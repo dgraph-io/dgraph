@@ -3280,7 +3280,7 @@
       }
     }
 
-- name: "get query with @id field having unique argument on interface "
+- name: "get query on interface with @id field having interface argument set"
   gqlquery: |
     query {
     	getMember(refID: "101") {

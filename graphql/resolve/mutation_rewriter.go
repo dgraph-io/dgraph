@@ -139,7 +139,7 @@ func (v *VariableGenerator) Next(typ schema.Type, xidName, xidVal string, auth b
 	flagAndXidName := xidName
 
 	// We pass the xidName as "Int.xidName" to generate variable for existence query
-	// of interface type when id filed is inherited from interface and have unique Argument set
+	// of interface type when id filed is inherited from interface and have interface Argument set
 	// Here we handle that case
 	if strings.Contains(flagAndXidName, ".") {
 		xidName = strings.Split(flagAndXidName, ".")[1]
@@ -1228,7 +1228,7 @@ func checkXIDExistsQuery(xidVariable, xidString, xidPredicate string, typ schema
 
 	// Below filter is added to generate existence query for interface
 	// If given xid field is inherited from interface and
-	// have unique arg set then we add interface type in filter
+	// have interface arg set then we add interface type in filter
 	if inherited != nil {
 		thisFilter := &gql.FilterTree{
 			Func: buildTypeFunc(schema.TypeName(inherited)),
@@ -1399,7 +1399,7 @@ func rewriteObject(
 				xidString, _ = extractVal(xidVal, xid.Name(), xid.Type().Name())
 				variable = varGen.Next(typ, xid.Name(), xidString, false)
 
-				// If this xid field is inherited from interface and have unique argument set, we also
+				// If this xid field is inherited from interface and have interface argument set, we also
 				// have existence query for interface to make sure that this xid is unique across all
 				// implementation types of the interface.
 				// We have following cases
@@ -1709,14 +1709,17 @@ func rewriteObject(
 
 func xidErrorForInterfaceType(typ schema.Type, xidString string, xid schema.FieldDefinition,
 	interfaceName string) error {
+	// TODO(GRAPHQL): currently we are checking typ of the mutated field for auth rules,
+	//  But we need to check auth rule on implementing type for which we found existing node
+	//  with same @id.
 	if queryAuthSelector(typ) == nil {
-		// This error will only be reported in debug mode.
 		return x.GqlErrorf("Type %s; field %s: id %s already exists in some other"+
 			" implementing type of interface %s", xid.ParentType().Name(), xid.Name(),
 			xidString, interfaceName)
 
 	}
-	return x.GqlErrorf("Type %s; field %s: id %s already exists in some other"+
+	// This error will only be reported in debug mode.
+	return x.GqlErrorf("GraphQL debug: Type %s; field %s: id %s already exists in some other"+
 		" implementing type of interface %s", xid.ParentType().Name(), xid.Name(),
 		xidString, interfaceName)
 }
@@ -1801,10 +1804,10 @@ func existenceQueries(
 					// considered a duplicate of the existing object, then return error.
 
 					if xidMetadata.isDuplicateXid(atTopLevel, variable, obj, srcField) {
-						// TODO(GRAPHQL): Add this error for inherited @id field with unique arg.
+						// TODO(GRAPHQL): Add this error for inherited @id field with interface arg.
 						//  Currently we don't return this error for the nested case when
 						//  at both root and nested level we have same value of @id fields
-						//  which have unique arg set and are inherited from same interface
+						//  which have interface arg set and are inherited from same interface
 						//  but are in different implementing type, we currently treat that as reference.
 						err := errors.Errorf("duplicate XID found: %s", xidString)
 						retErrors = append(retErrors, err)
@@ -1839,7 +1842,7 @@ func existenceQueries(
 					ret = append(ret, query)
 
 					// Add one more existence query if given xid field is inherited from interface and has
-					// unique argument set. This is added to ensure that this xid is unique across all the
+					// interface argument set. This is added to ensure that this xid is unique across all the
 					// implementation of the interface.
 					interfaceTypDef, varInterface := interfaceVariable(typ, varGen,
 						xid.Name(), xidString)
@@ -2393,7 +2396,7 @@ func interfaceVariable(typ schema.Type, varGen *VariableGenerator, xidName strin
 	xidString string) (*ast.Definition, string) {
 	interfaceTypeDef, isInherited := typ.FieldOriginatedFrom(xidName)
 	fieldDef := typ.Field(xidName)
-	if isInherited && fieldDef.HasUniqueArg() {
+	if isInherited && fieldDef.HasInterfaceArg() {
 		return interfaceTypeDef, varGen.Next(typ, "Int."+xidName, xidString, false)
 	}
 	return nil, ""

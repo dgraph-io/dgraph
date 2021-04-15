@@ -390,14 +390,14 @@ type Employer {
 }
 
 interface Member {
-    refID: String! @id (unique:true)
+    refID: String! @id (interface:true)
     name:  String! @id
     itemsIssued: [String]
     fineAccumulated: Int
 }
 
 interface Team {
-    teamID: String! @id (unique:true)
+    teamID: String! @id (interface:true)
     teamName:  String! @id
 }
 

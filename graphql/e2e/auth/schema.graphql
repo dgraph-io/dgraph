@@ -851,8 +851,8 @@ type State @auth(
 interface Member @auth(
     query: { rule: "{$ROLE: { eq: \"ADMIN\" } }" },
 ){
-    refID: String! @id (unique:true)
-    name:  String! @id (unique:false)
+    refID: String! @id (interface:true)
+    name:  String! @id (interface:false)
 }
 
 type SportsMember implements Member {

@@ -6088,7 +6088,7 @@ func updateLangTagFields(t *testing.T) {
 	DeleteGqlType(t, "Person", map[string]interface{}{}, 1, nil)
 }
 
-func addMutationWithIDFieldHavingUniqueArg(t *testing.T) {
+func addMutationWithIDFieldHavingInterfaceArg(t *testing.T) {
 
 	// add data successfully for different implementing types
 	tcases := []struct {

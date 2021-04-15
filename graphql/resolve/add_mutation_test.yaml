@@ -1101,7 +1101,7 @@
         }
 
 -
-  name: "Add mutation on implementation type which have inherited @id field with unique argument -1"
+  name: "Add mutation on implementation type which have inherited @id field with interface argument -1"
   explanation: "This mutation will generate three existence queries two for xid - refID (one for interface and one
   for implementing type) and one for xid - name"
   gqlmutation: |
@@ -1154,7 +1154,7 @@
         }
 
 -
-  name: "Add mutation on implementation type which have inherited @id field with unique argument -2"
+  name: "Add mutation on implementation type which have inherited @id field with interface argument -2"
   explanation: "Node with refID:101 already exist in other implementing type of interface, mutation not allowed
    in this case and we will return error"
   gqlmutation: |
@@ -1200,7 +1200,7 @@
     }
 
 -
-  name: "Add mutation on implementation type which have inherited @id field with unique argument -3"
+  name: "Add mutation on implementation type which have inherited @id field with interface argument -3"
   explanation: "Node with refID:101 already exist in same mutated type, returns error "
   gqlmutation: |
     mutation addLibraryMember($input: AddLibraryMemberInput!) {
@@ -1244,7 +1244,7 @@
     }
 
 -
-  name: "Add upsert mutation on implementation type which have inherited @id field with unique argument -1"
+  name: "Add upsert mutation on implementation type which have inherited @id field with interface argument -1"
   explanation: "node with @id field doesn't exist in any of the implementing type, we will add the node"
   gqlmutation: |
     mutation addLibraryMember($input: AddLibraryMemberInput!) {
@@ -1300,7 +1300,7 @@
         }
       cond: "@if(gt(len(LibraryMember_1), 0))"
 -
-  name: "Add upsert mutation on implementation type which have inherited @id field with unique argument -2"
+  name: "Add upsert mutation on implementation type which have inherited @id field with interface argument -2"
   explanation: "node with @id field already exist in one of the implementing type, returns error"
   gqlmutation: |
     mutation addLibraryMember($input: AddLibraryMemberInput!) {
@@ -1345,7 +1345,7 @@
     }
 
 -
-  name: "Add mutation with nested object which have inherited @id field with unique argument -1"
+  name: "Add mutation with nested object which have inherited @id field with interface argument -1"
   explanation: "There is no node with refID 101 of interface type or it's implementation type,hence will wii add
     nested object and link that to parent object"
   gqlmutation: |
@@ -1415,7 +1415,7 @@
         }
 
 -
-  name: "Add mutation with nested object which have inherited @id field with unique argument -2"
+  name: "Add mutation with nested object which have inherited @id field with interface argument -2"
   explanation: "node with refID 101 already exist in one of the implementing type other than mutated type,returns error"
   gqlmutation: |
     mutation addLibraryManager($input: AddLibraryManagerInput!) {
@@ -1468,7 +1468,7 @@
     }
 
 -
-  name: "Add mutation with nested object which have inherited @id field with unique argument -3"
+  name: "Add mutation with nested object which have inherited @id field with interface argument -3"
   explanation: "node with refID 101 already exist for mutated type,link child node to parent"
   gqlmutation: |
     mutation addLibraryManager($input: AddLibraryManagerInput!) {
@@ -1531,9 +1531,9 @@
         }
 
 -
-  name: "Add mutation on implementation type which have inherited @id fields with unique argument from multiple interfaces"
-  explanation: "This mutation will generate six existence queries, 2 existence queries for each of the inherited unique @id fields
-  and one for each @id field,none of the existence query return uid,so we successfully add the object in this case"
+  name: "Add mutation on implementation type which have inherited @id fields with interface argument from multiple interfaces"
+  explanation: "This mutation will generate six existence queries, 2 existence queries for each of the inherited @id fields
+  with interface arg and one for each @id field,none of the existence query return uid,so we successfully add the object in this case"
   gqlmutation: |
     mutation addSportsMember($input: AddSportsMemberInput!) {
       addSportsMember(input: [$input], upsert: false) {

@@ -3,13 +3,13 @@
 #######################
 
 interface LibraryItem {
-	refID: String! @id
-	itemID: String! @id(unique: true)
+	refID: String! @id(interface: false)
+	itemID: String! @id(interface: true)
 }
 
 type Book implements LibraryItem {
-	refID: String! @id
-	itemID: String! @id(unique: true)
+	refID: String! @id(interface: false)
+	itemID: String! @id(interface: true)
 	title: String
 	author: String
 }
@@ -191,7 +191,7 @@ input GenerateMutationParams {
 directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
-directive @id(unique: Boolean) on FIELD_DEFINITION
+directive @id(interface: Boolean) on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @auth(
@@ -472,7 +472,7 @@ input UpdateLibraryInput {
 #######################
 
 type Query {
-	getLibraryItem(refID: String, itemID: String): LibraryItem @deprecated(reason: "@id argument for get query on interface is being deprecated, it will be removed in v21.11.0, please update @id directive to have unique argument if you want to add the @id field in argument to get query for interface")
+	getLibraryItem(refID: String, itemID: String): LibraryItem @deprecated(reason: "@id argument for get query on interface is being deprecated. Only those @id fields which have interface argument set to true will be available in getQuery argument on interface post v21.11.0, please update your schema accordingly.")
 	queryLibraryItem(filter: LibraryItemFilter, order: LibraryItemOrder, first: Int, offset: Int): [LibraryItem]
 	aggregateLibraryItem(filter: LibraryItemFilter): LibraryItemAggregateResult
 	getBook(refID: String, itemID: String): Book

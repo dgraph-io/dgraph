@@ -1153,7 +1153,7 @@ func TestUpsertWithDeepAuth(t *testing.T) {
 	common.DeleteGqlType(t, "State", filter, 1, nil)
 }
 
-func TestAddMutationWithAuthOnIDFieldHavingUniqueArg(t *testing.T) {
+func TestAddMutationWithAuthOnIDFieldHavingInterfaceArg(t *testing.T) {
 	// add Library Member
 	addLibraryMemberParams := &common.GraphQLParams{
 		Query: `mutation addLibraryMember($input: [AddLibraryMemberInput!]!) {
@@ -1192,8 +1192,8 @@ func TestAddMutationWithAuthOnIDFieldHavingUniqueArg(t *testing.T) {
 
 	gqlResponse = addSportsMemberParams.ExecuteAsPost(t, common.GraphqlURL)
 	require.Contains(t, gqlResponse.Errors[0].Error(),
-		" GraphQL debug: interface Member; field refID: id 101 already exists"+
-			" for one of the implementing type of interface")
+		" GraphQL debug: Type SportsMember; field refID: id 101 already exists in some other"+
+			" implementing type of interface Member")
 
 	// cleanup
 	common.DeleteGqlType(t, "LibraryMember", map[string]interface{}{}, 1, nil)

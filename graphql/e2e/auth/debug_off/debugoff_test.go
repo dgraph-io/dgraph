@@ -124,7 +124,7 @@ func TestAddMutationWithXid(t *testing.T) {
 	tweet.DeleteByID(t, user, metaInfo)
 }
 
-func TestAddMutationWithAuthOnIDFieldHavingUniqueArg(t *testing.T) {
+func TestAddMutationWithAuthOnIDFieldHavingInterfaceArg(t *testing.T) {
 
 	// add Library Member
 	addLibraryMemberParams := &common.GraphQLParams{

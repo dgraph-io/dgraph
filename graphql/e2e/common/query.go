@@ -4011,7 +4011,7 @@ func queryMultipleLangFields(t *testing.T) {
 	DeleteGqlType(t, "Person", map[string]interface{}{}, 3, nil)
 }
 
-func queryWithIDFieldAndUniqueArg(t *testing.T) {
+func queryWithIDFieldAndInterfaceArg(t *testing.T) {
 	// add library member
 	addLibraryMemberParams := &GraphQLParams{
 		Query: `mutation addLibraryMember($input: [AddLibraryMemberInput!]!) {

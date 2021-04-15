@@ -269,7 +269,7 @@ type FieldDefinition interface {
 	IsID() bool
 	IsExternal() bool
 	HasIDDirective() bool
-	HasUniqueArg() bool
+	HasInterfaceArg() bool
 	Inverse() FieldDefinition
 	WithMemberType(string) FieldDefinition
 	// TODO - It might be possible to get rid of ForwardEdge and just use Inverse() always.
@@ -2332,18 +2332,18 @@ func hasIDDirective(fd *ast.FieldDefinition) bool {
 	return id != nil
 }
 
-func (fd *fieldDefinition) HasUniqueArg() bool {
+func (fd *fieldDefinition) HasInterfaceArg() bool {
 	if fd.fieldDef == nil {
 		return false
 	}
-	return hasUniqueArg(fd.fieldDef)
+	return hasInterfaceArg(fd.fieldDef)
 }
 
-func hasUniqueArg(fd *ast.FieldDefinition) bool {
+func hasInterfaceArg(fd *ast.FieldDefinition) bool {
 	if !hasIDDirective(fd) {
 		return false
 	}
-	uniqueArg := fd.Directives.ForName(idDirective).Arguments.ForName(idDirectiveUniqueArg)
+	uniqueArg := fd.Directives.ForName(idDirective).Arguments.ForName(idDirectiveInterfaceArg)
 	if uniqueArg == nil {
 		return false
 	}
