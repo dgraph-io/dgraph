@@ -2527,7 +2527,7 @@
     query {
       queryMovie(func: type(Movie)) {
         Movie.name : Movie.name
-        Movie.director : ~directed.movies {
+        Movie.director : ~directed.movies @filter(type(MovieDirector)) {
           MovieDirector.name : MovieDirector.name
           dgraph.uid : uid
         }
@@ -3407,6 +3407,54 @@
         Person.nameHiZh : Person.name@hi:zh
         Person.nameHi_Zh_Untag : Person.name@hi:zh:.
         Person.name_Untag_AnyLang : Person.name@.
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Query fields linked to reverse predicates in Dgraph"
+  gqlquery: |
+    query {
+      queryLinkX(filter:{f9:{eq: "Alice"}}) {
+        f1(filter: {f6: {eq: "Eve"}}) {
+          f6
+        }
+        f2(filter: {f7: {eq: "Bob"}}) {
+          f7
+        }
+        f1Aggregate(filter: {f6: {eq: "Eve"}}) {
+          count
+          f6Max
+        }
+        f2Aggregate(filter: {f7: {eq: "Bob"}}) {
+          count
+          f7Min
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryLinkX(func: type(LinkX)) @filter(eq(LinkX.f9, "Alice")) {
+        LinkX.f1 : ~link @filter((eq(LinkY.f6, "Eve") AND type(LinkY))) {
+          LinkY.f6 : LinkY.f6
+          dgraph.uid : uid
+        }
+        LinkX.f2 : ~link @filter((eq(LinkZ.f7, "Bob") AND type(LinkZ))) {
+          LinkZ.f7 : LinkZ.f7
+          dgraph.uid : uid
+        }
+        LinkX.f1Aggregate : ~link @filter((eq(LinkY.f6, "Eve") AND type(LinkY))) {
+          LinkX.f1Aggregate_f6Var as LinkY.f6
+          dgraph.uid : uid
+        }
+        LinkYAggregateResult.count_LinkX.f1Aggregate : count(~link) @filter((eq(LinkY.f6, "Eve") AND type(LinkY)))
+        LinkYAggregateResult.f6Max_LinkX.f1Aggregate : max(val(LinkX.f1Aggregate_f6Var))
+        LinkX.f2Aggregate : ~link @filter((eq(LinkZ.f7, "Bob") AND type(LinkZ))) {
+          LinkX.f2Aggregate_f7Var as LinkZ.f7
+          dgraph.uid : uid
+        }
+        LinkZAggregateResult.count_LinkX.f2Aggregate : count(~link) @filter((eq(LinkZ.f7, "Bob") AND type(LinkZ)))
+        LinkZAggregateResult.f7Min_LinkX.f2Aggregate : min(val(LinkX.f2Aggregate_f7Var))
         dgraph.uid : uid
       }
     }

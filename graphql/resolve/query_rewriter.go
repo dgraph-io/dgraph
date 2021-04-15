@@ -311,12 +311,6 @@ func aggregateQuery(query schema.Query, authRw *authRewriter) []*gql.GraphQuery 
 					//        scoreVar as Tweets.score
 					// }
 
-					// Add type filter in case the Dgraph predicate for which the aggregate
-					// field belongs is a reverse edge
-					if strings.HasPrefix(constructedForDgraphPredicate, "~") {
-						addTypeFilter(child, f.ConstructedFor())
-					}
-
 					mainQuery.Children = append(mainQuery.Children, child)
 					isAggregateVarAdded[constructedForField] = true
 				}
@@ -1182,7 +1176,7 @@ func buildAggregateFields(
 			// Add type filter in case the Dgraph predicate for which the aggregate
 			// field belongs to is a reverse edge
 			if strings.HasPrefix(constructedForDgraphPredicate, "~") {
-				addTypeFilter(mainField, f.ConstructedFor())
+				addTypeFilter(aggregateChild, f.ConstructedFor())
 			}
 
 			aggregateChildren = append(aggregateChildren, aggregateChild)
