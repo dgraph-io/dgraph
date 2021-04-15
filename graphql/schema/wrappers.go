@@ -202,7 +202,6 @@ type Field interface {
 	CompleteAlias(buf *bytes.Buffer)
 	// GetAuthMeta returns the Dgraph.Authorization meta information stored in schema
 	GetAuthMeta() *authorization.AuthMeta
-	GetField() ast.Field
 }
 
 // A Mutation is a field (from the schema's Mutation type) from an Operation
@@ -3097,16 +3096,4 @@ func parseRequiredArgsFromGQLRequest(req string) (map[string]bool, error) {
 	args := req[strings.Index(req, "(")+1 : strings.LastIndex(req, ")")]
 	_, rf, err := parseBodyTemplate("{"+args+"}", false)
 	return rf, err
-}
-
-func (f *field) GetField() ast.Field {
-	return *f.field
-}
-
-func (q *query) GetField() ast.Field {
-	return *q.field
-}
-
-func (m *mutation) GetField() ast.Field {
-	return *m.field
 }

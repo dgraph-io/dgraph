@@ -161,14 +161,14 @@ func externalRequestError(err error, f Field) *x.GqlError {
 		" returned an error: %s for field: %s within type: %s.", err, f.Name(), f.GetObjectName())
 }
 
-func GetBodyForLambda(ctx context.Context, field Field, parents,
+func GetBodyForLambda(ctx context.Context, f Field, parents,
 	args interface{}) map[string]interface{} {
 	accessJWT, _ := x.ExtractJwt(ctx)
 	body := map[string]interface{}{
-		"resolver":             field.GetObjectName() + "." + field.Name(),
+		"resolver":             f.GetObjectName() + "." + f.Name(),
 		"X-Dgraph-AccessToken": accessJWT,
 		"authHeader": map[string]interface{}{
-			"key":   field.GetAuthMeta().GetHeader(),
+			"key":   f.GetAuthMeta().GetHeader(),
 			"value": authorization.GetJwtToken(ctx),
 		},
 	}
@@ -178,7 +178,7 @@ func GetBodyForLambda(ctx context.Context, field Field, parents,
 	if args != nil {
 		body["args"] = args
 	}
-	body["info"] = convert(field.GetField())
+	body["info"] = convert(f.(*field).field)
 	return body
 }
 
@@ -187,26 +187,26 @@ type selectionField struct {
 	Name         string           `json:"name"`
 	Arguments    fldArgumentList  `json:"arguments"`
 	Directives   fldDirectiveList `json:"directives"`
-	SelectionSet fldSelectionSet  `json:"selectionSet"`
+	SelectionSet selectionSet     `json:"selectionSet"`
 }
 
 type fldArgumentList []*fldArgument
 
 type fldArgument struct {
-	Name  string
-	Value *fldValue
+	Name  string    `json:"name"`
+	Value *fldValue `json:"value"`
 }
 
 type fldValue struct {
-	Raw      string
-	Children fldChildValueList
+	Raw      string            `json:"name"`
+	Children fldChildValueList `json:"childValueList"`
 }
 
 type fldChildValueList []*fldChildValue
 
 type fldChildValue struct {
-	Name  string
-	Value *fldValue
+	Name  string    `json:"name"`
+	Value *fldValue `json:"value"`
 }
 
 type fldDirectiveList []*fldDirective
@@ -216,8 +216,7 @@ type fldDirective struct {
 	Arguments fldArgumentList `json:"arguments"`
 }
 
-type fldSelectionSet []fldSelection
-type fldSelection interface{}
+type selectionSet []selectionField
 
 func convertDirectiveList(dirList ast.DirectiveList) fldDirectiveList {
 	outDirList := make(fldDirectiveList, len(dirList))
@@ -243,16 +242,17 @@ func convertArgumentList(argList ast.ArgumentList) fldArgumentList {
 	return outArgList
 }
 
-func convert(f ast.Field) selectionField {
+func convert(f *ast.Field) selectionField {
 	outField := selectionField{
-		Alias:      f.Alias,
-		Name:       f.Name,
-		Arguments:  convertArgumentList(f.Arguments),
-		Directives: convertDirectiveList(f.Directives),
+		Alias:        f.Alias,
+		Name:         f.Name,
+		Arguments:    convertArgumentList(f.Arguments),
+		Directives:   convertDirectiveList(f.Directives),
+		SelectionSet: make(selectionSet, len(f.SelectionSet)),
 	}
-	outField.SelectionSet = make(fldSelectionSet, len(f.SelectionSet))
+	outField.SelectionSet = make(selectionSet, len(f.SelectionSet))
 	for i, sel := range f.SelectionSet {
-		outField.SelectionSet[i] = convert(*sel.(*ast.Field))
+		outField.SelectionSet[i] = convert(sel.(*ast.Field))
 	}
 	return outField
 }
