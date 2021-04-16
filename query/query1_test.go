@@ -652,6 +652,18 @@ func TestHasFuncAtRoot(t *testing.T) {
 	require.JSONEq(t, `{"data": {"me":[{"friend":[{"count":5}],"name":"Michonne"},{"friend":[{"count":1}],"name":"Rick Grimes"},{"friend":[{"count":1}],"name":"Andrea"}]}}`, js)
 }
 
+func TestHasFuncAtRootWithFirstAndOffset(t *testing.T) {
+	query := `
+	{
+		me(func: has(name), first: 5, offset: 5) {
+			name
+		}
+	}
+	`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{ "data": {"me":[{"name": "Bear"},{"name": "Nemo"},{"name": "name"},{"name": "Rick Grimes"},{"name": "Glenn Rhee"}]}}`, js)
+}
+
 func TestHasFuncAtRootWithAfter(t *testing.T) {
 
 	query := `
