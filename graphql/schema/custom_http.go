@@ -27,7 +27,6 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/graphql/authorization"
-	"github.com/dgraph-io/gqlparser/v2/ast"
 
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -178,81 +177,61 @@ func GetBodyForLambda(ctx context.Context, f Field, parents,
 	if args != nil {
 		body["args"] = args
 	}
-	body["info"] = convert(f.(*field).field)
+	body["info"] = getInfo(f)
 	return body
 }
 
+type info struct {
+	Field selectionField `json:"field"`
+}
+
 type selectionField struct {
-	Alias        string           `json:"alias"`
-	Name         string           `json:"name"`
-	Arguments    fldArgumentList  `json:"arguments"`
-	Directives   fldDirectiveList `json:"directives"`
-	SelectionSet selectionSet     `json:"selectionSet"`
-}
-
-type fldArgumentList []*fldArgument
-
-type fldArgument struct {
-	Name  string    `json:"name"`
-	Value *fldValue `json:"value"`
-}
-
-type fldValue struct {
-	Raw      string            `json:"name"`
-	Children fldChildValueList `json:"childValueList"`
-}
-
-type fldChildValueList []*fldChildValue
-
-type fldChildValue struct {
-	Name  string    `json:"name"`
-	Value *fldValue `json:"value"`
-}
-
-type fldDirectiveList []*fldDirective
-
-type fldDirective struct {
-	Name      string          `json:"name"`
-	Arguments fldArgumentList `json:"arguments"`
+	Alias        string                 `json:"alias"`
+	Name         string                 `json:"name"`
+	Arguments    map[string]interface{} `json:"arguments"`
+	Directives   fldDirectiveList       `json:"directives"`
+	SelectionSet selectionSet           `json:"selectionSet"`
 }
 
 type selectionSet []selectionField
 
-func convertDirectiveList(dirList ast.DirectiveList) fldDirectiveList {
-	outDirList := make(fldDirectiveList, len(dirList))
-	for i, dir := range dirList {
-		outDirList[i] = &fldDirective{Name: dir.Name, Arguments: convertArgumentList(dir.Arguments)}
+type fldDirectiveList []*fldDirective
+
+type fldDirective struct {
+	Name      string                 `json:"name"`
+	Arguments map[string]interface{} `json:"arguments"`
+}
+
+func convertDirectiveList(f *field) fldDirectiveList {
+	outDirList := make(fldDirectiveList, len(f.field.Directives))
+	for i, dir := range f.field.Directives {
+		outDirList[i] = &fldDirective{Name: dir.Name, Arguments: dir.ArgumentMap(f.op.vars)}
 	}
 	return outDirList
 }
 
-func convertChildValueList(childValueList ast.ChildValueList) fldChildValueList {
-	outChildValueList := make(fldChildValueList, len(childValueList))
-	for i, childValue := range childValueList {
-		outChildValueList[i] = &fldChildValue{Name: childValue.Name, Value: &fldValue{Raw: childValue.Value.Raw, Children: convertChildValueList(childValue.Value.Children)}}
-	}
-	return outChildValueList
-}
-
-func convertArgumentList(argList ast.ArgumentList) fldArgumentList {
-	outArgList := make(fldArgumentList, len(argList))
-	for i, arg := range argList {
-		outArgList[i] = &fldArgument{Name: arg.Name, Value: &fldValue{Raw: arg.Value.Raw, Children: convertChildValueList(arg.Value.Children)}}
-	}
-	return outArgList
-}
-
-func convert(f *ast.Field) selectionField {
+func convert(f *field) selectionField {
 	outField := selectionField{
-		Alias:        f.Alias,
-		Name:         f.Name,
-		Arguments:    convertArgumentList(f.Arguments),
-		Directives:   convertDirectiveList(f.Directives),
-		SelectionSet: make(selectionSet, len(f.SelectionSet)),
+		Alias:        f.field.Alias,
+		Name:         f.field.Name,
+		Arguments:    f.field.ArgumentMap(f.op.vars),
+		Directives:   convertDirectiveList(f),
+		SelectionSet: make(selectionSet, len(f.field.SelectionSet)),
 	}
-	outField.SelectionSet = make(selectionSet, len(f.SelectionSet))
-	for i, sel := range f.SelectionSet {
-		outField.SelectionSet[i] = convert(sel.(*ast.Field))
+	for i, sel := range f.SelectionSet() {
+		outField.SelectionSet[i] = convert(sel.(*field))
 	}
 	return outField
+}
+
+func getInfo(f Field) info {
+	switch fld := f.(type) {
+	case *query:
+		return info{Field: convert((*field)(fld))}
+	case *mutation:
+		return info{Field: convert((*field)(fld))}
+	case *field:
+		return info{Field: convert(fld)}
+	}
+	return info{}
 }

@@ -5,14 +5,17 @@ const droidBio = ({parent: {name, primaryFunction}}) => `My name is ${name}. My 
 const summary = () => `hi`
 const astronautBio = ({parent: {name, age, isActive}}) => `Name - ${name}, Age - ${age}, isActive - ${isActive}`
 
-async function authorsByName({args, dql}) {
-    const results = await dql.query(`query queryAuthor($name: string) {
-        queryAuthor(func: type(test.dgraph.author)) @filter(eq(test.dgraph.author.name, $name)) {
-            name: test.dgraph.author.name
-            dob: test.dgraph.author.dob
-            reputation: test.dgraph.author.reputation
+async function authorsByName({args, dql, info}) {
+    const results = await dql.query(`query queryAuthor($name: string, $numLikes: int) {
+        queryAuthor(func: type(Author)) @filter(eq(Author.name, $name)) {
+            name: Author.name
+            dob: Author.dob
+            reputation: Author.reputation
+            posts: Author.posts @filter(eq(Post.numLikes,$numLikes)) {
+                title: Post.title
+            }
         }
-    }`, {"$name": args.name})
+    }`, {"$name": args.name, "$numLikes": info.field.selectionset[3].arguments.filter.numLikes.eq})
     return results.data.queryAuthor
 }
 
