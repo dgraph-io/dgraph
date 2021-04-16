@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *	 http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -18,7 +18,9 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"io/ioutil"
+	"path"
 	"math"
 	"os"
 	"os/user"
@@ -37,7 +39,7 @@ import (
 type stringMap map[string]string
 
 type volume struct {
-	Type     string
+	Type	 string
 	Source   string
 	Target   string
 	ReadOnly bool `yaml:"read_only"`
@@ -56,22 +58,22 @@ type limit struct {
 }
 
 type service struct {
-	name          string // not exported
-	Image         string
-	ContainerName string    `yaml:"container_name,omitempty"`
-	Hostname      string    `yaml:",omitempty"`
-	Pid           string    `yaml:",omitempty"`
-	WorkingDir    string    `yaml:"working_dir,omitempty"`
-	DependsOn     []string  `yaml:"depends_on,omitempty"`
-	Labels        stringMap `yaml:",omitempty"`
-	EnvFile       []string  `yaml:"env_file,omitempty"`
-	Environment   []string  `yaml:",omitempty"`
-	Ports         []string  `yaml:",omitempty"`
-	Volumes       []volume  `yaml:",omitempty"`
-	TmpFS         []string  `yaml:",omitempty"`
-	User          string    `yaml:",omitempty"`
-	Command       string    `yaml:",omitempty"`
-	Deploy        deploy    `yaml:",omitempty"`
+	name			string // not exported
+	Image			string
+	ContainerName	string		`yaml:"container_name,omitempty"`
+	Hostname		string		`yaml:",omitempty"`
+	Pid				string		`yaml:",omitempty"`
+	WorkingDir		string		`yaml:"working_dir,omitempty"`
+	DependsOn		[]string	`yaml:"depends_on,omitempty"`
+	Labels			stringMap	`yaml:",omitempty"`
+	EnvFile			[]string	`yaml:"env_file,omitempty"`
+	Environment		[]string	`yaml:",omitempty"`
+	Ports			[]string	`yaml:",omitempty"`
+	Volumes			[]volume	`yaml:",omitempty"`
+	TmpFS			[]string	`yaml:",omitempty"`
+	User			string		`yaml:",omitempty"`
+	Command			string		`yaml:",omitempty"`
+	Deploy			deploy		`yaml:",omitempty"`
 }
 
 type composeConfig struct {
@@ -81,48 +83,49 @@ type composeConfig struct {
 }
 
 type options struct {
-	NumZeros       int
-	NumAlphas      int
-	NumReplicas    int
-	NumLearners    int
-	Acl            bool
-	AclSecret      string
-	DataDir        string
-	DataVol        bool
-	TmpFS          bool
-	UserOwnership  bool
-	Jaeger         bool
-	Metrics        bool
-	PortOffset     int
-	Verbosity      int
-	Vmodule        string
-	OutFile        string
-	LocalBin       bool
-	Image          string
-	Tag            string
-	WhiteList      bool
-	Ratel          bool
-	RatelPort      int
-	MemLimit       string
-	ExposePorts    bool
-	Encryption     bool
-	SnapshotAfter  string
-	ContainerNames bool
-	AlphaVolumes   []string
-	ZeroVolumes    []string
-	AlphaEnvFile   []string
-	ZeroEnvFile    []string
-	Minio          bool
-	MinioDataDir   string
-	MinioPort      uint16
-	MinioEnvFile   []string
-	Hostname       string
-	Cdc            bool
-	CdcConsumer    bool
+	NumZeros		int
+	NumAlphas		int
+	NumReplicas		int
+	NumLearners		int
+	Acl				bool
+	AclSecret		string
+	DataDir			string
+	PDir			string
+	DataVol			bool
+	TmpFS			bool
+	UserOwnership	bool
+	Jaeger			bool
+	Metrics			bool
+	PortOffset		int
+	Verbosity		int
+	Vmodule			string
+	OutFile			string
+	LocalBin		bool
+	Image			string
+	Tag				string
+	WhiteList		bool
+	Ratel			bool
+	RatelPort		int
+	MemLimit		string
+	ExposePorts		bool
+	Encryption		bool
+	SnapshotAfter	string
+	ContainerNames	bool
+	AlphaVolumes	[]string
+	ZeroVolumes		[]string
+	AlphaEnvFile	[]string
+	ZeroEnvFile		[]string
+	Minio			bool
+	MinioDataDir	string
+	MinioPort		uint16
+	MinioEnvFile	[]string
+	Hostname		string
+	Cdc				bool
+	CdcConsumer		bool
 
 	// Extra flags
-	AlphaFlags string
-	ZeroFlags  string
+	AlphaFlags	string
+	ZeroFlags	string
 }
 
 var opts options
@@ -190,7 +193,7 @@ func initService(basename string, idx, grpcPort int) service {
 	}
 	if opts.LocalBin {
 		svc.Volumes = append(svc.Volumes, volume{
-			Type:     "bind",
+			Type:	 "bind",
 			Source:   "$GOPATH/bin",
 			Target:   "/gobin",
 			ReadOnly: true,
@@ -342,7 +345,7 @@ func getAlpha(idx int, raft string) service {
 	if opts.Acl {
 		svc.Command += ` --acl "secret-file=/secret/hmac;"`
 		svc.Volumes = append(svc.Volumes, volume{
-			Type:     "bind",
+			Type:	 "bind",
 			Source:   "./acl-secret",
 			Target:   "/secret/hmac",
 			ReadOnly: true,
@@ -351,7 +354,7 @@ func getAlpha(idx int, raft string) service {
 	if opts.AclSecret != "" {
 		svc.Command += ` --acl "secret-file=/secret/hmac;"`
 		svc.Volumes = append(svc.Volumes, volume{
-			Type:     "bind",
+			Type:	 "bind",
 			Source:   opts.AclSecret,
 			Target:   "/secret/hmac",
 			ReadOnly: true,
@@ -365,7 +368,7 @@ func getAlpha(idx int, raft string) service {
 	if opts.Encryption {
 		svc.Command += ` --encryption "key-file=/secret/enc_key;"`
 		svc.Volumes = append(svc.Volumes, volume{
-			Type:     "bind",
+			Type:	 "bind",
 			Source:   "./enc-secret",
 			Target:   "/secret/enc_key",
 			ReadOnly: true,
@@ -397,7 +400,7 @@ func getVolume(vol string) volume {
 		volType = "bind"
 	}
 	return volume{
-		Type:     volType,
+		Type:	 volType,
 		Source:   srcDir,
 		Target:   dstDir,
 		ReadOnly: readOnly,
@@ -407,9 +410,9 @@ func getVolume(vol string) volume {
 
 func getJaeger() service {
 	svc := service{
-		Image:         "jaegertracing/all-in-one:1.18",
+		Image:		 "jaegertracing/all-in-one:1.18",
 		ContainerName: containerName("jaeger"),
-		WorkingDir:    "/working/jaeger",
+		WorkingDir:	"/working/jaeger",
 		Ports: []string{
 			toPort(14268),
 			toPort(16686),
@@ -429,7 +432,7 @@ func getJaeger() service {
 
 func getMinio(minioDataDir string) service {
 	svc := service{
-		Image:         "minio/minio:RELEASE.2020-11-13T20-10-18Z",
+		Image:		 "minio/minio:RELEASE.2020-11-13T20-10-18Z",
 		ContainerName: containerName("minio1"),
 		Ports: []string{
 			toPort(int(opts.MinioPort)),
@@ -454,7 +457,7 @@ func getRatel() service {
 		portFlag = fmt.Sprintf(" -port=%d", opts.RatelPort)
 	}
 	svc := service{
-		Image:         opts.Image + ":" + opts.Tag,
+		Image:		 opts.Image + ":" + opts.Tag,
 		ContainerName: containerName("ratel"),
 		Ports: []string{
 			toPort(opts.RatelPort),
@@ -469,12 +472,12 @@ func addMetrics(cfg *composeConfig) {
 	cfg.Volumes["grafana-volume"] = stringMap{}
 
 	cfg.Services["node-exporter"] = service{
-		Image:         "quay.io/prometheus/node-exporter:v1.0.1",
+		Image:		 "quay.io/prometheus/node-exporter:v1.0.1",
 		ContainerName: containerName("node-exporter"),
-		Pid:           "host",
-		WorkingDir:    "/working/jaeger",
+		Pid:		   "host",
+		WorkingDir:	"/working/jaeger",
 		Volumes: []volume{{
-			Type:     "bind",
+			Type:	 "bind",
 			Source:   "/",
 			Target:   "/host",
 			ReadOnly: true,
@@ -482,9 +485,9 @@ func addMetrics(cfg *composeConfig) {
 	}
 
 	cfg.Services["prometheus"] = service{
-		Image:         "prom/prometheus:v2.20.1",
+		Image:		 "prom/prometheus:v2.20.1",
 		ContainerName: containerName("prometheus"),
-		Hostname:      "prometheus",
+		Hostname:	  "prometheus",
 		Ports: []string{
 			toPort(9090),
 		},
@@ -495,7 +498,7 @@ func addMetrics(cfg *composeConfig) {
 				Target: "/prometheus",
 			},
 			{
-				Type:     "bind",
+				Type:	 "bind",
 				Source:   "$GOPATH/src/github.com/dgraph-io/dgraph/compose/prometheus.yml",
 				Target:   "/etc/prometheus/prometheus.yml",
 				ReadOnly: true,
@@ -504,9 +507,9 @@ func addMetrics(cfg *composeConfig) {
 	}
 
 	cfg.Services["grafana"] = service{
-		Image:         "grafana/grafana:7.1.2",
+		Image:		 "grafana/grafana:7.1.2",
 		ContainerName: containerName("grafana"),
-		Hostname:      "grafana",
+		Hostname:	  "grafana",
 		Ports: []string{
 			toPort(3000),
 		},
@@ -525,14 +528,14 @@ func addMetrics(cfg *composeConfig) {
 
 func addCdc(cfg *composeConfig) {
 	cfg.Services["zookeeper"] = service{
-		Image:         "bitnami/zookeeper:3.7.0",
+		Image:		 "bitnami/zookeeper:3.7.0",
 		ContainerName: containerName("zookeeper"),
 		Environment: []string{
 			"ALLOW_ANONYMOUS_LOGIN=yes",
 		},
 	}
 	cfg.Services["kafka"] = service{
-		Image:         "bitnami/kafka:2.7.0",
+		Image:		 "bitnami/kafka:2.7.0",
 		ContainerName: containerName("kafka"),
 		Environment: []string{
 			"ALLOW_PLAINTEXT_LISTENER=yes",
@@ -542,9 +545,9 @@ func addCdc(cfg *composeConfig) {
 	}
 	if opts.CdcConsumer {
 		cfg.Services["kafka-consumer"] = service{
-			Image:         "bitnami/kafka:2.7.0",
+			Image:		 "bitnami/kafka:2.7.0",
 			ContainerName: containerName("kafka-consumer"),
-			Command:       "kafka-console-consumer.sh --bootstrap-server kafka:9092 --topic dgraph-cdc",
+			Command:	   "kafka-console-consumer.sh --bootstrap-server kafka:9092 --topic dgraph-cdc",
 		}
 	}
 }
@@ -572,11 +575,80 @@ func fatal(err error) {
 	os.Exit(1)
 }
 
+
+func makeDir(path string) error {
+	_, err := os.Stat(path)
+	if os.IsNotExist(err) {
+		if errs := os.MkdirAll(path, 0755); errs != nil {
+			fatal(errors.Errorf("Couldn't create directory %v. Error: %v", opts.DataDir, errs))
+		}
+	}
+	return nil
+}
+
+func copyFile(src, dst string) error {
+	var err error
+	var srcfd *os.File
+	var dstfd *os.File
+	var srcinfo os.FileInfo
+
+	if srcfd, err = os.Open(src); err != nil {
+		return err
+	}
+	defer srcfd.Close()
+
+	if dstfd, err = os.Create(dst); err != nil {
+		return err
+	}
+	defer dstfd.Close()
+
+	if _, err = io.Copy(dstfd, srcfd); err != nil {
+		return err
+	}
+	if srcinfo, err = os.Stat(src); err != nil {
+		return err
+	}
+	return os.Chmod(dst, srcinfo.Mode())
+}
+
+func copyDir(src string, dst string) error {
+	var err error
+	var fds []os.FileInfo
+	var srcinfo os.FileInfo
+
+	if srcinfo, err = os.Stat(src); err != nil {
+		return err
+	}
+
+	if err = os.MkdirAll(dst, srcinfo.Mode()); err != nil {
+		return err
+	}
+
+	if fds, err = ioutil.ReadDir(src); err != nil {
+		return err
+	}
+	for _, fd := range fds {
+		srcfp := path.Join(src, fd.Name())
+		dstfp := path.Join(dst, fd.Name())
+
+		if fd.IsDir() {
+			if err = copyDir(srcfp, dstfp); err != nil {
+				fatal(errors.Errorf("Could not copy dir ", srcfp, "to ", dstfp, "because of error: ", err))
+			}
+		} else {
+			if err = copyFile(srcfp, dstfp); err != nil {
+				fatal(errors.Errorf("Could not copy dir ", srcfp, "to ", dstfp, "because of error: ", err))
+			}
+		}
+	}
+	return nil
+}
+
 func main() {
 	var cmd = &cobra.Command{
-		Use:     "compose",
+		Use:	 "compose",
 		Short:   "docker-compose config file generator for dgraph",
-		Long:    "Dynamically generate a docker-compose.yml file for running a dgraph cluster.",
+		Long:	"Dynamically generate a docker-compose.yml file for running a dgraph cluster.",
 		Example: "$ compose -z=3 -a=3",
 		Run: func(cmd *cobra.Command, args []string) {
 			// dummy to get "Usage:" template in Usage() output.
@@ -595,6 +667,9 @@ func main() {
 		"mount a docker volume as /data in containers")
 	cmd.PersistentFlags().StringVarP(&opts.DataDir, "data_dir", "d", "",
 		"mount a host directory as /data in containers")
+	cmd.PersistentFlags().StringVarP(&opts.PDir, "p_dir", "p", "",
+		"launch cluster with local path of p directory, data_vol must be set to true and a=r")
+
 	cmd.PersistentFlags().BoolVar(&opts.Acl, "acl", false, "Create ACL secret file and enable ACLs")
 	cmd.PersistentFlags().StringVar(&opts.AclSecret, "acl_secret", "",
 		"enable ACL feature with specified HMAC secret file")
@@ -693,6 +768,13 @@ func main() {
 	if cmd.Flags().Changed("cdc-consumer") && !opts.Cdc {
 		fatal(errors.Errorf("--cdc_consumer requires --cdc"))
 	}
+	if opts.PDir != ""  && opts.DataDir == "" {
+		fatal(errors.Errorf("--p_dir option requires --data_dir"))
+	}
+	if opts.PDir != ""  && opts.NumAlphas > opts.NumReplicas {
+		fatal(errors.Errorf("--p_dir requires --num_replicas >= --num_alphas"))
+	}
+
 	services := make(map[string]service)
 
 	for i := 1; i <= opts.NumZeros; i++ {
@@ -749,6 +831,20 @@ func main() {
 			if !isBindMount(srcDir) {
 				cfg.Volumes[srcDir] = stringMap{}
 			}
+		}
+	}
+
+	if opts.PDir != "" {
+		if _, err := os.Stat(opts.DataDir); !os.IsNotExist(err) {
+			fatal(errors.Errorf("Directory %v already exists.", opts.DataDir))
+		}
+
+		n := 1
+		for n <= opts.NumAlphas {
+			new_dir := opts.DataDir + "/alpha" + strconv.Itoa(n) + "/p"
+			makeDir(new_dir)
+			copyDir(opts.PDir, new_dir)
+			n++
 		}
 	}
 
