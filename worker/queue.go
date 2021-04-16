@@ -49,18 +49,17 @@ func InitTasks() {
 }
 
 type tasks struct {
-	queue  chan task
-	log    *z.Tree
-	raftId uint64
-	rng    *rand.Rand
+	queue  chan task  // Incoming tasks are sent over this channel.
+	log    *z.Tree    // All tasks write their status to the log.
+	raftId uint64     // raftId of current node.
+	rng    *rand.Rand // RNG for generating task key.
 }
 
+// Returns 0 if the task was not found.
 func (t tasks) GetStatus(id uint64) TaskStatus {
-	glog.Infof("Fetching task status: 0x%x", id)
 	if id == 0 || id == math.MaxUint64 {
 		return 0
 	}
-
 	value := t.log.Get(id)
 	return getTaskStatus(value)
 }
@@ -76,6 +75,7 @@ func (t tasks) cancelQueued() {
 }
 
 // deleteExpired deletes all expired tasks in the log.
+// TODO(ajeet): figure out how to call this once a week.
 func (t tasks) deleteExpired() {
 	const ttl = 7 * 24 * time.Hour // 1 week
 	minTs := time.Now().UTC().Add(-ttl).Unix()
@@ -137,7 +137,8 @@ func (t tasks) queueTask(req interface{}) (uint64, error) {
 	task := task{req: req}
 	for attempt := 0; ; attempt++ {
 		task.id = t.newId()
-		if t.log.Get(task.id) == 0 {
+		// z.Tree cannot store 0 or math.MaxUint64. Check that taskId is unique.
+		if task.id != 0 && task.id != math.MaxUint64 && t.log.Get(task.id) == 0 {
 			break
 		}
 		// Unable to generate a unique random number.
@@ -158,8 +159,7 @@ func (t tasks) queueTask(req interface{}) (uint64, error) {
 
 // TODO(ajeet): figure out edge cases
 func (t tasks) newId() uint64 {
-	rnd := t.rng.Int()
-	return uint64(rnd)<<32 | uint64(t.raftId)
+	return t.raftId<<32 | uint64(t.rng.Int())
 }
 
 type task struct {
@@ -195,7 +195,7 @@ func newTaskValue(status TaskStatus) uint64 {
 	return uint64(now)<<32 | uint64(status)
 }
 
-// newTaskValue extracts a taskStatus from a task value.
+// getTaskStatus extracts a taskStatus from a task value.
 func getTaskStatus(value uint64) TaskStatus {
 	return TaskStatus(value) & math.MaxUint32
 }

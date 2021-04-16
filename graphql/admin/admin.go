@@ -244,7 +244,7 @@ const (
 	}
 
 	input TaskInput {
-		id: String
+		id: String!
 	}
 
 	type Response {
@@ -266,7 +266,6 @@ const (
 	}
 
 	type TaskPayload {
-		response: Response
 		status: String
 	}
 
@@ -376,6 +375,7 @@ const (
 		health: [NodeState]
 		state: MembershipState
 		config: Config
+		task(input: TaskInput!): TaskPayload
 		` + adminQueries + `
 	}
 
@@ -403,11 +403,6 @@ const (
 		Shutdown this node.
 		"""
 		shutdown: ShutdownPayload
-
-		"""
-		Fetch task status.
-		"""
-		task(input: TaskInput!): TaskPayload
 
 		"""
 		Alter the node's config.
@@ -732,7 +727,6 @@ func newAdminResolver(
 }
 
 func newAdminResolverFactory() resolve.ResolverFactory {
-
 	adminMutationResolvers := map[string]resolve.MutationResolverFunc{
 		"addNamespace":      resolveAddNamespace,
 		"backup":            resolveBackup,
@@ -748,7 +742,6 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 		"moveTablet":        resolveMoveTablet,
 		"assign":            resolveAssign,
 		"enterpriseLicense": resolveEnterpriseLicense,
-		"task":              resolveTask,
 	}
 
 	rf := resolverFactoryWithErrorMsg(errResolverNotFound).
@@ -766,17 +759,20 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 		WithQueryResolver("listBackups", func(q schema.Query) resolve.QueryResolver {
 			return resolve.QueryResolverFunc(resolveListBackups)
 		}).
-		WithMutationResolver("updateGQLSchema", func(m schema.Mutation) resolve.MutationResolver {
-			return resolve.MutationResolverFunc(
-				func(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
-					return &resolve.Resolved{Err: errors.Errorf(errMsgServerNotReady), Field: m},
-						false
-				})
+		WithQueryResolver("task", func(q schema.Query) resolve.QueryResolver {
+			return resolve.QueryResolverFunc(resolveTask)
 		}).
 		WithQueryResolver("getGQLSchema", func(q schema.Query) resolve.QueryResolver {
 			return resolve.QueryResolverFunc(
 				func(ctx context.Context, query schema.Query) *resolve.Resolved {
 					return &resolve.Resolved{Err: errors.Errorf(errMsgServerNotReady), Field: q}
+				})
+		}).
+		WithMutationResolver("updateGQLSchema", func(m schema.Mutation) resolve.MutationResolver {
+			return resolve.MutationResolverFunc(
+				func(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
+					return &resolve.Resolved{Err: errors.Errorf(errMsgServerNotReady), Field: m},
+						false
 				})
 		})
 	for gqlMut, resolver := range adminMutationResolvers {

@@ -32,34 +32,36 @@ type taskInput struct {
 	Id string
 }
 
-func resolveTask(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
+func resolveTask(ctx context.Context, q schema.Query) *resolve.Resolved {
 	glog.Info("Got task request through GraphQL admin API")
 
-	input, err := getTaskInput(m)
+	input, err := getTaskInput(q)
 	if err != nil {
-		return resolve.EmptyResult(m, err), false
+		return resolve.EmptyResult(q, err)
 	}
 	if input.Id == "" {
-		return resolve.EmptyResult(m, fmt.Errorf("missing task ID")), false
+		return resolve.EmptyResult(q, fmt.Errorf("task ID is missing"))
 	}
 	id, err := strconv.ParseUint(input.Id, 0, 64)
 	if err != nil {
-		return resolve.EmptyResult(m, fmt.Errorf("invalid task ID")), false
+		return resolve.EmptyResult(q, fmt.Errorf("task ID is invalid"))
 	}
 
-	status := worker.Tasks.GetStatus(id).String()
-	msg := fmt.Sprintf("status: %s", status)
-	responseData := response("Success", msg)
-	responseData["status"] = status
+	status := worker.Tasks.GetStatus(id)
+	if status == 0 {
+		return resolve.EmptyResult(q, fmt.Errorf("task does not exist or has expired"))
+	}
 	return resolve.DataResult(
-		m,
-		map[string]interface{}{m.Name(): responseData},
+		q,
+		map[string]interface{}{q.Name(): map[string]interface{}{
+			"status": status.String(),
+		}},
 		nil,
-	), true
+	)
 }
 
-func getTaskInput(m schema.Mutation) (*taskInput, error) {
-	inputArg := m.ArgValue(schema.InputArgName)
+func getTaskInput(q schema.Query) (*taskInput, error) {
+	inputArg := q.ArgValue(schema.InputArgName)
 	glog.Infof("inputArg: %+v", inputArg)
 	inputBytes, err := json.Marshal(inputArg)
 	if err != nil {
