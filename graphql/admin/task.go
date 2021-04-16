@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Dgraph Labs, Inc. and Contributors
+ * Copyright 2021 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,56 +20,56 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
-	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/golang/glog"
 )
 
-type backupInput struct {
-	DestinationFields
-	ForceFull bool
+type taskInput struct {
+	Id string
 }
 
-func resolveBackup(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
-	glog.Info("Got backup request")
+func resolveTask(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
+	glog.Info("Got task request through GraphQL admin API")
 
-	input, err := getBackupInput(m)
+	input, err := getTaskInput(m)
 	if err != nil {
 		return resolve.EmptyResult(m, err), false
 	}
-
-	req := &pb.BackupRequest{
-		Destination:  input.Destination,
-		AccessKey:    input.AccessKey,
-		SecretKey:    input.SecretKey,
-		SessionToken: input.SessionToken,
-		Anonymous:    input.Anonymous,
-		ForceFull:    input.ForceFull,
+	if input.Id == "" {
+		return resolve.EmptyResult(m, fmt.Errorf("missing task ID")), false
 	}
-	taskId, err := worker.Tasks.QueueBackup(req)
+	id, err := strconv.ParseUint(input.Id, 0, 64)
 	if err != nil {
-		return resolve.EmptyResult(m, err), false
+		return resolve.EmptyResult(m, fmt.Errorf("invalid task ID")), false
 	}
 
-	msg := fmt.Sprintf("Backup started with ID 0x%x.", taskId)
+	status := worker.Tasks.GetStatus(id).String()
+	msg := fmt.Sprintf("status: %s", status)
+	responseData := response("Success", msg)
+	responseData["status"] = status
 	return resolve.DataResult(
 		m,
-		map[string]interface{}{m.Name(): response("Success", msg)},
+		map[string]interface{}{m.Name(): responseData},
 		nil,
 	), true
 }
 
-func getBackupInput(m schema.Mutation) (*backupInput, error) {
+func getTaskInput(m schema.Mutation) (*taskInput, error) {
 	inputArg := m.ArgValue(schema.InputArgName)
-	inputByts, err := json.Marshal(inputArg)
+	glog.Infof("inputArg: %+v", inputArg)
+	inputBytes, err := json.Marshal(inputArg)
 	if err != nil {
 		return nil, schema.GQLWrapf(err, "couldn't get input argument")
 	}
+	glog.Infof("taskInput: %s", string(inputBytes))
 
-	var input backupInput
-	err = json.Unmarshal(inputByts, &input)
-	return &input, schema.GQLWrapf(err, "couldn't get input argument")
+	var input taskInput
+	if err := json.Unmarshal(inputBytes, &input); err != nil {
+		return nil, schema.GQLWrapf(err, "couldn't get input argument")
+	}
+	return &input, nil
 }

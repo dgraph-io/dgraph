@@ -55,11 +55,21 @@ type tasks struct {
 	rng    *rand.Rand
 }
 
+func (t tasks) GetStatus(id uint64) TaskStatus {
+	glog.Infof("Fetching task status: 0x%x", id)
+	if id == 0 || id == math.MaxUint64 {
+		return 0
+	}
+
+	value := t.log.Get(id)
+	return getTaskStatus(value)
+}
+
 // cancelQueuedTasks marks all queued tasks in the log as canceled.
 func (t tasks) cancelQueued() {
-	t.log.IterateKV(func(key, val uint64) uint64 {
-		if getTaskStatus(val) == taskStatusQueued {
-			return newTaskValue(taskStatusCanceled)
+	t.log.IterateKV(func(id, val uint64) uint64 {
+		if getTaskStatus(val) == TaskStatusQueued {
+			return newTaskValue(TaskStatusCanceled)
 		}
 		return 0
 	})
@@ -69,8 +79,8 @@ func (t tasks) cancelQueued() {
 func (t tasks) deleteExpired() {
 	const ttl = 7 * 24 * time.Hour // 1 week
 	minTs := time.Now().UTC().Add(-ttl).Unix()
-	minKey := uint64(minTs) << 32
-	t.log.DeleteBelow(minKey)
+	minId := uint64(minTs) << 32
+	t.log.DeleteBelow(minId)
 }
 
 // run loops forever, running queued tasks one at a time. Any returned errors are logged.
@@ -86,48 +96,48 @@ func (t tasks) run() {
 
 		// Fetch the task from the log. If the task isn't found, this means it has expired (older
 		// than taskTtl.
-		value := t.log.Get(task.key)
+		value := t.log.Get(task.id)
 		if value == 0 {
-			glog.Errorf("task %d is expired, skipping", task.key)
+			glog.Errorf("task 0x%x: is expired, skipping", task.id)
 			continue
 		}
 		// Only proceed if the task is still queued. It's possible that the task got canceled
 		// before we were able to run it.
-		if status := getTaskStatus(value); status != taskStatusQueued {
-			glog.Errorf("task %d is set to %s, skipping", task.key, status)
+		if status := getTaskStatus(value); status != TaskStatusQueued {
+			glog.Errorf("task 0x%x: status is set to %s, skipping", task.id, status)
 		}
 		// Change the task status to RUNNING.
-		t.log.Set(task.key, newTaskValue(taskStatusRunning))
+		t.log.Set(task.id, newTaskValue(TaskStatusRunning))
 
 		// Run the task.
-		var status taskStatus
+		var status TaskStatus
 		if err := task.run(); err != nil {
-			status = taskStatusError
-			glog.Errorf("task %d: %s: %v", task.key, status, err)
+			status = TaskStatusError
+			glog.Errorf("task 0x%x: %s: %v", task.id, status, err)
 		} else {
-			status = taskStatusSuccess
-			glog.Infof("task %d: %s", task.key, status)
+			status = TaskStatusSuccess
+			glog.Infof("task 0x%x: %s", task.id, status)
 		}
 
 		// Change the task status to SUCCESS / ERROR.
-		t.log.Set(task.key, newTaskValue(status))
+		t.log.Set(task.id, newTaskValue(status))
 	}
 }
 
-func (t tasks) QueueBackup(req *pb.BackupRequest) (int64, error) {
+func (t tasks) QueueBackup(req *pb.BackupRequest) (uint64, error) {
 	return t.queueTask(req)
 }
 
-func (t tasks) QueueExport(req *pb.ExportRequest) (int64, error) {
+func (t tasks) QueueExport(req *pb.ExportRequest) (uint64, error) {
 	return t.queueTask(req)
 }
 
 // queueTask queues a task of any type. Don't use this function directly.
-func (t tasks) queueTask(req interface{}) (int64, error) {
+func (t tasks) queueTask(req interface{}) (uint64, error) {
 	task := task{req: req}
 	for attempt := 0; ; attempt++ {
-		task.key = t.newKey()
-		if t.log.Get(task.key) == 0 {
+		task.id = t.newId()
+		if t.log.Get(task.id) == 0 {
 			break
 		}
 		// Unable to generate a unique random number.
@@ -139,22 +149,21 @@ func (t tasks) queueTask(req interface{}) (int64, error) {
 
 	select {
 	case t.queue <- task:
-		t.log.Set(task.key, newTaskValue(taskStatusQueued))
-		// Casting to int64 is safe here because task.key is always < math.MaxInt64
-		return int64(task.key), nil
+		t.log.Set(task.id, newTaskValue(TaskStatusQueued))
+		return task.id, nil
 	default:
 		return 0, fmt.Errorf("too many pending tasks, please try again later")
 	}
 }
 
-// newTaskKey returns a new task key in the range [1, math.MaxInt64].
-func (t tasks) newKey() uint64 {
-	rnd := t.rng.Int31()
+// TODO(ajeet): figure out edge cases
+func (t tasks) newId() uint64 {
+	rnd := t.rng.Int()
 	return uint64(rnd)<<32 | uint64(t.raftId)
 }
 
 type task struct {
-	key uint64
+	id  uint64
 	req interface{} // *pb.BackupRequest, *pb.ExportRequest
 }
 
@@ -170,50 +179,50 @@ func (t task) run() error {
 		if err != nil {
 			return err
 		}
-		glog.Infof("task %d: exported files: %v", t.key, files)
+		glog.Infof("task 0x%x: exported files: %v", t.id, files)
 	default:
 		err := fmt.Errorf(
-			"task %d: received request of unknown type (%T)", t.key, reflect.TypeOf(t.req))
+			"task 0x%x: received request of unknown type (%T)", t.id, reflect.TypeOf(t.req))
 		panic(err)
 	}
 	return nil
 }
 
 // newTaskValue returns a new task value with the given status.
-func newTaskValue(status taskStatus) uint64 {
+func newTaskValue(status TaskStatus) uint64 {
 	now := time.Now().UTC().Unix()
 	// It's safe to use a 32-bit timestamp, this will only overflow on 2106-02-07.
 	return uint64(now)<<32 | uint64(status)
 }
 
 // newTaskValue extracts a taskStatus from a task value.
-func getTaskStatus(value uint64) taskStatus {
-	return taskStatus(value) & math.MaxUint32
+func getTaskStatus(value uint64) TaskStatus {
+	return TaskStatus(value) & math.MaxUint32
 }
 
-type taskStatus uint64
+type TaskStatus uint64
 
 const (
 	// newTaskValue must never return zero, since z.Tree does not support zero values.
 	// Starting taskStatus at 1 guarantees this.
-	taskStatusQueued taskStatus = iota + 1
-	taskStatusRunning
-	taskStatusCanceled
-	taskStatusError
-	taskStatusSuccess
+	TaskStatusQueued TaskStatus = iota + 1
+	TaskStatusRunning
+	TaskStatusCanceled
+	TaskStatusError
+	TaskStatusSuccess
 )
 
-func (status taskStatus) String() string {
+func (status TaskStatus) String() string {
 	switch status {
-	case taskStatusQueued:
+	case TaskStatusQueued:
 		return "QUEUED"
-	case taskStatusRunning:
+	case TaskStatusRunning:
 		return "RUNNING"
-	case taskStatusCanceled:
+	case TaskStatusCanceled:
 		return "CANCELED"
-	case taskStatusError:
+	case TaskStatusError:
 		return "ERROR"
-	case taskStatusSuccess:
+	case TaskStatusSuccess:
 		return "SUCCESS"
 	default:
 		return "UNKNOWN"
