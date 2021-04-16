@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
@@ -47,14 +48,16 @@ func resolveTask(ctx context.Context, q schema.Query) *resolve.Resolved {
 		return resolve.EmptyResult(q, fmt.Errorf("task ID is invalid"))
 	}
 
-	status := worker.Tasks.GetStatus(id)
-	if status == 0 {
+	meta := worker.Tasks.Get(id)
+	if meta == 0 {
 		return resolve.EmptyResult(q, fmt.Errorf("task does not exist or has expired"))
 	}
 	return resolve.DataResult(
 		q,
 		map[string]interface{}{q.Name(): map[string]interface{}{
-			"status": status.String(),
+			"kind":        meta.Kind().String(),
+			"status":      meta.Status().String(),
+			"lastUpdated": meta.Timestamp().Format(time.RFC3339),
 		}},
 		nil,
 	)

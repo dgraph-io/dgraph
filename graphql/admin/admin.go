@@ -266,7 +266,24 @@ const (
 	}
 
 	type TaskPayload {
-		status: String
+		kind: TaskKind
+		status: TaskStatus
+		lastUpdated: DateTime
+	}
+
+	enum TaskStatus {
+		Queued
+		Running
+		Canceled
+		Error
+		Success
+		Unknown
+	}
+
+	enum TaskKind {
+		Backup
+		Export
+		Unknown
 	}
 
 	input ConfigInput {
