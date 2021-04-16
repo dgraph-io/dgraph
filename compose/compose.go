@@ -582,7 +582,8 @@ func makeDir(path string) error {
 			fatal(errors.Errorf("Couldn't create directory %v. Error: %v", path, errs))
 		}
 	} else if err != nil {
-		fatal(errors.Errorf("Something went wrong while checking if directory %v still exists. Error: %v", path, err))
+		fatal(errors.Errorf("Something went wrong while checking if directory %v still exists. Error: %v",
+			path, err))
 	}
 	return nil
 }
@@ -606,7 +607,8 @@ func copyFile(src, dst string) error {
 	defer dstfd.Close()
 
 	if _, err = io.Copy(dstfd, srcfd); err != nil {
-		fatal(errors.Errorf("Error in copying source file %v to destination file %v. Error: %v", src, dst, err))
+		fatal(errors.Errorf("Error in copying source file %v to destination file %v. Error: %v",
+			src, dst, err))
 		return err
 	}
 	if srcinfo, err = os.Stat(src); err != nil {
@@ -850,8 +852,14 @@ func main() {
 		n := 1
 		for n <= opts.NumAlphas {
 			new_dir := opts.DataDir + "/alpha" + strconv.Itoa(n) + "/p"
-			makeDir(new_dir)
-			copyDir(opts.PDir, new_dir)
+			err := makeDir(new_dir)
+			if err != nil {
+				fatal(errors.Errorf("Couldn't create directory %v", new_dir))
+			}
+			err = copyDir(opts.PDir, new_dir)
+			if err != nil {
+				fatal(errors.Errorf("Couldn't copy directory from %v to %v", opts.PDir, new_dir))
+			}
 			n++
 		}
 	}
