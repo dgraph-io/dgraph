@@ -2468,6 +2468,7 @@ loop:
 			case err != nil:
 				return err
 			}
+			// skip entries upto Offset and do not store in the result.
 			if cnt < q.Offset {
 				cnt++
 				continue
@@ -2498,6 +2499,7 @@ loop:
 			case err != nil:
 				return err
 			}
+			// skip entries upto Offset and do not store in the result.
 			if cnt < q.Offset {
 				cnt++
 				continue

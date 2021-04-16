@@ -939,7 +939,7 @@ func createTaskQuery(ctx context.Context, sg *SubGraph) (*pb.Query, error) {
 		sg.Params.ExpandAll = true
 	}
 
-	// count is to limit how many results we want.
+	// first is to limit how many results we want.
 	first, offset := calculatePaginationParams(sg)
 
 	out := &pb.Query{
@@ -967,7 +967,7 @@ func createTaskQuery(ctx context.Context, sg *SubGraph) (*pb.Query, error) {
 	return out, nil
 }
 
-// calculateFirstN returns the count of result we need to proceed query further down.
+// calculatePaginationParams returns the (count, offset) of result we need to proceed query further down.
 func calculatePaginationParams(sg *SubGraph) (int32, int32) {
 	// by default count is zero. (zero will retrieve all the results)
 	count := math.MaxInt32
@@ -1005,6 +1005,7 @@ func calculatePaginationParams(sg *SubGraph) (int32, int32) {
 			return int32(sg.Params.Count), int32(sg.Params.Offset)
 		}
 	}
+	// make offset = 0, if there is need to fetch all the results.
 	return int32(count), 0
 }
 
