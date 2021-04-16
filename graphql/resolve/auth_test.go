@@ -814,19 +814,19 @@ func TestAuthQueryRewriting(t *testing.T) {
 			ClosedByDefault: authMeta.ClosedByDefault,
 		}
 
-		//b := read(t, "auth_query_test.yaml")
-		//t.Run("Query Rewriting "+algo, func(t *testing.T) {
-		//	queryRewriting(t, strSchema, metaInfo, b)
-		//})
-		//
-		//t.Run("Mutation Query Rewriting "+algo, func(t *testing.T) {
-		//	mutationQueryRewriting(t, strSchema, metaInfo)
-		//})
-		//b = read(t, "auth_add_test.yaml")
-		//t.Run("Add Mutation "+algo, func(t *testing.T) {
-		//	mutationAdd(t, strSchema, metaInfo, b)
-		//})
-		b := read(t, "auth_update_test.yaml")
+		b := read(t, "auth_query_test.yaml")
+		t.Run("Query Rewriting "+algo, func(t *testing.T) {
+			queryRewriting(t, strSchema, metaInfo, b)
+		})
+
+		t.Run("Mutation Query Rewriting "+algo, func(t *testing.T) {
+			mutationQueryRewriting(t, strSchema, metaInfo)
+		})
+		b = read(t, "auth_add_test.yaml")
+		t.Run("Add Mutation "+algo, func(t *testing.T) {
+			mutationAdd(t, strSchema, metaInfo, b)
+		})
+		b = read(t, "auth_update_test.yaml")
 		t.Run("Update Mutation "+algo, func(t *testing.T) {
 			mutationUpdate(t, strSchema, metaInfo, b)
 		})
