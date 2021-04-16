@@ -243,6 +243,7 @@ func aggregateQuery(query schema.Query, authRw *authRewriter) []*gql.GraphQuery 
 					// var(func: type(Tweets)) {
 					//        scoreVar as Tweets.score
 					// }
+
 					mainQuery.Children = append(mainQuery.Children, child)
 					isAggregateFieldVisited[constructedForField] = true
 				}
@@ -1042,6 +1043,12 @@ func buildAggregateFields(
 
 	// addedAggregateFields is a map from aggregate field name to boolean
 	addedAggregateField := make(map[string]bool)
+	// Add type filter in case the Dgraph predicate for which the aggregate
+	// field belongs to is a reverse edge
+	if strings.HasPrefix(constructedForDgraphPredicate, "~") {
+		addTypeFilter(mainField, f.ConstructedFor())
+	}
+
 	// isAggregateFieldVisited is a map from field name to boolean. It is used to
 	// ensure that a field is added to Var query at maximum once.
 	// Eg. Even if scoreMax and scoreMin are queried, the corresponding field will
@@ -1056,6 +1063,11 @@ func buildAggregateFields(
 	}
 	// Add filter to count aggregation field.
 	_ = addFilter(aggregateChild, constructedForType, fieldFilter)
+	// Add type filter in case the Dgraph predicate for which the aggregate
+	// field belongs to is a reverse edge
+	if strings.HasPrefix(constructedForDgraphPredicate, "~") {
+		addTypeFilter(aggregateChild, f.ConstructedFor())
+	}
 	aggregateChildren = append(aggregateChildren, aggregateChild)
 
 	// Iterate over fields queried inside aggregate.
@@ -1268,6 +1280,12 @@ func addSelectionSetFrom(
 		if includeField := addFilter(child, f.Type(), filter); !includeField {
 			continue
 		}
+
+		// Add type filter in case the Dgraph predicate is a reverse edge
+		if strings.HasPrefix(f.DgraphPredicate(), "~") {
+			addTypeFilter(child, f.Type())
+		}
+
 		addOrder(child, f)
 		addPagination(child, f)
 		addCascadeDirective(child, f)

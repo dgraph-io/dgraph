@@ -2395,7 +2395,7 @@
     query {
       queryMovie(func: type(Movie)) {
         name : Movie.name
-        director : ~directed.movies {
+        director : ~directed.movies @filter(type(MovieDirector)) {
           name : MovieDirector.name
           dgraph.uid : uid
         }
@@ -3181,6 +3181,54 @@
     query {
       queryAuthor(func: uid(0x1)) @filter(type(Author)) {
         name : Author.name
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Query fields linked to reverse predicates in Dgraph"
+  gqlquery: |
+    query {
+      queryLinkX(filter:{f9:{eq: "Alice"}}) {
+        f1(filter: {f6: {eq: "Eve"}}) {
+          f6
+        }
+        f2(filter: {f7: {eq: "Bob"}}) {
+          f7
+        }
+        f1Aggregate(filter: {f6: {eq: "Eve"}}) {
+          count
+          f6Max
+        }
+        f2Aggregate(filter: {f7: {eq: "Bob"}}) {
+          count
+          f7Min
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryLinkX(func: type(LinkX)) @filter(eq(LinkX.f9, "Alice")) {
+        f1 : ~link @filter((eq(LinkY.f6, "Eve") AND type(LinkY))) {
+          f6 : LinkY.f6
+          dgraph.uid : uid
+        }
+        f2 : ~link @filter((eq(LinkZ.f7, "Bob") AND type(LinkZ))) {
+          f7 : LinkZ.f7
+          dgraph.uid : uid
+        }
+        f1Aggregate : ~link @filter((eq(LinkY.f6, "Eve") AND type(LinkY))) {
+          f1Aggregate_f6Var as LinkY.f6
+          dgraph.uid : uid
+        }
+        count_f1Aggregate : count(~link) @filter((eq(LinkY.f6, "Eve") AND type(LinkY)))
+        f6Max_f1Aggregate : max(val(f1Aggregate_f6Var))
+        f2Aggregate : ~link @filter((eq(LinkZ.f7, "Bob") AND type(LinkZ))) {
+          f2Aggregate_f7Var as LinkZ.f7
+          dgraph.uid : uid
+        }
+        count_f2Aggregate : count(~link) @filter((eq(LinkZ.f7, "Bob") AND type(LinkZ)))
+        f7Min_f2Aggregate : min(val(f2Aggregate_f7Var))
         dgraph.uid : uid
       }
     }

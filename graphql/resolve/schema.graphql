@@ -379,3 +379,17 @@ type Workflow {
 type Node {
     name: String!
 }
+
+type LinkX {
+    f9: String! @id
+    f1: [LinkY] @dgraph(pred: "~link")
+    f2: [LinkZ] @dgraph(pred: "~link")
+}
+type LinkY {
+    f6: String! @id
+    f3: [LinkX] @dgraph(pred: "link")
+}
+type LinkZ {
+    f7: String! @id
+    f4: [LinkX] @dgraph(pred: "link")
+}
