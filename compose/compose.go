@@ -579,10 +579,10 @@ func makeDir(path string) error {
 	_, err := os.Stat(path)
 	if os.IsNotExist(err) {
 		if errs := os.MkdirAll(path, 0755); errs != nil {
-			fatal(errors.Errorf("Couldn't create directory %v. Error: %v", opts.DataDir, errs))
+			fatal(errors.Errorf("Couldn't create directory %v. Error: %v", path, errs))
 		}
 	} else if err != nil {
-		fatal(errors.Errorf("Something went wrong while checking if directory %v still exists. Error: %v", opts.DataDir, errs))
+		fatal(errors.Errorf("Something went wrong while checking if directory %v still exists. Error: %v", path, err))
 	}
 	return nil
 }
@@ -594,23 +594,23 @@ func copyFile(src, dst string) error {
 	var srcinfo os.FileInfo
 
 	if srcfd, err = os.Open(src); err != nil {
-		fatal(errors.Errorf("Error in opening source file %v. Error: %v", src, errs))
+		fatal(errors.Errorf("Error in opening source file %v. Error: %v", src, err))
 		return err
 	}
 	defer srcfd.Close()
 
 	if dstfd, err = os.Create(dst); err != nil {
-		fatal(errors.Errorf("Error in creating destination file %v. Error: %v", dst, errs))
+		fatal(errors.Errorf("Error in creating destination file %v. Error: %v", dst, err))
 		return err
 	}
 	defer dstfd.Close()
 
 	if _, err = io.Copy(dstfd, srcfd); err != nil {
-		fatal(errors.Errorf("Error in copying source file %v to destination file %v. Error: %v", src, dst, errs))
+		fatal(errors.Errorf("Error in copying source file %v to destination file %v. Error: %v", src, dst, err))
 		return err
 	}
 	if srcinfo, err = os.Stat(src); err != nil {
-		fatal(errors.Errorf("Error in doing stat of source file %v. Error: %v", src, errs))
+		fatal(errors.Errorf("Error in doing stat of source file %v. Error: %v", src, err))
 		return err
 	}
 	return os.Chmod(dst, srcinfo.Mode())
@@ -622,17 +622,17 @@ func copyDir(src string, dst string) error {
 	var srcinfo os.FileInfo
 
 	if srcinfo, err = os.Stat(src); err != nil {
-		fatal(errors.Errorf("Error in doing stat of source dir %v. Error: %v", src, errs))
+		fatal(errors.Errorf("Error in doing stat of source dir %v. Error: %v", src, err))
 		return err
 	}
 
 	if err = os.MkdirAll(dst, srcinfo.Mode()); err != nil {
-		fatal(errors.Errorf("Error in making dir %v. Error: %v", dst, errs))
+		fatal(errors.Errorf("Error in making dir %v. Error: %v", dst, err))
 		return err
 	}
 
 	if fds, err = ioutil.ReadDir(src); err != nil {
-		fatal(errors.Errorf("Error in reading source dir %v. Error: %v", src, errs))
+		fatal(errors.Errorf("Error in reading source dir %v. Error: %v", src, err))
 		return err
 	}
 	for _, fd := range fds {
