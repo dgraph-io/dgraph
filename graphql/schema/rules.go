@@ -195,6 +195,11 @@ func dgraphDirectivePredicateValidation(gqlSch *ast.Schema, definitions []string
 						isSecret:   false,
 					}
 
+					// Skip the checks related to same Dgraph predicates being used twice with
+					// different types in case it is an inverse edge.
+					if strings.HasPrefix(fname, "~") || strings.HasPrefix(fname, "<~") {
+						continue
+					}
 					if pred, ok := preds[fname]; ok {
 						if pred.isSecret {
 							errs = append(errs, secretError(pred, thisPred))

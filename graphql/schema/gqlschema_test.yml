@@ -3431,3 +3431,16 @@ valid_schemas:
         addressHi: String @dgraph(pred: "Person.address@hi")
         professionEn: String @dgraph(pred: "Person.profession@en")
       }
+
+  - name: "Same reverse dgraph predicate can be used by two different GraphQL fields"
+    input: |
+      type X {
+        f1: [Y] @dgraph(pred: "~link")
+        f2: [Z] @dgraph(pred: "~link")
+      }
+      type Y {
+        f3: [X] @dgraph(pred: "link")
+      }
+      type Z {
+        f4: [X] @dgraph(pred: "link")
+      }
