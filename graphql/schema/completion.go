@@ -72,6 +72,7 @@ func Unmarshal(data []byte, v interface{}) error {
 // At present, it is only used for building custom results by:
 //  * Admin Server
 //  * @custom(http: {...}) query/mutation
+//  * @custom(dql: ...) queries
 //
 // fields are all the fields from this bracketed level in the GraphQL  query, e.g:
 //  {
@@ -117,12 +118,18 @@ func CompleteObject(
 	seenField := make(map[string]bool)
 
 	x.Check2(buf.WriteRune('{'))
-	// @custom(http: {...}) query/mutation results may return __typename in response for abstract
-	// fields, lets use that information if present.
-	typename, ok := res[Typename].(string)
 	var dgraphTypes []string
-	if ok && len(typename) > 0 {
+	if typename, ok := res[Typename].(string); ok && len(typename) > 0 {
+		// @custom(http: {...}) query/mutation results may return __typename in response for
+		// abstract fields, lets use that information if present.
 		dgraphTypes = []string{typename}
+	} else if dgTypeVals, ok := res["dgraph.type"].([]interface{}); ok {
+		// @custom(dql: ...) query results may return dgraph.type in response for abstract fields
+		for _, val := range dgTypeVals {
+			if typename, ok = val.(string); ok {
+				dgraphTypes = append(dgraphTypes, typename)
+			}
+		}
 	}
 
 	for _, f := range fields {
@@ -133,8 +140,8 @@ func CompleteObject(
 		x.Check2(buf.WriteString(comma))
 		f.CompleteAlias(&buf)
 
-		val := res[f.Name()]
-		if f.Name() == Typename {
+		val := res[f.RemoteResponseName()]
+		if f.RemoteResponseName() == Typename {
 			// From GraphQL spec:
 			// https://graphql.github.io/graphql-spec/June2018/#sec-Type-Name-Introspection
 			// "GraphQL supports type name introspection at any point within a query by the
@@ -324,7 +331,7 @@ func mismatched(path []interface{}, field Field) ([]byte, x.GqlErrorList) {
 // defined in the GraphQL spec. If this is not possible, then it returns an error. The crux of
 // coercion rules defined in the spec is to not lose information during coercion.
 // Note that, admin server specifically uses these:
-//  * json.Number (Query.config.cacheMb)
+//  * json.Number
 //  * schema.Unmarshal() everywhere else
 // And, @custom(http: {...}) query/mutation would always use schema.Unmarshal().
 // Now, schema.Unmarshal() can only give one of the following types for scalars:
@@ -419,6 +426,17 @@ func coerceScalar(val interface{}, field Field, path []interface{}) (interface{}
 				return nil, valueCoercionError(v)
 			}
 			// do nothing, as val is already a valid number in int64 range
+		default:
+			return nil, valueCoercionError(v)
+		}
+	// UInt64 is present only in admin schema.
+	case "UInt64":
+		switch v := val.(type) {
+		case json.Number:
+			if _, err := strconv.ParseUint(v.String(), 10, 64); err != nil {
+				return nil, valueCoercionError(v)
+			}
+			// do nothing, as val is already a valid number in UInt64 range
 		default:
 			return nil, valueCoercionError(v)
 		}

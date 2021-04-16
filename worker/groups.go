@@ -26,7 +26,7 @@ import (
 	"time"
 
 	badgerpb "github.com/dgraph-io/badger/v3/pb"
-	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -59,8 +59,6 @@ var gr = &groupi{
 	blockDeletes: new(sync.Mutex),
 	tablets:      make(map[string]*pb.Tablet),
 }
-
-var RaftDefaults = "idx=0; group=0; learner=false; snapshot-after=10000"
 
 func groups() *groupi {
 	return gr
@@ -492,7 +490,7 @@ func (g *groupi) sendTablet(tablet *pb.Tablet) (*pb.Tablet, error) {
 	}
 
 	if out.GroupId == groups().groupId() {
-		glog.Infof("Serving tablet for: %v\n", tablet.GetPredicate())
+		glog.Infof("Serving tablet for: %v\n", x.FormatNsAttr(tablet.GetPredicate()))
 	}
 	return out, nil
 }
@@ -630,6 +628,11 @@ func KnownGroups() []uint32 {
 // GroupId returns the group to which this worker belongs to.
 func GroupId() uint32 {
 	return groups().groupId()
+}
+
+// NodeId returns the raft id of the node.
+func NodeId() uint64 {
+	return groups().Node.Id
 }
 
 func (g *groupi) triggerMembershipSync() {
@@ -1058,6 +1061,30 @@ func (g *groupi) processOracleDeltaStream() {
 			}
 		}
 	}
+}
+
+// GetEEFeaturesList returns a list of Enterprise Features that are available.
+func GetEEFeaturesList() []string {
+	if !EnterpriseEnabled() {
+		return nil
+	}
+	var ee []string
+	if len(Config.HmacSecret) > 0 {
+		ee = append(ee, "acl")
+		ee = append(ee, "multi_tenancy")
+	}
+	if x.WorkerConfig.EncryptionKey != nil {
+		ee = append(ee, "encryption_at_rest", "encrypted_backup_restore", "encrypted_export")
+	} else {
+		ee = append(ee, "backup_restore")
+	}
+	if x.WorkerConfig.Audit {
+		ee = append(ee, "audit")
+	}
+	if Config.ChangeDataConf != "" {
+		ee = append(ee, "cdc")
+	}
+	return ee
 }
 
 // EnterpriseEnabled returns whether enterprise features can be used or not.

@@ -79,8 +79,11 @@ func (p *Poller) AddSubscriber(req *schema.Request) (*SubscriberResponse, error)
 	// find out the custom claims for auth, if any. As,
 	// We also need to use authVariables in generating the hashed bucketID
 	authMeta := resolver.Schema().Meta().AuthMeta()
-	customClaims, err := authMeta.ExtractCustomClaims(authMeta.AttachAuthorizationJwt(context.
-		Background(), req.Header))
+	ctx, err := authMeta.AttachAuthorizationJwt(context.Background(), req.Header)
+	if err != nil {
+		return nil, err
+	}
+	customClaims, err := authMeta.ExtractCustomClaims(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -175,7 +178,7 @@ func (p *Poller) poll(req *pollRequest) {
 	pollID := uint64(0)
 	for {
 		pollID++
-		time.Sleep(x.Config.PollInterval)
+		time.Sleep(x.Config.GraphQL.GetDuration("poll-interval"))
 
 		globalEpoch := atomic.LoadUint64(p.globalEpoch)
 		if req.localEpoch != globalEpoch || globalEpoch == math.MaxUint64 {

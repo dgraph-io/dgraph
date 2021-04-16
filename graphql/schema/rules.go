@@ -39,7 +39,8 @@ func init() {
 	schemaValidations = append(schemaValidations, dgraphDirectivePredicateValidation)
 	typeValidations = append(typeValidations, idCountCheck, dgraphDirectiveTypeValidation,
 		passwordDirectiveValidation, conflictingDirectiveValidation, nonIdFieldsCheck,
-		remoteTypeValidation, generateDirectiveValidation, apolloKeyValidation, apolloExtendsValidation)
+		remoteTypeValidation, generateDirectiveValidation, apolloKeyValidation,
+		apolloExtendsValidation, lambdaOnMutateValidation)
 	fieldValidations = append(fieldValidations, listValidityCheck, fieldArgumentCheck,
 		fieldNameCheck, isValidFieldForList, hasAuthDirective, fieldDirectiveCheck)
 
@@ -817,7 +818,7 @@ func listValidityCheck(typ *ast.Definition, field *ast.FieldDefinition) gqlerror
 
 func hasInverseValidation(sch *ast.Schema, typ *ast.Definition,
 	field *ast.FieldDefinition, dir *ast.Directive,
-	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
+	secrets map[string]x.Sensitive) gqlerror.List {
 	var errs []*gqlerror.Error
 
 	invTypeName := field.Type.Name()
@@ -1001,7 +1002,7 @@ func searchValidation(
 	typ *ast.Definition,
 	field *ast.FieldDefinition,
 	dir *ast.Directive,
-	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
+	secrets map[string]x.Sensitive) gqlerror.List {
 	var errs []*gqlerror.Error
 
 	arg := dir.Arguments.ForName(searchArgs)
@@ -1080,7 +1081,7 @@ func searchValidation(
 }
 
 func dgraphDirectiveValidation(sch *ast.Schema, typ *ast.Definition, field *ast.FieldDefinition,
-	dir *ast.Directive, secrets map[string]x.SensitiveByteSlice) gqlerror.List {
+	dir *ast.Directive, secrets map[string]x.Sensitive) gqlerror.List {
 	var errs []*gqlerror.Error
 
 	if isID(field) {
@@ -1212,6 +1213,41 @@ func dgraphDirectiveValidation(sch *ast.Schema, typ *ast.Definition, field *ast.
 			return errs
 		}
 	}
+
+	if strings.Contains(predArg.Value.String(), "@") {
+		if field.Type.Name() != "String" {
+			errs = append(errs, gqlerror.ErrorPosf(field.Position,
+				"Type %s; Field %s: Expected type `String`"+
+					" for language tag field but got `%s`", typ.Name, field.Name, field.Type.Name()))
+			return errs
+		}
+		if field.Directives.ForName(idDirective) != nil {
+			errs = append(errs, gqlerror.ErrorPosf(field.Directives.ForName(idDirective).Position,
+				"Type %s; Field %s: @id "+
+					"directive not supported on language tag fields", typ.Name, field.Name))
+			return errs
+		}
+
+		if field.Directives.ForName(searchDirective) != nil && isMultiLangField(field, false) {
+			errs = append(errs, gqlerror.ErrorPosf(field.Directives.ForName(searchDirective).Position,
+				"Type %s; Field %s: @search directive not applicable"+
+					" on language tag field with multiple languages", typ.Name, field.Name))
+			return errs
+		}
+
+		tags := strings.Split(predArg.Value.Raw, "@")[1]
+		if tags == "*" {
+			errs = append(errs, gqlerror.ErrorPosf(dir.Position, "Type %s; Field %s: `*` language tag not"+
+				" supported in GraphQL", typ.Name, field.Name))
+			return errs
+		}
+		if tags == "" {
+			errs = append(errs, gqlerror.ErrorPosf(dir.Position, "Type %s; Field %s: empty language"+
+				" tag not supported", typ.Name, field.Name))
+			return errs
+		}
+
+	}
 	return nil
 }
 
@@ -1219,7 +1255,7 @@ func passwordValidation(sch *ast.Schema,
 	typ *ast.Definition,
 	field *ast.FieldDefinition,
 	dir *ast.Directive,
-	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
+	secrets map[string]x.Sensitive) gqlerror.List {
 
 	return passwordDirectiveValidation(sch, typ)
 }
@@ -1228,21 +1264,57 @@ func lambdaDirectiveValidation(sch *ast.Schema,
 	typ *ast.Definition,
 	field *ast.FieldDefinition,
 	dir *ast.Directive,
-	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
+	secrets map[string]x.Sensitive) gqlerror.List {
 	// if the lambda url wasn't specified during alpha startup,
 	// just return that error. Don't confuse the user with errors from @custom yet.
-	if x.Config.GraphqlLambdaUrl == "" {
+	if x.LambdaUrl(x.GalaxyNamespace) == "" {
 		return []*gqlerror.Error{gqlerror.ErrorPosf(dir.Position,
 			"Type %s; Field %s: has the @lambda directive, but the "+
-				"`--graphql_lambda_url` flag wasn't specified during alpha startup.",
+				`--graphql "lambda-url=...;" flag wasn't specified during alpha startup.`,
 			typ.Name, field.Name)}
 	}
 	// reuse @custom directive validation
 	errs := customDirectiveValidation(sch, typ, field, buildCustomDirectiveForLambda(typ, field,
-		dir, func(f *ast.FieldDefinition) bool { return false }), secrets)
+		dir, x.GalaxyNamespace, func(f *ast.FieldDefinition) bool { return false }), secrets)
 	for _, err := range errs {
 		err.Message = "While building @custom for @lambda: " + err.Message
 	}
+	return errs
+}
+
+func lambdaOnMutateValidation(sch *ast.Schema, typ *ast.Definition) gqlerror.List {
+	dir := typ.Directives.ForName(lambdaOnMutateDirective)
+	if dir == nil {
+		return nil
+	}
+
+	var errs []*gqlerror.Error
+
+	// lambda url must be specified during alpha startup
+	if x.LambdaUrl(x.GalaxyNamespace) == "" {
+		errs = append(errs, gqlerror.ErrorPosf(dir.Position,
+			"Type %s: has the @lambdaOnMutate directive, but the "+
+				"`--graphql_lambda_url` flag wasn't specified during alpha startup.", typ.Name))
+	}
+
+	if typ.Directives.ForName(remoteDirective) != nil {
+		errs = append(errs, gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s; @lambdaOnMutate directive not allowed along with @remote directive.",
+			typ.Name))
+	}
+
+	for _, arg := range dir.Arguments {
+		// validate add/update/delete args
+		if arg.Value.Kind != ast.BooleanValue {
+			errs = append(errs, gqlerror.ErrorPosf(
+				arg.Position,
+				"Type %s; %s argument in @lambdaOnMutate directive can only be "+
+					"true/false, found: `%s`.",
+				typ.Name, arg.Name, arg.Value.String()))
+		}
+	}
+
 	return errs
 }
 
@@ -1352,7 +1424,7 @@ func customDirectiveValidation(sch *ast.Schema,
 	typ *ast.Definition,
 	field *ast.FieldDefinition,
 	dir *ast.Directive,
-	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
+	secrets map[string]x.Sensitive) gqlerror.List {
 	var errs []*gqlerror.Error
 
 	// 1. Validating custom directive itself
@@ -1373,8 +1445,8 @@ func customDirectiveValidation(sch *ast.Schema,
 	}
 
 	defn := sch.Types[typ.Name]
-	id := getIDField(defn)
-	xid := getXIDField(defn)
+	id := getIDField(defn, nil)
+	xid := getXIDField(defn, nil)
 	if !isQueryOrMutationType(typ) {
 		if len(id) == 0 && len(xid) == 0 {
 			errs = append(errs, gqlerror.ErrorPosf(
@@ -1995,16 +2067,15 @@ func idValidation(sch *ast.Schema,
 	typ *ast.Definition,
 	field *ast.FieldDefinition,
 	dir *ast.Directive,
-	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
+	secrets map[string]x.Sensitive) gqlerror.List {
 	if field.Type.String() == "String!" ||
 		field.Type.String() == "Int!" ||
-		field.Type.String() == "Int64!" ||
-		field.Type.String() == "Float!" {
+		field.Type.String() == "Int64!" {
 		return nil
 	}
 	return []*gqlerror.Error{gqlerror.ErrorPosf(
 		dir.Position,
-		"Type %s; Field %s: with @id directive must be of type String!, Int!, Int64! or Float!, not %s",
+		"Type %s; Field %s: with @id directive must be of type String!, Int! or Int64!, not %s",
 		typ.Name, field.Name, field.Type.String())}
 }
 
@@ -2069,11 +2140,81 @@ func apolloExtendsValidation(sch *ast.Schema, typ *ast.Definition) gqlerror.List
 	return nil
 }
 
+func apolloRequiresValidation(sch *ast.Schema,
+	typ *ast.Definition,
+	field *ast.FieldDefinition,
+	dir *ast.Directive,
+	secrets map[string]x.Sensitive) gqlerror.List {
+
+	extendsDirective := typ.Directives.ForName(apolloExtendsDirective)
+	if extendsDirective == nil {
+		return []*gqlerror.Error{gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s: Field %s: @requires directive can only be defined on fields in type extensions. i.e., the type must have `@extends` or use `extend` keyword.", typ.Name, field.Name)}
+	}
+
+	arg := dir.Arguments.ForName(apolloKeyArg)
+	if arg == nil || arg.Value.Raw == "" {
+		return []*gqlerror.Error{gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s; Argument %s inside @requires directive must be defined.", typ.Name, apolloKeyArg)}
+	}
+
+	fldList := strings.Fields(arg.Value.Raw)
+	for _, fld := range fldList {
+		fldDefn := typ.Fields.ForName(fld)
+		if fldDefn == nil {
+			return []*gqlerror.Error{gqlerror.ErrorPosf(
+				dir.Position,
+				"Type %s; @requires directive uses a field %s which is not defined inside the type.", typ.Name, fld)}
+		}
+		if !hasExternal(fldDefn) {
+			return []*gqlerror.Error{gqlerror.ErrorPosf(
+				dir.Position,
+				"Type %s; Field %s must be @external.", typ.Name, fld)}
+		}
+	}
+	return nil
+}
+
+func apolloProvidesValidation(sch *ast.Schema,
+	typ *ast.Definition,
+	field *ast.FieldDefinition,
+	dir *ast.Directive,
+	secrets map[string]x.Sensitive) gqlerror.List {
+
+	fldTypeDefn := sch.Types[field.Type.Name()]
+	keyDirective := fldTypeDefn.Directives.ForName(apolloKeyDirective)
+	if keyDirective == nil {
+		return []*gqlerror.Error{gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s; Field %s does not return a type that has a @key.", typ.Name, field.Name)}
+	}
+
+	arg := dir.Arguments.ForName(apolloKeyArg)
+	if arg == nil || arg.Value.Raw == "" {
+		return []*gqlerror.Error{gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s; Argument %s inside @provides directive must be defined.", typ.Name, apolloKeyArg)}
+	}
+
+	fldList := strings.Fields(arg.Value.Raw)
+	for _, fld := range fldList {
+		fldDefn := fldTypeDefn.Fields.ForName(fld)
+		if fldDefn == nil {
+			return []*gqlerror.Error{gqlerror.ErrorPosf(
+				dir.Position,
+				"Type %s; Field %s: @provides field %s doesn't exist for type %s.", typ.Name, field.Name, fld, fldTypeDefn.Name)}
+		}
+	}
+	return nil
+}
+
 func apolloExternalValidation(sch *ast.Schema,
 	typ *ast.Definition,
 	field *ast.FieldDefinition,
 	dir *ast.Directive,
-	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
+	secrets map[string]x.Sensitive) gqlerror.List {
 
 	extendsDirective := typ.Directives.ForName(apolloExtendsDirective)
 	if extendsDirective == nil {
@@ -2098,6 +2239,28 @@ func apolloExternalValidation(sch *ast.Schema,
 					"Type %s: Field %s: @%s directive can not be defined on @external fields that are not @key.", typ.Name, field.Name, directive)}
 			}
 		}
+	}
+	return nil
+}
+
+func remoteResponseValidation(sch *ast.Schema,
+	typ *ast.Definition,
+	field *ast.FieldDefinition,
+	dir *ast.Directive,
+	secrets map[string]x.Sensitive) gqlerror.List {
+
+	remoteDirectiveDefn := typ.Directives.ForName(remoteDirective)
+	if remoteDirectiveDefn == nil {
+		return []*gqlerror.Error{gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s: Field %s: @remoteResponse directive can only be defined on fields of @remote type.", typ.Name, field.Name)}
+	}
+
+	arg := dir.Arguments.ForName("name")
+	if arg == nil || arg.Value.Raw == "" {
+		return []*gqlerror.Error{gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s: Field %s: Argument %s inside @remoteResponse directive must be defined.", typ.Name, field.Name, "name")}
 	}
 	return nil
 }

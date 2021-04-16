@@ -31,8 +31,8 @@ import (
 	"google.golang.org/grpc/credentials"
 
 	"github.com/dgraph-io/badger/v3/options"
-	"github.com/dgraph-io/dgo/v200"
-	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgo/v210"
+	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
@@ -409,10 +409,12 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	})
 	require.Equal(t, numExpectedDirs, len(dirs))
 
-	manifests := x.WalkPathFunc(copyBackupDir, func(path string, isdir bool) bool {
-		return !isdir && strings.Contains(path, "manifest.json") && strings.HasPrefix(path, "data/backups_copy/dgraph.")
-	})
-	require.Equal(t, numExpectedDirs, len(manifests))
+	b, err = ioutil.ReadFile(filepath.Join(copyBackupDir, "manifest.json"))
+	require.NoError(t, err)
+	var manifest worker.MasterManifest
+	err = json.Unmarshal(b, &manifest)
+	require.NoError(t, err)
+	require.Equal(t, numExpectedDirs, len(manifest.Manifests))
 
 	return dirs
 }
@@ -423,7 +425,7 @@ func runRestore(t *testing.T, backupLocation, lastDir string, commitTs uint64) m
 	require.NoError(t, os.RemoveAll(restoreDir))
 
 	t.Logf("--- Restoring from: %q", backupLocation)
-	result := worker.RunRestore("./data/restore", backupLocation, lastDir, x.SensitiveByteSlice(nil), options.Snappy, 0)
+	result := worker.RunOfflineRestore("./data/restore", backupLocation, lastDir, "", options.Snappy, 0)
 	require.NoError(t, result.Err)
 
 	for i, pdir := range []string{"p1", "p2", "p3"} {

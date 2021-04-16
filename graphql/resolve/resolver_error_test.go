@@ -22,7 +22,7 @@ import (
 	"io/ioutil"
 	"testing"
 
-	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
+	dgoapi "github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/graphql/test"
 	"github.com/dgraph-io/dgraph/x"
@@ -131,8 +131,9 @@ func (ex *executor) Execute(ctx context.Context, req *dgoapi.Request,
 
 }
 
-func (ex *executor) CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext) error {
-	return nil
+func (ex *executor) CommitOrAbort(ctx context.Context,
+	tc *dgoapi.TxnContext) (*dgoapi.TxnContext, error) {
+	return &dgoapi.TxnContext{}, nil
 }
 
 func complete(t *testing.T, gqlSchema schema.Schema, gqlQuery, dgResponse string) *schema.Response {
@@ -253,7 +254,7 @@ func TestAddMutationUsesErrorPropagation(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			resp := resolveWithClient(gqlSchema, mutation, nil,
 				&executor{
-					existenceQueriesResp: `{ "Author1": [{"uid":"0x1"}]}`,
+					existenceQueriesResp: `{ "Author_1": [{"uid":"0x1"}]}`,
 					resp:                 tcase.queryResponse,
 					assigned:             tcase.mutResponse,
 					result:               tcase.mutQryResp,
@@ -379,7 +380,7 @@ func TestManyMutationsWithError(t *testing.T) {
 		"Dgraph fail": {
 			explanation: "a Dgraph, network or error in rewritten query failed the mutation",
 			idValue:     "0x1",
-			mutResponse: map[string]string{"Post2": "0x2"},
+			mutResponse: map[string]string{"Post_2": "0x2"},
 			mutQryResp: map[string]interface{}{
 				"Author1": []interface{}{map[string]string{"uid": "0x1"}}},
 			queryResponse: `{"post": [{ "title": "A Post" } ] }`,
@@ -400,7 +401,7 @@ func TestManyMutationsWithError(t *testing.T) {
 		"Rewriting error": {
 			explanation: "The reference ID is not a uint64, so can't be converted to a uid",
 			idValue:     "hi",
-			mutResponse: map[string]string{"Post2": "0x2"},
+			mutResponse: map[string]string{"Post_2": "0x2"},
 			mutQryResp: map[string]interface{}{
 				"Author1": []interface{}{map[string]string{"uid": "0x1"}}},
 			queryResponse: `{"post": [{ "title": "A Post" } ] }`,
@@ -430,7 +431,7 @@ func TestManyMutationsWithError(t *testing.T) {
 				multiMutation,
 				map[string]interface{}{"id": tcase.idValue},
 				&executor{
-					existenceQueriesResp: `{ "Author1": [{"uid":"0x1"}]}`,
+					existenceQueriesResp: `{ "Author_1": [{"uid":"0x1"}]}`,
 					resp:                 tcase.queryResponse,
 					assigned:             tcase.mutResponse,
 					failMutation:         2})

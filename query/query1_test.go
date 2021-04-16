@@ -25,7 +25,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/metadata"
@@ -2544,4 +2544,32 @@ func TestExpandAll_empty_panic(t *testing.T) {
 	`
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t, `{"data":{"me":[]}}`, js)
+}
+
+func TestMatchFuncWithAfter(t *testing.T) {
+	query := `
+		{
+			q(func: match(name, Ali, 5), after: 0x2710) {
+				uid
+				name
+			}
+		}
+	`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"q": [{"name": "Alice", "uid": "0x2712"}, {"name": "Alice", "uid": "0x2714"}]}}`, js)
+}
+
+func TestCompareFuncWithAfter(t *testing.T) {
+	query := `
+		{
+			q(func: eq(name, Alice), after: 0x2710) {
+				uid
+				name
+			}
+		}
+	`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"q": [{"name": "Alice", "uid": "0x2712"}, {"name": "Alice", "uid": "0x2714"}]}}`, js)
 }

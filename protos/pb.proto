@@ -37,6 +37,7 @@ import "github.com/gogo/protobuf/gogoproto/gogo.proto";
 
 message List {
 	repeated fixed64 uids = 1;
+	bytes bitmap_do_not_use = 2;
 }
 
 message TaskValue {
@@ -276,6 +277,8 @@ message Snapshot {
 	bool done	= 4;
 	// since_ts stores the ts of the last snapshot to support diff snap updates.
 	uint64 since_ts = 5;
+	// max_assigned stores the ts as seen as of snapshot read_ts.
+	uint64 max_assigned = 6;
 }
 
 message ZeroSnapshot {
@@ -322,6 +325,8 @@ message Proposal {
 	RestoreRequest restore 		= 12;
 	CDCState cdc_state 				= 13;
 	DeleteNsRequest delete_ns = 14; // Used to delete namespace.
+	uint64 key = 15;
+	uint64 start_ts = 16;
 }
 
 message CDCState {
@@ -373,33 +378,14 @@ message Posting {
 	uint64 commit_ts = 14;  // Meant to use only inmemory
 }
 
-message UidBlock {
-	uint64 base = 1;
-	// deltas contains the deltas encoded with Varints. We don't store deltas as a list of integers,
-	// because when the PB is brought to memory, Go would always use 8-bytes per integer. Instead,
-	// storing it as a byte slice is a lot cheaper in memory.
-	bytes deltas = 2;
-	// num_uids is the number of UIDs in the block. We are including this because we want to
-	// switch encoding to groupvarint encoding. Current avaialble open source version implements
-	// encoding and decoding for uint32. To use that, we create different blocks for different 32-bit
-	// MSB base uids. That is, if the 32 MSBs are different, we will create a new block irrespective
-	// of whether the block is filled with the block_size or not.
-	// Default Blocksize is 256 so uint32 would be sufficient.
-	uint32 num_uids = 3;
-}
-
-message UidPack {
-	uint32 block_size        = 1;
-	repeated UidBlock blocks = 2;
-	uint64 alloc_ref = 23; // This field should be set to 0 during marshal.
-}
-
 message PostingList {
-	UidPack pack = 1; // Encoded list of uids in this posting list.
+	reserved 1; // It was used for UidPack.
 	repeated Posting postings = 2;
 	uint64 commit_ts = 3; // More inclination towards smaller values.
 
   repeated uint64 splits = 4;
+
+	bytes bitmap = 5; // Roaring Bitmap encoded uint64s.
 }
 
 message FacetParam {
@@ -504,8 +490,9 @@ message MovePredicatePayload {
 	string predicate         = 1;
 	uint32 source_gid        = 2;
 	uint32 dest_gid          = 3;
-	uint64 txn_ts            = 4;
+	uint64 read_ts           = 4;
 	uint64 expected_checksum = 5;
+	uint64 since_ts          = 6;
 }
 
 message TxnStatus {
@@ -553,6 +540,9 @@ service Zero {
 	rpc CommitOrAbort (api.TxnContext) returns (api.TxnContext) {}
 	rpc TryAbort (TxnTimestamps)       returns (OracleDelta) {}
 	rpc DeleteNamespace(DeleteNsRequest) returns (Status) {}
+	rpc RemoveNode (RemoveNodeRequest) returns (Status) {}
+	rpc MoveTablet (MoveTabletRequest) returns (Status) {}
+	rpc ApplyLicense (ApplyLicenseRequest) returns (Status) {}
 	rpc RemoveAlphaNode (Member)       returns (Status) {}
 }
 
@@ -600,6 +590,21 @@ message AssignedIds {
 
 	// The following is used for read only transactions.
 	uint64 read_only = 5;
+}
+
+message RemoveNodeRequest {
+	uint64 nodeId = 1;
+	uint32 groupId = 2;
+}
+
+message MoveTabletRequest {
+	uint64 namespace = 1;
+	string tablet = 2;
+	uint32 dstGroup = 3;
+}
+
+message ApplyLicenseRequest {
+    bytes license = 1;
 }
 
 message SnapshotMeta {

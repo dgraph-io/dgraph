@@ -29,8 +29,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgo/v200"
-	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgo/v210"
+	"github.com/dgraph-io/dgo/v210/protos/api"
 	"google.golang.org/grpc"
 
 	"github.com/spf13/cast"
@@ -381,10 +381,10 @@ func allPosts(t *testing.T) []*post {
 	return result.QueryPost
 }
 
-func entitiesQuery(t *testing.T) {
+func entitiesQueryWithKeyFieldOfTypeString(t *testing.T) {
 	addSpaceShipParams := &GraphQLParams{
-		Query: `mutation addSpaceShip($id1: String!, $missionId1: String! ) {
-			addSpaceShip(input: [{id: $id1, missions: [{id: $missionId1, designation: "Apollo1"}]} ]) {
+		Query: `mutation addSpaceShip($id1: String!, $id2: String!, $id3: String!, $id4: String! ) {
+			addSpaceShip(input: [{id: $id1, missions: [{id: "Mission1", designation: "Apollo1"}]},{id: $id2, missions: [{id: "Mission2", designation: "Apollo2"}]},{id: $id3, missions: [{id: "Mission3", designation: "Apollo3"}]}, {id: $id4, missions: [{id: "Mission4", designation: "Apollo4"}]}]){
 				spaceShip {
 					id
 					missions {
@@ -395,8 +395,10 @@ func entitiesQuery(t *testing.T) {
 			}
 		}`,
 		Variables: map[string]interface{}{
-			"id1":        "SpaceShip1",
-			"missionId1": "Mission1",
+			"id1": "SpaceShip1",
+			"id2": "SpaceShip2",
+			"id3": "SpaceShip3",
+			"id4": "SpaceShip4",
 		},
 	}
 
@@ -404,8 +406,8 @@ func entitiesQuery(t *testing.T) {
 	RequireNoGQLErrors(t, gqlResponse)
 
 	entitiesQueryParams := &GraphQLParams{
-		Query: `query _entities($typeName: String!, $id1: String!){
-			_entities(representations: [{__typename: $typeName, id: $id1}]) {
+		Query: `query _entities($typeName: String!, $id1: String!, $id2: String!, $id3: String!, $id4: String!){
+			_entities(representations: [{__typename: $typeName, id: $id4},{__typename: $typeName, id: $id2},{__typename: $typeName, id: $id1},{__typename: $typeName, id: $id3},{__typename: $typeName, id: $id1}]) {
 				... on SpaceShip {
 					missions(order: {asc: id}){
 						id
@@ -417,32 +419,77 @@ func entitiesQuery(t *testing.T) {
 		Variables: map[string]interface{}{
 			"typeName": "SpaceShip",
 			"id1":      "SpaceShip1",
+			"id2":      "SpaceShip2",
+			"id3":      "SpaceShip3",
+			"id4":      "SpaceShip4",
 		},
 	}
 
 	entitiesResp := entitiesQueryParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, entitiesResp)
 
-	expectedJSON := `{
-		"_entities": [
-		  {
-			"missions": [
-			  {
-				"id": "Mission1",
-				"designation": "Apollo1"
-			  }
-			]
-		  }
-		]
-	  }`
+	expectedJSON := `{"_entities":[{"missions":[{"designation":"Apollo4","id":"Mission4"}]},{"missions":[{"designation":"Apollo2","id":"Mission2"}]},{"missions":[{"designation":"Apollo1","id":"Mission1"}]},{"missions":[{"designation":"Apollo3","id":"Mission3"}]},{"missions":[{"designation":"Apollo1","id":"Mission1"}]}]}`
 
-	testutil.CompareJSON(t, expectedJSON, string(entitiesResp.Data))
+	JSONEqGraphQL(t, expectedJSON, string(entitiesResp.Data))
 
-	spaceShipDeleteFilter := map[string]interface{}{"id": map[string]interface{}{"in": []string{"SpaceShip1"}}}
-	DeleteGqlType(t, "SpaceShip", spaceShipDeleteFilter, 1, nil)
+	spaceShipDeleteFilter := map[string]interface{}{"id": map[string]interface{}{"in": []string{"SpaceShip1", "SpaceShip2", "SpaceShip3", "SpaceShip4"}}}
+	DeleteGqlType(t, "SpaceShip", spaceShipDeleteFilter, 4, nil)
 
-	missionDeleteFilter := map[string]interface{}{"id": map[string]interface{}{"in": []string{"Mission1"}}}
-	DeleteGqlType(t, "Mission", missionDeleteFilter, 1, nil)
+	missionDeleteFilter := map[string]interface{}{"id": map[string]interface{}{"in": []string{"Mission1", "Mission2", "Mission3", "Mission4"}}}
+	DeleteGqlType(t, "Mission", missionDeleteFilter, 4, nil)
+
+}
+
+func entitiesQueryWithKeyFieldOfTypeInt(t *testing.T) {
+	addPlanetParams := &GraphQLParams{
+		Query: `mutation {
+			addPlanet(input: [{id: 1, missions: [{id: "Mission1", designation: "Apollo1"}]},{id: 2, missions: [{id: "Mission2", designation: "Apollo2"}]},{id: 3, missions: [{id: "Mission3", designation: "Apollo3"}]}, {id: 4, missions: [{id: "Mission4", designation: "Apollo4"}]}]){
+				planet {
+					id
+					missions {
+						id
+						designation
+					}
+				}
+			}
+		}`,
+	}
+
+	gqlResponse := addPlanetParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	entitiesQueryParams := &GraphQLParams{
+		Query: `query _entities($typeName: String!, $id1: Int!, $id2: Int!, $id3: Int!, $id4: Int!){
+			_entities(representations: [{__typename: $typeName, id: $id4},{__typename: $typeName, id: $id2},{__typename: $typeName, id: $id1},{__typename: $typeName, id: $id3},{__typename: $typeName, id: $id1}]) {
+				... on Planet {
+					missions(order: {asc: id}){
+						id
+						designation
+					}
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{
+			"typeName": "Planet",
+			"id1":      1,
+			"id2":      2,
+			"id3":      3,
+			"id4":      4,
+		},
+	}
+
+	entitiesResp := entitiesQueryParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, entitiesResp)
+
+	expectedJSON := `{"_entities":[{"missions":[{"designation":"Apollo4","id":"Mission4"}]},{"missions":[{"designation":"Apollo2","id":"Mission2"}]},{"missions":[{"designation":"Apollo1","id":"Mission1"}]},{"missions":[{"designation":"Apollo3","id":"Mission3"}]},{"missions":[{"designation":"Apollo1","id":"Mission1"}]}]}`
+
+	JSONEqGraphQL(t, expectedJSON, string(entitiesResp.Data))
+
+	planetDeleteFilter := map[string]interface{}{"id": map[string]interface{}{"in": []int{1, 2, 3, 4}}}
+	DeleteGqlType(t, "Planet", planetDeleteFilter, 4, nil)
+
+	missionDeleteFilter := map[string]interface{}{"id": map[string]interface{}{"in": []string{"Mission1", "Mission2", "Mission3", "Mission4"}}}
+	DeleteGqlType(t, "Mission", missionDeleteFilter, 4, nil)
 
 }
 
@@ -2461,6 +2508,42 @@ func queryWithCascade(t *testing.T) {
 						}`,
 		},
 		{
+			name: "parameterized cascade at all levels using variables",
+			query: `query ($ids: [ID!],$fieldsRoot: [String], $fieldsDeep: [String]) {
+						queryAuthor(filter: {id: $ids}) @cascade(fields: $fieldsRoot) {
+							reputation
+							name
+							dob
+							posts @cascade(fields: $fieldsDeep) {
+								title
+								text
+							}
+						}
+					}`,
+			variables: map[string]interface{}{"ids": authorIds, "fieldsRoot": []string{"reputation", "name"}, "fieldsDeep": []string{"text"}},
+			respData: `{
+						  "queryAuthor": [
+							{
+							  "reputation": 4.5,
+							  "name": "George",
+							  "dob": null,
+							  "posts": [
+								{
+								  "title": "A show about nothing",
+								  "text": "Got ya!"
+								}
+							  ]
+							},
+							{
+							  "dob": null,
+							  "name": "Jerry",
+							  "posts": [],
+							  "reputation": 4.6
+							}
+						  ]
+						}`,
+		},
+		{
 			name: "parameterized cascade on ID type ",
 			query: `query ($ids: [ID!]) {
 						queryAuthor(filter: {id: $ids}) @cascade(fields:["reputation","id"]) {
@@ -3831,25 +3914,99 @@ func idDirectiveWithInt(t *testing.T) {
 	require.JSONEq(t, expected, string(response.Data))
 }
 
-func idDirectiveWithFloat(t *testing.T) {
-	query := &GraphQLParams{
-		Query: `query {
-		  getSection(sectionId: 1.1) {
-			chapterId
-			sectionId
-			name
-		  }
-		}`,
+func queryMultipleLangFields(t *testing.T) {
+	// add three Persons
+	addPersonParams := &GraphQLParams{
+		Query: `
+		mutation addPerson($person: [AddPersonInput!]!) {
+	       addPerson(input: $person) {
+             numUids
+	       }
+        }`,
+		Variables: map[string]interface{}{"person": []interface{}{
+			map[string]interface{}{
+				"name":         "Bob",
+				"professionEn": "writer",
+			},
+			map[string]interface{}{
+				"name":         "Alice",
+				"nameHi":       "ऐलिस",
+				"professionEn": "cricketer",
+			},
+			map[string]interface{}{
+				"name":         "Juliet",
+				"nameHi":       "जूलियट",
+				"nameZh":       "朱丽叶",
+				"professionEn": "singer",
+			},
+		}},
 	}
 
-	response := query.ExecuteAsPost(t, GraphqlURL)
-	RequireNoGQLErrors(t, response)
-	var expected = `{
-	 	"getSection": {
-			"chapterId": 1,
-			"sectionId": 1.1,
-			"name": "How to define dgraph schema"
-		  }
-	}`
-	require.JSONEq(t, expected, string(response.Data))
+	gqlResponse := addPersonParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	queryPerson := &GraphQLParams{
+		Query: `
+			query {
+             queryPerson(
+               filter: {
+                 or: [
+                   { name: { eq: "Bob" } }
+                   { nameHi: { eq: "ऐलिस" } }
+                   { nameZh: { eq: "朱丽叶" } }
+                 ]
+               }
+               order: { desc: nameHi }
+             ) {
+               name
+               nameZh
+               nameHi
+               nameHiZh
+               nameZhHi
+               nameHi_Zh_Untag
+               name_Untag_AnyLang
+               professionEn
+             }
+          }`,
+	}
+	gqlResponse = queryPerson.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	queryPersonExpected := `
+		{
+			"queryPerson":	[
+				{
+					"name":"Juliet",
+					"nameZh":"朱丽叶",
+					"nameHi":"जूलियट",
+					"nameHiZh":"जूलियट",
+					"nameZhHi":"朱丽叶",
+					"nameHi_Zh_Untag":"जूलियट",
+					"name_Untag_AnyLang":"Juliet",
+					"professionEn":"singer"
+				},
+				{
+					"name":"Alice",
+					"nameZh":null,
+					"nameHi":"ऐलिस",
+					"nameHiZh":"ऐलिस",
+					"nameZhHi":"ऐलिस",
+					"nameHi_Zh_Untag":"ऐलिस",
+					"name_Untag_AnyLang":"Alice",
+					"professionEn":"cricketer"
+				},
+				{	"name":"Bob",
+					"nameZh":null,
+					"nameHi":null,
+					"nameHiZh":null,
+					"nameZhHi":null,
+					"nameHi_Zh_Untag":"Bob",
+					"name_Untag_AnyLang":"Bob",
+					"professionEn":"writer"
+				}
+			]
+		}`
+
+	JSONEqGraphQL(t, queryPersonExpected, string(gqlResponse.Data))
+	// Cleanup
+	DeleteGqlType(t, "Person", map[string]interface{}{}, 3, nil)
 }

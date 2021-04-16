@@ -200,8 +200,10 @@ directive @auth(
 	delete: AuthRule) on OBJECT | INTERFACE
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
+directive @remoteResponse(name: String) on FIELD_DEFINITION
 directive @cascade(fields: [String]) on FIELD
 directive @lambda on FIELD_DEFINITION
+directive @lambdaOnMutate(add: Boolean, update: Boolean, delete: Boolean) on OBJECT | INTERFACE
 directive @cacheControl(maxAge: Int!) on QUERY
 directive @generate(
 	query: GenerateQueryParams,
@@ -456,6 +458,7 @@ input UpdateLibraryInput {
 #######################
 
 type Query {
+	getLibraryItem(refID: String!): LibraryItem @deprecated(reason: "@id argument for get query on interface is being deprecated, it will be removed in v21.11.0, please update your query to not use that argument")
 	queryLibraryItem(filter: LibraryItemFilter, order: LibraryItemOrder, first: Int, offset: Int): [LibraryItem]
 	aggregateLibraryItem(filter: LibraryItemFilter): LibraryItemAggregateResult
 	getBook(refID: String!): Book

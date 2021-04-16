@@ -35,17 +35,19 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/peer"
 
 	"github.com/dgraph-io/badger/v3"
 	bo "github.com/dgraph-io/badger/v3/options"
 	"github.com/dgraph-io/badger/v3/pb"
 	badgerpb "github.com/dgraph-io/badger/v3/pb"
-	"github.com/dgraph-io/dgo/v200"
-	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgo/v210"
+	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/dustin/go-humanize"
 
@@ -72,6 +74,8 @@ var (
 	ErrorInvalidLogin = errors.New("invalid username or password")
 	// ErrConflict is returned when commit couldn't succeed due to conflicts.
 	ErrConflict = errors.New("Transaction conflict")
+	// ErrHashMismatch is returned when the hash does not matches the startTs
+	ErrHashMismatch = errors.New("hash mismatch the claimed startTs|namespace")
 )
 
 const (
@@ -301,18 +305,18 @@ func GetForceNamespace(ctx context.Context) string {
 	return ns[0]
 }
 
-func ExtractJwt(ctx context.Context) ([]string, error) {
+func ExtractJwt(ctx context.Context) (string, error) {
 	// extract the jwt and unmarshal the jwt to get the list of groups
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		return nil, ErrNoJwt
+		return "", ErrNoJwt
 	}
 	accessJwt := md.Get("accessJwt")
 	if len(accessJwt) == 0 {
-		return nil, ErrNoJwt
+		return "", ErrNoJwt
 	}
 
-	return accessJwt, nil
+	return accessJwt[0], nil
 }
 
 // WithLocations adds a list of locations to a GqlError and returns the same
@@ -435,19 +439,17 @@ func ParseRequest(w http.ResponseWriter, r *http.Request, data interface{}) bool
 // AttachJWTNamespace attaches the namespace in the JWT claims to the context if present, otherwise
 // it attaches the galaxy namespace.
 func AttachJWTNamespace(ctx context.Context) context.Context {
-	if WorkerConfig.AclEnabled {
-		ns, err := ExtractJWTNamespace(ctx)
-		if err != nil {
-			glog.Errorf("Failed to get namespace from the accessJWT token: Error: %s", err)
-		} else {
-			// Attach the namespace only if we got one from JWT.
-			// This preserves any namespace directly present in the context which is needed for
-			// requests originating from dgraph internal code like server.go::GetGQLSchema() where
-			// context is created by hand.
-			ctx = AttachNamespace(ctx, ns)
-		}
-	} else {
-		ctx = AttachNamespace(ctx, GalaxyNamespace)
+	if !WorkerConfig.AclEnabled {
+		return AttachNamespace(ctx, GalaxyNamespace)
+	}
+
+	ns, err := ExtractJWTNamespace(ctx)
+	if err == nil {
+		// Attach the namespace only if we got one from JWT.
+		// This preserves any namespace directly present in the context which is needed for
+		// requests originating from dgraph internal code like server.go::GetGQLSchema() where
+		// context is created by hand.
+		ctx = AttachNamespace(ctx, ns)
 	}
 	return ctx
 }
@@ -461,6 +463,30 @@ func AttachNamespace(ctx context.Context, namespace uint64) context.Context {
 	ns := strconv.FormatUint(namespace, 10)
 	md.Set("namespace", ns)
 	return metadata.NewIncomingContext(ctx, md)
+}
+
+// AttachJWTNamespaceOutgoing attaches the namespace in the JWT claims to the outgoing metadata of
+// the context.
+func AttachJWTNamespaceOutgoing(ctx context.Context) (context.Context, error) {
+	if !WorkerConfig.AclEnabled {
+		return AttachNamespaceOutgoing(ctx, GalaxyNamespace), nil
+	}
+	ns, err := ExtractJWTNamespace(ctx)
+	if err != nil {
+		return ctx, err
+	}
+	return AttachNamespaceOutgoing(ctx, ns), nil
+}
+
+// AttachNamespaceOutgoing adds given namespace in the outgoing metadata of the context.
+func AttachNamespaceOutgoing(ctx context.Context, namespace uint64) context.Context {
+	md, ok := metadata.FromOutgoingContext(ctx)
+	if !ok {
+		md = metadata.New(nil)
+	}
+	ns := strconv.FormatUint(namespace, 10)
+	md.Set("namespace", ns)
+	return metadata.NewOutgoingContext(ctx, md)
 }
 
 // AttachGalaxyOperation specifies in the context that it will be used for doing a galaxy operation.
@@ -968,7 +994,7 @@ func WithAuthorizationCredentials(authToken string) grpc.DialOption {
 // GetDgraphClient creates a Dgraph client based on the following options in the configuration:
 // --slash_grpc_endpoint specifies the grpc endpoint for slash. It takes precedence over --alpha and TLS
 // --alpha specifies a comma separated list of endpoints to connect to
-// --tls_cacert, --tls_cert, --tls_key etc specify the TLS configuration of the connection
+// --tls "ca-cert=; client-cert=; client-key=;" etc specify the TLS configuration of the connection
 // --retries specifies how many times we should retry the connection to each endpoint upon failures
 // --user and --password specify the credentials we should use to login with the server
 func GetDgraphClient(conf *viper.Viper, login bool) (*dgo.Dgraph, CloseFunc) {
@@ -1352,6 +1378,9 @@ Available Commands: {{range .Commands}}{{if (or .IsAvailableCommand)}}
 Flags:
 {{.LocalFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if .HasAvailableInheritedFlags}}
 
+Global Flags:
+{{.InheritedFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if .HasHelpSubCommands}}
+
 Use "{{.CommandPath}} [command] --help" for more information about a command.{{end}}
 `
 
@@ -1378,4 +1407,84 @@ func PrefixesToMatches(prefixes [][]byte, ignore string) []*pb.Match {
 		})
 	}
 	return matches
+}
+
+// LimiterConf is the configuration options for LimiterConf.
+type LimiterConf struct {
+	UidLeaseLimit uint64
+	RefillAfter   time.Duration
+}
+
+// RateLimiter implements a basic rate limiter.
+type RateLimiter struct {
+	limiter     *sync.Map
+	maxTokens   int64
+	refillAfter time.Duration
+	closer      *z.Closer
+}
+
+// NewRateLimiter creates a rate limiter that limits lease by maxTokens in an interval specified by
+// refillAfter.
+func NewRateLimiter(maxTokens int64, refillAfter time.Duration, closer *z.Closer) *RateLimiter {
+	r := &RateLimiter{
+		limiter:     &sync.Map{},
+		maxTokens:   maxTokens,
+		refillAfter: refillAfter,
+		closer:      closer,
+	}
+	r.closer.AddRunning(1)
+	go r.RefillPeriodically()
+	return r
+}
+
+// Allow checks if the request for req number of tokens can be allowed for a given namespace.
+// If request is allowed, it subtracts the req from the available tokens.
+func (r *RateLimiter) Allow(ns uint64, req int64) bool {
+	v := r.maxTokens
+	val, _ := r.limiter.LoadOrStore(ns, &v)
+	ptr := val.(*int64)
+	if cnt := atomic.AddInt64(ptr, -req); cnt < 0 {
+		atomic.AddInt64(ptr, req)
+		return false
+	}
+	return true
+}
+
+// RefillPeriodically refills the tokens of all the namespaces to maxTokens periodically .
+func (r *RateLimiter) RefillPeriodically() {
+	defer r.closer.Done()
+	refill := func() {
+		r.limiter.Range(func(_, val interface{}) bool {
+			atomic.StoreInt64(val.(*int64), r.maxTokens)
+			return true
+		})
+	}
+
+	ticker := time.NewTicker(r.refillAfter)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-r.closer.HasBeenClosed():
+			return
+		case <-ticker.C:
+			refill()
+		}
+	}
+}
+
+// LambdaUrl returns the correct lambda-url for the given namespace
+func LambdaUrl(ns uint64) string {
+	return strings.Replace(Config.GraphQL.GetString("lambda-url"), "$ns", strconv.FormatUint(ns,
+		10), 1)
+}
+
+// IsJwtExpired returns true if the error indicates that the jwt has expired.
+func IsJwtExpired(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	st, ok := status.FromError(err)
+	return ok && st.Code() == codes.Unauthenticated &&
+		strings.Contains(err.Error(), "Token is expired")
 }

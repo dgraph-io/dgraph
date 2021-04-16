@@ -51,7 +51,7 @@ type handler struct {
 
 // FromString builds a GraphQL Schema from input string, or returns any parsing
 // or validation errors.
-func FromString(schema string) (Schema, error) {
+func FromString(schema string, ns uint64) (Schema, error) {
 	// validator.Prelude includes a bunch of predefined types which help with schema introspection
 	// queries, hence we include it as part of the schema.
 	doc, gqlErr := parser.ParseSchemas(validator.Prelude, &ast.Source{Input: schema})
@@ -64,7 +64,7 @@ func FromString(schema string) (Schema, error) {
 		return nil, errors.Wrap(gqlErr, "while validating GraphQL schema")
 	}
 
-	return AsSchema(gqlSchema)
+	return AsSchema(gqlSchema, ns)
 }
 
 func (s *handler) MetaInfo() *metaInfo {
@@ -178,7 +178,7 @@ func (s *handler) GQLSchemaWithoutApolloExtras() string {
 type metaInfo struct {
 	// secrets are key value pairs stored in the GraphQL schema which can be added as headers
 	// to requests which resolve custom queries/mutations. These are extracted from # Dgraph.Secret.
-	secrets map[string]x.SensitiveByteSlice
+	secrets map[string]x.Sensitive
 	// extraCorsHeaders are the allowed CORS Headers in addition to x.AccessControlAllowedHeaders.
 	// These are parsed from the forwardHeaders specified in the @custom directive.
 	// The header for Dgraph.Authorization is also part of this.
@@ -187,7 +187,8 @@ type metaInfo struct {
 	// allowedCorsOrigins stores allowed CORS origins extracted from # Dgraph.Allow-Origin.
 	// They are returned to the client as part of Access-Control-Allow-Origin.
 	allowedCorsOrigins map[string]bool
-	// authMeta stores the authorization meta info extracted from # Dgraph.Authorization
+	// authMeta stores the authorization meta info extracted from `# Dgraph.Authorization` if any,
+	// otherwise it is nil.
 	authMeta *authorization.AuthMeta
 }
 
@@ -207,7 +208,7 @@ func parseMetaInfo(sch string) (*metaInfo, error) {
 	scanner := bufio.NewScanner(strings.NewReader(sch))
 	authSecret := ""
 	schMetaInfo := &metaInfo{
-		secrets:            make(map[string]x.SensitiveByteSlice),
+		secrets:            make(map[string]x.Sensitive),
 		allowedCorsOrigins: make(map[string]bool),
 	}
 	var err error
@@ -261,7 +262,7 @@ func parseMetaInfo(sch string) (*metaInfo, error) {
 			val = strings.Trim(val, `"`)
 			key := strings.Trim(parts[2], `"`)
 			// lets obfuscate the value of the secrets from here on.
-			schMetaInfo.secrets[key] = x.SensitiveByteSlice(val)
+			schMetaInfo.secrets[key] = x.Sensitive(val)
 		}
 	}
 
@@ -339,6 +340,7 @@ func NewHandler(input string, apolloServiceQuery bool) (Handler, error) {
 
 	typesToComplete := make([]string, 0, len(doc.Definitions))
 	defns := make([]string, 0, len(doc.Definitions))
+	providesFieldsMap := make(map[string]map[string]bool)
 	for _, defn := range doc.Definitions {
 		if defn.BuiltIn {
 			continue
@@ -348,6 +350,25 @@ func NewHandler(input string, apolloServiceQuery bool) (Handler, error) {
 			remoteDir := defn.Directives.ForName(remoteDirective)
 			if remoteDir != nil {
 				continue
+			}
+
+			for _, fld := range defn.Fields {
+				providesDir := fld.Directives.ForName(apolloProvidesDirective)
+				if providesDir == nil {
+					continue
+				}
+				arg := providesDir.Arguments.ForName(apolloKeyArg)
+				providesFieldArgs := strings.Fields(arg.Value.Raw)
+				var typeMap map[string]bool
+				if existingTypeMap, ok := providesFieldsMap[fld.Type.Name()]; ok {
+					typeMap = existingTypeMap
+				} else {
+					typeMap = make(map[string]bool)
+				}
+				for _, fldName := range providesFieldArgs {
+					typeMap[fldName] = true
+				}
+				providesFieldsMap[fld.Type.Name()] = typeMap
 			}
 		}
 		typesToComplete = append(typesToComplete, defn.Name)
@@ -373,17 +394,17 @@ func NewHandler(input string, apolloServiceQuery bool) (Handler, error) {
 	}
 
 	metaInfo.extraCorsHeaders = getAllowedHeaders(sch, defns, authHeader)
-	dgSchema := genDgSchema(sch, typesToComplete)
-	completeSchema(sch, typesToComplete, apolloServiceQuery)
+	dgSchema := genDgSchema(sch, typesToComplete, providesFieldsMap)
+	completeSchema(sch, typesToComplete, providesFieldsMap, apolloServiceQuery)
 	cleanSchema(sch)
 
 	if len(sch.Query.Fields) == 0 && len(sch.Mutation.Fields) == 0 {
 		return nil, gqlerror.Errorf("No query or mutation found in the generated schema")
 	}
 
-	// If Dgraph.Authorization header is parsed successfully and JWKUrl is present
-	// then initialise the http client and Fetch the JWKs from the JWKUrl
-	if metaInfo.authMeta != nil && metaInfo.authMeta.JWKUrl != "" {
+	// If Dgraph.Authorization header is parsed successfully and JWKUrls is present
+	// then initialise the http client and Fetch the JWKs from the JWKUrls.
+	if metaInfo.authMeta != nil && len(metaInfo.authMeta.JWKUrls) != 0 {
 		metaInfo.authMeta.InitHttpClient()
 		fetchErr := metaInfo.authMeta.FetchJWKs()
 		if fetchErr != nil {
@@ -489,7 +510,8 @@ func getDgraphDirPredArg(def *ast.FieldDefinition) *ast.Argument {
 }
 
 // genDgSchema generates Dgraph schema from a valid graphql schema.
-func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
+func genDgSchema(gqlSch *ast.Schema, definitions []string,
+	providesFieldsMap map[string]map[string]bool) string {
 	var typeStrings []string
 
 	type dgPred struct {
@@ -497,6 +519,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 		indexes map[string]bool
 		upsert  string
 		reverse string
+		lang    bool
 	}
 
 	type field struct {
@@ -514,7 +537,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 	dgTypes := make([]dgType, 0, len(definitions))
 	dgPreds := make(map[string]dgPred)
 
-	getUpdatedPred := func(fname, typStr, upsertStr string, indexes []string) dgPred {
+	getUpdatedPred := func(fname, typStr, upsertStr string, indexes []string, lang bool) dgPred {
 		pred, ok := dgPreds[fname]
 		if !ok {
 			pred = dgPred{
@@ -526,6 +549,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 		for _, index := range indexes {
 			pred.indexes[index] = true
 		}
+		pred.lang = lang
 		return pred
 	}
 
@@ -547,7 +571,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 				}
 
 				// Ignore @external fields which are not @key
-				if hasExternal(f) && !isKeyField(f, def) {
+				if externalAndNonKeyField(f, def, providesFieldsMap[def.Name]) {
 					continue
 				}
 
@@ -583,7 +607,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 							indexes = append(indexes, supportedSearches[defaultSearches[f.Type.
 								Name()]].dgIndex)
 						}
-						dgPreds[fname] = getUpdatedPred(fname, typStr, "", indexes)
+						dgPreds[fname] = getUpdatedPred(fname, typStr, "", indexes, false)
 					} else {
 						typStr = fmt.Sprintf("%suid%s", prefix, suffix)
 					}
@@ -617,19 +641,6 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 					var indexes []string
 					upsertStr := ""
 					search := f.Directives.ForName(searchDirective)
-					id := f.Directives.ForName(idDirective)
-					if id != nil || f.Type.Name() == "ID" {
-						upsertStr = "@upsert "
-						switch f.Type.Name() {
-						case "Int", "Int64":
-							indexes = append(indexes, "int")
-						case "Float":
-							indexes = append(indexes, "float")
-						case "String", "ID":
-							indexes = append(indexes, "hash")
-						}
-					}
-
 					if search != nil {
 						arg := search.Arguments.ForName(searchArgs)
 						if arg != nil {
@@ -640,8 +651,27 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 						}
 					}
 
+					id := f.Directives.ForName(idDirective)
+					if id != nil || f.Type.Name() == "ID" {
+						upsertStr = "@upsert "
+						switch f.Type.Name() {
+						case "Int", "Int64":
+							indexes = append(indexes, "int")
+						case "String", "ID":
+							if !x.HasString(indexes, "exact") {
+								indexes = append(indexes, "hash")
+							}
+						}
+					}
+
 					if parentInt == nil {
-						dgPreds[fname] = getUpdatedPred(fname, typStr, upsertStr, indexes)
+						// if field name contains @ then it is a language tagged field.
+						isLang := false
+						if strings.Contains(fname, "@") {
+							fname = strings.Split(fname, "@")[0]
+							isLang = true
+						}
+						dgPreds[fname] = getUpdatedPred(fname, typStr, upsertStr, indexes, isLang)
 					}
 					typ.fields = append(typ.fields, field{fname, parentInt != nil})
 				case ast.Enum:
@@ -656,7 +686,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 						}
 					}
 					if parentInt == nil {
-						dgPreds[fname] = getUpdatedPred(fname, typStr, "", indexes)
+						dgPreds[fname] = getUpdatedPred(fname, typStr, "", indexes, false)
 					}
 					typ.fields = append(typ.fields, field{fname, parentInt != nil})
 				}
@@ -680,16 +710,20 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 
 	predWritten := make(map[string]bool, len(dgPreds))
 	for _, typ := range dgTypes {
+		// fieldAdded keeps track of whether a field has been added to typeDef
+		fieldAdded := make(map[string]bool, len(typ.fields))
 		var typeDef, preds strings.Builder
 		fmt.Fprintf(&typeDef, "type %s {\n", typ.name)
 		for _, fld := range typ.fields {
 			f, ok := dgPreds[fld.name]
-			if !ok {
+			if !ok || fieldAdded[fld.name] {
 				continue
 			}
 			fmt.Fprintf(&typeDef, "  %s\n", fld.name)
+			fieldAdded[fld.name] = true
 			if !fld.inherited && !predWritten[fld.name] {
 				indexStr := ""
+				langStr := ""
 				if len(f.indexes) > 0 {
 					indexes := make([]string, 0)
 					for index := range f.indexes {
@@ -698,7 +732,10 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 					sort.Strings(indexes)
 					indexStr = fmt.Sprintf(" @index(%s)", strings.Join(indexes, ", "))
 				}
-				fmt.Fprintf(&preds, "%s: %s%s %s%s.\n", fld.name, f.typ, indexStr, f.upsert,
+				if f.lang {
+					langStr = " @lang"
+				}
+				fmt.Fprintf(&preds, "%s: %s%s%s %s%s.\n", fld.name, f.typ, indexStr, langStr, f.upsert,
 					f.reverse)
 				predWritten[fld.name] = true
 			}

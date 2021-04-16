@@ -37,7 +37,7 @@ import (
 	geom "github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
 
-	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/task"
@@ -143,11 +143,68 @@ func newEncoder() *encoder {
 		attrMap: make(map[string]uint16),
 		idSlice: idSlice,
 		arena:   a,
-		alloc:   z.NewAllocator(4 << 10),
+		alloc:   z.NewAllocator(4<<10, "OutputNode.Encoder"),
 		buf:     &bytes.Buffer{},
 	}
 	e.uidAttr = e.idForAttr("uid")
 	return e
+}
+
+// Sort the given fastJson list
+func (enc *encoder) MergeSort(headRef *fastJsonNode) {
+	head := *headRef
+	if headRef == nil || head.next == nil {
+		return
+	}
+
+	var a, b fastJsonNode
+	frontBackSplit(head, &a, &b)
+	enc.MergeSort(&a)
+	enc.MergeSort(&b)
+	*headRef = enc.mergeSortedLists(a, b)
+}
+
+func (enc *encoder) mergeSortedLists(a fastJsonNode, b fastJsonNode) fastJsonNode {
+	var result fastJsonNode
+
+	if a == nil {
+		return b
+	} else if b == nil {
+		return a
+	}
+
+	if enc.less(a, b) {
+		result = a
+		result.next = enc.mergeSortedLists(a.next, b)
+	} else {
+		result = b
+		result.next = enc.mergeSortedLists(a, b.next)
+	}
+	return result
+}
+
+func (enc *encoder) less(i fastJsonNode, j fastJsonNode) bool {
+	attri := enc.getAttr(i)
+	attrj := enc.getAttr(j)
+	return strings.Compare(enc.attrForID(attri), enc.attrForID(attrj)) <= 0
+}
+
+func frontBackSplit(source fastJsonNode,
+	frontRef *fastJsonNode, backRef *fastJsonNode) {
+	slow := source
+	fast := source.next
+
+	for fast != nil {
+		fast = fast.next
+		if fast != nil {
+			slow = slow.next
+			fast = fast.next
+		}
+	}
+
+	*frontRef = source
+	*backRef = slow.next
+	slow.next = nil
 }
 
 func (enc *encoder) idForAttr(attr string) uint16 {
@@ -804,7 +861,7 @@ func (enc *encoder) merge(parent, child []fastJsonNode) ([]fastJsonNode, error) 
 			caCopy, caNodeCount := enc.copyFastJsonList(ca)
 
 			cnt += paNodeCount + caNodeCount
-			if cnt > x.Config.NormalizeNodeLimit {
+			if cnt > x.Config.LimitNormalizeNode {
 				return nil, errors.Errorf(
 					"Couldn't evaluate @normalize directive - too many results")
 			}
@@ -891,8 +948,11 @@ func (enc *encoder) normalize(fj fastJsonNode) ([]fastJsonNode, error) {
 		}
 	}
 
-	for _, slice := range parentSlice {
-		// From every slice we need to remove node with attribute "uid".
+	for i, slice := range parentSlice {
+		// sort the fastJson list
+		// This will ensure that nodes with same attribute name comes together in response
+		enc.MergeSort(&parentSlice[i])
+		// From every list we need to remove node with attribute "uid".
 		var prev, cur fastJsonNode
 		cur = slice
 		for cur != nil {
@@ -1011,7 +1071,7 @@ func processNodeUids(fj fastJsonNode, enc *encoder, sg *SubGraph) error {
 		return nil
 	}
 
-	hasChild, err := sg.handleCountUIDNodes(enc, fj, len(sg.DestUIDs.Uids))
+	hasChild, err := sg.handleCountUIDNodes(enc, fj, int(sg.DestMap.GetCardinality()))
 	if err != nil {
 		return err
 	}
@@ -1025,7 +1085,7 @@ func processNodeUids(fj fastJsonNode, enc *encoder, sg *SubGraph) error {
 	lenList := len(sg.uidMatrix[0].Uids)
 	for i := 0; i < lenList; i++ {
 		uid := sg.uidMatrix[0].Uids[i]
-		if algo.IndexOf(sg.DestUIDs, uid) < 0 {
+		if !sg.DestMap.Contains(uid) {
 			// This UID was filtered. So Ignore it.
 			continue
 		}
@@ -1286,6 +1346,7 @@ func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode) erro
 				len(pc.facetsMatrix), len(pc.uidMatrix))
 		}
 
+		// TODO: If we move GroupbyRes to a map, then this won't be needed.
 		idx := algo.IndexOf(pc.SrcUIDs, uid)
 		if idx < 0 {
 			continue

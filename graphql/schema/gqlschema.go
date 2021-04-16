@@ -38,13 +38,15 @@ const (
 	dgraphTypeArg   = "type"
 	dgraphPredArg   = "pred"
 
-	idDirective           = "id"
-	subscriptionDirective = "withSubscription"
-	secretDirective       = "secret"
-	authDirective         = "auth"
-	customDirective       = "custom"
-	remoteDirective       = "remote" // types with this directive are not stored in Dgraph.
-	lambdaDirective       = "lambda"
+	idDirective             = "id"
+	subscriptionDirective   = "withSubscription"
+	secretDirective         = "secret"
+	authDirective           = "auth"
+	customDirective         = "custom"
+	remoteDirective         = "remote" // types with this directive are not stored in Dgraph.
+	remoteResponseDirective = "remoteResponse"
+	lambdaDirective         = "lambda"
+	lambdaOnMutateDirective = "lambdaOnMutate"
 
 	generateDirective       = "generate"
 	generateQueryArg        = "query"
@@ -69,6 +71,8 @@ const (
 	apolloKeyArg            = "fields"
 	apolloExternalDirective = "external"
 	apolloExtendsDirective  = "extends"
+	apolloRequiresDirective = "requires"
+	apolloProvidesDirective = "provides"
 
 	// custom directive args and fields
 	dqlArg      = "dql"
@@ -283,15 +287,22 @@ directive @auth(
 	delete: AuthRule) on OBJECT | INTERFACE
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
+directive @remoteResponse(name: String) on FIELD_DEFINITION
 directive @cascade(fields: [String]) on FIELD
 directive @lambda on FIELD_DEFINITION
+directive @lambdaOnMutate(add: Boolean, update: Boolean, delete: Boolean) on OBJECT | INTERFACE
 directive @cacheControl(maxAge: Int!) on QUERY
 directive @generate(
 	query: GenerateQueryParams,
 	mutation: GenerateMutationParams,
 	subscription: Boolean) on OBJECT | INTERFACE
 `
-
+	// see: https://www.apollographql.com/docs/federation/gateway/#custom-directive-support
+	// So, we should only add type system directives here.
+	// Even with type system directives, there is a bug in Apollo Federation due to which the
+	// directives having non-scalar args cause issues in schema stitching in gateway.
+	// See: https://github.com/apollographql/apollo-server/issues/3655
+	// So, such directives have to be missed too.
 	apolloSupportedDirectiveDefs = `
 directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
@@ -300,9 +311,9 @@ directive @id on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
-directive @cascade(fields: [String]) on FIELD
+directive @remoteResponse(name: String) on FIELD_DEFINITION
 directive @lambda on FIELD_DEFINITION
-directive @cacheControl(maxAge: Int!) on QUERY
+directive @lambdaOnMutate(add: Boolean, update: Boolean, delete: Boolean) on OBJECT | INTERFACE
 `
 	filterInputs = `
 input IntFilter {
@@ -384,6 +395,8 @@ type _Service {
 }
 
 directive @external on FIELD_DEFINITION
+directive @requires(fields: _FieldSet!) on FIELD_DEFINITION
+directive @provides(fields: _FieldSet!) on FIELD_DEFINITION
 directive @key(fields: _FieldSet!) on OBJECT | INTERFACE
 directive @extends on OBJECT | INTERFACE
 `
@@ -412,7 +425,7 @@ type directiveValidator func(
 	typ *ast.Definition,
 	field *ast.FieldDefinition,
 	dir *ast.Directive,
-	secrets map[string]x.SensitiveByteSlice) gqlerror.List
+	secrets map[string]x.Sensitive) gqlerror.List
 
 type searchTypeIndex struct {
 	gqlType string
@@ -540,7 +553,7 @@ func ValidatorNoOp(
 	typ *ast.Definition,
 	field *ast.FieldDefinition,
 	dir *ast.Directive,
-	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
+	secrets map[string]x.Sensitive) gqlerror.List {
 	return nil
 }
 
@@ -556,10 +569,14 @@ var directiveValidators = map[string]directiveValidator{
 	remoteDirective:         ValidatorNoOp,
 	deprecatedDirective:     ValidatorNoOp,
 	lambdaDirective:         lambdaDirectiveValidation,
+	lambdaOnMutateDirective: ValidatorNoOp,
 	generateDirective:       ValidatorNoOp,
 	apolloKeyDirective:      ValidatorNoOp,
 	apolloExtendsDirective:  ValidatorNoOp,
 	apolloExternalDirective: apolloExternalValidation,
+	apolloRequiresDirective: apolloRequiresValidation,
+	apolloProvidesDirective: apolloProvidesValidation,
+	remoteResponseDirective: remoteResponseValidation,
 }
 
 // directiveLocationMap stores the directives and their locations for the ones which can be
@@ -575,8 +592,16 @@ var directiveLocationMap = map[string]map[ast.DefinitionKind]bool{
 	customDirective:       nil,
 	remoteDirective: {ast.Object: true, ast.Interface: true, ast.Union: true,
 		ast.InputObject: true, ast.Enum: true},
-	cascadeDirective:  nil,
-	generateDirective: {ast.Object: true, ast.Interface: true},
+	lambdaDirective:         nil,
+	lambdaOnMutateDirective: {ast.Object: true, ast.Interface: true},
+	generateDirective:       {ast.Object: true, ast.Interface: true},
+	apolloKeyDirective:      {ast.Object: true, ast.Interface: true},
+	apolloExtendsDirective:  {ast.Object: true, ast.Interface: true},
+	apolloExternalDirective: nil,
+	apolloRequiresDirective: nil,
+	apolloProvidesDirective: nil,
+	remoteResponseDirective: nil,
+	cascadeDirective:        nil,
 }
 
 // Struct to store parameters of @generate directive
@@ -827,7 +852,7 @@ func preGQLValidation(schema *ast.SchemaDocument) gqlerror.List {
 // has fleshed out the schema structure; we just need to check if it also satisfies
 // the extra rules.
 func postGQLValidation(schema *ast.Schema, definitions []string,
-	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
+	secrets map[string]x.Sensitive) gqlerror.List {
 	var errs []*gqlerror.Error
 
 	for _, defn := range definitions {
@@ -846,7 +871,6 @@ func postGQLValidation(schema *ast.Schema, definitions []string,
 			}
 		}
 	}
-
 	errs = append(errs, applySchemaValidations(schema, definitions)...)
 
 	return errs
@@ -901,7 +925,7 @@ func applyFieldValidations(typ *ast.Definition, field *ast.FieldDefinition) gqle
 // query/mutation/update for all the types mentioned in the schema.
 // In case of Apollo service Query, input types from queries and mutations
 // are excluded due to the limited support currently.
-func completeSchema(sch *ast.Schema, definitions []string, apolloServiceQuery bool) {
+func completeSchema(sch *ast.Schema, definitions []string, providesFieldsMap map[string]map[string]bool, apolloServiceQuery bool) {
 	query := sch.Types["Query"]
 	if query != nil {
 		query.Kind = ast.Object
@@ -962,18 +986,19 @@ func completeSchema(sch *ast.Schema, definitions []string, apolloServiceQuery bo
 		}
 
 		params := parseGenerateDirectiveParams(defn)
+		providesTypeMap := providesFieldsMap[key]
 
 		// Common types to both Interface and Object.
-		addReferenceType(sch, defn)
+		addReferenceType(sch, defn, providesTypeMap)
 
 		if params.generateUpdateMutation {
-			addPatchType(sch, defn)
+			addPatchType(sch, defn, providesTypeMap)
 			addUpdateType(sch, defn)
-			addUpdatePayloadType(sch, defn)
+			addUpdatePayloadType(sch, defn, providesTypeMap)
 		}
 
 		if params.generateDeleteMutation {
-			addDeletePayloadType(sch, defn)
+			addDeletePayloadType(sch, defn, providesTypeMap)
 		}
 
 		switch defn.Kind {
@@ -990,23 +1015,23 @@ func completeSchema(sch *ast.Schema, definitions []string, apolloServiceQuery bo
 		case ast.Object:
 			// types and inputs needed for mutations
 			if params.generateAddMutation {
-				addInputType(sch, defn)
-				addAddPayloadType(sch, defn)
+				addInputType(sch, defn, providesTypeMap)
+				addAddPayloadType(sch, defn, providesTypeMap)
 			}
 			addMutations(sch, defn, params)
 		}
 
 		// types and inputs needed for query and search
-		addFilterType(sch, defn)
-		addTypeOrderable(sch, defn)
-		addFieldFilters(sch, defn, apolloServiceQuery)
-		addAggregationResultType(sch, defn)
+		addFilterType(sch, defn, providesTypeMap)
+		addTypeOrderable(sch, defn, providesTypeMap)
+		addFieldFilters(sch, defn, providesTypeMap, apolloServiceQuery)
+		addAggregationResultType(sch, defn, providesTypeMap)
 		// Don't expose queries for the @extends type to the gateway
 		// as it is resolved through `_entities` resolver.
 		if !(apolloServiceQuery && hasExtends(defn)) {
-			addQueries(sch, defn, params)
+			addQueries(sch, defn, providesTypeMap, params)
 		}
-		addTypeHasFilter(sch, defn)
+		addTypeHasFilter(sch, defn, providesTypeMap)
 		// We need to call this at last as aggregateFields
 		// should not be part of HasFilter or UpdatePayloadType etc.
 		addAggregateFields(sch, defn, apolloServiceQuery)
@@ -1044,13 +1069,30 @@ func cleanupInput(sch *ast.Schema, def *ast.Definition, seen map[string]bool) {
 	}
 	def.Fields = def.Fields[:i]
 
+	// Delete input type which contains no fields.
+	if len(def.Fields) == 0 {
+		delete(sch.Types, def.Name)
+	}
+
 	// In case of UpdateTypeInput, if TypePatch gets cleaned up then it becomes
 	// input UpdateTypeInput {
 	//		filter: TypeFilter!
 	// }
 	// In this case, UpdateTypeInput should also be deleted.
-	if len(def.Fields) == 0 || (strings.HasPrefix(def.Name, "Update") && len(def.Fields) == 1) {
-		delete(sch.Types, def.Name)
+	if strings.HasPrefix(def.Name, "Update") &&
+		strings.HasSuffix(def.Name, "Input") &&
+		len(def.Fields) == 1 {
+		// Obtain T from UpdateTInput
+		typeDef := sch.Types[def.Name[6:len(def.Name)-5]]
+		if typeDef != nil &&
+			typeDef.Directives.ForName(remoteDirective) == nil &&
+			(typeDef.Kind == ast.Object || typeDef.Kind == ast.Interface) {
+			// this ensures that it was Dgraph who generated the `UpdateTInput`
+			// and allows users to still be able to define a type `UpdateT1Input` with a field named
+			//`filter` in that input type and not get cleaned up.
+			// It checks if the type T exists in schema and is an Object or Interface.
+			delete(sch.Types, def.Name)
+		}
 	}
 }
 
@@ -1156,10 +1198,10 @@ func addUnionMemberTypeEnum(schema *ast.Schema, defn *ast.Definition) {
 // For extended Type definition, if Field with ID type is also field with @key directive then
 // it should be present in the addTypeInput as it should not be generated automatically by dgraph
 // but determined by the value of field in the GraphQL service where the type is defined.
-func addInputType(schema *ast.Schema, defn *ast.Definition) {
-	field := getFieldsWithoutIDType(schema, defn)
+func addInputType(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[string]bool) {
+	field := getFieldsWithoutIDType(schema, defn, providesTypeMap, true)
 	if hasExtends(defn) {
-		idField := getIDField(defn)
+		idField := getIDField(defn, providesTypeMap)
 		field = append(idField, field...)
 	}
 
@@ -1172,15 +1214,16 @@ func addInputType(schema *ast.Schema, defn *ast.Definition) {
 	}
 }
 
-func addReferenceType(schema *ast.Schema, defn *ast.Definition) {
+func addReferenceType(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[string]bool) {
 	var flds ast.FieldList
 	if defn.Kind == ast.Interface {
 		if !hasID(defn) && !hasXID(defn) {
 			return
 		}
-		flds = append(getIDField(defn), getXIDField(defn)...)
+		flds = append(getIDField(defn, providesTypeMap), getXIDField(defn, providesTypeMap)...)
 	} else {
-		flds = append(getIDField(defn), getFieldsWithoutIDType(schema, defn)...)
+		flds = append(getIDField(defn, providesTypeMap),
+			getFieldsWithoutIDType(schema, defn, providesTypeMap, true)...)
 	}
 
 	if len(flds) == 1 && (hasID(defn) || hasXID(defn)) {
@@ -1235,12 +1278,12 @@ func addUpdateType(schema *ast.Schema, defn *ast.Definition) {
 	schema.Types["Update"+defn.Name+"Input"] = updType
 }
 
-func addPatchType(schema *ast.Schema, defn *ast.Definition) {
+func addPatchType(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[string]bool) {
 	if !hasFilterable(defn) {
 		return
 	}
 
-	nonIDFields := getNonIDFields(schema, defn)
+	nonIDFields := getNonIDFields(schema, defn, providesTypeMap)
 	if len(nonIDFields) == 0 {
 		// The user might just have an external id field and nothing else. We don't generate patch
 		// type in that case.
@@ -1272,11 +1315,11 @@ func addPatchType(schema *ast.Schema, defn *ast.Definition) {
 //     ...
 //   }
 // }
-func addFieldFilters(schema *ast.Schema, defn *ast.Definition, apolloServiceQuery bool) {
+func addFieldFilters(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[string]bool, apolloServiceQuery bool) {
 	for _, fld := range defn.Fields {
 		// Filtering and ordering for fields with @custom/@lambda directive is handled by the remote
 		// endpoint.
-		if hasCustomOrLambda(fld) {
+		if hasCustomOrLambda(fld) || isMultiLangField(fld, false) {
 			continue
 		}
 
@@ -1293,7 +1336,7 @@ func addFieldFilters(schema *ast.Schema, defn *ast.Definition, apolloServiceQuer
 		// Ordering and pagination, however, only makes sense for fields of
 		// list types (not scalar lists or enum lists).
 		if isTypeList(fld) && !isEnumList(fld, schema) {
-			addOrderArgument(schema, fld)
+			addOrderArgument(schema, fld, providesTypeMap)
 
 			// Pagination even makes sense when there's no orderables because
 			// Dgraph will do UID order by default.
@@ -1356,7 +1399,7 @@ func addFilterArgumentForField(schema *ast.Schema, fld *ast.FieldDefinition, fld
 
 // addTypeHasFilter adds `enum TypeHasFilter {...}` to the Schema
 // if the object/interface has a field other than the ID field
-func addTypeHasFilter(schema *ast.Schema, defn *ast.Definition) {
+func addTypeHasFilter(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[string]bool) {
 	filterName := defn.Name + "HasFilter"
 	filter := &ast.Definition{
 		Kind: ast.Enum,
@@ -1364,14 +1407,16 @@ func addTypeHasFilter(schema *ast.Schema, defn *ast.Definition) {
 	}
 
 	for _, fld := range defn.Fields {
-		if isID(fld) || hasCustomOrLambda(fld) {
+		if isID(fld) || hasCustomOrLambda(fld) || isMultiLangField(fld, false) {
 			continue
 		}
 		// Ignore Fields with @external directives also excluding those which are present
-		// as an argument in @key directive
-		if hasExternal(fld) && !isKeyField(fld, defn) {
+		// as an argument in @key directive. If the field is an argument to `@provides` directive
+		// then it can't be ignored.
+		if externalAndNonKeyField(fld, defn, providesTypeMap) {
 			continue
 		}
+
 		filter.EnumValues = append(filter.EnumValues,
 			&ast.EnumValueDefinition{Name: fld.Name})
 	}
@@ -1388,9 +1433,9 @@ func addTypeHasFilter(schema *ast.Schema, defn *ast.Definition) {
 	}
 }
 
-func addOrderArgument(schema *ast.Schema, fld *ast.FieldDefinition) {
+func addOrderArgument(schema *ast.Schema, fld *ast.FieldDefinition, providesTypeMap map[string]bool) {
 	fldType := fld.Type.Name()
-	if hasOrderables(schema.Types[fldType]) {
+	if hasOrderables(schema.Types[fldType], providesTypeMap) {
 		fld.Arguments = append(fld.Arguments,
 			&ast.ArgumentDefinition{
 				Name: "order",
@@ -1483,7 +1528,7 @@ func mergeAndAddFilters(filterTypes []string, schema *ast.Schema, filterName str
 //   f(filter: TFilter, ... ): T
 //   ...
 // }
-func addFilterType(schema *ast.Schema, defn *ast.Definition) {
+func addFilterType(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[string]bool) {
 	filterName := defn.Name + "Filter"
 	filter := &ast.Definition{
 		Kind: ast.InputObject,
@@ -1492,8 +1537,9 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 
 	for _, fld := range defn.Fields {
 		// Ignore Fields with @external directives also excluding those which are present
-		// as an argument in @key directive
-		if hasExternal(fld) && !isKeyField(fld, defn) {
+		// as an argument in @key directive. If the field is an argument to `@provides` directive
+		// then it can't be ignored.
+		if externalAndNonKeyField(fld, defn, providesTypeMap) {
 			continue
 		}
 
@@ -1525,7 +1571,7 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 	}
 
 	// Has filter makes sense only if there is atleast one non ID field in the defn
-	if len(getFieldsWithoutIDType(schema, defn)) > 0 {
+	if len(getFieldsWithoutIDType(schema, defn, providesTypeMap, false)) > 0 {
 		filter.Fields = append(filter.Fields,
 			&ast.FieldDefinition{Name: "has", Type: &ast.Type{Elem: &ast.Type{NamedType: defn.Name + "HasFilter"}}},
 		)
@@ -1557,7 +1603,8 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 func hasFilterable(defn *ast.Definition) bool {
 	return fieldAny(defn.Fields,
 		func(fld *ast.FieldDefinition) bool {
-			return len(getSearchArgs(fld)) != 0 || isID(fld) || !hasCustomOrLambda(fld)
+			return len(getSearchArgs(fld)) != 0 || isID(fld) ||
+				!hasCustomOrLambda(fld) || !isMultiLangField(fld, false)
 		})
 }
 
@@ -1574,24 +1621,32 @@ func isEnumList(fld *ast.FieldDefinition, sch *ast.Schema) bool {
 	return typeDefn.Kind == "ENUM" && fld.Type.Elem != nil
 }
 
-func hasOrderables(defn *ast.Definition) bool {
+func hasOrderables(defn *ast.Definition, providesTypeMap map[string]bool) bool {
 	return fieldAny(defn.Fields, func(fld *ast.FieldDefinition) bool {
-		return isOrderable(fld, defn)
+		return isOrderable(fld, defn, providesTypeMap)
 	})
 }
 
-func isOrderable(fld *ast.FieldDefinition, defn *ast.Definition) bool {
+func isOrderable(fld *ast.FieldDefinition, defn *ast.Definition,
+	providesTypeMap map[string]bool) bool {
 	// lists can't be ordered and NamedType will be empty for lists,
 	// so it will return false for list fields
-	// External field can't be ordered except when it is a @key field
+	// External field can't be ordered except when it is a @key field or
+	// the field is an argument in `@provides` directive.
+	// Multiple language fields(i.e. of type name@hi:en) are not orderable
+	// We allow to generate aggregate fields for multi language fields
 	if !hasExternal(fld) {
-		return orderable[fld.Type.NamedType] && !hasCustomOrLambda(fld)
+		return orderable[fld.Type.NamedType] && !hasCustomOrLambda(fld) &&
+			!isMultiLangField(fld, false)
 	}
-	return isKeyField(fld, defn)
+	return isKeyField(fld, defn) || providesTypeMap[fld.Name]
 }
 
 // Returns true if the field is of type which can be summed. Eg: int, int64, float
-func isSummable(fld *ast.FieldDefinition) bool {
+func isSummable(fld *ast.FieldDefinition, defn *ast.Definition, providesTypeMap map[string]bool) bool {
+	if externalAndNonKeyField(fld, defn, providesTypeMap) {
+		return false
+	}
 	return summable[fld.Type.NamedType] && !hasCustomOrLambda(fld)
 }
 
@@ -1628,14 +1683,8 @@ func addHashIfRequired(fld *ast.FieldDefinition, indexes []string) []string {
 	id := fld.Directives.ForName(idDirective)
 	if id != nil {
 		// If @id directive is applied along with @search, we check if the search has hash as an
-		// arg. If it doesn't, then we add it.
-		containsHash := false
-		for _, index := range indexes {
-			if index == "hash" {
-				containsHash = true
-			}
-		}
-		if !containsHash {
+		// arg. If it doesn't and there is no exact arg, then we add hash in it.
+		if !x.HasString(indexes, "hash") && !x.HasString(indexes, "exact") {
 			indexes = append(indexes, "hash")
 		}
 	}
@@ -1706,8 +1755,8 @@ func getSearchArgs(fld *ast.FieldDefinition) []string {
 // GraphQL orderings are given by the structure
 // `order: { asc: datePublished, then: { asc: title } }`.
 // a further `then` would be a third ordering, etc.
-func addTypeOrderable(schema *ast.Schema, defn *ast.Definition) {
-	if !hasOrderables(defn) {
+func addTypeOrderable(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[string]bool) {
+	if !hasOrderables(defn, providesTypeMap) {
 		return
 	}
 
@@ -1731,7 +1780,7 @@ func addTypeOrderable(schema *ast.Schema, defn *ast.Definition) {
 
 	for _, fld := range defn.Fields {
 
-		if isOrderable(fld, defn) {
+		if isOrderable(fld, defn, providesTypeMap) {
 			order.EnumValues = append(order.EnumValues,
 				&ast.EnumValueDefinition{Name: fld.Name})
 		}
@@ -1740,7 +1789,7 @@ func addTypeOrderable(schema *ast.Schema, defn *ast.Definition) {
 	schema.Types[orderableName] = order
 }
 
-func addAddPayloadType(schema *ast.Schema, defn *ast.Definition) {
+func addAddPayloadType(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[string]bool) {
 	qry := &ast.FieldDefinition{
 		Name: CamelCase(defn.Name),
 		Type: ast.ListType(&ast.Type{
@@ -1749,7 +1798,7 @@ func addAddPayloadType(schema *ast.Schema, defn *ast.Definition) {
 	}
 
 	addFilterArgument(schema, qry)
-	addOrderArgument(schema, qry)
+	addOrderArgument(schema, qry, providesTypeMap)
 	addPaginationArguments(qry)
 	if schema.Types["Add"+defn.Name+"Input"] != nil {
 		schema.Types["Add"+defn.Name+"Payload"] = &ast.Definition{
@@ -1760,7 +1809,7 @@ func addAddPayloadType(schema *ast.Schema, defn *ast.Definition) {
 	}
 }
 
-func addUpdatePayloadType(schema *ast.Schema, defn *ast.Definition) {
+func addUpdatePayloadType(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[string]bool) {
 	if !hasFilterable(defn) {
 		return
 	}
@@ -1782,7 +1831,7 @@ func addUpdatePayloadType(schema *ast.Schema, defn *ast.Definition) {
 	}
 
 	addFilterArgument(schema, qry)
-	addOrderArgument(schema, qry)
+	addOrderArgument(schema, qry, providesTypeMap)
 	addPaginationArguments(qry)
 
 	schema.Types["Update"+defn.Name+"Payload"] = &ast.Definition{
@@ -1794,7 +1843,7 @@ func addUpdatePayloadType(schema *ast.Schema, defn *ast.Definition) {
 	}
 }
 
-func addDeletePayloadType(schema *ast.Schema, defn *ast.Definition) {
+func addDeletePayloadType(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[string]bool) {
 	if !hasFilterable(defn) {
 		return
 	}
@@ -1807,7 +1856,7 @@ func addDeletePayloadType(schema *ast.Schema, defn *ast.Definition) {
 	}
 
 	addFilterArgument(schema, qry)
-	addOrderArgument(schema, qry)
+	addOrderArgument(schema, qry, providesTypeMap)
 	addPaginationArguments(qry)
 
 	msg := &ast.FieldDefinition{
@@ -1822,7 +1871,7 @@ func addDeletePayloadType(schema *ast.Schema, defn *ast.Definition) {
 	}
 }
 
-func addAggregationResultType(schema *ast.Schema, defn *ast.Definition) {
+func addAggregationResultType(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[string]bool) {
 	aggregationResultTypeName := defn.Name + "AggregateResult"
 
 	var aggregateFields []*ast.FieldDefinition
@@ -1848,7 +1897,7 @@ func addAggregationResultType(schema *ast.Schema, defn *ast.Definition) {
 		}
 
 		// Adds titleMax, titleMin fields for a field of name title.
-		if isOrderable(fld, defn) {
+		if isOrderable(fld, defn, providesTypeMap) || isMultiLangField(fld, false) {
 			minField := &ast.FieldDefinition{
 				Name: fld.Name + "Min",
 				Type: aggregateFieldType,
@@ -1862,7 +1911,7 @@ func addAggregationResultType(schema *ast.Schema, defn *ast.Definition) {
 
 		// Adds scoreSum and scoreAvg field for a field of name score.
 		// The type of scoreAvg is Float irrespective of the type of score.
-		if isSummable(fld) {
+		if isSummable(fld, defn, providesTypeMap) {
 			sumField := &ast.FieldDefinition{
 				Name: fld.Name + "Sum",
 				Type: aggregateFieldType,
@@ -1886,11 +1935,11 @@ func addAggregationResultType(schema *ast.Schema, defn *ast.Definition) {
 	}
 }
 
-func addGetQuery(schema *ast.Schema, defn *ast.Definition, generateSubscription bool) {
+func addGetQuery(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[string]bool, generateSubscription bool) {
 	hasIDField := hasID(defn)
 	hasXIDField := hasXID(defn)
 	xidCount := xidsCount(defn.Fields)
-	if !hasIDField && (defn.Kind == "INTERFACE" || !hasXIDField) {
+	if !hasIDField && !hasXIDField {
 		return
 	}
 	qry := &ast.FieldDefinition{
@@ -1903,7 +1952,7 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition, generateSubscription 
 	// If the defn, only specified one of ID/XID field, then they are mandatory. If it specified
 	// both, then they are optional.
 	if hasIDField {
-		fields := getIDField(defn)
+		fields := getIDField(defn, providesTypeMap)
 		qry.Arguments = append(qry.Arguments, &ast.ArgumentDefinition{
 			Name: fields[0].Name,
 			Type: &ast.Type{
@@ -1912,7 +1961,16 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition, generateSubscription 
 			},
 		})
 	}
-	if hasXIDField && defn.Kind != "INTERFACE" {
+	if hasXIDField {
+		if defn.Kind == "INTERFACE" {
+			qry.Directives = append(
+				qry.Directives, &ast.Directive{Name: deprecatedDirective,
+					Arguments: ast.ArgumentList{&ast.Argument{Name: "reason",
+						Value: &ast.Value{Raw: "@id argument for get query on interface is being deprecated, " +
+							"it will be removed in v21.11.0, " +
+							"please update your query to not use that argument",
+							Kind: ast.StringValue}}}})
+		}
 		for _, fld := range defn.Fields {
 			if hasIDDirective(fld) {
 				qry.Arguments = append(qry.Arguments, &ast.ArgumentDefinition{
@@ -1932,7 +1990,7 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition, generateSubscription 
 	}
 }
 
-func addFilterQuery(schema *ast.Schema, defn *ast.Definition, generateSubscription bool) {
+func addFilterQuery(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[string]bool, generateSubscription bool) {
 	qry := &ast.FieldDefinition{
 		Name: "query" + defn.Name,
 		Type: &ast.Type{
@@ -1942,7 +2000,7 @@ func addFilterQuery(schema *ast.Schema, defn *ast.Definition, generateSubscripti
 		},
 	}
 	addFilterArgument(schema, qry)
-	addOrderArgument(schema, qry)
+	addOrderArgument(schema, qry, providesTypeMap)
 	addPaginationArguments(qry)
 
 	schema.Query.Fields = append(schema.Query.Fields, qry)
@@ -1970,16 +2028,16 @@ func addAggregationQuery(schema *ast.Schema, defn *ast.Definition, generateSubsc
 
 }
 
-func addPasswordQuery(schema *ast.Schema, defn *ast.Definition) {
+func addPasswordQuery(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[string]bool) {
 	hasIDField := hasID(defn)
 	hasXIDField := hasXID(defn)
 	if !hasIDField && !hasXIDField {
 		return
 	}
 
-	idField := getIDField(defn)
+	idField := getIDField(defn, providesTypeMap)
 	if !hasIDField {
-		idField = getXIDField(defn)
+		idField = getXIDField(defn, providesTypeMap)
 	}
 	passwordField := getPasswordField(defn)
 	if passwordField == nil {
@@ -2008,17 +2066,17 @@ func addPasswordQuery(schema *ast.Schema, defn *ast.Definition) {
 	schema.Query.Fields = append(schema.Query.Fields, qry)
 }
 
-func addQueries(schema *ast.Schema, defn *ast.Definition, params *GenerateDirectiveParams) {
+func addQueries(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[string]bool, params *GenerateDirectiveParams) {
 	if params.generateGetQuery {
-		addGetQuery(schema, defn, params.generateSubscription)
+		addGetQuery(schema, defn, providesTypeMap, params.generateSubscription)
 	}
 
 	if params.generatePasswordQuery {
-		addPasswordQuery(schema, defn)
+		addPasswordQuery(schema, defn, providesTypeMap)
 	}
 
 	if params.generateFilterQuery {
-		addFilterQuery(schema, defn, params.generateSubscription)
+		addFilterQuery(schema, defn, providesTypeMap, params.generateSubscription)
 	}
 
 	if params.generateAggregateQuery {
@@ -2146,7 +2204,7 @@ func createField(schema *ast.Schema, fld *ast.FieldDefinition) *ast.FieldDefinit
 	return &newFld
 }
 
-func getNonIDFields(schema *ast.Schema, defn *ast.Definition) ast.FieldList {
+func getNonIDFields(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[string]bool) ast.FieldList {
 	fldList := make([]*ast.FieldDefinition, 0)
 	for _, fld := range defn.Fields {
 		if isIDField(defn, fld) || hasIDDirective(fld) {
@@ -2154,8 +2212,9 @@ func getNonIDFields(schema *ast.Schema, defn *ast.Definition) ast.FieldList {
 		}
 
 		// Ignore Fields with @external directives also as they shouldn't be present
-		// in the Patch Type Also.
-		if hasExternal(fld) {
+		// in the Patch Type also. If the field is an argument to `@provides` directive
+		// then it should be present.
+		if externalAndNonKeyField(fld, defn, providesTypeMap) {
 			continue
 		}
 		// Fields with @custom/@lambda directive should not be part of mutation input,
@@ -2163,7 +2222,12 @@ func getNonIDFields(schema *ast.Schema, defn *ast.Definition) ast.FieldList {
 		if hasCustomOrLambda(fld) {
 			continue
 		}
-
+		// We don't include fields in update patch, which corresponds to multiple language tags in dgraph
+		// Example, nameHi_En:  String @dgraph(pred:"Person.name@hi:en")
+		// We don't add above field in update patch because it corresponds to multiple languages
+		if isMultiLangField(fld, true) {
+			continue
+		}
 		// Remove edges which have a reverse predicate as they should only be updated through their
 		// forward edge.
 		fname := fieldName(fld, defn.Name)
@@ -2192,7 +2256,8 @@ func getNonIDFields(schema *ast.Schema, defn *ast.Definition) ast.FieldList {
 	return append(fldList, pd)
 }
 
-func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition) ast.FieldList {
+func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition,
+	providesTypeMap map[string]bool, isAddingInput bool) ast.FieldList {
 	fldList := make([]*ast.FieldDefinition, 0)
 	for _, fld := range defn.Fields {
 		if isIDField(defn, fld) {
@@ -2201,7 +2266,7 @@ func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition) ast.FieldL
 
 		// Ignore Fields with @external directives and excluding those which are present
 		// as an argument in @key directive
-		if hasExternal(fld) && !isKeyField(fld, defn) {
+		if externalAndNonKeyField(fld, defn, providesTypeMap) {
 			continue
 		}
 
@@ -2210,7 +2275,10 @@ func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition) ast.FieldL
 		if hasCustomOrLambda(fld) {
 			continue
 		}
-
+		// see the comment in getNonIDFields as well.
+		if isMultiLangField(fld, true) && isAddingInput {
+			continue
+		}
 		// Remove edges which have a reverse predicate as they should only be updated through their
 		// forward edge.
 		fname := fieldName(fld, defn.Name)
@@ -2233,12 +2301,31 @@ func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition) ast.FieldL
 	return append(fldList, pd)
 }
 
-func getIDField(defn *ast.Definition) ast.FieldList {
+// This function check if given gql field has multiple language tags
+func isMultiLangField(fld *ast.FieldDefinition, isMutationInput bool) bool {
+	dgDirective := fld.Directives.ForName(dgraphDirective)
+	if dgDirective != nil {
+		pred := dgDirective.Arguments.ForName("pred")
+		if pred != nil {
+			if strings.Contains(pred.Value.Raw, "@") {
+				langs := strings.Split(pred.Value.Raw, "@")[1]
+				if isMutationInput {
+					return strings.Contains(langs, ":") || langs == "."
+				}
+				return strings.Contains(langs, ":")
+			}
+		}
+	}
+	return false
+}
+
+func getIDField(defn *ast.Definition, providesTypeMap map[string]bool) ast.FieldList {
 	fldList := make([]*ast.FieldDefinition, 0)
 	for _, fld := range defn.Fields {
 		if isIDField(defn, fld) {
-			// Excluding those fields which are external and are not @key.
-			if hasExternal(fld) && !isKeyField(fld, defn) {
+			// Excluding those fields which are external and are not @key and are not
+			// used as an argument in `@provides` directive.
+			if externalAndNonKeyField(fld, defn, providesTypeMap) {
 				continue
 			}
 			newFld := *fld
@@ -2265,12 +2352,13 @@ func getPasswordField(defn *ast.Definition) *ast.FieldDefinition {
 	return fldList
 }
 
-func getXIDField(defn *ast.Definition) ast.FieldList {
+func getXIDField(defn *ast.Definition, providesTypeMap map[string]bool) ast.FieldList {
 	fldList := make([]*ast.FieldDefinition, 0)
 	for _, fld := range defn.Fields {
 		if hasIDDirective(fld) {
-			// Excluding those fields which are external and are not @key.
-			if hasExternal(fld) && !isKeyField(fld, defn) {
+			// Excluding those fields which are external and are not @key and are not
+			// used as an argument in `@provides` directive.
+			if externalAndNonKeyField(fld, defn, providesTypeMap) {
 				continue
 			}
 			newFld := *fld
@@ -2424,6 +2512,17 @@ func generateUnionString(typ *ast.Definition) string {
 		strings.Join(typ.Types, " | "))
 }
 
+func hasStringifiableFields(typ *ast.Definition) bool {
+	queriesToWrite := false
+	for _, fld := range typ.Fields {
+		if !strings.HasPrefix(fld.Name, "__") {
+			queriesToWrite = true
+			break
+		}
+	}
+	return queriesToWrite
+}
+
 // Stringify the schema as a GraphQL SDL string.  It's assumed that the schema was
 // built by completeSchema, and so contains an original set of definitions, the
 // definitions from schemaExtras and generated types, queries and mutations.
@@ -2550,7 +2649,7 @@ func Stringify(schema *ast.Schema, originalTypes []string, apolloServiceQuery bo
 		x.Check2(sch.WriteString(input.String()))
 	}
 
-	if len(schema.Query.Fields) > 0 {
+	if hasStringifiableFields(schema.Query) {
 		x.Check2(sch.WriteString(
 			"#######################\n# Generated Query\n#######################\n\n"))
 		x.Check2(sch.WriteString(generateObjectString(schema.Query) + "\n"))

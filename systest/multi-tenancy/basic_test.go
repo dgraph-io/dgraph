@@ -20,14 +20,17 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgo/v200"
-	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgo/v210"
+	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/ee/acl"
+	"github.com/dgraph-io/dgraph/graphql/e2e/common"
+	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
@@ -74,7 +77,7 @@ func TestAclBasic(t *testing.T) {
 	testutil.CompareJSON(t, `{"me": []}`, string(resp))
 
 	// Login to namespace 1 via groot and create new user alice.
-	token := testutil.Login(t, &testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: 1})
+	token := testutil.Login(t, &testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: ns})
 	testutil.CreateUser(t, token, "alice", "newpassword")
 
 	// Alice should not be able to see data added by groot in namespace 1
@@ -278,8 +281,7 @@ func TestLiveLoadMulti(t *testing.T) {
 		schema: `
 		name: string @index(term) .
 `,
-		creds: &testutil.LoginParams{UserID: "groot", Passwd: "password",
-			Namespace: x.GalaxyNamespace},
+		creds:   galaxyCreds,
 		forceNs: int64(ns),
 	}))
 
@@ -288,7 +290,59 @@ func TestLiveLoadMulti(t *testing.T) {
 		`{"me": [{"name":"ns alice"}, {"name": "ns bob"},{"name":"ns chew"},
 		{"name": "ns dan"},{"name":"ns eon"}]}`, string(resp))
 
+	// Try loading data into a namespace that does not exist. Expect a failure.
+	err = liveLoadData(t, &liveOpts{
+		rdfs:   fmt.Sprintf(`_:c <name> "ns eon" <%#x> .`, ns),
+		schema: `name: string @index(term) .`,
+		creds: &testutil.LoginParams{UserID: "groot", Passwd: "password",
+			Namespace: x.GalaxyNamespace},
+		forceNs: int64(0x123456), // Assuming this namespace does not exist.
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Cannot load into namespace 0x123456")
+
+	// Try loading into a multiple namespaces.
+	err = liveLoadData(t, &liveOpts{
+		rdfs:    fmt.Sprintf(`_:c <name> "ns eon" <%#x> .`, ns),
+		schema:  `[0x123456] name: string @index(term) .`,
+		creds:   galaxyCreds,
+		forceNs: -1,
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Namespace 0x123456 doesn't exist for pred")
+
+	err = liveLoadData(t, &liveOpts{
+		rdfs:    fmt.Sprintf(`_:c <name> "ns eon" <0x123456> .`),
+		schema:  `name: string @index(term) .`,
+		creds:   galaxyCreds,
+		forceNs: -1,
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Cannot load nquad")
+
 	// Load data by non-galaxy user.
+	err = liveLoadData(t, &liveOpts{
+		rdfs: `_:c <name> "ns hola" .`,
+		schema: `
+		name: string @index(term) .
+`,
+		creds:   &testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: ns},
+		forceNs: -1,
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "cannot force namespace")
+
+	err = liveLoadData(t, &liveOpts{
+		rdfs: `_:c <name> "ns hola" .`,
+		schema: `
+		name: string @index(term) .
+`,
+		creds:   &testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: ns},
+		forceNs: 10,
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "cannot force namespace")
+
 	require.NoError(t, liveLoadData(t, &liveOpts{
 		rdfs: fmt.Sprintf(`
 		_:a <name> "ns free" .
@@ -298,19 +352,99 @@ func TestLiveLoadMulti(t *testing.T) {
 		schema: `
 		name: string @index(term) .
 `,
-		creds:   &testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: ns},
-		forceNs: -1, // this will be ignored.
+		creds: &testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: ns},
 	}))
 
 	resp = testutil.QueryData(t, dc1, query3)
-	testutil.CompareJSON(t,
-		`{"me": [{"name":"ns alice"}, {"name": "ns bob"},{"name":"ns chew"},
+	testutil.CompareJSON(t, `{"me": [{"name":"ns alice"}, {"name": "ns bob"},{"name":"ns chew"},
 		{"name": "ns dan"},{"name":"ns eon"}, {"name": "ns free"},{"name":"ns gary"},
 		{"name": "ns hola"}]}`, string(resp))
+}
 
+func postGqlSchema(t *testing.T, schema string, accessJwt string) {
+	groupOneHTTP := testutil.ContainerAddr("alpha1", 8080)
+	header := http.Header{}
+	header.Set("X-Dgraph-AccessToken", accessJwt)
+	common.SafelyUpdateGQLSchema(t, groupOneHTTP, schema, header)
+}
+
+func postPersistentQuery(t *testing.T, query, sha, accessJwt string) *common.GraphQLResponse {
+	header := http.Header{}
+	header.Set("X-Dgraph-AccessToken", accessJwt)
+	queryCountryParams := &common.GraphQLParams{
+		Query: query,
+		Extensions: &schema.RequestExtensions{PersistedQuery: schema.PersistedQuery{
+			Sha256Hash: sha,
+		}},
+		Headers: header,
+	}
+	url := "http://" + testutil.ContainerAddr("alpha1", 8080) + "/graphql"
+	return queryCountryParams.ExecuteAsPost(t, url)
+}
+
+func TestPersistentQuery(t *testing.T) {
+	prepare(t)
+	galaxyToken := testutil.Login(t,
+		&testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: x.GalaxyNamespace})
+
+	// Create a new namespace
+	ns, err := testutil.CreateNamespaceWithRetry(t, galaxyToken)
+	require.NoError(t, err)
+
+	token := testutil.Login(t,
+		&testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: ns})
+
+	sch := `type Product {
+			productID: ID!
+			name: String @search(by: [term])
+		}`
+	postGqlSchema(t, sch, galaxyToken.AccessJwt)
+	postGqlSchema(t, sch, token.AccessJwt)
+
+	p1 := "query {queryProduct{productID}}"
+	sha1 := "7a8ff7a69169371c1eb52a8921387079ca281bb2d55feb4b535cbf0ab3896be5"
+	resp := postPersistentQuery(t, p1, sha1, galaxyToken.AccessJwt)
+	common.RequireNoGQLErrors(t, resp)
+
+	p2 := "query {queryProduct{name}}"
+	sha2 := "0efcdde144167b1046360b73c7f6bec325d9f555099a2ae9b820a13328d270e4"
+	resp = postPersistentQuery(t, p2, sha2, token.AccessJwt)
+	common.RequireNoGQLErrors(t, resp)
+
+	// User cannnot see persistent query from other namespace.
+	resp = postPersistentQuery(t, "", sha2, galaxyToken.AccessJwt)
+	require.Equal(t, 1, len(resp.Errors))
+	require.Contains(t, resp.Errors[0].Message, "PersistedQueryNotFound")
+
+	resp = postPersistentQuery(t, "", sha1, token.AccessJwt)
+	require.Equal(t, 1, len(resp.Errors))
+	require.Contains(t, resp.Errors[0].Message, "PersistedQueryNotFound")
+
+	resp = postPersistentQuery(t, "", sha1, "")
+	require.Equal(t, 1, len(resp.Errors))
+	require.Contains(t, resp.Errors[0].Message, "no accessJwt available")
+}
+
+func TestTokenExpired(t *testing.T) {
+	prepare(t)
+	galaxyToken := testutil.Login(t,
+		&testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: x.GalaxyNamespace})
+
+	// Create a new namespace
+	ns, err := testutil.CreateNamespaceWithRetry(t, galaxyToken)
+	require.NoError(t, err)
+	token := testutil.Login(t,
+		&testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: ns})
+
+	// Relogin using refresh JWT.
+	token = testutil.Login(t,
+		&testutil.LoginParams{RefreshJwt: token.RefreshToken})
+	_, err = testutil.CreateNamespaceWithRetry(t, token)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Only guardian of galaxy is allowed to do this operation")
 }
 
 func TestMain(m *testing.M) {
-	fmt.Printf("Using adminEndpoint : %s for multy-tenancy test.\n", testutil.AdminUrl())
+	fmt.Printf("Using adminEndpoint : %s for multi-tenancy test.\n", testutil.AdminUrl())
 	os.Exit(m.Run())
 }

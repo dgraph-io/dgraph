@@ -179,63 +179,12 @@ func entitiesQuery(field schema.Query, authRw *authRewriter) ([]*gql.GraphQuery,
 	// 		...
 	//   ]
 
-	representations, ok := field.ArgValue("representations").([]interface{})
-	if !ok {
-		return nil, fmt.Errorf("Error parsing `representations` argument")
-	}
-	typeNames := make(map[string]bool)
-	keyFieldValueList := make([]interface{}, 0)
-	keyFieldIsID := false
-	keyFieldName := ""
-	var err error
-	for i, rep := range representations {
-		representation, ok := rep.(map[string]interface{})
-		if !ok {
-			return nil, fmt.Errorf("Error parsing in %dth item in the `_representations` argument", i)
-		}
-
-		typename, ok := representation["__typename"].(string)
-		if !ok {
-			return nil, fmt.Errorf("Unable to extract __typename from %dth item in the `_representations` argument", i)
-		}
-
-		// Store all the typeNames into an map to perfrom validation at last.
-		typeNames[typename] = true
-		keyFieldName, keyFieldIsID, err = field.KeyField(typename)
-		if err != nil {
-			return nil, err
-		}
-		keyFieldValue, ok := representation[keyFieldName]
-		if !ok {
-			return nil, fmt.Errorf("Unable to extract value for key field `%s` from %dth item in the `_representations` argument", keyFieldName, i)
-		}
-		keyFieldValueList = append(keyFieldValueList, keyFieldValue)
+	parsedRepr, err := field.RepresentationsArg()
+	if err != nil {
+		return nil, err
 	}
 
-	// Return error if there was no typename extracted from the `_representations` argument.
-	if len(typeNames) == 0 {
-		return nil, fmt.Errorf("Expect one typename in `_representations` argument, got none")
-	}
-
-	// Since we have restricted that all the typeNames for the inputs in the
-	// representation list should be same, we need to validate it and throw error
-	// if represenation of more than one type exists.
-	if len(typeNames) > 1 {
-		keys := make([]string, len(typeNames))
-		i := 0
-		for k := range typeNames {
-			keys[i] = k
-			i++
-		}
-		return nil, fmt.Errorf("Expected only one unique typename in `_representations` argument, got: %v", keys)
-	}
-
-	var typeName string
-	for k := range typeNames {
-		typeName = k
-	}
-
-	typeDefn := field.BuildType(typeName)
+	typeDefn := parsedRepr.TypeDefn
 	rbac := authRw.evaluateStaticRules(typeDefn)
 
 	dgQuery := &gql.GraphQuery{
@@ -261,10 +210,16 @@ func entitiesQuery(field schema.Query, authRw *authRewriter) ([]*gql.GraphQuery,
 	// If the key field is of ID type and is not an external field
 	// then we query it using the `uid` otherwise we treat it as string
 	// and query using `eq` function.
-	if keyFieldIsID && !typeDefn.Field(keyFieldName).IsExternal() {
-		addUIDFunc(dgQuery, convertIDs(keyFieldValueList))
+	// We also don't need to add Order to the query as the results are
+	// automatically returned in the ascending order of the uids.
+	if parsedRepr.KeyField.IsID() && !parsedRepr.KeyField.IsExternal() {
+		addUIDFunc(dgQuery, convertIDs(parsedRepr.KeyVals))
 	} else {
-		addEqFunc(dgQuery, typeDefn.DgraphPredicate(keyFieldName), keyFieldValueList)
+		addEqFunc(dgQuery, typeDefn.DgraphPredicate(parsedRepr.KeyField.Name()), parsedRepr.KeyVals)
+		// Add the  ascending Order of the keyField in the query.
+		// The result will be converted into the exact in the resultCompletion step.
+		dgQuery.Order = append(dgQuery.Order,
+			&pb.Order{Attr: typeDefn.DgraphPredicate(parsedRepr.KeyField.Name())})
 	}
 	// AddTypeFilter in as the Filter to the Root the Query.
 	// Query will be like :-
@@ -773,8 +728,8 @@ func (authRw *authRewriter) addAuthQueries(
 				continue
 			}
 
-			// Form Query Like Todo1 as var(func: type(Todo))
-			queryVar := object.Name() + "1"
+			// Form Query Like Todo_1 as var(func: type(Todo))
+			queryVar := authRw.varGen.Next(object, "", "", authRw.isWritingAuth)
 			varQry := &gql.GraphQuery{
 				Attr: "var",
 				Var:  queryVar,
@@ -876,6 +831,8 @@ func (authRw *authRewriter) addAuthQueries(
 	// that has the order and pagination params from user query in it and filter set to auth
 	// queries built for this type. This is then used as the starting point for user query and
 	// auth queries for children.
+	// if @cascade directive is present in the user query then pagination and order are applied only
+	// on the user query and not on root query.
 	rootQry := &gql.GraphQuery{
 		Var:  authRw.parentVarName,
 		Attr: "var",
@@ -884,16 +841,22 @@ func (authRw *authRewriter) addAuthQueries(
 			Args: []gql.Arg{{Value: authRw.varName}},
 		},
 		Filter: filter,
-		Order:  dgQuery[0].Order, // we need the order here for pagination to work correctly
-		Args:   dgQuery[0].Args,  // this gets pagination from user query to root query
 	}
 
-	// The user query doesn't need the filter and pagination parameters anymore,
-	// as they have been taken care of by the var and root queries generated above.
-	// But, tt still needs the order parameter, even though it is also applied in root query.
+	// The user query doesn't need the filter parameter anymore,
+	// as it has been taken care of by the var and root queries generated above.
+	// But, it still needs the order parameter, even though it is also applied in root query.
 	// So, not setting order to nil.
 	dgQuery[0].Filter = nil
-	dgQuery[0].Args = nil
+
+	// if @cascade is not applied on the user query at root then shift pagination arguments
+	// from user query to root query for optimization and copy the order arguments for paginated
+	// query to work correctly.
+	if len(dgQuery[0].Cascade) == 0 {
+		rootQry.Args = dgQuery[0].Args
+		dgQuery[0].Args = nil
+		rootQry.Order = dgQuery[0].Order
+	}
 
 	// The user query starts from the root query generated above and so gets filtered
 	// input from auth processing, so now we build
@@ -1504,7 +1467,7 @@ func addSelectionSetFrom(
 				Alias: f.DgraphAlias(),
 			}
 
-			if f.Type().Name() == schema.IDType {
+			if f.Type().Name() == schema.IDType && !f.IsExternal() {
 				child.Attr = "uid"
 			} else {
 				child.Attr = f.DgraphPredicate()

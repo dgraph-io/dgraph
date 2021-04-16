@@ -46,6 +46,14 @@
       "upsert": true
     },
     {
+      "predicate": "Astronaut.name",
+      "type": "string"
+    },
+    {
+      "predicate": "Astronaut.isActive",
+      "type": "bool"
+    },
+    {
       "predicate": "Astronaut.missions",
       "type": "uid",
       "list": true
@@ -406,11 +414,26 @@
       "upsert": true
     },
     {
+      "lang": true,
+      "predicate": "Person.profession",
+      "type": "string"
+    },
+    {
+      "index": true,
+      "lang": true,
       "predicate": "Person.name",
+      "tokenizer": [
+        "hash"
+      ],
       "type": "string"
     },
     {
       "predicate": "Person1.friends",
+      "type": "uid",
+      "list": true
+    },
+    {
+      "predicate": "Person1.closeFriends",
       "type": "uid",
       "list": true
     },
@@ -555,27 +578,6 @@
       "type": "string"
     },
     {
-      "predicate": "Section.chapterId",
-      "type": "int",
-      "index": true,
-      "tokenizer": [
-        "int"
-      ]
-    },
-    {
-      "predicate": "Section.name",
-      "type": "string"
-    },
-    {
-      "predicate": "Section.sectionId",
-      "type": "float",
-      "index": true,
-      "tokenizer": [
-        "float"
-      ],
-      "upsert": true
-    },
-    {
       "predicate": "SpaceShip.id",
       "type": "string",
       "index": true,
@@ -586,6 +588,20 @@
     },
     {
       "predicate": "SpaceShip.missions",
+      "type": "uid",
+      "list": true
+    },
+    {
+      "predicate": "Planet.id",
+      "type": "int",
+      "index": true,
+      "tokenizer": [
+        "int"
+      ],
+      "upsert": true
+    },
+    {
+      "predicate": "Planet.missions",
       "type": "uid",
       "list": true
     },
@@ -772,6 +788,12 @@
       "fields": [
         {
           "name": "Astronaut.id"
+        },
+        {
+          "name": "Astronaut.name"
+        },
+        {
+          "name": "Astronaut.isActive"
         },
         {
           "name": "Astronaut.missions"
@@ -1098,18 +1120,13 @@
     {
       "fields": [
         {
-          "name": "Person.name"
-        }
-      ],
-      "name": "Person"
-    },
-    {
-      "fields": [
-        {
           "name": "Person1.name"
         },
         {
           "name": "Person1.friends"
+        },
+        {
+          "name": "Person1.closeFriends"
         }
       ],
       "name": "Person1"
@@ -1198,20 +1215,6 @@
         }
       ],
       "name": "Region"
-    },
-    {
-      "fields": [
-        {
-          "name": "Section.sectionId"
-        },
-        {
-          "name": "Section.name"
-        },
-        {
-          "name": "Section.chapterId"
-        }
-      ],
-      "name": "Section"
     },
     {
       "fields": [
@@ -1358,6 +1361,17 @@
     {
       "fields": [
         {
+          "name": "Planet.missions"
+        },
+        {
+          "name": "Planet.id"
+        }
+      ],
+      "name": "Planet"
+    },
+    {
+      "fields": [
+        {
           "name": "dgraph.graphql.schema"
         },
         {
@@ -1415,6 +1429,17 @@
         }
       ],
       "name": "Employer"
+    },
+    {
+      "fields": [
+        {
+          "name": "Person.name"
+        },
+        {
+          "name": "Person.profession"
+        }
+      ],
+      "name": "Person"
     }
   ]
 }

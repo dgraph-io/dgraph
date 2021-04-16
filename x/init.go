@@ -61,7 +61,9 @@ func AddInit(f func()) {
 // Init initializes flags and run all functions in initFunc.
 func Init() {
 	// Default value, would be overwritten by flag.
-	Config.QueryEdgeLimit = 1e6
+	//
+	// TODO: why is this here?
+	// Config.QueryEdgeLimit = 1e6
 
 	// Next, run all the init functions that have been added.
 	for _, f := range initFunc {
@@ -77,7 +79,7 @@ func BuildDetails() string {
 			"Community License"
 	}
 
-	buf := z.CallocNoRef(1)
+	buf := z.CallocNoRef(1, "X.BuildDetails")
 	jem := len(buf) > 0
 	z.Free(buf)
 
@@ -91,11 +93,12 @@ Branch           : %v
 Go version       : %v
 jemalloc enabled : %v
 
-For Dgraph official documentation, visit https://dgraph.io/docs/.
+For Dgraph official documentation, visit https://dgraph.io/docs.
 For discussions about Dgraph     , visit https://discuss.dgraph.io.
+For fully-managed Dgraph Cloud   , visit https://dgraph.io/cloud.
 
 %s.
-Copyright 2015-2020 Dgraph Labs, Inc.
+Copyright 2015-2021 Dgraph Labs, Inc.
 
 `,
 		dgraphVersion, dgraphCodename, ExecutableChecksum(), lastCommitSHA, lastCommitTime, gitBranch,

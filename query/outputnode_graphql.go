@@ -53,6 +53,8 @@ type graphQLEncoder struct {
 	// customFieldResultCh is used to process the fastJson tree updates resulting from custom
 	// field resolution
 	customFieldResultCh chan customFieldResult
+	// entityRepresentations stores the representations for the `_entities` query
+	entityRepresentations *gqlSchema.EntityRepresentations
 }
 
 // customFieldResult represents the fastJson tree updates for custom fields.
@@ -442,7 +444,16 @@ func (genc *graphQLEncoder) encode(encInp encodeInput) bool {
 		}
 
 		// Step-3: Update counters and Write closing ] for JSON arrays
-		if !curSelectionIsDgList || next == nil || genc.getAttr(cur) != genc.getAttr(next) {
+		// We perform this step in any of the 4 conditions is satisfied.
+		// 1. The current selection is not a Dgraph List (It's of custom type or a single JSON object)
+		// 2. We are at the end of json encoding process and there is no fastjson node ahead (next == nil)
+		// 3. We are at the end of list writing and the type of next fastJSON node is not equal to
+		//    type of curr fastJSON node.
+		// 4. The current selection set which we are encoding is not equal to the type of
+		//    current fastJSON node.
+		if !curSelectionIsDgList || next == nil ||
+			genc.getAttr(cur) != genc.getAttr(next) ||
+			curSelection.DgraphAlias() != genc.attrForID(genc.getAttr(cur)) {
 			if curSelectionIsDgList && !nullWritten {
 				x.Check2(genc.buf.WriteRune(']'))
 			}
@@ -636,7 +647,7 @@ func (genc *graphQLEncoder) processCustomFields(field gqlSchema.Field, n fastJso
 			// * a linear search to find the correct fastJson node for a custom field, or
 			// * first fix the order of custom fastJson nodes and then continue the encoding, or
 			// * create a map from custom fastJson node attr to the custom fastJson node,
-			//   so that whenever a custom field in encountered in the selection set,
+			//   so that whenever a custom field is encountered in the selection set,
 			//   just use the map to find out the fastJson node for that field.
 			// The last option seems better.
 
@@ -661,6 +672,11 @@ func (genc *graphQLEncoder) processCustomFields(field gqlSchema.Field, n fastJso
 			}
 			wg.Done()
 		}()
+		// extract the representations for Apollo _entities query and store them in GraphQL encoder
+		if q, ok := field.(gqlSchema.Query); ok && q.QueryType() == gqlSchema.EntitiesQuery {
+			// ignore the error here, as that should have been taken care of during query rewriting
+			genc.entityRepresentations, _ = q.RepresentationsArg()
+		}
 		// start resolving the custom fields
 		genc.resolveCustomFields(field.SelectionSet(), []fastJsonNode{genc.children(n)})
 		// close the error and result channels, to terminate the goroutines started above
@@ -799,6 +815,24 @@ func (genc *graphQLEncoder) resolveCustomField(childField gqlSchema.Field,
 				// this case can't happen as ID or @id fields are not list values
 				continue
 			}
+
+			// let's see if this field also had @requires directive. If so, we need to get the data
+			// for the fields specified in @requires from the correct object from representations
+			// list argument in the _entities query and pass that data to rfData.
+			// This would override any data returned for that field from dgraph.
+			apolloRequiredFields := childField.ApolloRequiredFields()
+			if len(apolloRequiredFields) > 0 && genc.entityRepresentations != nil {
+				keyFldName := genc.entityRepresentations.KeyField.Name()
+				// key fields will always have a non-list value, so it must be json.RawMessage
+				keyFldVal := toString(rfData[keyFldName].(json.RawMessage))
+				representation, ok := genc.entityRepresentations.KeyValToRepresentation[keyFldVal]
+				if ok {
+					for _, fName := range apolloRequiredFields {
+						rfData[fName] = representation[fName]
+					}
+				}
+			}
+
 			// add rfData to uniqueParents only if we haven't encountered any parentNode before
 			// with this idFieldValue
 			if len(parentNodes[idFieldValue]) == 0 {
@@ -809,6 +843,10 @@ func (genc *graphQLEncoder) resolveCustomField(childField gqlSchema.Field,
 			// build the response for all the duplicate parents
 			parentNodes[idFieldValue] = append(parentNodes[idFieldValue], parentNode)
 		}
+	}
+
+	if len(uniqueParents) == 0 {
+		return
 	}
 
 	switch fconf.Mode {

@@ -33,9 +33,9 @@ import (
 )
 
 func uids(l *List, readTs uint64) []uint64 {
-	r, err := l.Uids(ListOptions{ReadTs: readTs})
+	r, err := l.Bitmap(ListOptions{ReadTs: readTs})
 	x.Check(err)
-	return r.Uids
+	return r.ToArray()
 }
 
 // indexTokensForTest is just a wrapper around indexTokens used for convenience.
@@ -148,7 +148,7 @@ func addMutation(t *testing.T, l *List, edge *pb.DirectedEdge, op uint32,
 	default:
 		x.Fatalf("Unhandled op: %v", op)
 	}
-	txn := Oracle().RegisterStartTs(startTs)
+	txn, _ := Oracle().RegisterStartTs(startTs)
 	txn.cache.SetIfAbsent(string(l.key), l)
 	if index {
 		require.NoError(t, l.AddMutationWithIndex(context.Background(), edge, txn))

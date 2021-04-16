@@ -7,7 +7,7 @@ type User {
 	name: String!
 }
 
-input UserInput {
+input UpdateFavouriteUserInput {
 	name: String!
 }
 
@@ -194,8 +194,10 @@ directive @auth(
 	delete: AuthRule) on OBJECT | INTERFACE
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
+directive @remoteResponse(name: String) on FIELD_DEFINITION
 directive @cascade(fields: [String]) on FIELD
 directive @lambda on FIELD_DEFINITION
+directive @lambdaOnMutate(add: Boolean, update: Boolean, delete: Boolean) on OBJECT | INTERFACE
 directive @cacheControl(maxAge: Int!) on QUERY
 directive @generate(
 	query: GenerateQueryParams,
@@ -361,7 +363,7 @@ type Query {
 #######################
 
 type Mutation {
-	createMyFavouriteUsers(input: [UserInput!]!): [User] @custom(http: {url:"http://my-api.com",method:"POST",body:"{ data: $input }"})
+	createMyFavouriteUsers(input: [UpdateFavouriteUserInput!]!): [User] @custom(http: {url:"http://my-api.com",method:"POST",body:"{ data: $input }"})
 	addUser(input: [AddUserInput!]!): AddUserPayload
 	updateUser(input: UpdateUserInput!): UpdateUserPayload
 	deleteUser(filter: UserFilter!): DeleteUserPayload

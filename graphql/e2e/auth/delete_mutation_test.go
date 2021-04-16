@@ -569,11 +569,11 @@ func TestDeleteNestedFilter(t *testing.T) {
 	testCases := []TestCase{{
 		user:   "user1",
 		role:   "USER",
-		result: `{"deleteMovie":{"numUids":3,"movie":[{"content":"Movie2","regionsAvailable":[{"name":"Region1","global":null}]},{"content":"Movie3","regionsAvailable":[{"name":"Region1","global":null},{"name":"Region4","global":null}]},{"content":"Movie4","regionsAvailable":[{"name":"Region5","global":true}]}]}}`,
+		result: `{"deleteMovie":{"numUids":3,"movie":[{"content":"Movie2","regionsAvailable":[{"name":"Region1","global":null}]},{"content":"Movie3","regionsAvailable":[{"name":"Region1","global":null},{"name":"Region4","global":null},{"name":"Region6","global":true}]},{"content":"Movie4","regionsAvailable":[{"name":"Region5","global":true}]}]}}`,
 	}, {
 		user:   "user2",
 		role:   "USER",
-		result: `{"deleteMovie":{"numUids":4,"movie":[{"content":"Movie1","regionsAvailable":[{"name":"Region2","global":null},{"name":"Region3","global":null}]},{"content":"Movie2","regionsAvailable":[{"name":"Region1","global":null}]},{"content":"Movie3","regionsAvailable":[{"name":"Region1","global":null},{"name":"Region4","global":null}]},{"content":"Movie4","regionsAvailable":[{"name":"Region5","global":true}]}]}}`,
+		result: `{"deleteMovie":{"numUids":4,"movie":[{"content":"Movie1","regionsAvailable":[{"name":"Region2","global":null},{"name":"Region3","global":null}]},{"content":"Movie2","regionsAvailable":[{"name":"Region1","global":null}]},{"content":"Movie3","regionsAvailable":[{"name":"Region1","global":null},{"name":"Region4","global":null},{"name":"Region6","global":true}]},{"content":"Movie4","regionsAvailable":[{"name":"Region5","global":true}]}]}}`,
 	}}
 
 	query := `

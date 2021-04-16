@@ -14,7 +14,7 @@ docker==4.2.0
 docutils==0.15.2
 dulwich==0.19.15
 idna==2.9
-Jinja2==2.11.2
+Jinja2==2.11.3
 jmespath==0.9.5
 jsonpatch==1.25
 jsonpointer==2.0
@@ -27,10 +27,10 @@ pbr==5.4.5
 pyasn1==0.4.8
 pyrsistent==0.16.0
 python-dateutil==2.8.1
-PyYAML==5.3.1
+PyYAML==5.4
 reprint==0.5.2
 requests==2.23.0
-rsa==3.4.2
+rsa==4.1
 s3transfer==0.3.3
 six==1.14.0
 tabulate==0.8.7

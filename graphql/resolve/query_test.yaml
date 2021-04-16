@@ -1352,6 +1352,29 @@
     }
 
 -
+  name: "Deep filter with multiple order, first and offset"
+  gqlquery: |
+    query {
+      queryAuthor {
+        name
+        posts(filter: { title: { anyofterms: "GraphQL" } }, order: { asc: numLikes, then: { desc: title } }, first: 10, offset: 10) {
+          title
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) {
+        Author.name : Author.name
+        Author.posts : Author.posts @filter(anyofterms(Post.title, "GraphQL")) (orderasc: Post.numLikes, orderdesc: Post.title, first: 10, offset: 10) {
+          Post.title : Post.title
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+
+-
   name: "Float with large exponentiation"
   gqlquery: |
     query {
@@ -1574,9 +1597,6 @@
 
 -
   name: "Skip directive"
-  variables:
-    skipTrue: true
-    skipFalse: false
   gqlquery: |
     query ($skipTrue: Boolean!, $skipFalse: Boolean!) {
       getAuthor(id: "0x1") {
@@ -1586,6 +1606,11 @@
           text
         }
       }
+    }
+  gqlvariables: |
+    {
+        "skipTrue": true,
+        "skipFalse": false
     }
   dgquery: |-
     query {
@@ -1597,9 +1622,6 @@
 
 -
   name: "Include directive"
-  variables:
-    includeTrue: true
-    includeFalse: false
   gqlquery: |
     query ($includeTrue: Boolean!, $includeFalse: Boolean!) {
       queryAuthor {
@@ -1608,6 +1630,12 @@
           title
         }
       }
+    }
+
+  gqlvariables: |
+    {
+        "includeTrue": true,
+        "includeFalse": false
     }
   dgquery: |-
     query {
@@ -1637,6 +1665,13 @@
           tags
         }
       }
+    }
+  gqlvariables: |
+    {
+        "includeTrue": true,
+        "includeFalse": false,
+        "skipTrue": true,
+        "skipFalse": false
     }
   dgquery: |-
     query {
@@ -1932,6 +1967,43 @@
         dgraph.type
         Character.id : uid
         Character.name : Character.name
+      }
+    }
+
+-
+  name: "Parameterized Cascade directive on root and nested field using variables"
+  gqlquery: |
+    query($fieldsRoot:[String],$fieldsDeep:[String]) {
+      queryAuthor @cascade(fields: $fieldsRoot) {
+        dob
+        reputation
+        posts @cascade(fields: $fieldsDeep) {
+          text
+          title
+        }
+      }
+    }
+  gqlvariables: |
+    {
+        "fieldsRoot": [
+            "dob",
+            "reputation"
+        ],
+        "fieldsDeep": [
+            "text"
+        ]
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) @cascade(Author.dob, Author.reputation) {
+        Author.dob : Author.dob
+        Author.reputation : Author.reputation
+        Author.posts : Author.posts @cascade(Post.text) {
+          Post.text : Post.text
+          Post.title : Post.title
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
       }
     }
 
@@ -3226,7 +3298,7 @@
     }
   dgquery:  |-
     query {
-      _entities(func: eq(Astronaut.id, "0x1", "0x2")) @filter(type(Astronaut)) {
+      _entities(func: eq(Astronaut.id, "0x1", "0x2"), orderasc: Astronaut.id) @filter(type(Astronaut)) {
         dgraph.type
         Astronaut.missions : Astronaut.missions {
           Mission.designation : Mission.designation
@@ -3250,7 +3322,7 @@
     }
   dgquery:  |-
     query {
-      _entities(func: eq(SpaceShip.id, "0x1", "0x2")) @filter(type(SpaceShip)) {
+      _entities(func: eq(SpaceShip.id, "0x1", "0x2"), orderasc: SpaceShip.id) @filter(type(SpaceShip)) {
         dgraph.type
         SpaceShip.missions : SpaceShip.missions {
           Mission.designation : Mission.designation
@@ -3309,5 +3381,32 @@
           author.name : author.name
           dgraph.uid : uid
         }
+      }
+    }
+
+-
+  name: "query language tag fields with filter and order"
+  gqlquery: |
+    query {
+       queryPerson(filter:{or:[{name:{eq:"Alice"}},{nameHi:{eq:"ऐलिस"}},{nameZh:{eq:"爱丽丝"}},{name_Untag_AnyLang:{eq:"Alice"}}]}, order: { asc: nameHi })
+      {
+        name
+        nameZh
+        nameHi
+        nameHiZh
+        nameHi_Zh_Untag
+        name_Untag_AnyLang
+      }
+    }
+  dgquery: |-
+    query {
+      queryPerson(func: type(Person), orderasc: Person.name@hi) @filter((eq(Person.name, "Alice") OR eq(Person.name@hi, "ऐलिस") OR eq(Person.name@zh, "爱丽丝") OR eq(Person.name@., "Alice"))) {
+        Person.name : Person.name
+        Person.nameZh : Person.name@zh
+        Person.nameHi : Person.name@hi
+        Person.nameHiZh : Person.name@hi:zh
+        Person.nameHi_Zh_Untag : Person.name@hi:zh:.
+        Person.name_Untag_AnyLang : Person.name@.
+        dgraph.uid : uid
       }
     }

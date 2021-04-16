@@ -45,7 +45,12 @@ func init() {
 
 // Txn represents a transaction.
 type Txn struct {
-	StartTs uint64
+	StartTs          uint64
+	MaxAssignedSeen  uint64
+	AppliedIndexSeen uint64
+
+	// Runs keeps track of how many times this txn has been through applyCh.
+	Runs int32
 
 	// atomic
 	shouldAbort uint32
@@ -61,6 +66,7 @@ type Txn struct {
 	lastUpdate time.Time
 
 	cache *LocalCache // This pointer does not get modified.
+	ErrCh chan error
 }
 
 // NewTxn returns a new Txn instance.
@@ -69,6 +75,7 @@ func NewTxn(startTs uint64) *Txn {
 		StartTs:    startTs,
 		cache:      NewLocalCache(startTs),
 		lastUpdate: time.Now(),
+		ErrCh:      make(chan error, 1),
 	}
 }
 
@@ -115,7 +122,9 @@ func (o *oracle) init() {
 	o.pendingTxns = make(map[uint64]*Txn)
 }
 
-func (o *oracle) RegisterStartTs(ts uint64) *Txn {
+// RegisterStartTs would return a txn and a bool.
+// If the bool is true, the txn was already present. If false, it is new.
+func (o *oracle) RegisterStartTs(ts uint64) (*Txn, bool) {
 	o.Lock()
 	defer o.Unlock()
 	txn, ok := o.pendingTxns[ts]
@@ -125,6 +134,15 @@ func (o *oracle) RegisterStartTs(ts uint64) *Txn {
 		txn = NewTxn(ts)
 		o.pendingTxns[ts] = txn
 	}
+	return txn, ok
+}
+
+func (o *oracle) ResetTxn(ts uint64) *Txn {
+	o.Lock()
+	defer o.Unlock()
+
+	txn := NewTxn(ts)
+	o.pendingTxns[ts] = txn
 	return txn
 }
 
@@ -146,6 +164,18 @@ func (o *oracle) MinPendingStartTs() uint64 {
 	for ts := range o.pendingTxns {
 		if ts < min {
 			min = ts
+		}
+	}
+	return min
+}
+
+func (o *oracle) MinMaxAssignedSeenTs() uint64 {
+	o.RLock()
+	defer o.RUnlock()
+	min := o.MaxAssigned()
+	for _, txn := range o.pendingTxns {
+		if txn.MaxAssignedSeen < min {
+			min = txn.MaxAssignedSeen
 		}
 	}
 	return min
@@ -189,6 +219,14 @@ func (o *oracle) addToWaiters(startTs uint64) (chan struct{}, bool) {
 
 func (o *oracle) MaxAssigned() uint64 {
 	return atomic.LoadUint64(&o.maxAssigned)
+}
+func (o *oracle) SetMaxAssigned(m uint64) {
+	cur := atomic.LoadUint64(&o.maxAssigned)
+	glog.Infof("Current MaxAssigned: %d. SetMaxAssigned: %d.\n", cur, m)
+	if m < cur {
+		return
+	}
+	atomic.StoreUint64(&o.maxAssigned, m)
 }
 
 func (o *oracle) WaitForTs(ctx context.Context, startTs uint64) error {

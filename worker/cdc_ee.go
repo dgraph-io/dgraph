@@ -32,7 +32,6 @@ import (
 )
 
 const (
-	defaultCDCConfig  = "file=; kafka=; sasl_user=; sasl_password=; ca_cert=; client_cert=; client_key="
 	defaultEventTopic = "dgraph-cdc"
 )
 
@@ -45,9 +44,6 @@ const (
 // With Badger Subscribe, if we lose the connection, we would have no way to send over the "missed"
 // events. Even if we scan over Badger, we'd still not get those events in the right order, i.e.
 // order of their commit timestamp. So, this approach would be tricky to get right.
-//
-// Now, with ludicrous mode, Raft WAL does not help as well. It does NOT contain the commit
-// timestamps. So, for now we're going to not support it.
 type CDC struct {
 	sync.Mutex
 	sink             Sink
@@ -64,14 +60,11 @@ type CDC struct {
 }
 
 func newCDC() *CDC {
-	if Config.ChangeDataConf == "" {
+	if Config.ChangeDataConf == "" || Config.ChangeDataConf == CDCDefaults {
 		return nil
 	}
-	if x.WorkerConfig.LudicrousMode {
-		x.Fatalf("cdc is not supported in ludicrous mode")
-	}
 
-	cdcFlag := z.NewSuperFlag(Config.ChangeDataConf).MergeAndCheckDefault(defaultCDCConfig)
+	cdcFlag := z.NewSuperFlag(Config.ChangeDataConf).MergeAndCheckDefault(CDCDefaults)
 	sink, err := GetSink(cdcFlag)
 	x.Check(err)
 	cdc := &CDC{
@@ -109,6 +102,22 @@ func (cdc *CDC) resetPendingEvents() {
 	cdc.Lock()
 	defer cdc.Unlock()
 	cdc.pendingTxnEvents = make(map[uint64][]CDCEvent)
+}
+
+func (cdc *CDC) hasPending(attr string) bool {
+	if cdc == nil {
+		return false
+	}
+	cdc.Lock()
+	defer cdc.Unlock()
+	for _, events := range cdc.pendingTxnEvents {
+		for _, e := range events {
+			if me, ok := e.Event.(*MutationEvent); ok && me.Attr == attr {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (cdc *CDC) addToPending(ts uint64, events []CDCEvent) {
@@ -217,11 +226,7 @@ func (cdc *CDC) processCDCEvents() {
 			if len(events) == 0 {
 				return
 			}
-			// In ludicrous, we execute the mutations as soon as we get the proposal.
-			// TODO: We should get a confirmation from ludicrous scheduler about this.
-			// It should tell you what the commit ts used was.
-			// TODO: For now, do NOT support ludicrous mode.
-
+			edges := proposal.Mutations.Edges
 			switch {
 			case proposal.Mutations.DropOp != pb.Mutations_NONE: // this means its a drop operation
 				// if there is DROP ALL or DROP DATA operation, clear pending events also.
@@ -233,6 +238,19 @@ func (cdc *CDC) processCDCEvents() {
 					rerr = errors.Wrapf(err, "unable to send messages to sink")
 					return
 				}
+				// If drop predicate, then mutation only succeeds if there were no pending txn
+				// This check ensures then event will only be send if there were no pending txns
+			case len(edges) == 1 &&
+				edges[0].Entity == 0 &&
+				bytes.Equal(edges[0].Value, []byte(x.Star)):
+				// If there are no pending txn send the events else
+				// return as the mutation must have errored out in that case.
+				if !cdc.hasPending(x.ParseAttr(edges[0].Attr)) {
+					if err := sendToSink(events, proposal.Mutations.StartTs); err != nil {
+						rerr = errors.Wrapf(err, "unable to send messages to sink")
+					}
+				}
+				return
 			default:
 				cdc.addToPending(proposal.Mutations.StartTs, events)
 			}
@@ -331,7 +349,7 @@ type CDCEvent struct {
 
 type EventMeta struct {
 	RaftIndex uint64 `json:"-"`
-	Namespace []byte `json:"-"`
+	Namespace uint64 `json:"namespace"`
 	CommitTs  uint64 `json:"commit_ts"`
 }
 
@@ -362,18 +380,26 @@ func toCDCEvent(index uint64, mutation *pb.Mutations) []CDCEvent {
 	}
 
 	// If drop operation
-	// todo (aman): right now drop operations are still cluster wide.
+	// todo (aman): right now drop all and data operations are still cluster wide.
 	// Fix these once we have namespace specific operations.
 	if mutation.DropOp != pb.Mutations_NONE {
+		ns := x.GalaxyNamespace
+		var t string
+		if mutation.DropOp == pb.Mutations_TYPE {
+			// drop type are namespace specific.
+			ns, t = x.ParseNamespaceAttr(mutation.DropValue)
+		}
+
 		return []CDCEvent{
 			{
 				Type: EventTypeDrop,
 				Event: &DropEvent{
 					Operation: strings.ToLower(mutation.DropOp.String()),
-					Type:      mutation.DropValue,
+					Type:      t,
 				},
 				Meta: &EventMeta{
 					RaftIndex: index,
+					Namespace: ns,
 				},
 			},
 		}
@@ -384,7 +410,7 @@ func toCDCEvent(index uint64, mutation *pb.Mutations) []CDCEvent {
 		if x.IsReservedPredicate(edge.Attr) {
 			continue
 		}
-		ns, attr := x.ParseNamespaceBytes(edge.Attr)
+		ns, attr := x.ParseNamespaceAttr(edge.Attr)
 		// Handle drop attr event.
 		if edge.Entity == 0 && bytes.Equal(edge.Value, []byte(x.Star)) {
 			return []CDCEvent{

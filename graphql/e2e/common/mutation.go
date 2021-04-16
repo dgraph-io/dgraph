@@ -28,8 +28,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/dgraph-io/dgo/v200"
-	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgo/v210"
+	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/google/go-cmp/cmp"
@@ -3918,11 +3918,16 @@ func mutationsWithAlias(t *testing.T) {
 	require.JSONEq(t, multiMutationExpected, string(gqlResponse.Data))
 }
 
-func updateMutationWithoutSetRemove(t *testing.T) {
+func updateMutationTestsWithDifferentSetRemoveCases(t *testing.T) {
 	country := addCountry(t, postExecutor)
-
-	updateCountryParams := &GraphQLParams{
-		Query: `mutation updateCountry($id: ID!){
+	tcases := []struct {
+		name      string
+		query     string
+		variables map[string]interface{}
+		expected  string
+	}{{
+		name: "update mutation without set and Remove",
+		query: `mutation updateCountry($id: ID!){
             updateCountry(input: {filter: {id: [$id]}}) {
                 numUids
                 country {
@@ -3931,19 +3936,82 @@ func updateMutationWithoutSetRemove(t *testing.T) {
                 }
             }
         }`,
-		Variables: map[string]interface{}{"id": country.ID},
+		variables: map[string]interface{}{"id": country.ID},
+		expected: `{
+             "updateCountry": {
+               "numUids": 0,
+               "country": []
+             }
+        }`,
+	}, {
+		name: "update mutation with empty remove",
+		query: `mutation updateCountry($id: ID!){
+            updateCountry(input: {filter: {id: [$id]}, remove:{} }) {
+                numUids
+                country {
+                    id
+                    name
+                }
+            }
+        }`,
+		variables: map[string]interface{}{"id": country.ID},
+		expected: `{
+             "updateCountry": {
+               "numUids": 0,
+               "country": []
+             }
+        }`,
+	}, {
+		name: "update mutation with empty set and remove",
+		query: `mutation updateCountry($id: ID!){
+            updateCountry(input: {filter: {id: [$id]}, remove:{}, set: {} }) {
+                numUids
+                country {
+                    id
+                    name
+                }
+            }
+        }`,
+		variables: map[string]interface{}{"id": country.ID},
+		expected: `{
+             "updateCountry": {
+               "numUids": 0,
+               "country": []
+             }
+        }`,
+	}, {
+		name: "update mutation with empty set",
+		query: `mutation updateCountry($id: ID!){
+            updateCountry(input: {filter: {id: [$id]}, set:{} }) {
+                numUids
+                country {
+                    id
+                    name
+                }
+            }
+        }`,
+		variables: map[string]interface{}{"id": country.ID},
+		expected: `{
+             "updateCountry": {
+               "numUids": 0,
+               "country": []
+             }
+        }`,
+	},
 	}
-	gqlResponse := updateCountryParams.ExecuteAsPost(t, GraphqlURL)
-	RequireNoGQLErrors(t, gqlResponse)
-
-	require.JSONEq(t, `{
-        "updateCountry": {
-            "numUids": 0,
-            "country": []
-        }
-    }`, string(gqlResponse.Data))
-
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			params := &GraphQLParams{
+				Query:     tcase.query,
+				Variables: tcase.variables,
+			}
+			resp := params.ExecuteAsPost(t, GraphqlURL)
+			RequireNoGQLErrors(t, resp)
+			testutil.CompareJSON(t, tcase.expected, string(resp.Data))
+		})
+	}
 	// cleanup
+	// expectedNumUids:1 will ensures that no node has been deleted because of remove {}
 	deleteCountry(t, map[string]interface{}{"id": []string{country.ID}}, 1, nil)
 }
 
@@ -4075,7 +4143,7 @@ func intWithList(t *testing.T) {
 
 }
 
-func nestedAddMutationWithHasInverse(t *testing.T) {
+func nestedAddMutationWithMultipleLinkedListsAndHasInverse(t *testing.T) {
 	params := &GraphQLParams{
 		Query: `mutation addPerson1($input: [AddPerson1Input!]!) {
             addPerson1(input: $input) {
@@ -4083,6 +4151,9 @@ func nestedAddMutationWithHasInverse(t *testing.T) {
                     name
                     friends {
                         name
+						closeFriends {
+							name
+						}
                         friends {
                             name
                         }
@@ -4118,6 +4189,7 @@ func nestedAddMutationWithHasInverse(t *testing.T) {
             {
               "friends": [
                 {
+				  "closeFriends": [],
                   "friends": [
                     {
                       "name": "Or"
@@ -4886,24 +4958,38 @@ func filterInUpdateMutationsWithFilterAndOr(t *testing.T) {
 
 func idDirectiveWithInt64Mutation(t *testing.T) {
 	query := &GraphQLParams{
-		Query: `mutation {
+		Query: `mutation addBook($bookId2: Int64!, $bookId3: Int64!){
           addBook(input:[
             {
               bookId: 1234567890123
               name: "Graphql"
               desc: "Graphql is the next big thing"
-            }
+            },
+			{
+			  bookId: $bookId2
+			  name: "Dgraph"
+			  desc: "A GraphQL database"
+			},
+			{
+				bookId: $bookId3
+				name: "DQL"
+				desc: "Query Language for Dgraph"
+			  }
           ]) {
             numUids
           }
         }`,
+		Variables: map[string]interface{}{
+			"bookId2": "1234512345",
+			"bookId3": 5432154321,
+		},
 	}
 
 	response := query.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, response)
 	expected := `{
               "addBook": {
-              "numUids": 1
+              "numUids": 3
             }
         }`
 	require.JSONEq(t, expected, string(response.Data))
@@ -4912,59 +4998,32 @@ func idDirectiveWithInt64Mutation(t *testing.T) {
 	response = query.ExecuteAsPost(t, GraphqlURL)
 	require.Contains(t, response.Errors.Error(), "already exists")
 
-	DeleteGqlType(t, "Book", map[string]interface{}{}, 2, nil)
+	DeleteGqlType(t, "Book", map[string]interface{}{}, 4, nil)
 }
 
 func idDirectiveWithIntMutation(t *testing.T) {
 	query := &GraphQLParams{
-		Query: `mutation {
+		Query: `mutation addChapter($chId: Int!){
 		  addChapter(input:[{
 			chapterId: 2
 			name: "Graphql and more"
+		  },
+		  {
+			chapterId: $chId
+			name: "Authorization"
 		  }]) {
 			numUids
 		  }
 		}`,
+		Variables: map[string]interface{}{
+			"chId": 10,
+		},
 	}
 
 	response := query.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, response)
 	var expected = `{
             "addChapter": {
-              "numUids": 1
-            }
-        }`
-	require.JSONEq(t, expected, string(response.Data))
-
-	// adding same mutation again should result in error because of duplicate id
-	response = query.ExecuteAsPost(t, GraphqlURL)
-	require.Contains(t, response.Errors.Error(), "already exists")
-
-	DeleteGqlType(t, "Chapter", map[string]interface{}{}, 2, nil)
-}
-
-func idDirectiveWithFloatMutation(t *testing.T) {
-	query := &GraphQLParams{
-		Query: `mutation {
-          addSection(input:[{
-            chapterId: 2
-            name: "Graphql: Introduction"
-            sectionId: 2.1
-          },
-          {
-            chapterId: 2
-            name: "Graphql Available Data Types"
-            sectionId: 2.2
-          }]) {
-            numUids
-          }
-        }`,
-	}
-
-	response := query.ExecuteAsPost(t, GraphqlURL)
-	RequireNoGQLErrors(t, response)
-	var expected = `{
-            "addSection": {
               "numUids": 2
             }
         }`
@@ -4974,18 +5033,19 @@ func idDirectiveWithFloatMutation(t *testing.T) {
 	response = query.ExecuteAsPost(t, GraphqlURL)
 	require.Contains(t, response.Errors.Error(), "already exists")
 
-	DeleteGqlType(t, "Section", map[string]interface{}{}, 4, nil)
+	DeleteGqlType(t, "Chapter", map[string]interface{}{}, 3, nil)
 }
 
 func addMutationWithDeepExtendedTypeObjects(t *testing.T) {
 	varMap1 := map[string]interface{}{
 		"missionId":   "Mission1",
 		"astronautId": "Astronaut1",
+		"name":        "Guss Garissom",
 		"des":         "Apollo1",
 	}
 	addMissionParams := &GraphQLParams{
-		Query: `mutation addMission($missionId: String!, $astronautId: ID!, $des: String!) {
-			addMission(input: [{id: $missionId, designation: $des, crew: [{id: $astronautId}]}]) {
+		Query: `mutation addMission($missionId: String!, $astronautId: ID!, $name: String!, $des: String!) {
+			addMission(input: [{id: $missionId, designation: $des, crew: [{id: $astronautId, name: $name}]}]) {
 				mission{
 					id
 					crew {
@@ -5027,6 +5087,7 @@ func addMutationWithDeepExtendedTypeObjects(t *testing.T) {
 	varMap2 := map[string]interface{}{
 		"missionId":   "Mission2",
 		"astronautId": "Astronaut1",
+		"name":        "Gus Garrisom",
 		"des":         "Apollo2",
 	}
 	addMissionParams.Variables = varMap2
@@ -5067,10 +5128,11 @@ func addMutationWithDeepExtendedTypeObjects(t *testing.T) {
 
 func addMutationOnExtendedTypeWithIDasKeyField(t *testing.T) {
 	addAstronautParams := &GraphQLParams{
-		Query: `mutation addAstronaut($id1: ID!, $missionId1: String!, $id2: ID!, $missionId2: String! ) {
-			addAstronaut(input: [{id: $id1, missions: [{id: $missionId1, designation: "Apollo1"}]}, {id: $id2, missions: [{id: $missionId2, designation: "Apollo2"}]}]) {
+		Query: `mutation addAstronaut($id1: ID!, $name1: String!, $missionId1: String!, $id2: ID!, $name2: String!, $missionId2: String! ) {
+			addAstronaut(input: [{id: $id1, name: $name1, missions: [{id: $missionId1, designation: "Apollo1"}]}, {id: $id2, name: $name2, missions: [{id: $missionId2, designation: "Apollo11"}]}]) {
 				astronaut(order: {asc: id}){
 					id
+					name
 					missions {
 						id
 						designation
@@ -5080,8 +5142,10 @@ func addMutationOnExtendedTypeWithIDasKeyField(t *testing.T) {
 		}`,
 		Variables: map[string]interface{}{
 			"id1":        "Astronaut1",
+			"name1":      "Gus Grissom",
 			"missionId1": "Mission1",
 			"id2":        "Astronaut2",
+			"name2":      "Neil Armstrong",
 			"missionId2": "Mission2",
 		},
 	}
@@ -5091,27 +5155,29 @@ func addMutationOnExtendedTypeWithIDasKeyField(t *testing.T) {
 
 	expectedJSON := `{
 		"addAstronaut": {
-		  "astronaut": [
-			{
-			  "id": "Astronaut1",
-			  "missions": [
-				{
-				  "id": "Mission1",
-				  "designation": "Apollo1"
-				}
-			  ]
-			},
-			{
-			  "id": "Astronaut2",
-			  "missions": [
-				{
-				  "id": "Mission2",
-				  "designation": "Apollo2"
-				}
-			  ]
-			}
-		  ]
-		}
+			"astronaut": [
+			  {
+				"id": "Astronaut1",
+				"name": "Gus Grissom",
+				"missions": [
+				  {
+					"id": "Mission1",
+					"designation": "Apollo1"
+				  }
+				]
+			  },
+			  {
+				"id": "Astronaut2",
+				"name": "Neil Armstrong",
+				"missions": [
+				  {
+					"id": "Mission2",
+					"designation": "Apollo11"
+				  }
+				]
+			  }
+			]
+		  }
 	  }`
 
 	testutil.CompareJSON(t, expectedJSON, string(gqlResponse.Data))
@@ -5852,8 +5918,9 @@ func upsertMutationTests(t *testing.T) {
 	newCountry := addCountry(t, postExecutor)
 	// State should get added.
 	addStateParams := &GraphQLParams{
-		Query: `mutation addState($xcode: String!, $upsert: Boolean, $name: String!) {
-            addState(input: [{ xcode: $xcode, name: $name }], upsert: $upsert) {
+		Query: `mutation addState($xcode: String!, $upsert: Boolean, $name: String!, $xcode2: String!,
+					$name2: String!) {
+            addState(input: [{ xcode: $xcode, name: $name }, {xcode: $xcode2, name: $name2}], upsert: $upsert) {
                 state {
                     xcode
                     name
@@ -5866,6 +5933,8 @@ func upsertMutationTests(t *testing.T) {
 		Variables: map[string]interface{}{
 			"name":   "State1",
 			"xcode":  "S1",
+			"name2":  "State10",
+			"xcode2": "S10",
 			"upsert": true},
 	}
 
@@ -5874,18 +5943,26 @@ func upsertMutationTests(t *testing.T) {
 
 	addStateExpected := `{
         "addState": {
-            "state": [{
-                "xcode": "S1",
-                "name": "State1",
-				"country": null
-            }]
+            "state": [
+				{
+                	"xcode": "S1",
+                	"name": "State1",
+					"country": null
+            	},
+				{
+					"xcode": "S10",
+					"name": "State10",
+					"country": null
+				}]
         }
     }`
 	testutil.CompareJSON(t, addStateExpected, string(gqlResponse.Data))
 
 	// Add Mutation with Upsert: false should fail.
-	addStateParams.Query = `mutation addState($xcode: String!, $upsert: Boolean, $name: String!, $countryID: ID) {
-            addState(input: [{ xcode: $xcode, name: $name, country: {id: $countryID }}], upsert: $upsert) {
+	addStateParams.Query = `mutation addState($xcode: String!, $upsert: Boolean, $name: String!, $countryID: ID,
+				$xcode2: String!, $name2: String!) {
+            addState(input: [{ xcode: $xcode, name: $name, country: {id: $countryID }},
+							 { xcode: $xcode2, name: $name2}], upsert: $upsert) {
                 state {
                     xcode
                     name
@@ -5899,6 +5976,8 @@ func upsertMutationTests(t *testing.T) {
 		"upsert":    false,
 		"name":      "State2",
 		"xcode":     "S1",
+		"xcode2":    "S10",
+		"name2":     "NewState10",
 		"countryID": newCountry.ID,
 	}
 	gqlResponse = addStateParams.ExecuteAsPost(t, GraphqlURL)
@@ -5912,19 +5991,27 @@ func upsertMutationTests(t *testing.T) {
 		"upsert":    true,
 		"name":      "State2",
 		"xcode":     "S1",
+		"xcode2":    "S10",
+		"name2":     "NewState10",
 		"countryID": newCountry.ID,
 	}
 	gqlResponse = addStateParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 	addStateExpected = `{
         "addState": {
-            "state": [{
-                "xcode": "S1",
-                "name": "State2",
-				"country": {
-					"name": "Testland"
-				}
-            }]
+            "state": [
+				{
+                	"xcode": "S1",
+                	"name": "State2",
+					"country": {
+						"name": "Testland"
+					}
+            	},
+				{
+					"xcode": "S10",
+					"name": "NewState10",
+					"country": null
+				}]
         }
     }`
 	testutil.CompareJSON(t, addStateExpected, string(gqlResponse.Data))
@@ -5932,6 +6019,70 @@ func upsertMutationTests(t *testing.T) {
 	// Clean Up
 	filter := map[string]interface{}{"id": []string{newCountry.ID}}
 	deleteCountry(t, filter, 1, nil)
-	filter = GetXidFilter("xcode", []interface{}{"S1"})
-	deleteState(t, filter, 1, nil)
+	filter = GetXidFilter("xcode", []interface{}{"S1", "S10"})
+	deleteState(t, filter, 2, nil)
+}
+
+func updateLangTagFields(t *testing.T) {
+	addPersonParams := &GraphQLParams{
+		Query: `
+		mutation addPerson($person: [AddPersonInput!]!) {
+          addPerson(input: $person) {
+            numUids
+          }
+        }`,
+	}
+	addPersonParams.Variables = map[string]interface{}{"person": []interface{}{
+		map[string]interface{}{
+			"name":   "Juliet",
+			"nameHi": "जूलियट",
+			"nameZh": "朱丽叶",
+		},
+	},
+	}
+	gqlResponse := addPersonParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	// update Person using language tag field
+	updatePersonParams := &GraphQLParams{
+		Query: `
+		mutation updatePerson {
+           updatePerson(
+             input: {
+               filter: { nameHi: { eq: "जूलियट" } }
+               set: { nameHi: "जूली", nameZh: "朱丽叶" }
+             }
+           ) {
+             numUids
+           }
+        }`,
+	}
+	gqlResponse = updatePersonParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	queryPerson := &GraphQLParams{
+		Query: `
+			query {
+              queryPerson(filter: { name: { eq: "Juliet" } }) {
+                name
+                nameZh
+                nameHi
+              }
+           }`,
+	}
+	gqlResponse = queryPerson.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	queryPersonExpected := `
+	  {
+        "queryPerson": [
+            {
+                "name": "Juliet",
+                "nameZh": "朱丽叶",
+                "nameHi": "जूली"
+            }
+        ]
+      }`
+
+	testutil.CompareJSON(t, queryPersonExpected, string(gqlResponse.Data))
+	DeleteGqlType(t, "Person", map[string]interface{}{}, 1, nil)
 }

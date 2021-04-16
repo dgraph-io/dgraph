@@ -207,7 +207,20 @@ type post1{
 type Person1 {
     id: ID!
     name: String!
+    closeFriends: [Person1] @hasInverse(field: closeFriends)
     friends: [Person1] @hasInverse(field: friends)
+}
+
+type Person {
+    id: ID!
+    name: String! @search(by: [hash])
+    nameHi: String @dgraph(pred:"Person.name@hi") @search(by: [hash])
+    nameZh: String @dgraph(pred:"Person.name@zh") @search(by: [hash])
+    nameHiZh: String @dgraph(pred:"Person.name@hi:zh")
+    nameZhHi: String @dgraph(pred:"Person.name@zh:hi")
+    nameHi_Zh_Untag: String @dgraph(pred:"Person.name@hi:zh:.")
+    name_Untag_AnyLang: String @dgraph(pred:"Person.name@.") @search(by: [hash])
+    professionEn: String @dgraph(pred:"Person.profession@en")
 }
 
 # union testing - start
@@ -301,15 +314,9 @@ type Chapter {
 	book: Book
 }
 
-type Section {
-    sectionId: Float! @id
-    name: String!
-    chapterId: Int! @search
-}
-
 type Mission @key(fields: "id") {
     id: String! @id
-    crew: [Astronaut] @hasInverse(field: missions)
+    crew: [Astronaut] @provides(fields: "name") @hasInverse(field: missions)
     spaceShip: [SpaceShip]
     designation: String!
     startDate: String
@@ -318,6 +325,10 @@ type Mission @key(fields: "id") {
 
 type Astronaut @key(fields: "id") @extends {
     id: ID! @external
+    name: String @external
+    age: Int @external
+    isActive: Boolean
+    bio: String @requires(fields: "name age") @lambda
     missions: [Mission]
 }
 
@@ -326,13 +337,19 @@ type SpaceShip @key(fields: "id") @extends {
     missions: [Mission]
 }
 
+type Planet @key(fields: "id") @extends {
+        id: Int! @id @external
+        missions: [Mission]
+}
+
 type Region {
     id: String! @id
     name: String!
     district: District
 }
 
-type District {
+type District @lambdaOnMutate(add: true, update: true, delete: true) {
+    dgId: ID!
     id: String! @id
     name: String!
 }

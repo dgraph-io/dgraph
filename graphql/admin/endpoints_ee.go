@@ -1,19 +1,13 @@
 // +build !oss
 
 /*
- * Copyright 2020 Dgraph Labs, Inc. and Contributors
+ * Copyright 2020 Dgraph Labs, Inc. All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Licensed under the Dgraph Community License (the "License"); you
+ * may not use this file except in compliance with the License. You
+ * may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ *     https://github.com/dgraph-io/dgraph/blob/master/licenses/DCL.txt
  */
 
 package admin
@@ -33,22 +27,22 @@ const adminTypes = `
 
 		"""
 		Secret key credential for the destination.
-		"""		
+		"""
 		secretKey: String
 
 		"""
 		AWS session token, if required.
-		"""	
+		"""
 		sessionToken: String
 
 		"""
 		Set to true to allow backing up to S3 or Minio bucket that requires no credentials.
-		"""	
+		"""
 		anonymous: Boolean
 
 		"""
 		Force a full backup instead of an incremental backup.
-		"""	
+		"""
 		forceFull: Boolean
 	}
 
@@ -178,7 +172,7 @@ const adminTypes = `
 		"""
 		The ID of the cluster group.
 		"""
-		groupId: Int
+		groupId: UInt64
 
 		"""
 		List of predicates assigned to the group.
@@ -195,7 +189,7 @@ const adminTypes = `
 		"""
 		Number of this backup within the backup series. The full backup always has a value of one.
 		"""
-		backupNum: Int
+		backupNum: UInt64
 
 		"""
 		Whether this backup was encrypted.
@@ -216,24 +210,24 @@ const adminTypes = `
 		The timestamp at which this backup was taken. The next incremental backup will
 		start from this timestamp.
 		"""
-		since: Int
+		since: UInt64
 
 		"""
 		The type of backup, either full or incremental.
 		"""
 		type: String
 	}
-	
+
 	type LoginResponse {
 
 		"""
 		JWT token that should be used in future requests after this login.
-		"""	
+		"""
 		accessJWT: String
 
 		"""
 		Refresh token that can be used to re-login after accessJWT expires.
-		"""	
+		"""
 		refreshJWT: String
 	}
 
@@ -265,12 +259,12 @@ const adminTypes = `
 
 		"""
 		Predicate to which the rule applies.
-		"""	
+		"""
 		predicate: String! @dgraph(pred: "dgraph.rule.predicate")
 
 		"""
-		Permissions that apply for the rule.  Represented following the UNIX file permission 
-		convention. That is, 4 (binary 100) represents READ, 2 (binary 010) represents WRITE, 
+		Permissions that apply for the rule.  Represented following the UNIX file permission
+		convention. That is, 4 (binary 100) represents READ, 2 (binary 010) represents WRITE,
 		and 1 (binary 001) represents MODIFY (the permission to change a predicate’s schema).
 
 		The options are:
@@ -282,9 +276,9 @@ const adminTypes = `
 		* 6 (110) : READ+WRITE
 		* 7 (111) : READ+WRITE+MODIFY
 
-		Permission 0, which is equal to no permission for a predicate, blocks all read, 
+		Permission 0, which is equal to no permission for a predicate, blocks all read,
 		write and modify operations.
-		"""	
+		"""
 		permission: Int! @dgraph(pred: "dgraph.rule.permission")
 	}
 
@@ -322,12 +316,12 @@ const adminTypes = `
 	input RuleRef {
 		"""
 		Predicate to which the rule applies.
-		"""	
+		"""
 		predicate: String!
 
 		"""
-		Permissions that apply for the rule.  Represented following the UNIX file permission 
-		convention. That is, 4 (binary 100) represents READ, 2 (binary 010) represents WRITE, 
+		Permissions that apply for the rule.  Represented following the UNIX file permission
+		convention. That is, 4 (binary 100) represents READ, 2 (binary 010) represents WRITE,
 		and 1 (binary 001) represents MODIFY (the permission to change a predicate’s schema).
 
 		The options are:
@@ -339,7 +333,7 @@ const adminTypes = `
 		* 6 (110) : READ+WRITE
 		* 7 (111) : READ+WRITE+MODIFY
 
-		Permission 0, which is equal to no permission for a predicate, blocks all read, 
+		Permission 0, which is equal to no permission for a predicate, blocks all read,
 		write and modify operations.
 		"""
 		permission: Int!
@@ -423,7 +417,7 @@ const adminTypes = `
 	}
 
 	type NamespacePayload {
-		namespaceId: Int
+		namespaceId: UInt64
 		message: String
 	}
 
@@ -436,7 +430,18 @@ const adminTypes = `
 	type ResetPasswordPayload {
 		userId: String
 		message: String
-		namespace: Int
+		namespace: UInt64
+	}
+
+	input EnterpriseLicenseInput {
+		"""
+		The contents of license file as a String.
+		"""
+		license: String!
+	}
+
+	type EnterpriseLicensePayload {
+		response: Response
 	}
 	`
 
@@ -476,13 +481,13 @@ const adminMutations = `
 
 	"""
 	Update users, their passwords and groups.  As with AddUser, when linking to groups: if the
-	group doesn't exist it is created; if the group exists, the new user is linked to the existing 
+	group doesn't exist it is created; if the group exists, the new user is linked to the existing
 	group.  If the filter doesn't match any users, the mutation has no effect.
 	"""
 	updateUser(input: UpdateUserInput!): AddUserPayload
 
 	"""
-	Add or remove rules for groups. If the filter doesn't match any groups, 
+	Add or remove rules for groups. If the filter doesn't match any groups,
 	the mutation has no effect.
 	"""
 	updateGroup(input: UpdateGroupInput!): AddGroupPayload
@@ -505,6 +510,11 @@ const adminMutations = `
 	any user in any namespace.
 	"""
 	resetPassword(input: ResetPasswordInput!): ResetPasswordPayload
+
+	"""
+	Apply enterprise license.
+	"""
+	enterpriseLicense(input: EnterpriseLicenseInput!): EnterpriseLicensePayload
 	`
 
 const adminQueries = `

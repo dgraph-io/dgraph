@@ -15,8 +15,8 @@ package acl
 import (
 	"encoding/json"
 
-	"github.com/dgraph-io/dgo/v200"
-	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgo/v210"
+	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
@@ -73,6 +73,7 @@ type User struct {
 	Uid           string  `json:"uid"`
 	UserID        string  `json:"dgraph.xid"`
 	Password      string  `json:"dgraph.password"`
+	Namespace     uint64  `json:"namespace"`
 	PasswordMatch bool    `json:"password_match"`
 	Groups        []Group `json:"dgraph.user.group"`
 }

@@ -68,6 +68,14 @@
       "type": "uid"
     },
     {
+      "predicate": "Astronaut.name",
+      "type": "string"
+    },
+    {
+      "predicate": "Astronaut.isActive",
+      "type": "bool"
+    },
+    {
       "predicate": "Astronaut.missions",
       "type": "uid",
       "list": true
@@ -85,6 +93,20 @@
       "list": true,
       "predicate": "Employer.worker",
       "type": "uid"
+    },
+    {
+      "lang": true,
+      "predicate": "Person.profession",
+      "type": "string"
+    },
+    {
+      "index": true,
+      "lang": true,
+      "predicate": "Person.name",
+      "tokenizer": [
+        "hash"
+      ],
+      "type": "string"
     },
     {
       "predicate": "Book.chapters",
@@ -329,6 +351,11 @@
       "list": true
     },
     {
+      "predicate": "Person1.closeFriends",
+      "type": "uid",
+      "list": true
+    },
+    {
       "predicate": "Person1.name",
       "type": "string"
     },
@@ -394,27 +421,6 @@
       "type": "string"
     },
     {
-      "predicate": "Section.chapterId",
-      "type": "int",
-      "index": true,
-      "tokenizer": [
-        "int"
-      ]
-    },
-    {
-      "predicate": "Section.name",
-      "type": "string"
-    },
-    {
-      "predicate": "Section.sectionId",
-      "type": "float",
-      "index": true,
-      "tokenizer": [
-        "float"
-      ],
-      "upsert": true
-    },
-    {
       "predicate": "SpaceShip.id",
       "type": "string",
       "index": true,
@@ -425,6 +431,20 @@
     },
     {
       "predicate": "SpaceShip.missions",
+      "type": "uid",
+      "list": true
+    },
+    {
+      "predicate": "Planet.id",
+      "type": "int",
+      "index": true,
+      "tokenizer": [
+        "int"
+      ],
+      "upsert": true
+    },
+    {
+      "predicate": "Planet.missions",
       "type": "uid",
       "list": true
     },
@@ -774,6 +794,12 @@
           "name": "Astronaut.id"
         },
         {
+          "name": "Astronaut.name"
+        },
+        {
+          "name": "Astronaut.isActive"
+        },
+        {
           "name": "Astronaut.missions"
         }
       ],
@@ -906,6 +932,17 @@
         }
       ],
       "name": "Home"
+    },
+    {
+      "fields": [
+        {
+          "name": "Person.name"
+        },
+        {
+          "name": "Person.profession"
+        }
+      ],
+      "name": "Person"
     },
     {
       "fields": [
@@ -1054,6 +1091,9 @@
         },
         {
           "name": "Person1.friends"
+        },
+        {
+          "name": "Person1.closeFriends"
         }
       ],
       "name": "Person1"
@@ -1111,20 +1151,6 @@
     {
       "fields": [
         {
-          "name": "Section.sectionId"
-        },
-        {
-          "name": "Section.name"
-        },
-        {
-          "name": "Section.chapterId"
-        }
-      ],
-      "name": "Section"
-    },
-    {
-      "fields": [
-        {
           "name": "SpaceShip.id"
         },
         {
@@ -1132,6 +1158,17 @@
         }
       ],
       "name": "SpaceShip"
+    },
+    {
+      "fields": [
+        {
+          "name": "Planet.id"
+        },
+        {
+          "name": "Planet.missions"
+        }
+      ],
+      "name": "Planet"
     },
     {
       "fields": [

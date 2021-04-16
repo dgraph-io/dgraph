@@ -239,7 +239,7 @@ invalid_schemas:
     errlist: [
       { "message": "Type Z; Field f: Field f is of type U, but @hasInverse directive only applies to fields with object types.", "locations": [{"line":9, "column":3}]},
       { "message": "Type Z; Field f: has the @search directive but fields of type U can't have the @search directive.", "locations": [{"line":9, "column":34}]},
-      { "message": "Type Z; Field f: with @id directive must be of type String!, Int!, Int64! or Float!, not U", "locations": [{"line":9, "column":42}]}
+      { "message": "Type Z; Field f: with @id directive must be of type String!, Int! or Int64!, not U", "locations": [{"line":9, "column":42}]}
     ]
 
   -
@@ -622,8 +622,19 @@ invalid_schemas:
         f1: [String] @id
       }
     errlist: [
-      {"message": "Type X; Field f1: with @id directive must be of type String!, Int!, Int64! or Float!, not [String]",
+      {"message": "Type X; Field f1: with @id directive must be of type String!, Int! or Int64!, not [String]",
       "locations":[{"line":2, "column":17}]}
+      ]
+
+  -
+    name: "@id directive can't be applied on field with Float type"
+    input: |
+      type X {
+        f1: Float! @id
+      }
+    errlist: [
+      {"message": "Type X; Field f1: with @id directive must be of type String!, Int! or Int64!, not Float!",
+      "locations":[{"line":2, "column":15}]}
       ]
 
   -
@@ -633,7 +644,7 @@ invalid_schemas:
         f1: String @id
       }
     errlist: [
-      {"message": "Type X; Field f1: with @id directive must be of type String!, Int!, Int64! or Float!, not String",
+      {"message": "Type X; Field f1: with @id directive must be of type String!, Int! or Int64!, not String",
       "locations":[{"line":2, "column":15}]}
       ]
 
@@ -988,12 +999,11 @@ invalid_schemas:
       }
 
       type Query {
-        getAuthor1(id: ID): Author! @custom(http: {url: "blah.com", method: "GET"}, extra: "random")
+        getAuthor1(id: ID): Author! @custom(http: {url: "blah.com", method: "GET"}, dql: "random")
       }
     errlist: [
     {"message": "Type Query; Field getAuthor1: has 2 arguments for @custom directive, it should contain exactly one of `http` or `dql` arguments.",
      "locations":[{"line":7, "column":32}]},
-    {"message" : "Type Query; Field getAuthor1; url field inside @custom directive is invalid.", "locations" : [{"line":7, "column":52}]}
     ]
 
   - name: "@custom directive without http or dql argument"
@@ -1007,7 +1017,7 @@ invalid_schemas:
         getAuthor1(id: ID): Author! @custom(https: {url: "blah.com", method: "GET"})
       }
     errlist: [
-      {"message": "Type Query; Field getAuthor1: one of `http` or `dql` arguments must be present for @custom directive.",
+      {"message": "https is not supported as an argument for custom directive.",
       "locations":[{"line":7, "column":32}]},
     ]
 
@@ -2660,6 +2670,7 @@ invalid_schemas:
     errlist: [
           { "message": "Field I3.name can only be defined once.", "locations": [ { "line": 2, "column": 5 } ] },
           ]
+
   - name: "@external directive can only be used on fields of Type Extension"
     input: |
       type Product @key(fields: "id") {
@@ -2669,6 +2680,7 @@ invalid_schemas:
     errlist: [
         { "message": "Type Product: Field id: @external directive can only be defined on fields in type extensions. i.e., the type must have `@extends` or use `extend` keyword.", "locations": [ { "line": 2, "column": 14 } ] },
       ]
+
   - name: "@key directive defined more than once"
     input: |
       type Product @key(fields: "id") @key(fields: "name") {
@@ -2679,6 +2691,7 @@ invalid_schemas:
     errlist: [
         { "message": "Type Product; @key directive should not be defined more than once.", "locations": [ { "line": 1, "column": 34 } ] },
       ]
+
   - name: "Argument inside @key directive uses field not defined in the type"
     input: |
       type Product @key(fields: "username") {
@@ -2689,6 +2702,7 @@ invalid_schemas:
     errlist: [
         { "message": "Type Product; @key directive uses a field username which is not defined inside the type.", "locations": [ { "line": 1, "column":19 } ] },
       ]
+
   - name: "Argument inside @key directive must have ID field or field with @id directive"
     input: |
       extend type Product @key(fields: "name") {
@@ -2699,12 +2713,13 @@ invalid_schemas:
     errlist: [
         { "message": "Type Product: Field name: used inside @key directive should be of type ID or have @id directive.", "locations": [ { "line": 1, "column": 26 } ] },
       ]
+
   - name: "@extends directive without @key directive"
     input: |
       type Product  @extends{
-      id: ID! @external
-      name: String! @external
-      reviews: [Reviews]
+          id: ID! @external
+          name: String! @external
+          reviews: [Reviews]
       }
 
       type Reviews @key(fields: "id") {
@@ -2712,8 +2727,9 @@ invalid_schemas:
           review: String!
       }
     errlist: [
-      {"message": "Type Product; Type Extension cannot be defined without @key directive", "locations": [ { "line": 11, "column": 12} ] },
+      {"message": "Type Product; Type Extension cannot be defined without @key directive", "locations": [ { "line": 13, "column": 12} ] },
     ]
+
   - name: "@remote directive with @key"
     input: |
       type Product  @remote @key(fields: "id"){
@@ -2729,6 +2745,7 @@ invalid_schemas:
     errlist: [
       {"message": "Type Product; @remote directive cannot be defined with @key directive", "locations": [ { "line": 174, "column": 12} ] },
     ]
+
   - name: "directives defined on @external fields that are not @key."
     input: |
       extend type Product @key(fields: "id"){
@@ -2745,8 +2762,64 @@ invalid_schemas:
       {"message": "Type Product: Field name: @search directive can not be defined on @external fields that are not @key.", "locations": [ { "line": 3, "column": 18} ] },
     ]
 
+  - name: "@requires directive defined on type definitions"
+    input: |
+      type Product @key(fields: "id"){
+        id: ID!
+        name: String!
+        reviews: [Reviews] @requires(fields: "name")
+      }
+      type Reviews @key(fields: "id") {
+          id: ID!
+          review: String!
+      }
+    errlist: [
+      {"message": "Type Product: Field reviews: @requires directive can only be defined on fields in type extensions. i.e., the type must have `@extends` or use `extend` keyword.", "locations": [ { "line": 4, "column": 23} ] }
+    ]
 
-    
+  - name: "argument inside @requires directive is not an @external field."
+    input: |
+      extend type Product @key(fields: "id"){
+        id: ID! @external
+        name: String!
+        reviews: [Reviews] @requires(fields: "name")
+      }
+      type Reviews @key(fields: "id") {
+          id: ID!
+          review: String!
+      }
+    errlist: [
+      {"message": "Type Product; Field name must be @external.", "locations": [ { "line": 4, "column": 23} ] }
+    ]
+
+  - name: "@provides directive used on field with type that does not have a @key."
+    input: |
+      type Product @key(fields: "id") {
+        id: ID!
+        name: String!
+        reviews: [Reviews] @provides(fields: "name")
+      }
+      type Reviews {
+        id: ID!
+        name: String
+      }
+    errlist: [
+      {"message": "Type Product; Field reviews does not return a type that has a @key.", "locations": [ { "line": 4, "column": 23} ] }
+    ]
+
+  - name: "@provides directive uses a field that is not defined in the extended type"
+    input: |
+      type Review {
+        body: String
+        author: User @provides(fields: "username")
+      }
+      extend type User @key(fields: "id") {
+        id: ID! @external
+        reviews: [Review]
+      }
+    errlist: [
+      {"message": "Type Review; Field author: @provides field username doesn't exist for type User.", "locations": [ { "line": 3, "column": 17} ] }
+    ]
 
   - name: "@withSubscription on custom http query"
     input: |
@@ -2779,12 +2852,100 @@ invalid_schemas:
           "locations": [ { "line": 3, "column": 5 } ] },
       ]
 
+  - name: "@remoteResponse on field of non @remote type"
+    input: |
+        type TwitterUser {
+          id: ID!
+          name: String @remoteResponse(name: "screen_name")
+        }
+    errlist: [
+      { "message": "Type TwitterUser: Field name: @remoteResponse directive can only be defined on fields of @remote type.", "locations": [{"line": 3, "column": 17}]}
+    ]
+
+  - name: "@lambdaOnMutate with bad arg values"
+    input: |
+      type TwitterUser @lambdaOnMutate(add: true, update: badValue, delete: "false") {
+        id: ID!
+        name: String
+      }
+    errlist: [
+      { "message": "Type TwitterUser; update argument in @lambdaOnMutate directive can only be true/false, found: `badValue`.", "locations": [{"line": 1, "column": 45}]},
+      { "message": "Type TwitterUser; delete argument in @lambdaOnMutate directive can only be true/false, found: `\"false\"`.", "locations": [{"line": 1, "column": 63}]},
+    ]
+
+  - name: "@lambdaOnMutate isn't allowed on @remote types"
+    input: |
+      type TwitterUser @remote @lambdaOnMutate(add: true) {
+        id: ID!
+        name: String
+      }
+      type Query{
+        getCustomTwitterUser(name: String!): TwitterUser @custom(http:{
+            url: "https://api.twitter.com/1.1/users/show.json?screen_name=$name"
+            method: "GET"
+        })
+      }
+    errlist: [
+      { "message": "Type TwitterUser; @lambdaOnMutate directive not allowed along with @remote directive.", "locations": [{"line": 1, "column": 27}]}
+    ]
+
+  - name: "language tag field should be of String type"
+    input: |
+      type Person  {
+        name: String!
+        nameHi: Int @dgraph(pred:"Person.name@hi")
+      }
+    errlist: [
+      { "message": "Type Person; Field nameHi: Expected type `String` for language tag field but got `Int`",
+        "locations": [ { "line": 3, "column": 3 } ] },
+    ]
+
+  - name: "@id directive not supported on language tag field"
+    input: |
+      type Person  {
+        name: String!
+        nameHi: String! @dgraph(pred:"Person.name@hi") @id
+      }
+    errlist: [
+      { "message": "Type Person; Field nameHi: @id directive not supported on language tag fields",
+        "locations": [ { "line": 3, "column": 51 } ] },
+    ]
+
+  - name: "@search directive not supported on multiple language tag field"
+    input: |
+      type Person  {
+        name: String!
+        nameHiEn: String! @dgraph(pred:"Person.name@hi:en") @search(by: [exact])
+      }
+    errlist: [
+      { "message": "Type Person; Field nameHiEn: @search directive not applicable on language tag
+        field with multiple languages",
+        "locations": [ { "line": 3, "column": 56 } ] },
+    ]
+
+  - name: "unsupported `*` language tag in graphql"
+    input: |
+      type Person  {
+        name: String!
+        nameHi: String @dgraph(pred:"Person.name@*")
+      }
+    errlist: [
+      { "message": "Type Person; Field nameHi: `*` language tag not supported in GraphQL",
+        "locations": [ { "line": 3, "column": 19 } ] },
+    ]
+
 valid_schemas:
   - name: "Multiple fields with @id directive should be allowed"
     input: |
       type X {
         f1: String! @id
         f2: String! @id
+      }
+
+  - name: "field with @id directive can have exact index"
+    input: |
+      type X {
+        f1: String! @id @search(by:[exact])
       }
 
   - name: "Type implements from two interfaces where both have ID"
@@ -3212,4 +3373,61 @@ valid_schemas:
       input UpdateAuthorInput {
         id: ID!
         name: String
+      }
+
+  - name: "A valid federation schema"
+    input: |
+      type Review {
+        body: String
+        author: User @provides(fields: "username")
+        product: Product
+      }
+
+      extend type User @key(fields: "id") {
+        id: ID! @external
+        username: String! @external
+        reviews: [Review]
+      }
+
+      type Product @key(fields: "upc") @extends {
+        upc: String! @id @external
+        weight: Int @external
+        price: Int @external
+        inStock: Boolean
+        shippingEstimate: Int @requires(fields: "price weight") @lambda
+        reviews: [Review]
+      }
+
+
+
+  - name: "@lambdaOnMutate is allowed on types and interfaces"
+    input: |
+      interface Post @lambdaOnMutate(add: true, delete: false) {
+        id: ID!
+        title: String
+      }
+
+      type Question implements Post @lambdaOnMutate(add: true, update: true) {
+        id: ID!
+        questionText: String
+      }
+
+  - name: "valid schema with multiple language tag fields"
+    input: |
+      interface Node {
+        f1: String
+      }
+      type Person implements Node {
+        f1Hi: String @dgraph(pred: "Node.f1@hi")
+        f2: String @dgraph(pred: "T.f@no")
+        name: String! @id
+        f3: String @dgraph(pred: "f3@en")
+        nameHi: String @dgraph(pred: "Person.name@hi") @search(by: [term, exact])
+        nameEn: String @dgraph(pred: "Person.name@en") @search(by: [regexp])
+        nameHiEn: String @dgraph(pred: "Person.name@hi:en")
+        nameHi_En_Untag: String @dgraph(pred: "Person.name@hi:en:.")
+        name_Untag_AnyLang: String @dgraph(pred: "Person.name@.")
+        address: String @search(by: [fulltext])
+        addressHi: String @dgraph(pred: "Person.address@hi")
+        professionEn: String @dgraph(pred: "Person.profession@en")
       }

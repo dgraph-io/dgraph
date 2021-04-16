@@ -2,6 +2,11 @@ module github.com/dgraph-io/dgraph
 
 go 1.12
 
+// replace github.com/dgraph-io/badger/v3 => /home/mrjn/go/src/github.com/dgraph-io/badger
+// replace github.com/dgraph-io/ristretto => /home/mrjn/go/src/github.com/dgraph-io/ristretto
+
+// replace github.com/dgraph-io/roaring => /home/mrjn/go/src/github.com/dgraph-io/roaring
+
 require (
 	contrib.go.opencensus.io/exporter/jaeger v0.1.0
 	contrib.go.opencensus.io/exporter/prometheus v0.1.0
@@ -14,17 +19,17 @@ require (
 	github.com/Shopify/sarama v1.27.2
 	github.com/blevesearch/bleve v1.0.13
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd
-	github.com/dgraph-io/badger/v3 v3.0.0-20210209201111-6c35ad6c28e0
-	github.com/dgraph-io/dgo/v200 v200.0.0-20210212152539-e0a5bde40ba2
+	github.com/dgraph-io/badger/v3 v3.0.0-20210405181011-d918b9904b2a
+	github.com/dgraph-io/dgo/v210 v210.0.0-20210407152819-261d1c2a6987
 	github.com/dgraph-io/gqlgen v0.13.2
-	github.com/dgraph-io/gqlparser/v2 v2.1.5
+	github.com/dgraph-io/gqlparser/v2 v2.2.0
 	github.com/dgraph-io/graphql-transport-ws v0.0.0-20210223074046-e5b8b80bb4ed
-	github.com/dgraph-io/ristretto v0.0.4-0.20210223002318-8ec1dc18f880
+	github.com/dgraph-io/ristretto v0.0.4-0.20210407062338-62d2e1706f55
+	github.com/dgraph-io/roaring v0.5.6-0.20210227175938-766b897233a5
 	github.com/dgraph-io/simdjson-go v0.3.0
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/dgrijalva/jwt-go/v4 v4.0.0-preview1
 	github.com/dgryski/go-farm v0.0.0-20200201041132-a6ae2369ad13
-	github.com/dgryski/go-groupvarint v0.0.0-20190318181831-5ce5df8ca4e1
 	github.com/docker/distribution v2.7.1+incompatible // indirect
 	github.com/docker/docker v1.13.1
 	github.com/dustin/go-humanize v1.0.0
@@ -57,12 +62,13 @@ require (
 	github.com/spf13/pflag v1.0.3
 	github.com/spf13/viper v1.7.1
 	github.com/stretchr/testify v1.6.1
+	github.com/tinylib/msgp v1.1.5 // indirect
 	github.com/twpayne/go-geom v1.0.5
 	go.etcd.io/etcd v0.0.0-20190228193606-a943ad0ee4c9
 	go.opencensus.io v0.22.5
 	go.uber.org/zap v1.16.0
 	golang.org/x/crypto v0.0.0-20200820211705-5c72a883971a
-	golang.org/x/net v0.0.0-20201021035429-f5854403a974
+	golang.org/x/net v0.0.0-20201110031124-69a78807bb2b
 	golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9
 	golang.org/x/sys v0.0.0-20210124154548-22da62e12c0c
 	golang.org/x/text v0.3.3
@@ -70,5 +76,6 @@ require (
 	google.golang.org/grpc v1.27.0
 	gopkg.in/DataDog/dd-trace-go.v1 v1.13.1 // indirect
 	gopkg.in/square/go-jose.v2 v2.3.1
-	gopkg.in/yaml.v2 v2.2.4
+	gopkg.in/yaml.v2 v2.2.8
+	src.techknowlogick.com/xgo v1.4.1-0.20210311222705-d25c33fcd864
 )

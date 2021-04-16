@@ -13,21 +13,23 @@
 package audit
 
 import (
+	"fmt"
 	"io/ioutil"
 	"math"
-	"path/filepath"
 	"sync/atomic"
 	"time"
 
 	"github.com/dgraph-io/ristretto/z"
 
+	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 )
 
 const (
-	defaultAuditConf     = "dir=; compress=false; encrypt-file=; days=10; size=100"
-	defaultAuditFilename = "dgraph_audit.log"
+	defaultAuditFilenameF = "%s_audit_%d_%d.log"
+	NodeTypeAlpha         = "alpha"
+	NodeTypeZero          = "zero"
 )
 
 var auditEnabled uint32
@@ -53,7 +55,7 @@ const (
 	Http             = "Http"
 )
 
-var auditor *auditLogger = &auditLogger{}
+var auditor = &auditLogger{}
 
 type auditLogger struct {
 	log    *x.Logger
@@ -62,33 +64,30 @@ type auditLogger struct {
 }
 
 func GetAuditConf(conf string) *x.LoggerConf {
-	if conf == "" {
+	if conf == "" || conf == worker.AuditDefaults {
 		return nil
 	}
-	auditFlag := z.NewSuperFlag(conf).MergeAndCheckDefault(defaultAuditConf)
-	dir := auditFlag.GetString("dir")
-	x.AssertTruef(dir != "", "dir flag is not provided for the audit logs")
+	auditFlag := z.NewSuperFlag(conf).MergeAndCheckDefault(worker.AuditDefaults)
+	out := auditFlag.GetPath("output")
+	x.AssertTruef(out != "", "out flag is not provided for the audit logs")
 	encBytes, err := readAuditEncKey(auditFlag)
 	x.Check(err)
 	return &x.LoggerConf{
 		Compress:      auditFlag.GetBool("compress"),
-		Dir:           dir,
+		Output:        out,
 		EncryptionKey: encBytes,
 		Days:          auditFlag.GetInt64("days"),
 		Size:          auditFlag.GetInt64("size"),
+		MessageKey:    "endpoint",
 	}
 }
 
 func readAuditEncKey(conf *z.SuperFlag) ([]byte, error) {
-	encFile := conf.GetString("encrypt-file")
+	encFile := conf.GetPath("encrypt-file")
 	if encFile == "" {
 		return nil, nil
 	}
-	path, err := filepath.Abs(encFile)
-	if err != nil {
-		return nil, err
-	}
-	encKey, err := ioutil.ReadFile(path)
+	encKey, err := ioutil.ReadFile(encFile)
 	if err != nil {
 		return nil, err
 	}
@@ -102,10 +101,8 @@ func InitAuditorIfNecessary(conf *x.LoggerConf, eeEnabled func() bool) error {
 	if conf == nil {
 		return nil
 	}
-	if eeEnabled() {
-		if err := InitAuditor(conf); err != nil {
-			return err
-		}
+	if err := InitAuditor(conf, uint64(worker.GroupId()), worker.NodeId()); err != nil {
+		return err
 	}
 	auditor.tick = time.NewTicker(time.Minute * 5)
 	auditor.closer = z.NewCloser(1)
@@ -116,9 +113,14 @@ func InitAuditorIfNecessary(conf *x.LoggerConf, eeEnabled func() bool) error {
 // InitAuditor initializes the auditor.
 // This method doesnt keep track of whether cluster is part of enterprise edition or not.
 // Client has to keep track of that.
-func InitAuditor(conf *x.LoggerConf) error {
+func InitAuditor(conf *x.LoggerConf, gId, nId uint64) error {
+	ntype := NodeTypeAlpha
+	if gId == 0 {
+		ntype = NodeTypeZero
+	}
 	var err error
-	if auditor.log, err = x.InitLogger(conf, defaultAuditFilename); err != nil {
+	if auditor.log, err = x.InitLogger(conf,
+		fmt.Sprintf(defaultAuditFilenameF, ntype, gId, nId)); err != nil {
 		return err
 	}
 	atomic.StoreUint32(&auditEnabled, 1)
@@ -143,7 +145,9 @@ func trackIfEEValid(conf *x.LoggerConf, eeEnabledFunc func() bool) {
 			}
 
 			if atomic.LoadUint32(&auditEnabled) != 1 {
-				if auditor.log, err = x.InitLogger(conf, defaultAuditFilename); err != nil {
+				if auditor.log, err = x.InitLogger(conf,
+					fmt.Sprintf(defaultAuditFilenameF, NodeTypeAlpha, worker.GroupId(),
+						worker.NodeId())); err != nil {
 					continue
 				}
 				atomic.StoreUint32(&auditEnabled, 1)
@@ -175,6 +179,7 @@ func Close() {
 
 func (a *auditLogger) Audit(event *AuditEvent) {
 	a.log.AuditI(event.Endpoint,
+		"level", "AUDIT",
 		"user", event.User,
 		"namespace", event.Namespace,
 		"server", event.ServerHost,

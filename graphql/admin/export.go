@@ -30,9 +30,11 @@ import (
 	"github.com/pkg/errors"
 )
 
+const notSet = math.MaxInt64
+
 type exportInput struct {
 	Format    string
-	Namespace uint64
+	Namespace int64
 	DestinationFields
 }
 
@@ -53,18 +55,37 @@ func resolveExport(ctx context.Context, m schema.Mutation) (*resolve.Resolved, b
 		}
 	}
 
-	// For the request made from non-galaxy user, use the namespace from the context.
-	ns, err := x.ExtractNamespace(ctx)
-	if err != nil {
-		return resolve.EmptyResult(m, err), false
+	validateAndGetNs := func(inputNs int64) (uint64, error) {
+		ns, err := x.ExtractNamespace(ctx)
+		if err != nil {
+			return 0, err
+		}
+		if input.Namespace == notSet {
+			// If namespace parameter is not set, use the namespace from the context.
+			return ns, nil
+		}
+		switch ns {
+		case x.GalaxyNamespace:
+			if input.Namespace < 0 { // export all namespaces.
+				return math.MaxUint64, nil
+			}
+			return uint64(inputNs), nil
+		default:
+			if input.Namespace != notSet && uint64(input.Namespace) != ns {
+				return 0, errors.Errorf("not allowed to export namespace %#x", input.Namespace)
+			}
+		}
+		return ns, nil
 	}
-	if ns != x.GalaxyNamespace {
-		input.Namespace = ns
+
+	var exportNs uint64
+	if exportNs, err = validateAndGetNs(input.Namespace); err != nil {
+		return resolve.EmptyResult(m, err), false
 	}
 
 	files, err := worker.ExportOverNetwork(ctx, &pb.ExportRequest{
 		Format:       format,
-		Namespace:    input.Namespace,
+		Namespace:    exportNs,
 		Destination:  input.Destination,
 		AccessKey:    input.AccessKey,
 		SecretKey:    input.SecretKey,
@@ -107,7 +128,7 @@ func getExportInput(m schema.Mutation) (*exportInput, error) {
 	// Export everything if namespace is not specified.
 	if v, ok := inputArg.(map[string]interface{}); ok {
 		if _, ok := v["namespace"]; !ok {
-			input.Namespace = math.MaxUint64
+			input.Namespace = notSet
 		}
 	}
 	return &input, schema.GQLWrapf(err, "couldn't get input argument")

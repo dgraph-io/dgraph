@@ -24,7 +24,7 @@ import (
 	"sort"
 	"strconv"
 
-	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
+	dgoapi "github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/graphql/schema"
@@ -112,6 +112,11 @@ type MutationRewriter interface {
 		m schema.Mutation,
 		assigned map[string]string,
 		result map[string]interface{}) ([]*gql.GraphQuery, error)
+	// MutatedRootUIDs returns a list of Root UIDs that were mutated as part of the mutation.
+	MutatedRootUIDs(
+		mutation schema.Mutation,
+		assigned map[string]string,
+		result map[string]interface{}) []string
 }
 
 // A DgraphExecutor can execute a query/mutation and returns the request response and any errors.
@@ -120,7 +125,7 @@ type DgraphExecutor interface {
 	// occurs, that indicates that the execution failed in some way significant enough
 	// way as to not continue processing this query/mutation or others in the same request.
 	Execute(ctx context.Context, req *dgoapi.Request, field schema.Field) (*dgoapi.Response, error)
-	CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext) error
+	CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext) (*dgoapi.TxnContext, error)
 }
 
 // An UpsertMutation is the query and mutations needed for a Dgraph upsert.
@@ -215,23 +220,25 @@ func (mr *dgraphResolver) rewriteAndExecute(
 	defer func() {
 		if !commit && mutResp != nil && mutResp.Txn != nil {
 			mutResp.Txn.Aborted = true
-			err := mr.executor.CommitOrAbort(ctx, mutResp.Txn)
+			_, err := mr.executor.CommitOrAbort(ctx, mutResp.Txn)
 			if err != nil {
-				glog.Errorf("Error occured while aborting transaction: %s", err)
+				glog.Errorf("Error occurred while aborting transaction: %s", err)
 			}
 		}
 	}()
 
+	dgraphPreMutationQueryDuration := &schema.LabeledOffsetDuration{Label: "preMutationQuery"}
 	dgraphMutationDuration := &schema.LabeledOffsetDuration{Label: "mutation"}
-	dgraphQueryDuration := &schema.LabeledOffsetDuration{Label: "query"}
+	dgraphPostMutationQueryDuration := &schema.LabeledOffsetDuration{Label: "query"}
 	ext := &schema.Extensions{
 		Tracing: &schema.Trace{
 			Execution: &schema.ExecutionTrace{
 				Resolvers: []*schema.ResolverTrace{
 					{
 						Dgraph: []*schema.LabeledOffsetDuration{
+							dgraphPreMutationQueryDuration,
 							dgraphMutationDuration,
-							dgraphQueryDuration,
+							dgraphPostMutationQueryDuration,
 						},
 					},
 				},
@@ -272,12 +279,17 @@ func (mr *dgraphResolver) rewriteAndExecute(
 	// Don't execute the query in those cases.
 	// The query will also be empty in case this is not an Add or an Update Mutation.
 	if req.Query != "" {
+		// Executing and processing existence queries
+		queryTimer := newtimer(ctx, &dgraphPreMutationQueryDuration.OffsetDuration)
+		queryTimer.Start()
 		mutResp, err = mr.executor.Execute(ctx, req, nil)
-	}
-	if err != nil {
-		gqlErr := schema.GQLWrapLocationf(
-			err, mutation.Location(), "mutation %s failed", mutation.Name())
-		return emptyResult(gqlErr), resolverFailed
+		queryTimer.Stop()
+		if err != nil {
+			gqlErr := schema.GQLWrapLocationf(
+				err, mutation.Location(), "mutation %s failed", mutation.Name())
+			return emptyResult(gqlErr), resolverFailed
+		}
+		ext.TouchedUids += mutResp.GetMetrics().GetNumUids()[touchedUidsKey]
 	}
 
 	// Parse the result of query.
@@ -355,7 +367,7 @@ func (mr *dgraphResolver) rewriteAndExecute(
 			dgQuery := upserts[1].Query
 			upserts = upserts[0:1] // we don't need the second upsert anymore
 
-			queryTimer := newtimer(ctx, &dgraphQueryDuration.OffsetDuration)
+			queryTimer := newtimer(ctx, &dgraphPostMutationQueryDuration.OffsetDuration)
 			queryTimer.Start()
 			qryResp, err = mr.executor.Execute(ctx, &dgoapi.Request{Query: dgraph.AsString(dgQuery),
 				ReadOnly: true}, qryField)
@@ -414,7 +426,7 @@ func (mr *dgraphResolver) rewriteAndExecute(
 		return emptyResult(queryErrs), resolverFailed
 	}
 
-	err = mr.executor.CommitOrAbort(ctx, mutResp.Txn)
+	txnCtx, err := mr.executor.CommitOrAbort(ctx, mutResp.Txn)
 	if err != nil {
 		return emptyResult(
 				schema.GQLWrapf(err, "mutation failed, couldn't commit transaction")),
@@ -422,9 +434,15 @@ func (mr *dgraphResolver) rewriteAndExecute(
 	}
 	commit = true
 
+	// once committed, send async updates to configured webhooks, if any.
+	if mutation.HasLambdaOnMutate() {
+		rootUIDs := mr.mutationRewriter.MutatedRootUIDs(mutation, mutResp.GetUids(), result)
+		go sendWebhookEvent(ctx, mutation, txnCtx.CommitTs, rootUIDs)
+	}
+
 	// For delete mutation, we would have already populated qryResp if query field was requested.
 	if mutation.MutationType() != schema.DeleteMutation {
-		queryTimer := newtimer(ctx, &dgraphQueryDuration.OffsetDuration)
+		queryTimer := newtimer(ctx, &dgraphPostMutationQueryDuration.OffsetDuration)
 		queryTimer.Start()
 		qryResp, err = mr.executor.Execute(ctx, &dgoapi.Request{Query: dgraph.AsString(dgQuery),
 			ReadOnly: true}, mutation.QueryField())

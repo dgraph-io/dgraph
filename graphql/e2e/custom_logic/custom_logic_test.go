@@ -2572,13 +2572,16 @@ func TestCustomDQL(t *testing.T) {
 	common.SafelyDropAll(t)
 
 	schema := `
-	type Tweets {
+	interface Node {
 		id: ID!
-		text: String! @search(by: [fulltext])
+	}
+	type Tweets implements Node {
+		id: ID!
+		text: String! @search(by: [fulltext, exact])
 		user: User
 		timestamp: DateTime! @search
 	}
-	type User {
+	type User implements Node {
 		screen_name: String! @id
 		followers: Int @search
 		tweets: [Tweets] @hasInverse(field: user)
@@ -2587,11 +2590,29 @@ func TestCustomDQL(t *testing.T) {
 		screen_name: String
 		tweetCount: Int
 	}
-	
+	type UserMap @remote {
+		followers: Int
+		count: Int
+	}
+	type GroupUserMapQ @remote {
+		groupby: [UserMap] @remoteResponse(name: "@groupby")
+	}
+
 	type Query {
+	  queryNodeR: [Node] @custom(dql: """
+		query {
+			queryNodeR(func: type(Node), orderasc: User.screen_name) @filter(eq(Tweets.text, "Hello DQL!") OR eq(User.screen_name, "abhimanyu")) {
+				dgraph.type
+				id: uid
+				text: Tweets.text
+				screen_name: User.screen_name
+			}
+		}
+	  """)
+
 	  getFirstUserByFollowerCount(count: Int!): User @custom(dql: """
 		query getFirstUserByFollowerCount($count: int) {
-			getFirstUserByFollowerCount(func: eq(User.followers, $count), first: 1) {
+			getFirstUserByFollowerCount(func: eq(User.followers, $count),orderdesc: User.screen_name, first: 1) {
 				screen_name: User.screen_name
 				followers: User.followers
 			}
@@ -2630,15 +2651,23 @@ func TestCustomDQL(t *testing.T) {
 		}
 		""")
 
-	  queryUserTweetCounts: [UserTweetCount] @custom(dql: """
+	queryUserTweetCounts: [UserTweetCount] @custom(dql: """
 		query {
 			var(func: type(User)) {
 				tc as count(User.tweets)
 			}
-			queryUserTweetCounts(func: uid(tc), orderdesc: val(tc)) {
+			queryUserTweetCounts(func: uid(tc), orderdesc: User.screen_name) {
 				screen_name: User.screen_name
 				tweetCount: val(tc)
 			}
+		}
+		""")
+
+	  queryUserKeyMap: [GroupUserMapQ] @custom(dql: """
+		{
+				queryUserKeyMap(func: type(User)) @groupby(followers: User.followers){
+					count(uid)
+				}
 		}
 		""")
 	}
@@ -2673,6 +2702,14 @@ func TestCustomDQL(t *testing.T) {
 			  }
 			  timestamp: "2020-07-30"
 			}
+			{
+			  text: "Nice."
+			  user: {
+				screen_name: "minhaj"
+				followers: 10
+			  }
+			  timestamp: "2021-02-23"
+			}
 		  ]) {
 			numUids
 		  }
@@ -2685,6 +2722,11 @@ func TestCustomDQL(t *testing.T) {
 	params = &common.GraphQLParams{
 		Query: `
 		query ($count: Int!) {
+		  queryNodeR {
+			__typename
+			... on User { screen_name }
+			... on Tweets { text }
+		  }
 		  queryWithVar: getFirstUserByFollowerCount(count: $count) {
 			screen_name
 			followers
@@ -2703,6 +2745,12 @@ func TestCustomDQL(t *testing.T) {
 			screen_name
 			tweetCount
 		  }
+		  queryUserKeyMap {
+			groupby {
+			  followers
+			  count
+			}
+		  }
 		}`,
 		Variables: map[string]interface{}{"count": 5},
 	}
@@ -2711,38 +2759,65 @@ func TestCustomDQL(t *testing.T) {
 	common.RequireNoGQLErrors(t, result)
 
 	require.JSONEq(t, `{
+		"queryNodeR": [
+			{"__typename": "User", "screen_name": "abhimanyu"},
+			{"__typename": "Tweets", "text": "Hello DQL!"}
+		],
 		"queryWithVar": {
-		  "screen_name": "abhimanyu",
-		  "followers": 5
-		},
-		"getFirstUserByFollowerCount": {
-		  "screen_name": "pawan",
-		  "followers": 10
-		},
-		"dqlTweetsByAuthorFollowers": [
-		  {
-			"text": "Woah DQL works!"
-		  },
-		  {
-			"text": "Hello DQL!"
-		  }
-		],
-		"filteredTweetsByAuthorFollowers": [
-		  {
-			"text": "Hello DQL!"
-		  }
-		],
-		"queryUserTweetCounts": [
-		  {
 			"screen_name": "abhimanyu",
-			"tweetCount": 2
+			"followers": 5
 		  },
-		  {
+		  "getFirstUserByFollowerCount": {
 			"screen_name": "pawan",
-			"tweetCount": 1
-		  }
-		]
+			"followers": 10
+		  },
+		  "dqlTweetsByAuthorFollowers": [
+			{
+			  "text": "Woah DQL works!"
+			},
+			{
+			  "text": "Hello DQL!"
+			}
+		  ],
+		  "filteredTweetsByAuthorFollowers": [
+			{
+			  "text": "Hello DQL!"
+			}
+		  ],
+		  "queryUserTweetCounts": [
+			{
+			  "screen_name": "pawan",
+			  "tweetCount": 1
+			},
+			{
+			  "screen_name": "minhaj",
+			  "tweetCount": 1
+			},
+			{
+			  "screen_name": "abhimanyu",
+			  "tweetCount": 2
+			}
+		  ],
+		  "queryUserKeyMap": [
+			{
+			  "groupby": [
+				{
+				  "followers": 5,
+				  "count": 1
+				},
+				{
+				  "followers": 10,
+				  "count": 2
+				}
+			  ]
+			}
+		  ]
 	  }`, string(result.Data))
+
+	userFilter := map[string]interface{}{"screen_name": map[string]interface{}{"in": []string{"minhaj", "pawan", "abhimanyu"}}}
+	common.DeleteGqlType(t, "User", userFilter, 3, nil)
+	tweetFilter := map[string]interface{}{"text": map[string]interface{}{"in": []string{"Hello DQL!", "Woah DQL works!", "hmm, It worked.", "Nice."}}}
+	common.DeleteGqlType(t, "Tweets", tweetFilter, 4, nil)
 }
 
 func TestCustomGetQuerywithRESTError(t *testing.T) {
@@ -3119,6 +3194,61 @@ func TestCustomFieldIsResolvedWhenNoModeGiven(t *testing.T) {
 	common.DeleteGqlType(t, "Blueprint", map[string]interface{}{}, 1, nil)
 	common.DeleteGqlType(t, "BlueprintProduct", map[string]interface{}{}, 1, nil)
 	common.DeleteGqlType(t, "MarketStats", map[string]interface{}{}, 1, nil)
+}
+
+func TestApolloFederationWithCustom(t *testing.T) {
+	sch := `
+      type Product @key(fields: "upc") @extends {
+        upc: String! @id @external
+        weight: Int @external
+        price: Int @external
+        inStock: Boolean
+        shippingEstimate: Int @requires(fields: "price weight") @custom(http: {
+			url: "http://mock:8888/shippingEstimate"
+			method: POST
+			mode: BATCH
+			body: "{upc: $upc, weight: $weight, price: $price}"
+			skipIntrospection: true
+		})
+      }`
+	common.SafelyUpdateGQLSchemaOnAlpha1(t, sch)
+
+	mutation := &common.GraphQLParams{
+		Query: `mutation {
+		  addProduct(input: [
+			{ upc: "1", inStock: true },
+			{ upc: "2", inStock: false }
+		  ]) { numUids }
+		}`,
+	}
+	resp := mutation.ExecuteAsPost(t, common.GraphqlURL)
+	resp.RequireNoGQLErrors(t)
+
+	query := &common.GraphQLParams{
+		Query: `query _entities($typeName: String!) {
+			_entities(representations: [
+				{__typename: $typeName, upc: "2", price: 2000, weight: 100}
+				{__typename: $typeName, upc: "1", price: 999, weight: 500}
+			]) {
+				... on Product {
+					upc
+					shippingEstimate
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{"typeName": "Product"},
+	}
+	resp = query.ExecuteAsPost(t, common.GraphqlURL)
+	resp.RequireNoGQLErrors(t)
+
+	testutil.CompareJSON(t, `{
+	  "_entities": [
+		{ "upc": "2", "shippingEstimate": 0 },
+		{ "upc": "1", "shippingEstimate": 250 }
+	  ]
+	}`, string(resp.Data))
+
+	common.DeleteGqlType(t, "Product", map[string]interface{}{}, 2, nil)
 }
 
 func TestMain(m *testing.M) {

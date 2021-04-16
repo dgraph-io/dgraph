@@ -28,7 +28,7 @@ import (
 
 	"google.golang.org/grpc/metadata"
 
-	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
+	dgoapi "github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/graphql/dgraph"
@@ -165,8 +165,9 @@ func (ex *authExecutor) Execute(ctx context.Context, req *dgoapi.Request,
 	panic("test failed")
 }
 
-func (ex *authExecutor) CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext) error {
-	return nil
+func (ex *authExecutor) CommitOrAbort(ctx context.Context,
+	tc *dgoapi.TxnContext) (*dgoapi.TxnContext, error) {
+	return &dgoapi.TxnContext{}, nil
 }
 
 func TestStringCustomClaim(t *testing.T) {
@@ -264,7 +265,7 @@ func TestInvalidAuthInfo(t *testing.T) {
 	authSchema, err := testutil.AppendJWKAndVerificationKey(sch)
 	require.NoError(t, err)
 	_, err = schema.NewHandler(string(authSchema), false)
-	require.Error(t, err, fmt.Errorf("Expecting either JWKUrl or (VerificationKey, Algo), both were given"))
+	require.Error(t, err, fmt.Errorf("Expecting either JWKUrl/JWKUrls or (VerificationKey, Algo), both were given"))
 }
 
 func TestMissingAudienceWithJWKUrl(t *testing.T) {
@@ -276,7 +277,6 @@ func TestMissingAudienceWithJWKUrl(t *testing.T) {
 	require.Error(t, err, fmt.Errorf("required field missing in Dgraph.Authorization: `Audience`"))
 }
 
-//Todo(Minhaj): Add a testcase for token without Expiry
 func TestVerificationWithJWKUrl(t *testing.T) {
 	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")
 	require.NoError(t, err, "Unable to read schema file")
@@ -293,21 +293,73 @@ func TestVerificationWithJWKUrl(t *testing.T) {
 	require.Equal(t, metainfo.Header, "X-Test-Auth")
 	require.Equal(t, metainfo.Namespace, "https://xyz.io/jwt/claims")
 	require.Equal(t, metainfo.VerificationKey, "")
-	require.Equal(t, metainfo.JWKUrl, "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com")
+	require.Equal(t, metainfo.JWKUrl, "")
+	require.Equal(t, metainfo.JWKUrls, []string{"https://dev-hr2kugfp.us.auth0.com/.well-known/jwks.json"})
 
 	testCase := struct {
 		name  string
 		token string
 	}{
-		name:  `Expired Token`,
-		token: "eyJhbGciOiJSUzI1NiIsImtpZCI6IjE2NzUwM2UwYWVjNTJkZGZiODk2NTIxYjkxN2ZiOGUyMGMxZjMzMDAiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL3NlY3VyZXRva2VuLmdvb2dsZS5jb20vZmlyLXByb2plY3QxLTI1OWU3IiwiYXVkIjoiZmlyLXByb2plY3QxLTI1OWU3IiwiYXV0aF90aW1lIjoxNjAxNDQ0NjM0LCJ1c2VyX2lkIjoiMTdHb3h2dU5CWlc5YTlKU3Z3WXhROFc0bjE2MyIsInN1YiI6IjE3R294dnVOQlpXOWE5SlN2d1l4UThXNG4xNjMiLCJpYXQiOjE2MDE0NDQ2MzQsImV4cCI6MTYwMTQ0ODIzNCwiZW1haWwiOiJtaW5oYWpAZGdyYXBoLmlvIiwiZW1haWxfdmVyaWZpZWQiOmZhbHNlLCJmaXJlYmFzZSI6eyJpZGVudGl0aWVzIjp7ImVtYWlsIjpbIm1pbmhhakBkZ3JhcGguaW8iXX0sInNpZ25faW5fcHJvdmlkZXIiOiJwYXNzd29yZCJ9fQ.q5YmOzOUkZHNjlz53hgLNSVg-brIU9tLJ4jLC0_Xurl5wEbyZ6D_KQ9-UFqbl2HR6R1V5kpaf6eDFR3c83i1PpCbJ4LTjHAf_njQvL75ByERld23lZtKZyEeE6ujdFXL8ne4fI2qenD1Xeqx9AnXbLf7U_CvZpbX3l1wj7p0Lpn7qixi0AztuLSJMLkMfFpaiwyFZQivi4cqtnI25VIsK6a4KIpl1Sk0AHT-lv9PRadd_JDjWAIzD0SfhpZOskaeA9PljVMp-Y3Xscwg_Qc6u1MIBPg1jKO-ngjhWkgEWBoz5F836P7phT60LVBHhYuk-jRN6HSSNWQ3ineuN-jBkg",
+		name:  `Valid Token`,
+		token: "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjJKdVZuRkc0Q2JBX0E1VVNkenlDMyJ9.eyJnaXZlbl9uYW1lIjoibWluaGFqIiwiZmFtaWx5X25hbWUiOiJzaGFrZWVsIiwibmlja25hbWUiOiJtc3JpaXRkIiwibmFtZSI6Im1pbmhhaiBzaGFrZWVsIiwicGljdHVyZSI6Imh0dHBzOi8vbGgzLmdvb2dsZXVzZXJjb250ZW50LmNvbS9hLS9BT2gxNEdnYzVEZ2cyQThWZFNzWUNnc2RlR3lFMHM1d01Gdmd2X1htZDA4Q3B3PXM5Ni1jIiwibG9jYWxlIjoiZW4iLCJ1cGRhdGVkX2F0IjoiMjAyMS0wMy0wOVQxMDowOTozNi4yMDNaIiwiZW1haWwiOiJtc3JpaXRkQGdtYWlsLmNvbSIsImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJpc3MiOiJodHRwczovL2Rldi1ocjJrdWdmcC51cy5hdXRoMC5jb20vIiwic3ViIjoiZ29vZ2xlLW9hdXRoMnwxMDM2NTgyNjIxNzU2NDczNzEwNjQiLCJhdWQiOiJIaGFYa1FWUkJuNWUwSzNEbU1wMnpiakk4aTF3Y3YyZSIsImlhdCI6MTYxNTI4NDU3NywiZXhwIjo1MjE1Mjg0NTc3LCJub25jZSI6IlVtUk9NbTV0WWtoR2NGVjVOWGRhVGtKV1UyWm5ZM0pKUzNSR1ZsWk1jRzFLZUVkMGQzWkdkVTFuYXc9PSJ9.rlVl0tGOCypIts0C52g1qyiNaFV3UnDafJETXTGbt-toWvtCyZsa-JySgwG0DD1rMYm-gdwyJcjJlgwVPQD3ZlkJqbFFNvY4cX5injiOljpVFOHKXdi7tehY9We_vv1KYYpvhGMsE4u7o8tz2wEctdLTXT7omEq7gSdHuDgpM-h-K2RLApU8oyu8YOIqQlrqGgJ7Q8jy-jxMlU7BoZVz38FokjmkSapAAVORsbdEqPgQjeDnjaDQ5bRhxZUMSeKvvpvtVlPaeM1NI4S0R3g0qUGvX6L6qsLZqIilSQUiUaOEo8bLNBFHOxhBbocF-R-x40nSYjdjrEz60A99mz5XAA",
 	}
 
 	md := metadata.New(map[string]string{"authorizationJwt": testCase.token})
 	ctx := metadata.NewIncomingContext(context.Background(), md)
 
 	_, err = metainfo.ExtractCustomClaims(ctx)
-	require.True(t, strings.Contains(err.Error(), "unable to parse jwt token:token is unverifiable: Keyfunc returned an error"))
+	require.Nil(t, err)
+}
+
+func TestVerificationWithMultipleJWKUrls(t *testing.T) {
+	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")
+	require.NoError(t, err, "Unable to read schema file")
+
+	authSchema, err := testutil.AppendAuthInfoWithMultipleJWKUrls(sch)
+	require.NoError(t, err)
+
+	schema := test.LoadSchemaFromString(t, string(authSchema))
+	require.NotNil(t, schema.Meta().AuthMeta())
+
+	// Verify that authorization information is set correctly.
+	metainfo := schema.Meta().AuthMeta()
+	require.Equal(t, metainfo.Algo, "")
+	require.Equal(t, metainfo.Header, "X-Test-Auth")
+	require.Equal(t, metainfo.Namespace, "https://xyz.io/jwt/claims")
+	require.Equal(t, metainfo.VerificationKey, "")
+	require.Equal(t, metainfo.JWKUrl, "")
+	require.Equal(t, metainfo.JWKUrls, []string{"https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com", "https://dev-hr2kugfp.us.auth0.com/.well-known/jwks.json"})
+
+	testCases := []struct {
+		name    string
+		token   string
+		invalid bool
+	}{
+		{
+			name:    `Expired Token`,
+			token:   "eyJhbGciOiJSUzI1NiIsImtpZCI6IjE2NzUwM2UwYWVjNTJkZGZiODk2NTIxYjkxN2ZiOGUyMGMxZjMzMDAiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL3NlY3VyZXRva2VuLmdvb2dsZS5jb20vZmlyLXByb2plY3QxLTI1OWU3IiwiYXVkIjoiZmlyLXByb2plY3QxLTI1OWU3IiwiYXV0aF90aW1lIjoxNjAxNDQ0NjM0LCJ1c2VyX2lkIjoiMTdHb3h2dU5CWlc5YTlKU3Z3WXhROFc0bjE2MyIsInN1YiI6IjE3R294dnVOQlpXOWE5SlN2d1l4UThXNG4xNjMiLCJpYXQiOjE2MDE0NDQ2MzQsImV4cCI6MTYwMTQ0ODIzNCwiZW1haWwiOiJtaW5oYWpAZGdyYXBoLmlvIiwiZW1haWxfdmVyaWZpZWQiOmZhbHNlLCJmaXJlYmFzZSI6eyJpZGVudGl0aWVzIjp7ImVtYWlsIjpbIm1pbmhhakBkZ3JhcGguaW8iXX0sInNpZ25faW5fcHJvdmlkZXIiOiJwYXNzd29yZCJ9fQ.q5YmOzOUkZHNjlz53hgLNSVg-brIU9tLJ4jLC0_Xurl5wEbyZ6D_KQ9-UFqbl2HR6R1V5kpaf6eDFR3c83i1PpCbJ4LTjHAf_njQvL75ByERld23lZtKZyEeE6ujdFXL8ne4fI2qenD1Xeqx9AnXbLf7U_CvZpbX3l1wj7p0Lpn7qixi0AztuLSJMLkMfFpaiwyFZQivi4cqtnI25VIsK6a4KIpl1Sk0AHT-lv9PRadd_JDjWAIzD0SfhpZOskaeA9PljVMp-Y3Xscwg_Qc6u1MIBPg1jKO-ngjhWkgEWBoz5F836P7phT60LVBHhYuk-jRN6HSSNWQ3ineuN-jBkg",
+			invalid: true,
+		},
+		{
+			name:    `Valid Token`,
+			token:   "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjJKdVZuRkc0Q2JBX0E1VVNkenlDMyJ9.eyJnaXZlbl9uYW1lIjoibWluaGFqIiwiZmFtaWx5X25hbWUiOiJzaGFrZWVsIiwibmlja25hbWUiOiJtc3JpaXRkIiwibmFtZSI6Im1pbmhhaiBzaGFrZWVsIiwicGljdHVyZSI6Imh0dHBzOi8vbGgzLmdvb2dsZXVzZXJjb250ZW50LmNvbS9hLS9BT2gxNEdnYzVEZ2cyQThWZFNzWUNnc2RlR3lFMHM1d01Gdmd2X1htZDA4Q3B3PXM5Ni1jIiwibG9jYWxlIjoiZW4iLCJ1cGRhdGVkX2F0IjoiMjAyMS0wMy0wOVQxMDowOTozNi4yMDNaIiwiZW1haWwiOiJtc3JpaXRkQGdtYWlsLmNvbSIsImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJpc3MiOiJodHRwczovL2Rldi1ocjJrdWdmcC51cy5hdXRoMC5jb20vIiwic3ViIjoiZ29vZ2xlLW9hdXRoMnwxMDM2NTgyNjIxNzU2NDczNzEwNjQiLCJhdWQiOiJIaGFYa1FWUkJuNWUwSzNEbU1wMnpiakk4aTF3Y3YyZSIsImlhdCI6MTYxNTI4NDU3NywiZXhwIjo1MjE1Mjg0NTc3LCJub25jZSI6IlVtUk9NbTV0WWtoR2NGVjVOWGRhVGtKV1UyWm5ZM0pKUzNSR1ZsWk1jRzFLZUVkMGQzWkdkVTFuYXc9PSJ9.rlVl0tGOCypIts0C52g1qyiNaFV3UnDafJETXTGbt-toWvtCyZsa-JySgwG0DD1rMYm-gdwyJcjJlgwVPQD3ZlkJqbFFNvY4cX5injiOljpVFOHKXdi7tehY9We_vv1KYYpvhGMsE4u7o8tz2wEctdLTXT7omEq7gSdHuDgpM-h-K2RLApU8oyu8YOIqQlrqGgJ7Q8jy-jxMlU7BoZVz38FokjmkSapAAVORsbdEqPgQjeDnjaDQ5bRhxZUMSeKvvpvtVlPaeM1NI4S0R3g0qUGvX6L6qsLZqIilSQUiUaOEo8bLNBFHOxhBbocF-R-x40nSYjdjrEz60A99mz5XAA",
+			invalid: false,
+		},
+	}
+
+	for _, tcase := range testCases {
+		t.Run(tcase.name, func(t *testing.T) {
+			md := metadata.New(map[string]string{"authorizationJwt": tcase.token})
+			ctx := metadata.NewIncomingContext(context.Background(), md)
+
+			_, err := metainfo.ExtractCustomClaims(ctx)
+			if tcase.invalid {
+				require.True(t, strings.Contains(err.Error(), "unable to parse jwt token:token is unverifiable: Keyfunc returned an error"))
+			} else {
+				require.Nil(t, err)
+			}
+		})
+	}
 }
 
 // TODO(arijit): Generate the JWT token instead of using pre generated token.
@@ -430,20 +482,20 @@ func mutationQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMet
 				}
 			  }`,
 			rewriter:    NewAddRewriter,
-			assigned:    map[string]string{"Ticket2": "0x4"},
-			idExistence: map[string]string{"Column1": "0x1"},
+			assigned:    map[string]string{"Ticket_2": "0x4"},
+			idExistence: map[string]string{"Column_1": "0x1"},
 			dgQuery: `query {
   AddTicketPayload.ticket(func: uid(TicketRoot)) {
     Ticket.id : uid
     Ticket.title : Ticket.title
-    Ticket.onColumn : Ticket.onColumn @filter(uid(Column1)) {
+    Ticket.onColumn : Ticket.onColumn @filter(uid(Column_1)) {
       Column.colID : uid
       Column.name : Column.name
     }
   }
-  TicketRoot as var(func: uid(Ticket4)) @filter(uid(TicketAuth5))
-  Ticket4 as var(func: uid(0x4))
-  TicketAuth5 as var(func: uid(Ticket4)) @cascade {
+  TicketRoot as var(func: uid(Ticket_4)) @filter(uid(Ticket_Auth5))
+  Ticket_4 as var(func: uid(0x4))
+  Ticket_Auth5 as var(func: uid(Ticket_4)) @cascade {
     Ticket.onColumn : Ticket.onColumn {
       Column.inProject : Column.inProject {
         Project.roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
@@ -453,10 +505,10 @@ func mutationQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMet
     }
   }
   var(func: uid(TicketRoot)) {
-    Column2 as Ticket.onColumn
+    Column_2 as Ticket.onColumn
   }
-  Column1 as var(func: uid(Column2)) @filter(uid(ColumnAuth3))
-  ColumnAuth3 as var(func: uid(Column2)) @cascade {
+  Column_1 as var(func: uid(Column_2)) @filter(uid(Column_Auth3))
+  Column_Auth3 as var(func: uid(Column_2)) @cascade {
     Column.inProject : Column.inProject {
       Project.roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
         Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
@@ -486,14 +538,14 @@ func mutationQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMet
   UpdateTicketPayload.ticket(func: uid(TicketRoot)) {
     Ticket.id : uid
     Ticket.title : Ticket.title
-    Ticket.onColumn : Ticket.onColumn @filter(uid(Column1)) {
+    Ticket.onColumn : Ticket.onColumn @filter(uid(Column_1)) {
       Column.colID : uid
       Column.name : Column.name
     }
   }
-  TicketRoot as var(func: uid(Ticket4)) @filter(uid(TicketAuth5))
-  Ticket4 as var(func: uid(0x4))
-  TicketAuth5 as var(func: uid(Ticket4)) @cascade {
+  TicketRoot as var(func: uid(Ticket_4)) @filter(uid(Ticket_Auth5))
+  Ticket_4 as var(func: uid(0x4))
+  Ticket_Auth5 as var(func: uid(Ticket_4)) @cascade {
     Ticket.onColumn : Ticket.onColumn {
       Column.inProject : Column.inProject {
         Project.roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
@@ -503,10 +555,10 @@ func mutationQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMet
     }
   }
   var(func: uid(TicketRoot)) {
-    Column2 as Ticket.onColumn
+    Column_2 as Ticket.onColumn
   }
-  Column1 as var(func: uid(Column2)) @filter(uid(ColumnAuth3))
-  ColumnAuth3 as var(func: uid(Column2)) @cascade {
+  Column_1 as var(func: uid(Column_2)) @filter(uid(Column_Auth3))
+  Column_Auth3 as var(func: uid(Column_2)) @cascade {
     Column.inProject : Column.inProject {
       Project.roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
         Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))

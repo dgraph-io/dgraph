@@ -1,12 +1,15 @@
 extend type Product @key(fields: "id") {
     id: ID! @external
     name: String! @external
-    reviews: [Reviews]
+    price: Int @external
+    weight: Int @external
+    reviews: [Reviews] @requires(fields: "price weight")
 }
 
 type Reviews @key(fields: "id") {
     id: ID!
     review: String!
+    user: User @provides(fields: "age")
 }
 
 type Student @key(fields: "id"){
@@ -17,12 +20,13 @@ type Student @key(fields: "id"){
 
 type School @key(fields: "id"){
     id: ID!
-    students: [Student]
+    students: [Student] @provides(fields: "name")
 }
 
 extend type User @key(fields: "name") {
     id: ID! @external
     name: String! @id @external
+    age: Int! @external
     reviews: [Reviews]
 }
 

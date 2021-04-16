@@ -29,9 +29,9 @@ import (
 
 	admin2 "github.com/dgraph-io/dgraph/graphql/admin"
 
-	"github.com/dgraph-io/dgo/v200"
-	"github.com/dgraph-io/dgo/v200/protos/api"
-	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgo/v210"
+	"github.com/dgraph-io/dgo/v210/protos/api"
+	dgoapi "github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/graphql/test"
@@ -319,8 +319,9 @@ func (dg *panicClient) Execute(ctx context.Context, req *dgoapi.Request,
 	return nil, nil
 }
 
-func (dg *panicClient) CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext) error {
-	return nil
+func (dg *panicClient) CommitOrAbort(ctx context.Context,
+	tc *dgoapi.TxnContext) (*dgoapi.TxnContext, error) {
+	return &dgoapi.TxnContext{}, nil
 }
 
 // clientInfoLogin check whether the client info(IP address) is propagated in the request.

@@ -17,9 +17,7 @@
 package bulk
 
 import (
-	"bufio"
 	"bytes"
-	"compress/gzip"
 	"encoding/binary"
 	"fmt"
 	"log"
@@ -31,7 +29,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
@@ -42,6 +40,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
 	farm "github.com/dgryski/go-farm"
+	"github.com/golang/snappy"
 )
 
 type mapper struct {
@@ -59,7 +58,7 @@ type shardState struct {
 func newMapperBuffer(opt *options) *z.Buffer {
 	sz := float64(opt.MapBufSize) * 1.1
 	buf, err := z.NewBufferWithDir(int(sz), 2*int(opt.MapBufSize), z.UseMmap,
-		filepath.Join(opt.TmpDir, bufferDir))
+		filepath.Join(opt.TmpDir, bufferDir), "Mapper.Buffer")
 	x.Check(err)
 	return buf
 }
@@ -167,12 +166,9 @@ func (m *mapper) writeMapEntriesToFile(cbuf *z.Buffer, shardIdx int) {
 		x.Check(f.Close())
 	}()
 
-	gzWriter := gzip.NewWriter(f)
-	w := bufio.NewWriterSize(gzWriter, 4<<20)
+	w := snappy.NewBufferedWriter(f)
 	defer func() {
-		x.Check(w.Flush())
-		x.Check(gzWriter.Flush())
-		x.Check(gzWriter.Close())
+		x.Check(w.Close())
 	}()
 
 	// Create partition keys for the map file.
@@ -315,14 +311,14 @@ func (m *mapper) processNQuad(nq gql.NQuad) {
 	m.schema.checkAndSetInitialSchema(nq.Namespace)
 
 	// Appropriate schema must exist for the nquad's namespace by this time.
-	attr := x.NamespaceAttr(nq.Namespace, nq.Predicate)
+	de.Attr = x.NamespaceAttr(de.Namespace, de.Attr)
 	fwd, rev := m.createPostings(nq, de)
-	shard := m.state.shards.shardFor(attr)
-	key := x.DataKey(attr, sid)
+	shard := m.state.shards.shardFor(de.Attr)
+	key := x.DataKey(de.Attr, sid)
 	m.addMapEntry(key, fwd, shard)
 
 	if rev != nil {
-		key = x.ReverseKey(attr, oid)
+		key = x.ReverseKey(de.Attr, oid)
 		m.addMapEntry(key, rev, shard)
 	}
 	m.addIndexMapEntries(nq, de)
@@ -378,7 +374,7 @@ func (m *mapper) lookupUid(xid string, ns uint64) uint64 {
 func (m *mapper) createPostings(nq gql.NQuad,
 	de *pb.DirectedEdge) (*pb.Posting, *pb.Posting) {
 
-	m.schema.validateType(de, nq.Namespace, nq.ObjectValue == nil)
+	m.schema.validateType(de, nq.ObjectValue == nil)
 
 	p := posting.NewPosting(de)
 	sch := m.schema.getSchema(x.NamespaceAttr(nq.GetNamespace(), nq.GetPredicate()))
@@ -403,7 +399,7 @@ func (m *mapper) createPostings(nq gql.NQuad,
 	// Reverse predicate
 	x.AssertTruef(nq.GetObjectValue() == nil, "only has reverse schema if object is UID")
 	de.Entity, de.ValueId = de.ValueId, de.Entity
-	m.schema.validateType(de, nq.Namespace, true)
+	m.schema.validateType(de, true)
 	rp := posting.NewPosting(de)
 
 	de.Entity, de.ValueId = de.ValueId, de.Entity // de reused so swap back.

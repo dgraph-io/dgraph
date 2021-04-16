@@ -29,8 +29,8 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger/v3/options"
-	"github.com/dgraph-io/dgo/v200/protos/api"
-	"github.com/dgraph-io/dgraph/ee/enc"
+	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -57,9 +57,14 @@ func TestBackupMinioE(t *testing.T) {
 	localBackupDst = "minio://" + addr + "/dgraph-backup?secure=false"
 
 	conf := viper.GetViper()
-	conf.Set("tls_cacert", "../../../tlstest/mtls_internal/tls/live/ca.crt")
-	conf.Set("tls_internal_port_enabled", true)
-	conf.Set("tls_server_name", "alpha1")
+	conf.Set("tls", fmt.Sprintf("ca-cert=%s; server-name=%s; internal-port=%v;",
+		// ca-cert
+		"../../../tlstest/mtls_internal/tls/live/ca.crt",
+		// server-name
+		"alpha1",
+		// internal-port
+		true))
+
 	dg, err := testutil.DgraphClientWithCerts(testutil.SockAddr, conf)
 	require.NoError(t, err)
 	mc, err = testutil.NewMinioClient()
@@ -294,11 +299,13 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	})
 	require.Equal(t, numExpectedDirs, len(dirs))
 
-	manifests := x.WalkPathFunc(backupDir, func(path string, isdir bool) bool {
-		return !isdir && strings.Contains(path, "manifest.json")
-	})
-	require.Equal(t, numExpectedDirs, len(manifests))
+	b, err = ioutil.ReadFile(filepath.Join(backupDir, "manifest.json"))
+	require.NoError(t, err)
 
+	var manifest worker.MasterManifest
+	err = json.Unmarshal(b, &manifest)
+	require.NoError(t, err)
+	require.Equal(t, numExpectedDirs, len(manifest.Manifests))
 	return dirs
 }
 
@@ -309,12 +316,9 @@ func runRestore(t *testing.T, lastDir string, commitTs uint64) map[string]string
 
 	t.Logf("--- Restoring from: %q", localBackupDst)
 	testutil.KeyFile = "../../../ee/enc/test-fixtures/enc-key"
-	argv := []string{"dgraph", "restore", "-l", localBackupDst, "-p", "data/restore",
-		"--encryption_key_file", testutil.KeyFile, "--force_zero=false"}
-	cwd, err := os.Getwd()
-	require.NoError(t, err)
-	err = testutil.ExecWithOpts(argv, testutil.CmdOpts{Dir: cwd})
-	require.NoError(t, err)
+	result := worker.RunOfflineRestore("./data/restore", localBackupDst, lastDir,
+		testutil.KeyFile, options.Snappy, 0)
+	require.NoError(t, result.Err)
 
 	for i, pdir := range []string{"p1", "p2", "p3"} {
 		pdir = filepath.Join("./data/restore", pdir)
@@ -348,15 +352,10 @@ func runFailingRestore(t *testing.T, backupLocation, lastDir string, commitTs ui
 	// Recreate the restore directory to make sure there's no previous data when
 	// calling restore.
 	require.NoError(t, os.RemoveAll(restoreDir))
+	keyFile := "../../../ee/enc/test-fixtures/enc-key"
 
-	// Get key.
-	config := getEncConfig()
-	config.Set("encryption_key_file", "../../../ee/enc/test-fixtures/enc-key")
-	k, err := enc.ReadKey(config)
-	require.NotNil(t, k)
-	require.NoError(t, err)
-
-	result := worker.RunRestore("./data/restore", backupLocation, lastDir, k, options.Snappy, 0)
+	result := worker.RunOfflineRestore("./data/restore", backupLocation, lastDir, keyFile,
+		options.Snappy, 0)
 	require.Error(t, result.Err)
 	require.Contains(t, result.Err.Error(), "expected a BackupNum value of 1")
 }
@@ -364,7 +363,7 @@ func runFailingRestore(t *testing.T, backupLocation, lastDir string, commitTs ui
 func getEncConfig() *viper.Viper {
 	config := viper.New()
 	flags := &pflag.FlagSet{}
-	enc.RegisterFlags(flags)
+	ee.RegisterEncFlag(flags)
 	config.BindPFlags(flags)
 	return config
 }
@@ -393,8 +392,10 @@ func copyToLocalFs(t *testing.T) {
 	objectCh1 := mc.ListObjectsV2(bucketName, "", false, lsCh1)
 	for object := range objectCh1 {
 		require.NoError(t, object.Err)
-		dstDir := backupDir + "/" + object.Key
-		os.MkdirAll(dstDir, os.ModePerm)
+		if object.Key != "manifest.json" {
+			dstDir := backupDir + "/" + object.Key
+			require.NoError(t, os.MkdirAll(dstDir, os.ModePerm))
+		}
 
 		// Get all the files in that folder and copy them to the local filesystem.
 		lsCh2 := make(chan struct{})

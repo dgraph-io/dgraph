@@ -31,8 +31,8 @@ import (
 
 	"github.com/golang/glog"
 
-	"github.com/dgraph-io/dgo/v200"
-	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgo/v210"
+	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
@@ -50,6 +50,9 @@ var (
 
 	dgraphHealthURL = "http://" + Alpha1HTTP + "/health?all"
 	dgraphStateURL  = "http://" + Alpha1HTTP + "/state"
+
+	// this port is used on the host machine to spin up a test HTTP server
+	lambdaHookServerAddr = ":8888"
 
 	retryableUpdateGQLSchemaErrors = []string{
 		"errIndexingInProgress",
@@ -797,7 +800,8 @@ func RunAll(t *testing.T) {
 	t.Run("query only typename", queryOnlyTypename)
 	t.Run("query nested only typename", querynestedOnlyTypename)
 	t.Run("test onlytypename for interface types", onlytypenameForInterface)
-	t.Run("entitites Query on extended type", entitiesQuery)
+	t.Run("entities Query on extended type with key field of type String", entitiesQueryWithKeyFieldOfTypeString)
+	t.Run("entities Query on extended type with key field of type Int", entitiesQueryWithKeyFieldOfTypeInt)
 
 	t.Run("get state by xid", getStateByXid)
 	t.Run("get state without args", getStateWithoutArgs)
@@ -831,8 +835,9 @@ func RunAll(t *testing.T) {
 	t.Run("checkUserPassword query", passwordTest)
 	t.Run("query id directive with int", idDirectiveWithInt)
 	t.Run("query id directive with int64", idDirectiveWithInt64)
-	t.Run("query id directive with float", idDirectiveWithFloat)
 	t.Run("query filter ID values coercion to List", queryFilterWithIDInputCoercion)
+	t.Run("query multiple language Fields", queryMultipleLangFields)
+
 	// mutation tests
 	t.Run("add mutation", addMutation)
 	t.Run("update mutation by ids", updateMutationByIds)
@@ -857,7 +862,8 @@ func RunAll(t *testing.T) {
 	t.Run("add multiple mutations", testMultipleMutations)
 	t.Run("deep XID mutations", deepXIDMutations)
 	t.Run("three level xid", testThreeLevelXID)
-	t.Run("nested add mutation with @hasInverse", nestedAddMutationWithHasInverse)
+	t.Run("nested add mutation with multiple linked lists and @hasInverse",
+		nestedAddMutationWithMultipleLinkedListsAndHasInverse)
 	t.Run("add mutation with @hasInverse overrides correctly", addMutationWithHasInverseOverridesCorrectly)
 	t.Run("error in multiple mutations", addMultipleMutationWithOneError)
 	t.Run("dgraph directive with reverse edge adds data correctly",
@@ -870,7 +876,7 @@ func RunAll(t *testing.T) {
 	t.Run("mutations have extensions", mutationsHaveExtensions)
 	t.Run("alias works for mutations", mutationsWithAlias)
 	t.Run("three level deep", threeLevelDeepMutation)
-	t.Run("update mutation without set & remove", updateMutationWithoutSetRemove)
+	t.Run("update mutation without set & remove", updateMutationTestsWithDifferentSetRemoveCases)
 	t.Run("Input coercing for int64 type", int64BoundaryTesting)
 	t.Run("List of integers", intWithList)
 	t.Run("Check cascade with mutation without ID field", checkCascadeWithMutationWithoutIDField)
@@ -881,7 +887,6 @@ func RunAll(t *testing.T) {
 	t.Run("filter in update mutations with array for AND/OR", filterInUpdateMutationsWithFilterAndOr)
 	t.Run("mutation id directive with int", idDirectiveWithIntMutation)
 	t.Run("mutation id directive with int64", idDirectiveWithInt64Mutation)
-	t.Run("mutation id directive with float", idDirectiveWithFloatMutation)
 	t.Run("add mutation on extended type with field of ID type as key field", addMutationOnExtendedTypeWithIDasKeyField)
 	t.Run("add mutation with deep extended type objects", addMutationWithDeepExtendedTypeObjects)
 	t.Run("three level double XID mutation", threeLevelDoubleXID)
@@ -891,6 +896,7 @@ func RunAll(t *testing.T) {
 	t.Run("input coercion to list", inputCoerciontoList)
 	t.Run("multiple external Id's tests", multipleXidsTests)
 	t.Run("Upsert Mutation Tests", upsertMutationTests)
+	t.Run("Update language tag fields", updateLangTagFields)
 
 	// error tests
 	t.Run("graphql completion on", graphQLCompletionOn)
@@ -911,7 +917,10 @@ func RunAll(t *testing.T) {
 	t.Run("lambda on interface field", lambdaOnInterfaceField)
 	t.Run("lambda on query using dql", lambdaOnQueryUsingDql)
 	t.Run("lambda on mutation using graphql", lambdaOnMutationUsingGraphQL)
+	t.Run("lambda on query with no unique parents", lambdaOnQueryWithNoUniqueParents)
 	t.Run("query lambda field in a mutation with duplicate @id", lambdaInMutationWithDuplicateId)
+	t.Run("lambda with apollo federation", lambdaWithApolloFederation)
+	t.Run("lambdaOnMutate hooks", lambdaOnMutateHooks)
 }
 
 func gunzipData(data []byte) ([]byte, error) {
@@ -931,7 +940,8 @@ func gunzipData(data []byte) ([]byte, error) {
 
 func gzipData(data []byte) ([]byte, error) {
 	var b bytes.Buffer
-	gz := gzip.NewWriter(&b)
+	gz, err := gzip.NewWriterLevel(&b, gzip.BestSpeed)
+	x.Check(err)
 
 	if _, err := gz.Write(data); err != nil {
 		return nil, err
@@ -1138,7 +1148,7 @@ func (params *GraphQLParams) createApplicationGQLPost(url string) (*http.Request
 
 // RunGQLRequest runs a HTTP GraphQL request and returns the data or any errors.
 func RunGQLRequest(req *http.Request) ([]byte, error) {
-	client := &http.Client{Timeout: 50 * time.Second}
+	client := &http.Client{Timeout: 200 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
@@ -1178,6 +1188,10 @@ func RequireNoGQLErrors(t *testing.T, resp *GraphQLResponse) {
 		debug.PrintStack()
 		t.FailNow()
 	}
+}
+
+func (gqlRes *GraphQLResponse) RequireNoGQLErrors(t *testing.T) {
+	RequireNoGQLErrors(t, gqlRes)
 }
 
 func PopulateGraphQLData(client *dgo.Dgraph, data []byte) error {

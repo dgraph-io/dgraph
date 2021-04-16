@@ -23,10 +23,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 
-	"github.com/dgraph-io/dgo/v200"
-	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgo/v210"
+	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/pkg/errors"
@@ -51,10 +52,15 @@ func init() {
 	Increment.Cmd.SetHelpTemplate(x.NonRootTemplate)
 
 	flag := Increment.Cmd.Flags()
+	// --tls SuperFlag
+	x.RegisterClientTLSFlags(flag)
+
+	flag.String("cloud", "", "addr: xxx; jwt: xxx")
 	flag.String("alpha", "localhost:9080", "Address of Dgraph Alpha.")
-	flag.Int("num", 1, "How many times to run.")
+	flag.Int("num", 1, "How many times to run per goroutine.")
 	flag.Int("retries", 10, "How many times to retry setting up the connection.")
 	flag.Duration("wait", 0*time.Second, "How long to wait.")
+	flag.Int("conc", 1, "How many goroutines to run.")
 
 	flag.String("creds", "",
 		`Various login credentials if login is required.
@@ -69,9 +75,7 @@ func init() {
 		"Read-only. Read the counter value without updating it.")
 	flag.Bool("be", false,
 		"Best-effort. Read counter value without retrieving timestamp from Zero.")
-	flag.String("jaeger.collector", "", "Send opencensus traces to Jaeger.")
-	// TLS configuration
-	x.RegisterClientTLSFlags(flag)
+	flag.String("jaeger", "", "Send opencensus traces to Jaeger.")
 }
 
 // Counter stores information about the value being incremented by this tool.
@@ -176,28 +180,69 @@ func run(conf *viper.Viper) {
 
 	waitDur := conf.GetDuration("wait")
 	num := conf.GetInt("num")
+	conc := int(conf.GetInt("conc"))
 	format := "0102 03:04:05.999"
 
 	// Do a sanity check on the passed credentials.
 	_ = z.NewSuperFlag(Increment.Conf.GetString("creds")).MergeAndCheckDefault(x.DefaultCreds)
 
-	dg, closeFunc := x.GetDgraphClient(Increment.Conf, true)
-	defer closeFunc()
+	var dg *dgo.Dgraph
+	sf := z.NewSuperFlag(conf.GetString("cloud"))
+	if addr := sf.GetString("addr"); len(addr) > 0 {
+		conn, err := dgo.DialSlashEndpoint(addr, sf.GetString("jwt"))
+		x.Check(err)
+		dc := api.NewDgraphClient(conn)
+		dg = dgo.NewDgraphClient(dc)
+	} else {
+		dgTmp, closeFunc := x.GetDgraphClient(Increment.Conf, true)
+		defer closeFunc()
+		dg = dgTmp
+	}
 
-	for num > 0 {
+	addOne := func(i int) error {
 		txnStart := time.Now() // Start time of transaction
 		cnt, err := process(dg, conf)
 		now := time.Now().UTC().Format(format)
 		if err != nil {
-			fmt.Printf("%-17s While trying to process counter: %v. Retrying...\n", now, err)
-			time.Sleep(time.Second)
-			continue
+			return err
 		}
 		serverLat := cnt.qLatency + cnt.mLatency
 		clientLat := time.Since(txnStart).Round(time.Millisecond)
-		fmt.Printf("%-17s Counter VAL: %d   [ Ts: %d ] Latency: Q %s M %s S %s C %s D %s\n", now, cnt.Val,
-			cnt.startTs, cnt.qLatency, cnt.mLatency, serverLat, clientLat, clientLat-serverLat)
-		num--
-		time.Sleep(waitDur)
+		fmt.Printf(
+			"[w%d] %-17s Counter VAL: %d   [ Ts: %d ] Latency: Q %s M %s S %s C %s D %s\n",
+			i, now, cnt.Val, cnt.startTs, cnt.qLatency, cnt.mLatency,
+			serverLat, clientLat, clientLat-serverLat)
+		return nil
 	}
+
+	// Run things serially first, if conc > 1.
+	if conc > 1 {
+		for i := 0; i < conc; i++ {
+			err := addOne(0)
+			x.Check(err)
+			num--
+		}
+	}
+
+	var wg sync.WaitGroup
+	f := func(worker int) {
+		defer wg.Done()
+		count := 0
+		for count < num {
+			if err := addOne(worker); err != nil {
+				now := time.Now().UTC().Format(format)
+				fmt.Printf("%-17s While trying to process counter: %v. Retrying...\n", now, err)
+				time.Sleep(time.Second)
+				continue
+			}
+			time.Sleep(waitDur)
+			count++
+		}
+	}
+
+	for i := 0; i < conc; i++ {
+		wg.Add(1)
+		go f(i + 1)
+	}
+	wg.Wait()
 }

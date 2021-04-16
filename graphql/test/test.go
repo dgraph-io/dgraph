@@ -21,6 +21,8 @@ import (
 	"io/ioutil"
 	"testing"
 
+	"github.com/dgraph-io/dgraph/x"
+
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/gqlparser/v2/ast"
 	"github.com/dgraph-io/gqlparser/v2/parser"
@@ -40,7 +42,7 @@ func LoadSchema(t *testing.T, gqlSchema string) schema.Schema {
 	gql, gqlErr := validator.ValidateSchemaDocument(doc)
 	requireNoGQLErrors(t, gqlErr)
 
-	schema, err := schema.AsSchema(gql)
+	schema, err := schema.AsSchema(gql, x.GalaxyNamespace)
 	requireNoGQLErrors(t, err)
 	return schema
 }

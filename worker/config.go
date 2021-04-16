@@ -20,7 +20,6 @@ import (
 	"path/filepath"
 	"time"
 
-	bo "github.com/dgraph-io/badger/v3/options"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -37,12 +36,6 @@ const (
 type Options struct {
 	// PostingDir is the path to the directory storing the postings..
 	PostingDir string
-	// PostingDirCompression is the compression algorithem used to compression Postings directory.
-	PostingDirCompression bo.CompressionType
-	// PostingDirCompressionLevel is the ZSTD compression level used by Postings directory. A
-	// higher value means more CPU intensive compression and better compression
-	// ratio.
-	PostingDirCompressionLevel int
 	// WALDir is the path to the directory storing the write-ahead log.
 	WALDir string
 	// MutationsMode is the mode used to handle mutation requests.
@@ -50,15 +43,8 @@ type Options struct {
 	// AuthToken is the token to be passed for Alter HTTP requests.
 	AuthToken string
 
-	// PBlockCacheSize is the size of block cache for pstore
-	PBlockCacheSize int64
-	// PIndexCacheSize is the size of index cache for pstore
-	PIndexCacheSize int64
-	// WalCache is the size of block cache for wstore
-	WalCache int64
-
 	// HmacSecret stores the secret used to sign JSON Web Tokens (JWT).
-	HmacSecret x.SensitiveByteSlice
+	HmacSecret x.Sensitive
 	// AccessJwtTtl is the TTL for the access JWT.
 	AccessJwtTtl time.Duration
 	// RefreshJwtTtl is the TTL of the refresh JWT.
@@ -105,13 +91,13 @@ func (opt *Options) validate() {
 	x.AssertTruef(wd != td,
 		"WAL and Tmp directory cannot be the same ('%s').", opt.WALDir)
 	if opt.Audit != nil {
-		ad, err := filepath.Abs(opt.Audit.Dir)
+		ad, err := filepath.Abs(opt.Audit.Output)
 		x.Check(err)
 		x.AssertTruef(ad != pd,
-			"Posting and Audit Directory cannot be the same ('%s').", opt.Audit.Dir)
+			"Posting directory and Audit Output cannot be the same ('%s').", opt.Audit.Output)
 		x.AssertTruef(ad != wd,
-			"WAL and Audit directory cannot be the same ('%s').", opt.Audit.Dir)
+			"WAL directory and Audit Output cannot be the same ('%s').", opt.Audit.Output)
 		x.AssertTruef(ad != td,
-			"Tmp and Audit directory cannot be the same ('%s').", opt.Audit.Dir)
+			"Tmp directory and Audit Output cannot be the same ('%s').", opt.Audit.Output)
 	}
 }

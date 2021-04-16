@@ -39,16 +39,16 @@ func TestMetricTxnCommits(t *testing.T) {
 	`
 
 	// first normal commit
-	mr, err := mutationWithTs(mt, "application/rdf", false, false, 0)
+	mr, err := mutationWithTs(mutationInp{body: mt, typ: "application/rdf"})
 	require.NoError(t, err)
-	require.NoError(t, commitWithTs(mr.keys, mr.preds, mr.startTs, false))
+	require.NoError(t, commitWithTs(mr, false))
 
 	metrics := fetchMetrics(t, metricName)
 
 	// second normal commit
-	mr, err = mutationWithTs(mt, "application/rdf", false, false, 0)
+	mr, err = mutationWithTs(mutationInp{body: mt, typ: "application/rdf"})
 	require.NoError(t, err)
-	require.NoError(t, commitWithTs(mr.keys, mr.preds, mr.startTs, false))
+	require.NoError(t, commitWithTs(mr, false))
 
 	require.NoError(t, retryableFetchMetrics(t, map[string]int{
 		metricName: metrics[metricName] + 1,
@@ -66,16 +66,16 @@ func TestMetricTxnDiscards(t *testing.T) {
 	`
 
 	// first normal commit
-	mr, err := mutationWithTs(mt, "application/rdf", false, false, 0)
+	mr, err := mutationWithTs(mutationInp{body: mt, typ: "application/rdf"})
 	require.NoError(t, err)
-	require.NoError(t, commitWithTs(mr.keys, mr.preds, mr.startTs, false))
+	require.NoError(t, commitWithTs(mr, false))
 
 	metrics := fetchMetrics(t, metricName)
 
 	// second commit discarded
-	mr, err = mutationWithTs(mt, "application/rdf", false, false, 0)
+	mr, err = mutationWithTs(mutationInp{body: mt, typ: "application/rdf"})
 	require.NoError(t, err)
-	require.NoError(t, commitWithTs(mr.keys, mr.preds, mr.startTs, true))
+	require.NoError(t, commitWithTs(mr, true))
 
 	require.NoError(t, retryableFetchMetrics(t, map[string]int{
 		metricName: metrics[metricName] + 1,
@@ -92,21 +92,21 @@ func TestMetricTxnAborts(t *testing.T) {
 	}
 	`
 
-	mr1, err := mutationWithTs(mt, "application/rdf", false, false, 0)
+	mr1, err := mutationWithTs(mutationInp{body: mt, typ: "application/rdf"})
 	require.NoError(t, err)
-	mr2, err := mutationWithTs(mt, "application/rdf", false, false, 0)
+	mr2, err := mutationWithTs(mutationInp{body: mt, typ: "application/rdf"})
 	require.NoError(t, err)
-	require.NoError(t, commitWithTs(mr1.keys, mr1.preds, mr1.startTs, false))
-	require.Error(t, commitWithTs(mr2.keys, mr2.preds, mr2.startTs, false))
+	require.NoError(t, commitWithTs(mr1, false))
+	require.Error(t, commitWithTs(mr2, false))
 
 	metrics := fetchMetrics(t, metricName)
 
-	mr1, err = mutationWithTs(mt, "application/rdf", false, false, 0)
+	mr1, err = mutationWithTs(mutationInp{body: mt, typ: "application/rdf"})
 	require.NoError(t, err)
-	mr2, err = mutationWithTs(mt, "application/rdf", false, false, 0)
+	mr2, err = mutationWithTs(mutationInp{body: mt, typ: "application/rdf"})
 	require.NoError(t, err)
-	require.NoError(t, commitWithTs(mr1.keys, mr1.preds, mr1.startTs, false))
-	require.Error(t, commitWithTs(mr2.keys, mr2.preds, mr2.startTs, false))
+	require.NoError(t, commitWithTs(mr1, false))
+	require.Error(t, commitWithTs(mr2, false))
 
 	require.NoError(t, retryableFetchMetrics(t, map[string]int{
 		metricName: metrics[metricName] + 1,
@@ -180,9 +180,12 @@ func TestMetrics(t *testing.T) {
 		"go_memstats_heap_idle_bytes", "go_memstats_heap_inuse_bytes", "dgraph_latency_bucket",
 
 		// Badger Metrics
-		"badger_v3_disk_reads_total", "badger_v3_disk_writes_total", "badger_v3_gets_total",
-		"badger_v3_memtable_gets_total", "badger_v3_puts_total", "badger_v3_read_bytes",
-		"badger_v3_written_bytes",
+		"badger_disk_reads_total", "badger_disk_writes_total", "badger_gets_total",
+		"badger_memtable_gets_total", "badger_puts_total", "badger_read_bytes",
+		"badger_written_bytes",
+		// The following metrics get exposed after 1 minute from Badger, so
+		// they're not available in time for this test
+		// "badger_lsm_size_bytes", "badger_vlog_size_bytes",
 
 		// Transaction Metrics
 		"dgraph_txn_aborts_total", "dgraph_txn_commits_total", "dgraph_txn_discards_total",

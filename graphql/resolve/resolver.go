@@ -20,11 +20,12 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"sort"
 	"strings"
 	"sync"
 	"time"
 
-	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
+	dgoapi "github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/api"
 	"github.com/dgraph-io/dgraph/graphql/dgraph"
@@ -82,6 +83,12 @@ type ResolverFactory interface {
 	// WithSchemaIntrospection adds schema introspection capabilities to the factory.
 	// So __schema and __type queries can be resolved.
 	WithSchemaIntrospection() ResolverFactory
+}
+
+// A ResultCompleter can take a []byte slice representing an intermediate result
+// in resolving field and applies a completion step.
+type ResultCompleter interface {
+	Complete(ctx context.Context, resolved *Resolved)
 }
 
 // RequestResolver can process GraphQL requests and write GraphQL JSON responses.
@@ -142,6 +149,15 @@ type Resolved struct {
 	Extensions *schema.Extensions
 }
 
+// CompletionFunc is an adapter that allows us to compose completions and build a
+// ResultCompleter from a function.  Based on the http.HandlerFunc pattern.
+type CompletionFunc func(ctx context.Context, resolved *Resolved)
+
+// Complete calls cf(ctx, resolved)
+func (cf CompletionFunc) Complete(ctx context.Context, resolved *Resolved) {
+	cf(ctx, resolved)
+}
+
 // NewDgraphExecutor builds a DgraphExecutor for proxying requests through dgraph.
 func NewDgraphExecutor() DgraphExecutor {
 	return newDgraphExecutor(&dgraph.DgraphEx{})
@@ -162,7 +178,8 @@ func (aex *adminExecutor) Execute(ctx context.Context, req *dgoapi.Request, fiel
 	return aex.dg.Execute(ctx, req, field)
 }
 
-func (aex *adminExecutor) CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext) error {
+func (aex *adminExecutor) CommitOrAbort(ctx context.Context,
+	tc *dgoapi.TxnContext) (*dgoapi.TxnContext, error) {
 	return aex.dg.CommitOrAbort(ctx, tc)
 }
 
@@ -171,7 +188,8 @@ func (de *dgraphExecutor) Execute(ctx context.Context, req *dgoapi.Request, fiel
 	return de.dg.Execute(ctx, req, field)
 }
 
-func (de *dgraphExecutor) CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext) error {
+func (de *dgraphExecutor) CommitOrAbort(ctx context.Context,
+	tc *dgoapi.TxnContext) (*dgoapi.TxnContext, error) {
 	return de.dg.CommitOrAbort(ctx, tc)
 }
 
@@ -220,10 +238,15 @@ func (rf *resolverFactory) WithConventionResolvers(
 	queries := append(s.Queries(schema.GetQuery), s.Queries(schema.FilterQuery)...)
 	queries = append(queries, s.Queries(schema.PasswordQuery)...)
 	queries = append(queries, s.Queries(schema.AggregateQuery)...)
-	queries = append(queries, s.Queries(schema.EntitiesQuery)...)
 	for _, q := range queries {
 		rf.WithQueryResolver(q, func(q schema.Query) QueryResolver {
 			return NewQueryResolver(fns.Qrw, fns.Ex)
+		})
+	}
+
+	for _, q := range s.Queries(schema.EntitiesQuery) {
+		rf.WithQueryResolver(q, func(q schema.Query) QueryResolver {
+			return NewEntitiesQueryResolver(fns.Qrw, fns.Ex)
 		})
 	}
 
@@ -302,6 +325,105 @@ func NewResolverFactory(
 	}
 }
 
+// entitiesCompletion transform the result of the `_entities` query.
+// It changes the order of the result to the order of keyField in the
+// `_representations` argument.
+func entitiesQueryCompletion(ctx context.Context, resolved *Resolved) {
+	// return if Data is not present
+	if len(resolved.Data) == 0 {
+		return
+	}
+	query, ok := resolved.Field.(schema.Query)
+	if !ok {
+		// this function shouldn't be called for anything other than a query
+		return
+	}
+
+	var data map[string][]interface{}
+	err := schema.Unmarshal(resolved.Data, &data)
+	if err != nil {
+		resolved.Err = schema.AppendGQLErrs(resolved.Err, err)
+		return
+	}
+
+	// fetch the keyFieldValueList from the query arguments.
+	repr, err := query.RepresentationsArg()
+	if err != nil {
+		resolved.Err = schema.AppendGQLErrs(resolved.Err, err)
+		return
+	}
+	keyFieldType := repr.KeyField.Type().Name()
+
+	// store the index of the keyField Values present in the argument in a map.
+	// key in the map is of type interface because there are multiple types like String,
+	// Int, Int64 allowed as @id. There could be duplicate keys in the representations
+	// so the value of map is a list of integers containing all the indices for a key.
+	indexMap := make(map[interface{}][]int)
+	uniqueKeyList := make([]interface{}, 0)
+	for i, key := range repr.KeyVals {
+		indexMap[key] = append(indexMap[key], i)
+	}
+
+	// Create a list containing unique keys and then sort in ascending order because this
+	// will be the order in which the data is received.
+	// for eg: for keys: {1, 2, 4, 1, 3} is converted into {1, 2, 4, 3} and then {1, 2, 3, 4}
+	// this will be the order of received data from the dgraph.
+	for k := range indexMap {
+		uniqueKeyList = append(uniqueKeyList, k)
+	}
+	sort.Slice(uniqueKeyList, func(i, j int) bool {
+		switch val := uniqueKeyList[i].(type) {
+		case string:
+			return val < uniqueKeyList[j].(string)
+		case json.Number:
+			switch keyFieldType {
+			case "Int", "Int64":
+				val1, _ := val.Int64()
+				val2, _ := uniqueKeyList[j].(json.Number).Int64()
+				return val1 < val2
+			case "Float":
+				val1, _ := val.Float64()
+				val2, _ := uniqueKeyList[j].(json.Number).Float64()
+				return val1 < val2
+			}
+		case int64:
+			return val < uniqueKeyList[j].(int64)
+		case float64:
+			return val < uniqueKeyList[j].(float64)
+		}
+		return false
+	})
+
+	// create the new output according to the index of the keyFields present in the argument.
+	entitiesQryResp := data["_entities"]
+
+	// if `entitiesQueryResp` contains less number of elements than the number of unique keys
+	// which is because the object related to certain key is not present in the dgraph.
+	// This will end into an error at the Gateway, so no need to order the result here.
+	if len(entitiesQryResp) < len(uniqueKeyList) {
+		return
+	}
+
+	// Reorder the output response according to the order of the keys in the representations argument.
+	output := make([]interface{}, len(repr.KeyVals))
+	for i, key := range uniqueKeyList {
+		for _, idx := range indexMap[key] {
+			output[idx] = entitiesQryResp[i]
+		}
+	}
+
+	// replace the result obtained from the dgraph and marshal back.
+	data["_entities"] = output
+	resolved.Data, err = json.Marshal(data)
+	if err != nil {
+		resolved.Err = schema.AppendGQLErrs(resolved.Err, err)
+	}
+
+}
+
+// noopCompletion just passes back it's result and err arguments
+func noopCompletion(ctx context.Context, resolved *Resolved) {}
+
 func (rf *resolverFactory) queryResolverFor(query schema.Query) QueryResolver {
 	rf.RLock()
 	defer rf.RUnlock()
@@ -334,7 +456,7 @@ func New(s schema.Schema, resolverFactory ResolverFactory) *RequestResolver {
 // r.GqlReq should be set with a request before Resolve is called
 // and a schema and backend Dgraph should have been added.
 // Resolve records any errors in the response's error field.
-func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *schema.Response {
+func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) (resp *schema.Response) {
 	span := otrace.FromContext(ctx)
 	stop := x.SpanTimer(span, methodResolve)
 	defer stop()
@@ -350,7 +472,7 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 	}
 
 	startTime := time.Now()
-	resp := &schema.Response{
+	resp = &schema.Response{
 		Extensions: &schema.Extensions{
 			Tracing: &schema.Trace{
 				Version:   1,
@@ -358,6 +480,14 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 			},
 		},
 	}
+	// Panic Handler for mutation. This ensures that the mutation which causes panic
+	// gets logged in Alpha logs. This panic handler overrides the default Panic Handler
+	// used in recoveryHandler in admin/http.go
+	defer api.PanicHandler(
+		func(err error) {
+			resp.Errors = schema.AsGQLErrors(schema.AppendGQLErrs(resp.Errors, err))
+		}, gqlReq.Query)
+
 	defer func() {
 		endTime := time.Now()
 		resp.Extensions.Tracing.EndTime = endTime.Format(time.RFC3339Nano)
@@ -366,11 +496,17 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 	ctx = context.WithValue(ctx, resolveStartTime, startTime)
 
 	// Pass in GraphQL @auth information
-	ctx = r.schema.Meta().AuthMeta().AttachAuthorizationJwt(ctx, gqlReq.Header)
+	ctx, err := r.schema.Meta().AuthMeta().AttachAuthorizationJwt(ctx, gqlReq.Header)
+	if err != nil {
+		resp.Errors = schema.AsGQLErrors(err)
+		return
+	}
+
 	ctx = x.AttachJWTNamespace(ctx)
 	op, err := r.schema.Operation(gqlReq)
 	if err != nil {
-		return schema.ErrorResponse(err)
+		resp.Errors = schema.AsGQLErrors(err)
+		return
 	}
 
 	if glog.V(3) {
@@ -407,7 +543,7 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 							Field: q,
 							Err:   err,
 						}
-					})
+					}, gqlReq.Query)
 				allResolved[storeAt] = r.resolvers.queryResolverFor(q).Resolve(ctx, q)
 			}(q, i)
 		}

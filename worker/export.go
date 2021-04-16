@@ -24,23 +24,22 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"math"
 	"net/url"
-	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/golang/glog"
-	"github.com/minio/minio-go/v6"
 	"github.com/pkg/errors"
 
 	"github.com/dgraph-io/badger/v3"
 	bpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/ristretto/z"
 
-	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgo/v210/protos/api"
 
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/posting"
@@ -145,7 +144,7 @@ func (e *exporter) toJSON() (*bpb.KVList, error) {
 
 	continuing := false
 	mapStart := fmt.Sprintf("  {\"uid\":"+uidFmtStrJson+`,"namespace":"0x%x"`, e.uid, e.namespace)
-	err := e.pl.Iterate(e.readTs, 0, func(p *pb.Posting) error {
+	err := e.pl.IterateAll(e.readTs, 0, func(p *pb.Posting) error {
 		if continuing {
 			fmt.Fprint(bp, ",\n")
 		} else {
@@ -218,10 +217,10 @@ func (e *exporter) toRDF() (*bpb.KVList, error) {
 	bp := new(bytes.Buffer)
 
 	prefix := fmt.Sprintf(uidFmtStrRdf+" <%s> ", e.uid, e.attr)
-	err := e.pl.Iterate(e.readTs, 0, func(p *pb.Posting) error {
+	err := e.pl.IterateAll(e.readTs, 0, func(p *pb.Posting) error {
 		fmt.Fprint(bp, prefix)
 		if p.PostingType == pb.Posting_REF {
-			fmt.Fprint(bp, fmt.Sprintf(uidFmtStrRdf, p.Uid))
+			fmt.Fprintf(bp, uidFmtStrRdf, p.Uid)
 		} else {
 			val := types.Val{Tid: types.TypeID(p.ValType), Value: p.Value}
 			str, err := valToStr(val)
@@ -304,9 +303,7 @@ func toSchema(attr string, update *pb.SchemaUpdate) *bpb.KV {
 	case update.GetDirective() == pb.SchemaUpdate_REVERSE:
 		x.Check2(buf.WriteString(" @reverse"))
 	case update.GetDirective() == pb.SchemaUpdate_INDEX && len(update.GetTokenizer()) > 0:
-		x.Check2(buf.WriteString(" @index("))
-		x.Check2(buf.WriteString(strings.Join(update.GetTokenizer(), ",")))
-		x.Check2(buf.WriteRune(')'))
+		x.Check2(fmt.Fprintf(&buf, " @index(%s)", strings.Join(update.GetTokenizer(), ",")))
 	}
 	if update.GetCount() {
 		x.Check2(buf.WriteString(" @count"))
@@ -359,188 +356,56 @@ func fieldToString(update *pb.SchemaUpdate) string {
 	return builder.String()
 }
 
-type fileWriter struct {
-	fd            *os.File
+type ExportWriter struct {
+	w             io.WriteCloser
 	bw            *bufio.Writer
 	gw            *gzip.Writer
 	relativePath  string
 	hasDataBefore bool
 }
 
-func (writer *fileWriter) open(fpath string) error {
+func newExportWriter(handler x.UriHandler, fileName string) (*ExportWriter, error) {
+	writer := &ExportWriter{relativePath: fileName}
 	var err error
-	writer.fd, err = os.Create(fpath)
+
+	writer.w, err = handler.CreateFile(fileName)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	writer.bw = bufio.NewWriterSize(writer.fd, 1e6)
-	w, err := enc.GetWriter(x.WorkerConfig.EncryptionKey, writer.bw)
+	writer.bw = bufio.NewWriterSize(writer.w, 1e6)
+	ew, err := enc.GetWriter(x.WorkerConfig.EncryptionKey, writer.bw)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	writer.gw, err = gzip.NewWriterLevel(w, gzip.BestCompression)
-	return err
+	writer.gw, err = gzip.NewWriterLevel(ew, gzip.BestSpeed)
+	if err != nil {
+		return nil, err
+	}
+	return writer, nil
 }
 
-func (writer *fileWriter) Close() error {
-	if err := writer.gw.Flush(); err != nil {
-		return err
+func (writer *ExportWriter) Close() error {
+	if writer == nil {
+		return nil
 	}
-	if err := writer.gw.Close(); err != nil {
-		return err
+	var err1, err2, err3 error
+	if writer.gw != nil {
+		err1 = writer.gw.Close()
 	}
-	if err := writer.bw.Flush(); err != nil {
-		return err
+	if writer.bw != nil {
+		err2 = writer.bw.Flush()
 	}
-	if err := writer.fd.Sync(); err != nil {
-		return err
+	if writer.w != nil {
+		err3 = writer.w.Close()
 	}
-	return writer.fd.Close()
+	return x.MultiError(err1, err2, err3)
 }
 
 // ExportedFiles has the relative path of files that were written during export
 type ExportedFiles []string
 
-type exportStorage interface {
-	openFile(relativePath string) (*fileWriter, error)
-	finishWriting(fs ...*fileWriter) (ExportedFiles, error)
-}
-
-type localExportStorage struct {
-	destination  string
-	relativePath string
-}
-
-// remoteExportStorage uses localExportStorage to write files, then uploads to minio
-type remoteExportStorage struct {
-	mc     *x.MinioClient
-	bucket string
-	prefix string // stores the path within the bucket.
-	les    *localExportStorage
-}
-
-func newLocalExportStorage(destination, backupName string) (*localExportStorage, error) {
-	bdir, err := filepath.Abs(filepath.Join(destination, backupName))
-	if err != nil {
-		return nil, err
-	}
-
-	if err = os.MkdirAll(bdir, 0700); err != nil {
-		return nil, err
-	}
-
-	return &localExportStorage{destination, backupName}, nil
-}
-
-func (l *localExportStorage) openFile(fileName string) (*fileWriter, error) {
-	fw := &fileWriter{relativePath: filepath.Join(l.relativePath, fileName)}
-
-	filePath, err := filepath.Abs(filepath.Join(l.destination, fw.relativePath))
-	if err != nil {
-		return nil, err
-	}
-
-	glog.Infof("Exporting to file at %s\n", filePath)
-
-	if err := fw.open(filePath); err != nil {
-		return nil, err
-	}
-
-	return fw, nil
-}
-
-func (l *localExportStorage) finishWriting(fs ...*fileWriter) (ExportedFiles, error) {
-	var files ExportedFiles
-
-	for _, file := range fs {
-		err := file.Close()
-		if err != nil {
-			return nil, err
-		}
-		files = append(files, file.relativePath)
-	}
-
-	return files, nil
-}
-
-func newRemoteExportStorage(in *pb.ExportRequest, backupName string) (*remoteExportStorage, error) {
-	tmpDir, err := ioutil.TempDir("", "export")
-	if err != nil {
-		return nil, err
-	}
-	localStorage, err := newLocalExportStorage(tmpDir, backupName)
-	if err != nil {
-		return nil, err
-	}
-
-	uri, err := url.Parse(in.Destination)
-	if err != nil {
-		return nil, err
-	}
-
-	mc, err := x.NewMinioClient(uri, &x.MinioCredentials{
-		AccessKey:    in.AccessKey,
-		SecretKey:    in.SecretKey,
-		SessionToken: in.SessionToken,
-		Anonymous:    in.Anonymous,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	bucket, prefix, err := mc.ValidateBucket(uri)
-	if err != nil {
-		return nil, err
-	}
-
-	return &remoteExportStorage{mc, bucket, prefix, localStorage}, nil
-}
-
-func (r *remoteExportStorage) openFile(fileName string) (*fileWriter, error) {
-	return r.les.openFile(fileName)
-}
-
-func (r *remoteExportStorage) finishWriting(fs ...*fileWriter) (ExportedFiles, error) {
-	files, err := r.les.finishWriting(fs...)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, f := range files {
-		var d string
-		if r.prefix == "" {
-			d = f
-		} else {
-			d = r.prefix + "/" + f
-		}
-		filePath := filepath.Join(r.les.destination, f)
-		// FIXME: tejas [06/2020] - We could probably stream these results, but it's easier to copy for now
-		glog.Infof("Uploading from %s to %s\n", filePath, d)
-		_, err := r.mc.FPutObject(r.bucket, d, filePath, minio.PutObjectOptions{
-			ContentType: "application/gzip",
-		})
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return files, nil
-}
-
-func newExportStorage(in *pb.ExportRequest, backupName string) (exportStorage, error) {
-	switch {
-	case strings.HasPrefix(in.Destination, "/"):
-		return newLocalExportStorage(in.Destination, backupName)
-	case strings.HasPrefix(in.Destination, "minio://") || strings.HasPrefix(in.Destination, "s3://"):
-		return newRemoteExportStorage(in, backupName)
-	default:
-		return newLocalExportStorage(x.WorkerConfig.ExportPath, backupName)
-	}
-}
-
 // export creates a export of data by exporting it as an RDF gzip.
 func export(ctx context.Context, in *pb.ExportRequest) (ExportedFiles, error) {
-
 	if in.GroupId != groups().groupId() {
 		return nil, errors.Errorf("Export request group mismatch. Mine: %d. Requested: %d",
 			groups().groupId(), in.GroupId)
@@ -556,6 +421,220 @@ func export(ctx context.Context, in *pb.ExportRequest) (ExportedFiles, error) {
 	return exportInternal(ctx, in, pstore, false)
 }
 
+func ToExportKvList(pk x.ParsedKey, pl *posting.List, in *pb.ExportRequest) (*bpb.KVList, error) {
+	e := &exporter{
+		readTs:    in.ReadTs,
+		uid:       pk.Uid,
+		namespace: x.ParseNamespace(pk.Attr),
+		attr:      x.ParseAttr(pk.Attr),
+		pl:        pl,
+	}
+
+	emptyList := &bpb.KVList{}
+	switch {
+	// These predicates are not required in the export data.
+	case e.attr == "dgraph.graphql.xid":
+	case e.attr == "dgraph.drop.op":
+	case e.attr == "dgraph.graphql.p_query":
+
+	case pk.IsData() && e.attr == "dgraph.graphql.schema":
+		// Export the graphql schema.
+		vals, err := pl.AllValues(in.ReadTs)
+		if err != nil {
+			return emptyList, errors.Wrapf(err, "cannot read value of GraphQL schema")
+		}
+		// if the GraphQL schema node was deleted with S * * delete mutation,
+		// then the data key will be overwritten with nil value.
+		// So, just skip exporting it as there will be no value for this data key.
+		if len(vals) == 0 {
+			return emptyList, nil
+		}
+		// Give an error only if we find more than one value for the schema.
+		if len(vals) > 1 {
+			return emptyList, errors.Errorf("found multiple values for the GraphQL schema")
+		}
+		val, ok := vals[0].Value.([]byte)
+		if !ok {
+			return emptyList, errors.Errorf("cannot convert value of GraphQL schema to byte array")
+		}
+
+		exported := x.ExportedGQLSchema{
+			Namespace: e.namespace,
+			Schema:    string(val),
+		}
+		if val, err = json.Marshal(exported); err != nil {
+			return emptyList, errors.Wrapf(err, "Error marshalling GraphQL schema to json")
+		}
+		kv := &bpb.KV{
+			Value:   val,
+			Version: 2, // GraphQL schema value
+		}
+		return listWrap(kv), nil
+
+	// below predicates no longer exist internally starting v21.03 but leaving them here
+	// so that users with a binary with version >= 21.03 can export data from a version < 21.03
+	// without this internal data showing up.
+	case e.attr == "dgraph.cors":
+	case e.attr == "dgraph.graphql.schema_created_at":
+	case e.attr == "dgraph.graphql.schema_history":
+	case e.attr == "dgraph.graphql.p_sha256hash":
+
+	case pk.IsData():
+		// The GraphQL layer will create a node of type "dgraph.graphql". That entry
+		// should not be exported.
+		if e.attr == "dgraph.type" {
+			vals, err := e.pl.AllValues(in.ReadTs)
+			if err != nil {
+				return emptyList, errors.Wrapf(err, "cannot read value of dgraph.type entry")
+			}
+			if len(vals) == 1 {
+				val, ok := vals[0].Value.([]byte)
+				if !ok {
+					return emptyList, errors.Errorf("cannot read value of dgraph.type entry")
+				}
+				if string(val) == "dgraph.graphql" {
+					return emptyList, nil
+				}
+			}
+		}
+
+		switch in.Format {
+		case "json":
+			return e.toJSON()
+		case "rdf":
+			return e.toRDF()
+		default:
+			glog.Fatalf("Invalid export format found: %s", in.Format)
+		}
+
+	default:
+		glog.Fatalf("Invalid key found: %+v %v\n", pk, hex.Dump([]byte(pk.Attr)))
+	}
+	return emptyList, nil
+}
+
+func WriteExport(writers *Writers, kv *bpb.KV, format string) error {
+	// Skip nodes that have no data. Otherwise, the exported data could have
+	// formatting and/or syntax errors.
+	if len(kv.Value) == 0 {
+		return nil
+	}
+
+	var dataSeparator []byte
+	switch format {
+	case "json":
+		dataSeparator = []byte(",\n")
+	case "rdf":
+		// The separator for RDF should be empty since the toRDF function already
+		// adds newline to each RDF entry.
+	default:
+		glog.Fatalf("Invalid export format found: %s", format)
+	}
+
+	var writer *ExportWriter
+	var sep []byte
+	switch kv.Version {
+	case 1: // data
+		writer = writers.DataWriter
+		sep = dataSeparator
+	case 2: // graphQL schema
+		writer = writers.GqlSchemaWriter
+		sep = []byte(",\n") // use json separator.
+	case 3: // graphQL schema
+		writer = writers.SchemaWriter
+	default:
+		glog.Fatalf("Invalid data type found: %x", kv.Key)
+	}
+
+	if writer.hasDataBefore {
+		if _, err := writer.gw.Write(sep); err != nil {
+			return err
+		}
+	}
+	// change the hasDataBefore flag so that the next data entry will have a separator
+	// prepended
+	writer.hasDataBefore = true
+
+	_, err := writer.gw.Write(kv.Value)
+	return err
+}
+
+type Writers struct {
+	DataWriter      *ExportWriter
+	SchemaWriter    *ExportWriter
+	GqlSchemaWriter *ExportWriter
+	closeOnce       sync.Once
+}
+
+var _ io.Closer = &Writers{}
+
+func NewWriters(req *pb.ExportRequest) (*Writers, error) {
+	// Create a UriHandler for the given destination.
+	destination := req.GetDestination()
+	if destination == "" {
+		destination = x.WorkerConfig.ExportPath
+	}
+	uri, err := url.Parse(destination)
+	if err != nil {
+		return nil, err
+	}
+	creds := &x.MinioCredentials{
+		AccessKey:    req.GetAccessKey(),
+		SecretKey:    req.GetSecretKey(),
+		SessionToken: req.GetSessionToken(),
+		Anonymous:    req.GetAnonymous(),
+	}
+	handler, err := x.NewUriHandler(uri, creds)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create the export directory.
+	if !handler.DirExists(".") {
+		if err := handler.CreateDir("."); err != nil {
+			return nil, errors.Wrap(err, "while creating export directory")
+		}
+	}
+	uts := time.Unix(req.UnixTs, 0).UTC().Format("0102.1504")
+	dirName := fmt.Sprintf("dgraph.r%d.u%s", req.ReadTs, uts)
+	if err := handler.CreateDir(dirName); err != nil {
+		return nil, errors.Wrap(err, "while creating export directory")
+	}
+
+	// Create writers for each export file.
+	writers := &Writers{}
+	newWriter := func(ext string) (*ExportWriter, error) {
+		fileName := filepath.Join(dirName, fmt.Sprintf("g%02d%s", req.GroupId, ext))
+		return newExportWriter(handler, fileName)
+	}
+	if writers.DataWriter, err = newWriter(exportFormats[req.Format].ext + ".gz"); err != nil {
+		return writers, err
+	}
+	if writers.SchemaWriter, err = newWriter(".schema.gz"); err != nil {
+		return writers, err
+	}
+	if writers.GqlSchemaWriter, err = newWriter(".gql_schema.gz"); err != nil {
+		return writers, err
+	}
+
+	return writers, nil
+}
+
+// Closes the underlying writers.
+// This may be called multiple times.
+func (w *Writers) Close() error {
+	if w == nil {
+		return nil
+	}
+	var err1, err2, err3 error
+	w.closeOnce.Do(func() {
+		err1 = w.DataWriter.Close()
+		err2 = w.SchemaWriter.Close()
+		err3 = w.GqlSchemaWriter.Close()
+	})
+	return x.MultiError(err1, err2, err3)
+}
+
 // exportInternal contains the core logic to export a Dgraph database. If skipZero is set to
 // false, the parts of this method that require to talk to zero will be skipped. This is useful
 // when exporting a p directory directly from disk without a running cluster.
@@ -563,27 +642,8 @@ func export(ctx context.Context, in *pb.ExportRequest) (ExportedFiles, error) {
 // and types.
 func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 	skipZero bool) (ExportedFiles, error) {
-	uts := time.Unix(in.UnixTs, 0)
-	exportStorage, err := newExportStorage(in,
-		fmt.Sprintf("dgraph.r%d.u%s", in.ReadTs, uts.UTC().Format("0102.1504")))
-	if err != nil {
-		return nil, err
-	}
-
-	xfmt := exportFormats[in.Format]
-
-	dataWriter, err := exportStorage.openFile(fmt.Sprintf("g%02d%s", in.GroupId, xfmt.ext+".gz"))
-	if err != nil {
-		return nil, err
-	}
-
-	schemaWriter, err := exportStorage.openFile(fmt.Sprintf("g%02d%s", in.GroupId, ".schema.gz"))
-	if err != nil {
-		return nil, err
-	}
-
-	gqlSchemaWriter, err := exportStorage.openFile(
-		fmt.Sprintf("g%02d%s", in.GroupId, ".gql_schema.gz"))
+	writers, err := NewWriters(in)
+	defer writers.Close()
 	if err != nil {
 		return nil, err
 	}
@@ -627,6 +687,7 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 		}
 		return pk.IsData()
 	}
+
 	stream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
 		item := itr.Item()
 		pk, err := x.Parse(item.Key())
@@ -635,115 +696,11 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 				hex.EncodeToString(item.Key()))
 			return nil, err
 		}
-		e := &exporter{
-			readTs: in.ReadTs,
+		pl, err := posting.ReadPostingList(key, itr)
+		if err != nil {
+			return nil, errors.Wrapf(err, "cannot read posting list")
 		}
-		e.uid = pk.Uid
-		e.namespace, e.attr = x.ParseNamespaceAttr(pk.Attr)
-
-		switch {
-		case e.attr == "dgraph.graphql.xid":
-			// Ignore this predicate.
-		case e.attr == "dgraph.drop.op":
-			// Ignore this predicate.
-		case e.attr == "dgraph.graphql.p_query":
-			// Ignore this predicate.
-		case pk.IsData() && e.attr == "dgraph.graphql.schema":
-			// Export the graphql schema.
-			pl, err := posting.ReadPostingList(key, itr)
-			if err != nil {
-				return nil, errors.Wrapf(err, "cannot read posting list for GraphQL schema")
-			}
-			vals, err := pl.AllValues(in.ReadTs)
-			if err != nil {
-				return nil, errors.Wrapf(err, "cannot read value of GraphQL schema")
-			}
-			// if the GraphQL schema node was deleted with S * * delete mutation,
-			// then the data key will be overwritten with nil value.
-			// So, just skip exporting it as there will be no value for this data key.
-			if len(vals) == 0 {
-				return nil, nil
-			}
-			// Give an error only if we find more than one value for the schema.
-			if len(vals) > 1 {
-				return nil, errors.Errorf("found multiple values for the GraphQL schema")
-			}
-			val, ok := vals[0].Value.([]byte)
-			if !ok {
-				return nil, errors.Errorf("cannot convert value of GraphQL schema to byte array")
-			}
-
-			exported := x.ExportedGQLSchema{
-				Namespace: e.namespace,
-				Schema:    string(val),
-			}
-			if val, err = json.Marshal(exported); err != nil {
-				return nil, errors.Wrapf(err, "Error marshalling GraphQL schema to json")
-			}
-
-			kv := &bpb.KV{
-				Value:   val,
-				Version: 2, // GraphQL schema value
-			}
-			return listWrap(kv), nil
-
-		// below predicates no longer exist internally starting v21.03 but leaving them here
-		// so that users with a binary with version >= 21.03 can export data from a version < 21.03
-		// without this internal data showing up.
-		case e.attr == "dgraph.cors":
-		case e.attr == "dgraph.graphql.schema_created_at":
-		case e.attr == "dgraph.graphql.schema_history":
-		case e.attr == "dgraph.graphql.p_sha256hash":
-			// Ignore these predicates.
-
-		case pk.IsData():
-			e.pl, err = posting.ReadPostingList(key, itr)
-			if err != nil {
-				return nil, err
-			}
-
-			// The GraphQL layer will create a node of type "dgraph.graphql". That entry
-			// should not be exported.
-			if e.attr == "dgraph.type" {
-				vals, err := e.pl.AllValues(in.ReadTs)
-				if err != nil {
-					return nil, errors.Wrapf(err, "cannot read value of dgraph.type entry")
-				}
-				if len(vals) == 1 {
-					val, ok := vals[0].Value.([]byte)
-					if !ok {
-						return nil, errors.Errorf("cannot read value of dgraph.type entry")
-					}
-					if string(val) == "dgraph.graphql" {
-						return nil, nil
-					}
-				}
-			}
-
-			switch in.Format {
-			case "json":
-				return e.toJSON()
-			case "rdf":
-				return e.toRDF()
-			default:
-				glog.Fatalf("Invalid export format found: %s", in.Format)
-			}
-
-		default:
-			glog.Fatalf("Invalid key found: %+v\n", pk)
-		}
-		return nil, nil
-	}
-
-	var dataSeparator []byte
-	switch in.Format {
-	case "json":
-		dataSeparator = []byte(",\n")
-	case "rdf":
-		// The separator for RDF should be empty since the toRDF function already
-		// adds newline to each RDF entry.
-	default:
-		glog.Fatalf("Invalid export format found: %s", in.Format)
+		return ToExportKvList(pk, pl, in)
 	}
 
 	stream.Send = func(buf *z.Buffer) error {
@@ -753,36 +710,7 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 			if err := kv.Unmarshal(s); err != nil {
 				return err
 			}
-			// Skip nodes that have no data. Otherwise, the exported data could have
-			// formatting and/or syntax errors.
-			if len(kv.Value) == 0 {
-				return nil
-			}
-
-			var writer *fileWriter
-			var separator []byte
-			switch kv.Version {
-			case 1: // data
-				writer = dataWriter
-				separator = dataSeparator
-			case 2: // graphQL schema
-				writer = gqlSchemaWriter
-				separator = []byte(",\n") // use json separator.
-			default:
-				glog.Fatalf("Invalid data type found: %x", kv.Key)
-			}
-
-			if writer.hasDataBefore {
-				if _, err := writer.gw.Write(separator); err != nil {
-					return err
-				}
-			}
-			// change the hasDataBefore flag so that the next data entry will have a separator
-			// prepended
-			writer.hasDataBefore = true
-
-			_, err = writer.gw.Write(kv.Value)
-			return err
+			return WriteExport(writers, kv, in.Format)
 		})
 	}
 
@@ -812,65 +740,53 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 				return err
 			}
 
+			val, err := item.ValueCopy(nil)
+			if err != nil {
+				return errors.Wrap(err, "writePrefix failed to get value")
+			}
 			var kv *bpb.KV
 			switch prefix {
 			case x.ByteSchema:
-				if !skipZero {
-					servesTablet, err := groups().ServesTablet(pk.Attr)
-					if err != nil || !servesTablet {
-						continue
-					}
-				}
-
-				var update pb.SchemaUpdate
-				err = item.Value(func(val []byte) error {
-					return update.Unmarshal(val)
-				})
+				kv, err = SchemaExportKv(pk.Attr, val, skipZero)
 				if err != nil {
 					// Let's not propagate this error. We just log this and continue onwards.
-					glog.Errorf("Unable to unmarshal schema: %+v. Err=%v\n", pk, err)
+					glog.Errorf("Unable to export schema: %+v. Err=%v\n", pk, err)
 					continue
 				}
-				kv = toSchema(pk.Attr, &update)
-
 			case x.ByteType:
-				var update pb.TypeUpdate
-				err := item.Value(func(val []byte) error {
-					return update.Unmarshal(val)
-				})
+				kv, err = TypeExportKv(pk.Attr, val)
 				if err != nil {
 					// Let's not propagate this error. We just log this and continue onwards.
-					glog.Errorf("Unable to unmarshal type: %+v. Err=%v\n", pk, err)
-					return nil
+					glog.Errorf("Unable to export type: %+v. Err=%v\n", pk, err)
+					continue
 				}
-				kv = toType(pk.Attr, update)
-
 			default:
 				glog.Fatalf("Unhandled byte prefix: %v", prefix)
 			}
 
 			// Write to the appropriate writer.
-			if _, err := schemaWriter.gw.Write(kv.Value); err != nil {
+			if _, err := writers.SchemaWriter.gw.Write(kv.Value); err != nil {
 				return err
 			}
 		}
 		return nil
 	}
+	xfmt := exportFormats[in.Format]
 
 	// All prepwork done. Time to roll.
-	if _, err = gqlSchemaWriter.gw.Write([]byte(exportFormats["json"].pre)); err != nil {
+	if _, err = writers.GqlSchemaWriter.gw.Write([]byte(exportFormats["json"].pre)); err != nil {
 		return nil, err
 	}
-	if _, err = dataWriter.gw.Write([]byte(xfmt.pre)); err != nil {
+	if _, err = writers.DataWriter.gw.Write([]byte(xfmt.pre)); err != nil {
 		return nil, err
 	}
 	if err := stream.Orchestrate(ctx); err != nil {
 		return nil, err
 	}
-	if _, err = dataWriter.gw.Write([]byte(xfmt.post)); err != nil {
+	if _, err = writers.DataWriter.gw.Write([]byte(xfmt.post)); err != nil {
 		return nil, err
 	}
-	if _, err = gqlSchemaWriter.gw.Write([]byte(exportFormats["json"].post)); err != nil {
+	if _, err = writers.GqlSchemaWriter.gw.Write([]byte(exportFormats["json"].post)); err != nil {
 		return nil, err
 	}
 
@@ -881,8 +797,40 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 	if err := writePrefix(x.ByteType); err != nil {
 		return nil, err
 	}
+
+	// Finish up export.
+	if err := writers.Close(); err != nil {
+		return nil, err
+	}
 	glog.Infof("Export DONE for group %d at timestamp %d.", in.GroupId, in.ReadTs)
-	return exportStorage.finishWriting(dataWriter, schemaWriter, gqlSchemaWriter)
+	files := ExportedFiles{
+		writers.DataWriter.relativePath,
+		writers.SchemaWriter.relativePath,
+		writers.GqlSchemaWriter.relativePath}
+	return files, nil
+}
+
+func SchemaExportKv(attr string, val []byte, skipZero bool) (*bpb.KV, error) {
+	if !skipZero {
+		servesTablet, err := groups().ServesTablet(attr)
+		if err != nil || !servesTablet {
+			return nil, errors.Errorf("Tablet not found for attribute: %v", err)
+		}
+	}
+
+	var update pb.SchemaUpdate
+	if err := update.Unmarshal(val); err != nil {
+		return nil, err
+	}
+	return toSchema(attr, &update), nil
+}
+
+func TypeExportKv(attr string, val []byte) (*bpb.KV, error) {
+	var update pb.TypeUpdate
+	if err := update.Unmarshal(val); err != nil {
+		return nil, err
+	}
+	return toType(attr, update), nil
 }
 
 // Export request is used to trigger exports for the request list of groups.

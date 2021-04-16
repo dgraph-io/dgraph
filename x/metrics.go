@@ -30,8 +30,6 @@ import (
 	"strings"
 	"time"
 
-	"go.opencensus.io/trace"
-
 	"contrib.go.opencensus.io/exporter/jaeger"
 	oc_prom "contrib.go.opencensus.io/exporter/prometheus"
 	datadog "github.com/DataDog/opencensus-go-exporter-datadog"
@@ -45,6 +43,7 @@ import (
 	ostats "go.opencensus.io/stats"
 	"go.opencensus.io/stats/view"
 	"go.opencensus.io/tag"
+	"go.opencensus.io/trace"
 )
 
 var (
@@ -447,57 +446,57 @@ func init() {
 func NewBadgerCollector() prometheus.Collector {
 	return prometheus.NewExpvarCollector(map[string]*prometheus.Desc{
 		"badger_v3_disk_reads_total": prometheus.NewDesc(
-			"badger_v3_disk_reads_total",
+			"badger_disk_reads_total",
 			"Number of cumulative reads by Badger",
 			nil, nil,
 		),
 		"badger_v3_disk_writes_total": prometheus.NewDesc(
-			"badger_v3_disk_writes_total",
+			"badger_disk_writes_total",
 			"Number of cumulative writes by Badger",
 			nil, nil,
 		),
 		"badger_v3_read_bytes": prometheus.NewDesc(
-			"badger_v3_read_bytes",
+			"badger_read_bytes",
 			"Number of cumulative bytes read by Badger",
 			nil, nil,
 		),
 		"badger_v3_written_bytes": prometheus.NewDesc(
-			"badger_v3_written_bytes",
+			"badger_written_bytes",
 			"Number of cumulative bytes written by Badger",
 			nil, nil,
 		),
 		"badger_v3_lsm_level_gets_total": prometheus.NewDesc(
-			"badger_v3_lsm_level_gets_total",
+			"badger_lsm_level_gets_total",
 			"Total number of LSM gets",
 			[]string{"level"}, nil,
 		),
 		"badger_v3_lsm_bloom_hits_total": prometheus.NewDesc(
-			"badger_v3_lsm_bloom_hits_total",
+			"badger_lsm_bloom_hits_total",
 			"Total number of LSM bloom hits",
 			[]string{"level"}, nil,
 		),
 		"badger_v3_gets_total": prometheus.NewDesc(
-			"badger_v3_gets_total",
+			"badger_gets_total",
 			"Total number of gets",
 			nil, nil,
 		),
 		"badger_v3_puts_total": prometheus.NewDesc(
-			"badger_v3_puts_total",
+			"badger_puts_total",
 			"Total number of puts",
 			nil, nil,
 		),
 		"badger_v3_memtable_gets_total": prometheus.NewDesc(
-			"badger_v3_memtable_gets_total",
+			"badger_memtable_gets_total",
 			"Total number of memtable gets",
 			nil, nil,
 		),
-		"badger_v3_lsm_size": prometheus.NewDesc(
-			"badger_v3_lsm_size",
+		"badger_v3_lsm_size_bytes": prometheus.NewDesc(
+			"badger_lsm_size_bytes",
 			"Size of the LSM in bytes",
 			[]string{"dir"}, nil,
 		),
-		"badger_v3_vlog_size": prometheus.NewDesc(
-			"badger_v3_vlog_size",
+		"badger_v3_vlog_size_bytes": prometheus.NewDesc(
+			"badger_vlog_size_bytes",
 			"Size of the value log in bytes",
 			[]string{"dir"}, nil,
 		),
@@ -528,35 +527,37 @@ func SinceMs(startTime time.Time) float64 {
 
 // RegisterExporters sets up the services to which metrics will be exported.
 func RegisterExporters(conf *viper.Viper, service string) {
-	if collector := conf.GetString("jaeger.collector"); len(collector) > 0 {
-		// Port details: https://www.jaegertracing.io/docs/getting-started/
-		// Default collectorEndpointURI := "http://localhost:14268"
-		je, err := jaeger.NewExporter(jaeger.Options{
-			Endpoint:    collector,
-			ServiceName: service,
-		})
-		if err != nil {
-			log.Fatalf("Failed to create the Jaeger exporter: %v", err)
+	if traceFlag := conf.GetString("trace"); len(traceFlag) > 0 {
+		t := z.NewSuperFlag(traceFlag).MergeAndCheckDefault(TraceDefaults)
+		if collector := t.GetString("jaeger"); len(collector) > 0 {
+			// Port details: https://www.jaegertracing.io/docs/getting-started/
+			// Default collectorEndpointURI := "http://localhost:14268"
+			je, err := jaeger.NewExporter(jaeger.Options{
+				Endpoint:    collector,
+				ServiceName: service,
+			})
+			if err != nil {
+				log.Fatalf("Failed to create the Jaeger exporter: %v", err)
+			}
+			// And now finally register it as a Trace Exporter
+			trace.RegisterExporter(je)
 		}
-		// And now finally register it as a Trace Exporter
-		trace.RegisterExporter(je)
-	}
+		if collector := t.GetString("datadog"); len(collector) > 0 {
+			exporter, err := datadog.NewExporter(datadog.Options{
+				Service:   service,
+				TraceAddr: collector,
+			})
+			if err != nil {
+				log.Fatal(err)
+			}
 
-	if collector := conf.GetString("datadog.collector"); len(collector) > 0 {
-		exporter, err := datadog.NewExporter(datadog.Options{
-			Service:   service,
-			TraceAddr: collector,
-		})
-		if err != nil {
-			log.Fatal(err)
+			trace.RegisterExporter(exporter)
+
+			// For demoing purposes, always sample.
+			trace.ApplyConfig(trace.Config{
+				DefaultSampler: trace.AlwaysSample(),
+			})
 		}
-
-		trace.RegisterExporter(exporter)
-
-		// For demoing purposes, always sample.
-		trace.ApplyConfig(trace.Config{
-			DefaultSampler: trace.AlwaysSample(),
-		})
 	}
 
 	// Exclusively for stats, metrics, etc. Not for tracing.

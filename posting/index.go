@@ -29,7 +29,6 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
-	ostats "go.opencensus.io/stats"
 	otrace "go.opencensus.io/trace"
 
 	"github.com/dgraph-io/badger/v3"
@@ -124,11 +123,7 @@ func (txn *Txn) addIndexMutation(ctx context.Context, edge *pb.DirectedEdge, tok
 	}
 
 	x.AssertTrue(plist != nil)
-	if err = plist.addMutation(ctx, txn, edge); err != nil {
-		return err
-	}
-	ostats.Record(ctx, x.NumEdges.M(1))
-	return nil
+	return plist.addMutation(ctx, txn, edge)
 }
 
 // countParams is sent to updateCount function. It is used to update the count index.
@@ -187,12 +182,7 @@ func (txn *Txn) addReverseMutation(ctx context.Context, t *pb.DirectedEdge) erro
 		Op:      t.Op,
 		Facets:  t.Facets,
 	}
-	if err := plist.addMutation(ctx, txn, edge); err != nil {
-		return err
-	}
-
-	ostats.Record(ctx, x.NumEdges.M(1))
-	return nil
+	return plist.addMutation(ctx, txn, edge)
 }
 
 func (txn *Txn) addReverseAndCountMutation(ctx context.Context, t *pb.DirectedEdge) error {
@@ -228,18 +218,23 @@ func (txn *Txn) addReverseAndCountMutation(ctx context.Context, t *pb.DirectedEd
 			return errors.Wrapf(err, "cannot find single uid list to update with key %s",
 				hex.Dump(dataKey))
 		}
-		err = dataList.Iterate(txn.StartTs, 0, func(p *pb.Posting) error {
+
+		bm, err := dataList.Bitmap(ListOptions{ReadTs: txn.StartTs})
+		if err != nil {
+			return errors.Wrapf(err, "while retriving Bitmap for key %s", hex.Dump(dataKey))
+		}
+
+		for _, uid := range bm.ToArray() {
 			delEdge := &pb.DirectedEdge{
 				Entity:  t.Entity,
-				ValueId: p.Uid,
+				ValueId: uid,
 				Attr:    t.Attr,
 				Op:      pb.DirectedEdge_DEL,
 			}
-			return txn.addReverseAndCountMutation(ctx, delEdge)
-		})
-		if err != nil {
-			return errors.Wrapf(err, "cannot remove existing reverse index entries for key %s",
-				hex.Dump(dataKey))
+			if err := txn.addReverseAndCountMutation(ctx, delEdge); err != nil {
+				return errors.Wrapf(err, "cannot remove existing reverse index entries for key %s",
+					hex.Dump(dataKey))
+			}
 		}
 	}
 
@@ -256,14 +251,11 @@ func (txn *Txn) addReverseAndCountMutation(ctx context.Context, t *pb.DirectedEd
 	if err != nil {
 		return err
 	}
-	ostats.Record(ctx, x.NumEdges.M(1))
-
 	if hasCountIndex && cp.countAfter != cp.countBefore {
 		if err := txn.updateCount(ctx, cp); err != nil {
 			return err
 		}
 	}
-
 	return nil
 }
 
@@ -277,9 +269,8 @@ func (l *List) handleDeleteAll(ctx context.Context, edge *pb.DirectedEdge, txn *
 		Entity: edge.Entity,
 	}
 	// To calculate length of posting list. Used for deletion of count index.
-	var plen int
-	err := l.Iterate(txn.StartTs, 0, func(p *pb.Posting) error {
-		plen++
+	plen := l.Length(txn.StartTs, 0)
+	err := l.IterateAll(txn.StartTs, 0, func(p *pb.Posting) error {
 		switch {
 		case isReversed:
 			// Delete reverse edge for each posting.
@@ -330,11 +321,7 @@ func (txn *Txn) addCountMutation(ctx context.Context, t *pb.DirectedEdge, count 
 
 	x.AssertTruef(plist != nil, "plist is nil [%s] %d",
 		t.Attr, t.ValueId)
-	if err = plist.addMutation(ctx, txn, t); err != nil {
-		return err
-	}
-	ostats.Record(ctx, x.NumEdges.M(1))
-	return nil
+	return plist.addMutation(ctx, txn, t)
 }
 
 func (txn *Txn) updateCount(ctx context.Context, params countParams) error {
@@ -481,7 +468,6 @@ func (l *List) AddMutationWithIndex(ctx context.Context, edge *pb.DirectedEdge, 
 	if err != nil {
 		return err
 	}
-	ostats.Record(ctx, x.NumEdges.M(1))
 	if hasCountIndex && cp.countAfter != cp.countBefore {
 		if err := txn.updateCount(ctx, cp); err != nil {
 			return err
@@ -575,7 +561,8 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		WithLogger(&x.ToGlog{}).
 		WithCompression(options.None).
 		WithEncryptionKey(x.WorkerConfig.EncryptionKey).
-		WithLoggingLevel(badger.WARNING)
+		WithLoggingLevel(badger.WARNING).
+		WithMetricsEnabled(false)
 
 	// Set cache if we have encryption.
 	if len(x.WorkerConfig.EncryptionKey) > 0 {
@@ -591,7 +578,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 
 	glog.V(1).Infof(
 		"Rebuilding index for predicate %s: Starting process. StartTs=%d. Prefix=\n%s\n",
-		r.attr, r.startTs, hex.Dump(r.prefix))
+		x.FormatNsAttr(r.attr), r.startTs, hex.Dump(r.prefix))
 
 	// Counter is used here to ensure that all keys are committed at different timestamp.
 	// We set it to 1 in case there are no keys found and NewStreamAt is called with ts=0.
@@ -599,7 +586,8 @@ func (r *rebuilder) Run(ctx context.Context) error {
 
 	tmpWriter := tmpDB.NewManagedWriteBatch()
 	stream := pstore.NewStreamAt(r.startTs)
-	stream.LogPrefix = fmt.Sprintf("Rebuilding index for predicate %s (1/2):", r.attr)
+	stream.LogPrefix = fmt.Sprintf("Rebuilding index for predicate %s (1/2):",
+		x.FormatNsAttr(r.attr))
 	stream.Prefix = r.prefix
 	stream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
 		// We should return quickly if the context is no longer valid.
@@ -661,19 +649,21 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		return err
 	}
 	glog.V(1).Infof("Rebuilding index for predicate %s: building temp index took: %v\n",
-		r.attr, time.Since(start))
+		x.FormatNsAttr(r.attr), time.Since(start))
 
 	// Now we write all the created posting lists to disk.
-	glog.V(1).Infof("Rebuilding index for predicate %s: writing index to badger", r.attr)
+	glog.V(1).Infof("Rebuilding index for predicate %s: writing index to badger",
+		x.FormatNsAttr(r.attr))
 	start = time.Now()
 	defer func() {
 		glog.V(1).Infof("Rebuilding index for predicate %s: writing index took: %v\n",
-			r.attr, time.Since(start))
+			x.FormatNsAttr(r.attr), time.Since(start))
 	}()
 
 	writer := pstore.NewManagedWriteBatch()
 	tmpStream := tmpDB.NewStreamAt(counter)
-	tmpStream.LogPrefix = fmt.Sprintf("Rebuilding index for predicate %s (2/2):", r.attr)
+	tmpStream.LogPrefix = fmt.Sprintf("Rebuilding index for predicate %s (2/2):",
+		x.FormatNsAttr(r.attr))
 	tmpStream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
 		l, err := ReadPostingList(key, itr)
 		if err != nil {
@@ -716,7 +706,8 @@ func (r *rebuilder) Run(ctx context.Context) error {
 	if err := tmpStream.Orchestrate(ctx); err != nil {
 		return err
 	}
-	glog.V(1).Infof("Rebuilding index for predicate %s: Flushing all writes.\n", r.attr)
+	glog.V(1).Infof("Rebuilding index for predicate %s: Flushing all writes.\n",
+		x.FormatNsAttr(r.attr))
 	return writer.Flush()
 }
 
@@ -1133,7 +1124,7 @@ func rebuildReverseEdges(ctx context.Context, rb *IndexRebuild) error {
 	builder := rebuilder{attr: rb.Attr, prefix: pk.DataPrefix(), startTs: rb.StartTs}
 	builder.fn = func(uid uint64, pl *List, txn *Txn) error {
 		edge := pb.DirectedEdge{Attr: rb.Attr, Entity: uid}
-		return pl.Iterate(txn.StartTs, 0, func(pp *pb.Posting) error {
+		return pl.IterateAll(txn.StartTs, 0, func(pp *pb.Posting) error {
 			puid := pp.Uid
 			// Add reverse entries based on p.
 			edge.ValueId = puid
@@ -1186,7 +1177,7 @@ func rebuildListType(ctx context.Context, rb *IndexRebuild) error {
 	builder := rebuilder{attr: rb.Attr, prefix: pk.DataPrefix(), startTs: rb.StartTs}
 	builder.fn = func(uid uint64, pl *List, txn *Txn) error {
 		var mpost *pb.Posting
-		err := pl.Iterate(txn.StartTs, 0, func(p *pb.Posting) error {
+		err := pl.IterateAll(txn.StartTs, 0, func(p *pb.Posting) error {
 			// We only want to modify the untagged value. There could be other values with a
 			// lang tag.
 			if p.Uid == math.MaxUint64 {

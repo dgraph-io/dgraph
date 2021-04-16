@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
+	dgoapi "github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
@@ -48,7 +48,7 @@ func (urw *updateGroupRewriter) Rewrite(
 		return nil, nil
 	}
 
-	upsertQuery := resolve.RewriteUpsertQueryFromMutation(m, nil, resolve.MutationQueryVar, "")
+	upsertQuery := resolve.RewriteUpsertQueryFromMutation(m, nil, resolve.MutationQueryVar, m.Name(), "")
 	srcUID := resolve.MutationQueryVarUID
 
 	var errSet, errDel error
@@ -153,6 +153,13 @@ func (urw *updateGroupRewriter) FromMutationResult(
 	result map[string]interface{}) ([]*gql.GraphQuery, error) {
 
 	return ((*resolve.UpdateRewriter)(urw)).FromMutationResult(ctx, mutation, assigned, result)
+}
+
+func (urw *updateGroupRewriter) MutatedRootUIDs(
+	mutation schema.Mutation,
+	assigned map[string]string,
+	result map[string]interface{}) []string {
+	return ((*resolve.UpdateRewriter)(urw)).MutatedRootUIDs(mutation, assigned, result)
 }
 
 // addAclRuleQuery adds a *gql.GraphQuery to upsertQuery.Children to query a rule inside a group

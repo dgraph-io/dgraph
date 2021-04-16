@@ -35,9 +35,8 @@ import (
 
 const (
 	errGraphQLSchemaCommitFailed = "error occurred updating GraphQL schema, please retry"
-	ErrGraphQLSchemaAlterFailed  = "succeeded in saving GraphQL schema but failed to alter Dgraph" +
-		" schema - this indicates a bug in Dgraph schema generation. Please let us know by" +
-		" filing an issue. Don't forget to post your old and new schemas in the issue description."
+	ErrGraphQLSchemaAlterFailed  = "succeeded in saving GraphQL schema but failed to alter Dgraph schema - " +
+		"GraphQL layer may exhibit unexpected behaviour, reapplying the old GraphQL schema may prevent any issues"
 
 	GqlSchemaPred    = "dgraph.graphql.schema"
 	gqlSchemaXidPred = "dgraph.graphql.xid"
@@ -81,15 +80,24 @@ func (w *grpcWorker) UpdateGraphQLSchema(ctx context.Context,
 		return nil, errUpdatingGraphQLSchemaOnNonGroupOneLeader
 	}
 
-	// lock here so that only one request is served at a time by group 1 leader
-	schemaLock.Lock()
-	defer schemaLock.Unlock()
-
 	ctx = x.AttachJWTNamespace(ctx)
 	namespace, err := x.ExtractNamespace(ctx)
 	if err != nil {
 		return nil, errors.Wrapf(err, "While updating gql schema")
 	}
+
+	waitStart := time.Now()
+
+	// lock here so that only one request is served at a time by group 1 leader
+	schemaLock.Lock()
+	defer schemaLock.Unlock()
+
+	waitDuration := time.Since(waitStart)
+	if waitDuration > 500*time.Millisecond {
+		glog.Warningf("GraphQL schema update for namespace %d waited for %s as another schema"+
+			" update was in progress.", namespace, waitDuration.String())
+	}
+
 	// query the GraphQL schema node uid
 	res, err := ProcessTaskOverNetwork(ctx, &pb.Query{
 		Attr:    x.NamespaceAttr(namespace, GqlSchemaPred),

@@ -23,7 +23,7 @@ import (
 	"github.com/golang/glog"
 	"go.opencensus.io/trace"
 
-	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
+	dgoapi "github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
@@ -64,7 +64,7 @@ func (dg *DgraphEx) Execute(ctx context.Context, req *dgoapi.Request,
 }
 
 // CommitOrAbort is the underlying dgraph implementation for committing a Dgraph transaction
-func (dg *DgraphEx) CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext) error {
-	_, err := (&edgraph.Server{}).CommitOrAbort(ctx, tc)
-	return err
+func (dg *DgraphEx) CommitOrAbort(ctx context.Context,
+	tc *dgoapi.TxnContext) (*dgoapi.TxnContext, error) {
+	return (&edgraph.Server{}).CommitOrAbort(ctx, tc)
 }

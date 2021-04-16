@@ -19,6 +19,8 @@ package edgraph
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -42,11 +44,10 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
-	"github.com/dgraph-io/dgo/v200"
-	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgo/v210"
+	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/conn"
-	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/gql"
 	gqlSchema "github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/posting"
@@ -63,7 +64,6 @@ import (
 const (
 	methodMutate = "Server.Mutate"
 	methodQuery  = "Server.Query"
-	groupFile    = "group_id"
 )
 
 type GraphqlContextKey int
@@ -285,7 +285,15 @@ func parseSchemaFromAlterOperation(ctx context.Context, op *api.Operation) (*sch
 		return nil, err
 	}
 
+	preds := make(map[string]struct{})
+
 	for _, update := range result.Preds {
+		if _, ok := preds[update.Predicate]; ok {
+			return nil, errors.Errorf("predicate %s defined multiple times",
+				x.ParseAttr(update.Predicate))
+		}
+		preds[update.Predicate] = struct{}{}
+
 		// Pre-defined predicates cannot be altered but let the update go through
 		// if the update is equal to the existing one.
 		if schema.IsPreDefPredChanged(update) {
@@ -308,7 +316,14 @@ func parseSchemaFromAlterOperation(ctx context.Context, op *api.Operation) (*sch
 		}
 	}
 
+	types := make(map[string]struct{})
+
 	for _, typ := range result.Types {
+		if _, ok := types[typ.TypeName]; ok {
+			return nil, errors.Errorf("type %s defined multiple times", x.ParseAttr(typ.TypeName))
+		}
+		types[typ.TypeName] = struct{}{}
+
 		// Pre-defined types cannot be altered but let the update go through
 		// if the update is equal to the existing one.
 		if schema.IsPreDefTypeChanged(typ) {
@@ -378,6 +393,10 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	// if it lies on some other machine. Let's get it for safety.
 	m := &pb.Mutations{StartTs: worker.State.GetTimestamp(false)}
 	if isDropAll(op) {
+		if x.Config.BlockClusterWideDrop {
+			glog.V(2).Info("Blocked drop-all because it is not permitted.")
+			return empty, errors.New("Drop all operation is not permitted.")
+		}
 		if err := AuthGuardianOfTheGalaxy(ctx); err != nil {
 			return empty, errors.Wrapf(err, "Drop all can only be called by the guardian of the"+
 				" galaxy")
@@ -407,6 +426,10 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	}
 
 	if op.DropOp == api.Operation_DATA {
+		if x.Config.BlockClusterWideDrop {
+			glog.V(2).Info("Blocked drop-data because it is not permitted.")
+			return empty, errors.New("Drop data operation is not permitted.")
+		}
 		if err := AuthGuardianOfTheGalaxy(ctx); err != nil {
 			return empty, errors.Wrapf(err, "Drop data can only be called by the guardian of the"+
 				" galaxy")
@@ -589,16 +612,6 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 	resp.Txn, err = query.ApplyMutations(ctx, m)
 	qc.span.Annotatef(nil, "Txn Context: %+v. Err=%v", resp.Txn, err)
 
-	if x.WorkerConfig.LudicrousMode {
-		// Mutations are automatically committed in case of ludicrous mode, so we don't
-		// need to manually commit.
-		if resp.Txn == nil {
-			return errors.Wrapf(err, "Txn Context is nil")
-		}
-		resp.Txn.Keys = resp.Txn.Keys[:0]
-		resp.Txn.CommitTs = qc.req.StartTs
-		return err
-	}
 	// calculateMutationMetrics calculate cost for the mutation.
 	calculateMutationMetrics := func() {
 		cost := uint64(len(newUids) + len(edges))
@@ -849,9 +862,9 @@ func updateValInNQuads(nquads []*api.NQuad, qc *queryContext, isSet bool) []*api
 func updateValInMutations(gmu *gql.Mutation, qc *queryContext) error {
 	gmu.Del = updateValInNQuads(gmu.Del, qc, false)
 	gmu.Set = updateValInNQuads(gmu.Set, qc, true)
-	if qc.nquadsCount > x.Config.MutationsNQuadLimit {
+	if qc.nquadsCount > x.Config.LimitMutationsNquad {
 		return errors.Errorf("NQuad count in the request: %d, is more that threshold: %d",
-			qc.nquadsCount, x.Config.MutationsNQuadLimit)
+			qc.nquadsCount, int(x.Config.LimitMutationsNquad))
 	}
 	return nil
 }
@@ -903,9 +916,9 @@ func updateUIDInMutations(gmu *gql.Mutation, qc *queryContext) error {
 				gmuDel = append(gmuDel, getNewNQuad(nq, s, o))
 				qc.nquadsCount++
 			}
-			if qc.nquadsCount > x.Config.MutationsNQuadLimit {
+			if qc.nquadsCount > int(x.Config.LimitMutationsNquad) {
 				return errors.Errorf("NQuad count in the request: %d, is more that threshold: %d",
-					qc.nquadsCount, x.Config.MutationsNQuadLimit)
+					qc.nquadsCount, int(x.Config.LimitMutationsNquad))
 			}
 		}
 	}
@@ -919,9 +932,9 @@ func updateUIDInMutations(gmu *gql.Mutation, qc *queryContext) error {
 		newObs := getNewVals(nq.ObjectId)
 
 		qc.nquadsCount += len(newSubs) * len(newObs)
-		if qc.nquadsCount > x.Config.MutationsNQuadLimit {
+		if qc.nquadsCount > int(x.Config.LimitQueryEdge) {
 			return errors.Errorf("NQuad count in the request: %d, is more that threshold: %d",
-				qc.nquadsCount, x.Config.MutationsNQuadLimit)
+				qc.nquadsCount, int(x.Config.LimitQueryEdge))
 		}
 
 		for _, s := range newSubs {
@@ -1016,7 +1029,7 @@ func (s *Server) Health(ctx context.Context, all bool) (*api.Response, error) {
 		LastEcho:    time.Now().Unix(),
 		Ongoing:     worker.GetOngoingTasks(),
 		Indexing:    schema.GetIndexingPredicates(),
-		EeFeatures:  ee.GetEEFeaturesList(),
+		EeFeatures:  worker.GetEEFeaturesList(),
 		MaxAssigned: posting.Oracle().MaxAssigned(),
 	})
 
@@ -1038,7 +1051,16 @@ func filterTablets(ctx context.Context, ms *pb.MembershipState) error {
 		return errors.Errorf("Namespace not found in JWT.")
 	}
 	if namespace == x.GalaxyNamespace {
-		// For galaxy namespace, we don't want to filter out the predicates.
+		// For galaxy namespace, we don't want to filter out the predicates. We only format the
+		// namespace to human readable form.
+		for _, group := range ms.Groups {
+			tablets := make(map[string]*pb.Tablet)
+			for tabletName, tablet := range group.Tablets {
+				tablet.Predicate = x.FormatNsAttr(tablet.Predicate)
+				tablets[x.FormatNsAttr(tabletName)] = tablet
+			}
+			group.Tablets = tablets
+		}
 		return nil
 	}
 	for _, group := range ms.GetGroups() {
@@ -1099,23 +1121,56 @@ func (s *Server) QueryGraphQL(ctx context.Context, req *api.Request,
 // Query handles queries or mutations
 func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, error) {
 	ctx = x.AttachJWTNamespace(ctx)
+	if x.WorkerConfig.AclEnabled && req.GetStartTs() != 0 {
+		// A fresh StartTs is assigned if it is 0.
+		ns, err := x.ExtractNamespace(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if req.GetHash() != getHash(ns, req.GetStartTs()) {
+			return nil, x.ErrHashMismatch
+		}
+	}
+	// Add a timeout for queries which don't have a deadline set. We don't want to
+	// apply a timeout if it's a mutation, that's currently handled by flag
+	// "txn-abort-after".
+	if req.GetMutations() == nil && x.Config.QueryTimeout != 0 {
+		if d, _ := ctx.Deadline(); d.IsZero() {
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithTimeout(ctx, x.Config.QueryTimeout)
+			defer cancel()
+		}
+	}
 	return s.doQuery(ctx, &Request{req: req, doAuth: getAuthMode(ctx)})
+}
+
+var pendingQueries int64
+var maxPendingQueries int64
+var serverOverloadErr = errors.New("429 Too Many Requests. Please throttle your requests")
+
+func Init() {
+	maxPendingQueries = x.Config.Limit.GetInt64("max-pending-queries")
 }
 
 func (s *Server) doQuery(ctx context.Context, req *Request) (
 	resp *api.Response, rerr error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	defer atomic.AddInt64(&pendingQueries, -1)
+	if val := atomic.AddInt64(&pendingQueries, 1); val > maxPendingQueries {
+		return nil, serverOverloadErr
+	}
+
 	if bool(glog.V(3)) || worker.LogRequestEnabled() {
 		glog.Infof("Got a query: %+v", req.req)
 	}
+
 	isGraphQL, _ := ctx.Value(IsGraphql).(bool)
 	if isGraphQL {
 		atomic.AddUint64(&numGraphQL, 1)
 	} else {
 		atomic.AddUint64(&numGraphQLPM, 1)
-	}
-
-	if ctx.Err() != nil {
-		return nil, ctx.Err()
 	}
 
 	l := &query.Latency{}
@@ -1194,13 +1249,9 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (
 	defer annotateStartTs(qc.span, qc.req.StartTs)
 	// For mutations, we update the startTs if necessary.
 	if isMutation && req.req.StartTs == 0 {
-		if x.WorkerConfig.LudicrousMode {
-			req.req.StartTs = posting.Oracle().MaxAssigned()
-		} else {
-			start := time.Now()
-			req.req.StartTs = worker.State.GetTimestamp(false)
-			qc.latency.AssignTimestamp = time.Since(start)
-		}
+		start := time.Now()
+		req.req.StartTs = worker.State.GetTimestamp(false)
+		qc.latency.AssignTimestamp = time.Since(start)
 	}
 
 	var gqlErrs error
@@ -1235,6 +1286,14 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (
 		EncodingNs:        uint64(l.Json.Nanoseconds()),
 		TotalNs:           uint64((time.Since(l.Start)).Nanoseconds()),
 	}
+	if x.WorkerConfig.AclEnabled {
+		// attach the hash, user should send this hash when further operating on this startTs.
+		ns, err := x.ExtractNamespace(ctx)
+		if err != nil {
+			return nil, err
+		}
+		resp.Txn.Hash = getHash(ns, resp.Txn.StartTs)
+	}
 	md := metadata.Pairs(x.DgraphCostHeader, fmt.Sprint(resp.Metrics.NumUids["_total"]))
 	grpc.SendHeader(ctx, md)
 	return resp, gqlErrs
@@ -1251,9 +1310,6 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 	}
 	if ctx.Err() != nil {
 		return resp, ctx.Err()
-	}
-	if x.WorkerConfig.LudicrousMode {
-		qc.req.StartTs = posting.Oracle().MaxAssigned()
 	}
 	qr := query.Request{
 		Latency:  qc.latency,
@@ -1340,8 +1396,10 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 		// If the list of UIDs is empty but the map of values is not,
 		// we need to get the UIDs from the keys in the map.
 		var uidList []uint64
-		if v.Uids != nil && len(v.Uids.Uids) > 0 {
-			uidList = v.Uids.Uids
+		if v.OrderedUIDs != nil && len(v.OrderedUIDs.Uids) > 0 {
+			uidList = v.OrderedUIDs.Uids
+		} else if !v.UidMap.IsEmpty() {
+			uidList = v.UidMap.ToArray()
 		} else {
 			uidList = make([]uint64, 0, len(v.Vals))
 			for uid := range v.Vals {
@@ -1445,6 +1503,27 @@ func authorizeRequest(ctx context.Context, qc *queryContext) error {
 	return nil
 }
 
+func getHash(ns, startTs uint64) string {
+	h := sha256.New()
+	h.Write([]byte(fmt.Sprintf("%#x%#x%s", ns, startTs, x.WorkerConfig.HmacSecret)))
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+func validateNamespace(ctx context.Context, tc *api.TxnContext) error {
+	if !x.WorkerConfig.AclEnabled {
+		return nil
+	}
+
+	ns, err := x.ExtractJWTNamespace(ctx)
+	if err != nil {
+		return err
+	}
+	if tc.Hash != getHash(ns, tc.StartTs) {
+		return x.ErrHashMismatch
+	}
+	return nil
+}
+
 // CommitOrAbort commits or aborts a transaction.
 func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.TxnContext, error) {
 	ctx, span := otrace.StartSpan(ctx, "Server.CommitOrAbort")
@@ -1461,16 +1540,20 @@ func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.Tx
 	}
 	annotateStartTs(span, tc.StartTs)
 
+	if err := validateNamespace(ctx, tc); err != nil {
+		return &api.TxnContext{}, err
+	}
+
 	span.Annotatef(nil, "Txn Context received: %+v", tc)
 	commitTs, err := worker.CommitOverNetwork(ctx, tc)
 	if err == dgo.ErrAborted {
 		// If err returned is dgo.ErrAborted and tc.Aborted was set, that means the client has
 		// aborted the transaction by calling txn.Discard(). Hence return a nil error.
+		tctx.Aborted = true
 		if tc.Aborted {
 			return tctx, nil
 		}
 
-		tctx.Aborted = true
 		return tctx, status.Errorf(codes.Aborted, err.Error())
 	}
 	tctx.StartTs = tc.StartTs

@@ -29,7 +29,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/worker"
@@ -319,7 +319,7 @@ func TestIntrospectionQueryAfterDropAll(t *testing.T) {
 	introspectionResult := introspect.ExecuteAsPost(t, groupOneGraphQLServer)
 	require.Len(t, introspectionResult.Errors, 1)
 	gotErrorMessage := introspectionResult.Errors[0].Message
-	expectedErrorMessage := "Not resolving __schema. There's no GraphQL schema in Dgraph.  Use the /admin API to add a GraphQL schema"
+	expectedErrorMessage := "Not resolving __schema. There's no GraphQL schema in Dgraph. Use the /admin API to add a GraphQL schema"
 	require.Equal(t, expectedErrorMessage, gotErrorMessage)
 }
 
@@ -548,6 +548,20 @@ func TestUpdateGQLSchemaFields(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, string(generatedSchema), common.SafelyUpdateGQLSchema(t, groupOneHTTP,
 		schema, nil).GeneratedSchema)
+}
+
+// TestLargeSchemaUpdate makes sure that updating large schemas (4000 fields with indexes) does not
+// throw any error
+func TestLargeSchemaUpdate(t *testing.T) {
+	numFields := 250
+
+	schema := "type LargeSchema {"
+	for i := 1; i <= numFields; i++ {
+		schema = schema + "\n" + fmt.Sprintf("field%d: String! @search(by: [regexp])", i)
+	}
+	schema = schema + "\n}"
+
+	common.SafelyUpdateGQLSchema(t, groupOneHTTP, schema, nil)
 }
 
 func TestIntrospection(t *testing.T) {

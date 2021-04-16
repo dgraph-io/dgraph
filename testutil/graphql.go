@@ -129,6 +129,60 @@ func MakeGQLRequestWithAccessJwtAndTLS(t *testing.T, params *GraphQLParams, tls 
 	return &gqlResp
 }
 
+func AssertRemoveNode(t *testing.T, nodeId uint64, groupId uint32) {
+	params := &GraphQLParams{
+		Query: `mutation ($nodeId: UInt64!, $groupId: UInt64!) {
+		  removeNode(input: {nodeId: $nodeId, groupId: $groupId}) {
+			response {
+				code
+			}
+		  }
+		}`,
+		Variables: map[string]interface{}{
+			"nodeId":  nodeId,
+			"groupId": groupId,
+		},
+	}
+	resp := MakeGQLRequest(t, params)
+	resp.RequireNoGraphQLErrors(t)
+	CompareJSON(t, `{"removeNode":{"response":{"code":"Success"}}}`, string(resp.Data))
+}
+
+func AssertMoveTablet(t *testing.T, tablet string, groupId uint32) {
+	params := &GraphQLParams{
+		Query: `mutation ($tablet: String!, $groupId: UInt64!) {
+		  moveTablet(input: {tablet: $tablet, groupId: $groupId}) {
+			response {
+				code
+			}
+		  }
+		}`,
+		Variables: map[string]interface{}{
+			"tablet":  tablet,
+			"groupId": groupId,
+		},
+	}
+	resp := MakeGQLRequest(t, params)
+	resp.RequireNoGraphQLErrors(t)
+	CompareJSON(t, `{"moveTablet":{"response":{"code":"Success"}}}`, string(resp.Data))
+}
+
+func EnterpriseLicense(t *testing.T, license string) *GraphQLResponse {
+	params := &GraphQLParams{
+		Query: `mutation ($license: String!) {
+		  enterpriseLicense(input: {license: $license}) {
+			response {
+				code
+			}
+		  }
+		}`,
+		Variables: map[string]interface{}{
+			"license": license,
+		},
+	}
+	return MakeGQLRequest(t, params)
+}
+
 type clientCustomClaims struct {
 	Namespace     string
 	AuthVariables map[string]interface{}
@@ -249,7 +303,12 @@ func AppendAuthInfo(schema []byte, algo, publicKeyFile string, closedByDefault b
 }
 
 func AppendAuthInfoWithJWKUrl(schema []byte) ([]byte, error) {
-	authInfo := `#   Dgraph.Authorization {"VerificationKey":"","Header":"X-Test-Auth","jwkurl":"https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com", "Namespace":"https://xyz.io/jwt/claims","Algo":"","Audience":["fir-project1-259e7"]}`
+	authInfo := `#   Dgraph.Authorization {"VerificationKey":"","Header":"X-Test-Auth","jwkurl":"https://dev-hr2kugfp.us.auth0.com/.well-known/jwks.json", "Namespace":"https://xyz.io/jwt/claims","Algo":"","Audience":[ "HhaXkQVRBn5e0K3DmMp2zbjI8i1wcv2e"]}`
+	return append(schema, []byte(authInfo)...), nil
+}
+
+func AppendAuthInfoWithMultipleJWKUrls(schema []byte) ([]byte, error) {
+	authInfo := `#   Dgraph.Authorization {"VerificationKey":"","Header":"X-Test-Auth","jwkurls":["https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com","https://dev-hr2kugfp.us.auth0.com/.well-known/jwks.json"], "Namespace":"https://xyz.io/jwt/claims","Algo":"","Audience":["fir-project1-259e7", "HhaXkQVRBn5e0K3DmMp2zbjI8i1wcv2e"]}`
 	return append(schema, []byte(authInfo)...), nil
 }
 

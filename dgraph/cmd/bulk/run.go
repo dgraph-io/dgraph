@@ -30,12 +30,13 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dgraph-io/badger/v3"
+	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/filestore"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/ristretto/z"
 
-	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/cobra"
@@ -46,7 +47,7 @@ var Bulk x.SubCommand
 
 var defaultOutDir = "./out"
 
-const bulkBadgerDefaults = " cache_mb=64; cache_percentage=70,30;"
+const BulkBadgerDefaults = "compression=snappy; numgoroutines=8;"
 
 func init() {
 	Bulk.Cmd = &cobra.Command{
@@ -71,10 +72,10 @@ func init() {
 		"Specify file format (rdf or json) instead of getting it from filename.")
 	flag.Bool("encrypted", false,
 		"Flag to indicate whether schema and data files are encrypted. "+
-			"Must be specified with --encryption_key_file or vault option(s).")
+			"Must be specified with --encryption or vault option(s).")
 	flag.Bool("encrypted_out", false,
 		"Flag to indicate whether to encrypt the output. "+
-			"Must be specified with --encryption_key_file or vault option(s).")
+			"Must be specified with --encryption or vault option(s).")
 	flag.String("out", defaultOutDir,
 		"Location to write the final dgraph data directories.")
 	flag.Bool("replace_out", false,
@@ -119,36 +120,35 @@ func init() {
 	flag.Uint64("force-namespace", math.MaxUint64,
 		"Namespace onto which to load the data. If not set, will preserve the namespace.")
 
-	// Bulk has some extra defaults for Badger SuperFlag. These should only be applied in this
-	// package.
-	flag.String("badger", worker.BadgerDefaults+bulkBadgerDefaults,
-		z.NewSuperFlagHelp(worker.BadgerDefaults+bulkBadgerDefaults).
-			Head("Badger options").
-			Flag("compression",
-				"Specifies the compression algorithm and compression level (if applicable) for the "+
-					`postings directory. "none" would disable compression, while "zstd:1" would set `+
-					"zstd compression at level 1.").
-			Flag("goroutines",
-				"The number of goroutines to use in badger.Stream.").
-			Flag("cache-mb",
-				"Total size of cache (in MB) per shard in the reducer.").
-			Flag("cache-percentage",
-				"Cache percentages summing up to 100 for various caches. (Format: BlockCacheSize,"+
-					"IndexCacheSize)").
-			String())
+	flag.String("badger", BulkBadgerDefaults, z.NewSuperFlagHelp(BulkBadgerDefaults).
+		Head("Badger options (Refer to badger documentation for all possible options)").
+		Flag("compression",
+			"Specifies the compression algorithm and compression level (if applicable) for the "+
+				`postings directory. "none" would disable compression, while "zstd:1" would set `+
+				"zstd compression at level 1.").
+		Flag("numgoroutines",
+			"The number of goroutines to use in badger.Stream.").
+		String())
 
 	x.RegisterClientTLSFlags(flag)
 	// Encryption and Vault options
-	enc.RegisterFlags(flag)
+	ee.RegisterEncFlag(flag)
 }
 
 func run() {
-	badger := z.NewSuperFlag(Bulk.Conf.GetString("badger")).MergeAndCheckDefault(
-		worker.BadgerDefaults + bulkBadgerDefaults)
-	ctype, clevel := x.ParseCompression(badger.GetString("compression"))
+	cacheSize := 64 << 20 // These are the default values. User can overwrite them using --badger.
+	cacheDefaults := fmt.Sprintf("indexcachesize=%d; blockcachesize=%d; ",
+		(70*cacheSize)/100, (30*cacheSize)/100)
+
+	bopts := badger.DefaultOptions("").FromSuperFlag(BulkBadgerDefaults + cacheDefaults).
+		FromSuperFlag(Bulk.Conf.GetString("badger"))
+	keys, err := ee.GetKeys(Bulk.Conf)
+	x.Check(err)
+
 	opt := options{
 		DataFiles:        Bulk.Conf.GetString("files"),
 		DataFormat:       Bulk.Conf.GetString("format"),
+		EncryptionKey:    keys.EncKey,
 		SchemaFile:       Bulk.Conf.GetString("schema"),
 		GqlSchemaFile:    Bulk.Conf.GetString("graphql_schema"),
 		Encrypted:        Bulk.Conf.GetBool("encrypted"),
@@ -173,10 +173,7 @@ func run() {
 		NewUids:          Bulk.Conf.GetBool("new_uids"),
 		ClientDir:        Bulk.Conf.GetString("xidmap"),
 		Namespace:        Bulk.Conf.GetUint64("force-namespace"),
-
-		// Badger options
-		BadgerCompression:      ctype,
-		BadgerCompressionLevel: clevel,
+		Badger:           bopts,
 	}
 
 	x.PrintVersion()
@@ -184,32 +181,22 @@ func run() {
 		os.Exit(0)
 	}
 
-	totalCache := int64(badger.GetUint64("cache-mb"))
-	x.AssertTruef(totalCache >= 0, "ERROR: Cache size must be non-negative")
-	cachePercent, err := x.GetCachePercentages(badger.GetString("cache-percentage"), 2)
-	x.Check(err)
-	totalCache <<= 20 // Convert to MB.
-	opt.BlockCacheSize = (cachePercent[0] * totalCache) / 100
-	opt.IndexCacheSize = (cachePercent[1] * totalCache) / 100
-
-	if opt.EncryptionKey, err = enc.ReadKey(Bulk.Conf); err != nil {
-		fmt.Printf("unable to read key %v", err)
-		return
-	}
 	if len(opt.EncryptionKey) == 0 {
 		if opt.Encrypted || opt.EncryptedOut {
-			fmt.Fprint(os.Stderr, "Must use --encryption_key_file or vault option(s).\n")
+			fmt.Fprint(os.Stderr, "Must use --encryption or vault option(s).\n")
 			os.Exit(1)
 		}
 	} else {
 		requiredFlags := Bulk.Cmd.Flags().Changed("encrypted") &&
 			Bulk.Cmd.Flags().Changed("encrypted_out")
 		if !requiredFlags {
-			fmt.Fprint(os.Stderr, "Must specify --encrypted and --encrypted_out when providing encryption key.\n")
+			fmt.Fprint(os.Stderr,
+				"Must specify --encrypted and --encrypted_out when providing encryption key.\n")
 			os.Exit(1)
 		}
 		if !opt.Encrypted && !opt.EncryptedOut {
-			fmt.Fprint(os.Stderr, "Must set --encrypted and/or --encrypted_out to true when providing encryption key.\n")
+			fmt.Fprint(os.Stderr,
+				"Must set --encrypted and/or --encrypted_out to true when providing encryption key.\n")
 			os.Exit(1)
 		}
 
@@ -372,7 +359,7 @@ func maxOpenFilesWarning() {
 		yellow = "\x1b[33m"
 		reset  = "\x1b[0m"
 	)
-	maxOpenFiles, err := queryMaxOpenFiles()
+	maxOpenFiles, err := x.QueryMaxOpenFiles()
 	if err != nil || maxOpenFiles < 1e6 {
 		fmt.Println(green + "\nThe bulk loader needs to open many files at once. This number depends" +
 			" on the size of the data set loaded, the map file output size, and the level" +

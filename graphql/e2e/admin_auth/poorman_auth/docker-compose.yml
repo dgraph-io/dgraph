@@ -30,4 +30,6 @@ services:
     labels:
       cluster: test
       service: alpha1
-    command: /gobin/dgraph alpha --my=alpha1:7080 --zero=zero1:5080 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --auth_token itIsSecret
+    command: /gobin/dgraph alpha --my=alpha1:7080 --zero=zero1:5080 --expose_trace --profile_mode block --block_rate 10 --logtostderr -v=2 
+      --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16; token=itIsSecret;"
+      --trace "ratio=1.0;"

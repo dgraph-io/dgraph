@@ -38,7 +38,7 @@ import (
 	"github.com/dgraph-io/ristretto/z"
 
 	"github.com/dgraph-io/dgraph/codec"
-	"github.com/dgraph-io/dgraph/ee/enc"
+	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
@@ -67,7 +67,8 @@ type flagOptions struct {
 	readTs        uint64
 	sizeHistogram bool
 	noKeys        bool
-	key           x.SensitiveByteSlice
+	namespace     uint64
+	key           x.Sensitive
 
 	// Options related to the WAL.
 	wdir           string
@@ -93,8 +94,9 @@ func init() {
 		"Ignore key_. Only consider amount when calculating total.")
 	flag.StringVar(&opt.jepsen, "jepsen", "", "Disect Jepsen output. Can be linear/binary.")
 	flag.Uint64Var(&opt.readTs, "at", math.MaxUint64, "Set read timestamp for all txns.")
-	flag.BoolVarP(&opt.readOnly, "readonly", "o", true, "Open in read only mode.")
+	flag.BoolVarP(&opt.readOnly, "readonly", "o", false, "Open in read only mode.")
 	flag.StringVarP(&opt.predicate, "pred", "r", "", "Only output specified predicate.")
+	flag.Uint64VarP(&opt.namespace, "ns", "", 0, "Which namespace to use.")
 	flag.StringVarP(&opt.prefix, "prefix", "", "", "Uses a hex prefix.")
 	flag.StringVarP(&opt.keyLookup, "lookup", "l", "", "Hex of key to lookup.")
 	flag.StringVar(&opt.rollupKey, "rollup", "", "Hex of key to rollup.")
@@ -108,7 +110,7 @@ func init() {
 	flag.StringVarP(&opt.wsetSnapshot, "snap", "s", "",
 		"Set snapshot term,index,readts to this. Value must be comma-separated list containing"+
 			" the value for these vars in that order.")
-	enc.RegisterFlags(flag)
+	ee.RegisterEncFlag(flag)
 }
 
 func toInt(o *pb.Posting) int {
@@ -311,7 +313,7 @@ func showAllPostingsAt(db *badger.DB, readTs uint64) {
 		}
 	}
 	for uid, acc := range keys {
-		fmt.Fprintf(&buf, "Uid: %d %x Key: %d Amount: %d\n", uid, uid, acc.Key, acc.Amt)
+		fmt.Fprintf(&buf, "Uid: %#x Key: %d Amount: %d\n", uid, acc.Key, acc.Amt)
 	}
 	fmt.Println(buf.String())
 }
@@ -413,12 +415,18 @@ func history(lookup []byte, itr *badger.Iterator) {
 				appendPosting(&buf, p)
 			}
 
+			r := codec.FromBytes(plist.Bitmap)
 			fmt.Fprintf(&buf, " Num uids = %d. Size = %d\n",
-				codec.ExactLen(plist.Pack), plist.Pack.Size())
-			dec := codec.Decoder{Pack: plist.Pack}
-			for uids := dec.Seek(0, codec.SeekStart); len(uids) > 0; uids = dec.Next() {
-				for _, uid := range uids {
-					fmt.Fprintf(&buf, " Uid = %d\n", uid)
+				r.GetCardinality(), len(plist.Bitmap))
+			itr := r.ManyIterator()
+			uids := make([]uint64, 256)
+			for {
+				num := itr.NextMany(uids)
+				if num == 0 {
+					break
+				}
+				for _, uid := range uids[:num] {
+					fmt.Fprintf(&buf, " Uid = %#x\n", uid)
 				}
 			}
 		}
@@ -428,7 +436,7 @@ func history(lookup []byte, itr *badger.Iterator) {
 }
 
 func appendPosting(w io.Writer, o *pb.Posting) {
-	fmt.Fprintf(w, " Uid: %d Op: %d ", o.Uid, o.Op)
+	fmt.Fprintf(w, " Uid: %#x Op: %d ", o.Uid, o.Op)
 
 	if len(o.Value) > 0 {
 		fmt.Fprintf(w, " Type: %v. ", o.ValType)
@@ -472,7 +480,7 @@ func rollupKey(db *badger.DB) {
 	pl, err := posting.ReadPostingList(item.KeyCopy(nil), itr)
 	x.Check(err)
 
-	alloc := z.NewAllocator(32 << 20)
+	alloc := z.NewAllocator(32<<20, "Debug.RollupKey")
 	defer alloc.Release()
 
 	kvs, err := pl.Rollup(alloc)
@@ -539,7 +547,8 @@ func lookup(db *badger.DB) {
 func printKeys(db *badger.DB) {
 	var prefix []byte
 	if len(opt.predicate) > 0 {
-		prefix = x.PredicatePrefix(opt.predicate)
+		pred := x.NamespaceAttr(opt.namespace, opt.predicate)
+		prefix = x.PredicatePrefix(pred)
 	} else if len(opt.prefix) > 0 {
 		p, err := hex.DecodeString(opt.prefix)
 		x.Check(err)
@@ -577,11 +586,14 @@ func printKeys(db *badger.DB) {
 		if len(pk.Term) > 0 {
 			fmt.Fprintf(&buf, " term: [%d] %s ", pk.Term[0], pk.Term[1:])
 		}
+		if pk.Count > 0 {
+			fmt.Fprintf(&buf, " count: %d ", pk.Count)
+		}
 		if pk.Uid > 0 {
-			fmt.Fprintf(&buf, " uid: %d ", pk.Uid)
+			fmt.Fprintf(&buf, " uid: %#x ", pk.Uid)
 		}
 		if pk.StartUid > 0 {
-			fmt.Fprintf(&buf, " startUid: %d ", pk.StartUid)
+			fmt.Fprintf(&buf, " startUid: %#x ", pk.StartUid)
 		}
 
 		if opt.itemMeta {
@@ -885,17 +897,15 @@ func run() {
 		}
 	}()
 
-	var err error
 	dir := opt.pdir
 	isWal := false
 	if len(dir) == 0 {
 		dir = opt.wdir
 		isWal = true
 	}
-	if opt.key, err = enc.ReadKey(Debug.Conf); err != nil {
-		fmt.Printf("unable to read key %v", err)
-		return
-	}
+	keys, err := ee.GetKeys(Debug.Conf)
+	x.Check(err)
+	opt.key = keys.EncKey
 
 	if isWal {
 		store, err := raftwal.InitEncrypted(dir, opt.key)

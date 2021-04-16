@@ -24,8 +24,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/dgraph-io/dgo/v200"
-	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgo/v210"
+	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 )
@@ -41,6 +41,9 @@ type Member struct {
 // StateResponse represents the structure of the JSON object returned by calling
 // the /state endpoint in zero.
 type StateResponse struct {
+	Zeros map[string]struct {
+		Id string `json:"id"`
+	} `json:"zeros"`
 	Groups map[string]struct {
 		Members map[string]Member `json:"members"`
 		Tablets map[string]struct {

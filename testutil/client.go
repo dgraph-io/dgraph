@@ -34,8 +34,8 @@ import (
 
 	"github.com/dgraph-io/dgraph/gql"
 
-	"github.com/dgraph-io/dgo/v200"
-	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgo/v210"
+	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
@@ -447,7 +447,29 @@ top:
 
 // AssignUids talks to zero to assign the given number of uids.
 func AssignUids(num uint64) error {
-	_, err := http.Get(fmt.Sprintf("http://"+SockAddrZeroHttp+"/assign?what=uids&num=%d", num))
+	resp, err := http.Get(fmt.Sprintf("http://"+SockAddrZeroHttp+"/assign?what=uids&num=%d", num))
+	type assignResp struct {
+		Errors []struct {
+			Message string
+			Code    string
+		}
+	}
+	var data assignResp
+	if err == nil && resp != nil && resp.Body != nil {
+		body, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return err
+		}
+		if err := resp.Body.Close(); err != nil {
+			return err
+		}
+		if err := json.Unmarshal(body, &data); err != nil {
+			return err
+		}
+		if len(data.Errors) > 0 {
+			return errors.New(data.Errors[0].Message)
+		}
+	}
 	return err
 }
 
