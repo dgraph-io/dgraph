@@ -68,6 +68,90 @@
       "type": "uid"
     },
     {
+      "list": true,
+      "predicate": "LibraryManager.manages",
+      "type": "uid"
+    },
+    {
+      "predicate": "LibraryMember.readHours",
+      "type": "string"
+    },
+    {
+      "index": true,
+      "predicate": "Team.teamName",
+      "tokenizer": [
+        "hash"
+      ],
+      "type": "string",
+      "upsert": true
+    },
+    {
+      "predicate": "SportsMember.playerRating",
+      "type": "int"
+    },
+    {
+      "list": true,
+      "predicate": "LibraryMember.interests",
+      "type": "string"
+    },
+    {
+      "index": true,
+      "predicate": "Team.teamID",
+      "tokenizer": [
+        "hash"
+      ],
+      "type": "string",
+      "upsert": true
+    },
+    {
+      "index": true,
+      "predicate": "Member.name",
+      "tokenizer": [
+        "hash"
+      ],
+      "type": "string",
+      "upsert": true
+    },
+    {
+      "predicate": "CricketTeam.numOfBowlers",
+      "type": "int"
+    },
+    {
+      "predicate": "CricketTeam.numOfBatsmen",
+      "type": "int"
+    },
+    {
+      "index": true,
+      "predicate": "LibraryManager.name",
+      "tokenizer": [
+        "hash"
+      ],
+      "type": "string",
+      "upsert": true
+    },
+    {
+      "index": true,
+      "predicate": "Member.refID",
+      "tokenizer": [
+        "hash"
+      ],
+      "type": "string",
+      "upsert": true
+    },
+    {
+      "list": true,
+      "predicate": "Member.itemsIssued",
+      "type": "string"
+    },
+    {
+      "predicate": "Member.fineAccumulated",
+      "type": "int"
+    },
+    {
+      "predicate": "SportsMember.plays",
+      "type": "string"
+    },
+    {
       "predicate": "Astronaut.name",
       "type": "string"
     },
@@ -1452,6 +1536,114 @@
         }
       ],
       "name": "Employer"
+    },
+    {
+      "fields": [
+        {
+          "name": "Member.name"
+        },
+        {
+          "name": "Member.refID"
+        },
+        {
+          "name": "Member.itemsIssued"
+        },
+        {
+          "name": "Member.fineAccumulated"
+        }
+      ],
+      "name": "Member"
+    },
+    {
+      "fields": [
+        {
+          "name": "Team.teamName"
+        },
+        {
+          "name": "Team.teamID"
+        },
+        {
+          "name": "CricketTeam.numOfBowlers"
+        },
+        {
+          "name": "CricketTeam.numOfBatsmen"
+        }
+      ],
+      "name": "CricketTeam"
+    },
+    {
+      "fields": [
+        {
+          "name": "LibraryManager.manages"
+        },
+        {
+          "name": "LibraryManager.name"
+        }
+      ],
+      "name": "LibraryManager"
+    },
+    {
+      "fields": [
+        {
+          "name": "Team.teamName"
+        },
+        {
+          "name": "Team.teamID"
+        }
+      ],
+      "name": "Team"
+    },
+    {
+      "fields": [
+        {
+          "name": "Team.teamName"
+        },
+        {
+          "name": "SportsMember.playerRating"
+        },
+        {
+          "name": "Team.teamID"
+        },
+        {
+          "name": "Member.name"
+        },
+        {
+          "name": "Member.refID"
+        },
+        {
+          "name": "Member.itemsIssued"
+        },
+        {
+          "name": "SportsMember.plays"
+        },
+        {
+          "name": "Member.fineAccumulated"
+        }
+      ],
+      "name": "SportsMember"
+    },
+    {
+      "fields": [
+        {
+          "name": "LibraryMember.readHours"
+        },
+        {
+          "name": "LibraryMember.interests"
+        },
+        {
+          "name": "Member.name"
+        },
+        {
+          "name": "Member.refID"
+        },
+        {
+          "name": "Member.itemsIssued"
+        },
+        {
+          "name": "Member.fineAccumulated"
+        }
+      ],
+      "name": "LibraryMember"
     }
   ]
 }

@@ -10,169 +10,169 @@ type Hotel {
 }
 
 type Country {
-        id: ID!
-        name: String! @search(by: [trigram, exact])
-        states: [State] @hasInverse(field: country)
+    id: ID!
+    name: String! @search(by: [trigram, exact])
+    states: [State] @hasInverse(field: country)
 }
 
 type State {
-        code: String! @id
-        country: Country
-        name: String!
-        capital: String
+    code: String! @id
+    country: Country
+    name: String!
+    capital: String
 }
 
 type Author {
-        id: ID!
-        name: String! @search(by: [hash])
-        dob: DateTime @search
-        reputation: Float @search
-        country: Country
-        posts: [Post!] @hasInverse(field: author)
+    id: ID!
+    name: String! @search(by: [hash])
+    dob: DateTime @search
+    reputation: Float @search
+    country: Country
+    posts: [Post!] @hasInverse(field: author)
 }
 
 type Editor {
-        id: ID!
-        code: String! @id
-        name: String! @search(by: [hash])
+    id: ID!
+    code: String! @id
+    name: String! @search(by: [hash])
 }
 
 type Post {
-        postID: ID!
-        title: String! @search(by: [term])
-        text: String @search(by: [fulltext])
-        tags: [String] @search(by: [exact])
-        numLikes: Int @search
-        isPublished: Boolean @search
-        postType: [PostType] @search
-        author: Author!
-        category: Category @hasInverse(field: posts)
-        comments: [Comment]
-        ps: PostSecret
+    postID: ID!
+    title: String! @search(by: [term])
+    text: String @search(by: [fulltext])
+    tags: [String] @search(by: [exact])
+    numLikes: Int @search
+    isPublished: Boolean @search
+    postType: [PostType] @search
+    author: Author!
+    category: Category @hasInverse(field: posts)
+    comments: [Comment]
+    ps: PostSecret
 }
 
 type PostSecret {
-       title: String! @id
+    title: String! @id
 }
 
 type Category {
-        id: ID
-        name: String
-        posts: [Post]
-        iAmDeprecated: String @deprecated(reason: "because")
+    id: ID
+    name: String
+    posts: [Post]
+    iAmDeprecated: String @deprecated(reason: "because")
 }
 
 enum PostType {
-        Fact
-        Question
-        Opinion
+    Fact
+    Question
+    Opinion
 }
 
 interface Character {
-        id: ID!
-        name: String! @search
+    id: ID!
+    name: String! @search
 }
 
 interface Employee {
-        ename: String!
+    ename: String!
 }
 
 type Director implements Character {
-        movies: [String!]
+    movies: [String!]
 }
 
 type Human implements Character & Employee {
-        dob: DateTime
-        female: Boolean
+    dob: DateTime
+    female: Boolean
 }
 
 # just for testing filters on enum types
 
 type Verification {
-  name: String @search(by: [exact])
-  status: [Status!]! @search(by: [exact])
-  prevStatus: Status! @search
+    name: String @search(by: [exact])
+    status: [Status!]! @search(by: [exact])
+    prevStatus: Status! @search
 }
 
 enum Status {
-  ACTIVE
-  INACTIVE
-  DEACTIVATED
+    ACTIVE
+    INACTIVE
+    DEACTIVATED
 }
 
 # just for testing singluar (non-list) edges in both directions
 
 type House {
-        id: ID!
-        owner: Owner @hasInverse(field: house)
+    id: ID!
+    owner: Owner @hasInverse(field: house)
 }
 
 type Owner {
-        id: ID!
-        house: House
+    id: ID!
+    house: House
 }
 
 # for testing ~reverse predicate in @dgraph directive
 type Movie {
-        id: ID!
-        name: String!
-        director: [MovieDirector] @dgraph(pred: "~directed.movies")
+    id: ID!
+    name: String!
+    director: [MovieDirector] @dgraph(pred: "~directed.movies")
 }
 
 type MovieDirector {
-        id: ID!
-        name: String!
-        directed: [Movie] @dgraph(pred: "directed.movies")
+    id: ID!
+    name: String!
+    directed: [Movie] @dgraph(pred: "directed.movies")
 }
 
 type Lab {
-        name: String! @id
-        computers: [Computer]
+    name: String! @id
+    computers: [Computer]
 }
 
 # just for testing XID remove in list
 type Computer {
-	owners: [ComputerOwner!]
-	name: String! @id
+    owners: [ComputerOwner!]
+    name: String! @id
 }
 
 type ComputerOwner {
-	name: String! @id
-	nickName: String
-	computers: Computer! @hasInverse(field: owners)
+    name: String! @id
+    nickName: String
+    computers: Computer! @hasInverse(field: owners)
 }
 
 type User @secret(field: "pwd") {
-	name: String! @id
+    name: String! @id
 }
 
 # For testing duplicate XID in single mutation
 type District {
-	code: String! @id
-	name: String!
-	cities: [City] @hasInverse(field: district)
+    code: String! @id
+    name: String!
+    cities: [City] @hasInverse(field: district)
 }
 
 type City {
-	id: ID!
-	name: String!
-	district: District
+    id: ID!
+    name: String!
+    district: District
 }
 
 # For testing duplicate XID in single mutation for interface
 interface People {
-	id: ID!
-	xid: String! @id
-	name: String!
+    id: ID!
+    xid: String! @id
+    name: String!
 }
 
 type Teacher implements People {
-	subject: String
-	teaches: [Student]
+    subject: String
+    teaches: [Student]
 }
 
 type Student implements People {
-        taughtBy: [Teacher] @hasInverse(field: "teaches")
+    taughtBy: [Teacher] @hasInverse(field: "teaches")
 }
 
 type Comment {
@@ -180,64 +180,64 @@ type Comment {
     author: String!
     title: String
     content: String @custom(http: {
-              url: "http://api-gateway.com/post/",
-              method: "GET",
-              operation: "batch",
-              body: "{ myId: $id, theAuthor: $author}",
-              forwardHeaders: ["X-App-Token"]})
+        url: "http://api-gateway.com/post/",
+        method: "GET",
+        operation: "batch",
+        body: "{ myId: $id, theAuthor: $author}",
+        forwardHeaders: ["X-App-Token"]})
 
     url: String! @id
     ups: Int!
     downs: Int
     relatedUsers: [User] @custom(http: {
-              url: "http://api-gateway.com/relatedPosts",
-              method: "POST",
-              operation: "single",
-              body: "{ myId: $url }"})
+        url: "http://api-gateway.com/relatedPosts",
+        method: "POST",
+        operation: "single",
+        body: "{ myId: $url }"})
 }
 
 type Query {
-	myFavoriteMovies(id: ID!, name: String!, num: Int): [Movie] @custom(http: {
-		url: "http://myapi.com/favMovies/$id?name=$name&num=$num",
-		method: "GET"
-	})
+    myFavoriteMovies(id: ID!, name: String!, num: Int): [Movie] @custom(http: {
+        url: "http://myapi.com/favMovies/$id?name=$name&num=$num",
+        method: "GET"
+    })
 
-	myFavoriteMoviesPart2(id: ID!, name: String!, num: Int): [Movie] @custom(http: {
-		url: "http://myapi.com/favMovies/$id?name=$name&num=$num",
-		method: "POST",
-                body: "{ id: $id, name: $name, director: { number: $num }}",
-                forwardHeaders: ["X-App-Token", "Auth0-token"]
-        })
+    myFavoriteMoviesPart2(id: ID!, name: String!, num: Int): [Movie] @custom(http: {
+        url: "http://myapi.com/favMovies/$id?name=$name&num=$num",
+        method: "POST",
+        body: "{ id: $id, name: $name, director: { number: $num }}",
+        forwardHeaders: ["X-App-Token", "Auth0-token"]
+    })
 }
 
 input MovieDirectorInput {
-        id: ID
-        name: String
-        directed: [MovieInput]
+    id: ID
+    name: String
+    directed: [MovieInput]
 }
 
 input MovieInput {
-        id: ID
-        name: String
-        director: [MovieDirectorInput]
+    id: ID
+    name: String
+    director: [MovieDirectorInput]
 }
 
 type Mutation {
-        createMyFavouriteMovies(input: [MovieInput!]): [Movie] @custom(http: {
-                url: "http://myapi.com/favMovies",
-                method: "POST",
-                body: "{ movies: $input}",
-                forwardHeaders: ["X-App-Token", "Auth0-token"]
-        })
-        updateMyFavouriteMovie(id: ID!, input: MovieInput!): Movie @custom(http: {
-                url: "http://myapi.com/favMovies/$id",
-                method: "PATCH",
-                body: "{ movie: $input}"
-        })
-        deleteMyFavouriteMovie(id: ID!): Movie @custom(http: {
-                url: "http://myapi.com/favMovies/$id",
-                method: "DELETE"
-        })
+    createMyFavouriteMovies(input: [MovieInput!]): [Movie] @custom(http: {
+        url: "http://myapi.com/favMovies",
+        method: "POST",
+        body: "{ movies: $input}",
+        forwardHeaders: ["X-App-Token", "Auth0-token"]
+    })
+    updateMyFavouriteMovie(id: ID!, input: MovieInput!): Movie @custom(http: {
+        url: "http://myapi.com/favMovies/$id",
+        method: "PATCH",
+        body: "{ movie: $input}"
+    })
+    deleteMyFavouriteMovie(id: ID!): Movie @custom(http: {
+        url: "http://myapi.com/favMovies/$id",
+        method: "DELETE"
+    })
 }
 
 type Message {
@@ -252,33 +252,33 @@ interface X {
 }
 type Y implements X @auth(
     query: { rule: """
-      query($USER: String!) {
-        queryY(filter: { username: { eq: $USER } }) {
-          __typename
-        }
-      }
+    query($USER: String!) {
+    queryY(filter: { username: { eq: $USER } }) {
+    __typename
+    }
+    }
     """ }
 ){
-  userRole: String @search(by: [hash])
+    userRole: String @search(by: [hash])
 }
 
 type Post1 {
-  id: String! @id
-  content: String
-  comments: [Comment1]
+    id: String! @id
+    content: String
+    comments: [Comment1]
 }
 
 type Person1 {
-  id: String! @id
-  friends: [Person1] @hasInverse(field: friends)
-  closeFriends: [Person1] @hasInverse(field: closeFriends)
-  name: String! @id
+    id: String! @id
+    friends: [Person1] @hasInverse(field: friends)
+    closeFriends: [Person1] @hasInverse(field: closeFriends)
+    name: String! @id
 }
 
 type Comment1 {
-  id: String! @id
-  message: String
-  replies: [Comment1]
+    id: String! @id
+    message: String
+    replies: [Comment1]
 }
 
 type Tweets {
@@ -464,4 +464,36 @@ type LinkY {
 type LinkZ {
     f7: String! @id
     f4: [LinkX] @dgraph(pred: "link")
+}
+
+interface Member {
+    refID: String! @id (interface:true)
+    name:  String! @id
+    itemsIssued: [String]
+    fineAccumulated: Int
+}
+
+interface Team {
+    teamID: String! @id (interface:true)
+    teamName:  String! @id
+}
+
+type LibraryMember implements Member {
+    interests: [String]
+    readHours: String
+}
+
+type SportsMember implements Member & Team {
+    plays: String
+    playerRating: Int
+}
+
+type CricketTeam implements Team {
+    numOfBatsmans: Int
+    numOfBowlers: Int
+}
+
+type LibraryManager  {
+    name: String! @id
+    manages: [LibraryMember]
 }

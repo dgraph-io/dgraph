@@ -2076,12 +2076,26 @@ func idValidation(sch *ast.Schema,
 	if field.Type.String() == "String!" ||
 		field.Type.String() == "Int!" ||
 		field.Type.String() == "Int64!" {
+
+		var inherited bool
+		for _, implements := range sch.Implements[typ.Name] {
+			if implements.Fields.ForName(field.Name) != nil {
+				inherited = true
+			}
+		}
+		if typ.Kind != "INTERFACE" && hasInterfaceArg(field) && !inherited {
+			return []*gqlerror.Error{gqlerror.ErrorPosf(
+				dir.Position,
+				"Type %s; Field %s: @id field with interface argument can only be defined"+
+					" in interface,not in Type", typ.Name, field.Name)}
+		}
 		return nil
 	}
 	return []*gqlerror.Error{gqlerror.ErrorPosf(
 		dir.Position,
 		"Type %s; Field %s: with @id directive must be of type String!, Int! or Int64!, not %s",
 		typ.Name, field.Name, field.Type.String())}
+
 }
 
 func apolloKeyValidation(sch *ast.Schema, typ *ast.Definition) gqlerror.List {

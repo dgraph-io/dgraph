@@ -387,3 +387,36 @@ type Dataset {
         project: Project!
         name: String! @search(by: [hash])
 }
+
+
+interface Member {
+        refID: String! @id (interface:true)
+        name:  String! @id
+        itemsIssued: [String]
+        fineAccumulated: Int
+}
+
+interface Team {
+        teamID: String! @id (interface:true)
+        teamName:  String! @id
+}
+
+type LibraryMember implements Member {
+        interests: [String]
+        readHours: String
+}
+
+type SportsMember implements Member & Team {
+        plays: String
+        playerRating: Int
+}
+
+type CricketTeam implements Team {
+        numOfBatsmen: Int
+        numOfBowlers: Int
+}
+
+type LibraryManager  {
+        name: String! @id
+        manages: [LibraryMember]
+}

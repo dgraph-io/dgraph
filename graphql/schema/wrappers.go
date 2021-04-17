@@ -249,7 +249,7 @@ type Type interface {
 	Interfaces() []string
 	ImplementingTypes() []Type
 	EnsureNonNulls(map[string]interface{}, string) error
-	FieldOriginatedFrom(fieldName string) string
+	FieldOriginatedFrom(fieldName string) (Type, bool)
 	AuthRules() *TypeAuth
 	IsGeo() bool
 	IsAggregateResult() bool
@@ -269,6 +269,7 @@ type FieldDefinition interface {
 	IsID() bool
 	IsExternal() bool
 	HasIDDirective() bool
+	HasInterfaceArg() bool
 	Inverse() FieldDefinition
 	WithMemberType(string) FieldDefinition
 	// TODO - It might be possible to get rid of ForwardEdge and just use Inverse() always.
@@ -2327,8 +2328,32 @@ func (fd *fieldDefinition) HasIDDirective() bool {
 }
 
 func hasIDDirective(fd *ast.FieldDefinition) bool {
-	id := fd.Directives.ForName("id")
+	id := fd.Directives.ForName(idDirective)
 	return id != nil
+}
+
+func (fd *fieldDefinition) HasInterfaceArg() bool {
+	if fd.fieldDef == nil {
+		return false
+	}
+	return hasInterfaceArg(fd.fieldDef)
+}
+
+func hasInterfaceArg(fd *ast.FieldDefinition) bool {
+	if !hasIDDirective(fd) {
+		return false
+	}
+	interfaceArg := fd.Directives.ForName(idDirective).Arguments.ForName(idDirectiveInterfaceArg)
+	if interfaceArg == nil {
+		return false
+	}
+
+	value, _ := interfaceArg.Value.Value(nil)
+	if val, ok := value.(bool); ok && val {
+		return true
+	}
+
+	return false
 }
 
 func isID(fd *ast.FieldDefinition) bool {
@@ -3017,21 +3042,34 @@ func SubstituteVarsInBody(jsonTemplate interface{}, variables map[string]interfa
 	return jsonTemplate
 }
 
-// FieldOriginatedFrom returns the name of the interface from which given field was inherited.
-// If the field wasn't inherited, but belonged to this type, this type's name is returned.
-// Otherwise, empty string is returned.
-func (t *astType) FieldOriginatedFrom(fieldName string) string {
+// FieldOriginatedFrom returns the interface from which given field was inherited.
+// If the field wasn't inherited, but belonged to this type,then type is returned.
+// Otherwise, nil is returned. Along with type definition we return boolean flag true if field
+// is inherited from interface.
+func (t *astType) FieldOriginatedFrom(fieldName string) (Type, bool) {
+
+	astTyp := &astType{
+		inSchema:        t.inSchema,
+		dgraphPredicate: t.dgraphPredicate,
+	}
+
 	for _, implements := range t.inSchema.schema.Implements[t.Name()] {
 		if implements.Fields.ForName(fieldName) != nil {
-			return implements.Name
+			astTyp.typ = &ast.Type{
+				NamedType: implements.Name,
+			}
+			return astTyp, true
 		}
 	}
 
 	if t.inSchema.schema.Types[t.Name()].Fields.ForName(fieldName) != nil {
-		return t.Name()
+		astTyp.typ = &ast.Type{
+			NamedType: t.inSchema.schema.Types[t.Name()].Name,
+		}
+		return astTyp, false
 	}
 
-	return ""
+	return nil, false
 }
 
 // buildGraphqlRequestFields will build graphql request body from ast.

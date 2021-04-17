@@ -3,11 +3,13 @@
 #######################
 
 interface LibraryItem {
-	refID: String! @id
+	refID: String! @id(interface: false)
+	itemID: String! @id(interface: true)
 }
 
 type Book implements LibraryItem {
-	refID: String! @id
+	refID: String! @id(interface: false)
+	itemID: String! @id(interface: true)
 	title: String
 	author: String
 }
@@ -189,7 +191,7 @@ input GenerateMutationParams {
 directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
-directive @id on FIELD_DEFINITION
+directive @id(interface: Boolean) on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @auth(
@@ -297,6 +299,8 @@ type BookAggregateResult {
 	count: Int
 	refIDMin: String
 	refIDMax: String
+	itemIDMin: String
+	itemIDMax: String
 	titleMin: String
 	titleMax: String
 	authorMin: String
@@ -329,6 +333,8 @@ type LibraryItemAggregateResult {
 	count: Int
 	refIDMin: String
 	refIDMax: String
+	itemIDMin: String
+	itemIDMax: String
 }
 
 type UpdateBookPayload {
@@ -347,12 +353,14 @@ type UpdateLibraryPayload {
 
 enum BookHasFilter {
 	refID
+	itemID
 	title
 	author
 }
 
 enum BookOrderable {
 	refID
+	itemID
 	title
 	author
 }
@@ -363,10 +371,12 @@ enum LibraryHasFilter {
 
 enum LibraryItemHasFilter {
 	refID
+	itemID
 }
 
 enum LibraryItemOrderable {
 	refID
+	itemID
 }
 
 #######################
@@ -375,6 +385,7 @@ enum LibraryItemOrderable {
 
 input AddBookInput {
 	refID: String!
+	itemID: String!
 	title: String
 	author: String
 }
@@ -385,6 +396,7 @@ input AddLibraryInput {
 
 input BookFilter {
 	refID: StringHashFilter
+	itemID: StringHashFilter
 	has: [BookHasFilter]
 	and: [BookFilter]
 	or: [BookFilter]
@@ -404,6 +416,7 @@ input BookPatch {
 
 input BookRef {
 	refID: String
+	itemID: String
 	title: String
 	author: String
 }
@@ -417,6 +430,7 @@ input LibraryFilter {
 
 input LibraryItemFilter {
 	refID: StringHashFilter
+	itemID: StringHashFilter
 	has: [LibraryItemHasFilter]
 	and: [LibraryItemFilter]
 	or: [LibraryItemFilter]
@@ -458,10 +472,10 @@ input UpdateLibraryInput {
 #######################
 
 type Query {
-	getLibraryItem(refID: String!): LibraryItem @deprecated(reason: "@id argument for get query on interface is being deprecated, it will be removed in v21.11.0, please update your query to not use that argument")
+	getLibraryItem(refID: String, itemID: String): LibraryItem @deprecated(reason: "@id argument for get query on interface is being deprecated. Only those @id fields which have interface argument set to true will be available in getQuery argument on interface post v21.11.0, please update your schema accordingly.")
 	queryLibraryItem(filter: LibraryItemFilter, order: LibraryItemOrder, first: Int, offset: Int): [LibraryItem]
 	aggregateLibraryItem(filter: LibraryItemFilter): LibraryItemAggregateResult
-	getBook(refID: String!): Book
+	getBook(refID: String, itemID: String): Book
 	queryBook(filter: BookFilter, order: BookOrder, first: Int, offset: Int): [Book]
 	aggregateBook(filter: BookFilter): BookAggregateResult
 	queryLibrary(filter: LibraryFilter, first: Int, offset: Int): [Library]

@@ -2934,6 +2934,18 @@ invalid_schemas:
         "locations": [ { "line": 3, "column": 19 } ] },
     ]
 
+  - name: "@id field can't have interface argument when it's defined inside a type"
+    input: |
+      type Person  {
+        name: String! @id(interface:true)
+        age: Int
+      }
+    errlist: [
+      { "message": "Type Person; Field name: @id field with interface argument
+        can only be defined in interface,not in Type",
+        "locations": [ { "line": 2, "column": 18 } ] },
+    ]
+
 valid_schemas:
   - name: "Multiple fields with @id directive should be allowed"
     input: |
@@ -3443,4 +3455,38 @@ valid_schemas:
       }
       type Z {
         f4: [X] @dgraph(pred: "link")
+      }
+
+  - name: "valid schema with @id directive having interface argument in interface"
+    input: |
+      interface Member {
+        refID: String! @id(interface: true)
+        name: String! @id
+        itemsIssued: [String]
+        fineAccumulated: Int
+      }
+
+      interface Team {
+        teamID: String! @id(interface: true)
+        teamName: String! @id
+      }
+
+      type LibraryMember implements Member {
+        interests: [String]
+        readHours: String
+      }
+
+      type SportsMember implements Member & Team {
+        plays: String
+        playerRating: Int
+      }
+
+      type CricketTeam implements Team {
+        numOfBatsmans: Int
+        numOfBowlers: Int
+      }
+
+      type LibraryManager {
+        name: String! @id
+        manages: [LibraryMember]
       }
