@@ -277,7 +277,7 @@ type Person1 {
 
 type Comment1 {
   id: String! @id
-  commentId: String @id
+  commentId: String
   message: String
   replies: [Comment1]
 }

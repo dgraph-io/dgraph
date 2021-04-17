@@ -3144,7 +3144,7 @@
           "uid":"_:Author_2"
         }
 
-- name: "Deep mutation three level xid with no initial XID"
+- name: "Deep mutation three level xid with no initial XID "
   gqlmutation: |
     mutation($auth: [AddPost1Input!]!) {
       addPost1(input: $auth) {
@@ -3981,12 +3981,12 @@
               "dgraph.type": [
                 "Person1"
               ],
-              "uid": "_:Person1_4"
+              "uid": "_:Person1_3"
             }
           ],
           "Person1.friends": [
             {
-              "uid": "_:Person1_4",
+              "uid": "_:Person1_3",
               "Person1.friends": [
                 {
                   "uid": "_:Person1_2"

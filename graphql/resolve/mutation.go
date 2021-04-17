@@ -384,36 +384,6 @@ func (mr *dgraphResolver) rewriteAndExecute(
 
 	for _, upsert := range upserts {
 		req.Query = dgraph.AsString(upsert.Query)
-		if mutation.MutationType() == schema.UpdateMutation {
-			upsertWithoutVar := upsert.Query
-			upsertWithoutVar[0].Var = ""
-			resp, err := mr.executor.Execute(ctx, &dgoapi.Request{Query: dgraph.AsString(upsertWithoutVar),
-				ReadOnly: true}, nil)
-			if err != nil {
-				return emptyResult(schema.GQLWrapf(err, "couldn't execute query for mutation %s",
-					mutation.Name())), resolverFailed
-			}
-
-			// we will execute upsert query to see if it results into multiple xids
-			ResultMap := make(map[string][]map[string]string)
-			err = json.Unmarshal(resp.Json, &ResultMap)
-			if err != nil {
-				gqlErr := schema.GQLWrapLocationf(
-					err, mutation.Location(), "mutation %s failed", mutation.Name())
-				return emptyResult(gqlErr), resolverFailed
-			}
-
-			// if there are existence queries for update query it means we
-			// are setting an xid in set
-			if len(queries) != 0 && len(ResultMap[upsert.Query[0].Attr]) > 1 {
-				return emptyResult(
-						schema.GQLWrapf(errors.Errorf("multiple nodes are selected"+
-							" in filter while updating @id field "),
-							"mutation %s failed", mutation.Name())),
-					resolverFailed
-			}
-		}
-
 		req.Mutations = upsert.Mutations
 		mutResp, err = mr.executor.Execute(ctx, req, nil)
 		if err != nil {
@@ -428,6 +398,40 @@ func (mr *dgraphResolver) rewriteAndExecute(
 			if err := json.Unmarshal(mutResp.GetJson(), &result); err != nil {
 				return emptyResult(
 						schema.GQLWrapf(err, "Couldn't unmarshal response from Dgraph mutation")),
+					resolverFailed
+			}
+		}
+
+		if mutation.MutationType() == schema.UpdateMutation {
+
+			inp := mutation.ArgValue(schema.InputArgName).(map[string]interface{})
+			setArg := inp["set"]
+			objSet, okSetArg := setArg.(map[string]interface{})
+			if len(objSet) == 0 && okSetArg {
+				return emptyResult(
+						schema.GQLWrapf(errors.Errorf("not able to find set args"+
+							" in update mutation"),
+							"mutation %s failed", mutation.Name())),
+					resolverFailed
+			}
+
+			var xidsPresent bool
+			if len(objSet) != 0 {
+				mutatedType := mutation.MutatedType()
+				for _, xid := range mutatedType.XIDFields() {
+					if xidVal, ok := objSet[xid.Name()]; ok && xidVal != nil {
+						xidsPresent = true
+					}
+				}
+			}
+			// if there are existence queries for update query it means we
+			// are setting an xid in set
+			glog.Infof("%v---%v", xidsPresent, result)
+			if xidsPresent && len(result[mutation.Name()].([]interface{})) > 1 {
+				return emptyResult(
+						schema.GQLWrapf(errors.Errorf("multiple nodes are selected"+
+							" in filter while updating @id field "),
+							"mutation %s failed", mutation.Name())),
 					resolverFailed
 			}
 		}
