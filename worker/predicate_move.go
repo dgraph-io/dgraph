@@ -43,6 +43,14 @@ var (
 	emptyPayload      = api.Payload{}
 )
 
+const (
+	// NoCleanPredicate is used to indicate that we are in phase 2 of predicate move, so we should
+	// not clean the predicate.
+	NoCleanPredicate = iota
+	// CleanPredicate is used to indicate that we need to clean the predicate on receiver.
+	CleanPredicate
+)
+
 // size of kvs won't be too big, we would take care before proposing.
 func populateKeyValues(ctx context.Context, kvs []*bpb.KV) error {
 	glog.Infof("Writing %d keys\n", len(kvs))
@@ -87,12 +95,14 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *pb.KVS) error {
 					return errors.Errorf("Expecting first key to be schema key: %+v", kv)
 				}
 
-				// Delete on all nodes.
-				p := &pb.Proposal{CleanPredicate: pk.Attr}
 				glog.Infof("Predicate being received: %v", pk.Attr)
-				if err := n.proposeAndWait(ctx, p); err != nil {
-					glog.Errorf("Error while cleaning predicate %v %v\n", pk.Attr, err)
-					return err
+				if kv.StreamId == CleanPredicate {
+					// Delete on all nodes.
+					p := &pb.Proposal{CleanPredicate: pk.Attr}
+					if err := n.proposeAndWait(ctx, p); err != nil {
+						glog.Errorf("Error while cleaning predicate %v %v\n", pk.Attr, err)
+						return err
+					}
 				}
 			}
 
@@ -216,8 +226,9 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 		p := &pb.Proposal{CleanPredicate: in.Predicate, ExpectedChecksum: in.ExpectedChecksum}
 		return &emptyPayload, groups().Node.proposeAndWait(ctx, p)
 	}
-	if err := posting.Oracle().WaitForTs(ctx, in.TxnTs); err != nil {
-		return &emptyPayload, errors.Errorf("While waiting for txn ts: %d. Error: %v", in.TxnTs, err)
+	if err := posting.Oracle().WaitForTs(ctx, in.ReadTs); err != nil {
+		return &emptyPayload,
+			errors.Errorf("While waiting for read ts: %d. Error: %v", in.ReadTs, err)
 	}
 
 	gid, err := groups().BelongsTo(in.Predicate)
@@ -265,7 +276,7 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error
 
 	// This txn is only reading the schema. Doesn't really matter what read timestamp we use,
 	// because schema keys are always set at ts=1.
-	txn := pstore.NewTransactionAt(in.TxnTs, false)
+	txn := pstore.NewTransactionAt(in.ReadTs, false)
 	defer txn.Discard()
 
 	// Send schema first.
@@ -290,6 +301,10 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error
 		kv.Value = val
 		kv.Version = 1
 		kv.UserMeta = []byte{item.UserMeta()}
+		if in.SinceTs == 0 {
+			// When doing phase 1 of predicate move, receiver should clean the predicate.
+			kv.StreamId = CleanPredicate
+		}
 		badger.KVToBuffer(kv, buf)
 
 		kvs := &pb.KVS{
@@ -300,23 +315,42 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error
 		}
 	}
 
+	itrs := make([]*badger.Iterator, x.WorkerConfig.Badger.NumGoroutines)
+	if in.SinceTs > 0 {
+		iopt := badger.DefaultIteratorOptions
+		iopt.AllVersions = true
+		for i := range itrs {
+			itrs[i] = txn.NewIterator(iopt)
+			defer itrs[i].Close()
+		}
+	}
+
 	// sends all data except schema, schema key has different prefix
 	// Read the predicate keys and stream to keysCh.
-	stream := pstore.NewStreamAt(in.TxnTs)
+	stream := pstore.NewStreamAt(in.ReadTs)
 	stream.LogPrefix = fmt.Sprintf("Sending predicate: [%s]", in.Predicate)
 	stream.Prefix = x.PredicatePrefix(in.Predicate)
+	stream.SinceTs = in.SinceTs
 	stream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
+		bitr := itr
+		// Use the threadlocal iterator because "itr" has the sinceTs set and
+		// it will not be able to read all the data.
+		if itrs[itr.ThreadId] != nil {
+			bitr = itrs[itr.ThreadId]
+			bitr.Seek(key)
+		}
+
 		// For now, just send out full posting lists, because we use delete markers to delete older
 		// data in the prefix range. So, by sending only one version per key, and writing it at a
 		// provided timestamp, we can ensure that these writes are above all the delete markers.
-		l, err := posting.ReadPostingList(key, itr)
+		l, err := posting.ReadPostingList(key, bitr)
 		if err != nil {
 			return nil, err
 		}
 		kvs, err := l.Rollup(itr.Alloc)
 		for _, kv := range kvs {
 			// Let's set all of them at this move timestamp.
-			kv.Version = in.TxnTs
+			kv.Version = in.ReadTs
 		}
 		return &bpb.KVList{Kv: kvs}, err
 	}
@@ -339,7 +373,6 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error
 	if err != nil {
 		return err
 	}
-
 	msg := fmt.Sprintf("Receiver %s says it got %d keys.\n", pl.Addr, recvCount)
 	span.Annotate(nil, msg)
 	glog.Infof(msg)

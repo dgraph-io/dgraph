@@ -546,7 +546,10 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) error {
 	if err != nil {
 		return errors.Wrapf(err, "unable to get encryption config")
 	}
-	_, encKey := ee.GetKeys(cfg)
+	keys, err := ee.GetKeys(cfg)
+	if err != nil {
+		return err
+	}
 
 	mapper := &mapper{
 		buf:       newBuffer(),
@@ -594,7 +597,7 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) error {
 			// Only restore the predicates that were assigned to this group at the time
 			// of the last backup.
 			file := filepath.Join(manifest.Path, backupName(manifest.Since, gid))
-			br := readerFrom(h, file).WithEncryption(encKey).WithCompression(manifest.Compression)
+			br := readerFrom(h, file).WithEncryption(keys.EncKey).WithCompression(manifest.Compression)
 			if br.err != nil {
 				return errors.Wrap(br.err, "newBackupReader")
 			}

@@ -4,6 +4,7 @@ go 1.12
 
 // replace github.com/dgraph-io/badger/v3 => /home/mrjn/go/src/github.com/dgraph-io/badger
 // replace github.com/dgraph-io/ristretto => /home/mrjn/go/src/github.com/dgraph-io/ristretto
+
 // replace github.com/dgraph-io/roaring => /home/mrjn/go/src/github.com/dgraph-io/roaring
 
 require (
@@ -23,7 +24,7 @@ require (
 	github.com/dgraph-io/gqlgen v0.13.2
 	github.com/dgraph-io/gqlparser/v2 v2.2.0
 	github.com/dgraph-io/graphql-transport-ws v0.0.0-20210223074046-e5b8b80bb4ed
-	github.com/dgraph-io/ristretto v0.0.4-0.20210310100713-a4346e5d1f90
+	github.com/dgraph-io/ristretto v0.0.4-0.20210407062338-62d2e1706f55
 	github.com/dgraph-io/roaring v0.5.6-0.20210227175938-766b897233a5
 	github.com/dgraph-io/simdjson-go v0.3.0
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible

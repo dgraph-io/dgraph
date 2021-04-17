@@ -42,7 +42,7 @@ done
 
 if [[ $HELP ]]; then
     cat <<EOF
-usage: $ME [-h|--help] [--loader=<bulk|live|none>] [--cleanup=<all|none|servers>] [--savedir=path] [--mode=<normal|ludicrous|none>]
+usage: $ME [-h|--help] [--loader=<bulk|live|none>] [--cleanup=<all|none|servers>] [--savedir=path] [--mode=<normal|none>]
 
 options:
 
@@ -58,7 +58,6 @@ options:
     --quiet         just report which queries differ, without a diff
     --mode          normal = run dgraph in normal mode
                     none = run dgraph in normal mode
-                    ludicrous = run dgraph in ludicrous mode
 EOF
     exit 0
 fi
@@ -72,17 +71,6 @@ fi
 # if already re-using it from a previous run
 if [[ $LOADER == none && -z $CLEANUP ]]; then
     CLEANUP=servers
-fi
-
-if [[ $MODE == ludicrous ]]; then
-    Info "removing old data (if any)"
-    DockerCompose down -v --remove-orphans
-    function DockerCompose {
-        docker-compose -f docker-compose-ludicrous.yml -p dgraph "$@"
-    }
-    function DgraphLive {
-        dgraph live --ludicrous "$@"
-    }
 fi
 
 # default to cleaning up both services and volume
@@ -142,10 +130,7 @@ sleep 10
 if [[ $LOADER == live ]]; then
     Info "live loading data set"
     DgraphLive --schema=$SCHEMA_FILE --files=$DATA_FILE \
-                --format=rdf --zero=:5180 --alpha=:9180 --logtostderr --ludicrous
-    if [[ $MODE == ludicrous ]]; then
-        sleep 300
-    fi
+                --format=rdf --zero=:5180 --alpha=:9180 --logtostderr
 fi
 
 

@@ -220,6 +220,7 @@ type post1{
 type Person1 {
     id: ID!
     name: String!
+    closeFriends: [Person1] @hasInverse(field: closeFriends)
     friends: [Person1] @hasInverse(field: friends)
 }
 

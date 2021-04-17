@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"regexp"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -74,6 +75,7 @@ func TestSnapshot(t *testing.T) {
 	}
 	t.Logf("Mutations done.\n")
 	snapshotTs = waitForSnapshot(t, snapshotTs)
+	t.Logf("Took snapshot at ts: %d\n", snapshotTs)
 
 	t.Logf("Starting alpha2.\n")
 	err = testutil.DockerRun("alpha2", testutil.Start)
@@ -98,7 +100,9 @@ func TestSnapshot(t *testing.T) {
 		})
 		require.NoError(t, err)
 	}
-	_ = waitForSnapshot(t, snapshotTs)
+	t.Logf("Mutations done.\n")
+	snapshotTs = waitForSnapshot(t, snapshotTs)
+	t.Logf("Took snapshot at ts: %d\n", snapshotTs)
 
 	t.Logf("Starting alpha2.\n")
 	err = testutil.DockerRun("alpha2", testutil.Start)
@@ -135,6 +139,7 @@ func verifySnapshot(t *testing.T, dg *dgo.Dgraph, num int) {
 	require.Equal(t, expectedSum, sum)
 
 	// Perform a query using the updated index in the schema.
+top:
 	q2 := `
 	{
 		names(func: anyofterms(name, Mike)) {
@@ -143,6 +148,11 @@ func verifySnapshot(t *testing.T, dg *dgo.Dgraph, num int) {
 	}`
 	resMap = make(map[string][]map[string]int)
 	_, err = testutil.RetryQuery(dg, q2)
+	if err != nil && strings.Contains(err.Error(), "is not indexed with") {
+		t.Logf("Got error: %v. Retrying...", err)
+		time.Sleep(time.Second)
+		goto top
+	}
 	require.NoError(t, err)
 
 	// Trying to perform a query using the address index should not work since that

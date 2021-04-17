@@ -3133,3 +3133,16 @@ func TestLangDotInFunction(t *testing.T) {
 		`{"data": {"me":[{"name@pl":"Borsuk europejski","name@en":"European badger"},{"name@en":"Honey badger"},{"name@en":"Honey bee"}]}}`,
 		js)
 }
+
+func TestGeoFuncWithAfter(t *testing.T) {
+
+	query := `{
+		me(func: near(geometry, [-122.082506, 37.4249518], 1000), after: 0x13ee) {
+			name
+		}
+	}`
+
+	js := processQueryNoErr(t, query)
+	expected := `{"data": {"me":[{"name": "SF Bay area"}, {"name": "Mountain View"}]}}`
+	require.JSONEq(t, expected, js)
+}

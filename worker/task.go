@@ -1645,6 +1645,10 @@ func (qs *queryState) filterStringFunction(arg funcArgs) error {
 	// TODO: This function can be optimized by having a query specific cache, which can be populated
 	// by the handleHasFunction for e.g. for a `has(name)` query.
 	itr := uids.Iterator()
+
+	// We can't directly modify uids bitmap. We need to add them to another bitmap, and then take
+	// the difference.
+	remove := roaring64.New()
 	for itr.HasNext() {
 		uid := itr.Next()
 		vals, err := qs.getValsForUID(attr, lang, uid, arg.q.ReadTs)
@@ -1665,10 +1669,11 @@ func (qs *queryState) filterStringFunction(arg funcArgs) error {
 			strVals = append(strVals, strVal)
 		}
 		if !matchStrings(filter, strVals) {
-			uids.Remove(uid)
+			remove.Add(uid)
 		}
 	}
 
+	uids.AndNot(remove)
 	for i := 0; i < len(matrix); i++ {
 		matrix[i].And(uids)
 		// TODO: This could be a conversion to Bitmap instead of ToArray.
