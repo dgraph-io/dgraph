@@ -2942,7 +2942,7 @@ invalid_schemas:
       }
     errlist: [
       { "message": "Type Person; Field name: @id field with interface argument
-        can only be defined in interface,not in type",
+        can only be defined in interface,not in Type",
         "locations": [ { "line": 2, "column": 18 } ] },
     ]
 
