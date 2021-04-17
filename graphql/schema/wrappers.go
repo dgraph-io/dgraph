@@ -249,7 +249,7 @@ type Type interface {
 	Interfaces() []string
 	ImplementingTypes() []Type
 	EnsureNonNulls(map[string]interface{}, string) error
-	FieldOriginatedFrom(fieldName string) (*ast.Definition, bool)
+	FieldOriginatedFrom(fieldName string) (Type, bool)
 	AuthRules() *TypeAuth
 	IsGeo() bool
 	IsAggregateResult() bool
@@ -596,10 +596,10 @@ func dgraphMapping(sch *ast.Schema) map[string]map[string]string {
 				// fixed i.e. uid.
 				continue
 			}
-			typName := TypeName(inputTyp)
+			typName := typeName(inputTyp)
 			parentInt := parentInterface(sch, inputTyp, fld.Name)
 			if parentInt != nil {
-				typName = TypeName(parentInt)
+				typName = typeName(parentInt)
 			}
 			// 1. For fields that have @dgraph(pred: xxxName) directive, field name would be
 			//    xxxName.
@@ -667,7 +667,7 @@ func typeMappings(s *ast.Schema) map[string][]*ast.Definition {
 	typeNameAst := make(map[string][]*ast.Definition)
 
 	for _, typ := range s.Types {
-		name := TypeName(typ)
+		name := typeName(typ)
 		typeNameAst[name] = append(typeNameAst[name], typ)
 	}
 
@@ -2343,12 +2343,12 @@ func hasInterfaceArg(fd *ast.FieldDefinition) bool {
 	if !hasIDDirective(fd) {
 		return false
 	}
-	uniqueArg := fd.Directives.ForName(idDirective).Arguments.ForName(idDirectiveInterfaceArg)
-	if uniqueArg == nil {
+	interfaceArg := fd.Directives.ForName(idDirective).Arguments.ForName(idDirectiveInterfaceArg)
+	if interfaceArg == nil {
 		return false
 	}
 
-	value, _ := uniqueArg.Value.Value(nil)
+	value, _ := interfaceArg.Value.Value(nil)
 	if val, ok := value.(bool); ok && val {
 		return true
 	}
@@ -2479,7 +2479,7 @@ func (t *astType) Name() string {
 
 func (t *astType) DgraphName() string {
 	typeDef := t.inSchema.schema.Types[t.typ.Name()]
-	name := TypeName(typeDef)
+	name := typeName(typeDef)
 	if name != "" {
 		return name
 	}
@@ -2663,7 +2663,7 @@ func (t *astType) Interfaces() []string {
 	for _, intr := range interfaces {
 		i := t.inSchema.schema.Types[intr]
 		name := intr
-		if n := TypeName(i); n != "" {
+		if n := typeName(i); n != "" {
 			name = n
 		}
 		names = append(names, name)
@@ -3042,19 +3042,31 @@ func SubstituteVarsInBody(jsonTemplate interface{}, variables map[string]interfa
 	return jsonTemplate
 }
 
-// FieldOriginatedFrom returns the definition of the interface from which given field was inherited.
-// If the field wasn't inherited, but belonged to this type,then type's definition is returned.
+// FieldOriginatedFrom returns the interface from which given field was inherited.
+// If the field wasn't inherited, but belonged to this type,then type is returned.
 // Otherwise, nil is returned. Along with type definition we return boolean flag true if field
 // is inherited from interface.
-func (t *astType) FieldOriginatedFrom(fieldName string) (*ast.Definition, bool) {
+func (t *astType) FieldOriginatedFrom(fieldName string) (Type, bool) {
+
+	astTyp := &astType{
+		inSchema:        t.inSchema,
+		dgraphPredicate: t.dgraphPredicate,
+	}
+
 	for _, implements := range t.inSchema.schema.Implements[t.Name()] {
 		if implements.Fields.ForName(fieldName) != nil {
-			return implements, true
+			astTyp.typ = &ast.Type{
+				NamedType: implements.Name,
+			}
+			return astTyp, true
 		}
 	}
 
 	if t.inSchema.schema.Types[t.Name()].Fields.ForName(fieldName) != nil {
-		return t.inSchema.schema.Types[t.Name()], false
+		astTyp.typ = &ast.Type{
+			NamedType: t.inSchema.schema.Types[t.Name()].Name,
+		}
+		return astTyp, false
 	}
 
 	return nil, false

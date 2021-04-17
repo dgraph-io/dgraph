@@ -3283,14 +3283,14 @@
 - name: "get query on interface with @id field having interface argument set"
   gqlquery: |
     query {
-    	getMember(refID: "101") {
-    		refID
-    		name
-    		fineAccumulated
-    		... on SportsMember {
-              plays
-            }
-    	}
+      getMember(refID: "101") {
+        refID
+        name
+        fineAccumulated
+        ... on SportsMember {
+          plays
+        }
+      }
     }
   dgquery: |-
     query {

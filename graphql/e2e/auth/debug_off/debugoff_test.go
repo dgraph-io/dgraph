@@ -144,8 +144,17 @@ func TestAddMutationWithAuthOnIDFieldHavingInterfaceArg(t *testing.T) {
 
 	gqlResponse := addLibraryMemberParams.ExecuteAsPost(t, common.GraphqlURL)
 	common.RequireNoGQLErrors(t, gqlResponse)
+
 	// add SportsMember should return error but in debug mode
 	// because interface type have auth rules defined on it
+	var resultLibraryMember struct {
+		AddLibraryMember struct {
+			NumUids int
+		}
+	}
+	err := json.Unmarshal(gqlResponse.Data, &resultLibraryMember)
+	require.NoError(t, err)
+	require.Equal(t, 1, resultLibraryMember.AddLibraryMember.NumUids)
 
 	addSportsMemberParams := &common.GraphQLParams{
 		Query: `mutation addSportsMember($input: [AddSportsMemberInput!]!) {
@@ -164,6 +173,14 @@ func TestAddMutationWithAuthOnIDFieldHavingInterfaceArg(t *testing.T) {
 
 	gqlResponse = addSportsMemberParams.ExecuteAsPost(t, common.GraphqlURL)
 	common.RequireNoGQLErrors(t, gqlResponse)
+	var resultSportsMember struct {
+		AddSportsMember struct {
+			NumUids int
+		}
+	}
+	err = json.Unmarshal(gqlResponse.Data, &resultSportsMember)
+	require.NoError(t, err)
+	require.Equal(t, 0, resultSportsMember.AddSportsMember.NumUids)
 
 	// cleanup
 	common.DeleteGqlType(t, "LibraryMember", map[string]interface{}{}, 1, nil)

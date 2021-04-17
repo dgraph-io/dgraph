@@ -804,7 +804,7 @@
     }
   error2:
     {
-      "message": "failed to rewrite mutation payload because Type State; field code: id nsw already exists"
+      "message": "failed to rewrite mutation payload because id nsw already exists for field code inside type State"
     }
 
 -
@@ -1195,8 +1195,8 @@
     }
   error2:
     {
-      "message": "failed to rewrite mutation payload because Type LibraryMember; field refID:
-       id 101 already exists in some other implementing type of interface Member"
+      "message": "failed to rewrite mutation payload because id 101 already exists for field refID
+       in some other implementing type of interface Member"
     }
 
 -
@@ -1240,7 +1240,8 @@
     }
   error2:
     {
-      "message": "failed to rewrite mutation payload because Type LibraryMember; field refID: id 101 already exists"
+      "message": "failed to rewrite mutation payload because id 101 already exists for field
+       refID inside type LibraryMember"
     }
 
 -
@@ -1278,15 +1279,15 @@
         uid
       }
     }
+  qnametouid: |-
+    {
+      "LibraryMember_1": "0x11"
+    }
   dgquerysec: |-
     query {
       LibraryMember_1 as LibraryMember_1(func: uid(0x11)) @filter(type(LibraryMember)) {
         uid
       }
-    }
-  qnametouid: |-
-    {
-      "LibraryMember_1": "0x11"
     }
   dgmutations:
     - setjson: |
@@ -1340,8 +1341,8 @@
     }
   error2:
     {
-      "message": "failed to rewrite mutation payload because Type LibraryMember; field refID:
-       id 101 already exists in some other implementing type of interface Member"
+      "message": "failed to rewrite mutation payload because id 101 already exists for
+       field refID in some other implementing type of interface Member"
     }
 
 -
@@ -1463,8 +1464,8 @@
     }
   error2:
     {
-        "message": "failed to rewrite mutation payload because Type LibraryMember; field refID:
-         id 101 already exists in some other implementing type of interface Member"
+        "message": "failed to rewrite mutation payload because id 101 already exists for field
+         refID in some other implementing type of interface Member"
     }
 
 -

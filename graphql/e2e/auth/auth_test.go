@@ -352,7 +352,7 @@ func TestAddMutationWithXid(t *testing.T) {
 	require.Error(t, gqlResponse.Errors)
 	require.Equal(t, len(gqlResponse.Errors), 1)
 	require.Contains(t, gqlResponse.Errors[0].Error(),
-		"GraphQL debug: Type Tweets; field id: id tweet1 already exists")
+		"GraphQL debug: id Tweets already exists for field id inside type tweet1")
 
 	// Clear the tweet.
 	tweet.DeleteByID(t, user, metaInfo)

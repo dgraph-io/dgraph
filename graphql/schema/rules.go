@@ -159,7 +159,7 @@ func dgraphDirectivePredicateValidation(gqlSch *ast.Schema, definitions []string
 		def := gqlSch.Types[key]
 		switch def.Kind {
 		case ast.Object, ast.Interface:
-			typName := TypeName(def)
+			typName := typeName(def)
 			if def.Kind == ast.Interface {
 				interfacePreds[def.Name] = make(map[string]bool)
 			} else {
@@ -2081,8 +2081,8 @@ func idValidation(sch *ast.Schema,
 		if typ.Kind != "INTERFACE" && hasInterfaceArg(field) && !inherited {
 			return []*gqlerror.Error{gqlerror.ErrorPosf(
 				dir.Position,
-				"Type %s; Field %s: @id field with interface argument can only be defined in interface"+
-					" but it's given in Type", typ.Name, field.Name)}
+				"Type %s; Field %s: @id field with interface argument can only be defined"+
+					" in interface,not in Type", typ.Name, field.Name)}
 		}
 		return nil
 	}

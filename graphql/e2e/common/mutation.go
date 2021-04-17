@@ -2918,7 +2918,7 @@ func addMutationWithXid(t *testing.T, executeRequest requestExecutor) {
 	gqlResponse := executeRequest(t, GraphqlURL, addStateParams)
 	require.NotNil(t, gqlResponse.Errors)
 	require.Contains(t, gqlResponse.Errors[0].Error(),
-		" Type State; field xcode: id cal already exists")
+		" because id cal already exists for field xcode inside type State")
 
 	filter := map[string]interface{}{"xcode": map[string]interface{}{"eq": "cal"}}
 	deleteState(t, filter, 1, nil)
@@ -5554,8 +5554,7 @@ func multipleXidsTests(t *testing.T) {
 	                   	}
 	                   }
                     }`,
-			error: "couldn't rewrite mutation addWorker because failed to rewrite mutation payload" +
-				" because Type Worker; field reg_No: id 1 already exists",
+			error: `couldn't rewrite mutation addWorker because failed to rewrite mutation payload because id 1 already exists for field reg_No inside type Worker`,
 		},
 		{
 			name: "adding worker with same emp_Id will return error",
@@ -5568,8 +5567,7 @@ func multipleXidsTests(t *testing.T) {
 	                   	}
 	                   }
                     }`,
-			error: "couldn't rewrite mutation addWorker because failed to rewrite mutation payload" +
-				" because Type Worker; field emp_Id: id E01 already exists",
+			error: `couldn't rewrite mutation addWorker because failed to rewrite mutation payload because id E01 already exists for field emp_Id inside type Worker`,
 		},
 		{
 			name: "adding worker with same reg_No and emp_id will return error",
@@ -5582,8 +5580,7 @@ func multipleXidsTests(t *testing.T) {
 	                  	}
 	                  }
                   }`,
-			error: "couldn't rewrite mutation addWorker because failed to rewrite mutation payload" +
-				" because Type Worker; field emp_Id: id E01 already exists",
+			error: `couldn't rewrite mutation addWorker because failed to rewrite mutation payload because id E01 already exists for field emp_Id inside type Worker`,
 		},
 		{
 			name: "adding worker with different reg_No and emp_id will succeed",
@@ -5886,8 +5883,7 @@ func multipleXidsTests(t *testing.T) {
 	                   	}
 	                   }
                      }`,
-			error: "couldn't rewrite mutation updateEmployer because failed to rewrite mutation" +
-				" payload because field reg_No cannot be empty",
+			error: `couldn't rewrite mutation updateEmployer because failed to rewrite mutation payload because field reg_No cannot be empty`,
 		},
 	}
 
@@ -5982,8 +5978,7 @@ func upsertMutationTests(t *testing.T) {
 	}
 	gqlResponse = addStateParams.ExecuteAsPost(t, GraphqlURL)
 	require.NotNil(t, gqlResponse.Errors)
-	require.Equal(t, "couldn't rewrite mutation addState because failed to rewrite mutation"+
-		" payload because Type State; field xcode: id S1 already exists",
+	require.Equal(t, "couldn't rewrite mutation addState because failed to rewrite mutation payload because id S1 already exists for field xcode inside type State",
 		gqlResponse.Errors[0].Error())
 
 	// Add Mutation with upsert true should succeed. It should link the state to
@@ -6094,7 +6089,6 @@ func addMutationWithIDFieldHavingInterfaceArg(t *testing.T) {
 	tcases := []struct {
 		name      string
 		query     string
-		expected  string
 		variables string
 		error     string
 	}{
@@ -6216,10 +6210,10 @@ func addMutationWithIDFieldHavingInterfaceArg(t *testing.T) {
                          }
                      }`,
 			error: "couldn't rewrite mutation addLibraryMember because failed to rewrite mutation" +
-				" payload because Type LibraryMember; field refID: id 102 already exists in some" +
-				" other implementing type of interface Member",
+				" payload because id 102 already exists for field refID in some other implementing" +
+				" type of interface Member",
 		}, {
-			name: "adding new Cricket Team with upsert returns returns error as given id already exist" +
+			name: "adding new Cricket Team with upsert returns error as given id already exist" +
 				" in other node of type SportsMember which implements same interface",
 			query: `mutation addCricketTeam($input: [AddCricketTeamInput!]!) {
                       addCricketTeam(input: $input, upsert: true) {
@@ -6237,8 +6231,8 @@ func addMutationWithIDFieldHavingInterfaceArg(t *testing.T) {
                          }
                      }`,
 			error: "couldn't rewrite mutation addCricketTeam because failed to rewrite mutation" +
-				" payload because Type CricketTeam; field teamID: id T01 already exists in some" +
-				" other implementing type of interface Team",
+				" payload because id T01 already exists for field teamID in some other" +
+				" implementing type of interface Team",
 		}, {
 			name: "adding new Library manager returns error when it try to links to LibraryMember" +
 				" but got id of some other implementing type which implements " +
@@ -6259,8 +6253,8 @@ func addMutationWithIDFieldHavingInterfaceArg(t *testing.T) {
                           }
                        }`,
 			error: "couldn't rewrite mutation addLibraryManager because failed to rewrite mutation" +
-				" payload because Type LibraryMember; field refID: id 102 already" +
-				" exists in some other implementing type of interface Member",
+				" payload because id 102 already exists for field refID in some other implementing" +
+				" type of interface Member",
 		},
 	}
 

@@ -1035,7 +1035,7 @@ func TestUpsertMutationsWithRBAC(t *testing.T) {
 				require.Error(t, gqlResponse.Errors)
 				require.Equal(t, len(gqlResponse.Errors), 1)
 				require.Contains(t, gqlResponse.Errors[0].Error(),
-					" GraphQL debug: Type Tweets; field id: id tweet1 already exists")
+					" GraphQL debug: id Tweets already exists for field id inside type tweet1")
 			} else {
 				common.RequireNoGQLErrors(t, gqlResponse)
 				require.JSONEq(t, tcase.result, string(gqlResponse.Data))
@@ -1172,7 +1172,6 @@ func TestAddMutationWithAuthOnIDFieldHavingInterfaceArg(t *testing.T) {
 
 	gqlResponse := addLibraryMemberParams.ExecuteAsPost(t, common.GraphqlURL)
 	common.RequireNoGQLErrors(t, gqlResponse)
-
 	// add sports member should return error but in debug mode
 	// because interface type have auth rules defined on it
 	addSportsMemberParams := &common.GraphQLParams{
@@ -1192,7 +1191,7 @@ func TestAddMutationWithAuthOnIDFieldHavingInterfaceArg(t *testing.T) {
 
 	gqlResponse = addSportsMemberParams.ExecuteAsPost(t, common.GraphqlURL)
 	require.Contains(t, gqlResponse.Errors[0].Error(),
-		" GraphQL debug: Type SportsMember; field refID: id 101 already exists in some other"+
+		" GraphQL debug: id 101 already exists for field refID in some other"+
 			" implementing type of interface Member")
 
 	// cleanup

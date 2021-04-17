@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/dgraph-io/gqlparser/v2/ast"
 	"reflect"
 	"sort"
 	"strconv"
@@ -162,8 +161,8 @@ func (v *VariableGenerator) Next(typ schema.Type, xidName, xidVal string, auth b
 		// ABC.ab.cd and ABC.abc.d
 		// It also ensures that xids from different types gets different variable names
 		// here we are using the assertion that field name or type name can't have "." in them
-		typDef, _ := typ.FieldOriginatedFrom(xidName)
-		key = typDef.Name + "." + flagAndXidName + "." + xidVal
+		typOriginated, _ := typ.FieldOriginatedFrom(xidName)
+		key = typOriginated.Name() + "." + flagAndXidName + "." + xidVal
 	}
 
 	if varName, ok := v.xidVarNameMap[key]; ok {
@@ -1213,7 +1212,7 @@ func mutationFromFragment(
 }
 
 func checkXIDExistsQuery(xidVariable, xidString, xidPredicate string, typ schema.Type,
-	inherited *ast.Definition) *gql.GraphQuery {
+	interfaceType schema.Type) *gql.GraphQuery {
 	qry := &gql.GraphQuery{
 		Attr: xidVariable,
 		Func: &gql.Function{
@@ -1229,12 +1228,8 @@ func checkXIDExistsQuery(xidVariable, xidString, xidPredicate string, typ schema
 	// Below filter is added to generate existence query for interface
 	// If given xid field is inherited from interface and
 	// have interface arg set then we add interface type in filter
-	if inherited != nil {
-		thisFilter := &gql.FilterTree{
-			Func: buildTypeFunc(schema.TypeName(inherited)),
-		}
-		addToFilterTree(qry, thisFilter)
-		return qry
+	if interfaceType != nil {
+		typ = interfaceType
 	}
 	addTypeFilter(qry, typ)
 	return qry
@@ -1436,7 +1431,7 @@ func rewriteObject(
 								// if node is some other type as of xid Field then we can't upsert that
 								// and we returns error
 								retErrors = append(retErrors, xidErrorForInterfaceType(typ, xidString, xid,
-									interfaceTypDef.Name))
+									interfaceTypDef.Name()))
 								return nil, "", retErrors
 							}
 						} else {
@@ -1446,19 +1441,19 @@ func rewriteObject(
 							var err error
 							if typUidExist {
 								if queryAuthSelector(typ) == nil {
-									err = x.GqlErrorf("Type %s; field %s: id %s already exists",
-										typ.Name(), xid.Name(), xidString)
+									err = x.GqlErrorf("id %s already exists for field %s inside type %s",
+										xidString, xid.Name(), typ.Name())
 								} else {
 									// This error will only be reported in debug mode.
-									err = x.GqlErrorf("GraphQL debug: Type %s; field %s:"+
-										" id %s already exists", typ.Name(), xid.Name(), xidString)
+									err = x.GqlErrorf("GraphQL debug: id %s already exists for field %s"+
+										" inside type %s", typ.Name(), xid.Name(), xidString)
 								}
 								retErrors = append(retErrors, err)
 								return nil, upsertVar, retErrors
 							}
 
 							retErrors = append(retErrors, xidErrorForInterfaceType(typ, xidString, xid,
-								interfaceTypDef.Name))
+								interfaceTypDef.Name()))
 							return nil, upsertVar, retErrors
 
 						}
@@ -1470,7 +1465,7 @@ func rewriteObject(
 								mutationType == UpdateWithRemove), upsertVar, nil
 						}
 						retErrors = append(retErrors, xidErrorForInterfaceType(typ, xidString, xid,
-							interfaceTypDef.Name))
+							interfaceTypDef.Name()))
 						return nil, upsertVar, retErrors
 					}
 				} else {
@@ -1713,15 +1708,12 @@ func xidErrorForInterfaceType(typ schema.Type, xidString string, xid schema.Fiel
 	//  But we need to check auth rule on implementing type for which we found existing node
 	//  with same @id.
 	if queryAuthSelector(typ) == nil {
-		return x.GqlErrorf("Type %s; field %s: id %s already exists in some other"+
-			" implementing type of interface %s", xid.ParentType().Name(), xid.Name(),
-			xidString, interfaceName)
-
+		return x.GqlErrorf("id %s already exists for field %s in some other"+
+			" implementing type of interface %s", xidString, xid.Name(), interfaceName)
 	}
 	// This error will only be reported in debug mode.
-	return x.GqlErrorf("GraphQL debug: Type %s; field %s: id %s already exists in some other"+
-		" implementing type of interface %s", xid.ParentType().Name(), xid.Name(),
-		xidString, interfaceName)
+	return x.GqlErrorf("GraphQL debug: id %s already exists for field %s in some other"+
+		" implementing type of interface %s", xidString, xid.Name(), interfaceName)
 }
 
 // existenceQueries takes a GraphQL JSON object as obj and creates queries to find
@@ -1844,11 +1836,11 @@ func existenceQueries(
 					// Add one more existence query if given xid field is inherited from interface and has
 					// interface argument set. This is added to ensure that this xid is unique across all the
 					// implementation of the interface.
-					interfaceTypDef, varInterface := interfaceVariable(typ, varGen,
+					interfaceType, varInterface := interfaceVariable(typ, varGen,
 						xid.Name(), xidString)
-					if interfaceTypDef != nil {
+					if interfaceType != nil {
 						queryInterface := checkXIDExistsQuery(varInterface, xidString, xid.Name(),
-							typ, interfaceTypDef)
+							typ, interfaceType)
 						ret = append(ret, queryInterface)
 					}
 					// Don't return just over here as there maybe more nodes in the children tree.
@@ -2390,14 +2382,14 @@ func extractVal(xidVal interface{}, xidName, typeName string) (string, error) {
 	}
 }
 
-// This function will return interface definition and variable for existence query on interface,
+// This function will return interface type and variable for existence query on interface,
 // if given xid is inherited from interface, otherwise it will return nil and empty string
 func interfaceVariable(typ schema.Type, varGen *VariableGenerator, xidName string,
-	xidString string) (*ast.Definition, string) {
-	interfaceTypeDef, isInherited := typ.FieldOriginatedFrom(xidName)
+	xidString string) (schema.Type, string) {
+	interfaceType, isInherited := typ.FieldOriginatedFrom(xidName)
 	fieldDef := typ.Field(xidName)
 	if isInherited && fieldDef.HasInterfaceArg() {
-		return interfaceTypeDef, varGen.Next(typ, "Int."+xidName, xidString, false)
+		return interfaceType, varGen.Next(typ, "Int."+xidName, xidString, false)
 	}
 	return nil, ""
 }
