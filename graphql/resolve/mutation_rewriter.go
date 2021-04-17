@@ -161,8 +161,8 @@ func (v *VariableGenerator) Next(typ schema.Type, xidName, xidVal string, auth b
 		// ABC.ab.cd and ABC.abc.d
 		// It also ensures that xids from different types gets different variable names
 		// here we are using the assertion that field name or type name can't have "." in them
-		typOriginated, _ := typ.FieldOriginatedFrom(xidName)
-		key = typOriginated.Name() + "." + flagAndXidName + "." + xidVal
+		xidType, _ := typ.FieldOriginatedFrom(xidName)
+		key = xidType.Name() + "." + flagAndXidName + "." + xidVal
 	}
 
 	if varName, ok := v.xidVarNameMap[key]; ok {
@@ -1406,7 +1406,7 @@ func rewriteObject(
 				//    node added during the mutation rewriting. This is handled by adding the new blank UID
 				//    to existenceQueryResult.
 
-				interfaceTypDef, interfaceVar := interfaceVariable(typ, varGen, xid.Name(), xidString)
+				interfaceTyp, interfaceVar := interfaceVariable(typ, varGen, xid.Name(), xidString)
 
 				// Get whether node with XID exists or not from existenceQueriesResults
 				_, interfaceUidExist := idExistence[interfaceVar]
@@ -1431,7 +1431,7 @@ func rewriteObject(
 								// if node is some other type as of xid Field then we can't upsert that
 								// and we returns error
 								retErrors = append(retErrors, xidErrorForInterfaceType(typ, xidString, xid,
-									interfaceTypDef.Name()))
+									interfaceTyp.Name()))
 								return nil, "", retErrors
 							}
 						} else {
@@ -1453,7 +1453,7 @@ func rewriteObject(
 							}
 
 							retErrors = append(retErrors, xidErrorForInterfaceType(typ, xidString, xid,
-								interfaceTypDef.Name()))
+								interfaceTyp.Name()))
 							return nil, upsertVar, retErrors
 
 						}
@@ -1465,7 +1465,7 @@ func rewriteObject(
 								mutationType == UpdateWithRemove), upsertVar, nil
 						}
 						retErrors = append(retErrors, xidErrorForInterfaceType(typ, xidString, xid,
-							interfaceTypDef.Name()))
+							interfaceTyp.Name()))
 						return nil, upsertVar, retErrors
 					}
 				} else {
@@ -1836,11 +1836,11 @@ func existenceQueries(
 					// Add one more existence query if given xid field is inherited from interface and has
 					// interface argument set. This is added to ensure that this xid is unique across all the
 					// implementation of the interface.
-					interfaceType, varInterface := interfaceVariable(typ, varGen,
+					interfaceTyp, varInterface := interfaceVariable(typ, varGen,
 						xid.Name(), xidString)
-					if interfaceType != nil {
+					if interfaceTyp != nil {
 						queryInterface := checkXIDExistsQuery(varInterface, xidString, xid.Name(),
-							typ, interfaceType)
+							typ, interfaceTyp)
 						ret = append(ret, queryInterface)
 					}
 					// Don't return just over here as there maybe more nodes in the children tree.
