@@ -1406,7 +1406,7 @@ func rewriteObject(
 				// 3. The queryResult UID does not exist. But, this could be a reference to an XID
 				//    node added during the mutation rewriting. This is handled by adding the new blank UID
 				//    to existenceQueryResult.
-interfaceTyp, interfaceVar := interfaceVariable(typ, varGen, xid.Name(), xidString)
+				interfaceTyp, interfaceVar := interfaceVariable(typ, varGen, xid.Name(), xidString)
 
 				// Get whether node with XID exists or not from existenceQueriesResults
 				_, interfaceUidExist := idExistence[interfaceVar]
@@ -1415,7 +1415,6 @@ interfaceTyp, interfaceVar := interfaceVariable(typ, varGen, xid.Name(), xidStri
 				if interfaceUidExist || typUidExist {
 					// node with XID exists. This is a reference.
 					// We return an error if this is at toplevel. Else, we return the ID reference
-if
 					// found node is of same type as xid field type. Because that node can be of some other
 					// type in case xidField is inherited from interface.
 					if atTopLevel {
@@ -1432,8 +1431,7 @@ if
 								// updating this node.
 								upsertVar = variable
 								srcUID = fmt.Sprintf("uid(%s)", variable)
-							}
-							 else {
+							} else {
 								// if node is some other type as of xid Field then we can't upsert that
 								// and we returns error
 								retErrors = append(retErrors, xidErrorForInterfaceType(typ, xidString, xid,

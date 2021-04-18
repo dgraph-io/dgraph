@@ -1299,6 +1299,8 @@
   dgmutations:
     - setjson: |
         {
+            "Member.name": "Alice",
+            "Member.refID": "101",
             "LibraryMember.readHours": "4d2hr",
             "Member.itemsIssued": [
                 "Intro to Go",
