@@ -2187,4 +2187,223 @@
         "failed to rewrite mutation payload because field id cannot be empty"
     }
 
+-
+  name: "Updating inherited @id field with interface arg -1 "
+  explaination: "For this case we will generate one more existence query for inherited @id field refID which have
+  interface arg set. No node with given refID exist in same or other implementing type of interface so we will
+  successfully update node in this case"
+  gqlmutation: |
+    mutation update($patch: UpdateLibraryMemberInput!) {
+    	updateLibraryMember(input: $patch) {
+    		libraryMember {
+    			refID
+    		}
+    	}
+    }
+  gqlvariables: |
+    {
+            "patch": {
+                "filter": {
+                            "refID": {
+                                "in": "101"
+                            }
+                },
+                "set": {
+                    "refID": "102",
+                    "name": "Alice",
+                    "readHours": "3d2hr"
+                }
+            }
+    }
 
+  dgquery: |-
+    query {
+      LibraryMember_1(func: eq(Member.name, "Alice")) @filter(type(LibraryMember)) {
+        uid
+      }
+      LibraryMember_2(func: eq(Member.refID, "102")) @filter(type(LibraryMember)) {
+        uid
+      }
+      LibraryMember_3(func: eq(Member.refID, "102")) @filter(type(Member)) {
+        uid
+      }
+    }
+  dgquerysec: |-
+    query {
+      x as updateLibraryMember(func: type(LibraryMember)) @filter(eq(Member.refID, "101")) {
+        uid
+      }
+    }
+  dgmutations:
+  - setjson: |
+        {
+            "LibraryMember.readHours":"3d2hr",
+            "Member.name":"Alice",
+            "Member.refID":"102",
+            "uid":"uid(x)"
+        }
+    cond: "@if(gt(len(x), 0))"
+
+-
+  name: "Updating inherited @id field with interface arg -2 "
+  explaination: "For this case we will generate one more existence query for inherited @id field refID.
+  There already exist node with refID in other implementing type of interface so we will generate error for this case"
+  gqlmutation: |
+    mutation update($patch: UpdateLibraryMemberInput!) {
+    	updateLibraryMember(input: $patch) {
+    		libraryMember {
+    			refID
+    		}
+    	}
+    }
+  gqlvariables: |
+    {
+            "patch": {
+                "filter": {
+                            "refID": {
+                                "in": "101"
+                            }
+                },
+                "set": {
+                    "refID": "102",
+                    "name": "Alice",
+                    "readHours": "3d2hr"
+                }
+            }
+    }
+  dgquery: |-
+    query {
+      LibraryMember_1(func: eq(Member.name, "Alice")) @filter(type(LibraryMember)) {
+        uid
+      }
+      LibraryMember_2(func: eq(Member.refID, "102")) @filter(type(LibraryMember)) {
+        uid
+      }
+      LibraryMember_3(func: eq(Member.refID, "102")) @filter(type(Member)) {
+        uid
+      }
+    }
+  qnametouid: |-
+    {
+      "LibraryMember_3": "0x123"
+    }
+  error2:
+    {
+      "message": "failed to rewrite mutation payload because id 102 already exists for field refID
+         in some other implementing type of interface Member"
+    }
+
+-
+  name: "Updating link to nested object inheriting @id field with interface argument-1"
+  explaination: "If nested object have inherited @id field which have interface argument set, and that
+   field already exist in some other implementing type than we give error. Below manages is of type LibraryMember
+   but node with given refID already exist in some other type than than LibraryMember"
+  gqlmutation: |
+    mutation update($patch: UpdateLibraryManagerInput!) {
+    	updateLibraryManager(input: $patch) {
+    		libraryManager {
+    			name
+    		}
+    	}
+    }
+  gqlvariables: |
+    {
+            "patch": {
+                "filter": {
+                            "name": {
+                                "in": "Alice"
+                            }
+                },
+                "set": {
+                    "name": "Bob",
+                    "manages": {
+                       "refID":"101"
+                  }
+                }
+            }
+    }
+  dgquery: |-
+    query {
+      LibraryManager_1(func: eq(LibraryManager.name, "Bob")) @filter(type(LibraryManager)) {
+        uid
+      }
+      LibraryMember_2(func: eq(Member.refID, "101")) @filter(type(LibraryMember)) {
+        uid
+      }
+      LibraryMember_3(func: eq(Member.refID, "101")) @filter(type(Member)) {
+        uid
+      }
+    }
+  qnametouid: |-
+    {
+      "LibraryMember_3": "0x123"
+    }
+  error2:
+    {
+      "message": "failed to rewrite mutation payload because id 101 already exists for field refID
+         in some other implementing type of interface Member"
+    }
+
+-
+  name: "Updating link to nested object inheriting @id field with interface argument-2"
+  explaination: "Below manages is of type LibraryMember and node of type LibraryMember already
+   existed with given refID, so we link that correctly"
+  gqlmutation: |
+    mutation update($patch: UpdateLibraryManagerInput!) {
+    	updateLibraryManager(input: $patch) {
+    		libraryManager {
+    			name
+    		}
+    	}
+    }
+  gqlvariables: |
+    {
+            "patch": {
+                "filter": {
+                            "name": {
+                                "in": "Alice"
+                            }
+                },
+                "set": {
+                    "name": "Bob",
+                    "manages": {
+                       "refID":"101"
+                  }
+                }
+            }
+    }
+  dgquery: |-
+    query {
+      LibraryManager_1(func: eq(LibraryManager.name, "Bob")) @filter(type(LibraryManager)) {
+        uid
+      }
+      LibraryMember_2(func: eq(Member.refID, "101")) @filter(type(LibraryMember)) {
+        uid
+      }
+      LibraryMember_3(func: eq(Member.refID, "101")) @filter(type(Member)) {
+        uid
+      }
+    }
+  qnametouid: |-
+    {
+      "LibraryMember_2": "0x123",
+      "LibraryMember_3": "0x124"
+    }
+  dgquerysec: |-
+    query {
+      x as updateLibraryManager(func: type(LibraryManager)) @filter(eq(LibraryManager.name, "Alice")) {
+        uid
+      }
+    }
+  dgmutations:
+  - setjson: |
+       {
+         "LibraryManager.manages": [
+           {
+             "uid": "0x123"
+           }
+         ],
+         "LibraryManager.name": "Bob",
+         "uid": "uid(x)"
+       }
+    cond: "@if(gt(len(x), 0))"

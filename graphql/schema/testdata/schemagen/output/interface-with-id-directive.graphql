@@ -416,6 +416,7 @@ input BookOrder {
 
 input BookPatch {
 	refID: String
+	itemID: String
 	title: String
 	author: String
 }
@@ -451,6 +452,7 @@ input LibraryItemOrder {
 
 input LibraryItemPatch {
 	refID: String
+	itemID: String
 }
 
 input LibraryItemRef {
