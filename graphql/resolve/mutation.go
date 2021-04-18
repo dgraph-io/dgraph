@@ -433,11 +433,10 @@ func (mr *dgraphResolver) rewriteAndExecute(
 			}
 			// if there are existence queries for update query it means we
 			// are setting an xid in set
-			glog.Infof("%v---%v", xidsPresent, result)
 			if xidsPresent && len(result[mutation.Name()].([]interface{})) > 1 {
 				return emptyResult(
 						schema.GQLWrapf(errors.Errorf("multiple nodes are selected"+
-							" in filter while updating @id field "),
+							" in filter while updating @id field"),
 							"mutation %s failed", mutation.Name())),
 					resolverFailed
 			}

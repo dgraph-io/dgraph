@@ -179,6 +179,34 @@
       "type": "uid"
     },
     {
+      "index": true,
+      "predicate": "Employer.name",
+      "tokenizer": [
+        "hash"
+      ],
+      "type": "string",
+      "upsert": true
+    },
+    {
+      "index": true,
+      "predicate": "Worker.UniqueID",
+      "tokenizer": [
+        "int"
+      ],
+      "type": "int",
+      "upsert": true
+    },
+    {
+      "index": true,
+      "index": true,
+      "predicate": "Employer.company_Id",
+      "tokenizer": [
+        "hash"
+      ],
+      "type": "string",
+      "upsert": true
+    },
+    {
       "lang": true,
       "predicate": "Person.profession",
       "type": "string"
@@ -1038,6 +1066,9 @@
         },
         {
           "name": "Worker.name"
+        },
+        {
+          "name": "Worker.UniqueID"
         }
       ],
       "name": "Worker"
@@ -1533,6 +1564,12 @@
         },
         {
           "name": "Employer.worker"
+        },
+        {
+          "name": "Employer.company_Id"
+        },
+        {
+          "name": "Employer.name"
         }
       ],
       "name": "Employer"
