@@ -28,7 +28,7 @@ import (
 
 	"google.golang.org/grpc/metadata"
 
-	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
+	dgoapi "github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/graphql/dgraph"

@@ -34,7 +34,6 @@ type LiveOpts struct {
 	RdfFile    string
 	SchemaFile string
 	Dir        string
-	Ludicrous  bool
 	Env        []string
 	Creds      *LoginParams
 	ForceNs    int64
@@ -50,9 +49,6 @@ func LiveLoad(opts LiveOpts) error {
 	}
 	if opts.ForceNs != 0 {
 		args = append(args, "--force-namespace", strconv.FormatInt(opts.ForceNs, 10))
-	}
-	if opts.Ludicrous {
-		args = append(args, "--ludicrous")
 	}
 	if opts.Creds != nil {
 		args = append(args, "--creds")

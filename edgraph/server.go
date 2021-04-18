@@ -19,6 +19,8 @@ package edgraph
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -42,8 +44,8 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
-	"github.com/dgraph-io/dgo/v200"
-	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgo/v210"
+	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/gql"
@@ -283,7 +285,15 @@ func parseSchemaFromAlterOperation(ctx context.Context, op *api.Operation) (*sch
 		return nil, err
 	}
 
+	preds := make(map[string]struct{})
+
 	for _, update := range result.Preds {
+		if _, ok := preds[update.Predicate]; ok {
+			return nil, errors.Errorf("predicate %s defined multiple times",
+				x.ParseAttr(update.Predicate))
+		}
+		preds[update.Predicate] = struct{}{}
+
 		// Pre-defined predicates cannot be altered but let the update go through
 		// if the update is equal to the existing one.
 		if schema.IsPreDefPredChanged(update) {
@@ -306,7 +316,14 @@ func parseSchemaFromAlterOperation(ctx context.Context, op *api.Operation) (*sch
 		}
 	}
 
+	types := make(map[string]struct{})
+
 	for _, typ := range result.Types {
+		if _, ok := types[typ.TypeName]; ok {
+			return nil, errors.Errorf("type %s defined multiple times", x.ParseAttr(typ.TypeName))
+		}
+		types[typ.TypeName] = struct{}{}
+
 		// Pre-defined types cannot be altered but let the update go through
 		// if the update is equal to the existing one.
 		if schema.IsPreDefTypeChanged(typ) {
@@ -595,16 +612,6 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 	resp.Txn, err = query.ApplyMutations(ctx, m)
 	qc.span.Annotatef(nil, "Txn Context: %+v. Err=%v", resp.Txn, err)
 
-	if x.WorkerConfig.LudicrousEnabled {
-		// Mutations are automatically committed in case of ludicrous mode, so we don't
-		// need to manually commit.
-		if resp.Txn == nil {
-			return errors.Wrapf(err, "Txn Context is nil")
-		}
-		resp.Txn.Keys = resp.Txn.Keys[:0]
-		resp.Txn.CommitTs = qc.req.StartTs
-		return err
-	}
 	// calculateMutationMetrics calculate cost for the mutation.
 	calculateMutationMetrics := func() {
 		cost := uint64(len(newUids) + len(edges))
@@ -857,7 +864,7 @@ func updateValInMutations(gmu *gql.Mutation, qc *queryContext) error {
 	gmu.Set = updateValInNQuads(gmu.Set, qc, true)
 	if qc.nquadsCount > x.Config.LimitMutationsNquad {
 		return errors.Errorf("NQuad count in the request: %d, is more that threshold: %d",
-			qc.nquadsCount, int(x.Config.Limit.GetInt64("mutations-nquad")))
+			qc.nquadsCount, int(x.Config.LimitMutationsNquad))
 	}
 	return nil
 }
@@ -909,9 +916,9 @@ func updateUIDInMutations(gmu *gql.Mutation, qc *queryContext) error {
 				gmuDel = append(gmuDel, getNewNQuad(nq, s, o))
 				qc.nquadsCount++
 			}
-			if qc.nquadsCount > int(x.Config.Limit.GetInt64("mutations-nquad")) {
+			if qc.nquadsCount > int(x.Config.LimitMutationsNquad) {
 				return errors.Errorf("NQuad count in the request: %d, is more that threshold: %d",
-					qc.nquadsCount, int(x.Config.Limit.GetInt64("mutations-nquad")))
+					qc.nquadsCount, int(x.Config.LimitMutationsNquad))
 			}
 		}
 	}
@@ -1114,9 +1121,19 @@ func (s *Server) QueryGraphQL(ctx context.Context, req *api.Request,
 // Query handles queries or mutations
 func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, error) {
 	ctx = x.AttachJWTNamespace(ctx)
+	if x.WorkerConfig.AclEnabled && req.GetStartTs() != 0 {
+		// A fresh StartTs is assigned if it is 0.
+		ns, err := x.ExtractNamespace(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if req.GetHash() != getHash(ns, req.GetStartTs()) {
+			return nil, x.ErrHashMismatch
+		}
+	}
 	// Add a timeout for queries which don't have a deadline set. We don't want to
 	// apply a timeout if it's a mutation, that's currently handled by flag
-	// "abort_older_than".
+	// "txn-abort-after".
 	if req.GetMutations() == nil && x.Config.QueryTimeout != 0 {
 		if d, _ := ctx.Deadline(); d.IsZero() {
 			var cancel context.CancelFunc
@@ -1232,13 +1249,9 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (
 	defer annotateStartTs(qc.span, qc.req.StartTs)
 	// For mutations, we update the startTs if necessary.
 	if isMutation && req.req.StartTs == 0 {
-		if x.WorkerConfig.LudicrousEnabled {
-			req.req.StartTs = posting.Oracle().MaxAssigned()
-		} else {
-			start := time.Now()
-			req.req.StartTs = worker.State.GetTimestamp(false)
-			qc.latency.AssignTimestamp = time.Since(start)
-		}
+		start := time.Now()
+		req.req.StartTs = worker.State.GetTimestamp(false)
+		qc.latency.AssignTimestamp = time.Since(start)
 	}
 
 	var gqlErrs error
@@ -1273,6 +1286,14 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (
 		EncodingNs:        uint64(l.Json.Nanoseconds()),
 		TotalNs:           uint64((time.Since(l.Start)).Nanoseconds()),
 	}
+	if x.WorkerConfig.AclEnabled {
+		// attach the hash, user should send this hash when further operating on this startTs.
+		ns, err := x.ExtractNamespace(ctx)
+		if err != nil {
+			return nil, err
+		}
+		resp.Txn.Hash = getHash(ns, resp.Txn.StartTs)
+	}
 	md := metadata.Pairs(x.DgraphCostHeader, fmt.Sprint(resp.Metrics.NumUids["_total"]))
 	grpc.SendHeader(ctx, md)
 	return resp, gqlErrs
@@ -1289,9 +1310,6 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 	}
 	if ctx.Err() != nil {
 		return resp, ctx.Err()
-	}
-	if x.WorkerConfig.LudicrousEnabled {
-		qc.req.StartTs = posting.Oracle().MaxAssigned()
 	}
 	qr := query.Request{
 		Latency:  qc.latency,
@@ -1485,30 +1503,24 @@ func authorizeRequest(ctx context.Context, qc *queryContext) error {
 	return nil
 }
 
-func validateNamespace(ctx context.Context, preds []string) error {
+func getHash(ns, startTs uint64) string {
+	h := sha256.New()
+	h.Write([]byte(fmt.Sprintf("%#x%#x%s", ns, startTs, x.WorkerConfig.HmacSecret)))
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+func validateNamespace(ctx context.Context, tc *api.TxnContext) error {
+	if !x.WorkerConfig.AclEnabled {
+		return nil
+	}
+
 	ns, err := x.ExtractJWTNamespace(ctx)
 	if err != nil {
 		return err
 	}
-
-	// Do a basic validation that all the predicates passed in transaction context matches the
-	// claimed namespace and user is not accidently commiting a transaction that it did not create.
-	for _, pred := range preds {
-		// Format for Preds in TxnContext is gid-<namespace><pred> (see fillPreds in posting pkg)
-		splits := strings.Split(pred, "-")
-		if len(splits) < 2 {
-			return errors.Errorf("Unable to find group id in %s", pred)
-		}
-		pred = strings.Join(splits[1:], "-")
-		if len(pred) < 8 {
-			return errors.Errorf("found invalid pred %s of length < 8 in transaction context", pred)
-		}
-		if parsedNs := x.ParseNamespace(pred); parsedNs != ns {
-			return errors.Errorf("Please login into correct namespace. "+
-				"Currently logged in namespace %#x", ns)
-		}
+	if tc.Hash != getHash(ns, tc.StartTs) {
+		return x.ErrHashMismatch
 	}
-
 	return nil
 }
 
@@ -1521,18 +1533,16 @@ func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.Tx
 		return &api.TxnContext{}, err
 	}
 
-	if x.WorkerConfig.AclEnabled {
-		if err := validateNamespace(ctx, tc.Preds); err != nil {
-			return &api.TxnContext{}, err
-		}
-	}
-
 	tctx := &api.TxnContext{}
 	if tc.StartTs == 0 {
 		return &api.TxnContext{}, errors.Errorf(
 			"StartTs cannot be zero while committing a transaction")
 	}
 	annotateStartTs(span, tc.StartTs)
+
+	if err := validateNamespace(ctx, tc); err != nil {
+		return &api.TxnContext{}, err
+	}
 
 	span.Annotatef(nil, "Txn Context received: %+v", tc)
 	commitTs, err := worker.CommitOverNetwork(ctx, tc)

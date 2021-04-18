@@ -29,7 +29,6 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
-	ostats "go.opencensus.io/stats"
 	otrace "go.opencensus.io/trace"
 
 	"github.com/dgraph-io/badger/v3"
@@ -124,11 +123,7 @@ func (txn *Txn) addIndexMutation(ctx context.Context, edge *pb.DirectedEdge, tok
 	}
 
 	x.AssertTrue(plist != nil)
-	if err = plist.addMutation(ctx, txn, edge); err != nil {
-		return err
-	}
-	ostats.Record(ctx, x.NumEdges.M(1))
-	return nil
+	return plist.addMutation(ctx, txn, edge)
 }
 
 // countParams is sent to updateCount function. It is used to update the count index.
@@ -187,12 +182,7 @@ func (txn *Txn) addReverseMutation(ctx context.Context, t *pb.DirectedEdge) erro
 		Op:      t.Op,
 		Facets:  t.Facets,
 	}
-	if err := plist.addMutation(ctx, txn, edge); err != nil {
-		return err
-	}
-
-	ostats.Record(ctx, x.NumEdges.M(1))
-	return nil
+	return plist.addMutation(ctx, txn, edge)
 }
 
 func (txn *Txn) addReverseAndCountMutation(ctx context.Context, t *pb.DirectedEdge) error {
@@ -261,14 +251,11 @@ func (txn *Txn) addReverseAndCountMutation(ctx context.Context, t *pb.DirectedEd
 	if err != nil {
 		return err
 	}
-	ostats.Record(ctx, x.NumEdges.M(1))
-
 	if hasCountIndex && cp.countAfter != cp.countBefore {
 		if err := txn.updateCount(ctx, cp); err != nil {
 			return err
 		}
 	}
-
 	return nil
 }
 
@@ -334,11 +321,7 @@ func (txn *Txn) addCountMutation(ctx context.Context, t *pb.DirectedEdge, count 
 
 	x.AssertTruef(plist != nil, "plist is nil [%s] %d",
 		t.Attr, t.ValueId)
-	if err = plist.addMutation(ctx, txn, t); err != nil {
-		return err
-	}
-	ostats.Record(ctx, x.NumEdges.M(1))
-	return nil
+	return plist.addMutation(ctx, txn, t)
 }
 
 func (txn *Txn) updateCount(ctx context.Context, params countParams) error {
@@ -485,7 +468,6 @@ func (l *List) AddMutationWithIndex(ctx context.Context, edge *pb.DirectedEdge, 
 	if err != nil {
 		return err
 	}
-	ostats.Record(ctx, x.NumEdges.M(1))
 	if hasCountIndex && cp.countAfter != cp.countBefore {
 		if err := txn.updateCount(ctx, cp); err != nil {
 			return err

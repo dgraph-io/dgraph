@@ -36,7 +36,7 @@ import (
 
 type SinkMessage struct {
 	Meta  SinkMeta
-	Key   []byte
+	Key   uint64
 	Value []byte
 }
 
@@ -137,9 +137,11 @@ func (k *kafkaSinkClient) Send(messages []SinkMessage) error {
 	}
 	msgs := make([]*sarama.ProducerMessage, len(messages))
 	for i, m := range messages {
+		key := make([]byte, 8)
+		binary.BigEndian.PutUint64(key, m.Key)
 		msgs[i] = &sarama.ProducerMessage{
 			Topic: m.Meta.Topic,
-			Key:   sarama.ByteEncoder(m.Key),
+			Key:   sarama.ByteEncoder(key),
 			Value: sarama.ByteEncoder(m.Value),
 		}
 	}
@@ -160,7 +162,7 @@ type fileSink struct {
 func (f *fileSink) Send(messages []SinkMessage) error {
 	for _, m := range messages {
 		_, err := f.fileWriter.Write([]byte(fmt.Sprintf("{ \"key\": \"%d\", \"value\": %s}\n",
-			binary.BigEndian.Uint64(m.Key), string(m.Value))))
+			m.Key, string(m.Value))))
 		if err != nil {
 			return errors.Wrap(err, "unable to add message in the file sink")
 		}

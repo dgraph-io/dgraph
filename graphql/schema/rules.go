@@ -195,6 +195,11 @@ func dgraphDirectivePredicateValidation(gqlSch *ast.Schema, definitions []string
 						isSecret:   false,
 					}
 
+					// Skip the checks related to same Dgraph predicates being used twice with
+					// different types in case it is an inverse edge.
+					if strings.HasPrefix(fname, "~") || strings.HasPrefix(fname, "<~") {
+						continue
+					}
 					if pred, ok := preds[fname]; ok {
 						if pred.isSecret {
 							errs = append(errs, secretError(pred, thisPred))
@@ -2068,15 +2073,29 @@ func idValidation(sch *ast.Schema,
 	field *ast.FieldDefinition,
 	dir *ast.Directive,
 	secrets map[string]x.Sensitive) gqlerror.List {
-	if field.Type.NamedType == "String" ||
-		field.Type.NamedType == "Int" ||
-		field.Type.NamedType == "Int64" {
+	if field.Type.String() == "String" ||
+		field.Type.String() == "Int" ||
+		field.Type.String() == "Int64" {
+
+		var inherited bool
+		for _, implements := range sch.Implements[typ.Name] {
+			if implements.Fields.ForName(field.Name) != nil {
+				inherited = true
+			}
+		}
+		if typ.Kind != "INTERFACE" && hasInterfaceArg(field) && !inherited {
+			return []*gqlerror.Error{gqlerror.ErrorPosf(
+				dir.Position,
+				"Type %s; Field %s: @id field with interface argument can only be defined"+
+					" in interface,not in Type", typ.Name, field.Name)}
+		}
 		return nil
 	}
 	return []*gqlerror.Error{gqlerror.ErrorPosf(
 		dir.Position,
 		"Type %s; Field %s: with @id directive must be of type String, Int or Int64, not %s",
 		typ.Name, field.Name, field.Type.String())}
+
 }
 
 func apolloKeyValidation(sch *ast.Schema, typ *ast.Definition) gqlerror.List {

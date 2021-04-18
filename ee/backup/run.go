@@ -25,7 +25,6 @@ import (
 	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgraph/ee"
-	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/worker"
@@ -34,9 +33,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 )
-
-// Restore is the sub-command used to restore a backup.
-var Restore x.SubCommand
 
 // LsBackup is the sub-command used to list the backups in a folder.
 var LsBackup x.SubCommand
@@ -68,7 +64,7 @@ func initBackupLs() {
 		Short: "List info on backups in a given location",
 		Args:  cobra.NoArgs,
 		Run: func(cmd *cobra.Command, args []string) {
-			defer x.StartProfile(Restore.Conf).Stop()
+			defer x.StartProfile(LsBackup.Conf).Stop()
 			if err := runLsbackupCmd(); err != nil {
 				fmt.Fprintln(os.Stderr, err)
 				os.Exit(1)
@@ -159,7 +155,7 @@ func initExportBackup() {
 		`If true, retrieve the CORS from DB and append at the end of GraphQL schema.
 		It also deletes the deprecated types and predicates.
 		Use this option when exporting a backup of 20.11 for loading onto 21.03.`)
-	enc.RegisterFlags(flag)
+	ee.RegisterEncFlag(flag)
 }
 
 type bufWriter struct {
@@ -227,7 +223,11 @@ func (bw *bufWriter) Write(buf *z.Buffer) error {
 }
 
 func runExportBackup() error {
-	_, opt.key = ee.GetKeys(ExportBackup.Conf)
+	keys, err := ee.GetKeys(ExportBackup.Conf)
+	if err != nil {
+		return err
+	}
+	opt.key = keys.EncKey
 	if opt.format != "json" && opt.format != "rdf" {
 		return errors.Errorf("invalid format %s", opt.format)
 	}
@@ -258,18 +258,21 @@ func runExportBackup() error {
 	defer os.RemoveAll(mapDir)
 	glog.Infof("Created temporary map directory: %s\n", mapDir)
 
+	encFlag := z.NewSuperFlag(ExportBackup.Conf.GetString("encryption")).
+		MergeAndCheckDefault(ee.EncDefaults)
 	// TODO: Can probably make this procesing concurrent.
-	for gid, _ := range latestManifest.Groups {
+	for gid := range latestManifest.Groups {
 		glog.Infof("Exporting group: %d", gid)
 		req := &pb.RestoreRequest{
 			GroupId:           gid,
 			Location:          opt.location,
-			EncryptionKeyFile: ExportBackup.Conf.GetString("encryption_key_file"),
+			EncryptionKeyFile: encFlag.GetPath("key-file"),
 			RestoreTs:         1,
 		}
 		if err := worker.RunMapper(req, mapDir); err != nil {
 			return errors.Wrap(err, "Failed to map the backups")
 		}
+
 		in := &pb.ExportRequest{
 			GroupId:     uint32(gid),
 			ReadTs:      latestManifest.Since,
@@ -277,14 +280,8 @@ func runExportBackup() error {
 			Format:      opt.format,
 			Destination: exportDir,
 		}
-		uts := time.Unix(in.UnixTs, 0)
-		destPath := fmt.Sprintf("dgraph.r%d.u%s", in.ReadTs, uts.UTC().Format("0102.1504"))
-		exportStorage, err := worker.NewExportStorage(in, destPath)
-		if err != nil {
-			return err
-		}
-
-		writers, err := worker.InitWriters(exportStorage, in)
+		writers, err := worker.NewWriters(in)
+		defer writers.Close()
 		if err != nil {
 			return err
 		}
@@ -293,7 +290,7 @@ func runExportBackup() error {
 		if err := worker.RunReducer(w, mapDir); err != nil {
 			return errors.Wrap(err, "Failed to reduce the map")
 		}
-		if _, err := exportStorage.FinishWriting(writers); err != nil {
+		if err := writers.Close(); err != nil {
 			return errors.Wrap(err, "Failed to finish write")
 		}
 	}
