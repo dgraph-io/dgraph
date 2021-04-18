@@ -4545,7 +4545,8 @@
     }
   error2:
     {
-      "message": "failed to rewrite mutation payload because multiple nodes found for existence queries,updation not possible"
+      "message": "failed to rewrite mutation payload because multiple nodes found for given xid values,
+       updation not possible"
     }
 -
   name: "Add type with multiple Xids fields at deep level when deep node already exist for one existence query"
@@ -5022,7 +5023,7 @@
 -
   name: "2-level add mutation with nullable @id fields "
   explaination: "BookId in Book and PenName in author are @id and nullable field,
-   we can skip them while doing add mutation. Nested field author doesn't exist, so we
+   we can skip them while doing add mutation. Nested object author doesn't exist, so we
    add it and link it to book"
   gqlmutation: |
     mutation addBook($input: [AddBookInput!]!) {
@@ -5085,10 +5086,10 @@
 
 -
   name: "2- level add mutation with upsert and nullable @id fields "
-  explaination: "BookId in @id,penName in author are nullable @id fields and we can skip them,
+  explaination: "BookId in @id,penName in author are nullable @id fields and we can skip them.
   title,ISBN in Book are @id fields,so also added in set Json, because @id fields will also be updated by upserts.
-  both book and author already exist so we just link new author to book and delete old reference from book to author,
-  if any"
+  Both book and author already exist so we just link new author to book and delete old reference from book to author,
+  if there is any"
   gqlmutation: |
     mutation addBook($input: [AddBookInput!]!) {
       addBook(input: $input, upsert: true) {
@@ -5201,12 +5202,15 @@
     }
   error2:
     {
-      "message": "failed to rewrite mutation payload because multiple nodes found for existence queries,updation not possible"
+      "message": "failed to rewrite mutation payload because multiple nodes found
+       for given xid values, updation not possible"
     }
 
 -
-  name: "add mutation with upsert at nested level gives error when multiple nodes are found for existence queries"
-  explaination: "Two different books exist for title and Sapiens @id fields inside author, We can't link author to both books "
+  name: "add mutation with upsert at nested level gives error when multiple nodes are found
+   for existence queries"
+  explaination: "Two different author exist for penName and authorId @id fields inside author,
+   We can't link author to both books "
   gqlmutation: |
     mutation addBook($input: [AddBookInput!]!) {
       addBook(input: $input, upsert: true) {
@@ -5251,13 +5255,14 @@
     }
   error2:
     {
-      "message": "failed to rewrite mutation payload because multiple nodes found for existence queries,updation not possible"
+      "message": "failed to rewrite mutation payload because multiple nodes
+       found for given xid values, updation not possible"
     }
 
 -
   name: "No xid present for add mutation with upsert"
   explaination: "If none of the xid field is given in upsert mutation then there will be no existence queries,
-   and it will behave as simple add mutation, create new node with all the given fields"
+   and it will behave as simple add mutation,i.e. create new node with all the given fields"
   gqlmutation: |
     mutation addBook($input: [AddBookInput!]!) {
       addBook(input: $input, upsert: true) {
@@ -5286,8 +5291,8 @@
 
 -
   name: "Non-nullable xid should be present in add Mutation for nested field"
-  explaination: "non-nullable @id field id in commentNum is not provided. As no reference is provided for comment,
-   so we treat it as new node, and return error for missing xid."
+  explaination: "non-nullable @id field id in comment1 type not provided. As no reference is
+   provided for comment, we treat it as new node, and return error for missing xid."
   gqlmutation: |
     mutation addPost1($input: [AddPost1Input!]!) {
       addPost1(input: $input, upsert: false) {

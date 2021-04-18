@@ -278,8 +278,8 @@ type Person1 {
 type Comment1 {
     id: String! @id
     commentId: String
-  message: String
-  replies: [Comment1]
+    message: String
+    replies: [Comment1]
 }
 
 type Tweets {

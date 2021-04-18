@@ -2296,8 +2296,9 @@
 -
   name: "Updating link to nested object inheriting @id field with interface argument-1"
   explaination: "If nested object have inherited @id field which have interface argument set, and that
-   field already exist in some other implementing type than we give error. Below manages is of type LibraryMember
-   but node with given refID already exist in some other type than than LibraryMember"
+   field already exist in some other implementing type than we returns error.In below mutation manages
+  is of type LibraryMember but node with given refID already exist in some other
+   type than than LibraryMember"
   gqlmutation: |
     mutation update($patch: UpdateLibraryManagerInput!) {
     	updateLibraryManager(input: $patch) {
@@ -2346,7 +2347,7 @@
 
 -
   name: "Updating link to nested object inheriting @id field with interface argument-2"
-  explaination: "Below manages is of type LibraryMember and node of type LibraryMember already
+  explaination: "In below mutation manages is of type LibraryMember and node of type LibraryMember already
    existed with given refID, so we link that correctly"
   gqlmutation: |
     mutation update($patch: UpdateLibraryManagerInput!) {

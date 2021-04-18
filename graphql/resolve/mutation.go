@@ -408,9 +408,11 @@ func (mr *dgraphResolver) rewriteAndExecute(
 					resolverFailed
 			}
 		}
-
+		// for update mutation, if @id field is present in set then we check that
+		// in filter only one node is selected. if there are multiple nodes selected,
+		// then it's not possible to update all of them with same value of @id fields.
+		// In that case we return error
 		if mutation.MutationType() == schema.UpdateMutation {
-
 			inp := mutation.ArgValue(schema.InputArgName).(map[string]interface{})
 			setArg := inp["set"]
 			objSet, okSetArg := setArg.(map[string]interface{})
@@ -431,8 +433,8 @@ func (mr *dgraphResolver) rewriteAndExecute(
 					}
 				}
 			}
-			// if there are existence queries for update query it means we
-			// are setting an xid in set
+			// if @id field is present in set and there are multiple nodes returned from
+			// upsert query then we return error
 			if xidsPresent && len(result[mutation.Name()].([]interface{})) > 1 {
 				return emptyResult(
 						schema.GQLWrapf(errors.Errorf("multiple nodes are selected"+
