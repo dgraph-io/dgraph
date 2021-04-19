@@ -6604,8 +6604,12 @@ func xidUpdateAndNullableTests(t *testing.T) {
 	}
 
 	// Cleanup
-	filterEmployer := map[string]interface{}{"name": map[string]interface{}{"in": []string{"ABC", "MNO"}}}
-	filterWorker := map[string]interface{}{"reg_No": map[string]interface{}{"in": []int{101, 102, 103, 105}}}
+	filterEmployer :=
+		map[string]interface{}{
+			"name": map[string]interface{}{"in": []string{"ABC", "MNO"}}}
+	filterWorker :=
+		map[string]interface{}{
+			"reg_No": map[string]interface{}{"in": []int{101, 102, 103, 105}}}
 	DeleteGqlType(t, "Employer", filterEmployer, 2, nil)
 	DeleteGqlType(t, "Worker", filterWorker, 4, nil)
 }
