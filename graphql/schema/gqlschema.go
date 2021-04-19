@@ -1286,8 +1286,8 @@ func addPatchType(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[
 
 	nonIDFields := getNonIDFields(schema, defn, providesTypeMap)
 	if len(nonIDFields) == 0 {
-		// The user might just have an predicate with reverse edge id field and nothing else. We don't generate patch
-		// type in that case.
+		// The user might just have an predicate with reverse edge id field and nothing else.
+		//We don't generate patch type in that case.
 		return
 	}
 

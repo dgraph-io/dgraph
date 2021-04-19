@@ -1386,7 +1386,7 @@ func rewriteObject(
 	if len(xids) != 0 {
 		// multipleNodesForSameID is true when there are multiple nodes present
 		// in a result of existence queries
-		multipleNodesForSameID := existingXidsInObject(xids, obj, typ, varGen, idExistence)
+		multipleNodesForSameID := gotMultipleExistingNodes(xids, obj, typ, varGen, idExistence)
 		// xidVariables stores the variable names for each XID.
 		var xidVariables []string
 		for _, xid := range xids {
@@ -1394,7 +1394,8 @@ func rewriteObject(
 			if xidVal, ok := obj[xid.Name()]; ok && xidVal != nil {
 				xidString, _ = extractVal(xidVal, xid.Name(), xid.Type().Name())
 				variable = varGen.Next(typ, xid.Name(), xidString, false)
-				existenceError := x.GqlErrorf("multiple nodes found for given xid values, updation not possible")
+				existenceError := x.GqlErrorf("multiple nodes found for given xid values," +
+					" updation not possible")
 
 				// If this xid field is inherited from interface and have interface argument set, we also
 				// have existence query for interface to make sure that this xid is unique across all
@@ -1423,7 +1424,12 @@ func rewriteObject(
 						if mutationType == AddWithUpsert {
 							// returns from here if we got multiple nodes as a result of existence queries.
 							if multipleNodesForSameID {
-								retErrors = append(retErrors, existenceError)
+								if queryAuthSelector(typ) == nil {
+									retErrors = append(retErrors, existenceError)
+								} else {
+									retErrors = append(retErrors, x.GqlErrorf("GraphQL debug: "+existenceError.Error()))
+								}
+
 								return nil, "", retErrors
 							}
 							if typUidExist {
@@ -1453,7 +1459,7 @@ func rewriteObject(
 								} else {
 									// This error will only be reported in debug mode.
 									err = x.GqlErrorf("GraphQL debug: id %s already exists for field %s"+
-										" inside type %s", typ.Name(), xid.Name(), xidString)
+										" inside type %s", xidString, xid.Name(), typ.Name())
 								}
 								retErrors = append(retErrors, err)
 								return nil, upsertVar, retErrors
@@ -1467,7 +1473,11 @@ func rewriteObject(
 					} else {
 						if multipleNodesForSameID {
 							// returns from here if we got multiple nodes as a result of existence queries.
-							retErrors = append(retErrors, existenceError)
+							if queryAuthSelector(typ) == nil {
+								retErrors = append(retErrors, existenceError)
+							} else {
+								retErrors = append(retErrors, x.GqlErrorf("GraphQL debug: "+existenceError.Error()))
+							}
 							return nil, "", retErrors
 						}
 						// As we are not at top level, we return the XID reference. We don't update this node
@@ -1502,11 +1512,14 @@ func rewriteObject(
 			// This is done to ensure that the first time we encounter an XID node, we use
 			// its definition and later times, we just use its reference.
 
-			if err := typ.EnsureNonNulls(obj, exclude); err != nil {
-				// This object does not contain XID. This is an error.
+			if err := typ.EnsureNonNulls(obj, exclude); (err != nil) &&
+				!(mutationType == UpdateWithSet && atTopLevel) {
+				// This object does not contain non nullable XID, returns error.
+				// We ignore the error for update mutation top level fields.
 				retErrors = append(retErrors, err)
 				return nil, upsertVar, retErrors
 			}
+
 			// Set existenceQueryResult to _:variable. This is to make referencing to
 			// this node later easier.
 			// Set idExistence for all variables which are referencing this node to
@@ -2400,8 +2413,8 @@ func interfaceVariable(typ schema.Type, varGen *VariableGenerator, xidName strin
 
 // This function returns true if there are multiple nodes present
 // in a result of existence queries
-func existingXidsInObject(xids []schema.FieldDefinition, obj map[string]interface{}, typ schema.Type,
-	varGen *VariableGenerator, idExistence map[string]string) bool {
+func gotMultipleExistingNodes(xids []schema.FieldDefinition, obj map[string]interface{},
+	typ schema.Type, varGen *VariableGenerator, idExistence map[string]string) bool {
 
 	var existenceNodeUid string
 	for _, xid := range xids {

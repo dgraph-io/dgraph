@@ -5869,7 +5869,8 @@ func multipleXidsTests(t *testing.T) {
                   }`,
 		},
 		{
-			name: "Deep level update mutation return error when non- nullable xids are missing while creating new node using set",
+			name: "Deep level update mutation return error when non- nullable xids are" +
+				" missing while creating new node using set",
 			query: `mutation {
 	                   updateEmployer(
 	                   	input: {
@@ -5887,7 +5888,8 @@ func multipleXidsTests(t *testing.T) {
 	                   	}
 	                   }
                      }`,
-			error: `couldn't rewrite mutation updateEmployer because failed to rewrite mutation payload because type Worker requires a value for field name, but no value present`,
+			error: "couldn't rewrite mutation updateEmployer because failed to rewrite mutation" +
+				" payload because type Worker requires a value for field name, but no value present",
 		},
 	}
 
@@ -6494,7 +6496,8 @@ func xidUpdateAndNullableTests(t *testing.T) {
                         }
                     }
                 }`,
-			error: "mutation updateEmployer failed because multiple nodes are selected in filter while updating @id field",
+			error: "mutation updateEmployer failed because multiple nodes are selected in filter" +
+				" while updating @id field",
 		}, {
 			name: "successfully updating @id field of a node ",
 			query: `mutation update($patch: UpdateEmployerInput!) {
@@ -6600,7 +6603,7 @@ func xidUpdateAndNullableTests(t *testing.T) {
 		})
 	}
 
-	//Cleanup
+	// Cleanup
 	filterEmployer := map[string]interface{}{"name": map[string]interface{}{"in": []string{"ABC", "MNO"}}}
 	filterWorker := map[string]interface{}{"reg_No": map[string]interface{}{"in": []int{101, 102, 103, 105}}}
 	DeleteGqlType(t, "Employer", filterEmployer, 2, nil)

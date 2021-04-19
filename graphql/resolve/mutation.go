@@ -424,9 +424,9 @@ func (mr *dgraphResolver) rewriteAndExecute(
 					resolverFailed
 			}
 
+			mutatedType := mutation.MutatedType()
 			var xidsPresent bool
 			if len(objSet) != 0 {
-				mutatedType := mutation.MutatedType()
 				for _, xid := range mutatedType.XIDFields() {
 					if xidVal, ok := objSet[xid.Name()]; ok && xidVal != nil {
 						xidsPresent = true
@@ -436,11 +436,20 @@ func (mr *dgraphResolver) rewriteAndExecute(
 			// if @id field is present in set and there are multiple nodes returned from
 			// upsert query then we return error
 			if xidsPresent && len(result[mutation.Name()].([]interface{})) > 1 {
-				return emptyResult(
-						schema.GQLWrapf(errors.Errorf("multiple nodes are selected"+
-							" in filter while updating @id field"),
-							"mutation %s failed", mutation.Name())),
-					resolverFailed
+				if queryAuthSelector(mutatedType) == nil {
+					return emptyResult(
+							schema.GQLWrapf(errors.Errorf("multiple nodes are selected"+
+								" in filter while updating @id field"),
+								"mutation %s failed", mutation.Name())),
+						resolverFailed
+				} else {
+					return emptyResult(
+							schema.GQLWrapf(errors.Errorf("GraphQL debug: multiple nodes are selected"+
+								" in filter while updating @id field"),
+								"mutation %s failed", mutation.Name())),
+						resolverFailed
+				}
+
 			}
 		}
 
