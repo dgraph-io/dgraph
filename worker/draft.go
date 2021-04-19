@@ -470,6 +470,35 @@ func (n *node) processMutations(ctx context.Context, m *pb.Mutations, txn *posti
 	return rerr
 }
 
+func dropall() error {
+	posting.Oracle().ResetTxns()
+	schema.State().DeleteAll()
+
+	if err := posting.DeleteAll(); err != nil {
+		return err
+	}
+
+	// Clear entire cache.
+	posting.ResetCache()
+
+	if groups().groupId() == 1 {
+		initialSchema := schema.InitialSchema(x.GalaxyNamespace)
+		for _, s := range initialSchema {
+			applySchema(s)
+		}
+	}
+
+	// Propose initial types as well after a drop all as they would have been cleared.
+	initialTypes := schema.InitialTypes(x.GalaxyNamespace)
+	for _, t := range initialTypes {
+		if err := updateType(t.GetTypeName(), *t); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // We don't support schema mutations across nodes in a transaction.
 // Wait for all transactions to either abort or complete and all write transactions
 // involving the predicate are aborted until schema mutations are done.
@@ -502,32 +531,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 
 		// Ensures nothing get written to disk due to commit proposals.
 		n.keysWritten.rejectBeforeIndex = proposal.Index
-		posting.Oracle().ResetTxns()
-		schema.State().DeleteAll()
-
-		if err := posting.DeleteAll(); err != nil {
-			return err
-		}
-
-		// Clear entire cache.
-		posting.ResetCache()
-
-		if groups().groupId() == 1 {
-			initialSchema := schema.InitialSchema(x.GalaxyNamespace)
-			for _, s := range initialSchema {
-				applySchema(s)
-			}
-		}
-
-		// Propose initial types as well after a drop all as they would have been cleared.
-		initialTypes := schema.InitialTypes(x.GalaxyNamespace)
-		for _, t := range initialTypes {
-			if err := updateType(t.GetTypeName(), *t); err != nil {
-				return err
-			}
-		}
-
-		return nil
+		return dropall()
 	}
 
 	if proposal.Mutations.DropOp == pb.Mutations_TYPE {
@@ -748,23 +752,16 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 		x.UpdateDrainingMode(true)
 		defer x.UpdateDrainingMode(false)
 
-		// Drop all the current data. This also cancels all existing transactions.
-		dropProposal := pb.Proposal{
-			Mutations: &pb.Mutations{
-				GroupId: proposal.Restore.GroupId,
-				StartTs: proposal.Restore.RestoreTs,
-				DropOp:  pb.Mutations_ALL,
-			},
-		}
-		if err := groups().Node.applyMutations(ctx, &dropProposal); err != nil {
-			return err
-		}
-
 		closer, err := n.startTask(opRestore)
 		if err != nil {
 			return errors.Wrapf(err, "cannot start restore task")
 		}
 		defer closer.Done()
+
+		// Drop all the current data. This also cancels all existing transactions.
+		if err := dropall(); err != nil {
+			return errors.Wrap(err, "while dropping all")
+		}
 
 		if err := handleRestoreProposal(ctx, proposal.Restore); err != nil {
 			return err
