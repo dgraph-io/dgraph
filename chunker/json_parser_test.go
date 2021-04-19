@@ -1079,12 +1079,14 @@ func TestNquadsFromJsonEmptyFacet(t *testing.T) {
 	buf := NewNQuadBuffer(-1)
 	require.Nil(t, buf.FastParseJSON([]byte(json), DeleteNquads))
 	buf.Flush()
+	// needs to be empty, otherwise node gets deleted
 	require.Equal(t, 0, len(<-buf.Ch()))
 
 	// old
 	buf = NewNQuadBuffer(-1)
 	require.Nil(t, buf.ParseJSON([]byte(json), DeleteNquads))
 	buf.Flush()
+	// needs to be empty, otherwise node gets deleted
 	require.Equal(t, 0, len(<-buf.Ch()))
 }
 
