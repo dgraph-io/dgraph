@@ -442,13 +442,12 @@ func (mr *dgraphResolver) rewriteAndExecute(
 								" in filter while updating @id field"),
 								"mutation %s failed", mutation.Name())),
 						resolverFailed
-				} else {
-					return emptyResult(
-							schema.GQLWrapf(errors.Errorf("GraphQL debug: multiple nodes are selected"+
-								" in filter while updating @id field"),
-								"mutation %s failed", mutation.Name())),
-						resolverFailed
 				}
+				return emptyResult(
+						schema.GQLWrapf(errors.Errorf("GraphQL debug: multiple nodes are selected"+
+							" in filter while updating @id field"),
+							"mutation %s failed", mutation.Name())),
+					resolverFailed
 
 			}
 		}
