@@ -289,7 +289,7 @@ curl localhost:8080/health | jq -r '.[].ee_features | .[]' | sed 's/^/* /'
 
 ## Using Hashicorp Vault CIDR List for Authentication
 
-As an alternative, you can restrict access to a limited range of IP addresses and disable the requirement for a `secret-id`.  In this scenario, we will set `bind_seccret_id` to `false`, and supply a list of IP addresse ranges for the `bound_cidr_list` key.
+As an alternative, you can restrict access to a limited range of IP addresses and disable the requirement for a `secret-id`.  In this scenario, we will set `bind_seccret_id` to `false`, and supply a list of IP address ranges for the `bound_cidr_list` key.
 
 Only two steps will need to be changed, but otherwise the other steps are the same:
 
