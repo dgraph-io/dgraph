@@ -46,16 +46,16 @@ Alternative Steps using `bound_cidr_list` (see [Using Hashicorp Vault CIDR List 
 
 ## Steps
 
-This configures an app role that requires log in with `role-id` and `secret-id` to login.  This is the default role setting where `bind_seccret_id` is enabled.
+This configures an app role that requires log in with `role-id` and `secret-id` to login.  This is the default role setting where `bind_secret_id` is enabled.
 
 ### Step 1: Configure Dgraph and Vault Versions
 
 ```bash
-export DGRAPH_VERSION="v21.03"  # default is 'latest'
-export VAULT_VERSION="1.7.0"    # default is 'latest'
+export DGRAPH_VERSION="v21.03.0" # default is 'latest'
+export VAULT_VERSION="1.7.0"     # default is 'latest'
 ```
 
-**NOTE**: This guide has been tested with Hashicorp Vault version `1.6.3` and `1.7.0`.
+**NOTE**: This guide has been tested with HashiCorp Vault version `1.6.3` and `1.7.0`.
 
 ### Step 2: Launch unsealed Vault server
 
@@ -78,9 +78,6 @@ Using the root token copied from `vault operator init`, we can enable these feat
 
 ```bash
 export VAULT_ROOT_TOKEN="<root-token>"
-```
-
-```bash
 export VAULT_ADDRESS="127.0.0.1:8200"
 
 curl --silent \
@@ -211,7 +208,7 @@ curl --silent \
   http://$VAULT_ADDRESS/v1/secret/data/dgraph/alpha | jq
 ```
 
-**NOTE**: When updating K/V Version 2 secrets, be sure to increment the `options.cas` value to increase the version.  For example, if updating the `enc_key` value to 32-bits, you would update `./vault/payload_alpha.secrests.json` to look like the following:
+**NOTE**: When updating K/V Version 2 secrets, be sure to increment the `options.cas` value to increase the version.  For example, if updating the `enc_key` value to 32-bits, you would update `./vault/payload_alpha.secrets.json` to look like the following:
 ```json
 {
   "options": {
@@ -219,7 +216,7 @@ curl --silent \
   },
   "data": {
     "enc_key": "12345678901234567890123456789012",
-    "hmac_secret_file": "12345678901234567890123456789012"
+    "hmac_secret": "12345678901234567890123456789012"
   }
 }
 ```
@@ -276,7 +273,7 @@ curl localhost:8080/health | jq -r '.[].ee_features | .[]' | sed 's/^/* /'
 
 ## Using Hashicorp Vault CIDR List for Authentication
 
-As an alternative, you can restrict access to a limited range of IP addresses and disable the requirement for a `secret-id`.  In this scenario, we will set `bind_seccret_id` to `false`, and supply a list of IP addresses ranges for the `bound_cidr_list` key.
+As an alternative, you can restrict access to a limited range of IP addresses and disable the requirement for a `secret-id`.  In this scenario, we will set `bind_seccret_id` to `false`, and supply a list of IP addresse ranges for the `bound_cidr_list` key.
 
 Only two steps will need to be changed, but otherwise the other steps are the same:
 
