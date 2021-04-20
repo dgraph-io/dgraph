@@ -19,15 +19,15 @@
 package ee
 
 import (
-	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/glog"
+	"fmt"
+
 	"github.com/spf13/viper"
 )
 
 // GetKeys returns the ACL and encryption keys as configured by the user
 // through the --acl, --encryption, and --vault flags. On OSS builds,
-// this function exits with an error.
-func GetKeys(config *viper.Viper) (x.Sensitive, x.Sensitive) {
-	glog.Exit("flags: acl / encryption is an enterprise-only feature")
-	return nil, nil
+// this function always returns an error.
+func GetKeys(config *viper.Viper) (*Keys, error) {
+	return nil, fmt.Errorf(
+		"flags: acl / encryption is an enterprise-only feature")
 }

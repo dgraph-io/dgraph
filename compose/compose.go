@@ -116,6 +116,9 @@ type options struct {
 	MinioDataDir   string
 	MinioPort      uint16
 	MinioEnvFile   []string
+	Hostname       string
+	Cdc            bool
+	CdcConsumer    bool
 
 	// Extra flags
 	AlphaFlags string
@@ -157,6 +160,13 @@ func getOffset(idx int) int {
 	return idx
 }
 
+func getHost(host string) string {
+	if opts.Hostname != "" {
+		return opts.Hostname
+	}
+	return host
+}
+
 func initService(basename string, idx, grpcPort int) service {
 	var svc service
 
@@ -174,6 +184,10 @@ func initService(basename string, idx, grpcPort int) service {
 		toPort(grpcPort + 1000), // http port
 	}
 
+	// If hostname is specified then expose the internal grpc port (7080) of alpha.
+	if basename == "alpha" && opts.Hostname != "" {
+		svc.Ports = append(svc.Ports, toPort(grpcPort-1000))
+	}
 	if opts.LocalBin {
 		svc.Volumes = append(svc.Volumes, volume{
 			Type:     "bind",
@@ -236,7 +250,7 @@ func getZero(idx int, raft string) service {
 		svc.Command += fmt.Sprintf(" -o %d", opts.PortOffset+offset)
 	}
 	svc.Command += fmt.Sprintf(" --raft='%s'", raft)
-	svc.Command += fmt.Sprintf(" --my=%s:%d", svc.name, grpcPort)
+	svc.Command += fmt.Sprintf(" --my=%s:%d", getHost(svc.name), grpcPort)
 	if opts.NumAlphas > 1 {
 		svc.Command += fmt.Sprintf(" --replicas=%d", opts.NumReplicas)
 	}
@@ -247,7 +261,8 @@ func getZero(idx int, raft string) service {
 	if idx == 1 {
 		svc.Command += fmt.Sprintf(" --bindall")
 	} else {
-		svc.Command += fmt.Sprintf(" --peer=%s:%d", name(basename, 1), basePort)
+		peerHost := name(basename, 1)
+		svc.Command += fmt.Sprintf(" --peer=%s:%d", getHost(peerHost), basePort)
 	}
 	if len(opts.MemLimit) > 0 {
 		svc.Deploy.Resources = res{
@@ -291,10 +306,12 @@ func getAlpha(idx int, raft string) service {
 		maxZeros = opts.NumZeros
 	}
 
-	zeroHostAddr := fmt.Sprintf("zero%d:%d", 1, zeroBasePort+opts.PortOffset)
+	zeroHostAddr := fmt.Sprintf("%s:%d", getHost("zero1"), zeroBasePort+opts.PortOffset)
 	zeros := []string{zeroHostAddr}
 	for i := 2; i <= maxZeros; i++ {
-		zeroHostAddr = fmt.Sprintf("zero%d:%d", i, zeroBasePort+opts.PortOffset+getOffset(i))
+		port := zeroBasePort + opts.PortOffset + getOffset(i)
+		zeroHost := fmt.Sprintf("zero%d", i)
+		zeroHostAddr = fmt.Sprintf("%s:%d", getHost(zeroHost), port)
 		zeros = append(zeros, zeroHostAddr)
 	}
 
@@ -304,7 +321,7 @@ func getAlpha(idx int, raft string) service {
 	if (opts.PortOffset + offset) != 0 {
 		svc.Command += fmt.Sprintf(" -o %d", opts.PortOffset+offset)
 	}
-	svc.Command += fmt.Sprintf(" --my=%s:%d", svc.name, internalPort)
+	svc.Command += fmt.Sprintf(" --my=%s:%d", getHost(svc.name), internalPort)
 	svc.Command += fmt.Sprintf(" --zero=%s", zerosOpt)
 	svc.Command += fmt.Sprintf(" --logtostderr -v=%d", opts.Verbosity)
 	svc.Command += " --expose_trace=true"
@@ -320,7 +337,7 @@ func getAlpha(idx int, raft string) service {
 		svc.Command += fmt.Sprintf(" --vmodule=%s", opts.Vmodule)
 	}
 	if opts.WhiteList {
-		svc.Command += ` --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"`
+		svc.Command += ` --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,100.0.0.0/8;"`
 	}
 	if opts.Acl {
 		svc.Command += ` --acl "secret-file=/secret/hmac;"`
@@ -353,6 +370,9 @@ func getAlpha(idx int, raft string) service {
 			Target:   "/secret/enc_key",
 			ReadOnly: true,
 		})
+	}
+	if opts.Cdc {
+		svc.Command += " --cdc='kafka=kafka:9092'"
 	}
 	if len(opts.AlphaVolumes) > 0 {
 		for _, vol := range opts.AlphaVolumes {
@@ -503,6 +523,32 @@ func addMetrics(cfg *composeConfig) {
 	}
 }
 
+func addCdc(cfg *composeConfig) {
+	cfg.Services["zookeeper"] = service{
+		Image:         "bitnami/zookeeper:3.7.0",
+		ContainerName: containerName("zookeeper"),
+		Environment: []string{
+			"ALLOW_ANONYMOUS_LOGIN=yes",
+		},
+	}
+	cfg.Services["kafka"] = service{
+		Image:         "bitnami/kafka:2.7.0",
+		ContainerName: containerName("kafka"),
+		Environment: []string{
+			"ALLOW_PLAINTEXT_LISTENER=yes",
+			"KAFKA_BROKER_ID=1",
+			"KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper:2181",
+		},
+	}
+	if opts.CdcConsumer {
+		cfg.Services["kafka-consumer"] = service{
+			Image:         "bitnami/kafka:2.7.0",
+			ContainerName: containerName("kafka-consumer"),
+			Command:       "kafka-console-consumer.sh --bootstrap-server kafka:9092 --topic dgraph-cdc",
+		}
+	}
+}
+
 func semverCompare(constraint, version string) (bool, error) {
 	c, err := sv.NewConstraint(constraint)
 	if err != nil {
@@ -610,6 +656,12 @@ func main() {
 		"minio service port")
 	cmd.PersistentFlags().StringArrayVar(&opts.MinioEnvFile, "minio_env_file", nil,
 		"minio service env_file")
+	cmd.PersistentFlags().StringVar(&opts.Hostname, "hostname", "",
+		"hostname for the alpha and zero servers")
+	cmd.PersistentFlags().BoolVar(&opts.Cdc, "cdc", false,
+		"run Kafka and push CDC data to it")
+	cmd.PersistentFlags().BoolVar(&opts.CdcConsumer, "cdc_consumer", false,
+		"run Kafka consumer that prints out CDC events")
 	err := cmd.ParseFlags(os.Args)
 	if err != nil {
 		if err == pflag.ErrHelp {
@@ -638,7 +690,9 @@ func main() {
 	if cmd.Flags().Changed("ratel_port") && !opts.Ratel {
 		fatal(errors.Errorf("--ratel_port option requires --ratel"))
 	}
-
+	if cmd.Flags().Changed("cdc-consumer") && !opts.Cdc {
+		fatal(errors.Errorf("--cdc_consumer requires --cdc"))
+	}
 	services := make(map[string]service)
 
 	for i := 1; i <= opts.NumZeros; i++ {
@@ -731,6 +785,10 @@ func main() {
 		if err != nil {
 			fatal(errors.Errorf("unable to write file: %v", err))
 		}
+	}
+
+	if opts.Cdc {
+		addCdc(&cfg)
 	}
 
 	yml, err := yaml.Marshal(cfg)

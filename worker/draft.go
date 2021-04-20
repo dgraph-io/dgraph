@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -49,6 +50,10 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
+)
+
+const (
+	sensitiveString = "******"
 )
 
 type node struct {
@@ -757,13 +762,14 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 			return errors.Wrapf(err, "cannot start restore task")
 		}
 		defer closer.Done()
-
-		// Drop all the current data. This also cancels all existing transactions.
+    glog.Infof("Got restore proposal at Index:%d, ReadTs:%d",
+			proposal.Index, proposal.Restore.RestoreTs)
+		
+    // Drop all the current data. This also cancels all existing transactions.
 		if err := dropall(); err != nil {
 			return errors.Wrap(err, "while dropping all")
 		}
-
-		if err := handleRestoreProposal(ctx, proposal.Restore); err != nil {
+		if err := handleRestoreProposal(ctx, proposal.Restore, proposal.Index); err != nil {
 			return err
 		}
 
@@ -860,7 +866,8 @@ func (n *node) processApplyCh() {
 				previous[prop.Key] = p
 			}
 			if perr != nil {
-				glog.Errorf("Applying proposal. Error: %v. Proposal: %q.", perr, prop)
+				glog.Errorf("Applying proposal. Error: %v. Proposal: %q.", perr,
+					getSanitizedString(&prop))
 			}
 			n.elog.Printf("Applied proposal with key: %d, index: %d. Err: %v",
 				prop.Key, prop.Index, perr)
@@ -876,7 +883,10 @@ func (n *node) processApplyCh() {
 				tags = append(tags, tag.Upsert(x.KeyMethod, "apply.Delta"))
 			}
 			ms := x.SinceMs(start)
-			ostats.RecordWithTags(context.Background(), tags, x.LatencyMs.M(ms))
+			if err := ostats.RecordWithTags(context.Background(),
+				tags, x.LatencyMs.M(ms)); err != nil {
+				glog.Errorf("Error recording stats: %+v", err)
+			}
 		}
 
 		n.Proposals.Done(prop.Key, perr)
@@ -2069,4 +2079,19 @@ func (n *node) monitorRaftMetrics() {
 		ostats.Record(n.ctx, x.RaftPendingSize.M(curPendingSize))
 		ostats.Record(n.ctx, x.RaftApplyCh.M(int64(len(n.applyCh))))
 	}
+}
+
+func getSanitizedString(proposal *pb.Proposal) string {
+	ps := proposal.String()
+	if proposal.GetRestore() != nil {
+		if len(proposal.GetRestore().GetAccessKey()) != 0 {
+			ps = strings.Replace(ps, proposal.GetRestore().GetAccessKey(),
+				sensitiveString, 1)
+		}
+		if len(proposal.GetRestore().GetSecretKey()) != 0 {
+			ps = strings.Replace(ps, proposal.GetRestore().GetSecretKey(),
+				sensitiveString, 1)
+		}
+	}
+	return ps
 }

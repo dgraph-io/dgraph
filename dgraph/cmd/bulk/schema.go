@@ -113,24 +113,23 @@ func (s *schemaStore) checkAndSetInitialSchema(namespace uint64) {
 	return
 }
 
-func (s *schemaStore) validateType(de *pb.DirectedEdge, namespace uint64, objectIsUID bool) {
+func (s *schemaStore) validateType(de *pb.DirectedEdge, objectIsUID bool) {
 	if objectIsUID {
 		de.ValueType = pb.Posting_UID
 	}
 
-	attr := x.NamespaceAttr(namespace, de.Attr)
 	s.RLock()
-	sch, ok := s.schemaMap[attr]
+	sch, ok := s.schemaMap[de.Attr]
 	s.RUnlock()
 	if !ok {
 		s.Lock()
-		sch, ok = s.schemaMap[attr]
+		sch, ok = s.schemaMap[de.Attr]
 		if !ok {
 			sch = &pb.SchemaUpdate{ValueType: de.ValueType}
 			if objectIsUID {
 				sch.List = true
 			}
-			s.schemaMap[attr] = sch
+			s.schemaMap[de.Attr] = sch
 		}
 		s.Unlock()
 	}

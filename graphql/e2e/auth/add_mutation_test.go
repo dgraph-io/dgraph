@@ -1035,7 +1035,7 @@ func TestUpsertMutationsWithRBAC(t *testing.T) {
 				require.Error(t, gqlResponse.Errors)
 				require.Equal(t, len(gqlResponse.Errors), 1)
 				require.Contains(t, gqlResponse.Errors[0].Error(),
-					"GraphQL debug: id tweet1 already exists for field id inside type Tweets")
+					" GraphQL debug: id Tweets already exists for field id inside type tweet1")
 			} else {
 				common.RequireNoGQLErrors(t, gqlResponse)
 				require.JSONEq(t, tcase.result, string(gqlResponse.Data))
@@ -1151,4 +1151,49 @@ func TestUpsertWithDeepAuth(t *testing.T) {
 	common.DeleteGqlType(t, "Country", filter, 1, nil)
 	filter = map[string]interface{}{"code": map[string]interface{}{"eq": "UK"}}
 	common.DeleteGqlType(t, "State", filter, 1, nil)
+}
+
+func TestAddMutationWithAuthOnIDFieldHavingInterfaceArg(t *testing.T) {
+	// add Library Member
+	addLibraryMemberParams := &common.GraphQLParams{
+		Query: `mutation addLibraryMember($input: [AddLibraryMemberInput!]!) {
+                         addLibraryMember(input: $input, upsert: false) {
+                          numUids
+                         }
+                        }`,
+		Variables: map[string]interface{}{"input": []interface{}{
+			map[string]interface{}{
+				"refID":     "101",
+				"name":      "Alice",
+				"readHours": "4d2hr",
+			}},
+		},
+	}
+
+	gqlResponse := addLibraryMemberParams.ExecuteAsPost(t, common.GraphqlURL)
+	common.RequireNoGQLErrors(t, gqlResponse)
+	// add sports member should return error but in debug mode
+	// because interface type have auth rules defined on it
+	addSportsMemberParams := &common.GraphQLParams{
+		Query: `mutation addSportsMember($input: [AddSportsMemberInput!]!) {
+                         addSportsMember(input: $input, upsert: false) {
+                          numUids
+                         }
+                        }`,
+		Variables: map[string]interface{}{"input": []interface{}{
+			map[string]interface{}{
+				"refID": "101",
+				"name":  "Bob",
+				"plays": "football and cricket",
+			}},
+		},
+	}
+
+	gqlResponse = addSportsMemberParams.ExecuteAsPost(t, common.GraphqlURL)
+	require.Contains(t, gqlResponse.Errors[0].Error(),
+		" GraphQL debug: id 101 already exists for field refID in some other"+
+			" implementing type of interface Member")
+
+	// cleanup
+	common.DeleteGqlType(t, "LibraryMember", map[string]interface{}{}, 1, nil)
 }
