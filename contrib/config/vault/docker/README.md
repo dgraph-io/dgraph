@@ -22,7 +22,7 @@ Steps using `bind_secret_id`:
 11. [Verify secrets access using app persona](#Step-11-verify-secrets-access-using-app-persona)
 12. [Launch Dgraph](#Step-12-launch-Dgraph)
 
-Alternative Steps using `bound_cidr_list` (see [Using Hashicorp Vault CIDR List for Authentication](#Using-hashicorp-vault-cidr-list-for-authentication)):
+Alternative Steps using `bound_cidr_list` (see [Using HashiCorp Vault CIDR List for Authentication](#Using-hashicorp-vault-cidr-list-for-authentication)):
 
 1.  [Configure Dgraph and Vault Versions](#Step-1-configure-dgraph-and-vault-versions)
 2.  [Launch unsealed Vault server](#Step-2-launch-unsealed-Vault-server)
@@ -221,7 +221,7 @@ curl --silent \
   http://$VAULT_ADDRESS/v1/secret/data/dgraph/alpha | jq
 ```
 
-**NOTE**: When updating K/V Version 2 secrets, be sure to increment the `options.cas` value to increase the version.  For example, if updating the `enc_key` value to 32-bits, you would update `./vault/payload_alpha.secrets.json` to look like the following:
+**NOTE**: When updating K/V Version 2 secrets, be sure to increment the `options.cas` value to increase the version.  For example, if updating the `enc_key` value to 32-bits, you would update `./vault/payload_alpha_secrets.json` to look like the following:
 ```json
 {
   "options": {
@@ -287,7 +287,7 @@ You can verify encryption features are enabled with:
 curl localhost:8080/health | jq -r '.[].ee_features | .[]' | sed 's/^/* /'
 ```
 
-## Using Hashicorp Vault CIDR List for Authentication
+## Using HashiCorp Vault CIDR List for Authentication
 
 As an alternative, you can restrict access to a limited range of IP addresses and disable the requirement for a `secret-id`.  In this scenario, we will set `bind_seccret_id` to `false`, and supply a list of IP address ranges for the `bound_cidr_list` key.
 
