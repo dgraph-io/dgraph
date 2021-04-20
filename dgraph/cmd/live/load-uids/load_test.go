@@ -395,7 +395,7 @@ func TestLiveLoadWithoutForceNs(t *testing.T) {
 
 	out, err := liveCmd.CombinedOutput()
 	require.Error(t, err, "error expected: live loader exited with no error")
-	require.Contains(t, string(out), "force-namespace is mandatory when loading data from namespace 0")
+	require.Contains(t, string(out), "force-namespace is mandatory when logging into namespace 0")
 }
 
 func TestMain(m *testing.M) {
