@@ -989,6 +989,9 @@ func (n *node) processApplyCh() {
 // TODO(Anurag - 4 May 2020): Are we using pkey? Remove if unused.
 func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 	// First let's commit all mutations to disk.
+	_, span := otrace.StartSpan(context.Background(), "node.commitOrAbort")
+	defer span.End()
+
 	writer := posting.NewTxnWriter(pstore)
 	toDisk := func(start, commit uint64) {
 		txn := posting.Oracle().GetTxn(start)
@@ -1016,18 +1019,28 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 			glog.Errorf("Error while applying txn status to disk (%d -> %d): %v",
 				start, commit, err)
 		}
+		span.Annotatef(nil, "internal toDisk done for %d keys", len(txn.Deltas()))
 	}
 
+	span.Annotate(nil, "Start")
+	start := time.Now()
 	for _, status := range delta.Txns {
 		toDisk(status.StartTs, status.CommitTs)
 	}
+	span.Annotatef(nil, "toDisk done for %d txns", len(delta.Txns))
+	ms := x.SinceMs(start)
+	tags := []tag.Mutator{tag.Upsert(x.KeyMethod, "apply.toDisk")}
+	x.Check(ostats.RecordWithTags(context.Background(), tags, x.LatencyMs.M(ms)))
+
 	if err := writer.Flush(); err != nil {
 		return errors.Wrapf(err, "while flushing to disk")
 	}
+	span.Annotate(nil, "flush done")
 	if x.WorkerConfig.HardSync {
 		if err := pstore.Sync(); err != nil {
 			glog.Errorf("Error while calling Sync while commitOrAbort: %v", err)
 		}
+		span.Annotate(nil, "hard sync done")
 	}
 
 	g := groups()
@@ -1041,9 +1054,11 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 		txn.RemoveCachedKeys()
 	}
 	posting.WaitForCache()
+	span.Annotate(nil, "cache keys removed")
 
 	// Now advance Oracle(), so we can service waiting reads.
 	posting.Oracle().ProcessDelta(delta)
+	span.Annotate(nil, "process delta done")
 	return nil
 }
 
