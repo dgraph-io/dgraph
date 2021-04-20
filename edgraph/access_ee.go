@@ -78,7 +78,7 @@ func (s *Server) Login(ctx context.Context,
 		glog.Errorf("Authentication from address %s failed: %v", addr, err)
 		return nil, x.ErrorInvalidLogin
 	}
-	glog.Infof("%s logged in successfully", user.UserID)
+	glog.Infof("%s logged in successfully in namespace %#x", user.UserID, user.Namespace)
 
 	resp := &api.Response{}
 	accessJwt, err := getAccessJwt(user.UserID, user.Groups, user.Namespace)

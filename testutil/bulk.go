@@ -25,6 +25,7 @@ import (
 	"os/exec"
 	"strconv"
 
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
 )
 
@@ -47,7 +48,7 @@ func LiveLoad(opts LiveOpts) error {
 		"--alpha", opts.Alpha,
 		"--zero", opts.Zero,
 	}
-	if opts.ForceNs != 0 {
+	if opts.Creds.Namespace == x.GalaxyNamespace || opts.ForceNs != 0 {
 		args = append(args, "--force-namespace", strconv.FormatInt(opts.ForceNs, 10))
 	}
 	if opts.Creds != nil {

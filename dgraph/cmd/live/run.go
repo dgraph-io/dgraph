@@ -728,6 +728,9 @@ func run() error {
 		} else {
 			opt.namespaceToLoad = uint64(forceNs)
 		}
+		if len(creds.GetString("user")) > 0 && !Live.Conf.IsSet("force-namespace") {
+			return errors.Errorf("force-namespace is mandatory when logging into namespace 0")
+		}
 	default:
 		if Live.Conf.IsSet("force-namespace") {
 			return errors.Errorf("cannot force namespace %#x when provided creds are not of"+
