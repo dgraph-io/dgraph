@@ -192,6 +192,7 @@ type mapResponse struct {
 	uid       string       // uid retrieved or allocated for the node.
 	namespace uint64       // namespace to which the node belongs.
 	fcts      []*api.Facet // facets on the edge connecting this node to the source if any.
+	rawFacets map[string]interface{}
 }
 
 func handleBasicType(k string, v interface{}, op int, nq *api.NQuad) error {
@@ -264,7 +265,7 @@ func handleBasicType(k string, v interface{}, op int, nq *api.NQuad) error {
 
 func (buf *NQuadBuffer) checkForDeletion(mr mapResponse, m map[string]interface{}, op int) {
 	// Since uid is the only key, this must be S * * deletion.
-	if op == DeleteNquads && len(mr.uid) > 0 && len(m) == 1 {
+	if op == DeleteNquads && len(mr.uid) > 0 && len(m) == 1 && len(mr.rawFacets) == 0 {
 		buf.Push(&api.NQuad{
 			Subject:     mr.uid,
 			Predicate:   x.Star,
@@ -397,11 +398,11 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 	mapResponse, error) {
 	var mr mapResponse
 
-	// move all facets from global map to smaller mf map
-	mf := make(map[string]interface{})
+	// move all facets from global map to smaller mr.rawFacets map
+	mr.rawFacets = make(map[string]interface{})
 	for k, v := range m {
 		if strings.Contains(k, x.FacetDelimeter) {
-			mf[k] = v
+			mr.rawFacets[k] = v
 			delete(m, k)
 		}
 	}
@@ -512,7 +513,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 
 		prefix := pred + x.FacetDelimeter
 		if _, ok := v.([]interface{}); !ok {
-			fts, err := parseScalarFacets(mf, prefix)
+			fts, err := parseScalarFacets(mr.rawFacets, prefix)
 			if err != nil {
 				return mr, err
 			}
@@ -569,14 +570,16 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 			var facetsMapSlice []map[int]*api.Facet
 			for idx, item := range v {
 				if idx == 0 {
+					// determine if this is a scalar list
 					switch item.(type) {
 					case string, float64, json.Number, int64:
 						var err error
-						facetsMapSlice, err = parseMapFacets(mf, prefix)
+						facetsMapSlice, err = parseMapFacets(mr.rawFacets, prefix)
 						if err != nil {
 							return mr, err
 						}
 					default:
+						// not a scalar list, continue
 					}
 				}
 
@@ -648,7 +651,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 		}
 	}
 
-	fts, err := parseScalarFacets(mf, parentPred+x.FacetDelimeter)
+	fts, err := parseScalarFacets(mr.rawFacets, parentPred+x.FacetDelimeter)
 	mr.fcts = fts
 
 	return mr, err
