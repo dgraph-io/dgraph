@@ -99,7 +99,8 @@ curl --silent \
 ## convert policies to json format
 cat <<EOF > ./vault/policy_admin.json
 {
-  "policy": "$(sed -e ':a;N;$!ba;s/\n/\\n/g' -e 's/"/\\"/g' vault/policy_admin.hcl)"
+  "policy": "$(sed -e ':a;N;$!ba;s/\n/\\n/g' \
+                   -e 's/"/\\"/g' vault/policy_admin.hcl)"
 }
 EOF
 
@@ -123,7 +124,11 @@ curl --silent \
 curl --silent \
   --header "X-Vault-Token: $VAULT_ROOT_TOKEN" \
   --request POST \
-  --data '{ "token_policies": "admin", "token_ttl": "1h", "token_max_ttl": "4h" }' \
+  --data '{
+  "token_policies": "admin",
+  "token_ttl": "1h",
+  "token_max_ttl": "4h"
+}' \
   http://$VAULT_ADDRESS/v1/auth/approle/role/admin
 
 ## verify the role
@@ -151,7 +156,10 @@ VAULT_ADMIN_SECRET_ID=$(curl --silent \
 
 export VAULT_ADMIN_TOKEN=$(curl --silent \
   --request POST \
-  --data "{ \"role_id\": \"$VAULT_ADMIN_ROLE_ID\", \"secret_id\": \"$VAULT_ADMIN_SECRET_ID\" }" \
+  --data "{
+  \"role_id\": \"$VAULT_ADMIN_ROLE_ID\",
+  \"secret_id\": \"$VAULT_ADMIN_SECRET_ID\"
+}" \
   http://$VAULT_ADDRESS/v1/auth/approle/login | jq -r '.auth.client_token'
 )
 ```
@@ -162,7 +170,8 @@ export VAULT_ADMIN_TOKEN=$(curl --silent \
 ## convert policies to json format
 cat <<EOF > ./vault/policy_dgraph.json
 {
-  "policy": "$(sed -e ':a;N;$!ba;s/\n/\\n/g' -e 's/"/\\"/g' vault/policy_dgraph.hcl)"
+  "policy": "$(sed -e ':a;N;$!ba;s/\n/\\n/g' \
+                   -e 's/"/\\"/g' vault/policy_dgraph.hcl)"
 }
 EOF
 
@@ -187,7 +196,11 @@ curl --silent \
 curl --silent \
  --header "X-Vault-Token: $VAULT_ADMIN_TOKEN" \
  --request POST \
- --data '{ "token_policies": "dgraph", "token_ttl": "1h", "token_max_ttl": "4h" }' \
+ --data '{
+  "token_policies": "dgraph",
+  "token_ttl": "1h",
+  "token_max_ttl": "4h"
+}' \
  http://$VAULT_ADDRESS/v1/auth/approle/role/dgraph
 
 ## verify the role
@@ -237,7 +250,10 @@ VAULT_DGRAPH_SECRET_ID=$(curl --silent \
 
 export VAULT_DGRAPH_TOKEN=$(curl --silent \
   --request POST \
-  --data "{ \"role_id\": \"$VAULT_DGRAPH_ROLE_ID\", \"secret_id\": \"$VAULT_DGRAPH_SECRET_ID\" }" \
+  --data "{
+  \"role_id\": \"$VAULT_DGRAPH_ROLE_ID\",
+  \"secret_id\": \"$VAULT_DGRAPH_SECRET_ID\"
+}" \
   http://$VAULT_ADDRESS/v1/auth/approle/login | jq -r '.auth.client_token'
 )
 ```
@@ -285,11 +301,16 @@ curl --silent \
  --header "X-Vault-Token: $VAULT_ADMIN_TOKEN" \
  --request POST \
  --data '{
-"token_policies": "dgraph",
-"token_ttl": "1h",
-"token_max_ttl": "4h",
-"bind_secret_id": false,
-"bound_cidr_list": ["10.0.0.0/8","172.0.0.0/8","192.168.0.0/16", "127.0.0.1/32"]
+  "token_policies": "dgraph",
+  "token_ttl": "1h",
+  "token_max_ttl": "4h",
+  "bind_secret_id": false,
+  "bound_cidr_list": [
+    "10.0.0.0/8",
+    "172.0.0.0/8",
+    "192.168.0.0/16",
+    "127.0.0.1/32"
+  ]
 }' \
  http://$VAULT_ADDRESS/v1/auth/approle/role/dgraph
 
