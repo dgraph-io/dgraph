@@ -891,7 +891,6 @@ func TestQueryAuthWithFilterOnIDType(t *testing.T) {
 	}{{
 		user: []string{"0xffe", "0xfff"},
 		result: `{
-			"data": {
 			  "queryPerson": [
 				{
 				  "name": "Person1"
@@ -900,7 +899,6 @@ func TestQueryAuthWithFilterOnIDType(t *testing.T) {
 				  "name": "Person2"
 				}
 			  ]
-			}
 		}`,
 	}}
 
