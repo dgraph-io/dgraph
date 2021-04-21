@@ -1969,6 +1969,7 @@ func (n *node) retryUntilSuccess(fn func() error, pause time.Duration) {
 
 // InitAndStartNode gets called after having at least one membership sync with the cluster.
 func (n *node) InitAndStartNode() {
+	initProposalKey(n.Id)
 	_, restart, err := n.PastLife()
 	x.Check(err)
 
