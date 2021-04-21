@@ -520,12 +520,17 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		_, err := query.ApplyMutations(ctx, m)
 		return empty, err
 	}
+
+	// it is a schema update
 	result, err := parseSchemaFromAlterOperation(ctx, op)
 	if err == errIndexingInProgress {
 		// Make the client wait a bit.
 		time.Sleep(time.Second)
 		return nil, err
 	} else if err != nil {
+		return nil, err
+	}
+	if err = validateDQLSchemaForGraphQL(ctx, result, namespace); err != nil {
 		return nil, err
 	}
 
@@ -544,6 +549,124 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	}
 
 	return empty, nil
+}
+
+func validateDQLSchemaForGraphQL(ctx context.Context, dqlSch *schema.ParsedSchema, ns uint64) error {
+	// fetch the GraphQL schema for this namespace from disk
+	_, existingGQLSch, err := GetGQLSchema(ns)
+	if err != nil || existingGQLSch == "" {
+		return err
+	}
+
+	// convert the existing GraphQL schema to a DQL schema
+	handler, err := gqlSchema.NewHandler(existingGQLSch, false)
+	if err != nil {
+		return err
+	}
+	dgSchema := handler.DGSchema()
+	if dgSchema == "" {
+		return nil
+	}
+	gqlReservedDgSch, err := parseSchemaFromAlterOperation(ctx, &api.Operation{Schema: dgSchema})
+	if err != nil {
+		return err
+	}
+
+	// create a mapping for the GraphQL reserved predicates and types
+	gqlReservedPreds := make(map[string]*pb.SchemaUpdate)
+	gqlReservedTypes := make(map[string]*pb.TypeUpdate)
+	for _, pred := range gqlReservedDgSch.Preds {
+		gqlReservedPreds[pred.Predicate] = pred
+	}
+	for _, typ := range gqlReservedDgSch.Types {
+		gqlReservedTypes[typ.TypeName] = typ
+	}
+
+	// now validate the DQL schema to check that it doesn't break the existing GraphQL schema
+
+	// Step-1: validate predicates
+	for _, dqlPred := range dqlSch.Preds {
+		gqlPred := gqlReservedPreds[dqlPred.Predicate]
+		if gqlPred == nil {
+			continue // if the predicate isn't used by GraphQL, no need to validate it.
+		}
+
+		// type (including list) must match exactly
+		if gqlPred.ValueType != dqlPred.ValueType || gqlPred.List != dqlPred.List {
+			gqlType := strings.ToLower(gqlPred.ValueType.String())
+			dgType := strings.ToLower(dqlPred.ValueType.String())
+			if gqlPred.List {
+				gqlType = "[" + gqlType + "]"
+			}
+			if dqlPred.List {
+				dgType = "[" + dgType + "]"
+			}
+			return errors.Errorf("type mismatch for GraphQL predicate %s. want: %s, got: %s",
+				x.ParseAttr(gqlPred.Predicate), gqlType, dgType)
+		}
+		// if gqlSchema had any indexes, then those must be present in the dqlSchema.
+		// dqlSchema may add more indexes than what gqlSchema had initially, but can't remove them.
+		if gqlPred.Directive == pb.SchemaUpdate_INDEX {
+			if dqlPred.Directive != pb.SchemaUpdate_INDEX {
+				return errors.Errorf("missing @index for GraphQL predicate %s",
+					x.ParseAttr(gqlPred.Predicate))
+			}
+			for _, t := range gqlPred.Tokenizer {
+				if !x.HasString(dqlPred.Tokenizer, t) {
+					return errors.Errorf("missing %s index for GraphQL predicate %s", t, x.ParseAttr(gqlPred.Predicate))
+				}
+			}
+		}
+		// if gqlSchema had @reverse, then dqlSchema must have it. dqlSchema can't remove @reverse.
+		// if gqlSchema didn't had @reverse, it is allowed to dqlSchema to add it.
+		if gqlPred.Directive == pb.SchemaUpdate_REVERSE && dqlPred.Directive != pb.
+			SchemaUpdate_REVERSE {
+			return errors.Errorf("missing @reverse for GraphQL predicate %s",
+				x.ParseAttr(gqlPred.Predicate))
+		}
+		// if gqlSchema had @count, then dqlSchema must have it. dqlSchema can't remove @count.
+		// if gqlSchema didn't had @count, it is allowed to dqlSchema to add it.
+		if gqlPred.Count && !dqlPred.Count {
+			return errors.Errorf("missing @count for GraphQL predicate %s",
+				x.ParseAttr(gqlPred.Predicate))
+		}
+		// if gqlSchema had @upsert, then dqlSchema must have it. dqlSchema can't remove @upsert.
+		// if gqlSchema didn't had @upsert, it is allowed to dqlSchema to add it.
+		if gqlPred.Upsert && !dqlPred.Upsert {
+			return errors.Errorf("missing @upsert for GraphQL predicate %s",
+				x.ParseAttr(gqlPred.Predicate))
+		}
+		// if gqlSchema had @lang, then dqlSchema must have it. dqlSchema can't remove @lang.
+		// if gqlSchema didn't had @lang, it is allowed to dqlSchema to add it.
+		if gqlPred.Lang && !dqlPred.Lang {
+			return errors.Errorf("missing @lang for GraphQL predicate %s",
+				x.ParseAttr(gqlPred.Predicate))
+		}
+	}
+
+	// Step-2: validate types
+	for _, dqlType := range dqlSch.Types {
+		gqlType := gqlReservedTypes[dqlType.TypeName]
+		if gqlType == nil {
+			continue // if the type isn't used by GraphQL, no need to validate it.
+		}
+
+		// create a mapping of all the fields in the dqlType
+		dqlFields := make(map[string]bool)
+		for _, f := range dqlType.Fields {
+			dqlFields[f.Predicate] = true
+		}
+
+		// check that all the fields of the gqlType must be present in the dqlType
+		for _, f := range gqlType.Fields {
+			if !dqlFields[f.Predicate] {
+				return errors.Errorf("missing field %s in GraphQL type %s",
+					x.ParseAttr(f.Predicate), x.ParseAttr(gqlType.TypeName))
+			}
+		}
+	}
+
+	return nil
 }
 
 func annotateStartTs(span *otrace.Span, ts uint64) {
