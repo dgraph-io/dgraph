@@ -26,7 +26,7 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/worker"
-	"github.com/golang/glog"
+	"github.com/pkg/errors"
 )
 
 type taskInput struct {
@@ -34,8 +34,6 @@ type taskInput struct {
 }
 
 func resolveTask(ctx context.Context, q schema.Query) *resolve.Resolved {
-	glog.Info("Got task request through GraphQL admin API")
-
 	input, err := getTaskInput(q)
 	if err != nil {
 		return resolve.EmptyResult(q, err)
@@ -45,7 +43,7 @@ func resolveTask(ctx context.Context, q schema.Query) *resolve.Resolved {
 	}
 	id, err := strconv.ParseUint(input.Id, 0, 64)
 	if err != nil {
-		return resolve.EmptyResult(q, fmt.Errorf("task ID is invalid"))
+		return resolve.EmptyResult(q, errors.Wrapf(err, "task ID is invalid"))
 	}
 
 	meta := worker.Tasks.Get(id)
@@ -65,12 +63,10 @@ func resolveTask(ctx context.Context, q schema.Query) *resolve.Resolved {
 
 func getTaskInput(q schema.Query) (*taskInput, error) {
 	inputArg := q.ArgValue(schema.InputArgName)
-	glog.Infof("inputArg: %+v", inputArg)
 	inputBytes, err := json.Marshal(inputArg)
 	if err != nil {
 		return nil, schema.GQLWrapf(err, "couldn't get input argument")
 	}
-	glog.Infof("taskInput: %s", string(inputBytes))
 
 	var input taskInput
 	if err := json.Unmarshal(inputBytes, &input); err != nil {

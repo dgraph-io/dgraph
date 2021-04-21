@@ -1738,7 +1738,7 @@ func CountIndexConcurrentSetDelUIDList(t *testing.T, c *dgo.Dgraph) {
 					CommitNow: true,
 				}
 
-				mu.SetNquads = []byte(fmt.Sprintf("<0x1> <friend> <0x%x> .", id))
+				mu.SetNquads = []byte(fmt.Sprintf("<0x1> <friend> <%#x> .", id))
 				_, err := dg.NewTxn().Mutate(context.Background(), mu)
 				if err != nil && err != dgo.ErrAborted {
 					require.Fail(t, "unable to inserted uid with err: %s", err)
@@ -1789,7 +1789,7 @@ func CountIndexConcurrentSetDelUIDList(t *testing.T, c *dgo.Dgraph) {
 					CommitNow: true,
 				}
 
-				mu.DelNquads = []byte(fmt.Sprintf("<0x1> <friend> <0x%x> .", id))
+				mu.DelNquads = []byte(fmt.Sprintf("<0x1> <friend> <%#x> .", id))
 				_, err := dg.NewTxn().Mutate(context.Background(), mu)
 				if err != nil && err != dgo.ErrAborted {
 					require.Fail(t, "unable to delete uid with err: %s", err)

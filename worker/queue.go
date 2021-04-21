@@ -33,23 +33,39 @@ import (
 )
 
 var (
+	// Tasks is a global persistent task queue.
+	// Do not use this before calling InitTasks.
 	Tasks tasks
 )
 
+// InitTasks initializes the global Tasks variable.
 func InitTasks() {
 	// #nosec G404: weak RNG
 	Tasks = tasks{
-		queue:  make(chan taskRequest, 16),
-		log:    z.NewTree(),
-		logMu:  new(sync.Mutex),
-		raftId: State.WALstore.Uint(raftwal.RaftId),
-		rng:    rand.New(rand.NewSource(time.Now().UnixNano())),
+		queue:         make(chan taskRequest, 16),
+		log:           z.NewTree(),
+		logMu:         new(sync.Mutex),
+		shouldCleanup: time.NewTicker(7 * 24 * time.Hour),
+		raftId:        State.WALstore.Uint(raftwal.RaftId),
+		rng:           rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
-	Tasks.deleteExpired()
-	Tasks.cancelQueued()
+
+	// Mark all pending tasks as failed.
+	Tasks.logMu.Lock()
+	Tasks.log.IterateKV(func(id, val uint64) uint64 {
+		meta := TaskMeta(val)
+		if status := meta.Status(); status == TaskStatusQueued || status == TaskStatusRunning {
+			return uint64(newTaskMeta(meta.Kind(), TaskStatusFailed))
+		}
+		return 0
+	})
+	Tasks.logMu.Unlock()
+
+	// Start the task runner.
 	go Tasks.run()
 }
 
+// tasks is a persistent task queue.
 type tasks struct {
 	// queue stores the full Protobuf request.
 	queue chan taskRequest
@@ -57,11 +73,13 @@ type tasks struct {
 	log   *z.Tree
 	logMu *sync.Mutex
 
-	raftId uint64
-	rng    *rand.Rand
+	shouldCleanup *time.Ticker
+	raftId        uint64
+	rng           *rand.Rand
 }
 
-// Returns 0 if the task was not found.
+// Get retrieves metadata for a given task ID.
+// It returns 0 if the task was not found.
 func (t tasks) Get(id uint64) TaskMeta {
 	if id == 0 || id == math.MaxUint64 {
 		return 0
@@ -71,29 +89,22 @@ func (t tasks) Get(id uint64) TaskMeta {
 	return TaskMeta(t.log.Get(id))
 }
 
+// set stores metadata for a given task ID.
 func (t tasks) set(id uint64, meta TaskMeta) {
 	t.logMu.Lock()
 	defer t.logMu.Unlock()
 	t.log.Set(id, uint64(meta))
 }
 
-// cancelQueuedTasks marks all queued tasks in the log as canceled.
-func (t tasks) cancelQueued() {
-	t.logMu.Lock()
-	defer t.logMu.Unlock()
+// cleanup deletes all expired tasks.
+// This is not guaranteed to execute, it only runs if it hasn't run in a set interval.
+func (t tasks) cleanup() {
+	select {
+	case <-t.shouldCleanup.C:
+	default:
+		return
+	}
 
-	t.log.IterateKV(func(id, val uint64) uint64 {
-		meta := TaskMeta(val)
-		if meta.Status() == TaskStatusQueued {
-			return uint64(newTaskMeta(meta.Kind(), TaskStatusCanceled))
-		}
-		return 0
-	})
-}
-
-// deleteExpired deletes all expired tasks.
-// TODO(ajeet): figure out how to call this once a week.
-func (t tasks) deleteExpired() {
 	const ttl = 7 * 24 * time.Hour // 1 week
 	minTs := time.Now().UTC().Add(-ttl).Unix()
 	minMeta := uint64(minTs) << 32
@@ -110,7 +121,7 @@ func (t tasks) run() {
 		var task taskRequest
 		select {
 		case <-x.ServerCloser.HasBeenClosed():
-			break
+			return
 		case task = <-t.queue:
 		}
 
@@ -118,13 +129,13 @@ func (t tasks) run() {
 		// than taskTtl.
 		meta := TaskMeta(t.Get(task.id))
 		if meta == 0 {
-			glog.Errorf("task 0x%x: is expired, skipping", task.id)
+			glog.Errorf("task %#x: is expired, skipping", task.id)
 			continue
 		}
 		// Only proceed if the task is still queued. It's possible that the task got canceled
 		// before we were able to run it.
 		if status := meta.Status(); status != TaskStatusQueued {
-			glog.Errorf("task 0x%x: status is set to %s, skipping", task.id, status)
+			glog.Errorf("task %#x: status is set to %s, skipping", task.id, status)
 		}
 		// Change the task status to RUNNING.
 		t.set(task.id, newTaskMeta(meta.Kind(), TaskStatusRunning))
@@ -132,27 +143,30 @@ func (t tasks) run() {
 		// Run the task.
 		var status TaskStatus
 		if err := task.run(); err != nil {
-			status = TaskStatusError
-			glog.Errorf("task 0x%x: %s: %v", task.id, status, err)
+			status = TaskStatusFailed
+			glog.Errorf("task %#x: %s: %v", task.id, status, err)
 		} else {
 			status = TaskStatusSuccess
-			glog.Infof("task 0x%x: %s", task.id, status)
+			glog.Infof("task %#x: %s", task.id, status)
 		}
 
-		// Change the task status to SUCCESS / ERROR.
+		// Change the task status to SUCCESS / FAILED.
 		t.set(task.id, newTaskMeta(meta.Kind(), status))
 	}
 }
 
+// QueueBackup enqueues a backup request in the task queue.
 func (t tasks) QueueBackup(req *pb.BackupRequest) (uint64, error) {
 	return t.queueTask(req)
 }
 
+// QueueExport enqueues an export request in the task queue.
 func (t tasks) QueueExport(req *pb.ExportRequest) (uint64, error) {
 	return t.queueTask(req)
 }
 
-// queueTask queues a task of any type. Don't use this function directly.
+// queueTask enqueues a request of any type.
+// Don't use this function directly.
 func (t tasks) queueTask(req interface{}) (uint64, error) {
 	task := taskRequest{req: req}
 	for attempt := 0; ; attempt++ {
@@ -178,6 +192,7 @@ func (t tasks) queueTask(req interface{}) (uint64, error) {
 
 	select {
 	case t.queue <- task:
+		t.cleanup()
 		t.set(task.id, newTaskMeta(kind, TaskStatusQueued))
 		return task.id, nil
 	default:
@@ -211,10 +226,10 @@ func (t taskRequest) run() error {
 		if err != nil {
 			return err
 		}
-		glog.Infof("task 0x%x: exported files: %v", t.id, files)
+		glog.Infof("task %#x: exported files: %v", t.id, files)
 	default:
 		glog.Errorf(
-			"task 0x%x: received request of unknown type (%T)", t.id, reflect.TypeOf(t.req))
+			"task %#x: received request of unknown type (%T)", t.id, reflect.TypeOf(t.req))
 	}
 	return nil
 }
@@ -232,14 +247,17 @@ func newTaskMeta(kind TaskKind, status TaskStatus) TaskMeta {
 	return TaskMeta(now)<<32 | TaskMeta(kind)<<16 | TaskMeta(status)
 }
 
+// Timestamp returns the timestamp of the last status change of the task.
 func (t TaskMeta) Timestamp() time.Time {
 	return time.Unix(int64(t>>32), 0)
 }
 
+// Kind returns the type of the task.
 func (t TaskMeta) Kind() TaskKind {
 	return TaskKind((t >> 16) & math.MaxUint16)
 }
 
+// Status returns the current status of the task.
 func (t TaskMeta) Status() TaskStatus {
 	return TaskStatus(t & math.MaxUint16)
 }
@@ -267,8 +285,7 @@ const (
 	// Reserve the zero value for errors.
 	TaskStatusQueued TaskStatus = iota + 1
 	TaskStatusRunning
-	TaskStatusCanceled
-	TaskStatusError
+	TaskStatusFailed
 	TaskStatusSuccess
 )
 
@@ -280,10 +297,8 @@ func (status TaskStatus) String() string {
 		return "Queued"
 	case TaskStatusRunning:
 		return "Running"
-	case TaskStatusCanceled:
-		return "Canceled"
-	case TaskStatusError:
-		return "Error"
+	case TaskStatusFailed:
+		return "Failed"
 	case TaskStatusSuccess:
 		return "Success"
 	default:
