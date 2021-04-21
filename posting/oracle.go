@@ -23,6 +23,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/dgraph-io/badger/v3/skl"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
@@ -67,6 +68,8 @@ type Txn struct {
 
 	cache *LocalCache // This pointer does not get modified.
 	ErrCh chan error
+
+	sl *skl.Skiplist
 }
 
 // NewTxn returns a new Txn instance.
@@ -89,9 +92,21 @@ func (txn *Txn) GetFromDelta(key []byte) (*List, error) {
 	return txn.cache.GetFromDelta(key)
 }
 
+func (txn *Txn) EnsureDeltasArePopulated() {
+	x.AssertTrue(len(txn.cache.plists) == 0)
+}
+
+func (txn *Txn) Skiplist() *skl.Skiplist {
+	return txn.sl
+}
+
 // Update calls UpdateDeltasAndDiscardLists on the local cache.
 func (txn *Txn) Update() {
 	txn.cache.UpdateDeltasAndDiscardLists()
+	txn.sl = pstore.NewSkiplist()
+	if err := txn.ToSkiplist(txn.sl, math.MaxUint64); err != nil {
+		glog.Errorf("While creating skiplist: %v\n", err)
+	}
 }
 
 // Store is used by tests.

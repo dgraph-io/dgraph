@@ -42,6 +42,8 @@ import (
 
 	"github.com/dgraph-io/badger/v3"
 	bpb "github.com/dgraph-io/badger/v3/pb"
+	"github.com/dgraph-io/badger/v3/table"
+	"github.com/dgraph-io/badger/v3/y"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -992,50 +994,150 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 	_, span := otrace.StartSpan(context.Background(), "node.commitOrAbort")
 	defer span.End()
 
-	writer := posting.NewTxnWriter(pstore)
-	toDisk := func(start, commit uint64) {
-		txn := posting.Oracle().GetTxn(start)
-		if txn == nil {
-			return
-		}
-		txn.Update()
+	// buf := z.NewBuffer(1<<20, "commitOrAbort")
+	// defer buf.Release()
 
-		n.keysWritten.totalKeys += len(txn.Deltas())
-		ostats.Record(n.ctx, x.NumEdges.M(int64(len(txn.Deltas()))))
-		for k := range txn.Deltas() {
-			n.keysWritten.keyCommitTs[z.MemHashString(k)] = commit
-		}
-		err := x.RetryUntilSuccess(int(x.Config.MaxRetries),
-			10*time.Millisecond, func() error {
-				err := txn.CommitToDisk(writer, commit)
-				if err == badger.ErrBannedKey {
-					glog.Errorf("Error while writing to banned namespace.")
-					return nil
-				}
-				return err
-			})
-
-		if err != nil {
-			glog.Errorf("Error while applying txn status to disk (%d -> %d): %v",
-				start, commit, err)
-		}
-		span.Annotatef(nil, "internal toDisk done for %d keys", len(txn.Deltas()))
-	}
+	// s := pstore.NewSkiplist()
+	// toSkiplist := func(txn *posting.Txn, commit uint64) {
+	// 	err := txn.ToSkiplist(s, commit)
+	// 	if err != nil {
+	// 		glog.Errorf("Error while applying txn status to disk (%d -> %d): %v",
+	// 			txn.StartTs, commit, err)
+	// 	}
+	// 	span.Annotatef(nil, "internal toDisk done for %d keys", len(txn.Deltas()))
+	// }
 
 	span.Annotate(nil, "Start")
 	start := time.Now()
+	var numKeys int
+
+	var itrs []y.Iterator
 	for _, status := range delta.Txns {
-		toDisk(status.StartTs, status.CommitTs)
+		txn := posting.Oracle().GetTxn(status.StartTs)
+		if txn == nil {
+			continue
+		}
+		txn.EnsureDeltasArePopulated()
+		// txn.Update()
+		for k := range txn.Deltas() {
+			n.keysWritten.keyCommitTs[z.MemHashString(k)] = status.CommitTs
+		}
+		n.keysWritten.totalKeys += len(txn.Deltas())
+		numKeys += len(txn.Deltas())
+		if len(txn.Deltas()) == 0 {
+			continue
+		}
+
+		itrStart := time.Now()
+		itr := txn.Skiplist().NewIterator()
+		itr.SeekToFirst()
+		for itr.Valid() {
+			key := itr.Key()
+			// We don't expect the ordering of the keys to change due to setting their commit
+			// timestamps. Each key in the skiplist should be unique already.
+			y.SetKeyTs(key, status.CommitTs)
+			itr.Next()
+		}
+		itr.Close()
+		itrDur := time.Since(itrStart)
+
+		itrs = append(itrs, txn.Skiplist().NewUniIterator(false))
+
+		err := x.RetryUntilSuccess(3600, time.Second, func() error {
+			if numKeys == 0 {
+				return nil
+			}
+			return pstore.HandoverSkiplist(txn.Skiplist())
+		})
+		span.Annotatef(nil, "handover for txn %d. itr: %s. Err: %v\n", status.CommitTs, itrDur, err)
 	}
-	span.Annotatef(nil, "toDisk done for %d txns", len(delta.Txns))
+	ostats.Record(n.ctx, x.NumEdges.M(int64(numKeys)))
+
+	if len(itrs) > 0 {
+		sn := time.Now()
+		mi := table.NewMergeIterator(itrs, false)
+		mi.Rewind()
+		buf := z.NewBuffer(1<<20, "commitOrAbort")
+		defer buf.Release()
+
+		var keys int
+		for mi.Valid() {
+			key := mi.Key()
+			buf.Write(key)
+			vs := mi.Value()
+			dst := buf.Allocate(int(vs.EncodedSize()))
+			vs.Encode(dst)
+
+			keys++
+			mi.Next()
+		}
+		span.Annotatef(nil, "Iterating and buf over %d keys took: %s", keys, time.Since(sn))
+	}
+	if len(itrs) > 0 {
+		sn := time.Now()
+		mi := table.NewMergeIterator(itrs, false)
+		mi.Rewind()
+		dst := pstore.NewSkiplist()
+
+		var keys int
+		for mi.Valid() {
+			dst.Put(mi.Key(), mi.Value())
+
+			keys++
+			mi.Next()
+		}
+		span.Annotatef(nil, "Iterating and skiplist over %d keys took: %s", keys, time.Since(sn))
+	}
+
+	span.Annotate(nil, "toSkipList")
+	// for _, status := range delta.Txns {
+	// 	txn := posting.Oracle().GetTxn(status.StartTs)
+	// 	if txn == nil {
+	// 		continue
+	// 	}
+	// 	txn.ToSkiplist(s, status.CommitTs)
+	// }
+	// span.Annotate(nil, "done skiplist. iterating")
+	// itr := s.NewUniIterator(false)
+	// itr.Rewind()
+	// var count int
+	// for itr.Valid() {
+	// 	_ = itr.Key()
+	// 	itr.Next()
+	// 	count++
+	// }
+	// span.Annotatef(nil, "skiplist itr: %d\n", count)
+
+	// span.Annotate(nil, "toBuffer")
+	// for _, status := range delta.Txns {
+	// 	txn := posting.Oracle().GetTxn(status.StartTs)
+	// 	if txn == nil {
+	// 		continue
+	// 	}
+	// 	txn.ToBuffer(buf, status.CommitTs)
+	// }
+	// span.Annotate(nil, "done toBuffer")
+	// buf.SortSlice(func(ls, rs []byte) bool {
+	// 	lsz := binary.BigEndian.Uint16(ls)
+	// 	rsz := binary.BigEndian.Uint16(rs)
+	// 	return y.CompareKeys(ls[2:2+lsz], rs[2:2+rsz]) < 0
+	// })
+	// span.Annotate(nil, "sort buffer done")
+
+	span.Annotatef(nil, "toDisk done for %d txns %d keys", len(delta.Txns), numKeys)
 	ms := x.SinceMs(start)
 	tags := []tag.Mutator{tag.Upsert(x.KeyMethod, "apply.toDisk")}
 	x.Check(ostats.RecordWithTags(context.Background(), tags, x.LatencyMs.M(ms)))
 
-	if err := writer.Flush(); err != nil {
-		return errors.Wrapf(err, "while flushing to disk")
-	}
+	// err := x.RetryUntilSuccess(3600, time.Second, func() error {
+	// 	if numKeys == 0 {
+	// 		return nil
+	// 	}
+	// 	return pstore.HandoverSkiplist(s)
+	// })
+	// x.Check(err)
 	span.Annotate(nil, "flush done")
+	// glog.Infof("Pushed %d skiplis of size: %d %d\n", s.MemSize(), numKeys)
 	if x.WorkerConfig.HardSync {
 		if err := pstore.Sync(); err != nil {
 			glog.Errorf("Error while calling Sync while commitOrAbort: %v", err)
