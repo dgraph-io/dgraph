@@ -295,6 +295,9 @@ func (m *XidMap) updateMaxSeen(max uint64) {
 // BumpTo can be used to make Zero allocate UIDs up to this given number. Attempts are made to
 // ensure all future allocations of UIDs be higher than this one, but results are not guaranteed.
 func (m *XidMap) BumpTo(uid uint64) {
+	// If we have a cluster that cannot lease out new UIDs because it has already leased upto its
+	// max limit. Now, we try to live load the data with the given UIDs and the AssignIds complains
+	// that the limit has reached. Hence, update the xidmap's maxSeenUid and make progress.
 	updateLease := func(msg string) {
 		if !strings.Contains(msg, "limit has reached. currMax:") {
 			return
@@ -305,7 +308,7 @@ func (m *XidMap) BumpTo(uid uint64) {
 		}
 		maxUidLeased, err := strconv.ParseUint(matches[0][1], 10, 64)
 		if err != nil {
-			glog.Error("While parsing currMax %+v", err)
+			glog.Errorf("While parsing currMax %+v", err)
 			return
 		}
 		m.updateMaxSeen(maxUidLeased)
