@@ -171,7 +171,7 @@ type TaskOccurrence struct {
 }
 
 type TestCase struct {
-	user          []string
+	user          string
 	role          string
 	ans           bool
 	result        string
