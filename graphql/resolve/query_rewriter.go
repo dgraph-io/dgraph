@@ -637,7 +637,8 @@ func addCommonRules(
 	// We first check ids in the query filter and rewrite accordingly.
 	ids := idFilter(extractQueryFilter(field), fieldType.IDField())
 
-	if authRw != nil && (authRw.isWritingAuth || authRw.filterByUid) && (authRw.varName != "" || authRw.parentVarName != "") && ids == nil {
+	if authRw != nil && (authRw.isWritingAuth || authRw.filterByUid) &&
+		(authRw.varName != "" || authRw.parentVarName != "") && ids == nil {
 		authRw.addVariableUIDFunc(dgQuery)
 		// This is executed when querying while performing delete mutation request since
 		// in case of delete mutation we already have variable `MutationQueryVar` at root level.
