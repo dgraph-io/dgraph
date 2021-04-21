@@ -551,7 +551,8 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	return empty, nil
 }
 
-func validateDQLSchemaForGraphQL(ctx context.Context, dqlSch *schema.ParsedSchema, ns uint64) error {
+func validateDQLSchemaForGraphQL(ctx context.Context,
+	dqlSch *schema.ParsedSchema, ns uint64) error {
 	// fetch the GraphQL schema for this namespace from disk
 	_, existingGQLSch, err := GetGQLSchema(ns)
 	if err != nil || existingGQLSch == "" {
@@ -613,7 +614,8 @@ func validateDQLSchemaForGraphQL(ctx context.Context, dqlSch *schema.ParsedSchem
 			}
 			for _, t := range gqlPred.Tokenizer {
 				if !x.HasString(dqlPred.Tokenizer, t) {
-					return errors.Errorf("missing %s index for GraphQL predicate %s", t, x.ParseAttr(gqlPred.Predicate))
+					return errors.Errorf("missing %s index for GraphQL predicate %s", t,
+						x.ParseAttr(gqlPred.Predicate))
 				}
 			}
 		}
