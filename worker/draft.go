@@ -42,6 +42,7 @@ import (
 
 	"github.com/dgraph-io/badger/v3"
 	bpb "github.com/dgraph-io/badger/v3/pb"
+	"github.com/dgraph-io/badger/v3/skl"
 	"github.com/dgraph-io/badger/v3/table"
 	"github.com/dgraph-io/badger/v3/y"
 	"github.com/dgraph-io/dgraph/conn"
@@ -1028,6 +1029,7 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 			continue
 		}
 
+		// Iterate to set the commit timestamp for all keys.
 		itrStart := time.Now()
 		itr := txn.Skiplist().NewIterator()
 		itr.SeekToFirst()
@@ -1043,53 +1045,66 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 
 		itrs = append(itrs, txn.Skiplist().NewUniIterator(false))
 
-		err := x.RetryUntilSuccess(3600, time.Second, func() error {
-			if numKeys == 0 {
-				return nil
-			}
-			return pstore.HandoverSkiplist(txn.Skiplist())
-		})
-		span.Annotatef(nil, "handover for txn %d. itr: %s. Err: %v\n", status.CommitTs, itrDur, err)
+		// err := x.RetryUntilSuccess(3600, time.Second, func() error {
+		// 	if numKeys == 0 {
+		// 		return nil
+		// 	}
+		// 	return pstore.HandoverSkiplist(txn.Skiplist())
+		// })
+		span.Annotatef(nil, "txn %d. itr: %s\n", status.CommitTs, itrDur)
 	}
 	ostats.Record(n.ctx, x.NumEdges.M(int64(numKeys)))
 
+	// if len(itrs) > 0 {
+	// 	sn := time.Now()
+	// 	mi := table.NewMergeIterator(itrs, false)
+	// 	mi.Rewind()
+	// 	buf := z.NewBuffer(4<<20, "commitOrAbort")
+	// 	defer buf.Release()
+
+	// 	var keys int
+	// 	for mi.Valid() {
+	// 		key := mi.Key()
+	// 		buf.Write(key)
+	// 		vs := mi.Value()
+	// 		dst := buf.Allocate(int(vs.EncodedSize()))
+	// 		vs.Encode(dst)
+
+	// 		keys++
+	// 		mi.Next()
+	// 	}
+	// 	span.Annotatef(nil, "Iterating and buf over %d keys took: %s", keys, time.Since(sn))
+	// }
 	if len(itrs) > 0 {
 		sn := time.Now()
 		mi := table.NewMergeIterator(itrs, false)
 		mi.Rewind()
-		buf := z.NewBuffer(1<<20, "commitOrAbort")
-		defer buf.Release()
+
+		// builder := skl.NewBuilder(64 << 20) // Fix up the arena size.
+		// TODO: Have a way to grow the arena.
+		// dst := pstore.NewSkiplist()
+		b := skl.NewBuilder(8 << 20)
 
 		var keys int
 		for mi.Valid() {
-			key := mi.Key()
-			buf.Write(key)
-			vs := mi.Value()
-			dst := buf.Allocate(int(vs.EncodedSize()))
-			vs.Encode(dst)
-
-			keys++
-			mi.Next()
-		}
-		span.Annotatef(nil, "Iterating and buf over %d keys took: %s", keys, time.Since(sn))
-	}
-	if len(itrs) > 0 {
-		sn := time.Now()
-		mi := table.NewMergeIterator(itrs, false)
-		mi.Rewind()
-		dst := pstore.NewSkiplist()
-
-		var keys int
-		for mi.Valid() {
-			dst.Put(mi.Key(), mi.Value())
+			b.Add(mi.Key(), mi.Value())
 
 			keys++
 			mi.Next()
 		}
 		span.Annotatef(nil, "Iterating and skiplist over %d keys took: %s", keys, time.Since(sn))
+		err := x.RetryUntilSuccess(3600, time.Second, func() error {
+			if numKeys == 0 {
+				return nil
+			}
+			return pstore.HandoverSkiplist(b.Skiplist())
+		})
+		if err != nil {
+			glog.Errorf("while handing over skiplist: %v\n", err)
+		}
+		span.Annotate(nil, "hand over skiplist done")
 	}
 
-	span.Annotate(nil, "toSkipList")
 	// for _, status := range delta.Txns {
 	// 	txn := posting.Oracle().GetTxn(status.StartTs)
 	// 	if txn == nil {
