@@ -900,6 +900,20 @@ func TestQueryAuthWithFilterOnIDType(t *testing.T) {
 				}
 			  ]
 		}`,
+	}, {
+		user: []string{"0xffd", "0xffe"},
+		result: `{
+			  "queryPerson": [
+				{
+				  "name": "Person1"
+				}
+			  ]
+		}`,
+	}, {
+		user: []string{"0xaaa", "0xbbb"},
+		result: `{
+			  "queryPerson": []
+		}`,
 	}}
 
 	query := `
