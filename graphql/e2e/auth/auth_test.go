@@ -894,11 +894,9 @@ func TestQueryAuthWithFilterOnIDType(t *testing.T) {
 			"data": {
 			  "queryPerson": [
 				{
-				  "id": "0xffe",
 				  "name": "Person1"
 				},
 				{
-				  "id": "0xfff",
 				  "name": "Person2"
 				}
 			  ]
@@ -921,7 +919,7 @@ func TestQueryAuthWithFilterOnIDType(t *testing.T) {
 			}
 			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
 			common.RequireNoGQLErrors(t, gqlResponse)
-			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
+			require.JSONEq(t, tcase.result, string(gqlResponse.Data))
 		})
 	}
 }
