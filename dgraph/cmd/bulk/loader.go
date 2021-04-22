@@ -83,7 +83,7 @@ type options struct {
 
 	// ........... Badger options ..........
 	// EncryptionKey is the key used for encryption. Enterprise only feature.
-	EncryptionKey x.SensitiveByteSlice
+	EncryptionKey x.Sensitive
 	// Badger options.
 	Badger badger.Options
 }

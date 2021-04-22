@@ -27,7 +27,7 @@ import (
 type LoggerConf struct {
 	Compress      bool
 	Output        string
-	EncryptionKey SensitiveByteSlice
+	EncryptionKey Sensitive
 	Size          int64
 	Days          int64
 	MessageKey    string

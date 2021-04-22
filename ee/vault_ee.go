@@ -1,3 +1,4 @@
+//go:build !oss
 // +build !oss
 
 /*
@@ -19,13 +20,14 @@ import (
 	"reflect"
 
 	"github.com/dgraph-io/dgraph/x"
+
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
 	"github.com/hashicorp/vault/api"
 	"github.com/spf13/viper"
 )
 
-func vaultGetKeys(config *viper.Viper) (aclKey, encKey x.SensitiveByteSlice) {
+func vaultGetKeys(config *viper.Viper) (aclKey, encKey x.Sensitive) {
 	// Avoid querying Vault unless the flag has been explicitly set.
 	if !config.IsSet(flagVault) {
 		return
@@ -92,7 +94,7 @@ func vaultGetKvStore(client *api.Client, path string) (vaultKvStore, error) {
 }
 
 // getSensitiveBytes retrieves a value from a kvStore, decoding it if necessary.
-func (kv vaultKvStore) getSensitiveBytes(field, format string) (x.SensitiveByteSlice, error) {
+func (kv vaultKvStore) getSensitiveBytes(field, format string) (x.Sensitive, error) {
 	value, ok := kv[field]
 	if !ok {
 		return nil, fmt.Errorf("vault: key '%s' not found", field)
@@ -104,7 +106,7 @@ func (kv vaultKvStore) getSensitiveBytes(field, format string) (x.SensitiveByteS
 	}
 
 	// Decode value if necessary.
-	var valueBytes x.SensitiveByteSlice
+	var valueBytes x.Sensitive
 	var err error
 	if format == "base64" {
 		valueBytes, err = base64.StdEncoding.DecodeString(valueString)
@@ -113,7 +115,7 @@ func (kv vaultKvStore) getSensitiveBytes(field, format string) (x.SensitiveByteS
 				"vault: key '%s' could not be decoded as a base64 string: %s", field, err)
 		}
 	} else {
-		valueBytes = x.SensitiveByteSlice(valueString)
+		valueBytes = x.Sensitive(valueString)
 	}
 
 	return valueBytes, nil

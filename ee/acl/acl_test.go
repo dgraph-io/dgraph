@@ -2858,7 +2858,7 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 			queryName:          "listBackups",
 			respIsArray:        true,
 			testGuardianAccess: true,
-			guardianErr:        "The path \"\" does not exist or it is inaccessible.",
+			guardianErr:        "The path \"\" does not exist",
 			guardianData:       `{"listBackups": []}`,
 		},
 		{
@@ -2939,7 +2939,7 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 					}`,
 			queryName:          "restore",
 			testGuardianAccess: true,
-			guardianErr:        "The path \"\" does not exist or it is inaccessible.",
+			guardianErr:        "The path \"\" does not exist",
 			guardianData:       `{"restore": {"code": "Failure"}}`,
 		},
 		{
