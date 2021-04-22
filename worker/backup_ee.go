@@ -110,15 +110,6 @@ type BackupRes struct {
 }
 
 func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest) error {
-	if !EnterpriseEnabled() {
-		return errors.New("you must enable enterprise features first. " +
-			"Supply the appropriate license file to Dgraph Zero using the HTTP endpoint.")
-	}
-
-	if req.Destination == "" {
-		return errors.Errorf("you must specify a 'destination' value")
-	}
-
 	if err := x.HealthCheck(); err != nil {
 		glog.Errorf("Backup canceled, not ready to accept requests: %s", err)
 		return err

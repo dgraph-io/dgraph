@@ -38,6 +38,10 @@ var (
 	Tasks tasks
 )
 
+const (
+	taskTtl = 7 * 24 * time.Hour // 1 week
+)
+
 // InitTasks initializes the global Tasks variable.
 func InitTasks() {
 	// #nosec G404: weak RNG
@@ -45,7 +49,7 @@ func InitTasks() {
 		queue:         make(chan taskRequest, 16),
 		log:           z.NewTree(),
 		logMu:         new(sync.Mutex),
-		shouldCleanup: time.NewTicker(7 * 24 * time.Hour),
+		shouldCleanup: time.NewTicker(taskTtl),
 		raftId:        State.WALstore.Uint(raftwal.RaftId),
 		rng:           rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
@@ -105,8 +109,7 @@ func (t tasks) cleanup() {
 		return
 	}
 
-	const ttl = 7 * 24 * time.Hour // 1 week
-	minTs := time.Now().UTC().Add(-ttl).Unix()
+	minTs := time.Now().UTC().Add(-taskTtl).Unix()
 	minMeta := uint64(minTs) << 32
 
 	t.logMu.Lock()
