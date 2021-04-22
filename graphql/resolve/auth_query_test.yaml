@@ -2103,3 +2103,27 @@
         }
       }
     }
+
+-
+  name: "Query auth rules with filter on field with ID type"
+  gqlquery: |
+    query{
+      queryPerson{
+        id
+        name
+      }
+    }
+  jwtvar:
+    USER: ["0x5", "0x6"]
+  dgquery: |-
+    query {
+      queryPerson(func: uid(PersonRoot)) {
+        Person.id : uid
+        Person.name : Person.name
+      }
+      PersonRoot as var(func: uid(Person_1)) @filter(uid(Person_Auth2))
+      Person_1 as var(func: type(Person))
+      Person_Auth2 as var(func: uid(0x5, 0x6)) @filter(type(Person)) @cascade {
+        Person.id : uid
+      }
+    }
