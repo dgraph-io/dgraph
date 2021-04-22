@@ -43,7 +43,7 @@ func (*localFiles) FindDataFiles(str string, ext []string) []string {
 	return x.FindDataFiles(str, ext)
 }
 
-func (*localFiles) ChunkReader(file string, key x.SensitiveByteSlice) (*bufio.Reader, func()) {
+func (*localFiles) ChunkReader(file string, key x.Sensitive) (*bufio.Reader, func()) {
 	return chunker.FileReader(file, key)
 }
 
