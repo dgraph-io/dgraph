@@ -199,15 +199,15 @@ func TestUpdateMutationWithIDFields(t *testing.T) {
 				"company": "ABC tech",
 				"name":    "ABC",
 				"worker": map[string]interface{}{
-					"emp_Id": "E01",
-					"reg_No": 101,
+					"empId": "E01",
+					"regNo": 101,
 				},
 			}, map[string]interface{}{
 				"company": " XYZ tech",
 				"name":    "XYZ",
 				"worker": map[string]interface{}{
-					"emp_Id": "E02",
-					"reg_No": 102,
+					"empId": "E02",
+					"regNo": 102,
 				},
 			},
 		},
@@ -295,8 +295,8 @@ func TestUpdateMutationWithIDFields(t *testing.T) {
                        "set": {
                            "name": "JKL",
                            "worker":{
-                              "emp_Id":"E01",
-                              "reg_No":102
+                              "empId":"E01",
+                              "regNo":102
                           }
                        }
                    }
@@ -326,7 +326,7 @@ func TestUpdateMutationWithIDFields(t *testing.T) {
 
 	// cleanup
 	filterEmployer := map[string]interface{}{"name": map[string]interface{}{"in": []string{"ABC", "XYZ"}}}
-	filterWorker := map[string]interface{}{"emp_Id": map[string]interface{}{"in": []string{"E01", "E02"}}}
+	filterWorker := map[string]interface{}{"empId": map[string]interface{}{"in": []string{"E01", "E02"}}}
 	common.DeleteGqlType(t, "Employer", filterEmployer, 2, nil)
 	common.DeleteGqlType(t, "Worker", filterWorker, 2, nil)
 }

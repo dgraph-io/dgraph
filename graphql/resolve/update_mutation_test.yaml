@@ -1967,13 +1967,13 @@
   update the values successfully "
   gqlmutation: |
     mutation update($patch: UpdateBookInput!) {
-    	updateBook(input: $patch) {
-    		book {
-    			title
-    			ISBN
-    			publisher
-    		}
-    	}
+      updateBook(input: $patch) {
+        book {
+          title
+          ISBN
+          publisher
+        }
+      }
     }
   gqlvariables: |
     {
@@ -2029,13 +2029,13 @@
    Sapiens, we will return error in this case "
   gqlmutation: |
     mutation update($patch: UpdateBookInput!) {
-    	updateBook(input: $patch) {
-    		book {
-    			title
-    			ISBN
-    			publisher
-    		}
-    	}
+      updateBook(input: $patch) {
+        book {
+          title
+          ISBN
+          publisher
+        }
+      }
     }
   gqlvariables: |
     {
@@ -2087,11 +2087,11 @@
      it skips commentId in nested type Comment1"
   gqlmutation: |
     mutation update($patch: UpdatePost1Input!) {
-    	updatePost1(input: $patch) {
-    		post1 {
-    			id
-    		}
-    	}
+      updatePost1(input: $patch) {
+        post1 {
+          id
+        }
+      }
     }
   gqlvariables: |
     {
@@ -2153,11 +2153,11 @@
    node."
   gqlmutation: |
     mutation update($patch: UpdatePost1Input!) {
-    	updatePost1(input: $patch) {
-    		post1 {
-    			id
-    		}
-    	}
+      updatePost1(input: $patch) {
+        post1 {
+          id
+        }
+      }
     }
   gqlvariables: |
     {
@@ -2194,11 +2194,11 @@
   successfully update node in this case"
   gqlmutation: |
     mutation update($patch: UpdateLibraryMemberInput!) {
-    	updateLibraryMember(input: $patch) {
-    		libraryMember {
-    			refID
-    		}
-    	}
+      updateLibraryMember(input: $patch) {
+        libraryMember {
+          refID
+        }
+      }
     }
   gqlvariables: |
     {
@@ -2250,11 +2250,11 @@
   There already exist node with refID in other implementing type of interface so we will generate error for this case"
   gqlmutation: |
     mutation update($patch: UpdateLibraryMemberInput!) {
-    	updateLibraryMember(input: $patch) {
-    		libraryMember {
-    			refID
-    		}
-    	}
+      updateLibraryMember(input: $patch) {
+        libraryMember {
+          refID
+        }
+      }
     }
   gqlvariables: |
     {
@@ -2301,11 +2301,11 @@
    type than than LibraryMember"
   gqlmutation: |
     mutation update($patch: UpdateLibraryManagerInput!) {
-    	updateLibraryManager(input: $patch) {
-    		libraryManager {
-    			name
-    		}
-    	}
+      updateLibraryManager(input: $patch) {
+        libraryManager {
+          name
+        }
+      }
     }
   gqlvariables: |
     {
@@ -2351,11 +2351,11 @@
    existed with given refID, so we link that correctly"
   gqlmutation: |
     mutation update($patch: UpdateLibraryManagerInput!) {
-    	updateLibraryManager(input: $patch) {
-    		libraryManager {
-    			name
-    		}
-    	}
+      updateLibraryManager(input: $patch) {
+        libraryManager {
+          name
+        }
+      }
     }
   gqlvariables: |
     {
