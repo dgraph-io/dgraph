@@ -438,14 +438,14 @@ func (mr *dgraphResolver) rewriteAndExecute(
 			if xidsPresent && len(result[mutation.Name()].([]interface{})) > 1 {
 				if queryAuthSelector(mutatedType) == nil {
 					return emptyResult(
-							schema.GQLWrapf(errors.Errorf("multiple nodes are selected"+
-								" in filter while updating @id field"),
+							schema.GQLWrapf(errors.Errorf("only one node is allowed in"+
+								" the filter while updating fields with @id directive"),
 								"mutation %s failed", mutation.Name())),
 						resolverFailed
 				}
 				return emptyResult(
-						schema.GQLWrapf(errors.Errorf("GraphQL debug: multiple nodes are selected"+
-							" in filter while updating @id field"),
+						schema.GQLWrapf(errors.Errorf("GraphQL debug: only one node is"+
+							" allowed in the filter while updating fields with @id directive"),
 							"mutation %s failed", mutation.Name())),
 					resolverFailed
 

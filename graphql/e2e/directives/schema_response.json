@@ -37,7 +37,7 @@
     },
     {
       "index": true,
-      "predicate": "Worker.emp_Id",
+      "predicate": "Worker.empId",
       "tokenizer": [
         "hash"
       ],
@@ -46,7 +46,7 @@
     },
     {
       "index": true,
-      "predicate": "Worker.reg_No",
+      "predicate": "Worker.regNo",
       "tokenizer": [
         "int"
       ],
@@ -189,7 +189,7 @@
     },
     {
       "index": true,
-      "predicate": "Worker.UniqueID",
+      "predicate": "Worker.uniqueId",
       "tokenizer": [
         "int"
       ],
@@ -199,7 +199,7 @@
     {
       "index": true,
       "index": true,
-      "predicate": "Employer.company_Id",
+      "predicate": "Employer.companyId",
       "tokenizer": [
         "hash"
       ],
@@ -1059,16 +1059,16 @@
     {
       "fields": [
         {
-          "name": "Worker.emp_Id"
+          "name": "Worker.empId"
         },
         {
-          "name": "Worker.reg_No"
+          "name": "Worker.regNo"
         },
         {
           "name": "Worker.name"
         },
         {
-          "name": "Worker.UniqueID"
+          "name": "Worker.uniqueId"
         }
       ],
       "name": "Worker"
@@ -1566,7 +1566,7 @@
           "name": "Employer.worker"
         },
         {
-          "name": "Employer.company_Id"
+          "name": "Employer.companyId"
         },
         {
           "name": "Employer.name"

@@ -1829,7 +1829,9 @@ func existenceQueries(
 					// xidMetadata.variableObjMap[variable] = { "id": "1" }
 					// In this case, as obj is the correct definition of the object, we update variableObjMap
 					oldObj := xidMetadata.variableObjMap[variable]
-					if len(oldObj) < len(obj) {
+					// TODO(GRAOHQL): This condition also needs to change in accordance with multiple xids.
+					//  Also consider the case when @id fields can be nullable.
+					if len(oldObj) == 1 && len(obj) > 1 {
 						// Continue execution to perform dfs in this case. There may be more nodes
 						// in the subtree of this node.
 						xidMetadata.variableObjMap[variable] = obj

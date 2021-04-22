@@ -627,6 +627,17 @@ invalid_schemas:
       ]
 
   -
+    name: "@id directive can't be applied on field with Float type"
+    input: |
+      type X {
+        f1: Float! @id
+      }
+    errlist: [
+      {"message": "Type X; Field f1: with @id directive must be of type String, Int or Int64, not Float!",
+      "locations":[{"line":2, "column":15}]}
+      ]
+
+  -
     name: "Dgraph directive with wrong argument produces an error"
     input: |
       type X {

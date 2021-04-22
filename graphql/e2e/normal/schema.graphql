@@ -318,14 +318,14 @@ type Chapter {
 # multiple fields with @id directive
 type Worker {
     name: String!
-    reg_No: Int @id
-    UniqueID: Int @id
-    emp_Id: String! @id
+    regNo: Int @id
+    uniqueId: Int @id
+    empId: String! @id
 }
 
 type Employer {
     company: String! @id
-    company_Id: String @id
+    companyId: String @id
     name: String @id
     worker: [Worker]
 }

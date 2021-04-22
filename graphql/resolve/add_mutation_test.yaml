@@ -5022,7 +5022,7 @@
 
 -
   name: "2-level add mutation with nullable @id fields "
-  explaination: "BookId in Book and PenName in author are @id and nullable field,
+  explaination: "bookId in Book and PenName in author are @id and nullable field,
    we can skip them while doing add mutation. Nested object author doesn't exist, so we
    add it and link it to book"
   gqlmutation: |
@@ -5086,7 +5086,7 @@
 
 -
   name: "2- level add mutation with upsert and nullable @id fields "
-  explaination: "BookId in @id,penName in author are nullable @id fields and we can skip them.
+  explaination: "bookId in @id,penName in author are nullable @id fields and we can skip them.
   title,ISBN in Book are @id fields,so also added in set Json, because @id fields will also be updated by upserts.
   Both book and author already exist so we just link new author to book and delete old reference from book to author,
   if there is any"

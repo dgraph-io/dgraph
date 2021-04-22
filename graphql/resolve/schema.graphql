@@ -393,7 +393,7 @@ type Book {
     publisher: String
     title: String @id
     ISBN: String @id
-    BookId: Int @id
+    bookId: Int @id
     author: author
 }
 
