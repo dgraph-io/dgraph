@@ -2422,53 +2422,29 @@ type UidKey struct {
 }
 
 // applies "random" to lists inside uidMatrix
-// Params.Random number of nodes are selected
-// duplicates are not removed i.e., random selection by replacement is done
-// TODO: error handling here
+// sg.Params.Random number of nodes are selected in each uid list
+// duplicates are avoided (random selection without replacement)
+// if sg.Params.Random is more than the number of available nodes
+// all nodes are returned
 func (sg *SubGraph) applyRandom(ctx context.Context) error {
 	sg.updateUidMatrix()
 
-	// calculate total number of nodes
-	totalNodes := 0
-	for i := range sg.uidMatrix {
-		totalNodes += len(sg.uidMatrix[i].Uids)
-	}
-	// and if the required number of nodes is more (or equal) to that
-	// then just return all the nodes
-	// (this can cause an infinite loop if not checked)
-	if sg.Params.Random >= totalNodes {
-		return nil
-	}
+	for i := 0; i < len(sg.uidMatrix); i++ {
+		// shuffle the uid list and select the
+		// first sg.Params.Random uids
 
-	// store row id -> new uid list mapping
-	newUids := make(map[int][]uint64)
+		uidList := sg.uidMatrix[i].Uids
 
-	// to keep track of UIDs already selected
-	selected := make(map[UidKey]bool)
+		rand.Shuffle(len(uidList), func(i, j int) {
+			uidList[i], uidList[j] = uidList[j], uidList[i]
+		})
 
-	// keep track of number of nodes selected
-	numSelected := 0
-
-	for numSelected < sg.Params.Random {
-		randomIdx := rand.Intn(len(sg.uidMatrix))
-		randomIdy := rand.Intn(len(sg.uidMatrix[randomIdx].Uids))
-
-		if present := selected[UidKey{randomIdx, randomIdy}]; present {
-			continue
-		} else {
-			selected[UidKey{randomIdx, randomIdy}] = true
-			numSelected += 1
+		numRandom := sg.Params.Random
+		if sg.Params.Random > len(uidList) {
+			numRandom = len(uidList)
 		}
 
-		if newUids[randomIdx] == nil {
-			newUids[randomIdx] = make([]uint64, 0)
-		}
-
-		newUids[randomIdx] = append(newUids[randomIdx], sg.uidMatrix[randomIdx].Uids[randomIdy])
-	}
-
-	for idx, uids := range newUids {
-		sg.uidMatrix[idx].Uids = uids
+		sg.uidMatrix[i].Uids = uidList[:numRandom]
 	}
 
 	sg.DestMap = codec.Merge(sg.uidMatrix)
