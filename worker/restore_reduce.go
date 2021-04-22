@@ -25,14 +25,14 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dustin/go-humanize"
-	"github.com/golang/glog"
-	"github.com/golang/snappy"
-
 	"github.com/dgraph-io/badger/v3/y"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
+
+	"github.com/dustin/go-humanize"
+	"github.com/golang/glog"
+	"github.com/golang/snappy"
 )
 
 const (

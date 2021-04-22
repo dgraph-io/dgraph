@@ -76,7 +76,6 @@ func TestBufferUidPack(t *testing.T) {
 	// Some edge case tests.
 	pack := Encode([]uint64{}, 128)
 	FreePack(pack)
-
 	buf := z.NewBuffer(10<<10, "TestBufferUidPack")
 	defer buf.Release()
 	DecodeToBuffer(buf, &pb.UidPack{})

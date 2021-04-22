@@ -23,12 +23,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/golang/glog"
-	"github.com/pkg/errors"
-	"github.com/spf13/cobra"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
-
 	bpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/posting"
@@ -36,6 +30,12 @@ import (
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
+
+	"github.com/golang/glog"
+	"github.com/pkg/errors"
+	"github.com/spf13/cobra"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 )
 
 // Restore is the sub-command used to restore a backup.
@@ -467,10 +467,8 @@ func runExportBackup() error {
 		if err := worker.RunReducer(w, mapDir); err != nil {
 			return errors.Wrap(err, "Failed to reduce the map")
 		}
-		if files, err := exportStorage.FinishWriting(writers); err != nil {
+		if _, err := exportStorage.FinishWriting(writers); err != nil {
 			return errors.Wrap(err, "Failed to finish write")
-		} else {
-			glog.Infof("done exporting files: %v\n", files)
 		}
 	}
 	return nil

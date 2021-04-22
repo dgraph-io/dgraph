@@ -19,6 +19,7 @@ package admin
 import (
 	"context"
 	"encoding/json"
+	"github.com/dgraph-io/dgraph/worker"
 
 	"github.com/golang/glog"
 

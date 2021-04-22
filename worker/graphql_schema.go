@@ -22,14 +22,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/glog"
-	"github.com/pkg/errors"
-	"google.golang.org/grpc/metadata"
-
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
+
+	"github.com/golang/glog"
+	"github.com/pkg/errors"
+	"google.golang.org/grpc/metadata"
 )
 
 const (

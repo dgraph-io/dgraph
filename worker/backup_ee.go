@@ -25,12 +25,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/glog"
-	"github.com/golang/protobuf/proto"
-	"github.com/golang/snappy"
-	"github.com/pkg/errors"
-	ostats "go.opencensus.io/stats"
-
 	"github.com/dgraph-io/badger/v3"
 	bpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/badger/v3/y"
@@ -39,6 +33,12 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
+
+	"github.com/golang/glog"
+	"github.com/golang/protobuf/proto"
+	"github.com/golang/snappy"
+	"github.com/pkg/errors"
+	ostats "go.opencensus.io/stats"
 )
 
 // Backup handles a request coming from another node.

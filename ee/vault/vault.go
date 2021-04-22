@@ -20,10 +20,10 @@
 package vault
 
 import (
+	"github.com/dgraph-io/dgraph/ee"
+
 	"github.com/golang/glog"
 	"github.com/spf13/viper"
-
-	"github.com/dgraph-io/dgraph/ee"
 )
 
 func GetKeys(config *viper.Viper) (*ee.Keys, error) {

@@ -21,11 +21,11 @@ import (
 	"math"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
-
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/testutil"
+
+	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
 )
 
 func TestRemoveNode(t *testing.T) {

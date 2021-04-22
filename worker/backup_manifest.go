@@ -20,10 +20,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/pkg/errors"
-
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
+
+	"github.com/pkg/errors"
 )
 
 func verifyManifests(manifests []*Manifest) error {
