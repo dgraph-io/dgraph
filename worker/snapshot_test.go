@@ -34,6 +34,7 @@ import (
 )
 
 func TestSnapshot(t *testing.T) {
+	t.Skip()
 	snapshotTs := uint64(0)
 
 	dg1, err := testutil.DgraphClient(testutil.SockAddr)
