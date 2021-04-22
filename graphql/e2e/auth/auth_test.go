@@ -884,6 +884,58 @@ func TestOrderAndOffset(t *testing.T) {
 	common.RequireNoGQLErrors(t, gqlResponse)
 }
 
+func TestQueryAuthWithFilterOnIDType(t *testing.T) {
+	testCases := []struct {
+		user   []string
+		result string
+	}{{
+		user: []string{"0xffe", "0xfff"},
+		result: `{
+			  "queryPerson": [
+				{
+				  "name": "Person1"
+				},
+				{
+				  "name": "Person2"
+				}
+			  ]
+		}`,
+	}, {
+		user: []string{"0xffd", "0xffe"},
+		result: `{
+			  "queryPerson": [
+				{
+				  "name": "Person1"
+				}
+			  ]
+		}`,
+	}, {
+		user: []string{"0xaaa", "0xbbb"},
+		result: `{
+			  "queryPerson": []
+		}`,
+	}}
+
+	query := `
+		query {
+			queryPerson(order: {asc: name}){
+				name
+			}
+		}
+	`
+	for _, tcase := range testCases {
+		t.Run(tcase.user[0]+tcase.user[1], func(t *testing.T) {
+			getUserParams := &common.GraphQLParams{
+				Headers: common.GetJWT(t, tcase.user, nil, metaInfo),
+				Query:   query,
+			}
+			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
+			common.RequireNoGQLErrors(t, gqlResponse)
+			require.JSONEq(t, tcase.result, string(gqlResponse.Data))
+		})
+	}
+}
+
 func TestOrRBACFilter(t *testing.T) {
 	testCases := []TestCase{{
 		user: "user1",
