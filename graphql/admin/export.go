@@ -92,7 +92,7 @@ func resolveExport(ctx context.Context, m schema.Mutation) (*resolve.Resolved, b
 		SessionToken: input.SessionToken,
 		Anonymous:    input.Anonymous,
 	}
-	taskId, err := worker.Tasks.QueueExport(req)
+	taskId, err := worker.Tasks.Enqueue(req)
 	if err != nil {
 		return resolve.EmptyResult(m, err), false
 	}

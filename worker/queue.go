@@ -38,20 +38,15 @@ var (
 	Tasks tasks
 )
 
-const (
-	taskTtl = 7 * 24 * time.Hour // 1 week
-)
-
 // InitTasks initializes the global Tasks variable.
 func InitTasks() {
 	// #nosec G404: weak RNG
 	Tasks = tasks{
-		queue:         make(chan taskRequest, 16),
-		log:           z.NewTree(),
-		logMu:         new(sync.Mutex),
-		shouldCleanup: time.NewTicker(taskTtl),
-		raftId:        State.WALstore.Uint(raftwal.RaftId),
-		rng:           rand.New(rand.NewSource(time.Now().UnixNano())),
+		queue:  make(chan taskRequest, 16),
+		log:    z.NewTree(),
+		logMu:  new(sync.Mutex),
+		raftId: State.WALstore.Uint(raftwal.RaftId),
+		rng:    rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 
 	// Mark all pending tasks as failed.
@@ -66,7 +61,7 @@ func InitTasks() {
 	Tasks.logMu.Unlock()
 
 	// Start the task runner.
-	go Tasks.run()
+	go Tasks.worker()
 }
 
 // tasks is a persistent task queue.
@@ -77,9 +72,8 @@ type tasks struct {
 	log   *z.Tree
 	logMu *sync.Mutex
 
-	shouldCleanup *time.Ticker
-	raftId        uint64
-	rng           *rand.Rand
+	raftId uint64
+	rng    *rand.Rand
 }
 
 // Get retrieves metadata for a given task ID.
@@ -93,22 +87,9 @@ func (t tasks) Get(id uint64) TaskMeta {
 	return TaskMeta(t.log.Get(id))
 }
 
-// set stores metadata for a given task ID.
-func (t tasks) set(id uint64, meta TaskMeta) {
-	t.logMu.Lock()
-	defer t.logMu.Unlock()
-	t.log.Set(id, uint64(meta))
-}
-
 // cleanup deletes all expired tasks.
-// This is not guaranteed to execute, it only runs if it hasn't run in a set interval.
 func (t tasks) cleanup() {
-	select {
-	case <-t.shouldCleanup.C:
-	default:
-		return
-	}
-
+	const taskTtl = 7 * 24 * time.Hour // 1 week
 	minTs := time.Now().UTC().Add(-taskTtl).Unix()
 	minMeta := uint64(minTs) << 32
 
@@ -117,99 +98,110 @@ func (t tasks) cleanup() {
 	t.log.DeleteBelow(minMeta)
 }
 
-// run loops forever, running queued tasks one at a time. Any returned errors are logged.
-func (t tasks) run() {
+// worker loops forever, running queued tasks one at a time. Any returned errors are logged.
+func (t tasks) worker() {
+	shouldCleanup := time.NewTicker(time.Hour)
 	for {
 		// If the server is shutting down, return immediately. Else, fetch a task from the queue.
 		var task taskRequest
 		select {
 		case <-x.ServerCloser.HasBeenClosed():
 			return
+		case <-shouldCleanup.C:
+			t.cleanup()
 		case task = <-t.queue:
-		}
-
-		// Fetch the task from the log. If the task isn't found, this means it has expired (older
-		// than taskTtl.
-		meta := TaskMeta(t.Get(task.id))
-		if meta == 0 {
-			glog.Errorf("task %#x: is expired, skipping", task.id)
-			continue
-		}
-		// Only proceed if the task is still queued. It's possible that the task got canceled
-		// before we were able to run it.
-		if status := meta.Status(); status != TaskStatusQueued {
-			glog.Errorf("task %#x: status is set to %s, skipping", task.id, status)
-		}
-		// Change the task status to RUNNING.
-		t.set(task.id, newTaskMeta(meta.Kind(), TaskStatusRunning))
-
-		// Run the task.
-		var status TaskStatus
-		if err := task.run(); err != nil {
-			status = TaskStatusFailed
-			glog.Errorf("task %#x: %s: %v", task.id, status, err)
-		} else {
-			status = TaskStatusSuccess
-			glog.Infof("task %#x: %s", task.id, status)
-		}
-
-		// Change the task status to SUCCESS / FAILED.
-		t.set(task.id, newTaskMeta(meta.Kind(), status))
-	}
-}
-
-// QueueBackup enqueues a backup request in the task queue.
-func (t tasks) QueueBackup(req *pb.BackupRequest) (uint64, error) {
-	return t.queueTask(req)
-}
-
-// QueueExport enqueues an export request in the task queue.
-func (t tasks) QueueExport(req *pb.ExportRequest) (uint64, error) {
-	return t.queueTask(req)
-}
-
-// queueTask enqueues a request of any type.
-// Don't use this function directly.
-func (t tasks) queueTask(req interface{}) (uint64, error) {
-	task := taskRequest{req: req}
-	for attempt := 0; ; attempt++ {
-		task.id = t.newId()
-		// z.Tree cannot store 0 or math.MaxUint64. Check that taskId is unique.
-		if task.id != 0 && task.id != math.MaxUint64 && t.Get(task.id) == 0 {
-			break
-		}
-		// Unable to generate a unique random number.
-		if attempt >= 8 {
-			t.rng.Seed(time.Now().UnixNano())
-			return 0, fmt.Errorf("unable to generate unique task ID")
+			if err := t.run(task); err != nil {
+				glog.Errorf("task %#x: failed: %s", task.id, err)
+			} else {
+				glog.Infof("task %#x: completed successfully", task.id)
+			}
 		}
 	}
+}
 
+func (t tasks) run(task taskRequest) error {
+	// Fetch the task from the log. If the task isn't found, this means it has expired (older than
+	// taskTtl).
+	t.logMu.Lock()
+	meta := TaskMeta(t.log.Get(task.id))
+	t.logMu.Unlock()
+	if meta == 0 {
+		return fmt.Errorf("is expired, skipping")
+	}
+
+	// Only proceed if the task is still queued. It's possible that the task got canceled before we
+	// were able to run it.
+	if status := meta.Status(); status != TaskStatusQueued {
+		return fmt.Errorf("status is set to %s, skipping", status)
+	}
+
+	// Change the task status to Running.
+	t.logMu.Lock()
+	t.log.Set(task.id, newTaskMeta(meta.Kind(), TaskStatusRunning).uint64())
+	t.logMu.Unlock()
+
+	// Run the task.
+	var status TaskStatus
+	err := task.run()
+	if err != nil {
+		status = TaskStatusFailed
+	} else {
+		status = TaskStatusSuccess
+	}
+
+	// Change the task status to Success / Failed.
+	t.logMu.Lock()
+	t.log.Set(task.id, newTaskMeta(meta.Kind(), status).uint64())
+	t.logMu.Unlock()
+
+	// Return the error from the task.
+	return err
+}
+
+// Enqueue enqueues a new task. This must be of type:
+// - *pb.BackupRequest
+// - *pb.ExportRequest
+func (t tasks) Enqueue(req interface{}) (uint64, error) {
 	var kind TaskKind
 	switch req.(type) {
 	case *pb.BackupRequest:
 		kind = TaskKindBackup
 	case *pb.ExportRequest:
 		kind = TaskKindExport
+	default:
+		err := fmt.Errorf("invalid TaskKind: %d", kind)
+		panic(err)
 	}
 
+	t.logMu.Lock()
+	defer t.logMu.Unlock()
+
+	task := taskRequest{
+		id:  t.newId(),
+		req: req,
+	}
 	select {
 	case t.queue <- task:
-		t.cleanup()
-		t.set(task.id, newTaskMeta(kind, TaskStatusQueued))
+		t.log.Set(task.id, newTaskMeta(kind, TaskStatusQueued).uint64())
 		return task.id, nil
 	default:
 		return 0, fmt.Errorf("too many pending tasks, please try again later")
 	}
 }
 
-// newId generates a random task ID.
+// newId generates a random unique task ID. logMu must be acquired before calling this function.
 //
 // The format of this is:
 // 32 bits: raft ID
 // 32 bits: random number
 func (t tasks) newId() uint64 {
-	return t.raftId<<32 | uint64(t.rng.Int())
+	for {
+		id := t.raftId<<32 | uint64(t.rng.Int())
+		// z.Tree cannot store 0 or math.MaxUint64. Check that id is unique.
+		if id != 0 && id != math.MaxUint64 && t.log.Get(id) == 0 {
+			return id
+		}
+	}
 }
 
 type taskRequest struct {
@@ -263,6 +255,11 @@ func (t TaskMeta) Kind() TaskKind {
 // Status returns the current status of the task.
 func (t TaskMeta) Status() TaskStatus {
 	return TaskStatus(t & math.MaxUint16)
+}
+
+// uint64 represents the TaskMeta as a uint64.
+func (t TaskMeta) uint64() uint64 {
+	return uint64(t)
 }
 
 const (
