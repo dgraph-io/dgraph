@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dustin/go-humanize"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/golang/glog"
@@ -65,7 +64,6 @@ type s3Handler struct {
 	creds                    *x.MinioCredentials
 	uri                      *url.URL
 	mc                       *x.MinioClient
-	numWritten               int
 }
 
 // setup creates a new session, checks valid bucket at uri.Path, and configures a minio client.
@@ -220,13 +218,13 @@ func (h *s3Handler) Load(uri *url.URL, backupId string, backupNum uint64, fn loa
 	// otherwise this is a failure and the user must remedy.
 	var maxUid, maxNsId uint64
 	for i, manifest := range manifests {
-		if manifest.ValidReadTs() == 0 || len(manifest.Groups) == 0 {
+		if manifest.Since == 0 || len(manifest.Groups) == 0 {
 			continue
 		}
 
 		path := filepath.Join(h.objectPrefix, manifests[i].Path)
 		for gid := range manifest.Groups {
-			object := filepath.Join(path, backupName(manifest.ValidReadTs(), gid))
+			object := filepath.Join(path, backupName(manifest.Since, gid))
 			reader, err := h.mc.GetObject(h.bucketName, object, minio.GetObjectOptions{})
 			if err != nil {
 				return LoadResult{Err: errors.Wrapf(err, "Failed to get %q", object)}
@@ -247,20 +245,15 @@ func (h *s3Handler) Load(uri *url.URL, backupId string, backupNum uint64, fn loa
 			predSet := manifests[len(manifests)-1].getPredsInGroup(gid)
 
 			groupMaxUid, groupMaxNsId, err := fn(gid,
-				&loadBackupInput{
-					r:              reader,
-					preds:          predSet,
-					dropOperations: manifest.DropOperations,
-					isOld:          manifest.Version == 0,
-					compression:    manifest.Compression,
-				})
+				&loadBackupInput{r: reader, preds: predSet, dropOperations: manifest.DropOperations,
+					isOld: manifest.Version == 0})
 			if err != nil {
 				return LoadResult{Err: err}
 			}
 			maxUid = x.Max(maxUid, groupMaxUid)
 			maxNsId = x.Max(maxNsId, groupMaxNsId)
 		}
-		since = manifest.ValidReadTs()
+		since = manifest.Since
 	}
 
 	return LoadResult{Version: since, MaxLeaseUid: maxUid, MaxLeaseNsId: maxNsId}
@@ -285,8 +278,8 @@ func (h *s3Handler) upload(mc *x.MinioClient, object string) error {
 	// of upload. We're already tracking progress of the writes in stream.Lists, so no need to track
 	// the progress of read. By definition, it must be the same.
 	n, err := mc.PutObject(h.bucketName, object, h.preader, -1, minio.PutObjectOptions{})
-	glog.V(2).Infof("Backup sent data of size %s. Time elapsed: %s",
-		humanize.IBytes(uint64(n)), time.Since(start).Round(time.Second))
+	glog.V(2).Infof("Backup sent %d bytes. Time elapsed: %s",
+		n, time.Since(start).Round(time.Second))
 
 	if err != nil {
 		// This should cause Write to fail as well.
@@ -321,13 +314,7 @@ func (h *s3Handler) flush() error {
 }
 
 func (h *s3Handler) Write(b []byte) (int, error) {
-	n, err := h.pwriter.Write(b)
-	h.numWritten += n
-	return n, err
-}
-
-func (h *s3Handler) BytesWritten() int {
-	return h.numWritten
+	return h.pwriter.Write(b)
 }
 
 func (h *s3Handler) objectExists(objectPath string) bool {
@@ -337,7 +324,7 @@ func (h *s3Handler) objectExists(objectPath string) bool {
 		if errResponse.Code == "NoSuchKey" {
 			return false
 		} else {
-			glog.Errorf("Failed to verify object %s existance: %s", objectPath, errResponse.Code)
+			glog.Errorf("Failed to verify object existance: %s", errResponse.Code)
 			return false
 		}
 	}

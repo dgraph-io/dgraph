@@ -199,11 +199,9 @@ func (n *node) stopAllTasks() {
 	defer n.closer.Done() // CLOSER:1
 	<-n.closer.HasBeenClosed()
 
-	glog.Infof("Stopping all ongoing registered tasks...")
 	n.opsLock.Lock()
 	defer n.opsLock.Unlock()
-	for op, closer := range n.ops {
-		glog.Infof("Stopping op: %s...\n", op)
+	for _, closer := range n.ops {
 		closer.SignalAndWait()
 	}
 	glog.Infof("Stopped all ongoing registered tasks.")

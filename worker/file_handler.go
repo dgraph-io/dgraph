@@ -31,8 +31,7 @@ import (
 
 // fileHandler is used for 'file:' URI scheme.
 type fileHandler struct {
-	fp         *os.File
-	numWritten int
+	fp *os.File
 }
 
 // readManifest reads a manifest file at path using the handler.
@@ -181,13 +180,13 @@ func (h *fileHandler) Load(uri *url.URL, backupId string, backupNum uint64, fn l
 	var since uint64
 	var maxUid, maxNsId uint64
 	for i, manifest := range manifests {
-		if manifest.ValidReadTs() == 0 || len(manifest.Groups) == 0 {
+		if manifest.Since == 0 || len(manifest.Groups) == 0 {
 			continue
 		}
 
 		path := filepath.Join(uri.Path, manifests[i].Path)
 		for gid := range manifest.Groups {
-			file := filepath.Join(path, backupName(manifest.ValidReadTs(), gid))
+			file := filepath.Join(path, backupName(manifest.Since, gid))
 			fp, err := os.Open(file)
 			if err != nil {
 				return LoadResult{Err: errors.Wrapf(err, "Failed to open %q", file)}
@@ -199,20 +198,15 @@ func (h *fileHandler) Load(uri *url.URL, backupId string, backupNum uint64, fn l
 			predSet := manifests[len(manifests)-1].getPredsInGroup(gid)
 
 			groupMaxUid, groupMaxNsId, err := fn(gid,
-				&loadBackupInput{
-					r:              fp,
-					preds:          predSet,
-					dropOperations: manifest.DropOperations,
-					isOld:          manifest.Version == 0,
-					compression:    manifest.Compression,
-				})
+				&loadBackupInput{r: fp, preds: predSet, dropOperations: manifest.DropOperations,
+					isOld: manifest.Version == 0})
 			if err != nil {
 				return LoadResult{Err: err}
 			}
 			maxUid = x.Max(maxUid, groupMaxUid)
 			maxNsId = x.Max(maxNsId, groupMaxNsId)
 		}
-		since = manifest.ValidReadTs()
+		since = manifest.Since
 	}
 
 	return LoadResult{Version: since, MaxLeaseUid: maxUid, MaxLeaseNsId: maxNsId}
@@ -241,13 +235,7 @@ func (h *fileHandler) Close() error {
 }
 
 func (h *fileHandler) Write(b []byte) (int, error) {
-	n, err := h.fp.Write(b)
-	h.numWritten += n
-	return n, err
-}
-
-func (h *fileHandler) BytesWritten() int {
-	return h.numWritten
+	return h.fp.Write(b)
 }
 
 // pathExist checks if a path (file or dir) is found at target.

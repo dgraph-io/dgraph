@@ -13,6 +13,7 @@
 package worker
 
 import (
+	"compress/gzip"
 	"context"
 	"encoding/binary"
 	"encoding/hex"
@@ -26,9 +27,7 @@ import (
 	bpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/badger/v3/y"
 	"github.com/dgraph-io/ristretto/z"
-	"github.com/dustin/go-humanize"
 	"github.com/golang/glog"
-	"github.com/golang/snappy"
 	"github.com/pkg/errors"
 
 	"github.com/dgraph-io/dgraph/ee/enc"
@@ -57,7 +56,6 @@ type threadLocal struct {
 	bpl   pb.BackupPostingList
 	alloc *z.Allocator
 	itr   *badger.Iterator
-	buf   *z.Buffer
 }
 
 func NewBackupProcessor(db *badger.DB, req *pb.BackupRequest) *BackupProcessor {
@@ -70,12 +68,8 @@ func NewBackupProcessor(db *badger.DB, req *pb.BackupRequest) *BackupProcessor {
 		bp.txn = db.NewTransactionAt(req.ReadTs, false)
 	}
 	for i := range bp.threads {
-		buf, err := z.NewBufferWith(32<<20, 32<<30, z.UseCalloc, "Worker.BackupProcessor")
-		x.Check(err)
-		buf.AutoMmapAfter(1 << 30)
 		bp.threads[i] = &threadLocal{
 			Request: bp.Request,
-			buf:     buf,
 		}
 		if bp.txn != nil {
 			iopt := badger.DefaultIteratorOptions
@@ -84,18 +78,6 @@ func NewBackupProcessor(db *badger.DB, req *pb.BackupRequest) *BackupProcessor {
 		}
 	}
 	return bp
-}
-
-func (pr *BackupProcessor) Close() {
-	for _, th := range pr.threads {
-		if pr.txn != nil {
-			th.itr.Close()
-		}
-		th.buf.Release()
-	}
-	if pr.txn != nil {
-		pr.txn.Discard()
-	}
 }
 
 // LoadResult holds the output of a Load operation.
@@ -109,6 +91,16 @@ type LoadResult struct {
 	MaxLeaseNsId uint64
 	// The error, if any, of the load operation.
 	Err error
+}
+
+func (pr *BackupProcessor) Close() {
+	if pr.txn == nil {
+		return
+	}
+	for _, th := range pr.threads {
+		th.itr.Close()
+	}
+	pr.txn.Discard()
 }
 
 // WriteBackup uses the request values to create a stream writer then hand off the data
@@ -145,18 +137,14 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.BackupResponse,
 
 	var maxVersion uint64
 
-	iwriter, err := enc.GetWriter(x.WorkerConfig.EncryptionKey, handler)
+	newhandler, err := enc.GetWriter(x.WorkerConfig.EncryptionKey, handler)
 	if err != nil {
 		return &response, errors.Wrap(err, "failed to get encWriter")
 	}
-	// Snappy is much faster than gzip compression. In fact, in my experiments, gzip compression
-	// caused the output speed to be ~30 MBps. Snappy can write at ~90 MBps, and overall the speed
-	// is similar to writing uncompressed data on disk.
-	// These are the times I saw:
-	// Without compression: 7m2s 33GB output.
-	// With snappy: 7m11s 9.5GB output.
-	// With snappy + S3: 7m54s 9.5GB output.
-	cWriter := snappy.NewBufferedWriter(iwriter)
+	gzWriter, err := gzip.NewWriterLevel(newhandler, gzip.BestSpeed)
+	if err != nil {
+		return &response, errors.Wrap(err, "failed to create new gzip writer")
+	}
 
 	stream := pr.DB.NewStreamAt(pr.Request.ReadTs)
 	stream.LogPrefix = "Dgraph.Backup"
@@ -220,10 +208,10 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.BackupResponse,
 				maxVersion = kv.Version
 			}
 		}
-		return writeKVList(list, cWriter)
+		return writeKVList(list, gzWriter)
 	}
 
-	if err := stream.Orchestrate(ctx); err != nil {
+	if err := stream.Orchestrate(context.Background()); err != nil {
 		glog.Errorf("While taking backup: %v", err)
 		return &response, err
 	}
@@ -279,7 +267,7 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.BackupResponse,
 			kv.ExpiresAt = item.ExpiresAt()
 			list.Kv = append(list.Kv, kv)
 		}
-		return writeKVList(list, cWriter)
+		return writeKVList(list, gzWriter)
 	}
 
 	for _, prefix := range []byte{x.ByteSchema, x.ByteType} {
@@ -295,17 +283,16 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.BackupResponse,
 	}
 
 	glog.V(2).Infof("Backup group %d version: %d", pr.Request.GroupId, pr.Request.ReadTs)
-	if err = cWriter.Close(); err != nil {
+	if err = gzWriter.Close(); err != nil {
 		glog.Errorf("While closing gzipped writer: %v", err)
 		return &response, err
 	}
+
 	if err = handler.Close(); err != nil {
 		glog.Errorf("While closing handler: %v", err)
 		return &response, err
 	}
-	glog.Infof("Backup complete: group %d at %d. Bytes Written: %s\n",
-		pr.Request.GroupId, pr.Request.ReadTs,
-		humanize.IBytes(uint64(handler.BytesWritten())))
+	glog.Infof("Backup complete: group %d at %d", pr.Request.GroupId, pr.Request.ReadTs)
 	return &response, nil
 }
 
@@ -345,8 +332,8 @@ func (pr *BackupProcessor) CompleteBackup(ctx context.Context, m *Manifest) erro
 
 // GoString implements the GoStringer interface for Manifest.
 func (m *Manifest) GoString() string {
-	return fmt.Sprintf(`Manifest{Since: %d, ReadTs: %d, Groups: %v, Encrypted: %v}`,
-		m.SinceTsDeprecated, m.ReadTs, m.Groups, m.Encrypted)
+	return fmt.Sprintf(`Manifest{Since: %d, Groups: %v, Encrypted: %v}`,
+		m.Since, m.Groups, m.Encrypted)
 }
 
 func (tl *threadLocal) toBackupList(key []byte, itr *badger.Iterator) (
@@ -372,7 +359,7 @@ func (tl *threadLocal) toBackupList(key []byte, itr *badger.Iterator) (
 		}
 
 		// Don't allocate kv on tl.alloc, because we don't need it by the end of this func.
-		kv, err := l.ToBackupPostingList(&tl.bpl, tl.alloc, tl.buf)
+		kv, err := l.ToBackupPostingList(&tl.bpl, tl.alloc)
 		if err != nil {
 			return nil, nil, errors.Wrapf(err, "while rolling up list")
 		}

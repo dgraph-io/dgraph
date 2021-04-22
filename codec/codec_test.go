@@ -28,7 +28,6 @@ import (
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/ristretto/z"
 	humanize "github.com/dustin/go-humanize"
 	"github.com/stretchr/testify/require"
 )
@@ -75,10 +74,7 @@ func TestBufferUidPack(t *testing.T) {
 	// Some edge case tests.
 	pack := Encode([]uint64{}, 128)
 	FreePack(pack)
-
-	buf := z.NewBuffer(10<<10, "TestBufferUidPack")
-	defer buf.Release()
-	DecodeToBuffer(buf, &pb.UidPack{})
+	buf := DecodeToBuffer(&pb.UidPack{}, 0)
 	require.Equal(t, 0, buf.LenNoPadding())
 	require.NoError(t, buf.Release())
 
@@ -94,10 +90,7 @@ func TestBufferUidPack(t *testing.T) {
 		actual := Decode(pack, 0)
 		require.Equal(t, expected, actual)
 
-		actualbuffer := z.NewBuffer(10<<10, "TestBufferUidPack")
-		defer actualbuffer.Release()
-
-		DecodeToBuffer(actualbuffer, pack)
+		actualbuffer := DecodeToBuffer(pack, 0)
 		enc := EncodeFromBuffer(actualbuffer.Bytes(), 256)
 		require.Equal(t, ExactLen(pack), ExactLen(enc))
 

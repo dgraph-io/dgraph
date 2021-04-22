@@ -853,7 +853,7 @@ func (l *List) Rollup(alloc *z.Allocator) ([]*bpb.KV, error) {
 
 // ToBackupPostingList uses rollup to generate a single list with no splits.
 // It's used during backup so that each backed up posting list is stored in a single key.
-func (l *List) ToBackupPostingList(bl *pb.BackupPostingList, alloc *z.Allocator, buf *z.Buffer) (*bpb.KV, error) {
+func (l *List) ToBackupPostingList(bl *pb.BackupPostingList, alloc *z.Allocator) (*bpb.KV, error) {
 	bl.Reset()
 	l.RLock()
 	defer l.RUnlock()
@@ -868,12 +868,15 @@ func (l *List) ToBackupPostingList(bl *pb.BackupPostingList, alloc *z.Allocator,
 	defer out.free()
 
 	ol := out.plist
-
-	// Encode uids to []byte instead of []uint64. This helps improve memory usage.
-	buf.Reset()
-	codec.DecodeToBuffer(buf, ol.Pack)
-	bl.UidBytes = buf.Bytes()
-
+	// Encode uids to []byte instead of []uint64 if we have more than 1000
+	// uids. We do this to improve the memory usage.
+	if codec.ApproxLen(ol.Pack) > 1024 {
+		buf := codec.DecodeToBuffer(ol.Pack, 0)
+		defer buf.Release()
+		bl.UidBytes = buf.Bytes()
+	} else {
+		bl.Uids = codec.Decode(ol.Pack, 0)
+	}
 	bl.Postings = ol.Postings
 	bl.CommitTs = ol.CommitTs
 	bl.Splits = ol.Splits

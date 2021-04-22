@@ -13,6 +13,7 @@
 package worker
 
 import (
+	"compress/gzip"
 	"context"
 	"fmt"
 	"net/url"
@@ -343,13 +344,17 @@ func writeBackup(ctx context.Context, req *pb.RestoreRequest) error {
 				return 0, 0, errors.Wrapf(err, "unable to get encryption config")
 			}
 			_, encKey := ee.GetKeys(cfg)
-			bReader, err := in.getReader(encKey)
+			in.r, err = enc.GetReader(encKey, in.r)
 			if err != nil {
-				return 0, 0, errors.Wrap(err, "failed to getReader for restore")
+				return 0, 0, errors.Wrapf(err, "cannot get encrypted reader")
+			}
+			gzReader, err := gzip.NewReader(in.r)
+			if err != nil {
+				return 0, 0, errors.Wrapf(err, "couldn't create gzip reader")
 			}
 
 			maxUid, maxNsId, err := loadFromBackup(pstore, &loadBackupInput{
-				r:              bReader,
+				r:              gzReader,
 				restoreTs:      req.RestoreTs,
 				preds:          in.preds,
 				dropOperations: in.dropOperations,

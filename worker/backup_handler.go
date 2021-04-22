@@ -63,9 +63,6 @@ type UriHandler interface {
 	// These function calls are used by both Create and Load.
 	io.WriteCloser
 
-	// BytesWritten returns the number of bytes written.
-	BytesWritten() int
-
 	// GetManifest returns the master manifest, containing information about all the
 	// backups. If the backup directory is using old formats (version < 21.03) of manifests,
 	// then it will return a consolidated master manifest.

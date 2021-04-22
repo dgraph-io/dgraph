@@ -274,7 +274,6 @@ func runLsbackupCmd() error {
 	type backupEntry struct {
 		Path           string              `json:"path"`
 		Since          uint64              `json:"since"`
-		ReadTs         uint64              `json:"read_ts"`
 		BackupId       string              `json:"backup_id"`
 		BackupNum      uint64              `json:"backup_num"`
 		Encrypted      bool                `json:"encrypted"`
@@ -290,8 +289,7 @@ func runLsbackupCmd() error {
 
 		be := backupEntry{
 			Path:      manifest.Path,
-			Since:     manifest.SinceTsDeprecated,
-			ReadTs:    manifest.ReadTs,
+			Since:     manifest.Since,
 			BackupId:  manifest.BackupId,
 			BackupNum: manifest.BackupNum,
 			Encrypted: manifest.Encrypted,
