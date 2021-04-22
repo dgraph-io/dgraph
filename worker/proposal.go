@@ -114,7 +114,7 @@ var proposalKey uint64
 // {2 bytes Node ID} {4 bytes for random} {2 bytes zero}
 func initProposalKey(id uint64) {
 	x.AssertTrue(id != 0)
-	proposalKey = uint64(groups().Node.Id)<<48 | uint64(uint64(z.FastRand())<<16)
+	proposalKey = uint64(groups().Node.Id)<<48 | uint64(z.FastRand())<<16
 }
 
 // uniqueKey is meant to be unique across all the replicas.
