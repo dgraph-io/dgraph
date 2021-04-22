@@ -637,6 +637,7 @@ func addCommonRules(
 	// We first check ids in the query filter and rewrite accordingly.
 	ids := idFilter(extractQueryFilter(field), fieldType.IDField())
 
+	//Todo: Add more comments to this block.
 	if authRw != nil && (authRw.isWritingAuth || authRw.filterByUid) &&
 		(authRw.varName != "" || authRw.parentVarName != "") && ids == nil {
 		authRw.addVariableUIDFunc(dgQuery)
