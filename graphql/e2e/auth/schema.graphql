@@ -848,6 +848,39 @@ type State @auth(
     country: Country
 }
 
+interface Member @auth(
+    query: { rule: "{$ROLE: { eq: \"ADMIN\" } }" },
+){
+    refID: String! @id (interface:true)
+    name:  String! @id (interface:false)
+}
+
+type SportsMember implements Member {
+    plays: String
+    playerRating: Int
+}
+
+type LibraryMember implements Member {
+    interests: [String]
+    readHours: String
+}
+
+type Person
+  @auth(
+    query: {
+      rule: """
+      query ($USER: [ID!]) {
+        queryPerson(filter: {id: $USER}) {
+          id
+        }
+      }
+      """
+    }
+  ) {
+  id: ID!
+  name: String!
+}
+
 # union testing - start
 enum AnimalCategory {
     Fish
