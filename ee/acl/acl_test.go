@@ -28,6 +28,7 @@ import (
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
+
 	"github.com/golang/glog"
 	"github.com/stretchr/testify/require"
 )
@@ -2858,7 +2859,7 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 			queryName:          "listBackups",
 			respIsArray:        true,
 			testGuardianAccess: true,
-			guardianErr:        "The path \"\" does not exist or it is inaccessible.",
+			guardianErr:        `The uri path: "" doesn't exist`,
 			guardianData:       `{"listBackups": []}`,
 		},
 		{
@@ -2939,7 +2940,7 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 					}`,
 			queryName:          "restore",
 			testGuardianAccess: true,
-			guardianErr:        "The path \"\" does not exist or it is inaccessible.",
+			guardianErr:        `The uri path: "" doesn't exist`,
 			guardianData:       `{"restore": {"code": "Failure"}}`,
 		},
 		{
