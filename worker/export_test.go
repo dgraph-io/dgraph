@@ -32,11 +32,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/proto"
-	"github.com/stretchr/testify/require"
-
 	"github.com/dgraph-io/dgo/v210/protos/api"
-
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/dql"
 	"github.com/dgraph-io/dgraph/lex"
@@ -47,6 +43,9 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
+
+	"github.com/golang/protobuf/proto"
+	"github.com/stretchr/testify/require"
 )
 
 const (
