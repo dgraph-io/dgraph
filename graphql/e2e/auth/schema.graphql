@@ -865,7 +865,21 @@ type LibraryMember implements Member {
     readHours: String
 }
 
-
+type Person
+  @auth(
+    query: {
+      rule: """
+      query ($USER: [ID!]) {
+        queryPerson(filter: {id: $USER}) {
+          id
+        }
+      }
+      """
+    }
+  ) {
+  id: ID!
+  name: String!
+}
 
 # union testing - start
 enum AnimalCategory {

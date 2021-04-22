@@ -627,12 +627,19 @@ func addCommonRules(
 		return []*gql.GraphQuery{dgQuery}, rbac
 	}
 
-	if authRw != nil && (authRw.isWritingAuth || authRw.filterByUid) && (authRw.varName != "" || authRw.parentVarName != "") {
-		// When rewriting auth rules, they always start like
-		// Todo2 as var(func: uid(Todo1)) @cascade {
-		// Where Todo1 is the variable generated from the filter of the field
-		// we are adding auth to.
+	// When rewriting auth rules, they always start like
+	// Todo2 as var(func: uid(Todo1)) @cascade {
+	// Where Todo1 is the variable generated from the filter of the field
+	// we are adding auth to.
+	// Except for the case in which filter in auth rules is on field of
+	// ID type. In this situation we write it as:
+	// Todo2 as var(func: uid(0x5....)) @cascade {
+	// We first check ids in the query filter and rewrite accordingly.
+	ids := idFilter(extractQueryFilter(field), fieldType.IDField())
 
+	// Todo: Add more comments to this block.
+	if authRw != nil && (authRw.isWritingAuth || authRw.filterByUid) &&
+		(authRw.varName != "" || authRw.parentVarName != "") && ids == nil {
 		authRw.addVariableUIDFunc(dgQuery)
 		// This is executed when querying while performing delete mutation request since
 		// in case of delete mutation we already have variable `MutationQueryVar` at root level.
@@ -641,7 +648,7 @@ func addCommonRules(
 			authRw.varName = ""
 			authRw.filterByUid = false
 		}
-	} else if ids := idFilter(extractQueryFilter(field), fieldType.IDField()); ids != nil {
+	} else if ids != nil {
 		addUIDFunc(dgQuery, ids)
 	} else {
 		addTypeFunc(dgQuery, fieldType.DgraphName())

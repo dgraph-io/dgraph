@@ -257,6 +257,16 @@
 		"Book.name": "Introduction",
 		"Book.desc": "Intro book"
 	},
+	{
+		"uid": "0xffe",
+		"dgraph.type": "Person",
+		"Person.name": "Person1"
+	},
+	{
+		"uid": "0xfff",
+		"dgraph.type": "Person",
+		"Person.name": "Person2"
+	},
 	{"uid":"_:Question1","Post.text":"A Question"},
 	{"uid":"_:Question2","Post.text":"B Question"},
 	{"uid":"_:Question3","Post.text":"C Question"},
