@@ -20,6 +20,7 @@ import (
 	"reflect"
 
 	"github.com/dgraph-io/dgraph/x"
+
 	"github.com/dgraph-io/ristretto/z"
 
 	"github.com/golang/glog"
