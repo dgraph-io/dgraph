@@ -595,53 +595,67 @@ func validateDQLSchemaForGraphQL(ctx context.Context,
 		// type (including list) must match exactly
 		if gqlPred.ValueType != dqlPred.ValueType || gqlPred.List != dqlPred.List {
 			gqlType := strings.ToLower(gqlPred.ValueType.String())
-			dgType := strings.ToLower(dqlPred.ValueType.String())
+			dqlType := strings.ToLower(dqlPred.ValueType.String())
 			if gqlPred.List {
 				gqlType = "[" + gqlType + "]"
 			}
 			if dqlPred.List {
-				dgType = "[" + dgType + "]"
+				dqlType = "[" + dqlType + "]"
 			}
-			return errors.Errorf("type mismatch for GraphQL predicate %s. want: %s, got: %s",
-				x.ParseAttr(gqlPred.Predicate), gqlType, dgType)
+			return errors.Errorf("can't alter predicate %s as it is used by the GraphQL API, "+
+				"and type definition is incompatible with what is expected by the GraphQL API. "+
+				"want: %s, got: %s", x.ParseAttr(gqlPred.Predicate), gqlType, dqlType)
 		}
 		// if gqlSchema had any indexes, then those must be present in the dqlSchema.
 		// dqlSchema may add more indexes than what gqlSchema had initially, but can't remove them.
 		if gqlPred.Directive == pb.SchemaUpdate_INDEX {
 			if dqlPred.Directive != pb.SchemaUpdate_INDEX {
-				return errors.Errorf("missing @index for GraphQL predicate %s",
-					x.ParseAttr(gqlPred.Predicate))
+				return errors.Errorf("can't alter predicate %s as it is used by the GraphQL API, "+
+					"and is missing index definition that is expected by the GraphQL API. "+
+					"want: @index(%s)", x.ParseAttr(gqlPred.Predicate),
+					strings.Join(gqlPred.Tokenizer, ","))
 			}
+			var missingIndexes []string
 			for _, t := range gqlPred.Tokenizer {
 				if !x.HasString(dqlPred.Tokenizer, t) {
-					return errors.Errorf("missing %s index for GraphQL predicate %s", t,
-						x.ParseAttr(gqlPred.Predicate))
+					missingIndexes = append(missingIndexes, t)
 				}
+			}
+			if len(missingIndexes) > 0 {
+				return errors.Errorf("can't alter predicate %s as it is used by the GraphQL API, "+
+					"and is missing index definition that is expected by the GraphQL API. "+
+					"want: @index(%s, %s), got: @index(%s)", x.ParseAttr(gqlPred.Predicate),
+					strings.Join(dqlPred.Tokenizer, ","), strings.Join(missingIndexes, ","),
+					strings.Join(dqlPred.Tokenizer, ","))
 			}
 		}
 		// if gqlSchema had @reverse, then dqlSchema must have it. dqlSchema can't remove @reverse.
 		// if gqlSchema didn't had @reverse, it is allowed to dqlSchema to add it.
 		if gqlPred.Directive == pb.SchemaUpdate_REVERSE && dqlPred.Directive != pb.
 			SchemaUpdate_REVERSE {
-			return errors.Errorf("missing @reverse for GraphQL predicate %s",
+			return errors.Errorf("can't alter predicate %s as it is used by the GraphQL API, "+
+				"and is missing @reverse that is expected by the GraphQL API.",
 				x.ParseAttr(gqlPred.Predicate))
 		}
 		// if gqlSchema had @count, then dqlSchema must have it. dqlSchema can't remove @count.
 		// if gqlSchema didn't had @count, it is allowed to dqlSchema to add it.
 		if gqlPred.Count && !dqlPred.Count {
-			return errors.Errorf("missing @count for GraphQL predicate %s",
+			return errors.Errorf("can't alter predicate %s as it is used by the GraphQL API, "+
+				"and is missing @count that is expected by the GraphQL API.",
 				x.ParseAttr(gqlPred.Predicate))
 		}
 		// if gqlSchema had @upsert, then dqlSchema must have it. dqlSchema can't remove @upsert.
 		// if gqlSchema didn't had @upsert, it is allowed to dqlSchema to add it.
 		if gqlPred.Upsert && !dqlPred.Upsert {
-			return errors.Errorf("missing @upsert for GraphQL predicate %s",
+			return errors.Errorf("can't alter predicate %s as it is used by the GraphQL API, "+
+				"and is missing @upsert that is expected by the GraphQL API.",
 				x.ParseAttr(gqlPred.Predicate))
 		}
 		// if gqlSchema had @lang, then dqlSchema must have it. dqlSchema can't remove @lang.
 		// if gqlSchema didn't had @lang, it is allowed to dqlSchema to add it.
 		if gqlPred.Lang && !dqlPred.Lang {
-			return errors.Errorf("missing @lang for GraphQL predicate %s",
+			return errors.Errorf("can't alter predicate %s as it is used by the GraphQL API, "+
+				"and is missing @lang that is expected by the GraphQL API.",
 				x.ParseAttr(gqlPred.Predicate))
 		}
 	}
@@ -660,11 +674,16 @@ func validateDQLSchemaForGraphQL(ctx context.Context,
 		}
 
 		// check that all the fields of the gqlType must be present in the dqlType
+		var missingFields []string
 		for _, f := range gqlType.Fields {
 			if !dqlFields[f.Predicate] {
-				return errors.Errorf("missing field %s in GraphQL type %s",
-					x.ParseAttr(f.Predicate), x.ParseAttr(gqlType.TypeName))
+				missingFields = append(missingFields, x.ParseAttr(f.Predicate))
 			}
+		}
+		if len(missingFields) > 0 {
+			return errors.Errorf("can't alter type %s as it is used by the GraphQL API, "+
+				"and is missing fields: [%s] that are expected by the GraphQL API.",
+				x.ParseAttr(gqlType.TypeName), strings.Join(missingFields, ","))
 		}
 	}
 

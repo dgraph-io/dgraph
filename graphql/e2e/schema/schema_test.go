@@ -736,7 +736,9 @@ func TestAlterWithGraphQLSchema(t *testing.T) {
 		Person.follows: [uid] @reverse .
 		Person.relative: uid .
 		`,
-	}).Error(), "type mismatch for GraphQL predicate Person.age. want: int, got: float")
+	}).Error(), "can't alter predicate Person.age as it is used by the GraphQL API, "+
+		"and type definition is incompatible with what is expected by the GraphQL API. "+
+		"want: int, got: float")
 
 	// 2. int -> [int] should fail
 	require.Contains(t, dg.Alter(context.Background(), &api.Operation{
@@ -754,7 +756,9 @@ func TestAlterWithGraphQLSchema(t *testing.T) {
 		Person.follows: [uid] @reverse .
 		Person.relative: uid .
 		`,
-	}).Error(), "type mismatch for GraphQL predicate Person.age. want: int, got: [int]")
+	}).Error(), "can't alter predicate Person.age as it is used by the GraphQL API, "+
+		"and type definition is incompatible with what is expected by the GraphQL API. "+
+		"want: int, got: [int]")
 
 	// 3. [uid] -> uid should fail
 	require.Contains(t, dg.Alter(context.Background(), &api.Operation{
@@ -772,7 +776,9 @@ func TestAlterWithGraphQLSchema(t *testing.T) {
 		Person.follows: uid @reverse .
 		Person.relative: uid .
 		`,
-	}).Error(), "type mismatch for GraphQL predicate Person.follows. want: [uid], got: uid")
+	}).Error(), "can't alter predicate Person.follows as it is used by the GraphQL API, "+
+		"and type definition is incompatible with what is expected by the GraphQL API. "+
+		"want: [uid], got: uid")
 
 	// 4. removing @index should fail
 	require.Contains(t, dg.Alter(context.Background(), &api.Operation{
@@ -790,7 +796,8 @@ func TestAlterWithGraphQLSchema(t *testing.T) {
 		Person.follows: [uid] @reverse .
 		Person.relative: uid .
 		`,
-	}).Error(), "missing @index for GraphQL predicate Person.name")
+	}).Error(), "can't alter predicate Person.name as it is used by the GraphQL API, "+
+		"and is missing index definition that is expected by the GraphQL API. want: @index(hash)")
 
 	// 5. @index(hash) -> @index(term) should fail
 	require.Contains(t, dg.Alter(context.Background(), &api.Operation{
@@ -808,7 +815,9 @@ func TestAlterWithGraphQLSchema(t *testing.T) {
 		Person.follows: [uid] @reverse .
 		Person.relative: uid .
 		`,
-	}).Error(), "missing hash index for GraphQL predicate Person.name")
+	}).Error(), "can't alter predicate Person.name as it is used by the GraphQL API, "+
+		"and is missing index definition that is expected by the GraphQL API. "+
+		"want: @index(term, hash), got: @index(term)")
 
 	// 6. removing @reverse should fail
 	require.Contains(t, dg.Alter(context.Background(), &api.Operation{
@@ -826,7 +835,8 @@ func TestAlterWithGraphQLSchema(t *testing.T) {
 		Person.follows: [uid] .
 		Person.relative: uid .
 		`,
-	}).Error(), "missing @reverse for GraphQL predicate Person.follows")
+	}).Error(), "can't alter predicate Person.follows as it is used by the GraphQL API, "+
+		"and is missing @reverse that is expected by the GraphQL API.")
 
 	// 7. removing @upsert should fail
 	require.Contains(t, dg.Alter(context.Background(), &api.Operation{
@@ -844,7 +854,8 @@ func TestAlterWithGraphQLSchema(t *testing.T) {
 		Person.follows: [uid] @reverse .
 		Person.relative: uid .
 		`,
-	}).Error(), "missing @upsert for GraphQL predicate Person.name")
+	}).Error(), "can't alter predicate Person.name as it is used by the GraphQL API, "+
+		"and is missing @upsert that is expected by the GraphQL API.")
 
 	// 8. removing @lang should fail
 	require.Contains(t, dg.Alter(context.Background(), &api.Operation{
@@ -862,7 +873,8 @@ func TestAlterWithGraphQLSchema(t *testing.T) {
 		Person.follows: [uid] @reverse .
 		Person.relative: uid .
 		`,
-	}).Error(), "missing @lang for GraphQL predicate Person.bio")
+	}).Error(), "can't alter predicate Person.bio as it is used by the GraphQL API, "+
+		"and is missing @lang that is expected by the GraphQL API.")
 
 	// 9. removing a GraphQL field from Person type should fail
 	require.Contains(t, dg.Alter(context.Background(), &api.Operation{
@@ -879,7 +891,8 @@ func TestAlterWithGraphQLSchema(t *testing.T) {
 		Person.follows: [uid] @reverse .
 		Person.relative: uid .
 		`,
-	}).Error(), "missing field Person.name in GraphQL type Person")
+	}).Error(), "can't alter type Person as it is used by the GraphQL API, "+
+		"and is missing fields: [Person.name] that are expected by the GraphQL API.")
 
 	/******************
 		SUCCESS CASES
