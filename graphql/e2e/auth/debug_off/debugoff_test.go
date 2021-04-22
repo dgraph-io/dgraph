@@ -124,6 +124,68 @@ func TestAddMutationWithXid(t *testing.T) {
 	tweet.DeleteByID(t, user, metaInfo)
 }
 
+func TestAddMutationWithAuthOnIDFieldHavingInterfaceArg(t *testing.T) {
+
+	// add Library Member
+	addLibraryMemberParams := &common.GraphQLParams{
+		Query: `mutation addLibraryMember($input: [AddLibraryMemberInput!]!) {
+                         addLibraryMember(input: $input, upsert: false) {
+                          numUids
+                         }
+                        }`,
+		Variables: map[string]interface{}{"input": []interface{}{
+			map[string]interface{}{
+				"refID":     "101",
+				"name":      "Alice",
+				"readHours": "4d2hr",
+			}},
+		},
+	}
+
+	gqlResponse := addLibraryMemberParams.ExecuteAsPost(t, common.GraphqlURL)
+	common.RequireNoGQLErrors(t, gqlResponse)
+
+	// add SportsMember should return error but in debug mode
+	// because interface type have auth rules defined on it
+	var resultLibraryMember struct {
+		AddLibraryMember struct {
+			NumUids int
+		}
+	}
+	err := json.Unmarshal(gqlResponse.Data, &resultLibraryMember)
+	require.NoError(t, err)
+	require.Equal(t, 1, resultLibraryMember.AddLibraryMember.NumUids)
+
+	addSportsMemberParams := &common.GraphQLParams{
+		Query: `mutation addSportsMember($input: [AddSportsMemberInput!]!) {
+                         addSportsMember(input: $input, upsert: false) {
+                          numUids
+                         }
+                        }`,
+		Variables: map[string]interface{}{"input": []interface{}{
+			map[string]interface{}{
+				"refID": "101",
+				"name":  "Bob",
+				"plays": "football and cricket",
+			}},
+		},
+	}
+
+	gqlResponse = addSportsMemberParams.ExecuteAsPost(t, common.GraphqlURL)
+	common.RequireNoGQLErrors(t, gqlResponse)
+	var resultSportsMember struct {
+		AddSportsMember struct {
+			NumUids int
+		}
+	}
+	err = json.Unmarshal(gqlResponse.Data, &resultSportsMember)
+	require.NoError(t, err)
+	require.Equal(t, 0, resultSportsMember.AddSportsMember.NumUids)
+
+	// cleanup
+	common.DeleteGqlType(t, "LibraryMember", map[string]interface{}{}, 1, nil)
+}
+
 func TestMain(m *testing.M) {
 	schemaFile := "../schema.graphql"
 	schema, err := ioutil.ReadFile(schemaFile)

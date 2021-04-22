@@ -39,6 +39,7 @@ const (
 	dgraphPredArg   = "pred"
 
 	idDirective             = "id"
+	idDirectiveInterfaceArg = "interface"
 	subscriptionDirective   = "withSubscription"
 	secretDirective         = "secret"
 	authDirective           = "auth"
@@ -276,7 +277,7 @@ input GenerateMutationParams {
 directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
-directive @id on FIELD_DEFINITION
+directive @id(interface: Boolean) on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @auth(
@@ -307,7 +308,7 @@ directive @generate(
 directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
-directive @id on FIELD_DEFINITION
+directive @id(interface: Boolean) on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
@@ -1961,18 +1962,14 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[s
 			},
 		})
 	}
+
 	if hasXIDField {
-		if defn.Kind == "INTERFACE" {
-			qry.Directives = append(
-				qry.Directives, &ast.Directive{Name: deprecatedDirective,
-					Arguments: ast.ArgumentList{&ast.Argument{Name: "reason",
-						Value: &ast.Value{Raw: "@id argument for get query on interface is being deprecated, " +
-							"it will be removed in v21.11.0, " +
-							"please update your query to not use that argument",
-							Kind: ast.StringValue}}}})
-		}
+		var idWithoutUniqueArgExists bool
 		for _, fld := range defn.Fields {
 			if hasIDDirective(fld) {
+				if !hasInterfaceArg(fld) {
+					idWithoutUniqueArgExists = true
+				}
 				qry.Arguments = append(qry.Arguments, &ast.ArgumentDefinition{
 					Name: fld.Name,
 					Type: &ast.Type{
@@ -1981,6 +1978,16 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[s
 					},
 				})
 			}
+		}
+		if defn.Kind == "INTERFACE" && idWithoutUniqueArgExists {
+			qry.Directives = append(
+				qry.Directives, &ast.Directive{Name: deprecatedDirective,
+					Arguments: ast.ArgumentList{&ast.Argument{Name: "reason",
+						Value: &ast.Value{Raw: "@id argument for get query on interface is being" +
+							" deprecated. Only those @id fields which have interface argument" +
+							" set to true will be available in getQuery argument on interface" +
+							" post v21.11.0, please update your schema accordingly.",
+							Kind: ast.StringValue}}}})
 		}
 	}
 	schema.Query.Fields = append(schema.Query.Fields, qry)

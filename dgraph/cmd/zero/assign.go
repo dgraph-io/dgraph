@@ -18,8 +18,11 @@ package zero
 
 import (
 	"context"
+	"math/rand"
+	"time"
 
 	otrace "go.opencensus.io/trace"
+	"google.golang.org/grpc/metadata"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
@@ -103,38 +106,40 @@ func (s *Server) lease(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error
 		// We couldn't service it. So, let's request an extra timestamp for
 		// readonly transactions, if needed.
 	}
-
-	// If we're asking for more ids than the standard lease bandwidth, then we
-	// should set howMany generously, so we can service future requests from
-	// memory, without asking for another lease. Only used if we need to renew
-	// our lease.
-	howMany := leaseBandwidth
-	if num.Val > leaseBandwidth {
-		howMany = num.Val + leaseBandwidth
-	}
-
 	if s.nextLease[pb.Num_UID] == 0 || s.nextLease[pb.Num_TXN_TS] == 0 ||
 		s.nextLease[pb.Num_NS_ID] == 0 {
 		return nil, errors.New("Server not initialized")
 	}
 
-	var proposal pb.ZeroProposal
-
 	// Calculate how many ids do we have available in memory, before we need to
 	// renew our lease.
 	maxLease := s.maxLease(typ)
 	available := maxLease - s.nextLease[typ] + 1
-	switch typ {
-	case pb.Num_TXN_TS:
-		proposal.MaxTxnTs = maxLease + howMany
-	case pb.Num_UID:
-		proposal.MaxUID = maxLease + howMany
-	case pb.Num_NS_ID:
-		proposal.MaxNsID = maxLease + howMany
-	}
 
 	// If we have less available than what we need, we need to renew our lease.
 	if available < num.Val+1 { // +1 for a potential readonly ts.
+		// If we're asking for more ids than the standard lease bandwidth, then we
+		// should set howMany generously, so we can service future requests from
+		// memory, without asking for another lease. Only used if we need to renew
+		// our lease.
+		howMany := leaseBandwidth
+		if num.Val > leaseBandwidth {
+			howMany = num.Val + leaseBandwidth
+		}
+		if howMany < num.Val || maxLease+howMany < maxLease { // check for overflow.
+			return &emptyAssignedIds, errors.Errorf("Cannot lease %s as the limit has reached."+
+				" currMax:%d", typ, s.nextLease[typ]-1)
+		}
+
+		var proposal pb.ZeroProposal
+		switch typ {
+		case pb.Num_TXN_TS:
+			proposal.MaxTxnTs = maxLease + howMany
+		case pb.Num_UID:
+			proposal.MaxUID = maxLease + howMany
+		case pb.Num_NS_ID:
+			proposal.MaxNsID = maxLease + howMany
+		}
 		// Blocking propose to get more ids or timestamps.
 		if err := s.Node.proposeAndWait(ctx, &proposal); err != nil {
 			return nil, err
@@ -178,10 +183,39 @@ func (s *Server) AssignIds(ctx context.Context, num *pb.Num) (*pb.AssignedIds, e
 	ctx, span := otrace.StartSpan(ctx, "Zero.AssignIds")
 	defer span.End()
 
+	rateLimit := func() error {
+		if num.GetType() != pb.Num_UID {
+			// We only rate limit lease of UIDs.
+			return nil
+		}
+		ns, err := x.ExtractNamespace(ctx)
+		if err != nil || ns == x.GalaxyNamespace {
+			// There is no rate limiting for GalaxyNamespace. Also, we allow the requests which do
+			// not contain namespace into context.
+			return nil
+		}
+		if num.Val > opts.limiterConfig.UidLeaseLimit {
+			return errors.Errorf("Requested UID lease(%d) is greater than allowed(%d).",
+				num.Val, opts.limiterConfig.UidLeaseLimit)
+		}
+
+		if !s.rateLimiter.Allow(ns, int64(num.Val)) {
+			// Return error after random delay.
+			delay := rand.Intn(int(opts.limiterConfig.RefillAfter))
+			time.Sleep(time.Duration(delay) * time.Second)
+			return errors.Errorf("Cannot lease UID because UID lease for the namespace %#x is "+
+				"exhausted. Please retry after some time.", ns)
+		}
+		return nil
+	}
+
 	reply := &emptyAssignedIds
 	lease := func() error {
 		var err error
 		if s.Node.AmLeader() {
+			if err := rateLimit(); err != nil {
+				return err
+			}
 			span.Annotatef(nil, "Zero leader leasing %d ids", num.GetVal())
 			reply, err = s.lease(ctx, num)
 			return err
@@ -200,6 +234,10 @@ func (s *Server) AssignIds(ctx context.Context, num *pb.Num) (*pb.AssignedIds, e
 		span.Annotatef(nil, "Sending request to %v", pl.Addr)
 		zc := pb.NewZeroClient(pl.Get())
 		num.Forwarded = true
+		// pass on the incoming metadata to the zero leader.
+		if md, ok := metadata.FromIncomingContext(ctx); ok {
+			ctx = metadata.NewOutgoingContext(ctx, md)
+		}
 		reply, err = zc.AssignIds(ctx, num)
 		return err
 	}

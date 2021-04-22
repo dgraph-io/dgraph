@@ -25,7 +25,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger/v3"
-	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/conn"
@@ -842,7 +842,7 @@ func (qs *queryState) handleUidPostings(
 					ReadTs:    args.q.ReadTs,
 					AfterUid:  0,
 					Intersect: reqList,
-					First:     int(args.q.First),
+					First:     int(args.q.First + args.q.Offset),
 				}
 				plist, err := pl.Uids(topts)
 				if err != nil {
@@ -1024,7 +1024,7 @@ func (qs *queryState) helpProcessTask(ctx context.Context, q *pb.Query, gid uint
 	opts := posting.ListOptions{
 		ReadTs:   q.ReadTs,
 		AfterUid: q.AfterUid,
-		First:    int(q.First),
+		First:    int(q.First + q.Offset),
 	}
 	// If we have srcFunc and Uids, it means its a filter. So we intersect.
 	if srcFn.fnType != notAFunction && q.UidList != nil && len(q.UidList.Uids) > 0 {
@@ -1645,6 +1645,10 @@ func (qs *queryState) filterStringFunction(arg funcArgs) error {
 	// TODO: This function can be optimized by having a query specific cache, which can be populated
 	// by the handleHasFunction for e.g. for a `has(name)` query.
 	itr := uids.Iterator()
+
+	// We can't directly modify uids bitmap. We need to add them to another bitmap, and then take
+	// the difference.
+	remove := roaring64.New()
 	for itr.HasNext() {
 		uid := itr.Next()
 		vals, err := qs.getValsForUID(attr, lang, uid, arg.q.ReadTs)
@@ -1665,10 +1669,11 @@ func (qs *queryState) filterStringFunction(arg funcArgs) error {
 			strVals = append(strVals, strVal)
 		}
 		if !matchStrings(filter, strVals) {
-			uids.Remove(uid)
+			remove.Add(uid)
 		}
 	}
 
+	uids.AndNot(remove)
 	for i := 0; i < len(matrix); i++ {
 		matrix[i].And(uids)
 		// TODO: This could be a conversion to Bitmap instead of ToArray.
@@ -2421,6 +2426,7 @@ func (qs *queryState) handleHasFunction(ctx context.Context, q *pb.Query, out *p
 		return err
 	}
 
+	cnt := int32(0)
 loop:
 	// This function could be switched to the stream.Lists framework, but after the change to use
 	// BitCompletePosting, the speed here is already pretty fast. The slowdown for @lang predicates
@@ -2462,6 +2468,11 @@ loop:
 			case err != nil:
 				return err
 			}
+			// skip entries upto Offset and do not store in the result.
+			if cnt < q.Offset {
+				cnt++
+				continue
+			}
 			result.Uids = append(result.Uids, pk.Uid)
 
 			// We'll stop fetching if we fetch the required count.
@@ -2487,6 +2498,11 @@ loop:
 				continue
 			case err != nil:
 				return err
+			}
+			// skip entries upto Offset and do not store in the result.
+			if cnt < q.Offset {
+				cnt++
+				continue
 			}
 			result.Uids = append(result.Uids, pk.Uid)
 

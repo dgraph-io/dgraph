@@ -104,7 +104,6 @@ type options struct {
 	MemLimit       string
 	ExposePorts    bool
 	Encryption     bool
-	LudicrousMode  bool
 	SnapshotAfter  string
 	ContainerNames bool
 	AlphaVolumes   []string
@@ -115,6 +114,9 @@ type options struct {
 	MinioDataDir   string
 	MinioPort      uint16
 	MinioEnvFile   []string
+	Hostname       string
+	Cdc            bool
+	CdcConsumer    bool
 
 	// Extra flags
 	AlphaFlags string
@@ -156,6 +158,13 @@ func getOffset(idx int) int {
 	return idx
 }
 
+func getHost(host string) string {
+	if opts.Hostname != "" {
+		return opts.Hostname
+	}
+	return host
+}
+
 func initService(basename string, idx, grpcPort int) service {
 	var svc service
 
@@ -173,6 +182,10 @@ func initService(basename string, idx, grpcPort int) service {
 		toPort(grpcPort + 1000), // http port
 	}
 
+	// If hostname is specified then expose the internal grpc port (7080) of alpha.
+	if basename == "alpha" && opts.Hostname != "" {
+		svc.Ports = append(svc.Ports, toPort(grpcPort-1000))
+	}
 	if opts.LocalBin {
 		svc.Volumes = append(svc.Volumes, volume{
 			Type:     "bind",
@@ -235,7 +248,7 @@ func getZero(idx int, raft string) service {
 		svc.Command += fmt.Sprintf(" -o %d", opts.PortOffset+offset)
 	}
 	svc.Command += fmt.Sprintf(" --raft='%s'", raft)
-	svc.Command += fmt.Sprintf(" --my=%s:%d", svc.name, grpcPort)
+	svc.Command += fmt.Sprintf(" --my=%s:%d", getHost(svc.name), grpcPort)
 	if opts.NumAlphas > 1 {
 		svc.Command += fmt.Sprintf(" --replicas=%d", opts.NumReplicas)
 	}
@@ -246,7 +259,8 @@ func getZero(idx int, raft string) service {
 	if idx == 1 {
 		svc.Command += fmt.Sprintf(" --bindall")
 	} else {
-		svc.Command += fmt.Sprintf(" --peer=%s:%d", name(basename, 1), basePort)
+		peerHost := name(basename, 1)
+		svc.Command += fmt.Sprintf(" --peer=%s:%d", getHost(peerHost), basePort)
 	}
 	if len(opts.MemLimit) > 0 {
 		svc.Deploy.Resources = res{
@@ -290,10 +304,12 @@ func getAlpha(idx int, raft string) service {
 		maxZeros = opts.NumZeros
 	}
 
-	zeroHostAddr := fmt.Sprintf("zero%d:%d", 1, zeroBasePort+opts.PortOffset)
+	zeroHostAddr := fmt.Sprintf("%s:%d", getHost("zero1"), zeroBasePort+opts.PortOffset)
 	zeros := []string{zeroHostAddr}
 	for i := 2; i <= maxZeros; i++ {
-		zeroHostAddr = fmt.Sprintf("zero%d:%d", i, zeroBasePort+opts.PortOffset+getOffset(i))
+		port := zeroBasePort + opts.PortOffset + getOffset(i)
+		zeroHost := fmt.Sprintf("zero%d", i)
+		zeroHostAddr = fmt.Sprintf("%s:%d", getHost(zeroHost), port)
 		zeros = append(zeros, zeroHostAddr)
 	}
 
@@ -303,15 +319,13 @@ func getAlpha(idx int, raft string) service {
 	if (opts.PortOffset + offset) != 0 {
 		svc.Command += fmt.Sprintf(" -o %d", opts.PortOffset+offset)
 	}
-	svc.Command += fmt.Sprintf(" --my=%s:%d", svc.name, internalPort)
+	svc.Command += fmt.Sprintf(" --my=%s:%d", getHost(svc.name), internalPort)
 	svc.Command += fmt.Sprintf(" --zero=%s", zerosOpt)
 	svc.Command += fmt.Sprintf(" --logtostderr -v=%d", opts.Verbosity)
-	if opts.LudicrousMode {
-		svc.Command += ` --ludicrous "enabled=true;"`
-	}
+	svc.Command += " --expose_trace=true"
 
 	if opts.SnapshotAfter != "" {
-		raft = fmt.Sprintf("%s; snapshot-after=%s", raft, opts.SnapshotAfter)
+		raft = fmt.Sprintf("%s; %s", raft, opts.SnapshotAfter)
 	}
 	svc.Command += fmt.Sprintf(` --raft "%s"`, raft)
 
@@ -321,7 +335,7 @@ func getAlpha(idx int, raft string) service {
 		svc.Command += fmt.Sprintf(" --vmodule=%s", opts.Vmodule)
 	}
 	if opts.WhiteList {
-		svc.Command += ` --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"`
+		svc.Command += ` --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,100.0.0.0/8;"`
 	}
 	if opts.Acl {
 		svc.Command += ` --acl "secret-file=/secret/hmac;"`
@@ -347,13 +361,16 @@ func getAlpha(idx int, raft string) service {
 		}
 	}
 	if opts.Encryption {
-		svc.Command += " --encryption_key_file=/secret/enc_key"
+		svc.Command += ` --encryption "key-file=/secret/enc_key;"`
 		svc.Volumes = append(svc.Volumes, volume{
 			Type:     "bind",
 			Source:   "./enc-secret",
 			Target:   "/secret/enc_key",
 			ReadOnly: true,
 		})
+	}
+	if opts.Cdc {
+		svc.Command += " --cdc='kafka=kafka:9092'"
 	}
 	if len(opts.AlphaVolumes) > 0 {
 		for _, vol := range opts.AlphaVolumes {
@@ -396,11 +413,14 @@ func getJaeger() service {
 			toPort(16686),
 		},
 		Environment: []string{
-			"SPAN_STORAGE_TYPE=badger",
+			"SPAN_STORAGE_TYPE=memory",
+			// "SPAN_STORAGE_TYPE=badger",
+			// Note: Badger doesn't quite work as well in Jaeger. The integration isn't well
+			// written.
 		},
-		Command: "--badger.ephemeral=false" +
-			" --badger.directory-key /working/jaeger" +
-			" --badger.directory-value /working/jaeger",
+		// Command: "--badger.ephemeral=false" +
+		// 	" --badger.directory-key /working/jaeger" +
+		// 	" --badger.directory-value /working/jaeger",
 	}
 	return svc
 }
@@ -485,6 +505,32 @@ func addMetrics(cfg *composeConfig) {
 	}
 }
 
+func addCdc(cfg *composeConfig) {
+	cfg.Services["zookeeper"] = service{
+		Image:         "bitnami/zookeeper:3.7.0",
+		ContainerName: containerName("zookeeper"),
+		Environment: []string{
+			"ALLOW_ANONYMOUS_LOGIN=yes",
+		},
+	}
+	cfg.Services["kafka"] = service{
+		Image:         "bitnami/kafka:2.7.0",
+		ContainerName: containerName("kafka"),
+		Environment: []string{
+			"ALLOW_PLAINTEXT_LISTENER=yes",
+			"KAFKA_BROKER_ID=1",
+			"KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper:2181",
+		},
+	}
+	if opts.CdcConsumer {
+		cfg.Services["kafka-consumer"] = service{
+			Image:         "bitnami/kafka:2.7.0",
+			ContainerName: containerName("kafka-consumer"),
+			Command:       "kafka-console-consumer.sh --bootstrap-server kafka:9092 --topic dgraph-cdc",
+		}
+	}
+}
+
 func semverCompare(constraint, version string) (bool, error) {
 	c, err := sv.NewConstraint(constraint)
 	if err != nil {
@@ -542,8 +588,8 @@ func main() {
 		"include jaeger service")
 	cmd.PersistentFlags().BoolVarP(&opts.Metrics, "metrics", "m", false,
 		"include metrics (prometheus, grafana) services")
-	cmd.PersistentFlags().IntVarP(&opts.PortOffset, "port_offset", "o", 100,
-		"port offset for alpha and, if not 100, zero as well")
+	cmd.PersistentFlags().IntVarP(&opts.PortOffset, "port_offset", "o", 0,
+		"port offset for alpha and zero")
 	cmd.PersistentFlags().IntVarP(&opts.Verbosity, "verbosity", "v", 2,
 		"glog verbosity level")
 	cmd.PersistentFlags().StringVarP(&opts.OutFile, "out", "O",
@@ -564,8 +610,6 @@ func main() {
 		"comma-separated list of pattern=N settings for file-filtered logging")
 	cmd.PersistentFlags().BoolVar(&opts.Encryption, "encryption", false,
 		"enable encryption-at-rest feature.")
-	cmd.PersistentFlags().BoolVar(&opts.LudicrousMode, "ludicrous", false,
-		"enable zeros and alphas in ludicrous mode.")
 	cmd.PersistentFlags().StringVar(&opts.SnapshotAfter, "snapshot_after", "",
 		"create a new Raft snapshot after this many number of Raft entries.")
 	cmd.PersistentFlags().StringVar(&opts.AlphaFlags, "extra_alpha_flags", "",
@@ -590,6 +634,12 @@ func main() {
 		"minio service port")
 	cmd.PersistentFlags().StringArrayVar(&opts.MinioEnvFile, "minio_env_file", nil,
 		"minio service env_file")
+	cmd.PersistentFlags().StringVar(&opts.Hostname, "hostname", "",
+		"hostname for the alpha and zero servers")
+	cmd.PersistentFlags().BoolVar(&opts.Cdc, "cdc", false,
+		"run Kafka and push CDC data to it")
+	cmd.PersistentFlags().BoolVar(&opts.CdcConsumer, "cdc_consumer", false,
+		"run Kafka consumer that prints out CDC events")
 	err := cmd.ParseFlags(os.Args)
 	if err != nil {
 		if err == pflag.ErrHelp {
@@ -615,7 +665,9 @@ func main() {
 	if opts.UserOwnership && opts.DataDir == "" {
 		fatal(errors.Errorf("--user option requires --data_dir=<path>"))
 	}
-
+	if cmd.Flags().Changed("cdc-consumer") && !opts.Cdc {
+		fatal(errors.Errorf("--cdc_consumer requires --cdc"))
+	}
 	services := make(map[string]service)
 
 	for i := 1; i <= opts.NumZeros; i++ {
@@ -704,6 +756,10 @@ func main() {
 		if err != nil {
 			fatal(errors.Errorf("unable to write file: %v", err))
 		}
+	}
+
+	if opts.Cdc {
+		addCdc(&cfg)
 	}
 
 	yml, err := yaml.Marshal(cfg)

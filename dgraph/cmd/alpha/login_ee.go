@@ -17,7 +17,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"

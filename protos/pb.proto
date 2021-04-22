@@ -74,6 +74,8 @@ message Query {
 	int32 cache = 14;
 	int32 first = 15; // used to limit the number of result. Typically, the count is value of first
 	// field. Now, It's been used only for has query.
+	int32 offset = 16; // offset helps in fetching lesser results for the has query when there is
+	// no filter and order.
 }
 
 message ValueList {
@@ -277,6 +279,8 @@ message Snapshot {
 	bool done	= 4;
 	// since_ts stores the ts of the last snapshot to support diff snap updates.
 	uint64 since_ts = 5;
+	// max_assigned stores the ts as seen as of snapshot read_ts.
+	uint64 max_assigned = 6;
 }
 
 message ZeroSnapshot {
@@ -323,6 +327,8 @@ message Proposal {
 	RestoreRequest restore 		= 12;
 	CDCState cdc_state 				= 13;
 	DeleteNsRequest delete_ns = 14; // Used to delete namespace.
+	uint64 key = 15;
+	uint64 start_ts = 16;
 }
 
 message CDCState {
@@ -486,8 +492,9 @@ message MovePredicatePayload {
 	string predicate         = 1;
 	uint32 source_gid        = 2;
 	uint32 dest_gid          = 3;
-	uint64 txn_ts            = 4;
+	uint64 read_ts           = 4;
 	uint64 expected_checksum = 5;
+	uint64 since_ts          = 6;
 }
 
 message TxnStatus {

@@ -1101,6 +1101,504 @@
         }
 
 -
+  name: "Add mutation on implementation type which have inherited @id field with interface argument -1"
+  explanation: "This mutation will generate three existence queries two for xid - refID (one for interface and one
+  for implementing type) and one for xid - name"
+  gqlmutation: |
+    mutation addLibraryMember($input: AddLibraryMemberInput!) {
+      addLibraryMember(input: [$input], upsert: false) {
+        libraryMember {
+          refID
+        }
+      }
+    }
+  gqlvariables: |
+    {
+        "input": {
+            "refID": "101",
+            "name": "Alice",
+            "itemsIssued": [
+                "Intro to Go",
+                "Parallel Programming"
+            ],
+            "readHours": "4d2hr"
+        }
+    }
+  dgquery: |-
+    query {
+      LibraryMember_1(func: eq(Member.name, "Alice")) @filter(type(LibraryMember)) {
+        uid
+      }
+      LibraryMember_2(func: eq(Member.refID, "101")) @filter(type(LibraryMember)) {
+        uid
+      }
+      LibraryMember_3(func: eq(Member.refID, "101")) @filter(type(Member)) {
+        uid
+      }
+    }
+  dgmutations:
+    - setjson: |
+        {
+            "LibraryMember.readHours": "4d2hr",
+            "Member.itemsIssued": [
+                "Intro to Go",
+                "Parallel Programming"
+            ],
+            "Member.name": "Alice",
+            "Member.refID": "101",
+            "dgraph.type": [
+                "LibraryMember",
+                "Member"
+            ],
+            "uid": "_:LibraryMember_2"
+        }
+
+-
+  name: "Add mutation on implementation type which have inherited @id field with interface argument -2"
+  explanation: "Node with refID:101 already exist in other implementing type of interface, mutation not allowed
+   in this case and we will return error"
+  gqlmutation: |
+    mutation addLibraryMember($input: AddLibraryMemberInput!) {
+      addLibraryMember(input: [$input], upsert: false) {
+        libraryMember {
+          refID
+        }
+      }
+    }
+  gqlvariables: |
+    {
+        "input": {
+            "refID": "101",
+            "name": "Alice",
+            "itemsIssued": [
+                "Intro to Go",
+                "Parallel Programming"
+            ],
+            "readHours": "4d2hr"
+        }
+    }
+  dgquery: |-
+    query {
+      LibraryMember_1(func: eq(Member.name, "Alice")) @filter(type(LibraryMember)) {
+        uid
+      }
+      LibraryMember_2(func: eq(Member.refID, "101")) @filter(type(LibraryMember)) {
+        uid
+      }
+      LibraryMember_3(func: eq(Member.refID, "101")) @filter(type(Member)) {
+        uid
+      }
+    }
+  qnametouid: |-
+    {
+      "LibraryMember_3": "0x11"
+    }
+  error2:
+    {
+      "message": "failed to rewrite mutation payload because id 101 already exists for field refID
+       in some other implementing type of interface Member"
+    }
+
+-
+  name: "Add mutation on implementation type which have inherited @id field with interface argument -3"
+  explanation: "Node with refID:101 already exist in same mutated type, returns error "
+  gqlmutation: |
+    mutation addLibraryMember($input: AddLibraryMemberInput!) {
+      addLibraryMember(input: [$input], upsert: false) {
+        libraryMember {
+          refID
+        }
+      }
+    }
+  gqlvariables: |
+    {
+        "input": {
+            "refID": "101",
+            "name": "Alice",
+            "itemsIssued": [
+                "Intro to Go",
+                "Parallel Programming"
+            ],
+            "readHours": "4d2hr"
+        }
+    }
+  dgquery: |-
+    query {
+      LibraryMember_1(func: eq(Member.name, "Alice")) @filter(type(LibraryMember)) {
+        uid
+      }
+      LibraryMember_2(func: eq(Member.refID, "101")) @filter(type(LibraryMember)) {
+        uid
+      }
+      LibraryMember_3(func: eq(Member.refID, "101")) @filter(type(Member)) {
+        uid
+      }
+    }
+  qnametouid: |-
+    {
+      "LibraryMember_2": "0x11"
+    }
+  error2:
+    {
+      "message": "failed to rewrite mutation payload because id 101 already exists for field
+       refID inside type LibraryMember"
+    }
+
+-
+  name: "Add upsert mutation on implementation type which have inherited @id field with interface argument -1"
+  explanation: "node with @id field doesn't exist in any of the implementing type, we will add the node"
+  gqlmutation: |
+    mutation addLibraryMember($input: AddLibraryMemberInput!) {
+      addLibraryMember(input: [$input], upsert: true) {
+        libraryMember {
+          refID
+        }
+      }
+    }
+  gqlvariables: |
+    {
+        "input": {
+            "refID": "101",
+            "name": "Alice",
+            "itemsIssued": [
+                "Intro to Go",
+                "Parallel Programming"
+            ],
+            "readHours": "4d2hr"
+        }
+    }
+  dgquery: |-
+    query {
+      LibraryMember_1(func: eq(Member.name, "Alice")) @filter(type(LibraryMember)) {
+        uid
+      }
+      LibraryMember_2(func: eq(Member.refID, "101")) @filter(type(LibraryMember)) {
+        uid
+      }
+      LibraryMember_3(func: eq(Member.refID, "101")) @filter(type(Member)) {
+        uid
+      }
+    }
+  qnametouid: |-
+    {
+      "LibraryMember_1": "0x11"
+    }
+  dgquerysec: |-
+    query {
+      LibraryMember_1 as LibraryMember_1(func: uid(0x11)) @filter(type(LibraryMember)) {
+        uid
+      }
+    }
+  dgmutations:
+    - setjson: |
+        {
+            "LibraryMember.readHours": "4d2hr",
+            "Member.itemsIssued": [
+                "Intro to Go",
+                "Parallel Programming"
+            ],
+            "uid": "uid(LibraryMember_1)"
+        }
+      cond: "@if(gt(len(LibraryMember_1), 0))"
+-
+  name: "Add upsert mutation on implementation type which have inherited @id field with interface argument -2"
+  explanation: "node with @id field already exist in one of the implementing type, returns error"
+  gqlmutation: |
+    mutation addLibraryMember($input: AddLibraryMemberInput!) {
+      addLibraryMember(input: [$input], upsert: true) {
+        libraryMember {
+          refID
+        }
+      }
+    }
+  gqlvariables: |
+    {
+        "input": {
+            "refID": "101",
+            "name": "Alice",
+            "itemsIssued": [
+                "Intro to Go",
+                "Parallel Programming"
+            ],
+            "readHours": "4d2hr"
+        }
+    }
+  dgquery: |-
+    query {
+      LibraryMember_1(func: eq(Member.name, "Alice")) @filter(type(LibraryMember)) {
+        uid
+      }
+      LibraryMember_2(func: eq(Member.refID, "101")) @filter(type(LibraryMember)) {
+        uid
+      }
+      LibraryMember_3(func: eq(Member.refID, "101")) @filter(type(Member)) {
+        uid
+      }
+    }
+  qnametouid: |-
+    {
+      "LibraryMember_3": "0x11"
+    }
+  error2:
+    {
+      "message": "failed to rewrite mutation payload because id 101 already exists for
+       field refID in some other implementing type of interface Member"
+    }
+
+-
+  name: "Add mutation with nested object which have inherited @id field with interface argument -1"
+  explanation: "There is no node with refID 101 of interface type or it's implementation type,hence will wii add
+    nested object and link that to parent object"
+  gqlmutation: |
+    mutation addLibraryManager($input: AddLibraryManagerInput!) {
+      addLibraryManager(input: [$input], upsert: false) {
+        libraryManager {
+          name
+        }
+      }
+    }
+  gqlvariables: |
+    {
+        "input": {
+            "name": "Alice",
+            "manages": [
+                {
+                    "refID": "101",
+                    "name": "Bob",
+                    "itemsIssued": [
+                        "Intro to Go",
+                        "Parallel Programming"
+                    ],
+                    "readHours": "4d2hr"
+                }
+            ]
+        }
+    }
+  dgquery: |-
+    query {
+      LibraryManager_1(func: eq(LibraryManager.name, "Alice")) @filter(type(LibraryManager)) {
+        uid
+      }
+      LibraryMember_2(func: eq(Member.name, "Bob")) @filter(type(LibraryMember)) {
+        uid
+      }
+      LibraryMember_3(func: eq(Member.refID, "101")) @filter(type(LibraryMember)) {
+        uid
+      }
+      LibraryMember_4(func: eq(Member.refID, "101")) @filter(type(Member)) {
+        uid
+      }
+    }
+  dgmutations:
+    - setjson: |
+        {
+            "LibraryManager.manages": [
+                {
+                    "LibraryMember.readHours": "4d2hr",
+                    "Member.itemsIssued": [
+                        "Intro to Go",
+                        "Parallel Programming"
+                    ],
+                    "Member.name": "Bob",
+                    "Member.refID": "101",
+                    "dgraph.type": [
+                        "LibraryMember",
+                        "Member"
+                    ],
+                    "uid": "_:LibraryMember_3"
+                }
+            ],
+            "LibraryManager.name": "Alice",
+            "dgraph.type": [
+                "LibraryManager"
+            ],
+            "uid": "_:LibraryManager_1"
+        }
+
+-
+  name: "Add mutation with nested object which have inherited @id field with interface argument -2"
+  explanation: "node with refID 101 already exist in one of the implementing type other than mutated type,returns error"
+  gqlmutation: |
+    mutation addLibraryManager($input: AddLibraryManagerInput!) {
+      addLibraryManager(input: [$input], upsert: false) {
+        libraryManager {
+          name
+        }
+      }
+    }
+  gqlvariables: |
+    {
+        "input": {
+            "name": "Alice",
+            "manages": [
+                {
+                    "refID": "101",
+                    "name": "Bob",
+                    "itemsIssued": [
+                        "Intro to Go",
+                        "Parallel Programming"
+                    ],
+                    "readHours": "4d2hr"
+                }
+            ]
+        }
+    }
+  dgquery: |-
+    query {
+      LibraryManager_1(func: eq(LibraryManager.name, "Alice")) @filter(type(LibraryManager)) {
+        uid
+      }
+      LibraryMember_2(func: eq(Member.name, "Bob")) @filter(type(LibraryMember)) {
+        uid
+      }
+      LibraryMember_3(func: eq(Member.refID, "101")) @filter(type(LibraryMember)) {
+        uid
+      }
+      LibraryMember_4(func: eq(Member.refID, "101")) @filter(type(Member)) {
+        uid
+      }
+    }
+  qnametouid: |-
+    {
+      "LibraryMember_4": "0x11"
+    }
+  error2:
+    {
+        "message": "failed to rewrite mutation payload because id 101 already exists for field
+         refID in some other implementing type of interface Member"
+    }
+
+-
+  name: "Add mutation with nested object which have inherited @id field with interface argument -3"
+  explanation: "node with refID 101 already exist for mutated type,link child node to parent"
+  gqlmutation: |
+    mutation addLibraryManager($input: AddLibraryManagerInput!) {
+      addLibraryManager(input: [$input], upsert: false) {
+        libraryManager {
+          name
+        }
+      }
+    }
+  gqlvariables: |
+    {
+        "input": {
+            "name": "Alice",
+            "manages": [
+                {
+                    "refID": "101",
+                    "name": "Bob",
+                    "itemsIssued": [
+                        "Intro to Go",
+                        "Parallel Programming"
+                    ],
+                    "readHours": "4d2hr"
+                }
+            ]
+        }
+    }
+  dgquery: |-
+    query {
+      LibraryManager_1(func: eq(LibraryManager.name, "Alice")) @filter(type(LibraryManager)) {
+        uid
+      }
+      LibraryMember_2(func: eq(Member.name, "Bob")) @filter(type(LibraryMember)) {
+        uid
+      }
+      LibraryMember_3(func: eq(Member.refID, "101")) @filter(type(LibraryMember)) {
+        uid
+      }
+      LibraryMember_4(func: eq(Member.refID, "101")) @filter(type(Member)) {
+        uid
+      }
+    }
+  qnametouid: |-
+    {
+      "LibraryMember_3": "0x11",
+      "LibraryMember_4": "0x11"
+    }
+  dgmutations:
+    - setjson: |
+        {
+            "LibraryManager.manages": [
+                {
+                    "uid":"0x11"
+                }
+            ],
+            "LibraryManager.name": "Alice",
+            "dgraph.type": [
+                "LibraryManager"
+            ],
+            "uid": "_:LibraryManager_1"
+        }
+
+-
+  name: "Add mutation on implementation type which have inherited @id fields with interface argument from multiple interfaces"
+  explanation: "This mutation will generate six existence queries, 2 existence queries for each of the inherited @id fields
+  with interface arg and one for each @id field,none of the existence query return uid,so we successfully add the object in this case"
+  gqlmutation: |
+    mutation addSportsMember($input: AddSportsMemberInput!) {
+      addSportsMember(input: [$input], upsert: false) {
+        sportsMember {
+          refID
+        }
+      }
+    }
+  gqlvariables: |
+    {
+        "input": {
+            "refID": "101",
+            "name": "Alice",
+            "teamID": "T01",
+            "teamName": "GraphQL",
+            "itemsIssued": [
+                "2-Bats",
+                "1-football"
+            ],
+            "plays": "football and cricket"
+        }
+    }
+  dgquery: |-
+    query {
+      SportsMember_1(func: eq(Member.name, "Alice")) @filter(type(SportsMember)) {
+        uid
+      }
+      SportsMember_2(func: eq(Member.refID, "101")) @filter(type(SportsMember)) {
+        uid
+      }
+      SportsMember_3(func: eq(Member.refID, "101")) @filter(type(Member)) {
+        uid
+      }
+      SportsMember_4(func: eq(Team.teamID, "T01")) @filter(type(SportsMember)) {
+        uid
+      }
+      SportsMember_5(func: eq(Team.teamID, "T01")) @filter(type(Team)) {
+        uid
+      }
+      SportsMember_6(func: eq(Team.teamName, "GraphQL")) @filter(type(SportsMember)) {
+        uid
+      }
+    }
+  dgmutations:
+    - setjson: |
+        {
+            "Member.itemsIssued": [
+                "2-Bats",
+                "1-football"
+            ],
+            "Member.name": "Alice",
+            "Member.refID": "101",
+            "SportsMember.plays": "football and cricket",
+            "Team.teamID": "T01",
+            "Team.teamName": "GraphQL",
+            "dgraph.type": [
+                "SportsMember",
+                "Member",
+                "Team"
+            ],
+            "uid": "_:SportsMember_6"
+        }
+
+-
   name: "Add mutation using code on type which also has an ID field"
   gqlmutation: |
     mutation addEditor($input: AddEditorInput!) {

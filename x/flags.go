@@ -54,9 +54,6 @@ func FillCommonFlags(flag *pflag.FlagSet) {
 			`guaranteeing no data loss in case of hard reboot.`+"\n    "+
 			`Most users should be OK with choosing "process".`)
 
-	// Cache flags.
-	flag.Int64("cache_mb", 1024, "Total size of cache (in MB) to be used in Dgraph.")
-
 	flag.String("telemetry", TelemetryDefaults, z.NewSuperFlagHelp(TelemetryDefaults).
 		Head("Telemetry (diagnostic) options").
 		Flag("reports",

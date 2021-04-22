@@ -37,6 +37,7 @@ func uidsForRegex(attr string, arg funcArgs,
 	opts := posting.ListOptions{
 		ReadTs: arg.q.ReadTs,
 		First:  int(arg.q.First),
+		AfterUid: arg.q.AfterUid,
 	}
 	// TODO: Unnecessary conversion here. Avoid if possible.
 	if !intersect.IsEmpty() {

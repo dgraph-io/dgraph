@@ -939,8 +939,8 @@ func createTaskQuery(ctx context.Context, sg *SubGraph) (*pb.Query, error) {
 		sg.Params.ExpandAll = true
 	}
 
-	// count is to limit how many results we want.
-	first := calculateFirstN(sg)
+	// first is to limit how many results we want.
+	first, offset := calculatePaginationParams(sg)
 
 	out := &pb.Query{
 		ReadTs:       sg.ReadTs,
@@ -955,6 +955,7 @@ func createTaskQuery(ctx context.Context, sg *SubGraph) (*pb.Query, error) {
 		FacetsFilter: sg.facetsFilter,
 		ExpandAll:    sg.Params.ExpandAll,
 		First:        first,
+		Offset:       offset,
 	}
 
 	// Use the orderedUIDs if present, it will only be present for the shortest path case.
@@ -966,8 +967,9 @@ func createTaskQuery(ctx context.Context, sg *SubGraph) (*pb.Query, error) {
 	return out, nil
 }
 
-// calculateFirstN returns the count of result we need to proceed query further down.
-func calculateFirstN(sg *SubGraph) int32 {
+// calculatePaginationParams returns the (count, offset) of result
+// we need to proceed query further down.
+func calculatePaginationParams(sg *SubGraph) (int32, int32) {
 	// by default count is zero. (zero will retrieve all the results)
 	count := math.MaxInt32
 	// In order to limit we have to make sure that the this level met the following conditions
@@ -984,25 +986,28 @@ func calculateFirstN(sg *SubGraph) int32 {
 	//     name
 	//   }
 	// }
-	// - should be has function (Right now, I'm doing it for has, later it can be extended)
-	// {
-	//   q(func: has(name), first:1) {
-	//     name
-	//   }
-	// }
-	// isSupportedFunction := sg.SrcFunc != nil && sg.SrcFunc.Name == "has"
+	// - should not be one of those function which fetches some results and then do further
+	// processing to narrow down the result. For example: allofterm will fetch the index postings
+	// for each term and then do an intersection.
+	// TODO: Look into how we can optimize queries involving these functions.
 
-	// Manish: Shouldn't all functions allow this? If we don't have a order and we don't have a
-	// filter, then we can respect the first N, offset Y arguments when retrieving data.
-	isSupportedFunction := true
-	if len(sg.Filters) == 0 && len(sg.Params.Order) == 0 &&
-		isSupportedFunction {
-		// Offset also added because, we need n results to trim the offset.
-		if sg.Params.Count != 0 {
-			count = sg.Params.Count + sg.Params.Offset
+	shouldExclude := false
+	if sg.SrcFunc != nil {
+		switch sg.SrcFunc.Name {
+		case "regexp", "alloftext", "allofterms", "match":
+			shouldExclude = true
+		default:
+			shouldExclude = false
 		}
 	}
-	return int32(count)
+
+	if len(sg.Filters) == 0 && len(sg.Params.Order) == 0 && !shouldExclude {
+		if sg.Params.Count != 0 {
+			return int32(sg.Params.Count), int32(sg.Params.Offset)
+		}
+	}
+	// make offset = 0, if there is need to fetch all the results.
+	return int32(count), 0
 }
 
 // varValue is a generic representation of a variable and holds multiple things.
@@ -2282,10 +2287,14 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	}
 
 	if len(sg.Params.Order) == 0 && len(sg.Params.FacetsOrder) == 0 {
-		// There is no ordering. Just apply pagination and return.
-		if err = sg.applyPagination(ctx); err != nil {
-			rch <- err
-			return
+		// for `has` function when there is no filtering and ordering, we fetch
+		// correct paginated results so no need to apply pagination here.
+		if !(len(sg.Filters) == 0 && sg.SrcFunc != nil && sg.SrcFunc.Name == "has") {
+			// There is no ordering. Just apply pagination and return.
+			if err = sg.applyPagination(ctx); err != nil {
+				rch <- err
+				return
+			}
 		}
 	} else {
 		// If we are asked for count, we don't need to change the order of results.

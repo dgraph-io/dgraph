@@ -587,7 +587,6 @@ func removeAllTestContainers() {
 
 var loadPackages = []string{
 	"/systest/21million/bulk",
-	"/systest/21million/ludicrous",
 	"/systest/21million/live",
 	"/systest/1million",
 	"/systest/bulk_live/bulk",

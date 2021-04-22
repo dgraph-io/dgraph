@@ -29,7 +29,7 @@ import (
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/golang/glog"
 
-	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/stretchr/testify/require"
 )
@@ -1070,6 +1070,25 @@ func TestSetNquadNilValue(t *testing.T) {
 	fastNQ, err := FastParse([]byte(json), SetNquads)
 	require.NoError(t, err)
 	require.Equal(t, 0, len(fastNQ))
+}
+
+// See PR #7737 to understand why this test exists.
+func TestNquadsFromJsonEmptyFacet(t *testing.T) {
+	json := `{"uid":1000,"doesnt|exist":null}`
+
+	// fast
+	buf := NewNQuadBuffer(-1)
+	require.Nil(t, buf.FastParseJSON([]byte(json), DeleteNquads))
+	buf.Flush()
+	// needs to be empty, otherwise node gets deleted
+	require.Equal(t, 0, len(<-buf.Ch()))
+
+	// old
+	buf = NewNQuadBuffer(-1)
+	require.Nil(t, buf.ParseJSON([]byte(json), DeleteNquads))
+	buf.Flush()
+	// needs to be empty, otherwise node gets deleted
+	require.Equal(t, 0, len(<-buf.Ch()))
 }
 
 func BenchmarkNoFacets(b *testing.B) {
