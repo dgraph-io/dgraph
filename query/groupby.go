@@ -290,11 +290,14 @@ func (sg *SubGraph) fillGroupedVars(doneVars map[string]varValue, path []*SubGra
 
 	var pathNode *SubGraph
 	var dedupMap dedup
-
+	// uidPredicate is true when atleast one argument to
+	// the groupby is uid predicate.
+	uidPredicate := false
 	for _, child := range sg.Children {
 		if !child.Params.IgnoreResult {
 			continue
 		}
+		uidPredicate = uidPredicate || !child.DestMap.IsEmpty()
 
 		attr := child.Params.Alias
 		if attr == "" {
@@ -365,7 +368,8 @@ func (sg *SubGraph) fillGroupedVars(doneVars map[string]varValue, path []*SubGra
 			if len(grp.keys) == 0 {
 				continue
 			}
-			if len(grp.keys) > 1 {
+			// Return error when all the keys are not the value predicates.
+			if len(grp.keys) > 1 && uidPredicate {
 				return errors.Errorf("Expected one UID for var in groupby but got: %d", len(grp.keys))
 			}
 			uidVal := grp.keys[0].key.Value
