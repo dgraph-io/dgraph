@@ -1384,8 +1384,9 @@ func rewriteObject(
 
 	xids := typ.XIDFields()
 	if len(xids) != 0 {
-		// nonExistingXIDs stores number of uids for which there exist no nodes
-		var nonExistingXIDs int
+		// multipleNodesForSameID is true when there are multiple nodes present
+		// in a result of existence queries
+		multipleNodesForSameID := gotMultipleExistingNodes(xids, obj, typ, varGen, idExistence)
 		// xidVariables stores the variable names for each XID.
 		var xidVariables []string
 		for _, xid := range xids {
@@ -1393,6 +1394,8 @@ func rewriteObject(
 			if xidVal, ok := obj[xid.Name()]; ok && xidVal != nil {
 				xidString, _ = extractVal(xidVal, xid.Name(), xid.Type().Name())
 				variable = varGen.Next(typ, xid.Name(), xidString, false)
+				existenceError := x.GqlErrorf("multiple nodes found for given xid values," +
+					" updation not possible")
 
 				// If this xid field is inherited from interface and have interface argument set, we also
 				// have existence query for interface to make sure that this xid is unique across all
@@ -1405,7 +1408,6 @@ func rewriteObject(
 				// 3. The queryResult UID does not exist. But, this could be a reference to an XID
 				//    node added during the mutation rewriting. This is handled by adding the new blank UID
 				//    to existenceQueryResult.
-
 				interfaceTyp, interfaceVar := interfaceVariable(typ, varGen, xid.Name(), xidString)
 
 				// Get whether node with XID exists or not from existenceQueriesResults
@@ -1417,8 +1419,19 @@ func rewriteObject(
 					// We return an error if this is at toplevel. Else, we return the ID reference if
 					// found node is of same type as xid field type. Because that node can be of some other
 					// type in case xidField is inherited from interface.
+
 					if atTopLevel {
 						if mutationType == AddWithUpsert {
+							// returns from here if we got multiple nodes as a result of existence queries.
+							if multipleNodesForSameID {
+								if queryAuthSelector(typ) == nil {
+									retErrors = append(retErrors, existenceError)
+								} else {
+									retErrors = append(retErrors, x.GqlErrorf("GraphQL debug: "+existenceError.Error()))
+								}
+
+								return nil, "", retErrors
+							}
 							if typUidExist {
 								// This means we are in Add Mutation with upsert: true and node belong to
 								// same type as of the xid field.
@@ -1446,7 +1459,7 @@ func rewriteObject(
 								} else {
 									// This error will only be reported in debug mode.
 									err = x.GqlErrorf("GraphQL debug: id %s already exists for field %s"+
-										" inside type %s", typ.Name(), xid.Name(), xidString)
+										" inside type %s", xidString, xid.Name(), typ.Name())
 								}
 								retErrors = append(retErrors, err)
 								return nil, upsertVar, retErrors
@@ -1458,67 +1471,78 @@ func rewriteObject(
 
 						}
 					} else {
+						if multipleNodesForSameID {
+							// returns from here if we got multiple nodes as a result of existence queries.
+							if queryAuthSelector(typ) == nil {
+								retErrors = append(retErrors, existenceError)
+							} else {
+								retErrors = append(retErrors, x.GqlErrorf("GraphQL debug: "+existenceError.Error()))
+							}
+							return nil, "", retErrors
+						}
 						// As we are not at top level, we return the XID reference. We don't update this node
 						// further.
 						if typUidExist {
 							return asIDReference(ctx, typUid, srcField, srcUID, varGen,
 								mutationType == UpdateWithRemove), upsertVar, nil
 						}
+						// returns error if xid is present in some other implementing type
 						retErrors = append(retErrors, xidErrorForInterfaceType(typ, xidString, xid,
 							interfaceTyp.Name()))
 						return nil, upsertVar, retErrors
 					}
 				} else {
-
-					// Node with XIDs does not exist. It means this is a new node.
-					// This node will be created later.
-					obj = xidMetadata.variableObjMap[variable]
 					xidVariables = append(xidVariables, variable)
-					// We add a new node only if
-					// 1. All the xids are present and
-					// 2. No node exist for any of the xid
-					if nonExistingXIDs == len(xids)-1 {
-						exclude := ""
-						if srcField != nil {
-							invField := srcField.Inverse()
-							if invField != nil {
-								exclude = invField.Name()
-							}
-						}
-						// We replace obj with xidMetadata.variableObjMap[variable] in this case.
-						// This is done to ensure that the first time we encounter an XID node, we use
-						// its definition and later times, we just use its reference.
-
-						if err := typ.EnsureNonNulls(obj, exclude); err != nil {
-							// This object does not contain XID. This is an error.
-							retErrors = append(retErrors, err)
-							return nil, upsertVar, retErrors
-						}
-						// Set existenceQueryResult to _:variable. This is to make referencing to
-						// this node later easier.
-						// Set idExistence for all variables which are referencing this node to
-						// the blank node _:variable.
-						// Example: if We have multiple xids inside a type say person, then
-						// we create a single blank node e.g. _:person1
-						// and also two different query variables for xids say person1,person2 and assign
-						// _:person1 to both of them in idExistence map
-						// i.e. idExistence[person1]= _:person1
-						// idExistence[person2]= _:person1
-						for _, xidVariable := range xidVariables {
-							idExistence[xidVariable] = fmt.Sprintf("_:%s", variable)
-						}
-					}
-					nonExistingXIDs++
-
 				}
 			}
 		}
+
+		if len(xidVariables) != 0 {
+			exclude := ""
+			if srcField != nil {
+				invField := srcField.Inverse()
+				if invField != nil {
+					exclude = invField.Name()
+				}
+			}
+			// Node with XIDs does not exist. It means this is a new node.
+			// This node will be created later.
+			obj = xidMetadata.variableObjMap[xidVariables[0]]
+			// We replace obj with xidMetadata.variableObjMap[variable] in this case.
+			// This is done to ensure that the first time we encounter an XID node, we use
+			// its definition and later times, we just use its reference.
+
+			if err := typ.EnsureNonNulls(obj, exclude); (err != nil) &&
+				!(mutationType == UpdateWithSet && atTopLevel) {
+				// This object does not contain non nullable XID, returns error.
+				// We ignore the error for update mutation top level fields.
+				retErrors = append(retErrors, err)
+				return nil, upsertVar, retErrors
+			}
+
+			// Set existenceQueryResult to _:variable. This is to make referencing to
+			// this node later easier.
+			// Set idExistence for all variables which are referencing this node to
+			// the blank node _:variable.
+			// Example: if We have multiple xids inside a type say person, then
+			// we create a single blank node e.g. _:person1
+			// and also two different query variables for xids say person1,person2 and assign
+			// _:person1 to both of them in idExistence map
+			// i.e. idExistence[person1]= _:person1
+			// idExistence[person2]= _:person1
+			for _, xidVariable := range xidVariables {
+				idExistence[xidVariable] = fmt.Sprintf("_:%s", variable)
+			}
+		}
+
 		if upsertVar == "" {
 			for _, xid := range xids {
+				xidType := xid.Type().String()
 				if xidVal, ok := obj[xid.Name()]; ok && xidVal != nil {
 					// This is handled in the for loop above
 					continue
-				} else if mutationType == Add || mutationType == AddWithUpsert || !atTopLevel {
+				} else if (mutationType == Add || mutationType == AddWithUpsert || !atTopLevel) &&
+					(xidType == "String!" || xidType == "Int!" || xidType == "Int64!") {
 					// When we reach this stage we are absolutely sure that this is not a reference and is
 					// a new node and one of the XIDs is missing.
 					// There are two possibilities here:
@@ -1530,18 +1554,11 @@ func rewriteObject(
 					//    In this case this is not an error as the UID at top level of Update Mutation is
 					//    referenced as uid(x) in mutations. We don't throw an error in this case and continue
 					//    with the function.
+
 					err := errors.Errorf("field %s cannot be empty", xid.Name())
 					retErrors = append(retErrors, err)
 					return nil, upsertVar, retErrors
 				}
-			}
-		} else {
-			// In case this is known to be an Upsert. We delete all entries of XIDs
-			// from obj. This is done to prevent any XID entries in the json which is returned
-			// by rewriteObject and ensure that no XID value gets rewritten due to upsert.
-			for _, xid := range xids {
-				// To ensure that xid is not added to the output json in case of upsert
-				delete(obj, xid.Name())
 			}
 		}
 	}
@@ -1704,7 +1721,7 @@ func rewriteObject(
 
 func xidErrorForInterfaceType(typ schema.Type, xidString string, xid schema.FieldDefinition,
 	interfaceName string) error {
-	// TODO(GRAPHQL): currently we are checking typ of the mutated field for auth rules,
+	// TODO(Jatin): currently we are checking typ of the mutated field for auth rules,
 	//  But we need to check auth rule on implementing type for which we found existing node
 	//  with same @id.
 	if queryAuthSelector(typ) == nil {
@@ -1796,7 +1813,7 @@ func existenceQueries(
 					// considered a duplicate of the existing object, then return error.
 
 					if xidMetadata.isDuplicateXid(atTopLevel, variable, obj, srcField) {
-						// TODO(GRAPHQL): Add this error for inherited @id field with interface arg.
+						// TODO(Jatin): Add this error for inherited @id field with interface arg.
 						//  Currently we don't return this error for the nested case when
 						//  at both root and nested level we have same value of @id fields
 						//  which have interface arg set and are inherited from same interface
@@ -1812,6 +1829,8 @@ func existenceQueries(
 					// xidMetadata.variableObjMap[variable] = { "id": "1" }
 					// In this case, as obj is the correct definition of the object, we update variableObjMap
 					oldObj := xidMetadata.variableObjMap[variable]
+					// TODO(Jatin): This condition also needs to change in accordance with multiple xids.
+					//  Also consider the case when @id fields can be nullable.
 					if len(oldObj) == 1 && len(obj) > 1 {
 						// Continue execution to perform dfs in this case. There may be more nodes
 						// in the subtree of this node.
@@ -2392,4 +2411,28 @@ func interfaceVariable(typ schema.Type, varGen *VariableGenerator, xidName strin
 		return interfaceType, varGen.Next(typ, "Int."+xidName, xidString, false)
 	}
 	return nil, ""
+}
+
+// This function returns true if there are multiple nodes present
+// in a result of existence queries
+func gotMultipleExistingNodes(xids []schema.FieldDefinition, obj map[string]interface{},
+	typ schema.Type, varGen *VariableGenerator, idExistence map[string]string) bool {
+
+	var existenceNodeUid string
+	for _, xid := range xids {
+		if xidVal, ok := obj[xid.Name()]; ok && xidVal != nil {
+			xidString, _ := extractVal(xidVal, xid.Name(), xid.Type().Name())
+			variable := varGen.Next(typ, xid.Name(), xidString, false)
+			if uid, ok := idExistence[variable]; ok {
+				if existenceNodeUid == "" {
+					existenceNodeUid = uid
+				} else if existenceNodeUid != uid {
+					return true
+				}
+			}
+
+		}
+
+	}
+	return false
 }

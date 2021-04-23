@@ -2073,9 +2073,9 @@ func idValidation(sch *ast.Schema,
 	field *ast.FieldDefinition,
 	dir *ast.Directive,
 	secrets map[string]x.Sensitive) gqlerror.List {
-	if field.Type.String() == "String!" ||
-		field.Type.String() == "Int!" ||
-		field.Type.String() == "Int64!" {
+	if field.Type.NamedType == "String" ||
+		field.Type.NamedType == "Int" ||
+		field.Type.NamedType == "Int64" {
 
 		var inherited bool
 		for _, implements := range sch.Implements[typ.Name] {
@@ -2093,7 +2093,7 @@ func idValidation(sch *ast.Schema,
 	}
 	return []*gqlerror.Error{gqlerror.ErrorPosf(
 		dir.Position,
-		"Type %s; Field %s: with @id directive must be of type String!, Int! or Int64!, not %s",
+		"Type %s; Field %s: with @id directive must be of type String, Int or Int64, not %s",
 		typ.Name, field.Name, field.Type.String())}
 
 }

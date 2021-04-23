@@ -873,6 +873,7 @@
   dgmutations:
     - setjson: |
         { "uid" : "uid(State_1)",
+          "State.code":"nsw",
           "State.name": "NSW",
           "State.country": {
             "uid": "0x12",
@@ -895,6 +896,7 @@
     - setjson: |
         { "uid" : "uid(State_3)",
           "State.name": "Maharashtra",
+          "State.code": "mh",
           "State.country": {
             "uid": "0x14",
             "Country.states": [ { "uid": "uid(State_3)" } ]
@@ -958,6 +960,8 @@
   dgmutations:
     - setjson: |
         { "uid" : "uid(Book_2)",
+          "Book.ISBN":"NSW",
+          "Book.title":"Sapiens",
           "Book.publisher": "penguin"
         }
       cond: "@if(gt(len(Book_2), 0))"
@@ -1008,7 +1012,9 @@
     - setjson: |
         {
           "uid" : "uid(Book_2)",
-          "Book.publisher": "penguin"
+          "Book.ISBN":"NSW",
+          "Book.publisher": "penguin",
+          "Book.title":"Sapiens"
         }
       cond: "@if(gt(len(Book_2), 0))"
 
@@ -1069,6 +1075,7 @@
     - setjson: |
         { "uid" : "uid(State_1)",
           "State.name": "NSW",
+          "State.code": "nsw",
           "State.country": {
             "uid": "0x12",
             "Country.states": [ { "uid": "uid(State_1)" } ]
@@ -1292,6 +1299,8 @@
   dgmutations:
     - setjson: |
         {
+            "Member.name": "Alice",
+            "Member.refID": "101",
             "LibraryMember.readHours": "4d2hr",
             "Member.itemsIssued": [
                 "Intro to Go",
@@ -3635,7 +3644,7 @@
           "uid":"_:Author_2"
         }
 
-- name: "Deep mutation three level xid with no initial XID"
+- name: "Deep mutation three level xid with no initial XID "
   gqlmutation: |
     mutation($auth: [AddPost1Input!]!) {
       addPost1(input: $auth) {
@@ -4472,12 +4481,12 @@
               "dgraph.type": [
                 "Person1"
               ],
-              "uid": "_:Person1_4"
+              "uid": "_:Person1_3"
             }
           ],
           "Person1.friends": [
             {
-              "uid": "_:Person1_4",
+              "uid": "_:Person1_3",
               "Person1.friends": [
                 {
                   "uid": "_:Person1_2"
@@ -4529,46 +4538,16 @@
         uid
       }
     }
-  dgquerysec: |-
-    query {
-      var(func: uid(0x117)) {
-        author_4 as Book.author
-      }
-    }
   qnametouid: |
     {
-      "Book_1": "0x117",
-      "Book_2": "0x116"
+      "Book_1": "0x12",
+      "Book_2": "0x11"
     }
-  dgmutations:
-    - setjson: |
-        {
-            "author.name": "Yuval Noah Harari",
-            "dgraph.type": [
-                "author"
-            ],
-            "uid": "_:author_3",
-            "author.book": [
-                {
-                    "Book.author": {
-                        "uid": "_:author_3"
-                    },
-                    "uid": "0x117"
-                }
-            ]
-        }
-      deletejson: |
-        [
-            {
-                "author.book": [
-                    {
-                        "uid": "0x117"
-                    }
-                ],
-                "uid": "uid(author_4)"
-            }
-        ]
-
+  error2:
+    {
+      "message": "failed to rewrite mutation payload because multiple nodes found for given xid values,
+       updation not possible"
+    }
 -
   name: "Add type with multiple Xids fields at deep level when deep node already exist for one existence query"
   gqlmutation: |
@@ -5040,3 +5019,307 @@
           "dgraph.type": ["Person"],
           "uid": "_:Person_1"
         }
+
+-
+  name: "2-level add mutation with nullable @id fields "
+  explaination: "bookId in Book and PenName in author are @id and nullable field,
+   we can skip them while doing add mutation. Nested object author doesn't exist, so we
+   add it and link it to book"
+  gqlmutation: |
+    mutation addBook($input: [AddBookInput!]!) {
+      addBook(input: $input, upsert: false) {
+        book {
+          title
+        }
+      }
+    }
+  gqlvariables: |
+    { "input":
+      [
+        {
+          "title": "Sapiens",
+          "ISBN": "B02",
+          "publisher": "penguin",
+          "author": {
+             "name": "Alice",
+             "authorId": "A02"
+          }
+        }
+      ]
+    }
+  dgquery: |-
+    query {
+      Book_1(func: eq(Book.ISBN, "B02")) @filter(type(Book)) {
+        uid
+      }
+      Book_2(func: eq(Book.title, "Sapiens")) @filter(type(Book)) {
+        uid
+      }
+      author_3(func: eq(author.authorId, "A02")) @filter(type(author)) {
+        uid
+      }
+    }
+  dgmutations:
+    - setjson: |
+        {
+            "Book.title": "Sapiens",
+            "Book.ISBN": "B02",
+            "Book.publisher": "penguin",
+            "dgraph.type": [
+                "Book"
+            ],
+            "Book.author": {
+                "author.authorId":"A02",
+                "author.book": [
+                    {
+                        "uid": "_:Book_2"
+                    }
+                ],
+                "author.name": "Alice",
+                "dgraph.type": [
+                    "author"
+                ],
+                "uid": "_:author_3"
+            },
+            "uid": "_:Book_2"
+        }
+
+-
+  name: "2- level add mutation with upsert and nullable @id fields "
+  explaination: "bookId in @id,penName in author are nullable @id fields and we can skip them.
+  title,ISBN in Book are @id fields,so also added in set Json, because @id fields will also be updated by upserts.
+  Both book and author already exist so we just link new author to book and delete old reference from book to author,
+  if there is any"
+  gqlmutation: |
+    mutation addBook($input: [AddBookInput!]!) {
+      addBook(input: $input, upsert: true) {
+        book {
+          title
+        }
+      }
+    }
+  gqlvariables: |
+    { "input":
+      [
+        {
+          "title": "Sapiens",
+          "ISBN": "B01",
+          "publisher": "penguin",
+          "author": {
+             "name": "Alice",
+             "authorId": "A01"
+          }
+        }
+      ]
+    }
+  dgquery: |-
+    query {
+      Book_1(func: eq(Book.ISBN, "B01")) @filter(type(Book)) {
+        uid
+      }
+      Book_2(func: eq(Book.title, "Sapiens")) @filter(type(Book)) {
+        uid
+      }
+      author_3(func: eq(author.authorId, "A01")) @filter(type(author)) {
+        uid
+      }
+    }
+  qnametouid: |
+    {
+       "Book_2":"0x11",
+       "author_3": "0x12"
+    }
+  dgquerysec: |-
+    query {
+      Book_2 as Book_2(func: uid(0x11)) @filter(type(Book)) {
+        uid
+      }
+      var(func: uid(Book_2)) {
+        author_4 as Book.author @filter(NOT (uid(0x12)))
+      }
+    }
+  dgmutations:
+    - setjson: |
+        {
+            "Book.ISBN": "B01",
+            "Book.author": {
+                "author.book": [
+                    {
+                        "uid": "uid(Book_2)"
+                    }
+                ],
+                "uid": "0x12"
+            },
+            "Book.publisher": "penguin",
+            "Book.title": "Sapiens",
+            "uid": "uid(Book_2)"
+        }
+      deletejson: |
+        [{
+           "author.book": [
+              {
+                  "uid": "uid(Book_2)"
+              }
+          ],
+          "uid": "uid(author_4)"
+        }]
+      cond: "@if(gt(len(Book_2), 0))"
+
+-
+  name: "add mutation with upsert gives error when multiple nodes are found for existence queries"
+  explaination: "Two different books exist for title and Sapiens @id fields, We can't do upsert mutation "
+  gqlmutation: |
+    mutation addBook($input: [AddBookInput!]!) {
+      addBook(input: $input, upsert: true) {
+        book {
+          title
+        }
+      }
+    }
+  gqlvariables: |
+    { "input":
+      [
+        {
+          "title": "Sapiens",
+          "ISBN": "B01",
+          "publisher": "penguin"
+        }
+      ]
+    }
+  dgquery: |-
+    query {
+      Book_1(func: eq(Book.ISBN, "B01")) @filter(type(Book)) {
+        uid
+      }
+      Book_2(func: eq(Book.title, "Sapiens")) @filter(type(Book)) {
+        uid
+      }
+    }
+  qnametouid: |
+    {
+       "Book_1":"0x11",
+       "Book_2": "0x12"
+    }
+  error2:
+    {
+      "message": "failed to rewrite mutation payload because multiple nodes found
+       for given xid values, updation not possible"
+    }
+
+-
+  name: "add mutation with upsert at nested level gives error when multiple nodes are found
+   for existence queries"
+  explaination: "Two different author exist for penName and authorId @id fields inside author,
+   We can't link author to both books "
+  gqlmutation: |
+    mutation addBook($input: [AddBookInput!]!) {
+      addBook(input: $input, upsert: true) {
+        book {
+          title
+        }
+      }
+    }
+  gqlvariables: |
+    { "input":
+      [
+        {
+          "title": "Sapiens",
+          "ISBN": "B01",
+          "publisher": "penguin",
+          "author": {
+             "penName": "Alice",
+             "authorId": "A01"
+          }
+        }
+      ]
+    }
+  dgquery: |-
+    query {
+      Book_1(func: eq(Book.ISBN, "B01")) @filter(type(Book)) {
+        uid
+      }
+      Book_2(func: eq(Book.title, "Sapiens")) @filter(type(Book)) {
+        uid
+      }
+      author_3(func: eq(author.authorId, "A01")) @filter(type(author)) {
+        uid
+      }
+      author_4(func: eq(author.penName, "Alice")) @filter(type(author)) {
+        uid
+      }
+    }
+  qnametouid: |
+    {
+       "author_3":"0x11",
+       "author_4": "0x12"
+    }
+  error2:
+    {
+      "message": "failed to rewrite mutation payload because multiple nodes
+       found for given xid values, updation not possible"
+    }
+
+-
+  name: "No xid present for add mutation with upsert"
+  explaination: "If none of the xid field is given in upsert mutation then there will be no existence queries,
+   and it will behave as simple add mutation,i.e. create new node with all the given fields"
+  gqlmutation: |
+    mutation addBook($input: [AddBookInput!]!) {
+      addBook(input: $input, upsert: true) {
+        book {
+          title
+        }
+      }
+    }
+  gqlvariables: |
+    { "input":
+      [
+        {
+          "publisher": "penguin"
+        }
+      ]
+    }
+  dgmutations:
+    - setjson: |
+        {
+            "Book.publisher": "penguin",
+            "dgraph.type": [
+                    "Book"
+                ],
+             "uid":"_:Book_1"
+        }
+
+-
+  name: "Non-nullable xid should be present in add Mutation for nested field"
+  explaination: "non-nullable @id field id in comment1 type not provided. As no reference is
+   provided for comment, we treat it as new node, and return error for missing xid."
+  gqlmutation: |
+    mutation addPost1($input: [AddPost1Input!]!) {
+      addPost1(input: $input, upsert: false) {
+        post1 {
+          content
+        }
+      }
+    }
+  gqlvariables: |
+    { "input":
+      [
+        {
+          "id": "P01",
+          "content":"Intro to GraphQL",
+          "comments":[{
+             "message":"Nice Intro! Love GraphQl"
+          }]
+        }
+      ]
+    }
+  dgquery: |-
+    query {
+      Post1_1(func: eq(Post1.id, "P01")) @filter(type(Post1)) {
+        uid
+      }
+    }
+  error2:
+    {
+      "message": "failed to rewrite mutation payload because field id cannot be empty"
+    }

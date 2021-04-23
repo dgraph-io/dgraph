@@ -848,6 +848,21 @@ type State @auth(
     country: Country
 }
 
+type Employer@auth(
+    query: { rule: "{$ROLE: { eq: \"ADMIN\" } }" },
+) {
+    company: String! @id
+    companyId: String @id
+    name: String @id
+    worker:[Worker]
+}
+
+type Worker {
+    regNo: Int @id
+    uniqueId: Int @id
+    empId: String! @id
+}
+
 interface Member @auth(
     query: { rule: "{$ROLE: { eq: \"ADMIN\" } }" },
 ){

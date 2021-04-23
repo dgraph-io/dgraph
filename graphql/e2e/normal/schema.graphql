@@ -2,27 +2,27 @@
 # See: https://github.com/dgraph-io/dgraph/issues/4227
 
 type Hotel {
-        id: ID!
-        name: String! @search(by: [exact])
-        location: Point @search
-        area: Polygon @search
-        branches: MultiPolygon @search
+    id: ID!
+    name: String! @search(by: [exact])
+    location: Point @search
+    area: Polygon @search
+    branches: MultiPolygon @search
 }
 
 type Country {
-        # **Don't delete** Comments in types should work
-        id: ID! # **Don't delete** Comments in in lines should work
-        name: String! @search(by: [trigram, hash])
-        states: [State] @hasInverse(field: country)
+    # **Don't delete** Comments in types should work
+    id: ID! # **Don't delete** Comments in in lines should work
+    name: String! @search(by: [trigram, hash])
+    states: [State] @hasInverse(field: country)
 }
 
 type State {
-        id: ID!
-        xcode: String! @id @search(by: [regexp])
-        name: String!
-        capital: String
-        region: Region
-        country: Country
+    id: ID!
+    xcode: String! @id @search(by: [regexp])
+    name: String!
+    capital: String
+    region: Region
+    country: Country
 }
 
 # **Don't delete** Comments in the middle of schemas should work
@@ -34,45 +34,45 @@ GraphQL descriptions look like this.  They should work in the input
 schema and should make their way into the generated schema.
 """
 type Author {
-        id: ID!
+    id: ID!
 
-        """
-        GraphQL descriptions can be on fields.  They should work in the input
-        schema and should make their way into the generated schema.
-        """
-        name: String! @search(by: [hash, trigram])
+    """
+    GraphQL descriptions can be on fields.  They should work in the input
+    schema and should make their way into the generated schema.
+    """
+    name: String! @search(by: [hash, trigram])
 
-        dob: DateTime @search
-        reputation: Float @search
-        qualification: String @search(by: [hash, trigram])
-        country: Country
-        posts: [Post!] @hasInverse(field: author)
-        bio: String @lambda
-        rank: Int @lambda
+    dob: DateTime @search
+    reputation: Float @search
+    qualification: String @search(by: [hash, trigram])
+    country: Country
+    posts: [Post!] @hasInverse(field: author)
+    bio: String @lambda
+    rank: Int @lambda
 }
 
 type Post {
-        postID: ID!
-        title: String! @search(by: [term, fulltext])
-        text: String @search(by: [fulltext])
-        tags: [String] @search(by: [exact])
-        topic: String @search(by: [exact])
-        numLikes: Int @search
-        numViews: Int64 @search
-        isPublished: Boolean @search
-        postType: PostType @search(by: [hash, trigram])
-        author: Author! @hasInverse(field: posts)
-        category: Category @hasInverse(field: posts)
+    postID: ID!
+    title: String! @search(by: [term, fulltext])
+    text: String @search(by: [fulltext])
+    tags: [String] @search(by: [exact])
+    topic: String @search(by: [exact])
+    numLikes: Int @search
+    numViews: Int64 @search
+    isPublished: Boolean @search
+    postType: PostType @search(by: [hash, trigram])
+    author: Author! @hasInverse(field: posts)
+    category: Category @hasInverse(field: posts)
 }
 
 type Category {
-        id: ID
-        name: String
-        posts: [Post]
+    id: ID
+    name: String
+    posts: [Post]
 }
 
 type User @secret(field: "password") {
-	name: String! @id
+    name: String! @id
 }
 
 """
@@ -80,14 +80,14 @@ GraphQL descriptions can be on enums.  They should work in the input
 schema and should make their way into the generated schema.
 """
 enum PostType {
-        Fact
+    Fact
 
-        """
-        GraphQL descriptions can be on enum values.  They should work in the input
-        schema and should make their way into the generated schema.
-        """
-        Question
-        Opinion
+    """
+    GraphQL descriptions can be on enum values.  They should work in the input
+    schema and should make their way into the generated schema.
+    """
+    Question
+    Opinion
 }
 
 """
@@ -95,126 +95,126 @@ GraphQL descriptions can be on interfaces.  They should work in the input
 schema and should make their way into the generated schema.
 """
 interface Employee {
-        ename: String!
+    ename: String!
 }
 
 interface Character {
-        id: ID!
-        name: String! @search(by: [exact])
-        appearsIn: [Episode!] @search
-        bio: String @lambda
+    id: ID!
+    name: String! @search(by: [exact])
+    appearsIn: [Episode!] @search
+    bio: String @lambda
 }
 
 type Human implements Character & Employee {
-        id: ID!
-        name: String! @search(by: [exact])
-        appearsIn: [Episode!] @search
-        bio: String @lambda
-        ename: String!
-        starships: [Starship]
-        totalCredits: Float
+    id: ID!
+    name: String! @search(by: [exact])
+    appearsIn: [Episode!] @search
+    bio: String @lambda
+    ename: String!
+    starships: [Starship]
+    totalCredits: Float
 }
 
 type Droid implements Character {
-        id: ID!
-        name: String! @search(by: [exact])
-        appearsIn: [Episode!] @search
-        bio: String @lambda
-        primaryFunction: String
+    id: ID!
+    name: String! @search(by: [exact])
+    appearsIn: [Episode!] @search
+    bio: String @lambda
+    primaryFunction: String
 }
 
 enum Episode {
-        NEWHOPE
-        EMPIRE
-        JEDI
+    NEWHOPE
+    EMPIRE
+    JEDI
 }
 
 type Starship {
-        id: ID!
-        name: String! @search(by: [term])
-        length: Float
+    id: ID!
+    name: String! @search(by: [term])
+    length: Float
 }
 
 type Movie {
-        id: ID!
-	name: String!
-	director: [MovieDirector] @hasInverse(field: directed)
+    id: ID!
+    name: String!
+    director: [MovieDirector] @hasInverse(field: directed)
 }
 
 type MovieDirector {
-	id: ID!
-	name: String!
-	directed: [Movie]
+    id: ID!
+    name: String!
+    directed: [Movie]
 }
 
 interface People {
-	id: ID!
-	xid: String! @id
-	name: String!
+    id: ID!
+    xid: String! @id
+    name: String!
 }
 
 type Teacher implements People {
-	subject: String
-	teaches: [Student]
+    subject: String
+    teaches: [Student]
 }
 
 type Student implements People {
-        taughtBy: [Teacher] @hasInverse(field: teaches)
+    taughtBy: [Teacher] @hasInverse(field: teaches)
 }
 
 type Person @withSubscription{
-        id: ID!
-        name: String! @search(by: [hash])
-        nameHi: String @dgraph(pred:"Person.name@hi") @search(by: [hash])
-        nameZh: String @dgraph(pred:"Person.name@zh") @search(by: [hash])
-        nameHiZh: String @dgraph(pred:"Person.name@hi:zh")
-        nameZhHi: String @dgraph(pred:"Person.name@zh:hi")
-        nameHi_Zh_Untag: String @dgraph(pred:"Person.name@hi:zh:.")
-        name_Untag_AnyLang: String @dgraph(pred:"Person.name@.") @search(by: [hash])
-        professionEn: String @dgraph(pred:"Person.profession@en")
+    id: ID!
+    name: String! @search(by: [hash])
+    nameHi: String @dgraph(pred:"Person.name@hi") @search(by: [hash])
+    nameZh: String @dgraph(pred:"Person.name@zh") @search(by: [hash])
+    nameHiZh: String @dgraph(pred:"Person.name@hi:zh")
+    nameZhHi: String @dgraph(pred:"Person.name@zh:hi")
+    nameHi_Zh_Untag: String @dgraph(pred:"Person.name@hi:zh:.")
+    name_Untag_AnyLang: String @dgraph(pred:"Person.name@.") @search(by: [hash])
+    professionEn: String @dgraph(pred:"Person.profession@en")
 }
 
 """
 This is used for fragment related testing
 """
 interface Thing {
-        name: String # field to act as a common inherited field for both ThingOne and ThingTwo
+    name: String # field to act as a common inherited field for both ThingOne and ThingTwo
 }
 
 type ThingOne implements Thing {
-        id: ID! # ID field with same name as the ID field in ThingTwo
-        color: String # field with same name as a field in ThingTwo
-        usedBy: String # field with different name than any field in ThingTwo
+    id: ID! # ID field with same name as the ID field in ThingTwo
+    color: String # field with same name as a field in ThingTwo
+    usedBy: String # field with different name than any field in ThingTwo
 }
 
 type ThingTwo implements Thing {
-        id: ID!
-        color: String
-        owner: String
+    id: ID!
+    color: String
+    owner: String
 }
 
 type Post1 {
-       id: String! @id
-       comments: [Comment1]
+    id: String! @id
+    comments: [Comment1]
 }
 
 type Comment1 {
-      id: String! @id
-      replies: [Comment1]
+    id: String! @id
+    replies: [Comment1]
 }
 
 type author1{
-      name:String! @id @search(by: [regexp])
-      posts:[post1] @hasInverse(field: author)
+    name:String! @id @search(by: [regexp])
+    posts:[post1] @hasInverse(field: author)
 }
 
 type post1{
-        id: ID
-        title: String! @id @search(by: [regexp])
-        numLikes: Int64 @search
-        commentsByMonth: [Int]
-        likesByMonth: [Int64]
-        author:author1 @hasInverse(field: posts)
+    id: ID
+    title: String! @id @search(by: [regexp])
+    numLikes: Int64 @search
+    commentsByMonth: [Int]
+    likesByMonth: [Int64]
+    author:author1 @hasInverse(field: posts)
 }
 
 type Person1 {
@@ -226,29 +226,29 @@ type Person1 {
 
 # union testing - start
 enum AnimalCategory {
-        Fish
-        Amphibian
-        Reptile
-        Bird
-        Mammal
-        InVertebrate
+    Fish
+    Amphibian
+    Reptile
+    Bird
+    Mammal
+    InVertebrate
 }
 
 interface Animal {
-        id: ID!
-        category: AnimalCategory @search
+    id: ID!
+    category: AnimalCategory @search
 }
 
 type Dog implements Animal {
-        breed: String @search
+    breed: String @search
 }
 
 type Parrot implements Animal {
-        repeatsWords: [String]
+    repeatsWords: [String]
 }
 
 type Cheetah implements Animal {
-        speed: Float
+    speed: Float
 }
 
 """
@@ -256,75 +256,78 @@ This type specifically doesn't implement any interface.
 We need this to test out all cases with union.
 """
 type Plant {
-        id: ID!
-        breed: String # field with same name as a field in type Dog
+    id: ID!
+    breed: String # field with same name as a field in type Dog
 }
 
 union HomeMember = Dog | Parrot | Human | Plant
 
 type Zoo {
-        id: ID!
-        animals: [Animal]
-        city: String
+    id: ID!
+    animals: [Animal]
+    city: String
 }
 
 type Home {
-        id: ID!
-        address: String
-        members: [HomeMember]
-        favouriteMember: HomeMember
+    id: ID!
+    address: String
+    members: [HomeMember]
+    favouriteMember: HomeMember
 }
 # union testing - end
 
 type Query {
-        authorsByName(name: String!): [Author] @lambda
+    authorsByName(name: String!): [Author] @lambda
 }
 
 type Mutation {
-        newAuthor(name: String!): ID! @lambda
+    newAuthor(name: String!): ID! @lambda
 }
 
 # generate directive testing
 type University @generate(
-        query: {
-                query: false
-        },
-        mutation: {
-                add: true,
-                update: true,
-                delete: false
-        }
+    query: {
+        query: false
+    },
+    mutation: {
+        add: true,
+        update: true,
+        delete: false
+    }
 ){
-        id: ID!
-        name: String!
-        numStudents: Int
+    id: ID!
+    name: String!
+    numStudents: Int
 }
 
 # @id directive with multiple data types
 type Book {
-        bookId: Int64! @id
-        name: String!
-        desc: String
-        summary: String @lambda
-        chapters: [Chapter] @hasInverse(field: book)
+    bookId: Int64! @id
+    name: String!
+    desc: String
+    summary: String @lambda
+    chapters: [Chapter] @hasInverse(field: book)
 }
 
 type Chapter {
-        chapterId: Int! @id
-        name: String!
-        book: Book
+    chapterId: Int! @id
+    name: String!
+    book: Book
 }
 
 # multiple fields with @id directive
 type Worker {
-        name: String!
-        reg_No: Int! @id
-        emp_Id: String! @id
+    name: String!
+    regNo: Int @id
+    uniqueId: Int @id
+    empId: String! @id
 }
 
 type Employer {
-        company: String! @id
-        worker: [Worker]
+    company: String! @id
+    companyId: String @id
+    name: String @id
+    worker: [Worker]
 }
 
 # sample data: https://github.com/mandiwise/space-camp-federation-demo/blob/master/db.json
@@ -352,71 +355,71 @@ type SpaceShip @key(fields: "id") @extends {
 }
 
 type Planet @key(fields: "id") @extends {
-        id: Int! @id @external
-        missions: [Mission]
+    id: Int! @id @external
+    missions: [Mission]
 }
 
 type Region {
-        id: String! @id
-        name: String!
-        district: District
+    id: String! @id
+    name: String!
+    district: District
 }
 
 type District @lambdaOnMutate(add: true, update: true, delete: true) {
-        dgId: ID!
-        id: String! @id
-        name: String!
+    dgId: ID!
+    id: String! @id
+    name: String!
 }
 
 type Owner {
-        username: String! @id
-        password: String!
-        projects: [Project!] @hasInverse(field: owner)
+    username: String! @id
+    password: String!
+    projects: [Project!] @hasInverse(field: owner)
 }
 
 type Project {
-        id: String! @id
-        owner: Owner!
-        name: String! @search(by: [hash])
-        datasets: [Dataset!] @hasInverse(field: project)
+    id: String! @id
+    owner: Owner!
+    name: String! @search(by: [hash])
+    datasets: [Dataset!] @hasInverse(field: project)
 }
 
 type Dataset {
-        id: String! @id
-        owner: Owner!
-        project: Project!
-        name: String! @search(by: [hash])
+    id: String! @id
+    owner: Owner!
+    project: Project!
+    name: String! @search(by: [hash])
 }
 
 
 interface Member {
-        refID: String! @id (interface:true)
-        name:  String! @id
-        itemsIssued: [String]
-        fineAccumulated: Int
+    refID: String! @id (interface:true)
+    name:  String! @id
+    itemsIssued: [String]
+    fineAccumulated: Int
 }
 
 interface Team {
-        teamID: String! @id (interface:true)
-        teamName:  String! @id
+    teamID: String! @id (interface:true)
+    teamName:  String! @id
 }
 
 type LibraryMember implements Member {
-        interests: [String]
-        readHours: String
+    interests: [String]
+    readHours: String
 }
 
 type SportsMember implements Member & Team {
-        plays: String
-        playerRating: Int
+    plays: String
+    playerRating: Int
 }
 
 type CricketTeam implements Team {
-        numOfBatsmen: Int
-        numOfBowlers: Int
+    numOfBatsmen: Int
+    numOfBowlers: Int
 }
 
 type LibraryManager  {
-        name: String! @id
-        manages: [LibraryMember]
+    name: String! @id
+    manages: [LibraryMember]
 }

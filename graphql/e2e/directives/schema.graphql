@@ -10,19 +10,19 @@ type Hotel {
 }
 
 type Country {
-        # **Don't delete** Comments in types should work
-        id: ID! # **Don't delete** Comments in lines should work
-        name: String! @search(by: [trigram, hash])
-        states: [State] @hasInverse(field: country) @dgraph(pred: "hasStates")
+    # **Don't delete** Comments in types should work
+    id: ID! # **Don't delete** Comments in lines should work
+    name: String! @search(by: [trigram, hash])
+    states: [State] @hasInverse(field: country) @dgraph(pred: "hasStates")
 }
 
 type State {
-        id: ID!
-        xcode: String! @id @search(by: [regexp])
-        name: String!
-        capital: String
-        region: Region
-	    country: Country @dgraph(pred: "inCountry")
+    id: ID!
+    xcode: String! @id @search(by: [regexp])
+    name: String!
+    capital: String
+    region: Region
+    country: Country @dgraph(pred: "inCountry")
 }
 
 # **Don't delete** Comments in the middle of schemas should work
@@ -34,45 +34,45 @@ GraphQL descriptions look like this.  They should work in the input
 schema and should make their way into the generated schema.
 """
 type Author @dgraph(type: "test.dgraph.author") {
-        id: ID!
+    id: ID!
 
-        """
-        GraphQL descriptions can be on fields.  They should work in the input
-        schema and should make their way into the generated schema.
-        """
-        name: String! @search(by: [hash, trigram])
+    """
+    GraphQL descriptions can be on fields.  They should work in the input
+    schema and should make their way into the generated schema.
+    """
+    name: String! @search(by: [hash, trigram])
 
-        dob: DateTime @search
-        reputation: Float @search
-        qualification: String @search(by: [hash, trigram])
-        country: Country
-        posts: [Post!] @hasInverse(field: author)
-		bio: String @lambda
-		rank: Int @lambda
+    dob: DateTime @search
+    reputation: Float @search
+    qualification: String @search(by: [hash, trigram])
+    country: Country
+    posts: [Post!] @hasInverse(field: author)
+    bio: String @lambda
+    rank: Int @lambda
 }
 
 type Post @dgraph(type: "myPost") {
-        postID: ID!
-        title: String! @search(by: [term, fulltext])
-        text: String @search(by: [fulltext]) @dgraph(pred: "text")
-        tags: [String] @search(by: [exact])
-        topic: String @search(by: [exact]) @dgraph(pred: "test.dgraph.topic")
-        numLikes: Int @search
-        numViews: Int64 @search
-        isPublished: Boolean @search @dgraph(pred: "is_published")
-        postType: PostType @search(by: [hash, trigram])
-        author: Author! @hasInverse(field: posts) @dgraph(pred: "post.author")
-        category: Category @hasInverse(field: posts)
+    postID: ID!
+    title: String! @search(by: [term, fulltext])
+    text: String @search(by: [fulltext]) @dgraph(pred: "text")
+    tags: [String] @search(by: [exact])
+    topic: String @search(by: [exact]) @dgraph(pred: "test.dgraph.topic")
+    numLikes: Int @search
+    numViews: Int64 @search
+    isPublished: Boolean @search @dgraph(pred: "is_published")
+    postType: PostType @search(by: [hash, trigram])
+    author: Author! @hasInverse(field: posts) @dgraph(pred: "post.author")
+    category: Category @hasInverse(field: posts)
 }
 
 type Category {
-        id: ID
-        name: String
-        posts: [Post]
+    id: ID
+    name: String
+    posts: [Post]
 }
 
 type User @secret(field: "password", pred:"pwd"){
-	name: String! @id
+    name: String! @id
 }
 
 """
@@ -80,14 +80,14 @@ GraphQL descriptions can be on enums.  They should work in the input
 schema and should make their way into the generated schema.
 """
 enum PostType {
-        Fact
+    Fact
 
-        """
-        GraphQL descriptions can be on enum values.  They should work in the input
-        schema and should make their way into the generated schema.
-        """
-        Question
-        Opinion
+    """
+    GraphQL descriptions can be on enum values.  They should work in the input
+    schema and should make their way into the generated schema.
+    """
+    Question
+    Opinion
 }
 
 """
@@ -95,71 +95,71 @@ GraphQL descriptions can be on interfaces.  They should work in the input
 schema and should make their way into the generated schema.
 """
 interface Employee @dgraph(type: "test.dgraph.employee.en") {
-        ename: String!
+    ename: String!
 }
 
 interface Character @dgraph(type: "performance.character") {
-        id: ID!
-        name: String! @search(by: [exact])
-        appearsIn: [Episode!] @search @dgraph(pred: "appears_in")
-		bio: String @lambda
+    id: ID!
+    name: String! @search(by: [exact])
+    appearsIn: [Episode!] @search @dgraph(pred: "appears_in")
+    bio: String @lambda
 }
 
 type Human implements Character & Employee {
-        id: ID!
-        name: String! @search(by: [exact])
-        appearsIn: [Episode!] @search
-        bio: String @lambda
-        ename: String!
-        starships: [Starship]
-        totalCredits: Float @dgraph(pred: "credits")
+    id: ID!
+    name: String! @search(by: [exact])
+    appearsIn: [Episode!] @search
+    bio: String @lambda
+    ename: String!
+    starships: [Starship]
+    totalCredits: Float @dgraph(pred: "credits")
 }
 
 type Droid implements Character @dgraph(type: "roboDroid") {
-        id: ID!
-        name: String! @search(by: [exact])
-        appearsIn: [Episode!] @search
-        bio: String @lambda
-        primaryFunction: String
+    id: ID!
+    name: String! @search(by: [exact])
+    appearsIn: [Episode!] @search
+    bio: String @lambda
+    primaryFunction: String
 }
 
 enum Episode {
-        NEWHOPE
-        EMPIRE
-        JEDI
+    NEWHOPE
+    EMPIRE
+    JEDI
 }
 
 type Starship @dgraph(type: "star.ship") {
-        id: ID!
-        name: String! @search(by: [term]) @dgraph(pred: "star.ship.name")
-        length: Float
+    id: ID!
+    name: String! @search(by: [term]) @dgraph(pred: "star.ship.name")
+    length: Float
 }
 
 type Movie {
-	id: ID!
-	name: String!
-	director: [MovieDirector] @dgraph(pred: "~directed.movies")
+    id: ID!
+    name: String!
+    director: [MovieDirector] @dgraph(pred: "~directed.movies")
 }
 
 type MovieDirector {
-	id: ID!
-	name: String!
-	directed: [Movie] @dgraph(pred: "directed.movies")
+    id: ID!
+    name: String!
+    directed: [Movie] @dgraph(pred: "directed.movies")
 }
 
 interface People {
-	id: ID!
-	xid: String! @id
-	name: String!
+    id: ID!
+    xid: String! @id
+    name: String!
 }
 
 type Teacher implements People {
-	subject: String
-	teaches: [Student]
+    subject: String
+    teaches: [Student]
 }
 
 type Student implements People {
-        taughtBy: [Teacher] @hasInverse(field: "teaches")
+    taughtBy: [Teacher] @hasInverse(field: "teaches")
 }
 
 type Message @withSubscription {
@@ -171,29 +171,29 @@ type Message @withSubscription {
 This is used for fragment related testing
 """
 interface Thing {
-	name: String # field to act as a common inherited field for both ThingOne and ThingTwo
+    name: String # field to act as a common inherited field for both ThingOne and ThingTwo
 }
 
 type ThingOne implements Thing {
-	id: ID! # ID field with same name as the ID field in ThingTwo
-	color: String # field with same name as a field in ThingTwo
-	usedBy: String # field with different name than any field in ThingTwo
+    id: ID! # ID field with same name as the ID field in ThingTwo
+    color: String # field with same name as a field in ThingTwo
+    usedBy: String # field with different name than any field in ThingTwo
 }
 
 type ThingTwo implements Thing {
-	id: ID!
-	color: String
-	owner: String
+    id: ID!
+    color: String
+    owner: String
 }
 
 type Post1 {
-       id: String! @id
-       comments: [Comment1]
+    id: String! @id
+    comments: [Comment1]
 }
 
 type Comment1 {
-      id: String! @id
-      replies: [Comment1]
+    id: String! @id
+    replies: [Comment1]
 }
 type post1{
     id: ID
@@ -225,29 +225,29 @@ type Person {
 
 # union testing - start
 enum AnimalCategory {
-	Fish
-	Amphibian
-	Reptile
-	Bird
-	Mammal
-	InVertebrate
+    Fish
+    Amphibian
+    Reptile
+    Bird
+    Mammal
+    InVertebrate
 }
 
 interface Animal {
-	id: ID!
-	category: AnimalCategory @search
+    id: ID!
+    category: AnimalCategory @search
 }
 
 type Dog implements Animal {
-	breed: String @search
+    breed: String @search
 }
 
 type Parrot implements Animal {
-	repeatsWords: [String]
+    repeatsWords: [String]
 }
 
 type Cheetah implements Animal {
-	speed: Float
+    speed: Float
 }
 
 """
@@ -255,32 +255,32 @@ This type specifically doesn't implement any interface.
 We need this to test out all cases with union.
 """
 type Plant {
-	id: ID!
-	breed: String # field with same name as a field in type Dog
+    id: ID!
+    breed: String # field with same name as a field in type Dog
 }
 
 union HomeMember = Dog | Parrot | Human | Plant
 
 type Zoo {
-	id: ID!
-	animals: [Animal]
-	city: String
+    id: ID!
+    animals: [Animal]
+    city: String
 }
 
 type Home {
-	id: ID!
-	address: String
-	members: [HomeMember]
-	favouriteMember: HomeMember
+    id: ID!
+    address: String
+    members: [HomeMember]
+    favouriteMember: HomeMember
 }
 # union testing - end
 
 type Query {
-	authorsByName(name: String!): [Author] @lambda
+    authorsByName(name: String!): [Author] @lambda
 }
 
 type Mutation {
-	newAuthor(name: String!): ID! @lambda
+    newAuthor(name: String!): ID! @lambda
 }
 
 # generate directive testing
@@ -304,14 +304,14 @@ type Book {
     bookId: Int64! @id
     name: String!
     desc: String
-	summary: String @lambda
-	chapters: [Chapter] @hasInverse(field: book)
+    summary: String @lambda
+    chapters: [Chapter] @hasInverse(field: book)
 }
 
 type Chapter {
     chapterId: Int! @id
     name: String!
-	book: Book
+    book: Book
 }
 
 type Mission @key(fields: "id") {
@@ -338,8 +338,8 @@ type SpaceShip @key(fields: "id") @extends {
 }
 
 type Planet @key(fields: "id") @extends {
-        id: Int! @id @external
-        missions: [Mission]
+    id: Int! @id @external
+    missions: [Mission]
 }
 
 type Region {
@@ -381,12 +381,15 @@ type author1{
 # multiple fields with @id directive
 type Worker {
     name: String!
-    reg_No: Int! @id
-    emp_Id: String! @id
+    regNo: Int @id
+    uniqueId: Int @id
+    empId: String! @id
 }
 
 type Employer {
     company: String! @id
+    companyId: String @id
+    name: String @id
     worker: [Worker]
 }
 

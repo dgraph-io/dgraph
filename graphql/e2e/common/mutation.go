@@ -5527,11 +5527,11 @@ func multipleXidsTests(t *testing.T) {
 		{
 			name: "add worker with multiple xids",
 			query: `mutation {
-	                  addWorker(input: [{ name: "Alice", reg_No: 1, emp_Id: "E01" }]) {
+	                  addWorker(input: [{ name: "Alice", regNo: 1, empId: "E01" }]) {
 	                  	worker {
 	                  		name
-	                  		reg_No
-	                  		emp_Id
+	                  		regNo
+	                  		empId
 	                  	}
 	                  }
                     }`,
@@ -5540,60 +5540,63 @@ func multipleXidsTests(t *testing.T) {
                              "worker": [
                                  {
                                      "name": "Alice",
-                                     "reg_No": 1,
-                                     "emp_Id": "E01"
+                                     "regNo": 1,
+                                     "empId": "E01"
                                  }
                              ]
                          }
                       }`,
 		},
 		{
-			name: "adding worker with same reg_No will return error",
+			name: "adding worker with same regNo will return error",
 			query: `mutation {
-	                   addWorker(input: [{ name: "Alice", reg_No: 1, emp_Id: "E012" }]) {
+	                   addWorker(input: [{ name: "Alice", regNo: 1, empId: "E012" }]) {
 	                   	worker {
 	                   		name
-	                   		reg_No
-	                   		emp_Id
+	                   		regNo
+	                   		empId
 	                   	}
 	                   }
                     }`,
-			error: `couldn't rewrite mutation addWorker because failed to rewrite mutation payload because id 1 already exists for field reg_No inside type Worker`,
+			error: "couldn't rewrite mutation addWorker because failed to rewrite mutation" +
+				" payload because id 1 already exists for field regNo inside type Worker",
 		},
 		{
-			name: "adding worker with same emp_Id will return error",
+			name: "adding worker with same empId will return error",
 			query: `mutation {
-	                   addWorker(input: [{ name: "Alice", reg_No: 2, emp_Id: "E01" }]) {
+	                   addWorker(input: [{ name: "Alice", regNo: 2, empId: "E01" }]) {
 	                   	worker {
 	                   		name
-	                   		reg_No
-	                   		emp_Id
+	                   		regNo
+	                   		empId
 	                   	}
 	                   }
                     }`,
-			error: `couldn't rewrite mutation addWorker because failed to rewrite mutation payload because id E01 already exists for field emp_Id inside type Worker`,
+			error: "couldn't rewrite mutation addWorker because failed to rewrite mutation" +
+				" payload because id E01 already exists for field empId inside type Worker",
 		},
 		{
-			name: "adding worker with same reg_No and emp_id will return error",
+			name: "adding worker with same regNo and empId will return error",
 			query: `mutation {
-	                  addWorker(input: [{ name: "Alice", reg_No: 1, emp_Id: "E01" }]) {
+	                  addWorker(input: [{ name: "Alice", regNo: 1, empId: "E01" }]) {
 	                  	worker {
 	                  		name
-	                  		reg_No
-	                  		emp_Id
+	                  		regNo
+	                  		empId
 	                  	}
 	                  }
                   }`,
-			error: `couldn't rewrite mutation addWorker because failed to rewrite mutation payload because id E01 already exists for field emp_Id inside type Worker`,
+			error: "couldn't rewrite mutation addWorker because failed to rewrite mutation" +
+				" payload because id E01 already exists for field empId inside type Worker",
 		},
 		{
-			name: "adding worker with different reg_No and emp_id will succeed",
+			name: "adding worker with different regNo and empId will succeed",
 			query: `mutation {
-	                   addWorker(input: [{ name: "Bob", reg_No: 2, emp_Id: "E02" }]) {
+	                   addWorker(input: [{ name: "Bob", regNo: 2, empId: "E02" }]) {
 	                   	worker {
 	                   		name
-	                   		reg_No
-	                   		emp_Id
+	                   		regNo
+	                   		empId
 	                   	}
 	                   }
 					}`,
@@ -5602,27 +5605,27 @@ func multipleXidsTests(t *testing.T) {
                              "worker": [
                                  {
                                      "name": "Bob",
-                                     "reg_No": 2,
-                                     "emp_Id": "E02"
+                                     "regNo": 2,
+                                     "empId": "E02"
                                  }
                              ]
                          }
                     }`,
 		},
 		{
-			name: "adding worker with same reg_No and emp_id at deeper level will add reference",
+			name: "adding worker with same regNo and empId at deeper level will add reference",
 			query: `mutation {
 	                    addEmployer(
 	                    	input: [
-	                    		{ company: "Dgraph", worker: { name: "Bob", reg_No: 2, emp_Id: "E02" } }
+	                    		{ company: "Dgraph", worker: { name: "Bob", regNo: 2, empId: "E02" } }
 	                    	]
 	                    ) {
 	                    	employer {
 	                    		company
 	                    		worker {
 	                    			name
-	                    			reg_No
-	                    			emp_Id
+	                    			regNo
+	                    			empId
 	                    		}
 	                    	}
 	                    }
@@ -5635,8 +5638,8 @@ func multipleXidsTests(t *testing.T) {
                                       "worker": [
                                           {
                                               "name": "Bob",
-                                              "reg_No": 2,
-                                              "emp_Id": "E02"
+                                              "regNo": 2,
+                                              "empId": "E02"
                                           }
                                       ]
                                   }
@@ -5645,19 +5648,23 @@ func multipleXidsTests(t *testing.T) {
                        }`,
 		},
 		{
-			name: "adding worker with different reg_No and emp_id at deep level will add new node",
+			name: "adding worker with different regNo and empId at deep level will add new node",
 			query: `mutation {
-	                  addEmployer(input: [{ company: "GraphQL", worker: { name: "Jack", reg_No: 3, emp_Id: "E03" } }]) {
-	                  	employer {
-							company
-	                  		worker {
-	                  			name
-	                  			reg_No
-	                  			emp_Id
-	                  		}
-	                  	}
-	                  }
-					}`,
+                      addEmployer(
+                        input: [
+                          { company: "GraphQL", worker: { name: "Jack", regNo: 3, empId: "E03" } }
+                        ]
+                      ) {
+                        employer {
+                          company
+                          worker {
+                            name
+                            regNo
+                            empId
+                          }
+                        }
+                      }
+                    }`,
 			expected: `{
                          "addEmployer": {
                              "employer": [
@@ -5665,8 +5672,8 @@ func multipleXidsTests(t *testing.T) {
                                      "worker": [
                                          {
                                              "name": "Jack",
-                                             "reg_No": 3,
-                                             "emp_Id": "E03"
+                                             "regNo": 3,
+                                             "empId": "E03"
                                          }
                                      ]
                                  }
@@ -5675,15 +5682,15 @@ func multipleXidsTests(t *testing.T) {
                       }`,
 		},
 		{
-			name: "adding worker with same reg_No but different emp_id at deep level will add reference",
+			name: "adding worker with same regNo but different empId at deep level will add reference",
 			query: `mutation {
-	                  addEmployer(input: [{ company: "Slash", worker: { reg_No: 3, emp_Id: "E04" } }]) {
+	                  addEmployer(input: [{ company: "Slash", worker: { regNo: 3, empId: "E04" } }]) {
 	                  	employer {
 							company	
 	                  		worker {
 	                  			name
-	                  			reg_No
-	                  			emp_Id
+	                  			regNo
+	                  			empId
 	                  		}
 	                  	}
 	                  }
@@ -5695,8 +5702,8 @@ func multipleXidsTests(t *testing.T) {
                                      "worker": [
                                          {
                                              "name": "Jack",
-                                             "reg_No": 3,
-                                             "emp_Id": "E03"
+                                             "regNo": 3,
+                                             "empId": "E03"
                                          }
                                      ]
                                  }
@@ -5707,51 +5714,51 @@ func multipleXidsTests(t *testing.T) {
 		{
 			name: "get query with multiple Id's",
 			query: `query {
-	                  getWorker(reg_No: 2, emp_Id: "E02") {
+	                  getWorker(regNo: 2, empId: "E02") {
 	                  	name
-	                  	reg_No
-	                  	emp_Id
+	                  	regNo
+	                  	empId
 	                  }
                    }`,
 			expected: `{
                           "getWorker": {
-                              "emp_Id": "E02",
+                              "empId": "E02",
                               "name": "Bob",
-                              "reg_No": 2
+                              "regNo": 2
                           }
                       }`,
 		},
 		{
-			name: "query with reg_no",
+			name: "query with regNo",
 			query: `query {
-	                  getWorker(reg_No: 2) {
+	                  getWorker(regNo: 2) {
 	                  	name
-	                  	reg_No
-	                  	emp_Id
+	                  	regNo
+	                  	empId
 	                  }
                    }`,
 			expected: `{
                           "getWorker": {
-                              "emp_Id": "E02",
+                              "empId": "E02",
                               "name": "Bob",
-                              "reg_No": 2
+                              "regNo": 2
                           }
                       }`,
 		},
 		{
-			name: "query with emp_Id",
+			name: "query with empId",
 			query: `query {
-	                  getWorker(emp_Id: "E02") {
+	                  getWorker(empId: "E02") {
 	                  	name
-	                  	reg_No
-	                  	emp_Id
+	                  	regNo
+	                  	empId
 	                  }
                    }`,
 			expected: `{
                           "getWorker": {
-                              "emp_Id": "E02",
+                              "empId": "E02",
                               "name": "Bob",
-                              "reg_No": 2
+                              "regNo": 2
                           }
                       }`,
 		},
@@ -5759,24 +5766,24 @@ func multipleXidsTests(t *testing.T) {
 			name: "query with multiple Id's using filters",
 			query: `query {
 	                   queryWorker(
-	                   	filter: { or: [{ reg_No: { in: 2 } }, { emp_Id: { in: "E01" } }] }
+	                   	filter: { or: [{ regNo: { in: 2 } }, { empId: { in: "E01" } }] }
 	                   ) {
 	                   	name
-	                   	reg_No
-	                   	emp_Id
+	                   	regNo
+	                   	empId
 	                   }
 					}`,
 			expected: `{
                          "queryWorker": [
                              {
-                                 "emp_Id": "E02",
+                                 "empId": "E02",
                                  "name": "Bob",
-                                 "reg_No": 2
+                                 "regNo": 2
                              },
                              {
-                                 "emp_Id": "E01",
+                                 "empId": "E01",
                                  "name": "Alice",
-                                 "reg_No": 1
+                                 "regNo": 1
                              }
                          ]
 						}`,
@@ -5786,9 +5793,9 @@ func multipleXidsTests(t *testing.T) {
 			query: `mutation updateWorker($patch: UpdateWorkerInput!) {
 	                  updateWorker(input: $patch) {
 	                  	worker {
-	                  		emp_Id
+	                  		empId
 	                  		name
-	                  		reg_No
+	                  		regNo
 	                  	}
 	                  }
                    }`,
@@ -5796,14 +5803,14 @@ func multipleXidsTests(t *testing.T) {
                         "updateWorker": {
                             "worker": [
                                 {
-                                    "emp_Id": "E01",
+                                    "empId": "E01",
                                     "name": "Jacob",
-                                    "reg_No": 1
+                                    "regNo": 1
                                 },
                                 {
-                                    "emp_Id": "E02",
+                                    "empId": "E02",
                                     "name": "Jacob",
-                                    "reg_No": 2
+                                    "regNo": 2
                                 }
                             ]
                         }
@@ -5812,11 +5819,11 @@ func multipleXidsTests(t *testing.T) {
                           "patch": {
                               "filter": {"or": [
                                       {
-                                          "reg_No": {"in": 1
+                                          "regNo": {"in": 1
                                           }
                                       },
                                       {
-                                          "emp_Id": {"in": "E02"
+                                          "empId": {"in": "E02"
                                           }
                                       }
                                   ]
@@ -5833,15 +5840,15 @@ func multipleXidsTests(t *testing.T) {
 	                   updateEmployer(
 	                   	input: {
 	                   		filter: { company: { in: "GraphQL" } }
-	                   		set: { worker: { name: "Leo", emp_Id: "E06", reg_No: 6 } }
+	                   		set: { worker: { name: "Leo", empId: "E06", regNo: 6 } }
 	                   	}
 	                   ) {
 	                   	employer {
 	                   		company
 	                   		worker {
-	                   			emp_Id
+	                   			empId
 	                   			name
-	                   			reg_No
+	                   			regNo
 	                   		}
 	                   	}
 	                   }
@@ -5853,14 +5860,14 @@ func multipleXidsTests(t *testing.T) {
                                  "company": "GraphQL",
                                  "worker": [
                                      {
-                                         "emp_Id": "E06",
+                                         "empId": "E06",
                                          "name": "Leo",
-                                         "reg_No": 6
+                                         "regNo": 6
                                      },
                                      {
-                                         "emp_Id": "E03",
+                                         "empId": "E03",
                                          "name": "Jack",
-                                         "reg_No": 3
+                                         "regNo": 3
                                      }
                                  ]
                              }
@@ -5869,25 +5876,27 @@ func multipleXidsTests(t *testing.T) {
                   }`,
 		},
 		{
-			name: "Deep level update mutation return error when some xids are missing while creating new node using set",
+			name: "Deep level update mutation return error when non- nullable xids are" +
+				" missing while creating new node using set",
 			query: `mutation {
 	                   updateEmployer(
 	                   	input: {
 	                   		filter: { company: { in: "GraphQL" } }
-	                   		set: { worker: { name: "Leo", emp_Id: "E07" } }
+	                   		set: { worker: { empId: "E07" } }
 	                   	}
 	                   ) {
 	                   	employer {
 	                   		company
 	                   		worker {
-	                   			emp_Id
+	                   			empId
 	                   			name
-	                   			reg_No
+	                   			regNo
 	                   		}
 	                   	}
 	                   }
                      }`,
-			error: `couldn't rewrite mutation updateEmployer because failed to rewrite mutation payload because field reg_No cannot be empty`,
+			error: "couldn't rewrite mutation updateEmployer because failed to rewrite mutation" +
+				" payload because type Worker requires a value for field name, but no value present",
 		},
 	}
 
@@ -5910,7 +5919,7 @@ func multipleXidsTests(t *testing.T) {
 
 		})
 	}
-	filter := map[string]interface{}{"reg_No": map[string]interface{}{"in": []int{1, 2, 3, 6}}}
+	filter := map[string]interface{}{"regNo": map[string]interface{}{"in": []int{1, 2, 3, 6}}}
 	DeleteGqlType(t, "Worker", filter, 4, nil)
 }
 
@@ -6087,7 +6096,7 @@ func updateLangTagFields(t *testing.T) {
 	DeleteGqlType(t, "Person", map[string]interface{}{}, 1, nil)
 }
 
-func addMutationWithIDFieldHavingInterfaceArg(t *testing.T) {
+func mutationWithIDFieldHavingInterfaceArg(t *testing.T) {
 
 	// add data successfully for different implementing types
 	tcases := []struct {
@@ -6260,6 +6269,64 @@ func addMutationWithIDFieldHavingInterfaceArg(t *testing.T) {
 				" payload because id 102 already exists for field refID in some other implementing" +
 				" type of interface Member",
 		},
+		{
+			name: "updating inherited @id with interface argument true," +
+				"returns error if given value for id already exist in a node of " +
+				"some other implementing type",
+			query: `mutation update($patch: UpdateLibraryMemberInput!) {
+                      updateLibraryMember(input: $patch) {
+                        libraryMember {
+                          refID
+                        }
+                      }
+                    }`,
+			variables: `{
+                      "patch": {
+                          "filter": {
+                              "refID": {
+                                  "in": "101"
+                              }
+                          },
+                          "set": {
+                              "refID": "102",
+                              "name": "Miles",
+                              "readHours": "5d2hr"
+                          }
+                      }
+                  }`,
+			error: "couldn't rewrite mutation updateLibraryMember because failed to rewrite" +
+				" mutation payload because id 102 already exists for field refID in some other" +
+				" implementing type of interface Member",
+		},
+		{
+			name: "updating link to a type that have inherited @id field with interface" +
+				" argument true, returns error if given value for id field  already exist" +
+				" in a node of some other implementing type",
+			query: `mutation update($patch: UpdateLibraryManagerInput!) {
+                     updateLibraryManager(input: $patch) {
+                       libraryManager {
+                         name
+                       }
+                     }
+                   }`,
+			variables: `{
+                    "patch": {
+                        "filter": {
+                            "name": {
+                                "in": "Juliet"
+                            }
+                        },
+                        "set": {
+                            "manages": {
+                                "refID": "102"
+                            }
+                        }
+                    }
+                }`,
+			error: "couldn't rewrite mutation updateLibraryManager because failed to rewrite mutation" +
+				" payload because id 102 already exists for field refID in some other" +
+				" implementing type of interface Member",
+		},
 	}
 
 	for _, tcase := range tcases {
@@ -6288,4 +6355,268 @@ func addMutationWithIDFieldHavingInterfaceArg(t *testing.T) {
 	DeleteGqlType(t, "SportsMember", map[string]interface{}{}, 1, nil)
 	DeleteGqlType(t, "CricketTeam", map[string]interface{}{}, 1, nil)
 	DeleteGqlType(t, "LibraryManager", map[string]interface{}{}, 1, nil)
+}
+
+func xidUpdateAndNullableTests(t *testing.T) {
+
+	tcases := []struct {
+		name      string
+		query     string
+		variables string
+		error     string
+	}{
+		{
+			name: "2-level add mutation without nullable @id fields",
+			query: `mutation addEmployer($input: [AddEmployerInput!]!) {
+                      addEmployer(input: $input, upsert: false) {
+                        employer {
+                          company
+                        }
+                      }
+                    }`,
+			variables: `{
+                         "input": [
+                             {
+                                 "company": "ABC tech",
+                                 "name": "XYZ",
+                                 "worker": {
+                                     "name": "Alice",
+                                     "regNo": 101,
+                                     "empId": "E01"
+                                 }
+                             },
+                             {
+                                 "company": "XYZ industry",
+                                 "name": "ABC",
+                                 "worker": {
+                                     "name": "Bob",
+                                     "regNo": 102,
+                                     "empId": "E02"
+                                 }
+                             }
+                         ]
+                     }`,
+		}, {
+			name: "2-level add mutation with upserts without nullable @id fields",
+			query: `mutation addEmployer($input: [AddEmployerInput!]!) {
+                      addEmployer(input: $input, upsert: true) {
+                        employer {
+                          company
+                        }
+                      }
+                    }`,
+			variables: `{
+                      "input": {
+                          "company": "ABC tech",
+                          "worker": {
+                              "name": "Juliet",
+                              "regNo": 103,
+                              "empId": "E03"
+                          }
+                      }
+                  }`,
+		}, {
+			name: "upsert mutation gives error when multiple nodes are found with given @id fields",
+			query: `mutation addEmployer($input: [AddEmployerInput!]!) {
+                      addEmployer(input: $input, upsert: true) {
+                        employer {
+                          company
+                        }
+                      }
+                    }`,
+			variables: `{
+                       "input": {
+                           "company": "ABC tech",
+                           "name": "ABC"
+                       }
+                   }`,
+			error: "couldn't rewrite mutation addEmployer because failed to rewrite mutation" +
+				" payload because multiple nodes found for given xid values, updation not possible",
+		}, {
+			name: "upsert mutation gives error when multiple nodes are found with" +
+				" given @id fields at nested level",
+			query: `mutation addEmployer($input: [AddEmployerInput!]!) {
+                      addEmployer(input: $input, upsert: true) {
+                        employer {
+                          company
+                        }
+                      }
+                    }`,
+			variables: `{
+                     "input": {
+                         "company": "ABC tech",
+                         "worker": {
+                             "empId": "E02",
+                             "regNo": 103,
+                             "name": "William"
+                         }
+                     }
+                 }`,
+			error: "couldn't rewrite mutation addEmployer because failed to rewrite mutation" +
+				" payload because multiple nodes found for given xid values, updation not possible",
+		},
+		{
+			name: "Non-nullable id should be present while creating new node at nested level" +
+				" using upsert",
+			query: `mutation addEmployer($input: [AddEmployerInput!]!) {
+                      addEmployer(input: $input, upsert: true) {
+                        employer {
+                          company
+                        }
+                      }
+                    }`,
+			variables: `{
+                      "input": {
+                          "company": "ABC tech1",
+                          "worker": {
+                              "regNo": 104,
+                              "name": "John"
+                          }
+                      }
+                  }`,
+			error: "couldn't rewrite mutation addEmployer because failed to rewrite" +
+				" mutation payload because type Worker requires a value for" +
+				" field empId, but no value present",
+		},
+		{
+			name: "update mutation fails when @id field is being updated" +
+				" and multiple nodes are selected in filter",
+			query: `mutation update($patch: UpdateEmployerInput!) {
+                    	updateEmployer(input: $patch) {
+                    		employer {
+                    			company
+                    		}
+                    	}
+                    }`,
+			variables: `{
+                    "patch": {
+                        "filter": {
+                            "name": {
+                                "in": [
+                                    "XYZ",
+                                    "ABC"
+                                ]
+                            }
+                        },
+                        "set": {
+                            "company": "JKL"
+                        }
+                    }
+                }`,
+			error: "mutation updateEmployer failed because only one node is allowed in the filter" +
+				" while updating fields with @id directive",
+		}, {
+			name: "successfully updating @id field of a node ",
+			query: `mutation update($patch: UpdateEmployerInput!) {
+                    	updateEmployer(input: $patch) {
+                    		employer {
+                    			company
+                    		}
+                    	}
+                    }`,
+			variables: `{
+                    "patch": {
+                        "filter": {
+                            "name": {
+                                "in": [
+                                    "XYZ"
+                                ]
+                            }
+                        },
+                        "set": {
+                            "name": "JKL",
+                            "company": "JKL tech"
+                        }
+                    }
+                }`,
+		},
+		{
+			name: "updating @id field returns error because given value in update mutation already exists",
+			query: `mutation update($patch: UpdateEmployerInput!) {
+                    	updateEmployer(input: $patch) {
+                    		employer {
+                    			company
+                    		}
+                    	}
+                    }`,
+			variables: `{
+                        "patch": {
+                            "filter": {
+                                "name": {
+                                    "in": [
+                                        "JKL"
+                                    ]
+                                }
+                            },
+                            "set": {
+                                "name": "ABC",
+                                "company": "ABC tech"
+                            }
+                        }
+                     }`,
+			error: "couldn't rewrite mutation updateEmployer because failed to rewrite mutation" +
+				" payload because id ABC already exists for field name inside type Employer",
+		},
+		{
+			name: "updating root @id fields and also create a nested  link to nested object",
+			query: `mutation update($patch: UpdateEmployerInput!) {
+                    	updateEmployer(input: $patch) {
+                    		employer {
+                    			company
+                    		}
+                    	}
+                    }`,
+			variables: `{
+                      "patch": {
+                          "filter": {
+                              "name": {
+                                  "in": [
+                                      "JKL"
+                                  ]
+                              }
+                          },
+                          "set": {
+                              "name": "MNO",
+                              "company": "MNO tech",
+                              "worker": {
+                                  "name": "Miles",
+                                  "empId": "E05",
+                                  "regNo": 105
+                              }
+                          }
+                      }
+                  }`,
+		},
+	}
+
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			var vars map[string]interface{}
+			if tcase.variables != "" {
+				err := json.Unmarshal([]byte(tcase.variables), &vars)
+				require.NoError(t, err)
+			}
+			params := &GraphQLParams{
+				Query:     tcase.query,
+				Variables: vars,
+			}
+			resp := params.ExecuteAsPost(t, GraphqlURL)
+			if tcase.error != "" {
+				require.Equal(t, tcase.error, resp.Errors[0].Error())
+			} else {
+				RequireNoGQLErrors(t, resp)
+			}
+
+		})
+	}
+
+	// Cleanup
+	filterEmployer :=
+		map[string]interface{}{
+			"name": map[string]interface{}{"in": []string{"ABC", "MNO"}}}
+	filterWorker :=
+		map[string]interface{}{
+			"regNo": map[string]interface{}{"in": []int{101, 102, 103, 105}}}
+	DeleteGqlType(t, "Employer", filterEmployer, 2, nil)
+	DeleteGqlType(t, "Worker", filterWorker, 4, nil)
 }
