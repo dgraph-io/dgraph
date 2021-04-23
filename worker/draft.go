@@ -420,7 +420,10 @@ func (n *node) processMutations(ctx context.Context, m *pb.Mutations, txn *posti
 		return x.ErrConflict
 	}
 	// Discard the posting lists from cache to release memory at the end.
-	defer txn.Update()
+	defer func() {
+		txn.Update()
+		span.Annotate(nil, "update done")
+	}()
 
 	// Update the applied index that we are seeing.
 	if txn.AppliedIndexSeen == 0 {
@@ -1012,6 +1015,7 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 	start := time.Now()
 	var numKeys int
 
+	itrStart := time.Now()
 	var itrs []y.Iterator
 	for _, status := range delta.Txns {
 		txn := posting.Oracle().GetTxn(status.StartTs)
@@ -1030,7 +1034,6 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 		}
 
 		// Iterate to set the commit timestamp for all keys.
-		itrStart := time.Now()
 		itr := txn.Skiplist().NewIterator()
 		itr.SeekToFirst()
 		for itr.Valid() {
@@ -1041,7 +1044,6 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 			itr.Next()
 		}
 		itr.Close()
-		itrDur := time.Since(itrStart)
 
 		itrs = append(itrs, txn.Skiplist().NewUniIterator(false))
 
@@ -1051,8 +1053,8 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 		// 	}
 		// 	return pstore.HandoverSkiplist(txn.Skiplist())
 		// })
-		span.Annotatef(nil, "txn %d. itr: %s\n", status.CommitTs, itrDur)
 	}
+	span.Annotatef(nil, "num keys: %d itr: %s\n", numKeys, time.Since(itrStart))
 	ostats.Record(n.ctx, x.NumEdges.M(int64(numKeys)))
 
 	// if len(itrs) > 0 {
@@ -1083,7 +1085,7 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 		// builder := skl.NewBuilder(64 << 20) // Fix up the arena size.
 		// TODO: Have a way to grow the arena.
 		// dst := pstore.NewSkiplist()
-		b := skl.NewBuilder(8 << 20)
+		b := skl.NewBuilder(256 << 10)
 
 		var keys int
 		for mi.Valid() {

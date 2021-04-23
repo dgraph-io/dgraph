@@ -21,6 +21,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"math"
+	"sort"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -293,11 +294,7 @@ func (txn *Txn) ToBuffer(buf *z.Buffer, commitTs uint64) error {
 // This function only stores deltas to the commit timestamps. It does not try to generate a state.
 // State generation is done via rollups, which happen when a snapshot is created.
 // Don't call this for schema mutations. Directly commit them.
-func (txn *Txn) ToSkiplist(s *skl.Skiplist, commitTs uint64) error {
-	if commitTs == 0 {
-		return nil
-	}
-
+func (txn *Txn) ToSkiplist() error {
 	cache := txn.cache
 	cache.Lock()
 	defer cache.Unlock()
@@ -306,6 +303,7 @@ func (txn *Txn) ToSkiplist(s *skl.Skiplist, commitTs uint64) error {
 	for key := range cache.deltas {
 		keys = append(keys, key)
 	}
+	sort.Strings(keys)
 
 	defer func() {
 		// Add these keys to be rolled up after we're done writing. This is the right place for them
@@ -315,6 +313,7 @@ func (txn *Txn) ToSkiplist(s *skl.Skiplist, commitTs uint64) error {
 		// }
 	}()
 
+	b := skl.NewBuilder(16 << 10)
 	for _, key := range keys {
 		k := []byte(key)
 		data := cache.deltas[key]
@@ -326,18 +325,13 @@ func (txn *Txn) ToSkiplist(s *skl.Skiplist, commitTs uint64) error {
 			glog.Errorf("Invalid Entry. len(key): %d len(val): %d\n", len(k), len(data))
 			continue
 		}
-		if ts := cache.maxVersions[key]; ts >= commitTs {
-			// Skip write because we already have a write at a higher ts.
-			// Logging here can cause a lot of output when doing Raft log replay. So, let's
-			// not output anything here.
-			continue
-		}
-		s.Put(y.KeyWithTs(k, commitTs),
+		b.Add(y.KeyWithTs(k, math.MaxUint64),
 			y.ValueStruct{
 				Value:    data,
 				UserMeta: BitDeltaPosting,
 			})
 	}
+	txn.sl = b.Skiplist()
 	return nil
 }
 

@@ -103,8 +103,7 @@ func (txn *Txn) Skiplist() *skl.Skiplist {
 // Update calls UpdateDeltasAndDiscardLists on the local cache.
 func (txn *Txn) Update() {
 	txn.cache.UpdateDeltasAndDiscardLists()
-	txn.sl = pstore.NewSkiplist()
-	if err := txn.ToSkiplist(txn.sl, math.MaxUint64); err != nil {
+	if err := txn.ToSkiplist(); err != nil {
 		glog.Errorf("While creating skiplist: %v\n", err)
 	}
 }
