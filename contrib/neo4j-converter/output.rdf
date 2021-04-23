@@ -1,0 +1,55 @@
+<_:k_188> <_labels> ":Movie" .
+<_:k_188> <born> "" .
+<_:k_188> <name> "" .
+<_:k_188> <released> "1999" .
+<_:k_188> <tagline> "Welcome to the Real World" .
+<_:k_188> <title> "The Matrix" .
+<_:k_189> <_labels> ":Person" .
+<_:k_189> <born> "1964" .
+<_:k_189> <name> "Keanu Reeves" .
+<_:k_189> <released> "" .
+<_:k_189> <tagline> "" .
+<_:k_189> <title> "" .
+<_:k_190> <_labels> ":Person" .
+<_:k_190> <born> "1967" .
+<_:k_190> <name> "Carrie-Anne Moss" .
+<_:k_190> <released> "" .
+<_:k_190> <tagline> "" .
+<_:k_190> <title> "" .
+<_:k_191> <_labels> ":Person" .
+<_:k_191> <born> "1961" .
+<_:k_191> <name> "Laurence Fishburne" .
+<_:k_191> <released> "" .
+<_:k_191> <tagline> "" .
+<_:k_191> <title> "" .
+<_:k_192> <_labels> ":Person" .
+<_:k_192> <born> "1960" .
+<_:k_192> <name> "Hugo Weaving" .
+<_:k_192> <released> "" .
+<_:k_192> <tagline> "" .
+<_:k_192> <title> "" .
+<_:k_193> <_labels> ":Person" .
+<_:k_193> <born> "1967" .
+<_:k_193> <name> "Lilly Wachowski" .
+<_:k_193> <released> "" .
+<_:k_193> <tagline> "" .
+<_:k_193> <title> "" .
+<_:k_194> <_labels> ":Person" .
+<_:k_194> <born> "1965" .
+<_:k_194> <name> "Lana Wachowski" .
+<_:k_194> <released> "" .
+<_:k_194> <tagline> "" .
+<_:k_194> <title> "" .
+<_:k_195> <_labels> ":Person" .
+<_:k_195> <born> "1952" .
+<_:k_195> <name> "Joel Silver" .
+<_:k_195> <released> "" .
+<_:k_195> <tagline> "" .
+<_:k_195> <title> "" .
+<_:k_189> <ACTED_IN> <_:k_188> (  roles="Neo" ) .
+<_:k_190> <ACTED_IN> <_:k_188> (  roles="Trinity" ) .
+<_:k_191> <ACTED_IN> <_:k_188> (  roles="Morpheus" ) .
+<_:k_192> <ACTED_IN> <_:k_188> (  roles="Agent Smith" ) .
+<_:k_193> <DIRECTED> <_:k_188>  .
+<_:k_194> <DIRECTED> <_:k_188>  .
+<_:k_195> <PRODUCED> <_:k_188>  .

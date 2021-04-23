@@ -7,7 +7,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/dgraph-io/dgraph/x"
 	"io"
 	"log"
 	"os"
@@ -34,10 +33,10 @@ func main() {
 	fmt.Printf("CSV to convert: %q ?[y/n]", *inputPath)
 
 	var inputConf, outputConf string
-	x.Check2(fmt.Scanf("%s", &inputConf))
+	check2(fmt.Scanf("%s", &inputConf))
 
 	fmt.Printf("Output directory wanted: %q ?[y/n]", *outputPath)
-	x.Check2(fmt.Scanf("%s", &outputConf))
+	check2(fmt.Scanf("%s", &outputConf))
 
 	if inputConf != "y" || outputConf != "y" {
 		fmt.Println("Please update the directories")
@@ -46,7 +45,7 @@ func main() {
 
 	//open the file
 	ifile, err := os.Open(*inputPath)
-	x.Check(err)
+	check(err)
 	defer ifile.Close()
 	//log the start time
 	ts := time.Now().UnixNano()
@@ -54,17 +53,14 @@ func main() {
 	//create output file in append mode
 	outputName := filepath.Join(*outputPath, fmt.Sprintf("converted_%d.rdf", ts))
 	oFile, err := os.OpenFile(outputName, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
-	x.Check(err)
-	defer func() {
-		oFile.Close()
-	}()
+	check(err)
+	defer oFile.Close()
 	//process the file
-	x.Check(processNeo4jCSV(ifile, oFile))
+	check(processNeo4jCSV(ifile, oFile))
 	fmt.Printf("Finished writing %q", outputName)
 
 }
 
-// func processCSV(inputFile string, outputPath string) {
 func processNeo4jCSV(r io.Reader, w io.Writer) error {
 
 	scanner := bufio.NewScanner(r)
@@ -104,7 +100,7 @@ func processNeo4jCSV(r io.Reader, w io.Writer) error {
 		text.WriteString(scanner.Text() + "\n")
 		d := csv.NewReader(strings.NewReader(text.String()))
 		records, err := d.ReadAll()
-		x.Check(err)
+		check(err)
 
 		linkStartNode := ""
 		linkEndNode := ""
@@ -162,17 +158,28 @@ func processNeo4jCSV(r io.Reader, w io.Writer) error {
 				//wrap all facets with round brackets
 				facetLine = fmt.Sprintf("( %s )", facetLine)
 			}
-			rdfLines.WriteString(fmt.Sprintf("%s %s %s %s.\n", linkStartNode, linkName, linkEndNode, facetLine))
+			rdfLines.WriteString(fmt.Sprintf("%s %s %s %s .\n",
+				linkStartNode, linkName, linkEndNode, facetLine))
 		}
 
 		text.Reset()
 		//write a chunk when ready
 		if rdfLines.Len() > 100<<20 {
 			// Flush the writes and reset the rdfLines
-			x.Check2(w.Write(rdfLines.Bytes()))
+			check2(w.Write(rdfLines.Bytes()))
 			rdfLines.Reset()
 		}
 	}
-	x.Check2(w.Write(rdfLines.Bytes()))
+	check2(w.Write(rdfLines.Bytes()))
 	return nil
+}
+func check2(_ interface{}, err error) {
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+func check(err error) {
+	if err != nil {
+		log.Fatal(err)
+	}
 }
