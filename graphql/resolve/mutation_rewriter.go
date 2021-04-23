@@ -1721,7 +1721,7 @@ func rewriteObject(
 
 func xidErrorForInterfaceType(typ schema.Type, xidString string, xid schema.FieldDefinition,
 	interfaceName string) error {
-	// TODO(GRAPHQL): currently we are checking typ of the mutated field for auth rules,
+	// TODO(Jatin): currently we are checking typ of the mutated field for auth rules,
 	//  But we need to check auth rule on implementing type for which we found existing node
 	//  with same @id.
 	if queryAuthSelector(typ) == nil {
@@ -1813,7 +1813,7 @@ func existenceQueries(
 					// considered a duplicate of the existing object, then return error.
 
 					if xidMetadata.isDuplicateXid(atTopLevel, variable, obj, srcField) {
-						// TODO(GRAPHQL): Add this error for inherited @id field with interface arg.
+						// TODO(Jatin): Add this error for inherited @id field with interface arg.
 						//  Currently we don't return this error for the nested case when
 						//  at both root and nested level we have same value of @id fields
 						//  which have interface arg set and are inherited from same interface
@@ -1829,7 +1829,7 @@ func existenceQueries(
 					// xidMetadata.variableObjMap[variable] = { "id": "1" }
 					// In this case, as obj is the correct definition of the object, we update variableObjMap
 					oldObj := xidMetadata.variableObjMap[variable]
-					// TODO(GRAOHQL): This condition also needs to change in accordance with multiple xids.
+					// TODO(Jatin): This condition also needs to change in accordance with multiple xids.
 					//  Also consider the case when @id fields can be nullable.
 					if len(oldObj) == 1 && len(obj) > 1 {
 						// Continue execution to perform dfs in this case. There may be more nodes
