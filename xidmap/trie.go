@@ -20,7 +20,6 @@ import (
 	"math"
 	"unsafe"
 
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
 )
 
@@ -34,8 +33,7 @@ type Trie struct {
 // NewTrie would return back a Trie backed by the provided Arena. Trie would assume ownership of the
 // Arena. Release must be called at the end to release Arena's resources.
 func NewTrie() *Trie {
-	buf, err := z.NewBufferWith(32<<20, math.MaxUint32, z.UseMmap, "Trie")
-	x.Check(err)
+	buf := z.NewBuffer(32<<20, "Trie").WithMaxSize(math.MaxUint32)
 	// Add additional 8 bytes at the start, because offset=0 is used for checking non-existing node.
 	// Therefore we can't keep root at 0 offset.
 	ro := buf.AllocateOffset(nodeSz + 8)

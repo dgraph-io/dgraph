@@ -120,10 +120,7 @@ func newMapIterator(filename string) (*pb.MapHeader, *mapIterator) {
 func getBuf() *z.Buffer {
 	path := filepath.Join(x.WorkerConfig.TmpDir, "buffer")
 	x.Check(os.MkdirAll(path, 0750))
-	cbuf, err := z.NewBufferWithDir(64<<20, 64<<30, z.UseCalloc, path, "Restore.GetBuf")
-	x.Check(err)
-	cbuf.AutoMmapAfter(1 << 30)
-	return cbuf
+	return z.NewBuffer(64<<20, "Restore.GetBuf").WithAutoMmap(1<<30, path).WithMaxSize(64 << 30)
 }
 
 type reducer struct {

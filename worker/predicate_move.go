@@ -79,7 +79,7 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *pb.KVS) error {
 	var pk x.ParsedKey
 
 	for kvPayload := range kvs {
-		buf := z.BufferFrom(kvPayload.GetData())
+		buf := z.NewBufferSlice(kvPayload.GetData())
 		err := buf.SliceIterate(func(s []byte) error {
 			kv := &bpb.KV{}
 			x.Check(kv.Unmarshal(s))
@@ -174,7 +174,7 @@ func (w *grpcWorker) ReceivePredicate(stream pb.Worker_ReceivePredicateServer) e
 		}
 		glog.V(2).Infof("Received batch of size: %s\n", humanize.IBytes(uint64(len(kvBuf.Data))))
 
-		buf := z.BufferFrom(kvBuf.Data)
+		buf := z.NewBufferSlice(kvBuf.Data)
 		buf.SliceIterate(func(_ []byte) error {
 			count++
 			return nil

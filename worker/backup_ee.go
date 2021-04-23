@@ -306,9 +306,9 @@ func NewBackupProcessor(db *badger.DB, req *pb.BackupRequest) *BackupProcessor {
 		bp.txn = db.NewTransactionAt(req.ReadTs, false)
 	}
 	for i := range bp.threads {
-		buf, err := z.NewBufferWith(32<<20, 32<<30, z.UseCalloc, "Worker.BackupProcessor")
-		x.Check(err)
-		buf.AutoMmapAfter(1 << 30)
+		buf := z.NewBuffer(32<<20, "Worker.BackupProcessor").
+			WithAutoMmap(1<<30, "").
+			WithMaxSize(32 << 30)
 
 		bp.threads[i] = &threadLocal{
 			Request: bp.Request,

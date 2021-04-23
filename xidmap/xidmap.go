@@ -108,7 +108,7 @@ func New(opts XidMapOptions) *XidMap {
 	}
 	for i := range xm.shards {
 		xm.shards[i] = &shard{
-			tree: z.NewTree(),
+			tree: z.NewTree("XidMap"),
 		}
 	}
 

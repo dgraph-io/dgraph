@@ -228,9 +228,9 @@ func (m *mapper) writeToDisk(buf *z.Buffer) error {
 }
 
 func newBuffer() *z.Buffer {
-	buf, err := z.NewBufferWithDir(mapFileSz, 2*mapFileSz, z.UseMmap, "", "Restore.Buffer")
+	buf, err := z.NewBufferTmp("", mapFileSz)
 	x.Check(err)
-	return buf
+	return buf.WithMaxSize(2 * mapFileSz)
 }
 
 func (mw *mapper) sendForWriting() error {

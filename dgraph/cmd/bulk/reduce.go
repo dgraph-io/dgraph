@@ -435,11 +435,9 @@ func bufferStats(cbuf *z.Buffer) {
 }
 
 func getBuf(dir string) *z.Buffer {
-	cbuf, err := z.NewBufferWithDir(64<<20, 64<<30, z.UseCalloc,
-		filepath.Join(dir, bufferDir), "Reducer.GetBuf")
-	x.Check(err)
-	cbuf.AutoMmapAfter(1 << 30)
-	return cbuf
+	return z.NewBuffer(64<<20, "Reducer.GetBuf").
+		WithAutoMmap(1<<30, filepath.Join(dir, bufferDir)).
+		WithMaxSize(64 << 30)
 }
 
 func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *countIndexer) {
