@@ -120,18 +120,17 @@ func (d *dedup) addValue(attr string, value types.Val, uid uint64) {
 	if value.Tid == types.UidID {
 		strKey = strconv.FormatUint(value.Value.(uint64), 10)
 	} else {
-		valC := types.Val{Tid: types.StringID, Value: ""}
-		err := types.Marshal(value, &valC)
-		if err != nil {
-			return
-		}
-		strKey = valC.Value.(string)
+		strKey = strconv.FormatUint(uid, 10)
 	}
 
 	if _, ok := cur.elements[strKey]; !ok {
 		// If this is the first element of the group.
+		v := value
+		if value.Tid != types.UidID {
+			v = types.Val{Tid: types.UidID, Value: uid}
+		}
 		cur.elements[strKey] = groupElements{
-			key:      value,
+			key:      v,
 			entities: &pb.List{Uids: []uint64{}},
 		}
 	}
@@ -234,6 +233,7 @@ func (sg *SubGraph) formResult(ul *pb.List) (*groupResults, error) {
 			}
 		} else {
 			// It's a value node.
+			valUidMap := make(map[types.Val][]uint64)
 			for i, v := range child.valueMatrix {
 				srcUid := child.SrcUIDs.Uids[i]
 				if len(v.Values) == 0 || algo.IndexOf(ul, srcUid) < 0 {
@@ -243,7 +243,19 @@ func (sg *SubGraph) formResult(ul *pb.List) (*groupResults, error) {
 				if err != nil {
 					continue
 				}
-				dedupMap.addValue(attr, val, srcUid)
+				valUidMap[val] = append(valUidMap[val], srcUid)
+			}
+			for _, uidList := range valUidMap {
+				for _, uid := range uidList {
+					//dedupMap.addValue(attr, types.Val{Tid: types.UidID, Value: uid}, uid)
+					cur := dedupMap.getGroup(attr)
+					if _, ok := cur.elements[strconv.FormatUint(uid, 10)]; !ok {
+						cur.elements[strconv.FormatUint(uid, 10)] = groupElements{
+							key:      types.Val{Tid: types.UidID, Value: uid},
+							entities: &pb.List{Uids: uidList},
+						}
+					}
+				}
 			}
 		}
 	}
@@ -312,6 +324,7 @@ func (sg *SubGraph) fillGroupedVars(doneVars map[string]varValue, path []*SubGra
 			pathNode = child
 		} else {
 			// It's a value node.
+			valUidMap := make(map[types.Val][]uint64)
 			for i, v := range child.valueMatrix {
 				srcUid := child.SrcUIDs.Uids[i]
 				if len(v.Values) == 0 {
@@ -321,7 +334,19 @@ func (sg *SubGraph) fillGroupedVars(doneVars map[string]varValue, path []*SubGra
 				if err != nil {
 					continue
 				}
-				dedupMap.addValue(attr, val, srcUid)
+				valUidMap[val] = append(valUidMap[val], srcUid)
+			}
+			for _, uidList := range valUidMap {
+				for _, uid := range uidList {
+					//dedupMap.addValue(attr, types.Val{Tid: types.UidID, Value: uid}, uid)
+					cur := dedupMap.getGroup(attr)
+					if _, ok := cur.elements[strconv.FormatUint(uid, 10)]; !ok {
+						cur.elements[strconv.FormatUint(uid, 10)] = groupElements{
+							key:      types.Val{Tid: types.UidID, Value: uid},
+							entities: &pb.List{Uids: uidList},
+						}
+					}
+				}
 			}
 		}
 	}
