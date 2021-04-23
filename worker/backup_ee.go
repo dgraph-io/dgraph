@@ -173,8 +173,11 @@ func doBackup(ctx context.Context, req *pb.BackupRequest, forceFull bool) error 
 		return err
 	}
 
-	req.SinceTs = latestManifest.Since
+	// Use the readTs as the sinceTs for the next backup. If not found, use the
+	// SinceTsDeprecated value from the latest manifest.
+	req.SinceTs = latestManifest.ValidReadTs()
 	if forceFull {
+		// To force a full backup we'll set the sinceTs to zero.
 		req.SinceTs = 0
 	} else {
 		if x.WorkerConfig.EncryptionKey != nil {
@@ -241,7 +244,7 @@ func doBackup(ctx context.Context, req *pb.BackupRequest, forceFull bool) error 
 
 	dir := fmt.Sprintf(backupPathFmt, req.UnixTs)
 	m := Manifest{
-		Since:          req.ReadTs,
+		ReadTs:         req.ReadTs,
 		Groups:         predMap,
 		Version:        x.DgraphVersion,
 		DropOperations: dropOperations,
@@ -584,8 +587,8 @@ func (pr *BackupProcessor) CompleteBackup(ctx context.Context, m *Manifest) erro
 
 // GoString implements the GoStringer interface for Manifest.
 func (m *Manifest) GoString() string {
-	return fmt.Sprintf(`Manifest{Since: %d, Groups: %v, Encrypted: %v}`,
-		m.Since, m.Groups, m.Encrypted)
+	return fmt.Sprintf(`Manifest{Since: %d, ReadTs: %d, Groups: %v, Encrypted: %v}`,
+		m.SinceTsDeprecated, m.ReadTs, m.Groups, m.Encrypted)
 }
 
 func (tl *threadLocal) toBackupList(key []byte, itr *badger.Iterator) (

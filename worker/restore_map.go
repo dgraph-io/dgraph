@@ -108,6 +108,7 @@ type loadBackupInput struct {
 	dropOperations []*pb.DropOperation
 	isOld          bool
 	keepSchema     bool
+	compression    string
 }
 
 type listReq struct {
@@ -577,7 +578,7 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) error {
 		if dropAll {
 			break
 		}
-		if manifest.Since == 0 || len(manifest.Groups) == 0 {
+		if manifest.ValidReadTs() == 0 || len(manifest.Groups) == 0 {
 			continue
 		}
 		for gid := range manifest.Groups {
@@ -589,7 +590,7 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) error {
 
 			// Only restore the predicates that were assigned to this group at the time
 			// of the last backup.
-			file := filepath.Join(manifest.Path, backupName(manifest.Since, gid))
+			file := filepath.Join(manifest.Path, backupName(manifest.ValidReadTs(), gid))
 			br := readerFrom(h, file).WithEncryption(encKey).WithCompression(manifest.Compression)
 			if br.err != nil {
 				return errors.Wrap(br.err, "newBackupReader")
@@ -609,7 +610,8 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) error {
 				isOld:          manifest.Version == 0,
 				restoreTs:      req.RestoreTs,
 				// Only map the schema keys corresponding to the latest backup.
-				keepSchema: i == 0,
+				keepSchema:  i == 0,
+				compression: manifest.Compression,
 			}
 
 			// This would stream the backups from the source, and map them in
