@@ -5650,20 +5650,21 @@ func multipleXidsTests(t *testing.T) {
 		{
 			name: "adding worker with different regNo and empId at deep level will add new node",
 			query: `mutation {
-                     addEmployer(
-                       input: [
-                         { company: "GraphQL", worker: { name: "Jack", regNo: 3, empId: "E03" } }
-                       ]
-                     ) {
-                       employer {
-                         company
-                         worker {
-                           name
-                           regNo
-                           empId
-                         }
-                       }
-                     }`,
+                          addEmployer(
+                            input: [
+                              { company: "GraphQL", worker: { name: "Jack", regNo: 3, empId: "E03" } }
+                            ]
+                          ) {
+                            employer {
+                              company
+                              worker {
+                                name
+                                regNo
+                                empId
+                              }
+                            }
+                          }
+                        }`,
 			expected: `{
                          "addEmployer": {
                              "employer": [
