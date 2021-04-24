@@ -18,6 +18,7 @@ package posting
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"encoding/hex"
 	"math"
@@ -232,7 +233,7 @@ func (txn *Txn) FillContext(ctx *api.TxnContext, gid uint32) {
 	ctx.Keys = x.Unique(ctx.Keys)
 
 	txn.Unlock()
-	txn.Update()
+	txn.Update(context.Background())
 	txn.cache.fillPreds(ctx, gid)
 }
 

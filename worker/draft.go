@@ -421,7 +421,7 @@ func (n *node) processMutations(ctx context.Context, m *pb.Mutations, txn *posti
 	}
 	// Discard the posting lists from cache to release memory at the end.
 	defer func() {
-		txn.Update()
+		txn.Update(ctx)
 		span.Annotate(nil, "update done")
 	}()
 

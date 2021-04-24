@@ -28,6 +28,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	ostats "go.opencensus.io/stats"
+	otrace "go.opencensus.io/trace"
 )
 
 var o *oracle
@@ -69,7 +70,8 @@ type Txn struct {
 	cache *LocalCache // This pointer does not get modified.
 	ErrCh chan error
 
-	sl *skl.Skiplist
+	slWait sync.WaitGroup
+	sl     *skl.Skiplist
 }
 
 // NewTxn returns a new Txn instance.
@@ -97,15 +99,22 @@ func (txn *Txn) EnsureDeltasArePopulated() {
 }
 
 func (txn *Txn) Skiplist() *skl.Skiplist {
+	txn.slWait.Wait()
 	return txn.sl
 }
 
 // Update calls UpdateDeltasAndDiscardLists on the local cache.
-func (txn *Txn) Update() {
+func (txn *Txn) Update(ctx context.Context) {
 	txn.cache.UpdateDeltasAndDiscardLists()
-	if err := txn.ToSkiplist(); err != nil {
-		glog.Errorf("While creating skiplist: %v\n", err)
-	}
+	txn.slWait.Add(1)
+	go func() {
+		if err := txn.ToSkiplist(); err != nil {
+			glog.Errorf("While creating skiplist: %v\n", err)
+		}
+		span := otrace.FromContext(ctx)
+		span.Annotate(nil, "ToSkiplist done")
+		txn.slWait.Done()
+	}()
 }
 
 // Store is used by tests.

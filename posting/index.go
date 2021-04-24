@@ -616,7 +616,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		}
 
 		// Convert data into deltas.
-		txn.Update()
+		txn.Update(ctx)
 
 		// txn.cache.Lock() is not required because we are the only one making changes to txn.
 		kvs := make([]*bpb.KV, 0, len(txn.cache.deltas))
