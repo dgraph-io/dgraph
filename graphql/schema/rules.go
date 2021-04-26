@@ -1299,7 +1299,7 @@ func lambdaOnMutateValidation(sch *ast.Schema, typ *ast.Definition) gqlerror.Lis
 	if x.LambdaUrl(x.GalaxyNamespace) == "" {
 		errs = append(errs, gqlerror.ErrorPosf(dir.Position,
 			"Type %s: has the @lambdaOnMutate directive, but the "+
-				"`--graphql_lambda_url` flag wasn't specified during alpha startup.", typ.Name))
+				"`--graphql lambda-url` flag wasn't specified during alpha startup.", typ.Name))
 	}
 
 	if typ.Directives.ForName(remoteDirective) != nil {
