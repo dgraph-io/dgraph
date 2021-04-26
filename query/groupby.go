@@ -315,6 +315,18 @@ func (sg *SubGraph) fillGroupedVars(doneVars map[string]varValue, path []*SubGra
 			pathNode = child
 		} else {
 			// It's a value node.
+
+			// Currently vars are supported only at the root.
+			// for eg, The following query will result into error:-
+			// 	v as var(func: uid(1,31)) {
+			// 		name
+			// 		friend @groupby(age) {
+			// 			a as count(uid)
+			// 		}
+			// 	}
+			if sg.SrcFunc == nil {
+				return errors.Errorf("Vars can be assigned only at root when grouped by Value")
+			}
 			valUidMap := make(map[types.Val][]uint64)
 			for i, v := range child.valueMatrix {
 				srcUid := child.SrcUIDs.Uids[i]
@@ -329,10 +341,10 @@ func (sg *SubGraph) fillGroupedVars(doneVars map[string]varValue, path []*SubGra
 			}
 			for _, uidList := range valUidMap {
 				for _, uid := range uidList {
-					//dedupMap.addValue(attr, types.Val{Tid: types.UidID, Value: uid}, uid)
+					strKey := strconv.FormatUint(uid, 10)
 					cur := dedupMap.getGroup(attr)
-					if _, ok := cur.elements[strconv.FormatUint(uid, 10)]; !ok {
-						cur.elements[strconv.FormatUint(uid, 10)] = groupElements{
+					if _, ok := cur.elements[strKey]; !ok {
+						cur.elements[strKey] = groupElements{
 							key:      types.Val{Tid: types.UidID, Value: uid},
 							entities: &pb.List{Uids: uidList},
 						}
