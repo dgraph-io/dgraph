@@ -668,7 +668,7 @@ func (s *Server) ShouldServe(
 func (s *Server) RemoveAlphaNode(ctx context.Context, member *pb.Member) (*pb.Status, error) {
 	glog.Info("Zero server RemoveAlphaNode() invoked start")
 
-	err := s.removeNode(ctx, member.Id, member.GroupId)
+	_, err := s.RemoveNode(ctx, &pb.RemoveNodeRequest{NodeId: member.Id, GroupId: member.GroupId})
 	if err != nil {
 		return nil, err
 	}
