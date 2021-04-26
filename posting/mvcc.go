@@ -29,7 +29,6 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger/v3"
-	bpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/badger/v3/skl"
 	"github.com/dgraph-io/badger/v3/y"
 	"github.com/dgraph-io/dgo/v210/protos/api"
@@ -83,7 +82,7 @@ func init() {
 }
 
 // rollUpKey takes the given key's posting lists, rolls it up and writes back to badger
-func (ir *incrRollupi) rollUpKey(writer *TxnWriter, key []byte) error {
+func (ir *incrRollupi) rollUpKey(sl *skl.Skiplist, key []byte) error {
 	l, err := GetNoStore(key, math.MaxUint64)
 	if err != nil {
 		return err
@@ -102,7 +101,23 @@ func (ir *incrRollupi) rollUpKey(writer *TxnWriter, key []byte) error {
 			glog.V(2).Infof("Rolled up %d keys", count)
 		}
 	}
-	return writer.Write(&bpb.KVList{Kv: kvs})
+
+	for _, kv := range kvs {
+		vs := y.ValueStruct{
+			Value: kv.Value,
+		}
+		if len(kv.UserMeta) > 0 {
+			vs.UserMeta = kv.UserMeta[0]
+		}
+		switch vs.UserMeta {
+		case BitCompletePosting, BitEmptyPosting:
+			vs.Meta = badger.BitDiscardEarlierVersions
+		default:
+		}
+		sl.Put(y.KeyWithTs(kv.Key, kv.Version), vs)
+	}
+
+	return nil
 }
 
 // TODO: When the opRollup is not running the keys from keysPool of ir are dropped. Figure out some
@@ -129,32 +144,47 @@ func (ir *incrRollupi) addKeyToBatch(key []byte, priority int) {
 func (ir *incrRollupi) Process(closer *z.Closer) {
 	defer closer.Done()
 
-	writer := NewTxnWriter(pstore)
-	defer writer.Flush()
-
 	m := make(map[uint64]int64) // map hash(key) to ts. hash(key) to limit the size of the map.
+
 	limiter := time.NewTicker(time.Millisecond)
 	defer limiter.Stop()
+
 	cleanupTick := time.NewTicker(5 * time.Minute)
 	defer cleanupTick.Stop()
+
 	forceRollupTick := time.NewTicker(500 * time.Millisecond)
 	defer forceRollupTick.Stop()
+
+	sl := skl.NewGrowingSkiplist(1 << 32)
 
 	doRollup := func(batch *[][]byte, priority int) {
 		currTs := time.Now().Unix()
 		for _, key := range *batch {
 			hash := z.MemHash(key)
-			if elem := m[hash]; currTs-elem >= 10 {
-				// Key not present or Key present but last roll up was more than 10 sec ago.
-				// Add/Update map and rollup.
-				m[hash] = currTs
-				if err := ir.rollUpKey(writer, key); err != nil {
-					glog.Warningf("Error %v rolling up key %v\n", err, key)
-				}
+			if elem := m[hash]; currTs-elem < 10 {
+				continue
+			}
+			// Key not present or Key present but last roll up was more than 10 sec ago.
+			// Add/Update map and rollup.
+			m[hash] = currTs
+			if err := ir.rollUpKey(sl, key); err != nil {
+				glog.Warningf("Error %v rolling up key %v\n", err, key)
 			}
 		}
 		*batch = (*batch)[:0]
 		ir.priorityKeys[priority].keysPool.Put(batch)
+
+		if sl.MemSize() < 64<<20 {
+			return
+		}
+		if err := x.RetryUntilSuccess(3600, time.Second, func() error {
+			return pstore.HandoverSkiplist(sl, nil)
+		}); err != nil {
+			glog.Errorf("rollupKey handover skiplist: %v\n", err)
+		}
+		// If we have an error, the skiplist might not be safe to use still. So,
+		// just create a new one always.
+		sl = skl.NewGrowingSkiplist(1 << 32)
 	}
 
 	for {
@@ -309,6 +339,7 @@ func (txn *Txn) ToSkiplist() error {
 	defer func() {
 		// Add these keys to be rolled up after we're done writing. This is the right place for them
 		// to be rolled up, because we just pushed these deltas over to Badger.
+		// TODO: This is no longer the right place. Figure out a new place for these keys.
 		// for _, key := range keys {
 		// 	IncrRollup.addKeyToBatch([]byte(key), 1)
 		// }

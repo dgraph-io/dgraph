@@ -382,7 +382,7 @@ func (n *node) mutationWorker(workerId int) {
 
 		txn := posting.Oracle().GetTxn(p.Mutations.StartTs)
 		x.AssertTruef(txn != nil, "Unable to find txn with start ts: %d", p.Mutations.StartTs)
-		txn.ErrCh <- n.processMutations(ctx, p.Mutations, txn)
+		txn.ErrCh <- n.concMutations(ctx, p.Mutations, txn)
 		close(txn.ErrCh)
 	}
 
@@ -399,7 +399,7 @@ func (n *node) mutationWorker(workerId int) {
 	}
 }
 
-func (n *node) processMutations(ctx context.Context, m *pb.Mutations, txn *posting.Txn) error {
+func (n *node) concMutations(ctx context.Context, m *pb.Mutations, txn *posting.Txn) error {
 	// It is possible that the user gives us multiple versions of the same edge, one with no facets
 	// and another with facets. In that case, use stable sort to maintain the ordering given to us
 	// by the user.
@@ -655,7 +655,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 
 	// If we have an error, re-run this.
 	span.Annotatef(nil, "Re-running mutation from applyCh. Runs: %d", runs)
-	return n.processMutations(ctx, m, txn)
+	return n.concMutations(ctx, m, txn)
 }
 
 func (n *node) applyCommitted(proposal *pb.Proposal) error {
