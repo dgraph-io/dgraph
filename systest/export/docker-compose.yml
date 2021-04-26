@@ -17,8 +17,8 @@ services:
       source: $GOPATH/bin
       target: /gobin
       read_only: true
-    - type: volume
-      source: data
+    - type: bind
+      source: ./data
       target: /data
       read_only: false
     command: /gobin/dgraph alpha --my=alpha1:7080 --zero=zero1:5080 --logtostderr
@@ -39,8 +39,8 @@ services:
       source: $GOPATH/bin
       target: /gobin
       read_only: true
-    - type: volume
-      source: data
+    - type: bind 
+      source: ./data
       target: /data
       read_only: false
     command: /gobin/dgraph alpha --my=alpha2:7080 --zero=zero1:5080 --logtostderr
@@ -61,8 +61,8 @@ services:
       source: $GOPATH/bin
       target: /gobin
       read_only: true
-    - type: volume
-      source: data
+    - type: bind 
+      source: ./data
       target: /data
       read_only: false
     command: /gobin/dgraph alpha --my=alpha3:7080 --zero=zero1:5080 --logtostderr
