@@ -2595,7 +2595,7 @@ func parseLanguageList(it *lex.ItemIterator) ([]string, error) {
 
 func validKeyAtRoot(k string) bool {
 	switch k {
-	case "func", "orderasc", "orderdesc", "first", "offset", "after":
+	case "func", "orderasc", "orderdesc", "first", "offset", "after", "random":
 		return true
 	case "from", "to", "numpaths", "minweight", "maxweight":
 		// Specific to shortest path
@@ -2609,7 +2609,7 @@ func validKeyAtRoot(k string) bool {
 // Check for validity of key at non-root nodes.
 func validKey(k string) bool {
 	switch k {
-	case "orderasc", "orderdesc", "first", "offset", "after":
+	case "orderasc", "orderdesc", "first", "offset", "after", "random":
 		return true
 	}
 	return false

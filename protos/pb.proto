@@ -74,6 +74,8 @@ message Query {
 	int32 cache = 14;
 	int32 first = 15; // used to limit the number of result. Typically, the count is value of first
 	// field. Now, It's been used only for has query.
+	int32 offset = 16; // offset helps in fetching lesser results for the has query when there is
+	// no filter and order.
 }
 
 message ValueList {

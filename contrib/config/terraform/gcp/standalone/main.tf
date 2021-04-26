@@ -14,7 +14,7 @@ provider "google" {
 resource "google_compute_instance" "dgraph_standalone" {
   name         = var.instance_name
   machine_type = var.instance_type
-  description  = "GCP compute instance for dgrpah in standalone mode, this instance alone hosts everything including zero, alpha and ratel."
+  description  = "GCP compute instance for dgraph in standalone mode, this instance alone hosts everything (zero and alpha)."
 
   tags = ["dgraph", "dgraph-standalone"]
 

@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"math/rand"
 	"sort"
 	"strconv"
 	"strings"
@@ -114,6 +115,8 @@ type params struct {
 	Count int
 	// Offset is the value of the "offset" parameter.
 	Offset int
+	// Random is the value of the "random" parameter
+	Random int
 	// AfterUID is the value of the "after" parameter.
 	AfterUID uint64
 	// DoCount is true if the count of the predicate is requested instead of its value.
@@ -745,6 +748,15 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 		}
 		args.Count = int(first)
 	}
+
+	if v, ok := gq.Args["random"]; ok {
+		random, err := strconv.ParseInt(v, 0, 32)
+		if err != nil {
+			return err
+		}
+		args.Random = int(random)
+	}
+
 	return nil
 }
 
@@ -939,8 +951,8 @@ func createTaskQuery(ctx context.Context, sg *SubGraph) (*pb.Query, error) {
 		sg.Params.ExpandAll = true
 	}
 
-	// count is to limit how many results we want.
-	first := calculateFirstN(sg)
+	// first is to limit how many results we want.
+	first, offset := calculatePaginationParams(sg)
 
 	out := &pb.Query{
 		ReadTs:       sg.ReadTs,
@@ -955,6 +967,7 @@ func createTaskQuery(ctx context.Context, sg *SubGraph) (*pb.Query, error) {
 		FacetsFilter: sg.facetsFilter,
 		ExpandAll:    sg.Params.ExpandAll,
 		First:        first,
+		Offset:       offset,
 	}
 
 	// Use the orderedUIDs if present, it will only be present for the shortest path case.
@@ -966,8 +979,9 @@ func createTaskQuery(ctx context.Context, sg *SubGraph) (*pb.Query, error) {
 	return out, nil
 }
 
-// calculateFirstN returns the count of result we need to proceed query further down.
-func calculateFirstN(sg *SubGraph) int32 {
+// calculatePaginationParams returns the (count, offset) of result
+// we need to proceed query further down.
+func calculatePaginationParams(sg *SubGraph) (int32, int32) {
 	// by default count is zero. (zero will retrieve all the results)
 	count := math.MaxInt32
 	// In order to limit we have to make sure that the this level met the following conditions
@@ -1000,12 +1014,12 @@ func calculateFirstN(sg *SubGraph) int32 {
 	}
 
 	if len(sg.Filters) == 0 && len(sg.Params.Order) == 0 && !shouldExclude {
-		// Offset also added because, we need n results to trim the offset.
 		if sg.Params.Count != 0 {
-			count = sg.Params.Count + sg.Params.Offset
+			return int32(sg.Params.Count), int32(sg.Params.Offset)
 		}
 	}
-	return int32(count)
+	// make offset = 0, if there is need to fetch all the results.
+	return int32(count), 0
 }
 
 // varValue is a generic representation of a variable and holds multiple things.
@@ -2285,10 +2299,14 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	}
 
 	if len(sg.Params.Order) == 0 && len(sg.Params.FacetsOrder) == 0 {
-		// There is no ordering. Just apply pagination and return.
-		if err = sg.applyPagination(ctx); err != nil {
-			rch <- err
-			return
+		// for `has` function when there is no filtering and ordering, we fetch
+		// correct paginated results so no need to apply pagination here.
+		if !(len(sg.Filters) == 0 && sg.SrcFunc != nil && sg.SrcFunc.Name == "has") {
+			// There is no ordering. Just apply pagination and return.
+			if err = sg.applyPagination(ctx); err != nil {
+				rch <- err
+				return
+			}
 		}
 	} else {
 		// If we are asked for count, we don't need to change the order of results.
@@ -2298,6 +2316,13 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 				rch <- err
 				return
 			}
+		}
+	}
+
+	if sg.Params.Random > 0 {
+		if err = sg.applyRandom(ctx); err != nil {
+			rch <- err
+			return
 		}
 	}
 
@@ -2396,6 +2421,43 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	}
 
 	rch <- childErr
+}
+
+// stores index of a uid as the index in the uidMatrix (x)
+// and index in the corresponding list of the uidMatrix (y)
+type UidKey struct {
+	x int
+	y int
+}
+
+// applies "random" to lists inside uidMatrix
+// sg.Params.Random number of nodes are selected in each uid list
+// duplicates are avoided (random selection without replacement)
+// if sg.Params.Random is more than the number of available nodes
+// all nodes are returned
+func (sg *SubGraph) applyRandom(ctx context.Context) error {
+	sg.updateUidMatrix()
+
+	for i := 0; i < len(sg.uidMatrix); i++ {
+		// shuffle the uid list and select the
+		// first sg.Params.Random uids
+
+		uidList := sg.uidMatrix[i].Uids
+
+		rand.Shuffle(len(uidList), func(i, j int) {
+			uidList[i], uidList[j] = uidList[j], uidList[i]
+		})
+
+		numRandom := sg.Params.Random
+		if sg.Params.Random > len(uidList) {
+			numRandom = len(uidList)
+		}
+
+		sg.uidMatrix[i].Uids = uidList[:numRandom]
+	}
+
+	sg.DestMap = codec.Merge(sg.uidMatrix)
+	return nil
 }
 
 // applyPagination applies count and offset to lists inside uidMatrix.
@@ -2641,7 +2703,7 @@ func (sg *SubGraph) sortAndPaginateUsingVar(ctx context.Context) error {
 func isValidArg(a string) bool {
 	switch a {
 	case "numpaths", "from", "to", "orderasc", "orderdesc", "first", "offset", "after", "depth",
-		"minweight", "maxweight":
+		"minweight", "maxweight", "random":
 		return true
 	}
 	return false

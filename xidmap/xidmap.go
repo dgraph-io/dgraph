@@ -20,6 +20,9 @@ import (
 	"context"
 	"encoding/binary"
 	"math/rand"
+	"regexp"
+	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -35,6 +38,8 @@ import (
 	"github.com/dgryski/go-farm"
 	"github.com/golang/glog"
 )
+
+var maxLeaseRegex = regexp.MustCompile(`currMax:([0-9]+)`)
 
 // XidMapOptions specifies the options for creating a new xidmap.
 type XidMapOptions struct {
@@ -290,12 +295,30 @@ func (m *XidMap) updateMaxSeen(max uint64) {
 // BumpTo can be used to make Zero allocate UIDs up to this given number. Attempts are made to
 // ensure all future allocations of UIDs be higher than this one, but results are not guaranteed.
 func (m *XidMap) BumpTo(uid uint64) {
-	curMax := atomic.LoadUint64(&m.maxUidSeen)
-	if uid <= curMax {
-		return
+	// If we have a cluster that cannot lease out new UIDs because it has already leased upto its
+	// max limit. Now, we try to live load the data with the given UIDs and the AssignIds complains
+	// that the limit has reached. Hence, update the xidmap's maxSeenUid and make progress.
+	updateLease := func(msg string) {
+		if !strings.Contains(msg, "limit has reached. currMax:") {
+			return
+		}
+		matches := maxLeaseRegex.FindAllStringSubmatch(msg, 1)
+		if len(matches) == 0 {
+			return
+		}
+		maxUidLeased, err := strconv.ParseUint(matches[0][1], 10, 64)
+		if err != nil {
+			glog.Errorf("While parsing currMax %+v", err)
+			return
+		}
+		m.updateMaxSeen(maxUidLeased)
 	}
 
 	for {
+		curMax := atomic.LoadUint64(&m.maxUidSeen)
+		if uid <= curMax {
+			return
+		}
 		glog.V(1).Infof("Bumping up to %v", uid)
 		num := x.Max(uid-curMax, 1e4)
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -307,6 +330,7 @@ func (m *XidMap) BumpTo(uid uint64) {
 			m.updateMaxSeen(assigned.EndId)
 			return
 		}
+		updateLease(err.Error())
 		glog.Errorf("While requesting AssignUids(%d): %v", num, err)
 		if x.IsJwtExpired(err) {
 			if err := m.relogin(); err != nil {

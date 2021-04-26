@@ -20,8 +20,7 @@ $ terraform plan
 $ terraform apply
 ```
 
-The output of `terraform apply` will contain the Load Balancer DNS name configured with the setup. Dgraph-ratel will be available on `<LB_DNS_NAME>:8000`.
-Change the server URL in the dashboard to `<LB_DNS_NAME>:8080` and start playing with dgraph.
+The output of `terraform apply` will contain the Load Balancer DNS name configured with the setup.
 
 5. Use `terraform destroy` to delete the setup and restore the previous state.
 

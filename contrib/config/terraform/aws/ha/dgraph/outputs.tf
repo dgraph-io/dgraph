@@ -23,21 +23,6 @@ output "zero_private_ips" {
   value       = module.zero.private_ips
 }
 
-output "ratel_target_group_id" {
-  description = "Target group associated with the created ratel instances."
-  value       = module.ratel.target_group_id
-}
-
-output "ratel_private_ips" {
-  description = "IP addresses of the created dgraph ratel instances."
-  value       = module.ratel.private_ips
-}
-
-output "ratel_port" {
-  description = "Port to which ratel UI server is listening."
-  value       = module.ratel.ratel_port
-}
-
 output "alpha_target_group_id" {
   description = "ID of the target group associated with alpha autoscaling group."
   value       = module.alpha.target_group_id

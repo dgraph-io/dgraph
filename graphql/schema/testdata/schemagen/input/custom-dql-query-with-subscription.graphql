@@ -5,12 +5,12 @@ type Tweets {
     timestamp: DateTime! @search
 }
 type User {
-    screen_name: String! @id
+    screenName: String! @id
     followers: Int @search
     tweets: [Tweets] @hasInverse(field: author)
 }
 type UserTweetCount @remote {
-    screen_name: String
+    screenName: String
     tweetCount: Int
 }
 
@@ -18,7 +18,7 @@ type Query {
     queryUserTweetCounts : [UserTweetCount] @withSubscription @custom(dql: """
         query {
             queryUserTweetCounts(func: type(User)) {
-                screen_name: User.screen_name
+                screenName: User.screenName
                 tweetCount: count(User.tweets)
             }
         }
