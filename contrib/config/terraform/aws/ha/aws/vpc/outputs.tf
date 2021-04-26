@@ -30,5 +30,5 @@ output "alb_sg_id" {
 
 output "client_sg_id" {
   value       = aws_security_group.dgraph_client.id
-  description = "Security group that can be used by the client to connect to the dgraph cluster alpha and ratel instance using ALB."
+  description = "Security group that can be used by the client to connect to the dgraph alpha instance using ALB."
 }

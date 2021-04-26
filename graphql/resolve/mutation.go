@@ -408,6 +408,49 @@ func (mr *dgraphResolver) rewriteAndExecute(
 					resolverFailed
 			}
 		}
+		// for update mutation, if @id field is present in set then we check that
+		// in filter only one node is selected. if there are multiple nodes selected,
+		// then it's not possible to update all of them with same value of @id fields.
+		// In that case we return error
+		if mutation.MutationType() == schema.UpdateMutation {
+			inp := mutation.ArgValue(schema.InputArgName).(map[string]interface{})
+			setArg := inp["set"]
+			objSet, okSetArg := setArg.(map[string]interface{})
+			if len(objSet) == 0 && okSetArg {
+				return emptyResult(
+						schema.GQLWrapf(errors.Errorf("not able to find set args"+
+							" in update mutation"),
+							"mutation %s failed", mutation.Name())),
+					resolverFailed
+			}
+
+			mutatedType := mutation.MutatedType()
+			var xidsPresent bool
+			if len(objSet) != 0 {
+				for _, xid := range mutatedType.XIDFields() {
+					if xidVal, ok := objSet[xid.Name()]; ok && xidVal != nil {
+						xidsPresent = true
+					}
+				}
+			}
+			// if @id field is present in set and there are multiple nodes returned from
+			// upsert query then we return error
+			if xidsPresent && len(result[mutation.Name()].([]interface{})) > 1 {
+				if queryAuthSelector(mutatedType) == nil {
+					return emptyResult(
+							schema.GQLWrapf(errors.Errorf("only one node is allowed in"+
+								" the filter while updating fields with @id directive"),
+								"mutation %s failed", mutation.Name())),
+						resolverFailed
+				}
+				return emptyResult(
+						schema.GQLWrapf(errors.Errorf("GraphQL debug: only one node is"+
+							" allowed in the filter while updating fields with @id directive"),
+							"mutation %s failed", mutation.Name())),
+					resolverFailed
+
+			}
+		}
 
 		copyTypeMap(upsert.NewNodes, newNodes)
 	}

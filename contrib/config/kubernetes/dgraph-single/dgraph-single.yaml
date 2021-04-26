@@ -20,13 +20,10 @@ spec:
   - port: 9080
     targetPort: 9080
     name: grpc-alpha
-  - port: 8000
-    targetPort: 8000
-    name: http-ratel
   selector:
     app: dgraph
 ---
-# This StatefulSet runs 1 pod with one Zero, one Alpha & one Ratel containers.
+# This StatefulSet runs 1 pod with one Zero container and one Alpha container.
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -43,14 +40,6 @@ spec:
         app: dgraph
     spec:
       containers:
-      - name: ratel
-        image: dgraph/dgraph:latest
-        imagePullPolicy: IfNotPresent
-        ports:
-        - containerPort: 8000
-          name: http-ratel
-        command:
-          - dgraph-ratel
       - name: zero
         image: dgraph/dgraph:latest
         imagePullPolicy: IfNotPresent

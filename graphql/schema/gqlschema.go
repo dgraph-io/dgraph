@@ -1286,8 +1286,8 @@ func addPatchType(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[
 
 	nonIDFields := getNonIDFields(schema, defn, providesTypeMap)
 	if len(nonIDFields) == 0 {
-		// The user might just have an external id field and nothing else. We don't generate patch
-		// type in that case.
+		// The user might just have an predicate with reverse edge id field and nothing else.
+		// We don't generate patch type in that case.
 		return
 	}
 
@@ -1815,9 +1815,6 @@ func addUpdatePayloadType(schema *ast.Schema, defn *ast.Definition, providesType
 		return
 	}
 
-	// This covers the case where the Type only had one field (which had @id directive).
-	// Since we don't allow updating the field with @id directive we don't need to generate any
-	// update payload.
 	if _, ok := schema.Types[defn.Name+"Patch"]; !ok {
 		return
 	}
@@ -2214,7 +2211,7 @@ func createField(schema *ast.Schema, fld *ast.FieldDefinition) *ast.FieldDefinit
 func getNonIDFields(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[string]bool) ast.FieldList {
 	fldList := make([]*ast.FieldDefinition, 0)
 	for _, fld := range defn.Fields {
-		if isIDField(defn, fld) || hasIDDirective(fld) {
+		if isIDField(defn, fld) {
 			continue
 		}
 

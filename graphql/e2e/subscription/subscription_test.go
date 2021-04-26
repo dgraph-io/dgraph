@@ -80,12 +80,12 @@ const (
 		timestamp: DateTime @search
    }
    type User {
-    	screen_name: String! @id
+    	screenName: String! @id
 		followers: Int @search
 		tweets: [Tweets] @hasInverse(field: author)
    }
    type UserTweetCount @remote {
-		screen_name: String
+		screenName: String
 		tweetCount: Int
    }
 
@@ -93,7 +93,7 @@ const (
   	queryUserTweetCounts: [UserTweetCount] @withSubscription @custom(dql: """
 		query {
 			queryUserTweetCounts(func: type(User)) {
-				screen_name: User.screen_name
+				screenName: User.screenName
 				tweetCount: count(User.tweets)
 			}
 		}
@@ -980,7 +980,7 @@ func TestSubscriptionWithCustomDQL(t *testing.T) {
 	add := &common.GraphQLParams{
 		Query: `mutation  {
 				addTweets(input: [
-					{text: "Graphql is best",author:{screen_name:"001"}},
+					{text: "Graphql is best",author:{screenName:"001"}},
 				]) {
 				    numUids
 				    tweets {
@@ -996,7 +996,7 @@ func TestSubscriptionWithCustomDQL(t *testing.T) {
 	subscriptionClient, err := common.NewGraphQLSubscription(subscriptionEndpoint, &schema.Request{
 		Query: `subscription {
 					queryUserTweetCounts{
-						screen_name
+						screenName
 						tweetCount
 					}
 				}`,
@@ -1010,7 +1010,7 @@ func TestSubscriptionWithCustomDQL(t *testing.T) {
 	require.NoError(t, err)
 	common.RequireNoGQLErrors(t, &subscriptionResp)
 
-	require.JSONEq(t, `{"queryUserTweetCounts":[{"screen_name":"001","tweetCount": 1}]}`, string(subscriptionResp.Data))
+	require.JSONEq(t, `{"queryUserTweetCounts":[{"screenName":"001","tweetCount": 1}]}`, string(subscriptionResp.Data))
 	require.Contains(t, subscriptionResp.Extensions, touchedUidskey)
 	require.Greater(t, int(subscriptionResp.Extensions[touchedUidskey].(float64)), 0)
 
@@ -1018,8 +1018,8 @@ func TestSubscriptionWithCustomDQL(t *testing.T) {
 	add = &common.GraphQLParams{
 		Query: `mutation  {
 				addTweets(input: [
-					{text: "Dgraph is best",author:{screen_name:"002"}}
-                    {text: "Badger is best",author:{screen_name:"001"}},
+					{text: "Dgraph is best",author:{screenName:"002"}}
+                    {text: "Badger is best",author:{screenName:"001"}},
 				]) {
 				    numUids
 				    tweets {
@@ -1043,7 +1043,7 @@ func TestSubscriptionWithCustomDQL(t *testing.T) {
 	common.RequireNoGQLErrors(t, &subscriptionResp)
 
 	// Check the latest update.
-	require.JSONEq(t, `{"queryUserTweetCounts":[{"screen_name":"001","tweetCount": 2},{"screen_name":"002","tweetCount": 1}]}`, string(subscriptionResp.Data))
+	require.JSONEq(t, `{"queryUserTweetCounts":[{"screenName":"001","tweetCount": 2},{"screenName":"002","tweetCount": 1}]}`, string(subscriptionResp.Data))
 	require.Contains(t, subscriptionResp.Extensions, touchedUidskey)
 	require.Greater(t, int(subscriptionResp.Extensions[touchedUidskey].(float64)), 0)
 

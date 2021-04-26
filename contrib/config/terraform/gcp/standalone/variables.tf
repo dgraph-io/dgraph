@@ -48,13 +48,7 @@ variable "instance_name" {
 variable "dgraph_version" {
   type        = string
   description = "Dgraph version for installation"
-  default     = "1.1.0"
-}
-
-variable "dgraph_ui_port" {
-  type        = string
-  description = "Port number of ratel interface"
-  default     = "8000"
+  default     = "21.03.0"
 }
 
 variable "assign_public_ip" {

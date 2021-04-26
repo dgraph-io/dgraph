@@ -1959,3 +1959,452 @@
           "Author.name": "Alice"
         }
       cond: "@if(gt(len(x), 0))"
+
+-
+  name: "Updating @id field when given values for @id fields doesn't exists"
+  explaination: "We are giving two @id fields title and ISBN in set part of update mutation,
+  and will generate two existence queries for both of them. As none of the @id field is present,we
+  update the values successfully "
+  gqlmutation: |
+    mutation update($patch: UpdateBookInput!) {
+      updateBook(input: $patch) {
+        book {
+          title
+          ISBN
+          publisher
+        }
+      }
+    }
+  gqlvariables: |
+    {
+        "patch": {
+            "filter": {
+                "or": [
+                    {
+                        "title": {
+                            "in": "Sapiens"
+                        }
+                    },
+                    {
+                        "ISBN": {
+                            "in": "2QSAT"
+                        }
+                    }
+                ]
+            },
+            "set": {
+                "title": "History of Humans",
+                "ISBN": "I001",
+                "publisher": "penguin"
+            }
+        }
+    }
+  dgquery: |-
+    query {
+      Book_1(func: eq(Book.ISBN, "I001")) @filter(type(Book)) {
+        uid
+      }
+      Book_2(func: eq(Book.title, "History of Humans")) @filter(type(Book)) {
+        uid
+      }
+    }
+  dgquerysec: |-
+    query {
+      x as updateBook(func: type(Book)) @filter((eq(Book.title, "Sapiens") OR eq(Book.ISBN, "2QSAT"))) {
+        uid
+      }
+    }
+  dgmutations:
+    - setjson: |
+        { "uid" : "uid(x)",
+          "Book.ISBN": "I001",
+          "Book.publisher": "penguin",
+          "Book.title": "History of Humans"
+        }
+      cond: "@if(gt(len(x), 0))"
+-
+  name: "Updating @id field when given value for @id fields exist in some node"
+  explaination: "We are giving two @id fields title and ISBN in set part of update mutation,
+  and will generate two existence queries for both of them.As we already have node with title
+   Sapiens, we will return error in this case "
+  gqlmutation: |
+    mutation update($patch: UpdateBookInput!) {
+      updateBook(input: $patch) {
+        book {
+          title
+          ISBN
+          publisher
+        }
+      }
+    }
+  gqlvariables: |
+    {
+        "patch": {
+            "filter": {
+                "or": [
+                    {
+                        "title": {
+                            "in": "Sapiens"
+                        }
+                    },
+                    {
+                        "ISBN": {
+                            "in": "2QSAT"
+                        }
+                    }
+                ]
+            },
+            "set": {
+                "title": "History of Humans",
+                "ISBN": "I001",
+                "publisher": "penguin"
+            }
+        }
+    }
+  dgquery: |-
+    query {
+      Book_1(func: eq(Book.ISBN, "I001")) @filter(type(Book)) {
+        uid
+      }
+      Book_2(func: eq(Book.title, "History of Humans")) @filter(type(Book)) {
+        uid
+      }
+    }
+  qnametouid: |-
+    {
+      "Book_2": "0x123"
+    }
+  error2:
+    { "message":
+        "failed to rewrite mutation payload because id History of Humans already exists for field title inside type Book"
+    }
+
+-
+  name: "skipping nullable @id values while Updating link to non-existent nested object"
+  explaination: "when we update link to nested field, we check if that node already exists or not,
+   In this case nested object doesn't exists and update mutation create it and link it to root object.
+   while creating nested object it skip @id nullable fields which don't exists in nested object, in this case
+     it skips commentId in nested type Comment1"
+  gqlmutation: |
+    mutation update($patch: UpdatePost1Input!) {
+      updatePost1(input: $patch) {
+        post1 {
+          id
+        }
+      }
+    }
+  gqlvariables: |
+    {
+        "patch": {
+            "filter": {
+                "id": {
+                    "in": "P02"
+                }
+            },
+            "set": {
+                "id": "P01",
+                "content": "intro to graphql",
+                "comments": {
+                    "id": "C01",
+                    "message": "nice intro!"
+                }
+            }
+        }
+    }
+  dgquery: |-
+    query {
+      Post1_1(func: eq(Post1.id, "P01")) @filter(type(Post1)) {
+        uid
+      }
+      Comment1_2(func: eq(Comment1.id, "C01")) @filter(type(Comment1)) {
+        uid
+      }
+    }
+  dgquerysec: |-
+    query {
+      x as updatePost1(func: type(Post1)) @filter(eq(Post1.id, "P02")) {
+        uid
+      }
+    }
+  dgmutations:
+    - setjson: |
+        {
+            "Post1.comments": [
+                {
+                    "Comment1.id": "C01",
+                    "Comment1.message": "nice intro!",
+                    "dgraph.type": [
+                        "Comment1"
+                    ],
+                    "uid": "_:Comment1_2"
+                }
+            ],
+            "Post1.content": "intro to graphql",
+            "Post1.id": "P01",
+            "uid": "uid(x)"
+        }
+      cond: "@if(gt(len(x), 0))"
+
+-
+  name: "Updating link to nested field require all the non-null id's to be present in nested field"
+  explaination: "when we update link to nested field then we check if that already exist or not,
+   In this case since @id field is not present in nested field, so we assume it to be a new node.
+   update mutation tries to create it but failed because non-nullable id field is required to add new
+   node."
+  gqlmutation: |
+    mutation update($patch: UpdatePost1Input!) {
+      updatePost1(input: $patch) {
+        post1 {
+          id
+        }
+      }
+    }
+  gqlvariables: |
+    {
+        "patch": {
+            "filter": {
+                        "id": {
+                            "in": "P02"
+                        }
+            },
+            "set": {
+                "id": "P01",
+                "content": "intro to graphql",
+                "comments":{
+                  "message":"nice intro!"
+               }
+            }
+        }
+    }
+  dgquery: |-
+    query {
+      Post1_1(func: eq(Post1.id, "P01")) @filter(type(Post1)) {
+        uid
+      }
+    }
+  error2:
+    { "message":
+        "failed to rewrite mutation payload because field id cannot be empty"
+    }
+
+-
+  name: "Updating inherited @id field with interface arg -1 "
+  explaination: "For this case we will generate one more existence query for inherited @id field refID which have
+  interface arg set. No node with given refID exist in same or other implementing type of interface so we will
+  successfully update node in this case"
+  gqlmutation: |
+    mutation update($patch: UpdateLibraryMemberInput!) {
+      updateLibraryMember(input: $patch) {
+        libraryMember {
+          refID
+        }
+      }
+    }
+  gqlvariables: |
+    {
+            "patch": {
+                "filter": {
+                            "refID": {
+                                "in": "101"
+                            }
+                },
+                "set": {
+                    "refID": "102",
+                    "name": "Alice",
+                    "readHours": "3d2hr"
+                }
+            }
+    }
+
+  dgquery: |-
+    query {
+      LibraryMember_1(func: eq(Member.name, "Alice")) @filter(type(LibraryMember)) {
+        uid
+      }
+      LibraryMember_2(func: eq(Member.refID, "102")) @filter(type(LibraryMember)) {
+        uid
+      }
+      LibraryMember_3(func: eq(Member.refID, "102")) @filter(type(Member)) {
+        uid
+      }
+    }
+  dgquerysec: |-
+    query {
+      x as updateLibraryMember(func: type(LibraryMember)) @filter(eq(Member.refID, "101")) {
+        uid
+      }
+    }
+  dgmutations:
+  - setjson: |
+        {
+            "LibraryMember.readHours":"3d2hr",
+            "Member.name":"Alice",
+            "Member.refID":"102",
+            "uid":"uid(x)"
+        }
+    cond: "@if(gt(len(x), 0))"
+
+-
+  name: "Updating inherited @id field with interface arg -2 "
+  explaination: "For this case we will generate one more existence query for inherited @id field refID.
+  There already exist node with refID in other implementing type of interface so we will generate error for this case"
+  gqlmutation: |
+    mutation update($patch: UpdateLibraryMemberInput!) {
+      updateLibraryMember(input: $patch) {
+        libraryMember {
+          refID
+        }
+      }
+    }
+  gqlvariables: |
+    {
+            "patch": {
+                "filter": {
+                            "refID": {
+                                "in": "101"
+                            }
+                },
+                "set": {
+                    "refID": "102",
+                    "name": "Alice",
+                    "readHours": "3d2hr"
+                }
+            }
+    }
+  dgquery: |-
+    query {
+      LibraryMember_1(func: eq(Member.name, "Alice")) @filter(type(LibraryMember)) {
+        uid
+      }
+      LibraryMember_2(func: eq(Member.refID, "102")) @filter(type(LibraryMember)) {
+        uid
+      }
+      LibraryMember_3(func: eq(Member.refID, "102")) @filter(type(Member)) {
+        uid
+      }
+    }
+  qnametouid: |-
+    {
+      "LibraryMember_3": "0x123"
+    }
+  error2:
+    {
+      "message": "failed to rewrite mutation payload because id 102 already exists for field refID
+         in some other implementing type of interface Member"
+    }
+
+-
+  name: "Updating link to nested object inheriting @id field with interface argument-1"
+  explaination: "If nested object have inherited @id field which have interface argument set, and that
+   field already exist in some other implementing type than we returns error.In below mutation manages
+  is of type LibraryMember but node with given refID already exist in some other
+   type than than LibraryMember"
+  gqlmutation: |
+    mutation update($patch: UpdateLibraryManagerInput!) {
+      updateLibraryManager(input: $patch) {
+        libraryManager {
+          name
+        }
+      }
+    }
+  gqlvariables: |
+    {
+            "patch": {
+                "filter": {
+                            "name": {
+                                "in": "Alice"
+                            }
+                },
+                "set": {
+                    "name": "Bob",
+                    "manages": {
+                       "refID":"101"
+                  }
+                }
+            }
+    }
+  dgquery: |-
+    query {
+      LibraryManager_1(func: eq(LibraryManager.name, "Bob")) @filter(type(LibraryManager)) {
+        uid
+      }
+      LibraryMember_2(func: eq(Member.refID, "101")) @filter(type(LibraryMember)) {
+        uid
+      }
+      LibraryMember_3(func: eq(Member.refID, "101")) @filter(type(Member)) {
+        uid
+      }
+    }
+  qnametouid: |-
+    {
+      "LibraryMember_3": "0x123"
+    }
+  error2:
+    {
+      "message": "failed to rewrite mutation payload because id 101 already exists for field refID
+         in some other implementing type of interface Member"
+    }
+
+-
+  name: "Updating link to nested object inheriting @id field with interface argument-2"
+  explaination: "In below mutation manages is of type LibraryMember and node of type LibraryMember already
+   existed with given refID, so we link that correctly"
+  gqlmutation: |
+    mutation update($patch: UpdateLibraryManagerInput!) {
+      updateLibraryManager(input: $patch) {
+        libraryManager {
+          name
+        }
+      }
+    }
+  gqlvariables: |
+    {
+            "patch": {
+                "filter": {
+                            "name": {
+                                "in": "Alice"
+                            }
+                },
+                "set": {
+                    "name": "Bob",
+                    "manages": {
+                       "refID":"101"
+                  }
+                }
+            }
+    }
+  dgquery: |-
+    query {
+      LibraryManager_1(func: eq(LibraryManager.name, "Bob")) @filter(type(LibraryManager)) {
+        uid
+      }
+      LibraryMember_2(func: eq(Member.refID, "101")) @filter(type(LibraryMember)) {
+        uid
+      }
+      LibraryMember_3(func: eq(Member.refID, "101")) @filter(type(Member)) {
+        uid
+      }
+    }
+  qnametouid: |-
+    {
+      "LibraryMember_2": "0x123",
+      "LibraryMember_3": "0x124"
+    }
+  dgquerysec: |-
+    query {
+      x as updateLibraryManager(func: type(LibraryManager)) @filter(eq(LibraryManager.name, "Alice")) {
+        uid
+      }
+    }
+  dgmutations:
+  - setjson: |
+       {
+         "LibraryManager.manages": [
+           {
+             "uid": "0x123"
+           }
+         ],
+         "LibraryManager.name": "Bob",
+         "uid": "uid(x)"
+       }
+    cond: "@if(gt(len(x), 0))"

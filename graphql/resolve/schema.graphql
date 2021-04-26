@@ -277,6 +277,7 @@ type Person1 {
 
 type Comment1 {
     id: String! @id
+    commentId: String
     message: String
     replies: [Comment1]
 }
@@ -390,15 +391,17 @@ type Node {
 type Book {
     id: ID!
     publisher: String
-    title: String! @id
-    ISBN: String! @id
+    title: String @id
+    ISBN: String @id
+    bookId: Int @id
     author: author
-
 }
 
 type author {
     id: ID!
-    name: String!
+    name: String
+    penName: String @id
+    authorId: String @id
     book: [Book] @hasInverse(field: author)
 }
 # test for entities resolver

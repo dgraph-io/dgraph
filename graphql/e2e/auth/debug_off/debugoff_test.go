@@ -145,8 +145,6 @@ func TestAddMutationWithAuthOnIDFieldHavingInterfaceArg(t *testing.T) {
 	gqlResponse := addLibraryMemberParams.ExecuteAsPost(t, common.GraphqlURL)
 	common.RequireNoGQLErrors(t, gqlResponse)
 
-	// add SportsMember should return error but in debug mode
-	// because interface type have auth rules defined on it
 	var resultLibraryMember struct {
 		AddLibraryMember struct {
 			NumUids int
@@ -156,6 +154,8 @@ func TestAddMutationWithAuthOnIDFieldHavingInterfaceArg(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, resultLibraryMember.AddLibraryMember.NumUids)
 
+	// add SportsMember should return error but in debug mode
+	// because interface type have auth rules defined on it
 	addSportsMemberParams := &common.GraphQLParams{
 		Query: `mutation addSportsMember($input: [AddSportsMemberInput!]!) {
                          addSportsMember(input: $input, upsert: false) {
@@ -184,6 +184,151 @@ func TestAddMutationWithAuthOnIDFieldHavingInterfaceArg(t *testing.T) {
 
 	// cleanup
 	common.DeleteGqlType(t, "LibraryMember", map[string]interface{}{}, 1, nil)
+}
+
+func TestUpdateMutationWithIDFields(t *testing.T) {
+
+	addEmployerParams := &common.GraphQLParams{
+		Query: `mutation addEmployer($input: [AddEmployerInput!]!) {
+                      addEmployer(input: $input, upsert: false) {
+                        numUids
+                      }
+                    }`,
+		Variables: map[string]interface{}{"input": []interface{}{
+			map[string]interface{}{
+				"company": "ABC tech",
+				"name":    "ABC",
+				"worker": map[string]interface{}{
+					"empId": "E01",
+					"regNo": 101,
+				},
+			}, map[string]interface{}{
+				"company": " XYZ tech",
+				"name":    "XYZ",
+				"worker": map[string]interface{}{
+					"empId": "E02",
+					"regNo": 102,
+				},
+			},
+		},
+		},
+	}
+
+	gqlResponse := addEmployerParams.ExecuteAsPost(t, common.GraphqlURL)
+	common.RequireNoGQLErrors(t, gqlResponse)
+	type resEmployer struct {
+		AddEmployer struct {
+			NumUids int
+		}
+	}
+	var resultEmployer resEmployer
+	err := json.Unmarshal(gqlResponse.Data, &resultEmployer)
+	require.NoError(t, err)
+	require.Equal(t, 4, resultEmployer.AddEmployer.NumUids)
+
+	// errors while updating node should be returned in debug mode,
+	// if type have auth rules defined on it
+
+	tcases := []struct {
+		name      string
+		query     string
+		variables string
+		error     string
+	}{{
+		name: "update mutation gives error when multiple nodes are selected in filter",
+		query: `mutation update($patch: UpdateEmployerInput!) {
+                  updateEmployer(input: $patch) {
+                    numUids
+                  }
+                }`,
+		variables: `{
+              "patch": {
+                  "filter": {
+                      "name": {
+                          "in": [
+                              "ABC",
+                              "XYZ"
+                          ]
+                      }
+                  },
+                  "set": {
+                      "name": "MNO",
+                      "company": "MNO tech"
+                  }
+              }
+        }`,
+	}, {
+		name: "update mutation gives error when given @id field already exist in some node",
+		query: `mutation update($patch: UpdateEmployerInput!) {
+                  updateEmployer(input: $patch) {
+                    numUids
+                  }
+                }`,
+		variables: `{
+                   "patch": {
+                       "filter": {
+                           "name": {
+                               "in": "ABC"
+                           }
+                       },
+                       "set": {
+                           "company": "ABC tech"
+                       }
+                   }
+               }`,
+	},
+		{
+			name: "update mutation gives error when multiple nodes are found at nested level" +
+				"while linking rot object to nested object",
+			query: `mutation update($patch: UpdateEmployerInput!) {
+                  updateEmployer(input: $patch) {
+                    numUids
+                  }
+                }`,
+			variables: `{
+                   "patch": {
+                       "filter": {
+                           "name": {
+                               "in": "ABC"
+                           }
+                       },
+                       "set": {
+                           "name": "JKL",
+                           "worker":{
+                              "empId":"E01",
+                              "regNo":102
+                          }
+                       }
+                   }
+               }`,
+		},
+	}
+
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			var vars map[string]interface{}
+			var resultEmployerErr resEmployer
+			if tcase.variables != "" {
+				err := json.Unmarshal([]byte(tcase.variables), &vars)
+				require.NoError(t, err)
+			}
+			params := &common.GraphQLParams{
+				Query:     tcase.query,
+				Variables: vars,
+			}
+
+			resp := params.ExecuteAsPost(t, common.GraphqlURL)
+			err := json.Unmarshal(resp.Data, &resultEmployerErr)
+			require.NoError(t, err)
+			require.Equal(t, 0, resultEmployerErr.AddEmployer.NumUids)
+		})
+	}
+
+	// cleanup
+	filterEmployer := map[string]interface{}{"name": map[string]interface{}{"in": []string{"ABC", "XYZ"}}}
+	filterWorker := map[string]interface{}{"empId": map[string]interface{}{"in": []string{"E01", "E02"}}}
+	common.DeleteGqlType(t, "Employer", filterEmployer, 2, nil)
+	common.DeleteGqlType(t, "Worker", filterWorker, 2, nil)
 }
 
 func TestMain(m *testing.M) {

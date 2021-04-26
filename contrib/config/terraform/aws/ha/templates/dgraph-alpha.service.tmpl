@@ -5,7 +5,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/dgraph alpha --my=$(hostname -f):7080 --zero ${healthy_zero_ip}:5080 -p /var/run/dgraph/p -w /var/run/dgraph/w
+ExecStart=/usr/local/bin/dgraph alpha --my=$(hostname -f):7080 --zero ${healthy_zero_ip}:5080 -p /var/run/dgraph/p -w /var/run/dgraph/w --tmp /var/run/dgraph/t
 StandardOutput=journal
 StandardError=journal
 User=dgraph

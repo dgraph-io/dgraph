@@ -494,6 +494,7 @@ input ProductOrder {
 }
 
 input ProductPatch {
+	upc: String
 	inStock: Boolean
 	shippingEstimate: Float
 }

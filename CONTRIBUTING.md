@@ -133,7 +133,7 @@ Copyright 2015-2018 Dgraph Labs, Inc.
 ```
 
 For release images, follow [Doing a release](#doing-a-release). It creates
-Docker images that contains `dgraph`, `dgraph-ratel`, and `badger` commands.
+Docker images that contains `dgraph` and `badger` commands.
 
 ### Testing
 

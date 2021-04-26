@@ -31,18 +31,18 @@ If you are using this script on a system other than alpha, we'll call this *back
 
 ## Demo (Test) with local file path
 
-You can try out these features using [Docker Compose](https://docs.docker.com/compose/).  There's a `./compose-setup.sh` script that can configure the environment with the desired features.  As you need to have a common shared directory for file paths, you can use `ratel` container as the *backup workstation* to run the backup script.
+You can try out these features using [Docker Compose](https://docs.docker.com/compose/).  There's a `./compose-setup.sh` script that can configure the environment with the desired features.  As you need to have a common shared directory for file paths, you can use `alpha1` container to run the backup script and backup to the shared `/dgraph/backups` directory.
 
 As an example of performing backups with a local mounted file path using ACLs, Encryption, and TLS, you can follow these steps:
 
-1. Setup Environment and log into *backup workstation* (ratel container):
+1. Setup Environment and log into *backup workstation* (Alpha container):
    ```bash
    ## configure docker-compose environment
    ./compose-setup.sh --acl --enc --tls --make_tls_cert
    ## run demo
    docker-compose up --detach
-   ## login into Ratel to use for backups
-   docker exec --tty --interactive ratel bash
+   ## login into Alpha to use for backups
+   docker exec --tty --interactive alpha1 bash
    ```
 2. Trigger a full backup:
    ```bash
@@ -60,7 +60,7 @@ As an example of performing backups with a local mounted file path using ACLs, E
    ## check for backup files
    ls /dgraph/backups
    ```
-4. Logout of the Ratel container
+4. Logout of the Alpha container
    ```bash
    exit
    ```

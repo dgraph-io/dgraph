@@ -6,7 +6,7 @@ Requires=dgraph-zero.service
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/dgraph alpha -p /var/run/dgraph/p -w /var/run/dgraph/w
+ExecStart=/usr/local/bin/dgraph alpha -p /var/run/dgraph/p -w /var/run/dgraph/w --tmp /var/run/dgraph/t
 StandardOutput=journal
 StandardError=journal
 User=dgraph
