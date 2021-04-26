@@ -20,14 +20,15 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	"github.com/dgraph-io/dgraph/worker"
-	"go.uber.org/zap"
 	"log"
 	"math"
 	"sort"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/dgraph-io/dgraph/worker"
+	"go.uber.org/zap"
 
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/ee/audit"
@@ -733,9 +734,13 @@ func (n *node) initAndStartNode() error {
 	switch {
 	case restart:
 		if !n.forceNewCluster {
-			n.restartNode()
+			if err := n.restartNode(); err != nil {
+				return err
+			}
 		} else {
-			n.restartAsStandaloneNode()
+			if err := n.restartAsStandaloneNode(); err != nil {
+				return err
+			}
 		}
 
 	case len(opts.peer) > 0:

@@ -2166,9 +2166,13 @@ func (n *node) InitAndStartNode() {
 
 	if restart {
 		if !n.forceNewCluster {
-			n.restartNode()
+			if err := n.restartNode(); err != nil {
+				glog.Fatal(err)
+			}
 		} else {
-			n.restartAsStandaloneNode()
+			if err := n.restartAsStandaloneNode(); err != nil {
+				glog.Fatal(err)
+			}
 		}
 
 	} else {

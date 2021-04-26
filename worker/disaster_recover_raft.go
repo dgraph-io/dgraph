@@ -13,14 +13,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package worker
 
 import (
+	"sort"
+
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/golang/glog"
 	"go.etcd.io/etcd/raft/raftpb"
 	"go.uber.org/zap"
-	"sort"
 )
 
 // Uint64Slice implements sort interface
