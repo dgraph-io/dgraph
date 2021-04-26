@@ -1269,7 +1269,7 @@ func (n *node) updateRaftProgress() error {
 	atomic.StoreUint64(&n.checkpointTs, snap.ReadTs)
 
 	n.Store.SetUint(raftwal.CheckpointIndex, snap.GetIndex())
-	glog.V(2).Infof("[%#x] Set Raft progress to index: %d, ts: %d.", n.Id, snap.Index, snap.ReadTs)
+	glog.V(2).Infof("[%#x] Set Raft checkpoint to index: %d, ts: %d.", n.Id, snap.Index, snap.ReadTs)
 	return nil
 }
 
@@ -1279,6 +1279,28 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 
 	slowTicker := time.NewTicker(time.Minute)
 	defer slowTicker.Stop()
+
+	exceededSnapshotByEntries := func() bool {
+		if snapshotAfterEntries == 0 {
+			// If snapshot-after isn't set, return true always.
+			return true
+		}
+		chk, err := n.Store.Checkpoint()
+		if err != nil {
+			glog.Errorf("While reading checkpoint: %v", err)
+			return false
+		}
+		first, err := n.Store.FirstIndex()
+		if err != nil {
+			glog.Errorf("While reading first index: %v", err)
+			return false
+		}
+		// If we're over snapshotAfterEntries, calculate would be true.
+		glog.V(3).Infof("Evaluating snapshot first:%d chk:%d (chk-first:%d) "+
+			"snapshotAfterEntries:%d", first, chk, chk-first,
+			snapshotAfterEntries)
+		return chk-first > snapshotAfterEntries
+	}
 
 	lastSnapshotTime := time.Now()
 	snapshotFrequency := x.WorkerConfig.Raft.GetDuration("snapshot-after-duration")
@@ -1304,13 +1326,23 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 					continue
 				}
 
-				// If we don't have a snapshot, or if there are too many log files in Raft,
-				// calculate would be true.
+				// calculate would be true if:
+				// - snapshot is empty.
+				// - we have more than 4 log files in Raft WAL.
+				// - snapshot frequency is zero and exceeding threshold entries.
+				// - we have exceeded the threshold time since last snapshot and exceeding threshold
+				//   entries.
+				//
+				// Note: In case we're exceeding threshold entries, but have not exceeded the threshold
+				//   time since last snapshot, calculate would be false.
 				calculate := raft.IsEmptySnap(snap) || n.Store.NumLogFiles() > 4
-				if snapshotFrequency > 0 {
-					// If we haven't taken a snapshot since snapshotFrequency, calculate would be
-					// true.
-					calculate = calculate || time.Since(lastSnapshotTime) > snapshotFrequency
+				if snapshotFrequency == 0 {
+					calculate = calculate || exceededSnapshotByEntries()
+
+				} else if time.Since(lastSnapshotTime) > snapshotFrequency {
+					// If we haven't taken a snapshot since snapshotFrequency, calculate would
+					// follow snapshot entries.
+					calculate = calculate || exceededSnapshotByEntries()
 				}
 
 				// Check if we're snapshotAfterEntries away from the FirstIndex based off the last
@@ -1400,7 +1432,7 @@ func (n *node) Run() {
 	if err != nil {
 		glog.Errorf("While trying to find raft progress: %v", err)
 	} else {
-		glog.Infof("Found Raft progress: %d", applied)
+		glog.Infof("Found Raft checkpoint: %d", applied)
 	}
 
 	var timer x.Timer
