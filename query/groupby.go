@@ -327,7 +327,9 @@ func (sg *SubGraph) fillGroupedVars(doneVars map[string]varValue, path []*SubGra
 			if sg.SrcFunc == nil {
 				return errors.Errorf("Vars can be assigned only at root when grouped by Value")
 			}
-			valUidMap := make(map[types.Val][]uint64)
+
+			// valUidListMap gathers all the uids corresponding to one value.
+			valUidListMap := make(map[types.Val][]uint64)
 			for i, v := range child.valueMatrix {
 				srcUid := child.SrcUIDs.Uids[i]
 				if len(v.Values) == 0 {
@@ -337,9 +339,13 @@ func (sg *SubGraph) fillGroupedVars(doneVars map[string]varValue, path []*SubGra
 				if err != nil {
 					continue
 				}
-				valUidMap[val] = append(valUidMap[val], srcUid)
+				valUidListMap[val] = append(valUidListMap[val], srcUid)
 			}
-			for _, uidList := range valUidMap {
+			// for each uidList corresponding to one value, for eg:
+			// v1 -> [u1, u2, u3], groups are made in following way:
+			// u1 -> [u1, u2, u3], u2 -> [u1, u2, u3], u3 -> [u1, u2, u3]
+			// Hence, u_i contains all the uids having same value.
+			for _, uidList := range valUidListMap {
 				for _, uid := range uidList {
 					strKey := strconv.FormatUint(uid, 10)
 					cur := dedupMap.getGroup(attr)
