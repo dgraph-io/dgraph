@@ -992,24 +992,9 @@ func (n *node) processApplyCh() {
 	}
 }
 
-// TODO(Anurag - 4 May 2020): Are we using pkey? Remove if unused.
-func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
-	// First let's commit all mutations to disk.
+func (n *node) commitOrAbort(_ uint64, delta *pb.OracleDelta) error {
 	_, span := otrace.StartSpan(context.Background(), "node.commitOrAbort")
 	defer span.End()
-
-	// buf := z.NewBuffer(1<<20, "commitOrAbort")
-	// defer buf.Release()
-
-	// s := pstore.NewSkiplist()
-	// toSkiplist := func(txn *posting.Txn, commit uint64) {
-	// 	err := txn.ToSkiplist(s, commit)
-	// 	if err != nil {
-	// 		glog.Errorf("Error while applying txn status to disk (%d -> %d): %v",
-	// 			txn.StartTs, commit, err)
-	// 	}
-	// 	span.Annotatef(nil, "internal toDisk done for %d keys", len(txn.Deltas()))
-	// }
 
 	span.Annotate(nil, "Start")
 	start := time.Now()
@@ -1017,13 +1002,13 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 
 	itrStart := time.Now()
 	var itrs []y.Iterator
+	var txns []*posting.Txn
 	for _, status := range delta.Txns {
 		txn := posting.Oracle().GetTxn(status.StartTs)
 		if txn == nil {
 			continue
 		}
 		txn.EnsureDeltasArePopulated()
-		// txn.Update()
 		for k := range txn.Deltas() {
 			n.keysWritten.keyCommitTs[z.MemHashString(k)] = status.CommitTs
 		}
@@ -1032,8 +1017,10 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 		if len(txn.Deltas()) == 0 {
 			continue
 		}
+		txns = append(txns, txn)
 
 		// Iterate to set the commit timestamp for all keys.
+		// Skiplist can block if the conversion to Skiplist isn't done yet.
 		itr := txn.Skiplist().NewIterator()
 		itr.SeekToFirst()
 		for itr.Valid() {
@@ -1046,51 +1033,28 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 		itr.Close()
 
 		itrs = append(itrs, txn.Skiplist().NewUniIterator(false))
-
-		// err := x.RetryUntilSuccess(3600, time.Second, func() error {
-		// 	if numKeys == 0 {
-		// 		return nil
-		// 	}
-		// 	return pstore.HandoverSkiplist(txn.Skiplist())
-		// })
 	}
-	span.Annotatef(nil, "num keys: %d itr: %s\n", numKeys, time.Since(itrStart))
+	span.Annotatef(nil, "Num keys: %d Itr: %s\n", numKeys, time.Since(itrStart))
 	ostats.Record(n.ctx, x.NumEdges.M(int64(numKeys)))
 
-	// if len(itrs) > 0 {
-	// 	sn := time.Now()
-	// 	mi := table.NewMergeIterator(itrs, false)
-	// 	mi.Rewind()
-	// 	buf := z.NewBuffer(4<<20, "commitOrAbort")
-	// 	defer buf.Release()
+	// This would be used for callback via Badger when skiplist is pushed to
+	// disk.
+	deleteTxns := func() {
+		posting.Oracle().DeleteTxns(delta)
+	}
 
-	// 	var keys int
-	// 	for mi.Valid() {
-	// 		key := mi.Key()
-	// 		buf.Write(key)
-	// 		vs := mi.Value()
-	// 		dst := buf.Allocate(int(vs.EncodedSize()))
-	// 		vs.Encode(dst)
+	if len(itrs) == 0 {
+		deleteTxns()
 
-	// 		keys++
-	// 		mi.Next()
-	// 	}
-	// 	span.Annotatef(nil, "Iterating and buf over %d keys took: %s", keys, time.Since(sn))
-	// }
-	if len(itrs) > 0 {
+	} else {
 		sn := time.Now()
 		mi := table.NewMergeIterator(itrs, false)
 		mi.Rewind()
 
-		// builder := skl.NewBuilder(64 << 20) // Fix up the arena size.
-		// TODO: Have a way to grow the arena.
-		// dst := pstore.NewSkiplist()
-		b := skl.NewBuilder(256 << 10)
-
 		var keys int
+		b := skl.NewBuilder(256 << 10)
 		for mi.Valid() {
 			b.Add(mi.Key(), mi.Value())
-
 			keys++
 			mi.Next()
 		}
@@ -1099,68 +1063,22 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 			if numKeys == 0 {
 				return nil
 			}
-			return pstore.HandoverSkiplist(b.Skiplist())
+			// We do the pending txn deletion in the callback, so that our snapshot and checkpoint
+			// tracking would only consider the txns which have been successfully pushed to disk.
+			return pstore.HandoverSkiplist(b.Skiplist(), deleteTxns)
 		})
 		if err != nil {
 			glog.Errorf("while handing over skiplist: %v\n", err)
 		}
-		span.Annotate(nil, "hand over skiplist done")
+		span.Annotatef(nil, "Handover skiplist done for %d txns, %d keys", len(delta.Txns), numKeys)
 	}
 
-	// for _, status := range delta.Txns {
-	// 	txn := posting.Oracle().GetTxn(status.StartTs)
-	// 	if txn == nil {
-	// 		continue
-	// 	}
-	// 	txn.ToSkiplist(s, status.CommitTs)
-	// }
-	// span.Annotate(nil, "done skiplist. iterating")
-	// itr := s.NewUniIterator(false)
-	// itr.Rewind()
-	// var count int
-	// for itr.Valid() {
-	// 	_ = itr.Key()
-	// 	itr.Next()
-	// 	count++
-	// }
-	// span.Annotatef(nil, "skiplist itr: %d\n", count)
-
-	// span.Annotate(nil, "toBuffer")
-	// for _, status := range delta.Txns {
-	// 	txn := posting.Oracle().GetTxn(status.StartTs)
-	// 	if txn == nil {
-	// 		continue
-	// 	}
-	// 	txn.ToBuffer(buf, status.CommitTs)
-	// }
-	// span.Annotate(nil, "done toBuffer")
-	// buf.SortSlice(func(ls, rs []byte) bool {
-	// 	lsz := binary.BigEndian.Uint16(ls)
-	// 	rsz := binary.BigEndian.Uint16(rs)
-	// 	return y.CompareKeys(ls[2:2+lsz], rs[2:2+rsz]) < 0
-	// })
-	// span.Annotate(nil, "sort buffer done")
-
-	span.Annotatef(nil, "toDisk done for %d txns %d keys", len(delta.Txns), numKeys)
 	ms := x.SinceMs(start)
 	tags := []tag.Mutator{tag.Upsert(x.KeyMethod, "apply.toDisk")}
 	x.Check(ostats.RecordWithTags(context.Background(), tags, x.LatencyMs.M(ms)))
 
-	// err := x.RetryUntilSuccess(3600, time.Second, func() error {
-	// 	if numKeys == 0 {
-	// 		return nil
-	// 	}
-	// 	return pstore.HandoverSkiplist(s)
-	// })
-	// x.Check(err)
-	span.Annotate(nil, "flush done")
-	// glog.Infof("Pushed %d skiplis of size: %d %d\n", s.MemSize(), numKeys)
-	if x.WorkerConfig.HardSync {
-		if err := pstore.Sync(); err != nil {
-			glog.Errorf("Error while calling Sync while commitOrAbort: %v", err)
-		}
-		span.Annotate(nil, "hard sync done")
-	}
+	// Before, we used to call pstore.Sync() here. We don't need to do that
+	// anymore because we're not using Badger's WAL.
 
 	g := groups()
 	if delta.GroupChecksums != nil && delta.GroupChecksums[g.groupId()] > 0 {
