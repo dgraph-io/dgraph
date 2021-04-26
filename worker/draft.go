@@ -1277,11 +1277,11 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 	snapshotAfterEntries := x.WorkerConfig.Raft.GetUint64("snapshot-after-entries")
 	x.AssertTruef(snapshotAfterEntries > 10, "raft.snapshot-after must be a number greater than 10")
 
-	snapshotFrequency := x.WorkerConfig.Raft.GetDuration("snapshot-after-duration")
-	slowTicker := time.NewTicker(snapshotFrequency)
+	slowTicker := time.NewTicker(time.Minute)
 	defer slowTicker.Stop()
 
 	lastSnapshotTime := time.Now()
+	snapshotFrequency := x.WorkerConfig.Raft.GetDuration("snapshot-after-duration")
 	for {
 		select {
 		case <-slowTicker.C:
@@ -1305,17 +1305,20 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 				}
 
 				// If we don't have a snapshot, or if there are too many log files in Raft,
-				// calculate a new snapshot.
+				// calculate would be true.
 				calculate := raft.IsEmptySnap(snap) || n.Store.NumLogFiles() > 4
+				if snapshotFrequency > 0 {
+					// If we haven't taken a snapshot since snapshotFrequency, calculate would be
+					// true.
+					calculate = calculate || time.Since(lastSnapshotTime) > snapshotFrequency
+				}
 
-				// Only take snapshot if both snapshotFrequency and
-				// snapshotAfterEntries requirements are met. If set to 0,
-				// we consider duration condition to be disabled.
-				if snapshotFrequency == 0 || time.Since(lastSnapshotTime) > snapshotFrequency {
-					if chk, err := n.Store.Checkpoint(); err == nil {
-						if first, err := n.Store.FirstIndex(); err == nil {
-							// Save some cycles by only calculating snapshot if the checkpoint
-							// has gone quite a bit further than the first index.
+				// Check if we're snapshotAfterEntries away from the FirstIndex based off the last
+				// checkpoint. This is a cheap operation. We're not iterating over the logs.
+				if chk, err := n.Store.Checkpoint(); err == nil {
+					if first, err := n.Store.FirstIndex(); err == nil {
+						// If we're over snapshotAfterEntries, calculate would be true.
+						if snapshotAfterEntries > 0 {
 							calculate = calculate || chk >= first+snapshotAfterEntries
 							glog.V(3).Infof("Evaluating snapshot first:%d chk:%d (chk-first:%d) "+
 								"snapshotAfterEntries:%d snap:%v", first, chk, chk-first,
