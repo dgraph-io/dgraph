@@ -23,7 +23,7 @@ func NewAddGroupRewriter() resolve.MutationRewriter {
 // AddRewriter.
 func (mrw *addGroupRewriter) RewriteQueries(
 	ctx context.Context,
-	m schema.Mutation) ([]*gql.GraphQuery, error) {
+	m schema.Mutation) ([]*gql.GraphQuery, []schema.Type, error) {
 
 	return ((*resolve.AddRewriter)(mrw)).RewriteQueries(ctx, m)
 }
