@@ -152,11 +152,26 @@ func (ir *incrRollupi) Process(closer *z.Closer) {
 	cleanupTick := time.NewTicker(5 * time.Minute)
 	defer cleanupTick.Stop()
 
-	forceRollupTick := time.NewTicker(500 * time.Millisecond)
-	defer forceRollupTick.Stop()
+	baseTick := time.NewTicker(500 * time.Millisecond)
+	defer baseTick.Stop()
 
-	sl := skl.NewGrowingSkiplist(1 << 32)
+	const initSize = 1 << 20
+	sl := skl.NewGrowingSkiplist(initSize)
 
+	handover := func() {
+		if sl.Empty() {
+			return
+		}
+		if err := x.RetryUntilSuccess(3600, time.Second, func() error {
+			glog.V(2).Infof("Handing over a skiplist of size: %d\n", sl.MemSize())
+			return pstore.HandoverSkiplist(sl, nil)
+		}); err != nil {
+			glog.Errorf("rollupKey handover skiplist: %v\n", err)
+		}
+		// If we have an error, the skiplist might not be safe to use still. So,
+		// just create a new one always.
+		sl = skl.NewGrowingSkiplist(initSize)
+	}
 	doRollup := func(batch *[][]byte, priority int) {
 		currTs := time.Now().Unix()
 		for _, key := range *batch {
@@ -173,20 +188,9 @@ func (ir *incrRollupi) Process(closer *z.Closer) {
 		}
 		*batch = (*batch)[:0]
 		ir.priorityKeys[priority].keysPool.Put(batch)
-
-		if sl.MemSize() < 64<<20 {
-			return
-		}
-		if err := x.RetryUntilSuccess(3600, time.Second, func() error {
-			return pstore.HandoverSkiplist(sl, nil)
-		}); err != nil {
-			glog.Errorf("rollupKey handover skiplist: %v\n", err)
-		}
-		// If we have an error, the skiplist might not be safe to use still. So,
-		// just create a new one always.
-		sl = skl.NewGrowingSkiplist(1 << 32)
 	}
 
+	var ticks int
 	for {
 		select {
 		case <-closer.HasBeenClosed():
@@ -199,12 +203,16 @@ func (ir *incrRollupi) Process(closer *z.Closer) {
 					delete(m, hash)
 				}
 			}
-		case <-forceRollupTick.C:
+		case <-baseTick.C:
 			batch := ir.priorityKeys[0].keysPool.Get().(*[][]byte)
 			if len(*batch) > 0 {
 				doRollup(batch, 0)
 			} else {
 				ir.priorityKeys[0].keysPool.Put(batch)
+			}
+			ticks++
+			if ticks%4 == 0 { // base tick is every 500ms. This is 2s.
+				handover()
 			}
 		case batch := <-ir.priorityKeys[0].keysCh:
 			doRollup(batch, 0)
