@@ -142,6 +142,31 @@ func (e *exporter) toJSON() (*bpb.KVList, error) {
 	// We could output more compact JSON at the cost of code complexity.
 	// Leaving it simple for now.
 
+	writeFacets := func(pfacets []*api.Facet) error {
+		for _, fct := range pfacets {
+			fmt.Fprintf(bp, `,"%s|%s":`, e.attr, fct.Key)
+
+			str, err := facetToString(fct)
+			if err != nil {
+				glog.Errorf("Ignoring error: %+v", err)
+				return nil
+			}
+
+			tid, err := facets.TypeIDFor(fct)
+			if err != nil {
+				glog.Errorf("Error getting type id from facet %#v: %v", fct, err)
+				continue
+			}
+
+			if !tid.IsNumber() {
+				str = escapedString(str)
+			}
+
+			fmt.Fprint(bp, str)
+		}
+		return nil
+	}
+
 	continuing := false
 	mapStart := fmt.Sprintf("  {\"uid\":"+uidFmtStrJson+`,"namespace":"0x%x"`, e.uid, e.namespace)
 	err := e.pl.IterateAll(e.readTs, 0, func(p *pb.Posting) error {
@@ -154,8 +179,11 @@ func (e *exporter) toJSON() (*bpb.KVList, error) {
 		fmt.Fprint(bp, mapStart)
 		if p.PostingType == pb.Posting_REF {
 			fmt.Fprintf(bp, `,"%s":[`, e.attr)
-			fmt.Fprintf(bp, "{\"uid\":"+uidFmtStrJson+"}", p.Uid)
-			fmt.Fprint(bp, "]")
+			fmt.Fprintf(bp, "{\"uid\":"+uidFmtStrJson, p.Uid)
+			if err := writeFacets(p.Facets); err != nil {
+				return errors.Wrap(err, "While writing facets for posting_REF")
+			}
+			fmt.Fprint(bp, "}]")
 		} else {
 			if p.PostingType == pb.Posting_VALUE_LANG {
 				fmt.Fprintf(bp, `,"%s@%s":`, e.attr, string(p.LangTag))
@@ -178,28 +206,9 @@ func (e *exporter) toJSON() (*bpb.KVList, error) {
 			}
 
 			fmt.Fprint(bp, str)
-		}
-
-		for _, fct := range p.Facets {
-			fmt.Fprintf(bp, `,"%s|%s":`, e.attr, fct.Key)
-
-			str, err := facetToString(fct)
-			if err != nil {
-				glog.Errorf("Ignoring error: %+v", err)
-				return nil
+			if err := writeFacets(p.Facets); err != nil {
+				return errors.Wrap(err, "While writing facets for value postings")
 			}
-
-			tid, err := facets.TypeIDFor(fct)
-			if err != nil {
-				glog.Errorf("Error getting type id from facet %#v: %v", fct, err)
-				continue
-			}
-
-			if !tid.IsNumber() {
-				str = escapedString(str)
-			}
-
-			fmt.Fprint(bp, str)
 		}
 
 		fmt.Fprint(bp, "}")
