@@ -324,6 +324,10 @@ func (sg *SubGraph) fillGroupedVars(doneVars map[string]varValue, path []*SubGra
 			// 			a as count(uid)
 			// 		}
 			// 	}
+			// since `a` is a global variable which stores (uid, val) pair for
+			// all the srcUids (1 & 31 in this case), we can't store distinct
+			// vals for same uid locally. This will eventually lead to incorrect
+			// results.
 			if sg.SrcFunc == nil {
 				return errors.Errorf("Vars can be assigned only at root when grouped by Value")
 			}
