@@ -867,15 +867,15 @@ func populateCluster() {
 		<63> <connects> <66> .
 		<63> <connects> <67> .
 		<63> <connects> <68> .
-		<64> <name> "yes" .
-		<65> <name> "yes" .
-		<66> <name> "yes" .
-		<67> <name> "yes" .
-		<68> <name> "yes" .
+		<64> <kname> "yes" .
+		<65> <kname> "yes" .
+		<66> <kname> "yes" .
+		<67> <kname> "yes" .
+		<68> <kname> "yes" .
 
-		<61> <name> "can_be_picked" .
-		<62> <name> "can_be_picked" .
-		<63> <name> "can_be_picked" .
+		<61> <kname> "can_be_picked" .
+		<62> <kname> "can_be_picked" .
+		<63> <kname> "can_be_picked" .
 	`)
 	if err != nil {
 		panic(fmt.Sprintf("Could not able add triple to the cluster. Got error %v", err.Error()))

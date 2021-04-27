@@ -3487,23 +3487,23 @@ func TestMatchingWithPagination(t *testing.T) {
 func TestKRandomNodes(t *testing.T) {
 	q := `{
 		data(func: uid(61, 62, 63, 64, 65, 66, 67, 68, 69, 70), random: 2) @filter(has(connects)) {
-			name
+			kname
 			connects(random:2){
-				name
+				kname
 			}
 		}
 	}`
 	result := processQueryNoErr(t, q)
 	expected := `{"data":{"data":[{
-		"name":"can_be_picked",
+		"kname":"can_be_picked",
 		"connects":[
-			{"name":"yes"},
-			{"name":"yes"}
+			{"kname":"yes"},
+			{"kname":"yes"}
 			]},
-		{"name":"can_be_picked",
+		{"kname":"can_be_picked",
 		"connects":[
-			{"name":"yes"},
-			{"name":"yes"}
+			{"kname":"yes"},
+			{"kname":"yes"}
 		]}]}}`
 	require.JSONEq(t, expected, result)
 
