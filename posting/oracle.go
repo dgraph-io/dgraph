@@ -258,6 +258,7 @@ func (o *oracle) ProcessDelta(delta *pb.OracleDelta) {
 	o.Lock()
 	defer o.Unlock()
 	for _, txn := range delta.Txns {
+		glog.Infof("=== ProcessDelta startTs=%d commitTs=%d", txn.StartTs, txn.CommitTs)
 		delete(o.pendingTxns, txn.StartTs)
 	}
 	curMax := o.MaxAssigned()

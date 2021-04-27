@@ -378,6 +378,7 @@ func (n *node) mutationWorker(workerId int) {
 		span.Annotatef(nil, "Executing mutation from worker id: %d", workerId)
 
 		txn := posting.Oracle().GetTxn(p.Mutations.StartTs)
+		glog.Infof("=== mutationWorker startTs=%d mutation sz: %+v\n", p.StartTs, p.Mutations.Size())
 		x.AssertTruef(txn != nil, "Unable to find txn with start ts: %d", p.Mutations.StartTs)
 		txn.ErrCh <- n.processMutations(ctx, p.Mutations, txn)
 		close(txn.ErrCh)
@@ -631,6 +632,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 
 	m := proposal.Mutations
 	txn := posting.Oracle().GetTxn(m.StartTs)
+	glog.Infof("=== applyMut startTs=%d\n", m.StartTs)
 	x.AssertTruef(txn != nil, "Unable to find txn with start ts: %d", m.StartTs)
 	runs := atomic.AddInt32(&txn.Runs, 1)
 	if runs <= 1 {
@@ -1559,10 +1561,8 @@ func (n *node) Run() {
 					// We should register this txn before sending it over for concurrent
 					// application.
 					txn, has := posting.Oracle().RegisterStartTs(p.StartTs)
-					if x.Debug {
-						glog.Infof("Registered start ts: %d txn: %p. has: %v. mutation: %+v\n",
-							p.StartTs, txn, has, p.Mutations)
-					}
+					glog.Infof("=== Registered start ts: %d txn: %p. has: %v. mutation sz: %+v\n",
+						p.StartTs, txn, has, p.Mutations.Size())
 
 					if has {
 						// We have already registered this txn before. That means, this txn would
