@@ -81,22 +81,22 @@ func TestExportSchemaToMinio(t *testing.T) {
 }
 
 var expectedSchema = `[0x0] <movie>:string .` + " " + `
-	[0x0] <dgraph.type>:[string] @index(exact) .` + " " + `
-	[0x0] <dgraph.drop.op>:string .` + " " + `
-	[0x0] <dgraph.graphql.xid>:string @index(exact) @upsert .` + " " + `
-	[0x0] <dgraph.graphql.schema>:string .` + " " + `
-	[0x0] <dgraph.graphql.p_query>:string @index(sha256) .` + " " + `
-	[0x0] type <Node> {
-		movie
-	}
-	[0x0] type <dgraph.graphql> {
-		dgraph.graphql.schema
-		dgraph.graphql.xid
-	}
-	[0x0] type <dgraph.graphql.persisted_query> {
-		dgraph.graphql.p_query
-	}
-	`
+[0x0] <dgraph.type>:[string] @index(exact) .` + " " + `
+[0x0] <dgraph.drop.op>:string .` + " " + `
+[0x0] <dgraph.graphql.xid>:string @index(exact) @upsert .` + " " + `
+[0x0] <dgraph.graphql.schema>:string .` + " " + `
+[0x0] <dgraph.graphql.p_query>:string @index(sha256) .` + " " + `
+[0x0] type <Node> {
+	movie
+}
+[0x0] type <dgraph.graphql> {
+	dgraph.graphql.schema
+	dgraph.graphql.xid
+}
+[0x0] type <dgraph.graphql.persisted_query> {
+	dgraph.graphql.p_query
+}
+`
 var moviesData = `<_:x1> <movie> "BIRDS MAN OR (THE UNEXPECTED VIRTUE OF IGNORANCE)" .
 	<_:x2> <movie> "Spotlight" .
 	<_:x3> <movie> "Moonlight" .
