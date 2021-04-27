@@ -851,6 +851,31 @@ func populateCluster() {
 		<61> <tweet-d> "aaabxxx" .
 		<62> <tweet-d> "aaacdxx" .
 		<63> <tweet-d> "aaabcd" .
+
+		<61> <connects> <64> .
+		<61> <connects> <65> .
+		<61> <connects> <66> .
+		<61> <connects> <67> .
+		<61> <connects> <68> .
+		<62> <connects> <64> .
+		<62> <connects> <65> .
+		<62> <connects> <66> .
+		<62> <connects> <67> .
+		<62> <connects> <68> .
+		<63> <connects> <64> .
+		<63> <connects> <65> .
+		<63> <connects> <66> .
+		<63> <connects> <67> .
+		<63> <connects> <68> .
+		<64> <name> "yes" .
+		<65> <name> "yes" .
+		<66> <name> "yes" .
+		<67> <name> "yes" .
+		<68> <name> "yes" .
+
+		<61> <name> "can_be_picked" .
+		<62> <name> "can_be_picked" .
+		<63> <name> "can_be_picked" .
 	`)
 	if err != nil {
 		panic(fmt.Sprintf("Could not able add triple to the cluster. Got error %v", err.Error()))
