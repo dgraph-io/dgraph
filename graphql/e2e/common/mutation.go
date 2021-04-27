@@ -3003,7 +3003,7 @@ func addMultipleMutationWithOneError(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Contains(t, gqlResponse.Errors[0].Error(),
-		`because ID "0x0" isn't a Author`)
+		`Invalid UID with value 0 for key`)
 
 	cleanUp(t, []*country{newCountry}, []*author{newAuth}, result.AddPost.Post)
 }

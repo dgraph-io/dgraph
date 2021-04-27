@@ -818,6 +818,7 @@ func TestAuthQueryRewriting(t *testing.T) {
 		t.Run("Query Rewriting "+algo, func(t *testing.T) {
 			queryRewriting(t, strSchema, metaInfo, b)
 		})
+
 		t.Run("Mutation Query Rewriting "+algo, func(t *testing.T) {
 			mutationQueryRewriting(t, strSchema, metaInfo)
 		})
