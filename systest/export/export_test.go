@@ -81,27 +81,27 @@ func TestExportSchemaToMinio(t *testing.T) {
 }
 
 var expectedSchema = `[0x0] <movie>:string .` + " " + `
-[0x0] <dgraph.type>:[string] @index(exact) .` + " " + `
-[0x0] <dgraph.drop.op>:string .` + " " + `
-[0x0] <dgraph.graphql.xid>:string @index(exact) @upsert .` + " " + `
-[0x0] <dgraph.graphql.schema>:string .` + " " + `
-[0x0] <dgraph.graphql.p_query>:string @index(sha256) .` + " " + `
-[0x0] type <Node> {
-	movie
-}
-[0x0] type <dgraph.graphql> {
-	dgraph.graphql.schema
-	dgraph.graphql.xid
-}
-[0x0] type <dgraph.graphql.persisted_query> {
-	dgraph.graphql.p_query
-}
-`
+	[0x0] <dgraph.type>:[string] @index(exact) .` + " " + `
+	[0x0] <dgraph.drop.op>:string .` + " " + `
+	[0x0] <dgraph.graphql.xid>:string @index(exact) @upsert .` + " " + `
+	[0x0] <dgraph.graphql.schema>:string .` + " " + `
+	[0x0] <dgraph.graphql.p_query>:string @index(sha256) .` + " " + `
+	[0x0] type <Node> {
+		movie
+	}
+	[0x0] type <dgraph.graphql> {
+		dgraph.graphql.schema
+		dgraph.graphql.xid
+	}
+	[0x0] type <dgraph.graphql.persisted_query> {
+		dgraph.graphql.p_query
+	}
+	`
 var moviesData = `<_:x1> <movie> "BIRDS MAN OR (THE UNEXPECTED VIRTUE OF IGNORANCE)" .
-				<_:x2> <movie> "Spotlight" .
-				<_:x3> <movie> "Moonlight" .
-				<_:x4> <movie> "THE SHAPE OF WATERLOO" .
-				<_:x5> <movie> "BLACK PUNTER" .`
+	<_:x2> <movie> "Spotlight" .
+	<_:x3> <movie> "Moonlight" .
+	<_:x4> <movie> "THE SHAPE OF WATERLOO" .
+	<_:x5> <movie> "BLACK PUNTER" .`
 
 var movieSchema = `
 	movie: string .
@@ -187,46 +187,33 @@ func TestExportAndLoadJsonFacets(t *testing.T) {
 	require.Equal(t, 3, len(files))
 	copyToLocalFs(t)
 
-	q := `{
-		q(func:has(name)) {
-			pred @facets
-			predlist @facets
-			refone @facets
-			friend @facets {
-				name
-			}
-		}
-	}`
+	checkRes := func() {
+		// Check value posting.
+		q := `{ q(func:has(name)) { pred @facets } }`
+		res := runQuery(t, q)
+		require.JSONEq(t, `{"data": {"q": [{"pred": "test", "pred|f": "test"}]}}`, res)
 
-	res := runQuery(t, q)
-	expected := `{
-	"data": {
-	  "q": [
-	    {
-	      "friend": [
-	        {
-	          "name": "Daryl",
-	          "friend|close": "yes"
-	        }
-	      ]
-	    },
-	    {
-	      "pred|f": "test",
-	      "pred": "test",
-	      "predlist|cont": {
-	        "0": "England",
-	        "1": "France"
-	      },
-	      "predlist": [
-	        "London",
-	        "Paris"
-	      ]
-	    }
-	  ]
+		// Check value postings of list type.
+		q = `{ q(func:has(name)) {	predlist @facets } }`
+		res = runQuery(t, q)
+		require.JSONEq(t, `{"data": {"q": [{
+		      "predlist|cont": {"0": "England","1": "France"},
+		      "predlist": ["London","Paris" ]}]}}`, res)
+
+		// Check reference posting.
+		q = `{ q(func:has(name)) { refone @facets {name} } }`
+		res = runQuery(t, q)
+		require.JSONEq(t,
+			`{"data":{"q":[{"refone":{"name":"alice","refone|f":"something"}}]}}`, res)
+
+		// Check reference postings of list type.
+		q = `{ q(func:has(name)) { friend @facets {name} } }`
+		res = runQuery(t, q)
+		require.JSONEq(t,
+			`{"data":{"q":[{"friend":[{"name":"Daryl","friend|close":"yes"}]}]}}`, res)
 	}
-}`
 
-	require.JSONEq(t, expected, res)
+	checkRes()
 
 	// Drop all data
 	dg, err := testutil.DgraphClient(testutil.SockAddr)
@@ -234,7 +221,7 @@ func TestExportAndLoadJsonFacets(t *testing.T) {
 	err = dg.Alter(context.Background(), &api.Operation{DropAll: true})
 	require.NoError(t, err)
 
-	res = runQuery(t, q)
+	res := runQuery(t, `{ q(func:has(name)) { name } }`)
 	require.JSONEq(t, `{"data": {"q": []}}`, res)
 
 	// Live load the exported data and verify that exported data is loaded correctly.
@@ -242,9 +229,8 @@ func TestExportAndLoadJsonFacets(t *testing.T) {
 	dir := filepath.Join(copyExportDir, base)
 	loadData(t, dir, "json")
 
-	res = runQuery(t, q)
-	require.JSONEq(t, expected, res)
-
+	// verify that the state after loading the exported data as same.
+	checkRes()
 	dirCleanup(t)
 }
 
@@ -265,7 +251,6 @@ func runQuery(t *testing.T, q string) string {
 func copyToLocalFs(t *testing.T) {
 	require.NoError(t, os.RemoveAll(copyExportDir))
 	srcPath := testutil.DockerPrefix + "_alpha1_1:/data/export-data"
-	t.Log(srcPath)
 	require.NoError(t, testutil.DockerCp(srcPath, copyExportDir))
 }
 
@@ -286,8 +271,9 @@ func loadData(t *testing.T, dir, format string) {
 
 func dirCleanup(t *testing.T) {
 	require.NoError(t, os.RemoveAll("./t"))
+	require.NoError(t, os.RemoveAll("./data"))
 
-	cmd := []string{"bash", "-c", "rm -rf /data/*"}
+	cmd := []string{"bash", "-c", "rm -rf /data/export-data/*"}
 	require.NoError(t, testutil.DockerExec("alpha1", cmd...))
 }
 
