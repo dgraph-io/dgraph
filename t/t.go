@@ -154,7 +154,7 @@ func outputLogs(prefix string) {
 		}
 		logCmd := exec.Command("docker", "logs", c.ID)
 		out, err := logCmd.CombinedOutput()
-		fmt.Printf("Docker logs for %d is %s with error %+v ", c.ID, string(out), err)
+		fmt.Printf("Docker logs for %s is %s with error %+v ", c.ID, string(out), err)
 	}
 	for i := 0; i <= 3; i++ {
 		printLogs("zero" + strconv.Itoa(i))

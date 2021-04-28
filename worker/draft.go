@@ -639,21 +639,25 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	txn := posting.Oracle().GetTxn(m.StartTs)
 	x.AssertTruef(txn != nil, "Unable to find txn with start ts: %d", m.StartTs)
 	runs := atomic.AddInt32(&txn.Runs, 1)
+	glog.Infof("Running txn with start ts: %d txn: %d runs: %d\n", m.StartTs, txn.StartTs, runs)
 	if runs <= 1 {
 		// If we didn't have it in Oracle, then mutation workers won't be processing it either. So,
 		// don't block on txn.ErrCh.
 		err, ok := <-txn.ErrCh
 		x.AssertTrue(ok)
 		if err == nil && n.keysWritten.StillValid(txn) {
+			glog.Infof("StillValid: %d\n", txn.StartTs)
 			span.Annotate(nil, "Mutation is still valid.")
 			return nil
 		}
 		// If mutation is invalid or we got an error, reset the txn, so we can run again.
+		glog.Infof("Txn is invalid. StartTs: %d\n", m.StartTs)
 		txn = posting.Oracle().ResetTxn(m.StartTs)
 		atomic.AddInt32(&txn.Runs, 1) // We have already run this once via serial loop.
 	}
 
 	// If we have an error, re-run this.
+	glog.Infof("Re-running mutation: %d on applyCh. Runs: %d", m.StartTs, runs)
 	span.Annotatef(nil, "Re-running mutation from applyCh. Runs: %d", runs)
 	return n.concMutations(ctx, m, txn)
 }
@@ -1003,12 +1007,13 @@ func (n *node) commitOrAbort(_ uint64, delta *pb.OracleDelta) error {
 	itrStart := time.Now()
 	var itrs []y.Iterator
 	var txns []*posting.Txn
+	var sz int64
 	for _, status := range delta.Txns {
 		txn := posting.Oracle().GetTxn(status.StartTs)
 		if txn == nil {
 			continue
 		}
-		txn.EnsureDeltasArePopulated()
+		glog.Infof("GetTxn %d %p\n", status.StartTs, txn)
 		for k := range txn.Deltas() {
 			n.keysWritten.keyCommitTs[z.MemHashString(k)] = status.CommitTs
 		}
@@ -1019,6 +1024,7 @@ func (n *node) commitOrAbort(_ uint64, delta *pb.OracleDelta) error {
 		}
 		txns = append(txns, txn)
 
+		sz += txn.Skiplist().MemSize()
 		// Iterate to set the commit timestamp for all keys.
 		// Skiplist can block if the conversion to Skiplist isn't done yet.
 		itr := txn.Skiplist().NewIterator()
@@ -1052,7 +1058,7 @@ func (n *node) commitOrAbort(_ uint64, delta *pb.OracleDelta) error {
 		mi.Rewind()
 
 		var keys int
-		b := skl.NewBuilder(256 << 10)
+		b := skl.NewBuilder(int64(float64(sz) * 1.1))
 		for mi.Valid() {
 			b.Add(mi.Key(), mi.Value())
 			keys++

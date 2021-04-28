@@ -18,7 +18,6 @@ package posting
 
 import (
 	"bytes"
-	"context"
 	"encoding/binary"
 	"encoding/hex"
 	"math"
@@ -271,7 +270,6 @@ func (txn *Txn) FillContext(ctx *api.TxnContext, gid uint32) {
 	ctx.Keys = x.Unique(ctx.Keys)
 
 	txn.Unlock()
-	txn.Update(context.Background())
 	txn.cache.fillPreds(ctx, gid)
 }
 
@@ -353,7 +351,7 @@ func (txn *Txn) ToSkiplist() error {
 		// }
 	}()
 
-	b := skl.NewBuilder(16 << 10)
+	b := skl.NewBuilder(1 << 10)
 	for _, key := range keys {
 		k := []byte(key)
 		data := cache.deltas[key]

@@ -94,10 +94,6 @@ func (txn *Txn) GetFromDelta(key []byte) (*List, error) {
 	return txn.cache.GetFromDelta(key)
 }
 
-func (txn *Txn) EnsureDeltasArePopulated() {
-	x.AssertTrue(len(txn.cache.plists) == 0)
-}
-
 func (txn *Txn) Skiplist() *skl.Skiplist {
 	txn.slWait.Wait()
 	return txn.sl
@@ -105,7 +101,14 @@ func (txn *Txn) Skiplist() *skl.Skiplist {
 
 // Update calls UpdateDeltasAndDiscardLists on the local cache.
 func (txn *Txn) Update(ctx context.Context) {
+	txn.Lock()
+	defer txn.Unlock()
+	glog.Infof("Update called on txn: %d %p\n", txn.StartTs, txn)
 	txn.cache.UpdateDeltasAndDiscardLists()
+
+	// If we already have a pending Update, then wait for it to be done first. So it does not end up
+	// overwriting the skiplist that we generate here.
+	txn.slWait.Wait()
 	txn.slWait.Add(1)
 	go func() {
 		if err := txn.ToSkiplist(); err != nil {
@@ -161,6 +164,7 @@ func (o *oracle) RegisterStartTs(ts uint64) (*Txn, bool) {
 }
 
 func (o *oracle) ResetTxn(ts uint64) *Txn {
+	glog.Infof("ResetTxn: %d\n", ts)
 	o.Lock()
 	defer o.Unlock()
 

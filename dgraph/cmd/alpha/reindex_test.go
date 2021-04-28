@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
 )
 
@@ -39,7 +40,10 @@ func TestReindexTerm(t *testing.T) {
 	require.NoError(t, err)
 
 	// perform re-indexing
-	require.NoError(t, alterSchema(`name: string @index(term) .`))
+	err = x.RetryUntilSuccess(3, time.Second, func() error {
+		return alterSchema(`name: string @index(term) .`)
+	})
+	require.NoError(t, err)
 
 	q1 := `{
       q(func: anyofterms(name, "bc")) {
@@ -67,8 +71,11 @@ func TestReindexLang(t *testing.T) {
 	_, err := mutationWithTs(mutationInp{body: m1, typ: "application/rdf", commitNow: true})
 	require.NoError(t, err)
 
-	// reindex
-	require.NoError(t, alterSchema(`name: string @lang @index(exact) .`))
+	// perform re-indexing
+	err = x.RetryUntilSuccess(3, time.Second, func() error {
+		return alterSchema(`name: string @lang @index(exact) .`)
+	})
+	require.NoError(t, err)
 
 	q1 := `{
     q(func: eq(name@en, "Runtime")) {
@@ -141,8 +148,11 @@ func TestReindexReverseCount(t *testing.T) {
 	_, err := mutationWithTs(mutationInp{body: m1, typ: "application/rdf", commitNow: true})
 	require.NoError(t, err)
 
-	// reindex
-	require.NoError(t, alterSchema(`value: [uid] @count @reverse .`))
+	// perform re-indexing
+	err = x.RetryUntilSuccess(3, time.Second, func() error {
+		return alterSchema(`value: [uid] @count @reverse .`)
+	})
+	require.NoError(t, err)
 
 	q1 := `{
     q(func: eq(count(~value), "3")) {
