@@ -233,6 +233,8 @@ they form a Raft group and provide synchronous replication.
 			"The SASL username for Kafka.").
 		Flag("sasl-password",
 			"The SASL password for Kafka.").
+		Flag("sasl-mechanism",
+			"The SASL mechanism(PLAIN, SCRAM-SHA-256, SCRAM-SHA-512) for Kafka.").
 		Flag("ca-cert",
 			"The path to CA cert file for TLS encryption.").
 		Flag("client-cert",

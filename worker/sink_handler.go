@@ -115,6 +115,7 @@ func newKafkaSink(config *z.SuperFlag) (Sink, error) {
 		saramaConf.Net.SASL.Enable = true
 		saramaConf.Net.SASL.User = config.GetString("sasl-user")
 		saramaConf.Net.SASL.Password = config.GetString("sasl-password")
+		saramaConf.Net.SASL.Mechanism = sarama.SASLMechanism(config.GetString("sasl-mechanism"))
 	}
 	brokers := strings.Split(config.GetString("kafka"), ",")
 	client, err := sarama.NewClient(brokers, saramaConf)
