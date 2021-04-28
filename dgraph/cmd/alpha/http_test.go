@@ -322,12 +322,11 @@ func runRequest(req *http.Request) (*x.QueryResWithData, []byte, *http.Response,
 func runWithRetriesForResp(method, contentType, url string, body string) (
 	*x.QueryResWithData, []byte, *http.Response, error) {
 
+label:
 	req, err := createRequest(method, contentType, url, body)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-
-label:
 	qr, respBody, resp, err := runRequest(req)
 	if err != nil && strings.Contains(err.Error(), "Please retry operation") {
 		time.Sleep(time.Second)
