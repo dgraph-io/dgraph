@@ -22,12 +22,12 @@ func NewUpdateGroupRewriter() resolve.MutationRewriter {
 // nodes. It does not rewrite any queries.
 func (urw *updateGroupRewriter) RewriteQueries(
 	ctx context.Context,
-	m schema.Mutation) ([]*gql.GraphQuery, error) {
+	m schema.Mutation) ([]*gql.GraphQuery, []string, error) {
 
 	urw.VarGen = resolve.NewVariableGenerator()
 	urw.XidMetadata = resolve.NewXidMetadata()
 
-	return []*gql.GraphQuery{}, nil
+	return []*gql.GraphQuery{}, []string{}, nil
 }
 
 // Rewrite rewrites set and remove update patches into dql upsert mutations
