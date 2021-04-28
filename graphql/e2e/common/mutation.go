@@ -2933,7 +2933,7 @@ func addMultipleMutationWithOneError(t *testing.T) {
 	newAuth := addAuthor(t, newCountry.ID, postExecutor)
 
 	badAuth := &author{
-		ID: "0x0",
+		ID: "0x1234321", // A random non-existing ID
 	}
 
 	goodPost := &post{
@@ -3003,7 +3003,7 @@ func addMultipleMutationWithOneError(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Contains(t, gqlResponse.Errors[0].Error(),
-		`because ID "0x0" isn't a Author`)
+		`because ID "0x1234321" isn't a Author`)
 
 	cleanUp(t, []*country{newCountry}, []*author{newAuth}, result.AddPost.Post)
 }
