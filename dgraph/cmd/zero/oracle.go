@@ -66,8 +66,9 @@ func (o *Oracle) Init() {
 	go o.sendDeltasToSubscribers()
 }
 
-// oracle close releases the memory associated with btree used for keycommit.
-func (o *Oracle) close() {
+// Close releases the memory associated with btree used for keycommit.
+func (o *Oracle) Close() {
+	o.keyCommit.Close()
 }
 
 func (o *Oracle) updateStartTxnTs(ts uint64) {

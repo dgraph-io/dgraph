@@ -127,7 +127,7 @@ instances to achieve high-availability.
 		Head("Audit options").
 		Flag("output",
 			`[stdout, /path/to/dir] This specifies where audit logs should be output to.
-			"stdout" is for standard output. You can also specify the directory where audit logs 
+			"stdout" is for standard output. You can also specify the directory where audit logs
 			will be saved. When stdout is specified as output other fields will be ignored.`).
 		Flag("compress",
 			"Enables the compression of old audit logs.").
@@ -399,6 +399,6 @@ func run() {
 
 	audit.Close()
 
-	st.zero.orc.close()
+	st.zero.orc.Close()
 	glog.Infoln("All done. Goodbye!")
 }
