@@ -24,6 +24,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -123,6 +124,8 @@ func newKafkaSink(config *z.SuperFlag) (Sink, error) {
 		saramaConf.Net.SASL.SCRAMClientGeneratorFunc = sha512ClientGenerator
 
 	}
+
+	sarama.Logger = log.New(os.Stdout, "[sarama] ", log.LstdFlags)
 	brokers := strings.Split(config.GetString("kafka"), ",")
 	client, err := sarama.NewClient(brokers, saramaConf)
 	if err != nil {
