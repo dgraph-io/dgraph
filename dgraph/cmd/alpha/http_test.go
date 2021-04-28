@@ -327,7 +327,12 @@ func runWithRetriesForResp(method, contentType, url string, body string) (
 		return nil, nil, nil, err
 	}
 
+label:
 	qr, respBody, resp, err := runRequest(req)
+	if err != nil && strings.Contains(err.Error(), "Please retry operation") {
+		time.Sleep(time.Second)
+		goto label
+	}
 	if err != nil && strings.Contains(err.Error(), "Token is expired") {
 		err = token.refreshToken()
 		if err != nil {
