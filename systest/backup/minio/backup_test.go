@@ -310,7 +310,7 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	type m = map[string]interface{}
 	require.Equal(t, "Success", data.(m)["data"].(m)["backup"].(m)["response"].(m)["code"].(string))
 	taskId := data.(m)["data"].(m)["backup"].(m)["taskId"].(string)
-	testutil.WaitForTask(t, taskId)
+	testutil.WaitForTask(t, taskId, true)
 
 	// Verify that the right amount of files and directories were created.
 	copyToLocalFs(t)

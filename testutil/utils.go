@@ -19,6 +19,7 @@ package testutil
 import (
 	"bytes"
 	"encoding/json"
+	"net/http"
 	"testing"
 	"time"
 
@@ -56,7 +57,7 @@ func GalaxyCountKey(attr string, count uint32, reverse bool) []byte {
 	return x.CountKey(attr, count, reverse)
 }
 
-func WaitForTask(t *testing.T, taskId string) {
+func WaitForTask(t *testing.T, taskId string, useHttps bool) {
 	const query = `query task($id: String!) {
 		task(input: {id: $id}) {
 			status
@@ -69,9 +70,16 @@ func WaitForTask(t *testing.T, taskId string) {
 	request, err := json.Marshal(params)
 	require.NoError(t, err)
 
-	adminUrl := "https://" + SockAddrHttp + "/admin"
 	for {
-		client := GetHttpsClient(t)
+		var adminUrl string
+		var client http.Client
+		if useHttps {
+			adminUrl = "https://" + SockAddrHttp + "/admin"
+			client = GetHttpsClient(t)
+		} else {
+			adminUrl = "http://" + SockAddrHttp + "/admin"
+			client = *http.DefaultClient
+		}
 		response, err := client.Post(adminUrl, "application/json", bytes.NewBuffer(request))
 		require.NoError(t, err)
 		defer response.Body.Close()
