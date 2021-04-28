@@ -146,7 +146,7 @@ func detectRace(prefix string) bool {
 }
 
 func outputLogs(prefix string) {
-	f, err := ioutil.TempFile(".", prefix)
+	f, err := ioutil.TempFile(".", prefix+"*.log")
 	x.Check(err)
 	printLogs := func(container string) {
 		in := testutil.GetContainerInstance(prefix, container)
@@ -169,7 +169,9 @@ func outputLogs(prefix string) {
 	}
 	f.Sync()
 	f.Close()
-	fmt.Printf("Logs written to %s .\n", f.Name())
+	s := fmt.Sprintf("---> LOGS for %s written to %s .\n", prefix, f.Name())
+	_, err = oc.Write([]byte(s))
+	x.Check(err)
 }
 
 func stopCluster(composeFile, prefix string, wg *sync.WaitGroup, err error) {

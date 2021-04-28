@@ -323,17 +323,17 @@ func HttpLogin(params *LoginParams) (*HttpToken, error) {
 
 	data, found := outputJson["data"].(map[string]interface{})
 	if !found {
-		return nil, errors.New("data entry not found in the output")
+		return nil, errors.Errorf("data entry not found in the output: %s\n", respBody)
 	}
 
 	l, found := data["login"].(map[string]interface{})
 	if !found {
-		return nil, errors.New("login entry not found in the output")
+		return nil, errors.Errorf("login entry not found in the output: %s\n", respBody)
 	}
 
 	response, found := l["response"].(map[string]interface{})
 	if !found {
-		return nil, errors.New("response entry not found in the output")
+		return nil, errors.Errorf("response entry not found in the output: %s\n", respBody)
 	}
 
 	newAccessJwt, found := response["accessJWT"].(string)

@@ -367,7 +367,7 @@ func RefreshAcls(closer *z.Closer) {
 		if err != nil {
 			glog.Fatalf("Got a key from subscription which is not parsable: %s", err)
 		}
-		glog.V(3).Infof("Got ACL update via subscription for attr: %s", pk.Attr)
+		glog.V(2).Infof("Got ACL update via subscription for attr: %s", pk.Attr)
 
 		ns, _ := x.ParseNamespaceAttr(pk.Attr)
 		if err := retrieveAcls(ns, kv.GetVersion()); err != nil {
