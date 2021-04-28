@@ -332,8 +332,6 @@ func (sg *SubGraph) fillGroupedVars(doneVars map[string]varValue, path []*SubGra
 				return errors.Errorf("Vars can be assigned only at root when grouped by Value")
 			}
 
-			// valUidListMap gathers all the uids corresponding to one value.
-			valUidListMap := make(map[types.Val][]uint64)
 			for i, v := range child.valueMatrix {
 				srcUid := child.SrcUIDs.Uids[i]
 				if len(v.Values) == 0 {
@@ -343,23 +341,7 @@ func (sg *SubGraph) fillGroupedVars(doneVars map[string]varValue, path []*SubGra
 				if err != nil {
 					continue
 				}
-				valUidListMap[val] = append(valUidListMap[val], srcUid)
-			}
-			// for each uidList corresponding to one value, for eg:
-			// v1 -> [u1, u2, u3], groups are made in following way:
-			// u1 -> [u1, u2, u3], u2 -> [u1, u2, u3], u3 -> [u1, u2, u3]
-			// Hence, u_i contains all the uids having same value.
-			for _, uidList := range valUidListMap {
-				for _, uid := range uidList {
-					strKey := strconv.FormatUint(uid, 10)
-					cur := dedupMap.getGroup(attr)
-					if _, ok := cur.elements[strKey]; !ok {
-						cur.elements[strKey] = groupElements{
-							key:      types.Val{Tid: types.UidID, Value: uid},
-							entities: &pb.List{Uids: uidList},
-						}
-					}
-				}
+				dedupMap.addValue(attr, val, srcUid)
 			}
 		}
 	}
@@ -391,17 +373,22 @@ func (sg *SubGraph) fillGroupedVars(doneVars map[string]varValue, path []*SubGra
 				continue
 			}
 			// Return error when all the keys are not the value predicates.
-			if len(grp.keys) > 1 && uidPredicate {
-				return errors.Errorf("Expected one UID for var in groupby but got: %d", len(grp.keys))
-			}
-			uidVal := grp.keys[0].key.Value
-			uid, ok := uidVal.(uint64)
-			if !ok {
-				return errors.Errorf("Vars can be assigned only when grouped by UID attribute")
-			}
-			// grp.aggregates could be empty if schema conversion failed during aggregation
-			if len(grp.aggregates) > 0 {
-				tempMap[uid] = grp.aggregates[len(grp.aggregates)-1].key
+			if len(grp.keys) == 1 && uidPredicate {
+				uidVal := grp.keys[0].key.Value
+				uid, ok := uidVal.(uint64)
+				if !ok {
+					return errors.Errorf("Vars can be assigned only when grouped by UID attribute")
+				}
+				// grp.aggregates could be empty if schema conversion failed during aggregation
+				if len(grp.aggregates) > 0 {
+					tempMap[uid] = grp.aggregates[len(grp.aggregates)-1].key
+				}
+			} else {
+				for _, uid := range grp.uids {
+					if len(grp.aggregates) > 0 {
+						tempMap[uid] = grp.aggregates[len(grp.aggregates)-1].key
+					}
+				}
 			}
 		}
 		doneVars[chVar] = varValue{
