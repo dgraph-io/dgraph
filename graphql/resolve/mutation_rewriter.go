@@ -275,7 +275,7 @@ func (xidMetadata *xidMetadata) isDuplicateXid(atTopLevel bool, xidVar string,
 // mutation will fail.
 func (arw *AddRewriter) RewriteQueries(
 	ctx context.Context,
-	m schema.Mutation) ([]*gql.GraphQuery, []schema.Type, error) {
+	m schema.Mutation) ([]*gql.GraphQuery, []string, error) {
 
 	arw.VarGen = NewVariableGenerator()
 	arw.XidMetadata = NewXidMetadata()
@@ -284,7 +284,7 @@ func (arw *AddRewriter) RewriteQueries(
 	val, _ := m.ArgValue(schema.InputArgName).([]interface{})
 
 	var ret []*gql.GraphQuery
-	var retTypes []schema.Type
+	var retTypes []string
 	var retErrors error
 
 	for _, i := range val {
@@ -325,7 +325,7 @@ func (arw *AddRewriter) RewriteQueries(
 // See AddRewriter for how the rewritten queries look like.
 func (urw *UpdateRewriter) RewriteQueries(
 	ctx context.Context,
-	m schema.Mutation) ([]*gql.GraphQuery, []schema.Type, error) {
+	m schema.Mutation) ([]*gql.GraphQuery, []string, error) {
 	mutatedType := m.MutatedType()
 
 	urw.VarGen = NewVariableGenerator()
@@ -336,7 +336,7 @@ func (urw *UpdateRewriter) RewriteQueries(
 	delArg := inp["remove"]
 
 	var ret []*gql.GraphQuery
-	var retTypes []schema.Type
+	var retTypes []string
 	var retErrors error
 
 	// Write existence queries for set
@@ -1133,11 +1133,11 @@ func (drw *deleteRewriter) MutatedRootUIDs(
 // The function generates VarGen and XidMetadata which are used in Rewrite function.
 func (drw *deleteRewriter) RewriteQueries(
 	ctx context.Context,
-	m schema.Mutation) ([]*gql.GraphQuery, []schema.Type, error) {
+	m schema.Mutation) ([]*gql.GraphQuery, []string, error) {
 
 	drw.VarGen = NewVariableGenerator()
 
-	return []*gql.GraphQuery{}, []schema.Type{}, nil
+	return []*gql.GraphQuery{}, []string{}, nil
 }
 
 func asUID(val interface{}) (uint64, error) {
@@ -1735,11 +1735,11 @@ func existenceQueries(
 	srcField schema.FieldDefinition,
 	varGen *VariableGenerator,
 	obj map[string]interface{},
-	xidMetadata *xidMetadata) ([]*gql.GraphQuery, []schema.Type, []error) {
+	xidMetadata *xidMetadata) ([]*gql.GraphQuery, []string, []error) {
 
 	atTopLevel := srcField == nil
 	var ret []*gql.GraphQuery
-	var retTypes []schema.Type
+	var retTypes []string
 	var retErrors []error
 
 	// Inverse Object field is deleted. This is to ensure that we don't refer any conflicting
@@ -1768,7 +1768,7 @@ func existenceQueries(
 					retErrors = append(retErrors, err)
 				}
 				ret = append(ret, query)
-				retTypes = append(retTypes, srcField.Type())
+				retTypes = append(retTypes, srcField.Type().DgraphName())
 				return ret, retTypes, retErrors
 				// Add check UID query and return it.
 				// There is no need to move forward. If reference ID field is given,
@@ -1842,7 +1842,7 @@ func existenceQueries(
 					// encountered this variable, the query is added only once per variable.
 					query := checkXIDExistsQuery(variable, xidString, xid.Name(), typ)
 					ret = append(ret, query)
-					retTypes = append(retTypes, typ)
+					retTypes = append(retTypes, typ.DgraphName())
 
 					// Add one more existence query if given xid field is inherited from interface and has
 					// interface argument set. This is added to ensure that this xid is unique across all the
@@ -1853,7 +1853,7 @@ func existenceQueries(
 						queryInterface := checkXIDExistsQuery(varInterface, xidString, xid.Name(),
 							typ)
 						ret = append(ret, queryInterface)
-						retTypes = append(retTypes, interfaceTyp)
+						retTypes = append(retTypes, interfaceTyp.DgraphName())
 					}
 					// Don't return just over here as there maybe more nodes in the children tree.
 				}
@@ -1900,7 +1900,7 @@ func existenceQueries(
 				switch object := object.(type) {
 				case map[string]interface{}:
 					var fieldQueries []*gql.GraphQuery
-					var fieldTypes []schema.Type
+					var fieldTypes []string
 					var err []error
 					if fieldDef.Type().IsUnion() {
 						fieldQueries, fieldTypes, err = existenceQueriesUnion(
@@ -1939,7 +1939,7 @@ func existenceQueriesUnion(
 	varGen *VariableGenerator,
 	obj map[string]interface{},
 	xidMetadata *xidMetadata,
-	listIndex int) ([]*gql.GraphQuery, []schema.Type, []error) {
+	listIndex int) ([]*gql.GraphQuery, []string, []error) {
 
 	var retError []error
 	if len(obj) != 1 {

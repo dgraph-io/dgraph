@@ -89,16 +89,20 @@ type MutationResolver interface {
 type MutationRewriter interface {
 	// RewriteQueries generates and rewrites GraphQL mutation m into DQL queries which
 	// check if any referenced node by XID or ID exist or not.
+	// Instead of filtering on dgraph.type like @filter(type(Parrot)), we query `dgraph.type` and
+	// filter it on GraphQL side. @filter(type(Parrot)) is costly in terms of memory and cpu.
 	// Example existence queries:
-	// 1. Parrot1(func: uid(0x127)) @filter(type: Parrot) {
+	// 1. Parrot1(func: uid(0x127)) {
 	//      uid
+	//      dgraph.type
 	//    }
-	// 2.  Computer2(func: eq(Computer.name, "computer1")) @filter(type(Computer)) {
+	// 2.  Computer2(func: eq(Computer.name, "computer1")) {
 	//       uid
+	//       dgraph.type
 	//     }
 	// These query will be created in case of Add or Update Mutation which references node
 	// 0x127 or Computer of name "computer1"
-	RewriteQueries(ctx context.Context, m schema.Mutation) ([]*gql.GraphQuery, []schema.Type, error)
+	RewriteQueries(ctx context.Context, m schema.Mutation) ([]*gql.GraphQuery, []string, error)
 	// Rewrite rewrites GraphQL mutation m into a Dgraph mutation - that could
 	// be as simple as a single DelNquads, or could be a Dgraph upsert mutation
 	// with a query and multiple mutations guarded by conditions.
@@ -266,7 +270,7 @@ func (mr *dgraphResolver) rewriteAndExecute(
 	// queries stores rewritten []*gql.GraphQuery by RewriteQueries function. These queries
 	// are then executed and the results are processed
 	var queries []*gql.GraphQuery
-	var filterTypes []schema.Type
+	var filterTypes []string
 	queries, filterTypes, err = mr.mutationRewriter.RewriteQueries(ctx, mutation)
 	if err != nil {
 		return emptyResult(schema.GQLWrapf(err, "couldn't rewrite mutation %s", mutation.Name())),
@@ -296,18 +300,21 @@ func (mr *dgraphResolver) rewriteAndExecute(
 	// Parse the result of query.
 	// mutResp.Json will contain response to the query.
 	// The response is parsed to existenceQueriesResult
+	// dgraph.type is a list that contains types and interfaces the type implements.
 	// Example Response:
 	// {
 	// 	Project_1 :
 	//		[
 	//			{
-	//				"uid" : "0x123"
+	//				"uid" : "0x123",
+	// 				"dgraph.type" : ["Project", "Work"]
 	// 			}
 	//		],
 	//	Column_2 :
 	//		[
 	//			{
-	//				"uid": "0x234"
+	//				"uid": "0x234",
+	// 				"dgraph.type" : ["Column"]
 	// 			}
 	//		]
 	// }
@@ -326,9 +333,11 @@ func (mr *dgraphResolver) rewriteAndExecute(
 	}
 
 	x.AssertTrue(len(filterTypes) == len(queries))
-	qNameToFilterType := make(map[string]string)
+	// qNameToType map contains the mapping from the query name to type/interface the query response
+	// has to be filtered upon.
+	qNameToType := make(map[string]string)
 	for i, typ := range filterTypes {
-		qNameToFilterType[queries[i].Attr] = typ.DgraphName()
+		qNameToType[queries[i].Attr] = typ
 	}
 	// The above response is parsed into map[string]string as follows:
 	// {
@@ -340,7 +349,7 @@ func (mr *dgraphResolver) rewriteAndExecute(
 	qNameToUID := make(map[string]string)
 	for key, result := range queryResultMap {
 		count := 0
-		typ := qNameToFilterType[key]
+		typ := qNameToType[key]
 		for _, res := range result {
 			if x.HasString(res.Types, typ) {
 				qNameToUID[key] = res.Uid
