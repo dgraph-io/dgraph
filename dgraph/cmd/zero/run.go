@@ -399,6 +399,6 @@ func run() {
 
 	audit.Close()
 
-	st.zero.orc.Close()
+	st.zero.orc.close()
 	glog.Infoln("All done. Goodbye!")
 }
