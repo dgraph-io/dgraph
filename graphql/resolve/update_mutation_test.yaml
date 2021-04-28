@@ -531,8 +531,9 @@
     }
   dgquery: |-
     query {
-      Post_1(func: uid(0x456)) @filter(type(Post)) {
+      Post_1(func: uid(0x456)) {
         uid
+        dgraph.type
       }
     }
   qnametouid: |
@@ -619,8 +620,9 @@
     }
   dgquery: |-
     query {
-      ComputerOwner_1(func: eq(ComputerOwner.name, "computerOwnerName")) @filter(type(ComputerOwner)) {
+      ComputerOwner_1(func: eq(ComputerOwner.name, "computerOwnerName")) {
         uid
+        dgraph.type
       }
     }
   qnametouid: |
@@ -668,8 +670,9 @@
     }
   dgquery: |-
     query {
-      Post_1(func: uid(0x124)) @filter(type(Post)) {
+      Post_1(func: uid(0x124)) {
         uid
+        dgraph.type
       }
     }
   qnametouid: |
@@ -717,8 +720,9 @@
     }
   dgquery: |-
     query {
-      Post_1(func: uid(0x456)) @filter(type(Post)) {
+      Post_1(func: uid(0x456)) {
         uid
+        dgraph.type
       }
     }
   qnametouid: |
@@ -795,11 +799,13 @@
     }
   dgquery: |-
     query {
-      Post_1(func: uid(0x456)) @filter(type(Post)) {
+      Post_1(func: uid(0x456)) {
         uid
+        dgraph.type
       }
-      Post_2(func: uid(0x789)) @filter(type(Post)) {
+      Post_2(func: uid(0x789)) {
         uid
+        dgraph.type
       }
     }
   qnametouid: |
@@ -872,8 +878,9 @@
   explanation: "updateAuthor doesn't update posts except where references are removed"
   dgquery: |-
     query {
-      Post_1(func: uid(0x456)) @filter(type(Post)) {
+      Post_1(func: uid(0x456)) {
         uid
+        dgraph.type
       }
     }
   qnametouid: |
@@ -977,8 +984,9 @@
   explanation: "The update creates a new state"
   dgquery: |-
     query {
-      State_1(func: eq(State.code, "dg")) @filter(type(State)) {
+      State_1(func: eq(State.code, "dg")) {
         uid
+        dgraph.type
       }
     }
   dgquerysec: |-
@@ -1038,8 +1046,9 @@
   explanation: "The update links to existing state"
   dgquery: |-
     query {
-      State_1(func: eq(State.code, "dg")) @filter(type(State)) {
+      State_1(func: eq(State.code, "dg")) {
         uid
+        dgraph.type
       }
     }
   qnametouid: |
@@ -1108,8 +1117,9 @@
   explanation: "The update must link to the existing state"
   dgquery: |-
     query {
-      State_1(func: eq(State.code, "dg")) @filter(type(State)) {
+      State_1(func: eq(State.code, "dg")) {
         uid
+        dgraph.type
       }
     }
   qnametouid: |
@@ -1174,8 +1184,9 @@
   explanation: " Owner 0x123"
   dgquery: |-
     query {
-      House_1(func: uid(0x456)) @filter(type(House)) {
+      House_1(func: uid(0x456)) {
         uid
+        dgraph.type
       }
     }
   qnametouid: |
@@ -1237,8 +1248,9 @@
     }
   dgquery: |-
     query {
-      Movie_1(func: uid(0x456)) @filter(type(Movie)) {
+      Movie_1(func: uid(0x456)) {
         uid
+        dgraph.type
       }
     }
   qnametouid: |
@@ -1284,8 +1296,9 @@
     }
   dgquery: |-
     query {
-      Movie_1(func: uid(0x456)) @filter(type(Movie)) {
+      Movie_1(func: uid(0x456)) {
         uid
+        dgraph.type
       }
     }
   qnametouid: |
@@ -1342,8 +1355,9 @@
   is same, it should not return error."
   dgquery: |-
     query {
-      Teacher_1(func: eq(People.xid, "T1")) @filter(type(Teacher)) {
+      Teacher_1(func: eq(People.xid, "T1")) {
         uid
+        dgraph.type
       }
     }
   dgquerysec: |-
@@ -1546,8 +1560,9 @@
     }
   dgquery: |-
     query {
-      Post_1(func: uid(0x456)) @filter(type(Post)) {
+      Post_1(func: uid(0x456)) {
         uid
+        dgraph.type
       }
     }
   qnametouid: |
@@ -1605,8 +1620,9 @@
     }
   dgquery: |-
     query {
-      Author_1(func: uid(0x456)) @filter(type(Author)) {
+      Author_1(func: uid(0x456)) {
         uid
+        dgraph.type
       }
     }
   qnametouid: |
@@ -1662,8 +1678,9 @@
     }
   dgquery: |-
     query {
-      State_1(func: eq(State.code, "abc")) @filter(type(State)) {
+      State_1(func: eq(State.code, "abc")) {
         uid
+        dgraph.type
       }
     }
   dgquerysec: |-
@@ -1731,8 +1748,9 @@
     }
   dgquery: |-
     query {
-      Computer_1(func: eq(Computer.name, "Comp")) @filter(type(Computer)) {
+      Computer_1(func: eq(Computer.name, "Comp")) {
         uid
+        dgraph.type
       }
     }
   dgquerysec: |-
@@ -1790,11 +1808,13 @@
     }
   dgquery: |-
     query {
-      Parrot_1(func: uid(0x124)) @filter(type(Parrot)) {
+      Parrot_1(func: uid(0x124)) {
         uid
+        dgraph.type
       }
-      Parrot_2(func: uid(0x125)) @filter(type(Parrot)) {
+      Parrot_2(func: uid(0x125)) {
         uid
+        dgraph.type
       }
     }
   qnametouid: |

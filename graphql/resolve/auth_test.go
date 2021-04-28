@@ -585,7 +585,7 @@ func mutationQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMet
 			ctx, err := authMeta.AddClaimsToContext(context.Background())
 			require.NoError(t, err)
 
-			_, _ = rewriter.RewriteQueries(context.Background(), gqlMutation)
+			_, _, _ = rewriter.RewriteQueries(context.Background(), gqlMutation)
 			_, err = rewriter.Rewrite(ctx, gqlMutation, tt.idExistence)
 			require.Nil(t, err)
 
@@ -660,7 +660,7 @@ func deleteQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMeta,
 			}
 
 			// -- Act --
-			_, _ = rewriterToTest.RewriteQueries(context.Background(), mut)
+			_, _, _ = rewriterToTest.RewriteQueries(context.Background(), mut)
 			idExistence := make(map[string]string)
 			upsert, err := rewriterToTest.Rewrite(ctx, mut, idExistence)
 
@@ -822,10 +822,12 @@ func TestAuthQueryRewriting(t *testing.T) {
 		t.Run("Mutation Query Rewriting "+algo, func(t *testing.T) {
 			mutationQueryRewriting(t, strSchema, metaInfo)
 		})
+
 		b = read(t, "auth_add_test.yaml")
 		t.Run("Add Mutation "+algo, func(t *testing.T) {
 			mutationAdd(t, strSchema, metaInfo, b)
 		})
+
 		b = read(t, "auth_update_test.yaml")
 		t.Run("Update Mutation "+algo, func(t *testing.T) {
 			mutationUpdate(t, strSchema, metaInfo, b)
