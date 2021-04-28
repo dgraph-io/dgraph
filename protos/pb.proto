@@ -725,6 +725,7 @@ message UpdateGraphQLSchemaResponse {
 message BulkMeta {
 	int64 edge_count = 1;
 	map<string, SchemaUpdate> schema_map = 2;
+	repeated TypeUpdate types = 3;
 }
 
 message DeleteNsRequest {

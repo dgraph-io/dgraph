@@ -413,28 +413,35 @@ func ResetAcl(closer *z.Closer) {
 		// The acl feature is not turned on.
 		return
 	}
-	for closer.Ctx().Err() == nil {
-		ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
-		defer cancel()
-		ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
-		if err := upsertGuardian(ctx); err != nil {
-			glog.Infof("Unable to upsert the guardian group. Error: %v", err)
-			time.Sleep(100 * time.Millisecond)
-			continue
+
+	upsertGuardianAndGroot := func(ns uint64) {
+		for closer.Ctx().Err() == nil {
+			ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
+			defer cancel()
+			ctx = x.AttachNamespace(ctx, ns)
+			if err := upsertGuardian(ctx); err != nil {
+				glog.Infof("Unable to upsert the guardian group. Error: %v", err)
+				time.Sleep(100 * time.Millisecond)
+				continue
+			}
+			break
 		}
-		break
+
+		for closer.Ctx().Err() == nil {
+			ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
+			defer cancel()
+			ctx = x.AttachNamespace(ctx, ns)
+			if err := upsertGroot(ctx, "password"); err != nil {
+				glog.Infof("Unable to upsert the groot account. Error: %v", err)
+				time.Sleep(100 * time.Millisecond)
+				continue
+			}
+			break
+		}
 	}
 
-	for closer.Ctx().Err() == nil {
-		ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
-		defer cancel()
-		ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
-		if err := upsertGroot(ctx, "password"); err != nil {
-			glog.Infof("Unable to upsert the groot account. Error: %v", err)
-			time.Sleep(100 * time.Millisecond)
-			continue
-		}
-		break
+	for ns := range schema.State().Namespaces() {
+		upsertGuardianAndGroot(ns)
 	}
 }
 

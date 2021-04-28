@@ -138,6 +138,22 @@ func (s *state) DeleteType(typeName string) error {
 	return nil
 }
 
+// Namespaces returns the active namespaces based on the current types.
+func (s *state) Namespaces() map[uint64]struct{} {
+	if s == nil {
+		return nil
+	}
+
+	s.RLock()
+	defer s.RUnlock()
+
+	ns := make(map[uint64]struct{})
+	for typ := range s.types {
+		ns[x.ParseNamespace(typ)] = struct{}{}
+	}
+	return ns
+}
+
 // DeletePredsForNs deletes the predicate information for the namespace from the schema.
 func (s *state) DeletePredsForNs(delNs uint64) {
 	if s == nil {

@@ -84,24 +84,20 @@ func GalaxyAttr(attr string) string {
 
 // ParseNamespaceAttr returns the namespace and attr from the given value.
 func ParseNamespaceAttr(attr string) (uint64, string) {
-	AssertTrue(len(attr) >= 8)
 	return binary.BigEndian.Uint64([]byte(attr[:8])), attr[8:]
 }
 
 func ParseNamespaceBytes(attr string) ([]byte, string) {
-	AssertTrue(len(attr) >= 8)
 	return []byte(attr[:8]), attr[8:]
 }
 
 // ParseAttr returns the attr from the given value.
 func ParseAttr(attr string) string {
-	AssertTrue(len(attr) >= 8)
 	return attr[8:]
 }
 
 // ParseNamespace returns the namespace from the given value.
 func ParseNamespace(attr string) uint64 {
-	AssertTrue(len(attr) >= 8)
 	return binary.BigEndian.Uint64([]byte(attr[:8]))
 }
 
@@ -114,7 +110,6 @@ func ParseAttrList(attrs []string) []string {
 }
 
 func IsReverseAttr(attr string) bool {
-	AssertTrue(len(attr) >= 8)
 	return attr[8] == '~'
 }
 
