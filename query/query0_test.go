@@ -3486,7 +3486,7 @@ func TestMatchingWithPagination(t *testing.T) {
 
 func TestKRandomNodes(t *testing.T) {
 	q := `{
-		data(func: uid(61, 62, 63, 64, 65, 66, 67, 68, 69, 70), random: 2) @filter(has(connects)) {
+		data(func: uid(61, 62, 63, 64, 65, 66, 67, 68), random: 2) @filter(has(connects)) {
 			kname
 			connects(random:2){
 				kname
@@ -3508,7 +3508,7 @@ func TestKRandomNodes(t *testing.T) {
 	require.JSONEq(t, expected, result)
 
 	q = `{
-		data(func: uid(61, 62, 63, 64, 65, 66, 67, 68, 69, 70), random: 10) @filter(has(connects)) {
+		data(func: uid(61, 62, 63, 64, 65, 66, 67, 68), random: 10) @filter(has(connects)) {
 			count(uid)
 		}
 	}`
