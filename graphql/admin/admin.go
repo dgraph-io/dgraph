@@ -253,8 +253,9 @@ const (
 	}
 
 	type ExportPayload {
-		response: Response
 		exportedFiles: [String]
+		response: Response
+		taskId: String
 	}
 
 	type DrainingPayload {

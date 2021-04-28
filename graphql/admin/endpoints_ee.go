@@ -48,6 +48,7 @@ const adminTypes = `
 
 	type BackupPayload {
 		response: Response
+		taskId: String
 	}
 
 	input RestoreInput {

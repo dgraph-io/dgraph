@@ -22,6 +22,7 @@ import (
 	"math"
 	"math/rand"
 	"reflect"
+	"strconv"
 	"sync"
 	"time"
 
@@ -30,6 +31,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 )
 
 var (
@@ -78,13 +80,21 @@ type tasks struct {
 
 // Get retrieves metadata for a given task ID.
 // It returns 0 if the task was not found.
-func (t tasks) Get(id uint64) TaskMeta {
-	if id == 0 || id == math.MaxUint64 {
-		return 0
+func (t tasks) Get(id string) (TaskMeta, error) {
+	idUint64, err := strconv.ParseUint(id, 0, 64)
+	if err != nil {
+		return 0, errors.Wrapf(err, "task ID is invalid: %s", id)
+	}
+	if idUint64 == 0 || idUint64 == math.MaxUint64 {
+		return 0, fmt.Errorf("task ID is invalid: %d", idUint64)
 	}
 	t.logMu.Lock()
 	defer t.logMu.Unlock()
-	return TaskMeta(t.log.Get(id))
+	meta := TaskMeta(t.log.Get(idUint64))
+	if meta == 0 {
+		return 0, fmt.Errorf("task does not exist or has expired")
+	}
+	return meta, nil
 }
 
 // cleanup deletes all expired tasks.
@@ -161,7 +171,7 @@ func (t tasks) run(task taskRequest) error {
 // Enqueue enqueues a new task. This must be of type:
 // - *pb.BackupRequest
 // - *pb.ExportRequest
-func (t tasks) Enqueue(req interface{}) (uint64, error) {
+func (t tasks) Enqueue(req interface{}) (string, error) {
 	var kind TaskKind
 	switch req.(type) {
 	case *pb.BackupRequest:
@@ -183,9 +193,9 @@ func (t tasks) Enqueue(req interface{}) (uint64, error) {
 	select {
 	case t.queue <- task:
 		t.log.Set(task.id, newTaskMeta(kind, TaskStatusQueued).uint64())
-		return task.id, nil
+		return fmt.Sprintf("%#x", task.id), nil
 	default:
-		return 0, fmt.Errorf("too many pending tasks, please try again later")
+		return "", fmt.Errorf("too many pending tasks, please try again later")
 	}
 }
 

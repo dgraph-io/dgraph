@@ -20,13 +20,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"time"
 
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/worker"
-	"github.com/pkg/errors"
 )
 
 type taskInput struct {
@@ -41,14 +39,10 @@ func resolveTask(ctx context.Context, q schema.Query) *resolve.Resolved {
 	if input.Id == "" {
 		return resolve.EmptyResult(q, fmt.Errorf("task ID is missing"))
 	}
-	id, err := strconv.ParseUint(input.Id, 0, 64)
-	if err != nil {
-		return resolve.EmptyResult(q, errors.Wrapf(err, "task ID is invalid"))
-	}
 
-	meta := worker.Tasks.Get(id)
-	if meta == 0 {
-		return resolve.EmptyResult(q, fmt.Errorf("task does not exist or has expired"))
+	meta, err := worker.Tasks.Get(input.Id)
+	if err != nil {
+		return resolve.EmptyResult(q, err)
 	}
 	return resolve.DataResult(
 		q,

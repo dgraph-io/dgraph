@@ -16,7 +16,15 @@
 
 package testutil
 
-import "github.com/dgraph-io/dgraph/x"
+import (
+	"bytes"
+	"encoding/json"
+	"testing"
+	"time"
+
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/stretchr/testify/require"
+)
 
 func GalaxySchemaKey(attr string) []byte {
 	attr = x.GalaxyAttr(attr)
@@ -46,4 +54,35 @@ func GalaxyIndexKey(attr, term string) []byte {
 func GalaxyCountKey(attr string, count uint32, reverse bool) []byte {
 	attr = x.GalaxyAttr(attr)
 	return x.CountKey(attr, count, reverse)
+}
+
+func WaitForTask(t *testing.T, taskId string) {
+	const query = `query task($id: String!) {
+		task(input: {id: $id}) {
+			status
+		}
+	}`
+	params := GraphQLParams{
+		Query:     query,
+		Variables: map[string]interface{}{"id": taskId},
+	}
+	request, err := json.Marshal(params)
+	require.NoError(t, err)
+
+	adminUrl := "https://" + SockAddrHttp + "/admin"
+	for {
+		client := GetHttpsClient(t)
+		response, err := client.Post(adminUrl, "application/json", bytes.NewBuffer(request))
+		require.NoError(t, err)
+		defer response.Body.Close()
+
+		var data interface{}
+		require.NoError(t, json.NewDecoder(response.Body).Decode(&data))
+		type m = map[string]interface{}
+		if data.(m)["data"].(m)["task"].(m)["status"] == "Success" {
+			return
+		}
+
+		time.Sleep(4 * time.Second)
+	}
 }

@@ -97,10 +97,12 @@ func resolveExport(ctx context.Context, m schema.Mutation) (*resolve.Resolved, b
 		return resolve.EmptyResult(m, err), false
 	}
 
-	msg := fmt.Sprintf("Export started with ID %#x", taskId)
+	msg := fmt.Sprintf("Export started with ID %s", taskId)
+	data := response("Success", msg)
+	data["taskId"] = taskId
 	return resolve.DataResult(
 		m,
-		map[string]interface{}{m.Name(): response("Success", msg)},
+		map[string]interface{}{m.Name(): data},
 		nil,
 	), true
 }
