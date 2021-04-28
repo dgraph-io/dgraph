@@ -17,6 +17,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/rand"
 	"os"
 	"strconv"
 	"strings"
@@ -32,7 +33,7 @@ import (
 )
 
 var (
-	userid       = "alice"
+	commonUserId = "alice"
 	userpassword = "simplepassword"
 )
 
@@ -230,16 +231,16 @@ func TestCreateAndDeleteUsers(t *testing.T) {
 
 	// adding the user again should fail
 	token := testutil.GrootHttpLogin(adminEndpoint)
-	resp := createUser(t, token, userid, userpassword)
+	resp := createUser(t, token, commonUserId, userpassword)
 	require.Equal(t, 1, len(resp.Errors))
 	require.Equal(t, "couldn't rewrite mutation addUser because failed to rewrite mutation payload because id"+
 		" alice already exists for field name inside type User", resp.Errors[0].Message)
 	checkUserCount(t, resp.Data, 0)
 
 	// delete the user
-	_ = deleteUser(t, token, userid, true)
+	_ = deleteUser(t, token, commonUserId, true)
 
-	resp = createUser(t, token, userid, userpassword)
+	resp = createUser(t, token, commonUserId, userpassword)
 	resp.RequireNoGraphQLErrors(t)
 	// now we should be able to create the user again
 	checkUserCount(t, resp.Data, 1)
@@ -248,11 +249,11 @@ func TestCreateAndDeleteUsers(t *testing.T) {
 func resetUser(t *testing.T) {
 	token := testutil.GrootHttpLogin(adminEndpoint)
 	// clean up the user to allow repeated running of this test
-	deleteUserResp := deleteUser(t, token, userid, false)
+	deleteUserResp := deleteUser(t, token, commonUserId, false)
 	deleteUserResp.RequireNoGraphQLErrors(t)
 	glog.Infof("deleted user")
 
-	resp := createUser(t, token, userid, userpassword)
+	resp := createUser(t, token, commonUserId, userpassword)
 	resp.RequireNoGraphQLErrors(t)
 	checkUserCount(t, resp.Data, 1)
 	glog.Infof("created user")
@@ -353,8 +354,8 @@ const expireJwtSleep = 21 * time.Second
 func testAuthorization(t *testing.T, dg *dgo.Dgraph) {
 	createAccountAndData(t, dg)
 	ctx := context.Background()
-	if err := dg.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace); err != nil {
-		t.Fatalf("unable to login using the account %v", userid)
+	if err := dg.LoginIntoNamespace(ctx, commonUserId, userpassword, x.GalaxyNamespace); err != nil {
+		t.Fatalf("unable to login using the account %v", commonUserId)
 	}
 
 	// initially the query should return empty result, mutate and alter
@@ -818,7 +819,7 @@ func createGroupAndAcls(t *testing.T, group string, addUserToGroup bool) {
 
 	// add the user to the group
 	if addUserToGroup {
-		addToGroup(t, token, userid, group)
+		addToGroup(t, token, commonUserId, group)
 	}
 
 	rules := []rule{
@@ -855,7 +856,7 @@ func TestPredicatePermission(t *testing.T) {
 	}
 	createAccountAndData(t, dg)
 	ctx := context.Background()
-	err = dg.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace)
+	err = dg.LoginIntoNamespace(ctx, commonUserId, userpassword, x.GalaxyNamespace)
 	require.NoError(t, err, "Logging in with the current password should have succeeded")
 
 	// Schema query is allowed to all logged in users.
@@ -928,7 +929,7 @@ func TestUnauthorizedDeletion(t *testing.T) {
 	require.NoError(t, err, "login failed")
 	createGroup(t, token, devGroup)
 
-	addToGroup(t, token, userid, devGroup)
+	addToGroup(t, token, commonUserId, devGroup)
 
 	txn := dg.NewTxn()
 	mutation := &api.Mutation{
@@ -947,7 +948,7 @@ func TestUnauthorizedDeletion(t *testing.T) {
 	require.NoError(t, err)
 	time.Sleep(defaultTimeToSleep)
 
-	err = userClient.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace)
+	err = userClient.LoginIntoNamespace(ctx, commonUserId, userpassword, x.GalaxyNamespace)
 	require.NoError(t, err)
 
 	_, err = deleteUsingNQuad(userClient, "<"+nodeUID+">", "<"+unAuthPred+">", "*")
@@ -1095,7 +1096,7 @@ func TestQueryRemoveUnauthorizedPred(t *testing.T) {
 	})
 	require.NoError(t, err, "login failed")
 	createGroup(t, token, devGroup)
-	addToGroup(t, token, userid, devGroup)
+	addToGroup(t, token, commonUserId, devGroup)
 
 	txn := dg.NewTxn()
 	mutation := &api.Mutation{
@@ -1121,7 +1122,7 @@ func TestQueryRemoveUnauthorizedPred(t *testing.T) {
 	require.NoError(t, err)
 	time.Sleep(defaultTimeToSleep)
 
-	err = userClient.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace)
+	err = userClient.LoginIntoNamespace(ctx, commonUserId, userpassword, x.GalaxyNamespace)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -1247,7 +1248,7 @@ func TestExpandQueryWithACLPermissions(t *testing.T) {
 	createGroup(t, token, sreGroup)
 
 	addRulesToGroup(t, token, sreGroup, []rule{{"age", Read.Code}, {"name", Write.Code}})
-	addToGroup(t, token, userid, devGroup)
+	addToGroup(t, token, commonUserId, devGroup)
 
 	txn := dg.NewTxn()
 	mutation := &api.Mutation{
@@ -1278,7 +1279,7 @@ func TestExpandQueryWithACLPermissions(t *testing.T) {
 	require.NoError(t, err)
 	time.Sleep(defaultTimeToSleep)
 
-	err = userClient.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace)
+	err = userClient.LoginIntoNamespace(ctx, commonUserId, userpassword, x.GalaxyNamespace)
 	require.NoError(t, err)
 
 	// Query via user when user has no permissions
@@ -1313,7 +1314,7 @@ func TestExpandQueryWithACLPermissions(t *testing.T) {
 	})
 	require.NoError(t, err, "login failed")
 	// Add alice to sre group which has read access to <age> and write access to <name>
-	addToGroup(t, token, userid, sreGroup)
+	addToGroup(t, token, commonUserId, sreGroup)
 	time.Sleep(defaultTimeToSleep)
 
 	resp, err = userClient.NewReadOnlyTxn().Query(ctx, query)
@@ -1374,7 +1375,7 @@ func TestDeleteQueryWithACLPermissions(t *testing.T) {
 
 	createGroup(t, token, devGroup)
 
-	addToGroup(t, token, userid, devGroup)
+	addToGroup(t, token, commonUserId, devGroup)
 
 	txn := dg.NewTxn()
 	mutation := &api.Mutation{
@@ -1411,7 +1412,7 @@ func TestDeleteQueryWithACLPermissions(t *testing.T) {
 	require.NoError(t, err)
 	time.Sleep(defaultTimeToSleep)
 
-	err = userClient.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace)
+	err = userClient.LoginIntoNamespace(ctx, commonUserId, userpassword, x.GalaxyNamespace)
 	require.NoError(t, err)
 
 	// delete S * * (user now has permission to name and age)
@@ -1490,7 +1491,7 @@ func TestValQueryWithACLPermissions(t *testing.T) {
 	// createGroup(t, accessJwt, sreGroup)
 
 	// addRulesToGroup(t, accessJwt, sreGroup, []rule{{"age", Read.Code}, {"name", Write.Code}})
-	addToGroup(t, token, userid, devGroup)
+	addToGroup(t, token, commonUserId, devGroup)
 
 	txn := dg.NewTxn()
 	mutation := &api.Mutation{
@@ -1625,7 +1626,7 @@ func TestValQueryWithACLPermissions(t *testing.T) {
 	require.NoError(t, err)
 	time.Sleep(defaultTimeToSleep)
 
-	err = userClient.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace)
+	err = userClient.LoginIntoNamespace(ctx, commonUserId, userpassword, x.GalaxyNamespace)
 	require.NoError(t, err)
 
 	// Query via user when user has no permissions
@@ -1694,7 +1695,7 @@ func TestNewACLPredicates(t *testing.T) {
 	require.NoError(t, err)
 	time.Sleep(defaultTimeToSleep)
 
-	err = userClient.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace)
+	err = userClient.LoginIntoNamespace(ctx, commonUserId, userpassword, x.GalaxyNamespace)
 	require.NoError(t, err)
 
 	queryTests := []struct {
@@ -1812,7 +1813,7 @@ func TestDeleteRule(t *testing.T) {
 	require.NoError(t, err)
 	time.Sleep(defaultTimeToSleep)
 
-	err = userClient.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace)
+	err = userClient.LoginIntoNamespace(ctx, commonUserId, userpassword, x.GalaxyNamespace)
 	require.NoError(t, err)
 
 	queryName := "{me(func: has(name)) {name}}"
@@ -1876,7 +1877,7 @@ func addDataAndRules(ctx context.Context, t *testing.T, dg *dgo.Dgraph) map[stri
 		userid as var(func: eq(dgraph.xid, "%s"))
 		gid as var(func: eq(dgraph.type, "dgraph.type.Group")) @filter(eq(dgraph.xid, "dev") OR
 			eq(dgraph.xid, "dev-a"))
-	}`, userid)
+	}`, commonUserId)
 	addAliceToGroups := &api.NQuad{
 		Subject:   "uid(userid)",
 		Predicate: "dgraph.user.group",
@@ -1936,7 +1937,7 @@ func TestQueryUserInfo(t *testing.T) {
 
 	token, err := testutil.HttpLogin(&testutil.LoginParams{
 		Endpoint:  adminEndpoint,
-		UserID:    userid,
+		UserID:    commonUserId,
 		Passwd:    userpassword,
 		Namespace: x.GalaxyNamespace,
 	})
@@ -2022,7 +2023,7 @@ func TestQueryUserInfo(t *testing.T) {
 	userClient, err := testutil.DgraphClient(testutil.SockAddr)
 	require.NoError(t, err)
 
-	err = userClient.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace)
+	err = userClient.LoginIntoNamespace(ctx, commonUserId, userpassword, x.GalaxyNamespace)
 	require.NoError(t, err)
 
 	resp, err := userClient.NewReadOnlyTxn().Query(ctx, query)
@@ -2113,7 +2114,7 @@ func TestQueriesForNonGuardianUserWithoutGroup(t *testing.T) {
 
 	token, err := testutil.HttpLogin(&testutil.LoginParams{
 		Endpoint:  adminEndpoint,
-		UserID:    userid,
+		UserID:    commonUserId,
 		Passwd:    userpassword,
 		Namespace: x.GalaxyNamespace,
 	})
@@ -2340,7 +2341,7 @@ func TestSchemaQueryWithACL(t *testing.T) {
 	// the other user should be able to view only the part of schema for which it has read access
 	dg, err = testutil.DgraphClient(testutil.SockAddr)
 	require.NoError(t, err)
-	require.NoError(t, dg.LoginIntoNamespace(context.Background(), userid, userpassword, x.GalaxyNamespace))
+	require.NoError(t, dg.LoginIntoNamespace(context.Background(), commonUserId, userpassword, x.GalaxyNamespace))
 	resp, err = dg.NewReadOnlyTxn().Query(context.Background(), schemaQuery)
 	require.NoError(t, err)
 	require.JSONEq(t, aliceSchema, string(resp.GetJson()))
@@ -2362,7 +2363,7 @@ func TestDeleteUserShouldDeleteUserFromGroup(t *testing.T) {
 	})
 	require.NoError(t, err, "login failed")
 
-	_ = deleteUser(t, token, userid, true)
+	_ = deleteUser(t, token, commonUserId, true)
 
 	gqlQuery := `
 	query {
@@ -2592,7 +2593,7 @@ func assertNonGuardianFailure(t *testing.T, queryName string, respIsNull bool,
 
 	token, err := testutil.HttpLogin(&testutil.LoginParams{
 		Endpoint:  adminEndpoint,
-		UserID:    userid,
+		UserID:    commonUserId,
 		Passwd:    userpassword,
 		Namespace: x.GalaxyNamespace,
 	})
@@ -2602,7 +2603,7 @@ func assertNonGuardianFailure(t *testing.T, queryName string, respIsNull bool,
 	require.Len(t, resp.Errors, 1)
 	require.Contains(t, resp.Errors[0].Message,
 		fmt.Sprintf("rpc error: code = PermissionDenied desc = Only guardians are allowed access."+
-			" User '%s' is not a member of guardians group.", userid))
+			" User '%s' is not a member of guardians group.", commonUserId))
 	if len(resp.Data) != 0 {
 		queryVal := "null"
 		if !respIsNull {
@@ -2950,7 +2951,7 @@ func TestAllowUIDAccess(t *testing.T) {
 	})
 	require.NoError(t, err, "login failed")
 	createGroup(t, token, devGroup)
-	addToGroup(t, token, userid, devGroup)
+	addToGroup(t, token, commonUserId, devGroup)
 
 	require.NoError(t, testutil.AssignUids(101))
 	mutation := &api.Mutation{
@@ -2969,7 +2970,7 @@ func TestAllowUIDAccess(t *testing.T) {
 	require.NoError(t, err)
 	time.Sleep(defaultTimeToSleep)
 
-	err = userClient.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace)
+	err = userClient.LoginIntoNamespace(ctx, commonUserId, userpassword, x.GalaxyNamespace)
 	require.NoError(t, err)
 
 	uidQuery := `
@@ -2987,7 +2988,8 @@ func TestAllowUIDAccess(t *testing.T) {
 }
 
 func TestAddNewPredicate(t *testing.T) {
-	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	defer cancel()
 
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
@@ -2995,30 +2997,40 @@ func TestAddNewPredicate(t *testing.T) {
 	testutil.DropAll(t, dg)
 	resetUser(t)
 
+	id := fmt.Sprintf("%02d", rand.Intn(100))
+	userId, newPred := "alice"+id, "newpred"+id
+
+	t.Logf("Creating user: %s\n", userId)
+	token := testutil.GrootHttpLogin(adminEndpoint)
+	resp := createUser(t, token, userId, userpassword)
+	resp.RequireNoGraphQLErrors(t)
+
 	userClient, err := testutil.DgraphClient(testutil.SockAddr)
 	require.NoError(t, err)
-	err = userClient.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace)
+	err = userClient.LoginIntoNamespace(ctx, userId, userpassword, x.GalaxyNamespace)
 	require.NoError(t, err)
+
+	t.Logf("Will create new predicate: %s for user: %s\n", newPred, userId)
 
 	// Alice doesn't have access to create new predicate.
 	err = userClient.Alter(ctx, &api.Operation{
-		Schema: `newpred: string .`,
+		Schema: newPred + ": string .",
 	})
 	require.Error(t, err, "User can't create new predicate. Alter should have returned error.")
 
-	token, err := testutil.HttpLogin(&testutil.LoginParams{
-		Endpoint:  adminEndpoint,
-		UserID:    "groot",
-		Passwd:    "password",
-		Namespace: x.GalaxyNamespace,
-	})
-	require.NoError(t, err, "login failed")
-	addToGroup(t, token, userid, "guardians")
-	time.Sleep(expireJwtSleep)
+	addToGroup(t, token, userId, "guardians")
+
+	// Login again to refresh our token.
+	err = userClient.LoginIntoNamespace(ctx, userId, userpassword, x.GalaxyNamespace)
+	require.NoError(t, err)
 
 	// Alice is a guardian now, it can create new predicate.
-	err = userClient.Alter(ctx, &api.Operation{
-		Schema: `newpred: string .`,
+	err = x.RetryUntilSuccess(60, time.Second, func() error {
+		err := userClient.Alter(ctx, &api.Operation{
+			Schema: newPred + ": string .",
+		})
+		t.Logf("While creating new predicate: %s, got error: %v\n", newPred, err)
+		return err
 	})
 	require.NoError(t, err, "User is a guardian. Alter should have succeeded.")
 }
@@ -3169,9 +3181,9 @@ func TestMutationWithValueVar(t *testing.T) {
 		Passwd:   "password",
 	})
 	require.NoError(t, err)
-	createUser(t, token, userid, userpassword)
+	createUser(t, token, commonUserId, userpassword)
 	createGroup(t, token, devGroup)
-	addToGroup(t, token, userid, devGroup)
+	addToGroup(t, token, commonUserId, devGroup)
 	addRulesToGroup(t, token, devGroup, []rule{
 		{
 			Predicate:  "name",
@@ -3207,7 +3219,7 @@ func TestMutationWithValueVar(t *testing.T) {
 
 	userClient, err := testutil.DgraphClient(testutil.SockAddr)
 	require.NoError(t, err)
-	err = userClient.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace)
+	err = userClient.LoginIntoNamespace(ctx, commonUserId, userpassword, x.GalaxyNamespace)
 	require.NoError(t, err)
 
 	_, err = userClient.NewTxn().Do(ctx, &api.Request{
@@ -3248,13 +3260,13 @@ func TestFailedLogin(t *testing.T) {
 	require.NoError(t, err)
 
 	// User is not present
-	err = client.LoginIntoNamespace(ctx, userid, "simplepassword", x.GalaxyNamespace)
+	err = client.LoginIntoNamespace(ctx, commonUserId, "simplepassword", x.GalaxyNamespace)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), x.ErrorInvalidLogin.Error())
 
 	resetUser(t)
 	// User is present
-	err = client.LoginIntoNamespace(ctx, userid, "randomstring", x.GalaxyNamespace)
+	err = client.LoginIntoNamespace(ctx, commonUserId, "randomstring", x.GalaxyNamespace)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), x.ErrorInvalidLogin.Error())
 }
