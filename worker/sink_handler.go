@@ -17,6 +17,8 @@
 package worker
 
 import (
+	"crypto/sha256"
+	"crypto/sha512"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/binary"
@@ -27,6 +29,7 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
+	"github.com/xdg/scram"
 
 	"github.com/Shopify/sarama"
 
@@ -116,6 +119,9 @@ func newKafkaSink(config *z.SuperFlag) (Sink, error) {
 		saramaConf.Net.SASL.User = config.GetString("sasl-user")
 		saramaConf.Net.SASL.Password = config.GetString("sasl-password")
 		saramaConf.Net.SASL.Mechanism = sarama.SASLMechanism(config.GetString("sasl-mechanism"))
+
+		saramaConf.Net.SASL.SCRAMClientGeneratorFunc = sha512ClientGenerator
+
 	}
 	brokers := strings.Split(config.GetString("kafka"), ",")
 	client, err := sarama.NewClient(brokers, saramaConf)
@@ -130,6 +136,42 @@ func newKafkaSink(config *z.SuperFlag) (Sink, error) {
 		client:   client,
 		producer: producer,
 	}, nil
+}
+
+var (
+	sha256ClientGenerator = func() sarama.SCRAMClient {
+		return &scramClient{HashGeneratorFcn: sha256.New}
+	}
+
+	sha512ClientGenerator = func() sarama.SCRAMClient {
+		return &scramClient{HashGeneratorFcn: sha512.New}
+	}
+)
+
+type scramClient struct {
+	*scram.Client
+	*scram.ClientConversation
+	scram.HashGeneratorFcn
+}
+
+var _ sarama.SCRAMClient = &scramClient{}
+
+func (c *scramClient) Begin(userName, password, authzID string) error {
+	var err error
+	c.Client, err = c.HashGeneratorFcn.NewClient(userName, password, authzID)
+	if err != nil {
+		return err
+	}
+	c.ClientConversation = c.Client.NewConversation()
+	return nil
+}
+
+func (c *scramClient) Step(challenge string) (string, error) {
+	return c.ClientConversation.Step(challenge)
+}
+
+func (c *scramClient) Done() bool {
+	return c.ClientConversation.Done()
 }
 
 func (k *kafkaSinkClient) Send(messages []SinkMessage) error {
