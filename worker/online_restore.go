@@ -266,7 +266,7 @@ func (w *grpcWorker) Restore(ctx context.Context, req *pb.RestoreRequest) (*pb.S
 }
 
 // TODO(DGRAPH-1232): Ensure all groups receive the restore proposal.
-func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
+func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest, pidx uint64) error {
 	if req == nil {
 		return errors.Errorf("nil restore request")
 	}
@@ -364,9 +364,19 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 
 	// Propose a snapshot immediately after all the work is done to prevent the restore
 	// from being replayed.
-	if err := groups().Node.proposeSnapshot(); err != nil {
-		return errors.Wrapf(err, "cannot propose snapshot after processing restore proposal")
-	}
+	go func(idx uint64) {
+		n := groups().Node
+		if !n.AmLeader() {
+			return
+		}
+		if err := n.Applied.WaitForMark(context.Background(), idx); err != nil {
+			glog.Errorf("Error waiting for mark for index %d: %+v", idx, err)
+			return
+		}
+		if err := n.proposeSnapshot(); err != nil {
+			glog.Errorf("cannot propose snapshot after processing restore proposal %+v", err)
+		}
+	}(pidx)
 
 	// Update the membership state to re-compute the group checksums.
 	if err := UpdateMembershipState(ctx); err != nil {

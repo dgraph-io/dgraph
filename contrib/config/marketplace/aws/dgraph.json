@@ -30,8 +30,6 @@
                         "ZeroInstanceType",
                         "ZeroDiskSize",
                         "ZeroDiskIops",
-                        "RatelInstanceCount",
-                        "RatelInstanceType",
                         "Tag"
                     ]
                 }
@@ -72,12 +70,6 @@
                 },
                 "ZeroDiskIops": {
                     "default": "Zero node Disk IOPS"
-                },
-                "RatelInstanceCount": {
-                    "default": "Number of EC2 instances to launch as dgraph ratel nodes."
-                },
-                "RatelInstanceType": {
-                    "default": "AWS instance types to use for dgraph Ratel nodes"
                 },
                 "DgraphVersion": {
                     "default": "Dgraph version to deploy."
@@ -150,7 +142,7 @@
             "MaxValue": 255
         },
         "AllowPublicAccess": {
-            "Description": "Allow public access for dgraph ratel and dgraph alpha HTTP endpoints. *Avoid this in production environment*.",
+            "Description": "Allow public access for dgraph alpha HTTP endpoint. *Avoid this in production environment*.",
             "Type": "String",
             "Default": "false"
         },
@@ -259,34 +251,6 @@
             "Description": "IOPS of the EBS io1 volume on each Zero node",
             "Type": "Number",
             "Default": 1000
-        },
-        "RatelMinInstanceCount": {
-            "Description": "Min alpha nodes to have.",
-            "Type": "Number",
-            "Default": 0
-        },
-        "RatelMaxInstanceCount": {
-            "Description": "Maximum alpha nodes to have.",
-            "Type": "Number",
-            "Default": 3
-        },
-        "RatelInstanceCount": {
-            "Description": "Number of EC2 instances to launch as dgraph ratel nodes.",
-            "Type": "Number",
-            "Default": 1,
-            "MinValue": 1,
-            "MaxValue": 3
-        },
-        "RatelInstanceType": {
-            "Description": "Instance type for dgraph Ratel nodes",
-            "Type": "String",
-            "Default": "t3a.small",
-            "AllowedValues": [
-                "t3a.small",
-                "t3a.medium",
-                "t3a.large"
-            ],
-            "ConstraintDescription": "must be a valid EC2 instance type."
         },
         "KeyName": {
             "Description": "Name of an existing EC2 KeyPair to enable SSH access to the instances",
@@ -575,24 +539,6 @@
                 ]
             }
         },
-        "DgraphRatelLoadBalancerListener": {
-            "Type": "AWS::ElasticLoadBalancingV2::Listener",
-            "Properties": {
-                "DefaultActions": [
-                    {
-                        "Type": "forward",
-                        "TargetGroupArn": {
-                            "Ref": "RatelTargetGroup"
-                        }
-                    }
-                ],
-                "LoadBalancerArn": {
-                    "Ref": "DgraphLoadBalancer"
-                },
-                "Port": 8000,
-                "Protocol": "HTTP"
-            }
-        },
         "DgraphAlphaHTTPLoadBalancerListener": {
             "Type": "AWS::ElasticLoadBalancingV2::Listener",
             "Properties": {
@@ -627,26 +573,6 @@
                 },
                 "Port": 9080,
                 "Protocol": "HTTP"
-            }
-        },
-        "RatelTargetGroup": {
-            "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
-            "Properties": {
-                "HealthCheckIntervalSeconds": 30,
-                "HealthCheckPath": "/",
-                "HealthCheckPort": "8000",
-                "HealthCheckProtocol": "HTTP",
-                "HealthCheckTimeoutSeconds": 10,
-                "HealthyThresholdCount": 3,
-                "Matcher": {
-                    "HttpCode": "200"
-                },
-                "Port": 8000,
-                "Protocol": "HTTP",
-                "UnhealthyThresholdCount": 3,
-                "VpcId": {
-                    "Ref": "VPC"
-                }
             }
         },
         "AlphaTargetGroup": {
@@ -752,33 +678,6 @@
                 }
             }
         },
-        "DgraphALBRatelSGIngress": {
-            "Type": "AWS::EC2::SecurityGroupIngress",
-            "Properties": {
-                "GroupId": {
-                    "Ref": "DgraphALBSecurityGroup"
-                },
-                "IpProtocol": "tcp",
-                "FromPort": 8000,
-                "ToPort": 8000,
-                "SourceSecurityGroupId": {
-                    "Ref": "DgraphClientSecurityGroup"
-                }
-            }
-        },
-        "DgraphALBRatelPublicSGIngress": {
-            "Type": "AWS::EC2::SecurityGroupIngress",
-            "Condition": "AllowPublicAccess",
-            "Properties": {
-                "GroupId": {
-                    "Ref": "DgraphALBSecurityGroup"
-                },
-                "IpProtocol": "tcp",
-                "FromPort": 8000,
-                "ToPort": 8000,
-                "CidrIp": "0.0.0.0/0"
-            }
-        },
         "DgraphALBSGEgress": {
             "Type": "AWS::EC2::SecurityGroupEgress",
             "Properties": {
@@ -825,45 +724,6 @@
                 "IpProtocol": "tcp",
                 "FromPort": 8080,
                 "ToPort": 8080,
-                "SourceSecurityGroupId": {
-                    "Ref": "DgraphALBSecurityGroup"
-                }
-            }
-        },
-        "DgraphRatelSecurityGroup": {
-            "Type": "AWS::EC2::SecurityGroup",
-            "Properties": {
-                "GroupDescription": "Allow traffic from ALB to go to port 8000 on Dgraph Ratel nodes",
-                "VpcId": {
-                    "Ref": "VPC"
-                },
-                "Tags": [
-                    {
-                        "Key": "context",
-                        "Value": {
-                            "Fn::Join": [
-                                "",
-                                [
-                                    "ratel.",
-                                    {
-                                        "Ref": "Tag"
-                                    }
-                                ]
-                            ]
-                        }
-                    }
-                ]
-            }
-        },
-        "DgraphRatelSGIngress": {
-            "Type": "AWS::EC2::SecurityGroupIngress",
-            "Properties": {
-                "GroupId": {
-                    "Ref": "DgraphRatelSecurityGroup"
-                },
-                "IpProtocol": "tcp",
-                "FromPort": 8000,
-                "ToPort": 8000,
                 "SourceSecurityGroupId": {
                     "Ref": "DgraphALBSecurityGroup"
                 }
@@ -938,20 +798,6 @@
                 "IpProtocol": "tcp",
                 "FromPort": 7080,
                 "ToPort": 7080,
-                "SourceSecurityGroupId": {
-                    "Ref": "DgraphSecurityGroup"
-                }
-            }
-        },
-        "DgraphSGRatelExternalIngress": {
-            "Type": "AWS::EC2::SecurityGroupIngress",
-            "Properties": {
-                "GroupId": {
-                    "Ref": "DgraphSecurityGroup"
-                },
-                "IpProtocol": "tcp",
-                "FromPort": 8000,
-                "ToPort": 8000,
                 "SourceSecurityGroupId": {
                     "Ref": "DgraphSecurityGroup"
                 }
@@ -1533,154 +1379,6 @@
                                 "",
                                 [
                                     "alpha.",
-                                    {
-                                        "Ref": "Tag"
-                                    }
-                                ]
-                            ]
-                        },
-                        "PropagateAtLaunch": true
-                    }
-                ]
-            }
-        },
-        "RatelLaunchTemplate": {
-            "Type": "AWS::EC2::LaunchTemplate",
-            "Properties": {
-                "LaunchTemplateData": {
-                    "BlockDeviceMappings": [
-                        {
-                            "DeviceName": "/dev/sda1",
-                            "Ebs": {
-                                "VolumeSize": 20
-                            }
-                        }
-                    ],
-                    "DisableApiTermination": false,
-                    "ImageId": {
-                        "Fn::FindInMap": [
-                            "AWSRegionArch2AMI",
-                            {
-                                "Ref": "AWS::Region"
-                            },
-                            "64"
-                        ]
-                    },
-                    "InstanceType": {
-                        "Ref": "RatelInstanceType"
-                    },
-                    "KeyName": {
-                        "Ref": "KeyName"
-                    },
-                    "NetworkInterfaces": [
-                        {
-                            "AssociatePublicIpAddress": true,
-                            "DeleteOnTermination": true,
-                            "DeviceIndex": 0,
-                            "SubnetId": {
-                                "Ref": "SubnetA"
-                            },
-                            "Groups": [
-                                {
-                                    "Ref": "DgraphSecurityGroup"
-                                },
-                                {
-                                    "Ref": "DgraphRatelSecurityGroup"
-                                }
-                            ]
-                        }
-                    ],
-                    "UserData": {
-                        "Fn::Base64": {
-                            "Fn::Join": [
-                                "",
-                                [
-                                    "#!/usr/bin/env bash",
-                                    "\n\n",
-                                    "set -euxo pipefail",
-                                    "\n\n",
-                                    "groupadd --system dgraph\n",
-                                    "useradd --system -d /var/run/dgraph -s /bin/false -g dgraph dgraph\n",
-                                    "mkdir -p /var/log/dgraph/ && mkdir -p /var/run/dgraph/\n",
-                                    "chown -R dgraph:dgraph /var/run/dgraph\n",
-                                    "chown -R dgraph:dgraph /var/log/dgraph\n",
-                                    "\n\n",
-                                    "cat <<EOT > /etc/systemd/system/dgraph-ratel.service\n",
-                                    "[Unit]\n",
-                                    "Description=dgraph.io UI server\n",
-                                    "Wants=network.target\n",
-                                    "After=network.target\n",
-                                    "[Service]\n",
-                                    "Type=simple\n",
-                                    "ExecStart=/usr/local/bin/dgraph-ratel\n",
-                                    "StandardOutput=journal\n",
-                                    "StandardError=journal\n",
-                                    "User=dgraph\n",
-                                    "Group=dgraph\n",
-                                    "[Install]\n",
-                                    "WantedBy=multi-user.target\n",
-                                    "EOT\n",
-                                    "\n\n",
-                                    "chmod +x /etc/systemd/system/dgraph-ratel.service\n",
-                                    "curl -sSf https://get.dgraph.io | ACCEPT_LICENSE=y VERSION=",
-                                    {
-                                        "Ref": "DgraphVersion"
-                                    },
-                                    " bash\n",
-                                    "systemctl daemon-reload\n",
-                                    "systemctl enable --now dgraph-ratel.service"
-                                ]
-                            ]
-                        }
-                    }
-                },
-                "LaunchTemplateName": "ratel.dgraph.io"
-            }
-        },
-        "RatelAutoscalingGroup": {
-            "Type": "AWS::AutoScaling::AutoScalingGroup",
-            "DependsOn": [
-                "AlphaAutoscalingGroup"
-            ],
-            "Properties": {
-                "VPCZoneIdentifier": [
-                    {
-                        "Ref": "SubnetA"
-                    }
-                ],
-                "LaunchTemplate": {
-                    "LaunchTemplateId": {
-                        "Ref": "RatelLaunchTemplate"
-                    },
-                    "Version": {
-                        "Fn::GetAtt": [
-                            "RatelLaunchTemplate",
-                            "LatestVersionNumber"
-                        ]
-                    }
-                },
-                "DesiredCapacity": {
-                    "Ref": "RatelInstanceCount"
-                },
-                "TargetGroupARNs": [
-                    {
-                        "Ref": "RatelTargetGroup"
-                    }
-                ],
-                "MinSize": {
-                    "Ref": "RatelMinInstanceCount"
-                },
-                "MaxSize": {
-                    "Ref": "RatelMaxInstanceCount"
-                },
-                "Tags": [
-                    {
-                        "Key": "context",
-                        "Value": {
-                            "Fn::Join": [
-                                "",
-                                [
-                                    "ratel.",
                                     {
                                         "Ref": "Tag"
                                     }

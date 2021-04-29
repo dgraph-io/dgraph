@@ -24,7 +24,7 @@ require (
 	github.com/dgraph-io/gqlgen v0.13.2
 	github.com/dgraph-io/gqlparser/v2 v2.2.0
 	github.com/dgraph-io/graphql-transport-ws v0.0.0-20210223074046-e5b8b80bb4ed
-	github.com/dgraph-io/ristretto v0.0.4-0.20210415071355-221ca9b2091d
+	github.com/dgraph-io/ristretto v0.0.4-0.20210428103110-8405ab9b246f
 	github.com/dgraph-io/roaring v0.5.6-0.20210227175938-766b897233a5
 	github.com/dgraph-io/simdjson-go v0.3.0
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
@@ -56,6 +56,7 @@ require (
 	github.com/prometheus/client_golang v0.9.3
 	github.com/prometheus/common v0.4.1 // indirect
 	github.com/prometheus/procfs v0.0.0-20190517135640-51af30a78b0e // indirect
+	github.com/sergi/go-diff v1.1.0
 	github.com/soheilhy/cmux v0.1.4
 	github.com/spf13/cast v1.3.0
 	github.com/spf13/cobra v0.0.5

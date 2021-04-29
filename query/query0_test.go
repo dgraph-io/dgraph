@@ -3484,6 +3484,38 @@ func TestMatchingWithPagination(t *testing.T) {
 	}
 }
 
+func TestKRandomNodes(t *testing.T) {
+	q := `{
+		data(func: uid(61, 62, 63, 64, 65, 66, 67, 68), random: 2) @filter(has(connects)) {
+			kname
+			connects(random:2){
+				kname
+			}
+		}
+	}`
+	result := processQueryNoErr(t, q)
+	expected := `{"data":{"data":[{
+		"kname":"can_be_picked",
+		"connects":[
+			{"kname":"yes"},
+			{"kname":"yes"}
+			]},
+		{"kname":"can_be_picked",
+		"connects":[
+			{"kname":"yes"},
+			{"kname":"yes"}
+		]}]}}`
+	require.JSONEq(t, expected, result)
+
+	q = `{
+		data(func: uid(61, 62, 63, 64, 65, 66, 67, 68), random: 10) @filter(has(connects)) {
+			count(uid)
+		}
+	}`
+	result = processQueryNoErr(t, q)
+	require.JSONEq(t, `{"data":{"data":[{"count":3}]}}`, result)
+}
+
 var client *dgo.Dgraph
 
 func TestMain(m *testing.M) {

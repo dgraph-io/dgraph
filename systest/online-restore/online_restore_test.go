@@ -32,11 +32,13 @@ import (
 
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/graph-gophers/graphql-go/errors"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 func sendRestoreRequest(t *testing.T, location, backupId string, backupNum int) {
@@ -94,6 +96,34 @@ func disableDraining(t *testing.T) {
 	buf, err := ioutil.ReadAll(resp.Body)
 	require.NoError(t, err)
 	require.Contains(t, string(buf), "draining mode has been set to false")
+}
+
+func getSnapshotTs(t *testing.T) uint64 {
+	snapTsRequest := `query {
+		  state {
+			groups{
+			id
+			  snapshotTs
+			}
+		  }
+		}`
+
+	params := testutil.GraphQLParams{
+		Query: snapTsRequest,
+	}
+	resp := testutil.MakeGQLRequestWithTLS(t, &params, testutil.GetAlphaClientConfig(t))
+	resp.RequireNoGraphQLErrors(t)
+
+	var stateResp struct {
+		State struct {
+			Groups []struct {
+				SnapshotTs uint64
+			}
+		}
+	}
+	require.NoError(t, json.Unmarshal(resp.Data, &stateResp))
+	require.GreaterOrEqual(t, len(stateResp.State.Groups), 1)
+	return stateResp.State.Groups[0].SnapshotTs
 }
 
 func runQueries(t *testing.T, dg *dgo.Dgraph, shouldFail bool) {
@@ -177,8 +207,16 @@ func TestBasicRestore(t *testing.T) {
 	ctx := context.Background()
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
 
+	snapshotTs := getSnapshotTs(t)
 	sendRestoreRequest(t, "", "youthful_rhodes3", 0)
 	testutil.WaitForRestore(t, dg)
+	// Snapshot must be taken just after the restore and hence the snapshotTs be updated.
+	require.NoError(t, x.RetryUntilSuccess(3, 1*time.Second, func() error {
+		if getSnapshotTs(t) <= snapshotTs {
+			return errors.Errorf("snapshot not taken after restore")
+		}
+		return nil
+	}))
 	runQueries(t, dg, false)
 	runMutations(t, dg)
 }

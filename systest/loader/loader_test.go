@@ -76,6 +76,7 @@ func TestLoaderXidmap(t *testing.T) {
 		"--files", data,
 		"--alpha", testutil.SockAddr,
 		"--zero", testutil.SockAddrZero,
+		"--force-namespace", "0",
 		"-x", "x"}, testutil.CmdOpts{Dir: tmpDir})
 	require.NoError(t, err)
 
@@ -87,6 +88,7 @@ func TestLoaderXidmap(t *testing.T) {
 		"--files", data,
 		"--alpha", testutil.SockAddr,
 		"--zero", testutil.SockAddrZero,
+		"--force-namespace", "0",
 		"-x", "x"}, testutil.CmdOpts{Dir: tmpDir})
 	require.NoError(t, err)
 

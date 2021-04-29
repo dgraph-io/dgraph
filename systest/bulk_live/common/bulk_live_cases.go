@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"net/http"
 	"os"
 	"os/exec"
@@ -74,6 +75,29 @@ func RunBulkCases(t *testing.T) {
 
 	suite = deleteEdgeWithStarSetup(t, true)
 	testDeleteEdgeWithStar(t)
+	suite.cleanup(t)
+}
+
+func RunBulkCasesAcl(t *testing.T) {
+	opts := suiteOpts{
+		schema:    helloWorldSchema,
+		gqlSchema: "",
+		rdfs:      helloWorldData,
+		bulkSuite: true,
+		bulkOpts:  bulkOpts{alpha: "../bulk/alpha_acl.yml", forceNs: 0x10},
+	}
+	suite := newSuiteInternal(t, opts)
+
+	t.Run("Pan and Jackson", testCaseWithAcl(`
+		{q(func: anyofterms(name, "Peter")) {
+			name
+		}}
+	`, `
+		{"q": [
+			{ "name": "Peter Pan" },
+			{ "name": "Peter Jackson" }
+		]}
+	`, "groot", "password", 0x10))
 	suite.cleanup(t)
 }
 
@@ -130,6 +154,7 @@ func remoteHelloWorldSetup(t *testing.T, isBulkLoader bool) *suite {
 		rdfs:      helloWorldData,
 		bulkSuite: isBulkLoader,
 		remote:    true,
+		bulkOpts:  bulkOpts{alpha: "../bulk/alpha.yml", forceNs: math.MaxUint64},
 	})
 }
 

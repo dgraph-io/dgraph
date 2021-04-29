@@ -34,9 +34,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// Restore is the sub-command used to restore a backup.
-var Restore x.SubCommand
-
 // LsBackup is the sub-command used to list the backups in a folder.
 var LsBackup x.SubCommand
 
@@ -67,7 +64,7 @@ func initBackupLs() {
 		Short: "List info on backups in a given location",
 		Args:  cobra.NoArgs,
 		Run: func(cmd *cobra.Command, args []string) {
-			defer x.StartProfile(Restore.Conf).Stop()
+			defer x.StartProfile(LsBackup.Conf).Stop()
 			if err := runLsbackupCmd(); err != nil {
 				fmt.Fprintln(os.Stderr, err)
 				os.Exit(1)
@@ -226,7 +223,11 @@ func (bw *bufWriter) Write(buf *z.Buffer) error {
 }
 
 func runExportBackup() error {
-	_, opt.key = ee.GetKeys(ExportBackup.Conf)
+	keys, err := ee.GetKeys(ExportBackup.Conf)
+	if err != nil {
+		return err
+	}
+	opt.key = keys.EncKey
 	if opt.format != "json" && opt.format != "rdf" {
 		return errors.Errorf("invalid format %s", opt.format)
 	}

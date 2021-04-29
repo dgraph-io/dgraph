@@ -191,7 +191,7 @@ create_certs() {
     docker run \
       --tty \
       --volume $PWD/data/tls:/tls dgraph/dgraph:$DGRAPH_VERSION \
-      dgraph cert --dir /tls --client backupuser --nodes "localhost,alpha1,zero1,ratel" --duration 365
+      dgraph cert --dir /tls --client backupuser --nodes "localhost,alpha1,zero1" --duration 365
   fi
 }
 

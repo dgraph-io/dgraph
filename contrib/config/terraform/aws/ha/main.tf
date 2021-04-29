@@ -40,17 +40,15 @@ module "dgraph" {
   alpha_count = var.alpha_count
   zero_count  = var.zero_count
 
-  alpha_instance_type  = var.alpha_instance_type
-  zero_instance_type   = var.zero_instance_type
-  ratel_instance_type  = var.ratel_instance_type
+  alpha_instance_type = var.alpha_instance_type
+  zero_instance_type  = var.zero_instance_type
 
   alpha_disk_size = var.alpha_disk_size
   zero_disk_size  = var.zero_disk_size
-  ratel_disk_size = var.ratel_disk_size
   disk_iops       = var.disk_iops
 
-  key_pair_name   = var.key_pair_name
-  public_key      = var.public_key
+  key_pair_name = var.key_pair_name
+  public_key    = var.public_key
 
   cidr_block                  = var.vpc_cidr_block
   subnet_cidr_block           = var.vpc_subnet_cidr_block
