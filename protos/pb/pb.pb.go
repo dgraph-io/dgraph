@@ -4480,6 +4480,10 @@ func (m *Status) GetMsg() string {
 	return ""
 }
 
+// Backups record all data from since_ts to read_ts.
+// With incremental backups, the read_ts of the first backup becomes
+// the since_ts of the second backup.
+// Incremental backups can be disabled using the force_full field.
 type BackupRequest struct {
 	ReadTs       uint64 `protobuf:"varint,1,opt,name=read_ts,json=readTs,proto3" json:"read_ts,omitempty"`
 	SinceTs      uint64 `protobuf:"varint,2,opt,name=since_ts,json=sinceTs,proto3" json:"since_ts,omitempty"`
