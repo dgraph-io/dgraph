@@ -48,10 +48,10 @@ func LiveLoad(opts LiveOpts) error {
 		"--alpha", opts.Alpha,
 		"--zero", opts.Zero,
 	}
-	if opts.Creds.Namespace == x.GalaxyNamespace || opts.ForceNs != 0 {
-		args = append(args, "--force-namespace", strconv.FormatInt(opts.ForceNs, 10))
-	}
 	if opts.Creds != nil {
+		if opts.Creds.Namespace == x.GalaxyNamespace || opts.ForceNs != 0 {
+			args = append(args, "--force-namespace", strconv.FormatInt(opts.ForceNs, 10))
+		}
 		args = append(args, "--creds")
 		args = append(args, fmt.Sprintf("user=%s;password=%s;namespace=%d",
 			opts.Creds.UserID, opts.Creds.Passwd, opts.Creds.Namespace))
@@ -85,6 +85,7 @@ type BulkOpts struct {
 	GQLSchemaFile string
 	Dir           string
 	Env           []string
+	Namespace     uint64
 }
 
 func BulkLoad(opts BulkOpts) error {
@@ -97,6 +98,7 @@ func BulkLoad(opts BulkOpts) error {
 		"--map_shards="+strconv.Itoa(opts.Shards),
 		"--store_xids=true",
 		"--zero", opts.Zero,
+		"--force-namespace", strconv.FormatUint(opts.Namespace, 10),
 	)
 
 	if opts.Dir != "" {

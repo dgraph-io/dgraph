@@ -51,6 +51,7 @@ func newSchemaStore(initial *schema.ParsedSchema, opt *options, state *state) *s
 	// whenever we see data for a new namespace.
 	s.checkAndSetInitialSchema(x.GalaxyNamespace)
 
+	s.types = initial.Types
 	// This is from the schema read from the schema file.
 	for _, sch := range initial.Preds {
 		p := sch.Predicate
@@ -62,8 +63,6 @@ func newSchemaStore(initial *schema.ParsedSchema, opt *options, state *state) *s
 		s.checkAndSetInitialSchema(x.ParseNamespace(p))
 		s.schemaMap[p] = sch
 	}
-
-	s.types = initial.Types
 
 	return s
 }
@@ -102,6 +101,7 @@ func (s *schemaStore) checkAndSetInitialSchema(namespace uint64) {
 	for _, update := range schema.CompleteInitialSchema(namespace) {
 		s.schemaMap[update.Predicate] = update
 	}
+	s.types = append(s.types, schema.CompleteInitialTypes(namespace)...)
 
 	if s.opt.StoreXids {
 		s.schemaMap[x.NamespaceAttr(namespace, "xid")] = &pb.SchemaUpdate{
