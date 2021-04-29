@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"path/filepath"
 	"reflect"
 	"strconv"
 	"sync"
@@ -42,10 +43,14 @@ var (
 
 // InitTasks initializes the global Tasks variable.
 func InitTasks() {
+	path := filepath.Join(x.WorkerConfig.TmpDir, "tasks.buf")
+	log, err := z.NewTreePersistent(path)
+	x.Check(err)
+
 	// #nosec G404: weak RNG
 	Tasks = tasks{
 		queue:  make(chan taskRequest, 16),
-		log:    z.NewTree(),
+		log:    log,
 		logMu:  new(sync.Mutex),
 		raftId: State.WALstore.Uint(raftwal.RaftId),
 		rng:    rand.New(rand.NewSource(time.Now().UnixNano())),
@@ -116,6 +121,7 @@ func (t tasks) worker() {
 		var task taskRequest
 		select {
 		case <-x.ServerCloser.HasBeenClosed():
+			t.log.Close()
 			return
 		case <-shouldCleanup.C:
 			t.cleanup()
