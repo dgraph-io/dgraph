@@ -323,6 +323,7 @@ func run() {
 
 		loader.prog.mapEdgeCount = bulkMeta.EdgeCount
 		loader.schema.schemaMap = bulkMeta.SchemaMap
+		loader.schema.types = bulkMeta.Types
 	} else {
 		loader.mapStage()
 		mergeMapShardsIntoReduceShards(&opt)
@@ -331,6 +332,7 @@ func run() {
 		bulkMeta := pb.BulkMeta{
 			EdgeCount: loader.prog.mapEdgeCount,
 			SchemaMap: loader.schema.schemaMap,
+			Types:     loader.schema.types,
 		}
 		bulkMetaData, err := bulkMeta.Marshal()
 		if err != nil {

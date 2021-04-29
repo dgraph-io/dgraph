@@ -19,6 +19,7 @@ package common
 import (
 	"context"
 	"io/ioutil"
+	"math"
 	"os"
 	"path/filepath"
 	"testing"
@@ -42,7 +43,13 @@ type suiteOpts struct {
 	gqlSchema string
 	rdfs      string
 	bulkSuite bool
+	bulkOpts  bulkOpts
 	remote    bool
+}
+
+type bulkOpts struct {
+	alpha   string
+	forceNs uint64
 }
 
 func newSuiteInternal(t *testing.T, opts suiteOpts) *suite {
@@ -54,7 +61,6 @@ func newSuiteInternal(t *testing.T, opts suiteOpts) *suite {
 		t:    t,
 		opts: opts,
 	}
-
 	require.NoError(s.t, makeDirEmpty(rootDir))
 	rdfFile := filepath.Join(rootDir, "rdfs.rdf")
 	require.NoError(s.t, ioutil.WriteFile(rdfFile, []byte(opts.rdfs), 0644))
@@ -95,6 +101,7 @@ func newBulkOnlySuite(t *testing.T, schema, rdfs, gqlSchema string) *suite {
 		gqlSchema: gqlSchema,
 		rdfs:      rdfs,
 		bulkSuite: true,
+		bulkOpts:  bulkOpts{alpha: "../bulk/alpha.yml", forceNs: math.MaxUint64}, // preserve ns
 	}
 	return newSuiteInternal(t, opts)
 }
@@ -125,10 +132,11 @@ func (s *suite) setup(t *testing.T, schemaFile, rdfFile, gqlSchemaFile string) {
 			GQLSchemaFile: gqlSchemaFile,
 			Dir:           rootDir,
 			Env:           env,
+			Namespace:     s.opts.bulkOpts.forceNs,
 		})
 
 		require.NoError(t, err)
-		err = testutil.StartAlphas("../bulk/alpha.yml")
+		err = testutil.StartAlphas(s.opts.bulkOpts.alpha)
 		require.NoError(t, err)
 		return
 	}
@@ -157,7 +165,7 @@ func (s *suite) cleanup(t *testing.T) {
 	// NOTE: Shouldn't raise any errors here or fail a test, since this is
 	// called when we detect an error (don't want to mask the original problem).
 	if s.opts.bulkSuite {
-		isRace := testutil.StopAlphasAndDetectRace("../bulk/alpha.yml")
+		isRace := testutil.StopAlphasAndDetectRace(s.opts.bulkOpts.alpha)
 		_ = os.RemoveAll(rootDir)
 		if isRace {
 			t.Fatalf("Failing because race condition is detected. " +
@@ -181,6 +189,22 @@ func testCase(query, wantResult string) func(*testing.T) {
 		require.NoError(t, err)
 		ctx2, cancel2 := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel2()
+
+		txn := dg.NewTxn()
+		resp, err := txn.Query(ctx2, query)
+		require.NoError(t, err)
+		testutil.CompareJSON(t, wantResult, string(resp.GetJson()))
+	}
+}
+
+func testCaseWithAcl(query, wantResult, user, password string, ns uint64) func(*testing.T) {
+	return func(t *testing.T) {
+		// Check results of the bulk loader.
+		dg, err := testutil.DgraphClient(testutil.ContainerAddr("alpha1", 9080))
+		require.NoError(t, err)
+		ctx2, cancel2 := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel2()
+		require.NoError(t, dg.LoginIntoNamespace(ctx2, user, password, ns))
 
 		txn := dg.NewTxn()
 		resp, err := txn.Query(ctx2, query)
