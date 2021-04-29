@@ -25,3 +25,7 @@ import (
 func TestBulkCases(t *testing.T) {
 	t.Run("bulk test cases", common.RunBulkCases)
 }
+
+func TestBulkCasesAcl(t *testing.T) {
+	t.Run("bulk test cases with acl", common.RunBulkCasesAcl)
+}

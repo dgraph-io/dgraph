@@ -1,0 +1,25 @@
+version: "3.5"
+services:
+  alpha1:
+    image: dgraph/dgraph:latest
+    working_dir: /data/alpha1
+    labels:
+      cluster: test
+    ports:
+      - "8080"
+      - "9080"
+    volumes:
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+      - type: bind
+        source: ./data/out/0/p
+        target: /posting
+        read_only: false
+      - type: bind
+        source: ../../../ee/acl/hmac-secret
+        target: /dgraph-acl/hmac-secret
+        read_only: true
+    command: /gobin/dgraph alpha --my=alpha1:7080 --zero=zero1:5080 --logtostderr -v=2 -p=/posting
+      --security "whitelist=0.0.0.0/0;" --acl "secret-file=/dgraph-acl/hmac-secret; "
