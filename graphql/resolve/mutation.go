@@ -407,7 +407,7 @@ func (mr *dgraphResolver) rewriteAndExecute(
 	err = mr.executor.CommitOrAbort(ctx, mutResp.Txn)
 	if err != nil {
 		return emptyResult(
-				schema.GQLWrapf(authErr, "mutation failed, couldn't commit transaction")),
+				schema.GQLWrapf(err, "mutation failed, couldn't commit transaction")),
 			resolverFailed
 	}
 	commit = true
