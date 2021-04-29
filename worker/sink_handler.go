@@ -24,7 +24,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -123,16 +122,24 @@ func newKafkaSink(config *z.SuperFlag) (Sink, error) {
 	mechanism := config.GetString("sasl-mechanism")
 	if mechanism != "" {
 		switch mechanism {
-		case sarama.SASLTypeSCRAMSHA256, sarama.SASLTypeSCRAMSHA512, sarama.SASLTypePlaintext:
+		case sarama.SASLTypeSCRAMSHA256:
+			saramaConf.Net.SASL.Mechanism = sarama.SASLTypeSCRAMSHA256
+			saramaConf.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient {
+				return &scramClient{HashGeneratorFcn: sha256.New}
+			}
+		case sarama.SASLTypeSCRAMSHA512:
+			saramaConf.Net.SASL.Mechanism = sarama.SASLTypeSCRAMSHA512
+			saramaConf.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient {
+				return &scramClient{HashGeneratorFcn: sha512.New}
+			}
+		case sarama.SASLTypePlaintext:
+			saramaConf.Net.SASL.Mechanism = sarama.SASLTypePlaintext
 		default:
 			return nil, errors.Errorf("Invalid SASL mechanism. Valid mechanisms are: %s, %s and %s",
 				sarama.SASLTypePlaintext, sarama.SASLTypeSCRAMSHA256, sarama.SASLTypeSCRAMSHA512)
 		}
-		saramaConf.Net.SASL.Mechanism = sarama.SASLMechanism(mechanism)
-		saramaConf.Net.SASL.SCRAMClientGeneratorFunc = sha512ClientGenerator
 	}
 
-	sarama.Logger = log.New(os.Stdout, "[sarama] ", log.LstdFlags)
 	brokers := strings.Split(config.GetString("kafka"), ",")
 	client, err := sarama.NewClient(brokers, saramaConf)
 	if err != nil {
@@ -215,38 +222,26 @@ func newFileSink(path *z.SuperFlag) (Sink, error) {
 	}, nil
 }
 
-var (
-	sha256ClientGenerator = func() sarama.SCRAMClient {
-		return &scramClient{HashGeneratorFcn: sha256.New}
-	}
-
-	sha512ClientGenerator = func() sarama.SCRAMClient {
-		return &scramClient{HashGeneratorFcn: sha512.New}
-	}
-)
-
 type scramClient struct {
 	*scram.Client
 	*scram.ClientConversation
 	scram.HashGeneratorFcn
 }
 
-var _ sarama.SCRAMClient = &scramClient{}
-
-func (c *scramClient) Begin(userName, password, authzID string) error {
-	var err error
-	c.Client, err = c.HashGeneratorFcn.NewClient(userName, password, authzID)
+func (x *scramClient) Begin(userName, password, authzID string) (err error) {
+	x.Client, err = x.HashGeneratorFcn.NewClient(userName, password, authzID)
 	if err != nil {
 		return err
 	}
-	c.ClientConversation = c.Client.NewConversation()
+	x.ClientConversation = x.Client.NewConversation()
 	return nil
 }
 
-func (c *scramClient) Step(challenge string) (string, error) {
-	return c.ClientConversation.Step(challenge)
+func (x *scramClient) Step(challenge string) (response string, err error) {
+	response, err = x.ClientConversation.Step(challenge)
+	return
 }
 
-func (c *scramClient) Done() bool {
-	return c.ClientConversation.Done()
+func (x *scramClient) Done() bool {
+	return x.ClientConversation.Done()
 }
