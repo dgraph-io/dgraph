@@ -228,20 +228,20 @@ type scramClient struct {
 	scram.HashGeneratorFcn
 }
 
-func (x *scramClient) Begin(userName, password, authzID string) (err error) {
-	x.Client, err = x.HashGeneratorFcn.NewClient(userName, password, authzID)
+func (sc *scramClient) Begin(userName, password, authzID string) (err error) {
+	sc.Client, err = sc.HashGeneratorFcn.NewClient(userName, password, authzID)
 	if err != nil {
 		return err
 	}
-	x.ClientConversation = x.Client.NewConversation()
+	sc.ClientConversation = sc.Client.NewConversation()
 	return nil
 }
 
-func (x *scramClient) Step(challenge string) (response string, err error) {
-	response, err = x.ClientConversation.Step(challenge)
+func (sc *scramClient) Step(challenge string) (response string, err error) {
+	response, err = sc.ClientConversation.Step(challenge)
 	return
 }
 
-func (x *scramClient) Done() bool {
-	return x.ClientConversation.Done()
+func (sc *scramClient) Done() bool {
+	return sc.ClientConversation.Done()
 }
