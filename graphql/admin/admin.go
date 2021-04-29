@@ -275,7 +275,7 @@ const (
 	enum TaskStatus {
 		Queued
 		Running
-		Error
+		Failed
 		Success
 		Unknown
 	}

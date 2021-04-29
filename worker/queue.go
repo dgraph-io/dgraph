@@ -174,10 +174,41 @@ func (t tasks) run(task taskRequest) error {
 	return err
 }
 
-// Enqueue enqueues a new task. This must be of type:
+// Enqueue adds a new task to the queue, waits for 3 seconds, and returns any errors that
+// may have happened in that span of time. The request must be of type:
 // - *pb.BackupRequest
 // - *pb.ExportRequest
 func (t tasks) Enqueue(req interface{}) (string, error) {
+	id, err := t.enqueue(req)
+	if err != nil {
+		return "", err
+	}
+	taskId := fmt.Sprintf("%#x", id)
+
+	// Wait for upto 3 seconds to check for errors.
+	for i := 0; i < 3; i++ {
+		time.Sleep(time.Second)
+
+		t.logMu.Lock()
+		meta := TaskMeta(t.log.Get(id))
+		t.logMu.Unlock()
+
+		// Early return
+		switch meta.Status() {
+		case TaskStatusFailed:
+			return "", fmt.Errorf("an error occurred, please check logs for details")
+		case TaskStatusSuccess:
+			return taskId, nil
+		}
+	}
+
+	return taskId, nil
+}
+
+// enqueue adds a new task to the queue. This must be of type:
+// - *pb.BackupRequest
+// - *pb.ExportRequest
+func (t tasks) enqueue(req interface{}) (uint64, error) {
 	var kind TaskKind
 	switch req.(type) {
 	case *pb.BackupRequest:
@@ -197,11 +228,13 @@ func (t tasks) Enqueue(req interface{}) (string, error) {
 		req: req,
 	}
 	select {
+	// t.logMu must be acquired before pushing to t.queue, otherwise the worker might start the
+	// task, and won't be able to find it in t.log.
 	case t.queue <- task:
 		t.log.Set(task.id, newTaskMeta(kind, TaskStatusQueued).uint64())
-		return fmt.Sprintf("%#x", task.id), nil
+		return task.id, nil
 	default:
-		return "", fmt.Errorf("too many pending tasks, please try again later")
+		return 0, fmt.Errorf("too many pending tasks, please try again later")
 	}
 }
 
