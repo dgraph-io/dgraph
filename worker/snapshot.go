@@ -112,7 +112,7 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) error {
 		return err
 	}
 
-	if err := deleteStalePreds(ctx, done); err != nil {
+	if err := deleteStalePreds(ctx, done, snap.ReadTs); err != nil {
 		return err
 	}
 
@@ -127,7 +127,7 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) error {
 	return nil
 }
 
-func deleteStalePreds(ctx context.Context, kvs *pb.KVS) error {
+func deleteStalePreds(ctx context.Context, kvs *pb.KVS, readTs uint64) error {
 	if kvs == nil {
 		return nil
 	}
@@ -144,7 +144,7 @@ func deleteStalePreds(ctx context.Context, kvs *pb.KVS) error {
 		if _, ok := snapshotPreds[pred]; !ok {
 		LOOP:
 			for {
-				err := posting.DeletePredicate(ctx, pred)
+				err := posting.DeletePredicate(ctx, pred, readTs)
 				switch err {
 				case badger.ErrBlockedWrites:
 					time.Sleep(1 * time.Second)

@@ -768,7 +768,7 @@ func (rb *IndexRebuild) DropIndexes(ctx context.Context) error {
 	prefixes = append(prefixes, prefixesToDropReverseEdges(ctx, rb)...)
 	prefixes = append(prefixes, prefixesToDropCountIndex(ctx, rb)...)
 	glog.Infof("Deleting indexes for %s", rb.Attr)
-	return pstore.DropPrefix(prefixes...)
+	return pstore.DropPrefixNonBlocking(rb.StartTs, prefixes...)
 }
 
 // BuildData updates data.
@@ -1228,10 +1228,10 @@ func DeleteData() error {
 }
 
 // DeletePredicate deletes all entries and indices for a given predicate.
-func DeletePredicate(ctx context.Context, attr string) error {
+func DeletePredicate(ctx context.Context, attr string, readTs uint64) error {
 	glog.Infof("Dropping predicate: [%s]", attr)
 	prefix := x.PredicatePrefix(attr)
-	if err := pstore.DropPrefix(prefix); err != nil {
+	if err := pstore.DropPrefixNonBlocking(readTs, prefix); err != nil {
 		return err
 	}
 
