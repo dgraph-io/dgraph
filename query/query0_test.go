@@ -1500,7 +1500,7 @@ func TestGroupByCountValVarFilter(t *testing.T) {
 	}
 	`
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data":"me":[{"name": "Rick Grimes","val": 2},{"name": "Glenn Rhee","val": 2}]}}`, js)
+	require.JSONEq(t, `{"data":{"me": [{"name": "Rick Grimes","val": 2},{"name": "Glenn Rhee","val": 2}]}}`, js)
 }
 
 func TestGroupByMultiCountValVar(t *testing.T) {
