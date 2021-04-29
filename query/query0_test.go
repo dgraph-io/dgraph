@@ -1519,6 +1519,22 @@ func TestGroupByMultiCountValVar(t *testing.T) {
 	require.JSONEq(t, `{"data": {"me": [{"name": "Michonne","val": 1},{"name": "Rick Grimes","val": 1},{"name": "Glenn Rhee","val": 1},{"name": "Daryl Dixon","val": 1},{"name": "Andrea","val": 1}]}}`, js)
 }
 
+func TestGroupByCountUidValVar(t *testing.T) {
+	query := `
+	{
+		var(func: uid(1, 23, 24)) @groupby(school, age) {
+		  c as count(uid)
+		}
+		me(func: uid(c))  {
+		  name
+		  val: val(c)
+		}
+	  }
+	`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me": [{"name": "Michonne","val": 1},{"name": "Rick Grimes","val": 1},{"name": "Glenn Rhee","val": 1}]}}`, js)
+}
+
 func TestGroupByRootAlias2(t *testing.T) {
 	query := `
 	{
