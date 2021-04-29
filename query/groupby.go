@@ -372,18 +372,20 @@ func (sg *SubGraph) fillGroupedVars(doneVars map[string]varValue, path []*SubGra
 			if len(grp.keys) == 0 {
 				continue
 			}
-			// Return error when all the keys are not the value predicates.
-			if len(grp.keys) == 1 && uidPredicate {
+
+			if len(grp.keys) == 1 && grp.keys[0].key.Tid == types.UidID {
 				uidVal := grp.keys[0].key.Value
-				uid, ok := uidVal.(uint64)
-				if !ok {
-					return errors.Errorf("Vars can be assigned only when grouped by UID attribute")
-				}
+				uid, _ := uidVal.(uint64)
 				// grp.aggregates could be empty if schema conversion failed during aggregation
 				if len(grp.aggregates) > 0 {
 					tempMap[uid] = grp.aggregates[len(grp.aggregates)-1].key
 				}
 			} else {
+				// if there are more than one predicates or a single scalar
+				// predicate in the @groupby then the variable stores the mapping of
+				// uid -> count of duplicates. for eg if there are two predicates(u & v) and
+				// the groupby uids for (u1, v1) pair are (uid1, uid2, uid3) then the variable
+				// stores (uid1, 3), (uid2, 3) & (uid2, 2) map.
 				for _, uid := range grp.uids {
 					if len(grp.aggregates) > 0 {
 						tempMap[uid] = grp.aggregates[len(grp.aggregates)-1].key
