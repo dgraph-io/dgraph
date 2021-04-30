@@ -773,7 +773,11 @@ func (arw *AddRewriter) FromMutationResult(
 	}
 	authRw.hasAuthRules = hasAuthRules(mutation.QueryField(), authRw)
 
-	return rewriteAsQueryByIds(mutation.QueryField(), uids, authRw), errs
+	if errs != nil {
+		return nil, errs
+	}
+	// No errors are thrown while rewriting queries by Ids.
+	return rewriteAsQueryByIds(mutation.QueryField(), uids, authRw), nil
 }
 
 // FromMutationResult rewrites the query part of a GraphQL update mutation into a Dgraph query.

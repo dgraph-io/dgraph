@@ -489,7 +489,7 @@ func (mr *dgraphResolver) rewriteAndExecute(
 	dgQuery, err = mr.mutationRewriter.FromMutationResult(ctx, mutation, mutResp.GetUids(), result)
 	queryErrs = schema.AppendGQLErrs(queryErrs, schema.GQLWrapf(err,
 		"couldn't rewrite query for mutation %s", mutation.Name()))
-	if dgQuery == nil && err != nil {
+	if err != nil {
 		return emptyResult(queryErrs), resolverFailed
 	}
 
