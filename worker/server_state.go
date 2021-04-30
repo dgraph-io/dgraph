@@ -45,7 +45,7 @@ const (
 	SecurityDefaults  = `token=; whitelist=;`
 	LudicrousDefaults = `enabled=false; concurrency=2000;`
 	CDCDefaults       = `file=; kafka=; sasl_user=; sasl_password=; ca_cert=; client_cert=; ` +
-		`client_key=;`
+		`client_key=; sasl-mechanism=PLAIN;`
 	LimitDefaults = `mutations=allow; query-edge=1000000; normalize-node=10000; ` +
 		`mutations-nquad=1000000; disallow-drop=false; query-timeout=0ms; txn-abort-after=5m; ` +
 		` max-retries=-1;max-pending-queries=10000`
