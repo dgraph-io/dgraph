@@ -60,6 +60,9 @@ type Options struct {
 
 	// Define different ChangeDataCapture configurations
 	ChangeDataConf string
+
+	// Define different Cloud configurations.
+	CloudMode bool
 }
 
 // Config holds an instance of the server options..

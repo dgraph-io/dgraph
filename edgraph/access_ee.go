@@ -50,6 +50,10 @@ type predsAndvars struct {
 func (s *Server) Login(ctx context.Context,
 	request *api.LoginRequest) (*api.Response, error) {
 
+	if worker.Config.CloudMode && request.GetNamespace() != x.GalaxyNamespace {
+		return nil, errors.New("Operation is not allowed in cloud mode.")
+	}
+
 	if err := x.HealthCheck(); err != nil {
 		return nil, err
 	}
@@ -605,14 +609,11 @@ type authPredResult struct {
 }
 
 func authorizePreds(ctx context.Context, userData *userData, preds []string,
-	aclOp *acl.Operation) (*authPredResult, error) {
+	aclOp *acl.Operation) *authPredResult {
 
-	ns, err := x.ExtractNamespace(ctx)
-	if err != nil {
-		return nil, errors.Wrapf(err, "While authorizing preds")
-	}
 	userId := userData.userId
 	groupIds := userData.groupIds
+	ns := userData.namespace
 	blockedPreds := make(map[string]struct{})
 	for _, pred := range preds {
 		nsPred := x.NamespaceAttr(ns, pred)
@@ -638,7 +639,7 @@ func authorizePreds(ctx context.Context, userData *userData, preds []string,
 		}
 	}
 	aclCachePtr.RUnlock()
-	return &authPredResult{allowed: allowedPreds, blocked: blockedPreds}, nil
+	return &authPredResult{allowed: allowedPreds, blocked: blockedPreds}
 }
 
 // authorizeAlter parses the Schema in the operation and authorizes the operation
@@ -693,10 +694,7 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 				"only guardians are allowed to drop all data, but the current user is %s", userId)
 		}
 
-		result, err := authorizePreds(ctx, userData, preds, acl.Modify)
-		if err != nil {
-			return nil
-		}
+		result := authorizePreds(ctx, userData, preds, acl.Modify)
 		if len(result.blocked) > 0 {
 			var msg strings.Builder
 			for key := range result.blocked {
@@ -805,12 +803,11 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 			case isAclPredMutation(gmu.Del):
 				return errors.Errorf("ACL predicates can't be deleted")
 			}
-			return nil
+			if allowNonGalaxyGuardian(userData.namespace) {
+				return nil
+			}
 		}
-		result, err := authorizePreds(ctx, userData, preds, acl.Write)
-		if err != nil {
-			return err
-		}
+		result := authorizePreds(ctx, userData, preds, acl.Write)
 		if len(result.blocked) > 0 {
 			var msg strings.Builder
 			for key := range result.blocked {
@@ -918,7 +915,11 @@ func logAccess(log *accessEntry) {
 	}
 }
 
-//authorizeQuery authorizes the query using the aclCachePtr. It will silently drop all
+func allowNonGalaxyGuardian(ns uint64) bool {
+	return !worker.Config.CloudMode || ns == x.GalaxyNamespace
+}
+
+// authorizeQuery authorizes the query using the aclCachePtr. It will silently drop all
 // unauthorized predicates from query.
 // At this stage, namespace is not attached in the predicates.
 func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) error {
@@ -929,6 +930,7 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) er
 
 	var userId string
 	var groupIds []string
+	var namespace uint64
 	predsAndvars := parsePredsFromQuery(parsedReq.Query)
 	preds := predsAndvars.preds
 	varsToPredMap := predsAndvars.vars
@@ -948,14 +950,15 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) er
 
 		userId = userData.userId
 		groupIds = userData.groupIds
+		namespace = userData.namespace
 
-		if x.IsGuardian(groupIds) {
+		if x.IsGuardian(groupIds) && allowNonGalaxyGuardian(namespace) {
 			// Members of guardian groups are allowed to query anything.
 			return nil, nil, nil
 		}
 
-		result, err := authorizePreds(ctx, userData, preds, acl.Read)
-		return result.blocked, result.allowed, err
+		result := authorizePreds(ctx, userData, preds, acl.Read)
+		return result.blocked, result.allowed, nil
 	}
 
 	blockedPreds, allowedPreds, err := doAuthorizeQuery()
@@ -976,7 +979,7 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) er
 	if len(blockedPreds) != 0 {
 		// For GraphQL requests, we allow filtered access to the ACL predicates.
 		// Filter for user_id and group_id is applied for the currently logged in user.
-		if graphql {
+		if graphql && allowNonGalaxyGuardian(namespace) {
 			for _, gq := range parsedReq.Query {
 				addUserFilterToQuery(gq, userId, groupIds)
 			}
@@ -1036,12 +1039,12 @@ func authorizeSchemaQuery(ctx context.Context, er *query.ExecutionResult) error 
 		}
 
 		groupIds := userData.groupIds
-		if x.IsGuardian(groupIds) {
+		if x.IsGuardian(groupIds) && allowNonGalaxyGuardian(userData.namespace) {
 			// Members of guardian groups are allowed to query anything.
 			return nil, nil
 		}
-		result, err := authorizePreds(ctx, userData, preds, acl.Read)
-		return result.blocked, err
+		result := authorizePreds(ctx, userData, preds, acl.Read)
+		return result.blocked, nil
 	}
 
 	// find the predicates which are blocked for the schema query

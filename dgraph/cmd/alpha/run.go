@@ -258,6 +258,12 @@ they form a Raft group and provide synchronous replication.
 		Flag("size",
 			"The audit log max size in MB after which it will be rolled over.").
 		String())
+
+	flag.String("cloud", worker.CloudDefaults, z.NewSuperFlagHelp(worker.CloudDefaults).
+		Head("Dgraph cloud options").
+		Flag("disable-non-galaxy",
+			"Disable ACL for non-galaxy users.").
+		String())
 }
 
 func setupCustomTokenizers() {
@@ -623,7 +629,8 @@ func run() {
 		pstoreBlockCacheSize, pstoreIndexCacheSize)
 	bopts := badger.DefaultOptions("").FromSuperFlag(worker.BadgerDefaults + cacheOpts).
 		FromSuperFlag(Alpha.Conf.GetString("badger"))
-
+	cloudMode := z.NewSuperFlag(Alpha.Conf.GetString("cloud")).
+		MergeAndCheckDefault(worker.CloudDefaults).GetBool("disable-non-galaxy")
 	security := z.NewSuperFlag(Alpha.Conf.GetString("security")).MergeAndCheckDefault(
 		worker.SecurityDefaults)
 	conf := audit.GetAuditConf(Alpha.Conf.GetString("audit"))
@@ -637,6 +644,7 @@ func run() {
 		AuthToken:      security.GetString("token"),
 		Audit:          conf,
 		ChangeDataConf: Alpha.Conf.GetString("cdc"),
+		CloudMode:      cloudMode,
 	}
 
 	keys, err := ee.GetKeys(Alpha.Conf)
