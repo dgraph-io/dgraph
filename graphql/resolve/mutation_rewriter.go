@@ -775,10 +775,9 @@ func (arw *AddRewriter) FromMutationResult(
 
 	if errs != nil {
 		return nil, errs
-	} else {
-		// No errors are thrown while rewriting queries by Ids.
-		return rewriteAsQueryByIds(mutation.QueryField(), uids, authRw), nil
 	}
+	// No errors are thrown while rewriting queries by Ids.
+	return rewriteAsQueryByIds(mutation.QueryField(), uids, authRw), nil
 }
 
 // FromMutationResult rewrites the query part of a GraphQL update mutation into a Dgraph query.
