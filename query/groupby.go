@@ -384,8 +384,18 @@ func (sg *SubGraph) fillGroupedVars(doneVars map[string]varValue, path []*SubGra
 				// if there are more than one predicates or a single scalar
 				// predicate in the @groupby then the variable stores the mapping of
 				// uid -> count of duplicates. for eg if there are two predicates(u & v) and
-				// the groupby uids for (u1, v1) pair are (uid1, uid2, uid3) then the variable
+				// the grouped uids for (u1, v1) pair are (uid1, uid2, uid3) then the variable
 				// stores (uid1, 3), (uid2, 3) & (uid2, 2) map.
+				// For the query given below:-
+				// 	var(func: type(Student)) @groupby(school, age) {
+				// 		c as count(uid)
+				// 	}
+				// if the grouped result is:-
+				// (s1, age1) -> "0x1", "0x2", "0x3"
+				// (s2, age2) -> "0x4"
+				// (s3, ag3) -> "0x5","0x6"
+				// then `c` will store the mapping:-
+				// {"0x1" -> 3, "0x2" -> 3, "0x3" -> 3, "0x4" -> 1, "0x5" -> 2, "0x6"-> 2}
 				for _, uid := range grp.uids {
 					if len(grp.aggregates) > 0 {
 						tempMap[uid] = grp.aggregates[len(grp.aggregates)-1].key
