@@ -783,13 +783,17 @@ func checkAddUpdateCase(
 	resolver := NewDgraphResolver(rewriter(), ex)
 
 	// -- Act --
-	resolved, _ := resolver.Resolve(ctx, mut)
+	resolved, success := resolver.Resolve(ctx, mut)
 
 	// -- Assert --
 	// most cases are built into the authExecutor
 	if tcase.Error != nil {
+		require.False(t, success, "Mutation should have failed as it throws an error")
 		require.NotNil(t, resolved.Err)
 		require.Equal(t, tcase.Error.Error(), resolved.Err.Error())
+	} else {
+		require.True(t, success, "Mutation should have not failed as it did not"+
+			" throw an error")
 	}
 }
 
