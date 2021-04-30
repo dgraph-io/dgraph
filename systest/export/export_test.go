@@ -315,11 +315,3 @@ func requestExport(t *testing.T, dest string, format string) {
 	taskId := testutil.JsonGet(data, "data", "export", "taskId").(string)
 	testutil.WaitForTask(t, taskId, false)
 }
-
-func getFromJSON(j map[string]interface{}, path ...string) interface{} {
-	var res interface{} = j
-	for _, p := range path {
-		res = res.(map[string]interface{})[p]
-	}
-	return res
-}
