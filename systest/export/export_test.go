@@ -129,10 +129,10 @@ func TestExportAndLoadJson(t *testing.T) {
 	require.JSONEq(t, `{"data": {"q": [{"count":0}]}}`, res)
 
 	// Live load the exported data
-	entries, err := os.ReadDir(copyExportDir)
+	files, err := ioutil.ReadDir(copyExportDir)
 	require.NoError(t, err)
-	require.Len(t, entries, 1)
-	exportName := entries[0].Name()
+	require.Len(t, files, 1)
+	exportName := files[0].Name()
 	dir := filepath.Join(copyExportDir, exportName)
 	loadData(t, dir, "json")
 
