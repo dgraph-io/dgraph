@@ -19,6 +19,7 @@ package testutil
 import (
 	"bytes"
 	"encoding/json"
+	"log"
 	"net/http"
 	"testing"
 	"time"
@@ -86,11 +87,22 @@ func WaitForTask(t *testing.T, taskId string, useHttps bool) {
 
 		var data interface{}
 		require.NoError(t, json.NewDecoder(response.Body).Decode(&data))
-		type m = map[string]interface{}
-		if data.(m)["data"].(m)["task"].(m)["status"] == "Success" {
+		status := JsonGet(data, "data", "task", "status").(string)
+		switch status {
+		case "Success":
+			log.Printf("export complete")
 			return
+		case "Failed", "Unknown":
+			t.Errorf("task failed with status: %s", status)
 		}
 
 		time.Sleep(4 * time.Second)
 	}
+}
+
+func JsonGet(j interface{}, components ...string) interface{} {
+	for _, component := range components {
+		j = j.(map[string]interface{})[component]
+	}
+	return j
 }
