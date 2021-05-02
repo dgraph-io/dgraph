@@ -41,6 +41,7 @@ type progress struct {
 	reduceEdgeCount int64
 	reduceKeyCount  int64
 	numEncoding     int64
+	numAssigned     int64 // Number of UIDs assigned.
 
 	start       time.Time
 	startReduce time.Time
@@ -92,7 +93,7 @@ func (p *progress) reportOnce() {
 		errCount := atomic.LoadInt64(&p.errCount)
 		elapsed := time.Since(p.start)
 		fmt.Printf("[%s] MAP %s nquad_count:%s err_count:%s nquad_speed:%s/sec "+
-			"edge_count:%s edge_speed:%s/sec jemalloc: %s \n",
+			"edge_count:%s edge_speed:%s/sec num_assigned_uids: %s jemalloc: %s \n",
 			timestamp,
 			x.FixedDuration(elapsed),
 			niceFloat(float64(rdfCount)),
@@ -100,6 +101,7 @@ func (p *progress) reportOnce() {
 			niceFloat(float64(rdfCount)/elapsed.Seconds()),
 			niceFloat(float64(mapEdgeCount)),
 			niceFloat(float64(mapEdgeCount)/elapsed.Seconds()),
+			niceFloat(float64(atomic.LoadInt64(&p.numAssigned))),
 			humanize.IBytes(uint64(z.NumAllocBytes())),
 		)
 	case reducePhase:

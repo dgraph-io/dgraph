@@ -19,6 +19,7 @@ package xidmap
 import (
 	"context"
 	"encoding/binary"
+	"fmt"
 	"math/rand"
 	"sync"
 	"sync/atomic"
@@ -33,6 +34,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/dgryski/go-farm"
+	"github.com/dustin/go-humanize"
 	"github.com/golang/glog"
 )
 
@@ -48,11 +50,12 @@ type XidMapOptions struct {
 // manner. It's memory friendly because the mapping is stored on disk, but fast
 // because it uses an LRU cache.
 type XidMap struct {
-	dg         *dgo.Dgraph
-	shards     []*shard
-	newRanges  chan *pb.AssignedIds
-	zc         pb.ZeroClient
-	maxUidSeen uint64
+	dg          *dgo.Dgraph
+	shards      []*shard
+	newRanges   chan *pb.AssignedIds
+	zc          pb.ZeroClient
+	maxUidSeen  uint64
+	numAssigned int64
 
 	// Optionally, these can be set to persist the mappings.
 	writer *badger.WriteBatch
@@ -124,12 +127,12 @@ func New(opts XidMapOptions) *XidMap {
 			defer itr.Close()
 			for itr.Rewind(); itr.Valid(); itr.Next() {
 				item := itr.Item()
-				key := string(item.Key())
-				sh := xm.shardFor(key)
+				fp := fp64(item.Key())
+				sh := xm.shardFor(fp)
 				err := item.Value(func(val []byte) error {
 					uid := binary.BigEndian.Uint64(val)
 					// No need to acquire a lock. This is all serial access.
-					sh.tree.Set(farm.Fingerprint64([]byte(key)), uid)
+					sh.tree.Set(fp, uid)
 					return nil
 				})
 				if err != nil {
@@ -202,25 +205,26 @@ func (m *XidMap) relogin() error {
 	return m.dg.Relogin(ctx)
 }
 
-func (m *XidMap) shardFor(xid string) *shard {
-	fp := z.MemHashString(xid)
+func (m *XidMap) shardFor(fp uint64) *shard {
 	idx := fp % uint64(len(m.shards))
 	return m.shards[idx]
 }
 
 func (m *XidMap) CheckUid(xid string) bool {
-	sh := m.shardFor(xid)
+	fp := fp64([]byte(xid))
+	sh := m.shardFor(fp)
 	sh.RLock()
 	defer sh.RUnlock()
-	uid := sh.tree.Get(farm.Fingerprint64([]byte(xid)))
+	uid := sh.tree.Get(fp)
 	return uid != 0
 }
 
 func (m *XidMap) SetUid(xid string, uid uint64) {
-	sh := m.shardFor(xid)
+	fp := fp64([]byte(xid))
+	sh := m.shardFor(fp)
 	sh.Lock()
 	defer sh.Unlock()
-	sh.tree.Set(farm.Fingerprint64([]byte(xid)), uid)
+	sh.tree.Set(fp, uid)
 }
 
 func (m *XidMap) dbWriter() {
@@ -232,13 +236,34 @@ func (m *XidMap) dbWriter() {
 	}
 }
 
+func fp64(xid []byte) uint64 {
+	return farm.Fingerprint64([]byte(xid))
+}
+
+func (m *XidMap) Stats() string {
+	var keys, mem int
+	var occ float64
+	num := float64(len(m.shards))
+	for _, sh := range m.shards {
+		sh.RLock()
+		st := sh.tree.Stats()
+		keys += st.NumLeafKeys
+		mem += st.Allocated       // Memory allocated is a sum of all.
+		occ += st.Occupancy / num // Occupancy is an average across all.
+		sh.RUnlock()
+	}
+	return fmt.Sprintf("XidMap keys: %s allocated: %s occupancy: %.2f",
+		humanize.Comma(int64(keys)), humanize.IBytes(uint64(mem)), occ)
+}
+
 // AssignUid creates new or looks up existing XID to UID mappings. It also returns if
 // UID was created.
 func (m *XidMap) AssignUid(xid string) (uint64, bool) {
-	sh := m.shardFor(xid)
+	fp := fp64([]byte(xid))
+	sh := m.shardFor(fp)
 	sh.RLock()
 
-	uid := sh.tree.Get(farm.Fingerprint64([]byte(xid)))
+	uid := sh.tree.Get(fp)
 	sh.RUnlock()
 	if uid > 0 {
 		return uid, false
@@ -247,15 +272,21 @@ func (m *XidMap) AssignUid(xid string) (uint64, bool) {
 	sh.Lock()
 	defer sh.Unlock()
 
-	uid = sh.tree.Get(farm.Fingerprint64([]byte(xid)))
+	uid = sh.tree.Get(fp)
 	if uid > 0 {
 		return uid, false
 	}
 
 	newUid := sh.assign(m.newRanges)
-	sh.tree.Set(farm.Fingerprint64([]byte(xid)), newUid)
+	sh.tree.Set(fp, newUid)
+	if num := atomic.AddInt64(&m.numAssigned, 1); num%1000000 == 0 {
+		go func() {
+			fmt.Printf("Stats: %s\n", m.Stats())
+		}()
+	}
 
 	if m.writer != nil {
+		// If we're pushing to Badger, then use skiplists and hand over to Badger.
 		var uidBuf [8]byte
 		binary.BigEndian.PutUint64(uidBuf[:], newUid)
 		m.kvBuf = append(m.kvBuf, kv{key: []byte(xid), value: uidBuf[:]})

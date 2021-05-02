@@ -269,6 +269,8 @@ func (m *mapper) run(inputFormat chunker.InputFormat) {
 
 func (m *mapper) addMapEntry(key []byte, p *pb.Posting, shard int) {
 	atomic.AddInt64(&m.prog.mapEdgeCount, 1)
+	// HACK: Don't create any map output.
+	return
 
 	uid := p.Uid
 	if p.PostingType != pb.Posting_REF || len(p.Facets) > 0 {
@@ -352,6 +354,9 @@ func (m *mapper) lookupUid(xid string, ns uint64) uint64 {
 
 	// There might be a case where Nquad from different namespace have the same xid.
 	uid, isNew := m.xids.AssignUid(x.NamespaceAttr(ns, xid))
+	if isNew {
+		atomic.AddInt64(&m.prog.numAssigned, 1)
+	}
 	if !m.opt.StoreXids || !isNew {
 		return uid
 	}
