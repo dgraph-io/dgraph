@@ -243,7 +243,8 @@ func (m *XidMap) AssignUid(xid string) (uint64, bool) {
 	sh := m.shardFor(xid)
 	sh.RLock()
 
-	uid := sh.tree.Get(farm.Fingerprint64([]byte(xid)))
+	key := farm.Fingerprint64([]byte(xid))
+	uid := sh.tree.Get(key)
 	sh.RUnlock()
 	if uid > 0 {
 		return uid, false
@@ -252,13 +253,13 @@ func (m *XidMap) AssignUid(xid string) (uint64, bool) {
 	sh.Lock()
 	defer sh.Unlock()
 
-	uid = sh.tree.Get(farm.Fingerprint64([]byte(xid)))
+	uid = sh.tree.Get(key)
 	if uid > 0 {
 		return uid, false
 	}
 
 	newUid := sh.assign(m.newRanges)
-	sh.tree.Set(farm.Fingerprint64([]byte(xid)), newUid)
+	sh.tree.Set(key, newUid)
 
 	if m.writer != nil {
 		var uidBuf [8]byte
