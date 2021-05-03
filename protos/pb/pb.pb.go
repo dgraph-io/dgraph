@@ -91,11 +91,14 @@ func (Mutations_DropOp) EnumDescriptor() ([]byte, []int) {
 type Metadata_HintType int32
 
 const (
-	// DEFAULT means no hint is provided and Dgraph will follow the default behavior.
+	// DEFAULT means no hint is provided and Dgraph will follow the default
+	// behavior.
 	Metadata_DEFAULT Metadata_HintType = 0
-	// SINGLE signals that the predicate should be created as a single type (e.g string, uid).
+	// SINGLE signals that the predicate should be created as a single type (e.g
+	// string, uid).
 	Metadata_SINGLE Metadata_HintType = 1
-	// LIST signals that the predicate should be created as a list (e.g [string], [uid]).
+	// LIST signals that the predicate should be created as a list (e.g
+	// [string], [uid]).
 	Metadata_LIST Metadata_HintType = 2
 )
 
@@ -504,15 +507,22 @@ type Query struct {
 	// Exactly one of uids and terms is populated.
 	UidList *List `protobuf:"bytes,5,opt,name=uid_list,json=uidList,proto3" json:"uid_list,omitempty"`
 	// Function to generate or filter UIDs.
-	SrcFunc      *SrcFunction `protobuf:"bytes,6,opt,name=src_func,json=srcFunc,proto3" json:"src_func,omitempty"`
-	Reverse      bool         `protobuf:"varint,7,opt,name=reverse,proto3" json:"reverse,omitempty"`
-	FacetParam   *FacetParams `protobuf:"bytes,8,opt,name=facet_param,json=facetParam,proto3" json:"facet_param,omitempty"`
-	FacetsFilter *FilterTree  `protobuf:"bytes,9,opt,name=facets_filter,json=facetsFilter,proto3" json:"facets_filter,omitempty"`
-	ExpandAll    bool         `protobuf:"varint,10,opt,name=expand_all,json=expandAll,proto3" json:"expand_all,omitempty"`
-	ReadTs       uint64       `protobuf:"varint,13,opt,name=read_ts,json=readTs,proto3" json:"read_ts,omitempty"`
-	Cache        int32        `protobuf:"varint,14,opt,name=cache,proto3" json:"cache,omitempty"`
-	First        int32        `protobuf:"varint,15,opt,name=first,proto3" json:"first,omitempty"`
+	SrcFunc *SrcFunction `protobuf:"bytes,6,opt,name=src_func,json=srcFunc,proto3" json:"src_func,omitempty"`
+	// Whether this is a reverse edge.
+	Reverse bool `protobuf:"varint,7,opt,name=reverse,proto3" json:"reverse,omitempty"`
+	// Which facets to fetch.
+	FacetParam *FacetParams `protobuf:"bytes,8,opt,name=facet_param,json=facetParam,proto3" json:"facet_param,omitempty"`
+	// Filtering on facets: has Op (and/or/not) tree.
+	FacetsFilter *FilterTree `protobuf:"bytes,9,opt,name=facets_filter,json=facetsFilter,proto3" json:"facets_filter,omitempty"`
+	// Expand all language variants.
+	ExpandAll bool   `protobuf:"varint,10,opt,name=expand_all,json=expandAll,proto3" json:"expand_all,omitempty"`
+	ReadTs    uint64 `protobuf:"varint,13,opt,name=read_ts,json=readTs,proto3" json:"read_ts,omitempty"`
+	Cache     int32  `protobuf:"varint,14,opt,name=cache,proto3" json:"cache,omitempty"`
+	// Used to limit the number of result. Typically, the count is value of first
 	// field. Now, It's been used only for has query.
+	First int32 `protobuf:"varint,15,opt,name=first,proto3" json:"first,omitempty"`
+	// Offset helps in fetching lesser results for the has query when there is no
+	// filter and order.
 	Offset int32 `protobuf:"varint,16,opt,name=offset,proto3" json:"offset,omitempty"`
 }
 
@@ -1084,8 +1094,8 @@ func (m *RaftContext) GetIsLearner() bool {
 }
 
 // Member stores information about RAFT group member for a single RAFT node.
-// Note that each server can be serving multiple RAFT groups. Each group would have
-// one RAFT node per server serving that group.
+// Note that each server can be serving multiple RAFT groups. Each group would
+// have one RAFT node per server serving that group.
 type Member struct {
 	Id              uint64 `protobuf:"fixed64,1,opt,name=id,proto3" json:"id,omitempty"`
 	GroupId         uint32 `protobuf:"varint,2,opt,name=group_id,json=groupId,proto3" json:"groupId,omitempty"`
@@ -1471,9 +1481,9 @@ func (m *ZeroProposal) GetDeleteNs() *DeleteNsRequest {
 	return nil
 }
 
-// MembershipState is used to pack together the current membership state of all the nodes
-// in the caller server; and the membership updates recorded by the callee server since
-// the provided lastUpdate.
+// MembershipState is used to pack together the current membership state of all
+// the nodes in the caller server; and the membership updates recorded by the
+// callee server since the provided lastUpdate.
 type MembershipState struct {
 	Counter   uint64             `protobuf:"varint,1,opt,name=counter,proto3" json:"counter,omitempty"`
 	Groups    map[uint32]*Group  `protobuf:"bytes,2,rep,name=groups,proto3" json:"groups,omitempty" protobuf_key:"varint,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
@@ -1591,9 +1601,10 @@ func (m *MembershipState) GetLicense() *License {
 }
 
 type ConnectionState struct {
-	Member     *Member          `protobuf:"bytes,1,opt,name=member,proto3" json:"member,omitempty"`
-	State      *MembershipState `protobuf:"bytes,2,opt,name=state,proto3" json:"state,omitempty"`
-	MaxPending uint64           `protobuf:"varint,3,opt,name=max_pending,json=maxPending,proto3" json:"max_pending,omitempty"`
+	Member *Member          `protobuf:"bytes,1,opt,name=member,proto3" json:"member,omitempty"`
+	State  *MembershipState `protobuf:"bytes,2,opt,name=state,proto3" json:"state,omitempty"`
+	// Used to determine the timstamp for reading after bulk load.
+	MaxPending uint64 `protobuf:"varint,3,opt,name=max_pending,json=maxPending,proto3" json:"max_pending,omitempty"`
 }
 
 func (m *ConnectionState) Reset()         { *m = ConnectionState{} }
@@ -1775,14 +1786,17 @@ func (m *HealthInfo) GetMaxAssigned() uint64 {
 }
 
 type Tablet struct {
-	GroupId           uint32 `protobuf:"varint,1,opt,name=group_id,json=groupId,proto3" json:"groupId,omitempty"`
-	Predicate         string `protobuf:"bytes,2,opt,name=predicate,proto3" json:"predicate,omitempty"`
-	Force             bool   `protobuf:"varint,3,opt,name=force,proto3" json:"force,omitempty"`
-	OnDiskBytes       int64  `protobuf:"varint,7,opt,name=on_disk_bytes,json=onDiskBytes,proto3" json:"on_disk_bytes,omitempty"`
-	Remove            bool   `protobuf:"varint,8,opt,name=remove,proto3" json:"remove,omitempty"`
-	ReadOnly          bool   `protobuf:"varint,9,opt,name=read_only,json=readOnly,proto3" json:"readOnly,omitempty"`
-	MoveTs            uint64 `protobuf:"varint,10,opt,name=move_ts,json=moveTs,proto3" json:"moveTs,omitempty"`
-	UncompressedBytes int64  `protobuf:"varint,11,opt,name=uncompressed_bytes,json=uncompressedBytes,proto3" json:"uncompressed_bytes,omitempty"`
+	// Served by which group.
+	GroupId     uint32 `protobuf:"varint,1,opt,name=group_id,json=groupId,proto3" json:"groupId,omitempty"`
+	Predicate   string `protobuf:"bytes,2,opt,name=predicate,proto3" json:"predicate,omitempty"`
+	Force       bool   `protobuf:"varint,3,opt,name=force,proto3" json:"force,omitempty"`
+	OnDiskBytes int64  `protobuf:"varint,7,opt,name=on_disk_bytes,json=onDiskBytes,proto3" json:"on_disk_bytes,omitempty"`
+	Remove      bool   `protobuf:"varint,8,opt,name=remove,proto3" json:"remove,omitempty"`
+	// If true, do not ask zero to serve any tablets.
+	ReadOnly bool   `protobuf:"varint,9,opt,name=read_only,json=readOnly,proto3" json:"readOnly,omitempty"`
+	MoveTs   uint64 `protobuf:"varint,10,opt,name=move_ts,json=moveTs,proto3" json:"moveTs,omitempty"`
+	// Estimated uncompressed size of tablet in bytes
+	UncompressedBytes int64 `protobuf:"varint,11,opt,name=uncompressed_bytes,json=uncompressedBytes,proto3" json:"uncompressed_bytes,omitempty"`
 }
 
 func (m *Tablet) Reset()         { *m = Tablet{} }
@@ -2450,13 +2464,15 @@ func (m *RestoreRequest) GetBackupNum() uint64 {
 }
 
 type Proposal struct {
-	Mutations        *Mutations       `protobuf:"bytes,2,opt,name=mutations,proto3" json:"mutations,omitempty"`
-	Kv               []*pb.KV         `protobuf:"bytes,4,rep,name=kv,proto3" json:"kv,omitempty"`
-	State            *MembershipState `protobuf:"bytes,5,opt,name=state,proto3" json:"state,omitempty"`
-	CleanPredicate   string           `protobuf:"bytes,6,opt,name=clean_predicate,json=cleanPredicate,proto3" json:"clean_predicate,omitempty"`
-	Delta            *OracleDelta     `protobuf:"bytes,8,opt,name=delta,proto3" json:"delta,omitempty"`
-	Snapshot         *Snapshot        `protobuf:"bytes,9,opt,name=snapshot,proto3" json:"snapshot,omitempty"`
-	Index            uint64           `protobuf:"varint,10,opt,name=index,proto3" json:"index,omitempty"`
+	Mutations *Mutations       `protobuf:"bytes,2,opt,name=mutations,proto3" json:"mutations,omitempty"`
+	Kv        []*pb.KV         `protobuf:"bytes,4,rep,name=kv,proto3" json:"kv,omitempty"`
+	State     *MembershipState `protobuf:"bytes,5,opt,name=state,proto3" json:"state,omitempty"`
+	// Delete the predicate which was moved to other group.
+	CleanPredicate string       `protobuf:"bytes,6,opt,name=clean_predicate,json=cleanPredicate,proto3" json:"clean_predicate,omitempty"`
+	Delta          *OracleDelta `protobuf:"bytes,8,opt,name=delta,proto3" json:"delta,omitempty"`
+	Snapshot       *Snapshot    `protobuf:"bytes,9,opt,name=snapshot,proto3" json:"snapshot,omitempty"`
+	Index          uint64       `protobuf:"varint,10,opt,name=index,proto3" json:"index,omitempty"`
+	// Block an operation until membership reaches this checksum.
 	ExpectedChecksum uint64           `protobuf:"varint,11,opt,name=expected_checksum,json=expectedChecksum,proto3" json:"expected_checksum,omitempty"`
 	Restore          *RestoreRequest  `protobuf:"bytes,12,opt,name=restore,proto3" json:"restore,omitempty"`
 	CdcState         *CDCState        `protobuf:"bytes,13,opt,name=cdc_state,json=cdcState,proto3" json:"cdc_state,omitempty"`
@@ -2635,11 +2651,12 @@ func (m *CDCState) GetSentTs() uint64 {
 
 type KVS struct {
 	Data []byte `protobuf:"bytes,5,opt,name=data,proto3" json:"data,omitempty"`
-	// done used to indicate if the stream of KVS is over.
+	// Done used to indicate if the stream of KVS is over.
 	Done bool `protobuf:"varint,2,opt,name=done,proto3" json:"done,omitempty"`
-	// predicates is the list of predicates known by the leader at the time of the snapshot.
+	// Predicates is the list of predicates known by the leader at the time of the
+	// snapshot.
 	Predicates []string `protobuf:"bytes,3,rep,name=predicates,proto3" json:"predicates,omitempty"`
-	// types is the list of types known by the leader at the time of the snapshot.
+	// Types is the list of types known by the leader at the time of the snapshot.
 	Types []string `protobuf:"bytes,4,rep,name=types,proto3" json:"types,omitempty"`
 }
 
@@ -3199,7 +3216,7 @@ func (m *FilterTree) GetFunc() *Function {
 type SchemaRequest struct {
 	GroupId    uint32   `protobuf:"varint,1,opt,name=group_id,json=groupId,proto3" json:"group_id,omitempty"`
 	Predicates []string `protobuf:"bytes,2,rep,name=predicates,proto3" json:"predicates,omitempty"`
-	// fields can be on of type, index, reverse or tokenizer
+	// Fields can be on of type, index, reverse or tokenizer.
 	Fields []string `protobuf:"bytes,3,rep,name=fields,proto3" json:"fields,omitempty"`
 	Types  []string `protobuf:"bytes,4,rep,name=types,proto3" json:"types,omitempty"`
 }
@@ -3438,8 +3455,8 @@ type SchemaUpdate struct {
 	// Fields required for type system.
 	NonNullable     bool `protobuf:"varint,10,opt,name=non_nullable,json=nonNullable,proto3" json:"non_nullable,omitempty"`
 	NonNullableList bool `protobuf:"varint,11,opt,name=non_nullable_list,json=nonNullableList,proto3" json:"non_nullable_list,omitempty"`
-	// If value_type is OBJECT, then this represents an object type with a
-	// custom name. This field stores said name.
+	// If value_type is OBJECT, then this represents an object type with a custom
+	// name. This field stores said name.
 	ObjectTypeName string `protobuf:"bytes,12,opt,name=object_type_name,json=objectTypeName,proto3" json:"object_type_name,omitempty"`
 	NoConflict     bool   `protobuf:"varint,13,opt,name=no_conflict,json=noConflict,proto3" json:"no_conflict,omitempty"`
 }
@@ -4480,9 +4497,8 @@ func (m *Status) GetMsg() string {
 	return ""
 }
 
-// Backups record all data from since_ts to read_ts.
-// With incremental backups, the read_ts of the first backup becomes
-// the since_ts of the second backup.
+// Backups record all data from since_ts to read_ts. With incremental backups,
+// the read_ts of the first backup becomes the since_ts of the second backup.
 // Incremental backups can be disabled using the force_full field.
 type BackupRequest struct {
 	ReadTs       uint64 `protobuf:"varint,1,opt,name=read_ts,json=readTs,proto3" json:"read_ts,omitempty"`
@@ -4658,7 +4674,8 @@ func (m *BackupResponse) GetDropOperations() []*DropOperation {
 
 type DropOperation struct {
 	DropOp DropOperation_DropOp `protobuf:"varint,1,opt,name=drop_op,json=dropOp,proto3,enum=pb.DropOperation_DropOp" json:"drop_op,omitempty"`
-	// When drop_op is ATTR, drop_value will be the name of the ATTR; empty otherwise.
+	// When drop_op is ATTR, drop_value will be the name of the ATTR; empty
+	// otherwise.
 	DropValue string `protobuf:"bytes,2,opt,name=drop_value,json=dropValue,proto3" json:"drop_value,omitempty"`
 }
 
