@@ -620,9 +620,13 @@ message Status {
 	string msg = 2;
 }
 
+// Backups record all data from since_ts to read_ts.
+// With incremental backups, the read_ts of the first backup becomes
+// the since_ts of the second backup.
+// Incremental backups can be disabled using the force_full field.
 message BackupRequest {
 	uint64 read_ts = 1;
-  uint64 since_ts = 2;
+	uint64 since_ts = 2;
 	uint32 group_id = 3;
 	string unix_ts = 4;
 	string destination = 5;
@@ -637,6 +641,8 @@ message BackupRequest {
 	// The predicates to backup. All other predicates present in the group (e.g
 	// stale data from a predicate move) will be ignored.
 	repeated string predicates = 10;
+
+	bool force_full = 11;
 }
 
 message BackupResponse {

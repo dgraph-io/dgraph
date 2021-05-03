@@ -93,7 +93,7 @@ func WaitForRestore(t *testing.T, dg *dgo.Dgraph) {
 	   }}`)
 
 		if err == nil {
-			numSuccess += 1
+			numSuccess++
 		} else {
 			require.Contains(t, err.Error(), "the server is in draining mode")
 			numSuccess = 0

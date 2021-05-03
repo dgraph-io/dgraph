@@ -16,11 +16,11 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"math"
-	"net/url"
 	"os"
 	"strings"
 	"testing"
@@ -144,17 +144,36 @@ func addTriples(t *testing.T, dg *dgo.Dgraph, numTriples int) {
 }
 
 func runBackup(t *testing.T) {
-	// Using the old /admin/backup endpoint to ensure it works. Change back to using
-	// the GraphQL endpoint at /admin once this endpoint is deprecated.
+	backupRequest := `mutation backup($dst: String!, $ff: Boolean!) {
+		backup(input: {destination: $dst, forceFull: $ff}) {
+			response {
+				code
+			}
+			taskId
+		}
+	}`
+
+	adminUrl := "https://" + testutil.SockAddrHttp + "/admin"
+	params := testutil.GraphQLParams{
+		Query: backupRequest,
+		Variables: map[string]interface{}{
+			"dst": backupDestination,
+			"ff":  false,
+		},
+	}
+	b, err := json.Marshal(params)
+	require.NoError(t, err)
+
 	client := testutil.GetHttpsClient(t)
-	resp, err := client.PostForm("https://"+testutil.SockAddrHttp+"/admin/backup", url.Values{
-		"destination": []string{backupDestination},
-	})
+	resp, err := client.Post(adminUrl, "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
 	defer resp.Body.Close()
-	buf, err := ioutil.ReadAll(resp.Body)
-	require.NoError(t, err)
-	require.Contains(t, string(buf), "Backup completed.")
+
+	var data interface{}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
+	require.Equal(t, "Success", testutil.JsonGet(data, "data", "backup", "response", "code").(string))
+	taskId := testutil.JsonGet(data, "data", "backup", "taskId").(string)
+	testutil.WaitForTask(t, taskId, true)
 
 	// Verify that the right amount of files and directories were created.
 	copyToLocalFs(t)
