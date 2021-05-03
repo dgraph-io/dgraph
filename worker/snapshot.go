@@ -112,7 +112,7 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) error {
 		return err
 	}
 
-	if err := deleteStalePreds(ctx, done, snap.ReadTs); err != nil {
+	if err := deleteStalePreds(ctx, done); err != nil {
 		return err
 	}
 
@@ -127,7 +127,7 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) error {
 	return nil
 }
 
-func deleteStalePreds(ctx context.Context, kvs *pb.KVS, readTs uint64) error {
+func deleteStalePreds(ctx context.Context, kvs *pb.KVS) error {
 	if kvs == nil {
 		return nil
 	}
@@ -144,7 +144,9 @@ func deleteStalePreds(ctx context.Context, kvs *pb.KVS, readTs uint64) error {
 		if _, ok := snapshotPreds[pred]; !ok {
 		LOOP:
 			for {
-				err := posting.DeletePredicate(ctx, pred, readTs)
+				// While retrieving the snapshot, we mark the node as unhealthy. So it is okay to do
+				// a blocking delete of predicate.
+				err := posting.DeletePredicate(ctx, pred)
 				switch err {
 				case badger.ErrBlockedWrites:
 					time.Sleep(1 * time.Second)

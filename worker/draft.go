@@ -596,8 +596,8 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 			// MaxAssigned would ensure that everything that's committed up until this point
 			// would be logically deleted. Any uncommitted txns would be cancelled
 			// by detectPendingTxns above.
-			startTs := posting.Oracle().MaxAssigned()
-			return posting.DeletePredicate(ctx, edge.Attr, startTs)
+			deleteTs := posting.Oracle().MaxAssigned()
+			return posting.DeletePredicateNonBlocking(ctx, edge.Attr, deleteTs)
 		}
 		// Don't derive schema when doing deletion.
 		if edge.Op == pb.DirectedEdge_DEL {
@@ -710,8 +710,8 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 				proposal.CleanPredicate, proposal.ExpectedChecksum)
 			return nil
 		}
-		// It is crucial to send the correct startTs as we are doing logical deletes.
-		return posting.DeletePredicate(ctx, proposal.CleanPredicate, proposal.StartTs)
+		// It is crucial to send the correct startTs as we are doing a logical delete.
+		return posting.DeletePredicateNonBlocking(ctx, proposal.CleanPredicate, proposal.StartTs)
 
 	case proposal.Delta != nil:
 		n.elog.Printf("Applying Oracle Delta for key: %d", key)
