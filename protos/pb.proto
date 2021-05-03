@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-
 // Style guide for Protocol Buffer 3.
 // Use CamelCase (with an initial capital) for message names – for example,
 // SongServerRequest. Use underscore_separated_names for field names – for
@@ -36,653 +35,671 @@ import "github.com/gogo/protobuf/gogoproto/gogo.proto";
 /* option (gogoproto.goproto_getters_all) = true; */
 
 message List {
-	repeated fixed64 uids = 1;
-	bytes bitmap_do_not_use = 2;
+  repeated fixed64 uids = 1;
+  bytes bitmap_do_not_use = 2;
 }
 
 message TaskValue {
-	bytes val = 1;
-	Posting.ValType val_type = 2;
+  bytes val = 1;
+  Posting.ValType val_type = 2;
 }
 
 message SrcFunction {
-	string name = 1;
-	repeated string args = 3;
-	bool isCount = 4;
+  string name = 1;
+  repeated string args = 3;
+  bool isCount = 4;
 }
 
 message Query {
-	string attr = 1;
-	repeated string langs = 2; // language list for attribute
-	fixed64 after_uid = 3;  // Only return UIDs greater than this.
-	bool do_count = 4;      // Are we just getting lengths?
+  string attr = 1;
+  repeated string langs = 2;  // language list for attribute
+  fixed64 after_uid = 3;      // Only return UIDs greater than this.
+  bool do_count = 4;          // Are we just getting lengths?
 
-	// Exactly one of uids and terms is populated.
-	List uid_list = 5;
+  // Exactly one of uids and terms is populated.
+  List uid_list = 5;
 
-	// Function to generate or filter UIDs.
-	SrcFunction src_func = 6;
+  // Function to generate or filter UIDs.
+  SrcFunction src_func = 6;
 
-	bool reverse = 7;  // Whether this is a reverse edge.
+  // Whether this is a reverse edge.
+  bool reverse = 7;
 
-	FacetParams facet_param = 8; // which facets to fetch
-	FilterTree facets_filter = 9; // filtering on facets : has Op (and/or/not) tree
+  // Which facets to fetch.
+  FacetParams facet_param = 8;
+  // Filtering on facets: has Op (and/or/not) tree.
+  FilterTree facets_filter = 9;
 
-	bool expand_all = 10; // expand all language variants.
+  // Expand all language variants.
+  bool expand_all = 10;
 
-	uint64 read_ts = 13;
-	int32 cache = 14;
-	int32 first = 15; // used to limit the number of result. Typically, the count is value of first
-	// field. Now, It's been used only for has query.
-	int32 offset = 16; // offset helps in fetching lesser results for the has query when there is
-	// no filter and order.
+  uint64 read_ts = 13;
+  int32 cache = 14;
+  // Used to limit the number of result. Typically, the count is value of first
+  // field. Now, It's been used only for has query.
+  int32 first = 15;
+  // Offset helps in fetching lesser results for the has query when there is no
+  // filter and order.
+  int32 offset = 16;
 }
 
 message ValueList {
-	repeated TaskValue values = 1;
+  repeated TaskValue values = 1;
 }
 
 message LangList {
-	repeated string lang = 1;
+  repeated string lang = 1;
 }
 
 message Result {
-	repeated List uid_matrix = 1;
-	repeated ValueList value_matrix = 2;
-	repeated uint32 counts = 3;
-	bool intersect_dest = 4;
-	repeated FacetsList facet_matrix = 5;
-	repeated LangList lang_matrix = 6;
-	bool list = 7;
+  repeated List uid_matrix = 1;
+  repeated ValueList value_matrix = 2;
+  repeated uint32 counts = 3;
+  bool intersect_dest = 4;
+  repeated FacetsList facet_matrix = 5;
+  repeated LangList lang_matrix = 6;
+  bool list = 7;
 }
 
 message Order {
-	string attr = 1;
-	bool desc = 2;
-	repeated string langs = 3;
+  string attr = 1;
+  bool desc = 2;
+  repeated string langs = 3;
 }
 
 message SortMessage {
-	repeated Order order = 1;
-	repeated List uid_matrix = 2;
-	int32 count = 3;   // Return this many elements.
-	int32 offset = 4;  // Skip this many elements.
+  repeated Order order = 1;
+  repeated List uid_matrix = 2;
+  int32 count = 3;   // Return this many elements.
+  int32 offset = 4;  // Skip this many elements.
 
-	uint64 read_ts = 13;
+  uint64 read_ts = 13;
 }
 
 message SortResult {
-	repeated List uid_matrix = 1;
+  repeated List uid_matrix = 1;
 }
 
 message RaftContext {
-	fixed64 id = 1;
-	uint32 group = 2;
-	string addr = 3;
-	uint64 snapshot_ts = 4;
-	bool is_learner = 5;
+  fixed64 id = 1;
+  uint32 group = 2;
+  string addr = 3;
+  uint64 snapshot_ts = 4;
+  bool is_learner = 5;
 }
 
 // Member stores information about RAFT group member for a single RAFT node.
-// Note that each server can be serving multiple RAFT groups. Each group would have
-// one RAFT node per server serving that group.
+// Note that each server can be serving multiple RAFT groups. Each group would
+// have one RAFT node per server serving that group.
 message Member {
-	fixed64 id = 1;
-	uint32 group_id = 2 [(gogoproto.jsontag) = "groupId,omitempty"];
-	string addr = 3;
-	bool leader = 4;
-	bool am_dead = 5 [(gogoproto.jsontag) = "amDead,omitempty"];
-	uint64 last_update = 6 [(gogoproto.jsontag) = "lastUpdate,omitempty"];
-	bool learner = 7;
+  fixed64 id = 1;
+  uint32 group_id = 2 [(gogoproto.jsontag) = "groupId,omitempty"];
+  string addr = 3;
+  bool leader = 4;
+  bool am_dead = 5 [(gogoproto.jsontag) = "amDead,omitempty"];
+  uint64 last_update = 6 [(gogoproto.jsontag) = "lastUpdate,omitempty"];
+  bool learner = 7;
 
-	bool cluster_info_only = 13 [(gogoproto.jsontag) = "clusterInfoOnly,omitempty"];
-	bool force_group_id = 14 [(gogoproto.jsontag) = "forceGroupId,omitempty"];
+  bool cluster_info_only = 13
+      [(gogoproto.jsontag) = "clusterInfoOnly,omitempty"];
+  bool force_group_id = 14 [(gogoproto.jsontag) = "forceGroupId,omitempty"];
 }
 
 message Group {
-	map<uint64, Member> members = 1; // Raft ID is the key.
-	map<string, Tablet> tablets = 2; // Predicate + others are key.
-	uint64 snapshot_ts          = 3; // Stores Snapshot transaction ts.
-	uint64 checksum             = 4; // Stores a checksum.
-	uint64 checkpoint_ts        = 5; // Stores checkpoint ts as seen by leader.
+  map<uint64, Member> members = 1;  // Raft ID is the key.
+  map<string, Tablet> tablets = 2;  // Predicate + others are key.
+  uint64 snapshot_ts = 3;           // Stores Snapshot transaction ts.
+  uint64 checksum = 4;              // Stores a checksum.
+  uint64 checkpoint_ts = 5;         // Stores checkpoint ts as seen by leader.
 }
 
 message License {
-	string user = 1;
-	uint64 maxNodes = 2;
-	int64 expiryTs = 3;
-	bool enabled = 4;
+  string user = 1;
+  uint64 maxNodes = 2;
+  int64 expiryTs = 3;
+  bool enabled = 4;
 }
 
 message ZeroProposal {
-	reserved 8;  // Was used for string key.
-	map<uint32, uint64> snapshot_ts = 1; // Group ID -> Snapshot Ts.
-	Member member = 2;
-	Tablet tablet = 3;
-	uint64 maxUID = 4;
-	uint64 maxTxnTs = 5;
-	uint64 maxNsID = 12;
-	uint64 maxRaftId = 6;
-	api.TxnContext txn = 7;
-	string cid = 9; // Used as unique identifier for the cluster.
-	License license = 10;
-	ZeroSnapshot snapshot = 11; // Used to make Zeros take a snapshot.
-	// 12 has already been used.
-	DeleteNsRequest delete_ns = 13; // Used to delete namespace.
+  reserved 8;                           // Was used for string key.
+  map<uint32, uint64> snapshot_ts = 1;  // Group ID -> Snapshot Ts.
+  Member member = 2;
+  Tablet tablet = 3;
+  uint64 maxUID = 4;
+  uint64 maxTxnTs = 5;
+  uint64 maxNsID = 12;
+  uint64 maxRaftId = 6;
+  api.TxnContext txn = 7;
+  string cid = 9;  // Used as unique identifier for the cluster.
+  License license = 10;
+  ZeroSnapshot snapshot = 11;  // Used to make Zeros take a snapshot.
+  // 12 has already been used.
+  DeleteNsRequest delete_ns = 13;  // Used to delete namespace.
 }
 
-// MembershipState is used to pack together the current membership state of all the nodes
-// in the caller server; and the membership updates recorded by the callee server since
-// the provided lastUpdate.
+// MembershipState is used to pack together the current membership state of all
+// the nodes in the caller server; and the membership updates recorded by the
+// callee server since the provided lastUpdate.
 message MembershipState {
-	uint64 counter = 1;  // used to find latest membershipState in case of race.
-	map<uint32, Group> groups = 2;
-	map<uint64, Member> zeros = 3;
-	uint64 maxUID = 4;
-	uint64 maxTxnTs = 5;
-	uint64 maxNsID = 10;
-	uint64 maxRaftId = 6;
-	repeated Member removed = 7;
-	string cid = 8; // Used to uniquely identify the Dgraph cluster.
-	License license = 9;
-	// 10 has already been used.
+  uint64 counter = 1;  // Used to find latest membershipState in case of race.
+  map<uint32, Group> groups = 2;
+  map<uint64, Member> zeros = 3;
+  uint64 maxUID = 4;
+  uint64 maxTxnTs = 5;
+  uint64 maxNsID = 10;
+  uint64 maxRaftId = 6;
+  repeated Member removed = 7;
+  string cid = 8;  // Used to uniquely identify the Dgraph cluster.
+  License license = 9;
+  // 10 has already been used.
 }
 
 message ConnectionState {
-    Member member = 1;
-    MembershipState state = 2;
-    uint64 max_pending = 3; // Used to determine the timstamp for reading after bulk load
+  Member member = 1;
+  MembershipState state = 2;
+  // Used to determine the timstamp for reading after bulk load.
+  uint64 max_pending = 3;
 }
 
 message HealthInfo {
-    string instance = 1;
-    string address = 2;
-    string status = 3;
-    string group = 4; // string so group = 0 can be printed in JSON.
-    string version = 5;
-    int64 uptime = 6;
-    int64 lastEcho = 7;
-    repeated string ongoing = 8;
-    repeated string indexing = 9;
-    repeated string ee_features = 10;
-		uint64 max_assigned = 11;
+  string instance = 1;
+  string address = 2;
+  string status = 3;
+  string group = 4;  // string so group = 0 can be printed in JSON.
+  string version = 5;
+  int64 uptime = 6;
+  int64 lastEcho = 7;
+  repeated string ongoing = 8;
+  repeated string indexing = 9;
+  repeated string ee_features = 10;
+  uint64 max_assigned = 11;
 }
 
 message Tablet {
-    uint32 group_id = 1 [(gogoproto.jsontag) = "groupId,omitempty"]; // Served by which group.
-    string predicate = 2;
-    bool force = 3; // Used while moving predicate.
-    int64 on_disk_bytes = 7;
-    bool remove = 8;
-    bool read_only = 9 [(gogoproto.jsontag) = "readOnly,omitempty"]; // If true, do not ask zero to serve any tablets.
-	uint64 move_ts = 10 [(gogoproto.jsontag) = "moveTs,omitempty"];
-	int64 uncompressed_bytes = 11; // Estimated uncompressed size of tablet in bytes
+  // Served by which group.
+  uint32 group_id = 1 [(gogoproto.jsontag) = "groupId,omitempty"];
+  string predicate = 2;
+  bool force = 3;  // Used while moving predicate.
+  int64 on_disk_bytes = 7;
+  bool remove = 8;
+  // If true, do not ask zero to serve any tablets.
+  bool read_only = 9 [(gogoproto.jsontag) = "readOnly,omitempty"];
+  uint64 move_ts = 10 [(gogoproto.jsontag) = "moveTs,omitempty"];
+  // Estimated uncompressed size of tablet in bytes
+  int64 uncompressed_bytes = 11;
 }
 
 message DirectedEdge {
-	reserved 6;  // This was used for label.
-	fixed64 entity             = 1;    // Subject or source node / UID.
-	string attr                = 2;       // Attribute or predicate. Labels the edge.
-	bytes value                = 3;       // Edge points to a value.
-	Posting.ValType value_type = 4;  // The type of the value
-	fixed64 value_id           = 5;   // Object or destination node / UID.
-	string lang                = 7;
-	enum Op {
-		SET = 0;
-		DEL = 1;
-	}
-	Op op = 8;
-	repeated api.Facet facets = 9;
-	repeated string allowedPreds = 10;
-	uint64 namespace = 11;
+  reserved 6;                      // This was used for label.
+  fixed64 entity = 1;              // Subject or source node / UID.
+  string attr = 2;                 // Attribute or predicate. Labels the edge.
+  bytes value = 3;                 // Edge points to a value.
+  Posting.ValType value_type = 4;  // The type of the value
+  fixed64 value_id = 5;            // Object or destination node / UID.
+  string lang = 7;
+  enum Op {
+    SET = 0;
+    DEL = 1;
+  }
+  Op op = 8;
+  repeated api.Facet facets = 9;
+  repeated string allowedPreds = 10;
+  uint64 namespace = 11;
 }
 
 message Mutations {
-	uint32 group_id	= 1;
-	uint64 start_ts	= 2;
-	repeated DirectedEdge edges	= 3;
-	repeated SchemaUpdate schema = 4;
-	repeated TypeUpdate types	= 6;
-	enum DropOp {
-		NONE = 0;
-		ALL = 1;
-		DATA = 2;
-		TYPE = 3;
-	}
-	DropOp drop_op = 7;
-	string drop_value = 8;
+  uint32 group_id = 1;
+  uint64 start_ts = 2;
+  repeated DirectedEdge edges = 3;
+  repeated SchemaUpdate schema = 4;
+  repeated TypeUpdate types = 6;
+  enum DropOp {
+    NONE = 0;
+    ALL = 1;
+    DATA = 2;
+    TYPE = 3;
+  }
+  DropOp drop_op = 7;
+  string drop_value = 8;
 
-	Metadata metadata = 9;
+  Metadata metadata = 9;
 }
 
 message Metadata {
   // HintType represents a hint that will be passed along the mutation and used
   // to add the predicate to the schema if it's not already there.
   enum HintType {
-    // DEFAULT means no hint is provided and Dgraph will follow the default behavior.
+    // DEFAULT means no hint is provided and Dgraph will follow the default
+    // behavior.
     DEFAULT = 0;
-    // SINGLE signals that the predicate should be created as a single type (e.g string, uid).
+    // SINGLE signals that the predicate should be created as a single type (e.g
+    // string, uid).
     SINGLE = 1;
-    // LIST signals that the predicate should be created as a list (e.g [string], [uid]).
+    // LIST signals that the predicate should be created as a list (e.g
+    // [string], [uid]).
     LIST = 2;
   }
 
   // Map of predicates to their hints.
-	map<string, HintType> pred_hints = 1;
+  map<string, HintType> pred_hints = 1;
 }
 
 message Snapshot {
-	RaftContext context = 1;
-	uint64 index = 2;
-	uint64 read_ts = 3;
-	// done is used to indicate that snapshot stream was a success.
-	bool done	= 4;
-	// since_ts stores the ts of the last snapshot to support diff snap updates.
-	uint64 since_ts = 5;
-	// max_assigned stores the ts as seen as of snapshot read_ts.
-	uint64 max_assigned = 6;
+  RaftContext context = 1;
+  uint64 index = 2;
+  uint64 read_ts = 3;
+  // done is used to indicate that snapshot stream was a success.
+  bool done = 4;
+  // since_ts stores the ts of the last snapshot to support diff snap updates.
+  uint64 since_ts = 5;
+  // max_assigned stores the ts as seen as of snapshot read_ts.
+  uint64 max_assigned = 6;
 }
 
 message ZeroSnapshot {
-	uint64 index = 1;
-	uint64 checkpoint_ts = 2;
-	MembershipState state = 5;
+  uint64 index = 1;
+  uint64 checkpoint_ts = 2;
+  MembershipState state = 5;
 }
 
 message RestoreRequest {
-	uint32 group_id = 1;
-	uint64 restore_ts = 2;
-	string location = 3;
-	string backup_id = 4;
+  uint32 group_id = 1;
+  uint64 restore_ts = 2;
+  string location = 3;
+  string backup_id = 4;
 
-	// Credentials when using a minio or S3 bucket as the backup location.
-	string access_key = 5;
-	string secret_key = 6;
-	string session_token = 7;
-	bool anonymous = 8;
+  // Credentials when using a minio or S3 bucket as the backup location.
+  string access_key = 5;
+  string secret_key = 6;
+  string session_token = 7;
+  bool anonymous = 8;
 
-	// Info needed to process encrypted backups.
-	string encryption_key_file = 9;
-	// Vault options
-	string vault_addr = 10;
-	string vault_roleid_file = 11;
-	string vault_secretid_file = 12;
-	string vault_path = 13;
-	string vault_field = 14;
-	string vault_format = 15;
+  // Info needed to process encrypted backups.
+  string encryption_key_file = 9;
+  // Vault options
+  string vault_addr = 10;
+  string vault_roleid_file = 11;
+  string vault_secretid_file = 12;
+  string vault_path = 13;
+  string vault_field = 14;
+  string vault_format = 15;
 
-	uint64 backup_num = 16;
+  uint64 backup_num = 16;
 }
 
 message Proposal {
-	reserved 7; // Was used for string key.
-	Mutations mutations    		= 2;
-	repeated badgerpb3.KV kv  = 4;
-	MembershipState state  		= 5;
-	string clean_predicate 		= 6;  // Delete the predicate which was moved to other group.
-	OracleDelta delta      		= 8;
-	Snapshot snapshot      		= 9;  // Used to tell the group when to take snapshot.
-	uint64 index           		= 10; // Used to store Raft index, in raft.Ready.
-	uint64 expected_checksum 	= 11; // Block an operation until membership reaches this checksum.
-	RestoreRequest restore 		= 12;
-	CDCState cdc_state 				= 13;
-	DeleteNsRequest delete_ns = 14; // Used to delete namespace.
-	uint64 key = 15;
-	uint64 start_ts = 16;
+  reserved 7;  // Was used for string key.
+  Mutations mutations = 2;
+  repeated badgerpb3.KV kv = 4;
+  MembershipState state = 5;
+  // Delete the predicate which was moved to other group.
+  string clean_predicate = 6;
+  OracleDelta delta = 8;
+  Snapshot snapshot = 9;  // Used to tell the group when to take snapshot.
+  uint64 index = 10;      // Used to store Raft index, in raft.Ready.
+  // Block an operation until membership reaches this checksum.
+  uint64 expected_checksum = 11;
+  RestoreRequest restore = 12;
+  CDCState cdc_state = 13;
+  DeleteNsRequest delete_ns = 14;  // Used to delete namespace.
+  uint64 key = 15;
+  uint64 start_ts = 16;
 }
 
 message CDCState {
-	uint64 sent_ts    = 1;
+  uint64 sent_ts = 1;
 }
 
 message KVS {
-	bytes data = 5;
+  bytes data = 5;
 
-	// done used to indicate if the stream of KVS is over.
-	bool done	= 2;
-	// predicates is the list of predicates known by the leader at the time of the snapshot.
-	repeated string predicates = 3;
-	// types is the list of types known by the leader at the time of the snapshot.
-	repeated string types = 4;
+  // Done used to indicate if the stream of KVS is over.
+  bool done = 2;
+  // Predicates is the list of predicates known by the leader at the time of the
+  // snapshot.
+  repeated string predicates = 3;
+  // Types is the list of types known by the leader at the time of the snapshot.
+  repeated string types = 4;
 }
 
 // Posting messages.
 message Posting {
-	reserved 6; // This was used for label.
-	fixed64 uid = 1;
-	bytes value = 2;
-	enum ValType {
-		DEFAULT = 0;
-		BINARY = 1;
-		INT = 2; // We treat it as int64.
-		FLOAT = 3;
-		BOOL = 4;
-		DATETIME = 5;
-		GEO = 6;
-		UID = 7;
-		PASSWORD = 8;
-		STRING = 9;
+  reserved 6;  // This was used for label.
+  fixed64 uid = 1;
+  bytes value = 2;
+  enum ValType {
+    DEFAULT = 0;
+    BINARY = 1;
+    INT = 2;  // We treat it as int64.
+    FLOAT = 3;
+    BOOL = 4;
+    DATETIME = 5;
+    GEO = 6;
+    UID = 7;
+    PASSWORD = 8;
+    STRING = 9;
     OBJECT = 10;
-	}
-	ValType val_type = 3;
-	enum PostingType {
-		REF=0;          // UID
-		VALUE=1;        // simple, plain value
-		VALUE_LANG=2;   // value with specified language
-	}
-	PostingType posting_type = 4;
-	bytes lang_tag = 5; // Only set for VALUE_LANG
-	repeated api.Facet facets = 9;
+  }
+  ValType val_type = 3;
+  enum PostingType {
+    REF = 0;         // UID
+    VALUE = 1;       // simple, plain value
+    VALUE_LANG = 2;  // value with specified language
+  }
+  PostingType posting_type = 4;
+  bytes lang_tag = 5;  // Only set for VALUE_LANG
+  repeated api.Facet facets = 9;
 
-	// TODO: op is only used temporarily. See if we can remove it from here.
-	uint32 op = 12;
-	uint64 start_ts = 13;   // Meant to use only inmemory
-	uint64 commit_ts = 14;  // Meant to use only inmemory
+  // TODO: op is only used temporarily. See if we can remove it from here.
+  uint32 op = 12;
+  uint64 start_ts = 13;   // Meant to use only inmemory
+  uint64 commit_ts = 14;  // Meant to use only inmemory
 }
 
 message PostingList {
-	reserved 1; // It was used for UidPack.
-	repeated Posting postings = 2;
-	uint64 commit_ts = 3; // More inclination towards smaller values.
+  reserved 1;  // It was used for UidPack.
+  repeated Posting postings = 2;
+  uint64 commit_ts = 3;  // More inclination towards smaller values.
 
   repeated uint64 splits = 4;
 
-	bytes bitmap = 5; // Roaring Bitmap encoded uint64s.
+  bytes bitmap = 5;  // Roaring Bitmap encoded uint64s.
 }
 
 message FacetParam {
-	string key = 1;
-	string alias = 2;
+  string key = 1;
+  string alias = 2;
 }
 
 message FacetParams {
-	bool all_keys = 1; // keys should be in sorted order.
-	repeated FacetParam param = 2;
+  bool all_keys = 1;  // Keys should be in sorted order.
+  repeated FacetParam param = 2;
 }
 
 message Facets {
-	repeated api.Facet facets = 1;
+  repeated api.Facet facets = 1;
 }
 
 message FacetsList {
-	repeated Facets facets_list = 1;
+  repeated Facets facets_list = 1;
 }
 
 message Function {
-	string name = 1;          // Name of the function : eq, le
-	string key = 2;           // Facet key over which to run the function.
-	repeated string args = 3; // Arguments of the function.
+  string name = 1;           // Name of the function : eq, le
+  string key = 2;            // Facet key over which to run the function.
+  repeated string args = 3;  // Arguments of the function.
 }
 
 // Op and Children are internal nodes and Func on leaves.
 message FilterTree {
-	string op = 1;
-	repeated FilterTree children = 2;
-	Function func = 3;
+  string op = 1;
+  repeated FilterTree children = 2;
+  Function func = 3;
 }
 
 // Schema messages.
 message SchemaRequest {
-	uint32 group_id = 1;
-	repeated string predicates = 2;
-	// fields can be on of type, index, reverse or tokenizer
-	repeated string fields = 3;
+  uint32 group_id = 1;
+  repeated string predicates = 2;
+  // Fields can be on of type, index, reverse or tokenizer.
+  repeated string fields = 3;
 
   repeated string types = 4;
 }
 
 message SchemaNode {
-	string predicate = 1;
-	string type = 2;
-	bool index = 3;
-	repeated string tokenizer = 4;
-	bool reverse = 5;
-	bool count = 6;
-	bool list = 7;
-	bool upsert = 8;
-	bool lang = 9;
-	bool no_conflict = 10;
+  string predicate = 1;
+  string type = 2;
+  bool index = 3;
+  repeated string tokenizer = 4;
+  bool reverse = 5;
+  bool count = 6;
+  bool list = 7;
+  bool upsert = 8;
+  bool lang = 9;
+  bool no_conflict = 10;
 }
 
 message SchemaResult {
-	repeated SchemaNode schema = 1 [deprecated=true];
+  repeated SchemaNode schema = 1 [deprecated = true];
 }
 
 message SchemaUpdate {
-	string predicate = 1;
-	Posting.ValType value_type = 2;
-	enum Directive {
-	   NONE = 0;
-	   INDEX = 1;
-	   REVERSE = 2;
-	   DELETE = 3;
-	}
-	Directive directive = 3;
-	repeated string tokenizer = 4;
-	bool count = 5;
-	bool list = 6;
-	bool upsert = 8;
-	bool lang = 9;
+  string predicate = 1;
+  Posting.ValType value_type = 2;
+  enum Directive {
+    NONE = 0;
+    INDEX = 1;
+    REVERSE = 2;
+    DELETE = 3;
+  }
+  Directive directive = 3;
+  repeated string tokenizer = 4;
+  bool count = 5;
+  bool list = 6;
+  bool upsert = 8;
+  bool lang = 9;
 
-	// Fields required for type system.
-	bool non_nullable = 10;
-	bool non_nullable_list = 11;
+  // Fields required for type system.
+  bool non_nullable = 10;
+  bool non_nullable_list = 11;
 
-	// If value_type is OBJECT, then this represents an object type with a
-	// custom name. This field stores said name.
-	string object_type_name = 12;
+  // If value_type is OBJECT, then this represents an object type with a custom
+  // name. This field stores said name.
+  string object_type_name = 12;
 
-	bool no_conflict = 13;
+  bool no_conflict = 13;
 
-	// Deleted field:
-	reserved 7;
-	reserved "explicit";
+  // Deleted field:
+  reserved 7;
+  reserved "explicit";
 }
 
 message TypeUpdate {
-	string type_name = 1;
-	repeated SchemaUpdate fields = 2;
+  string type_name = 1;
+  repeated SchemaUpdate fields = 2;
 }
 
 message MapHeader {
-	repeated bytes partition_keys = 1;
+  repeated bytes partition_keys = 1;
 }
 
 message MovePredicatePayload {
-	string predicate         = 1;
-	uint32 source_gid        = 2;
-	uint32 dest_gid          = 3;
-	uint64 read_ts           = 4;
-	uint64 expected_checksum = 5;
-	uint64 since_ts          = 6;
+  string predicate = 1;
+  uint32 source_gid = 2;
+  uint32 dest_gid = 3;
+  uint64 read_ts = 4;
+  uint64 expected_checksum = 5;
+  uint64 since_ts = 6;
 }
 
 message TxnStatus {
-	uint64 start_ts = 1;
-	uint64 commit_ts = 2;
+  uint64 start_ts = 1;
+  uint64 commit_ts = 2;
 }
 
 message OracleDelta {
-	repeated TxnStatus txns             = 1;
-	uint64 max_assigned                 = 2;
-	map<uint32, uint64> group_checksums = 3;
-	// implement tmax.
+  repeated TxnStatus txns = 1;
+  uint64 max_assigned = 2;
+  map<uint32, uint64> group_checksums = 3;
+  // implement tmax.
 }
 
 message TxnTimestamps {
-	repeated uint64 ts = 1;
+  repeated uint64 ts = 1;
 }
 
 message PeerResponse {
-	bool status = 1;
+  bool status = 1;
 }
 
 message RaftBatch {
-	RaftContext context = 1;
-	api.Payload payload = 2;
+  RaftContext context = 1;
+  api.Payload payload = 2;
 }
 
 service Raft {
-	rpc Heartbeat (api.Payload)        returns (stream HealthInfo) {}
-	rpc RaftMessage (stream RaftBatch) returns (api.Payload) {}
-	rpc JoinCluster (RaftContext)      returns (api.Payload) {}
-	rpc IsPeer (RaftContext)           returns (PeerResponse) {}
+  rpc Heartbeat(api.Payload) returns (stream HealthInfo) {}
+  rpc RaftMessage(stream RaftBatch) returns (api.Payload) {}
+  rpc JoinCluster(RaftContext) returns (api.Payload) {}
+  rpc IsPeer(RaftContext) returns (PeerResponse) {}
 }
 
 service Zero {
-	// These 3 endpoints are for handling membership.
-	rpc Connect (Member)               returns (ConnectionState) {}
-	rpc UpdateMembership (Group)                 returns (api.Payload) {}
-	rpc StreamMembership (api.Payload)       returns (stream MembershipState) {}
+  // These 3 endpoints are for handling membership.
+  rpc Connect(Member) returns (ConnectionState) {}
+  rpc UpdateMembership(Group) returns (api.Payload) {}
+  rpc StreamMembership(api.Payload) returns (stream MembershipState) {}
 
-	rpc Oracle (api.Payload)           returns (stream OracleDelta) {}
-	rpc ShouldServe (Tablet)           returns (Tablet) {}
-	rpc AssignIds (Num)               returns (AssignedIds) {}
-	rpc Timestamps (Num)               returns (AssignedIds) {}
-	rpc CommitOrAbort (api.TxnContext) returns (api.TxnContext) {}
-	rpc TryAbort (TxnTimestamps)       returns (OracleDelta) {}
-	rpc DeleteNamespace(DeleteNsRequest) returns (Status) {}
-	rpc RemoveNode (RemoveNodeRequest) returns (Status) {}
-	rpc MoveTablet (MoveTabletRequest) returns (Status) {}
-	rpc ApplyLicense (ApplyLicenseRequest) returns (Status) {}
+  rpc Oracle(api.Payload) returns (stream OracleDelta) {}
+  rpc ShouldServe(Tablet) returns (Tablet) {}
+  rpc AssignIds(Num) returns (AssignedIds) {}
+  rpc Timestamps(Num) returns (AssignedIds) {}
+  rpc CommitOrAbort(api.TxnContext) returns (api.TxnContext) {}
+  rpc TryAbort(TxnTimestamps) returns (OracleDelta) {}
+  rpc DeleteNamespace(DeleteNsRequest) returns (Status) {}
+  rpc RemoveNode(RemoveNodeRequest) returns (Status) {}
+  rpc MoveTablet(MoveTabletRequest) returns (Status) {}
+  rpc ApplyLicense(ApplyLicenseRequest) returns (Status) {}
 }
 
 service Worker {
-	// Data serving RPCs.
-	rpc Mutate (Mutations)                  returns (api.TxnContext) {}
-	rpc ServeTask (Query)                   returns (Result) {}
-	rpc StreamSnapshot (stream Snapshot)    returns (stream KVS) {}
-	rpc Sort (SortMessage)                  returns (SortResult) {}
-	rpc Schema (SchemaRequest)              returns (SchemaResult) {}
-	rpc Backup (BackupRequest)              returns (BackupResponse) {}
-	rpc Restore (RestoreRequest)            returns (Status) {}
-	rpc Export (ExportRequest)              returns (ExportResponse) {}
-	rpc ReceivePredicate(stream KVS)        returns (api.Payload) {}
-	rpc MovePredicate(MovePredicatePayload) returns (api.Payload) {}
-	rpc Subscribe(SubscriptionRequest) returns (stream badgerpb3.KVList) {}
-	rpc UpdateGraphQLSchema(UpdateGraphQLSchemaRequest) returns (UpdateGraphQLSchemaResponse) {}
-	rpc DeleteNamespace (DeleteNsRequest)              returns (Status) {}
+  // Data serving RPCs.
+  rpc Mutate(Mutations) returns (api.TxnContext) {}
+  rpc ServeTask(Query) returns (Result) {}
+  rpc StreamSnapshot(stream Snapshot) returns (stream KVS) {}
+  rpc Sort(SortMessage) returns (SortResult) {}
+  rpc Schema(SchemaRequest) returns (SchemaResult) {}
+  rpc Backup(BackupRequest) returns (BackupResponse) {}
+  rpc Restore(RestoreRequest) returns (Status) {}
+  rpc Export(ExportRequest) returns (ExportResponse) {}
+  rpc ReceivePredicate(stream KVS) returns (api.Payload) {}
+  rpc MovePredicate(MovePredicatePayload) returns (api.Payload) {}
+  rpc Subscribe(SubscriptionRequest) returns (stream badgerpb3.KVList) {}
+  rpc UpdateGraphQLSchema(UpdateGraphQLSchemaRequest)
+      returns (UpdateGraphQLSchemaResponse) {}
+  rpc DeleteNamespace(DeleteNsRequest) returns (Status) {}
 }
 
 message SubscriptionRequest {
-	repeated bytes prefixes = 1;
-	repeated badgerpb3.Match matches = 2;
+  repeated bytes prefixes = 1;
+  repeated badgerpb3.Match matches = 2;
 }
 
 message SubscriptionResponse {
-    badgerpb3.KVList kvs = 1;
+  badgerpb3.KVList kvs = 1;
 }
 
 message Num {
-	uint64 val = 1;
-	bool read_only = 2;
-	bool forwarded = 3; // True if this request was forwarded by a peer.
-	enum leaseType {
-		NS_ID = 0;
-		UID = 1;
-		TXN_TS = 2;
-	}
-	leaseType type = 4;
+  uint64 val = 1;
+  bool read_only = 2;
+  bool forwarded = 3;  // True if this request was forwarded by a peer.
+  enum leaseType {
+    NS_ID = 0;
+    UID = 1;
+    TXN_TS = 2;
+  }
+  leaseType type = 4;
 }
 
 message AssignedIds {
-	uint64 startId = 1;
-	uint64 endId = 2;
+  uint64 startId = 1;
+  uint64 endId = 2;
 
-	// The following is used for read only transactions.
-	uint64 read_only = 5;
+  // The following is used for read only transactions.
+  uint64 read_only = 5;
 }
 
 message RemoveNodeRequest {
-	uint64 nodeId = 1;
-	uint32 groupId = 2;
+  uint64 nodeId = 1;
+  uint32 groupId = 2;
 }
 
 message MoveTabletRequest {
-	uint64 namespace = 1;
-	string tablet = 2;
-	uint32 dstGroup = 3;
+  uint64 namespace = 1;
+  string tablet = 2;
+  uint32 dstGroup = 3;
 }
 
 message ApplyLicenseRequest {
-    bytes license = 1;
+  bytes license = 1;
 }
 
 message SnapshotMeta {
-	uint64 client_ts = 1;
-	uint32 group_id = 2;
+  uint64 client_ts = 1;
+  uint32 group_id = 2;
 }
 
 // Status describes a general status response.
 // code: 0 = success, 0 != failure.
 message Status {
-	int32 code = 1;
-	string msg = 2;
+  int32 code = 1;
+  string msg = 2;
 }
 
-// Backups record all data from since_ts to read_ts.
-// With incremental backups, the read_ts of the first backup becomes
-// the since_ts of the second backup.
+// Backups record all data from since_ts to read_ts. With incremental backups,
+// the read_ts of the first backup becomes the since_ts of the second backup.
 // Incremental backups can be disabled using the force_full field.
 message BackupRequest {
-	uint64 read_ts = 1;
-	uint64 since_ts = 2;
-	uint32 group_id = 3;
-	string unix_ts = 4;
-	string destination = 5;
-	string access_key = 6;
-	string secret_key = 7;
-	string session_token = 8;
+  uint64 read_ts = 1;
+  uint64 since_ts = 2;
+  uint32 group_id = 3;
+  string unix_ts = 4;
+  string destination = 5;
+  string access_key = 6;
+  string secret_key = 7;
+  string session_token = 8;
 
-	// True if no credentials should be used to access the S3 or minio bucket.
-	// For example, when using a bucket with a public policy.
-	bool anonymous = 9;
+  // True if no credentials should be used to access the S3 or minio bucket.
+  // For example, when using a bucket with a public policy.
+  bool anonymous = 9;
 
-	// The predicates to backup. All other predicates present in the group (e.g
-	// stale data from a predicate move) will be ignored.
-	repeated string predicates = 10;
+  // The predicates to backup. All other predicates present in the group (e.g
+  // stale data from a predicate move) will be ignored.
+  repeated string predicates = 10;
 
-	bool force_full = 11;
+  bool force_full = 11;
 }
 
 message BackupResponse {
-	repeated DropOperation drop_operations = 1;
+  repeated DropOperation drop_operations = 1;
 }
 
 message DropOperation {
-	enum DropOp {
-		ALL = 0;
-		DATA = 1;
-		ATTR = 2;
-		NS = 3;
-	}
-	DropOp drop_op    = 1;
-	// When drop_op is ATTR, drop_value will be the name of the ATTR; empty otherwise.
-	string drop_value = 2;
+  enum DropOp {
+    ALL = 0;
+    DATA = 1;
+    ATTR = 2;
+    NS = 3;
+  }
+  DropOp drop_op = 1;
+  // When drop_op is ATTR, drop_value will be the name of the ATTR; empty
+  // otherwise.
+  string drop_value = 2;
 }
 
 message ExportRequest {
-	uint32  group_id = 1;  // Group id to back up.
-	uint64  read_ts  = 2;
-	int64   unix_ts  = 3;
-	string  format   = 4;
+  uint32 group_id = 1;  // Group id to back up.
+  uint64 read_ts = 2;
+  int64 unix_ts = 3;
+  string format = 4;
 
-	string destination = 5;
+  string destination = 5;
 
-	// These credentials are used to access the S3 or minio bucket.
-	string access_key = 6;
-	string secret_key = 7;
-	string session_token = 8;
-	bool anonymous = 9;
+  // These credentials are used to access the S3 or minio bucket.
+  string access_key = 6;
+  string secret_key = 7;
+  string session_token = 8;
+  bool anonymous = 9;
 
-	uint64 namespace = 10;
+  uint64 namespace = 10;
 }
 
 message ExportResponse {
-	// 0 indicates a success, and a non-zero code indicates failure
-	int32 code = 1;
-	string msg = 2;
-	repeated string files = 3;
+  // 0 indicates a success, and a non-zero code indicates failure
+  int32 code = 1;
+  string msg = 2;
+  repeated string files = 3;
 }
 
 // A key stored in the format used for writing backups.
@@ -704,39 +721,39 @@ message BackupKey {
   uint64 start_uid = 4;
   string term = 5;
   uint32 count = 6;
-	uint64 namespace = 7;
+  uint64 namespace = 7;
 }
 
 // A posting list stored in the format used for writing backups.
 message BackupPostingList {
-	repeated uint64 uids = 1;
-	repeated Posting postings = 2;
-	uint64 commit_ts = 3;
+  repeated uint64 uids = 1;
+  repeated Posting postings = 2;
+  uint64 commit_ts = 3;
   repeated uint64 splits = 4;
-	bytes uid_bytes = 5;
+  bytes uid_bytes = 5;
 }
 
 message UpdateGraphQLSchemaRequest {
-	uint64                start_ts       = 1;
-	string                graphql_schema = 2;
-	repeated SchemaUpdate dgraph_preds   = 3;
-	repeated TypeUpdate   dgraph_types   = 4;
+  uint64 start_ts = 1;
+  string graphql_schema = 2;
+  repeated SchemaUpdate dgraph_preds = 3;
+  repeated TypeUpdate dgraph_types = 4;
 }
 
 message UpdateGraphQLSchemaResponse {
-	uint64 uid = 1;
+  uint64 uid = 1;
 }
 
 // BulkMeta stores metadata from the map phase of the bulk loader.
 message BulkMeta {
-	int64 edge_count = 1;
-	map<string, SchemaUpdate> schema_map = 2;
-	repeated TypeUpdate types = 3;
+  int64 edge_count = 1;
+  map<string, SchemaUpdate> schema_map = 2;
+  repeated TypeUpdate types = 3;
 }
 
 message DeleteNsRequest {
-	uint32 group_id = 1;
-	uint64 namespace = 2;
+  uint32 group_id = 1;
+  uint64 namespace = 2;
 }
 
-// vim: noexpandtab sw=2 ts=2
+// vim: expandtab sw=2 ts=2
