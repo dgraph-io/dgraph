@@ -50,8 +50,8 @@ type predsAndvars struct {
 func (s *Server) Login(ctx context.Context,
 	request *api.LoginRequest) (*api.Response, error) {
 
-	if worker.Config.CloudMode && request.GetNamespace() != x.GalaxyNamespace {
-		return nil, errors.New("Operation is not allowed in cloud mode.")
+	if !shouldAllowAcls(request.GetNamespace()) {
+		return nil, errors.New("operation is not allowed in cloud mode")
 	}
 
 	if err := x.HealthCheck(); err != nil {
@@ -803,9 +803,15 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 			case isAclPredMutation(gmu.Del):
 				return errors.Errorf("ACL predicates can't be deleted")
 			}
-			if allowNonGalaxyGuardian(userData.namespace) {
-				return nil
+			if !shouldAllowAcls(userData.namespace) {
+				for _, pred := range preds {
+					if x.IsAclPredicate(pred) {
+						return status.Errorf(codes.PermissionDenied,
+							"unauthorized to mutate acl predicates: %s\n", pred)
+					}
+				}
 			}
+			return nil
 		}
 		result := authorizePreds(ctx, userData, preds, acl.Write)
 		if len(result.blocked) > 0 {
@@ -915,7 +921,8 @@ func logAccess(log *accessEntry) {
 	}
 }
 
-func allowNonGalaxyGuardian(ns uint64) bool {
+// With cloud mode enabled, we don't allow ACL operations from any of the non-galaxy namespace.
+func shouldAllowAcls(ns uint64) bool {
 	return !worker.Config.CloudMode || ns == x.GalaxyNamespace
 }
 
@@ -952,9 +959,16 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) er
 		groupIds = userData.groupIds
 		namespace = userData.namespace
 
-		if x.IsGuardian(groupIds) && allowNonGalaxyGuardian(namespace) {
-			// Members of guardian groups are allowed to query anything.
-			return nil, nil, nil
+		if x.IsGuardian(groupIds) && shouldAllowAcls(namespace) {
+			if shouldAllowAcls(userData.namespace) {
+				// Members of guardian groups are allowed to query anything.
+				return nil, nil, nil
+			}
+			blocked := make(map[string]struct{})
+			for _, pred := range x.AllACLPredicates() {
+				blocked[pred] = struct{}{}
+			}
+			return blocked, nil, nil
 		}
 
 		result := authorizePreds(ctx, userData, preds, acl.Read)
@@ -979,7 +993,7 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) er
 	if len(blockedPreds) != 0 {
 		// For GraphQL requests, we allow filtered access to the ACL predicates.
 		// Filter for user_id and group_id is applied for the currently logged in user.
-		if graphql && allowNonGalaxyGuardian(namespace) {
+		if graphql && shouldAllowAcls(namespace) {
 			for _, gq := range parsedReq.Query {
 				addUserFilterToQuery(gq, userId, groupIds)
 			}
@@ -1039,9 +1053,16 @@ func authorizeSchemaQuery(ctx context.Context, er *query.ExecutionResult) error 
 		}
 
 		groupIds := userData.groupIds
-		if x.IsGuardian(groupIds) && allowNonGalaxyGuardian(userData.namespace) {
-			// Members of guardian groups are allowed to query anything.
-			return nil, nil
+		if x.IsGuardian(groupIds) && shouldAllowAcls(userData.namespace) {
+			if shouldAllowAcls(userData.namespace) {
+				// Members of guardian groups are allowed to query anything.
+				return nil, nil
+			}
+			blocked := make(map[string]struct{})
+			for _, pred := range x.AllACLPredicates() {
+				blocked[pred] = struct{}{}
+			}
+			return blocked, nil
 		}
 		result := authorizePreds(ctx, userData, preds, acl.Read)
 		return result.blocked, nil

@@ -109,7 +109,6 @@ func (cache *aclCache) update(ns uint64, groups []acl.Group) {
 
 func (cache *aclCache) authorizePredicate(groups []string, predicate string,
 	operation *acl.Operation) error {
-
 	if x.IsAclPredicate(x.ParseAttr(predicate)) {
 		return errors.Errorf("only groot is allowed to access the ACL predicate: %s", predicate)
 	}
