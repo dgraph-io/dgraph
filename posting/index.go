@@ -768,7 +768,7 @@ func (rb *IndexRebuild) DropIndexes(ctx context.Context) error {
 	prefixes = append(prefixes, prefixesToDropReverseEdges(ctx, rb)...)
 	prefixes = append(prefixes, prefixesToDropCountIndex(ctx, rb)...)
 	glog.Infof("Deleting indexes for %s", rb.Attr)
-	return pstore.DropPrefixNonBlocking(rb.StartTs, prefixes...)
+	return pstore.DropPrefix(prefixes...)
 }
 
 // BuildData updates data.
@@ -1224,29 +1224,27 @@ func DeleteAll() error {
 
 // DeleteData deletes all data but leaves types and schema intact.
 func DeleteData() error {
-	return pstore.DropPrefix([]byte{x.DefaultPrefix})
+	return pstore.DropPrefixBlocking([]byte{x.DefaultPrefix})
 }
 
-// DeletePredicateNonBlocking logically deletes all entries and indices below deleteTs for a given
-// predicate. Unlike DeletePredicate, this does not blocks the writes.
-func DeletePredicateNonBlocking(ctx context.Context, attr string, deleteTs uint64) error {
-	glog.Infof("Dropping predicate: [%s]", attr)
-	prefix := x.PredicatePrefix(attr)
-	if err := pstore.DropPrefixNonBlocking(deleteTs, prefix); err != nil {
-		return err
-	}
-
-	return schema.State().Delete(attr)
-}
-
-// DeletePredicate deletes all entries and indices for a given predicate.
+// DeletePredicate deletes all entries and indices for a given predicate. The delete may be logical
+// based on DB options set.
 func DeletePredicate(ctx context.Context, attr string) error {
 	glog.Infof("Dropping predicate: [%s]", attr)
 	prefix := x.PredicatePrefix(attr)
 	if err := pstore.DropPrefix(prefix); err != nil {
 		return err
 	}
+	return schema.State().Delete(attr)
+}
 
+// DeletePredicateBlocking deletes all entries and indices for a given predicate.
+func DeletePredicateBlocking(ctx context.Context, attr string) error {
+	glog.Infof("Dropping predicate: [%s]", attr)
+	prefix := x.PredicatePrefix(attr)
+	if err := pstore.DropPrefixBlocking(prefix); err != nil {
+		return err
+	}
 	return schema.State().Delete(attr)
 }
 

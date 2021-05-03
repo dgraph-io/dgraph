@@ -97,15 +97,12 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *pb.KVS) error {
 
 				glog.Infof("Predicate being received: %v", pk.Attr)
 				if kv.StreamId == CleanPredicate {
-					// Delete on all nodes. For the predicate, delete all the data that lies below
-					// readTs - 1 (kv.ExpiresAt - 1).
-					p := &pb.Proposal{CleanPredicate: pk.Attr, StartTs: kv.ExpiresAt - 1}
+					// Delete on all nodes.
+					p := &pb.Proposal{CleanPredicate: pk.Attr}
 					if err := n.proposeAndWait(ctx, p); err != nil {
 						glog.Errorf("Error while cleaning predicate %v %v\n", pk.Attr, err)
 						return err
 					}
-					// Reset the ExpiresAt.
-					kv.ExpiresAt = 0
 				}
 			}
 
@@ -226,11 +223,7 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 		// know that they are no longer serving this predicate, before they delete it from their
 		// state. Without this checksum, the members could end up deleting the predicate and then
 		// serve a request asking for that predicate, causing Jepsen failures.
-		p := &pb.Proposal{
-			CleanPredicate:   in.Predicate,
-			ExpectedChecksum: in.ExpectedChecksum,
-			StartTs:          in.ReadTs,
-		}
+		p := &pb.Proposal{CleanPredicate: in.Predicate, ExpectedChecksum: in.ExpectedChecksum}
 		return &emptyPayload, groups().Node.proposeAndWait(ctx, p)
 	}
 	if err := posting.Oracle().WaitForTs(ctx, in.ReadTs); err != nil {
@@ -311,10 +304,6 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error
 		if in.SinceTs == 0 {
 			// When doing Phase I of predicate move, receiver should clean the predicate.
 			kv.StreamId = CleanPredicate
-			// Using ExpiresAt as the dummy for passing in the read ts. Receiver will use it for
-			// cleaning the predicate data that lies below this readTs. Receiver should reset this
-			// value.
-			kv.ExpiresAt = in.ReadTs
 		}
 		badger.KVToBuffer(kv, buf)
 

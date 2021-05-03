@@ -270,7 +270,7 @@ func TestRebuildTokIndex(t *testing.T) {
 	}
 	prefixes, err := prefixesForTokIndexes(context.Background(), &rb)
 	require.NoError(t, err)
-	require.NoError(t, pstore.DropPrefixNonBlocking(rb.StartTs, prefixes...))
+	require.NoError(t, pstore.DropPrefixNonBlocking(prefixes...))
 	require.NoError(t, rebuildTokIndex(context.Background(), &rb))
 
 	// Check index entries in data store.
@@ -323,7 +323,7 @@ func TestRebuildTokIndexWithDeletion(t *testing.T) {
 	}
 	prefixes, err := prefixesForTokIndexes(context.Background(), &rb)
 	require.NoError(t, err)
-	require.NoError(t, pstore.DropPrefixNonBlocking(rb.StartTs, prefixes...))
+	require.NoError(t, pstore.DropPrefix(prefixes...))
 	require.NoError(t, rebuildTokIndex(context.Background(), &rb))
 
 	// Mutate the schema (the index in name2 is deleted) and rebuild the index.
@@ -337,7 +337,7 @@ func TestRebuildTokIndexWithDeletion(t *testing.T) {
 	}
 	prefixes, err = prefixesForTokIndexes(context.Background(), &rb)
 	require.NoError(t, err)
-	require.NoError(t, pstore.DropPrefixNonBlocking(rb.StartTs, prefixes...))
+	require.NoError(t, pstore.DropPrefix(prefixes...))
 	require.NoError(t, rebuildTokIndex(context.Background(), &rb))
 
 	// Check index entries in data store.
