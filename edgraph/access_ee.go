@@ -959,7 +959,7 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) er
 		groupIds = userData.groupIds
 		namespace = userData.namespace
 
-		if x.IsGuardian(groupIds) && shouldAllowAcls(namespace) {
+		if x.IsGuardian(groupIds) {
 			if shouldAllowAcls(userData.namespace) {
 				// Members of guardian groups are allowed to query anything.
 				return nil, nil, nil
@@ -1053,7 +1053,7 @@ func authorizeSchemaQuery(ctx context.Context, er *query.ExecutionResult) error 
 		}
 
 		groupIds := userData.groupIds
-		if x.IsGuardian(groupIds) && shouldAllowAcls(userData.namespace) {
+		if x.IsGuardian(groupIds) {
 			if shouldAllowAcls(userData.namespace) {
 				// Members of guardian groups are allowed to query anything.
 				return nil, nil
@@ -1107,7 +1107,7 @@ func AuthGuardianOfTheGalaxy(ctx context.Context) error {
 	}
 	ns, err := x.ExtractJWTNamespace(ctx)
 	if err != nil {
-		return errors.Wrap(err, "Authorize guradian of the galaxy, extracting jwt token, error:")
+		return errors.Wrap(err, "Authorize guardian of the galaxy, extracting jwt token, error:")
 	}
 	if ns != 0 {
 		return errors.New("Only guardian of galaxy is allowed to do this operation")
