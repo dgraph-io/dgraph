@@ -20,11 +20,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/worker"
+	"github.com/pkg/errors"
 )
 
 type taskInput struct {
@@ -32,6 +35,7 @@ type taskInput struct {
 }
 
 func resolveTask(ctx context.Context, q schema.Query) *resolve.Resolved {
+	// Get Task ID.
 	input, err := getTaskInput(q)
 	if err != nil {
 		return resolve.EmptyResult(q, err)
@@ -39,11 +43,19 @@ func resolveTask(ctx context.Context, q schema.Query) *resolve.Resolved {
 	if input.Id == "" {
 		return resolve.EmptyResult(q, fmt.Errorf("task ID is missing"))
 	}
+	taskId, err := strconv.ParseUint(input.Id, 0, 64)
+	if err != nil {
+		err = errors.Wrapf(err, "invalid task ID: %s", input.Id)
+		return resolve.EmptyResult(q, err)
+	}
 
-	meta, err := worker.Tasks.Get(input.Id)
+	// Get TaskMeta from network.
+	req := &pb.TaskStatusRequest{TaskId: taskId}
+	resp, err := worker.TaskStatusOverNetwork(context.Background(), req)
 	if err != nil {
 		return resolve.EmptyResult(q, err)
 	}
+	meta := worker.TaskMeta(resp.GetTaskMeta())
 	return resolve.DataResult(
 		q,
 		map[string]interface{}{q.Name(): map[string]interface{}{

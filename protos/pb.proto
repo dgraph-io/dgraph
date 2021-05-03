@@ -562,6 +562,7 @@ service Worker {
 	rpc Subscribe(SubscriptionRequest) returns (stream badgerpb3.KVList) {}
 	rpc UpdateGraphQLSchema(UpdateGraphQLSchemaRequest) returns (UpdateGraphQLSchemaResponse) {}
 	rpc DeleteNamespace (DeleteNsRequest)              returns (Status) {}
+	rpc TaskStatus (TaskStatusRequest) returns (TaskStatusResponse) {}
 }
 
 message SubscriptionRequest {
@@ -737,6 +738,14 @@ message BulkMeta {
 message DeleteNsRequest {
 	uint32 group_id = 1;
 	uint64 namespace = 2;
+}
+
+message TaskStatusRequest {
+	uint64 task_id = 1;
+}
+
+message TaskStatusResponse {
+	uint64 task_meta = 1;
 }
 
 // vim: noexpandtab sw=2 ts=2
