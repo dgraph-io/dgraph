@@ -116,6 +116,7 @@ func (t tasks) cleanup() {
 // worker loops forever, running queued tasks one at a time. Any returned errors are logged.
 func (t tasks) worker() {
 	shouldCleanup := time.NewTicker(time.Hour)
+	defer shouldCleanup.Stop()
 	for {
 		// If the server is shutting down, return immediately. Else, fetch a task from the queue.
 		var task taskRequest

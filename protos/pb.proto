@@ -626,7 +626,7 @@ message Status {
 // Incremental backups can be disabled using the force_full field.
 message BackupRequest {
 	uint64 read_ts = 1;
-  	uint64 since_ts = 2;
+	uint64 since_ts = 2;
 	uint32 group_id = 3;
 	string unix_ts = 4;
 	string destination = 5;
