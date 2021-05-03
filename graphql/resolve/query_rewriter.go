@@ -781,7 +781,7 @@ func (authRw *authRewriter) addAuthQueries(
 
 		// For an interface having Auth rules in some of the implementing types, len(qrys) = 0
 		// indicates that None of the type satisfied the Auth rules, We must return Empty Query here.
-		if implementingTypesHasAuthRules == true && len(qrys) == 0 {
+		if implementingTypesHasAuthRules && len(qrys) == 0 {
 			return []*gql.GraphQuery{{
 				Attr: dgQuery[0].Attr + "()",
 			}}
@@ -806,7 +806,7 @@ func (authRw *authRewriter) addAuthQueries(
 
 		// Adding the case of Query on interface in which None of the implementing type have
 		// Auth Query Rules, in that case, we also return simple query.
-		if typ.IsInterface() == true && implementingTypesHasAuthRules == false {
+		if typ.IsInterface() && !implementingTypesHasAuthRules {
 			return dgQuery
 		}
 
@@ -822,7 +822,7 @@ func (authRw *authRewriter) addAuthQueries(
 	}
 
 	// build a query like
-	//   Todo1 as var(func: ... ) @filter(...)
+	//   Todo_1 as var(func: ... ) @filter(...)
 	// that has the filter from the user query in it.  This is then used as
 	// the starting point for other auth queries.
 	//
@@ -833,6 +833,7 @@ func (authRw *authRewriter) addAuthQueries(
 		Func:   dgQuery[0].Func,
 		Filter: dgQuery[0].Filter,
 	}
+	varQry.Func.UID = dgQuery[0].UID
 
 	// build the root auth query like
 	//   TodoRoot as var(func: uid(Todo1), orderasc: ..., first: ..., offset: ...) @filter(... type auth queries ...)
@@ -849,6 +850,13 @@ func (authRw *authRewriter) addAuthQueries(
 			Args: []gql.Arg{{Value: authRw.varName}},
 		},
 		Filter: filter,
+	}
+	// if @auth rules are applied on DQL query and the root function is of
+	// uid(0x1, 0x2,...) then the root query will be written as:-
+	// typeRoot as var(func: uid(0x1, 0x2, 0x3), ....) @filter
+	if len(dgQuery[0].UID) != 0 {
+		rootQry.Func.UID = dgQuery[0].UID
+		rootQry.Func.Args = nil
 	}
 
 	// The user query doesn't need the filter parameter anymore,

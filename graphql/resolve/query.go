@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strconv"
+	"strings"
 
 	"github.com/golang/glog"
 	otrace "go.opencensus.io/trace"
@@ -197,7 +198,6 @@ func (qr *customDQLQueryResolver) rewriteAndExecute(ctx context.Context,
 		return resolved
 	}
 
-	dgQuery := query.DQLQuery()
 	args := query.Arguments()
 	vars := make(map[string]string)
 	for k, v := range args {
@@ -211,9 +211,37 @@ func (qr *customDQLQueryResolver) rewriteAndExecute(ctx context.Context,
 		vars["$"+k] = vStr
 	}
 
+	dqlReq := gql.Request{
+		Str:       dgQuery,
+		Variables: vars,
+	}
+	parsedResult, err := gql.Parse(dqlReq)
+	parsedResult.Query[0].Attr = parsedResult.Query[0].Alias
+	parsedResult.Query[0].Alias = ""
+	if err != nil {
+		return emptyResult(schema.GQLWrapf(err, "Could not parse DQL query"))
+	}
+
+	customClaims, _ := query.GetAuthMeta().ExtractCustomClaims(ctx)
+	authRw := &authRewriter{
+		authVariables: customClaims.AuthVariables,
+		varGen:        NewVariableGenerator(),
+		selector:      getAuthSelector(query.QueryType()),
+		parentVarName: query.ConstructedFor().Name() + "Root",
+	}
+	authRw.hasAuthRules = hasAuthRules(query, authRw)
+	authRw.hasCascade = hasCascadeDirective(query)
+
+	dgGraph, err := rewriteWithAuth(parsedResult.Query, query.Schema(), authRw)
+	if err != nil {
+		return emptyResult(schema.GQLWrapf(err, "rewriting failed"))
+	}
+
+	qry := dgraph.AsString(dgGraph)
+
 	queryTimer := newtimer(ctx, &dgraphQueryDuration.OffsetDuration)
 	queryTimer.Start()
-	resp, err := qr.executor.Execute(ctx, &dgoapi.Request{Query: dgQuery, Vars: vars,
+	resp, err := qr.executor.Execute(ctx, &dgoapi.Request{Query: qry, Vars: vars,
 		ReadOnly: true}, nil)
 	queryTimer.Stop()
 
@@ -230,6 +258,49 @@ func (qr *customDQLQueryResolver) rewriteAndExecute(ctx context.Context,
 	resolved := DataResult(query, respJson, nil)
 	resolved.Extensions = ext
 	return resolved
+}
+
+func extractType(dgQuery *gql.GraphQuery) string {
+	typeName := extractTypeFromFunc(dgQuery.Func)
+	if typeName != "" {
+		return typeName
+	}
+
+	typeName = extractTypeFromFilter(dgQuery.Filter)
+	return typeName
+}
+
+func extractTypeFromFilter(f *gql.FilterTree) string {
+	for _, fltr := range f.Child {
+		typeName := extractTypeFromFilter(fltr)
+		if typeName != "" {
+			return typeName
+		}
+	}
+	return extractTypeFromFunc(f.Func)
+}
+
+func extractTypeFromFunc(f *gql.Function) string {
+	switch f.Name {
+	case "type":
+		return f.Args[0].Value
+	case "eq", "allofterms", "anyofterms", "gt", "le":
+		return strings.Split(f.Attr, ".")[0]
+	}
+	return ""
+}
+
+func rewriteWithAuth(dgQuery []*gql.GraphQuery, sch schema.Schema, authRw *authRewriter) ([]*gql.GraphQuery, error) {
+	qry := dgQuery[0]
+	typeName := extractType(qry)
+	if typeName == "" {
+		return dgQuery, nil
+	}
+
+	typ := sch.Type(typeName)
+	rbac := authRw.evaluateStaticRules(typ)
+	dgQuery = authRw.addAuthQueries(typ, dgQuery, rbac)
+	return dgQuery, nil
 }
 
 func resolveIntrospection(ctx context.Context, q schema.Query) *Resolved {

@@ -178,6 +178,10 @@ func writeFilterFunction(b *strings.Builder, f *gql.Function) {
 		writeUIDFunc(b, f.UID, f.Args)
 	default:
 		x.Check2(b.WriteString(fmt.Sprintf("%s(", f.Name)))
+		if f.Attr != "" {
+			x.Check2(b.WriteString(f.Attr))
+			x.Check2(b.WriteRune(','))
+		}
 		writeFilterArguments(b, f.Args)
 		x.Check2(b.WriteRune(')'))
 	}

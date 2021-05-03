@@ -972,3 +972,26 @@ type Home @auth(
     favouriteMember: HomeMember
 }
 # union testing - end
+
+
+## custom DQL testing start
+
+type GroupedIssueMapQ @remote {
+    groupby: [FriendMap] @remoteResponse(name: "@groupby")
+}
+
+type IssueMap {
+	author: ID!
+	count: Int
+}
+
+type Query {
+	queryIssueGroupedByAuthor: [GroupedIssueMapQ] @custom(dql: "
+    query{
+        queryIssueGroupedByAuthor(func: type(Issue)) @groupby(author: Issue.Author) {
+            count(uid)
+        }
+    }")
+}
+
+## custom DQL testing end

@@ -113,6 +113,7 @@ type Schema interface {
 	IsFederated() bool
 	SetMeta(meta *metaInfo)
 	Meta() *metaInfo
+	Type(typeName string) Type
 }
 
 // An Operation is a single valid GraphQL operation.  It contains either
@@ -224,6 +225,7 @@ type Query interface {
 	// query
 	RepresentationsArg() (*EntityRepresentations, error)
 	AuthFor(jwtVars map[string]interface{}) Query
+	Schema() Schema
 }
 
 // A Type is a GraphQL type like: Float, T, T! and [T!]!.  If it's not a list, then
@@ -398,6 +400,17 @@ func (s *schema) SetMeta(meta *metaInfo) {
 
 func (s *schema) Meta() *metaInfo {
 	return s.meta
+}
+
+func (s *schema) Type(typeName string) Type {
+	if s.typeNameAst[typeName] != nil {
+		return &astType{
+			typ:             &ast.Type{NamedType: typeName},
+			inSchema:        s,
+			dgraphPredicate: s.dgraphPredicate,
+		}
+	}
+	return nil
 }
 
 func (o *operation) IsQuery() bool {
@@ -1785,6 +1798,10 @@ func (q *query) AuthFor(jwtVars map[string]interface{}) Query {
 
 func (q *query) Rename(newName string) {
 	q.field.Name = newName
+}
+
+func (q *query) Schema() Schema {
+	return q.op.inSchema
 }
 
 func (q *query) Name() string {
