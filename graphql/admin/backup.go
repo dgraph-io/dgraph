@@ -19,6 +19,7 @@ package admin
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
@@ -34,27 +35,39 @@ type backupInput struct {
 
 func resolveBackup(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
 	glog.Info("Got backup request")
+	if !worker.EnterpriseEnabled() {
+		err := fmt.Errorf("you must enable enterprise features first. " +
+			"Supply the appropriate license file to Dgraph Zero using the HTTP endpoint.")
+		return resolve.EmptyResult(m, err), false
+	}
 
 	input, err := getBackupInput(m)
 	if err != nil {
 		return resolve.EmptyResult(m, err), false
 	}
+	if input.Destination == "" {
+		err := fmt.Errorf("you must specify a 'destination' value")
+		return resolve.EmptyResult(m, err), false
+	}
 
-	err = worker.ProcessBackupRequest(context.Background(), &pb.BackupRequest{
+	req := &pb.BackupRequest{
 		Destination:  input.Destination,
 		AccessKey:    input.AccessKey,
 		SecretKey:    input.SecretKey,
 		SessionToken: input.SessionToken,
 		Anonymous:    input.Anonymous,
-	}, input.ForceFull)
-
+	}
+	taskId, err := worker.Tasks.Enqueue(req)
 	if err != nil {
 		return resolve.EmptyResult(m, err), false
 	}
 
+	msg := fmt.Sprintf("Backup queued with ID %s", taskId)
+	data := response("Success", msg)
+	data["taskId"] = taskId
 	return resolve.DataResult(
 		m,
-		map[string]interface{}{m.Name(): response("Success", "Backup completed.")},
+		map[string]interface{}{m.Name(): data},
 		nil,
 	), true
 }

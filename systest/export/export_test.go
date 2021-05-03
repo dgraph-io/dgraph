@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/dgraph-io/dgo/v210"
@@ -52,20 +53,17 @@ func TestExportSchemaToMinio(t *testing.T) {
 	mc.MakeBucket(bucketName, "")
 
 	setupDgraph(t, moviesData, movieSchema)
-	result := requestExport(t, minioDest, "rdf")
+	requestExport(t, minioDest, "rdf")
 
-	require.Equal(t, "Success", getFromJSON(result, "data", "export", "response", "code").(string))
-	require.Equal(t, "Export completed.",
-		getFromJSON(result, "data", "export", "response", "message").(string))
-
-	var files []string
-	for _, f := range getFromJSON(result, "data", "export", "exportedFiles").([]interface{}) {
-		files = append(files, f.(string))
+	schemaFile := ""
+	doneCh := make(chan struct{})
+	defer close(doneCh)
+	for obj := range mc.ListObjectsV2(bucketName, "dgraph.", true, doneCh) {
+		if strings.Contains(obj.Key, ".schema.gz") {
+			schemaFile = obj.Key
+		}
 	}
-	require.Equal(t, 3, len(files))
-
-	schemaFile := files[1]
-	require.Contains(t, schemaFile, ".schema.gz")
+	require.NotEmpty(t, schemaFile)
 
 	object, err := mc.GetObject(bucketName, schemaFile, minio.GetObjectOptions{})
 	require.NoError(t, err)
@@ -113,16 +111,7 @@ func TestExportAndLoadJson(t *testing.T) {
 	setupDgraph(t, moviesData, movieSchema)
 
 	// Run export
-	result := requestExport(t, "/data/export-data", "json")
-	require.Equal(t, "Success", getFromJSON(result, "data", "export", "response", "code").(string))
-	require.Equal(t, "Export completed.",
-		getFromJSON(result, "data", "export", "response", "message").(string))
-
-	var files []string
-	for _, f := range getFromJSON(result, "data", "export", "exportedFiles").([]interface{}) {
-		files = append(files, f.(string))
-	}
-	require.Equal(t, 3, len(files))
+	requestExport(t, "/data/export-data", "json")
 	copyToLocalFs(t)
 
 	q := `{ q(func:has(movie)) { count(uid) } }`
@@ -140,8 +129,11 @@ func TestExportAndLoadJson(t *testing.T) {
 	require.JSONEq(t, `{"data": {"q": [{"count":0}]}}`, res)
 
 	// Live load the exported data
-	base := filepath.Dir(files[0])
-	dir := filepath.Join(copyExportDir, base)
+	files, err := ioutil.ReadDir(copyExportDir)
+	require.NoError(t, err)
+	require.Len(t, files, 1)
+	exportName := files[0].Name()
+	dir := filepath.Join(copyExportDir, exportName)
 	loadData(t, dir, "json")
 
 	res = runQuery(t, q)
@@ -175,16 +167,7 @@ func TestExportAndLoadJsonFacets(t *testing.T) {
 	setupDgraph(t, facetsData, facetsSchema)
 
 	// Run export
-	result := requestExport(t, "/data/export-data", "json")
-	require.Equal(t, "Success", getFromJSON(result, "data", "export", "response", "code").(string))
-	require.Equal(t, "Export completed.",
-		getFromJSON(result, "data", "export", "response", "message").(string))
-
-	var files []string
-	for _, f := range getFromJSON(result, "data", "export", "exportedFiles").([]interface{}) {
-		files = append(files, f.(string))
-	}
-	require.Equal(t, 3, len(files))
+	requestExport(t, "/data/export-data", "json")
 	copyToLocalFs(t)
 
 	checkRes := func() {
@@ -225,8 +208,11 @@ func TestExportAndLoadJsonFacets(t *testing.T) {
 	require.JSONEq(t, `{"data": {"q": []}}`, res)
 
 	// Live load the exported data and verify that exported data is loaded correctly.
-	base := filepath.Dir(files[0])
-	dir := filepath.Join(copyExportDir, base)
+	files, err := ioutil.ReadDir(copyExportDir)
+	require.NoError(t, err)
+	require.Len(t, files, 1)
+	exportName := files[0].Name()
+	dir := filepath.Join(copyExportDir, exportName)
 	loadData(t, dir, "json")
 
 	// verify that the state after loading the exported data as same.
@@ -299,14 +285,13 @@ func setupDgraph(t *testing.T, nquads, schema string) {
 	require.NoError(t, err)
 }
 
-func requestExport(t *testing.T, dest string, format string) map[string]interface{} {
+func requestExport(t *testing.T, dest string, format string) {
 	exportRequest := `mutation export($dst: String!, $f: String!) {
 		export(input: {destination: $dst, format: $f}) {
 			response {
 				code
-				message
 			}
-			exportedFiles
+			taskId
 		}
 	}`
 
@@ -323,19 +308,10 @@ func requestExport(t *testing.T, dest string, format string) map[string]interfac
 
 	resp, err := http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
-	buf, err := ioutil.ReadAll(resp.Body)
-	require.NoError(t, err)
 
-	var result map[string]interface{}
-	require.NoError(t, json.Unmarshal(buf, &result))
-
-	return result
-}
-
-func getFromJSON(j map[string]interface{}, path ...string) interface{} {
-	var res interface{} = j
-	for _, p := range path {
-		res = res.(map[string]interface{})[p]
-	}
-	return res
+	var data interface{}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
+	require.Equal(t, "Success", testutil.JsonGet(data, "data", "export", "response", "code").(string))
+	taskId := testutil.JsonGet(data, "data", "export", "taskId").(string)
+	testutil.WaitForTask(t, taskId, false)
 }
