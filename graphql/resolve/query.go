@@ -198,6 +198,7 @@ func (qr *customDQLQueryResolver) rewriteAndExecute(ctx context.Context,
 		return resolved
 	}
 
+	dgQuery := query.DQLQuery()
 	args := query.Arguments()
 	vars := make(map[string]string)
 	for k, v := range args {
