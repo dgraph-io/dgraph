@@ -108,16 +108,7 @@ type BackupRes struct {
 	err error
 }
 
-func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull bool) error {
-	if !EnterpriseEnabled() {
-		return errors.New("you must enable enterprise features first. " +
-			"Supply the appropriate license file to Dgraph Zero using the HTTP endpoint.")
-	}
-
-	if req.Destination == "" {
-		return errors.Errorf("you must specify a 'destination' value")
-	}
-
+func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest) error {
 	if err := x.HealthCheck(); err != nil {
 		glog.Errorf("Backup canceled, not ready to accept requests: %s", err)
 		return err
@@ -160,11 +151,8 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull 
 		return err
 	}
 
-	// Use the readTs as the sinceTs for the next backup. If not found, use the
-	// SinceTsDeprecated value from the latest manifest.
 	req.SinceTs = latestManifest.ValidReadTs()
-	if forceFull {
-		// To force a full backup we'll set the sinceTs to zero.
+	if req.ForceFull {
 		req.SinceTs = 0
 	} else {
 		if x.WorkerConfig.EncryptionKey != nil {
