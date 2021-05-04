@@ -2741,42 +2741,42 @@
     message: |-
       failed to rewrite mutation payload because duplicate XID found: S1
 
-- name: "Duplicate XIDs in single mutation for Interface"
-  gqlmutation: |
-    mutation addStudent($input: [AddStudentInput!]!) {
-      addStudent(input: $input) {
-        student {
-          xid
-          name
-          taughtBy {
-            xid
-            name
-            subject
-          }
-        }
-      }
-    }
-  gqlvariables: |
-    {
-      "input": [
-        {
-          "xid": "S1",
-          "name": "Stud1"
-        },
-        {
-          "xid": "S2",
-          "name": "Stud2",
-          "taughtBy": [
-            {"xid": "S1", "name": "Teacher1", "subject": "Sub1"}
-          ]
-        }
-      ]
-    }
-  explanation: "When duplicate XIDs are given as input for an Interface in a single mutation, it
-  should return error."
-  error:
-    message: |-
-      failed to rewrite mutation payload because duplicate XID found: S1
+#- name: "Duplicate XIDs in single mutation for Interface"
+#  gqlmutation: |
+#    mutation addStudent($input: [AddStudentInput!]!) {
+#      addStudent(input: $input) {
+#        student {
+#          xid
+#          name
+#          taughtBy {
+#            xid
+#            name
+#            subject
+#          }
+#        }
+#      }
+#    }
+#  gqlvariables: |
+#    {
+#      "input": [
+#        {
+#          "xid": "S1",
+#          "name": "Stud1"
+#        },
+#        {
+#          "xid": "S2",
+#          "name": "Stud2",
+#          "taughtBy": [
+#            {"xid": "S1", "name": "Teacher1", "subject": "Sub1"}
+#          ]
+#        }
+#      ]
+#    }
+#  explanation: "When duplicate XIDs are given as input for an Interface in a single mutation, it
+#  should return error."
+#  error:
+#    message: |-
+#      failed to rewrite mutation payload because duplicate XID found: S1
 
 # Additional Deletes
 #

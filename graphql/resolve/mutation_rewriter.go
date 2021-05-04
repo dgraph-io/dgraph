@@ -107,6 +107,9 @@ type xidMetadata struct {
 	seenAtTopLevel map[string]bool
 	// seenUIDs tells whether the UID is previously been seen during DFS traversal
 	seenUIDs map[string]bool
+	// interfaceVariableToTypes stores a map from interface variable to type to which the node
+	// belongs
+	interfaceVariableToTypes map[string]string
 }
 
 // A mutationBuilder can build a json mutation []byte from a mutationFragment
@@ -136,12 +139,14 @@ func (v *VariableGenerator) Next(typ schema.Type, xidName, xidVal string, auth b
 	// return previously allocated variable name for repeating xidVal
 	var key string
 	flagAndXidName := xidName
+	isIntefaceVariable := false
 
 	// We pass the xidName as "Int.xidName" to generate variable for existence query
 	// of interface type when id filed is inherited from interface and have interface Argument set
 	// Here we handle that case
 	if strings.Contains(flagAndXidName, ".") {
 		xidName = strings.Split(flagAndXidName, ".")[1]
+		isIntefaceVariable = true
 	}
 
 	if xidName == "" || xidVal == "" {
@@ -163,6 +168,9 @@ func (v *VariableGenerator) Next(typ schema.Type, xidName, xidVal string, auth b
 		// here we are using the assertion that field name or type name can't have "." in them
 		xidType, _ := typ.FieldOriginatedFrom(xidName)
 		key = xidType.Name() + "." + flagAndXidName + "." + xidVal
+		if !isIntefaceVariable {
+			key = key + typ.Name()
+		}
 	}
 
 	if varName, ok := v.xidVarNameMap[key]; ok {
@@ -204,9 +212,10 @@ func NewDeleteRewriter() MutationRewriter {
 // NewXidMetadata returns a new empty *xidMetadata for storing the metadata.
 func NewXidMetadata() *xidMetadata {
 	return &xidMetadata{
-		variableObjMap: make(map[string]map[string]interface{}),
-		seenAtTopLevel: make(map[string]bool),
-		seenUIDs:       make(map[string]bool),
+		variableObjMap:           make(map[string]map[string]interface{}),
+		seenAtTopLevel:           make(map[string]bool),
+		seenUIDs:                 make(map[string]bool),
+		interfaceVariableToTypes: make(map[string]string),
 	}
 }
 
@@ -1808,11 +1817,6 @@ func existenceQueries(
 					// considered a duplicate of the existing object, then return error.
 
 					if xidMetadata.isDuplicateXid(atTopLevel, variable, obj, srcField) {
-						// TODO(Jatin): Add this error for inherited @id field with interface arg.
-						//  Currently we don't return this error for the nested case when
-						//  at both root and nested level we have same value of @id fields
-						//  which have interface arg set and are inherited from same interface
-						//  but are in different implementing type, we currently treat that as reference.
 						err := errors.Errorf("duplicate XID found: %s", xidString)
 						retErrors = append(retErrors, err)
 						return nil, nil, retErrors
@@ -1854,6 +1858,18 @@ func existenceQueries(
 					interfaceTyp, varInterface := interfaceVariable(typ, varGen,
 						xid.Name(), xidString)
 					if interfaceTyp != nil {
+						if typeName, ok := xidMetadata.interfaceVariableToTypes[varInterface]; ok {
+							if typeName != typ.Name() {
+								err := errors.Errorf(
+									"using duplicate XID value: %s for XID: %s "+
+										"for two different implementing"+
+										" types of same interfaces: %s and"+
+										" %s", xidString, xid.Name(), typeName, typ.Name())
+								retErrors = append(retErrors, err)
+								return nil, nil, retErrors
+							}
+						}
+						xidMetadata.interfaceVariableToTypes[varInterface] = typ.Name()
 						queryInterface := checkXIDExistsQuery(varInterface, xidString, xid.Name(),
 							typ)
 						ret = append(ret, queryInterface)
