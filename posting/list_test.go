@@ -27,7 +27,6 @@ import (
 	"testing"
 
 	"github.com/dgraph-io/badger/v3"
-	"github.com/dgraph-io/badger/v3/options"
 	bpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/ristretto/z"
@@ -1508,7 +1507,7 @@ func TestMain(m *testing.M) {
 	dir, err := ioutil.TempDir("", "storetest_")
 	x.Check(err)
 
-	ps, err = badger.OpenManaged(badger.DefaultOptions(dir).WithDropMode(options.NonBlocking))
+	ps, err = badger.OpenManaged(badger.DefaultOptions(dir).WithAllowStopTheWorld(false))
 	x.Check(err)
 	// Not using posting list cache
 	Init(ps, 0)

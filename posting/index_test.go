@@ -270,7 +270,7 @@ func TestRebuildTokIndex(t *testing.T) {
 	}
 	prefixes, err := prefixesForTokIndexes(context.Background(), &rb)
 	require.NoError(t, err)
-	require.NoError(t, pstore.DropPrefixNonBlocking(prefixes...))
+	require.NoError(t, pstore.DropPrefix(prefixes...))
 	require.NoError(t, rebuildTokIndex(context.Background(), &rb))
 
 	// Check index entries in data store.

@@ -1224,7 +1224,7 @@ func DeleteAll() error {
 
 // DeleteData deletes all data but leaves types and schema intact.
 func DeleteData() error {
-	return pstore.DropPrefixBlocking([]byte{x.DefaultPrefix})
+	return pstore.DropPrefix([]byte{x.DefaultPrefix})
 }
 
 // DeletePredicate deletes all entries and indices for a given predicate. The delete may be logical
@@ -1238,7 +1238,8 @@ func DeletePredicate(ctx context.Context, attr string) error {
 	return schema.State().Delete(attr)
 }
 
-// DeletePredicateBlocking deletes all entries and indices for a given predicate.
+// DeletePredicateBlocking deletes all entries and indices for a given predicate. It also blocks the
+// writes.
 func DeletePredicateBlocking(ctx context.Context, attr string) error {
 	glog.Infof("Dropping predicate: [%s]", attr)
 	prefix := x.PredicatePrefix(attr)
