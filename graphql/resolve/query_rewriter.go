@@ -681,6 +681,10 @@ func rewriteWithAuth(dgQuery []*gql.GraphQuery, sch schema.Schema, authRw *authR
 
 	typ := sch.Type(typeName)
 	rbac := authRw.evaluateStaticRules(typ)
+	if rbac == schema.Negative {
+		emptyQuery := &gql.GraphQuery{Attr: qry.Attr + "()"}
+		return []*gql.GraphQuery{emptyQuery}, nil
+	}
 	dgQuery = authRw.addAuthQueries(typ, dgQuery, rbac)
 	return dgQuery, nil
 }
@@ -907,7 +911,12 @@ func (authRw *authRewriter) addAuthQueries(
 		Func:   dgQuery[0].Func,
 		Filter: dgQuery[0].Filter,
 	}
-	varQry.Func.UID = dgQuery[0].UID
+
+	// for the custom DQL query like `me(func: uid("0x1", "0x2"))`,
+	// we need to copy the uids to the root func.
+	if len(dgQuery[0].UID) != 0 {
+		varQry.Func.UID = dgQuery[0].UID
+	}
 
 	// build the root auth query like
 	//   TodoRoot as var(func: uid(Todo1), orderasc: ..., first: ..., offset: ...) @filter(... type auth queries ...)

@@ -977,21 +977,22 @@ type Home @auth(
 ## custom DQL testing start
 
 type GroupedIssueMapQ @remote {
-    groupby: [FriendMap] @remoteResponse(name: "@groupby")
+    groupby: [IssueMap] @remoteResponse(name: "@groupby")
 }
 
 type IssueMap {
-	author: ID!
+	owner: ID!
 	count: Int
 }
 
 type Query {
-	queryIssueGroupedByAuthor: [GroupedIssueMapQ] @custom(dql: "
+	queryIssueGroupedByOwner: [GroupedIssueMapQ] @custom(dql: """
     query{
-        queryIssueGroupedByAuthor(func: type(Issue)) @groupby(author: Issue.Author) {
+        queryIssueGroupedByOwner(func: type(Issue)) @groupby(owner: Issue.owner) {
             count(uid)
         }
-    }")
+    }"""
+    )
 }
 
 ## custom DQL testing end

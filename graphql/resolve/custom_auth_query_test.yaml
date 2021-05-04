@@ -1,21 +1,24 @@
-- name : "Simple DQL query"
+- name : "custom DQL query with @groupby"
   gqlquery: |
     query{
-      queryIssueGroupedByAuthor {
+      queryIssueGroupedByOwner {
         groupby {
-        author
-        count
+          owner
+          count
         } 
       }
     }
   jwtvar:
-    ROLE: "USER"
+    ROLE: "ADMIN"
     USER: "user1"
   dgquery: |-
-    queryIssueGroupedByAuthor(func: type(Person)) @groupby(friend: Person.friends) @filter(uid(Issue_Auth2)) {
-      count(uid)
-    }
-    Issue_1 as var(func: type(Issue))
-    Issue_Auth2 as var(func: uid(Issue_1)) @cascade {
-      Issue.owner : Issue.owner @filter(eq(User.username, "user1"))
+    query {
+      queryIssueGroupedByOwner(func: uid(GroupedIssueMapQRoot)) @groupby(owner : Issue.owner) {
+        count(uid)
+      }
+      GroupedIssueMapQRoot as var(func: uid(Issue_1)) @filter(uid(Issue_Auth2))
+      Issue_1 as var(func: type(Issue))
+      Issue_Auth2 as var(func: uid(Issue_1)) @cascade {
+        Issue.owner : Issue.owner @filter(eq(User.username, "user1"))
+      }
     }
