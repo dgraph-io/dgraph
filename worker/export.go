@@ -168,7 +168,7 @@ func (e *exporter) toJSON() (*bpb.KVList, error) {
 	}
 
 	continuing := false
-	mapStart := fmt.Sprintf("  {\"uid\":"+uidFmtStrJson+`,"namespace":"0x%x"`, e.uid, e.namespace)
+	mapStart := fmt.Sprintf("  {\"uid\":"+uidFmtStrJson+`,"namespace":"%#x"`, e.uid, e.namespace)
 	err := e.pl.IterateAll(e.readTs, 0, func(p *pb.Posting) error {
 		if continuing {
 			fmt.Fprint(bp, ",\n")
@@ -334,7 +334,7 @@ func toSchema(attr string, update *pb.SchemaUpdate) *bpb.KV {
 func toType(attr string, update pb.TypeUpdate) *bpb.KV {
 	var buf bytes.Buffer
 	ns, attr := x.ParseNamespaceAttr(attr)
-	x.Check2(buf.WriteString(fmt.Sprintf("[0x%x] type <%s> {\n", ns, attr)))
+	x.Check2(buf.WriteString(fmt.Sprintf("[%#x] type <%s> {\n", ns, attr)))
 	for _, field := range update.Fields {
 		x.Check2(buf.WriteString(fieldToString(field)))
 	}

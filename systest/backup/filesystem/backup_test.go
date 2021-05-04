@@ -372,8 +372,8 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 			backup(input: {destination: $dst, forceFull: $ff}) {
 				response {
 					code
-					message
 				}
+				taskId
 			}
 		}`
 
@@ -392,9 +392,12 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	resp, err := client.Post(adminUrl, "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
 	defer resp.Body.Close()
-	buf, err := ioutil.ReadAll(resp.Body)
-	require.NoError(t, err)
-	require.Contains(t, string(buf), "Backup completed.")
+
+	var data interface{}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
+	require.Equal(t, "Success", testutil.JsonGet(data, "data", "backup", "response", "code").(string))
+	taskId := testutil.JsonGet(data, "data", "backup", "taskId").(string)
+	testutil.WaitForTask(t, taskId, true)
 
 	// Verify that the right amount of files and directories were created.
 	common.CopyToLocalFs(t)
