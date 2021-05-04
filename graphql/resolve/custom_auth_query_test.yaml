@@ -1,4 +1,4 @@
--name : "Simple DQL query"
+- name : "Simple DQL query"
   gqlquery: |
     query{
       queryIssueGroupedByAuthor {

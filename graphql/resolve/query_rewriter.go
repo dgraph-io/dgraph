@@ -155,6 +155,8 @@ func (qr *queryRewriter) Rewrite(
 		return aggregateQuery(gqlQuery, authRw), nil
 	case schema.EntitiesQuery:
 		return entitiesQuery(gqlQuery, authRw)
+	case schema.DQLQuery:
+		return rewriteDQLQuery(gqlQuery, authRw)
 	default:
 		return nil, errors.Errorf("unimplemented query type %s", gqlQuery.QueryType())
 	}
@@ -609,6 +611,78 @@ func rewriteAsGet(
 	}
 
 	return dgQuery
+}
+
+func rewriteDQLQuery(query schema.Query, authRw *authRewriter) ([]*gql.GraphQuery, error) {
+	dgQuery := query.DQLQuery()
+	args := query.Arguments()
+	vars := make(map[string]string)
+	for k, v := range args {
+		// dgoapi.Request{}.Vars accepts only string values for variables,
+		// so need to convert all variable values to string
+		vStr, err := convertScalarToString(v)
+		if err != nil {
+			return nil, err
+		}
+		// the keys in dgoapi.Request{}.Vars are assumed to be prefixed with $
+		vars["$"+k] = vStr
+	}
+
+	dqlReq := gql.Request{
+		Str:       dgQuery,
+		Variables: vars,
+	}
+	parsedResult, err := gql.Parse(dqlReq)
+	parsedResult.Query[0].Attr = parsedResult.Query[0].Alias
+	parsedResult.Query[0].Alias = ""
+	if err != nil {
+		return nil, err
+	}
+
+	return rewriteWithAuth(parsedResult.Query, query.Schema(), authRw)
+}
+
+func extractType(dgQuery *gql.GraphQuery) string {
+	typeName := extractTypeFromFunc(dgQuery.Func)
+	if typeName != "" {
+		return typeName
+	}
+
+	typeName = extractTypeFromFilter(dgQuery.Filter)
+	return typeName
+}
+
+func extractTypeFromFilter(f *gql.FilterTree) string {
+	for _, fltr := range f.Child {
+		typeName := extractTypeFromFilter(fltr)
+		if typeName != "" {
+			return typeName
+		}
+	}
+	return extractTypeFromFunc(f.Func)
+}
+
+func extractTypeFromFunc(f *gql.Function) string {
+	switch f.Name {
+	case "type":
+		return f.Args[0].Value
+	case "eq", "allofterms", "anyofterms", "gt", "le":
+		return strings.Split(f.Attr, ".")[0]
+	}
+	return ""
+}
+
+func rewriteWithAuth(dgQuery []*gql.GraphQuery, sch schema.Schema, authRw *authRewriter) ([]*gql.GraphQuery, error) {
+	qry := dgQuery[0]
+	typeName := extractType(qry)
+	if typeName == "" {
+		return dgQuery, nil
+	}
+
+	typ := sch.Type(typeName)
+	rbac := authRw.evaluateStaticRules(typ)
+	dgQuery = authRw.addAuthQueries(typ, dgQuery, rbac)
+	return dgQuery, nil
 }
 
 // Adds common RBAC and UID, Type rules to DQL query.
