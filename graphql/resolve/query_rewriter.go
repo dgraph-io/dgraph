@@ -851,13 +851,6 @@ func (authRw *authRewriter) addAuthQueries(
 		},
 		Filter: filter,
 	}
-	// if @auth rules are applied on DQL query and the root function is of
-	// uid(0x1, 0x2,...) then the root query will be written as:-
-	// typeRoot as var(func: uid(0x1, 0x2, 0x3), ....) @filter
-	if len(dgQuery[0].UID) != 0 {
-		rootQry.Func.UID = dgQuery[0].UID
-		rootQry.Func.Args = nil
-	}
 
 	// The user query doesn't need the filter parameter anymore,
 	// as it has been taken care of by the var and root queries generated above.
