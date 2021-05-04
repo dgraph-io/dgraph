@@ -65,7 +65,12 @@ func writeQuery(b *strings.Builder, query *gql.GraphQuery, prefix string) {
 		x.Check2(b.WriteString(query.Alias))
 		x.Check2(b.WriteString(" : "))
 	}
-	x.Check2(b.WriteString(query.Attr))
+
+	if query.IsCount {
+		x.Check2(b.WriteString(fmt.Sprintf("count(%s)", query.Attr)))
+	} else {
+		x.Check2(b.WriteString(query.Attr))
+	}
 
 	if query.Func != nil {
 		writeRoot(b, query)
@@ -93,6 +98,12 @@ func writeQuery(b *strings.Builder, query *gql.GraphQuery, prefix string) {
 		}
 	}
 
+	if query.IsGroupby {
+		x.Check2(b.WriteString(" @groupby("))
+		writeGroupByAttributes(b, query.GroupbyAttrs)
+		x.Check2(b.WriteRune(')'))
+	}
+
 	switch {
 	case len(query.Children) > 0:
 		prefixAdd := ""
@@ -109,6 +120,19 @@ func writeQuery(b *strings.Builder, query *gql.GraphQuery, prefix string) {
 		}
 	case query.Var != "" || query.Alias != "" || query.Attr != "":
 		x.Check2(b.WriteString("\n"))
+	}
+}
+
+func writeGroupByAttributes(b *strings.Builder, attrList []gql.GroupByAttr) {
+	for i, attr := range attrList {
+		if i != 0 {
+			x.Check2(b.WriteString(", "))
+		}
+		if attr.Alias != "" {
+			x.Check2(b.WriteString(attr.Alias))
+			x.Check2(b.WriteString(" : "))
+		}
+		x.Check2(b.WriteString(attr.Attr))
 	}
 }
 
