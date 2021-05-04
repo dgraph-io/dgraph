@@ -248,6 +248,16 @@ func (n *node) startTask(id op) (*z.Closer, error) {
 	return closer, nil
 }
 
+func (n *node) stopTask(id op) {
+	n.opsLock.Lock()
+	closer, ok := n.ops[id]
+	n.opsLock.Unlock()
+	if !ok {
+		return
+	}
+	closer.SignalAndWait()
+}
+
 func (n *node) waitForTask(id op) {
 	n.opsLock.Lock()
 	closer, ok := n.ops[id]
@@ -496,6 +506,11 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	if proposal.Mutations.DropOp == pb.Mutations_DATA {
 		// Ensures nothing get written to disk due to commit proposals.
 		n.keysWritten.rejectBeforeIndex = proposal.Index
+
+		// Stop rollups, otherwise we might end up overwriting some new data.
+		n.stopTask(opRollup)
+		defer n.startTask(opRollup)
+
 		posting.Oracle().ResetTxns()
 		if err := posting.DeleteData(); err != nil {
 			return err
@@ -509,6 +524,11 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	if proposal.Mutations.DropOp == pb.Mutations_ALL {
 		// Ensures nothing get written to disk due to commit proposals.
 		n.keysWritten.rejectBeforeIndex = proposal.Index
+
+		// Stop rollups, otherwise we might end up overwriting some new data.
+		n.stopTask(opRollup)
+		defer n.startTask(opRollup)
+
 		posting.Oracle().ResetTxns()
 		schema.State().DeleteAll()
 
