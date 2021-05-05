@@ -982,7 +982,7 @@ func TestLargePlistSplit(t *testing.T) {
 	key := x.DataKey(uuid.New().String(), 1331)
 	ol, err := getNew(key, ps, math.MaxUint64)
 	require.NoError(t, err)
-	b := make([]byte, 30<<20)
+	b := make([]byte, 5<<20)
 	rand.Read(b)
 	for i := 1; i <= 2; i++ {
 		edge := &pb.DirectedEdge{
@@ -999,7 +999,7 @@ func TestLargePlistSplit(t *testing.T) {
 
 	ol, err = getNew(key, ps, math.MaxUint64)
 	require.NoError(t, err)
-	b = make([]byte, 10<<20)
+	b = make([]byte, 5<<20)
 	rand.Read(b)
 	for i := 0; i < 63; i++ {
 		edge := &pb.DirectedEdge{

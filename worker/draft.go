@@ -42,6 +42,9 @@ import (
 
 	"github.com/dgraph-io/badger/v3"
 	bpb "github.com/dgraph-io/badger/v3/pb"
+	"github.com/dgraph-io/badger/v3/skl"
+	"github.com/dgraph-io/badger/v3/table"
+	"github.com/dgraph-io/badger/v3/y"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -245,6 +248,16 @@ func (n *node) startTask(id op) (*z.Closer, error) {
 	return closer, nil
 }
 
+func (n *node) stopTask(id op) {
+	n.opsLock.Lock()
+	closer, ok := n.ops[id]
+	n.opsLock.Unlock()
+	if !ok {
+		return
+	}
+	closer.SignalAndWait()
+}
+
 func (n *node) waitForTask(id op) {
 	n.opsLock.Lock()
 	closer, ok := n.ops[id]
@@ -379,7 +392,7 @@ func (n *node) mutationWorker(workerId int) {
 
 		txn := posting.Oracle().GetTxn(p.Mutations.StartTs)
 		x.AssertTruef(txn != nil, "Unable to find txn with start ts: %d", p.Mutations.StartTs)
-		txn.ErrCh <- n.processMutations(ctx, p.Mutations, txn)
+		txn.ErrCh <- n.concMutations(ctx, p.Mutations, txn)
 		close(txn.ErrCh)
 	}
 
@@ -396,7 +409,7 @@ func (n *node) mutationWorker(workerId int) {
 	}
 }
 
-func (n *node) processMutations(ctx context.Context, m *pb.Mutations, txn *posting.Txn) error {
+func (n *node) concMutations(ctx context.Context, m *pb.Mutations, txn *posting.Txn) error {
 	// It is possible that the user gives us multiple versions of the same edge, one with no facets
 	// and another with facets. In that case, use stable sort to maintain the ordering given to us
 	// by the user.
@@ -417,7 +430,10 @@ func (n *node) processMutations(ctx context.Context, m *pb.Mutations, txn *posti
 		return x.ErrConflict
 	}
 	// Discard the posting lists from cache to release memory at the end.
-	defer txn.Update()
+	defer func() {
+		txn.Update(ctx)
+		span.Annotate(nil, "update done")
+	}()
 
 	// Update the applied index that we are seeing.
 	if txn.AppliedIndexSeen == 0 {
@@ -490,6 +506,11 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	if proposal.Mutations.DropOp == pb.Mutations_DATA {
 		// Ensures nothing get written to disk due to commit proposals.
 		n.keysWritten.rejectBeforeIndex = proposal.Index
+
+		// Stop rollups, otherwise we might end up overwriting some new data.
+		n.stopTask(opRollup)
+		defer n.startTask(opRollup)
+
 		posting.Oracle().ResetTxns()
 		if err := posting.DeleteData(); err != nil {
 			return err
@@ -503,6 +524,11 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	if proposal.Mutations.DropOp == pb.Mutations_ALL {
 		// Ensures nothing get written to disk due to commit proposals.
 		n.keysWritten.rejectBeforeIndex = proposal.Index
+
+		// Stop rollups, otherwise we might end up overwriting some new data.
+		n.stopTask(opRollup)
+		defer n.startTask(opRollup)
+
 		posting.Oracle().ResetTxns()
 		schema.State().DeleteAll()
 
@@ -649,7 +675,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 
 	// If we have an error, re-run this.
 	span.Annotatef(nil, "Re-running mutation from applyCh. Runs: %d", runs)
-	return n.processMutations(ctx, m, txn)
+	return n.concMutations(ctx, m, txn)
 }
 
 func (n *node) applyCommitted(proposal *pb.Proposal) error {
@@ -986,49 +1012,94 @@ func (n *node) processApplyCh() {
 	}
 }
 
-// TODO(Anurag - 4 May 2020): Are we using pkey? Remove if unused.
-func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
-	// First let's commit all mutations to disk.
-	writer := posting.NewTxnWriter(pstore)
-	toDisk := func(start, commit uint64) {
-		txn := posting.Oracle().GetTxn(start)
-		if txn == nil {
-			return
-		}
-		txn.Update()
+func (n *node) commitOrAbort(_ uint64, delta *pb.OracleDelta) error {
+	_, span := otrace.StartSpan(context.Background(), "node.commitOrAbort")
+	defer span.End()
 
-		n.keysWritten.totalKeys += len(txn.Deltas())
-		ostats.Record(n.ctx, x.NumEdges.M(int64(len(txn.Deltas()))))
-		for k := range txn.Deltas() {
-			n.keysWritten.keyCommitTs[z.MemHashString(k)] = commit
-		}
-		err := x.RetryUntilSuccess(int(x.Config.MaxRetries),
-			10*time.Millisecond, func() error {
-				err := txn.CommitToDisk(writer, commit)
-				if err == badger.ErrBannedKey {
-					glog.Errorf("Error while writing to banned namespace.")
-					return nil
-				}
-				return err
-			})
+	span.Annotate(nil, "Start")
+	start := time.Now()
+	var numKeys int
 
-		if err != nil {
-			glog.Errorf("Error while applying txn status to disk (%d -> %d): %v",
-				start, commit, err)
-		}
-	}
-
+	itrStart := time.Now()
+	var itrs []y.Iterator
+	var txns []*posting.Txn
+	var sz int64
 	for _, status := range delta.Txns {
-		toDisk(status.StartTs, status.CommitTs)
-	}
-	if err := writer.Flush(); err != nil {
-		return errors.Wrapf(err, "while flushing to disk")
-	}
-	if x.WorkerConfig.HardSync {
-		if err := pstore.Sync(); err != nil {
-			glog.Errorf("Error while calling Sync while commitOrAbort: %v", err)
+		txn := posting.Oracle().GetTxn(status.StartTs)
+		if txn == nil {
+			continue
 		}
+		for k := range txn.Deltas() {
+			n.keysWritten.keyCommitTs[z.MemHashString(k)] = status.CommitTs
+		}
+		n.keysWritten.totalKeys += len(txn.Deltas())
+		numKeys += len(txn.Deltas())
+		if len(txn.Deltas()) == 0 {
+			continue
+		}
+		txns = append(txns, txn)
+
+		sz += txn.Skiplist().MemSize()
+		// Iterate to set the commit timestamp for all keys.
+		// Skiplist can block if the conversion to Skiplist isn't done yet.
+		itr := txn.Skiplist().NewIterator()
+		itr.SeekToFirst()
+		for itr.Valid() {
+			key := itr.Key()
+			// We don't expect the ordering of the keys to change due to setting their commit
+			// timestamps. Each key in the skiplist should be unique already.
+			y.SetKeyTs(key, status.CommitTs)
+			itr.Next()
+		}
+		itr.Close()
+
+		itrs = append(itrs, txn.Skiplist().NewUniIterator(false))
 	}
+	span.Annotatef(nil, "Num keys: %d Itr: %s\n", numKeys, time.Since(itrStart))
+	ostats.Record(n.ctx, x.NumEdges.M(int64(numKeys)))
+
+	// This would be used for callback via Badger when skiplist is pushed to
+	// disk.
+	deleteTxns := func() {
+		posting.Oracle().DeleteTxns(delta)
+	}
+
+	if len(itrs) == 0 {
+		deleteTxns()
+
+	} else {
+		sn := time.Now()
+		mi := table.NewMergeIterator(itrs, false)
+		mi.Rewind()
+
+		var keys int
+		b := skl.NewBuilder(int64(float64(sz) * 1.1))
+		for mi.Valid() {
+			b.Add(mi.Key(), mi.Value())
+			keys++
+			mi.Next()
+		}
+		span.Annotatef(nil, "Iterating and skiplist over %d keys took: %s", keys, time.Since(sn))
+		err := x.RetryUntilSuccess(3600, time.Second, func() error {
+			if numKeys == 0 {
+				return nil
+			}
+			// We do the pending txn deletion in the callback, so that our snapshot and checkpoint
+			// tracking would only consider the txns which have been successfully pushed to disk.
+			return pstore.HandoverSkiplist(b.Skiplist(), deleteTxns)
+		})
+		if err != nil {
+			glog.Errorf("while handing over skiplist: %v\n", err)
+		}
+		span.Annotatef(nil, "Handover skiplist done for %d txns, %d keys", len(delta.Txns), numKeys)
+	}
+
+	ms := x.SinceMs(start)
+	tags := []tag.Mutator{tag.Upsert(x.KeyMethod, "apply.toDisk")}
+	x.Check(ostats.RecordWithTags(context.Background(), tags, x.LatencyMs.M(ms)))
+
+	// Before, we used to call pstore.Sync() here. We don't need to do that
+	// anymore because we're not using Badger's WAL.
 
 	g := groups()
 	if delta.GroupChecksums != nil && delta.GroupChecksums[g.groupId()] > 0 {
@@ -1041,9 +1112,11 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 		txn.RemoveCachedKeys()
 	}
 	posting.WaitForCache()
+	span.Annotate(nil, "cache keys removed")
 
 	// Now advance Oracle(), so we can service waiting reads.
 	posting.Oracle().ProcessDelta(delta)
+	span.Annotate(nil, "process delta done")
 	return nil
 }
 
@@ -1217,7 +1290,8 @@ func (n *node) updateRaftProgress() error {
 	atomic.StoreUint64(&n.checkpointTs, snap.ReadTs)
 
 	n.Store.SetUint(raftwal.CheckpointIndex, snap.GetIndex())
-	glog.V(2).Infof("[%#x] Set Raft progress to index: %d, ts: %d.", n.Id, snap.Index, snap.ReadTs)
+	glog.V(2).Infof("[%#x] Set Raft checkpoint to index: %d, ts: %d.",
+		n.Id, snap.Index, snap.ReadTs)
 	return nil
 }
 
@@ -1225,11 +1299,33 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 	snapshotAfterEntries := x.WorkerConfig.Raft.GetUint64("snapshot-after-entries")
 	x.AssertTruef(snapshotAfterEntries > 10, "raft.snapshot-after must be a number greater than 10")
 
-	snapshotFrequency := x.WorkerConfig.Raft.GetDuration("snapshot-after-duration")
-	slowTicker := time.NewTicker(snapshotFrequency)
+	slowTicker := time.NewTicker(time.Minute)
 	defer slowTicker.Stop()
 
+	exceededSnapshotByEntries := func() bool {
+		if snapshotAfterEntries == 0 {
+			// If snapshot-after isn't set, return true always.
+			return true
+		}
+		chk, err := n.Store.Checkpoint()
+		if err != nil {
+			glog.Errorf("While reading checkpoint: %v", err)
+			return false
+		}
+		first, err := n.Store.FirstIndex()
+		if err != nil {
+			glog.Errorf("While reading first index: %v", err)
+			return false
+		}
+		// If we're over snapshotAfterEntries, calculate would be true.
+		glog.V(3).Infof("Evaluating snapshot first:%d chk:%d (chk-first:%d) "+
+			"snapshotAfterEntries:%d", first, chk, chk-first,
+			snapshotAfterEntries)
+		return chk-first > snapshotAfterEntries
+	}
+
 	lastSnapshotTime := time.Now()
+	snapshotFrequency := x.WorkerConfig.Raft.GetDuration("snapshot-after-duration")
 	for {
 		select {
 		case <-slowTicker.C:
@@ -1252,18 +1348,31 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 					continue
 				}
 
-				// If we don't have a snapshot, or if there are too many log files in Raft,
-				// calculate a new snapshot.
+				// calculate would be true if:
+				// - snapshot is empty.
+				// - we have more than 4 log files in Raft WAL.
+				// - snapshot frequency is zero and exceeding threshold entries.
+				// - we have exceeded the threshold time since last snapshot and exceeding threshold
+				//   entries.
+				//
+				// Note: In case we're exceeding threshold entries, but have not exceeded the
+				// threshold time since last snapshot, calculate would be false.
 				calculate := raft.IsEmptySnap(snap) || n.Store.NumLogFiles() > 4
+				if snapshotFrequency == 0 {
+					calculate = calculate || exceededSnapshotByEntries()
 
-				// Only take snapshot if both snapshotFrequency and
-				// snapshotAfterEntries requirements are met. If set to 0,
-				// we consider duration condition to be disabled.
-				if snapshotFrequency == 0 || time.Since(lastSnapshotTime) > snapshotFrequency {
-					if chk, err := n.Store.Checkpoint(); err == nil {
-						if first, err := n.Store.FirstIndex(); err == nil {
-							// Save some cycles by only calculating snapshot if the checkpoint
-							// has gone quite a bit further than the first index.
+				} else if time.Since(lastSnapshotTime) > snapshotFrequency {
+					// If we haven't taken a snapshot since snapshotFrequency, calculate would
+					// follow snapshot entries.
+					calculate = calculate || exceededSnapshotByEntries()
+				}
+
+				// Check if we're snapshotAfterEntries away from the FirstIndex based off the last
+				// checkpoint. This is a cheap operation. We're not iterating over the logs.
+				if chk, err := n.Store.Checkpoint(); err == nil {
+					if first, err := n.Store.FirstIndex(); err == nil {
+						// If we're over snapshotAfterEntries, calculate would be true.
+						if snapshotAfterEntries > 0 {
 							calculate = calculate || chk >= first+snapshotAfterEntries
 							glog.V(3).Infof("Evaluating snapshot first:%d chk:%d (chk-first:%d) "+
 								"snapshotAfterEntries:%d snap:%v", first, chk, chk-first,
@@ -1345,7 +1454,7 @@ func (n *node) Run() {
 	if err != nil {
 		glog.Errorf("While trying to find raft progress: %v", err)
 	} else {
-		glog.Infof("Found Raft progress: %d", applied)
+		glog.Infof("Found Raft checkpoint: %d", applied)
 	}
 
 	var timer x.Timer
