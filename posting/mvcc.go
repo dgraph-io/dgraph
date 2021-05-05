@@ -326,10 +326,10 @@ func (txn *Txn) ToBuffer(buf *z.Buffer, commitTs uint64) error {
 	return nil
 }
 
-// CommitToDisk commits a transaction to disk.
-// This function only stores deltas to the commit timestamps. It does not try to generate a state.
-// State generation is done via rollups, which happen when a snapshot is created.
-// Don't call this for schema mutations. Directly commit them.
+// ToSkiplist replaces CommitToDisk. ToSkiplist creates a Badger usable Skiplist from the Txn, so
+// it can be passed over to Badger after commit. This only stores deltas to the commit timestamps.
+// It does not try to generate a state. State generation is done via rollups, which happen when a
+// snapshot is created.  Don't call this for schema mutations. Directly commit them.
 func (txn *Txn) ToSkiplist() error {
 	cache := txn.cache
 	cache.Lock()
@@ -341,14 +341,14 @@ func (txn *Txn) ToSkiplist() error {
 	}
 	sort.Strings(keys)
 
-	defer func() {
-		// Add these keys to be rolled up after we're done writing. This is the right place for them
-		// to be rolled up, because we just pushed these deltas over to Badger.
-		// TODO: This is no longer the right place. Figure out a new place for these keys.
-		// for _, key := range keys {
-		// 	IncrRollup.addKeyToBatch([]byte(key), 1)
-		// }
-	}()
+	// defer func() {
+	// Add these keys to be rolled up after we're done writing. This is the right place for them
+	// to be rolled up, because we just pushed these deltas over to Badger.
+	// TODO: This is no longer the right place. Figure out a new place for these keys.
+	// for _, key := range keys {
+	// 	IncrRollup.addKeyToBatch([]byte(key), 1)
+	// }
+	// }()
 
 	b := skl.NewBuilder(1 << 10)
 	for _, key := range keys {

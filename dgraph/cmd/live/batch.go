@@ -459,7 +459,8 @@ func (l *loader) printCounters() {
 		r.Capture(c.Nquads)
 		elapsed := time.Since(start).Round(time.Second)
 		timestamp := time.Now().Format("15:04:05Z0700")
-		fmt.Printf("[%s] Elapsed: %s Txns: %d N-Quads: %s N-Quads/s: %s Inflight: %2d/%2d Aborts: %d\n",
+		fmt.Printf("[%s] Elapsed: %s Txns: %d N-Quads: %s N-Quads/s: %s"+
+			" Inflight: %2d/%2d Aborts: %d\n",
 			timestamp, x.FixedDuration(elapsed), c.TxnsDone,
 			humanize.Comma(int64(c.Nquads)), humanize.Comma(int64(r.Rate())),
 			atomic.LoadInt32(&l.inflight), atomic.LoadInt32(&l.conc), c.Aborts)

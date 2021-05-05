@@ -1290,7 +1290,8 @@ func (n *node) updateRaftProgress() error {
 	atomic.StoreUint64(&n.checkpointTs, snap.ReadTs)
 
 	n.Store.SetUint(raftwal.CheckpointIndex, snap.GetIndex())
-	glog.V(2).Infof("[%#x] Set Raft checkpoint to index: %d, ts: %d.", n.Id, snap.Index, snap.ReadTs)
+	glog.V(2).Infof("[%#x] Set Raft checkpoint to index: %d, ts: %d.",
+		n.Id, snap.Index, snap.ReadTs)
 	return nil
 }
 
@@ -1354,8 +1355,8 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 				// - we have exceeded the threshold time since last snapshot and exceeding threshold
 				//   entries.
 				//
-				// Note: In case we're exceeding threshold entries, but have not exceeded the threshold
-				//   time since last snapshot, calculate would be false.
+				// Note: In case we're exceeding threshold entries, but have not exceeded the
+				// threshold time since last snapshot, calculate would be false.
 				calculate := raft.IsEmptySnap(snap) || n.Store.NumLogFiles() > 4
 				if snapshotFrequency == 0 {
 					calculate = calculate || exceededSnapshotByEntries()

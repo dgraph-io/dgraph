@@ -78,7 +78,7 @@ func (s *Server) Login(ctx context.Context,
 		glog.Errorf("Authentication from address %s failed: %v", addr, err)
 		return nil, x.ErrorInvalidLogin
 	}
-	glog.Infof("%s logged in successfully", user.UserID)
+	glog.Infof("%s logged in successfully in namespace %#x", user.UserID, user.Namespace)
 
 	resp := &api.Response{}
 	accessJwt, err := getAccessJwt(user.UserID, user.Groups, user.Namespace)
@@ -367,7 +367,7 @@ func RefreshAcls(closer *z.Closer) {
 		if err != nil {
 			glog.Fatalf("Got a key from subscription which is not parsable: %s", err)
 		}
-		glog.V(2).Infof("Got ACL update via subscription for attr: %s", pk.Attr)
+		glog.V(3).Infof("Got ACL update via subscription for attr: %s", pk.Attr)
 
 		ns, _ := x.ParseNamespaceAttr(pk.Attr)
 		if err := retrieveAcls(ns, kv.GetVersion()); err != nil {
@@ -413,28 +413,35 @@ func ResetAcl(closer *z.Closer) {
 		// The acl feature is not turned on.
 		return
 	}
-	for closer.Ctx().Err() == nil {
-		ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
-		defer cancel()
-		ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
-		if err := upsertGuardian(ctx); err != nil {
-			glog.Infof("Unable to upsert the guardian group. Error: %v", err)
-			time.Sleep(100 * time.Millisecond)
-			continue
+
+	upsertGuardianAndGroot := func(ns uint64) {
+		for closer.Ctx().Err() == nil {
+			ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
+			defer cancel()
+			ctx = x.AttachNamespace(ctx, ns)
+			if err := upsertGuardian(ctx); err != nil {
+				glog.Infof("Unable to upsert the guardian group. Error: %v", err)
+				time.Sleep(100 * time.Millisecond)
+				continue
+			}
+			break
 		}
-		break
+
+		for closer.Ctx().Err() == nil {
+			ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
+			defer cancel()
+			ctx = x.AttachNamespace(ctx, ns)
+			if err := upsertGroot(ctx, "password"); err != nil {
+				glog.Infof("Unable to upsert the groot account. Error: %v", err)
+				time.Sleep(100 * time.Millisecond)
+				continue
+			}
+			break
+		}
 	}
 
-	for closer.Ctx().Err() == nil {
-		ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
-		defer cancel()
-		ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
-		if err := upsertGroot(ctx, "password"); err != nil {
-			glog.Infof("Unable to upsert the groot account. Error: %v", err)
-			time.Sleep(100 * time.Millisecond)
-			continue
-		}
-		break
+	for ns := range schema.State().Namespaces() {
+		upsertGuardianAndGroot(ns)
 	}
 }
 
