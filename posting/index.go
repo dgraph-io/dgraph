@@ -1227,14 +1227,25 @@ func DeleteData() error {
 	return pstore.DropPrefix([]byte{x.DefaultPrefix})
 }
 
-// DeletePredicate deletes all entries and indices for a given predicate.
+// DeletePredicate deletes all entries and indices for a given predicate. The delete may be logical
+// based on DB options set.
 func DeletePredicate(ctx context.Context, attr string) error {
 	glog.Infof("Dropping predicate: [%s]", attr)
 	prefix := x.PredicatePrefix(attr)
 	if err := pstore.DropPrefix(prefix); err != nil {
 		return err
 	}
+	return schema.State().Delete(attr)
+}
 
+// DeletePredicateBlocking deletes all entries and indices for a given predicate. It also blocks the
+// writes.
+func DeletePredicateBlocking(ctx context.Context, attr string) error {
+	glog.Infof("Dropping predicate: [%s]", attr)
+	prefix := x.PredicatePrefix(attr)
+	if err := pstore.DropPrefixBlocking(prefix); err != nil {
+		return err
+	}
 	return schema.State().Delete(attr)
 }
 

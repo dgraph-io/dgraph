@@ -302,7 +302,7 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error
 		kv.Version = 1
 		kv.UserMeta = []byte{item.UserMeta()}
 		if in.SinceTs == 0 {
-			// When doing phase 1 of predicate move, receiver should clean the predicate.
+			// When doing Phase I of predicate move, receiver should clean the predicate.
 			kv.StreamId = CleanPredicate
 		}
 		badger.KVToBuffer(kv, buf)

@@ -1507,7 +1507,7 @@ func TestMain(m *testing.M) {
 	dir, err := ioutil.TempDir("", "storetest_")
 	x.Check(err)
 
-	ps, err = badger.OpenManaged(badger.DefaultOptions(dir))
+	ps, err = badger.OpenManaged(badger.DefaultOptions(dir).WithAllowStopTheWorld(false))
 	x.Check(err)
 	// Not using posting list cache
 	Init(ps, 0)
