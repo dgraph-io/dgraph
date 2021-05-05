@@ -55,9 +55,9 @@ const (
     """
 	The UInt64 scalar type represents an unsigned 64‐bit numeric non‐fractional value.
 	UInt64 can represent values in range [0,(2^64 - 1)].
-	""" 
+	"""
     scalar UInt64
-	
+
 	"""
 	The DateTime scalar type represents date and time as a string in RFC3339 format.
 	For example: "1985-04-12T23:20:50.52Z" represents 20 minutes and 50.52 seconds after the 23rd hour of April 12th, 1985 in UTC.
@@ -243,14 +243,19 @@ const (
 		anonymous: Boolean
 	}
 
+	input TaskInput {
+		id: String!
+	}
+
 	type Response {
 		code: String
 		message: String
 	}
 
 	type ExportPayload {
-		response: Response
 		exportedFiles: [String]
+		response: Response
+		taskId: String
 	}
 
 	type DrainingPayload {
@@ -259,6 +264,26 @@ const (
 
 	type ShutdownPayload {
 		response: Response
+	}
+
+	type TaskPayload {
+		kind: TaskKind
+		status: TaskStatus
+		lastUpdated: DateTime
+	}
+
+	enum TaskStatus {
+		Queued
+		Running
+		Failed
+		Success
+		Unknown
+	}
+
+	enum TaskKind {
+		Backup
+		Export
+		Unknown
 	}
 
 	input ConfigInput {
@@ -367,6 +392,7 @@ const (
 		health: [NodeState]
 		state: MembershipState
 		config: Config
+		task(input: TaskInput!): TaskPayload
 		` + adminQueries + `
 	}
 
@@ -718,7 +744,6 @@ func newAdminResolver(
 }
 
 func newAdminResolverFactory() resolve.ResolverFactory {
-
 	adminMutationResolvers := map[string]resolve.MutationResolverFunc{
 		"addNamespace":      resolveAddNamespace,
 		"backup":            resolveBackup,
@@ -751,17 +776,20 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 		WithQueryResolver("listBackups", func(q schema.Query) resolve.QueryResolver {
 			return resolve.QueryResolverFunc(resolveListBackups)
 		}).
-		WithMutationResolver("updateGQLSchema", func(m schema.Mutation) resolve.MutationResolver {
-			return resolve.MutationResolverFunc(
-				func(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
-					return &resolve.Resolved{Err: errors.Errorf(errMsgServerNotReady), Field: m},
-						false
-				})
+		WithQueryResolver("task", func(q schema.Query) resolve.QueryResolver {
+			return resolve.QueryResolverFunc(resolveTask)
 		}).
 		WithQueryResolver("getGQLSchema", func(q schema.Query) resolve.QueryResolver {
 			return resolve.QueryResolverFunc(
 				func(ctx context.Context, query schema.Query) *resolve.Resolved {
 					return &resolve.Resolved{Err: errors.Errorf(errMsgServerNotReady), Field: q}
+				})
+		}).
+		WithMutationResolver("updateGQLSchema", func(m schema.Mutation) resolve.MutationResolver {
+			return resolve.MutationResolverFunc(
+				func(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
+					return &resolve.Resolved{Err: errors.Errorf(errMsgServerNotReady), Field: m},
+						false
 				})
 		})
 	for gqlMut, resolver := range adminMutationResolvers {

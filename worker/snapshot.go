@@ -103,7 +103,7 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) error {
 		glog.V(1).Infof("Received batch of size: %s. Total so far: %s\n",
 			humanize.IBytes(uint64(len(kvs.Data))), humanize.IBytes(uint64(size)))
 
-		buf := z.BufferFrom(kvs.Data)
+		buf := z.NewBufferSlice(kvs.Data)
 		if err := writer.Write(buf); err != nil {
 			return err
 		}
