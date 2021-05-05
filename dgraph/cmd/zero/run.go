@@ -240,7 +240,7 @@ func run() {
 	}
 	if limitConf.UidLeaseLimit == 0 {
 		// Setting it to 0 removes the limit.
-		limitConf.UidLeaseLimit = math.MaxInt64
+		limitConf.UidLeaseLimit = math.MaxUint64
 	}
 	opts = options{
 		telemetry:         telemetry,
