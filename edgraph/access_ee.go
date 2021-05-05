@@ -965,8 +965,10 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) er
 				return nil, nil, nil
 			}
 			blocked := make(map[string]struct{})
-			for _, pred := range x.AllACLPredicates() {
-				blocked[pred] = struct{}{}
+			for _, pred := range preds {
+				if x.IsAclPredicate(pred) {
+					blocked[pred] = struct{}{}
+				}
 			}
 			return blocked, nil, nil
 		}
@@ -1059,8 +1061,10 @@ func authorizeSchemaQuery(ctx context.Context, er *query.ExecutionResult) error 
 				return nil, nil
 			}
 			blocked := make(map[string]struct{})
-			for _, pred := range x.AllACLPredicates() {
-				blocked[pred] = struct{}{}
+			for _, pred := range preds {
+				if x.IsAclPredicate(pred) {
+					blocked[pred] = struct{}{}
+				}
 			}
 			return blocked, nil
 		}

@@ -344,8 +344,8 @@ func QueryData(t *testing.T, dg *dgo.Dgraph, query string) []byte {
 }
 
 func Export(t *testing.T, token *HttpToken, dest, accessKey, secretKey string) *GraphQLResponse {
-	exportRequest := `mutation export($dst: String!, $f: String!, $access: String!, $secret: String!){
-export(input: {destination: $dst, format: $f, accessKey: $access, secretKey: $secret}) {
+	exportRequest := `mutation export($dst: String!, $f: String!, $acc: String!, $sec: String!){
+export(input: {destination: $dst, format: $f, accessKey: $acc, secretKey: $sec}) {
 			response {
 				message
 			}
@@ -355,10 +355,10 @@ export(input: {destination: $dst, format: $f, accessKey: $access, secretKey: $se
 	params := GraphQLParams{
 		Query: exportRequest,
 		Variables: map[string]interface{}{
-			"dst":    dest,
-			"f":      "rdf",
-			"access": accessKey,
-			"secret": secretKey,
+			"dst": dest,
+			"f":   "rdf",
+			"acc": accessKey,
+			"sec": secretKey,
 		},
 	}
 
