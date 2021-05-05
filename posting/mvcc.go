@@ -18,15 +18,18 @@ package posting
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/hex"
 	"math"
+	"sort"
 	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/dgraph-io/badger/v3"
-	bpb "github.com/dgraph-io/badger/v3/pb"
+	"github.com/dgraph-io/badger/v3/skl"
+	"github.com/dgraph-io/badger/v3/y"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
@@ -78,7 +81,7 @@ func init() {
 }
 
 // rollUpKey takes the given key's posting lists, rolls it up and writes back to badger
-func (ir *incrRollupi) rollUpKey(writer *TxnWriter, key []byte) error {
+func (ir *incrRollupi) rollUpKey(sl *skl.Skiplist, key []byte) error {
 	l, err := GetNoStore(key, math.MaxUint64)
 	if err != nil {
 		return err
@@ -97,7 +100,23 @@ func (ir *incrRollupi) rollUpKey(writer *TxnWriter, key []byte) error {
 			glog.V(2).Infof("Rolled up %d keys", count)
 		}
 	}
-	return writer.Write(&bpb.KVList{Kv: kvs})
+
+	for _, kv := range kvs {
+		vs := y.ValueStruct{
+			Value: kv.Value,
+		}
+		if len(kv.UserMeta) > 0 {
+			vs.UserMeta = kv.UserMeta[0]
+		}
+		switch vs.UserMeta {
+		case BitCompletePosting, BitEmptyPosting:
+			vs.Meta = badger.BitDiscardEarlierVersions
+		default:
+		}
+		sl.Put(y.KeyWithTs(kv.Key, kv.Version), vs)
+	}
+
+	return nil
 }
 
 // TODO: When the opRollup is not running the keys from keysPool of ir are dropped. Figure out some
@@ -124,34 +143,52 @@ func (ir *incrRollupi) addKeyToBatch(key []byte, priority int) {
 func (ir *incrRollupi) Process(closer *z.Closer) {
 	defer closer.Done()
 
-	writer := NewTxnWriter(pstore)
-	defer writer.Flush()
-
 	m := make(map[uint64]int64) // map hash(key) to ts. hash(key) to limit the size of the map.
+
 	limiter := time.NewTicker(time.Millisecond)
 	defer limiter.Stop()
+
 	cleanupTick := time.NewTicker(5 * time.Minute)
 	defer cleanupTick.Stop()
-	forceRollupTick := time.NewTicker(500 * time.Millisecond)
-	defer forceRollupTick.Stop()
 
+	baseTick := time.NewTicker(500 * time.Millisecond)
+	defer baseTick.Stop()
+
+	const initSize = 1 << 20
+	sl := skl.NewGrowingSkiplist(initSize)
+
+	handover := func() {
+		if sl.Empty() {
+			return
+		}
+		if err := x.RetryUntilSuccess(3600, time.Second, func() error {
+			return pstore.HandoverSkiplist(sl, nil)
+		}); err != nil {
+			glog.Errorf("Rollup handover skiplist returned error: %v\n", err)
+		}
+		// If we have an error, the skiplist might not be safe to use still. So,
+		// just create a new one always.
+		sl = skl.NewGrowingSkiplist(initSize)
+	}
 	doRollup := func(batch *[][]byte, priority int) {
 		currTs := time.Now().Unix()
 		for _, key := range *batch {
 			hash := z.MemHash(key)
-			if elem := m[hash]; currTs-elem >= 10 {
-				// Key not present or Key present but last roll up was more than 10 sec ago.
-				// Add/Update map and rollup.
-				m[hash] = currTs
-				if err := ir.rollUpKey(writer, key); err != nil {
-					glog.Warningf("Error %v rolling up key %v\n", err, key)
-				}
+			if elem := m[hash]; currTs-elem < 10 {
+				continue
+			}
+			// Key not present or Key present but last roll up was more than 10 sec ago.
+			// Add/Update map and rollup.
+			m[hash] = currTs
+			if err := ir.rollUpKey(sl, key); err != nil {
+				glog.Warningf("Error %v rolling up key %v\n", err, key)
 			}
 		}
 		*batch = (*batch)[:0]
 		ir.priorityKeys[priority].keysPool.Put(batch)
 	}
 
+	var ticks int
 	for {
 		select {
 		case <-closer.HasBeenClosed():
@@ -164,12 +201,16 @@ func (ir *incrRollupi) Process(closer *z.Closer) {
 					delete(m, hash)
 				}
 			}
-		case <-forceRollupTick.C:
+		case <-baseTick.C:
 			batch := ir.priorityKeys[0].keysPool.Get().(*[][]byte)
 			if len(*batch) > 0 {
 				doRollup(batch, 0)
 			} else {
 				ir.priorityKeys[0].keysPool.Put(batch)
+			}
+			ticks++
+			if ticks%4 == 0 { // base tick is every 500ms. This is 2s.
+				handover()
 			}
 		case batch := <-ir.priorityKeys[0].keysCh:
 			doRollup(batch, 0)
@@ -228,15 +269,10 @@ func (txn *Txn) FillContext(ctx *api.TxnContext, gid uint32) {
 	ctx.Keys = x.Unique(ctx.Keys)
 
 	txn.Unlock()
-	txn.Update()
 	txn.cache.fillPreds(ctx, gid)
 }
 
-// CommitToDisk commits a transaction to disk.
-// This function only stores deltas to the commit timestamps. It does not try to generate a state.
-// State generation is done via rollups, which happen when a snapshot is created.
-// Don't call this for schema mutations. Directly commit them.
-func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
+func (txn *Txn) ToBuffer(buf *z.Buffer, commitTs uint64) error {
 	if commitTs == 0 {
 		return nil
 	}
@@ -258,39 +294,81 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 		}
 	}()
 
-	var idx int
-	for idx < len(keys) {
-		// writer.update can return early from the loop in case we encounter badger.ErrTxnTooBig. On
-		// that error, writer.update would still commit the transaction and return any error. If
-		// nil, we continue to process the remaining keys.
-		err := writer.update(commitTs, func(btxn *badger.Txn) error {
-			for ; idx < len(keys); idx++ {
-				key := keys[idx]
-				data := cache.deltas[key]
-				if len(data) == 0 {
-					continue
-				}
-				if ts := cache.maxVersions[key]; ts >= commitTs {
-					// Skip write because we already have a write at a higher ts.
-					// Logging here can cause a lot of output when doing Raft log replay. So, let's
-					// not output anything here.
-					continue
-				}
-				err := btxn.SetEntry(&badger.Entry{
-					Key:      []byte(key),
-					Value:    data,
-					UserMeta: BitDeltaPosting,
-				})
-				if err != nil {
-					return err
-				}
-			}
-			return nil
-		})
-		if err != nil {
-			return err
+	for _, key := range keys {
+		k := []byte(key)
+		data := cache.deltas[key]
+		if len(data) == 0 {
+			continue
 		}
+
+		if err := badger.ValidEntry(pstore, k, data); err != nil {
+			glog.Errorf("Invalid Entry. len(key): %d len(val): %d\n", len(k), len(data))
+			continue
+		}
+		if ts := cache.maxVersions[key]; ts >= commitTs {
+			// Skip write because we already have a write at a higher ts.
+			// Logging here can cause a lot of output when doing Raft log replay. So, let's
+			// not output anything here.
+			continue
+		}
+
+		key := y.KeyWithTs(k, commitTs)
+		val := y.ValueStruct{
+			Value:    data,
+			UserMeta: BitDeltaPosting,
+		}
+
+		dst := buf.SliceAllocate(2 + len(key) + int(val.EncodedSize()))
+		binary.BigEndian.PutUint16(dst[:2], uint16(len(key)))
+		x.AssertTrue(len(key) == copy(dst[2:], key))
+		x.AssertTrue(uint32(len(dst)-2-len(key)) == val.Encode(dst[2+len(key):]))
 	}
+	return nil
+}
+
+// ToSkiplist replaces CommitToDisk. ToSkiplist creates a Badger usable Skiplist from the Txn, so
+// it can be passed over to Badger after commit. This only stores deltas to the commit timestamps.
+// It does not try to generate a state. State generation is done via rollups, which happen when a
+// snapshot is created.  Don't call this for schema mutations. Directly commit them.
+func (txn *Txn) ToSkiplist() error {
+	cache := txn.cache
+	cache.Lock()
+	defer cache.Unlock()
+
+	var keys []string
+	for key := range cache.deltas {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	// defer func() {
+	// Add these keys to be rolled up after we're done writing. This is the right place for them
+	// to be rolled up, because we just pushed these deltas over to Badger.
+	// TODO: This is no longer the right place. Figure out a new place for these keys.
+	// for _, key := range keys {
+	// 	IncrRollup.addKeyToBatch([]byte(key), 1)
+	// }
+	// }()
+
+	b := skl.NewBuilder(1 << 10)
+	for _, key := range keys {
+		k := []byte(key)
+		data := cache.deltas[key]
+		if len(data) == 0 {
+			continue
+		}
+
+		if err := badger.ValidEntry(pstore, k, data); err != nil {
+			glog.Errorf("Invalid Entry. len(key): %d len(val): %d\n", len(k), len(data))
+			continue
+		}
+		b.Add(y.KeyWithTs(k, math.MaxUint64),
+			y.ValueStruct{
+				Value:    data,
+				UserMeta: BitDeltaPosting,
+			})
+	}
+	txn.sl = b.Skiplist()
 	return nil
 }
 

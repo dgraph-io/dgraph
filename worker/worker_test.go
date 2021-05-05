@@ -23,12 +23,14 @@ import (
 	"math"
 	"os"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/badger/v3"
+	"github.com/dgraph-io/badger/v3/y"
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 
@@ -60,10 +62,20 @@ func commitTransaction(t *testing.T, edge *pb.DirectedEdge, l *posting.List) {
 
 	commit := commitTs(startTs)
 
-	txn.Update()
-	writer := posting.NewTxnWriter(pstore)
-	require.NoError(t, txn.CommitToDisk(writer, commit))
-	require.NoError(t, writer.Flush())
+	txn.Update(context.Background())
+	sl := txn.Skiplist()
+
+	itr := sl.NewUniIterator(false)
+	itr.Rewind()
+	for itr.Valid() {
+		y.SetKeyTs(itr.Key(), commit)
+		itr.Next()
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	pstore.HandoverSkiplist(sl, wg.Done)
+	wg.Wait()
 }
 
 func timestamp() uint64 {

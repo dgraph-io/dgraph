@@ -62,9 +62,9 @@ func resolveBackup(ctx context.Context, m schema.Mutation) (*resolve.Resolved, b
 		return resolve.EmptyResult(m, err), false
 	}
 
-	msg := fmt.Sprintf("Backup queued with ID %s", taskId)
+	msg := fmt.Sprintf("Backup queued with ID %#x", taskId)
 	data := response("Success", msg)
-	data["taskId"] = taskId
+	data["taskId"] = fmt.Sprintf("%#x", taskId)
 	return resolve.DataResult(
 		m,
 		map[string]interface{}{m.Name(): data},

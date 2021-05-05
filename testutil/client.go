@@ -373,6 +373,7 @@ func GrootHttpLoginNamespace(endpoint string, namespace uint64) *HttpToken {
 		Namespace: namespace,
 	})
 	x.Check(err)
+	x.AssertTrue(token != nil)
 	return token
 }
 

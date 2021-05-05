@@ -97,6 +97,8 @@ func WaitForTask(t *testing.T, taskId string, useHttps bool) {
 	require.NoError(t, err)
 
 	for {
+		time.Sleep(4 * time.Second)
+
 		var adminUrl string
 		var client http.Client
 		if useHttps {
@@ -120,8 +122,6 @@ func WaitForTask(t *testing.T, taskId string, useHttps bool) {
 		case "Failed", "Unknown":
 			t.Errorf("task failed with status: %s", status)
 		}
-
-		time.Sleep(4 * time.Second)
 	}
 }
 
