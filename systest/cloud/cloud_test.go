@@ -172,8 +172,8 @@ func TestEnvironmentAccess(t *testing.T) {
 	resp = testutil.Export(t, nsToken, minioDest, "accesskey", "secretkey")
 	require.Zero(t, len(resp.Errors))
 
-	// Export without the minio creds should work for galaxy guardian.
-	resp = testutil.Export(t, galaxyToken, minioDest, "", "")
+	// Galaxy guardian should provide the crednetials as well.
+	resp = testutil.Export(t, galaxyToken, minioDest, "accesskey", "secretkey")
 	require.Zero(t, len(resp.Errors))
 
 }

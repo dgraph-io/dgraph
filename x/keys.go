@@ -53,8 +53,6 @@ const (
 	ByteUnused = byte(0xff)
 	// GalaxyNamespace is the default namespace name.
 	GalaxyNamespace = uint64(0)
-	// AllNamespaces is used to denote a cluster wide operation.
-	AllNamespaces = math.MaxUint64
 	// IgnoreBytes is the byte range which will be ignored while prefix match in subscription.
 	IgnoreBytes = "1-8"
 	// NamespaceOffset is the offset in badger key from which the next 8 bytes contain namespace.
