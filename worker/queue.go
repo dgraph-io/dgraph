@@ -46,6 +46,13 @@ func TaskStatusOverNetwork(ctx context.Context, req *pb.TaskStatusRequest,
 	}
 	raftId := taskId >> 32
 
+	// Skip the network call if the required Alpha is me.
+	myRaftId := State.WALstore.Uint(raftwal.RaftId)
+	if raftId == myRaftId {
+		worker := (*grpcWorker)(nil)
+		return worker.TaskStatus(ctx, req)
+	}
+
 	// Find the Alpha with the required Raft ID.
 	var addr string
 	for _, group := range groups().state.GetGroups() {
@@ -69,7 +76,7 @@ func TaskStatusOverNetwork(ctx context.Context, req *pb.TaskStatusRequest,
 }
 
 // TaskStatus retrieves metadata for a given task ID.
-func (w *grpcWorker) TaskStatus(ctx context.Context, req *pb.TaskStatusRequest,
+func (*grpcWorker) TaskStatus(ctx context.Context, req *pb.TaskStatusRequest,
 ) (*pb.TaskStatusResponse, error) {
 	taskId := req.GetTaskId()
 	meta, err := Tasks.get(taskId)
@@ -152,7 +159,7 @@ func (t *tasks) Enqueue(req interface{}) (uint64, error) {
 		// Early return
 		switch meta.Status() {
 		case TaskStatusFailed:
-			return 0, fmt.Errorf("an error occurred, please check logs for details")
+			return 0, fmt.Errorf("task failed")
 		case TaskStatusSuccess:
 			return id, nil
 		}
@@ -288,12 +295,12 @@ func (t *tasks) cleanup() {
 // newId generates a random unique task ID. logMu must be acquired before calling this function.
 //
 // The format of this is:
-// 32 bits: random number
 // 32 bits: raft ID
+// 32 bits: random number
 func (t *tasks) newId() uint64 {
-	raftId := State.WALstore.Uint(raftwal.RaftId)
+	myRaftId := State.WALstore.Uint(raftwal.RaftId)
 	for {
-		id := raftId<<32 | uint64(t.rng.Intn(math.MaxUint32))
+		id := myRaftId<<32 | uint64(t.rng.Intn(math.MaxUint32))
 		// z.Tree cannot store 0 or math.MaxUint64. Check that id is unique.
 		if id != 0 && id != math.MaxUint64 && t.log.Get(id) == 0 {
 			return id
