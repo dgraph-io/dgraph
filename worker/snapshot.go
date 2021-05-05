@@ -144,7 +144,10 @@ func deleteStalePreds(ctx context.Context, kvs *pb.KVS) error {
 		if _, ok := snapshotPreds[pred]; !ok {
 		LOOP:
 			for {
-				err := posting.DeletePredicate(ctx, pred)
+				// While retrieving the snapshot, we mark the node as unhealthy. So it is better to
+				// a blocking delete of predicate as we know that no new writes will arrive at
+				// this alpha.
+				err := posting.DeletePredicateBlocking(ctx, pred)
 				switch err {
 				case badger.ErrBlockedWrites:
 					time.Sleep(1 * time.Second)
