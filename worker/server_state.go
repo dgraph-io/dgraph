@@ -77,6 +77,7 @@ func InitServerState() {
 
 	State.initStorage()
 	go State.fillTimestampRequests()
+	go processMoveCh()
 
 	groupId, err := x.ReadGroupIdFile(Config.PostingDir)
 	if err != nil {
