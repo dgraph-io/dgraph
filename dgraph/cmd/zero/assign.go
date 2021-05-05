@@ -186,6 +186,9 @@ func (s *Server) AssignIds(ctx context.Context, num *pb.Num) (*pb.AssignedIds, e
 	defer span.End()
 
 	rateLimit := func() error {
+		if s.rateLimiter == nil {
+			return nil
+		}
 		if num.GetType() != pb.Num_UID {
 			// We only rate limit lease of UIDs.
 			return nil
