@@ -162,10 +162,9 @@ func (ir *incrRollupi) Process(closer *z.Closer) {
 			return
 		}
 		if err := x.RetryUntilSuccess(3600, time.Second, func() error {
-			glog.V(2).Infof("Handing over a skiplist of size: %d\n", sl.MemSize())
 			return pstore.HandoverSkiplist(sl, nil)
 		}); err != nil {
-			glog.Errorf("rollupKey handover skiplist: %v\n", err)
+			glog.Errorf("Rollup handover skiplist returned error: %v\n", err)
 		}
 		// If we have an error, the skiplist might not be safe to use still. So,
 		// just create a new one always.
