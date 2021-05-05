@@ -1240,15 +1240,26 @@ func DeleteData() error {
 	return pstore.DropPrefix([]byte{x.DefaultPrefix})
 }
 
-// DeletePredicate deletes all entries and indices for a given predicate.
-func DeletePredicate(ctx context.Context, attr string, ts uint64) error {
+// DeletePredicate deletes all entries and indices for a given predicate. The delete may be logical
+// based on DB options set.
+func DeletePredicate(ctx context.Context, attr string) error {
 	glog.Infof("Dropping predicate: [%s]", attr)
 	prefix := x.PredicatePrefix(attr)
 	if err := pstore.DropPrefix(prefix); err != nil {
 		return err
 	}
+	return schema.State().Delete(attr)
+}
 
-	return schema.State().Delete(attr, ts)
+// DeletePredicateBlocking deletes all entries and indices for a given predicate. It also blocks the
+// writes.
+func DeletePredicateBlocking(ctx context.Context, attr string) error {
+	glog.Infof("Dropping predicate: [%s]", attr)
+	prefix := x.PredicatePrefix(attr)
+	if err := pstore.DropPrefixBlocking(prefix); err != nil {
+		return err
+	}
+	return schema.State().Delete(attr)
 }
 
 // DeleteNamespace bans the namespace and deletes its predicates/types from the schema.
