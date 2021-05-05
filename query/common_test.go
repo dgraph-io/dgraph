@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -44,9 +45,12 @@ func setSchema(schema string) {
 }
 
 func dropPredicate(pred string) {
-	err := client.Alter(context.Background(), &api.Operation{
-		DropAttr: pred,
-	})
+alter:
+	err := client.Alter(context.Background(), &api.Operation{DropAttr: pred})
+	if err != nil && strings.Contains(err.Error(), "Please retry operation") {
+		time.Sleep(1 * time.Second)
+		goto alter
+	}
 	if err != nil {
 		panic(fmt.Sprintf("Could not drop predicate. Got error %v", err.Error()))
 	}

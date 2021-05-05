@@ -538,9 +538,16 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	// TODO: Maybe add some checks about the schema.
 	m.Schema = result.Preds
 	m.Types = result.Types
-	_, err = query.ApplyMutations(ctx, m)
+	for i := 0; i < 3; i++ {
+		_, err = query.ApplyMutations(ctx, m)
+		if err != nil && strings.Contains(err.Error(), "Please retry operation") {
+			time.Sleep(time.Second)
+			continue
+		}
+		break
+	}
 	if err != nil {
-		return empty, err
+		return empty, errors.Wrapf(err, "During ApplyMutations")
 	}
 
 	// wait for indexing to complete or context to be canceled.

@@ -59,6 +59,7 @@ var (
 		"is already running",
 		"retry again, server is not ready", // given by Dgraph while applying the snapshot
 		"Unavailable: Server not ready",    // given by GraphQL layer, during init on admin server
+		"Please retry operation",
 	}
 
 	retryableCreateNamespaceErrors = append(retryableUpdateGQLSchemaErrors,

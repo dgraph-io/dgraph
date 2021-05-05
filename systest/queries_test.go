@@ -24,10 +24,12 @@ import (
 	"io/ioutil"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
 )
 
@@ -1361,8 +1363,11 @@ func EqWithAlteredIndexOrder(t *testing.T, c *dgo.Dgraph) {
 	testutil.CompareJSON(t, expectedResult, string(resp.Json))
 
 	// now, let's set the schema with trigram before term
-	op = &api.Operation{Schema: `name: string @index(trigram, term) .`}
-	require.NoError(t, c.Alter(ctx, op))
+	err = x.RetryUntilSuccess(1, time.Second, func() error {
+		op = &api.Operation{Schema: `name: string @index(trigram, term) .`}
+		return c.Alter(ctx, op)
+	})
+	require.NoError(t, err)
 
 	// querying with eq should still work
 	resp, err = c.NewReadOnlyTxn().Query(ctx, q)

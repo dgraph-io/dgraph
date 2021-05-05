@@ -20,10 +20,12 @@ import (
 	"bytes"
 	"context"
 	"math"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/dgraph-io/badger/v3"
+	"github.com/dgraph-io/badger/v3/y"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -157,10 +159,20 @@ func addMutation(t *testing.T, l *List, edge *pb.DirectedEdge, op uint32,
 		require.NoError(t, err)
 	}
 
-	txn.Update()
-	writer := NewTxnWriter(pstore)
-	require.NoError(t, txn.CommitToDisk(writer, commitTs))
-	require.NoError(t, writer.Flush())
+	txn.Update(context.Background())
+	sl := txn.Skiplist()
+
+	itr := sl.NewUniIterator(false)
+	itr.Rewind()
+	for itr.Valid() {
+		y.SetKeyTs(itr.Key(), commitTs)
+		itr.Next()
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	pstore.HandoverSkiplist(sl, wg.Done)
+	wg.Wait()
 }
 
 const schemaVal = `

@@ -648,7 +648,7 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph, conf *viper.Viper) *loader
 
 	l.requestsWg.Add(opts.Pending)
 	for i := 0; i < opts.Pending; i++ {
-		go l.makeRequests()
+		go l.makeRequests(i)
 	}
 
 	rand.Seed(time.Now().Unix())

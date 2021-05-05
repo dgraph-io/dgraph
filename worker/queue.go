@@ -23,10 +23,10 @@ import (
 	"math/rand"
 	"path/filepath"
 	"reflect"
-	"strconv"
 	"sync"
 	"time"
 
+	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
@@ -35,10 +35,63 @@ import (
 	"github.com/pkg/errors"
 )
 
+// TaskStatusOverNetwork fetches the status of a task over the network. Alphas only know about the
+// tasks created by them, but this function would fetch the task from the correct Alpha.
+func TaskStatusOverNetwork(ctx context.Context, req *pb.TaskStatusRequest,
+) (*pb.TaskStatusResponse, error) {
+	// Extract Raft ID from Task ID.
+	taskId := req.GetTaskId()
+	if taskId == 0 {
+		return nil, fmt.Errorf("invalid task ID: %#x", taskId)
+	}
+	raftId := taskId >> 32
+
+	// Skip the network call if the required Alpha is me.
+	myRaftId := State.WALstore.Uint(raftwal.RaftId)
+	if raftId == myRaftId {
+		worker := (*grpcWorker)(nil)
+		return worker.TaskStatus(ctx, req)
+	}
+
+	// Find the Alpha with the required Raft ID.
+	var addr string
+	for _, group := range groups().state.GetGroups() {
+		for _, member := range group.GetMembers() {
+			if member.GetId() == raftId {
+				addr = member.GetAddr()
+			}
+		}
+	}
+	if addr == "" {
+		return nil, fmt.Errorf("the Alpha that served that task is not available")
+	}
+
+	// Send the request to the Alpha.
+	pool, err := conn.GetPools().Get(addr)
+	if err != nil {
+		return nil, errors.Wrapf(err, "unable to reach the Alpha that served that task")
+	}
+	client := pb.NewWorkerClient(pool.Get())
+	return client.TaskStatus(ctx, req)
+}
+
+// TaskStatus retrieves metadata for a given task ID.
+func (*grpcWorker) TaskStatus(ctx context.Context, req *pb.TaskStatusRequest,
+) (*pb.TaskStatusResponse, error) {
+	taskId := req.GetTaskId()
+	meta, err := Tasks.get(taskId)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &pb.TaskStatusResponse{TaskMeta: meta.uint64()}
+	return resp, nil
+}
+
 var (
 	// Tasks is a global persistent task queue.
 	// Do not use this before calling InitTasks.
-	Tasks tasks
+	Tasks *tasks
 )
 
 // InitTasks initializes the global Tasks variable.
@@ -48,12 +101,11 @@ func InitTasks() {
 	x.Check(err)
 
 	// #nosec G404: weak RNG
-	Tasks = tasks{
-		queue:  make(chan taskRequest, 16),
-		log:    log,
-		logMu:  new(sync.Mutex),
-		raftId: State.WALstore.Uint(raftwal.RaftId),
-		rng:    rand.New(rand.NewSource(time.Now().UnixNano())),
+	Tasks = &tasks{
+		queue: make(chan taskRequest, 16),
+		log:   log,
+		logMu: new(sync.Mutex),
+		rng:   rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 
 	// Mark all pending tasks as failed.
@@ -79,42 +131,96 @@ type tasks struct {
 	log   *z.Tree
 	logMu *sync.Mutex
 
-	raftId uint64
-	rng    *rand.Rand
+	rng *rand.Rand
 }
 
-// Get retrieves metadata for a given task ID.
-// It returns 0 if the task was not found.
-func (t tasks) Get(id string) (TaskMeta, error) {
-	idUint64, err := strconv.ParseUint(id, 0, 64)
-	if err != nil {
-		return 0, errors.Wrapf(err, "task ID is invalid: %s", id)
+// Enqueue adds a new task to the queue, waits for 3 seconds, and returns any errors that
+// may have happened in that span of time. The request must be of type:
+// - *pb.BackupRequest
+// - *pb.ExportRequest
+func (t *tasks) Enqueue(req interface{}) (uint64, error) {
+	if t == nil {
+		return 0, fmt.Errorf("task queue hasn't been initialized yet")
 	}
-	if idUint64 == 0 || idUint64 == math.MaxUint64 {
-		return 0, fmt.Errorf("task ID is invalid: %d", idUint64)
+
+	id, err := t.enqueue(req)
+	if err != nil {
+		return 0, err
+	}
+
+	// Wait for upto 3 seconds to check for errors.
+	for i := 0; i < 3; i++ {
+		time.Sleep(time.Second)
+
+		t.logMu.Lock()
+		meta := TaskMeta(t.log.Get(id))
+		t.logMu.Unlock()
+
+		// Early return
+		switch meta.Status() {
+		case TaskStatusFailed:
+			return 0, fmt.Errorf("task failed")
+		case TaskStatusSuccess:
+			return id, nil
+		}
+	}
+
+	return id, nil
+}
+
+// enqueue adds a new task to the queue. This must be of type:
+// - *pb.BackupRequest
+// - *pb.ExportRequest
+func (t *tasks) enqueue(req interface{}) (uint64, error) {
+	var kind TaskKind
+	switch req.(type) {
+	case *pb.BackupRequest:
+		kind = TaskKindBackup
+	case *pb.ExportRequest:
+		kind = TaskKindExport
+	default:
+		err := fmt.Errorf("invalid TaskKind: %d", kind)
+		panic(err)
+	}
+
+	t.logMu.Lock()
+	defer t.logMu.Unlock()
+
+	task := taskRequest{
+		id:  t.newId(),
+		req: req,
+	}
+	select {
+	// t.logMu must be acquired before pushing to t.queue, otherwise the worker might start the
+	// task, and won't be able to find it in t.log.
+	case t.queue <- task:
+		t.log.Set(task.id, newTaskMeta(kind, TaskStatusQueued).uint64())
+		return task.id, nil
+	default:
+		return 0, fmt.Errorf("too many pending tasks, please try again later")
+	}
+}
+
+// get retrieves metadata for a given task ID.
+func (t *tasks) get(id uint64) (TaskMeta, error) {
+	if t == nil {
+		return 0, fmt.Errorf("task queue hasn't been initialized yet")
+	}
+
+	if id == 0 || id == math.MaxUint64 {
+		return 0, fmt.Errorf("task ID is invalid: %d", id)
 	}
 	t.logMu.Lock()
 	defer t.logMu.Unlock()
-	meta := TaskMeta(t.log.Get(idUint64))
+	meta := TaskMeta(t.log.Get(id))
 	if meta == 0 {
 		return 0, fmt.Errorf("task does not exist or has expired")
 	}
 	return meta, nil
 }
 
-// cleanup deletes all expired tasks.
-func (t tasks) cleanup() {
-	const taskTtl = 7 * 24 * time.Hour // 1 week
-	minTs := time.Now().UTC().Add(-taskTtl).Unix()
-	minMeta := uint64(minTs) << 32
-
-	t.logMu.Lock()
-	defer t.logMu.Unlock()
-	t.log.DeleteBelow(minMeta)
-}
-
 // worker loops forever, running queued tasks one at a time. Any returned errors are logged.
-func (t tasks) worker() {
+func (t *tasks) worker() {
 	shouldCleanup := time.NewTicker(time.Hour)
 	defer shouldCleanup.Stop()
 	for {
@@ -136,7 +242,7 @@ func (t tasks) worker() {
 	}
 }
 
-func (t tasks) run(task taskRequest) error {
+func (t *tasks) run(task taskRequest) error {
 	// Fetch the task from the log. If the task isn't found, this means it has expired (older than
 	// taskTtl).
 	t.logMu.Lock()
@@ -175,68 +281,15 @@ func (t tasks) run(task taskRequest) error {
 	return err
 }
 
-// Enqueue adds a new task to the queue, waits for 3 seconds, and returns any errors that
-// may have happened in that span of time. The request must be of type:
-// - *pb.BackupRequest
-// - *pb.ExportRequest
-func (t tasks) Enqueue(req interface{}) (string, error) {
-	id, err := t.enqueue(req)
-	if err != nil {
-		return "", err
-	}
-	taskId := fmt.Sprintf("%#x", id)
-
-	// Wait for upto 3 seconds to check for errors.
-	for i := 0; i < 3; i++ {
-		time.Sleep(time.Second)
-
-		t.logMu.Lock()
-		meta := TaskMeta(t.log.Get(id))
-		t.logMu.Unlock()
-
-		// Early return
-		switch meta.Status() {
-		case TaskStatusFailed:
-			return "", fmt.Errorf("an error occurred, please check logs for details")
-		case TaskStatusSuccess:
-			return taskId, nil
-		}
-	}
-
-	return taskId, nil
-}
-
-// enqueue adds a new task to the queue. This must be of type:
-// - *pb.BackupRequest
-// - *pb.ExportRequest
-func (t tasks) enqueue(req interface{}) (uint64, error) {
-	var kind TaskKind
-	switch req.(type) {
-	case *pb.BackupRequest:
-		kind = TaskKindBackup
-	case *pb.ExportRequest:
-		kind = TaskKindExport
-	default:
-		err := fmt.Errorf("invalid TaskKind: %d", kind)
-		panic(err)
-	}
+// cleanup deletes all expired tasks.
+func (t *tasks) cleanup() {
+	const taskTtl = 7 * 24 * time.Hour // 1 week
+	minTs := time.Now().UTC().Add(-taskTtl).Unix()
+	minMeta := uint64(minTs) << 32
 
 	t.logMu.Lock()
 	defer t.logMu.Unlock()
-
-	task := taskRequest{
-		id:  t.newId(),
-		req: req,
-	}
-	select {
-	// t.logMu must be acquired before pushing to t.queue, otherwise the worker might start the
-	// task, and won't be able to find it in t.log.
-	case t.queue <- task:
-		t.log.Set(task.id, newTaskMeta(kind, TaskStatusQueued).uint64())
-		return task.id, nil
-	default:
-		return 0, fmt.Errorf("too many pending tasks, please try again later")
-	}
+	t.log.DeleteBelow(minMeta)
 }
 
 // newId generates a random unique task ID. logMu must be acquired before calling this function.
@@ -244,9 +297,10 @@ func (t tasks) enqueue(req interface{}) (uint64, error) {
 // The format of this is:
 // 32 bits: raft ID
 // 32 bits: random number
-func (t tasks) newId() uint64 {
+func (t *tasks) newId() uint64 {
+	myRaftId := State.WALstore.Uint(raftwal.RaftId)
 	for {
-		id := t.raftId<<32 | uint64(t.rng.Int())
+		id := myRaftId<<32 | uint64(t.rng.Intn(math.MaxUint32))
 		// z.Tree cannot store 0 or math.MaxUint64. Check that id is unique.
 		if id != 0 && id != math.MaxUint64 && t.log.Get(id) == 0 {
 			return id
@@ -260,7 +314,7 @@ type taskRequest struct {
 }
 
 // run starts a task and blocks till it completes.
-func (t taskRequest) run() error {
+func (t *taskRequest) run() error {
 	switch req := t.req.(type) {
 	case *pb.BackupRequest:
 		if err := ProcessBackupRequest(context.Background(), req); err != nil {
