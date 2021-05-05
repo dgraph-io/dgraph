@@ -17,6 +17,10 @@
 package testutil
 
 import (
+	"bytes"
+	"encoding/json"
+	"log"
+	"net/http"
 	"testing"
 	"time"
 
@@ -77,4 +81,53 @@ func GetAccessJwt(t *testing.T, params JwtParams) string {
 	jwtString, err := token.SignedString(params.Secret)
 	require.NoError(t, err)
 	return jwtString
+}
+
+func WaitForTask(t *testing.T, taskId string, useHttps bool) {
+	const query = `query task($id: String!) {
+		task(input: {id: $id}) {
+			status
+		}
+	}`
+	params := GraphQLParams{
+		Query:     query,
+		Variables: map[string]interface{}{"id": taskId},
+	}
+	request, err := json.Marshal(params)
+	require.NoError(t, err)
+
+	for {
+		time.Sleep(4 * time.Second)
+
+		var adminUrl string
+		var client http.Client
+		if useHttps {
+			adminUrl = "https://" + SockAddrHttp + "/admin"
+			client = GetHttpsClient(t)
+		} else {
+			adminUrl = "http://" + SockAddrHttp + "/admin"
+			client = *http.DefaultClient
+		}
+		response, err := client.Post(adminUrl, "application/json", bytes.NewBuffer(request))
+		require.NoError(t, err)
+		defer response.Body.Close()
+
+		var data interface{}
+		require.NoError(t, json.NewDecoder(response.Body).Decode(&data))
+		status := JsonGet(data, "data", "task", "status").(string)
+		switch status {
+		case "Success":
+			log.Printf("export complete")
+			return
+		case "Failed", "Unknown":
+			t.Errorf("task failed with status: %s", status)
+		}
+	}
+}
+
+func JsonGet(j interface{}, components ...string) interface{} {
+	for _, component := range components {
+		j = j.(map[string]interface{})[component]
+	}
+	return j
 }
