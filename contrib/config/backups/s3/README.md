@@ -44,10 +44,6 @@ AWS_SECRET_ACCESS_KEY=<aws-secret-key>
 docker-compose up --detach
 ```
 
-#### Access Ratel UI
-
-* Ratel UI: http://localhost:8000
-
 #### Clean up the Docker Environment
 
 ```bash
@@ -123,18 +119,6 @@ export ALPHA_POD_NAME=$(
   --output jsonpath="{.items[0].metadata.name}"
 )
 kubectl --namespace default port-forward $ALPHA_POD_NAME 8080:8080
-```
-
-For Dgraph Ratel UI, you can use this to access it at http://localhost:8000:
-
-```bash
-export RATEL_POD_NAME=$(
- kubectl get pods \
-  --namespace default \
-  --selector "component=ratel,release=my-release" \
-  --output jsonpath="{.items[0].metadata.name}"
-)
-kubectl --namespace default port-forward $RATEL_POD_NAME 8000:8000
 ```
 
 #### Cleanup the Kubernetes environment

@@ -162,13 +162,14 @@
     }
   dgquery: |-
     query {
-      Project_1(func: uid(0x123)) @filter(type(Project)) {
+      Project_1(func: uid(0x123)) {
         uid
+        dgraph.type
       }
     }
   queryjson: |
     {
-      "Project_1": [ { "uid": "0x123" } ]
+      "Project_1": [ { "uid": "0x123", "dgraph.type": ["Project"] } ]
     }
   uids: |
     {
@@ -229,13 +230,14 @@
     }
   dgquery: |-
     query {
-      Project_1(func: uid(0x123)) @filter(type(Project)) {
+      Project_1(func: uid(0x123)) {
         uid
+        dgraph.type
       }
     }
   queryjson: |
     {
-      "Project_1": [ { "uid": "0x123" } ]
+        "Project_1": [ { "uid": "0x123", "dgraph.type": ["Project"]} ]
     }
   uids: |
     {
@@ -301,13 +303,14 @@
     }
   dgquery: |-
     query {
-      Project_1(func: uid(0x123)) @filter(type(Project)) {
+      Project_1(func: uid(0x123)) {
         uid
+        dgraph.type
       }
     }
   queryjson: |
     {
-      "Project_1": [ { "uid": "0x123" } ]
+        "Project_1": [ { "uid": "0x123", "dgraph.type":["Project"] } ]
     }
   uids: |
     {
@@ -374,13 +377,14 @@
     }
   dgquery: |-
     query {
-      Project_1(func: uid(0x123)) @filter(type(Project)) {
+      Project_1(func: uid(0x123)) {
         uid
+        dgraph.type
       }
     }
   queryjson: |
     {
-      "Project_1": [ { "uid": "0x123" } ]
+        "Project_1": [ { "uid": "0x123", "dgraph.type":["Project"]} ]
     }
   uids: |
     {
@@ -449,17 +453,19 @@
     }
   dgquery: |-
     query {
-      Project_1(func: uid(0x123)) @filter(type(Project)) {
+      Project_1(func: uid(0x123)) {
         uid
+        dgraph.type
       }
-      Ticket_2(func: uid(0x789)) @filter(type(Ticket)) {
+      Ticket_2(func: uid(0x789)) {
         uid
+        dgraph.type
       }
     }
   queryjson: |
     {
-      "Project_1": [ { "uid": "0x123" } ],
-      "Ticket_2": [ { "uid": "0x789" } ]
+      "Project_1": [ { "uid": "0x123", "dgraph.type": ["Project"] } ],
+      "Ticket_2": [ { "uid": "0x789", "dgraph.type": ["Ticket"] } ]
     }
   dgquerysec: |-
     query {
@@ -528,17 +534,19 @@
     }
   dgquery: |-
     query {
-      Project_1(func: uid(0x123)) @filter(type(Project)) {
+      Project_1(func: uid(0x123)) {
         uid
+        dgraph.type
       }
-      Ticket_2(func: uid(0x789)) @filter(type(Ticket)) {
+      Ticket_2(func: uid(0x789)) {
         uid
+        dgraph.type
       }
     }
   queryjson: |
     {
-      "Project_1": [ { "uid": "0x123" } ],
-      "Ticket_2": [ { "uid": "0x789" } ]
+        "Project_1": [ { "uid": "0x123", "dgraph.type":["Project"] } ],
+        "Ticket_2": [ { "uid": "0x789", "dgraph.type":["Ticket"]} ]
     }
   dgquerysec: |-
     query {
@@ -612,13 +620,14 @@
     }
   dgquery: |-
     query {
-      Ticket_1(func: uid(0x789)) @filter(type(Ticket)) {
+      Ticket_1(func: uid(0x789)) {
         uid
+        dgraph.type
       }
     }
   queryjson: |
     {
-      "Ticket_1": [ { "uid": "0x789" } ]
+      "Ticket_1": [ { "uid": "0x789", "dgraph.type": ["Ticket"] } ]
     }
   dgquerysec: |-
     query {
@@ -702,13 +711,14 @@
     }
   dgquery: |-
     query {
-      Ticket_1(func: uid(0x789)) @filter(type(Ticket)) {
+      Ticket_1(func: uid(0x789)) {
         uid
+        dgraph.type
       }
     }
   queryjson: |
     {
-      "Ticket_1": [ { "uid": "0x789" } ]
+        "Ticket_1": [ { "uid": "0x789", "dgraph.type":["Ticket"] } ]
     }
   dgquerysec: |-
     query {
@@ -908,8 +918,9 @@
     }
   dgquery: |-
     query {
-      User_1(func: eq(User.username, "user1")) @filter(type(User)) {
+      User_1(func: eq(User.username, "user1")) {
         uid
+        dgraph.type
       }
     }
   queryjson: |
@@ -958,8 +969,9 @@
     }
   dgquery: |-
     query {
-      User_1(func: eq(User.username, "user1")) @filter(type(User)) {
+      User_1(func: eq(User.username, "user1")) {
         uid
+        dgraph.type
       }
     }
   queryjson: |
@@ -1241,13 +1253,14 @@
     }
   dgquery: |-
     query {
-      Tweets_1(func: eq(Tweets.id, "existing ID")) @filter(type(Tweets)) {
+      Tweets_1(func: eq(Tweets.id, "existing ID")) {
         uid
+        dgraph.type
       }
     }
   queryjson: |
     {
-      "Tweets_1": [ { "uid": "0x123" } ]
+        "Tweets_1": [ { "uid": "0x123", "dgraph.type":["Tweets"] } ]
     }
   dgquerysec: |-
     query {
@@ -1278,13 +1291,14 @@
     }
   dgquery: |-
     query {
-      Tweets_1(func: eq(Tweets.id, "existing ID")) @filter(type(Tweets)) {
+      Tweets_1(func: eq(Tweets.id, "existing ID")) {
         uid
+        dgraph.type
       }
     }
   queryjson: |
     {
-      "Tweets_1": [ { "uid": "0x123" } ]
+        "Tweets_1": [ { "uid": "0x123", "dgraph.type":["Tweets"] } ]
     }
   dgquerysec: |-
     query {
@@ -1320,16 +1334,18 @@
     }
   dgquery: |-
     query {
-      State_1(func: eq(State.code, "mh")) @filter(type(State)) {
+      State_1(func: eq(State.code, "mh")) {
         uid
+        dgraph.type
       }
-      Country_2(func: eq(Country.id, "in")) @filter(type(Country)) {
+      Country_2(func: eq(Country.id, "in")) {
         uid
+        dgraph.type
       }
     }
   queryjson: |
     {
-      "State_1": [ { "uid": "0x123" } ]
+        "State_1": [ { "uid": "0x123", "dgraph.type":["State"] } ]
     }
   dgquerysec: |-
     query {

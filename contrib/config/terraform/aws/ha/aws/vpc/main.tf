@@ -16,9 +16,9 @@
 # A typical outbound connection from dgraph instance to google.com looks something like this
 # Instance --> Route --> NAT Instance(in public subnet) --> Route --> Internet Gateway(in public subnet)
 resource "aws_vpc" "dgraph" {
-  cidr_block           = var.cidr_block
-  enable_dns_support   = true
-  instance_tenancy     = "dedicated"
+  cidr_block         = var.cidr_block
+  enable_dns_support = true
+  instance_tenancy   = "dedicated"
 
   # For enabling assignment of private dns addresses within AWS.
   enable_dns_hostnames = true
@@ -115,53 +115,45 @@ resource "aws_subnet" "dgraph_secondary" {
 
 resource "aws_security_group" "dgraph_client" {
   name        = "dgraph-cluster-client"
-  description = "Security group that can be used by the client to connect to the dgraph cluster alpha and ratel instance using ALB."
+  description = "Security group that can be used by the client to connect to the dgraph alpha instance using ALB."
   vpc_id      = aws_vpc.dgraph.id
 
   egress {
-    from_port       = 0
-    to_port         = 0
-    protocol        = "-1"
-    cidr_blocks     = [var.cidr_block]
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = [var.cidr_block]
   }
 }
 
 resource "aws_security_group" "dgraph_alb" {
   name        = "dgraph-alb"
-  description = "Security group associated with the dgraph loadbalancer sitting in front of alpha and ratel instances."
+  description = "Security group associated with the dgraph loadbalancer sitting in front of dgraph alpha instances."
   vpc_id      = aws_vpc.dgraph.id
 
   ingress {
-    from_port   = 8000
-    to_port     = 8000
-    protocol    = "tcp"
+    from_port = 8000
+    to_port   = 8000
+    protocol  = "tcp"
 
     security_groups = [aws_security_group.dgraph_client.id]
   }
 
   ingress {
-    from_port   = 8080
-    to_port     = 8080
-    protocol    = "tcp"
+    from_port = 8080
+    to_port   = 8080
+    protocol  = "tcp"
 
     security_groups = [aws_security_group.dgraph_client.id]
   }
 
-  # Egress to the alpha and ratel instances port only.
+  # Egress to the alpha instances port only.
   egress {
-    from_port   = 8080
-    to_port     = 8080
-    protocol    = "tcp"
+    from_port = 8080
+    to_port   = 8080
+    protocol  = "tcp"
 
-    cidr_blocks     = [var.subnet_cidr_block]
-  }
-
-  egress {
-    from_port   = 8000
-    to_port     = 8000
-    protocol    = "tcp"
-
-    cidr_blocks     = [var.subnet_cidr_block]
+    cidr_blocks = [var.subnet_cidr_block]
   }
 }
 
@@ -195,18 +187,9 @@ resource "aws_security_group" "dgraph_services" {
   }
 
   ingress {
-    from_port   = 8000
-    to_port     = 8000
-    protocol    = "tcp"
-
-    security_groups = [aws_security_group.dgraph_alb.id]
-    description     = "For external ratel communication, this is opened to everyone to try."
-  }
-
-  ingress {
-    from_port   = 8080
-    to_port     = 8080
-    protocol    = "tcp"
+    from_port = 8080
+    to_port   = 8080
+    protocol  = "tcp"
 
     security_groups = [aws_security_group.dgraph_alb.id]
     description     = "For alpha external HTTP communication."
@@ -223,9 +206,9 @@ resource "aws_security_group" "dgraph_services" {
   # Allow egress to everywhere from within any instance in the cluster, this
   # is useful for bootstrap of the instance.
   egress {
-    from_port       = 0
-    to_port         = 0
-    protocol        = "-1"
-    cidr_blocks     = ["0.0.0.0/0"]
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 }

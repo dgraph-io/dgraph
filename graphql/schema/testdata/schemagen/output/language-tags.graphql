@@ -447,6 +447,7 @@ input PersonPatch {
 	f1Hi: String
 	f2: String
 	f3: String
+	name: String
 	nameHi: String
 	nameEn: String
 	address: String

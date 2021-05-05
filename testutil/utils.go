@@ -16,7 +16,17 @@
 
 package testutil
 
-import "github.com/dgraph-io/dgraph/x"
+import (
+	"bytes"
+	"encoding/json"
+	"log"
+	"net/http"
+	"testing"
+	"time"
+
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/stretchr/testify/require"
+)
 
 func GalaxySchemaKey(attr string) []byte {
 	attr = x.GalaxyAttr(attr)
@@ -46,4 +56,53 @@ func GalaxyIndexKey(attr, term string) []byte {
 func GalaxyCountKey(attr string, count uint32, reverse bool) []byte {
 	attr = x.GalaxyAttr(attr)
 	return x.CountKey(attr, count, reverse)
+}
+
+func WaitForTask(t *testing.T, taskId string, useHttps bool) {
+	const query = `query task($id: String!) {
+		task(input: {id: $id}) {
+			status
+		}
+	}`
+	params := GraphQLParams{
+		Query:     query,
+		Variables: map[string]interface{}{"id": taskId},
+	}
+	request, err := json.Marshal(params)
+	require.NoError(t, err)
+
+	for {
+		var adminUrl string
+		var client http.Client
+		if useHttps {
+			adminUrl = "https://" + SockAddrHttp + "/admin"
+			client = GetHttpsClient(t)
+		} else {
+			adminUrl = "http://" + SockAddrHttp + "/admin"
+			client = *http.DefaultClient
+		}
+		response, err := client.Post(adminUrl, "application/json", bytes.NewBuffer(request))
+		require.NoError(t, err)
+		defer response.Body.Close()
+
+		var data interface{}
+		require.NoError(t, json.NewDecoder(response.Body).Decode(&data))
+		status := JsonGet(data, "data", "task", "status").(string)
+		switch status {
+		case "Success":
+			log.Printf("export complete")
+			return
+		case "Failed", "Unknown":
+			t.Errorf("task failed with status: %s", status)
+		}
+
+		time.Sleep(4 * time.Second)
+	}
+}
+
+func JsonGet(j interface{}, components ...string) interface{} {
+	for _, component := range components {
+		j = j.(map[string]interface{})[component]
+	}
+	return j
 }

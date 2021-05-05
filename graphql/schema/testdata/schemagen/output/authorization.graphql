@@ -452,6 +452,7 @@ input UserOrder {
 }
 
 input UserPatch {
+	username: String
 	todos: [TodoRef]
 }
 

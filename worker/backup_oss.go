@@ -34,7 +34,7 @@ func (w *grpcWorker) Backup(
 	return nil, x.ErrNotSupported
 }
 
-func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull bool) error {
+func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest) error {
 	glog.Warningf("Backup failed: %v", x.ErrNotSupported)
 	return x.ErrNotSupported
 }

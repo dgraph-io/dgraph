@@ -233,6 +233,8 @@ they form a Raft group and provide synchronous replication.
 			"The SASL username for Kafka.").
 		Flag("sasl-password",
 			"The SASL password for Kafka.").
+		Flag("sasl-mechanism",
+			"The SASL mechanism for Kafka (PLAIN, SCRAM-SHA-256 or SCRAM-SHA-512)").
 		Flag("ca-cert",
 			"The path to CA cert file for TLS encryption.").
 		Flag("client-cert",
@@ -734,6 +736,7 @@ func run() {
 	glog.Infof("worker.Config: %+v", worker.Config)
 
 	worker.InitServerState()
+	worker.InitTasks()
 
 	if Alpha.Conf.GetBool("expose_trace") {
 		// TODO: Remove this once we get rid of event logs.

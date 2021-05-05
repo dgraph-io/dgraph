@@ -210,7 +210,7 @@ func deleteMutationRewriting(t *testing.T, file string, rewriterFactory func() M
 			rewriterToTest := rewriterFactory()
 
 			// -- Act --
-			_, _ = rewriterToTest.RewriteQueries(context.Background(), mut)
+			_, _, _ = rewriterToTest.RewriteQueries(context.Background(), mut)
 			idExistence := make(map[string]string)
 			upsert, err := rewriterToTest.Rewrite(context.Background(), mut, idExistence)
 			// -- Assert --
@@ -282,7 +282,7 @@ func mutationRewriting(t *testing.T, file string, rewriterFactory func() Mutatio
 			rewriterToTest := rewriterFactory()
 
 			// -- Query --
-			queries, err := rewriterToTest.RewriteQueries(context.Background(), mut)
+			queries, _, err := rewriterToTest.RewriteQueries(context.Background(), mut)
 			// -- Assert --
 			if tcase.Error != nil || err != nil {
 				require.NotNil(t, err)
@@ -381,7 +381,7 @@ func TestMutationQueryRewriting(t *testing.T) {
 					require.NoError(t, err)
 					gqlMutation := test.GetMutation(t, op)
 
-					_, _ = rewriter.RewriteQueries(context.Background(), gqlMutation)
+					_, _, _ = rewriter.RewriteQueries(context.Background(), gqlMutation)
 					_, err = rewriter.Rewrite(context.Background(), gqlMutation, tt.idExistence)
 					require.Nil(t, err)
 

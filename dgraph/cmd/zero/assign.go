@@ -127,7 +127,8 @@ func (s *Server) lease(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error
 			howMany = num.Val + leaseBandwidth
 		}
 		if howMany < num.Val || maxLease+howMany < maxLease { // check for overflow.
-			return &emptyAssignedIds, errors.Errorf("Cannot lease %s as the limit has reached", typ)
+			return &emptyAssignedIds, errors.Errorf("Cannot lease %s as the limit has reached."+
+				" currMax:%d", typ, s.nextLease[typ]-1)
 		}
 
 		var proposal pb.ZeroProposal

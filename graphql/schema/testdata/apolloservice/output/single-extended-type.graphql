@@ -322,6 +322,7 @@ input ProductOrder {
 }
 
 input ProductPatch {
+	id: String
 	name: String
 }
 
