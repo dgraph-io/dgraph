@@ -31,6 +31,7 @@ import (
 
 	bpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/badger/v3/y"
+	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/posting"
@@ -322,9 +323,11 @@ func (m *mapper) processReqCh(ctx context.Context) error {
 			if err := backupPl.Unmarshal(kv.Value); err != nil {
 				return errors.Wrapf(err, "while reading backup posting list")
 			}
-			pl := posting.FromBackupPostingList(backupPl)
-			shouldSplit := pl.Size() >= (1<<20)/2 && len(pl.Pack.Blocks) > 1
 
+			pl := posting.FromBackupPostingList(backupPl)
+			defer codec.FreePack(pl.Pack)
+
+			shouldSplit := pl.Size() >= (1<<20)/2 && len(pl.Pack.Blocks) > 1
 			if !shouldSplit || parsedKey.HasStartUid || len(pl.GetSplits()) > 0 {
 				// This covers two cases.
 				// 1. The list is not big enough to be split.
