@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/dgraph-io/dgo/v210"
@@ -49,19 +50,17 @@ func TestExportSchemaToMinio(t *testing.T) {
 	mc.MakeBucket(bucketName, "")
 
 	setupDgraph(t)
-	result := requestExport(t)
+	requestExport(t)
 
-	require.Equal(t, "Success", getFromJSON(result, "data", "export", "response", "code").(string))
-	require.Equal(t, "Export completed.", getFromJSON(result, "data", "export", "response", "message").(string))
-
-	var files []string
-	for _, f := range getFromJSON(result, "data", "export", "exportedFiles").([]interface{}) {
-		files = append(files, f.(string))
+	schemaFile := ""
+	doneCh := make(chan struct{})
+	defer close(doneCh)
+	for obj := range mc.ListObjectsV2(bucketName, "dgraph.", true, doneCh) {
+		if strings.Contains(obj.Key, ".schema.gz") {
+			schemaFile = obj.Key
+		}
 	}
-	require.Equal(t, 3, len(files))
-
-	schemaFile := files[1]
-	require.Contains(t, schemaFile, ".schema.gz")
+	require.NotEmpty(t, schemaFile)
 
 	object, err := mc.GetObject(bucketName, schemaFile, minio.GetObjectOptions{})
 	require.NoError(t, err)
@@ -123,14 +122,13 @@ func setupDgraph(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func requestExport(t *testing.T) map[string]interface{} {
+func requestExport(t *testing.T) {
 	exportRequest := `mutation export($dst: String!) {
 		export(input: {destination: $dst}) {
 			response {
 				code
-				message
 			}
-			exportedFiles
+			taskId
 		}
 	}`
 
@@ -146,19 +144,10 @@ func requestExport(t *testing.T) map[string]interface{} {
 
 	resp, err := http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
-	buf, err := ioutil.ReadAll(resp.Body)
-	require.NoError(t, err)
 
-	var result map[string]interface{}
-	require.NoError(t, json.Unmarshal(buf, &result))
-
-	return result
-}
-
-func getFromJSON(j map[string]interface{}, path ...string) interface{} {
-	var res interface{} = j
-	for _, p := range path {
-		res = res.(map[string]interface{})[p]
-	}
-	return res
+	var data interface{}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
+	require.Equal(t, "Success", testutil.JsonGet(data, "data", "export", "response", "code").(string))
+	taskId := testutil.JsonGet(data, "data", "export", "taskId").(string)
+	testutil.WaitForTask(t, taskId, false)
 }

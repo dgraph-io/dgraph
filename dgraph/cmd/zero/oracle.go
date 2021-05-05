@@ -59,15 +59,16 @@ func (o *Oracle) Init() {
 	o.commits = make(map[uint64]uint64)
 	// Remove the older btree file, before creating NewTree, as it may contain stale data leading
 	// to wrong results.
-	o.keyCommit = z.NewTree()
+	o.keyCommit = z.NewTree("oracle")
 	o.subscribers = make(map[int]chan pb.OracleDelta)
 	o.updates = make(chan *pb.OracleDelta, 100000) // Keeping 1 second worth of updates.
 	o.doneUntil.Init(nil)
 	go o.sendDeltasToSubscribers()
 }
 
-// oracle close releases the memory associated with btree used for keycommit.
+// close releases the memory associated with btree used for keycommit.
 func (o *Oracle) close() {
+	o.keyCommit.Close()
 }
 
 func (o *Oracle) updateStartTxnTs(ts uint64) {

@@ -328,7 +328,7 @@ func toSchema(attr string, update *pb.SchemaUpdate) *bpb.KV {
 func toType(attr string, update pb.TypeUpdate) *bpb.KV {
 	var buf bytes.Buffer
 	ns, attr := x.ParseNamespaceAttr(attr)
-	x.Check2(buf.WriteString(fmt.Sprintf("[0x%x] type <%s> {\n", ns, attr)))
+	x.Check2(buf.WriteString(fmt.Sprintf("[%#x] type <%s> {\n", ns, attr)))
 	for _, field := range update.Fields {
 		x.Check2(buf.WriteString(fieldToString(field)))
 	}
@@ -540,6 +540,7 @@ func newExportStorage(in *pb.ExportRequest, backupName string) (exportStorage, e
 
 // export creates a export of data by exporting it as an RDF gzip.
 func export(ctx context.Context, in *pb.ExportRequest) (ExportedFiles, error) {
+
 	if in.GroupId != groups().groupId() {
 		return nil, errors.Errorf("Export request group mismatch. Mine: %d. Requested: %d",
 			groups().groupId(), in.GroupId)

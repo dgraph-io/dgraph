@@ -19,6 +19,7 @@ package admin
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"math"
 
 	"github.com/dgraph-io/dgraph/graphql/resolve"
@@ -39,7 +40,6 @@ type exportInput struct {
 }
 
 func resolveExport(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
-
 	glog.Info("Got export request through GraphQL admin API")
 
 	input, err := getExportInput(m)
@@ -83,7 +83,7 @@ func resolveExport(ctx context.Context, m schema.Mutation) (*resolve.Resolved, b
 		return resolve.EmptyResult(m, err), false
 	}
 
-	files, err := worker.ExportOverNetwork(ctx, &pb.ExportRequest{
+	req := &pb.ExportRequest{
 		Format:       format,
 		Namespace:    exportNs,
 		Destination:  input.Destination,
@@ -91,28 +91,20 @@ func resolveExport(ctx context.Context, m schema.Mutation) (*resolve.Resolved, b
 		SecretKey:    input.SecretKey,
 		SessionToken: input.SessionToken,
 		Anonymous:    input.Anonymous,
-	})
+	}
+	taskId, err := worker.Tasks.Enqueue(req)
 	if err != nil {
 		return resolve.EmptyResult(m, err), false
 	}
 
-	responseData := response("Success", "Export completed.")
-	responseData["exportedFiles"] = toInterfaceSlice(files)
-
+	msg := fmt.Sprintf("Export queued with ID %#x", taskId)
+	data := response("Success", msg)
+	data["taskId"] = fmt.Sprintf("%#x", taskId)
 	return resolve.DataResult(
 		m,
-		map[string]interface{}{m.Name(): responseData},
+		map[string]interface{}{m.Name(): data},
 		nil,
 	), true
-}
-
-// toInterfaceSlice converts []string to []interface{}
-func toInterfaceSlice(in []string) []interface{} {
-	out := make([]interface{}, 0, len(in))
-	for _, s := range in {
-		out = append(out, s)
-	}
-	return out
 }
 
 func getExportInput(m schema.Mutation) (*exportInput, error) {

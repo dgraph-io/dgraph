@@ -161,9 +161,7 @@ func TestRestoreOfOldBackup(t *testing.T) {
 }
 
 func TestBackupFilesystem(t *testing.T) {
-	conn, err := grpc.Dial(
-		testutil.SockAddr,
-		grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))))
+	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))))
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 
@@ -179,7 +177,8 @@ func TestBackupFilesystem(t *testing.T) {
 
 	var buf bytes.Buffer
 	for i := 0; i < 10000; i++ {
-		fmt.Fprintf(&buf, "<_:x%d> <name> \"ibrahim\" .\n", i)
+		buf.Write([]byte(fmt.Sprintf(`<_:x%d> <name> "ibrahim" .
+		`, i)))
 	}
 	// Add initial data.
 	_, err = dg.NewTxn().Mutate(ctx, &api.Mutation{
@@ -405,9 +404,38 @@ func runBackup(t *testing.T, numExpectedFiles, numExpectedDirs int) []string {
 	return runBackupInternal(t, false, numExpectedFiles, numExpectedDirs)
 }
 
-func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles, numExpectedDirs int) []string {
-	testutil.StartBackupHttps(t, alphaBackupDir, forceFull)
-	testutil.WaitForTask(t, "opBackup")
+func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
+	numExpectedDirs int) []string {
+	backupRequest := `mutation backup($dst: String!, $ff: Boolean!) {
+			backup(input: {destination: $dst, forceFull: $ff}) {
+				response {
+					code
+				}
+				taskId
+			}
+		}`
+
+	adminUrl := "https://" + testutil.SockAddrHttp + "/admin"
+	params := testutil.GraphQLParams{
+		Query: backupRequest,
+		Variables: map[string]interface{}{
+			"dst": alphaBackupDir,
+			"ff":  forceFull,
+		},
+	}
+	b, err := json.Marshal(params)
+	require.NoError(t, err)
+
+	client := testutil.GetHttpsClient(t)
+	resp, err := client.Post(adminUrl, "application/json", bytes.NewBuffer(b))
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	var data interface{}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
+	require.Equal(t, "Success", testutil.JsonGet(data, "data", "backup", "response", "code").(string))
+	taskId := testutil.JsonGet(data, "data", "backup", "taskId").(string)
+	testutil.WaitForTask(t, taskId, true)
 
 	// Verify that the right amount of files and directories were created.
 	common.CopyToLocalFs(t)
@@ -422,7 +450,7 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles, numExpect
 	})
 	require.Equal(t, numExpectedDirs, len(dirs))
 
-	b, err := ioutil.ReadFile(filepath.Join(copyBackupDir, "manifest.json"))
+	b, err = ioutil.ReadFile(filepath.Join(copyBackupDir, "manifest.json"))
 	require.NoError(t, err)
 	var manifest worker.MasterManifest
 	err = json.Unmarshal(b, &manifest)
