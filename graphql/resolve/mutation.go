@@ -222,7 +222,7 @@ func (mr *dgraphResolver) rewriteAndExecute(
 	commit := false
 
 	defer func() {
-		if !commit && mutResp != nil && mutResp.Txn != nil {
+		if !commit && mutResp != nil && mutResp.Txn != nil && mutResp.Txn.StartTs > 0 {
 			mutResp.Txn.Aborted = true
 			_, err := mr.executor.CommitOrAbort(ctx, mutResp.Txn)
 			if err != nil {
