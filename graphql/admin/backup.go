@@ -54,9 +54,7 @@ func resolveBackup(ctx context.Context, m schema.Mutation) (*resolve.Resolved, b
 
 	return resolve.DataResult(
 		m,
-		map[string]interface{}{
-			m.Name(): response("Success", "Backup queued successfully, please check /health for status."),
-		},
+		map[string]interface{}{m.Name(): response("Success", "Backup completed.")},
 		nil,
 	), true
 }

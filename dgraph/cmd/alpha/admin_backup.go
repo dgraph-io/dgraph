@@ -62,7 +62,5 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	x.Check2(w.Write([]byte(`{` +
-		`"code": "Success", ` +
-		`"message": "Backup queued successfully, please check /health for status."}`)))
+	x.Check2(w.Write([]byte(`{"code": "Success", "message": "Backup completed."}`)))
 }
