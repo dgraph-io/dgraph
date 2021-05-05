@@ -921,9 +921,9 @@ func logAccess(log *accessEntry) {
 	}
 }
 
-// With cloud mode enabled, we don't allow ACL operations from any of the non-galaxy namespace.
+// With shared instance enabled, we don't allow ACL operations from any of the non-galaxy namespace.
 func shouldAllowAcls(ns uint64) bool {
-	return !worker.Config.CloudMode || ns == x.GalaxyNamespace
+	return !x.Config.SharedInstance || ns == x.GalaxyNamespace
 }
 
 // authorizeQuery authorizes the query using the aclCachePtr. It will silently drop all

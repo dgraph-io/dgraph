@@ -592,8 +592,6 @@ func NewWriters(req *pb.ExportRequest) (*Writers, error) {
 		SecretKey:    req.GetSecretKey(),
 		SessionToken: req.GetSessionToken(),
 		Anonymous:    req.GetAnonymous(),
-		// Prevent access to environment credentials when the cloud mode is enabled.
-		DisableEnv: Config.CloudMode,
 	}
 	handler, err := x.NewUriHandler(uri, creds)
 	if err != nil {

@@ -33,7 +33,6 @@ type MinioCredentials struct {
 	SecretKey    string
 	SessionToken string
 	Anonymous    bool
-	DisableEnv   bool
 }
 
 type MinioClient struct {
@@ -45,13 +44,6 @@ func (creds *MinioCredentials) isAnonymous() bool {
 		return false
 	}
 	return creds.Anonymous
-}
-
-func (creds *MinioCredentials) disableEnv() bool {
-	if creds == nil {
-		return false
-	}
-	return creds.DisableEnv
 }
 
 func MinioCredentialsProviderWithoutEnv(requestCreds credentials.Value) credentials.Provider {
@@ -118,7 +110,7 @@ func NewMinioClient(uri *url.URL, creds *MinioCredentials) (*MinioClient, error)
 	}
 
 	var credsProvider *credentials.Credentials
-	if creds.disableEnv() {
+	if Config.SharedInstance {
 		credsProvider = credentials.New(MinioCredentialsProviderWithoutEnv(requestCreds(creds)))
 	} else {
 		credsProvider = credentials.New(MinioCredentialsProvider(uri.Scheme, requestCreds(creds)))
