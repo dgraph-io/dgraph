@@ -1404,6 +1404,18 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (
 		req.req.StartTs = worker.State.GetTimestamp(false)
 		qc.latency.AssignTimestamp = time.Since(start)
 	}
+	if x.WorkerConfig.AclEnabled {
+		ns, err := x.ExtractNamespace(ctx)
+		if err != nil {
+			return nil, err
+		}
+		defer func() {
+			if resp != nil && resp.Txn != nil {
+				// attach the hash, user must send this hash when further operating on this startTs.
+				resp.Txn.Hash = getHash(ns, resp.Txn.StartTs)
+			}
+		}()
+	}
 
 	var gqlErrs error
 	if resp, rerr = processQuery(ctx, qc); rerr != nil {
@@ -1436,14 +1448,6 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (
 		ProcessingNs:      uint64(l.Processing.Nanoseconds()),
 		EncodingNs:        uint64(l.Json.Nanoseconds()),
 		TotalNs:           uint64((time.Since(l.Start)).Nanoseconds()),
-	}
-	if x.WorkerConfig.AclEnabled {
-		// attach the hash, user should send this hash when further operating on this startTs.
-		ns, err := x.ExtractNamespace(ctx)
-		if err != nil {
-			return nil, err
-		}
-		resp.Txn.Hash = getHash(ns, resp.Txn.StartTs)
 	}
 	md := metadata.Pairs(x.DgraphCostHeader, fmt.Sprint(resp.Metrics.NumUids["_total"]))
 	grpc.SendHeader(ctx, md)
