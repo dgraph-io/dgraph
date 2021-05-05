@@ -166,7 +166,7 @@ func TestEnvironmentAccess(t *testing.T) {
 	// Export without the minio creds should fail for non-galaxy.
 	resp := testutil.Export(t, nsToken, minioDest, "", "")
 	require.Greater(t, len(resp.Errors), 0)
-	require.Contains(t, resp.Errors.Error(), "an error occurred, please check logs")
+	require.Contains(t, resp.Errors.Error(), "task failed")
 
 	// Export without the minio creds should work for non-galaxy.
 	resp = testutil.Export(t, nsToken, minioDest, "accesskey", "secretkey")
