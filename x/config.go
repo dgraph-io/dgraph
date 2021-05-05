@@ -38,6 +38,8 @@ type Options struct {
 	// mutations-nquad int - maximum number of nquads that can be inserted in a mutation request
 	// BlockDropAll bool - if set to true, the drop all operation will be rejected by the server.
 	// query-timeout duration - Maximum time after which a query execution will fail.
+	// max-retries int64 - maximum number of retries made by dgraph to commit a transaction to disk.
+	// shared-instance bool - if set to true, ACLs will be disabled for non-galaxy users.
 	Limit                *z.SuperFlag
 	LimitMutationsNquad  int
 	LimitQueryEdge       uint64
@@ -45,6 +47,7 @@ type Options struct {
 	LimitNormalizeNode   int
 	QueryTimeout         time.Duration
 	MaxRetries           int64
+	SharedInstance       bool
 
 	// GraphQL options:
 	//
