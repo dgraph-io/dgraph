@@ -347,7 +347,7 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest, pidx uin
 		return errors.Wrapf(err, "cannot write backup")
 	}
 
-	// Reduce the map to pstore.
+	// Reduce the map to pstore using stream writer.
 	sw := pstore.NewStreamWriter()
 	if err := sw.Prepare(); err != nil {
 		return errors.Wrapf(err, "while preparing DB")
@@ -358,8 +358,9 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest, pidx uin
 	if err := sw.Flush(); err != nil {
 		return errors.Wrap(err, "while stream writer flush")
 	}
-	// update the UID and NsId lease after restore.
-	if err := leaseBump(ctx, mapRes); err != nil {
+
+	// Bump the UID and NsId lease after restore.
+	if err := bumpLease(ctx, mapRes); err != nil {
 		return errors.Wrap(err, "While bumping the leases after restore")
 	}
 
@@ -391,7 +392,7 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest, pidx uin
 	return nil
 }
 
-func leaseBump(ctx context.Context, mr *mapResult) error {
+func bumpLease(ctx context.Context, mr *mapResult) error {
 	pl := groups().connToZeroLeader()
 	if pl == nil {
 		return errors.Errorf("cannot update uid lease due to no connection to zero leader")

@@ -282,6 +282,9 @@ func (m *mapper) processReqCh(ctx context.Context) error {
 	buf := z.NewBuffer(20<<20, "processKVList")
 	defer buf.Release()
 
+	maxNs := uint64(0)
+	maxUid := uint64(0)
+
 	toBuffer := func(kv *bpb.KV, version uint64) error {
 		key := y.KeyWithTs(kv.Key, version)
 		sz := kv.Size()
@@ -312,19 +315,12 @@ func (m *mapper) processReqCh(ctx context.Context) error {
 			return errors.Wrapf(err, "could not parse key %s", hex.Dump(restoreKey))
 		}
 
-		for {
-			oldMaxUid := atomic.LoadUint64(&m.maxUid)
-			newMaxUid := x.Max(oldMaxUid, parsedKey.Uid)
-			if swapped := atomic.CompareAndSwapUint64(&m.maxUid, oldMaxUid, newMaxUid); swapped {
-				break
-			}
+		// Update the local max uid and max namespace values.
+		if parsedKey.Uid > maxUid {
+			maxUid = parsedKey.Uid
 		}
-		for {
-			oldMaxNs := atomic.LoadUint64(&m.maxNs)
-			newMaxNs := x.Max(oldMaxNs, ns)
-			if swapped := atomic.CompareAndSwapUint64(&m.maxNs, oldMaxNs, newMaxNs); swapped {
-				break
-			}
+		if ns > maxNs {
+			maxNs = ns
 		}
 
 		if !in.keepSchema && (parsedKey.IsSchema() || parsedKey.IsType()) {
@@ -468,6 +464,24 @@ func (m *mapper) processReqCh(ctx context.Context) error {
 	if err := mergeBuffer(); err != nil {
 		return err
 	}
+
+	// Update the global maxUid and maxNs. We need CAS here because mapping is
+	// being carried out concurrently.
+	for {
+		oldMaxUid := atomic.LoadUint64(&m.maxUid)
+		newMaxUid := x.Max(oldMaxUid, maxUid)
+		if swapped := atomic.CompareAndSwapUint64(&m.maxUid, oldMaxUid, newMaxUid); swapped {
+			break
+		}
+	}
+	for {
+		oldMaxNs := atomic.LoadUint64(&m.maxNs)
+		newMaxNs := x.Max(oldMaxNs, maxNs)
+		if swapped := atomic.CompareAndSwapUint64(&m.maxNs, oldMaxNs, newMaxNs); swapped {
+			break
+		}
+	}
+
 	return nil
 }
 
