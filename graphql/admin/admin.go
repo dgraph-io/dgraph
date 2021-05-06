@@ -855,7 +855,7 @@ func (as *adminServer) initServer() {
 
 		sch, err := getCurrentGraphQLSchema(x.GalaxyNamespace)
 		if err != nil {
-			glog.Infof("namespace: %d. Error reading GraphQL schema: %s.", x.GalaxyNamespace, err)
+			glog.Errorf("namespace: %d. Error reading GraphQL schema: %s.", x.GalaxyNamespace, err)
 			continue
 		}
 		sch.loaded = true
@@ -873,7 +873,7 @@ func (as *adminServer) initServer() {
 
 		generatedSchema, err := generateGQLSchema(sch, x.GalaxyNamespace)
 		if err != nil {
-			glog.Infof("namespace: %d. Error processing GraphQL schema: %s.",
+			glog.Errorf("namespace: %d. Error processing GraphQL schema: %s.",
 				x.GalaxyNamespace, err)
 			break
 		}
@@ -1050,7 +1050,7 @@ func (as *adminServer) lazyLoadSchema(namespace uint64) error {
 	} else {
 		generatedSchema, err = generateGQLSchema(sch, namespace)
 		if err != nil {
-			glog.Infof("namespace: %d. Error processing GraphQL schema: %s.", namespace, err)
+			glog.Errorf("namespace: %d. Error processing GraphQL schema: %s.", namespace, err)
 			return err
 		}
 	}
