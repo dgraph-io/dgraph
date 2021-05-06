@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -314,13 +315,18 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	span := otrace.FromContext(ctx)
 
 	if proposal.Mutations.DropOp == pb.Mutations_DATA {
+		ns, err := strconv.ParseUint(proposal.Mutations.DropValue, 0, 64)
+		if err != nil {
+			return err
+		}
 		// Ensures nothing get written to disk due to commit proposals.
-		posting.Oracle().ResetTxns()
-		if err := posting.DeleteData(); err != nil {
+		posting.Oracle().ResetTxnsForNs(ns)
+		if err := posting.DeleteData(ns); err != nil {
 			return err
 		}
 
 		// Clear entire cache.
+		// TODO(Naman): Would it be okay for now to reset cluster wide cache on drop data.
 		posting.ResetCache()
 		return nil
 	}

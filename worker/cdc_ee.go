@@ -17,6 +17,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"math"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -109,6 +110,19 @@ func (cdc *CDC) resetPendingEvents() {
 	cdc.Lock()
 	defer cdc.Unlock()
 	cdc.pendingTxnEvents = make(map[uint64][]CDCEvent)
+}
+
+func (cdc *CDC) resetPendingEventsForNs(ns uint64) {
+	if cdc == nil {
+		return
+	}
+	cdc.Lock()
+	defer cdc.Unlock()
+	for ts, events := range cdc.pendingTxnEvents {
+		if len(events) > 0 && binary.BigEndian.Uint64(events[0].Meta.Namespace) == ns {
+			delete(cdc.pendingTxnEvents, ts)
+		}
+	}
 }
 
 func (cdc *CDC) hasPending(attr string) bool {
@@ -241,9 +255,15 @@ func (cdc *CDC) processCDCEvents() {
 			switch {
 			case proposal.Mutations.DropOp != pb.Mutations_NONE: // this means its a drop operation
 				// if there is DROP ALL or DROP DATA operation, clear pending events also.
-				if proposal.Mutations.DropOp == pb.Mutations_ALL ||
-					proposal.Mutations.DropOp == pb.Mutations_DATA {
+				if proposal.Mutations.DropOp == pb.Mutations_ALL {
 					cdc.resetPendingEvents()
+				} else if proposal.Mutations.DropOp == pb.Mutations_DATA {
+					ns, err := strconv.ParseUint(proposal.Mutations.DropValue, 0, 64)
+					if err != nil {
+						glog.Warningf("CDC: parsing namespace failed with error %v. Ignoring.", err)
+						return
+					}
+					cdc.resetPendingEventsForNs(ns)
 				}
 				if err := sendToSink(events, proposal.Mutations.StartTs); err != nil {
 					rerr = errors.Wrapf(err, "unable to send messages to sink")
