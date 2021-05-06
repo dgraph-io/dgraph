@@ -532,7 +532,10 @@ func setupServer(closer *z.Closer) {
 	baseMux.HandleFunc("/graphql", func(w http.ResponseWriter, r *http.Request) {
 		namespace := x.ExtractNamespaceHTTP(r)
 		r.Header.Set("resolver", strconv.FormatUint(namespace, 10))
-		admin.LazyLoadSchema(namespace)
+		if err := admin.LazyLoadSchema(namespace); err != nil {
+			admin.WriteErrorResponse(w, r, err)
+			return
+		}
 		mainServer.HTTPHandler().ServeHTTP(w, r)
 	})
 
@@ -542,7 +545,10 @@ func setupServer(closer *z.Closer) {
 		r.Header.Set("resolver", "0")
 		// We don't need to load the schema for all the admin operations.
 		// Only a few like getUser, queryGroup require this. So, this can be optimized.
-		admin.LazyLoadSchema(x.ExtractNamespaceHTTP(r))
+		if err := admin.LazyLoadSchema(x.ExtractNamespaceHTTP(r)); err != nil {
+			admin.WriteErrorResponse(w, r, err)
+			return
+		}
 		allowedMethodsHandler(allowedMethods{
 			http.MethodGet:     true,
 			http.MethodPost:    true,
