@@ -266,7 +266,7 @@ func (txn *Txn) FillContext(ctx *api.TxnContext, gid uint32) {
 		fps := strconv.FormatUint(key, 36)
 		ctx.Keys = append(ctx.Keys, fps)
 	}
-	ctx.Keys = x.Unique(ctx.Keys)
+	// ctx.Keys = x.Unique(ctx.Keys)
 
 	txn.Unlock()
 	txn.cache.fillPreds(ctx, gid)

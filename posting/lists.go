@@ -249,5 +249,5 @@ func (lc *LocalCache) fillPreds(ctx *api.TxnContext, gid uint32) {
 		predKey := fmt.Sprintf("%d-%s", gid, pk.Attr)
 		ctx.Preds = append(ctx.Preds, predKey)
 	}
-	ctx.Preds = x.Unique(ctx.Preds)
+	// ctx.Preds = x.Unique(ctx.Preds)
 }
