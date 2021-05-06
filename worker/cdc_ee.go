@@ -430,7 +430,7 @@ func toCDCEvent(index uint64, mutation *pb.Mutations) []CDCEvent {
 		case pb.Mutations_TYPE:
 			namespace, t = x.ParseNamespaceBytes(mutation.DropValue)
 		default:
-			panic("unhandled drop operation")
+			glog.Error("CDC: got unhandled drop operation")
 		}
 
 		return []CDCEvent{
