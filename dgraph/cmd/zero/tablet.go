@@ -20,8 +20,10 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strconv"
 	"time"
 
+	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	humanize "github.com/dustin/go-humanize"
@@ -32,6 +34,7 @@ import (
 
 const (
 	predicateMoveTimeout = 120 * time.Minute
+	phaseOneThreshold    = 10000
 )
 
 /*
@@ -160,12 +163,6 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 	glog.Info(msg)
 	span.Annotate([]otrace.Attribute{otrace.StringAttribute("tablet", predicate)}, msg)
 
-	// Get a new timestamp. Source Alpha leader must reach this timestamp before streaming the data.
-	ids, err := s.Timestamps(ctx, &pb.Num{Val: 1})
-	if err != nil || ids.StartId == 0 {
-		return errors.Wrapf(err, "while leasing txn timestamp. Id: %+v", ids)
-	}
-
 	// Get connection to leader of source group.
 	pl := s.Leader(srcGroup)
 	if pl == nil {
@@ -176,16 +173,40 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 		Predicate: predicate,
 		SourceGid: srcGroup,
 		DestGid:   dstGroup,
-		ReadTs:    ids.StartId,
-		SinceTs:   0,
 	}
 
-	// Move the predicate. Commits on this predicate are not blocked yet. Any data after ReadTs
-	// will be moved in the phase II below.
-	span.Annotatef(nil, "Starting move [1]: %+v", in)
-	glog.Infof("Starting move [1]: %+v", in)
-	if _, err := wc.MovePredicate(ctx, in); err != nil {
-		return errors.Wrapf(err, "while moving the majority of predicate")
+	var sinceTs uint64
+	counter := 0
+	phaseI := func() (*api.Payload, error) {
+		// Get a new timestamp. Source Alpha leader must reach this timestamp before streaming data.
+		ids, err := s.Timestamps(ctx, &pb.Num{Val: 1})
+		if err != nil || ids.StartId == 0 {
+			return nil, errors.Wrapf(err, "while leasing txn timestamp. Id: %+v", ids)
+		}
+
+		counter++
+		// Move the predicate. Commits on this predicate are not blocked yet. Any data after ReadTs
+		// will be moved in the phase II below.
+		in.ReadTs = ids.StartId
+		in.SinceTs, sinceTs = sinceTs, in.ReadTs
+		span.Annotatef(nil, "Starting move [1.%d]: %+v", counter, in)
+		glog.Infof("Starting move [1.%d]: %+v", counter, in)
+		return wc.MovePredicate(ctx, in)
+	}
+
+	for {
+		reply, err := phaseI()
+		if err != nil {
+			return errors.Wrapf(err, "while moving the majority of predicate")
+		}
+
+		recvCount, err := strconv.Atoi(string(reply.Data))
+		if err != nil {
+			return err
+		}
+		if recvCount < phaseOneThreshold || counter > 5 {
+			break
+		}
 	}
 
 	// PHASE II:
@@ -195,13 +216,13 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 
 	// Get a new timestamp, beyond which we are sure that no new txns would be committed for this
 	// predicate. Source Alpha leader must reach this timestamp before streaming the data.
-	ids, err = s.Timestamps(ctx, &pb.Num{Val: 1})
+	ids, err := s.Timestamps(ctx, &pb.Num{Val: 1})
 	if err != nil || ids.StartId == 0 {
 		return errors.Wrapf(err, "while leasing txn timestamp. Id: %+v", ids)
 	}
 
 	// We have done a majority of move. Now transfer rest of the data.
-	in.SinceTs = in.ReadTs
+	in.SinceTs = sinceTs
 	in.ReadTs = ids.StartId
 	span.Annotatef(nil, "Starting move [2]: %+v", in)
 	glog.Infof("Starting move [2]: %+v", in)
