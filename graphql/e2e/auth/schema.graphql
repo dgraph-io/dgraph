@@ -1004,6 +1004,21 @@ type Query {
 	}"""
     )
 
+    queryIssueSortedByOwnerAge: [Issue] @custom(dql: """
+	query q($search: string) {
+		var(func: type(Issue)) {
+			Issue.owner {
+				age as User.age
+			}
+		}
+		queryIssueSortedByOwnerAge(func: uid(age), orderdesc: val(age)) {
+			id : uid
+            msg : Issue.msg
+            random : Issue.random
+		}
+	}"""
+    )
+
 	queryIssueGroupedByOwner: [GroupedIssueMapQ] @custom(dql: """
     query{
         queryIssueGroupedByOwner(func: type(Issue)) @groupby(owner: Issue.owner) {
