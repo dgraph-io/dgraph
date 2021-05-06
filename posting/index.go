@@ -19,6 +19,7 @@ package posting
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"io/ioutil"
@@ -1235,9 +1236,12 @@ func DeleteAll() error {
 	return pstore.DropAll()
 }
 
-// DeleteData deletes all data but leaves types and schema intact.
-func DeleteData() error {
-	return pstore.DropPrefix([]byte{x.DefaultPrefix})
+// DeleteData deletes all data for the namespace but leaves types and schema intact.
+func DeleteData(ns uint64) error {
+	prefix := make([]byte, 9)
+	prefix[0] = x.DefaultPrefix
+	binary.BigEndian.PutUint64(prefix[1:], ns)
+	return pstore.DropPrefix(prefix)
 }
 
 // DeletePredicate deletes all entries and indices for a given predicate.
