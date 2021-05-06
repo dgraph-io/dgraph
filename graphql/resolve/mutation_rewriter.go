@@ -227,7 +227,7 @@ func NewXidMetadata() *xidMetadata {
 //		b. newXidObj has some values other than xid and isn't equal to existingXidObject
 // It is used in places where we don't want to allow duplicates.
 func (xidMetadata *xidMetadata) isDuplicateXid(atTopLevel bool, xidVar string,
-	newXidObj map[string]interface{}, srcField schema.FieldDefinition) bool {
+	newXidObj map[string]interface{}, srcField schema.FieldDefinition, isXID map[string]bool) bool {
 	if atTopLevel && xidMetadata.seenAtTopLevel[xidVar] {
 		return true
 	}
@@ -243,11 +243,31 @@ func (xidMetadata *xidMetadata) isDuplicateXid(atTopLevel bool, xidVar string,
 	// and are not equal.
 	// XID should be defined with all its values at one of the places and references with its
 	// XID from other places.
-	if len(newXidObj) > 1 && len(xidMetadata.variableObjMap[xidVar]) > 1 &&
-		!reflect.DeepEqual(xidMetadata.variableObjMap[xidVar], newXidObj) {
-		return true
+	containsNonXID1 := false
+	containsNonXID2 := false
+	for key, val := range newXidObj {
+		if !isXID[key] {
+			containsNonXID1 = true
+		}
+		if otherVal, ok := xidMetadata.variableObjMap[xidVar][key]; ok {
+			if !reflect.DeepEqual(val, otherVal) {
+				return true
+			}
+		}
 	}
-
+	for key, val := range xidMetadata.variableObjMap[xidVar] {
+		if !isXID[key] {
+			containsNonXID2 = true
+		}
+		if otherVal, ok := newXidObj[key]; ok {
+			if !reflect.DeepEqual(val, otherVal) {
+				return true
+			}
+		}
+	}
+	if containsNonXID1 && containsNonXID2 {
+		return !reflect.DeepEqual(xidMetadata.variableObjMap[xidVar], newXidObj)
+	}
 	return false
 }
 
@@ -1794,6 +1814,11 @@ func existenceQueries(
 	}
 
 	xids := typ.XIDFields()
+	// xidNames[fieldName] is set to true if fieldName is XID.
+	isXID := make(map[string]bool)
+	for _, xid := range xids {
+		isXID[xid.Name()] = true
+	}
 	var xidString string
 	var err error
 	if len(xids) != 0 {
@@ -1816,7 +1841,7 @@ func existenceQueries(
 					// if we already encountered an object with same xid earlier, and this object is
 					// considered a duplicate of the existing object, then return error.
 
-					if xidMetadata.isDuplicateXid(atTopLevel, variable, obj, srcField) {
+					if xidMetadata.isDuplicateXid(atTopLevel, variable, obj, srcField, isXID) {
 						err := errors.Errorf("duplicate XID found: %s", xidString)
 						retErrors = append(retErrors, err)
 						return nil, nil, retErrors
@@ -1830,7 +1855,7 @@ func existenceQueries(
 					oldObj := xidMetadata.variableObjMap[variable]
 					// TODO(Jatin): This condition also needs to change in accordance with multiple xids.
 					//  Also consider the case when @id fields can be nullable.
-					if len(oldObj) == 1 && len(obj) > 1 {
+					if len(obj) > len(oldObj) {
 						// Continue execution to perform dfs in this case. There may be more nodes
 						// in the subtree of this node.
 						xidMetadata.variableObjMap[variable] = obj
