@@ -611,9 +611,13 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) error {
 					delete(predSet, p)
 				}
 			}
+			localDropNs := make(map[uint64]struct{})
+			for ns := range dropNs {
+				localDropNs[ns] = struct{}{}
+			}
 			in := &loadBackupInput{
 				preds:     predSet,
-				dropNs:    dropNs,
+				dropNs:    localDropNs,
 				isOld:     manifest.Version == 0,
 				restoreTs: req.RestoreTs,
 				// Only map the schema keys corresponding to the latest backup.

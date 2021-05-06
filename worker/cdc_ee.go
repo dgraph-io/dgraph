@@ -411,15 +411,26 @@ func toCDCEvent(index uint64, mutation *pb.Mutations) []CDCEvent {
 	}
 
 	// If drop operation
-	// todo (aman): right now drop all and data operations are still cluster wide.
-	// Fix these once we have namespace specific operations.
+	// todo (aman): right now drop all operation is still cluster wide.
+	// Fix this once we have namespace specific operation.
 	if mutation.DropOp != pb.Mutations_NONE {
-		ns := make([]byte, 8)
-		binary.BigEndian.PutUint64(ns, x.GalaxyNamespace)
+		namespace := make([]byte, 8)
 		var t string
-		if mutation.DropOp == pb.Mutations_TYPE {
-			// drop type are namespace specific.
-			ns, t = x.ParseNamespaceBytes(mutation.DropValue)
+		switch mutation.DropOp {
+		case pb.Mutations_ALL:
+			// Drop all is cluster wide.
+			binary.BigEndian.PutUint64(namespace, x.GalaxyNamespace)
+		case pb.Mutations_DATA:
+			ns, err := strconv.ParseUint(mutation.DropValue, 0, 64)
+			if err != nil {
+				glog.Warningf("CDC: parsing namespace failed with error %v. Ignoring.", err)
+				return nil
+			}
+			binary.BigEndian.PutUint64(namespace, ns)
+		case pb.Mutations_TYPE:
+			namespace, t = x.ParseNamespaceBytes(mutation.DropValue)
+		default:
+			panic("unhandled drop operation")
 		}
 
 		return []CDCEvent{
@@ -431,7 +442,7 @@ func toCDCEvent(index uint64, mutation *pb.Mutations) []CDCEvent {
 				},
 				Meta: &EventMeta{
 					RaftIndex: index,
-					Namespace: ns,
+					Namespace: namespace,
 				},
 			},
 		}
