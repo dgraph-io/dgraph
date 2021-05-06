@@ -136,7 +136,7 @@ func writeGroupByAttributes(b *strings.Builder, attrList []gql.GroupByAttr) {
 	}
 }
 
-func writeUIDFunc(b *strings.Builder, uids []uint64, args []gql.Arg) {
+func writeUIDFunc(b *strings.Builder, uids []uint64, args []gql.Arg, needVar []gql.VarContext) {
 	x.Check2(b.WriteString("uid("))
 	if len(uids) > 0 {
 		// uid function with uint64 - uid(0x123, 0x456, ...)
@@ -146,13 +146,20 @@ func writeUIDFunc(b *strings.Builder, uids []uint64, args []gql.Arg) {
 			}
 			x.Check2(b.WriteString(fmt.Sprintf("%#x", uid)))
 		}
-	} else {
+	} else if len(args) > 0 {
 		// uid function with a Dgraph query variable - uid(Post1)
 		for i, arg := range args {
 			if i != 0 {
 				x.Check2(b.WriteString(", "))
 			}
 			x.Check2(b.WriteString(arg.Value))
+		}
+	} else {
+		for i, v := range needVar {
+			if i != 0 {
+				x.Check2(b.WriteString(", "))
+			}
+			x.Check2(b.WriteString(v.Name))
 		}
 	}
 	x.Check2(b.WriteString(")"))
@@ -171,7 +178,7 @@ func writeRoot(b *strings.Builder, q *gql.GraphQuery) {
 	switch {
 	case q.Func.Name == "uid":
 		x.Check2(b.WriteString("(func: "))
-		writeUIDFunc(b, q.Func.UID, q.Func.Args)
+		writeUIDFunc(b, q.Func.UID, q.Func.Args, q.Func.NeedsVar)
 	case q.Func.Name == "type" && len(q.Func.Args) == 1:
 		x.Check2(b.WriteString(fmt.Sprintf("(func: type(%s)", q.Func.Args[0].Value)))
 	case q.Func.Name == "eq":
@@ -199,7 +206,7 @@ func writeFilterFunction(b *strings.Builder, f *gql.Function) {
 
 	switch {
 	case f.Name == "uid":
-		writeUIDFunc(b, f.UID, f.Args)
+		writeUIDFunc(b, f.UID, f.Args, f.NeedsVar)
 	default:
 		x.Check2(b.WriteString(fmt.Sprintf("%s(", f.Name)))
 		if f.Attr != "" {

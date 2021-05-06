@@ -633,8 +633,10 @@ func rewriteDQLQuery(query schema.Query, authRw *authRewriter) ([]*gql.GraphQuer
 		Variables: vars,
 	}
 	parsedResult, err := gql.Parse(dqlReq)
-	parsedResult.Query[0].Attr = parsedResult.Query[0].Alias
-	parsedResult.Query[0].Alias = ""
+	for _, qry := range parsedResult.Query {
+		qry.Attr = qry.Alias
+		qry.Alias = ""
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -653,6 +655,9 @@ func extractType(dgQuery *gql.GraphQuery) string {
 }
 
 func extractTypeFromFilter(f *gql.FilterTree) string {
+	if f == nil {
+		return ""
+	}
 	for _, fltr := range f.Child {
 		typeName := extractTypeFromFilter(fltr)
 		if typeName != "" {
@@ -663,6 +668,9 @@ func extractTypeFromFilter(f *gql.FilterTree) string {
 }
 
 func extractTypeFromFunc(f *gql.Function) string {
+	if f == nil {
+		return ""
+	}
 	switch f.Name {
 	case "type":
 		return f.Args[0].Value
@@ -676,20 +684,26 @@ func rewriteWithAuth(
 	dgQuery []*gql.GraphQuery,
 	sch schema.Schema,
 	authRw *authRewriter) ([]*gql.GraphQuery, error) {
-	qry := dgQuery[0]
-	typeName := extractType(qry)
-	if typeName == "" {
-		return dgQuery, nil
-	}
+	var dgQueries []*gql.GraphQuery
+	for _, qry := range dgQuery {
+		typeName := extractType(qry)
+		if typeName == "" {
+			dgQueries = append(dgQueries, qry)
+			continue
+		}
 
-	typ := sch.Type(typeName)
-	rbac := authRw.evaluateStaticRules(typ)
-	if rbac == schema.Negative {
-		emptyQuery := &gql.GraphQuery{Attr: qry.Attr + "()"}
-		return []*gql.GraphQuery{emptyQuery}, nil
+		typ := sch.Type(typeName)
+		if typ == nil {
+			dgQueries = append(dgQueries, qry)
+			continue
+		}
+		rbac := authRw.evaluateStaticRules(typ)
+		if rbac == schema.Negative {
+			dgQueries = append(dgQueries, &gql.GraphQuery{Attr: qry.Attr + "()"})
+		}
+		dgQueries = append(dgQueries, authRw.addAuthQueries(typ, []*gql.GraphQuery{qry}, rbac)...)
 	}
-	dgQuery = authRw.addAuthQueries(typ, dgQuery, rbac)
-	return dgQuery, nil
+	return dgQueries, nil
 }
 
 // Adds common RBAC and UID, Type rules to DQL query.

@@ -22,3 +22,31 @@
         Issue.owner : Issue.owner @filter(eq(User.username, "user1"))
       }
     }
+
+- name : "custom DQL query with var block"
+  gqlquery: |
+    query{
+      queryUserSortedByTweetScore {
+        username
+        age
+      }
+    }
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
+  dgquery: |-
+    query {
+      var(func: type(User)) {
+        User.tweets {
+          score as Tweets.score
+        }
+      }
+      queryUserSortedByTweetScore(func: uid(score), orderdesc: score) {
+        username : User.username
+        age : User.age
+        tweets : User.tweets {
+          text : Tweets.text
+          score : Tweets.score
+        }
+      }
+    }
