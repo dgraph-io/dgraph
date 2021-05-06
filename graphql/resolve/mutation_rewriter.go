@@ -139,6 +139,8 @@ func (v *VariableGenerator) Next(typ schema.Type, xidName, xidVal string, auth b
 	// return previously allocated variable name for repeating xidVal
 	var key string
 	flagAndXidName := xidName
+	// isInterfaceVariable is true if Next function is being used to generate variable for an
+	// interface. This is used for XIDs which are part of interface with interface=true flag.
 	isIntefaceVariable := false
 
 	// We pass the xidName as "Int.xidName" to generate variable for existence query
@@ -169,6 +171,8 @@ func (v *VariableGenerator) Next(typ schema.Type, xidName, xidVal string, auth b
 		xidType, _ := typ.FieldOriginatedFrom(xidName)
 		key = xidType.Name() + "." + flagAndXidName + "." + xidVal
 		if !isIntefaceVariable {
+			// This is done to ensure that two implementing types get a different variable
+			// assigned in case they are not inheriting the same XID with interface=true flag.
 			key = key + typ.Name()
 		}
 	}
@@ -224,7 +228,7 @@ func NewXidMetadata() *xidMetadata {
 // 2. we are in a deep mutation and:
 //		a. this newXidObj has a field which is inverse of srcField and that
 //		invField is not of List type, OR
-//		b. newXidObj has some values other than xid and isn't equal to existingXidObject
+//		b. newXidObj has some values other than xids and isn't equal to existingXidObject
 // It is used in places where we don't want to allow duplicates.
 func (xidMetadata *xidMetadata) isDuplicateXid(atTopLevel bool, xidVar string,
 	newXidObj map[string]interface{}, srcField schema.FieldDefinition, isXID map[string]bool) bool {
@@ -239,16 +243,20 @@ func (xidMetadata *xidMetadata) isDuplicateXid(atTopLevel bool, xidVar string,
 		}
 	}
 
-	// We return an error if both occurrences of xid contain more than one values
-	// and are not equal.
-	// XID should be defined with all its values at one of the places and references with its
-	// XID from other places.
+	// We return an error if both occurrences of xid contain any non-XID value and are not equal.
+	// We don't return an error in case some of the XID values are missing from one of the
+	// references. This is perfectly fine.
+
+	// Stores if newXidObj contains any non XID value.
 	containsNonXID1 := false
+	// Stores if xidMetadata.variableObjMap[xidVar] contains any non XID value.
 	containsNonXID2 := false
 	for key, val := range newXidObj {
 		if !isXID[key] {
 			containsNonXID1 = true
 		}
+		// The value should either be nil in other map. If it is not nil, it should be completely
+		// equal.
 		if otherVal, ok := xidMetadata.variableObjMap[xidVar][key]; ok {
 			if !reflect.DeepEqual(val, otherVal) {
 				return true
@@ -259,12 +267,16 @@ func (xidMetadata *xidMetadata) isDuplicateXid(atTopLevel bool, xidVar string,
 		if !isXID[key] {
 			containsNonXID2 = true
 		}
+		// The value should either be nil in other map. If it is not nil, it should be completely
+		// equal.
 		if otherVal, ok := newXidObj[key]; ok {
 			if !reflect.DeepEqual(val, otherVal) {
 				return true
 			}
 		}
 	}
+	// If both contain non XID values, check for equality. We return an true if both maps are not
+	// equal.
 	if containsNonXID1 && containsNonXID2 {
 		return !reflect.DeepEqual(xidMetadata.variableObjMap[xidVar], newXidObj)
 	}
@@ -1853,8 +1865,6 @@ func existenceQueries(
 					// xidMetadata.variableObjMap[variable] = { "id": "1" }
 					// In this case, as obj is the correct definition of the object, we update variableObjMap
 					oldObj := xidMetadata.variableObjMap[variable]
-					// TODO(Jatin): This condition also needs to change in accordance with multiple xids.
-					//  Also consider the case when @id fields can be nullable.
 					if len(obj) > len(oldObj) {
 						// Continue execution to perform dfs in this case. There may be more nodes
 						// in the subtree of this node.
@@ -1884,6 +1894,9 @@ func existenceQueries(
 						xid.Name(), xidString)
 					if interfaceTyp != nil {
 						if typeName, ok := xidMetadata.interfaceVariableToTypes[varInterface]; ok {
+							// If we have reached this state, it means the interface XID has been
+							// referenced before. We throw an error if it has previously been
+							// referenced with different implementing type.
 							if typeName != typ.Name() {
 								err := errors.Errorf(
 									"using duplicate XID value: %s for XID: %s "+
