@@ -672,7 +672,10 @@ func extractTypeFromFunc(f *gql.Function) string {
 	return ""
 }
 
-func rewriteWithAuth(dgQuery []*gql.GraphQuery, sch schema.Schema, authRw *authRewriter) ([]*gql.GraphQuery, error) {
+func rewriteWithAuth(
+	dgQuery []*gql.GraphQuery,
+	sch schema.Schema,
+	authRw *authRewriter) ([]*gql.GraphQuery, error) {
 	qry := dgQuery[0]
 	typeName := extractType(qry)
 	if typeName == "" {
