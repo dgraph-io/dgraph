@@ -46,6 +46,9 @@ func ResetAcl(closer *z.Closer) {
 	// do nothing
 }
 
+func upsertGuardianAndGroot(closer *z.Closer, ns uint64) {
+}
+
 // ResetAcls is an empty method since ACL is only supported in the enterprise version.
 func RefreshAcls(closer *z.Closer) {
 	// do nothing
