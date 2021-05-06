@@ -145,6 +145,9 @@ type mapper struct {
 	mapDir string
 	reqCh  chan listReq
 	szHist *z.HistogramData
+
+	maxUid uint64
+	maxNs  uint64
 }
 
 func (mw *mapper) newMapFile() (*os.File, error) {
@@ -296,7 +299,7 @@ func (m *mapper) processReqCh(ctx context.Context) error {
 				"Unexpected meta: %v for key: %s", kv.UserMeta, hex.Dump(kv.Key))
 		}
 
-		restoreKey, _, err := fromBackupKey(kv.Key)
+		restoreKey, ns, err := fromBackupKey(kv.Key)
 		if err != nil {
 			return errors.Wrap(err, "fromBackupKey")
 		}
@@ -308,6 +311,22 @@ func (m *mapper) processReqCh(ctx context.Context) error {
 		if err != nil {
 			return errors.Wrapf(err, "could not parse key %s", hex.Dump(restoreKey))
 		}
+
+		for {
+			oldMaxUid := atomic.LoadUint64(&m.maxUid)
+			newMaxUid := x.Max(oldMaxUid, parsedKey.Uid)
+			if swapped := atomic.CompareAndSwapUint64(&m.maxUid, oldMaxUid, newMaxUid); swapped {
+				break
+			}
+		}
+		for {
+			oldMaxNs := atomic.LoadUint64(&m.maxNs)
+			newMaxNs := x.Max(oldMaxNs, ns)
+			if swapped := atomic.CompareAndSwapUint64(&m.maxNs, oldMaxNs, newMaxNs); swapped {
+				break
+			}
+		}
+
 		if !in.keepSchema && (parsedKey.IsSchema() || parsedKey.IsType()) {
 			return nil
 		}
@@ -519,36 +538,41 @@ func (m *mapper) Map(r io.Reader, in *loadBackupInput) error {
 	return nil
 }
 
+type mapResult struct {
+	maxUid uint64
+	maxNs  uint64
+}
+
 // 1. RunMapper creates a mapper object
 // 2. mapper.Map() ->
-func RunMapper(req *pb.RestoreRequest, mapDir string) error {
+func RunMapper(req *pb.RestoreRequest, mapDir string) (*mapResult, error) {
 	uri, err := url.Parse(req.Location)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if req.RestoreTs == 0 {
-		return errors.New("RestoreRequest must have a valid restoreTs")
+		return nil, errors.New("RestoreRequest must have a valid restoreTs")
 	}
 
 	creds := getCredentialsFromRestoreRequest(req)
 	h, err := x.NewUriHandler(uri, creds)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	manifests, err := getManifestsToRestore(h, uri, req)
 	if err != nil {
-		return errors.Wrapf(err, "cannot retrieve manifests")
+		return nil, errors.Wrapf(err, "cannot retrieve manifests")
 	}
 	glog.Infof("Got %d backups to restore ", len(manifests))
 
 	cfg, err := getEncConfig(req)
 	if err != nil {
-		return errors.Wrapf(err, "unable to get encryption config")
+		return nil, errors.Wrapf(err, "unable to get encryption config")
 	}
 	keys, err := ee.GetKeys(cfg)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	mapper := &mapper{
@@ -599,7 +623,7 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) error {
 			file := filepath.Join(manifest.Path, backupName(manifest.Since, gid))
 			br := readerFrom(h, file).WithEncryption(keys.EncKey).WithCompression(manifest.Compression)
 			if br.err != nil {
-				return errors.Wrap(br.err, "newBackupReader")
+				return nil, errors.Wrap(br.err, "newBackupReader")
 			}
 			defer br.Close()
 
@@ -622,10 +646,10 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) error {
 			// This would stream the backups from the source, and map them in
 			// Dgraph compatible format on disk.
 			if err := mapper.Map(br, in); err != nil {
-				return errors.Wrap(err, "mapper.Map")
+				return nil, errors.Wrap(err, "mapper.Map")
 			}
 			if err := br.Close(); err != nil {
-				return errors.Wrap(err, "br.Close")
+				return nil, errors.Wrap(err, "br.Close")
 			}
 		}
 		for _, op := range manifest.DropOperations {
@@ -641,10 +665,10 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) error {
 				// TODO: We probably need to propose ban request.
 				ns, err := strconv.ParseUint(op.DropValue, 0, 64)
 				if err != nil {
-					return errors.Wrapf(err, "Map phase failed to parse namespace")
+					return nil, errors.Wrapf(err, "Map phase failed to parse namespace")
 				}
 				if err := pstore.BanNamespace(ns); err != nil {
-					return errors.Wrapf(err, "Map phase failed to ban namespace: %d", ns)
+					return nil, errors.Wrapf(err, "Map phase failed to ban namespace: %d", ns)
 				}
 			}
 		}
@@ -653,7 +677,14 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) error {
 	glog.Infof("Histogram of map input sizes:\n%s\n", mapper.szHist)
 	close(mapper.reqCh)
 	if err := g.Wait(); err != nil {
-		return errors.Wrapf(err, "from processKVList")
+		return nil, errors.Wrapf(err, "from processKVList")
 	}
-	return mapper.Flush()
+	if err := mapper.Flush(); err != nil {
+		return nil, errors.Wrap(err, "failed to flush the mapper")
+	}
+	mapRes := &mapResult{
+		maxUid: mapper.maxUid,
+		maxNs:  mapper.maxNs,
+	}
+	return mapRes, nil
 }

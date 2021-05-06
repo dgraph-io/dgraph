@@ -341,11 +341,13 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest, pidx uin
 	defer os.RemoveAll(mapDir)
 	glog.Infof("Created temporary map directory: %s\n", mapDir)
 
-	// Write restored values to disk and update the UID lease.
-	if err := RunMapper(req, mapDir); err != nil {
+	// Map the backup.
+	mapRes, err := RunMapper(req, mapDir)
+	if err != nil {
 		return errors.Wrapf(err, "cannot write backup")
 	}
 
+	// Reduce the map to pstore.
 	sw := pstore.NewStreamWriter()
 	if err := sw.Prepare(); err != nil {
 		return errors.Wrapf(err, "while preparing DB")
@@ -355,6 +357,10 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest, pidx uin
 	}
 	if err := sw.Flush(); err != nil {
 		return errors.Wrap(err, "while stream writer flush")
+	}
+	// update the UID and NsId lease after restore.
+	if err := leaseBump(ctx, mapRes); err != nil {
+		return errors.Wrap(err, "While bumping the leases after restore")
 	}
 
 	// Load schema back.
@@ -381,6 +387,30 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest, pidx uin
 	// Update the membership state to re-compute the group checksums.
 	if err := UpdateMembershipState(ctx); err != nil {
 		return errors.Wrapf(err, "cannot update membership state after restore")
+	}
+	return nil
+}
+
+func leaseBump(ctx context.Context, mr *mapResult) error {
+	pl := groups().connToZeroLeader()
+	if pl == nil {
+		return errors.Errorf("cannot update uid lease due to no connection to zero leader")
+	}
+
+	zc := pb.NewZeroClient(pl.Get())
+	leaseID := func(val uint64, typ pb.NumLeaseType) error {
+		if val == 0 {
+			return nil
+		}
+		_, err := zc.AssignIds(ctx, &pb.Num{Val: val, Type: typ})
+		return err
+	}
+
+	if err := leaseID(mr.maxUid, pb.Num_UID); err != nil {
+		return errors.Wrapf(err, "cannot update max uid lease after restore.")
+	}
+	if err := leaseID(mr.maxNs, pb.Num_NS_ID); err != nil {
+		return errors.Wrapf(err, "cannot update max namespace lease after restore.")
 	}
 	return nil
 }
@@ -473,7 +503,7 @@ func RunOfflineRestore(dir, location, backupId string, keyFile string,
 			EncryptionKeyFile: keyFile,
 			RestoreTs:         1,
 		}
-		if err := RunMapper(req, mapDir); err != nil {
+		if _, err := RunMapper(req, mapDir); err != nil {
 			return LoadResult{Err: errors.Wrap(err, "RunRestore failed to map")}
 		}
 		pdir := filepath.Join(dir, fmt.Sprintf("p%d", gid))
