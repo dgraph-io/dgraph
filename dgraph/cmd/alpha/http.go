@@ -426,7 +426,7 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 		Latency: resp.Latency,
 	}
 	sort.Strings(e.Txn.Keys)
-	sort.Strings(e.Txn.Preds)
+	e.Txn.Preds = x.Unique(e.Txn.Preds)
 
 	// Don't send keys array which is part of txn context if its commit immediately.
 	if req.CommitNow {
