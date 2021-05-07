@@ -68,7 +68,11 @@
     USER: "user1"
   dgquery: |-
     query {
-      var()
+      var() {
+        Issue.owner {
+          age as User.age
+        }
+      }
       queryIssueSortedByOwnerAge(func: uid(age), orderdesc: age) {
         id : uid
         msg : Issue.msg
