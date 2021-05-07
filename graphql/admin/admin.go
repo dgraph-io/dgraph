@@ -1037,7 +1037,7 @@ func (as *adminServer) lazyLoadSchema(namespace uint64) error {
 	sch, err := getCurrentGraphQLSchema(namespace)
 	if err != nil {
 		glog.Errorf("namespace: %d. Error reading GraphQL schema: %s.", namespace, err)
-		return err
+		return errors.Wrap(err, "failed to lazy-load GraphQL schema")
 	}
 
 	var generatedSchema schema.Schema
@@ -1051,7 +1051,7 @@ func (as *adminServer) lazyLoadSchema(namespace uint64) error {
 		generatedSchema, err = generateGQLSchema(sch, namespace)
 		if err != nil {
 			glog.Errorf("namespace: %d. Error processing GraphQL schema: %s.", namespace, err)
-			return err
+			return errors.Wrap(err, "failed to lazy-load GraphQL schema")
 		}
 	}
 

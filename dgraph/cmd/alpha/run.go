@@ -533,7 +533,7 @@ func setupServer(closer *z.Closer) {
 		namespace := x.ExtractNamespaceHTTP(r)
 		r.Header.Set("resolver", strconv.FormatUint(namespace, 10))
 		if err := admin.LazyLoadSchema(namespace); err != nil {
-			admin.WriteErrorResponse(w, r, errors.Wrap(err, "failed to lazy-load GraphQL schema"))
+			admin.WriteErrorResponse(w, r, err)
 			return
 		}
 		mainServer.HTTPHandler().ServeHTTP(w, r)
@@ -546,7 +546,7 @@ func setupServer(closer *z.Closer) {
 		// We don't need to load the schema for all the admin operations.
 		// Only a few like getUser, queryGroup require this. So, this can be optimized.
 		if err := admin.LazyLoadSchema(x.ExtractNamespaceHTTP(r)); err != nil {
-			admin.WriteErrorResponse(w, r, errors.Wrap(err, "failed to lazy-load GraphQL schema"))
+			admin.WriteErrorResponse(w, r, err)
 			return
 		}
 		allowedMethodsHandler(allowedMethods{

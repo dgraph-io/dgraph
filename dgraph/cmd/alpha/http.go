@@ -652,8 +652,7 @@ func graphqlProbeHandler(gqlHealthStore *admin.GraphQLHealthStore, globalEpoch m
 		namespace := x.ExtractNamespaceHTTP(r)
 		if err := admin.LazyLoadSchema(namespace); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
-			x.Check2(w.Write([]byte(fmt.Sprintf(`{"error":"%s"}`, errors.Wrap(err,
-				"failed to lazy-load GraphQL schema")))))
+			x.Check2(w.Write([]byte(fmt.Sprintf(`{"error":"%s"}`, err))))
 			return
 		}
 
