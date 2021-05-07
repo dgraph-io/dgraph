@@ -103,12 +103,10 @@ func (br *backupReader) WithCompression(comp string) *backupReader {
 }
 
 type loadBackupInput struct {
-	restoreTs   uint64
-	preds       predicateSet
-	dropNs      map[uint64]struct{}
-	isOld       bool
-	keepSchema  bool
-	compression string
+	preds      predicateSet
+	dropNs     map[uint64]struct{}
+	isOld      bool
+	keepSchema bool
 }
 
 type listReq struct {
@@ -620,10 +618,9 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) error {
 				localDropNs[ns] = struct{}{}
 			}
 			in := &loadBackupInput{
-				preds:     predSet,
-				dropNs:    localDropNs,
-				isOld:     manifest.Version == 0,
-				restoreTs: req.RestoreTs,
+				preds:  predSet,
+				dropNs: localDropNs,
+				isOld:  manifest.Version == 0,
 				// Only map the schema keys corresponding to the latest backup.
 				keepSchema: i == 0,
 			}
