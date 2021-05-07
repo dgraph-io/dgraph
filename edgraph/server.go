@@ -185,7 +185,7 @@ func GetGQLSchema(namespace uint64) (uid, graphQLSchema string, err error) {
 	sort.Slice(res, func(i, j int) bool {
 		return res[i].UidInt < res[j].UidInt
 	})
-	glog.Errorf("Multiple schema node found, using the last one")
+	glog.Errorf("namespace: %d. Multiple schema nodes found, using the last one", namespace)
 	resLast := res[len(res)-1]
 	return resLast.Uid, resLast.Schema, nil
 }

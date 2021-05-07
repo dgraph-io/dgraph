@@ -645,18 +645,22 @@ func adminSchemaHandler(w http.ResponseWriter, r *http.Request) {
 
 func graphqlProbeHandler(gqlHealthStore *admin.GraphQLHealthStore, globalEpoch map[uint64]*uint64) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		x.AddCorsHeaders(w)
+		w.Header().Set("Content-Type", "application/json")
 		// lazy load the schema so that just by making a probe request,
 		// one can boot up GraphQL for their namespace
 		namespace := x.ExtractNamespaceHTTP(r)
-		admin.LazyLoadSchema(namespace)
+		if err := admin.LazyLoadSchema(namespace); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			x.Check2(w.Write([]byte(fmt.Sprintf(`{"error":"%s"}`, err))))
+			return
+		}
 
 		healthStatus := gqlHealthStore.GetHealth()
 		httpStatusCode := http.StatusOK
 		if !healthStatus.Healthy {
 			httpStatusCode = http.StatusServiceUnavailable
 		}
-		w.Header().Set("Content-Type", "application/json")
-		x.AddCorsHeaders(w)
 		w.WriteHeader(httpStatusCode)
 		e := globalEpoch[namespace]
 		var counter uint64
