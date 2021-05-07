@@ -68,12 +68,24 @@ func writeQuery(b *strings.Builder, query *gql.GraphQuery, prefix string) {
 
 	if query.IsCount {
 		x.Check2(b.WriteString(fmt.Sprintf("count(%s)", query.Attr)))
-	} else {
+	} else if query.Attr != "val" {
 		x.Check2(b.WriteString(query.Attr))
 	}
 
 	if query.Func != nil {
+		if query.Attr == "val" {
+			x.Check2(b.WriteString("val("))
+		}
 		writeRoot(b, query)
+		switch query.Func.Name {
+		case "max", "sum", "min":
+			x.Check2(b.WriteString(fmt.Sprintf("%s(", query.Func.Name)))
+			writeAggregate(b, query.Func.Args, query.Func.NeedsVar)
+		}
+		x.Check2(b.WriteRune(')'))
+		if query.Attr == "val" {
+			x.Check2(b.WriteRune(')'))
+		}
 	}
 
 	if query.Filter != nil {
@@ -187,7 +199,25 @@ func writeRoot(b *strings.Builder, q *gql.GraphQuery) {
 		x.Check2(b.WriteRune(')'))
 	}
 	writeOrderAndPage(b, q, true)
-	x.Check2(b.WriteRune(')'))
+}
+
+func writeAggregate(b *strings.Builder, args []gql.Arg, needVar []gql.VarContext) {
+	if len(args) > 0 {
+		// uid function with a Dgraph query variable - uid(Post1)
+		for i, arg := range args {
+			if i != 0 {
+				x.Check2(b.WriteString(", "))
+			}
+			x.Check2(b.WriteString(arg.Value))
+		}
+	} else {
+		for i, v := range needVar {
+			if i != 0 {
+				x.Check2(b.WriteString(", "))
+			}
+			x.Check2(b.WriteString(v.Name))
+		}
+	}
 }
 
 func writeFilterArguments(b *strings.Builder, args []gql.Arg) {

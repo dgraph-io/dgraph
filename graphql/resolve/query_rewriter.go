@@ -699,7 +699,14 @@ func rewriteWithAuth(
 		}
 		rbac := authRw.evaluateStaticRules(typ)
 		if rbac == schema.Negative {
-			dgQueries = append(dgQueries, &gql.GraphQuery{Attr: qry.Attr + "()"})
+			if qry.Attr == "var" {
+				qry.Attr = qry.Attr + "()"
+				qry.Func = nil
+				dgQueries = append(dgQueries, qry)
+			} else {
+				dgQueries = append(dgQueries, &gql.GraphQuery{Attr: qry.Attr + "()"})
+			}
+			continue
 		}
 		dgQueries = append(dgQueries, authRw.addAuthQueries(typ, []*gql.GraphQuery{qry}, rbac)...)
 	}
