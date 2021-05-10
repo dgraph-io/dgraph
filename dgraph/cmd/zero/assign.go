@@ -244,17 +244,20 @@ func (s *Server) AssignIds(ctx context.Context, num *pb.Num) (*pb.AssignedIds, e
 		return err
 	}
 
-	if num.GetBump() {
+	// If this is a bump request and the current node is the leader then we create a normal lease
+	// request based on the number of required ids to reach the asked bump value. If the current
+	// node is not the leader then the bump request will be forwarded to the leader by lease().
+	if num.GetBump() && s.Node.AmLeader() {
 		s.leaseLock.Lock()
 		cur := s.nextLease[num.GetType()] - 1
 		s.leaseLock.Unlock()
 
 		// We need to lease more UIDs if bump request is more than current max lease.
 		req := num.GetVal()
-		num.Val = 0
-		if cur < req {
-			num.Val = req - cur
+		if cur >= req {
+			return &emptyAssignedIds, errors.Errorf("Nothing to be leased")
 		}
+		num.Val = req - cur
 
 		// Set bump to false because we want to lease the required ids in the following request.
 		num.Bump = false
