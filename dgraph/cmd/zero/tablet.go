@@ -32,7 +32,7 @@ import (
 
 const (
 	predicateMoveTimeout = 120 * time.Minute
-	phaseOneThreshold    = 100 << 20 // 100 MB
+	phaseOneThreshold    = 20 * time.Minute
 )
 
 /*
@@ -49,8 +49,8 @@ Phase I:
 • G1 would do a call to G2, and start streaming.
 • Before G2 starts accepting, it should delete any current keys for P.
 • G1 should tell Zero whether it succeeded or failed. (Endpoint: G1 → Zero)
-• If it succeeds, then based on difference of tablet size before and after the above run,
-  zero decides to do another run of Phase I, or move to Phase II.
+• If it succeeds, then based on the time taken for the above run, zero decides to do another run of
+  Phase I, or move to Phase II.
 
 Phase II:
 • Zero would propose that G1 is read-only for predicate P. This would propagate to the cluster.
@@ -143,23 +143,16 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 		return errors.Errorf("Unable to move reserved predicate %s", predicate)
 	}
 
-	var tab *pb.Tablet
-	updateTablet := func() error {
-		// Ensure that I'm connected to the rest of the Zero group, and am the leader.
-		if _, err := s.latestMembershipState(ctx); err != nil {
-			return errors.Wrapf(err, "unable to reach quorum")
-		}
-		if !s.Node.AmLeader() {
-			return errors.Errorf("I am not the Zero leader")
-		}
-		tab = s.ServingTablet(predicate)
-		if tab == nil {
-			return errors.Errorf("Tablet to be moved: [%v] is not being served", predicate)
-		}
-		return nil
+	// Ensure that I'm connected to the rest of the Zero group, and am the leader.
+	if _, err := s.latestMembershipState(ctx); err != nil {
+		return errors.Wrapf(err, "unable to reach quorum")
 	}
-	if err := updateTablet(); err != nil {
-		return err
+	if !s.Node.AmLeader() {
+		return errors.Errorf("I am not the Zero leader")
+	}
+	tab := s.ServingTablet(predicate)
+	if tab == nil {
+		return errors.Errorf("Tablet to be moved: [%v] is not being served", predicate)
 	}
 
 	// PHASE I:
@@ -200,27 +193,20 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 		return err
 	}
 
+	var start time.Time
 	for {
+		start = time.Now()
 		if err := nonBlockingMove(); err != nil {
 			return errors.Wrapf(err, "while moving the majority of predicate")
 		}
-
-		prevSize := tab.UncompressedBytes
-		if err := updateTablet(); err != nil {
-			return err
-		}
-		// If the difference in tablet size is less than threshold, or the counter reached limit,
-		// then move to Phase II.
-		diff := tab.UncompressedBytes - prevSize
-		if diff < phaseOneThreshold || counter > 3 {
-			msg := fmt.Sprintf("Done Phase I: got diff %s at counter: %d",
-				humanize.IBytes(uint64(diff)), counter)
+		took := time.Since(start)
+		if took < phaseOneThreshold || counter > 3 {
+			msg := fmt.Sprintf("Done Phase I: took %s at counter: %d", took, counter)
 			span.Annotate(nil, msg)
 			glog.Infof(msg)
 			break
 		}
-		msg := fmt.Sprintf("Redo Phase I: got diff %s at counter: %d",
-			humanize.IBytes(uint64(diff)), counter)
+		msg := fmt.Sprintf("Redo Phase I: took %s at counter: %d", took, counter)
 		span.Annotate(nil, msg)
 		glog.Infof(msg)
 		counter++
