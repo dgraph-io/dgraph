@@ -316,12 +316,8 @@ func (m *mapper) processReqCh(ctx context.Context) error {
 		}
 
 		// Update the local max uid and max namespace values.
-		if parsedKey.Uid > maxUid {
-			maxUid = parsedKey.Uid
-		}
-		if ns > maxNs {
-			maxNs = ns
-		}
+		maxUid = x.Max(maxUid, parsedKey.Uid)
+		maxNs = x.Max(maxNs, ns)
 
 		if !in.keepSchema && (parsedKey.IsSchema() || parsedKey.IsType()) {
 			return nil
