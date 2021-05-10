@@ -70,14 +70,13 @@ func writeQuery(b *strings.Builder, query *gql.GraphQuery, prefix string) {
 		x.Check2(b.WriteString(fmt.Sprintf("count(%s)", query.Attr)))
 	} else if query.Attr != "val" {
 		x.Check2(b.WriteString(query.Attr))
+	} else if isAggregateFn(query.Func) {
+		x.Check2(b.WriteString("sum(val("))
+		writeNeedVar(b, query)
+		x.Check2(b.WriteRune(')'))
 	} else {
 		x.Check2(b.WriteString("val("))
-		for i, v := range query.NeedsVar {
-			if i != 0 {
-				x.Check2(b.WriteString(", "))
-			}
-			x.Check2(b.WriteString(v.Name))
-		}
+		writeNeedVar(b, query)
 		x.Check2(b.WriteRune(')'))
 	}
 
@@ -131,6 +130,26 @@ func writeQuery(b *strings.Builder, query *gql.GraphQuery, prefix string) {
 	case query.Var != "" || query.Alias != "" || query.Attr != "":
 		x.Check2(b.WriteString("\n"))
 	}
+}
+
+func writeNeedVar(b *strings.Builder, query *gql.GraphQuery) {
+	for i, v := range query.NeedsVar {
+		if i != 0 {
+			x.Check2(b.WriteString(", "))
+		}
+		x.Check2(b.WriteString(v.Name))
+	}
+}
+
+func isAggregateFn(f *gql.Function) bool {
+	if f == nil {
+		return false
+	}
+	switch f.Name {
+	case "min", "max", "avg", "sum":
+		return true
+	}
+	return false
 }
 
 func writeGroupByAttributes(b *strings.Builder, attrList []gql.GroupByAttr) {
@@ -195,23 +214,6 @@ func writeRoot(b *strings.Builder, q *gql.GraphQuery) {
 		x.Check2(b.WriteString("(func: eq("))
 		writeFilterArguments(b, q.Func.Args)
 		x.Check2(b.WriteRune(')'))
-	case q.Func.Name == "sum":
-		x.Check2(b.WriteString("sum(val("))
-		writeAggregate(b, q.Func.Args, q.NeedsVar)
-		x.Check2(b.WriteRune(')'))
-	case q.Func.Name == "max":
-		x.Check2(b.WriteString("max(val("))
-		writeAggregate(b, q.Func.Args, q.NeedsVar)
-		x.Check2(b.WriteRune(')'))
-	case q.Func.Name == "min":
-		x.Check2(b.WriteString("min(val("))
-		writeAggregate(b, q.Func.Args, q.NeedsVar)
-		x.Check2(b.WriteRune(')'))
-	case q.Func.Name == "avg":
-		x.Check2(b.WriteString("avg(val("))
-		writeAggregate(b, q.Func.Args, q.NeedsVar)
-		x.Check2(b.WriteRune(')'))
-
 	}
 	writeOrderAndPage(b, q, true)
 }
