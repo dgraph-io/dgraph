@@ -247,11 +247,14 @@ func (s *Server) AssignIds(ctx context.Context, num *pb.Num) (*pb.AssignedIds, e
 	shouldLimit := true
 	if num.GetBump() {
 		s.leaseLock.Lock()
-		cur := s.maxLease(num.GetType())
+		cur := s.nextLease[num.GetType()] - 1
 		s.leaseLock.Unlock()
 
-		required := x.Max(0, num.GetVal()-cur)
-		num.Val = required
+		req := num.GetVal()
+		num.Val = 0
+		if cur < req {
+			num.Val = req - cur
+		}
 		num.Bump = false
 		shouldLimit = false
 	}
