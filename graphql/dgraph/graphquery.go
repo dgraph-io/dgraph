@@ -70,22 +70,20 @@ func writeQuery(b *strings.Builder, query *gql.GraphQuery, prefix string) {
 		x.Check2(b.WriteString(fmt.Sprintf("count(%s)", query.Attr)))
 	} else if query.Attr != "val" {
 		x.Check2(b.WriteString(query.Attr))
+	} else {
+		x.Check2(b.WriteString("val("))
+		for i, v := range query.NeedsVar {
+			if i != 0 {
+				x.Check2(b.WriteString(", "))
+			}
+			x.Check2(b.WriteString(v.Name))
+		}
+		x.Check2(b.WriteRune(')'))
 	}
 
 	if query.Func != nil {
-		if query.Attr == "val" {
-			x.Check2(b.WriteString("val("))
-		}
 		writeRoot(b, query)
-		switch query.Func.Name {
-		case "max", "sum", "min":
-			x.Check2(b.WriteString(fmt.Sprintf("%s(", query.Func.Name)))
-			writeAggregate(b, query.Func.Args, query.Func.NeedsVar)
-		}
 		x.Check2(b.WriteRune(')'))
-		if query.Attr == "val" {
-			x.Check2(b.WriteRune(')'))
-		}
 	}
 
 	if query.Filter != nil {
@@ -197,6 +195,23 @@ func writeRoot(b *strings.Builder, q *gql.GraphQuery) {
 		x.Check2(b.WriteString("(func: eq("))
 		writeFilterArguments(b, q.Func.Args)
 		x.Check2(b.WriteRune(')'))
+	case q.Func.Name == "sum":
+		x.Check2(b.WriteString("sum(val("))
+		writeAggregate(b, q.Func.Args, q.NeedsVar)
+		x.Check2(b.WriteRune(')'))
+	case q.Func.Name == "max":
+		x.Check2(b.WriteString("max(val("))
+		writeAggregate(b, q.Func.Args, q.NeedsVar)
+		x.Check2(b.WriteRune(')'))
+	case q.Func.Name == "min":
+		x.Check2(b.WriteString("min(val("))
+		writeAggregate(b, q.Func.Args, q.NeedsVar)
+		x.Check2(b.WriteRune(')'))
+	case q.Func.Name == "avg":
+		x.Check2(b.WriteString("avg(val("))
+		writeAggregate(b, q.Func.Args, q.NeedsVar)
+		x.Check2(b.WriteRune(')'))
+
 	}
 	writeOrderAndPage(b, q, true)
 }
@@ -280,6 +295,15 @@ func hasOrderOrPage(q *gql.GraphQuery) bool {
 	return len(q.Order) > 0 || hasFirst || hasOffset
 }
 
+func IsValueVar(attr string, q *gql.GraphQuery) bool {
+	for _, vars := range q.NeedsVar {
+		if attr == vars.Name && vars.Typ == 2 {
+			return true
+		}
+	}
+	return false
+}
+
 func writeOrderAndPage(b *strings.Builder, query *gql.GraphQuery, root bool) {
 	var wroteOrder, wroteFirst bool
 
@@ -292,7 +316,13 @@ func writeOrderAndPage(b *strings.Builder, query *gql.GraphQuery, root bool) {
 		} else {
 			x.Check2(b.WriteString("orderasc: "))
 		}
-		x.Check2(b.WriteString(ord.Attr))
+		if IsValueVar(ord.Attr, query) {
+			x.Check2(b.WriteString("val("))
+			x.Check2(b.WriteString(ord.Attr))
+			x.Check2(b.WriteRune(')'))
+		} else {
+			x.Check2(b.WriteString(ord.Attr))
+		}
 		wroteOrder = true
 	}
 

@@ -1659,7 +1659,7 @@ func addSelectionSetFrom(
 // the corresponding child is ignored during calculation. for eg: predicates like
 // `uid`,`name@en` will be ignored.
 func dqlHasAuthRules(q *gql.GraphQuery, typ schema.Type, authRw *authRewriter) bool {
-	if q == nil {
+	if q == nil || typ == nil {
 		return false
 	}
 	rn := authRw.selector(typ)
@@ -1680,7 +1680,7 @@ func dqlHasAuthRules(q *gql.GraphQuery, typ schema.Type, authRw *authRewriter) b
 
 func getFieldName(attr string) string {
 	fldSplit := strings.Split(attr, ".")
-	if len(fldSplit) == 1 {
+	if len(fldSplit) == 1 || attr == "dgraph.type" {
 		return ""
 	}
 	return fldSplit[1]
