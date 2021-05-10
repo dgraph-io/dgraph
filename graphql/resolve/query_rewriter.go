@@ -100,6 +100,18 @@ func hasCascadeDirective(field schema.Field) bool {
 	return false
 }
 
+func dqlHasCascadeDirective(q *gql.GraphQuery) bool {
+	if len(q.Cascade) > 0 {
+		return true
+	}
+	for _, childField := range q.Children {
+		if res := dqlHasCascadeDirective(childField); res {
+			return true
+		}
+	}
+	return false
+}
+
 // Returns the auth selector to be used depending on the query type.
 func getAuthSelector(queryType schema.QueryType) func(t schema.Type) *schema.RuleNode {
 	if queryType == schema.PasswordQuery {
@@ -644,6 +656,13 @@ func rewriteDQLQuery(query schema.Query, authRw *authRewriter) ([]*gql.GraphQuer
 	return rewriteWithAuth(parsedResult.Query, query.Schema(), authRw)
 }
 
+// extractType tries to find out the queried type in the DQL query.
+// First it tries to look in the root func and then in the filters.
+// However, there are some cases in which it is impossible to find
+// the type. for eg: the root func `func: uid(x,y)` doesn't tell us
+// anything about the type.
+// Similarly if the filter is of type `eq(name@en,10)` then we can't
+// find out the type with which the field `name@en` is associated.
 func extractType(dgQuery *gql.GraphQuery) string {
 	typeName := extractTypeFromFunc(dgQuery.Func)
 	if typeName != "" {
@@ -667,6 +686,10 @@ func extractTypeFromFilter(f *gql.FilterTree) string {
 	return extractTypeFromFunc(f.Func)
 }
 
+// extractTypeFromFunc extracts typeName from func. It
+// expects predicate names in the format of `Type.Field`.
+// If the predicate name is not in the format, it do not
+// return anything.
 func extractTypeFromFunc(f *gql.Function) string {
 	if f == nil {
 		return ""
@@ -675,7 +698,11 @@ func extractTypeFromFunc(f *gql.Function) string {
 	case "type":
 		return f.Args[0].Value
 	case "eq", "allofterms", "anyofterms", "gt", "le":
-		return strings.Split(f.Attr, ".")[0]
+		split := strings.Split(f.Attr, ".")
+		if len(split) == 1 {
+			return ""
+		}
+		return split[0]
 	}
 	return ""
 }
@@ -685,34 +712,38 @@ func rewriteWithAuth(
 	sch schema.Schema,
 	authRw *authRewriter) ([]*gql.GraphQuery, error) {
 	var dgQueries []*gql.GraphQuery
+	// DQL query may contain multiple query blocks.
+	// Need to apply @auth rules on each of the block.
 	for _, qry := range dgQuery {
-		typeName := extractType(qry)
-		if typeName == "" {
-			dgQueries = append(dgQueries, qry)
-			continue
-		}
 
+		typeName := extractType(qry)
 		typ := sch.Type(typeName)
+
+		// if unable to find the valid type then
+		// no @auth rules are applied.
 		if typ == nil {
 			dgQueries = append(dgQueries, qry)
 			continue
 		}
 
+		// authRw.hasAuthRules needs to be calculated separately for
+		// each query block in case of DQL queries.
 		authRw.hasAuthRules = dqlHasAuthRules(qry, typ, authRw)
-
-		fldAuthQueries := addAuthQueriesOnSelectionSet(qry, typ, authRw)
-
+		authRw.hasCascade = dqlHasCascadeDirective(qry)
 		rbac := authRw.evaluateStaticRules(typ)
+
 		if rbac == schema.Negative {
+			// Todo: form dummy query properly for var block.
 			if qry.Attr == "var" {
-				qry.Attr = qry.Attr + "()"
-				qry.Func = nil
+				qry.Func = &gql.Function{Name: "uid", UID: []uint64{0}}
 				dgQueries = append(dgQueries, qry)
 			} else {
 				dgQueries = append(dgQueries, &gql.GraphQuery{Attr: qry.Attr + "()"})
 			}
 			continue
 		}
+
+		fldAuthQueries := addAuthQueriesOnSelectionSet(qry, typ, authRw)
 
 		dgQueries = append(dgQueries, authRw.addAuthQueries(typ, []*gql.GraphQuery{qry}, rbac)...)
 		if len(fldAuthQueries) > 0 {
@@ -1623,6 +1654,10 @@ func addSelectionSetFrom(
 	return authQueries
 }
 
+// dqlHasAuthRules is similar to `hasAuthRules`, except it is for DQL queries.
+// If the predicate Attribute of children is not of the type `Type.Field` then
+// the corresponding child is ignored during calculation. for eg: predicates like
+// `uid`,`name@en` will be ignored.
 func dqlHasAuthRules(q *gql.GraphQuery, typ schema.Type, authRw *authRewriter) bool {
 	if q == nil {
 		return false
@@ -1632,11 +1667,8 @@ func dqlHasAuthRules(q *gql.GraphQuery, typ schema.Type, authRw *authRewriter) b
 		return true
 	}
 	for _, fld := range q.Children {
-		var fldName string
-		fldSplit := strings.Split(fld.Attr, ".")
-		if len(fldSplit) > 1 {
-			fldName = fldSplit[1]
-		} else {
+		fldName := getFieldName(fld.Attr)
+		if fldName == "" {
 			continue
 		}
 		if authRules := dqlHasAuthRules(fld, typ.Field(fldName).Type(), authRw); authRules {
@@ -1646,26 +1678,33 @@ func dqlHasAuthRules(q *gql.GraphQuery, typ schema.Type, authRw *authRewriter) b
 	return false
 }
 
+func getFieldName(attr string) string {
+	fldSplit := strings.Split(attr, ".")
+	if len(fldSplit) == 1 {
+		return ""
+	}
+	return fldSplit[1]
+}
+
 func addAuthQueriesOnSelectionSet(
 	q *gql.GraphQuery,
 	typ schema.Type,
 	auth *authRewriter) []*gql.GraphQuery {
 
-	var authQueries []*gql.GraphQuery
-	var children []*gql.GraphQuery
+	var authQueries, children []*gql.GraphQuery
+
 	for _, f := range q.Children {
-		var fldName string
+		fldName := getFieldName(f.Attr)
+		fld := typ.Field(fldName)
+		var fldType schema.Type
+		if fld != nil {
+			fldType = fld.Type()
+		}
 
-		fldSplit := strings.Split(f.Attr, ".")
-
-		// field must of the type User.tickets or "uid".
-		if len(fldSplit) > 1 {
-			fldName = fldSplit[1]
-		} else {
+		if fldType == nil {
 			children = append(children, f)
 			continue
 		}
-		fldType := typ.Field(fldName).Type()
 
 		rbac := auth.evaluateStaticRules(fldType)
 
@@ -1689,19 +1728,40 @@ func addAuthQueriesOnSelectionSet(
 			}
 		}
 
-		//If RBAC rules are evaluated to `Uncertain` then we add the Auth rules.
-		var fieldAuth []*gql.GraphQuery
-		var authFilter *gql.FilterTree
-
 		if rbac == schema.Positive || rbac == schema.Uncertain {
 			children = append(children, f)
 		}
 
-		if rbac == schema.Negative {
+		var fieldAuth []*gql.GraphQuery
+		var authFilter *gql.FilterTree
+		if rbac == schema.Negative && auth.hasAuthRules && auth.hasCascade && !auth.isWritingAuth {
+			// If RBAC rules are evaluated to Negative but we have cascade directive we continue
+			// to write the query and add a dummy filter that doesn't return anything.
+			// Example: AdminTask5 as var(func: uid())
+			children = append(children, f)
+			varName := auth.varGen.Next(fldType, "", "", auth.isWritingAuth)
+			fieldAuth = append(fieldAuth, &gql.GraphQuery{
+				Var:  varName,
+				Attr: "var",
+				Func: &gql.Function{
+					Name: "uid",
+				},
+			})
+			authFilter = &gql.FilterTree{
+				Func: &gql.Function{
+					Name: "uid",
+					Args: []gql.Arg{{Value: varName}},
+				},
+			}
+			rbac = schema.Positive
+		} else if rbac == schema.Negative {
+			// If RBAC rules are evaluated to Negative, we don't write queries for deeper levels.
+			// Hence we don't need to do any further processing for this field.
 			restoreAuthState()
 			continue
 		}
 
+		//If RBAC rules are evaluated to `Uncertain` then we add the Auth rules.
 		if rbac == schema.Uncertain {
 			fieldAuth, authFilter = auth.rewriteAuthQueries(fldType)
 		}
@@ -1744,7 +1804,9 @@ func addAuthQueriesOnSelectionSet(
 					Args: []gql.Arg{{Value: commonAuthQueryVars.selectionQry.Var}},
 				},
 			}
-			authQueries = append(authQueries, commonAuthQueryVars.parentQry, commonAuthQueryVars.selectionQry)
+			authQueries = append(authQueries,
+				commonAuthQueryVars.parentQry,
+				commonAuthQueryVars.selectionQry)
 		}
 		authQueries = append(authQueries, selectionAuth...)
 		authQueries = append(authQueries, fieldAuth...)

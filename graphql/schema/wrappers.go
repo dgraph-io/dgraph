@@ -2378,6 +2378,9 @@ func isID(fd *ast.FieldDefinition) bool {
 }
 
 func (fd *fieldDefinition) Type() Type {
+	if fd.fieldDef == nil {
+		return nil
+	}
 	return &astType{
 		typ:             fd.fieldDef.Type,
 		inSchema:        fd.inSchema,

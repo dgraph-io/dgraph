@@ -1027,9 +1027,26 @@ type Query {
     }"""
     )
 
+    queryContacts: [Contact] @custom(dql: """
+    query {
+      queryContacts(func: type(Contact)) @cascade {
+        id : uid
+        nickName : Contact.nickName
+        adminTasks : Contact.adminTasks {
+          id : uid
+          name : AdminTask.name
+          occurrences : AdminTask.occurrences {
+            due : TaskOccurrence.due
+            comp : TaskOccurrence.comp
+          }
+        }
+      }
+    }"""
+    )
+
    queryUsers: [User] @custom(dql: """
     query {
-      queryUsers(func: type(User)) {
+      queryUsers(func: uid("0x1")) @filter(eq(User.username, "minhaj")) {
         username: User.username
         tickets: User.tickets {
           id: uid

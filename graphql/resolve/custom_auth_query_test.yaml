@@ -38,15 +38,19 @@
   dgquery: |-
     query {
       var(func: uid(IssueRoot)) {
-        Issue.owner {
+        Issue.owner @filter(uid(User_1)) {
           age as User.age
         }
       }
-      IssueRoot as var(func: uid(Issue_1)) @filter(uid(Issue_Auth2))
-      Issue_1 as var(func: type(Issue))
-      Issue_Auth2 as var(func: uid(Issue_1)) @cascade {
+      IssueRoot as var(func: uid(Issue_3)) @filter(uid(Issue_Auth4))
+      Issue_3 as var(func: type(Issue))
+      Issue_Auth4 as var(func: uid(Issue_3)) @cascade {
         Issue.owner : Issue.owner @filter(eq(User.username, "user1"))
       }
+      var(func: uid(IssueRoot)) {
+        User_2 as Issue.owner
+      }
+      User_1 as var(func: uid(User_2))
       queryIssueSortedByOwnerAge(func: uid(age), orderdesc: age) {
         id : uid
         msg : Issue.msg
@@ -54,7 +58,7 @@
       }
     }
 
-- name : "custom DQL query with var block failing RBAC @auth rules"
+- name : "f custom DQL query with var block failing RBAC @auth rules"
   gqlquery: |
     query{
       queryIssueSortedByOwnerAge {
@@ -68,7 +72,7 @@
     USER: "user1"
   dgquery: |-
     query {
-      var() {
+      var(func: uid(0x0)) {
         Issue.owner {
           age as User.age
         }
@@ -102,7 +106,7 @@
         }
       }
       UserRoot as var(func: uid(User_4))
-      User_4 as var(func: type(User))
+      User_4 as var(func: uid(0x1)) @filter(eq(User.username,minhaj))
       var(func: uid(UserRoot)) {
         Ticket_2 as User.tickets
       }
@@ -135,5 +139,53 @@
         username : User.username
       }
       UserRoot as var(func: uid(User_3))
-      User_3 as var(func: type(User))
+      User_3 as var(func: uid(0x1)) @filter(eq(User.username,minhaj))
+    }
+
+- name: "Deep RBAC rule with cascade - Level 1 false"
+  gqlquery: |
+    query {
+      queryContacts {
+        id
+        nickName
+        adminTasks {
+          id
+          name
+          occurrences {
+            due
+            comp
+          }
+        }
+      }
+    }
+  jwtvar:
+    ContactRole: ADMINISTRATOR
+    TaskRole: User
+    TaskOccuranceRole: ADMINISTRATOR
+  dgquery: |-
+    query {
+      queryContacts(func: uid(ContactRoot)) @cascade {
+        id : uid
+        nickName : Contact.nickName
+        adminTasks : Contact.adminTasks @filter(uid(AdminTask_1)) {
+          id : uid
+          name : AdminTask.name
+          occurrences : AdminTask.occurrences @filter(uid(TaskOccurrence_3)) {
+            due : TaskOccurrence.due
+            comp : TaskOccurrence.comp
+          }
+        }
+      }
+      ContactRoot as var(func: uid(Contact_7))
+      Contact_7 as var(func: type(Contact))
+      var(func: uid(ContactRoot)) {
+        AdminTask_2 as Contact.adminTasks
+      }
+      AdminTask_1 as var(func: uid(AdminTask_2)) @filter(uid(AdminTask_6))
+      var(func: uid(AdminTask_1)) {
+        TaskOccurrence_4 as AdminTask.occurrences
+      }
+      TaskOccurrence_3 as var(func: uid(TaskOccurrence_4)) @filter(uid(TaskOccurrence_Auth5))
+      TaskOccurrence_Auth5 as var(func: uid(TaskOccurrence_4)) @filter(eq(TaskOccurrence.role, "ADMINISTRATOR")) @cascade
+      AdminTask_6 as var(func: uid())
     }
