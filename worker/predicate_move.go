@@ -245,20 +245,20 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 	glog.Info(msg)
 	span.Annotate(nil, msg)
 
-	payload, err := movePredicateHelper(ctx, in)
+	err = movePredicateHelper(ctx, in)
 	if err != nil {
 		span.Annotatef(nil, "Error while movePredicateHelper: %v", err)
 	}
-	return payload, nil
+	return &emptyPayload, err
 }
 
-func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) (*api.Payload, error) {
+func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error {
 	// Note: Manish thinks it *should* be OK for a predicate receiver to not have to stop other
 	// operations like snapshots and rollups. Note that this is the sender. This should stop other
 	// operations.
 	closer, err := groups().Node.startTask(opPredMove)
 	if err != nil {
-		return nil, errors.Wrapf(err, "unable to start task opPredMove")
+		return errors.Wrapf(err, "unable to start task opPredMove")
 	}
 	defer closer.Done()
 
@@ -266,12 +266,12 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) (*api
 
 	pl := groups().Leader(in.DestGid)
 	if pl == nil {
-		return nil, errors.Errorf("Unable to find a connection for group: %d\n", in.DestGid)
+		return errors.Errorf("Unable to find a connection for group: %d\n", in.DestGid)
 	}
 	c := pb.NewWorkerClient(pl.Get())
 	out, err := c.ReceivePredicate(ctx)
 	if err != nil {
-		return nil, errors.Wrapf(err, "while calling ReceivePredicate")
+		return errors.Wrapf(err, "while calling ReceivePredicate")
 	}
 
 	// This txn is only reading the schema. Doesn't really matter what read timestamp we use,
@@ -287,11 +287,11 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) (*api
 		// The predicate along with the schema could have been deleted. In that case badger would
 		// return ErrKeyNotFound. We don't want to try and access item.Value() in that case.
 	case err != nil:
-		return nil, err
+		return err
 	default:
 		val, err := item.ValueCopy(nil)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		buf := z.NewBuffer(1024, "PredicateMove.MovePredicateHelper")
 		defer buf.Release()
@@ -311,7 +311,7 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) (*api
 			Data: buf.Bytes(),
 		}
 		if err := out.Send(kvs); err != nil {
-			return nil, errors.Errorf("while sending: %v", err)
+			return errors.Errorf("while sending: %v", err)
 		}
 	}
 
@@ -362,19 +362,19 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) (*api
 	}
 	span.Annotatef(nil, "Starting stream list orchestrate")
 	if err := stream.Orchestrate(out.Context()); err != nil {
-		return nil, err
+		return err
 	}
 
 	payload, err := out.CloseAndRecv()
 	if err != nil {
-		return nil, err
+		return err
 	}
 	recvCount, err := strconv.Atoi(string(payload.Data))
 	if err != nil {
-		return nil, err
+		return err
 	}
 	msg := fmt.Sprintf("Receiver %s says it got %d keys.\n", pl.Addr, recvCount)
 	span.Annotate(nil, msg)
 	glog.Infof(msg)
-	return payload, nil
+	return nil
 }

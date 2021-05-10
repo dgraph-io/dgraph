@@ -20,10 +20,8 @@ import (
 	"context"
 	"fmt"
 	"sort"
-	"strconv"
 	"time"
 
-	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	humanize "github.com/dustin/go-humanize"
@@ -34,7 +32,7 @@ import (
 
 const (
 	predicateMoveTimeout = 120 * time.Minute
-	phaseOneThreshold    = 10000
+	phaseOneThreshold    = 100 << 20 // 100 MB
 )
 
 /*
@@ -51,7 +49,8 @@ Phase I:
 • G1 would do a call to G2, and start streaming.
 • Before G2 starts accepting, it should delete any current keys for P.
 • G1 should tell Zero whether it succeeded or failed. (Endpoint: G1 → Zero)
-• If Phase I succeeds, proceed with Phase II. Else, P would be served by G1.
+• If it succeeds, then based on difference of tablet size before and after the above run,
+  zero decides to do another run of Phase I, or move to Phase II.
 
 Phase II:
 • Zero would propose that G1 is read-only for predicate P. This would propagate to the cluster.
@@ -144,16 +143,23 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 		return errors.Errorf("Unable to move reserved predicate %s", predicate)
 	}
 
-	// Ensure that I'm connected to the rest of the Zero group, and am the leader.
-	if _, err := s.latestMembershipState(ctx); err != nil {
-		return errors.Wrapf(err, "unable to reach quorum")
+	var tab *pb.Tablet
+	updateTablet := func() error {
+		// Ensure that I'm connected to the rest of the Zero group, and am the leader.
+		if _, err := s.latestMembershipState(ctx); err != nil {
+			return errors.Wrapf(err, "unable to reach quorum")
+		}
+		if !s.Node.AmLeader() {
+			return errors.Errorf("I am not the Zero leader")
+		}
+		tab = s.ServingTablet(predicate)
+		if tab == nil {
+			return errors.Errorf("Tablet to be moved: [%v] is not being served", predicate)
+		}
+		return nil
 	}
-	if !s.Node.AmLeader() {
-		return errors.Errorf("I am not the Zero leader")
-	}
-	tab := s.ServingTablet(predicate)
-	if tab == nil {
-		return errors.Errorf("Tablet to be moved: [%v] is not being served", predicate)
+	if err := updateTablet(); err != nil {
+		return err
 	}
 
 	// PHASE I:
@@ -176,37 +182,48 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 	}
 
 	var sinceTs uint64
-	counter := 0
-	phaseI := func() (*api.Payload, error) {
+	counter := 1
+	nonBlockingMove := func() error {
 		// Get a new timestamp. Source Alpha leader must reach this timestamp before streaming data.
 		ids, err := s.Timestamps(ctx, &pb.Num{Val: 1})
 		if err != nil || ids.StartId == 0 {
-			return nil, errors.Wrapf(err, "while leasing txn timestamp. Id: %+v", ids)
+			return errors.Wrapf(err, "while leasing txn timestamp. Id: %+v", ids)
 		}
 
-		counter++
 		// Move the predicate. Commits on this predicate are not blocked yet. Any data after ReadTs
 		// will be moved in the phase II below.
 		in.ReadTs = ids.StartId
 		in.SinceTs, sinceTs = sinceTs, in.ReadTs
 		span.Annotatef(nil, "Starting move [1.%d]: %+v", counter, in)
 		glog.Infof("Starting move [1.%d]: %+v", counter, in)
-		return wc.MovePredicate(ctx, in)
+		_, err = wc.MovePredicate(ctx, in)
+		return err
 	}
 
 	for {
-		reply, err := phaseI()
-		if err != nil {
+		if err := nonBlockingMove(); err != nil {
 			return errors.Wrapf(err, "while moving the majority of predicate")
 		}
 
-		recvCount, err := strconv.Atoi(string(reply.Data))
-		if err != nil {
+		prevSize := tab.UncompressedBytes
+		if err := updateTablet(); err != nil {
 			return err
 		}
-		if recvCount < phaseOneThreshold || counter > 5 {
+		// If the difference in tablet size is less than threshold, or the counter reached limit,
+		// then move to Phase II.
+		diff := tab.UncompressedBytes - prevSize
+		if diff < phaseOneThreshold || counter > 3 {
+			msg := fmt.Sprintf("Done Phase I: got diff %s at counter: %d",
+				humanize.IBytes(uint64(diff)), counter)
+			span.Annotate(nil, msg)
+			glog.Infof(msg)
 			break
 		}
+		msg := fmt.Sprintf("Redo Phase I: got diff %s at counter: %d",
+			humanize.IBytes(uint64(diff)), counter)
+		span.Annotate(nil, msg)
+		glog.Infof(msg)
+		counter++
 	}
 
 	// PHASE II:
