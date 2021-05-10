@@ -697,8 +697,11 @@ func run() error {
 	}
 
 	creds := z.NewSuperFlag(Live.Conf.GetString("creds")).MergeAndCheckDefault(x.DefaultCreds)
+	keys, err := ee.GetKeys(Live.Conf)
+	if err != nil {
+		return err
+	}
 
-	var err error
 	x.PrintVersion()
 	opt = options{
 		dataFiles:       Live.Conf.GetString("files"),
@@ -717,6 +720,7 @@ func run() error {
 		ludicrousMode:   Live.Conf.GetBool("ludicrous"),
 		upsertPredicate: Live.Conf.GetString("upsertPredicate"),
 		tmpDir:          Live.Conf.GetString("tmp"),
+		key:             keys.EncKey,
 	}
 
 	forceNs := Live.Conf.GetInt64("force-namespace")
@@ -738,7 +742,6 @@ func run() error {
 
 	z.SetTmpDir(opt.tmpDir)
 
-	_, opt.key = ee.GetKeys(Live.Conf)
 	go func() {
 		if err := http.ListenAndServe(opt.httpAddr, nil); err != nil {
 			glog.Errorf("Error while starting HTTP server: %+v", err)
