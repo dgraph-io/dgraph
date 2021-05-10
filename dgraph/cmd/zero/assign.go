@@ -210,13 +210,11 @@ func (s *Server) AssignIds(ctx context.Context, num *pb.Num) (*pb.AssignedIds, e
 	}
 
 	reply := &emptyAssignedIds
-	lease := func(num *pb.Num, shouldLimit bool) error {
+	lease := func(num *pb.Num) error {
 		var err error
 		if s.Node.AmLeader() {
-			if shouldLimit {
-				if err := rateLimit(); err != nil {
-					return err
-				}
+			if err := rateLimit(); err != nil {
+				return err
 			}
 			span.Annotatef(nil, "Zero leader leasing %d ids", num.GetVal())
 			reply, err = s.lease(ctx, num)
@@ -244,24 +242,23 @@ func (s *Server) AssignIds(ctx context.Context, num *pb.Num) (*pb.AssignedIds, e
 		return err
 	}
 
-	shouldLimit := true
 	if num.GetBump() {
 		s.leaseLock.Lock()
 		cur := s.nextLease[num.GetType()] - 1
 		s.leaseLock.Unlock()
 
+		// We need to lease more UIDs if bump request is more than current lease.
 		req := num.GetVal()
 		num.Val = 0
 		if cur < req {
 			num.Val = req - cur
 		}
 		num.Bump = false
-		shouldLimit = false
 	}
 
 	c := make(chan error, 1)
 	go func() {
-		c <- lease(num, shouldLimit)
+		c <- lease(num)
 	}()
 
 	select {
