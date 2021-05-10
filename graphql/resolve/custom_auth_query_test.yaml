@@ -58,7 +58,7 @@
       }
     }
 
-- name : "f custom DQL query with var block failing RBAC @auth rules"
+- name : "custom DQL query with var block failing RBAC @auth rules"
   gqlquery: |
     query{
       queryIssueSortedByOwnerAge {
@@ -122,7 +122,7 @@
       }
     }
 
-- name : "Auth rules with deep filter failed"
+- name : "Auth rules with deep filter missing JWT"
   gqlquery: |
     query{
       queryUsers{
