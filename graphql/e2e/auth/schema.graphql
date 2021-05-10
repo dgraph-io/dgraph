@@ -1026,6 +1026,18 @@ type Query {
         }
     }"""
     )
+
+   queryUsers: [User] @custom(dql: """
+    query {
+      queryUsers(func: type(User)) {
+        username: User.username
+        tickets: User.tickets {
+          id: uid
+          title: Ticket.title
+        }
+      }
+    }"""
+    )
 }
 
 ## custom DQL testing end

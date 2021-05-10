@@ -697,6 +697,11 @@ func rewriteWithAuth(
 			dgQueries = append(dgQueries, qry)
 			continue
 		}
+
+		authRw.hasAuthRules = dqlHasAuthRules(qry, typ, authRw)
+
+		fldAuthQueries := addAuthQueriesOnSelectionSet(qry, typ, authRw)
+
 		rbac := authRw.evaluateStaticRules(typ)
 		if rbac == schema.Negative {
 			if qry.Attr == "var" {
@@ -708,7 +713,11 @@ func rewriteWithAuth(
 			}
 			continue
 		}
+
 		dgQueries = append(dgQueries, authRw.addAuthQueries(typ, []*gql.GraphQuery{qry}, rbac)...)
+		if len(fldAuthQueries) > 0 {
+			dgQueries = append(dgQueries, fldAuthQueries...)
+		}
 	}
 	return dgQueries, nil
 }
@@ -1611,6 +1620,137 @@ func addSelectionSetFrom(
 		}
 	}
 
+	return authQueries
+}
+
+func dqlHasAuthRules(q *gql.GraphQuery, typ schema.Type, authRw *authRewriter) bool {
+	if q == nil {
+		return false
+	}
+	rn := authRw.selector(typ)
+	if rn != nil {
+		return true
+	}
+	for _, fld := range q.Children {
+		var fldName string
+		fldSplit := strings.Split(fld.Attr, ".")
+		if len(fldSplit) > 1 {
+			fldName = fldSplit[1]
+		} else {
+			continue
+		}
+		if authRules := dqlHasAuthRules(fld, typ.Field(fldName).Type(), authRw); authRules {
+			return true
+		}
+	}
+	return false
+}
+
+func addAuthQueriesOnSelectionSet(
+	q *gql.GraphQuery,
+	typ schema.Type,
+	auth *authRewriter) []*gql.GraphQuery {
+
+	var authQueries []*gql.GraphQuery
+	var children []*gql.GraphQuery
+	for _, f := range q.Children {
+		var fldName string
+
+		fldSplit := strings.Split(f.Attr, ".")
+
+		// field must of the type User.tickets or "uid".
+		if len(fldSplit) > 1 {
+			fldName = fldSplit[1]
+		} else {
+			children = append(children, f)
+			continue
+		}
+		fldType := typ.Field(fldName).Type()
+
+		rbac := auth.evaluateStaticRules(fldType)
+
+		// Since the recursion processes the query in bottom up way, we store the state of the so
+		// that we can restore it later.
+		var parentVarName, parentQryName string
+		if len(f.Children) > 0 && !auth.isWritingAuth && auth.hasAuthRules {
+			parentVarName = auth.parentVarName
+			parentQryName = auth.varName
+			auth.parentVarName = auth.varGen.Next(fldType, "", "", auth.isWritingAuth)
+			auth.varName = auth.varGen.Next(fldType, "", "", auth.isWritingAuth)
+		}
+
+		selectionAuth := addAuthQueriesOnSelectionSet(f, fldType, auth)
+
+		restoreAuthState := func() {
+			if len(f.Children) > 0 && !auth.isWritingAuth && auth.hasAuthRules {
+				// Restore the auth state after processing is done.
+				auth.parentVarName = parentVarName
+				auth.varName = parentQryName
+			}
+		}
+
+		//If RBAC rules are evaluated to `Uncertain` then we add the Auth rules.
+		var fieldAuth []*gql.GraphQuery
+		var authFilter *gql.FilterTree
+
+		if rbac == schema.Positive || rbac == schema.Uncertain {
+			children = append(children, f)
+		}
+
+		if rbac == schema.Negative {
+			restoreAuthState()
+			continue
+		}
+
+		if rbac == schema.Uncertain {
+			fieldAuth, authFilter = auth.rewriteAuthQueries(fldType)
+		}
+
+		if len(f.Children) > 0 && !auth.isWritingAuth && auth.hasAuthRules {
+
+			parentQry := &gql.GraphQuery{
+				Func: &gql.Function{
+					Name: "uid",
+					Args: []gql.Arg{{Value: parentVarName}},
+				},
+				Attr:     "var",
+				Children: []*gql.GraphQuery{{Attr: f.Attr, Var: auth.varName}},
+			}
+
+			// This query aggregates all filters and auth rules and is used by root query to filter
+			// the final nodes for the current level.
+			// User3 as var(func: uid(User4)) @filter((eq(User.username, "User1") AND (...Auth Filter))))
+			selectionQry := &gql.GraphQuery{
+				Var:  auth.parentVarName,
+				Attr: "var",
+				Func: &gql.Function{
+					Name: "uid",
+					Args: []gql.Arg{{Value: auth.varName}},
+				},
+			}
+
+			commonAuthQueryVars := commonAuthQueryVars{
+				parentQry:    parentQry,
+				selectionQry: selectionQry,
+			}
+
+			// add child filter to parent query, auth filters to selection query and
+			// selection query as a filter to child
+			commonAuthQueryVars.parentQry.Children[0].Filter = f.Filter
+			commonAuthQueryVars.selectionQry.Filter = authFilter
+			f.Filter = &gql.FilterTree{
+				Func: &gql.Function{
+					Name: "uid",
+					Args: []gql.Arg{{Value: commonAuthQueryVars.selectionQry.Var}},
+				},
+			}
+			authQueries = append(authQueries, commonAuthQueryVars.parentQry, commonAuthQueryVars.selectionQry)
+		}
+		authQueries = append(authQueries, selectionAuth...)
+		authQueries = append(authQueries, fieldAuth...)
+		restoreAuthState()
+	}
+	q.Children = children
 	return authQueries
 }
 
