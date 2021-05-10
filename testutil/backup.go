@@ -50,12 +50,15 @@ func openDgraph(pdir string) (*badger.DB, error) {
 		return nil, err
 	}
 	config.Set("encryption", ee.BuildEncFlag(KeyFile))
-	_, encKey := ee.GetKeys(config)
+	keys, err := ee.GetKeys(config)
+	if err != nil {
+		return nil, err
+	}
 
 	opt := badger.DefaultOptions(pdir).
 		WithBlockCacheSize(10 * (1 << 20)).
 		WithIndexCacheSize(10 * (1 << 20)).
-		WithEncryptionKey(encKey).
+		WithEncryptionKey(keys.EncKey).
 		WithNamespaceOffset(x.NamespaceOffset)
 	return badger.OpenManaged(opt)
 }

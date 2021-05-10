@@ -185,7 +185,11 @@ func runRestoreCmd() error {
 		zc    pb.ZeroClient
 		err   error
 	)
-	_, opt.key = ee.GetKeys(Restore.Conf)
+	keys, err := ee.GetKeys(Restore.Conf)
+	if err != nil {
+		return err
+	}
+	opt.key = keys.EncKey
 	fmt.Println("Restoring backups from:", opt.location)
 	fmt.Println("Writing postings to:", opt.pdir)
 
@@ -345,7 +349,11 @@ func initExportBackup() {
 }
 
 func runExportBackup() error {
-	_, opt.key = ee.GetKeys(ExportBackup.Conf)
+	keys, err := ee.GetKeys(ExportBackup.Conf)
+	if err != nil {
+		return err
+	}
+	opt.key = keys.EncKey
 	if opt.format != "json" && opt.format != "rdf" {
 		return errors.Errorf("invalid format %s", opt.format)
 	}

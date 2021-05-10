@@ -362,10 +362,11 @@ func runFailingRestore(t *testing.T, backupLocation, lastDir string, commitTs ui
 	// Get key.
 	config := getEncConfig()
 	config.Set("encryption", ee.BuildEncFlag("../../../ee/enc/test-fixtures/enc-key"))
-	_, encKey := ee.GetKeys(config)
-	require.NotNil(t, encKey)
+	keys, err := ee.GetKeys(config)
+	require.NoError(t, err)
+	require.NotNil(t, keys.EncKey)
 
-	result := worker.RunRestore("./data/restore", backupLocation, lastDir, encKey, options.Snappy, 0)
+	result := worker.RunRestore("./data/restore", backupLocation, lastDir, keys.EncKey, options.Snappy, 0)
 	require.Error(t, result.Err)
 	require.Contains(t, result.Err.Error(), "expected a BackupNum value of 1")
 }
