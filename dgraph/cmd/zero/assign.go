@@ -247,12 +247,14 @@ func (s *Server) AssignIds(ctx context.Context, num *pb.Num) (*pb.AssignedIds, e
 		cur := s.nextLease[num.GetType()] - 1
 		s.leaseLock.Unlock()
 
-		// We need to lease more UIDs if bump request is more than current lease.
+		// We need to lease more UIDs if bump request is more than current max lease.
 		req := num.GetVal()
 		num.Val = 0
 		if cur < req {
 			num.Val = req - cur
 		}
+
+		// Set bump to false because we want to lease the required ids in the following request.
 		num.Bump = false
 	}
 

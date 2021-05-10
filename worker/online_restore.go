@@ -395,22 +395,22 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest, pidx uin
 func bumpLease(ctx context.Context, mr *mapResult) error {
 	pl := groups().connToZeroLeader()
 	if pl == nil {
-		return errors.Errorf("cannot update uid lease due to no connection to zero leader")
+		return errors.Errorf("cannot update lease due to no connection to zero leader")
 	}
 
 	zc := pb.NewZeroClient(pl.Get())
-	leaseID := func(val uint64, typ pb.NumLeaseType) error {
-		if val == 0 {
+	bump := func(val uint64, typ pb.NumLeaseType) error {
+		_, err := zc.AssignIds(ctx, &pb.Num{Val: val, Type: typ, Bump: true})
+		if strings.Contains(err.Error(), "Nothing to be leased") {
 			return nil
 		}
-		_, err := zc.AssignIds(ctx, &pb.Num{Val: val, Type: typ})
 		return err
 	}
 
-	if err := leaseID(mr.maxUid, pb.Num_UID); err != nil {
+	if err := bump(mr.maxUid, pb.Num_UID); err != nil {
 		return errors.Wrapf(err, "cannot update max uid lease after restore.")
 	}
-	if err := leaseID(mr.maxNs, pb.Num_NS_ID); err != nil {
+	if err := bump(mr.maxNs, pb.Num_NS_ID); err != nil {
 		return errors.Wrapf(err, "cannot update max namespace lease after restore.")
 	}
 	return nil
