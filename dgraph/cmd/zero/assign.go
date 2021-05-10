@@ -210,11 +210,13 @@ func (s *Server) AssignIds(ctx context.Context, num *pb.Num) (*pb.AssignedIds, e
 	}
 
 	reply := &emptyAssignedIds
-	lease := func() error {
+	lease := func(num *pb.Num, shouldLimit bool) error {
 		var err error
 		if s.Node.AmLeader() {
-			if err := rateLimit(); err != nil {
-				return err
+			if shouldLimit {
+				if err := rateLimit(); err != nil {
+					return err
+				}
 			}
 			span.Annotatef(nil, "Zero leader leasing %d ids", num.GetVal())
 			reply, err = s.lease(ctx, num)
@@ -242,9 +244,21 @@ func (s *Server) AssignIds(ctx context.Context, num *pb.Num) (*pb.AssignedIds, e
 		return err
 	}
 
+	shouldLimit := true
+	if num.GetBump() {
+		s.leaseLock.Lock()
+		cur := s.maxLease(num.GetType())
+		s.leaseLock.Unlock()
+
+		required := x.Max(0, num.GetVal()-cur)
+		num.Val = required
+		num.Bump = false
+		shouldLimit = false
+	}
+
 	c := make(chan error, 1)
 	go func() {
-		c <- lease()
+		c <- lease(num, shouldLimit)
 	}()
 
 	select {
