@@ -69,7 +69,9 @@ func TestIdBump(t *testing.T) {
 
 	// Bump the lease to 100000.
 	res, err = zc.AssignIds(ctx, &pb.Num{Val: 100000, Type: pb.Num_UID, Bump: true})
-	require.NoError(t, err)
+	if err != nil {
+		require.Error(t, err, "Nothing to be leased")
+	}
 
 	// Next assignemnt's startId should be greater than 100000.
 	res, err = zc.AssignIds(ctx, &pb.Num{Val: 10, Type: pb.Num_UID})
