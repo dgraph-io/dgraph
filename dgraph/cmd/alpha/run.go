@@ -207,7 +207,7 @@ they form a Raft group and provide synchronous replication.
 		Flag("txn-abort-after", "Abort any pending transactions older than this duration."+
 			" The liveness of a transaction is determined by its last mutation.").
 		Flag("shared-instance", "When set to true, it disables ACLs for non-galaxy users. "+
-			"It expects the access JWT to be contructed outside dgraph for those users as even "+
+			"It expects the access JWT to be constructed outside dgraph for those users as even "+
 			"login is denied to them. Additionally, this disables access to environment variables"+
 			"for minio, aws, etc.").
 		String())
