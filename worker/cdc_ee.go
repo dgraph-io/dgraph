@@ -16,6 +16,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"math"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -102,6 +103,19 @@ func (cdc *CDC) resetPendingEvents() {
 	cdc.Lock()
 	defer cdc.Unlock()
 	cdc.pendingTxnEvents = make(map[uint64][]CDCEvent)
+}
+
+func (cdc *CDC) resetPendingEventsForNs(ns uint64) {
+	if cdc == nil {
+		return
+	}
+	cdc.Lock()
+	defer cdc.Unlock()
+	for ts, events := range cdc.pendingTxnEvents {
+		if len(events) > 0 && events[0].Meta.Namespace == ns {
+			delete(cdc.pendingTxnEvents, ts)
+		}
+	}
 }
 
 func (cdc *CDC) hasPending(attr string) bool {
@@ -230,9 +244,15 @@ func (cdc *CDC) processCDCEvents() {
 			switch {
 			case proposal.Mutations.DropOp != pb.Mutations_NONE: // this means its a drop operation
 				// if there is DROP ALL or DROP DATA operation, clear pending events also.
-				if proposal.Mutations.DropOp == pb.Mutations_ALL ||
-					proposal.Mutations.DropOp == pb.Mutations_DATA {
+				if proposal.Mutations.DropOp == pb.Mutations_ALL {
 					cdc.resetPendingEvents()
+				} else if proposal.Mutations.DropOp == pb.Mutations_DATA {
+					ns, err := strconv.ParseUint(proposal.Mutations.DropValue, 0, 64)
+					if err != nil {
+						glog.Warningf("CDC: parsing namespace failed with error %v. Ignoring.", err)
+						return
+					}
+					cdc.resetPendingEventsForNs(ns)
 				}
 				if err := sendToSink(events, proposal.Mutations.StartTs); err != nil {
 					rerr = errors.Wrapf(err, "unable to send messages to sink")
@@ -380,14 +400,26 @@ func toCDCEvent(index uint64, mutation *pb.Mutations) []CDCEvent {
 	}
 
 	// If drop operation
-	// todo (aman): right now drop all and data operations are still cluster wide.
-	// Fix these once we have namespace specific operations.
+	// todo (aman): right now drop all operation is still cluster wide.
+	// Fix this once we have namespace specific operation.
 	if mutation.DropOp != pb.Mutations_NONE {
-		ns := x.GalaxyNamespace
+		var ns uint64
 		var t string
-		if mutation.DropOp == pb.Mutations_TYPE {
-			// drop type are namespace specific.
+		switch mutation.DropOp {
+		case pb.Mutations_ALL:
+			// Drop all is cluster wide.
+			ns = x.GalaxyNamespace
+		case pb.Mutations_DATA:
+			var err error
+			ns, err = strconv.ParseUint(mutation.DropValue, 0, 64)
+			if err != nil {
+				glog.Warningf("CDC: parsing namespace failed with error %v. Ignoring.", err)
+				return nil
+			}
+		case pb.Mutations_TYPE:
 			ns, t = x.ParseNamespaceAttr(mutation.DropValue)
+		default:
+			glog.Error("CDC: got unhandled drop operation")
 		}
 
 		return []CDCEvent{

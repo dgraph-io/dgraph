@@ -103,11 +103,10 @@ func (br *backupReader) WithCompression(comp string) *backupReader {
 }
 
 type loadBackupInput struct {
-	restoreTs      uint64
-	preds          predicateSet
-	dropOperations []*pb.DropOperation
-	isOld          bool
-	keepSchema     bool
+	preds      predicateSet
+	dropNs     map[uint64]struct{}
+	isOld      bool
+	keepSchema bool
 }
 
 type listReq struct {
@@ -296,7 +295,7 @@ func (m *mapper) processReqCh(ctx context.Context) error {
 				"Unexpected meta: %v for key: %s", kv.UserMeta, hex.Dump(kv.Key))
 		}
 
-		restoreKey, _, err := fromBackupKey(kv.Key)
+		restoreKey, ns, err := fromBackupKey(kv.Key)
 		if err != nil {
 			return errors.Wrap(err, "fromBackupKey")
 		}
@@ -317,6 +316,9 @@ func (m *mapper) processReqCh(ctx context.Context) error {
 
 		switch kv.GetUserMeta()[0] {
 		case posting.BitEmptyPosting, posting.BitCompletePosting, posting.BitDeltaPosting:
+			if _, ok := in.dropNs[ns]; ok {
+				return nil
+			}
 			backupPl := &pb.BackupPostingList{}
 			if err := backupPl.Unmarshal(kv.Value); err != nil {
 				return errors.Wrapf(err, "while reading backup posting list")
@@ -577,6 +579,7 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) error {
 
 	dropAll := false
 	dropAttr := make(map[string]struct{})
+	dropNs := make(map[uint64]struct{})
 
 	// manifests are ordered as: latest..full
 	for i, manifest := range manifests {
@@ -610,11 +613,14 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) error {
 					delete(predSet, p)
 				}
 			}
+			localDropNs := make(map[uint64]struct{})
+			for ns := range dropNs {
+				localDropNs[ns] = struct{}{}
+			}
 			in := &loadBackupInput{
-				preds:          predSet,
-				dropOperations: manifest.DropOperations,
-				isOld:          manifest.Version == 0,
-				restoreTs:      req.RestoreTs,
+				preds:  predSet,
+				dropNs: localDropNs,
+				isOld:  manifest.Version == 0,
 				// Only map the schema keys corresponding to the latest backup.
 				keepSchema: i == 0,
 			}
@@ -633,12 +639,15 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) error {
 			case pb.DropOperation_ALL:
 				dropAll = true
 			case pb.DropOperation_DATA:
-				dropAll = true
+				ns, err := strconv.ParseUint(op.DropValue, 0, 64)
+				if err != nil {
+					return errors.Wrap(err, "Map phase failed to parse namespace")
+				}
+				dropNs[ns] = struct{}{}
 			case pb.DropOperation_ATTR:
 				dropAttr[op.DropValue] = struct{}{}
 			case pb.DropOperation_NS:
 				// If there is a drop namespace, we just ban the namespace in the pstore.
-				// TODO: We probably need to propose ban request.
 				ns, err := strconv.ParseUint(op.DropValue, 0, 64)
 				if err != nil {
 					return errors.Wrapf(err, "Map phase failed to parse namespace")
