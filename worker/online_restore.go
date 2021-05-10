@@ -344,8 +344,9 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest, pidx uin
 	// Map the backup.
 	mapRes, err := RunMapper(req, mapDir)
 	if err != nil {
-		return errors.Wrapf(err, "cannot write backup")
+		return errors.Wrapf(err, "Failed to map the backup files")
 	}
+	glog.Infof("Backup map phase is complete. Map result is: %+v\n", mapRes)
 
 	// Reduce the map to pstore using stream writer.
 	sw := pstore.NewStreamWriter()
@@ -401,7 +402,7 @@ func bumpLease(ctx context.Context, mr *mapResult) error {
 	zc := pb.NewZeroClient(pl.Get())
 	bump := func(val uint64, typ pb.NumLeaseType) error {
 		_, err := zc.AssignIds(ctx, &pb.Num{Val: val, Type: typ, Bump: true})
-		if strings.Contains(err.Error(), "Nothing to be leased") {
+		if err != nil && strings.Contains(err.Error(), "Nothing to be leased") {
 			return nil
 		}
 		return err

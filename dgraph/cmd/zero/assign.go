@@ -175,7 +175,9 @@ func (s *Server) lease(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error
 }
 
 // AssignIds is used to assign new ids (UIDs, NsIDs) by communicating with the leader of the
-// RAFT group responsible for handing out ids.
+// RAFT group responsible for handing out ids. If bump is set to true in the request then the
+// lease for the given id type is bumped to num.Val and {startId, endId} of the newly leased ids
+// in the process of bump is returned.
 func (s *Server) AssignIds(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error) {
 	if ctx.Err() != nil {
 		return &emptyAssignedIds, ctx.Err()
