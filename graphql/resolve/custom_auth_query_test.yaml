@@ -23,7 +23,7 @@
       }
     }
 
-- name : "custom DQL query with var block satisfying RBAC @auth rules"
+- name : "custom DQL query with var block RBAC rules true"
   gqlquery: |
     query{
       queryIssueSortedByOwnerAge {
@@ -58,7 +58,7 @@
       }
     }
 
-- name : "custom DQL query with var block failing RBAC @auth rules"
+- name : "custom DQL query with var block RBAC rules false"
   gqlquery: |
     query{
       queryIssueSortedByOwnerAge {
@@ -83,6 +83,32 @@
         random : Issue.random
       }
     }
+
+- name : "custom DQL query with var block missing partial jwt"
+  gqlquery: |
+    query{
+      queryIssueSortedByOwnerAge {
+        id
+        msg
+        random
+      }
+    }
+  jwtvar:
+    ROLE: "ADMIN"
+  dgquery: |-
+    query {
+      var(func: uid(0x0)) {
+        Issue.owner {
+          age as User.age
+        }
+      }
+      queryIssueSortedByOwnerAge(func: uid(age), orderdesc: val(age)) {
+        id : uid
+        msg : Issue.msg
+        random : Issue.random
+      }
+    }
+
 - name : "Auth Rules with deep filter"
   gqlquery: |
     query {
@@ -105,8 +131,8 @@
           title : Ticket.title
         }
       }
-      UserRoot as var(func: uid(User_4))
-      User_4 as var(func: uid(0x1)) @filter(eq(User.username, "minhaj"))
+      UserRoot as var(func: uid(User_6))
+      User_6 as var(func: uid(0x1, 0x2)) @filter(eq(User.username, "minhaj"))
       var(func: uid(UserRoot)) {
         Ticket_2 as User.tickets
       }
@@ -131,6 +157,10 @@
           id
           title
         }
+        tweets {
+          id
+          score
+        }
       }
     }
   dgquery: |-
@@ -138,8 +168,52 @@
       queryUsers(func: uid(UserRoot)) {
         username : User.username
       }
-      UserRoot as var(func: uid(User_3))
-      User_3 as var(func: uid(0x1)) @filter(eq(User.username, "minhaj"))
+      UserRoot as var(func: uid(User_5))
+      User_5 as var(func: uid(0x1, 0x2)) @filter(eq(User.username, "minhaj"))
+    }
+
+- name : "Auth rules with deep filter and level 1 RBAC false"
+  gqlquery: |
+    query {
+      queryUsers{
+        username
+        tickets {
+          id
+          title
+        }
+        tweets {
+          id
+          score
+        }
+      }
+    }
+  jwtvar:
+    ROLE: "user"
+    USER: "user1"
+  dgquery: |-
+    query {
+      queryUsers(func: uid(UserRoot)) {
+        username : User.username
+        tickets : User.tickets @filter(uid(Ticket_1)) {
+          id : uid
+          title : Ticket.title
+        }
+      }
+      UserRoot as var(func: uid(User_6))
+      User_6 as var(func: uid(0x1, 0x2)) @filter(eq(User.username, "minhaj"))
+      var(func: uid(UserRoot)) {
+        Ticket_2 as User.tickets
+      }
+      Ticket_1 as var(func: uid(Ticket_2)) @filter(uid(Ticket_Auth3))
+      Ticket_Auth3 as var(func: uid(Ticket_2)) @cascade {
+        Ticket.onColumn : Ticket.onColumn {
+          Column.inProject : Column.inProject {
+            Project.roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
+              Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+            }
+          }
+        }
+      }
     }
 
 - name: "Deep RBAC rule with cascade - Level 1 false"

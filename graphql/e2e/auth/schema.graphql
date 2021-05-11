@@ -986,23 +986,6 @@ type IssueMap {
 }
 
 type Query {
-    queryUserSortedByTweetScore: [User] @custom(dql: """
-	query q($search: string) {
-		var(func: type(User)) {
-			User.tweets {
-				score as Tweets.score
-			}
-		}
-		queryUserSortedByTweetScore(func: uid(score), orderdesc: val(score)) {
-			username : User.username
-            age : User.age
-			tweets: User.tweets {
-			    text : Tweets.text
-			    score : Tweets.score
-			}
-		}
-	}"""
-    )
 
     queryIssueSortedByOwnerAge: [Issue] @custom(dql: """
 	query q($search: string) {
@@ -1046,11 +1029,16 @@ type Query {
 
    queryUsers: [User] @custom(dql: """
     query {
-      queryUsers(func: uid("0x1")) @filter(eq(User.username, "minhaj")) {
+      queryUsers(func: uid("0x1", "0x2")) @filter(eq(User.username, "minhaj")) {
         username: User.username
         tickets: User.tickets {
           id: uid
           title: Ticket.title
+        }
+        tweets: User.tweets {
+            id: uid
+            text: Tweets.text
+            score: Tweets.score
         }
       }
     }"""
