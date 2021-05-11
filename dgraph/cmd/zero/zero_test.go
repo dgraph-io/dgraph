@@ -18,9 +18,11 @@ package zero
 
 import (
 	"context"
+	"math"
 	"testing"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/stretchr/testify/require"
 )
 
@@ -34,4 +36,11 @@ func TestRemoveNode(t *testing.T) {
 	require.Error(t, err)
 	_, err = server.RemoveNode(context.TODO(), &pb.RemoveNodeRequest{NodeId: 1, GroupId: 2})
 	require.Error(t, err)
+}
+
+func TestIdLeaseOverflow(t *testing.T) {
+	require.NoError(t, testutil.AssignUids(100))
+	err := testutil.AssignUids(math.MaxUint64 - 10)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "limit has reached")
 }
