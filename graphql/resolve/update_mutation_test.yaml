@@ -1457,48 +1457,6 @@
     message: |-
       failed to rewrite mutation payload because duplicate XID found: T1
 
-- name: "Duplicate XIDs in single mutation for Interface"
-  gqlmutation: |
-    mutation updateStudent($input: UpdateStudentInput!) {
-      updateStudent(input: $input) {
-        student {
-          xid
-          name
-          taughtBy {
-            xid
-            name
-            subject
-          }
-        }
-      }
-    }
-  gqlvariables: |
-    {
-      "input": {
-        "filter": {
-          "xid": {"eq": "S1"}
-        },
-        "set": {
-          "taughtBy": [
-            {
-              "xid": "T1",
-              "name": "Teacher1",
-              "subject": "Sub1",
-              "teaches": [
-                {"xid": "T1", "name": "Stud2"}
-              ]
-            }
-          ]
-        }
-      }
-    }
-  explanation: "When duplicate XIDs are given as input for an Interface in a single mutation, it
-  should return error."
-  error:
-    message: |-
-      failed to rewrite mutation payload because duplicate XID found: T1
-
-
 # Additional Deletes
 #
 # If we have

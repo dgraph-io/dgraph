@@ -901,6 +901,8 @@ func RunAll(t *testing.T) {
 	t.Run("Update language tag fields", updateLangTagFields)
 	t.Run("mutation with @id field and interface arg", mutationWithIDFieldHavingInterfaceArg)
 	t.Run("xid update and nullable tests", xidUpdateAndNullableTests)
+	t.Run("Referencing same node containing multiple XIDs",
+		referencingSameNodeWithMultipleXIds)
 
 	// error tests
 	t.Run("graphql completion on", graphQLCompletionOn)
