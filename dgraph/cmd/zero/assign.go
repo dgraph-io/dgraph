@@ -212,7 +212,7 @@ func (s *Server) AssignIds(ctx context.Context, num *pb.Num) (*pb.AssignedIds, e
 	}
 
 	reply := &emptyAssignedIds
-	lease := func(num *pb.Num) error {
+	lease := func() error {
 		var err error
 		if s.Node.AmLeader() {
 			if err := rateLimit(); err != nil {
@@ -265,7 +265,7 @@ func (s *Server) AssignIds(ctx context.Context, num *pb.Num) (*pb.AssignedIds, e
 
 	c := make(chan error, 1)
 	go func() {
-		c <- lease(num)
+		c <- lease()
 	}()
 
 	select {
