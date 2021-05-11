@@ -21,7 +21,6 @@ import (
 	"crypto/tls"
 	"fmt"
 	"log"
-	"math"
 	"net"
 	"net/http"
 	"os"
@@ -237,10 +236,6 @@ func run() {
 	limitConf := &x.LimiterConf{
 		UidLeaseLimit: limit.GetUint64("uid-lease"),
 		RefillAfter:   limit.GetDuration("refill-interval"),
-	}
-	if limitConf.UidLeaseLimit == 0 {
-		// Setting it to 0 removes the limit.
-		limitConf.UidLeaseLimit = math.MaxInt64
 	}
 	opts = options{
 		telemetry:         telemetry,
