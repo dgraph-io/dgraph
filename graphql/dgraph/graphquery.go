@@ -212,18 +212,18 @@ func writeRoot(b *strings.Builder, q *gql.GraphQuery) {
 		x.Check2(b.WriteString(fmt.Sprintf("(func: type(%s)", q.Func.Args[0].Value)))
 	case q.Func.Name == "eq":
 		x.Check2(b.WriteString("(func: eq("))
-		writeFilterArguments(b, q.Func.Args)
+		writeFilterArguments(b, q.Func.Args, q.Func.Attr)
 		x.Check2(b.WriteRune(')'))
 	}
 	writeOrderAndPage(b, q, true)
 }
 
-func writeFilterArguments(b *strings.Builder, args []gql.Arg) {
+func writeFilterArguments(b *strings.Builder, args []gql.Arg, attr string) {
 	for i, arg := range args {
 		if i != 0 {
 			x.Check2(b.WriteString(", "))
 		}
-		if arg.IsValueVar && string(arg.Value[0]) != "\"" {
+		if attr != "" && string(arg.Value[0]) != "\"" {
 			arg.Value = fmt.Sprintf("\"%v\"", arg.Value)
 		}
 		x.Check2(b.WriteString(arg.Value))
@@ -244,7 +244,7 @@ func writeFilterFunction(b *strings.Builder, f *gql.Function) {
 			x.Check2(b.WriteString(f.Attr))
 			x.Check2(b.WriteRune(','))
 		}
-		writeFilterArguments(b, f.Args)
+		writeFilterArguments(b, f.Args, f.Attr)
 		x.Check2(b.WriteRune(')'))
 	}
 }
