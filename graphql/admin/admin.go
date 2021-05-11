@@ -699,11 +699,15 @@ func newAdminResolver(
 
 		server.mux.RLock()
 		currentSchema, ok := server.schema[ns]
-		if ok && (newSchema.Version <= currentSchema.Version || newSchema.Schema == currentSchema.Schema) {
-			glog.Infof("Skipping GraphQL schema update, new badger key version is %d, the old version was %d.",
-				newSchema.Version, currentSchema.Version)
-			server.mux.RUnlock()
-			return
+		if ok {
+			schemaChanged := newSchema.Schema == currentSchema.Schema
+			if newSchema.Version <= currentSchema.Version || schemaChanged {
+				glog.Infof("namespace: %d. Skipping GraphQL schema update. "+
+					"newSchema.Version: %d, oldSchema.Version: %d, schemaChanged: %v.",
+					ns, newSchema.Version, currentSchema.Version, schemaChanged)
+				server.mux.RUnlock()
+				return
+			}
 		}
 		server.mux.RUnlock()
 
@@ -712,7 +716,7 @@ func newAdminResolver(
 		if newSchema.Schema != "" {
 			gqlSchema, err = generateGQLSchema(newSchema, ns)
 			if err != nil {
-				glog.Errorf("Error processing GraphQL schema: %s.  ", err)
+				glog.Errorf("namespace: %d. Error processing GraphQL schema: %s.", ns, err)
 				return
 			}
 		}
@@ -726,7 +730,8 @@ func newAdminResolver(
 		if !(ok && currentSchema.loaded) {
 			// this just set schema in admin server, so that next invalid badger subscription update gets rejected upfront
 			server.schema[ns] = newSchema
-			glog.Infof("Skipping in-memory GraphQL schema update, it will be lazy-loaded later.")
+			glog.Infof("namespace: %d. Skipping in-memory GraphQL schema update, "+
+				"it will be lazy-loaded later.", ns)
 			return
 		}
 
@@ -735,7 +740,8 @@ func newAdminResolver(
 		server.schema[ns] = newSchema
 		server.resetSchema(ns, gqlSchema)
 
-		glog.Infof("Successfully updated GraphQL schema. Serving New GraphQL API.")
+		glog.Infof("namespace: %d. Successfully updated GraphQL schema. "+
+			"Serving New GraphQL API.", ns)
 	}, 1, closer)
 
 	go server.initServer()
@@ -849,7 +855,7 @@ func (as *adminServer) initServer() {
 
 		sch, err := getCurrentGraphQLSchema(x.GalaxyNamespace)
 		if err != nil {
-			glog.Infof("Error reading GraphQL schema: %s.", err)
+			glog.Errorf("namespace: %d. Error reading GraphQL schema: %s.", x.GalaxyNamespace, err)
 			continue
 		}
 		sch.loaded = true
@@ -860,19 +866,22 @@ func (as *adminServer) initServer() {
 		mainHealthStore.up()
 
 		if sch.Schema == "" {
-			glog.Infof("No GraphQL schema in Dgraph; serving empty GraphQL API")
+			glog.Infof("namespace: %d. No GraphQL schema in Dgraph; serving empty GraphQL API",
+				x.GalaxyNamespace)
 			break
 		}
 
 		generatedSchema, err := generateGQLSchema(sch, x.GalaxyNamespace)
 		if err != nil {
-			glog.Infof("Error processing GraphQL schema: %s.", err)
+			glog.Errorf("namespace: %d. Error processing GraphQL schema: %s.",
+				x.GalaxyNamespace, err)
 			break
 		}
 		as.incrementSchemaUpdateCounter(x.GalaxyNamespace)
 		as.resetSchema(x.GalaxyNamespace, generatedSchema)
 
-		glog.Infof("Successfully loaded GraphQL schema.  Serving GraphQL API.")
+		glog.Infof("namespace: %d. Successfully loaded GraphQL schema.  Serving GraphQL API.",
+			x.GalaxyNamespace)
 
 		break
 	}
@@ -1015,20 +1024,20 @@ func (as *adminServer) resetSchema(ns uint64, gqlSchema schema.Schema) {
 	mainHealthStore.up()
 }
 
-func (as *adminServer) lazyLoadSchema(namespace uint64) {
+func (as *adminServer) lazyLoadSchema(namespace uint64) error {
 	// if the schema is already in memory, no need to fetch it from disk
 	as.mux.RLock()
 	if currentSchema, ok := as.schema[namespace]; ok && currentSchema.loaded {
 		as.mux.RUnlock()
-		return
+		return nil
 	}
 	as.mux.RUnlock()
 
 	// otherwise, fetch the schema from disk
 	sch, err := getCurrentGraphQLSchema(namespace)
 	if err != nil {
-		glog.Infof("Error reading GraphQL schema: %s.", err)
-		return
+		glog.Errorf("namespace: %d. Error reading GraphQL schema: %s.", namespace, err)
+		return errors.Wrap(err, "failed to lazy-load GraphQL schema")
 	}
 
 	var generatedSchema schema.Schema
@@ -1036,12 +1045,13 @@ func (as *adminServer) lazyLoadSchema(namespace uint64) {
 		// if there was no schema stored in Dgraph, we still need to attach resolvers to the main
 		// graphql server which should just return errors for any incoming request.
 		// generatedSchema will be nil in this case
-		glog.Infof("No GraphQL schema in Dgraph; serving empty GraphQL API")
+		glog.Infof("namespace: %d. No GraphQL schema in Dgraph; serving empty GraphQL API",
+			namespace)
 	} else {
 		generatedSchema, err = generateGQLSchema(sch, namespace)
 		if err != nil {
-			glog.Infof("Error processing GraphQL schema: %s.", err)
-			return
+			glog.Errorf("namespace: %d. Error processing GraphQL schema: %s.", namespace, err)
+			return errors.Wrap(err, "failed to lazy-load GraphQL schema")
 		}
 	}
 
@@ -1051,11 +1061,12 @@ func (as *adminServer) lazyLoadSchema(namespace uint64) {
 	as.schema[namespace] = sch
 	as.resetSchema(namespace, generatedSchema)
 
-	glog.Infof("Successfully lazy-loaded GraphQL schema.")
+	glog.Infof("namespace: %d. Successfully lazy-loaded GraphQL schema.", namespace)
+	return nil
 }
 
-func LazyLoadSchema(namespace uint64) {
-	adminServerVar.lazyLoadSchema(namespace)
+func LazyLoadSchema(namespace uint64) error {
+	return adminServerVar.lazyLoadSchema(namespace)
 }
 
 func inputArgError(err error) error {

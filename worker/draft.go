@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -504,6 +505,10 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	span := otrace.FromContext(ctx)
 
 	if proposal.Mutations.DropOp == pb.Mutations_DATA {
+		ns, err := strconv.ParseUint(proposal.Mutations.DropValue, 0, 64)
+		if err != nil {
+			return err
+		}
 		// Ensures nothing get written to disk due to commit proposals.
 		n.keysWritten.rejectBeforeIndex = proposal.Index
 
@@ -511,13 +516,14 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		n.stopTask(opRollup)
 		defer n.startTask(opRollup)
 
-		posting.Oracle().ResetTxns()
-		if err := posting.DeleteData(); err != nil {
+		posting.Oracle().ResetTxnsForNs(ns)
+		if err := posting.DeleteData(ns); err != nil {
 			return err
 		}
 
-		// Clear entire cache.
-		posting.ResetCache()
+		// TODO: Revisit this when we work on posting cache. Clear entire cache.
+		// We don't want to drop entire cache, just due to one namespace.
+		// posting.ResetCache()
 		return nil
 	}
 
