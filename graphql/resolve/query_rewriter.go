@@ -136,8 +136,13 @@ func (qr *queryRewriter) Rewrite(
 		selector:      getAuthSelector(gqlQuery.QueryType()),
 		parentVarName: gqlQuery.ConstructedFor().Name() + "Root",
 	}
-	authRw.hasAuthRules = hasAuthRules(gqlQuery, authRw)
-	authRw.hasCascade = hasCascadeDirective(gqlQuery)
+
+	// In case of DQL queries, these need to be calculated
+	// for each of the query block and not for the whole query.
+	if gqlQuery.QueryType() != schema.DQLQuery {
+		authRw.hasAuthRules = hasAuthRules(gqlQuery, authRw)
+		authRw.hasCascade = hasCascadeDirective(gqlQuery)
+	}
 
 	switch gqlQuery.QueryType() {
 	case schema.GetQuery:
@@ -625,6 +630,8 @@ func rewriteAsGet(
 	return dgQuery
 }
 
+// rewriteDQLQuery first parses the custom DQL query string and add @auth rules to the
+// DQL query.
 func rewriteDQLQuery(query schema.Query, authRw *authRewriter) ([]*gql.GraphQuery, error) {
 	dgQuery := query.DQLQuery()
 	args := query.Arguments()
@@ -653,7 +660,7 @@ func rewriteDQLQuery(query schema.Query, authRw *authRewriter) ([]*gql.GraphQuer
 		return nil, err
 	}
 
-	return rewriteWithAuth(parsedResult.Query, query.Schema(), authRw)
+	return rewriteDQLQueryWithAuth(parsedResult.Query, query.Schema(), authRw)
 }
 
 // extractType tries to find out the queried type in the DQL query.
@@ -688,7 +695,7 @@ func extractTypeFromFilter(f *gql.FilterTree) string {
 
 // extractTypeFromFunc extracts typeName from func. It
 // expects predicate names in the format of `Type.Field`.
-// If the predicate name is not in the format, it do not
+// If the predicate name is not in the format, it does not
 // return anything.
 func extractTypeFromFunc(f *gql.Function) string {
 	if f == nil {
@@ -707,7 +714,16 @@ func extractTypeFromFunc(f *gql.Function) string {
 	return ""
 }
 
-func rewriteWithAuth(
+// rewriteDQLQueryWithAuth adds @auth Rules to the DQL query.
+// It adds @auth rules independently on each query block.
+// It first try to find out the type queried at the root and if
+// it fails to find out then no @auth rule will be applied.
+// for eg: 	me(func: uid("0x1")) {
+//		 	}
+// The queries type is impossible to find. To enable @auth rules on
+// these type of queries, we should introduce some directive in the
+// DQL which tells us about the queried type at the root.
+func rewriteDQLQueryWithAuth(
 	dgQuery []*gql.GraphQuery,
 	sch schema.Schema,
 	authRw *authRewriter) ([]*gql.GraphQuery, error) {
@@ -726,14 +742,18 @@ func rewriteWithAuth(
 			continue
 		}
 
-		// authRw.hasAuthRules needs to be calculated separately for
-		// each query block in case of DQL queries.
+		// authRw.hasAuthRules & auth.hasCascade needs to be calculated
+		// separately for each query block in case of DQL queries.
 		authRw.hasAuthRules = dqlHasAuthRules(qry, typ, authRw)
 		authRw.hasCascade = dqlHasCascadeDirective(qry)
+
 		rbac := authRw.evaluateStaticRules(typ)
 
 		if rbac == schema.Negative {
-			// Todo: form dummy query properly for var block.
+			// if it is var query then it may contain variables which are
+			// used in subsequent query blocks. We just add dumm rootFunc
+			// here `var(func: uid(0)` which doesn't return any node and
+			// keep the remaining query unchanged.
 			if qry.Attr == "var" {
 				qry.Func = &gql.Function{Name: "uid", UID: []uint64{0}}
 				dgQueries = append(dgQueries, qry)
@@ -1686,6 +1706,9 @@ func getFieldName(attr string) string {
 	return fldSplit[1]
 }
 
+// addAuthQueriesOnSelectionSet adds auth queries on fields
+// in the selection set of a DQL query. If any field doesn't
+// satisfy the @auth rules then it is removed from the query.
 func addAuthQueriesOnSelectionSet(
 	q *gql.GraphQuery,
 	typ schema.Type,
