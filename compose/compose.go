@@ -175,7 +175,7 @@ func initService(basename string, idx, grpcPort int) service {
 	if idx > 1 {
 		svc.DependsOn = append(svc.DependsOn, name(basename, idx-1))
 	}
-	svc.Labels = map[string]string{"cluster": "test"}
+	svc.Labels = map[string]string{"cluster": opts.ClusterLabel}
 
 	svc.Ports = []string{
 		toPort(grpcPort),
@@ -640,6 +640,8 @@ func main() {
 		"run Kafka and push CDC data to it")
 	cmd.PersistentFlags().BoolVar(&opts.CdcConsumer, "cdc_consumer", false,
 		"run Kafka consumer that prints out CDC events")
+	cmd.PersistentFlags().StringVar(&opts.ClusterLabel, "label", "test",
+		`docker "cluster" label`)
 	err := cmd.ParseFlags(os.Args)
 	if err != nil {
 		if err == pflag.ErrHelp {
