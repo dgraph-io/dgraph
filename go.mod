@@ -21,7 +21,7 @@ require (
 	github.com/dgraph-io/dgo/v210 v210.0.0-20210407152819-261d1c2a6987
 	github.com/dgraph-io/gqlgen v0.13.2
 	github.com/dgraph-io/gqlparser/v2 v2.2.0
-	github.com/dgraph-io/graphql-transport-ws v0.0.0-20210223074046-e5b8b80bb4ed
+	github.com/dgraph-io/graphql-transport-ws v0.0.0-20210511143556-2cef522f1f15
 	github.com/dgraph-io/ristretto v0.0.4-0.20210504190834-0bf2acd73aa3
 	github.com/dgraph-io/roaring v0.5.6-0.20210227175938-766b897233a5
 	github.com/dgraph-io/simdjson-go v0.3.0

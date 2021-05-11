@@ -158,10 +158,10 @@ func (gs *graphqlSubscription) Subscribe(
 	variableValues map[string]interface{}) (payloads <-chan interface{},
 	err error) {
 
+	reqHeader := http.Header{}
 	// library (graphql-transport-ws) passes the headers which are part of the INIT payload to us
 	// in the context. We are extracting those headers and passing them along.
 	headerPayload, _ := ctx.Value("Header").(json.RawMessage)
-	reqHeader := http.Header{}
 	if len(headerPayload) > 0 {
 		headers := make(map[string]interface{})
 		if err = json.Unmarshal(headerPayload, &headers); err != nil {
@@ -171,6 +171,23 @@ func (gs *graphqlSubscription) Subscribe(
 		for k, v := range headers {
 			if vStr, ok := v.(string); ok {
 				reqHeader.Set(k, vStr)
+			}
+		}
+	}
+
+	// Earlier the graphql-transport-ws library was ignoring the http headers in the request.
+	// The library was relying upon the information present in the request payload. This was
+	// blocker for the cloud team because the only control cloud has is over the HTTP headers.
+	// This fix ensures that we are setting the request headers if not provided in the payload.
+	headerPayload, _ = ctx.Value("RequestHeader").(json.RawMessage)
+	if len(headerPayload) > 0 {
+		headers := http.Header{}
+		if err = json.Unmarshal(headerPayload, &headers); err != nil {
+			return nil, err
+		}
+		for k := range headers {
+			if len(strings.TrimSpace(reqHeader.Get(k))) == 0 {
+				reqHeader.Set(k, headers.Get(k))
 			}
 		}
 	}
