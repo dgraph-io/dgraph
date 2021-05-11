@@ -212,19 +212,37 @@ func writeRoot(b *strings.Builder, q *gql.GraphQuery) {
 		x.Check2(b.WriteString(fmt.Sprintf("(func: type(%s)", q.Func.Args[0].Value)))
 	case q.Func.Name == "eq":
 		x.Check2(b.WriteString("(func: eq("))
-		writeFilterArguments(b, q.Func.Args, q.Func.Attr)
+		writeFilterArguments(b, q.Func.Args, q.Func.Attr, q.Func.Name)
 		x.Check2(b.WriteRune(')'))
 	}
 	writeOrderAndPage(b, q, true)
 }
 
-func writeFilterArguments(b *strings.Builder, args []gql.Arg, attr string) {
+func maybeQuoteArg(fn string, arg interface{}) string {
+	switch arg := arg.(type) {
+	case string: // dateTime also parsed as string
+		if fn == "regexp" {
+			return arg
+		}
+		return fmt.Sprintf("%q", arg)
+	case float64, float32:
+		return fmt.Sprintf("\"%v\"", arg)
+	default:
+		return fmt.Sprintf("%v", arg)
+	}
+}
+
+func writeFilterArguments(b *strings.Builder, args []gql.Arg, attr, fn string) {
+	if attr != "" {
+		x.Check2(b.WriteString(attr))
+		x.Check2(b.WriteString(", "))
+	}
 	for i, arg := range args {
 		if i != 0 {
 			x.Check2(b.WriteString(", "))
 		}
-		if attr != "" && string(arg.Value[0]) != "\"" {
-			arg.Value = fmt.Sprintf("\"%v\"", arg.Value)
+		if attr != "" {
+			arg.Value = maybeQuoteArg(fn, arg.Value)
 		}
 		x.Check2(b.WriteString(arg.Value))
 	}
@@ -240,11 +258,7 @@ func writeFilterFunction(b *strings.Builder, f *gql.Function) {
 		writeUIDFunc(b, f.UID, f.Args, f.NeedsVar)
 	default:
 		x.Check2(b.WriteString(fmt.Sprintf("%s(", f.Name)))
-		if f.Attr != "" {
-			x.Check2(b.WriteString(f.Attr))
-			x.Check2(b.WriteRune(','))
-		}
-		writeFilterArguments(b, f.Args, f.Attr)
+		writeFilterArguments(b, f.Args, f.Attr, f.Name)
 		x.Check2(b.WriteRune(')'))
 	}
 }
