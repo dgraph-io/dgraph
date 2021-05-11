@@ -558,66 +558,67 @@ func fatal(err error) {
 }
 
 func makeDir(path string) error {
+	var err1 error
 	_, err := os.Stat(path)
 	if os.IsNotExist(err) {
 		if errs := os.MkdirAll(path, 0755); errs != nil {
-			fatal(errors.Errorf("Couldn't create directory %v. Error: %v", path, errs))
+			err1 = errors.Wrapf(err, "Couldn't create directory %v.", path)
 		}
 	} else if err != nil {
-		fatal(errors.Errorf("Something went wrong while checking if directory %v still exists. Error: %v",
-			path, err))
+		err1 = errors.Wrapf(err, "Something went wrong while checking if directory %v still exists.",
+			path)
 	}
-	return nil
+	return err1
 }
 
 func copyFile(src, dst string) error {
-	var err error
+	var err, err1 error
 	var srcfd *os.File
 	var dstfd *os.File
-	var srcinfo os.FileInfo
+	var srcInfo os.FileInfo
 
 	if srcfd, err = os.Open(src); err != nil {
-		fatal(errors.Errorf("Error in opening source file %v. Error: %v", src, err))
-		return err
+		err1 = errors.Wrapf(err, "Error in opening source file %v.", src)
+		return err1
 	}
 	defer srcfd.Close()
 
 	if dstfd, err = os.Create(dst); err != nil {
-		fatal(errors.Errorf("Error in creating destination file %v. Error: %v", dst, err))
-		return err
+		err1 = errors.Wrapf(err, "Error in creating destination file %v.", dst)
+		return err1
 	}
 	defer dstfd.Close()
 
 	if _, err = io.Copy(dstfd, srcfd); err != nil {
-		fatal(errors.Errorf("Error in copying source file %v to destination file %v. Error: %v",
-			src, dst, err))
-		return err
+		err1 = errors.Wrapf(err, "Error in copying source file %v to destination file %v.",
+			src, dst)
+		return err1
 	}
-	if srcinfo, err = os.Stat(src); err != nil {
-		fatal(errors.Errorf("Error in doing stat of source file %v. Error: %v", src, err))
-		return err
+	if srcInfo, err = os.Stat(src); err != nil {
+		err1 = errors.Wrapf(err, "Error in doing stat of source file %v.", src)
+		return err1
 	}
-	return os.Chmod(dst, srcinfo.Mode())
+	return os.Chmod(dst, srcInfo.Mode())
 }
 
 func copyDir(src string, dst string) error {
-	var err error
+	var err, err1 error
 	var fds []os.FileInfo
-	var srcinfo os.FileInfo
+	var srcInfo os.FileInfo
 
-	if srcinfo, err = os.Stat(src); err != nil {
-		fatal(errors.Errorf("Error in doing stat of source dir %v. Error: %v", src, err))
-		return err
+	if srcInfo, err = os.Stat(src); err != nil {
+		err1 = errors.Wrapf(err, "Error in doing stat of source dir %v.", src)
+		return err1
 	}
 
-	if err = os.MkdirAll(dst, srcinfo.Mode()); err != nil {
-		fatal(errors.Errorf("Error in making dir %v. Error: %v", dst, err))
-		return err
+	if err = os.MkdirAll(dst, srcInfo.Mode()); err != nil {
+		err1 = errors.Wrapf(err, "Error in making dir %v.", dst)
+		return err1
 	}
 
 	if fds, err = ioutil.ReadDir(src); err != nil {
-		fatal(errors.Errorf("Error in reading source dir %v. Error: %v", src, err))
-		return err
+		err1 = errors.Wrapf(err, "Error in reading source dir %v.", src)
+		return err1
 	}
 	for _, fd := range fds {
 		srcfp := path.Join(src, fd.Name())
@@ -625,11 +626,13 @@ func copyDir(src string, dst string) error {
 
 		if fd.IsDir() {
 			if err = copyDir(srcfp, dstfp); err != nil {
-				fatal(errors.Errorf("Could not copy dir %v to %v, because of error %v", srcfp, dstfp, err))
+				err1 = errors.Wrapf(err, "Could not copy dir %v to %v.", srcfp, dstfp)
+				return err1
 			}
 		} else {
 			if err = copyFile(srcfp, dstfp); err != nil {
-				fatal(errors.Errorf("Could not copy file %v to %v, because of error %v", srcfp, dstfp, err))
+				err1 = errors.Wrapf(err, "Could not copy file %v to %v.", srcfp, dstfp)
+				return err1
 			}
 		}
 	}
@@ -826,14 +829,14 @@ func main() {
 
 		n := 1
 		for n <= opts.NumAlphas {
-			new_dir := opts.DataDir + "/alpha" + strconv.Itoa(n) + "/p"
-			err := makeDir(new_dir)
+			newDir := opts.DataDir + "/alpha" + strconv.Itoa(n) + "/p"
+			err := makeDir(newDir)
 			if err != nil {
-				fatal(errors.Errorf("Couldn't create directory %v", new_dir))
+				fatal(errors.Errorf("Couldn't create directory %v. Error: %v.", newDir, err))
 			}
-			err = copyDir(opts.PDir, new_dir)
+			err = copyDir(opts.PDir, newDir)
 			if err != nil {
-				fatal(errors.Errorf("Couldn't copy directory from %v to %v", opts.PDir, new_dir))
+				fatal(errors.Errorf("Couldn't copy directory from %v to %v. Error: %v.", opts.PDir, newDir, err))
 			}
 			n++
 		}
