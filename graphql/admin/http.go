@@ -182,9 +182,10 @@ func (gs *graphqlSubscription) Subscribe(
 		Header:        reqHeader,
 	}
 	namespace := x.ExtractNamespaceHTTP(&http.Request{Header: reqHeader})
+	// first load the schema, then do anything else
 	if err = LazyLoadSchema(namespace); err != nil {
 		return nil, err
-	} // first load the schema, then do anything else
+	}
 	if err = gs.isValid(namespace); err != nil {
 		glog.Errorf("namespace: %d. graphqlSubscription not initialized: %s", namespace, err)
 		return nil, errors.New(resolve.ErrInternal)
