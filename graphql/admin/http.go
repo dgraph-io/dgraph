@@ -179,15 +179,11 @@ func (gs *graphqlSubscription) Subscribe(
 	// The library was relying upon the information present in the request payload. This was
 	// blocker for the cloud team because the only control cloud has is over the HTTP headers.
 	// This fix ensures that we are setting the request headers if not provided in the payload.
-	headerPayload, _ = ctx.Value("RequestHeader").(json.RawMessage)
-	if len(headerPayload) > 0 {
-		headers := http.Header{}
-		if err = json.Unmarshal(headerPayload, &headers); err != nil {
-			return nil, err
-		}
-		for k := range headers {
+	httpHeaders, _ := ctx.Value("RequestHeader").(http.Header)
+	if len(httpHeaders) > 0 {
+		for k := range httpHeaders {
 			if len(strings.TrimSpace(reqHeader.Get(k))) == 0 {
-				reqHeader.Set(k, headers.Get(k))
+				reqHeader.Set(k, httpHeaders.Get(k))
 			}
 		}
 	}
