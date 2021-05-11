@@ -121,6 +121,8 @@ type options struct {
 	// Extra flags
 	AlphaFlags string
 	ZeroFlags  string
+
+	ClusterLabel string
 }
 
 var opts options
