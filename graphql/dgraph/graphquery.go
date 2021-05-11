@@ -242,6 +242,9 @@ func writeFilterArguments(b *strings.Builder, args []gql.Arg) {
 		if i != 0 {
 			x.Check2(b.WriteString(", "))
 		}
+		if arg.IsValueVar && string(arg.Value[0]) != "\"" {
+			arg.Value = fmt.Sprintf("\"%v\"", arg.Value)
+		}
 		x.Check2(b.WriteString(arg.Value))
 	}
 }
