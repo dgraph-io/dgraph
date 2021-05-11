@@ -201,6 +201,8 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 		}
 		took := time.Since(start)
 		if took < phaseOneThreshold || counter > 3 {
+			// If we already did atleast 3 iterations in Phase I or the last iteration took less
+			// than phaseOneThreshold, then move to Phase II.
 			msg := fmt.Sprintf("Done Phase I: took %s at counter: %d", took, counter)
 			span.Annotate(nil, msg)
 			glog.Infof(msg)
