@@ -147,6 +147,9 @@ type mapper struct {
 	mapDir string
 	reqCh  chan listReq
 	szHist *z.HistogramData
+
+	maxUid uint64
+	maxNs  uint64
 }
 
 func (mw *mapper) newMapFile() (*os.File, error) {
@@ -281,6 +284,9 @@ func (m *mapper) processReqCh(ctx context.Context) error {
 	buf := z.NewBuffer(20<<20, "processKVList")
 	defer buf.Release()
 
+	maxNs := uint64(0)
+	maxUid := uint64(0)
+
 	toBuffer := func(kv *bpb.KV, version uint64) error {
 		key := y.KeyWithTs(kv.Key, version)
 		sz := kv.Size()
@@ -310,6 +316,11 @@ func (m *mapper) processReqCh(ctx context.Context) error {
 		if err != nil {
 			return errors.Wrapf(err, "could not parse key %s", hex.Dump(restoreKey))
 		}
+
+		// Update the local max uid and max namespace values.
+		maxUid = x.Max(maxUid, parsedKey.Uid)
+		maxNs = x.Max(maxNs, ns)
+
 		if !in.keepSchema && (parsedKey.IsSchema() || parsedKey.IsType()) {
 			return nil
 		}
@@ -452,6 +463,24 @@ func (m *mapper) processReqCh(ctx context.Context) error {
 	if err := mergeBuffer(); err != nil {
 		return err
 	}
+
+	// Update the global maxUid and maxNs. We need CAS here because mapping is
+	// being carried out concurrently.
+	for {
+		oldMaxUid := atomic.LoadUint64(&m.maxUid)
+		newMaxUid := x.Max(oldMaxUid, maxUid)
+		if swapped := atomic.CompareAndSwapUint64(&m.maxUid, oldMaxUid, newMaxUid); swapped {
+			break
+		}
+	}
+	for {
+		oldMaxNs := atomic.LoadUint64(&m.maxNs)
+		newMaxNs := x.Max(oldMaxNs, maxNs)
+		if swapped := atomic.CompareAndSwapUint64(&m.maxNs, oldMaxNs, newMaxNs); swapped {
+			break
+		}
+	}
+
 	return nil
 }
 
@@ -522,36 +551,41 @@ func (m *mapper) Map(r io.Reader, in *loadBackupInput) error {
 	return nil
 }
 
+type mapResult struct {
+	maxUid uint64
+	maxNs  uint64
+}
+
 // 1. RunMapper creates a mapper object
 // 2. mapper.Map() ->
-func RunMapper(req *pb.RestoreRequest, mapDir string) error {
+func RunMapper(req *pb.RestoreRequest, mapDir string) (*mapResult, error) {
 	uri, err := url.Parse(req.Location)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if req.RestoreTs == 0 {
-		return errors.New("RestoreRequest must have a valid restoreTs")
+		return nil, errors.New("RestoreRequest must have a valid restoreTs")
 	}
 
 	creds := getCredentialsFromRestoreRequest(req)
 	h, err := NewUriHandler(uri, creds)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	manifests, err := getManifestsToRestore(h, uri, req)
 	if err != nil {
-		return errors.Wrapf(err, "cannot retrieve manifests")
+		return nil, errors.Wrapf(err, "cannot retrieve manifests")
 	}
 	glog.Infof("Got %d backups to restore ", len(manifests))
 
 	cfg, err := getEncConfig(req)
 	if err != nil {
-		return errors.Wrapf(err, "unable to get encryption config")
+		return nil, errors.Wrapf(err, "unable to get encryption config")
 	}
 	keys, err := ee.GetKeys(cfg)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	mapper := &mapper{
@@ -603,7 +637,7 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) error {
 			file := filepath.Join(manifest.Path, backupName(manifest.ValidReadTs(), gid))
 			br := readerFrom(h, file).WithEncryption(keys.EncKey).WithCompression(manifest.Compression)
 			if br.err != nil {
-				return errors.Wrap(br.err, "newBackupReader")
+				return nil, errors.Wrap(br.err, "newBackupReader")
 			}
 			defer br.Close()
 
@@ -631,10 +665,10 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) error {
 			// This would stream the backups from the source, and map them in
 			// Dgraph compatible format on disk.
 			if err := mapper.Map(br, in); err != nil {
-				return errors.Wrap(err, "mapper.Map")
+				return nil, errors.Wrap(err, "mapper.Map")
 			}
 			if err := br.Close(); err != nil {
-				return errors.Wrap(err, "br.Close")
+				return nil, errors.Wrap(err, "br.Close")
 			}
 		}
 		for _, op := range manifest.DropOperations {
@@ -644,7 +678,7 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) error {
 			case pb.DropOperation_DATA:
 				ns, err := strconv.ParseUint(op.DropValue, 0, 64)
 				if err != nil {
-					return errors.Wrap(err, "Map phase failed to parse namespace")
+					return nil, errors.Wrap(err, "Map phase failed to parse namespace")
 				}
 				dropNs[ns] = struct{}{}
 			case pb.DropOperation_ATTR:
@@ -653,10 +687,10 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) error {
 				// If there is a drop namespace, we just ban the namespace in the pstore.
 				ns, err := strconv.ParseUint(op.DropValue, 0, 64)
 				if err != nil {
-					return errors.Wrapf(err, "Map phase failed to parse namespace")
+					return nil, errors.Wrapf(err, "Map phase failed to parse namespace")
 				}
 				if err := pstore.BanNamespace(ns); err != nil {
-					return errors.Wrapf(err, "Map phase failed to ban namespace: %d", ns)
+					return nil, errors.Wrapf(err, "Map phase failed to ban namespace: %d", ns)
 				}
 			}
 		}
@@ -665,7 +699,14 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) error {
 	glog.Infof("Histogram of map input sizes:\n%s\n", mapper.szHist)
 	close(mapper.reqCh)
 	if err := g.Wait(); err != nil {
-		return errors.Wrapf(err, "from processKVList")
+		return nil, errors.Wrapf(err, "from processKVList")
 	}
-	return mapper.Flush()
+	if err := mapper.Flush(); err != nil {
+		return nil, errors.Wrap(err, "failed to flush the mapper")
+	}
+	mapRes := &mapResult{
+		maxUid: mapper.maxUid,
+		maxNs:  mapper.maxNs,
+	}
+	return mapRes, nil
 }
