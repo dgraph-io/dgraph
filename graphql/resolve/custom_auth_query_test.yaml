@@ -51,7 +51,7 @@
         User_2 as Issue.owner
       }
       User_1 as var(func: uid(User_2))
-      queryIssueSortedByOwnerAge(func: uid(age), orderdesc: age) {
+      queryIssueSortedByOwnerAge(func: uid(age), orderdesc: val(age)) {
         id : uid
         msg : Issue.msg
         random : Issue.random
@@ -77,7 +77,7 @@
           age as User.age
         }
       }
-      queryIssueSortedByOwnerAge(func: uid(age), orderdesc: age) {
+      queryIssueSortedByOwnerAge(func: uid(age), orderdesc: val(age)) {
         id : uid
         msg : Issue.msg
         random : Issue.random
@@ -106,7 +106,7 @@
         }
       }
       UserRoot as var(func: uid(User_4))
-      User_4 as var(func: uid(0x1)) @filter(eq(User.username,minhaj))
+      User_4 as var(func: uid(0x1)) @filter(eq(User.username, "minhaj"))
       var(func: uid(UserRoot)) {
         Ticket_2 as User.tickets
       }
@@ -139,7 +139,7 @@
         username : User.username
       }
       UserRoot as var(func: uid(User_3))
-      User_3 as var(func: uid(0x1)) @filter(eq(User.username,minhaj))
+      User_3 as var(func: uid(0x1)) @filter(eq(User.username, "minhaj"))
     }
 
 - name: "Deep RBAC rule with cascade - Level 1 false"
