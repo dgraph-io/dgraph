@@ -4107,11 +4107,13 @@ func (m *SubscriptionResponse) GetKvs() *pb.KVList {
 }
 
 type Num struct {
-	Val       uint64       `protobuf:"varint,1,opt,name=val,proto3" json:"val,omitempty"`
-	ReadOnly  bool         `protobuf:"varint,2,opt,name=read_only,json=readOnly,proto3" json:"read_only,omitempty"`
-	Forwarded bool         `protobuf:"varint,3,opt,name=forwarded,proto3" json:"forwarded,omitempty"`
-	Bump      bool         `protobuf:"varint,5,opt,name=bump,proto3" json:"bump,omitempty"`
-	Type      NumLeaseType `protobuf:"varint,4,opt,name=type,proto3,enum=pb.NumLeaseType" json:"type,omitempty"`
+	Val       uint64 `protobuf:"varint,1,opt,name=val,proto3" json:"val,omitempty"`
+	ReadOnly  bool   `protobuf:"varint,2,opt,name=read_only,json=readOnly,proto3" json:"read_only,omitempty"`
+	Forwarded bool   `protobuf:"varint,3,opt,name=forwarded,proto3" json:"forwarded,omitempty"`
+	// If bump is set to true then we bump the lease to val. If false, we assign new ids with count
+	// equal to val.
+	Bump bool         `protobuf:"varint,5,opt,name=bump,proto3" json:"bump,omitempty"`
+	Type NumLeaseType `protobuf:"varint,4,opt,name=type,proto3,enum=pb.NumLeaseType" json:"type,omitempty"`
 }
 
 func (m *Num) Reset()         { *m = Num{} }
