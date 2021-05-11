@@ -218,25 +218,6 @@ func writeRoot(b *strings.Builder, q *gql.GraphQuery) {
 	writeOrderAndPage(b, q, true)
 }
 
-func writeAggregate(b *strings.Builder, args []gql.Arg, needVar []gql.VarContext) {
-	if len(args) > 0 {
-		// uid function with a Dgraph query variable - uid(Post1)
-		for i, arg := range args {
-			if i != 0 {
-				x.Check2(b.WriteString(", "))
-			}
-			x.Check2(b.WriteString(arg.Value))
-		}
-	} else {
-		for i, v := range needVar {
-			if i != 0 {
-				x.Check2(b.WriteString(", "))
-			}
-			x.Check2(b.WriteString(v.Name))
-		}
-	}
-}
-
 func writeFilterArguments(b *strings.Builder, args []gql.Arg) {
 	for i, arg := range args {
 		if i != 0 {
