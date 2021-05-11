@@ -1471,6 +1471,70 @@ func TestGroupByRootAlias(t *testing.T) {
 	require.JSONEq(t, `{"data":{"me":[{"@groupby":[{"age":17,"Count":1},{"age":19,"Count":1},{"age":38,"Count":1},{"age":15,"Count":2}]}]}}`, js)
 }
 
+func TestGroupByCountValVar(t *testing.T) {
+	query := `
+	{
+		var(func: uid(1, 23, 24, 25, 31)) @groupby(age) {
+			c as count(uid)
+		}
+		me(func: uid(c)) {
+			uid
+			val: val(c)
+		}
+	}
+	`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data":{"me":[{"uid": "0x1","val":1},{"uid": "0x17","val": 2},{"uid": "0x18","val": 2},{"uid": "0x19","val": 1},{"uid": "0x1f","val": 1}]}}`, js)
+}
+
+func TestGroupByCountValVarFilter(t *testing.T) {
+	query := `
+	{
+		var(func: uid(1, 23, 24, 25, 31)) @groupby(age) {
+			c as count(uid)
+		}
+		me(func: uid(c)) @filter(ge(val(c),2)) {
+			name
+			val: val(c)
+		}
+	}
+	`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data":{"me": [{"name": "Rick Grimes","val": 2},{"name": "Glenn Rhee","val": 2}]}}`, js)
+}
+
+func TestGroupByMultiCountValVar(t *testing.T) {
+	query := `
+	{
+		var(func: uid(1, 23, 24, 25, 31)) @groupby(name,age) {
+			c as count(uid)
+		}
+		me(func: uid(c)) {
+			name
+			val: val(c)
+		}
+	}
+	`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me": [{"name": "Michonne","val": 1},{"name": "Rick Grimes","val": 1},{"name": "Glenn Rhee","val": 1},{"name": "Daryl Dixon","val": 1},{"name": "Andrea","val": 1}]}}`, js)
+}
+
+func TestGroupByCountUidValVar(t *testing.T) {
+	query := `
+	{
+		var(func: uid(1, 23, 24)) @groupby(school, age) {
+		  c as count(uid)
+		}
+		me(func: uid(c))  {
+		  name
+		  val: val(c)
+		}
+	  }
+	`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me": [{"name": "Michonne","val": 1},{"name": "Rick Grimes","val": 1},{"name": "Glenn Rhee","val": 1}]}}`, js)
+}
+
 func TestGroupByRootAlias2(t *testing.T) {
 	query := `
 	{
@@ -3482,6 +3546,38 @@ func TestMatchingWithPagination(t *testing.T) {
 			require.JSONEq(t, tc.expected, result)
 		})
 	}
+}
+
+func TestKRandomNodes(t *testing.T) {
+	q := `{
+		data(func: uid(61, 62, 63, 64, 65, 66, 67, 68), random: 2) @filter(has(connects)) {
+			kname
+			connects(random:2){
+				kname
+			}
+		}
+	}`
+	result := processQueryNoErr(t, q)
+	expected := `{"data":{"data":[{
+		"kname":"can_be_picked",
+		"connects":[
+			{"kname":"yes"},
+			{"kname":"yes"}
+			]},
+		{"kname":"can_be_picked",
+		"connects":[
+			{"kname":"yes"},
+			{"kname":"yes"}
+		]}]}}`
+	require.JSONEq(t, expected, result)
+
+	q = `{
+		data(func: uid(61, 62, 63, 64, 65, 66, 67, 68), random: 10) @filter(has(connects)) {
+			count(uid)
+		}
+	}`
+	result = processQueryNoErr(t, q)
+	require.JSONEq(t, `{"data":{"data":[{"count":3}]}}`, result)
 }
 
 var client *dgo.Dgraph

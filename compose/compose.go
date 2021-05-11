@@ -104,8 +104,6 @@ type options struct {
 	Image          string
 	Tag            string
 	WhiteList      bool
-	Ratel          bool
-	RatelPort      int
 	MemLimit       string
 	ExposePorts    bool
 	Encryption     bool
@@ -451,22 +449,6 @@ func getMinio(minioDataDir string) service {
 	return svc
 }
 
-func getRatel() service {
-	portFlag := ""
-	if opts.RatelPort != 8000 {
-		portFlag = fmt.Sprintf(" -port=%d", opts.RatelPort)
-	}
-	svc := service{
-		Image:         opts.Image + ":" + opts.Tag,
-		ContainerName: containerName("ratel"),
-		Ports: []string{
-			toPort(opts.RatelPort),
-		},
-		Command: "dgraph-ratel" + portFlag,
-	}
-	return svc
-}
-
 func addMetrics(cfg *composeConfig) {
 	cfg.Volumes["prometheus-volume"] = stringMap{}
 	cfg.Volumes["grafana-volume"] = stringMap{}
@@ -705,10 +687,6 @@ func main() {
 		"Docker tag for the --image image. Requires -l=false to use binary from docker container.")
 	cmd.PersistentFlags().BoolVarP(&opts.WhiteList, "whitelist", "w", true,
 		"include a whitelist if true")
-	cmd.PersistentFlags().BoolVar(&opts.Ratel, "ratel", false,
-		"include ratel service")
-	cmd.PersistentFlags().IntVar(&opts.RatelPort, "ratel_port", 8000,
-		"Port to expose Ratel service")
 	cmd.PersistentFlags().StringVarP(&opts.MemLimit, "mem", "", "32G",
 		"Limit memory provided to the docker containers, for example 8G.")
 	cmd.PersistentFlags().BoolVar(&opts.ExposePorts, "expose_ports", true,
@@ -771,9 +749,6 @@ func main() {
 	}
 	if opts.UserOwnership && opts.DataDir == "" {
 		fatal(errors.Errorf("--user option requires --data_dir=<path>"))
-	}
-	if cmd.Flags().Changed("ratel_port") && !opts.Ratel {
-		fatal(errors.Errorf("--ratel_port option requires --ratel"))
 	}
 	if cmd.Flags().Changed("cdc-consumer") && !opts.Cdc {
 		fatal(errors.Errorf("--cdc_consumer requires --cdc"))
@@ -870,10 +845,6 @@ func main() {
 
 	if opts.Jaeger {
 		services["jaeger"] = getJaeger()
-	}
-
-	if opts.Ratel {
-		services["ratel"] = getRatel()
 	}
 
 	if opts.Metrics {

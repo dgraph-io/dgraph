@@ -185,7 +185,7 @@ func GetGQLSchema(namespace uint64) (uid, graphQLSchema string, err error) {
 	sort.Slice(res, func(i, j int) bool {
 		return res[i].UidInt < res[j].UidInt
 	})
-	glog.Errorf("Multiple schema node found, using the last one")
+	glog.Errorf("namespace: %d. Multiple schema nodes found, using the last one", namespace)
 	resLast := res[len(res)-1]
 	return resLast.Uid, resLast.Schema, nil
 }
@@ -426,14 +426,6 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	}
 
 	if op.DropOp == api.Operation_DATA {
-		if x.Config.BlockClusterWideDrop {
-			glog.V(2).Info("Blocked drop-data because it is not permitted.")
-			return empty, errors.New("Drop data operation is not permitted.")
-		}
-		if err := AuthGuardianOfTheGalaxy(ctx); err != nil {
-			return empty, errors.Wrapf(err, "Drop data can only be called by the guardian of the"+
-				" galaxy")
-		}
 		if len(op.DropValue) > 0 {
 			return empty, errors.Errorf("If DropOp is set to DATA, DropValue must be empty")
 		}
@@ -445,13 +437,14 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		}
 
 		m.DropOp = pb.Mutations_DATA
+		m.DropValue = fmt.Sprintf("%#x", namespace)
 		_, err = query.ApplyMutations(ctx, m)
 		if err != nil {
 			return empty, err
 		}
 
 		// insert a helper record for backup & restore, indicating that drop_data was done
-		err = InsertDropRecord(ctx, "DROP_DATA;")
+		err = InsertDropRecord(ctx, fmt.Sprintf("DROP_DATA;%#x", namespace))
 		if err != nil {
 			return empty, err
 		}
@@ -459,7 +452,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		// just reinsert the GraphQL schema, no need to alter dgraph schema as this was drop_data
 		_, err = UpdateGQLSchema(ctx, graphQLSchema, "")
 		// recreate the admin account after a drop data operation
-		ResetAcl(nil)
+		upsertGuardianAndGroot(nil, namespace)
 		return empty, err
 	}
 
@@ -520,6 +513,8 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		_, err := query.ApplyMutations(ctx, m)
 		return empty, err
 	}
+
+	// it is a schema update
 	result, err := parseSchemaFromAlterOperation(ctx, op)
 	if err == errIndexingInProgress {
 		// Make the client wait a bit.
@@ -528,14 +523,24 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	} else if err != nil {
 		return nil, err
 	}
+	if err = validateDQLSchemaForGraphQL(ctx, result, namespace); err != nil {
+		return nil, err
+	}
 
 	glog.Infof("Got schema: %+v\n", result)
 	// TODO: Maybe add some checks about the schema.
 	m.Schema = result.Preds
 	m.Types = result.Types
-	_, err = query.ApplyMutations(ctx, m)
+	for i := 0; i < 3; i++ {
+		_, err = query.ApplyMutations(ctx, m)
+		if err != nil && strings.Contains(err.Error(), "Please retry operation") {
+			time.Sleep(time.Second)
+			continue
+		}
+		break
+	}
 	if err != nil {
-		return empty, err
+		return empty, errors.Wrapf(err, "During ApplyMutations")
 	}
 
 	// wait for indexing to complete or context to be canceled.
@@ -544,6 +549,145 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	}
 
 	return empty, nil
+}
+
+func validateDQLSchemaForGraphQL(ctx context.Context,
+	dqlSch *schema.ParsedSchema, ns uint64) error {
+	// fetch the GraphQL schema for this namespace from disk
+	_, existingGQLSch, err := GetGQLSchema(ns)
+	if err != nil || existingGQLSch == "" {
+		return err
+	}
+
+	// convert the existing GraphQL schema to a DQL schema
+	handler, err := gqlSchema.NewHandler(existingGQLSch, false)
+	if err != nil {
+		return err
+	}
+	dgSchema := handler.DGSchema()
+	if dgSchema == "" {
+		return nil
+	}
+	gqlReservedDgSch, err := parseSchemaFromAlterOperation(ctx, &api.Operation{Schema: dgSchema})
+	if err != nil {
+		return err
+	}
+
+	// create a mapping for the GraphQL reserved predicates and types
+	gqlReservedPreds := make(map[string]*pb.SchemaUpdate)
+	gqlReservedTypes := make(map[string]*pb.TypeUpdate)
+	for _, pred := range gqlReservedDgSch.Preds {
+		gqlReservedPreds[pred.Predicate] = pred
+	}
+	for _, typ := range gqlReservedDgSch.Types {
+		gqlReservedTypes[typ.TypeName] = typ
+	}
+
+	// now validate the DQL schema to check that it doesn't break the existing GraphQL schema
+
+	// Step-1: validate predicates
+	for _, dqlPred := range dqlSch.Preds {
+		gqlPred := gqlReservedPreds[dqlPred.Predicate]
+		if gqlPred == nil {
+			continue // if the predicate isn't used by GraphQL, no need to validate it.
+		}
+
+		// type (including list) must match exactly
+		if gqlPred.ValueType != dqlPred.ValueType || gqlPred.List != dqlPred.List {
+			gqlType := strings.ToLower(gqlPred.ValueType.String())
+			dqlType := strings.ToLower(dqlPred.ValueType.String())
+			if gqlPred.List {
+				gqlType = "[" + gqlType + "]"
+			}
+			if dqlPred.List {
+				dqlType = "[" + dqlType + "]"
+			}
+			return errors.Errorf("can't alter predicate %s as it is used by the GraphQL API, "+
+				"and type definition is incompatible with what is expected by the GraphQL API. "+
+				"want: %s, got: %s", x.ParseAttr(gqlPred.Predicate), gqlType, dqlType)
+		}
+		// if gqlSchema had any indexes, then those must be present in the dqlSchema.
+		// dqlSchema may add more indexes than what gqlSchema had initially, but can't remove them.
+		if gqlPred.Directive == pb.SchemaUpdate_INDEX {
+			if dqlPred.Directive != pb.SchemaUpdate_INDEX {
+				return errors.Errorf("can't alter predicate %s as it is used by the GraphQL API, "+
+					"and is missing index definition that is expected by the GraphQL API. "+
+					"want: @index(%s)", x.ParseAttr(gqlPred.Predicate),
+					strings.Join(gqlPred.Tokenizer, ","))
+			}
+			var missingIndexes []string
+			for _, t := range gqlPred.Tokenizer {
+				if !x.HasString(dqlPred.Tokenizer, t) {
+					missingIndexes = append(missingIndexes, t)
+				}
+			}
+			if len(missingIndexes) > 0 {
+				return errors.Errorf("can't alter predicate %s as it is used by the GraphQL API, "+
+					"and is missing index definition that is expected by the GraphQL API. "+
+					"want: @index(%s, %s), got: @index(%s)", x.ParseAttr(gqlPred.Predicate),
+					strings.Join(dqlPred.Tokenizer, ","), strings.Join(missingIndexes, ","),
+					strings.Join(dqlPred.Tokenizer, ","))
+			}
+		}
+		// if gqlSchema had @reverse, then dqlSchema must have it. dqlSchema can't remove @reverse.
+		// if gqlSchema didn't had @reverse, it is allowed to dqlSchema to add it.
+		if gqlPred.Directive == pb.SchemaUpdate_REVERSE && dqlPred.Directive != pb.
+			SchemaUpdate_REVERSE {
+			return errors.Errorf("can't alter predicate %s as it is used by the GraphQL API, "+
+				"and is missing @reverse that is expected by the GraphQL API.",
+				x.ParseAttr(gqlPred.Predicate))
+		}
+		// if gqlSchema had @count, then dqlSchema must have it. dqlSchema can't remove @count.
+		// if gqlSchema didn't had @count, it is allowed to dqlSchema to add it.
+		if gqlPred.Count && !dqlPred.Count {
+			return errors.Errorf("can't alter predicate %s as it is used by the GraphQL API, "+
+				"and is missing @count that is expected by the GraphQL API.",
+				x.ParseAttr(gqlPred.Predicate))
+		}
+		// if gqlSchema had @upsert, then dqlSchema must have it. dqlSchema can't remove @upsert.
+		// if gqlSchema didn't had @upsert, it is allowed to dqlSchema to add it.
+		if gqlPred.Upsert && !dqlPred.Upsert {
+			return errors.Errorf("can't alter predicate %s as it is used by the GraphQL API, "+
+				"and is missing @upsert that is expected by the GraphQL API.",
+				x.ParseAttr(gqlPred.Predicate))
+		}
+		// if gqlSchema had @lang, then dqlSchema must have it. dqlSchema can't remove @lang.
+		// if gqlSchema didn't had @lang, it is allowed to dqlSchema to add it.
+		if gqlPred.Lang && !dqlPred.Lang {
+			return errors.Errorf("can't alter predicate %s as it is used by the GraphQL API, "+
+				"and is missing @lang that is expected by the GraphQL API.",
+				x.ParseAttr(gqlPred.Predicate))
+		}
+	}
+
+	// Step-2: validate types
+	for _, dqlType := range dqlSch.Types {
+		gqlType := gqlReservedTypes[dqlType.TypeName]
+		if gqlType == nil {
+			continue // if the type isn't used by GraphQL, no need to validate it.
+		}
+
+		// create a mapping of all the fields in the dqlType
+		dqlFields := make(map[string]bool)
+		for _, f := range dqlType.Fields {
+			dqlFields[f.Predicate] = true
+		}
+
+		// check that all the fields of the gqlType must be present in the dqlType
+		var missingFields []string
+		for _, f := range gqlType.Fields {
+			if !dqlFields[f.Predicate] {
+				missingFields = append(missingFields, x.ParseAttr(f.Predicate))
+			}
+		}
+		if len(missingFields) > 0 {
+			return errors.Errorf("can't alter type %s as it is used by the GraphQL API, "+
+				"and is missing fields: [%s] that are expected by the GraphQL API.",
+				x.ParseAttr(gqlType.TypeName), strings.Join(missingFields, ","))
+		}
+	}
+
+	return nil
 }
 
 func annotateStartTs(span *otrace.Span, ts uint64) {
@@ -1253,6 +1397,18 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (
 		req.req.StartTs = worker.State.GetTimestamp(false)
 		qc.latency.AssignTimestamp = time.Since(start)
 	}
+	if x.WorkerConfig.AclEnabled {
+		ns, err := x.ExtractNamespace(ctx)
+		if err != nil {
+			return nil, err
+		}
+		defer func() {
+			if resp != nil && resp.Txn != nil {
+				// attach the hash, user must send this hash when further operating on this startTs.
+				resp.Txn.Hash = getHash(ns, resp.Txn.StartTs)
+			}
+		}()
+	}
 
 	var gqlErrs error
 	if resp, rerr = processQuery(ctx, qc); rerr != nil {
@@ -1285,14 +1441,6 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (
 		ProcessingNs:      uint64(l.Processing.Nanoseconds()),
 		EncodingNs:        uint64(l.Json.Nanoseconds()),
 		TotalNs:           uint64((time.Since(l.Start)).Nanoseconds()),
-	}
-	if x.WorkerConfig.AclEnabled {
-		// attach the hash, user should send this hash when further operating on this startTs.
-		ns, err := x.ExtractNamespace(ctx)
-		if err != nil {
-			return nil, err
-		}
-		resp.Txn.Hash = getHash(ns, resp.Txn.StartTs)
 	}
 	md := metadata.Pairs(x.DgraphCostHeader, fmt.Sprint(resp.Metrics.NumUids["_total"]))
 	grpc.SendHeader(ctx, md)

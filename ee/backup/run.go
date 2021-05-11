@@ -215,11 +215,7 @@ func (bw *bufWriter) Write(buf *z.Buffer) error {
 		}
 		return nil
 	})
-	if err != nil {
-		return err
-	}
-	buf.Release()
-	return nil
+	return errors.Wrap(err, "bufWriter failed to write")
 }
 
 func runExportBackup() error {

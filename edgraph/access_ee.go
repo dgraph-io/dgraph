@@ -50,6 +50,10 @@ type predsAndvars struct {
 func (s *Server) Login(ctx context.Context,
 	request *api.LoginRequest) (*api.Response, error) {
 
+	if !shouldAllowAcls(request.GetNamespace()) {
+		return nil, errors.New("operation is not allowed in cloud mode")
+	}
+
 	if err := x.HealthCheck(); err != nil {
 		return nil, err
 	}
@@ -78,7 +82,7 @@ func (s *Server) Login(ctx context.Context,
 		glog.Errorf("Authentication from address %s failed: %v", addr, err)
 		return nil, x.ErrorInvalidLogin
 	}
-	glog.Infof("%s logged in successfully", user.UserID)
+	glog.Infof("%s logged in successfully in namespace %#x", user.UserID, user.Namespace)
 
 	resp := &api.Response{}
 	accessJwt, err := getAccessJwt(user.UserID, user.Groups, user.Namespace)
@@ -413,10 +417,22 @@ func ResetAcl(closer *z.Closer) {
 		// The acl feature is not turned on.
 		return
 	}
+
+	for ns := range schema.State().Namespaces() {
+		upsertGuardianAndGroot(closer, ns)
+	}
+}
+
+// Note: The handling of closer should be done by caller.
+func upsertGuardianAndGroot(closer *z.Closer, ns uint64) {
+	if len(worker.Config.HmacSecret) == 0 {
+		// The acl feature is not turned on.
+		return
+	}
 	for closer.Ctx().Err() == nil {
 		ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
 		defer cancel()
-		ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
+		ctx = x.AttachNamespace(ctx, ns)
 		if err := upsertGuardian(ctx); err != nil {
 			glog.Infof("Unable to upsert the guardian group. Error: %v", err)
 			time.Sleep(100 * time.Millisecond)
@@ -428,7 +444,7 @@ func ResetAcl(closer *z.Closer) {
 	for closer.Ctx().Err() == nil {
 		ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
 		defer cancel()
-		ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
+		ctx = x.AttachNamespace(ctx, ns)
 		if err := upsertGroot(ctx, "password"); err != nil {
 			glog.Infof("Unable to upsert the groot account. Error: %v", err)
 			time.Sleep(100 * time.Millisecond)
@@ -598,14 +614,11 @@ type authPredResult struct {
 }
 
 func authorizePreds(ctx context.Context, userData *userData, preds []string,
-	aclOp *acl.Operation) (*authPredResult, error) {
+	aclOp *acl.Operation) *authPredResult {
 
-	ns, err := x.ExtractNamespace(ctx)
-	if err != nil {
-		return nil, errors.Wrapf(err, "While authorizing preds")
-	}
 	userId := userData.userId
 	groupIds := userData.groupIds
+	ns := userData.namespace
 	blockedPreds := make(map[string]struct{})
 	for _, pred := range preds {
 		nsPred := x.NamespaceAttr(ns, pred)
@@ -631,7 +644,7 @@ func authorizePreds(ctx context.Context, userData *userData, preds []string,
 		}
 	}
 	aclCachePtr.RUnlock()
-	return &authPredResult{allowed: allowedPreds, blocked: blockedPreds}, nil
+	return &authPredResult{allowed: allowedPreds, blocked: blockedPreds}
 }
 
 // authorizeAlter parses the Schema in the operation and authorizes the operation
@@ -686,10 +699,7 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 				"only guardians are allowed to drop all data, but the current user is %s", userId)
 		}
 
-		result, err := authorizePreds(ctx, userData, preds, acl.Modify)
-		if err != nil {
-			return nil
-		}
+		result := authorizePreds(ctx, userData, preds, acl.Modify)
 		if len(result.blocked) > 0 {
 			var msg strings.Builder
 			for key := range result.blocked {
@@ -798,12 +808,17 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 			case isAclPredMutation(gmu.Del):
 				return errors.Errorf("ACL predicates can't be deleted")
 			}
+			if !shouldAllowAcls(userData.namespace) {
+				for _, pred := range preds {
+					if x.IsAclPredicate(pred) {
+						return status.Errorf(codes.PermissionDenied,
+							"unauthorized to mutate acl predicates: %s\n", pred)
+					}
+				}
+			}
 			return nil
 		}
-		result, err := authorizePreds(ctx, userData, preds, acl.Write)
-		if err != nil {
-			return err
-		}
+		result := authorizePreds(ctx, userData, preds, acl.Write)
 		if len(result.blocked) > 0 {
 			var msg strings.Builder
 			for key := range result.blocked {
@@ -911,7 +926,12 @@ func logAccess(log *accessEntry) {
 	}
 }
 
-//authorizeQuery authorizes the query using the aclCachePtr. It will silently drop all
+// With shared instance enabled, we don't allow ACL operations from any of the non-galaxy namespace.
+func shouldAllowAcls(ns uint64) bool {
+	return !x.Config.SharedInstance || ns == x.GalaxyNamespace
+}
+
+// authorizeQuery authorizes the query using the aclCachePtr. It will silently drop all
 // unauthorized predicates from query.
 // At this stage, namespace is not attached in the predicates.
 func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) error {
@@ -922,6 +942,7 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) er
 
 	var userId string
 	var groupIds []string
+	var namespace uint64
 	predsAndvars := parsePredsFromQuery(parsedReq.Query)
 	preds := predsAndvars.preds
 	varsToPredMap := predsAndvars.vars
@@ -941,14 +962,24 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) er
 
 		userId = userData.userId
 		groupIds = userData.groupIds
+		namespace = userData.namespace
 
 		if x.IsGuardian(groupIds) {
-			// Members of guardian groups are allowed to query anything.
-			return nil, nil, nil
+			if shouldAllowAcls(userData.namespace) {
+				// Members of guardian groups are allowed to query anything.
+				return nil, nil, nil
+			}
+			blocked := make(map[string]struct{})
+			for _, pred := range preds {
+				if x.IsAclPredicate(pred) {
+					blocked[pred] = struct{}{}
+				}
+			}
+			return blocked, nil, nil
 		}
 
-		result, err := authorizePreds(ctx, userData, preds, acl.Read)
-		return result.blocked, result.allowed, err
+		result := authorizePreds(ctx, userData, preds, acl.Read)
+		return result.blocked, result.allowed, nil
 	}
 
 	blockedPreds, allowedPreds, err := doAuthorizeQuery()
@@ -969,7 +1000,7 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) er
 	if len(blockedPreds) != 0 {
 		// For GraphQL requests, we allow filtered access to the ACL predicates.
 		// Filter for user_id and group_id is applied for the currently logged in user.
-		if graphql {
+		if graphql && shouldAllowAcls(namespace) {
 			for _, gq := range parsedReq.Query {
 				addUserFilterToQuery(gq, userId, groupIds)
 			}
@@ -1030,11 +1061,20 @@ func authorizeSchemaQuery(ctx context.Context, er *query.ExecutionResult) error 
 
 		groupIds := userData.groupIds
 		if x.IsGuardian(groupIds) {
-			// Members of guardian groups are allowed to query anything.
-			return nil, nil
+			if shouldAllowAcls(userData.namespace) {
+				// Members of guardian groups are allowed to query anything.
+				return nil, nil
+			}
+			blocked := make(map[string]struct{})
+			for _, pred := range preds {
+				if x.IsAclPredicate(pred) {
+					blocked[pred] = struct{}{}
+				}
+			}
+			return blocked, nil
 		}
-		result, err := authorizePreds(ctx, userData, preds, acl.Read)
-		return result.blocked, err
+		result := authorizePreds(ctx, userData, preds, acl.Read)
+		return result.blocked, nil
 	}
 
 	// find the predicates which are blocked for the schema query
@@ -1076,7 +1116,7 @@ func AuthGuardianOfTheGalaxy(ctx context.Context) error {
 	}
 	ns, err := x.ExtractJWTNamespace(ctx)
 	if err != nil {
-		return errors.Wrap(err, "Authorize guradian of the galaxy, extracting jwt token, error:")
+		return errors.Wrap(err, "Authorize guardian of the galaxy, extracting jwt token, error:")
 	}
 	if ns != 0 {
 		return errors.New("Only guardian of galaxy is allowed to do this operation")

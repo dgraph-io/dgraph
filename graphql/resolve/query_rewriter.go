@@ -310,6 +310,7 @@ func aggregateQuery(query schema.Query, authRw *authRewriter) []*gql.GraphQuery 
 					// var(func: type(Tweets)) {
 					//        scoreVar as Tweets.score
 					// }
+
 					mainQuery.Children = append(mainQuery.Children, child)
 					isAggregateVarAdded[constructedForField] = true
 				}
@@ -626,12 +627,19 @@ func addCommonRules(
 		return []*gql.GraphQuery{dgQuery}, rbac
 	}
 
-	if authRw != nil && (authRw.isWritingAuth || authRw.filterByUid) && (authRw.varName != "" || authRw.parentVarName != "") {
-		// When rewriting auth rules, they always start like
-		// Todo2 as var(func: uid(Todo1)) @cascade {
-		// Where Todo1 is the variable generated from the filter of the field
-		// we are adding auth to.
+	// When rewriting auth rules, they always start like
+	// Todo2 as var(func: uid(Todo1)) @cascade {
+	// Where Todo1 is the variable generated from the filter of the field
+	// we are adding auth to.
+	// Except for the case in which filter in auth rules is on field of
+	// ID type. In this situation we write it as:
+	// Todo2 as var(func: uid(0x5....)) @cascade {
+	// We first check ids in the query filter and rewrite accordingly.
+	ids := idFilter(extractQueryFilter(field), fieldType.IDField())
 
+	// Todo: Add more comments to this block.
+	if authRw != nil && (authRw.isWritingAuth || authRw.filterByUid) &&
+		(authRw.varName != "" || authRw.parentVarName != "") && ids == nil {
 		authRw.addVariableUIDFunc(dgQuery)
 		// This is executed when querying while performing delete mutation request since
 		// in case of delete mutation we already have variable `MutationQueryVar` at root level.
@@ -640,7 +648,7 @@ func addCommonRules(
 			authRw.varName = ""
 			authRw.filterByUid = false
 		}
-	} else if ids := idFilter(extractQueryFilter(field), fieldType.IDField()); ids != nil {
+	} else if ids != nil {
 		addUIDFunc(dgQuery, ids)
 	} else {
 		addTypeFunc(dgQuery, fieldType.DgraphName())
@@ -1148,6 +1156,12 @@ func buildAggregateFields(
 	fieldFilter, _ := f.ArgValue("filter").(map[string]interface{})
 	_ = addFilter(mainField, constructedForType, fieldFilter)
 
+	// Add type filter in case the Dgraph predicate for which the aggregate
+	// field belongs to is a reverse edge
+	if strings.HasPrefix(constructedForDgraphPredicate, "~") {
+		addTypeFilter(mainField, f.ConstructedFor())
+	}
+
 	// isAggregateVarAdded is a map from field name to boolean. It is used to
 	// ensure that a field is added to Var query at maximum once.
 	// Eg. Even if scoreMax and scoreMin are queried, the corresponding field will
@@ -1165,6 +1179,13 @@ func buildAggregateFields(
 			}
 			// Add filter to count aggregation field.
 			_ = addFilter(aggregateChild, constructedForType, fieldFilter)
+
+			// Add type filter in case the Dgraph predicate for which the aggregate
+			// field belongs to is a reverse edge
+			if strings.HasPrefix(constructedForDgraphPredicate, "~") {
+				addTypeFilter(aggregateChild, f.ConstructedFor())
+			}
+
 			aggregateChildren = append(aggregateChildren, aggregateChild)
 			continue
 		}
@@ -1363,6 +1384,12 @@ func addSelectionSetFrom(
 		if includeField := addFilter(child, f.Type(), filter); !includeField {
 			continue
 		}
+
+		// Add type filter in case the Dgraph predicate is a reverse edge
+		if strings.HasPrefix(f.DgraphPredicate(), "~") {
+			addTypeFilter(child, f.Type())
+		}
+
 		addOrder(child, f)
 		addPagination(child, f)
 		addCascadeDirective(child, f)

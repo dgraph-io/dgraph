@@ -23,12 +23,14 @@ import (
 	"math"
 	"os"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/badger/v3"
+	"github.com/dgraph-io/badger/v3/y"
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 
@@ -60,10 +62,20 @@ func commitTransaction(t *testing.T, edge *pb.DirectedEdge, l *posting.List) {
 
 	commit := commitTs(startTs)
 
-	txn.Update()
-	writer := posting.NewTxnWriter(pstore)
-	require.NoError(t, txn.CommitToDisk(writer, commit))
-	require.NoError(t, writer.Flush())
+	txn.Update(context.Background())
+	sl := txn.Skiplist()
+
+	itr := sl.NewUniIterator(false)
+	itr.Rewind()
+	for itr.Valid() {
+		y.SetKeyTs(itr.Key(), commit)
+		itr.Next()
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	pstore.HandoverSkiplist(sl, wg.Done)
+	wg.Wait()
 }
 
 func timestamp() uint64 {
@@ -141,13 +153,13 @@ func populateGraph(t *testing.T) {
 func populateClusterGraph(t *testing.T, dg *dgo.Dgraph) {
 	data1 := [][]int{{10, 23}, {11, 23}, {12, 23}, {12, 25}, {12, 26}, {10, 31}, {12, 31}}
 	for _, pair := range data1 {
-		rdf := fmt.Sprintf(`<0x%x> <neighbour> <0x%x> .`, pair[0], pair[1])
+		rdf := fmt.Sprintf(`<%#x> <neighbour> <%#x> .`, pair[0], pair[1])
 		setClusterEdge(t, dg, rdf)
 	}
 
 	data2 := map[int]string{12: "photon", 10: "photon"}
 	for key, val := range data2 {
-		rdf := fmt.Sprintf(`<0x%x> <friend> %q .`, key, val)
+		rdf := fmt.Sprintf(`<%#x> <friend> %q .`, key, val)
 		setClusterEdge(t, dg, rdf)
 	}
 }
@@ -211,7 +223,7 @@ func runQuery(dg *dgo.Dgraph, attr string, uids []uint64, srcFunc []string) (*ap
 	if uids != nil {
 		var uidv []string
 		for _, uid := range uids {
-			uidv = append(uidv, fmt.Sprintf("0x%x", uid))
+			uidv = append(uidv, fmt.Sprintf("%#x", uid))
 		}
 		query = fmt.Sprintf(`
 			{
@@ -258,8 +270,8 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 
 	// Now try changing 12's friend value from "photon" to "notphotonExtra" to
 	// "notphoton".
-	setClusterEdge(t, dg, fmt.Sprintf("<0x%x> <friend> %q .", 12, "notphotonExtra"))
-	setClusterEdge(t, dg, fmt.Sprintf("<0x%x> <friend> %q .", 12, "notphoton"))
+	setClusterEdge(t, dg, fmt.Sprintf("<%#x> <friend> %q .", 12, "notphotonExtra"))
+	setClusterEdge(t, dg, fmt.Sprintf("<%#x> <friend> %q .", 12, "notphoton"))
 
 	// Issue a similar query.
 	resp, err = runQuery(dg, "friend", nil,
@@ -275,12 +287,12 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	)
 
 	// Try redundant deletes.
-	delClusterEdge(t, dg, fmt.Sprintf("<0x%x> <friend> %q .", 10, "photon"))
-	delClusterEdge(t, dg, fmt.Sprintf("<0x%x> <friend> %q .", 10, "photon"))
+	delClusterEdge(t, dg, fmt.Sprintf("<%#x> <friend> %q .", 10, "photon"))
+	delClusterEdge(t, dg, fmt.Sprintf("<%#x> <friend> %q .", 10, "photon"))
 
 	// Delete followed by set.
-	delClusterEdge(t, dg, fmt.Sprintf("<0x%x> <friend> %q .", 12, "notphoton"))
-	setClusterEdge(t, dg, fmt.Sprintf("<0x%x> <friend> %q .", 12, "ignored"))
+	delClusterEdge(t, dg, fmt.Sprintf("<%#x> <friend> %q .", 12, "notphoton"))
+	setClusterEdge(t, dg, fmt.Sprintf("<%#x> <friend> %q .", 12, "ignored"))
 
 	// Issue a similar query.
 	resp, err = runQuery(dg, "friend", nil,
@@ -324,8 +336,8 @@ func TestProcessTaskIndex(t *testing.T) {
 
 	// Now try changing 12's friend value from "photon" to "notphotonExtra" to
 	// "notphoton".
-	setClusterEdge(t, dg, fmt.Sprintf("<0x%x> <friend> %q .", 12, "notphotonExtra"))
-	setClusterEdge(t, dg, fmt.Sprintf("<0x%x> <friend> %q .", 12, "notphoton"))
+	setClusterEdge(t, dg, fmt.Sprintf("<%#x> <friend> %q .", 12, "notphotonExtra"))
+	setClusterEdge(t, dg, fmt.Sprintf("<%#x> <friend> %q .", 12, "notphoton"))
 
 	// Issue a similar query.
 	resp, err = runQuery(dg, "friend", nil,
@@ -341,12 +353,12 @@ func TestProcessTaskIndex(t *testing.T) {
 	)
 
 	// Try redundant deletes.
-	delClusterEdge(t, dg, fmt.Sprintf("<0x%x> <friend> %q .", 10, "photon"))
-	delClusterEdge(t, dg, fmt.Sprintf("<0x%x> <friend> %q .", 10, "photon"))
+	delClusterEdge(t, dg, fmt.Sprintf("<%#x> <friend> %q .", 10, "photon"))
+	delClusterEdge(t, dg, fmt.Sprintf("<%#x> <friend> %q .", 10, "photon"))
 
 	// Delete followed by set.
-	delClusterEdge(t, dg, fmt.Sprintf("<0x%x> <friend> %q .", 12, "notphoton"))
-	setClusterEdge(t, dg, fmt.Sprintf("<0x%x> <friend> %q .", 12, "ignored"))
+	delClusterEdge(t, dg, fmt.Sprintf("<%#x> <friend> %q .", 12, "notphoton"))
+	setClusterEdge(t, dg, fmt.Sprintf("<%#x> <friend> %q .", 12, "ignored"))
 
 	// Issue a similar query.
 	resp, err = runQuery(dg, "friend", nil,

@@ -18,15 +18,18 @@ package posting
 
 import (
 	"context"
+	"encoding/hex"
 	"math"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/dgraph-io/badger/v3/skl"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	ostats "go.opencensus.io/stats"
+	otrace "go.opencensus.io/trace"
 )
 
 var o *oracle
@@ -67,6 +70,9 @@ type Txn struct {
 
 	cache *LocalCache // This pointer does not get modified.
 	ErrCh chan error
+
+	slWait sync.WaitGroup
+	sl     *skl.Skiplist
 }
 
 // NewTxn returns a new Txn instance.
@@ -89,9 +95,29 @@ func (txn *Txn) GetFromDelta(key []byte) (*List, error) {
 	return txn.cache.GetFromDelta(key)
 }
 
+func (txn *Txn) Skiplist() *skl.Skiplist {
+	txn.slWait.Wait()
+	return txn.sl
+}
+
 // Update calls UpdateDeltasAndDiscardLists on the local cache.
-func (txn *Txn) Update() {
+func (txn *Txn) Update(ctx context.Context) {
+	txn.Lock()
+	defer txn.Unlock()
 	txn.cache.UpdateDeltasAndDiscardLists()
+
+	// If we already have a pending Update, then wait for it to be done first. So it does not end up
+	// overwriting the skiplist that we generate here.
+	txn.slWait.Wait()
+	txn.slWait.Add(1)
+	go func() {
+		if err := txn.ToSkiplist(); err != nil {
+			glog.Errorf("While creating skiplist: %v\n", err)
+		}
+		span := otrace.FromContext(ctx)
+		span.Annotate(nil, "ToSkiplist done")
+		txn.slWait.Done()
+	}()
 }
 
 // Store is used by tests.
@@ -242,6 +268,14 @@ func (o *oracle) WaitForTs(ctx context.Context, startTs uint64) error {
 	}
 }
 
+func (o *oracle) DeleteTxns(delta *pb.OracleDelta) {
+	o.Lock()
+	for _, txn := range delta.Txns {
+		delete(o.pendingTxns, txn.StartTs)
+	}
+	o.Unlock()
+}
+
 func (o *oracle) ProcessDelta(delta *pb.OracleDelta) {
 	if glog.V(3) {
 		glog.Infof("ProcessDelta: Max Assigned: %d", delta.MaxAssigned)
@@ -257,9 +291,6 @@ func (o *oracle) ProcessDelta(delta *pb.OracleDelta) {
 
 	o.Lock()
 	defer o.Unlock()
-	for _, txn := range delta.Txns {
-		delete(o.pendingTxns, txn.StartTs)
-	}
 	curMax := o.MaxAssigned()
 	if delta.MaxAssigned < curMax {
 		return
@@ -284,6 +315,23 @@ func (o *oracle) ResetTxns() {
 	o.Lock()
 	defer o.Unlock()
 	o.pendingTxns = make(map[uint64]*Txn)
+}
+
+// ResetTxnForNs deletes all the pending transactions for a given namespace.
+func (o *oracle) ResetTxnsForNs(ns uint64) {
+	txns := o.IterateTxns(func(key []byte) bool {
+		pk, err := x.Parse(key)
+		if err != nil {
+			glog.Errorf("error %v while parsing key %v", err, hex.EncodeToString(key))
+			return false
+		}
+		return x.ParseNamespace(pk.Attr) == ns
+	})
+	o.Lock()
+	defer o.Unlock()
+	for _, txn := range txns {
+		delete(o.pendingTxns, txn)
+	}
 }
 
 func (o *oracle) GetTxn(startTs uint64) *Txn {

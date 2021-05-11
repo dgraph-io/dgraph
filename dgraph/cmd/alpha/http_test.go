@@ -322,12 +322,16 @@ func runRequest(req *http.Request) (*x.QueryResWithData, []byte, *http.Response,
 func runWithRetriesForResp(method, contentType, url string, body string) (
 	*x.QueryResWithData, []byte, *http.Response, error) {
 
+label:
 	req, err := createRequest(method, contentType, url, body)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-
 	qr, respBody, resp, err := runRequest(req)
+	if err != nil && strings.Contains(err.Error(), "Please retry operation") {
+		time.Sleep(time.Second)
+		goto label
+	}
 	if err != nil && strings.Contains(err.Error(), "Token is expired") {
 		err = token.refreshToken()
 		if err != nil {
@@ -619,7 +623,13 @@ func TestAlterSanity(t *testing.T) {
 		`{"drop_all":true}`}
 
 	for _, op := range ops {
+	label:
 		qr, _, err := runWithRetries("PUT", "", addr+"/alter", op)
+		if err != nil && strings.Contains(err.Error(), "Please retry") {
+			t.Logf("Got error: %v. Retrying...", err)
+			time.Sleep(time.Second)
+			goto label
+		}
 		require.NoError(t, err)
 		require.Len(t, qr.Errors, 0)
 	}
@@ -886,13 +896,20 @@ func TestDrainingMode(t *testing.T) {
 			require.NoError(t, err, "Got error while running mutation: %v", err)
 		}
 
-		err = alterSchema(`name: string @index(term) .`)
-		if expectErr {
-			require.True(t, err != nil && strings.Contains(err.Error(), "the server is in draining mode"))
-		} else {
-			require.NoError(t, err, "Got error while running alter: %v", err)
-		}
-
+		err = x.RetryUntilSuccess(3, time.Second, func() error {
+			err := alterSchema(`name: string @index(term) .`)
+			if expectErr {
+				if err == nil {
+					return errors.New("expected error")
+				}
+				if err != nil && strings.Contains(err.Error(), "server is in draining mode") {
+					return nil
+				}
+				return err
+			}
+			return err
+		})
+		require.NoError(t, err, "Got error while running alter: %v", err)
 	}
 
 	token := testutil.GrootHttpLogin(addr + "/admin")

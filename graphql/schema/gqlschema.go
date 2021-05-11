@@ -39,6 +39,7 @@ const (
 	dgraphPredArg   = "pred"
 
 	idDirective             = "id"
+	idDirectiveInterfaceArg = "interface"
 	subscriptionDirective   = "withSubscription"
 	secretDirective         = "secret"
 	authDirective           = "auth"
@@ -276,7 +277,7 @@ input GenerateMutationParams {
 directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
-directive @id on FIELD_DEFINITION
+directive @id(interface: Boolean) on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @auth(
@@ -307,7 +308,7 @@ directive @generate(
 directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
-directive @id on FIELD_DEFINITION
+directive @id(interface: Boolean) on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
@@ -1285,8 +1286,8 @@ func addPatchType(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[
 
 	nonIDFields := getNonIDFields(schema, defn, providesTypeMap)
 	if len(nonIDFields) == 0 {
-		// The user might just have an external id field and nothing else. We don't generate patch
-		// type in that case.
+		// The user might just have an predicate with reverse edge id field and nothing else.
+		// We don't generate patch type in that case.
 		return
 	}
 
@@ -1814,9 +1815,6 @@ func addUpdatePayloadType(schema *ast.Schema, defn *ast.Definition, providesType
 		return
 	}
 
-	// This covers the case where the Type only had one field (which had @id directive).
-	// Since we don't allow updating the field with @id directive we don't need to generate any
-	// update payload.
 	if _, ok := schema.Types[defn.Name+"Patch"]; !ok {
 		return
 	}
@@ -1961,18 +1959,14 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[s
 			},
 		})
 	}
+
 	if hasXIDField {
-		if defn.Kind == "INTERFACE" {
-			qry.Directives = append(
-				qry.Directives, &ast.Directive{Name: deprecatedDirective,
-					Arguments: ast.ArgumentList{&ast.Argument{Name: "reason",
-						Value: &ast.Value{Raw: "@id argument for get query on interface is being deprecated, " +
-							"it will be removed in v21.11.0, " +
-							"please update your query to not use that argument",
-							Kind: ast.StringValue}}}})
-		}
+		var idWithoutUniqueArgExists bool
 		for _, fld := range defn.Fields {
 			if hasIDDirective(fld) {
+				if !hasInterfaceArg(fld) {
+					idWithoutUniqueArgExists = true
+				}
 				qry.Arguments = append(qry.Arguments, &ast.ArgumentDefinition{
 					Name: fld.Name,
 					Type: &ast.Type{
@@ -1981,6 +1975,16 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[s
 					},
 				})
 			}
+		}
+		if defn.Kind == "INTERFACE" && idWithoutUniqueArgExists {
+			qry.Directives = append(
+				qry.Directives, &ast.Directive{Name: deprecatedDirective,
+					Arguments: ast.ArgumentList{&ast.Argument{Name: "reason",
+						Value: &ast.Value{Raw: "@id argument for get query on interface is being" +
+							" deprecated. Only those @id fields which have interface argument" +
+							" set to true will be available in getQuery argument on interface" +
+							" post v21.11.0, please update your schema accordingly.",
+							Kind: ast.StringValue}}}})
 		}
 	}
 	schema.Query.Fields = append(schema.Query.Fields, qry)
@@ -2207,7 +2211,7 @@ func createField(schema *ast.Schema, fld *ast.FieldDefinition) *ast.FieldDefinit
 func getNonIDFields(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[string]bool) ast.FieldList {
 	fldList := make([]*ast.FieldDefinition, 0)
 	for _, fld := range defn.Fields {
-		if isIDField(defn, fld) || hasIDDirective(fld) {
+		if isIDField(defn, fld) {
 			continue
 		}
 

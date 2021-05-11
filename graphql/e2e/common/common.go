@@ -59,6 +59,7 @@ var (
 		"is already running",
 		"retry again, server is not ready", // given by Dgraph while applying the snapshot
 		"Unavailable: Server not ready",    // given by GraphQL layer, during init on admin server
+		"Please retry operation",
 	}
 
 	retryableCreateNamespaceErrors = append(retryableUpdateGQLSchemaErrors,
@@ -837,6 +838,7 @@ func RunAll(t *testing.T) {
 	t.Run("query id directive with int64", idDirectiveWithInt64)
 	t.Run("query filter ID values coercion to List", queryFilterWithIDInputCoercion)
 	t.Run("query multiple language Fields", queryMultipleLangFields)
+	t.Run("query @id field with interface arg on interface", queryWithIDFieldAndInterfaceArg)
 
 	// mutation tests
 	t.Run("add mutation", addMutation)
@@ -897,6 +899,8 @@ func RunAll(t *testing.T) {
 	t.Run("multiple external Id's tests", multipleXidsTests)
 	t.Run("Upsert Mutation Tests", upsertMutationTests)
 	t.Run("Update language tag fields", updateLangTagFields)
+	t.Run("mutation with @id field and interface arg", mutationWithIDFieldHavingInterfaceArg)
+	t.Run("xid update and nullable tests", xidUpdateAndNullableTests)
 
 	// error tests
 	t.Run("graphql completion on", graphQLCompletionOn)

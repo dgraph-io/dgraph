@@ -45,15 +45,3 @@ module "alpha" {
 
   namespace_resource = kubernetes_namespace.dgraph_namespace
 }
-
-module "ratel" {
-  source = "./modules/ratel"
-
-  prefix    = var.prefix
-  namespace = var.namespace
-
-  ingress_whitelist_cidrs = var.ingress_whitelist_cidrs
-
-  namespace_resource = kubernetes_namespace.dgraph_namespace
-}
-

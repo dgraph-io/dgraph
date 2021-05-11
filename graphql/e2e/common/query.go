@@ -4010,3 +4010,60 @@ func queryMultipleLangFields(t *testing.T) {
 	// Cleanup
 	DeleteGqlType(t, "Person", map[string]interface{}{}, 3, nil)
 }
+
+func queryWithIDFieldAndInterfaceArg(t *testing.T) {
+	// add library member
+	addLibraryMemberParams := &GraphQLParams{
+		Query: `mutation addLibraryMember($input: [AddLibraryMemberInput!]!) {
+                         addLibraryMember(input: $input, upsert: false) {
+                          libraryMember {
+                           refID
+                          }
+                         }
+                        }`,
+		Variables: map[string]interface{}{"input": []interface{}{
+			map[string]interface{}{
+				"refID":       "101",
+				"name":        "Alice",
+				"itemsIssued": []string{"Intro to Go", "Parallel Programming"},
+				"readHours":   "4d2hr",
+			}},
+		},
+	}
+
+	gqlResponse := addLibraryMemberParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	queryMember := &GraphQLParams{
+		Query: `
+			query {
+				getMember(refID: "101") {
+					refID
+					name
+					itemsIssued
+					... on LibraryMember {
+						readHours
+					}
+				}
+			}`,
+	}
+
+	gqlResponse = queryMember.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	queryPersonExpected := `
+		  {
+              "getMember": {
+                  "refID": "101",
+                  "name": "Alice",
+                  "itemsIssued": [
+                      "Parallel Programming",
+                      "Intro to Go"
+                  ],
+                  "readHours": "4d2hr"
+              }
+          }`
+
+	require.JSONEq(t, queryPersonExpected, string(gqlResponse.Data))
+	// Cleanup
+	DeleteGqlType(t, "LibraryMember", map[string]interface{}{}, 1, nil)
+}

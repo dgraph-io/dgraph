@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -44,9 +45,12 @@ func setSchema(schema string) {
 }
 
 func dropPredicate(pred string) {
-	err := client.Alter(context.Background(), &api.Operation{
-		DropAttr: pred,
-	})
+alter:
+	err := client.Alter(context.Background(), &api.Operation{DropAttr: pred})
+	if err != nil && strings.Contains(err.Error(), "Please retry operation") {
+		time.Sleep(1 * time.Second)
+		goto alter
+	}
 	if err != nil {
 		panic(fmt.Sprintf("Could not drop predicate. Got error %v", err.Error()))
 	}
@@ -851,6 +855,31 @@ func populateCluster() {
 		<61> <tweet-d> "aaabxxx" .
 		<62> <tweet-d> "aaacdxx" .
 		<63> <tweet-d> "aaabcd" .
+
+		<61> <connects> <64> .
+		<61> <connects> <65> .
+		<61> <connects> <66> .
+		<61> <connects> <67> .
+		<61> <connects> <68> .
+		<62> <connects> <64> .
+		<62> <connects> <65> .
+		<62> <connects> <66> .
+		<62> <connects> <67> .
+		<62> <connects> <68> .
+		<63> <connects> <64> .
+		<63> <connects> <65> .
+		<63> <connects> <66> .
+		<63> <connects> <67> .
+		<63> <connects> <68> .
+		<64> <kname> "yes" .
+		<65> <kname> "yes" .
+		<66> <kname> "yes" .
+		<67> <kname> "yes" .
+		<68> <kname> "yes" .
+
+		<61> <kname> "can_be_picked" .
+		<62> <kname> "can_be_picked" .
+		<63> <kname> "can_be_picked" .
 	`)
 	if err != nil {
 		panic(fmt.Sprintf("Could not able add triple to the cluster. Got error %v", err.Error()))

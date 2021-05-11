@@ -23,11 +23,6 @@ variable "zero_instance_type" {
   description = "EC2 instance type for dgraph zero component."
 }
 
-variable "ratel_instance_type" {
-  type        = string
-  description = "EC2 instance type for dgraph ratel component."
-}
-
 variable "alpha_disk_size" {
   type        = string
   description = "Disk size for dgraph alpha node."
@@ -36,11 +31,6 @@ variable "alpha_disk_size" {
 variable "zero_disk_size" {
   type        = string
   description = "Disk size for dgraph zero node."
-}
-
-variable "ratel_disk_size" {
-  type        = string
-  description = "Disk size for dgraph ratel node."
 }
 
 variable "disk_iops" {

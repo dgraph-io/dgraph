@@ -103,7 +103,7 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) error {
 		glog.V(1).Infof("Received batch of size: %s. Total so far: %s\n",
 			humanize.IBytes(uint64(len(kvs.Data))), humanize.IBytes(uint64(size)))
 
-		buf := z.BufferFrom(kvs.Data)
+		buf := z.NewBufferSlice(kvs.Data)
 		if err := writer.Write(buf); err != nil {
 			return err
 		}
@@ -144,7 +144,10 @@ func deleteStalePreds(ctx context.Context, kvs *pb.KVS) error {
 		if _, ok := snapshotPreds[pred]; !ok {
 		LOOP:
 			for {
-				err := posting.DeletePredicate(ctx, pred)
+				// While retrieving the snapshot, we mark the node as unhealthy. So it is better to
+				// a blocking delete of predicate as we know that no new writes will arrive at
+				// this alpha.
+				err := posting.DeletePredicateBlocking(ctx, pred)
 				switch err {
 				case badger.ErrBlockedWrites:
 					time.Sleep(1 * time.Second)
