@@ -836,7 +836,8 @@ func main() {
 			}
 			err = copyDir(opts.PDir, newDir)
 			if err != nil {
-				fatal(errors.Errorf("Couldn't copy directory from %v to %v. Error: %v.", opts.PDir, newDir, err))
+				fatal(errors.Errorf("Couldn't copy directory from %v to %v. Error: %v.",
+					opts.PDir, newDir, err))
 			}
 			n++
 		}
