@@ -704,7 +704,7 @@ func extractTypeFromFunc(f *gql.Function) string {
 	switch f.Name {
 	case "type":
 		return f.Args[0].Value
-	case "eq", "allofterms", "anyofterms", "gt", "le":
+	case "eq", "allofterms", "anyofterms", "gt", "le", "has":
 		split := strings.Split(f.Attr, ".")
 		if len(split) == 1 {
 			return ""

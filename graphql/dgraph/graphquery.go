@@ -205,6 +205,8 @@ func writeRoot(b *strings.Builder, q *gql.GraphQuery) {
 	}
 
 	switch {
+	case q.Func.Name == "has":
+		x.Check2(b.WriteString(fmt.Sprintf("(func: has(%s)", q.Func.Attr)))
 	case q.Func.Name == "uid":
 		x.Check2(b.WriteString("(func: "))
 		writeUIDFunc(b, q.Func.UID, q.Func.Args, q.Func.NeedsVar)

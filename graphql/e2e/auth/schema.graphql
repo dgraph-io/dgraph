@@ -989,12 +989,12 @@ type Query {
 
     queryIssueSortedByOwnerAge: [Issue] @custom(dql: """
 	query q($search: string) {
-		var(func: type(Issue)) {
+		iss as var(func: type(Issue)) {
 			Issue.owner {
 				age as User.age
 			}
 		}
-		queryIssueSortedByOwnerAge(func: uid(age), orderdesc: val(age)) {
+		queryIssueSortedByOwnerAge(func: uid(iss), orderdesc: val(age)) {
 			id : uid
             msg : Issue.msg
             random : Issue.random
@@ -1042,6 +1042,25 @@ type Query {
         }
       }
     }"""
+    )
+
+    queryProjectsOrderByName: [Project] @custom(dql: """
+        query {
+            queryProjectsOrderByName(func: eq(Project.name, "Project1", "Project2"), orderasc: Project.name) {
+                name: Project.name
+            }
+        }"""
+    )
+    queryFirstTwoMovieWithNonNullRegion: [Movie] @ custom(dql: """
+        query {
+            queryFirstTwoMovieWithNonNullRegion(func: has(Movie.content), first: 2, offset: 0, orderasc: Movie.content) @cascade {
+                content: Movie.content
+                code: Movie.code
+                regionsAvailable: Movie.regionsAvailable(first: 1, orderasc: Region.name) {
+                    name: Region.name
+                }
+            }
+        }"""
     )
 }
 
