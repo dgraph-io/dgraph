@@ -401,13 +401,13 @@ func TestAuthWithCustomDQL(t *testing.T) {
 		`,
 			role: "ADMIN",
 			user: "user1",
-			result: `"queryFirstTwoMovieWithNonNullRegion": [
+			result: `{"queryFirstTwoMovieWithNonNullRegion": [
 				{
 				  "content": "Movie3",
 				  "code": "m3",
 				  "regionsAvailable": [
 					{
-					  "name": "Region6"
+					  "name": "Region1"
 					}
 				  ]
 				},
