@@ -17,6 +17,7 @@
 package x
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"sort"
@@ -274,4 +275,32 @@ func TestBadKeys(t *testing.T) {
 	key = DataKey(GalaxyAttr("bad uid"), uint64(uid))
 	_, err = Parse(key)
 	require.Error(t, err)
+}
+
+func TestJsonMarshal(t *testing.T) {
+	type predicate struct {
+		Predicate string `json:"predicate,omitempty"`
+	}
+
+	p := &predicate{Predicate: NamespaceAttr(129, "name")}
+	b, err := json.Marshal(p)
+	require.NoError(t, err)
+
+	var p2 predicate
+	require.NoError(t, json.Unmarshal(b, &p2))
+	ns, attr := ParseNamespaceAttr(p2.Predicate)
+	require.Equal(t, uint64(129), ns)
+	require.Equal(t, "name", attr)
+}
+
+func TestNsSeparator(t *testing.T) {
+	uid := uint64(10)
+	pred := "name" + NsSeparator + "surname"
+	key := DataKey(GalaxyAttr(pred), uid)
+	pk, err := Parse(key)
+	require.NoError(t, err)
+	require.Equal(t, uid, pk.Uid)
+	ns, attr := ParseNamespaceAttr(pk.Attr)
+	require.Equal(t, GalaxyNamespace, ns)
+	require.Equal(t, pred, attr)
 }

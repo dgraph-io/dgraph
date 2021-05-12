@@ -58,7 +58,7 @@ const (
 	// NamespaceOffset is the offset in badger key from which the next 8 bytes contain namespace.
 	NamespaceOffset = 1
 	// NsSeparator is the separator between between the namespace and attribute.
-	NsSeparator = string(byte(30))
+	NsSeparator = "-"
 )
 
 func NamespaceToBytes(ns uint64) []byte {
@@ -69,7 +69,7 @@ func NamespaceToBytes(ns uint64) []byte {
 
 // NamespaceAttr is used to generate attr from namespace.
 func NamespaceAttr(ns uint64, attr string) string {
-	return nsToStr(ns) + NsSeparator + attr
+	return uintToStr(ns) + NsSeparator + attr
 }
 
 func NamespaceAttrList(ns uint64, preds []string) []string {
@@ -87,13 +87,13 @@ func GalaxyAttr(attr string) string {
 // ParseNamespaceAttr returns the namespace and attr from the given value.
 func ParseNamespaceAttr(attr string) (uint64, string) {
 	splits := strings.SplitN(attr, NsSeparator, 2)
-	return strToNs(splits[0]), splits[1]
+	return strToUint(splits[0]), splits[1]
 }
 
 func ParseNamespaceBytes(attr string) ([]byte, string) {
 	splits := strings.SplitN(attr, NsSeparator, 2)
 	ns := make([]byte, 8)
-	binary.BigEndian.PutUint64(ns, strToNs(splits[0]))
+	binary.BigEndian.PutUint64(ns, strToUint(splits[0]))
 	return ns, splits[1]
 }
 
@@ -104,7 +104,7 @@ func ParseAttr(attr string) string {
 
 // ParseNamespace returns the namespace from the given value.
 func ParseNamespace(attr string) uint64 {
-	return strToNs(strings.SplitN(attr, NsSeparator, 2)[0])
+	return strToUint(strings.SplitN(attr, NsSeparator, 2)[0])
 }
 
 func ParseAttrList(attrs []string) []string {
@@ -115,14 +115,14 @@ func ParseAttrList(attrs []string) []string {
 	return resp
 }
 
-func strToNs(s string) uint64 {
-	ns, err := strconv.ParseUint(s, 0, 64)
+// For consistency, use base16 to encode/decode the namespace.
+func strToUint(s string) uint64 {
+	ns, err := strconv.ParseUint(s, 16, 64)
 	Check(err)
 	return ns
 }
-
-func nsToStr(ns uint64) string {
-	return strconv.FormatUint(ns, 10)
+func uintToStr(ns uint64) string {
+	return strconv.FormatUint(ns, 16)
 }
 
 func IsReverseAttr(attr string) bool {
