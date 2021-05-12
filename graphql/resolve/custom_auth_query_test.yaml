@@ -43,7 +43,7 @@
         }
       }
       IssueRoot as var(func: uid(Issue_3)) @filter(uid(Issue_Auth4))
-      Issue_3 as var(func: type(Issue))
+      Issue_3 as var(func: type(Issue)) @filter(has(Issue.owner))
       Issue_Auth4 as var(func: uid(Issue_3)) @cascade {
         Issue.owner : Issue.owner @filter(eq(User.username, "user1"))
       }
@@ -72,7 +72,7 @@
     USER: "user1"
   dgquery: |-
     query {
-      iss as var(func: uid(0x0)) {
+      iss as var(func: uid(0x1)) @filter((uid(0x2) AND has(Issue.owner))) {
         Issue.owner {
           age as User.age
         }
@@ -97,7 +97,7 @@
     ROLE: "ADMIN"
   dgquery: |-
     query {
-      iss as var(func: uid(0x0)) {
+      iss as var(func: uid(0x1)) @filter((uid(0x2) AND has(Issue.owner))) {
         Issue.owner {
           age as User.age
         }
@@ -288,7 +288,7 @@
         }
       }
       MovieRoot as var(func: uid(Movie_3)) @filter((NOT (uid(Movie_Auth4)) AND uid(Movie_Auth5)))
-      Movie_3 as var)
+      Movie_3 as var(func: has(Movie.content))
       Movie_Auth4 as var(func: uid(Movie_3)) @filter(eq(Movie.hidden, true)) @cascade
       Movie_Auth5 as var(func: uid(Movie_3)) @cascade {
         Movie.regionsAvailable : Movie.regionsAvailable @filter(eq(Region.global, true))

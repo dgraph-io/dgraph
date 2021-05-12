@@ -237,7 +237,9 @@ func maybeQuoteArg(fn string, arg interface{}) string {
 func writeFilterArguments(b *strings.Builder, args []gql.Arg, attr, fn string) {
 	if attr != "" {
 		x.Check2(b.WriteString(attr))
-		x.Check2(b.WriteString(", "))
+		if len(args) != 0 {
+			x.Check2(b.WriteString(", "))
+		}
 	}
 	for i, arg := range args {
 		if i != 0 {

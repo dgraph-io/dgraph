@@ -989,7 +989,7 @@ type Query {
 
     queryIssueSortedByOwnerAge: [Issue] @custom(dql: """
 	query q($search: string) {
-		iss as var(func: type(Issue)) {
+		iss as var(func: type(Issue)) @filter(has(Issue.owner)) {
 			Issue.owner {
 				age as User.age
 			}

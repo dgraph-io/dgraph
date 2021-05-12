@@ -751,11 +751,17 @@ func rewriteDQLQueryWithAuth(
 
 		if rbac == schema.Negative {
 			// if it is var query then it may contain variables which are
-			// used in subsequent query blocks. We just add dumm rootFunc
-			// here `var(func: uid(0)` which doesn't return any node and
-			// keep the remaining query unchanged.
+			// used in subsequent query blocks. We just add dummy rootFunc
+			// `var(func: uid(1))` with  filter `@filter(uid(2))` which doesn't
+			// return any node and keep the remaining query unchanged.
 			if qry.Attr == "var" {
-				qry.Func = &gql.Function{Name: "uid", UID: []uint64{0}}
+				qry.Func = &gql.Function{Name: "uid", UID: []uint64{1}}
+				fltr := &gql.FilterTree{Func: &gql.Function{Name: "uid", UID: []uint64{2}}}
+				if qry.Filter != nil {
+					qry.Filter = &gql.FilterTree{Op: "and", Child: []*gql.FilterTree{fltr, qry.Filter}}
+				} else {
+					qry.Filter = fltr
+				}
 				dgQueries = append(dgQueries, qry)
 			} else {
 				dgQueries = append(dgQueries, &gql.GraphQuery{Attr: qry.Attr + "()"})

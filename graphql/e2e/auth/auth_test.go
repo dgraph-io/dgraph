@@ -358,35 +358,33 @@ func TestAuthWithCustomDQL(t *testing.T) {
 			}
 		}
 		`,
-			role:   "USER",
-			user:   "user1",
 			result: `{"queryProjectsOrderByName":[]}`,
 		},
 		{
 			name: "var query; RBAC AND filter query; RBAC pass",
 			query: `
 		query{
-			queryIssueOrderByOwnerAge{
+			queryIssueSortedByOwnerAge{
 				msg
 			}
 		}
 		`,
 			role:   "ADMIN",
 			user:   "user2",
-			result: `{"queryIssueSortedByOwnerAge": [{"msg": "Issue2"}]}}`,
+			result: `{"queryIssueSortedByOwnerAge": [{"msg": "Issue2"}]}`,
 		},
 		{
 			name: "var query; RBAC AND filter query; RBAC fail",
 			query: `
 		query{
-			queryIssueOrderByOwnerAge{
+			queryIssueSortedByOwnerAge{
 				msg
 			}
 		}
 		`,
 			role:   "USER",
 			user:   "user2",
-			result: `{"queryIssueSortedByOwnerAge": []}}`,
+			result: `{"queryIssueSortedByOwnerAge": []}`,
 		},
 		{
 			name: "DQL query with @cascade and pagination",
