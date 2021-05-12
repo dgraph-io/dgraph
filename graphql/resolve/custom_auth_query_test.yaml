@@ -37,7 +37,7 @@
     USER: "user1"
   dgquery: |-
     query {
-      var(func: uid(IssueRoot)) {
+      iss as var(func: uid(IssueRoot)) {
         Issue.owner @filter(uid(User_1)) {
           age as User.age
         }
@@ -51,7 +51,7 @@
         User_2 as Issue.owner
       }
       User_1 as var(func: uid(User_2))
-      queryIssueSortedByOwnerAge(func: uid(age), orderdesc: val(age)) {
+      queryIssueSortedByOwnerAge(func: uid(iss), orderdesc: val(age)) {
         id : uid
         msg : Issue.msg
         random : Issue.random
@@ -72,12 +72,12 @@
     USER: "user1"
   dgquery: |-
     query {
-      var(func: uid(0x0)) {
+      iss as var(func: uid(0x0)) {
         Issue.owner {
           age as User.age
         }
       }
-      queryIssueSortedByOwnerAge(func: uid(age), orderdesc: val(age)) {
+      queryIssueSortedByOwnerAge(func: uid(iss), orderdesc: val(age)) {
         id : uid
         msg : Issue.msg
         random : Issue.random
@@ -97,12 +97,12 @@
     ROLE: "ADMIN"
   dgquery: |-
     query {
-      var(func: uid(0x0)) {
+      iss as var(func: uid(0x0)) {
         Issue.owner {
           age as User.age
         }
       }
-      queryIssueSortedByOwnerAge(func: uid(age), orderdesc: val(age)) {
+      queryIssueSortedByOwnerAge(func: uid(iss), orderdesc: val(age)) {
         id : uid
         msg : Issue.msg
         random : Issue.random
@@ -262,4 +262,39 @@
       TaskOccurrence_3 as var(func: uid(TaskOccurrence_4)) @filter(uid(TaskOccurrence_Auth5))
       TaskOccurrence_Auth5 as var(func: uid(TaskOccurrence_4)) @filter(eq(TaskOccurrence.role, "ADMINISTRATOR")) @cascade
       AdminTask_6 as var(func: uid())
+    }
+
+- name: "DQL query with @cascade and pagination"
+  gqlquery: |
+    query{
+      queryFirstTwoMovieWithNonNullRegion{
+        content
+        code
+        regionsAvailable{
+          name
+        }
+      }
+    }
+  jwtVar:
+    ROLE: "ADMIN"
+    USER: "user1"
+  dgquery: |-
+    query {
+      queryFirstTwoMovieWithNonNullRegion(func: uid(MovieRoot), orderasc: Movie.content, first: 2, offset: 0) @cascade {
+        content : Movie.content
+        code : Movie.code
+        regionsAvailable : Movie.regionsAvailable @filter(uid(Region_1)) (orderasc: Region.name, first: 1) {
+          name : Region.name
+        }
+      }
+      MovieRoot as var(func: uid(Movie_3)) @filter((NOT (uid(Movie_Auth4)) AND uid(Movie_Auth5)))
+      Movie_3 as var)
+      Movie_Auth4 as var(func: uid(Movie_3)) @filter(eq(Movie.hidden, true)) @cascade
+      Movie_Auth5 as var(func: uid(Movie_3)) @cascade {
+        Movie.regionsAvailable : Movie.regionsAvailable @filter(eq(Region.global, true))
+      }
+      var(func: uid(MovieRoot)) {
+        Region_2 as Movie.regionsAvailable
+      }
+      Region_1 as var(func: uid(Region_2))
     }
