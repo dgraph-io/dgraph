@@ -150,6 +150,7 @@ const (
 		removed: [Member]
 		cid: String
 		license: License
+		namespaces: [UInt64]
 	}
 
 	type ClusterGroup {
