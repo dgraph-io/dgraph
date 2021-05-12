@@ -189,8 +189,7 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest) error {
 		}
 	}
 
-	glog.Infof("Created backup request: read_ts:%d since_ts:%d unix_ts:\"%s\" destination:\"%s\" ."+
-		" Groups=%v\n", req.ReadTs, req.SinceTs, req.UnixTs, req.Destination, groups)
+	glog.Infof("Created backup request: read_ts:%d since_ts:%d unix_ts:\"%s\" destination:\"%s\" . Groups=%v\n", req.ReadTs, req.SinceTs, req.UnixTs, req.Destination, groups)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 

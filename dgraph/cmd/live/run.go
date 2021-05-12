@@ -682,7 +682,7 @@ func (l *loader) populateNamespaces(ctx context.Context, dc *dgo.Dgraph, singleN
 	}
 
 	for _, pred := range sch.Predicates {
-		ns, _ := x.ParseNsAttrFromJson(pred.Predicate)
+		ns := x.ParseNamespace(pred.Predicate)
 		l.namespaces[ns] = struct{}{}
 	}
 	return nil

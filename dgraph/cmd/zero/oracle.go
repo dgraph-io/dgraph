@@ -370,18 +370,14 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 		// Check if any of these tablets is being moved. If so, abort the transaction.
 		for _, pkey := range src.Preds {
 			splits := strings.Split(pkey, "-")
-			if len(splits) < 3 {
+			if len(splits) < 2 {
 				return errors.Errorf("Unable to find group id in %s", pkey)
 			}
 			gid, err := strconv.Atoi(splits[0])
 			if err != nil {
 				return errors.Wrapf(err, "unable to parse group id from %s", pkey)
 			}
-			ns, err := strconv.ParseUint(splits[1], 0, 64)
-			if err != nil {
-				return errors.Wrapf(err, "unable to parse namespace from %s", pkey)
-			}
-			pred := string(x.NamespaceToBytes(ns)) + strings.Join(splits[2:], "-")
+			pred := strings.Join(splits[1:], "-")
 			tablet := s.ServingTablet(pred)
 			if tablet == nil {
 				return errors.Errorf("Tablet for %s is nil", pred)

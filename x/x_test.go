@@ -17,7 +17,6 @@
 package x
 
 import (
-	"encoding/json"
 	"fmt"
 	"math"
 	"testing"
@@ -197,51 +196,4 @@ func TestToHex(t *testing.T) {
 	require.Equal(t, []byte(`<0xff>`), ToHex(255, true))
 	require.Equal(t, []byte(`"0xffffffffffffffff"`), ToHex(math.MaxUint64, false))
 	require.Equal(t, []byte(`<0xffffffffffffffff>`), ToHex(math.MaxUint64, true))
-}
-
-// func TestSchemaUnmarshal(t *testing.T) {
-// 	type predicate struct {
-// 		Predicate string `json:"predicate,omitempty"`
-// 	}
-// 	type schema struct {
-// 		Predicates []*predicate `json:"schema,omitempty"`
-// 	}
-
-// 	var nodes []*pb.SchemaNode
-// 	nodes = append(nodes, &pb.SchemaNode{Predicate: NamespaceAttr(129, "name")})
-// 	for _, node := range nodes {
-// 		node.Predicate = SchemaEncode(node.Predicate)
-// 	}
-
-// 	respMap := make(map[string]interface{})
-// 	respMap["schema"] = nodes
-// 	resp := &dgoapi.Response{}
-// 	var err error
-// 	resp.Json, err = json.Marshal(respMap)
-// 	require.NoError(t, err)
-// 	t.Log(string(resp.Json))
-
-// 	var sch schema
-// 	require.NoError(t, json.Unmarshal(resp.GetJson(), &sch))
-
-// 	for _, pred := range sch.Predicates {
-// 		pred.Predicate = SchemaDecode(pred.Predicate)
-// 		t.Logf("Unmarshalled %s %v", FormatNsAttr(pred.Predicate), []byte(pred.Predicate))
-// 	}
-// }
-
-func TestSchemaUnmarshalSimple(t *testing.T) {
-	type predicate struct {
-		Predicate string `json:"predicate,omitempty"`
-	}
-
-	p := &predicate{Predicate: NamespaceAttr(128, "name")}
-	b, err := json.Marshal(p)
-	require.NoError(t, err)
-	t.Log(string(b))
-
-	var p2 predicate
-	require.NoError(t, json.Unmarshal(b, &p2))
-	t.Logf("Unmarshalled %s %v", FormatNsAttr(p2.Predicate), []byte(p2.Predicate))
-
 }

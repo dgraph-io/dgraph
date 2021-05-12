@@ -1264,10 +1264,10 @@ func gqlCarsWithErrorHandler(w http.ResponseWriter, r *http.Request) {
 			"cars": output,
 		},
 		"errors": []map[string]interface{}{
-			{
+			map[string]interface{}{
 				"message": "error-1 from cars",
 			},
-			{
+			map[string]interface{}{
 				"message": "error-2 from cars",
 			},
 		},

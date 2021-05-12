@@ -1374,14 +1374,6 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 			return er.Types[i].TypeName < er.Types[j].TypeName
 		})
 
-		if x.IsGalaxyOperation(ctx) {
-			// Schema contains ns|attr in the predicates. Format it, so that it is parsed by json
-			// correctly.
-			for _, node := range er.SchemaNode {
-				node.Predicate = x.FormatNsAttr(node.Predicate)
-			}
-		}
-
 		respMap := make(map[string]interface{})
 		if len(er.SchemaNode) > 0 {
 			respMap["schema"] = er.SchemaNode

@@ -99,7 +99,7 @@ func getFilteredManifests(h UriHandler, manifests []*Manifest,
 	var validManifests []*Manifest
 	for _, m := range manifests {
 		missingFiles := false
-		for g := range m.Groups {
+		for g, _ := range m.Groups {
 			path := filepath.Join(m.Path, backupName(m.ValidReadTs(), g))
 			if !h.FileExists(path) {
 				missingFiles = true
@@ -172,7 +172,6 @@ func readManifest(h UriHandler, path string) (*Manifest, error) {
 	if err := json.Unmarshal(b, &m); err != nil {
 		return &m, errors.Wrap(err, "readManifest failed to unmarshal: ")
 	}
-	convertJsonToMemory(&m)
 	return &m, nil
 }
 
@@ -196,40 +195,7 @@ func readMasterManifest(h UriHandler, path string) (*MasterManifest, error) {
 	if err := json.Unmarshal(b, &m); err != nil {
 		return &m, errors.Wrap(err, "readMasterManifest failed to unmarshal: ")
 	}
-	for _, manifest := range m.Manifests {
-		convertJsonToMemory(manifest)
-	}
 	return &m, nil
-}
-
-// In the manifest, we store the predicates in the format: ns-attr
-// But in-memory, we have ns|attr (where | denotes concatenation).
-func convertJsonToMemory(m *Manifest) {
-	if m.Version == 0 {
-		return
-	}
-	for gid, preds := range m.Groups {
-		parsedPreds := preds[:0]
-		for _, pred := range preds {
-			ns, attr := x.ParseNsAttrFromJson(pred)
-			parsedPreds = append(parsedPreds, string(x.NamespaceToBytes(ns))+attr)
-		}
-		m.Groups[gid] = parsedPreds
-	}
-}
-
-func convertMemoryToJson(m *Manifest) {
-	if m.Version == 0 {
-		// TODO(Naman): Check if m.Version can be zero while creating a manifest/masterManifest.
-		return
-	}
-	for gid, preds := range m.Groups {
-		parsedPreds := preds[:0]
-		for _, pred := range preds {
-			parsedPreds = append(parsedPreds, x.FormatNsAttr(pred))
-		}
-		m.Groups[gid] = parsedPreds
-	}
 }
 
 func GetManifest(h UriHandler, uri *url.URL) (*MasterManifest, error) {
@@ -250,10 +216,6 @@ func createManifest(h UriHandler, uri *url.URL, manifest *MasterManifest) error 
 		if err := h.CreateDir("./"); err != nil {
 			return errors.Wrap(err, "createManifest failed to create path")
 		}
-	}
-
-	for _, m := range manifest.Manifests {
-		convertMemoryToJson(m)
 	}
 
 	w, err := h.CreateFile(tmpManifest)
