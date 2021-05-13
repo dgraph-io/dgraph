@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package gql
+package dql
 
 // GQL parser fuzzer for use with https://github.com/dvyukov/go-fuzz.
 //

@@ -36,7 +36,7 @@ import (
 
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
-	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/dql"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/x"
@@ -392,7 +392,7 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 
 	case "application/rdf":
 		// Parse N-Quads.
-		req, err = gql.ParseMutation(string(body))
+		req, err = dql.ParseMutation(string(body))
 		if err != nil {
 			x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 			return
