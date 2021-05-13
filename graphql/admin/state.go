@@ -15,16 +15,17 @@ import (
 )
 
 type membershipState struct {
-	Counter   uint64         `json:"counter,omitempty"`
-	Groups    []clusterGroup `json:"groups,omitempty"`
-	Zeros     []*pb.Member   `json:"zeros,omitempty"`
-	MaxUID    uint64         `json:"maxUID,omitempty"`
-	MaxNsID   uint64         `json:"maxNsID,omitempty"`
-	MaxTxnTs  uint64         `json:"maxTxnTs,omitempty"`
-	MaxRaftId uint64         `json:"maxRaftId,omitempty"`
-	Removed   []*pb.Member   `json:"removed,omitempty"`
-	Cid       string         `json:"cid,omitempty"`
-	License   *pb.License    `json:"license,omitempty"`
+	Counter    uint64         `json:"counter,omitempty"`
+	Groups     []clusterGroup `json:"groups,omitempty"`
+	Zeros      []*pb.Member   `json:"zeros,omitempty"`
+	MaxUID     uint64         `json:"maxUID,omitempty"`
+	MaxNsID    uint64         `json:"maxNsID,omitempty"`
+	MaxTxnTs   uint64         `json:"maxTxnTs,omitempty"`
+	MaxRaftId  uint64         `json:"maxRaftId,omitempty"`
+	Removed    []*pb.Member   `json:"removed,omitempty"`
+	Cid        string         `json:"cid,omitempty"`
+	License    *pb.License    `json:"license,omitempty"`
+	Namespaces []uint64       `json:"namespaces,omitempty"`
 }
 
 type clusterGroup struct {
@@ -78,6 +79,9 @@ func resolveState(ctx context.Context, q schema.Query) *resolve.Resolved {
 func convertToGraphQLResp(ms pb.MembershipState) membershipState {
 	var state membershipState
 
+	// namespaces stores set of namespaces
+	namespaces := make(map[uint64]struct{})
+
 	state.Counter = ms.Counter
 	for k, v := range ms.Groups {
 		var members = make([]*pb.Member, 0, len(v.Members))
@@ -85,8 +89,12 @@ func convertToGraphQLResp(ms pb.MembershipState) membershipState {
 			members = append(members, v1)
 		}
 		var tablets = make([]*pb.Tablet, 0, len(v.Tablets))
-		for _, v1 := range v.Tablets {
+		for name, v1 := range v.Tablets {
 			tablets = append(tablets, v1)
+			val, err := x.ExtractNamespaceFromPredicate(name)
+			if err == nil {
+				namespaces[val] = struct{}{}
+			}
 		}
 		state.Groups = append(state.Groups, clusterGroup{
 			Id:         k,
@@ -107,6 +115,11 @@ func convertToGraphQLResp(ms pb.MembershipState) membershipState {
 	state.Removed = ms.Removed
 	state.Cid = ms.Cid
 	state.License = ms.License
+
+	state.Namespaces = []uint64{}
+	for ns := range namespaces {
+		state.Namespaces = append(state.Namespaces, ns)
+	}
 
 	return state
 }
