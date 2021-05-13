@@ -99,7 +99,7 @@ func getFilteredManifests(h UriHandler, manifests []*Manifest,
 	var validManifests []*Manifest
 	for _, m := range manifests {
 		missingFiles := false
-		for g, _ := range m.Groups {
+		for g := range m.Groups {
 			path := filepath.Join(m.Path, backupName(m.ValidReadTs(), g))
 			if !h.FileExists(path) {
 				missingFiles = true
@@ -178,7 +178,7 @@ func readManifest(h UriHandler, path string) (*Manifest, error) {
 func GetLatestManifest(h UriHandler, uri *url.URL) (*Manifest, error) {
 	manifest, err := GetManifest(h, uri)
 	if err != nil {
-		return &Manifest{}, errors.Wrap(err, "Fialed to get the manifest")
+		return &Manifest{}, errors.Wrap(err, "Failed to get the manifest")
 	}
 	if len(manifest.Manifests) == 0 {
 		return &Manifest{}, nil
@@ -210,7 +210,7 @@ func GetManifest(h UriHandler, uri *url.URL) (*MasterManifest, error) {
 	return manifest, nil
 }
 
-func createManifest(h UriHandler, uri *url.URL, manifest *MasterManifest) error {
+func CreateManifest(h UriHandler, uri *url.URL, manifest *MasterManifest) error {
 	var err error
 	if !h.DirExists("./") {
 		if err := h.CreateDir("./"); err != nil {
