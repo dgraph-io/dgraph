@@ -257,7 +257,7 @@ func runExportBackup() error {
 	glog.Infof("Created temporary map directory: %s\n", mapDir)
 
 	// TODO: Can probably make this procesing concurrent.
-	for gid, _ := range latestManifest.Groups {
+	for gid := range latestManifest.Groups {
 		glog.Infof("Exporting group: %d", gid)
 		req := &pb.RestoreRequest{
 			GroupId:           gid,
