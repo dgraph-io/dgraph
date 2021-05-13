@@ -29,8 +29,8 @@ import (
 
 	bpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/dgo/v210/protos/api"
-	"github.com/dgraph-io/dgraph/ee/acl"
 	"github.com/dgraph-io/dgraph/dql"
+	"github.com/dgraph-io/dgraph/ee/acl"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"

@@ -35,8 +35,8 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/admin"
 
 	"github.com/dgraph-io/dgo/v210/protos/api"
-	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/dql"
+	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/x"
