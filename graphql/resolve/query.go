@@ -198,17 +198,9 @@ func (qr *customDQLQueryResolver) rewriteAndExecute(ctx context.Context,
 		return resolved
 	}
 
-	args := query.Arguments()
-	vars := make(map[string]string)
-	for k, v := range args {
-		// dgoapi.Request{}.Vars accepts only string values for variables,
-		// so need to convert all variable values to string
-		vStr, err := convertScalarToString(v)
-		if err != nil {
-			return emptyResult(schema.GQLWrapf(err, "couldn't convert argument %s to string", k))
-		}
-		// the keys in dgoapi.Request{}.Vars are assumed to be prefixed with $
-		vars["$"+k] = vStr
+	vars, err := dqlVars(query.Arguments())
+	if err != nil {
+		return emptyResult(err)
 	}
 
 	dgQuery, err := qr.queryRewriter.Rewrite(ctx, query)
@@ -270,4 +262,19 @@ func convertScalarToString(val interface{}) (string, error) {
 		return "", errNotScalar
 	}
 	return str, nil
+}
+
+func dqlVars(args map[string]interface{}) (map[string]string, error) {
+	vars := make(map[string]string)
+	for k, v := range args {
+		// dgoapi.Request{}.Vars accepts only string values for variables,
+		// so need to convert all variable values to string
+		vStr, err := convertScalarToString(v)
+		if err != nil {
+			return vars, schema.GQLWrapf(err, "couldn't convert argument %s to string", k)
+		}
+		// the keys in dgoapi.Request{}.Vars are assumed to be prefixed with $
+		vars["$"+k] = vStr
+	}
+	return vars, nil
 }

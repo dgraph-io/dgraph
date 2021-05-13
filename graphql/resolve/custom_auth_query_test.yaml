@@ -41,6 +41,7 @@
         Issue.owner @filter(uid(User_1)) {
           age as User.age
         }
+        ownerAge as sum(val(age))
       }
       IssueRoot as var(func: uid(Issue_3)) @filter(uid(Issue_Auth4))
       Issue_3 as var(func: type(Issue)) @filter(has(Issue.owner))
@@ -51,7 +52,7 @@
         User_2 as Issue.owner
       }
       User_1 as var(func: uid(User_2))
-      queryIssueSortedByOwnerAge(func: uid(iss), orderdesc: val(age)) {
+      queryIssueSortedByOwnerAge(func: uid(iss), orderdesc: val(ownerAge)) {
         id : uid
         msg : Issue.msg
         random : Issue.random
@@ -76,8 +77,9 @@
         Issue.owner {
           age as User.age
         }
+        ownerAge as sum(val(age))
       }
-      queryIssueSortedByOwnerAge(func: uid(iss), orderdesc: val(age)) {
+      queryIssueSortedByOwnerAge(func: uid(iss), orderdesc: val(ownerAge)) {
         id : uid
         msg : Issue.msg
         random : Issue.random
@@ -101,8 +103,9 @@
         Issue.owner {
           age as User.age
         }
+        ownerAge as sum(val(age))
       }
-      queryIssueSortedByOwnerAge(func: uid(iss), orderdesc: val(age)) {
+      queryIssueSortedByOwnerAge(func: uid(iss), orderdesc: val(ownerAge)) {
         id : uid
         msg : Issue.msg
         random : Issue.random
@@ -297,4 +300,25 @@
         Region_2 as Movie.regionsAvailable
       }
       Region_1 as var(func: uid(Region_2))
+    }
+
+- name: "Query interface with @auth rules true for interface and implementing types"
+  gqlquery: |-
+    query {
+      queryQuestionAndAnswer{
+        id
+        text
+        topic
+        author {
+          id
+          name
+        }
+      }
+    }
+  jwtVar:
+    USER: "user1"
+    ANS: "true"
+  dgquery: |-
+    query {
+
     }

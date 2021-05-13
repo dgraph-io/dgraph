@@ -988,11 +988,12 @@ type IssueMap {
 type Query {
 
     queryIssueSortedByOwnerAge: [Issue] @custom(dql: """
-	query q($search: string) {
+	query {
 		iss as var(func: type(Issue)) @filter(has(Issue.owner)) {
 			Issue.owner {
 				age as User.age
 			}
+            ownerAge as max(val(age))
 		}
 		queryIssueSortedByOwnerAge(func: uid(iss), orderdesc: val(age)) {
 			id : uid
@@ -1058,6 +1059,21 @@ type Query {
                 code: Movie.code
                 regionsAvailable: Movie.regionsAvailable(first: 1, orderasc: Region.name) {
                     name: Region.name
+                }
+            }
+        }"""
+    )
+    queryQuestionAndAnswer: [Post] @custom(dql: """
+        query {
+            ques as var(func: type(Question))
+            ans as var(func: type(Answer))
+            queryQuestionAndAnswer(func: uid(ques, ans)) {
+                id : uid
+                text : Post.text
+                topic : Post.topic
+                author : Post.author {
+                    id : Author.id
+                    name : Author.name
                 }
             }
         }"""

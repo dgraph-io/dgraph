@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -214,39 +215,25 @@ func writeRoot(b *strings.Builder, q *gql.GraphQuery) {
 		x.Check2(b.WriteString(fmt.Sprintf("(func: type(%s)", q.Func.Args[0].Value)))
 	case q.Func.Name == "eq":
 		x.Check2(b.WriteString("(func: eq("))
-		writeFilterArguments(b, q.Func.Args, q.Func.Attr, q.Func.Name)
+		writeFilterArguments(b, q.Func)
 		x.Check2(b.WriteRune(')'))
 	}
 	writeOrderAndPage(b, q, true)
 }
 
-func maybeQuoteArg(fn string, arg interface{}) string {
-	switch arg := arg.(type) {
-	case string: // dateTime also parsed as string
-		if fn == "regexp" {
-			return arg
-		}
-		return fmt.Sprintf("%q", arg)
-	case float64, float32:
-		return fmt.Sprintf("\"%v\"", arg)
-	default:
-		return fmt.Sprintf("%v", arg)
-	}
-}
-
-func writeFilterArguments(b *strings.Builder, args []gql.Arg, attr, fn string) {
-	if attr != "" {
-		x.Check2(b.WriteString(attr))
-		if len(args) != 0 {
+func writeFilterArguments(b *strings.Builder, q *gql.Function) {
+	if q.Attr != "" {
+		x.Check2(b.WriteString(q.Attr))
+		if len(q.Args) != 0 {
 			x.Check2(b.WriteString(", "))
 		}
 	}
-	for i, arg := range args {
+	for i, arg := range q.Args {
 		if i != 0 {
 			x.Check2(b.WriteString(", "))
 		}
-		if attr != "" {
-			arg.Value = maybeQuoteArg(fn, arg.Value)
+		if q.Attr != "" {
+			arg.Value = schema.MaybeQuoteArg(q.Name, arg.Value)
 		}
 		x.Check2(b.WriteString(arg.Value))
 	}
@@ -262,7 +249,7 @@ func writeFilterFunction(b *strings.Builder, f *gql.Function) {
 		writeUIDFunc(b, f.UID, f.Args, f.NeedsVar)
 	default:
 		x.Check2(b.WriteString(fmt.Sprintf("%s(", f.Name)))
-		writeFilterArguments(b, f.Args, f.Attr, f.Name)
+		writeFilterArguments(b, f)
 		x.Check2(b.WriteRune(')'))
 	}
 }

@@ -578,7 +578,7 @@ func rewriteAsGet(
 			Name: "eq",
 			Args: []gql.Arg{
 				{Value: xidArgNameToDgPredMap[xid]},
-				{Value: maybeQuoteArg("eq", xidArgToVal[xid])},
+				{Value: schema.MaybeQuoteArg("eq", xidArgToVal[xid])},
 			},
 		}
 		flt = append(flt, &gql.FilterTree{
@@ -635,16 +635,9 @@ func rewriteAsGet(
 func rewriteDQLQuery(query schema.Query, authRw *authRewriter) ([]*gql.GraphQuery, error) {
 	dgQuery := query.DQLQuery()
 	args := query.Arguments()
-	vars := make(map[string]string)
-	for k, v := range args {
-		// dgoapi.Request{}.Vars accepts only string values for variables,
-		// so need to convert all variable values to string
-		vStr, err := convertScalarToString(v)
-		if err != nil {
-			return nil, err
-		}
-		// the keys in dgoapi.Request{}.Vars are assumed to be prefixed with $
-		vars["$"+k] = vStr
+	vars, err := dqlVars(args)
+	if err != nil {
+		return nil, err
 	}
 
 	dqlReq := gql.Request{
@@ -675,9 +668,28 @@ func extractType(dgQuery *gql.GraphQuery) string {
 	if typeName != "" {
 		return typeName
 	}
-
+	typeName = extractTypeFromOrder(dgQuery.Order)
 	typeName = extractTypeFromFilter(dgQuery.Filter)
 	return typeName
+}
+
+func getTypeNameFromAttr(Attr string) string {
+	split := strings.Split(Attr, ".")
+	if len(split) == 1 {
+		return ""
+	}
+	return split[0]
+}
+
+func extractTypeFromOrder(orderArgs []*pb.Order) string {
+	var typeName string
+	for _, order := range orderArgs {
+		typeName = getTypeNameFromAttr(order.Attr)
+		if typeName != "" {
+			return typeName
+		}
+	}
+	return ""
 }
 
 func extractTypeFromFilter(f *gql.FilterTree) string {
@@ -705,11 +717,7 @@ func extractTypeFromFunc(f *gql.Function) string {
 	case "type":
 		return f.Args[0].Value
 	case "eq", "allofterms", "anyofterms", "gt", "le", "has":
-		split := strings.Split(f.Attr, ".")
-		if len(split) == 1 {
-			return ""
-		}
-		return split[0]
+		return getTypeNameFromAttr(f.Attr)
 	}
 	return ""
 }
@@ -741,6 +749,10 @@ func rewriteDQLQueryWithAuth(
 			dgQueries = append(dgQueries, qry)
 			continue
 		}
+
+		// parentVarName needs to be calculated separately for
+		// each query block.
+		//authRw.parentVarName = typeName + "Root"
 
 		// authRw.hasAuthRules & auth.hasCascade needs to be calculated
 		// separately for each query block in case of DQL queries.
@@ -1236,7 +1248,7 @@ func addUIDFunc(q *gql.GraphQuery, uids []uint64) {
 func addEqFunc(q *gql.GraphQuery, dgPred string, values []interface{}) {
 	args := []gql.Arg{{Value: dgPred}}
 	for _, v := range values {
-		args = append(args, gql.Arg{Value: maybeQuoteArg("eq", v)})
+		args = append(args, gql.Arg{Value: schema.MaybeQuoteArg("eq", v)})
 	}
 	q.Func = &gql.Function{
 		Name: "eq",
@@ -2091,15 +2103,15 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 					fn = "eq"
 
 					for _, v := range vals {
-						args = append(args, gql.Arg{Value: maybeQuoteArg(fn, v)})
+						args = append(args, gql.Arg{Value: schema.MaybeQuoteArg(fn, v)})
 					}
 				case "between":
 					// numLikes: { between : { min : 10,  max:100 }} should be rewritten into
 					// 	between(numLikes,10,20). Order of arguments (min,max) is neccessary or
 					// it will return empty
 					vals := val.(map[string]interface{})
-					args = append(args, gql.Arg{Value: maybeQuoteArg(fn, vals["min"])},
-						gql.Arg{Value: maybeQuoteArg(fn, vals["max"])})
+					args = append(args, gql.Arg{Value: schema.MaybeQuoteArg(fn, vals["min"])},
+						gql.Arg{Value: schema.MaybeQuoteArg(fn, vals["max"])})
 				case "near":
 					// For Geo type we have `near` filter which is written as follows:
 					// { near: { distance: 33.33, coordinate: { latitude: 11.11, longitude: 22.22 } } }
@@ -2148,7 +2160,7 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 					}
 					args = append(args, gql.Arg{Value: buf.String()})
 				default:
-					args = append(args, gql.Arg{Value: maybeQuoteArg(fn, val)})
+					args = append(args, gql.Arg{Value: schema.MaybeQuoteArg(fn, val)})
 				}
 				ands = append(ands, &gql.FilterTree{
 					Func: &gql.Function{
@@ -2169,7 +2181,7 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 						fn := "eq"
 						args := []gql.Arg{{Value: typ.DgraphPredicate(field)}}
 						for _, v := range dgFunc {
-							args = append(args, gql.Arg{Value: maybeQuoteArg(fn, v)})
+							args = append(args, gql.Arg{Value: schema.MaybeQuoteArg(fn, v)})
 						}
 						ands = append(ands, &gql.FilterTree{
 							Func: &gql.Function{
@@ -2325,20 +2337,6 @@ func buildUnionFilter(typ schema.Type, filter map[string]interface{}) (*gql.Filt
 
 	// return true because we want to include the field with filter in query
 	return ft, true
-}
-
-func maybeQuoteArg(fn string, arg interface{}) string {
-	switch arg := arg.(type) {
-	case string: // dateTime also parsed as string
-		if fn == "regexp" {
-			return arg
-		}
-		return fmt.Sprintf("%q", arg)
-	case float64, float32:
-		return fmt.Sprintf("\"%v\"", arg)
-	default:
-		return fmt.Sprintf("%v", arg)
-	}
 }
 
 // first returns the first element it finds in a map - we bump into lots of one-element

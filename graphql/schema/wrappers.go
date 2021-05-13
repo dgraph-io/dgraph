@@ -3155,3 +3155,18 @@ func parseRequiredArgsFromGQLRequest(req string) (map[string]bool, error) {
 	_, rf, err := parseBodyTemplate("{"+args+"}", false)
 	return rf, err
 }
+
+// MaybeQuoteArg puts a quote on the function arguments.
+func MaybeQuoteArg(fn string, arg interface{}) string {
+	switch arg := arg.(type) {
+	case string: // dateTime also parsed as string
+		if fn == "regexp" {
+			return arg
+		}
+		return fmt.Sprintf("%q", arg)
+	case float64, float32:
+		return fmt.Sprintf("\"%v\"", arg)
+	default:
+		return fmt.Sprintf("%v", arg)
+	}
+}
