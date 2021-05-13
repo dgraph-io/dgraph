@@ -1,0 +1,919 @@
+2021/05/19 08:04:36 profile: block profiling enabled, /tmp/profile706780864/block.pprof
+[Sentry] 2021/05/19 08:04:36 Integration installed: ContextifyFrames
+[Sentry] 2021/05/19 08:04:36 Integration installed: Environment
+[Sentry] 2021/05/19 08:04:36 Integration installed: Modules
+[Sentry] 2021/05/19 08:04:36 Integration installed: IgnoreErrors
+[Sentry] 2021/05/19 08:04:37 Integration installed: ContextifyFrames
+[Sentry] 2021/05/19 08:04:37 Integration installed: Environment
+[Sentry] 2021/05/19 08:04:37 Integration installed: Modules
+[Sentry] 2021/05/19 08:04:37 Integration installed: IgnoreErrors
+2021/05/19 08:04:37 profile: block profiling enabled, /tmp/profile605144523/block.pprof
+I0519 08:04:38.099403      18 sentry_integration.go:48] This instance of Dgraph will send anonymous reports of panics back to Dgraph Labs via Sentry. No confidential information is sent. These reports help improve Dgraph. To opt-out, restart your instance with the --telemetry "sentry=false;" flag. For more info, see https://dgraph.io/docs/howto/#data-handling.
+I0519 08:04:38.537363      18 init.go:110] 
+
+Dgraph version   : v20.11.0-rc1-630-g05c0ee419
+Dgraph codename  : unnamed
+Dgraph SHA-256   : 2e162c940122699302e86ede2fd369c0757f1e9aa0972e21eef85d9365d8634c
+Commit SHA-1     : 05c0ee419
+Commit timestamp : 2021-05-19 13:28:23 +0530
+Branch           : naman/fix-live-auth
+Go version       : go1.16.3
+jemalloc enabled : true
+
+For Dgraph official documentation, visit https://dgraph.io/docs.
+For discussions about Dgraph     , visit https://discuss.dgraph.io.
+For fully-managed Dgraph Cloud   , visit https://dgraph.io/cloud.
+
+Licensed variously under the Apache Public License 2.0 and Dgraph Community License.
+Copyright 2015-2021 Dgraph Labs, Inc.
+
+
+I0519 08:04:38.537468      18 run.go:254] Setting Config to: {raft:0xc0001b20b0 telemetry:0xc0002fc060 limit:0xc0001b20b8 bindall:true portOffset:0 numReplicas:3 peer: w:zw rebalanceInterval:480000000000 tlsClientConfig:<nil> audit:<nil> limiterConfig:0xc0001b03c0}
+I0519 08:04:38.537528      18 run.go:144] Setting up grpc listener at: 0.0.0.0:5080
+I0519 08:04:38.537833      18 run.go:144] Setting up http listener at: 0.0.0.0:6080
+I0519 08:04:38.539382      18 storage.go:125] Init Raft Storage with snap: 0, first: 1, last: 0
+I0519 08:04:38.539652      18 node.go:152] Setting raft.Config to: &{ID:1 peers:[] learners:[] ElectionTick:20 HeartbeatTick:1 Storage:0xc0004f6440 Applied:0 MaxSizePerMsg:262144 MaxCommittedSizePerReady:67108864 MaxUncommittedEntriesSize:0 MaxInflightMsgs:256 CheckQuorum:false PreVote:true ReadOnlyOption:0 Logger:0x32b9cd0 DisableProposalForwarding:false}
+I0519 08:04:38.540955      18 node.go:326] Group 0 found 0 entries
+I0519 08:04:38.541219      18 raft.go:663] Starting a brand new node
+I0519 08:04:38.541330      18 log.go:34] 1 became follower at term 0
+I0519 08:04:38.541419      18 log.go:34] newRaft 1 [peers: [], term: 0, commit: 0, applied: 0, lastindex: 0, lastterm: 0]
+I0519 08:04:38.541506      18 log.go:34] 1 became follower at term 1
+I0519 08:04:38.541918      18 zero.go:116] Starting telemetry data collection for zero...
+E0519 08:04:38.542222      18 raft.go:547] While proposing CID: Not Zero leader. Aborting proposal: cid:"63ee35ab-5bbf-42b1-949e-90810e7cea96" . Retrying...
+I0519 08:04:38.542308      18 run.go:388] Running Dgraph Zero...
+I0519 08:04:38.542142      18 node.go:189] Setting conf state to nodes:1 
+I0519 08:04:38.542731      18 raft.go:966] Done applying conf change at 0x1
+I0519 08:04:38.785296      18 zero.go:447] Got connection request: cluster_info_only:true 
+I0519 08:04:38.785468      18 log.go:34] 1 no leader at term 1; dropping index reading msg
+W0519 08:04:40.786439      18 node.go:680] [0x1] Read index context timed out
+I0519 08:04:40.786488      18 log.go:34] 1 no leader at term 1; dropping index reading msg
+I0519 08:04:40.964886      18 pool.go:162] CONNECTING to zero2:5080
+I0519 08:04:40.964937      18 node.go:585] Trying to add 0x2 to cluster. Addr: zero2:5080
+I0519 08:04:40.964945      18 node.go:586] Current confstate at 0x1: nodes:1 
+E0519 08:04:41.545028      18 raft.go:547] While proposing CID: Not Zero leader. Aborting proposal: cid:"b5dc2403-9620-41f5-bee5-0fe8c710bda1" . Retrying...
+I0519 08:04:42.342559      18 log.go:34] 1 is starting a new election at term 1
+I0519 08:04:42.342592      18 log.go:34] 1 became pre-candidate at term 1
+I0519 08:04:42.342600      18 log.go:34] 1 received MsgPreVoteResp from 1 at term 1
+I0519 08:04:42.342623      18 log.go:34] 1 became candidate at term 2
+I0519 08:04:42.342627      18 log.go:34] 1 received MsgVoteResp from 1 at term 2
+I0519 08:04:42.342641      18 log.go:34] 1 became leader at term 2
+I0519 08:04:42.342648      18 log.go:34] raft.node: 1 elected leader 1 at term 2
+I0519 08:04:42.342719      18 raft.go:912] I've become the leader, updating leases.
+I0519 08:04:42.342727      18 assign.go:47] Updated UID: 1. Txn Ts: 1. NsID: 1.
+I0519 08:04:42.344419      18 node.go:189] Setting conf state to nodes:1 nodes:2 
+I0519 08:04:42.344483      18 raft.go:966] Done applying conf change at 0x1
+I0519 08:04:42.344569      18 node.go:755] [0x2] Done joining cluster with err: <nil>
+I0519 08:04:42.634803      18 pool.go:162] CONNECTING to zero3:5080
+I0519 08:04:42.634816      18 node.go:585] Trying to add 0x3 to cluster. Addr: zero3:5080
+I0519 08:04:42.634822      18 node.go:586] Current confstate at 0x1: nodes:1 nodes:2 
+W0519 08:04:42.786732      18 node.go:680] [0x1] Read index context timed out
+I0519 08:04:44.445021      18 zero.go:472] Connected: cluster_info_only:true 
+I0519 08:04:44.445317      18 zero.go:447] Got connection request: cluster_info_only:true 
+I0519 08:04:44.445989      18 node.go:189] Setting conf state to nodes:1 nodes:2 nodes:3 
+I0519 08:04:44.446027      18 raft.go:966] Done applying conf change at 0x1
+I0519 08:04:44.446076      18 node.go:755] [0x3] Done joining cluster with err: <nil>
+I0519 08:04:44.447929      18 zero.go:472] Connected: cluster_info_only:true 
+I0519 08:04:44.448021      18 zero.go:447] Got connection request: cluster_info_only:true 
+I0519 08:04:44.450049      18 zero.go:472] Connected: cluster_info_only:true 
+I0519 08:04:44.450151      18 zero.go:447] Got connection request: cluster_info_only:true 
+I0519 08:04:44.450661      18 zero.go:472] Connected: cluster_info_only:true 
+I0519 08:04:44.450994      18 zero.go:447] Got connection request: cluster_info_only:true 
+I0519 08:04:44.451657      18 zero.go:472] Connected: cluster_info_only:true 
+I0519 08:04:44.451699      18 zero.go:447] Got connection request: cluster_info_only:true 
+I0519 08:04:44.452210      18 zero.go:472] Connected: cluster_info_only:true 
+I0519 08:04:44.452241      18 zero.go:447] Got connection request: cluster_info_only:true 
+I0519 08:04:44.452813      18 zero.go:472] Connected: cluster_info_only:true 
+I0519 08:04:44.452855      18 zero.go:447] Got connection request: cluster_info_only:true 
+I0519 08:04:44.453535      18 zero.go:472] Connected: cluster_info_only:true 
+I0519 08:04:44.545633      18 raft.go:540] CID set for cluster: 2374c3f6-f0a2-4482-8073-43a6ae90ac6f
+I0519 08:04:44.546222      18 license_ee.go:46] Enterprise trial license proposed to the cluster: license:<maxNodes:18446744073709551615 expiryTs:1624003484 > 
+I0519 08:04:44.588703      18 zero.go:447] Got connection request: cluster_info_only:true 
+I0519 08:04:44.589359      18 zero.go:472] Connected: cluster_info_only:true 
+I0519 08:04:44.590278      18 zero.go:447] Got connection request: cluster_info_only:true 
+I0519 08:04:44.590832      18 zero.go:472] Connected: cluster_info_only:true 
+I0519 08:04:44.731877      18 zero.go:447] Got connection request: cluster_info_only:true 
+I0519 08:04:44.732473      18 zero.go:472] Connected: cluster_info_only:true 
+I0519 08:04:44.733024      18 zero.go:447] Got connection request: addr:"alpha5:7080" 
+I0519 08:04:44.733604      18 pool.go:162] CONNECTING to alpha5:7080
+I0519 08:04:44.734433      18 zero.go:612] Connected: id:1 group_id:1 addr:"alpha5:7080" 
+I0519 08:04:45.474045      18 zero.go:447] Got connection request: cluster_info_only:true 
+I0519 08:04:45.474511      18 zero.go:472] Connected: cluster_info_only:true 
+I0519 08:04:45.475340      18 zero.go:447] Got connection request: cluster_info_only:true 
+I0519 08:04:45.475760      18 zero.go:472] Connected: cluster_info_only:true 
+I0519 08:04:45.553208      18 zero.go:447] Got connection request: cluster_info_only:true 
+I0519 08:04:45.553713      18 zero.go:472] Connected: cluster_info_only:true 
+I0519 08:04:45.553795      18 zero.go:447] Got connection request: cluster_info_only:true 
+I0519 08:04:45.554218      18 zero.go:472] Connected: cluster_info_only:true 
+I0519 08:04:45.554321      18 zero.go:447] Got connection request: cluster_info_only:true 
+I0519 08:04:45.554907      18 zero.go:472] Connected: cluster_info_only:true 
+I0519 08:04:45.555009      18 zero.go:447] Got connection request: cluster_info_only:true 
+I0519 08:04:45.555704      18 zero.go:472] Connected: cluster_info_only:true 
+I0519 08:04:45.555805      18 zero.go:447] Got connection request: cluster_info_only:true 
+I0519 08:04:45.556367      18 zero.go:472] Connected: cluster_info_only:true 
+I0519 08:04:45.556451      18 zero.go:447] Got connection request: cluster_info_only:true 
+I0519 08:04:45.557044      18 zero.go:472] Connected: cluster_info_only:true 
+I0519 08:04:45.557437      18 zero.go:447] Got connection request: cluster_info_only:true 
+I0519 08:04:45.557993      18 zero.go:472] Connected: cluster_info_only:true 
+I0519 08:04:45.558080      18 zero.go:447] Got connection request: cluster_info_only:true 
+I0519 08:04:45.558505      18 zero.go:472] Connected: cluster_info_only:true 
+I0519 08:04:45.615100      18 zero.go:447] Got connection request: cluster_info_only:true 
+I0519 08:04:45.615676      18 zero.go:472] Connected: cluster_info_only:true 
+I0519 08:04:45.616303      18 zero.go:447] Got connection request: addr:"alpha6:7080" 
+I0519 08:04:45.616946      18 pool.go:162] CONNECTING to alpha6:7080
+I0519 08:04:45.617641      18 zero.go:612] Connected: id:2 group_id:1 addr:"alpha6:7080" 
+I0519 08:04:45.704121      18 zero.go:447] Got connection request: cluster_info_only:true 
+I0519 08:04:45.704540      18 zero.go:472] Connected: cluster_info_only:true 
+I0519 08:04:45.704955      18 zero.go:447] Got connection request: addr:"alpha3:7080" 
+I0519 08:04:45.705514      18 pool.go:162] CONNECTING to alpha3:7080
+I0519 08:04:45.706201      18 zero.go:612] Connected: id:3 group_id:1 addr:"alpha3:7080" 
+I0519 08:04:45.706327      18 zero.go:447] Got connection request: cluster_info_only:true 
+I0519 08:04:45.708146      18 zero.go:472] Connected: cluster_info_only:true 
+I0519 08:04:45.709544      18 zero.go:447] Got connection request: addr:"alpha1:7080" 
+I0519 08:04:45.710917      18 pool.go:162] CONNECTING to alpha1:7080
+I0519 08:04:45.713564      18 zero.go:612] Connected: id:4 group_id:2 addr:"alpha1:7080" 
+I0519 08:04:45.714150      18 zero.go:447] Got connection request: cluster_info_only:true 
+W0519 08:04:45.714593      18 pool.go:267] Connection lost with alpha1:7080. Error: rpc error: code = Unknown desc = No node has been set up yet
+I0519 08:04:45.721123      18 zero.go:472] Connected: cluster_info_only:true 
+I0519 08:04:45.721891      18 zero.go:447] Got connection request: cluster_info_only:true 
+I0519 08:04:45.722888      18 zero.go:472] Connected: cluster_info_only:true 
+I0519 08:04:45.723225      18 zero.go:447] Got connection request: addr:"alpha4:7080" 
+I0519 08:04:45.724102      18 pool.go:162] CONNECTING to alpha4:7080
+I0519 08:04:45.724936      18 zero.go:612] Connected: id:5 group_id:2 addr:"alpha4:7080" 
+I0519 08:04:45.725138      18 zero.go:447] Got connection request: addr:"alpha2:7080" 
+I0519 08:04:45.725853      18 pool.go:162] CONNECTING to alpha2:7080
+I0519 08:04:45.726575      18 zero.go:612] Connected: id:6 group_id:2 addr:"alpha2:7080" 
+I0519 08:04:47.655194      18 main.go:83] Num goroutines: 130
+[Sentry] 2021/05/19 08:04:38 Integration installed: ContextifyFrames
+[Sentry] 2021/05/19 08:04:38 Integration installed: Environment
+[Sentry] 2021/05/19 08:04:38 Integration installed: Modules
+[Sentry] 2021/05/19 08:04:38 Integration installed: IgnoreErrors
+[Sentry] 2021/05/19 08:04:40 Integration installed: ContextifyFrames
+[Sentry] 2021/05/19 08:04:40 Integration installed: Environment
+[Sentry] 2021/05/19 08:04:40 Integration installed: Modules
+[Sentry] 2021/05/19 08:04:40 Integration installed: IgnoreErrors
+I0519 08:04:40.443711      16 sentry_integration.go:48] This instance of Dgraph will send anonymous reports of panics back to Dgraph Labs via Sentry. No confidential information is sent. These reports help improve Dgraph. To opt-out, restart your instance with the --telemetry "sentry=false;" flag. For more info, see https://dgraph.io/docs/howto/#data-handling.
+I0519 08:04:40.938779      16 init.go:110] 
+
+Dgraph version   : v20.11.0-rc1-630-g05c0ee419
+Dgraph codename  : unnamed
+Dgraph SHA-256   : 2e162c940122699302e86ede2fd369c0757f1e9aa0972e21eef85d9365d8634c
+Commit SHA-1     : 05c0ee419
+Commit timestamp : 2021-05-19 13:28:23 +0530
+Branch           : naman/fix-live-auth
+Go version       : go1.16.3
+jemalloc enabled : true
+
+For Dgraph official documentation, visit https://dgraph.io/docs.
+For discussions about Dgraph     , visit https://discuss.dgraph.io.
+For fully-managed Dgraph Cloud   , visit https://dgraph.io/cloud.
+
+Licensed variously under the Apache Public License 2.0 and Dgraph Community License.
+Copyright 2015-2021 Dgraph Labs, Inc.
+
+
+I0519 08:04:40.939232      16 run.go:254] Setting Config to: {raft:0xc0000dc100 telemetry:0xc0000dc0d8 limit:0xc0000dc108 bindall:true portOffset:0 numReplicas:3 peer:zero1:5080 w:zw rebalanceInterval:480000000000 tlsClientConfig:<nil> audit:<nil> limiterConfig:0xc0000d4a30}
+I0519 08:04:40.939435      16 run.go:144] Setting up grpc listener at: 0.0.0.0:5080
+I0519 08:04:40.939858      16 run.go:144] Setting up http listener at: 0.0.0.0:6080
+I0519 08:04:40.941448      16 storage.go:125] Init Raft Storage with snap: 0, first: 1, last: 0
+I0519 08:04:40.941800      16 node.go:152] Setting raft.Config to: &{ID:2 peers:[] learners:[] ElectionTick:20 HeartbeatTick:1 Storage:0xc0000e0e80 Applied:0 MaxSizePerMsg:262144 MaxCommittedSizePerReady:67108864 MaxUncommittedEntriesSize:0 MaxInflightMsgs:256 CheckQuorum:false PreVote:true ReadOnlyOption:0 Logger:0x32b9cd0 DisableProposalForwarding:false}
+I0519 08:04:40.956510      16 node.go:326] Group 0 found 0 entries
+I0519 08:04:40.956675      16 pool.go:162] CONNECTING to zero1:5080
+I0519 08:04:42.344988      16 raft.go:659] [0x2] Starting node
+I0519 08:04:42.345025      16 log.go:34] 2 became follower at term 0
+I0519 08:04:42.345034      16 log.go:34] newRaft 2 [peers: [], term: 0, commit: 0, applied: 0, lastindex: 0, lastterm: 0]
+I0519 08:04:42.345042      16 log.go:34] 2 became follower at term 1
+I0519 08:04:42.345400      16 zero.go:116] Starting telemetry data collection for zero...
+I0519 08:04:42.345643      16 run.go:388] Running Dgraph Zero...
+I0519 08:04:43.443315      16 log.go:34] 2 [term: 1] received a MsgHeartbeat message with higher term from 1 [term: 2]
+I0519 08:04:43.443338      16 log.go:34] 2 became follower at term 2
+I0519 08:04:43.443347      16 log.go:34] raft.node: 2 elected leader 1 at term 2
+I0519 08:04:44.445317      16 node.go:189] Setting conf state to nodes:1 
+I0519 08:04:44.445595      16 raft.go:966] Done applying conf change at 0x2
+I0519 08:04:44.445702      16 node.go:189] Setting conf state to nodes:1 nodes:2 
+I0519 08:04:44.445783      16 raft.go:966] Done applying conf change at 0x2
+I0519 08:04:44.447387      16 node.go:189] Setting conf state to nodes:1 nodes:2 nodes:3 
+I0519 08:04:44.447510      16 raft.go:966] Done applying conf change at 0x2
+I0519 08:04:44.448169      16 pool.go:162] CONNECTING to zero3:5080
+I0519 08:04:44.734659      16 pool.go:162] CONNECTING to alpha5:7080
+I0519 08:04:45.617979      16 pool.go:162] CONNECTING to alpha6:7080
+I0519 08:04:45.706505      16 pool.go:162] CONNECTING to alpha3:7080
+I0519 08:04:45.713948      16 pool.go:162] CONNECTING to alpha1:7080
+I0519 08:04:45.725178      16 pool.go:162] CONNECTING to alpha4:7080
+I0519 08:04:45.726699      16 pool.go:162] CONNECTING to alpha2:7080
+W0519 08:04:45.732261      16 pool.go:267] Connection lost with alpha2:7080. Error: rpc error: code = Unknown desc = No node has been set up yet
+I0519 08:04:50.003271      16 main.go:83] Num goroutines: 119
+[Sentry] 2021/05/19 08:04:40 Integration installed: ContextifyFrames
+[Sentry] 2021/05/19 08:04:40 Integration installed: Environment
+[Sentry] 2021/05/19 08:04:40 Integration installed: Modules
+[Sentry] 2021/05/19 08:04:40 Integration installed: IgnoreErrors
+[Sentry] 2021/05/19 08:04:41 Integration installed: ContextifyFrames
+[Sentry] 2021/05/19 08:04:41 Integration installed: Environment
+[Sentry] 2021/05/19 08:04:41 Integration installed: Modules
+[Sentry] 2021/05/19 08:04:41 Integration installed: IgnoreErrors
+I0519 08:04:42.215480      19 sentry_integration.go:48] This instance of Dgraph will send anonymous reports of panics back to Dgraph Labs via Sentry. No confidential information is sent. These reports help improve Dgraph. To opt-out, restart your instance with the --telemetry "sentry=false;" flag. For more info, see https://dgraph.io/docs/howto/#data-handling.
+I0519 08:04:42.627918      19 init.go:110] 
+
+Dgraph version   : v20.11.0-rc1-630-g05c0ee419
+Dgraph codename  : unnamed
+Dgraph SHA-256   : 2e162c940122699302e86ede2fd369c0757f1e9aa0972e21eef85d9365d8634c
+Commit SHA-1     : 05c0ee419
+Commit timestamp : 2021-05-19 13:28:23 +0530
+Branch           : naman/fix-live-auth
+Go version       : go1.16.3
+jemalloc enabled : true
+
+For Dgraph official documentation, visit https://dgraph.io/docs.
+For discussions about Dgraph     , visit https://discuss.dgraph.io.
+For fully-managed Dgraph Cloud   , visit https://dgraph.io/cloud.
+
+Licensed variously under the Apache Public License 2.0 and Dgraph Community License.
+Copyright 2015-2021 Dgraph Labs, Inc.
+
+
+I0519 08:04:42.627986      19 run.go:254] Setting Config to: {raft:0xc0001144e8 telemetry:0xc0001144c0 limit:0xc0001144f0 bindall:true portOffset:0 numReplicas:3 peer:zero1:5080 w:zw rebalanceInterval:480000000000 tlsClientConfig:<nil> audit:<nil> limiterConfig:0xc00013a6f0}
+I0519 08:04:42.628052      19 run.go:144] Setting up grpc listener at: 0.0.0.0:5080
+I0519 08:04:42.628292      19 run.go:144] Setting up http listener at: 0.0.0.0:6080
+I0519 08:04:42.629331      19 storage.go:125] Init Raft Storage with snap: 0, first: 1, last: 0
+I0519 08:04:42.629400      19 node.go:152] Setting raft.Config to: &{ID:3 peers:[] learners:[] ElectionTick:20 HeartbeatTick:1 Storage:0xc00013dcc0 Applied:0 MaxSizePerMsg:262144 MaxCommittedSizePerReady:67108864 MaxUncommittedEntriesSize:0 MaxInflightMsgs:256 CheckQuorum:false PreVote:true ReadOnlyOption:0 Logger:0x32b9cd0 DisableProposalForwarding:false}
+I0519 08:04:42.631905      19 node.go:326] Group 0 found 0 entries
+I0519 08:04:42.632119      19 pool.go:162] CONNECTING to zero1:5080
+I0519 08:04:44.446313      19 raft.go:659] [0x3] Starting node
+I0519 08:04:44.446419      19 log.go:34] 3 became follower at term 0
+I0519 08:04:44.446435      19 log.go:34] newRaft 3 [peers: [], term: 0, commit: 0, applied: 0, lastindex: 0, lastterm: 0]
+I0519 08:04:44.446462      19 log.go:34] 3 became follower at term 1
+I0519 08:04:44.446572      19 zero.go:116] Starting telemetry data collection for zero...
+I0519 08:04:44.449215      19 run.go:388] Running Dgraph Zero...
+I0519 08:04:45.448980      19 log.go:34] 3 [term: 1] received a MsgHeartbeat message with higher term from 1 [term: 2]
+I0519 08:04:45.448995      19 log.go:34] 3 became follower at term 2
+I0519 08:04:45.448999      19 log.go:34] raft.node: 3 elected leader 1 at term 2
+I0519 08:04:46.450983      19 node.go:189] Setting conf state to nodes:1 
+I0519 08:04:46.451204      19 raft.go:966] Done applying conf change at 0x3
+I0519 08:04:46.451329      19 node.go:189] Setting conf state to nodes:1 nodes:2 
+I0519 08:04:46.451378      19 pool.go:162] CONNECTING to zero2:5080
+I0519 08:04:46.451381      19 raft.go:966] Done applying conf change at 0x3
+I0519 08:04:46.451416      19 node.go:189] Setting conf state to nodes:1 nodes:2 nodes:3 
+I0519 08:04:46.451448      19 raft.go:966] Done applying conf change at 0x3
+I0519 08:04:46.451541      19 pool.go:162] CONNECTING to alpha6:7080
+I0519 08:04:46.451565      19 pool.go:162] CONNECTING to alpha2:7080
+I0519 08:04:46.451751      19 pool.go:162] CONNECTING to alpha4:7080
+I0519 08:04:46.451881      19 pool.go:162] CONNECTING to alpha1:7080
+I0519 08:04:46.452132      19 pool.go:162] CONNECTING to alpha5:7080
+I0519 08:04:46.453847      19 pool.go:162] CONNECTING to alpha3:7080
+I0519 08:04:51.847940      19 main.go:83] Num goroutines: 119
+2021/05/19 08:04:36 profile: block profiling enabled, /tmp/profile381555905/block.pprof
+[Sentry] 2021/05/19 08:04:36 Integration installed: ContextifyFrames
+[Sentry] 2021/05/19 08:04:36 Integration installed: Environment
+[Sentry] 2021/05/19 08:04:36 Integration installed: Modules
+[Sentry] 2021/05/19 08:04:36 Integration installed: IgnoreErrors
+2021/05/19 08:04:37 profile: block profiling enabled, /tmp/profile467004910/block.pprof
+[Sentry] 2021/05/19 08:04:37 Integration installed: ContextifyFrames
+[Sentry] 2021/05/19 08:04:37 Integration installed: Environment
+[Sentry] 2021/05/19 08:04:37 Integration installed: Modules
+[Sentry] 2021/05/19 08:04:37 Integration installed: IgnoreErrors
+I0519 08:04:38.172347      18 sentry_integration.go:48] This instance of Dgraph will send anonymous reports of panics back to Dgraph Labs via Sentry. No confidential information is sent. These reports help improve Dgraph. To opt-out, restart your instance with the --telemetry "sentry=false;" flag. For more info, see https://dgraph.io/docs/howto/#data-handling.
+I0519 08:04:38.173676      18 run.go:658] ACL secret key loaded successfully.
+I0519 08:04:38.174014      18 server.go:114] Starting telemetry data collection for alpha...
+I0519 08:04:38.673074      18 init.go:110] 
+
+Dgraph version   : v20.11.0-rc1-630-g05c0ee419
+Dgraph codename  : unnamed
+Dgraph SHA-256   : 2e162c940122699302e86ede2fd369c0757f1e9aa0972e21eef85d9365d8634c
+Commit SHA-1     : 05c0ee419
+Commit timestamp : 2021-05-19 13:28:23 +0530
+Branch           : naman/fix-live-auth
+Go version       : go1.16.3
+jemalloc enabled : true
+
+For Dgraph official documentation, visit https://dgraph.io/docs.
+For discussions about Dgraph     , visit https://discuss.dgraph.io.
+For fully-managed Dgraph Cloud   , visit https://dgraph.io/cloud.
+
+Licensed variously under the Apache Public License 2.0 and Dgraph Community License.
+Copyright 2015-2021 Dgraph Labs, Inc.
+
+
+I0519 08:04:38.673325      18 run.go:744] x.Config: {PortOffset:0 Limit:normalize-node=10000; txn-abort-after=5m; max-pending-queries=10000; max-retries=-1; shared-instance=false; mutations=allow; query-edge=1000000; mutations-nquad=1000000; disallow-drop=false; query-timeout=0ms LimitMutationsNquad:1000000 LimitQueryEdge:1000000 BlockClusterWideDrop:false LimitNormalizeNode:10000 QueryTimeout:0s MaxRetries:-1 SharedInstance:false GraphQL:introspection=true; debug=false; extensions=true; poll-interval=1s; lambda-url= GraphQLDebug:false}
+I0519 08:04:38.673563      18 run.go:745] x.WorkerConfig: {TmpDir:t ExportPath:export Trace:datadog=; ratio=0.01; jaeger= MyAddr:alpha1:7080 ZeroAddr:[zero1:5080 zero2:5080 zero3:5080] TLSClientConfig:<nil> TLSServerConfig:<nil> Raft:learner=false; snapshot-after-entries=10000; snapshot-after-duration=30m; pending-proposals=256; idx=; group= Badger:{Dir: ValueDir: SyncWrites:false NumVersionsToKeep:1 ReadOnly:false Logger:0xc0004161b0 Compression:1 InMemory:false MetricsEnabled:true NumGoroutines:8 MemTableSize:67108864 BaseTableSize:2097152 BaseLevelSize:10485760 LevelSizeMultiplier:10 TableSizeMultiplier:2 MaxLevels:7 VLogPercentile:0 ValueThreshold:1048576 NumMemtables:15 BlockSize:4096 BloomFalsePositive:0.01 BlockCacheSize:697932185 IndexCacheSize:375809638 NumLevelZeroTables:5 NumLevelZeroTablesStall:15 ValueLogFileSize:1073741823 ValueLogMaxEntries:1000000 NumCompactors:4 CompactL0OnClose:false LmaxCompaction:false ZSTDCompressionLevel:0 VerifyValueChecksum:false EncryptionKey:[] EncryptionKeyRotationDuration:240h0m0s BypassLockGuard:false ChecksumVerificationMode:0 AllowStopTheWorld:true DetectConflicts:true NamespaceOffset:-1 managedTxns:false maxBatchCount:0 maxBatchSize:0 maxValueThreshold:0} WhiteListedIPRanges:[{Lower:10.0.0.0 Upper:10.255.255.255} {Lower:172.16.0.0 Upper:172.31.255.255} {Lower:192.168.0.0 Upper:192.168.255.255}] StrictMutations:false AclEnabled:true HmacSecret:**** AbortOlderThan:5m0s ProposedGroupId:0 StartTime:2021-05-19 08:04:36.821163994 +0000 UTC m=+0.343695029 Security:whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16; token= EncryptionKey:**** LogRequest:0 HardSync:false Audit:false}
+I0519 08:04:38.673837      18 run.go:746] worker.Config: {PostingDir:p WALDir:w MutationsMode:0 AuthToken: HmacSecret:**** AccessJwtTtl:20s RefreshJwtTtl:720h0m0s CachePercentage:0,65,35 CacheMb:1024 Audit:<nil> ChangeDataConf:file=; kafka=; sasl_user=; sasl_password=; ca_cert=; client_cert=; client_key=; sasl-mechanism=PLAIN;}
+I0519 08:04:38.674504      18 groups.go:652] No healthy Zero leader found. Trying to find a Zero leader...
+I0519 08:04:38.776986      18 pool.go:162] CONNECTING to zero1:5080
+I0519 08:04:44.446064      18 groups.go:698] Found connection to leader: zero1:5080
+I0519 08:04:44.452628      18 groups.go:1118] Retry Zero Connection
+I0519 08:04:45.453038      18 groups.go:652] No healthy Zero leader found. Trying to find a Zero leader...
+I0519 08:04:45.554557      18 groups.go:698] Found connection to leader: zero1:5080
+I0519 08:04:45.556164      18 server_state.go:114] Encryption feature enabled.
+I0519 08:04:45.572729      18 storage.go:125] Init Raft Storage with snap: 0, first: 1, last: 0
+I0519 08:04:45.572906      18 server_state.go:139] Opening postings BadgerDB with options: {Dir:p ValueDir:p SyncWrites:false NumVersionsToKeep:2147483647 ReadOnly:false Logger:0x32b9cd0 Compression:1 InMemory:false MetricsEnabled:true NumGoroutines:8 MemTableSize:67108864 BaseTableSize:2097152 BaseLevelSize:10485760 LevelSizeMultiplier:10 TableSizeMultiplier:2 MaxLevels:7 VLogPercentile:0 ValueThreshold:1048576 NumMemtables:15 BlockSize:4096 BloomFalsePositive:0.01 BlockCacheSize:697932185 IndexCacheSize:375809638 NumLevelZeroTables:5 NumLevelZeroTablesStall:15 ValueLogFileSize:1073741823 ValueLogMaxEntries:1000000 NumCompactors:4 CompactL0OnClose:false LmaxCompaction:false ZSTDCompressionLevel:0 VerifyValueChecksum:false EncryptionKey:[] EncryptionKeyRotationDuration:240h0m0s BypassLockGuard:false ChecksumVerificationMode:0 AllowStopTheWorld:true DetectConflicts:false NamespaceOffset:1 managedTxns:false maxBatchCount:0 maxBatchSize:0 maxValueThreshold:0}
+I0519 08:04:45.601457      18 log.go:34] All 0 tables opened in 0s
+I0519 08:04:45.604924      18 log.go:34] Discard stats nextEmptySlot: 0
+I0519 08:04:45.604953      18 log.go:34] Set nextTxnTs to 0
+I0519 08:04:45.605612      18 groups.go:99] Current Raft Id: 0x0
+I0519 08:04:45.605629      18 groups.go:115] Sending member request to Zero: addr:"alpha1:7080" 
+I0519 08:04:45.605709      18 groups.go:652] No healthy Zero leader found. Trying to find a Zero leader...
+I0519 08:04:45.606025      18 worker.go:114] Worker listening at address: [::]:7080
+I0519 08:04:45.607570      18 run.go:561] Bringing up GraphQL HTTP API at 0.0.0.0:8080/graphql
+I0519 08:04:45.607589      18 run.go:562] Bringing up GraphQL HTTP admin API at 0.0.0.0:8080/admin
+I0519 08:04:45.607758      18 run.go:589] gRPC server started.  Listening on port 9080
+I0519 08:04:45.607807      18 run.go:590] HTTP server started.  Listening on port 8080
+E0519 08:04:45.607831      18 groups.go:1177] Error during SubscribeForUpdates for prefix "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x15dgraph.graphql.schema\x00": Unable to find any servers for group: 1. closer err: <nil>
+I0519 08:04:45.708868      18 groups.go:698] Found connection to leader: zero1:5080
+I0519 08:04:45.714495      18 groups.go:134] Connected to group zero. Assigned group: 2
+I0519 08:04:45.714514      18 groups.go:136] Raft Id after connection to Zero: 0x4
+I0519 08:04:45.714584      18 pool.go:162] CONNECTING to alpha5:7080
+I0519 08:04:45.714621      18 pool.go:162] CONNECTING to alpha3:7080
+I0519 08:04:45.714660      18 pool.go:162] CONNECTING to alpha6:7080
+I0519 08:04:45.714697      18 pool.go:162] CONNECTING to zero3:5080
+I0519 08:04:45.714727      18 pool.go:162] CONNECTING to zero2:5080
+I0519 08:04:45.714734      18 draft.go:306] Node ID: 0x4 with GroupID: 2
+I0519 08:04:45.714741      18 draft.go:315] RaftContext: id:4 group:2 addr:"alpha1:7080" 
+I0519 08:04:45.714832      18 node.go:152] Setting raft.Config to: &{ID:4 peers:[] learners:[] ElectionTick:20 HeartbeatTick:1 Storage:0xc00015b280 Applied:0 MaxSizePerMsg:262144 MaxCommittedSizePerReady:67108864 MaxUncommittedEntriesSize:0 MaxInflightMsgs:256 CheckQuorum:false PreVote:true ReadOnlyOption:0 Logger:0x32b9cd0 DisableProposalForwarding:false}
+I0519 08:04:45.714918      18 node.go:326] Group 2 found 0 entries
+I0519 08:04:45.714930      18 draft.go:2140] New Node for group: 2
+I0519 08:04:45.714952      18 log.go:34] 4 became follower at term 0
+I0519 08:04:45.714960      18 log.go:34] newRaft 4 [peers: [], term: 0, commit: 0, applied: 0, lastindex: 0, lastterm: 0]
+I0519 08:04:45.714966      18 log.go:34] 4 became follower at term 1
+I0519 08:04:45.715008      18 draft.go:244] Operation started with id: opRollup
+I0519 08:04:45.717216      18 draft.go:1463] Found Raft checkpoint: 0
+I0519 08:04:45.717272      18 groups.go:816] Got address of a Zero leader: zero1:5080
+I0519 08:04:45.717388      18 groups.go:830] Starting a new membership stream receive from zero1:5080.
+I0519 08:04:45.718410      18 node.go:189] Setting conf state to nodes:4 
+I0519 08:04:45.718736      18 log.go:34] 4 is starting a new election at term 1
+I0519 08:04:45.718756      18 log.go:34] 4 became pre-candidate at term 1
+I0519 08:04:45.718762      18 log.go:34] 4 received MsgPreVoteResp from 4 at term 1
+I0519 08:04:45.718776      18 log.go:34] 4 became candidate at term 2
+I0519 08:04:45.718780      18 log.go:34] 4 received MsgVoteResp from 4 at term 2
+I0519 08:04:45.718790      18 log.go:34] 4 became leader at term 2
+I0519 08:04:45.718796      18 log.go:34] raft.node: 4 elected leader 4 at term 2
+I0519 08:04:45.722920      18 groups.go:847] Received first state update from Zero: counter:11 groups:<key:1 value:<members:<key:1 value:<id:1 group_id:1 addr:"alpha5:7080" leader:true last_update:1621411484 > > members:<key:2 value:<id:2 group_id:1 addr:"alpha6:7080" > > members:<key:3 value:<id:3 group_id:1 addr:"alpha3:7080" > > > > groups:<key:2 value:<members:<key:4 value:<id:4 group_id:2 addr:"alpha1:7080" > > > > zeros:<key:1 value:<id:1 addr:"zero1:5080" leader:true > > zeros:<key:2 value:<id:2 addr:"zero2:5080" > > zeros:<key:3 value:<id:3 addr:"zero3:5080" > > maxRaftId:4 cid:"2374c3f6-f0a2-4482-8073-43a6ae90ac6f" license:<maxNodes:18446744073709551615 expiryTs:1624003484 enabled:true > 
+I0519 08:04:45.736892      18 pool.go:162] CONNECTING to alpha4:7080
+I0519 08:04:45.736908      18 node.go:585] Trying to add 0x5 to cluster. Addr: alpha4:7080
+I0519 08:04:45.736913      18 node.go:586] Current confstate at 0x4: nodes:4 
+I0519 08:04:45.737312      18 node.go:189] Setting conf state to nodes:4 nodes:5 
+I0519 08:04:45.737446      18 node.go:755] [0x5] Done joining cluster with err: <nil>
+I0519 08:04:45.737812      18 pool.go:162] CONNECTING to alpha2:7080
+I0519 08:04:45.738685      18 node.go:585] Trying to add 0x6 to cluster. Addr: alpha2:7080
+I0519 08:04:45.739085      18 node.go:586] Current confstate at 0x4: nodes:4 nodes:5 
+I0519 08:04:46.715491      18 groups.go:197] Done informing Zero about the 0 tablets I have
+I0519 08:04:46.715515      18 groups.go:902] Leader idx=0x4 of group=2 is connecting to Zero for txn updates
+I0519 08:04:46.715524      18 groups.go:914] Got Zero leader: zero1:5080
+I0519 08:04:46.715759      18 groups.go:166] Server is ready
+I0519 08:04:47.407428      18 main.go:83] Num goroutines: 160
+I0519 08:04:47.645331      18 access_ee.go:437] Unable to upsert the guardian group. Error: while upserting group with id guardians: rpc error: code = Aborted desc = Transaction has been aborted. Please retry
+I0519 08:04:47.742281      18 node.go:189] Setting conf state to nodes:4 nodes:5 nodes:6 
+I0519 08:04:47.742313      18 node.go:755] [0x6] Done joining cluster with err: <nil>
+I0519 08:04:47.752477      18 access_ee.go:522] Successfully upserted the guardian of namespace: 0
+I0519 08:04:47.826775      18 access_ee.go:598] Successfully upserted groot account for namespace 0
+I0519 08:04:47.826791      18 access_ee.go:412] ResetAcl closed
+I0519 08:04:50.611923      18 admin.go:874] namespace: 0. No GraphQL schema in Dgraph; serving empty GraphQL API
+I0519 08:04:50.611999      18 http.go:240] namespace: 0. Got GraphQL request over HTTP.
+I0519 08:04:50.612166      18 middlewares.go:210] GraphQL admin mutation. Name =  login
+I0519 08:04:50.612177      18 login.go:38] Got login request
+I0519 08:04:50.612249      18 server.go:1749] Got Login request from: "172.31.0.1:48462"
+I0519 08:04:50.681712      18 access_ee.go:85] groot logged in successfully in namespace 0x0
+I0519 08:04:54.972170      18 http.go:240] namespace: 0. Got GraphQL request over HTTP.
+I0519 08:04:54.972322      18 middlewares.go:210] GraphQL admin mutation. Name =  login
+I0519 08:04:54.972334      18 login.go:38] Got login request
+I0519 08:04:54.972387      18 server.go:1749] Got Login request from: "172.31.0.1:48516"
+I0519 08:04:55.041803      18 access_ee.go:85] groot logged in successfully in namespace 0x0
+I0519 08:04:55.043052      18 http.go:240] namespace: 0. Got GraphQL request over HTTP.
+I0519 08:04:55.043189      18 middlewares.go:210] GraphQL admin mutation. Name =  deleteUser
+I0519 08:04:55.047661      18 http.go:240] namespace: 0. Got GraphQL request over HTTP.
+I0519 08:04:55.047834      18 middlewares.go:210] GraphQL admin mutation. Name =  addUser
+I0519 08:04:55.125523      18 http.go:240] namespace: 0. Got GraphQL request over HTTP.
+I0519 08:04:55.125828      18 middlewares.go:210] GraphQL admin mutation. Name =  login
+I0519 08:04:55.125841      18 login.go:38] Got login request
+I0519 08:04:55.125924      18 server.go:1749] Got Login request from: "172.31.0.1:48528"
+I0519 08:04:55.195130      18 access_ee.go:85] alice logged in successfully in namespace 0x0
+I0519 08:04:55.196258      18 http.go:240] namespace: 0. Got GraphQL request over HTTP.
+2021/05/19 08:04:37 profile: block profiling enabled, /tmp/profile132444780/block.pprof
+[Sentry] 2021/05/19 08:04:37 Integration installed: ContextifyFrames
+[Sentry] 2021/05/19 08:04:37 Integration installed: Environment
+[Sentry] 2021/05/19 08:04:37 Integration installed: Modules
+[Sentry] 2021/05/19 08:04:37 Integration installed: IgnoreErrors
+2021/05/19 08:04:39 profile: block profiling enabled, /tmp/profile242578779/block.pprof
+[Sentry] 2021/05/19 08:04:39 Integration installed: ContextifyFrames
+[Sentry] 2021/05/19 08:04:39 Integration installed: Environment
+[Sentry] 2021/05/19 08:04:39 Integration installed: Modules
+[Sentry] 2021/05/19 08:04:39 Integration installed: IgnoreErrors
+I0519 08:04:40.281056      17 sentry_integration.go:48] This instance of Dgraph will send anonymous reports of panics back to Dgraph Labs via Sentry. No confidential information is sent. These reports help improve Dgraph. To opt-out, restart your instance with the --telemetry "sentry=false;" flag. For more info, see https://dgraph.io/docs/howto/#data-handling.
+I0519 08:04:40.281623      17 run.go:658] ACL secret key loaded successfully.
+I0519 08:04:40.284927      17 server.go:114] Starting telemetry data collection for alpha...
+I0519 08:04:40.705185      17 init.go:110] 
+
+Dgraph version   : v20.11.0-rc1-630-g05c0ee419
+Dgraph codename  : unnamed
+Dgraph SHA-256   : 2e162c940122699302e86ede2fd369c0757f1e9aa0972e21eef85d9365d8634c
+Commit SHA-1     : 05c0ee419
+Commit timestamp : 2021-05-19 13:28:23 +0530
+Branch           : naman/fix-live-auth
+Go version       : go1.16.3
+jemalloc enabled : true
+
+For Dgraph official documentation, visit https://dgraph.io/docs.
+For discussions about Dgraph     , visit https://discuss.dgraph.io.
+For fully-managed Dgraph Cloud   , visit https://dgraph.io/cloud.
+
+Licensed variously under the Apache Public License 2.0 and Dgraph Community License.
+Copyright 2015-2021 Dgraph Labs, Inc.
+
+
+I0519 08:04:40.705437      17 run.go:744] x.Config: {PortOffset:0 Limit:disallow-drop=false; query-timeout=0ms; max-pending-queries=10000; max-retries=-1; mutations=allow; query-edge=1000000; normalize-node=10000; mutations-nquad=1000000; txn-abort-after=5m; shared-instance=false LimitMutationsNquad:1000000 LimitQueryEdge:1000000 BlockClusterWideDrop:false LimitNormalizeNode:10000 QueryTimeout:0s MaxRetries:-1 SharedInstance:false GraphQL:introspection=true; debug=false; extensions=true; poll-interval=1s; lambda-url= GraphQLDebug:false}
+I0519 08:04:40.705690      17 run.go:745] x.WorkerConfig: {TmpDir:t ExportPath:export Trace:ratio=0.01; jaeger=; datadog= MyAddr:alpha2:7080 ZeroAddr:[zero1:5080 zero2:5080 zero3:5080] TLSClientConfig:<nil> TLSServerConfig:<nil> Raft:group=; learner=false; snapshot-after-entries=10000; snapshot-after-duration=30m; pending-proposals=256; idx= Badger:{Dir: ValueDir: SyncWrites:false NumVersionsToKeep:1 ReadOnly:false Logger:0xc0001dc0d0 Compression:1 InMemory:false MetricsEnabled:true NumGoroutines:8 MemTableSize:67108864 BaseTableSize:2097152 BaseLevelSize:10485760 LevelSizeMultiplier:10 TableSizeMultiplier:2 MaxLevels:7 VLogPercentile:0 ValueThreshold:1048576 NumMemtables:15 BlockSize:4096 BloomFalsePositive:0.01 BlockCacheSize:697932185 IndexCacheSize:375809638 NumLevelZeroTables:5 NumLevelZeroTablesStall:15 ValueLogFileSize:1073741823 ValueLogMaxEntries:1000000 NumCompactors:4 CompactL0OnClose:false LmaxCompaction:false ZSTDCompressionLevel:0 VerifyValueChecksum:false EncryptionKey:[] EncryptionKeyRotationDuration:240h0m0s BypassLockGuard:false ChecksumVerificationMode:0 AllowStopTheWorld:true DetectConflicts:true NamespaceOffset:-1 managedTxns:false maxBatchCount:0 maxBatchSize:0 maxValueThreshold:0} WhiteListedIPRanges:[{Lower:10.0.0.0 Upper:10.255.255.255} {Lower:172.16.0.0 Upper:172.31.255.255} {Lower:192.168.0.0 Upper:192.168.255.255}] StrictMutations:false AclEnabled:true HmacSecret:**** AbortOlderThan:5m0s ProposedGroupId:0 StartTime:2021-05-19 08:04:39.178040291 +0000 UTC m=+0.661061169 Security:whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16; token= EncryptionKey:**** LogRequest:0 HardSync:false Audit:false}
+I0519 08:04:40.705986      17 run.go:746] worker.Config: {PostingDir:p WALDir:w MutationsMode:0 AuthToken: HmacSecret:**** AccessJwtTtl:20s RefreshJwtTtl:720h0m0s CachePercentage:0,65,35 CacheMb:1024 Audit:<nil> ChangeDataConf:file=; kafka=; sasl_user=; sasl_password=; ca_cert=; client_cert=; client_key=; sasl-mechanism=PLAIN;}
+I0519 08:04:40.706780      17 groups.go:652] No healthy Zero leader found. Trying to find a Zero leader...
+I0519 08:04:40.807303      17 pool.go:162] CONNECTING to zero1:5080
+I0519 08:04:44.448265      17 groups.go:698] Found connection to leader: zero1:5080
+I0519 08:04:44.453368      17 groups.go:1118] Retry Zero Connection
+I0519 08:04:45.454401      17 groups.go:652] No healthy Zero leader found. Trying to find a Zero leader...
+I0519 08:04:45.556761      17 groups.go:698] Found connection to leader: zero1:5080
+I0519 08:04:45.558317      17 server_state.go:114] Encryption feature enabled.
+I0519 08:04:45.575373      17 storage.go:125] Init Raft Storage with snap: 0, first: 1, last: 0
+I0519 08:04:45.575458      17 server_state.go:139] Opening postings BadgerDB with options: {Dir:p ValueDir:p SyncWrites:false NumVersionsToKeep:2147483647 ReadOnly:false Logger:0x32b9cd0 Compression:1 InMemory:false MetricsEnabled:true NumGoroutines:8 MemTableSize:67108864 BaseTableSize:2097152 BaseLevelSize:10485760 LevelSizeMultiplier:10 TableSizeMultiplier:2 MaxLevels:7 VLogPercentile:0 ValueThreshold:1048576 NumMemtables:15 BlockSize:4096 BloomFalsePositive:0.01 BlockCacheSize:697932185 IndexCacheSize:375809638 NumLevelZeroTables:5 NumLevelZeroTablesStall:15 ValueLogFileSize:1073741823 ValueLogMaxEntries:1000000 NumCompactors:4 CompactL0OnClose:false LmaxCompaction:false ZSTDCompressionLevel:0 VerifyValueChecksum:false EncryptionKey:[] EncryptionKeyRotationDuration:240h0m0s BypassLockGuard:false ChecksumVerificationMode:0 AllowStopTheWorld:true DetectConflicts:false NamespaceOffset:1 managedTxns:false maxBatchCount:0 maxBatchSize:0 maxValueThreshold:0}
+I0519 08:04:45.604832      17 log.go:34] All 0 tables opened in 0s
+I0519 08:04:45.610215      17 log.go:34] Discard stats nextEmptySlot: 0
+I0519 08:04:45.610249      17 log.go:34] Set nextTxnTs to 0
+I0519 08:04:45.611404      17 groups.go:99] Current Raft Id: 0x0
+I0519 08:04:45.611583      17 worker.go:114] Worker listening at address: [::]:7080
+I0519 08:04:45.611571      17 groups.go:115] Sending member request to Zero: addr:"alpha2:7080" 
+I0519 08:04:45.611872      17 groups.go:652] No healthy Zero leader found. Trying to find a Zero leader...
+I0519 08:04:45.612619      17 run.go:561] Bringing up GraphQL HTTP API at 0.0.0.0:8080/graphql
+I0519 08:04:45.612632      17 run.go:562] Bringing up GraphQL HTTP admin API at 0.0.0.0:8080/admin
+I0519 08:04:45.612641      17 run.go:589] gRPC server started.  Listening on port 9080
+I0519 08:04:45.612648      17 run.go:590] HTTP server started.  Listening on port 8080
+E0519 08:04:45.612667      17 groups.go:1177] Error during SubscribeForUpdates for prefix "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x15dgraph.graphql.schema\x00": Unable to find any servers for group: 1. closer err: <nil>
+I0519 08:04:45.724006      17 groups.go:698] Found connection to leader: zero1:5080
+I0519 08:04:45.729134      17 groups.go:134] Connected to group zero. Assigned group: 2
+I0519 08:04:45.729167      17 groups.go:136] Raft Id after connection to Zero: 0x6
+I0519 08:04:45.729307      17 pool.go:162] CONNECTING to alpha6:7080
+I0519 08:04:45.729381      17 pool.go:162] CONNECTING to alpha5:7080
+I0519 08:04:45.729454      17 pool.go:162] CONNECTING to alpha3:7080
+I0519 08:04:45.729500      17 pool.go:162] CONNECTING to alpha4:7080
+I0519 08:04:45.729655      17 pool.go:162] CONNECTING to alpha1:7080
+I0519 08:04:45.729744      17 pool.go:162] CONNECTING to zero3:5080
+I0519 08:04:45.729782      17 pool.go:162] CONNECTING to zero2:5080
+I0519 08:04:45.729791      17 draft.go:306] Node ID: 0x6 with GroupID: 2
+I0519 08:04:45.729798      17 draft.go:315] RaftContext: id:6 group:2 addr:"alpha2:7080" 
+I0519 08:04:45.729922      17 node.go:152] Setting raft.Config to: &{ID:6 peers:[] learners:[] ElectionTick:20 HeartbeatTick:1 Storage:0xc00015bdc0 Applied:0 MaxSizePerMsg:262144 MaxCommittedSizePerReady:67108864 MaxUncommittedEntriesSize:0 MaxInflightMsgs:256 CheckQuorum:false PreVote:true ReadOnlyOption:0 Logger:0x32b9cd0 DisableProposalForwarding:false}
+I0519 08:04:45.730034      17 node.go:326] Group 2 found 0 entries
+I0519 08:04:45.730063      17 draft.go:2065] Calling IsPeer
+I0519 08:04:45.736422      17 draft.go:2070] Done with IsPeer call
+I0519 08:04:45.736441      17 draft.go:2140] New Node for group: 2
+I0519 08:04:45.736449      17 draft.go:2147] Trying to join peers.
+I0519 08:04:45.736455      17 draft.go:2048] Calling JoinCluster via leader: alpha1:7080
+I0519 08:04:47.742468      17 draft.go:2052] Done with JoinCluster call
+I0519 08:04:47.742584      17 log.go:34] 6 became follower at term 0
+I0519 08:04:47.742634      17 log.go:34] newRaft 6 [peers: [], term: 0, commit: 0, applied: 0, lastindex: 0, lastterm: 0]
+I0519 08:04:47.742680      17 log.go:34] 6 became follower at term 1
+I0519 08:04:47.742739      17 draft.go:244] Operation started with id: opRollup
+I0519 08:04:47.742933      17 draft.go:1463] Found Raft checkpoint: 0
+I0519 08:04:47.743220      17 groups.go:816] Got address of a Zero leader: zero1:5080
+I0519 08:04:47.743275      17 groups.go:830] Starting a new membership stream receive from zero1:5080.
+I0519 08:04:47.743891      17 groups.go:847] Received first state update from Zero: counter:31 groups:<key:1 value:<members:<key:1 value:<id:1 group_id:1 addr:"alpha5:7080" leader:true last_update:1621411484 > > members:<key:2 value:<id:2 group_id:1 addr:"alpha6:7080" > > members:<key:3 value:<id:3 group_id:1 addr:"alpha3:7080" > > tablets:<key:"\000\000\000\000\000\000\000\000dgraph.acl.rule" value:<group_id:1 predicate:"\000\000\000\000\000\000\000\000dgraph.acl.rule" > > tablets:<key:"\000\000\000\000\000\000\000\000dgraph.drop.op" value:<group_id:1 predicate:"\000\000\000\000\000\000\000\000dgraph.drop.op" > > tablets:<key:"\000\000\000\000\000\000\000\000dgraph.graphql.p_query" value:<group_id:1 predicate:"\000\000\000\000\000\000\000\000dgraph.graphql.p_query" > > tablets:<key:"\000\000\000\000\000\000\000\000dgraph.graphql.schema" value:<group_id:1 predicate:"\000\000\000\000\000\000\000\000dgraph.graphql.schema" > > tablets:<key:"\000\000\000\000\000\000\000\000dgraph.graphql.xid" value:<group_id:1 predicate:"\000\000\000\000\000\000\000\000dgraph.graphql.xid" > > tablets:<key:"\000\000\000\000\000\000\000\000dgraph.password" value:<group_id:1 predicate:"\000\000\000\000\000\000\000\000dgraph.password" > > tablets:<key:"\000\000\000\000\000\000\000\000dgraph.rule.permission" value:<group_id:1 predicate:"\000\000\000\000\000\000\000\000dgraph.rule.permission" > > tablets:<key:"\000\000\000\000\000\000\000\000dgraph.rule.predicate" value:<group_id:1 predicate:"\000\000\000\000\000\000\000\000dgraph.rule.predicate" > > tablets:<key:"\000\000\000\000\000\000\000\000dgraph.type" value:<group_id:1 predicate:"\000\000\000\000\000\000\000\000dgraph.type" > > tablets:<key:"\000\000\000\000\000\000\000\000dgraph.user.group" value:<group_id:1 predicate:"\000\000\000\000\000\000\000\000dgraph.user.group" > > tablets:<key:"\000\000\000\000\000\000\000\000dgraph.xid" value:<group_id:1 predicate:"\000\000\000\000\000\000\000\000dgraph.xid" > > checksum:13681338879762120592 > > groups:<key:2 value:<members:<key:4 value:<id:4 group_id:2 addr:"alpha1:7080" leader:true last_update:1621411485 > > members:<key:5 value:<id:5 group_id:2 addr:"alpha4:7080" > > members:<key:6 value:<id:6 group_id:2 addr:"alpha2:7080" > > checksum:11160318154034397263 > > zeros:<key:1 value:<id:1 addr:"zero1:5080" leader:true > > zeros:<key:2 value:<id:2 addr:"zero2:5080" > > zeros:<key:3 value:<id:3 addr:"zero3:5080" > > maxUID:10000 maxTxnTs:10000 maxRaftId:6 cid:"2374c3f6-f0a2-4482-8073-43a6ae90ac6f" license:<maxNodes:18446744073709551615 expiryTs:1624003484 enabled:true > 
+I0519 08:04:48.743515      17 groups.go:197] Done informing Zero about the 0 tablets I have
+I0519 08:04:48.743869      17 groups.go:166] Server is ready
+I0519 08:04:48.743968      17 log.go:34] 6 [term: 1] received a MsgApp message with higher term from 4 [term: 2]
+I0519 08:04:48.743980      17 log.go:34] 6 became follower at term 2
+I0519 08:04:48.743988      17 log.go:34] raft.node: 6 elected leader 4 at term 2
+I0519 08:04:48.748042      17 access_ee.go:522] Successfully upserted the guardian of namespace: 0
+I0519 08:04:48.752959      17 access_ee.go:598] Successfully upserted groot account for namespace 0
+I0519 08:04:48.752978      17 access_ee.go:412] ResetAcl closed
+I0519 08:04:49.665212      17 main.go:83] Num goroutines: 162
+I0519 08:04:49.746950      17 node.go:189] Setting conf state to nodes:4 
+I0519 08:04:49.747155      17 node.go:189] Setting conf state to nodes:4 nodes:5 
+I0519 08:04:49.747194      17 node.go:189] Setting conf state to nodes:4 nodes:5 nodes:6 
+I0519 08:04:50.617954      17 admin.go:874] namespace: 0. No GraphQL schema in Dgraph; serving empty GraphQL API
+I0519 08:04:50.690082      17 http.go:240] namespace: 0. Got GraphQL request over HTTP.
+I0519 08:04:50.690253      17 middlewares.go:210] GraphQL admin mutation. Name =  login
+I0519 08:04:50.690260      17 login.go:38] Got login request
+I0519 08:04:50.690323      17 server.go:1749] Got Login request from: "172.31.0.1:43776"
+I0519 08:04:50.758643      17 access_ee.go:85] groot logged in successfully in namespace 0x0
+2021/05/19 08:04:39 profile: block profiling enabled, /tmp/profile758604461/block.pprof
+[Sentry] 2021/05/19 08:04:39 Integration installed: ContextifyFrames
+[Sentry] 2021/05/19 08:04:39 Integration installed: Environment
+[Sentry] 2021/05/19 08:04:39 Integration installed: Modules
+[Sentry] 2021/05/19 08:04:39 Integration installed: IgnoreErrors
+2021/05/19 08:04:41 profile: block profiling enabled, /tmp/profile120289121/block.pprof
+[Sentry] 2021/05/19 08:04:41 Integration installed: ContextifyFrames
+[Sentry] 2021/05/19 08:04:41 Integration installed: Environment
+[Sentry] 2021/05/19 08:04:41 Integration installed: Modules
+[Sentry] 2021/05/19 08:04:41 Integration installed: IgnoreErrors
+I0519 08:04:41.665777      17 sentry_integration.go:48] This instance of Dgraph will send anonymous reports of panics back to Dgraph Labs via Sentry. No confidential information is sent. These reports help improve Dgraph. To opt-out, restart your instance with the --telemetry "sentry=false;" flag. For more info, see https://dgraph.io/docs/howto/#data-handling.
+I0519 08:04:41.666198      17 run.go:658] ACL secret key loaded successfully.
+I0519 08:04:41.666456      17 server.go:114] Starting telemetry data collection for alpha...
+I0519 08:04:41.960368      17 init.go:110] 
+
+Dgraph version   : v20.11.0-rc1-630-g05c0ee419
+Dgraph codename  : unnamed
+Dgraph SHA-256   : 2e162c940122699302e86ede2fd369c0757f1e9aa0972e21eef85d9365d8634c
+Commit SHA-1     : 05c0ee419
+Commit timestamp : 2021-05-19 13:28:23 +0530
+Branch           : naman/fix-live-auth
+Go version       : go1.16.3
+jemalloc enabled : true
+
+For Dgraph official documentation, visit https://dgraph.io/docs.
+For discussions about Dgraph     , visit https://discuss.dgraph.io.
+For fully-managed Dgraph Cloud   , visit https://dgraph.io/cloud.
+
+Licensed variously under the Apache Public License 2.0 and Dgraph Community License.
+Copyright 2015-2021 Dgraph Labs, Inc.
+
+
+I0519 08:04:41.960392      17 run.go:744] x.Config: {PortOffset:0 Limit:mutations=allow; mutations-nquad=1000000; disallow-drop=false; query-timeout=0ms; shared-instance=false; query-edge=1000000; normalize-node=10000; txn-abort-after=5m; max-pending-queries=10000; max-retries=-1 LimitMutationsNquad:1000000 LimitQueryEdge:1000000 BlockClusterWideDrop:false LimitNormalizeNode:10000 QueryTimeout:0s MaxRetries:-1 SharedInstance:false GraphQL:extensions=true; poll-interval=1s; lambda-url=; introspection=true; debug=false GraphQLDebug:false}
+I0519 08:04:41.960463      17 run.go:745] x.WorkerConfig: {TmpDir:t ExportPath:export Trace:ratio=0.01; jaeger=; datadog= MyAddr:alpha3:7080 ZeroAddr:[zero1:5080 zero2:5080 zero3:5080] TLSClientConfig:<nil> TLSServerConfig:<nil> Raft:group=; learner=false; snapshot-after-entries=10000; snapshot-after-duration=30m; pending-proposals=256; idx= Badger:{Dir: ValueDir: SyncWrites:false NumVersionsToKeep:1 ReadOnly:false Logger:0xc000078360 Compression:1 InMemory:false MetricsEnabled:true NumGoroutines:8 MemTableSize:67108864 BaseTableSize:2097152 BaseLevelSize:10485760 LevelSizeMultiplier:10 TableSizeMultiplier:2 MaxLevels:7 VLogPercentile:0 ValueThreshold:1048576 NumMemtables:15 BlockSize:4096 BloomFalsePositive:0.01 BlockCacheSize:697932185 IndexCacheSize:375809638 NumLevelZeroTables:5 NumLevelZeroTablesStall:15 ValueLogFileSize:1073741823 ValueLogMaxEntries:1000000 NumCompactors:4 CompactL0OnClose:false LmaxCompaction:false ZSTDCompressionLevel:0 VerifyValueChecksum:false EncryptionKey:[] EncryptionKeyRotationDuration:240h0m0s BypassLockGuard:false ChecksumVerificationMode:0 AllowStopTheWorld:true DetectConflicts:true NamespaceOffset:-1 managedTxns:false maxBatchCount:0 maxBatchSize:0 maxValueThreshold:0} WhiteListedIPRanges:[{Lower:10.0.0.0 Upper:10.255.255.255} {Lower:172.16.0.0 Upper:172.31.255.255} {Lower:192.168.0.0 Upper:192.168.255.255}] StrictMutations:false AclEnabled:true HmacSecret:**** AbortOlderThan:5m0s ProposedGroupId:0 StartTime:2021-05-19 08:04:40.464487176 +0000 UTC m=+0.387202331 Security:whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16; token= EncryptionKey:**** LogRequest:0 HardSync:false Audit:false}
+I0519 08:04:41.960648      17 run.go:746] worker.Config: {PostingDir:p WALDir:w MutationsMode:0 AuthToken: HmacSecret:**** AccessJwtTtl:20s RefreshJwtTtl:720h0m0s CachePercentage:0,65,35 CacheMb:1024 Audit:<nil> ChangeDataConf:file=; kafka=; sasl_user=; sasl_password=; ca_cert=; client_cert=; client_key=; sasl-mechanism=PLAIN;}
+I0519 08:04:41.961198      17 groups.go:652] No healthy Zero leader found. Trying to find a Zero leader...
+I0519 08:04:42.061471      17 pool.go:162] CONNECTING to zero1:5080
+I0519 08:04:44.450620      17 groups.go:698] Found connection to leader: zero1:5080
+I0519 08:04:44.452050      17 groups.go:1118] Retry Zero Connection
+I0519 08:04:45.452754      17 groups.go:652] No healthy Zero leader found. Trying to find a Zero leader...
+I0519 08:04:45.553973      17 groups.go:698] Found connection to leader: zero1:5080
+I0519 08:04:45.555217      17 server_state.go:114] Encryption feature enabled.
+I0519 08:04:45.569602      17 storage.go:125] Init Raft Storage with snap: 0, first: 1, last: 0
+I0519 08:04:45.569703      17 server_state.go:139] Opening postings BadgerDB with options: {Dir:p ValueDir:p SyncWrites:false NumVersionsToKeep:2147483647 ReadOnly:false Logger:0x32b9cd0 Compression:1 InMemory:false MetricsEnabled:true NumGoroutines:8 MemTableSize:67108864 BaseTableSize:2097152 BaseLevelSize:10485760 LevelSizeMultiplier:10 TableSizeMultiplier:2 MaxLevels:7 VLogPercentile:0 ValueThreshold:1048576 NumMemtables:15 BlockSize:4096 BloomFalsePositive:0.01 BlockCacheSize:697932185 IndexCacheSize:375809638 NumLevelZeroTables:5 NumLevelZeroTablesStall:15 ValueLogFileSize:1073741823 ValueLogMaxEntries:1000000 NumCompactors:4 CompactL0OnClose:false LmaxCompaction:false ZSTDCompressionLevel:0 VerifyValueChecksum:false EncryptionKey:[] EncryptionKeyRotationDuration:240h0m0s BypassLockGuard:false ChecksumVerificationMode:0 AllowStopTheWorld:true DetectConflicts:false NamespaceOffset:1 managedTxns:false maxBatchCount:0 maxBatchSize:0 maxValueThreshold:0}
+I0519 08:04:45.598806      17 log.go:34] All 0 tables opened in 0s
+I0519 08:04:45.602410      17 log.go:34] Discard stats nextEmptySlot: 0
+I0519 08:04:45.602445      17 log.go:34] Set nextTxnTs to 0
+I0519 08:04:45.603142      17 groups.go:99] Current Raft Id: 0x0
+I0519 08:04:45.603168      17 groups.go:115] Sending member request to Zero: addr:"alpha3:7080" 
+I0519 08:04:45.603335      17 worker.go:114] Worker listening at address: [::]:7080
+I0519 08:04:45.603351      17 groups.go:652] No healthy Zero leader found. Trying to find a Zero leader...
+I0519 08:04:45.604416      17 run.go:561] Bringing up GraphQL HTTP API at 0.0.0.0:8080/graphql
+I0519 08:04:45.604427      17 run.go:562] Bringing up GraphQL HTTP admin API at 0.0.0.0:8080/admin
+E0519 08:04:45.604420      17 groups.go:1177] Error during SubscribeForUpdates for prefix "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x15dgraph.graphql.schema\x00": Unable to find any servers for group: 1. closer err: <nil>
+I0519 08:04:45.604436      17 run.go:589] gRPC server started.  Listening on port 9080
+I0519 08:04:45.604476      17 run.go:590] HTTP server started.  Listening on port 8080
+I0519 08:04:45.704751      17 groups.go:698] Found connection to leader: zero1:5080
+I0519 08:04:45.706654      17 groups.go:134] Connected to group zero. Assigned group: 1
+I0519 08:04:45.706676      17 groups.go:136] Raft Id after connection to Zero: 0x3
+I0519 08:04:45.706741      17 pool.go:162] CONNECTING to alpha5:7080
+I0519 08:04:45.706771      17 pool.go:162] CONNECTING to alpha6:7080
+I0519 08:04:45.706790      17 pool.go:162] CONNECTING to zero3:5080
+I0519 08:04:45.706817      17 pool.go:162] CONNECTING to zero2:5080
+I0519 08:04:45.706824      17 draft.go:306] Node ID: 0x3 with GroupID: 1
+I0519 08:04:45.706829      17 draft.go:315] RaftContext: id:3 group:1 addr:"alpha3:7080" 
+I0519 08:04:45.706895      17 node.go:152] Setting raft.Config to: &{ID:3 peers:[] learners:[] ElectionTick:20 HeartbeatTick:1 Storage:0xc000049980 Applied:0 MaxSizePerMsg:262144 MaxCommittedSizePerReady:67108864 MaxUncommittedEntriesSize:0 MaxInflightMsgs:256 CheckQuorum:false PreVote:true ReadOnlyOption:0 Logger:0x32b9cd0 DisableProposalForwarding:false}
+I0519 08:04:45.706950      17 node.go:326] Group 1 found 0 entries
+I0519 08:04:45.706956      17 draft.go:2065] Calling IsPeer
+I0519 08:04:45.709992      17 draft.go:2070] Done with IsPeer call
+I0519 08:04:45.710005      17 draft.go:2140] New Node for group: 1
+I0519 08:04:45.710014      17 draft.go:2147] Trying to join peers.
+I0519 08:04:45.710024      17 draft.go:2048] Calling JoinCluster via leader: alpha5:7080
+I0519 08:04:47.638797      17 draft.go:2052] Done with JoinCluster call
+I0519 08:04:47.638859      17 log.go:34] 3 became follower at term 0
+I0519 08:04:47.638867      17 log.go:34] newRaft 3 [peers: [], term: 0, commit: 0, applied: 0, lastindex: 0, lastterm: 0]
+I0519 08:04:47.638870      17 log.go:34] 3 became follower at term 1
+I0519 08:04:47.638893      17 draft.go:244] Operation started with id: opRollup
+I0519 08:04:47.639039      17 draft.go:1463] Found Raft checkpoint: 0
+I0519 08:04:47.639221      17 groups.go:816] Got address of a Zero leader: zero1:5080
+I0519 08:04:47.639289      17 groups.go:830] Starting a new membership stream receive from zero1:5080.
+I0519 08:04:47.640229      17 groups.go:847] Received first state update from Zero: counter:26 groups:<key:1 value:<members:<key:1 value:<id:1 group_id:1 addr:"alpha5:7080" leader:true last_update:1621411484 > > members:<key:2 value:<id:2 group_id:1 addr:"alpha6:7080" > > members:<key:3 value:<id:3 group_id:1 addr:"alpha3:7080" > > tablets:<key:"\000\000\000\000\000\000\000\000dgraph.acl.rule" value:<group_id:1 predicate:"\000\000\000\000\000\000\000\000dgraph.acl.rule" > > tablets:<key:"\000\000\000\000\000\000\000\000dgraph.drop.op" value:<group_id:1 predicate:"\000\000\000\000\000\000\000\000dgraph.drop.op" > > tablets:<key:"\000\000\000\000\000\000\000\000dgraph.graphql.p_query" value:<group_id:1 predicate:"\000\000\000\000\000\000\000\000dgraph.graphql.p_query" > > tablets:<key:"\000\000\000\000\000\000\000\000dgraph.graphql.schema" value:<group_id:1 predicate:"\000\000\000\000\000\000\000\000dgraph.graphql.schema" > > tablets:<key:"\000\000\000\000\000\000\000\000dgraph.graphql.xid" value:<group_id:1 predicate:"\000\000\000\000\000\000\000\000dgraph.graphql.xid" > > tablets:<key:"\000\000\000\000\000\000\000\000dgraph.password" value:<group_id:1 predicate:"\000\000\000\000\000\000\000\000dgraph.password" > > tablets:<key:"\000\000\000\000\000\000\000\000dgraph.rule.permission" value:<group_id:1 predicate:"\000\000\000\000\000\000\000\000dgraph.rule.permission" > > tablets:<key:"\000\000\000\000\000\000\000\000dgraph.rule.predicate" value:<group_id:1 predicate:"\000\000\000\000\000\000\000\000dgraph.rule.predicate" > > tablets:<key:"\000\000\000\000\000\000\000\000dgraph.type" value:<group_id:1 predicate:"\000\000\000\000\000\000\000\000dgraph.type" > > tablets:<key:"\000\000\000\000\000\000\000\000dgraph.user.group" value:<group_id:1 predicate:"\000\000\000\000\000\000\000\000dgraph.user.group" > > tablets:<key:"\000\000\000\000\000\000\000\000dgraph.xid" value:<group_id:1 predicate:"\000\000\000\000\000\000\000\000dgraph.xid" > > checksum:13681338879762120592 > > groups:<key:2 value:<members:<key:4 value:<id:4 group_id:2 addr:"alpha1:7080" leader:true last_update:1621411485 > > members:<key:5 value:<id:5 group_id:2 addr:"alpha4:7080" > > members:<key:6 value:<id:6 group_id:2 addr:"alpha2:7080" > > checksum:11160318154034397263 > > zeros:<key:1 value:<id:1 addr:"zero1:5080" leader:true > > zeros:<key:2 value:<id:2 addr:"zero2:5080" > > zeros:<key:3 value:<id:3 addr:"zero3:5080" > > maxTxnTs:10000 maxRaftId:6 cid:"2374c3f6-f0a2-4482-8073-43a6ae90ac6f" license:<maxNodes:18446744073709551615 expiryTs:1624003484 enabled:true > 
+I0519 08:04:47.640645      17 pool.go:162] CONNECTING to alpha4:7080
+I0519 08:04:47.640727      17 pool.go:162] CONNECTING to alpha1:7080
+I0519 08:04:47.640748      17 pool.go:162] CONNECTING to alpha2:7080
+I0519 08:04:48.639010      17 groups.go:197] Done informing Zero about the 0 tablets I have
+I0519 08:04:48.639207      17 log.go:34] 3 [term: 1] received a MsgApp message with higher term from 1 [term: 2]
+I0519 08:04:48.639220      17 log.go:34] 3 became follower at term 2
+I0519 08:04:48.639228      17 log.go:34] raft.node: 3 elected leader 1 at term 2
+I0519 08:04:48.640153      17 groups.go:166] Server is ready
+I0519 08:04:49.640860      17 node.go:189] Setting conf state to nodes:1 
+I0519 08:04:49.641023      17 node.go:189] Setting conf state to nodes:1 nodes:2 
+I0519 08:04:49.641046      17 node.go:189] Setting conf state to nodes:1 nodes:2 nodes:3 
+I0519 08:04:49.641530      17 log.go:34] Handover found 2038 B data in current memtable. Pushing to flushChan.
+I0519 08:04:49.649565      17 access_ee.go:522] Successfully upserted the guardian of namespace: 0
+I0519 08:04:49.654152      17 access_ee.go:598] Successfully upserted groot account for namespace 0
+I0519 08:04:49.654338      17 access_ee.go:412] ResetAcl closed
+I0519 08:04:49.654420      17 pool.go:162] CONNECTING to alpha3:7080
+I0519 08:04:50.606732      17 admin.go:874] namespace: 0. No GraphQL schema in Dgraph; serving empty GraphQL API
+I0519 08:04:50.769559      17 http.go:240] namespace: 0. Got GraphQL request over HTTP.
+I0519 08:04:50.769735      17 middlewares.go:210] GraphQL admin mutation. Name =  login
+I0519 08:04:50.769743      17 login.go:38] Got login request
+I0519 08:04:50.769806      17 server.go:1749] Got Login request from: "172.31.0.1:39748"
+I0519 08:04:50.838514      17 access_ee.go:85] groot logged in successfully in namespace 0x0
+I0519 08:04:51.133282      17 main.go:83] Num goroutines: 178
+2021/05/19 08:04:41 profile: block profiling enabled, /tmp/profile507204121/block.pprof
+[Sentry] 2021/05/19 08:04:41 Integration installed: ContextifyFrames
+[Sentry] 2021/05/19 08:04:41 Integration installed: Environment
+[Sentry] 2021/05/19 08:04:41 Integration installed: Modules
+[Sentry] 2021/05/19 08:04:41 Integration installed: IgnoreErrors
+2021/05/19 08:04:42 profile: block profiling enabled, /tmp/profile828319670/block.pprof
+[Sentry] 2021/05/19 08:04:42 Integration installed: ContextifyFrames
+[Sentry] 2021/05/19 08:04:42 Integration installed: Environment
+[Sentry] 2021/05/19 08:04:42 Integration installed: Modules
+[Sentry] 2021/05/19 08:04:42 Integration installed: IgnoreErrors
+I0519 08:04:43.126042      18 sentry_integration.go:48] This instance of Dgraph will send anonymous reports of panics back to Dgraph Labs via Sentry. No confidential information is sent. These reports help improve Dgraph. To opt-out, restart your instance with the --telemetry "sentry=false;" flag. For more info, see https://dgraph.io/docs/howto/#data-handling.
+I0519 08:04:43.126383      18 run.go:658] ACL secret key loaded successfully.
+I0519 08:04:43.126604      18 server.go:114] Starting telemetry data collection for alpha...
+I0519 08:04:43.368218      18 init.go:110] 
+
+Dgraph version   : v20.11.0-rc1-630-g05c0ee419
+Dgraph codename  : unnamed
+Dgraph SHA-256   : 2e162c940122699302e86ede2fd369c0757f1e9aa0972e21eef85d9365d8634c
+Commit SHA-1     : 05c0ee419
+Commit timestamp : 2021-05-19 13:28:23 +0530
+Branch           : naman/fix-live-auth
+Go version       : go1.16.3
+jemalloc enabled : true
+
+For Dgraph official documentation, visit https://dgraph.io/docs.
+For discussions about Dgraph     , visit https://discuss.dgraph.io.
+For fully-managed Dgraph Cloud   , visit https://dgraph.io/cloud.
+
+Licensed variously under the Apache Public License 2.0 and Dgraph Community License.
+Copyright 2015-2021 Dgraph Labs, Inc.
+
+
+I0519 08:04:43.368237      18 run.go:744] x.Config: {PortOffset:0 Limit:query-edge=1000000; normalize-node=10000; mutations-nquad=1000000; query-timeout=0ms; txn-abort-after=5m; max-pending-queries=10000; max-retries=-1; mutations=allow; shared-instance=false; disallow-drop=false LimitMutationsNquad:1000000 LimitQueryEdge:1000000 BlockClusterWideDrop:false LimitNormalizeNode:10000 QueryTimeout:0s MaxRetries:-1 SharedInstance:false GraphQL:introspection=true; debug=false; extensions=true; poll-interval=1s; lambda-url= GraphQLDebug:false}
+I0519 08:04:43.368284      18 run.go:745] x.WorkerConfig: {TmpDir:t ExportPath:export Trace:ratio=0.01; jaeger=; datadog= MyAddr:alpha4:7080 ZeroAddr:[zero1:5080 zero2:5080 zero3:5080] TLSClientConfig:<nil> TLSServerConfig:<nil> Raft:snapshot-after-entries=10000; snapshot-after-duration=30m; pending-proposals=256; idx=; group=; learner=false Badger:{Dir: ValueDir: SyncWrites:false NumVersionsToKeep:1 ReadOnly:false Logger:0xc000078240 Compression:1 InMemory:false MetricsEnabled:true NumGoroutines:8 MemTableSize:67108864 BaseTableSize:2097152 BaseLevelSize:10485760 LevelSizeMultiplier:10 TableSizeMultiplier:2 MaxLevels:7 VLogPercentile:0 ValueThreshold:1048576 NumMemtables:15 BlockSize:4096 BloomFalsePositive:0.01 BlockCacheSize:697932185 IndexCacheSize:375809638 NumLevelZeroTables:5 NumLevelZeroTablesStall:15 ValueLogFileSize:1073741823 ValueLogMaxEntries:1000000 NumCompactors:4 CompactL0OnClose:false LmaxCompaction:false ZSTDCompressionLevel:0 VerifyValueChecksum:false EncryptionKey:[] EncryptionKeyRotationDuration:240h0m0s BypassLockGuard:false ChecksumVerificationMode:0 AllowStopTheWorld:true DetectConflicts:true NamespaceOffset:-1 managedTxns:false maxBatchCount:0 maxBatchSize:0 maxValueThreshold:0} WhiteListedIPRanges:[{Lower:10.0.0.0 Upper:10.255.255.255} {Lower:172.16.0.0 Upper:172.31.255.255} {Lower:192.168.0.0 Upper:192.168.255.255}] StrictMutations:false AclEnabled:true HmacSecret:**** AbortOlderThan:5m0s ProposedGroupId:0 StartTime:2021-05-19 08:04:42.54940756 +0000 UTC m=+0.520973032 Security:whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16; token= EncryptionKey:**** LogRequest:0 HardSync:false Audit:false}
+I0519 08:04:43.368365      18 run.go:746] worker.Config: {PostingDir:p WALDir:w MutationsMode:0 AuthToken: HmacSecret:**** AccessJwtTtl:20s RefreshJwtTtl:720h0m0s CachePercentage:0,65,35 CacheMb:1024 Audit:<nil> ChangeDataConf:file=; kafka=; sasl_user=; sasl_password=; ca_cert=; client_cert=; client_key=; sasl-mechanism=PLAIN;}
+I0519 08:04:43.368698      18 groups.go:652] No healthy Zero leader found. Trying to find a Zero leader...
+I0519 08:04:43.469047      18 pool.go:162] CONNECTING to zero1:5080
+I0519 08:04:44.451523      18 groups.go:698] Found connection to leader: zero1:5080
+I0519 08:04:44.454115      18 groups.go:1118] Retry Zero Connection
+I0519 08:04:45.454759      18 groups.go:652] No healthy Zero leader found. Trying to find a Zero leader...
+I0519 08:04:45.557308      18 groups.go:698] Found connection to leader: zero1:5080
+I0519 08:04:45.558748      18 server_state.go:114] Encryption feature enabled.
+I0519 08:04:45.575375      18 storage.go:125] Init Raft Storage with snap: 0, first: 1, last: 0
+I0519 08:04:45.575457      18 server_state.go:139] Opening postings BadgerDB with options: {Dir:p ValueDir:p SyncWrites:false NumVersionsToKeep:2147483647 ReadOnly:false Logger:0x32b9cd0 Compression:1 InMemory:false MetricsEnabled:true NumGoroutines:8 MemTableSize:67108864 BaseTableSize:2097152 BaseLevelSize:10485760 LevelSizeMultiplier:10 TableSizeMultiplier:2 MaxLevels:7 VLogPercentile:0 ValueThreshold:1048576 NumMemtables:15 BlockSize:4096 BloomFalsePositive:0.01 BlockCacheSize:697932185 IndexCacheSize:375809638 NumLevelZeroTables:5 NumLevelZeroTablesStall:15 ValueLogFileSize:1073741823 ValueLogMaxEntries:1000000 NumCompactors:4 CompactL0OnClose:false LmaxCompaction:false ZSTDCompressionLevel:0 VerifyValueChecksum:false EncryptionKey:[] EncryptionKeyRotationDuration:240h0m0s BypassLockGuard:false ChecksumVerificationMode:0 AllowStopTheWorld:true DetectConflicts:false NamespaceOffset:1 managedTxns:false maxBatchCount:0 maxBatchSize:0 maxValueThreshold:0}
+I0519 08:04:45.602145      18 log.go:34] All 0 tables opened in 0s
+I0519 08:04:45.607508      18 log.go:34] Discard stats nextEmptySlot: 0
+I0519 08:04:45.607541      18 log.go:34] Set nextTxnTs to 0
+I0519 08:04:45.608810      18 worker.go:114] Worker listening at address: [::]:7080
+I0519 08:04:45.608887      18 groups.go:99] Current Raft Id: 0x0
+I0519 08:04:45.608938      18 groups.go:115] Sending member request to Zero: addr:"alpha4:7080" 
+I0519 08:04:45.609020      18 groups.go:652] No healthy Zero leader found. Trying to find a Zero leader...
+I0519 08:04:45.609478      18 run.go:561] Bringing up GraphQL HTTP API at 0.0.0.0:8080/graphql
+I0519 08:04:45.609492      18 run.go:562] Bringing up GraphQL HTTP admin API at 0.0.0.0:8080/admin
+I0519 08:04:45.609505      18 run.go:589] gRPC server started.  Listening on port 9080
+I0519 08:04:45.609512      18 run.go:590] HTTP server started.  Listening on port 8080
+E0519 08:04:45.609529      18 groups.go:1177] Error during SubscribeForUpdates for prefix "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x15dgraph.graphql.schema\x00": Unable to find any servers for group: 1. closer err: <nil>
+I0519 08:04:45.722305      18 groups.go:698] Found connection to leader: zero1:5080
+I0519 08:04:45.725702      18 groups.go:134] Connected to group zero. Assigned group: 2
+I0519 08:04:45.725720      18 groups.go:136] Raft Id after connection to Zero: 0x5
+I0519 08:04:45.725786      18 pool.go:162] CONNECTING to alpha1:7080
+I0519 08:04:45.725822      18 pool.go:162] CONNECTING to alpha5:7080
+I0519 08:04:45.725851      18 pool.go:162] CONNECTING to alpha3:7080
+I0519 08:04:45.726076      18 pool.go:162] CONNECTING to alpha6:7080
+I0519 08:04:45.726191      18 pool.go:162] CONNECTING to zero2:5080
+I0519 08:04:45.726596      18 pool.go:162] CONNECTING to zero3:5080
+I0519 08:04:45.726610      18 draft.go:306] Node ID: 0x5 with GroupID: 2
+I0519 08:04:45.726617      18 draft.go:315] RaftContext: id:5 group:2 addr:"alpha4:7080" 
+I0519 08:04:45.727214      18 node.go:152] Setting raft.Config to: &{ID:5 peers:[] learners:[] ElectionTick:20 HeartbeatTick:1 Storage:0xc000049fc0 Applied:0 MaxSizePerMsg:262144 MaxCommittedSizePerReady:67108864 MaxUncommittedEntriesSize:0 MaxInflightMsgs:256 CheckQuorum:false PreVote:true ReadOnlyOption:0 Logger:0x32b9cd0 DisableProposalForwarding:false}
+I0519 08:04:45.727356      18 node.go:326] Group 2 found 0 entries
+I0519 08:04:45.727375      18 draft.go:2065] Calling IsPeer
+I0519 08:04:45.734504      18 draft.go:2070] Done with IsPeer call
+I0519 08:04:45.734533      18 draft.go:2140] New Node for group: 2
+I0519 08:04:45.734543      18 draft.go:2147] Trying to join peers.
+I0519 08:04:45.734550      18 draft.go:2048] Calling JoinCluster via leader: alpha1:7080
+I0519 08:04:45.738084      18 draft.go:2052] Done with JoinCluster call
+I0519 08:04:45.738303      18 log.go:34] 5 became follower at term 0
+I0519 08:04:45.738513      18 log.go:34] newRaft 5 [peers: [], term: 0, commit: 0, applied: 0, lastindex: 0, lastterm: 0]
+I0519 08:04:45.738632      18 log.go:34] 5 became follower at term 1
+I0519 08:04:45.738964      18 draft.go:244] Operation started with id: opRollup
+I0519 08:04:45.739269      18 draft.go:1463] Found Raft checkpoint: 0
+I0519 08:04:45.739294      18 groups.go:816] Got address of a Zero leader: zero1:5080
+I0519 08:04:45.739520      18 groups.go:830] Starting a new membership stream receive from zero1:5080.
+I0519 08:04:45.740591      18 groups.go:847] Received first state update from Zero: counter:15 groups:<key:1 value:<members:<key:1 value:<id:1 group_id:1 addr:"alpha5:7080" leader:true last_update:1621411484 > > members:<key:2 value:<id:2 group_id:1 addr:"alpha6:7080" > > members:<key:3 value:<id:3 group_id:1 addr:"alpha3:7080" > > tablets:<key:"\000\000\000\000\000\000\000\000dgraph.type" value:<group_id:1 predicate:"\000\000\000\000\000\000\000\000dgraph.type" > > checksum:722545940012700602 > > groups:<key:2 value:<members:<key:4 value:<id:4 group_id:2 addr:"alpha1:7080" leader:true last_update:1621411485 > > members:<key:5 value:<id:5 group_id:2 addr:"alpha4:7080" > > members:<key:6 value:<id:6 group_id:2 addr:"alpha2:7080" > > checksum:11160318154034397263 > > zeros:<key:1 value:<id:1 addr:"zero1:5080" leader:true > > zeros:<key:2 value:<id:2 addr:"zero2:5080" > > zeros:<key:3 value:<id:3 addr:"zero3:5080" > > maxRaftId:6 cid:"2374c3f6-f0a2-4482-8073-43a6ae90ac6f" license:<maxNodes:18446744073709551615 expiryTs:1624003484 enabled:true > 
+I0519 08:04:45.741077      18 pool.go:162] CONNECTING to alpha2:7080
+I0519 08:04:46.740114      18 groups.go:197] Done informing Zero about the 0 tablets I have
+I0519 08:04:46.740172      18 log.go:34] 5 [term: 1] received a MsgApp message with higher term from 4 [term: 2]
+I0519 08:04:46.740189      18 log.go:34] 5 became follower at term 2
+I0519 08:04:46.740199      18 log.go:34] raft.node: 5 elected leader 4 at term 2
+I0519 08:04:46.740514      18 groups.go:166] Server is ready
+I0519 08:04:47.646180      18 access_ee.go:437] Unable to upsert the guardian group. Error: while upserting group with id guardians: rpc error: code = Aborted desc = Transaction has been aborted. Please retry
+I0519 08:04:47.741825      18 node.go:189] Setting conf state to nodes:4 
+I0519 08:04:47.741964      18 node.go:189] Setting conf state to nodes:4 nodes:5 
+I0519 08:04:47.742430      18 node.go:189] Setting conf state to nodes:4 nodes:5 nodes:6 
+I0519 08:04:47.752321      18 access_ee.go:522] Successfully upserted the guardian of namespace: 0
+I0519 08:04:47.831817      18 access_ee.go:449] Unable to upsert the groot account. Error: while upserting user with id groot: rpc error: code = Aborted desc = Transaction has been aborted. Please retry
+I0519 08:04:47.935061      18 access_ee.go:598] Successfully upserted groot account for namespace 0
+I0519 08:04:47.935075      18 access_ee.go:412] ResetAcl closed
+I0519 08:04:50.611273      18 admin.go:874] namespace: 0. No GraphQL schema in Dgraph; serving empty GraphQL API
+I0519 08:04:50.847012      18 http.go:240] namespace: 0. Got GraphQL request over HTTP.
+I0519 08:04:50.847184      18 middlewares.go:210] GraphQL admin mutation. Name =  login
+I0519 08:04:50.847192      18 login.go:38] Got login request
+I0519 08:04:50.847243      18 server.go:1749] Got Login request from: "172.31.0.1:36382"
+I0519 08:04:50.914839      18 access_ee.go:85] groot logged in successfully in namespace 0x0
+I0519 08:04:52.833606      18 main.go:83] Num goroutines: 162
+2021/05/19 08:04:42 profile: block profiling enabled, /tmp/profile123898037/block.pprof
+[Sentry] 2021/05/19 08:04:42 Integration installed: ContextifyFrames
+[Sentry] 2021/05/19 08:04:42 Integration installed: Environment
+[Sentry] 2021/05/19 08:04:42 Integration installed: Modules
+[Sentry] 2021/05/19 08:04:42 Integration installed: IgnoreErrors
+2021/05/19 08:04:43 profile: block profiling enabled, /tmp/profile150082284/block.pprof
+[Sentry] 2021/05/19 08:04:43 Integration installed: ContextifyFrames
+[Sentry] 2021/05/19 08:04:43 Integration installed: Environment
+[Sentry] 2021/05/19 08:04:43 Integration installed: Modules
+[Sentry] 2021/05/19 08:04:43 Integration installed: IgnoreErrors
+I0519 08:04:44.189392      17 sentry_integration.go:48] This instance of Dgraph will send anonymous reports of panics back to Dgraph Labs via Sentry. No confidential information is sent. These reports help improve Dgraph. To opt-out, restart your instance with the --telemetry "sentry=false;" flag. For more info, see https://dgraph.io/docs/howto/#data-handling.
+I0519 08:04:44.189799      17 run.go:658] ACL secret key loaded successfully.
+I0519 08:04:44.190015      17 server.go:114] Starting telemetry data collection for alpha...
+I0519 08:04:44.485479      17 init.go:110] 
+
+Dgraph version   : v20.11.0-rc1-630-g05c0ee419
+Dgraph codename  : unnamed
+Dgraph SHA-256   : 2e162c940122699302e86ede2fd369c0757f1e9aa0972e21eef85d9365d8634c
+Commit SHA-1     : 05c0ee419
+Commit timestamp : 2021-05-19 13:28:23 +0530
+Branch           : naman/fix-live-auth
+Go version       : go1.16.3
+jemalloc enabled : true
+
+For Dgraph official documentation, visit https://dgraph.io/docs.
+For discussions about Dgraph     , visit https://discuss.dgraph.io.
+For fully-managed Dgraph Cloud   , visit https://dgraph.io/cloud.
+
+Licensed variously under the Apache Public License 2.0 and Dgraph Community License.
+Copyright 2015-2021 Dgraph Labs, Inc.
+
+
+I0519 08:04:44.485506      17 run.go:744] x.Config: {PortOffset:0 Limit:mutations-nquad=1000000; disallow-drop=false; query-timeout=0ms; txn-abort-after=5m; max-retries=-1; shared-instance=false; normalize-node=10000; query-edge=1000000; max-pending-queries=10000; mutations=allow LimitMutationsNquad:1000000 LimitQueryEdge:1000000 BlockClusterWideDrop:false LimitNormalizeNode:10000 QueryTimeout:0s MaxRetries:-1 SharedInstance:false GraphQL:poll-interval=1s; lambda-url=; introspection=true; debug=false; extensions=true GraphQLDebug:false}
+I0519 08:04:44.485569      17 run.go:745] x.WorkerConfig: {TmpDir:t ExportPath:export Trace:ratio=0.01; jaeger=; datadog= MyAddr:alpha5:7080 ZeroAddr:[zero1:5080 zero2:5080 zero3:5080] TLSClientConfig:<nil> TLSServerConfig:<nil> Raft:snapshot-after-entries=10000; snapshot-after-duration=30m; pending-proposals=256; idx=; group=; learner=false Badger:{Dir: ValueDir: SyncWrites:false NumVersionsToKeep:1 ReadOnly:false Logger:0xc0000acd10 Compression:1 InMemory:false MetricsEnabled:true NumGoroutines:8 MemTableSize:67108864 BaseTableSize:2097152 BaseLevelSize:10485760 LevelSizeMultiplier:10 TableSizeMultiplier:2 MaxLevels:7 VLogPercentile:0 ValueThreshold:1048576 NumMemtables:15 BlockSize:4096 BloomFalsePositive:0.01 BlockCacheSize:697932185 IndexCacheSize:375809638 NumLevelZeroTables:5 NumLevelZeroTablesStall:15 ValueLogFileSize:1073741823 ValueLogMaxEntries:1000000 NumCompactors:4 CompactL0OnClose:false LmaxCompaction:false ZSTDCompressionLevel:0 VerifyValueChecksum:false EncryptionKey:[] EncryptionKeyRotationDuration:240h0m0s BypassLockGuard:false ChecksumVerificationMode:0 AllowStopTheWorld:true DetectConflicts:true NamespaceOffset:-1 managedTxns:false maxBatchCount:0 maxBatchSize:0 maxValueThreshold:0} WhiteListedIPRanges:[{Lower:10.0.0.0 Upper:10.255.255.255} {Lower:172.16.0.0 Upper:172.31.255.255} {Lower:192.168.0.0 Upper:192.168.255.255}] StrictMutations:false AclEnabled:true HmacSecret:**** AbortOlderThan:5m0s ProposedGroupId:0 StartTime:2021-05-19 08:04:43.700396522 +0000 UTC m=+0.426069172 Security:whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16; token= EncryptionKey:**** LogRequest:0 HardSync:false Audit:false}
+I0519 08:04:44.485691      17 run.go:746] worker.Config: {PostingDir:p WALDir:w MutationsMode:0 AuthToken: HmacSecret:**** AccessJwtTtl:20s RefreshJwtTtl:720h0m0s CachePercentage:0,65,35 CacheMb:1024 Audit:<nil> ChangeDataConf:file=; kafka=; sasl_user=; sasl_password=; ca_cert=; client_cert=; client_key=; sasl-mechanism=PLAIN;}
+I0519 08:04:44.486246      17 groups.go:652] No healthy Zero leader found. Trying to find a Zero leader...
+I0519 08:04:44.586613      17 pool.go:162] CONNECTING to zero1:5080
+I0519 08:04:44.590038      17 groups.go:698] Found connection to leader: zero1:5080
+I0519 08:04:44.591196      17 server_state.go:114] Encryption feature enabled.
+I0519 08:04:44.608301      17 storage.go:125] Init Raft Storage with snap: 0, first: 1, last: 0
+I0519 08:04:44.608387      17 server_state.go:139] Opening postings BadgerDB with options: {Dir:p ValueDir:p SyncWrites:false NumVersionsToKeep:2147483647 ReadOnly:false Logger:0x32b9cd0 Compression:1 InMemory:false MetricsEnabled:true NumGoroutines:8 MemTableSize:67108864 BaseTableSize:2097152 BaseLevelSize:10485760 LevelSizeMultiplier:10 TableSizeMultiplier:2 MaxLevels:7 VLogPercentile:0 ValueThreshold:1048576 NumMemtables:15 BlockSize:4096 BloomFalsePositive:0.01 BlockCacheSize:697932185 IndexCacheSize:375809638 NumLevelZeroTables:5 NumLevelZeroTablesStall:15 ValueLogFileSize:1073741823 ValueLogMaxEntries:1000000 NumCompactors:4 CompactL0OnClose:false LmaxCompaction:false ZSTDCompressionLevel:0 VerifyValueChecksum:false EncryptionKey:[] EncryptionKeyRotationDuration:240h0m0s BypassLockGuard:false ChecksumVerificationMode:0 AllowStopTheWorld:true DetectConflicts:false NamespaceOffset:1 managedTxns:false maxBatchCount:0 maxBatchSize:0 maxValueThreshold:0}
+I0519 08:04:44.627416      17 log.go:34] All 0 tables opened in 0s
+I0519 08:04:44.630295      17 log.go:34] Discard stats nextEmptySlot: 0
+I0519 08:04:44.630336      17 log.go:34] Set nextTxnTs to 0
+I0519 08:04:44.631097      17 groups.go:99] Current Raft Id: 0x0
+I0519 08:04:44.631129      17 groups.go:115] Sending member request to Zero: addr:"alpha5:7080" 
+I0519 08:04:44.631203      17 groups.go:652] No healthy Zero leader found. Trying to find a Zero leader...
+I0519 08:04:44.631289      17 worker.go:114] Worker listening at address: [::]:7080
+I0519 08:04:44.633460      17 run.go:561] Bringing up GraphQL HTTP API at 0.0.0.0:8080/graphql
+E0519 08:04:44.633457      17 groups.go:1177] Error during SubscribeForUpdates for prefix "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x15dgraph.graphql.schema\x00": Unable to find any servers for group: 1. closer err: <nil>
+I0519 08:04:44.633488      17 run.go:562] Bringing up GraphQL HTTP admin API at 0.0.0.0:8080/admin
+I0519 08:04:44.633544      17 run.go:589] gRPC server started.  Listening on port 9080
+I0519 08:04:44.633559      17 run.go:590] HTTP server started.  Listening on port 8080
+I0519 08:04:44.732804      17 groups.go:698] Found connection to leader: zero1:5080
+I0519 08:04:44.734796      17 groups.go:134] Connected to group zero. Assigned group: 1
+I0519 08:04:44.734814      17 groups.go:136] Raft Id after connection to Zero: 0x1
+I0519 08:04:44.734868      17 pool.go:162] CONNECTING to zero2:5080
+I0519 08:04:44.734904      17 pool.go:162] CONNECTING to zero3:5080
+I0519 08:04:44.734911      17 draft.go:306] Node ID: 0x1 with GroupID: 1
+I0519 08:04:44.734917      17 draft.go:315] RaftContext: id:1 group:1 addr:"alpha5:7080" 
+I0519 08:04:44.735000      17 node.go:152] Setting raft.Config to: &{ID:1 peers:[] learners:[] ElectionTick:20 HeartbeatTick:1 Storage:0xc000614740 Applied:0 MaxSizePerMsg:262144 MaxCommittedSizePerReady:67108864 MaxUncommittedEntriesSize:0 MaxInflightMsgs:256 CheckQuorum:false PreVote:true ReadOnlyOption:0 Logger:0x32b9cd0 DisableProposalForwarding:false}
+I0519 08:04:44.735093      17 node.go:326] Group 1 found 0 entries
+I0519 08:04:44.735111      17 draft.go:2140] New Node for group: 1
+I0519 08:04:44.735131      17 log.go:34] 1 became follower at term 0
+I0519 08:04:44.735140      17 log.go:34] newRaft 1 [peers: [], term: 0, commit: 0, applied: 0, lastindex: 0, lastterm: 0]
+I0519 08:04:44.735147      17 log.go:34] 1 became follower at term 1
+I0519 08:04:44.735186      17 draft.go:244] Operation started with id: opRollup
+I0519 08:04:44.735326      17 draft.go:1463] Found Raft checkpoint: 0
+I0519 08:04:44.735468      17 groups.go:816] Got address of a Zero leader: zero1:5080
+I0519 08:04:44.735568      17 groups.go:830] Starting a new membership stream receive from zero1:5080.
+I0519 08:04:44.735657      17 node.go:189] Setting conf state to nodes:1 
+I0519 08:04:44.736124      17 log.go:34] 1 is starting a new election at term 1
+I0519 08:04:44.736138      17 log.go:34] 1 became pre-candidate at term 1
+I0519 08:04:44.736143      17 log.go:34] 1 received MsgPreVoteResp from 1 at term 1
+I0519 08:04:44.736157      17 log.go:34] 1 became candidate at term 2
+I0519 08:04:44.736161      17 log.go:34] 1 received MsgVoteResp from 1 at term 2
+I0519 08:04:44.736171      17 log.go:34] 1 became leader at term 2
+I0519 08:04:44.736177      17 log.go:34] raft.node: 1 elected leader 1 at term 2
+I0519 08:04:44.740571      17 groups.go:847] Received first state update from Zero: counter:8 groups:<key:1 value:<members:<key:1 value:<id:1 group_id:1 addr:"alpha5:7080" leader:true last_update:1621411484 > > > > zeros:<key:1 value:<id:1 addr:"zero1:5080" leader:true > > zeros:<key:2 value:<id:2 addr:"zero2:5080" > > zeros:<key:3 value:<id:3 addr:"zero3:5080" > > maxRaftId:1 cid:"2374c3f6-f0a2-4482-8073-43a6ae90ac6f" license:<maxNodes:18446744073709551615 expiryTs:1624003484 enabled:true > 
+I0519 08:04:45.622329      17 pool.go:162] CONNECTING to alpha6:7080
+I0519 08:04:45.622345      17 node.go:585] Trying to add 0x2 to cluster. Addr: alpha6:7080
+I0519 08:04:45.622351      17 node.go:586] Current confstate at 0x1: nodes:1 
+I0519 08:04:45.622451      17 node.go:189] Setting conf state to nodes:1 nodes:2 
+I0519 08:04:45.622559      17 node.go:755] [0x2] Done joining cluster with err: <nil>
+I0519 08:04:45.633668      17 pool.go:162] CONNECTING to alpha5:7080
+I0519 08:04:45.710347      17 pool.go:162] CONNECTING to alpha3:7080
+I0519 08:04:45.710362      17 node.go:585] Trying to add 0x3 to cluster. Addr: alpha3:7080
+I0519 08:04:45.710367      17 node.go:586] Current confstate at 0x1: nodes:1 nodes:2 
+I0519 08:04:45.736123      17 groups.go:197] Done informing Zero about the 0 tablets I have
+I0519 08:04:45.736189      17 groups.go:902] Leader idx=0x1 of group=1 is connecting to Zero for txn updates
+I0519 08:04:45.736202      17 groups.go:914] Got Zero leader: zero1:5080
+I0519 08:04:45.740925      17 groups.go:491] Serving tablet for: 0-dgraph.type
+I0519 08:04:45.741535      17 pool.go:162] CONNECTING to alpha2:7080
+I0519 08:04:45.741578      17 pool.go:162] CONNECTING to alpha4:7080
+I0519 08:04:45.741609      17 pool.go:162] CONNECTING to alpha1:7080
+I0519 08:04:45.746216      17 groups.go:491] Serving tablet for: 0-dgraph.drop.op
+I0519 08:04:45.747908      17 groups.go:491] Serving tablet for: 0-dgraph.graphql.schema
+I0519 08:04:45.749405      17 groups.go:491] Serving tablet for: 0-dgraph.graphql.xid
+I0519 08:04:45.750688      17 groups.go:491] Serving tablet for: 0-dgraph.graphql.p_query
+I0519 08:04:45.751879      17 groups.go:491] Serving tablet for: 0-dgraph.xid
+I0519 08:04:45.752999      17 groups.go:491] Serving tablet for: 0-dgraph.password
+I0519 08:04:45.754273      17 groups.go:491] Serving tablet for: 0-dgraph.user.group
+I0519 08:04:45.755586      17 groups.go:491] Serving tablet for: 0-dgraph.acl.rule
+I0519 08:04:45.760945      17 groups.go:491] Serving tablet for: 0-dgraph.rule.predicate
+I0519 08:04:45.761974      17 groups.go:491] Serving tablet for: 0-dgraph.rule.permission
+I0519 08:04:45.762331      17 groups.go:166] Server is ready
+I0519 08:04:47.638513      17 node.go:189] Setting conf state to nodes:1 nodes:2 nodes:3 
+I0519 08:04:47.638576      17 node.go:755] [0x3] Done joining cluster with err: <nil>
+I0519 08:04:47.645201      17 access_ee.go:522] Successfully upserted the guardian of namespace: 0
+I0519 08:04:47.646317      17 log.go:34] Handover found 2038 B data in current memtable. Pushing to flushChan.
+I0519 08:04:47.830769      17 access_ee.go:449] Unable to upsert the groot account. Error: while upserting user with id groot: rpc error: code = Aborted desc = Transaction has been aborted. Please retry
+I0519 08:04:47.935350      17 access_ee.go:598] Successfully upserted groot account for namespace 0
+I0519 08:04:47.935417      17 access_ee.go:412] ResetAcl closed
+I0519 08:04:49.634848      17 admin.go:874] namespace: 0. No GraphQL schema in Dgraph; serving empty GraphQL API
+I0519 08:04:50.923400      17 http.go:240] namespace: 0. Got GraphQL request over HTTP.
+I0519 08:04:50.923571      17 middlewares.go:210] GraphQL admin mutation. Name =  login
+I0519 08:04:50.923578      17 login.go:38] Got login request
+I0519 08:04:50.923644      17 server.go:1749] Got Login request from: "172.31.0.1:36592"
+I0519 08:04:50.990743      17 access_ee.go:85] groot logged in successfully in namespace 0x0
+I0519 08:04:53.943977      17 main.go:83] Num goroutines: 183
+2021/05/19 08:04:44 profile: block profiling enabled, /tmp/profile071788661/block.pprof
+[Sentry] 2021/05/19 08:04:44 Integration installed: ContextifyFrames
+[Sentry] 2021/05/19 08:04:44 Integration installed: Environment
+[Sentry] 2021/05/19 08:04:44 Integration installed: Modules
+[Sentry] 2021/05/19 08:04:44 Integration installed: IgnoreErrors
+2021/05/19 08:04:44 profile: block profiling enabled, /tmp/profile417061282/block.pprof
+[Sentry] 2021/05/19 08:04:44 Integration installed: ContextifyFrames
+[Sentry] 2021/05/19 08:04:44 Integration installed: Environment
+[Sentry] 2021/05/19 08:04:44 Integration installed: Modules
+[Sentry] 2021/05/19 08:04:44 Integration installed: IgnoreErrors
+I0519 08:04:45.156378      18 sentry_integration.go:48] This instance of Dgraph will send anonymous reports of panics back to Dgraph Labs via Sentry. No confidential information is sent. These reports help improve Dgraph. To opt-out, restart your instance with the --telemetry "sentry=false;" flag. For more info, see https://dgraph.io/docs/howto/#data-handling.
+I0519 08:04:45.156679      18 run.go:658] ACL secret key loaded successfully.
+I0519 08:04:45.156879      18 server.go:114] Starting telemetry data collection for alpha...
+I0519 08:04:45.371810      18 init.go:110] 
+
+Dgraph version   : v20.11.0-rc1-630-g05c0ee419
+Dgraph codename  : unnamed
+Dgraph SHA-256   : 2e162c940122699302e86ede2fd369c0757f1e9aa0972e21eef85d9365d8634c
+Commit SHA-1     : 05c0ee419
+Commit timestamp : 2021-05-19 13:28:23 +0530
+Branch           : naman/fix-live-auth
+Go version       : go1.16.3
+jemalloc enabled : true
+
+For Dgraph official documentation, visit https://dgraph.io/docs.
+For discussions about Dgraph     , visit https://discuss.dgraph.io.
+For fully-managed Dgraph Cloud   , visit https://dgraph.io/cloud.
+
+Licensed variously under the Apache Public License 2.0 and Dgraph Community License.
+Copyright 2015-2021 Dgraph Labs, Inc.
+
+
+I0519 08:04:45.371831      18 run.go:744] x.Config: {PortOffset:0 Limit:mutations=allow; query-edge=1000000; max-pending-queries=10000; max-retries=-1; shared-instance=false; normalize-node=10000; mutations-nquad=1000000; disallow-drop=false; query-timeout=0ms; txn-abort-after=5m LimitMutationsNquad:1000000 LimitQueryEdge:1000000 BlockClusterWideDrop:false LimitNormalizeNode:10000 QueryTimeout:0s MaxRetries:-1 SharedInstance:false GraphQL:poll-interval=1s; lambda-url=; introspection=true; debug=false; extensions=true GraphQLDebug:false}
+I0519 08:04:45.371879      18 run.go:745] x.WorkerConfig: {TmpDir:t ExportPath:export Trace:ratio=0.01; jaeger=; datadog= MyAddr:alpha6:7080 ZeroAddr:[zero1:5080 zero2:5080 zero3:5080] TLSClientConfig:<nil> TLSServerConfig:<nil> Raft:pending-proposals=256; idx=; group=; learner=false; snapshot-after-entries=10000; snapshot-after-duration=30m Badger:{Dir: ValueDir: SyncWrites:false NumVersionsToKeep:1 ReadOnly:false Logger:0xc0001f8cb0 Compression:1 InMemory:false MetricsEnabled:true NumGoroutines:8 MemTableSize:67108864 BaseTableSize:2097152 BaseLevelSize:10485760 LevelSizeMultiplier:10 TableSizeMultiplier:2 MaxLevels:7 VLogPercentile:0 ValueThreshold:1048576 NumMemtables:15 BlockSize:4096 BloomFalsePositive:0.01 BlockCacheSize:697932185 IndexCacheSize:375809638 NumLevelZeroTables:5 NumLevelZeroTablesStall:15 ValueLogFileSize:1073741823 ValueLogMaxEntries:1000000 NumCompactors:4 CompactL0OnClose:false LmaxCompaction:false ZSTDCompressionLevel:0 VerifyValueChecksum:false EncryptionKey:[] EncryptionKeyRotationDuration:240h0m0s BypassLockGuard:false ChecksumVerificationMode:0 AllowStopTheWorld:true DetectConflicts:true NamespaceOffset:-1 managedTxns:false maxBatchCount:0 maxBatchSize:0 maxValueThreshold:0} WhiteListedIPRanges:[{Lower:10.0.0.0 Upper:10.255.255.255} {Lower:172.16.0.0 Upper:172.31.255.255} {Lower:192.168.0.0 Upper:192.168.255.255}] StrictMutations:false AclEnabled:true HmacSecret:**** AbortOlderThan:5m0s ProposedGroupId:0 StartTime:2021-05-19 08:04:44.677178116 +0000 UTC m=+0.323916475 Security:token=; whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 EncryptionKey:**** LogRequest:0 HardSync:false Audit:false}
+I0519 08:04:45.371963      18 run.go:746] worker.Config: {PostingDir:p WALDir:w MutationsMode:0 AuthToken: HmacSecret:**** AccessJwtTtl:20s RefreshJwtTtl:720h0m0s CachePercentage:0,65,35 CacheMb:1024 Audit:<nil> ChangeDataConf:file=; kafka=; sasl_user=; sasl_password=; ca_cert=; client_cert=; client_key=; sasl-mechanism=PLAIN;}
+I0519 08:04:45.372333      18 groups.go:652] No healthy Zero leader found. Trying to find a Zero leader...
+I0519 08:04:45.472594      18 pool.go:162] CONNECTING to zero1:5080
+I0519 08:04:45.475140      18 groups.go:698] Found connection to leader: zero1:5080
+I0519 08:04:45.476044      18 server_state.go:114] Encryption feature enabled.
+I0519 08:04:45.492602      18 storage.go:125] Init Raft Storage with snap: 0, first: 1, last: 0
+I0519 08:04:45.492672      18 server_state.go:139] Opening postings BadgerDB with options: {Dir:p ValueDir:p SyncWrites:false NumVersionsToKeep:2147483647 ReadOnly:false Logger:0x32b9cd0 Compression:1 InMemory:false MetricsEnabled:true NumGoroutines:8 MemTableSize:67108864 BaseTableSize:2097152 BaseLevelSize:10485760 LevelSizeMultiplier:10 TableSizeMultiplier:2 MaxLevels:7 VLogPercentile:0 ValueThreshold:1048576 NumMemtables:15 BlockSize:4096 BloomFalsePositive:0.01 BlockCacheSize:697932185 IndexCacheSize:375809638 NumLevelZeroTables:5 NumLevelZeroTablesStall:15 ValueLogFileSize:1073741823 ValueLogMaxEntries:1000000 NumCompactors:4 CompactL0OnClose:false LmaxCompaction:false ZSTDCompressionLevel:0 VerifyValueChecksum:false EncryptionKey:[] EncryptionKeyRotationDuration:240h0m0s BypassLockGuard:false ChecksumVerificationMode:0 AllowStopTheWorld:true DetectConflicts:false NamespaceOffset:1 managedTxns:false maxBatchCount:0 maxBatchSize:0 maxValueThreshold:0}
+I0519 08:04:45.510636      18 log.go:34] All 0 tables opened in 0s
+I0519 08:04:45.513440      18 log.go:34] Discard stats nextEmptySlot: 0
+I0519 08:04:45.513467      18 log.go:34] Set nextTxnTs to 0
+I0519 08:04:45.514113      18 groups.go:99] Current Raft Id: 0x0
+I0519 08:04:45.514128      18 groups.go:115] Sending member request to Zero: addr:"alpha6:7080" 
+I0519 08:04:45.514223      18 groups.go:652] No healthy Zero leader found. Trying to find a Zero leader...
+I0519 08:04:45.514311      18 worker.go:114] Worker listening at address: [::]:7080
+I0519 08:04:45.515730      18 run.go:561] Bringing up GraphQL HTTP API at 0.0.0.0:8080/graphql
+E0519 08:04:45.515723      18 groups.go:1177] Error during SubscribeForUpdates for prefix "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x15dgraph.graphql.schema\x00": Unable to find any servers for group: 1. closer err: <nil>
+I0519 08:04:45.515745      18 run.go:562] Bringing up GraphQL HTTP admin API at 0.0.0.0:8080/admin
+I0519 08:04:45.515758      18 run.go:589] gRPC server started.  Listening on port 9080
+I0519 08:04:45.515768      18 run.go:590] HTTP server started.  Listening on port 8080
+I0519 08:04:45.616014      18 groups.go:698] Found connection to leader: zero1:5080
+I0519 08:04:45.618038      18 groups.go:134] Connected to group zero. Assigned group: 1
+I0519 08:04:45.618129      18 groups.go:136] Raft Id after connection to Zero: 0x2
+I0519 08:04:45.618279      18 pool.go:162] CONNECTING to alpha5:7080
+I0519 08:04:45.618378      18 pool.go:162] CONNECTING to zero2:5080
+I0519 08:04:45.618625      18 pool.go:162] CONNECTING to zero3:5080
+I0519 08:04:45.618719      18 draft.go:306] Node ID: 0x2 with GroupID: 1
+I0519 08:04:45.618823      18 draft.go:315] RaftContext: id:2 group:1 addr:"alpha6:7080" 
+I0519 08:04:45.619729      18 node.go:152] Setting raft.Config to: &{ID:2 peers:[] learners:[] ElectionTick:20 HeartbeatTick:1 Storage:0xc0000a6280 Applied:0 MaxSizePerMsg:262144 MaxCommittedSizePerReady:67108864 MaxUncommittedEntriesSize:0 MaxInflightMsgs:256 CheckQuorum:false PreVote:true ReadOnlyOption:0 Logger:0x32b9cd0 DisableProposalForwarding:false}
+I0519 08:04:45.620003      18 node.go:326] Group 1 found 0 entries
+I0519 08:04:45.620168      18 draft.go:2065] Calling IsPeer
+I0519 08:04:45.621501      18 draft.go:2070] Done with IsPeer call
+I0519 08:04:45.621703      18 draft.go:2140] New Node for group: 1
+I0519 08:04:45.621836      18 draft.go:2147] Trying to join peers.
+I0519 08:04:45.621934      18 draft.go:2048] Calling JoinCluster via leader: alpha5:7080
+I0519 08:04:45.623319      18 draft.go:2052] Done with JoinCluster call
+I0519 08:04:45.623511      18 log.go:34] 2 became follower at term 0
+I0519 08:04:45.623524      18 log.go:34] newRaft 2 [peers: [], term: 0, commit: 0, applied: 0, lastindex: 0, lastterm: 0]
+I0519 08:04:45.623529      18 log.go:34] 2 became follower at term 1
+I0519 08:04:45.623607      18 draft.go:244] Operation started with id: opRollup
+I0519 08:04:45.623929      18 draft.go:1463] Found Raft checkpoint: 0
+I0519 08:04:45.623977      18 groups.go:816] Got address of a Zero leader: zero1:5080
+I0519 08:04:45.624048      18 groups.go:830] Starting a new membership stream receive from zero1:5080.
+I0519 08:04:45.625418      18 groups.go:847] Received first state update from Zero: counter:9 groups:<key:1 value:<members:<key:1 value:<id:1 group_id:1 addr:"alpha5:7080" leader:true last_update:1621411484 > > members:<key:2 value:<id:2 group_id:1 addr:"alpha6:7080" > > > > zeros:<key:1 value:<id:1 addr:"zero1:5080" leader:true > > zeros:<key:2 value:<id:2 addr:"zero2:5080" > > zeros:<key:3 value:<id:3 addr:"zero3:5080" > > maxRaftId:2 cid:"2374c3f6-f0a2-4482-8073-43a6ae90ac6f" license:<maxNodes:18446744073709551615 expiryTs:1624003484 enabled:true > 
+I0519 08:04:46.624691      18 groups.go:197] Done informing Zero about the 0 tablets I have
+I0519 08:04:46.626308      18 pool.go:162] CONNECTING to alpha1:7080
+I0519 08:04:46.626331      18 pool.go:162] CONNECTING to alpha2:7080
+I0519 08:04:46.626351      18 pool.go:162] CONNECTING to alpha4:7080
+I0519 08:04:46.626377      18 pool.go:162] CONNECTING to alpha3:7080
+I0519 08:04:46.627123      18 groups.go:166] Server is ready
+I0519 08:04:46.636691      18 log.go:34] 2 [term: 1] received a MsgHeartbeat message with higher term from 1 [term: 2]
+I0519 08:04:46.636703      18 log.go:34] 2 became follower at term 2
+I0519 08:04:46.636708      18 log.go:34] raft.node: 2 elected leader 1 at term 2
+I0519 08:04:47.638159      18 node.go:189] Setting conf state to nodes:1 
+I0519 08:04:47.638327      18 node.go:189] Setting conf state to nodes:1 nodes:2 
+I0519 08:04:47.638747      18 node.go:189] Setting conf state to nodes:1 nodes:2 nodes:3 
+I0519 08:04:47.644863      18 access_ee.go:437] Unable to upsert the guardian group. Error: while upserting group with id guardians: rpc error: code = Aborted desc = Transaction has been aborted. Please retry
+I0519 08:04:47.646513      18 log.go:34] Handover found 2018 B data in current memtable. Pushing to flushChan.
+I0519 08:04:47.749214      18 access_ee.go:522] Successfully upserted the guardian of namespace: 0
+I0519 08:04:48.721741      18 access_ee.go:449] Unable to upsert the groot account. Error: while upserting user with id groot: rpc error: code = Aborted desc = Transaction has been aborted. Please retry
+I0519 08:04:48.828716      18 access_ee.go:598] Successfully upserted groot account for namespace 0
+I0519 08:04:48.828731      18 access_ee.go:412] ResetAcl closed
+I0519 08:04:50.522124      18 admin.go:874] namespace: 0. No GraphQL schema in Dgraph; serving empty GraphQL API
+I0519 08:04:50.998828      18 http.go:240] namespace: 0. Got GraphQL request over HTTP.
+I0519 08:04:50.999007      18 middlewares.go:210] GraphQL admin mutation. Name =  login
+I0519 08:04:50.999015      18 login.go:38] Got login request
+I0519 08:04:50.999072      18 server.go:1749] Got Login request from: "172.31.0.1:44298"
+I0519 08:04:51.065753      18 access_ee.go:85] groot logged in successfully in namespace 0x0
+I0519 08:04:54.923157      18 main.go:83] Num goroutines: 164

@@ -1198,16 +1198,7 @@ func filterTablets(ctx context.Context, ms *pb.MembershipState) error {
 		return errors.Errorf("Namespace not found in JWT.")
 	}
 	if namespace == x.GalaxyNamespace {
-		// For galaxy namespace, we don't want to filter out the predicates. We only format the
-		// namespace to human readable form.
-		for _, group := range ms.Groups {
-			tablets := make(map[string]*pb.Tablet)
-			for tabletName, tablet := range group.Tablets {
-				tablet.Predicate = x.FormatNsAttr(tablet.Predicate)
-				tablets[x.FormatNsAttr(tabletName)] = tablet
-			}
-			group.Tablets = tablets
-		}
+		// For galaxy namespace, we don't want to filter out the predicates.
 		return nil
 	}
 	for _, group := range ms.GetGroups() {
