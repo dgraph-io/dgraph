@@ -150,6 +150,10 @@ const (
 		removed: [Member]
 		cid: String
 		license: License
+		"""
+		Contains list of namespaces. Note that this is not stored in proto's MembershipState and
+		computed at the time of query.
+		"""
 		namespaces: [UInt64]
 	}
 

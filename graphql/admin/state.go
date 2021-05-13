@@ -80,7 +80,7 @@ func convertToGraphQLResp(ms pb.MembershipState) membershipState {
 	var state membershipState
 
 	// namespaces stores set of namespaces
-	namespaces := make(map[uint64]bool)
+	namespaces := make(map[uint64]struct{})
 
 	state.Counter = ms.Counter
 	for k, v := range ms.Groups {
@@ -93,7 +93,7 @@ func convertToGraphQLResp(ms pb.MembershipState) membershipState {
 			tablets = append(tablets, v1)
 			val, err := x.ExtractNamespaceFromPredicate(name)
 			if err == nil {
-				namespaces[val] = true
+				namespaces[val] = struct{}{}
 			}
 		}
 		state.Groups = append(state.Groups, clusterGroup{
