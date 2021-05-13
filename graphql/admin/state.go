@@ -117,7 +117,7 @@ func convertToGraphQLResp(ms pb.MembershipState) membershipState {
 	state.License = ms.License
 
 	state.Namespaces = []uint64{}
-	for ns, _ := range namespaces {
+	for ns := range namespaces {
 		state.Namespaces = append(state.Namespaces, ns)
 	}
 
