@@ -108,7 +108,7 @@ func New(opts XidMapOptions) *XidMap {
 	}
 	for i := range xm.shards {
 		xm.shards[i] = &shard{
-			tree: z.NewTree(),
+			tree: z.NewTree("XidMap"),
 		}
 	}
 
@@ -355,6 +355,9 @@ func (m *XidMap) Flush() error {
 	// even during reduce phase. If bulk loader is running on large dataset, this occupies lot of
 	// memory and causing OOM sometimes. Making shards explicitly nil in this method fixes this.
 	// TODO: find why xidmap is not getting GCed without below line.
+	for _, shards := range m.shards {
+		shards.tree.Close()
+	}
 	m.shards = nil
 	if m.writer == nil {
 		return nil

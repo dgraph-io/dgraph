@@ -17,6 +17,8 @@
 package worker
 
 import (
+	"crypto/sha256"
+	"crypto/sha512"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/binary"
@@ -27,6 +29,7 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
+	"github.com/xdg/scram"
 
 	"github.com/Shopify/sarama"
 
@@ -116,6 +119,27 @@ func newKafkaSink(config *z.SuperFlag) (Sink, error) {
 		saramaConf.Net.SASL.User = config.GetString("sasl-user")
 		saramaConf.Net.SASL.Password = config.GetString("sasl-password")
 	}
+	mechanism := config.GetString("sasl-mechanism")
+	if mechanism != "" {
+		switch mechanism {
+		case sarama.SASLTypeSCRAMSHA256:
+			saramaConf.Net.SASL.Mechanism = sarama.SASLTypeSCRAMSHA256
+			saramaConf.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient {
+				return &scramClient{HashGeneratorFcn: sha256.New}
+			}
+		case sarama.SASLTypeSCRAMSHA512:
+			saramaConf.Net.SASL.Mechanism = sarama.SASLTypeSCRAMSHA512
+			saramaConf.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient {
+				return &scramClient{HashGeneratorFcn: sha512.New}
+			}
+		case sarama.SASLTypePlaintext:
+			saramaConf.Net.SASL.Mechanism = sarama.SASLTypePlaintext
+		default:
+			return nil, errors.Errorf("Invalid SASL mechanism. Valid mechanisms are: %s, %s and %s",
+				sarama.SASLTypePlaintext, sarama.SASLTypeSCRAMSHA256, sarama.SASLTypeSCRAMSHA512)
+		}
+	}
+
 	brokers := strings.Split(config.GetString("kafka"), ",")
 	client, err := sarama.NewClient(brokers, saramaConf)
 	if err != nil {
@@ -196,4 +220,28 @@ func newFileSink(path *z.SuperFlag) (Sink, error) {
 	return &fileSink{
 		fileWriter: w,
 	}, nil
+}
+
+type scramClient struct {
+	*scram.Client
+	*scram.ClientConversation
+	scram.HashGeneratorFcn
+}
+
+func (sc *scramClient) Begin(userName, password, authzID string) (err error) {
+	sc.Client, err = sc.HashGeneratorFcn.NewClient(userName, password, authzID)
+	if err != nil {
+		return err
+	}
+	sc.ClientConversation = sc.Client.NewConversation()
+	return nil
+}
+
+func (sc *scramClient) Step(challenge string) (response string, err error) {
+	response, err = sc.ClientConversation.Step(challenge)
+	return
+}
+
+func (sc *scramClient) Done() bool {
+	return sc.ClientConversation.Done()
 }

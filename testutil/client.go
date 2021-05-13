@@ -310,46 +310,45 @@ func HttpLogin(params *LoginParams) (*HttpToken, error) {
 		return nil, errors.New(fmt.Sprintf("got non 200 response from the server with %s ",
 			string(respBody)))
 	}
-	var outputJson map[string]interface{}
-	if err := json.Unmarshal(respBody, &outputJson); err != nil {
-		var errOutputJson map[string]interface{}
-		if err := json.Unmarshal(respBody, &errOutputJson); err == nil {
-			if _, ok := errOutputJson["errors"]; ok {
-				return nil, errors.Errorf("response error: %v", string(respBody))
+
+	var gqlResp GraphQLResponse
+	if err := json.Unmarshal(respBody, &gqlResp); err != nil {
+		return nil, err
+	}
+
+	if len(gqlResp.Errors) > 0 {
+		return nil, errors.Errorf(gqlResp.Errors.Error())
+	}
+
+	if gqlResp.Data == nil {
+		return nil, errors.Wrapf(err, "data entry found in the output")
+	}
+
+	type Response struct {
+		Login struct {
+			Response struct {
+				AccessJWT  string
+				RefreshJwt string
 			}
 		}
-		return nil, errors.Wrapf(err, "unable to unmarshal the output to get JWTs")
+	}
+	var r Response
+	if err := json.Unmarshal(gqlResp.Data, &r); err != nil {
+		return nil, err
 	}
 
-	data, found := outputJson["data"].(map[string]interface{})
-	if !found {
-		return nil, errors.Wrapf(err, "data entry found in the output")
-	}
-
-	l, found := data["login"].(map[string]interface{})
-	if !found {
-		return nil, errors.Wrapf(err, "data entry found in the output")
-	}
-
-	response, found := l["response"].(map[string]interface{})
-	if !found {
-		return nil, errors.Wrapf(err, "data entry found in the output")
-	}
-
-	newAccessJwt, found := response["accessJWT"].(string)
-	if !found || newAccessJwt == "" {
+	if r.Login.Response.AccessJWT == "" {
 		return nil, errors.Errorf("no access JWT found in the output")
 	}
-	newRefreshJwt, found := response["refreshJWT"].(string)
-	if !found || newRefreshJwt == "" {
+	if r.Login.Response.RefreshJwt == "" {
 		return nil, errors.Errorf("no refresh JWT found in the output")
 	}
 
 	return &HttpToken{
 		UserId:       params.UserID,
 		Password:     params.Passwd,
-		AccessJwt:    newAccessJwt,
-		RefreshToken: newRefreshJwt,
+		AccessJwt:    r.Login.Response.AccessJWT,
+		RefreshToken: r.Login.Response.RefreshJwt,
 	}, nil
 }
 
@@ -374,6 +373,7 @@ func GrootHttpLoginNamespace(endpoint string, namespace uint64) *HttpToken {
 		Namespace: namespace,
 	})
 	x.Check(err)
+	x.AssertTrue(token != nil)
 	return token
 }
 

@@ -89,16 +89,20 @@ type MutationResolver interface {
 type MutationRewriter interface {
 	// RewriteQueries generates and rewrites GraphQL mutation m into DQL queries which
 	// check if any referenced node by XID or ID exist or not.
+	// Instead of filtering on dgraph.type like @filter(type(Parrot)), we query `dgraph.type` and
+	// filter it on GraphQL side. @filter(type(Parrot)) is costly in terms of memory and cpu.
 	// Example existence queries:
-	// 1. Parrot1(func: uid(0x127)) @filter(type: Parrot) {
+	// 1. Parrot1(func: uid(0x127)) {
 	//      uid
+	//      dgraph.type
 	//    }
-	// 2.  Computer2(func: eq(Computer.name, "computer1")) @filter(type(Computer)) {
+	// 2.  Computer2(func: eq(Computer.name, "computer1")) {
 	//       uid
+	//       dgraph.type
 	//     }
 	// These query will be created in case of Add or Update Mutation which references node
 	// 0x127 or Computer of name "computer1"
-	RewriteQueries(ctx context.Context, m schema.Mutation) ([]*gql.GraphQuery, error)
+	RewriteQueries(ctx context.Context, m schema.Mutation) ([]*gql.GraphQuery, []string, error)
 	// Rewrite rewrites GraphQL mutation m into a Dgraph mutation - that could
 	// be as simple as a single DelNquads, or could be a Dgraph upsert mutation
 	// with a query and multiple mutations guarded by conditions.
@@ -266,7 +270,8 @@ func (mr *dgraphResolver) rewriteAndExecute(
 	// queries stores rewritten []*gql.GraphQuery by RewriteQueries function. These queries
 	// are then executed and the results are processed
 	var queries []*gql.GraphQuery
-	queries, err = mr.mutationRewriter.RewriteQueries(ctx, mutation)
+	var filterTypes []string
+	queries, filterTypes, err = mr.mutationRewriter.RewriteQueries(ctx, mutation)
 	if err != nil {
 		return emptyResult(schema.GQLWrapf(err, "couldn't rewrite mutation %s", mutation.Name())),
 			resolverFailed
@@ -295,22 +300,29 @@ func (mr *dgraphResolver) rewriteAndExecute(
 	// Parse the result of query.
 	// mutResp.Json will contain response to the query.
 	// The response is parsed to existenceQueriesResult
+	// dgraph.type is a list that contains types and interfaces the type implements.
 	// Example Response:
 	// {
-	// 	Project1 :
+	// 	Project_1 :
 	//		[
 	//			{
-	//				"uid" : "0x123"
+	//				"uid" : "0x123",
+	// 				"dgraph.type" : ["Project", "Work"]
 	// 			}
 	//		],
-	//	Column2 :
+	//	Column_2 :
 	//		[
 	//			{
-	//				"uid": "0x234"
+	//				"uid": "0x234",
+	// 				"dgraph.type" : ["Column"]
 	// 			}
 	//		]
 	// }
-	queryResultMap := make(map[string][]map[string]string)
+	type res struct {
+		Uid   string   `json:"uid"`
+		Types []string `json:"dgraph.type"`
+	}
+	queryResultMap := make(map[string][]res)
 	if mutResp != nil {
 		err = json.Unmarshal(mutResp.Json, &queryResultMap)
 	}
@@ -320,22 +332,34 @@ func (mr *dgraphResolver) rewriteAndExecute(
 		return emptyResult(gqlErr), resolverFailed
 	}
 
+	x.AssertTrue(len(filterTypes) == len(queries))
+	// qNameToType map contains the mapping from the query name to type/interface the query response
+	// has to be filtered upon.
+	qNameToType := make(map[string]string)
+	for i, typ := range filterTypes {
+		qNameToType[queries[i].Attr] = typ
+	}
 	// The above response is parsed into map[string]string as follows:
 	// {
-	// 		"Project1" : "0x123",
-	// 		"Column2" : "0x234"
+	// 		"Project_1" : "0x123",
+	// 		"Column_2" : "0x234"
 	// }
 	// As only Add and Update mutations generate queries using RewriteQueries,
 	// qNameToUID map will be non-empty only in case of Add or Update Mutation.
 	qNameToUID := make(map[string]string)
 	for key, result := range queryResultMap {
-		if len(result) == 1 {
-			// Found exactly one UID / XID corresponding to given condition
-			qNameToUID[key] = result[0]["uid"]
-		} else if len(result) > 1 {
+		count := 0
+		typ := qNameToType[key]
+		for _, res := range result {
+			if x.HasString(res.Types, typ) {
+				qNameToUID[key] = res.Uid
+				count++
+			}
+		}
+		if count > 1 {
 			// Found multiple UIDs for query. This should ideally not happen.
 			// This indicates that there are multiple nodes with same XIDs / UIDs. Throw an error.
-			err = errors.New(fmt.Sprintf("Found multiple nodes with ID: %s", result[0]["uid"]))
+			err = errors.New(fmt.Sprintf("Found multiple nodes with ID: %s", qNameToUID[key]))
 			gqlErr := schema.GQLWrapLocationf(
 				err, mutation.Location(), "mutation %s failed", mutation.Name())
 			return emptyResult(gqlErr), resolverFailed
@@ -465,7 +489,7 @@ func (mr *dgraphResolver) rewriteAndExecute(
 	dgQuery, err = mr.mutationRewriter.FromMutationResult(ctx, mutation, mutResp.GetUids(), result)
 	queryErrs = schema.AppendGQLErrs(queryErrs, schema.GQLWrapf(err,
 		"couldn't rewrite query for mutation %s", mutation.Name()))
-	if dgQuery == nil && err != nil {
+	if err != nil {
 		return emptyResult(queryErrs), resolverFailed
 	}
 

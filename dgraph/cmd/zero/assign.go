@@ -39,17 +39,21 @@ const (
 func (s *Server) updateLeases() {
 	var startTs uint64
 	s.Lock()
-	s.nextLease[pb.Num_UID] = s.state.MaxUID + 1
-	s.nextLease[pb.Num_TXN_TS] = s.state.MaxTxnTs + 1
-	s.nextLease[pb.Num_NS_ID] = s.state.MaxNsID + 1
+	s.nextUint[pb.Num_UID] = s.state.MaxUID + 1
+	s.nextUint[pb.Num_TXN_TS] = s.state.MaxTxnTs + 1
+	s.nextUint[pb.Num_NS_ID] = s.state.MaxNsID + 1
 
-	startTs = s.nextLease[pb.Num_TXN_TS]
+	startTs = s.nextUint[pb.Num_TXN_TS]
 	glog.Infof("Updated UID: %d. Txn Ts: %d. NsID: %d.",
-		s.nextLease[pb.Num_UID], s.nextLease[pb.Num_TXN_TS], s.nextLease[pb.Num_NS_ID])
+		s.nextUint[pb.Num_UID], s.nextUint[pb.Num_TXN_TS], s.nextUint[pb.Num_NS_ID])
 	s.Unlock()
 	s.orc.updateStartTxnTs(startTs)
 }
 
+// maxLease keeps track of the various ID leases that we have already achieved
+// quorum on. This Server can hand out IDs <= maxLease, without the need for any
+// more quorum. If a new server becomes Zero leader, they'd renew this lease and
+// advance maxLease before handing out new IDs.
 func (s *Server) maxLease(typ pb.NumLeaseType) uint64 {
 	s.RLock()
 	defer s.RUnlock()
@@ -97,24 +101,24 @@ func (s *Server) lease(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error
 			// service it directly.
 			if glog.V(3) {
 				glog.Infof("Attempting to serve read only txn ts [%d, %d]",
-					s.readOnlyTs, s.nextLease[pb.Num_TXN_TS])
+					s.readOnlyTs, s.nextUint[pb.Num_TXN_TS])
 			}
-			if s.readOnlyTs > 0 && s.readOnlyTs == s.nextLease[pb.Num_TXN_TS]-1 {
+			if s.readOnlyTs > 0 && s.readOnlyTs == s.nextUint[pb.Num_TXN_TS]-1 {
 				return &pb.AssignedIds{ReadOnly: s.readOnlyTs}, errServedFromMemory
 			}
 		}
 		// We couldn't service it. So, let's request an extra timestamp for
 		// readonly transactions, if needed.
 	}
-	if s.nextLease[pb.Num_UID] == 0 || s.nextLease[pb.Num_TXN_TS] == 0 ||
-		s.nextLease[pb.Num_NS_ID] == 0 {
+	if s.nextUint[pb.Num_UID] == 0 || s.nextUint[pb.Num_TXN_TS] == 0 ||
+		s.nextUint[pb.Num_NS_ID] == 0 {
 		return nil, errors.New("Server not initialized")
 	}
 
 	// Calculate how many ids do we have available in memory, before we need to
 	// renew our lease.
 	maxLease := s.maxLease(typ)
-	available := maxLease - s.nextLease[typ] + 1
+	available := maxLease - s.nextUint[typ] + 1
 
 	// If we have less available than what we need, we need to renew our lease.
 	if available < num.Val+1 { // +1 for a potential readonly ts.
@@ -128,7 +132,7 @@ func (s *Server) lease(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error
 		}
 		if howMany < num.Val || maxLease+howMany < maxLease { // check for overflow.
 			return &emptyAssignedIds, errors.Errorf("Cannot lease %s as the limit has reached."+
-				" currMax:%d", typ, s.nextLease[typ]-1)
+				" currMax:%d", typ, s.nextUint[typ]-1)
 		}
 
 		var proposal pb.ZeroProposal
@@ -149,24 +153,24 @@ func (s *Server) lease(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error
 	out := &pb.AssignedIds{}
 	if typ == pb.Num_TXN_TS {
 		if num.Val > 0 {
-			out.StartId = s.nextLease[pb.Num_TXN_TS]
+			out.StartId = s.nextUint[pb.Num_TXN_TS]
 			out.EndId = out.StartId + num.Val - 1
-			s.nextLease[pb.Num_TXN_TS] = out.EndId + 1
+			s.nextUint[pb.Num_TXN_TS] = out.EndId + 1
 		}
 		if num.ReadOnly {
-			s.readOnlyTs = s.nextLease[pb.Num_TXN_TS]
-			s.nextLease[pb.Num_TXN_TS]++
+			s.readOnlyTs = s.nextUint[pb.Num_TXN_TS]
+			s.nextUint[pb.Num_TXN_TS]++
 			out.ReadOnly = s.readOnlyTs
 		}
 		s.orc.doneUntil.Begin(x.Max(out.EndId, out.ReadOnly))
 	} else if typ == pb.Num_UID {
-		out.StartId = s.nextLease[pb.Num_UID]
+		out.StartId = s.nextUint[pb.Num_UID]
 		out.EndId = out.StartId + num.Val - 1
-		s.nextLease[pb.Num_UID] = out.EndId + 1
+		s.nextUint[pb.Num_UID] = out.EndId + 1
 	} else if typ == pb.Num_NS_ID {
-		out.StartId = s.nextLease[pb.Num_NS_ID]
+		out.StartId = s.nextUint[pb.Num_NS_ID]
 		out.EndId = out.StartId + num.Val - 1
-		s.nextLease[pb.Num_NS_ID] = out.EndId + 1
+		s.nextUint[pb.Num_NS_ID] = out.EndId + 1
 
 	} else {
 		return out, errors.Errorf("Unknown lease type: %v\n", typ)
@@ -175,7 +179,9 @@ func (s *Server) lease(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error
 }
 
 // AssignIds is used to assign new ids (UIDs, NsIDs) by communicating with the leader of the
-// RAFT group responsible for handing out ids.
+// RAFT group responsible for handing out ids. If bump is set to true in the request then the
+// lease for the given id type is bumped to num.Val and {startId, endId} of the newly leased ids
+// in the process of bump is returned.
 func (s *Server) AssignIds(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error) {
 	if ctx.Err() != nil {
 		return &emptyAssignedIds, ctx.Err()
@@ -184,6 +190,9 @@ func (s *Server) AssignIds(ctx context.Context, num *pb.Num) (*pb.AssignedIds, e
 	defer span.End()
 
 	rateLimit := func() error {
+		if s.rateLimiter == nil {
+			return nil
+		}
 		if num.GetType() != pb.Num_UID {
 			// We only rate limit lease of UIDs.
 			return nil
@@ -240,6 +249,25 @@ func (s *Server) AssignIds(ctx context.Context, num *pb.Num) (*pb.AssignedIds, e
 		}
 		reply, err = zc.AssignIds(ctx, num)
 		return err
+	}
+
+	// If this is a bump request and the current node is the leader then we create a normal lease
+	// request based on the number of required ids to reach the asked bump value. If the current
+	// node is not the leader then the bump request will be forwarded to the leader by lease().
+	if num.GetBump() && s.Node.AmLeader() {
+		s.leaseLock.Lock()
+		cur := s.nextUint[num.GetType()] - 1
+		s.leaseLock.Unlock()
+
+		// We need to lease more UIDs if bump request is more than current max lease.
+		req := num.GetVal()
+		if cur >= req {
+			return &emptyAssignedIds, errors.Errorf("Nothing to be leased")
+		}
+		num.Val = req - cur
+
+		// Set bump to false because we want to lease the required ids in the following request.
+		num.Bump = false
 	}
 
 	c := make(chan error, 1)

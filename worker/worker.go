@@ -80,6 +80,9 @@ type grpcWorker struct {
 	sync.Mutex
 }
 
+// grpcWorker implements pb.WorkerServer.
+var _ pb.WorkerServer = (*grpcWorker)(nil)
+
 func (w *grpcWorker) Subscribe(
 	req *pb.SubscriptionRequest, stream pb.Worker_SubscribeServer) error {
 	// Subscribe on given prefixes.

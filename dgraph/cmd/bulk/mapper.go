@@ -57,10 +57,10 @@ type shardState struct {
 
 func newMapperBuffer(opt *options) *z.Buffer {
 	sz := float64(opt.MapBufSize) * 1.1
-	buf, err := z.NewBufferWithDir(int(sz), 2*int(opt.MapBufSize), z.UseMmap,
-		filepath.Join(opt.TmpDir, bufferDir), "Mapper.Buffer")
+	tmpDir := filepath.Join(opt.TmpDir, bufferDir)
+	buf, err := z.NewBufferTmp(tmpDir, int(sz))
 	x.Check(err)
-	return buf
+	return buf.WithMaxSize(2 * int(opt.MapBufSize))
 }
 
 func newMapper(st *state) *mapper {

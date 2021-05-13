@@ -27,6 +27,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 
 	ostats "go.opencensus.io/stats"
 	"go.opencensus.io/tag"
@@ -108,9 +109,18 @@ func (rl *rateLimiter) decr(retry int) {
 	rl.c.Broadcast()
 }
 
+var proposalKey uint64
+
+// {2 bytes Node ID} {4 bytes for random} {2 bytes zero}
+func initProposalKey(id uint64) {
+	x.AssertTrue(id != 0)
+	proposalKey = uint64(groups().Node.Id)<<48 | uint64(z.FastRand())<<16
+}
+
 // uniqueKey is meant to be unique across all the replicas.
+// initProposalKey should be called before calling uniqueKey.
 func uniqueKey() uint64 {
-	return uint64(groups().Node.Id)<<32 | uint64(groups().Node.Rand.Uint32())
+	return atomic.AddUint64(&proposalKey, 1)
 }
 
 var errInternalRetry = errors.New("Retry Raft proposal internally")

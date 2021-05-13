@@ -40,7 +40,7 @@ func TestCurlAuthorization(t *testing.T) {
 	// test query through curl
 	token, err := testutil.HttpLogin(&testutil.LoginParams{
 		Endpoint:  adminEndpoint,
-		UserID:    userid,
+		UserID:    commonUserId,
 		Passwd:    userpassword,
 		Namespace: x.GalaxyNamespace,
 	})

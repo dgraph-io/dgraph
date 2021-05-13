@@ -185,7 +185,7 @@ func GetGQLSchema(namespace uint64) (uid, graphQLSchema string, err error) {
 	sort.Slice(res, func(i, j int) bool {
 		return res[i].UidInt < res[j].UidInt
 	})
-	glog.Errorf("Multiple schema node found, using the last one")
+	glog.Errorf("namespace: %d. Multiple schema nodes found, using the last one", namespace)
 	resLast := res[len(res)-1]
 	return resLast.Uid, resLast.Schema, nil
 }
@@ -426,14 +426,6 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	}
 
 	if op.DropOp == api.Operation_DATA {
-		if x.Config.BlockClusterWideDrop {
-			glog.V(2).Info("Blocked drop-data because it is not permitted.")
-			return empty, errors.New("Drop data operation is not permitted.")
-		}
-		if err := AuthGuardianOfTheGalaxy(ctx); err != nil {
-			return empty, errors.Wrapf(err, "Drop data can only be called by the guardian of the"+
-				" galaxy")
-		}
 		if len(op.DropValue) > 0 {
 			return empty, errors.Errorf("If DropOp is set to DATA, DropValue must be empty")
 		}
@@ -445,13 +437,14 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		}
 
 		m.DropOp = pb.Mutations_DATA
+		m.DropValue = fmt.Sprintf("%#x", namespace)
 		_, err = query.ApplyMutations(ctx, m)
 		if err != nil {
 			return empty, err
 		}
 
 		// insert a helper record for backup & restore, indicating that drop_data was done
-		err = InsertDropRecord(ctx, "DROP_DATA;")
+		err = InsertDropRecord(ctx, fmt.Sprintf("DROP_DATA;%#x", namespace))
 		if err != nil {
 			return empty, err
 		}
@@ -459,7 +452,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		// just reinsert the GraphQL schema, no need to alter dgraph schema as this was drop_data
 		_, err = UpdateGQLSchema(ctx, graphQLSchema, "")
 		// recreate the admin account after a drop data operation
-		ResetAcl(nil)
+		upsertGuardianAndGroot(nil, namespace)
 		return empty, err
 	}
 
@@ -538,9 +531,16 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	// TODO: Maybe add some checks about the schema.
 	m.Schema = result.Preds
 	m.Types = result.Types
-	_, err = query.ApplyMutations(ctx, m)
+	for i := 0; i < 3; i++ {
+		_, err = query.ApplyMutations(ctx, m)
+		if err != nil && strings.Contains(err.Error(), "Please retry operation") {
+			time.Sleep(time.Second)
+			continue
+		}
+		break
+	}
 	if err != nil {
-		return empty, err
+		return empty, errors.Wrapf(err, "During ApplyMutations")
 	}
 
 	// wait for indexing to complete or context to be canceled.
@@ -1397,6 +1397,18 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (
 		req.req.StartTs = worker.State.GetTimestamp(false)
 		qc.latency.AssignTimestamp = time.Since(start)
 	}
+	if x.WorkerConfig.AclEnabled {
+		ns, err := x.ExtractNamespace(ctx)
+		if err != nil {
+			return nil, err
+		}
+		defer func() {
+			if resp != nil && resp.Txn != nil {
+				// attach the hash, user must send this hash when further operating on this startTs.
+				resp.Txn.Hash = getHash(ns, resp.Txn.StartTs)
+			}
+		}()
+	}
 
 	var gqlErrs error
 	if resp, rerr = processQuery(ctx, qc); rerr != nil {
@@ -1429,14 +1441,6 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (
 		ProcessingNs:      uint64(l.Processing.Nanoseconds()),
 		EncodingNs:        uint64(l.Json.Nanoseconds()),
 		TotalNs:           uint64((time.Since(l.Start)).Nanoseconds()),
-	}
-	if x.WorkerConfig.AclEnabled {
-		// attach the hash, user should send this hash when further operating on this startTs.
-		ns, err := x.ExtractNamespace(ctx)
-		if err != nil {
-			return nil, err
-		}
-		resp.Txn.Hash = getHash(ns, resp.Txn.StartTs)
 	}
 	md := metadata.Pairs(x.DgraphCostHeader, fmt.Sprint(resp.Metrics.NumUids["_total"]))
 	grpc.SendHeader(ctx, md)

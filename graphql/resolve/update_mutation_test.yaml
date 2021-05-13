@@ -531,8 +531,9 @@
     }
   dgquery: |-
     query {
-      Post_1(func: uid(0x456)) @filter(type(Post)) {
+      Post_1(func: uid(0x456)) {
         uid
+        dgraph.type
       }
     }
   qnametouid: |
@@ -619,8 +620,9 @@
     }
   dgquery: |-
     query {
-      ComputerOwner_1(func: eq(ComputerOwner.name, "computerOwnerName")) @filter(type(ComputerOwner)) {
+      ComputerOwner_1(func: eq(ComputerOwner.name, "computerOwnerName")) {
         uid
+        dgraph.type
       }
     }
   qnametouid: |
@@ -668,8 +670,9 @@
     }
   dgquery: |-
     query {
-      Post_1(func: uid(0x124)) @filter(type(Post)) {
+      Post_1(func: uid(0x124)) {
         uid
+        dgraph.type
       }
     }
   qnametouid: |
@@ -717,8 +720,9 @@
     }
   dgquery: |-
     query {
-      Post_1(func: uid(0x456)) @filter(type(Post)) {
+      Post_1(func: uid(0x456)) {
         uid
+        dgraph.type
       }
     }
   qnametouid: |
@@ -795,11 +799,13 @@
     }
   dgquery: |-
     query {
-      Post_1(func: uid(0x456)) @filter(type(Post)) {
+      Post_1(func: uid(0x456)) {
         uid
+        dgraph.type
       }
-      Post_2(func: uid(0x789)) @filter(type(Post)) {
+      Post_2(func: uid(0x789)) {
         uid
+        dgraph.type
       }
     }
   qnametouid: |
@@ -872,8 +878,9 @@
   explanation: "updateAuthor doesn't update posts except where references are removed"
   dgquery: |-
     query {
-      Post_1(func: uid(0x456)) @filter(type(Post)) {
+      Post_1(func: uid(0x456)) {
         uid
+        dgraph.type
       }
     }
   qnametouid: |
@@ -977,8 +984,9 @@
   explanation: "The update creates a new state"
   dgquery: |-
     query {
-      State_1(func: eq(State.code, "dg")) @filter(type(State)) {
+      State_1(func: eq(State.code, "dg")) {
         uid
+        dgraph.type
       }
     }
   dgquerysec: |-
@@ -1038,8 +1046,9 @@
   explanation: "The update links to existing state"
   dgquery: |-
     query {
-      State_1(func: eq(State.code, "dg")) @filter(type(State)) {
+      State_1(func: eq(State.code, "dg")) {
         uid
+        dgraph.type
       }
     }
   qnametouid: |
@@ -1108,8 +1117,9 @@
   explanation: "The update must link to the existing state"
   dgquery: |-
     query {
-      State_1(func: eq(State.code, "dg")) @filter(type(State)) {
+      State_1(func: eq(State.code, "dg")) {
         uid
+        dgraph.type
       }
     }
   qnametouid: |
@@ -1174,8 +1184,9 @@
   explanation: " Owner 0x123"
   dgquery: |-
     query {
-      House_1(func: uid(0x456)) @filter(type(House)) {
+      House_1(func: uid(0x456)) {
         uid
+        dgraph.type
       }
     }
   qnametouid: |
@@ -1237,8 +1248,9 @@
     }
   dgquery: |-
     query {
-      Movie_1(func: uid(0x456)) @filter(type(Movie)) {
+      Movie_1(func: uid(0x456)) {
         uid
+        dgraph.type
       }
     }
   qnametouid: |
@@ -1284,8 +1296,9 @@
     }
   dgquery: |-
     query {
-      Movie_1(func: uid(0x456)) @filter(type(Movie)) {
+      Movie_1(func: uid(0x456)) {
         uid
+        dgraph.type
       }
     }
   qnametouid: |
@@ -1342,8 +1355,9 @@
   is same, it should not return error."
   dgquery: |-
     query {
-      Teacher_1(func: eq(People.xid, "T1")) @filter(type(Teacher)) {
+      Teacher_1(func: eq(People.xid, "T1")) {
         uid
+        dgraph.type
       }
     }
   dgquerysec: |-
@@ -1443,48 +1457,6 @@
     message: |-
       failed to rewrite mutation payload because duplicate XID found: T1
 
-- name: "Duplicate XIDs in single mutation for Interface"
-  gqlmutation: |
-    mutation updateStudent($input: UpdateStudentInput!) {
-      updateStudent(input: $input) {
-        student {
-          xid
-          name
-          taughtBy {
-            xid
-            name
-            subject
-          }
-        }
-      }
-    }
-  gqlvariables: |
-    {
-      "input": {
-        "filter": {
-          "xid": {"eq": "S1"}
-        },
-        "set": {
-          "taughtBy": [
-            {
-              "xid": "T1",
-              "name": "Teacher1",
-              "subject": "Sub1",
-              "teaches": [
-                {"xid": "T1", "name": "Stud2"}
-              ]
-            }
-          ]
-        }
-      }
-    }
-  explanation: "When duplicate XIDs are given as input for an Interface in a single mutation, it
-  should return error."
-  error:
-    message: |-
-      failed to rewrite mutation payload because duplicate XID found: T1
-
-
 # Additional Deletes
 #
 # If we have
@@ -1546,8 +1518,9 @@
     }
   dgquery: |-
     query {
-      Post_1(func: uid(0x456)) @filter(type(Post)) {
+      Post_1(func: uid(0x456)) {
         uid
+        dgraph.type
       }
     }
   qnametouid: |
@@ -1605,8 +1578,9 @@
     }
   dgquery: |-
     query {
-      Author_1(func: uid(0x456)) @filter(type(Author)) {
+      Author_1(func: uid(0x456)) {
         uid
+        dgraph.type
       }
     }
   qnametouid: |
@@ -1662,8 +1636,9 @@
     }
   dgquery: |-
     query {
-      State_1(func: eq(State.code, "abc")) @filter(type(State)) {
+      State_1(func: eq(State.code, "abc")) {
         uid
+        dgraph.type
       }
     }
   dgquerysec: |-
@@ -1731,8 +1706,9 @@
     }
   dgquery: |-
     query {
-      Computer_1(func: eq(Computer.name, "Comp")) @filter(type(Computer)) {
+      Computer_1(func: eq(Computer.name, "Comp")) {
         uid
+        dgraph.type
       }
     }
   dgquerysec: |-
@@ -1790,11 +1766,13 @@
     }
   dgquery: |-
     query {
-      Parrot_1(func: uid(0x124)) @filter(type(Parrot)) {
+      Parrot_1(func: uid(0x124)) {
         uid
+        dgraph.type
       }
-      Parrot_2(func: uid(0x125)) @filter(type(Parrot)) {
+      Parrot_2(func: uid(0x125)) {
         uid
+        dgraph.type
       }
     }
   qnametouid: |
@@ -2001,11 +1979,13 @@
     }
   dgquery: |-
     query {
-      Book_1(func: eq(Book.ISBN, "I001")) @filter(type(Book)) {
+      Book_1(func: eq(Book.ISBN, "I001")) {
         uid
+        dgraph.type
       }
-      Book_2(func: eq(Book.title, "History of Humans")) @filter(type(Book)) {
+      Book_2(func: eq(Book.title, "History of Humans")) {
         uid
+        dgraph.type
       }
     }
   dgquerysec: |-
@@ -2063,11 +2043,13 @@
     }
   dgquery: |-
     query {
-      Book_1(func: eq(Book.ISBN, "I001")) @filter(type(Book)) {
+      Book_1(func: eq(Book.ISBN, "I001")) {
         uid
+        dgraph.type
       }
-      Book_2(func: eq(Book.title, "History of Humans")) @filter(type(Book)) {
+      Book_2(func: eq(Book.title, "History of Humans")) {
         uid
+        dgraph.type
       }
     }
   qnametouid: |-
@@ -2113,11 +2095,13 @@
     }
   dgquery: |-
     query {
-      Post1_1(func: eq(Post1.id, "P01")) @filter(type(Post1)) {
+      Post1_1(func: eq(Post1.id, "P01")) {
         uid
+        dgraph.type
       }
-      Comment1_2(func: eq(Comment1.id, "C01")) @filter(type(Comment1)) {
+      Comment1_2(func: eq(Comment1.id, "C01")) {
         uid
+        dgraph.type
       }
     }
   dgquerysec: |-
@@ -2178,8 +2162,9 @@
     }
   dgquery: |-
     query {
-      Post1_1(func: eq(Post1.id, "P01")) @filter(type(Post1)) {
+      Post1_1(func: eq(Post1.id, "P01")) {
         uid
+        dgraph.type
       }
     }
   error2:
@@ -2218,14 +2203,17 @@
 
   dgquery: |-
     query {
-      LibraryMember_1(func: eq(Member.name, "Alice")) @filter(type(LibraryMember)) {
+      LibraryMember_1(func: eq(Member.name, "Alice")) {
         uid
+        dgraph.type
       }
-      LibraryMember_2(func: eq(Member.refID, "102")) @filter(type(LibraryMember)) {
+      LibraryMember_2(func: eq(Member.refID, "102")) {
         uid
+        dgraph.type
       }
-      LibraryMember_3(func: eq(Member.refID, "102")) @filter(type(Member)) {
+      LibraryMember_3(func: eq(Member.refID, "102")) {
         uid
+        dgraph.type
       }
     }
   dgquerysec: |-
@@ -2273,14 +2261,17 @@
     }
   dgquery: |-
     query {
-      LibraryMember_1(func: eq(Member.name, "Alice")) @filter(type(LibraryMember)) {
+      LibraryMember_1(func: eq(Member.name, "Alice")) {
         uid
+        dgraph.type
       }
-      LibraryMember_2(func: eq(Member.refID, "102")) @filter(type(LibraryMember)) {
+      LibraryMember_2(func: eq(Member.refID, "102")) {
         uid
+        dgraph.type
       }
-      LibraryMember_3(func: eq(Member.refID, "102")) @filter(type(Member)) {
+      LibraryMember_3(func: eq(Member.refID, "102")) {
         uid
+        dgraph.type
       }
     }
   qnametouid: |-
@@ -2325,14 +2316,17 @@
     }
   dgquery: |-
     query {
-      LibraryManager_1(func: eq(LibraryManager.name, "Bob")) @filter(type(LibraryManager)) {
+      LibraryManager_1(func: eq(LibraryManager.name, "Bob")) {
         uid
+        dgraph.type
       }
-      LibraryMember_2(func: eq(Member.refID, "101")) @filter(type(LibraryMember)) {
+      LibraryMember_2(func: eq(Member.refID, "101")) {
         uid
+        dgraph.type
       }
-      LibraryMember_3(func: eq(Member.refID, "101")) @filter(type(Member)) {
+      LibraryMember_3(func: eq(Member.refID, "101")) {
         uid
+        dgraph.type
       }
     }
   qnametouid: |-
@@ -2375,14 +2369,17 @@
     }
   dgquery: |-
     query {
-      LibraryManager_1(func: eq(LibraryManager.name, "Bob")) @filter(type(LibraryManager)) {
+      LibraryManager_1(func: eq(LibraryManager.name, "Bob")) {
         uid
+        dgraph.type
       }
-      LibraryMember_2(func: eq(Member.refID, "101")) @filter(type(LibraryMember)) {
+      LibraryMember_2(func: eq(Member.refID, "101")) {
         uid
+        dgraph.type
       }
-      LibraryMember_3(func: eq(Member.refID, "101")) @filter(type(Member)) {
+      LibraryMember_3(func: eq(Member.refID, "101")) {
         uid
+        dgraph.type
       }
     }
   qnametouid: |-

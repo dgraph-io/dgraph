@@ -34,7 +34,13 @@ func main() {
 	// benchmark notes are located in badger-bench/randread.
 	runtime.GOMAXPROCS(128)
 
-	absDiff := func(a, b uint64) uint64 {
+	absU := func(a, b uint64) uint64 {
+		if a > b {
+			return a - b
+		}
+		return b - a
+	}
+	abs := func(a, b int) int {
 		if a > b {
 			return a - b
 		}
@@ -53,11 +59,12 @@ func main() {
 
 		var js z.MemStats
 		var lastAlloc uint64
+		var numGo int
 
 		for range ticker.C {
 			// Read Jemalloc stats first. Print if there's a big difference.
 			z.ReadMemStats(&js)
-			if diff := absDiff(uint64(z.NumAllocBytes()), lastAlloc); diff > 1<<30 {
+			if diff := absU(uint64(z.NumAllocBytes()), lastAlloc); diff > 1<<30 {
 				glog.V(2).Infof("NumAllocBytes: %s jemalloc: Active %s Allocated: %s"+
 					" Resident: %s Retained: %s\n",
 					humanize.IBytes(uint64(z.NumAllocBytes())),
@@ -69,7 +76,13 @@ func main() {
 			}
 
 			runtime.ReadMemStats(&ms)
-			diff := absDiff(ms.HeapAlloc, lastMs.HeapAlloc)
+			diff := absU(ms.HeapAlloc, lastMs.HeapAlloc)
+
+			curGo := runtime.NumGoroutine()
+			if diff := abs(curGo, numGo); diff >= 64 {
+				glog.V(2).Infof("Num goroutines: %d\n", curGo)
+				numGo = curGo
+			}
 
 			switch {
 			case ms.NumGC > lastNumGC:

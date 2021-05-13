@@ -50,13 +50,17 @@ func TestBackupMultiTenancy(t *testing.T) {
 	dg := testutil.DgClientWithLogin(t, "groot", "password", x.GalaxyNamespace)
 	testutil.DropAll(t, dg)
 
-	galaxyCreds := &testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: x.GalaxyNamespace}
+	galaxyCreds := &testutil.LoginParams{
+		UserID: "groot", Passwd: "password", Namespace: x.GalaxyNamespace}
 	galaxyToken := testutil.Login(t, galaxyCreds)
 
 	// Create a new namespace
-	ns, err := testutil.CreateNamespaceWithRetry(t, galaxyToken)
+	ns1, err := testutil.CreateNamespaceWithRetry(t, galaxyToken)
 	require.NoError(t, err)
-	dg1 := testutil.DgClientWithLogin(t, "groot", "password", ns)
+	ns2, err := testutil.CreateNamespaceWithRetry(t, galaxyToken)
+	require.NoError(t, err)
+	dg1 := testutil.DgClientWithLogin(t, "groot", "password", ns1)
+	dg2 := testutil.DgClientWithLogin(t, "groot", "password", ns2)
 
 	addSchema := func(dg *dgo.Dgraph) {
 		// Add schema and types.
@@ -69,6 +73,7 @@ func TestBackupMultiTenancy(t *testing.T) {
 
 	addSchema(dg)
 	addSchema(dg1)
+	addSchema(dg2)
 
 	addData := func(dg *dgo.Dgraph, name string) *api.Response {
 		var buf bytes.Buffer
@@ -96,7 +101,8 @@ func TestBackupMultiTenancy(t *testing.T) {
 
 	original := make(map[uint64]*api.Response)
 	original[x.GalaxyNamespace] = addData(dg, "galaxy")
-	original[ns] = addData(dg1, "ns")
+	original[ns1] = addData(dg1, "ns1")
+	original[ns2] = addData(dg2, "ns2")
 
 	// Setup test directories.
 	common.DirSetup(t)
@@ -111,11 +117,23 @@ func TestBackupMultiTenancy(t *testing.T) {
 	expectedResponse := `{ "q": [{ "count": 5 }]}`
 	testutil.VerifyQueryResponse(t, dg, query, expectedResponse)
 	testutil.VerifyQueryResponse(t, dg1, query, expectedResponse)
+	testutil.VerifyQueryResponse(t, dg2, query, expectedResponse)
+
+	// Call drop data from namespace ns2.
+	require.NoError(t, dg2.Alter(ctx, &api.Operation{DropOp: api.Operation_DATA}))
+	// Send backup request.
+	_ = runBackup(t, galaxyToken, 6, 2)
+	testutil.DropAll(t, dg)
+	sendRestoreRequest(t, alphaBackupDir, galaxyToken.AccessJwt)
+	testutil.WaitForRestore(t, dg)
+	testutil.VerifyQueryResponse(t, dg, query, expectedResponse)
+	testutil.VerifyQueryResponse(t, dg1, query, expectedResponse)
+	testutil.VerifyQueryResponse(t, dg2, query, `{ "q": [{ "count": 0 }]}`)
 
 	// After deleting a namespace in incremental backup, we should not be able to get the data from
 	// banned namespace.
-	require.NoError(t, testutil.DeleteNamespace(t, galaxyToken, ns))
-	_ = runBackup(t, galaxyToken, 6, 2)
+	require.NoError(t, testutil.DeleteNamespace(t, galaxyToken, ns1))
+	_ = runBackup(t, galaxyToken, 9, 3)
 	testutil.DropAll(t, dg)
 	sendRestoreRequest(t, alphaBackupDir, galaxyToken.AccessJwt)
 	testutil.WaitForRestore(t, dg)
@@ -138,8 +156,8 @@ func runBackupInternal(t *testing.T, token *testutil.HttpToken, forceFull bool, 
 			backup(input: {destination: $dst, forceFull: $ff}) {
 				response {
 					code
-					message
 				}
+				taskId
 			}
 		}`
 
@@ -150,16 +168,13 @@ func runBackupInternal(t *testing.T, token *testutil.HttpToken, forceFull bool, 
 			"ff":  forceFull,
 		},
 	}
+
 	resp := testutil.MakeRequest(t, token, params)
-	var result struct {
-		Backup struct {
-			Response struct {
-				Message, Code string
-			}
-		}
-	}
-	require.NoError(t, json.Unmarshal(resp.Data, &result))
-	require.Contains(t, result.Backup.Response.Message, "Backup completed.")
+	var data interface{}
+	require.NoError(t, json.Unmarshal(resp.Data, &data))
+	require.Equal(t, "Success", testutil.JsonGet(data, "backup", "response", "code").(string))
+	taskId := testutil.JsonGet(data, "backup", "taskId").(string)
+	testutil.WaitForTask(t, taskId, false)
 
 	// Verify that the right amount of files and directories were created.
 	common.CopyToLocalFs(t)

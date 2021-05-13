@@ -290,11 +290,14 @@ func (sg *SubGraph) fillGroupedVars(doneVars map[string]varValue, path []*SubGra
 
 	var pathNode *SubGraph
 	var dedupMap dedup
-
+	// uidPredicate is true when atleast one argument to
+	// the groupby is uid predicate.
+	uidPredicate := false
 	for _, child := range sg.Children {
 		if !child.Params.IgnoreResult {
 			continue
 		}
+		uidPredicate = uidPredicate || !child.DestMap.IsEmpty()
 
 		attr := child.Params.Alias
 		if attr == "" {
@@ -312,6 +315,23 @@ func (sg *SubGraph) fillGroupedVars(doneVars map[string]varValue, path []*SubGra
 			pathNode = child
 		} else {
 			// It's a value node.
+
+			// Currently vars are supported only at the root.
+			// for eg, The following query will result into error:-
+			// 	v as var(func: uid(1,31)) {
+			// 		name
+			// 		friend @groupby(age) {
+			// 			a as count(uid)
+			// 		}
+			// 	}
+			// since `a` is a global variable which stores (uid, val) pair for
+			// all the srcUids (1 & 31 in this case), we can't store distinct
+			// vals for same uid locally. This will eventually lead to incorrect
+			// results.
+			if sg.SrcFunc == nil {
+				return errors.Errorf("Vars can be assigned only at root when grouped by Value")
+			}
+
 			for i, v := range child.valueMatrix {
 				srcUid := child.SrcUIDs.Uids[i]
 				if len(v.Values) == 0 {
@@ -352,17 +372,35 @@ func (sg *SubGraph) fillGroupedVars(doneVars map[string]varValue, path []*SubGra
 			if len(grp.keys) == 0 {
 				continue
 			}
-			if len(grp.keys) > 1 {
-				return errors.Errorf("Expected one UID for var in groupby but got: %d", len(grp.keys))
-			}
-			uidVal := grp.keys[0].key.Value
-			uid, ok := uidVal.(uint64)
-			if !ok {
-				return errors.Errorf("Vars can be assigned only when grouped by UID attribute")
-			}
-			// grp.aggregates could be empty if schema conversion failed during aggregation
-			if len(grp.aggregates) > 0 {
-				tempMap[uid] = grp.aggregates[len(grp.aggregates)-1].key
+
+			if len(grp.keys) == 1 && grp.keys[0].key.Tid == types.UidID {
+				uidVal := grp.keys[0].key.Value
+				uid, _ := uidVal.(uint64)
+				// grp.aggregates could be empty if schema conversion failed during aggregation
+				if len(grp.aggregates) > 0 {
+					tempMap[uid] = grp.aggregates[len(grp.aggregates)-1].key
+				}
+			} else {
+				// if there are more than one predicates or a single scalar
+				// predicate in the @groupby then the variable stores the mapping of
+				// uid -> count of duplicates. for eg if there are two predicates(u & v) and
+				// the grouped uids for (u1, v1) pair are (uid1, uid2, uid3) then the variable
+				// stores (uid1, 3), (uid2, 3) & (uid2, 2) map.
+				// For the query given below:-
+				// 	var(func: type(Student)) @groupby(school, age) {
+				// 		c as count(uid)
+				// 	}
+				// if the grouped result is:-
+				// (s1, age1) -> "0x1", "0x2", "0x3"
+				// (s2, age2) -> "0x4"
+				// (s3, ag3) -> "0x5","0x6"
+				// then `c` will store the mapping:-
+				// {"0x1" -> 3, "0x2" -> 3, "0x3" -> 3, "0x4" -> 1, "0x5" -> 2, "0x6"-> 2}
+				for _, uid := range grp.uids {
+					if len(grp.aggregates) > 0 {
+						tempMap[uid] = grp.aggregates[len(grp.aggregates)-1].key
+					}
+				}
 			}
 		}
 		doneVars[chVar] = varValue{

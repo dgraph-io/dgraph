@@ -215,11 +215,7 @@ func (bw *bufWriter) Write(buf *z.Buffer) error {
 		}
 		return nil
 	})
-	if err != nil {
-		return err
-	}
-	buf.Release()
-	return nil
+	return errors.Wrap(err, "bufWriter failed to write")
 }
 
 func runExportBackup() error {
@@ -269,7 +265,7 @@ func runExportBackup() error {
 			EncryptionKeyFile: encFlag.GetPath("key-file"),
 			RestoreTs:         1,
 		}
-		if err := worker.RunMapper(req, mapDir); err != nil {
+		if _, err := worker.RunMapper(req, mapDir); err != nil {
 			return errors.Wrap(err, "Failed to map the backups")
 		}
 

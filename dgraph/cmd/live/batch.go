@@ -74,14 +74,12 @@ type loader struct {
 	retryRequestsWg sync.WaitGroup
 
 	// Miscellaneous information to print counters.
-	// Num of N-Quads sent
-	nquads uint64
-	// Num of txns sent
-	txns uint64
-	// Num of aborts
-	aborts uint64
-	// To get time elapsed
-	start time.Time
+	nquads   uint64    // Num of N-Quads sent
+	txns     uint64    // Num of txns sent
+	aborts   uint64    // Num of aborts
+	start    time.Time // To get time elapsed
+	inflight int32     // Number of inflight requests.
+	conc     int32     // Number of request makers.
 
 	conflicts map[uint64]struct{}
 	uidsLock  sync.RWMutex
@@ -165,6 +163,7 @@ func (l *loader) infinitelyRetry(req *request) {
 }
 
 func (l *loader) mutate(req *request) error {
+	atomic.AddInt32(&l.inflight, 1)
 	txn := l.dc.NewTxn()
 	req.CommitNow = true
 	request := &api.Request{
@@ -172,6 +171,7 @@ func (l *loader) mutate(req *request) error {
 		Mutations: []*api.Mutation{req.Mutation},
 	}
 	_, err := txn.Do(l.opts.Ctx, request)
+	atomic.AddInt32(&l.inflight, -1)
 	return err
 }
 
@@ -383,39 +383,69 @@ func (l *loader) deregister(req *request) {
 // makeRequests can receive requests from batchNquads or directly from BatchSetWithMark.
 // It doesn't need to batch the requests anymore. Batching is already done for it by the
 // caller functions.
-func (l *loader) makeRequests() {
+func (l *loader) makeRequests(id int) {
 	defer l.requestsWg.Done()
+	atomic.AddInt32(&l.conc, 1)
+	defer atomic.AddInt32(&l.conc, -1)
 
 	buffer := make([]*request, 0, l.opts.bufferSize)
-	drain := func(maxSize int) {
-		for len(buffer) > maxSize {
-			i := 0
-			for _, req := range buffer {
-				// If there is no conflict in req, we will use it
-				// and then it would shift all the other reqs in buffer
-				if !l.addConflictKeys(req) {
-					buffer[i] = req
-					i++
-					continue
-				}
-				// Req will no longer be part of a buffer
-				l.request(req)
+	var loops int
+	drain := func() {
+		i := 0
+		for _, req := range buffer {
+			loops++
+			// If there is no conflict in req, we will use it
+			// and then it would shift all the other reqs in buffer
+			if !l.addConflictKeys(req) {
+				buffer[i] = req
+				i++
+				continue
 			}
-			buffer = buffer[:i]
-		}
-	}
-
-	for req := range l.reqs {
-		req.conflicts = l.conflictKeysForReq(req)
-		if l.addConflictKeys(req) {
+			// Req will no longer be part of a buffer
 			l.request(req)
-		} else {
-			buffer = append(buffer, req)
 		}
-		drain(l.opts.bufferSize - 1)
+		buffer = buffer[:i]
 	}
 
-	drain(0)
+	t := time.NewTicker(5 * time.Second)
+	defer t.Stop()
+
+outer:
+	for {
+		select {
+		case req, ok := <-l.reqs:
+			if !ok {
+				break outer
+			}
+			req.conflicts = l.conflictKeysForReq(req)
+			if l.addConflictKeys(req) {
+				l.request(req)
+			} else {
+				buffer = append(buffer, req)
+			}
+
+		case <-t.C:
+			for {
+				drain()
+				if len(buffer) < l.opts.bufferSize {
+					break
+				}
+				time.Sleep(100 * time.Millisecond)
+			}
+		}
+	}
+
+	for len(buffer) > 0 {
+		select {
+		case <-t.C:
+			fmt.Printf("[%2d] Draining. len(buffer): %d\n", id, len(buffer))
+		default:
+		}
+
+		drain()
+		time.Sleep(100 * time.Millisecond)
+	}
+	fmt.Printf("[%2d] Looped %d times over buffered requests.\n", id, loops)
 }
 
 func (l *loader) printCounters() {
@@ -429,9 +459,11 @@ func (l *loader) printCounters() {
 		r.Capture(c.Nquads)
 		elapsed := time.Since(start).Round(time.Second)
 		timestamp := time.Now().Format("15:04:05Z0700")
-		fmt.Printf("[%s] Elapsed: %s Txns: %d N-Quads: %s N-Quads/s: %s Aborts: %d\n",
+		fmt.Printf("[%s] Elapsed: %s Txns: %d N-Quads: %s N-Quads/s: %s"+
+			" Inflight: %2d/%2d Aborts: %d\n",
 			timestamp, x.FixedDuration(elapsed), c.TxnsDone,
-			humanize.Comma(int64(c.Nquads)), humanize.Comma(int64(r.Rate())), c.Aborts)
+			humanize.Comma(int64(c.Nquads)), humanize.Comma(int64(r.Rate())),
+			atomic.LoadInt32(&l.inflight), atomic.LoadInt32(&l.conc), c.Aborts)
 	}
 }
 

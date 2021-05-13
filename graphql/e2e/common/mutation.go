@@ -2933,7 +2933,7 @@ func addMultipleMutationWithOneError(t *testing.T) {
 	newAuth := addAuthor(t, newCountry.ID, postExecutor)
 
 	badAuth := &author{
-		ID: "0x0",
+		ID: "0x1234321", // A random non-existing ID
 	}
 
 	goodPost := &post{
@@ -3003,7 +3003,7 @@ func addMultipleMutationWithOneError(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Contains(t, gqlResponse.Errors[0].Error(),
-		`because ID "0x0" isn't a Author`)
+		`because ID "0x1234321" isn't a Author`)
 
 	cleanUp(t, []*country{newCountry}, []*author{newAuth}, result.AddPost.Post)
 }
@@ -6619,4 +6619,78 @@ func xidUpdateAndNullableTests(t *testing.T) {
 			"regNo": map[string]interface{}{"in": []int{101, 102, 103, 105}}}
 	DeleteGqlType(t, "Employer", filterEmployer, 2, nil)
 	DeleteGqlType(t, "Worker", filterWorker, 4, nil)
+}
+
+func referencingSameNodeWithMultipleXIds(t *testing.T) {
+	params := &GraphQLParams{
+		Query: `mutation($input: [AddPerson1Input!]!) {
+					addPerson1(input: $input) {
+						person1 {
+							regId
+							name
+							friends {
+								regId
+								name
+							}
+							closeFriends {
+								regId
+								name
+							}
+						}
+					}
+				}`,
+		Variables: map[string]interface{}{
+			"input": []interface{}{
+				map[string]interface{}{
+					"regId": "7",
+					"name":  "7th Person",
+					"name1": "seventh Person",
+					"friends": []interface{}{
+						map[string]interface{}{
+							"regId": "8",
+							"name":  "8th Person",
+							"name1": "eighth Person",
+						},
+					},
+					"closeFriends": []interface{}{
+						map[string]interface{}{
+							"regId": "8",
+							"name":  "8th Person",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	gqlResponse := postExecutor(t, GraphqlURL, params)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	expected := `{
+					"addPerson1":
+						{
+							"person1": [
+								{
+									"closeFriends": [
+										{
+											"name": "8th Person",
+											"regId": "8"
+										}
+									],
+									"friends": [
+										{
+											"name": "8th Person",
+        							      	"regId": "8"
+										}
+									],
+									"name": "7th Person",
+									"regId": "7"
+								}
+							]
+						}
+					}`
+	testutil.CompareJSON(t, expected, string(gqlResponse.Data))
+
+	// cleanup
+	DeleteGqlType(t, "Person1", map[string]interface{}{}, 2, nil)
 }
