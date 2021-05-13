@@ -662,8 +662,11 @@ func main() {
 		"mount a docker volume as /data in containers")
 	cmd.PersistentFlags().StringVarP(&opts.DataDir, "data_dir", "d", "",
 		"mount a host directory as /data in containers")
-	cmd.PersistentFlags().StringVarP(&opts.PDir, "p_dir", "p", "",
-		"launch cluster with local path of p directory, data_vol must be set to true and a=r")
+	cmd.PersistentFlags().StringVarP(&opts.PDir, "postings", "p", "",
+		"launch cluster with local path of p directory, data_vol must be set to true and a=r."+
+			"\nFor new cluster to pick postings, you might have to move uids and timestamp..."+
+			"\ncurl \"http://localhost:<zeroPort>/assign?what=timestamps&num=1000000\""+
+			"\ncurl \"http://localhost:<zeroPort>/assign?what=uids&num=1000000\"")
 
 	cmd.PersistentFlags().BoolVar(&opts.Acl, "acl", false, "Create ACL secret file and enable ACLs")
 	cmd.PersistentFlags().StringVar(&opts.AclSecret, "acl_secret", "",
@@ -757,10 +760,10 @@ func main() {
 		fatal(errors.Errorf("--cdc_consumer requires --cdc"))
 	}
 	if opts.PDir != "" && opts.DataDir == "" {
-		fatal(errors.Errorf("--p_dir option requires --data_dir"))
+		fatal(errors.Errorf("--postings option requires --data_dir"))
 	}
 	if opts.PDir != "" && opts.NumAlphas > opts.NumReplicas {
-		fatal(errors.Errorf("--p_dir requires --num_replicas >= --num_alphas"))
+		fatal(errors.Errorf("--postings requires --num_replicas >= --num_alphas"))
 	}
 
 	services := make(map[string]service)
@@ -895,5 +898,11 @@ func main() {
 		if err != nil {
 			fatal(errors.Errorf("unable to write file: %v", err))
 		}
+	}
+
+	if opts.PDir != "" {
+		fmt.Printf("For new cluster to pick \"postings\", you might have to move uids and timestamp..." +
+			"\n\tcurl \"http://localhost:<zeroPort>/assign?what=timestamps&num=1000000\"" +
+			"\n\tcurl \"http://localhost:<zeroPort>/assign?what=uids&num=1000000\"\n")
 	}
 }
