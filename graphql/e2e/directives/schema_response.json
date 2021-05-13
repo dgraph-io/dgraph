@@ -469,7 +469,30 @@
     },
     {
       "predicate": "Person1.name",
-      "type": "string"
+      "type": "string",
+      "upsert": true,
+      "tokenizer": [
+        "hash"
+      ],
+      "index": true
+    },
+    {
+      "predicate": "Person1.regId",
+      "type": "string",
+      "upsert": true,
+      "tokenizer": [
+        "hash"
+      ],
+      "index": true
+    },
+    {
+      "predicate": "Person1.name1",
+      "type": "string",
+      "upsert": true,
+      "tokenizer": [
+        "hash"
+      ],
+      "index": true
     },
     {
       "predicate": "Plant.breed",
@@ -1209,6 +1232,12 @@
         },
         {
           "name": "Person1.closeFriends"
+        },
+        {
+          "name": "Person1.name1"
+        },
+        {
+          "name": "Person1.regId"
         }
       ],
       "name": "Person1"

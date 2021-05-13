@@ -523,7 +523,30 @@
     },
     {
       "predicate": "Person1.name",
-      "type": "string"
+      "index": true,
+      "type": "string",
+      "tokenizer": [
+        "hash"
+      ],
+      "upsert": true
+    },
+    {
+      "predicate": "Person1.name1",
+      "index": true,
+      "type": "string",
+      "tokenizer": [
+        "hash"
+      ],
+      "upsert": true
+    },
+    {
+      "predicate": "Person1.regId",
+      "index": true,
+      "type": "string",
+      "tokenizer": [
+        "hash"
+      ],
+      "upsert": true
     },
     {
       "predicate": "Plant.breed",
@@ -1236,6 +1259,12 @@
       "fields": [
         {
           "name": "Person1.name"
+        },
+        {
+          "name": "Person1.name1"
+        },
+        {
+          "name": "Person1.regId"
         },
         {
           "name": "Person1.friends"

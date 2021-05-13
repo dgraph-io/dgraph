@@ -32,6 +32,7 @@ import (
 
 const (
 	predicateMoveTimeout = 120 * time.Minute
+	phaseOneThreshold    = 20 * time.Minute
 )
 
 /*
@@ -48,7 +49,8 @@ Phase I:
 • G1 would do a call to G2, and start streaming.
 • Before G2 starts accepting, it should delete any current keys for P.
 • G1 should tell Zero whether it succeeded or failed. (Endpoint: G1 → Zero)
-• If Phase I succeeds, proceed with Phase II. Else, P would be served by G1.
+• If it succeeds, then based on the time taken for the above run, zero decides to do another run of
+  Phase I, or move to Phase II.
 
 Phase II:
 • Zero would propose that G1 is read-only for predicate P. This would propagate to the cluster.
@@ -160,12 +162,6 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 	glog.Info(msg)
 	span.Annotate([]otrace.Attribute{otrace.StringAttribute("tablet", predicate)}, msg)
 
-	// Get a new timestamp. Source Alpha leader must reach this timestamp before streaming the data.
-	ids, err := s.Timestamps(ctx, &pb.Num{Val: 1})
-	if err != nil || ids.StartId == 0 {
-		return errors.Wrapf(err, "while leasing txn timestamp. Id: %+v", ids)
-	}
-
 	// Get connection to leader of source group.
 	pl := s.Leader(srcGroup)
 	if pl == nil {
@@ -176,16 +172,46 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 		Predicate: predicate,
 		SourceGid: srcGroup,
 		DestGid:   dstGroup,
-		ReadTs:    ids.StartId,
-		SinceTs:   0,
 	}
 
-	// Move the predicate. Commits on this predicate are not blocked yet. Any data after ReadTs
-	// will be moved in the phase II below.
-	span.Annotatef(nil, "Starting move [1]: %+v", in)
-	glog.Infof("Starting move [1]: %+v", in)
-	if _, err := wc.MovePredicate(ctx, in); err != nil {
-		return errors.Wrapf(err, "while moving the majority of predicate")
+	var sinceTs uint64
+	counter := 1
+	nonBlockingMove := func() error {
+		// Get a new timestamp. Source Alpha leader must reach this timestamp before streaming data.
+		ids, err := s.Timestamps(ctx, &pb.Num{Val: 1})
+		if err != nil || ids.StartId == 0 {
+			return errors.Wrapf(err, "while leasing txn timestamp. Id: %+v", ids)
+		}
+
+		// Move the predicate. Commits on this predicate are not blocked yet. Any data after ReadTs
+		// will be moved in the phase II below.
+		in.ReadTs = ids.StartId
+		in.SinceTs, sinceTs = sinceTs, in.ReadTs
+		span.Annotatef(nil, "Starting move [1.%d]: %+v", counter, in)
+		glog.Infof("Starting move [1.%d]: %+v", counter, in)
+		_, err = wc.MovePredicate(ctx, in)
+		return err
+	}
+
+	var start time.Time
+	for {
+		start = time.Now()
+		if err := nonBlockingMove(); err != nil {
+			return errors.Wrapf(err, "while moving the majority of predicate")
+		}
+		took := time.Since(start)
+		if took < phaseOneThreshold || counter > 3 {
+			// If we already did atleast 3 iterations in Phase I or the last iteration took less
+			// than phaseOneThreshold, then move to Phase II.
+			msg := fmt.Sprintf("Done Phase I: took %s at counter: %d", took, counter)
+			span.Annotate(nil, msg)
+			glog.Infof(msg)
+			break
+		}
+		msg := fmt.Sprintf("Redo Phase I: took %s at counter: %d", took, counter)
+		span.Annotate(nil, msg)
+		glog.Infof(msg)
+		counter++
 	}
 
 	// PHASE II:
@@ -195,13 +221,13 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 
 	// Get a new timestamp, beyond which we are sure that no new txns would be committed for this
 	// predicate. Source Alpha leader must reach this timestamp before streaming the data.
-	ids, err = s.Timestamps(ctx, &pb.Num{Val: 1})
+	ids, err := s.Timestamps(ctx, &pb.Num{Val: 1})
 	if err != nil || ids.StartId == 0 {
 		return errors.Wrapf(err, "while leasing txn timestamp. Id: %+v", ids)
 	}
 
 	// We have done a majority of move. Now transfer rest of the data.
-	in.SinceTs = in.ReadTs
+	in.SinceTs = sinceTs
 	in.ReadTs = ids.StartId
 	span.Annotatef(nil, "Starting move [2]: %+v", in)
 	glog.Infof("Starting move [2]: %+v", in)

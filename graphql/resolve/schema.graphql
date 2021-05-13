@@ -500,3 +500,20 @@ type LibraryManager  {
     name: String! @id
     manages: [LibraryMember]
 }
+
+interface T {
+    name: String! @id(interface:true)
+    name1: String
+
+}
+
+type T1 implements T {
+    name2:String
+    link:T2
+
+}
+
+type T2 implements T {
+    name3:String
+
+}
