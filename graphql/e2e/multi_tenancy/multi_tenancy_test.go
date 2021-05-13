@@ -14,12 +14,13 @@
  * limitations under the License.
  */
 
-package schema
+package multi_tenancy
 
 import (
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -211,7 +212,7 @@ func TestGraphQLResponse(t *testing.T) {
 	require.Equal(t, schema, common.AssertGetGQLSchema(t, common.Alpha1HTTP, header).Schema)
 	require.Equal(t, schema, common.AssertGetGQLSchema(t, common.Alpha1HTTP, header1).Schema)
 
-	graphqlHelper(t, `
+	queryHelper(t, groupOneGraphQLServer, `
 	mutation {
 		addAuthor(input:{name: "Alice"}) {
 			author{
@@ -227,7 +228,7 @@ func TestGraphQLResponse(t *testing.T) {
 			}
 		}`)
 
-	graphqlHelper(t, query, header,
+	queryHelper(t, groupOneGraphQLServer, query, header,
 		`{
 			"queryAuthor": [
 				{
@@ -236,7 +237,7 @@ func TestGraphQLResponse(t *testing.T) {
 			]
 		}`)
 
-	graphqlHelper(t, query, header1,
+	queryHelper(t, groupOneGraphQLServer, query, header1,
 		`{
 			"queryAuthor": []
 		}`)
@@ -309,7 +310,7 @@ func TestAuth(t *testing.T) {
 		Header:    "Authorization",
 	})
 	header.Set(accessJwtHeader, testutil.GrootHttpLogin(groupOneAdminServer).AccessJwt)
-	graphqlHelper(t, addUserMutation, header, `{
+	queryHelper(t, groupOneGraphQLServer, addUserMutation, header, `{
 		"addUser": {
 			"user":[{
 				"username":"Alice"
@@ -326,7 +327,7 @@ func TestAuth(t *testing.T) {
 	})
 	header1.Set(accessJwtHeader, testutil.GrootHttpLoginNamespace(groupOneAdminServer,
 		ns).AccessJwt)
-	graphqlHelper(t, addUserMutation, header1, `{
+	queryHelper(t, groupOneGraphQLServer, addUserMutation, header1, `{
 		"addUser": {
 			"user":[{
 				"username":"Bob"
@@ -385,13 +386,13 @@ func TestCORS(t *testing.T) {
 	common.DeleteNamespace(t, ns, header)
 }
 
-func graphqlHelper(t *testing.T, query string, headers http.Header,
+func queryHelper(t *testing.T, server, query string, headers http.Header,
 	expectedResult string) {
 	params := &common.GraphQLParams{
 		Query:   query,
 		Headers: headers,
 	}
-	queryResult := params.ExecuteAsPost(t, groupOneGraphQLServer)
+	queryResult := params.ExecuteAsPost(t, server)
 	common.RequireNoGQLErrors(t, queryResult)
 	testutil.CompareJSON(t, expectedResult, string(queryResult.Data))
 }
@@ -429,4 +430,54 @@ func testCORS(t *testing.T, namespace uint64, reqOrigin, expectedAllowedOrigin,
 	require.NoError(t, json.Unmarshal(body, gqlRes))
 	common.RequireNoGQLErrors(t, gqlRes)
 	testutil.CompareJSON(t, `{"queryTestCORS":[]}`, string(gqlRes.Data))
+}
+
+// TestNamespacesQueryField checks that namespaces field in state query of /admin endpoint is
+// properly working.
+func TestNamespacesQueryField(t *testing.T) {
+	header := http.Header{}
+	header.Set(accessJwtHeader, testutil.GrootHttpLogin(groupOneAdminServer).AccessJwt)
+
+	namespaceQuery :=
+		`query {
+			state {
+				namespaces
+			}
+		}`
+
+	// Test namespaces query shows 0 as the only namespace.
+	queryHelper(t, groupOneAdminServer, namespaceQuery, header,
+		`{
+			"state": {
+				"namespaces":[0]
+			}
+		}`)
+
+	ns1 := common.CreateNamespace(t, header)
+	ns2 := common.CreateNamespace(t, header)
+	header1 := http.Header{}
+	header1.Set(accessJwtHeader, testutil.GrootHttpLoginNamespace(groupOneAdminServer,
+		ns1).AccessJwt)
+
+	// Test namespaces query shows no namespace in case user is not guardian of galaxy.
+	queryHelper(t, groupOneAdminServer, namespaceQuery, header1,
+		`{
+			"state": {
+				"namespaces":[]
+			}
+		}`)
+
+	// Test namespaces query shows all 3 namespaces, 0,ns1,ns2 in case user is guardian of galaxy.
+	queryHelper(t, groupOneAdminServer, namespaceQuery, header,
+		`{
+			"state": {
+				"namespaces":[0,`+
+			strconv.FormatUint(ns1, 10)+`,`+
+			strconv.FormatUint(ns2, 10)+`]
+			}
+		}`)
+
+	// cleanup
+	common.DeleteNamespace(t, ns1, header)
+	common.DeleteNamespace(t, ns2, header)
 }
