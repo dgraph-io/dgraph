@@ -487,7 +487,7 @@ func (g *groupi) sendTablet(tablet *pb.Tablet) (*pb.Tablet, error) {
 	}
 
 	if out.GroupId == groups().groupId() {
-		glog.Infof("Serving tablet for: %v\n", x.FormatNsAttr(tablet.GetPredicate()))
+		glog.Infof("Serving tablet for: %v\n", tablet.GetPredicate())
 	}
 	return out, nil
 }
@@ -534,7 +534,7 @@ func (g *groupi) Inform(preds []string) ([]*pb.Tablet, error) {
 		}
 
 		if t.GroupId == groups().groupId() {
-			glog.Infof("Serving tablet for: %v\n", x.FormatNsAttr(t.GetPredicate()))
+			glog.Infof("Serving tablet for: %v\n", t.GetPredicate())
 		}
 	}
 	g.Unlock()
