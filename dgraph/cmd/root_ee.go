@@ -17,6 +17,7 @@ import (
 	acl "github.com/dgraph-io/dgraph/ee/acl"
 	"github.com/dgraph-io/dgraph/ee/audit"
 	"github.com/dgraph-io/dgraph/ee/backup"
+	"github.com/dgraph-io/dgraph/ee/updatemanifest"
 )
 
 func init() {
@@ -27,5 +28,6 @@ func init() {
 		&backup.ExportBackup,
 		&acl.CmdAcl,
 		&audit.CmdAudit,
+		&updatemanifest.UpdateManifest,
 	)
 }
