@@ -573,7 +573,7 @@ func (pr *BackupProcessor) CompleteBackup(ctx context.Context, m *Manifest) erro
 	}
 	manifest.Manifests = append(manifest.Manifests, m)
 
-	if err := createManifest(handler, uri, manifest); err != nil {
+	if err := CreateManifest(handler, uri, manifest); err != nil {
 		return errors.Wrap(err, "Complete backup failed")
 	}
 	glog.Infof("Backup completed OK.")
@@ -687,7 +687,7 @@ func checkAndGetDropOp(key []byte, l *posting.List, readTs uint64) (*pb.DropOper
 		// * DROP_NS;ns
 		// So, accordingly construct the *pb.DropOperation.
 		dropOp := &pb.DropOperation{}
-		dropInfo := strings.Split(string(val), ";")
+		dropInfo := strings.SplitN(string(val), ";", 2)
 		if len(dropInfo) != 2 {
 			return nil, errors.Errorf("Unexpected value: %s for dgraph.drop.op", val)
 		}

@@ -134,7 +134,7 @@ func getFilteredManifests(h x.UriHandler, manifests []*Manifest,
 	for _, m := range manifests {
 		missingFiles := false
 		for g := range m.Groups {
-			path := filepath.Join(m.Path, backupName(m.Since, g))
+			path := filepath.Join(m.Path, backupName(m.ValidReadTs(), g))
 			if !h.FileExists(path) {
 				missingFiles = true
 				break
@@ -244,7 +244,7 @@ func GetManifest(h x.UriHandler, uri *url.URL) (*MasterManifest, error) {
 	return manifest, nil
 }
 
-func createManifest(h x.UriHandler, uri *url.URL, manifest *MasterManifest) error {
+func CreateManifest(h x.UriHandler, uri *url.URL, manifest *MasterManifest) error {
 	var err error
 	if !h.DirExists("./") {
 		if err := h.CreateDir("./"); err != nil {
