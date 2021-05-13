@@ -13,10 +13,10 @@
 package cmd
 
 import (
-	"github.com/dgraph-io/dgraph/dgraph/cmd/updatemanifest"
 	acl "github.com/dgraph-io/dgraph/ee/acl"
 	"github.com/dgraph-io/dgraph/ee/audit"
 	"github.com/dgraph-io/dgraph/ee/backup"
+	"github.com/dgraph-io/dgraph/ee/updatemanifest"
 )
 
 func init() {
