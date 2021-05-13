@@ -1,3 +1,5 @@
+// +build !oss
+
 /*
  * Copyright 2021 Dgraph Labs, Inc. and Contributors
  *
@@ -14,7 +16,7 @@
  * limitations under the License.
  */
 
-package update_manifest
+package updatemanifest
 
 import (
 	"encoding/binary"
@@ -35,7 +37,6 @@ var (
 	logger = log.New(os.Stderr, "", 0)
 	// UpdateManifest is the sub-command invoked when running "dgraph update_manifest".
 	UpdateManifest x.SubCommand
-	quiet          bool // enabling quiet mode would suppress the warning logs
 )
 
 var opt struct {
@@ -122,8 +123,5 @@ func run() error {
 	}
 
 	// Rewrite the master manifest.
-	if err := worker.CreateManifest(handler, uri, masterManifest); err != nil {
-		return errors.Wrap(err, "Complete backup failed")
-	}
-	return nil
+	return errors.Wrap(worker.CreateManifest(handler, uri, masterManifest), "rewrite failed")
 }
