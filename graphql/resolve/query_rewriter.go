@@ -916,7 +916,8 @@ func passwordAuthSelector(t schema.Type) *schema.RuleNode {
 	return auth.Rules.Password
 }
 
-func (authRw *authRewriter) rewriteAuthQueries(typ schema.Type) ([]*dql.GraphQuery, *dql.FilterTree) {
+func (authRw *authRewriter) rewriteAuthQueries(typ schema.Type) (
+	[]*dql.GraphQuery, *dql.FilterTree) {
 	if authRw == nil || authRw.isWritingAuth {
 		return nil, nil
 	}
