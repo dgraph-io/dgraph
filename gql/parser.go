@@ -535,6 +535,23 @@ func Parse(r Request) (Result, error) {
 	return ParseWithNeedVars(r, nil)
 }
 
+func LexQuery(req string) []lex.Item {
+	var l lex.Lexer
+	l.Reset(req)
+	l.Run(lexTopLevel)
+	it := l.NewIterator()
+
+	var res []lex.Item
+	for it.Next() {
+		item := it.Item()
+		res = append(res, item)
+		if item.Typ == lex.ItemError {
+			return res
+		}
+	}
+	return res
+}
+
 // ParseWithNeedVars performs parsing of a query with given needVars.
 //
 // The needVars parameter is passed in the case of upsert block.
