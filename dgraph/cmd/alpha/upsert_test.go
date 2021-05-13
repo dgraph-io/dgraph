@@ -39,7 +39,7 @@ type QueryResult struct {
 
 func splitPreds(ps []string) []string {
 	for i, p := range ps {
-		ps[i] = x.ParseAttr(strings.Split(p, "-")[1])
+		ps[i] = x.ParseAttr(strings.SplitN(p, "-", 2)[1])
 	}
 
 	return ps
