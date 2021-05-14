@@ -1547,7 +1547,8 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 			uids = codec.FromList(sg.SrcUIDs)
 		} else {
 			// Avoid an upfront Clone.
-			sg.DestMap.SetCopyOnWrite(true)
+			// TODO(Ahsan): See if we want to implement this function.
+			// sg.DestMap.SetCopyOnWrite(true)
 			uids = sg.DestMap
 		}
 
@@ -1791,7 +1792,7 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 		case (v.Typ == gql.AnyVar || v.Typ == gql.UidVar) && len(l.Vals) != 0:
 			// Derive the UID list from value var.
 			for k := range l.Vals {
-				out.Add(k)
+				out.Set(k)
 			}
 
 		case len(l.Vals) != 0 || !l.UidMap.IsEmpty():
@@ -1889,14 +1890,14 @@ func (sg *SubGraph) applyIneqFunc() error {
 		for _, uid := range sg.SrcUIDs.Uids {
 			curVal, ok := sg.Params.UidToVal[uid]
 			if ok && types.CompareVals(sg.SrcFunc.Name, curVal, dst) {
-				sg.DestMap.Add(uid)
+				sg.DestMap.Set(uid)
 			}
 		}
 	} else {
 		// This means it's a function at root as SrcUIDs is nil
 		for uid, curVal := range sg.Params.UidToVal {
 			if types.CompareVals(sg.SrcFunc.Name, curVal, dst) {
-				sg.DestMap.Add(uid)
+				sg.DestMap.Set(uid)
 			}
 		}
 		sg.uidMatrix = []*pb.List{codec.ToList(sg.DestMap)}
@@ -2268,7 +2269,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 
 		switch {
 		case sg.FilterOp == "or":
-			sg.DestMap = sroar.ParOr(4, bitmaps...)
+			sg.DestMap = sroar.FastParOr(4, bitmaps...)
 		case sg.FilterOp == "not":
 			x.AssertTrue(len(sg.Filters) == 1)
 			if sg.Filters[0].DestMap == nil {

@@ -87,7 +87,7 @@ func expandEdges(ctx context.Context, m *pb.Mutations) ([]*pb.DirectedEdge, erro
 		} else {
 			sg := &SubGraph{}
 			sg.DestMap = sroar.NewBitmap()
-			sg.DestMap.Add(edge.GetEntity())
+			sg.DestMap.Set(edge.GetEntity())
 			sg.ReadTs = m.StartTs
 			types, err := getNodeTypes(ctx, sg)
 			if err != nil {

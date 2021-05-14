@@ -170,7 +170,7 @@ func (c *countIndexer) writeIndex(buf *z.Buffer) {
 		if !bytes.Equal(lastCe.Key(), ce.Key()) {
 			encode()
 		}
-		bm.Add(ce.Uid())
+		bm.Set(ce.Uid())
 		lastCe = ce
 		return nil
 	})

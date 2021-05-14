@@ -605,7 +605,7 @@ func (r *reducer) toList(req *encodeRequest) {
 			}
 			lastUid = uid
 
-			bm.Add(uid)
+			bm.Set(uid)
 			if pbuf := me.Plist(); len(pbuf) > 0 {
 				p := getPosting()
 				x.Check(p.Unmarshal(pbuf))
