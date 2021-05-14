@@ -6,7 +6,7 @@ go 1.12
 // replace github.com/dgraph-io/ristretto => /home/mrjn/go/src/github.com/dgraph-io/ristretto
 // replace github.com/dgraph-io/roaring => /home/mrjn/go/src/github.com/dgraph-io/roaring
 
-replace github.com/dgraph-io/sroar => /home/ash/go/src/github.com/dgraph-io/sroar
+// replace github.com/dgraph-io/sroar => /home/ash/go/src/github.com/dgraph-io/sroar
 
 require (
 	contrib.go.opencensus.io/exporter/jaeger v0.1.0
@@ -26,7 +26,7 @@ require (
 	github.com/dgraph-io/graphql-transport-ws v0.0.0-20210511143556-2cef522f1f15
 	github.com/dgraph-io/ristretto v0.0.4-0.20210504190834-0bf2acd73aa3
 	github.com/dgraph-io/simdjson-go v0.3.0
-	github.com/dgraph-io/sroar v0.0.0-20210514153452-88f47c2d35d4
+	github.com/dgraph-io/sroar v0.0.0-20210514172639-f38a7c7549b6
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/dgrijalva/jwt-go/v4 v4.0.0-preview1
 	github.com/dgryski/go-farm v0.0.0-20200201041132-a6ae2369ad13
