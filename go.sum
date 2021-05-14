@@ -137,6 +137,10 @@ github.com/dgraph-io/roaring v0.5.6-0.20210227175938-766b897233a5 h1:9t3OKcvsQlx
 github.com/dgraph-io/roaring v0.5.6-0.20210227175938-766b897233a5/go.mod h1:I8kxPBtSQW3OdQFWonumQdCx2DTmq2WjdnTjGXz3uTM=
 github.com/dgraph-io/simdjson-go v0.3.0 h1:h71LO7vR4LHMPUhuoGN8bqGm1VNfGOlAG8BI6iDUKw0=
 github.com/dgraph-io/simdjson-go v0.3.0/go.mod h1:Otpysdjaxj9OGaJusn4pgQV7OFh2bELuHANq0I78uvY=
+github.com/dgraph-io/sroar v0.0.0-20210514152843-ef1bdb0a41af h1:A7HxAY+ATThNKX1uTgoVXbQwLM2IQXPZhun7oauJT5k=
+github.com/dgraph-io/sroar v0.0.0-20210514152843-ef1bdb0a41af/go.mod h1:S6rr3uEf8N34jGaA8XIQFvP7jSSkIGB+Ss9RKL3WKko=
+github.com/dgraph-io/sroar v0.0.0-20210514153452-88f47c2d35d4 h1:SQ035ZgXN8TbLuBdoehqiYvD1LbUJNaEHr6oy4AGiFI=
+github.com/dgraph-io/sroar v0.0.0-20210514153452-88f47c2d35d4/go.mod h1:S6rr3uEf8N34jGaA8XIQFvP7jSSkIGB+Ss9RKL3WKko=
 github.com/dgrijalva/jwt-go v3.2.0+incompatible h1:7qlOGliEKZXTDg6OTjfoBKDXWrumCAMpl/TFQ4/5kLM=
 github.com/dgrijalva/jwt-go v3.2.0+incompatible/go.mod h1:E3ru+11k8xSBh+hMPgOLZmtrrCbhqsmaPHjLKYnJCaQ=
 github.com/dgrijalva/jwt-go/v4 v4.0.0-preview1 h1:CaO/zOnF8VvUfEbhRatPcwKVWamvbYd8tQGRWacE9kU=
@@ -571,6 +575,7 @@ github.com/stretchr/testify v1.4.0/go.mod h1:j7eGeouHqKxXV5pUuKE4zz7dFj8WfuZ+81P
 github.com/stretchr/testify v1.5.1/go.mod h1:5W2xD1RspED5o8YsWQXVCued0rvSQ+mT+I5cxcmMvtA=
 github.com/stretchr/testify v1.6.1 h1:hDPOHmpOpP40lSULcqw7IrRb/u7w6RpDC9399XyoNd0=
 github.com/stretchr/testify v1.6.1/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
+github.com/stretchr/testify v1.7.0/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
 github.com/subosito/gotenv v1.2.0 h1:Slr1R9HxAlEKefgq5jn9U+DnETlIUa6HfgEzj0g5d7s=
 github.com/subosito/gotenv v1.2.0/go.mod h1:N0PQaV/YGNqwC0u51sEeR/aUtSLEXKX9iv69rRypqCw=
 github.com/syndtr/goleveldb v1.0.0/go.mod h1:ZVVdQEZoIme9iO1Ch2Jdy24qqXrMMOU6lpPAyBWyWuQ=

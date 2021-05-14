@@ -20,7 +20,7 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/roaring/roaring64"
+	"github.com/dgraph-io/sroar"
 )
 
 // LevenshteinDistance measures the difference between two strings.
@@ -79,13 +79,13 @@ func matchFuzzy(query, val string, max int) bool {
 // uidsForMatch collects a list of uids that "might" match a fuzzy term based on the ngram
 // index. matchFuzzy does the actual fuzzy match.
 // Returns the list of uids even if empty, or an error otherwise.
-func uidsForMatch(attr string, arg funcArgs) (*roaring64.Bitmap, error) {
+func uidsForMatch(attr string, arg funcArgs) (*sroar.Bitmap, error) {
 	opts := posting.ListOptions{
-		ReadTs: arg.q.ReadTs,
-		First:  int(arg.q.First),
+		ReadTs:   arg.q.ReadTs,
+		First:    int(arg.q.First),
 		AfterUid: arg.q.AfterUid,
 	}
-	uidsForNgram := func(ngram string) (*roaring64.Bitmap, error) {
+	uidsForNgram := func(ngram string) (*sroar.Bitmap, error) {
 		key := x.IndexKey(attr, ngram)
 		pl, err := posting.GetNoStore(key, arg.q.ReadTs)
 		if err != nil {
@@ -100,7 +100,7 @@ func uidsForMatch(attr string, arg funcArgs) (*roaring64.Bitmap, error) {
 	}
 
 	// TODO: Looks like we're ignoring the "first" argument here. Deal with that.
-	res := roaring64.New()
+	res := sroar.NewBitmap()
 	for _, t := range tokens {
 		bm, err := uidsForNgram(t)
 		if err != nil {

@@ -25,7 +25,7 @@ import (
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
-	"github.com/dgraph-io/roaring/roaring64"
+	"github.com/dgraph-io/sroar"
 	"github.com/pkg/errors"
 )
 
@@ -194,7 +194,7 @@ func (res *groupResults) formGroups(dedupMap dedup, cur *pb.List, groupVal []gro
 		})
 		if l != 0 {
 			ve := codec.FromList(v.entities)
-			r := roaring64.And(curmap, ve)
+			r := sroar.And(curmap, ve)
 			temp = codec.ToList(r)
 		} else {
 			temp.Uids = make([]uint64, len(v.entities.Uids))

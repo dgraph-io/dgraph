@@ -43,7 +43,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
-	"github.com/dgraph-io/roaring/roaring64"
+	"github.com/dgraph-io/sroar"
 	"github.com/dustin/go-humanize"
 	"github.com/golang/snappy"
 )
@@ -592,7 +592,7 @@ func (r *reducer) toList(req *encodeRequest) {
 			}
 		}
 
-		bm := roaring64.New()
+		bm := sroar.NewBitmap()
 		var lastUid uint64
 		slice, next := []byte{}, start
 		for next >= 0 && (next < end || end == -1) {

@@ -26,7 +26,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dgraph-io/roaring/roaring64"
+	"github.com/dgraph-io/sroar"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"
@@ -298,7 +298,7 @@ type SubGraph struct {
 	Children     []*SubGraph // children of the current node, should be empty for leaf nodes.
 
 	// destUIDs is a list of destination UIDs, after applying filters, pagination.
-	DestMap *roaring64.Bitmap
+	DestMap *sroar.Bitmap
 
 	// OrderedUIDs is used to store the UIDs in some order, used for shortest path.
 	OrderedUIDs *pb.List
@@ -1026,7 +1026,7 @@ func calculatePaginationParams(sg *SubGraph) (int32, int32) {
 // TODO(pawan) - Come back to this and document what do individual fields mean and when are they
 // populated.
 type varValue struct {
-	UidMap *roaring64.Bitmap // list of uids if this denotes a uid variable.
+	UidMap *sroar.Bitmap // list of uids if this denotes a uid variable.
 	Vals   map[uint64]types.Val
 	path   []*SubGraph // This stores the subgraph path from root to var definition.
 	// strList stores the valueMatrix corresponding to a predicate and is later used in
@@ -1542,7 +1542,7 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 		//    }
 
 		// Uid variable could be defined using uid or a predicate.
-		var uids *roaring64.Bitmap
+		var uids *sroar.Bitmap
 		if sg.Attr == "uid" {
 			uids = codec.FromList(sg.SrcUIDs)
 		} else {
@@ -1601,7 +1601,7 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 			path:        sgPath,
 			Vals:        make(map[uint64]types.Val),
 			strList:     sg.valueMatrix,
-			UidMap:      roaring64.New(),
+			UidMap:      sroar.NewBitmap(),
 		}
 	}
 	return nil
@@ -1747,7 +1747,7 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 		}
 	}
 
-	out := roaring64.New()
+	out := sroar.NewBitmap()
 	// Go through all the variables in NeedsVar and see if we have a value for them in the map. If
 	// we do, then we store that value in the appropriate variable inside SubGraph.
 	for _, v := range sg.Params.NeedsVar {
@@ -2257,7 +2257,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 
 		hasNils := false
 		// Now apply the results from filter.
-		var bitmaps []*roaring64.Bitmap
+		var bitmaps []*sroar.Bitmap
 		for _, filter := range sg.Filters {
 			if filter.DestMap == nil {
 				hasNils = true
@@ -2268,19 +2268,19 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 
 		switch {
 		case sg.FilterOp == "or":
-			sg.DestMap = roaring64.ParOr(4, bitmaps...)
+			sg.DestMap = sroar.ParOr(4, bitmaps...)
 		case sg.FilterOp == "not":
 			x.AssertTrue(len(sg.Filters) == 1)
 			if sg.Filters[0].DestMap == nil {
-				sg.DestMap.AndNot(roaring64.New())
+				sg.DestMap.AndNot(sroar.NewBitmap())
 			} else {
 				sg.DestMap.AndNot(sg.Filters[0].DestMap)
 			}
 		case sg.FilterOp == "and":
 			if hasNils {
-				sg.DestMap = roaring64.New()
+				sg.DestMap = sroar.NewBitmap()
 			} else {
-				sg.DestMap = roaring64.FastAnd(bitmaps...)
+				sg.DestMap = sroar.FastAnd(bitmaps...)
 			}
 		default:
 			// We need to also intersect the original dest uids in this case to get the final
@@ -2290,9 +2290,9 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			// TODO - See if the server performing the filter can intersect with the srcUIDs before
 			// returning them in this case.
 			if hasNils {
-				sg.DestMap = roaring64.New()
+				sg.DestMap = sroar.NewBitmap()
 			} else {
-				r := roaring64.FastAnd(bitmaps...)
+				r := sroar.FastAnd(bitmaps...)
 				sg.DestMap.And(r)
 			}
 		}

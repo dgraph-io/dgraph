@@ -30,7 +30,7 @@ import (
 	bpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/ristretto/z"
-	"github.com/dgraph-io/roaring/roaring64"
+	"github.com/dgraph-io/sroar"
 	"github.com/gogo/protobuf/proto"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
@@ -1148,7 +1148,7 @@ func TestBinSplit(t *testing.T) {
 			bm.GetCardinality(), bm.Minimum(), bm.Maximum(),
 			low.GetCardinality(), low.Minimum(), low.Maximum(),
 			high.GetCardinality(), high.Minimum(), high.Maximum())
-		require.Equal(t, uint64(0), roaring64.And(low, high).GetCardinality())
+		require.Equal(t, uint64(0), sroar.And(low, high).GetCardinality())
 		got := append(low.ToArray(), high.ToArray()...)
 		require.Equal(t, len(expected), len(got))
 		require.Equal(t, expected, got)
