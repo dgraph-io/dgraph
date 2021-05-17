@@ -465,7 +465,7 @@ func TestAuthWithCustomDQL(t *testing.T) {
 	for _, tcase := range TestCases {
 		t.Run(tcase.name, func(t *testing.T) {
 			getUserParams := &common.GraphQLParams{
-				Headers: common.GetJWT(t, tcase.user, tcase.role, metaInfo),
+				Headers: common.GetJWTForInterfaceAuth(t, tcase.user, tcase.role, tcase.ans, metaInfo),
 				Query:   tcase.query,
 			}
 			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
