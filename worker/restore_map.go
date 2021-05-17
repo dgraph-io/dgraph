@@ -670,6 +670,11 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) (*mapResult, error) {
 			case pb.DropOperation_ALL:
 				dropAll = true
 			case pb.DropOperation_DATA:
+				if op.DropValue == "" {
+					// In 2103, we do not support namespace level drop data.
+					dropAll = true
+					continue
+				}
 				ns, err := strconv.ParseUint(op.DropValue, 0, 64)
 				if err != nil {
 					return nil, errors.Wrap(err, "Map phase failed to parse namespace")

@@ -86,17 +86,16 @@ func run() error {
 	if err != nil {
 		return errors.Wrapf(err, "while parsing location")
 	}
-	handler, err := worker.NewUriHandler(uri, nil)
+	handler, err := x.NewUriHandler(uri, nil)
 	if err != nil {
 		return errors.Wrapf(err, "while creating uri handler")
 	}
-	masterManifest, err := worker.GetManifest(handler, uri)
+	masterManifest, err := worker.GetManifestNoUpgrade(handler, uri)
 	if err != nil {
 		return errors.Wrapf(err, "while getting manifest")
 	}
 
-	// Update the master manifest with the changes for drop operations and group predicates.
-	for _, manifest := range masterManifest.Manifests {
+	update := func(manifest *worker.Manifest) {
 		for gid, preds := range manifest.Groups {
 			parsedPreds := preds[:0]
 			for _, pred := range preds {
@@ -119,6 +118,13 @@ func run() error {
 				}
 				op.DropValue = x.NamespaceAttr(ns, attr)
 			}
+		}
+	}
+
+	// Update the master manifest with the changes for drop operations and group predicates.
+	for _, manifest := range masterManifest.Manifests {
+		if manifest.Version == 2103 {
+			update(manifest)
 		}
 	}
 
