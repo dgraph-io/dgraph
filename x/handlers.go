@@ -27,9 +27,12 @@ import (
 	"strings"
 	"time"
 
+	"cloud.google.com/go/storage"
 	"github.com/Azure/azure-storage-blob-go/azblob"
 	"github.com/golang/glog"
 	"github.com/minio/minio-go/v6"
+	"google.golang.org/api/iterator"
+	"google.golang.org/api/option"
 
 	"github.com/pkg/errors"
 )
@@ -95,6 +98,8 @@ func NewUriHandler(uri *url.URL, creds *MinioCredentials) (UriHandler, error) {
 		return NewFileHandler(uri), nil
 	case "minio", "s3":
 		return NewS3Handler(uri, creds)
+	case "gs":
+		return NewGCSHandler(uri, creds)
 	}
 
 	if strings.HasSuffix(uri.Host, "blob.core.windows.net") {
@@ -585,4 +590,209 @@ func (w *azWriter) upload(bucket *azblob.ContainerURL, absPath string) {
 		return errors.Wrapf(err, "while uploading")
 	}
 	w.errCh <- f()
+}
+
+type GCS struct {
+	client   *storage.Client
+	bucket   *storage.BucketHandle
+	pathName string
+}
+
+func NewGCSHandler(uri *url.URL, creds *MinioCredentials) (gcs *GCS, err error) {
+	ctx := context.Background()
+
+	var c *storage.Client
+	if os.Getenv("GOOGLE_APPLICATION_CREDENTIALS") != "" {
+		f, err := os.Open(os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"))
+		if err != nil {
+			return nil, err
+		}
+
+		data, err := ioutil.ReadAll(f)
+		if err != nil {
+			return nil, err
+		}
+
+		c, err = storage.NewClient(ctx, option.WithCredentialsJSON(data))
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		if c, err = storage.NewClient(ctx, option.WithoutAuthentication()); err != nil {
+			return nil, err
+		}
+	}
+
+	gcs = &GCS{
+		client:   c,
+		pathName: uri.Path,
+	}
+
+	if len(gcs.pathName) > 0 && gcs.pathName[0] == '/' {
+		gcs.pathName = gcs.pathName[1:]
+	}
+
+	gcs.bucket = gcs.client.Bucket(uri.Host)
+	if _, err := gcs.bucket.Attrs(ctx); err != nil {
+		gcs.client.Close()
+		return nil, errors.Wrapf(err, "while accessing bucket: %s", err)
+	}
+
+	return gcs, nil
+}
+
+//CreateDir creates a directory relative to the root path of the handler.
+func (gcs *GCS) CreateDir(path string) error {
+	ctx := context.Background()
+
+	// GCS used a flat storage and provides an illusion of directories. To create a directory, file
+	// name must be followed by '/'.
+	dir := filepath.Join(gcs.pathName, path, "") + "/"
+	glog.V(2).Infof("Creating dir: %s", dir)
+
+	writer := gcs.bucket.Object(dir).NewWriter(ctx)
+	if err := writer.Close(); err != nil {
+		return errors.Wrapf(err, "while creating directory: %s", err)
+	}
+
+	return nil
+}
+
+// CreateFile creates a file relative to the root path of the handler. It also makes the
+// handler's descriptor to point to this file.
+func (gcs *GCS) CreateFile(path string) (io.WriteCloser, error) {
+	ctx := context.Background()
+
+	writer := gcs.bucket.Object(gcs.JoinPath(path)).NewWriter(ctx)
+	return writer, nil
+}
+
+// DirExists returns true if the directory relative to the root path of the handler exists.
+func (gcs *GCS) DirExists(path string) bool {
+	ctx := context.Background()
+
+	// GCS doesn't has the concept of directories, it emulated the folder behaviour if the path is
+	// suffixed with '/'.
+	absPath := gcs.JoinPath(path)
+
+	// If there's no root specified we return true because we have ensured that the bucket exists.
+	if len(absPath) == 0 {
+		return true
+	} else {
+		absPath += "/"
+	}
+
+	it := gcs.bucket.Objects(ctx, &storage.Query{
+		Prefix: absPath,
+	})
+
+	if _, err := it.Next(); err != iterator.Done {
+		return true
+	} else if err != nil {
+		glog.Error(errors.Wrapf(err, "while checking if directory exists: %s", err))
+	}
+
+	return false
+}
+
+// FileExists returns true if the file relative to the root path of the handler exists.
+func (gcs *GCS) FileExists(path string) bool {
+	ctx := context.Background()
+
+	obj := gcs.bucket.Object(gcs.JoinPath(path))
+	if _, err := obj.Attrs(ctx); err == storage.ErrObjectNotExist {
+		return false
+	} else if err != nil {
+		glog.Error(errors.Wrapf(err, "while checking if file exists: %s", err))
+		return false
+	}
+
+	return true
+}
+
+// JoinPath appends the given path to the root path of the handler.
+func (gcs *GCS) JoinPath(path string) string {
+	return filepath.Join(gcs.pathName, path)
+}
+
+// ListPaths returns a list of all the valid paths from the given root path. The given root path
+// should be relative to the handler's root path.
+func (gcs *GCS) ListPaths(path string) []string {
+	ctx := context.Background()
+
+	absPath := gcs.JoinPath(path)
+	if len(absPath) != 0 {
+		absPath += "/"
+	}
+
+	it := gcs.bucket.Objects(ctx, &storage.Query{
+		Prefix: absPath,
+	})
+
+	paths := []string{}
+
+	for {
+		attrs, err := it.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			glog.Error(errors.Wrapf(err, "while listing paths: %s", err))
+		}
+
+		if len(attrs.Name) > 0 {
+			paths = append(paths, attrs.Name)
+		} else if len(attrs.Prefix) > 0 {
+			paths = append(paths, attrs.Prefix)
+		}
+	}
+
+	return paths
+}
+
+// Read reads the file at given relative path and returns the read bytes.
+func (gcs *GCS) Read(path string) ([]byte, error) {
+	ctx := context.Background()
+	reader, err := gcs.bucket.Object(gcs.JoinPath(path)).NewReader(ctx)
+	if err != nil {
+		return nil, errors.Wrapf(err, "while reading file: %s", err)
+	}
+	defer reader.Close()
+
+	data, err := ioutil.ReadAll(reader)
+	if err != nil {
+		return nil, errors.Wrapf(err, "while reading file: %s", err)
+	}
+
+	return data, nil
+}
+
+// Rename renames the src file to the destination file.
+func (gcs *GCS) Rename(src, dst string) error {
+	ctx := context.Background()
+
+	srcObj := gcs.bucket.Object(gcs.JoinPath(src))
+	dstObj := gcs.bucket.Object(gcs.JoinPath(dst))
+
+	if _, err := dstObj.CopierFrom(srcObj).Run(ctx); err != nil {
+		return errors.Wrapf(err, "while renaming file: %s", err)
+	}
+
+	if err := srcObj.Delete(ctx); err != nil {
+		return errors.Wrapf(err, "while renaming file: %s", err)
+	}
+
+	return nil
+}
+
+// Stream would stream the path via an instance of io.ReadCloser. Close must be called at the
+// end to release resources appropriately.
+func (gcs *GCS) Stream(path string) (io.ReadCloser, error) {
+	ctx := context.Background()
+	reader, err := gcs.bucket.Object(gcs.JoinPath(path)).NewReader(ctx)
+	if err != nil {
+		return nil, errors.Wrapf(err, "while reading file: %s", err)
+	}
+
+	return reader, nil
 }
