@@ -47,7 +47,9 @@ var (
 	restoreDir      = "./data/restore"
 	testDirs        = []string{restoreDir}
 	alphaBackupDir  = "/data/backups"
-	oldBackupDir    = "/data/to_restore"
+	oldBackupDir1   = "/data/to_restore/1"
+	oldBackupDir2   = "/data/to_restore/2"
+	oldBackupDir3   = "/data/to_restore/3"
 	alphaContainers = []string{
 		"alpha1",
 		"alpha2",
@@ -85,6 +87,44 @@ func sendRestoreRequest(t *testing.T, location string) {
 	return
 }
 
+// This test restores the old backups.
+// The backup dir contains:
+// - Full backup with pred "p1", "p2", "p3". (insert k1, k2, k3).
+// - Incremental backup after drop data was called and "p2", "p3", "p4" inserted. --> (insert k4,k5)
+// - Incremental backup after "p3" was dropped.
+func TestRestoreOfOldBackup(t *testing.T) {
+	test := func(dir string) {
+		common.DirSetup(t)
+		common.CopyOldBackupDir(t)
+
+		conn, err := grpc.Dial(testutil.SockAddr,
+			grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))))
+		require.NoError(t, err)
+		dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
+		require.NoError(t, err)
+
+		testutil.DropAll(t, dg)
+		time.Sleep(2 * time.Second)
+
+		sendRestoreRequest(t, dir)
+		testutil.WaitForRestore(t, dg)
+
+		queryAndCheck := func(pred string, cnt int) {
+			q := fmt.Sprintf(`{ me(func: has(%s)) { count(uid) } }`, pred)
+			r := fmt.Sprintf("{\"me\":[{\"count\":%d}]}", cnt)
+			resp, err := dg.NewTxn().Query(context.Background(), q)
+			require.NoError(t, err)
+			require.JSONEq(t, r, string(resp.Json))
+		}
+		queryAndCheck("p1", 0)
+		queryAndCheck("p2", 2)
+		queryAndCheck("p3", 0)
+		queryAndCheck("p4", 2)
+	}
+	t.Run("backup of 20.11", func(t *testing.T) { test(oldBackupDir2) })
+	t.Run("backup of 21.03", func(t *testing.T) { test(oldBackupDir3) })
+}
+
 // This test takes a backup and then restores an old backup in a cluster incrementally.
 // Next, cleans up the cluster and tries restoring the backups above.
 // Regression test for DGRAPH-2775
@@ -92,7 +132,8 @@ func TestBackupOfOldRestore(t *testing.T) {
 	common.DirSetup(t)
 	common.CopyOldBackupDir(t)
 
-	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))))
+	conn, err := grpc.Dial(testutil.SockAddr,
+		grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))))
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 	require.NoError(t, err)
@@ -102,10 +143,11 @@ func TestBackupOfOldRestore(t *testing.T) {
 
 	_ = runBackup(t, 3, 1)
 
-	sendRestoreRequest(t, oldBackupDir)
+	sendRestoreRequest(t, oldBackupDir1)
 	testutil.WaitForRestore(t, dg)
 
-	resp, err := dg.NewTxn().Query(context.Background(), `{ authors(func: has(Author.name)) { count(uid) } }`)
+	q := `{ authors(func: has(Author.name)) { count(uid) } }`
+	resp, err := dg.NewTxn().Query(context.Background(), q)
 	require.NoError(t, err)
 	require.JSONEq(t, "{\"authors\":[{\"count\":1}]}", string(resp.Json))
 
@@ -117,13 +159,14 @@ func TestBackupOfOldRestore(t *testing.T) {
 	sendRestoreRequest(t, alphaBackupDir)
 	testutil.WaitForRestore(t, dg)
 
-	resp, err = dg.NewTxn().Query(context.Background(), `{ authors(func: has(Author.name)) { count(uid) } }`)
+	resp, err = dg.NewTxn().Query(context.Background(), q)
 	require.NoError(t, err)
 	require.JSONEq(t, "{\"authors\":[{\"count\":1}]}", string(resp.Json))
 }
 
 func TestBackupFilesystem(t *testing.T) {
-	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))))
+	conn, err := grpc.Dial(testutil.SockAddr,
+		grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))))
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 
@@ -395,7 +438,8 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 
 	var data interface{}
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
-	require.Equal(t, "Success", testutil.JsonGet(data, "data", "backup", "response", "code").(string))
+	require.Equal(t, "Success",
+		testutil.JsonGet(data, "data", "backup", "response", "code").(string))
 	taskId := testutil.JsonGet(data, "data", "backup", "taskId").(string)
 	testutil.WaitForTask(t, taskId, true)
 
@@ -403,7 +447,8 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	common.CopyToLocalFs(t)
 
 	files := x.WalkPathFunc(copyBackupDir, func(path string, isdir bool) bool {
-		return !isdir && strings.HasSuffix(path, ".backup") && strings.HasPrefix(path, "data/backups_copy/dgraph.")
+		return !isdir && strings.HasSuffix(path, ".backup") &&
+			strings.HasPrefix(path, "data/backups_copy/dgraph.")
 	})
 	require.Equal(t, numExpectedFiles, len(files))
 
@@ -428,7 +473,8 @@ func runRestore(t *testing.T, backupLocation, lastDir string, commitTs uint64) m
 	require.NoError(t, os.RemoveAll(restoreDir))
 
 	t.Logf("--- Restoring from: %q", backupLocation)
-	result := worker.RunOfflineRestore("./data/restore", backupLocation, lastDir, "", options.Snappy, 0)
+	result := worker.RunOfflineRestore(
+		"./data/restore", backupLocation, lastDir, "", options.Snappy, 0)
 	require.NoError(t, result.Err)
 
 	for i, pdir := range []string{"p1", "p2", "p3"} {
