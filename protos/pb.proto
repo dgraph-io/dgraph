@@ -561,6 +561,7 @@ service Zero {
   rpc RemoveNode(RemoveNodeRequest) returns (Status) {}
   rpc MoveTablet(MoveTabletRequest) returns (Status) {}
   rpc ApplyLicense(ApplyLicenseRequest) returns (Status) {}
+  rpc RemoveAlphaNode (Member)       returns (Status) {}
 }
 
 service Worker {

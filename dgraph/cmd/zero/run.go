@@ -137,6 +137,8 @@ instances to achieve high-availability.
 		Flag("size",
 			"The audit log max size in MB after which it will be rolled over.").
 		String())
+
+	flag.Bool("force_new_cluster", false, "Force to create a new one member cluster.")
 }
 
 func setupListener(addr string, port int, kind string) (listener net.Listener, err error) {
@@ -334,6 +336,7 @@ func run() {
 	baseMux.HandleFunc("/debug/jemalloc", x.JemallocHandler)
 	zpages.Handle(baseMux, "/debug/z")
 
+	st.node.forceNewCluster = Zero.Conf.GetBool("force_new_cluster")
 	// This must be here. It does not work if placed before Grpc init.
 	x.Check(st.node.initAndStartNode())
 

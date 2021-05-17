@@ -262,6 +262,8 @@ they form a Raft group and provide synchronous replication.
 		Flag("size",
 			"The audit log max size in MB after which it will be rolled over.").
 		String())
+
+	flag.Bool("force_new_cluster", false, "Force to create a new one member cluster.")
 }
 
 func setupCustomTokenizers() {
@@ -700,6 +702,7 @@ func run() {
 		HmacSecret:          opts.HmacSecret,
 		Audit:               opts.Audit != nil,
 		Badger:              bopts,
+		ForceNewCluster:     Alpha.Conf.GetBool("force_new_cluster"),
 	}
 	x.WorkerConfig.Parse(Alpha.Conf)
 
