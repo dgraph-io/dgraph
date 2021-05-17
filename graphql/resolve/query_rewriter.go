@@ -780,7 +780,7 @@ func rewriteDQLQueryWithAuth(
 			} else {
 				// if it is main Query then just return this empty query only as there might
 				// be some unused variables. We do the similar thing for interface also.
-				return []*gql.GraphQuery{&gql.GraphQuery{Attr: qry.Attr + "()"}}, nil
+				return []*gql.GraphQuery{{Attr: qry.Attr + "()"}}, nil
 			}
 			continue
 		}
