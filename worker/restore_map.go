@@ -675,15 +675,14 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) (*mapResult, error) {
 			case pb.DropOperation_ALL:
 				dropAll = true
 			case pb.DropOperation_DATA:
-				var ns uint64
-				if manifest.Version == 0 {
-					ns = x.GalaxyNamespace
-				} else {
-					var err error
-					ns, err = strconv.ParseUint(op.DropValue, 0, 64)
-					if err != nil {
-						return nil, errors.Wrap(err, "Map phase failed to parse namespace")
-					}
+				if op.DropValue == "" {
+					// In 2103, we do not support namespace level drop data.
+					dropAll = true
+					continue
+				}
+				ns, err := strconv.ParseUint(op.DropValue, 0, 64)
+				if err != nil {
+					return nil, errors.Wrap(err, "Map phase failed to parse namespace")
 				}
 				dropNs[ns] = struct{}{}
 			case pb.DropOperation_ATTR:
