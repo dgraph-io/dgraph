@@ -211,6 +211,7 @@ func upgradeManifest(m *Manifest) error {
 			m.Groups[gid] = parsedPreds
 		}
 		for _, op := range m.DropOperations {
+			// We have a cluster wide drop data in v21.03.
 			if op.DropOp == pb.DropOperation_ATTR {
 				ns, attr, err := parseNsAttr(op.DropValue)
 				if err != nil {
