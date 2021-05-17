@@ -166,7 +166,8 @@ const replacementRune = rune('\ufffd')
 
 func parseNsAttr(attr string) (uint64, string, error) {
 	if strings.ContainsRune(attr, replacementRune) {
-		return 0, "", errors.New("replacement char found")
+		return 0, "", errors.Errorf("replacement rune found while parsing attr: %s (%+v)",
+			attr, []byte(attr))
 	}
 	return binary.BigEndian.Uint64([]byte(attr[:8])), attr[8:], nil
 }
@@ -204,7 +205,7 @@ func upgradeManifest(m *Manifest) error {
 			for _, pred := range preds {
 				ns, attr, err := parseNsAttr(pred)
 				if err != nil {
-					return errors.Errorf("Unable to parse the pred: %v", pred)
+					return errors.Errorf("while parsing predicate got: %q", err)
 				}
 				parsedPreds = append(parsedPreds, x.NamespaceAttr(ns, attr))
 			}
@@ -215,8 +216,8 @@ func upgradeManifest(m *Manifest) error {
 			if op.DropOp == pb.DropOperation_ATTR {
 				ns, attr, err := parseNsAttr(op.DropValue)
 				if err != nil {
-					return errors.Errorf("Unable to parse the drop operation %+v pred: %v",
-						op, []byte(op.DropValue))
+					return errors.Errorf("while parsing the drop operation %+v got: %q",
+						op, err)
 				}
 				op.DropValue = x.NamespaceAttr(ns, attr)
 			}
@@ -262,8 +263,8 @@ func readMasterManifest(h UriHandler, path string) (*MasterManifest, error) {
 	return &m, nil
 }
 
-// GetManifestWithoutUpgrade returns the master manifest using the given handler and uri.
-func GetManifestWithoutUpgrade(h UriHandler, uri *url.URL) (*MasterManifest, error) {
+// GetManifestNoUpgrade returns the master manifest using the given handler and uri.
+func GetManifestNoUpgrade(h UriHandler, uri *url.URL) (*MasterManifest, error) {
 	if !h.DirExists("") {
 		return &MasterManifest{},
 			errors.Errorf("getManifestWithoutUpgrade: The uri path: %q doesn't exists", uri.Path)
@@ -280,7 +281,7 @@ func GetManifestWithoutUpgrade(h UriHandler, uri *url.URL) (*MasterManifest, err
 // Note: This function must not be used when using the returned manifest for the purpose of
 // overwriting the old manifest.
 func GetManifest(h UriHandler, uri *url.URL) (*MasterManifest, error) {
-	manifest, err := GetManifestWithoutUpgrade(h, uri)
+	manifest, err := GetManifestNoUpgrade(h, uri)
 	if err != nil {
 		return manifest, err
 	}

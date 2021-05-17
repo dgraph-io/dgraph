@@ -90,7 +90,7 @@ func run() error {
 	if err != nil {
 		return errors.Wrapf(err, "while creating uri handler")
 	}
-	masterManifest, err := worker.GetManifestWithoutUpgrade(handler, uri)
+	masterManifest, err := worker.GetManifestNoUpgrade(handler, uri)
 	if err != nil {
 		return errors.Wrapf(err, "while getting manifest")
 	}
