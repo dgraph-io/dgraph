@@ -423,6 +423,43 @@ func TestAuthWithCustomDQL(t *testing.T) {
 			  ]
 			}`,
 		},
+		{
+			name: "query interface; auth rules pass for all the implementing types",
+			query: `
+		query{
+			queryQuestionAndAnswer{
+				text
+			}
+		}
+		`,
+			ans:    true,
+			user:   "user1@dgraph.io",
+			result: `{"queryQuestionAndAnswer": [{"text": "A Answer"},{"text": "A Question"}]}`,
+		},
+		{
+			name: "query interface; auth rules fail for some implementing types",
+			query: `
+		query{
+			queryQuestionAndAnswer{
+				text
+			}
+		}
+		`,
+			user:   "user2@dgraph.io",
+			result: `{"queryQuestionAndAnswer": [{"text": "B Answer"}]}`,
+		},
+		{
+			name: "query interface; auth rules fail for the interface",
+			query: `
+		query{
+			queryQuestionAndAnswer{
+				text
+			}
+		}
+		`,
+			ans:    true,
+			result: `{"queryQuestionAndAnswer": []}`,
+		},
 	}
 
 	for _, tcase := range TestCases {
