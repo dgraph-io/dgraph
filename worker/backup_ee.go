@@ -548,7 +548,7 @@ func (pr *BackupProcessor) CompleteBackup(ctx context.Context, m *Manifest) erro
 		return err
 	}
 
-	manifest, err := GetManifest(handler, uri)
+	manifest, err := GetManifestWithoutUpgrade(handler, uri)
 	if err != nil {
 		return err
 	}

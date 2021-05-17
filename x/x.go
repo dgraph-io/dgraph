@@ -140,7 +140,7 @@ const (
 		"X-CSRF-Token, X-Auth-Token, X-Requested-With"
 	DgraphCostHeader = "Dgraph-TouchedUids"
 
-	DgraphVersion = 2103
+	DgraphVersion = 2105
 )
 
 var (
