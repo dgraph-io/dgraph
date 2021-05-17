@@ -669,8 +669,10 @@ func extractType(dgQuery *gql.GraphQuery) string {
 		return typeName
 	}
 	typeName = extractTypeFromOrder(dgQuery.Order)
-	typeName = extractTypeFromFilter(dgQuery.Filter)
-	return typeName
+	if typeName != "" {
+		return typeName
+	}
+	return extractTypeFromFilter(dgQuery.Filter)
 }
 
 func getTypeNameFromAttr(Attr string) string {
