@@ -752,7 +752,7 @@ func rewriteDQLQueryWithAuth(
 
 		// parentVarName needs to be calculated separately for
 		// each query block.
-		//authRw.parentVarName = typeName + "Root"
+		authRw.parentVarName = typeName + "Root"
 
 		// authRw.hasAuthRules & auth.hasCascade needs to be calculated
 		// separately for each query block in case of DQL queries.

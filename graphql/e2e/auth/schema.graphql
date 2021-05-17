@@ -995,7 +995,7 @@ type Query {
 			}
             ownerAge as max(val(age))
 		}
-		queryIssueSortedByOwnerAge(func: uid(iss), orderdesc: val(age)) {
+		queryIssueSortedByOwnerAge(func: uid(iss), orderdesc: val(ownerAge)) {
 			id : uid
             msg : Issue.msg
             random : Issue.random

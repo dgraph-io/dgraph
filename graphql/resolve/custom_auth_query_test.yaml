@@ -13,10 +13,10 @@
     USER: "user1"
   dgquery: |-
     query {
-      queryIssueGroupedByOwner(func: uid(GroupedIssueMapQRoot)) @groupby(owner : Issue.owner) {
+      queryIssueGroupedByOwner(func: uid(IssueRoot)) @groupby(owner : Issue.owner) {
         count(uid)
       }
-      GroupedIssueMapQRoot as var(func: uid(Issue_1)) @filter(uid(Issue_Auth2))
+      IssueRoot as var(func: uid(Issue_1)) @filter(uid(Issue_Auth2))
       Issue_1 as var(func: type(Issue))
       Issue_Auth2 as var(func: uid(Issue_1)) @cascade {
         Issue.owner : Issue.owner @filter(eq(User.username, "user1"))
@@ -302,10 +302,10 @@
       Region_1 as var(func: uid(Region_2))
     }
 
-- name: "Query interface with @auth rules true for interface and implementing types"
-  gqlquery: |-
+- name : "Query interface with @auth rules true for interface and implementing types"
+  gqlquery: |
     query {
-      queryQuestionAndAnswer{
+      queryQuestionAndAnswer {
         id
         text
         topic
@@ -315,10 +315,107 @@
         }
       }
     }
-  jwtVar:
+  jwtvar:
+    ANS: "true"
     USER: "user1"
+  dgquery: |-
+    query {
+      ques as var(func: uid(QuestionRoot))
+      QuestionRoot as var(func: uid(Question_1)) @filter((uid(Question_Auth2) AND uid(Question_Auth3)))
+      Question_1 as var(func: type(Question))
+      Question_Auth2 as var(func: uid(Question_1)) @filter(eq(Question.answered, true)) @cascade {
+        Question.id : uid
+      }
+      Question_Auth3 as var(func: uid(Question_1)) @cascade {
+        dgraph.type
+        Post.author : Post.author @filter(eq(Author.name, "user1")) {
+          Author.name : Author.name
+        }
+      }
+      ans as var(func: uid(AnswerRoot))
+      AnswerRoot as var(func: uid(Answer_4)) @filter(uid(Answer_Auth5))
+      Answer_4 as var(func: type(Answer))
+      Answer_Auth5 as var(func: uid(Answer_4)) @cascade {
+        dgraph.type
+        Post.author : Post.author @filter(eq(Author.name, "user1")) {
+          Author.name : Author.name
+        }
+      }
+      queryQuestionAndAnswer(func: uid(ques, ans)) {
+        id : uid
+        text : Post.text
+        topic : Post.topic
+        author : Post.author {
+          id : Author.id
+          name : Author.name
+        }
+      }
+    }
+
+- name : "Query interface with @auth rules true for some of the implementing types"
+  gqlquery: |
+    query {
+      queryQuestionAndAnswer {
+        id
+        text
+        topic
+        author {
+          id
+          name
+        }
+      }
+    }
+  jwtvar:
+    USER: "user1"
+  dgquery: |-
+    query {
+      ques as var(func: uid(0x1)) @filter(uid(0x2))
+      ans as var(func: uid(AnswerRoot))
+      AnswerRoot as var(func: uid(Answer_1)) @filter(uid(Answer_Auth2))
+      Answer_1 as var(func: type(Answer))
+      Answer_Auth2 as var(func: uid(Answer_1)) @cascade {
+        dgraph.type
+        Post.author : Post.author @filter(eq(Author.name, "user1")) {
+          Author.name : Author.name
+        }
+      }
+      queryQuestionAndAnswer(func: uid(ques, ans)) {
+        id : uid
+        text : Post.text
+        topic : Post.topic
+        author : Post.author {
+          id : Author.id
+          name : Author.name
+        }
+      }
+    }
+
+- name : "Query interface with @auth rules false for interface"
+  gqlquery: |
+    query {
+      queryQuestionAndAnswer {
+        id
+        text
+        topic
+        author {
+          id
+          name
+        }
+      }
+    }
+  jwtvar:
     ANS: "true"
   dgquery: |-
     query {
-
+      ques as var(func: uid(0x1)) @filter(uid(0x2))
+      ans as var(func: uid(0x1)) @filter(uid(0x2))
+      queryQuestionAndAnswer(func: uid(ques, ans)) {
+        id : uid
+        text : Post.text
+        topic : Post.topic
+        author : Post.author {
+          id : Author.id
+          name : Author.name
+        }
+      }
     }
