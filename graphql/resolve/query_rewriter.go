@@ -778,14 +778,21 @@ func rewriteDQLQueryWithAuth(
 				}
 				dgQueries = append(dgQueries, qry)
 			} else {
-				dgQueries = append(dgQueries, &gql.GraphQuery{Attr: qry.Attr + "()"})
+				// if it is main Query then just return this empty query only as there might
+				// be some unused variables. We do the similar thing for interface also.
+				return []*gql.GraphQuery{&gql.GraphQuery{Attr: qry.Attr + "()"}}, nil
 			}
 			continue
 		}
 
 		fldAuthQueries := addAuthQueriesOnSelectionSet(qry, typ, authRw)
 
-		dgQueries = append(dgQueries, authRw.addAuthQueries(typ, []*gql.GraphQuery{qry}, rbac)...)
+		qryWithAuth := authRw.addAuthQueries(typ, []*gql.GraphQuery{qry}, rbac)
+		if typ.IsInterface() && len(qryWithAuth) == 1 && qryWithAuth[0].Attr == qry.Attr+"()" {
+			return qryWithAuth, nil
+		}
+
+		dgQueries = append(dgQueries, qryWithAuth...)
 		if len(fldAuthQueries) > 0 {
 			dgQueries = append(dgQueries, fldAuthQueries...)
 		}

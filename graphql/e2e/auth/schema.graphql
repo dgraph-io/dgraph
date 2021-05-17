@@ -1067,7 +1067,7 @@ type Query {
         query {
             ques as var(func: type(Question))
             ans as var(func: type(Answer))
-            queryQuestionAndAnswer(func: uid(ques, ans)) {
+            queryQuestionAndAnswer(func: uid(ques, ans), orderasc: Post.text) {
                 id : uid
                 text : Post.text
                 topic : Post.topic

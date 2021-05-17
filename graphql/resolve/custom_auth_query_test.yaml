@@ -341,13 +341,32 @@
           Author.name : Author.name
         }
       }
-      queryQuestionAndAnswer(func: uid(ques, ans)) {
+      queryQuestionAndAnswer(func: uid(PostRoot), orderasc: Post.text) {
         id : uid
         text : Post.text
         topic : Post.topic
         author : Post.author {
           id : Author.id
           name : Author.name
+        }
+      }
+      PostRoot as var(func: uid(Post_6), orderasc: Post.text) @filter(((uid(Question_Auth8) AND uid(Question_Auth9)) OR uid(Answer_Auth11)))
+      Post_6 as var(func: uid(ques, ans))
+      Question_7 as var(func: type(Question))
+      Question_Auth8 as var(func: uid(Question_7)) @filter(eq(Question.answered, true)) @cascade {
+        Question.id : uid
+      }
+      Question_Auth9 as var(func: uid(Question_7)) @cascade {
+        dgraph.type
+        Post.author : Post.author @filter(eq(Author.name, "user1")) {
+          Author.name : Author.name
+        }
+      }
+      Answer_10 as var(func: type(Answer))
+      Answer_Auth11 as var(func: uid(Answer_10)) @cascade {
+        dgraph.type
+        Post.author : Post.author @filter(eq(Author.name, "user1")) {
+          Author.name : Author.name
         }
       }
     }
@@ -379,13 +398,22 @@
           Author.name : Author.name
         }
       }
-      queryQuestionAndAnswer(func: uid(ques, ans)) {
+      queryQuestionAndAnswer(func: uid(PostRoot), orderasc: Post.text) {
         id : uid
         text : Post.text
         topic : Post.topic
         author : Post.author {
           id : Author.id
           name : Author.name
+        }
+      }
+      PostRoot as var(func: uid(Post_3), orderasc: Post.text) @filter((uid(Answer_Auth5)))
+      Post_3 as var(func: uid(ques, ans))
+      Answer_4 as var(func: type(Answer))
+      Answer_Auth5 as var(func: uid(Answer_4)) @cascade {
+        dgraph.type
+        Post.author : Post.author @filter(eq(Author.name, "user1")) {
+          Author.name : Author.name
         }
       }
     }
@@ -407,15 +435,5 @@
     ANS: "true"
   dgquery: |-
     query {
-      ques as var(func: uid(0x1)) @filter(uid(0x2))
-      ans as var(func: uid(0x1)) @filter(uid(0x2))
-      queryQuestionAndAnswer(func: uid(ques, ans)) {
-        id : uid
-        text : Post.text
-        topic : Post.topic
-        author : Post.author {
-          id : Author.id
-          name : Author.name
-        }
-      }
+      queryQuestionAndAnswer()
     }
