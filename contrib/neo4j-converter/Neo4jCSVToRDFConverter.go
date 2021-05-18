@@ -62,7 +62,6 @@ func main() {
 }
 
 func processNeo4jCSV(r io.Reader, w io.Writer) error {
-
 	scanner := bufio.NewScanner(r)
 	scanner.Split(bufio.ScanLines)
 	var text, rdfLines bytes.Buffer
@@ -89,6 +88,54 @@ func processNeo4jCSV(r io.Reader, w io.Writer) error {
 	// Scan and read the header.
 	scanner.Scan()
 	readHeader()
+
+	//setup a new reader for line items
+	characterReader := bufio.NewReader(r)
+	quoteOpen:=false
+	totalSizeInBytes:=0
+	var csvLine bytes.Buffer
+	var fullFile = bytes.Buffer{}
+	for {
+		if c, sz, err := characterReader.ReadRune(); err != nil {
+			if err == io.EOF {
+				fmt.Println("this is a genuine end of line with byte size ", totalSizeInBytes )
+				totalSizeInBytes=0
+				fmt.Println(csvLine.String())
+				fullFile.WriteString(csvLine.String())
+				csvLine.Reset()
+				break
+			} else {
+				fmt.Println("Error")
+			}
+		} else {
+			totalSizeInBytes += sz
+			//fmt.Println(c)
+			csvLine.WriteRune(c)
+			if c==10{
+				if quoteOpen {
+					fmt.Println("this is a new line inside  string quotes")
+				}else{
+					fmt.Println("this is a genuine end of line with byte size ", totalSizeInBytes - 1 )
+					fmt.Println(csvLine.String())
+					fullFile.WriteString(csvLine.String())
+					//i := strings.NewReader(string(csvLine.String()))
+					//buf := new(bytes.Buffer)
+					//processNeo4jCSV(i, buf)
+					//fmt.Println( buf.String())
+					csvLine.Reset()
+					totalSizeInBytes=0
+				}
+			}else if c==34{
+
+				if !quoteOpen {
+					quoteOpen = true
+				}else{
+					quoteOpen = false
+				}
+			}
+		}
+	}
+
 	//ensure that header exists
 	if positionOfStart == -1 {
 		return errors.New("column '_start' is absent in file")
@@ -98,7 +145,10 @@ func processNeo4jCSV(r io.Reader, w io.Writer) error {
 	for scanner.Scan() {
 		//parse csv
 		text.WriteString(scanner.Text() + "\n")
+		fmt.Println(text.String())
 		d := csv.NewReader(strings.NewReader(text.String()))
+		d.LazyQuotes=true
+		//records, err := d.ReadAll()
 		records, err := d.ReadAll()
 		check(err)
 
@@ -106,7 +156,7 @@ func processNeo4jCSV(r io.Reader, w io.Writer) error {
 		linkEndNode := ""
 		linkName := ""
 		facets := make(map[string]string)
-
+		fmt.Printf("%+v\n",records)
 		line := records[0]
 		for position := 0; position < len(line); position++ {
 
@@ -115,8 +165,9 @@ func processNeo4jCSV(r io.Reader, w io.Writer) error {
 				bn := fmt.Sprintf("<_:k_%s>", line[0])
 				if position < positionOfStart && position > 0 {
 					//write non-facet data
-					rdfLines.WriteString(fmt.Sprintf("%s <%s> \"%s\" .\n",
-						bn, header[position], line[position]))
+					str := strings.Replace(line[position], `"`, `"`, -1)
+					rdfLines.WriteString(fmt.Sprintf("%s <%s> %q .\n",
+						bn, header[position],str))
 				}
 				continue
 			}
@@ -151,7 +202,7 @@ func processNeo4jCSV(r io.Reader, w io.Writer) error {
 					facetLine = fmt.Sprintf("%s, ", facetLine)
 				}
 				//write the actual facet
-				facetLine = fmt.Sprintf("%s %s=%s", facetLine, facetName, facetValue)
+				facetLine = fmt.Sprintf("%s %s=%q", facetLine, facetName, facetValue)
 				atleastOneFacetExists = true
 			}
 			if atleastOneFacetExists {

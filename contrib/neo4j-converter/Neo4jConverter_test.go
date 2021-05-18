@@ -1,11 +1,14 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
 	"github.com/sergi/go-diff/diffmatchpatch"
 	"github.com/stretchr/testify/require"
+	"io"
 	"io/ioutil"
+	"os"
 	"strings"
 	"testing"
 )
@@ -72,4 +75,70 @@ func BenchmarkSampleFile(b *testing.B) {
 		processNeo4jCSV(i, buf)
 		buf.Reset()
 	}
+}
+
+func TestWholeFileWithQuotedLineBreaks(t *testing.T) {
+	//goldenFile := "./output.rdf"
+	inBuf, _ := ioutil.ReadFile("./exampleLineBreaks.csv")
+	i := strings.NewReader(string(inBuf))
+	//buf := new(bytes.Buffer)
+
+	scanner := bufio.NewScanner(i)
+	//scanner.Split(TScanLineWithLineBreaks)
+	scanner.Scan()
+	txt:=scanner.Text()
+	fmt.Println(txt)
+
+}
+
+func TestParsing(t *testing.T){
+	file, _ := os.Open("./exampleLineBreaks.csv")
+	r := bufio.NewReader(file)
+	quoteOpen:=false
+	totalSizeInBytes:=0
+	var csvLine bytes.Buffer
+	var fullFile = bytes.Buffer{}
+	for {
+		if c, sz, err := r.ReadRune(); err != nil {
+			if err == io.EOF {
+				fmt.Println("this is a genuine end of line with byte size ", totalSizeInBytes )
+				totalSizeInBytes=0
+				fmt.Println(csvLine.String())
+				fullFile.WriteString(csvLine.String())
+				csvLine.Reset()
+				break
+			} else {
+				fmt.Println("Error")
+			}
+		} else {
+			totalSizeInBytes += sz
+			//fmt.Println(c)
+			csvLine.WriteRune(c)
+			if c==10{
+				if quoteOpen {
+					fmt.Println("this is a new line inside  string quotes")
+				}else{
+					fmt.Println("this is a genuine end of line with byte size ", totalSizeInBytes - 1 )
+					fmt.Println(csvLine.String())
+					fullFile.WriteString(csvLine.String())
+					//i := strings.NewReader(string(csvLine.String()))
+					//buf := new(bytes.Buffer)
+					//processNeo4jCSV(i, buf)
+					//fmt.Println( buf.String())
+					csvLine.Reset()
+					totalSizeInBytes=0
+				}
+			}else if c==34{
+
+				if !quoteOpen {
+					quoteOpen = true
+				}else{
+					quoteOpen = false
+				}
+			}
+		}
+	}
+	fmt.Println("fully read file")
+	fmt.Println(fullFile.String())
+
 }
