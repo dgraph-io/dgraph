@@ -15,7 +15,7 @@ import (
 
 func subgraphWithSingleResultAndSingleValue(val *pb.TaskValue) *SubGraph {
 	r := sroar.NewBitmap()
-	r.Add(1)
+	r.Set(1)
 	return &SubGraph{
 		Params:    params{Alias: "query"},
 		SrcUIDs:   &pb.List{Uids: []uint64{1}},
