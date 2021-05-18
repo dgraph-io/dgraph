@@ -47,7 +47,8 @@ var (
 	restoreDir      = "./data/restore"
 	testDirs        = []string{restoreDir}
 	alphaBackupDir  = "/data/backups"
-	oldBackupDir    = "/data/to_restore"
+	oldBackupDir1   = "/data/to_restore/1"
+	oldBackupDir2   = "/data/to_restore/2"
 	alphaContainers = []string{
 		"alpha1",
 		"alpha2",
@@ -102,7 +103,7 @@ func TestBackupOfOldRestore(t *testing.T) {
 
 	_ = runBackup(t, 3, 1)
 
-	sendRestoreRequest(t, oldBackupDir)
+	sendRestoreRequest(t, oldBackupDir1)
 	testutil.WaitForRestore(t, dg)
 
 	resp, err := dg.NewTxn().Query(context.Background(), `{ authors(func: has(Author.name)) { count(uid) } }`)
@@ -120,6 +121,43 @@ func TestBackupOfOldRestore(t *testing.T) {
 	resp, err = dg.NewTxn().Query(context.Background(), `{ authors(func: has(Author.name)) { count(uid) } }`)
 	require.NoError(t, err)
 	require.JSONEq(t, "{\"authors\":[{\"count\":1}]}", string(resp.Json))
+}
+
+// This test restores the old backups.
+// The backup dir contains:
+// - Full backup with pred "p1", "p2", "p3". (insert k1, k2, k3).
+// - Incremental backup after drop data was called and "p2", "p3", "p4" inserted. --> (insert k4,k5)
+// - Incremental backup after "p3" was dropped.
+func TestRestoreOfOldBackup(t *testing.T) {
+	test := func(dir string) {
+		common.DirSetup(t)
+		common.CopyOldBackupDir(t)
+
+		conn, err := grpc.Dial(testutil.SockAddr,
+			grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))))
+		require.NoError(t, err)
+		dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
+		require.NoError(t, err)
+
+		testutil.DropAll(t, dg)
+		time.Sleep(2 * time.Second)
+
+		sendRestoreRequest(t, dir)
+		testutil.WaitForRestore(t, dg)
+
+		queryAndCheck := func(pred string, cnt int) {
+			q := fmt.Sprintf(`{ me(func: has(%s)) { count(uid) } }`, pred)
+			r := fmt.Sprintf("{\"me\":[{\"count\":%d}]}", cnt)
+			resp, err := dg.NewTxn().Query(context.Background(), q)
+			require.NoError(t, err)
+			require.JSONEq(t, r, string(resp.Json))
+		}
+		queryAndCheck("p1", 0)
+		queryAndCheck("p2", 2)
+		queryAndCheck("p3", 0)
+		queryAndCheck("p4", 2)
+	}
+	t.Run("backup of 20.11", func(t *testing.T) { test(oldBackupDir2) })
 }
 
 func TestBackupFilesystem(t *testing.T) {
