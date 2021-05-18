@@ -47,7 +47,7 @@ var opt struct {
 func init() {
 	UpdateManifest.Cmd = &cobra.Command{
 		Use:   "update_manifest",
-		Short: "Run the Dgraph update tool to update the manifest from v21.03 to latest.",
+		Short: "Run the Dgraph update tool to update the manifest from 2103 to 2105.",
 		Run: func(cmd *cobra.Command, args []string) {
 			if err := run(); err != nil {
 				logger.Fatalf("%v\n", err)
@@ -71,7 +71,8 @@ const replacementRune = rune('\ufffd')
 
 func parseNsAttr(attr string) (uint64, string, error) {
 	if strings.ContainsRune(attr, replacementRune) {
-		return 0, "", errors.New("replacement char found")
+		return 0, "", errors.Errorf("replacement rune found while parsing attr: %s (%+v)",
+			attr, []byte(attr))
 	}
 	return binary.BigEndian.Uint64([]byte(attr[:8])), attr[8:], nil
 }
@@ -101,6 +102,7 @@ func run() error {
 			for _, pred := range preds {
 				ns, attr, err := parseNsAttr(pred)
 				if err != nil {
+					parsedPreds = append(parsedPreds, pred)
 					logger.Printf("Unable to parse the pred: %v", pred)
 					continue
 				}
@@ -119,6 +121,8 @@ func run() error {
 				op.DropValue = x.NamespaceAttr(ns, attr)
 			}
 		}
+		// As we have made the required changes to the manifest, we should update the version too.
+		manifest.Version = 2105
 	}
 
 	// Update the master manifest with the changes for drop operations and group predicates.
