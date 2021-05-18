@@ -29,7 +29,6 @@ import (
 
 	"github.com/dgraph-io/badger/v3"
 	bpb "github.com/dgraph-io/badger/v3/pb"
-	"github.com/dgraph-io/badger/v3/y"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -230,7 +229,7 @@ func doStreamSnapshot(snap *pb.Snapshot, out pb.Worker_StreamSnapshotServer) err
 
 	// Type and Schema keys always have a timestamp of 1. They all need to be sent
 	// with the snapshot. The stream framework does not send it when streaming at SinceTs > 1.
-	if stream.SinceTs > 0 {
+	if stream.SinceTs > 1 {
 		buf := z.NewBuffer(10*MB, "DoStreamSnapshot")
 		defer buf.Release()
 		txn := pstore.NewTransactionAt(1, false)
@@ -245,13 +244,13 @@ func doStreamSnapshot(snap *pb.Snapshot, out pb.Worker_StreamSnapshotServer) err
 			for itr.Rewind(); itr.Valid(); itr.Next() {
 				kv.Reset()
 				item := itr.Item()
+				kv.Key = item.Key()
 				if err := item.Value(func(val []byte) error {
-					kv.Value = y.SafeCopy(nil, val)
+					kv.Value = val
 					return nil
 				}); err != nil {
 					return err
 				}
-				kv.Key = item.KeyCopy(nil)
 				kv.Version = item.Version()
 				kv.ExpiresAt = item.ExpiresAt()
 				kv.UserMeta = []byte{item.UserMeta()}
