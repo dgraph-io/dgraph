@@ -131,7 +131,7 @@ func loadFromBackup(db *badger.DB, in *loadBackupInput) (uint64, uint64, error) 
 
 	// if there were any DROP operations that need to be applied before loading the backup into
 	// the db, then apply them here
-	if err := applyDropOperationsBeforeRestore(db, in.dropOperations); err != nil {
+	if err := applyDropOperationsBeforeRestore(db, in.dropOperations, in.isOld); err != nil {
 		return 0, 0, errors.Wrapf(err, "cannot apply DROP operations while loading backup")
 	}
 
@@ -283,7 +283,8 @@ func loadFromBackup(db *badger.DB, in *loadBackupInput) (uint64, uint64, error) 
 	return maxUid, maxNsId, nil
 }
 
-func applyDropOperationsBeforeRestore(db *badger.DB, dropOperations []*pb.DropOperation) error {
+func applyDropOperationsBeforeRestore(
+	db *badger.DB, dropOperations []*pb.DropOperation, isOld bool) error {
 	for _, operation := range dropOperations {
 		switch operation.DropOp {
 		case pb.DropOperation_ALL:
@@ -291,7 +292,11 @@ func applyDropOperationsBeforeRestore(db *badger.DB, dropOperations []*pb.DropOp
 		case pb.DropOperation_DATA:
 			return db.DropPrefix([]byte{x.DefaultPrefix})
 		case pb.DropOperation_ATTR:
-			return db.DropPrefix(x.PredicatePrefix(operation.DropValue))
+			attr := operation.DropValue
+			if isOld {
+				attr = x.GalaxyAttr(operation.DropValue)
+			}
+			return db.DropPrefix(x.PredicatePrefix(attr))
 		case pb.DropOperation_NS:
 			ns, err := strconv.ParseUint(operation.DropValue, 0, 64)
 			x.Check(err)
