@@ -605,7 +605,7 @@ func (l *List) iterateAll(readTs uint64, afterUid uint64, f func(obj *pb.Posting
 
 	p := &pb.Posting{}
 
-	uitr := bm.Iterator()
+	uitr := bm.NewIterator()
 	var next uint64
 
 	advance := func() {
@@ -643,7 +643,7 @@ func (l *List) iterateAll(readTs uint64, afterUid uint64, f func(obj *pb.Posting
 	}
 
 	codec.RemoveRange(bm, 0, maxUid)
-	uitr = bm.Iterator()
+	uitr = bm.NewIterator()
 	for uitr.HasNext() {
 		p.Uid = uitr.Next()
 		f(p)
@@ -1297,11 +1297,11 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 		return out, nil
 	}
 
-	var itr *sroar.Itr
+	var itr *sroar.Iterator
 	if opt.First > 0 {
-		itr = bm.Iterator()
+		itr = bm.NewIterator()
 	} else {
-		itr = bm.ReverseIterator()
+		itr = bm.NewReverseIterator()
 	}
 	num := abs(opt.First)
 	for len(out.Uids) < num && itr.HasNext() {
