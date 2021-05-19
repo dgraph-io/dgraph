@@ -392,6 +392,9 @@ func (m *mapper) processReqCh(ctx context.Context) error {
 				return err
 			}
 			changeFormat := func() error {
+				// In the backup taken on 2103, we have the schemaUpdate.Predicate in format
+				// <namespace 8 bytes>|<attribute>. That had issues with JSON marshalling.
+				// So, we switched over to the format <namespace hex string>-<attribute>.
 				var err error
 				if parsedKey.IsSchema() {
 					var update pb.SchemaUpdate
@@ -422,6 +425,8 @@ func (m *mapper) processReqCh(ctx context.Context) error {
 				}
 				return nil
 			}
+			// We changed the format of predicate in 2103 and 2105. SchemaUpdate and TypeUpdate have
+			// predicate stored within them, so they also need to be updated accordingly.
 			switch in.version {
 			case 0:
 				if parsedKey.IsType() {
