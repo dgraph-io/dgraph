@@ -1118,7 +1118,7 @@ func AuthGuardianOfTheGalaxy(ctx context.Context) error {
 	ns, err := x.ExtractJWTNamespace(ctx)
 	if err != nil {
 		return status.Error(codes.Unauthenticated,
-			"AuthGuardianOfTheGalaxy: extracting jwt token, error:"+err.Error())
+			"AuthGuardianOfTheGalaxy: extracting jwt token, error: "+err.Error())
 	}
 	if ns != 0 {
 		return status.Error(
@@ -1129,7 +1129,7 @@ func AuthGuardianOfTheGalaxy(ctx context.Context) error {
 	if err := AuthorizeGuardians(ctx); err != nil {
 		s := status.Convert(err)
 		return status.Error(
-			s.Code(), "AuthGuardianOfTheGalaxy: failed to authorize guardians"+s.Message())
+			s.Code(), "AuthGuardianOfTheGalaxy: failed to authorize guardians. "+s.Message())
 	}
 	glog.V(3).Info("Successfully authorised guardian of the galaxy")
 	return nil
