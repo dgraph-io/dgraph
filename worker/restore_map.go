@@ -438,6 +438,8 @@ func (m *mapper) processReqCh(ctx context.Context) error {
 			default:
 				// for manifest versions >= 2015, do nothing.
 			}
+			// Reset the StreamId to prevent ordering issues while writing to stream writer.
+			kv.StreamId = 0
 			// Schema and type keys are not stored in an intermediate format so their
 			// value can be written as is.
 			kv.Key = restoreKey
