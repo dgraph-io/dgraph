@@ -285,6 +285,8 @@ func (m *mapper) processReqCh(ctx context.Context) error {
 	maxUid := uint64(0)
 
 	toBuffer := func(kv *bpb.KV, version uint64) error {
+		// Reset the StreamId to prevent ordering issues.
+		kv.StreamId = 0
 		key := y.KeyWithTs(kv.Key, version)
 		sz := kv.Size()
 		buf := buf.SliceAllocate(2 + len(key) + sz)
