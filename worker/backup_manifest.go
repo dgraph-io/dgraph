@@ -13,7 +13,6 @@
 package worker
 
 import (
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -193,18 +192,6 @@ func getConsolidatedManifest(h x.UriHandler, uri *url.URL) (*MasterManifest, err
 	return &MasterManifest{Manifests: mlist}, nil
 }
 
-// Invalid bytes are replaced with the Unicode replacement rune.
-// See https://golang.org/pkg/encoding/json/#Marshal
-const replacementRune = rune('\ufffd')
-
-func parseNsAttr(attr string) (uint64, string, error) {
-	if strings.ContainsRune(attr, replacementRune) {
-		return 0, "", errors.Errorf("replacement rune found while parsing attr: %s (%+v)",
-			attr, []byte(attr))
-	}
-	return binary.BigEndian.Uint64([]byte(attr[:8])), attr[8:], nil
-}
-
 // upgradeManifest updates the in-memory manifest from various versions to the latest version.
 // If the manifest version is 0 (dgraph version < v21.03), attach namespace to the predicates and
 // the drop data/attr operation.
@@ -236,23 +223,23 @@ func upgradeManifest(m *Manifest) error {
 		for gid, preds := range m.Groups {
 			parsedPreds := preds[:0]
 			for _, pred := range preds {
-				ns, attr, err := parseNsAttr(pred)
+				attr, err := x.AttrFrom2103(pred)
 				if err != nil {
 					return errors.Errorf("while parsing predicate got: %q", err)
 				}
-				parsedPreds = append(parsedPreds, x.NamespaceAttr(ns, attr))
+				parsedPreds = append(parsedPreds, attr)
 			}
 			m.Groups[gid] = parsedPreds
 		}
 		for _, op := range m.DropOperations {
 			// We have a cluster wide drop data in v21.03.
 			if op.DropOp == pb.DropOperation_ATTR {
-				ns, attr, err := parseNsAttr(op.DropValue)
+				attr, err := x.AttrFrom2103(op.DropValue)
 				if err != nil {
 					return errors.Errorf("while parsing the drop operation %+v got: %q",
 						op, err)
 				}
-				op.DropValue = x.NamespaceAttr(ns, attr)
+				op.DropValue = attr
 			}
 		}
 	case 2105:

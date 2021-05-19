@@ -61,6 +61,19 @@ const (
 	NsSeparator = "-"
 )
 
+// Invalid bytes are replaced with the Unicode replacement rune.
+// See https://golang.org/pkg/encoding/json/#Marshal
+const replacementRune = rune('\ufffd')
+
+func AttrFrom2103(attr string) (string, error) {
+	if strings.ContainsRune(attr, replacementRune) {
+		return "", errors.Errorf("replacement rune found while parsing attr: %s (%+v)",
+			attr, []byte(attr))
+	}
+	ns, pred := binary.BigEndian.Uint64([]byte(attr[:8])), attr[8:]
+	return NamespaceAttr(ns, pred), nil
+}
+
 func NamespaceToBytes(ns uint64) []byte {
 	buf := make([]byte, 8)
 	binary.BigEndian.PutUint64(buf, ns)
