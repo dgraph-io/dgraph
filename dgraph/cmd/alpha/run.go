@@ -173,7 +173,7 @@ they form a Raft group and provide synchronous replication.
 		Flag("token",
 			"If set, all Admin requests to Dgraph will need to have this token. The token can be "+
 				"passed as follows: for HTTP requests, in the X-Dgraph-AuthToken header. For Grpc, "+
-				"in auth-token key in the context.").
+				"in Authorization key in the context.").
 		Flag("whitelist",
 			"A comma separated list of IP addresses, IP ranges, CIDR blocks, or hostnames you wish "+
 				"to whitelist for performing admin actions (i.e., --security "+

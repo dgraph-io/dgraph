@@ -508,7 +508,7 @@ func AttachAuthToken(ctx context.Context, r *http.Request) context.Context {
 			md = metadata.New(nil)
 		}
 
-		md.Append("auth-token", authToken)
+		md.Append("Authorization", authToken)
 		ctx = metadata.NewIncomingContext(ctx, md)
 	}
 	return ctx

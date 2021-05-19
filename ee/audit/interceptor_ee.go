@@ -112,7 +112,7 @@ func auditGrpc(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo)
 	extractUser := func(md metadata.MD) {
 		if t := md.Get("accessJwt"); len(t) > 0 {
 			user = getUser(t[0], false)
-		} else if t := md.Get("auth-token"); len(t) > 0 {
+		} else if t := md.Get("Authorization"); len(t) > 0 {
 			user = getUser(t[0], true)
 		} else {
 			user = getUser("", false)

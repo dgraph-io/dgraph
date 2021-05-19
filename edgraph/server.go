@@ -1608,7 +1608,7 @@ func hasPoormansAuth(ctx context.Context) error {
 	if !ok {
 		return errNoAuth
 	}
-	tokens := md.Get("auth-token")
+	tokens := md.Get("Authorization")
 	if len(tokens) == 0 {
 		return errNoAuth
 	}
