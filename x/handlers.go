@@ -635,7 +635,7 @@ func NewGCSHandler(uri *url.URL, creds *MinioCredentials) (gcs *GCS, err error) 
 	gcs.bucket = gcs.client.Bucket(uri.Host)
 	if _, err := gcs.bucket.Attrs(ctx); err != nil {
 		gcs.client.Close()
-		return nil, errors.Wrapf(err, "while accessing bucket: %s", err)
+		return nil, errors.Wrapf(err, "while accessing bucket")
 	}
 
 	return gcs, nil
@@ -647,12 +647,12 @@ func (gcs *GCS) CreateDir(path string) error {
 
 	// GCS used a flat storage and provides an illusion of directories. To create a directory, file
 	// name must be followed by '/'.
-	dir := filepath.Join(gcs.pathName, path, "") + "/"
-	glog.V(2).Infof("Creating dir: %s", dir)
+	dir := filepath.Join(gcs.pathName, path, "") + string(filepath.Separator)
+	glog.V(2).Infof("Creating dir: %q", dir)
 
 	writer := gcs.bucket.Object(dir).NewWriter(ctx)
 	if err := writer.Close(); err != nil {
-		return errors.Wrapf(err, "while creating directory: %s", err)
+		return errors.Wrapf(err, "while creating directory")
 	}
 
 	return nil
@@ -680,7 +680,7 @@ func (gcs *GCS) DirExists(path string) bool {
 
 	// GCS doesn't has the concept of directories, it emulated the folder behaviour if the path is
 	// suffixed with '/'.
-	absPath += "/"
+	absPath += string(filepath.Separator)
 
 	it := gcs.bucket.Objects(ctx, &storage.Query{
 		Prefix: absPath,
@@ -689,7 +689,7 @@ func (gcs *GCS) DirExists(path string) bool {
 	if _, err := it.Next(); err != iterator.Done {
 		return true
 	} else if err != nil {
-		glog.Error(errors.Wrapf(err, "while checking if directory exists: %s", err))
+		glog.Errorf("Error while checking if directory exists: %s", err)
 	}
 
 	return false
@@ -703,7 +703,7 @@ func (gcs *GCS) FileExists(path string) bool {
 	if _, err := obj.Attrs(ctx); err == storage.ErrObjectNotExist {
 		return false
 	} else if err != nil {
-		glog.Error(errors.Wrapf(err, "while checking if file exists: %s", err))
+		glog.Error("Error while checking if file exists: %s", err)
 		return false
 	}
 
@@ -722,7 +722,7 @@ func (gcs *GCS) ListPaths(path string) []string {
 
 	absPath := gcs.JoinPath(path)
 	if len(absPath) != 0 {
-		absPath += "/"
+		absPath += string(filepath.Separator)
 	}
 
 	it := gcs.bucket.Objects(ctx, &storage.Query{
@@ -737,7 +737,7 @@ func (gcs *GCS) ListPaths(path string) []string {
 			break
 		}
 		if err != nil {
-			glog.Error(errors.Wrapf(err, "while listing paths: %s", err))
+			glog.Error("Error while listing paths: %s", err)
 		}
 
 		if len(attrs.Name) > 0 {
@@ -755,13 +755,13 @@ func (gcs *GCS) Read(path string) ([]byte, error) {
 	ctx := context.Background()
 	reader, err := gcs.bucket.Object(gcs.JoinPath(path)).NewReader(ctx)
 	if err != nil {
-		return nil, errors.Wrapf(err, "while reading file: %s", err)
+		return nil, errors.Wrapf(err, "while reading file")
 	}
 	defer reader.Close()
 
 	data, err := ioutil.ReadAll(reader)
 	if err != nil {
-		return nil, errors.Wrapf(err, "while reading file: %s", err)
+		return nil, errors.Wrapf(err, "while reading file")
 	}
 
 	return data, nil
@@ -775,11 +775,11 @@ func (gcs *GCS) Rename(src, dst string) error {
 	dstObj := gcs.bucket.Object(gcs.JoinPath(dst))
 
 	if _, err := dstObj.CopierFrom(srcObj).Run(ctx); err != nil {
-		return errors.Wrapf(err, "while renaming file: %s", err)
+		return errors.Wrapf(err, "while renaming file")
 	}
 
 	if err := srcObj.Delete(ctx); err != nil {
-		return errors.Wrapf(err, "while renaming file: %s", err)
+		return errors.Wrapf(err, "while renaming file")
 	}
 
 	return nil
@@ -791,7 +791,7 @@ func (gcs *GCS) Stream(path string) (io.ReadCloser, error) {
 	ctx := context.Background()
 	reader, err := gcs.bucket.Object(gcs.JoinPath(path)).NewReader(ctx)
 	if err != nil {
-		return nil, errors.Wrapf(err, "while reading file: %s", err)
+		return nil, errors.Wrapf(err, "while reading file")
 	}
 
 	return reader, nil
