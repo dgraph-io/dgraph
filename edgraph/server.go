@@ -1612,6 +1612,10 @@ func hasPoormansAuth(ctx context.Context) error {
 	if len(tokens) == 0 {
 		return errNoAuth
 	}
+	if !strings.HasPrefix(tokens[0], "Bearer ") {
+		return errors.Errorf("Authorization header must begin with Bearer")
+	}
+
 	tok := strings.ReplaceAll(tokens[0], "Bearer ", "")
 	glog.Infof("tok: %v\n", tok)
 	if tok != worker.Config.AuthToken {
