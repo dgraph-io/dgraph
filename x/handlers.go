@@ -671,16 +671,16 @@ func (gcs *GCS) CreateFile(path string) (io.WriteCloser, error) {
 func (gcs *GCS) DirExists(path string) bool {
 	ctx := context.Background()
 
-	// GCS doesn't has the concept of directories, it emulated the folder behaviour if the path is
-	// suffixed with '/'.
 	absPath := gcs.JoinPath(path)
 
 	// If there's no root specified we return true because we have ensured that the bucket exists.
 	if len(absPath) == 0 {
 		return true
-	} else {
-		absPath += "/"
 	}
+
+	// GCS doesn't has the concept of directories, it emulated the folder behaviour if the path is
+	// suffixed with '/'.
+	absPath += "/"
 
 	it := gcs.bucket.Objects(ctx, &storage.Query{
 		Prefix: absPath,
