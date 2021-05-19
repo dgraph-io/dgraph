@@ -466,7 +466,7 @@ func (gcs *GCS) FileExists(path string) bool {
 	if _, err := obj.Attrs(ctx); err == storage.ErrObjectNotExist {
 		return false
 	} else if err != nil {
-		glog.Error("Error while checking if file exists: %s", err)
+		glog.Errorf("Error while checking if file exists: %s", err)
 		return false
 	}
 
@@ -500,7 +500,7 @@ func (gcs *GCS) ListPaths(path string) []string {
 			break
 		}
 		if err != nil {
-			glog.Error("Error while listing paths: %s", err)
+			glog.Errorf("Error while listing paths: %s", err)
 		}
 
 		if len(attrs.Name) > 0 {
