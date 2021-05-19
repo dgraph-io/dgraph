@@ -19,11 +19,9 @@
 package updatemanifest
 
 import (
-	"encoding/binary"
 	"log"
 	"net/url"
 	"os"
-	"strings"
 
 	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -65,18 +63,6 @@ func init() {
 	ee.RegisterEncFlag(flag)
 }
 
-// Invalid bytes are replaced with the Unicode replacement rune.
-// See https://golang.org/pkg/encoding/json/#Marshal
-const replacementRune = rune('\ufffd')
-
-func parseNsAttr(attr string) (uint64, string, error) {
-	if strings.ContainsRune(attr, replacementRune) {
-		return 0, "", errors.Errorf("replacement rune found while parsing attr: %s (%+v)",
-			attr, []byte(attr))
-	}
-	return binary.BigEndian.Uint64([]byte(attr[:8])), attr[8:], nil
-}
-
 func run() error {
 	keys, err := ee.GetKeys(UpdateManifest.Conf)
 	if err != nil {
@@ -100,25 +86,25 @@ func run() error {
 		for gid, preds := range manifest.Groups {
 			parsedPreds := preds[:0]
 			for _, pred := range preds {
-				ns, attr, err := parseNsAttr(pred)
+				attr, err := x.AttrFrom2103(pred)
 				if err != nil {
 					parsedPreds = append(parsedPreds, pred)
 					logger.Printf("Unable to parse the pred: %v", pred)
 					continue
 				}
-				parsedPreds = append(parsedPreds, x.NamespaceAttr(ns, attr))
+				parsedPreds = append(parsedPreds, attr)
 			}
 			manifest.Groups[gid] = parsedPreds
 		}
 		for _, op := range manifest.DropOperations {
 			if op.DropOp == pb.DropOperation_ATTR {
-				ns, attr, err := parseNsAttr(op.DropValue)
+				attr, err := x.AttrFrom2103(op.DropValue)
 				if err != nil {
 					logger.Printf("Unable to parse the drop operation %+v pred: %v",
 						op, []byte(op.DropValue))
 					continue
 				}
-				op.DropValue = x.NamespaceAttr(ns, attr)
+				op.DropValue = attr
 			}
 		}
 		// As we have made the required changes to the manifest, we should update the version too.
