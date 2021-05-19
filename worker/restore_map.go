@@ -21,7 +21,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"math"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -370,19 +369,9 @@ func (m *mapper) processReqCh(ctx context.Context) error {
 					// TODO: wrap errors in this file for easier debugging.
 					return err
 				}
-				// Rollup resets the StreamId for the kvs, so use the same StreamId for the main
-				// posting list while use math.MaxUint32 for the splits to prevent any collision of
-				// StreamId. This is to prevent ordering issues while writing to stream writer.
-				kvs[0].StreamId = kv.StreamId
-				if err := toBuffer(kvs[0], kv.Version); err != nil {
-					return err
-				}
-				if len(kvs) > 1 {
-					for _, kv := range kvs[1:] {
-						kv.StreamId = math.MaxUint32
-						if err := toBuffer(kv, kv.Version); err != nil {
-							return err
-						}
+				for _, kv := range kvs {
+					if err := toBuffer(kv, kv.Version); err != nil {
+						return err
 					}
 				}
 			}
@@ -407,6 +396,8 @@ func (m *mapper) processReqCh(ctx context.Context) error {
 					return nil
 				}
 			}
+			// Reset the StreamId to prevent ordering issues while writing to stream writer.
+			kv.StreamId = 0
 			// Schema and type keys are not stored in an intermediate format so their
 			// value can be written as is.
 			kv.Key = restoreKey
