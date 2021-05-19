@@ -1612,7 +1612,8 @@ func hasPoormansAuth(ctx context.Context) error {
 	if len(tokens) == 0 {
 		return errNoAuth
 	}
-	if tokens[0] != worker.Config.AuthToken {
+	tok := strings.Replace(tokens[0], "Bearer ", "", 0)
+	if tok != worker.Config.AuthToken {
 		return errors.Errorf("Provided auth token [%s] does not match. Permission denied.", tokens[0])
 	}
 	return nil
