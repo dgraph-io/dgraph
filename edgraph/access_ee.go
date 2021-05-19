@@ -1110,27 +1110,33 @@ func authorizeSchemaQuery(ctx context.Context, er *query.ExecutionResult) error 
 // AuthGuardianOfTheGalaxy authorizes the operations for the users who belong to the guardians
 // group in the galaxy namespace. This authorization is used for admin usages like creation and
 // deletion of a namespace, resetting passwords across namespaces etc.
+// NOTE: The caller should not wrap the error returned. If needed, propagate the GRPC error code.
 func AuthGuardianOfTheGalaxy(ctx context.Context) error {
 	if !x.WorkerConfig.AclEnabled {
 		return nil
 	}
 	ns, err := x.ExtractJWTNamespace(ctx)
 	if err != nil {
-		return errors.Wrap(err, "Authorize guardian of the galaxy, extracting jwt token, error:")
+		return status.Error(codes.Unauthenticated,
+			"AuthGuardianOfTheGalaxy: extracting jwt token, error:"+err.Error())
 	}
 	if ns != 0 {
-		return errors.New("Only guardian of galaxy is allowed to do this operation")
+		return status.Error(
+			codes.PermissionDenied, "Only guardian of galaxy is allowed to do this operation")
 	}
 	// AuthorizeGuardians will extract (user, []groups) from the JWT claims and will check if
 	// any of the group to which the user belongs is "guardians" or not.
 	if err := AuthorizeGuardians(ctx); err != nil {
-		return errors.Wrap(err, "AuthGuardianOfTheGalaxy, failed to authorize guardians")
+		s := status.Convert(err)
+		return status.Error(
+			s.Code(), "AuthGuardianOfTheGalaxy: failed to authorize guardians"+s.Message())
 	}
 	glog.V(3).Info("Successfully authorised guardian of the galaxy")
 	return nil
 }
 
 // AuthorizeGuardians authorizes the operation for users which belong to Guardians group.
+// NOTE: The caller should not wrap the error returned. If needed, propagate the GRPC error code.
 func AuthorizeGuardians(ctx context.Context) error {
 	if len(worker.Config.HmacSecret) == 0 {
 		// the user has not turned on the acl feature
