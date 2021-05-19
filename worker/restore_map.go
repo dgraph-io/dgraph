@@ -107,7 +107,7 @@ type loadBackupInput struct {
 	restoreTs   uint64
 	preds       predicateSet
 	dropNs      map[uint64]struct{}
-	isOld       bool
+	version     int
 	keepSchema  bool
 	compression string
 }
@@ -391,11 +391,52 @@ func (m *mapper) processReqCh(ctx context.Context) error {
 				kv.Value, err = update.Marshal()
 				return err
 			}
-			if in.isOld && parsedKey.IsType() {
-				if err := appendNamespace(); err != nil {
-					glog.Errorf("Unable to (un)marshal type: %+v. Err=%v\n", parsedKey, err)
+			changeFormat := func() error {
+				var err error
+				if parsedKey.IsSchema() {
+					var update pb.SchemaUpdate
+					if err := update.Unmarshal(kv.Value); err != nil {
+						return err
+					}
+					if update.Predicate, err = x.AttrFrom2103(update.Predicate); err != nil {
+						return err
+					}
+					kv.Value, err = update.Marshal()
+					return err
+				}
+				if parsedKey.IsType() {
+					var update pb.TypeUpdate
+					if err := update.Unmarshal(kv.Value); err != nil {
+						return err
+					}
+					if update.TypeName, err = x.AttrFrom2103(update.TypeName); err != nil {
+						return err
+					}
+					for _, sch := range update.Fields {
+						if sch.Predicate, err = x.AttrFrom2103(sch.Predicate); err != nil {
+							return err
+						}
+					}
+					kv.Value, err = update.Marshal()
+					return err
+				}
+				return nil
+			}
+			switch in.version {
+			case 0:
+				if parsedKey.IsType() {
+					if err := appendNamespace(); err != nil {
+						glog.Errorf("Unable to (un)marshal type: %+v. Err=%v\n", parsedKey, err)
+						return nil
+					}
+				}
+			case 2103:
+				if err := changeFormat(); err != nil {
+					glog.Errorf("Unable to change format for: %+v Err=%+v", parsedKey, err)
 					return nil
 				}
+			default:
+				// for manifest versions >= 2015, do nothing.
 			}
 			// Schema and type keys are not stored in an intermediate format so their
 			// value can be written as is.
@@ -655,7 +696,7 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) (*mapResult, error) {
 			in := &loadBackupInput{
 				preds:     predSet,
 				dropNs:    localDropNs,
-				isOld:     manifest.Version == 0,
+				version:   manifest.Version,
 				restoreTs: req.RestoreTs,
 				// Only map the schema keys corresponding to the latest backup.
 				keepSchema:  i == 0,
