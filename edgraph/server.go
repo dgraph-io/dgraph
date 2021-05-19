@@ -271,7 +271,9 @@ func parseSchemaFromAlterOperation(ctx context.Context, op *api.Operation) (*sch
 		// Only the guardian of the galaxy can do a galaxy wide query/mutation. This operation is
 		// needed by live loader.
 		if err := AuthGuardianOfTheGalaxy(ctx); err != nil {
-			return nil, errors.Wrap(err, "Non guardian of galaxy user cannot bypass namespaces.")
+			s := status.Convert(err)
+			return nil, status.Error(s.Code(),
+				"Non guardian of galaxy user cannot bypass namespaces. "+s.Message())
 		}
 		var err error
 		namespace, err = strconv.ParseUint(x.GetForceNamespace(ctx), 0, 64)
@@ -398,8 +400,9 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 			return empty, errors.New("Drop all operation is not permitted.")
 		}
 		if err := AuthGuardianOfTheGalaxy(ctx); err != nil {
-			return empty, errors.Wrapf(err, "Drop all can only be called by the guardian of the"+
-				" galaxy")
+			s := status.Convert(err)
+			return empty, status.Error(s.Code(),
+				"Drop all can only be called by the guardian of the galaxy. "+s.Message())
 		}
 		if len(op.DropValue) > 0 {
 			return empty, errors.Errorf("If DropOp is set to ALL, DropValue must be empty")
@@ -1363,11 +1366,13 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (
 		ostats.Record(ctx, x.NumMutations.M(1))
 	}
 
-	if x.IsGalaxyOperation(ctx) {
+	if req.doAuth == NeedAuthorize && x.IsGalaxyOperation(ctx) {
 		// Only the guardian of the galaxy can do a galaxy wide query/mutation. This operation is
 		// needed by live loader.
 		if err := AuthGuardianOfTheGalaxy(ctx); err != nil {
-			return nil, errors.Wrap(err, "Non guardian of galaxy user cannot bypass namespaces.")
+			s := status.Convert(err)
+			return nil, status.Error(s.Code(),
+				"Non guardian of galaxy user cannot bypass namespaces. "+s.Message())
 		}
 	}
 
