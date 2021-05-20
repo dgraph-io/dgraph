@@ -1070,6 +1070,8 @@ func writePostingListToDisk(kvs []*bpb.KV) error {
 
 // Create a multi-part list and verify all the uids are there.
 func TestMultiPartListBasic(t *testing.T) {
+	// TODO(sroar): Increase size to 1e5 once sroar is optimized.
+	// size := int(1e5)
 	size := int(6000)
 	ol, commits := createMultiPartList(t, size, false)
 	opt := ListOptions{ReadTs: uint64(size) + 1}
@@ -1199,6 +1201,8 @@ func TestBinSplit(t *testing.T) {
 
 // Verify that iteration works with an afterUid value greater than zero.
 func TestMultiPartListIterAfterUid(t *testing.T) {
+	// TODO(sroar): Revert back size
+	// size := int(1e5)
 	size := int(4000)
 	ol, _ := createMultiPartList(t, size, false)
 
@@ -1216,6 +1220,8 @@ func TestMultiPartListIterAfterUid(t *testing.T) {
 
 // Verify that postings can be retrieved in multi-part lists.
 func TestMultiPartListWithPostings(t *testing.T) {
+	// TODO(sroar): Revert back size
+	// size := int(1e5)
 	size := int(1e4)
 	ol, commits := createMultiPartList(t, size, true)
 
@@ -1235,6 +1241,8 @@ func TestMultiPartListWithPostings(t *testing.T) {
 
 // Verify marshaling of multi-part lists.
 func TestMultiPartListMarshal(t *testing.T) {
+	// TODO(sroar): Revert back size
+	// size := int(1e5)
 	size := int(1e4)
 	ol, _ := createMultiPartList(t, size, false)
 
@@ -1263,6 +1271,8 @@ func TestMultiPartListMarshal(t *testing.T) {
 
 // Verify that writing a multi-part list to disk works correctly.
 func TestMultiPartListWriteToDisk(t *testing.T) {
+	// TODO(sroar): Revert back size
+	// size := int(1e5)
 	size := int(1e4)
 	originalList, commits := createMultiPartList(t, size, false)
 
@@ -1288,6 +1298,8 @@ func TestMultiPartListWriteToDisk(t *testing.T) {
 
 // Verify that adding and deleting all the entries returns an empty list.
 func TestMultiPartListDelete(t *testing.T) {
+	// TODO(sroar): Revert back size
+	// size := int(1e5)
 	size := int(1e4)
 	ol, commits := createAndDeleteMultiPartList(t, size)
 	require.Equal(t, size*2, commits)
@@ -1422,6 +1434,8 @@ func TestMultiPartListDeleteAndAdd(t *testing.T) {
 
 func TestSingleListRollup(t *testing.T) {
 	// Generate a split posting list.
+	// TODO(sroar): Revert back size
+	// size := int(1e5)
 	size := int(1e4)
 	ol, commits := createMultiPartList(t, size, true)
 
