@@ -28,6 +28,7 @@ import (
 	"go.etcd.io/etcd/raft"
 
 	"github.com/dgraph-io/badger/v3"
+	bpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -211,26 +212,10 @@ func doStreamSnapshot(snap *pb.Snapshot, out pb.Worker_StreamSnapshotServer) err
 	// Use the default implementation. We no longer try to generate a rolled up posting list here.
 	// Instead, we just stream out all the versions as they are.
 	stream.KeyToList = nil
+	stream.SinceTs = snap.SinceTs
 	stream.Send = func(buf *z.Buffer) error {
 		kvs := &pb.KVS{Data: buf.Bytes()}
 		return out.Send(kvs)
-	}
-	stream.ChooseKey = func(item *badger.Item) bool {
-		if item.Version() >= snap.SinceTs {
-			return true
-		}
-
-		if item.Version() != 1 {
-			return false
-		}
-
-		// Type and Schema keys always have a timestamp of 1. They all need to be sent
-		// with the snapshot.
-		pk, err := x.Parse(item.Key())
-		if err != nil {
-			return false
-		}
-		return pk.IsSchema() || pk.IsType()
 	}
 
 	// Get the list of all the predicate and types at the time of the snapshot so that the receiver
@@ -240,6 +225,49 @@ func doStreamSnapshot(snap *pb.Snapshot, out pb.Worker_StreamSnapshotServer) err
 
 	if err := stream.Orchestrate(out.Context()); err != nil {
 		return err
+	}
+
+	// Type and Schema keys always have a timestamp of 1. They all need to be sent
+	// with the snapshot. The stream framework does not send it when streaming at SinceTs > 1.
+	if stream.SinceTs > 1 {
+		buf := z.NewBuffer(10*MB, "DoStreamSnapshot")
+		defer buf.Release()
+		txn := pstore.NewTransactionAt(1, false)
+		defer txn.Discard()
+		copyKvsForPrefix := func(prefix []byte) error {
+			iopts := badger.DefaultIteratorOptions
+			iopts.Prefix = prefix
+			itr := txn.NewIterator(iopts)
+			defer itr.Close()
+
+			kv := bpb.KV{}
+			for itr.Rewind(); itr.Valid(); itr.Next() {
+				kv.Reset()
+				item := itr.Item()
+				kv.Key = item.Key()
+				if err := item.Value(func(val []byte) error {
+					kv.Value = val
+					return nil
+				}); err != nil {
+					return err
+				}
+				kv.Version = item.Version()
+				kv.ExpiresAt = item.ExpiresAt()
+				kv.UserMeta = []byte{item.UserMeta()}
+				badger.KVToBuffer(&kv, buf)
+			}
+			return nil
+		}
+		if err := copyKvsForPrefix(x.SchemaPrefix()); err != nil {
+			return errors.Wrap(err, "streamSnapshot: while copying schema")
+		}
+		if err := copyKvsForPrefix(x.TypePrefix()); err != nil {
+			return errors.Wrap(err, "streamSnapshot: while copying types")
+		}
+		kvs := &pb.KVS{Data: buf.Bytes()}
+		if err := out.Send(kvs); err != nil {
+			return err
+		}
 	}
 
 	// Indicate that sending is done.

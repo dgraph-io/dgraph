@@ -661,8 +661,10 @@
     }
   explanation: "A reference must be a valid UID"
   error:
-    { "message":
-        "failed to rewrite mutation payload because ID argument (HI!) was not able to be parsed" }
+    {
+      "message":
+        "failed to rewrite mutation payload because ID argument (HI!) was not able to be parsed"
+    }
 
 -
   name: "Add mutation with inverse reference"
@@ -2736,43 +2738,6 @@
       ]
     }
   explanation: "When duplicate XIDs are given as input circularly in a single mutation, it
-  should return error."
-  error:
-    message: |-
-      failed to rewrite mutation payload because duplicate XID found: S1
-
-- name: "Duplicate XIDs in single mutation for Interface"
-  gqlmutation: |
-    mutation addStudent($input: [AddStudentInput!]!) {
-      addStudent(input: $input) {
-        student {
-          xid
-          name
-          taughtBy {
-            xid
-            name
-            subject
-          }
-        }
-      }
-    }
-  gqlvariables: |
-    {
-      "input": [
-        {
-          "xid": "S1",
-          "name": "Stud1"
-        },
-        {
-          "xid": "S2",
-          "name": "Stud2",
-          "taughtBy": [
-            {"xid": "S1", "name": "Teacher1", "subject": "Sub1"}
-          ]
-        }
-      ]
-    }
-  explanation: "When duplicate XIDs are given as input for an Interface in a single mutation, it
   should return error."
   error:
     message: |-
@@ -5500,3 +5465,42 @@
     {
       "message": "failed to rewrite mutation payload because field id cannot be empty"
     }
+
+-
+  name: "Add Mutation referencing same XID in different types"
+  gqlmutation: |
+    mutation($input: [AddT1Input!]!) {
+      addT1(input: $input) {
+        t1 {
+          name
+          name1
+          name2
+          link {
+            name
+            name1
+            name3
+          }
+        }
+      }
+    }
+  gqlvariables: |
+    {
+      "input": [
+        {
+          "name": "Bob",
+          "name1": "Bob11",
+          "name2": "Bob2",
+          "link": {
+            "name": "Bob"
+          }
+        }
+      ]
+    }
+  explanation: "As the link and top level object contain the same XID, Bob, this should throw an error"
+  error:
+    {
+      "message":
+        "failed to rewrite mutation payload because using duplicate XID value: Bob for XID: name for two different
+         implementing types of same interfaces: T1 and T2"
+    }
+

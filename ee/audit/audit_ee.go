@@ -68,7 +68,10 @@ func GetAuditConf(conf string) *x.LoggerConf {
 		return nil
 	}
 	auditFlag := z.NewSuperFlag(conf).MergeAndCheckDefault(worker.AuditDefaults)
-	out := auditFlag.GetPath("output")
+	out := auditFlag.GetString("output")
+	if out != "stdout" {
+		out = auditFlag.GetPath("output")
+	}
 	x.AssertTruef(out != "", "out flag is not provided for the audit logs")
 	encBytes, err := readAuditEncKey(auditFlag)
 	x.Check(err)

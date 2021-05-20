@@ -17,7 +17,6 @@
 package schema
 
 import (
-	"bytes"
 	"context"
 	"encoding/hex"
 	"fmt"
@@ -506,18 +505,16 @@ func LoadFromDb() error {
 
 // LoadSchemaFromDb iterates through the DB and loads all the stored schema updates.
 func LoadSchemaFromDb() error {
-	prefix := x.SchemaPrefix()
 	txn := pstore.NewTransactionAt(1, false)
 	defer txn.Discard()
-	itr := txn.NewIterator(badger.DefaultIteratorOptions) // Need values, reversed=false.
+	iopts := badger.DefaultIteratorOptions
+	iopts.Prefix = x.SchemaPrefix()
+	itr := txn.NewIterator(iopts) // Need values, reversed=false.
 	defer itr.Close()
 
-	for itr.Seek(prefix); itr.Valid(); itr.Next() {
+	for itr.Rewind(); itr.Valid(); itr.Next() {
 		item := itr.Item()
 		key := item.Key()
-		if !bytes.HasPrefix(key, prefix) {
-			break
-		}
 		pk, err := x.Parse(key)
 		if err != nil {
 			glog.Errorf("Error while parsing key %s: %v", hex.Dump(key), err)
@@ -542,18 +539,16 @@ func LoadSchemaFromDb() error {
 
 // LoadTypesFromDb iterates through the DB and loads all the stored type updates.
 func LoadTypesFromDb() error {
-	prefix := x.TypePrefix()
 	txn := pstore.NewTransactionAt(1, false)
 	defer txn.Discard()
-	itr := txn.NewIterator(badger.DefaultIteratorOptions) // Need values, reversed=false.
+	iopts := badger.DefaultIteratorOptions
+	iopts.Prefix = x.TypePrefix()
+	itr := txn.NewIterator(iopts) // Need values, reversed=false.
 	defer itr.Close()
 
-	for itr.Seek(prefix); itr.Valid(); itr.Next() {
+	for itr.Rewind(); itr.Valid(); itr.Next() {
 		item := itr.Item()
 		key := item.Key()
-		if !bytes.HasPrefix(key, prefix) {
-			break
-		}
 		pk, err := x.Parse(key)
 		if err != nil {
 			glog.Errorf("Error while parsing key %s: %v", hex.Dump(key), err)

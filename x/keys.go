@@ -118,6 +118,19 @@ func FormatNsAttr(attr string) string {
 	return strconv.FormatUint(ns, 10) + "-" + attr
 }
 
+func ExtractNamespaceFromPredicate(predicate string) (uint64, error) {
+	splitString := strings.Split(predicate, "-")
+	if len(splitString) <= 1 {
+		return 0, errors.Errorf("predicate does not contain namespace name")
+	}
+	uintVal, err := strconv.ParseUint(splitString[0], 0, 64)
+	if err != nil {
+		return 0, errors.Wrapf(err, "while parsing %s as uint64", splitString[0])
+	}
+	return uintVal, nil
+
+}
+
 func writeAttr(buf []byte, attr string) []byte {
 	AssertTrue(len(attr) < math.MaxUint16)
 	binary.BigEndian.PutUint16(buf[:2], uint16(len(attr)))

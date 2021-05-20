@@ -5330,7 +5330,47 @@ func TestFilterWithDollarError(t *testing.T) {
 	_, err := Parse(Request{
 		Str: query,
 	})
+
 	require.Error(t, err)
+}
+
+func TestLexQueryWithValidQuery(t *testing.T) {
+	query := `{
+		q(func: allofterms(<name:is>, "hey you there"), first:20, offset:0, orderasc:Pokemon.id){
+			uid
+			expand(_all_)(first:1){
+				uid
+				Pokemon.name
+				expand(_all_)(first:1)
+			}
+		}
+		n(func:type(Pokemon)){
+			count:count(uid)
+		}
+	}`
+
+	items := LexQuery(query)
+	for i, item := range items {
+		t.Logf("[%d] item: %+v\n", i, item)
+	}
+	require.Equal(t, 68, len(items))
+}
+
+func TestLexQueryWithInvalidQuery(t *testing.T) {
+	query := `{
+		q(func: allofterms(<name:is>, "hey you there"), first: 20, offset:0, orderasc:Pokemon.id){
+			uid
+		}
+		n(func:type(Pokemon)){
+			count:count(uid)
+	}`
+
+	items := LexQuery(query)
+	for i, item := range items {
+		t.Logf("[%d] item: %+v\n", i, item.Typ)
+	}
+	require.Equal(t, 45, len(items))
+	require.Equal(t, lex.ItemError, items[44].Typ)
 }
 
 func TestFilterWithVar(t *testing.T) {
