@@ -402,10 +402,8 @@ func TestExportJson(t *testing.T) {
 
 const exportRequest = `mutation export($format: String!) {
 	export(input: {format: $format}) {
-		exportedFiles
-		response {
-			code
-		}
+		response { code }
+		taskId
 	}
 }`
 
@@ -427,7 +425,12 @@ func TestExportFormat(t *testing.T) {
 
 	resp, err := http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
-	testutil.RequireNoGraphQLErrors(t, resp)
+
+	var data interface{}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
+	require.Equal(t, "Success", testutil.JsonGet(data, "data", "export", "response", "code").(string))
+	taskId := testutil.JsonGet(data, "data", "export", "taskId").(string)
+	testutil.WaitForTask(t, taskId, false)
 
 	params.Variables["format"] = "rdf"
 	b, err = json.Marshal(params)
