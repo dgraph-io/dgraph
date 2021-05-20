@@ -89,6 +89,7 @@ type UriHandler interface {
 //   minio://localhost:9000/dgraph?secure=true
 //   file:///tmp/dgraph/backups
 //   /tmp/dgraph/backups?compress=gzip
+//   gs://dgraph/backups
 func NewUriHandler(uri *url.URL, creds *MinioCredentials) (UriHandler, error) {
 	switch uri.Scheme {
 	case "file", "":
@@ -355,6 +356,8 @@ func (h *s3Handler) getObjectPath(path string) string {
 	return filepath.Join(h.objectPrefix, path)
 }
 
+const GCSSeparator = '/'
+
 type GCS struct {
 	client   *storage.Client
 	bucket   *storage.BucketHandle
@@ -365,8 +368,13 @@ func NewGCSHandler(uri *url.URL, creds *MinioCredentials) (gcs *GCS, err error) 
 	ctx := context.Background()
 
 	var c *storage.Client
-	if os.Getenv("GOOGLE_APPLICATION_CREDENTIALS") != "" {
-		f, err := os.Open(os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"))
+	if creds.SecretKey != "" || os.Getenv("GOOGLE_APPLICATION_CREDENTIALS") != "" {
+		credsPath := creds.SecretKey
+		if credsPath == "" {
+			credsPath = os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
+		}
+
+		f, err := os.Open(credsPath)
 		if err != nil {
 			return nil, err
 		}
@@ -380,10 +388,8 @@ func NewGCSHandler(uri *url.URL, creds *MinioCredentials) (gcs *GCS, err error) 
 		if err != nil {
 			return nil, err
 		}
-	} else {
-		if c, err = storage.NewClient(ctx, option.WithoutAuthentication()); err != nil {
-			return nil, err
-		}
+	} else if c, err = storage.NewClient(ctx, option.WithoutAuthentication()); err != nil {
+		return nil, err
 	}
 
 	gcs = &GCS{
@@ -391,7 +397,7 @@ func NewGCSHandler(uri *url.URL, creds *MinioCredentials) (gcs *GCS, err error) 
 		pathName: uri.Path,
 	}
 
-	if len(gcs.pathName) > 0 && gcs.pathName[0] == '/' {
+	if len(gcs.pathName) > 0 && gcs.pathName[0] == GCSSeparator {
 		gcs.pathName = gcs.pathName[1:]
 	}
 
@@ -404,13 +410,13 @@ func NewGCSHandler(uri *url.URL, creds *MinioCredentials) (gcs *GCS, err error) 
 	return gcs, nil
 }
 
-//CreateDir creates a directory relative to the root path of the handler.
+// CreateDir creates a directory relative to the root path of the handler.
 func (gcs *GCS) CreateDir(path string) error {
 	ctx := context.Background()
 
 	// GCS used a flat storage and provides an illusion of directories. To create a directory, file
 	// name must be followed by '/'.
-	dir := filepath.Join(gcs.pathName, path, "") + string(filepath.Separator)
+	dir := filepath.Join(gcs.pathName, path, "") + string(GCSSeparator)
 	glog.V(2).Infof("Creating dir: %q", dir)
 
 	writer := gcs.bucket.Object(dir).NewWriter(ctx)
@@ -443,7 +449,7 @@ func (gcs *GCS) DirExists(path string) bool {
 
 	// GCS doesn't has the concept of directories, it emulated the folder behaviour if the path is
 	// suffixed with '/'.
-	absPath += string(filepath.Separator)
+	absPath += string(GCSSeparator)
 
 	it := gcs.bucket.Objects(ctx, &storage.Query{
 		Prefix: absPath,
@@ -475,7 +481,15 @@ func (gcs *GCS) FileExists(path string) bool {
 
 // JoinPath appends the given path to the root path of the handler.
 func (gcs *GCS) JoinPath(path string) string {
-	return filepath.Join(gcs.pathName, path)
+	if len(gcs.pathName) == 0 {
+		return path
+	}
+
+	if len(path) == 0 {
+		return gcs.pathName
+	}
+
+	return gcs.pathName + string(GCSSeparator) + path
 }
 
 // ListPaths returns a list of all the valid paths from the given root path. The given root path
@@ -485,7 +499,7 @@ func (gcs *GCS) ListPaths(path string) []string {
 
 	absPath := gcs.JoinPath(path)
 	if len(absPath) != 0 {
-		absPath += string(filepath.Separator)
+		absPath += string(GCSSeparator)
 	}
 
 	it := gcs.bucket.Objects(ctx, &storage.Query{
