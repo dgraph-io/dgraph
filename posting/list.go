@@ -37,6 +37,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/dgraph-io/sroar"
+	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 )
 
@@ -518,12 +519,9 @@ func (l *List) bitmap(opt ListOptions) (*sroar.Bitmap, error) {
 	if opt.Intersect != nil {
 		iw = codec.FromList(opt.Intersect)
 	}
-
 	r := sroar.NewBitmap()
 	if deleteBelow == 0 {
-		if err := codec.FromPostingList(r, l.plist); err != nil {
-			return nil, errors.Wrapf(err, "Bitmap: l.plist")
-		}
+		r = sroar.FromBuffer(l.plist.Bitmap)
 		if iw != nil {
 			r.And(iw)
 		}
@@ -536,10 +534,8 @@ func (l *List) bitmap(opt ListOptions) (*sroar.Bitmap, error) {
 			if err != nil {
 				return nil, errors.Wrapf(err, "while reading a split with startUid: %d", startUid)
 			}
-			s := sroar.NewBitmap()
-			if err := codec.FromPostingList(s, split); err != nil {
-				return nil, errors.Wrapf(err, "Bitmap: split")
-			}
+			s := sroar.FromBuffer(split.Bitmap)
+
 			// Intersect with opt.Intersect.
 			if iw != nil {
 				s.And(iw)
@@ -643,6 +639,7 @@ func (l *List) iterateAll(readTs uint64, afterUid uint64, f func(obj *pb.Posting
 	}
 
 	codec.RemoveRange(bm, 0, maxUid)
+	glog.Infof("bm before iteration: %v\n", bm.ToArray())
 	uitr = bm.NewIterator()
 	for uitr.HasNext() {
 		p.Uid = uitr.Next()
@@ -963,7 +960,7 @@ func (l *List) ToBackupPostingList(
 	ol := out.plist
 	bm := sroar.NewBitmap()
 	if ol.Bitmap != nil {
-		bm.UnmarshalBinary(ol.Bitmap)
+		bm = sroar.FromBuffer(ol.Bitmap)
 
 	}
 
@@ -1065,25 +1062,18 @@ func (ro *rollupOutput) getRange(uid uint64) (uint64, uint64) {
 	return 1, math.MaxUint64
 }
 
-func ShouldSplit(plist *pb.PostingList) (bool, error) {
+func ShouldSplit(plist *pb.PostingList) bool {
 	if plist.Size() >= maxListSize {
-		r := sroar.NewBitmap()
-		if err := codec.FromPostingList(r, plist); err != nil {
-			return false, err
-		}
-		return r.GetCardinality() > 1, nil
+		r := sroar.FromBuffer(plist.Bitmap)
+		return r.GetCardinality() > 1
 	}
-	return false, nil
+	return false
 }
 
 func (ro *rollupOutput) runSplits() error {
 top:
 	for startUid, pl := range ro.parts {
-		should, err := ShouldSplit(pl)
-		if err != nil {
-			return err
-		}
-		if should {
+		if ShouldSplit(pl) {
 			if err := ro.split(startUid); err != nil {
 				return err
 			}
@@ -1097,11 +1087,7 @@ top:
 func (ro *rollupOutput) split(startUid uint64) error {
 	pl := ro.parts[startUid]
 
-	r := sroar.NewBitmap()
-	if err := codec.FromPostingList(r, pl); err != nil {
-		return errors.Wrapf(err, "split codec.FromPostingList")
-	}
-
+	r := sroar.FromBuffer(pl.Bitmap)
 	num := r.GetCardinality()
 	uid, err := r.Select(uint64(num / 2))
 	if err != nil {
@@ -1661,10 +1647,7 @@ func isPlistEmpty(plist *pb.PostingList) bool {
 	if len(plist.Splits) > 0 {
 		return false
 	}
-	r := sroar.NewBitmap()
-	if err := codec.FromPostingList(r, plist); err != nil {
-		return false
-	}
+	r := sroar.FromBuffer(plist.Bitmap)
 	if r.IsEmpty() {
 		return true
 	}

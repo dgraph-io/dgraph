@@ -1424,7 +1424,7 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue, sgPath []*SubGr
 	}
 
 	// Filter out UIDs that don't have atleast one UID in every child.
-	itr := sg.DestMap.Iterator()
+	itr := sg.DestMap.NewIterator()
 	out := sg.DestMap.Clone()
 	for i := 0; itr.HasNext(); i++ {
 		uid := itr.Next()
@@ -1766,7 +1766,7 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 
 		case (v.Typ == gql.UidVar && sg.SrcFunc != nil && sg.SrcFunc.Name == "uid_in"):
 			srcFuncArgs := sg.SrcFunc.Args[:0]
-			itr := l.UidMap.Iterator()
+			itr := l.UidMap.NewIterator()
 			for itr.HasNext() {
 				uid := itr.Next()
 				// We use base 10 here because the uid parser expects the uid to be in base 10.

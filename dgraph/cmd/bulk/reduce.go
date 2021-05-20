@@ -647,9 +647,7 @@ func (r *reducer) toList(req *encodeRequest) {
 			}
 		}
 
-		shouldSplit, err := posting.ShouldSplit(pl)
-		x.Check(err)
-		if shouldSplit {
+		if posting.ShouldSplit(pl) {
 			// Give ownership of pl.Pack away to list. Rollup would deallocate the Pack.
 			l := posting.NewList(y.Copy(currentKey), pl, writeVersionTs)
 			kvs, err := l.Rollup(nil)

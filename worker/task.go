@@ -1201,7 +1201,7 @@ func (qs *queryState) handleRegexFunction(ctx context.Context, arg funcArgs) err
 	span.Annotatef(nil, "Total uids: %d, list: %t lang: %v", uids.GetCardinality(), isList, lang)
 
 	filtered := sroar.NewBitmap()
-	itr := uids.Iterator()
+	itr := uids.NewIterator()
 	for itr.HasNext() {
 		uid := itr.Next()
 		select {
@@ -1449,7 +1449,7 @@ func (qs *queryState) handleMatchFunction(ctx context.Context, arg funcArgs) err
 	matchQuery := strings.Join(arg.srcFn.tokens, "")
 	filtered := sroar.NewBitmap()
 
-	itr := uids.Iterator()
+	itr := uids.NewIterator()
 	for itr.HasNext() {
 		uid := itr.Next()
 		select {
@@ -1534,7 +1534,7 @@ func (qs *queryState) filterGeoFunction(ctx context.Context, arg funcArgs) error
 		if err != nil {
 			return err
 		}
-		itr := uids.Iterator()
+		itr := uids.NewIterator()
 		itr.AdvanceIfNeeded(startUid)
 
 		for uidx := start; uidx < end; uidx++ {
@@ -1644,7 +1644,7 @@ func (qs *queryState) filterStringFunction(arg funcArgs) error {
 	// matrix, to check it later.
 	// TODO: This function can be optimized by having a query specific cache, which can be populated
 	// by the handleHasFunction for e.g. for a `has(name)` query.
-	itr := uids.Iterator()
+	itr := uids.NewIterator()
 
 	// We can't directly modify uids bitmap. We need to add them to another bitmap, and then take
 	// the difference.

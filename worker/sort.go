@@ -412,7 +412,7 @@ func multiSort(ctx context.Context, r *sortresult, ts *pb.SortMessage) error {
 		result := or.r
 		dsz := int(dest.GetCardinality())
 		x.AssertTrue(len(result.ValueMatrix) == dsz)
-		itr := dest.Iterator()
+		itr := dest.NewIterator()
 		for i := 0; itr.HasNext(); i++ {
 			var sv types.Val
 			if len(result.ValueMatrix[i].Values) == 0 {

@@ -53,7 +53,7 @@ func ApproxLen(bitmap []byte) int {
 func Encode(uids []uint64) []byte {
 	r := sroar.NewBitmap()
 	r.SetMany(uids)
-	return r.ToBytes()
+	return r.ToBuffer()
 }
 
 func ToList(rm *sroar.Bitmap) *pb.List {
@@ -103,21 +103,11 @@ func Merge(matrix []*pb.List) *sroar.Bitmap {
 	return out
 }
 
-// TODO(Ahsan): We don't need this anymore.
 func ToBytes(bm *sroar.Bitmap) []byte {
 	if bm.IsEmpty() {
 		return nil
 	}
-	return bm.ToBytes()
-}
-
-// TODO(Ahsan): Remove error from return value
-func FromPostingList(r *sroar.Bitmap, pl *pb.PostingList) error {
-	if len(pl.Bitmap) == 0 {
-		return nil
-	}
-	r.UnmarshalBinary(pl.Bitmap)
-	return nil
+	return bm.ToBuffer()
 }
 
 func FromList(l *pb.List) *sroar.Bitmap {
@@ -125,9 +115,10 @@ func FromList(l *pb.List) *sroar.Bitmap {
 	if l == nil {
 		return iw
 	}
+
 	if len(l.BitmapDoNotUse) > 0 {
 		// Only one of Uids or Bitmap should be defined.
-		iw.UnmarshalBinary(l.BitmapDoNotUse)
+		iw = sroar.FromBuffer(l.BitmapDoNotUse)
 	}
 	if len(l.Uids) > 0 {
 		iw.SetMany(l.Uids)
@@ -140,8 +131,7 @@ func FromBytes(buf []byte) *sroar.Bitmap {
 	if buf == nil || len(buf) == 0 {
 		return r
 	}
-	r.UnmarshalBinary(buf)
-	return r
+	return sroar.FromBuffer(buf)
 }
 
 func FromBackup(buf []byte) *sroar.Bitmap {
@@ -162,8 +152,7 @@ func FromBackup(buf []byte) *sroar.Bitmap {
 }
 
 func ToUids(plist *pb.PostingList, start uint64) []uint64 {
-	r := sroar.NewBitmap()
-	x.Check(FromPostingList(r, plist))
+	r := sroar.FromBuffer(plist.Bitmap)
 	r.RemoveRange(0, start)
 	return r.ToArray()
 }

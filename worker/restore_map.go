@@ -336,12 +336,7 @@ func (m *mapper) processReqCh(ctx context.Context) error {
 			}
 			pl := posting.FromBackupPostingList(backupPl)
 
-			shouldSplit, err := posting.ShouldSplit(pl)
-			if err != nil {
-				return errors.Wrap(err, "Failed to get shouldSplit")
-			}
-
-			if !shouldSplit || parsedKey.HasStartUid || len(pl.GetSplits()) > 0 {
+			if !posting.ShouldSplit(pl) || parsedKey.HasStartUid || len(pl.GetSplits()) > 0 {
 				// This covers two cases.
 				// 1. The list is not big enough to be split.
 				// 2. This key is storing part of a multi-part list. Write each individual
