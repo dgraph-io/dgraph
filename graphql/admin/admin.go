@@ -258,7 +258,6 @@ const (
 	}
 
 	type ExportPayload {
-		exportedFiles: [String]
 		response: Response
 		taskId: String
 	}
