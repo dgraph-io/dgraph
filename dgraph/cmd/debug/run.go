@@ -418,10 +418,17 @@ func history(lookup []byte, itr *badger.Iterator) {
 			r := codec.FromBytes(plist.Bitmap)
 			fmt.Fprintf(&buf, " Num uids = %d. Size = %d\n",
 				r.GetCardinality(), len(plist.Bitmap))
-			//TODO(Ahsan): See if we want ManyIterator().
-			uids := r.ToArray()
-			for _, uid := range uids {
-				fmt.Fprintf(&buf, " Uid = %#x\n", uid)
+
+			itr := r.ManyIterator()
+			uids := make([]uint64, 256)
+			for {
+				num := itr.NextMany(uids)
+				if num == 0 {
+					break
+				}
+				for _, uid := range uids[:num] {
+					fmt.Fprintf(&buf, " Uid = %#x\n", uid)
+				}
 			}
 		}
 		x.Check2(buf.WriteString("\n"))

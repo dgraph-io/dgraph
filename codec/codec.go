@@ -43,19 +43,6 @@ func ApproxLen(bitmap []byte) int {
 	return 0
 }
 
-// Encode takes in a list of uids and a block size. It would pack these uids into blocks of the
-// given size, with the last block having fewer uids. Within each block, it stores the first uid as
-// base. For each next uid, a delta = uids[i] - uids[i-1] is stored. Protobuf uses Varint encoding,
-// as mentioned here: https://developers.google.com/protocol-buffers/docs/encoding . This ensures
-// that the deltas being considerably smaller than the original uids are nicely packed in fewer
-// bytes. Our benchmarks on artificial data show compressed size to be 13% of the original. This
-// mechanism is a LOT simpler to understand and if needed, debug.
-func Encode(uids []uint64) []byte {
-	r := sroar.NewBitmap()
-	r.SetMany(uids)
-	return r.ToBuffer()
-}
-
 func ToList(rm *sroar.Bitmap) *pb.List {
 	return &pb.List{
 		Uids: rm.ToArray(),
@@ -165,32 +152,20 @@ func RemoveRange(bm *sroar.Bitmap, from, to uint64) {
 
 // DecodeToBuffer is the same as Decode but it returns a z.Buffer which is
 // calloc'ed and can be SHOULD be freed up by calling buffer.Release().
-// func DecodeToBuffer(buf *z.Buffer, bm *sroar.Bitmap) {
-// 	var last uint64
-// 	tmp := make([]byte, 16)
-// 	itr := bm.ManyIterator()
-// 	uids := make([]uint64, 64)
-// 	for {
-// 		got := itr.NextMany(uids)
-// 		if got == 0 {
-// 			break
-// 		}
-// 		for _, u := range uids[:got] {
-// 			n := binary.PutUvarint(tmp, u-last)
-// 			x.Check2(buf.Write(tmp[:n]))
-// 			last = u
-// 		}
-// 	}
-// }
-
-// TODO(Ahsan): We should introduce iterators. ToArray is too expensive.
 func DecodeToBuffer(buf *z.Buffer, bm *sroar.Bitmap) {
 	var last uint64
 	tmp := make([]byte, 16)
-	uids := bm.ToArray()
-	for _, u := range uids {
-		n := binary.PutUvarint(tmp, u-last)
-		x.Check2(buf.Write(tmp[:n]))
-		last = u
+	itr := bm.ManyIterator()
+	uids := make([]uint64, 64)
+	for {
+		got := itr.NextMany(uids)
+		if got == 0 {
+			break
+		}
+		for _, u := range uids[:got] {
+			n := binary.PutUvarint(tmp, u-last)
+			x.Check2(buf.Write(tmp[:n]))
+			last = u
+		}
 	}
 }
