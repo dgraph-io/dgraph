@@ -94,9 +94,12 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) error {
 				return
 			case <-tick.C:
 				last := atomic.LoadInt64(&lastReceived)
+				if last == 0 {
+					continue
+				}
 				lastTs := time.Unix(last, 0)
-				if time.Since(lastTs) > 60*time.Second {
-					glog.Warningf("Haven't received anything for over 60s." +
+				if time.Since(lastTs) > 300*time.Second {
+					glog.Warningf("Haven't received anything for over 300s." +
 						" Abandoning snapshot retrieval...\n")
 					cancel()
 				}
@@ -107,14 +110,14 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) error {
 	size := 0
 	var done *pb.KVS
 	for {
+		// Track when we last received anything from the leader. If we don't
+		// receive anything for a while, we should abandon this connection.
+		atomic.StoreInt64(&lastReceived, time.Now().Unix())
 		kvs, err := stream.Recv()
 		if err != nil {
 			return errors.Wrapf(err, "stream.Recv")
 		}
-
-		// Track when we last received anything from the leader. If we don't
-		// receive anything for a while, we should abandon this connection.
-		atomic.StoreInt64(&lastReceived, time.Now().Unix())
+		atomic.StoreInt64(&lastReceived, 0) // We got something.
 
 		if kvs.Done {
 			done = kvs
