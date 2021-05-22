@@ -37,7 +37,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/dgraph-io/sroar"
-	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 )
 
@@ -639,7 +638,6 @@ func (l *List) iterateAll(readTs uint64, afterUid uint64, f func(obj *pb.Posting
 	}
 
 	codec.RemoveRange(bm, 0, maxUid)
-	glog.Infof("bm before iteration: %v\n", bm.ToArray())
 	uitr = bm.NewIterator()
 	for uitr.HasNext() {
 		p.Uid = uitr.Next()
