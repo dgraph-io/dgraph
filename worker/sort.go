@@ -34,7 +34,7 @@ import (
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/roaring/roaring64"
+	"github.com/dgraph-io/sroar"
 )
 
 var emptySortResult pb.SortResult
@@ -412,7 +412,7 @@ func multiSort(ctx context.Context, r *sortresult, ts *pb.SortMessage) error {
 		result := or.r
 		dsz := int(dest.GetCardinality())
 		x.AssertTrue(len(result.ValueMatrix) == dsz)
-		itr := dest.Iterator()
+		itr := dest.NewIterator()
 		for i := 0; itr.HasNext(); i++ {
 			var sv types.Val
 			if len(result.ValueMatrix[i].Values) == 0 {
@@ -538,8 +538,8 @@ func processSort(ctx context.Context, ts *pb.SortMessage) (*pb.SortResult, error
 	return r.reply, err
 }
 
-func destUids(uidMatrix []*pb.List) *roaring64.Bitmap {
-	res := roaring64.New()
+func destUids(uidMatrix []*pb.List) *sroar.Bitmap {
+	res := sroar.NewBitmap()
 	for _, ul := range uidMatrix {
 		out := codec.FromList(ul)
 		res.Or(out)

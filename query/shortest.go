@@ -28,7 +28,7 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/roaring/roaring64"
+	"github.com/dgraph-io/sroar"
 	"github.com/pkg/errors"
 )
 
@@ -426,7 +426,7 @@ func runKShortestPaths(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	next <- false
 
 	if len(kroutes) == 0 {
-		sg.DestMap = roaring64.New()
+		sg.DestMap = sroar.NewBitmap()
 		return nil, nil
 	}
 
@@ -434,7 +434,7 @@ func runKShortestPaths(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	// TODO: The order would be wrong here for the path. Fix that later.
 	for _, it := range *kroutes[0].route {
 		result = append(result, it.uid)
-		sg.DestMap.Add(it.uid)
+		sg.DestMap.Set(it.uid)
 	}
 	shortestSg := createkroutesubgraph(ctx, kroutes)
 	sg.OrderedUIDs = &pb.List{Uids: result}
@@ -611,7 +611,7 @@ func shortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 		cur = dist[cur].parent
 	}
 	if cur != sg.Params.From {
-		sg.DestMap = roaring64.New()
+		sg.DestMap = sroar.NewBitmap()
 		return nil, nil
 	}
 
@@ -622,7 +622,7 @@ func shortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	}
 	// Put the path in DestUIDs of the root.
 	// TODO: This would result in out of order Uids.
-	sg.DestMap.AddMany(result)
+	sg.DestMap.SetMany(result)
 	sg.OrderedUIDs = &pb.List{Uids: result}
 
 	shortestSg := createPathSubgraph(ctx, dist, totalWeight, result)
@@ -660,8 +660,8 @@ func createPathSubgraph(ctx context.Context, dist map[uint64]nodeInfo, totalWeig
 		node.Attr = nodeInfo.attr
 		node.facetsMatrix = []*pb.FacetsList{{FacetsList: []*pb.Facets{nodeInfo.facet}}}
 		node.SrcUIDs = &pb.List{Uids: []uint64{curUid}}
-		node.DestMap = roaring64.New()
-		node.DestMap.Add(childUid)
+		node.DestMap = sroar.NewBitmap()
+		node.DestMap.Set(childUid)
 		node.uidMatrix = []*pb.List{{Uids: []uint64{childUid}}}
 
 		curNode.Children = append(curNode.Children, node)

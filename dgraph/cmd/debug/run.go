@@ -418,6 +418,7 @@ func history(lookup []byte, itr *badger.Iterator) {
 			r := codec.FromBytes(plist.Bitmap)
 			fmt.Fprintf(&buf, " Num uids = %d. Size = %d\n",
 				r.GetCardinality(), len(plist.Bitmap))
+
 			itr := r.ManyIterator()
 			uids := make([]uint64, 256)
 			for {

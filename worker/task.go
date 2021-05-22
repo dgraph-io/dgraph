@@ -37,7 +37,7 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/roaring/roaring64"
+	"github.com/dgraph-io/sroar"
 	"github.com/golang/glog"
 	otrace "go.opencensus.io/trace"
 	"golang.org/x/sync/errgroup"
@@ -1163,7 +1163,7 @@ func (qs *queryState) handleRegexFunction(ctx context.Context, arg funcArgs) err
 		useIndex, arg.srcFn.isFuncAtRoot)
 
 	query := cindex.RegexpQuery(arg.srcFn.regex.Syntax)
-	uids := roaring64.New()
+	uids := sroar.NewBitmap()
 
 	// Here we determine the list of uids to match.
 	switch {
@@ -1178,7 +1178,7 @@ func (qs *queryState) handleRegexFunction(ctx context.Context, arg funcArgs) err
 		// not support eq/gt/lt/le in @filter, see #4077), and this was new code that
 		// was added just to support the aforementioned case, the race condition is only
 		// in this part of the code.
-		uids.AddMany(arg.q.UidList.Uids)
+		uids.SetMany(arg.q.UidList.Uids)
 
 	// Prefer to use an index (fast)
 	case useIndex:
@@ -1200,8 +1200,8 @@ func (qs *queryState) handleRegexFunction(ctx context.Context, arg funcArgs) err
 
 	span.Annotatef(nil, "Total uids: %d, list: %t lang: %v", uids.GetCardinality(), isList, lang)
 
-	filtered := roaring64.New()
-	itr := uids.Iterator()
+	filtered := sroar.NewBitmap()
+	itr := uids.NewIterator()
 	for itr.HasNext() {
 		uid := itr.Next()
 		select {
@@ -1236,7 +1236,7 @@ func (qs *queryState) handleRegexFunction(ctx context.Context, arg funcArgs) err
 			// convert data from binary to appropriate format
 			strVal, err := types.Convert(val, types.StringID)
 			if err == nil && matchRegex(strVal, arg.srcFn.regex) {
-				filtered.Add(uid)
+				filtered.Set(uid)
 				// NOTE: We only add the uid once.
 				break
 			}
@@ -1416,7 +1416,7 @@ func (qs *queryState) handleMatchFunction(ctx context.Context, arg funcArgs) err
 	attr := arg.q.Attr
 	typ := arg.srcFn.atype
 	span.Annotatef(nil, "Attr: %s. Type: %s", attr, typ.Name())
-	var uids *roaring64.Bitmap
+	var uids *sroar.Bitmap
 	switch {
 	case !typ.IsScalar():
 		return errors.Errorf("Attribute not scalar: %s %v", attr, typ)
@@ -1447,9 +1447,9 @@ func (qs *queryState) handleMatchFunction(ctx context.Context, arg funcArgs) err
 	// arg.out.UidMatrix = append(arg.out.UidMatrix, uids)
 
 	matchQuery := strings.Join(arg.srcFn.tokens, "")
-	filtered := roaring64.New()
+	filtered := sroar.NewBitmap()
 
-	itr := uids.Iterator()
+	itr := uids.NewIterator()
 	for itr.HasNext() {
 		uid := itr.Next()
 		select {
@@ -1485,7 +1485,7 @@ func (qs *queryState) handleMatchFunction(ctx context.Context, arg funcArgs) err
 			// convert data from binary to appropriate format
 			strVal, err := types.Convert(val, types.StringID)
 			if err == nil && matchFuzzy(matchQuery, strVal.Value.(string), max) {
-				filtered.Add(uid)
+				filtered.Set(uid)
 				// NOTE: We only add the uid once.
 				break
 			}
@@ -1506,8 +1506,8 @@ func (qs *queryState) filterGeoFunction(ctx context.Context, arg funcArgs) error
 
 	attr := arg.q.Attr
 
-	uids := roaring64.New()
-	var matrix []*roaring64.Bitmap
+	uids := sroar.NewBitmap()
+	var matrix []*sroar.Bitmap
 	for _, l := range arg.out.UidMatrix {
 		bm := codec.FromList(l)
 		matrix = append(matrix, bm)
@@ -1524,17 +1524,17 @@ func (qs *queryState) filterGeoFunction(ctx context.Context, arg funcArgs) error
 			uids.GetCardinality(), numGo, width)
 	}
 
-	filtered := make([]*roaring64.Bitmap, numGo)
+	filtered := make([]*sroar.Bitmap, numGo)
 	filter := func(idx, start, end int) error {
 
-		filtered[idx] = roaring64.New()
+		filtered[idx] = sroar.NewBitmap()
 		out := filtered[idx]
 
 		startUid, err := uids.Select(uint64(start))
 		if err != nil {
 			return err
 		}
-		itr := uids.Iterator()
+		itr := uids.NewIterator()
 		itr.AdvanceIfNeeded(startUid)
 
 		for uidx := start; uidx < end; uidx++ {
@@ -1548,7 +1548,7 @@ func (qs *queryState) filterGeoFunction(ctx context.Context, arg funcArgs) error
 				tv.ValType = p.ValType
 				tv.Val = p.Value
 				if types.MatchGeo(&tv, arg.srcFn.geoQuery) {
-					out.Add(uid)
+					out.Set(uid)
 					return posting.ErrStopIteration
 				}
 				return nil
@@ -1577,7 +1577,7 @@ func (qs *queryState) filterGeoFunction(ctx context.Context, arg funcArgs) error
 		}
 	}
 
-	final := roaring64.New()
+	final := sroar.NewBitmap()
 	for _, out := range filtered {
 		final.Or(out)
 	}
@@ -1603,8 +1603,8 @@ func (qs *queryState) filterStringFunction(arg funcArgs) error {
 	}
 	attr := arg.q.Attr
 
-	uids := roaring64.New()
-	var matrix []*roaring64.Bitmap
+	uids := sroar.NewBitmap()
+	var matrix []*sroar.Bitmap
 	for _, l := range arg.out.UidMatrix {
 		bm := codec.FromList(l)
 		matrix = append(matrix, bm)
@@ -1644,11 +1644,11 @@ func (qs *queryState) filterStringFunction(arg funcArgs) error {
 	// matrix, to check it later.
 	// TODO: This function can be optimized by having a query specific cache, which can be populated
 	// by the handleHasFunction for e.g. for a `has(name)` query.
-	itr := uids.Iterator()
+	itr := uids.NewIterator()
 
 	// We can't directly modify uids bitmap. We need to add them to another bitmap, and then take
 	// the difference.
-	remove := roaring64.New()
+	remove := sroar.NewBitmap()
 	for itr.HasNext() {
 		uid := itr.Next()
 		vals, err := qs.getValsForUID(attr, lang, uid, arg.q.ReadTs)
@@ -1669,7 +1669,7 @@ func (qs *queryState) filterStringFunction(arg funcArgs) error {
 			strVals = append(strVals, strVal)
 		}
 		if !matchStrings(filter, strVals) {
-			remove.Add(uid)
+			remove.Set(uid)
 		}
 	}
 

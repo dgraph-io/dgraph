@@ -25,18 +25,18 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/roaring/roaring64"
+	"github.com/dgraph-io/sroar"
 )
 
 var errRegexTooWide = errors.New(
 	"regular expression is too wide-ranging and can't be executed efficiently")
 
 func uidsForRegex(attr string, arg funcArgs,
-	query *cindex.Query, intersect *roaring64.Bitmap) (*roaring64.Bitmap, error) {
+	query *cindex.Query, intersect *sroar.Bitmap) (*sroar.Bitmap, error) {
 
 	opts := posting.ListOptions{
-		ReadTs: arg.q.ReadTs,
-		First:  int(arg.q.First),
+		ReadTs:   arg.q.ReadTs,
+		First:    int(arg.q.First),
 		AfterUid: arg.q.AfterUid,
 	}
 	// TODO: Unnecessary conversion here. Avoid if possible.
@@ -45,10 +45,10 @@ func uidsForRegex(attr string, arg funcArgs,
 			Uids: intersect.ToArray(),
 		}
 	} else {
-		intersect = roaring64.New()
+		intersect = sroar.NewBitmap()
 	}
 
-	uidsForTrigram := func(trigram string) (*roaring64.Bitmap, error) {
+	uidsForTrigram := func(trigram string) (*sroar.Bitmap, error) {
 		key := x.IndexKey(attr, trigram)
 		pl, err := posting.GetNoStore(key, arg.q.ReadTs)
 		if err != nil {
@@ -57,7 +57,7 @@ func uidsForRegex(attr string, arg funcArgs,
 		return pl.Bitmap(opts)
 	}
 
-	results := roaring64.New()
+	results := sroar.NewBitmap()
 	switch query.Op {
 	case cindex.QAnd:
 		tok.EncodeRegexTokens(query.Trigram)

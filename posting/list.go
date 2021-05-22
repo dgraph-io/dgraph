@@ -36,7 +36,7 @@ import (
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
-	"github.com/dgraph-io/roaring/roaring64"
+	"github.com/dgraph-io/sroar"
 	"github.com/golang/protobuf/proto"
 )
 
@@ -503,27 +503,24 @@ func (l *List) splitIdx(afterUid uint64) int {
 	return len(l.plist.Splits) - 1
 }
 
-func (l *List) Bitmap(opt ListOptions) (*roaring64.Bitmap, error) {
+func (l *List) Bitmap(opt ListOptions) (*sroar.Bitmap, error) {
 	l.RLock()
 	defer l.RUnlock()
 	return l.bitmap(opt)
 }
 
-// Bitmap would generate a roaring64.Bitmap from the list.
+// Bitmap would generate a sroar.Bitmap from the list.
 // It works on split posting lists as well.
-func (l *List) bitmap(opt ListOptions) (*roaring64.Bitmap, error) {
+func (l *List) bitmap(opt ListOptions) (*sroar.Bitmap, error) {
 	deleteBelow, posts := l.pickPostings(opt.ReadTs)
 
-	var iw *roaring64.Bitmap
+	var iw *sroar.Bitmap
 	if opt.Intersect != nil {
 		iw = codec.FromList(opt.Intersect)
 	}
-
-	r := roaring64.New()
+	r := sroar.NewBitmap()
 	if deleteBelow == 0 {
-		if err := codec.FromPostingList(r, l.plist); err != nil {
-			return nil, errors.Wrapf(err, "Bitmap: l.plist")
-		}
+		r = sroar.FromBuffer(l.plist.Bitmap)
 		if iw != nil {
 			r.And(iw)
 		}
@@ -536,10 +533,8 @@ func (l *List) bitmap(opt ListOptions) (*roaring64.Bitmap, error) {
 			if err != nil {
 				return nil, errors.Wrapf(err, "while reading a split with startUid: %d", startUid)
 			}
-			s := roaring64.New()
-			if err := codec.FromPostingList(s, split); err != nil {
-				return nil, errors.Wrapf(err, "Bitmap: split")
-			}
+			s := sroar.FromBuffer(split.Bitmap)
+
 			// Intersect with opt.Intersect.
 			if iw != nil {
 				s.And(iw)
@@ -558,7 +553,7 @@ func (l *List) bitmap(opt ListOptions) (*roaring64.Bitmap, error) {
 			continue
 		}
 		if p.Op == Set {
-			r.Add(p.Uid)
+			r.Set(p.Uid)
 		} else if p.Op == Del {
 			r.Remove(p.Uid)
 		}
@@ -605,7 +600,7 @@ func (l *List) iterateAll(readTs uint64, afterUid uint64, f func(obj *pb.Posting
 
 	p := &pb.Posting{}
 
-	uitr := bm.Iterator()
+	uitr := bm.NewIterator()
 	var next uint64
 
 	advance := func() {
@@ -643,7 +638,7 @@ func (l *List) iterateAll(readTs uint64, afterUid uint64, f func(obj *pb.Posting
 	}
 
 	codec.RemoveRange(bm, 0, maxUid)
-	uitr = bm.Iterator()
+	uitr = bm.NewIterator()
 	for uitr.HasNext() {
 		p.Uid = uitr.Next()
 		f(p)
@@ -829,7 +824,7 @@ func (l *List) IsEmpty(readTs, afterUid uint64) (bool, error) {
 func (l *List) getPostingAndLength(readTs, afterUid, uid uint64) (int, bool, *pb.Posting) {
 	l.AssertRLock()
 	var post *pb.Posting
-	var bm *roaring64.Bitmap
+	var bm *sroar.Bitmap
 	var err error
 
 	foundPosting := false
@@ -961,11 +956,10 @@ func (l *List) ToBackupPostingList(
 	x.AssertTrue(out != nil)
 
 	ol := out.plist
-	bm := roaring64.New()
+	bm := sroar.NewBitmap()
 	if ol.Bitmap != nil {
-		if err := bm.UnmarshalBinary(ol.Bitmap); err != nil {
-			return nil, errors.Wrapf(err, "failed when unmarshal binary bitmap")
-		}
+		bm = sroar.FromBuffer(ol.Bitmap)
+
 	}
 
 	buf.Reset()
@@ -1066,25 +1060,18 @@ func (ro *rollupOutput) getRange(uid uint64) (uint64, uint64) {
 	return 1, math.MaxUint64
 }
 
-func ShouldSplit(plist *pb.PostingList) (bool, error) {
+func ShouldSplit(plist *pb.PostingList) bool {
 	if plist.Size() >= maxListSize {
-		r := roaring64.New()
-		if err := codec.FromPostingList(r, plist); err != nil {
-			return false, err
-		}
-		return r.GetCardinality() > 1, nil
+		r := sroar.FromBuffer(plist.Bitmap)
+		return r.GetCardinality() > 1
 	}
-	return false, nil
+	return false
 }
 
 func (ro *rollupOutput) runSplits() error {
 top:
 	for startUid, pl := range ro.parts {
-		should, err := ShouldSplit(pl)
-		if err != nil {
-			return err
-		}
-		if should {
+		if ShouldSplit(pl) {
 			if err := ro.split(startUid); err != nil {
 				return err
 			}
@@ -1098,13 +1085,9 @@ top:
 func (ro *rollupOutput) split(startUid uint64) error {
 	pl := ro.parts[startUid]
 
-	r := roaring64.New()
-	if err := codec.FromPostingList(r, pl); err != nil {
-		return errors.Wrapf(err, "split codec.FromPostingList")
-	}
-
+	r := sroar.FromBuffer(pl.Bitmap)
 	num := r.GetCardinality()
-	uid, err := r.Select(num / 2)
+	uid, err := r.Select(uint64(num / 2))
 	if err != nil {
 		return errors.Wrapf(err, "split Select rank: %d", num/2)
 	}
@@ -1298,11 +1281,11 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 		return out, nil
 	}
 
-	var itr roaring64.IntIterable64
+	var itr *sroar.Iterator
 	if opt.First > 0 {
-		itr = bm.Iterator()
+		itr = bm.NewIterator()
 	} else {
-		itr = bm.ReverseIterator()
+		itr = bm.NewReverseIterator()
 	}
 	num := abs(opt.First)
 	for len(out.Uids) < num && itr.HasNext() {
@@ -1662,10 +1645,7 @@ func isPlistEmpty(plist *pb.PostingList) bool {
 	if len(plist.Splits) > 0 {
 		return false
 	}
-	r := roaring64.New()
-	if err := codec.FromPostingList(r, plist); err != nil {
-		return false
-	}
+	r := sroar.FromBuffer(plist.Bitmap)
 	if r.IsEmpty() {
 		return true
 	}
@@ -1689,10 +1669,10 @@ func FromBackupPostingList(bl *pb.BackupPostingList) *pb.PostingList {
 		return &l
 	}
 
-	var r *roaring64.Bitmap
+	var r *sroar.Bitmap
 	if len(bl.Uids) > 0 {
-		r = roaring64.New()
-		r.AddMany(bl.Uids)
+		r = sroar.NewBitmap()
+		r.SetMany(bl.Uids)
 	} else if len(bl.UidBytes) > 0 {
 		r = codec.FromBackup(bl.UidBytes)
 	}

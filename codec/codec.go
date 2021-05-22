@@ -22,8 +22,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
-	"github.com/dgraph-io/roaring/roaring64"
-	"github.com/pkg/errors"
+	"github.com/dgraph-io/sroar"
 )
 
 type seekPos int
@@ -44,35 +43,20 @@ func ApproxLen(bitmap []byte) int {
 	return 0
 }
 
-// Encode takes in a list of uids and a block size. It would pack these uids into blocks of the
-// given size, with the last block having fewer uids. Within each block, it stores the first uid as
-// base. For each next uid, a delta = uids[i] - uids[i-1] is stored. Protobuf uses Varint encoding,
-// as mentioned here: https://developers.google.com/protocol-buffers/docs/encoding . This ensures
-// that the deltas being considerably smaller than the original uids are nicely packed in fewer
-// bytes. Our benchmarks on artificial data show compressed size to be 13% of the original. This
-// mechanism is a LOT simpler to understand and if needed, debug.
-func Encode(uids []uint64) []byte {
-	r := roaring64.New()
-	r.AddMany(uids)
-	b, err := r.ToBytes()
-	x.Check(err)
-	return b
-}
-
-func ToList(rm *roaring64.Bitmap) *pb.List {
+func ToList(rm *sroar.Bitmap) *pb.List {
 	return &pb.List{
 		Uids: rm.ToArray(),
 		// Bitmap: ToBytes(rm),
 	}
 }
 
-func And(rm *roaring64.Bitmap, l *pb.List) {
+func And(rm *sroar.Bitmap, l *pb.List) {
 	rl := FromList(l)
 	rm.And(rl)
 }
 
-func MatrixToBitmap(matrix []*pb.List) *roaring64.Bitmap {
-	res := roaring64.New()
+func MatrixToBitmap(matrix []*pb.List) *sroar.Bitmap {
+	res := sroar.NewBitmap()
 	for _, l := range matrix {
 		r := FromList(l)
 		res.Or(r)
@@ -80,8 +64,8 @@ func MatrixToBitmap(matrix []*pb.List) *roaring64.Bitmap {
 	return res
 }
 
-func Intersect(matrix []*pb.List) *roaring64.Bitmap {
-	out := roaring64.New()
+func Intersect(matrix []*pb.List) *sroar.Bitmap {
+	out := sroar.NewBitmap()
 	if len(matrix) == 0 {
 		return out
 	}
@@ -93,8 +77,8 @@ func Intersect(matrix []*pb.List) *roaring64.Bitmap {
 	return out
 }
 
-func Merge(matrix []*pb.List) *roaring64.Bitmap {
-	out := roaring64.New()
+func Merge(matrix []*pb.List) *sroar.Bitmap {
+	out := sroar.NewBitmap()
 	if len(matrix) == 0 {
 		return out
 	}
@@ -106,51 +90,39 @@ func Merge(matrix []*pb.List) *roaring64.Bitmap {
 	return out
 }
 
-func ToBytes(bm *roaring64.Bitmap) []byte {
+func ToBytes(bm *sroar.Bitmap) []byte {
 	if bm.IsEmpty() {
 		return nil
 	}
-	b, err := bm.ToBytes()
-	x.Check(err)
-	return b
+	return bm.ToBuffer()
 }
 
-func FromPostingList(r *roaring64.Bitmap, pl *pb.PostingList) error {
-	if len(pl.Bitmap) == 0 {
-		return nil
-	}
-	if err := r.UnmarshalBinary(pl.Bitmap); err != nil {
-		return errors.Wrapf(err, "codec.FromPostingList")
-	}
-	return nil
-}
-
-func FromList(l *pb.List) *roaring64.Bitmap {
-	iw := roaring64.New()
+func FromList(l *pb.List) *sroar.Bitmap {
+	iw := sroar.NewBitmap()
 	if l == nil {
 		return iw
 	}
+
 	if len(l.BitmapDoNotUse) > 0 {
 		// Only one of Uids or Bitmap should be defined.
-		x.Check(iw.UnmarshalBinary(l.BitmapDoNotUse))
+		iw = sroar.FromBuffer(l.BitmapDoNotUse)
 	}
 	if len(l.Uids) > 0 {
-		iw.AddMany(l.Uids)
+		iw.SetMany(l.Uids)
 	}
 	return iw
 }
 
-func FromBytes(buf []byte) *roaring64.Bitmap {
-	r := roaring64.New()
+func FromBytes(buf []byte) *sroar.Bitmap {
+	r := sroar.NewBitmap()
 	if buf == nil || len(buf) == 0 {
 		return r
 	}
-	x.Check(r.UnmarshalBinary(buf))
-	return r
+	return sroar.FromBuffer(buf)
 }
 
-func FromBackup(buf []byte) *roaring64.Bitmap {
-	r := roaring64.New()
+func FromBackup(buf []byte) *sroar.Bitmap {
+	r := sroar.NewBitmap()
 	var prev uint64
 	for len(buf) > 0 {
 		uid, n := binary.Uvarint(buf)
@@ -160,28 +132,27 @@ func FromBackup(buf []byte) *roaring64.Bitmap {
 		buf = buf[n:]
 
 		next := prev + uid
-		r.Add(next)
+		r.Set(next)
 		prev = next
 	}
 	return r
 }
 
 func ToUids(plist *pb.PostingList, start uint64) []uint64 {
-	r := roaring64.New()
-	x.Check(FromPostingList(r, plist))
+	r := sroar.FromBuffer(plist.Bitmap)
 	r.RemoveRange(0, start)
 	return r.ToArray()
 }
 
 // RemoveRange would remove [from, to] from bm.
-func RemoveRange(bm *roaring64.Bitmap, from, to uint64) {
+func RemoveRange(bm *sroar.Bitmap, from, to uint64) {
 	bm.RemoveRange(from, to)
 	bm.Remove(to)
 }
 
 // DecodeToBuffer is the same as Decode but it returns a z.Buffer which is
 // calloc'ed and can be SHOULD be freed up by calling buffer.Release().
-func DecodeToBuffer(buf *z.Buffer, bm *roaring64.Bitmap) {
+func DecodeToBuffer(buf *z.Buffer, bm *sroar.Bitmap) {
 	var last uint64
 	tmp := make([]byte, 16)
 	itr := bm.ManyIterator()
