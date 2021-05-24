@@ -361,18 +361,20 @@ func (h *s3Handler) getObjectPath(path string) string {
 const AZSSeparator = '/'
 
 type AZS struct {
-	bucket   *azblob.ContainerURL
-	client   *azblob.ServiceURL // Azure sdk client
-	pathName string
+	bucket      *azblob.ContainerURL
+	client      *azblob.ServiceURL // Azure sdk client
+	accountName string
+	bucketName  string
+	pathName    string
 }
 
 // Helper function to get the account, container and path of the destination folder from an Azure
-// URL.
-func getAzDetailsFromUri(uri *url.URL) (accountName, bucketName, pathName string, err error) {
+// URL and adds it to azs.
+func getAzDetailsFromUri(uri *url.URL, azs *AZS) (err error) {
 	// azure url -> https://<account_name>.blob.core.windows.net/<container>/path/to/dest
 	parts := strings.Split(uri.Host, ".")
 	if len(parts) > 0 {
-		accountName = parts[0]
+		azs.accountName = parts[0]
 	} else {
 		err = errors.Errorf("invalid azure host: %s", uri.Host)
 		return
@@ -380,8 +382,8 @@ func getAzDetailsFromUri(uri *url.URL) (accountName, bucketName, pathName string
 
 	parts = strings.Split(uri.Path, string(filepath.Separator))
 	if len(parts) > 1 {
-		bucketName = parts[1]
-		pathName = strings.Join(parts[2:], string(filepath.Separator))
+		azs.bucketName = parts[1]
+		azs.pathName = strings.Join(parts[2:], string(filepath.Separator))
 	} else {
 		err = errors.Errorf("invalid azure path: %s", uri.Path)
 		return
@@ -392,37 +394,36 @@ func getAzDetailsFromUri(uri *url.URL) (accountName, bucketName, pathName string
 
 // NewAZSHandler creates a new azure storage handler.
 func NewAZSHandler(uri *url.URL, creds *MinioCredentials) (*AZS, error) {
-	// Override credentials from the Azure storage environment variables if specified
-	account, bucketName, pathName, err := getAzDetailsFromUri(uri)
-	if err != nil {
+	azs := &AZS{}
+	if err := getAzDetailsFromUri(uri, azs); err != nil {
 		return nil, errors.Wrapf(err, "while getting bucket details")
 	}
 
+	// Override credentials from the Azure storage environment variables if specified
 	key := os.Getenv("AZURE_STORAGE_KEY")
 	if len(creds.SecretKey) > 0 {
 		key = creds.SecretKey
 	}
 
-	azCreds, err := azblob.NewSharedKeyCredential(account, key)
+	azCreds, err := azblob.NewSharedKeyCredential(azs.accountName, key)
 	if err != nil {
 		return nil, errors.Wrap(err, "while creating sharedkey")
 	}
 
-	// Remove path as NewServiceURL only requires hostname and scheme.
-	uri.Path = ""
-	client := azblob.NewServiceURL(*uri, azblob.NewPipeline(azCreds, azblob.PipelineOptions{}))
-	bucket := client.NewContainerURL(bucketName)
+	// NewServiceURL only requires hostname and scheme.
+	client := azblob.NewServiceURL(url.URL{
+		Scheme: uri.Scheme,
+		Host:   uri.Host,
+	}, azblob.NewPipeline(azCreds, azblob.PipelineOptions{}))
+	azs.client = &client
+
+	bucket := azs.client.NewContainerURL(azs.bucketName)
+	azs.bucket = &bucket
 
 	// Verify that bucket exists.
-	if _, err = bucket.GetProperties(context.Background(),
+	if _, err = azs.bucket.GetProperties(context.Background(),
 		azblob.LeaseAccessConditions{}); err != nil {
 		return nil, errors.Wrap(err, "while checking if bucket exists")
-	}
-
-	azs := &AZS{
-		client:   &client,
-		bucket:   &bucket,
-		pathName: pathName,
 	}
 
 	return azs, nil
