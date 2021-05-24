@@ -332,7 +332,7 @@ func TestAuthWithCustomDQL(t *testing.T) {
 					name
 				}
 			}
-		`,
+			`,
 			role:   "ADMIN",
 			result: `{"queryProjectsOrderByName":[{"name": "Project1"},{"name": "Project2"}]}`,
 		},
@@ -344,7 +344,7 @@ func TestAuthWithCustomDQL(t *testing.T) {
 					name
 				}
 			}
-		`,
+			`,
 			role:   "USER",
 			user:   "user1",
 			result: `{"queryProjectsOrderByName":[{"name": "Project1"}]}`,
@@ -357,7 +357,7 @@ func TestAuthWithCustomDQL(t *testing.T) {
 					name
 				}
 			}
-		`,
+			`,
 			result: `{"queryProjectsOrderByName":[]}`,
 		},
 		{
@@ -368,7 +368,7 @@ func TestAuthWithCustomDQL(t *testing.T) {
 					msg
 				}
 			}
-		`,
+			`,
 			role:   "ADMIN",
 			user:   "user2",
 			result: `{"queryIssueSortedByOwnerAge": [{"msg": "Issue2"}]}`,
@@ -381,7 +381,7 @@ func TestAuthWithCustomDQL(t *testing.T) {
 					msg
 				}
 			}
-		`,
+			`,
 			role:   "USER",
 			user:   "user2",
 			result: `{"queryIssueSortedByOwnerAge": []}`,
@@ -398,7 +398,7 @@ func TestAuthWithCustomDQL(t *testing.T) {
 					}
 				}
 			}
-		`,
+			`,
 			role: "ADMIN",
 			user: "user1",
 			result: `{"queryFirstTwoMovieWithNonNullRegion": [
@@ -431,7 +431,7 @@ func TestAuthWithCustomDQL(t *testing.T) {
 					text
 				}
 			}
-		`,
+			`,
 			ans:    true,
 			user:   "user1@dgraph.io",
 			result: `{"queryQuestionAndAnswer": [{"text": "A Answer"},{"text": "A Question"}]}`,
@@ -444,7 +444,7 @@ func TestAuthWithCustomDQL(t *testing.T) {
 					text
 				}
 			}
-		`,
+			`,
 			user:   "user2@dgraph.io",
 			result: `{"queryQuestionAndAnswer": [{"text": "B Answer"}]}`,
 		},
@@ -456,7 +456,7 @@ func TestAuthWithCustomDQL(t *testing.T) {
 					text
 				}
 			}
-		`,
+			`,
 			ans:    true,
 			result: `{"queryQuestionAndAnswer": []}`,
 		},
