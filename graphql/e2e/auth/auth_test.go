@@ -327,23 +327,23 @@ func TestAuthWithCustomDQL(t *testing.T) {
 		{
 			name: "RBAC OR filter query; RBAC Pass",
 			query: `
-		query{
-			queryProjectsOrderByName{
-				name
+			query{
+				queryProjectsOrderByName{
+					name
+				}
 			}
-		}
 		`,
 			role:   "ADMIN",
 			result: `{"queryProjectsOrderByName":[{"name": "Project1"},{"name": "Project2"}]}`,
 		},
 		{
-			name: "RBAC OR filter query; RBAC fail",
+			name: "RBAC OR filter query; RBAC false OR `user1` projects",
 			query: `
-		query{
-			queryProjectsOrderByName{
-				name
+			query{
+				queryProjectsOrderByName{
+					name
+				}
 			}
-		}
 		`,
 			role:   "USER",
 			user:   "user1",
@@ -352,22 +352,22 @@ func TestAuthWithCustomDQL(t *testing.T) {
 		{
 			name: "RBAC OR filter query; missing jwt",
 			query: `
-		query{
-			queryProjectsOrderByName{
-				name
+			query{
+				queryProjectsOrderByName{
+					name
+				}
 			}
-		}
 		`,
 			result: `{"queryProjectsOrderByName":[]}`,
 		},
 		{
 			name: "var query; RBAC AND filter query; RBAC pass",
 			query: `
-		query{
-			queryIssueSortedByOwnerAge{
-				msg
+			query{
+				queryIssueSortedByOwnerAge{
+					msg
+				}
 			}
-		}
 		`,
 			role:   "ADMIN",
 			user:   "user2",
@@ -376,11 +376,11 @@ func TestAuthWithCustomDQL(t *testing.T) {
 		{
 			name: "var query; RBAC AND filter query; RBAC fail",
 			query: `
-		query{
-			queryIssueSortedByOwnerAge{
-				msg
+			query{
+				queryIssueSortedByOwnerAge{
+					msg
+				}
 			}
-		}
 		`,
 			role:   "USER",
 			user:   "user2",
@@ -389,15 +389,15 @@ func TestAuthWithCustomDQL(t *testing.T) {
 		{
 			name: "DQL query with @cascade and pagination",
 			query: `
-		query{
-			queryFirstTwoMovieWithNonNullRegion{
-				content
-				code
-				regionsAvailable{
-					name
+			query{
+				queryFirstTwoMovieWithNonNullRegion{
+					content
+					code
+					regionsAvailable{
+						name
+					}
 				}
 			}
-		}
 		`,
 			role: "ADMIN",
 			user: "user1",
@@ -426,11 +426,11 @@ func TestAuthWithCustomDQL(t *testing.T) {
 		{
 			name: "query interface; auth rules pass for all the implementing types",
 			query: `
-		query{
-			queryQuestionAndAnswer{
-				text
+			query{
+				queryQuestionAndAnswer{
+					text
+				}
 			}
-		}
 		`,
 			ans:    true,
 			user:   "user1@dgraph.io",
@@ -439,11 +439,11 @@ func TestAuthWithCustomDQL(t *testing.T) {
 		{
 			name: "query interface; auth rules fail for some implementing types",
 			query: `
-		query{
-			queryQuestionAndAnswer{
-				text
+			query{
+				queryQuestionAndAnswer{
+					text
+				}
 			}
-		}
 		`,
 			user:   "user2@dgraph.io",
 			result: `{"queryQuestionAndAnswer": [{"text": "B Answer"}]}`,
@@ -451,11 +451,11 @@ func TestAuthWithCustomDQL(t *testing.T) {
 		{
 			name: "query interface; auth rules fail for the interface",
 			query: `
-		query{
-			queryQuestionAndAnswer{
-				text
+			query{
+				queryQuestionAndAnswer{
+					text
+				}
 			}
-		}
 		`,
 			ans:    true,
 			result: `{"queryQuestionAndAnswer": []}`,

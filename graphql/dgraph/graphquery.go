@@ -133,6 +133,9 @@ func writeQuery(b *strings.Builder, query *gql.GraphQuery, prefix string) {
 	}
 }
 
+// writeNeedVar writes the NeedsVar of the query. For eg :-
+// `userFollowerCount as sum(val(followers))` has `followers`
+// as NeedsVar.
 func writeNeedVar(b *strings.Builder, query *gql.GraphQuery) {
 	for i, v := range query.NeedsVar {
 		if i != 0 {
@@ -221,18 +224,21 @@ func writeRoot(b *strings.Builder, q *gql.GraphQuery) {
 	writeOrderAndPage(b, q, true)
 }
 
+// writeFilterArguments writes the filter arguments. If the filter
+// is constructed in graphql query rewriting then `Attr` is an empty
+// string since we add Attr in the argument itself.
 func writeFilterArguments(b *strings.Builder, q *gql.Function) {
 	if q.Attr != "" {
 		x.Check2(b.WriteString(q.Attr))
-		if len(q.Args) != 0 {
-			x.Check2(b.WriteString(", "))
-		}
 	}
+
 	for i, arg := range q.Args {
-		if i != 0 {
+		if i != 0 || q.Attr != "" {
 			x.Check2(b.WriteString(", "))
 		}
 		if q.Attr != "" {
+			// quote the arguments since this is the case of
+			// @custom DQL string.
 			arg.Value = schema.MaybeQuoteArg(q.Name, arg.Value)
 		}
 		x.Check2(b.WriteString(arg.Value))

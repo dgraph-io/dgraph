@@ -988,61 +988,61 @@ type IssueMap {
 type Query {
 
     queryIssueSortedByOwnerAge: [Issue] @custom(dql: """
-	query {
-		iss as var(func: type(Issue)) @filter(has(Issue.owner)) {
-			Issue.owner {
-				age as User.age
-			}
-            ownerAge as max(val(age))
-		}
-		queryIssueSortedByOwnerAge(func: uid(iss), orderdesc: val(ownerAge)) {
-			id : uid
-            msg : Issue.msg
-            random : Issue.random
-		}
-	}"""
+        query {
+            iss as var(func: type(Issue)) @filter(has(Issue.owner)) {
+                Issue.owner {
+                    age as User.age
+                }
+                ownerAge as max(val(age))
+            }
+            queryIssueSortedByOwnerAge(func: uid(iss), orderdesc: val(ownerAge)) {
+                id : uid
+                msg : Issue.msg
+                random : Issue.random
+            }
+        }"""
     )
 
-	queryIssueGroupedByOwner: [GroupedIssueMapQ] @custom(dql: """
-    query{
-        queryIssueGroupedByOwner(func: type(Issue)) @groupby(owner: Issue.owner) {
-            count(uid)
-        }
-    }"""
+    queryIssueGroupedByOwner: [GroupedIssueMapQ] @custom(dql: """
+        query{
+            queryIssueGroupedByOwner(func: type(Issue)) @groupby(owner: Issue.owner) {
+                count(uid)
+            }
+        }"""
     )
 
     queryContacts: [Contact] @custom(dql: """
-    query {
-      queryContacts(func: type(Contact)) @cascade {
-        id : uid
-        nickName : Contact.nickName
-        adminTasks : Contact.adminTasks {
-          id : uid
-          name : AdminTask.name
-          occurrences : AdminTask.occurrences {
-            due : TaskOccurrence.due
-            comp : TaskOccurrence.comp
-          }
-        }
-      }
-    }"""
+        query {
+            queryContacts(func: type(Contact)) @cascade {
+                id : uid
+                nickName : Contact.nickName
+                adminTasks : Contact.adminTasks {
+                id : uid
+                name : AdminTask.name
+                occurrences : AdminTask.occurrences {
+                    due : TaskOccurrence.due
+                    comp : TaskOccurrence.comp
+                }
+                }
+            }
+        }"""
     )
 
-   queryUsers: [User] @custom(dql: """
-    query {
-      queryUsers(func: uid("0x1", "0x2")) @filter(eq(User.username, "minhaj")) {
-        username: User.username
-        tickets: User.tickets {
-          id: uid
-          title: Ticket.title
-        }
-        tweets: User.tweets {
-            id: uid
-            text: Tweets.text
-            score: Tweets.score
-        }
-      }
-    }"""
+    queryUsers: [User] @custom(dql: """
+        query {
+            queryUsers(func: uid("0x1", "0x2")) @filter(eq(User.username, "minhaj")) {
+                username: User.username
+                tickets: User.tickets {
+                id: uid
+                title: Ticket.title
+                }
+                tweets: User.tweets {
+                    id: uid
+                    text: Tweets.text
+                    score: Tweets.score
+                }
+            }
+        }"""
     )
 
     queryProjectsOrderByName: [Project] @custom(dql: """
