@@ -110,9 +110,6 @@ func (s *Server) CreateNamespace(ctx context.Context, passwd string) (uint64, er
 		return 0, err
 	}
 
-	if err = worker.WaitForIndexing(ctx, true); err != nil {
-		return 0, errors.Wrap(err, "Creating namespace, got error: ")
-	}
 	err = x.RetryUntilSuccess(10, 100*time.Millisecond, func() error {
 		return createGuardianAndGroot(ctx, ids.StartId, passwd)
 	})
