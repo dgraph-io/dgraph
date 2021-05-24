@@ -245,8 +245,7 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 		}
 
 		// Start opIndexing task only if schema update needs to build the indexes.
-		if ok && rebuild.NeedIndexRebuild() {
-			gr.Node.waitForTask(opIndexing)
+		if ok && rebuild.NeedIndexRebuild() && !gr.Node.isRunningTask(opIndexing) {
 			closer, err := gr.Node.startTask(opIndexing)
 			if err != nil {
 				return err

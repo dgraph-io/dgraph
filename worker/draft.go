@@ -269,6 +269,13 @@ func (n *node) waitForTask(id op) {
 	closer.Wait()
 }
 
+func (n *node) isRunningTask(id op) bool {
+	n.opsLock.Lock()
+	_, ok := n.ops[id]
+	n.opsLock.Unlock()
+	return ok
+}
+
 func (n *node) stopAllTasks() {
 	defer n.closer.Done() // CLOSER:1
 	<-n.closer.HasBeenClosed()
