@@ -207,8 +207,10 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 	// "Too many open files" error.
 	throttle := y.NewThrottle(maxOpenFileLimit / 8)
 
-	buildIndexes := func(update *pb.SchemaUpdate, rebuild posting.IndexRebuild) {
-		// In case background indexing is running, we should call it here again.
+	buildIndexes := func(update *pb.SchemaUpdate, rebuild posting.IndexRebuild, c *z.Closer) {
+		// In case background indexing is running, we should call it here again. stopIndexing will
+		// stop opIndexing only if indexing is no more in progress.
+		defer stopIndexing(c)
 
 		// We should only start building indexes once this function has returned.
 		// This is in order to ensure that we do not call DropPrefix for one predicate
@@ -225,6 +227,7 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 		throttle.Done(nil)
 	}
 
+	var closer *z.Closer
 	for _, su := range updates {
 		if tablet, err := groups().Tablet(su.Predicate); err != nil {
 			return err
@@ -246,7 +249,7 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 
 		// Start opIndexing task only if schema update needs to build the indexes.
 		if ok && rebuild.NeedIndexRebuild() && !gr.Node.isRunningTask(opIndexing) {
-			closer, err := gr.Node.startTask(opIndexing)
+			closer, err = gr.Node.startTask(opIndexing)
 			if err != nil {
 				return err
 			}
@@ -276,7 +279,7 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 		}
 
 		if ok && rebuild.NeedIndexRebuild() {
-			go buildIndexes(su, rebuild)
+			go buildIndexes(su, rebuild, closer)
 		} else if err := updateSchema(su); err != nil {
 			return err
 		}
