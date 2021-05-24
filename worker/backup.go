@@ -28,13 +28,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-const (
-	unknownStatus    = "UNKNOWN"
-	inProgressStatus = "IN_PROGRESS"
-	okStatus         = "OK"
-	errStatus        = "ERR"
-)
-
 // predicateSet is a map whose keys are predicates. It is meant to be used as a set.
 type predicateSet map[string]struct{}
 

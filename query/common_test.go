@@ -20,12 +20,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 )
 
@@ -44,9 +45,12 @@ func setSchema(schema string) {
 }
 
 func dropPredicate(pred string) {
-	err := client.Alter(context.Background(), &api.Operation{
-		DropAttr: pred,
-	})
+alter:
+	err := client.Alter(context.Background(), &api.Operation{DropAttr: pred})
+	if err != nil && strings.Contains(err.Error(), "Please retry operation") {
+		time.Sleep(1 * time.Second)
+		goto alter
+	}
 	if err != nil {
 		panic(fmt.Sprintf("Could not drop predicate. Got error %v", err.Error()))
 	}
@@ -328,6 +332,10 @@ gender                         : string .
 indexpred                      : string @index(exact) .
 pred                           : string .
 pname                          : string .
+tweet-a                        : string @index(trigram) .
+tweet-b                        : string @index(term) .
+tweet-c                        : string @index(fulltext) .
+tweet-d                        : string @index(trigram) .
 `
 
 func populateCluster() {
@@ -828,6 +836,50 @@ func populateCluster() {
 		<67> <index-pred2> "I" .
 		<68> <index-pred2> "J" .
 		<69> <index-pred2> "K" .
+
+		<61> <tweet-a> "aaa" .
+		<62> <tweet-a> "aaaa" .
+		<63> <tweet-a> "aaaab" .
+		<64> <tweet-a> "aaaabb" .
+
+		<61> <tweet-b> "indiana" .
+		<62> <tweet-b> "indiana" .
+		<63> <tweet-b> "indiana jones" .
+		<64> <tweet-b> "indiana pop" .
+
+		<61> <tweet-c> "I am a citizen" .
+		<62> <tweet-c> "I am a citizen" .
+		<63> <tweet-c> "I am a citizen" .
+		<64> <tweet-c> "I am a citizen of Paradis Island" .
+
+		<61> <tweet-d> "aaabxxx" .
+		<62> <tweet-d> "aaacdxx" .
+		<63> <tweet-d> "aaabcd" .
+
+		<61> <connects> <64> .
+		<61> <connects> <65> .
+		<61> <connects> <66> .
+		<61> <connects> <67> .
+		<61> <connects> <68> .
+		<62> <connects> <64> .
+		<62> <connects> <65> .
+		<62> <connects> <66> .
+		<62> <connects> <67> .
+		<62> <connects> <68> .
+		<63> <connects> <64> .
+		<63> <connects> <65> .
+		<63> <connects> <66> .
+		<63> <connects> <67> .
+		<63> <connects> <68> .
+		<64> <kname> "yes" .
+		<65> <kname> "yes" .
+		<66> <kname> "yes" .
+		<67> <kname> "yes" .
+		<68> <kname> "yes" .
+
+		<61> <kname> "can_be_picked" .
+		<62> <kname> "can_be_picked" .
+		<63> <kname> "can_be_picked" .
 	`)
 	if err != nil {
 		panic(fmt.Sprintf("Could not able add triple to the cluster. Got error %v", err.Error()))

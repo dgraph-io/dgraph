@@ -11,21 +11,20 @@ require (
 	contrib.go.opencensus.io/exporter/prometheus v0.1.0
 	github.com/DataDog/datadog-go v0.0.0-20190425163447-40bafcb5f6c1 // indirect
 	github.com/DataDog/opencensus-go-exporter-datadog v0.0.0-20190503082300-0f32ad59ab08
-	github.com/DataDog/zstd v1.4.5 // indirect
 	github.com/Masterminds/semver/v3 v3.1.0
 	github.com/Microsoft/go-winio v0.4.15 // indirect
 	github.com/OneOfOne/xxhash v1.2.5 // indirect
 	github.com/Shopify/sarama v1.27.2
 	github.com/blevesearch/bleve v1.0.13
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd
-	github.com/dgraph-io/badger/v3 v3.0.0-20210401200525-7d7d7908a001
-	github.com/dgraph-io/dgo/v200 v200.0.0-20210212152539-e0a5bde40ba2
+	github.com/dgraph-io/badger/v3 v3.0.0-20210504192519-da5f789ecb38
+	github.com/dgraph-io/dgo/v210 v210.0.0-20210407152819-261d1c2a6987
 	github.com/dgraph-io/gqlgen v0.13.2
 	github.com/dgraph-io/gqlparser/v2 v2.2.0
-	github.com/dgraph-io/graphql-transport-ws v0.0.0-20210223074046-e5b8b80bb4ed
-	github.com/dgraph-io/ristretto v0.0.4-0.20210310100713-a4346e5d1f90
-	github.com/dgraph-io/roaring v0.5.6-0.20210227175938-766b897233a5
+	github.com/dgraph-io/graphql-transport-ws v0.0.0-20210511143556-2cef522f1f15
+	github.com/dgraph-io/ristretto v0.0.4-0.20210504190834-0bf2acd73aa3
 	github.com/dgraph-io/simdjson-go v0.3.0
+	github.com/dgraph-io/sroar v0.0.0-20210522085927-7150620bb343
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/dgrijalva/jwt-go/v4 v4.0.0-preview1
 	github.com/dgryski/go-farm v0.0.0-20200201041132-a6ae2369ad13
@@ -45,7 +44,6 @@ require (
 	github.com/google/uuid v1.0.0
 	github.com/gorilla/websocket v1.4.2
 	github.com/graph-gophers/graphql-go v0.0.0-20200309224638-dae41bde9ef9
-	github.com/graph-gophers/graphql-transport-ws v0.0.0-20190611222414-40c048432299 // indirect
 	github.com/hashicorp/vault/api v1.0.4
 	github.com/json-iterator/go v1.1.10 // indirect
 	github.com/minio/minio-go/v6 v6.0.55
@@ -57,14 +55,16 @@ require (
 	github.com/prometheus/client_golang v1.5.1
 	github.com/prometheus/common v0.10.0 // indirect
 	github.com/prometheus/procfs v0.2.0 // indirect
+	github.com/sergi/go-diff v1.1.0
 	github.com/soheilhy/cmux v0.1.5-0.20210205191134-5ec6847320e5
 	github.com/spf13/cast v1.3.0
 	github.com/spf13/cobra v1.1.1
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.7.1
-	github.com/stretchr/testify v1.6.1
+	github.com/stretchr/testify v1.7.0
 	github.com/tinylib/msgp v1.1.5 // indirect
 	github.com/twpayne/go-geom v1.0.5
+	github.com/xdg/scram v0.0.0-20180814205039-7eeb5667e42c
 	go.etcd.io/etcd/raft/v3 v3.5.0-alpha.0
 	go.opencensus.io v0.22.5
 	go.uber.org/zap v1.16.0

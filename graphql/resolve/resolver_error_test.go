@@ -22,7 +22,7 @@ import (
 	"io/ioutil"
 	"testing"
 
-	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
+	dgoapi "github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/graphql/test"
 	"github.com/dgraph-io/dgraph/x"
@@ -431,7 +431,7 @@ func TestManyMutationsWithError(t *testing.T) {
 				multiMutation,
 				map[string]interface{}{"id": tcase.idValue},
 				&executor{
-					existenceQueriesResp: `{ "Author_1": [{"uid":"0x1"}]}`,
+					existenceQueriesResp: `{ "Author_1": [{"uid":"0x1", "dgraph.type":["Author"]}]}`,
 					resp:                 tcase.queryResponse,
 					assigned:             tcase.mutResponse,
 					failMutation:         2})

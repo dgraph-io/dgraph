@@ -109,16 +109,7 @@ type BackupRes struct {
 	err error
 }
 
-func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull bool) error {
-	if !EnterpriseEnabled() {
-		return errors.New("you must enable enterprise features first. " +
-			"Supply the appropriate license file to Dgraph Zero using the HTTP endpoint.")
-	}
-
-	if req.Destination == "" {
-		return errors.Errorf("you must specify a 'destination' value")
-	}
-
+func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest) error {
 	if err := x.HealthCheck(); err != nil {
 		glog.Errorf("Backup canceled, not ready to accept requests: %s", err)
 		return err
@@ -162,7 +153,7 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull 
 	}
 
 	req.SinceTs = latestManifest.Since
-	if forceFull {
+	if req.ForceFull {
 		req.SinceTs = 0
 	} else {
 		if x.WorkerConfig.EncryptionKey != nil {
@@ -300,15 +291,15 @@ func NewBackupProcessor(db *badger.DB, req *pb.BackupRequest) *BackupProcessor {
 	bp := &BackupProcessor{
 		DB:      db,
 		Request: req,
-		threads: make([]*threadLocal, x.WorkerConfig.Badger.GetUint64("goroutines")),
+		threads: make([]*threadLocal, x.WorkerConfig.Badger.NumGoroutines),
 	}
 	if req.SinceTs > 0 && db != nil {
 		bp.txn = db.NewTransactionAt(req.ReadTs, false)
 	}
 	for i := range bp.threads {
-		buf, err := z.NewBufferWith(32<<20, 32<<30, z.UseCalloc, "Worker.BackupProcessor")
-		x.Check(err)
-		buf.AutoMmapAfter(1 << 30)
+		buf := z.NewBuffer(32<<20, "Worker.BackupProcessor").
+			WithAutoMmap(1<<30, "").
+			WithMaxSize(32 << 30)
 
 		bp.threads[i] = &threadLocal{
 			Request: bp.Request,
@@ -691,8 +682,9 @@ func checkAndGetDropOp(key []byte, l *posting.List, readTs uint64) (*pb.DropOper
 		}
 		// A dgraph.drop.op record can have values in only one of the following formats:
 		// * DROP_ALL;
-		// * DROP_DATA;
+		// * DROP_DATA;ns
 		// * DROP_ATTR;attrName
+		// * DROP_NS;ns
 		// So, accordingly construct the *pb.DropOperation.
 		dropOp := &pb.DropOperation{}
 		dropInfo := strings.Split(string(val), ";")
@@ -704,6 +696,7 @@ func checkAndGetDropOp(key []byte, l *posting.List, readTs uint64) (*pb.DropOper
 			dropOp.DropOp = pb.DropOperation_ALL
 		case "DROP_DATA":
 			dropOp.DropOp = pb.DropOperation_DATA
+			dropOp.DropValue = dropInfo[1] // contains namespace.
 		case "DROP_ATTR":
 			dropOp.DropOp = pb.DropOperation_ATTR
 			dropOp.DropValue = dropInfo[1]

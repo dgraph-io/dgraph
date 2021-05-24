@@ -8,6 +8,7 @@ Requires=dgraph-zero.service
 Type=simple
 WorkingDirectory=/var/lib/dgraph
 ExecStart=/usr/bin/bash -c 'dgraph alpha -p /var/lib/dgraph/p -w /var/lib/dgraph/w'
+LimitNOFILE=65536
 Restart=on-failure
 StandardOutput=journal
 StandardError=journal

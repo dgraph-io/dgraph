@@ -29,8 +29,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgo/v200"
-	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgo/v210"
+	"github.com/dgraph-io/dgo/v210/protos/api"
 	"google.golang.org/grpc"
 
 	"github.com/spf13/cast"
@@ -4009,4 +4009,61 @@ func queryMultipleLangFields(t *testing.T) {
 	JSONEqGraphQL(t, queryPersonExpected, string(gqlResponse.Data))
 	// Cleanup
 	DeleteGqlType(t, "Person", map[string]interface{}{}, 3, nil)
+}
+
+func queryWithIDFieldAndInterfaceArg(t *testing.T) {
+	// add library member
+	addLibraryMemberParams := &GraphQLParams{
+		Query: `mutation addLibraryMember($input: [AddLibraryMemberInput!]!) {
+                         addLibraryMember(input: $input, upsert: false) {
+                          libraryMember {
+                           refID
+                          }
+                         }
+                        }`,
+		Variables: map[string]interface{}{"input": []interface{}{
+			map[string]interface{}{
+				"refID":       "101",
+				"name":        "Alice",
+				"itemsIssued": []string{"Intro to Go", "Parallel Programming"},
+				"readHours":   "4d2hr",
+			}},
+		},
+	}
+
+	gqlResponse := addLibraryMemberParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	queryMember := &GraphQLParams{
+		Query: `
+			query {
+				getMember(refID: "101") {
+					refID
+					name
+					itemsIssued
+					... on LibraryMember {
+						readHours
+					}
+				}
+			}`,
+	}
+
+	gqlResponse = queryMember.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	queryPersonExpected := `
+		  {
+              "getMember": {
+                  "refID": "101",
+                  "name": "Alice",
+                  "itemsIssued": [
+                      "Parallel Programming",
+                      "Intro to Go"
+                  ],
+                  "readHours": "4d2hr"
+              }
+          }`
+
+	require.JSONEq(t, queryPersonExpected, string(gqlResponse.Data))
+	// Cleanup
+	DeleteGqlType(t, "LibraryMember", map[string]interface{}{}, 1, nil)
 }

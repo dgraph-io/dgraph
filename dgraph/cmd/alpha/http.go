@@ -34,7 +34,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/graphql/admin"
 
-	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/schema"
@@ -163,6 +163,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	startTs, err := parseUint64(r, "startTs")
+	hash := r.URL.Query().Get("hash")
 	if err != nil {
 		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 		return
@@ -218,6 +219,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		Vars:    params.Variables,
 		Query:   params.Query,
 		StartTs: startTs,
+		Hash:    hash,
 	}
 
 	if req.StartTs == 0 {
@@ -295,6 +297,7 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	startTs, err := parseUint64(r, "startTs")
+	hash := r.URL.Query().Get("hash")
 	if err != nil {
 		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 		return
@@ -405,6 +408,7 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 	parseEnd := time.Now()
 
 	req.StartTs = startTs
+	req.Hash = hash
 	req.CommitNow = commitNow
 
 	ctx := x.AttachAccessJwt(context.Background(), r)
@@ -463,6 +467,7 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	hash := r.URL.Query().Get("hash")
 	abort, err := parseBool(r, "abort")
 	if err != nil {
 		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
@@ -472,7 +477,7 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := x.AttachAccessJwt(context.Background(), r)
 	var response map[string]interface{}
 	if abort {
-		response, err = handleAbort(ctx, startTs)
+		response, err = handleAbort(ctx, startTs, hash)
 	} else {
 		// Keys are sent as an array in the body.
 		reqText := readRequest(w, r)
@@ -480,7 +485,7 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		response, err = handleCommit(ctx, startTs, reqText)
+		response, err = handleCommit(ctx, startTs, hash, reqText)
 	}
 	if err != nil {
 		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
@@ -496,10 +501,11 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 	_, _ = x.WriteResponse(w, r, js)
 }
 
-func handleAbort(ctx context.Context, startTs uint64) (map[string]interface{}, error) {
+func handleAbort(ctx context.Context, startTs uint64, hash string) (map[string]interface{}, error) {
 	tc := &api.TxnContext{
 		StartTs: startTs,
 		Aborted: true,
+		Hash:    hash,
 	}
 
 	tctx, err := (&edgraph.Server{}).CommitOrAbort(ctx, tc)
@@ -516,10 +522,11 @@ func handleAbort(ctx context.Context, startTs uint64) (map[string]interface{}, e
 	}
 }
 
-func handleCommit(ctx context.Context, startTs uint64, reqText []byte) (map[string]interface{},
-	error) {
+func handleCommit(ctx context.Context,
+	startTs uint64, hash string, reqText []byte) (map[string]interface{}, error) {
 	tc := &api.TxnContext{
 		StartTs: startTs,
+		Hash:    hash,
 	}
 
 	var reqList []string
@@ -638,18 +645,22 @@ func adminSchemaHandler(w http.ResponseWriter, r *http.Request) {
 
 func graphqlProbeHandler(gqlHealthStore *admin.GraphQLHealthStore, globalEpoch map[uint64]*uint64) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		x.AddCorsHeaders(w)
+		w.Header().Set("Content-Type", "application/json")
 		// lazy load the schema so that just by making a probe request,
 		// one can boot up GraphQL for their namespace
 		namespace := x.ExtractNamespaceHTTP(r)
-		admin.LazyLoadSchema(namespace)
+		if err := admin.LazyLoadSchema(namespace); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			x.Check2(w.Write([]byte(fmt.Sprintf(`{"error":"%s"}`, err))))
+			return
+		}
 
 		healthStatus := gqlHealthStore.GetHealth()
 		httpStatusCode := http.StatusOK
 		if !healthStatus.Healthy {
 			httpStatusCode = http.StatusServiceUnavailable
 		}
-		w.Header().Set("Content-Type", "application/json")
-		x.AddCorsHeaders(w)
 		w.WriteHeader(httpStatusCode)
 		e := globalEpoch[namespace]
 		var counter uint64

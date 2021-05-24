@@ -26,8 +26,8 @@ import (
 
 	"github.com/golang/glog"
 
-	"github.com/dgraph-io/dgo/v200"
-	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgo/v210"
+	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
@@ -142,7 +142,7 @@ func DeleteNamespace(t *testing.T, token *HttpToken, nsID uint64) error {
 }
 
 func CreateUser(t *testing.T, token *HttpToken, username,
-	password string) {
+	password string) *GraphQLResponse {
 	addUser := `
 	mutation addUser($name: String!, $pass: String!) {
 		addUser(input: [{name: $name, password: $pass}]) {
@@ -170,6 +170,7 @@ func CreateUser(t *testing.T, token *HttpToken, username,
 	var r Response
 	err := json.Unmarshal(resp.Data, &r)
 	require.NoError(t, err)
+	return resp
 }
 
 func CreateGroup(t *testing.T, token *HttpToken, name string) {
@@ -340,4 +341,37 @@ func QueryData(t *testing.T, dg *dgo.Dgraph, query string) []byte {
 	resp, err := dg.NewReadOnlyTxn().Query(context.Background(), query)
 	require.NoError(t, err)
 	return resp.GetJson()
+}
+
+func Export(t *testing.T, token *HttpToken, dest, accessKey, secretKey string) *GraphQLResponse {
+	exportRequest := `mutation export($dst: String!, $f: String!, $acc: String!, $sec: String!){
+export(input: {destination: $dst, format: $f, accessKey: $acc, secretKey: $sec}) {
+			response {
+				message
+			}
+		}
+	}`
+
+	params := GraphQLParams{
+		Query: exportRequest,
+		Variables: map[string]interface{}{
+			"dst": dest,
+			"f":   "rdf",
+			"acc": accessKey,
+			"sec": secretKey,
+		},
+	}
+
+	resp := MakeRequest(t, token, params)
+	type Response struct {
+		Export struct {
+			Response struct {
+				Message string
+			}
+		}
+	}
+	var r Response
+	err := json.Unmarshal(resp.Data, &r)
+	require.NoError(t, err)
+	return resp
 }

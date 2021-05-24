@@ -20,12 +20,13 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"math/rand"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/dgraph-io/roaring/roaring64"
+	"github.com/dgraph-io/sroar"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"
@@ -114,6 +115,8 @@ type params struct {
 	Count int
 	// Offset is the value of the "offset" parameter.
 	Offset int
+	// Random is the value of the "random" parameter
+	Random int
 	// AfterUID is the value of the "after" parameter.
 	AfterUID uint64
 	// DoCount is true if the count of the predicate is requested instead of its value.
@@ -295,7 +298,7 @@ type SubGraph struct {
 	Children     []*SubGraph // children of the current node, should be empty for leaf nodes.
 
 	// destUIDs is a list of destination UIDs, after applying filters, pagination.
-	DestMap *roaring64.Bitmap
+	DestMap *sroar.Bitmap
 
 	// OrderedUIDs is used to store the UIDs in some order, used for shortest path.
 	OrderedUIDs *pb.List
@@ -745,6 +748,15 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 		}
 		args.Count = int(first)
 	}
+
+	if v, ok := gq.Args["random"]; ok {
+		random, err := strconv.ParseInt(v, 0, 32)
+		if err != nil {
+			return err
+		}
+		args.Random = int(random)
+	}
+
 	return nil
 }
 
@@ -939,8 +951,8 @@ func createTaskQuery(ctx context.Context, sg *SubGraph) (*pb.Query, error) {
 		sg.Params.ExpandAll = true
 	}
 
-	// count is to limit how many results we want.
-	first := calculateFirstN(sg)
+	// first is to limit how many results we want.
+	first, offset := calculatePaginationParams(sg)
 
 	out := &pb.Query{
 		ReadTs:       sg.ReadTs,
@@ -955,6 +967,7 @@ func createTaskQuery(ctx context.Context, sg *SubGraph) (*pb.Query, error) {
 		FacetsFilter: sg.facetsFilter,
 		ExpandAll:    sg.Params.ExpandAll,
 		First:        first,
+		Offset:       offset,
 	}
 
 	// Use the orderedUIDs if present, it will only be present for the shortest path case.
@@ -966,8 +979,9 @@ func createTaskQuery(ctx context.Context, sg *SubGraph) (*pb.Query, error) {
 	return out, nil
 }
 
-// calculateFirstN returns the count of result we need to proceed query further down.
-func calculateFirstN(sg *SubGraph) int32 {
+// calculatePaginationParams returns the (count, offset) of result
+// we need to proceed query further down.
+func calculatePaginationParams(sg *SubGraph) (int32, int32) {
 	// by default count is zero. (zero will retrieve all the results)
 	count := math.MaxInt32
 	// In order to limit we have to make sure that the this level met the following conditions
@@ -984,32 +998,35 @@ func calculateFirstN(sg *SubGraph) int32 {
 	//     name
 	//   }
 	// }
-	// - should be has function (Right now, I'm doing it for has, later it can be extended)
-	// {
-	//   q(func: has(name), first:1) {
-	//     name
-	//   }
-	// }
-	// isSupportedFunction := sg.SrcFunc != nil && sg.SrcFunc.Name == "has"
+	// - should not be one of those function which fetches some results and then do further
+	// processing to narrow down the result. For example: allofterm will fetch the index postings
+	// for each term and then do an intersection.
+	// TODO: Look into how we can optimize queries involving these functions.
 
-	// Manish: Shouldn't all functions allow this? If we don't have a order and we don't have a
-	// filter, then we can respect the first N, offset Y arguments when retrieving data.
-	isSupportedFunction := true
-	if len(sg.Filters) == 0 && len(sg.Params.Order) == 0 &&
-		isSupportedFunction {
-		// Offset also added because, we need n results to trim the offset.
-		if sg.Params.Count != 0 {
-			count = sg.Params.Count + sg.Params.Offset
+	shouldExclude := false
+	if sg.SrcFunc != nil {
+		switch sg.SrcFunc.Name {
+		case "regexp", "alloftext", "allofterms", "match":
+			shouldExclude = true
+		default:
+			shouldExclude = false
 		}
 	}
-	return int32(count)
+
+	if len(sg.Filters) == 0 && len(sg.Params.Order) == 0 && !shouldExclude {
+		if sg.Params.Count != 0 {
+			return int32(sg.Params.Count), int32(sg.Params.Offset)
+		}
+	}
+	// make offset = 0, if there is need to fetch all the results.
+	return int32(count), 0
 }
 
 // varValue is a generic representation of a variable and holds multiple things.
 // TODO(pawan) - Come back to this and document what do individual fields mean and when are they
 // populated.
 type varValue struct {
-	UidMap *roaring64.Bitmap // list of uids if this denotes a uid variable.
+	UidMap *sroar.Bitmap // list of uids if this denotes a uid variable.
 	Vals   map[uint64]types.Val
 	path   []*SubGraph // This stores the subgraph path from root to var definition.
 	// strList stores the valueMatrix corresponding to a predicate and is later used in
@@ -1407,7 +1424,7 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue, sgPath []*SubGr
 	}
 
 	// Filter out UIDs that don't have atleast one UID in every child.
-	itr := sg.DestMap.Iterator()
+	itr := sg.DestMap.NewIterator()
 	out := sg.DestMap.Clone()
 	for i := 0; itr.HasNext(); i++ {
 		uid := itr.Next()
@@ -1525,12 +1542,13 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 		//    }
 
 		// Uid variable could be defined using uid or a predicate.
-		var uids *roaring64.Bitmap
+		var uids *sroar.Bitmap
 		if sg.Attr == "uid" {
 			uids = codec.FromList(sg.SrcUIDs)
 		} else {
 			// Avoid an upfront Clone.
-			sg.DestMap.SetCopyOnWrite(true)
+			// TODO(Ahsan): See if we want to implement this function.
+			// sg.DestMap.SetCopyOnWrite(true)
 			uids = sg.DestMap
 		}
 
@@ -1584,7 +1602,7 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 			path:        sgPath,
 			Vals:        make(map[uint64]types.Val),
 			strList:     sg.valueMatrix,
-			UidMap:      roaring64.New(),
+			UidMap:      sroar.NewBitmap(),
 		}
 	}
 	return nil
@@ -1730,7 +1748,7 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 		}
 	}
 
-	out := roaring64.New()
+	out := sroar.NewBitmap()
 	// Go through all the variables in NeedsVar and see if we have a value for them in the map. If
 	// we do, then we store that value in the appropriate variable inside SubGraph.
 	for _, v := range sg.Params.NeedsVar {
@@ -1748,7 +1766,7 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 
 		case (v.Typ == gql.UidVar && sg.SrcFunc != nil && sg.SrcFunc.Name == "uid_in"):
 			srcFuncArgs := sg.SrcFunc.Args[:0]
-			itr := l.UidMap.Iterator()
+			itr := l.UidMap.NewIterator()
 			for itr.HasNext() {
 				uid := itr.Next()
 				// We use base 10 here because the uid parser expects the uid to be in base 10.
@@ -1774,7 +1792,7 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 		case (v.Typ == gql.AnyVar || v.Typ == gql.UidVar) && len(l.Vals) != 0:
 			// Derive the UID list from value var.
 			for k := range l.Vals {
-				out.Add(k)
+				out.Set(k)
 			}
 
 		case len(l.Vals) != 0 || !l.UidMap.IsEmpty():
@@ -1872,14 +1890,14 @@ func (sg *SubGraph) applyIneqFunc() error {
 		for _, uid := range sg.SrcUIDs.Uids {
 			curVal, ok := sg.Params.UidToVal[uid]
 			if ok && types.CompareVals(sg.SrcFunc.Name, curVal, dst) {
-				sg.DestMap.Add(uid)
+				sg.DestMap.Set(uid)
 			}
 		}
 	} else {
 		// This means it's a function at root as SrcUIDs is nil
 		for uid, curVal := range sg.Params.UidToVal {
 			if types.CompareVals(sg.SrcFunc.Name, curVal, dst) {
-				sg.DestMap.Add(uid)
+				sg.DestMap.Set(uid)
 			}
 		}
 		sg.uidMatrix = []*pb.List{codec.ToList(sg.DestMap)}
@@ -2240,7 +2258,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 
 		hasNils := false
 		// Now apply the results from filter.
-		var bitmaps []*roaring64.Bitmap
+		var bitmaps []*sroar.Bitmap
 		for _, filter := range sg.Filters {
 			if filter.DestMap == nil {
 				hasNils = true
@@ -2251,19 +2269,19 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 
 		switch {
 		case sg.FilterOp == "or":
-			sg.DestMap = roaring64.ParOr(4, bitmaps...)
+			sg.DestMap = sroar.FastParOr(4, bitmaps...)
 		case sg.FilterOp == "not":
 			x.AssertTrue(len(sg.Filters) == 1)
 			if sg.Filters[0].DestMap == nil {
-				sg.DestMap.AndNot(roaring64.New())
+				sg.DestMap.AndNot(sroar.NewBitmap())
 			} else {
 				sg.DestMap.AndNot(sg.Filters[0].DestMap)
 			}
 		case sg.FilterOp == "and":
 			if hasNils {
-				sg.DestMap = roaring64.New()
+				sg.DestMap = sroar.NewBitmap()
 			} else {
-				sg.DestMap = roaring64.FastAnd(bitmaps...)
+				sg.DestMap = sroar.FastAnd(bitmaps...)
 			}
 		default:
 			// We need to also intersect the original dest uids in this case to get the final
@@ -2273,19 +2291,23 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			// TODO - See if the server performing the filter can intersect with the srcUIDs before
 			// returning them in this case.
 			if hasNils {
-				sg.DestMap = roaring64.New()
+				sg.DestMap = sroar.NewBitmap()
 			} else {
-				r := roaring64.FastAnd(bitmaps...)
+				r := sroar.FastAnd(bitmaps...)
 				sg.DestMap.And(r)
 			}
 		}
 	}
 
 	if len(sg.Params.Order) == 0 && len(sg.Params.FacetsOrder) == 0 {
-		// There is no ordering. Just apply pagination and return.
-		if err = sg.applyPagination(ctx); err != nil {
-			rch <- err
-			return
+		// for `has` function when there is no filtering and ordering, we fetch
+		// correct paginated results so no need to apply pagination here.
+		if !(len(sg.Filters) == 0 && sg.SrcFunc != nil && sg.SrcFunc.Name == "has") {
+			// There is no ordering. Just apply pagination and return.
+			if err = sg.applyPagination(ctx); err != nil {
+				rch <- err
+				return
+			}
 		}
 	} else {
 		// If we are asked for count, we don't need to change the order of results.
@@ -2295,6 +2317,13 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 				rch <- err
 				return
 			}
+		}
+	}
+
+	if sg.Params.Random > 0 {
+		if err = sg.applyRandom(ctx); err != nil {
+			rch <- err
+			return
 		}
 	}
 
@@ -2393,6 +2422,43 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	}
 
 	rch <- childErr
+}
+
+// stores index of a uid as the index in the uidMatrix (x)
+// and index in the corresponding list of the uidMatrix (y)
+type UidKey struct {
+	x int
+	y int
+}
+
+// applies "random" to lists inside uidMatrix
+// sg.Params.Random number of nodes are selected in each uid list
+// duplicates are avoided (random selection without replacement)
+// if sg.Params.Random is more than the number of available nodes
+// all nodes are returned
+func (sg *SubGraph) applyRandom(ctx context.Context) error {
+	sg.updateUidMatrix()
+
+	for i := 0; i < len(sg.uidMatrix); i++ {
+		// shuffle the uid list and select the
+		// first sg.Params.Random uids
+
+		uidList := sg.uidMatrix[i].Uids
+
+		rand.Shuffle(len(uidList), func(i, j int) {
+			uidList[i], uidList[j] = uidList[j], uidList[i]
+		})
+
+		numRandom := sg.Params.Random
+		if sg.Params.Random > len(uidList) {
+			numRandom = len(uidList)
+		}
+
+		sg.uidMatrix[i].Uids = uidList[:numRandom]
+	}
+
+	sg.DestMap = codec.Merge(sg.uidMatrix)
+	return nil
 }
 
 // applyPagination applies count and offset to lists inside uidMatrix.
@@ -2638,7 +2704,7 @@ func (sg *SubGraph) sortAndPaginateUsingVar(ctx context.Context) error {
 func isValidArg(a string) bool {
 	switch a {
 	case "numpaths", "from", "to", "orderasc", "orderdesc", "first", "offset", "after", "depth",
-		"minweight", "maxweight":
+		"minweight", "maxweight", "random":
 		return true
 	}
 	return false

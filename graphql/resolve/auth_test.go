@@ -28,7 +28,7 @@ import (
 
 	"google.golang.org/grpc/metadata"
 
-	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
+	dgoapi "github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/graphql/dgraph"
@@ -585,7 +585,7 @@ func mutationQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMet
 			ctx, err := authMeta.AddClaimsToContext(context.Background())
 			require.NoError(t, err)
 
-			_, _ = rewriter.RewriteQueries(context.Background(), gqlMutation)
+			_, _, _ = rewriter.RewriteQueries(context.Background(), gqlMutation)
 			_, err = rewriter.Rewrite(ctx, gqlMutation, tt.idExistence)
 			require.Nil(t, err)
 
@@ -660,7 +660,7 @@ func deleteQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMeta,
 			}
 
 			// -- Act --
-			_, _ = rewriterToTest.RewriteQueries(context.Background(), mut)
+			_, _, _ = rewriterToTest.RewriteQueries(context.Background(), mut)
 			idExistence := make(map[string]string)
 			upsert, err := rewriterToTest.Rewrite(ctx, mut, idExistence)
 
@@ -783,13 +783,17 @@ func checkAddUpdateCase(
 	resolver := NewDgraphResolver(rewriter(), ex)
 
 	// -- Act --
-	resolved, _ := resolver.Resolve(ctx, mut)
+	resolved, success := resolver.Resolve(ctx, mut)
 
 	// -- Assert --
 	// most cases are built into the authExecutor
 	if tcase.Error != nil {
+		require.False(t, success, "Mutation should have failed as it throws an error")
 		require.NotNil(t, resolved.Err)
 		require.Equal(t, tcase.Error.Error(), resolved.Err.Error())
+	} else {
+		require.True(t, success, "Mutation should have not failed as it did not"+
+			" throw an error")
 	}
 }
 
@@ -822,10 +826,12 @@ func TestAuthQueryRewriting(t *testing.T) {
 		t.Run("Mutation Query Rewriting "+algo, func(t *testing.T) {
 			mutationQueryRewriting(t, strSchema, metaInfo)
 		})
+
 		b = read(t, "auth_add_test.yaml")
 		t.Run("Add Mutation "+algo, func(t *testing.T) {
 			mutationAdd(t, strSchema, metaInfo, b)
 		})
+
 		b = read(t, "auth_update_test.yaml")
 		t.Run("Update Mutation "+algo, func(t *testing.T) {
 			mutationUpdate(t, strSchema, metaInfo, b)

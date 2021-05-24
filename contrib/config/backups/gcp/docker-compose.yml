@@ -21,13 +21,6 @@ services:
     command: dgraph alpha --my=alpha1:7080 --zero=zero1:5080 
       --security "whitelist=10.0.0.0/8,172.0.0.0/8,192.168.0.0/16,127.0.0.1;"
 
-  ratel:
-    image: dgraph/dgraph:${DGRAPH_VERSION}
-    ports:
-      - 8000:8000
-    command: dgraph-ratel
-    container_name: ratel
-
   minio:
     image: minio/minio:${MINIO_VERSION}
     command: gateway gcs ${PROJECT_ID}

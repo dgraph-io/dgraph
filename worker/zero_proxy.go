@@ -5,10 +5,24 @@ import (
 
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 )
 
 func forwardAssignUidsToZero(ctx context.Context, in *pb.Num) (*pb.AssignedIds, error) {
+	if in.Type != pb.Num_UID {
+		return &pb.AssignedIds{}, errors.Errorf("Cannot lease %s via zero proxy", in.Type.String())
+	}
+
+	if x.WorkerConfig.AclEnabled {
+		var err error
+		ctx, err = x.AttachJWTNamespaceOutgoing(ctx)
+		if err != nil {
+			return &pb.AssignedIds{}, err
+		}
+	}
+
 	pl := groups().Leader(0)
 	if pl == nil {
 		return nil, conn.ErrNoConnection
@@ -27,7 +41,6 @@ func RegisterZeroProxyServer(s *grpc.Server) {
 				MethodName: "AssignIds",
 				Handler: func(srv interface{}, ctx context.Context, dec func(interface{}) error, _ grpc.UnaryServerInterceptor) (interface{}, error) {
 					in := new(pb.Num)
-					in.Type = pb.Num_UID
 					if err := dec(in); err != nil {
 						return nil, err
 					}

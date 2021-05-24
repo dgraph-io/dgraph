@@ -39,16 +39,16 @@ func TestMetricTxnCommits(t *testing.T) {
 	`
 
 	// first normal commit
-	mr, err := mutationWithTs(mt, "application/rdf", false, false, 0)
+	mr, err := mutationWithTs(mutationInp{body: mt, typ: "application/rdf"})
 	require.NoError(t, err)
-	require.NoError(t, commitWithTs(mr.keys, mr.preds, mr.startTs, false))
+	require.NoError(t, commitWithTs(mr, false))
 
 	metrics := fetchMetrics(t, metricName)
 
 	// second normal commit
-	mr, err = mutationWithTs(mt, "application/rdf", false, false, 0)
+	mr, err = mutationWithTs(mutationInp{body: mt, typ: "application/rdf"})
 	require.NoError(t, err)
-	require.NoError(t, commitWithTs(mr.keys, mr.preds, mr.startTs, false))
+	require.NoError(t, commitWithTs(mr, false))
 
 	require.NoError(t, retryableFetchMetrics(t, map[string]int{
 		metricName: metrics[metricName] + 1,
@@ -66,16 +66,16 @@ func TestMetricTxnDiscards(t *testing.T) {
 	`
 
 	// first normal commit
-	mr, err := mutationWithTs(mt, "application/rdf", false, false, 0)
+	mr, err := mutationWithTs(mutationInp{body: mt, typ: "application/rdf"})
 	require.NoError(t, err)
-	require.NoError(t, commitWithTs(mr.keys, mr.preds, mr.startTs, false))
+	require.NoError(t, commitWithTs(mr, false))
 
 	metrics := fetchMetrics(t, metricName)
 
 	// second commit discarded
-	mr, err = mutationWithTs(mt, "application/rdf", false, false, 0)
+	mr, err = mutationWithTs(mutationInp{body: mt, typ: "application/rdf"})
 	require.NoError(t, err)
-	require.NoError(t, commitWithTs(mr.keys, mr.preds, mr.startTs, true))
+	require.NoError(t, commitWithTs(mr, true))
 
 	require.NoError(t, retryableFetchMetrics(t, map[string]int{
 		metricName: metrics[metricName] + 1,
@@ -92,21 +92,21 @@ func TestMetricTxnAborts(t *testing.T) {
 	}
 	`
 
-	mr1, err := mutationWithTs(mt, "application/rdf", false, false, 0)
+	mr1, err := mutationWithTs(mutationInp{body: mt, typ: "application/rdf"})
 	require.NoError(t, err)
-	mr2, err := mutationWithTs(mt, "application/rdf", false, false, 0)
+	mr2, err := mutationWithTs(mutationInp{body: mt, typ: "application/rdf"})
 	require.NoError(t, err)
-	require.NoError(t, commitWithTs(mr1.keys, mr1.preds, mr1.startTs, false))
-	require.Error(t, commitWithTs(mr2.keys, mr2.preds, mr2.startTs, false))
+	require.NoError(t, commitWithTs(mr1, false))
+	require.Error(t, commitWithTs(mr2, false))
 
 	metrics := fetchMetrics(t, metricName)
 
-	mr1, err = mutationWithTs(mt, "application/rdf", false, false, 0)
+	mr1, err = mutationWithTs(mutationInp{body: mt, typ: "application/rdf"})
 	require.NoError(t, err)
-	mr2, err = mutationWithTs(mt, "application/rdf", false, false, 0)
+	mr2, err = mutationWithTs(mutationInp{body: mt, typ: "application/rdf"})
 	require.NoError(t, err)
-	require.NoError(t, commitWithTs(mr1.keys, mr1.preds, mr1.startTs, false))
-	require.Error(t, commitWithTs(mr2.keys, mr2.preds, mr2.startTs, false))
+	require.NoError(t, commitWithTs(mr1, false))
+	require.Error(t, commitWithTs(mr2, false))
 
 	require.NoError(t, retryableFetchMetrics(t, map[string]int{
 		metricName: metrics[metricName] + 1,

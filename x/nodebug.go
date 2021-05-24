@@ -25,6 +25,8 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 )
 
+var Debug bool
+
 // VerifyPack works in debug mode. Check out the comment in debug_on.go
 func VerifyPack(plist *pb.PostingList) {
 }

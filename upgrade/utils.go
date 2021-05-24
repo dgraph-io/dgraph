@@ -26,15 +26,22 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dgraph-io/dgo/v200"
-	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgo/v210"
+	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
 )
 
+func hasAclCreds() bool {
+	return len(Upgrade.Conf.GetString(user)) > 0
+}
+
 // getAccessJwt gets the access jwt token from by logging into the cluster.
 func getAccessJwt() (*api.Jwt, error) {
+	if !hasAclCreds() {
+		return &api.Jwt{}, nil
+	}
 	user := Upgrade.Conf.GetString(user)
 	password := Upgrade.Conf.GetString(password)
 	header := http.Header{}

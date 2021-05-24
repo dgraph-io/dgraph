@@ -30,7 +30,7 @@ import (
 	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/badger/v3/options"
 	"github.com/dgraph-io/dgraph/conn"
-	"github.com/dgraph-io/dgraph/ee/enc"
+	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
@@ -266,7 +266,7 @@ func (w *grpcWorker) Restore(ctx context.Context, req *pb.RestoreRequest) (*pb.S
 }
 
 // TODO(DGRAPH-1232): Ensure all groups receive the restore proposal.
-func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
+func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest, pidx uint64) error {
 	if req == nil {
 		return errors.Errorf("nil restore request")
 	}
@@ -341,11 +341,14 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 	defer os.RemoveAll(mapDir)
 	glog.Infof("Created temporary map directory: %s\n", mapDir)
 
-	// Write restored values to disk and update the UID lease.
-	if err := RunMapper(req, mapDir); err != nil {
-		return errors.Wrapf(err, "cannot write backup")
+	// Map the backup.
+	mapRes, err := RunMapper(req, mapDir)
+	if err != nil {
+		return errors.Wrapf(err, "Failed to map the backup files")
 	}
+	glog.Infof("Backup map phase is complete. Map result is: %+v\n", mapRes)
 
+	// Reduce the map to pstore using stream writer.
 	sw := pstore.NewStreamWriter()
 	if err := sw.Prepare(); err != nil {
 		return errors.Wrapf(err, "while preparing DB")
@@ -357,6 +360,11 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 		return errors.Wrap(err, "while stream writer flush")
 	}
 
+	// Bump the UID and NsId lease after restore.
+	if err := bumpLease(ctx, mapRes); err != nil {
+		return errors.Wrap(err, "While bumping the leases after restore")
+	}
+
 	// Load schema back.
 	if err := schema.LoadFromDb(); err != nil {
 		return errors.Wrapf(err, "cannot load schema after restore")
@@ -364,9 +372,19 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 
 	// Propose a snapshot immediately after all the work is done to prevent the restore
 	// from being replayed.
-	if err := groups().Node.proposeSnapshot(); err != nil {
-		return errors.Wrapf(err, "cannot propose snapshot after processing restore proposal")
-	}
+	go func(idx uint64) {
+		n := groups().Node
+		if !n.AmLeader() {
+			return
+		}
+		if err := n.Applied.WaitForMark(context.Background(), idx); err != nil {
+			glog.Errorf("Error waiting for mark for index %d: %+v", idx, err)
+			return
+		}
+		if err := n.proposeSnapshot(); err != nil {
+			glog.Errorf("cannot propose snapshot after processing restore proposal %+v", err)
+		}
+	}(pidx)
 
 	// Update the membership state to re-compute the group checksums.
 	if err := UpdateMembershipState(ctx); err != nil {
@@ -375,17 +393,41 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 	return nil
 }
 
+func bumpLease(ctx context.Context, mr *mapResult) error {
+	pl := groups().connToZeroLeader()
+	if pl == nil {
+		return errors.Errorf("cannot update lease due to no connection to zero leader")
+	}
+
+	zc := pb.NewZeroClient(pl.Get())
+	bump := func(val uint64, typ pb.NumLeaseType) error {
+		_, err := zc.AssignIds(ctx, &pb.Num{Val: val, Type: typ, Bump: true})
+		if err != nil && strings.Contains(err.Error(), "Nothing to be leased") {
+			return nil
+		}
+		return err
+	}
+
+	if err := bump(mr.maxUid, pb.Num_UID); err != nil {
+		return errors.Wrapf(err, "cannot update max uid lease after restore.")
+	}
+	if err := bump(mr.maxNs, pb.Num_NS_ID); err != nil {
+		return errors.Wrapf(err, "cannot update max namespace lease after restore.")
+	}
+	return nil
+}
+
 // create a config object from the request for use with enc package.
 func getEncConfig(req *pb.RestoreRequest) (*viper.Viper, error) {
 	config := viper.New()
 	flags := &pflag.FlagSet{}
-	enc.RegisterFlags(flags)
+	ee.RegisterEncFlag(flags)
 	if err := config.BindPFlags(flags); err != nil {
 		return nil, errors.Wrapf(err, "bad config bind")
 	}
 
 	// Copy from the request.
-	config.Set("encryption_key_file", req.EncryptionKeyFile)
+	config.Set("encryption", ee.BuildEncFlag(req.EncryptionKeyFile))
 
 	vaultBuilder := new(strings.Builder)
 	if req.VaultRoleidFile != "" {
@@ -463,7 +505,7 @@ func RunOfflineRestore(dir, location, backupId string, keyFile string,
 			EncryptionKeyFile: keyFile,
 			RestoreTs:         1,
 		}
-		if err := RunMapper(req, mapDir); err != nil {
+		if _, err := RunMapper(req, mapDir); err != nil {
 			return LoadResult{Err: errors.Wrap(err, "RunRestore failed to map")}
 		}
 		pdir := filepath.Join(dir, fmt.Sprintf("p%d", gid))

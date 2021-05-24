@@ -21,7 +21,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgo/v210/protos/api"
 )
 
 func Test_version_String(t *testing.T) {

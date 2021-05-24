@@ -191,7 +191,7 @@ create_certs() {
     docker run \
       --tty \
       --volume $PWD/data/tls:/tls dgraph/dgraph:$DGRAPH_VERSION \
-      dgraph cert --dir /tls --client backupuser --nodes "localhost,alpha1,zero1,ratel" --duration 365
+      dgraph cert --dir /tls --client backupuser --nodes "localhost,alpha1,zero1" --duration 365
   fi
 }
 
@@ -220,7 +220,7 @@ config_compose() {
   [[ $TOKEN_ENABLED == "true" ]] && \
     echo "auth_token = '$(cat ./data/token/auth_token_file)'" >> "$CFGPATH/config.toml"
   [[ $ENC_ENABLED == "true" ]] && \
-    echo "encryption_key_file = '/dgraph/enc/enc_key_file'" >> "$CFGPATH/config.toml"
+    echo "--encryption \"key-file=/dgraph/enc/enc_key_file;\"" >> "$CFGPATH/config.toml"
   [[ $TLS_ENABLED == "true" ]] &&
     cat <<-TLS_CONFIG >> $CFGPATH/config.toml
 tls_client_auth = '$TLS_CLIENT_AUTH'

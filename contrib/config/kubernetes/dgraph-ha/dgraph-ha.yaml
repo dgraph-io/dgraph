@@ -1,12 +1,10 @@
-# This highly available config creates 3 Dgraph Zeros, 3 Dgraph
-# Alphas with 3 replicas, and 1 Ratel UI client. The Dgraph cluster
-# will still be available to service requests even when one Zero
-# and/or one Alpha are down.
+# This highly available config creates 3 Dgraph Zeros and 3 Dgraph Alphas with 3
+# replicas. The Dgraph cluster will still be available to service requests even
+# when one Zero and/or one Alpha are down.
 #
 # There are 3 services can can be used to expose outside the cluster as needed:
 #       dgraph-zero-public - To load data using Live & Bulk Loaders
 #       dgraph-alpha-public - To connect clients and for HTTP APIs
-#       dgraph-ratel-public - For Dgraph UI
 
 apiVersion: v1
 kind: Service
@@ -45,21 +43,6 @@ spec:
     name: grpc-alpha
   selector:
     app: dgraph-alpha
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: dgraph-ratel-public
-  labels:
-    app: dgraph-ratel
-spec:
-  type: ClusterIP
-  ports:
-  - port: 8000
-    targetPort: 8000
-    name: http-ratel
-  selector:
-    app: dgraph-ratel
 ---
 # This is a headless service which is necessary for discovery for a dgraph-zero StatefulSet.
 # https://kubernetes.io/docs/tutorials/stateful-application/basic-stateful-set/#creating-a-statefulset
@@ -337,26 +320,3 @@ spec:
       resources:
         requests:
           storage: 5Gi
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: dgraph-ratel
-  labels:
-    app: dgraph-ratel
-spec:
-  selector:
-    matchLabels:
-      app: dgraph-ratel
-  template:
-    metadata:
-      labels:
-        app: dgraph-ratel
-    spec:
-      containers:
-      - name: ratel
-        image: dgraph/dgraph:latest
-        ports:
-        - containerPort: 8000
-        command:
-          - dgraph-ratel

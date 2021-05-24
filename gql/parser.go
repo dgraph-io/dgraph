@@ -535,6 +535,23 @@ func Parse(r Request) (Result, error) {
 	return ParseWithNeedVars(r, nil)
 }
 
+func LexQuery(req string) []lex.Item {
+	var l lex.Lexer
+	l.Reset(req)
+	l.Run(lexTopLevel)
+	it := l.NewIterator()
+
+	var res []lex.Item
+	for it.Next() {
+		item := it.Item()
+		res = append(res, item)
+		if item.Typ == lex.ItemError {
+			return res
+		}
+	}
+	return res
+}
+
 // ParseWithNeedVars performs parsing of a query with given needVars.
 //
 // The needVars parameter is passed in the case of upsert block.
@@ -2595,7 +2612,7 @@ func parseLanguageList(it *lex.ItemIterator) ([]string, error) {
 
 func validKeyAtRoot(k string) bool {
 	switch k {
-	case "func", "orderasc", "orderdesc", "first", "offset", "after":
+	case "func", "orderasc", "orderdesc", "first", "offset", "after", "random":
 		return true
 	case "from", "to", "numpaths", "minweight", "maxweight":
 		// Specific to shortest path
@@ -2609,7 +2626,7 @@ func validKeyAtRoot(k string) bool {
 // Check for validity of key at non-root nodes.
 func validKey(k string) bool {
 	switch k {
-	case "orderasc", "orderdesc", "first", "offset", "after":
+	case "orderasc", "orderdesc", "first", "offset", "after", "random":
 		return true
 	}
 	return false

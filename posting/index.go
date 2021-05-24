@@ -19,6 +19,7 @@ package posting
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"io/ioutil"
@@ -29,7 +30,6 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
-	ostats "go.opencensus.io/stats"
 	otrace "go.opencensus.io/trace"
 
 	"github.com/dgraph-io/badger/v3"
@@ -124,11 +124,7 @@ func (txn *Txn) addIndexMutation(ctx context.Context, edge *pb.DirectedEdge, tok
 	}
 
 	x.AssertTrue(plist != nil)
-	if err = plist.addMutation(ctx, txn, edge); err != nil {
-		return err
-	}
-	ostats.Record(ctx, x.NumEdges.M(1))
-	return nil
+	return plist.addMutation(ctx, txn, edge)
 }
 
 // countParams is sent to updateCount function. It is used to update the count index.
@@ -187,12 +183,7 @@ func (txn *Txn) addReverseMutation(ctx context.Context, t *pb.DirectedEdge) erro
 		Op:      t.Op,
 		Facets:  t.Facets,
 	}
-	if err := plist.addMutation(ctx, txn, edge); err != nil {
-		return err
-	}
-
-	ostats.Record(ctx, x.NumEdges.M(1))
-	return nil
+	return plist.addMutation(ctx, txn, edge)
 }
 
 func (txn *Txn) addReverseAndCountMutation(ctx context.Context, t *pb.DirectedEdge) error {
@@ -261,14 +252,11 @@ func (txn *Txn) addReverseAndCountMutation(ctx context.Context, t *pb.DirectedEd
 	if err != nil {
 		return err
 	}
-	ostats.Record(ctx, x.NumEdges.M(1))
-
 	if hasCountIndex && cp.countAfter != cp.countBefore {
 		if err := txn.updateCount(ctx, cp); err != nil {
 			return err
 		}
 	}
-
 	return nil
 }
 
@@ -334,11 +322,7 @@ func (txn *Txn) addCountMutation(ctx context.Context, t *pb.DirectedEdge, count 
 
 	x.AssertTruef(plist != nil, "plist is nil [%s] %d",
 		t.Attr, t.ValueId)
-	if err = plist.addMutation(ctx, txn, t); err != nil {
-		return err
-	}
-	ostats.Record(ctx, x.NumEdges.M(1))
-	return nil
+	return plist.addMutation(ctx, txn, t)
 }
 
 func (txn *Txn) updateCount(ctx context.Context, params countParams) error {
@@ -485,7 +469,6 @@ func (l *List) AddMutationWithIndex(ctx context.Context, edge *pb.DirectedEdge, 
 	if err != nil {
 		return err
 	}
-	ostats.Record(ctx, x.NumEdges.M(1))
 	if hasCountIndex && cp.countAfter != cp.countBefore {
 		if err := txn.updateCount(ctx, cp); err != nil {
 			return err
@@ -634,7 +617,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		}
 
 		// Convert data into deltas.
-		txn.Update()
+		txn.Update(ctx)
 
 		// txn.cache.Lock() is not required because we are the only one making changes to txn.
 		kvs := make([]*bpb.KV, 0, len(txn.cache.deltas))
@@ -1240,19 +1223,33 @@ func DeleteAll() error {
 	return pstore.DropAll()
 }
 
-// DeleteData deletes all data but leaves types and schema intact.
-func DeleteData() error {
-	return pstore.DropPrefix([]byte{x.DefaultPrefix})
+// DeleteData deletes all data for the namespace but leaves types and schema intact.
+func DeleteData(ns uint64) error {
+	prefix := make([]byte, 9)
+	prefix[0] = x.DefaultPrefix
+	binary.BigEndian.PutUint64(prefix[1:], ns)
+	return pstore.DropPrefix(prefix)
 }
 
-// DeletePredicate deletes all entries and indices for a given predicate.
+// DeletePredicate deletes all entries and indices for a given predicate. The delete may be logical
+// based on DB options set.
 func DeletePredicate(ctx context.Context, attr string) error {
 	glog.Infof("Dropping predicate: [%s]", attr)
 	prefix := x.PredicatePrefix(attr)
 	if err := pstore.DropPrefix(prefix); err != nil {
 		return err
 	}
+	return schema.State().Delete(attr)
+}
 
+// DeletePredicateBlocking deletes all entries and indices for a given predicate. It also blocks the
+// writes.
+func DeletePredicateBlocking(ctx context.Context, attr string) error {
+	glog.Infof("Dropping predicate: [%s]", attr)
+	prefix := x.PredicatePrefix(attr)
+	if err := pstore.DropPrefixBlocking(prefix); err != nil {
+		return err
+	}
 	return schema.State().Delete(attr)
 }
 

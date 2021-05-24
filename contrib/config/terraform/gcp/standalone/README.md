@@ -35,7 +35,6 @@ Outputs:
 dgraph_ip = <OUTPUT_IP>
 ```
 
-The output of `terraform apply` will contain the IP address assigned to your instance. Dgraph-ratel will be available on `<OUTPUT_IP>:8000`.
-Change the server URL in the dashboard to `<OUTPUT_IP>:8080` and start playing with dgraph.
+The output of `terraform apply` will contain the IP address assigned to your instance.
 
 5. Use `terraform destroy` to delete the setup and restore the state.

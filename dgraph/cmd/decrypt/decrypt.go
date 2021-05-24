@@ -18,20 +18,19 @@ package decrypt
 
 import (
 	"compress/gzip"
-	"fmt"
 	"io"
-	"log"
 	"os"
 	"strings"
 
 	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 	"github.com/spf13/cobra"
 )
 
 type options struct {
-	// keyfile comes from the encryption_key_file or Vault flags
+	// keyfile comes from the encryption or Vault flags
 	keyfile x.Sensitive
 	file    string
 	output  string
@@ -54,20 +53,24 @@ func init() {
 	flag := Decrypt.Cmd.Flags()
 	flag.StringP("file", "f", "", "Path to file to decrypt.")
 	flag.StringP("out", "o", "", "Path to the decrypted file.")
-	enc.RegisterFlags(flag)
+	ee.RegisterEncFlag(flag)
 }
 func run() {
+	keys, err := ee.GetKeys(Decrypt.Conf)
+	x.Check(err)
+	if len(keys.EncKey) == 0 {
+		glog.Fatal("Error while reading encryption key: Key is empty")
+	}
+
 	opts := options{
-		file:   Decrypt.Conf.GetString("file"),
-		output: Decrypt.Conf.GetString("out"),
+		file:    Decrypt.Conf.GetString("file"),
+		output:  Decrypt.Conf.GetString("out"),
+		keyfile: keys.EncKey,
 	}
-	_, opts.keyfile = ee.GetKeys(Decrypt.Conf)
-	if len(opts.keyfile) == 0 {
-		log.Fatal("Error while reading encryption key: Key is empty")
-	}
+
 	f, err := os.Open(opts.file)
 	if err != nil {
-		log.Fatalf("Error opening file: %v\n", err)
+		glog.Fatalf("Error opening file: %v\n", err)
 	}
 	defer f.Close()
 	reader, err := enc.GetReader(opts.keyfile, f)
@@ -78,14 +81,14 @@ func run() {
 	}
 	outf, err := os.OpenFile(opts.output, os.O_WRONLY|os.O_CREATE, 0644)
 	if err != nil {
-		log.Fatalf("Error while opening output file: %v\n", err)
+		glog.Fatalf("Error while opening output file: %v\n", err)
 	}
 	w := gzip.NewWriter(outf)
-	fmt.Printf("Decrypting %s\n", opts.file)
-	fmt.Printf("Writing to %v\n", opts.output)
+	glog.Infof("Decrypting %s\n", opts.file)
+	glog.Infof("Writing to %v\n", opts.output)
 	_, err = io.Copy(w, reader)
 	if err != nil {
-		log.Fatalf("Error while writing: %v\n", err)
+		glog.Fatalf("Error while writing: %v\n", err)
 	}
 	err = w.Flush()
 	x.Check(err)
@@ -93,5 +96,5 @@ func run() {
 	x.Check(err)
 	err = outf.Close()
 	x.Check(err)
-	fmt.Println("Done.")
+	glog.Infof("Done.")
 }

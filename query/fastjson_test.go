@@ -9,13 +9,13 @@ import (
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/types"
-	"github.com/dgraph-io/roaring/roaring64"
+	"github.com/dgraph-io/sroar"
 	"github.com/stretchr/testify/require"
 )
 
 func subgraphWithSingleResultAndSingleValue(val *pb.TaskValue) *SubGraph {
-	r := roaring64.New()
-	r.Add(1)
+	r := sroar.NewBitmap()
+	r.Set(1)
 	return &SubGraph{
 		Params:    params{Alias: "query"},
 		SrcUIDs:   &pb.List{Uids: []uint64{1}},

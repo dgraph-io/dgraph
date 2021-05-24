@@ -12,8 +12,3 @@ output "alpha_indexzero_public_dns" {
   value       = module.alpha.alpha_indexzero_public_dns
   description = "The hostname of the Alpha[0] pod"
 }
-
-output "ratel_public_dns" {
-  value       = module.ratel.ratel_public_dns
-  description = "The hostname of the Ratel service LB"
-}

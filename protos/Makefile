@@ -17,7 +17,7 @@
 # Update BADGER_PB_VERSION when upgrading Badger major versions
 BADGER_PB_VERSION = 3
 
-DGO_PATH    := github.com/dgraph-io/dgo/v200
+DGO_PATH    := github.com/dgraph-io/dgo/v210
 BADGER_PATH := github.com/dgraph-io/badger/v${BADGER_PB_VERSION}
 GOGO_PATH   := github.com/gogo/protobuf
 

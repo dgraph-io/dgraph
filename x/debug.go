@@ -28,6 +28,10 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 )
 
+func init() {
+	Debug = true
+}
+
 // VerifyPack checks that the Pack should not be nil if the postings exist.
 func VerifyPack(plist *pb.PostingList) {
 	if plist.Pack == nil && len(plist.Postings) > 0 {

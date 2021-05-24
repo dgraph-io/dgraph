@@ -17,6 +17,8 @@
 package worker
 
 import (
+	"crypto/sha256"
+	"crypto/sha512"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/binary"
@@ -27,6 +29,7 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
+	"github.com/xdg/scram"
 
 	"github.com/Shopify/sarama"
 
@@ -36,7 +39,7 @@ import (
 
 type SinkMessage struct {
 	Meta  SinkMeta
-	Key   []byte
+	Key   uint64
 	Value []byte
 }
 
@@ -116,6 +119,27 @@ func newKafkaSink(config *z.SuperFlag) (Sink, error) {
 		saramaConf.Net.SASL.User = config.GetString("sasl-user")
 		saramaConf.Net.SASL.Password = config.GetString("sasl-password")
 	}
+	mechanism := config.GetString("sasl-mechanism")
+	if mechanism != "" {
+		switch mechanism {
+		case sarama.SASLTypeSCRAMSHA256:
+			saramaConf.Net.SASL.Mechanism = sarama.SASLTypeSCRAMSHA256
+			saramaConf.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient {
+				return &scramClient{HashGeneratorFcn: sha256.New}
+			}
+		case sarama.SASLTypeSCRAMSHA512:
+			saramaConf.Net.SASL.Mechanism = sarama.SASLTypeSCRAMSHA512
+			saramaConf.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient {
+				return &scramClient{HashGeneratorFcn: sha512.New}
+			}
+		case sarama.SASLTypePlaintext:
+			saramaConf.Net.SASL.Mechanism = sarama.SASLTypePlaintext
+		default:
+			return nil, errors.Errorf("Invalid SASL mechanism. Valid mechanisms are: %s, %s and %s",
+				sarama.SASLTypePlaintext, sarama.SASLTypeSCRAMSHA256, sarama.SASLTypeSCRAMSHA512)
+		}
+	}
+
 	brokers := strings.Split(config.GetString("kafka"), ",")
 	client, err := sarama.NewClient(brokers, saramaConf)
 	if err != nil {
@@ -137,9 +161,11 @@ func (k *kafkaSinkClient) Send(messages []SinkMessage) error {
 	}
 	msgs := make([]*sarama.ProducerMessage, len(messages))
 	for i, m := range messages {
+		key := make([]byte, 8)
+		binary.BigEndian.PutUint64(key, m.Key)
 		msgs[i] = &sarama.ProducerMessage{
 			Topic: m.Meta.Topic,
-			Key:   sarama.ByteEncoder(m.Key),
+			Key:   sarama.ByteEncoder(key),
 			Value: sarama.ByteEncoder(m.Value),
 		}
 	}
@@ -160,7 +186,7 @@ type fileSink struct {
 func (f *fileSink) Send(messages []SinkMessage) error {
 	for _, m := range messages {
 		_, err := f.fileWriter.Write([]byte(fmt.Sprintf("{ \"key\": \"%d\", \"value\": %s}\n",
-			binary.BigEndian.Uint64(m.Key), string(m.Value))))
+			m.Key, string(m.Value))))
 		if err != nil {
 			return errors.Wrap(err, "unable to add message in the file sink")
 		}
@@ -194,4 +220,28 @@ func newFileSink(path *z.SuperFlag) (Sink, error) {
 	return &fileSink{
 		fileWriter: w,
 	}, nil
+}
+
+type scramClient struct {
+	*scram.Client
+	*scram.ClientConversation
+	scram.HashGeneratorFcn
+}
+
+func (sc *scramClient) Begin(userName, password, authzID string) (err error) {
+	sc.Client, err = sc.HashGeneratorFcn.NewClient(userName, password, authzID)
+	if err != nil {
+		return err
+	}
+	sc.ClientConversation = sc.Client.NewConversation()
+	return nil
+}
+
+func (sc *scramClient) Step(challenge string) (response string, err error) {
+	response, err = sc.ClientConversation.Step(challenge)
+	return
+}
+
+func (sc *scramClient) Done() bool {
+	return sc.ClientConversation.Done()
 }

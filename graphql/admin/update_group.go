@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
+	dgoapi "github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
@@ -22,12 +22,12 @@ func NewUpdateGroupRewriter() resolve.MutationRewriter {
 // nodes. It does not rewrite any queries.
 func (urw *updateGroupRewriter) RewriteQueries(
 	ctx context.Context,
-	m schema.Mutation) ([]*gql.GraphQuery, error) {
+	m schema.Mutation) ([]*gql.GraphQuery, []string, error) {
 
 	urw.VarGen = resolve.NewVariableGenerator()
 	urw.XidMetadata = resolve.NewXidMetadata()
 
-	return []*gql.GraphQuery{}, nil
+	return []*gql.GraphQuery{}, []string{}, nil
 }
 
 // Rewrite rewrites set and remove update patches into dql upsert mutations

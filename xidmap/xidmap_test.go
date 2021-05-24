@@ -17,6 +17,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
 )
 
 // Opens a badger db and runs a a test on it.
@@ -33,13 +34,21 @@ func withDB(t *testing.T, test func(db *badger.DB)) {
 	test(db)
 }
 
+func getTestXidmapOpts(conn *grpc.ClientConn, db *badger.DB) XidMapOptions {
+	return XidMapOptions{
+		UidAssigner: conn,
+		DgClient:    nil,
+		DB:          db,
+	}
+}
+
 func TestXidmap(t *testing.T) {
 	conn, err := x.SetupConnection(testutil.SockAddrZero, nil, false)
 	require.NoError(t, err)
 	require.NotNil(t, conn)
 
 	withDB(t, func(db *badger.DB) {
-		xidmap := New(conn, db, "")
+		xidmap := New(getTestXidmapOpts(conn, db))
 
 		uida, isNew := xidmap.AssignUid("a")
 		require.True(t, isNew)
@@ -62,7 +71,7 @@ func TestXidmap(t *testing.T) {
 		require.NoError(t, xidmap.Flush())
 		xidmap = nil
 
-		xidmap2 := New(conn, db, "")
+		xidmap2 := New(getTestXidmapOpts(conn, db))
 		uida2, isNew := xidmap2.AssignUid("a")
 		require.Equal(t, uida, uida2)
 		require.False(t, isNew)
@@ -100,7 +109,7 @@ func TestXidmapMemory(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, conn)
 
-	xidmap := New(conn, nil, "")
+	xidmap := New(getTestXidmapOpts(conn, nil))
 	defer xidmap.Flush()
 
 	start := time.Now()
@@ -148,7 +157,7 @@ func BenchmarkXidmapWrites(b *testing.B) {
 	}
 
 	var counter int64
-	xidmap := New(conn, nil, "")
+	xidmap := New(getTestXidmapOpts(conn, nil))
 	defer xidmap.Flush()
 	b.ResetTimer()
 
@@ -166,7 +175,7 @@ func BenchmarkXidmapWritesRandom(b *testing.B) {
 		b.Fatalf("Error setting up connection: %s", err.Error())
 	}
 
-	xidmap := New(conn, nil, "")
+	xidmap := New(getTestXidmapOpts(conn, nil))
 	defer xidmap.Flush()
 	b.ResetTimer()
 	buf := make([]byte, 32)
@@ -188,7 +197,7 @@ func BenchmarkXidmapReads(b *testing.B) {
 	}
 
 	var N = 1000000
-	xidmap := New(conn, nil, "")
+	xidmap := New(getTestXidmapOpts(conn, nil))
 	defer xidmap.Flush()
 	for i := 0; i < N; i++ {
 		xidmap.AssignUid("xid-" + strconv.Itoa(i))
@@ -212,7 +221,7 @@ func BenchmarkXidmapReadsRandom(b *testing.B) {
 	var N = 1000000
 	buf := make([]byte, 32)
 	var list [][]byte
-	xidmap := New(conn, nil, "")
+	xidmap := New(getTestXidmapOpts(conn, nil))
 	defer xidmap.Flush()
 	for i := 0; i < N; i++ {
 		rand.Read(buf)

@@ -107,9 +107,27 @@ func NewFileHandler(uri *url.URL) *fileHandler {
 	return h
 }
 
-func (h *fileHandler) DirExists(path string) bool       { return pathExist(h.JoinPath(path)) }
-func (h *fileHandler) FileExists(path string) bool      { return pathExist(h.JoinPath(path)) }
-func (h *fileHandler) Read(path string) ([]byte, error) { return ioutil.ReadFile(h.JoinPath(path)) }
+func (h *fileHandler) DirExists(path string) bool {
+	path = h.JoinPath(path)
+	stat, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	return stat.IsDir()
+}
+
+func (h *fileHandler) FileExists(path string) bool {
+	path = h.JoinPath(path)
+	stat, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	return stat.Mode().IsRegular()
+}
+
+func (h *fileHandler) Read(path string) ([]byte, error) {
+	return ioutil.ReadFile(h.JoinPath(path))
+}
 
 func (h *fileHandler) JoinPath(path string) string {
 	return filepath.Join(h.rootDir, h.prefix, path)
@@ -154,16 +172,6 @@ func (h *fileHandler) Rename(src, dst string) error {
 	src = h.JoinPath(src)
 	dst = h.JoinPath(dst)
 	return os.Rename(src, dst)
-}
-
-// pathExist checks if a path (file or dir) is found at target.
-// Returns true if found, false otherwise.
-func pathExist(path string) bool {
-	_, err := os.Stat(path)
-	if err == nil {
-		return true
-	}
-	return !os.IsNotExist(err) && !os.IsPermission(err)
 }
 
 // S3 Handler.

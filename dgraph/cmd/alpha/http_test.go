@@ -162,33 +162,47 @@ func queryWithGz(queryText, contentType, debug, timeout string, gzReq, gzResp bo
 	return string(output), resp, err
 }
 
-func queryWithTs(queryText, contentType, debug string, ts uint64) (string, uint64, error) {
-	out, startTs, _, err := queryWithTsForResp(queryText, contentType, debug, ts)
-	return out, startTs, err
+type queryInp struct {
+	body  string
+	typ   string
+	debug string
+	ts    uint64
+	hash  string
+}
+
+type tsInfo struct {
+	ts   uint64
+	hash string
+}
+
+func queryWithTs(inp queryInp) (string, *tsInfo, error) {
+	out, tsInfo, _, err := queryWithTsForResp(inp)
+	return out, tsInfo, err
 }
 
 // queryWithTsForResp query the dgraph and returns it's http response and result.
-func queryWithTsForResp(queryText, contentType, debug string, ts uint64) (string,
-	uint64, *http.Response, error) {
-	params := make([]string, 0, 2)
-	if debug != "" {
-		params = append(params, "debug="+debug)
+func queryWithTsForResp(inp queryInp) (string, *tsInfo, *http.Response, error) {
+	params := make([]string, 0, 3)
+	if inp.debug != "" {
+		params = append(params, "debug="+inp.debug)
 	}
-	if ts != 0 {
-		params = append(params, fmt.Sprintf("startTs=%v", strconv.FormatUint(ts, 10)))
+	if inp.ts != 0 {
+		params = append(params, fmt.Sprintf("startTs=%v", strconv.FormatUint(inp.ts, 10)))
+		params = append(params, fmt.Sprintf("hash=%s", inp.hash))
 	}
 	url := addr + "/query?" + strings.Join(params, "&")
 
-	_, body, resp, err := runWithRetriesForResp("POST", contentType, url, queryText)
+	_, body, resp, err := runWithRetriesForResp("POST", inp.typ, url, inp.body)
 	if err != nil {
-		return "", 0, resp, err
+		return "", nil, resp, err
 	}
 
 	var r res
 	if err := json.Unmarshal(body, &r); err != nil {
-		return "", 0, resp, err
+		return "", nil, resp, err
 	}
 	startTs := r.Extensions.Txn.StartTs
+	hash := r.Extensions.Txn.Hash
 
 	// Remove the extensions.
 	r2 := res{
@@ -196,32 +210,40 @@ func queryWithTsForResp(queryText, contentType, debug string, ts uint64) (string
 	}
 	output, err := json.Marshal(r2)
 
-	return string(output), startTs, resp, err
+	return string(output), &tsInfo{ts: startTs, hash: hash}, resp, err
 }
 
 type mutationResponse struct {
 	keys    []string
 	preds   []string
 	startTs uint64
+	hash    string
 	data    json.RawMessage
 	cost    string
 }
 
-func mutationWithTs(m, t string, isJson bool, commitNow bool, ts uint64) (
-	mutationResponse, error) {
+type mutationInp struct {
+	body      string
+	typ       string
+	isJson    bool
+	commitNow bool
+	ts        uint64
+	hash      string
+}
 
-	params := make([]string, 2)
-	if ts != 0 {
-		params = append(params, "startTs="+strconv.FormatUint(ts, 10))
+func mutationWithTs(inp mutationInp) (mutationResponse, error) {
+	params := make([]string, 0, 3)
+	if inp.ts != 0 {
+		params = append(params, "startTs="+strconv.FormatUint(inp.ts, 10))
+		params = append(params, "hash="+inp.hash)
 	}
 
 	var mr mutationResponse
-	if commitNow {
+	if inp.commitNow {
 		params = append(params, "commitNow=true")
 	}
-
 	url := addr + "/mutate?" + strings.Join(params, "&")
-	_, body, resp, err := runWithRetriesForResp("POST", t, url, m)
+	_, body, resp, err := runWithRetriesForResp("POST", inp.typ, url, inp.body)
 	if err != nil {
 		return mr, err
 	}
@@ -235,6 +257,7 @@ func mutationWithTs(m, t string, isJson bool, commitNow bool, ts uint64) (
 	mr.keys = r.Extensions.Txn.Keys
 	mr.preds = r.Extensions.Txn.Preds
 	mr.startTs = r.Extensions.Txn.StartTs
+	mr.hash = r.Extensions.Txn.Hash
 	sort.Strings(mr.preds)
 
 	var d map[string]interface{}
@@ -299,12 +322,16 @@ func runRequest(req *http.Request) (*x.QueryResWithData, []byte, *http.Response,
 func runWithRetriesForResp(method, contentType, url string, body string) (
 	*x.QueryResWithData, []byte, *http.Response, error) {
 
+label:
 	req, err := createRequest(method, contentType, url, body)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-
 	qr, respBody, resp, err := runRequest(req)
+	if err != nil && strings.Contains(err.Error(), "Please retry operation") {
+		time.Sleep(time.Second)
+		goto label
+	}
 	if err != nil && strings.Contains(err.Error(), "Token is expired") {
 		err = token.refreshToken()
 		if err != nil {
@@ -322,13 +349,14 @@ func runWithRetriesForResp(method, contentType, url string, body string) (
 	return qr, respBody, resp, err
 }
 
-func commitWithTs(keys, preds []string, ts uint64, abort bool) error {
+func commitWithTs(mr mutationResponse, abort bool) error {
 	url := addr + "/commit"
-	if ts != 0 {
-		url += "?startTs=" + strconv.FormatUint(ts, 10)
+	if mr.startTs != 0 {
+		url += "?startTs=" + strconv.FormatUint(mr.startTs, 10)
+		url += "&hash=" + mr.hash
 	}
 	if abort {
-		if ts != 0 {
+		if mr.startTs != 0 {
 			url += "&abort=true"
 		} else {
 			url += "?abort=true"
@@ -336,8 +364,8 @@ func commitWithTs(keys, preds []string, ts uint64, abort bool) error {
 	}
 
 	m := make(map[string]interface{})
-	m["keys"] = keys
-	m["preds"] = preds
+	m["keys"] = mr.keys
+	m["preds"] = mr.preds
 	b, err := json.Marshal(m)
 	if err != nil {
 		return err
@@ -350,10 +378,11 @@ func commitWithTs(keys, preds []string, ts uint64, abort bool) error {
 	return err
 }
 
-func commitWithTsKeysOnly(keys []string, ts uint64) error {
+func commitWithTsKeysOnly(keys []string, ts uint64, hash string) error {
 	url := addr + "/commit"
 	if ts != 0 {
 		url += "?startTs=" + strconv.FormatUint(ts, 10)
+		url += "&hash=" + hash
 	}
 
 	b, err := json.Marshal(keys)
@@ -381,8 +410,10 @@ func TestTransactionBasic(t *testing.T) {
 	  }
 	}
 	`
-	_, ts, err := queryWithTs(q1, "application/dql", "", 0)
+	_, tsInfo, err := queryWithTs(queryInp{body: q1, typ: "application/dql"})
 	require.NoError(t, err)
+	ts := tsInfo.ts
+	hash := tsInfo.hash
 
 	m1 := `
     {
@@ -394,7 +425,7 @@ func TestTransactionBasic(t *testing.T) {
 	}
 	`
 
-	mr, err := mutationWithTs(m1, "application/rdf", false, false, ts)
+	mr, err := mutationWithTs(mutationInp{body: m1, typ: "application/rdf", ts: ts, hash: hash})
 	require.NoError(t, err)
 	require.Equal(t, mr.startTs, ts)
 	require.Equal(t, 4, len(mr.keys))
@@ -408,18 +439,18 @@ func TestTransactionBasic(t *testing.T) {
 	require.Equal(t, "balance", parsedPreds[0])
 	require.Equal(t, "name", parsedPreds[1])
 
-	data, _, err := queryWithTs(q1, "application/dql", "", 0)
+	data, _, err := queryWithTs(queryInp{body: q1, typ: "application/dql"})
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[]}}`, data)
 
 	// Query with same timestamp.
-	data, _, err = queryWithTs(q1, "application/dql", "", ts)
+	data, _, err = queryWithTs(queryInp{body: q1, typ: "application/dql", ts: ts, hash: hash})
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
 
 	// Commit and query.
-	require.NoError(t, commitWithTs(mr.keys, mr.preds, ts, false))
-	data, _, err = queryWithTs(q1, "application/dql", "", 0)
+	require.NoError(t, commitWithTs(mr, false))
+	data, _, err = queryWithTs(queryInp{body: q1, typ: "application/dql"})
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
 }
@@ -436,8 +467,10 @@ func TestTransactionBasicNoPreds(t *testing.T) {
 	  }
 	}
 	`
-	_, ts, err := queryWithTs(q1, "application/dql", "", 0)
+	_, tsInfo, err := queryWithTs(queryInp{body: q1, typ: "application/dql"})
 	require.NoError(t, err)
+	ts := tsInfo.ts
+	hash := tsInfo.hash
 
 	m1 := `
     {
@@ -449,23 +482,23 @@ func TestTransactionBasicNoPreds(t *testing.T) {
 	}
 	`
 
-	mr, err := mutationWithTs(m1, "application/rdf", false, false, ts)
+	mr, err := mutationWithTs(mutationInp{body: m1, typ: "application/rdf", ts: ts, hash: hash})
 	require.NoError(t, err)
 	require.Equal(t, mr.startTs, ts)
 	require.Equal(t, 4, len(mr.keys))
 
-	data, _, err := queryWithTs(q1, "application/dql", "", 0)
+	data, _, err := queryWithTs(queryInp{body: q1, typ: "application/dql"})
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[]}}`, data)
 
 	// Query with same timestamp.
-	data, _, err = queryWithTs(q1, "application/dql", "", ts)
+	data, _, err = queryWithTs(queryInp{body: q1, typ: "application/dql", ts: ts, hash: hash})
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
 
 	// Commit and query.
-	require.NoError(t, commitWithTs(mr.keys, nil, ts, false))
-	data, _, err = queryWithTs(q1, "application/dql", "", 0)
+	require.NoError(t, commitWithTs(mr, false))
+	data, _, err = queryWithTs(queryInp{body: q1, typ: "application/dql"})
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
 }
@@ -481,7 +514,7 @@ func TestTransactionForCost(t *testing.T) {
 	  }
 	}
 	`
-	_, _, err := queryWithTs(q1, "application/dql", "", 0)
+	_, _, err := queryWithTs(queryInp{body: q1, typ: "application/dql"})
 	require.NoError(t, err)
 
 	m1 := `
@@ -494,11 +527,11 @@ func TestTransactionForCost(t *testing.T) {
 	}
 	`
 
-	mr, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	mr, err := mutationWithTs(mutationInp{body: m1, typ: "application/rdf", commitNow: true})
 	require.NoError(t, err)
 	require.Equal(t, "5", mr.cost)
 
-	_, _, resp, err := queryWithTsForResp(q1, "application/dql", "", 0)
+	_, _, resp, err := queryWithTsForResp(queryInp{body: q1, typ: "application/dql"})
 	require.NoError(t, err)
 	require.Equal(t, "2", resp.Header.Get(x.DgraphCostHeader))
 }
@@ -515,8 +548,10 @@ func TestTransactionBasicOldCommitFormat(t *testing.T) {
 	  }
 	}
 	`
-	_, ts, err := queryWithTs(q1, "application/dql", "", 0)
+	_, tsInfo, err := queryWithTs(queryInp{body: q1, typ: "application/dql"})
 	require.NoError(t, err)
+	ts := tsInfo.ts
+	hash := tsInfo.hash
 
 	m1 := `
     {
@@ -528,35 +563,36 @@ func TestTransactionBasicOldCommitFormat(t *testing.T) {
 	}
 	`
 
-	mr, err := mutationWithTs(m1, "application/rdf", false, false, ts)
+	mr, err := mutationWithTs(mutationInp{body: m1, typ: "application/rdf", ts: ts, hash: hash})
 	require.NoError(t, err)
 	require.Equal(t, mr.startTs, ts)
 	require.Equal(t, 4, len(mr.keys))
 
-	data, _, err := queryWithTs(q1, "application/dql", "", 0)
+	data, _, err := queryWithTs(queryInp{body: q1, typ: "application/dql"})
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[]}}`, data)
 
 	// Query with same timestamp.
-	data, _, err = queryWithTs(q1, "application/dql", "", ts)
+	data, _, err = queryWithTs(queryInp{body: q1, typ: "application/dql", ts: ts, hash: hash})
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
 
 	// One more time, with json body this time.
 	d1, err := json.Marshal(params{Query: q1})
 	require.NoError(t, err)
-	data, _, err = queryWithTs(string(d1), "application/json", "", ts)
+	data, _, err = queryWithTs(
+		queryInp{body: string(d1), typ: "application/json", ts: ts, hash: hash})
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
 
 	// Commit (using a list of keys instead of a map) and query.
-	require.NoError(t, commitWithTsKeysOnly(mr.keys, ts))
-	data, _, err = queryWithTs(q1, "application/dql", "", 0)
+	require.NoError(t, commitWithTsKeysOnly(mr.keys, ts, mr.hash))
+	data, _, err = queryWithTs(queryInp{body: q1, typ: "application/dql"})
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
 
 	// Aborting a transaction
-	url := fmt.Sprintf("%s/commit?startTs=%d&abort=true", addr, ts)
+	url := fmt.Sprintf("%s/commit?startTs=%d&abort=true&hash=%s", addr, ts, mr.hash)
 	req, err := http.NewRequest("POST", url, nil)
 	require.NoError(t, err)
 	_, _, _, err = runRequest(req)
@@ -587,7 +623,13 @@ func TestAlterSanity(t *testing.T) {
 		`{"drop_all":true}`}
 
 	for _, op := range ops {
+	label:
 		qr, _, err := runWithRetries("PUT", "", addr+"/alter", op)
+		if err != nil && strings.Contains(err.Error(), "Please retry") {
+			t.Logf("Got error: %v. Retrying...", err)
+			time.Sleep(time.Second)
+			goto label
+		}
 		require.NoError(t, err)
 		require.Len(t, qr.Errors, 0)
 	}
@@ -786,7 +828,7 @@ func TestDebugSupport(t *testing.T) {
 	require.Empty(t, resp.Header.Get("Content-Encoding"))
 
 	// This test passes access token along with debug flag
-	data, _, err = queryWithTs(q1, "application/dql", "true", 0)
+	data, _, err = queryWithTs(queryInp{body: q1, typ: "application/dql", debug: "true"})
 	require.NoError(t, err)
 	requireEqual(t, data)
 	require.Empty(t, resp.Header.Get("Content-Encoding"))
@@ -833,7 +875,7 @@ func TestDrainingMode(t *testing.T) {
 	  }
 	}
 	`
-		_, _, err := queryWithTs(q1, "application/dql", "", 0)
+		_, _, err := queryWithTs(queryInp{body: q1, typ: "application/dql"})
 		if expectErr {
 			require.True(t, err != nil && strings.Contains(err.Error(), "the server is in draining mode"))
 		} else {
@@ -847,20 +889,27 @@ func TestDrainingMode(t *testing.T) {
 	  }
 	}
 	`
-		_, err = mutationWithTs(m1, "application/rdf", false, true, ts)
+		_, err = mutationWithTs(mutationInp{body: m1, typ: "application/rdf", commitNow: true, ts: ts})
 		if expectErr {
 			require.True(t, err != nil && strings.Contains(err.Error(), "the server is in draining mode"))
 		} else {
 			require.NoError(t, err, "Got error while running mutation: %v", err)
 		}
 
-		err = alterSchema(`name: string @index(term) .`)
-		if expectErr {
-			require.True(t, err != nil && strings.Contains(err.Error(), "the server is in draining mode"))
-		} else {
-			require.NoError(t, err, "Got error while running alter: %v", err)
-		}
-
+		err = x.RetryUntilSuccess(3, time.Second, func() error {
+			err := alterSchema(`name: string @index(term) .`)
+			if expectErr {
+				if err == nil {
+					return errors.New("expected error")
+				}
+				if err != nil && strings.Contains(err.Error(), "server is in draining mode") {
+					return nil
+				}
+				return err
+			}
+			return err
+		})
+		require.NoError(t, err, "Got error while running alter: %v", err)
 	}
 
 	token := testutil.GrootHttpLogin(addr + "/admin")
@@ -913,10 +962,12 @@ func TestContentTypeCharset(t *testing.T) {
 	_, _, err = queryWithGz(`{"query": "schema {}"}`, "application/json; charset=latin1", "false", "", false, false)
 	require.True(t, err != nil && strings.Contains(err.Error(), "Unsupported charset"))
 
-	_, err = mutationWithTs(`{}`, "application/rdf; charset=utf-8", false, true, 0)
+	_, err = mutationWithTs(
+		mutationInp{body: `{}`, typ: "application/rdf; charset=utf-8", commitNow: true})
 	require.NoError(t, err)
 
-	_, err = mutationWithTs(`{}`, "application/rdf; charset=latin1", false, true, 0)
+	_, err = mutationWithTs(
+		mutationInp{body: `{}`, typ: "application/rdf; charset=latin1", commitNow: true})
 	require.True(t, err != nil && strings.Contains(err.Error(), "Unsupported charset"))
 }
 
@@ -932,7 +983,7 @@ func TestQueryBackwardCompatibleWithGraphqlPlusMinusHeader(t *testing.T) {
 	  }
 	}
 	`
-	_, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	_, _, err := queryWithTs(queryInp{body: q1, typ: "application/graphql+-"})
 	require.NoError(t, err)
 
 	m1 := `
@@ -945,11 +996,11 @@ func TestQueryBackwardCompatibleWithGraphqlPlusMinusHeader(t *testing.T) {
 	}
 	`
 
-	mr, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	mr, err := mutationWithTs(mutationInp{body: m1, typ: "application/rdf", commitNow: true})
 	require.NoError(t, err)
 	require.Equal(t, "5", mr.cost)
 
-	_, _, resp, err := queryWithTsForResp(q1, "application/graphql+-", "", 0)
+	_, _, resp, err := queryWithTsForResp(queryInp{body: q1, typ: "application/graphql+-"})
 	require.NoError(t, err)
 	require.Equal(t, "2", resp.Header.Get(x.DgraphCostHeader))
 }

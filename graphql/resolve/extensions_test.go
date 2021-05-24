@@ -134,7 +134,7 @@ func TestMutationsPropagateExtensions(t *testing.T) {
 	resp := resolveWithClient(gqlSchema, mutation, nil,
 		&executor{
 			assigned:             map[string]string{"Post_2": "0x2"},
-			existenceQueriesResp: `{ "Author_1": [{"uid":"0x1"}]}`,
+			existenceQueriesResp: `{ "Author_1": [{"uid":"0x1", "dgraph.type": ["Author"]}]}`,
 			queryTouched:         2,
 			mutationTouched:      5,
 		})
@@ -163,8 +163,8 @@ func TestMutationsPropagateExtensions(t *testing.T) {
 	require.True(t, resp.Extensions.Tracing.Execution.Resolvers[0].StartOffset > 0)
 	require.True(t, resp.Extensions.Tracing.Execution.Resolvers[0].Duration > 0)
 
-	require.Len(t, resp.Extensions.Tracing.Execution.Resolvers[0].Dgraph, 2)
-	labels := []string{"mutation", "query"}
+	require.Len(t, resp.Extensions.Tracing.Execution.Resolvers[0].Dgraph, 3)
+	labels := []string{"preMutationQuery", "mutation", "query"}
 	for i, dgraphTrace := range resp.Extensions.Tracing.Execution.Resolvers[0].Dgraph {
 		require.Equal(t, dgraphTrace.Label, labels[i])
 		require.True(t, dgraphTrace.StartOffset > 0)
@@ -190,7 +190,7 @@ func TestMultipleMutationsPropagateExtensionsCorrectly(t *testing.T) {
 	resp := resolveWithClient(gqlSchema, mutation, nil,
 		&executor{
 			assigned:             map[string]string{"Post_2": "0x2"},
-			existenceQueriesResp: `{ "Author_1": [{"uid":"0x1"}]}`,
+			existenceQueriesResp: `{ "Author_1": [{"uid":"0x1", "dgraph.type": ["Author"]}]}`,
 			queryTouched:         2,
 			mutationTouched:      5,
 		})
@@ -221,8 +221,8 @@ func TestMultipleMutationsPropagateExtensionsCorrectly(t *testing.T) {
 		require.True(t, resolver.StartOffset > 0)
 		require.True(t, resolver.Duration > 0)
 
-		require.Len(t, resolver.Dgraph, 2)
-		labels := []string{"mutation", "query"}
+		require.Len(t, resolver.Dgraph, 3)
+		labels := []string{"preMutationQuery", "mutation", "query"}
 		for j, dgraphTrace := range resolver.Dgraph {
 			require.Equal(t, dgraphTrace.Label, labels[j])
 			require.True(t, dgraphTrace.StartOffset > 0)

@@ -239,7 +239,7 @@ invalid_schemas:
     errlist: [
       { "message": "Type Z; Field f: Field f is of type U, but @hasInverse directive only applies to fields with object types.", "locations": [{"line":9, "column":3}]},
       { "message": "Type Z; Field f: has the @search directive but fields of type U can't have the @search directive.", "locations": [{"line":9, "column":34}]},
-      { "message": "Type Z; Field f: with @id directive must be of type String!, Int! or Int64!, not U", "locations": [{"line":9, "column":42}]}
+      { "message": "Type Z; Field f: with @id directive must be of type String, Int or Int64, not U", "locations": [{"line":9, "column":42}]}
     ]
 
   -
@@ -622,7 +622,7 @@ invalid_schemas:
         f1: [String] @id
       }
     errlist: [
-      {"message": "Type X; Field f1: with @id directive must be of type String!, Int! or Int64!, not [String]",
+      {"message": "Type X; Field f1: with @id directive must be of type String, Int or Int64, not [String]",
       "locations":[{"line":2, "column":17}]}
       ]
 
@@ -633,18 +633,7 @@ invalid_schemas:
         f1: Float! @id
       }
     errlist: [
-      {"message": "Type X; Field f1: with @id directive must be of type String!, Int! or Int64!, not Float!",
-      "locations":[{"line":2, "column":15}]}
-      ]
-
-  -
-    name: "Field with @id directive should be mandatory"
-    input: |
-      type X {
-        f1: String @id
-      }
-    errlist: [
-      {"message": "Type X; Field f1: with @id directive must be of type String!, Int! or Int64!, not String",
+      {"message": "Type X; Field f1: with @id directive must be of type String, Int or Int64, not Float!",
       "locations":[{"line":2, "column":15}]}
       ]
 
@@ -2934,6 +2923,18 @@ invalid_schemas:
         "locations": [ { "line": 3, "column": 19 } ] },
     ]
 
+  - name: "@id field can't have interface argument when it's defined inside a type"
+    input: |
+      type Person  {
+        name: String! @id(interface:true)
+        age: Int
+      }
+    errlist: [
+      { "message": "Type Person; Field name: @id field with interface argument
+        can only be defined in interface,not in Type",
+        "locations": [ { "line": 2, "column": 18 } ] },
+    ]
+
 valid_schemas:
   - name: "Multiple fields with @id directive should be allowed"
     input: |
@@ -3430,4 +3431,51 @@ valid_schemas:
         address: String @search(by: [fulltext])
         addressHi: String @dgraph(pred: "Person.address@hi")
         professionEn: String @dgraph(pred: "Person.profession@en")
+      }
+
+  - name: "Same reverse dgraph predicate can be used by two different GraphQL fields"
+    input: |
+      type X {
+        f1: [Y] @dgraph(pred: "~link")
+        f2: [Z] @dgraph(pred: "~link")
+      }
+      type Y {
+        f3: [X] @dgraph(pred: "link")
+      }
+      type Z {
+        f4: [X] @dgraph(pred: "link")
+      }
+
+  - name: "valid schema with @id directive having interface argument in interface"
+    input: |
+      interface Member {
+        refID: String! @id(interface: true)
+        name: String! @id
+        itemsIssued: [String]
+        fineAccumulated: Int
+      }
+
+      interface Team {
+        teamID: String! @id(interface: true)
+        teamName: String! @id
+      }
+
+      type LibraryMember implements Member {
+        interests: [String]
+        readHours: String
+      }
+
+      type SportsMember implements Member & Team {
+        plays: String
+        playerRating: Int
+      }
+
+      type CricketTeam implements Team {
+        numOfBatsmans: Int
+        numOfBowlers: Int
+      }
+
+      type LibraryManager {
+        name: String! @id
+        manages: [LibraryMember]
       }
