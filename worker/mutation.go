@@ -176,13 +176,6 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 		}
 	}
 
-	// Ensure that rollup is not running.
-	closer, err := gr.Node.startTask(opIndexing)
-	if err != nil {
-		return err
-	}
-	defer stopIndexing(closer)
-
 	buildIndexesHelper := func(update *pb.SchemaUpdate, rebuild posting.IndexRebuild) error {
 		wrtCtx := schema.GetWriteContext(context.Background())
 		if err := rebuild.BuildIndexes(wrtCtx); err != nil {
@@ -216,7 +209,6 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 
 	buildIndexes := func(update *pb.SchemaUpdate, rebuild posting.IndexRebuild) {
 		// In case background indexing is running, we should call it here again.
-		defer stopIndexing(closer)
 
 		// We should only start building indexes once this function has returned.
 		// This is in order to ensure that we do not call DropPrefix for one predicate
@@ -251,6 +243,17 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 			OldSchema:     &old,
 			CurrentSchema: su,
 		}
+
+		// Start opIndexing task only if schema update needs to build the indexes.
+		if ok && rebuild.NeedIndexRebuild() {
+			gr.Node.waitForTask(opIndexing)
+			closer, err := gr.Node.startTask(opIndexing)
+			if err != nil {
+				return err
+			}
+			defer stopIndexing(closer)
+		}
+
 		querySchema := rebuild.GetQuerySchema()
 		// Sets the schema only in memory. The schema is written to
 		// disk only after schema mutations are successful.
