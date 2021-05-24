@@ -176,13 +176,6 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 		}
 	}
 
-	// Ensure that rollup is not running.
-	closer, err := gr.Node.startTask(opIndexing)
-	if err != nil {
-		return err
-	}
-	defer stopIndexing(closer)
-
 	buildIndexesHelper := func(update *pb.SchemaUpdate, rebuild posting.IndexRebuild) error {
 		wrtCtx := schema.GetWriteContext(context.Background())
 		if err := rebuild.BuildIndexes(wrtCtx); err != nil {
@@ -214,9 +207,9 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 	// "Too many open files" error.
 	throttle := y.NewThrottle(maxOpenFileLimit / 8)
 
-	buildIndexes := func(update *pb.SchemaUpdate, rebuild posting.IndexRebuild) {
+	buildIndexes := func(update *pb.SchemaUpdate, rebuild posting.IndexRebuild, c *z.Closer) {
 		// In case background indexing is running, we should call it here again.
-		defer stopIndexing(closer)
+		defer stopIndexing(c)
 
 		// We should only start building indexes once this function has returned.
 		// This is in order to ensure that we do not call DropPrefix for one predicate
@@ -233,6 +226,7 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 		throttle.Done(nil)
 	}
 
+	var closer *z.Closer
 	for _, su := range updates {
 		if tablet, err := groups().Tablet(su.Predicate); err != nil {
 			return err
@@ -251,6 +245,17 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 			OldSchema:     &old,
 			CurrentSchema: su,
 		}
+		shouldRebuild := ok && rebuild.NeedIndexRebuild()
+
+		// Start opIndexing task only if schema update needs to build the indexes.
+		if shouldRebuild && !gr.Node.isRunningTask(opIndexing) {
+			closer, err = gr.Node.startTask(opIndexing)
+			if err != nil {
+				return err
+			}
+			defer stopIndexing(closer)
+		}
+
 		querySchema := rebuild.GetQuerySchema()
 		// Sets the schema only in memory. The schema is written to
 		// disk only after schema mutations are successful.
@@ -273,8 +278,8 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 			return err
 		}
 
-		if ok && rebuild.NeedIndexRebuild() {
-			go buildIndexes(su, rebuild)
+		if shouldRebuild {
+			go buildIndexes(su, rebuild, closer)
 		} else if err := updateSchema(su); err != nil {
 			return err
 		}
