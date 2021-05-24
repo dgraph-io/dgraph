@@ -1725,6 +1725,9 @@ func dqlHasAuthRules(q *gql.GraphQuery, typ schema.Type, authRw *authRewriter) b
 	return false
 }
 
+// Todo: Currently it doesn't work for fields with
+// @dgraph predicate in the GraphQL schema because
+// it doesn't enforce the Type.FieldName syntax.
 func getFieldName(attr string) string {
 	fldSplit := strings.Split(attr, ".")
 	if len(fldSplit) == 1 || attr == "dgraph.type" {
