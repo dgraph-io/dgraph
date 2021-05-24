@@ -208,8 +208,7 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 	throttle := y.NewThrottle(maxOpenFileLimit / 8)
 
 	buildIndexes := func(update *pb.SchemaUpdate, rebuild posting.IndexRebuild, c *z.Closer) {
-		// In case background indexing is running, we should call it here again. stopIndexing will
-		// stop opIndexing only if indexing is no more in progress.
+		// In case background indexing is running, we should call it here again.
 		defer stopIndexing(c)
 
 		// We should only start building indexes once this function has returned.
