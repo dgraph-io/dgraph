@@ -18,13 +18,16 @@ package x
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"io/ioutil"
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
+	"github.com/Azure/azure-storage-blob-go/azblob"
 	"github.com/golang/glog"
 	"github.com/minio/minio-go/v6"
 
@@ -85,6 +88,7 @@ type UriHandler interface {
 //   minio://localhost:9000/dgraph?secure=true
 //   file:///tmp/dgraph/backups
 //   /tmp/dgraph/backups?compress=gzip
+//   https://dgraph.blob.core.windows.net/dgraph/backups
 func NewUriHandler(uri *url.URL, creds *MinioCredentials) (UriHandler, error) {
 	switch uri.Scheme {
 	case "file", "":
@@ -92,6 +96,11 @@ func NewUriHandler(uri *url.URL, creds *MinioCredentials) (UriHandler, error) {
 	case "minio", "s3":
 		return NewS3Handler(uri, creds)
 	}
+
+	if strings.HasSuffix(uri.Host, "blob.core.windows.net") {
+		return NewAZSHandler(uri, creds)
+	}
+
 	return nil, errors.Errorf("Unable to handle url: %s", uri)
 }
 
@@ -347,4 +356,233 @@ func (h *s3Handler) Rename(srcPath, dstPath string) error {
 
 func (h *s3Handler) getObjectPath(path string) string {
 	return filepath.Join(h.objectPrefix, path)
+}
+
+const AZSSeparator = '/'
+
+type AZS struct {
+	bucket      *azblob.ContainerURL
+	client      *azblob.ServiceURL // Azure sdk client
+	accountName string
+	bucketName  string
+	pathName    string
+}
+
+// Helper function to get the account, container and path of the destination folder from an Azure
+// URL and adds it to azs.
+func getAzDetailsFromUri(uri *url.URL, azs *AZS) (err error) {
+	// azure url -> https://<account_name>.blob.core.windows.net/<container>/path/to/dest
+	parts := strings.Split(uri.Host, ".")
+	if len(parts) > 0 {
+		azs.accountName = parts[0]
+	} else {
+		err = errors.Errorf("invalid azure host: %s", uri.Host)
+		return
+	}
+
+	parts = strings.Split(uri.Path, string(filepath.Separator))
+	if len(parts) > 1 {
+		azs.bucketName = parts[1]
+		azs.pathName = strings.Join(parts[2:], string(filepath.Separator))
+	} else {
+		err = errors.Errorf("invalid azure path: %s", uri.Path)
+		return
+	}
+
+	return
+}
+
+// NewAZSHandler creates a new azure storage handler.
+func NewAZSHandler(uri *url.URL, creds *MinioCredentials) (*AZS, error) {
+	azs := &AZS{}
+	if err := getAzDetailsFromUri(uri, azs); err != nil {
+		return nil, errors.Wrapf(err, "while getting bucket details")
+	}
+
+	// Override credentials from the Azure storage environment variables if specified
+	key := os.Getenv("AZURE_STORAGE_KEY")
+	if len(creds.SecretKey) > 0 {
+		key = creds.SecretKey
+	}
+
+	azCreds, err := azblob.NewSharedKeyCredential(azs.accountName, key)
+	if err != nil {
+		return nil, errors.Wrap(err, "while creating sharedkey")
+	}
+
+	// NewServiceURL only requires hostname and scheme.
+	client := azblob.NewServiceURL(url.URL{
+		Scheme: uri.Scheme,
+		Host:   uri.Host,
+	}, azblob.NewPipeline(azCreds, azblob.PipelineOptions{}))
+	azs.client = &client
+
+	bucket := azs.client.NewContainerURL(azs.bucketName)
+	azs.bucket = &bucket
+
+	// Verify that bucket exists.
+	if _, err = azs.bucket.GetProperties(context.Background(),
+		azblob.LeaseAccessConditions{}); err != nil {
+		return nil, errors.Wrap(err, "while checking if bucket exists")
+	}
+
+	return azs, nil
+}
+
+// CreateDir creates a directory relative to the root path of the handler.
+func (azs *AZS) CreateDir(path string) error {
+	// Can't create a directory separately in azure. Folders are emulated with path separator.
+	// Empty directories are not allowed.
+	return nil
+}
+
+// CreateFile creates a file relative to the root path of the handler. It also makes the
+// handler's descriptor to point to this file.
+func (azs *AZS) CreateFile(path string) (io.WriteCloser, error) {
+	azW := &azWriter{
+		errCh: make(chan error, 1),
+	}
+	azW.pReader, azW.pWriter = io.Pipe()
+	go azW.upload(azs.bucket, azs.JoinPath(path))
+	return azW, nil
+}
+
+// DirExists returns true if the directory relative to the root path of the handler exists.
+func (azs *AZS) DirExists(path string) bool {
+	// Can't create a directory separately in azure. Folders are emulated with path separator.
+	// Empty directories are not allowed.
+	return true
+}
+
+// FileExists returns true if the file relative to the root path of the handler exists.
+func (azs *AZS) FileExists(path string) bool {
+	if _, err := azs.bucket.NewBlobURL(azs.JoinPath(path)).GetProperties(context.Background(),
+		azblob.BlobAccessConditions{}, azblob.ClientProvidedKeyOptions{}); err != nil {
+		glog.Errorf("while checking if file exists: %s", err)
+		return false
+	}
+	return true
+}
+
+// JoinPath appends the given path to the root path of the handler.
+func (azs *AZS) JoinPath(path string) string {
+	return filepath.Join(azs.pathName, path)
+}
+
+// ListPaths returns a list of all the valid paths from the given root path. The given root path
+// should be relative to the handler's root path.
+func (azs *AZS) ListPaths(path string) []string {
+	paths := []string{}
+	marker := azblob.Marker{}
+	for marker.NotDone() {
+		blobList, err := azs.bucket.ListBlobsFlatSegment(context.Background(), marker,
+			azblob.ListBlobsSegmentOptions{
+				Prefix: azs.JoinPath(path),
+			})
+		if err != nil {
+			glog.Errorf("while listing paths: %q", err)
+			return nil
+		}
+
+		marker = blobList.NextMarker
+		for _, blobinfo := range blobList.Segment.BlobItems {
+			name := blobinfo.Name
+			name = name[len(azs.pathName):]
+			paths = append(paths, name)
+		}
+	}
+
+	return paths
+}
+
+// Read reads the file at given relative path and returns the read bytes.
+func (azs *AZS) Read(path string) ([]byte, error) {
+	resp, err := azs.bucket.NewBlockBlobURL(azs.JoinPath(path)).Download(context.Background(), 0,
+		azblob.CountToEnd, azblob.BlobAccessConditions{}, false, azblob.ClientProvidedKeyOptions{})
+	if err != nil {
+		return nil, errors.Wrap(err, "while reading file")
+	}
+
+	buf := bytes.Buffer{}
+	if _, err := buf.ReadFrom(resp.Body(azblob.RetryReaderOptions{})); err != nil {
+		return nil, errors.Wrap(err, "while reading file")
+	}
+	return buf.Bytes(), nil
+}
+
+// Rename renames the src file to the destination file.
+func (azs *AZS) Rename(src, dst string) error {
+	ctx := context.Background()
+
+	srcHandle := azs.bucket.NewBlockBlobURL(azs.JoinPath(src))
+	resp, err := srcHandle.Download(ctx, 0,
+		azblob.CountToEnd, azblob.BlobAccessConditions{}, false, azblob.ClientProvidedKeyOptions{})
+	if err != nil {
+		return errors.Wrap(err, "while reading file")
+	}
+
+	if _, err = azblob.UploadStreamToBlockBlob(ctx, resp.Body(azblob.RetryReaderOptions{}),
+		azs.bucket.NewBlockBlobURL(azs.JoinPath(dst)),
+		azblob.UploadStreamToBlockBlobOptions{}); err != nil {
+		return errors.Wrapf(err, "while uploading")
+	}
+
+	if _, err = srcHandle.Delete(ctx, azblob.DeleteSnapshotsOptionInclude,
+		azblob.BlobAccessConditions{}); err != nil {
+		return errors.Wrapf(err, "while deleting file")
+	}
+
+	return nil
+}
+
+// Stream would stream the path via an instance of io.ReadCloser. Close must be called at the
+// end to release resources appropriately.
+func (azs *AZS) Stream(path string) (io.ReadCloser, error) {
+	resp, err := azs.bucket.NewBlockBlobURL(azs.JoinPath(path)).Download(context.Background(), 0,
+		azblob.CountToEnd, azblob.BlobAccessConditions{}, false, azblob.ClientProvidedKeyOptions{})
+	if err != nil {
+		return nil, errors.Wrap(err, "while reading file")
+	}
+
+	return resp.Body(azblob.RetryReaderOptions{}), nil
+}
+
+type azWriter struct {
+	pReader *io.PipeReader
+	pWriter *io.PipeWriter
+	errCh   chan error
+}
+
+// Write writes to the pipe writer.
+func (w *azWriter) Write(p []byte) (n int, err error) {
+	return w.pWriter.Write(p)
+}
+
+// Close calls close on the pipe writer and returns any erorrs encoutered in writing using the
+// pipe reader.
+func (w *azWriter) Close() error {
+	if w == nil {
+		return nil
+	}
+
+	if err := w.pWriter.Close(); err != nil {
+		glog.Errorf("Unexpected error when closing pipe: %v", err)
+	}
+	w.pWriter = nil
+
+	return <-w.errCh
+}
+
+// Helper function to process writes to azure. The function is run is a separate go-routine because
+// the azure API requires a reader instead of a writer as an input. Any errors are returned to
+// errCh of the azWriter, which are returned when close on the azWriter is called.
+func (w *azWriter) upload(bucket *azblob.ContainerURL, absPath string) {
+	f := func() error {
+		ctx := context.Background()
+		_, err := azblob.UploadStreamToBlockBlob(ctx, w.pReader, bucket.NewBlockBlobURL(absPath),
+			azblob.UploadStreamToBlockBlobOptions{})
+
+		return errors.Wrapf(err, "while uploading")
+	}
+	w.errCh <- f()
 }
