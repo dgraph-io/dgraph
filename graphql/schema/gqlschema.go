@@ -37,6 +37,8 @@ const (
 	dgraphDirective = "dgraph"
 	dgraphTypeArg   = "type"
 	dgraphPredArg   = "pred"
+	dgraphFacetArg  = "facet"
+	dgraphFieldArg  = "field"
 
 	idDirective             = "id"
 	idDirectiveInterfaceArg = "interface"
@@ -276,7 +278,8 @@ input GenerateMutationParams {
 	directiveDefs = `
 directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
-directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
+directive @dgraph(type: String, pred: String, facet: String, field: String) ` +
+		`on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id(interface: Boolean) on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
