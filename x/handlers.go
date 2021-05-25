@@ -100,7 +100,7 @@ func NewUriHandler(uri *url.URL, creds *MinioCredentials) (UriHandler, error) {
 	case "minio", "s3":
 		return NewS3Handler(uri, creds)
 	case "gs":
-		return NewGCSHandler(uri, creds)
+		return NewGCSHandler(uri, creds.SecretKey)
 	}
 
 	if strings.HasSuffix(uri.Host, "blob.core.windows.net") {
@@ -596,17 +596,16 @@ func (w *azWriter) upload(bucket *azblob.ContainerURL, absPath string) {
 const GCSSeparator = '/'
 
 type GCS struct {
-	client   *storage.Client
-	bucket   *storage.BucketHandle
-	pathName string
+	client     *storage.Client
+	bucket     *storage.BucketHandle
+	pathPrefix string
 }
 
-func NewGCSHandler(uri *url.URL, creds *MinioCredentials) (gcs *GCS, err error) {
+func NewGCSHandler(uri *url.URL, credsPath string) (gcs *GCS, err error) {
 	ctx := context.Background()
 
 	var c *storage.Client
-	if creds.SecretKey != "" || os.Getenv("GOOGLE_APPLICATION_CREDENTIALS") != "" {
-		credsPath := creds.SecretKey
+	if credsPath != "" || os.Getenv("GOOGLE_APPLICATION_CREDENTIALS") != "" {
 		if credsPath == "" {
 			credsPath = os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
 		}
@@ -630,12 +629,12 @@ func NewGCSHandler(uri *url.URL, creds *MinioCredentials) (gcs *GCS, err error) 
 	}
 
 	gcs = &GCS{
-		client:   c,
-		pathName: uri.Path,
+		client:     c,
+		pathPrefix: uri.Path,
 	}
 
-	if len(gcs.pathName) > 0 && gcs.pathName[0] == GCSSeparator {
-		gcs.pathName = gcs.pathName[1:]
+	if len(gcs.pathPrefix) > 0 && gcs.pathPrefix[0] == GCSSeparator {
+		gcs.pathPrefix = gcs.pathPrefix[1:]
 	}
 
 	gcs.bucket = gcs.client.Bucket(uri.Host)
@@ -651,9 +650,9 @@ func NewGCSHandler(uri *url.URL, creds *MinioCredentials) (gcs *GCS, err error) 
 func (gcs *GCS) CreateDir(path string) error {
 	ctx := context.Background()
 
-	// GCS used a flat storage and provides an illusion of directories. To create a directory, file
+	// GCS uses a flat storage and provides an illusion of directories. To create a directory, file
 	// name must be followed by '/'.
-	dir := filepath.Join(gcs.pathName, path, "") + string(GCSSeparator)
+	dir := filepath.Join(gcs.pathPrefix, path, "") + string(GCSSeparator)
 	glog.V(2).Infof("Creating dir: %q", dir)
 
 	writer := gcs.bucket.Object(dir).NewWriter(ctx)
@@ -692,6 +691,8 @@ func (gcs *GCS) DirExists(path string) bool {
 		Prefix: absPath,
 	})
 
+	// If err != iterator.Done i.e. iterator hasn't reached end, we can assume there are results in
+	// the iterator and hence directory exists.
 	if _, err := it.Next(); err != iterator.Done {
 		return true
 	} else if err != nil {
@@ -718,15 +719,15 @@ func (gcs *GCS) FileExists(path string) bool {
 
 // JoinPath appends the given path to the root path of the handler.
 func (gcs *GCS) JoinPath(path string) string {
-	if len(gcs.pathName) == 0 {
+	if len(gcs.pathPrefix) == 0 {
 		return path
 	}
 
 	if len(path) == 0 {
-		return gcs.pathName
+		return gcs.pathPrefix
 	}
 
-	return gcs.pathName + string(GCSSeparator) + path
+	return gcs.pathPrefix + string(GCSSeparator) + path
 }
 
 // ListPaths returns a list of all the valid paths from the given root path. The given root path
