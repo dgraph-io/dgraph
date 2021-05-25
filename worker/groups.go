@@ -206,7 +206,7 @@ func (g *groupi) applyInitialTypes() {
 		if _, ok := schema.State().GetType(t.TypeName); ok {
 			continue
 		}
-		// TODO: What should be the correct timestamp here?
+		// It is okay to write initial types at ts=1.
 		if err := updateType(t.GetTypeName(), *t, 1); err != nil {
 			glog.Errorf("Error while applying initial type: %s", err)
 		}
@@ -221,7 +221,9 @@ func (g *groupi) applyInitialSchema() {
 	ctx := g.Ctx()
 
 	apply := func(s *pb.SchemaUpdate) {
-		// TODO: What should be the correct timestamp here?
+		// There are 2 cases: either the alpha is fresh or it restarted. If it is fresh cluster
+		// then we can write the schema at ts=1. If alpha restarted, then we will already have the
+		// schema at higher version and this operation will be a no-op.
 		if err := applySchema(s, 1); err != nil {
 			glog.Errorf("Error while applying initial schema: %s", err)
 		}

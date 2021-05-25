@@ -566,13 +566,13 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		// Clear entire cache.
 		posting.ResetCache()
 
-		// TODO: Check if this assumption is correct. We removed the special handling for schema
-		// from snapshot transfer.
 		// It should be okay to set the schema at timestamp 1 after drop all operation.
 		if groups().groupId() == 1 {
 			initialSchema := schema.InitialSchema(x.GalaxyNamespace)
 			for _, s := range initialSchema {
-				applySchema(s, 1)
+				if err := applySchema(s, 1); err != nil {
+					return err
+				}
 			}
 		}
 
