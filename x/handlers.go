@@ -582,11 +582,7 @@ func (w *azWriter) upload(bucket *azblob.ContainerURL, absPath string) {
 		_, err := azblob.UploadStreamToBlockBlob(ctx, w.pReader, bucket.NewBlockBlobURL(absPath),
 			azblob.UploadStreamToBlockBlobOptions{})
 
-		if err != nil {
-			return errors.Wrapf(err, "while uploading")
-		}
-
-		return nil
+		return errors.Wrapf(err, "while uploading")
 	}
 	w.errCh <- f()
 }
