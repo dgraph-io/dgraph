@@ -1331,6 +1331,11 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (
 
 	var measurements []ostats.Measurement
 	ctx, span := otrace.StartSpan(ctx, methodRequest)
+	ns, err := x.ExtractNamespace(ctx)
+	if err == nil {
+		span.AddAttributes(otrace.Int64Attribute("ns", int64(ns)))
+	}
+
 	ctx = x.WithMethod(ctx, methodRequest)
 	defer func() {
 		span.End()
