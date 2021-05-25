@@ -225,7 +225,20 @@ func (n *node) startTask(id op) (*z.Closer, error) {
 			delete(n.ops, otherId)
 			otherCloser.SignalAndWait()
 		}
-	case opSnapshot, opIndexing, opPredMove:
+	case opIndexing:
+		for otherId, otherCloser := range n.ops {
+			if otherId == opBackup {
+				continue
+			}
+			if otherId == opRollup {
+				// Remove from map and signal the closer to cancel the operation.
+				delete(n.ops, otherId)
+				otherCloser.SignalAndWait()
+			} else {
+				return nil, errors.Errorf("operation %s is already running", otherId)
+			}
+		}
+	case opSnapshot, opPredMove:
 		for otherId, otherCloser := range n.ops {
 			if otherId == opRollup {
 				// Remove from map and signal the closer to cancel the operation.
@@ -552,17 +565,20 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		// Clear entire cache.
 		posting.ResetCache()
 
+		// TODO: Check if this assumption is correct. We removed the special handling for schema
+		// from snapshot transfer.
+		// It should be okay to set the schema at timestamp 1 after drop all operation.
 		if groups().groupId() == 1 {
 			initialSchema := schema.InitialSchema(x.GalaxyNamespace)
 			for _, s := range initialSchema {
-				applySchema(s)
+				applySchema(s, 1)
 			}
 		}
 
 		// Propose initial types as well after a drop all as they would have been cleared.
 		initialTypes := schema.InitialTypes(x.GalaxyNamespace)
 		for _, t := range initialTypes {
-			if err := updateType(t.GetTypeName(), *t); err != nil {
+			if err := updateType(t.GetTypeName(), *t, 1); err != nil {
 				return err
 			}
 		}
@@ -572,7 +588,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 
 	if proposal.Mutations.DropOp == pb.Mutations_TYPE {
 		n.keysWritten.rejectBeforeIndex = proposal.Index
-		return schema.State().DeleteType(proposal.Mutations.DropValue)
+		return schema.State().DeleteType(proposal.Mutations.DropValue, proposal.StartTs)
 	}
 
 	if proposal.Mutations.StartTs == 0 {
@@ -606,7 +622,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		}
 
 		for _, tupdate := range proposal.Mutations.Types {
-			if err := runTypeMutation(ctx, tupdate); err != nil {
+			if err := runTypeMutation(ctx, tupdate, startTs); err != nil {
 				return err
 			}
 		}
@@ -632,7 +648,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 			}
 			span.Annotatef(nil, "Deleting predicate: %s", edge.Attr)
 			n.keysWritten.rejectBeforeIndex = proposal.Index
-			return posting.DeletePredicate(ctx, edge.Attr)
+			return posting.DeletePredicate(ctx, edge.Attr, proposal.StartTs)
 		}
 		// Don't derive schema when doing deletion.
 		if edge.Op == pb.DirectedEdge_DEL {
@@ -662,7 +678,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 			if mutHint, ok := proposal.GetMutations().GetMetadata().GetPredHints()[attr]; ok {
 				hint = mutHint
 			}
-			if err := createSchema(attr, storageType, hint); err != nil {
+			if err := createSchema(attr, storageType, hint, proposal.StartTs); err != nil {
 				return err
 			}
 		}
@@ -745,7 +761,7 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 				proposal.CleanPredicate, proposal.ExpectedChecksum)
 			return nil
 		}
-		return posting.DeletePredicate(ctx, proposal.CleanPredicate)
+		return posting.DeletePredicate(ctx, proposal.CleanPredicate, proposal.StartTs)
 
 	case proposal.Delta != nil:
 		n.elog.Printf("Applying Oracle Delta for key: %d", key)
