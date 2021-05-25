@@ -15,7 +15,7 @@
  */
 
 // Package gql is responsible for lexing and parsing a GraphQL query/mutation.
-package gql
+package dql
 
 import (
 	"github.com/dgraph-io/dgraph/lex"

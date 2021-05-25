@@ -33,7 +33,7 @@ import (
 
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
-	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/dql"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/schema"
@@ -66,7 +66,7 @@ func timestamp() uint64 {
 }
 
 func processToFastJSON(q string) string {
-	res, err := gql.Parse(gql.Request{Str: q})
+	res, err := dql.Parse(dql.Request{Str: q})
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -874,7 +874,7 @@ var q5 = `
 `
 
 func TestSchemaValidationError(t *testing.T) {
-	_, err := gql.Parse(gql.Request{Str: m5})
+	_, err := dql.Parse(dql.Request{Str: m5})
 	require.Error(t, err)
 	output, err := runGraphqlQuery(strings.Replace(q5, "<id>", "0x8", -1))
 	require.NoError(t, err)

@@ -26,7 +26,7 @@ import (
 	"strings"
 
 	dgoapi "github.com/dgraph-io/dgo/v210/protos/api"
-	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/dql"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
 
@@ -90,7 +90,7 @@ type deleteRewriter struct {
 // of add a new object for the XID and another for link to an existing XID, depending
 // on what condition evaluates to true in the upsert.
 type mutationFragment struct {
-	queries    []*gql.GraphQuery
+	queries    []*dql.GraphQuery
 	conditions []string
 	fragment   interface{}
 	deletes    []interface{}
@@ -316,7 +316,7 @@ func (xidMetadata *xidMetadata) isDuplicateXid(atTopLevel bool, xidVar string,
 // mutation will fail.
 func (arw *AddRewriter) RewriteQueries(
 	ctx context.Context,
-	m schema.Mutation) ([]*gql.GraphQuery, []string, error) {
+	m schema.Mutation) ([]*dql.GraphQuery, []string, error) {
 
 	arw.VarGen = NewVariableGenerator()
 	arw.XidMetadata = NewXidMetadata()
@@ -324,7 +324,7 @@ func (arw *AddRewriter) RewriteQueries(
 	mutatedType := m.MutatedType()
 	val, _ := m.ArgValue(schema.InputArgName).([]interface{})
 
-	var ret []*gql.GraphQuery
+	var ret []*dql.GraphQuery
 	var retTypes []string
 	var retErrors error
 
@@ -366,7 +366,7 @@ func (arw *AddRewriter) RewriteQueries(
 // See AddRewriter for how the rewritten queries look like.
 func (urw *UpdateRewriter) RewriteQueries(
 	ctx context.Context,
-	m schema.Mutation) ([]*gql.GraphQuery, []string, error) {
+	m schema.Mutation) ([]*dql.GraphQuery, []string, error) {
 	mutatedType := m.MutatedType()
 
 	urw.VarGen = NewVariableGenerator()
@@ -376,7 +376,7 @@ func (urw *UpdateRewriter) RewriteQueries(
 	setArg := inp["set"]
 	delArg := inp["remove"]
 
-	var ret []*gql.GraphQuery
+	var ret []*dql.GraphQuery
 	var retTypes []string
 	var retErrors error
 
@@ -489,7 +489,7 @@ func (arw *AddRewriter) Rewrite(
 	// }
 	// The above query is used to find old Author of the Post. The edge between the Post and
 	// Author is then deleted using the accompanied mutation.
-	var queries []*gql.GraphQuery
+	var queries []*dql.GraphQuery
 	// newNodes is map from variable name to node type.
 	// This is used for applying auth on newly added nodes.
 	// This is collated from newNodes of each fragment.
@@ -638,7 +638,7 @@ func (urw *UpdateRewriter) Rewrite(
 	// }
 	// The above query is used to find old Author of the Post. The edge between the Post and
 	// Author is then deleted using the accompanied mutation.
-	var queries []*gql.GraphQuery
+	var queries []*dql.GraphQuery
 	// newNodes is map from variable name to node type.
 	// This is used for applying auth on newly added nodes.
 	// This is collated from newNodes of each fragment.
@@ -772,7 +772,7 @@ func (arw *AddRewriter) FromMutationResult(
 	ctx context.Context,
 	mutation schema.Mutation,
 	assigned map[string]string,
-	result map[string]interface{}) ([]*gql.GraphQuery, error) {
+	result map[string]interface{}) ([]*dql.GraphQuery, error) {
 
 	var errs error
 
@@ -826,7 +826,7 @@ func (urw *UpdateRewriter) FromMutationResult(
 	ctx context.Context,
 	mutation schema.Mutation,
 	assigned map[string]string,
-	result map[string]interface{}) ([]*gql.GraphQuery, error) {
+	result map[string]interface{}) ([]*dql.GraphQuery, error) {
 
 	err := checkResult(urw.setFrag, result)
 	if err != nil {
@@ -958,9 +958,9 @@ func RewriteUpsertQueryFromMutation(
 	authRw *authRewriter,
 	mutationQueryVar string,
 	queryAttribute string,
-	nodeID string) []*gql.GraphQuery {
+	nodeID string) []*dql.GraphQuery {
 	// The query needs to assign the results to a variable, so that the mutation can use them.
-	dgQuery := []*gql.GraphQuery{{
+	dgQuery := []*dql.GraphQuery{{
 		Var:  mutationQueryVar,
 		Attr: queryAttribute,
 	}}
@@ -989,7 +989,7 @@ func RewriteUpsertQueryFromMutation(
 	}
 
 	// Add uid child to the upsert query, so that we can get the list of nodes upserted.
-	dgQuery[0].Children = append(dgQuery[0].Children, &gql.GraphQuery{
+	dgQuery[0].Children = append(dgQuery[0].Children, &dql.GraphQuery{
 		Attr: "uid",
 	})
 
@@ -1030,7 +1030,7 @@ func RewriteUpsertQueryFromMutation(
 
 // removeNodeReference removes any reference we know about (via @hasInverse) into a node.
 func removeNodeReference(m schema.Mutation, authRw *authRewriter,
-	qry *gql.GraphQuery) []interface{} {
+	qry *dql.GraphQuery) []interface{} {
 	var deletes []interface{}
 	for _, fld := range m.MutatedType().Fields() {
 		invField := fld.Inverse()
@@ -1045,7 +1045,7 @@ func removeNodeReference(m schema.Mutation, authRw *authRewriter,
 		varName := authRw.varGen.Next(fld.Type(), "", "", false)
 
 		qry.Children = append(qry.Children,
-			&gql.GraphQuery{
+			&dql.GraphQuery{
 				Var:  varName,
 				Attr: invField.Type().DgraphPredicate(fld.Name()),
 			})
@@ -1130,7 +1130,7 @@ func (drw *deleteRewriter) Rewrite(
 		// field. So, need to make it `var` query and remove any children from it as there can be
 		// variables in them which won't be used in this query.
 		// Need to make a copy because the query for the 1st upsert shouldn't be affected.
-		qryCopy := &gql.GraphQuery{
+		qryCopy := &dql.GraphQuery{
 			Var:      MutationQueryVar,
 			Attr:     "var",
 			Func:     qry.Func,
@@ -1148,7 +1148,7 @@ func (drw *deleteRewriter) Rewrite(
 		if queryFieldQry[0].Attr == queryField.DgraphAlias()+"()" {
 			qryCopy.Var = ""
 		}
-		queryFieldQry = append(append([]*gql.GraphQuery{qryCopy}, dgQry[1:]...), queryFieldQry...)
+		queryFieldQry = append(append([]*dql.GraphQuery{qryCopy}, dgQry[1:]...), queryFieldQry...)
 		upserts = append(upserts, &UpsertMutation{Query: queryFieldQry})
 	}
 
@@ -1159,7 +1159,7 @@ func (drw *deleteRewriter) FromMutationResult(
 	ctx context.Context,
 	mutation schema.Mutation,
 	assigned map[string]string,
-	result map[string]interface{}) ([]*gql.GraphQuery, error) {
+	result map[string]interface{}) ([]*dql.GraphQuery, error) {
 
 	// There's no query that follows a delete
 	return nil, nil
@@ -1178,11 +1178,11 @@ func (drw *deleteRewriter) MutatedRootUIDs(
 // The function generates VarGen and XidMetadata which are used in Rewrite function.
 func (drw *deleteRewriter) RewriteQueries(
 	ctx context.Context,
-	m schema.Mutation) ([]*gql.GraphQuery, []string, error) {
+	m schema.Mutation) ([]*dql.GraphQuery, []string, error) {
 
 	drw.VarGen = NewVariableGenerator()
 
-	return []*gql.GraphQuery{}, []string{}, nil
+	return []*dql.GraphQuery{}, []string{}, nil
 }
 
 func asUID(val interface{}) (uint64, error) {
@@ -1259,32 +1259,32 @@ func mutationFromFragment(
 }
 
 func checkXIDExistsQuery(
-	xidVariable, xidString, xidPredicate string, typ schema.Type) *gql.GraphQuery {
-	qry := &gql.GraphQuery{
+	xidVariable, xidString, xidPredicate string, typ schema.Type) *dql.GraphQuery {
+	qry := &dql.GraphQuery{
 		Attr: xidVariable,
-		Func: &gql.Function{
+		Func: &dql.Function{
 			Name: "eq",
-			Args: []gql.Arg{
+			Args: []dql.Arg{
 				{Value: typ.DgraphPredicate(xidPredicate)},
 				{Value: maybeQuoteArg("eq", xidString)},
 			},
 		},
-		Children: []*gql.GraphQuery{{Attr: "uid"}, {Attr: "dgraph.type"}},
+		Children: []*dql.GraphQuery{{Attr: "uid"}, {Attr: "dgraph.type"}},
 	}
 
 	return qry
 }
 
-func checkUIDExistsQuery(val interface{}, variable string) (*gql.GraphQuery, error) {
+func checkUIDExistsQuery(val interface{}, variable string) (*dql.GraphQuery, error) {
 	uid, err := asUID(val)
 	if err != nil {
 		return nil, err
 	}
 
-	query := &gql.GraphQuery{
+	query := &dql.GraphQuery{
 		Attr:     variable,
 		UID:      []uint64{uid},
-		Children: []*gql.GraphQuery{{Attr: "uid"}, {Attr: "dgraph.type"}},
+		Children: []*dql.GraphQuery{{Attr: "uid"}, {Attr: "dgraph.type"}},
 	}
 	addUIDFunc(query, []uint64{uid})
 	return query, nil
@@ -1780,10 +1780,10 @@ func existenceQueries(
 	srcField schema.FieldDefinition,
 	varGen *VariableGenerator,
 	obj map[string]interface{},
-	xidMetadata *xidMetadata) ([]*gql.GraphQuery, []string, []error) {
+	xidMetadata *xidMetadata) ([]*dql.GraphQuery, []string, []error) {
 
 	atTopLevel := srcField == nil
-	var ret []*gql.GraphQuery
+	var ret []*dql.GraphQuery
 	var retTypes []string
 	var retErrors []error
 
@@ -1957,7 +1957,7 @@ func existenceQueries(
 			for i, object := range val {
 				switch object := object.(type) {
 				case map[string]interface{}:
-					var fieldQueries []*gql.GraphQuery
+					var fieldQueries []*dql.GraphQuery
 					var fieldTypes []string
 					var err []error
 					if fieldDef.Type().IsUnion() {
@@ -1997,7 +1997,7 @@ func existenceQueriesUnion(
 	varGen *VariableGenerator,
 	obj map[string]interface{},
 	xidMetadata *xidMetadata,
-	listIndex int) ([]*gql.GraphQuery, []string, []error) {
+	listIndex int) ([]*dql.GraphQuery, []string, []error) {
 
 	var retError []error
 	if len(obj) != 1 {
@@ -2222,13 +2222,13 @@ func addDelete(
 	targetVar := varGen.Next(qryFld.Type(), "", "", false)
 	delFldName := qryFld.Type().DgraphPredicate(delFld.Name())
 
-	qry := &gql.GraphQuery{
+	qry := &dql.GraphQuery{
 		Attr: "var",
-		Func: &gql.Function{
+		Func: &dql.Function{
 			Name: "uid",
-			Args: []gql.Arg{{Value: qryVar}},
+			Args: []dql.Arg{{Value: qryVar}},
 		},
-		Children: []*gql.GraphQuery{{
+		Children: []*dql.GraphQuery{{
 			Var:  targetVar,
 			Attr: delFld.Type().DgraphPredicate(qryFld.Name()),
 		}},
@@ -2250,12 +2250,12 @@ func addDelete(
 	// is in the graph and we are creating a new node _:Author1 ... there's no way
 	// Author3 and _:Author1 can be the same uid, so the check isn't required.
 	if !strings.HasPrefix(excludeVar, "_:") {
-		qry.Children[0].Filter = &gql.FilterTree{
+		qry.Children[0].Filter = &dql.FilterTree{
 			Op: "not",
-			Child: []*gql.FilterTree{{
-				Func: &gql.Function{
+			Child: []*dql.FilterTree{{
+				Func: &dql.Function{
 					Name: "uid",
-					Args: []gql.Arg{{Value: exclude}}}}},
+					Args: []dql.Arg{{Value: exclude}}}}},
 		}
 	}
 
@@ -2322,19 +2322,19 @@ func addDelete(
 	// Author5, Author6, etc. ... auth queries...
 
 	frag.queries = append(frag.queries,
-		&gql.GraphQuery{
+		&dql.GraphQuery{
 			Attr: targetVar,
-			Func: &gql.Function{
+			Func: &dql.Function{
 				Name: "uid",
-				Args: []gql.Arg{{Value: targetVar}}},
-			Children: []*gql.GraphQuery{{Attr: "uid"}}},
-		&gql.GraphQuery{
+				Args: []dql.Arg{{Value: targetVar}}},
+			Children: []*dql.GraphQuery{{Attr: "uid"}}},
+		&dql.GraphQuery{
 			Attr: targetVar + ".auth",
-			Func: &gql.Function{
+			Func: &dql.Function{
 				Name: "uid",
-				Args: []gql.Arg{{Value: targetVar}}},
+				Args: []dql.Arg{{Value: targetVar}}},
 			Filter:   authFilter,
-			Children: []*gql.GraphQuery{{Attr: "uid"}}})
+			Children: []*dql.GraphQuery{{Attr: "uid"}}})
 
 	frag.queries = append(frag.queries, authQueries...)
 

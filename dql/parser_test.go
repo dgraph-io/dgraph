@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package gql
+package dql
 
 import (
 	"bytes"
@@ -4141,8 +4141,8 @@ func TestMultipleEqual(t *testing.T) {
 
 	gql, err := Parse(Request{Str: query})
 	require.NoError(t, err)
-	require.Equal(t, 2, len(gql.Query[0].Func.Args))
-	require.Equal(t, "Tom Hanks", gql.Query[0].Func.Args[1].Value)
+	require.Equal(t, 2, len(dql.Query[0].Func.Args))
+	require.Equal(t, "Tom Hanks", dql.Query[0].Func.Args[1].Value)
 }
 
 func TestParseEqArg(t *testing.T) {
@@ -4155,7 +4155,7 @@ func TestParseEqArg(t *testing.T) {
 `
 	gql, err := Parse(Request{Str: query})
 	require.NoError(t, err)
-	require.Equal(t, 2, len(gql.Query[0].Filter.Func.Args))
+	require.Equal(t, 2, len(dql.Query[0].Filter.Func.Args))
 }
 
 // TestParserFuzz replays inputs that were identified by go-fuzz to cause crash
@@ -4252,8 +4252,8 @@ func TestParseEqArg2(t *testing.T) {
 `
 	gql, err := Parse(Request{Str: query})
 	require.NoError(t, err)
-	require.Equal(t, 2, len(gql.Query[0].Filter.Func.Args))
-	require.Equal(t, 2, len(gql.Query[0].Func.Args))
+	require.Equal(t, 2, len(dql.Query[0].Filter.Func.Args))
+	require.Equal(t, 2, len(dql.Query[0].Func.Args))
 }
 
 func TestFilterError(t *testing.T) {
@@ -4314,8 +4314,8 @@ func TestFilterUid(t *testing.T) {
 	`
 	gql, err := Parse(Request{Str: query})
 	require.NoError(t, err)
-	require.Equal(t, []uint64{1, 3, 5, 7}, gql.Query[0].UID)
-	require.Equal(t, []uint64{3, 7}, gql.Query[0].Filter.Func.UID)
+	require.Equal(t, []uint64{1, 3, 5, 7}, dql.Query[0].UID)
+	require.Equal(t, []uint64{3, 7}, dql.Query[0].Filter.Func.UID)
 }
 
 func TestIdErr(t *testing.T) {
@@ -4362,8 +4362,8 @@ func TestAggRoot1(t *testing.T) {
 	`
 	gql, err := Parse(Request{Str: query})
 	require.NoError(t, err)
-	require.Equal(t, "me", gql.Query[1].Alias)
-	require.Equal(t, true, gql.Query[1].IsEmpty)
+	require.Equal(t, "me", dql.Query[1].Alias)
+	require.Equal(t, true, dql.Query[1].IsEmpty)
 }
 
 func TestAggRootError(t *testing.T) {
@@ -4517,7 +4517,7 @@ func TestEqArgWithDollar(t *testing.T) {
 	`
 	gql, err := Parse(Request{Str: query})
 	require.NoError(t, err)
-	require.Equal(t, gql.Query[0].Func.Args[0].Value, `$pringfield (or, How)`)
+	require.Equal(t, dql.Query[0].Func.Args[0].Value, `$pringfield (or, How)`)
 }
 
 func TestLangWithDash(t *testing.T) {
@@ -4529,7 +4529,7 @@ func TestLangWithDash(t *testing.T) {
 
 	gql, err := Parse(Request{Str: query})
 	require.NoError(t, err)
-	require.Equal(t, []string{"en-us"}, gql.Query[0].Children[0].Langs)
+	require.Equal(t, []string{"en-us"}, dql.Query[0].Children[0].Langs)
 }
 
 func TestOrderByVarAndPred(t *testing.T) {
