@@ -70,7 +70,7 @@ func TestFullTextTokenizer(t *testing.T) {
 	require.Nil(t, err)
 	require.Equal(t, 2, len(tokens))
 	id := tokenizer.Identifier()
-	require.Equal(t, []string{encodeToken("stem", id), encodeToken("work", id)}, tokens)
+	require.Equal(t, []string{EncodeToken("stem", id), EncodeToken("work", id)}, tokens)
 }
 
 func TestHourTokenizer(t *testing.T) {
@@ -139,7 +139,7 @@ func TestFullTextTokenizerLang(t *testing.T) {
 	require.Equal(t, 2, len(tokens))
 	id := tokenizer.Identifier()
 	// tokens should be sorted and unique
-	require.Equal(t, []string{encodeToken("auffassung", id), encodeToken("katz", id)}, tokens)
+	require.Equal(t, []string{EncodeToken("auffassung", id), EncodeToken("katz", id)}, tokens)
 }
 
 func TestTermTokenizer(t *testing.T) {
@@ -151,7 +151,7 @@ func TestTermTokenizer(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 2, len(tokens))
 	id := tokenizer.Identifier()
-	require.Equal(t, []string{encodeToken("tokenizer", id), encodeToken("works", id)}, tokens)
+	require.Equal(t, []string{EncodeToken("tokenizer", id), EncodeToken("works", id)}, tokens)
 
 	// TEMPORARILY COMMENTED OUT AS THIS IS THE IDEAL BEHAVIOUR. WE ARE NOT THERE YET.
 	/*
@@ -175,17 +175,17 @@ func TestTrigramTokenizer(t *testing.T) {
 	require.Equal(t, 11, len(tokens))
 	id := tokenizer.Identifier()
 	expected := []string{
-		encodeToken("Dgr", id),
-		encodeToken("gra", id),
-		encodeToken("rap", id),
-		encodeToken("aph", id),
-		encodeToken("ph ", id),
-		encodeToken("h r", id),
-		encodeToken(" ro", id),
-		encodeToken("roc", id),
-		encodeToken("ock", id),
-		encodeToken("cks", id),
-		encodeToken("ks!", id),
+		EncodeToken("Dgr", id),
+		EncodeToken("gra", id),
+		EncodeToken("rap", id),
+		EncodeToken("aph", id),
+		EncodeToken("ph ", id),
+		EncodeToken("h r", id),
+		EncodeToken(" ro", id),
+		EncodeToken("roc", id),
+		EncodeToken("ock", id),
+		EncodeToken("cks", id),
+		EncodeToken("ks!", id),
 	}
 	sort.Strings(expected)
 	require.Equal(t, expected, tokens)
@@ -233,16 +233,16 @@ func TestFullTextTokenizerCJKChinese(t *testing.T) {
 
 	id := tokenizer.Identifier()
 	wantToks := []string{
-		encodeToken("一个", id),
-		encodeToken("个薪", id),
-		encodeToken("他是", id),
-		encodeToken("商人", id),
-		encodeToken("很高", id),
-		encodeToken("是一", id),
-		encodeToken("水很", id),
-		encodeToken("的商", id),
-		encodeToken("薪水", id),
-		encodeToken("高的", id),
+		EncodeToken("一个", id),
+		EncodeToken("个薪", id),
+		EncodeToken("他是", id),
+		EncodeToken("商人", id),
+		EncodeToken("很高", id),
+		EncodeToken("是一", id),
+		EncodeToken("水很", id),
+		EncodeToken("的商", id),
+		EncodeToken("薪水", id),
+		EncodeToken("高的", id),
 	}
 	require.Equal(t, wantToks, got)
 	checkSortedAndUnique(t, got)
@@ -258,11 +258,11 @@ func TestFullTextTokenizerCJKKorean(t *testing.T) {
 
 	id := tokenizer.Identifier()
 	wantToks := []string{
-		encodeToken("가진", id),
-		encodeToken("그는", id),
-		encodeToken("급여를", id),
-		encodeToken("사업가입니다", id),
-		encodeToken("큰", id),
+		EncodeToken("가진", id),
+		EncodeToken("그는", id),
+		EncodeToken("급여를", id),
+		EncodeToken("사업가입니다", id),
+		EncodeToken("큰", id),
 	}
 	require.Equal(t, wantToks, got)
 	checkSortedAndUnique(t, got)
@@ -278,20 +278,20 @@ func TestFullTextTokenizerCJKJapanese(t *testing.T) {
 
 	id := tokenizer.Identifier()
 	wantToks := []string{
-		encodeToken("きな", id),
-		encodeToken("つ実", id),
-		encodeToken("です", id),
-		encodeToken("な給", id),
-		encodeToken("は大", id),
-		encodeToken("を持", id),
-		encodeToken("与を", id),
-		encodeToken("大き", id),
-		encodeToken("実業", id),
-		encodeToken("家で", id),
-		encodeToken("彼は", id),
-		encodeToken("持つ", id),
-		encodeToken("業家", id),
-		encodeToken("給与", id),
+		EncodeToken("きな", id),
+		EncodeToken("つ実", id),
+		EncodeToken("です", id),
+		EncodeToken("な給", id),
+		EncodeToken("は大", id),
+		EncodeToken("を持", id),
+		EncodeToken("与を", id),
+		EncodeToken("大き", id),
+		EncodeToken("実業", id),
+		EncodeToken("家で", id),
+		EncodeToken("彼は", id),
+		EncodeToken("持つ", id),
+		EncodeToken("業家", id),
+		EncodeToken("給与", id),
 	}
 	require.Equal(t, wantToks, got)
 	checkSortedAndUnique(t, got)
@@ -307,8 +307,8 @@ func TestTermTokenizeCJKChinese(t *testing.T) {
 
 	id := tokenizer.Identifier()
 	wantToks := []string{
-		encodeToken("第一轮", id),
-		encodeToken("第二轮", id),
+		EncodeToken("第一轮", id),
+		EncodeToken("第二轮", id),
 	}
 	require.Equal(t, wantToks, got)
 	checkSortedAndUnique(t, got)

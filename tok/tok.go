@@ -113,7 +113,7 @@ func BuildTokens(val interface{}, t Tokenizer) ([]string, error) {
 	}
 	id := t.Identifier()
 	for i := range tokens {
-		tokens[i] = encodeToken(tokens[i], id)
+		tokens[i] = EncodeToken(tokens[i], id)
 	}
 	return tokens, nil
 }
@@ -495,20 +495,20 @@ func encodeInt(val int64) string {
 	return string(buf)
 }
 
-func encodeToken(tok string, typ byte) string {
+func EncodeToken(tok string, typ byte) string {
 	return string(typ) + tok
 }
 
 // EncodeGeoTokens encodes the given list of tokens as geo tokens.
 func EncodeGeoTokens(tokens []string) {
 	for i := 0; i < len(tokens); i++ {
-		tokens[i] = encodeToken(tokens[i], GeoTokenizer{}.Identifier())
+		tokens[i] = EncodeToken(tokens[i], GeoTokenizer{}.Identifier())
 	}
 }
 
 // EncodeRegexTokens encodes the given list of strings as regex tokens.
 func EncodeRegexTokens(tokens []string) {
 	for i := 0; i < len(tokens); i++ {
-		tokens[i] = encodeToken(tokens[i], TrigramTokenizer{}.Identifier())
+		tokens[i] = EncodeToken(tokens[i], TrigramTokenizer{}.Identifier())
 	}
 }

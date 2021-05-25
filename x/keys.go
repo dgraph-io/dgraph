@@ -48,7 +48,8 @@ const (
 	ByteSchema    = byte(0x01)
 	ByteType      = byte(0x02)
 	// ByteSplit signals that the key stores an individual part of a multi-part list.
-	ByteSplit = byte(0x04)
+	ByteSplit    = byte(0x04)
+	ByteDocument = byte(0x5e)
 	// ByteUnused is a constant to specify keys which need to be discarded.
 	ByteUnused = byte(0xff)
 	// GalaxyNamespace is the default namespace name.
@@ -248,6 +249,10 @@ func IndexKey(attr, term string) []byte {
 	AssertTrue(len(rest) == len(term))
 	AssertTrue(len(term) == copy(rest, term))
 	return buf
+}
+
+func DocumentKey(attr string) []byte {
+	return generateKey(ByteDocument, attr, 1+2+len(attr))
 }
 
 // CountKey generates a count key with the given attribute and uid.

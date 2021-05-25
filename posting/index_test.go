@@ -42,7 +42,7 @@ func uids(l *List, readTs uint64) []uint64 {
 
 // indexTokensForTest is just a wrapper around indexTokens used for convenience.
 func indexTokensForTest(attr, lang string, val types.Val) ([]string, error) {
-	return indexTokens(context.Background(), &indexMutationInfo{
+	tokens, _, err := indexTokens(context.Background(), &indexMutationInfo{
 		tokenizers: schema.State().Tokenizer(context.Background(), x.GalaxyAttr(attr)),
 		edge: &pb.DirectedEdge{
 			Attr: x.GalaxyAttr(attr),
@@ -50,6 +50,7 @@ func indexTokensForTest(attr, lang string, val types.Val) ([]string, error) {
 		},
 		val: val,
 	})
+	return tokens, err
 }
 
 func TestIndexingInt(t *testing.T) {
