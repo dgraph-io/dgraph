@@ -228,6 +228,7 @@ func (n *node) startTask(id op) (*z.Closer, error) {
 	case opIndexing:
 		for otherId, otherCloser := range n.ops {
 			if otherId == opBackup {
+				// We can start indexing even if backup is already running.
 				continue
 			}
 			if otherId == opRollup {
@@ -1072,13 +1073,11 @@ func (n *node) commitOrAbort(_ uint64, delta *pb.OracleDelta) error {
 		// Iterate to set the commit timestamp for all keys.
 		// Skiplist can block if the conversion to Skiplist isn't done yet.
 		itr := txn.Skiplist().NewIterator()
-		itr.SeekToFirst()
-		for itr.Valid() {
+		for itr.SeekToFirst(); itr.Valid(); itr.Next() {
 			key := itr.Key()
 			// We don't expect the ordering of the keys to change due to setting their commit
 			// timestamps. Each key in the skiplist should be unique already.
 			y.SetKeyTs(key, status.CommitTs)
-			itr.Next()
 		}
 		itr.Close()
 
@@ -1666,7 +1665,7 @@ func (n *node) Run() {
 			// Send the whole lot to applyCh in one go, instead of sending proposals one by one.
 			if len(entries) > 0 {
 				// Apply the meter this before adding size to pending size so some crazy big
-				// proposal can be pushed to applyCh. If this do this after adding its size to
+				// proposal can be pushed to applyCh. If we do this after adding its size to
 				// pending size, we could block forever in rampMeter.
 				rampMeter(&n.pendingSize, maxPendingSize, nodeApplyChan)
 				var pendingSize int64

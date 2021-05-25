@@ -98,7 +98,6 @@ func TestBackupOfOldRestore(t *testing.T) {
 	require.NoError(t, err)
 
 	testutil.DropAll(t, dg)
-	time.Sleep(2 * time.Second)
 
 	_ = runBackup(t, 3, 1)
 
@@ -113,7 +112,6 @@ func TestBackupOfOldRestore(t *testing.T) {
 
 	// Clean the cluster and try restoring the backups created above.
 	testutil.DropAll(t, dg)
-	time.Sleep(2 * time.Second)
 	sendRestoreRequest(t, alphaBackupDir)
 	testutil.WaitForRestore(t, dg)
 
@@ -171,13 +169,13 @@ func TestBackupFilesystem(t *testing.T) {
 	t.Log("Pausing to let zero move tablet...")
 	moveOk := false
 	for retry := 5; retry > 0; retry-- {
-		time.Sleep(3 * time.Second)
 		state, err := testutil.GetStateHttps(testutil.GetAlphaClientConfig(t))
 		require.NoError(t, err)
 		if _, ok := state.Groups["1"].Tablets[x.NamespaceAttr(x.GalaxyNamespace, "movie")]; ok {
 			moveOk = true
 			break
 		}
+		time.Sleep(1 * time.Second)
 	}
 
 	require.True(t, moveOk)
