@@ -1098,6 +1098,98 @@ func dgraphDirectiveValidation(sch *ast.Schema, typ *ast.Definition, field *ast.
 	}
 
 	predArg := dir.Arguments.ForName(dgraphPredArg)
+	facetArg := dir.Arguments.ForName(dgraphFacetArg)
+	fieldArg := dir.Arguments.ForName(dgraphFieldArg)
+
+	// Validation in case of GraphQL Facets.
+	if facetArg != nil && facetArg.Value.Raw != "" {
+		// If facet is supplied, ensure that it is string
+		if facetArg.Value.Kind != ast.StringValue {
+			errs = append(errs, gqlerror.ErrorPosf(
+				dir.Position,
+				"Type %s; Field %s: facet argument for @dgraph directive should be of type String.",
+				typ.Name, field.Name))
+			return errs
+		}
+
+		// predArg should be empty in this case.
+		if predArg != nil && predArg.Value.Raw != "" {
+			errs = append(errs, gqlerror.ErrorPosf(
+				dir.Position,
+				"Type %s; Field %s: facet and pred argument for @dgraph directive should not be"+
+					" both non-empty.", typ.Name, field.Name))
+			return errs
+		}
+
+		// Cannot have @id and @search directive added along with facet field.
+		if field.Directives.ForName(idDirective) != nil {
+			errs = append(errs, gqlerror.ErrorPosf(field.Directives.ForName(idDirective).Position,
+				"Type %s; Field %s: @id "+
+					"directive not supported on facet fields.", typ.Name, field.Name))
+			return errs
+		}
+		if field.Directives.ForName(searchDirective) != nil && isMultiLangField(field, false) {
+			errs = append(errs, gqlerror.ErrorPosf(field.Directives.ForName(searchDirective).Position,
+				"Type %s; Field %s: @search directive not applicable"+
+					" on facet fields.", typ.Name, field.Name))
+			return errs
+		}
+
+		// field Argument should be some other field in the given type.
+		// TODO(Rajas): Should we also check for fields inherited from interface, proabably no.
+		if fieldArg != nil && fieldArg.Value.Raw != "" {
+			// Ensure that field argument is a string.
+			if fieldArg.Value.Kind != ast.StringValue {
+				errs = append(errs, gqlerror.ErrorPosf(
+					dir.Position,
+					"Type %s; Field %s: field argument for @dgraph directive should be of type"+
+						" String.",
+					typ.Name, field.Name))
+				return errs
+			}
+			// Ensure that there exists field with fieldArg as name.
+			isFieldArgPresent := false
+			for _, fld := range typ.Fields {
+				if fld.Name == fieldArg.Value.Raw {
+					isFieldArgPresent = true
+					// Also check if the list type of fld and field are consistent
+					if fld.Type.NamedType == "" && field.Type.NamedType != "" {
+						errs = append(errs, gqlerror.ErrorPosf(
+							dir.Position,
+							"Type %s; Field %s: field argument for @dgraph directive should not"+
+								" be of list type as facet field is not of list type.",
+							typ.Name, field.Name))
+						return errs
+					} else if fld.Type.NamedType != "" && field.Type.NamedType == "" {
+						errs = append(errs, gqlerror.ErrorPosf(
+							dir.Position,
+							"Type %s; Field %s: field argument for @dgraph directive should be of"+
+								" list type as facet field is of list type.",
+							typ.Name, field.Name))
+						return errs
+					}
+				}
+			}
+			if !isFieldArgPresent {
+				errs = append(errs, gqlerror.ErrorPosf(
+					dir.Position,
+					"Type %s; Field %s: field argument for @dgraph directive should be present"+
+						" as field name in the Type.",
+					typ.Name, field.Name))
+				return errs
+			}
+		}
+	}
+	// fieldArg should be empty in this case as it this is clearly not a facet field.
+	if fieldArg != nil && fieldArg.Value.Raw != "" {
+		errs = append(errs, gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s; Field %s: field argument for @dgraph directive should not be"+
+				" non-empty when facet argument is empty.", typ.Name, field.Name))
+		return errs
+	}
+
+	// Validation in case of predicate argument with Dgraph directive.
 	if predArg == nil || predArg.Value.Raw == "" {
 		errs = append(errs, gqlerror.ErrorPosf(
 			dir.Position,
@@ -1223,32 +1315,33 @@ func dgraphDirectiveValidation(sch *ast.Schema, typ *ast.Definition, field *ast.
 		if field.Type.Name() != "String" {
 			errs = append(errs, gqlerror.ErrorPosf(field.Position,
 				"Type %s; Field %s: Expected type `String`"+
-					" for language tag field but got `%s`", typ.Name, field.Name, field.Type.Name()))
+					" for language tag field but got `%s`.", typ.Name, field.Name,
+				field.Type.Name()))
 			return errs
 		}
 		if field.Directives.ForName(idDirective) != nil {
 			errs = append(errs, gqlerror.ErrorPosf(field.Directives.ForName(idDirective).Position,
 				"Type %s; Field %s: @id "+
-					"directive not supported on language tag fields", typ.Name, field.Name))
+					"directive not supported on language tag fields.", typ.Name, field.Name))
 			return errs
 		}
 
 		if field.Directives.ForName(searchDirective) != nil && isMultiLangField(field, false) {
 			errs = append(errs, gqlerror.ErrorPosf(field.Directives.ForName(searchDirective).Position,
 				"Type %s; Field %s: @search directive not applicable"+
-					" on language tag field with multiple languages", typ.Name, field.Name))
+					" on language tag field with multiple languages.", typ.Name, field.Name))
 			return errs
 		}
 
 		tags := strings.Split(predArg.Value.Raw, "@")[1]
 		if tags == "*" {
 			errs = append(errs, gqlerror.ErrorPosf(dir.Position, "Type %s; Field %s: `*` language tag not"+
-				" supported in GraphQL", typ.Name, field.Name))
+				" supported in GraphQL.", typ.Name, field.Name))
 			return errs
 		}
 		if tags == "" {
 			errs = append(errs, gqlerror.ErrorPosf(dir.Position, "Type %s; Field %s: empty language"+
-				" tag not supported", typ.Name, field.Name))
+				" tag not supported.", typ.Name, field.Name))
 			return errs
 		}
 
