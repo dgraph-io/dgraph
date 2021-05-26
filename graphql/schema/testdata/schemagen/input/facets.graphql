@@ -1,0 +1,15 @@
+type Person {
+    name: String!
+    pet: Animal
+    pets: [Animal]
+    nameSince: DateTime @dgraph(facet: "since", field: "name")
+}
+
+type Animal {
+    id: ID!
+    name: String!
+    colors: [String]
+    petClose: Boolean! @dgraph(facet: "close")
+    petSince: DateTime @dgraph(facet: "since")
+    colorTones: [String] @dgraph(facet: "tone", field: "colors")
+}

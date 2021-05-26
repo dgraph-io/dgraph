@@ -1179,6 +1179,7 @@ func dgraphDirectiveValidation(sch *ast.Schema, typ *ast.Definition, field *ast.
 				return errs
 			}
 		}
+		return nil
 	}
 	// fieldArg should be empty in this case as it this is clearly not a facet field.
 	if fieldArg != nil && fieldArg.Value.Raw != "" {
