@@ -38,8 +38,8 @@ func printEntry(es raftpb.Entry, pending map[uint64]bool, isZero bool) {
 	defer func() {
 		fmt.Printf("%s\n", buf.Bytes())
 	}()
-	fmt.Fprintf(&buf, "%d . %d . %v . %-6s .", es.Term, es.Index, es.Type,
-		humanize.Bytes(uint64(es.Size())))
+	fmt.Fprintf(&buf, "%d . %d . %v . %-6s . %8d .", es.Term, es.Index, es.Type,
+		humanize.Bytes(uint64(es.Size())), binary.BigEndian.Uint64(es.Data[:8]))
 	if es.Type == raftpb.EntryConfChange {
 		return
 	}
