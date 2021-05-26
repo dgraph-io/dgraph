@@ -5,6 +5,7 @@ import (
 	"math"
 	"testing"
 
+	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/testutil"
@@ -18,13 +19,13 @@ func subgraphWithSingleResultAndSingleValue(val *pb.TaskValue) *SubGraph {
 	r.Set(1)
 	return &SubGraph{
 		Params:    params{Alias: "query"},
-		SrcUIDs:   &pb.List{Uids: []uint64{1}},
+		SrcUIDs:   codec.OneUid(1),
 		DestMap:   r,
-		uidMatrix: []*pb.List{&pb.List{Uids: []uint64{1}}},
+		uidMatrix: []*pb.List{codec.OneUid(1)},
 		Children: []*SubGraph{
 			&SubGraph{
 				Attr:      "val",
-				SrcUIDs:   &pb.List{Uids: []uint64{1}},
+				SrcUIDs:   codec.OneUid(1),
 				uidMatrix: []*pb.List{&pb.List{}},
 				valueMatrix: []*pb.ValueList{
 					// UID 1

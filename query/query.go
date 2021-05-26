@@ -2974,8 +2974,9 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 				sg.updateUidMatrix()
 				for i := 0; i < len(sg.uidMatrix); i++ {
 					start, end := x.PageRange(sg.Params.Cascade.First, sg.Params.Cascade.Offset,
-						len(sg.uidMatrix[i].SortedUids))
-					sg.uidMatrix[i].SortedUids = sg.uidMatrix[i].SortedUids[start:end]
+						int(codec.ListCardinality(sg.uidMatrix[i])))
+					uids := codec.GetUids(sg.uidMatrix[i])
+					sg.uidMatrix[i].SortedUids = uids[start:end]
 				}
 			}
 
