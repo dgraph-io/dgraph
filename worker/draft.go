@@ -511,7 +511,6 @@ func (n *node) concMutations(ctx context.Context, m *pb.Mutations, txn *posting.
 func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr error) {
 	span := otrace.FromContext(ctx)
 
-	glog.Infof("Got mutation proposal: %+v\n", proposal)
 	if proposal.Mutations.DropOp == pb.Mutations_DATA {
 		ns, err := strconv.ParseUint(proposal.Mutations.DropValue, 0, 64)
 		if err != nil {

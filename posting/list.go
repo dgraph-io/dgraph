@@ -1283,18 +1283,20 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 	}
 	num := uint64(abs(opt.First))
 	sz := uint64(bm.GetCardinality())
-	if opt.First > 0 {
-		x, err := bm.Select(num)
-		if err != nil {
-			return nil, err
+	if sz >= num {
+		if opt.First > 0 {
+			x, err := bm.Select(num)
+			if err != nil {
+				return nil, err
+			}
+			codec.RemoveRange(bm, x, math.MaxUint64)
+		} else {
+			x, err := bm.Select(sz - num)
+			if err != nil {
+				return nil, err
+			}
+			codec.RemoveRange(bm, 0, x)
 		}
-		codec.RemoveRange(bm, x, math.MaxUint64)
-	} else {
-		x, err := bm.Select(sz - num)
-		if err != nil {
-			return nil, err
-		}
-		codec.RemoveRange(bm, 0, x)
 	}
 	return codec.ToList(bm), nil
 }

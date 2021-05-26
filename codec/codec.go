@@ -69,6 +69,9 @@ func OneUid(uid uint64) *pb.List {
 }
 
 func GetUids(l *pb.List) []uint64 {
+	if l == nil {
+		return []uint64{}
+	}
 	if len(l.SortedUids) > 0 {
 		x.AssertTrue(l.Bitmap == nil)
 		return l.SortedUids

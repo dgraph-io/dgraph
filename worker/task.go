@@ -733,6 +733,7 @@ func retrieveUidsAndFacets(args funcArgs, pl *posting.List, facetsTree *facetsTr
 
 // This function handles operations on uid posting lists. Index keys, reverse keys and some data
 // keys store uid posting lists.
+
 func (qs *queryState) handleUidPostings(
 	ctx context.Context, args funcArgs, opts posting.ListOptions) error {
 	srcFn := args.srcFn
@@ -757,13 +758,12 @@ func (qs *queryState) handleUidPostings(
 	// calculate) to work correctly. But we have seen some panics while forming DataKey in
 	// calculate(). panic is of the form "index out of range [4] with length 1". Hence return error
 	// from here when srcFn.n != len(q.UidList.Uids).
-	bm := codec.FromList(q.UidList)
-
 	switch srcFn.fnType {
 	case notAFunction, compareScalarFn, hasFn, uidInFn:
-		if sz := int(bm.GetCardinality()); srcFn.n != sz {
+		c := int(codec.ListCardinality(q.UidList))
+		if srcFn.n != c {
 			return errors.Errorf("srcFn.n: %d is not equal to len(q.UidList.Uids): %d, srcFn: %+v in "+
-				"handleUidPostings", srcFn.n, sz, srcFn)
+				"handleUidPostings", srcFn.n, c, srcFn)
 		}
 	}
 
@@ -772,44 +772,34 @@ func (qs *queryState) handleUidPostings(
 	x.AssertTrue(width > 0)
 	span.Annotatef(nil, "Width: %d. NumGo: %d", width, numGo)
 
+	errCh := make(chan error, numGo)
 	outputs := make([]*pb.Result, numGo)
 
-	calculate := func(start int) error {
+	calculate := func(start, end int) error {
 		x.AssertTrue(start%width == 0)
 		out := &pb.Result{}
 		outputs[start/width] = out
 
-		startNum, err := bm.Select(uint64(start))
-		x.Check(err)
-
-		itr := bm.NewIterator()
-		itr.AdvanceIfNeeded(startNum)
-
-		for count := 0; itr.HasNext(); count++ {
-			if count >= width {
-				break
-			}
-
-			if count%100 == 0 {
+		uids := codec.GetUids(q.UidList)
+		for i := start; i < end; i++ {
+			if i%100 == 0 {
 				select {
 				case <-ctx.Done():
 					return ctx.Err()
 				default:
 				}
 			}
-			uid := itr.Next()
-
 			var key []byte
 			switch srcFn.fnType {
 			case notAFunction, compareScalarFn, hasFn, uidInFn:
 				if q.Reverse {
-					key = x.ReverseKey(q.Attr, uid)
+					key = x.ReverseKey(q.Attr, uids[i])
 				} else {
-					key = x.DataKey(q.Attr, uid)
+					key = x.DataKey(q.Attr, uids[i])
 				}
 			case geoFn, regexFn, fullTextSearchFn, standardFn, customIndexFn, matchFn,
 				compareAttrFn:
-				key = x.IndexKey(q.Attr, srcFn.tokens[start+count])
+				key = x.IndexKey(q.Attr, srcFn.tokens[i])
 			default:
 				return errors.Errorf("Unhandled function in handleUidPostings: %s", srcFn.fname)
 			}
@@ -820,10 +810,9 @@ func (qs *queryState) handleUidPostings(
 				return err
 			}
 
-			first := start == 0 && count == 0
 			switch {
 			case q.DoCount:
-				if first {
+				if i == 0 {
 					span.Annotate(nil, "DoCount")
 				}
 				count, err := countForUidPostings(args, pl, facetsTree, opts)
@@ -834,7 +823,7 @@ func (qs *queryState) handleUidPostings(
 				// Add an empty UID list to make later processing consistent.
 				out.UidMatrix = append(out.UidMatrix, &pb.List{})
 			case srcFn.fnType == compareScalarFn:
-				if first {
+				if i == 0 {
 					span.Annotate(nil, "CompareScalarFn")
 				}
 				len := pl.Length(args.q.ReadTs, 0)
@@ -843,10 +832,11 @@ func (qs *queryState) handleUidPostings(
 				}
 				count := int64(len)
 				if evalCompare(srcFn.fname, count, srcFn.threshold[0]) {
-					out.UidMatrix = append(out.UidMatrix, codec.OneUid(uid))
+					tlist := codec.OneUid(uids[i])
+					out.UidMatrix = append(out.UidMatrix, tlist)
 				}
 			case srcFn.fnType == hasFn:
-				if first {
+				if i == 0 {
 					span.Annotate(nil, "HasFn")
 				}
 				empty, err := pl.IsEmpty(args.q.ReadTs, 0)
@@ -854,32 +844,32 @@ func (qs *queryState) handleUidPostings(
 					return err
 				}
 				if !empty {
-					out.UidMatrix = append(out.UidMatrix, codec.OneUid(uid))
+					tlist := codec.OneUid(uids[i])
+					out.UidMatrix = append(out.UidMatrix, tlist)
 				}
 			case srcFn.fnType == uidInFn:
-				if first {
+				if i == 0 {
 					span.Annotate(nil, "UidInFn")
 				}
-				// TODO: Fix up ListOptions. It should be using roaring bitmap, instead of a list of
-				// UIDs.
-				reqList := &pb.List{SortedUids: srcFn.uidsPresent}
+				reqBm := sroar.NewBitmap()
+				reqBm.SetMany(srcFn.uidsPresent)
+				reqList := codec.ToList(reqBm)
 				topts := posting.ListOptions{
 					ReadTs:    args.q.ReadTs,
 					AfterUid:  0,
 					Intersect: reqList,
-					First:     int(args.q.First),
+					First:     int(args.q.First + args.q.Offset),
 				}
-				res, err := pl.Bitmap(topts)
+				plist, err := pl.Uids(topts)
 				if err != nil {
 					return err
 				}
-				// TODO: This could be optimized it seems like. We don't need the whole
-				// intersection, just need to check if there are any results at all.
-				if !res.IsEmpty() {
-					out.UidMatrix = append(out.UidMatrix, codec.OneUid(uid))
+				if codec.ListCardinality(plist) > 0 {
+					tlist := codec.OneUid(uids[i])
+					out.UidMatrix = append(out.UidMatrix, tlist)
 				}
 			case q.FacetParam != nil || facetsTree != nil:
-				if first {
+				if i == 0 {
 					span.Annotate(nil, "default with facets")
 				}
 				uidList, fcsList, err := retrieveUidsAndFacets(args, pl, facetsTree, opts)
@@ -891,30 +881,34 @@ func (qs *queryState) handleUidPostings(
 					out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{FacetsList: fcsList})
 				}
 			default:
-				if first {
+				if i == 0 {
 					span.Annotate(nil, "default no facets")
 				}
-				res, err := pl.Bitmap(opts)
+				uidList, err := pl.Uids(opts)
 				if err != nil {
 					return err
 				}
-				out.UidMatrix = append(out.UidMatrix, codec.ToList(res))
+				out.UidMatrix = append(out.UidMatrix, uidList)
 			}
 		}
 		return nil
 	} // End of calculate function.
 
-	var g errgroup.Group
 	for i := 0; i < numGo; i++ {
 		start := i * width
-		g.Go(func() error {
-			return calculate(start)
-		})
+		end := start + width
+		if end > srcFn.n {
+			end = srcFn.n
+		}
+		go func(start, end int) {
+			errCh <- calculate(start, end)
+		}(start, end)
 	}
-	if err := g.Wait(); err != nil {
-		return err
+	for i := 0; i < numGo; i++ {
+		if err := <-errCh; err != nil {
+			return err
+		}
 	}
-
 	// All goroutines are done. Now attach their results.
 	out := args.out
 	for _, chunk := range outputs {
@@ -922,6 +916,11 @@ func (qs *queryState) handleUidPostings(
 		out.Counts = append(out.Counts, chunk.Counts...)
 		out.UidMatrix = append(out.UidMatrix, chunk.UidMatrix...)
 	}
+	var total int
+	for _, list := range out.UidMatrix {
+		total += int(codec.ListCardinality(list))
+	}
+	span.Annotatef(nil, "Total number of elements in matrix: %d", total)
 	return nil
 }
 
@@ -2422,7 +2421,6 @@ func (qs *queryState) handleHasFunction(ctx context.Context, q *pb.Query, out *p
 		prefix = initKey.ReversePrefix()
 	}
 
-	result := &pb.List{}
 	var prevKey []byte
 	itOpt := badger.DefaultIteratorOptions
 	itOpt.PrefetchValues = false
@@ -2549,6 +2547,7 @@ loop:
 	if span != nil {
 		span.Annotatef(nil, "handleHasFunction found %d uids", setCnt)
 	}
+	result := &pb.List{Bitmap: res.ToBuffer()}
 	out.UidMatrix = append(out.UidMatrix, result)
 	return nil
 }
