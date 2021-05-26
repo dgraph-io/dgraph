@@ -100,7 +100,7 @@ func NewUriHandler(uri *url.URL, creds *MinioCredentials) (UriHandler, error) {
 	case "minio", "s3":
 		return NewS3Handler(uri, creds)
 	case "gs":
-		return NewGCSHandler(uri, creds.SecretKey)
+		return NewGCSHandler(uri, creds)
 	}
 
 	if strings.HasSuffix(uri.Host, "blob.core.windows.net") {
@@ -405,15 +405,26 @@ func NewAZSHandler(uri *url.URL, creds *MinioCredentials) (*AZS, error) {
 		return nil, errors.Wrapf(err, "while getting bucket details")
 	}
 
-	// Override credentials from the Azure storage environment variables if specified
-	key := os.Getenv("AZURE_STORAGE_KEY")
-	if len(creds.SecretKey) > 0 {
-		key = creds.SecretKey
-	}
+	var azCreds azblob.Credential
+	if creds.isAnonymous() {
+		azCreds = azblob.NewAnonymousCredential()
+	} else {
+		// Override credentials from the Azure storage environment variables if specified
+		key := os.Getenv("AZURE_STORAGE_KEY")
+		if len(creds.SecretKey) > 0 {
+			key = creds.SecretKey
+		}
 
-	azCreds, err := azblob.NewSharedKeyCredential(azs.accountName, key)
-	if err != nil {
-		return nil, errors.Wrap(err, "while creating sharedkey")
+		if len(key) == 0 {
+			return nil, errors.Errorf("Missing secret key for azure access.")
+		}
+
+		sharedkey, err := azblob.NewSharedKeyCredential(azs.accountName, key)
+		if err != nil {
+			return nil, errors.Wrap(err, "while creating sharedkey")
+		}
+
+		azCreds = sharedkey
 	}
 
 	// NewServiceURL only requires hostname and scheme.
@@ -427,7 +438,7 @@ func NewAZSHandler(uri *url.URL, creds *MinioCredentials) (*AZS, error) {
 	azs.bucket = &bucket
 
 	// Verify that bucket exists.
-	if _, err = azs.bucket.GetProperties(context.Background(),
+	if _, err := azs.bucket.GetProperties(context.Background(),
 		azblob.LeaseAccessConditions{}); err != nil {
 		return nil, errors.Wrap(err, "while checking if bucket exists")
 	}
@@ -601,16 +612,17 @@ type GCS struct {
 	pathPrefix string
 }
 
-func NewGCSHandler(uri *url.URL, credsPath string) (gcs *GCS, err error) {
+func NewGCSHandler(uri *url.URL, creds *MinioCredentials) (gcs *GCS, err error) {
 	ctx := context.Background()
 
 	var c *storage.Client
-	if credsPath != "" || os.Getenv("GOOGLE_APPLICATION_CREDENTIALS") != "" {
-		if credsPath == "" {
-			credsPath = os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
+	// TODO(rohanprasad): Add support for API key, if it's sufficient to access storage bucket.
+	if creds.isAnonymous() {
+		if c, err = storage.NewClient(ctx, option.WithoutAuthentication()); err != nil {
+			return nil, err
 		}
-
-		f, err := os.Open(credsPath)
+	} else if creds.SecretKey != "" {
+		f, err := os.Open(creds.SecretKey)
 		if err != nil {
 			return nil, err
 		}
@@ -624,8 +636,15 @@ func NewGCSHandler(uri *url.URL, credsPath string) (gcs *GCS, err error) {
 		if err != nil {
 			return nil, err
 		}
-	} else if c, err = storage.NewClient(ctx, option.WithoutAuthentication()); err != nil {
-		return nil, err
+	} else {
+		// If no credentials are supplied, the library checks for environment variable
+		// GOOGLE_APPLICATION_CREDENTIALS otherwise falls back to use the service account attached
+		// to the resource running the code.
+		// https://cloud.google.com/docs/authentication/production#automatically
+		c, err = storage.NewClient(ctx)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	gcs = &GCS{
@@ -691,15 +710,14 @@ func (gcs *GCS) DirExists(path string) bool {
 		Prefix: absPath,
 	})
 
-	// If err != iterator.Done i.e. iterator hasn't reached end, we can assume there are results in
-	// the iterator and hence directory exists.
-	if _, err := it.Next(); err != iterator.Done {
+	if _, err := it.Next(); err == iterator.Done {
+		return false
+	} else if err == nil {
 		return true
-	} else if err != nil {
+	} else {
 		glog.Errorf("Error while checking if directory exists: %s", err)
+		return false
 	}
-
-	return false
 }
 
 // FileExists returns true if the file relative to the root path of the handler exists.
