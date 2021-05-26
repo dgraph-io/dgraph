@@ -334,6 +334,8 @@ message Proposal {
   RestoreRequest restore = 12;
   CDCState cdc_state = 13;
   DeleteNsRequest delete_ns = 14;  // Used to delete namespace.
+  // Skipping 15 as it is used for uint64 key in master and might be needed later here.
+  uint64 start_ts = 16;
 }
 
 message CDCState {

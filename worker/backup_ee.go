@@ -52,7 +52,7 @@ func backupCurrentGroup(ctx context.Context, req *pb.BackupRequest) (*pb.BackupR
 		return nil, err
 	}
 
-	closer, err := g.Node.startTask(opBackup)
+	closer, err := g.Node.startTaskAtTs(opBackup, req.ReadTs)
 	if err != nil {
 		return nil, errors.Wrapf(err, "cannot start backup operation")
 	}
