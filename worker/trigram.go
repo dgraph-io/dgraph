@@ -42,7 +42,8 @@ func uidsForRegex(attr string, arg funcArgs,
 	// TODO: Unnecessary conversion here. Avoid if possible.
 	if !intersect.IsEmpty() {
 		opts.Intersect = &pb.List{
-			Uids: intersect.ToArray(),
+			// Uids: intersect.ToArray(),
+			Bitmap: intersect.ToBuffer(),
 		}
 	} else {
 		intersect = sroar.NewBitmap()

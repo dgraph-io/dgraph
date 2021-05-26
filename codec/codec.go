@@ -45,9 +45,32 @@ func ApproxLen(bitmap []byte) int {
 
 func ToList(rm *sroar.Bitmap) *pb.List {
 	return &pb.List{
-		Uids: rm.ToArray(),
-		// Bitmap: ToBytes(rm),
+		// Uids: rm.ToArray(),
+		Bitmap: ToBytes(rm),
 	}
+}
+
+func ListCardinality(l *pb.List) uint64 {
+	if len(l.SortedUids) > 0 {
+		x.AssertTrue(l.Bitmap == nil)
+		return uint64(len(l.SortedUids))
+	}
+	b := FromList(l)
+	return uint64(b.GetCardinality())
+}
+
+func OneUid(uid uint64) *pb.List {
+	bm := sroar.NewBitmap()
+	bm.Set(uid)
+	return ToList(bm)
+}
+
+func GetUids(l *pb.List) []uint64 {
+	if len(l.SortedUids) > 0 {
+		x.AssertTrue(l.Bitmap == nil)
+		return l.SortedUids
+	}
+	return FromList(l).ToArray()
 }
 
 func And(rm *sroar.Bitmap, l *pb.List) {
@@ -103,13 +126,13 @@ func FromList(l *pb.List) *sroar.Bitmap {
 		return iw
 	}
 
-	if len(l.BitmapDoNotUse) > 0 {
+	if len(l.Bitmap) > 0 {
 		// Only one of Uids or Bitmap should be defined.
-		iw = sroar.FromBuffer(l.BitmapDoNotUse)
+		iw = sroar.FromBuffer(l.Bitmap)
 	}
-	if len(l.Uids) > 0 {
-		iw.SetMany(l.Uids)
-	}
+	// if len(l.Uids) > 0 {
+	// 	iw.SetMany(l.Uids)
+	// }
 	return iw
 }
 
