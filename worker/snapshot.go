@@ -28,7 +28,6 @@ import (
 	"go.etcd.io/etcd/raft"
 
 	"github.com/dgraph-io/badger/v3"
-	bpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -113,7 +112,7 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) error {
 		return err
 	}
 
-	if err := deleteStalePreds(ctx, done); err != nil {
+	if err := deleteStalePreds(ctx, done, snap.ReadTs); err != nil {
 		return err
 	}
 
@@ -128,7 +127,7 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) error {
 	return nil
 }
 
-func deleteStalePreds(ctx context.Context, kvs *pb.KVS) error {
+func deleteStalePreds(ctx context.Context, kvs *pb.KVS, ts uint64) error {
 	if kvs == nil {
 		return nil
 	}
@@ -148,7 +147,7 @@ func deleteStalePreds(ctx context.Context, kvs *pb.KVS) error {
 				// While retrieving the snapshot, we mark the node as unhealthy. So it is better to
 				// a blocking delete of predicate as we know that no new writes will arrive at
 				// this alpha.
-				err := posting.DeletePredicateBlocking(ctx, pred)
+				err := posting.DeletePredicateBlocking(ctx, pred, ts)
 				switch err {
 				case badger.ErrBlockedWrites:
 					time.Sleep(1 * time.Second)
@@ -175,7 +174,7 @@ func deleteStalePreds(ctx context.Context, kvs *pb.KVS) error {
 	}
 	for _, typ := range currTypes {
 		if _, ok := snapshotTypes[typ]; !ok {
-			if err := schema.State().DeleteType(typ); err != nil {
+			if err := schema.State().DeleteType(typ, ts); err != nil {
 				return errors.Wrapf(err, "cannot delete removed type %s after streaming snapshot",
 					typ)
 			}
@@ -225,49 +224,6 @@ func doStreamSnapshot(snap *pb.Snapshot, out pb.Worker_StreamSnapshotServer) err
 
 	if err := stream.Orchestrate(out.Context()); err != nil {
 		return err
-	}
-
-	// Type and Schema keys always have a timestamp of 1. They all need to be sent
-	// with the snapshot. The stream framework does not send it when streaming at SinceTs > 1.
-	if stream.SinceTs > 1 {
-		buf := z.NewBuffer(10*MB, "DoStreamSnapshot")
-		defer buf.Release()
-		txn := pstore.NewTransactionAt(1, false)
-		defer txn.Discard()
-		copyKvsForPrefix := func(prefix []byte) error {
-			iopts := badger.DefaultIteratorOptions
-			iopts.Prefix = prefix
-			itr := txn.NewIterator(iopts)
-			defer itr.Close()
-
-			kv := bpb.KV{}
-			for itr.Rewind(); itr.Valid(); itr.Next() {
-				kv.Reset()
-				item := itr.Item()
-				kv.Key = item.Key()
-				if err := item.Value(func(val []byte) error {
-					kv.Value = val
-					return nil
-				}); err != nil {
-					return err
-				}
-				kv.Version = item.Version()
-				kv.ExpiresAt = item.ExpiresAt()
-				kv.UserMeta = []byte{item.UserMeta()}
-				badger.KVToBuffer(&kv, buf)
-			}
-			return nil
-		}
-		if err := copyKvsForPrefix(x.SchemaPrefix()); err != nil {
-			return errors.Wrap(err, "streamSnapshot: while copying schema")
-		}
-		if err := copyKvsForPrefix(x.TypePrefix()); err != nil {
-			return errors.Wrap(err, "streamSnapshot: while copying types")
-		}
-		kvs := &pb.KVS{Data: buf.Bytes()}
-		if err := out.Send(kvs); err != nil {
-			return err
-		}
 	}
 
 	// Indicate that sending is done.

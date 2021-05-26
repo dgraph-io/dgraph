@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"sync"
 
 	"github.com/golang/glog"
@@ -95,17 +96,17 @@ func (s *state) DeleteAll() {
 }
 
 // Delete updates the schema in memory and disk
-func (s *state) Delete(attr string) error {
+func (s *state) Delete(attr string, ts uint64) error {
 	s.Lock()
 	defer s.Unlock()
 
 	glog.Infof("Deleting schema for predicate: [%s]", attr)
-	txn := pstore.NewTransactionAt(1, true)
+	txn := pstore.NewTransactionAt(ts, true)
 	if err := txn.Delete(x.SchemaKey(attr)); err != nil {
 		return err
 	}
 	// Delete is called rarely so sync write should be fine.
-	if err := txn.CommitAt(1, nil); err != nil {
+	if err := txn.CommitAt(ts, nil); err != nil {
 		return err
 	}
 
@@ -115,7 +116,7 @@ func (s *state) Delete(attr string) error {
 }
 
 // DeleteType updates the schema in memory and disk
-func (s *state) DeleteType(typeName string) error {
+func (s *state) DeleteType(typeName string, ts uint64) error {
 	if s == nil {
 		return nil
 	}
@@ -124,12 +125,12 @@ func (s *state) DeleteType(typeName string) error {
 	defer s.Unlock()
 
 	glog.Infof("Deleting type definition for type: [%s]", typeName)
-	txn := pstore.NewTransactionAt(1, true)
+	txn := pstore.NewTransactionAt(ts, true)
 	if err := txn.Delete(x.TypeKey(typeName)); err != nil {
 		return err
 	}
 	// Delete is called rarely so sync write should be fine.
-	if err := txn.CommitAt(1, nil); err != nil {
+	if err := txn.CommitAt(ts, nil); err != nil {
 		return err
 	}
 
@@ -465,14 +466,14 @@ func Init(ps *badger.DB) {
 	reset()
 }
 
-// Load reads the schema for the given predicate from the DB.
+// Load reads the latest schema for the given predicate from the DB.
 func Load(predicate string) error {
 	if len(predicate) == 0 {
 		return errors.Errorf("Empty predicate")
 	}
 	delete(State().mutSchema, predicate)
 	key := x.SchemaKey(predicate)
-	txn := pstore.NewTransactionAt(1, false)
+	txn := pstore.NewTransactionAt(math.MaxUint64, false)
 	defer txn.Discard()
 	item, err := txn.Get(key)
 	if err == badger.ErrKeyNotFound || err == badger.ErrBannedKey {
@@ -505,7 +506,7 @@ func LoadFromDb() error {
 
 // LoadSchemaFromDb iterates through the DB and loads all the stored schema updates.
 func LoadSchemaFromDb() error {
-	txn := pstore.NewTransactionAt(1, false)
+	txn := pstore.NewTransactionAt(math.MaxUint64, false)
 	defer txn.Discard()
 	iopts := badger.DefaultIteratorOptions
 	iopts.Prefix = x.SchemaPrefix()
@@ -539,7 +540,7 @@ func LoadSchemaFromDb() error {
 
 // LoadTypesFromDb iterates through the DB and loads all the stored type updates.
 func LoadTypesFromDb() error {
-	txn := pstore.NewTransactionAt(1, false)
+	txn := pstore.NewTransactionAt(math.MaxUint64, false)
 	defer txn.Discard()
 	iopts := badger.DefaultIteratorOptions
 	iopts.Prefix = x.TypePrefix()

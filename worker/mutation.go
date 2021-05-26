@@ -181,7 +181,7 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 		if err := rebuild.BuildIndexes(wrtCtx); err != nil {
 			return err
 		}
-		if err := updateSchema(update); err != nil {
+		if err := updateSchema(update, rebuild.StartTs); err != nil {
 			return err
 		}
 
@@ -249,7 +249,7 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 
 		// Start opIndexing task only if schema update needs to build the indexes.
 		if shouldRebuild && !gr.Node.isRunningTask(opIndexing) {
-			closer, err = gr.Node.startTask(opIndexing)
+			closer, err = gr.Node.startTaskAtTs(opIndexing, startTs)
 			if err != nil {
 				return err
 			}
@@ -280,7 +280,7 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 
 		if shouldRebuild {
 			go buildIndexes(su, rebuild, closer)
-		} else if err := updateSchema(su); err != nil {
+		} else if err := updateSchema(su, rebuild.StartTs); err != nil {
 			return err
 		}
 	}
@@ -290,25 +290,25 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 
 // updateSchema commits the schema to disk in blocking way, should be ok because this happens
 // only during schema mutations or we see a new predicate.
-func updateSchema(s *pb.SchemaUpdate) error {
+func updateSchema(s *pb.SchemaUpdate, ts uint64) error {
 	schema.State().Set(s.Predicate, s)
 	schema.State().DeleteMutSchema(s.Predicate)
-	txn := pstore.NewTransactionAt(1, true)
+	txn := pstore.NewTransactionAt(ts, true)
 	defer txn.Discard()
 	data, err := s.Marshal()
 	x.Check(err)
-	err = txn.SetEntry(&badger.Entry{
+	e := &badger.Entry{
 		Key:      x.SchemaKey(s.Predicate),
 		Value:    data,
 		UserMeta: posting.BitSchemaPosting,
-	})
-	if err != nil {
+	}
+	if err = txn.SetEntry(e.WithDiscard()); err != nil {
 		return err
 	}
-	return txn.CommitAt(1, nil)
+	return txn.CommitAt(ts, nil)
 }
 
-func createSchema(attr string, typ types.TypeID, hint pb.Metadata_HintType) error {
+func createSchema(attr string, typ types.TypeID, hint pb.Metadata_HintType, ts uint64) error {
 	ctx := schema.GetWriteContext(context.Background())
 
 	// Don't overwrite schema blindly, acl's might have been set even though
@@ -335,32 +335,32 @@ func createSchema(attr string, typ types.TypeID, hint pb.Metadata_HintType) erro
 	if err := checkSchema(&s); err != nil {
 		return err
 	}
-	return updateSchema(&s)
+	return updateSchema(&s, ts)
 }
 
-func runTypeMutation(ctx context.Context, update *pb.TypeUpdate) error {
+func runTypeMutation(ctx context.Context, update *pb.TypeUpdate, ts uint64) error {
 	current := *update
 	schema.State().SetType(update.TypeName, current)
-	return updateType(update.TypeName, *update)
+	return updateType(update.TypeName, *update, ts)
 }
 
 // We commit schema to disk in blocking way, should be ok because this happens
 // only during schema mutations or we see a new predicate.
-func updateType(typeName string, t pb.TypeUpdate) error {
+func updateType(typeName string, t pb.TypeUpdate, ts uint64) error {
 	schema.State().SetType(typeName, t)
-	txn := pstore.NewTransactionAt(1, true)
+	txn := pstore.NewTransactionAt(ts, true)
 	defer txn.Discard()
 	data, err := t.Marshal()
 	x.Check(err)
-	err = txn.SetEntry(&badger.Entry{
+	e := &badger.Entry{
 		Key:      x.TypeKey(typeName),
 		Value:    data,
 		UserMeta: posting.BitSchemaPosting,
-	})
-	if err != nil {
+	}
+	if err := txn.SetEntry(e.WithDiscard()); err != nil {
 		return err
 	}
-	return txn.CommitAt(1, nil)
+	return txn.CommitAt(ts, nil)
 }
 
 func hasEdges(attr string, startTs uint64) bool {

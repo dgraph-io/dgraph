@@ -64,7 +64,7 @@ func backupCurrentGroup(ctx context.Context, req *pb.BackupRequest) (*pb.BackupR
 		return nil, err
 	}
 
-	closer, err := g.Node.startTask(opBackup)
+	closer, err := g.Node.startTaskAtTs(opBackup, req.ReadTs)
 	if err != nil {
 		return nil, errors.Wrapf(err, "cannot start backup operation")
 	}
@@ -479,8 +479,7 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.BackupResponse,
 		}
 		defer tl.alloc.Release()
 
-		// Schema and types are written at Ts=1.
-		txn := pr.DB.NewTransactionAt(1, false)
+		txn := pr.DB.NewTransactionAt(pr.Request.ReadTs, false)
 		defer txn.Discard()
 		// We don't need to iterate over all versions.
 		iopts := badger.DefaultIteratorOptions
