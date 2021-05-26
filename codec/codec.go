@@ -51,6 +51,9 @@ func ToList(rm *sroar.Bitmap) *pb.List {
 }
 
 func ListCardinality(l *pb.List) uint64 {
+	if l == nil {
+		return 0
+	}
 	if len(l.SortedUids) > 0 {
 		x.AssertTrue(l.Bitmap == nil)
 		return uint64(len(l.SortedUids))
