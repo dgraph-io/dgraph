@@ -206,7 +206,8 @@ func (g *groupi) applyInitialTypes() {
 		if _, ok := schema.State().GetType(t.TypeName); ok {
 			continue
 		}
-		if err := updateType(t.GetTypeName(), *t); err != nil {
+		// It is okay to write initial types at ts=1.
+		if err := updateType(t.GetTypeName(), *t, 1); err != nil {
 			glog.Errorf("Error while applying initial type: %s", err)
 		}
 	}
@@ -220,7 +221,10 @@ func (g *groupi) applyInitialSchema() {
 	ctx := g.Ctx()
 
 	apply := func(s *pb.SchemaUpdate) {
-		if err := applySchema(s); err != nil {
+		// There are 2 cases: either the alpha is fresh or it restarted. If it is fresh cluster
+		// then we can write the schema at ts=1. If alpha restarted, then we will already have the
+		// schema at higher version and this operation will be a no-op.
+		if err := applySchema(s, 1); err != nil {
 			glog.Errorf("Error while applying initial schema: %s", err)
 		}
 	}
@@ -246,8 +250,8 @@ func (g *groupi) applyInitialSchema() {
 	}
 }
 
-func applySchema(s *pb.SchemaUpdate) error {
-	if err := updateSchema(s); err != nil {
+func applySchema(s *pb.SchemaUpdate, ts uint64) error {
+	if err := updateSchema(s, ts); err != nil {
 		return err
 	}
 	if servesTablet, err := groups().ServesTablet(s.Predicate); err != nil {
