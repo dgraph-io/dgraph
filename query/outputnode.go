@@ -30,6 +30,7 @@ import (
 	"unicode/utf8"
 	"unsafe"
 
+	"github.com/dgraph-io/dgraph/codec"
 	gqlSchema "github.com/dgraph-io/dgraph/graphql/schema"
 
 	"github.com/golang/glog"
@@ -1082,9 +1083,10 @@ func processNodeUids(fj fastJsonNode, enc *encoder, sg *SubGraph) error {
 		return sg.addGroupby(enc, fj, sg.GroupbyRes[0], sg.Params.Alias)
 	}
 
-	lenList := len(sg.uidMatrix[0].Uids)
+	uids := codec.GetUids(sg.uidMatrix[0])
+	lenList := len(uids)
 	for i := 0; i < lenList; i++ {
-		uid := sg.uidMatrix[0].Uids[i]
+		uid := uids[i]
 		if !sg.DestMap.Contains(uid) {
 			// This UID was filtered. So Ignore it.
 			continue
@@ -1362,6 +1364,7 @@ func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode) erro
 			continue
 		}
 
+		uids := codec.GetUids(pc.uidMatrix[idx])
 		fieldName := pc.fieldName()
 		switch {
 		case len(pc.counts) > 0:
@@ -1374,7 +1377,7 @@ func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode) erro
 				return err
 			}
 
-		case idx < len(pc.uidMatrix) && len(pc.uidMatrix[idx].Uids) > 0:
+		case idx < len(pc.uidMatrix) && len(uids) > 0:
 			var fcsList []*pb.Facets
 			if pc.Params.Facet != nil {
 				fcsList = pc.facetsMatrix[idx].FacetsList
@@ -1391,8 +1394,7 @@ func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode) erro
 
 			// We create as many predicate entity children as the length of uids for
 			// this predicate.
-			ul := pc.uidMatrix[idx]
-			for childIdx, childUID := range ul.Uids {
+			for childIdx, childUID := range uids {
 				if fieldName == "" || (invalidUids != nil && invalidUids[childUID]) {
 					continue
 				}
@@ -1482,7 +1484,7 @@ func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode) erro
 			}
 
 			// add value for count(uid) nodes if any.
-			if _, err := pc.handleCountUIDNodes(enc, dst, len(ul.Uids)); err != nil {
+			if _, err := pc.handleCountUIDNodes(enc, dst, len(uids)); err != nil {
 				return err
 			}
 		default:

@@ -136,6 +136,22 @@ func FromList(l *pb.List) *sroar.Bitmap {
 	return iw
 }
 
+func FromListCopy(l *pb.List) *sroar.Bitmap {
+	iw := sroar.NewBitmap()
+	if l == nil {
+		return iw
+	}
+
+	if len(l.Bitmap) > 0 {
+		// Only one of Uids or Bitmap should be defined.
+		iw = sroar.FromBufferWithCopy(l.Bitmap)
+	}
+	// if len(l.Uids) > 0 {
+	// 	iw.SetMany(l.Uids)
+	// }
+	return iw
+}
+
 func FromBytes(buf []byte) *sroar.Bitmap {
 	r := sroar.NewBitmap()
 	if buf == nil || len(buf) == 0 {
