@@ -2885,7 +2885,7 @@ invalid_schemas:
         nameHi: Int @dgraph(pred:"Person.name@hi")
       }
     errlist: [
-      { "message": "Type Person; Field nameHi: Expected type `String` for language tag field but got `Int`",
+      { "message": "Type Person; Field nameHi: Expected type `String` for language tag field but got `Int`.",
         "locations": [ { "line": 3, "column": 3 } ] },
     ]
 
@@ -2896,7 +2896,7 @@ invalid_schemas:
         nameHi: String! @dgraph(pred:"Person.name@hi") @id
       }
     errlist: [
-      { "message": "Type Person; Field nameHi: @id directive not supported on language tag fields",
+      { "message": "Type Person; Field nameHi: @id directive not supported on language tag fields.",
         "locations": [ { "line": 3, "column": 51 } ] },
     ]
 
@@ -2908,7 +2908,7 @@ invalid_schemas:
       }
     errlist: [
       { "message": "Type Person; Field nameHiEn: @search directive not applicable on language tag
-        field with multiple languages",
+        field with multiple languages.",
         "locations": [ { "line": 3, "column": 56 } ] },
     ]
 
@@ -2919,7 +2919,7 @@ invalid_schemas:
         nameHi: String @dgraph(pred:"Person.name@*")
       }
     errlist: [
-      { "message": "Type Person; Field nameHi: `*` language tag not supported in GraphQL",
+      { "message": "Type Person; Field nameHi: `*` language tag not supported in GraphQL.",
         "locations": [ { "line": 3, "column": 19 } ] },
     ]
 
@@ -2933,6 +2933,121 @@ invalid_schemas:
       { "message": "Type Person; Field name: @id field with interface argument
         can only be defined in interface,not in Type",
         "locations": [ { "line": 2, "column": 18 } ] },
+    ]
+
+  - name: "facet argument of @dgraph directive has to be string"
+    input: |
+      type Person  {
+        name: String!
+        nameSince: String! @dgraph(facet: 2, field: "name")
+        age: Int
+      }
+    errlist: [
+      { "message": "Type Person; Field nameSince: facet argument for @dgraph directive
+       should be of type String.",
+        "locations": [ { "line": 3, "column": 23 } ] },
+    ]
+
+  - name: "facet argument and pred argument of @dgraph directive should not be set together"
+    input: |
+      type Person  {
+        name: String!
+        nameSince: String! @dgraph(facet: "since", field: "name", pred: "something")
+        age: Int
+      }
+    errlist: [
+      { "message": "Type Person; Field nameSince: facet and pred argument for @dgraph directive should
+       not be both non-empty.",
+        "locations": [ { "line": 3, "column": 23 } ] },
+    ]
+
+  - name: "facet argument of @dgraph directive and id directive should not be set together"
+    input: |
+      type Person  {
+        name: String!
+        nameSince: String! @dgraph(facet: "since", field: "name") @id
+        age: Int
+      }
+    errlist: [
+      { "message": "Type Person; Field nameSince: @id directive not supported on facet fields.",
+        "locations": [ { "line": 3, "column": 62 } ] },
+    ]
+
+  - name: "facet argument of @dgraph directive and search directive should not be set together"
+    input: |
+      type Person  {
+        name: String!
+        nameSince: String! @dgraph(facet: "since", field: "name") @search
+        age: Int
+      }
+    errlist: [
+      { "message": "Type Person; Field nameSince: @search directive not applicable on facet fields.",
+        "locations": [ { "line": 3, "column": 62 } ] },
+    ]
+
+  - name: "field argument of @dgraph directive should be of type string"
+    input: |
+      type Person  {
+        name: String!
+        nameSince: String! @dgraph(facet: "since", field: 2)
+        age: Int
+      }
+    errlist: [
+      { "message": "Type Person; Field nameSince: field argument for @dgraph directive should be of
+       type String.",
+        "locations": [ { "line": 3, "column": 23 } ] },
+    ]
+
+  - name: "field and facet field of dgraph directive should both be non-lists"
+    input: |
+      type Person  {
+        name: [String!]
+        nameSince: String! @dgraph(facet: "since", field: "name")
+        age: Int
+      }
+    errlist: [
+      { "message": "Type Person; Field nameSince: field argument for @dgraph directive
+       should not be of list type as facet field is not of list type.",
+        "locations": [ { "line": 3, "column": 23 } ] },
+    ]
+
+  - name: "field and facet field of dgraph directive should both be lists"
+    input: |
+      type Person  {
+        name: String!
+        nameSince: [String!] @dgraph(facet: "since", field: "name")
+        age: Int
+      }
+    errlist: [
+      { "message": "Type Person; Field nameSince: field argument for @dgraph
+       directive should be of list type as facet field is of list type.",
+        "locations": [ { "line": 3, "column": 25 } ] },
+    ]
+
+  - name: "field argument of dgraph directive not present"
+    input: |
+      type Person  {
+        name: String!
+        nameSince: String! @dgraph(facet: "since", field: "nonExistent")
+        age: Int
+      }
+    errlist: [
+      { "message": "Type Person; Field nameSince: field argument for @dgraph directive
+       should be present as field name in the Type.",
+        "locations": [ { "line": 3, "column": 23 } ] },
+    ]
+
+  - name: "field argument should not be present when facet argument is not provided"
+    input: |
+      type Person  {
+        name: String!
+        nameSince: String! @dgraph(field: "name")
+        age: Int
+      }
+    errlist: [
+      { "message": "Type Person; Field nameSince: field argument
+       for @dgraph directive should not be non-empty when facet argument is empty.",
+        "locations": [ { "line": 3, "column": 23 } ] },
     ]
 
 valid_schemas:
@@ -3479,3 +3594,22 @@ valid_schemas:
         name: String! @id
         manages: [LibraryMember]
       }
+
+  - name: "valid schema with facets added using @dgraph directive"
+    input: |
+      type Person {
+          name: String!
+          pet: Animal
+          pets: [Animal]
+          nameSince: DateTime @dgraph(facet: "since", field: "name")
+      }
+
+      type Animal {
+          id: ID!
+          name: String!
+          colors: [String]
+          petClose: Boolean! @dgraph(facet: "close")
+          petSince: DateTime @dgraph(facet: "since")
+          colorTones: [String] @dgraph(facet: "tone", field: "colors")
+      }
+

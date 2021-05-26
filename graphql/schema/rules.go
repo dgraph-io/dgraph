@@ -1128,7 +1128,7 @@ func dgraphDirectiveValidation(sch *ast.Schema, typ *ast.Definition, field *ast.
 					"directive not supported on facet fields.", typ.Name, field.Name))
 			return errs
 		}
-		if field.Directives.ForName(searchDirective) != nil && isMultiLangField(field, false) {
+		if field.Directives.ForName(searchDirective) != nil {
 			errs = append(errs, gqlerror.ErrorPosf(field.Directives.ForName(searchDirective).Position,
 				"Type %s; Field %s: @search directive not applicable"+
 					" on facet fields.", typ.Name, field.Name))
@@ -1170,6 +1170,7 @@ func dgraphDirectiveValidation(sch *ast.Schema, typ *ast.Definition, field *ast.
 					}
 				}
 			}
+			// TODO(Rajas): Check if validation needs to be added for linking to same field.
 			if !isFieldArgPresent {
 				errs = append(errs, gqlerror.ErrorPosf(
 					dir.Position,
