@@ -214,12 +214,12 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest) error {
 		}
 
 		for range groups {
-			if backupRes := <-resCh; backupRes.err != nil {
+			backupRes := <-resCh
+			if backupRes.err != nil {
 				glog.Errorf("Error received during backup: %v", backupRes.err)
 				return backupRes.err
-			} else {
-				dropOperations = append(dropOperations, backupRes.res.GetDropOperations()...)
 			}
+			dropOperations = append(dropOperations, backupRes.res.GetDropOperations()...)
 		}
 	}
 
