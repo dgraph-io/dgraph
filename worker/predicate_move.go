@@ -97,8 +97,9 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *pb.KVS) error {
 
 				glog.Infof("Predicate being received: %v", pk.Attr)
 				if kv.StreamId == CleanPredicate {
-					// Delete on all nodes.
-					p := &pb.Proposal{CleanPredicate: pk.Attr, StartTs: kv.Version}
+					// Delete on all nodes. Remove the schema at timestamp kv.Version-1 and set it at
+					// kv.Version. kv.Version will be the TxnTs of the predicate move.
+					p := &pb.Proposal{CleanPredicate: pk.Attr, StartTs: kv.Version - 1}
 					if err := n.proposeAndWait(ctx, p); err != nil {
 						glog.Errorf("Error while cleaning predicate %v %v\n", pk.Attr, err)
 						return err
@@ -301,7 +302,7 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error
 		kv := &bpb.KV{}
 		kv.Key = schemaKey
 		kv.Value = val
-		kv.Version = item.Version()
+		kv.Version = in.ReadTs
 		kv.UserMeta = []byte{item.UserMeta()}
 		if in.SinceTs == 0 {
 			// When doing Phase I of predicate move, receiver should clean the predicate.
