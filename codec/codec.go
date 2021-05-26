@@ -131,14 +131,14 @@ func FromList(l *pb.List) *sroar.Bitmap {
 	if l == nil {
 		return iw
 	}
-
+	if len(l.SortedUids) > 0 {
+		x.AssertTrue(l.Bitmap == nil)
+		iw.SetMany(l.SortedUids)
+	}
 	if len(l.Bitmap) > 0 {
 		// Only one of Uids or Bitmap should be defined.
 		iw = sroar.FromBuffer(l.Bitmap)
 	}
-	// if len(l.Uids) > 0 {
-	// 	iw.SetMany(l.Uids)
-	// }
 	return iw
 }
 
