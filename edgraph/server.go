@@ -1455,7 +1455,10 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (
 		EncodingNs:        uint64(l.Json.Nanoseconds()),
 		TotalNs:           uint64((time.Since(l.Start)).Nanoseconds()),
 	}
-	md := metadata.Pairs(x.DgraphCostHeader, fmt.Sprint(resp.Metrics.NumUids["_total"]))
+	md := metadata.Pairs(
+		x.DgraphCostHeader, fmt.Sprint(resp.Metrics.NumUids["_total"]),
+		x.ContentLengthHeader, strconv.Itoa(resp.Size()),
+	)
 	grpc.SendHeader(ctx, md)
 	return resp, gqlErrs
 }

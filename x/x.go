@@ -138,7 +138,8 @@ const (
 	AccessControlAllowedHeaders = "X-Dgraph-AccessToken, X-Dgraph-AuthToken, " +
 		"Content-Type, Content-Length, Accept-Encoding, Cache-Control, " +
 		"X-CSRF-Token, X-Auth-Token, X-Requested-With"
-	DgraphCostHeader = "Dgraph-TouchedUids"
+	DgraphCostHeader    = "Dgraph-TouchedUids"
+	ContentLengthHeader = "Dgraph-Content-Length"
 
 	DgraphVersion = 2103
 )
@@ -591,11 +592,16 @@ func WriteResponse(w http.ResponseWriter, r *http.Request, b []byte) (int, error
 		out = gzw
 	}
 
+	// The messages bigger than 2KB are sent with Transfer-Encoding:chunked, which means that
+	// Content-Length header won't be sent. This means that to send the Content-Length, we have to
+	// send it as a trailer. Also, Content-Length is reserved to be used as Trailer, so we have to
+	// use Dgraph-Content-Length.
+	w.Header().Set("Trailer", ContentLengthHeader)
 	bytesWritten, err := out.Write(b)
 	if err != nil {
 		return 0, err
 	}
-	w.Header().Set("Content-Length", strconv.FormatInt(int64(bytesWritten), 10))
+	w.Header().Set(ContentLengthHeader, strconv.FormatInt(int64(bytesWritten), 10))
 	return bytesWritten, nil
 }
 
