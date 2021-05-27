@@ -129,7 +129,7 @@ func getFilteredManifests(h x.UriHandler, manifests []*Manifest,
 	for _, m := range manifests {
 		missingFiles := false
 		for g := range m.Groups {
-			path := filepath.Join(m.Path, backupName(m.Since, g))
+			path := filepath.Join(m.Path, backupName(m.ValidReadTs(), g))
 			if !h.FileExists(path) {
 				missingFiles = true
 				break

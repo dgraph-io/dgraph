@@ -18,15 +18,21 @@ package x
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"io/ioutil"
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
+	"cloud.google.com/go/storage"
+	"github.com/Azure/azure-storage-blob-go/azblob"
 	"github.com/golang/glog"
 	"github.com/minio/minio-go/v6"
+	"google.golang.org/api/iterator"
+	"google.golang.org/api/option"
 
 	"github.com/pkg/errors"
 )
@@ -85,13 +91,22 @@ type UriHandler interface {
 //   minio://localhost:9000/dgraph?secure=true
 //   file:///tmp/dgraph/backups
 //   /tmp/dgraph/backups?compress=gzip
+//   https://dgraph.blob.core.windows.net/dgraph/backups
+//   gs://dgraph/backups
 func NewUriHandler(uri *url.URL, creds *MinioCredentials) (UriHandler, error) {
 	switch uri.Scheme {
 	case "file", "":
 		return NewFileHandler(uri), nil
 	case "minio", "s3":
 		return NewS3Handler(uri, creds)
+	case "gs":
+		return NewGCSHandler(uri, creds)
 	}
+
+	if strings.HasSuffix(uri.Host, "blob.core.windows.net") {
+		return NewAZSHandler(uri, creds)
+	}
+
 	return nil, errors.Errorf("Unable to handle url: %s", uri)
 }
 
@@ -347,4 +362,470 @@ func (h *s3Handler) Rename(srcPath, dstPath string) error {
 
 func (h *s3Handler) getObjectPath(path string) string {
 	return filepath.Join(h.objectPrefix, path)
+}
+
+const AZSSeparator = '/'
+
+type AZS struct {
+	bucket      *azblob.ContainerURL
+	client      *azblob.ServiceURL // Azure sdk client
+	accountName string
+	bucketName  string
+	pathName    string
+}
+
+// Helper function to get the account, container and path of the destination folder from an Azure
+// URL and adds it to azs.
+func getAzDetailsFromUri(uri *url.URL, azs *AZS) (err error) {
+	// azure url -> https://<account_name>.blob.core.windows.net/<container>/path/to/dest
+	parts := strings.Split(uri.Host, ".")
+	if len(parts) > 0 {
+		azs.accountName = parts[0]
+	} else {
+		err = errors.Errorf("invalid azure host: %s", uri.Host)
+		return
+	}
+
+	parts = strings.Split(uri.Path, string(filepath.Separator))
+	if len(parts) > 1 {
+		azs.bucketName = parts[1]
+		azs.pathName = strings.Join(parts[2:], string(filepath.Separator))
+	} else {
+		err = errors.Errorf("invalid azure path: %s", uri.Path)
+		return
+	}
+
+	return
+}
+
+// NewAZSHandler creates a new azure storage handler.
+func NewAZSHandler(uri *url.URL, creds *MinioCredentials) (*AZS, error) {
+	azs := &AZS{}
+	if err := getAzDetailsFromUri(uri, azs); err != nil {
+		return nil, errors.Wrapf(err, "while getting bucket details")
+	}
+
+	var azCreds azblob.Credential
+	if creds.isAnonymous() {
+		azCreds = azblob.NewAnonymousCredential()
+	} else {
+		// Override credentials from the Azure storage environment variables if specified
+		key := os.Getenv("AZURE_STORAGE_KEY")
+		if len(creds.SecretKey) > 0 {
+			key = creds.SecretKey
+		}
+
+		if len(key) == 0 {
+			return nil, errors.Errorf("Missing secret key for azure access.")
+		}
+
+		sharedkey, err := azblob.NewSharedKeyCredential(azs.accountName, key)
+		if err != nil {
+			return nil, errors.Wrap(err, "while creating sharedkey")
+		}
+
+		azCreds = sharedkey
+	}
+
+	// NewServiceURL only requires hostname and scheme.
+	client := azblob.NewServiceURL(url.URL{
+		Scheme: uri.Scheme,
+		Host:   uri.Host,
+	}, azblob.NewPipeline(azCreds, azblob.PipelineOptions{}))
+	azs.client = &client
+
+	bucket := azs.client.NewContainerURL(azs.bucketName)
+	azs.bucket = &bucket
+
+	// Verify that bucket exists.
+	if _, err := azs.bucket.GetProperties(context.Background(),
+		azblob.LeaseAccessConditions{}); err != nil {
+		return nil, errors.Wrap(err, "while checking if bucket exists")
+	}
+
+	return azs, nil
+}
+
+// CreateDir creates a directory relative to the root path of the handler.
+func (azs *AZS) CreateDir(path string) error {
+	// Can't create a directory separately in azure. Folders are emulated with path separator.
+	// Empty directories are not allowed.
+	return nil
+}
+
+// CreateFile creates a file relative to the root path of the handler. It also makes the
+// handler's descriptor to point to this file.
+func (azs *AZS) CreateFile(path string) (io.WriteCloser, error) {
+	azW := &azWriter{
+		errCh: make(chan error, 1),
+	}
+	azW.pReader, azW.pWriter = io.Pipe()
+	go azW.upload(azs.bucket, azs.JoinPath(path))
+	return azW, nil
+}
+
+// DirExists returns true if the directory relative to the root path of the handler exists.
+func (azs *AZS) DirExists(path string) bool {
+	// Can't create a directory separately in azure. Folders are emulated with path separator.
+	// Empty directories are not allowed.
+	return true
+}
+
+// FileExists returns true if the file relative to the root path of the handler exists.
+func (azs *AZS) FileExists(path string) bool {
+	if _, err := azs.bucket.NewBlobURL(azs.JoinPath(path)).GetProperties(context.Background(),
+		azblob.BlobAccessConditions{}, azblob.ClientProvidedKeyOptions{}); err != nil {
+		glog.Errorf("while checking if file exists: %s", err)
+		return false
+	}
+	return true
+}
+
+// JoinPath appends the given path to the root path of the handler.
+func (azs *AZS) JoinPath(path string) string {
+	return filepath.Join(azs.pathName, path)
+}
+
+// ListPaths returns a list of all the valid paths from the given root path. The given root path
+// should be relative to the handler's root path.
+func (azs *AZS) ListPaths(path string) []string {
+	paths := []string{}
+	marker := azblob.Marker{}
+	for marker.NotDone() {
+		blobList, err := azs.bucket.ListBlobsFlatSegment(context.Background(), marker,
+			azblob.ListBlobsSegmentOptions{
+				Prefix: azs.JoinPath(path),
+			})
+		if err != nil {
+			glog.Errorf("while listing paths: %q", err)
+			return nil
+		}
+
+		marker = blobList.NextMarker
+		for _, blobinfo := range blobList.Segment.BlobItems {
+			name := blobinfo.Name
+			name = name[len(azs.pathName):]
+			paths = append(paths, name)
+		}
+	}
+
+	return paths
+}
+
+// Read reads the file at given relative path and returns the read bytes.
+func (azs *AZS) Read(path string) ([]byte, error) {
+	resp, err := azs.bucket.NewBlockBlobURL(azs.JoinPath(path)).Download(context.Background(), 0,
+		azblob.CountToEnd, azblob.BlobAccessConditions{}, false, azblob.ClientProvidedKeyOptions{})
+	if err != nil {
+		return nil, errors.Wrap(err, "while reading file")
+	}
+
+	buf := bytes.Buffer{}
+	if _, err := buf.ReadFrom(resp.Body(azblob.RetryReaderOptions{})); err != nil {
+		return nil, errors.Wrap(err, "while reading file")
+	}
+	return buf.Bytes(), nil
+}
+
+// Rename renames the src file to the destination file.
+func (azs *AZS) Rename(src, dst string) error {
+	ctx := context.Background()
+
+	srcHandle := azs.bucket.NewBlockBlobURL(azs.JoinPath(src))
+	resp, err := srcHandle.Download(ctx, 0,
+		azblob.CountToEnd, azblob.BlobAccessConditions{}, false, azblob.ClientProvidedKeyOptions{})
+	if err != nil {
+		return errors.Wrap(err, "while reading file")
+	}
+
+	if _, err = azblob.UploadStreamToBlockBlob(ctx, resp.Body(azblob.RetryReaderOptions{}),
+		azs.bucket.NewBlockBlobURL(azs.JoinPath(dst)),
+		azblob.UploadStreamToBlockBlobOptions{}); err != nil {
+		return errors.Wrapf(err, "while uploading")
+	}
+
+	if _, err = srcHandle.Delete(ctx, azblob.DeleteSnapshotsOptionInclude,
+		azblob.BlobAccessConditions{}); err != nil {
+		return errors.Wrapf(err, "while deleting file")
+	}
+
+	return nil
+}
+
+// Stream would stream the path via an instance of io.ReadCloser. Close must be called at the
+// end to release resources appropriately.
+func (azs *AZS) Stream(path string) (io.ReadCloser, error) {
+	resp, err := azs.bucket.NewBlockBlobURL(azs.JoinPath(path)).Download(context.Background(), 0,
+		azblob.CountToEnd, azblob.BlobAccessConditions{}, false, azblob.ClientProvidedKeyOptions{})
+	if err != nil {
+		return nil, errors.Wrap(err, "while reading file")
+	}
+
+	return resp.Body(azblob.RetryReaderOptions{}), nil
+}
+
+type azWriter struct {
+	pReader *io.PipeReader
+	pWriter *io.PipeWriter
+	errCh   chan error
+}
+
+// Write writes to the pipe writer.
+func (w *azWriter) Write(p []byte) (n int, err error) {
+	return w.pWriter.Write(p)
+}
+
+// Close calls close on the pipe writer and returns any erorrs encoutered in writing using the
+// pipe reader.
+func (w *azWriter) Close() error {
+	if w == nil {
+		return nil
+	}
+
+	if err := w.pWriter.Close(); err != nil {
+		glog.Errorf("Unexpected error when closing pipe: %v", err)
+	}
+	w.pWriter = nil
+
+	return <-w.errCh
+}
+
+// Helper function to process writes to azure. The function is run is a separate go-routine because
+// the azure API requires a reader instead of a writer as an input. Any errors are returned to
+// errCh of the azWriter, which are returned when close on the azWriter is called.
+func (w *azWriter) upload(bucket *azblob.ContainerURL, absPath string) {
+	f := func() error {
+		ctx := context.Background()
+		_, err := azblob.UploadStreamToBlockBlob(ctx, w.pReader, bucket.NewBlockBlobURL(absPath),
+			azblob.UploadStreamToBlockBlobOptions{})
+
+		return errors.Wrapf(err, "while uploading")
+	}
+	w.errCh <- f()
+}
+
+const GCSSeparator = '/'
+
+type GCS struct {
+	client     *storage.Client
+	bucket     *storage.BucketHandle
+	pathPrefix string
+}
+
+func NewGCSHandler(uri *url.URL, creds *MinioCredentials) (gcs *GCS, err error) {
+	ctx := context.Background()
+
+	var c *storage.Client
+	// TODO(rohanprasad): Add support for API key, if it's sufficient to access storage bucket.
+	if creds.isAnonymous() {
+		if c, err = storage.NewClient(ctx, option.WithoutAuthentication()); err != nil {
+			return nil, err
+		}
+	} else if creds.SecretKey != "" {
+		f, err := os.Open(creds.SecretKey)
+		if err != nil {
+			return nil, err
+		}
+
+		data, err := ioutil.ReadAll(f)
+		if err != nil {
+			return nil, err
+		}
+
+		c, err = storage.NewClient(ctx, option.WithCredentialsJSON(data))
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		// If no credentials are supplied, the library checks for environment variable
+		// GOOGLE_APPLICATION_CREDENTIALS otherwise falls back to use the service account attached
+		// to the resource running the code.
+		// https://cloud.google.com/docs/authentication/production#automatically
+		c, err = storage.NewClient(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	gcs = &GCS{
+		client:     c,
+		pathPrefix: uri.Path,
+	}
+
+	if len(gcs.pathPrefix) > 0 && gcs.pathPrefix[0] == GCSSeparator {
+		gcs.pathPrefix = gcs.pathPrefix[1:]
+	}
+
+	gcs.bucket = gcs.client.Bucket(uri.Host)
+	if _, err := gcs.bucket.Attrs(ctx); err != nil {
+		gcs.client.Close()
+		return nil, errors.Wrapf(err, "while accessing bucket")
+	}
+
+	return gcs, nil
+}
+
+// CreateDir creates a directory relative to the root path of the handler.
+func (gcs *GCS) CreateDir(path string) error {
+	ctx := context.Background()
+
+	// GCS uses a flat storage and provides an illusion of directories. To create a directory, file
+	// name must be followed by '/'.
+	dir := filepath.Join(gcs.pathPrefix, path, "") + string(GCSSeparator)
+	glog.V(2).Infof("Creating dir: %q", dir)
+
+	writer := gcs.bucket.Object(dir).NewWriter(ctx)
+	if err := writer.Close(); err != nil {
+		return errors.Wrapf(err, "while creating directory")
+	}
+
+	return nil
+}
+
+// CreateFile creates a file relative to the root path of the handler. It also makes the
+// handler's descriptor to point to this file.
+func (gcs *GCS) CreateFile(path string) (io.WriteCloser, error) {
+	ctx := context.Background()
+
+	writer := gcs.bucket.Object(gcs.JoinPath(path)).NewWriter(ctx)
+	return writer, nil
+}
+
+// DirExists returns true if the directory relative to the root path of the handler exists.
+func (gcs *GCS) DirExists(path string) bool {
+	ctx := context.Background()
+
+	absPath := gcs.JoinPath(path)
+
+	// If there's no root specified we return true because we have ensured that the bucket exists.
+	if len(absPath) == 0 {
+		return true
+	}
+
+	// GCS doesn't has the concept of directories, it emulated the folder behaviour if the path is
+	// suffixed with '/'.
+	absPath += string(GCSSeparator)
+
+	it := gcs.bucket.Objects(ctx, &storage.Query{
+		Prefix: absPath,
+	})
+
+	if _, err := it.Next(); err == iterator.Done {
+		return false
+	} else if err == nil {
+		return true
+	} else {
+		glog.Errorf("Error while checking if directory exists: %s", err)
+		return false
+	}
+}
+
+// FileExists returns true if the file relative to the root path of the handler exists.
+func (gcs *GCS) FileExists(path string) bool {
+	ctx := context.Background()
+
+	obj := gcs.bucket.Object(gcs.JoinPath(path))
+	if _, err := obj.Attrs(ctx); err == storage.ErrObjectNotExist {
+		return false
+	} else if err != nil {
+		glog.Errorf("Error while checking if file exists: %s", err)
+		return false
+	}
+
+	return true
+}
+
+// JoinPath appends the given path to the root path of the handler.
+func (gcs *GCS) JoinPath(path string) string {
+	if len(gcs.pathPrefix) == 0 {
+		return path
+	}
+
+	if len(path) == 0 {
+		return gcs.pathPrefix
+	}
+
+	return gcs.pathPrefix + string(GCSSeparator) + path
+}
+
+// ListPaths returns a list of all the valid paths from the given root path. The given root path
+// should be relative to the handler's root path.
+func (gcs *GCS) ListPaths(path string) []string {
+	ctx := context.Background()
+
+	absPath := gcs.JoinPath(path)
+	if len(absPath) != 0 {
+		absPath += string(GCSSeparator)
+	}
+
+	it := gcs.bucket.Objects(ctx, &storage.Query{
+		Prefix: absPath,
+	})
+
+	paths := []string{}
+
+	for {
+		attrs, err := it.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			glog.Errorf("Error while listing paths: %s", err)
+		}
+
+		if len(attrs.Name) > 0 {
+			paths = append(paths, attrs.Name)
+		} else if len(attrs.Prefix) > 0 {
+			paths = append(paths, attrs.Prefix)
+		}
+	}
+
+	return paths
+}
+
+// Read reads the file at given relative path and returns the read bytes.
+func (gcs *GCS) Read(path string) ([]byte, error) {
+	ctx := context.Background()
+	reader, err := gcs.bucket.Object(gcs.JoinPath(path)).NewReader(ctx)
+	if err != nil {
+		return nil, errors.Wrapf(err, "while reading file")
+	}
+	defer reader.Close()
+
+	data, err := ioutil.ReadAll(reader)
+	if err != nil {
+		return nil, errors.Wrapf(err, "while reading file")
+	}
+
+	return data, nil
+}
+
+// Rename renames the src file to the destination file.
+func (gcs *GCS) Rename(src, dst string) error {
+	ctx := context.Background()
+
+	srcObj := gcs.bucket.Object(gcs.JoinPath(src))
+	dstObj := gcs.bucket.Object(gcs.JoinPath(dst))
+
+	if _, err := dstObj.CopierFrom(srcObj).Run(ctx); err != nil {
+		return errors.Wrapf(err, "while renaming file")
+	}
+
+	if err := srcObj.Delete(ctx); err != nil {
+		return errors.Wrapf(err, "while renaming file")
+	}
+
+	return nil
+}
+
+// Stream would stream the path via an instance of io.ReadCloser. Close must be called at the
+// end to release resources appropriately.
+func (gcs *GCS) Stream(path string) (io.ReadCloser, error) {
+	ctx := context.Background()
+	reader, err := gcs.bucket.Object(gcs.JoinPath(path)).NewReader(ctx)
+	if err != nil {
+		return nil, errors.Wrapf(err, "while reading file")
+	}
+
+	return reader, nil
 }

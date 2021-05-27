@@ -64,7 +64,7 @@ func backupCurrentGroup(ctx context.Context, req *pb.BackupRequest) (*pb.BackupR
 		return nil, err
 	}
 
-	closer, err := g.Node.startTask(opBackup)
+	closer, err := g.Node.startTaskAtTs(opBackup, req.ReadTs)
 	if err != nil {
 		return nil, errors.Wrapf(err, "cannot start backup operation")
 	}
@@ -152,8 +152,12 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest) error {
 		return err
 	}
 
-	req.SinceTs = latestManifest.Since
+	// Use the readTs as the sinceTs for the next backup. If not found, use the
+	// SinceTsDeprecated value from the latest manifest.
+	req.SinceTs = latestManifest.ValidReadTs()
+
 	if req.ForceFull {
+		// To force a full backup we'll set the sinceTs to zero.
 		req.SinceTs = 0
 	} else {
 		if x.WorkerConfig.EncryptionKey != nil {
@@ -196,30 +200,32 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	resCh := make(chan BackupRes, len(state.Groups))
-	for _, gid := range groups {
-		br := proto.Clone(req).(*pb.BackupRequest)
-		br.GroupId = gid
-		br.Predicates = predMap[gid]
-		go func(req *pb.BackupRequest) {
-			res, err := BackupGroup(ctx, req)
-			resCh <- BackupRes{res: res, err: err}
-		}(br)
-	}
-
 	var dropOperations []*pb.DropOperation
-	for range groups {
-		if backupRes := <-resCh; backupRes.err != nil {
-			glog.Errorf("Error received during backup: %v", backupRes.err)
-			return backupRes.err
-		} else {
+	{ // This is the code which sends out Backup requests and waits for them to finish.
+		resCh := make(chan BackupRes, len(state.Groups))
+		for _, gid := range groups {
+			br := proto.Clone(req).(*pb.BackupRequest)
+			br.GroupId = gid
+			br.Predicates = predMap[gid]
+			go func(req *pb.BackupRequest) {
+				res, err := BackupGroup(ctx, req)
+				resCh <- BackupRes{res: res, err: err}
+			}(br)
+		}
+
+		for range groups {
+			backupRes := <-resCh
+			if backupRes.err != nil {
+				glog.Errorf("Error received during backup: %v", backupRes.err)
+				return backupRes.err
+			}
 			dropOperations = append(dropOperations, backupRes.res.GetDropOperations()...)
 		}
 	}
 
 	dir := fmt.Sprintf(backupPathFmt, req.UnixTs)
 	m := Manifest{
-		Since:          req.ReadTs,
+		ReadTs:         req.ReadTs,
 		Groups:         predMap,
 		Version:        x.ManifestVersion,
 		DropOperations: dropOperations,
@@ -479,8 +485,7 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.BackupResponse,
 		}
 		defer tl.alloc.Release()
 
-		// Schema and types are written at Ts=1.
-		txn := pr.DB.NewTransactionAt(1, false)
+		txn := pr.DB.NewTransactionAt(pr.Request.ReadTs, false)
 		defer txn.Discard()
 		// We don't need to iterate over all versions.
 		iopts := badger.DefaultIteratorOptions
@@ -582,8 +587,8 @@ func (pr *BackupProcessor) CompleteBackup(ctx context.Context, m *Manifest) erro
 
 // GoString implements the GoStringer interface for Manifest.
 func (m *Manifest) GoString() string {
-	return fmt.Sprintf(`Manifest{Since: %d, Groups: %v, Encrypted: %v}`,
-		m.Since, m.Groups, m.Encrypted)
+	return fmt.Sprintf(`Manifest{Since: %d, ReadTs: %d, Groups: %v, Encrypted: %v}`,
+		m.SinceTsDeprecated, m.ReadTs, m.Groups, m.Encrypted)
 }
 
 func (tl *threadLocal) toBackupList(key []byte, itr *badger.Iterator) (

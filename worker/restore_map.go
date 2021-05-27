@@ -665,7 +665,7 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) (*mapResult, error) {
 		if dropAll {
 			break
 		}
-		if manifest.Since == 0 || len(manifest.Groups) == 0 {
+		if manifest.ValidReadTs() == 0 || len(manifest.Groups) == 0 {
 			continue
 		}
 		for gid := range manifest.Groups {
@@ -677,7 +677,7 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) (*mapResult, error) {
 
 			// Only restore the predicates that were assigned to this group at the time
 			// of the last backup.
-			file := filepath.Join(manifest.Path, backupName(manifest.Since, gid))
+			file := filepath.Join(manifest.Path, backupName(manifest.ValidReadTs(), gid))
 			br := readerFrom(h, file).WithEncryption(keys.EncKey).WithCompression(manifest.Compression)
 			if br.err != nil {
 				return nil, errors.Wrap(br.err, "newBackupReader")
