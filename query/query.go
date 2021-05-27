@@ -2538,6 +2538,11 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 		Count:     int32(sg.Params.Count),
 		ReadTs:    sg.ReadTs,
 	}
+
+	// Convert the bitmaps to Sorted, as now we need to store the uids in order.
+	for _, ul := range sortMsg.UidMatrix {
+		codec.BitmapToSorted(ul)
+	}
 	result, err := worker.SortOverNetwork(ctx, sortMsg)
 	if err != nil {
 		return err

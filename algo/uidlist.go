@@ -37,7 +37,12 @@ func ApplyFilter(u *pb.List, f func(uint64, int) bool) {
 			bm2.Set(uid)
 		}
 	}
-	u.Bitmap = bm2.ToBuffer()
+	// Need to think of a better way to abstract this.
+	if u.SortedUids != nil {
+		u.SortedUids = bm2.ToArray()
+	} else {
+		u.Bitmap = bm2.ToBuffer()
+	}
 	// u.Bitmap = nil
 	// u.SortedUids = out
 }

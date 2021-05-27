@@ -262,7 +262,7 @@ func (sg *SubGraph) expandOut(ctx context.Context,
 					temp := new(SubGraph)
 					temp.copyFiltersRecurse(child)
 
-					temp.SrcUIDs = codec.ToList(subgraph.DestMap)
+					temp.SrcUIDs = codec.ToSortedList(subgraph.DestMap)
 					// Remove those nodes which we have already traversed. As this cannot be
 					// in the path again.
 					algo.ApplyFilter(temp.SrcUIDs, func(uid uint64, i int) bool {
@@ -441,7 +441,7 @@ func runKShortestPaths(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	return shortestSg, nil
 }
 
-// Djikstras algorithm pseudocode for reference.
+// Dijkstra's algorithm pseudocode for reference.
 //
 //
 // 1  function Dijkstra(Graph, source):

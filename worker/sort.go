@@ -391,7 +391,7 @@ func multiSort(ctx context.Context, r *sortresult, ts *pb.SortMessage) error {
 	for i := 1; i < len(ts.Order); i++ {
 		in := &pb.Query{
 			Attr:    ts.Order[i].Attr,
-			UidList: codec.ToList(dest),
+			UidList: codec.ToSortedList(dest),
 			Langs:   ts.Order[i].Langs,
 			ReadTs:  ts.ReadTs,
 		}
@@ -610,6 +610,7 @@ func intersectBucket(ctx context.Context, ts *pb.SortMessage, token string,
 		if err != nil {
 			return err
 		}
+		codec.BitmapToSorted(result)
 
 		// Duplicates will exist between buckets if there are multiple language
 		// variants of a predicate.

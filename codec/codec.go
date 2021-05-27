@@ -45,8 +45,14 @@ func ApproxLen(bitmap []byte) int {
 
 func ToList(rm *sroar.Bitmap) *pb.List {
 	return &pb.List{
-		// Uids: rm.ToArray(),
 		Bitmap: ToBytes(rm),
+		// SortedUids: rm.ToArray(),
+	}
+}
+
+func ToSortedList(rm *sroar.Bitmap) *pb.List {
+	return &pb.List{
+		SortedUids: rm.ToArray(),
 	}
 }
 
@@ -77,6 +83,14 @@ func GetUids(l *pb.List) []uint64 {
 		return l.SortedUids
 	}
 	return FromList(l).ToArray()
+}
+
+func BitmapToSorted(l *pb.List) {
+	if l == nil {
+		return
+	}
+	l.SortedUids = FromList(l).ToArray()
+	l.Bitmap = nil
 }
 
 func And(rm *sroar.Bitmap, l *pb.List) {

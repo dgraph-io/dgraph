@@ -697,38 +697,8 @@ func retrieveUidsAndFacets(args funcArgs, pl *posting.List, facetsTree *facetsTr
 	if err != nil {
 		return nil, nil, err
 	}
-	return codec.ToList(res), fcsList, nil
-
-	// if q.FacetParam != nil || facetsTree != nil {
-	// 	// Takes care of 2 and 3. And also 4 for picking facets.
-	// 	err := facetsFilterUidPostingList(pl, facetsTree, opts, func(p *pb.Posting) {
-	// 		uidList.Uids = append(uidList.Uids, p.Uid)
-	// 		if q.FacetParam != nil {
-	// 			fcsList = append(fcsList, &pb.Facets{
-	// 				Facets: facets.CopyFacets(p.Facets, q.FacetParam),
-	// 			})
-	// 		}
-	// 	})
-	// 	if err != nil {
-	// 		return nil, nil, err
-	// 	}
-	// }
-	// if facetsTree == nil {
-	// 	// Takes care of 1 and 4 for picking all UIDs.
-	// 	bm, err := pl.Bitmap(opts)
-	// 	if err != nil {
-	// 		return nil, nil, err
-	// 	}
-	// 	uidList = codec.ToList(bm)
-	// }
-
-	// // TODO: We shouldn't be adding nils to match up indices. Refactor how we do this.
-	// if q.FacetParam != nil {
-	// 	if len(uidList.Uids) != len(fcsList) {
-	// 	}
-	// }
-
-	// return uidList, fcsList, nil
+	// TODO(Ahsan): Need to figure out for what all cases we need sortedList.
+	return codec.ToSortedList(res), fcsList, nil
 }
 
 // This function handles operations on uid posting lists. Index keys, reverse keys and some data
