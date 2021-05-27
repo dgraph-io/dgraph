@@ -538,5 +538,5 @@ func RunOfflineRestore(dir, location, backupId string, keyFile string,
 		}
 	}
 	// TODO: Fix this return value.
-	return LoadResult{Version: manifest.Since}
+	return LoadResult{Version: manifest.ValidReadTs()}
 }

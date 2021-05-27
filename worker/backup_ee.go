@@ -152,8 +152,12 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest) error {
 		return err
 	}
 
-	req.SinceTs = latestManifest.Since
+	// Use the readTs as the sinceTs for the next backup. If not found, use the
+	// SinceTsDeprecated value from the latest manifest.
+	req.SinceTs = latestManifest.ValidReadTs()
+
 	if req.ForceFull {
+		// To force a full backup we'll set the sinceTs to zero.
 		req.SinceTs = 0
 	} else {
 		if x.WorkerConfig.EncryptionKey != nil {
@@ -196,30 +200,32 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	resCh := make(chan BackupRes, len(state.Groups))
-	for _, gid := range groups {
-		br := proto.Clone(req).(*pb.BackupRequest)
-		br.GroupId = gid
-		br.Predicates = predMap[gid]
-		go func(req *pb.BackupRequest) {
-			res, err := BackupGroup(ctx, req)
-			resCh <- BackupRes{res: res, err: err}
-		}(br)
-	}
-
 	var dropOperations []*pb.DropOperation
-	for range groups {
-		if backupRes := <-resCh; backupRes.err != nil {
-			glog.Errorf("Error received during backup: %v", backupRes.err)
-			return backupRes.err
-		} else {
+	{ // This is the code which sends out Backup requests and waits for them to finish.
+		resCh := make(chan BackupRes, len(state.Groups))
+		for _, gid := range groups {
+			br := proto.Clone(req).(*pb.BackupRequest)
+			br.GroupId = gid
+			br.Predicates = predMap[gid]
+			go func(req *pb.BackupRequest) {
+				res, err := BackupGroup(ctx, req)
+				resCh <- BackupRes{res: res, err: err}
+			}(br)
+		}
+
+		for range groups {
+			backupRes := <-resCh
+			if backupRes.err != nil {
+				glog.Errorf("Error received during backup: %v", backupRes.err)
+				return backupRes.err
+			}
 			dropOperations = append(dropOperations, backupRes.res.GetDropOperations()...)
 		}
 	}
 
 	dir := fmt.Sprintf(backupPathFmt, req.UnixTs)
 	m := Manifest{
-		Since:          req.ReadTs,
+		ReadTs:         req.ReadTs,
 		Groups:         predMap,
 		Version:        x.DgraphVersion,
 		DropOperations: dropOperations,
@@ -581,8 +587,8 @@ func (pr *BackupProcessor) CompleteBackup(ctx context.Context, m *Manifest) erro
 
 // GoString implements the GoStringer interface for Manifest.
 func (m *Manifest) GoString() string {
-	return fmt.Sprintf(`Manifest{Since: %d, Groups: %v, Encrypted: %v}`,
-		m.Since, m.Groups, m.Encrypted)
+	return fmt.Sprintf(`Manifest{Since: %d, ReadTs: %d, Groups: %v, Encrypted: %v}`,
+		m.SinceTsDeprecated, m.ReadTs, m.Groups, m.Encrypted)
 }
 
 func (tl *threadLocal) toBackupList(key []byte, itr *badger.Iterator) (

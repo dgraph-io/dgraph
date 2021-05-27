@@ -32,17 +32,17 @@ import (
 type predicateSet map[string]struct{}
 
 // Manifest records backup details, these are values used during restore.
-// Since is the timestamp from which the next incremental backup should start (it's set
-// to the readTs of the current backup).
+// ReadTs will be used to create the next incremental backup.
 // Groups are the IDs of the groups involved.
 type Manifest struct {
 	sync.Mutex
 	//Type is the type of backup, either full or incremental.
 	Type string `json:"type"`
-	// Since is the timestamp at which this backup was taken. It's called Since
-	// because it will become the timestamp from which to backup in the next
-	// incremental backup.
-	Since uint64 `json:"since"`
+	// SinceTsDeprecated is kept for backward compatibility. Use readTs instead of sinceTs.
+	SinceTsDeprecated uint64 `json:"since"`
+	// ReadTs is the timestamp at which this backup was taken. This would be
+	// the since timestamp for the next incremental backup.
+	ReadTs uint64 `json:"read_ts"`
 	// Groups is the map of valid groups to predicates at the time the backup was created.
 	Groups map[uint32][]string `json:"groups"`
 	// BackupId is a unique ID assigned to all the backups in the same series
@@ -66,6 +66,16 @@ type Manifest struct {
 	DropOperations []*pb.DropOperation `json:"drop_operations"`
 	// Compression keeps track of the compression that was used for the data.
 	Compression string `json:"compression"`
+}
+
+// ValidReadTs function returns the valid read timestamp. The backup can have
+// the readTs=0 if the backup was done on an older version of dgraph. The
+// SinceTsDecprecated is kept for backward compatibility.
+func (m *Manifest) ValidReadTs() uint64 {
+	if m.ReadTs == 0 {
+		return m.SinceTsDeprecated
+	}
+	return m.ReadTs
 }
 
 type MasterManifest struct {
