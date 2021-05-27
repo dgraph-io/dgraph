@@ -85,6 +85,7 @@ type options struct {
 	NumAlphas      int
 	NumReplicas    int
 	NumLearners    int
+	CustomGroups   []string
 	Acl            bool
 	AclSecret      string
 	DataDir        string
@@ -164,12 +165,12 @@ func getOffset(idx int) int {
 	return idx
 }
 
-func initService(basename string, idx, grpcPort int, container_name string) service {
+func initService(basename string, idx, grpcPort int, aliasName string) service {
 	var svc service
 
 	cont_name := func() string {
-		if container_name != "" {
-			return container_name + "_" + basename
+		if aliasName != "" {
+			return aliasName + "_" + basename
 		} else {
 			return basename
 		}
@@ -282,7 +283,7 @@ func getZero(idx int, raft string) service {
 	return svc
 }
 
-func getAlpha(idx int, raft string, custom_flag string) service {
+func getAlpha(idx int, raft string, customFlags string) service {
 	basename := "alpha"
 	internalPort := alphaBasePort + opts.PortOffset + getOffset(idx)
 	grpcPort := internalPort + 1000
@@ -305,15 +306,15 @@ func getAlpha(idx int, raft string, custom_flag string) service {
 		maxZeros = opts.NumZeros
 	}
 
-	zero_name := "zero"
+	zeroName := "zero"
 	if opts.ContainerAlias != "" {
-		zero_name = opts.ContainerAlias + "_" + zero_name
+		zeroName = opts.ContainerAlias + "_" + zeroName
 	}
 
-	zeroHostAddr := fmt.Sprintf("%s%d:%d", zero_name, 1, zeroBasePort+opts.PortOffset)
+	zeroHostAddr := fmt.Sprintf("%s%d:%d", zeroName, 1, zeroBasePort+opts.PortOffset)
 	zeros := []string{zeroHostAddr}
 	for i := 2; i <= maxZeros; i++ {
-		zeroHostAddr = fmt.Sprintf("%s%d:%d", zero_name, i, zeroBasePort+opts.PortOffset+getOffset(i))
+		zeroHostAddr = fmt.Sprintf("%s%d:%d", zeroName, i, zeroBasePort+opts.PortOffset+getOffset(i))
 		zeros = append(zeros, zeroHostAddr)
 	}
 
@@ -381,18 +382,13 @@ func getAlpha(idx int, raft string, custom_flag string) service {
 		}
 	}
 
-	// Configure Alpha
-	// if opts.AlphaOptions{
-	// 	svc.Command +=
-	// }
-
 	svc.EnvFile = opts.AlphaEnvFile
 	if opts.AlphaFlags != "" {
 		svc.Command += " " + opts.AlphaFlags
 	}
 
-	if custom_flag != "" {
-		svc.Command += " " + custom_flag
+	if customFlags != "" {
+		svc.Command += " " + customFlags
 	}
 
 	return svc
@@ -573,6 +569,8 @@ func main() {
 		"number of alpha replicas in Dgraph cluster")
 	cmd.PersistentFlags().IntVarP(&opts.NumLearners, "num_learners", "n", 0,
 		"number of learner replicas in Dgraph cluster")
+	cmd.PersistentFlags().StringArrayVar(&opts.CustomGroups, "custom_groups", nil,
+		"number of groups alpha's belong to in Dgraph cluster alpha_index:group_num")
 	cmd.PersistentFlags().BoolVar(&opts.DataVol, "data_vol", false,
 		"mount a docker volume as /data in containers")
 	cmd.PersistentFlags().StringVarP(&opts.DataDir, "data_dir", "d", "",
@@ -621,7 +619,7 @@ func main() {
 	cmd.PersistentFlags().StringVar(&opts.AlphaFlags, "extra_alpha_flags", "",
 		"extra flags for alphas.")
 	cmd.PersistentFlags().StringArrayVar(&opts.CustomAlphaOptions, "custom_alpha_flags", nil,
-		"Custom alpha flags for specific alphas, following {\"1:custom_flags\", \"2:custom_flags\"}, eg: {\"2: -p <bulk_path> --raft \"learner=true;\"}\" ")
+		"Custom alpha flags for specific alphas, following {\"1:custom_flags\", \"2:custom_flags\"}, eg: {\"2: -p <bulk_path> ")
 	cmd.PersistentFlags().StringVar(&opts.ZeroFlags, "extra_zero_flags", "",
 		"extra flags for zeros.")
 	cmd.PersistentFlags().BoolVar(&opts.ContainerNames, "names", true,
@@ -679,38 +677,67 @@ func main() {
 		svc := getZero(i, fmt.Sprintf("idx=%d", i))
 		services[svc.name] = svc
 	}
-	custom_alphas := ""
-	if len(opts.CustomAlphaOptions) > 0 {
-		custom_alphas = opts.CustomAlphaOptions[0]
-	}
-	cust_index := 0
-	for i := 1; i <= opts.NumAlphas; i++ {
-		gid := int(math.Ceil(float64(i) / float64(opts.NumReplicas)))
-		rs := fmt.Sprintf("idx=%d; group=%d", i, gid)
 
-		// Handling alpha customizations
-		custom_flags := ""
-		alpha_index := 0
-		if custom_alphas != "" {
-			alpha_index, err = strconv.Atoi(strings.Split(custom_alphas, ":")[0])
+	// Alpha Customization
+	customAlphas := make(map[int]string)
+	if len(opts.CustomAlphaOptions) > 0 {
+		for _, flag := range opts.CustomAlphaOptions {
+			splits := strings.SplitN(flag, ":", 2)
+			if len(splits) != 2 {
+				fatal(errors.Errorf(" --custom_alpha_flags option requires string in index:options format."))
+			}
+			custIdx, err := strconv.Atoi(splits[0])
 			if err != nil {
-				println(err)
+				fatal(errors.Errorf(" --custom_alpha_flags captured erros while parsing index value %v", err))
 			}
-			if i == alpha_index {
-				custom_flags = strings.Split(custom_alphas, ":")[1]
-				cust_index++
-				if len(opts.CustomAlphaOptions) < cust_index {
-					custom_alphas = opts.CustomAlphaOptions[cust_index]
-				}
-			}
+			customAlphas[custIdx] = splits[1]
 		}
-		svc := getAlpha(i, rs, custom_flags)
+	}
+
+	alphaGroups := make(map[int]int)
+	if len(opts.CustomGroups) > 0 {
+		for _, flag := range opts.CustomGroups {
+			splits := strings.SplitN(flag, ":", 2)
+			if len(splits) != 2 {
+				fatal(errors.Errorf(" --custom_groups option requires string in index:groupNum format."))
+			}
+			custIdx, errIndex := strconv.Atoi(splits[0])
+			custValue, errValue := strconv.Atoi(splits[1])
+			if errIndex != nil || errValue != nil {
+				fatal(errors.Errorf(" --custom_groups captured erros while parsing index value %v", err))
+			}
+			alphaGroups[custIdx] = custValue
+		}
+	}
+
+	gid := 0
+	idxNum := 0
+	for i := 1; i <= opts.NumAlphas; i++ {
+		if val, ok := alphaGroups[i]; ok {
+			if gid != val {
+				idxNum = 1
+			} else {
+				idxNum++
+			}
+			gid = val
+		} else {
+			gid = int(math.Ceil(float64(i) / float64(opts.NumReplicas)))
+			idxNum = i
+		}
+		rs := fmt.Sprintf("idx=%d; group=%d", idxNum, gid)
+		svc := getAlpha(i, rs, customAlphas[i])
 		// Don't make Alphas depend on each other.
 		svc.DependsOn = nil
 		services[svc.name] = svc
 	}
 
-	numGroups := opts.NumAlphas / opts.NumReplicas
+	numGroups := 0
+	if len(alphaGroups) > 0 {
+		numGroups = alphaGroups[len(alphaGroups)-1]
+	} else {
+		numGroups = opts.NumAlphas / opts.NumReplicas
+	}
+
 	lidx := opts.NumZeros
 	for i := 1; i <= opts.NumLearners; i++ {
 		lidx++
@@ -719,28 +746,11 @@ func main() {
 		services[svc.name] = svc
 	}
 	lidx = opts.NumAlphas
-	cust_index = 0
 	for gid := 1; gid <= numGroups; gid++ {
 		for i := 1; i <= opts.NumLearners; i++ {
 			lidx++
 			rs := fmt.Sprintf("idx=%d; group=%d; learner=true", lidx, gid)
-			// Handling alpha customizations
-			custom_flags := ""
-			alpha_index := 0
-			if custom_alphas != "" {
-				alpha_index, err = strconv.Atoi(strings.Split(custom_alphas, ":")[0])
-				if err != nil {
-					println(err)
-				}
-				if i == alpha_index {
-					custom_flags = strings.Split(custom_alphas, ":")[1]
-					cust_index++
-					if len(opts.CustomAlphaOptions) < cust_index {
-						custom_alphas = opts.CustomAlphaOptions[cust_index]
-					}
-				}
-			}
-			svc := getAlpha(lidx, rs, custom_flags)
+			svc := getAlpha(lidx, rs, customAlphas[i])
 			services[svc.name] = svc
 		}
 	}
