@@ -89,14 +89,9 @@ func verifyManifests(manifests []*Manifest) error {
 
 func getManifestsToRestore(
 	h x.UriHandler, uri *url.URL, req *pb.RestoreRequest) ([]*Manifest, error) {
-
-	if !h.DirExists("") {
-		return nil, errors.Errorf("getManifestsToRestore: The uri path: %q doesn't exist",
-			uri.Path)
-	}
-	manifest, err := getConsolidatedManifest(h, uri)
+	manifest, err := GetManifest(h, uri)
 	if err != nil {
-		return manifest.Manifests, errors.Wrap(err, "Failed to get consolidated manifest: ")
+		return manifest.Manifests, err
 	}
 	return getFilteredManifests(h, manifest.Manifests, req)
 }
@@ -197,6 +192,62 @@ func getConsolidatedManifest(h x.UriHandler, uri *url.URL) (*MasterManifest, err
 	return &MasterManifest{Manifests: mlist}, nil
 }
 
+// upgradeManifest updates the in-memory manifest from various versions to the latest version.
+// If the manifest version is 0 (dgraph version < v21.03), attach namespace to the predicates and
+// the drop data/attr operation.
+// If the manifest version is 2103, convert the format of predicate from <ns bytes>|<attr> to
+// <ns string>-<attr>. This is because of a bug for namespace greater than 127.
+// See https://github.com/dgraph-io/dgraph/pull/7810
+// NOTE: Do not use the upgraded manifest to overwrite the non-upgraded manifest.
+func upgradeManifest(m *Manifest) error {
+	switch m.Version {
+	case 0:
+		for gid, preds := range m.Groups {
+			parsedPreds := preds[:0]
+			for _, pred := range preds {
+				parsedPreds = append(parsedPreds, x.GalaxyAttr(pred))
+			}
+			m.Groups[gid] = parsedPreds
+		}
+		for _, op := range m.DropOperations {
+			switch op.DropOp {
+			case pb.DropOperation_DATA:
+				op.DropValue = fmt.Sprintf("%#x", x.GalaxyNamespace)
+			case pb.DropOperation_ATTR:
+				op.DropValue = x.GalaxyAttr(op.DropValue)
+			default:
+				// do nothing for drop all and drop namespace.
+			}
+		}
+	case 2103:
+		for gid, preds := range m.Groups {
+			parsedPreds := preds[:0]
+			for _, pred := range preds {
+				attr, err := x.AttrFrom2103(pred)
+				if err != nil {
+					return errors.Errorf("while parsing predicate got: %q", err)
+				}
+				parsedPreds = append(parsedPreds, attr)
+			}
+			m.Groups[gid] = parsedPreds
+		}
+		for _, op := range m.DropOperations {
+			// We have a cluster wide drop data in v21.03.
+			if op.DropOp == pb.DropOperation_ATTR {
+				attr, err := x.AttrFrom2103(op.DropValue)
+				if err != nil {
+					return errors.Errorf("while parsing the drop operation %+v got: %q",
+						op, err)
+				}
+				op.DropValue = attr
+			}
+		}
+	case 2105:
+		// pass
+	}
+	return nil
+}
+
 func readManifest(h x.UriHandler, path string) (*Manifest, error) {
 	var m Manifest
 	b, err := h.Read(path)
@@ -232,10 +283,11 @@ func readMasterManifest(h x.UriHandler, path string) (*MasterManifest, error) {
 	return &m, nil
 }
 
-func GetManifest(h x.UriHandler, uri *url.URL) (*MasterManifest, error) {
+// GetManifestNoUpgrade returns the master manifest using the given handler and uri.
+func GetManifestNoUpgrade(h x.UriHandler, uri *url.URL) (*MasterManifest, error) {
 	if !h.DirExists("") {
-		return &MasterManifest{}, errors.Errorf("getManifest: The uri path: %q doesn't exist",
-			uri.Path)
+		return &MasterManifest{},
+			errors.Errorf("getManifestWithoutUpgrade: The uri path: %q doesn't exists", uri.Path)
 	}
 	manifest, err := getConsolidatedManifest(h, uri)
 	if err != nil {
@@ -244,7 +296,24 @@ func GetManifest(h x.UriHandler, uri *url.URL) (*MasterManifest, error) {
 	return manifest, nil
 }
 
-func createManifest(h x.UriHandler, uri *url.URL, manifest *MasterManifest) error {
+// GetManifest returns the master manifest using the given handler and uri. Additionally, it also
+// upgrades the manifest for the in-memory processing.
+// Note: This function must not be used when using the returned manifest for the purpose of
+// overwriting the old manifest.
+func GetManifest(h x.UriHandler, uri *url.URL) (*MasterManifest, error) {
+	manifest, err := GetManifestNoUpgrade(h, uri)
+	if err != nil {
+		return manifest, err
+	}
+	for _, m := range manifest.Manifests {
+		if err := upgradeManifest(m); err != nil {
+			return manifest, errors.Wrapf(err, "getManifest: failed to upgrade")
+		}
+	}
+	return manifest, nil
+}
+
+func CreateManifest(h x.UriHandler, uri *url.URL, manifest *MasterManifest) error {
 	var err error
 	if !h.DirExists("./") {
 		if err := h.CreateDir("./"); err != nil {

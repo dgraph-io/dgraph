@@ -313,15 +313,6 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest, pidx uin
 	lastManifest := manifests[0]
 	preds, ok := lastManifest.Groups[req.GroupId]
 
-	// Version is 0 if the backup was taken on an old version (v20.11).
-	if lastManifest.Version == 0 {
-		tmp := make([]string, 0, len(preds))
-		for _, pred := range preds {
-			tmp = append(tmp, x.GalaxyAttr(pred))
-		}
-		preds = tmp
-	}
-
 	if !ok {
 		return errors.Errorf("backup manifest does not contain information for group ID %d",
 			req.GroupId)

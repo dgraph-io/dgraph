@@ -90,10 +90,6 @@ func (m *Manifest) getPredsInGroup(gid uint32) predicateSet {
 
 	predSet := make(predicateSet)
 	for _, pred := range preds {
-		if m.Version == 0 {
-			// For older versions, preds set will contain attribute without namespace.
-			pred = x.NamespaceAttr(x.GalaxyNamespace, pred)
-		}
 		predSet[pred] = struct{}{}
 	}
 	return predSet
