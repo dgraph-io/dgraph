@@ -271,7 +271,9 @@ func parseSchemaFromAlterOperation(ctx context.Context, op *api.Operation) (*sch
 		// Only the guardian of the galaxy can do a galaxy wide query/mutation. This operation is
 		// needed by live loader.
 		if err := AuthGuardianOfTheGalaxy(ctx); err != nil {
-			return nil, errors.Wrap(err, "Non guardian of galaxy user cannot bypass namespaces.")
+			s := status.Convert(err)
+			return nil, status.Error(s.Code(),
+				"Non guardian of galaxy user cannot bypass namespaces. "+s.Message())
 		}
 		var err error
 		namespace, err = strconv.ParseUint(x.GetForceNamespace(ctx), 0, 64)
@@ -383,8 +385,9 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 			return empty, errors.New("Drop all operation is not permitted.")
 		}
 		if err := AuthGuardianOfTheGalaxy(ctx); err != nil {
-			return empty, errors.Wrapf(err, "Drop all can only be called by the guardian of the"+
-				" galaxy")
+			s := status.Convert(err)
+			return empty, status.Error(s.Code(),
+				"Drop all can only be called by the guardian of the galaxy. "+s.Message())
 		}
 		if len(op.DropValue) > 0 {
 			return empty, errors.Errorf("If DropOp is set to ALL, DropValue must be empty")
@@ -1109,6 +1112,16 @@ func getAuthMode(ctx context.Context) AuthMode {
 // QueryGraphQL handles only GraphQL queries, neither mutations nor DQL.
 func (s *Server) QueryGraphQL(ctx context.Context, req *api.Request,
 	field gqlSchema.Field) (*api.Response, error) {
+	// Add a timeout for queries which don't have a deadline set. We don't want to
+	// apply a timeout if it's a mutation, that's currently handled by flag
+	// "txn-abort-after".
+	if req.GetMutations() == nil && x.Config.QueryTimeout != 0 {
+		if d, _ := ctx.Deadline(); d.IsZero() {
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithTimeout(ctx, x.Config.QueryTimeout)
+			defer cancel()
+		}
+	}
 	// no need to attach namespace here, it is already done by GraphQL layer
 	return s.doQuery(ctx, &Request{req: req, gqlField: field, doAuth: getAuthMode(ctx)})
 }
@@ -1147,8 +1160,7 @@ func Init() {
 	maxPendingQueries = x.Config.Limit.GetInt64("max-pending-queries")
 }
 
-func (s *Server) doQuery(ctx context.Context, req *Request) (
-	resp *api.Response, rerr error) {
+func (s *Server) doQuery(ctx context.Context, req *Request) (resp *api.Response, rerr error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
@@ -1214,11 +1226,13 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (
 		ostats.Record(ctx, x.NumMutations.M(1))
 	}
 
-	if x.IsGalaxyOperation(ctx) {
+	if req.doAuth == NeedAuthorize && x.IsGalaxyOperation(ctx) {
 		// Only the guardian of the galaxy can do a galaxy wide query/mutation. This operation is
 		// needed by live loader.
 		if err := AuthGuardianOfTheGalaxy(ctx); err != nil {
-			return nil, errors.Wrap(err, "Non guardian of galaxy user cannot bypass namespaces.")
+			s := status.Convert(err)
+			return nil, status.Error(s.Code(),
+				"Non guardian of galaxy user cannot bypass namespaces. "+s.Message())
 		}
 	}
 
