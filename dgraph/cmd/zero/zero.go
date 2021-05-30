@@ -101,8 +101,11 @@ func (s *Server) Init() {
 	s.blockCommitsOn = new(sync.Map)
 	s.moveOngoing = make(chan struct{}, 1)
 	s.checkpointPerGroup = make(map[uint32]uint64)
-	s.rateLimiter = x.NewRateLimiter(int64(opts.limiterConfig.UidLeaseLimit),
-		opts.limiterConfig.RefillAfter, s.closer)
+	if opts.limiterConfig.UidLeaseLimit > 0 {
+		// rate limiting is not enabled when lease limit is set to zero.
+		s.rateLimiter = x.NewRateLimiter(int64(opts.limiterConfig.UidLeaseLimit),
+			opts.limiterConfig.RefillAfter, s.closer)
+	}
 
 	go s.rebalanceTablets()
 }

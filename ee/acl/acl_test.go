@@ -2600,9 +2600,10 @@ func assertNonGuardianFailure(t *testing.T, queryName string, respIsNull bool,
 	resp := makeRequestAndRefreshTokenIfNecessary(t, token, params)
 
 	require.Len(t, resp.Errors, 1)
-	require.Contains(t, resp.Errors[0].Message,
-		fmt.Sprintf("rpc error: code = PermissionDenied desc = Only guardians are allowed access."+
-			" User '%s' is not a member of guardians group.", userid))
+	require.Contains(t, resp.Errors[0].Message, "rpc error: code = PermissionDenied")
+	require.Contains(t, resp.Errors[0].Message, fmt.Sprintf(
+		"Only guardians are allowed access. User '%s' is not a member of guardians group.",
+		userid))
 	if len(resp.Data) != 0 {
 		queryVal := "null"
 		if !respIsNull {
