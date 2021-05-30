@@ -352,8 +352,11 @@ func writeBackup(ctx context.Context, req *pb.RestoreRequest) error {
 			if err != nil {
 				return 0, 0, errors.Wrapf(err, "unable to get encryption config")
 			}
-			_, encKey := ee.GetKeys(cfg)
-			bReader, err := in.getReader(encKey)
+			keys, err := ee.GetKeys(cfg)
+			if err != nil {
+				return 0, 0, err
+			}
+			bReader, err := in.getReader(keys.EncKey)
 			if err != nil {
 				return 0, 0, errors.Wrap(err, "failed to getReader for restore")
 			}

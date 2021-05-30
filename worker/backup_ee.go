@@ -97,38 +97,16 @@ type BackupRes struct {
 	err error
 }
 
-func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull bool) error {
-	if !EnterpriseEnabled() {
-		return errors.New("you must enable enterprise features first. " +
-			"Supply the appropriate license file to Dgraph Zero using the HTTP endpoint.")
-	}
-
-	if req.Destination == "" {
-		return errors.Errorf("you must specify a 'destination' value")
-	}
-
+func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest) error {
 	if err := x.HealthCheck(); err != nil {
-		glog.Errorf("Backup canceled: not ready to accept requests: %s", err)
+		glog.Errorf("Backup canceled, not ready to accept requests: %s", err)
 		return err
 	}
 
-	go func() {
-		// Grab the lock here to avoid more than one request to be processed at the same time.
-		backupLock.Lock()
-		defer backupLock.Unlock()
+	// Grab the lock here to avoid more than one request to be processed at the same time.
+	backupLock.Lock()
+	defer backupLock.Unlock()
 
-		glog.Infof("Backup started: %s", req.Destination)
-		if err := doBackup(ctx, req, forceFull); err != nil {
-			glog.Errorf("Backup error: %s: %s", err, req.Destination)
-		} else {
-			glog.Infof("Backup complete: %s", req.Destination)
-		}
-	}()
-
-	return nil
-}
-
-func doBackup(ctx context.Context, req *pb.BackupRequest, forceFull bool) error {
 	backupSuccessful := false
 	ostats.Record(ctx, x.NumBackups.M(1), x.PendingBackups.M(1))
 	defer func() {
@@ -162,12 +140,10 @@ func doBackup(ctx context.Context, req *pb.BackupRequest, forceFull bool) error 
 		return err
 	}
 
-	// Use the readTs as the sinceTs for the next backup. If not found, use the
-	// SinceTsDeprecated value from the latest manifest.
 	req.SinceTs = latestManifest.ValidReadTs()
 
-	if forceFull {
-		// To force a full backup we'll set the sinceTs to zero.
+	// To force a full backup we'll set the sinceTs to zero.
+	if req.ForceFull {
 		req.SinceTs = 0
 	} else {
 		if x.WorkerConfig.EncryptionKey != nil {
@@ -198,16 +174,13 @@ func doBackup(ctx context.Context, req *pb.BackupRequest, forceFull bool) error 
 	predMap := make(map[uint32][]string)
 	for gid, group := range state.Groups {
 		groups = append(groups, gid)
-		preds := make([]string, 0, len(group.Tablets))
+		predMap[gid] = make([]string, 0)
 		for pred := range group.Tablets {
-			preds = append(preds, pred)
+			predMap[gid] = append(predMap[gid], pred)
 		}
-		predMap[gid] = preds
 	}
 
-	glog.Infof(
-		"Created backup request: read_ts:%d since_ts:%d unix_ts:%q destination:%q. Groups=%v\n",
-		req.ReadTs, req.SinceTs, req.UnixTs, req.Destination, groups)
+	glog.Infof("Created backup request: read_ts:%d since_ts:%d unix_ts:\"%s\" destination:\"%s\" . Groups=%v\n", req.ReadTs, req.SinceTs, req.UnixTs, req.Destination, groups)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -274,5 +247,9 @@ func ProcessListBackups(ctx context.Context, location string, creds *x.MinioCred
 		return nil, errors.Wrapf(err, "cannot read manifests at location %s", location)
 	}
 
-	return manifests, nil
+	res := make([]*Manifest, 0)
+	for _, m := range manifests {
+		res = append(res, m)
+	}
+	return res, nil
 }
