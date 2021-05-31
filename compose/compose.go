@@ -745,7 +745,7 @@ func main() {
 		"minio service env_file")
 	cmd.PersistentFlags().StringVar(&opts.ContainerPrefix, "prefix", "",
 		"prefix for the container name")
-	cmd.PersistentFlags().StringArrayVar(&opts.CustomAlphaOptions, "custom_alpha_flags", nil,
+	cmd.PersistentFlags().StringArrayVar(&opts.CustomAlphaOptions, "custom_alpha_options", nil,
 		"Custom alpha flags for specific alphas, following {\"1:custom_flags\", \"2:custom_flags\"}, eg: {\"2: -p <bulk_path>")
 	cmd.PersistentFlags().StringVar(&opts.Hostname, "hostname", "",
 		"hostname for the alpha and zero servers")
