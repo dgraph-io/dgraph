@@ -321,11 +321,11 @@ func getAlpha(idx int, raft string, customFlags string) service {
 		zeroName = opts.ContainerPrefix + "_" + zeroName
 	}
 
-	zeroHostAddr := fmt.Sprintf("%s%d:%d", zeroName, 1, zeroBasePort+opts.PortOffset)
+	zeroHostAddr := fmt.Sprintf("%s:%d", getHost(zeroName+"1"), zeroBasePort+opts.PortOffset)
 	zeros := []string{zeroHostAddr}
 	for i := 2; i <= maxZeros; i++ {
 		port := zeroBasePort + opts.PortOffset + getOffset(i)
-		zeroHost := fmt.Sprintf("zero%d", i)
+		zeroHost := fmt.Sprintf("%s%d", zeroName, i)
 		zeroHostAddr = fmt.Sprintf("%s:%d", getHost(zeroHost), port)
 		zeros = append(zeros, zeroHostAddr)
 	}
@@ -746,7 +746,8 @@ func main() {
 	cmd.PersistentFlags().StringVar(&opts.ContainerPrefix, "prefix", "",
 		"prefix for the container name")
 	cmd.PersistentFlags().StringArrayVar(&opts.CustomAlphaOptions, "custom_alpha_options", nil,
-		"Custom alpha flags for specific alphas, following {\"1:custom_flags\", \"2:custom_flags\"}, eg: {\"2: -p <bulk_path>")
+		"Custom alpha flags for specific alphas,"+
+			" following {\"1:custom_flags\", \"2:custom_flags\"}, eg: {\"2: -p <bulk_path>\"")
 	cmd.PersistentFlags().StringVar(&opts.Hostname, "hostname", "",
 		"hostname for the alpha and zero servers")
 	cmd.PersistentFlags().BoolVar(&opts.Cdc, "cdc", false,
@@ -800,13 +801,13 @@ func main() {
 	for _, flag := range opts.CustomAlphaOptions {
 		splits := strings.SplitN(flag, ":", 2)
 		if len(splits) != 2 {
-			fatal(errors.Errorf(" --custom_alpha_flags option requires string in index:options format."))
+			fatal(errors.Errorf("custom_alpha_options, requires string in index:options format."))
 		}
-		custIdx, err := strconv.Atoi(splits[0])
+		idx, err := strconv.Atoi(splits[0])
 		if err != nil {
-			fatal(errors.Errorf(" --custom_alpha_flags captured erros while parsing index value %v", err))
+			fatal(errors.Errorf(" custom_alpha_options, captured erros while parsing index value %v", err))
 		}
-		customAlphas[custIdx] = splits[1]
+		customAlphas[idx] = splits[1]
 	}
 
 	for i := 1; i <= opts.NumAlphas; i++ {
