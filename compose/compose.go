@@ -122,7 +122,7 @@ type options struct {
 	CustomAlphaOptions []string
 
 	// Container Alias
-	ContainerPrefix string
+	ContainerAlias string
 
 	// Extra flags
 	AlphaFlags string
@@ -164,13 +164,17 @@ func getOffset(idx int) int {
 	return idx
 }
 
-func initService(basename string, idx, grpcPort int) service {
+func initService(basename string, idx, grpcPort int, container_name string) service {
 	var svc service
-	containerPrefix := basename
-	if opts.ContainerPrefix != "" {
-		containerPrefix = opts.ContainerPrefix + "_" + basename
-	}
-	svc.name = name(containerPrefix, idx)
+
+	cont_name := func() string {
+		if container_name != "" {
+			return container_name + "_" + basename
+		} else {
+			return basename
+		}
+	}()
+	svc.name = name(cont_name, idx)
 	svc.Image = opts.Image + ":" + opts.Tag
 	svc.ContainerName = containerName(svc.name)
 	svc.WorkingDir = fmt.Sprintf("/data/%s", svc.name)
@@ -235,7 +239,7 @@ func getZero(idx int, raft string) service {
 	basePort := zeroBasePort + opts.PortOffset
 	grpcPort := basePort + getOffset(idx)
 
-	svc := initService(basename, idx, grpcPort)
+	svc := initService(basename, idx, grpcPort, opts.ContainerAlias)
 
 	if opts.TmpFS {
 		svc.TmpFS = append(svc.TmpFS, fmt.Sprintf("/data/%s/zw", svc.name))
@@ -278,11 +282,11 @@ func getZero(idx int, raft string) service {
 	return svc
 }
 
-func getAlpha(idx int, raft string, customFlags string) service {
+func getAlpha(idx int, raft string, custom_flag string) service {
 	basename := "alpha"
 	internalPort := alphaBasePort + opts.PortOffset + getOffset(idx)
 	grpcPort := internalPort + 1000
-	svc := initService(basename, idx, grpcPort)
+	svc := initService(basename, idx, grpcPort, opts.ContainerAlias)
 
 	if opts.TmpFS {
 		svc.TmpFS = append(svc.TmpFS, fmt.Sprintf("/data/%s/w", svc.name))
@@ -301,15 +305,15 @@ func getAlpha(idx int, raft string, customFlags string) service {
 		maxZeros = opts.NumZeros
 	}
 
-	zeroName := "zero"
-	if opts.ContainerPrefix != "" {
-		zeroName = opts.ContainerPrefix + "_" + zeroName
+	zero_name := "zero"
+	if opts.ContainerAlias != "" {
+		zero_name = opts.ContainerAlias + "_" + zero_name
 	}
 
-	zeroHostAddr := fmt.Sprintf("%s%d:%d", zeroName, 1, zeroBasePort+opts.PortOffset)
+	zeroHostAddr := fmt.Sprintf("%s%d:%d", zero_name, 1, zeroBasePort+opts.PortOffset)
 	zeros := []string{zeroHostAddr}
 	for i := 2; i <= maxZeros; i++ {
-		zeroHostAddr = fmt.Sprintf("zero%d:%d", i, zeroBasePort+opts.PortOffset+getOffset(i))
+		zeroHostAddr = fmt.Sprintf("%s%d:%d", zero_name, i, zeroBasePort+opts.PortOffset+getOffset(i))
 		zeros = append(zeros, zeroHostAddr)
 	}
 
@@ -376,13 +380,19 @@ func getAlpha(idx int, raft string, customFlags string) service {
 			svc.Volumes = append(svc.Volumes, getVolume(vol))
 		}
 	}
+
+	// Configure Alpha
+	// if opts.AlphaOptions{
+	// 	svc.Command +=
+	// }
+
 	svc.EnvFile = opts.AlphaEnvFile
 	if opts.AlphaFlags != "" {
 		svc.Command += " " + opts.AlphaFlags
 	}
 
-	if customFlags != "" {
-		svc.Command += " " + customFlags
+	if custom_flag != "" {
+		svc.Command += " " + custom_flag
 	}
 
 	return svc
@@ -610,6 +620,8 @@ func main() {
 		"create a new Raft snapshot after this many number of Raft entries.")
 	cmd.PersistentFlags().StringVar(&opts.AlphaFlags, "extra_alpha_flags", "",
 		"extra flags for alphas.")
+	cmd.PersistentFlags().StringArrayVar(&opts.CustomAlphaOptions, "custom_alpha_flags", nil,
+		"Custom alpha flags for specific alphas, following {\"1:custom_flags\", \"2:custom_flags\"}, eg: {\"2: -p <bulk_path> --raft \"learner=true;\"}\" ")
 	cmd.PersistentFlags().StringVar(&opts.ZeroFlags, "extra_zero_flags", "",
 		"extra flags for zeros.")
 	cmd.PersistentFlags().BoolVar(&opts.ContainerNames, "names", true,
@@ -630,7 +642,7 @@ func main() {
 		"minio service port")
 	cmd.PersistentFlags().StringArrayVar(&opts.MinioEnvFile, "minio_env_file", nil,
 		"minio service env_file")
-	cmd.PersistentFlags().StringVar(&opts.ContainerPrefix, "alias", "",
+	cmd.PersistentFlags().StringVar(&opts.ContainerAlias, "alias", "",
 		"alias for the containers")
 	err := cmd.ParseFlags(os.Args)
 	if err != nil {
@@ -667,25 +679,32 @@ func main() {
 		svc := getZero(i, fmt.Sprintf("idx=%d", i))
 		services[svc.name] = svc
 	}
-
-	// Alpha Customization
-	customAlphas := make(map[int]string)
-	for _, flag := range opts.CustomAlphaOptions {
-		splits := strings.SplitN(flag, ":", 2)
-		if len(splits) != 2 {
-			fatal(errors.Errorf(" --custom_alpha_flags option requires string in index:options format."))
-		}
-		custIdx, err := strconv.Atoi(splits[0])
-		if err != nil {
-			fatal(errors.Errorf(" --custom_alpha_flags captured erros while parsing index value %v", err))
-		}
-		customAlphas[custIdx] = splits[1]
+	custom_alphas := ""
+	if len(opts.CustomAlphaOptions) > 0 {
+		custom_alphas = opts.CustomAlphaOptions[0]
 	}
-
+	cust_index := 0
 	for i := 1; i <= opts.NumAlphas; i++ {
 		gid := int(math.Ceil(float64(i) / float64(opts.NumReplicas)))
 		rs := fmt.Sprintf("idx=%d; group=%d", i, gid)
-		svc := getAlpha(i, rs, customAlphas[i])
+
+		// Handling alpha customizations
+		custom_flags := ""
+		alpha_index := 0
+		if custom_alphas != "" {
+			alpha_index, err = strconv.Atoi(strings.Split(custom_alphas, ":")[0])
+			if err != nil {
+				println(err)
+			}
+			if i == alpha_index {
+				custom_flags = strings.Split(custom_alphas, ":")[1]
+				cust_index++
+				if len(opts.CustomAlphaOptions) < cust_index {
+					custom_alphas = opts.CustomAlphaOptions[cust_index]
+				}
+			}
+		}
+		svc := getAlpha(i, rs, custom_flags)
 		// Don't make Alphas depend on each other.
 		svc.DependsOn = nil
 		services[svc.name] = svc
@@ -700,11 +719,28 @@ func main() {
 		services[svc.name] = svc
 	}
 	lidx = opts.NumAlphas
+	cust_index = 0
 	for gid := 1; gid <= numGroups; gid++ {
 		for i := 1; i <= opts.NumLearners; i++ {
 			lidx++
 			rs := fmt.Sprintf("idx=%d; group=%d; learner=true", lidx, gid)
-			svc := getAlpha(lidx, rs, customAlphas[i])
+			// Handling alpha customizations
+			custom_flags := ""
+			alpha_index := 0
+			if custom_alphas != "" {
+				alpha_index, err = strconv.Atoi(strings.Split(custom_alphas, ":")[0])
+				if err != nil {
+					println(err)
+				}
+				if i == alpha_index {
+					custom_flags = strings.Split(custom_alphas, ":")[1]
+					cust_index++
+					if len(opts.CustomAlphaOptions) < cust_index {
+						custom_alphas = opts.CustomAlphaOptions[cust_index]
+					}
+				}
+			}
+			svc := getAlpha(lidx, rs, custom_flags)
 			services[svc.name] = svc
 		}
 	}
