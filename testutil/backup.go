@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"net/http"
 	"strings"
 	"testing"
@@ -30,7 +31,10 @@ import (
 	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgraph/ee"
+<<<<<<< HEAD
 	"github.com/dgraph-io/dgraph/ee/enc"
+=======
+>>>>>>> master
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
@@ -48,17 +52,29 @@ func openDgraph(pdir string) (*badger.DB, error) {
 	// Get key.
 	config := viper.New()
 	flags := &pflag.FlagSet{}
-	enc.RegisterFlags(flags)
+	ee.RegisterEncFlag(flags)
 	if err := config.BindPFlags(flags); err != nil {
 		return nil, err
 	}
+<<<<<<< HEAD
 	config.Set("encryption", enc.BuildEncFlag(KeyFile))
 	_, encKey := ee.GetKeys(config)
+=======
+	config.Set("encryption", ee.BuildEncFlag(KeyFile))
+	keys, err := ee.GetKeys(config)
+	if err != nil {
+		return nil, err
+	}
+>>>>>>> master
 
 	opt := badger.DefaultOptions(pdir).
 		WithBlockCacheSize(10 * (1 << 20)).
 		WithIndexCacheSize(10 * (1 << 20)).
+<<<<<<< HEAD
 		WithEncryptionKey(encKey).
+=======
+		WithEncryptionKey(keys.EncKey).
+>>>>>>> master
 		WithNamespaceOffset(x.NamespaceOffset)
 	return badger.OpenManaged(opt)
 }
@@ -206,8 +222,7 @@ func readSchema(pdir string, dType dataType) ([]string, error) {
 	defer db.Close()
 	values := make([]string, 0)
 
-	// Predicates and types in the schema are written with timestamp 1.
-	txn := db.NewTransactionAt(1, false)
+	txn := db.NewTransactionAt(math.MaxUint64, false)
 	defer txn.Discard()
 	itr := txn.NewIterator(badger.DefaultIteratorOptions)
 	defer itr.Close()

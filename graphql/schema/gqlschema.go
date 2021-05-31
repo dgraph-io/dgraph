@@ -39,6 +39,7 @@ const (
 	dgraphPredArg   = "pred"
 
 	idDirective             = "id"
+	idDirectiveInterfaceArg = "interface"
 	subscriptionDirective   = "withSubscription"
 	secretDirective         = "secret"
 	authDirective           = "auth"
@@ -276,7 +277,7 @@ input GenerateMutationParams {
 directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
-directive @id on FIELD_DEFINITION
+directive @id(interface: Boolean) on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @auth(
@@ -307,7 +308,7 @@ directive @generate(
 directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
-directive @id on FIELD_DEFINITION
+directive @id(interface: Boolean) on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
@@ -425,7 +426,7 @@ type directiveValidator func(
 	typ *ast.Definition,
 	field *ast.FieldDefinition,
 	dir *ast.Directive,
-	secrets map[string]x.SensitiveByteSlice) gqlerror.List
+	secrets map[string]x.Sensitive) gqlerror.List
 
 type searchTypeIndex struct {
 	gqlType string
@@ -553,7 +554,7 @@ func ValidatorNoOp(
 	typ *ast.Definition,
 	field *ast.FieldDefinition,
 	dir *ast.Directive,
-	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
+	secrets map[string]x.Sensitive) gqlerror.List {
 	return nil
 }
 
@@ -852,7 +853,7 @@ func preGQLValidation(schema *ast.SchemaDocument) gqlerror.List {
 // has fleshed out the schema structure; we just need to check if it also satisfies
 // the extra rules.
 func postGQLValidation(schema *ast.Schema, definitions []string,
-	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
+	secrets map[string]x.Sensitive) gqlerror.List {
 	var errs []*gqlerror.Error
 
 	for _, defn := range definitions {
@@ -871,7 +872,6 @@ func postGQLValidation(schema *ast.Schema, definitions []string,
 			}
 		}
 	}
-
 	errs = append(errs, applySchemaValidations(schema, definitions)...)
 
 	return errs
@@ -1200,7 +1200,11 @@ func addUnionMemberTypeEnum(schema *ast.Schema, defn *ast.Definition) {
 // it should be present in the addTypeInput as it should not be generated automatically by dgraph
 // but determined by the value of field in the GraphQL service where the type is defined.
 func addInputType(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[string]bool) {
+<<<<<<< HEAD
 	field := getFieldsWithoutIDType(schema, defn, providesTypeMap)
+=======
+	field := getFieldsWithoutIDType(schema, defn, providesTypeMap, true)
+>>>>>>> master
 	if hasExtends(defn) {
 		idField := getIDField(defn, providesTypeMap)
 		field = append(idField, field...)
@@ -1223,7 +1227,12 @@ func addReferenceType(schema *ast.Schema, defn *ast.Definition, providesTypeMap 
 		}
 		flds = append(getIDField(defn, providesTypeMap), getXIDField(defn, providesTypeMap)...)
 	} else {
+<<<<<<< HEAD
 		flds = append(getIDField(defn, providesTypeMap), getFieldsWithoutIDType(schema, defn, providesTypeMap)...)
+=======
+		flds = append(getIDField(defn, providesTypeMap),
+			getFieldsWithoutIDType(schema, defn, providesTypeMap, true)...)
+>>>>>>> master
 	}
 
 	if len(flds) == 1 && (hasID(defn) || hasXID(defn)) {
@@ -1285,8 +1294,8 @@ func addPatchType(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[
 
 	nonIDFields := getNonIDFields(schema, defn, providesTypeMap)
 	if len(nonIDFields) == 0 {
-		// The user might just have an external id field and nothing else. We don't generate patch
-		// type in that case.
+		// The user might just have an predicate with reverse edge id field and nothing else.
+		// We don't generate patch type in that case.
 		return
 	}
 
@@ -1319,7 +1328,7 @@ func addFieldFilters(schema *ast.Schema, defn *ast.Definition, providesTypeMap m
 	for _, fld := range defn.Fields {
 		// Filtering and ordering for fields with @custom/@lambda directive is handled by the remote
 		// endpoint.
-		if hasCustomOrLambda(fld) {
+		if hasCustomOrLambda(fld) || isMultiLangField(fld, false) {
 			continue
 		}
 
@@ -1407,7 +1416,7 @@ func addTypeHasFilter(schema *ast.Schema, defn *ast.Definition, providesTypeMap 
 	}
 
 	for _, fld := range defn.Fields {
-		if isID(fld) || hasCustomOrLambda(fld) {
+		if isID(fld) || hasCustomOrLambda(fld) || isMultiLangField(fld, false) {
 			continue
 		}
 		// Ignore Fields with @external directives also excluding those which are present
@@ -1571,7 +1580,11 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition, providesTypeMap map
 	}
 
 	// Has filter makes sense only if there is atleast one non ID field in the defn
+<<<<<<< HEAD
 	if len(getFieldsWithoutIDType(schema, defn, providesTypeMap)) > 0 {
+=======
+	if len(getFieldsWithoutIDType(schema, defn, providesTypeMap, false)) > 0 {
+>>>>>>> master
 		filter.Fields = append(filter.Fields,
 			&ast.FieldDefinition{Name: "has", Type: &ast.Type{Elem: &ast.Type{NamedType: defn.Name + "HasFilter"}}},
 		)
@@ -1603,7 +1616,8 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition, providesTypeMap map
 func hasFilterable(defn *ast.Definition) bool {
 	return fieldAny(defn.Fields,
 		func(fld *ast.FieldDefinition) bool {
-			return len(getSearchArgs(fld)) != 0 || isID(fld) || !hasCustomOrLambda(fld)
+			return len(getSearchArgs(fld)) != 0 || isID(fld) ||
+				!hasCustomOrLambda(fld) || !isMultiLangField(fld, false)
 		})
 }
 
@@ -1626,13 +1640,24 @@ func hasOrderables(defn *ast.Definition, providesTypeMap map[string]bool) bool {
 	})
 }
 
+<<<<<<< HEAD
 func isOrderable(fld *ast.FieldDefinition, defn *ast.Definition, providesTypeMap map[string]bool) bool {
+=======
+func isOrderable(fld *ast.FieldDefinition, defn *ast.Definition,
+	providesTypeMap map[string]bool) bool {
+>>>>>>> master
 	// lists can't be ordered and NamedType will be empty for lists,
 	// so it will return false for list fields
 	// External field can't be ordered except when it is a @key field or
 	// the field is an argument in `@provides` directive.
+<<<<<<< HEAD
+=======
+	// Multiple language fields(i.e. of type name@hi:en) are not orderable
+	// We allow to generate aggregate fields for multi language fields
+>>>>>>> master
 	if !hasExternal(fld) {
-		return orderable[fld.Type.NamedType] && !hasCustomOrLambda(fld)
+		return orderable[fld.Type.NamedType] && !hasCustomOrLambda(fld) &&
+			!isMultiLangField(fld, false)
 	}
 	return isKeyField(fld, defn) || providesTypeMap[fld.Name]
 }
@@ -1809,9 +1834,6 @@ func addUpdatePayloadType(schema *ast.Schema, defn *ast.Definition, providesType
 		return
 	}
 
-	// This covers the case where the Type only had one field (which had @id directive).
-	// Since we don't allow updating the field with @id directive we don't need to generate any
-	// update payload.
 	if _, ok := schema.Types[defn.Name+"Patch"]; !ok {
 		return
 	}
@@ -1892,7 +1914,11 @@ func addAggregationResultType(schema *ast.Schema, defn *ast.Definition, provides
 		}
 
 		// Adds titleMax, titleMin fields for a field of name title.
+<<<<<<< HEAD
 		if isOrderable(fld, defn, providesTypeMap) {
+=======
+		if isOrderable(fld, defn, providesTypeMap) || isMultiLangField(fld, false) {
+>>>>>>> master
 			minField := &ast.FieldDefinition{
 				Name: fld.Name + "Min",
 				Type: aggregateFieldType,
@@ -1956,6 +1982,7 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[s
 			},
 		})
 	}
+<<<<<<< HEAD
 	if hasXIDField {
 		if defn.Kind == "INTERFACE" {
 			qry.Directives = append(
@@ -1966,8 +1993,16 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[s
 							"please update your query to not use that argument",
 							Kind: ast.StringValue}}}})
 		}
+=======
+
+	if hasXIDField {
+		var idWithoutUniqueArgExists bool
+>>>>>>> master
 		for _, fld := range defn.Fields {
 			if hasIDDirective(fld) {
+				if !hasInterfaceArg(fld) {
+					idWithoutUniqueArgExists = true
+				}
 				qry.Arguments = append(qry.Arguments, &ast.ArgumentDefinition{
 					Name: fld.Name,
 					Type: &ast.Type{
@@ -1976,6 +2011,16 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[s
 					},
 				})
 			}
+		}
+		if defn.Kind == "INTERFACE" && idWithoutUniqueArgExists {
+			qry.Directives = append(
+				qry.Directives, &ast.Directive{Name: deprecatedDirective,
+					Arguments: ast.ArgumentList{&ast.Argument{Name: "reason",
+						Value: &ast.Value{Raw: "@id argument for get query on interface is being" +
+							" deprecated. Only those @id fields which have interface argument" +
+							" set to true will be available in getQuery argument on interface" +
+							" post v21.11.0, please update your schema accordingly.",
+							Kind: ast.StringValue}}}})
 		}
 	}
 	schema.Query.Fields = append(schema.Query.Fields, qry)
@@ -2202,13 +2247,17 @@ func createField(schema *ast.Schema, fld *ast.FieldDefinition) *ast.FieldDefinit
 func getNonIDFields(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[string]bool) ast.FieldList {
 	fldList := make([]*ast.FieldDefinition, 0)
 	for _, fld := range defn.Fields {
-		if isIDField(defn, fld) || hasIDDirective(fld) {
+		if isIDField(defn, fld) {
 			continue
 		}
 
 		// Ignore Fields with @external directives also as they shouldn't be present
 		// in the Patch Type also. If the field is an argument to `@provides` directive
+<<<<<<< HEAD
 		// then it should be presnt.
+=======
+		// then it should be present.
+>>>>>>> master
 		if externalAndNonKeyField(fld, defn, providesTypeMap) {
 			continue
 		}
@@ -2217,7 +2266,12 @@ func getNonIDFields(schema *ast.Schema, defn *ast.Definition, providesTypeMap ma
 		if hasCustomOrLambda(fld) {
 			continue
 		}
-
+		// We don't include fields in update patch, which corresponds to multiple language tags in dgraph
+		// Example, nameHi_En:  String @dgraph(pred:"Person.name@hi:en")
+		// We don't add above field in update patch because it corresponds to multiple languages
+		if isMultiLangField(fld, true) {
+			continue
+		}
 		// Remove edges which have a reverse predicate as they should only be updated through their
 		// forward edge.
 		fname := fieldName(fld, defn.Name)
@@ -2246,7 +2300,12 @@ func getNonIDFields(schema *ast.Schema, defn *ast.Definition, providesTypeMap ma
 	return append(fldList, pd)
 }
 
+<<<<<<< HEAD
 func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[string]bool) ast.FieldList {
+=======
+func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition,
+	providesTypeMap map[string]bool, isAddingInput bool) ast.FieldList {
+>>>>>>> master
 	fldList := make([]*ast.FieldDefinition, 0)
 	for _, fld := range defn.Fields {
 		if isIDField(defn, fld) {
@@ -2264,7 +2323,10 @@ func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition, providesTy
 		if hasCustomOrLambda(fld) {
 			continue
 		}
-
+		// see the comment in getNonIDFields as well.
+		if isMultiLangField(fld, true) && isAddingInput {
+			continue
+		}
 		// Remove edges which have a reverse predicate as they should only be updated through their
 		// forward edge.
 		fname := fieldName(fld, defn.Name)
@@ -2287,6 +2349,27 @@ func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition, providesTy
 	return append(fldList, pd)
 }
 
+<<<<<<< HEAD
+=======
+// This function check if given gql field has multiple language tags
+func isMultiLangField(fld *ast.FieldDefinition, isMutationInput bool) bool {
+	dgDirective := fld.Directives.ForName(dgraphDirective)
+	if dgDirective != nil {
+		pred := dgDirective.Arguments.ForName("pred")
+		if pred != nil {
+			if strings.Contains(pred.Value.Raw, "@") {
+				langs := strings.Split(pred.Value.Raw, "@")[1]
+				if isMutationInput {
+					return strings.Contains(langs, ":") || langs == "."
+				}
+				return strings.Contains(langs, ":")
+			}
+		}
+	}
+	return false
+}
+
+>>>>>>> master
 func getIDField(defn *ast.Definition, providesTypeMap map[string]bool) ast.FieldList {
 	fldList := make([]*ast.FieldDefinition, 0)
 	for _, fld := range defn.Fields {

@@ -24,7 +24,11 @@ import (
 	"github.com/spf13/viper"
 )
 
+<<<<<<< HEAD:ee/vault/vault.go
 func GetKeys(config *viper.Viper) (aclKey, encKey x.SensitiveByteSlice) {
+=======
+func GetKeys(config *viper.Viper) (aclKey, encKey x.Sensitive) {
+>>>>>>> master:ee/enc/vault.go
 	glog.Exit("flags: vault is an enterprise-only feature")
 	return
 }

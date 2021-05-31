@@ -338,6 +338,7 @@ func getAllMovies(t *testing.T, users, roles []string) ([]*Movie, []string) {
 				queryMovie {
 					id
 					content
+					code
 					hidden
 					regionsAvailable {
 						id

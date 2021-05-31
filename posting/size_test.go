@@ -44,8 +44,6 @@ import (
 var manual = flag.Bool("manual", false, "Set when manually running some tests.")
 var (
 	list    *List
-	pack    *pb.UidPack
-	block   *pb.UidBlock
 	posting *pb.Posting
 	facet   *api.Facet
 )
@@ -54,18 +52,6 @@ func BenchmarkPostingList(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		list = &List{}
 		list.mutationMap = make(map[uint64]*pb.PostingList)
-	}
-}
-
-func BenchmarkUidPack(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		pack = &pb.UidPack{}
-	}
-}
-
-func BenchmarkUidBlock(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		block = &pb.UidBlock{}
 	}
 }
 
@@ -86,18 +72,6 @@ func TestPostingListCalculation(t *testing.T) {
 	list.mutationMap = make(map[uint64]*pb.PostingList)
 	// 144 is obtained from BenchmarkPostingList
 	require.Equal(t, uint64(144), list.DeepSize())
-}
-
-func TestUidPackCalculation(t *testing.T) {
-	pack = &pb.UidPack{}
-	// 48 is obtained from BenchmarkUidPack
-	require.Equal(t, uint64(48), calculatePackSize(pack))
-}
-
-func TestUidBlockCalculation(t *testing.T) {
-	block = &pb.UidBlock{}
-	// 48 is obtained from BenchmarkUidBlock
-	require.Equal(t, uint64(48), calculateUIDBlock(block))
 }
 
 func TestPostingCalculation(t *testing.T) {

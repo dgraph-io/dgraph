@@ -199,6 +199,7 @@ func run(conf *viper.Viper) {
 		dg = dgTmp
 	}
 
+<<<<<<< HEAD
 	// Run things serially first.
 	for i := 0; i < conc; i++ {
 		_, err := process(dg, conf)
@@ -234,5 +235,52 @@ func run(conf *viper.Viper) {
 		wg.Add(1)
 		go f(i)
 	}
+=======
+	addOne := func(i int) error {
+		txnStart := time.Now() // Start time of transaction
+		cnt, err := process(dg, conf)
+		now := time.Now().UTC().Format(format)
+		if err != nil {
+			return err
+		}
+		serverLat := cnt.qLatency + cnt.mLatency
+		clientLat := time.Since(txnStart).Round(time.Millisecond)
+		fmt.Printf(
+			"[w%d] %-17s Counter VAL: %d   [ Ts: %d ] Latency: Q %s M %s S %s C %s D %s\n",
+			i, now, cnt.Val, cnt.startTs, cnt.qLatency, cnt.mLatency,
+			serverLat, clientLat, clientLat-serverLat)
+		return nil
+	}
+
+	// Run things serially first, if conc > 1.
+	if conc > 1 {
+		for i := 0; i < conc; i++ {
+			err := addOne(0)
+			x.Check(err)
+			num--
+		}
+	}
+
+	var wg sync.WaitGroup
+	f := func(worker int) {
+		defer wg.Done()
+		count := 0
+		for count < num {
+			if err := addOne(worker); err != nil {
+				now := time.Now().UTC().Format(format)
+				fmt.Printf("%-17s While trying to process counter: %v. Retrying...\n", now, err)
+				time.Sleep(time.Second)
+				continue
+			}
+			time.Sleep(waitDur)
+			count++
+		}
+	}
+
+	for i := 0; i < conc; i++ {
+		wg.Add(1)
+		go f(i + 1)
+	}
+>>>>>>> master
 	wg.Wait()
 }

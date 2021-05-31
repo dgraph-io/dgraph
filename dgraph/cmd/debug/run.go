@@ -39,7 +39,10 @@ import (
 
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/ee"
+<<<<<<< HEAD
 	"github.com/dgraph-io/dgraph/ee/enc"
+=======
+>>>>>>> master
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
@@ -68,7 +71,8 @@ type flagOptions struct {
 	readTs        uint64
 	sizeHistogram bool
 	noKeys        bool
-	key           x.SensitiveByteSlice
+	namespace     uint64
+	key           x.Sensitive
 
 	// Options related to the WAL.
 	wdir           string
@@ -94,8 +98,9 @@ func init() {
 		"Ignore key_. Only consider amount when calculating total.")
 	flag.StringVar(&opt.jepsen, "jepsen", "", "Disect Jepsen output. Can be linear/binary.")
 	flag.Uint64Var(&opt.readTs, "at", math.MaxUint64, "Set read timestamp for all txns.")
-	flag.BoolVarP(&opt.readOnly, "readonly", "o", true, "Open in read only mode.")
+	flag.BoolVarP(&opt.readOnly, "readonly", "o", false, "Open in read only mode.")
 	flag.StringVarP(&opt.predicate, "pred", "r", "", "Only output specified predicate.")
+	flag.Uint64VarP(&opt.namespace, "ns", "", 0, "Which namespace to use.")
 	flag.StringVarP(&opt.prefix, "prefix", "", "", "Uses a hex prefix.")
 	flag.StringVarP(&opt.keyLookup, "lookup", "l", "", "Hex of key to lookup.")
 	flag.StringVar(&opt.rollupKey, "rollup", "", "Hex of key to rollup.")
@@ -109,7 +114,7 @@ func init() {
 	flag.StringVarP(&opt.wsetSnapshot, "snap", "s", "",
 		"Set snapshot term,index,readts to this. Value must be comma-separated list containing"+
 			" the value for these vars in that order.")
-	enc.RegisterFlags(flag)
+	ee.RegisterEncFlag(flag)
 }
 
 func toInt(o *pb.Posting) int {
@@ -312,7 +317,7 @@ func showAllPostingsAt(db *badger.DB, readTs uint64) {
 		}
 	}
 	for uid, acc := range keys {
-		fmt.Fprintf(&buf, "Uid: %d %x Key: %d Amount: %d\n", uid, uid, acc.Key, acc.Amt)
+		fmt.Fprintf(&buf, "Uid: %#x Key: %d Amount: %d\n", uid, acc.Key, acc.Amt)
 	}
 	fmt.Println(buf.String())
 }
@@ -414,12 +419,19 @@ func history(lookup []byte, itr *badger.Iterator) {
 				appendPosting(&buf, p)
 			}
 
+			r := codec.FromBytes(plist.Bitmap)
 			fmt.Fprintf(&buf, " Num uids = %d. Size = %d\n",
-				codec.ExactLen(plist.Pack), plist.Pack.Size())
-			dec := codec.Decoder{Pack: plist.Pack}
-			for uids := dec.Seek(0, codec.SeekStart); len(uids) > 0; uids = dec.Next() {
-				for _, uid := range uids {
-					fmt.Fprintf(&buf, " Uid = %d\n", uid)
+				r.GetCardinality(), len(plist.Bitmap))
+
+			itr := r.ManyIterator()
+			uids := make([]uint64, 256)
+			for {
+				num := itr.NextMany(uids)
+				if num == 0 {
+					break
+				}
+				for _, uid := range uids[:num] {
+					fmt.Fprintf(&buf, " Uid = %#x\n", uid)
 				}
 			}
 		}
@@ -429,7 +441,7 @@ func history(lookup []byte, itr *badger.Iterator) {
 }
 
 func appendPosting(w io.Writer, o *pb.Posting) {
-	fmt.Fprintf(w, " Uid: %d Op: %d ", o.Uid, o.Op)
+	fmt.Fprintf(w, " Uid: %#x Op: %d ", o.Uid, o.Op)
 
 	if len(o.Value) > 0 {
 		fmt.Fprintf(w, " Type: %v. ", o.ValType)
@@ -540,7 +552,8 @@ func lookup(db *badger.DB) {
 func printKeys(db *badger.DB) {
 	var prefix []byte
 	if len(opt.predicate) > 0 {
-		prefix = x.PredicatePrefix(opt.predicate)
+		pred := x.NamespaceAttr(opt.namespace, opt.predicate)
+		prefix = x.PredicatePrefix(pred)
 	} else if len(opt.prefix) > 0 {
 		p, err := hex.DecodeString(opt.prefix)
 		x.Check(err)
@@ -578,11 +591,14 @@ func printKeys(db *badger.DB) {
 		if len(pk.Term) > 0 {
 			fmt.Fprintf(&buf, " term: [%d] %s ", pk.Term[0], pk.Term[1:])
 		}
+		if pk.Count > 0 {
+			fmt.Fprintf(&buf, " count: %d ", pk.Count)
+		}
 		if pk.Uid > 0 {
-			fmt.Fprintf(&buf, " uid: %d ", pk.Uid)
+			fmt.Fprintf(&buf, " uid: %#x ", pk.Uid)
 		}
 		if pk.StartUid > 0 {
-			fmt.Fprintf(&buf, " startUid: %d ", pk.StartUid)
+			fmt.Fprintf(&buf, " startUid: %#x ", pk.StartUid)
 		}
 
 		if opt.itemMeta {
@@ -667,99 +683,6 @@ func printKeys(db *badger.DB) {
 	fmt.Printf("Found %d keys\n", atomic.LoadUint64(&total))
 }
 
-// Creates bounds for an histogram. The bounds are powers of two of the form
-// [2^min_exponent, ..., 2^max_exponent].
-func getHistogramBounds(minExponent, maxExponent uint32) []float64 {
-	var bounds []float64
-	for i := minExponent; i <= maxExponent; i++ {
-		bounds = append(bounds, float64(int(1)<<i))
-	}
-	return bounds
-}
-
-// HistogramData stores the information needed to represent the sizes of the keys and values
-// as a histogram.
-type HistogramData struct {
-	Bounds         []float64
-	Count          int64
-	CountPerBucket []int64
-	Min            int64
-	Max            int64
-	Sum            int64
-}
-
-// NewHistogramData returns a new instance of HistogramData with properly initialized fields.
-func NewHistogramData(bounds []float64) *HistogramData {
-	return &HistogramData{
-		Bounds:         bounds,
-		CountPerBucket: make([]int64, len(bounds)+1),
-		Max:            0,
-		Min:            math.MaxInt64,
-	}
-}
-
-// Update changes the Min and Max fields if value is less than or greater than the current values.
-func (histogram *HistogramData) Update(value int64) {
-	if value > histogram.Max {
-		histogram.Max = value
-	}
-	if value < histogram.Min {
-		histogram.Min = value
-	}
-
-	histogram.Sum += value
-	histogram.Count++
-
-	for index := 0; index <= len(histogram.Bounds); index++ {
-		// Allocate value in the last buckets if we reached the end of the Bounds array.
-		if index == len(histogram.Bounds) {
-			histogram.CountPerBucket[index]++
-			break
-		}
-
-		if value < int64(histogram.Bounds[index]) {
-			histogram.CountPerBucket[index]++
-			break
-		}
-	}
-}
-
-// PrintHistogram prints the histogram data in a human-readable format.
-func (histogram *HistogramData) PrintHistogram() {
-	if histogram == nil {
-		return
-	}
-
-	fmt.Printf("Min value: %d\n", histogram.Min)
-	fmt.Printf("Max value: %d\n", histogram.Max)
-	fmt.Printf("Mean: %.2f\n", float64(histogram.Sum)/float64(histogram.Count))
-	fmt.Printf("%24s %9s\n", "Range", "Count")
-
-	numBounds := len(histogram.Bounds)
-	for index, count := range histogram.CountPerBucket {
-		if count == 0 {
-			continue
-		}
-
-		// The last bucket represents the bucket that contains the range from
-		// the last bound up to infinity so it's processed differently than the
-		// other buckets.
-		if index == len(histogram.CountPerBucket)-1 {
-			lowerBound := int(histogram.Bounds[numBounds-1])
-			fmt.Printf("[%10d, %10s) %9d\n", lowerBound, "infinity", count)
-			continue
-		}
-
-		upperBound := int(histogram.Bounds[index])
-		lowerBound := 0
-		if index > 0 {
-			lowerBound = int(histogram.Bounds[index-1])
-		}
-
-		fmt.Printf("[%10d, %10d) %9d\n", lowerBound, upperBound, count)
-	}
-}
-
 func sizeHistogram(db *badger.DB) {
 	txn := db.NewTransactionAt(opt.readTs, false)
 	defer txn.Discard()
@@ -771,12 +694,12 @@ func sizeHistogram(db *badger.DB) {
 
 	// Generate distribution bounds. Key sizes are not greater than 2^16 while
 	// value sizes are not greater than 1GB (2^30).
-	keyBounds := getHistogramBounds(5, 16)
-	valueBounds := getHistogramBounds(5, 30)
+	keyBounds := z.HistogramBounds(5, 16)
+	valueBounds := z.HistogramBounds(5, 30)
 
 	// Initialize exporter.
-	keySizeHistogram := NewHistogramData(keyBounds)
-	valueSizeHistogram := NewHistogramData(valueBounds)
+	keySizeHistogram := z.NewHistogramData(keyBounds)
+	valueSizeHistogram := z.NewHistogramData(valueBounds)
 
 	// Collect key and value sizes.
 	var prefix []byte
@@ -795,10 +718,8 @@ func sizeHistogram(db *badger.DB) {
 
 	fmt.Printf("prefix = %s\n", hex.Dump(prefix))
 	fmt.Printf("Found %d keys\n", loop)
-	fmt.Printf("\nHistogram of key sizes (in bytes)\n")
-	keySizeHistogram.PrintHistogram()
-	fmt.Printf("\nHistogram of value sizes (in bytes)\n")
-	valueSizeHistogram.PrintHistogram()
+	fmt.Printf("\nHistogram of key sizes (in bytes) %s\n", keySizeHistogram.String())
+	fmt.Printf("\nHistogram of value sizes (in bytes) %s\n", valueSizeHistogram.String())
 }
 
 func printAlphaProposal(buf *bytes.Buffer, pr *pb.Proposal, pending map[uint64]bool) {
@@ -886,14 +807,19 @@ func run() {
 		}
 	}()
 
-	var err error
 	dir := opt.pdir
 	isWal := false
 	if len(dir) == 0 {
 		dir = opt.wdir
 		isWal = true
 	}
+<<<<<<< HEAD
 	_, opt.key = ee.GetKeys(Debug.Conf)
+=======
+	keys, err := ee.GetKeys(Debug.Conf)
+	x.Check(err)
+	opt.key = keys.EncKey
+>>>>>>> master
 
 	if isWal {
 		store, err := raftwal.InitEncrypted(dir, opt.key)

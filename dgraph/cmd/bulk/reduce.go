@@ -43,6 +43,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
+	"github.com/dgraph-io/sroar"
 	"github.com/dustin/go-humanize"
 	"github.com/golang/snappy"
 )
@@ -434,11 +435,17 @@ func bufferStats(cbuf *z.Buffer) {
 }
 
 func getBuf(dir string) *z.Buffer {
+<<<<<<< HEAD
 	cbuf, err := z.NewBufferWithDir(64<<20, 64<<30, z.UseCalloc,
 		filepath.Join(dir, bufferDir), "Reducer.GetBuf")
 	x.Check(err)
 	cbuf.AutoMmapAfter(1 << 30)
 	return cbuf
+=======
+	return z.NewBuffer(64<<20, "Reducer.GetBuf").
+		WithAutoMmap(1<<30, filepath.Join(dir, bufferDir)).
+		WithMaxSize(64 << 30)
+>>>>>>> master
 }
 
 func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *countIndexer) {
@@ -483,8 +490,8 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 		partitionKeys = append(partitionKeys, nil)
 
 		for i := 0; i < len(partitionKeys); i++ {
+			pkey := partitionKeys[i]
 			for _, itr := range mapItrs {
-				pkey := partitionKeys[i]
 				itr.Next(cbuf, pkey)
 			}
 			if cbuf.LenNoPadding() < 256<<20 {
@@ -567,12 +574,15 @@ func (r *reducer) toList(req *encodeRequest) {
 		freePostings = append(freePostings, p)
 	}
 
+<<<<<<< HEAD
 	alloc := z.NewAllocator(16<<20, "Reducer.ToList")
 	defer func() {
 		// We put alloc.Release in defer because we reassign alloc for split posting lists.
 		alloc.Release()
 	}()
 
+=======
+>>>>>>> master
 	start, end, num := cbuf.StartOffset(), cbuf.StartOffset(), 0
 	appendToList := func() {
 		if num == 0 {
@@ -599,8 +609,7 @@ func (r *reducer) toList(req *encodeRequest) {
 			}
 		}
 
-		alloc.Reset()
-		enc := codec.Encoder{BlockSize: 256, Alloc: alloc}
+		bm := sroar.NewBitmap()
 		var lastUid uint64
 		slice, next := []byte{}, start
 		for next >= 0 && (next < end || end == -1) {
@@ -613,7 +622,7 @@ func (r *reducer) toList(req *encodeRequest) {
 			}
 			lastUid = uid
 
-			enc.Add(uid)
+			bm.Set(uid)
 			if pbuf := me.Plist(); len(pbuf) > 0 {
 				p := getPosting()
 				x.Check(p.Unmarshal(pbuf))
@@ -623,8 +632,8 @@ func (r *reducer) toList(req *encodeRequest) {
 
 		// We should not do defer FreePack here, because we might be giving ownership of it away if
 		// we run Rollup.
-		pl.Pack = enc.Done()
-		numUids := codec.ExactLen(pl.Pack)
+		pl.Bitmap = codec.ToBytes(bm)
+		numUids := bm.GetCardinality()
 
 		atomic.AddInt64(&r.prog.reduceKeyCount, 1)
 
@@ -655,16 +664,18 @@ func (r *reducer) toList(req *encodeRequest) {
 			}
 		}
 
-		shouldSplit := pl.Size() > (1<<20)/2 && len(pl.Pack.Blocks) > 1
-		if shouldSplit {
+		if posting.ShouldSplit(pl) {
 			// Give ownership of pl.Pack away to list. Rollup would deallocate the Pack.
 			l := posting.NewList(y.Copy(currentKey), pl, writeVersionTs)
 			kvs, err := l.Rollup(nil)
 			x.Check(err)
 
+<<<<<<< HEAD
 			// Assign a new allocator, so we don't reset the one we were using during Rollup.
 			alloc = z.NewAllocator(16<<20, "Reducer.AppendToList")
 
+=======
+>>>>>>> master
 			for _, kv := range kvs {
 				kv.StreamId = r.streamIdFor(pk.Attr)
 			}

@@ -98,7 +98,6 @@ func TestBackupOfOldRestore(t *testing.T) {
 	require.NoError(t, err)
 
 	testutil.DropAll(t, dg)
-	time.Sleep(2 * time.Second)
 
 	_ = runBackup(t, 3, 1)
 
@@ -113,7 +112,6 @@ func TestBackupOfOldRestore(t *testing.T) {
 
 	// Clean the cluster and try restoring the backups created above.
 	testutil.DropAll(t, dg)
-	time.Sleep(2 * time.Second)
 	sendRestoreRequest(t, alphaBackupDir)
 	testutil.WaitForRestore(t, dg)
 
@@ -172,13 +170,13 @@ func TestBackupFilesystem(t *testing.T) {
 	t.Log("Pausing to let zero move tablet...")
 	moveOk := false
 	for retry := 5; retry > 0; retry-- {
-		time.Sleep(3 * time.Second)
 		state, err := testutil.GetStateHttps(testutil.GetAlphaClientConfig(t))
 		require.NoError(t, err)
 		if _, ok := state.Groups["1"].Tablets[x.NamespaceAttr(x.GalaxyNamespace, "movie")]; ok {
 			moveOk = true
 			break
 		}
+		time.Sleep(1 * time.Second)
 	}
 
 	require.True(t, moveOk)
@@ -367,9 +365,44 @@ func runBackup(t *testing.T, numExpectedFiles, numExpectedDirs int) []string {
 	return runBackupInternal(t, false, numExpectedFiles, numExpectedDirs)
 }
 
+<<<<<<< HEAD
 func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles, numExpectedDirs int) []string {
 	testutil.StartBackupHttps(t, alphaBackupDir, forceFull)
 	testutil.WaitForTask(t, "opBackup")
+=======
+func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
+	numExpectedDirs int) []string {
+	backupRequest := `mutation backup($dst: String!, $ff: Boolean!) {
+			backup(input: {destination: $dst, forceFull: $ff}) {
+				response {
+					code
+				}
+				taskId
+			}
+		}`
+
+	adminUrl := "https://" + testutil.SockAddrHttp + "/admin"
+	params := testutil.GraphQLParams{
+		Query: backupRequest,
+		Variables: map[string]interface{}{
+			"dst": alphaBackupDir,
+			"ff":  forceFull,
+		},
+	}
+	b, err := json.Marshal(params)
+	require.NoError(t, err)
+
+	client := testutil.GetHttpsClient(t)
+	resp, err := client.Post(adminUrl, "application/json", bytes.NewBuffer(b))
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	var data interface{}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
+	require.Equal(t, "Success", testutil.JsonGet(data, "data", "backup", "response", "code").(string))
+	taskId := testutil.JsonGet(data, "data", "backup", "taskId").(string)
+	testutil.WaitForTask(t, taskId, true)
+>>>>>>> master
 
 	// Verify that the right amount of files and directories were created.
 	common.CopyToLocalFs(t)
@@ -384,7 +417,11 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles, numExpect
 	})
 	require.Equal(t, numExpectedDirs, len(dirs))
 
+<<<<<<< HEAD
 	b, err := ioutil.ReadFile(filepath.Join(copyBackupDir, "manifest.json"))
+=======
+	b, err = ioutil.ReadFile(filepath.Join(copyBackupDir, "manifest.json"))
+>>>>>>> master
 	require.NoError(t, err)
 	var manifest worker.MasterManifest
 	err = json.Unmarshal(b, &manifest)
@@ -400,7 +437,7 @@ func runRestore(t *testing.T, backupLocation, lastDir string, commitTs uint64) m
 	require.NoError(t, os.RemoveAll(restoreDir))
 
 	t.Logf("--- Restoring from: %q", backupLocation)
-	result := worker.RunRestore("./data/restore", backupLocation, lastDir, x.SensitiveByteSlice(nil), options.Snappy, 0)
+	result := worker.RunOfflineRestore("./data/restore", backupLocation, lastDir, "", options.Snappy, 0)
 	require.NoError(t, result.Err)
 
 	for i, pdir := range []string{"p1", "p2", "p3"} {

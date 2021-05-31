@@ -90,8 +90,8 @@ func calculatePostingListSize(list *pb.PostingList) uint64 {
 		1*8 + // CommitTs consists of 1 word.
 		3*8 // Splits array consists of 3 words.
 
-	// add pack size.
-	size += calculatePackSize(list.Pack)
+	// add bitmap size.
+	size += uint64(cap(list.Bitmap))
 
 	// Each entry take one word.
 	// Adding each entry reference allocation.
@@ -133,45 +133,6 @@ func calculatePostingSize(posting *pb.Posting) uint64 {
 		// Add the size of each facet.
 		size += calculateFacet(f)
 	}
-
-	return size
-}
-
-// calculatePackSize is used to calculate the size of a uidpack
-func calculatePackSize(pack *pb.UidPack) uint64 {
-	if pack == nil {
-		return 0
-	}
-
-	var size uint64 = 1*8 + // BlockSize consists of 1 word.
-		3*8 + // Blocks array consists of 3 words.
-		1*8 + // AllocRef consists of 1 word.
-		8 // Rounding it to 6 words by adding 1.
-
-	// Adding size of each entry in Blocks array.
-	// Each entry consumes 1 word.
-	size += uint64(cap(pack.Blocks)) * 8
-	for _, block := range pack.Blocks {
-		// Adding the size of UIDBlock.
-		size += calculateUIDBlock(block)
-	}
-
-	return size
-}
-
-// calculateUIDBlock is used to calculate UidBlock
-func calculateUIDBlock(block *pb.UidBlock) uint64 {
-	if block == nil {
-		return 0
-	}
-
-	var size uint64 = 1*8 + // Base consists of 1 word.
-		3*8 + // Delta array consists of 3 words.
-		1*8 + // NumUids consists of 1 word.
-		1*8 // Rounding it to 6 words by adding 1.
-
-	// Adding the size of each entry in Deltas array.
-	size += uint64(cap(block.Deltas))
 
 	return size
 }

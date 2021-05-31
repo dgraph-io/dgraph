@@ -123,7 +123,7 @@ type options struct {
 	CustomAlphaOptions []string
 
 	// Container Alias
-	ContainerAlias string
+	ContainerPrefix string
 
 	// Extra flags
 	AlphaFlags string
@@ -167,15 +167,11 @@ func getOffset(idx int) int {
 
 func initService(basename string, idx, grpcPort int, aliasName string) service {
 	var svc service
-
-	cont_name := func() string {
-		if aliasName != "" {
-			return aliasName + "_" + basename
-		} else {
-			return basename
-		}
-	}()
-	svc.name = name(cont_name, idx)
+	containerPrefix := basename
+	if opts.ContainerPrefix != "" {
+		containerPrefix = opts.ContainerPrefix + "_" + basename
+	}
+	svc.name = name(containerPrefix, idx)
 	svc.Image = opts.Image + ":" + opts.Tag
 	svc.ContainerName = containerName(svc.name)
 	svc.WorkingDir = fmt.Sprintf("/data/%s", svc.name)
@@ -307,8 +303,8 @@ func getAlpha(idx int, raft string, customFlags string) service {
 	}
 
 	zeroName := "zero"
-	if opts.ContainerAlias != "" {
-		zeroName = opts.ContainerAlias + "_" + zeroName
+	if opts.ContainerPrefix != "" {
+		zeroName = opts.ContainerPrefix + "_" + zeroName
 	}
 
 	zeroHostAddr := fmt.Sprintf("%s%d:%d", zeroName, 1, zeroBasePort+opts.PortOffset)
@@ -640,7 +636,7 @@ func main() {
 		"minio service port")
 	cmd.PersistentFlags().StringArrayVar(&opts.MinioEnvFile, "minio_env_file", nil,
 		"minio service env_file")
-	cmd.PersistentFlags().StringVar(&opts.ContainerAlias, "alias", "",
+	cmd.PersistentFlags().StringVar(&opts.ContainerPrefix, "alias", "",
 		"alias for the containers")
 	err := cmd.ParseFlags(os.Args)
 	if err != nil {
@@ -680,51 +676,21 @@ func main() {
 
 	// Alpha Customization
 	customAlphas := make(map[int]string)
-	if len(opts.CustomAlphaOptions) > 0 {
-		for _, flag := range opts.CustomAlphaOptions {
-			splits := strings.SplitN(flag, ":", 2)
-			if len(splits) != 2 {
-				fatal(errors.Errorf(" --custom_alpha_flags option requires string in index:options format."))
-			}
-			custIdx, err := strconv.Atoi(splits[0])
-			if err != nil {
-				fatal(errors.Errorf(" --custom_alpha_flags captured erros while parsing index value %v", err))
-			}
-			customAlphas[custIdx] = splits[1]
+	for _, flag := range opts.CustomAlphaOptions {
+		splits := strings.SplitN(flag, ":", 2)
+		if len(splits) != 2 {
+			fatal(errors.Errorf(" --custom_alpha_flags option requires string in index:options format."))
 		}
+		custIdx, err := strconv.Atoi(splits[0])
+		if err != nil {
+			fatal(errors.Errorf(" --custom_alpha_flags captured erros while parsing index value %v", err))
+		}
+		customAlphas[custIdx] = splits[1]
 	}
 
-	alphaGroups := make(map[int]int)
-	if len(opts.CustomGroups) > 0 {
-		for _, flag := range opts.CustomGroups {
-			splits := strings.SplitN(flag, ":", 2)
-			if len(splits) != 2 {
-				fatal(errors.Errorf(" --custom_groups option requires string in index:groupNum format."))
-			}
-			custIdx, errIndex := strconv.Atoi(splits[0])
-			custValue, errValue := strconv.Atoi(splits[1])
-			if errIndex != nil || errValue != nil {
-				fatal(errors.Errorf(" --custom_groups captured erros while parsing index value %v", err))
-			}
-			alphaGroups[custIdx] = custValue
-		}
-	}
-
-	gid := 0
-	idxNum := 0
 	for i := 1; i <= opts.NumAlphas; i++ {
-		if val, ok := alphaGroups[i]; ok {
-			if gid != val {
-				idxNum = 1
-			} else {
-				idxNum++
-			}
-			gid = val
-		} else {
-			gid = int(math.Ceil(float64(i) / float64(opts.NumReplicas)))
-			idxNum = i
-		}
-		rs := fmt.Sprintf("idx=%d; group=%d", idxNum, gid)
+		gid := int(math.Ceil(float64(i) / float64(opts.NumReplicas)))
+		rs := fmt.Sprintf("idx=%d; group=%d", i, gid)
 		svc := getAlpha(i, rs, customAlphas[i])
 		// Don't make Alphas depend on each other.
 		svc.DependsOn = nil

@@ -57,18 +57,12 @@ variable "instance_name" {
 variable "dgraph_version" {
   type        = string
   description = "Dgraph version for installation"
-  default     = "1.1.0"
+  default     = "21.03.0"
 }
 
-variable "dgraph_ui_port" {
+variable "dgraph_alpha_port" {
   type        = string
-  description = "Port number of ratel interface"
-  default     = "8000"
-}
-
-variable "dgraph_server_port" {
-  type        = string
-  description = "Port number of dgraph server for ratel to connect to."
+  description = "Port number of dgraph alpha to connect to."
   default     = "8080"
 }
 

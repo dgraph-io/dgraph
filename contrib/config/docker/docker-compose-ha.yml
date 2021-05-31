@@ -148,13 +148,5 @@ services:
         constraints:
           - node.hostname == aws06
     command: dgraph alpha --my=alpha6:7085 --zero=zero1:5080,zero2:5081,zero3:5082 -o 5
-  ratel:
-    image: dgraph/dgraph:latest
-    hostname: "ratel"
-    ports:
-      - 8000:8000
-    networks:
-      - dgraph
-    command: dgraph-ratel
 volumes:
   data-volume:

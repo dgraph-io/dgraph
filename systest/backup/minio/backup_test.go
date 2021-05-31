@@ -98,13 +98,13 @@ func TestBackupMinio(t *testing.T) {
 	t.Log("Pausing to let zero move tablet...")
 	moveOk := false
 	for retry := 5; retry > 0; retry-- {
-		time.Sleep(3 * time.Second)
 		state, err := testutil.GetStateHttps(testutil.GetAlphaClientConfig(t))
 		require.NoError(t, err)
 		if _, ok := state.Groups["1"].Tablets[x.NamespaceAttr(x.GalaxyNamespace, "movie")]; ok {
 			moveOk = true
 			break
 		}
+		time.Sleep(1 * time.Second)
 	}
 	require.True(t, moveOk)
 
@@ -278,8 +278,42 @@ func runBackup(t *testing.T, numExpectedFiles, numExpectedDirs int) []string {
 
 func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	numExpectedDirs int) []string {
+<<<<<<< HEAD
 	testutil.StartBackupHttps(t, backupDst, forceFull)
 	testutil.WaitForTask(t, "opBackup")
+=======
+
+	backupRequest := `mutation backup($dst: String!, $ff: Boolean!) {
+		backup(input: {destination: $dst, forceFull: $ff}) {
+			response {
+				code
+			}
+			taskId
+		}
+	}`
+
+	adminUrl := "https://" + testutil.SockAddrHttp + "/admin"
+	params := testutil.GraphQLParams{
+		Query: backupRequest,
+		Variables: map[string]interface{}{
+			"dst": backupDst,
+			"ff":  forceFull,
+		},
+	}
+	b, err := json.Marshal(params)
+	require.NoError(t, err)
+
+	client := testutil.GetHttpsClient(t)
+	resp, err := client.Post(adminUrl, "application/json", bytes.NewBuffer(b))
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	var data interface{}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
+	require.Equal(t, "Success", testutil.JsonGet(data, "data", "backup", "response", "code").(string))
+	taskId := testutil.JsonGet(data, "data", "backup", "taskId").(string)
+	testutil.WaitForTask(t, taskId, true)
+>>>>>>> master
 
 	// Verify that the right amount of files and directories were created.
 	copyToLocalFs(t)
@@ -294,7 +328,11 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	})
 	require.Equal(t, numExpectedDirs, len(dirs))
 
+<<<<<<< HEAD
 	b, err := ioutil.ReadFile(filepath.Join(backupDir, "manifest.json"))
+=======
+	b, err = ioutil.ReadFile(filepath.Join(backupDir, "manifest.json"))
+>>>>>>> master
 	require.NoError(t, err)
 
 	var manifest worker.MasterManifest
@@ -311,8 +349,12 @@ func runRestore(t *testing.T, lastDir string, commitTs uint64) map[string]string
 	require.NoError(t, os.RemoveAll(restoreDir))
 
 	t.Logf("--- Restoring from: %q", localBackupDst)
+<<<<<<< HEAD
 	result := worker.RunRestore("./data/restore", localBackupDst, lastDir,
 		x.SensitiveByteSlice(nil), options.Snappy, 0)
+=======
+	result := worker.RunOfflineRestore("./data/restore", localBackupDst, lastDir, "", options.Snappy, 0)
+>>>>>>> master
 	require.NoError(t, result.Err)
 
 	for i, pdir := range []string{"p1", "p2", "p3"} {
@@ -334,7 +376,7 @@ func runFailingRestore(t *testing.T, backupLocation, lastDir string, commitTs ui
 	// calling restore.
 	require.NoError(t, os.RemoveAll(restoreDir))
 
-	result := worker.RunRestore("./data/restore", backupLocation, lastDir, x.SensitiveByteSlice(nil), options.Snappy, 0)
+	result := worker.RunOfflineRestore("./data/restore", backupLocation, lastDir, "", options.Snappy, 0)
 	require.Error(t, result.Err)
 	require.Contains(t, result.Err.Error(), "expected a BackupNum value of 1")
 }

@@ -13,10 +13,10 @@
 package backup
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+<<<<<<< HEAD
 	"math"
 	"os"
 	"path/filepath"
@@ -32,6 +32,18 @@ import (
 
 	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/ee/enc"
+=======
+	"net/url"
+	"os"
+	"path/filepath"
+	"time"
+
+	bpb "github.com/dgraph-io/badger/v3/pb"
+	"github.com/golang/glog"
+
+	"github.com/dgraph-io/dgraph/ee"
+	"github.com/dgraph-io/dgraph/posting"
+>>>>>>> master
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/upgrade"
 	"github.com/dgraph-io/dgraph/worker"
@@ -39,11 +51,7 @@ import (
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
-	"google.golang.org/grpc"
 )
-
-// Restore is the sub-command used to restore a backup.
-var Restore x.SubCommand
 
 // LsBackup is the sub-command used to list the backups in a folder.
 var LsBackup x.SubCommand
@@ -56,7 +64,7 @@ var opt struct {
 	location    string
 	pdir        string
 	zero        string
-	key         x.SensitiveByteSlice
+	key         x.Sensitive
 	forceZero   bool
 	destination string
 	format      string
@@ -65,96 +73,8 @@ var opt struct {
 }
 
 func init() {
-	initRestore()
 	initBackupLs()
 	initExportBackup()
-}
-
-func initRestore() {
-	Restore.Cmd = &cobra.Command{
-		Use:   "restore",
-		Short: "Restore backup from Dgraph Enterprise Edition",
-		Long: `
-Restore loads objects created with the backup feature in Dgraph Enterprise Edition (EE).
-
-Backups are originated from HTTP at /admin/backup, then can be restored using CLI restore
-command. Restore is intended to be used with new Dgraph clusters in offline state.
-
-The --location flag indicates a source URI with Dgraph backup objects. This URI supports all
-the schemes used for backup.
-
-Source URI formats:
-  [scheme]://[host]/[path]?[args]
-  [scheme]:///[path]?[args]
-  /[path]?[args] (only for local or NFS)
-
-Source URI parts:
-  scheme - service handler, one of: "s3", "minio", "file"
-    host - remote address. ex: "dgraph.s3.amazonaws.com"
-    path - directory, bucket or container at target. ex: "/dgraph/backups/"
-    args - specific arguments that are ok to appear in logs.
-
-The --posting flag sets the posting list parent dir to store the loaded backup files.
-
-Using the --zero flag will use a Dgraph Zero address to update the start timestamp using
-the restored version. Otherwise, the timestamp must be manually updated through Zero's HTTP
-'assign' command.
-
-Dgraph backup creates a unique backup object for each node group, and restore will create
-a posting directory 'p' matching the backup group ID. Such that a backup file
-named '.../r32-g2.backup' will be loaded to posting dir 'p2'.
-
-Usage examples:
-
-# Restore from local dir or NFS mount:
-$ dgraph restore -p . -l /var/backups/dgraph
-
-# Restore from S3:
-$ dgraph restore -p /var/db/dgraph -l s3://s3.us-west-2.amazonaws.com/srfrog/dgraph
-
-# Restore from dir and update Ts:
-$ dgraph restore -p . -l /var/backups/dgraph -z localhost:5080
-
-		`,
-		Args: cobra.NoArgs,
-		Run: func(cmd *cobra.Command, args []string) {
-			defer x.StartProfile(Restore.Conf).Stop()
-			if err := runRestoreCmd(); err != nil {
-				fmt.Fprintln(os.Stderr, err)
-				os.Exit(1)
-			}
-		},
-		Annotations: map[string]string{"group": "data-load"},
-	}
-	Restore.Cmd.SetHelpTemplate(x.NonRootTemplate)
-	flag := Restore.Cmd.Flags()
-
-	flag.StringVarP(&opt.badger, "badger", "b", worker.BadgerDefaults,
-		z.NewSuperFlagHelp(worker.BadgerDefaults).
-			Head("Badger options").
-			Flag("compression",
-				"Specifies the compression algorithm and compression level (if applicable) for the "+
-					`postings directory. "none" would disable compression, while "zstd:1" would set `+
-					"zstd compression at level 1.").
-			Flag("goroutines",
-				"The number of goroutines to use in badger.Stream.").
-			String())
-
-	flag.StringVarP(&opt.location, "location", "l", "",
-		"Sets the source location URI (required).")
-	flag.StringVarP(&opt.pdir, "postings", "p", "",
-		"Directory where posting lists are stored (required).")
-	flag.StringVarP(&opt.zero, "zero", "z", "", "gRPC address for Dgraph zero. ex: localhost:5080")
-	flag.StringVarP(&opt.backupId, "backup_id", "", "", "The ID of the backup series to "+
-		"restore. If empty, it will restore the latest series.")
-	flag.BoolVarP(&opt.forceZero, "force_zero", "", true, "If false, no connection to "+
-		"a zero in the cluster will be required. Keep in mind this requires you to manually "+
-		"update the timestamp and max uid when you start the cluster. The correct values are "+
-		"printed near the end of this command's output.")
-	x.RegisterClientTLSFlags(flag)
-	enc.RegisterFlags(flag)
-	_ = Restore.Cmd.MarkFlagRequired("postings")
-	_ = Restore.Cmd.MarkFlagRequired("location")
 }
 
 func initBackupLs() {
@@ -163,7 +83,7 @@ func initBackupLs() {
 		Short: "List info on backups in a given location",
 		Args:  cobra.NoArgs,
 		Run: func(cmd *cobra.Command, args []string) {
-			defer x.StartProfile(Restore.Conf).Stop()
+			defer x.StartProfile(LsBackup.Conf).Stop()
 			if err := runLsbackupCmd(); err != nil {
 				fmt.Fprintln(os.Stderr, err)
 				os.Exit(1)
@@ -180,6 +100,7 @@ func initBackupLs() {
 	_ = LsBackup.Cmd.MarkFlagRequired("location")
 }
 
+<<<<<<< HEAD
 func runRestoreCmd() error {
 	var (
 		start time.Time
@@ -266,6 +187,8 @@ func runRestoreCmd() error {
 	return nil
 }
 
+=======
+>>>>>>> master
 func runLsbackupCmd() error {
 	manifests, err := worker.ListBackupManifests(opt.location, nil)
 	if err != nil {
@@ -291,8 +214,12 @@ func runLsbackupCmd() error {
 
 		be := backupEntry{
 			Path:      manifest.Path,
+<<<<<<< HEAD
 			Since:     manifest.SinceTsDeprecated,
 			ReadTs:    manifest.ReadTs,
+=======
+			Since:     manifest.Since,
+>>>>>>> master
 			BackupId:  manifest.BackupId,
 			BackupNum: manifest.BackupNum,
 			Encrypted: manifest.Encrypted,
@@ -342,6 +269,7 @@ func initExportBackup() {
 		`If true, retrieve the CORS from DB and append at the end of GraphQL schema.
 		It also deletes the deprecated types and predicates.
 		Use this option when exporting a backup of 20.11 for loading onto 21.03.`)
+<<<<<<< HEAD
 	enc.RegisterFlags(flag)
 }
 
@@ -423,5 +351,142 @@ func runExportBackup() error {
 		return errors.Wrapf(err, "cannot remove temp directory at %s", tmpDir)
 	}
 
+=======
+	ee.RegisterEncFlag(flag)
+}
+
+type bufWriter struct {
+	writers *worker.Writers
+	req     *pb.ExportRequest
+}
+
+func exportSchema(writers *worker.Writers, val []byte, pk x.ParsedKey) error {
+	kv := &bpb.KV{}
+	var err error
+	if pk.IsSchema() {
+		kv, err = worker.SchemaExportKv(pk.Attr, val, true)
+		if err != nil {
+			return err
+		}
+	} else {
+		kv, err = worker.TypeExportKv(pk.Attr, val)
+		if err != nil {
+			return err
+		}
+	}
+	return worker.WriteExport(writers, kv, "rdf")
+}
+
+func (bw *bufWriter) Write(buf *z.Buffer) error {
+	kv := &bpb.KV{}
+	err := buf.SliceIterate(func(s []byte) error {
+		kv.Reset()
+		if err := kv.Unmarshal(s); err != nil {
+			return errors.Wrap(err, "processKvBuf failed to unmarshal kv")
+		}
+		pk, err := x.Parse(kv.Key)
+		if err != nil {
+			return errors.Wrap(err, "processKvBuf failed to parse key")
+		}
+		if pk.Attr == "_predicate_" {
+			return nil
+		}
+		if pk.IsSchema() || pk.IsType() {
+			return exportSchema(bw.writers, kv.Value, pk)
+		}
+		if pk.IsData() {
+			pl := &pb.PostingList{}
+			if err := pl.Unmarshal(kv.Value); err != nil {
+				return errors.Wrap(err, "ProcessKvBuf failed to Unmarshal pl")
+			}
+			l := posting.NewList(kv.Key, pl, kv.Version)
+			kvList, err := worker.ToExportKvList(pk, l, bw.req)
+			if err != nil {
+				return errors.Wrap(err, "processKvBuf failed to Export")
+			}
+			if len(kvList.Kv) == 0 {
+				return nil
+			}
+			exportKv := kvList.Kv[0]
+			return worker.WriteExport(bw.writers, exportKv, bw.req.Format)
+		}
+		return nil
+	})
+	return errors.Wrap(err, "bufWriter failed to write")
+}
+
+func runExportBackup() error {
+	keys, err := ee.GetKeys(ExportBackup.Conf)
+	if err != nil {
+		return err
+	}
+	opt.key = keys.EncKey
+	if opt.format != "json" && opt.format != "rdf" {
+		return errors.Errorf("invalid format %s", opt.format)
+	}
+	// Create exportDir and temporary folder to store the restored backup.
+	exportDir, err := filepath.Abs(opt.destination)
+	if err != nil {
+		return errors.Wrapf(err, "cannot convert path %s to absolute path", exportDir)
+	}
+	if err := os.MkdirAll(exportDir, 0755); err != nil {
+		return errors.Wrapf(err, "cannot create dir %s", exportDir)
+	}
+
+	uri, err := url.Parse(opt.location)
+	if err != nil {
+		return errors.Wrapf(err, "runExportBackup")
+	}
+	handler, err := x.NewUriHandler(uri, nil)
+	if err != nil {
+		return errors.Wrapf(err, "runExportBackup")
+	}
+	latestManifest, err := worker.GetLatestManifest(handler, uri)
+	if err != nil {
+		return errors.Wrapf(err, "runExportBackup")
+	}
+
+	mapDir, err := ioutil.TempDir(x.WorkerConfig.TmpDir, "restore-export")
+	x.Check(err)
+	defer os.RemoveAll(mapDir)
+	glog.Infof("Created temporary map directory: %s\n", mapDir)
+
+	encFlag := z.NewSuperFlag(ExportBackup.Conf.GetString("encryption")).
+		MergeAndCheckDefault(ee.EncDefaults)
+	// TODO: Can probably make this procesing concurrent.
+	for gid := range latestManifest.Groups {
+		glog.Infof("Exporting group: %d", gid)
+		req := &pb.RestoreRequest{
+			GroupId:           gid,
+			Location:          opt.location,
+			EncryptionKeyFile: encFlag.GetPath("key-file"),
+			RestoreTs:         1,
+		}
+		if _, err := worker.RunMapper(req, mapDir); err != nil {
+			return errors.Wrap(err, "Failed to map the backups")
+		}
+
+		in := &pb.ExportRequest{
+			GroupId:     uint32(gid),
+			ReadTs:      latestManifest.Since,
+			UnixTs:      time.Now().Unix(),
+			Format:      opt.format,
+			Destination: exportDir,
+		}
+		writers, err := worker.NewWriters(in)
+		defer writers.Close()
+		if err != nil {
+			return err
+		}
+
+		w := &bufWriter{req: in, writers: writers}
+		if err := worker.RunReducer(w, mapDir); err != nil {
+			return errors.Wrap(err, "Failed to reduce the map")
+		}
+		if err := writers.Close(); err != nil {
+			return errors.Wrap(err, "Failed to finish write")
+		}
+	}
+>>>>>>> master
 	return nil
 }

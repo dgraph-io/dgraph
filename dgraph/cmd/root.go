@@ -25,6 +25,10 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+<<<<<<< HEAD
+=======
+	"strconv"
+>>>>>>> master
 	"strings"
 	"unicode"
 
@@ -306,6 +310,16 @@ func convertJSON(old string) io.Reader {
 	// condense superflags
 	for f, options := range super {
 		for k, v := range options {
+<<<<<<< HEAD
+=======
+			// JSON does not have distinct types for integers and floats.
+			// Go will always give us a float64 value. So, an exceptionally
+			// large integer like 1_000_000 will be printed as 1e06 unless
+			// we format it carefully.
+			if vFloat, ok := v.(float64); ok {
+				v = strconv.FormatFloat(vFloat, 'f', -1, 64)
+			}
+>>>>>>> master
 			good[f] += fmt.Sprintf("%s=%v; ", k, v)
 		}
 		good[f] = good[f][:len(good[f])-1]

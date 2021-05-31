@@ -239,7 +239,11 @@ invalid_schemas:
     errlist: [
       { "message": "Type Z; Field f: Field f is of type U, but @hasInverse directive only applies to fields with object types.", "locations": [{"line":9, "column":3}]},
       { "message": "Type Z; Field f: has the @search directive but fields of type U can't have the @search directive.", "locations": [{"line":9, "column":34}]},
+<<<<<<< HEAD
       { "message": "Type Z; Field f: with @id directive must be of type String!, Int! or Int64!, not U", "locations": [{"line":9, "column":42}]}
+=======
+      { "message": "Type Z; Field f: with @id directive must be of type String, Int or Int64, not U", "locations": [{"line":9, "column":42}]}
+>>>>>>> master
     ]
 
   -
@@ -622,12 +626,17 @@ invalid_schemas:
         f1: [String] @id
       }
     errlist: [
+<<<<<<< HEAD
       {"message": "Type X; Field f1: with @id directive must be of type String!, Int! or Int64!, not [String]",
+=======
+      {"message": "Type X; Field f1: with @id directive must be of type String, Int or Int64, not [String]",
+>>>>>>> master
       "locations":[{"line":2, "column":17}]}
       ]
 
   -
     name: "@id directive can't be applied on field with Float type"
+<<<<<<< HEAD
     input: |
       type X {
         f1: Float! @id
@@ -639,12 +648,18 @@ invalid_schemas:
 
   -
     name: "Field with @id directive should be mandatory"
+=======
+>>>>>>> master
     input: |
       type X {
-        f1: String @id
+        f1: Float! @id
       }
     errlist: [
+<<<<<<< HEAD
       {"message": "Type X; Field f1: with @id directive must be of type String!, Int! or Int64!, not String",
+=======
+      {"message": "Type X; Field f1: with @id directive must be of type String, Int or Int64, not Float!",
+>>>>>>> master
       "locations":[{"line":2, "column":15}]}
       ]
 
@@ -2776,6 +2791,7 @@ invalid_schemas:
     errlist: [
       {"message": "Type Product: Field reviews: @requires directive can only be defined on fields in type extensions. i.e., the type must have `@extends` or use `extend` keyword.", "locations": [ { "line": 4, "column": 23} ] }
     ]
+<<<<<<< HEAD
 
   - name: "argument inside @requires directive is not an @external field."
     input: |
@@ -2807,6 +2823,39 @@ invalid_schemas:
       {"message": "Type Product; Field reviews does not return a type that has a @key.", "locations": [ { "line": 4, "column": 23} ] }
     ]
 
+=======
+
+  - name: "argument inside @requires directive is not an @external field."
+    input: |
+      extend type Product @key(fields: "id"){
+        id: ID! @external
+        name: String!
+        reviews: [Reviews] @requires(fields: "name")
+      }
+      type Reviews @key(fields: "id") {
+          id: ID!
+          review: String!
+      }
+    errlist: [
+      {"message": "Type Product; Field name must be @external.", "locations": [ { "line": 4, "column": 23} ] }
+    ]
+
+  - name: "@provides directive used on field with type that does not have a @key."
+    input: |
+      type Product @key(fields: "id") {
+        id: ID!
+        name: String!
+        reviews: [Reviews] @provides(fields: "name")
+      }
+      type Reviews {
+        id: ID!
+        name: String
+      }
+    errlist: [
+      {"message": "Type Product; Field reviews does not return a type that has a @key.", "locations": [ { "line": 4, "column": 23} ] }
+    ]
+
+>>>>>>> master
   - name: "@provides directive uses a field that is not defined in the extended type"
     input: |
       type Review {
@@ -2889,6 +2938,66 @@ invalid_schemas:
       { "message": "Type TwitterUser; @lambdaOnMutate directive not allowed along with @remote directive.", "locations": [{"line": 1, "column": 27}]}
     ]
 
+<<<<<<< HEAD
+=======
+  - name: "language tag field should be of String type"
+    input: |
+      type Person  {
+        name: String!
+        nameHi: Int @dgraph(pred:"Person.name@hi")
+      }
+    errlist: [
+      { "message": "Type Person; Field nameHi: Expected type `String` for language tag field but got `Int`",
+        "locations": [ { "line": 3, "column": 3 } ] },
+    ]
+
+  - name: "@id directive not supported on language tag field"
+    input: |
+      type Person  {
+        name: String!
+        nameHi: String! @dgraph(pred:"Person.name@hi") @id
+      }
+    errlist: [
+      { "message": "Type Person; Field nameHi: @id directive not supported on language tag fields",
+        "locations": [ { "line": 3, "column": 51 } ] },
+    ]
+
+  - name: "@search directive not supported on multiple language tag field"
+    input: |
+      type Person  {
+        name: String!
+        nameHiEn: String! @dgraph(pred:"Person.name@hi:en") @search(by: [exact])
+      }
+    errlist: [
+      { "message": "Type Person; Field nameHiEn: @search directive not applicable on language tag
+        field with multiple languages",
+        "locations": [ { "line": 3, "column": 56 } ] },
+    ]
+
+  - name: "unsupported `*` language tag in graphql"
+    input: |
+      type Person  {
+        name: String!
+        nameHi: String @dgraph(pred:"Person.name@*")
+      }
+    errlist: [
+      { "message": "Type Person; Field nameHi: `*` language tag not supported in GraphQL",
+        "locations": [ { "line": 3, "column": 19 } ] },
+    ]
+
+  - name: "@id field can't have interface argument when it's defined inside a type"
+    input: |
+      type Person  {
+        name: String! @id(interface:true)
+        age: Int
+      }
+    errlist: [
+      { "message": "Type Person; Field name: @id field with interface argument
+        can only be defined in interface,not in Type",
+        "locations": [ { "line": 2, "column": 18 } ] },
+    ]
+
+>>>>>>> master
 valid_schemas:
   - name: "Multiple fields with @id directive should be allowed"
     input: |
@@ -3367,3 +3476,72 @@ valid_schemas:
         questionText: String
       }
 
+<<<<<<< HEAD
+=======
+  - name: "valid schema with multiple language tag fields"
+    input: |
+      interface Node {
+        f1: String
+      }
+      type Person implements Node {
+        f1Hi: String @dgraph(pred: "Node.f1@hi")
+        f2: String @dgraph(pred: "T.f@no")
+        name: String! @id
+        f3: String @dgraph(pred: "f3@en")
+        nameHi: String @dgraph(pred: "Person.name@hi") @search(by: [term, exact])
+        nameEn: String @dgraph(pred: "Person.name@en") @search(by: [regexp])
+        nameHiEn: String @dgraph(pred: "Person.name@hi:en")
+        nameHi_En_Untag: String @dgraph(pred: "Person.name@hi:en:.")
+        name_Untag_AnyLang: String @dgraph(pred: "Person.name@.")
+        address: String @search(by: [fulltext])
+        addressHi: String @dgraph(pred: "Person.address@hi")
+        professionEn: String @dgraph(pred: "Person.profession@en")
+      }
+
+  - name: "Same reverse dgraph predicate can be used by two different GraphQL fields"
+    input: |
+      type X {
+        f1: [Y] @dgraph(pred: "~link")
+        f2: [Z] @dgraph(pred: "~link")
+      }
+      type Y {
+        f3: [X] @dgraph(pred: "link")
+      }
+      type Z {
+        f4: [X] @dgraph(pred: "link")
+      }
+
+  - name: "valid schema with @id directive having interface argument in interface"
+    input: |
+      interface Member {
+        refID: String! @id(interface: true)
+        name: String! @id
+        itemsIssued: [String]
+        fineAccumulated: Int
+      }
+
+      interface Team {
+        teamID: String! @id(interface: true)
+        teamName: String! @id
+      }
+
+      type LibraryMember implements Member {
+        interests: [String]
+        readHours: String
+      }
+
+      type SportsMember implements Member & Team {
+        plays: String
+        playerRating: Int
+      }
+
+      type CricketTeam implements Team {
+        numOfBatsmans: Int
+        numOfBowlers: Int
+      }
+
+      type LibraryManager {
+        name: String! @id
+        manages: [LibraryMember]
+      }
+>>>>>>> master

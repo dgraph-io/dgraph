@@ -74,10 +74,9 @@ type options struct {
 	verbose         bool
 	httpAddr        string
 	bufferSize      int
-	ludicrousMode   bool
 	upsertPredicate string
 	tmpDir          string
-	key             x.SensitiveByteSlice
+	key             x.Sensitive
 	namespaceToLoad uint64
 	preserveNs      bool
 }
@@ -143,7 +142,7 @@ func init() {
 
 	flag := Live.Cmd.Flags()
 	// --vault SuperFlag and encryption flags
-	enc.RegisterFlags(flag)
+	ee.RegisterEncFlag(flag)
 	// --tls SuperFlag
 	x.RegisterClientTLSFlags(flag)
 
@@ -181,8 +180,6 @@ func init() {
 	Sample flag could look like --creds user=username;password=mypass;namespace=2`)
 
 	flag.StringP("bufferSize", "m", "100", "Buffer for each thread")
-	flag.Bool("ludicrous", false, "Run live loader in ludicrous mode (Should "+
-		"only be done when alpha is under ludicrous mode)")
 	flag.StringP("upsertPredicate", "U", "", "run in upsertPredicate mode. the value would "+
 		"be used to store blank nodes as an xid")
 	flag.String("tmp", "t", "Directory to store temporary buffers.")
@@ -232,7 +229,11 @@ func validateSchema(sch string, namespaces map[uint64]struct{}) error {
 }
 
 // processSchemaFile process schema for a given gz file.
+<<<<<<< HEAD
 func (l *loader) processSchemaFile(ctx context.Context, file string, key x.SensitiveByteSlice,
+=======
+func (l *loader) processSchemaFile(ctx context.Context, file string, key x.Sensitive,
+>>>>>>> master
 	dgraphClient *dgo.Dgraph) error {
 	fmt.Printf("\nProcessing schema file %q\n", file)
 	if len(opt.authToken) > 0 {
@@ -323,7 +324,7 @@ func generateQuery(node, predicate, xid string) string {
 	return sb.String()
 }
 
-func (l *loader) upsertUids(nqs []*api.NQuad) {
+func (l *loader) upsertUids(nqs []*api.NQuad) error {
 	// We form upsertPredicate query for each of the ids we saw in the request, along with
 	// adding the corresponding xid to that uid. The mutation we added is only useful if the
 	// uid doesn't exists.
@@ -378,7 +379,7 @@ func (l *loader) upsertUids(nqs []*api.NQuad) {
 	}
 
 	if len(mutations) == 0 {
-		return
+		return nil
 	}
 
 	query.WriteRune('}')
@@ -391,7 +392,7 @@ func (l *loader) upsertUids(nqs []*api.NQuad) {
 	})
 
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	type dResult struct {
@@ -401,7 +402,7 @@ func (l *loader) upsertUids(nqs []*api.NQuad) {
 	var result map[string][]dResult
 	err = json.Unmarshal(resp.GetJson(), &result)
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	for xid, idx := range ids {
@@ -409,7 +410,7 @@ func (l *loader) upsertUids(nqs []*api.NQuad) {
 		if val, ok := result[idx]; ok && len(val) > 0 {
 			uid, err := strconv.ParseUint(val[0].Uid, 0, 64)
 			if err != nil {
-				panic(err)
+				return err
 			}
 
 			l.alloc.SetUid(xid, uid)
@@ -420,13 +421,15 @@ func (l *loader) upsertUids(nqs []*api.NQuad) {
 		if val, ok := resp.GetUids()[generateUidFunc(idx)]; ok {
 			uid, err := strconv.ParseUint(val, 0, 64)
 			if err != nil {
-				panic(err)
+				return err
 			}
 
 			l.alloc.SetUid(xid, uid)
 			continue
 		}
 	}
+
+	return nil
 }
 
 // allocateUids looks for the maximum uid value in the given NQuads and bumps the
@@ -459,7 +462,7 @@ func (l *loader) allocateUids(nqs []*api.NQuad) {
 
 // processFile forwards a file to the RDF or JSON processor as appropriate
 func (l *loader) processFile(ctx context.Context, fs filestore.FileStore, filename string,
-	key x.SensitiveByteSlice) error {
+	key x.Sensitive) error {
 
 	fmt.Printf("Processing data file %q\n", filename)
 
@@ -549,7 +552,9 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 				// figure out its processsing.
 				// Currently, this option works with data loading in the logged-in namespace.
 				// TODO(Naman): Add a test for a case when it works and when it doesn't.
-				l.upsertUids(nqs)
+				if err = l.upsertUids(nqs); err != nil {
+					return
+				}
 			}
 
 			for _, nq := range nqs {
@@ -651,7 +656,7 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph, conf *viper.Viper) *loader
 
 	l.requestsWg.Add(opts.Pending)
 	for i := 0; i < opts.Pending; i++ {
-		go l.makeRequests()
+		go l.makeRequests(i)
 	}
 
 	rand.Seed(time.Now().Unix())
@@ -697,8 +702,11 @@ func run() error {
 	}
 
 	creds := z.NewSuperFlag(Live.Conf.GetString("creds")).MergeAndCheckDefault(x.DefaultCreds)
+	keys, err := ee.GetKeys(Live.Conf)
+	if err != nil {
+		return err
+	}
 
-	var err error
 	x.PrintVersion()
 	opt = options{
 		dataFiles:       Live.Conf.GetString("files"),
@@ -714,9 +722,9 @@ func run() error {
 		verbose:         Live.Conf.GetBool("verbose"),
 		httpAddr:        Live.Conf.GetString("http"),
 		bufferSize:      Live.Conf.GetInt("bufferSize"),
-		ludicrousMode:   Live.Conf.GetBool("ludicrous"),
 		upsertPredicate: Live.Conf.GetString("upsertPredicate"),
 		tmpDir:          Live.Conf.GetString("tmp"),
+		key:             keys.EncKey,
 	}
 
 	forceNs := Live.Conf.GetInt64("force-namespace")
@@ -727,6 +735,12 @@ func run() error {
 			opt.namespaceToLoad = math.MaxUint64
 		} else {
 			opt.namespaceToLoad = uint64(forceNs)
+<<<<<<< HEAD
+=======
+		}
+		if len(creds.GetString("user")) > 0 && !Live.Conf.IsSet("force-namespace") {
+			return errors.Errorf("force-namespace is mandatory when logging into namespace 0")
+>>>>>>> master
 		}
 	default:
 		if Live.Conf.IsSet("force-namespace") {
@@ -738,7 +752,10 @@ func run() error {
 
 	z.SetTmpDir(opt.tmpDir)
 
+<<<<<<< HEAD
 	_, opt.key = ee.GetKeys(Live.Conf)
+=======
+>>>>>>> master
 	go func() {
 		if err := http.ListenAndServe(opt.httpAddr, nil); err != nil {
 			glog.Errorf("Error while starting HTTP server: %+v", err)

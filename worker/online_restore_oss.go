@@ -1,4 +1,4 @@
-// +build !oss
+// +build oss
 
 /*
  * Copyright 2021 Dgraph Labs, Inc. All rights reserved.
@@ -10,9 +10,10 @@
  *     https://github.com/dgraph-io/dgraph/blob/master/licenses/DCL.txt
  */
 
-package ee
+package worker
 
 import (
+<<<<<<< HEAD:ee/utils_ee.go
 	"io/ioutil"
 
 	"github.com/dgraph-io/dgraph/ee/enc"
@@ -59,4 +60,27 @@ func GetKeys(config *viper.Viper) (x.SensitiveByteSlice, x.SensitiveByteSlice) {
 	}
 
 	return aclKey, encKey
+=======
+	"context"
+	"sync"
+
+	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
+)
+
+func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest, wg *sync.WaitGroup) error {
+	glog.Warningf("Restore failed: %v", x.ErrNotSupported)
+	return x.ErrNotSupported
+}
+
+// Restore implements the Worker interface.
+func (w *grpcWorker) Restore(ctx context.Context, req *pb.RestoreRequest) (*pb.Status, error) {
+	glog.Warningf("Restore failed: %v", x.ErrNotSupported)
+	return &pb.Status{}, x.ErrNotSupported
+}
+
+func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest, pidx uint64) error {
+	return nil
+>>>>>>> master:worker/online_restore_oss.go
 }

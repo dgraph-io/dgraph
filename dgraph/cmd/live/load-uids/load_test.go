@@ -22,6 +22,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -34,7 +35,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+<<<<<<< HEAD
 	"github.com/dgraph-io/dgraph/ee/enc"
+=======
+	"github.com/dgraph-io/dgraph/ee"
+>>>>>>> master
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -99,7 +104,8 @@ func TestLiveLoadUpsertAtOnce(t *testing.T) {
 		{testutil.DgraphBinaryPath(), "live",
 			"--schema", testDataDir + "/xid.schema", "--files", file, "--alpha",
 			alphaService, "--zero", zeroService,
-			"--creds", "user=groot;password=password;", "-U", "xid"},
+			"--creds", "user=groot;password=password;", "-U", "xid",
+			"--force-namespace", "0"},
 	}
 	_, err := testutil.Pipeline(pipeline)
 	require.NoError(t, err, "live loading JSON file exited with error")
@@ -114,7 +120,8 @@ func TestLiveLoadUpsert(t *testing.T) {
 		{testutil.DgraphBinaryPath(), "live",
 			"--schema", testDataDir + "/xid.schema", "--files", testDataDir + "/xid_a.rdf",
 			"--alpha", alphaService, "--zero", zeroService,
-			"--creds", "user=groot;password=password;", "-U", "xid"},
+			"--creds", "user=groot;password=password;", "-U", "xid",
+			"--force-namespace", "0"},
 	}
 	_, err := testutil.Pipeline(pipeline)
 	require.NoError(t, err, "live loading JSON file exited with error")
@@ -123,7 +130,8 @@ func TestLiveLoadUpsert(t *testing.T) {
 		{testutil.DgraphBinaryPath(), "live",
 			"--schema", testDataDir + "/xid.schema", "--files", testDataDir + "/xid_b.rdf",
 			"--alpha", alphaService, "--zero", zeroService,
-			"--creds", "user=groot;password=password;", "-U", "xid"},
+			"--creds", "user=groot;password=password;", "-U", "xid",
+			"--force-namespace", "0"},
 	}
 	_, err = testutil.Pipeline(pipeline)
 	require.NoError(t, err, "live loading JSON file exited with error")
@@ -202,7 +210,8 @@ func TestLiveLoadJsonUidKeep(t *testing.T) {
 		{testutil.DgraphBinaryPath(), "live",
 			"--schema", testDataDir + "/family.schema", "--files", testDataDir + "/family.json",
 			"--alpha", alphaService, "--zero", zeroService,
-			"--creds", "user=groot;password=password;"},
+			"--creds", "user=groot;password=password;",
+			"--force-namespace", "0"},
 	}
 	_, err := testutil.Pipeline(pipeline)
 	require.NoError(t, err, "live loading JSON file exited with error")
@@ -217,7 +226,8 @@ func TestLiveLoadJsonUidDiscard(t *testing.T) {
 		{testutil.DgraphBinaryPath(), "live", "--new_uids",
 			"--schema", testDataDir + "/family.schema", "--files", testDataDir + "/family.json",
 			"--alpha", alphaService, "--zero", zeroService,
-			"--creds", "user=groot;password=password;"},
+			"--creds", "user=groot;password=password;",
+			"--force-namespace", "0"},
 	}
 	_, err := testutil.Pipeline(pipeline)
 	require.NoError(t, err, "live loading JSON file exited with error")
@@ -232,7 +242,8 @@ func TestLiveLoadRdfUidKeep(t *testing.T) {
 		{testutil.DgraphBinaryPath(), "live",
 			"--schema", testDataDir + "/family.schema", "--files", testDataDir + "/family.rdf",
 			"--alpha", alphaService, "--zero", zeroService,
-			"--creds", "user=groot;password=password;"},
+			"--creds", "user=groot;password=password;",
+			"--force-namespace", "0"},
 	}
 	_, err := testutil.Pipeline(pipeline)
 	require.NoError(t, err, "live loading JSON file exited with error")
@@ -247,7 +258,8 @@ func TestLiveLoadRdfUidDiscard(t *testing.T) {
 		{testutil.DgraphBinaryPath(), "live", "--new_uids",
 			"--schema", testDataDir + "/family.schema", "--files", testDataDir + "/family.rdf",
 			"--alpha", alphaService, "--zero", zeroService,
-			"--creds", "user=groot;password=password;"},
+			"--creds", "user=groot;password=password;",
+			"--force-namespace", "0"},
 	}
 	_, err := testutil.Pipeline(pipeline)
 	require.NoError(t, err, "live loading JSON file exited with error")
@@ -286,9 +298,14 @@ func TestLiveLoadExportedSchema(t *testing.T) {
 			"--schema", localExportPath + "/" + exportId + "/" + groupId + ".schema.gz",
 			"--files", localExportPath + "/" + exportId + "/" + groupId + ".rdf.gz",
 			"--encryption",
+<<<<<<< HEAD
 			enc.BuildEncFlag(testDataDir + "/../../../../ee/enc/test-fixtures/enc-key"),
+=======
+			ee.BuildEncFlag(testDataDir + "/../../../../ee/enc/test-fixtures/enc-key"),
+>>>>>>> master
 			"--alpha", alphaService, "--zero", zeroService,
-			"--creds", "user=groot;password=password;"},
+			"--creds", "user=groot;password=password;",
+			"--force-namespace", "0"},
 	}
 	_, err := testutil.Pipeline(pipeline)
 	require.NoError(t, err, "live loading exported schema exited with error")
@@ -328,7 +345,8 @@ func TestLiveLoadFileName(t *testing.T) {
 		{testutil.DgraphBinaryPath(), "live",
 			"--files", testDataDir + "/correct1.rdf," + testDataDir + "/errored1.rdf",
 			"--alpha", alphaService, "--zero", zeroService,
-			"--creds", "user=groot;password=password;"},
+			"--creds", "user=groot;password=password;",
+			"--force-namespace", "0"},
 	}
 
 	out, err := testutil.Pipeline(pipeline)
@@ -345,7 +363,8 @@ func TestLiveLoadFileNameMultipleErrored(t *testing.T) {
 		{testutil.DgraphBinaryPath(), "live",
 			"--files", testDataDir + "/correct1.rdf," + testDataDir + "/errored1.rdf," +
 				testDataDir + "/errored2.rdf", "--alpha", alphaService, "--zero", zeroService,
-			"--creds", "user=groot;password=password;"},
+			"--creds", "user=groot;password=password;",
+			"--force-namespace", "0"},
 	}
 
 	out, err := testutil.Pipeline(pipeline)
@@ -363,7 +382,8 @@ func TestLiveLoadFileNameMultipleCorrect(t *testing.T) {
 		{testutil.DgraphBinaryPath(), "live",
 			"--files", testDataDir + "/correct1.rdf," + testDataDir + "/correct2.rdf," +
 				testDataDir + "/errored1.rdf", "--alpha", alphaService, "--zero", zeroService,
-			"--creds", "user=groot;password=password;"},
+			"--creds", "user=groot;password=password;",
+			"--force-namespace", "0"},
 	}
 
 	out, err := testutil.Pipeline(pipeline)
@@ -371,6 +391,19 @@ func TestLiveLoadFileNameMultipleCorrect(t *testing.T) {
 	errLine := extractErrLine(out)
 	errLineExp := fmt.Sprintf(`Error while processing data file %s/errored1.rdf:`, testDataDir)
 	require.Equal(t, errLineExp, errLine, "incorrect name for errored file")
+}
+
+func TestLiveLoadWithoutForceNs(t *testing.T) {
+	testutil.DropAll(t, dg)
+
+	liveCmd := exec.Command(testutil.DgraphBinaryPath(), "live",
+		"--files", testDataDir+"/correct1.rdf",
+		"--alpha", alphaService, "--zero", zeroService,
+		"--creds", "user=groot;password=password;")
+
+	out, err := liveCmd.CombinedOutput()
+	require.Error(t, err, "error expected: live loader exited with no error")
+	require.Contains(t, string(out), "force-namespace is mandatory when logging into namespace 0")
 }
 
 func TestMain(m *testing.M) {

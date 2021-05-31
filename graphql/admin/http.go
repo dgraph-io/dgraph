@@ -124,15 +124,31 @@ func write(w http.ResponseWriter, rr *schema.Response, acceptGzip bool) {
 	}
 }
 
+// WriteErrorResponse writes the error to the HTTP response writer in GraphQL format.
+func WriteErrorResponse(w http.ResponseWriter, r *http.Request, err error) {
+	write(w, schema.ErrorResponse(err), strings.Contains(r.Header.Get("Accept-Encoding"), "gzip"))
+}
+
 type graphqlSubscription struct {
 	graphqlHandler *graphqlHandler
 }
 
-func (gs *graphqlSubscription) isValid(namespace uint64) bool {
+func (gs *graphqlSubscription) isValid(namespace uint64) error {
 	gs.graphqlHandler.pollerMux.RLock()
 	defer gs.graphqlHandler.pollerMux.RUnlock()
-	return !(gs == nil || !gs.graphqlHandler.isValid(namespace) || gs.graphqlHandler.
-		poller == nil || gs.graphqlHandler.poller[namespace] == nil)
+	if gs == nil {
+		return errors.New("gs is nil")
+	}
+	if err := gs.graphqlHandler.isValid(namespace); err != nil {
+		return err
+	}
+	if gs.graphqlHandler.poller == nil {
+		return errors.New("poller is nil")
+	}
+	if gs.graphqlHandler.poller[namespace] == nil {
+		return errors.New("poller not found")
+	}
+	return nil
 }
 
 func (gs *graphqlSubscription) Subscribe(
@@ -142,10 +158,10 @@ func (gs *graphqlSubscription) Subscribe(
 	variableValues map[string]interface{}) (payloads <-chan interface{},
 	err error) {
 
+	reqHeader := http.Header{}
 	// library (graphql-transport-ws) passes the headers which are part of the INIT payload to us
 	// in the context. We are extracting those headers and passing them along.
 	headerPayload, _ := ctx.Value("Header").(json.RawMessage)
-	reqHeader := http.Header{}
 	if len(headerPayload) > 0 {
 		headers := make(map[string]interface{})
 		if err = json.Unmarshal(headerPayload, &headers); err != nil {
@@ -159,6 +175,19 @@ func (gs *graphqlSubscription) Subscribe(
 		}
 	}
 
+	// Earlier the graphql-transport-ws library was ignoring the http headers in the request.
+	// The library was relying upon the information present in the request payload. This was
+	// blocker for the cloud team because the only control cloud has is over the HTTP headers.
+	// This fix ensures that we are setting the request headers if not provided in the payload.
+	httpHeaders, _ := ctx.Value("RequestHeader").(http.Header)
+	if len(httpHeaders) > 0 {
+		for k := range httpHeaders {
+			if len(strings.TrimSpace(reqHeader.Get(k))) == 0 {
+				reqHeader.Set(k, httpHeaders.Get(k))
+			}
+		}
+	}
+
 	req := &schema.Request{
 		OperationName: operationName,
 		Query:         document,
@@ -166,8 +195,13 @@ func (gs *graphqlSubscription) Subscribe(
 		Header:        reqHeader,
 	}
 	namespace := x.ExtractNamespaceHTTP(&http.Request{Header: reqHeader})
-	LazyLoadSchema(namespace) // first load the schema, then do anything else
-	if !gs.isValid(namespace) {
+	glog.Infof("namespace: %d. Got GraphQL request over websocket.", namespace)
+	// first load the schema, then do anything else
+	if err = LazyLoadSchema(namespace); err != nil {
+		return nil, err
+	}
+	if err = gs.isValid(namespace); err != nil {
+		glog.Errorf("namespace: %d. graphqlSubscription not initialized: %s", namespace, err)
 		return nil, errors.New(resolve.ErrInternal)
 	}
 
@@ -203,8 +237,11 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 
 	ns, _ := strconv.ParseUint(r.Header.Get("resolver"), 10, 64)
-	if !gh.isValid(ns) {
-		x.Panic(errors.New("graphqlHandler not initialised"))
+	glog.Infof("namespace: %d. Got GraphQL request over HTTP.", ns)
+	if err := gh.isValid(ns); err != nil {
+		glog.Errorf("namespace: %d. graphqlHandler not initialised: %s", ns, err)
+		WriteErrorResponse(w, r, errors.New(resolve.ErrInternal))
+		return
 	}
 
 	gh.resolverMux.RLock()
@@ -227,12 +264,12 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	gqlReq, err := getRequest(r)
 
 	if err != nil {
-		write(w, schema.ErrorResponse(err), strings.Contains(r.Header.Get("Accept-Encoding"), "gzip"))
+		WriteErrorResponse(w, r, err)
 		return
 	}
 
 	if err = edgraph.ProcessPersistedQuery(ctx, gqlReq); err != nil {
-		write(w, schema.ErrorResponse(err), strings.Contains(r.Header.Get("Accept-Encoding"), "gzip"))
+		WriteErrorResponse(w, r, err)
 		return
 	}
 
@@ -240,11 +277,22 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	write(w, res, strings.Contains(r.Header.Get("Accept-Encoding"), "gzip"))
 }
 
-func (gh *graphqlHandler) isValid(namespace uint64) bool {
+func (gh *graphqlHandler) isValid(namespace uint64) error {
 	gh.resolverMux.RLock()
 	defer gh.resolverMux.RUnlock()
-	return !(gh == nil || gh.resolver == nil || gh.resolver[namespace] == nil || gh.
-		resolver[namespace].Schema() == nil || gh.resolver[namespace].Schema().Meta() == nil)
+	switch {
+	case gh == nil:
+		return errors.New("gh is nil")
+	case gh.resolver == nil:
+		return errors.New("resolver is nil")
+	case gh.resolver[namespace] == nil:
+		return errors.New("resolver not found")
+	case gh.resolver[namespace].Schema() == nil:
+		return errors.New("schema is nil")
+	case gh.resolver[namespace].Schema().Meta() == nil:
+		return errors.New("schema meta is nil")
+	}
+	return nil
 }
 
 type gzreadCloser struct {

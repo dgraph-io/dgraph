@@ -19,6 +19,7 @@ package posting
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"io/ioutil"
@@ -29,7 +30,6 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
-	ostats "go.opencensus.io/stats"
 	otrace "go.opencensus.io/trace"
 
 	"github.com/dgraph-io/badger/v3"
@@ -124,11 +124,7 @@ func (txn *Txn) addIndexMutation(ctx context.Context, edge *pb.DirectedEdge, tok
 	}
 
 	x.AssertTrue(plist != nil)
-	if err = plist.addMutation(ctx, txn, edge); err != nil {
-		return err
-	}
-	ostats.Record(ctx, x.NumEdges.M(1))
-	return nil
+	return plist.addMutation(ctx, txn, edge)
 }
 
 // countParams is sent to updateCount function. It is used to update the count index.
@@ -187,12 +183,7 @@ func (txn *Txn) addReverseMutation(ctx context.Context, t *pb.DirectedEdge) erro
 		Op:      t.Op,
 		Facets:  t.Facets,
 	}
-	if err := plist.addMutation(ctx, txn, edge); err != nil {
-		return err
-	}
-
-	ostats.Record(ctx, x.NumEdges.M(1))
-	return nil
+	return plist.addMutation(ctx, txn, edge)
 }
 
 func (txn *Txn) addReverseAndCountMutation(ctx context.Context, t *pb.DirectedEdge) error {
@@ -228,18 +219,23 @@ func (txn *Txn) addReverseAndCountMutation(ctx context.Context, t *pb.DirectedEd
 			return errors.Wrapf(err, "cannot find single uid list to update with key %s",
 				hex.Dump(dataKey))
 		}
-		err = dataList.Iterate(txn.StartTs, 0, func(p *pb.Posting) error {
+
+		bm, err := dataList.Bitmap(ListOptions{ReadTs: txn.StartTs})
+		if err != nil {
+			return errors.Wrapf(err, "while retriving Bitmap for key %s", hex.Dump(dataKey))
+		}
+
+		for _, uid := range bm.ToArray() {
 			delEdge := &pb.DirectedEdge{
 				Entity:  t.Entity,
-				ValueId: p.Uid,
+				ValueId: uid,
 				Attr:    t.Attr,
 				Op:      pb.DirectedEdge_DEL,
 			}
-			return txn.addReverseAndCountMutation(ctx, delEdge)
-		})
-		if err != nil {
-			return errors.Wrapf(err, "cannot remove existing reverse index entries for key %s",
-				hex.Dump(dataKey))
+			if err := txn.addReverseAndCountMutation(ctx, delEdge); err != nil {
+				return errors.Wrapf(err, "cannot remove existing reverse index entries for key %s",
+					hex.Dump(dataKey))
+			}
 		}
 	}
 
@@ -256,14 +252,11 @@ func (txn *Txn) addReverseAndCountMutation(ctx context.Context, t *pb.DirectedEd
 	if err != nil {
 		return err
 	}
-	ostats.Record(ctx, x.NumEdges.M(1))
-
 	if hasCountIndex && cp.countAfter != cp.countBefore {
 		if err := txn.updateCount(ctx, cp); err != nil {
 			return err
 		}
 	}
-
 	return nil
 }
 
@@ -277,9 +270,8 @@ func (l *List) handleDeleteAll(ctx context.Context, edge *pb.DirectedEdge, txn *
 		Entity: edge.Entity,
 	}
 	// To calculate length of posting list. Used for deletion of count index.
-	var plen int
-	err := l.Iterate(txn.StartTs, 0, func(p *pb.Posting) error {
-		plen++
+	plen := l.Length(txn.StartTs, 0)
+	err := l.IterateAll(txn.StartTs, 0, func(p *pb.Posting) error {
 		switch {
 		case isReversed:
 			// Delete reverse edge for each posting.
@@ -330,11 +322,7 @@ func (txn *Txn) addCountMutation(ctx context.Context, t *pb.DirectedEdge, count 
 
 	x.AssertTruef(plist != nil, "plist is nil [%s] %d",
 		t.Attr, t.ValueId)
-	if err = plist.addMutation(ctx, txn, t); err != nil {
-		return err
-	}
-	ostats.Record(ctx, x.NumEdges.M(1))
-	return nil
+	return plist.addMutation(ctx, txn, t)
 }
 
 func (txn *Txn) updateCount(ctx context.Context, params countParams) error {
@@ -481,7 +469,6 @@ func (l *List) AddMutationWithIndex(ctx context.Context, edge *pb.DirectedEdge, 
 	if err != nil {
 		return err
 	}
-	ostats.Record(ctx, x.NumEdges.M(1))
 	if hasCountIndex && cp.countAfter != cp.countBefore {
 		if err := txn.updateCount(ctx, cp); err != nil {
 			return err
@@ -574,7 +561,10 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		WithNumVersionsToKeep(math.MaxInt32).
 		WithLogger(&x.ToGlog{}).
 		WithCompression(options.None).
+<<<<<<< HEAD
 		WithEncryptionKey(x.WorkerConfig.EncryptionKey).
+=======
+>>>>>>> master
 		WithLoggingLevel(badger.WARNING).
 		WithMetricsEnabled(false)
 
@@ -630,7 +620,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		}
 
 		// Convert data into deltas.
-		txn.Update()
+		txn.Update(ctx)
 
 		// txn.cache.Lock() is not required because we are the only one making changes to txn.
 		kvs := make([]*bpb.KV, 0, len(txn.cache.deltas))
@@ -1138,7 +1128,7 @@ func rebuildReverseEdges(ctx context.Context, rb *IndexRebuild) error {
 	builder := rebuilder{attr: rb.Attr, prefix: pk.DataPrefix(), startTs: rb.StartTs}
 	builder.fn = func(uid uint64, pl *List, txn *Txn) error {
 		edge := pb.DirectedEdge{Attr: rb.Attr, Entity: uid}
-		return pl.Iterate(txn.StartTs, 0, func(pp *pb.Posting) error {
+		return pl.IterateAll(txn.StartTs, 0, func(pp *pb.Posting) error {
 			puid := pp.Uid
 			// Add reverse entries based on p.
 			edge.ValueId = puid
@@ -1191,7 +1181,7 @@ func rebuildListType(ctx context.Context, rb *IndexRebuild) error {
 	builder := rebuilder{attr: rb.Attr, prefix: pk.DataPrefix(), startTs: rb.StartTs}
 	builder.fn = func(uid uint64, pl *List, txn *Txn) error {
 		var mpost *pb.Posting
-		err := pl.Iterate(txn.StartTs, 0, func(p *pb.Posting) error {
+		err := pl.IterateAll(txn.StartTs, 0, func(p *pb.Posting) error {
 			// We only want to modify the untagged value. There could be other values with a
 			// lang tag.
 			if p.Uid == math.MaxUint64 {
@@ -1236,20 +1226,34 @@ func DeleteAll() error {
 	return pstore.DropAll()
 }
 
-// DeleteData deletes all data but leaves types and schema intact.
-func DeleteData() error {
-	return pstore.DropPrefix([]byte{x.DefaultPrefix})
+// DeleteData deletes all data for the namespace but leaves types and schema intact.
+func DeleteData(ns uint64) error {
+	prefix := make([]byte, 9)
+	prefix[0] = x.DefaultPrefix
+	binary.BigEndian.PutUint64(prefix[1:], ns)
+	return pstore.DropPrefix(prefix)
 }
 
-// DeletePredicate deletes all entries and indices for a given predicate.
-func DeletePredicate(ctx context.Context, attr string) error {
+// DeletePredicate deletes all entries and indices for a given predicate. The delete may be logical
+// based on DB options set.
+func DeletePredicate(ctx context.Context, attr string, ts uint64) error {
 	glog.Infof("Dropping predicate: [%s]", attr)
 	prefix := x.PredicatePrefix(attr)
 	if err := pstore.DropPrefix(prefix); err != nil {
 		return err
 	}
+	return schema.State().Delete(attr, ts)
+}
 
-	return schema.State().Delete(attr)
+// DeletePredicateBlocking deletes all entries and indices for a given predicate. It also blocks the
+// writes.
+func DeletePredicateBlocking(ctx context.Context, attr string, ts uint64) error {
+	glog.Infof("Dropping predicate: [%s]", attr)
+	prefix := x.PredicatePrefix(attr)
+	if err := pstore.DropPrefixBlocking(prefix); err != nil {
+		return err
+	}
+	return schema.State().Delete(attr, ts)
 }
 
 // DeleteNamespace bans the namespace and deletes its predicates/types from the schema.

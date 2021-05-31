@@ -84,24 +84,20 @@ func GalaxyAttr(attr string) string {
 
 // ParseNamespaceAttr returns the namespace and attr from the given value.
 func ParseNamespaceAttr(attr string) (uint64, string) {
-	AssertTrue(len(attr) >= 8)
 	return binary.BigEndian.Uint64([]byte(attr[:8])), attr[8:]
 }
 
 func ParseNamespaceBytes(attr string) ([]byte, string) {
-	AssertTrue(len(attr) >= 8)
 	return []byte(attr[:8]), attr[8:]
 }
 
 // ParseAttr returns the attr from the given value.
 func ParseAttr(attr string) string {
-	AssertTrue(len(attr) >= 8)
 	return attr[8:]
 }
 
 // ParseNamespace returns the namespace from the given value.
 func ParseNamespace(attr string) uint64 {
-	AssertTrue(len(attr) >= 8)
 	return binary.BigEndian.Uint64([]byte(attr[:8]))
 }
 
@@ -114,13 +110,32 @@ func ParseAttrList(attrs []string) []string {
 }
 
 func IsReverseAttr(attr string) bool {
+<<<<<<< HEAD
 	AssertTrue(len(attr) >= 8)
+=======
+>>>>>>> master
 	return attr[8] == '~'
 }
 
 func FormatNsAttr(attr string) string {
 	ns, attr := ParseNamespaceAttr(attr)
 	return strconv.FormatUint(ns, 10) + "-" + attr
+<<<<<<< HEAD
+=======
+}
+
+func ExtractNamespaceFromPredicate(predicate string) (uint64, error) {
+	splitString := strings.Split(predicate, "-")
+	if len(splitString) <= 1 {
+		return 0, errors.Errorf("predicate does not contain namespace name")
+	}
+	uintVal, err := strconv.ParseUint(splitString[0], 0, 64)
+	if err != nil {
+		return 0, errors.Wrapf(err, "while parsing %s as uint64", splitString[0])
+	}
+	return uintVal, nil
+
+>>>>>>> master
 }
 
 func writeAttr(buf []byte, attr string) []byte {

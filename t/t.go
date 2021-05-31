@@ -146,6 +146,11 @@ func detectRace(prefix string) bool {
 }
 
 func outputLogs(prefix string) {
+<<<<<<< HEAD
+=======
+	f, err := ioutil.TempFile(".", prefix+"*.log")
+	x.Check(err)
+>>>>>>> master
 	printLogs := func(container string) {
 		in := testutil.GetContainerInstance(prefix, container)
 		c := in.GetContainer()
@@ -154,7 +159,13 @@ func outputLogs(prefix string) {
 		}
 		logCmd := exec.Command("docker", "logs", c.ID)
 		out, err := logCmd.CombinedOutput()
+<<<<<<< HEAD
 		fmt.Printf("Docker logs for %d is %s with error %+v ", c.ID, string(out), err)
+=======
+		x.Check(err)
+		f.Write(out)
+		// fmt.Printf("Docker logs for %s is %s with error %+v ", c.ID, string(out), err)
+>>>>>>> master
 	}
 	for i := 0; i <= 3; i++ {
 		printLogs("zero" + strconv.Itoa(i))
@@ -163,6 +174,14 @@ func outputLogs(prefix string) {
 	for i := 0; i <= 6; i++ {
 		printLogs("alpha" + strconv.Itoa(i))
 	}
+<<<<<<< HEAD
+=======
+	f.Sync()
+	f.Close()
+	s := fmt.Sprintf("---> LOGS for %s written to %s .\n", prefix, f.Name())
+	_, err = oc.Write([]byte(s))
+	x.Check(err)
+>>>>>>> master
 }
 
 func stopCluster(composeFile, prefix string, wg *sync.WaitGroup, err error) {
@@ -315,6 +334,10 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 			}
 			start()
 			if err = runTestsFor(ctx, task.pkg.ID, prefix); err != nil {
+<<<<<<< HEAD
+=======
+				// fmt.Printf("ERROR for package: %s. Err: %v\n", task.pkg.ID, err)
+>>>>>>> master
 				return err
 			}
 		} else {
@@ -587,7 +610,6 @@ func removeAllTestContainers() {
 
 var loadPackages = []string{
 	"/systest/21million/bulk",
-	"/systest/21million/ludicrous",
 	"/systest/21million/live",
 	"/systest/1million",
 	"/systest/bulk_live/bulk",

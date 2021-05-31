@@ -113,6 +113,7 @@ type Schema interface {
 	IsFederated() bool
 	SetMeta(meta *metaInfo)
 	Meta() *metaInfo
+	Type(typeName string) Type
 }
 
 // An Operation is a single valid GraphQL operation.  It contains either
@@ -224,6 +225,7 @@ type Query interface {
 	// query
 	RepresentationsArg() (*EntityRepresentations, error)
 	AuthFor(jwtVars map[string]interface{}) Query
+	Schema() Schema
 }
 
 // A Type is a GraphQL type like: Float, T, T! and [T!]!.  If it's not a list, then
@@ -249,7 +251,7 @@ type Type interface {
 	Interfaces() []string
 	ImplementingTypes() []Type
 	EnsureNonNulls(map[string]interface{}, string) error
-	FieldOriginatedFrom(fieldName string) string
+	FieldOriginatedFrom(fieldName string) (Type, bool)
 	AuthRules() *TypeAuth
 	IsGeo() bool
 	IsAggregateResult() bool
@@ -269,6 +271,7 @@ type FieldDefinition interface {
 	IsID() bool
 	IsExternal() bool
 	HasIDDirective() bool
+	HasInterfaceArg() bool
 	Inverse() FieldDefinition
 	WithMemberType(string) FieldDefinition
 	// TODO - It might be possible to get rid of ForwardEdge and just use Inverse() always.
@@ -397,6 +400,17 @@ func (s *schema) SetMeta(meta *metaInfo) {
 
 func (s *schema) Meta() *metaInfo {
 	return s.meta
+}
+
+func (s *schema) Type(typeName string) Type {
+	if s.typeNameAst[typeName] != nil {
+		return &astType{
+			typ:             &ast.Type{NamedType: typeName},
+			inSchema:        s,
+			dgraphPredicate: s.dgraphPredicate,
+		}
+	}
+	return nil
 }
 
 func (o *operation) IsQuery() bool {
@@ -1786,6 +1800,10 @@ func (q *query) Rename(newName string) {
 	q.field.Name = newName
 }
 
+func (q *query) Schema() Schema {
+	return q.op.inSchema
+}
+
 func (q *query) Name() string {
 	return (*field)(q).Name()
 }
@@ -2327,8 +2345,32 @@ func (fd *fieldDefinition) HasIDDirective() bool {
 }
 
 func hasIDDirective(fd *ast.FieldDefinition) bool {
-	id := fd.Directives.ForName("id")
+	id := fd.Directives.ForName(idDirective)
 	return id != nil
+}
+
+func (fd *fieldDefinition) HasInterfaceArg() bool {
+	if fd.fieldDef == nil {
+		return false
+	}
+	return hasInterfaceArg(fd.fieldDef)
+}
+
+func hasInterfaceArg(fd *ast.FieldDefinition) bool {
+	if !hasIDDirective(fd) {
+		return false
+	}
+	interfaceArg := fd.Directives.ForName(idDirective).Arguments.ForName(idDirectiveInterfaceArg)
+	if interfaceArg == nil {
+		return false
+	}
+
+	value, _ := interfaceArg.Value.Value(nil)
+	if val, ok := value.(bool); ok && val {
+		return true
+	}
+
+	return false
 }
 
 func isID(fd *ast.FieldDefinition) bool {
@@ -2336,6 +2378,9 @@ func isID(fd *ast.FieldDefinition) bool {
 }
 
 func (fd *fieldDefinition) Type() Type {
+	if fd.fieldDef == nil {
+		return nil
+	}
 	return &astType{
 		typ:             fd.fieldDef.Type,
 		inSchema:        fd.inSchema,
@@ -3017,21 +3062,34 @@ func SubstituteVarsInBody(jsonTemplate interface{}, variables map[string]interfa
 	return jsonTemplate
 }
 
-// FieldOriginatedFrom returns the name of the interface from which given field was inherited.
-// If the field wasn't inherited, but belonged to this type, this type's name is returned.
-// Otherwise, empty string is returned.
-func (t *astType) FieldOriginatedFrom(fieldName string) string {
+// FieldOriginatedFrom returns the interface from which given field was inherited.
+// If the field wasn't inherited, but belonged to this type,then type is returned.
+// Otherwise, nil is returned. Along with type definition we return boolean flag true if field
+// is inherited from interface.
+func (t *astType) FieldOriginatedFrom(fieldName string) (Type, bool) {
+
+	astTyp := &astType{
+		inSchema:        t.inSchema,
+		dgraphPredicate: t.dgraphPredicate,
+	}
+
 	for _, implements := range t.inSchema.schema.Implements[t.Name()] {
 		if implements.Fields.ForName(fieldName) != nil {
-			return implements.Name
+			astTyp.typ = &ast.Type{
+				NamedType: implements.Name,
+			}
+			return astTyp, true
 		}
 	}
 
 	if t.inSchema.schema.Types[t.Name()].Fields.ForName(fieldName) != nil {
-		return t.Name()
+		astTyp.typ = &ast.Type{
+			NamedType: t.inSchema.schema.Types[t.Name()].Name,
+		}
+		return astTyp, false
 	}
 
-	return ""
+	return nil, false
 }
 
 // buildGraphqlRequestFields will build graphql request body from ast.
@@ -3096,4 +3154,19 @@ func parseRequiredArgsFromGQLRequest(req string) (map[string]bool, error) {
 	args := req[strings.Index(req, "(")+1 : strings.LastIndex(req, ")")]
 	_, rf, err := parseBodyTemplate("{"+args+"}", false)
 	return rf, err
+}
+
+// MaybeQuoteArg puts a quote on the function arguments.
+func MaybeQuoteArg(fn string, arg interface{}) string {
+	switch arg := arg.(type) {
+	case string: // dateTime also parsed as string
+		if fn == "regexp" {
+			return arg
+		}
+		return fmt.Sprintf("%q", arg)
+	case float64, float32:
+		return fmt.Sprintf("\"%v\"", arg)
+	default:
+		return fmt.Sprintf("%v", arg)
+	}
 }

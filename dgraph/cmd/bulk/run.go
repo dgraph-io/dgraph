@@ -37,7 +37,6 @@ import (
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/ristretto/z"
 
-	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/cobra"
@@ -133,7 +132,7 @@ func init() {
 
 	x.RegisterClientTLSFlags(flag)
 	// Encryption and Vault options
-	enc.RegisterFlags(flag)
+	ee.RegisterEncFlag(flag)
 }
 
 func run() {
@@ -143,9 +142,16 @@ func run() {
 
 	bopts := badger.DefaultOptions("").FromSuperFlag(BulkBadgerDefaults + cacheDefaults).
 		FromSuperFlag(Bulk.Conf.GetString("badger"))
+<<<<<<< HEAD
+=======
+	keys, err := ee.GetKeys(Bulk.Conf)
+	x.Check(err)
+
+>>>>>>> master
 	opt := options{
 		DataFiles:        Bulk.Conf.GetString("files"),
 		DataFormat:       Bulk.Conf.GetString("format"),
+		EncryptionKey:    keys.EncKey,
 		SchemaFile:       Bulk.Conf.GetString("schema"),
 		GqlSchemaFile:    Bulk.Conf.GetString("graphql_schema"),
 		Encrypted:        Bulk.Conf.GetBool("encrypted"),
@@ -178,7 +184,10 @@ func run() {
 		os.Exit(0)
 	}
 
+<<<<<<< HEAD
 	_, opt.EncryptionKey = ee.GetKeys(Bulk.Conf)
+=======
+>>>>>>> master
 	if len(opt.EncryptionKey) == 0 {
 		if opt.Encrypted || opt.EncryptedOut {
 			fmt.Fprint(os.Stderr, "Must use --encryption or vault option(s).\n")
@@ -188,11 +197,13 @@ func run() {
 		requiredFlags := Bulk.Cmd.Flags().Changed("encrypted") &&
 			Bulk.Cmd.Flags().Changed("encrypted_out")
 		if !requiredFlags {
-			fmt.Fprint(os.Stderr, "Must specify --encrypted and --encrypted_out when providing encryption key.\n")
+			fmt.Fprint(os.Stderr,
+				"Must specify --encrypted and --encrypted_out when providing encryption key.\n")
 			os.Exit(1)
 		}
 		if !opt.Encrypted && !opt.EncryptedOut {
-			fmt.Fprint(os.Stderr, "Must set --encrypted and/or --encrypted_out to true when providing encryption key.\n")
+			fmt.Fprint(os.Stderr,
+				"Must set --encrypted and/or --encrypted_out to true when providing encryption key.\n")
 			os.Exit(1)
 		}
 
@@ -324,6 +335,7 @@ func run() {
 
 		loader.prog.mapEdgeCount = bulkMeta.EdgeCount
 		loader.schema.schemaMap = bulkMeta.SchemaMap
+		loader.schema.types = bulkMeta.Types
 	} else {
 		loader.mapStage()
 		mergeMapShardsIntoReduceShards(&opt)
@@ -332,6 +344,7 @@ func run() {
 		bulkMeta := pb.BulkMeta{
 			EdgeCount: loader.prog.mapEdgeCount,
 			SchemaMap: loader.schema.schemaMap,
+			Types:     loader.schema.types,
 		}
 		bulkMetaData, err := bulkMeta.Marshal()
 		if err != nil {

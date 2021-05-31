@@ -195,6 +195,11 @@ func dgraphDirectivePredicateValidation(gqlSch *ast.Schema, definitions []string
 						isSecret:   false,
 					}
 
+					// Skip the checks related to same Dgraph predicates being used twice with
+					// different types in case it is an inverse edge.
+					if strings.HasPrefix(fname, "~") || strings.HasPrefix(fname, "<~") {
+						continue
+					}
 					if pred, ok := preds[fname]; ok {
 						if pred.isSecret {
 							errs = append(errs, secretError(pred, thisPred))
@@ -818,7 +823,7 @@ func listValidityCheck(typ *ast.Definition, field *ast.FieldDefinition) gqlerror
 
 func hasInverseValidation(sch *ast.Schema, typ *ast.Definition,
 	field *ast.FieldDefinition, dir *ast.Directive,
-	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
+	secrets map[string]x.Sensitive) gqlerror.List {
 	var errs []*gqlerror.Error
 
 	invTypeName := field.Type.Name()
@@ -1002,7 +1007,7 @@ func searchValidation(
 	typ *ast.Definition,
 	field *ast.FieldDefinition,
 	dir *ast.Directive,
-	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
+	secrets map[string]x.Sensitive) gqlerror.List {
 	var errs []*gqlerror.Error
 
 	arg := dir.Arguments.ForName(searchArgs)
@@ -1081,7 +1086,7 @@ func searchValidation(
 }
 
 func dgraphDirectiveValidation(sch *ast.Schema, typ *ast.Definition, field *ast.FieldDefinition,
-	dir *ast.Directive, secrets map[string]x.SensitiveByteSlice) gqlerror.List {
+	dir *ast.Directive, secrets map[string]x.Sensitive) gqlerror.List {
 	var errs []*gqlerror.Error
 
 	if isID(field) {
@@ -1213,6 +1218,41 @@ func dgraphDirectiveValidation(sch *ast.Schema, typ *ast.Definition, field *ast.
 			return errs
 		}
 	}
+
+	if strings.Contains(predArg.Value.String(), "@") {
+		if field.Type.Name() != "String" {
+			errs = append(errs, gqlerror.ErrorPosf(field.Position,
+				"Type %s; Field %s: Expected type `String`"+
+					" for language tag field but got `%s`", typ.Name, field.Name, field.Type.Name()))
+			return errs
+		}
+		if field.Directives.ForName(idDirective) != nil {
+			errs = append(errs, gqlerror.ErrorPosf(field.Directives.ForName(idDirective).Position,
+				"Type %s; Field %s: @id "+
+					"directive not supported on language tag fields", typ.Name, field.Name))
+			return errs
+		}
+
+		if field.Directives.ForName(searchDirective) != nil && isMultiLangField(field, false) {
+			errs = append(errs, gqlerror.ErrorPosf(field.Directives.ForName(searchDirective).Position,
+				"Type %s; Field %s: @search directive not applicable"+
+					" on language tag field with multiple languages", typ.Name, field.Name))
+			return errs
+		}
+
+		tags := strings.Split(predArg.Value.Raw, "@")[1]
+		if tags == "*" {
+			errs = append(errs, gqlerror.ErrorPosf(dir.Position, "Type %s; Field %s: `*` language tag not"+
+				" supported in GraphQL", typ.Name, field.Name))
+			return errs
+		}
+		if tags == "" {
+			errs = append(errs, gqlerror.ErrorPosf(dir.Position, "Type %s; Field %s: empty language"+
+				" tag not supported", typ.Name, field.Name))
+			return errs
+		}
+
+	}
 	return nil
 }
 
@@ -1220,7 +1260,7 @@ func passwordValidation(sch *ast.Schema,
 	typ *ast.Definition,
 	field *ast.FieldDefinition,
 	dir *ast.Directive,
-	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
+	secrets map[string]x.Sensitive) gqlerror.List {
 
 	return passwordDirectiveValidation(sch, typ)
 }
@@ -1229,7 +1269,7 @@ func lambdaDirectiveValidation(sch *ast.Schema,
 	typ *ast.Definition,
 	field *ast.FieldDefinition,
 	dir *ast.Directive,
-	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
+	secrets map[string]x.Sensitive) gqlerror.List {
 	// if the lambda url wasn't specified during alpha startup,
 	// just return that error. Don't confuse the user with errors from @custom yet.
 	if x.LambdaUrl(x.GalaxyNamespace) == "" {
@@ -1259,7 +1299,11 @@ func lambdaOnMutateValidation(sch *ast.Schema, typ *ast.Definition) gqlerror.Lis
 	if x.LambdaUrl(x.GalaxyNamespace) == "" {
 		errs = append(errs, gqlerror.ErrorPosf(dir.Position,
 			"Type %s: has the @lambdaOnMutate directive, but the "+
+<<<<<<< HEAD
 				"`--graphql_lambda_url` flag wasn't specified during alpha startup.", typ.Name))
+=======
+				"`--graphql lambda-url` flag wasn't specified during alpha startup.", typ.Name))
+>>>>>>> master
 	}
 
 	if typ.Directives.ForName(remoteDirective) != nil {
@@ -1389,7 +1433,7 @@ func customDirectiveValidation(sch *ast.Schema,
 	typ *ast.Definition,
 	field *ast.FieldDefinition,
 	dir *ast.Directive,
-	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
+	secrets map[string]x.Sensitive) gqlerror.List {
 	var errs []*gqlerror.Error
 
 	// 1. Validating custom directive itself
@@ -2032,16 +2076,41 @@ func idValidation(sch *ast.Schema,
 	typ *ast.Definition,
 	field *ast.FieldDefinition,
 	dir *ast.Directive,
+<<<<<<< HEAD
 	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
 	if field.Type.String() == "String!" ||
 		field.Type.String() == "Int!" ||
 		field.Type.String() == "Int64!" {
+=======
+	secrets map[string]x.Sensitive) gqlerror.List {
+	if field.Type.NamedType == "String" ||
+		field.Type.NamedType == "Int" ||
+		field.Type.NamedType == "Int64" {
+
+		var inherited bool
+		for _, implements := range sch.Implements[typ.Name] {
+			if implements.Fields.ForName(field.Name) != nil {
+				inherited = true
+			}
+		}
+		if typ.Kind != "INTERFACE" && hasInterfaceArg(field) && !inherited {
+			return []*gqlerror.Error{gqlerror.ErrorPosf(
+				dir.Position,
+				"Type %s; Field %s: @id field with interface argument can only be defined"+
+					" in interface,not in Type", typ.Name, field.Name)}
+		}
+>>>>>>> master
 		return nil
 	}
 	return []*gqlerror.Error{gqlerror.ErrorPosf(
 		dir.Position,
+<<<<<<< HEAD
 		"Type %s; Field %s: with @id directive must be of type String!, Int! or Int64!, not %s",
+=======
+		"Type %s; Field %s: with @id directive must be of type String, Int or Int64, not %s",
+>>>>>>> master
 		typ.Name, field.Name, field.Type.String())}
+
 }
 
 func apolloKeyValidation(sch *ast.Schema, typ *ast.Definition) gqlerror.List {
@@ -2109,7 +2178,11 @@ func apolloRequiresValidation(sch *ast.Schema,
 	typ *ast.Definition,
 	field *ast.FieldDefinition,
 	dir *ast.Directive,
+<<<<<<< HEAD
 	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
+=======
+	secrets map[string]x.Sensitive) gqlerror.List {
+>>>>>>> master
 
 	extendsDirective := typ.Directives.ForName(apolloExtendsDirective)
 	if extendsDirective == nil {
@@ -2146,7 +2219,11 @@ func apolloProvidesValidation(sch *ast.Schema,
 	typ *ast.Definition,
 	field *ast.FieldDefinition,
 	dir *ast.Directive,
+<<<<<<< HEAD
 	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
+=======
+	secrets map[string]x.Sensitive) gqlerror.List {
+>>>>>>> master
 
 	fldTypeDefn := sch.Types[field.Type.Name()]
 	keyDirective := fldTypeDefn.Directives.ForName(apolloKeyDirective)
@@ -2179,7 +2256,7 @@ func apolloExternalValidation(sch *ast.Schema,
 	typ *ast.Definition,
 	field *ast.FieldDefinition,
 	dir *ast.Directive,
-	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
+	secrets map[string]x.Sensitive) gqlerror.List {
 
 	extendsDirective := typ.Directives.ForName(apolloExtendsDirective)
 	if extendsDirective == nil {
@@ -2212,7 +2289,7 @@ func remoteResponseValidation(sch *ast.Schema,
 	typ *ast.Definition,
 	field *ast.FieldDefinition,
 	dir *ast.Directive,
-	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
+	secrets map[string]x.Sensitive) gqlerror.List {
 
 	remoteDirectiveDefn := typ.Directives.ForName(remoteDirective)
 	if remoteDirectiveDefn == nil {

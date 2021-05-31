@@ -107,7 +107,11 @@ they form a Raft group and provide synchronous replication.
 	// --tls SuperFlag
 	x.RegisterServerTLSFlags(flag)
 	// --encryption and --vault Superflag
+<<<<<<< HEAD
 	enc.RegisterFlags(flag)
+=======
+	ee.RegisterAclAndEncFlags(flag)
+>>>>>>> master
 
 	flag.StringP("postings", "p", "p", "Directory to store posting lists.")
 	flag.String("tmp", "t", "Directory to store temporary buffers.")
@@ -181,17 +185,6 @@ they form a Raft group and provide synchronous replication.
 				`internal").`).
 		String())
 
-	flag.String("acl", worker.AclDefaults, z.NewSuperFlagHelp(worker.AclDefaults).
-		Head("[Enterprise Feature] ACL options").
-		Flag("secret-file",
-			"The file that stores the HMAC secret, which is used for signing the JWT and "+
-				"should have at least 32 ASCII characters. Required to enable ACLs.").
-		Flag("access-ttl",
-			"The TTL for the access JWT.").
-		Flag("refresh-ttl",
-			"The TTL for the refresh JWT.").
-		String())
-
 	flag.String("limit", worker.LimitDefaults, z.NewSuperFlagHelp(worker.LimitDefaults).
 		Head("Limit options").
 		Flag("query-edge",
@@ -207,16 +200,25 @@ they form a Raft group and provide synchronous replication.
 		Flag("disallow-drop",
 			"Set disallow-drop to true to block drop-all and drop-data operation. It still"+
 				" allows dropping attributes and types.").
+<<<<<<< HEAD
 		Flag("max-pending-queries",
 			"Number of maximum pending queries before we reject them as too many requests.").
 		Flag("query-timeout",
 			"Maximum time after which a query execution will fail. If set to"+
 				" 0, the timeout is infinite.").
+=======
+		Flag("query-timeout",
+			"Maximum time after which a query execution will fail. If set to"+
+				" 0, the timeout is infinite.").
+		Flag("max-pending-queries",
+			"Number of maximum pending queries before we reject them as too many requests.").
+>>>>>>> master
 		Flag("max-retries",
 			"Commits to disk will give up after these number of retries to prevent locking the "+
 				"worker in a failed state. Use -1 to retry infinitely.").
 		Flag("txn-abort-after", "Abort any pending transactions older than this duration."+
 			" The liveness of a transaction is determined by its last mutation.").
+<<<<<<< HEAD
 		String())
 
 	flag.String("ludicrous", worker.LudicrousDefaults, z.NewSuperFlagHelp(worker.LudicrousDefaults).
@@ -225,6 +227,12 @@ they form a Raft group and provide synchronous replication.
 			"Set enabled to true to run Dgraph in Ludicrous mode.").
 		Flag("concurrency",
 			"The number of concurrent threads to use in Ludicrous mode.").
+=======
+		Flag("shared-instance", "When set to true, it disables ACLs for non-galaxy users. "+
+			"It expects the access JWT to be contructed outside dgraph for those users as even "+
+			"login is denied to them. Additionally, this disables access to environment variables"+
+			"for minio, aws, etc.").
+>>>>>>> master
 		String())
 
 	flag.String("graphql", worker.GraphQLDefaults, z.NewSuperFlagHelp(worker.GraphQLDefaults).
@@ -252,6 +260,8 @@ they form a Raft group and provide synchronous replication.
 			"The SASL username for Kafka.").
 		Flag("sasl-password",
 			"The SASL password for Kafka.").
+		Flag("sasl-mechanism",
+			"The SASL mechanism for Kafka (PLAIN, SCRAM-SHA-256 or SCRAM-SHA-512)").
 		Flag("ca-cert",
 			"The path to CA cert file for TLS encryption.").
 		Flag("client-cert",
@@ -545,7 +555,10 @@ func setupServer(closer *z.Closer) {
 	baseMux.HandleFunc("/graphql", func(w http.ResponseWriter, r *http.Request) {
 		namespace := x.ExtractNamespaceHTTP(r)
 		r.Header.Set("resolver", strconv.FormatUint(namespace, 10))
-		admin.LazyLoadSchema(namespace)
+		if err := admin.LazyLoadSchema(namespace); err != nil {
+			admin.WriteErrorResponse(w, r, err)
+			return
+		}
 		mainServer.HTTPHandler().ServeHTTP(w, r)
 	})
 
@@ -555,7 +568,10 @@ func setupServer(closer *z.Closer) {
 		r.Header.Set("resolver", "0")
 		// We don't need to load the schema for all the admin operations.
 		// Only a few like getUser, queryGroup require this. So, this can be optimized.
-		admin.LazyLoadSchema(x.ExtractNamespaceHTTP(r))
+		if err := admin.LazyLoadSchema(x.ExtractNamespaceHTTP(r)); err != nil {
+			admin.WriteErrorResponse(w, r, err)
+			return
+		}
 		allowedMethodsHandler(allowedMethods{
 			http.MethodGet:     true,
 			http.MethodPost:    true,
@@ -635,12 +651,19 @@ func run() {
 	postingListCacheSize := (cachePercent[0] * (totalCache << 20)) / 100
 	pstoreBlockCacheSize := (cachePercent[1] * (totalCache << 20)) / 100
 	pstoreIndexCacheSize := (cachePercent[2] * (totalCache << 20)) / 100
+<<<<<<< HEAD
 
 	cacheOpts := fmt.Sprintf("blockcachesize=%d; indexcachesize=%d; ",
 		pstoreBlockCacheSize, pstoreIndexCacheSize)
 	bopts := badger.DefaultOptions("").FromSuperFlag(worker.BadgerDefaults + cacheOpts).
 		FromSuperFlag(Alpha.Conf.GetString("badger"))
+=======
+>>>>>>> master
 
+	cacheOpts := fmt.Sprintf("blockcachesize=%d; indexcachesize=%d; ",
+		pstoreBlockCacheSize, pstoreIndexCacheSize)
+	bopts := badger.DefaultOptions("").FromSuperFlag(worker.BadgerDefaults + cacheOpts).
+		FromSuperFlag(Alpha.Conf.GetString("badger"))
 	security := z.NewSuperFlag(Alpha.Conf.GetString("security")).MergeAndCheckDefault(
 		worker.SecurityDefaults)
 	conf := audit.GetAuditConf(Alpha.Conf.GetString("audit"))
@@ -656,6 +679,7 @@ func run() {
 		ChangeDataConf: Alpha.Conf.GetString("cdc"),
 	}
 
+<<<<<<< HEAD
 	aclKey, encKey := ee.GetKeys(Alpha.Conf)
 	if aclKey != nil {
 		opts.HmacSecret = aclKey
@@ -664,6 +688,15 @@ func run() {
 		opts.AccessJwtTtl = acl.GetDuration("access-ttl")
 		opts.RefreshJwtTtl = acl.GetDuration("refresh-ttl")
 
+=======
+	keys, err := ee.GetKeys(Alpha.Conf)
+	x.Check(err)
+
+	if keys.AclKey != nil {
+		opts.HmacSecret = keys.AclKey
+		opts.AccessJwtTtl = keys.AclAccessTtl
+		opts.RefreshJwtTtl = keys.AclRefreshTtl
+>>>>>>> master
 		glog.Info("ACL secret key loaded successfully.")
 	}
 
@@ -692,8 +725,6 @@ func run() {
 	tlsServerConf, err := x.LoadServerTLSConfigForInternalPort(Alpha.Conf)
 	x.Check(err)
 
-	ludicrous := z.NewSuperFlag(Alpha.Conf.GetString("ludicrous")).MergeAndCheckDefault(
-		worker.LudicrousDefaults)
 	raft := z.NewSuperFlag(Alpha.Conf.GetString("raft")).MergeAndCheckDefault(worker.RaftDefaults)
 	x.WorkerConfig = x.WorkerOptions{
 		TmpDir:              Alpha.Conf.GetString("tmp"),
@@ -702,11 +733,13 @@ func run() {
 		Raft:                raft,
 		WhiteListedIPRanges: ips,
 		StrictMutations:     opts.MutationsMode == worker.StrictMutations,
+<<<<<<< HEAD
 		AclEnabled:          aclKey != nil,
+=======
+		AclEnabled:          keys.AclKey != nil,
+>>>>>>> master
 		AbortOlderThan:      abortDur,
 		StartTime:           startTime,
-		Ludicrous:           ludicrous,
-		LudicrousEnabled:    ludicrous.GetBool("enabled"),
 		Security:            security,
 		TLSClientConfig:     tlsClientConf,
 		TLSServerConfig:     tlsServerConf,
@@ -723,7 +756,11 @@ func run() {
 	// Set the directory for temporary buffers.
 	z.SetTmpDir(x.WorkerConfig.TmpDir)
 
+<<<<<<< HEAD
 	x.WorkerConfig.EncryptionKey = encKey
+=======
+	x.WorkerConfig.EncryptionKey = keys.EncKey
+>>>>>>> master
 
 	setupCustomTokenizers()
 	x.Init()
@@ -734,6 +771,10 @@ func run() {
 	x.Config.LimitNormalizeNode = int(x.Config.Limit.GetInt64("normalize-node"))
 	x.Config.QueryTimeout = x.Config.Limit.GetDuration("query-timeout")
 	x.Config.MaxRetries = x.Config.Limit.GetInt64("max-retries")
+<<<<<<< HEAD
+=======
+	x.Config.SharedInstance = x.Config.Limit.GetBool("shared-instance")
+>>>>>>> master
 
 	x.Config.GraphQL = z.NewSuperFlag(Alpha.Conf.GetString("graphql")).MergeAndCheckDefault(
 		worker.GraphQLDefaults)
@@ -758,6 +799,10 @@ func run() {
 	glog.Infof("worker.Config: %+v", worker.Config)
 
 	worker.InitServerState()
+<<<<<<< HEAD
+=======
+	worker.InitTasks()
+>>>>>>> master
 
 	if Alpha.Conf.GetBool("expose_trace") {
 		// TODO: Remove this once we get rid of event logs.

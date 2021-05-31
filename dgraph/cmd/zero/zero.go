@@ -59,7 +59,13 @@ type Server struct {
 	state       *pb.MembershipState
 	nextRaftId  uint64
 
+<<<<<<< HEAD
 	nextLease   map[pb.NumLeaseType]uint64
+=======
+	// nextUint is the uint64 which we can hand out next. See maxLease for the
+	// max ID leased via Zero quorum.
+	nextUint    map[pb.NumLeaseType]uint64
+>>>>>>> master
 	readOnlyTs  uint64
 	leaseLock   sync.Mutex // protects nextUID, nextTxnTs, nextNsID and corresponding proposals.
 	rateLimiter *x.RateLimiter
@@ -90,19 +96,27 @@ func (s *Server) Init() {
 		Groups: make(map[uint32]*pb.Group),
 		Zeros:  make(map[uint64]*pb.Member),
 	}
-	s.nextLease = make(map[pb.NumLeaseType]uint64)
+	s.nextUint = make(map[pb.NumLeaseType]uint64)
 	s.nextRaftId = 1
-	s.nextLease[pb.Num_UID] = 1
-	s.nextLease[pb.Num_TXN_TS] = 1
-	s.nextLease[pb.Num_NS_ID] = 1
+	s.nextUint[pb.Num_UID] = 1
+	s.nextUint[pb.Num_TXN_TS] = 1
+	s.nextUint[pb.Num_NS_ID] = 1
 	s.nextGroup = 1
 	s.leaderChangeCh = make(chan struct{}, 1)
 	s.closer = z.NewCloser(2) // grpc and http
 	s.blockCommitsOn = new(sync.Map)
 	s.moveOngoing = make(chan struct{}, 1)
 	s.checkpointPerGroup = make(map[uint32]uint64)
+<<<<<<< HEAD
 	s.rateLimiter = x.NewRateLimiter(int64(opts.limiterConfig.UidLeaseLimit),
 		opts.limiterConfig.RefillAfter, s.closer)
+=======
+	if opts.limiterConfig.UidLeaseLimit > 0 {
+		// rate limiting is not enabled when lease limit is set to zero.
+		s.rateLimiter = x.NewRateLimiter(int64(opts.limiterConfig.UidLeaseLimit),
+			opts.limiterConfig.RefillAfter, s.closer)
+	}
+>>>>>>> master
 
 	go s.rebalanceTablets()
 }
@@ -416,6 +430,7 @@ func (s *Server) RemoveNode(ctx context.Context, req *pb.RemoveNodeRequest) (*pb
 	zp.Member = &pb.Member{Id: req.NodeId, GroupId: req.GroupId, AmDead: true}
 	if _, ok := s.state.Groups[req.GroupId]; !ok {
 		return nil, errors.Errorf("No group with groupId %d found", req.GroupId)
+<<<<<<< HEAD
 	}
 	if _, ok := s.state.Groups[req.GroupId].Members[req.NodeId]; !ok {
 		return nil, errors.Errorf("No node with nodeId %d found in group %d", req.NodeId,
@@ -426,6 +441,18 @@ func (s *Server) RemoveNode(ctx context.Context, req *pb.RemoveNodeRequest) (*pb
 		return nil, errors.Errorf("Move all tablets from group %d before removing the last node",
 			req.GroupId)
 	}
+=======
+	}
+	if _, ok := s.state.Groups[req.GroupId].Members[req.NodeId]; !ok {
+		return nil, errors.Errorf("No node with nodeId %d found in group %d", req.NodeId,
+			req.GroupId)
+	}
+	if len(s.state.Groups[req.GroupId].Members) == 1 && len(s.state.Groups[req.GroupId].
+		Tablets) > 0 {
+		return nil, errors.Errorf("Move all tablets from group %d before removing the last node",
+			req.GroupId)
+	}
+>>>>>>> master
 	if err := s.Node.proposeAndWait(ctx, zp); err != nil {
 		return nil, err
 	}

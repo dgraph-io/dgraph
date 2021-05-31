@@ -20,10 +20,12 @@ import (
 	"bytes"
 	"context"
 	"math"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/dgraph-io/badger/v3"
+	"github.com/dgraph-io/badger/v3/y"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -33,9 +35,9 @@ import (
 )
 
 func uids(l *List, readTs uint64) []uint64 {
-	r, err := l.Uids(ListOptions{ReadTs: readTs})
+	r, err := l.Bitmap(ListOptions{ReadTs: readTs})
 	x.Check(err)
-	return r.Uids
+	return r.ToArray()
 }
 
 // indexTokensForTest is just a wrapper around indexTokens used for convenience.
@@ -148,7 +150,7 @@ func addMutation(t *testing.T, l *List, edge *pb.DirectedEdge, op uint32,
 	default:
 		x.Fatalf("Unhandled op: %v", op)
 	}
-	txn := Oracle().RegisterStartTs(startTs)
+	txn, _ := Oracle().RegisterStartTs(startTs)
 	txn.cache.SetIfAbsent(string(l.key), l)
 	if index {
 		require.NoError(t, l.AddMutationWithIndex(context.Background(), edge, txn))
@@ -157,10 +159,20 @@ func addMutation(t *testing.T, l *List, edge *pb.DirectedEdge, op uint32,
 		require.NoError(t, err)
 	}
 
-	txn.Update()
-	writer := NewTxnWriter(pstore)
-	require.NoError(t, txn.CommitToDisk(writer, commitTs))
-	require.NoError(t, writer.Flush())
+	txn.Update(context.Background())
+	sl := txn.Skiplist()
+
+	itr := sl.NewUniIterator(false)
+	itr.Rewind()
+	for itr.Valid() {
+		y.SetKeyTs(itr.Key(), commitTs)
+		itr.Next()
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	pstore.HandoverSkiplist(sl, wg.Done)
+	wg.Wait()
 }
 
 const schemaVal = `

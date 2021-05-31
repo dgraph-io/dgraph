@@ -162,13 +162,22 @@
     }
   dgquery: |-
     query {
+<<<<<<< HEAD
       Project_1(func: uid(0x123)) @filter(type(Project)) {
+=======
+      Project_1(func: uid(0x123)) {
+>>>>>>> master
         uid
+        dgraph.type
       }
     }
   queryjson: |
     {
+<<<<<<< HEAD
       "Project_1": [ { "uid": "0x123" } ]
+=======
+      "Project_1": [ { "uid": "0x123", "dgraph.type": ["Project"] } ]
+>>>>>>> master
     }
   uids: |
     {
@@ -229,13 +238,22 @@
     }
   dgquery: |-
     query {
+<<<<<<< HEAD
       Project_1(func: uid(0x123)) @filter(type(Project)) {
+=======
+      Project_1(func: uid(0x123)) {
+>>>>>>> master
         uid
+        dgraph.type
       }
     }
   queryjson: |
     {
+<<<<<<< HEAD
       "Project_1": [ { "uid": "0x123" } ]
+=======
+        "Project_1": [ { "uid": "0x123", "dgraph.type": ["Project"]} ]
+>>>>>>> master
     }
   uids: |
     {
@@ -301,13 +319,22 @@
     }
   dgquery: |-
     query {
+<<<<<<< HEAD
       Project_1(func: uid(0x123)) @filter(type(Project)) {
+=======
+      Project_1(func: uid(0x123)) {
+>>>>>>> master
         uid
+        dgraph.type
       }
     }
   queryjson: |
     {
+<<<<<<< HEAD
       "Project_1": [ { "uid": "0x123" } ]
+=======
+        "Project_1": [ { "uid": "0x123", "dgraph.type":["Project"] } ]
+>>>>>>> master
     }
   uids: |
     {
@@ -374,13 +401,22 @@
     }
   dgquery: |-
     query {
+<<<<<<< HEAD
       Project_1(func: uid(0x123)) @filter(type(Project)) {
+=======
+      Project_1(func: uid(0x123)) {
+>>>>>>> master
         uid
+        dgraph.type
       }
     }
   queryjson: |
     {
+<<<<<<< HEAD
       "Project_1": [ { "uid": "0x123" } ]
+=======
+        "Project_1": [ { "uid": "0x123", "dgraph.type":["Project"]} ]
+>>>>>>> master
     }
   uids: |
     {
@@ -449,17 +485,32 @@
     }
   dgquery: |-
     query {
+<<<<<<< HEAD
       Project_1(func: uid(0x123)) @filter(type(Project)) {
+=======
+      Project_1(func: uid(0x123)) {
+>>>>>>> master
         uid
+        dgraph.type
       }
+<<<<<<< HEAD
       Ticket_2(func: uid(0x789)) @filter(type(Ticket)) {
+=======
+      Ticket_2(func: uid(0x789)) {
+>>>>>>> master
         uid
+        dgraph.type
       }
     }
   queryjson: |
     {
+<<<<<<< HEAD
       "Project_1": [ { "uid": "0x123" } ],
       "Ticket_2": [ { "uid": "0x789" } ]
+=======
+      "Project_1": [ { "uid": "0x123", "dgraph.type": ["Project"] } ],
+      "Ticket_2": [ { "uid": "0x789", "dgraph.type": ["Ticket"] } ]
+>>>>>>> master
     }
   dgquerysec: |-
     query {
@@ -528,17 +579,32 @@
     }
   dgquery: |-
     query {
+<<<<<<< HEAD
       Project_1(func: uid(0x123)) @filter(type(Project)) {
+=======
+      Project_1(func: uid(0x123)) {
+>>>>>>> master
         uid
+        dgraph.type
       }
+<<<<<<< HEAD
       Ticket_2(func: uid(0x789)) @filter(type(Ticket)) {
+=======
+      Ticket_2(func: uid(0x789)) {
+>>>>>>> master
         uid
+        dgraph.type
       }
     }
   queryjson: |
     {
+<<<<<<< HEAD
       "Project_1": [ { "uid": "0x123" } ],
       "Ticket_2": [ { "uid": "0x789" } ]
+=======
+        "Project_1": [ { "uid": "0x123", "dgraph.type":["Project"] } ],
+        "Ticket_2": [ { "uid": "0x789", "dgraph.type":["Ticket"]} ]
+>>>>>>> master
     }
   dgquerysec: |-
     query {
@@ -612,13 +678,22 @@
     }
   dgquery: |-
     query {
+<<<<<<< HEAD
       Ticket_1(func: uid(0x789)) @filter(type(Ticket)) {
+=======
+      Ticket_1(func: uid(0x789)) {
+>>>>>>> master
         uid
+        dgraph.type
       }
     }
   queryjson: |
     {
+<<<<<<< HEAD
       "Ticket_1": [ { "uid": "0x789" } ]
+=======
+      "Ticket_1": [ { "uid": "0x789", "dgraph.type": ["Ticket"] } ]
+>>>>>>> master
     }
   dgquerysec: |-
     query {
@@ -702,13 +777,22 @@
     }
   dgquery: |-
     query {
+<<<<<<< HEAD
       Ticket_1(func: uid(0x789)) @filter(type(Ticket)) {
+=======
+      Ticket_1(func: uid(0x789)) {
+>>>>>>> master
         uid
+        dgraph.type
       }
     }
   queryjson: |
     {
+<<<<<<< HEAD
       "Ticket_1": [ { "uid": "0x789" } ]
+=======
+        "Ticket_1": [ { "uid": "0x789", "dgraph.type":["Ticket"] } ]
+>>>>>>> master
     }
   dgquerysec: |-
     query {
@@ -908,8 +992,13 @@
     }
   dgquery: |-
     query {
+<<<<<<< HEAD
       User_1(func: eq(User.username, "user1")) @filter(type(User)) {
+=======
+      User_1(func: eq(User.username, "user1")) {
+>>>>>>> master
         uid
+        dgraph.type
       }
     }
   queryjson: |
@@ -958,8 +1047,13 @@
     }
   dgquery: |-
     query {
+<<<<<<< HEAD
       User_1(func: eq(User.username, "user1")) @filter(type(User)) {
+=======
+      User_1(func: eq(User.username, "user1")) {
+>>>>>>> master
         uid
+        dgraph.type
       }
     }
   queryjson: |
@@ -1241,13 +1335,22 @@
     }
   dgquery: |-
     query {
+<<<<<<< HEAD
       Tweets_1(func: eq(Tweets.id, "existing ID")) @filter(type(Tweets)) {
+=======
+      Tweets_1(func: eq(Tweets.id, "existing ID")) {
+>>>>>>> master
         uid
+        dgraph.type
       }
     }
   queryjson: |
     {
+<<<<<<< HEAD
       "Tweets_1": [ { "uid": "0x123" } ]
+=======
+        "Tweets_1": [ { "uid": "0x123", "dgraph.type":["Tweets"] } ]
+>>>>>>> master
     }
   dgquerysec: |-
     query {
@@ -1278,13 +1381,22 @@
     }
   dgquery: |-
     query {
+<<<<<<< HEAD
       Tweets_1(func: eq(Tweets.id, "existing ID")) @filter(type(Tweets)) {
+=======
+      Tweets_1(func: eq(Tweets.id, "existing ID")) {
+>>>>>>> master
         uid
+        dgraph.type
       }
     }
   queryjson: |
     {
+<<<<<<< HEAD
       "Tweets_1": [ { "uid": "0x123" } ]
+=======
+        "Tweets_1": [ { "uid": "0x123", "dgraph.type":["Tweets"] } ]
+>>>>>>> master
     }
   dgquerysec: |-
     query {
@@ -1320,16 +1432,30 @@
     }
   dgquery: |-
     query {
+<<<<<<< HEAD
       State_1(func: eq(State.code, "mh")) @filter(type(State)) {
+=======
+      State_1(func: eq(State.code, "mh")) {
+>>>>>>> master
         uid
+        dgraph.type
       }
+<<<<<<< HEAD
       Country_2(func: eq(Country.id, "in")) @filter(type(Country)) {
+=======
+      Country_2(func: eq(Country.id, "in")) {
+>>>>>>> master
         uid
+        dgraph.type
       }
     }
   queryjson: |
     {
+<<<<<<< HEAD
       "State_1": [ { "uid": "0x123" } ]
+=======
+        "State_1": [ { "uid": "0x123", "dgraph.type":["State"] } ]
+>>>>>>> master
     }
   dgquerysec: |-
     query {

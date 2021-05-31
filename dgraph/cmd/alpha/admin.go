@@ -83,8 +83,11 @@ func getAdminMux() *http.ServeMux {
 		http.MethodPut:  true,
 		http.MethodPost: true,
 	}, adminAuthHandler(http.HandlerFunc(drainingHandler))))
+<<<<<<< HEAD
 	adminMux.Handle("/admin/export", allowedMethodsHandler(allowedMethods{http.MethodGet: true},
 		adminAuthHandler(http.HandlerFunc(exportHandler))))
+=======
+>>>>>>> master
 	adminMux.Handle("/admin/config/cache_mb", allowedMethodsHandler(allowedMethods{
 		http.MethodGet: true,
 		http.MethodPut: true,
@@ -151,6 +154,7 @@ func shutDownHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}`,
 	}
+<<<<<<< HEAD
 
 	if resp := resolveWithAdminServer(gqlReq, r, adminServer); len(resp.Errors) != 0 {
 		x.SetStatus(w, resp.Errors[0].Message, "Shutdown failed.")
@@ -194,10 +198,15 @@ func exportHandler(w http.ResponseWriter, r *http.Request) {
 
 	if resp := resolveWithAdminServer(gqlReq, r, adminServer); len(resp.Errors) != 0 {
 		x.SetStatus(w, resp.Errors[0].Message, "Export failed.")
+=======
+
+	if resp := resolveWithAdminServer(gqlReq, r, adminServer); len(resp.Errors) != 0 {
+		x.SetStatus(w, resp.Errors[0].Message, "Shutdown failed.")
+>>>>>>> master
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	x.Check2(w.Write([]byte(`{"code": "Success", "message": "Export completed."}`)))
+	x.Check2(w.Write([]byte(`{"code": "Success", "message": "Server is shutting down"}`)))
 }
 
 func memoryLimitHandler(w http.ResponseWriter, r *http.Request) {

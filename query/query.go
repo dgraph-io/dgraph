@@ -20,17 +20,20 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"math/rand"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/dgraph-io/sroar"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"
 	"google.golang.org/grpc/metadata"
 
 	"github.com/dgraph-io/dgraph/algo"
+	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
@@ -112,6 +115,8 @@ type params struct {
 	Count int
 	// Offset is the value of the "offset" parameter.
 	Offset int
+	// Random is the value of the "random" parameter
+	Random int
 	// AfterUID is the value of the "after" parameter.
 	AfterUID uint64
 	// DoCount is true if the count of the predicate is requested instead of its value.
@@ -273,6 +278,7 @@ type SubGraph struct {
 
 	// facetsMatrix contains the facet values. There would a list corresponding to each uid in
 	// uidMatrix.
+	// TODO: Would make sense to move these to a map.
 	facetsMatrix []*pb.FacetsList
 	ExpandPreds  []*pb.ValueList
 	GroupbyRes   []*groupResults // one result for each uid list.
@@ -292,8 +298,11 @@ type SubGraph struct {
 	Children     []*SubGraph // children of the current node, should be empty for leaf nodes.
 
 	// destUIDs is a list of destination UIDs, after applying filters, pagination.
-	DestUIDs *pb.List
-	List     bool // whether predicate is of list type
+	DestMap *sroar.Bitmap
+
+	// OrderedUIDs is used to store the UIDs in some order, used for shortest path.
+	OrderedUIDs *pb.List
+	List        bool // whether predicate is of list type
 
 	pathMeta *pathMetadata
 }
@@ -352,8 +361,8 @@ func (sg *SubGraph) DebugPrint(prefix string) {
 	if sg.SrcUIDs != nil {
 		src = len(sg.SrcUIDs.Uids)
 	}
-	if sg.DestUIDs != nil {
-		dst = len(sg.DestUIDs.Uids)
+	if sg.DestMap != nil {
+		dst = int(sg.DestMap.GetCardinality())
 	}
 	glog.Infof("%s[%q Alias:%q Func:%v SrcSz:%v Op:%q DestSz:%v IsCount: %v ValueSz:%v]\n",
 		prefix, sg.Attr, sg.Params.Alias, sg.SrcFunc, src, sg.FilterOp,
@@ -739,6 +748,15 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 		}
 		args.Count = int(first)
 	}
+
+	if v, ok := gq.Args["random"]; ok {
+		random, err := strconv.ParseInt(v, 0, 32)
+		if err != nil {
+			return err
+		}
+		args.Random = int(random)
+	}
+
 	return nil
 }
 
@@ -933,8 +951,8 @@ func createTaskQuery(ctx context.Context, sg *SubGraph) (*pb.Query, error) {
 		sg.Params.ExpandAll = true
 	}
 
-	// count is to limit how many results we want.
-	first := calculateFirstN(sg)
+	// first is to limit how many results we want.
+	first, offset := calculatePaginationParams(sg)
 
 	out := &pb.Query{
 		ReadTs:       sg.ReadTs,
@@ -949,16 +967,21 @@ func createTaskQuery(ctx context.Context, sg *SubGraph) (*pb.Query, error) {
 		FacetsFilter: sg.facetsFilter,
 		ExpandAll:    sg.Params.ExpandAll,
 		First:        first,
+		Offset:       offset,
 	}
 
-	if sg.SrcUIDs != nil {
+	// Use the orderedUIDs if present, it will only be present for the shortest path case.
+	if sg.OrderedUIDs != nil {
+		out.UidList = sg.OrderedUIDs
+	} else if sg.SrcUIDs != nil {
 		out.UidList = sg.SrcUIDs
 	}
 	return out, nil
 }
 
-// calculateFirstN returns the count of result we need to proceed query further down.
-func calculateFirstN(sg *SubGraph) int32 {
+// calculatePaginationParams returns the (count, offset) of result
+// we need to proceed query further down.
+func calculatePaginationParams(sg *SubGraph) (int32, int32) {
 	// by default count is zero. (zero will retrieve all the results)
 	count := math.MaxInt32
 	// In order to limit we have to make sure that the this level met the following conditions
@@ -991,24 +1014,29 @@ func calculateFirstN(sg *SubGraph) int32 {
 	}
 
 	if len(sg.Filters) == 0 && len(sg.Params.Order) == 0 && !shouldExclude {
+<<<<<<< HEAD
 		// Offset also added because, we need n results to trim the offset.
+=======
+>>>>>>> master
 		if sg.Params.Count != 0 {
-			count = sg.Params.Count + sg.Params.Offset
+			return int32(sg.Params.Count), int32(sg.Params.Offset)
 		}
 	}
-	return int32(count)
+	// make offset = 0, if there is need to fetch all the results.
+	return int32(count), 0
 }
 
 // varValue is a generic representation of a variable and holds multiple things.
 // TODO(pawan) - Come back to this and document what do individual fields mean and when are they
 // populated.
 type varValue struct {
-	Uids *pb.List // list of uids if this denotes a uid variable.
-	Vals map[uint64]types.Val
-	path []*SubGraph // This stores the subgraph path from root to var definition.
+	UidMap *sroar.Bitmap // list of uids if this denotes a uid variable.
+	Vals   map[uint64]types.Val
+	path   []*SubGraph // This stores the subgraph path from root to var definition.
 	// strList stores the valueMatrix corresponding to a predicate and is later used in
 	// expand(val(x)) query.
-	strList []*pb.ValueList
+	strList     []*pb.ValueList
+	OrderedUIDs *pb.List
 }
 
 func evalLevelAgg(
@@ -1248,7 +1276,7 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, path []*Su
 			mp := make(map[uint64]types.Val)
 			rangeOver := sg.SrcUIDs
 			if parent == nil {
-				rangeOver = sg.DestUIDs
+				rangeOver = &pb.List{Uids: sg.DestMap.ToArray()}
 			}
 			if rangeOver == nil {
 				it := doneVars[sg.Params.Var]
@@ -1314,7 +1342,7 @@ func (sg *SubGraph) updateFacetMatrix() {
 		out := sg.facetsMatrix[lidx].FacetsList[:0]
 		for idx, uid := range l.Uids {
 			// If uid wasn't filtered then we keep the facet for it.
-			if algo.IndexOf(sg.DestUIDs, uid) >= 0 {
+			if sg.DestMap.Contains(uid) {
 				out = append(out, sg.facetsMatrix[lidx].FacetsList[idx])
 			}
 		}
@@ -1335,11 +1363,16 @@ func (sg *SubGraph) updateUidMatrix() {
 			// We can't do intersection directly as the list is not sorted by UIDs.
 			// So do filter.
 			algo.ApplyFilter(l, func(uid uint64, idx int) bool {
-				return algo.IndexOf(sg.DestUIDs, uid) >= 0 // Binary search.
+				return sg.DestMap.Contains(uid)
 			})
 		} else {
 			// If we didn't order on UIDmatrix, it'll be sorted.
-			algo.IntersectWith(l, sg.DestUIDs, l)
+			// algo.IntersectWith(l, sg.DestUIDs, l)
+			// TODO: Doing intersection with list would require conversion to Bitmap and conversion
+			// back. Instead, just directly applyfilter like above.
+			algo.ApplyFilter(l, func(uid uint64, idx int) bool {
+				return sg.DestMap.Contains(uid)
+			})
 		}
 	}
 }
@@ -1349,7 +1382,7 @@ func (sg *SubGraph) updateUidMatrix() {
 // TODO (pawan) - This function also transforms the DestUids and uidMatrix if the query is a cascade
 // query which should probably happen before.
 func (sg *SubGraph) populateVarMap(doneVars map[string]varValue, sgPath []*SubGraph) error {
-	if sg.DestUIDs == nil || sg.IsGroupBy() {
+	if sg.DestMap == nil || sg.IsGroupBy() {
 		return nil
 	}
 
@@ -1359,9 +1392,8 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue, sgPath []*SubGr
 	}
 	cascadeAllPreds := cascadeArgMap["__all__"]
 
-	out := make([]uint64, 0, len(sg.DestUIDs.Uids))
 	if sg.Params.Alias == "shortest" {
-		goto AssignStep
+		return sg.updateVars(doneVars, sgPath)
 	}
 
 	if len(sg.Filters) > 0 {
@@ -1392,11 +1424,14 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue, sgPath []*SubGr
 	}
 
 	if len(sg.Params.Cascade.Fields) == 0 {
-		goto AssignStep
+		return sg.updateVars(doneVars, sgPath)
 	}
 
 	// Filter out UIDs that don't have atleast one UID in every child.
-	for i, uid := range sg.DestUIDs.Uids {
+	itr := sg.DestMap.NewIterator()
+	out := sg.DestMap.Clone()
+	for i := 0; itr.HasNext(); i++ {
+		uid := itr.Next()
 		var exclude bool
 		for _, child := range sg.Children {
 			// For uid we dont actually populate the uidMatrix or values. So a node asking for
@@ -1417,15 +1452,15 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue, sgPath []*SubGr
 				break
 			}
 		}
-		if !exclude {
-			out = append(out, uid)
+		if exclude {
+			out.Remove(uid)
 		}
 	}
 	// Note the we can't overwrite DestUids, as it'd also modify the SrcUids of
 	// next level and the mapping from SrcUids to uidMatrix would be lost.
-	sg.DestUIDs = &pb.List{Uids: out}
-
-AssignStep:
+	// TODO: Consider if we should have such a tight coupling with SrcUids and DestMap. Better to do
+	// a copy on write arrangement.
+	sg.DestMap = out
 	return sg.updateVars(doneVars, sgPath)
 }
 
@@ -1465,9 +1500,10 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 
 		// This implies it is a value variable.
 		doneVars[sg.Params.Var] = varValue{
-			Vals:    make(map[uint64]types.Val),
-			path:    sgPath,
-			strList: sg.valueMatrix,
+			OrderedUIDs: sg.OrderedUIDs,
+			Vals:        make(map[uint64]types.Val),
+			path:        sgPath,
+			strList:     sg.valueMatrix,
 		}
 		for idx, uid := range sg.SrcUIDs.Uids {
 			val := types.Val{
@@ -1482,9 +1518,10 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 		// math.MaxUint64 which isn't entirely correct as there could be an actual uid with that
 		// value.
 		doneVars[sg.Params.Var] = varValue{
-			Vals:    make(map[uint64]types.Val),
-			path:    sgPath,
-			strList: sg.valueMatrix,
+			OrderedUIDs: sg.OrderedUIDs,
+			Vals:        make(map[uint64]types.Val),
+			path:        sgPath,
+			strList:     sg.valueMatrix,
 		}
 
 		// Because we are counting the number of UIDs in parent
@@ -1494,7 +1531,7 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 			Value: int64(len(sg.SrcUIDs.Uids)),
 		}
 		doneVars[sg.Params.Var].Vals[math.MaxUint64] = val
-	case len(sg.DestUIDs.Uids) != 0 || (sg.Attr == "uid" && sg.SrcUIDs != nil):
+	case !sg.DestMap.IsEmpty() || (sg.Attr == "uid" && sg.SrcUIDs != nil):
 		// 3. A uid variable. The variable could be defined in one of two places.
 		// a) Either on the actual predicate.
 		//    me(func: (...)) {
@@ -1509,25 +1546,29 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 		//    }
 
 		// Uid variable could be defined using uid or a predicate.
-		uids := sg.DestUIDs
+		var uids *sroar.Bitmap
 		if sg.Attr == "uid" {
-			uids = sg.SrcUIDs
+			uids = codec.FromList(sg.SrcUIDs)
+		} else {
+			// Avoid an upfront Clone.
+			// TODO(Ahsan): See if we want to implement this function.
+			// sg.DestMap.SetCopyOnWrite(true)
+			uids = sg.DestMap
 		}
 
 		if v, ok = doneVars[sg.Params.Var]; !ok {
 			doneVars[sg.Params.Var] = varValue{
-				Uids:    uids,
-				path:    sgPath,
-				Vals:    make(map[uint64]types.Val),
-				strList: sg.valueMatrix,
+				OrderedUIDs: sg.OrderedUIDs,
+				UidMap:      uids,
+				path:        sgPath,
+				Vals:        make(map[uint64]types.Val),
+				strList:     sg.valueMatrix,
 			}
 			return nil
 		}
-
 		// For a recurse query this can happen. We don't allow using the same variable more than
 		// once otherwise.
-		lists := append([]*pb.List(nil), v.Uids, uids)
-		v.Uids = algo.MergeSorted(lists)
+		v.UidMap.Or(uids)
 		doneVars[sg.Params.Var] = v
 	case len(sg.valueMatrix) != 0 && sg.SrcUIDs != nil && len(sgPath) != 0:
 		// 4. A value variable. We get the first value from every list thats part of ValueMatrix
@@ -1561,9 +1602,11 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 		}
 		// Insert a empty entry to keep the dependency happy.
 		doneVars[sg.Params.Var] = varValue{
-			path:    sgPath,
-			Vals:    make(map[uint64]types.Val),
-			strList: sg.valueMatrix,
+			OrderedUIDs: sg.OrderedUIDs,
+			path:        sgPath,
+			Vals:        make(map[uint64]types.Val),
+			strList:     sg.valueMatrix,
+			UidMap:      sroar.NewBitmap(),
 		}
 	}
 	return nil
@@ -1675,11 +1718,11 @@ func (sg *SubGraph) fillShortestPathVars(mp map[string]varValue) error {
 			return errors.Errorf("value of from var(%s) should have already been populated",
 				fromVar)
 		}
-		if uidVar.Uids != nil && len(uidVar.Uids.Uids) > 0 {
-			if len(uidVar.Uids.Uids) > 1 {
+		if !uidVar.UidMap.IsEmpty() {
+			if uidVar.UidMap.GetCardinality() > 1 {
 				return errors.Errorf("from variable(%s) should only expand to 1 uid", fromVar)
 			}
-			sg.Params.From = uidVar.Uids.Uids[0]
+			sg.Params.From = uidVar.UidMap.Minimum()
 		}
 	}
 
@@ -1690,11 +1733,11 @@ func (sg *SubGraph) fillShortestPathVars(mp map[string]varValue) error {
 			return errors.Errorf("value of to var(%s) should have already been populated",
 				toVar)
 		}
-		if uidVar.Uids != nil && len(uidVar.Uids.Uids) > 0 {
-			if len(uidVar.Uids.Uids) > 1 {
+		if !uidVar.UidMap.IsEmpty() {
+			if uidVar.UidMap.GetCardinality() > 1 {
 				return errors.Errorf("to variable(%s) should only expand to 1 uid", toVar)
 			}
-			sg.Params.To = uidVar.Uids.Uids[0]
+			sg.Params.To = uidVar.UidMap.Minimum()
 		}
 	}
 	return nil
@@ -1709,7 +1752,7 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 		}
 	}
 
-	var lists []*pb.List
+	out := sroar.NewBitmap()
 	// Go through all the variables in NeedsVar and see if we have a value for them in the map. If
 	// we do, then we store that value in the appropriate variable inside SubGraph.
 	for _, v := range sg.Params.NeedsVar {
@@ -1727,16 +1770,23 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 
 		case (v.Typ == gql.UidVar && sg.SrcFunc != nil && sg.SrcFunc.Name == "uid_in"):
 			srcFuncArgs := sg.SrcFunc.Args[:0]
-
-			for _, uid := range l.Uids.GetUids() {
+			itr := l.UidMap.NewIterator()
+			for itr.HasNext() {
+				uid := itr.Next()
 				// We use base 10 here because the uid parser expects the uid to be in base 10.
 				arg := gql.Arg{Value: strconv.FormatUint(uid, 10)}
 				srcFuncArgs = append(srcFuncArgs, arg)
 			}
 			sg.SrcFunc.Args = srcFuncArgs
 
-		case (v.Typ == gql.AnyVar || v.Typ == gql.UidVar) && l.Uids != nil:
-			lists = append(lists, l.Uids)
+		case (v.Typ == gql.AnyVar || v.Typ == gql.UidVar) && !l.UidMap.IsEmpty():
+			if l.OrderedUIDs != nil {
+				// TODO(Ahsan): There should only be one shortest path block in a query. So, we can
+				// assume the below assertion to hold. Need to double-check this.
+				x.AssertTrue(sg.OrderedUIDs == nil)
+				sg.OrderedUIDs = l.OrderedUIDs
+			}
+			out.Or(l.UidMap)
 
 		case (v.Typ == gql.AnyVar || v.Typ == gql.ValueVar):
 			// This should happen only once.
@@ -1745,14 +1795,11 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 
 		case (v.Typ == gql.AnyVar || v.Typ == gql.UidVar) && len(l.Vals) != 0:
 			// Derive the UID list from value var.
-			uids := make([]uint64, 0, len(l.Vals))
 			for k := range l.Vals {
-				uids = append(uids, k)
+				out.Set(k)
 			}
-			sort.Slice(uids, func(i, j int) bool { return uids[i] < uids[j] })
-			lists = append(lists, &pb.List{Uids: uids})
 
-		case len(l.Vals) != 0 || l.Uids != nil:
+		case len(l.Vals) != 0 || !l.UidMap.IsEmpty():
 			return errors.Errorf("Wrong variable type encountered for var(%v) %v.", v.Name, v.Typ)
 
 		default:
@@ -1763,13 +1810,13 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 		return err
 	}
 
-	if len(sg.DestUIDs.GetUids()) > 0 {
+	if sg.DestMap != nil {
 		// Don't add sg.DestUIDs in case its size is 0.
 		// This is to avoiding adding nil (empty element) to lists.
-		lists = append(lists, sg.DestUIDs)
+		out.Or(sg.DestMap)
 	}
 
-	sg.DestUIDs = algo.MergeSorted(lists)
+	sg.DestMap = out
 	return nil
 }
 
@@ -1847,20 +1894,17 @@ func (sg *SubGraph) applyIneqFunc() error {
 		for _, uid := range sg.SrcUIDs.Uids {
 			curVal, ok := sg.Params.UidToVal[uid]
 			if ok && types.CompareVals(sg.SrcFunc.Name, curVal, dst) {
-				sg.DestUIDs.Uids = append(sg.DestUIDs.Uids, uid)
+				sg.DestMap.Set(uid)
 			}
 		}
 	} else {
 		// This means it's a function at root as SrcUIDs is nil
 		for uid, curVal := range sg.Params.UidToVal {
 			if types.CompareVals(sg.SrcFunc.Name, curVal, dst) {
-				sg.DestUIDs.Uids = append(sg.DestUIDs.Uids, uid)
+				sg.DestMap.Set(uid)
 			}
 		}
-		sort.Slice(sg.DestUIDs.Uids, func(i, j int) bool {
-			return sg.DestUIDs.Uids[i] < sg.DestUIDs.Uids[j]
-		})
-		sg.uidMatrix = []*pb.List{sg.DestUIDs}
+		sg.uidMatrix = []*pb.List{codec.ToList(sg.DestMap)}
 	}
 	return nil
 }
@@ -2069,18 +2113,17 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			// I am root. I don't have any function to execute, and my
 			// result has been prepared for me already by list passed by the user.
 			// uidmatrix retains the order. SrcUids are sorted (in newGraph).
-			sg.DestUIDs = sg.SrcUIDs
+			sg.DestMap = codec.FromList(sg.SrcUIDs)
 		} else {
 			// Populated variable.
-			o := append(sg.DestUIDs.Uids[:0:0], sg.DestUIDs.Uids...)
-			sg.uidMatrix = []*pb.List{{Uids: o}}
-			sort.Slice(sg.DestUIDs.Uids, func(i, j int) bool {
-				return sg.DestUIDs.Uids[i] < sg.DestUIDs.Uids[j]
-			})
+			if sg.OrderedUIDs != nil {
+				sg.uidMatrix = []*pb.List{sg.OrderedUIDs}
+			} else {
+				sg.uidMatrix = []*pb.List{codec.ToList(sg.DestMap)}
+			}
 		}
 		if sg.Params.AfterUID > 0 {
-			i := sort.Search(len(sg.DestUIDs.Uids), func(i int) bool { return sg.DestUIDs.Uids[i] > sg.Params.AfterUID })
-			sg.DestUIDs.Uids = sg.DestUIDs.Uids[i:]
+			sg.DestMap.RemoveRange(0, sg.Params.AfterUID+1)
 		}
 
 	case sg.Attr == "":
@@ -2092,7 +2135,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 				rch <- err
 				return
 			}
-			algo.IntersectWith(sg.DestUIDs, sg.SrcUIDs, sg.DestUIDs)
+			codec.And(sg.DestMap, sg.SrcUIDs)
 			rch <- nil
 			return
 		}
@@ -2107,7 +2150,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		// This is to allow providing SrcUIDs to the filter children.
 		// Each filter use it's own (shallow) copy of SrcUIDs, so there is no race conditions,
 		// when multiple filters replace their sg.DestUIDs
-		sg.DestUIDs = &pb.List{Uids: sg.SrcUIDs.Uids}
+		sg.DestMap = codec.FromList(sg.SrcUIDs)
 	default:
 		isInequalityFn := sg.SrcFunc != nil && isInequalityFn(sg.SrcFunc.Name)
 		switch {
@@ -2130,11 +2173,11 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 				return
 			}
 
-			curVal := types.Val{Tid: types.IntID, Value: int64(len(sg.DestUIDs.Uids))}
+			curVal := types.Val{Tid: types.IntID, Value: int64(sg.DestMap.GetCardinality())}
 			if types.CompareVals(sg.SrcFunc.Name, curVal, dst) {
-				sg.DestUIDs.Uids = sg.SrcUIDs.GetUids()
+				sg.DestMap = codec.FromList(sg.SrcUIDs)
 			} else {
-				sg.DestUIDs.Uids = nil
+				sg.DestMap = nil
 			}
 		default:
 			taskQuery, err := createTaskQuery(ctx, sg)
@@ -2170,26 +2213,14 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			}
 
 			if result.IntersectDest {
-				sg.DestUIDs = algo.IntersectSorted(result.UidMatrix)
+				sg.DestMap = codec.Intersect(result.UidMatrix)
 			} else {
-				sg.DestUIDs = algo.MergeSorted(result.UidMatrix)
+				sg.DestMap = codec.Merge(result.UidMatrix)
 			}
 
 			if parent == nil {
 				// I'm root. We reach here if root had a function.
-
-				if len(sg.Params.Cascade.Fields) >= 0 {
-					// DesitUIDs for this level becomes the sourceUIDs for the next level. In updateUidMatrix with cascade,
-					// we end up modifying the first list from the uidMatrix which ends up modifying the srcUids of the next level.
-					// So to avoid that we make a copy.
-					newDestUIDList := &pb.List{Uids: make([]uint64, 0, len(sg.DestUIDs.Uids))}
-					for _, uid := range sg.DestUIDs.GetUids() {
-						newDestUIDList.Uids = append(newDestUIDList.Uids, uid)
-					}
-					sg.uidMatrix = []*pb.List{newDestUIDList}
-				} else {
-					sg.uidMatrix = []*pb.List{sg.DestUIDs}
-				}
+				sg.uidMatrix = []*pb.List{codec.ToList(sg.DestMap)}
 			}
 		}
 	}
@@ -2204,12 +2235,12 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			// For uid function filter, no need for processing. User already gave us the
 			// list. Lets just update DestUIDs.
 			if isUidFuncWithoutVar {
-				filter.DestUIDs = filter.SrcUIDs
+				filter.DestMap = codec.FromList(filter.SrcUIDs)
 				filterChan <- nil
 				continue
 			}
 
-			filter.SrcUIDs = sg.DestUIDs
+			filter.SrcUIDs = codec.ToList(sg.DestMap)
 			// Passing the pointer is okay since the filter only reads.
 			filter.Params.ParentVars = sg.Params.ParentVars // Pass to the child.
 			go ProcessGraph(ctx, filter, sg, filterChan)
@@ -2229,20 +2260,33 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			return
 		}
 
+		hasNils := false
 		// Now apply the results from filter.
-		var lists []*pb.List
+		var bitmaps []*sroar.Bitmap
 		for _, filter := range sg.Filters {
-			lists = append(lists, filter.DestUIDs)
+			if filter.DestMap == nil {
+				hasNils = true
+				break
+			}
+			bitmaps = append(bitmaps, filter.DestMap)
 		}
 
 		switch {
 		case sg.FilterOp == "or":
-			sg.DestUIDs = algo.MergeSorted(lists)
+			sg.DestMap = sroar.FastParOr(4, bitmaps...)
 		case sg.FilterOp == "not":
 			x.AssertTrue(len(sg.Filters) == 1)
-			sg.DestUIDs = algo.Difference(sg.DestUIDs, sg.Filters[0].DestUIDs)
+			if sg.Filters[0].DestMap == nil {
+				sg.DestMap.AndNot(sroar.NewBitmap())
+			} else {
+				sg.DestMap.AndNot(sg.Filters[0].DestMap)
+			}
 		case sg.FilterOp == "and":
-			sg.DestUIDs = algo.IntersectSorted(lists)
+			if hasNils {
+				sg.DestMap = sroar.NewBitmap()
+			} else {
+				sg.DestMap = sroar.FastAnd(bitmaps...)
+			}
 		default:
 			// We need to also intersect the original dest uids in this case to get the final
 			// DestUIDs.
@@ -2250,16 +2294,24 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 
 			// TODO - See if the server performing the filter can intersect with the srcUIDs before
 			// returning them in this case.
-			lists = append(lists, sg.DestUIDs)
-			sg.DestUIDs = algo.IntersectSorted(lists)
+			if hasNils {
+				sg.DestMap = sroar.NewBitmap()
+			} else {
+				r := sroar.FastAnd(bitmaps...)
+				sg.DestMap.And(r)
+			}
 		}
 	}
 
 	if len(sg.Params.Order) == 0 && len(sg.Params.FacetsOrder) == 0 {
-		// There is no ordering. Just apply pagination and return.
-		if err = sg.applyPagination(ctx); err != nil {
-			rch <- err
-			return
+		// for `has` function when there is no filtering and ordering, we fetch
+		// correct paginated results so no need to apply pagination here.
+		if !(len(sg.Filters) == 0 && sg.SrcFunc != nil && sg.SrcFunc.Name == "has") {
+			// There is no ordering. Just apply pagination and return.
+			if err = sg.applyPagination(ctx); err != nil {
+				rch <- err
+				return
+			}
 		}
 	} else {
 		// If we are asked for count, we don't need to change the order of results.
@@ -2269,6 +2321,13 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 				rch <- err
 				return
 			}
+		}
+	}
+
+	if sg.Params.Random > 0 {
+		if err = sg.applyRandom(ctx); err != nil {
+			rch <- err
+			return
 		}
 	}
 
@@ -2330,7 +2389,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			child.Params.ParentVars[k] = v
 		}
 
-		child.SrcUIDs = sg.DestUIDs // Make the connection.
+		child.SrcUIDs = codec.ToList(sg.DestMap) // Make the connection.
 		if child.IsInternal() {
 			// We dont have to execute these nodes.
 			continue
@@ -2349,7 +2408,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 	}
 
-	if sg.DestUIDs == nil || len(sg.DestUIDs.Uids) == 0 {
+	if sg.DestMap == nil || sg.DestMap.GetCardinality() == 0 {
 		// Looks like we're done here. Be careful with nil srcUIDs!
 		if span != nil {
 			span.Annotatef(nil, "Zero uids for %q", sg.Attr)
@@ -2369,6 +2428,43 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	rch <- childErr
 }
 
+// stores index of a uid as the index in the uidMatrix (x)
+// and index in the corresponding list of the uidMatrix (y)
+type UidKey struct {
+	x int
+	y int
+}
+
+// applies "random" to lists inside uidMatrix
+// sg.Params.Random number of nodes are selected in each uid list
+// duplicates are avoided (random selection without replacement)
+// if sg.Params.Random is more than the number of available nodes
+// all nodes are returned
+func (sg *SubGraph) applyRandom(ctx context.Context) error {
+	sg.updateUidMatrix()
+
+	for i := 0; i < len(sg.uidMatrix); i++ {
+		// shuffle the uid list and select the
+		// first sg.Params.Random uids
+
+		uidList := sg.uidMatrix[i].Uids
+
+		rand.Shuffle(len(uidList), func(i, j int) {
+			uidList[i], uidList[j] = uidList[j], uidList[i]
+		})
+
+		numRandom := sg.Params.Random
+		if sg.Params.Random > len(uidList) {
+			numRandom = len(uidList)
+		}
+
+		sg.uidMatrix[i].Uids = uidList[:numRandom]
+	}
+
+	sg.DestMap = codec.Merge(sg.uidMatrix)
+	return nil
+}
+
 // applyPagination applies count and offset to lists inside uidMatrix.
 func (sg *SubGraph) applyPagination(ctx context.Context) error {
 	if sg.Params.Count == 0 && sg.Params.Offset == 0 { // No pagination.
@@ -2382,7 +2478,7 @@ func (sg *SubGraph) applyPagination(ctx context.Context) error {
 		sg.uidMatrix[i].Uids = sg.uidMatrix[i].Uids[start:end]
 	}
 	// Re-merge the UID matrix.
-	sg.DestUIDs = algo.MergeSorted(sg.uidMatrix)
+	sg.DestMap = codec.Merge(sg.uidMatrix)
 	return nil
 }
 
@@ -2476,16 +2572,7 @@ func (sg *SubGraph) updateDestUids() {
 	// UID). For each element in UID matrix, we do a binary search in the
 	// current destUID and mark it. Then we scan over this bool array and
 	// rebuild destUIDs.
-	included := make([]bool, len(sg.DestUIDs.Uids))
-	for _, ul := range sg.uidMatrix {
-		for _, uid := range ul.Uids {
-			idx := algo.IndexOf(sg.DestUIDs, uid) // Binary search.
-			if idx >= 0 {
-				included[idx] = true
-			}
-		}
-	}
-	algo.ApplyFilter(sg.DestUIDs, func(uid uint64, idx int) bool { return included[idx] })
+	sg.DestMap = codec.Merge(sg.uidMatrix)
 }
 
 func (sg *SubGraph) sortAndPaginateUsingFacet(ctx context.Context) error {
@@ -2621,7 +2708,7 @@ func (sg *SubGraph) sortAndPaginateUsingVar(ctx context.Context) error {
 func isValidArg(a string) bool {
 	switch a {
 	case "numpaths", "from", "to", "orderasc", "orderdesc", "first", "offset", "after", "depth",
-		"minweight", "maxweight":
+		"minweight", "maxweight", "random":
 		return true
 	}
 	return false
@@ -2660,7 +2747,7 @@ func isUidFnWithoutVar(f *gql.Function) bool {
 func getNodeTypes(ctx context.Context, sg *SubGraph) ([]string, error) {
 	temp := &SubGraph{
 		Attr:    "dgraph.type",
-		SrcUIDs: sg.DestUIDs,
+		SrcUIDs: codec.ToList(sg.DestMap),
 		ReadTs:  sg.ReadTs,
 	}
 	taskQuery, err := createTaskQuery(ctx, temp)
@@ -2801,6 +2888,7 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 	for i := 0; i < len(req.Subgraphs) && numQueriesDone < len(req.Subgraphs); i++ {
 		errChan := make(chan error, len(req.Subgraphs))
 		var idxList []int
+
 		// If we have N blocks in a query, it can take a maximum of N iterations for all of them
 		// to be executed.
 		for idx := 0; idx < len(req.Subgraphs); idx++ {

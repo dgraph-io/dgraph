@@ -7,6 +7,7 @@ After=network.target
 Type=simple
 WorkingDirectory=/var/lib/dgraph
 ExecStart=/usr/bin/bash -c 'dgraph zero --wal /var/lib/dgraph/zw'
+LimitNOFILE=65536
 Restart=on-failure
 StandardOutput=journal
 StandardError=journal

@@ -431,7 +431,11 @@ func TestManyMutationsWithError(t *testing.T) {
 				multiMutation,
 				map[string]interface{}{"id": tcase.idValue},
 				&executor{
+<<<<<<< HEAD
 					existenceQueriesResp: `{ "Author_1": [{"uid":"0x1"}]}`,
+=======
+					existenceQueriesResp: `{ "Author_1": [{"uid":"0x1", "dgraph.type":["Author"]}]}`,
+>>>>>>> master
 					resp:                 tcase.queryResponse,
 					assigned:             tcase.mutResponse,
 					failMutation:         2})

@@ -176,19 +176,12 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 		}
 	}
 
-	// Ensure that rollup is not running.
-	closer, err := gr.Node.startTask(opIndexing)
-	if err != nil {
-		return err
-	}
-	defer stopIndexing(closer)
-
 	buildIndexesHelper := func(update *pb.SchemaUpdate, rebuild posting.IndexRebuild) error {
 		wrtCtx := schema.GetWriteContext(context.Background())
 		if err := rebuild.BuildIndexes(wrtCtx); err != nil {
 			return err
 		}
-		if err := updateSchema(update); err != nil {
+		if err := updateSchema(update, rebuild.StartTs); err != nil {
 			return err
 		}
 
@@ -214,9 +207,13 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 	// "Too many open files" error.
 	throttle := y.NewThrottle(maxOpenFileLimit / 8)
 
+<<<<<<< HEAD
 	buildIndexes := func(update *pb.SchemaUpdate, rebuild posting.IndexRebuild) {
+=======
+	buildIndexes := func(update *pb.SchemaUpdate, rebuild posting.IndexRebuild, c *z.Closer) {
+>>>>>>> master
 		// In case background indexing is running, we should call it here again.
-		defer stopIndexing(closer)
+		defer stopIndexing(c)
 
 		// We should only start building indexes once this function has returned.
 		// This is in order to ensure that we do not call DropPrefix for one predicate
@@ -233,6 +230,7 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 		throttle.Done(nil)
 	}
 
+	var closer *z.Closer
 	for _, su := range updates {
 		if tablet, err := groups().Tablet(su.Predicate); err != nil {
 			return err
@@ -251,6 +249,17 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 			OldSchema:     &old,
 			CurrentSchema: su,
 		}
+		shouldRebuild := ok && rebuild.NeedIndexRebuild()
+
+		// Start opIndexing task only if schema update needs to build the indexes.
+		if shouldRebuild && !gr.Node.isRunningTask(opIndexing) {
+			closer, err = gr.Node.startTaskAtTs(opIndexing, startTs)
+			if err != nil {
+				return err
+			}
+			defer stopIndexing(closer)
+		}
+
 		querySchema := rebuild.GetQuerySchema()
 		// Sets the schema only in memory. The schema is written to
 		// disk only after schema mutations are successful.
@@ -273,9 +282,15 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 			return err
 		}
 
+<<<<<<< HEAD
 		if ok && rebuild.NeedIndexRebuild() {
 			go buildIndexes(su, rebuild)
 		} else if err := updateSchema(su); err != nil {
+=======
+		if shouldRebuild {
+			go buildIndexes(su, rebuild, closer)
+		} else if err := updateSchema(su, rebuild.StartTs); err != nil {
+>>>>>>> master
 			return err
 		}
 	}
@@ -285,25 +300,25 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 
 // updateSchema commits the schema to disk in blocking way, should be ok because this happens
 // only during schema mutations or we see a new predicate.
-func updateSchema(s *pb.SchemaUpdate) error {
+func updateSchema(s *pb.SchemaUpdate, ts uint64) error {
 	schema.State().Set(s.Predicate, s)
 	schema.State().DeleteMutSchema(s.Predicate)
-	txn := pstore.NewTransactionAt(1, true)
+	txn := pstore.NewTransactionAt(ts, true)
 	defer txn.Discard()
 	data, err := s.Marshal()
 	x.Check(err)
-	err = txn.SetEntry(&badger.Entry{
+	e := &badger.Entry{
 		Key:      x.SchemaKey(s.Predicate),
 		Value:    data,
 		UserMeta: posting.BitSchemaPosting,
-	})
-	if err != nil {
+	}
+	if err = txn.SetEntry(e.WithDiscard()); err != nil {
 		return err
 	}
-	return txn.CommitAt(1, nil)
+	return txn.CommitAt(ts, nil)
 }
 
-func createSchema(attr string, typ types.TypeID, hint pb.Metadata_HintType) error {
+func createSchema(attr string, typ types.TypeID, hint pb.Metadata_HintType, ts uint64) error {
 	ctx := schema.GetWriteContext(context.Background())
 
 	// Don't overwrite schema blindly, acl's might have been set even though
@@ -330,32 +345,32 @@ func createSchema(attr string, typ types.TypeID, hint pb.Metadata_HintType) erro
 	if err := checkSchema(&s); err != nil {
 		return err
 	}
-	return updateSchema(&s)
+	return updateSchema(&s, ts)
 }
 
-func runTypeMutation(ctx context.Context, update *pb.TypeUpdate) error {
+func runTypeMutation(ctx context.Context, update *pb.TypeUpdate, ts uint64) error {
 	current := *update
 	schema.State().SetType(update.TypeName, current)
-	return updateType(update.TypeName, *update)
+	return updateType(update.TypeName, *update, ts)
 }
 
 // We commit schema to disk in blocking way, should be ok because this happens
 // only during schema mutations or we see a new predicate.
-func updateType(typeName string, t pb.TypeUpdate) error {
+func updateType(typeName string, t pb.TypeUpdate, ts uint64) error {
 	schema.State().SetType(typeName, t)
-	txn := pstore.NewTransactionAt(1, true)
+	txn := pstore.NewTransactionAt(ts, true)
 	defer txn.Discard()
 	data, err := t.Marshal()
 	x.Check(err)
-	err = txn.SetEntry(&badger.Entry{
+	e := &badger.Entry{
 		Key:      x.TypeKey(typeName),
 		Value:    data,
 		UserMeta: posting.BitSchemaPosting,
-	})
-	if err != nil {
+	}
+	if err := txn.SetEntry(e.WithDiscard()); err != nil {
 		return err
 	}
-	return txn.CommitAt(1, nil)
+	return txn.CommitAt(ts, nil)
 }
 
 func hasEdges(attr string, startTs uint64) bool {
@@ -471,7 +486,7 @@ func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate) error {
 	switch {
 	case edge.Lang != "" && !su.GetLang():
 		return errors.Errorf("Attr: [%v] should have @lang directive in schema to mutate edge: [%v]",
-			edge.Attr, edge)
+			x.ParseAttr(edge.Attr), edge)
 
 	case !schemaType.IsScalar() && !storageType.IsScalar():
 		return nil
@@ -695,6 +710,7 @@ func MutateOverNetwork(ctx context.Context, m *pb.Mutations) (*api.TxnContext, e
 	if err != nil {
 		return tctx, err
 	}
+	span.Annotate(nil, "mutation map populated")
 
 	resCh := make(chan res, len(mutationMap))
 	for gid, mu := range mutationMap {
@@ -866,15 +882,9 @@ func (w *grpcWorker) proposeAndWait(ctx context.Context, txnCtx *api.TxnContext,
 		}
 	}
 
-	// We should wait to ensure that we have seen all the updates until the StartTs of this mutation
-	// transaction. Otherwise, when we read the posting list value for calculating the indices, we
-	// might be wrong because we might be missing out a commit which has updated the value. This
-	// wait here ensures that the proposal would only be registered after seeing txn status of all
-	// pending transactions. Thus, the ordering would be correct.
-	if err := posting.Oracle().WaitForTs(ctx, m.StartTs); err != nil {
-		return err
-	}
-
+	// We used to WaitForTs(ctx, m.StartTs) here. But, with concurrent mutation execution, we can do
+	// the re-arranging of mutations post Raft proposals to ensure that they get run after server's
+	// MaxAssignedTs >= m.StartTs.
 	node := groups().Node
 	err := node.proposeAndWait(ctx, &pb.Proposal{Mutations: m})
 	fillTxnContext(txnCtx, m.StartTs)

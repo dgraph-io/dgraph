@@ -38,6 +38,7 @@ const (
 	//       For easy readability, keep the options without default values (if any) at the end of
 	//       the *Defaults string. Also, since these strings are printed in --help text, avoid line
 	//       breaks.
+<<<<<<< HEAD
 	AclDefaults    = `access-ttl=6h; refresh-ttl=30d; secret-file=;`
 	AuditDefaults  = `compress=false; days=10; size=100; dir=; output=; encrypt-file=;`
 	BadgerDefaults = `compression=snappy; numgoroutines=8;`
@@ -54,6 +55,22 @@ const (
 	GraphQLDefaults    = `introspection=true; debug=false; extensions=true; poll-interval=1s; ` +
 		`lambda-url=;`
 	CacheDefaults = `size-mb=1024; percentage=0,65,35;`
+=======
+	AuditDefaults  = `compress=false; days=10; size=100; dir=; output=; encrypt-file=;`
+	BadgerDefaults = `compression=snappy; numgoroutines=8;`
+	CacheDefaults  = `size-mb=1024; percentage=0,65,35;`
+	CDCDefaults    = `file=; kafka=; sasl_user=; sasl_password=; ca_cert=; client_cert=; ` +
+		`client_key=; sasl-mechanism=PLAIN;`
+	GraphQLDefaults = `introspection=true; debug=false; extensions=true; poll-interval=1s; ` +
+		`lambda-url=;`
+	LimitDefaults = `mutations=allow; query-edge=1000000; normalize-node=10000; ` +
+		`mutations-nquad=1000000; disallow-drop=false; query-timeout=0ms; txn-abort-after=5m;` +
+		`max-pending-queries=10000;  max-retries=-1; shared-instance=false;`
+	RaftDefaults = `learner=false; snapshot-after-entries=10000; ` +
+		`snapshot-after-duration=30m; pending-proposals=256; idx=; group=;`
+	SecurityDefaults   = `token=; whitelist=;`
+	ZeroLimitsDefaults = `uid-lease=0; refill-interval=30s; disable-admin-http=false;`
+>>>>>>> master
 )
 
 // ServerState holds the state of the Dgraph server.

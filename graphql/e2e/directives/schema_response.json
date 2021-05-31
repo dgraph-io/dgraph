@@ -37,7 +37,7 @@
     },
     {
       "index": true,
-      "predicate": "Worker.emp_Id",
+      "predicate": "Worker.empId",
       "tokenizer": [
         "hash"
       ],
@@ -46,7 +46,7 @@
     },
     {
       "index": true,
-      "predicate": "Worker.reg_No",
+      "predicate": "Worker.regNo",
       "tokenizer": [
         "int"
       ],
@@ -68,6 +68,93 @@
       "type": "uid"
     },
     {
+<<<<<<< HEAD
+=======
+      "list": true,
+      "predicate": "LibraryManager.manages",
+      "type": "uid"
+    },
+    {
+      "predicate": "LibraryMember.readHours",
+      "type": "string"
+    },
+    {
+      "index": true,
+      "predicate": "Team.teamName",
+      "tokenizer": [
+        "hash"
+      ],
+      "type": "string",
+      "upsert": true
+    },
+    {
+      "predicate": "SportsMember.playerRating",
+      "type": "int"
+    },
+    {
+      "list": true,
+      "predicate": "LibraryMember.interests",
+      "type": "string"
+    },
+    {
+      "index": true,
+      "predicate": "Team.teamID",
+      "tokenizer": [
+        "hash"
+      ],
+      "type": "string",
+      "upsert": true
+    },
+    {
+      "index": true,
+      "predicate": "Member.name",
+      "tokenizer": [
+        "hash"
+      ],
+      "type": "string",
+      "upsert": true
+    },
+    {
+      "predicate": "CricketTeam.numOfBowlers",
+      "type": "int"
+    },
+    {
+      "predicate": "CricketTeam.numOfBatsmen",
+      "type": "int"
+    },
+    {
+      "index": true,
+      "predicate": "LibraryManager.name",
+      "tokenizer": [
+        "hash"
+      ],
+      "type": "string",
+      "upsert": true
+    },
+    {
+      "index": true,
+      "predicate": "Member.refID",
+      "tokenizer": [
+        "hash"
+      ],
+      "type": "string",
+      "upsert": true
+    },
+    {
+      "list": true,
+      "predicate": "Member.itemsIssued",
+      "type": "string"
+    },
+    {
+      "predicate": "Member.fineAccumulated",
+      "type": "int"
+    },
+    {
+      "predicate": "SportsMember.plays",
+      "type": "string"
+    },
+    {
+>>>>>>> master
       "predicate": "Astronaut.name",
       "type": "string"
     },
@@ -93,6 +180,48 @@
       "list": true,
       "predicate": "Employer.worker",
       "type": "uid"
+    },
+    {
+      "index": true,
+      "predicate": "Employer.name",
+      "tokenizer": [
+        "hash"
+      ],
+      "type": "string",
+      "upsert": true
+    },
+    {
+      "index": true,
+      "predicate": "Worker.uniqueId",
+      "tokenizer": [
+        "int"
+      ],
+      "type": "int",
+      "upsert": true
+    },
+    {
+      "index": true,
+      "index": true,
+      "predicate": "Employer.companyId",
+      "tokenizer": [
+        "hash"
+      ],
+      "type": "string",
+      "upsert": true
+    },
+    {
+      "lang": true,
+      "predicate": "Person.profession",
+      "type": "string"
+    },
+    {
+      "index": true,
+      "lang": true,
+      "predicate": "Person.name",
+      "tokenizer": [
+        "hash"
+      ],
+      "type": "string"
     },
     {
       "predicate": "Book.chapters",
@@ -337,8 +466,36 @@
       "list": true
     },
     {
+      "predicate": "Person1.closeFriends",
+      "type": "uid",
+      "list": true
+    },
+    {
       "predicate": "Person1.name",
-      "type": "string"
+      "type": "string",
+      "upsert": true,
+      "tokenizer": [
+        "hash"
+      ],
+      "index": true
+    },
+    {
+      "predicate": "Person1.regId",
+      "type": "string",
+      "upsert": true,
+      "tokenizer": [
+        "hash"
+      ],
+      "index": true
+    },
+    {
+      "predicate": "Person1.name1",
+      "type": "string",
+      "upsert": true,
+      "tokenizer": [
+        "hash"
+      ],
+      "index": true
     },
     {
       "predicate": "Plant.breed",
@@ -917,13 +1074,27 @@
     {
       "fields": [
         {
-          "name": "Worker.emp_Id"
+          "name": "Person.name"
         },
         {
-          "name": "Worker.reg_No"
+          "name": "Person.profession"
+        }
+      ],
+      "name": "Person"
+    },
+    {
+      "fields": [
+        {
+          "name": "Worker.empId"
+        },
+        {
+          "name": "Worker.regNo"
         },
         {
           "name": "Worker.name"
+        },
+        {
+          "name": "Worker.uniqueId"
         }
       ],
       "name": "Worker"
@@ -1061,6 +1232,15 @@
         },
         {
           "name": "Person1.friends"
+        },
+        {
+          "name": "Person1.closeFriends"
+        },
+        {
+          "name": "Person1.name1"
+        },
+        {
+          "name": "Person1.regId"
         }
       ],
       "name": "Person1"
@@ -1416,9 +1596,123 @@
         },
         {
           "name": "Employer.worker"
+        },
+        {
+          "name": "Employer.companyId"
+        },
+        {
+          "name": "Employer.name"
         }
       ],
       "name": "Employer"
+    },
+    {
+      "fields": [
+        {
+          "name": "Member.name"
+        },
+        {
+          "name": "Member.refID"
+        },
+        {
+          "name": "Member.itemsIssued"
+        },
+        {
+          "name": "Member.fineAccumulated"
+        }
+      ],
+      "name": "Member"
+    },
+    {
+      "fields": [
+        {
+          "name": "Team.teamName"
+        },
+        {
+          "name": "Team.teamID"
+        },
+        {
+          "name": "CricketTeam.numOfBowlers"
+        },
+        {
+          "name": "CricketTeam.numOfBatsmen"
+        }
+      ],
+      "name": "CricketTeam"
+    },
+    {
+      "fields": [
+        {
+          "name": "LibraryManager.manages"
+        },
+        {
+          "name": "LibraryManager.name"
+        }
+      ],
+      "name": "LibraryManager"
+    },
+    {
+      "fields": [
+        {
+          "name": "Team.teamName"
+        },
+        {
+          "name": "Team.teamID"
+        }
+      ],
+      "name": "Team"
+    },
+    {
+      "fields": [
+        {
+          "name": "Team.teamName"
+        },
+        {
+          "name": "SportsMember.playerRating"
+        },
+        {
+          "name": "Team.teamID"
+        },
+        {
+          "name": "Member.name"
+        },
+        {
+          "name": "Member.refID"
+        },
+        {
+          "name": "Member.itemsIssued"
+        },
+        {
+          "name": "SportsMember.plays"
+        },
+        {
+          "name": "Member.fineAccumulated"
+        }
+      ],
+      "name": "SportsMember"
+    },
+    {
+      "fields": [
+        {
+          "name": "LibraryMember.readHours"
+        },
+        {
+          "name": "LibraryMember.interests"
+        },
+        {
+          "name": "Member.name"
+        },
+        {
+          "name": "Member.refID"
+        },
+        {
+          "name": "Member.itemsIssued"
+        },
+        {
+          "name": "Member.fineAccumulated"
+        }
+      ],
+      "name": "LibraryMember"
     }
   ]
 }

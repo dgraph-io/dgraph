@@ -16,11 +16,11 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"math"
-	"net/url"
 	"os"
 	"strings"
 	"testing"
@@ -110,7 +110,6 @@ func setupTablets(t *testing.T, dg *dgo.Dgraph) {
 	t.Log("Pausing to let zero move tablets...")
 	moveOk := false
 	for retry := 5; retry > 0; retry-- {
-		time.Sleep(3 * time.Second)
 		state, err := testutil.GetStateHttps(testutil.GetAlphaClientConfig(t))
 		require.NoError(t, err)
 		_, ok1 := state.Groups["1"].Tablets[x.GalaxyAttr("name1")]
@@ -120,6 +119,7 @@ func setupTablets(t *testing.T, dg *dgo.Dgraph) {
 			moveOk = true
 			break
 		}
+		time.Sleep(1 * time.Second)
 	}
 	require.True(t, moveOk)
 }
@@ -144,6 +144,7 @@ func addTriples(t *testing.T, dg *dgo.Dgraph, numTriples int) {
 }
 
 func runBackup(t *testing.T) {
+<<<<<<< HEAD
 	// Using the old /admin/backup endpoint to ensure it works. Change back to using
 	// the GraphQL endpoint at /admin once this endpoint is deprecated.
 	backupUrl := "https://" + testutil.SockAddrHttp + "/admin/backup"
@@ -157,6 +158,38 @@ func runBackup(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, string(buf), "Backup queued successfully")
 	testutil.WaitForTask(t, "opBackup")
+=======
+	backupRequest := `mutation backup($dst: String!, $ff: Boolean!) {
+		backup(input: {destination: $dst, forceFull: $ff}) {
+			response {
+				code
+			}
+			taskId
+		}
+	}`
+
+	adminUrl := "https://" + testutil.SockAddrHttp + "/admin"
+	params := testutil.GraphQLParams{
+		Query: backupRequest,
+		Variables: map[string]interface{}{
+			"dst": backupDestination,
+			"ff":  false,
+		},
+	}
+	b, err := json.Marshal(params)
+	require.NoError(t, err)
+
+	client := testutil.GetHttpsClient(t)
+	resp, err := client.Post(adminUrl, "application/json", bytes.NewBuffer(b))
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	var data interface{}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
+	require.Equal(t, "Success", testutil.JsonGet(data, "data", "backup", "response", "code").(string))
+	taskId := testutil.JsonGet(data, "data", "backup", "taskId").(string)
+	testutil.WaitForTask(t, taskId, true)
+>>>>>>> master
 
 	// Verify that the right amount of files and directories were created.
 	copyToLocalFs(t)
@@ -169,7 +202,7 @@ func runRestore(t *testing.T, backupLocation, lastDir string, commitTs uint64) m
 	require.NoError(t, os.MkdirAll(restoreDir, os.ModePerm))
 
 	t.Logf("--- Restoring from: %q", backupLocation)
-	result := worker.RunRestore("./data/restore", backupLocation, lastDir, x.SensitiveByteSlice(nil), options.Snappy, 0)
+	result := worker.RunOfflineRestore("./data/restore", backupLocation, lastDir, "", options.Snappy, 0)
 	require.NoError(t, result.Err)
 
 	restored1, err := testutil.GetPredicateValues("./data/restore/p1", x.GalaxyAttr("name1"), commitTs)

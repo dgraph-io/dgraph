@@ -9,14 +9,17 @@ import (
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/sroar"
 	"github.com/stretchr/testify/require"
 )
 
 func subgraphWithSingleResultAndSingleValue(val *pb.TaskValue) *SubGraph {
+	r := sroar.NewBitmap()
+	r.Set(1)
 	return &SubGraph{
 		Params:    params{Alias: "query"},
 		SrcUIDs:   &pb.List{Uids: []uint64{1}},
-		DestUIDs:  &pb.List{Uids: []uint64{1}},
+		DestMap:   r,
 		uidMatrix: []*pb.List{&pb.List{Uids: []uint64{1}}},
 		Children: []*SubGraph{
 			&SubGraph{

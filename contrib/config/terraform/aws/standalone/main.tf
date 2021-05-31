@@ -22,9 +22,9 @@ resource "aws_security_group" "dgraph_standalone" {
   }
 
   ingress {
-    from_port   = var.ssh_port
-    to_port     = var.ssh_port
-    protocol    = "tcp"
+    from_port = var.ssh_port
+    to_port   = var.ssh_port
+    protocol  = "tcp"
 
     # To keep this setup simple, we allow incoming SSH requests from any IP.
     # In real-world usage, you should only allow SSH requests from trusted servers,
@@ -32,17 +32,9 @@ resource "aws_security_group" "dgraph_standalone" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-
   ingress {
-    from_port   = var.dgraph_ui_port
-    to_port     = var.dgraph_ui_port
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    from_port   = var.dgraph_server_port
-    to_port     = var.dgraph_server_port
+    from_port   = var.dgraph_alpha_port
+    to_port     = var.dgraph_alpha_port
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
