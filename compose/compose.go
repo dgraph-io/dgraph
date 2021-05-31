@@ -166,11 +166,11 @@ func getOffset(idx int) int {
 
 func initService(basename string, idx, grpcPort int) service {
 	var svc service
-	contaierPrefix := basename
+	containerPrefix := basename
 	if opts.ContainerPrefix != "" {
-		contaierPrefix = opts.ContainerPrefix + "_" + basename
+		containerPrefix = opts.ContainerPrefix + "_" + basename
 	}
-	svc.name = name(contaierPrefix, idx)
+	svc.name = name(containerPrefix, idx)
 	svc.Image = opts.Image + ":" + opts.Tag
 	svc.ContainerName = containerName(svc.name)
 	svc.WorkingDir = fmt.Sprintf("/data/%s", svc.name)
