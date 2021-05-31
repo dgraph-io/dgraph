@@ -121,6 +121,12 @@ type options struct {
 	Cdc            bool
 	CdcConsumer    bool
 
+	// Alpha Configurations
+	CustomAlphaOptions []string
+
+	// Container Alias
+	ContainerPrefix string
+
 	// Extra flags
 	AlphaFlags string
 	ZeroFlags  string
@@ -170,8 +176,11 @@ func getHost(host string) string {
 
 func initService(basename string, idx, grpcPort int) service {
 	var svc service
-
-	svc.name = name(basename, idx)
+	containerPrefix := basename
+	if opts.ContainerPrefix != "" {
+		containerPrefix = opts.ContainerPrefix + "_" + basename
+	}
+	svc.name = name(containerPrefix, idx)
 	svc.Image = opts.Image + ":" + opts.Tag
 	svc.ContainerName = containerName(svc.name)
 	svc.WorkingDir = fmt.Sprintf("/data/%s", svc.name)
@@ -284,7 +293,7 @@ func getZero(idx int, raft string) service {
 	return svc
 }
 
-func getAlpha(idx int, raft string) service {
+func getAlpha(idx int, raft string, customFlags string) service {
 	basename := "alpha"
 	internalPort := alphaBasePort + opts.PortOffset + getOffset(idx)
 	grpcPort := internalPort + 1000
@@ -307,7 +316,12 @@ func getAlpha(idx int, raft string) service {
 		maxZeros = opts.NumZeros
 	}
 
-	zeroHostAddr := fmt.Sprintf("%s:%d", getHost("zero1"), zeroBasePort+opts.PortOffset)
+	zeroName := "zero"
+	if opts.ContainerPrefix != "" {
+		zeroName = opts.ContainerPrefix + "_" + zeroName
+	}
+
+	zeroHostAddr := fmt.Sprintf("%s%d:%d", zeroName, 1, zeroBasePort+opts.PortOffset)
 	zeros := []string{zeroHostAddr}
 	for i := 2; i <= maxZeros; i++ {
 		port := zeroBasePort + opts.PortOffset + getOffset(i)
@@ -383,6 +397,10 @@ func getAlpha(idx int, raft string) service {
 	svc.EnvFile = opts.AlphaEnvFile
 	if opts.AlphaFlags != "" {
 		svc.Command += " " + opts.AlphaFlags
+	}
+
+	if customFlags != "" {
+		svc.Command += " " + customFlags
 	}
 
 	return svc
@@ -725,6 +743,10 @@ func main() {
 		"minio service port")
 	cmd.PersistentFlags().StringArrayVar(&opts.MinioEnvFile, "minio_env_file", nil,
 		"minio service env_file")
+	cmd.PersistentFlags().StringVar(&opts.ContainerPrefix, "alias", "",
+		"alias for the containers")
+	cmd.PersistentFlags().StringArrayVar(&opts.CustomAlphaOptions, "custom_alpha_flags", nil,
+		"Custom alpha flags for specific alphas, following {\"1:custom_flags\", \"2:custom_flags\"}, eg: {\"2: -p <bulk_path>")
 	cmd.PersistentFlags().StringVar(&opts.Hostname, "hostname", "",
 		"hostname for the alpha and zero servers")
 	cmd.PersistentFlags().BoolVar(&opts.Cdc, "cdc", false,
@@ -773,10 +795,24 @@ func main() {
 		services[svc.name] = svc
 	}
 
+	// Alpha Customization
+	customAlphas := make(map[int]string)
+	for _, flag := range opts.CustomAlphaOptions {
+		splits := strings.SplitN(flag, ":", 2)
+		if len(splits) != 2 {
+			fatal(errors.Errorf(" --custom_alpha_flags option requires string in index:options format."))
+		}
+		custIdx, err := strconv.Atoi(splits[0])
+		if err != nil {
+			fatal(errors.Errorf(" --custom_alpha_flags captured erros while parsing index value %v", err))
+		}
+		customAlphas[custIdx] = splits[1]
+	}
+
 	for i := 1; i <= opts.NumAlphas; i++ {
 		gid := int(math.Ceil(float64(i) / float64(opts.NumReplicas)))
 		rs := fmt.Sprintf("idx=%d; group=%d", i, gid)
-		svc := getAlpha(i, rs)
+		svc := getAlpha(i, rs, customAlphas[i])
 		// Don't make Alphas depend on each other.
 		svc.DependsOn = nil
 		services[svc.name] = svc
@@ -795,7 +831,7 @@ func main() {
 		for i := 1; i <= opts.NumLearners; i++ {
 			lidx++
 			rs := fmt.Sprintf("idx=%d; group=%d; learner=true", lidx, gid)
-			svc := getAlpha(lidx, rs)
+			svc := getAlpha(lidx, rs, customAlphas[i])
 			services[svc.name] = svc
 		}
 	}
