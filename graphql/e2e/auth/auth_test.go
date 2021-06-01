@@ -322,6 +322,159 @@ func (s Student) add(t *testing.T) {
 	require.JSONEq(t, result, string(gqlResponse.Data))
 }
 
+func TestAuthWithCustomDQL(t *testing.T) {
+	TestCases := []TestCase{
+		{
+			name: "RBAC OR filter query; RBAC Pass",
+			query: `
+			query{
+				queryProjectsOrderByName{
+					name
+				}
+			}
+			`,
+			role:   "ADMIN",
+			result: `{"queryProjectsOrderByName":[{"name": "Project1"},{"name": "Project2"}]}`,
+		},
+		{
+			name: "RBAC OR filter query; RBAC false OR `user1` projects",
+			query: `
+			query{
+				queryProjectsOrderByName{
+					name
+				}
+			}
+			`,
+			role:   "USER",
+			user:   "user1",
+			result: `{"queryProjectsOrderByName":[{"name": "Project1"}]}`,
+		},
+		{
+			name: "RBAC OR filter query; missing jwt",
+			query: `
+			query{
+				queryProjectsOrderByName{
+					name
+				}
+			}
+			`,
+			result: `{"queryProjectsOrderByName":[]}`,
+		},
+		{
+			name: "var query; RBAC AND filter query; RBAC pass",
+			query: `
+			query{
+				queryIssueSortedByOwnerAge{
+					msg
+				}
+			}
+			`,
+			role:   "ADMIN",
+			user:   "user2",
+			result: `{"queryIssueSortedByOwnerAge": [{"msg": "Issue2"}]}`,
+		},
+		{
+			name: "var query; RBAC AND filter query; RBAC fail",
+			query: `
+			query{
+				queryIssueSortedByOwnerAge{
+					msg
+				}
+			}
+			`,
+			role:   "USER",
+			user:   "user2",
+			result: `{"queryIssueSortedByOwnerAge": []}`,
+		},
+		{
+			name: "DQL query with @cascade and pagination",
+			query: `
+			query{
+				queryFirstTwoMovieWithNonNullRegion{
+					content
+					code
+					regionsAvailable{
+						name
+					}
+				}
+			}
+			`,
+			role: "ADMIN",
+			user: "user1",
+			result: `{"queryFirstTwoMovieWithNonNullRegion": [
+				{
+				  "content": "Movie3",
+				  "code": "m3",
+				  "regionsAvailable": [
+					{
+					  "name": "Region1"
+					}
+				  ]
+				},
+				{
+				  "content": "Movie4",
+				  "code": "m4",
+				  "regionsAvailable": [
+					{
+					  "name": "Region5"
+					}
+				  ]
+				}
+			  ]
+			}`,
+		},
+		{
+			name: "query interface; auth rules pass for all the implementing types",
+			query: `
+			query{
+				queryQuestionAndAnswer{
+					text
+				}
+			}
+			`,
+			ans:    true,
+			user:   "user1@dgraph.io",
+			result: `{"queryQuestionAndAnswer": [{"text": "A Answer"},{"text": "A Question"}]}`,
+		},
+		{
+			name: "query interface; auth rules fail for some implementing types",
+			query: `
+			query{
+				queryQuestionAndAnswer{
+					text
+				}
+			}
+			`,
+			user:   "user2@dgraph.io",
+			result: `{"queryQuestionAndAnswer": [{"text": "B Answer"}]}`,
+		},
+		{
+			name: "query interface; auth rules fail for the interface",
+			query: `
+			query{
+				queryQuestionAndAnswer{
+					text
+				}
+			}
+			`,
+			ans:    true,
+			result: `{"queryQuestionAndAnswer": []}`,
+		},
+	}
+
+	for _, tcase := range TestCases {
+		t.Run(tcase.name, func(t *testing.T) {
+			getUserParams := &common.GraphQLParams{
+				Headers: common.GetJWTForInterfaceAuth(t, tcase.user, tcase.role, tcase.ans, metaInfo),
+				Query:   tcase.query,
+			}
+			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
+			common.RequireNoGQLErrors(t, gqlResponse)
+			require.JSONEq(t, tcase.result, string(gqlResponse.Data))
+		})
+	}
+}
+
 func TestAddMutationWithXid(t *testing.T) {
 	mutation := `
 	mutation addTweets($tweet: AddTweetsInput!){

@@ -113,6 +113,7 @@ type Schema interface {
 	IsFederated() bool
 	SetMeta(meta *metaInfo)
 	Meta() *metaInfo
+	Type(typeName string) Type
 }
 
 // An Operation is a single valid GraphQL operation.  It contains either
@@ -224,6 +225,7 @@ type Query interface {
 	// query
 	RepresentationsArg() (*EntityRepresentations, error)
 	AuthFor(jwtVars map[string]interface{}) Query
+	Schema() Schema
 }
 
 // A Type is a GraphQL type like: Float, T, T! and [T!]!.  If it's not a list, then
@@ -398,6 +400,17 @@ func (s *schema) SetMeta(meta *metaInfo) {
 
 func (s *schema) Meta() *metaInfo {
 	return s.meta
+}
+
+func (s *schema) Type(typeName string) Type {
+	if s.typeNameAst[typeName] != nil {
+		return &astType{
+			typ:             &ast.Type{NamedType: typeName},
+			inSchema:        s,
+			dgraphPredicate: s.dgraphPredicate,
+		}
+	}
+	return nil
 }
 
 func (o *operation) IsQuery() bool {
@@ -1787,6 +1800,10 @@ func (q *query) Rename(newName string) {
 	q.field.Name = newName
 }
 
+func (q *query) Schema() Schema {
+	return q.op.inSchema
+}
+
 func (q *query) Name() string {
 	return (*field)(q).Name()
 }
@@ -2361,6 +2378,9 @@ func isID(fd *ast.FieldDefinition) bool {
 }
 
 func (fd *fieldDefinition) Type() Type {
+	if fd.fieldDef == nil {
+		return nil
+	}
 	return &astType{
 		typ:             fd.fieldDef.Type,
 		inSchema:        fd.inSchema,
@@ -3134,4 +3154,19 @@ func parseRequiredArgsFromGQLRequest(req string) (map[string]bool, error) {
 	args := req[strings.Index(req, "(")+1 : strings.LastIndex(req, ")")]
 	_, rf, err := parseBodyTemplate("{"+args+"}", false)
 	return rf, err
+}
+
+// MaybeQuoteArg puts a quote on the function arguments.
+func MaybeQuoteArg(fn string, arg interface{}) string {
+	switch arg := arg.(type) {
+	case string: // dateTime also parsed as string
+		if fn == "regexp" {
+			return arg
+		}
+		return fmt.Sprintf("%q", arg)
+	case float64, float32:
+		return fmt.Sprintf("\"%v\"", arg)
+	default:
+		return fmt.Sprintf("%v", arg)
+	}
 }

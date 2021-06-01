@@ -693,8 +693,12 @@ func validateDQLSchemaForGraphQL(ctx context.Context,
 	return nil
 }
 
+func annotateNamespace(span *otrace.Span, ns uint64) {
+	span.AddAttributes(otrace.Int64Attribute("ns", int64(ns)))
+}
+
 func annotateStartTs(span *otrace.Span, ts uint64) {
-	span.Annotate([]otrace.Attribute{otrace.Int64Attribute("startTs", int64(ts))}, "")
+	span.AddAttributes(otrace.Int64Attribute("startTs", int64(ts)))
 }
 
 func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Response) error {
@@ -1331,6 +1335,10 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (
 
 	var measurements []ostats.Measurement
 	ctx, span := otrace.StartSpan(ctx, methodRequest)
+	if ns, err := x.ExtractNamespace(ctx); err == nil {
+		annotateNamespace(span, ns)
+	}
+
 	ctx = x.WithMethod(ctx, methodRequest)
 	defer func() {
 		span.End()
@@ -1690,6 +1698,9 @@ func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.Tx
 	if tc.StartTs == 0 {
 		return &api.TxnContext{}, errors.Errorf(
 			"StartTs cannot be zero while committing a transaction")
+	}
+	if ns, err := x.ExtractJWTNamespace(ctx); err == nil {
+		annotateNamespace(span, ns)
 	}
 	annotateStartTs(span, tc.StartTs)
 

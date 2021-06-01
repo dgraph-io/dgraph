@@ -7,8 +7,10 @@ go 1.12
 // replace github.com/dgraph-io/roaring => /home/mrjn/go/src/github.com/dgraph-io/roaring
 
 require (
+	cloud.google.com/go/storage v1.15.0
 	contrib.go.opencensus.io/exporter/jaeger v0.1.0
 	contrib.go.opencensus.io/exporter/prometheus v0.1.0
+	github.com/Azure/azure-storage-blob-go v0.13.0
 	github.com/DataDog/datadog-go v0.0.0-20190425163447-40bafcb5f6c1 // indirect
 	github.com/DataDog/opencensus-go-exporter-datadog v0.0.0-20190503082300-0f32ad59ab08
 	github.com/Masterminds/semver/v3 v3.1.0
@@ -36,12 +38,12 @@ require (
 	github.com/gogo/protobuf v1.3.2
 	github.com/golang/geo v0.0.0-20170810003146-31fb0106dc4a
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
-	github.com/golang/groupcache v0.0.0-20200121045136-8c9f03a8e57e // indirect
-	github.com/golang/protobuf v1.4.1
+	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
+	github.com/golang/protobuf v1.5.2
 	github.com/golang/snappy v0.0.2
 	github.com/google/codesearch v1.0.0
-	github.com/google/go-cmp v0.5.4
-	github.com/google/uuid v1.0.0
+	github.com/google/go-cmp v0.5.5
+	github.com/google/uuid v1.1.2
 	github.com/gorilla/websocket v1.4.2
 	github.com/graph-gophers/graphql-go v0.0.0-20200309224638-dae41bde9ef9
 	github.com/hashicorp/vault/api v1.0.4
@@ -66,16 +68,18 @@ require (
 	github.com/twpayne/go-geom v1.0.5
 	github.com/xdg/scram v0.0.0-20180814205039-7eeb5667e42c
 	go.etcd.io/etcd/raft/v3 v3.5.0-alpha.0
-	go.opencensus.io v0.22.5
+	go.opencensus.io v0.23.0
 	go.uber.org/zap v1.16.0
 	golang.org/x/crypto v0.0.0-20201002170205-7f63de1d35b0
-	golang.org/x/net v0.0.0-20201202161906-c7110b5ffcbb
-	golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9
-	golang.org/x/sys v0.0.0-20210124154548-22da62e12c0c
-	golang.org/x/text v0.3.3
-	golang.org/x/time v0.0.0-20200630173020-3af7569d3a1e // indirect
-	golang.org/x/tools v0.0.0-20210106214847-113979e3529a
-	google.golang.org/grpc v1.32.0
+	golang.org/x/lint v0.0.0-20210508222113-6edffad5e616 // indirect
+	golang.org/x/net v0.0.0-20210503060351-7fd8e65b6420
+	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
+	golang.org/x/sys v0.0.0-20210511113859-b0526f3d8744
+	golang.org/x/text v0.3.6
+	golang.org/x/tools v0.1.1
+	google.golang.org/api v0.46.0
+	google.golang.org/genproto v0.0.0-20210510173355-fb37daa5cd7a // indirect
+	google.golang.org/grpc v1.37.1
 	gopkg.in/DataDog/dd-trace-go.v1 v1.13.1 // indirect
 	gopkg.in/square/go-jose.v2 v2.3.1
 	gopkg.in/yaml.v2 v2.3.0
