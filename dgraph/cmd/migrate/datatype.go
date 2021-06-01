@@ -53,6 +53,10 @@ func initDataTypes() {
 	sqlTypeToInternal["float"] = floatType
 	sqlTypeToInternal["double"] = doubleType
 	sqlTypeToInternal["decimal"] = floatType
+	sqlTypeToInternal["bigint"] = stringType
+	sqlTypeToInternal["varbinary"] = stringType
+	sqlTypeToInternal["mediumtext"] = stringType
+	sqlTypeToInternal["timestamp"] = stringType
 }
 
 func (t dataType) String() string {
