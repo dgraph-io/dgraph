@@ -236,8 +236,7 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.BackupResponse,
 		}
 		defer tl.alloc.Release()
 
-		// Schema and types are written at Ts=1.
-		txn := pr.DB.NewTransactionAt(1, false)
+		txn := pr.DB.NewTransactionAt(pr.Request.ReadTs, false)
 		defer txn.Discard()
 		// We don't need to iterate over all versions.
 		iopts := badger.DefaultIteratorOptions

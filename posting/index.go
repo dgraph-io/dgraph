@@ -574,7 +574,6 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		WithNumVersionsToKeep(math.MaxInt32).
 		WithLogger(&x.ToGlog{}).
 		WithCompression(options.None).
-		WithEncryptionKey(x.WorkerConfig.EncryptionKey).
 		WithLoggingLevel(badger.WARNING).
 		WithMetricsEnabled(false)
 
@@ -1242,14 +1241,14 @@ func DeleteData() error {
 }
 
 // DeletePredicate deletes all entries and indices for a given predicate.
-func DeletePredicate(ctx context.Context, attr string) error {
+func DeletePredicate(ctx context.Context, attr string, ts uint64) error {
 	glog.Infof("Dropping predicate: [%s]", attr)
 	prefix := x.PredicatePrefix(attr)
 	if err := pstore.DropPrefix(prefix); err != nil {
 		return err
 	}
 
-	return schema.State().Delete(attr)
+	return schema.State().Delete(attr, ts)
 }
 
 // DeleteNamespace bans the namespace and deletes its predicates/types from the schema.

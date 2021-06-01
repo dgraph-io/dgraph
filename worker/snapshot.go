@@ -112,7 +112,7 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) error {
 		return err
 	}
 
-	if err := deleteStalePreds(ctx, done); err != nil {
+	if err := deleteStalePreds(ctx, done, snap.ReadTs); err != nil {
 		return err
 	}
 
@@ -127,7 +127,7 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) error {
 	return nil
 }
 
-func deleteStalePreds(ctx context.Context, kvs *pb.KVS) error {
+func deleteStalePreds(ctx context.Context, kvs *pb.KVS, ts uint64) error {
 	if kvs == nil {
 		return nil
 	}
@@ -144,7 +144,10 @@ func deleteStalePreds(ctx context.Context, kvs *pb.KVS) error {
 		if _, ok := snapshotPreds[pred]; !ok {
 		LOOP:
 			for {
-				err := posting.DeletePredicate(ctx, pred)
+				// While retrieving the snapshot, we mark the node as unhealthy. So it is better to
+				// a blocking delete of predicate as we know that no new writes will arrive at
+				// this alpha.
+				err := posting.DeletePredicate(ctx, pred, ts)
 				switch err {
 				case badger.ErrBlockedWrites:
 					time.Sleep(1 * time.Second)
@@ -171,7 +174,7 @@ func deleteStalePreds(ctx context.Context, kvs *pb.KVS) error {
 	}
 	for _, typ := range currTypes {
 		if _, ok := snapshotTypes[typ]; !ok {
-			if err := schema.State().DeleteType(typ); err != nil {
+			if err := schema.State().DeleteType(typ, ts); err != nil {
 				return errors.Wrapf(err, "cannot delete removed type %s after streaming snapshot",
 					typ)
 			}

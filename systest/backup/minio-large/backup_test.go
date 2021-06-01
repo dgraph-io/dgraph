@@ -110,7 +110,6 @@ func setupTablets(t *testing.T, dg *dgo.Dgraph) {
 	t.Log("Pausing to let zero move tablets...")
 	moveOk := false
 	for retry := 5; retry > 0; retry-- {
-		time.Sleep(3 * time.Second)
 		state, err := testutil.GetStateHttps(testutil.GetAlphaClientConfig(t))
 		require.NoError(t, err)
 		_, ok1 := state.Groups["1"].Tablets[x.GalaxyAttr("name1")]
@@ -120,6 +119,7 @@ func setupTablets(t *testing.T, dg *dgo.Dgraph) {
 			moveOk = true
 			break
 		}
+		time.Sleep(1 * time.Second)
 	}
 	require.True(t, moveOk)
 }
