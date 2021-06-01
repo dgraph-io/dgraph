@@ -657,7 +657,7 @@ func (n *node) initAndStartNode() error {
 			cancel()
 		}
 		glog.Infof("[%#x] Starting node\n", n.Id)
-		n.SetRaft(raft.StartNode(n.Cfg, nil))
+		n.SetRaft(raft.RestartNode(n.Cfg))
 
 	default:
 		glog.Infof("Starting a brand new node")
