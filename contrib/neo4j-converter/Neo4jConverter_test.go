@@ -11,6 +11,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"text/scanner"
 )
 
 func TestParsingHeader(t *testing.T) {
@@ -94,17 +95,38 @@ func TestWholeFileWithQuotedLineBreaks(t *testing.T) {
 func TestParsing(t *testing.T){
 	file, _ := os.Open("./exampleLineBreaks.csv")
 	r := bufio.NewReader(file)
+	headerProcessed:=false
 	quoteOpen:=false
 	totalSizeInBytes:=0
 	var csvLine bytes.Buffer
 	var fullFile = bytes.Buffer{}
+	var nContext Context
+	nContext.positionOfStart = -1
+	nContext.startPositionOfProperty = -1
+
+
+	var s scanner.Scanner
+	s.Init(r)
+	for tok := s.Scan(); tok != scanner.EOF; tok = s.Scan() {
+		fmt.Printf("%s: %s\n", s.Position, s.TokenText())
+	}
+
+
 	for {
 		if c, sz, err := r.ReadRune(); err != nil {
 			if err == io.EOF {
-				fmt.Println("this is a genuine end of line with byte size ", totalSizeInBytes )
+				//fmt.Println("this is a genuine end of line with byte size ", totalSizeInBytes )
 				totalSizeInBytes=0
-				fmt.Println(csvLine.String())
+				//fmt.Println(csvLine.String())
 				fullFile.WriteString(csvLine.String())
+
+				if !headerProcessed {
+					//send header
+					nContext.processHeader(csvLine.String())
+					headerProcessed = true
+				}else{
+					nContext.processLineItem(csvLine.String())
+				}
 				csvLine.Reset()
 				break
 			} else {
@@ -116,15 +138,18 @@ func TestParsing(t *testing.T){
 			csvLine.WriteRune(c)
 			if c==10{
 				if quoteOpen {
-					fmt.Println("this is a new line inside  string quotes")
+					fmt.Println(">>>>ignoring new line inside  string quotes")
 				}else{
-					fmt.Println("this is a genuine end of line with byte size ", totalSizeInBytes - 1 )
-					fmt.Println(csvLine.String())
+					//fmt.Println("this is a genuine end of line with byte size ", totalSizeInBytes - 1 )
+					//fmt.Println(csvLine.String())
 					fullFile.WriteString(csvLine.String())
-					//i := strings.NewReader(string(csvLine.String()))
-					//buf := new(bytes.Buffer)
-					//processNeo4jCSV(i, buf)
-					//fmt.Println( buf.String())
+					if !headerProcessed {
+						//send header
+						nContext.processHeader(csvLine.String())
+						headerProcessed = true
+					}else{
+						nContext.processLineItem(csvLine.String())
+					}
 					csvLine.Reset()
 					totalSizeInBytes=0
 				}
@@ -138,7 +163,17 @@ func TestParsing(t *testing.T){
 			}
 		}
 	}
-	fmt.Println("fully read file")
-	fmt.Println(fullFile.String())
+	//fmt.Println("fully read file")
+	//fmt.Println(fullFile.String())
 
 }
+
+func TestOO(t *testing.T){
+	var nSource Source
+	nSource.count=0
+	nSource.increment()
+	fmt.Printf("I got %d\n", nSource.get())
+	nSource.increment()
+	fmt.Printf("I got %d\n", nSource.get())
+}
+

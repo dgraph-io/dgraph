@@ -86,6 +86,7 @@ func processNeo4jCSV(r io.Reader, w io.Writer) error {
 	}
 
 	// Scan and read the header.
+//	nextLine:=readNextLine(r) TO DO
 	scanner.Scan()
 	readHeader()
 
