@@ -22,12 +22,27 @@ import (
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/sroar"
+	"github.com/golang/glog"
 )
 
 const jump = 32 // Jump size in InsersectWithJump.
 
 // ApplyFilter applies a filter to our UIDList.
+// TODO: ApplyFilter in this way should only happen for sorted uids. For normal
+// filter, it should use Bitmap FastAnd or And.
 func ApplyFilter(u *pb.List, f func(uint64, int) bool) {
+	if len(u.SortedUids) > 0 {
+		glog.Infof("Applying ApplyFilter on sorted uids: %d\n", len(u.SortedUids))
+		out := u.SortedUids[:0]
+		for i, x := range u.SortedUids {
+			if f(x, i) {
+				out = append(out, x)
+			}
+		}
+		u.SortedUids = out
+		return
+	}
+
 	bm := codec.FromList(u)
 	var i int
 	bm2 := sroar.NewBitmap()
@@ -38,11 +53,7 @@ func ApplyFilter(u *pb.List, f func(uint64, int) bool) {
 		}
 	}
 	// Need to think of a better way to abstract this.
-	if u.SortedUids != nil {
-		u.SortedUids = bm2.ToArray()
-	} else {
-		u.Bitmap = bm2.ToBuffer()
-	}
+	u.Bitmap = bm2.ToBuffer()
 	// u.Bitmap = nil
 	// u.SortedUids = out
 }
