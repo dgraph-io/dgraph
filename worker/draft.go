@@ -2185,7 +2185,7 @@ func (n *node) InitAndStartNode() {
 			// snapshot as needed after joining the group, instead of us forcing one upfront.
 			glog.Infoln("Trying to join peers.")
 			n.retryUntilSuccess(n.joinPeers, time.Second)
-			n.SetRaft(raft.StartNode(n.Cfg, nil))
+			n.SetRaft(raft.RestartNode(n.Cfg))
 		} else {
 			peers := []raft.Peer{{ID: n.Id}}
 			n.SetRaft(raft.StartNode(n.Cfg, peers))
