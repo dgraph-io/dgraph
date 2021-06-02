@@ -189,7 +189,7 @@ func exportHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		  }
 		}`,
-		Variables: map[string]interface{}{},
+		Variables: map[string]interface{}{"format": format},
 	}
 
 	if resp := resolveWithAdminServer(gqlReq, r, adminServer); len(resp.Errors) != 0 {

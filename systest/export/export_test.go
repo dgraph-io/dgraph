@@ -21,7 +21,6 @@ import (
 	"context"
 	"encoding/json"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -54,8 +53,6 @@ func TestExportSchemaToMinio(t *testing.T) {
 
 	setupDgraph(t, moviesData, movieSchema)
 	result := requestExport(t, minioDest, "rdf")
-
-	log.Printf("ajeet %+v", result)
 	require.Equal(t, "Success", testutil.JsonGet(result, "data", "export", "response", "code").(string))
 	require.Equal(
 		t, "Export completed.", testutil.JsonGet(result, "data", "export", "response", "message").(string))
