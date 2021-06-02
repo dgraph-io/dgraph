@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"text/scanner"
 	"time"
 )
 
@@ -70,8 +71,9 @@ func processNeo4jCSV(r io.Reader, w io.Writer) error {
 	positionOfStart, startPositionOfProperty := -1, -1
 
 	//read header
-	readHeader := func() {
-		h := csv.NewReader(strings.NewReader(scanner.Text()))
+	readHeader := func(headerLine string) {
+		//h := csv.NewReader(strings.NewReader(scanner.Text()))
+		h := csv.NewReader(strings.NewReader(headerLine))
 		line, _ := h.Read()
 		//read headers
 		for position, fieldName := range line {
@@ -84,57 +86,16 @@ func processNeo4jCSV(r io.Reader, w io.Writer) error {
 			}
 		}
 	}
-
-	// Scan and read the header.
-//	nextLine:=readNextLine(r) TO DO
+	var nContext Neo4jCSVContext
+	eofReached := false
+	nextLine := ""
+	bufr := bufio.NewReader(r)
+	nContext.InitWithReader(*bufr)
+	nextLine, eofReached = nContext.ProvideNextLine()
 	scanner.Scan()
-	readHeader()
-
-	//setup a new reader for line items
-	characterReader := bufio.NewReader(r)
-	quoteOpen:=false
-	totalSizeInBytes:=0
-	var csvLine bytes.Buffer
-	var fullFile = bytes.Buffer{}
-	for {
-		if c, sz, err := characterReader.ReadRune(); err != nil {
-			if err == io.EOF {
-				fmt.Println("this is a genuine end of line with byte size ", totalSizeInBytes )
-				totalSizeInBytes=0
-				fmt.Println(csvLine.String())
-				fullFile.WriteString(csvLine.String())
-				csvLine.Reset()
-				break
-			} else {
-				fmt.Println("Error")
-			}
-		} else {
-			totalSizeInBytes += sz
-			//fmt.Println(c)
-			csvLine.WriteRune(c)
-			if c==10{
-				if quoteOpen {
-					fmt.Println("this is a new line inside  string quotes")
-				}else{
-					fmt.Println("this is a genuine end of line with byte size ", totalSizeInBytes - 1 )
-					fmt.Println(csvLine.String())
-					fullFile.WriteString(csvLine.String())
-					//i := strings.NewReader(string(csvLine.String()))
-					//buf := new(bytes.Buffer)
-					//processNeo4jCSV(i, buf)
-					//fmt.Println( buf.String())
-					csvLine.Reset()
-					totalSizeInBytes=0
-				}
-			}else if c==34{
-
-				if !quoteOpen {
-					quoteOpen = true
-				}else{
-					quoteOpen = false
-				}
-			}
-		}
+	scanner.Text()
+	if !eofReached {
+		readHeader(nextLine)
 	}
 
 	//ensure that header exists
@@ -143,11 +104,17 @@ func processNeo4jCSV(r io.Reader, w io.Writer) error {
 	}
 
 	// Read the actual data.
-	for scanner.Scan() {
+	//for scanner.Scan() {
+	for !eofReached{
+		nextLine, eofReached = nContext.ProvideNextLine()
 		//parse csv
-		text.WriteString(scanner.Text() + "\n")
-		fmt.Println(text.String())
-		d := csv.NewReader(strings.NewReader(text.String()))
+		//text.WriteString(scanner.Text() + "\n")
+		//fmt.Println(text.String())
+		//d := csv.NewReader(strings.NewReader(text.String()))
+		if eofReached{
+			break
+		}
+		d := csv.NewReader(strings.NewReader(nextLine))
 		d.LazyQuotes=true
 		//records, err := d.ReadAll()
 		records, err := d.ReadAll()
@@ -234,4 +201,59 @@ func check(err error) {
 	if err != nil {
 		log.Fatal(err)
 	}
+}
+
+
+type Neo4jCSVContext struct{
+	r *bufio.Reader
+	count int
+}
+
+func (context *Neo4jCSVContext) Init(fileName string) {
+	file, _ := os.Open("./exampleLineBreaks.csv")
+	context.r = bufio.NewReader(file)
+}
+func (context *Neo4jCSVContext) InitWithReader(_r bufio.Reader) {
+	context.r = &_r
+}
+
+
+// ProvideNextLine This function processes the next line in the file
+func (context *Neo4jCSVContext) ProvideNextLine() (string, bool){
+	var lineBuffer bytes.Buffer
+
+	completeLineRead := false
+	continueReadingLine := false
+	eofFileReached := false
+
+	handler := func(s *scanner.Scanner, msg string) {
+		//fmt.Println("ERROR")
+		//fmt.Println(msg)
+		if msg == "literal not terminated"{
+			continueReadingLine = true
+		}
+	}
+	for !completeLineRead {
+		continueReadingLine = false
+		line,_ := context.r.ReadString('\n')
+		lineBuffer.WriteString(line)
+
+		var s scanner.Scanner
+		s.Init(strings.NewReader(line))
+		s.Error = handler
+		var tok rune
+		for tok = s.Scan(); tok != scanner.EOF; tok = s.Scan() {
+			//do nothing
+		}
+		if tok == scanner.EOF && len(line) == 0{
+			eofFileReached = true
+		}
+
+		if continueReadingLine {
+			completeLineRead = false
+		} else{
+			completeLineRead = true
+		}
+	}
+	return lineBuffer.String(), eofFileReached
 }

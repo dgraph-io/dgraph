@@ -34,7 +34,7 @@ func TestSingleLineFileString(t *testing.T) {
 	i := strings.NewReader(fileLines)
 	buf := new(bytes.Buffer)
 	processNeo4jCSV(i, buf)
-	require.Equal(t, buf.String(), output)
+	require.Equal(t, output,buf.String() )
 }
 
 func TestWholeFile(t *testing.T) {
@@ -47,7 +47,7 @@ func TestWholeFile(t *testing.T) {
 	require.Contains(t, buf.String(), "<_:k_188> <_labels> \":Movie\" .")
 	//check facets
 	require.Contains(t, buf.String(),
-		"<_:k_191> <ACTED_IN> <_:k_188> (  roles=\"Morpheus\" )")
+		"<_:k_191> <ACTED_IN> <_:k_188> (  roles=\"\\\"Morpheus\\\"\" )")
 	//check link w/o facets
 	require.Contains(t, buf.String(), "<_:k_193> <DIRECTED> <_:k_188>")
 
@@ -65,6 +65,25 @@ func TestWholeFile(t *testing.T) {
 	}
 	require.True(t, isSame)
 
+}
+
+func TestSingleLineFileWithLineBreak(t *testing.T) {
+	header := `"_id","_labels","born","name","released","tagline"` +
+		`,"title","_start","_end","_type","roles"`
+	detail := `"188",":Movie","","","1999","Welcome\n to the \"Real\" World","The Matrix",,,,`
+	fileLines := fmt.Sprintf("%s\n%s", header, detail)
+	output := `<_:k_188> <_labels> ":Movie" .
+<_:k_188> <born> "" .
+<_:k_188> <name> "" .
+<_:k_188> <released> "1999" .
+<_:k_188> <tagline> "Welcome\\n to the \\\"Real\\\" World" .
+<_:k_188> <title> "The Matrix" .
+`
+	i := strings.NewReader(fileLines)
+	buf := new(bytes.Buffer)
+	processNeo4jCSV(i, buf)
+	out:=buf.String()
+	require.Equal(t, output,out )
 }
 
 func BenchmarkSampleFile(b *testing.B) {
