@@ -191,7 +191,7 @@ func TestStorageCreateSnapshot(t *testing.T) {
 
 	ds := Init(dir)
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
-	cs := &pb.ConfState{Nodes: []uint64{1, 2, 3}}
+	cs := &pb.ConfState{Voters: []uint64{1, 2, 3}}
 	data := []byte("data")
 
 	tests := []struct {
