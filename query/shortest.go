@@ -205,14 +205,14 @@ func (sg *SubGraph) expandOut(ctx context.Context,
 				// it explicitly here to ensure the results are correct.
 				subgraph.updateUidMatrix()
 				// Send the destuids in res chan.
-				for mIdx, fromUID := range subgraph.SrcUIDs.SortedUids {
+				for mIdx, fromUID := range codec.GetUids(subgraph.SrcUIDs) {
 					// This can happen when trying to go traverse a predicate of type password
 					// for example.
 					if mIdx >= len(subgraph.uidMatrix) {
 						continue
 					}
 
-					for lIdx, toUID := range subgraph.uidMatrix[mIdx].SortedUids {
+					for lIdx, toUID := range codec.GetUids(subgraph.uidMatrix[mIdx]) {
 						if adjacencyMap[fromUID] == nil {
 							adjacencyMap[fromUID] = make(map[uint64]mapItem)
 						}

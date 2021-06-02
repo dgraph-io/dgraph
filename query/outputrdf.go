@@ -110,12 +110,12 @@ func (b *rdfBuilder) rdfForSubgraph(sg *SubGraph) error {
 			b.writeRDF(uid, []byte(sg.aggWithVarFieldName()), outputval)
 			continue
 		}
-		uids := codec.GetUids(sg.uidMatrix[i])
 		switch {
 		case len(sg.counts) > 0:
 			// Add count rdf.
 			b.rdfForCount(uid, sg.counts[i], sg)
-		case i < len(sg.uidMatrix) && len(uids) != 0 && len(sg.Children) > 0:
+		case i < len(sg.uidMatrix) && codec.ListCardinality(sg.uidMatrix[i]) != 0 &&
+			len(sg.Children) > 0:
 			// Add posting list relation.
 			b.rdfForUIDList(uid, sg.uidMatrix[i], sg)
 		case i < len(sg.valueMatrix):
