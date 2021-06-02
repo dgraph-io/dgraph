@@ -98,6 +98,7 @@ func (w *grpcWorker) UpdateGraphQLSchema(ctx context.Context,
 			" update was in progress.", namespace, waitDuration.String())
 	}
 
+	// TODO: Should we transmit res.ReadBytes up?
 	// query the GraphQL schema node uid
 	res, err := ProcessTaskOverNetwork(ctx, &pb.Query{
 		Attr:    x.NamespaceAttr(namespace, GqlSchemaPred),

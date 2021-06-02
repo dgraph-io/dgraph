@@ -99,6 +99,7 @@ message Result {
   repeated FacetsList facet_matrix = 5;
   repeated LangList lang_matrix = 6;
   bool list = 7;
+  uint64 read_bytes = 8;
 }
 
 message Order {
@@ -118,6 +119,7 @@ message SortMessage {
 
 message SortResult {
   repeated List uid_matrix = 1;
+  uint64 read_bytes = 2;
 }
 
 message RaftContext {

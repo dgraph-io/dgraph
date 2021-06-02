@@ -1446,7 +1446,10 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (
 		EncodingNs:        uint64(l.Json.Nanoseconds()),
 		TotalNs:           uint64((time.Since(l.Start)).Nanoseconds()),
 	}
-	md := metadata.Pairs(x.DgraphCostHeader, fmt.Sprint(resp.Metrics.NumUids["_total"]))
+	md := metadata.Pairs(
+		x.DgraphCostHeader, fmt.Sprint(resp.Metrics.NumUids["_total"]),
+		x.DgraphReadBytesHeader, fmt.Sprint(resp.Metrics.ReadBytes),
+	)
 	grpc.SendHeader(ctx, md)
 	return resp, gqlErrs
 }
@@ -1583,7 +1586,8 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 	}
 
 	resp.Metrics = &api.Metrics{
-		NumUids: er.Metrics,
+		NumUids:   er.Metrics.NumUids,
+		ReadBytes: er.Metrics.ReadBytes,
 	}
 	var total uint64
 	for _, num := range resp.Metrics.NumUids {
