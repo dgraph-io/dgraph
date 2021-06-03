@@ -22,7 +22,6 @@ import (
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/sroar"
-	"github.com/golang/glog"
 )
 
 const jump = 32 // Jump size in InsersectWithJump.
@@ -31,31 +30,21 @@ const jump = 32 // Jump size in InsersectWithJump.
 // TODO: ApplyFilter in this way should only happen for sorted uids. For normal
 // filter, it should use Bitmap FastAnd or And.
 func ApplyFilter(u *pb.List, f func(uint64, int) bool) {
-	if len(u.SortedUids) > 0 {
-		glog.Infof("Applying ApplyFilter on sorted uids: %d\n", len(u.SortedUids))
-		out := u.SortedUids[:0]
-		for i, x := range u.SortedUids {
-			if f(x, i) {
-				out = append(out, x)
-			}
+	uids := codec.GetUids(u)
+	var out []uint64
+	for i, x := range uids {
+		if f(x, i) {
+			out = append(out, x)
 		}
-		u.SortedUids = out
-		return
 	}
 
-	bm := codec.FromList(u)
-	var i int
-	bm2 := sroar.NewBitmap()
-	for itr := bm.NewIterator(); itr.HasNext(); i++ {
-		uid := itr.Next()
-		if f(uid, i) {
-			bm2.Set(uid)
-		}
+	if len(u.SortedUids) > 0 {
+		u.SortedUids = out
+	} else {
+		b := sroar.NewBitmap()
+		b.SetMany(out)
+		u.Bitmap = b.ToBuffer()
 	}
-	// Need to think of a better way to abstract this.
-	u.Bitmap = bm2.ToBuffer()
-	// u.Bitmap = nil
-	// u.SortedUids = out
 }
 
 // IndexOf performs a binary search on the uids slice and returns the index at

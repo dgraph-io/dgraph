@@ -502,8 +502,8 @@ func TestAddMutation_mrjn2(t *testing.T) {
 		opt := ListOptions{ReadTs: uint64(i)}
 		list, err := ol.Uids(opt)
 		require.NoError(t, err)
-		require.EqualValues(t, 1, len(list.Uids))
-		require.EqualValues(t, uint64(i), list.Uids[0])
+		require.EqualValues(t, 1, codec.ListCardinality(list))
+		require.EqualValues(t, uint64(i), codec.GetUids(list)[0])
 	}
 	require.EqualValues(t, 0, ol.Length(readTs, 0))
 	require.NoError(t, ol.commitMutation(1, 0))
@@ -557,8 +557,9 @@ func TestAddMutation_mrjn2(t *testing.T) {
 		opts := ListOptions{ReadTs: 15}
 		list, err := ol.Uids(opts)
 		require.NoError(t, err)
-		require.EqualValues(t, 7, list.Uids[0])
-		require.EqualValues(t, 9, list.Uids[1])
+		uids := codec.GetUids(list)
+		require.EqualValues(t, 7, uids[0])
+		require.EqualValues(t, 9, uids[1])
 	}
 }
 
@@ -1077,8 +1078,9 @@ func TestMultiPartListBasic(t *testing.T) {
 	opt := ListOptions{ReadTs: uint64(size) + 1}
 	l, err := ol.Uids(opt)
 	require.NoError(t, err)
-	require.Equal(t, commits, len(l.Uids), "List of Uids received: %+v", l.Uids)
-	for i, uid := range l.Uids {
+	uids := codec.GetUids(l)
+	require.Equal(t, commits, len(uids), "List of Uids received: %+v", uids)
+	for i, uid := range uids {
 		require.Equal(t, uint64(i+1), uid)
 	}
 }
@@ -1289,10 +1291,12 @@ func TestMultiPartListWriteToDisk(t *testing.T) {
 	require.NoError(t, err)
 	newUids, err := newList.Uids(opt)
 	require.NoError(t, err)
-	require.Equal(t, commits, len(originalUids.Uids))
-	require.Equal(t, len(originalUids.Uids), len(newUids.Uids))
-	for i := range originalUids.Uids {
-		require.Equal(t, originalUids.Uids[i], newUids.Uids[i])
+	origUids := codec.GetUids(originalUids)
+	newIds := codec.GetUids(newUids)
+	require.Equal(t, commits, len(origUids))
+	require.Equal(t, len(origUids), len(newIds))
+	for i := range origUids {
+		require.Equal(t, origUids[i], newIds[i])
 	}
 }
 
@@ -1355,8 +1359,9 @@ func TestMultiPartListDeleteAndAdd(t *testing.T) {
 	opt := ListOptions{ReadTs: math.MaxUint64}
 	l, err := ol.Uids(opt)
 	require.NoError(t, err)
-	require.Equal(t, size, len(l.Uids), "List of Uids received: %+v", l.Uids)
-	for i, uid := range l.Uids {
+	uids := codec.GetUids(l)
+	require.Equal(t, size, len(uids), "List of Uids received: %+v", uids)
+	for i, uid := range uids {
 		require.Equal(t, uint64(i+1), uid)
 	}
 
@@ -1391,8 +1396,9 @@ func TestMultiPartListDeleteAndAdd(t *testing.T) {
 	opt = ListOptions{ReadTs: math.MaxUint64}
 	l, err = ol.Uids(opt)
 	require.NoError(t, err)
-	require.Equal(t, size/2, len(l.Uids), "List of Uids received: %+v", l.Uids)
-	for i, uid := range l.Uids {
+	uids = codec.GetUids(l)
+	require.Equal(t, size/2, len(uids), "List of Uids received: %+v", uids)
+	for i, uid := range uids {
 		require.Equal(t, uint64(size/2)+uint64(i+1), uid)
 	}
 
@@ -1426,8 +1432,9 @@ func TestMultiPartListDeleteAndAdd(t *testing.T) {
 	opt = ListOptions{ReadTs: math.MaxUint64}
 	l, err = ol.Uids(opt)
 	require.NoError(t, err)
-	require.Equal(t, size, len(l.Uids), "List of Uids received: %+v", l.Uids)
-	for i, uid := range l.Uids {
+	uids = codec.GetUids(l)
+	require.Equal(t, size, len(uids), "List of Uids received: %+v", uids)
+	for i, uid := range uids {
 		require.Equal(t, uint64(i+1), uid)
 	}
 }

@@ -20,6 +20,7 @@ import (
 	"math"
 	"testing"
 
+	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
@@ -38,7 +39,7 @@ func TestRollupTimestamp(t *testing.T) {
 
 	uidList, err := l.Uids(ListOptions{ReadTs: 7})
 	require.NoError(t, err)
-	require.Equal(t, 3, len(uidList.Uids))
+	require.Equal(t, uint64(3), codec.ListCardinality(uidList))
 
 	edge := &pb.DirectedEdge{
 		Entity: 1,
@@ -53,7 +54,7 @@ func TestRollupTimestamp(t *testing.T) {
 
 	uidList, err = nl.Uids(ListOptions{ReadTs: 11})
 	require.NoError(t, err)
-	require.Equal(t, 0, len(uidList.Uids))
+	require.Equal(t, uint64(0), codec.ListCardinality(uidList))
 
 	// Now check that we don't lost the highest version during a rollup operation, despite the STAR
 	// delete marker being the most recent update.
@@ -71,7 +72,7 @@ func TestPostingListRead(t *testing.T) {
 		require.NoError(t, err)
 		uidList, err := nl.Uids(ListOptions{ReadTs: uint64(readTs)})
 		require.NoError(t, err)
-		require.Equal(t, sz, len(uidList.Uids))
+		require.Equal(t, uint64(sz), codec.ListCardinality(uidList))
 	}
 
 	addEdgeToUID(t, attr, 1, 2, 1, 2)
