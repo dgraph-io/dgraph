@@ -379,6 +379,7 @@ func (m *mapper) processReqCh(ctx context.Context) error {
 				if err := update.Unmarshal(kv.Value); err != nil {
 					return err
 				}
+				update.TypeName = x.GalaxyAttr(update.TypeName)
 				for _, sch := range update.Fields {
 					sch.Predicate = x.GalaxyAttr(sch.Predicate)
 				}
