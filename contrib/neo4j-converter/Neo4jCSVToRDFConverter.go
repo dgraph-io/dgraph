@@ -111,14 +111,20 @@ func processNeo4jCSV(r io.Reader, w io.Writer) error {
 		//text.WriteString(scanner.Text() + "\n")
 		//fmt.Println(text.String())
 		//d := csv.NewReader(strings.NewReader(text.String()))
-		if eofReached{
+		if eofReached && len(nextLine) == 0 {
 			break
 		}
 		d := csv.NewReader(strings.NewReader(nextLine))
 		d.LazyQuotes=true
 		//records, err := d.ReadAll()
 		records, err := d.ReadAll()
-		check(err)
+
+		if err != nil {
+			fmt.Printf("Skipping line from file due to error: %s", err.Error())
+			fmt.Println(nextLine)
+			continue
+		}
+
 
 		linkStartNode := ""
 		linkEndNode := ""

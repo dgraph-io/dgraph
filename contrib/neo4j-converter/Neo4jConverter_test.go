@@ -70,13 +70,13 @@ func TestWholeFile(t *testing.T) {
 func TestSingleLineFileWithLineBreak(t *testing.T) {
 	header := `"_id","_labels","born","name","released","tagline"` +
 		`,"title","_start","_end","_type","roles"`
-	detail := `"188",":Movie","","","1999","Welcome\n to the \"Real\" World","The Matrix",,,,`
+	detail := `"188",":Movie","","","1999","Welcome\n to \nthe \"Real\" World","The Matrix",,,,`
 	fileLines := fmt.Sprintf("%s\n%s", header, detail)
 	output := `<_:k_188> <_labels> ":Movie" .
 <_:k_188> <born> "" .
 <_:k_188> <name> "" .
 <_:k_188> <released> "1999" .
-<_:k_188> <tagline> "Welcome\\n to the \\\"Real\\\" World" .
+<_:k_188> <tagline> "Welcome\\n to \\nthe \\\"Real\\\" World" .
 <_:k_188> <title> "The Matrix" .
 `
 	i := strings.NewReader(fileLines)
