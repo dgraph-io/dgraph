@@ -250,6 +250,7 @@ func loadFromBackup(db *badger.DB, in *loadBackupInput) (uint64, uint64, error) 
 					if err := update.Unmarshal(kv.Value); err != nil {
 						return err
 					}
+					update.TypeName = x.GalaxyAttr(update.TypeName)
 					for _, sch := range update.Fields {
 						sch.Predicate = x.GalaxyAttr(sch.Predicate)
 					}
