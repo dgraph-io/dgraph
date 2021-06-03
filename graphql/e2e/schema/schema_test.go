@@ -673,7 +673,6 @@ func TestDeleteSchemaAndExport(t *testing.T) {
 		Query: `mutation {
 		  export(input: {format: "rdf"}) {
 			response { code }
-			taskId
 		  }
 		}`,
 	}
@@ -682,10 +681,7 @@ func TestDeleteSchemaAndExport(t *testing.T) {
 
 	var data interface{}
 	require.NoError(t, json.Unmarshal(exportGqlResp.Data, &data))
-
 	require.Equal(t, "Success", testutil.JsonGet(data, "export", "response", "code").(string))
-	taskId := testutil.JsonGet(data, "export", "taskId").(string)
-	testutil.WaitForTask(t, taskId, false)
 
 	// applying a new schema should still work
 	newSchemaResp := common.AssertUpdateGQLSchemaSuccess(t, groupOneHTTP, schema, nil)

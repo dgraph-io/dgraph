@@ -24,7 +24,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/dgraph-io/dgo/v210"
@@ -53,17 +52,19 @@ func TestExportSchemaToMinio(t *testing.T) {
 	mc.MakeBucket(bucketName, "")
 
 	setupDgraph(t, moviesData, movieSchema)
-	requestExport(t, minioDest, "rdf")
+	result := requestExport(t, minioDest, "rdf")
+	require.Equal(t, "Success", testutil.JsonGet(result, "data", "export", "response", "code").(string))
+	require.Equal(
+		t, "Export completed.", testutil.JsonGet(result, "data", "export", "response", "message").(string))
 
-	schemaFile := ""
-	doneCh := make(chan struct{})
-	defer close(doneCh)
-	for obj := range mc.ListObjectsV2(bucketName, "dgraph.", true, doneCh) {
-		if strings.Contains(obj.Key, ".schema.gz") {
-			schemaFile = obj.Key
-		}
+	var files []string
+	for _, f := range testutil.JsonGet(result, "data", "export", "exportedFiles").([]interface{}) {
+		files = append(files, f.(string))
 	}
-	require.NotEmpty(t, schemaFile)
+	require.Equal(t, 3, len(files))
+
+	schemaFile := files[1]
+	require.Contains(t, schemaFile, ".schema.gz")
 
 	object, err := mc.GetObject(bucketName, schemaFile, minio.GetObjectOptions{})
 	require.NoError(t, err)
@@ -287,11 +288,11 @@ func setupDgraph(t *testing.T, nquads, schema string) {
 	require.NoError(t, err)
 }
 
-func requestExport(t *testing.T, dest string, format string) {
+func requestExport(t *testing.T, dest string, format string) map[string]interface{} {
 	exportRequest := `mutation export($dst: String!, $f: String!) {
 		export(input: {destination: $dst, format: $f}) {
-			response { code }
-			taskId
+			response { code message }
+			exportedFiles
 		}
 	}`
 
@@ -309,9 +310,11 @@ func requestExport(t *testing.T, dest string, format string) {
 	resp, err := http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
 
-	var data interface{}
-	require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
-	require.Equal(t, "Success", testutil.JsonGet(data, "data", "export", "response", "code").(string))
-	taskId := testutil.JsonGet(data, "data", "export", "taskId").(string)
-	testutil.WaitForTask(t, taskId, false)
+	buf, err := ioutil.ReadAll(resp.Body)
+	require.NoError(t, err)
+
+	var result map[string]interface{}
+	require.NoError(t, json.Unmarshal(buf, &result))
+
+	return result
 }
