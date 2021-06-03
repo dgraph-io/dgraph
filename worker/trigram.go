@@ -54,6 +54,7 @@ func uidsForRegex(attr string, arg funcArgs,
 		if err != nil {
 			return nil, err
 		}
+		arg.out.ReadBytes += pl.DeepSize()
 		return pl.Bitmap(opts)
 	}
 

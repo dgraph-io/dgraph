@@ -91,6 +91,7 @@ func uidsForMatch(attr string, arg funcArgs) (*sroar.Bitmap, error) {
 		if err != nil {
 			return nil, err
 		}
+		arg.out.ReadBytes += pl.DeepSize()
 		return pl.Bitmap(opts)
 	}
 

@@ -1305,6 +1305,7 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 						filterErr = err
 						return false
 					}
+					arg.out.ReadBytes += pl.DeepSize()
 					svs, err := pl.AllUntaggedValues(arg.q.ReadTs)
 					if err != nil {
 						if err != posting.ErrNoValue {
@@ -1327,6 +1328,7 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 					filterErr = err
 					return false
 				}
+				arg.out.ReadBytes += pl.DeepSize()
 				sv, err := pl.Value(arg.q.ReadTs)
 				if err != nil {
 					if err != posting.ErrNoValue {
@@ -1342,6 +1344,7 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 					filterErr = err
 					return false
 				}
+				arg.out.ReadBytes += pl.DeepSize()
 				values, err := pl.AllValues(arg.q.ReadTs) // does not return ErrNoValue
 				if err != nil {
 					filterErr = err
@@ -1355,13 +1358,14 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 				}
 				return false
 			default:
-				sv, err := fetchValue(uid, attr, arg.q.Langs, typ, arg.q.ReadTs)
+				sv, sz, err := fetchValue(uid, attr, arg.q.Langs, typ, arg.q.ReadTs)
 				if err != nil {
 					if err != posting.ErrNoValue {
 						filterErr = err
 					}
 					return false
 				}
+				arg.out.ReadBytes += sz
 				if sv.Value == nil {
 					return false
 				}

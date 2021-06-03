@@ -123,7 +123,7 @@ var (
 )
 
 func resultWithError(err error) *sortresult {
-	return &sortresult{&emptySortResult, nil, nil, err}
+	return &sortresult{reply: &emptySortResult, err: err}
 }
 
 func sortWithoutIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
@@ -150,9 +150,11 @@ func sortWithoutIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
 			// Copy, otherwise it'd affect the destUids and hence the srcUids of Next level.
 			tempList := &pb.List{Uids: ts.UidMatrix[i].Uids}
 			var vals []types.Val
-			if vals, err = sortByValue(ctx, ts, tempList, sType); err != nil {
+			var sz uint64
+			if vals, sz, err = sortByValue(ctx, ts, tempList, sType); err != nil {
 				return resultWithError(err)
 			}
+			r.ReadBytes += sz
 			start, end, err := paginate(ts, tempList, vals)
 			if err != nil {
 				return resultWithError(err)
@@ -283,7 +285,8 @@ BUCKETS:
 			token := k.Term
 			// Intersect every UID list with the index bucket, and update their
 			// results (in out).
-			err = intersectBucket(ctx, ts, token, out)
+			sz, err := intersectBucket(ctx, ts, token, out)
+			r.ReadBytes += sz
 			switch err {
 			case errDone:
 				break BUCKETS
@@ -574,12 +577,12 @@ type intersectedList struct {
 // intersectBucket intersects every UID list in the UID matrix with the
 // indexed bucket.
 func intersectBucket(ctx context.Context, ts *pb.SortMessage, token string,
-	out []intersectedList) error {
+	out []intersectedList) (uint64, error) {
 	count := int(ts.Count)
 	order := ts.Order[0]
 	sType, err := schema.State().TypeOf(order.Attr)
 	if err != nil || !sType.IsScalar() {
-		return errors.Errorf("Cannot sort attribute %s of type object.", order.Attr)
+		return 0, errors.Errorf("Cannot sort attribute %s of type object.", order.Attr)
 	}
 	scalar := sType
 
@@ -587,8 +590,9 @@ func intersectBucket(ctx context.Context, ts *pb.SortMessage, token string,
 	// Don't put the Index keys in memory.
 	pl, err := posting.GetNoStore(key, ts.GetReadTs())
 	if err != nil {
-		return err
+		return 0, err
 	}
+	readBytes := pl.DeepSize()
 	var vals []types.Val
 
 	// For each UID list, we need to intersect with the index bucket.
@@ -609,7 +613,7 @@ func intersectBucket(ctx context.Context, ts *pb.SortMessage, token string,
 		}
 		result, err := pl.Uids(listOpt) // The actual intersection work is done here.
 		if err != nil {
-			return err
+			return readBytes, err
 		}
 
 		// Duplicates will exist between buckets if there are multiple language
@@ -630,9 +634,11 @@ func intersectBucket(ctx context.Context, ts *pb.SortMessage, token string,
 		// We are within the page. We need to apply sorting.
 		// Sort results by value before applying offset.
 		// TODO (pawan) - Why do we do this? Looks like it it is only useful for language.
-		if vals, err = sortByValue(ctx, ts, result, scalar); err != nil {
-			return err
+		var sz uint64
+		if vals, sz, err = sortByValue(ctx, ts, result, scalar); err != nil {
+			return readBytes, err
 		}
+		readBytes += sz
 
 		// Result set might have reduced after sorting. As some uids might not have a
 		// value in the lang specified.
@@ -678,7 +684,7 @@ func intersectBucket(ctx context.Context, ts *pb.SortMessage, token string,
 		// We need to reduce multiSortOffset while checking the count as we might have included
 		// some extra uids earlier for the multi-sort case.
 		if len(out[i].ulist.Uids)-int(out[i].multiSortOffset) < count {
-			return errContinue
+			return readBytes, errContinue
 		}
 
 		if len(ts.Order) == 1 {
@@ -687,7 +693,7 @@ func intersectBucket(ctx context.Context, ts *pb.SortMessage, token string,
 	}
 	// All UID lists have enough items (according to pagination). Let's notify
 	// the outermost loop.
-	return errDone
+	return readBytes, errDone
 }
 
 // removeDuplicates removes elements from uids if they are in set. It also adds
@@ -742,7 +748,7 @@ func paginate(ts *pb.SortMessage, dest *pb.List, vals []types.Val) (int, int, er
 
 // sortByValue fetches values and sort UIDList.
 func sortByValue(ctx context.Context, ts *pb.SortMessage, ul *pb.List,
-	typ types.TypeID) ([]types.Val, error) {
+	typ types.TypeID) ([]types.Val, uint64, error) {
 	lenList := len(ul.Uids)
 	uids := make([]uint64, 0, lenList)
 	values := make([][]types.Val, 0, lenList)
@@ -753,19 +759,20 @@ func sortByValue(ctx context.Context, ts *pb.SortMessage, ul *pb.List,
 	if langCount := len(order.Langs); langCount == 1 {
 		lang = order.Langs[0]
 	} else if langCount > 1 {
-		return nil, errors.Errorf("Sorting on multiple language is not supported.")
+		return nil, 0, errors.Errorf("Sorting on multiple language is not supported.")
 	}
 
+	var readBytes uint64
 	// nullsList is the list of UIDs for which value doesn't exist.
 	var nullsList []uint64
 	var nullVals [][]types.Val
 	for i := 0; i < lenList; i++ {
 		select {
 		case <-ctx.Done():
-			return multiSortVals, ctx.Err()
+			return multiSortVals, readBytes, ctx.Err()
 		default:
 			uid := ul.Uids[i]
-			val, err := fetchValue(uid, order.Attr, order.Langs, typ, ts.ReadTs)
+			val, sz, err := fetchValue(uid, order.Attr, order.Langs, typ, ts.ReadTs)
 			if err != nil {
 				// Value couldn't be found or couldn't be converted to the sort type.
 				// It will be appended to the end of the result based on the pagination.
@@ -774,6 +781,7 @@ func sortByValue(ctx context.Context, ts *pb.SortMessage, ul *pb.List,
 				nullVals = append(nullVals, []types.Val{val})
 				continue
 			}
+			readBytes += sz
 			uids = append(uids, uid)
 			values = append(values, []types.Val{val})
 		}
@@ -786,27 +794,28 @@ func sortByValue(ctx context.Context, ts *pb.SortMessage, ul *pb.List,
 			multiSortVals = append(multiSortVals, v[0])
 		}
 	}
-	return multiSortVals, err
+	return multiSortVals, readBytes, err
 }
 
 // fetchValue gets the value for a given UID.
 func fetchValue(uid uint64, attr string, langs []string, scalar types.TypeID,
-	readTs uint64) (types.Val, error) {
+	readTs uint64) (types.Val, uint64, error) {
 	// Don't put the values in memory
 	pl, err := posting.GetNoStore(x.DataKey(attr, uid), readTs)
 	if err != nil {
-		return types.Val{}, err
+		return types.Val{}, 0, err
 	}
+	sz := pl.DeepSize()
 
 	src, err := pl.ValueFor(readTs, langs)
 
 	if err != nil {
-		return types.Val{}, err
+		return types.Val{}, sz, err
 	}
 	dst, err := types.Convert(src, scalar)
 	if err != nil {
-		return types.Val{}, err
+		return types.Val{}, sz, err
 	}
 
-	return dst, nil
+	return dst, pl.DeepSize(), nil
 }
