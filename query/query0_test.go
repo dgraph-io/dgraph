@@ -533,6 +533,19 @@ func TestCascadeWithPaginationAndOffsetZero(t *testing.T) {
 	require.JSONEq(t, `{"data":{"me":[{"name":"Rick Grimes","alive":true}]}}`, js)
 }
 
+func TestCascadeWithSort(t *testing.T) {
+	query := `
+	{
+		me(func: type(Person), first: 2, offset: 1, orderasc: name) @cascade{
+			name
+			alive
+		}
+	}
+	`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data":{"me":[{"name": "Daryl Dixon","alive": false},{"name": "Rick Grimes","alive": true}]}}`, js)
+}
+
 func TestLevelBasedFacetVarAggSum(t *testing.T) {
 	query := `
 		{
