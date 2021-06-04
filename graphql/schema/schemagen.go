@@ -250,6 +250,8 @@ func NewHandler(input string, validateOnly bool) (Handler, error) {
 
 	if metaInfo != nil {
 		authorization.SetAuthMeta(metaInfo)
+	} else {
+		authorization.ResetAuthMeta()
 	}
 	return handler, nil
 }

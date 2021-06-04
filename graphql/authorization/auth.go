@@ -256,6 +256,10 @@ func SetAuthMeta(m *AuthMeta) {
 	authMeta.ClosedByDefault = m.ClosedByDefault
 }
 
+func ResetAuthMeta() {
+	SetAuthMeta(&AuthMeta{})
+}
+
 // AttachAuthorizationJwt adds any incoming JWT authorization data into the grpc context metadata.
 func AttachAuthorizationJwt(ctx context.Context, r *http.Request) context.Context {
 	authorizationJwt := r.Header.Get(authMeta.Header)
