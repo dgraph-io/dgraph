@@ -2461,7 +2461,6 @@ loop:
 			}
 			res.Set(pk.Uid)
 			setCnt++
-			// result.Uids = append(result.Uids, pk.Uid)
 
 			// We'll stop fetching if we fetch the required count.
 			if setCnt >= int(q.First) {
@@ -2494,7 +2493,6 @@ loop:
 			}
 			res.Set(pk.Uid)
 			setCnt++
-			// result.Uids = append(result.Uids, pk.Uid)
 
 			// We'll stop fetching if we fetch the required count.
 			if setCnt >= int(q.First) {

@@ -60,7 +60,6 @@ func ListCardinality(l *pb.List) uint64 {
 		return 0
 	}
 	if len(l.SortedUids) > 0 {
-		// x.AssertTrue(l.Bitmap == nil)
 		return uint64(len(l.SortedUids))
 	}
 	b := FromList(l)
@@ -78,7 +77,6 @@ func GetUids(l *pb.List) []uint64 {
 		return []uint64{}
 	}
 	if len(l.SortedUids) > 0 {
-		// x.AssertTrue(l.Bitmap == nil)
 		return l.SortedUids
 	}
 	return FromList(l).ToArray()

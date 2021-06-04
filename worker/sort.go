@@ -643,7 +643,8 @@ func intersectBucket(ctx context.Context, ts *pb.SortMessage, token string,
 			if len(ts.Order) == 1 {
 				// Keep track of UIDs which had sort predicate but have been skipped because of
 				// the offset.
-				il.skippedUids.SortedUids = append(il.skippedUids.SortedUids, result.SortedUids[:il.offset]...)
+				il.skippedUids.SortedUids = append(il.skippedUids.SortedUids,
+					result.SortedUids[:il.offset]...)
 				result.SortedUids = result.SortedUids[il.offset:n]
 			} else {
 				// In case of multi sort we can't apply the offset yet, as the order might change
@@ -682,7 +683,8 @@ func intersectBucket(ctx context.Context, ts *pb.SortMessage, token string,
 		}
 
 		if len(ts.Order) == 1 {
-			x.AssertTruef(len(out[i].ulist.SortedUids) == count, "%d %d", len(out[i].ulist.SortedUids), count)
+			x.AssertTruef(len(out[i].ulist.SortedUids) == count, "%d %d",
+				len(out[i].ulist.SortedUids), count)
 		}
 	}
 	// All UID lists have enough items (according to pagination). Let's notify
