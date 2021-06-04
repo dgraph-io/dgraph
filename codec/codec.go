@@ -46,7 +46,6 @@ func ApproxLen(bitmap []byte) int {
 func ToList(rm *sroar.Bitmap) *pb.List {
 	return &pb.List{
 		Bitmap: ToBytes(rm),
-		// SortedUids: rm.ToArray(),
 	}
 }
 
@@ -137,8 +136,7 @@ func ToBytes(bm *sroar.Bitmap) []byte {
 	if bm.IsEmpty() {
 		return nil
 	}
-	// TODO: We should not use ToBufferWithCopy always. Need to figure out at the places where we
-	// don't need to copy.
+	// TODO: We should not use ToBufferWithCopy always.
 	return bm.ToBufferWithCopy()
 }
 
@@ -151,6 +149,7 @@ func FromList(l *pb.List) *sroar.Bitmap {
 		iw.SetMany(l.SortedUids)
 	}
 	if len(l.Bitmap) > 0 {
+		// TODO: We should not use FromBufferWithCopy always.
 		iw = sroar.FromBufferWithCopy(l.Bitmap)
 	}
 	return iw
