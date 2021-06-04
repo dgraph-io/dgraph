@@ -1274,8 +1274,7 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 	// Before this, we were only picking math.Int32 number of uids.
 	// Now we're picking everything.
 	if opt.First == 0 {
-		// out.Uids = bm.ToArray()
-		out.Bitmap = bm.ToBuffer()
+		out.Bitmap = codec.ToBytes(bm)
 		// TODO: Not yet ready to use Bitmap for data transfer. We'd have to deal with all the
 		// places where List.Uids is being called.
 		// out.Bitmap = codec.ToBytes(bm)

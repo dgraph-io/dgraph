@@ -21,6 +21,7 @@ import (
 
 	cindex "github.com/google/codesearch/index"
 
+	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/tok"
@@ -42,8 +43,7 @@ func uidsForRegex(attr string, arg funcArgs,
 	// TODO: Unnecessary conversion here. Avoid if possible.
 	if !intersect.IsEmpty() {
 		opts.Intersect = &pb.List{
-			// Uids: intersect.ToArray(),
-			Bitmap: intersect.ToBuffer(),
+			Bitmap: codec.ToBytes(intersect),
 		}
 	} else {
 		intersect = sroar.NewBitmap()

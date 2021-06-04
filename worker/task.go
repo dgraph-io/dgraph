@@ -1230,8 +1230,7 @@ func (qs *queryState) handleRegexFunction(ctx context.Context, arg funcArgs) err
 	}
 
 	list := &pb.List{
-		// Uids: filtered.ToArray(),
-		Bitmap: filtered.ToBuffer(),
+		Bitmap: codec.ToBytes(filtered),
 	}
 	arg.out.UidMatrix = append(arg.out.UidMatrix, list)
 	return nil
@@ -1480,8 +1479,7 @@ func (qs *queryState) handleMatchFunction(ctx context.Context, arg funcArgs) err
 	}
 
 	out := &pb.List{
-		// Uids: filtered.ToArray(),
-		Bitmap: filtered.ToBuffer(),
+		Bitmap: codec.ToBytes(filtered),
 	}
 	arg.out.UidMatrix = append(arg.out.UidMatrix, out)
 	return nil
@@ -1575,8 +1573,7 @@ func (qs *queryState) filterGeoFunction(ctx context.Context, arg funcArgs) error
 	}
 	for i := 0; i < len(matrix); i++ {
 		matrix[i].And(final)
-		// TODO: This could be a conversion to Bitmap instead of ToArray.
-		arg.out.UidMatrix[i].Bitmap = matrix[i].ToBuffer()
+		arg.out.UidMatrix[i].Bitmap = codec.ToBytes(matrix[i])
 	}
 	return nil
 }
@@ -1664,8 +1661,7 @@ func (qs *queryState) filterStringFunction(arg funcArgs) error {
 	uids.AndNot(remove)
 	for i := 0; i < len(matrix); i++ {
 		matrix[i].And(uids)
-		// TODO: This could be a conversion to Bitmap instead of ToArray.
-		arg.out.UidMatrix[i].Bitmap = matrix[i].ToBuffer()
+		arg.out.UidMatrix[i].Bitmap = codec.ToBytes(matrix[i])
 	}
 	return nil
 }
@@ -2517,7 +2513,7 @@ loop:
 	if span != nil {
 		span.Annotatef(nil, "handleHasFunction found %d uids", setCnt)
 	}
-	result := &pb.List{Bitmap: res.ToBuffer()}
+	result := &pb.List{Bitmap: codec.ToBytes(res)}
 	out.UidMatrix = append(out.UidMatrix, result)
 	return nil
 }

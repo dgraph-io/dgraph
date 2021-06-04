@@ -804,7 +804,7 @@ func (sg *SubGraph) populate(uids []uint64) error {
 	sort.Slice(uids, func(i, j int) bool { return uids[i] < uids[j] })
 	r := sroar.NewBitmap()
 	r.SetMany(uids)
-	sg.uidMatrix = []*pb.List{{Bitmap: r.ToBuffer()}}
+	sg.uidMatrix = []*pb.List{{Bitmap: codec.ToBytes(r)}}
 	// User specified list may not be sorted.
 	sg.SrcUIDs = &pb.List{SortedUids: uids}
 	return nil
@@ -1275,8 +1275,7 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, path []*Su
 			mp := make(map[uint64]types.Val)
 			rangeOver := sg.SrcUIDs
 			if parent == nil {
-				// rangeOver = &pb.List{Uids: sg.DestMap.ToArray()}
-				rangeOver = &pb.List{Bitmap: sg.DestMap.ToBuffer()}
+				rangeOver = &pb.List{Bitmap: codec.ToBytes(sg.DestMap)}
 			}
 			if rangeOver == nil {
 				it := doneVars[sg.Params.Var]
@@ -1423,7 +1422,7 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue, sgPath []*SubGr
 					len(uids))
 				r := sroar.NewBitmap()
 				r.SetMany(uids[start:end])
-				child.uidMatrix[i].Bitmap = r.ToBuffer()
+				child.uidMatrix[i].Bitmap = codec.ToBytes(r)
 			}
 		}
 	}
@@ -2467,7 +2466,7 @@ func (sg *SubGraph) applyRandom(ctx context.Context) error {
 
 		r := sroar.NewBitmap()
 		r.SetMany(uidList[:numRandom])
-		sg.uidMatrix[i].Bitmap = r.ToBuffer()
+		sg.uidMatrix[i].Bitmap = codec.ToBytes(r)
 	}
 
 	sg.DestMap = codec.Merge(sg.uidMatrix)
@@ -2488,7 +2487,7 @@ func (sg *SubGraph) applyPagination(ctx context.Context) error {
 		start, end := x.PageRange(sg.Params.Count, sg.Params.Offset, len(uids))
 		r := sroar.NewBitmap()
 		r.SetMany(uids[start:end])
-		sg.uidMatrix[i].Bitmap = r.ToBuffer()
+		sg.uidMatrix[i].Bitmap = codec.ToBytes(r)
 	}
 	// Re-merge the UID matrix.
 	sg.DestMap = codec.Merge(sg.uidMatrix)
