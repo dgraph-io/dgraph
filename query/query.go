@@ -2501,8 +2501,8 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 		}
 	}
 
-	// if the @cascade directive is used then retrieve all the results.
-	if sg.Params.Count == 0 && len(sg.Params.Cascade.Fields) == 0 {
+	// Todo: fix offset for cascade queries.
+	if sg.Params.Count == 0 {
 		// Only retrieve up to 1000 results by default.
 		sg.Params.Count = 1000
 	}
