@@ -280,6 +280,11 @@ func (sg *SubGraph) expandOut(ctx context.Context,
 			return
 		}
 		rch <- nil
+
+		// Before resetting the exec let's update the metrics.
+		for _, subgraph := range exec {
+			sg.ReadBytes += subgraph.ReadBytes
+		}
 		exec = out
 	}
 }

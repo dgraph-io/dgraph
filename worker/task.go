@@ -2438,9 +2438,7 @@ func (qs *queryState) handleHasFunction(ctx context.Context, q *pb.Query, out *p
 		}
 
 		_, sz, err := qs.getValsForUID(q.Attr, lang, uid, q.ReadTs)
-		if err == nil {
-			out.ReadBytes += sz
-		}
+		out.ReadBytes += sz
 		return err
 	}
 

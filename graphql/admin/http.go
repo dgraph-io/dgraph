@@ -44,6 +44,7 @@ type Headerkey string
 
 const (
 	touchedUidsHeader = "Graphql-TouchedUids"
+	readBytesHeader   = "Graphql-ReadBytes"
 )
 
 // An IServeGraphQL can serve a GraphQL endpoint (currently only ons http)
@@ -105,6 +106,7 @@ func write(w http.ResponseWriter, rr *schema.Response, acceptGzip bool) {
 
 	// set TouchedUids header
 	w.Header().Set(touchedUidsHeader, strconv.FormatUint(rr.GetExtensions().GetTouchedUids(), 10))
+	w.Header().Set(readBytesHeader, strconv.FormatUint(rr.GetExtensions().GetReadBytes(), 10))
 
 	for key, val := range rr.Header {
 		w.Header()[key] = val
@@ -134,11 +136,12 @@ type graphqlSubscription struct {
 }
 
 func (gs *graphqlSubscription) isValid(namespace uint64) error {
-	gs.graphqlHandler.pollerMux.RLock()
-	defer gs.graphqlHandler.pollerMux.RUnlock()
 	if gs == nil {
 		return errors.New("gs is nil")
 	}
+	gs.graphqlHandler.pollerMux.RLock()
+	defer gs.graphqlHandler.pollerMux.RUnlock()
+
 	if err := gs.graphqlHandler.isValid(namespace); err != nil {
 		return err
 	}
@@ -278,11 +281,12 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (gh *graphqlHandler) isValid(namespace uint64) error {
+	if gh == nil {
+		return errors.New("gh is nil")
+	}
 	gh.resolverMux.RLock()
 	defer gh.resolverMux.RUnlock()
 	switch {
-	case gh == nil:
-		return errors.New("gh is nil")
 	case gh.resolver == nil:
 		return errors.New("resolver is nil")
 	case gh.resolver[namespace] == nil:

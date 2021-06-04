@@ -181,6 +181,7 @@ func (r *Response) Output() interface{} {
 // Extensions represents GraphQL extensions
 type Extensions struct {
 	TouchedUids uint64 `json:"touched_uids,omitempty"`
+	ReadBytes   uint64 `json:"read_bytes,omitempty"`
 	Tracing     *Trace `json:"tracing,omitempty"`
 }
 
@@ -192,6 +193,14 @@ func (e *Extensions) GetTouchedUids() uint64 {
 	return e.TouchedUids
 }
 
+// GetTouchedUids returns TouchedUids
+func (e *Extensions) GetReadBytes() uint64 {
+	if e == nil {
+		return 0
+	}
+	return e.ReadBytes
+}
+
 // Merge merges ext with e
 func (e *Extensions) Merge(ext *Extensions) {
 	if e == nil || ext == nil {
@@ -199,6 +208,7 @@ func (e *Extensions) Merge(ext *Extensions) {
 	}
 
 	e.TouchedUids += ext.TouchedUids
+	e.ReadBytes += ext.ReadBytes
 
 	if e.Tracing == nil {
 		e.Tracing = ext.Tracing

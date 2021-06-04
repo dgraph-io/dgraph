@@ -98,7 +98,9 @@ func (w *grpcWorker) UpdateGraphQLSchema(ctx context.Context,
 			" update was in progress.", namespace, waitDuration.String())
 	}
 
-	// TODO: Should we transmit res.ReadBytes up?
+	// TODO(Naman): Currently, we don't account for mutations in the Dgraph-ReadBytes. Pass on the
+	// metrics from here if we need it later.
+
 	// query the GraphQL schema node uid
 	res, err := ProcessTaskOverNetwork(ctx, &pb.Query{
 		Attr:    x.NamespaceAttr(namespace, GqlSchemaPred),

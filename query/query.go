@@ -1981,10 +1981,11 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 		}
 
 		var preds []string
-		typeNames, err := getNodeTypes(ctx, sg)
+		typeNames, sz, err := getNodeTypes(ctx, sg)
 		if err != nil {
 			return out, err
 		}
+		child.ReadBytes += sz
 
 		switch child.Params.Expand {
 		// It could be expand(_all_) or expand(val(x)).
@@ -2743,7 +2744,7 @@ func isUidFnWithoutVar(f *gql.Function) bool {
 	return f != nil && f.Name == "uid" && len(f.NeedsVar) == 0
 }
 
-func getNodeTypes(ctx context.Context, sg *SubGraph) ([]string, error) {
+func getNodeTypes(ctx context.Context, sg *SubGraph) ([]string, uint64, error) {
 	temp := &SubGraph{
 		Attr:    "dgraph.type",
 		SrcUIDs: codec.ToList(sg.DestMap),
@@ -2751,14 +2752,13 @@ func getNodeTypes(ctx context.Context, sg *SubGraph) ([]string, error) {
 	}
 	taskQuery, err := createTaskQuery(ctx, temp)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	// TODO: Should we transmit the result.ReadBytes up?
 	result, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	return getPredsFromVals(result.ValueMatrix), nil
+	return getPredsFromVals(result.ValueMatrix), result.ReadBytes, nil
 }
 
 // getPredicatesFromTypes returns the list of preds contained in the given types.
@@ -2980,7 +2980,6 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 
 	// If we had a shortestPath SG, append it to the result.
 	if len(shortestSg) != 0 {
-		// TODO: Verify if we have correctly set the readbytes for shortest path sg.
 		req.Subgraphs = append(req.Subgraphs, shortestSg...)
 	}
 	return nil
