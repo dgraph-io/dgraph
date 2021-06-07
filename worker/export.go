@@ -138,7 +138,6 @@ func escapedString(str string) string {
 }
 
 func (e *exporter) toJSON() (*bpb.KVList, error) {
-	buf := new(bytes.Buffer)
 	bp := new(bytes.Buffer)
 	// We could output more compact JSON at the cost of code complexity.
 	// Leaving it simple for now.
@@ -171,7 +170,6 @@ func (e *exporter) toJSON() (*bpb.KVList, error) {
 	continuing := false
 	mapStart := fmt.Sprintf("  {\"uid\":"+uidFmtStrJson+`,"namespace":"%#x"`, e.uid, e.namespace)
 	err := e.pl.IterateAll(e.readTs, 0, func(p *pb.Posting) error {
-		bp.Reset()
 		if continuing {
 			fmt.Fprint(bp, ",\n")
 		} else {
@@ -214,29 +212,21 @@ func (e *exporter) toJSON() (*bpb.KVList, error) {
 		}
 
 		fmt.Fprint(bp, "}")
-		data := bp.Bytes()
-		n, err := buf.Write(data)
-		if n != len(data) || err != nil {
-			return errors.Errorf("toJSON: writing to buffer failed. n:%d, len(data):%d, err",
-				n, len(data), err)
-		}
 		return nil
 	})
 
 	kv := &bpb.KV{
-		Value:   buf.Bytes(),
+		Value:   bp.Bytes(),
 		Version: 1,
 	}
 	return listWrap(kv), err
 }
 
 func (e *exporter) toRDF() (*bpb.KVList, error) {
-	buf := new(bytes.Buffer)
 	bp := new(bytes.Buffer)
 
 	prefix := fmt.Sprintf(uidFmtStrRdf+" <%s> ", e.uid, e.attr)
 	err := e.pl.IterateAll(e.readTs, 0, func(p *pb.Posting) error {
-		bp.Reset()
 		fmt.Fprint(bp, prefix)
 		if p.PostingType == pb.Posting_REF {
 			fmt.Fprintf(bp, uidFmtStrRdf, p.Uid)
@@ -291,17 +281,11 @@ func (e *exporter) toRDF() (*bpb.KVList, error) {
 		}
 		// End dot.
 		fmt.Fprint(bp, " .\n")
-		data := bp.Bytes()
-		n, err := buf.Write(data)
-		if n != len(data) || err != nil {
-			return errors.Errorf("toRDF: writing to buffer failed. n:%d, len(data):%d, err",
-				n, len(data), err)
-		}
 		return nil
 	})
 
 	kv := &bpb.KV{
-		Value:   buf.Bytes(),
+		Value:   bp.Bytes(),
 		Version: 1,
 	}
 	return listWrap(kv), err
