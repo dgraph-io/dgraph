@@ -144,17 +144,20 @@ func (e *exporter) toJSON() (*bpb.KVList, error) {
 
 	writeFacets := func(pfacets []*api.Facet) error {
 		for _, fct := range pfacets {
+			fstart := bp.Len() // Use fstart to skip the facet that we are not able to parse.
 			fmt.Fprintf(bp, `,"%s|%s":`, e.attr, fct.Key)
 
 			str, err := facetToString(fct)
 			if err != nil {
 				glog.Errorf("Ignoring error: %+v", err)
+				bp.Truncate(fstart)
 				return nil
 			}
 
 			tid, err := facets.TypeIDFor(fct)
 			if err != nil {
 				glog.Errorf("Error getting type id from facet %#v: %v", fct, err)
+				bp.Truncate(fstart)
 				continue
 			}
 
@@ -170,6 +173,8 @@ func (e *exporter) toJSON() (*bpb.KVList, error) {
 	continuing := false
 	mapStart := fmt.Sprintf("  {\"uid\":"+uidFmtStrJson+`,"namespace":"%#x"`, e.uid, e.namespace)
 	err := e.pl.IterateAll(e.readTs, 0, func(p *pb.Posting) error {
+		// Use start to skip the JSON entirely, if we are not able to parse a part of it.
+		start := bp.Len()
 		if continuing {
 			fmt.Fprint(bp, ",\n")
 		} else {
@@ -198,6 +203,7 @@ func (e *exporter) toJSON() (*bpb.KVList, error) {
 				// TODO Investigate why returning here before before completely
 				//      exporting this posting is not considered data loss.
 				glog.Errorf("Ignoring error: %+v\n", err)
+				bp.Truncate(start)
 				return nil
 			}
 
@@ -227,6 +233,8 @@ func (e *exporter) toRDF() (*bpb.KVList, error) {
 
 	prefix := fmt.Sprintf(uidFmtStrRdf+" <%s> ", e.uid, e.attr)
 	err := e.pl.IterateAll(e.readTs, 0, func(p *pb.Posting) error {
+		// Use start to skip the RDF entirely, if we are not able to parse a part of it.
+		start := bp.Len()
 		fmt.Fprint(bp, prefix)
 		if p.PostingType == pb.Posting_REF {
 			fmt.Fprintf(bp, uidFmtStrRdf, p.Uid)
@@ -235,6 +243,7 @@ func (e *exporter) toRDF() (*bpb.KVList, error) {
 			str, err := valToStr(val)
 			if err != nil {
 				glog.Errorf("Ignoring error: %+v\n", err)
+				bp.Truncate(start)
 				return nil
 			}
 			fmt.Fprintf(bp, "%s", escapedString(str))
@@ -255,6 +264,7 @@ func (e *exporter) toRDF() (*bpb.KVList, error) {
 		if len(p.Facets) != 0 {
 			fmt.Fprint(bp, " (")
 			for i, fct := range p.Facets {
+				fstart := bp.Len() // Use fstart to skip the facet that we are not able to parse.
 				if i != 0 {
 					fmt.Fprint(bp, ",")
 				}
@@ -263,12 +273,14 @@ func (e *exporter) toRDF() (*bpb.KVList, error) {
 				str, err := facetToString(fct)
 				if err != nil {
 					glog.Errorf("Ignoring error: %+v", err)
+					bp.Truncate(fstart)
 					return nil
 				}
 
 				tid, err := facets.TypeIDFor(fct)
 				if err != nil {
 					glog.Errorf("Error getting type id from facet %#v: %v", fct, err)
+					bp.Truncate(fstart)
 					continue
 				}
 
