@@ -155,7 +155,8 @@ func TestDeleteNamespace(t *testing.T) {
 
 	// Deleting a non-existent namespace should error out.
 	err = testutil.DeleteNamespace(t, galaxyToken, 1000)
-	require.Contains(t, err.Error(), "The namespace 1000 doesn't exist")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "The namespace 0x3e8 doesn't exist")
 
 	err = addData(x.GalaxyNamespace)
 	require.NoError(t, err)
