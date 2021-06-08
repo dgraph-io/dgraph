@@ -734,6 +734,7 @@ type Response struct {
 	Errors     interface{}
 	Extensions struct {
 		TouchedUids uint64 `json:"touched_uids,omitempty"`
+		ReadBytes   uint64 `json:"read_bytes,omitempty"`
 		Tracing     struct {
 			// Timestamps in RFC 3339 nano format.
 			StartTime string `json:"startTime,"`
