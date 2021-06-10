@@ -295,6 +295,7 @@ func (mr *dgraphResolver) rewriteAndExecute(
 			return emptyResult(gqlErr), resolverFailed
 		}
 		ext.TouchedUids += mutResp.GetMetrics().GetNumUids()[touchedUidsKey]
+		ext.ReadBytes += mutResp.GetMetrics().GetReadBytes()
 	}
 
 	// Parse the result of query.
@@ -404,6 +405,7 @@ func (mr *dgraphResolver) rewriteAndExecute(
 				queryErrs = err
 			}
 			ext.TouchedUids += qryResp.GetMetrics().GetNumUids()[touchedUidsKey]
+			ext.ReadBytes += qryResp.GetMetrics().GetReadBytes()
 		}
 	}
 
@@ -425,6 +427,7 @@ func (mr *dgraphResolver) rewriteAndExecute(
 		}
 
 		ext.TouchedUids += mutResp.GetMetrics().GetNumUids()[touchedUidsKey]
+		ext.ReadBytes += mutResp.GetMetrics().GetReadBytes()
 		if req.Query != "" && len(mutResp.GetJson()) != 0 {
 			if err := json.Unmarshal(mutResp.GetJson(), &result); err != nil {
 				return emptyResult(
@@ -520,6 +523,7 @@ func (mr *dgraphResolver) rewriteAndExecute(
 		}
 		queryErrs = schema.AppendGQLErrs(queryErrs, err)
 		ext.TouchedUids += qryResp.GetMetrics().GetNumUids()[touchedUidsKey]
+		ext.ReadBytes += qryResp.GetMetrics().GetReadBytes()
 	}
 	numUids := getNumUids(mutation, mutResp.Uids, result)
 

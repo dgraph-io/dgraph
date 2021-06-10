@@ -398,6 +398,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 			if err != nil {
 				return err
 			}
+			out.ReadBytes += pl.DeepSize()
 
 			// If count is being requested, there is no need to populate value and facets matrix.
 			if q.DoCount {
@@ -533,6 +534,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 		out.ValueMatrix = append(out.ValueMatrix, chunk.ValueMatrix...)
 		out.FacetMatrix = append(out.FacetMatrix, chunk.FacetMatrix...)
 		out.LangMatrix = append(out.LangMatrix, chunk.LangMatrix...)
+		out.ReadBytes += chunk.ReadBytes
 	}
 	return nil
 }
@@ -795,6 +797,7 @@ func (qs *queryState) handleUidPostings(
 			if err != nil {
 				return err
 			}
+			out.ReadBytes += pl.DeepSize()
 
 			switch {
 			case q.DoCount:
@@ -899,6 +902,7 @@ func (qs *queryState) handleUidPostings(
 		out.FacetMatrix = append(out.FacetMatrix, chunk.FacetMatrix...)
 		out.Counts = append(out.Counts, chunk.Counts...)
 		out.UidMatrix = append(out.UidMatrix, chunk.UidMatrix...)
+		out.ReadBytes += chunk.ReadBytes
 	}
 	var total int
 	for _, list := range out.UidMatrix {
@@ -1213,6 +1217,7 @@ func (qs *queryState) handleRegexFunction(ctx context.Context, arg funcArgs) err
 		if err != nil {
 			return err
 		}
+		arg.out.ReadBytes += pl.DeepSize()
 
 		vals := make([]types.Val, 1)
 		switch {
@@ -1300,6 +1305,7 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 						filterErr = err
 						return false
 					}
+					arg.out.ReadBytes += pl.DeepSize()
 					svs, err := pl.AllUntaggedValues(arg.q.ReadTs)
 					if err != nil {
 						if err != posting.ErrNoValue {
@@ -1322,6 +1328,7 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 					filterErr = err
 					return false
 				}
+				arg.out.ReadBytes += pl.DeepSize()
 				sv, err := pl.Value(arg.q.ReadTs)
 				if err != nil {
 					if err != posting.ErrNoValue {
@@ -1337,6 +1344,7 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 					filterErr = err
 					return false
 				}
+				arg.out.ReadBytes += pl.DeepSize()
 				values, err := pl.AllValues(arg.q.ReadTs) // does not return ErrNoValue
 				if err != nil {
 					filterErr = err
@@ -1350,13 +1358,14 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 				}
 				return false
 			default:
-				sv, err := fetchValue(uid, attr, arg.q.Langs, typ, arg.q.ReadTs)
+				sv, sz, err := fetchValue(uid, attr, arg.q.Langs, typ, arg.q.ReadTs)
 				if err != nil {
 					if err != posting.ErrNoValue {
 						filterErr = err
 					}
 					return false
 				}
+				arg.out.ReadBytes += sz
 				if sv.Value == nil {
 					return false
 				}
@@ -1461,6 +1470,7 @@ func (qs *queryState) handleMatchFunction(ctx context.Context, arg funcArgs) err
 		if err != nil {
 			return err
 		}
+		arg.out.ReadBytes += pl.DeepSize()
 
 		vals := make([]types.Val, 1)
 		switch {
@@ -1543,6 +1553,7 @@ func (qs *queryState) filterGeoFunction(ctx context.Context, arg funcArgs) error
 			if err != nil {
 				return err
 			}
+			arg.out.ReadBytes += pl.DeepSize()
 			var tv pb.TaskValue
 			err = pl.Iterate(arg.q.ReadTs, 0, func(p *pb.Posting) error {
 				tv.ValType = p.ValType
@@ -1651,13 +1662,14 @@ func (qs *queryState) filterStringFunction(arg funcArgs) error {
 	remove := sroar.NewBitmap()
 	for itr.HasNext() {
 		uid := itr.Next()
-		vals, err := qs.getValsForUID(attr, lang, uid, arg.q.ReadTs)
+		vals, sz, err := qs.getValsForUID(attr, lang, uid, arg.q.ReadTs)
 		switch {
 		case err == posting.ErrNoValue:
 			continue
 		case err != nil:
 			return err
 		}
+		arg.out.ReadBytes += sz
 
 		var strVals []types.Val
 		for _, v := range vals {
@@ -1682,11 +1694,12 @@ func (qs *queryState) filterStringFunction(arg funcArgs) error {
 	return nil
 }
 
-func (qs *queryState) getValsForUID(attr, lang string, uid, ReadTs uint64) ([]types.Val, error) {
+func (qs *queryState) getValsForUID(
+	attr, lang string, uid, ReadTs uint64) ([]types.Val, uint64, error) {
 	key := x.DataKey(attr, uid)
 	pl, err := qs.cache.Get(key)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	var vals []types.Val
@@ -1705,7 +1718,7 @@ func (qs *queryState) getValsForUID(attr, lang string, uid, ReadTs uint64) ([]ty
 		vals = append(vals, val)
 	}
 
-	return vals, err
+	return vals, pl.DeepSize(), err
 }
 
 func matchRegex(value types.Val, regex *cregexp.Regexp) bool {
@@ -2323,6 +2336,7 @@ func (qs *queryState) evaluate(cp countParams, out *pb.Result) error {
 		if err != nil {
 			return err
 		}
+		out.ReadBytes += pl.DeepSize()
 		uids, err := pl.Uids(posting.ListOptions{ReadTs: cp.readTs})
 		if err != nil {
 			return err
@@ -2369,6 +2383,7 @@ func (qs *queryState) evaluate(cp countParams, out *pb.Result) error {
 		if err != nil {
 			return err
 		}
+		out.ReadBytes += pl.DeepSize()
 		uids, err := pl.Uids(posting.ListOptions{ReadTs: cp.readTs})
 		if err != nil {
 			return err
@@ -2422,7 +2437,8 @@ func (qs *queryState) handleHasFunction(ctx context.Context, q *pb.Query, out *p
 			return nil
 		}
 
-		_, err := qs.getValsForUID(q.Attr, lang, uid, q.ReadTs)
+		_, sz, err := qs.getValsForUID(q.Attr, lang, uid, q.ReadTs)
+		out.ReadBytes += sz
 		return err
 	}
 
@@ -2487,6 +2503,7 @@ loop:
 		if err != nil {
 			return err
 		}
+		out.ReadBytes += l.DeepSize()
 		empty, err := l.IsEmpty(q.ReadTs, 0)
 		switch {
 		case err != nil:

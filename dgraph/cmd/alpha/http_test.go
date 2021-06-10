@@ -534,6 +534,7 @@ func TestTransactionForCost(t *testing.T) {
 	_, _, resp, err := queryWithTsForResp(queryInp{body: q1, typ: "application/dql"})
 	require.NoError(t, err)
 	require.Equal(t, "2", resp.Header.Get(x.DgraphCostHeader))
+	require.Equal(t, "1925", resp.Header.Get(x.DgraphReadBytesHeader))
 }
 
 func TestTransactionBasicOldCommitFormat(t *testing.T) {
@@ -1003,4 +1004,5 @@ func TestQueryBackwardCompatibleWithGraphqlPlusMinusHeader(t *testing.T) {
 	_, _, resp, err := queryWithTsForResp(queryInp{body: q1, typ: "application/graphql+-"})
 	require.NoError(t, err)
 	require.Equal(t, "2", resp.Header.Get(x.DgraphCostHeader))
+	require.Equal(t, "1925", resp.Header.Get(x.DgraphReadBytesHeader))
 }

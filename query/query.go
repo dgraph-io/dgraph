@@ -304,7 +304,8 @@ type SubGraph struct {
 	OrderedUIDs *pb.List
 	List        bool // whether predicate is of list type
 
-	pathMeta *pathMetadata
+	ReadBytes uint64 // size of data read from the DB
+	pathMeta  *pathMetadata
 }
 
 func (sg *SubGraph) recurse(set func(sg *SubGraph)) {
@@ -1980,10 +1981,11 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 		}
 
 		var preds []string
-		typeNames, err := getNodeTypes(ctx, sg)
+		typeNames, sz, err := getNodeTypes(ctx, sg)
 		if err != nil {
 			return out, err
 		}
+		child.ReadBytes += sz
 
 		switch child.Params.Expand {
 		// It could be expand(_all_) or expand(val(x)).
@@ -2198,6 +2200,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			sg.counts = result.Counts
 			sg.LangTags = result.LangMatrix
 			sg.List = result.List
+			sg.ReadBytes += result.ReadBytes
 
 			if sg.Params.DoCount {
 				if len(sg.Filters) == 0 {
@@ -2542,6 +2545,7 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 		}
 	}
 
+	sg.ReadBytes += result.ReadBytes
 	sg.uidMatrix = result.UidMatrix
 	// Update the destUids as we might have removed some UIDs for which we didn't find any values
 	// while sorting.
@@ -2740,7 +2744,7 @@ func isUidFnWithoutVar(f *gql.Function) bool {
 	return f != nil && f.Name == "uid" && len(f.NeedsVar) == 0
 }
 
-func getNodeTypes(ctx context.Context, sg *SubGraph) ([]string, error) {
+func getNodeTypes(ctx context.Context, sg *SubGraph) ([]string, uint64, error) {
 	temp := &SubGraph{
 		Attr:    "dgraph.type",
 		SrcUIDs: codec.ToList(sg.DestMap),
@@ -2748,13 +2752,13 @@ func getNodeTypes(ctx context.Context, sg *SubGraph) ([]string, error) {
 	}
 	taskQuery, err := createTaskQuery(ctx, temp)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	result, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	return getPredsFromVals(result.ValueMatrix), nil
+	return getPredsFromVals(result.ValueMatrix), result.ReadBytes, nil
 }
 
 // getPredicatesFromTypes returns the list of preds contained in the given types.
@@ -2986,7 +2990,12 @@ type ExecutionResult struct {
 	Subgraphs  []*SubGraph
 	SchemaNode []*pb.SchemaNode
 	Types      []*pb.TypeUpdate
-	Metrics    map[string]uint64
+	Metrics    *metrics
+}
+
+type metrics struct {
+	NumUids   map[string]uint64
+	ReadBytes uint64
 }
 
 // Process handles a query request.
@@ -2997,11 +3006,11 @@ func (req *Request) Process(ctx context.Context) (er ExecutionResult, err error)
 	}
 	er.Subgraphs = req.Subgraphs
 	// calculate metrics.
-	metrics := make(map[string]uint64)
+	m := &metrics{NumUids: make(map[string]uint64)}
 	for _, sg := range er.Subgraphs {
-		calculateMetrics(sg, metrics)
+		calculateMetrics(sg, m)
 	}
-	er.Metrics = metrics
+	er.Metrics = m
 	namespace, err := x.ExtractNamespace(ctx)
 	if err != nil {
 		return er, errors.Wrapf(err, "While processing query")
@@ -3082,11 +3091,16 @@ func StripBlankNode(mp map[string]uint64) map[string]uint64 {
 
 // calculateMetrics populates the given map with the number of UIDs that were seen
 // for each predicate.
-func calculateMetrics(sg *SubGraph, metrics map[string]uint64) {
+func calculateMetrics(sg *SubGraph, metrics *metrics) {
 	// Skip internal nodes.
 	if !sg.IsInternal() {
 		// Add the number of SrcUIDs. This is the number of uids processed by this attribute.
-		metrics[sg.Attr] += uint64(len(sg.SrcUIDs.GetUids()))
+		metrics.NumUids[sg.Attr] += uint64(len(sg.SrcUIDs.GetUids()))
+		metrics.ReadBytes += sg.ReadBytes
+	} else {
+		if sg.ReadBytes > 0 {
+			glog.Infoln("calc metrics", sg.ReadBytes)
+		}
 	}
 	// Add all the uids gathered by filters.
 	for _, filter := range sg.Filters {

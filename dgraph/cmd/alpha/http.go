@@ -253,6 +253,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	// Add cost to the header.
 	w.Header().Set(x.DgraphCostHeader, fmt.Sprint(resp.Metrics.NumUids["_total"]))
+	w.Header().Set(x.DgraphReadBytesHeader, fmt.Sprint(resp.Metrics.ReadBytes))
 
 	e := query.Extensions{
 		Txn:     resp.Txn,
@@ -419,6 +420,7 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	// Add cost to the header.
 	w.Header().Set(x.DgraphCostHeader, fmt.Sprint(resp.Metrics.NumUids["_total"]))
+	w.Header().Set(x.DgraphReadBytesHeader, fmt.Sprint(resp.Metrics.ReadBytes))
 
 	resp.Latency.ParsingNs = uint64(parseEnd.Sub(parseStart).Nanoseconds())
 	e := query.Extensions{
