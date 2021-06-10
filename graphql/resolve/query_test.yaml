@@ -41,45 +41,9 @@
     }
   dgquery: |-
     query {
-      queryState(func: type(State)) @filter(eq(State.code, "abc", "def", "ghi")) {
+      queryState(func: eq(State.code, "abc", "def", "ghi")) @filter(type(State)) {
         code : State.code
         name : State.name
-        dgraph.uid : uid
-      }
-    }
-
--
-  name: "in filter on field which is of enum type"
-  gqlquery: |
-    query{
-      queryVerification(filter: {prevStatus: {in: [ACTIVE, DEACTIVATED]}}){
-        name
-        prevStatus
-      }
-    }
-  dgquery: |-
-    query {
-      queryVerification(func: type(Verification)) @filter(eq(Verification.prevStatus, "ACTIVE", "DEACTIVATED")) {
-        name : Verification.name
-        prevStatus : Verification.prevStatus
-        dgraph.uid : uid
-      }
-    }
-
--
-  name: "in filter on field which is a List of enum type"
-  gqlquery: |
-    query{
-      queryVerification(filter: {status: {in: [ACTIVE, DEACTIVATED]}}){
-        name
-        status
-      }
-    }
-  dgquery: |-
-    query {
-      queryVerification(func: type(Verification)) @filter(eq(Verification.status, "ACTIVE", "DEACTIVATED")) {
-        name : Verification.name
-        status : Verification.status
         dgraph.uid : uid
       }
     }
@@ -94,7 +58,7 @@
     }
   dgquery: |-
     query {
-      queryVerification(func: type(Verification)) @filter(eq(Verification.status, "ACTIVE")) {
+      queryVerification(func: eq(Verification.status, "ACTIVE")) @filter(type(Verification)) {
         name : Verification.name
         status : Verification.status
         dgraph.uid : uid
@@ -796,8 +760,7 @@
       }
     }
 
--
-  name: "Filter gets rewritten as @filter"
+- name: "eq Filter gets rewritten as root func"
   gqlquery: |
     query {
       queryAuthor(filter: { name: { eq: "A. N. Author" } }) {
@@ -806,7 +769,7 @@
     }
   dgquery: |-
     query {
-      queryAuthor(func: type(Author)) @filter(eq(Author.name, "A. N. Author")) {
+      queryAuthor(func: eq(Author.name, "A. N. Author")) @filter(type(Author)) {
         name : Author.name
         dgraph.uid : uid
       }
@@ -822,7 +785,7 @@
     }
   dgquery: |-
     query {
-      queryAuthor(func: type(Author)) @filter(eq(Author.name, "A. N. Author")) {
+      queryAuthor(func: eq(Author.name, "A. N. Author")) @filter(type(Author)) {
         name : Author.name
         dgraph.uid : uid
       }
@@ -1061,7 +1024,7 @@
     }
   dgquery: |-
     query {
-      queryAuthor(func: type(Author), first: 10) @filter(eq(Author.name, "A. N. Author")) {
+      queryAuthor(func: eq(Author.name, "A. N. Author"), first: 10) @filter(type(Author)) {
         name : Author.name
         dgraph.uid : uid
       }
@@ -1077,7 +1040,7 @@
     }
   dgquery: |-
     query {
-      queryAuthor(func: type(Author), first: 10, offset: 10) @filter(eq(Author.name, "A. N. Author")) {
+      queryAuthor(func: eq(Author.name, "A. N. Author"), first: 10, offset: 10) @filter(type(Author)) {
         name : Author.name
         dgraph.uid : uid
       }
@@ -1093,7 +1056,7 @@
     }
   dgquery: |-
     query {
-      queryAuthor(func: type(Author), orderasc: Author.reputation) @filter(eq(Author.name, "A. N. Author")) {
+      queryAuthor(func: eq(Author.name, "A. N. Author"), orderasc: Author.reputation) @filter(type(Author)) {
         name : Author.name
         dgraph.uid : uid
       }
@@ -1109,7 +1072,7 @@
     }
   dgquery: |-
     query {
-      queryAuthor(func: type(Author), orderdesc: Author.reputation) @filter(eq(Author.name, "A. N. Author")) {
+      queryAuthor(func: eq(Author.name, "A. N. Author"), orderdesc: Author.reputation) @filter(type(Author)) {
         name : Author.name
         dgraph.uid : uid
       }
@@ -1126,7 +1089,7 @@
     }
   dgquery: |-
     query {
-      queryAuthor(func: type(Author), orderdesc: Author.reputation, orderasc: Author.dob) @filter(eq(Author.name, "A. N. Author")) {
+      queryAuthor(func: eq(Author.name, "A. N. Author"), orderdesc: Author.reputation, orderasc: Author.dob) @filter(type(Author)) {
         name : Author.name
         dgraph.uid : uid
       }
@@ -1142,7 +1105,7 @@
     }
   dgquery: |-
     query {
-      queryAuthor(func: type(Author), orderdesc: Author.reputation, first: 10, offset: 10) @filter(eq(Author.name, "A. N. Author")) {
+      queryAuthor(func: eq(Author.name, "A. N. Author"), orderdesc: Author.reputation, first: 10, offset: 10) @filter(type(Author)) {
         name : Author.name
         dgraph.uid : uid
       }
@@ -1322,7 +1285,7 @@
     }
   dgquery: |-
     query {
-      queryAuthor(func: type(Author)) @filter(eq(Author.name, "A. N. Author")) {
+      queryAuthor(func: eq(Author.name, "A. N. Author")) @filter(type(Author)) {
         name : Author.name
         dgraph.uid : uid
       }
