@@ -866,6 +866,17 @@ func rewriteAsQuery(field schema.Field, authRw *authRewriter) []*gql.GraphQuery 
 		return append(dgQuery, selectionAuth...)
 	}
 
+	dgQuery = rootQueryOptimization(dgQuery)
+	return dgQuery
+}
+
+func rootQueryOptimization(dgQuery []*gql.GraphQuery) []*gql.GraphQuery {
+	if dgQuery[0].Filter != nil && dgQuery[0].Filter.Func != nil &&
+		dgQuery[0].Filter.Func.Name == "eq" && dgQuery[0].Func.Name == "type" {
+		rootFunc := dgQuery[0].Func
+		dgQuery[0].Func = dgQuery[0].Filter.Func
+		dgQuery[0].Filter.Func = rootFunc
+	}
 	return dgQuery
 }
 
