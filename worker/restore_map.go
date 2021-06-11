@@ -796,6 +796,10 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) (*mapResult, error) {
 			case pb.DropOperation_ATTR:
 				dropAttr[op.DropValue] = struct{}{}
 			case pb.DropOperation_NS:
+				// pstore will be nil for export_backup tool. In that case we don't need to ban ns.
+				if pstore == nil {
+					continue
+				}
 				// If there is a drop namespace, we just ban the namespace in the pstore.
 				ns, err := strconv.ParseUint(op.DropValue, 0, 64)
 				if err != nil {
