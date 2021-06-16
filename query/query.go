@@ -1415,14 +1415,13 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue, sgPath []*SubGr
 		child.updateUidMatrix()
 
 		// Apply pagination after the @cascade.
-		if len(child.Params.Cascade.Fields) > 0 && (child.Params.Cascade.First != 0 || child.Params.Cascade.Offset != 0) {
+		if len(child.Params.Cascade.Fields) > 0 && (child.Params.Cascade.First != 0 ||
+			child.Params.Cascade.Offset != 0) {
 			for i := 0; i < len(child.uidMatrix); i++ {
 				uids := codec.GetUids(child.uidMatrix[i])
 				start, end := x.PageRange(child.Params.Cascade.First, child.Params.Cascade.Offset,
 					len(uids))
-				r := sroar.NewBitmap()
-				r.SetMany(uids[start:end])
-				child.uidMatrix[i].Bitmap = codec.ToBytes(r)
+				codec.SetUids(child.uidMatrix[i], uids[start:end])
 			}
 		}
 	}
