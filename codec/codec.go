@@ -83,9 +83,6 @@ func GetUids(l *pb.List) []uint64 {
 }
 
 func SetUids(l *pb.List, uids []uint64) {
-	if l == nil {
-		return
-	}
 	if len(l.SortedUids) > 0 {
 		l.SortedUids = uids
 	} else {
