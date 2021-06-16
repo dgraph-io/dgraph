@@ -15,14 +15,12 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
   - Fix(GraphQL): Fix GraphQL encoding in case of empty list ([#7726][]) ([#7730][])
   - Fix(GraphQL): Add filter in DQL query in case of reverse predicate ([#7728][]) ([#7733][])
   - Fix(graphql): Fix error message of lambdaOnMutate directive  ([#7751][]) ([#7754][])
-  - opt(GraphQL): filter existence queries on GraphQL side instead of using @filter(type) ([#7757][]) ([#7760][])
 
 - Core Dgraph
   - fix(vault): Hide ACL flags when not required ([#7701][])
   - fix(Chunker): don't delete node with empty facet in mutation ([#7737][]) ([#7745][])
   - fix(bulk): throw the error instead of crashing ([#7722][]) ([#7749][])
   - fix(raftwal): take snapshot after restore ([#7719][]) ([#7750][])
-  - feat(cdc): Add support for SCRAM SASL mechanism ([#7765][]) ([#7767][])
   - fix(bulk): upsert guardian/groot for all existing namespaces ([#7759][]) ([#7769][])
   - fix(txn): ensure that txn hash is set ([#7782][]) ([#7784][])
   - bug fix to permit audit streaming to stdout writer([#7803][]) ([#7804][])
@@ -33,14 +31,19 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
   - fix(lease): don't do rate limiting when not limit is not specified ([#7787][])
   - fix(lease): prevent ID lease overflow ([#7802][])
   - fix(auth): preserve the status code while returning error ([#7832][]) ([#7834][])
-  - chore(graphql): fixing query timeouts for graphql queries too ([#7796][])
-  - Add asynchronous task API ([#7781][])
   - fix(ee): GetKeys should return an error ([#7713][]) ([#7797][])
   - fix(admin): remove exportedFiles field ([#7835][]) ([#7836][])
-  - feat(schema): do schema versioning and make backup non-blocking for i… ([#7856][]) ([#7873][])
   - fix(restore): append galaxy namespace to type name ([#7881][])
   - fix(DQL): revert changes related to cascade pagination with sort ([#7885][]) ([#7888][])
+
+### Changed
+  - opt(GraphQL): filter existence queries on GraphQL side instead of using @filter(type) ([#7757][]) ([#7760][])
+
+### Added
+  - feat(cdc): Add support for SCRAM SASL mechanism ([#7765][]) ([#7767][])
+  - Add asynchronous task API ([#7781][])
   - make exports synchronous again ([#7877][])
+  - feat(schema): do schema versioning and make backup non-blocking for i… ([#7856][]) ([#7873][])
 
 [#7701]: https://github.com/dgraph-io/dgraph/issues/7701
 [#7737]: https://github.com/dgraph-io/dgraph/issues/7737
