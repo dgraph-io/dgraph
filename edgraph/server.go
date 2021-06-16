@@ -1557,8 +1557,8 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 		// If the list of UIDs is empty but the map of values is not,
 		// we need to get the UIDs from the keys in the map.
 		var uidList []uint64
-		if v.OrderedUIDs != nil && len(v.OrderedUIDs.Uids) > 0 {
-			uidList = v.OrderedUIDs.Uids
+		if v.OrderedUIDs != nil && len(v.OrderedUIDs.SortedUids) > 0 {
+			uidList = v.OrderedUIDs.SortedUids
 		} else if !v.UidMap.IsEmpty() {
 			uidList = v.UidMap.ToArray()
 		} else {

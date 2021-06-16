@@ -132,11 +132,12 @@ func (d *dedup) addValue(attr string, value types.Val, uid uint64) {
 		// If this is the first element of the group.
 		cur.elements[strKey] = groupElements{
 			key:      value,
-			entities: &pb.List{Uids: []uint64{}},
+			entities: &pb.List{},
 		}
 	}
-	curEntity := cur.elements[strKey].entities
-	curEntity.Uids = append(curEntity.Uids, uid)
+	r := codec.FromList(cur.elements[strKey].entities)
+	r.Set(uid)
+	cur.elements[strKey].entities.Bitmap = codec.ToBytes(r)
 }
 
 func aggregateGroup(grp *groupResult, child *SubGraph) (types.Val, error) {
@@ -144,10 +145,12 @@ func aggregateGroup(grp *groupResult, child *SubGraph) (types.Val, error) {
 		name: child.SrcFunc.Name,
 	}
 	for _, uid := range grp.uids {
-		idx := sort.Search(len(child.SrcUIDs.Uids), func(i int) bool {
-			return child.SrcUIDs.Uids[i] >= uid
+		// TODO(Ahsan): We can have Rank API on sroar.
+		uids := codec.GetUids(child.SrcUIDs)
+		idx := sort.Search(len(uids), func(i int) bool {
+			return uids[i] >= uid
 		})
-		if idx == len(child.SrcUIDs.Uids) || child.SrcUIDs.Uids[idx] != uid {
+		if idx == len(uids) || uids[idx] != uid {
 			continue
 		}
 
@@ -168,15 +171,16 @@ func aggregateGroup(grp *groupResult, child *SubGraph) (types.Val, error) {
 // group.
 func (res *groupResults) formGroups(dedupMap dedup, cur *pb.List, groupVal []groupPair) {
 	l := len(groupVal)
-	if len(dedupMap.groups) == 0 || (l != 0 && len(cur.Uids) == 0) {
+	uids := codec.GetUids(cur)
+	if len(dedupMap.groups) == 0 || (l != 0 && len(uids) == 0) {
 		// This group is already empty or no group can be formed. So stop.
 		return
 	}
 
 	if l == len(dedupMap.groups) {
-		a := make([]uint64, len(cur.Uids))
+		a := make([]uint64, len(uids))
 		b := make([]groupPair, len(groupVal))
-		copy(a, cur.Uids)
+		copy(a, uids)
 		copy(b, groupVal)
 		res.group = append(res.group, &groupResult{
 			uids: a,
@@ -187,7 +191,7 @@ func (res *groupResults) formGroups(dedupMap dedup, cur *pb.List, groupVal []gro
 
 	curmap := codec.FromList(cur)
 	for _, v := range dedupMap.groups[l].elements {
-		temp := new(pb.List)
+		temp := sroar.NewBitmap()
 		groupVal = append(groupVal, groupPair{
 			key:  v.key,
 			attr: dedupMap.groups[l].attr,
@@ -195,12 +199,12 @@ func (res *groupResults) formGroups(dedupMap dedup, cur *pb.List, groupVal []gro
 		if l != 0 {
 			ve := codec.FromList(v.entities)
 			r := sroar.And(curmap, ve)
-			temp = codec.ToList(r)
+			temp = r
 		} else {
-			temp.Uids = make([]uint64, len(v.entities.Uids))
-			copy(temp.Uids, v.entities.Uids)
+			vuids := codec.GetUids(v.entities)
+			temp.SetMany(vuids)
 		}
-		res.formGroups(dedupMap, temp, groupVal)
+		res.formGroups(dedupMap, codec.ToList(temp), groupVal)
 		groupVal = groupVal[:len(groupVal)-1]
 	}
 }
@@ -218,24 +222,25 @@ func (sg *SubGraph) formResult(ul *pb.List) (*groupResults, error) {
 		if attr == "" {
 			attr = child.Attr
 		}
+		childUids := codec.GetUids(child.SrcUIDs)
 		if !child.DestMap.IsEmpty() {
 			// It's a UID node.
 			for i := 0; i < len(child.uidMatrix); i++ {
-				srcUid := child.SrcUIDs.Uids[i]
+				srcUid := childUids[i]
 				// Ignore uids which are not part of srcUid.
 				if algo.IndexOf(ul, srcUid) < 0 {
 					continue
 				}
 
 				ul := child.uidMatrix[i]
-				for _, uid := range ul.GetUids() {
+				for _, uid := range codec.GetUids(ul) {
 					dedupMap.addValue(attr, types.Val{Tid: types.UidID, Value: uid}, srcUid)
 				}
 			}
 		} else {
 			// It's a value node.
 			for i, v := range child.valueMatrix {
-				srcUid := child.SrcUIDs.Uids[i]
+				srcUid := childUids[i]
 				if len(v.Values) == 0 || algo.IndexOf(ul, srcUid) < 0 {
 					continue
 				}
@@ -303,12 +308,14 @@ func (sg *SubGraph) fillGroupedVars(doneVars map[string]varValue, path []*SubGra
 		if attr == "" {
 			attr = child.Attr
 		}
+		childUids := codec.GetUids(child.SrcUIDs)
 		if !child.DestMap.IsEmpty() {
 			// It's a UID node.
 			for i := 0; i < len(child.uidMatrix); i++ {
-				srcUid := child.SrcUIDs.Uids[i]
+				srcUid := childUids[i]
 				ul := child.uidMatrix[i]
-				for _, uid := range ul.Uids {
+				ulUids := codec.GetUids(ul)
+				for _, uid := range ulUids {
 					dedupMap.addValue(attr, types.Val{Tid: types.UidID, Value: uid}, srcUid)
 				}
 			}
@@ -333,7 +340,7 @@ func (sg *SubGraph) fillGroupedVars(doneVars map[string]varValue, path []*SubGra
 			}
 
 			for i, v := range child.valueMatrix {
-				srcUid := child.SrcUIDs.Uids[i]
+				srcUid := childUids[i]
 				if len(v.Values) == 0 {
 					continue
 				}

@@ -119,10 +119,10 @@ func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error
 				sg.updateUidMatrix()
 			}
 
-			for mIdx, fromUID := range sg.SrcUIDs.Uids {
+			for mIdx, fromUID := range codec.GetUids(sg.SrcUIDs) {
 				if allowLoop {
 					for _, ul := range sg.uidMatrix {
-						numEdges += uint64(len(ul.Uids))
+						numEdges += codec.ListCardinality(ul)
 					}
 				} else {
 					algo.ApplyFilter(sg.uidMatrix[mIdx], func(uid uint64, i int) bool {

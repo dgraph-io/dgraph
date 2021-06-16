@@ -1274,27 +1274,30 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 	// Before this, we were only picking math.Int32 number of uids.
 	// Now we're picking everything.
 	if opt.First == 0 {
-		out.Uids = bm.ToArray()
+		out.Bitmap = codec.ToBytes(bm)
 		// TODO: Not yet ready to use Bitmap for data transfer. We'd have to deal with all the
 		// places where List.Uids is being called.
 		// out.Bitmap = codec.ToBytes(bm)
 		return out, nil
 	}
-
-	var itr *sroar.Iterator
-	if opt.First > 0 {
-		itr = bm.NewIterator()
-	} else {
-		itr = bm.NewReverseIterator()
+	num := uint64(abs(opt.First))
+	sz := uint64(bm.GetCardinality())
+	if num < sz {
+		if opt.First > 0 {
+			x, err := bm.Select(num)
+			if err != nil {
+				return nil, errors.Wrap(err, "While selecting Uids")
+			}
+			codec.RemoveRange(bm, x, math.MaxUint64)
+		} else {
+			x, err := bm.Select(sz - num)
+			if err != nil {
+				return nil, errors.Wrap(err, "While selecting Uids")
+			}
+			codec.RemoveRange(bm, 0, x)
+		}
 	}
-	num := abs(opt.First)
-	for len(out.Uids) < num && itr.HasNext() {
-		out.Uids = append(out.Uids, itr.Next())
-	}
-	return out, nil
-
-	// errors.Wrapf(err, "cannot retrieve UIDs from list with key %s",
-	//		hex.EncodeToString(l.key))
+	return codec.ToList(bm), nil
 }
 
 // Postings calls postFn with the postings that are common with

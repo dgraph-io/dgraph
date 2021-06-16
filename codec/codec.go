@@ -45,9 +45,49 @@ func ApproxLen(bitmap []byte) int {
 
 func ToList(rm *sroar.Bitmap) *pb.List {
 	return &pb.List{
-		Uids: rm.ToArray(),
-		// Bitmap: ToBytes(rm),
+		Bitmap: ToBytes(rm),
 	}
+}
+
+func ToSortedList(rm *sroar.Bitmap) *pb.List {
+	return &pb.List{
+		SortedUids: rm.ToArray(),
+	}
+}
+
+func ListCardinality(l *pb.List) uint64 {
+	if l == nil {
+		return 0
+	}
+	if len(l.SortedUids) > 0 {
+		return uint64(len(l.SortedUids))
+	}
+	b := FromList(l)
+	return uint64(b.GetCardinality())
+}
+
+func OneUid(uid uint64) *pb.List {
+	bm := sroar.NewBitmap()
+	bm.Set(uid)
+	return ToList(bm)
+}
+
+func GetUids(l *pb.List) []uint64 {
+	if l == nil {
+		return []uint64{}
+	}
+	if len(l.SortedUids) > 0 {
+		return l.SortedUids
+	}
+	return FromList(l).ToArray()
+}
+
+func BitmapToSorted(l *pb.List) {
+	if l == nil {
+		return
+	}
+	l.SortedUids = FromList(l).ToArray()
+	l.Bitmap = nil
 }
 
 func And(rm *sroar.Bitmap, l *pb.List) {
@@ -94,7 +134,8 @@ func ToBytes(bm *sroar.Bitmap) []byte {
 	if bm.IsEmpty() {
 		return nil
 	}
-	return bm.ToBuffer()
+	// TODO: We should not use ToBufferWithCopy always.
+	return bm.ToBufferWithCopy()
 }
 
 func FromList(l *pb.List) *sroar.Bitmap {
@@ -102,13 +143,12 @@ func FromList(l *pb.List) *sroar.Bitmap {
 	if l == nil {
 		return iw
 	}
-
-	if len(l.BitmapDoNotUse) > 0 {
-		// Only one of Uids or Bitmap should be defined.
-		iw = sroar.FromBuffer(l.BitmapDoNotUse)
+	if len(l.SortedUids) > 0 {
+		iw.SetMany(l.SortedUids)
 	}
-	if len(l.Uids) > 0 {
-		iw.SetMany(l.Uids)
+	if len(l.Bitmap) > 0 {
+		// TODO: We should not use FromBufferWithCopy always.
+		iw = sroar.FromBufferWithCopy(l.Bitmap)
 	}
 	return iw
 }

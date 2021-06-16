@@ -26,6 +26,7 @@ import (
 
 	"github.com/golang/glog"
 
+	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
@@ -115,7 +116,8 @@ func (w *grpcWorker) UpdateGraphQLSchema(ctx context.Context,
 	creatingNode := false
 	var schemaNodeUid uint64
 	uidMtrxLen := len(res.GetUidMatrix())
-	if uidMtrxLen == 0 || (uidMtrxLen == 1 && len(res.GetUidMatrix()[0].GetUids()) == 0) {
+	c := codec.ListCardinality(res.GetUidMatrix()[0])
+	if uidMtrxLen == 0 || (uidMtrxLen == 1 && c == 0) {
 		// if there was no schema node earlier, then need to assign a new uid for the node
 		res, err := AssignUidsOverNetwork(ctx, &pb.Num{Val: 1, Type: pb.Num_UID})
 		if err != nil {
@@ -123,13 +125,13 @@ func (w *grpcWorker) UpdateGraphQLSchema(ctx context.Context,
 		}
 		creatingNode = true
 		schemaNodeUid = res.StartId
-	} else if uidMtrxLen == 1 && len(res.GetUidMatrix()[0].GetUids()) == 1 {
+	} else if uidMtrxLen == 1 && c == 1 {
 		// if there was already a schema node, then just use the uid from that node
-		schemaNodeUid = res.GetUidMatrix()[0].GetUids()[0]
+		schemaNodeUid = codec.GetUids(res.GetUidMatrix()[0])[0]
 	} else {
 		// there seems to be multiple nodes for GraphQL schema,Ideally we should never reach here
 		// But if by any bug we reach here then return the schema node which is added last
-		uidList := res.GetUidMatrix()[0].GetUids()
+		uidList := codec.GetUids(res.GetUidMatrix()[0])
 		sort.Slice(uidList, func(i, j int) bool {
 			return uidList[i] < uidList[j]
 		})
