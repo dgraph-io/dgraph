@@ -55,7 +55,7 @@ func init() {
 	// --tls SuperFlag
 	x.RegisterClientTLSFlags(flag)
 
-	flag.String("cloud", "", "addr: xxx; jwt: xxx")
+	flag.String("cloud", "", "addr=xxx; jwt=yyy")
 	flag.String("alpha", "localhost:9080", "Address of Dgraph Alpha.")
 	flag.Int("num", 1, "How many times to run per goroutine.")
 	flag.Int("retries", 10, "How many times to retry setting up the connection.")
