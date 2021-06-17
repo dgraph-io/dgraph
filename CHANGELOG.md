@@ -4,6 +4,96 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project will adhere to [Calendar Versioning](https://calver.org/) starting v20.03.
 
+
+
+## [21.03.1] - 2021-06-16
+[21.03.1]: https://github.com/dgraph-io/dgraph/compare/v21.03.0...v21.03.1
+
+### Fixed
+- GraphQL
+  - fix(GraphQL): fix @cascade with Pagination for @auth queries ([#7695][])
+  - Fix(GraphQL): Fix GraphQL encoding in case of empty list ([#7726][]) ([#7730][])
+  - Fix(GraphQL): Add filter in DQL query in case of reverse predicate ([#7728][]) ([#7733][])
+  - Fix(graphql): Fix error message of lambdaOnMutate directive  ([#7751][]) ([#7754][])
+
+- Core Dgraph
+  - fix(vault): Hide ACL flags when not required ([#7701][])
+  - fix(Chunker): don't delete node with empty facet in mutation ([#7737][]) ([#7745][])
+  - fix(bulk): throw the error instead of crashing ([#7722][]) ([#7749][])
+  - fix(raftwal): take snapshot after restore ([#7719][]) ([#7750][])
+  - fix(bulk): upsert guardian/groot for all existing namespaces ([#7759][]) ([#7769][])
+  - fix(txn): ensure that txn hash is set ([#7782][]) ([#7784][])
+  - bug fix to permit audit streaming to stdout writer([#7803][]) ([#7804][])
+  - fix(drop): attach galaxy namespace to drop attr done on 20.11 backup ([#7827][])
+  - fix: Prevent proposal from being dropped accidentally ([#7741][]) ([#7811][])
+  - fix(schema-update): Start opIndexing only when index creation is required. ([#7845][]) ([#7847][])
+  - fix(export): Fix facet export of reference type postings to JSON format ([#7744][]) ([#7756][])
+  - fix(lease): don't do rate limiting when not limit is not specified ([#7787][])
+  - fix(lease): prevent ID lease overflow ([#7802][])
+  - fix(auth): preserve the status code while returning error ([#7832][]) ([#7834][])
+  - fix(ee): GetKeys should return an error ([#7713][]) ([#7797][])
+  - fix(admin): remove exportedFiles field ([#7835][]) ([#7836][])
+  - fix(restore): append galaxy namespace to type name ([#7881][])
+  - fix(DQL): revert changes related to cascade pagination with sort ([#7885][]) ([#7888][])
+
+### Changed
+  - opt(GraphQL): filter existence queries on GraphQL side instead of using @filter(type) ([#7757][]) ([#7760][])
+
+### Added
+  - feat(cdc): Add support for SCRAM SASL mechanism ([#7765][]) ([#7767][])
+  - Add asynchronous task API ([#7781][])
+  - make exports synchronous again ([#7877][])
+  - feat(schema): do schema versioning and make backup non-blocking for i… ([#7856][]) ([#7873][])
+
+[#7701]: https://github.com/dgraph-io/dgraph/issues/7701
+[#7737]: https://github.com/dgraph-io/dgraph/issues/7737
+[#7745]: https://github.com/dgraph-io/dgraph/issues/7745
+[#7722]: https://github.com/dgraph-io/dgraph/issues/7722
+[#7749]: https://github.com/dgraph-io/dgraph/issues/7749
+[#7719]: https://github.com/dgraph-io/dgraph/issues/7719
+[#7750]: https://github.com/dgraph-io/dgraph/issues/7750
+[#7765]: https://github.com/dgraph-io/dgraph/issues/7765
+[#7767]: https://github.com/dgraph-io/dgraph/issues/7767
+[#7759]: https://github.com/dgraph-io/dgraph/issues/7759
+[#7769]: https://github.com/dgraph-io/dgraph/issues/7769
+[#7782]: https://github.com/dgraph-io/dgraph/issues/7782
+[#7784]: https://github.com/dgraph-io/dgraph/issues/7784
+[#7803]: https://github.com/dgraph-io/dgraph/issues/7803
+[#7804]: https://github.com/dgraph-io/dgraph/issues/7804
+[#7827]: https://github.com/dgraph-io/dgraph/issues/7827
+[#7741]: https://github.com/dgraph-io/dgraph/issues/7741
+[#7811]: https://github.com/dgraph-io/dgraph/issues/7811
+[#7845]: https://github.com/dgraph-io/dgraph/issues/7845
+[#7847]: https://github.com/dgraph-io/dgraph/issues/7847
+[#7744]: https://github.com/dgraph-io/dgraph/issues/7744
+[#7756]: https://github.com/dgraph-io/dgraph/issues/7756
+[#7787]: https://github.com/dgraph-io/dgraph/issues/7787
+[#7802]: https://github.com/dgraph-io/dgraph/issues/7802
+[#7832]: https://github.com/dgraph-io/dgraph/issues/7832
+[#7834]: https://github.com/dgraph-io/dgraph/issues/7834
+[#7796]: https://github.com/dgraph-io/dgraph/issues/7796
+[#7781]: https://github.com/dgraph-io/dgraph/issues/7781
+[#7713]: https://github.com/dgraph-io/dgraph/issues/7713
+[#7797]: https://github.com/dgraph-io/dgraph/issues/7797
+[#7835]: https://github.com/dgraph-io/dgraph/issues/7835
+[#7836]: https://github.com/dgraph-io/dgraph/issues/7836
+[#7856]: https://github.com/dgraph-io/dgraph/issues/7856
+[#7873]: https://github.com/dgraph-io/dgraph/issues/7873
+[#7881]: https://github.com/dgraph-io/dgraph/issues/7881
+[#7885]: https://github.com/dgraph-io/dgraph/issues/7885
+[#7888]: https://github.com/dgraph-io/dgraph/issues/7888
+[#7877]: https://github.com/dgraph-io/dgraph/issues/7877
+[#7695]: https://github.com/dgraph-io/dgraph/issues/7695
+[#7726]: https://github.com/dgraph-io/dgraph/issues/7726
+[#7730]: https://github.com/dgraph-io/dgraph/issues/7730
+[#7728]: https://github.com/dgraph-io/dgraph/issues/7728
+[#7733]: https://github.com/dgraph-io/dgraph/issues/7733
+[#7751]: https://github.com/dgraph-io/dgraph/issues/7751
+[#7754]: https://github.com/dgraph-io/dgraph/issues/7754
+[#7757]: https://github.com/dgraph-io/dgraph/issues/7757
+[#7760]: https://github.com/dgraph-io/dgraph/issues/7760
+
+
 ## [21.03.0] - 2021-04-07
 [21.03.0]: https://github.com/dgraph-io/dgraph/compare/v20.11.0...v21.03.0
 
