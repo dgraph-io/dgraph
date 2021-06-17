@@ -35,6 +35,7 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
   - fix(admin): remove exportedFiles field ([#7835][]) ([#7836][])
   - fix(restore): append galaxy namespace to type name ([#7881][])
   - fix(DQL): revert changes related to cascade pagination with sort ([#7885][]) ([#7888][])
+  - fix(metrics): Expose dgraph_num_backups_failed_total metric view. ([#7900][]) ([#7904][])
 
 ### Changed
   - opt(GraphQL): filter existence queries on GraphQL side instead of using @filter(type) ([#7757][]) ([#7760][])
@@ -92,6 +93,8 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 [#7754]: https://github.com/dgraph-io/dgraph/issues/7754
 [#7757]: https://github.com/dgraph-io/dgraph/issues/7757
 [#7760]: https://github.com/dgraph-io/dgraph/issues/7760
+[#7900]: https://github.com/dgraph-io/dgraph/issues/7900
+[#7904]: https://github.com/dgraph-io/dgraph/issues/7904
 
 
 ## [21.03.0] - 2021-04-07
