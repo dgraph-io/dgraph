@@ -223,6 +223,13 @@ var (
 			TagKeys:     nil,
 		},
 		{
+			Name:        NumBackupsFailed.Name(),
+			Measure:     NumBackupsFailed,
+			Description: NumBackupsFailed.Description(),
+			Aggregation: view.Count(),
+			TagKeys:     nil,
+		},
+		{
 			Name:        TxnCommits.Name(),
 			Measure:     TxnCommits,
 			Description: TxnCommits.Description(),
