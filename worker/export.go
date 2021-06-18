@@ -169,7 +169,7 @@ func (e *exporter) toJSON() (*bpb.KVList, error) {
 	}
 
 	continuing := false
-	mapStart := fmt.Sprintf("  {\"uid\":"+uidFmtStrJson+`,"namespace":"0x%x"`, e.uid, e.namespace)
+	mapStart := fmt.Sprintf("  {\"uid\":"+uidFmtStrJson, e.uid)
 	err := e.pl.Iterate(e.readTs, 0, func(p *pb.Posting) error {
 		if continuing {
 			fmt.Fprint(bp, ",\n")
@@ -294,10 +294,8 @@ func (e *exporter) toRDF() (*bpb.KVList, error) {
 
 func toSchema(attr string, update *pb.SchemaUpdate) *bpb.KV {
 	// bytes.Buffer never returns error for any of the writes. So, we don't need to check them.
-	ns, attr := x.ParseNamespaceAttr(attr)
+	_, attr = x.ParseNamespaceAttr(attr)
 	var buf bytes.Buffer
-	x.Check2(buf.WriteString(fmt.Sprintf("[%#x]", ns)))
-	x.Check2(buf.WriteRune(' '))
 	x.Check2(buf.WriteRune('<'))
 	x.Check2(buf.WriteString(attr))
 	x.Check2(buf.WriteRune('>'))
@@ -336,8 +334,8 @@ func toSchema(attr string, update *pb.SchemaUpdate) *bpb.KV {
 
 func toType(attr string, update pb.TypeUpdate) *bpb.KV {
 	var buf bytes.Buffer
-	ns, attr := x.ParseNamespaceAttr(attr)
-	x.Check2(buf.WriteString(fmt.Sprintf("[%#x] type <%s> {\n", ns, attr)))
+	_, attr = x.ParseNamespaceAttr(attr)
+	x.Check2(buf.WriteString(fmt.Sprintf("type <%s> {\n", attr)))
 	for _, field := range update.Fields {
 		x.Check2(buf.WriteString(fieldToString(field)))
 	}
