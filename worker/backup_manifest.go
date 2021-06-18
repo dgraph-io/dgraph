@@ -95,7 +95,7 @@ func getManifestsToRestore(
 	h x.UriHandler, uri *url.URL, req *pb.RestoreRequest) ([]*Manifest, error) {
 	manifest, err := GetManifest(h, uri)
 	if err != nil {
-		return manifest.Manifests, err
+		return nil, err
 	}
 	return getFilteredManifests(h, manifest.Manifests, req)
 }
