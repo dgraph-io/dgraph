@@ -214,11 +214,6 @@ services:
       --tls_internal_port_enabled=true --tls_cert /dgraph-tls/client.alpha6.crt --tls_key /dgraph-tls/client.alpha6.key
       --logtostderr -v=2 --idx=6 --encryption_key_file /data/keys/enc_key
       --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
-  ratel:
-    image: dgraph/dgraph:latest
-    ports:
-    - 8000
-    command: dgraph-ratel
   zero1:
     image: dgraph/dgraph:latest
     working_dir: /data/zero1
