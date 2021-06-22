@@ -231,8 +231,8 @@ func (m *mapper) run(inputFormat chunker.InputFormat) {
 			}
 		}
 		once.Do(func() {
-			if m.opt.Namespace != math.MaxUint64 {
-				// Insert ACL related RDFs.
+			if m.opt.Namespace != math.MaxUint64 && m.opt.Namespace != x.GalaxyNamespace {
+				// Insert ACL related RDFs force uploading the data into non-galaxy namespace.
 				aclNquads := make([]*api.NQuad, 0)
 				aclNquads = append(aclNquads, acl.CreateGroupNQuads(x.GuardiansId)...)
 				aclNquads = append(aclNquads, acl.CreateUserNQuads(x.GrootId, "password")...)
