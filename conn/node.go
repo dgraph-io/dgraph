@@ -483,7 +483,7 @@ func (n *Node) doSendMessage(to uint64, msgCh chan []byte) error {
 			slurp(batch) // Pick up more entries from msgCh, if present.
 			span.Annotatef(nil, "[to: %x] [Packets: %d] Sending data of length: %d.",
 				to, packets, len(batch.Payload.Data))
-			if packets%1000 == 0 {
+			if packets%10000 == 0 {
 				glog.V(2).Infof("[to: %x] [Packets: %d] Sending data of length: %d.",
 					to, packets, len(batch.Payload.Data))
 			}
