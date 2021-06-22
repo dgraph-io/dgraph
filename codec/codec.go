@@ -82,6 +82,16 @@ func GetUids(l *pb.List) []uint64 {
 	return FromList(l).ToArray()
 }
 
+func SetUids(l *pb.List, uids []uint64) {
+	if len(l.SortedUids) > 0 {
+		l.SortedUids = uids
+	} else {
+		r := sroar.NewBitmap()
+		r.SetMany(uids)
+		l.Bitmap = ToBytes(r)
+	}
+}
+
 func BitmapToSorted(l *pb.List) {
 	if l == nil {
 		return
