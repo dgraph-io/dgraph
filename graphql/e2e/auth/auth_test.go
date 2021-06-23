@@ -666,6 +666,44 @@ func TestAuthOnInterfaces(t *testing.T) {
 	}
 }
 
+func TestNestedAndAuthRulesWithMissingJWT(t *testing.T) {
+	addParams := &common.GraphQLParams{
+		Query: `
+		mutation($user1: String!, $user2: String!){
+			addGroup(input: [{users: {username: $user1}, createdBy: {username: $user2}}, {users: {username: $user2}, createdBy: {username: $user1}}]){
+			  numUids
+			}
+		  }
+		`,
+		Variables: map[string]interface{}{"user1": "user1", "user2": "user2"},
+	}
+	gqlResponse := addParams.ExecuteAsPost(t, common.GraphqlURL)
+	common.RequireNoGQLErrors(t, gqlResponse)
+	require.JSONEq(t, `{"addGroup": {"numUids": 2}}`, string(gqlResponse.Data))
+
+	queryParams := &common.GraphQLParams{
+		Query: `
+		query{
+			queryGroup{
+			  users{
+				username
+			  }
+			}
+		  }
+		`,
+		Headers: common.GetJWT(t, "user1", nil, metaInfo),
+	}
+
+	expectedJSON := `{"queryGroup": [{"users": [{"username": "user1"}]}]}`
+
+	gqlResponse = queryParams.ExecuteAsPost(t, common.GraphqlURL)
+	common.RequireNoGQLErrors(t, gqlResponse)
+	require.JSONEq(t, expectedJSON, string(gqlResponse.Data))
+
+	deleteFilter := map[string]interface{}{"has": "users"}
+	common.DeleteGqlType(t, "Group", deleteFilter, 2, nil)
+}
+
 func TestAuthRulesWithNullValuesInJWT(t *testing.T) {
 	testCases := []TestCase{
 		{
