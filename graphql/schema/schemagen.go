@@ -326,9 +326,13 @@ func NewHandler(input string, apolloServiceQuery bool) (Handler, error) {
 	}
 
 	// Convert All the Type Extensions into the Type Definitions with @external directive
-	// to maintain uniformity in the output schema
+	// to maintain uniformity in the output schema.
+	// No need to add `@extends` directive to type `Query` and `Mutation` since
+	// `extend type Query` is same as declaring `type Query`.
 	for _, ext := range doc.Extensions {
-		ext.Directives = append(ext.Directives, &ast.Directive{Name: "extends"})
+		if ext.Name != "Query" && ext.Name != "Mutation" {
+			ext.Directives = append(ext.Directives, &ast.Directive{Name: "extends"})
+		}
 	}
 	doc.Definitions = append(doc.Definitions, doc.Extensions...)
 	doc.Extensions = nil
