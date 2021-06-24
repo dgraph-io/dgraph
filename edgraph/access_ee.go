@@ -1,3 +1,4 @@
+//go:build !oss
 // +build !oss
 
 /*
@@ -14,13 +15,9 @@ package edgraph
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"strconv"
-	"strings"
 	"time"
 
-	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/ristretto/z"
 
 	"github.com/dgraph-io/dgraph/query"
@@ -37,8 +34,6 @@ import (
 	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/golang/glog"
 	otrace "go.opencensus.io/trace"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 type predsAndvars struct {
@@ -424,34 +419,37 @@ func InitializeAcl(closer *z.Closer) {
 		return
 	}
 
-	upsertGuardianAndGroot := func(ns uint64) {
-		for closer.Ctx().Err() == nil {
-			ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
-			defer cancel()
-			ctx = x.AttachNamespace(ctx, ns)
-			if err := upsertGuardian(ctx); err != nil {
-				glog.Infof("Unable to upsert the guardian group. Error: %v", err)
-				time.Sleep(100 * time.Millisecond)
-				continue
-			}
-			break
-		}
+	upsertGuardianAndGroot(closer, x.GalaxyNamespace)
+}
 
-		for closer.Ctx().Err() == nil {
-			ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
-			defer cancel()
-			ctx = x.AttachNamespace(ctx, ns)
-			if err := upsertGroot(ctx, "password"); err != nil {
-				glog.Infof("Unable to upsert the groot account. Error: %v", err)
-				time.Sleep(100 * time.Millisecond)
-				continue
-			}
-			break
+// Note: The handling of closer should be done by caller.
+func upsertGuardianAndGroot(closer *z.Closer, ns uint64) {
+	if len(worker.Config.HmacSecret) == 0 {
+		// The acl feature is not turned on.
+		return
+	}
+	for closer.Ctx().Err() == nil {
+		ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
+		defer cancel()
+		ctx = x.AttachNamespace(ctx, ns)
+		if err := upsertGuardian(ctx); err != nil {
+			glog.Infof("Unable to upsert the guardian group. Error: %v", err)
+			time.Sleep(100 * time.Millisecond)
+			continue
 		}
+		break
 	}
 
-	for ns := range schema.State().Namespaces() {
-		upsertGuardianAndGroot(ns)
+	for closer.Ctx().Err() == nil {
+		ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
+		defer cancel()
+		ctx = x.AttachNamespace(ctx, ns)
+		if err := upsertGroot(ctx, "password"); err != nil {
+			glog.Infof("Unable to upsert the groot account. Error: %v", err)
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+		break
 	}
 }
 
@@ -936,7 +934,7 @@ func logAccess(log *accessEntry) {
 	}
 }
 
-//authorizeQuery authorizes the query using the aclCachePtr. It will silently drop all
+// authorizeQuery authorizes the query using the aclCachePtr. It will silently drop all
 // unauthorized predicates from query.
 // At this stage, namespace is not attached in the predicates.
 func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) error {
@@ -1149,14 +1147,13 @@ func AuthorizeGuardians(ctx context.Context) error {
 }
 
 /*
-	addUserFilterToQuery applies makes sure that a user can access only its own
-	acl info by applying filter of userid and groupid to acl predicates. A query like
-	Conversion pattern:
-		* me(func: type(dgraph.type.Group)) ->
-				me(func: type(dgraph.type.Group)) @filter(eq("dgraph.xid", groupIds...))
-		* me(func: type(dgraph.type.User)) ->
-				me(func: type(dgraph.type.User)) @filter(eq("dgraph.xid", userId))
-
+addUserFilterToQuery applies makes sure that a user can access only its own
+acl info by applying filter of userid and groupid to acl predicates. A query like
+Conversion pattern:
+  - me(func: type(dgraph.type.Group)) ->
+    me(func: type(dgraph.type.Group)) @filter(eq("dgraph.xid", groupIds...))
+  - me(func: type(dgraph.type.User)) ->
+    me(func: type(dgraph.type.User)) @filter(eq("dgraph.xid", userId))
 */
 func addUserFilterToQuery(gq *gql.GraphQuery, userId string, groupIds []string) {
 	if gq.Func != nil && gq.Func.Name == "type" {
@@ -1243,17 +1240,17 @@ func groupFilter(groupIds []string) *gql.FilterTree {
 }
 
 /*
- addUserFilterToFilter makes sure that user can't misue filters to access other user's info.
- If the *filter* have type(dgraph.type.Group) or type(dgraph.type.User) functions,
- it generate a *newFilter* with function like eq(dgraph.xid, userId) or eq(dgraph.xid,groupId...)
- and return a filter of the form
+	 addUserFilterToFilter makes sure that user can't misue filters to access other user's info.
+	 If the *filter* have type(dgraph.type.Group) or type(dgraph.type.User) functions,
+	 it generate a *newFilter* with function like eq(dgraph.xid, userId) or eq(dgraph.xid,groupId...)
+	 and return a filter of the form
 
-		&gql.FilterTree{
-			Op: "AND",
-			Child: []gql.FilterTree{
-				{filter, newFilter}
+			&gql.FilterTree{
+				Op: "AND",
+				Child: []gql.FilterTree{
+					{filter, newFilter}
+				}
 			}
-		}
 */
 func addUserFilterToFilter(filter *gql.FilterTree, userId string,
 	groupIds []string) *gql.FilterTree {
