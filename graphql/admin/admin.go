@@ -659,9 +659,7 @@ func newAdminResolver(
 	}
 	adminServerVar = server // store the admin server in package variable
 
-	prefix := x.DataKey(x.GalaxyAttr(worker.GqlSchemaPred), 0)
-	// Remove uid from the key, to get the correct prefix
-	prefix = prefix[:len(prefix)-8]
+	prefix := x.PredicatePrefix(x.GalaxyAttr(worker.GqlSchemaPred))
 	// Listen for graphql schema changes in group 1.
 	go worker.SubscribeForUpdates([][]byte{prefix}, x.IgnoreBytes, func(kvs *badgerpb.KVList) {
 
@@ -1064,8 +1062,21 @@ func (as *adminServer) lazyLoadSchema(namespace uint64) error {
 	return nil
 }
 
+func (as *adminServer) resetGQLSchema() error {
+	as.mux.Lock()
+	defer as.mux.Unlock()
+
+	as.schema = make(map[uint64]*gqlSchema)
+	return nil
+}
+
+
 func LazyLoadSchema(namespace uint64) error {
 	return adminServerVar.lazyLoadSchema(namespace)
+}
+
+func ResetGQLSchema() error {
+	return adminServerVar.resetGQLSchema()
 }
 
 func inputArgError(err error) error {
