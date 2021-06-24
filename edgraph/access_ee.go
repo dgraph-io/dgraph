@@ -434,10 +434,7 @@ func InitializeAcl(closer *z.Closer) {
 		// The acl feature is not turned on.
 		return
 	}
-
-	for ns := range schema.State().Namespaces() {
-		upsertGuardianAndGroot(closer, ns)
-	}
+	upsertGuardianAndGroot(closer, x.GalaxyNamespace)
 }
 
 // Note: The handling of closer should be done by caller.
