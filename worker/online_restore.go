@@ -336,6 +336,11 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 		return errors.Wrapf(err, "cannot load schema after restore")
 	}
 
+	// refreshing gql schema
+	if err := RefreshGQLSchema(); err != nil {
+		glog.Errorf("error while refreshing graphql schema %+v", err)
+	}
+
 	// Propose a snapshot immediately after all the work is done to prevent the restore
 	// from being replayed.
 	if err := groups().Node.proposeSnapshot(); err != nil {

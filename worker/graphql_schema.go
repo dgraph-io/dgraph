@@ -48,11 +48,59 @@ var (
 	errUpdatingGraphQLSchemaOnNonGroupOneLeader = errors.New(
 		"while updating GraphQL schema: this server isn't group-1 leader, please retry")
 	ErrMultipleGraphQLSchemaNodes = errors.New("found multiple nodes for GraphQL schema")
+	gqlSchemaStorage *GQLSchemaStorage
 )
+
+type GqlSchema struct {
+	ID              string `json:"id,omitempty"`
+	Schema          string `json:"schema,omitempty"`
+	Version         uint64
+	GeneratedSchema string
+	Loaded          bool // This indicate whether the schema has been loaded into graphql server
+	// or not
+}
+
+type GQLSchemaStorage struct {
+	mux sync.RWMutex
+	schema map[uint64]*GqlSchema
+}
+
+func NewGQLSchemaStorage() *GQLSchemaStorage {
+	gqlSchemaStorage = &GQLSchemaStorage{
+		mux:               sync.RWMutex{},
+		schema:            make(map[uint64]*GqlSchema),
+	}
+	return gqlSchemaStorage
+}
+
+func (gs *GQLSchemaStorage) Set(ns uint64, sch *GqlSchema) {
+	gs.mux.Lock()
+	defer gs.mux.Unlock()
+	gs.schema[ns] = sch
+}
+
+func (gs *GQLSchemaStorage) GetCurrent(ns uint64) (*GqlSchema, bool) {
+	gs.mux.RLock()
+	defer gs.mux.RUnlock()
+	sch, ok := gs.schema[ns]
+	return sch, ok
+}
+
+func (gs *GQLSchemaStorage) refreshGQLSchema() error {
+	gs.mux.Lock()
+	defer gs.mux.Unlock()
+
+	gs.schema = make(map[uint64]*GqlSchema)
+	return nil
+}
+
+func RefreshGQLSchema() error {
+	return gqlSchemaStorage.refreshGQLSchema()
+}
 
 // UpdateGQLSchemaOverNetwork sends the request to the group one leader for execution.
 func UpdateGQLSchemaOverNetwork(ctx context.Context, req *pb.UpdateGraphQLSchemaRequest) (*pb.
-	UpdateGraphQLSchemaResponse, error) {
+UpdateGraphQLSchemaResponse, error) {
 	if isGroupOneLeader() {
 		return (&grpcWorker{}).UpdateGraphQLSchema(ctx, req)
 	}

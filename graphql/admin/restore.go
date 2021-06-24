@@ -19,7 +19,6 @@ package admin
 import (
 	"context"
 	"encoding/json"
-	"github.com/golang/glog"
 	"sync"
 
 	"github.com/dgraph-io/dgraph/edgraph"
@@ -86,9 +85,6 @@ func resolveRestore(ctx context.Context, m schema.Mutation) (*resolve.Resolved, 
 	go func() {
 		wg.Wait()
 		edgraph.ResetAcl(nil)
-		if err := ResetGQLSchema(); err != nil {
-			glog.Errorf("error while refreshing graphql schema %+v", err)
-		}
 	}()
 
 	return resolve.DataResult(
