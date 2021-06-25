@@ -54,6 +54,7 @@ func startServers(m cmux.CMux, tlsConf *tls.Config) {
 
 	// if tls is enabled, make tls encryption based connections as default
 	if tlsConf != nil {
+		tlsConf.NextProtos = []string{"h2", "http/1.1"}
 		httpsRule := m.Match(cmux.Any())
 		// this is chained listener. tls listener will decrypt
 		// the message and send it in plain text to HTTP server
