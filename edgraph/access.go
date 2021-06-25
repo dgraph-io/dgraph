@@ -50,11 +50,16 @@ func upsertGuardianAndGroot(closer *z.Closer, ns uint64) {
 	// do nothing
 }
 
-// ResetAcls is an empty method since ACL is only supported in the enterprise version.
-func RefreshAcls(closer *z.Closer) {
+// SubscribeForAclUpdates is an empty method since ACL is only supported in the enterprise version.
+func SubscribeForAclUpdates(closer *z.Closer) {
 	// do nothing
 	<-closer.HasBeenClosed()
 	closer.Done()
+}
+
+// RefreshACLs is an empty method since ACL is only supported in the enterprise version.
+func RefreshACLs(ctx context.Context) {
+	return
 }
 
 func authorizeAlter(ctx context.Context, op *api.Operation) error {
