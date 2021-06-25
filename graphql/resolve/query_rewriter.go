@@ -1173,6 +1173,11 @@ func (authRw *authRewriter) rewriteRuleNode(
 
 	switch {
 	case len(rn.And) > 0:
+		// if there is atleast one RBAC rule which is false, then this
+		// whole And block needs to be ignored.
+		if rn.EvaluateStatic(authRw.authVariables) == schema.Negative {
+			return nil, nil
+		}
 		qrys, filts := nodeList(typ, rn.And)
 		if len(filts) == 0 {
 			return qrys, nil
