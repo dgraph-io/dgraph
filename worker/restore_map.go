@@ -450,8 +450,10 @@ func (m *mapper) processReqCh(ctx context.Context) error {
 			kv.StreamId = 0
 			// Schema and type keys are not stored in an intermediate format so their
 			// value can be written as is.
+			version := kv.Version
+			kv.Version = m.restoreTs
 			kv.Key = restoreKey
-			if err := toBuffer(kv, kv.Version); err != nil {
+			if err := toBuffer(kv, version); err != nil {
 				return err
 			}
 
