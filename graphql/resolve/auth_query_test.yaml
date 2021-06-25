@@ -644,13 +644,10 @@
       queryGroup(func: uid(GroupRoot)) {
         Group.id : uid
       }
-      GroupRoot as var(func: uid(Group_1)) @filter((uid(Group_Auth2) OR uid(Group_Auth3)))
+      GroupRoot as var(func: uid(Group_1)) @filter(uid(Group_Auth2))
       Group_1 as var(func: type(Group))
       Group_Auth2 as var(func: uid(Group_1)) @cascade {
         Group.users : Group.users @filter(eq(User.username, "user1"))
-      }
-      Group_Auth3 as var(func: uid(Group_1)) @cascade {
-        Group.createdBy : Group.createdBy @filter(eq(User.username, "user1"))
       }
     }
 
@@ -2101,5 +2098,28 @@
           dgraph.type
           Plant.breed : Plant.breed
         }
+      }
+    }
+-
+  name: "Query auth rules with filter on field with ID type"
+  gqlquery: |
+    query{
+      queryPerson{
+        id
+        name
+      }
+    }
+  jwtvar:
+    USER: ["0x5", "0x6"]
+  dgquery: |-
+    query {
+      queryPerson(func: uid(PersonRoot)) {
+        Person.id : uid
+        Person.name : Person.name
+      }
+      PersonRoot as var(func: uid(Person_1)) @filter(uid(Person_Auth2))
+      Person_1 as var(func: type(Person))
+      Person_Auth2 as var(func: uid(0x5, 0x6)) @filter(type(Person)) @cascade {
+        Person.id : uid
       }
     }
