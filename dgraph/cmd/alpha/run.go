@@ -819,7 +819,8 @@ func run() {
 		// initialization of the admin account can only be done after raft nodes are running
 		// and health check passes
 		edgraph.ResetAcl(updaters)
-		edgraph.RefreshAcls(updaters)
+		edgraph.RefreshACLs(updaters.Ctx())
+		edgraph.SubscribeForAclUpdates(updaters)
 	}()
 
 	// Graphql subscribes to alpha to get schema updates. We need to close that before we

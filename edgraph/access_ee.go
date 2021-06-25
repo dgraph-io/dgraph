@@ -316,8 +316,43 @@ func authorizeUser(ctx context.Context, userid string, password string) (
 	return user, nil
 }
 
-// RefreshAcls queries for the ACL triples and refreshes the ACLs accordingly.
-func RefreshAcls(closer *z.Closer) {
+func refreshAclCache(ctx context.Context, ns, refreshTs uint64) error {
+	glog.V(2).Infof("Refreshing ACLs")
+	req := &Request{
+		req: &api.Request{
+			Query:    queryAcls,
+			ReadOnly: true,
+			StartTs:  refreshTs,
+		},
+		doAuth: NoAuthorize,
+	}
+
+	ctx = x.AttachNamespace(ctx, ns)
+	queryResp, err := (&Server{}).doQuery(ctx, req)
+	if err != nil {
+		return errors.Errorf("unable to retrieve acls: %v", err)
+	}
+	groups, err := acl.UnmarshalGroups(queryResp.GetJson(), "allAcls")
+	if err != nil {
+		return err
+	}
+
+	aclCachePtr.update(ns, groups)
+	glog.V(2).Infof("Updated the ACL cache for namespace: %#x", ns)
+	return nil
+
+}
+
+func RefreshACLs(ctx context.Context) {
+	for ns, _ := range schema.State().Namespaces() {
+		if err := refreshAclCache(ctx, ns, 0); err != nil {
+			glog.Errorf("Error while retrieving acls for namespace %#x: %v", ns, err)
+		}
+	}
+}
+
+// SubscribeForAclUpdates subscribes for ACL predicates and updates the acl cache.
+func SubscribeForAclUpdates(closer *z.Closer) {
 	defer func() {
 		glog.Infoln("RefreshAcls closed")
 		closer.Done()
@@ -327,38 +362,14 @@ func RefreshAcls(closer *z.Closer) {
 		return
 	}
 
-	// retrieve the full data set of ACLs from the corresponding alpha server, and update the
-	// aclCachePtr
 	var maxRefreshTs uint64
 	retrieveAcls := func(ns uint64, refreshTs uint64) error {
 		if refreshTs <= maxRefreshTs {
 			return nil
 		}
 		maxRefreshTs = refreshTs
-
-		glog.V(3).Infof("Refreshing ACLs")
-		req := &Request{
-			req: &api.Request{
-				Query:    queryAcls,
-				ReadOnly: true,
-				StartTs:  refreshTs,
-			},
-			doAuth: NoAuthorize,
-		}
-
 		ctx := x.AttachNamespace(closer.Ctx(), ns)
-		queryResp, err := (&Server{}).doQuery(ctx, req)
-		if err != nil {
-			return errors.Errorf("unable to retrieve acls: %v", err)
-		}
-		groups, err := acl.UnmarshalGroups(queryResp.GetJson(), "allAcls")
-		if err != nil {
-			return err
-		}
-
-		aclCachePtr.update(ns, groups)
-		glog.V(3).Infof("Updated the ACL cache")
-		return nil
+		return refreshAclCache(ctx, ns, refreshTs)
 	}
 
 	closer.AddRunning(1)
