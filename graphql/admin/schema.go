@@ -89,7 +89,7 @@ func (gsr *getSchemaResolver) Resolve(ctx context.Context, q schema.Query) *reso
 		return resolve.EmptyResult(q, err)
 	}
 
-	cs, _:= gsr.admin.gqlSchemas.GetCurrent(ns)
+	cs, _ := gsr.admin.gqlSchemas.GetCurrent(ns)
 	if cs == nil || cs.ID == "" {
 		data = map[string]interface{}{q.Name(): nil}
 	} else {
