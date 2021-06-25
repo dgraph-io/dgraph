@@ -344,7 +344,7 @@ func refreshAclCache(ctx context.Context, ns, refreshTs uint64) error {
 }
 
 func RefreshACLs(ctx context.Context) {
-	for ns, _ := range schema.State().Namespaces() {
+	for ns := range schema.State().Namespaces() {
 		if err := refreshAclCache(ctx, ns, 0); err != nil {
 			glog.Errorf("Error while retrieving acls for namespace %#x: %v", ns, err)
 		}
