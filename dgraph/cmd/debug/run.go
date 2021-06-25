@@ -38,6 +38,7 @@ import (
 	"github.com/dgraph-io/badger/v3"
 	bpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/ristretto/z"
+	humanize "github.com/dustin/go-humanize"
 
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/ee"
@@ -874,6 +875,51 @@ func printZeroProposal(buf *bytes.Buffer, zpr *pb.ZeroProposal) {
 	default:
 		fmt.Fprintf(buf, " Proposal: %+v .", zpr)
 	}
+}
+
+func printSummary(db *badger.DB) {
+	nsFromKey := func(key []byte) uint64 {
+		pk, err := x.Parse(key)
+		if err != nil {
+			// Some of the keys are badger's internal and couldn't be parsed.
+			// Hence, the error is expected in that case.
+			fmt.Printf("Unable to parse key: %#x\n", key)
+			return x.GalaxyNamespace
+		}
+		return x.ParseNamespace(pk.Attr)
+	}
+	banned := db.BannedNamespaces()
+	bannedNs := make(map[uint64]struct{})
+	for _, ns := range banned {
+		bannedNs[ns] = struct{}{}
+	}
+
+	tables := db.Tables()
+	levelSizes := make([]uint64, len(db.Levels()))
+	nsSize := make(map[uint64]uint64)
+	for _, tab := range tables {
+		levelSizes[tab.Level] += uint64(tab.OnDiskSize)
+		if nsFromKey(tab.Left) == nsFromKey(tab.Right) {
+			nsSize[nsFromKey(tab.Left)] += uint64(tab.OnDiskSize)
+		}
+	}
+
+	fmt.Println("[SUMMARY]")
+	totalSize := uint64(0)
+	for i, sz := range levelSizes {
+		fmt.Printf("Level %d size: %12s\n", i, humanize.IBytes(sz))
+		totalSize += sz
+	}
+	fmt.Printf("Total SST size: %12s\n", humanize.IBytes(totalSize))
+	fmt.Println()
+	for ns, sz := range nsSize {
+		fmt.Printf("Namespace %#x size: %12s", ns, humanize.IBytes(sz))
+		if _, ok := bannedNs[ns]; ok {
+			fmt.Printf(" (banned)")
+		}
+		fmt.Println()
+	}
+	fmt.Println()
 }
 
 func run() {
