@@ -835,7 +835,7 @@ func printSummary(db *badger.DB) {
 	fmt.Println()
 	for ns, sz := range nsSize {
 		fmt.Printf("Namespace %#x size: %12s", ns, humanize.IBytes(sz))
-		if _, ok := bannedNs[ns]; !ok {
+		if _, ok := bannedNs[ns]; ok {
 			fmt.Printf(" (banned)")
 		}
 		fmt.Println()
