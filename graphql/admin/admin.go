@@ -588,7 +588,7 @@ type adminServer struct {
 	// The GraphQL server that's being admin'd
 	gqlServer IServeGraphQL
 
-	gqlSchemas *worker.GQLSchemaStorage
+	gqlSchemas *worker.GQLSchemaStore
 	// When the schema changes, we use these to create a new RequestResolver for
 	// the main graphql endpoint (gqlServer) and thus refresh the API.
 	fns               *resolve.ResolverFns
@@ -646,7 +646,7 @@ func newAdminResolver(
 		fns:               fns,
 		withIntrospection: withIntrospection,
 		globalEpoch:       epoch,
-		gqlSchemas:        worker.NewGQLSchemaStorage(),
+		gqlSchemas:        worker.NewGQLSchemaStore(),
 		gqlServer:         defaultGqlServer,
 	}
 	adminServerVar = server // store the admin server in package variable
