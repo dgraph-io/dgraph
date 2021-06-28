@@ -19,6 +19,7 @@ package admin
 import (
 	"context"
 	"encoding/json"
+	"github.com/dgraph-io/dgraph/worker"
 
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
@@ -33,7 +34,7 @@ type getSchemaResolver struct {
 }
 
 type updateGQLSchemaInput struct {
-	Set gqlSchema `json:"set,omitempty"`
+	Set worker.GqlSchema `json:"set,omitempty"`
 }
 
 type updateSchemaResolver struct {
@@ -88,7 +89,7 @@ func (gsr *getSchemaResolver) Resolve(ctx context.Context, q schema.Query) *reso
 		return resolve.EmptyResult(q, err)
 	}
 
-	cs := gsr.admin.schema[ns]
+	cs, _ := gsr.admin.gqlSchemas.GetCurrent(ns)
 	if cs == nil || cs.ID == "" {
 		data = map[string]interface{}{q.Name(): nil}
 	} else {
