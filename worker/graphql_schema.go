@@ -86,16 +86,15 @@ func (gs *GQLSchemaStorage) GetCurrent(ns uint64) (*GqlSchema, bool) {
 	return sch, ok
 }
 
-func (gs *GQLSchemaStorage) refreshGQLSchema() error {
+func (gs *GQLSchemaStorage) resetGQLSchema() {
 	gs.mux.Lock()
 	defer gs.mux.Unlock()
 
 	gs.schema = make(map[uint64]*GqlSchema)
-	return nil
 }
 
-func RefreshGQLSchema() error {
-	return gqlSchemaStorage.refreshGQLSchema()
+func ResetGQLSchema() {
+	gqlSchemaStorage.resetGQLSchema()
 }
 
 // UpdateGQLSchemaOverNetwork sends the request to the group one leader for execution.
