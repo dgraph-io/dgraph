@@ -62,8 +62,11 @@ func startServers(m cmux.CMux, tlsConf *tls.Config) {
 	}
 }
 
+var H2cHandler http.Handler
+
 func startListen(l net.Listener) {
 	srv := &http.Server{
+		Handler:      H2cHandler,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 600 * time.Second,
 		IdleTimeout:  2 * time.Minute,
