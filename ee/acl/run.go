@@ -19,6 +19,7 @@
 package acl
 
 import (
+	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/cobra"
 )
@@ -30,6 +31,44 @@ func init() {
 		Use:         "acl",
 		Short:       "Enterprise feature. Not supported in oss version",
 		Annotations: map[string]string{"group": "security"},
-	},
-		Acl.Cmd.SetHelpTemplate(x.NonRootTemplate)
+	}
+	CmdAcl.Cmd.SetHelpTemplate(x.NonRootTemplate)
+}
+
+// CreateUserNQuads creates the NQuads needed to store a user with the given ID and
+// password in the ACL system.
+func CreateUserNQuads(userId, password string) []*api.NQuad {
+	return []*api.NQuad{
+		{
+			Subject:     "_:newuser",
+			Predicate:   "dgraph.xid",
+			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: userId}},
+		},
+		{
+			Subject:     "_:newuser",
+			Predicate:   "dgraph.password",
+			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: password}},
+		},
+		{
+			Subject:     "_:newuser",
+			Predicate:   "dgraph.type",
+			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "dgraph.type.User"}},
+		},
+	}
+}
+
+// CreateGroupNQuads cretes NQuads needed to store a group with the give ID.
+func CreateGroupNQuads(groupId string) []*api.NQuad {
+	return []*api.NQuad{
+		{
+			Subject:     "_:newgroup",
+			Predicate:   "dgraph.xid",
+			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: groupId}},
+		},
+		{
+			Subject:     "_:newgroup",
+			Predicate:   "dgraph.type",
+			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "dgraph.type.Group"}},
+		},
+	}
 }
