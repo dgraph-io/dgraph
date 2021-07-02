@@ -513,28 +513,40 @@ func lookup(db *badger.DB) {
 		return
 	}
 
-	item := itr.Item()
-	pl, err := posting.ReadPostingList(item.KeyCopy(nil), itr)
-	if err != nil {
-		log.Fatal(err)
-	}
 	var buf bytes.Buffer
-	fmt.Fprintf(&buf, " Key: %x", item.Key())
-	fmt.Fprintf(&buf, " Length: %d", pl.Length(math.MaxUint64, 0))
+	item := itr.Item()
 
-	splits := pl.PartSplits()
-	isMultiPart := len(splits) > 0
-	fmt.Fprintf(&buf, " Is multi-part list? %v", isMultiPart)
-	if isMultiPart {
-		fmt.Fprintf(&buf, " Start UID of parts: %v\n", splits)
-	}
+	fmt.Fprintf(&buf, "Key: %x\n", item.Key())
+	pk, err := x.Parse(item.Key())
+	x.Check(err)
+	fmt.Fprintf(&buf, "Parsed Key: %+v\n", pk)
 
-	err = pl.Iterate(math.MaxUint64, 0, func(o *pb.Posting) error {
-		appendPosting(&buf, o)
-		return nil
-	})
-	if err != nil {
-		log.Fatal(err)
+	// Schema is stored as pb.SchemaUpdate, we should not try to read it as a posting list.
+	if item.UserMeta()&posting.BitSchemaPosting > 0 {
+		schemaBytes, err := item.ValueCopy(nil)
+		x.Check(err)
+		fmt.Fprintf(&buf, "Value: %s\n", schemaBytes)
+	} else {
+		pl, err := posting.ReadPostingList(item.KeyCopy(nil), itr)
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Fprintf(&buf, " Length: %d", pl.Length(math.MaxUint64, 0))
+
+		splits := pl.PartSplits()
+		isMultiPart := len(splits) > 0
+		fmt.Fprintf(&buf, " Is multi-part list? %v", isMultiPart)
+		if isMultiPart {
+			fmt.Fprintf(&buf, " Start UID of parts: %v\n", splits)
+		}
+
+		err = pl.Iterate(math.MaxUint64, 0, func(o *pb.Posting) error {
+			appendPosting(&buf, o)
+			return nil
+		})
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 	fmt.Println(buf.String())
 }
