@@ -607,6 +607,13 @@ func (m *mapper) Map(r io.Reader, in *loadBackupInput) error {
 type mapResult struct {
 	maxUid uint64
 	maxNs  uint64
+
+	// shouldDropAll is used for incremental restores. In case of normal restore, we just don't
+	// process the backups after encountering a drop operation (while iterating from latest
+	// to the oldest baskup). But for incremental restore if a drop operation is encountered, we
+	// need to call a dropAll, so that the data written in the DB because of a normal restore is
+	// cleaned up before an incremental restore.
+	shouldDropAll bool
 }
 
 // 1. RunMapper creates a mapper object
@@ -774,8 +781,9 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) (*mapResult, error) {
 		return nil, errors.Wrap(err, "failed to flush the mapper")
 	}
 	mapRes := &mapResult{
-		maxUid: mapper.maxUid,
-		maxNs:  mapper.maxNs,
+		maxUid:        mapper.maxUid,
+		maxNs:         mapper.maxNs,
+		shouldDropAll: dropAll,
 	}
 	// update the maxNsId considering banned namespaces.
 	mapRes.maxNs = x.Max(mapRes.maxNs, maxBannedNs)
