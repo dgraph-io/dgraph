@@ -150,8 +150,10 @@ func StartRaftNodes(walStore *raftwal.DiskStorage, bindall bool) {
 	gr.Node = newNode(walStore, gid, raftIdx, x.WorkerConfig.MyAddr)
 
 	x.Checkf(schema.LoadFromDb(), "Error while initializing schema")
+	glog.Infof("Load schema from DB: OK")
 	raftServer.UpdateNode(gr.Node.Node)
 	gr.Node.InitAndStartNode()
+	glog.Infof("Init and start Raft node: OK")
 
 	gr.closer = z.NewCloser(3) // Match CLOSER:1 in this file.
 	go gr.sendMembershipUpdates()
@@ -159,11 +161,14 @@ func StartRaftNodes(walStore *raftwal.DiskStorage, bindall bool) {
 	go gr.processOracleDeltaStream()
 
 	gr.informZeroAboutTablets()
+
+	glog.Infof("Informed Zero about tablets I have: OK")
 	gr.applyInitialSchema()
 	gr.applyInitialTypes()
+	glog.Infof("Upserted Schema and Types: OK")
 
 	x.UpdateHealthStatus(true)
-	glog.Infof("Server is ready")
+	glog.Infof("Server is ready: OK")
 }
 
 func (g *groupi) Ctx() context.Context {
@@ -186,6 +191,10 @@ func (g *groupi) informZeroAboutTablets() {
 		failed := false
 		preds := schema.State().Predicates()
 		for _, pred := range preds {
+			if len(pred) == 0 {
+				glog.Warningf("Got an empty pred")
+				continue
+			}
 			if tablet, err := g.Tablet(pred); err != nil {
 				failed = true
 				glog.Errorf("Error while getting tablet for pred %q: %v", pred, err)
