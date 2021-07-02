@@ -672,6 +672,11 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) (*mapResult, error) {
 
 	// manifests are ordered as: latest..full
 	for i, manifest := range manifests {
+		// We only need to consider the incremental backups.
+		if manifest.BackupNum < req.IncrementalFrom {
+			break
+		}
+
 		// A dropAll or DropData operation is encountered. No need to restore previous backups.
 		if dropAll {
 			break

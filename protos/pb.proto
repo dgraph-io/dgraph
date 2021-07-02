@@ -317,6 +317,7 @@ message RestoreRequest {
   string vault_format = 15;
 
   uint64 backup_num = 16;
+  uint64 incremental_from = 17;
 }
 
 message Proposal {

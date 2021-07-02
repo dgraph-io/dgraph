@@ -246,16 +246,23 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 		return errors.Errorf("nil restore request")
 	}
 
-	// Drop all the current data. This also cancels all existing transactions.
-	dropProposal := pb.Proposal{
-		Mutations: &pb.Mutations{
-			GroupId: req.GroupId,
-			StartTs: req.RestoreTs,
-			DropOp:  pb.Mutations_ALL,
-		},
+	if req.IncrementalFrom == 1 {
+		return errors.Errorf("Incremental restore must not include full backup")
 	}
-	if err := groups().Node.applyMutations(ctx, &dropProposal); err != nil {
-		return err
+
+	// Clean up the cluster if it is a full backup restore.
+	if req.IncrementalFrom == 0 {
+		// Drop all the current data. This also cancels all existing transactions.
+		dropProposal := pb.Proposal{
+			Mutations: &pb.Mutations{
+				GroupId: req.GroupId,
+				StartTs: req.RestoreTs,
+				DropOp:  pb.Mutations_ALL,
+			},
+		}
+		if err := groups().Node.applyMutations(ctx, &dropProposal); err != nil {
+			return err
+		}
 	}
 
 	// TODO: after the drop, the tablets for the predicates stored in this group's
