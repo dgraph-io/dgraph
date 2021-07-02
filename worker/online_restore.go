@@ -28,12 +28,14 @@ import (
 
 	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/badger/v3/options"
+	badgerpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
@@ -240,6 +242,24 @@ func (w *grpcWorker) Restore(ctx context.Context, req *pb.RestoreRequest) (*pb.S
 	return &emptyRes, nil
 }
 
+type IncrementalWriter struct {
+	Loader *badger.KVLoader
+}
+
+func (iw IncrementalWriter) Write(buf *z.Buffer) error {
+	if buf.LenNoPadding() == 0 {
+		return nil
+	}
+	err := buf.SliceIterate(func(s []byte) error {
+		kv := &badgerpb.KV{}
+		if err := kv.Unmarshal(s); err != nil {
+			return err
+		}
+		return iw.Loader.Set(kv)
+	})
+	return err
+}
+
 // TODO(DGRAPH-1232): Ensure all groups receive the restore proposal.
 func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 	if req == nil {
@@ -251,6 +271,7 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 	}
 
 	// Clean up the cluster if it is a full backup restore.
+	glog.Infof("[handleRestoreProposal] IncrementalFrom: %d\n", req.IncrementalFrom)
 	if req.IncrementalFrom == 0 {
 		// Drop all the current data. This also cancels all existing transactions.
 		dropProposal := pb.Proposal{
@@ -321,16 +342,27 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 	}
 	glog.Infof("Backup map phase is complete. Map result is: %+v\n", mapRes)
 
-	// Reduce the map to pstore using stream writer.
-	sw := pstore.NewStreamWriter()
-	if err := sw.Prepare(); err != nil {
-		return errors.Wrapf(err, "while preparing DB")
-	}
-	if err := RunReducer(sw, mapDir); err != nil {
-		return errors.Wrap(err, "failed to reduce restore map")
-	}
-	if err := sw.Flush(); err != nil {
-		return errors.Wrap(err, "while stream writer flush")
+	// We can not use stream writer for incremental restore, we we use badger batch write.
+	if req.IncrementalFrom > 0 {
+		iw := IncrementalWriter{Loader: pstore.NewKVLoader(16)}
+		if err := RunReducer(iw, mapDir); err != nil {
+			return errors.Wrap(err, "failed to reduce incremental restore map")
+		}
+		if err := iw.Loader.Finish(); err != nil {
+			return errors.Wrap(err, "failed to reduce incremental restore map")
+		}
+	} else {
+		// Reduce the map to pstore using stream writer.
+		sw := pstore.NewStreamWriter()
+		if err := sw.Prepare(); err != nil {
+			return errors.Wrapf(err, "while preparing DB")
+		}
+		if err := RunReducer(sw, mapDir); err != nil {
+			return errors.Wrap(err, "failed to reduce restore map")
+		}
+		if err := sw.Flush(); err != nil {
+			return errors.Wrap(err, "while stream writer flush")
+		}
 	}
 
 	// Bump the UID and NsId lease after restore.
