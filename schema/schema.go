@@ -487,7 +487,7 @@ func loadFromDB(loadType int) error {
 		pk, err := x.Parse(key)
 		if err != nil {
 			glog.Errorf("Error while parsing key %s: %v", hex.Dump(key), err)
-			return nil, errors.Wrapf(err, "KeyToList")
+			return nil, nil
 		}
 		if len(pk.Attr) == 0 {
 			glog.Warningf("Empty Attribute: %+v for Key: %x\n", pk, key)
