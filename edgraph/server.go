@@ -409,7 +409,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		// reset their in-memory GraphQL schema
 		_, err = UpdateGQLSchema(ctx, "", "")
 		// recreate the admin account after a drop all operation
-		ResetAcl(nil)
+		InitializeAcl(nil)
 		return empty, err
 	}
 

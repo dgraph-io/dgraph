@@ -339,6 +339,7 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 	// reset gql schema
 	glog.Info("reseting local gql schema store")
 	ResetGQLSchemaStore()
+	ResetAclCache()
 
 	// Propose a snapshot immediately after all the work is done to prevent the restore
 	// from being replayed.

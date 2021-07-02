@@ -1,16 +1,4 @@
-// +build !oss
-
-/*
- * Copyright 2018 Dgraph Labs, Inc. All rights reserved.
- *
- * Licensed under the Dgraph Community License (the "License"); you
- * may not use this file except in compliance with the License. You
- * may obtain a copy of the License at
- *
- *     https://github.com/dgraph-io/dgraph/blob/master/licenses/DCL.txt
- */
-
-package edgraph
+package worker
 
 import (
 	"sync"
@@ -21,22 +9,44 @@ import (
 )
 
 // aclCache is the cache mapping group names to the corresponding group acls
-type aclCache struct {
+type AclCache struct {
 	sync.RWMutex
+	loaded        bool
 	predPerms     map[string]map[string]int32
 	userPredPerms map[string]map[string]int32
 }
 
-var aclCachePtr = &aclCache{
+func (cache *AclCache) reset() {
+	cache.loaded = false
+}
+
+func ResetAclCache() {
+	AclCachePtr.reset()
+}
+
+func (cache *AclCache) Loaded() bool {
+	return cache.loaded
+}
+
+func (cache *AclCache) Set() {
+	cache.loaded = true
+}
+
+var AclCachePtr = &AclCache{
+	loaded:        false,
 	predPerms:     make(map[string]map[string]int32),
 	userPredPerms: make(map[string]map[string]int32),
 }
 
-func (cache *aclCache) update(ns uint64, groups []acl.Group) {
+func (cache *AclCache) GetUserPredPerms(userId string) map[string]int32 {
+	return cache.userPredPerms[userId]
+}
+
+func (cache *AclCache) Update(ns uint64, groups []acl.Group) {
 	// In dgraph, acl rules are divided by groups, e.g.
 	// the dev group has the following blob representing its ACL rules
 	// [friend, 4], [name, 7] where friend and name are predicates,
-	// However in the aclCachePtr in memory, we need to change the structure and store
+	// However in the AclCachePtr in memory, we need to change the structure and store
 	// the information in two formats for efficient look-ups.
 	//
 	// First in which ACL rules are divided by predicates, e.g.
@@ -101,21 +111,21 @@ func (cache *aclCache) update(ns uint64, groups []acl.Group) {
 		}
 	}
 
-	aclCachePtr.Lock()
-	defer aclCachePtr.Unlock()
-	aclCachePtr.predPerms = predPerms
-	aclCachePtr.userPredPerms = userPredPerms
+	AclCachePtr.Lock()
+	defer AclCachePtr.Unlock()
+	AclCachePtr.predPerms = predPerms
+	AclCachePtr.userPredPerms = userPredPerms
 }
 
-func (cache *aclCache) authorizePredicate(groups []string, predicate string,
+func (cache *AclCache) AuthorizePredicate(groups []string, predicate string,
 	operation *acl.Operation) error {
 	if x.IsAclPredicate(x.ParseAttr(predicate)) {
 		return errors.Errorf("only groot is allowed to access the ACL predicate: %s", predicate)
 	}
 
-	aclCachePtr.RLock()
-	predPerms := aclCachePtr.predPerms
-	aclCachePtr.RUnlock()
+	AclCachePtr.RLock()
+	predPerms := AclCachePtr.predPerms
+	AclCachePtr.RUnlock()
 
 	if groupPerms, found := predPerms[predicate]; found {
 		if hasRequiredAccess(groupPerms, groups, operation) {

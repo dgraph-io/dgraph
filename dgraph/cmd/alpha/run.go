@@ -818,8 +818,7 @@ func run() {
 
 		// initialization of the admin account can only be done after raft nodes are running
 		// and health check passes
-		edgraph.ResetAcl(updaters)
-		edgraph.RefreshACLs(updaters.Ctx())
+		edgraph.InitializeAcl(updaters)
 		edgraph.SubscribeForAclUpdates(updaters)
 	}()
 
