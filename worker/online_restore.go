@@ -342,7 +342,7 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest, pidx uin
 	}
 	glog.Infof("Backup map phase is complete. Map result is: %+v\n", mapRes)
 
-	// We can not use stream writer for incremental restore, we we use badger batch write.
+	// We can not use stream writer for incremental restore, we use badger batch write for it.
 	if req.IncrementalFrom > 0 {
 		if mapRes.shouldDropAll {
 			if err := pstore.DropAll(); err != nil {
