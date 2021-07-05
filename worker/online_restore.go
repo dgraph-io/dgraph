@@ -271,7 +271,6 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest, pidx uin
 	}
 
 	// Clean up the cluster if it is a full backup restore.
-	glog.Infof("[handleRestoreProposal] IncrementalFrom: %d\n", req.IncrementalFrom)
 	if req.IncrementalFrom == 0 {
 		// Drop all the current data. This also cancels all existing transactions.
 		dropProposal := pb.Proposal{
