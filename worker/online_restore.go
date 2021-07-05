@@ -344,14 +344,18 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest, pidx uin
 
 	// We can not use stream writer for incremental restore, we use badger batch write for it.
 	if req.IncrementalFrom > 0 {
+		// If there is a drop all in between the last restored backup and the incremental backups
+		// then drop everything before restoring incremental backups.
 		if mapRes.shouldDropAll {
 			if err := pstore.DropAll(); err != nil {
 				return errors.Wrap(err, "failed to reduce incremental restore map")
 			}
 		}
 
-		// Drop the predicates if required.
-		var dropAttrs [][]byte
+		// Drop all the predictes which were dropped in between the last restored backup and the
+		// incremental backup. Also, drop all the schema and type keys, latest schema and type will
+		// be written by the restore of lastest incremental backup.
+		dropAttrs := [][]byte{x.SchemaPrefix(), x.TypePrefix()}
 		for attr := range mapRes.dropAttr {
 			dropAttrs = append(dropAttrs, x.PredicatePrefix(attr))
 		}
