@@ -313,13 +313,13 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest, pidx uin
 	}
 
 	lastManifest := manifests[0]
-	preds, ok := lastManifest.Groups[req.GroupId]
+	restorePreds, ok := lastManifest.Groups[req.GroupId]
 
 	if !ok {
 		return errors.Errorf("backup manifest does not contain information for group ID %d",
 			req.GroupId)
 	}
-	for _, pred := range preds {
+	for _, pred := range restorePreds {
 		// Force the tablet to be moved to this group, even if it's currently being served
 		// by another group.
 		if tablet, err := groups().ForceTablet(pred); err != nil {
@@ -358,6 +358,22 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest, pidx uin
 		for attr := range mapRes.dropAttr {
 			dropAttrs = append(dropAttrs, x.PredicatePrefix(attr))
 		}
+
+		// Any predicate which is currently in the state but not in the latest manifest should
+		// be dropped. It is possible that the tablet would have been moved in between the last
+		// restored backup and the incremental backups being restored.
+		clusterPreds := schema.State().Predicates()
+		validPreds := make(map[string]struct{})
+		for _, pred := range restorePreds {
+			validPreds[pred] = struct{}{}
+		}
+		for _, pred := range clusterPreds {
+			if _, ok := validPreds[pred]; !ok {
+				// drop this pred
+				dropAttrs = append(dropAttrs, x.PredicatePrefix(pred))
+			}
+		}
+
 		if err := pstore.DropPrefix(dropAttrs...); err != nil {
 			return errors.Wrap(err, "failed to reduce incremental restore map")
 		}
