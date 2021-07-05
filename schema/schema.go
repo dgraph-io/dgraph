@@ -499,6 +499,7 @@ func Load(predicate string) error {
 
 // LoadFromDb reads schema information from db and stores it in memory
 func LoadFromDb() error {
+	State().DeleteAll()
 	if err := LoadSchemaFromDb(); err != nil {
 		return err
 	}

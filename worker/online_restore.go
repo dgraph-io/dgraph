@@ -351,10 +351,12 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest, pidx uin
 		}
 
 		// Drop the predicates if required.
+		var dropAttrs [][]byte
 		for attr := range mapRes.dropAttr {
-			if err := pstore.DropPrefix(x.PredicatePrefix(attr)); err != nil {
-				return errors.Wrap(err, "failed to reduce incremental restore map")
-			}
+			dropAttrs = append(dropAttrs, x.PredicatePrefix(attr))
+		}
+		if err := pstore.DropPrefix(dropAttrs...); err != nil {
+			return errors.Wrap(err, "failed to reduce incremental restore map")
 		}
 
 		iw := IncrementalWriter{Loader: pstore.NewKVLoader(16)}
