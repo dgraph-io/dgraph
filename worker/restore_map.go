@@ -614,6 +614,7 @@ type mapResult struct {
 	// need to call a dropAll, so that the data written in the DB because of a normal restore is
 	// cleaned up before an incremental restore.
 	shouldDropAll bool
+	dropAttr      map[string]struct{}
 }
 
 // 1. RunMapper creates a mapper object
@@ -784,6 +785,7 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) (*mapResult, error) {
 		maxUid:        mapper.maxUid,
 		maxNs:         mapper.maxNs,
 		shouldDropAll: dropAll,
+		dropAttr:      dropAttr,
 	}
 	// update the maxNsId considering banned namespaces.
 	mapRes.maxNs = x.Max(mapRes.maxNs, maxBannedNs)

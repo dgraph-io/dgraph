@@ -349,6 +349,14 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest, pidx uin
 				return errors.Wrap(err, "failed to reduce incremental restore map")
 			}
 		}
+
+		// Drop the predicates if required.
+		for attr := range mapRes.dropAttr {
+			if err := pstore.DropPrefix(x.PredicatePrefix(attr)); err != nil {
+				return errors.Wrap(err, "failed to reduce incremental restore map")
+			}
+		}
+
 		iw := IncrementalWriter{Loader: pstore.NewKVLoader(16)}
 		if err := RunReducer(iw, mapDir); err != nil {
 			return errors.Wrap(err, "failed to reduce incremental restore map")
