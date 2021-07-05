@@ -373,7 +373,6 @@ func SubscribeForAclUpdates(closer *z.Closer) {
 
 		if !worker.AclCachePtr.Loaded() {
 			updaters := z.NewCloser(1)
-			InitializeAcl(updaters)
 			RefreshACLs(updaters.Ctx())
 		}
 
@@ -633,8 +632,6 @@ func authorizePreds(ctx context.Context, userData *userData, preds []string,
 	aclOp *acl.Operation) *authPredResult {
 
 	if !worker.AclCachePtr.Loaded() {
-		updaters := z.NewCloser(1)
-		InitializeAcl(updaters)
 		RefreshACLs(ctx)
 	}
 
