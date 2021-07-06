@@ -171,6 +171,10 @@ func StartRaftNodes(walStore *raftwal.DiskStorage, bindall bool) {
 	glog.Infof("Server is ready: OK")
 }
 
+func RunLinRead(ctx context.Context) error {
+	return groups().Node.WaitLinearizableRead(ctx)
+}
+
 func (g *groupi) Ctx() context.Context {
 	return g.closer.Ctx()
 }

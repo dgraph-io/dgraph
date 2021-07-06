@@ -375,8 +375,29 @@ func healthCheck(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, ok := r.URL.Query()["live"]
-	if !ok {
+	if lr, ok := r.URL.Query()["linread"]; ok {
+		if len(lr) == 0 {
+			// return error
+		}
+		b, err := strconv.ParseBool(lr[0])
+		if err != nil {
+			// return error
+		}
+		if b {
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+			err := worker.RunLinRead(ctx)
+			// Maybe return a JSON error, if linread failed. If it succeeded, then
+			// we can
+			// Maybe this should be part of the health endpoint in server.
+			_ = err
+		}
+	}
+
+	// This section is checking if live key is present. If not present, it would
+	// do an extra check for x.HealthCheck(), which also considers draining
+	// mode. The server.Health endpoint does not consider
+	if _, has := r.URL.Query()["live"]; !has {
 		if err := x.HealthCheck(); err != nil {
 			w.WriteHeader(http.StatusServiceUnavailable)
 			_, err = w.Write([]byte(err.Error()))
