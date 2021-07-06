@@ -332,10 +332,11 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest, pidx uin
 			}
 		}
 
-		// Drop all the predictes which were dropped in between the last restored backup and the
-		// incremental backup. Also, drop all the schema and type keys, latest schema and type will
-		// be written by the restore of lastest incremental backup.
 		dropAttrs := [][]byte{x.SchemaPrefix(), x.TypePrefix()}
+		for ns := range mapRes.dropNs {
+			prefix := x.DataPrefix(ns)
+			dropAttrs = append(dropAttrs, prefix)
+		}
 		for attr := range mapRes.dropAttr {
 			dropAttrs = append(dropAttrs, x.PredicatePrefix(attr))
 		}

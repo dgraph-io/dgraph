@@ -615,6 +615,7 @@ type mapResult struct {
 	// cleaned up before an incremental restore.
 	shouldDropAll bool
 	dropAttr      map[string]struct{}
+	dropNs        map[uint64]struct{}
 }
 
 // 1. RunMapper creates a mapper object
@@ -680,6 +681,8 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) (*mapResult, error) {
 
 	// manifests are ordered as: latest..full
 	for i, manifest := range manifests {
+
+		glog.Infof("[MAP] Reading manifest %d\n", manifest.BackupNum)
 		// We only need to consider the incremental backups.
 		if manifest.BackupNum < req.IncrementalFrom {
 			break
@@ -743,11 +746,6 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) (*mapResult, error) {
 			case pb.DropOperation_ALL:
 				dropAll = true
 			case pb.DropOperation_DATA:
-				if op.DropValue == "" {
-					// In 2103, we do not support namespace level drop data.
-					dropAll = true
-					continue
-				}
 				ns, err := strconv.ParseUint(op.DropValue, 0, 64)
 				if err != nil {
 					return nil, errors.Wrap(err, "Map phase failed to parse namespace")
@@ -771,6 +769,7 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) (*mapResult, error) {
 				maxBannedNs = x.Max(maxBannedNs, ns)
 			}
 		}
+		glog.Infof("[MAP] Reading manifest %d done! dropAll: %v\n", manifest.BackupNum, dropAll)
 	} // done with all the manifests.
 
 	glog.Infof("Histogram of map input sizes:\n%s\n", mapper.szHist)
@@ -786,6 +785,7 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) (*mapResult, error) {
 		maxNs:         mapper.maxNs,
 		shouldDropAll: dropAll,
 		dropAttr:      dropAttr,
+		dropNs:        dropNs,
 	}
 	// update the maxNsId considering banned namespaces.
 	mapRes.maxNs = x.Max(mapRes.maxNs, maxBannedNs)

@@ -202,6 +202,20 @@ func TestBasicRestore(t *testing.T) {
 	runMutations(t, dg)
 }
 
+// The 6 backups that are being restored in this test were taken in the following manner
+// Add _:a <name> "alice" .
+// Take backup b1
+// Add _:b <name> "bob" .
+// Add _:b <age> "12" .
+// Take backup b2
+// Drop attribute "name"
+// Take backup b3
+// Add _:a <name> "alice" .
+// Take backup b4
+// drop data
+// Take backup b5
+// drop all
+// Take backup b6
 func TestIncrementalRestore(t *testing.T) {
 	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))))
 	require.NoError(t, err)
@@ -212,36 +226,80 @@ func TestIncrementalRestore(t *testing.T) {
 
 	req := &restoreReq{
 		location:  "/data/backups2011",
-		backupId:  "vigorous_williamson1",
 		backupNum: 1,
 	}
 	sendRestoreRequest(t, req)
 	testutil.WaitForRestore(t, dg)
 
-	res, err := dg.NewTxn().Query(context.Background(), `{
-	  q(func: has(name)) {
-		name
-		age
-	  }
-	}`)
-	require.NoError(t, err)
-	require.JSONEq(t, `{"q":[{"name":"alice", "age":"12"}]}`, string(res.Json))
+	query := `{ q(func: has(name)) { name age } }`
+	runQuery := func(query, expectedResp string) {
+		res, err := dg.NewTxn().Query(context.Background(), query)
+		require.NoError(t, err)
+		require.JSONEq(t, expectedResp, string(res.Json))
+	}
+	runQuery(query, `{"q":[{"name":"alice"}]}`)
 
 	req = &restoreReq{
 		location:        "/data/backups2011",
-		backupId:        "vigorous_williamson1",
+		backupNum:       2,
 		incrementalFrom: 2,
 	}
 	sendRestoreRequest(t, req)
 	testutil.WaitForRestore(t, dg)
-	res, err = dg.NewTxn().Query(context.Background(), `{
-	  q(func: has(name)) {
-		name
-		age
-	  }
-	}`)
+	runQuery(query, `{"q":[{"name":"alice"}, {"name":"bob", "age": "12"}]}`)
+
+	req = &restoreReq{
+		location:        "/data/backups2011",
+		backupNum:       3,
+		incrementalFrom: 3,
+	}
+	sendRestoreRequest(t, req)
+	testutil.WaitForRestore(t, dg)
+	runQuery(query, `{"q":[]}`)
+	runQuery(`{ q(func: has(age)) {age} }`, `{"q":[{"age": "12"}]}`)
+
+	req = &restoreReq{
+		location:        "/data/backups2011",
+		backupNum:       4,
+		incrementalFrom: 4,
+	}
+	sendRestoreRequest(t, req)
+	testutil.WaitForRestore(t, dg)
+	runQuery(query, `{"q":[{"name":"alice"}]}`)
+
+	req = &restoreReq{
+		location:        "/data/backups2011",
+		backupNum:       5,
+		incrementalFrom: 5,
+	}
+
+	sendRestoreRequest(t, req)
+	testutil.WaitForRestore(t, dg)
+	runQuery(query, `{"q":[]}`)
+	runQuery(`{ q(func: has(age)) {age} }`, `{"q":[]}`)
+
+	// after drop data, there should be no data but schema should still contain the predicates.
+	res, err := dg.NewTxn().Query(context.Background(), `schema{}`)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"q":[{"name":"alice"}, {"name":"bob"}]}`, string(res.Json))
+	require.Contains(t, string(res.Json), `{"predicate":"age","type":"default"}`)
+	require.Contains(t, string(res.Json), `{"predicate":"name","type":"default"}`)
+
+	req = &restoreReq{
+		location:        "/data/backups2011",
+		backupNum:       6,
+		incrementalFrom: 6,
+	}
+
+	// after drop all
+	sendRestoreRequest(t, req)
+	testutil.WaitForRestore(t, dg)
+	runQuery(query, `{"q":[]}`)
+	runQuery(`{ q(func: has(age)) {age} }`, `{"q":[]}`)
+
+	res, err := dg.NewTxn().Query(context.Background(), `schema{}`)
+	require.NoError(t, err)
+	require.NotContains(t, string(res.Json), `{"predicate":"age","type":"default"}`)
+	require.NotContains(t, string(res.Json), `{"predicate":"name","type":"default"}`)
 }
 
 func TestRestoreBackupNum(t *testing.T) {
