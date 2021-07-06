@@ -674,7 +674,7 @@ func (n *node) applyCommitted(proposal *pb.Proposal, key uint64) error {
 		}
 		defer closer.Done()
 
-		glog.Infof("Got restore proposal at Index:%d, ReadTs:%d",
+		glog.Infof("Got restore proposal at Index: %d, ReadTs: %d",
 			proposal.Index, proposal.Restore.RestoreTs)
 		if err := handleRestoreProposal(ctx, proposal.Restore, proposal.Index); err != nil {
 			return err

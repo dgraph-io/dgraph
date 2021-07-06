@@ -21,6 +21,10 @@ services:
       source: ./backup
       target: /data/backup2
       read_only: true
+    - type: bind
+      source: ./backups2011
+      target: /data/backups2011
+      read_only: true
     - type: volume
       source: backup
       target: /data/backup
@@ -55,6 +59,10 @@ services:
     - type: bind
       source: ./keys
       target: /data/keys
+      read_only: true
+    - type: bind
+      source: ./backups2011
+      target: /data/backups2011
       read_only: true
     - type: volume
       source: backup
@@ -91,6 +99,10 @@ services:
       source: ./backup
       target: /data/backup2
       read_only: true
+    - type: bind
+      source: ./backups2011
+      target: /data/backups2011
+      read_only: true
     - type: volume
       source: backup
       target: /data/backup
@@ -125,6 +137,10 @@ services:
     - type: bind
       source: ./backup
       target: /data/backup2
+      read_only: true
+    - type: bind
+      source: ./backups2011
+      target: /data/backups2011
       read_only: true
     - type: volume
       source: backup
@@ -161,6 +177,10 @@ services:
       source: ./backup
       target: /data/backup2
       read_only: true
+    - type: bind
+      source: ./backups2011
+      target: /data/backups2011
+      read_only: true
     - type: volume
       source: backup
       target: /data/backup
@@ -195,6 +215,10 @@ services:
     - type: bind
       source: ./backup
       target: /data/backup2
+      read_only: true
+    - type: bind
+      source: ./backups2011
+      target: /data/backups2011
       read_only: true
     - type: volume
       source: backup

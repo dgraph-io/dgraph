@@ -39,22 +39,36 @@ import (
 	"github.com/dgraph-io/dgraph/testutil"
 )
 
-func sendRestoreRequest(t *testing.T, location, backupId string, backupNum int) {
-	if location == "" {
-		location = "/data/backup2"
-	}
+type restoreReq struct {
+	location        string
+	backupId        string
+	backupNum       int
+	encKeyFile      string
+	incrementalFrom int
+}
+
+const (
+	backupLocation     = "/data/backup2"
+	backup2011Location = "/data/backups2011"
+	encKeyFile         = "/data/keys/enc_key"
+)
+
+func sendRestoreRequest(t *testing.T, req *restoreReq) {
 	params := testutil.GraphQLParams{
-		Query: `mutation restore($location: String!, $backupId: String, $backupNum: Int) {
+		Query: `mutation restore($location: String!, $backupId: String, $backupNum: Int,
+			$encKey: String, $incrFrom: Int) {
 			restore(input: {location: $location, backupId: $backupId, backupNum: $backupNum,
-				encryptionKeyFile: "/data/keys/enc_key"}) {
+				encryptionKeyFile: $encKey, incrementalFrom: $incrFrom}) {
 				code
 				message
 			}
 		}`,
 		Variables: map[string]interface{}{
-			"location":  location,
-			"backupId":  backupId,
-			"backupNum": backupNum,
+			"location":  req.location,
+			"backupId":  req.backupId,
+			"backupNum": req.backupNum,
+			"encKey":    req.encKeyFile,
+			"incrFrom":  req.incrementalFrom,
 		},
 	}
 	resp := testutil.MakeGQLRequestWithTLS(t, &params, testutil.GetAlphaClientConfig(t))
@@ -177,10 +191,57 @@ func TestBasicRestore(t *testing.T) {
 	ctx := context.Background()
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
 
-	sendRestoreRequest(t, "", "youthful_rhodes3", 0)
+	req := &restoreReq{
+		location:   backupLocation,
+		backupId:   "youthful_rhodes3",
+		encKeyFile: encKeyFile,
+	}
+	sendRestoreRequest(t, req)
 	testutil.WaitForRestore(t, dg)
 	runQueries(t, dg, false)
 	runMutations(t, dg)
+}
+
+func TestIncrementalRestore(t *testing.T) {
+	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))))
+	require.NoError(t, err)
+	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
+
+	ctx := context.Background()
+	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
+
+	req := &restoreReq{
+		location:  "/data/backups2011",
+		backupId:  "vigorous_williamson1",
+		backupNum: 1,
+	}
+	sendRestoreRequest(t, req)
+	testutil.WaitForRestore(t, dg)
+
+	res, err := dg.NewTxn().Query(context.Background(), `{
+	  q(func: has(name)) {
+		name
+		age
+	  }
+	}`)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"q":[{"name":"alice", "age":"12"}]}`, string(res.Json))
+
+	req = &restoreReq{
+		location:        "/data/backups2011",
+		backupId:        "vigorous_williamson1",
+		incrementalFrom: 2,
+	}
+	sendRestoreRequest(t, req)
+	testutil.WaitForRestore(t, dg)
+	res, err = dg.NewTxn().Query(context.Background(), `{
+	  q(func: has(name)) {
+		name
+		age
+	  }
+	}`)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"q":[{"name":"alice"}, {"name":"bob"}]}`, string(res.Json))
 }
 
 func TestRestoreBackupNum(t *testing.T) {
@@ -194,7 +255,13 @@ func TestRestoreBackupNum(t *testing.T) {
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
 	runQueries(t, dg, true)
 
-	sendRestoreRequest(t, "", "youthful_rhodes3", 1)
+	req := &restoreReq{
+		location:   backupLocation,
+		backupId:   "youthful_rhodes3",
+		backupNum:  1,
+		encKeyFile: encKeyFile,
+	}
+	sendRestoreRequest(t, req)
 	testutil.WaitForRestore(t, dg)
 	runQueries(t, dg, true)
 	runMutations(t, dg)
@@ -267,13 +334,23 @@ func TestMoveTablets(t *testing.T) {
 	ctx := context.Background()
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
 
-	sendRestoreRequest(t, "", "youthful_rhodes3", 0)
+	req := &restoreReq{
+		location:   backupLocation,
+		backupId:   "youthful_rhodes3",
+		encKeyFile: encKeyFile,
+	}
+	sendRestoreRequest(t, req)
 	testutil.WaitForRestore(t, dg)
 	runQueries(t, dg, false)
 
 	// Send another restore request with a different backup. This backup has some of the
 	// same predicates as the previous one but they are stored in different groups.
-	sendRestoreRequest(t, "", "blissful_hermann1", 0)
+	req = &restoreReq{
+		location:   backupLocation,
+		backupId:   "blissful_hermann1",
+		encKeyFile: encKeyFile,
+	}
+	sendRestoreRequest(t, req)
 	testutil.WaitForRestore(t, dg)
 
 	resp, err := dg.NewTxn().Query(context.Background(), `{
@@ -569,7 +646,13 @@ func backupRestoreAndVerify(t *testing.T, dg *dgo.Dgraph, backupDir, queryToVeri
 	expectedResponse string, schemaVerificationOpts testutil.SchemaOptions) {
 	schemaVerificationOpts.ExcludeAclSchema = true
 	backup(t, backupDir)
-	sendRestoreRequest(t, backupDir, "", 0)
+
+	req := &restoreReq{
+		location:   backupDir,
+		encKeyFile: encKeyFile,
+	}
+
+	sendRestoreRequest(t, req)
 	testutil.WaitForRestore(t, dg)
 	testutil.VerifyQueryResponse(t, dg, queryToVerify, expectedResponse)
 	testutil.VerifySchema(t, dg, schemaVerificationOpts)
