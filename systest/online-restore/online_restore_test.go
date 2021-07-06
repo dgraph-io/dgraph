@@ -296,7 +296,7 @@ func TestIncrementalRestore(t *testing.T) {
 	runQuery(query, `{"q":[]}`)
 	runQuery(`{ q(func: has(age)) {age} }`, `{"q":[]}`)
 
-	res, err := dg.NewTxn().Query(context.Background(), `schema{}`)
+	res, err = dg.NewTxn().Query(context.Background(), `schema{}`)
 	require.NoError(t, err)
 	require.NotContains(t, string(res.Json), `{"predicate":"age","type":"default"}`)
 	require.NotContains(t, string(res.Json), `{"predicate":"name","type":"default"}`)
