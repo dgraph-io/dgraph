@@ -318,6 +318,7 @@ message RestoreRequest {
 
   uint64 backup_num = 16;
   uint64 incremental_from = 17;
+  bool isPartial = 18;
 }
 
 message Proposal {

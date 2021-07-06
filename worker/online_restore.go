@@ -383,9 +383,12 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest, pidx uin
 		return errors.Wrapf(err, "cannot load schema after restore")
 	}
 
-	// reset gql schema
+	// Reset gql schema only when the restore is not partial, so that after this restore the cluster
+	// can be in non-draining mode and hence gqlSchema can be lazy loaded.
 	glog.Info("reseting local gql schema store")
-	ResetGQLSchemaStore()
+	if !req.IsPartial {
+		ResetGQLSchemaStore()
+	}
 
 	// Propose a snapshot immediately after all the work is done to prevent the restore
 	// from being replayed.

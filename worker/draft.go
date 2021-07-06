@@ -664,7 +664,9 @@ func (n *node) applyCommitted(proposal *pb.Proposal, key uint64) error {
 	case proposal.Restore != nil:
 		// Enable draining mode for the duration of the restore processing.
 		x.UpdateDrainingMode(true)
-		defer x.UpdateDrainingMode(false)
+		if !proposal.Restore.IsPartial {
+			defer x.UpdateDrainingMode(false)
+		}
 
 		var err error
 		var closer *z.Closer
