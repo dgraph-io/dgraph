@@ -322,6 +322,8 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest, pidx uin
 	glog.Infof("Backup map phase is complete. Map result is: %+v\n", mapRes)
 
 	sw := pstore.NewStreamWriter()
+	defer sw.Cancel()
+
 	prepareForReduce := func() error {
 		if req.IncrementalFrom == 0 {
 			return sw.Prepare()
