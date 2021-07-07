@@ -324,10 +324,7 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest, pidx uin
 	sw := pstore.NewStreamWriter()
 	prepareForReduce := func() error {
 		if req.IncrementalFrom == 0 {
-			if err := sw.Prepare(); err != nil {
-				return errors.Wrapf(err, "while preparing DB")
-			}
-			return nil
+			return sw.Prepare()
 		}
 		// If there is a drop all in between the last restored backup and the incremental backups
 		// then drop everything before restoring incremental backups.
