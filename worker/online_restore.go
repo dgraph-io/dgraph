@@ -322,8 +322,13 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest, pidx uin
 	glog.Infof("Backup map phase is complete. Map result is: %+v\n", mapRes)
 
 	sw := pstore.NewStreamWriter()
-	// We can not use stream writer for incremental restore, we use badger batch write for it.
-	if req.IncrementalFrom > 0 {
+	prepareForReduce := func() error {
+		if req.IncrementalFrom == 0 {
+			if err := sw.Prepare(); err != nil {
+				return errors.Wrapf(err, "while preparing DB")
+			}
+			return nil
+		}
 		// If there is a drop all in between the last restored backup and the incremental backups
 		// then drop everything before restoring incremental backups.
 		if mapRes.shouldDropAll {
@@ -360,14 +365,14 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest, pidx uin
 		if err := sw.PrepareIncremental(); err != nil {
 			return errors.Wrapf(err, "while preparing DB")
 		}
-	} else {
-		if err := sw.Prepare(); err != nil {
-			return errors.Wrapf(err, "while preparing DB")
-		}
+		return nil
 	}
 
+	if err := prepareForReduce(); err != nil {
+		return errors.Wrap(err, "while preparing for reduce phase")
+	}
 	if err := RunReducer(sw, mapDir); err != nil {
-		return errors.Wrap(err, "failed to reduce incremental restore map")
+		return errors.Wrap(err, "failed to reduce restore map")
 	}
 	if err := sw.Flush(); err != nil {
 		return errors.Wrap(err, "while stream writer flush")

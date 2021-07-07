@@ -682,7 +682,6 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) (*mapResult, error) {
 	// manifests are ordered as: latest..full
 	for i, manifest := range manifests {
 
-		glog.Infof("[MAP] Reading manifest %d\n", manifest.BackupNum)
 		// We only need to consider the incremental backups.
 		if manifest.BackupNum < req.IncrementalFrom {
 			break
@@ -773,8 +772,8 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) (*mapResult, error) {
 				}
 				maxBannedNs = x.Max(maxBannedNs, ns)
 			}
+			glog.Infof("[MAP] Processed manifest %d\n", manifest.BackupNum)
 		}
-		glog.Infof("[MAP] Reading manifest %d done! dropAll: %v\n", manifest.BackupNum, dropAll)
 	} // done with all the manifests.
 
 	glog.Infof("Histogram of map input sizes:\n%s\n", mapper.szHist)
