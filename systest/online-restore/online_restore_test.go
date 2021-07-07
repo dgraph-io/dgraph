@@ -48,12 +48,13 @@ type restoreReq struct {
 }
 
 const (
-	backupLocation     = "/data/backup2"
-	backup2011Location = "/data/backups2011"
+	backupLocation     = "/data/backup2/backups"
+	backup2011Location = "/data/backup2/backups2011"
 	encKeyFile         = "/data/keys/enc_key"
 )
 
 func sendRestoreRequest(t *testing.T, req *restoreReq) {
+	t.Logf("Restoring backup number: %d\n", req.backupNum)
 	params := testutil.GraphQLParams{
 		Query: `mutation restore($location: String!, $backupId: String, $backupNum: Int,
 			$encKey: String, $incrFrom: Int) {
@@ -226,7 +227,7 @@ func TestIncrementalRestore(t *testing.T) {
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
 
 	req := &restoreReq{
-		location:  "/data/backups2011",
+		location:  backup2011Location,
 		backupNum: 1,
 	}
 	sendRestoreRequest(t, req)
@@ -241,7 +242,7 @@ func TestIncrementalRestore(t *testing.T) {
 	runQuery(query, `{"q":[{"name":"alice"}]}`)
 
 	req = &restoreReq{
-		location:        "/data/backups2011",
+		location:        backup2011Location,
 		backupNum:       2,
 		incrementalFrom: 2,
 	}
@@ -250,7 +251,7 @@ func TestIncrementalRestore(t *testing.T) {
 	runQuery(query, `{"q":[{"name":"alice"}, {"name":"bob", "age": "12"}]}`)
 
 	req = &restoreReq{
-		location:        "/data/backups2011",
+		location:        backup2011Location,
 		backupNum:       3,
 		incrementalFrom: 3,
 	}
@@ -260,7 +261,7 @@ func TestIncrementalRestore(t *testing.T) {
 	runQuery(`{ q(func: has(age)) {age} }`, `{"q":[{"age": "12"}]}`)
 
 	req = &restoreReq{
-		location:        "/data/backups2011",
+		location:        backup2011Location,
 		backupNum:       4,
 		incrementalFrom: 4,
 	}
@@ -269,7 +270,7 @@ func TestIncrementalRestore(t *testing.T) {
 	runQuery(query, `{"q":[{"name":"alice"}]}`)
 
 	req = &restoreReq{
-		location:        "/data/backups2011",
+		location:        backup2011Location,
 		backupNum:       5,
 		incrementalFrom: 5,
 	}
@@ -286,7 +287,7 @@ func TestIncrementalRestore(t *testing.T) {
 	require.Contains(t, string(res.Json), `{"predicate":"name","type":"default"}`)
 
 	req = &restoreReq{
-		location:        "/data/backups2011",
+		location:        backup2011Location,
 		backupNum:       6,
 		incrementalFrom: 6,
 	}
