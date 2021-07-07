@@ -667,8 +667,8 @@ func authorizePreds(ctx context.Context, userData *userData, preds []string,
 }
 
 // authorizeAlter parses the Schema in the operation and authorizes the operation
-// using the worker.AclCachePtr. It will return error if any one of the predicates specified in alter
-// are not authorized.
+// using the worker.AclCachePtr. It will return error if any one of the predicates
+// specified in alter are not authorized.
 func authorizeAlter(ctx context.Context, op *api.Operation) error {
 	if len(worker.Config.HmacSecret) == 0 {
 		// the user has not turned on the acl feature
