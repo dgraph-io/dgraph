@@ -340,7 +340,7 @@ func TestRestoreBackupNumInvalid(t *testing.T) {
 
 	// Send a request with a backupNum greater than the number of manifests.
 	restoreRequest := fmt.Sprintf(`mutation restore() {
-		 restore(input: {location: "/data/backup2", backupId: "%s", backupNum: %d,
+		 restore(input: {location: "/data/backup2/backups", backupId: "%s", backupNum: %d,
 		 	encryptionKeyFile: "/data/keys/enc_key"}) {
 			code
 			message
@@ -363,7 +363,7 @@ func TestRestoreBackupNumInvalid(t *testing.T) {
 
 	// Send a request with a negative backupNum value.
 	restoreRequest = fmt.Sprintf(`mutation restore() {
-		 restore(input: {location: "/data/backup2", backupId: "%s", backupNum: %d,
+		 restore(input: {location: "/data/backup2/backups", backupId: "%s", backupNum: %d,
 		 	encryptionKeyFile: "/data/keys/enc_key"}) {
 			code
 			message
@@ -458,7 +458,7 @@ func TestInvalidBackupId(t *testing.T) {
 
 func TestListBackups(t *testing.T) {
 	query := `query backup() {
-		listBackups(input: {location: "/data/backup2"}) {
+		listBackups(input: {location: "/data/backup2/backups"}) {
 			backupId
 			backupNum
 			encrypted
