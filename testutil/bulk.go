@@ -52,9 +52,7 @@ func LiveLoad(opts LiveOpts) error {
 		if opts.Creds.Namespace == x.GalaxyNamespace || opts.ForceNs != 0 {
 			args = append(args, "--force-namespace", strconv.FormatInt(opts.ForceNs, 10))
 		}
-		args = append(args, "--creds")
-		args = append(args, fmt.Sprintf("user=%s;password=%s;namespace=%d",
-			opts.Creds.UserID, opts.Creds.Passwd, opts.Creds.Namespace))
+		args = append(args, "--creds", fmt.Sprintf("user=%s;password=%s;namespace=%d", opts.Creds.UserID, opts.Creds.Passwd, opts.Creds.Namespace))
 	}
 	liveCmd := exec.Command(DgraphBinaryPath(), args...)
 

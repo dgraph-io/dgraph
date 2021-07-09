@@ -187,8 +187,7 @@ func queryWithTsForResp(inp queryInp) (string, *tsInfo, *http.Response, error) {
 		params = append(params, "debug="+inp.debug)
 	}
 	if inp.ts != 0 {
-		params = append(params, fmt.Sprintf("startTs=%v", strconv.FormatUint(inp.ts, 10)))
-		params = append(params, fmt.Sprintf("hash=%s", inp.hash))
+		params = append(params, fmt.Sprintf("startTs=%v", strconv.FormatUint(inp.ts, 10)), fmt.Sprintf("hash=%s", inp.hash))
 	}
 	url := addr + "/query?" + strings.Join(params, "&")
 
@@ -234,8 +233,7 @@ type mutationInp struct {
 func mutationWithTs(inp mutationInp) (mutationResponse, error) {
 	params := make([]string, 0, 3)
 	if inp.ts != 0 {
-		params = append(params, "startTs="+strconv.FormatUint(inp.ts, 10))
-		params = append(params, "hash="+inp.hash)
+		params = append(params, "startTs="+strconv.FormatUint(inp.ts, 10), "hash="+inp.hash)
 	}
 
 	var mr mutationResponse
