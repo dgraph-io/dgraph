@@ -197,7 +197,7 @@ func (gs *graphqlSubscription) Subscribe(
 	namespace := x.ExtractNamespaceHTTP(&http.Request{Header: reqHeader})
 	glog.Infof("namespace: %d. Got GraphQL request over websocket.", namespace)
 	// first load the schema, then do anything else
-	if err = LazyLoadSchema(namespace); err != nil {
+	if err = LazyLoadSchemaAndScript(namespace); err != nil {
 		return nil, err
 	}
 	if err = gs.isValid(namespace); err != nil {

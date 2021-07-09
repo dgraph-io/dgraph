@@ -163,7 +163,9 @@ func externalRequestError(err error, f Field) *x.GqlError {
 func GetBodyForLambda(ctx context.Context, field Field, parents,
 	args interface{}) map[string]interface{} {
 	accessJWT, _ := x.ExtractJwt(ctx)
+	// ns, _ := x.ExtractNamespace(ctx)
 	body := map[string]interface{}{
+		// "source":               admin.LambdaScript(ns),
 		"resolver":             field.GetObjectName() + "." + field.Name(),
 		"X-Dgraph-AccessToken": accessJWT,
 		"authHeader": map[string]interface{}{

@@ -68,6 +68,7 @@ require (
 	github.com/xdg/scram v0.0.0-20180814205039-7eeb5667e42c
 	go.etcd.io/etcd v0.0.0-20190228193606-a943ad0ee4c9
 	go.opencensus.io v0.23.0
+	go.uber.org/multierr v1.7.0 // indirect
 	go.uber.org/zap v1.16.0
 	golang.org/x/crypto v0.0.0-20200820211705-5c72a883971a
 	golang.org/x/lint v0.0.0-20210508222113-6edffad5e616 // indirect

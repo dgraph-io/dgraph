@@ -39,6 +39,7 @@ import (
 	"go.opencensus.io/tag"
 	"go.opencensus.io/trace"
 	otrace "go.opencensus.io/trace"
+	"go.uber.org/multierr"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -109,6 +110,17 @@ type existingGQLSchemaQryResp struct {
 	ExistingGQLSchema []graphQLSchemaNode `json:"ExistingGQLSchema"`
 }
 
+// lambdaScriptNode represents the node which contains Lambda script
+type lambdaScriptNode struct {
+	Uid    string `json:"uid"`
+	UidInt uint64
+	Script string `json:"dgraph.lambda.script"`
+}
+
+type existingLambdaScriptQryResp struct {
+	ExistingLambdaScript []lambdaScriptNode `json:"ExistingLambdaScript"`
+}
+
 // PeriodicallyPostTelemetry periodically reports telemetry data for alpha.
 func PeriodicallyPostTelemetry() {
 	glog.V(2).Infof("Starting telemetry data collection for alpha...")
@@ -138,6 +150,69 @@ func PeriodicallyPostTelemetry() {
 			glog.V(2).Infof("Telemetry couldn't be posted. Error: %v", err)
 		}
 	}
+}
+
+// GetLambdaScript queries for the GraphQL schema node, and returns the uid and the lambda script.
+// If multiple script nodes were found, it returns an error.
+func GetLambdaScript(namespace uint64) (uid, script string, err error) {
+	ctx := context.WithValue(context.Background(), Authorize, false)
+	ctx = x.AttachNamespace(ctx, namespace)
+	resp, err := (&Server{}).Query(ctx,
+		&api.Request{
+			Query: `
+			query {
+			  ExistingLambdaScript(func: has(dgraph.lambda.script)) {
+				uid
+				dgraph.lambda.script
+			  }
+			}`})
+	if err != nil {
+		return "", "", err
+	}
+
+	var result existingLambdaScriptQryResp
+	if err := json.Unmarshal(resp.GetJson(), &result); err != nil {
+		return "", "", errors.Wrap(err, "Couldn't unmarshal response from Dgraph query")
+	}
+	res := result.ExistingLambdaScript
+	if len(res) == 0 {
+		// no script has been stored yet in Dgraph
+		return "", "", nil
+	} else if len(res) == 1 {
+		// we found an existing Lambda script
+		lambdaScriptNode := res[0]
+		return lambdaScriptNode.Uid, lambdaScriptNode.Script, nil
+	}
+
+	// found multiple Lambda script nodes, this should never happen
+	// returning the script node which is added last
+	for i := range res {
+		iUid, err := gql.ParseUid(res[i].Uid)
+		if err != nil {
+			return "", "", err
+		}
+		res[i].UidInt = iUid
+	}
+
+	sort.Slice(res, func(i, j int) bool {
+		return res[i].UidInt < res[j].UidInt
+	})
+	glog.Errorf("namespace: %d. Multiple script nodes found, using the last one", namespace)
+	resLast := res[len(res)-1]
+	return resLast.Uid, resLast.Script, nil
+}
+
+// UpdateLambdaScript updates the Lambda Script using the given inputs.
+// It sends an update request to the worker, which is executed only on Group-1 leader.
+func UpdateLambdaScript(ctx context.Context, script string) (*pb.UpdateLambdaScriptResponse, error) {
+	if !x.WorkerConfig.AclEnabled {
+		ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
+	}
+
+	return worker.UpdateLambdaScriptOverNetwork(ctx, &pb.UpdateLambdaScriptRequest{
+		StartTs:      worker.State.GetTimestamp(false),
+		LambdaScript: script,
+	})
 }
 
 // GetGQLSchema queries for the GraphQL schema node, and returns the uid and the GraphQL schema.
@@ -422,7 +497,12 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 
 		// insert empty GraphQL schema, so all alphas get notified to
 		// reset their in-memory GraphQL schema
-		_, err = UpdateGQLSchema(ctx, "", "")
+		if _, err1 := UpdateGQLSchema(ctx, "", ""); err1 != nil {
+			err = multierr.Append(err, err1)
+		}
+		if _, err2 := UpdateLambdaScript(ctx, ""); err2 != nil {
+			err = multierr.Append(err, err2)
+		}
 		// recreate the admin account after a drop all operation
 		ResetAcl(nil)
 		return empty, err
@@ -453,7 +533,13 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		}
 
 		// just reinsert the GraphQL schema, no need to alter dgraph schema as this was drop_data
-		_, err = UpdateGQLSchema(ctx, graphQLSchema, "")
+		if _, err1 := UpdateGQLSchema(ctx, graphQLSchema, ""); err1 != nil {
+			err = multierr.Append(err, err1)
+		}
+		// TODO: Query the lambda script and set it.
+		if _, err2 := UpdateLambdaScript(ctx, ""); err2 != nil {
+			err = multierr.Append(err, err2)
+		}
 		// recreate the admin account after a drop data operation
 		upsertGuardianAndGroot(nil, namespace)
 		return empty, err

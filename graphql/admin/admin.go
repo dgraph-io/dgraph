@@ -83,6 +83,16 @@ const (
 	}
 
 	"""
+	Data about the Lambda script served by Dgraph.
+	"""
+	type LambdaScript @dgraph(type: "dgraph.lambda") {
+		"""
+		Input script (base64 encoded)
+		"""
+		script: String! @dgraph(pred: "dgraph.lambda.script")
+	}
+
+	"""
 	A NodeState is the state of an individual node in the Dgraph cluster.
 	"""
 	type NodeState {
@@ -208,6 +218,18 @@ const (
 
 	input GQLSchemaPatch {
 		schema: String!
+	}
+
+	type UpdateLambdaScriptPayload {
+		script: LambdaScript
+	}
+
+	input UpdateLambdaScriptInput {
+		set: ScriptPatch!
+	}
+
+	input ScriptPatch {
+		script: String!
 	}
 
 	input ExportInput {
@@ -393,6 +415,7 @@ const (
 
 	type Query {
 		getGQLSchema: GQLSchema
+		getLambdaScript: LambdaScript
 		health: [NodeState]
 		state: MembershipState
 		config: Config
@@ -409,6 +432,10 @@ const (
 		updateGQLSchema(input: UpdateGQLSchemaInput!) : UpdateGQLSchemaPayload
 
 		"""
+		Update the lambda script used by lambda resolvers.
+		"""
+		updateLambdaScript(input: UpdateLambdaScriptInput!) : UpdateLambdaScriptPayload
+
 		Starts an export of all data in the cluster.  Export format should be 'rdf' (the default
 		if no format is given), or 'json'.
 		See : https://dgraph.io/docs/deploy/#export-database
@@ -500,11 +527,12 @@ var (
 		resolve.LoggingMWMutation,
 	}
 	adminQueryMWConfig = map[string]resolve.QueryMiddlewares{
-		"health":       minimalAdminQryMWs, // dgraph checks Guardian auth for health
-		"state":        minimalAdminQryMWs, // dgraph checks Guardian auth for state
-		"config":       stdAdminQryMWs,
-		"listBackups":  gogQryMWs,
-		"getGQLSchema": stdAdminQryMWs,
+		"health":          minimalAdminQryMWs, // dgraph checks Guardian auth for health
+		"state":           minimalAdminQryMWs, // dgraph checks Guardian auth for state
+		"config":          stdAdminQryMWs,
+		"listBackups":     gogQryMWs,
+		"getGQLSchema":    stdAdminQryMWs,
+		"getLambdaScript": stdAdminQryMWs,
 		// for queries and mutations related to User/Group, dgraph handles Guardian auth,
 		// so no need to apply GuardianAuth Middleware
 		"queryUser":      minimalAdminQryMWs,
@@ -514,21 +542,22 @@ var (
 		"getGroup":       minimalAdminQryMWs,
 	}
 	adminMutationMWConfig = map[string]resolve.MutationMiddlewares{
-		"backup":            gogMutMWs,
-		"config":            gogMutMWs,
-		"draining":          gogMutMWs,
-		"export":            stdAdminMutMWs, // dgraph handles the export for other namespaces by guardian of galaxy
-		"login":             minimalAdminMutMWs,
-		"restore":           gogMutMWs,
-		"shutdown":          gogMutMWs,
-		"removeNode":        gogMutMWs,
-		"moveTablet":        gogMutMWs,
-		"assign":            gogMutMWs,
-		"enterpriseLicense": gogMutMWs,
-		"updateGQLSchema":   stdAdminMutMWs,
-		"addNamespace":      gogAclMutMWs,
-		"deleteNamespace":   gogAclMutMWs,
-		"resetPassword":     gogAclMutMWs,
+		"backup":             gogMutMWs,
+		"config":             gogMutMWs,
+		"draining":           gogMutMWs,
+		"export":             stdAdminMutMWs, // dgraph handles the export for other namespaces by guardian of galaxy
+		"login":              minimalAdminMutMWs,
+		"restore":            gogMutMWs,
+		"shutdown":           gogMutMWs,
+		"removeNode":         gogMutMWs,
+		"moveTablet":         gogMutMWs,
+		"assign":             gogMutMWs,
+		"enterpriseLicense":  gogMutMWs,
+		"updateGQLSchema":    stdAdminMutMWs,
+		"updateLambdaScript": stdAdminMutMWs,
+		"addNamespace":       gogAclMutMWs,
+		"deleteNamespace":    gogAclMutMWs,
+		"resetPassword":      gogAclMutMWs,
 		// for queries and mutations related to User/Group, dgraph handles Guardian auth,
 		// so no need to apply GuardianAuth Middleware
 		"addUser":     minimalAdminMutMWs,
@@ -590,6 +619,13 @@ type gqlSchema struct {
 	loaded          bool // This indicate whether the schema has been loaded into graphql server or not
 }
 
+type lambdaScript struct {
+	ID      string `json:"id,omitempty"`
+	Script  string `json:"script,omitempty"`
+	Version uint64
+	loaded  bool // This indicate whether the script has been loaded into graphql server or not
+}
+
 type adminServer struct {
 	rf       resolve.ResolverFactory
 	resolver *resolve.RequestResolver
@@ -601,6 +637,7 @@ type adminServer struct {
 	gqlServer IServeGraphQL
 
 	schema map[uint64]*gqlSchema
+	script map[uint64]*lambdaScript
 
 	// When the schema changes, we use these to create a new RequestResolver for
 	// the main graphql endpoint (gqlServer) and thus refresh the API.
@@ -660,97 +697,170 @@ func newAdminResolver(
 		withIntrospection: withIntrospection,
 		globalEpoch:       epoch,
 		schema:            make(map[uint64]*gqlSchema),
+		script:            make(map[uint64]*lambdaScript),
 		gqlServer:         defaultGqlServer,
 	}
 	adminServerVar = server // store the admin server in package variable
 
-	prefix := x.DataKey(x.GalaxyAttr(worker.GqlSchemaPred), 0)
+	go subscribeForUpdates(server, GQLSchema, closer)
+	go subscribeForUpdates(server, LambdaScriptType, closer)
+	go server.initServer()
+
+	return server.resolver
+}
+
+type SubscriptionType int
+
+func (t SubscriptionType) String() string {
+	return [...]string{"GraphQL schema", "Lambda script"}[t]
+}
+
+const (
+	GQLSchema SubscriptionType = iota
+	LambdaScriptType
+)
+
+// TODO: Figure out if this works correctly for multi group setup.
+func subscribeForUpdates(server *adminServer, typ SubscriptionType, closer *z.Closer) {
+	var prefix []byte
+	var processUpdate func(ns, uid, version uint64, pl *pb.PostingList)
+	switch typ {
+	case GQLSchema:
+		prefix = x.DataKey(x.GalaxyAttr(worker.GqlSchemaPred), 0)
+		processUpdate = func(ns, uid, version uint64, pl *pb.PostingList) {
+			var err error
+			newSchema := &gqlSchema{
+				ID:      query.UidToHex(uid),
+				Version: version,
+				Schema:  string(pl.Postings[0].Value),
+			}
+
+			server.mux.RLock()
+			currentSchema, ok := server.schema[ns]
+			if ok {
+				schemaChanged := newSchema.Schema == currentSchema.Schema
+				if newSchema.Version <= currentSchema.Version || schemaChanged {
+					glog.Infof("namespace: %d. Skipping GraphQL schema update. "+
+						"newSchema.Version: %d, oldSchema.Version: %d, schemaChanged: %v.",
+						ns, newSchema.Version, currentSchema.Version, schemaChanged)
+					server.mux.RUnlock()
+					return
+				}
+			}
+			server.mux.RUnlock()
+
+			var gqlSchema schema.Schema
+			// on drop_all, we will receive an empty string as the schema update
+			if newSchema.Schema != "" {
+				gqlSchema, err = generateGQLSchema(newSchema, ns)
+				if err != nil {
+					glog.Errorf("namespace: %d. Error processing GraphQL schema: %s.", ns, err)
+					return
+				}
+			}
+
+			server.mux.Lock()
+			defer server.mux.Unlock()
+
+			server.incrementSchemaUpdateCounter(ns)
+			// if the schema hasn't been loaded yet, then we don't need to load it here
+			currentSchema, ok = server.schema[ns]
+			if !(ok && currentSchema.loaded) {
+				// this just set schema in admin server, so that next invalid badger subscription update gets rejected upfront
+				server.schema[ns] = newSchema
+				glog.Infof("namespace: %d. Skipping in-memory GraphQL schema update, "+
+					"it will be lazy-loaded later.", ns)
+				return
+			}
+
+			// update this schema in both admin and graphql server
+			newSchema.loaded = true
+			server.schema[ns] = newSchema
+			server.resetSchema(ns, gqlSchema)
+
+			glog.Infof("namespace: %d. Successfully updated %s. "+
+				"Serving New %s.", typ, typ, ns)
+		}
+	case LambdaScriptType:
+		prefix = x.DataKey(x.GalaxyAttr(worker.LambdaPred), 0)
+		processUpdate = func(ns, uid, version uint64, pl *pb.PostingList) {
+			newScript := &lambdaScript{
+				ID:      query.UidToHex(uid),
+				Version: version,
+				Script:  string(pl.Postings[0].Value),
+			}
+
+			server.mux.RLock()
+			currentScript, ok := server.script[ns]
+			if ok {
+				scriptChanged := newScript.Script == currentScript.Script
+				if newScript.Version <= currentScript.Version || scriptChanged {
+					glog.Infof("namespace: %d. Skipping Lambda Script update. "+
+						"newSchema.Version: %d, oldSchema.Version: %d, schemaChanged: %v.",
+						ns, newScript.Version, currentScript.Version, scriptChanged)
+					server.mux.RUnlock()
+					return
+				}
+			}
+			server.mux.RUnlock()
+
+			server.mux.Lock()
+			defer server.mux.Unlock()
+
+			// server.incrementSchemaUpdateCounter(ns)
+			// if the schema hasn't been loaded yet, then we don't need to load it here
+			currentScript, ok = server.script[ns]
+			if !(ok && currentScript.loaded) {
+				// this just set script in admin server, so that next invalid badger subscription update gets rejected upfront
+				server.script[ns] = newScript
+				glog.Infof("namespace: %d. Skipping in-memory GraphQL schema update, "+
+					"it will be lazy-loaded later.", ns)
+				return
+			}
+
+			// update this schema in both admin and graphql server
+			newScript.loaded = true
+			server.script[ns] = newScript
+			// server.resetSchema(ns, gqlSchema)
+
+			glog.Infof("namespace: %d. Successfully updated %s. "+
+				"Serving New %s.", typ, typ, ns)
+		}
+	default:
+		panic("unhandled type")
+	}
+
 	// Remove uid from the key, to get the correct prefix
 	prefix = prefix[:len(prefix)-8]
 	// Listen for graphql schema changes in group 1.
-	go worker.SubscribeForUpdates([][]byte{prefix}, x.IgnoreBytes, func(kvs *badgerpb.KVList) {
-
+	worker.SubscribeForUpdates([][]byte{prefix}, x.IgnoreBytes, func(kvs *badgerpb.KVList) {
 		kv := x.KvWithMaxVersion(kvs, [][]byte{prefix})
-		glog.Infof("Updating GraphQL schema from subscription.")
+		glog.Infof("Updating %s from subscription.", typ)
 
 		// Unmarshal the incoming posting list.
 		pl := &pb.PostingList{}
 		err := pl.Unmarshal(kv.GetValue())
 		if err != nil {
-			glog.Errorf("Unable to unmarshal the posting list for graphql schema update %s", err)
+			glog.Errorf("Unable to unmarshal the posting list for %s update %s", typ, err)
 			return
 		}
 
 		// There should be only one posting.
 		if len(pl.Postings) != 1 {
-			glog.Errorf("Only one posting is expected in the graphql schema posting list but got %d",
-				len(pl.Postings))
+			glog.Errorf("Only one posting is expected in the %s posting list but got %d",
+				typ, len(pl.Postings))
 			return
 		}
 
 		pk, err := x.Parse(kv.GetKey())
 		if err != nil {
-			glog.Errorf("Unable to find uid of updated schema %s", err)
-			return
-		}
-		ns, _ := x.ParseNamespaceAttr(pk.Attr)
-
-		newSchema := &gqlSchema{
-			ID:      query.UidToHex(pk.Uid),
-			Version: kv.GetVersion(),
-			Schema:  string(pl.Postings[0].Value),
-		}
-
-		server.mux.RLock()
-		currentSchema, ok := server.schema[ns]
-		if ok {
-			schemaChanged := newSchema.Schema == currentSchema.Schema
-			if newSchema.Version <= currentSchema.Version || schemaChanged {
-				glog.Infof("namespace: %d. Skipping GraphQL schema update. "+
-					"newSchema.Version: %d, oldSchema.Version: %d, schemaChanged: %v.",
-					ns, newSchema.Version, currentSchema.Version, schemaChanged)
-				server.mux.RUnlock()
-				return
-			}
-		}
-		server.mux.RUnlock()
-
-		var gqlSchema schema.Schema
-		// on drop_all, we will receive an empty string as the schema update
-		if newSchema.Schema != "" {
-			gqlSchema, err = generateGQLSchema(newSchema, ns)
-			if err != nil {
-				glog.Errorf("namespace: %d. Error processing GraphQL schema: %s.", ns, err)
-				return
-			}
-		}
-
-		server.mux.Lock()
-		defer server.mux.Unlock()
-
-		server.incrementSchemaUpdateCounter(ns)
-		// if the schema hasn't been loaded yet, then we don't need to load it here
-		currentSchema, ok = server.schema[ns]
-		if !(ok && currentSchema.loaded) {
-			// this just set schema in admin server, so that next invalid badger subscription update gets rejected upfront
-			server.schema[ns] = newSchema
-			glog.Infof("namespace: %d. Skipping in-memory GraphQL schema update, "+
-				"it will be lazy-loaded later.", ns)
+			glog.Errorf("Unable to find uid of updated %s: %s", typ, err)
 			return
 		}
 
-		// update this schema in both admin and graphql server
-		newSchema.loaded = true
-		server.schema[ns] = newSchema
-		server.resetSchema(ns, gqlSchema)
-
-		glog.Infof("namespace: %d. Successfully updated GraphQL schema. "+
-			"Serving New GraphQL API.", ns)
+		ns := x.ParseNamespace(pk.Attr)
+		processUpdate(ns, pk.Uid, kv.GetVersion(), pl)
 	}, 1, closer)
-
-	go server.initServer()
-
-	return server.resolver
 }
 
 func newAdminResolverFactory() resolve.ResolverFactory {
@@ -839,6 +949,15 @@ func generateGQLSchema(sch *gqlSchema, ns uint64) (schema.Schema, error) {
 	return generatedSchema, nil
 }
 
+func getCurrentLambdaScript(namespace uint64) (*lambdaScript, error) {
+	uid, script, err := edgraph.GetLambdaScript(namespace)
+	if err != nil {
+		return nil, err
+	}
+
+	return &lambdaScript{ID: uid, Script: script}, nil
+}
+
 func (as *adminServer) initServer() {
 	// Nothing else should be able to lock before here.  The admin resolvers aren't yet
 	// set up (they all just error), so we will obtain the lock here without contention.
@@ -864,6 +983,14 @@ func (as *adminServer) initServer() {
 		}
 		sch.loaded = true
 		as.schema[x.GalaxyNamespace] = sch
+
+		script, err := getCurrentLambdaScript(x.GalaxyNamespace)
+		if err != nil {
+			glog.Errorf("namespace: %d. Error reading Lambda Script: %s.", x.GalaxyNamespace, err)
+			continue
+		}
+		script.loaded = true
+		as.script[x.GalaxyNamespace] = script
 		// adding the actual resolvers for updateGQLSchema and getGQLSchema only after server has
 		// current GraphQL schema, if there was any.
 		as.addConnectedAdminResolvers()
@@ -904,6 +1031,14 @@ func (as *adminServer) addConnectedAdminResolvers() {
 		WithQueryResolver("getGQLSchema",
 			func(q schema.Query) resolve.QueryResolver {
 				return &getSchemaResolver{admin: as}
+			}).
+		WithMutationResolver("updateLambdaScript",
+			func(m schema.Mutation) resolve.MutationResolver {
+				return &updateLambdaResolver{admin: as}
+			}).
+		WithQueryResolver("getLamdaScript",
+			func(q schema.Query) resolve.QueryResolver {
+				return &getLambdaResolver{admin: as}
 			}).
 		WithQueryResolver("queryGroup",
 			func(q schema.Query) resolve.QueryResolver {
@@ -1069,8 +1204,45 @@ func (as *adminServer) lazyLoadSchema(namespace uint64) error {
 	return nil
 }
 
-func LazyLoadSchema(namespace uint64) error {
-	return adminServerVar.lazyLoadSchema(namespace)
+func (as *adminServer) lazyLoadScript(namespace uint64) error {
+	// if the schema is already in memory, no need to fetch it from disk
+	as.mux.RLock()
+	if currentScript, ok := as.script[namespace]; ok && currentScript.loaded {
+		as.mux.RUnlock()
+		return nil
+	}
+	as.mux.RUnlock()
+
+	// otherwise, fetch the schema from disk
+	script, err := getCurrentLambdaScript(namespace)
+	if err != nil {
+		glog.Errorf("namespace: %d. Error reading Lambda script: %s.", namespace, err)
+		return errors.Wrap(err, "failed to lazy-load Lambda script")
+	}
+
+	as.mux.Lock()
+	defer as.mux.Unlock()
+	script.loaded = true
+	as.script[namespace] = script
+	// as.resetSchema(namespace, generatedSchema)
+
+	glog.Infof("namespace: %d. Successfully lazy-loaded Lambda script.", namespace)
+	return nil
+}
+
+func LazyLoadSchemaAndScript(namespace uint64) error {
+	if err := adminServerVar.lazyLoadSchema(namespace); err != nil {
+		return err
+	}
+	return adminServerVar.lazyLoadScript(namespace)
+}
+
+func LambdaScript(namespace uint64) string {
+	script, ok := adminServerVar.script[namespace]
+	if !ok {
+		return ""
+	}
+	return script.Script
 }
 
 func inputArgError(err error) error {

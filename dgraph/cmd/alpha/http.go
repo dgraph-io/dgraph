@@ -650,7 +650,7 @@ func graphqlProbeHandler(gqlHealthStore *admin.GraphQLHealthStore, globalEpoch m
 		// lazy load the schema so that just by making a probe request,
 		// one can boot up GraphQL for their namespace
 		namespace := x.ExtractNamespaceHTTP(r)
-		if err := admin.LazyLoadSchema(namespace); err != nil {
+		if err := admin.LazyLoadSchemaAndScript(namespace); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			x.Check2(w.Write([]byte(fmt.Sprintf(`{"error":"%s"}`, err))))
 			return

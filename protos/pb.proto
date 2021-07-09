@@ -579,6 +579,8 @@ service Worker {
   rpc Subscribe(SubscriptionRequest) returns (stream badgerpb3.KVList) {}
   rpc UpdateGraphQLSchema(UpdateGraphQLSchemaRequest)
       returns (UpdateGraphQLSchemaResponse) {}
+  rpc UpdateLambdaScript(UpdateLambdaScriptRequest)
+      returns (UpdateLambdaScriptResponse) {}
   rpc DeleteNamespace(DeleteNsRequest) returns (Status) {}
   rpc TaskStatus(TaskStatusRequest) returns (TaskStatusResponse) {}
 }
@@ -746,6 +748,15 @@ message UpdateGraphQLSchemaRequest {
 }
 
 message UpdateGraphQLSchemaResponse {
+  uint64 uid = 1;
+}
+
+message UpdateLambdaScriptRequest {
+  uint64 start_ts = 1;
+  string lambda_script = 2;
+}
+
+message UpdateLambdaScriptResponse {
   uint64 uid = 1;
 }
 
