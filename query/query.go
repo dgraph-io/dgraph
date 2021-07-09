@@ -298,6 +298,64 @@ type SubGraph struct {
 	pathMeta *pathMetadata
 }
 
+func (sg *SubGraph) Estimate(ctx context.Context) *SubGraph {
+	cnt := sg.getCount(ctx)
+	if cnt < 1000 {
+		glog.Infof("Root is correct with %d\n", cnt)
+		return sg
+	}
+
+	for i, f := range sg.Filters {
+		if fcnt := f.getCount(ctx); fcnt < 1000 {
+			glog.Infof("Filter [%d] should be root: %d\n", i, fcnt)
+		}
+	}
+	glog.Infof("Estimate done")
+	return nil
+}
+
+var countCache map[string]int
+
+func init() {
+	countCache = make(map[string]int)
+}
+
+func cacheKey(q *pb.Query) string {
+	var s []string
+	s = append(s, q.Attr)
+	if q.SrcFunc != nil {
+		s = append(s, q.SrcFunc.Name)
+		s = append(s, q.SrcFunc.Args...)
+	}
+	return strings.Join(s, "|")
+}
+
+func (sg *SubGraph) getCount(ctx context.Context) int {
+	taskQuery, err := createTaskQuery(ctx, sg)
+	x.Check(err)
+	taskQuery.DoCount = true
+	taskQuery.First = 0
+	key := cacheKey(taskQuery)
+	if cnt, has := countCache[key]; has {
+		glog.Infof("Served %s from cache: %d\n", key, cnt)
+		return cnt
+	}
+
+	result, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
+	if err != nil {
+		return 0
+	}
+	glog.Infof("Got count for %+v: key: %s : %+v\n", taskQuery, key, result.Counts)
+	if len(result.Counts) > 0 {
+		var total int
+		for _, c := range result.Counts {
+			total += int(c)
+		}
+		countCache[key] = total
+	}
+	return 0
+}
+
 func (sg *SubGraph) recurse(set func(sg *SubGraph)) {
 	set(sg)
 	for _, child := range sg.Children {
@@ -355,7 +413,7 @@ func (sg *SubGraph) DebugPrint(prefix string) {
 	if sg.DestUIDs != nil {
 		dst = len(sg.DestUIDs.Uids)
 	}
-	glog.Infof("%s[%q Alias:%q Func:%v SrcSz:%v Op:%q DestSz:%v IsCount: %v ValueSz:%v]\n",
+	glog.Infof("%s[%q Alias:%q Func:%+v SrcSz:%v Op:%q DestSz:%v IsCount: %v ValueSz:%v]\n",
 		prefix, sg.Attr, sg.Params.Alias, sg.SrcFunc, src, sg.FilterOp,
 		dst, sg.Params.DoCount, len(sg.valueMatrix))
 	for _, f := range sg.Filters {
@@ -2766,6 +2824,7 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 			sg.Cache = req.Cache
 		})
 		span.Annotate(nil, "Query parsed")
+		sg.DebugPrint("  ")
 		req.Subgraphs = append(req.Subgraphs, sg)
 	}
 	req.Latency.Parsing += time.Since(loopStart)
@@ -2841,6 +2900,7 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 					errChan <- recurse(ctx, sg)
 				}()
 			default:
+				sg.Estimate(ctx)
 				go ProcessGraph(ctx, sg, nil, errChan)
 			}
 		}
