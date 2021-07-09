@@ -1,33 +1,27 @@
-# Auto-generated with: [./compose -z 1 -a 1 -w -o 0 --acl -d ./data -u]
-#
-# NOTE: Env var UID must be exported by the shell
-#
 version: "3.5"
 services:
   alpha1:
     image: dgraph/dgraph:latest
-    container_name: alpha1
-    working_dir: /working/alpha1
+    working_dir: /data/alpha1
     labels:
       cluster: test
     ports:
-    - 8080:8080
-    - 9080:9080
+    - 8080
+    - 9080
     volumes:
     - type: bind
       source: $GOPATH/bin
       target: /gobin
       read_only: true
     - type: bind
-      source: ./data
-      target: /data
+      source: ./data/backups
+      target: /backups
       read_only: false
     - type: bind
       source: ./acl-secret
       target: /secret/hmac
       read_only: true
-    user: ${UID:-501}
-    command: /gobin/dgraph --cwd=/data/alpha1 alpha --my=alpha1:7080 --zero=zero1:5080
+    command: /gobin/dgraph alpha --my=alpha1:7080 --zero=zero1:5080
       --logtostderr -v=2 --raft "idx=1; group=1" --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
       --acl "secret-file=/secret/hmac;"
     deploy:
@@ -36,24 +30,18 @@ services:
           memory: 32G
   zero1:
     image: dgraph/dgraph:latest
-    container_name: zero1
-    working_dir: /working/zero1
+    working_dir: /data/zero1
     labels:
       cluster: test
     ports:
-    - 5080:5080
-    - 6080:6080
+    - 5080
+    - 6080
     volumes:
     - type: bind
       source: $GOPATH/bin
       target: /gobin
       read_only: true
-    - type: bind
-      source: ./data
-      target: /data
-      read_only: false
-    user: ${UID:-501}
-    command: /gobin/dgraph --cwd=/data/zero1 zero --raft='idx=1' --my=zero1:5080 --logtostderr
+    command: /gobin/dgraph zero --raft='idx=1' --my=zero1:5080 --logtostderr
       -v=2 --bindall
     deploy:
       resources:
