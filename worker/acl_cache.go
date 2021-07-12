@@ -29,6 +29,8 @@ type AclCache struct {
 }
 
 func (cache *AclCache) reset() {
+	cache.Lock()
+	defer cache.Unlock()
 	cache.loaded = false
 }
 
@@ -37,10 +39,14 @@ func ResetAclCache() {
 }
 
 func (cache *AclCache) Loaded() bool {
+	cache.RLock()
+	defer cache.Unlock()
 	return cache.loaded
 }
 
 func (cache *AclCache) Set() {
+	cache.Lock()
+	defer cache.Unlock()
 	cache.loaded = true
 }
 
@@ -51,6 +57,8 @@ var AclCachePtr = &AclCache{
 }
 
 func (cache *AclCache) GetUserPredPerms(userId string) map[string]int32 {
+	cache.Lock()
+	defer cache.Unlock()
 	return cache.userPredPerms[userId]
 }
 

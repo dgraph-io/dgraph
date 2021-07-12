@@ -369,14 +369,12 @@ func SubscribeForAclUpdates(closer *z.Closer) {
 			return nil
 		}
 		maxRefreshTs = refreshTs
-		ctx := x.AttachNamespace(closer.Ctx(), ns)
-
 		if !worker.AclCachePtr.Loaded() {
 			updaters := z.NewCloser(1)
 			RefreshACLs(updaters.Ctx())
 		}
 
-		return refreshAclCache(ctx, ns, refreshTs)
+		return refreshAclCache(closer.Ctx(), ns, refreshTs)
 	}
 
 	closer.AddRunning(1)
@@ -653,7 +651,6 @@ func authorizePreds(ctx context.Context, userData *userData, preds []string,
 			blockedPreds[pred] = struct{}{}
 		}
 	}
-	worker.AclCachePtr.RLock()
 	// User can have multiple permission for same predicate, add predicate
 	allowedPreds := make([]string, len(worker.AclCachePtr.GetUserPredPerms(userId)))
 	// only if the acl.Op is covered in the set of permissions for the user
@@ -662,7 +659,6 @@ func authorizePreds(ctx context.Context, userData *userData, preds []string,
 			allowedPreds = append(allowedPreds, predicate)
 		}
 	}
-	worker.AclCachePtr.RUnlock()
 	return &authPredResult{allowed: allowedPreds, blocked: blockedPreds}
 }
 
