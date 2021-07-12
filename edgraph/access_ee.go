@@ -317,7 +317,6 @@ func authorizeUser(ctx context.Context, userid string, password string) (
 }
 
 func refreshAclCache(ctx context.Context, ns, refreshTs uint64) error {
-	glog.V(2).Infof("Refreshing ACLs")
 	req := &Request{
 		req: &api.Request{
 			Query:    queryAcls,
@@ -369,11 +368,6 @@ func SubscribeForAclUpdates(closer *z.Closer) {
 			return nil
 		}
 		maxRefreshTs = refreshTs
-		if !worker.AclCachePtr.Loaded() {
-			updaters := z.NewCloser(1)
-			RefreshACLs(updaters.Ctx())
-		}
-
 		return refreshAclCache(closer.Ctx(), ns, refreshTs)
 	}
 
@@ -425,7 +419,7 @@ var aclPrefixes = [][]byte{
 // upserts the Groot account.
 func InitializeAcl(closer *z.Closer) {
 	defer func() {
-		glog.Infof("ResetAcl closed")
+		glog.Infof("InitializeAcl closed")
 		closer.Done()
 	}()
 
