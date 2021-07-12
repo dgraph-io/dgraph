@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/graphql/authorization"
+	"github.com/dgraph-io/dgraph/worker"
 
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -163,9 +164,10 @@ func externalRequestError(err error, f Field) *x.GqlError {
 func GetBodyForLambda(ctx context.Context, field Field, parents,
 	args interface{}) map[string]interface{} {
 	accessJWT, _ := x.ExtractJwt(ctx)
-	// ns, _ := x.ExtractNamespace(ctx)
+	ns, _ := x.ExtractNamespace(ctx)
+	// move LambdaScript to worker.
 	body := map[string]interface{}{
-		// "source":               admin.LambdaScript(ns),
+		"source":               worker.GetLambdaScript(ns),
 		"resolver":             field.GetObjectName() + "." + field.Name(),
 		"X-Dgraph-AccessToken": accessJWT,
 		"authHeader": map[string]interface{}{

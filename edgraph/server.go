@@ -495,8 +495,8 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 			return empty, err
 		}
 
-		// insert empty GraphQL schema, so all alphas get notified to
-		// reset their in-memory GraphQL schema
+		// insert empty GraphQL schema and Lambda script, so all alphas get notified to
+		// reset their in-memory GraphQL schema ans Lambda script.
 		if _, err1 := UpdateGQLSchema(ctx, "", ""); err1 != nil {
 			err = multierr.Append(err, err1)
 		}
@@ -519,6 +519,12 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 			return empty, err
 		}
 
+		// query the Lambda script and keep it in memory, so it can be inserted again
+		_, lambdaScript, err := GetLambdaScript(namespace)
+		if err != nil {
+			return empty, err
+		}
+
 		m.DropOp = pb.Mutations_DATA
 		m.DropValue = fmt.Sprintf("%#x", namespace)
 		_, err = query.ApplyMutations(ctx, m)
@@ -532,14 +538,14 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 			return empty, err
 		}
 
-		// just reinsert the GraphQL schema, no need to alter dgraph schema as this was drop_data
+		// just reinsert the GraphQL schema and Lambda script, no need to alter dgraph schema as this was drop_data
 		if _, err1 := UpdateGQLSchema(ctx, graphQLSchema, ""); err1 != nil {
 			err = multierr.Append(err, err1)
 		}
-		// TODO: Query the lambda script and set it.
-		if _, err2 := UpdateLambdaScript(ctx, ""); err2 != nil {
+		if _, err2 := UpdateLambdaScript(ctx, lambdaScript); err2 != nil {
 			err = multierr.Append(err, err2)
 		}
+
 		// recreate the admin account after a drop data operation
 		upsertGuardianAndGroot(nil, namespace)
 		return empty, err

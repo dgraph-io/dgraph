@@ -24,6 +24,7 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/query"
+	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 )
@@ -33,7 +34,7 @@ type getLambdaResolver struct {
 }
 
 type updateLambdaInput struct {
-	Set lambdaScript `json:"set,omitempty"`
+	Set worker.LambdaScript `json:"set,omitempty"`
 }
 
 type updateLambdaResolver struct {
@@ -75,7 +76,7 @@ func (gsr *getLambdaResolver) Resolve(ctx context.Context, q schema.Query) *reso
 		return resolve.EmptyResult(q, err)
 	}
 
-	cs := gsr.admin.script[ns]
+	cs, _ := gsr.admin.lambdaScripts.GetCurrent(ns)
 	if cs == nil || cs.ID == "" {
 		data = map[string]interface{}{q.Name(): nil}
 	} else {

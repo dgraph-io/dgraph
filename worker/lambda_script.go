@@ -48,7 +48,51 @@ var (
 	errUpdatingLambdaScriptOnNonGroupOneLeader = errors.New(
 		"while updating Lambda Script: this server isn't group-1 leader, please retry")
 	ErrMultipleLambdaScriptNodes = errors.New("found multiple nodes for Lambda Script")
+	lambdaScriptStore            *LambdaScriptStore
 )
+
+type LambdaScript struct {
+	ID      string `json:"id,omitempty"`
+	Script  string `json:"script,omitempty"`
+	Version uint64
+	Loaded  bool // This indicate whether the script has been loaded into graphql server or not
+}
+
+type LambdaScriptStore struct {
+	mux    sync.RWMutex
+	script map[uint64]*LambdaScript
+}
+
+func NewLambdaScriptStore() *LambdaScriptStore {
+	lambdaScriptStore := &LambdaScriptStore{
+		mux:    sync.RWMutex{},
+		script: make(map[uint64]*LambdaScript),
+	}
+	return lambdaScriptStore
+}
+
+func (ls *LambdaScriptStore) Set(ns uint64, scr *LambdaScript) {
+	ls.mux.Lock()
+	defer ls.mux.Unlock()
+	ls.script[ns] = scr
+}
+
+func (ls *LambdaScriptStore) GetCurrent(ns uint64) (*LambdaScript, bool) {
+	ls.mux.RLock()
+	defer ls.mux.RUnlock()
+	scr, ok := ls.script[ns]
+	return scr, ok
+}
+
+func (ls *LambdaScriptStore) resetLambdaScript() {
+	ls.mux.Lock()
+	defer ls.mux.Unlock()
+	ls.script = make(map[uint64]*LambdaScript)
+}
+
+func ResetLambdaScriptStore() {
+	lambdaScriptStore.resetLambdaScript()
+}
 
 // UpdateLambdaScriptOverNetwork sends the request to the group one leader for execution.
 func UpdateLambdaScriptOverNetwork(ctx context.Context, req *pb.UpdateLambdaScriptRequest) (*pb.
@@ -152,7 +196,7 @@ func (w *grpcWorker) UpdateLambdaScript(ctx context.Context,
 			},
 			{
 				// if this server is no more the Group-1 leader and is mutating the GraphQL
-				// schema node, also if concurrently another schema update is requested which is
+				// script node, also if concurrently another script update is requested which is
 				// being performed at the actual Group-1 leader, then mutating the xid with the
 				// same value will cause one of the mutations to abort, because of the upsert
 				// directive on xid. So, this way we make sure that even in this rare case there can
@@ -194,4 +238,8 @@ func (w *grpcWorker) UpdateLambdaScript(ctx context.Context,
 
 	// return the uid of the Lambda script node
 	return &pb.UpdateLambdaScriptResponse{Uid: scriptNodeUid}, nil
+}
+
+func GetLambdaScript(ns uint64) string {
+	return "script"
 }

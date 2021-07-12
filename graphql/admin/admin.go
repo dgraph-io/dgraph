@@ -619,13 +619,6 @@ type gqlSchema struct {
 	loaded          bool // This indicate whether the schema has been loaded into graphql server or not
 }
 
-type lambdaScript struct {
-	ID      string `json:"id,omitempty"`
-	Script  string `json:"script,omitempty"`
-	Version uint64
-	loaded  bool // This indicate whether the script has been loaded into graphql server or not
-}
-
 type adminServer struct {
 	rf       resolve.ResolverFactory
 	resolver *resolve.RequestResolver
@@ -636,8 +629,8 @@ type adminServer struct {
 	// The GraphQL server that's being admin'd
 	gqlServer IServeGraphQL
 
-	schema map[uint64]*gqlSchema
-	script map[uint64]*lambdaScript
+	schema        map[uint64]*gqlSchema
+	lambdaScripts *worker.LambdaScriptStore
 
 	// When the schema changes, we use these to create a new RequestResolver for
 	// the main graphql endpoint (gqlServer) and thus refresh the API.
@@ -697,7 +690,7 @@ func newAdminResolver(
 		withIntrospection: withIntrospection,
 		globalEpoch:       epoch,
 		schema:            make(map[uint64]*gqlSchema),
-		script:            make(map[uint64]*lambdaScript),
+		lambdaScripts:     worker.NewLambdaScriptStore(),
 		gqlServer:         defaultGqlServer,
 	}
 	adminServerVar = server // store the admin server in package variable
@@ -784,14 +777,14 @@ func subscribeForUpdates(server *adminServer, typ SubscriptionType, closer *z.Cl
 	case LambdaScriptType:
 		prefix = x.DataKey(x.GalaxyAttr(worker.LambdaPred), 0)
 		processUpdate = func(ns, uid, version uint64, pl *pb.PostingList) {
-			newScript := &lambdaScript{
+			newScript := &worker.LambdaScript{
 				ID:      query.UidToHex(uid),
 				Version: version,
 				Script:  string(pl.Postings[0].Value),
 			}
 
 			server.mux.RLock()
-			currentScript, ok := server.script[ns]
+			currentScript, ok := server.lambdaScripts.GetCurrent(ns)
 			if ok {
 				scriptChanged := newScript.Script == currentScript.Script
 				if newScript.Version <= currentScript.Version || scriptChanged {
@@ -809,18 +802,18 @@ func subscribeForUpdates(server *adminServer, typ SubscriptionType, closer *z.Cl
 
 			// server.incrementSchemaUpdateCounter(ns)
 			// if the schema hasn't been loaded yet, then we don't need to load it here
-			currentScript, ok = server.script[ns]
-			if !(ok && currentScript.loaded) {
+			currentScript, ok = server.lambdaScripts.GetCurrent(ns)
+			if !(ok && currentScript.Loaded) {
 				// this just set script in admin server, so that next invalid badger subscription update gets rejected upfront
-				server.script[ns] = newScript
+				server.lambdaScripts.Set(ns, newScript)
 				glog.Infof("namespace: %d. Skipping in-memory GraphQL schema update, "+
 					"it will be lazy-loaded later.", ns)
 				return
 			}
 
 			// update this schema in both admin and graphql server
-			newScript.loaded = true
-			server.script[ns] = newScript
+			newScript.Loaded = true
+			server.lambdaScripts.Set(ns, newScript)
 			// server.resetSchema(ns, gqlSchema)
 
 			glog.Infof("namespace: %d. Successfully updated %s. "+
@@ -949,13 +942,13 @@ func generateGQLSchema(sch *gqlSchema, ns uint64) (schema.Schema, error) {
 	return generatedSchema, nil
 }
 
-func getCurrentLambdaScript(namespace uint64) (*lambdaScript, error) {
+func getCurrentLambdaScript(namespace uint64) (*worker.LambdaScript, error) {
 	uid, script, err := edgraph.GetLambdaScript(namespace)
 	if err != nil {
 		return nil, err
 	}
 
-	return &lambdaScript{ID: uid, Script: script}, nil
+	return &worker.LambdaScript{ID: uid, Script: script}, nil
 }
 
 func (as *adminServer) initServer() {
@@ -989,8 +982,8 @@ func (as *adminServer) initServer() {
 			glog.Errorf("namespace: %d. Error reading Lambda Script: %s.", x.GalaxyNamespace, err)
 			continue
 		}
-		script.loaded = true
-		as.script[x.GalaxyNamespace] = script
+		script.Loaded = true
+		as.lambdaScripts.Set(x.GalaxyNamespace, script)
 		// adding the actual resolvers for updateGQLSchema and getGQLSchema only after server has
 		// current GraphQL schema, if there was any.
 		as.addConnectedAdminResolvers()
@@ -1205,15 +1198,15 @@ func (as *adminServer) lazyLoadSchema(namespace uint64) error {
 }
 
 func (as *adminServer) lazyLoadScript(namespace uint64) error {
-	// if the schema is already in memory, no need to fetch it from disk
+	// if the script is already in memory, no need to fetch it from disk
 	as.mux.RLock()
-	if currentScript, ok := as.script[namespace]; ok && currentScript.loaded {
+	if currentScript, ok := as.lambdaScripts.GetCurrent(namespace); ok && currentScript.Loaded {
 		as.mux.RUnlock()
 		return nil
 	}
 	as.mux.RUnlock()
 
-	// otherwise, fetch the schema from disk
+	// otherwise, fetch the script from disk
 	script, err := getCurrentLambdaScript(namespace)
 	if err != nil {
 		glog.Errorf("namespace: %d. Error reading Lambda script: %s.", namespace, err)
@@ -1222,8 +1215,8 @@ func (as *adminServer) lazyLoadScript(namespace uint64) error {
 
 	as.mux.Lock()
 	defer as.mux.Unlock()
-	script.loaded = true
-	as.script[namespace] = script
+	script.Loaded = true
+	as.lambdaScripts.Set(namespace, script)
 	// as.resetSchema(namespace, generatedSchema)
 
 	glog.Infof("namespace: %d. Successfully lazy-loaded Lambda script.", namespace)
@@ -1238,7 +1231,7 @@ func LazyLoadSchemaAndScript(namespace uint64) error {
 }
 
 func LambdaScript(namespace uint64) string {
-	script, ok := adminServerVar.script[namespace]
+	script, ok := adminServerVar.lambdaScripts.GetCurrent(namespace)
 	if !ok {
 		return ""
 	}
