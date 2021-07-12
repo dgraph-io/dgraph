@@ -165,7 +165,6 @@ func GetBodyForLambda(ctx context.Context, field Field, parents,
 	args interface{}) map[string]interface{} {
 	accessJWT, _ := x.ExtractJwt(ctx)
 	ns, _ := x.ExtractNamespace(ctx)
-	// move LambdaScript to worker.
 	body := map[string]interface{}{
 		"source":               worker.GetLambdaScript(ns),
 		"resolver":             field.GetObjectName() + "." + field.Name(),

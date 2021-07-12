@@ -64,7 +64,7 @@ type LambdaScriptStore struct {
 }
 
 func NewLambdaScriptStore() *LambdaScriptStore {
-	lambdaScriptStore := &LambdaScriptStore{
+	lambdaScriptStore = &LambdaScriptStore{
 		mux:    sync.RWMutex{},
 		script: make(map[uint64]*LambdaScript),
 	}
@@ -92,6 +92,13 @@ func (ls *LambdaScriptStore) resetLambdaScript() {
 
 func ResetLambdaScriptStore() {
 	lambdaScriptStore.resetLambdaScript()
+}
+
+func GetLambdaScript(ns uint64) string {
+	if script, ok := lambdaScriptStore.GetCurrent(ns); ok {
+		return script.Script
+	}
+	return ""
 }
 
 // UpdateLambdaScriptOverNetwork sends the request to the group one leader for execution.
@@ -238,8 +245,4 @@ func (w *grpcWorker) UpdateLambdaScript(ctx context.Context,
 
 	// return the uid of the Lambda script node
 	return &pb.UpdateLambdaScriptResponse{Uid: scriptNodeUid}, nil
-}
-
-func GetLambdaScript(ns uint64) string {
-	return "script"
 }

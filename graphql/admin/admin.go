@@ -221,7 +221,7 @@ const (
 	}
 
 	type UpdateLambdaScriptPayload {
-		script: LambdaScript
+		lambdaScript: LambdaScript
 	}
 
 	input UpdateLambdaScriptInput {
@@ -436,6 +436,7 @@ const (
 		"""
 		updateLambdaScript(input: UpdateLambdaScriptInput!) : UpdateLambdaScriptPayload
 
+		"""
 		Starts an export of all data in the cluster.  Export format should be 'rdf' (the default
 		if no format is given), or 'json'.
 		See : https://dgraph.io/docs/deploy/#export-database
@@ -817,7 +818,7 @@ func subscribeForUpdates(server *adminServer, typ SubscriptionType, closer *z.Cl
 			// server.resetSchema(ns, gqlSchema)
 
 			glog.Infof("namespace: %d. Successfully updated %s. "+
-				"Serving New %s.", typ, typ, ns)
+				"Serving New %d.", typ, typ, ns)
 		}
 	default:
 		panic("unhandled type")
@@ -1029,7 +1030,7 @@ func (as *adminServer) addConnectedAdminResolvers() {
 			func(m schema.Mutation) resolve.MutationResolver {
 				return &updateLambdaResolver{admin: as}
 			}).
-		WithQueryResolver("getLamdaScript",
+		WithQueryResolver("getLambdaScript",
 			func(q schema.Query) resolve.QueryResolver {
 				return &getLambdaResolver{admin: as}
 			}).

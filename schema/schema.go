@@ -601,6 +601,18 @@ func initialTypesInternal(namespace uint64, all bool) []*pb.TypeUpdate {
 				},
 			},
 		}, &pb.TypeUpdate{
+			TypeName: "dgraph.lambda",
+			Fields: []*pb.SchemaUpdate{
+				{
+					Predicate: "dgraph.lambda.script",
+					ValueType: pb.Posting_STRING,
+				},
+				{
+					Predicate: "dgraph.lambda.xid",
+					ValueType: pb.Posting_STRING,
+				},
+			},
+		}, &pb.TypeUpdate{
 			TypeName: "dgraph.graphql.persisted_query",
 			Fields: []*pb.SchemaUpdate{
 				{
@@ -701,6 +713,15 @@ func initialSchemaInternal(namespace uint64, all bool) []*pb.SchemaUpdate {
 			ValueType: pb.Posting_STRING,
 		}, &pb.SchemaUpdate{
 			Predicate: "dgraph.graphql.xid",
+			ValueType: pb.Posting_STRING,
+			Directive: pb.SchemaUpdate_INDEX,
+			Tokenizer: []string{"exact"},
+			Upsert:    true,
+		}, &pb.SchemaUpdate{
+			Predicate: "dgraph.lambda.script",
+			ValueType: pb.Posting_STRING,
+		}, &pb.SchemaUpdate{
+			Predicate: "dgraph.lambda.xid",
 			ValueType: pb.Posting_STRING,
 			Directive: pb.SchemaUpdate_INDEX,
 			Tokenizer: []string{"exact"},

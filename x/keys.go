@@ -659,6 +659,7 @@ var aclPredicateMap = map[string]struct{}{
 var graphqlReservedPredicate = map[string]struct{}{
 	"dgraph.graphql.xid":     {},
 	"dgraph.graphql.schema":  {},
+	"dgraph.lambda.script":   {},
 	"dgraph.drop.op":         {},
 	"dgraph.graphql.p_query": {},
 }
@@ -673,6 +674,7 @@ var internalPredicateMap = map[string]struct{}{
 
 var preDefinedTypeMap = map[string]struct{}{
 	"dgraph.graphql":                 {},
+	"dgraph.lambda":                  {},
 	"dgraph.type.User":               {},
 	"dgraph.type.Group":              {},
 	"dgraph.type.Rule":               {},
