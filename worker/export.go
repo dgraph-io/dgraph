@@ -442,6 +442,7 @@ func ToExportKvList(pk x.ParsedKey, pl *posting.List, in *pb.ExportRequest) (*bp
 	emptyList := &bpb.KVList{}
 	switch {
 	// These predicates are not required in the export data.
+	// TODO(Naman): How do we need to handle the lambda script in export.
 	case e.attr == "dgraph.graphql.xid":
 	case e.attr == "dgraph.drop.op":
 	case e.attr == "dgraph.graphql.p_query":

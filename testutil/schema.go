@@ -39,8 +39,8 @@ const (
 {"predicate":"dgraph.drop.op", "type": "string"},
 {"predicate":"dgraph.graphql.p_query","type":"string","index":true,"tokenizer":["sha256"]},
 {"predicate":"dgraph.graphql.schema", "type": "string"},
-{"predicate":"dgraph.lambda.script", "type": "string"},
 {"predicate":"dgraph.graphql.xid","type":"string","index":true,"tokenizer":["exact"],"upsert":true},
+{"predicate":"dgraph.lambda.script", "type": "string"},
 {"predicate":"dgraph.lambda.xid","type":"string","index":true,"tokenizer":["exact"],"upsert":true}
 `
 	aclTypes = `

@@ -659,6 +659,7 @@ var aclPredicateMap = map[string]struct{}{
 var graphqlReservedPredicate = map[string]struct{}{
 	"dgraph.graphql.xid":     {},
 	"dgraph.graphql.schema":  {},
+	"dgraph.lambda.xid":      {},
 	"dgraph.lambda.script":   {},
 	"dgraph.drop.op":         {},
 	"dgraph.graphql.p_query": {},
