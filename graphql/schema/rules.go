@@ -1918,8 +1918,8 @@ func customDirectiveValidation(sch *ast.Schema,
 	}
 
 	// 12. Finally validate the given graphql operation on remote server, when all locally doable
-	// validations have finished
-	var skip bool
+	// validations have finished. skip introspection by default.
+	skip := true
 	iHeaders := make(map[string]string)
 	if body != nil || graphql != nil {
 		var errPos *ast.Position
