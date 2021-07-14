@@ -17,6 +17,7 @@
 package x
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"sort"
@@ -29,8 +30,8 @@ func TestNameSpace(t *testing.T) {
 	ns := uint64(133)
 	attr := "name"
 	nsAttr := NamespaceAttr(ns, attr)
-	require.Equal(t, 8+len(attr), len(nsAttr))
-	parsedAttr := ParseAttr(nsAttr)
+	parsedNs, parsedAttr := ParseNamespaceAttr(nsAttr)
+	require.Equal(t, ns, parsedNs)
 	require.Equal(t, attr, parsedAttr)
 }
 
@@ -39,7 +40,7 @@ func TestDataKey(t *testing.T) {
 
 	// key with uid = 0 is invalid
 	uid = 0
-	key := DataKey(NamespaceAttr(GalaxyNamespace, "bad uid"), uid)
+	key := DataKey(GalaxyAttr("bad uid"), uid)
 	_, err := Parse(key)
 	require.Error(t, err)
 
@@ -47,7 +48,7 @@ func TestDataKey(t *testing.T) {
 		// Use the uid to derive the attribute so it has variable length and the test
 		// can verify that multiple sizes of attr work correctly.
 		sattr := fmt.Sprintf("attr:%d", uid)
-		key := DataKey(NamespaceAttr(GalaxyNamespace, sattr), uid)
+		key := DataKey(GalaxyAttr(sattr), uid)
 		pk, err := Parse(key)
 		require.NoError(t, err)
 
@@ -59,14 +60,14 @@ func TestDataKey(t *testing.T) {
 
 	keys := make([]string, 0, 1024)
 	for uid = 1024; uid >= 1; uid-- {
-		key := DataKey(NamespaceAttr(GalaxyNamespace, "testing.key"), uid)
+		key := DataKey(GalaxyAttr("testing.key"), uid)
 		keys = append(keys, string(key))
 	}
 	// Test that sorting is as expected.
 	sort.Strings(keys)
 	require.True(t, sort.StringsAreSorted(keys))
 	for i, key := range keys {
-		exp := DataKey(NamespaceAttr(GalaxyNamespace, "testing.key"), uint64(i+1))
+		exp := DataKey(GalaxyAttr("testing.key"), uint64(i+1))
 		require.Equal(t, string(exp), key)
 	}
 }
@@ -76,7 +77,7 @@ func TestParseDataKeyWithStartUid(t *testing.T) {
 	startUid := uint64(math.MaxUint64)
 	for uid = 1; uid < 1001; uid++ {
 		sattr := fmt.Sprintf("attr:%d", uid)
-		key := DataKey(NamespaceAttr(GalaxyNamespace, sattr), uid)
+		key := DataKey(GalaxyAttr(sattr), uid)
 		key, err := SplitKey(key, startUid)
 		require.NoError(t, err)
 		pk, err := Parse(key)
@@ -96,7 +97,7 @@ func TestIndexKey(t *testing.T) {
 		sattr := fmt.Sprintf("attr:%d", uid)
 		sterm := fmt.Sprintf("term:%d", uid)
 
-		key := IndexKey(NamespaceAttr(GalaxyNamespace, sattr), sterm)
+		key := IndexKey(GalaxyAttr(sattr), sterm)
 		pk, err := Parse(key)
 		require.NoError(t, err)
 
@@ -113,7 +114,7 @@ func TestIndexKeyWithStartUid(t *testing.T) {
 		sattr := fmt.Sprintf("attr:%d", uid)
 		sterm := fmt.Sprintf("term:%d", uid)
 
-		key := IndexKey(NamespaceAttr(GalaxyNamespace, sattr), sterm)
+		key := IndexKey(GalaxyAttr(sattr), sterm)
 		key, err := SplitKey(key, startUid)
 		require.NoError(t, err)
 		pk, err := Parse(key)
@@ -132,7 +133,7 @@ func TestReverseKey(t *testing.T) {
 	for uid = 1; uid < 1001; uid++ {
 		sattr := fmt.Sprintf("attr:%d", uid)
 
-		key := ReverseKey(NamespaceAttr(GalaxyNamespace, sattr), uid)
+		key := ReverseKey(GalaxyAttr(sattr), uid)
 		pk, err := Parse(key)
 		require.NoError(t, err)
 
@@ -148,7 +149,7 @@ func TestReverseKeyWithStartUid(t *testing.T) {
 	for uid = 1; uid < 1001; uid++ {
 		sattr := fmt.Sprintf("attr:%d", uid)
 
-		key := ReverseKey(NamespaceAttr(GalaxyNamespace, sattr), uid)
+		key := ReverseKey(GalaxyAttr(sattr), uid)
 		key, err := SplitKey(key, startUid)
 		require.NoError(t, err)
 		pk, err := Parse(key)
@@ -167,7 +168,7 @@ func TestCountKey(t *testing.T) {
 	for count = 0; count < 1001; count++ {
 		sattr := fmt.Sprintf("attr:%d", count)
 
-		key := CountKey(NamespaceAttr(GalaxyNamespace, sattr), count, true)
+		key := CountKey(GalaxyAttr(sattr), count, true)
 		pk, err := Parse(key)
 		require.NoError(t, err)
 
@@ -183,7 +184,7 @@ func TestCountKeyWithStartUid(t *testing.T) {
 	for count = 0; count < 1001; count++ {
 		sattr := fmt.Sprintf("attr:%d", count)
 
-		key := CountKey(NamespaceAttr(GalaxyNamespace, sattr), count, true)
+		key := CountKey(GalaxyAttr(sattr), count, true)
 		key, err := SplitKey(key, startUid)
 		require.NoError(t, err)
 		pk, err := Parse(key)
@@ -202,7 +203,7 @@ func TestSchemaKey(t *testing.T) {
 	for uid = 0; uid < 1001; uid++ {
 		sattr := fmt.Sprintf("attr:%d", uid)
 
-		key := SchemaKey(NamespaceAttr(GalaxyNamespace, sattr))
+		key := SchemaKey(GalaxyAttr(sattr))
 		pk, err := Parse(key)
 		require.NoError(t, err)
 
@@ -216,7 +217,7 @@ func TestTypeKey(t *testing.T) {
 	for uid = 0; uid < 1001; uid++ {
 		sattr := fmt.Sprintf("attr:%d", uid)
 
-		key := TypeKey(NamespaceAttr(GalaxyNamespace, sattr))
+		key := TypeKey(GalaxyAttr(sattr))
 		pk, err := Parse(key)
 		require.NoError(t, err)
 
@@ -236,16 +237,16 @@ func TestBadStartUid(t *testing.T) {
 		require.Error(t, err)
 	}
 
-	key := DataKey(NamespaceAttr(GalaxyNamespace, "aa"), 1)
+	key := DataKey(GalaxyAttr("aa"), 1)
 	testKey(key)
 
-	key = ReverseKey(NamespaceAttr(GalaxyNamespace, "aa"), 1)
+	key = ReverseKey(GalaxyAttr("aa"), 1)
 	testKey(key)
 
-	key = CountKey(NamespaceAttr(GalaxyNamespace, "aa"), 0, false)
+	key = CountKey(GalaxyAttr("aa"), 0, false)
 	testKey(key)
 
-	key = CountKey(NamespaceAttr(GalaxyNamespace, "aa"), 0, true)
+	key = CountKey(GalaxyAttr("aa"), 0, true)
 	testKey(key)
 }
 
@@ -271,7 +272,35 @@ func TestBadKeys(t *testing.T) {
 
 	// key with uid = 0 is invalid
 	uid := 0
-	key = DataKey(NamespaceAttr(GalaxyNamespace, "bad uid"), uint64(uid))
+	key = DataKey(GalaxyAttr("bad uid"), uint64(uid))
 	_, err = Parse(key)
 	require.Error(t, err)
+}
+
+func TestJsonMarshal(t *testing.T) {
+	type predicate struct {
+		Predicate string `json:"predicate,omitempty"`
+	}
+
+	p := &predicate{Predicate: NamespaceAttr(129, "name")}
+	b, err := json.Marshal(p)
+	require.NoError(t, err)
+
+	var p2 predicate
+	require.NoError(t, json.Unmarshal(b, &p2))
+	ns, attr := ParseNamespaceAttr(p2.Predicate)
+	require.Equal(t, uint64(129), ns)
+	require.Equal(t, "name", attr)
+}
+
+func TestNsSeparator(t *testing.T) {
+	uid := uint64(10)
+	pred := "name" + NsSeparator + "surname"
+	key := DataKey(GalaxyAttr(pred), uid)
+	pk, err := Parse(key)
+	require.NoError(t, err)
+	require.Equal(t, uid, pk.Uid)
+	ns, attr := ParseNamespaceAttr(pk.Attr)
+	require.Equal(t, GalaxyNamespace, ns)
+	require.Equal(t, pred, attr)
 }

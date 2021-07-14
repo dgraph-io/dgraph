@@ -365,9 +365,11 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 	// calculate) to work correctly. But we have seen some panics while forming DataKey in
 	// calculate(). panic is of the form "index out of range [4] with length 1". Hence return error
 	// from here when srcFn.n != len(q.UidList.Uids).
-	if srcFn.n != len(q.UidList.Uids) {
+
+	bm := codec.FromList(q.UidList)
+	if sz := int(bm.GetCardinality()); srcFn.n != sz {
 		return errors.Errorf("srcFn.n: %d is not equal to len(q.UidList.Uids): %d, srcFn: %+v in "+
-			"handleValuePostings", srcFn.n, len(q.UidList.GetUids()), srcFn)
+			"handleValuePostings", srcFn.n, sz, srcFn)
 	}
 
 	// This function has small boilerplate as handleUidPostings, around how the code gets
@@ -380,18 +382,31 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 	outputs := make([]*pb.Result, numGo)
 	listType := schema.State().IsList(q.Attr)
 
-	calculate := func(start, end int) error {
+	calculate := func(start int) error {
 		x.AssertTrue(start%width == 0)
 		out := &pb.Result{}
 		outputs[start/width] = out
 
-		for i := start; i < end; i++ {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			default:
+		startNum, err := bm.Select(uint64(start))
+		x.Check(err)
+
+		itr := bm.NewIterator()
+		itr.AdvanceIfNeeded(startNum)
+
+		for count := 0; itr.HasNext(); count++ {
+			if count >= width {
+				break
 			}
-			key := x.DataKey(q.Attr, q.UidList.Uids[i])
+			if count%100 == 0 {
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				default:
+				}
+			}
+
+			uid := itr.Next()
+			key := x.DataKey(q.Attr, uid)
 
 			// Get or create the posting list for an entity, attribute combination.
 			pl, err := qs.cache.Get(key)
@@ -439,7 +454,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 				out.LangMatrix = append(out.LangMatrix, &pb.LangList{Lang: langTags})
 			}
 
-			uidList := new(pb.List)
+			res := sroar.NewBitmap()
 			var vl pb.ValueList
 			for _, val := range vals {
 				newValue, err := convertToType(val, srcFn.atype)
@@ -458,17 +473,17 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 					case "eq":
 						for _, eqToken := range srcFn.eqTokens {
 							if types.CompareVals(srcFn.fname, val, eqToken) {
-								uidList.Uids = append(uidList.Uids, q.UidList.Uids[i])
+								res.Set(uid)
 								break
 							}
 						}
 					case "between":
 						if types.CompareBetween(val, srcFn.eqTokens[0], srcFn.eqTokens[1]) {
-							uidList.Uids = append(uidList.Uids, q.UidList.Uids[i])
+							res.Set(uid)
 						}
 					default:
 						if types.CompareVals(srcFn.fname, val, srcFn.eqTokens[0]) {
-							uidList.Uids = append(uidList.Uids, q.UidList.Uids[i])
+							res.Set(uid)
 						}
 					}
 
@@ -504,7 +519,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 				// Add an empty UID list to make later processing consistent
 				out.UidMatrix = append(out.UidMatrix, &pb.List{})
 			default:
-				out.UidMatrix = append(out.UidMatrix, uidList)
+				out.UidMatrix = append(out.UidMatrix, codec.ToList(res))
 			}
 		}
 		return nil
@@ -513,12 +528,8 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 	var g errgroup.Group
 	for i := 0; i < numGo; i++ {
 		start := i * width
-		end := start + width
-		if end > srcFn.n {
-			end = srcFn.n
-		}
 		g.Go(func() error {
-			return calculate(start, end)
+			return calculate(start)
 		})
 	}
 	if err := g.Wait(); err != nil {
@@ -667,7 +678,7 @@ func retrieveUidsAndFacets(args funcArgs, pl *posting.List, facetsTree *facetsTr
 	opts posting.ListOptions) (*pb.List, []*pb.Facets, error) {
 	q := args.q
 
-	uidList := &pb.List{}
+	res := sroar.NewBitmap()
 	var fcsList []*pb.Facets
 
 	// [1] q.FacetParam == nil, facetsTree == nil => No facets. Pick all UIDs.
@@ -676,7 +687,7 @@ func retrieveUidsAndFacets(args funcArgs, pl *posting.List, facetsTree *facetsTr
 	// [4] q.FacetParam != nil, facetsTree == nil => Pick facets. Pick all UIDs.
 
 	err := facetsFilterUidPostingList(pl, facetsTree, opts, func(p *pb.Posting) {
-		uidList.Uids = append(uidList.Uids, p.Uid)
+		res.Set(p.Uid)
 		if q.FacetParam != nil {
 			fcsList = append(fcsList, &pb.Facets{
 				Facets: facets.CopyFacets(p.Facets, q.FacetParam),
@@ -686,42 +697,13 @@ func retrieveUidsAndFacets(args funcArgs, pl *posting.List, facetsTree *facetsTr
 	if err != nil {
 		return nil, nil, err
 	}
-	return uidList, fcsList, nil
-
-	// if q.FacetParam != nil || facetsTree != nil {
-	// 	// Takes care of 2 and 3. And also 4 for picking facets.
-	// 	err := facetsFilterUidPostingList(pl, facetsTree, opts, func(p *pb.Posting) {
-	// 		uidList.Uids = append(uidList.Uids, p.Uid)
-	// 		if q.FacetParam != nil {
-	// 			fcsList = append(fcsList, &pb.Facets{
-	// 				Facets: facets.CopyFacets(p.Facets, q.FacetParam),
-	// 			})
-	// 		}
-	// 	})
-	// 	if err != nil {
-	// 		return nil, nil, err
-	// 	}
-	// }
-	// if facetsTree == nil {
-	// 	// Takes care of 1 and 4 for picking all UIDs.
-	// 	bm, err := pl.Bitmap(opts)
-	// 	if err != nil {
-	// 		return nil, nil, err
-	// 	}
-	// 	uidList = codec.ToList(bm)
-	// }
-
-	// // TODO: We shouldn't be adding nils to match up indices. Refactor how we do this.
-	// if q.FacetParam != nil {
-	// 	if len(uidList.Uids) != len(fcsList) {
-	// 	}
-	// }
-
-	// return uidList, fcsList, nil
+	// TODO(Ahsan): Need to figure out for what all cases we need sortedList.
+	return codec.ToSortedList(res), fcsList, nil
 }
 
 // This function handles operations on uid posting lists. Index keys, reverse keys and some data
 // keys store uid posting lists.
+
 func (qs *queryState) handleUidPostings(
 	ctx context.Context, args funcArgs, opts posting.ListOptions) error {
 	srcFn := args.srcFn
@@ -748,9 +730,10 @@ func (qs *queryState) handleUidPostings(
 	// from here when srcFn.n != len(q.UidList.Uids).
 	switch srcFn.fnType {
 	case notAFunction, compareScalarFn, hasFn, uidInFn:
-		if srcFn.n != len(q.UidList.GetUids()) {
+		c := int(codec.ListCardinality(q.UidList))
+		if srcFn.n != c {
 			return errors.Errorf("srcFn.n: %d is not equal to len(q.UidList.Uids): %d, srcFn: %+v in "+
-				"handleUidPostings", srcFn.n, len(q.UidList.GetUids()), srcFn)
+				"handleUidPostings", srcFn.n, c, srcFn)
 		}
 	}
 
@@ -767,6 +750,7 @@ func (qs *queryState) handleUidPostings(
 		out := &pb.Result{}
 		outputs[start/width] = out
 
+		uids := codec.GetUids(q.UidList)
 		for i := start; i < end; i++ {
 			if i%100 == 0 {
 				select {
@@ -779,9 +763,9 @@ func (qs *queryState) handleUidPostings(
 			switch srcFn.fnType {
 			case notAFunction, compareScalarFn, hasFn, uidInFn:
 				if q.Reverse {
-					key = x.ReverseKey(q.Attr, q.UidList.Uids[i])
+					key = x.ReverseKey(q.Attr, uids[i])
 				} else {
-					key = x.DataKey(q.Attr, q.UidList.Uids[i])
+					key = x.DataKey(q.Attr, uids[i])
 				}
 			case geoFn, regexFn, fullTextSearchFn, standardFn, customIndexFn, matchFn,
 				compareAttrFn:
@@ -818,7 +802,7 @@ func (qs *queryState) handleUidPostings(
 				}
 				count := int64(len)
 				if evalCompare(srcFn.fname, count, srcFn.threshold[0]) {
-					tlist := &pb.List{Uids: []uint64{q.UidList.Uids[i]}}
+					tlist := codec.OneUid(uids[i])
 					out.UidMatrix = append(out.UidMatrix, tlist)
 				}
 			case srcFn.fnType == hasFn:
@@ -830,14 +814,16 @@ func (qs *queryState) handleUidPostings(
 					return err
 				}
 				if !empty {
-					tlist := &pb.List{Uids: []uint64{q.UidList.Uids[i]}}
+					tlist := codec.OneUid(uids[i])
 					out.UidMatrix = append(out.UidMatrix, tlist)
 				}
 			case srcFn.fnType == uidInFn:
 				if i == 0 {
 					span.Annotate(nil, "UidInFn")
 				}
-				reqList := &pb.List{Uids: srcFn.uidsPresent}
+				reqBm := sroar.NewBitmap()
+				reqBm.SetMany(srcFn.uidsPresent)
+				reqList := codec.ToList(reqBm)
 				topts := posting.ListOptions{
 					ReadTs:    args.q.ReadTs,
 					AfterUid:  0,
@@ -848,8 +834,8 @@ func (qs *queryState) handleUidPostings(
 				if err != nil {
 					return err
 				}
-				if len(plist.Uids) > 0 {
-					tlist := &pb.List{Uids: []uint64{q.UidList.Uids[i]}}
+				if codec.ListCardinality(plist) > 0 {
+					tlist := codec.OneUid(uids[i])
 					out.UidMatrix = append(out.UidMatrix, tlist)
 				}
 			case q.FacetParam != nil || facetsTree != nil:
@@ -902,7 +888,7 @@ func (qs *queryState) handleUidPostings(
 	}
 	var total int
 	for _, list := range out.UidMatrix {
-		total += len(list.Uids)
+		total += int(codec.ListCardinality(list))
 	}
 	span.Annotatef(nil, "Total number of elements in matrix: %d", total)
 	return nil
@@ -1027,7 +1013,7 @@ func (qs *queryState) helpProcessTask(ctx context.Context, q *pb.Query, gid uint
 		First:    int(q.First + q.Offset),
 	}
 	// If we have srcFunc and Uids, it means its a filter. So we intersect.
-	if srcFn.fnType != notAFunction && q.UidList != nil && len(q.UidList.Uids) > 0 {
+	if srcFn.fnType != notAFunction && q.UidList != nil && codec.ListCardinality(q.UidList) > 0 {
 		opts.Intersect = q.UidList
 	}
 
@@ -1178,7 +1164,7 @@ func (qs *queryState) handleRegexFunction(ctx context.Context, arg funcArgs) err
 		// not support eq/gt/lt/le in @filter, see #4077), and this was new code that
 		// was added just to support the aforementioned case, the race condition is only
 		// in this part of the code.
-		uids.SetMany(arg.q.UidList.Uids)
+		uids.SetMany(codec.GetUids(arg.q.UidList))
 
 	// Prefer to use an index (fast)
 	case useIndex:
@@ -1244,7 +1230,7 @@ func (qs *queryState) handleRegexFunction(ctx context.Context, arg funcArgs) err
 	}
 
 	list := &pb.List{
-		Uids: filtered.ToArray(),
+		Bitmap: codec.ToBytes(filtered),
 	}
 	arg.out.UidMatrix = append(arg.out.UidMatrix, list)
 	return nil
@@ -1424,7 +1410,7 @@ func (qs *queryState) handleMatchFunction(ctx context.Context, arg funcArgs) err
 	case typ != types.StringID:
 		return errors.Errorf("Got non-string type. Fuzzy match is allowed only on string type.")
 
-	case arg.q.UidList != nil && len(arg.q.UidList.Uids) != 0:
+	case arg.q.UidList != nil && codec.ListCardinality(arg.q.UidList) != 0:
 		uids = codec.FromList(arg.q.UidList)
 
 	case schema.State().HasTokenizer(ctx, tok.IdentTrigram, attr):
@@ -1493,7 +1479,7 @@ func (qs *queryState) handleMatchFunction(ctx context.Context, arg funcArgs) err
 	}
 
 	out := &pb.List{
-		Uids: filtered.ToArray(),
+		Bitmap: codec.ToBytes(filtered),
 	}
 	arg.out.UidMatrix = append(arg.out.UidMatrix, out)
 	return nil
@@ -1587,8 +1573,7 @@ func (qs *queryState) filterGeoFunction(ctx context.Context, arg funcArgs) error
 	}
 	for i := 0; i < len(matrix); i++ {
 		matrix[i].And(final)
-		// TODO: This could be a conversion to Bitmap instead of ToArray.
-		arg.out.UidMatrix[i].Uids = matrix[i].ToArray()
+		arg.out.UidMatrix[i].Bitmap = codec.ToBytes(matrix[i])
 	}
 	return nil
 }
@@ -1676,8 +1661,7 @@ func (qs *queryState) filterStringFunction(arg funcArgs) error {
 	uids.AndNot(remove)
 	for i := 0; i < len(matrix); i++ {
 		matrix[i].And(uids)
-		// TODO: This could be a conversion to Bitmap instead of ToArray.
-		arg.out.UidMatrix[i].Uids = matrix[i].ToArray()
+		arg.out.UidMatrix[i].Bitmap = codec.ToBytes(matrix[i])
 	}
 	return nil
 }
@@ -1753,7 +1737,7 @@ func checkRoot(q *pb.Query, fc *functionContext) {
 		fc.n = 0
 		fc.isFuncAtRoot = true
 	} else {
-		fc.n = len(q.UidList.Uids)
+		fc.n = int(codec.ListCardinality(q.UidList))
 	}
 }
 
@@ -1780,7 +1764,7 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 
 	switch fnType {
 	case notAFunction:
-		fc.n = len(q.UidList.Uids)
+		fc.n = int(codec.ListCardinality(q.UidList))
 	case aggregatorFn:
 		// confirm aggregator could apply on the attributes
 		typ, err := schema.State().TypeOf(attr)
@@ -1791,7 +1775,7 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 			return nil, errors.Errorf("Aggregator %q could not apply on %v",
 				f, x.ParseAttr(attr))
 		}
-		fc.n = len(q.UidList.Uids)
+		fc.n = int(codec.ListCardinality(q.UidList))
 	case compareAttrFn:
 		args := q.SrcFunc.Args
 		if fc.fname == eq { // Only eq can have multiple args. It should have atleast one.
@@ -1862,12 +1846,13 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 		// We don't do this for eq because eq could have multiple arguments and we would have to
 		// compare the value with all of them. Also eq would usually have less arguments, hence we
 		// won't be fetching many index keys.
+		c := int(codec.ListCardinality(q.UidList))
 		switch {
 		case q.UidList != nil && !isIndexedAttr:
-			fc.n = len(q.UidList.Uids)
-		case q.UidList != nil && len(fc.tokens) > len(q.UidList.Uids) && fc.fname != eq:
+			fc.n = c
+		case q.UidList != nil && len(fc.tokens) > c && fc.fname != eq:
 			fc.tokens = fc.tokens[:0]
-			fc.n = len(q.UidList.Uids)
+			fc.n = c
 		default:
 			fc.n = len(fc.tokens)
 		}
@@ -1902,7 +1887,7 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 		if err = ensureArgsCount(q.SrcFunc, 2); err != nil {
 			return nil, err
 		}
-		fc.n = len(q.UidList.Uids)
+		fc.n = int(codec.ListCardinality(q.UidList))
 	case standardFn, fullTextSearchFn:
 		// srcfunc 0th val is func name and and [2:] are args.
 		// we tokenize the arguments of the query.
@@ -2041,7 +2026,7 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *pb.Query) (*pb.Result, er
 
 	var numUids int
 	if q.UidList != nil {
-		numUids = len(q.UidList.Uids)
+		numUids = int(codec.ListCardinality(q.UidList))
 	}
 	span.Annotatef(nil, "Attribute: %q NumUids: %v groupId: %v ServeTask", q.Attr, numUids, gid)
 
@@ -2402,7 +2387,6 @@ func (qs *queryState) handleHasFunction(ctx context.Context, q *pb.Query, out *p
 		prefix = initKey.ReversePrefix()
 	}
 
-	result := &pb.List{}
 	var prevKey []byte
 	itOpt := badger.DefaultIteratorOptions
 	itOpt.PrefetchValues = false
@@ -2426,7 +2410,9 @@ func (qs *queryState) handleHasFunction(ctx context.Context, q *pb.Query, out *p
 		return err
 	}
 
-	cnt := int32(0)
+	skipCnt := int32(0)
+	setCnt := 0
+	res := sroar.NewBitmap()
 loop:
 	// This function could be switched to the stream.Lists framework, but after the change to use
 	// BitCompletePosting, the speed here is already pretty fast. The slowdown for @lang predicates
@@ -2469,14 +2455,15 @@ loop:
 				return err
 			}
 			// skip entries upto Offset and do not store in the result.
-			if cnt < q.Offset {
-				cnt++
+			if skipCnt < q.Offset {
+				skipCnt++
 				continue
 			}
-			result.Uids = append(result.Uids, pk.Uid)
+			res.Set(pk.Uid)
+			setCnt++
 
 			// We'll stop fetching if we fetch the required count.
-			if len(result.Uids) >= int(q.First) {
+			if setCnt >= int(q.First) {
 				break
 			}
 			continue
@@ -2500,29 +2487,31 @@ loop:
 				return err
 			}
 			// skip entries upto Offset and do not store in the result.
-			if cnt < q.Offset {
-				cnt++
+			if skipCnt < q.Offset {
+				skipCnt++
 				continue
 			}
-			result.Uids = append(result.Uids, pk.Uid)
+			res.Set(pk.Uid)
+			setCnt++
 
 			// We'll stop fetching if we fetch the required count.
-			if len(result.Uids) >= int(q.First) {
+			if setCnt >= int(q.First) {
 				break loop
 			}
 		}
 
-		if len(result.Uids)%100000 == 0 {
+		if setCnt%100000 == 0 {
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
 			default:
 			}
 		}
-	}
+	} // end of Loop
 	if span != nil {
-		span.Annotatef(nil, "handleHasFunction found %d uids", len(result.Uids))
+		span.Annotatef(nil, "handleHasFunction found %d uids", setCnt)
 	}
+	result := &pb.List{Bitmap: codec.ToBytes(res)}
 	out.UidMatrix = append(out.UidMatrix, result)
 	return nil
 }

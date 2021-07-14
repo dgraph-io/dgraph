@@ -413,6 +413,8 @@ func (n *Node) streamMessages(to uint64, s *stream) {
 
 	var logged int
 	for range ticker.C { // Don't do this in an busy-wait loop, use a ticker.
+		// doSendMessage would block doing a stream. So, time.Now().After is
+		// only there to avoid a busy-wait.
 		if err := n.doSendMessage(to, s.msgCh); err != nil {
 			// Update lastLog so we print error only a few times if we are not able to connect.
 			// Otherwise, the log is polluted with repeated errors.
@@ -464,6 +466,10 @@ func (n *Node) doSendMessage(to uint64, msgCh chan []byte) error {
 	}
 
 	ctx = mc.Context()
+
+	fastTick := time.NewTicker(5 * time.Second)
+	defer fastTick.Stop()
+
 	ticker := time.NewTicker(3 * time.Minute)
 	defer ticker.Stop()
 
@@ -474,12 +480,17 @@ func (n *Node) doSendMessage(to uint64, msgCh chan []byte) error {
 				Context: n.RaftContext,
 				Payload: &api.Payload{Data: data},
 			}
-			packets++
 			slurp(batch) // Pick up more entries from msgCh, if present.
-			span.Annotatef(nil, "[Packets: %d] Sending data of length: %d.",
-				packets, len(batch.Payload.Data))
+			span.Annotatef(nil, "[to: %x] [Packets: %d] Sending data of length: %d.",
+				to, packets, len(batch.Payload.Data))
+			if packets%10000 == 0 {
+				glog.V(2).Infof("[to: %x] [Packets: %d] Sending data of length: %d.",
+					to, packets, len(batch.Payload.Data))
+			}
+			packets++
 			if err := mc.Send(batch); err != nil {
 				span.Annotatef(nil, "Error while mc.Send: %v", err)
+				glog.Errorf("[to: %x] Error while mc.Send: %v", to, err)
 				switch {
 				case strings.Contains(err.Error(), "TransientFailure"):
 					glog.Warningf("Reporting node: %d addr: %s as unreachable.", to, pool.Addr)
@@ -490,6 +501,23 @@ func (n *Node) doSendMessage(to uint64, msgCh chan []byte) error {
 				// We don't need to do anything if we receive any error while sending message.
 				// RAFT would automatically retry.
 				return err
+			}
+		case <-fastTick.C:
+			// We use this ticker, because during network partitions, mc.Send is
+			// unable to actually send packets, and also does not complain about
+			// them. We could have potentially used the separately tracked
+			// heartbeats to check this, but what we have observed is that
+			// incoming traffic might be OK, but outgoing might not be. So, this
+			// is a better way for us to verify whether this particular outbound
+			// connection is valid or not.
+			ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+			_, err := c.IsPeer(ctx, n.RaftContext)
+			cancel()
+			if err != nil {
+				glog.Errorf("Error while calling IsPeer %v. Reporting %x as unreachable.", err, to)
+				n.Raft().ReportUnreachable(to)
+				pool.SetUnhealthy()
+				return errors.Wrapf(err, "while calling IsPeer %x", to)
 			}
 		case <-ticker.C:
 			if lastPackets == packets {

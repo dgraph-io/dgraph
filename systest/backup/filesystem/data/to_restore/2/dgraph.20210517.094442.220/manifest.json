@@ -1,0 +1,1 @@
+{"type":"full","since":38,"groups":{"1":["dgraph.graphql.schema_history","dgraph.drop.op","dgraph.graphql.p_sha256hash","dgraph.graphql.schema","dgraph.cors","dgraph.type","dgraph.graphql.xid","dgraph.graphql.schema_created_at","dgraph.graphql.p_query"],"2":["p2","p1","p3"],"3":[]},"backup_id":"jolly_yalow0","backup_num":1,"encrypted":false,"drop_operations":null}

@@ -19,27 +19,42 @@ package algo
 import (
 	"sort"
 
+	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/sroar"
 )
 
 const jump = 32 // Jump size in InsersectWithJump.
 
 // ApplyFilter applies a filter to our UIDList.
+// TODO: ApplyFilter in this way should only happen for sorted uids. For normal
+// filter, it should use Bitmap FastAnd or And.
 func ApplyFilter(u *pb.List, f func(uint64, int) bool) {
-	out := u.Uids[:0]
-	for i, uid := range u.Uids {
-		if f(uid, i) {
-			out = append(out, uid)
+	uids := codec.GetUids(u)
+	var out []uint64
+	for i, x := range uids {
+		if f(x, i) {
+			out = append(out, x)
 		}
 	}
-	u.Uids = out
+
+	if len(u.SortedUids) > 0 {
+		u.SortedUids = out
+	} else {
+		b := sroar.NewBitmap()
+		b.SetMany(out)
+		u.Bitmap = codec.ToBytes(b)
+	}
 }
 
 // IndexOf performs a binary search on the uids slice and returns the index at
 // which it finds the uid, else returns -1
 func IndexOf(u *pb.List, uid uint64) int {
-	i := sort.Search(len(u.Uids), func(i int) bool { return u.Uids[i] >= uid })
-	if i < len(u.Uids) && u.Uids[i] == uid {
+	bm := codec.FromList(u)
+	// TODO(Ahsan): We might want bm.Rank()
+	uids := bm.ToArray()
+	i := sort.Search(len(uids), func(i int) bool { return uids[i] >= uid })
+	if i < len(uids) && uids[i] == uid {
 		return i
 	}
 	return -1

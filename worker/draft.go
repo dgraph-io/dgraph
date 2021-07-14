@@ -1366,7 +1366,7 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 		glog.V(3).Infof("Evaluating snapshot first:%d chk:%d (chk-first:%d) "+
 			"snapshotAfterEntries:%d", first, chk, chk-first,
 			snapshotAfterEntries)
-		return chk-first > snapshotAfterEntries
+		return chk-first >= snapshotAfterEntries
 	}
 
 	lastSnapshotTime := time.Now()
@@ -1394,36 +1394,28 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 				}
 
 				// calculate would be true if:
-				// - snapshot is empty.
-				// - we have more than 4 log files in Raft WAL.
-				// - snapshot frequency is zero and exceeding threshold entries.
-				// - we have exceeded the threshold time since last snapshot and exceeding threshold
-				//   entries.
+				// - snapshot is empty [#0]
+				// - we have more than 4 log files in Raft WAL [#0]
+				//
+				// If snapshot entries is set (no frequency):
+				// - Just use entries [#1]
+				//
+				// If snapshot frequency is set (no entries):
+				// - Just use frequency based threshold time [#2]
+				//
+				// If both entries and frequency is set:
+				// - Take a snapshot after BOTH time and entries are exceeded [#3]
 				//
 				// Note: In case we're exceeding threshold entries, but have not exceeded the
 				// threshold time since last snapshot, calculate would be false.
-				calculate := raft.IsEmptySnap(snap) || n.Store.NumLogFiles() > 4
+				calculate := raft.IsEmptySnap(snap) || n.Store.NumLogFiles() > 4 // #0
 				if snapshotFrequency == 0 {
-					calculate = calculate || exceededSnapshotByEntries()
+					calculate = calculate || exceededSnapshotByEntries() // #1
 
 				} else if time.Since(lastSnapshotTime) > snapshotFrequency {
 					// If we haven't taken a snapshot since snapshotFrequency, calculate would
 					// follow snapshot entries.
-					calculate = calculate || exceededSnapshotByEntries()
-				}
-
-				// Check if we're snapshotAfterEntries away from the FirstIndex based off the last
-				// checkpoint. This is a cheap operation. We're not iterating over the logs.
-				if chk, err := n.Store.Checkpoint(); err == nil {
-					if first, err := n.Store.FirstIndex(); err == nil {
-						// If we're over snapshotAfterEntries, calculate would be true.
-						if snapshotAfterEntries > 0 {
-							calculate = calculate || chk >= first+snapshotAfterEntries
-							glog.V(3).Infof("Evaluating snapshot first:%d chk:%d (chk-first:%d) "+
-								"snapshotAfterEntries:%d snap:%v", first, chk, chk-first,
-								snapshotAfterEntries, calculate)
-						}
-					}
+					calculate = calculate || exceededSnapshotByEntries() // #2, #3
 				}
 
 				// We keep track of the applied index in the p directory. Even if we don't take

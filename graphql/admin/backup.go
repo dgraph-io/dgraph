@@ -56,6 +56,7 @@ func resolveBackup(ctx context.Context, m schema.Mutation) (*resolve.Resolved, b
 		SecretKey:    input.SecretKey,
 		SessionToken: input.SessionToken,
 		Anonymous:    input.Anonymous,
+		ForceFull:    input.ForceFull,
 	}
 	taskId, err := worker.Tasks.Enqueue(req)
 	if err != nil {

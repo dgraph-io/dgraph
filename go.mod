@@ -4,7 +4,7 @@ go 1.12
 
 // replace github.com/dgraph-io/badger/v3 => /home/mrjn/go/src/github.com/dgraph-io/badger
 // replace github.com/dgraph-io/ristretto => /home/mrjn/go/src/github.com/dgraph-io/ristretto
-// replace github.com/dgraph-io/roaring => /home/mrjn/go/src/github.com/dgraph-io/roaring
+// replace github.com/dgraph-io/sroar => /home/ash/go/src/github.com/dgraph-io/sroar
 
 require (
 	cloud.google.com/go/storage v1.15.0
@@ -19,14 +19,14 @@ require (
 	github.com/Shopify/sarama v1.27.2
 	github.com/blevesearch/bleve v1.0.13
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd
-	github.com/dgraph-io/badger/v3 v3.0.0-20210504192519-da5f789ecb38
+	github.com/dgraph-io/badger/v3 v3.0.0-20210527100413-b18860020f34
 	github.com/dgraph-io/dgo/v210 v210.0.0-20210407152819-261d1c2a6987
 	github.com/dgraph-io/gqlgen v0.13.2
 	github.com/dgraph-io/gqlparser/v2 v2.2.0
 	github.com/dgraph-io/graphql-transport-ws v0.0.0-20210511143556-2cef522f1f15
 	github.com/dgraph-io/ristretto v0.0.4-0.20210504190834-0bf2acd73aa3
 	github.com/dgraph-io/simdjson-go v0.3.0
-	github.com/dgraph-io/sroar v0.0.0-20210522085927-7150620bb343
+	github.com/dgraph-io/sroar v0.0.0-20210604145002-865050cb7465
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/dgrijalva/jwt-go/v4 v4.0.0-preview1
 	github.com/dgryski/go-farm v0.0.0-20200201041132-a6ae2369ad13
@@ -40,7 +40,7 @@ require (
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.2
-	github.com/golang/snappy v0.0.2
+	github.com/golang/snappy v0.0.3
 	github.com/google/codesearch v1.0.0
 	github.com/google/go-cmp v0.5.5
 	github.com/google/uuid v1.1.2
