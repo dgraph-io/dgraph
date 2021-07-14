@@ -86,7 +86,7 @@ func newKafkaSink(config *z.SuperFlag) (Sink, error) {
 	saramaConf.Producer.Return.Successes = true
 	saramaConf.Producer.Return.Errors = true
 
-	if config.GetBool("tls") && config.GetPath("ca-cert") != "" {
+	if config.GetBool("tls") && config.GetPath("ca-cert") == "" {
 		tlsCfg := &tls.Config{}
 		var pool *x509.CertPool
 		var err error
