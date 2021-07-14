@@ -1292,6 +1292,7 @@ func TestForInvalidCustomQuery(t *testing.T) {
 			url: "http://mock:8888/noquery",
 			method: "POST",
 			forwardHeaders: ["Content-Type"],
+			skipIntrospection: "false",
 			graphql: "query($id: ID!) { country(code: $id) }"
 		})
 	}`
@@ -1318,6 +1319,7 @@ func TestForInvalidArgument(t *testing.T) {
 			url: "http://mock:8888/invalidargument",
 			method: "POST",
 			forwardHeaders: ["Content-Type"],
+			skipIntrospection: "false",
 			graphql: "query($id: ID!) { country(code: $id) }"
 		})
 	}`
@@ -1344,6 +1346,7 @@ func TestForInvalidType(t *testing.T) {
 			url: "http://mock:8888/invalidtype",
 			method: "POST",
 			forwardHeaders: ["Content-Type"],
+			skipIntrospection: "false",
 			graphql: "query($id: ID!) { country(code: $id) }"
 		})
 	}`
