@@ -647,7 +647,7 @@ var errReadIndex = errors.Errorf(
 var readIndexOk, readIndexTotal uint64
 
 // WaitLinearizableRead waits until a linearizable read can be performed.
-func (n *Node) WaitLinearizableRead(ctx context.Context) error {
+func (n *Node) WaitLinearizableRead(ctx context.Context, who string) error {
 	span := otrace.FromContext(ctx)
 	span.Annotate(nil, "WaitLinearizableRead")
 
@@ -663,6 +663,7 @@ func (n *Node) WaitLinearizableRead(ctx context.Context) error {
 		return ctx.Err()
 	}
 
+	glog.Info(who + " Waiting on indexCH")
 	select {
 	case index := <-indexCh:
 		span.Annotatef(nil, "Received index: %d", index)
@@ -671,7 +672,9 @@ func (n *Node) WaitLinearizableRead(ctx context.Context) error {
 		} else if num := atomic.AddUint64(&readIndexOk, 1); num%1000 == 0 {
 			glog.V(2).Infof("ReadIndex OK: %d\n", num)
 		}
+		glog.Info(who + " Waiting for mark")
 		err := n.Applied.WaitForMark(ctx, index)
+		glog.Info(who + " done")
 		span.Annotatef(nil, "Error from Applied.WaitForMark: %v", err)
 		return err
 	case <-ctx.Done():

@@ -1879,6 +1879,8 @@ func (n *node) InitAndStartNode() {
 			n.canCampaign = true
 		}
 	}
+	readStateCh := make(chan raft.ReadState, 100)
+	go n.RunReadIndexLoop(n.closer, readStateCh)
 	go n.processTabletSizes()
 	go n.processApplyCh()
 	go n.BatchAndSendMessages()

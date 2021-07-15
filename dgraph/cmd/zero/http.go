@@ -212,7 +212,7 @@ func (st *state) getState(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := st.node.WaitLinearizableRead(ctx); err != nil {
+	if err := st.node.WaitLinearizableRead(ctx, "getState"); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		x.SetStatus(w, x.Error, err.Error())
 		return

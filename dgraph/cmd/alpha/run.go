@@ -371,7 +371,8 @@ func healthCheck(w http.ResponseWriter, r *http.Request) {
 
 		ctx := x.AttachAccessJwt(context.Background(), r)
 		var resp *api.Response
-		if resp, err = (&edgraph.Server{}).Health(ctx, true); err != nil {
+		req := &api.HealthRequest{All: true}
+		if resp, err = (&edgraph.Server{}).Health(ctx, req); err != nil {
 			x.SetStatus(w, x.Error, err.Error())
 			return
 		}
@@ -381,6 +382,35 @@ func healthCheck(w http.ResponseWriter, r *http.Request) {
 		}
 		_, _ = w.Write(resp.Json)
 		return
+	}
+
+	if lr, ok := r.URL.Query()["linread"]; ok {
+		if len(lr) == 0 {
+			x.SetStatus(w, x.Error, "No argument passed with linread (example usage: linread=true)")
+			return
+		}
+		b, err := strconv.ParseBool(lr[0])
+		if err != nil {
+			x.SetStatus(w, x.Error, fmt.Sprintf("Failed to parse argument: %v as a boolean", lr[0]))
+			return
+		}
+		if b {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+
+			var resp *api.Response
+			req := &api.HealthRequest{LinRead: true}
+			if resp, err = (&edgraph.Server{}).Health(ctx, req); err != nil {
+				x.SetStatus(w, x.Error, err.Error())
+				return
+			}
+			if resp == nil {
+				x.SetStatus(w, x.ErrorNoData, "No health information available.")
+				return
+			}
+			_, _ = w.Write(resp.Json)
+			return
+		}
 	}
 
 	_, ok := r.URL.Query()["live"]
@@ -396,7 +426,8 @@ func healthCheck(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var resp *api.Response
-	if resp, err = (&edgraph.Server{}).Health(context.Background(), false); err != nil {
+	req := &api.HealthRequest{All: false}
+	if resp, err = (&edgraph.Server{}).Health(context.Background(), req); err != nil {
 		x.SetStatus(w, x.Error, err.Error())
 		return
 	}

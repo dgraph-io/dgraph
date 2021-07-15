@@ -994,13 +994,19 @@ type Request struct {
 }
 
 // Health handles /health and /health?all requests.
-func (s *Server) Health(ctx context.Context, all bool) (*api.Response, error) {
+func (s *Server) Health(ctx context.Context, req *api.HealthRequest) (*api.Response, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
 
+	if req.LinRead {
+		if err := worker.RunLinRead(ctx); err != nil {
+			return &api.Response{}, err
+		}
+	}
+
 	var healthAll []pb.HealthInfo
-	if all {
+	if req.All {
 		if err := AuthorizeGuardians(ctx); err != nil {
 			return nil, err
 		}

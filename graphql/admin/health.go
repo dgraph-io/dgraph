@@ -19,6 +19,7 @@ package admin
 import (
 	"context"
 
+	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
@@ -30,7 +31,7 @@ import (
 func resolveHealth(ctx context.Context, q schema.Query) *resolve.Resolved {
 	glog.Info("Got health request")
 
-	resp, err := (&edgraph.Server{}).Health(ctx, true)
+	resp, err := (&edgraph.Server{}).Health(ctx, &api.HealthRequest{All: true})
 	if err != nil {
 		return resolve.EmptyResult(q, errors.Errorf("%s: %s", x.Error, err.Error()))
 	}
