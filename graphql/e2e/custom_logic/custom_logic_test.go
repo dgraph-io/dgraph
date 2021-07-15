@@ -1949,32 +1949,6 @@ func TestCustomMutationShouldForwardHeaders(t *testing.T) {
 	require.JSONEq(t, expected, string(result.Data))
 }
 
-func TestCustomGraphqlNullQueryType(t *testing.T) {
-	schema := customTypes + `
-	type Query {
-		getCountry1(id: ID!): Country! @custom(http: {
-			url: "http://mock:8888/nullQueryAndMutationType",
-			method: "POST",
-			graphql: "query($id: ID!) { getCountry(id: $id) }"
-		})
-	}`
-	common.AssertUpdateGQLSchemaFailure(t, common.Alpha1HTTP, schema, nil,
-		[]string{"remote schema doesn't have any queries."})
-}
-
-func TestCustomGraphqlNullMutationType(t *testing.T) {
-	schema := customTypes + `
-	type Mutation {
-		addCountry1(input: CountryInput!): Country! @custom(http: {
-			url: "http://mock:8888/nullQueryAndMutationType",
-			method: "POST",
-			graphql: "mutation($input: CountryInput!) { putCountry(country: $input) }"
-		})
-	}`
-	common.AssertUpdateGQLSchemaFailure(t, common.Alpha1HTTP, schema, nil,
-		[]string{"remote schema doesn't have any mutations."})
-}
-
 func TestCustomGraphqlMissingQueryType(t *testing.T) {
 	schema := customTypes + `
 	type Query {
