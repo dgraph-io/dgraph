@@ -84,7 +84,7 @@ func resolveRestore(ctx context.Context, m schema.Mutation) (*resolve.Resolved, 
 
 	go func() {
 		wg.Wait()
-		edgraph.ResetAcl(nil)
+		edgraph.InitializeAcl(nil)
 	}()
 
 	return resolve.DataResult(
