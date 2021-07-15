@@ -1285,33 +1285,6 @@ func TestCustomFieldResolutionShouldPropagateGraphQLErrors(t *testing.T) {
 	testutil.CompareJSON(t, expected, string(result.Data))
 }
 
-func TestForInvalidArgument(t *testing.T) {
-	schema := `
-	type Country @remote {
-        code: String
-        name: String
-        states: [State]
-        std: Int
-      }
-
-      type State @remote {
-        code: String
-        name: String
-        country: Country
-      }
-	type Query {
-		getCountry1(id: ID!): Country! @custom(http: {
-			url: "http://mock:8888/invalidargument",
-			method: "POST",
-			forwardHeaders: ["Content-Type"],
-			skipIntrospection: "false",
-			graphql: "query($id: ID!) { country(code: $id) }"
-		})
-	}`
-	common.AssertUpdateGQLSchemaFailure(t, common.Alpha1HTTP, schema, nil,
-		[]string{"argument `code` is not present in remote query `country`"})
-}
-
 func TestCustomLogicGraphql(t *testing.T) {
 	schema := `
 	type Country @remote {
