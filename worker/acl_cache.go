@@ -40,7 +40,7 @@ func ResetAclCache() {
 
 func (cache *AclCache) Loaded() bool {
 	cache.RLock()
-	defer cache.Unlock()
+	defer cache.RUnlock()
 	return cache.loaded
 }
 
