@@ -1918,7 +1918,9 @@ func customDirectiveValidation(sch *ast.Schema,
 	}
 
 	// 12. Finally validate the given graphql operation on remote server, when all locally doable
-	// validations have finished. skip introspection by default.
+	// validations have finished.
+	// For now, introspection is disabled and it will be skipped irrespective of the value of the
+	// `skipIntrospection` present in the query.
 	skip := true
 	iHeaders := make(map[string]string)
 	if body != nil || graphql != nil {
@@ -1936,7 +1938,7 @@ func customDirectiveValidation(sch *ast.Schema,
 		}
 		si := httpArg.Value.Children.ForName("skipIntrospection")
 		if si != nil {
-			skip, err = strconv.ParseBool(si.Raw)
+			_, err = strconv.ParseBool(si.Raw)
 			if err != nil {
 				errs = append(errs, gqlerror.ErrorPosf(errPos,
 					"Type %s; Field %s; skipIntrospection in @custom directive can only be "+
