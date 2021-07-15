@@ -84,7 +84,6 @@ func sendRestoreRequest(t *testing.T, req *restoreReq) {
 	}
 	require.NoError(t, json.Unmarshal(resp.Data, &restoreResp))
 	require.Equal(t, restoreResp.Restore.Code, "Success")
-	return
 }
 
 // disableDraining disables draining mode before each test for increased reliability.
