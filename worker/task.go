@@ -55,11 +55,10 @@ func invokeNetworkRequest(ctx context.Context, addr string,
 		return nil, errors.Wrapf(err, "dispatchTaskOverNetwork: while retrieving connection.")
 	}
 
-	con := pl.Get()
 	if span := otrace.FromContext(ctx); span != nil {
 		span.Annotatef(nil, "invokeNetworkRequest: Sending request to %v", addr)
 	}
-	c := pb.NewWorkerClient(con)
+	c := pb.NewWorkerClient(pl.Get())
 	return f(ctx, c)
 }
 

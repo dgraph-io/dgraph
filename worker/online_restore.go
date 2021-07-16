@@ -203,8 +203,7 @@ func proposeRestoreOrSend(ctx context.Context, req *pb.RestoreRequest) error {
 	if pl == nil {
 		return conn.ErrNoConnection
 	}
-	con := pl.Get()
-	c := pb.NewWorkerClient(con)
+	c := pb.NewWorkerClient(pl.Get())
 
 	_, err := c.Restore(ctx, req)
 	return err
