@@ -1,4 +1,4 @@
-![](/logo.png)
+![](/dgraphlogo.png)
 
 **The Only Native GraphQL Database With A Graph Backend.**
 
