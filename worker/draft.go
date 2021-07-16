@@ -1602,7 +1602,9 @@ func (n *node) Run() {
 							glog.Infoln("---> Retrieve snapshot: OK.")
 							break
 						}
-						glog.Errorf("While retrieving snapshot, error: %v. Retrying...", err)
+						if !strings.Contains(err.Error(), "is already running") {
+							glog.Errorf("While retrieving snapshot, error: %v. Retrying...", err)
+						}
 						time.Sleep(time.Second) // Wait for a bit.
 					}
 					glog.Infof("---> SNAPSHOT: %+v. Group %d. DONE.\n", snap, n.gid)
