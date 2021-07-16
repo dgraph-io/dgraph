@@ -49,7 +49,7 @@ type Telemetry struct {
 	EEFeaturesList []string `json:",omitempty"`
 }
 
-const url = "https://ping.dgraph.io/3.0/projects/5b809dfac9e77c0001783ad0/events"
+const url = "https://ping.dgraph.io"
 
 // NewZero returns a Telemetry struct that holds information about the state of zero server.
 func NewZero(ms *pb.MembershipState) *Telemetry {
