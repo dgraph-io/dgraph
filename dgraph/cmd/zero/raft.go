@@ -36,8 +36,8 @@ import (
 	"github.com/golang/glog"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
-	"go.etcd.io/etcd/raft"
-	"go.etcd.io/etcd/raft/raftpb"
+	"go.etcd.io/etcd/raft/v3"
+	"go.etcd.io/etcd/raft/v3/raftpb"
 	ostats "go.opencensus.io/stats"
 	"go.opencensus.io/tag"
 	otrace "go.opencensus.io/trace"
@@ -612,7 +612,7 @@ func (n *node) initAndStartNode() error {
 			var zs pb.ZeroSnapshot
 			x.Check(zs.Unmarshal(sp.Data))
 			n.server.SetMembershipState(zs.State)
-			for _, id := range sp.Metadata.ConfState.Nodes {
+			for _, id := range sp.Metadata.ConfState.Voters {
 				n.Connect(id, zs.State.Zeros[id].Addr)
 			}
 		}
@@ -656,7 +656,7 @@ func (n *node) initAndStartNode() error {
 			cancel()
 		}
 		glog.Infof("[%#x] Starting node\n", n.Id)
-		n.SetRaft(raft.StartNode(n.Cfg, nil))
+		n.SetRaft(raft.RestartNode(n.Cfg))
 
 	default:
 		glog.Infof("Starting a brand new node")

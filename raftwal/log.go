@@ -35,7 +35,7 @@ import (
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
-	"go.etcd.io/etcd/raft/raftpb"
+	"go.etcd.io/etcd/raft/v3/raftpb"
 )
 
 // WAL is divided up into entryFiles. Each entry file stores maxNumEntries in

@@ -33,8 +33,8 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
-	"go.etcd.io/etcd/raft"
-	"go.etcd.io/etcd/raft/raftpb"
+	"go.etcd.io/etcd/raft/v3"
+	"go.etcd.io/etcd/raft/v3/raftpb"
 	"golang.org/x/net/trace"
 
 	ostats "go.opencensus.io/stats"
@@ -2150,7 +2150,7 @@ func (n *node) InitAndStartNode() {
 
 			// TODO: Making connections here seems unnecessary, evaluate.
 			members := groups().members(n.gid)
-			for _, id := range sp.Metadata.ConfState.Nodes {
+			for _, id := range sp.Metadata.ConfState.Voters {
 				m, ok := members[id]
 				if ok {
 					n.Connect(id, m.Addr)
@@ -2176,7 +2176,7 @@ func (n *node) InitAndStartNode() {
 			// snapshot as needed after joining the group, instead of us forcing one upfront.
 			glog.Infoln("Trying to join peers.")
 			n.retryUntilSuccess(n.joinPeers, time.Second)
-			n.SetRaft(raft.StartNode(n.Cfg, nil))
+			n.SetRaft(raft.RestartNode(n.Cfg))
 		} else {
 			peers := []raft.Peer{{ID: n.Id}}
 			n.SetRaft(raft.StartNode(n.Cfg, peers))
