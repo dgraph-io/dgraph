@@ -160,14 +160,14 @@ func externalRequestError(err error, f Field) *x.GqlError {
 		" returned an error: %s for field: %s within type: %s.", err, f.Name(), f.GetObjectName())
 }
 
-func GetBodyForLambda(ctx context.Context, field Field, parents,
+func GetBodyForLambda(ctx context.Context, f Field, parents,
 	args interface{}) map[string]interface{} {
 	accessJWT, _ := x.ExtractJwt(ctx)
 	body := map[string]interface{}{
-		"resolver":             field.GetObjectName() + "." + field.Name(),
+		"resolver":             f.GetObjectName() + "." + f.Name(),
 		"X-Dgraph-AccessToken": accessJWT,
 		"authHeader": map[string]interface{}{
-			"key":   field.GetAuthMeta().GetHeader(),
+			"key":   f.GetAuthMeta().GetHeader(),
 			"value": authorization.GetJwtToken(ctx),
 		},
 	}
@@ -177,5 +177,61 @@ func GetBodyForLambda(ctx context.Context, field Field, parents,
 	if args != nil {
 		body["args"] = args
 	}
+	body["info"] = getInfo(f)
 	return body
+}
+
+type info struct {
+	Field selectionField `json:"field"`
+}
+
+type selectionField struct {
+	Alias        string                 `json:"alias"`
+	Name         string                 `json:"name"`
+	Arguments    map[string]interface{} `json:"arguments"`
+	Directives   fldDirectiveList       `json:"directives"`
+	SelectionSet selectionSet           `json:"selectionSet"`
+}
+
+type selectionSet []selectionField
+
+type fldDirectiveList []*fldDirective
+
+type fldDirective struct {
+	Name      string                 `json:"name"`
+	Arguments map[string]interface{} `json:"arguments"`
+}
+
+func convertDirectiveList(f *field) fldDirectiveList {
+	outDirList := make(fldDirectiveList, len(f.field.Directives))
+	for i, dir := range f.field.Directives {
+		outDirList[i] = &fldDirective{Name: dir.Name, Arguments: dir.ArgumentMap(f.op.vars)}
+	}
+	return outDirList
+}
+
+func convert(f *field) selectionField {
+	outField := selectionField{
+		Alias:        f.field.Alias,
+		Name:         f.field.Name,
+		Arguments:    f.field.ArgumentMap(f.op.vars),
+		Directives:   convertDirectiveList(f),
+		SelectionSet: make(selectionSet, len(f.field.SelectionSet)),
+	}
+	for i, sel := range f.SelectionSet() {
+		outField.SelectionSet[i] = convert(sel.(*field))
+	}
+	return outField
+}
+
+func getInfo(f Field) info {
+	switch fld := f.(type) {
+	case *query:
+		return info{Field: convert((*field)(fld))}
+	case *mutation:
+		return info{Field: convert((*field)(fld))}
+	case *field:
+		return info{Field: convert(fld)}
+	}
+	return info{}
 }
