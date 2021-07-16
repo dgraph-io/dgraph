@@ -174,8 +174,7 @@ func getSchemaOverNetwork(ctx context.Context, gid uint32, s *pb.SchemaRequest, 
 		ch <- resultErr{err: conn.ErrNoConnection}
 		return
 	}
-	conn := pl.Get()
-	c := pb.NewWorkerClient(conn)
+	c := pb.NewWorkerClient(pl.Get())
 	schema, e := c.Schema(ctx, s)
 	ch <- resultErr{result: schema, err: e}
 }
