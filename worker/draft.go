@@ -779,7 +779,15 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 				proposal.CleanPredicate, proposal.ExpectedChecksum)
 			return nil
 		}
-		return posting.DeletePredicate(ctx, proposal.CleanPredicate, proposal.StartTs)
+		err := posting.DeletePredicate(ctx, proposal.CleanPredicate, proposal.StartTs)
+		if err == badger.ErrBannedKey {
+			// Zero might send the delete predicate instruction to alpha when updating the
+			// membership state. This can happen for predicates from banned namespaces too.
+			glog.Warningf("Couldn't clean the predicate %s as it is already banned.",
+				proposal.CleanPredicate)
+			return nil
+		}
+		return err
 
 	case proposal.Delta != nil:
 		n.elog.Printf("Applying Oracle Delta for key: %d", key)
