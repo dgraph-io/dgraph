@@ -1209,6 +1209,11 @@ func (n *node) Run() {
 		go x.StoreSync(pstore, closer)
 	}
 
+	readStateCh := make(chan raft.ReadState, 100)
+	closer := z.NewCloser(1)
+	defer closer.SignalAndWait()
+	go n.RunReadIndexLoop(closer, readStateCh)
+
 	applied, err := n.Store.Checkpoint()
 	if err != nil {
 		glog.Errorf("While trying to find raft progress: %v", err)
@@ -1238,6 +1243,9 @@ func (n *node) Run() {
 			timer.Start()
 			_, span := otrace.StartSpan(n.ctx, "Alpha.RunLoop",
 				otrace.WithSampler(otrace.ProbabilitySampler(0.001)))
+			for _, rs := range rd.ReadStates {
+				readStateCh <- rs
+			}
 
 			if rd.SoftState != nil {
 				groups().triggerMembershipSync()

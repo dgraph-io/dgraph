@@ -998,7 +998,6 @@ func (s *Server) Health(ctx context.Context, req *api.HealthRequest) (*api.Respo
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
-
 	if req.LinRead {
 		if err := worker.RunLinRead(ctx); err != nil {
 			return &api.Response{}, err

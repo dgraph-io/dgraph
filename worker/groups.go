@@ -171,7 +171,7 @@ func StartRaftNodes(walStore *raftwal.DiskStorage, bindall bool) {
 }
 
 func RunLinRead(ctx context.Context) error {
-	return groups().Node.WaitLinearizableRead(ctx, "us")
+	return groups().Node.WaitLinearizableRead(ctx)
 }
 
 func (g *groupi) Ctx() context.Context {
