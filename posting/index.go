@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"math"
@@ -35,6 +36,7 @@ import (
 	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/badger/v3/options"
 	bpb "github.com/dgraph-io/badger/v3/pb"
+	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/tok"
@@ -54,32 +56,49 @@ type indexMutationInfo struct {
 
 // indexTokens return tokens, without the predicate prefix and
 // index rune, for specific tokenizers.
-func indexTokens(ctx context.Context, info *indexMutationInfo) ([]string, error) {
+func indexTokens(ctx context.Context, info *indexMutationInfo) ([]string, map[string]uint32, error) {
 	attr := info.edge.Attr
 	lang := info.edge.GetLang()
 
 	schemaType, err := schema.State().TypeOf(attr)
 	if err != nil || !schemaType.IsScalar() {
-		return nil, errors.Errorf("Cannot index attribute %s of type object.", attr)
+		return nil, nil, errors.Errorf("Cannot index attribute %s of type object.", attr)
 	}
 
 	if !schema.State().IsIndexed(ctx, attr) {
-		return nil, errors.Errorf("Attribute %s is not indexed.", attr)
+		return nil, nil, errors.Errorf("Attribute %s is not indexed.", attr)
 	}
 	sv, err := types.Convert(info.val, schemaType)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	var tokens []string
-	for _, it := range info.tokenizers {
-		toks, err := tok.BuildTokens(sv.Value, tok.GetTokenizerForLang(it, lang))
+	var tokensFullText map[string]uint32
+
+	for _, tokenizer := range info.tokenizers {
+		tokenizer := tok.GetTokenizerForLang(tokenizer, lang)
+		toks, err := tokenizer.Tokens(sv.Value)
 		if err != nil {
-			return tokens, err
+			return nil, nil, err
+		}
+
+		id := tokenizer.Identifier()
+		if id == byte(tok.IdentFullText) {
+			if tokensFullText == nil {
+				tokensFullText = make(map[string]uint32)
+			}
+			for i := range toks {
+				tokensFullText[toks[i]]++
+			}
+		}
+		for i := range toks {
+			toks[i] = tok.EncodeToken(toks[i], id)
 		}
 		tokens = append(tokens, toks...)
 	}
-	return tokens, nil
+
+	return tokens, tokensFullText, nil
 }
 
 // addIndexMutations adds mutation(s) for a single term, to maintain the index,
@@ -95,7 +114,7 @@ func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) 
 	if uid == 0 {
 		return errors.New("invalid UID with value 0")
 	}
-	tokens, err := indexTokens(ctx, info)
+	tokens, fullTextTokens, err := indexTokens(ctx, info)
 	if err != nil {
 		// This data is not indexable
 		return err
@@ -113,6 +132,49 @@ func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) 
 			return err
 		}
 	}
+
+	if len(fullTextTokens) > 0 {
+		count := uint32(0)
+		for _, tokenCount := range fullTextTokens {
+			count += tokenCount
+		}
+		data := map[string]interface{}{
+			"tokens": fullTextTokens,
+			"count":  count,
+		}
+
+		buffer := new(bytes.Buffer)
+		err = json.NewEncoder(buffer).Encode(data)
+		x.Check(err)
+
+		facet := &api.Facet{
+			Key:     "ajeet",
+			Value:   buffer.Bytes(),
+			ValType: api.Facet_STRING,
+		}
+
+		edge := &pb.DirectedEdge{
+			Entity: uid,
+			Attr:   attr,
+			Op:     info.op,
+			Value:  info.edge.Value,
+			Facets: []*api.Facet{facet},
+		}
+
+		key := x.DataKey(attr, uid)
+		plist, err := txn.cache.GetFromDelta(key)
+		x.Check(err)
+
+		// TODO(ajeet): we're essentially inserting the same edge here, with an added facet.
+		// We need to figure out how to prevent this duplicate work.
+		err = plist.addMutation(ctx, txn, edge)
+		x.Check(err)
+
+		if err := txn.setDocument(ctx, attr, uint64(len(fullTextTokens))); err != nil {
+			panic(err)
+		}
+	}
+
 	return nil
 }
 
@@ -312,6 +374,40 @@ func (l *List) handleDeleteAll(ctx context.Context, edge *pb.DirectedEdge, txn *
 	return l.addMutation(ctx, txn, edge)
 }
 
+func (txn *Txn) setDocument(ctx context.Context, attr string, delta uint64) error {
+	key := x.DocumentKey(attr)
+	if pstore.IsClosed() {
+		return badger.ErrDBClosed
+	}
+	btxn := pstore.NewTransactionAt(math.MaxUint64, true)
+	defer btxn.Discard()
+
+	var value uint64
+	item, err := btxn.Get(key)
+	if err != nil {
+		if err != badger.ErrKeyNotFound {
+			return err
+		}
+	} else {
+		if err := item.Value(func(val []byte) error {
+			value = binary.BigEndian.Uint64(val)
+			return nil
+		}); err != nil {
+			return err
+		}
+	}
+
+	value += delta
+	valueBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(valueBytes, value)
+	entry := badger.NewEntry(key, valueBytes).WithDiscard()
+	if err := btxn.SetEntry(entry); err != nil {
+		return err
+	}
+
+	return btxn.CommitAt(math.MaxUint64, nil)
+}
+
 func (txn *Txn) addCountMutation(ctx context.Context, t *pb.DirectedEdge, count uint32,
 	reverse bool) error {
 	key := x.CountKey(t.Attr, count, reverse)
@@ -459,7 +555,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, edge *pb.DirectedEdge, 
 
 	// Add reverse mutation irrespective of hasMutated, server crash can happen after
 	// mutation is synced and before reverse edge is synced
-	if (pstore != nil) && (edge.ValueId != 0) && schema.State().IsReversed(ctx, edge.Attr) {
+	if pstore != nil && edge.ValueId != 0 && schema.State().IsReversed(ctx, edge.Attr) {
 		if err := txn.addReverseAndCountMutation(ctx, edge); err != nil {
 			return err
 		}
