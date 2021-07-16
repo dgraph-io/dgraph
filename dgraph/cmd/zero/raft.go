@@ -632,10 +632,9 @@ func (n *node) initAndStartNode() error {
 			return errors.Errorf("Unhealthy connection to %v", opts.peer)
 		}
 
-		gconn := p.Get()
-		c := pb.NewRaftClient(gconn)
 		timeout := 8 * time.Second
 		for {
+			c := pb.NewRaftClient(p.Get())
 			ctx, cancel := context.WithTimeout(n.ctx, timeout)
 			// JoinCluster can block indefinitely, raft ignores conf change proposal
 			// if it has pending configuration.

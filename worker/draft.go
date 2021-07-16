@@ -2074,8 +2074,7 @@ func (n *node) joinPeers() error {
 		return err
 	}
 
-	gconn := pl.Get()
-	c := pb.NewRaftClient(gconn)
+	c := pb.NewRaftClient(pl.Get())
 	glog.Infof("Calling JoinCluster via leader: %s", pl.Addr)
 	if _, err := c.JoinCluster(n.ctx, n.RaftContext); err != nil {
 		return errors.Wrapf(err, "error while joining cluster")
