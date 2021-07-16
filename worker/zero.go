@@ -31,8 +31,7 @@ func RemoveNodeOverNetwork(ctx context.Context, req *pb.RemoveNodeRequest) (*pb.
 		return nil, conn.ErrNoConnection
 	}
 
-	con := pl.Get()
-	c := pb.NewZeroClient(con)
+	c := pb.NewZeroClient(pl.Get())
 	return c.RemoveNode(ctx, req)
 }
 
@@ -44,8 +43,7 @@ func MoveTabletOverNetwork(ctx context.Context, req *pb.MoveTabletRequest) (*pb.
 		return nil, conn.ErrNoConnection
 	}
 
-	con := pl.Get()
-	c := pb.NewZeroClient(con)
+	c := pb.NewZeroClient(pl.Get())
 	return c.MoveTablet(ctx, req)
 }
 
@@ -57,7 +55,6 @@ func ApplyLicenseOverNetwork(ctx context.Context, req *pb.ApplyLicenseRequest) (
 		return nil, conn.ErrNoConnection
 	}
 
-	con := pl.Get()
-	c := pb.NewZeroClient(con)
+	c := pb.NewZeroClient(pl.Get())
 	return c.ApplyLicense(ctx, req)
 }

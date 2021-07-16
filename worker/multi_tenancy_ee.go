@@ -88,9 +88,7 @@ func proposeDeleteOrSend(ctx context.Context, req *pb.DeleteNsRequest) error {
 	if pl == nil {
 		return conn.ErrNoConnection
 	}
-	con := pl.Get()
-	c := pb.NewWorkerClient(con)
-
+	c := pb.NewWorkerClient(pl.Get())
 	_, err := c.DeleteNamespace(ctx, req)
 	return err
 }
