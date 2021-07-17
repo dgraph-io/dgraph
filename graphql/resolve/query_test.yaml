@@ -2596,11 +2596,7 @@
       getComment(id: "0x1") {
         author
         title
-        content
         ups
-        relatedUsers {
-          name
-        }
       }
     }
   dgquery: |-
@@ -2609,8 +2605,7 @@
         Comment.author : Comment.author
         Comment.title : Comment.title
         Comment.ups : Comment.ups
-        Comment.id : uid
-        Comment.url : Comment.url
+        dgraph.uid : uid
       }
     }
 
@@ -2619,6 +2614,7 @@
     query {
       getComment(id: "0x1") {
         content
+        url: author
         relatedUsers {
           name
         }
@@ -2627,9 +2623,10 @@
   dgquery: |-
     query {
       getComment(func: uid(0x1)) @filter(type(Comment)) {
-        Comment.author : Comment.author
-        Comment.id : uid
-        Comment.url : Comment.url
+        Comment.url : Comment.author
+        Comment._.author : Comment.author
+        Comment._.id : uid
+        Comment._.url : Comment.url
       }
     }
 - name: "Rewrite without custom fields deep"
@@ -2641,12 +2638,8 @@
           id
           author
           title
-          content
           ups
           url
-          relatedUsers {
-            name
-          }
         }
       }
     }
@@ -2669,7 +2662,7 @@
       getPost(postID: "0x1") {
         postID
         comments {
-          author
+          url : author
           title
           content
           ups
@@ -2684,11 +2677,12 @@
       getPost(func: uid(0x1)) @filter(type(Post)) {
         Post.postID : uid
         Post.comments : Post.comments {
-          Comment.author : Comment.author
+          Comment.url : Comment.author
           Comment.title : Comment.title
           Comment.ups : Comment.ups
-          Comment.id : uid
-          Comment.url : Comment.url
+          Comment._.author : Comment.author
+          Comment._.id : uid
+          Comment._.url : Comment.url
         }
       }
     }
