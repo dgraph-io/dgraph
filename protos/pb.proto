@@ -743,6 +743,7 @@ message UpdateGraphQLSchemaRequest {
   string graphql_schema = 2;
   repeated SchemaUpdate dgraph_preds = 3;
   repeated TypeUpdate dgraph_types = 4;
+  string lambda_script = 5;
 }
 
 message UpdateGraphQLSchemaResponse {
