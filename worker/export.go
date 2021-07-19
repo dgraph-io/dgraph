@@ -467,7 +467,7 @@ func ToExportKvList(pk x.ParsedKey, pl *posting.List, in *pb.ExportRequest) (*bp
 			return emptyList, errors.Errorf("cannot convert value of GraphQL schema to byte array")
 		}
 
-		schema, script := ParseToSchemaAndScript(val)
+		schema, script := ParseAsSchemaAndScript(val)
 		exported := x.ExportedGQLSchema{
 			Namespace: e.namespace,
 			Schema:    string(schema),

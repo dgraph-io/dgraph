@@ -546,7 +546,7 @@ var (
 		"backup":             gogMutMWs,
 		"config":             gogMutMWs,
 		"draining":           gogMutMWs,
-		"export":             stdAdminMutMWs, // dgraph handles the export for other namespaces by guardian of galaxy
+		"export":             stdAdminMutMWs, // dgraph handles the export by GoG internally
 		"login":              minimalAdminMutMWs,
 		"restore":            gogMutMWs,
 		"shutdown":           gogMutMWs,
@@ -726,7 +726,7 @@ func newAdminResolver(
 		ns, _ := x.ParseNamespaceAttr(pk.Attr)
 
 		var data x.GQL
-		data.Schema, data.Script = worker.ParseToSchemaAndScript(pl.Postings[0].Value)
+		data.Schema, data.Script = worker.ParseAsSchemaAndScript(pl.Postings[0].Value)
 
 		newSchema := &gqlSchema{
 			ID:      query.UidToHex(pk.Uid),

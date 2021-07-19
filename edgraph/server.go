@@ -187,7 +187,7 @@ func getGQLSchema(namespace uint64) (string, *x.GQL, error) {
 	} else if len(res) == 1 {
 		// we found an existing GraphQL schema
 		gqlSchemaNode := res[0]
-		data.Schema, data.Script = worker.ParseToSchemaAndScript([]byte(gqlSchemaNode.Schema))
+		data.Schema, data.Script = worker.ParseAsSchemaAndScript([]byte(gqlSchemaNode.Schema))
 		return gqlSchemaNode.Uid, data, nil
 	}
 
@@ -206,7 +206,7 @@ func getGQLSchema(namespace uint64) (string, *x.GQL, error) {
 	})
 	glog.Errorf("namespace: %d. Multiple schema nodes found, using the last one", namespace)
 	resLast := res[len(res)-1]
-	// TODO(Naman): Fix this.
+	data.Schema, data.Script = worker.ParseAsSchemaAndScript([]byte(resLast.Schema))
 	return resLast.Uid, data, nil
 }
 
@@ -499,7 +499,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 			err = errors.Errorf("While updating gql schema, got err: %+v.", e)
 		}
 		if _, e := UpdateLambdaScript(ctx, lambdaScript); e != nil {
-			err = errors.Errorf("%s While updating gql schema, got err: %+v.", err, e)
+			err = errors.Errorf("%s While updating lambda script, got err: %+v.", err, e)
 		}
 		// recreate the admin account after a drop data operation
 		upsertGuardianAndGroot(nil, namespace)

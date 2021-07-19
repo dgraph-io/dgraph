@@ -74,7 +74,7 @@ func UpdateGQLSchemaOverNetwork(ctx context.Context, req *pb.UpdateGraphQLSchema
 	return c.UpdateGraphQLSchema(ctx, req)
 }
 
-func ParseToSchemaAndScript(b []byte) (string, string) {
+func ParseAsSchemaAndScript(b []byte) (string, string) {
 	var data x.GQL
 	if err := json.Unmarshal(b, &data); err != nil {
 		glog.Warningf("Cannot unmarshal existing GQL schema into new format. Got err: %+v. "+
@@ -161,12 +161,11 @@ func (w *grpcWorker) UpdateGraphQLSchema(ctx context.Context,
 		if err != nil {
 			return nil, err
 		}
-		if len(res.GetValueMatrix()) == 0 || len(res.GetValueMatrix()[0].Values) == 0 {
-			// TODO: See if this can be cleaned.
+		if len(res.GetValueMatrix()) == 0 || len(res.ValueMatrix[0].GetValues()) == 0 {
 			return nil,
 				errors.Errorf("Schema node was found but the corresponding schema does not exist")
 		}
-		gql.Schema, gql.Script = ParseToSchemaAndScript(res.GetValueMatrix()[0].Values[0].Val)
+		gql.Schema, gql.Script = ParseAsSchemaAndScript(res.ValueMatrix[0].Values[0].Val)
 	}
 
 	switch req.Op {
