@@ -238,6 +238,7 @@ func UpdateGQLSchema(ctx context.Context, gqlSchema,
 		GraphqlSchema: gqlSchema,
 		DgraphPreds:   parsedDgraphSchema.Preds,
 		DgraphTypes:   parsedDgraphSchema.Types,
+		Op:            pb.UpdateGraphQLSchemaRequest_SCHEMA,
 	})
 }
 
@@ -252,6 +253,7 @@ func UpdateLambdaScript(
 	return worker.UpdateGQLSchemaOverNetwork(ctx, &pb.UpdateGraphQLSchemaRequest{
 		StartTs:      worker.State.GetTimestamp(false),
 		LambdaScript: script,
+		Op:           pb.UpdateGraphQLSchemaRequest_SCRIPT,
 	})
 }
 
@@ -456,6 +458,8 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 
 		// insert empty GraphQL schema, so all alphas get notified to
 		// reset their in-memory GraphQL schema
+		// NOTE: As lambda script and graphql schema are stored in same predicates, there is no need
+		// to send a notification to update in-memory lambda script.
 		_, err = UpdateGQLSchema(ctx, "", "")
 		// recreate the admin account after a drop all operation
 		ResetAcl(nil)
@@ -469,6 +473,10 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 
 		// query the GraphQL schema and keep it in memory, so it can be inserted again
 		_, graphQLSchema, err := GetGQLSchema(namespace)
+		if err != nil {
+			return empty, err
+		}
+		_, lambdaScript, err := GetLambdaScript(namespace)
 		if err != nil {
 			return empty, err
 		}
@@ -487,7 +495,12 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		}
 
 		// just reinsert the GraphQL schema, no need to alter dgraph schema as this was drop_data
-		_, err = UpdateGQLSchema(ctx, graphQLSchema, "")
+		if _, e := UpdateGQLSchema(ctx, graphQLSchema, ""); e != nil {
+			err = errors.Errorf("While updating gql schema, got err: %+v.", e)
+		}
+		if _, e := UpdateLambdaScript(ctx, lambdaScript); e != nil {
+			err = errors.Errorf("%s While updating gql schema, got err: %+v.", err, e)
+		}
 		// recreate the admin account after a drop data operation
 		upsertGuardianAndGroot(nil, namespace)
 		return empty, err

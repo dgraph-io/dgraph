@@ -18,17 +18,9 @@ package worker
 
 import (
 	"sync"
-
-	"github.com/pkg/errors"
 )
 
-var (
-	scriptLock                                 sync.Mutex
-	errUpdatingLambdaScriptOnNonGroupOneLeader = errors.New(
-		"while updating Lambda Script: this server isn't group-1 leader, please retry")
-	ErrMultipleLambdaScriptNodes = errors.New("found multiple nodes for Lambda Script")
-	lambdaScriptStore            *LambdaScriptStore
-)
+var lambdaScriptStore *LambdaScriptStore
 
 type LambdaScript struct {
 	ID     string `json:"id,omitempty"`
@@ -41,18 +33,13 @@ type LambdaScriptStore struct {
 }
 
 func init() {
-	lambdaScriptStore = NewLambdaScriptStore()
-}
-
-func Lambda() *LambdaScriptStore {
-	return lambdaScriptStore
-}
-
-func NewLambdaScriptStore() *LambdaScriptStore {
 	lambdaScriptStore = &LambdaScriptStore{
 		mux:    sync.RWMutex{},
 		script: make(map[uint64]*LambdaScript),
 	}
+}
+
+func Lambda() *LambdaScriptStore {
 	return lambdaScriptStore
 }
 

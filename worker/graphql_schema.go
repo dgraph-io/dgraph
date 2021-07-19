@@ -164,19 +164,18 @@ func (w *grpcWorker) UpdateGraphQLSchema(ctx context.Context,
 		if len(res.GetValueMatrix()) == 0 || len(res.GetValueMatrix()[0].Values) == 0 {
 			// TODO: See if this can be cleaned.
 			return nil,
-				errors.Errorf("Schema node was found but the corresponding schema does not exist.")
+				errors.Errorf("Schema node was found but the corresponding schema does not exist")
 		}
 		gql.Schema, gql.Script = ParseToSchemaAndScript(res.GetValueMatrix()[0].Values[0].Val)
 	}
 
-	switch {
-	case len(req.GraphqlSchema) > 0:
+	switch req.Op {
+	case pb.UpdateGraphQLSchemaRequest_SCHEMA:
 		gql.Schema = req.GraphqlSchema
-	case len(req.LambdaScript) > 0:
+	case pb.UpdateGraphQLSchemaRequest_SCRIPT:
 		gql.Script = req.LambdaScript
 	default:
-		// If both the fields are empty, just reset everything.
-		gql = x.GQL{}
+		panic("GraphQL update operation should be either SCHEMA or SCRIPT")
 	}
 	val, err := json.Marshal(gql)
 	if err != nil {
