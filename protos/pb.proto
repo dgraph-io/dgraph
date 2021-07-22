@@ -34,6 +34,7 @@ import "github.com/gogo/protobuf/gogoproto/gogo.proto";
 /* option (gogoproto.unmarshaler_all) = true; */
 /* option (gogoproto.goproto_getters_all) = true; */
 
+
 message List {
   repeated fixed64 uids = 1;
 }
