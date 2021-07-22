@@ -827,7 +827,7 @@ func (l *List) Rollup(alloc *z.Allocator) ([]*bpb.KV, error) {
 
 	var kvs []*bpb.KV
 	kv := MarshalPostingList(out.plist, alloc)
-	kv.Version = out.newMinTs
+	kv.Version = out.newMinTs + 1
 	kv.Key = alloc.Copy(l.key)
 	kvs = append(kvs, kv)
 
@@ -906,7 +906,7 @@ func (out *rollupOutput) marshalPostingListPart(alloc *z.Allocator,
 			hex.EncodeToString(baseKey), startUid)
 	}
 	kv := MarshalPostingList(plist, alloc)
-	kv.Version = out.newMinTs
+	kv.Version = out.newMinTs + 1
 	kv.Key = alloc.Copy(key)
 	return kv, nil
 }
