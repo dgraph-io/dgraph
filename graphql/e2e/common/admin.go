@@ -19,6 +19,7 @@ package common
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
@@ -194,6 +195,12 @@ func admin(t *testing.T) {
 	}
 
 	addSchemaAndData(schema, data, client, nil)
+	scriptFile := "script.js"
+	script, err := ioutil.ReadFile(scriptFile)
+	if err != nil {
+		panic(errors.Wrapf(err, "Unable to read file %s.", scriptFile))
+	}
+	AddLambdaScript(base64.StdEncoding.EncodeToString(script))
 }
 
 func schemaIsInInitialState(t *testing.T, client *dgo.Dgraph) {

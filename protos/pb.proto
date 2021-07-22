@@ -739,10 +739,16 @@ message BackupPostingList {
 }
 
 message UpdateGraphQLSchemaRequest {
+  enum Op {
+    SCHEMA = 0;
+    SCRIPT = 1;
+  }
   uint64 start_ts = 1;
   string graphql_schema = 2;
   repeated SchemaUpdate dgraph_preds = 3;
   repeated TypeUpdate dgraph_types = 4;
+  string lambda_script = 5;
+  Op op = 6;
 }
 
 message UpdateGraphQLSchemaResponse {

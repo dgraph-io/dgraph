@@ -711,6 +711,45 @@ func addSchemaAndData(schema, data []byte, client *dgo.Dgraph, headers http.Head
 	}
 }
 
+func AddLambdaScript(script string) {
+	// first, make an initial probe to get the schema update counter
+	oldProbe := retryProbeGraphQL(Alpha1HTTP, nil)
+
+	// then, add the GraphQL schema
+	for {
+		err := addScript(GraphqlAdminURL, script)
+		if err == nil {
+			break
+		}
+
+		if containsRetryableUpdateGQLSchemaError(err.Error()) {
+			glog.Infof("Got error while AddScript: %v. Retrying...\n", err)
+			time.Sleep(time.Second)
+			continue
+		}
+
+		// panic, if got a non-retryable error
+		x.Panic(err)
+	}
+	// now, move forward only after the GraphQL layer has seen the lambda script update.
+	i := 0
+	var newProbe *ProbeGraphQLResp
+	for ; i < 10; i++ {
+		newProbe = retryProbeGraphQL(Alpha1HTTP, nil)
+		if newProbe.SchemaUpdateCounter > oldProbe.SchemaUpdateCounter {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+
+	// Even after atleast 10 seconds, the schema update hasn't reached GraphQL layer.
+	// That indicates something fatal.
+	if i == 10 {
+		x.Panic(errors.Errorf(safelyUpdateGQLSchemaErr, newProbe.SchemaUpdateCounter,
+			oldProbe.SchemaUpdateCounter))
+	}
+}
+
 func BootstrapServer(schema, data []byte) {
 	err := CheckGraphQLStarted(GraphqlAdminURL)
 	if err != nil {
@@ -1360,6 +1399,53 @@ func addSchema(url, schema string) error {
 		return errors.New("GraphQL schema mutation failed")
 	}
 
+	return nil
+}
+
+func addScript(url, script string) error {
+	add := &GraphQLParams{
+		Query: `mutation updateLambdaScript($sch: String!) {
+			updateLambdaScript(input: { set: { script: $sch }}) {
+				lambdaScript {
+					script
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{"sch": script},
+	}
+	req, err := add.CreateGQLPost(url)
+	if err != nil {
+		return errors.Wrap(err, "error creating GraphQL query")
+	}
+
+	resp, err := RunGQLRequest(req)
+	if err != nil {
+		return errors.Wrap(err, "error running GraphQL query")
+	}
+
+	var addResult struct {
+		Data struct {
+			UpdateLambdaScript struct {
+				LambdaScript struct {
+					Script string
+				}
+			}
+		}
+		Errors []interface{}
+	}
+
+	err = json.Unmarshal(resp, &addResult)
+	if err != nil {
+		return errors.Wrap(err, "error trying to unmarshal GraphQL mutation result")
+	}
+
+	if len(addResult.Errors) > 0 {
+		return errors.Errorf("%v", addResult.Errors)
+	}
+
+	if addResult.Data.UpdateLambdaScript.LambdaScript.Script != script {
+		return errors.New("Lambda script mutation failed")
+	}
 	return nil
 }
 

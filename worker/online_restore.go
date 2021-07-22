@@ -360,6 +360,10 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest, pidx uin
 		return errors.Wrapf(err, "cannot load schema after restore")
 	}
 
+	// Reset the lambda script store.
+	ResetLambdaScriptStore()
+	// TODO(Aman): Reset the graphql schema store as well after cherry-picking changes to master.
+
 	// Propose a snapshot immediately after all the work is done to prevent the restore
 	// from being replayed.
 	go func(idx uint64) {

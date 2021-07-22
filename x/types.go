@@ -19,6 +19,12 @@ package x
 type ExportedGQLSchema struct {
 	Namespace uint64
 	Schema    string
+	Script    string
+}
+
+type GQL struct {
+	Schema string
+	Script string
 }
 
 // Sensitive implements the Stringer interface to redact its contents.

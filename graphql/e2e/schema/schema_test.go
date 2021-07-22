@@ -296,7 +296,9 @@ func TestConcurrentSchemaUpdates(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(res.GetJson(), &resp))
 	require.Len(t, resp.GqlSchema, 1)
-	require.Equal(t, finalGraphQLSchema, resp.GqlSchema[0].Schema)
+	var sch x.GQL
+	require.NoError(t, json.Unmarshal([]byte(resp.GqlSchema[0].Schema), &sch))
+	require.Equal(t, finalGraphQLSchema, sch.Schema)
 }
 
 // TestIntrospectionQueryAfterDropAll make sure that Introspection query after drop_all doesn't give any internal error
