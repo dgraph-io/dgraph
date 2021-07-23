@@ -827,6 +827,9 @@ func (l *List) Rollup(alloc *z.Allocator) ([]*bpb.KV, error) {
 
 	var kvs []*bpb.KV
 	kv := MarshalPostingList(out.plist, alloc)
+	// We set kv.Version to newMinTs + 1 because if we write the rolled up keys at the same ts as
+	// that of the delta, then in case of wal replay the rolled up key would get over-written by the
+	// delta which can bring db to an invalid state.
 	kv.Version = out.newMinTs + 1
 	kv.Key = alloc.Copy(l.key)
 	kvs = append(kvs, kv)
