@@ -569,7 +569,14 @@ func (n *Node) DeletePeer(pid uint64) {
 var errInternalRetry = errors.New("Retry proposal again")
 
 func (n *Node) proposeConfChange(ctx context.Context, conf raftpb.ConfChange) error {
-	cctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	if ctx.Err() != nil {
+		// If ctx has already errored out, return without proposing.
+		return errors.Wrapf(ctx.Err(), "while proposeConfChange")
+	}
+	// Don't use ctx here, so we can give a proper shot to the proposal. We
+	// don't want to error out due to ctx after having proposed.
+	// Relevant PR: https://github.com/dgraph-io/dgraph/pull/2467
+	cctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
 	ch := make(chan error, 1)
@@ -586,8 +593,6 @@ func (n *Node) proposeConfChange(ctx context.Context, conf raftpb.ConfChange) er
 	select {
 	case err := <-ch:
 		return err
-	case <-ctx.Done():
-		return ctx.Err()
 	case <-cctx.Done():
 		return errInternalRetry
 	}
@@ -779,7 +784,7 @@ func (n *Node) joinCluster(ctx context.Context, rc *pb.RaftContext) (*api.Payloa
 	}
 	n.Connect(rc.Id, rc.Addr)
 
-	err := n.addToCluster(context.Background(), rc)
+	err := n.addToCluster(ctx, rc)
 	glog.Infof("[%#x] Done joining cluster with err: %v", rc.Id, err)
 	return &api.Payload{}, err
 }
