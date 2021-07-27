@@ -496,11 +496,11 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		}
 
 		// just reinsert the GraphQL schema, no need to alter dgraph schema as this was drop_data
-		if _, e := UpdateGQLSchema(ctx, graphQLSchema, ""); e != nil {
-			err = errors.Errorf("While updating gql schema, got err: %+v.", e)
+		if _, err := UpdateGQLSchema(ctx, graphQLSchema, ""); err != nil {
+			return empty, errors.Wrap(err, "While updating gql schema ")
 		}
-		if _, e := UpdateLambdaScript(ctx, lambdaScript); e != nil {
-			err = errors.Errorf("%s While updating lambda script, got err: %+v.", err, e)
+		if _, err := UpdateLambdaScript(ctx, lambdaScript); err != nil {
+			return empty, errors.Wrap(err, "While updating lambda script ")
 		}
 		// recreate the admin account after a drop data operation
 		upsertGuardianAndGroot(nil, namespace)

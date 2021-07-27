@@ -28,13 +28,12 @@ type LambdaScript struct {
 }
 
 type LambdaScriptStore struct {
-	mux    sync.RWMutex
+	sync.RWMutex
 	script map[uint64]*LambdaScript
 }
 
 func init() {
 	lambdaScriptStore = &LambdaScriptStore{
-		mux:    sync.RWMutex{},
 		script: make(map[uint64]*LambdaScript),
 	}
 }
@@ -44,21 +43,21 @@ func Lambda() *LambdaScriptStore {
 }
 
 func (ls *LambdaScriptStore) Set(ns uint64, scr *LambdaScript) {
-	ls.mux.Lock()
-	defer ls.mux.Unlock()
+	ls.Lock()
+	defer ls.Unlock()
 	ls.script[ns] = scr
 }
 
 func (ls *LambdaScriptStore) GetCurrent(ns uint64) (*LambdaScript, bool) {
-	ls.mux.RLock()
-	defer ls.mux.RUnlock()
+	ls.RLock()
+	defer ls.RUnlock()
 	scr, ok := ls.script[ns]
 	return scr, ok
 }
 
 func (ls *LambdaScriptStore) resetLambdaScript() {
-	ls.mux.Lock()
-	defer ls.mux.Unlock()
+	ls.Lock()
+	defer ls.Unlock()
 	ls.script = make(map[uint64]*LambdaScript)
 }
 
