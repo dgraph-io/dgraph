@@ -393,6 +393,8 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest, pidx uin
 		ResetGQLSchemaStore()
 	}
 	ResetAclCache()
+	// Reset the lambda script store.
+	ResetLambdaScriptStore()
 
 	// Propose a snapshot immediately after all the work is done to prevent the restore
 	// from being replayed.
