@@ -801,12 +801,23 @@ func (l *List) Rollup() ([]*bpb.KV, error) {
 	}
 
 	var kvs []*bpb.KV
+
+	// We set kv.Version to newMinTs + 1 because if we write the rolled up keys at the same ts as
+	// that of the delta, then in case of wal replay the rolled up key would get over-written by the
+	// delta which can bring db to an invalid state.
+	// It would be fine to write rolled up key at ts+1 and this key won't be overwritten by any
+	// other delta because there cannot be commit at ts as well as ts+1 on the same key. The reason
+	// is as follows:
+	// Suppose there are two inter-leaved txns [s1 s2 c1 c2] where si, ci is the start and commit
+	// of the i'th txn. In this case c2 would not have happened because of conflict.
+	// Suppose there are two disjoint txns [s1 c1 s2 c2], then c1 and c2 cannot be consecutive.
 	kv := &bpb.KV{}
-	kv.Version = out.newMinTs
+	kv.Version = out.newMinTs + 1
 	kv.Key = l.key
 	val, meta := marshalPostingList(out.plist)
 	kv.UserMeta = []byte{meta}
 	kv.Value = val
+
 	kvs = append(kvs, kv)
 
 	for startUid, plist := range out.parts {
@@ -858,7 +869,7 @@ func (l *List) SingleListRollup(kv *bpb.KV) error {
 func (out *rollupOutput) marshalPostingListPart(
 	baseKey []byte, startUid uint64, plist *pb.PostingList) (*bpb.KV, error) {
 	kv := &bpb.KV{}
-	kv.Version = out.newMinTs
+	kv.Version = out.newMinTs + 1
 	key, err := x.SplitKey(baseKey, startUid)
 	if err != nil {
 		return nil, errors.Wrapf(err,

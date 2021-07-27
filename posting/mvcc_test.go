@@ -58,7 +58,7 @@ func TestRollupTimestamp(t *testing.T) {
 	// delete marker being the most recent update.
 	kvs, err := nl.Rollup()
 	require.NoError(t, err)
-	require.Equal(t, uint64(10), kvs[0].Version)
+	require.Equal(t, uint64(11), kvs[0].Version)
 }
 
 func TestPostingListRead(t *testing.T) {
