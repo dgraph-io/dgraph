@@ -311,20 +311,25 @@ func (ld *loader) mapStage() {
 	ld.xids = nil
 }
 
-func parseGqlSchema(s string) map[uint64]string {
-	var schemas []x.ExportedGQLSchema
+func parseGqlSchema(s string) map[uint64]*x.ExportedGQLSchema {
+	schemaMap := make(map[uint64]*x.ExportedGQLSchema)
+
+	var schemas []*x.ExportedGQLSchema
 	if err := json.Unmarshal([]byte(s), &schemas); err != nil {
 		fmt.Println("Error while decoding the graphql schema. Assuming it to be in format < 21.03.")
-		return map[uint64]string{x.GalaxyNamespace: s}
+		schemaMap[x.GalaxyNamespace] = &x.ExportedGQLSchema{
+			Namespace: x.GalaxyNamespace,
+			Schema:    s,
+		}
+		return schemaMap
 	}
 
-	schemaMap := make(map[uint64]string)
 	for _, schema := range schemas {
 		if _, ok := schemaMap[schema.Namespace]; ok {
 			fmt.Printf("Found multiple GraphQL schema for namespace %d.", schema.Namespace)
 			continue
 		}
-		schemaMap[schema.Namespace] = schema.Schema
+		schemaMap[schema.Namespace] = schema
 	}
 	return schemaMap
 }
@@ -364,19 +369,27 @@ func (ld *loader) processGqlSchema(loadType chunker.InputFormat) {
 		"dgraph.graphql.schema": %s
 	}`
 
-	process := func(ns uint64, schema string) {
+	process := func(ns uint64, schema *x.ExportedGQLSchema) {
 		// Ignore the schema if the namespace is not already seen.
 		if _, ok := ld.schema.namespaces.Load(ns); !ok {
 			fmt.Printf("No data exist for namespace: %d. Cannot load the graphql schema.", ns)
 			return
 		}
 		gqlBuf := &bytes.Buffer{}
-		schema = strconv.Quote(schema)
+		sch := x.GQL{
+			Schema: strconv.Quote(schema.Schema),
+			Script: schema.Script,
+		}
+		b, err := json.Marshal(sch)
+		if err != nil {
+			fmt.Printf("Error while marshalling schema for the namespace: %d. err: %v", ns, err)
+			return
+		}
 		switch loadType {
 		case chunker.RdfFormat:
-			x.Check2(gqlBuf.Write([]byte(fmt.Sprintf(rdfSchema, ns, ns, schema, ns))))
+			x.Check2(gqlBuf.Write([]byte(fmt.Sprintf(rdfSchema, ns, ns, b, ns))))
 		case chunker.JsonFormat:
-			x.Check2(gqlBuf.Write([]byte(fmt.Sprintf(jsonSchema, ns, schema))))
+			x.Check2(gqlBuf.Write([]byte(fmt.Sprintf(jsonSchema, ns, b))))
 		}
 		ld.readerChunkCh <- gqlBuf
 	}

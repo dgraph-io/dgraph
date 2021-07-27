@@ -37,7 +37,7 @@ services:
       --trace "ratio=1.0;"
 
   lambda:
-    image: dgraph/dgraph-lambda:latest
+    image: namanj1811/lambda-test:v1
     labels:
       cluster: test
     ports:
@@ -46,8 +46,3 @@ services:
       - alpha1
     environment:
       DGRAPH_URL: http://alpha1:8080
-    volumes:
-      - type: bind
-        source: ./script.js
-        target: /app/script/script.js
-        read_only: true

@@ -17,6 +17,7 @@
 package normal
 
 import (
+	"encoding/base64"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -55,11 +56,17 @@ func TestMain(m *testing.M) {
 		panic(errors.Wrapf(err, "Unable to read file %s.", jsonFile))
 	}
 
+	scriptFile := "script.js"
+	script, err := ioutil.ReadFile(scriptFile)
+	if err != nil {
+		panic(errors.Wrapf(err, "Unable to read file %s.", scriptFile))
+	}
 	// set up the lambda url for unit tests
 	x.Config.GraphQL = z.NewSuperFlag("lambda-url=http://localhost:8086/graphql-worker;").
 		MergeAndCheckDefault("lambda-url=;")
 
 	common.BootstrapServer(schema, data)
+	common.AddLambdaScript(base64.StdEncoding.EncodeToString(script))
 
 	os.Exit(m.Run())
 }
