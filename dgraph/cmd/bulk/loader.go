@@ -319,7 +319,7 @@ func parseGqlSchema(s string) map[uint64]*x.ExportedGQLSchema {
 		fmt.Println("Error while decoding the graphql schema. Assuming it to be in format < 21.03.")
 		schemaMap[x.GalaxyNamespace] = &x.ExportedGQLSchema{
 			Namespace: x.GalaxyNamespace,
-			Schema:    string(s),
+			Schema:    s,
 		}
 		return schemaMap
 	}

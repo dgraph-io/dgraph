@@ -470,8 +470,8 @@ func ToExportKvList(pk x.ParsedKey, pl *posting.List, in *pb.ExportRequest) (*bp
 		schema, script := ParseAsSchemaAndScript(val)
 		exported := x.ExportedGQLSchema{
 			Namespace: e.namespace,
-			Schema:    string(schema),
-			Script:    string(script),
+			Schema:    schema,
+			Script:    script,
 		}
 		if val, err = json.Marshal(exported); err != nil {
 			return emptyList, errors.Wrapf(err, "Error marshalling GraphQL schema to json")

@@ -156,7 +156,8 @@ func GetGQLSchema(namespace uint64) (uid, graphQLSchema string, err error) {
 	return uid, gql.Schema, nil
 }
 
-// getGQLSchema queries for the GraphQL schema node, and returns the uid and the GraphQL schema.
+// getGQLSchema queries for the GraphQL schema node, and returns the uid and the GraphQL schema and
+// lambda script.
 // If multiple schema nodes were found, it returns an error.
 func getGQLSchema(namespace uint64) (string, *x.GQL, error) {
 	ctx := context.WithValue(context.Background(), Authorize, false)
@@ -458,7 +459,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 
 		// insert empty GraphQL schema, so all alphas get notified to
 		// reset their in-memory GraphQL schema
-		// NOTE: As lambda script and graphql schema are stored in same predicates, there is no need
+		// NOTE: As lambda script and graphql schema are stored in same predicate, there is no need
 		// to send a notification to update in-memory lambda script.
 		_, err = UpdateGQLSchema(ctx, "", "")
 		// recreate the admin account after a drop all operation

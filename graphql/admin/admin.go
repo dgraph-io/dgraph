@@ -745,12 +745,13 @@ func newAdminResolver(
 		server.mux.RLock()
 		currentSchema, ok := server.schema[ns]
 		if ok {
-			schemaChanged := newSchema.Schema == currentSchema.Schema
-			scriptChanged := newScript.Script == currentScript
-			if newSchema.Version <= currentSchema.Version || (schemaChanged && scriptChanged) {
+			schemaNotChanged := newSchema.Schema == currentSchema.Schema
+			scriptNotChanged := newScript.Script == currentScript
+			if newSchema.Version <= currentSchema.Version ||
+				(schemaNotChanged && scriptNotChanged) {
 				glog.Infof("namespace: %d. Skipping GraphQL schema update. "+
 					"newSchema.Version: %d, oldSchema.Version: %d, schemaChanged: %v.",
-					ns, newSchema.Version, currentSchema.Version, schemaChanged)
+					ns, newSchema.Version, currentSchema.Version, !schemaNotChanged)
 				server.mux.RUnlock()
 				return
 			}
