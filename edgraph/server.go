@@ -140,9 +140,26 @@ func PeriodicallyPostTelemetry() {
 	}
 }
 
-// GetGQLSchema queries for the GraphQL schema node, and returns the uid and the GraphQL schema.
-// If multiple schema nodes were found, it returns an error.
+func GetLambdaScript(namespace uint64) (uid, script string, err error) {
+	uid, gql, err := getGQLSchema(namespace)
+	if err != nil {
+		return "", "", err
+	}
+	return uid, gql.Script, nil
+}
+
 func GetGQLSchema(namespace uint64) (uid, graphQLSchema string, err error) {
+	uid, gql, err := getGQLSchema(namespace)
+	if err != nil {
+		return "", "", err
+	}
+	return uid, gql.Schema, nil
+}
+
+// getGQLSchema queries for the GraphQL schema node, and returns the uid and the GraphQL schema and
+// lambda script.
+// If multiple schema nodes were found, it returns an error.
+func getGQLSchema(namespace uint64) (string, *x.GQL, error) {
 	ctx := context.WithValue(context.Background(), Authorize, false)
 	ctx = x.AttachNamespace(ctx, namespace)
 	resp, err := (&Server{}).Query(ctx,
@@ -155,21 +172,24 @@ func GetGQLSchema(namespace uint64) (uid, graphQLSchema string, err error) {
 			  }
 			}`})
 	if err != nil {
-		return "", "", err
+		return "", nil, err
 	}
 
 	var result existingGQLSchemaQryResp
 	if err := json.Unmarshal(resp.GetJson(), &result); err != nil {
-		return "", "", errors.Wrap(err, "Couldn't unmarshal response from Dgraph query")
+		return "", nil, errors.Wrap(err, "Couldn't unmarshal response from Dgraph query")
 	}
+
+	data := &x.GQL{}
 	res := result.ExistingGQLSchema
 	if len(res) == 0 {
 		// no schema has been stored yet in Dgraph
-		return "", "", nil
+		return "", data, nil
 	} else if len(res) == 1 {
 		// we found an existing GraphQL schema
 		gqlSchemaNode := res[0]
-		return gqlSchemaNode.Uid, gqlSchemaNode.Schema, nil
+		data.Schema, data.Script = worker.ParseAsSchemaAndScript([]byte(gqlSchemaNode.Schema))
+		return gqlSchemaNode.Uid, data, nil
 	}
 
 	// found multiple GraphQL schema nodes, this should never happen
@@ -177,7 +197,7 @@ func GetGQLSchema(namespace uint64) (uid, graphQLSchema string, err error) {
 	for i := range res {
 		iUid, err := gql.ParseUid(res[i].Uid)
 		if err != nil {
-			return "", "", err
+			return "", nil, err
 		}
 		res[i].UidInt = iUid
 	}
@@ -187,7 +207,8 @@ func GetGQLSchema(namespace uint64) (uid, graphQLSchema string, err error) {
 	})
 	glog.Errorf("namespace: %d. Multiple schema nodes found, using the last one", namespace)
 	resLast := res[len(res)-1]
-	return resLast.Uid, resLast.Schema, nil
+	data.Schema, data.Script = worker.ParseAsSchemaAndScript([]byte(resLast.Schema))
+	return resLast.Uid, data, nil
 }
 
 // UpdateGQLSchema updates the GraphQL and Dgraph schemas using the given inputs.
@@ -218,6 +239,22 @@ func UpdateGQLSchema(ctx context.Context, gqlSchema,
 		GraphqlSchema: gqlSchema,
 		DgraphPreds:   parsedDgraphSchema.Preds,
 		DgraphTypes:   parsedDgraphSchema.Types,
+		Op:            pb.UpdateGraphQLSchemaRequest_SCHEMA,
+	})
+}
+
+// UpdateLambdaScript updates the Lambda Script using the given inputs.
+// It sends an update request to the worker, which is executed only on Group-1 leader.
+func UpdateLambdaScript(
+	ctx context.Context, script string) (*pb.UpdateGraphQLSchemaResponse, error) {
+	if !x.WorkerConfig.AclEnabled {
+		ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
+	}
+
+	return worker.UpdateGQLSchemaOverNetwork(ctx, &pb.UpdateGraphQLSchemaRequest{
+		StartTs:      worker.State.GetTimestamp(false),
+		LambdaScript: script,
+		Op:           pb.UpdateGraphQLSchemaRequest_SCRIPT,
 	})
 }
 
@@ -422,6 +459,8 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 
 		// insert empty GraphQL schema, so all alphas get notified to
 		// reset their in-memory GraphQL schema
+		// NOTE: As lambda script and graphql schema are stored in same predicate, there is no need
+		// to send a notification to update in-memory lambda script.
 		_, err = UpdateGQLSchema(ctx, "", "")
 		// recreate the admin account after a drop all operation
 		ResetAcl(nil)
@@ -435,6 +474,10 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 
 		// query the GraphQL schema and keep it in memory, so it can be inserted again
 		_, graphQLSchema, err := GetGQLSchema(namespace)
+		if err != nil {
+			return empty, err
+		}
+		_, lambdaScript, err := GetLambdaScript(namespace)
 		if err != nil {
 			return empty, err
 		}
@@ -453,7 +496,12 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		}
 
 		// just reinsert the GraphQL schema, no need to alter dgraph schema as this was drop_data
-		_, err = UpdateGQLSchema(ctx, graphQLSchema, "")
+		if _, err := UpdateGQLSchema(ctx, graphQLSchema, ""); err != nil {
+			return empty, errors.Wrap(err, "While updating gql schema ")
+		}
+		if _, err := UpdateLambdaScript(ctx, lambdaScript); err != nil {
+			return empty, errors.Wrap(err, "While updating lambda script ")
+		}
 		// recreate the admin account after a drop data operation
 		upsertGuardianAndGroot(nil, namespace)
 		return empty, err

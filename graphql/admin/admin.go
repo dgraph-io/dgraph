@@ -83,6 +83,16 @@ const (
 	}
 
 	"""
+	Data about the Lambda script served by Dgraph.
+	"""
+	type LambdaScript @dgraph(type: "dgraph.graphql") {
+		"""
+		Input script (base64 encoded)
+		"""
+		script: String! @dgraph(pred: "dgraph.graphql.schema")
+	}
+
+	"""
 	A NodeState is the state of an individual node in the Dgraph cluster.
 	"""
 	type NodeState {
@@ -208,6 +218,18 @@ const (
 
 	input GQLSchemaPatch {
 		schema: String!
+	}
+
+	type UpdateLambdaScriptPayload {
+		lambdaScript: LambdaScript
+	}
+
+	input UpdateLambdaScriptInput {
+		set: ScriptPatch!
+	}
+
+	input ScriptPatch {
+		script: String!
 	}
 
 	input ExportInput {
@@ -393,6 +415,7 @@ const (
 
 	type Query {
 		getGQLSchema: GQLSchema
+		getLambdaScript: LambdaScript
 		health: [NodeState]
 		state: MembershipState
 		config: Config
@@ -407,6 +430,11 @@ const (
 		schema, the types and predicates in the Dgraph schema, and cause indexes to be recomputed.
 		"""
 		updateGQLSchema(input: UpdateGQLSchemaInput!) : UpdateGQLSchemaPayload
+
+		"""
+		Update the lambda script used by lambda resolvers.
+		"""
+		updateLambdaScript(input: UpdateLambdaScriptInput!) : UpdateLambdaScriptPayload
 
 		"""
 		Starts an export of all data in the cluster.  Export format should be 'rdf' (the default
@@ -500,11 +528,12 @@ var (
 		resolve.LoggingMWMutation,
 	}
 	adminQueryMWConfig = map[string]resolve.QueryMiddlewares{
-		"health":       minimalAdminQryMWs, // dgraph checks Guardian auth for health
-		"state":        minimalAdminQryMWs, // dgraph checks Guardian auth for state
-		"config":       stdAdminQryMWs,
-		"listBackups":  gogQryMWs,
-		"getGQLSchema": stdAdminQryMWs,
+		"health":          minimalAdminQryMWs, // dgraph checks Guardian auth for health
+		"state":           minimalAdminQryMWs, // dgraph checks Guardian auth for state
+		"config":          stdAdminQryMWs,
+		"listBackups":     gogQryMWs,
+		"getGQLSchema":    stdAdminQryMWs,
+		"getLambdaScript": stdAdminQryMWs,
 		// for queries and mutations related to User/Group, dgraph handles Guardian auth,
 		// so no need to apply GuardianAuth Middleware
 		"queryUser":      minimalAdminQryMWs,
@@ -514,21 +543,22 @@ var (
 		"getGroup":       minimalAdminQryMWs,
 	}
 	adminMutationMWConfig = map[string]resolve.MutationMiddlewares{
-		"backup":            gogMutMWs,
-		"config":            gogMutMWs,
-		"draining":          gogMutMWs,
-		"export":            stdAdminMutMWs, // dgraph handles the export for other namespaces by guardian of galaxy
-		"login":             minimalAdminMutMWs,
-		"restore":           gogMutMWs,
-		"shutdown":          gogMutMWs,
-		"removeNode":        gogMutMWs,
-		"moveTablet":        gogMutMWs,
-		"assign":            gogMutMWs,
-		"enterpriseLicense": gogMutMWs,
-		"updateGQLSchema":   stdAdminMutMWs,
-		"addNamespace":      gogAclMutMWs,
-		"deleteNamespace":   gogAclMutMWs,
-		"resetPassword":     gogAclMutMWs,
+		"backup":             gogMutMWs,
+		"config":             gogMutMWs,
+		"draining":           gogMutMWs,
+		"export":             stdAdminMutMWs, // dgraph handles the export by GoG internally
+		"login":              minimalAdminMutMWs,
+		"restore":            gogMutMWs,
+		"shutdown":           gogMutMWs,
+		"removeNode":         gogMutMWs,
+		"moveTablet":         gogMutMWs,
+		"assign":             gogMutMWs,
+		"enterpriseLicense":  gogMutMWs,
+		"updateGQLSchema":    stdAdminMutMWs,
+		"updateLambdaScript": stdAdminMutMWs,
+		"addNamespace":       gogAclMutMWs,
+		"deleteNamespace":    gogAclMutMWs,
+		"resetPassword":      gogAclMutMWs,
 		// for queries and mutations related to User/Group, dgraph handles Guardian auth,
 		// so no need to apply GuardianAuth Middleware
 		"addUser":     minimalAdminMutMWs,
@@ -695,20 +725,33 @@ func newAdminResolver(
 		}
 		ns, _ := x.ParseNamespaceAttr(pk.Attr)
 
+		var data x.GQL
+		data.Schema, data.Script = worker.ParseAsSchemaAndScript(pl.Postings[0].Value)
+
 		newSchema := &gqlSchema{
 			ID:      query.UidToHex(pk.Uid),
 			Version: kv.GetVersion(),
-			Schema:  string(pl.Postings[0].Value),
+			Schema:  data.Schema,
+		}
+		newScript := &worker.LambdaScript{
+			ID:     query.UidToHex(pk.Uid),
+			Script: data.Script,
 		}
 
+		var currentScript string
+		if script, ok := worker.Lambda().GetCurrent(ns); ok {
+			currentScript = script.Script
+		}
 		server.mux.RLock()
 		currentSchema, ok := server.schema[ns]
 		if ok {
-			schemaChanged := newSchema.Schema == currentSchema.Schema
-			if newSchema.Version <= currentSchema.Version || schemaChanged {
+			schemaNotChanged := newSchema.Schema == currentSchema.Schema
+			scriptNotChanged := newScript.Script == currentScript
+			if newSchema.Version <= currentSchema.Version ||
+				(schemaNotChanged && scriptNotChanged) {
 				glog.Infof("namespace: %d. Skipping GraphQL schema update. "+
 					"newSchema.Version: %d, oldSchema.Version: %d, schemaChanged: %v.",
-					ns, newSchema.Version, currentSchema.Version, schemaChanged)
+					ns, newSchema.Version, currentSchema.Version, !schemaNotChanged)
 				server.mux.RUnlock()
 				return
 			}
@@ -734,6 +777,7 @@ func newAdminResolver(
 		if !(ok && currentSchema.loaded) {
 			// this just set schema in admin server, so that next invalid badger subscription update gets rejected upfront
 			server.schema[ns] = newSchema
+			worker.Lambda().Set(ns, newScript)
 			glog.Infof("namespace: %d. Skipping in-memory GraphQL schema update, "+
 				"it will be lazy-loaded later.", ns)
 			return
@@ -743,6 +787,8 @@ func newAdminResolver(
 		newSchema.loaded = true
 		server.schema[ns] = newSchema
 		server.resetSchema(ns, gqlSchema)
+		// Update the lambda script
+		worker.Lambda().Set(ns, newScript)
 
 		glog.Infof("namespace: %d. Successfully updated GraphQL schema. "+
 			"Serving New GraphQL API.", ns)
@@ -755,16 +801,18 @@ func newAdminResolver(
 
 func newAdminResolverFactory() resolve.ResolverFactory {
 	adminMutationResolvers := map[string]resolve.MutationResolverFunc{
-		"addNamespace":      resolveAddNamespace,
-		"backup":            resolveBackup,
-		"config":            resolveUpdateConfig,
-		"deleteNamespace":   resolveDeleteNamespace,
-		"draining":          resolveDraining,
-		"export":            resolveExport,
-		"login":             resolveLogin,
-		"resetPassword":     resolveResetPassword,
-		"restore":           resolveRestore,
-		"shutdown":          resolveShutdown,
+		"addNamespace":       resolveAddNamespace,
+		"backup":             resolveBackup,
+		"config":             resolveUpdateConfig,
+		"deleteNamespace":    resolveDeleteNamespace,
+		"draining":           resolveDraining,
+		"export":             resolveExport,
+		"login":              resolveLogin,
+		"resetPassword":      resolveResetPassword,
+		"restore":            resolveRestore,
+		"shutdown":           resolveShutdown,
+		"updateLambdaScript": resolveUpdateLambda,
+
 		"removeNode":        resolveRemoveNode,
 		"moveTablet":        resolveMoveTablet,
 		"assign":            resolveAssign,
@@ -788,6 +836,9 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 		}).
 		WithQueryResolver("task", func(q schema.Query) resolve.QueryResolver {
 			return resolve.QueryResolverFunc(resolveTask)
+		}).
+		WithQueryResolver("getLambdaScript", func(q schema.Query) resolve.QueryResolver {
+			return resolve.QueryResolverFunc(resolveGetLambda)
 		}).
 		WithQueryResolver("getGQLSchema", func(q schema.Query) resolve.QueryResolver {
 			return resolve.QueryResolverFunc(
@@ -1069,8 +1120,29 @@ func (as *adminServer) lazyLoadSchema(namespace uint64) error {
 	return nil
 }
 
+func lazyLoadScript(namespace uint64) error {
+	// If script is already loaded in memory, no need to fetch from disk.
+	if _, ok := worker.Lambda().GetCurrent(namespace); ok {
+		return nil
+	}
+	// Otherwise, fetch it from disk.
+	uid, script, err := edgraph.GetLambdaScript(namespace)
+	if err != nil {
+		glog.Errorf("namespace: %d. Error reading Lambda Script: %s.", namespace, err)
+		return errors.Wrap(err, "failed to lazy-load Lambda Script")
+	}
+	worker.Lambda().Set(namespace, &worker.LambdaScript{
+		ID:     uid,
+		Script: script,
+	})
+	return nil
+}
+
 func LazyLoadSchema(namespace uint64) error {
-	return adminServerVar.lazyLoadSchema(namespace)
+	if err := adminServerVar.lazyLoadSchema(namespace); err != nil {
+		return err
+	}
+	return lazyLoadScript(namespace)
 }
 
 func inputArgError(err error) error {

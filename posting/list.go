@@ -914,7 +914,16 @@ func (l *List) Rollup(alloc *z.Allocator) ([]*bpb.KV, error) {
 
 	var kvs []*bpb.KV
 	kv := MarshalPostingList(out.plist, alloc)
-	kv.Version = out.newMinTs
+	// We set kv.Version to newMinTs + 1 because if we write the rolled up keys at the same ts as
+	// that of the delta, then in case of wal replay the rolled up key would get over-written by the
+	// delta which can bring db to an invalid state.
+	// It would be fine to write rolled up key at ts+1 and this key won't be overwritten by any
+	// other delta because there cannot be commit at ts as well as ts+1 on the same key. The reason
+	// is as follows:
+	// Suppose there are two inter-leaved txns [s1 s2 c1 c2] where si, ci is the start and commit
+	// of the i'th txn. In this case c2 would not have happened because of conflict.
+	// Suppose there are two disjoint txns [s1 c1 s2 c2], then c1 and c2 cannot be consecutive.
+	kv.Version = out.newMinTs + 1
 	kv.Key = alloc.Copy(l.key)
 	kvs = append(kvs, kv)
 
@@ -997,7 +1006,7 @@ func (out *rollupOutput) marshalPostingListPart(alloc *z.Allocator,
 			hex.EncodeToString(baseKey), startUid)
 	}
 	kv := MarshalPostingList(plist, alloc)
-	kv.Version = out.newMinTs
+	kv.Version = out.newMinTs + 1
 	kv.Key = alloc.Copy(key)
 	return kv, nil
 }
