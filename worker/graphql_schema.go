@@ -200,7 +200,7 @@ func (w *grpcWorker) UpdateGraphQLSchema(ctx context.Context,
 		// Fetch the current graphql schema and script using the schema node uid.
 		res, err := ProcessTaskOverNetwork(ctx, &pb.Query{
 			Attr:    x.NamespaceAttr(namespace, GqlSchemaPred),
-			UidList: &pb.List{SortedUids: []uint64{schemaNodeUid}},
+			UidList: &pb.List{Uids: []uint64{schemaNodeUid}},
 			ReadTs:  req.StartTs,
 		})
 		if err != nil {
