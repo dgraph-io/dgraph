@@ -344,10 +344,11 @@ func (p *Pool) IsHealthy() bool {
 
 // HealthInfo returns the healthinfo.
 func (p *Pool) HealthInfo() pb.HealthInfo {
-	p.RLock()
-	defer p.RUnlock()
+	ok := p.IsHealthy()
+	p.Lock()
+	defer p.Unlock()
 	p.healthInfo.Status = "healthy"
-	if !p.IsHealthy() {
+	if !ok {
 		p.healthInfo.Status = "unhealthy"
 	}
 	p.healthInfo.LastEcho = p.lastEcho.Unix()
