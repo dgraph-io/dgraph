@@ -58,6 +58,7 @@ type groupi struct {
 var gr = &groupi{
 	blockDeletes: new(sync.Mutex),
 	tablets:      make(map[string]*pb.Tablet),
+	closer:       z.NewCloser(3), // Match CLOSER:1 in this file.
 }
 
 func groups() *groupi {
@@ -153,7 +154,6 @@ func StartRaftNodes(walStore *raftwal.DiskStorage, bindall bool) {
 	raftServer.UpdateNode(gr.Node.Node)
 	gr.Node.InitAndStartNode()
 
-	gr.closer = z.NewCloser(3) // Match CLOSER:1 in this file.
 	go gr.sendMembershipUpdates()
 	go gr.receiveMembershipUpdates()
 	go gr.processOracleDeltaStream()
