@@ -814,6 +814,7 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 			}
 			glog.Warningf("Error while calling CreateSnapshot: %v. Retrying...", err)
 		}
+		atomic.StoreInt64(&lastSnapshotTime, time.Now().Unix())
 		// We can now discard all invalid versions of keys below this ts.
 		pstore.SetDiscardTs(snap.ReadTs)
 		return nil
@@ -1340,6 +1341,8 @@ func (n *node) updateRaftProgress() error {
 	return nil
 }
 
+var lastSnapshotTime int64 = time.Now().Unix()
+
 func (n *node) checkpointAndClose(done chan struct{}) {
 	snapshotAfterEntries := x.WorkerConfig.Raft.GetUint64("snapshot-after-entries")
 	x.AssertTruef(snapshotAfterEntries > 10, "raft.snapshot-after must be a number greater than 10")
@@ -1369,7 +1372,6 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 		return chk-first >= snapshotAfterEntries
 	}
 
-	lastSnapshotTime := time.Now()
 	snapshotFrequency := x.WorkerConfig.Raft.GetDuration("snapshot-after-duration")
 	for {
 		select {
@@ -1409,10 +1411,11 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 				// Note: In case we're exceeding threshold entries, but have not exceeded the
 				// threshold time since last snapshot, calculate would be false.
 				calculate := raft.IsEmptySnap(snap) || n.Store.NumLogFiles() > 4 // #0
+				lastSnapTime := time.Unix(atomic.LoadInt64(&lastSnapshotTime), 0)
 				if snapshotFrequency == 0 {
 					calculate = calculate || exceededSnapshotByEntries() // #1
 
-				} else if time.Since(lastSnapshotTime) > snapshotFrequency {
+				} else if time.Since(lastSnapTime) > snapshotFrequency {
 					// If we haven't taken a snapshot since snapshotFrequency, calculate would
 					// follow snapshot entries.
 					calculate = calculate || exceededSnapshotByEntries() // #2, #3
@@ -1436,7 +1439,7 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 					if err := n.proposeSnapshot(); err != nil {
 						glog.Errorf("While calculating and proposing snapshot: %v", err)
 					} else {
-						lastSnapshotTime = time.Now()
+						atomic.StoreInt64(&lastSnapshotTime, time.Now().Unix())
 					}
 				}
 				go n.abortOldTransactions()
