@@ -46,17 +46,12 @@ func InitializeAcl(closer *z.Closer) {
 	// do nothing
 }
 
-<<<<<<< HEAD
-// ResetAcls is an empty method since ACL is only supported in the enterprise version.
-func RefreshAcls(closer *z.Closer) {
-=======
 func upsertGuardianAndGroot(closer *z.Closer, ns uint64) {
 	// do nothing
 }
 
 // SubscribeForAclUpdates is an empty method since ACL is only supported in the enterprise version.
 func SubscribeForAclUpdates(closer *z.Closer) {
->>>>>>> 9759fb038... fix(ACL): The Acl cache should be updated on restart and restore (#7926)
 	// do nothing
 	<-closer.HasBeenClosed()
 	closer.Done()
