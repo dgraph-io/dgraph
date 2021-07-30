@@ -42,15 +42,24 @@ func (s *Server) Login(ctx context.Context,
 }
 
 // ResetAcl is an empty method since ACL is only supported in the enterprise version.
-func ResetAcl(closer *z.Closer) {
+func InitializeAcl(closer *z.Closer) {
 	// do nothing
 }
 
-// ResetAcls is an empty method since ACL is only supported in the enterprise version.
-func RefreshAcls(closer *z.Closer) {
+func upsertGuardianAndGroot(closer *z.Closer, ns uint64) {
+	// do nothing
+}
+
+// SubscribeForAclUpdates is an empty method since ACL is only supported in the enterprise version.
+func SubscribeForAclUpdates(closer *z.Closer) {
 	// do nothing
 	<-closer.HasBeenClosed()
 	closer.Done()
+}
+
+// RefreshACLs is an empty method since ACL is only supported in the enterprise version.
+func RefreshACLs(ctx context.Context) {
+	return
 }
 
 func authorizeAlter(ctx context.Context, op *api.Operation) error {

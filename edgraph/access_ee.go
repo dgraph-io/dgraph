@@ -312,8 +312,43 @@ func authorizeUser(ctx context.Context, userid string, password string) (
 	return user, nil
 }
 
-// RefreshAcls queries for the ACL triples and refreshes the ACLs accordingly.
-func RefreshAcls(closer *z.Closer) {
+func refreshAclCache(ctx context.Context, ns, refreshTs uint64) error {
+	req := &Request{
+		req: &api.Request{
+			Query:    queryAcls,
+			ReadOnly: true,
+			StartTs:  refreshTs,
+		},
+		doAuth: NoAuthorize,
+	}
+
+	ctx = x.AttachNamespace(ctx, ns)
+	queryResp, err := (&Server{}).doQuery(ctx, req)
+	if err != nil {
+		return errors.Errorf("unable to retrieve acls: %v", err)
+	}
+	groups, err := acl.UnmarshalGroups(queryResp.GetJson(), "allAcls")
+	if err != nil {
+		return err
+	}
+
+	worker.AclCachePtr.Update(ns, groups)
+	glog.V(2).Infof("Updated the ACL cache for namespace: %#x", ns)
+	return nil
+
+}
+
+func RefreshACLs(ctx context.Context) {
+	for ns := range schema.State().Namespaces() {
+		if err := refreshAclCache(ctx, ns, 0); err != nil {
+			glog.Errorf("Error while retrieving acls for namespace %#x: %v", ns, err)
+		}
+	}
+	worker.AclCachePtr.Set()
+}
+
+// SubscribeForAclUpdates subscribes for ACL predicates and updates the acl cache.
+func SubscribeForAclUpdates(closer *z.Closer) {
 	defer func() {
 		glog.Infoln("RefreshAcls closed")
 		closer.Done()
@@ -323,38 +358,13 @@ func RefreshAcls(closer *z.Closer) {
 		return
 	}
 
-	// retrieve the full data set of ACLs from the corresponding alpha server, and update the
-	// aclCachePtr
 	var maxRefreshTs uint64
 	retrieveAcls := func(ns uint64, refreshTs uint64) error {
 		if refreshTs <= maxRefreshTs {
 			return nil
 		}
 		maxRefreshTs = refreshTs
-
-		glog.V(3).Infof("Refreshing ACLs")
-		req := &Request{
-			req: &api.Request{
-				Query:    queryAcls,
-				ReadOnly: true,
-				StartTs:  refreshTs,
-			},
-			doAuth: NoAuthorize,
-		}
-
-		ctx := x.AttachNamespace(closer.Ctx(), ns)
-		queryResp, err := (&Server{}).doQuery(ctx, req)
-		if err != nil {
-			return errors.Errorf("unable to retrieve acls: %v", err)
-		}
-		groups, err := acl.UnmarshalGroups(queryResp.GetJson(), "allAcls")
-		if err != nil {
-			return err
-		}
-
-		aclCachePtr.update(ns, groups)
-		glog.V(3).Infof("Updated the ACL cache")
-		return nil
+		return refreshAclCache(closer.Ctx(), ns, refreshTs)
 	}
 
 	closer.AddRunning(1)
@@ -402,10 +412,10 @@ var aclPrefixes = [][]byte{
 	x.PredicatePrefix(x.GalaxyAttr("dgraph.xid")),
 }
 
-// clears the aclCachePtr and upserts the Groot account.
-func ResetAcl(closer *z.Closer) {
+// upserts the Groot account.
+func InitializeAcl(closer *z.Closer) {
 	defer func() {
-		glog.Infof("ResetAcl closed")
+		glog.Infof("InitializeAcl closed")
 		closer.Done()
 	}()
 
@@ -611,12 +621,16 @@ func authorizePreds(ctx context.Context, userData *userData, preds []string,
 	if err != nil {
 		return nil, errors.Wrapf(err, "While authorizing preds")
 	}
+	if !worker.AclCachePtr.Loaded() {
+		RefreshACLs(ctx)
+	}
+
 	userId := userData.userId
 	groupIds := userData.groupIds
 	blockedPreds := make(map[string]struct{})
 	for _, pred := range preds {
 		nsPred := x.NamespaceAttr(ns, pred)
-		if err := aclCachePtr.authorizePredicate(groupIds, nsPred, aclOp); err != nil {
+		if err := worker.AclCachePtr.AuthorizePredicate(groupIds, nsPred, aclOp); err != nil {
 			logAccess(&accessEntry{
 				userId:    userId,
 				groups:    groupIds,
@@ -628,22 +642,20 @@ func authorizePreds(ctx context.Context, userData *userData, preds []string,
 			blockedPreds[pred] = struct{}{}
 		}
 	}
-	aclCachePtr.RLock()
-	allowedPreds := make([]string, len(aclCachePtr.userPredPerms[userId]))
 	// User can have multiple permission for same predicate, add predicate
+	allowedPreds := make([]string, len(worker.AclCachePtr.GetUserPredPerms(userId)))
 	// only if the acl.Op is covered in the set of permissions for the user
-	for predicate, perm := range aclCachePtr.userPredPerms[userId] {
+	for predicate, perm := range worker.AclCachePtr.GetUserPredPerms(userId) {
 		if (perm & aclOp.Code) > 0 {
 			allowedPreds = append(allowedPreds, predicate)
 		}
 	}
-	aclCachePtr.RUnlock()
 	return &authPredResult{allowed: allowedPreds, blocked: blockedPreds}, nil
 }
 
 // authorizeAlter parses the Schema in the operation and authorizes the operation
-// using the aclCachePtr. It will return error if any one of the predicates specified in alter
-// are not authorized.
+// using the worker.AclCachePtr. It will return error if any one of the predicates
+// specified in alter are not authorized.
 func authorizeAlter(ctx context.Context, op *api.Operation) error {
 	if len(worker.Config.HmacSecret) == 0 {
 		// the user has not turned on the acl feature
@@ -768,7 +780,7 @@ func isAclPredMutation(nquads []*api.NQuad) bool {
 	return false
 }
 
-// authorizeMutation authorizes the mutation using the aclCachePtr. It will return permission
+// authorizeMutation authorizes the mutation using the worker.AclCachePtr. It will return permission
 // denied error if any one of the predicates in mutation(set or delete) is unauthorized.
 // At this stage, namespace is not attached in the predicates.
 func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {

@@ -268,6 +268,7 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest, pidx uin
 		return errors.Wrapf(err, "cannot load schema after restore")
 	}
 
+	ResetAclCache()
 	// Propose a snapshot immediately after all the work is done to prevent the restore
 	// from being replayed.
 	go func(idx uint64) {
