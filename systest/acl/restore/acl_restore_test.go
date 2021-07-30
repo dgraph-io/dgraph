@@ -90,7 +90,7 @@ func TestAclCacheRestore(t *testing.T) {
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 	dg.Login(context.Background(), "groot", "password")
 
-	sendRestoreRequest(t, "/backups", "beautiful_merkle9", 1)
+	sendRestoreRequest(t, "/backups", "vibrant_euclid5", 1)
 	testutil.WaitForRestore(t, dg)
 
 	token := testutil.Login(t,
