@@ -270,16 +270,23 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest, pidx uin
 		return errors.Errorf("nil restore request")
 	}
 
-	// Drop all the current data. This also cancels all existing transactions.
-	dropProposal := pb.Proposal{
-		Mutations: &pb.Mutations{
-			GroupId: req.GroupId,
-			StartTs: req.RestoreTs,
-			DropOp:  pb.Mutations_ALL,
-		},
+	if req.IncrementalFrom == 1 {
+		return errors.Errorf("Incremental restore must not include full backup")
 	}
-	if err := groups().Node.applyMutations(ctx, &dropProposal); err != nil {
-		return err
+
+	// Clean up the cluster if it is a full backup restore.
+	if req.IncrementalFrom == 0 {
+		// Drop all the current data. This also cancels all existing transactions.
+		dropProposal := pb.Proposal{
+			Mutations: &pb.Mutations{
+				GroupId: req.GroupId,
+				StartTs: req.RestoreTs,
+				DropOp:  pb.Mutations_ALL,
+			},
+		}
+		if err := groups().Node.applyMutations(ctx, &dropProposal); err != nil {
+			return err
+		}
 	}
 
 	// TODO: after the drop, the tablets for the predicates stored in this group's
@@ -310,13 +317,13 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest, pidx uin
 	}
 
 	lastManifest := manifests[0]
-	preds, ok := lastManifest.Groups[req.GroupId]
+	restorePreds, ok := lastManifest.Groups[req.GroupId]
 
 	if !ok {
 		return errors.Errorf("backup manifest does not contain information for group ID %d",
 			req.GroupId)
 	}
-	for _, pred := range preds {
+	for _, pred := range restorePreds {
 		// Force the tablet to be moved to this group, even if it's currently being served
 		// by another group.
 		if tablet, err := groups().ForceTablet(pred); err != nil {
@@ -338,10 +345,54 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest, pidx uin
 	}
 	glog.Infof("Backup map phase is complete. Map result is: %+v\n", mapRes)
 
-	// Reduce the map to pstore using stream writer.
 	sw := pstore.NewStreamWriter()
-	if err := sw.Prepare(); err != nil {
-		return errors.Wrapf(err, "while preparing DB")
+	defer sw.Cancel()
+
+	prepareForReduce := func() error {
+		if req.IncrementalFrom == 0 {
+			return sw.Prepare()
+		}
+		// If there is a drop all in between the last restored backup and the incremental backups
+		// then drop everything before restoring incremental backups.
+		if mapRes.shouldDropAll {
+			if err := pstore.DropAll(); err != nil {
+				return errors.Wrap(err, "failed to reduce incremental restore map")
+			}
+		}
+
+		dropAttrs := [][]byte{x.SchemaPrefix(), x.TypePrefix()}
+		for ns := range mapRes.dropNs {
+			prefix := x.DataPrefix(ns)
+			dropAttrs = append(dropAttrs, prefix)
+		}
+		for attr := range mapRes.dropAttr {
+			dropAttrs = append(dropAttrs, x.PredicatePrefix(attr))
+		}
+
+		// Any predicate which is currently in the state but not in the latest manifest should
+		// be dropped. It is possible that the tablet would have been moved in between the last
+		// restored backup and the incremental backups being restored.
+		clusterPreds := schema.State().Predicates()
+		validPreds := make(map[string]struct{})
+		for _, pred := range restorePreds {
+			validPreds[pred] = struct{}{}
+		}
+		for _, pred := range clusterPreds {
+			if _, ok := validPreds[pred]; !ok {
+				dropAttrs = append(dropAttrs, x.PredicatePrefix(pred))
+			}
+		}
+		if err := pstore.DropPrefixBlocking(dropAttrs...); err != nil {
+			return errors.Wrap(err, "failed to reduce incremental restore map")
+		}
+		if err := sw.PrepareIncremental(); err != nil {
+			return errors.Wrapf(err, "while preparing DB")
+		}
+		return nil
+	}
+
+	if err := prepareForReduce(); err != nil {
+		return errors.Wrap(err, "while preparing for reduce phase")
 	}
 	if err := RunReducer(sw, mapDir); err != nil {
 		return errors.Wrap(err, "failed to reduce restore map")
@@ -360,10 +411,13 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest, pidx uin
 		return errors.Wrapf(err, "cannot load schema after restore")
 	}
 
-	// reset gql schema and lambda script
-	glog.Info("reseting local gql schema and lambda script store")
-	ResetGQLSchemaStore()
-	ResetLambdaScriptStore()
+	// Reset gql schema only when the restore is not partial, so that after this restore the cluster
+	// can be in non-draining mode and hence gqlSchema can be lazy loaded.
+	if !req.IsPartial {
+		glog.Info("reseting local gql schema and script store")
+		ResetGQLSchemaStore()
+		ResetLambdaScriptStore()
+	}
 
 	// Propose a snapshot immediately after all the work is done to prevent the restore
 	// from being replayed.
