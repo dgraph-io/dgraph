@@ -360,9 +360,10 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest, pidx uin
 		return errors.Wrapf(err, "cannot load schema after restore")
 	}
 
-	// reset gql schema
-	glog.Info("reseting local gql schema store")
+	// reset gql schema and lambda script
+	glog.Info("reseting local gql schema and lambda script store")
 	ResetGQLSchemaStore()
+	ResetLambdaScriptStore()
 
 	// Propose a snapshot immediately after all the work is done to prevent the restore
 	// from being replayed.
