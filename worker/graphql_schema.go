@@ -50,7 +50,54 @@ var (
 	errUpdatingGraphQLSchemaOnNonGroupOneLeader = errors.New(
 		"while updating GraphQL schema: this server isn't group-1 leader, please retry")
 	ErrMultipleGraphQLSchemaNodes = errors.New("found multiple nodes for GraphQL schema")
+	gqlSchemaStore                *GQLSchemaStore
 )
+
+type GqlSchema struct {
+	ID              string `json:"id,omitempty"`
+	Schema          string `json:"schema,omitempty"`
+	Version         uint64
+	GeneratedSchema string
+	Loaded          bool // This indicate whether the schema has been loaded into graphql server
+	// or not
+}
+
+type GQLSchemaStore struct {
+	mux    sync.RWMutex
+	schema map[uint64]*GqlSchema
+}
+
+func NewGQLSchemaStore() *GQLSchemaStore {
+	gqlSchemaStore = &GQLSchemaStore{
+		mux:    sync.RWMutex{},
+		schema: make(map[uint64]*GqlSchema),
+	}
+	return gqlSchemaStore
+}
+
+func (gs *GQLSchemaStore) Set(ns uint64, sch *GqlSchema) {
+	gs.mux.Lock()
+	defer gs.mux.Unlock()
+	gs.schema[ns] = sch
+}
+
+func (gs *GQLSchemaStore) GetCurrent(ns uint64) (*GqlSchema, bool) {
+	gs.mux.RLock()
+	defer gs.mux.RUnlock()
+	sch, ok := gs.schema[ns]
+	return sch, ok
+}
+
+func (gs *GQLSchemaStore) resetGQLSchema() {
+	gs.mux.Lock()
+	defer gs.mux.Unlock()
+
+	gs.schema = make(map[uint64]*GqlSchema)
+}
+
+func ResetGQLSchemaStore() {
+	gqlSchemaStore.resetGQLSchema()
+}
 
 // UpdateGQLSchemaOverNetwork sends the request to the group one leader for execution.
 func UpdateGQLSchemaOverNetwork(ctx context.Context, req *pb.UpdateGraphQLSchemaRequest) (*pb.
