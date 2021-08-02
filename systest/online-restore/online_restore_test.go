@@ -222,17 +222,13 @@ func TestBasicRestore(t *testing.T) {
 	ctx := context.Background()
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
 
-<<<<<<< HEAD
 	snapshotTs := getSnapshotTs(t)
-	sendRestoreRequest(t, "", "youthful_rhodes3", 0)
-=======
 	req := &restoreReq{
 		location:   backupLocation,
 		backupId:   "youthful_rhodes3",
 		encKeyFile: encKeyFile,
 	}
 	sendRestoreRequest(t, req)
->>>>>>> dfa5daec1... feat(restore): Introduce incremental restore (#7942)
 	testutil.WaitForRestore(t, dg)
 	// Snapshot must be taken just after the restore and hence the snapshotTs be updated.
 	require.NoError(t, x.RetryUntilSuccess(3, 1*time.Second, func() error {
