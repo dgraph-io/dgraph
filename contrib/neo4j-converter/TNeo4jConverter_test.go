@@ -66,36 +66,17 @@ func TestWholeFile(t *testing.T) {
 	require.True(t, isSame)
 
 }
-func TestSingleLineFileWithLineBreakVizzn(t *testing.T) {
-	header := `"_id","_labels","actionStrategyId","allSchemas","allowSignup","assignments","audiences","bgColor","calendarId","calendarType","capacity","classificationId","combinationTypeId","contactEmail","contactPreference","contactSms","createdAt","createdBy","currentLocation","currentLocationId","date","days","declaredValue","description","descriptionFieldId","dispatcherGroupId","dispatcherId","displayName","duration","email","emailParts","end","entityClassId","entityId","equipmentIdFieldId","eventType","fieldId","firstName","formId","formioId","formioSubmissionId","fromDay","groupIds","hasMap","id","identityFields","intervalFrequency","isActive","isArchived","isPreferred","isReadOnly","isResourceProvider","jobCode","jobSiteIdFieldId","keyRoleIds","lastName","list_tags","loadTypeIds","loadTypes","locationClassificationId","locationStatus","minuteOfDay","name","nextAlertAt","nextIntervalAt","notes","ownedBy","partnerIds","partners","personIds","priority","requiresFuel","returnToServiceAt","roleIds","scheduleId","scheduleIntervalIds","sharingStatus","siteId","start","startDate","status","styleBg","styleText","subjectIds","tag","teamId","templateId","templates","timezone","trailerCombinationId","trailerIds","trailerOptions","triggerValue","truckId","type","updatedAt","updatedBy","userIds","user_tags","version","year","_start","_end","_type","audienceId","duration","fieldId","inactive","templateId"`
-	detail := `"10331",":Site","","","","","","","","","","","","","","","2021-02-04T20:23:26.163Z","T35LTMN675hPzYBa9eizD55ZoLm1","","","","","","Full scope onsite and offsite
-
-
-
-
-
-","","","","","","","","","uRlHnNBYsgaQyVQluuCjf","","","","","","","","","","","true","Nztiwb-l76brh3401PAeP","","","","false","","","","","","","","[""site""]","","","","","","20-091 Sunnyside","","","","s2aLVSnDvXheCyUzfPK6NCoMtE43","","","","","false","","","","","","","","","active","","","","","Wi4VGIlOPjdin3aL9gC8","","","","","","","","","site","2021-02-04T20:57:22.901Z","wPlqbFJwKBUre431dwlMbnGLov53","","[]","","",,,,,,,,`
-	fileLines := fmt.Sprintf("%s\n%s", header, detail)
-
-	i := strings.NewReader(fileLines)
-	buf := new(bytes.Buffer)
-	processNeo4jCSV(i, buf)
-	fmt.Println(buf.String())
-}
-
-
-
 
 func TestSingleLineFileWithLineBreak(t *testing.T) {
 	header := `"_id","_labels","born","name","released","tagline"` +
 		`,"title","_start","_end","_type","roles"`
-	detail := `"188",":Movie","","","1999","Welcome\n to \nthe \"Real\" World","The Matrix",,,,`
+	detail := `"188",":Movie","","","1999","Welcome\n to \n\n\n\nthe \"Real\" World","The Matrix",,,,`
 	fileLines := fmt.Sprintf("%s\n%s", header, detail)
 	output := `<_:k_188> <_labels> ":Movie" .
 <_:k_188> <born> "" .
 <_:k_188> <name> "" .
 <_:k_188> <released> "1999" .
-<_:k_188> <tagline> "Welcome\\n to \\nthe \\\"Real\\\" World" .
+<_:k_188> <tagline> "Welcome\\n to \\n\\n\\n\\nthe \\\"Real\\\" World" .
 <_:k_188> <title> "The Matrix" .
 `
 	i := strings.NewReader(fileLines)

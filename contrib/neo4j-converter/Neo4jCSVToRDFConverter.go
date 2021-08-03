@@ -63,8 +63,6 @@ func main() {
 }
 
 func processNeo4jCSV(r io.Reader, w io.Writer) error {
-	scanner := bufio.NewScanner(r)
-	scanner.Split(bufio.ScanLines)
 	var text, rdfLines bytes.Buffer
 
 	header := make(map[int]string)
@@ -89,11 +87,9 @@ func processNeo4jCSV(r io.Reader, w io.Writer) error {
 	var nContext Neo4jCSVContext
 	eofReached := false
 	nextLine := ""
-	bufr := bufio.NewReader(r)
-	nContext.InitWithReader(*bufr)
+	lineBuffer := bufio.NewReader(r)
+	nContext.InitWithReader(*lineBuffer)
 	nextLine, eofReached = nContext.ProvideNextLine()
-	scanner.Scan()
-	scanner.Text()
 	if !eofReached {
 		readHeader(nextLine)
 	}
@@ -107,16 +103,11 @@ func processNeo4jCSV(r io.Reader, w io.Writer) error {
 	//for scanner.Scan() {
 	for !eofReached{
 		nextLine, eofReached = nContext.ProvideNextLine()
-		//parse csv
-		//text.WriteString(scanner.Text() + "\n")
-		//fmt.Println(text.String())
-		//d := csv.NewReader(strings.NewReader(text.String()))
 		if eofReached && len(nextLine) == 0 {
 			break
 		}
 		d := csv.NewReader(strings.NewReader(nextLine))
 		d.LazyQuotes=true
-		//records, err := d.ReadAll()
 		records, err := d.ReadAll()
 
 		if err != nil {
@@ -125,7 +116,6 @@ func processNeo4jCSV(r io.Reader, w io.Writer) error {
 			continue
 		}
 
-
 		linkStartNode := ""
 		linkEndNode := ""
 		linkName := ""
@@ -133,7 +123,6 @@ func processNeo4jCSV(r io.Reader, w io.Writer) error {
 		fmt.Printf("%+v\n",records)
 		line := records[0]
 		for position := 0; position < len(line); position++ {
-
 			// This is an _id node.
 			if len(line[0]) > 0 {
 				bn := fmt.Sprintf("<_:k_%s>", line[0])
@@ -216,7 +205,7 @@ type Neo4jCSVContext struct{
 }
 
 func (context *Neo4jCSVContext) Init(fileName string) {
-	file, _ := os.Open("./exampleLineBreaks.csv")
+	file, _ := os.Open(fileName)
 	context.r = bufio.NewReader(file)
 }
 func (context *Neo4jCSVContext) InitWithReader(_r bufio.Reader) {
