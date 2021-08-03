@@ -101,13 +101,13 @@ func processNeo4jCSV(r io.Reader, w io.Writer) error {
 
 	// Read the actual data.
 	//for scanner.Scan() {
-	for !eofReached{
+	for !eofReached {
 		nextLine, eofReached = nContext.ProvideNextLine()
 		if eofReached && len(nextLine) == 0 {
 			break
 		}
 		d := csv.NewReader(strings.NewReader(nextLine))
-		d.LazyQuotes=true
+		d.LazyQuotes = true
 		records, err := d.ReadAll()
 
 		if err != nil {
@@ -120,7 +120,7 @@ func processNeo4jCSV(r io.Reader, w io.Writer) error {
 		linkEndNode := ""
 		linkName := ""
 		facets := make(map[string]string)
-		fmt.Printf("%+v\n",records)
+		fmt.Printf("%+v\n", records)
 		line := records[0]
 		for position := 0; position < len(line); position++ {
 			// This is an _id node.
@@ -130,7 +130,7 @@ func processNeo4jCSV(r io.Reader, w io.Writer) error {
 					//write non-facet data
 					str := strings.Replace(line[position], `"`, `"`, -1)
 					rdfLines.WriteString(fmt.Sprintf("%s <%s> %q .\n",
-						bn, header[position],str))
+						bn, header[position], str))
 				}
 				continue
 			}
@@ -198,10 +198,8 @@ func check(err error) {
 	}
 }
 
-
-type Neo4jCSVContext struct{
-	r *bufio.Reader
-	count int
+type Neo4jCSVContext struct {
+	r     *bufio.Reader
 }
 
 func (context *Neo4jCSVContext) Init(fileName string) {
@@ -212,9 +210,8 @@ func (context *Neo4jCSVContext) InitWithReader(_r bufio.Reader) {
 	context.r = &_r
 }
 
-
 // ProvideNextLine This function processes the next line in the file
-func (context *Neo4jCSVContext) ProvideNextLine() (string, bool){
+func (context *Neo4jCSVContext) ProvideNextLine() (string, bool) {
 	var lineBuffer bytes.Buffer
 
 	completeLineRead := false
@@ -224,13 +221,13 @@ func (context *Neo4jCSVContext) ProvideNextLine() (string, bool){
 	handler := func(s *scanner.Scanner, msg string) {
 		//fmt.Println("ERROR")
 		//fmt.Println(msg)
-		if msg == "literal not terminated"{
+		if msg == "literal not terminated" {
 			continueReadingLine = true
 		}
 	}
 	for !completeLineRead {
 		continueReadingLine = false
-		line,_ := context.r.ReadString('\n')
+		line, _ := context.r.ReadString('\n')
 		if line == "\n" {
 			continueReadingLine = true
 		}
@@ -243,13 +240,13 @@ func (context *Neo4jCSVContext) ProvideNextLine() (string, bool){
 		for tok = s.Scan(); tok != scanner.EOF; tok = s.Scan() {
 			//do nothing
 		}
-		if tok == scanner.EOF && len(line) == 0{
+		if tok == scanner.EOF && len(line) == 0 {
 			eofFileReached = true
 		}
 
 		if continueReadingLine {
 			completeLineRead = false
-		} else{
+		} else {
 			completeLineRead = true
 		}
 	}

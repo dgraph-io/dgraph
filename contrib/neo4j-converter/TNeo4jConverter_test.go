@@ -34,7 +34,7 @@ func TestSingleLineFileString(t *testing.T) {
 	i := strings.NewReader(fileLines)
 	buf := new(bytes.Buffer)
 	processNeo4jCSV(i, buf)
-	require.Equal(t, output,buf.String() )
+	require.Equal(t, output, buf.String())
 }
 
 func TestWholeFile(t *testing.T) {
@@ -82,8 +82,8 @@ func TestSingleLineFileWithLineBreak(t *testing.T) {
 	i := strings.NewReader(fileLines)
 	buf := new(bytes.Buffer)
 	processNeo4jCSV(i, buf)
-	out:=buf.String()
-	require.Equal(t, output,out )
+	out := buf.String()
+	require.Equal(t, output, out)
 }
 
 func TestMultiLineFileWithLineBreakWithFacets(t *testing.T) {
@@ -122,12 +122,12 @@ func TestWholeFileWithQuotedLineBreaks(t *testing.T) {
 	scanner := bufio.NewScanner(i)
 	//scanner.Split(TScanLineWithLineBreaks)
 	scanner.Scan()
-	txt:=scanner.Text()
+	txt := scanner.Text()
 	fmt.Println(txt)
 
 }
 
-func TestScan(t *testing.T){
+func TestScan(t *testing.T) {
 	file, _ := os.Open("./exampleLineBreaks.csv")
 	r := bufio.NewReader(file)
 	var s scanner.Scanner
@@ -135,14 +135,14 @@ func TestScan(t *testing.T){
 	count := 0
 	for tok := s.Scan(); tok != scanner.EOF; tok = s.Scan() {
 		fmt.Printf("%s: %s\n", s.Position, s.TokenText())
-		if count>5 {
+		if count > 5 {
 			break
 		}
 		count = count + 1
 	}
 }
 
-func TestReader(t *testing.T){
+func TestReader(t *testing.T) {
 	file, _ := os.Open("./exampleLineBreaks.csv")
 	var r *bufio.Reader
 	r = bufio.NewReader(file)
@@ -152,12 +152,12 @@ func TestReader(t *testing.T){
 	continueReadingLine := false
 	for !completeLineRead {
 		continueReadingLine = false
-		line,_ := r.ReadString('\n')
+		line, _ := r.ReadString('\n')
 		lineBuffer.WriteString(line)
 		handler := func(s *scanner.Scanner, msg string) {
 			fmt.Println("ERROR")
 			fmt.Println(msg)
-			if msg == "literal not terminated"{
+			if msg == "literal not terminated" {
 				continueReadingLine = true
 			}
 		}
@@ -169,7 +169,7 @@ func TestReader(t *testing.T){
 
 		if continueReadingLine {
 			completeLineRead = false
-		} else{
+		} else {
 			completeLineRead = true
 		}
 	}
@@ -177,7 +177,7 @@ func TestReader(t *testing.T){
 	fmt.Println(lineBuffer.String())
 }
 
-func TestNeo4jFileReader(t *testing.T){
+func TestNeo4jFileReader(t *testing.T) {
 	fileName := "./exampleLineBreaks.csv"
 	var nContext Neo4jCSVContext
 	nContext.Init(fileName)
@@ -188,9 +188,8 @@ func TestNeo4jFileReader(t *testing.T){
 	for !eofReached {
 		nextLine, eofReached = nContext.ProvideNextLine()
 		fmt.Println(nextLine)
-		count=count  + 1
+		count = count + 1
 	}
 
 	require.Equal(t, 2, count)
 }
-
