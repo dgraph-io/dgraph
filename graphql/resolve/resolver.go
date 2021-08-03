@@ -19,10 +19,12 @@ package resolve
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	dgoapi "github.com/dgraph-io/dgo/v210/protos/api"
@@ -697,6 +699,8 @@ func (hr *httpResolver) Resolve(ctx context.Context, field schema.Field) *Resolv
 	return resolved
 }
 
+var loop int32
+
 func (hr *httpResolver) rewriteAndExecute(ctx context.Context, field schema.Field) *Resolved {
 	hrc, err := field.CustomHTTPConfig()
 	if err != nil {
@@ -707,8 +711,11 @@ func (hr *httpResolver) rewriteAndExecute(ctx context.Context, field schema.Fiel
 	// Just convert that into a lambda template.
 	if field.HasLambdaDirective() {
 		hrc.Template = schema.GetBodyForLambda(ctx, field, nil, hrc.Template)
+		rr := atomic.AddInt32(&loop, 1)
+		hrc.URL = fmt.Sprintf("http://172.17.0.1:%d/graphql-worker", 8686+(rr%4))
 	}
 
+	glog.Infof("URL is %s\n", hrc.URL)
 	fieldData, errs, hardErrs := hrc.MakeAndDecodeHTTPRequest(hr.Client, hrc.URL, hrc.Template,
 		field)
 	if hardErrs != nil {

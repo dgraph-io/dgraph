@@ -495,6 +495,18 @@ func setupServer(closer *z.Closer) {
 		log.Fatal(err)
 	}
 
+	// for i := 0; i < 4; i++ {
+	// 	cmd := exec.Command("node", "/home/mrjn/source/dgraph-lambda/dist/index.js")
+	// 	cmd.Env = append(cmd.Env, fmt.Sprintf("PORT=%d", 8686+i))
+	// 	go func() {
+	// 		glog.Infof("Running node command: %+v\n", cmd)
+	// 		err := cmd.Run()
+	// 		if err != nil {
+	// 			log.Fatalf("Error is %v", err)
+	// 		}
+	// 	}()
+	// }
+
 	baseMux := http.NewServeMux()
 	http.Handle("/", audit.AuditRequestHttp(baseMux))
 

@@ -28,6 +28,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/worker"
+	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -76,6 +77,7 @@ func MakeHttpRequest(client *http.Client, method, url string, header http.Header
 // For REST requests, any error is a hard error, including those returned from the remote endpoint.
 func (fconf *FieldHTTPConfig) MakeAndDecodeHTTPRequest(client *http.Client, url string,
 	body interface{}, field Field) (interface{}, x.GqlErrorList, x.GqlErrorList) {
+	glog.Infof("MakeAndDecodeHTTPRequest: %s\n", url)
 	var b []byte
 	var err error
 	// need this check to make sure that we don't send body as []byte(`null`)

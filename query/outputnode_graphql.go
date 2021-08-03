@@ -25,6 +25,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	gqlSchema "github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
@@ -731,6 +732,8 @@ func (genc *graphQLEncoder) resolveCustomFields(childFields []gqlSchema.Field,
 	wg.Wait()
 }
 
+var loop int32
+
 // resolveCustomField resolves the @custom childField by making an external HTTP request and then
 // updates the fastJson tree with results of that HTTP request.
 // It accepts the following arguments:
@@ -951,6 +954,9 @@ func (genc *graphQLEncoder) resolveCustomField(childField gqlSchema.Field,
 
 		// Step-3 & 4: Make the request to external HTTP endpoint using the URL and
 		// body. Then, Decode the HTTP response.
+		rr := atomic.AddInt32(&loop, 1)
+		fconf.URL = fmt.Sprintf("http://172.17.0.1:%d/graphql-worker", 8686+(rr%4))
+		// glog.Infof("URL is %s\n", fconf.URL)
 		response, errs, hardErrs := fconf.MakeAndDecodeHTTPRequest(nil, fconf.URL, body, childField)
 		if hardErrs != nil {
 			genc.errCh <- hardErrs
