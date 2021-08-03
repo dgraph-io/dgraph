@@ -242,6 +242,9 @@ func (context *Neo4jCSVContext) ProvideNextLine() (string, bool){
 	for !completeLineRead {
 		continueReadingLine = false
 		line,_ := context.r.ReadString('\n')
+		if line == "\n" {
+			continueReadingLine = true
+		}
 		lineBuffer.WriteString(line)
 
 		var s scanner.Scanner
