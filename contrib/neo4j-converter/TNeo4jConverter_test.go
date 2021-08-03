@@ -94,21 +94,13 @@ func TestMultiLineFileWithLineBreakWithFacets(t *testing.T) {
 	facetLine := `,,,,,,,"189","188","ACTED_IN","[""N\neo""]"`
 
 	fileLines := fmt.Sprintf("%s\n%s\n%s\n%s", header, line1, line2, facetLine)
-	output := `<_:k_188> <_labels> ":Movie" .
-<_:k_188> <born> "" .
-<_:k_188> <name> "" .
-<_:k_188> <released> "1999" .
-<_:k_188> <tagline> "Welcome\\n to \\nthe \\\"Real\\\" World" .
-<_:k_188> <title> "The Matrix" .
-`
 	i := strings.NewReader(fileLines)
 	buf := new(bytes.Buffer)
 	processNeo4jCSV(i, buf)
 	fmt.Println(buf.String())
-
-	fmt.Println("ignore this",len(output))
-	//out:=buf.String()
-	//require.Equal(t, output,out )
+	out := buf.String()
+	facetsArePresent := strings.Contains(out, "<_:k_189> <ACTED_IN> <_:k_188> (  roles=\"\\\"N\\\\neo\\\"\" ) .")
+	require.True(t, facetsArePresent)
 }
 
 func BenchmarkSampleFile(b *testing.B) {
@@ -180,9 +172,6 @@ func TestReader(t *testing.T){
 		} else{
 			completeLineRead = true
 		}
-		//for tok := s.Scan(); tok != scanner.EOF; tok = s.Scan() {
-		//	fmt.Printf("%s: %s\n", s.Position, s.TokenText())
-		//}
 	}
 	fmt.Println(continueReadingLine)
 	fmt.Println(lineBuffer.String())
