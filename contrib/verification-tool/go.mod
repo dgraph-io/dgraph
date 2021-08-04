@@ -1,4 +1,4 @@
-module qrunner
+module vtool
 
 go 1.16
 
