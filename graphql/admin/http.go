@@ -274,8 +274,8 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	res = resolver.Resolve(ctx, gqlReq)
-	write(w, res, strings.Contains(r.Header.Get("Accept-Encoding"), "gzip"))
-	// write(w, res, false)
+	// write(w, res, strings.Contains(r.Header.Get("Accept-Encoding"), "gzip"))
+	write(w, res, false)
 }
 
 func (gh *graphqlHandler) isValid(namespace uint64) error {
