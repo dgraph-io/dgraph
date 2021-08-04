@@ -7,47 +7,32 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-	"os"
-	"os/exec"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 )
 
+var lambda, verbose bool
+var port int
+
 func main() {
-	lambda := flag.Bool("lambda", false, "Run lambda calls")
-	node := flag.Bool("node", false, "Just run node JS")
+	flag.BoolVar(&lambda, "lambda", false, "Run lambda calls")
+	flag.BoolVar(&verbose, "verbose", false, "Verbose logs")
+	flag.IntVar(&port, "port", 8080, "Verbose logs")
 	flag.Parse()
 
-	if *node {
-		var wg sync.WaitGroup
-		for i := 0; i < 4; i++ {
-			cmd := exec.Command("node", "/home/mrjn/source/dgraph-lambda/dist/index.js")
-			cmd.Env = append(cmd.Env, fmt.Sprintf("PORT=%d", 8686+i))
-			wg.Add(1)
-			go func() {
-				fmt.Printf("Running command: %+v Env: %+v\n", cmd, cmd.Env)
-				cmd.Stdout = os.Stdout
-				cmd.Stderr = os.Stderr
-				err := cmd.Run()
-				if err != nil {
-					log.Fatalf("Error is %v", err)
-				}
-			}()
-		}
-		wg.Wait()
-	}
+	url := fmt.Sprintf("http://localhost:%d/graphql", port)
 
 	client := http.Client{}
 	var count int32
 	start := time.Now()
 	ch := make(chan struct{}, 100)
 	req := func() {
-		if *lambda {
-			callLambda(client)
+		if lambda {
+			callLambda(client, url)
 		} else {
-			callDgraph(client)
+			callDgraph(client, url)
 		}
 		if num := atomic.AddInt32(&count, 1); num%1000 == 0 {
 			elasped := time.Since(start).Round(time.Second).Seconds()
@@ -75,35 +60,50 @@ func main() {
 	wg.Wait()
 }
 
-func callLambda(client http.Client) {
+func callLambda(client http.Client, url string) {
 	b := bytes.NewBuffer([]byte(`{"query":"query {\n  queryUser{\n    Capital\n }\n}\n"}`))
-	resp, err := client.Post("http://localhost:8180/graphql", "application/json", b)
+	req, err := http.NewRequest("POST", "http://localhost:8080/graphql", b)
 	if err != nil {
 		log.Fatal(err)
 	}
-	// _, err = ioutil.ReadAll(resp.Body)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	bb, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	// Validate data.
 	if !strings.Contains(string(bb), "NAMAN") {
 		log.Fatalf("Didn't get NAMAN: %s\n", bb)
 	}
-	// fmt.Printf(string(bb))
-	resp.Body.Close()
-	if err != nil {
-		log.Fatal(err)
+	if verbose {
+		fmt.Printf("[LAMBDA] %s\n", bb)
 	}
 }
 
-func callDgraph(client http.Client) {
+func callDgraph(client http.Client, url string) {
 	b := bytes.NewBuffer([]byte(`{"query":"query {\n  queryUser{\n    name\n }\n}\n"}`))
-	resp, err := client.Post("http://localhost:8180/graphql", "application/json", b)
+	resp, err := client.Post("http://localhost:8080/graphql", "application/json", b)
 	if err != nil {
 		log.Fatal(err)
 	}
-	_, err = ioutil.ReadAll(resp.Body)
-	// bb, err := ioutil.ReadAll(resp.Body)
-	// fmt.Println(string(bb))
-	defer resp.Body.Close()
+	bb, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		log.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	// Validate data.
+	if !strings.Contains(string(bb), "Naman") {
+		log.Fatalf("Didn't get NAMAN: %s\n", bb)
+	}
+	if verbose {
+		fmt.Printf("[DGRAPH] %s\n", bb)
 	}
 }
