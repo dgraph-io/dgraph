@@ -26,10 +26,12 @@ import (
 
 	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/graphql/schema"
+	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 )
 
 type webhookPayload struct {
+	Source     string             `json:"source"`
 	Resolver   string             `json:"resolver"`
 	AccessJWT  string             `json:"X-Dgraph-AccessToken,omitempty"`
 	AuthHeader *authHeaderPayload `json:"authHeader,omitempty"`
@@ -70,6 +72,7 @@ type deleteEvent struct {
 // guarantee that the payload will be delivered successfully to the lambda server.
 func sendWebhookEvent(ctx context.Context, m schema.Mutation, commitTs uint64, rootUIDs []string) {
 	accessJWT, _ := x.ExtractJwt(ctx)
+	ns, _ := x.ExtractNamespace(ctx)
 	var authHeader *authHeaderPayload
 	if m.GetAuthMeta() != nil {
 		authHeader = &authHeaderPayload{
@@ -79,6 +82,7 @@ func sendWebhookEvent(ctx context.Context, m schema.Mutation, commitTs uint64, r
 	}
 
 	payload := webhookPayload{
+		Source:     worker.GetLambdaScript(ns),
 		Resolver:   "$webhook",
 		AccessJWT:  accessJWT,
 		AuthHeader: authHeader,
@@ -115,7 +119,6 @@ func sendWebhookEvent(ctx context.Context, m schema.Mutation, commitTs uint64, r
 	}
 
 	// send the request
-	ns, _ := x.ExtractNamespace(ctx)
 	headers := http.Header{}
 	headers.Set("Content-Type", "application/json")
 	resp, err := schema.MakeHttpRequest(nil, http.MethodPost, x.LambdaUrl(ns), headers, b)

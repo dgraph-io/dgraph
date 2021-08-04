@@ -28,6 +28,7 @@ import (
 	_ "net/http/pprof" // http profiler
 	"net/url"
 	"os"
+	"os/exec"
 	"os/signal"
 	"strconv"
 	"strings"
@@ -224,7 +225,14 @@ they form a Raft group and provide synchronous replication.
 		Flag("poll-interval",
 			"The polling interval for GraphQL subscription.").
 		Flag("lambda-url",
-			"The URL of a lambda server that implements custom GraphQL Javascript resolvers.").
+			"The URL of a lambda server that implements custom GraphQL Javascript resolvers."+
+				" This should be used only when using custom lambda server."+
+				" Use --lambda-cnt to launch official lambda server."+
+				" This flag if set, overrides the other lambda flags.").
+		Flag("lambda-cnt",
+			"Number of JS lambda servers to be launched by alpha.").
+		Flag("lambda-port",
+			"The starting port at which the lambda server listens.").
 		String())
 
 	flag.String("cdc", worker.CDCDefaults, z.NewSuperFlagHelp(worker.CDCDefaults).
@@ -464,6 +472,45 @@ func serveGRPC(l net.Listener, tlsCfg *tls.Config, closer *z.Closer) {
 	s.Stop()
 }
 
+func setupLambdaServer(closer *z.Closer) {
+	// If lambda-url is set, then don't launch the lambda servers from dgraph.
+	if len(x.Config.GraphQL.GetString("lambda-url")) > 0 {
+		return
+	}
+
+	num := int(x.Config.GraphQL.GetUint32("lambda-cnt"))
+	port := int(x.Config.GraphQL.GetUint32("lambda-port"))
+	if num == 0 {
+		return
+	}
+
+	glog.Infoln("Setting up lambda servers")
+	dgraphUrl := fmt.Sprintf("http://localhost:%d", httpPort())
+	jsFile := "/home/algod/repos/dgraph-lambda/dist/index.js"
+	for i := 0; i < num; i++ {
+		go func(i int) {
+			for {
+				select {
+				case <-closer.HasBeenClosed():
+					break
+				default:
+					cmd := exec.CommandContext(closer.Ctx(), "node", jsFile)
+					cmd.Env = append(cmd.Env, fmt.Sprintf("PORT=%d", port+i))
+					cmd.Env = append(cmd.Env, fmt.Sprintf("DGRAPH_URL="+dgraphUrl))
+					cmd.Stdout = os.Stdout
+					cmd.Stderr = os.Stderr
+					glog.Infof("Running node command: %+v\n", cmd)
+					err := cmd.Run()
+					if err != nil {
+						glog.Errorf("Lambda server idx: %d stopped with error %v", i, err)
+					}
+					time.Sleep(2 * time.Second)
+				}
+			}
+		}(i)
+	}
+}
+
 func setupServer(closer *z.Closer) {
 	go worker.RunServer(bindall) // For pb.communication.
 
@@ -486,18 +533,6 @@ func setupServer(closer *z.Closer) {
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	// for i := 0; i < 4; i++ {
-	// 	cmd := exec.Command("node", "/home/mrjn/source/dgraph-lambda/dist/index.js")
-	// 	cmd.Env = append(cmd.Env, fmt.Sprintf("PORT=%d", 8686+i))
-	// 	go func() {
-	// 		glog.Infof("Running node command: %+v\n", cmd)
-	// 		err := cmd.Run()
-	// 		if err != nil {
-	// 			log.Fatalf("Error is %v", err)
-	// 		}
-	// 	}()
-	// }
 
 	baseMux := http.NewServeMux()
 	http.Handle("/", audit.AuditRequestHttp(baseMux))
@@ -576,11 +611,12 @@ func setupServer(closer *z.Closer) {
 	baseMux.Handle("/", http.HandlerFunc(homeHandler))
 	baseMux.Handle("/ui/keywords", http.HandlerFunc(keywordHandler))
 
+	// Initialize the lambda server
+	setupLambdaServer(x.ServerCloser)
 	// Initialize the servers.
 	x.ServerCloser.AddRunning(3)
 	go serveGRPC(grpcListener, tlsCfg, x.ServerCloser)
 	go x.StartListenHttpAndHttps(httpListener, tlsCfg, x.ServerCloser)
-
 	go func() {
 		defer x.ServerCloser.Done()
 
