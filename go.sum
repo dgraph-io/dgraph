@@ -186,6 +186,10 @@ github.com/dgraph-io/sroar v0.0.0-20210604145002-865050cb7465 h1:wj9EEeLJyJnopcm
 github.com/dgraph-io/sroar v0.0.0-20210604145002-865050cb7465/go.mod h1:bdNPtQmcxoIQVkZEWZvX0n0/IDlHFab397xdBlP4OoE=
 github.com/dgraph-io/sroar v0.0.0-20210805094118-511ec227b28b h1:t5XhFBfwQEhoceEe+/PIAZoHMI+kkxOHpUEskP9VJp0=
 github.com/dgraph-io/sroar v0.0.0-20210805094118-511ec227b28b/go.mod h1:bdNPtQmcxoIQVkZEWZvX0n0/IDlHFab397xdBlP4OoE=
+github.com/dgraph-io/sroar v0.0.0-20210805205241-d3e786805b6c h1:2lXEYrNUKZbe/wFsDc0yIDwMJMJ4BLe3BH84/jFs7RY=
+github.com/dgraph-io/sroar v0.0.0-20210805205241-d3e786805b6c/go.mod h1:bdNPtQmcxoIQVkZEWZvX0n0/IDlHFab397xdBlP4OoE=
+github.com/dgraph-io/sroar v0.0.0-20210805220317-d69a751a653a h1:hLkFEbXmMANPOZRSpoSBhPXQH2zsUGOe41+SzMCm7qY=
+github.com/dgraph-io/sroar v0.0.0-20210805220317-d69a751a653a/go.mod h1:bdNPtQmcxoIQVkZEWZvX0n0/IDlHFab397xdBlP4OoE=
 github.com/dgrijalva/jwt-go v3.2.0+incompatible h1:7qlOGliEKZXTDg6OTjfoBKDXWrumCAMpl/TFQ4/5kLM=
 github.com/dgrijalva/jwt-go v3.2.0+incompatible/go.mod h1:E3ru+11k8xSBh+hMPgOLZmtrrCbhqsmaPHjLKYnJCaQ=
 github.com/dgrijalva/jwt-go/v4 v4.0.0-preview1 h1:CaO/zOnF8VvUfEbhRatPcwKVWamvbYd8tQGRWacE9kU=
