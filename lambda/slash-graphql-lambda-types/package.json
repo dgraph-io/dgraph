@@ -1,0 +1,16 @@
+{
+  "name": "@slash-graphql/lambda-types",
+  "version": "1.2.0",
+  "description": "Types for building out a Dgraph Lambda",
+  "main": "index.js",
+  "types": "types.d.ts",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "github.com/dgraph-io/dgraph-lambda"
+  },
+  "author": "Tejas Dinkar <tejas@gja.in>",
+  "license": "Apache-2.0"
+}

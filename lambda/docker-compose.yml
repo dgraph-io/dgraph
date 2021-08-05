@@ -1,0 +1,17 @@
+version: '3.4'
+services:
+  dgraph-lambda:
+    build:
+      context: .
+      target: build
+      args:
+        nodeEnv: development
+    ports:
+      - "8686:8686"
+    depends_on:
+      - dgraph
+    environment:
+      DGRAPH_URL: http://dgraph:8080
+      INTEGRATION_TEST: "true"
+  dgraph:
+    image: "dgraph/standalone:master"

@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"embed"
 	"fmt"
 	"log"
 	"math"
@@ -30,6 +31,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -79,6 +81,10 @@ var (
 	adminServer admin.IServeGraphQL
 	initDone    uint32
 )
+
+// Embed the Javascript Lambda Server's code to launch lambda server later on.
+//go:embed dist/*
+var jsLambda embed.FS
 
 func init() {
 	Alpha.Cmd = &cobra.Command{
@@ -486,7 +492,24 @@ func setupLambdaServer(closer *z.Closer) {
 
 	glog.Infoln("Setting up lambda servers")
 	dgraphUrl := fmt.Sprintf("http://localhost:%d", httpPort())
-	jsFile := "/home/algod/repos/dgraph-lambda/dist/index.js"
+	// Entry point of the script is index.js.
+	filename := filepath.Join(x.WorkerConfig.TmpDir, "index.js")
+
+	dir := "dist"
+	files, err := jsLambda.ReadDir(dir)
+	x.Check(err)
+	for _, file := range files {
+		// The separator for embedded files is forward-slash even on Windows.
+		data, err := jsLambda.ReadFile(dir + "/" + file.Name())
+		x.Check(err)
+		filename := filepath.Join(x.WorkerConfig.TmpDir, file.Name())
+		file, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, file.Type().Perm())
+		x.Check(err)
+		_, err = file.Write(data)
+		x.Check(err)
+		x.Check(file.Close())
+	}
+
 	for i := 0; i < num; i++ {
 		go func(i int) {
 			for {
@@ -494,7 +517,7 @@ func setupLambdaServer(closer *z.Closer) {
 				case <-closer.HasBeenClosed():
 					break
 				default:
-					cmd := exec.CommandContext(closer.Ctx(), "node", jsFile)
+					cmd := exec.CommandContext(closer.Ctx(), "node", filename)
 					cmd.Env = append(cmd.Env, fmt.Sprintf("PORT=%d", port+i))
 					cmd.Env = append(cmd.Env, fmt.Sprintf("DGRAPH_URL="+dgraphUrl))
 					cmd.Stdout = os.Stdout
