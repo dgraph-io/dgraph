@@ -473,7 +473,7 @@ func (l *localExportStorage) finishWriting(fs ...*fileWriter) (ExportedFiles, er
 }
 
 func newRemoteExportStorage(in *pb.ExportRequest, backupName string) (*remoteExportStorage, error) {
-	tmpDir, err := ioutil.TempDir("", "export")
+	tmpDir, err := ioutil.TempDir(x.WorkerConfig.TmpDir, "export")
 	if err != nil {
 		return nil, err
 	}
