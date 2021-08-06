@@ -26,6 +26,7 @@ import (
 	"io/ioutil"
 	"math"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -33,6 +34,7 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/minio/minio-go/v6"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/v210/protos/api"
@@ -576,4 +578,31 @@ func TestToSchema(t *testing.T) {
 		kv := toSchema(testCase.skv.attr, &testCase.skv.schema)
 		require.Equal(t, testCase.expected, string(kv.Value))
 	}
+}
+
+func TestMultiPartUpload(t *testing.T) {
+	uri, err := url.Parse("minio://127.0.0.1:9001/test?secure=false")
+	mc, err := x.NewMinioClient(uri, &x.MinioCredentials{
+		AccessKey:    "minioadmin",
+		SecretKey:    "minioadmin",
+		SessionToken: "",
+		Anonymous:    false,
+	})
+	require.NoError(t, err)
+
+	bucket, prefix, err := mc.ValidateBucket(uri)
+	require.NoError(t, err)
+	f := "bigfile"
+	var d string
+	if prefix == "" {
+		d = f
+	} else {
+		d = prefix + "/" + f
+	}
+
+	filePath := filepath.Join("./", f)
+	_, err = mc.FPutObject(bucket, d, filePath, minio.PutObjectOptions{
+		ContentType: "application/gzip",
+	})
+	require.NoError(t, err)
 }
