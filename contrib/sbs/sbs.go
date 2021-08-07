@@ -53,7 +53,7 @@ type Options struct {
 	alphaLeft  string
 	alphaRight string
 	countOnly  bool
-	numGo      uint32
+	numGo      int
 }
 
 func init() {
@@ -72,7 +72,7 @@ func init() {
 		"alpha-right", "", "GRPC endpoint of right alpha")
 	flags.BoolVar(&opts.countOnly,
 		"counts-only", false, "Only get the count of all predicates in the left alpha")
-	flags.Uint32Var(&opts.numGo,
+	flags.IntVar(&opts.numGo,
 		"workers", 16, "Number of query request workers")
 	Sbs.Conf = viper.New()
 	Sbs.Conf.BindPFlags(flags)
@@ -112,17 +112,6 @@ func run(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-type request struct {
-	id  uint64
-	req *api.Request
-}
-
-type response struct {
-	req  *request
-	resp string
-	err  error
-}
-
 func processLog(dcLeft, dcRight *dgo.Dgraph) {
 	f, err := os.Open(opts.logPath)
 	if err != nil {
@@ -130,31 +119,36 @@ func processLog(dcLeft, dcRight *dgo.Dgraph) {
 	}
 	defer f.Close()
 
-	var leftMap, rightMap sync.Map
-	var reqId, failed, total, leftDone, rightDone uint64
-	leftReqCh := make(chan *request, 1000)
-	rightReqCh := make(chan *request, 1000)
-	leftRespCh := make(chan *response, 1000)
-	rightRespCh := make(chan *response, 1000)
+	var failed, total uint64
+	reqCh := make(chan *api.Request, opts.numGo*5)
 
 	var wg sync.WaitGroup
-	worker := func(dc *dgo.Dgraph, inCh chan *request, outCh chan *response) {
-		wg.Add(1)
+	worker := func(wg *sync.WaitGroup) {
 		defer wg.Done()
-		for r := range inCh {
-			resp, err := runQuery(r.req, dc)
-			outCh <- &response{r, resp, err}
+		for r := range reqCh {
+			respL, err := runQuery(r, dcLeft)
+			if err != nil {
+				klog.Errorf("While running on left: %v", err)
+			}
+			respR, err := runQuery(r, dcRight)
+			if err != nil {
+				klog.Errorf("While running on right: %v", err)
+			}
+			if !areEqualJSON(respL, respR) {
+				atomic.AddUint64(&failed, 1)
+				klog.Infof("Failed Query: %s \nVars: %v\nLeft: %v\nRight: %v\n",
+					r.Query, r.Vars, respL, respR)
+			}
+			atomic.AddUint64(&total, 1)
 		}
 	}
 
-	for i := 0; i < 16; i++ {
-		go worker(dcLeft, leftReqCh, leftRespCh)
-		go worker(dcRight, rightReqCh, rightRespCh)
+	for i := 0; i < opts.numGo; i++ {
+		wg.Add(1)
+		go worker(&wg)
 	}
 
 	go func() {
-		wg.Add(1)
-		defer wg.Done()
 		scan := bufio.NewScanner(f)
 		for scan.Scan() {
 			r, err := getReq(scan.Text())
@@ -162,48 +156,9 @@ func processLog(dcLeft, dcRight *dgo.Dgraph) {
 				// skipping the log line which doesn't have a valid query
 				continue
 			}
-			req := request{reqId, r}
-			reqId++
-			leftReqCh <- &req
-			rightReqCh <- &req
+			reqCh <- r
 		}
-		close(leftReqCh)
-		close(rightReqCh)
-	}()
-
-	go func() {
-		wg.Add(1)
-		defer wg.Done()
-		for {
-			select {
-			case res := <-leftRespCh:
-				atomic.AddUint64(&leftDone, 1)
-				if v, ok := rightMap.Load(res.req.id); ok {
-					if !areEqualJSON(res.resp, v.(string)) {
-						atomic.AddUint64(&failed, 1)
-						klog.Infof("Failed Query: %s \nVars: %v\nLeft: %v\nRight: %v\n",
-							res.req.req.Query, res.req.req.Vars, res.resp, v)
-					}
-					atomic.AddUint64(&total, 1)
-					rightMap.Delete(res.req.id)
-				} else {
-					leftMap.Store(res.req.id, res.resp)
-				}
-			case res := <-rightRespCh:
-				atomic.AddUint64(&rightDone, 1)
-				if v, ok := leftMap.Load(res.req.id); ok {
-					if !areEqualJSON(res.resp, v.(string)) {
-						atomic.AddUint64(&failed, 1)
-						klog.Infof("Failed Query: %s \nVars: %v\nLeft: %v\nRight: %v\n",
-							res.req.req.Query, res.req.req.Vars, v, res.resp)
-					}
-					atomic.AddUint64(&total, 1)
-					leftMap.Delete(res.req.id)
-				} else {
-					rightMap.Store(res.req.id, res.resp)
-				}
-			}
-		}
+		close(reqCh)
 	}()
 
 	go func() {
@@ -211,9 +166,8 @@ func processLog(dcLeft, dcRight *dgo.Dgraph) {
 		for {
 			select {
 			case <-ticker.C:
-				klog.Infof("Total: %d Failed: %d leftDone: %d rightDone: %d\n",
-					atomic.LoadUint64(&total), atomic.LoadUint64(&failed), atomic.LoadUint64(&leftDone),
-					atomic.LoadUint64(&rightDone))
+				klog.Infof("Total: %d Failed: %d ", atomic.LoadUint64(&total),
+					atomic.LoadUint64(&failed))
 			default:
 			}
 		}
