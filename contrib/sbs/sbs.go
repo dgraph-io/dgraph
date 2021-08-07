@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"reflect"
 	"regexp"
@@ -49,11 +50,12 @@ type Command struct {
 }
 
 type Options struct {
-	logPath    string
-	alphaLeft  string
-	alphaRight string
-	countOnly  bool
-	numGo      int
+	logPath     string
+	alphaLeft   string
+	alphaRight  string
+	countOnly   bool
+	singleQuery string
+	numGo       int
 }
 
 func init() {
@@ -72,6 +74,8 @@ func init() {
 		"alpha-right", "", "GRPC endpoint of right alpha")
 	flags.BoolVar(&opts.countOnly,
 		"counts-only", false, "Only get the count of all predicates in the left alpha")
+	flags.StringVar(&opts.singleQuery,
+		"query-file", "", "The query in this file will be shot concurrently to left alpha")
 	flags.IntVar(&opts.numGo,
 		"workers", 16, "Number of query request workers")
 	Sbs.Conf = viper.New()
@@ -100,6 +104,10 @@ func run(cmd *cobra.Command, args []string) error {
 		getCounts(dcLeft)
 		return nil
 	}
+	if len(opts.singleQuery) > 0 {
+		singleQuery(dcLeft)
+		return nil
+	}
 
 	conn2, err := grpc.Dial(opts.alphaRight, grpc.WithInsecure())
 	if err != nil {
@@ -110,6 +118,28 @@ func run(cmd *cobra.Command, args []string) error {
 
 	processLog(dcLeft, dcRight)
 	return nil
+}
+
+func singleQuery(dc *dgo.Dgraph) {
+	klog.Infof("Running single query")
+	q, err := ioutil.ReadFile(opts.singleQuery)
+	if err != nil {
+		klog.Fatalf("While reading query file got error: %v", err)
+	}
+	var wg sync.WaitGroup
+	for i := 0; i < opts.numGo; i++ {
+		wg.Add(1)
+		go func() {
+			for {
+				r, err := runQuery(&api.Request{Query: string(q)}, dc)
+				if err != nil {
+					klog.Error(err)
+				}
+				fmt.Println(string(r.Json))
+			}
+		}()
+	}
+	wg.Wait()
 }
 
 func processLog(dcLeft, dcRight *dgo.Dgraph) {
@@ -128,13 +158,13 @@ func processLog(dcLeft, dcRight *dgo.Dgraph) {
 		for r := range reqCh {
 			respL, err := runQuery(r, dcLeft)
 			if err != nil {
-				klog.Errorf("While running on left: %v", err)
+				klog.Errorf("While running on left: %v\n", err)
 			}
 			respR, err := runQuery(r, dcRight)
 			if err != nil {
-				klog.Errorf("While running on right: %v", err)
+				klog.Errorf("While running on right: %v\n", err)
 			}
-			if !areEqualJSON(respL, respR) {
+			if !areEqualJSON(string(respL.Json), string(respR.Json)) {
 				atomic.AddUint64(&failed, 1)
 				klog.Infof("Failed Query: %s \nVars: %v\nLeft: %v\nRight: %v\n",
 					r.Query, r.Vars, respL, respR)
@@ -163,13 +193,9 @@ func processLog(dcLeft, dcRight *dgo.Dgraph) {
 
 	go func() {
 		ticker := time.NewTicker(5 * time.Second)
-		for {
-			select {
-			case <-ticker.C:
-				klog.Infof("Total: %d Failed: %d ", atomic.LoadUint64(&total),
-					atomic.LoadUint64(&failed))
-			default:
-			}
+		for range ticker.C {
+			klog.Infof("Total: %d Failed: %d\n", atomic.LoadUint64(&total),
+				atomic.LoadUint64(&failed))
 		}
 	}()
 	wg.Wait()
@@ -229,7 +255,7 @@ func getCounts(client *dgo.Dgraph) error {
 		}
 
 		var cnt map[string]interface{}
-		if err := json.Unmarshal([]byte(r), &cnt); err != nil {
+		if err := json.Unmarshal(r.Json, &cnt); err != nil {
 			return errors.Errorf("while unmarshalling %v\n", err)
 		}
 		c := cnt["f"].([]interface{})[0].(map[string]interface{})["count"].(float64)
@@ -238,16 +264,16 @@ func getCounts(client *dgo.Dgraph) error {
 	return nil
 }
 
-func runQuery(r *api.Request, client *dgo.Dgraph) (string, error) {
+func runQuery(r *api.Request, client *dgo.Dgraph) (*api.Response, error) {
 	txn := client.NewReadOnlyTxn().BestEffort()
 	ctx, cancel := context.WithTimeout(context.Background(), 1800*time.Second)
 	defer cancel()
 	resp, err := txn.QueryWithVars(ctx, r.Query, r.Vars)
 	if err != nil {
-		return "", errors.Errorf("While running query %s %+v  got error %v\n",
+		return nil, errors.Errorf("While running query %s %+v  got error %v\n",
 			r.Query, r.Vars, err)
 	}
-	return string(resp.Json), nil
+	return resp, nil
 }
 
 func areEqualJSON(s1, s2 string) bool {
