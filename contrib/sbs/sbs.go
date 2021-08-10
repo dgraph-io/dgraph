@@ -302,7 +302,7 @@ func getCounts(left, right *dgo.Dgraph) {
 	}
 	close(reqCh)
 	wg.Wait()
-	klog.Infof("Done schema count. Failed predicated count: %d\n", failed)
+	klog.Infof("Done schema count. Failed predicate count: %d\n", failed)
 }
 
 func runQuery(r *api.Request, client *dgo.Dgraph) (*api.Response, error) {
