@@ -520,7 +520,7 @@ func (l *List) bitmap(opt ListOptions) (*sroar.Bitmap, error) {
 	}
 	r := sroar.NewBitmap()
 	if deleteBelow == 0 {
-		r = sroar.FromBuffer(l.plist.Bitmap)
+		r = sroar.FromBufferWithCopy(l.plist.Bitmap)
 		if iw != nil {
 			r.And(iw)
 		}
@@ -533,7 +533,7 @@ func (l *List) bitmap(opt ListOptions) (*sroar.Bitmap, error) {
 			if err != nil {
 				return nil, errors.Wrapf(err, "while reading a split with startUid: %d", startUid)
 			}
-			s := sroar.FromBuffer(split.Bitmap)
+			s := sroar.FromBufferWithCopy(split.Bitmap)
 
 			// Intersect with opt.Intersect.
 			if iw != nil {
