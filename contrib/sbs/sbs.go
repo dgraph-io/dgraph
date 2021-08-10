@@ -296,13 +296,13 @@ func getCounts(left, right *dgo.Dgraph) {
 		}()
 	}
 
-	klog.Infof("Done schema count. Failed predicated count: %d\n", atomic.LoadUint32(&failed))
 	for _, s := range sch.Schema {
 		q := fmt.Sprintf("query { f(func: has(%s)) { count(uid) } }", s.Predicate)
 		reqCh <- &cntReq{s.Predicate, &api.Request{Query: q}}
 	}
 	close(reqCh)
 	wg.Wait()
+	klog.Infof("Done schema count. Failed predicated count: %d\n", failed)
 }
 
 func runQuery(r *api.Request, client *dgo.Dgraph) (*api.Response, error) {
