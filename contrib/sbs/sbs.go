@@ -53,7 +53,7 @@ type Options struct {
 	logPath    string
 	alphaLeft  string
 	alphaRight string
-	countOnly  bool
+	matchCount bool
 	queryFile  string
 	numGo      int
 }
@@ -61,7 +61,7 @@ type Options struct {
 func init() {
 	Sbs.Cmd = &cobra.Command{
 		Use:   "sbs",
-		Short: "A tool to do side-by-side comparision of dgraph clusters",
+		Short: "A tool to do side-by-side comparison of dgraph clusters",
 		RunE:  run,
 	}
 
@@ -72,8 +72,8 @@ func init() {
 		"alpha-left", "", "GRPC endpoint of left alpha")
 	flags.StringVar(&opts.alphaRight,
 		"alpha-right", "", "GRPC endpoint of right alpha")
-	flags.BoolVar(&opts.countOnly,
-		"counts-only", false, "Only get the count of all predicates in the left alpha")
+	flags.BoolVar(&opts.matchCount,
+		"match-count", false, "Get the count and each predicate and verify")
 	flags.StringVar(&opts.queryFile,
 		"query-file", "", "The query in this file will be shot concurrently to left alpha")
 	flags.IntVar(&opts.numGo,
@@ -100,11 +100,7 @@ func run(cmd *cobra.Command, args []string) error {
 	defer conn.Close()
 	dcLeft := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 
-	// counts only and single query are meant to be run on the left alpha only.
-	if opts.countOnly {
-		getCounts(dcLeft)
-		return nil
-	}
+	// single query is meant to be run on the left alpha only.
 	if len(opts.queryFile) > 0 {
 		singleQuery(dcLeft)
 		return nil
@@ -117,6 +113,11 @@ func run(cmd *cobra.Command, args []string) error {
 	defer conn2.Close()
 	dcRight := dgo.NewDgraphClient(api.NewDgraphClient(conn2))
 
+	if opts.matchCount {
+		getCounts(dcLeft, dcRight)
+		return nil
+	}
+
 	processLog(dcLeft, dcRight)
 	return nil
 }
@@ -127,9 +128,10 @@ func singleQuery(dc *dgo.Dgraph) {
 	if err != nil {
 		klog.Fatalf("While reading query file got error: %v", err)
 	}
+	// It will keep on running this query forever, with numGo in-flight requests.
 	var wg sync.WaitGroup
+	wg.Add(1)
 	for i := 0; i < opts.numGo; i++ {
-		wg.Add(1)
 		go func() {
 			for {
 				r, err := runQuery(&api.Request{Query: string(q)}, dc)
@@ -240,29 +242,67 @@ func getSchema(client *dgo.Dgraph) string {
 	return string(resp.Json)
 }
 
-func getCounts(client *dgo.Dgraph) error {
+func getCounts(left, right *dgo.Dgraph) {
+	s := getSchema(left)
 	var sch Schema
-	s := getSchema(client)
 	if err := json.Unmarshal([]byte(s), &sch); err != nil {
-		return errors.Errorf("While unmarshalling schema: %v", err)
+		klog.Fatalf("While unmarshalling schema: %v", err)
 	}
 
-	for _, s := range sch.Schema {
-		q := fmt.Sprintf("query { f(func: has(%s)) { count(uid) } }", s.Predicate)
-		req := &api.Request{Query: q}
-		r, err := runQuery(req, client)
-		if err != nil {
-			return errors.Wrap(err, "While running query")
+	parseCount := func(resp *api.Response) int {
+		if resp == nil {
+			return 0
 		}
-
 		var cnt map[string]interface{}
-		if err := json.Unmarshal(r.Json, &cnt); err != nil {
-			return errors.Errorf("while unmarshalling %v\n", err)
+		if err := json.Unmarshal(resp.Json, &cnt); err != nil {
+			klog.Errorf("while unmarshalling %v\n", err)
 		}
 		c := cnt["f"].([]interface{})[0].(map[string]interface{})["count"].(float64)
-		klog.Infof("%-50s ---> %d\n", s.Predicate, int(c))
+		return int(c)
 	}
-	return nil
+
+	klog.Infof("%-50s ---> %-15s %-15s\n", "PREDICATE", "LEFT", "RIGHT")
+
+	var failed uint32
+	var wg sync.WaitGroup
+
+	type cntReq struct {
+		pred string
+		req  *api.Request
+	}
+	reqCh := make(chan *cntReq, 5*opts.numGo)
+
+	for i := 0; i < opts.numGo; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for r := range reqCh {
+				rLeft, err := runQuery(r.req, left)
+				if err != nil {
+					klog.Errorf("While running on left alpha: %v\n", err)
+				}
+				rRight, err := runQuery(r.req, right)
+				if err != nil {
+					klog.Errorf("While running on right alpha: %v\n", err)
+				}
+
+				cl, cr := parseCount(rLeft), parseCount(rRight)
+				if cl != cr {
+					atomic.AddUint32(&failed, 1)
+				}
+				klog.Infof("%-50s ---> %-15d %-15d\n", r.pred, cl, cr)
+
+			}
+		}()
+	}
+
+	klog.Infof("Done schema count. Failed predicated count: %d\n", atomic.LoadUint32(&failed))
+	for _, s := range sch.Schema {
+		q := fmt.Sprintf("query { f(func: has(%s)) { count(uid) } }", s.Predicate)
+		reqCh <- &cntReq{s.Predicate, &api.Request{Query: q}}
+	}
+	close(reqCh)
+	wg.Wait()
 }
 
 func runQuery(r *api.Request, client *dgo.Dgraph) (*api.Response, error) {
@@ -278,11 +318,9 @@ func runQuery(r *api.Request, client *dgo.Dgraph) (*api.Response, error) {
 }
 
 func areEqualJSON(s1, s2 string) bool {
-	var o1 interface{}
-	var o2 interface{}
+	var o1, o2 interface{}
 
-	var err error
-	err = json.Unmarshal([]byte(s1), &o1)
+	err := json.Unmarshal([]byte(s1), &o1)
 	if err != nil {
 		return false
 	}
