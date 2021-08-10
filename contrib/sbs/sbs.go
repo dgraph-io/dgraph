@@ -136,7 +136,7 @@ func singleQuery(dc *dgo.Dgraph) {
 				if err != nil {
 					klog.Error(err)
 				}
-				fmt.Println(string(r.Json))
+				klog.V(1).Info("Response: %s\n", r.Json)
 			}
 		}()
 	}
