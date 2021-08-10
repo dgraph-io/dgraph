@@ -50,12 +50,12 @@ type Command struct {
 }
 
 type Options struct {
-	logPath     string
-	alphaLeft   string
-	alphaRight  string
-	countOnly   bool
-	singleQuery string
-	numGo       int
+	logPath    string
+	alphaLeft  string
+	alphaRight string
+	countOnly  bool
+	queryFile  string
+	numGo      int
 }
 
 func init() {
@@ -74,7 +74,7 @@ func init() {
 		"alpha-right", "", "GRPC endpoint of right alpha")
 	flags.BoolVar(&opts.countOnly,
 		"counts-only", false, "Only get the count of all predicates in the left alpha")
-	flags.StringVar(&opts.singleQuery,
+	flags.StringVar(&opts.queryFile,
 		"query-file", "", "The query in this file will be shot concurrently to left alpha")
 	flags.IntVar(&opts.numGo,
 		"workers", 16, "Number of query request workers")
@@ -100,11 +100,12 @@ func run(cmd *cobra.Command, args []string) error {
 	defer conn.Close()
 	dcLeft := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 
+	// counts only and single query are meant to be run on the left alpha only.
 	if opts.countOnly {
 		getCounts(dcLeft)
 		return nil
 	}
-	if len(opts.singleQuery) > 0 {
+	if len(opts.queryFile) > 0 {
 		singleQuery(dcLeft)
 		return nil
 	}
@@ -122,7 +123,7 @@ func run(cmd *cobra.Command, args []string) error {
 
 func singleQuery(dc *dgo.Dgraph) {
 	klog.Infof("Running single query")
-	q, err := ioutil.ReadFile(opts.singleQuery)
+	q, err := ioutil.ReadFile(opts.queryFile)
 	if err != nil {
 		klog.Fatalf("While reading query file got error: %v", err)
 	}
