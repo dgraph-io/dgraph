@@ -236,7 +236,7 @@ func getSchema(client *dgo.Dgraph) string {
 	defer cancel()
 	resp, err := txn.Query(ctx, `schema{}`)
 	if err != nil {
-		klog.Errorf("[ERR] Got error while querying schema %v", err)
+		klog.Errorf("Got error while querying schema %v", err)
 		return "{}"
 	}
 	return string(resp.Json)
