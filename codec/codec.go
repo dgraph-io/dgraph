@@ -172,8 +172,8 @@ func FromBytes(buf []byte) *sroar.Bitmap {
 }
 
 func FromBackup(buf []byte) *sroar.Bitmap {
-	r := sroar.NewBitmap()
 	var prev uint64
+	var uids []uint64
 	for len(buf) > 0 {
 		uid, n := binary.Uvarint(buf)
 		if uid == 0 {
@@ -182,14 +182,14 @@ func FromBackup(buf []byte) *sroar.Bitmap {
 		buf = buf[n:]
 
 		next := prev + uid
-		r.Set(next)
+		uids = append(uids, next)
 		prev = next
 	}
-	return r
+	return sroar.FromSortedList(uids)
 }
 
 func ToUids(plist *pb.PostingList, start uint64) []uint64 {
-	r := sroar.FromBuffer(plist.Bitmap)
+	r := sroar.FromBufferWithCopy(plist.Bitmap)
 	r.RemoveRange(0, start)
 	return r.ToArray()
 }
