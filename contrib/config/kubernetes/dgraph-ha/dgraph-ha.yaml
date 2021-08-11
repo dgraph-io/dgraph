@@ -142,7 +142,7 @@ spec:
             if [[ $ordinal -eq 0 ]]; then
               exec dgraph zero --my=$(hostname -f):5080 --raft="idx=$idx" --replicas 3
             else
-              exec dgraph zero --my=$(hostname -f):5080 --peer dgraph-zero-0.dgraph-zero.${POD_NAMESPACE}.svc.cluster.local:5080 --raft="idx=$idx" --replicas 3
+              exec dgraph zero --my=$(hostname -f):5080 --peer dgraph-zero-0.dgraph-zero.${POD_NAMESPACE}:5080 --raft="idx=$idx" --replicas 3
             fi
         livenessProbe:
           httpGet:
@@ -274,7 +274,7 @@ spec:
               fieldRef:
                 fieldPath: metadata.namespace
         # dgraph versions earlier than v1.2.3 and v20.03.0 can only support one zero:
-        #  `dgraph alpha --zero dgraph-zero-0.dgraph-zero.${POD_NAMESPACE}.svc.cluster.local:5080`
+        #  `dgraph alpha --zero dgraph-zero-0.dgraph-zero.${POD_NAMESPACE}:5080`
         # dgraph-alpha versions greater than or equal to v1.2.3 or v20.03.1 can support
         #  a comma-separated list of zeros.  The value below supports 3 zeros
         #  (set according to number of replicas)
@@ -283,7 +283,7 @@ spec:
           - "-c"
           - |
             set -ex
-            dgraph alpha --my=$(hostname -f):7080 --zero dgraph-zero-0.dgraph-zero.${POD_NAMESPACE}.svc.cluster.local:5080,dgraph-zero-1.dgraph-zero.${POD_NAMESPACE}.svc.cluster.local:5080,dgraph-zero-2.dgraph-zero.${POD_NAMESPACE}.svc.cluster.local:5080
+            dgraph alpha --my=$(hostname -f):7080 --zero dgraph-zero-0.dgraph-zero.${POD_NAMESPACE}:5080,dgraph-zero-1.dgraph-zero.${POD_NAMESPACE}:5080,dgraph-zero-2.dgraph-zero.${POD_NAMESPACE}:5080
         livenessProbe:
           httpGet:
             path: /health?live=1
