@@ -36,8 +36,9 @@ func (h *histogram) add(v float64) {
 	atomic.AddUint64(&h.total, 1)
 }
 
-func (h *histogram) print() {
-	fmt.Printf("-------------- Histogram --------------\n")
+func (h *histogram) show() {
+	fmt.Printf("-------------- Histogram --------------\nTotal samples: %d\n",
+		atomic.LoadUint64(&h.total))
 	for i := 0; i < len(h.bins); i++ {
 		pert := float64(atomic.LoadUint64(&h.count[i])) / float64(atomic.LoadUint64(&h.total))
 		if i+1 >= len(h.bins) {

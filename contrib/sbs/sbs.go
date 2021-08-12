@@ -174,9 +174,13 @@ func processLog(dcLeft, dcRight *dgo.Dgraph) {
 					r.Query, r.Vars, respL, respR)
 			}
 
-			lt, rt := respL.Latency.ProcessingNs, respR.Latency.ProcessingNs
-			ratio := float64(rt) / float64(lt)
-			hist.add(ratio)
+			lt := float64(respL.Latency.ProcessingNs) / 1e6
+			rt := float64(respR.Latency.ProcessingNs) / 1e6
+			// Only consider the processing time > 10 ms for histogram to avoid noise in ratios.
+			if lt > 10 || rt > 10 {
+				ratio := rt / lt
+				hist.add(ratio)
+			}
 			atomic.AddUint64(&total, 1)
 		}
 	}
@@ -204,7 +208,7 @@ func processLog(dcLeft, dcRight *dgo.Dgraph) {
 		for range ticker.C {
 			klog.Infof("Total: %d Failed: %d\n", atomic.LoadUint64(&total),
 				atomic.LoadUint64(&failed))
-			hist.print()
+			hist.show()
 		}
 	}()
 	wg.Wait()
