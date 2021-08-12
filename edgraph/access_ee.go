@@ -277,7 +277,7 @@ func getRefreshJwt(userId string, namespace uint64) (string, error) {
 
 const queryUser = `
     query search($userid: string, $password: string){
-      user(func: eq(dgraph.xid, $userid)) {
+      user(func: eq(dgraph.xid, $userid)) @filter(type(dgraph.type.User)) {
 	    uid
         dgraph.xid
         password_match: checkpwd(dgraph.password, $password)
@@ -455,7 +455,7 @@ func upsertGuardianAndGroot(closer *z.Closer, ns uint64) {
 func upsertGuardian(ctx context.Context) error {
 	query := fmt.Sprintf(`
 			{
-				guid as guardians(func: eq(dgraph.xid, "%s")){
+				guid as guardians(func: eq(dgraph.xid, "%s")) @filter(type(dgraph.type.Group)) {
 					uid
 				}
 			}
@@ -525,10 +525,10 @@ func upsertGroot(ctx context.Context, passwd string) error {
 	// groot is the default user of guardians group.
 	query := fmt.Sprintf(`
 			{
-				grootid as grootUser(func: eq(dgraph.xid, "%s")){
+				grootid as grootUser(func: eq(dgraph.xid, "%s")) @filter(type(dgraph.type.User)) {
 					uid
 				}
-				guid as var(func: eq(dgraph.xid, "%s"))
+				guid as var(func: eq(dgraph.xid, "%s")) @filter(type(dgraph.type.Group))
 			}
 		`, x.GrootId, x.GuardiansId)
 	userNQuads := acl.CreateUserNQuads(x.GrootId, passwd)
