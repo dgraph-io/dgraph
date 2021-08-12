@@ -53,29 +53,25 @@ class GraphQLResolverEventTarget extends EventTarget {
   }
 }
 
-function appendPrefix(fn: (message?: any, ...optionalParams: any[]) => void, prefix: string){
-  return function() {
-    // 1. Convert args to a normal array
-    var args = Array.from(arguments);
-    // 2. Prepend log prefix log string
-    args.unshift(prefix + ": ");
-    // 3. Pass along arguments to console.log
-    fn.apply(console, args);
+function newContext(eventTarget: GraphQLResolverEventTarget, logger: any) {
+  function appendLogs(){
+    return function() {
+      var args = Array.from(arguments);
+      logger.logs = [logger.logs, ...args].join("\n")
+    }
   }
-}
 
-function newContext(eventTarget: GraphQLResolverEventTarget, logPrefix: string) {
-  // Override the console object to append prefix in front.
-  const customConsole = Object.assign({}, console)
-  customConsole.debug = appendPrefix(customConsole.debug, logPrefix)
-  customConsole.error = appendPrefix(customConsole.error, logPrefix)
-  customConsole.info = appendPrefix(customConsole.info, logPrefix)
-  customConsole.log = appendPrefix(customConsole.log, logPrefix)
-  customConsole.warn = appendPrefix(customConsole.warn, logPrefix)
+  // Override the console object to append to logger.logs.
+  const _console = Object.assign({}, console)
+  _console.debug = appendLogs()
+  _console.error = appendLogs()
+  _console.info = appendLogs()
+  _console.log = appendLogs()
+  _console.warn = appendLogs()
 
   return vm.createContext({
     // From fetch
-    fetch,
+    fetch:fetch.bind({}),
     Request,
     Response,
     Headers,
@@ -85,8 +81,8 @@ function newContext(eventTarget: GraphQLResolverEventTarget, logPrefix: string) 
     URLSearchParams,
 
     // bas64
-    atob,
-    btoa,
+    atob:atob.bind({}),
+    btoa:btoa.bind({}),
 
     // Crypto
     crypto: new Crypto(),
@@ -94,7 +90,7 @@ function newContext(eventTarget: GraphQLResolverEventTarget, logPrefix: string) 
     TextEncoder,
 
     // Debugging
-    console:customConsole,
+    console:_console,
 
     // Async
     setTimeout,
@@ -112,10 +108,16 @@ function newContext(eventTarget: GraphQLResolverEventTarget, logPrefix: string) 
   });
 }
 
-export function evaluateScript(source: string, namespace: string) {
-  const script = new vm.Script(source)
+
+var scripts = new Map();
+
+export function evaluateScript(source: string, logger: any) {
+  if(!scripts.has(source)){
+    scripts.set(source, new vm.Script(source))
+  }
+  const script = scripts.get(source)
   const target = new GraphQLResolverEventTarget();
-  const context = newContext(target, "Namespace " + namespace)
+  const context = newContext(target, logger)
   // Using the timeout or breakOnSigint options will result in new event loops and corresponding
   // threads being started, which have a non-zero performance overhead.
   // Ref: https://nodejs.org/api/vm.html#vm_script_runincontext_contextifiedobject_options

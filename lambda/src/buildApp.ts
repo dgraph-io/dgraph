@@ -36,29 +36,22 @@ function base64Decode(str: string) {
   }
 }
 
-var scripts = new Map();
-
 export function buildApp() {
     const app = express();
     app.use(express.json({limit: '32mb'}))
     app.post("/graphql-worker", async (req, res, next) => {
+        const logger = {logs: ""}
         try {
           const source = base64Decode(req.body.source) || req.body.source
-          const namespace = req.body.namespace || "0"
-          if (!scripts.has(source)) {
-            scripts.set(source, evaluateScript(source, namespace))
-          }
-          const runner = scripts.get(source)
+          const runner = evaluateScript(source, logger)
           const result = await runner(bodyToEvent(req.body));
           if(result === undefined && req.body.resolver !== '$webhook') {
               res.status(400)
           }
-          res.json(result)
+          res.json({res:result, logs: logger.logs})
         } catch(err) {
-          if(err.message.includes("Script execution timed out")) {
-            res.json({"error": err.message})
-          }
-          next(err)
+          res.json({logs: logger.logs, error: err.toString()})
+          res.status(500)
         }
     })
     return app;

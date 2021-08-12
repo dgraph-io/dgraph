@@ -15,36 +15,37 @@ import sleep from 'sleep-promise';
 const integrationTest = process.env.INTEGRATION_TEST === "true" ? describe : describe.skip;
 
 describe(evaluateScript, () => {
+  const logger = {logs:""}
   it("returns undefined if there was no event", async () => {
-    const runScript = evaluateScript("", "0")
+    const runScript = evaluateScript("", logger)
     expect(await runScript({type: "Query.unknown", args: {}, parents: null})).toBeUndefined()
   })
 
   it("returns the value if there is a resolver registered", async () => {
     const runScript = evaluateScript(`addGraphQLResolvers({
       "Query.fortyTwo": ({parent}) => 42
-    })`, "0")
+    })`, logger)
     expect(await runScript({ type: "Query.fortyTwo", args: {}, parents: null })).toEqual(42)
   })
 
   it("passes the args and parents over", async () => {
     const runScript = evaluateScript(`addMultiParentGraphQLResolvers({
       "User.fortyTwo": ({parents, args}) => parents.map(({n}) => n + args.foo)
-    })`, "0")
+    })`, logger)
     expect(await runScript({ type: "User.fortyTwo", args: {foo: 1}, parents: [{n: 41}] })).toEqual([42])
   })
 
   it("returns undefined if the number of parents doesn't match the number of return types", async () => {
     const runScript = evaluateScript(`addMultiParentGraphQLResolvers({
       "Query.fortyTwo": () => [41, 42]
-    })`, "0")
+    })`, logger)
     expect(await runScript({ type: "Query.fortyTwo", args: {}, parents: null })).toBeUndefined()
   })
 
   it("returns undefined somehow the script doesn't return an array", async () => {
     const runScript = evaluateScript(`addMultiParentGraphQLResolvers({
       "User.fortyTwo": () => ({})
-    })`, "0")
+    })`, logger)
     expect(await runScript({ type: "User.fortyTwo", args: {}, parents: [{n: 42}] })).toBeUndefined()
   })
 
@@ -62,7 +63,7 @@ describe(evaluateScript, () => {
           const results = await graphql('{ queryTodo { title } }')
           return results.data.queryTodo.map(t => t.title)
         }
-        addGraphQLResolvers({ "Query.todoTitles": todoTitles })`, "0")
+        addGraphQLResolvers({ "Query.todoTitles": todoTitles })`, logger)
       const results = await runScript({ type: "Query.todoTitles", args: {}, parents: null });
       expect(new Set(results)).toEqual(new Set(["Kick Ass", "Chew Bubblegum"]))
     })
@@ -73,7 +74,7 @@ describe(evaluateScript, () => {
           const results = await dql.query('{ queryTitles(func: type(Todo)){ Todo.title } }')
           return results.data.queryTitles.map(t => t["Todo.title"])
         }
-        addGraphQLResolvers({ "Query.todoTitles": todoTitles })`, "0")
+        addGraphQLResolvers({ "Query.todoTitles": todoTitles })`, logger)
       const results = await runScript({ type: "Query.todoTitles", args: {}, parents: null });
       expect(new Set(results)).toEqual(new Set(["Kick Ass", "Chew Bubblegum"]))
     })
