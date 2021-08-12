@@ -162,11 +162,6 @@ func (m *mapper) writeToDisk(buf *z.Buffer) error {
 	if buf.IsEmpty() {
 		return nil
 	}
-	buf.SortSlice(func(ls, rs []byte) bool {
-		lme := mapEntry(ls)
-		rme := mapEntry(rs)
-		return y.CompareKeys(lme.Key(), rme.Key()) < 0
-	})
 
 	f, err := m.newMapFile()
 	if err != nil {
@@ -239,6 +234,11 @@ func (mw *mapper) sendForWriting() error {
 	if mw.buf.IsEmpty() {
 		return nil
 	}
+	mw.buf.SortSlice(func(ls, rs []byte) bool {
+		lme := mapEntry(ls)
+		rme := mapEntry(rs)
+		return y.CompareKeys(lme.Key(), rme.Key()) < 0
+	})
 
 	if err := mw.thr.Do(); err != nil {
 		return err
