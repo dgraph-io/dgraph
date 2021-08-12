@@ -1487,7 +1487,7 @@ func LambdaUrl(ns uint64) string {
 	}
 	// TODO: Parse once.
 	port := Config.GraphQL.GetUint32("lambda-port")
-	url := fmt.Sprintf("http://localhost:%d/graphql-worker", port+(atomic.AddUint32(&loop, 1)%4))
+	url := fmt.Sprintf("http://localhost:%d/graphql-worker", port+(atomic.AddUint32(&loop, 1)%num))
 	return url
 }
 

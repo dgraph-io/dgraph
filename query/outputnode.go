@@ -49,7 +49,7 @@ import (
 )
 
 // ToJson converts the list of subgraph into a JSON response by calling toFastJSON.
-func ToJson(ctx context.Context, l *Latency, sgl []*SubGraph, field gqlSchema.Field) ([]byte,
+func ToJson(ctx context.Context, l *Latency, sgl []*SubGraph, field gqlSchema.Field) ([]byte, []string,
 	error) {
 	sgr := &SubGraph{}
 	for _, sg := range sgl {
@@ -61,16 +61,16 @@ func ToJson(ctx context.Context, l *Latency, sgl []*SubGraph, field gqlSchema.Fi
 		}
 		sgr.Children = append(sgr.Children, sg)
 	}
-	data, err := sgr.toFastJSON(ctx, l, field)
+	data, logs, err := sgr.toFastJSON(ctx, l, field)
 
 	// don't log or wrap GraphQL errors
 	if x.IsGqlErrorList(err) {
-		return data, err
+		return data, logs, err
 	}
 	if err != nil {
 		glog.Errorf("while running ToJson: %v\n", err)
 	}
-	return data, errors.Wrapf(err, "while running ToJson")
+	return data, logs, errors.Wrapf(err, "while running ToJson")
 }
 
 // We are capping maxEncoded size to 4GB, as grpc encoding fails
@@ -1144,7 +1144,7 @@ type Extensions struct {
 	Metrics *api.Metrics    `json:"metrics,omitempty"`
 }
 
-func (sg *SubGraph) toFastJSON(ctx context.Context, l *Latency, field gqlSchema.Field) ([]byte,
+func (sg *SubGraph) toFastJSON(ctx context.Context, l *Latency, field gqlSchema.Field) ([]byte, []string,
 	error) {
 	encodingStart := time.Now()
 	defer func() {
@@ -1163,7 +1163,7 @@ func (sg *SubGraph) toFastJSON(ctx context.Context, l *Latency, field gqlSchema.
 	for _, sg := range sg.Children {
 		err = processNodeUids(n, enc, sg)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 	enc.fixOrder(n)
@@ -1172,23 +1172,24 @@ func (sg *SubGraph) toFastJSON(ctx context.Context, l *Latency, field gqlSchema.
 	// level keys. Hence we send server_latency under extensions key.
 	// https://facebook.github.io/graphql/#sec-Response-Format
 
+	var logs []string
 	// if there is a GraphQL field that means we need to encode the response in GraphQL form,
 	// otherwise encode it in DQL form.
 	if field != nil {
 		// if there were any GraphQL errors, we need to propagate them back to GraphQL layer along
 		// with the data. So, don't return here if we get an error.
-		err = sg.toGraphqlJSON(newGraphQLEncoder(ctx, enc), n, field)
+		logs, err = sg.toGraphqlJSON(newGraphQLEncoder(ctx, enc), n, field)
 	} else if err = sg.toDqlJSON(enc, n); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Return error if encoded buffer size exceeds than a threshold size.
 	if uint64(enc.buf.Len()) > maxEncodedSize {
-		return nil, fmt.Errorf("while writing to buffer. Encoded response size: %d"+
+		return nil, nil, fmt.Errorf("while writing to buffer. Encoded response size: %d"+
 			" is bigger than threshold: %d", enc.buf.Len(), maxEncodedSize)
 	}
 
-	return enc.buf.Bytes(), err
+	return enc.buf.Bytes(), logs, err
 }
 
 func (sg *SubGraph) toDqlJSON(enc *encoder, n fastJsonNode) error {
@@ -1199,7 +1200,7 @@ func (sg *SubGraph) toDqlJSON(enc *encoder, n fastJsonNode) error {
 	return enc.encode(n)
 }
 
-func (sg *SubGraph) toGraphqlJSON(genc *graphQLEncoder, n fastJsonNode, f gqlSchema.Field) error {
+func (sg *SubGraph) toGraphqlJSON(genc *graphQLEncoder, n fastJsonNode, f gqlSchema.Field) ([]string, error) {
 	// GraphQL queries will always have at least one query whose results are visible to users,
 	// implying that the root fastJson node will always have at least one child. So, no need
 	// to check for the case where there are no children for the root fastJson node.
@@ -1229,9 +1230,9 @@ func (sg *SubGraph) toGraphqlJSON(genc *graphQLEncoder, n fastJsonNode, f gqlSch
 	}
 
 	if len(genc.errs) > 0 {
-		return genc.errs
+		return genc.getLogs(), genc.errs
 	}
-	return nil
+	return genc.getLogs(), nil
 }
 
 func (sg *SubGraph) fieldName() string {

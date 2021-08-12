@@ -503,7 +503,7 @@ func setupLambdaServer(closer *z.Closer) {
 		data, err := jsLambda.ReadFile(dir + "/" + file.Name())
 		x.Check(err)
 		filename := filepath.Join(x.WorkerConfig.TmpDir, file.Name())
-		file, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, file.Type().Perm())
+		file, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 		x.Check(err)
 		_, err = file.Write(data)
 		x.Check(err)

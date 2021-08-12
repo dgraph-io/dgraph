@@ -722,7 +722,18 @@ func (hr *httpResolver) rewriteAndExecute(ctx context.Context, field schema.Fiel
 		}
 	}
 
-	return DataResult(field, map[string]interface{}{field.Name(): fieldData}, errs)
+	// Extract the logs from the lambda response and propagate it via extensions.
+	var ext *schema.Extensions
+	if field.HasLambdaDirective() {
+		res := fieldData.(map[string]interface{})
+		logs := res["logs"].(string)
+		ext = &schema.Extensions{
+			Logs: []string{logs},
+		}
+		fieldData = res["res"]
+	}
+
+	return DataResultWithExt(field, map[string]interface{}{field.Name(): fieldData}, errs, ext)
 }
 
 func (h *httpQueryResolver) Resolve(ctx context.Context, query schema.Query) *Resolved {
@@ -751,6 +762,13 @@ func DataResult(f schema.Field, data map[string]interface{}, err error) *Resolve
 		Field: f,
 		Err:   schema.AppendGQLErrs(err, errs),
 	}
+}
+
+func DataResultWithExt(
+	f schema.Field, data map[string]interface{}, err error, ext *schema.Extensions) *Resolved {
+	r := DataResult(f, data, err)
+	r.Extensions = ext
+	return r
 }
 
 func newtimer(ctx context.Context, Duration *schema.OffsetDuration) schema.OffsetTimer {

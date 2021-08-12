@@ -39,7 +39,7 @@ func subgraphWithSingleResultAndSingleValue(val *pb.TaskValue) *SubGraph {
 }
 
 func assertJSON(t *testing.T, expected string, sg *SubGraph) {
-	buf, err := ToJson(context.Background(), &Latency{}, []*SubGraph{sg}, nil)
+	buf, _, err := ToJson(context.Background(), &Latency{}, []*SubGraph{sg}, nil)
 	require.Nil(t, err)
 	require.Equal(t, expected, string(buf))
 }
