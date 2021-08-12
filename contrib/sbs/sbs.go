@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"reflect"
 	"regexp"
 	"strconv"
 	"sync"
@@ -153,6 +152,8 @@ func processLog(dcLeft, dcRight *dgo.Dgraph) {
 	defer f.Close()
 
 	var failed, total uint64
+	hist := newHistogram([]float64{0, 0.5, 1, 1.5, 2})
+
 	reqCh := make(chan *api.Request, opts.numGo*5)
 
 	var wg sync.WaitGroup
@@ -171,6 +172,14 @@ func processLog(dcLeft, dcRight *dgo.Dgraph) {
 				atomic.AddUint64(&failed, 1)
 				klog.Infof("Failed Query: %s \nVars: %v\nLeft: %v\nRight: %v\n",
 					r.Query, r.Vars, respL, respR)
+			}
+
+			lt := float64(respL.Latency.ProcessingNs) / 1e6
+			rt := float64(respR.Latency.ProcessingNs) / 1e6
+			// Only consider the processing time > 10 ms for histogram to avoid noise in ratios.
+			if lt > 10 || rt > 10 {
+				ratio := rt / lt
+				hist.add(ratio)
 			}
 			atomic.AddUint64(&total, 1)
 		}
@@ -199,6 +208,7 @@ func processLog(dcLeft, dcRight *dgo.Dgraph) {
 		for range ticker.C {
 			klog.Infof("Total: %d Failed: %d\n", atomic.LoadUint64(&total),
 				atomic.LoadUint64(&failed))
+			hist.show()
 		}
 	}()
 	wg.Wait()
@@ -315,24 +325,4 @@ func runQuery(r *api.Request, client *dgo.Dgraph) (*api.Response, error) {
 			r.Query, r.Vars, err)
 	}
 	return resp, nil
-}
-
-func areEqualJSON(s1, s2 string) bool {
-	var o1, o2 interface{}
-
-	err := json.Unmarshal([]byte(s1), &o1)
-	if err != nil {
-		return false
-	}
-	err = json.Unmarshal([]byte(s2), &o2)
-	if err != nil {
-		return false
-	}
-	return reflect.DeepEqual(o1, o2)
-}
-
-func check(err error) {
-	if err != nil {
-		panic(err)
-	}
 }
