@@ -62,7 +62,11 @@ func ListCardinality(l *pb.List) uint64 {
 	if len(l.SortedUids) > 0 {
 		return uint64(len(l.SortedUids))
 	}
-	b := FromList(l)
+	b := FromListNoCopy(l)
+	if b == nil {
+		return 0
+	}
+	// TODO: Update GetCardinality to handle nil Bitmap.
 	return uint64(b.GetCardinality())
 }
 

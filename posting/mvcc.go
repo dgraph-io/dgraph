@@ -35,6 +35,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
+	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 )
 
@@ -515,31 +516,31 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 }
 
 func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
-	// TODO: Fix this up later.
-	// cachedVal, ok := lCache.Get(key)
-	// if ok {
-	// 	l, ok := cachedVal.(*List)
-	// 	if ok && l != nil {
-	// 		// No need to clone the immutable layer or the key since mutations will not modify it.
-	// 		lCopy := &List{
-	// 			minTs: l.minTs,
-	// 			maxTs: l.maxTs,
-	// 			key:   key,
-	// 			plist: l.plist,
-	// 		}
-	// 		if l.mutationMap != nil {
-	// 			lCopy.mutationMap = make(map[uint64]*pb.PostingList, len(l.mutationMap))
-	// 			for ts, pl := range l.mutationMap {
-	// 				lCopy.mutationMap[ts] = proto.Clone(pl).(*pb.PostingList)
-	// 			}
-	// 		}
-	// 		return lCopy, nil
-	// 	}
-	// }
-
 	if pstore.IsClosed() {
 		return nil, badger.ErrDBClosed
 	}
+	// TODO: Fix this up later.
+	cachedVal, ok := lCache.Get(key)
+	if ok {
+		l, ok := cachedVal.(*List)
+		if ok && l != nil {
+			// No need to clone the immutable layer or the key since mutations will not modify it.
+			lCopy := &List{
+				minTs: l.minTs,
+				maxTs: l.maxTs,
+				key:   key,
+				plist: l.plist,
+			}
+			if l.mutationMap != nil {
+				lCopy.mutationMap = make(map[uint64]*pb.PostingList, len(l.mutationMap))
+				for ts, pl := range l.mutationMap {
+					lCopy.mutationMap[ts] = proto.Clone(pl).(*pb.PostingList)
+				}
+			}
+			return lCopy, nil
+		}
+	}
+
 	txn := pstore.NewTransactionAt(readTs, false)
 	defer txn.Discard()
 
@@ -555,6 +556,6 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 	if err != nil {
 		return l, err
 	}
-	// lCache.Set(key, l, 0)
+	lCache.Set(key, l, 0)
 	return l, nil
 }
