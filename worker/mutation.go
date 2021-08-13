@@ -598,10 +598,9 @@ func proposeOrSend(ctx context.Context, gid uint32, m *pb.Mutations, chr chan re
 		chr <- res
 		return
 	}
-	con := pl.Get()
 
 	var tc *api.TxnContext
-	c := pb.NewWorkerClient(con)
+	c := pb.NewWorkerClient(pl.Get())
 
 	ch := make(chan error, 1)
 	go func() {

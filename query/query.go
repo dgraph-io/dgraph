@@ -2210,6 +2210,10 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			}
 
 			filter.SrcUIDs = sg.DestUIDs
+			if len(filter.SrcUIDs.Uids) == 0 {
+				filterChan <- nil
+				continue
+			}
 			// Passing the pointer is okay since the filter only reads.
 			filter.Params.ParentVars = sg.Params.ParentVars // Pass to the child.
 			go ProcessGraph(ctx, filter, sg, filterChan)

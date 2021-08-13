@@ -178,8 +178,7 @@ func proposeRestoreOrSend(ctx context.Context, req *pb.RestoreRequest) error {
 	if pl == nil {
 		return conn.ErrNoConnection
 	}
-	con := pl.Get()
-	c := pb.NewWorkerClient(con)
+	c := pb.NewWorkerClient(pl.Get())
 
 	_, err := c.Restore(ctx, req)
 	return err
@@ -393,6 +392,7 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest, pidx uin
 	if !req.IsPartial {
 		ResetGQLSchemaStore()
 	}
+	ResetAclCache()
 
 	// Propose a snapshot immediately after all the work is done to prevent the restore
 	// from being replayed.
