@@ -42,7 +42,7 @@ const (
 	BadgerDefaults = `compression=snappy; numgoroutines=8;`
 	CacheDefaults  = `size-mb=1024; percentage=0,65,35;`
 	CDCDefaults    = `file=; kafka=; sasl_user=; sasl_password=; ca_cert=; client_cert=; ` +
-		`client_key=; sasl-mechanism=PLAIN;`
+		`client_key=; sasl-mechanism=PLAIN; tls=false;`
 	GraphQLDefaults = `introspection=true; debug=false; extensions=true; poll-interval=1s; ` +
 		`lambda-url=;`
 	LimitDefaults = `mutations=allow; query-edge=1000000; normalize-node=10000; ` +
