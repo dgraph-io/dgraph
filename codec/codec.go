@@ -132,12 +132,15 @@ func Merge(matrix []*pb.List) *sroar.Bitmap {
 	if len(matrix) == 0 {
 		return out
 	}
-	out.Or(FromList(matrix[0]))
-	for _, l := range matrix[1:] {
-		r := FromList(l)
-		out.Or(r)
+
+	var bms []*sroar.Bitmap
+	for _, m := range matrix {
+		bmc := FromListNoCopy(m)
+		if bmc != nil {
+			bms = append(bms, bmc)
+		}
 	}
-	return out
+	return sroar.FastOr(bms...)
 }
 
 func ToBytes(bm *sroar.Bitmap) []byte {
@@ -161,6 +164,19 @@ func FromList(l *pb.List) *sroar.Bitmap {
 		iw = sroar.FromBufferWithCopy(l.Bitmap)
 	}
 	return iw
+}
+
+func FromListNoCopy(l *pb.List) *sroar.Bitmap {
+	if l == nil {
+		return nil
+	}
+	if len(l.Bitmap) > 0 {
+		// Optimize the code for this case. Avoid creating NewBitmap for error
+		// handling.
+		return sroar.FromBuffer(l.Bitmap)
+	}
+	x.AssertTrue(len(l.SortedUids) == 0)
+	return nil
 }
 
 func FromBytes(buf []byte) *sroar.Bitmap {
