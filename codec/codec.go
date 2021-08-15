@@ -174,12 +174,16 @@ func FromListNoCopy(l *pb.List) *sroar.Bitmap {
 	if l == nil {
 		return nil
 	}
+	if len(l.SortedUids) > 0 {
+		bm := sroar.NewBitmap()
+		bm.SetMany(l.SortedUids)
+		return bm
+	}
 	if len(l.Bitmap) > 0 {
 		// Optimize the code for this case. Avoid creating NewBitmap for error
 		// handling.
 		return sroar.FromBuffer(l.Bitmap)
 	}
-	x.AssertTrue(len(l.SortedUids) == 0)
 	return nil
 }
 
