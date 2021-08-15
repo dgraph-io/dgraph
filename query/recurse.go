@@ -151,9 +151,9 @@ func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error
 							return true
 						})
 					} else {
-						// TODO: update the numEdges
 						ur.AndNot(prev) // This would only keep the UIDs which are NEW.
 						sg.uidMatrix[mIdx].Bitmap = ur.ToBuffer()
+						numEdges += uint64(ur.GetCardinality())
 
 						prev.Or(ur) // Add the new UIDs to our "reach"
 						reachMap[key] = prev
