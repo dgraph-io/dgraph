@@ -381,30 +381,12 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 	outputs := make([]*pb.Result, numGo)
 	listType := schema.State().IsList(q.Attr)
 
-	calculate := func(start int) error {
-		x.AssertTrue(start%width == 0)
+	calculate := func(idx int, itr *sroar.FastIterator) error {
 		out := &pb.Result{}
-		outputs[start/width] = out
+		outputs[idx] = out
 
-		startNum, err := bm.Select(uint64(start))
-		x.Check(err)
-
-		itr := bm.NewIterator()
-		itr.AdvanceIfNeeded(startNum)
-
-		for count := 0; itr.HasNext(); count++ {
-			if count >= width {
-				break
-			}
-			if count%100 == 0 {
-				select {
-				case <-ctx.Done():
-					return ctx.Err()
-				default:
-				}
-			}
-
-			uid := itr.Next()
+		for uid := itr.Next(); uid > 0; uid = itr.Next() {
+			// glog.Infof("------- looping: %d\n", uid)
 			key := x.DataKey(q.Attr, uid)
 
 			// Get or create the posting list for an entity, attribute combination.
@@ -524,11 +506,12 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 		return nil
 	} // End of calculate function.
 
+	iters := bm.NewRangeIterators(numGo)
 	var g errgroup.Group
 	for i := 0; i < numGo; i++ {
-		start := i * width
+		i := i
 		g.Go(func() error {
-			return calculate(start)
+			return calculate(i, iters[i])
 		})
 	}
 	if err := g.Wait(); err != nil {
@@ -1186,9 +1169,8 @@ func (qs *queryState) handleRegexFunction(ctx context.Context, arg funcArgs) err
 	span.Annotatef(nil, "Total uids: %d, list: %t lang: %v", uids.GetCardinality(), isList, lang)
 
 	filtered := sroar.NewBitmap()
-	itr := uids.NewIterator()
-	for itr.HasNext() {
-		uid := itr.Next()
+	itr := uids.NewFastIterator()
+	for uid := itr.Next(); uid > 0; uid = itr.Next() {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -1434,9 +1416,8 @@ func (qs *queryState) handleMatchFunction(ctx context.Context, arg funcArgs) err
 	matchQuery := strings.Join(arg.srcFn.tokens, "")
 	filtered := sroar.NewBitmap()
 
-	itr := uids.NewIterator()
-	for itr.HasNext() {
-		uid := itr.Next()
+	itr := uids.NewFastIterator()
+	for uid := itr.Next(); uid > 0; uid = itr.Next() {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -1510,20 +1491,12 @@ func (qs *queryState) filterGeoFunction(ctx context.Context, arg funcArgs) error
 	}
 
 	filtered := make([]*sroar.Bitmap, numGo)
-	filter := func(idx, start, end int) error {
+	filter := func(idx int, it *sroar.FastIterator) error {
 
 		filtered[idx] = sroar.NewBitmap()
 		out := filtered[idx]
 
-		startUid, err := uids.Select(uint64(start))
-		if err != nil {
-			return err
-		}
-		itr := uids.NewIterator()
-		itr.AdvanceIfNeeded(startUid)
-
-		for uidx := start; uidx < end; uidx++ {
-			uid := itr.Next()
+		for uid := it.Next(); uid > 0; uid = it.Next() {
 			pl, err := qs.cache.Get(x.DataKey(attr, uid))
 			if err != nil {
 				return err
@@ -1545,16 +1518,12 @@ func (qs *queryState) filterGeoFunction(ctx context.Context, arg funcArgs) error
 		return nil
 	}
 
+	iters := uids.NewRangeIterators(numGo)
 	errCh := make(chan error, numGo)
 	for i := 0; i < numGo; i++ {
-		start := i * width
-		end := start + width
-		if end > numUids {
-			end = numUids
-		}
-		go func(idx, start, end int) {
-			errCh <- filter(idx, start, end)
-		}(i, start, end)
+		go func(idx int, it *sroar.FastIterator) {
+			errCh <- filter(idx, it)
+		}(i, iters[i])
 	}
 	for i := 0; i < numGo; i++ {
 		if err := <-errCh; err != nil {
@@ -1628,13 +1597,12 @@ func (qs *queryState) filterStringFunction(arg funcArgs) error {
 	// matrix, to check it later.
 	// TODO: This function can be optimized by having a query specific cache, which can be populated
 	// by the handleHasFunction for e.g. for a `has(name)` query.
-	itr := uids.NewIterator()
+	itr := uids.NewFastIterator()
 
 	// We can't directly modify uids bitmap. We need to add them to another bitmap, and then take
 	// the difference.
 	remove := sroar.NewBitmap()
-	for itr.HasNext() {
-		uid := itr.Next()
+	for uid := itr.Next(); uid > 0; uid = itr.Next() {
 		vals, err := qs.getValsForUID(attr, lang, uid, arg.q.ReadTs)
 		switch {
 		case err == posting.ErrNoValue:

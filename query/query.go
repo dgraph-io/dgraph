@@ -1431,10 +1431,10 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue, sgPath []*SubGr
 	}
 
 	// Filter out UIDs that don't have atleast one UID in every child.
-	itr := sg.DestMap.NewIterator()
+	itr := sg.DestMap.NewFastIterator()
 	out := sg.DestMap.Clone()
-	for i := 0; itr.HasNext(); i++ {
-		uid := itr.Next()
+	uid := itr.Next()
+	for i := 0; uid > 0; i++ {
 		var exclude bool
 		for _, child := range sg.Children {
 			// For uid we dont actually populate the uidMatrix or values. So a node asking for
@@ -1458,6 +1458,7 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue, sgPath []*SubGr
 		if exclude {
 			out.Remove(uid)
 		}
+		uid = itr.Next()
 	}
 	// Note the we can't overwrite DestUids, as it'd also modify the SrcUids of
 	// next level and the mapping from SrcUids to uidMatrix would be lost.
@@ -1774,9 +1775,8 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 
 		case (v.Typ == gql.UidVar && sg.SrcFunc != nil && sg.SrcFunc.Name == "uid_in"):
 			srcFuncArgs := sg.SrcFunc.Args[:0]
-			itr := l.UidMap.NewIterator()
-			for itr.HasNext() {
-				uid := itr.Next()
+			itr := l.UidMap.NewFastIterator()
+			for uid := itr.Next(); uid > 0; uid = itr.Next() {
 				// We use base 10 here because the uid parser expects the uid to be in base 10.
 				arg := gql.Arg{Value: strconv.FormatUint(uid, 10)}
 				srcFuncArgs = append(srcFuncArgs, arg)
