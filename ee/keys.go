@@ -19,8 +19,6 @@
 package ee
 
 import (
-	"fmt"
-
 	"github.com/spf13/viper"
 )
 
@@ -28,6 +26,5 @@ import (
 // through the --acl, --encryption, and --vault flags. On OSS builds,
 // this function always returns an error.
 func GetKeys(config *viper.Viper) (*Keys, error) {
-	return nil, fmt.Errorf(
-		"flags: acl / encryption is an enterprise-only feature")
+	return &Keys{}, nil
 }

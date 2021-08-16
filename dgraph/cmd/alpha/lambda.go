@@ -28,5 +28,5 @@ func setupLambdaServer(closer *z.Closer) {
 	if num == 0 {
 		return
 	}
-	glog.Fatalf("Cannot setup lambda server using lambda-cnt flag: ", x.ErrNotSupported)
+	glog.Fatalf("Cannot setup lambda server using lambda-cnt flag: %v", x.ErrNotSupported)
 }
