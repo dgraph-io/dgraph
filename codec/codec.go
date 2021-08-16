@@ -45,7 +45,7 @@ func ApproxLen(bitmap []byte) int {
 
 func ToList(rm *sroar.Bitmap) *pb.List {
 	return &pb.List{
-		Bitmap: ToBytes(rm),
+		Bitmap: rm.ToBufferWithCopy(),
 	}
 }
 
@@ -62,7 +62,7 @@ func ListCardinality(l *pb.List) uint64 {
 	if len(l.SortedUids) > 0 {
 		return uint64(len(l.SortedUids))
 	}
-	b := FromList(l)
+	b := FromListNoCopy(l)
 	return uint64(b.GetCardinality())
 }
 
@@ -88,7 +88,7 @@ func SetUids(l *pb.List, uids []uint64) {
 	} else {
 		r := sroar.NewBitmap()
 		r.SetMany(uids)
-		l.Bitmap = ToBytes(r)
+		l.Bitmap = r.ToBuffer()
 	}
 }
 
@@ -132,35 +132,46 @@ func Merge(matrix []*pb.List) *sroar.Bitmap {
 	if len(matrix) == 0 {
 		return out
 	}
-	out.Or(FromList(matrix[0]))
-	for _, l := range matrix[1:] {
-		r := FromList(l)
-		out.Or(r)
-	}
-	return out
-}
 
-func ToBytes(bm *sroar.Bitmap) []byte {
-	if bm.IsEmpty() {
-		return nil
+	var bms []*sroar.Bitmap
+	for _, m := range matrix {
+		if bmc := FromListNoCopy(m); bmc != nil {
+			bms = append(bms, bmc)
+		}
 	}
-	// TODO: We should not use ToBufferWithCopy always.
-	return bm.ToBufferWithCopy()
+	return sroar.FastOr(bms...)
 }
 
 func FromList(l *pb.List) *sroar.Bitmap {
-	iw := sroar.NewBitmap()
 	if l == nil {
-		return iw
+		return nil
+	}
+	// Keep the check for bitmap before sortedUids because we expect to have bitmap very often
+	if len(l.Bitmap) > 0 {
+		return sroar.FromBufferWithCopy(l.Bitmap)
 	}
 	if len(l.SortedUids) > 0 {
-		iw.SetMany(l.SortedUids)
+		bm := sroar.NewBitmap()
+		bm.SetMany(l.SortedUids)
+		return bm
 	}
+	return sroar.NewBitmap()
+}
+
+func FromListNoCopy(l *pb.List) *sroar.Bitmap {
+	if l == nil {
+		return nil
+	}
+	// Keep the check for bitmap before sortedUids because we expect to have bitmap very often
 	if len(l.Bitmap) > 0 {
-		// TODO: We should not use FromBufferWithCopy always.
-		iw = sroar.FromBufferWithCopy(l.Bitmap)
+		return sroar.FromBuffer(l.Bitmap)
 	}
-	return iw
+	if len(l.SortedUids) > 0 {
+		bm := sroar.NewBitmap()
+		bm.SetMany(l.SortedUids)
+		return bm
+	}
+	return sroar.NewBitmap()
 }
 
 func FromBytes(buf []byte) *sroar.Bitmap {

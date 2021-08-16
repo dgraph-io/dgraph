@@ -137,7 +137,7 @@ func (d *dedup) addValue(attr string, value types.Val, uid uint64) {
 	}
 	r := codec.FromList(cur.elements[strKey].entities)
 	r.Set(uid)
-	cur.elements[strKey].entities.Bitmap = codec.ToBytes(r)
+	cur.elements[strKey].entities.Bitmap = r.ToBuffer()
 }
 
 func aggregateGroup(grp *groupResult, child *SubGraph) (types.Val, error) {

@@ -18,18 +18,19 @@ package query
 
 import (
 	"context"
-	"fmt"
 	"math"
+	"strconv"
 
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/sroar"
 	"github.com/pkg/errors"
 )
 
 func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error {
 	// Note: Key format is - "attr|fromUID|toUID"
-	reachMap := make(map[string]struct{})
+	reachMap := make(map[string]*sroar.Bitmap)
 	allowLoop := start.Params.RecurseArgs.AllowLoop
 	var numEdges uint64
 	var exec []*SubGraph
@@ -121,21 +122,42 @@ func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error
 
 			for mIdx, fromUID := range codec.GetUids(sg.SrcUIDs) {
 				if allowLoop {
+					// TODO: This needs to be optimized.
 					for _, ul := range sg.uidMatrix {
 						numEdges += codec.ListCardinality(ul)
 					}
 				} else {
-					algo.ApplyFilter(sg.uidMatrix[mIdx], func(uid uint64, i int) bool {
-						key := fmt.Sprintf("%s|%d|%d", sg.Attr, fromUID, uid)
-						_, seen := reachMap[key] // Combine fromUID here.
-						if seen {
-							return false
-						}
-						// Mark this edge as taken. We'd disallow this edge later.
-						reachMap[key] = struct{}{}
-						numEdges++
-						return true
-					})
+					ul := sg.uidMatrix[mIdx]
+					ur := codec.FromListNoCopy(ul)
+					if ur == nil {
+						continue
+					}
+
+					key := sg.Attr + "|" + strconv.Itoa(int(fromUID))
+					prev, ok := reachMap[key]
+					if !ok {
+						reachMap[key] = codec.FromList(ul)
+						continue
+					}
+					// Any edges that we have seen before, do not consider
+					// them again.
+					if len(sg.uidMatrix[mIdx].SortedUids) > 0 {
+						// we will have to keep the order, so using ApplyFilter
+						algo.ApplyFilter(sg.uidMatrix[mIdx], func(uid uint64, i int) bool {
+							if ur.Contains(uid) {
+								return false
+							}
+							numEdges++
+							return true
+						})
+					} else {
+						ur.AndNot(prev) // This would only keep the UIDs which are NEW.
+						sg.uidMatrix[mIdx].Bitmap = ur.ToBuffer()
+						numEdges += uint64(ur.GetCardinality())
+
+						prev.Or(ur) // Add the new UIDs to our "reach"
+						reachMap[key] = prev
+					}
 				}
 			}
 			if len(sg.Params.Order) > 0 || len(sg.Params.FacetsOrder) > 0 {
