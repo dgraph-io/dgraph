@@ -499,7 +499,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 				// Add an empty UID list to make later processing consistent
 				out.UidMatrix = append(out.UidMatrix, &pb.List{})
 			default:
-				out.UidMatrix = append(out.UidMatrix, &pb.List{Bitmap: codec.ToBytesNoCopy(res)})
+				out.UidMatrix = append(out.UidMatrix, &pb.List{Bitmap: res.ToBuffer()})
 			}
 		}
 		return nil
@@ -1216,7 +1216,7 @@ func (qs *queryState) handleRegexFunction(ctx context.Context, arg funcArgs) err
 	}
 
 	list := &pb.List{
-		Bitmap: codec.ToBytes(filtered),
+		Bitmap: filtered.ToBuffer(),
 	}
 	arg.out.UidMatrix = append(arg.out.UidMatrix, list)
 	return nil
@@ -1464,7 +1464,7 @@ func (qs *queryState) handleMatchFunction(ctx context.Context, arg funcArgs) err
 	}
 
 	out := &pb.List{
-		Bitmap: codec.ToBytes(filtered),
+		Bitmap: filtered.ToBuffer(),
 	}
 	arg.out.UidMatrix = append(arg.out.UidMatrix, out)
 	return nil
@@ -1546,7 +1546,7 @@ func (qs *queryState) filterGeoFunction(ctx context.Context, arg funcArgs) error
 	}
 	for i := 0; i < len(matrix); i++ {
 		matrix[i].And(final)
-		arg.out.UidMatrix[i].Bitmap = codec.ToBytes(matrix[i])
+		arg.out.UidMatrix[i].Bitmap = matrix[i].ToBuffer()
 	}
 	return nil
 }
@@ -1633,7 +1633,7 @@ func (qs *queryState) filterStringFunction(arg funcArgs) error {
 	uids.AndNot(remove)
 	for i := 0; i < len(matrix); i++ {
 		matrix[i].And(uids)
-		arg.out.UidMatrix[i].Bitmap = codec.ToBytes(matrix[i])
+		arg.out.UidMatrix[i].Bitmap = matrix[i].ToBuffer()
 	}
 	return nil
 }
@@ -2483,7 +2483,7 @@ loop:
 	if span != nil {
 		span.Annotatef(nil, "handleHasFunction found %d uids", setCnt)
 	}
-	result := &pb.List{Bitmap: codec.ToBytes(res)}
+	result := &pb.List{Bitmap: res.ToBuffer()}
 	out.UidMatrix = append(out.UidMatrix, result)
 	return nil
 }

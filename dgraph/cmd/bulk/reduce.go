@@ -38,7 +38,6 @@ import (
 	bo "github.com/dgraph-io/badger/v3/options"
 	bpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/badger/v3/y"
-	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
@@ -615,7 +614,7 @@ func (r *reducer) toList(req *encodeRequest) {
 
 		// We should not do defer FreePack here, because we might be giving ownership of it away if
 		// we run Rollup.
-		pl.Bitmap = codec.ToBytes(bm)
+		pl.Bitmap = bm.ToBuffer()
 		numUids := bm.GetCardinality()
 
 		atomic.AddInt64(&r.prog.reduceKeyCount, 1)
