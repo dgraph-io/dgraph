@@ -516,7 +516,7 @@ func setupServer(closer *z.Closer) {
 	// TODO: Figure out what this is for?
 	http.HandleFunc("/debug/store", storeStatsHandler)
 
-	introspection := x.Config.GraphQL.GetBool("introspection")
+	introspection := x.Config.GraphQL.Introspection
 
 	// Global Epoch is a lockless synchronization mechanism for graphql service.
 	// It's is just an atomic counter used by the graphql subscription to update its state.
@@ -736,11 +736,19 @@ func run() {
 	x.Config.MaxRetries = x.Config.Limit.GetInt64("max-retries")
 	x.Config.SharedInstance = x.Config.Limit.GetBool("shared-instance")
 
-	x.Config.GraphQL = z.NewSuperFlag(Alpha.Conf.GetString("graphql")).MergeAndCheckDefault(
+	graphql := z.NewSuperFlag(Alpha.Conf.GetString("graphql")).MergeAndCheckDefault(
 		worker.GraphQLDefaults)
-	x.Config.GraphQLDebug = x.Config.GraphQL.GetBool("debug")
-	if x.Config.GraphQL.GetString("lambda-url") != "" {
-		graphqlLambdaUrl, err := url.Parse(x.Config.GraphQL.GetString("lambda-url"))
+	x.Config.GraphQL = x.GraphQLOptions{
+		Introspection: graphql.GetBool("introspection"),
+		Debug:         graphql.GetBool("debug"),
+		Extensions:    graphql.GetBool("extensions"),
+		PollInterval:  graphql.GetDuration("poll-interval"),
+		LambdaUrl:     graphql.GetString("lambda-url"),
+		LambdaCnt:     graphql.GetUint32("lambda-cnt"),
+		LambdaPort:    graphql.GetUint32("lambda-port"),
+	}
+	if x.Config.GraphQL.LambdaUrl != "" {
+		graphqlLambdaUrl, err := url.Parse(x.Config.GraphQL.LambdaUrl)
 		if err != nil {
 			glog.Errorf("unable to parse --graphql lambda-url: %v", err)
 			return

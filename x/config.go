@@ -63,9 +63,24 @@ type Options struct {
 	// 	| http://localhost:8686/graphql-worker     |  1  | http://localhost:8686/graphql-worker   |
 	// 	|=========================================================================================|
 	//
+	// Update(Aug 2021): Now, alpha spins up lambda servers based on lambda-cnt and lambda-port
+	// sub-flags. Also, no special handling of namespace is needed from lambda as we send the script
+	// along with request body to lambda server. If lambda-url is set, these two flags are ignored.
+	//
 	// poll-interval duration - The polling interval for graphql subscription.
-	GraphQL      *z.SuperFlag
-	GraphQLDebug bool
+	GraphQL GraphQLOptions
+}
+
+type GraphQLOptions struct {
+	Introspection bool
+	Debug         bool
+	Extensions    bool
+	PollInterval  time.Duration
+
+	// Lambda options
+	LambdaUrl  string
+	LambdaCnt  uint32
+	LambdaPort uint32
 }
 
 // Config stores the global instance of this package's options.

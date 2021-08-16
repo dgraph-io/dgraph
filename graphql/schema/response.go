@@ -75,11 +75,11 @@ func (r *Response) WithError(err error) {
 		return
 	}
 
-	if !x.Config.GraphQLDebug && strings.Contains(err.Error(), "authorization failed") {
+	if !x.Config.GraphQL.Debug && strings.Contains(err.Error(), "authorization failed") {
 		return
 	}
 
-	if !x.Config.GraphQLDebug && strings.Contains(err.Error(), "GraphQL debug:") {
+	if !x.Config.GraphQL.Debug && strings.Contains(err.Error(), "GraphQL debug:") {
 		return
 	}
 
@@ -172,7 +172,7 @@ func (r *Response) Output() interface{} {
 		Data:   r.Data.Bytes(),
 	}
 
-	if x.Config.GraphQL.GetBool("extensions") {
+	if x.Config.GraphQL.Extensions {
 		res.Extensions = r.Extensions
 	}
 	return res

@@ -26,12 +26,12 @@ import (
 
 func setupLambdaServer(closer *z.Closer) {
 	// If lambda-url is set, then don't launch the lambda servers from dgraph.
-	if len(x.Config.GraphQL.GetString("lambda-url")) > 0 {
+	if len(x.Config.GraphQL.LambdaUrl) > 0 {
 		return
 	}
 
-	num := int(x.Config.GraphQL.GetUint32("lambda-cnt"))
-	port := int(x.Config.GraphQL.GetUint32("lambda-port"))
+	num := int(x.Config.GraphQL.LambdaCnt)
+	port := int(x.Config.GraphQL.LambdaPort)
 	if num == 0 {
 		return
 	}

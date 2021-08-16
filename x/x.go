@@ -1476,17 +1476,16 @@ var loop uint32
 
 // LambdaUrl returns the correct lambda-url for the given namespace
 func LambdaUrl(ns uint64) string {
-	lambdaUrl := Config.GraphQL.GetString("lambda-url")
+	lambdaUrl := Config.GraphQL.LambdaUrl
 	if len(lambdaUrl) > 0 {
 		return strings.Replace(lambdaUrl, "$ns", strconv.FormatUint(ns, 10), 1)
 	}
 	// TODO: Should we check if this server is active and then consider it for load balancing?
-	num := Config.GraphQL.GetUint32("lambda-cnt")
+	num := Config.GraphQL.LambdaCnt
 	if num == 0 {
 		return ""
 	}
-	// TODO: Parse once.
-	port := Config.GraphQL.GetUint32("lambda-port")
+	port := Config.GraphQL.LambdaPort
 	url := fmt.Sprintf("http://localhost:%d/graphql-worker", port+(atomic.AddUint32(&loop, 1)%num))
 	return url
 }
