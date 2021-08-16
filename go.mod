@@ -26,7 +26,7 @@ require (
 	github.com/dgraph-io/graphql-transport-ws v0.0.0-20210511143556-2cef522f1f15
 	github.com/dgraph-io/ristretto v0.1.0
 	github.com/dgraph-io/simdjson-go v0.3.0
-	github.com/dgraph-io/sroar v0.0.0-20210812083743-986f6c1098e2
+	github.com/dgraph-io/sroar v0.0.0-20210816191646-201f86ca72d6
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/dgrijalva/jwt-go/v4 v4.0.0-preview1
 	github.com/dgryski/go-farm v0.0.0-20200201041132-a6ae2369ad13
@@ -75,7 +75,7 @@ require (
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	golang.org/x/sys v0.0.0-20210511113859-b0526f3d8744
 	golang.org/x/text v0.3.6
-	golang.org/x/tools v0.1.1
+	golang.org/x/tools v0.1.6-0.20210802203754-9b21a8868e16
 	google.golang.org/api v0.46.0
 	google.golang.org/genproto v0.0.0-20210510173355-fb37daa5cd7a // indirect
 	google.golang.org/grpc v1.37.1
@@ -83,5 +83,6 @@ require (
 	gopkg.in/DataDog/dd-trace-go.v1 v1.13.1 // indirect
 	gopkg.in/square/go-jose.v2 v2.3.1
 	gopkg.in/yaml.v2 v2.2.8
+	honnef.co/go/tools v0.2.0 // indirect
 	src.techknowlogick.com/xgo v1.4.1-0.20210311222705-d25c33fcd864
 )

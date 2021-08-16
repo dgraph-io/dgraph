@@ -43,7 +43,7 @@ func ApplyFilter(u *pb.List, f func(uint64, int) bool) {
 	} else {
 		b := sroar.NewBitmap()
 		b.SetMany(out)
-		u.Bitmap = codec.ToBytes(b)
+		u.Bitmap = b.ToBuffer()
 	}
 }
 

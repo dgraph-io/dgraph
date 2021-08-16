@@ -605,8 +605,8 @@ func (l *List) iterateAll(readTs uint64, afterUid uint64, f func(obj *pb.Posting
 
 	advance := func() {
 		next = math.MaxUint64
-		if uitr.HasNext() {
-			next = uitr.Next()
+		if nx := uitr.Next(); nx > 0 {
+			next = nx
 		}
 	}
 	advance()
@@ -639,8 +639,8 @@ func (l *List) iterateAll(readTs uint64, afterUid uint64, f func(obj *pb.Posting
 
 	codec.RemoveRange(bm, 0, maxUid)
 	uitr = bm.NewIterator()
-	for uitr.HasNext() {
-		p.Uid = uitr.Next()
+	for u := uitr.Next(); u > 0; u = uitr.Next() {
+		p.Uid = u
 		f(p)
 	}
 	return nil
@@ -1107,7 +1107,7 @@ func (ro *rollupOutput) split(startUid uint64) error {
 	// Remove everything from startUid to uid.
 	nr := r.Clone()
 	nr.RemoveRange(0, uid) // Keep all uids >= uid.
-	newpl.Bitmap = codec.ToBytes(nr)
+	newpl.Bitmap = nr.ToBuffer()
 
 	// Take everything from the first posting where posting.Uid >= uid.
 	idx := sort.Search(len(pl.Postings), func(i int) bool {
@@ -1117,7 +1117,7 @@ func (ro *rollupOutput) split(startUid uint64) error {
 
 	// Update pl as well. Keeps the lower UIDs.
 	codec.RemoveRange(r, uid, math.MaxUint64)
-	pl.Bitmap = codec.ToBytes(r)
+	pl.Bitmap = r.ToBuffer()
 	pl.Postings = pl.Postings[:idx]
 
 	return nil
@@ -1169,7 +1169,7 @@ func (l *List) encode(out *rollupOutput, readTs uint64, split bool) error {
 		}
 
 		plist := &pb.PostingList{}
-		plist.Bitmap = codec.ToBytes(r)
+		plist.Bitmap = r.ToBuffer()
 
 		out.parts[startUid] = plist
 	}
@@ -1283,7 +1283,7 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 	// Before this, we were only picking math.Int32 number of uids.
 	// Now we're picking everything.
 	if opt.First == 0 {
-		out.Bitmap = codec.ToBytes(bm)
+		out.Bitmap = bm.ToBufferWithCopy()
 		// TODO: Not yet ready to use Bitmap for data transfer. We'd have to deal with all the
 		// places where List.Uids is being called.
 		// out.Bitmap = codec.ToBytes(bm)
@@ -1688,7 +1688,7 @@ func FromBackupPostingList(bl *pb.BackupPostingList) *pb.PostingList {
 	} else if len(bl.UidBytes) > 0 {
 		r = codec.FromBackup(bl.UidBytes)
 	}
-	l.Bitmap = codec.ToBytes(r)
+	l.Bitmap = r.ToBuffer()
 	l.Postings = bl.Postings
 	l.CommitTs = bl.CommitTs
 	l.Splits = bl.Splits
