@@ -145,8 +145,8 @@ func (b *rdfBuilder) rdfForSubgraph(sg *SubGraph) {
 
 func (b *rdfBuilder) write(buf *bytes.Buffer) {
 	b.Lock()
-	defer b.Unlock()
 	b.buf = append(b.buf, buf.Bytes()...)
+	b.Unlock()
 }
 
 func writeRDF(buf *bytes.Buffer, subject uint64, predicate []byte, object []byte) {
