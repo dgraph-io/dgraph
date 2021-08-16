@@ -34,19 +34,22 @@ func TestRDFResult(t *testing.T) {
 		}
 	  }`
 
-	rdf, err := processQueryRDF(context.Background(), t, query)
+	output, err := processQueryRDF(context.Background(), t, query)
 	require.NoError(t, err)
-	require.Equal(t, rdf, `<0x1> <name> "Michonne" .
-<0x1> <friend> <0x17> .
-<0x1> <friend> <0x18> .
-<0x1> <friend> <0x19> .
-<0x17> <name> "Rick Grimes" .
-<0x18> <name> "Glenn Rhee" .
-<0x19> <name> "Daryl Dixon" .
-<0x17> <age> "15" .
-<0x18> <age> "15" .
-<0x19> <age> "17" .
-`)
+	rdfs := []string{`<0x1> <name> "Michonne" .`,
+		`<0x1> <friend> <0x17> .`,
+		`<0x1> <friend> <0x18> .`,
+		`<0x1> <friend> <0x19> .`,
+		`<0x17> <name> "Rick Grimes" .`,
+		`<0x18> <name> "Glenn Rhee" .`,
+		`<0x19> <name> "Daryl Dixon" .`,
+		`<0x17> <age> "15" .`,
+		`<0x18> <age> "15" .`,
+		`<0x19> <age> "17" .`,
+	}
+	for _, rdf := range rdfs {
+		require.Contains(t, output, rdf)
+	}
 }
 
 func TestRDFNormalize(t *testing.T) {
