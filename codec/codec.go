@@ -155,6 +155,13 @@ func ToBytes(bm *sroar.Bitmap) []byte {
 	return bm.ToBufferWithCopy()
 }
 
+func ToBytesNoCopy(bm *sroar.Bitmap) []byte {
+	if bm.IsEmpty() {
+		return nil
+	}
+	return bm.ToBuffer()
+}
+
 func FromList(l *pb.List) *sroar.Bitmap {
 	iw := sroar.NewBitmap()
 	if l == nil {
