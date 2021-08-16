@@ -26,7 +26,7 @@ require (
 	github.com/dgraph-io/graphql-transport-ws v0.0.0-20210511143556-2cef522f1f15
 	github.com/dgraph-io/ristretto v0.1.0
 	github.com/dgraph-io/simdjson-go v0.3.0
-	github.com/dgraph-io/sroar v0.0.0-20210816191646-201f86ca72d6
+	github.com/dgraph-io/sroar v0.0.0-20210816194026-bc614dc5ce67
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/dgrijalva/jwt-go/v4 v4.0.0-preview1
 	github.com/dgryski/go-farm v0.0.0-20200201041132-a6ae2369ad13
