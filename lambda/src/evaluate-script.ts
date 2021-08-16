@@ -12,8 +12,9 @@ import { EventTarget } from 'event-target-shim';
 import vm from 'vm';
 import { GraphQLEvent, GraphQLEventWithParent, GraphQLEventFields, ResolverResponse, AuthHeaderField, WebHookGraphQLEvent } from '@slash-graphql/lambda-types'
 
-import fetch, { Request, Response, Headers } from "node-fetch";
+import fetch, { RequestInfo, RequestInit, Request, Response, Headers } from "node-fetch";
 import { URL } from "url";
+import isIp from "is-ip";
 import atob from "atob";
 import btoa from "btoa";
 import { TextDecoder, TextEncoder } from "util";
@@ -61,6 +62,26 @@ function newContext(eventTarget: GraphQLResolverEventTarget, logger: any) {
     }
   }
 
+  // Override the default fetch to blacklist certain IPs.
+  const _fetch = function(url: RequestInfo, init?: RequestInit): Promise<Response> {
+    try {
+      const u = new URL(url.toString())
+      if (isIp(u.hostname) || u.hostname == "localhost") {
+        return new Promise((resolve, reject) => {
+          reject("Cannot send request to blacklisted IP: " + url.toString())
+          return
+        })
+      }
+    } catch(error) {
+      return new Promise((resolve, reject) => {
+        reject(error)
+        return
+      })
+    }
+
+    return fetch(url, init)
+  }
+
   // Override the console object to append to logger.logs.
   const _console = Object.assign({}, console)
   _console.debug = appendLogs()
@@ -71,7 +92,7 @@ function newContext(eventTarget: GraphQLResolverEventTarget, logger: any) {
 
   return vm.createContext({
     // From fetch
-    fetch:fetch.bind({}),
+    fetch:_fetch,
     Request,
     Response,
     Headers,
