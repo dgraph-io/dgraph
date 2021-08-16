@@ -381,7 +381,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 	outputs := make([]*pb.Result, numGo)
 	listType := schema.State().IsList(q.Attr)
 
-	calculate := func(idx int, itr *sroar.FastIterator) error {
+	calculate := func(idx int, itr *sroar.Iterator) error {
 		out := &pb.Result{}
 		outputs[idx] = out
 
@@ -1174,7 +1174,7 @@ func (qs *queryState) handleRegexFunction(ctx context.Context, arg funcArgs) err
 	span.Annotatef(nil, "Total uids: %d, list: %t lang: %v", uids.GetCardinality(), isList, lang)
 
 	filtered := sroar.NewBitmap()
-	itr := uids.NewFastIterator()
+	itr := uids.NewIterator()
 	for uid := itr.Next(); uid > 0; uid = itr.Next() {
 		select {
 		case <-ctx.Done():
@@ -1421,7 +1421,7 @@ func (qs *queryState) handleMatchFunction(ctx context.Context, arg funcArgs) err
 	matchQuery := strings.Join(arg.srcFn.tokens, "")
 	filtered := sroar.NewBitmap()
 
-	itr := uids.NewFastIterator()
+	itr := uids.NewIterator()
 	for uid := itr.Next(); uid > 0; uid = itr.Next() {
 		select {
 		case <-ctx.Done():
@@ -1496,7 +1496,7 @@ func (qs *queryState) filterGeoFunction(ctx context.Context, arg funcArgs) error
 	}
 
 	filtered := make([]*sroar.Bitmap, numGo)
-	filter := func(idx int, it *sroar.FastIterator) error {
+	filter := func(idx int, it *sroar.Iterator) error {
 
 		filtered[idx] = sroar.NewBitmap()
 		out := filtered[idx]
@@ -1526,7 +1526,7 @@ func (qs *queryState) filterGeoFunction(ctx context.Context, arg funcArgs) error
 	iters := uids.NewRangeIterators(numGo)
 	errCh := make(chan error, numGo)
 	for i := 0; i < numGo; i++ {
-		go func(idx int, it *sroar.FastIterator) {
+		go func(idx int, it *sroar.Iterator) {
 			errCh <- filter(idx, it)
 		}(i, iters[i])
 	}
@@ -1602,7 +1602,7 @@ func (qs *queryState) filterStringFunction(arg funcArgs) error {
 	// matrix, to check it later.
 	// TODO: This function can be optimized by having a query specific cache, which can be populated
 	// by the handleHasFunction for e.g. for a `has(name)` query.
-	itr := uids.NewFastIterator()
+	itr := uids.NewIterator()
 
 	// We can't directly modify uids bitmap. We need to add them to another bitmap, and then take
 	// the difference.
