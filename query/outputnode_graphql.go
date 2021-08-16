@@ -989,7 +989,7 @@ func (genc *graphQLEncoder) resolveCustomField(childField gqlSchema.Field,
 					genc.appendLogs([]string{logs})
 				}
 			} else {
-				glog.Errorf("Expected lambda logs of type string, got %v",
+				glog.Errorf("Expected lambda logs of type string, got %v for field: %s",
 					reflect.TypeOf(response).Name(), childField.Name())
 			}
 			response = res["res"]
