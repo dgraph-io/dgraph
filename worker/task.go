@@ -39,10 +39,10 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/sroar"
 	"github.com/golang/glog"
+	"github.com/golang/protobuf/proto"
 	otrace "go.opencensus.io/trace"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/golang/protobuf/proto"
 	cindex "github.com/google/codesearch/index"
 	cregexp "github.com/google/codesearch/regexp"
 	"github.com/pkg/errors"
@@ -386,7 +386,6 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 		outputs[idx] = out
 
 		for uid := itr.Next(); uid > 0; uid = itr.Next() {
-			// glog.Infof("------- looping: %d\n", uid)
 			key := x.DataKey(q.Attr, uid)
 
 			// Get or create the posting list for an entity, attribute combination.
@@ -500,7 +499,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 				// Add an empty UID list to make later processing consistent
 				out.UidMatrix = append(out.UidMatrix, &pb.List{})
 			default:
-				out.UidMatrix = append(out.UidMatrix, codec.ToList(res))
+				out.UidMatrix = append(out.UidMatrix, &pb.List{Bitmap: codec.ToBytesNoCopy(res)})
 			}
 		}
 		return nil
@@ -544,16 +543,18 @@ func facetsFilterValuePostingList(args funcArgs, pl *posting.List, facetsTree *f
 
 	if !pickMultiplePostings {
 		// Retrieve the posting that matches the language preferences.
-		langMatch, err = pl.PostingFor(q.ReadTs, q.Langs)
-		if err != nil && err != posting.ErrNoValue {
-			return err
+		if len(q.Langs) > 0 {
+			langMatch, err = pl.PostingFor(q.ReadTs, q.Langs)
+			if err != nil && err != posting.ErrNoValue {
+				return err
+			}
 		}
 	}
 
 	// TODO(Ashish): This function starts iteration from start(afterUID is always 0). This can be
 	// optimized in come cases. For example when we know lang tag to fetch, we can directly jump
 	// to posting starting with that UID(check list.ValueFor()).
-	return pl.IterateAll(q.ReadTs, 0, func(p *pb.Posting) error {
+	return pl.Iterate(q.ReadTs, 0, func(p *pb.Posting) error {
 		if q.ExpandAll {
 			// If q.ExpandAll is true we need to consider all postings irrespective of langs.
 		} else if listType && len(q.Langs) == 0 {
@@ -562,8 +563,12 @@ func facetsFilterValuePostingList(args funcArgs, pl *posting.List, facetsTree *f
 				return nil
 			}
 		} else {
+			// Don't retrieve tagged values unless explicitly asked.
+			if len(q.Langs) == 0 && len(p.LangTag) > 0 {
+				return nil
+			}
 			// Only consider the posting that matches our language preferences.
-			if !proto.Equal(p, langMatch) {
+			if len(q.Langs) > 0 && !proto.Equal(p, langMatch) {
 				return nil
 			}
 		}
