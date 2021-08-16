@@ -74,6 +74,7 @@ func ToRDF(l *Latency, sgl []*SubGraph) ([]byte, error) {
 	return b.buf, nil
 }
 
+// send recursively validates the subgraph and sends the valid subgraphs to sgCh
 func (b *rdfBuilder) send(sg *SubGraph) error {
 	if sg.SrcUIDs != nil {
 		if err := validateSubGraphForRDF(sg); err != nil {
@@ -128,8 +129,7 @@ func (b *rdfBuilder) rdfForSubgraph(sg *SubGraph) {
 			if sg.Params.Expand != "" {
 				continue
 			}
-			// Check if we have val for the given uid. If you got uid then populate
-			// the rdf.
+			// Check if we have val for the given uid. If you got uid then populate the rdf.
 			val, ok := sg.Params.UidToVal[uid]
 			if !ok && val.Value == nil {
 				continue
@@ -138,31 +138,31 @@ func (b *rdfBuilder) rdfForSubgraph(sg *SubGraph) {
 			if err != nil {
 				continue
 			}
-			b.writeRDF(buf, uid, []byte(sg.aggWithVarFieldName()), outputval)
+			writeRDF(buf, uid, []byte(sg.aggWithVarFieldName()), outputval)
 			continue
 		}
 		switch {
 		case len(sg.counts) > 0:
 			// Add count rdf.
-			b.rdfForCount(buf, uid, sg.counts[i], sg)
+			rdfForCount(buf, uid, sg.counts[i], sg)
 		case i < len(sg.uidMatrix) && codec.ListCardinality(sg.uidMatrix[i]) != 0 &&
 			len(sg.Children) > 0:
 			// Add posting list relation.
-			b.rdfForUIDList(buf, uid, sg.uidMatrix[i], sg)
+			rdfForUIDList(buf, uid, sg.uidMatrix[i], sg)
 		case i < len(sg.valueMatrix):
-			b.rdfForValueList(buf, uid, sg.valueMatrix[i], sg.fieldName())
+			rdfForValueList(buf, uid, sg.valueMatrix[i], sg.fieldName())
 		}
 	}
 	b.outCh <- buf
 	return
 }
 
-func (b *rdfBuilder) writeRDF(buf *bytes.Buffer, subject uint64, predicate []byte, object []byte) {
+func writeRDF(buf *bytes.Buffer, subject uint64, predicate []byte, object []byte) {
 	// add subject
 	x.Check2(buf.Write(x.ToHex(subject, true)))
 	x.Check(buf.WriteByte(' '))
 	// add predicate
-	b.writeTriple(buf, predicate)
+	writeTriple(buf, predicate)
 	x.Check(buf.WriteByte(' '))
 	// add object
 	x.Check2(buf.Write(object))
@@ -171,37 +171,37 @@ func (b *rdfBuilder) writeRDF(buf *bytes.Buffer, subject uint64, predicate []byt
 	x.Check(buf.WriteByte('\n'))
 }
 
-func (b *rdfBuilder) writeTriple(buf *bytes.Buffer, val []byte) {
+func writeTriple(buf *bytes.Buffer, val []byte) {
 	x.Check(buf.WriteByte('<'))
 	x.Check2(buf.Write(val))
 	x.Check(buf.WriteByte('>'))
 }
 
 // rdfForCount returns rdf for count fucntion.
-func (b *rdfBuilder) rdfForCount(buf *bytes.Buffer, subject uint64, count uint32, sg *SubGraph) {
+func rdfForCount(buf *bytes.Buffer, subject uint64, count uint32, sg *SubGraph) {
 	fieldName := sg.Params.Alias
 	if fieldName == "" {
 		fieldName = fmt.Sprintf("count(%s)", sg.Attr)
 	}
-	b.writeRDF(buf, subject, []byte(fieldName),
+	writeRDF(buf, subject, []byte(fieldName),
 		quotedNumber([]byte(strconv.FormatUint(uint64(count), 10))))
 }
 
 // rdfForUIDList returns rdf for uid list.
-func (b *rdfBuilder) rdfForUIDList(buf *bytes.Buffer, subject uint64, list *pb.List, sg *SubGraph) {
+func rdfForUIDList(buf *bytes.Buffer, subject uint64, list *pb.List, sg *SubGraph) {
 	for _, destUID := range codec.GetUids(list) {
 		if !sg.DestMap.Contains(destUID) {
 			// This uid is filtered.
 			continue
 		}
 		// Build object.
-		b.writeRDF(buf, subject, []byte(sg.fieldName()), x.ToHex(destUID, true))
+		writeRDF(buf, subject, []byte(sg.fieldName()), x.ToHex(destUID, true))
 	}
 }
 
 // rdfForValueList returns rdf for the value list.
 // Ignore RDF's for the attirbute `uid`.
-func (b *rdfBuilder) rdfForValueList(buf *bytes.Buffer, subject uint64, valueList *pb.ValueList,
+func rdfForValueList(buf *bytes.Buffer, subject uint64, valueList *pb.ValueList,
 	attr string) {
 	for _, destValue := range valueList.Values {
 		val, err := convertWithBestEffort(destValue, attr)
@@ -212,7 +212,7 @@ func (b *rdfBuilder) rdfForValueList(buf *bytes.Buffer, subject uint64, valueLis
 		if err != nil {
 			continue
 		}
-		b.writeRDF(buf, subject, []byte(attr), outputval)
+		writeRDF(buf, subject, []byte(attr), outputval)
 	}
 }
 
