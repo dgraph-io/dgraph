@@ -29,25 +29,21 @@ import (
 	"github.com/pkg/errors"
 )
 
-const numGo = 32
+const numGo = 4
 
 // rdfBuilder is used to generate RDF from subgraph.
 type rdfBuilder struct {
-	buf   []byte
-	sgCh  chan *SubGraph
-	outCh chan *bytes.Buffer
+	sync.Mutex
+	buf  []byte
+	sgCh chan *SubGraph
 }
 
 // ToRDF converts the given subgraph list into rdf format.
 func ToRDF(l *Latency, sgl []*SubGraph) ([]byte, error) {
-	var fwg, wg sync.WaitGroup
+	var wg sync.WaitGroup
 	b := &rdfBuilder{
-		sgCh:  make(chan *SubGraph, 1000),
-		outCh: make(chan *bytes.Buffer, 1000),
+		sgCh: make(chan *SubGraph, 16),
 	}
-
-	fwg.Add(1)
-	go b.finalize(&fwg)
 
 	for i := 0; i < numGo; i++ {
 		wg.Add(1)
@@ -68,9 +64,6 @@ func ToRDF(l *Latency, sgl []*SubGraph) ([]byte, error) {
 	close(b.sgCh)
 	wg.Wait()
 
-	// close the out channel and wait for finalize to finish
-	close(b.outCh)
-	fwg.Wait()
 	return b.buf, nil
 }
 
@@ -94,13 +87,6 @@ func (b *rdfBuilder) worker(wg *sync.WaitGroup) {
 	defer wg.Done()
 	for sg := range b.sgCh {
 		b.rdfForSubgraph(sg)
-	}
-}
-
-func (b *rdfBuilder) finalize(wg *sync.WaitGroup) {
-	defer wg.Done()
-	for buf := range b.outCh {
-		b.buf = append(b.buf, buf.Bytes()...)
 	}
 }
 
@@ -153,8 +139,14 @@ func (b *rdfBuilder) rdfForSubgraph(sg *SubGraph) {
 			rdfForValueList(buf, uid, sg.valueMatrix[i], sg.fieldName())
 		}
 	}
-	b.outCh <- buf
+	b.write(buf)
 	return
+}
+
+func (b *rdfBuilder) write(buf *bytes.Buffer) {
+	b.Lock()
+	defer b.Unlock()
+	b.buf = append(b.buf, buf.Bytes()...)
 }
 
 func writeRDF(buf *bytes.Buffer, subject uint64, predicate []byte, object []byte) {
