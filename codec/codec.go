@@ -135,8 +135,7 @@ func Merge(matrix []*pb.List) *sroar.Bitmap {
 
 	var bms []*sroar.Bitmap
 	for _, m := range matrix {
-		bmc := FromListNoCopy(m)
-		if bmc != nil {
+		if bmc := FromListNoCopy(m); bmc != nil {
 			bms = append(bms, bmc)
 		}
 	}
