@@ -67,13 +67,14 @@ function newContext(eventTarget: GraphQLResolverEventTarget, logger: any) {
     try {
       const u = new URL(url.toString())
       if (isIp(u.hostname) || u.hostname == "localhost") {
-        return new Promise((resolve, reject) => {
-          reject("Cannot send request to blacklisted IP: " + url.toString())
+        return new Promise((_resolve, reject) => {
+          reject("Cannot send request to IP: " + url.toString()
+          + ". Please use domain names instead.")
           return
         })
       }
     } catch(error) {
-      return new Promise((resolve, reject) => {
+      return new Promise((_resolve, reject) => {
         reject(error)
         return
       })
@@ -113,12 +114,6 @@ function newContext(eventTarget: GraphQLResolverEventTarget, logger: any) {
     // Debugging
     console:_console,
 
-    // Async
-    setTimeout,
-    setInterval,
-    clearTimeout,
-    clearInterval,
-
     // EventTarget
     self: eventTarget,
     addEventListener: eventTarget.addEventListener.bind(eventTarget),
@@ -142,7 +137,8 @@ export function evaluateScript(source: string, logger: any) {
   // Using the timeout or breakOnSigint options will result in new event loops and corresponding
   // threads being started, which have a non-zero performance overhead.
   // Ref: https://nodejs.org/api/vm.html#vm_script_runincontext_contextifiedobject_options
-  script.runInContext(context, {timeout:10000}); // timeout after 10 seconds
+  // It should not take more than a second to add the resolvers. Add timeout of 1 second.
+  script.runInContext(context, {timeout: 1000});
 
   return async function(e: GraphQLEventFields): Promise<any | undefined> {
     let retPromise: ResolverResponse | undefined = undefined;

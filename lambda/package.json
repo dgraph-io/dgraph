@@ -25,6 +25,7 @@
     "@slash-graphql/lambda-types": "file:slash-graphql-lambda-types",
     "atob": "^2.1.2",
     "btoa": "^1.2.1",
+    "connect-timeout": "^1.9.0",
     "event-target-shim": "^5.0.1",
     "express": "^4.17.1",
     "is-ip": "^3.1.0",
@@ -35,6 +36,7 @@
   "devDependencies": {
     "@types/atob": "^2.1.2",
     "@types/btoa": "^1.2.3",
+    "@types/connect-timeout": "0.0.35",
     "@types/express": "^4.17.8",
     "@types/jest": "^26.0.14",
     "@types/node-fetch": "^2.5.7",
