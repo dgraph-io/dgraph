@@ -1009,19 +1009,15 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, er
 	return s.doQuery(ctx, req, NoAuthorize)
 }
 
-<<<<<<< HEAD
-func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode) (
-=======
 var pendingQueries int64
 var maxPendingQueries int64
 var serverOverloadErr = errors.New("429 Too Many Requests. Please throttle your requests")
 
 func Init() {
-	maxPendingQueries = x.Config.Limit.GetInt64("max-pending-queries")
+	maxPendingQueries = x.WorkerConfig.MaxPendingQueries
 }
 
-func (s *Server) doQuery(ctx context.Context, req *Request) (
->>>>>>> 1450f8100... feat(query): Add mechanism to have a limit on number of pending queries (#7603)
+func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode) (
 	resp *api.Response, rerr error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
