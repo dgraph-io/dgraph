@@ -129,6 +129,8 @@ they form a Raft group and provide synchronous replication.
 	flag.String("export", "export", "Folder in which to store exports.")
 	flag.Int("pending_proposals", 256,
 		"Number of pending mutation proposals. Useful for rate limiting.")
+	flag.Int64("max_pending_queries", 10000,
+		"Number of maximum pending queries before we reject them as too many requests.")
 	flag.StringP("zero", "z", fmt.Sprintf("localhost:%d", x.PortZeroGrpc),
 		"Comma separated list of Dgraph zero addresses of the form IP_ADDRESS:PORT.")
 	flag.Uint64("idx", 0,
@@ -645,6 +647,7 @@ func run() {
 		TmpDir:               Alpha.Conf.GetString("tmp"),
 		ExportPath:           Alpha.Conf.GetString("export"),
 		NumPendingProposals:  Alpha.Conf.GetInt("pending_proposals"),
+		MaxPendingQueries:    Alpha.Conf.GetInt64("max_pending_queries"),
 		ZeroAddr:             strings.Split(Alpha.Conf.GetString("zero"), ","),
 		RaftId:               cast.ToUint64(Alpha.Conf.GetString("idx")),
 		WhiteListedIPRanges:  ips,
@@ -691,6 +694,7 @@ func run() {
 			return
 		}
 	}
+	edgraph.Init()
 
 	x.PrintVersion()
 	glog.Infof("x.Config: %+v", x.Config)

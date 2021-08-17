@@ -63,6 +63,8 @@ type WorkerOptions struct {
 	ExportPath string
 	// NumPendingProposals indicates the maximum number of pending mutation proposals.
 	NumPendingProposals int
+	// MaxPendingQueries indicates the maximum number of pending queries.
+	MaxPendingQueries int64
 	// Tracing tells Dgraph to only sample a percentage of the traces equal to its value.
 	// The value of this option must be between 0 and 1.
 	// TODO: Get rid of this here.
