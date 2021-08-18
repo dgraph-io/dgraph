@@ -314,9 +314,9 @@ func generateQuery(node, predicate, xid string) string {
 	sb.WriteString(node)
 	sb.WriteString("(func: eq(")
 	sb.WriteString(predicate)
-	sb.WriteString(`, "`)
-	sb.WriteString(xid)
-	sb.WriteString(`")) {uid}`)
+	sb.WriteString(`, `)
+	sb.WriteString(strconv.Quote(xid))
+	sb.WriteString(`)) {uid}`)
 	return sb.String()
 }
 
