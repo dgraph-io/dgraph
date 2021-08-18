@@ -398,8 +398,8 @@ const queryAcls = `
 `
 
 var aclPrefixes = [][]byte{
-	x.PredicatePrefix(x.GalaxyAttr("dgraph.acl.permission")),
-	x.PredicatePrefix(x.GalaxyAttr("dgraph.acl.predicate")),
+	x.PredicatePrefix(x.GalaxyAttr("dgraph.rule.permission")),
+	x.PredicatePrefix(x.GalaxyAttr("dgraph.rule.predicate")),
 	x.PredicatePrefix(x.GalaxyAttr("dgraph.acl.rule")),
 	x.PredicatePrefix(x.GalaxyAttr("dgraph.user.group")),
 	x.PredicatePrefix(x.GalaxyAttr("dgraph.type.Group")),
