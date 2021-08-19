@@ -9,7 +9,7 @@
  */
 
 import fetch from 'node-fetch';
-import { GraphQLResponse, AuthHeaderField } from '@slash-graphql/lambda-types';
+import { GraphQLResponse, AuthHeaderField } from '@dgraph-lambda/lambda-types';
 
 export async function graphql(query: string, variables: Record<string, any> = {}, authHeader?: AuthHeaderField): Promise<GraphQLResponse> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };

@@ -8,21 +8,18 @@
     "build": "npx webpack-cli",
     "test": "jest"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/dgraph-io/dgraph-lambda.git"
-  },
   "keywords": [
     "dgraph"
   ],
-  "author": "Tejas Dinkar <tejas@gja.in>",
-  "license": "Apache-2.0",
+  "author": "Dgraph Labs",
+  "private": true,
+  "license": "SEE LICENSE in https://github.com/dgraph-io/dgraph/blob/master/licenses/DCL.txt",
   "bugs": {
-    "url": "https://github.com/dgraph-io/dgraph-lambda/issues"
+    "url": "https://github.com/dgraph-io/dgraph/issues"
   },
-  "homepage": "https://github.com/dgraph-io/dgraph-lambda#readme",
+  "homepage": "https://github.com/dgraph-io/dgraph/lambda#readme",
   "dependencies": {
-    "@slash-graphql/lambda-types": "file:slash-graphql-lambda-types",
+    "@dgraph-lambda/lambda-types": "file:lambda-types",
     "atob": "^2.1.2",
     "btoa": "^1.2.1",
     "connect-timeout": "^1.9.0",

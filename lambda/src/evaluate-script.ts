@@ -10,7 +10,7 @@
 
 import { EventTarget } from 'event-target-shim';
 import vm from 'vm';
-import { GraphQLEvent, GraphQLEventWithParent, GraphQLEventFields, ResolverResponse, AuthHeaderField, WebHookGraphQLEvent } from '@slash-graphql/lambda-types'
+import { GraphQLEvent, GraphQLEventWithParent, GraphQLEventFields, ResolverResponse, AuthHeaderField, WebHookGraphQLEvent } from '@dgraph-lambda/lambda-types'
 
 import fetch, { RequestInfo, RequestInit, Request, Response, Headers } from "node-fetch";
 import { URL } from "url";

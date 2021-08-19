@@ -14,7 +14,7 @@ import vm from 'vm';
 import atob from "atob";
 import btoa from "btoa";
 import { evaluateScript } from './evaluate-script'
-import { GraphQLEventFields } from '@slash-graphql/lambda-types'
+import { GraphQLEventFields } from '@dgraph-lambda/lambda-types'
 
 function bodyToEvent(b: any): GraphQLEventFields {
   return {

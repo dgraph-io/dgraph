@@ -1,5 +1,5 @@
 {
-  "name": "@slash-graphql/lambda-types",
+  "name": "@dgraph-lambda/lambda-types",
   "version": "1.2.0",
   "description": "Types for building out a Dgraph Lambda",
   "main": "index.js",
@@ -9,8 +9,9 @@
   },
   "repository": {
     "type": "git",
-    "url": "github.com/dgraph-io/dgraph-lambda"
+    "url": "github.com/dgraph-io/dgraph",
+    "directory": "lambda/lambda-types"
   },
-  "author": "Tejas Dinkar <tejas@gja.in>",
-  "license": "Apache-2.0"
+  "author": "Dgraph Labs",
+  "license": "See LICENSE in DCL.txt"
 }

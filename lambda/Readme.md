@@ -1,6 +1,6 @@
 # Dgraph Lambda
 
-Dgraph Lambda is a serverless platform for running JS on Slash GraphQL (or Dgraph).
+Dgraph Lambda is a serverless platform for running JS on Dgraph Cloud.
 
 ## Running a script
 
@@ -34,7 +34,7 @@ self.addMultiParentGraphQLResolvers({
 })
 ```
 
-## Running Locally
+## Running Locally [Needs to be updated]
 
 First launch dgraph and load it with the todo schema (and add a todo or two).
 
@@ -88,10 +88,10 @@ You can import @slash-graph/lambda-types to get types for `addGraphQLResolver` a
 
 ## Security
 
-Currently, this uses node context to try and make sure that users aren't up to any fishy business. However, contexts aren't true security, and we should eventually switch to isolates. In the meanwhile, we will basically have kube kill this if it takes a lot of CPU for say 5 secs
+Currently, this uses node context to try and make sure that users aren't up to any fishy business. However, contexts aren't true security, and we should eventually switch to isolates.
 
-## Publishing
+## Publishing [Needs to be updated]
 
 Currently, the publishing of this isn't automated. In order to publish:
-* Publish the types in slash-graphql-lambda-types if needed with (npm version minor; npm publish)
+* Publish the types in lambda-types if needed with (npm version minor; npm publish)
 * The docker-image auto publishes, but pushing a tag will create a tagged version that is more stable

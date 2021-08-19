@@ -8,7 +8,7 @@
  *     https://github.com/dgraph-io/dgraph/blob/master/licenses/DCL.txt
  */
 
-declare module "@slash-graphql/lambda-types" {
+declare module "@dgraph-lambda/lambda-types" {
   type GraphQLResponse = {
     data?: Record<string, any>,
     errors?: { message: string }[]
