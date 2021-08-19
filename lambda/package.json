@@ -8,12 +8,16 @@
     "build": "npx webpack-cli",
     "test": "jest"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dgraph-io/dgraph.git",
+    "directory": "lambda"
+  },
   "keywords": [
     "dgraph"
   ],
-  "author": "Dgraph Labs",
-  "private": true,
-  "license": "SEE LICENSE in https://github.com/dgraph-io/dgraph/blob/master/licenses/DCL.txt",
+  "author": "Dgraph Labs <contact@dgraph.io>",
+  "license": "Apache-2.0",
   "bugs": {
     "url": "https://github.com/dgraph-io/dgraph/issues"
   },

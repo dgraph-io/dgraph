@@ -9,9 +9,9 @@
   },
   "repository": {
     "type": "git",
-    "url": "github.com/dgraph-io/dgraph",
+    "url": "git+https://github.com/dgraph-io/dgraph.git",
     "directory": "lambda/lambda-types"
   },
-  "author": "Dgraph Labs",
-  "license": "See LICENSE in DCL.txt"
+  "author": "Dgraph Labs <contact@dgraph.io>",
+  "license": "Apache-2.0"
 }
