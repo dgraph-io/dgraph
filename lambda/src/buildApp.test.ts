@@ -24,7 +24,7 @@ describe(buildApp, () => {
       .set('Accept', 'application/json')
       .expect('Content-Type', /json/)
       .expect(200);
-    expect(response.body).toEqual([42]);
+    expect(response.body).toEqual({"logs": "", "res": [42]});
   })
 
   it("returns a single item if the parents is null", async () => {
@@ -39,7 +39,7 @@ describe(buildApp, () => {
       .set('Accept', 'application/json')
       .expect('Content-Type', /json/)
       .expect(200);
-    expect(response.body).toEqual(42);
+    expect(response.body).toEqual({"logs": "", "res": 42});
   })
 
   it("returns a 400 if the resolver is not registered or invalid", async () => {
@@ -51,7 +51,7 @@ describe(buildApp, () => {
       .set('Accept', 'application/json')
       .expect('Content-Type', /json/)
       .expect(400);
-    expect(response.body).toEqual("");
+    expect(response.body).toEqual({"logs": ""});
   })
 
   it("gets the auth header as a key", async () => {
@@ -69,6 +69,6 @@ describe(buildApp, () => {
       .set('Accept', 'application/json')
       .expect('Content-Type', /json/)
       .expect(200);
-    expect(response.body).toEqual(["foobar"]);
+    expect(response.body).toEqual({"logs": "", "res": ["foobar"]});
   })
 })

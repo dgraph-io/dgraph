@@ -50,7 +50,7 @@ export function buildApp() {
           await vm.runInNewContext(
             `runner(bodyToEvent(req.body)).then(result => {
               if(result === undefined && req.body.resolver !== '$webhook') {
-                  resp.status(400)
+                  res.status(400)
               }
               res.json({res: result, logs: logger.logs})
             })
