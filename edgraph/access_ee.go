@@ -631,8 +631,15 @@ func authorizePreds(ctx context.Context, userData *userData, preds []string,
 			blockedPreds[pred] = struct{}{}
 		}
 	}
+
+	if hasAccessToAllPreds(ns, groupIds, aclOp) {
+		// Setting allowed to nil allows access to all predicates. Note that the access to ACL
+		// predicates will still be blocked.
+		return &authPredResult{allowed: nil, blocked: blockedPreds}
+	}
+
 	aclCachePtr.RLock()
-	allowedPreds := make([]string, len(aclCachePtr.userPredPerms[userId]))
+	allowedPreds := make([]string, 0, len(aclCachePtr.userPredPerms[userId]))
 	// User can have multiple permission for same predicate, add predicate
 	// only if the acl.Op is covered in the set of permissions for the user
 	for predicate, perm := range aclCachePtr.userPredPerms[userId] {
