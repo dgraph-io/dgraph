@@ -404,8 +404,8 @@ const queryAcls = `
 `
 
 var aclPrefixes = [][]byte{
-	x.PredicatePrefix(x.GalaxyAttr("dgraph.acl.permission")),
-	x.PredicatePrefix(x.GalaxyAttr("dgraph.acl.predicate")),
+	x.PredicatePrefix(x.GalaxyAttr("dgraph.rule.permission")),
+	x.PredicatePrefix(x.GalaxyAttr("dgraph.rule.predicate")),
 	x.PredicatePrefix(x.GalaxyAttr("dgraph.acl.rule")),
 	x.PredicatePrefix(x.GalaxyAttr("dgraph.user.group")),
 	x.PredicatePrefix(x.GalaxyAttr("dgraph.type.Group")),
@@ -642,8 +642,14 @@ func authorizePreds(ctx context.Context, userData *userData, preds []string,
 			blockedPreds[pred] = struct{}{}
 		}
 	}
+
+	if worker.HasAccessToAllPreds(ns, groupIds, aclOp) {
+		// Setting allowed to nil allows access to all predicates. Note that the access to ACL
+		// predicates will still be blocked.
+		return &authPredResult{allowed: nil, blocked: blockedPreds}, nil
+	}
 	// User can have multiple permission for same predicate, add predicate
-	allowedPreds := make([]string, len(worker.AclCachePtr.GetUserPredPerms(userId)))
+	allowedPreds := make([]string, 0, len(worker.AclCachePtr.GetUserPredPerms(userId)))
 	// only if the acl.Op is covered in the set of permissions for the user
 	for predicate, perm := range worker.AclCachePtr.GetUserPredPerms(userId) {
 		if (perm & aclOp.Code) > 0 {
