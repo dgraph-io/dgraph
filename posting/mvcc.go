@@ -35,7 +35,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 )
 
@@ -522,6 +521,10 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 	return l, nil
 }
 
+type dummyPL struct {
+	writeTs uint64
+}
+
 func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 	if pstore.IsClosed() {
 		return nil, badger.ErrDBClosed
@@ -532,16 +535,25 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 	// We use badger subscription to invalidate the cache. For every write we make the value
 	// corresponding to the key in the cache to nil. So, if we get some non-nil value from the cache
 	// then it means that no  writes have happened after the last set of this key in the cache.
-	if cachedVal, ok := lCache.Get(key); ok {
-		l, ok := cachedVal.(*List)
-		if ok && l != nil && l.maxTs > 0 && l.maxTs <= readTs {
-			glog.Infof("Found in cache key: %x readTs: %d l.maxTs: %d\n", key, readTs, l.maxTs)
-			l.RLock()
-			lCopy = copyList(l)
-			l.RUnlock()
-			// return lCopy, nil
+	if val, ok := lCache.Get(key); ok {
+		switch val.(type) {
+		case *List:
+			l := val.(*List)
+			if l != nil {
+				x.AssertTruef(l.maxTs > 0 && l.maxTs <= readTs, "l.maxTs: %d, readTs: %d", l.maxTs, readTs)
+				glog.Infof("Found in cache key: %x readTs: %d l.maxTs: %d\n", key, readTs, l.maxTs)
+				l.RLock()
+				lCopy = copyList(l)
+				l.RUnlock()
+				// return lCopy, nil
+			}
+
+		case *dummyPL:
+			glog.Infof("TODO: Found a dummy with write ts: %d for key: %x", val.(*dummyPL).writeTs, key)
 		}
 	}
+
+	lCache.SetIfAbsent(key, &dummyPL{}, 1)
 
 	txn := pstore.NewTransactionAt(readTs, false)
 	defer txn.Discard()
@@ -597,12 +609,13 @@ func copyList(l *List) *List {
 		key:   l.key,
 		plist: l.plist,
 	}
-	// x.AssertTrue(l.mutationMap == nil)
-	if l.mutationMap != nil {
-		lCopy.mutationMap = make(map[uint64]*pb.PostingList)
-		for ts, pl := range l.mutationMap {
-			lCopy.mutationMap[ts] = proto.Clone(pl).(*pb.PostingList)
-		}
-	}
+	// We do a rollup before storing PL in cache.
+	x.AssertTrue(l.mutationMap == nil)
+	// if l.mutationMap != nil {
+	// 	lCopy.mutationMap = make(map[uint64]*pb.PostingList)
+	// 	for ts, pl := range l.mutationMap {
+	// 		lCopy.mutationMap[ts] = proto.Clone(pl).(*pb.PostingList)
+	// 	}
+	// }
 	return lCopy
 }

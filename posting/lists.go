@@ -44,9 +44,17 @@ type GoCache struct {
 	mp map[string]interface{}
 }
 
-func (c *GoCache) Set(key []byte, l interface{}, v uint64) {
+func (c *GoCache) Set(key []byte, l interface{}, _ uint64) {
 	c.Lock()
 	c.mp[string(key)] = l
+	c.Unlock()
+}
+
+func (c *GoCache) SetIfAbsent(key []byte, l interface{}, _ uint64) {
+	c.Lock()
+	if _, has := c.mp[string(key)]; !has {
+		c.mp[string(key)] = l
+	}
 	c.Unlock()
 }
 
