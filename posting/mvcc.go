@@ -497,8 +497,8 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 	}
 
 	// We use badger subscription to invalidate the cache. For every write we make the value
-	// of the cache nil. So, if we get some non-nil value from the cache then it means that no
-	// writes have happened after the last set of this key in the cache.
+	// corresponding to the key in the cache to nil. So, if we get some non-nil value from the cache
+	// then it means that no  writes have happened after the last set of this key in the cache.
 	cachedVal, ok := lCache.Get(key)
 	if ok {
 		l, ok := cachedVal.(*List)
@@ -537,7 +537,7 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 		return l, err
 	}
 
-	// Only set this posting list to the cache if readTs >= latestTs, which implies that this is
+	// Only set l to the cache if readTs >= latestTs, which implies that l is
 	// the latest version of the PL.
 	if readTs >= latestTs && l.maxTs > 0 {
 		lCache.Set(key, l, 0)
