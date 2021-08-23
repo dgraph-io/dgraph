@@ -40,7 +40,7 @@ const (
 	//       breaks.
 	AuditDefaults  = `compress=false; days=10; size=100; dir=; output=; encrypt-file=;`
 	BadgerDefaults = `compression=snappy; numgoroutines=8;`
-	CacheDefaults  = `size-mb=1024; percentage=0,65,35;`
+	CacheDefaults  = `size-mb=1024; percentage=50,30,20;`
 	CDCDefaults    = `file=; kafka=; sasl_user=; sasl_password=; ca_cert=; client_cert=; ` +
 		`client_key=; sasl-mechanism=PLAIN;`
 	GraphQLDefaults = `introspection=true; debug=false; extensions=true; poll-interval=1s; ` +

@@ -25,6 +25,8 @@ import (
 	ostats "go.opencensus.io/stats"
 
 	"github.com/dgraph-io/badger/v3"
+	bpb "github.com/dgraph-io/badger/v3/pb"
+	"github.com/dgraph-io/badger/v3/y"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/ristretto"
 	"github.com/dgraph-io/ristretto/z"
@@ -46,8 +48,25 @@ var (
 // Init initializes the posting lists package, the in memory and dirty list hash.
 func Init(ps *badger.DB, cacheSize int64) {
 	pstore = ps
-	closer = z.NewCloser(1)
+	closer = z.NewCloser(2)
 	go x.MonitorMemoryMetrics(closer)
+
+	// Use pstore.Subscribe and call UpdateIfPresent, so you only update the
+	// keys which are already cached. Not introduce new keys.
+	go func(closer *z.Closer) {
+		defer closer.Done()
+		err := pstore.Subscribe(closer.Ctx(), func(kvs *bpb.KVList) error {
+			for _, kv := range kvs.Kv {
+				key := y.ParseKey(kv.Key)
+				if _, ok := lCache.Get(key); ok {
+					lCache.Set(key, nil, 0)
+				}
+			}
+			return nil
+		}, nil)
+		x.Check(err)
+	}(closer)
+
 	// Initialize cache.
 	if cacheSize == 0 {
 		return

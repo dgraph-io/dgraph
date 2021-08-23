@@ -580,9 +580,6 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 			return err
 		}
 
-		// Clear entire cache.
-		posting.ResetCache()
-
 		// It should be okay to set the schema at timestamp 1 after drop all operation.
 		if groups().groupId() == 1 {
 			initialSchema := schema.InitialSchema(x.GalaxyNamespace)
@@ -631,12 +628,6 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 
 		if err := runSchemaMutation(ctx, proposal.Mutations.Schema, startTs); err != nil {
 			return err
-		}
-
-		// Clear the entire cache if there is a schema update because the index rebuild
-		// will invalidate the state.
-		if len(proposal.Mutations.Schema) > 0 {
-			posting.ResetCache()
 		}
 
 		for _, tupdate := range proposal.Mutations.Types {
@@ -1153,14 +1144,6 @@ func (n *node) commitOrAbort(_ uint64, delta *pb.OracleDelta) error {
 	if delta.GroupChecksums != nil && delta.GroupChecksums[g.groupId()] > 0 {
 		atomic.StoreUint64(&g.deltaChecksum, delta.GroupChecksums[g.groupId()])
 	}
-
-	// Clear all the cached lists that were touched by this transaction.
-	for _, status := range delta.Txns {
-		txn := posting.Oracle().GetTxn(status.StartTs)
-		txn.RemoveCachedKeys()
-	}
-	posting.WaitForCache()
-	span.Annotate(nil, "cache keys removed")
 
 	// Now advance Oracle(), so we can service waiting reads.
 	posting.Oracle().ProcessDelta(delta)
