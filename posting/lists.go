@@ -26,7 +26,6 @@ import (
 
 	"github.com/dgraph-io/badger/v3"
 	bpb "github.com/dgraph-io/badger/v3/pb"
-	"github.com/dgraph-io/badger/v3/y"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/ristretto"
 	"github.com/dgraph-io/ristretto/z"
@@ -55,15 +54,14 @@ func Init(ps *badger.DB, cacheSize int64) {
 	// keys which are already cached. Not introduce new keys.
 	go func(closer *z.Closer) {
 		defer closer.Done()
-		err := pstore.Subscribe(closer.Ctx(), func(kvs *bpb.KVList) error {
+		err := pstore.Subscribe(context.Background(), func(kvs *bpb.KVList) error {
 			for _, kv := range kvs.Kv {
-				key := y.ParseKey(kv.Key)
-				if _, ok := lCache.Get(key); ok {
-					lCache.Set(key, nil, 0)
+				if _, ok := lCache.Get(kv.Key); ok {
+					lCache.Set(kv.Key, nil, 0)
 				}
 			}
 			return nil
-		}, nil)
+		}, []bpb.Match{{}})
 		x.Check(err)
 	}(closer)
 
