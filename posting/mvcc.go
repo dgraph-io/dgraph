@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
+	"fmt"
 	"math"
 	"sort"
 	"strconv"
@@ -93,7 +94,7 @@ func (ir *incrRollupi) rollUpKey(sl *skl.Skiplist, key []byte) error {
 	}
 
 	// Clear the list from the cache after a rollup.
-	RemoveCacheFor(key)
+	// RemoveCacheFor(key)
 
 	const N = uint64(1000)
 	if glog.V(2) {
@@ -379,24 +380,25 @@ func ResetCache() {
 
 // RemoveCacheFor will delete the list corresponding to the given key.
 func RemoveCacheFor(key []byte) {
-	v, ok := lCache.Get(key)
-	if ok {
-		l, ok := v.(*List)
-		if ok {
-			glog.Infof("-----Invalidated key: %x l.maxTs: %d\n", key, l.maxTs)
-			lCache.Set(key, struct{}{}, 0)
-			lCache.Wait()
-		}
-	}
+	lCache.UpdateIfPresent(key, &dummyPL{}, 0)
+	// v, ok := lCache.Get(key)
+	// if ok {
+	// 	l, ok := v.(*List)
+	// 	if ok {
+	// 		glog.Infof("-----Invalidated key: %x l.maxTs: %d\n", key, l.maxTs)
+	// 		lCache.Set(key, struct{}{}, 0)
+	// 		lCache.Wait()
+	// 	}
+	// }
 }
 
 // RemoveCachedKeys will delete the cached list by this txn.
-func (txn *Txn) RemoveCachedKeys() {
+func (txn *Txn) UpdateCachedKeys(commitTs uint64) {
 	if txn == nil || txn.cache == nil {
 		return
 	}
 	for key := range txn.cache.deltas {
-		RemoveCacheFor([]byte(key))
+		lCache.UpdateIfPresent([]byte(key), &dummyPL{writeTs: commitTs}, 0)
 	}
 }
 
@@ -531,6 +533,7 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 	}
 
 	var lCopy *List
+	var seenTs uint64
 	glog.Infof("Looking for key: %x readTs: %d\n", key, readTs)
 	// We use badger subscription to invalidate the cache. For every write we make the value
 	// corresponding to the key in the cache to nil. So, if we get some non-nil value from the cache
@@ -549,10 +552,13 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 			}
 
 		case *dummyPL:
-			glog.Infof("TODO: Found a dummy with write ts: %d for key: %x", val.(*dummyPL).writeTs, key)
+			seenTs = val.(*dummyPL).writeTs
+			glog.Infof("TODO: Found a dummy with write ts: %d for key: %x", seenTs, key)
 		}
 	}
 
+	// We set the key upfront, so it has a chance to register the updated write
+	// ts coming from commits.
 	lCache.SetIfAbsent(key, &dummyPL{}, 1)
 
 	txn := pstore.NewTransactionAt(readTs, false)
@@ -571,15 +577,13 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 		return l, err
 	}
 
-	if lCopy != nil && lCopy.maxTs > 0 && l.maxTs <= readTs && l.maxTs != lCopy.maxTs {
-		glog.Infof("++++++++++++++++++++++ key: %x l.maxTs: %d lCopy.maxTs: %d\n",
-			key, l.maxTs, lCopy.maxTs)
-		panic("oops")
+	if lCopy != nil && lCopy.maxTs != l.maxTs {
+		panic(fmt.Sprintf("lcopy: %d l.maxTs: %d key: %x\n", lCopy.maxTs, l.maxTs, key))
 	}
 
 	// Only set l to the cache if readTs >= latestTs, which implies that l is
 	// the latest version of the PL.
-	if readTs >= latestTs && l.maxTs > 0 {
+	if readTs >= latestTs && latestTs >= seenTs {
 		// glog.Infof("Setting cache key: %x readTs: %d l.maxTs: %d latestTs: %d\n",
 		// 	key, readTs, l.maxTs, latestTs)
 		// l.RLock()
@@ -595,7 +599,10 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 		// 	plist: out.plist,
 		// }
 		lc := copyList(l)
-		lCache.Set(key, lc, 0)
+		lCache.UpdateIfPresent(key, lc, 0)
+		// lCache.Set(key, lc, 0)
+	} else {
+		glog.Infof("TODO. readTs: %d latestTs: %d seenTs: %d maxTs: %d key: %x\n", readTs, latestTs, seenTs, l.maxTs, key)
 	}
 	return l, nil
 }

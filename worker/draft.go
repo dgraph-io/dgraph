@@ -1157,7 +1157,7 @@ func (n *node) commitOrAbort(_ uint64, delta *pb.OracleDelta) error {
 	// Clear all the cached lists that were touched by this transaction.
 	for _, status := range delta.Txns {
 		txn := posting.Oracle().GetTxn(status.StartTs)
-		txn.RemoveCachedKeys()
+		txn.UpdateCachedKeys(status.CommitTs)
 	}
 	posting.WaitForCache()
 	span.Annotate(nil, "cache keys removed")

@@ -50,6 +50,13 @@ func (c *GoCache) Set(key []byte, l interface{}, _ uint64) {
 	c.Unlock()
 }
 
+func (c *GoCache) UpdateIfPresent(key []byte, l interface{}, _ uint64) {
+	c.Lock()
+	if _, has := c.mp[string(key)]; has {
+		c.mp[string(key)] = l
+	}
+	c.Unlock()
+}
 func (c *GoCache) SetIfAbsent(key []byte, l interface{}, _ uint64) {
 	c.Lock()
 	if _, has := c.mp[string(key)]; !has {
