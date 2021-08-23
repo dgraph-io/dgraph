@@ -379,8 +379,8 @@ func ResetCache() {
 }
 
 // RemoveCacheFor will delete the list corresponding to the given key.
-func RemoveCacheFor(key []byte) {
-	lCache.UpdateIfPresent(key, &dummyPL{}, 0)
+func RemoveCacheFor_Unused(key []byte) {
+	// lCache.UpdateIfPresent(key, &dummyPL{}, 0)
 	// v, ok := lCache.Get(key)
 	// if ok {
 	// 	l, ok := v.(*List)
@@ -397,6 +397,7 @@ func (txn *Txn) UpdateCachedKeys(commitTs uint64) {
 	if txn == nil || txn.cache == nil {
 		return
 	}
+	x.AssertTrue(commitTs > 0)
 	for key := range txn.cache.deltas {
 		lCache.UpdateIfPresent([]byte(key), &dummyPL{writeTs: commitTs}, 0)
 	}
@@ -542,9 +543,10 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 		switch val.(type) {
 		case *List:
 			l := val.(*List)
-			if l != nil {
-				x.AssertTruef(l.maxTs > 0 && l.maxTs <= readTs, "l.maxTs: %d, readTs: %d", l.maxTs, readTs)
-				glog.Infof("Found in cache key: %x readTs: %d l.maxTs: %d\n", key, readTs, l.maxTs)
+			// l.maxTs can be greater than readTs. We might have the latest
+			// version cached, while readTs is looking for an older version.
+			if l != nil && l.maxTs <= readTs {
+				glog.Infof("getNew Found in cache key: %x readTs: %d l.maxTs: %d\n", key, readTs, l.maxTs)
 				l.RLock()
 				lCopy = copyList(l)
 				l.RUnlock()
@@ -553,13 +555,13 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 
 		case *dummyPL:
 			seenTs = val.(*dummyPL).writeTs
-			glog.Infof("TODO: Found a dummy with write ts: %d for key: %x", seenTs, key)
+			glog.Infof("getNew Found a dummy with write ts: %d for key: %x", seenTs, key)
 		}
+	} else {
+		// We set the key upfront, so it has a chance to register the updated write
+		// ts coming from commits.
+		lCache.SetIfAbsent(key, &dummyPL{writeTs: 1}, 1)
 	}
-
-	// We set the key upfront, so it has a chance to register the updated write
-	// ts coming from commits.
-	lCache.SetIfAbsent(key, &dummyPL{}, 1)
 
 	txn := pstore.NewTransactionAt(readTs, false)
 	defer txn.Discard()
@@ -577,8 +579,12 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 		return l, err
 	}
 
+	glog.Infof("getNew readTs: %d latestTs: %d seenTs: %d maxTs: %d key: %x\n", readTs, latestTs, seenTs, l.maxTs, key)
 	if lCopy != nil && lCopy.maxTs != l.maxTs {
-		panic(fmt.Sprintf("lcopy: %d l.maxTs: %d key: %x\n", lCopy.maxTs, l.maxTs, key))
+		panic(fmt.Sprintf("getNew lcopy: %d l.maxTs: %d key: %x\n", lCopy.maxTs, l.maxTs, key))
+	}
+	if lCopy != nil && readTs >= latestTs && latestTs > lCopy.maxTs {
+		panic(fmt.Sprintf("getNew2 lcopy.maxTs: %d l.maxTs: %d key: %x\n", lCopy.maxTs, l.maxTs, key))
 	}
 
 	// Only set l to the cache if readTs >= latestTs, which implies that l is
@@ -586,23 +592,24 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 	if readTs >= latestTs && latestTs >= seenTs {
 		// glog.Infof("Setting cache key: %x readTs: %d l.maxTs: %d latestTs: %d\n",
 		// 	key, readTs, l.maxTs, latestTs)
-		// l.RLock()
-		// defer l.RUnlock()
-		// out, err := l.rollup(math.MaxUint64, false)
-		// if err != nil {
-		// 	return nil, err
-		// }
-		// lc := &List{
-		// 	minTs: out.newMinTs,
-		// 	maxTs: l.maxTs,
-		// 	key:   l.key,
-		// 	plist: out.plist,
-		// }
-		lc := copyList(l)
-		lCache.UpdateIfPresent(key, lc, 0)
+		l.RLock()
+		defer l.RUnlock()
+		out, err := l.rollup(math.MaxUint64, false)
+		if err != nil {
+			return nil, err
+		}
+		lc := &List{
+			minTs: out.newMinTs,
+			maxTs: l.maxTs,
+			key:   l.key,
+			plist: out.plist,
+		}
+		// TODO: We should return a rolled up version to the user. And cache a
+		// copy of it.
+		if lCopy == nil { // Remove this later.
+			lCache.UpdateIfPresent(key, lc, 0)
+		}
 		// lCache.Set(key, lc, 0)
-	} else {
-		glog.Infof("TODO. readTs: %d latestTs: %d seenTs: %d maxTs: %d key: %x\n", readTs, latestTs, seenTs, l.maxTs, key)
 	}
 	return l, nil
 }
@@ -617,7 +624,7 @@ func copyList(l *List) *List {
 		plist: l.plist,
 	}
 	// We do a rollup before storing PL in cache.
-	x.AssertTrue(l.mutationMap == nil)
+	x.AssertTrue(len(l.mutationMap) == 0)
 	// if l.mutationMap != nil {
 	// 	lCopy.mutationMap = make(map[uint64]*pb.PostingList)
 	// 	for ts, pl := range l.mutationMap {

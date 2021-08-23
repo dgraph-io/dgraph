@@ -23,6 +23,7 @@ import (
 	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/ristretto/z"
+	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
@@ -51,15 +52,52 @@ func (c *GoCache) Set(key []byte, l interface{}, _ uint64) {
 }
 
 func (c *GoCache) UpdateIfPresent(key []byte, l interface{}, _ uint64) {
+	sk := string(key)
 	c.Lock()
-	if _, has := c.mp[string(key)]; has {
-		c.mp[string(key)] = l
+	defer c.Unlock()
+
+	if prev, has := c.mp[sk]; has {
+		var prevMax uint64
+		switch prev.(type) {
+		case *List:
+			glog.Infof("GoCache Prev Key %x had l.maxTs: %d", key, prev.(*List).maxTs)
+			prevMax = prev.(*List).maxTs
+		case *dummyPL:
+			glog.Infof("GoCache Prev Key %x had dummy.writeTs: %d", key, prev.(*dummyPL).writeTs)
+			prevMax = prev.(*dummyPL).writeTs
+		default:
+			x.AssertTrue(false)
+		}
+		switch l.(type) {
+		case *List:
+			if l.(*List).maxTs < prevMax {
+				glog.Infof("GoCache rejecting PL update. prev: %d new: %d\n", prevMax, l.(*List).maxTs)
+				return
+			}
+			glog.Infof("GoCache UpdateIfPresent key %x with l.maxTs: %d", key, l.(*List).maxTs)
+		case *dummyPL:
+			if l.(*dummyPL).writeTs < prevMax {
+				glog.Infof("GoCache rejecting dummy update. prev: %d new: %d\n", prevMax, l.(*dummyPL).writeTs)
+				return
+			}
+			glog.Infof("GoCache UpdateIfPresent key %x with dummy.writeTs: %d", key, l.(*dummyPL).writeTs)
+		default:
+			x.AssertTrue(false)
+		}
+		c.mp[sk] = l
 	}
-	c.Unlock()
 }
 func (c *GoCache) SetIfAbsent(key []byte, l interface{}, _ uint64) {
 	c.Lock()
 	if _, has := c.mp[string(key)]; !has {
+		switch l.(type) {
+		case *List:
+			glog.Infof("GoCache Updating key %x with l.maxTs: %d", key, l.(*List).maxTs)
+		case *dummyPL:
+			glog.Infof("GoCache Updating key %x with dummy.writeTs: %d", key, l.(*dummyPL).writeTs)
+		default:
+			x.AssertTrue(false)
+		}
 		c.mp[string(key)] = l
 	}
 	c.Unlock()
