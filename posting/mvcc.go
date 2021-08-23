@@ -371,6 +371,10 @@ func (txn *Txn) ToSkiplist() error {
 	return nil
 }
 
+func ResetCache() {
+	lCache.Clear()
+}
+
 func unmarshalOrCopy(plist *pb.PostingList, item *badger.Item) error {
 	if plist == nil {
 		return errors.Errorf("cannot unmarshal value to a nil posting list of key %s",

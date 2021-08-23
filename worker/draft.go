@@ -580,6 +580,9 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 			return err
 		}
 
+		// Clear entire cache.
+		posting.ResetCache()
+
 		// It should be okay to set the schema at timestamp 1 after drop all operation.
 		if groups().groupId() == 1 {
 			initialSchema := schema.InitialSchema(x.GalaxyNamespace)
@@ -628,6 +631,12 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 
 		if err := runSchemaMutation(ctx, proposal.Mutations.Schema, startTs); err != nil {
 			return err
+		}
+
+		// Clear the entire cache if there is a schema update because the index rebuild
+		// will invalidate the state.
+		if len(proposal.Mutations.Schema) > 0 {
+			posting.ResetCache()
 		}
 
 		for _, tupdate := range proposal.Mutations.Types {
