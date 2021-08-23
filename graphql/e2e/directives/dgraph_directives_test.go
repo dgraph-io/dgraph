@@ -63,9 +63,9 @@ func TestMain(m *testing.M) {
 	}
 
 	// set up the lambda url for unit tests
-	x.Config.GraphQL = x.GraphQLOptions{
-		LambdaCnt:  2,
-		LambdaPort: 20000,
+	x.Config.Lambda = x.LambdaOptions{
+		Cnt:  2,
+		Port: 20000,
 	}
 
 	common.BootstrapServer(schema, data)
