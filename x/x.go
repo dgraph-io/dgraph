@@ -1474,18 +1474,18 @@ func (r *RateLimiter) RefillPeriodically() {
 
 var loop uint32
 
-// LambdaUrl returns the correct lambda-url for the given namespace
+// LambdaUrl returns the correct lambda url for the given namespace
 func LambdaUrl(ns uint64) string {
-	lambdaUrl := Config.GraphQL.LambdaUrl
+	lambdaUrl := Config.Lambda.Url
 	if len(lambdaUrl) > 0 {
 		return strings.Replace(lambdaUrl, "$ns", strconv.FormatUint(ns, 10), 1)
 	}
 	// TODO: Should we check if this server is active and then consider it for load balancing?
-	num := Config.GraphQL.LambdaCnt
+	num := Config.Lambda.Cnt
 	if num == 0 {
 		return ""
 	}
-	port := Config.GraphQL.LambdaPort
+	port := Config.Lambda.Port
 	url := fmt.Sprintf("http://localhost:%d/graphql-worker", port+(atomic.AddUint32(&loop, 1)%num))
 	return url
 }

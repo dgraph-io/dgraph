@@ -230,14 +230,18 @@ they form a Raft group and provide synchronous replication.
 			"Enables extensions in GraphQL response body.").
 		Flag("poll-interval",
 			"The polling interval for GraphQL subscription.").
-		Flag("lambda-url",
+		String())
+
+	flag.String("lambda", worker.LambdaDefaults, z.NewSuperFlagHelp(worker.LambdaDefaults).
+		Head("Lambda options").
+		Flag("url",
 			"The URL of a lambda server that implements custom GraphQL Javascript resolvers."+
 				" This should be used only when using custom lambda server."+
-				" Use --lambda-cnt to launch official lambda server."+
+				" Use cnt subflag to launch official lambda server."+
 				" This flag if set, overrides the other lambda flags.").
-		Flag("lambda-cnt",
+		Flag("cnt",
 			"Number of JS lambda servers to be launched by alpha.").
-		Flag("lambda-port",
+		Flag("port",
 			"The starting port at which the lambda server listens.").
 		String())
 
@@ -453,13 +457,13 @@ func setupListener(addr string, port int) (net.Listener, error) {
 }
 
 func setupLambdaServer(closer *z.Closer) {
-	// If lambda-url is set, then don't launch the lambda servers from dgraph.
-	if len(x.Config.GraphQL.LambdaUrl) > 0 {
+	// If --lambda url is set, then don't launch the lambda servers from dgraph.
+	if len(x.Config.Lambda.Url) > 0 {
 		return
 	}
 
-	num := int(x.Config.GraphQL.LambdaCnt)
-	port := int(x.Config.GraphQL.LambdaPort)
+	num := int(x.Config.Lambda.Cnt)
+	port := int(x.Config.Lambda.Port)
 	if num == 0 {
 		return
 	}
@@ -801,18 +805,22 @@ func run() {
 		Debug:         graphql.GetBool("debug"),
 		Extensions:    graphql.GetBool("extensions"),
 		PollInterval:  graphql.GetDuration("poll-interval"),
-		LambdaUrl:     graphql.GetString("lambda-url"),
-		LambdaCnt:     graphql.GetUint32("lambda-cnt"),
-		LambdaPort:    graphql.GetUint32("lambda-port"),
 	}
-	if x.Config.GraphQL.LambdaUrl != "" {
-		graphqlLambdaUrl, err := url.Parse(x.Config.GraphQL.LambdaUrl)
+	lambda := z.NewSuperFlag(Alpha.Conf.GetString("lambda")).MergeAndCheckDefault(
+		worker.LambdaDefaults)
+	x.Config.Lambda = x.LambdaOptions{
+		Url:  lambda.GetString("url"),
+		Cnt:  lambda.GetUint32("cnt"),
+		Port: lambda.GetUint32("port"),
+	}
+	if x.Config.Lambda.Url != "" {
+		graphqlLambdaUrl, err := url.Parse(x.Config.Lambda.Url)
 		if err != nil {
-			glog.Errorf("unable to parse --graphql lambda-url: %v", err)
+			glog.Errorf("unable to parse --lambda url: %v", err)
 			return
 		}
 		if !graphqlLambdaUrl.IsAbs() {
-			glog.Errorf("expecting --graphql lambda-url to be an absolute URL, got: %s",
+			glog.Errorf("expecting --lambda url to be an absolute URL, got: %s",
 				graphqlLambdaUrl.String())
 			return
 		}
