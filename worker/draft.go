@@ -1120,11 +1120,21 @@ func (n *node) commitOrAbort(_ uint64, delta *pb.OracleDelta) error {
 		var keys int
 		b := skl.NewBuilder(int64(float64(sz) * 1.1))
 		for mi.Valid() {
+			posting.RemoveCacheFor(y.ParseKey(mi.Key()))
 			b.Add(mi.Key(), mi.Value())
 			keys++
 			mi.Next()
 		}
 		span.Annotatef(nil, "Iterating and skiplist over %d keys took: %s", keys, time.Since(sn))
+
+		// // Clear all the cached lists that were touched by this transaction.
+		// for _, status := range delta.Txns {
+		// 	txn := posting.Oracle().GetTxn(status.StartTs)
+		// 	txn.RemoveCachedKeys()
+		// }
+		// posting.WaitForCache()
+		span.Annotate(nil, "cache keys removed")
+
 		err := x.RetryUntilSuccess(3600, time.Second, func() error {
 			if numKeys == 0 {
 				return nil

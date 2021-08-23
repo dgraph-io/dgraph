@@ -93,6 +93,9 @@ func (ir *incrRollupi) rollUpKey(sl *skl.Skiplist, key []byte) error {
 		return err
 	}
 
+	// Clear the list from the cache after a rollup.
+	RemoveCacheFor(key)
+
 	const N = uint64(1000)
 	if glog.V(2) {
 		if count := atomic.AddUint64(&ir.count, 1); count%N == 0 {
@@ -375,6 +378,34 @@ func ResetCache() {
 	lCache.Clear()
 }
 
+// RemoveCacheFor will delete the list corresponding to the given key.
+func RemoveCacheFor(key []byte) {
+	v, ok := lCache.Get(key)
+	if ok {
+		l, ok := v.(*List)
+		if ok {
+			glog.Infof("-----Invalidated key: %x l.maxTs: %d\n", key, l.maxTs)
+			lCache.Set(key, struct{}{}, 0)
+			lCache.Wait()
+		}
+	}
+}
+
+// RemoveCachedKeys will delete the cached list by this txn.
+func (txn *Txn) RemoveCachedKeys() {
+	if txn == nil || txn.cache == nil {
+		return
+	}
+	for key := range txn.cache.deltas {
+		RemoveCacheFor([]byte(key))
+	}
+}
+
+func WaitForCache() {
+	// TODO Investigate if this is needed and why Jepsen tests fail with the cache enabled.
+	lCache.Wait()
+}
+
 func unmarshalOrCopy(plist *pb.PostingList, item *badger.Item) error {
 	if plist == nil {
 		return errors.Errorf("cannot unmarshal value to a nil posting list of key %s",
@@ -496,28 +527,19 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 		return nil, badger.ErrDBClosed
 	}
 
+	var lCopy *List
+	glog.Infof("Looking for key: %x readTs: %d\n", key, readTs)
 	// We use badger subscription to invalidate the cache. For every write we make the value
 	// corresponding to the key in the cache to nil. So, if we get some non-nil value from the cache
 	// then it means that no  writes have happened after the last set of this key in the cache.
-	cachedVal, ok := lCache.Get(key)
-	if ok {
+	if cachedVal, ok := lCache.Get(key); ok {
 		l, ok := cachedVal.(*List)
-		if ok && l != nil {
-			x.AssertTrue(l.maxTs <= readTs)
-			// No need to clone the immutable layer or the key since mutations will not modify it.
-			lCopy := &List{
-				minTs: l.minTs,
-				maxTs: l.maxTs,
-				key:   l.key,
-				plist: l.plist,
-			}
-			if l.mutationMap != nil {
-				lCopy.mutationMap = make(map[uint64]*pb.PostingList)
-				for ts, pl := range l.mutationMap {
-					lCopy.mutationMap[ts] = proto.Clone(pl).(*pb.PostingList)
-				}
-			}
-			return lCopy, nil
+		if ok && l != nil && l.maxTs > 0 && l.maxTs <= readTs {
+			glog.Infof("Found in cache key: %x readTs: %d l.maxTs: %d\n", key, readTs, l.maxTs)
+			l.RLock()
+			lCopy = copyList(l)
+			l.RUnlock()
+			// return lCopy, nil
 		}
 	}
 
@@ -537,10 +559,50 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 		return l, err
 	}
 
+	if lCopy != nil && lCopy.maxTs > 0 && l.maxTs <= readTs && l.maxTs != lCopy.maxTs {
+		glog.Infof("++++++++++++++++++++++ key: %x l.maxTs: %d lCopy.maxTs: %d\n",
+			key, l.maxTs, lCopy.maxTs)
+		panic("oops")
+	}
+
 	// Only set l to the cache if readTs >= latestTs, which implies that l is
 	// the latest version of the PL.
 	if readTs >= latestTs && l.maxTs > 0 {
-		lCache.Set(key, l, 0)
+		// glog.Infof("Setting cache key: %x readTs: %d l.maxTs: %d latestTs: %d\n",
+		// 	key, readTs, l.maxTs, latestTs)
+		// l.RLock()
+		// defer l.RUnlock()
+		// out, err := l.rollup(math.MaxUint64, false)
+		// if err != nil {
+		// 	return nil, err
+		// }
+		// lc := &List{
+		// 	minTs: out.newMinTs,
+		// 	maxTs: l.maxTs,
+		// 	key:   l.key,
+		// 	plist: out.plist,
+		// }
+		lc := copyList(l)
+		lCache.Set(key, lc, 0)
 	}
 	return l, nil
+}
+
+func copyList(l *List) *List {
+	l.AssertRLock()
+	// No need to clone the immutable layer or the key since mutations will not modify it.
+	lCopy := &List{
+		minTs: l.minTs,
+		maxTs: l.maxTs,
+		key:   l.key,
+		plist: l.plist,
+	}
+	// x.AssertTrue(l.mutationMap == nil)
+	if l.mutationMap != nil {
+		lCopy.mutationMap = make(map[uint64]*pb.PostingList)
+		for ts, pl := range l.mutationMap {
+			lCopy.mutationMap[ts] = proto.Clone(pl).(*pb.PostingList)
+		}
+	}
+	return lCopy
 }
