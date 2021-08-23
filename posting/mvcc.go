@@ -508,7 +508,7 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 				plist: l.plist,
 			}
 			if l.mutationMap != nil {
-				lCopy.mutationMap = make(map[uint64]*pb.PostingList, len(l.mutationMap))
+				lCopy.mutationMap = make(map[uint64]*pb.PostingList)
 				for ts, pl := range l.mutationMap {
 					lCopy.mutationMap[ts] = proto.Clone(pl).(*pb.PostingList)
 				}
@@ -535,7 +535,7 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 
 	// Only set this posting list to the cache if readTs >= latestTs, which implies that this is
 	// the latest version of the PL.
-	if readTs >= latestTs {
+	if readTs >= latestTs && l.maxTs > 0 {
 		lCache.Set(key, l, 0)
 	}
 	return l, nil
