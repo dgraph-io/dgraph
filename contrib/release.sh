@@ -163,8 +163,8 @@ popd
 
 # Build the JS lambda server
 pushd $basedir/dgraph/lambda
-  check_command_exists npm
   check_command_exists node
+  check_command_exists npm
   make build
 popd
 
