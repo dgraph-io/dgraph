@@ -906,7 +906,7 @@ func createMultiPartList(t *testing.T, size int, addFacet bool) (*List, int) {
 			kvs, err := ol.Rollup(nil)
 			require.NoError(t, err)
 			require.NoError(t, writePostingListToDisk(kvs))
-			ol, err = getNew(key, ps, math.MaxUint64)
+			ol, err = readPostingListFromDisk(key, ps, math.MaxUint64)
 			require.NoError(t, err)
 		}
 		commits++
@@ -919,7 +919,7 @@ func createMultiPartList(t *testing.T, size int, addFacet bool) (*List, int) {
 		require.Equal(t, uint64(curTs+1), kv.Version)
 	}
 	require.NoError(t, writePostingListToDisk(kvs))
-	ol, err = getNew(key, ps, math.MaxUint64)
+	ol, err = readPostingListFromDisk(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 	require.Nil(t, ol.plist.Bitmap)
 	require.Equal(t, 0, len(ol.plist.Postings))
@@ -950,7 +950,7 @@ func createAndDeleteMultiPartList(t *testing.T, size int) (*List, int) {
 			kvs, err := ol.Rollup(nil)
 			require.NoError(t, err)
 			require.NoError(t, writePostingListToDisk(kvs))
-			ol, err = getNew(key, ps, math.MaxUint64)
+			ol, err = readPostingListFromDisk(key, ps, math.MaxUint64)
 			require.NoError(t, err)
 		}
 		commits++
@@ -1071,6 +1071,21 @@ func writePostingListToDisk(kvs []*bpb.KV) error {
 	return writer.Flush()
 }
 
+func readPostingListFromDisk(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
+	txn := pstore.NewTransactionAt(readTs, false)
+	defer txn.Discard()
+
+	// When we do rollups, an older version would go to the top of the LSM tree, which can cause
+	// issues during txn.Get. Therefore, always iterate.
+	iterOpts := badger.DefaultIteratorOptions
+	iterOpts.AllVersions = true
+	iterOpts.PrefetchValues = false
+	itr := txn.NewKeyIterator(key, iterOpts)
+	defer itr.Close()
+	itr.Seek(key)
+	return ReadPostingList(key, itr)
+}
+
 // Create a multi-part list and verify all the uids are there.
 func TestMultiPartListBasic(t *testing.T) {
 	// TODO(sroar): Increase size to 1e5 once sroar is optimized.
@@ -1122,7 +1137,7 @@ func TestBinSplit(t *testing.T) {
 			require.Equal(t, uint64(size+2), kv.Version)
 		}
 		require.NoError(t, writePostingListToDisk(kvs))
-		ol, err = getNew(key, ps, math.MaxUint64)
+		ol, err = readPostingListFromDisk(key, ps, math.MaxUint64)
 		require.NoError(t, err)
 		require.Equal(t, 0, len(ol.plist.Splits))
 		require.Equal(t, size, len(ol.plist.Postings))
@@ -1510,7 +1525,7 @@ func TestRecursiveSplits(t *testing.T) {
 	kvs, err := ol.Rollup(nil)
 	require.NoError(t, err)
 	require.NoError(t, writePostingListToDisk(kvs))
-	ol, err = getNew(key, ps, math.MaxUint64)
+	ol, err = readPostingListFromDisk(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 	require.True(t, len(ol.plist.Splits) > 2)
 
