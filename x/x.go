@@ -1481,7 +1481,7 @@ func LambdaUrl(ns uint64) string {
 		return strings.Replace(lambdaUrl, "$ns", strconv.FormatUint(ns, 10), 1)
 	}
 	// TODO: Should we check if this server is active and then consider it for load balancing?
-	num := Config.Lambda.Cnt
+	num := Config.Lambda.Num
 	if num == 0 {
 		return ""
 	}

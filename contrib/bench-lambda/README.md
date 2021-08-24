@@ -3,7 +3,7 @@
 1. Start dgraph with lambda servers.
 ```
 dgraph zero
-dgraph alpha --lambda cnt=2
+dgraph alpha --lambda num=2
 ```
 
 2. Run `load-data.sh` script

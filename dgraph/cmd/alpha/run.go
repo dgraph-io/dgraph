@@ -462,7 +462,7 @@ func setupLambdaServer(closer *z.Closer) {
 		return
 	}
 
-	num := int(x.Config.Lambda.Cnt)
+	num := int(x.Config.Lambda.Num)
 	port := int(x.Config.Lambda.Port)
 	if num == 0 {
 		return
@@ -810,7 +810,7 @@ func run() {
 		worker.LambdaDefaults)
 	x.Config.Lambda = x.LambdaOptions{
 		Url:  lambda.GetString("url"),
-		Cnt:  lambda.GetUint32("cnt"),
+		Num:  lambda.GetUint32("num"),
 		Port: lambda.GetUint32("port"),
 	}
 	if x.Config.Lambda.Url != "" {

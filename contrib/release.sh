@@ -161,6 +161,13 @@ pushd $basedir/dgraph/protos
   fi
 popd
 
+# Build the JS lambda server
+pushd $basedir/dgraph/lambda
+  check_command_exists npm
+  check_command_exists node
+  make build
+popd
+
 # Clone Badger repo.
 pushd $basedir
   git clone https://github.com/dgraph-io/badger.git

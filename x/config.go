@@ -82,7 +82,7 @@ type GraphQLOptions struct {
 
 type LambdaOptions struct {
 	Url  string
-	Cnt  uint32
+	Num  uint32
 	Port uint32
 }
 

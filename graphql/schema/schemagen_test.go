@@ -348,7 +348,7 @@ func TestOnlyCorrectSearchArgsWork(t *testing.T) {
 func TestMain(m *testing.M) {
 	// set up the lambda url for unit tests
 	x.Config.Lambda = x.LambdaOptions{
-		Cnt:  2,
+		Num:  2,
 		Port: 20000,
 	}
 	// now run the tests
