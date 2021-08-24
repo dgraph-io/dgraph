@@ -1215,6 +1215,8 @@ func (l *List) rollup(readTs uint64, split bool) (*rollupOutput, error) {
 	}
 
 	if len(out.plist.Splits) > 0 || len(l.mutationMap) > 0 {
+		// In case there were splits, this would read all the splits from
+		// Badger.
 		if err := l.encode(out, readTs, split); err != nil {
 			return nil, errors.Wrapf(err, "while encoding")
 		}

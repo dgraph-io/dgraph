@@ -1161,7 +1161,6 @@ func (n *node) commitOrAbort(_ uint64, delta *pb.OracleDelta) error {
 			txn.UpdateCachedKeys(status.CommitTs)
 		}
 	}
-	posting.WaitForCache()
 	span.Annotate(nil, "cache keys removed")
 
 	// Now advance Oracle(), so we can service waiting reads.

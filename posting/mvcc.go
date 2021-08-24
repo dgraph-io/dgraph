@@ -18,7 +18,6 @@ package posting
 
 import (
 	"bytes"
-	"encoding/binary"
 	"encoding/hex"
 	"math"
 	"sort"
@@ -80,8 +79,8 @@ func init() {
 	}
 }
 
-// rollUpKey takes the given key's posting lists, rolls it up and writes back to badger
-func (ir *incrRollupi) rollUpKey(sl *skl.Skiplist, key []byte) error {
+// rollupKey takes the given key's posting lists, rolls it up and writes back to badger
+func (ir *incrRollupi) rollupKey(sl *skl.Skiplist, key []byte) error {
 	l, err := GetNoStore(key, math.MaxUint64)
 	if err != nil {
 		return err
@@ -92,9 +91,10 @@ func (ir *incrRollupi) rollUpKey(sl *skl.Skiplist, key []byte) error {
 		return err
 	}
 
-	// Clear the list from the cache after a rollup.
-	// RemoveCacheFor(key)
-
+	// If we do a rollup, we typically won't need to update the key in cache.
+	// The only caveat is that the key written by rollup would be written at +1
+	// timestamp, hence bumping the latest TS for the key by 1. The cache should
+	// understand that.
 	const N = uint64(1000)
 	if glog.V(2) {
 		if count := atomic.AddUint64(&ir.count, 1); count%N == 0 {
@@ -181,7 +181,7 @@ func (ir *incrRollupi) Process(closer *z.Closer) {
 			// Key not present or Key present but last roll up was more than 10 sec ago.
 			// Add/Update map and rollup.
 			m[hash] = currTs
-			if err := ir.rollUpKey(sl, key); err != nil {
+			if err := ir.rollupKey(sl, key); err != nil {
 				glog.Warningf("Error %v rolling up key %v\n", err, key)
 			}
 		}
@@ -203,6 +203,9 @@ func (ir *incrRollupi) Process(closer *z.Closer) {
 				}
 			}
 		case <-baseTick.C:
+			// Pick up incomplete batches from the keysPool, and process them.
+			// This handles infrequent writes case, where a batch might take a
+			// long time to fill up.
 			batch := ir.priorityKeys[0].keysPool.Get().(*[][]byte)
 			if len(*batch) > 0 {
 				doRollup(batch, 0)
@@ -214,6 +217,7 @@ func (ir *incrRollupi) Process(closer *z.Closer) {
 				handover()
 			}
 		case batch := <-ir.priorityKeys[0].keysCh:
+			// P0 keys are high priority keys. They have more than a threshold number of deltas.
 			doRollup(batch, 0)
 			// We don't need a limiter here as we don't expect to call this function frequently.
 		case batch := <-ir.priorityKeys[1].keysCh:
@@ -273,60 +277,6 @@ func (txn *Txn) FillContext(ctx *api.TxnContext, gid uint32) {
 	txn.cache.fillPreds(ctx, gid)
 }
 
-func (txn *Txn) ToBuffer(buf *z.Buffer, commitTs uint64) error {
-	if commitTs == 0 {
-		return nil
-	}
-
-	cache := txn.cache
-	cache.Lock()
-	defer cache.Unlock()
-
-	var keys []string
-	for key := range cache.deltas {
-		keys = append(keys, key)
-	}
-
-	defer func() {
-		// Add these keys to be rolled up after we're done writing. This is the right place for them
-		// to be rolled up, because we just pushed these deltas over to Badger.
-		for _, key := range keys {
-			IncrRollup.addKeyToBatch([]byte(key), 1)
-		}
-	}()
-
-	for _, key := range keys {
-		k := []byte(key)
-		data := cache.deltas[key]
-		if len(data) == 0 {
-			continue
-		}
-
-		if err := badger.ValidEntry(pstore, k, data); err != nil {
-			glog.Errorf("Invalid Entry. len(key): %d len(val): %d\n", len(k), len(data))
-			continue
-		}
-		if ts := cache.maxVersions[key]; ts >= commitTs {
-			// Skip write because we already have a write at a higher ts.
-			// Logging here can cause a lot of output when doing Raft log replay. So, let's
-			// not output anything here.
-			continue
-		}
-
-		key := y.KeyWithTs(k, commitTs)
-		val := y.ValueStruct{
-			Value:    data,
-			UserMeta: BitDeltaPosting,
-		}
-
-		dst := buf.SliceAllocate(2 + len(key) + int(val.EncodedSize()))
-		binary.BigEndian.PutUint16(dst[:2], uint16(len(key)))
-		x.AssertTrue(len(key) == copy(dst[2:], key))
-		x.AssertTrue(uint32(len(dst)-2-len(key)) == val.Encode(dst[2+len(key):]))
-	}
-	return nil
-}
-
 // ToSkiplist replaces CommitToDisk. ToSkiplist creates a Badger usable Skiplist from the Txn, so
 // it can be passed over to Badger after commit. This only stores deltas to the commit timestamps.
 // It does not try to generate a state. State generation is done via rollups, which happen when a
@@ -342,14 +292,12 @@ func (txn *Txn) ToSkiplist() error {
 	}
 	sort.Strings(keys)
 
-	// defer func() {
-	// Add these keys to be rolled up after we're done writing. This is the right place for them
-	// to be rolled up, because we just pushed these deltas over to Badger.
-	// TODO: This is no longer the right place. Figure out a new place for these keys.
-	// for _, key := range keys {
-	// 	IncrRollup.addKeyToBatch([]byte(key), 1)
-	// }
-	// }()
+	// Add these keys to be rolled up after we're done writing them to Badger.
+	// TODO: We are no longer rolling up the keys on write. A simple way to achieve
+	// that would be to subscribe to Badger writes, and just push those to
+	// IncrRollup. Some full text indices could easily gain hundreds of
+	// thousands of mutations, while never being read. We do want to capture
+	// those cases.
 
 	b := skl.NewBuilder(1 << 10)
 	for _, key := range keys {
@@ -386,11 +334,6 @@ func (txn *Txn) UpdateCachedKeys(commitTs uint64) {
 	for key := range txn.cache.deltas {
 		lCache.SetIfPresent([]byte(key), commitTs, 0)
 	}
-}
-
-func WaitForCache() {
-	// TODO Investigate if this is needed and why Jepsen tests fail with the cache enabled.
-	lCache.Wait()
 }
 
 func unmarshalOrCopy(plist *pb.PostingList, item *badger.Item) error {
@@ -568,16 +511,22 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 	if err != nil {
 		return l, err
 	}
-	// Roll up upfront to avoid repetitive work later.
 	l.RLock()
+	// Rollup is useful to improve memory utilization in the cache and also for
+	// reads.  However, in case the posting list is split, this would read all
+	// the parts and create a full PL. Not sure how much of an issue that is.
 	out, err := l.rollup(math.MaxUint64, false)
 	l.RUnlock()
 	if err != nil {
 		return nil, err
 	}
 
-	// TODO: We could also write this to Badger, considering we've already done
-	// the work of rollup.
+	// We could consider writing this to Badger here, as we already have a
+	// rolled up version. But, doing the write here to Badger wouldn't be
+	// ideal. We write to Badger using Skiplists, instead of writing one entry
+	// at a time. Secondly, sending it over to IncrRollup would require us to
+	// deal with the race between the write from here against the key being
+	// registered for a rollup. Ignore this optimization to maintain simplicity.
 
 	newList := func() *List {
 		return &List{

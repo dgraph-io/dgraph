@@ -109,7 +109,7 @@ func Init(ps *badger.DB, cacheSize int64) {
 }
 
 func UpdateMaxCost(maxCost int64) {
-	// lCache.UpdateMaxCost(maxCost)
+	lCache.UpdateMaxCost(maxCost)
 }
 
 // Cleanup waits until the closer has finished processing.
