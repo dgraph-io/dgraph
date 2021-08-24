@@ -48,14 +48,12 @@ Build dev/feature-branch branch and tag as dev-abc123 for the Docker image
 fi
 
 
-if [[ $DGRAPH_BUILD_RATEL =~ 1|true ]]; then
-  export NVM_DIR="$HOME/.nvm"
-  [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
-  [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
 
-  check_command_exists nvm
-  check_command_exists npm
-fi
+check_command_exists nvm
+check_command_exists npm
 
 # TODO Check if ports 8000, 9080, or 6080 are bound already and error out early.
 
@@ -69,6 +67,8 @@ check_command_exists protoc
 check_command_exists shasum
 check_command_exists tar
 check_command_exists zip
+
+nvm install --lts
 
 # Don't use standard GOPATH. Create a new one.
 unset GOBIN
@@ -148,12 +148,10 @@ popd
 # The initial slash is taken from the repository name dgraph/dgraph:tag
 DOCKER_TAG=${2:-$release_version}
 
-# TODO: Build the JS lambda server. gce image needs to be updated to include npm.
-# pushd $basedir/dgraph/lambda
-#   check_command_exists node
-#   check_command_exists npm
-#   make build
-# popd
+# Build the JS lambda server.
+pushd $basedir/dgraph/lambda
+  make build
+popd
 
 # Regenerate protos. Should not be different from what's checked in.
 pushd $basedir/dgraph/protos
@@ -186,7 +184,6 @@ if [[ $DGRAPH_BUILD_RATEL =~ 1|true ]]; then
 
   # build ratel client
   pushd $basedir/ratel
-    nvm install --lts
     (export GO111MODULE=off; ./scripts/build.prod.sh)
     ./scripts/test.sh
   popd
