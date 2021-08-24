@@ -17,13 +17,16 @@
 package posting
 
 import (
+	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/ristretto"
 	"github.com/dgraph-io/ristretto/z"
-	"github.com/golang/glog"
+	ostats "go.opencensus.io/stats"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
@@ -36,94 +39,9 @@ const (
 var (
 	pstore *badger.DB
 	closer *z.Closer
-	// lCache *ristretto.Cache
-	lCache *GoCache
+	lCache *ristretto.Cache
+	// lCache *GoCache
 )
-
-type GoCache struct {
-	sync.Mutex
-	mp map[string]interface{}
-}
-
-func (c *GoCache) Set(key []byte, l interface{}, _ uint64) {
-	c.Lock()
-	c.mp[string(key)] = l
-	c.Unlock()
-}
-
-func (c *GoCache) UpdateIfPresent(key []byte, l interface{}, _ uint64) {
-	sk := string(key)
-	c.Lock()
-	defer c.Unlock()
-
-	if prev, has := c.mp[sk]; has {
-		var prevMax uint64
-		switch prev.(type) {
-		case *List:
-			glog.Infof("GoCache Prev Key %x had l.maxTs: %d", key, prev.(*List).maxTs)
-			prevMax = prev.(*List).maxTs
-		case *dummyPL:
-			glog.Infof("GoCache Prev Key %x had dummy.writeTs: %d", key, prev.(*dummyPL).writeTs)
-			prevMax = prev.(*dummyPL).writeTs
-		default:
-			x.AssertTrue(false)
-		}
-		switch l.(type) {
-		case *List:
-			if l.(*List).maxTs < prevMax {
-				glog.Infof("GoCache rejecting PL update. prev: %d new: %d\n", prevMax, l.(*List).maxTs)
-				return
-			}
-			glog.Infof("GoCache UpdateIfPresent key %x with l.maxTs: %d", key, l.(*List).maxTs)
-		case *dummyPL:
-			if l.(*dummyPL).writeTs < prevMax {
-				glog.Infof("GoCache rejecting dummy update. prev: %d new: %d\n", prevMax, l.(*dummyPL).writeTs)
-				return
-			}
-			glog.Infof("GoCache UpdateIfPresent key %x with dummy.writeTs: %d", key, l.(*dummyPL).writeTs)
-		default:
-			x.AssertTrue(false)
-		}
-		c.mp[sk] = l
-	}
-}
-func (c *GoCache) SetIfAbsent(key []byte, l interface{}, _ uint64) {
-	c.Lock()
-	if _, has := c.mp[string(key)]; !has {
-		switch l.(type) {
-		case *List:
-			glog.Infof("GoCache Updating key %x with l.maxTs: %d", key, l.(*List).maxTs)
-		case *dummyPL:
-			glog.Infof("GoCache Updating key %x with dummy.writeTs: %d", key, l.(*dummyPL).writeTs)
-		default:
-			x.AssertTrue(false)
-		}
-		c.mp[string(key)] = l
-	}
-	c.Unlock()
-}
-
-func (c *GoCache) Get(key []byte) (interface{}, bool) {
-	c.Lock()
-	v, ok := c.mp[string(key)]
-	c.Unlock()
-	return v, ok
-}
-
-func (c *GoCache) Del(key []byte) {
-	c.Lock()
-	delete(c.mp, string(key))
-	c.Unlock()
-}
-
-func (c *GoCache) Clear() {
-	c.Lock()
-	c.mp = make(map[string]interface{})
-	c.Unlock()
-}
-
-func (c *GoCache) Wait() {
-}
 
 // Init initializes the posting lists package, the in memory and dirty list hash.
 func Init(ps *badger.DB, cacheSize int64) {
@@ -136,34 +54,58 @@ func Init(ps *badger.DB, cacheSize int64) {
 		return
 	}
 
-	lCache = &GoCache{
-		mp: make(map[string]interface{}),
-	}
-	// var err error
-	// lCache, err = ristretto.NewCache(&ristretto.Config{
-	// 	// Use 5% of cache memory for storing counters.
-	// 	NumCounters: int64(float64(cacheSize) * 0.05 * 2),
-	// 	MaxCost:     int64(float64(cacheSize) * 0.95),
-	// 	BufferItems: 64,
-	// 	Metrics:     true,
-	// 	Cost: func(val interface{}) int64 {
-	// 		l, ok := val.(*List)
-	// 		if !ok {
-	// 			return int64(0)
-	// 		}
-	// 		return int64(l.DeepSize())
-	// 	},
-	// })
-	// x.Check(err)
-	// go func() {
-	// 	m := lCache.Metrics
-	// 	ticker := time.NewTicker(10 * time.Second)
-	// 	defer ticker.Stop()
-	// 	for range ticker.C {
-	// 		// Record the posting list cache hit ratio
-	// 		ostats.Record(context.Background(), x.PLCacheHitRatio.M(m.Ratio()))
-	// 	}
-	// }()
+	var err error
+	lCache, err = ristretto.NewCache(&ristretto.Config{
+		// Use 5% of cache memory for storing counters.
+		NumCounters: int64(float64(cacheSize) * 0.05 * 2),
+		MaxCost:     int64(float64(cacheSize) * 0.95),
+		BufferItems: 64,
+		Metrics:     true,
+		Cost: func(val interface{}) int64 {
+			switch val.(type) {
+			case *List:
+				return int64(val.(*List).DeepSize())
+			case uint64:
+				return 8
+			default:
+				x.AssertTruef(false, "Don't know about type %T in Dgraph cache", val)
+				return 0
+			}
+		},
+		ShouldUpdate: func(prev, cur interface{}) bool {
+			var prevTs, curTs uint64
+			switch prev.(type) {
+			case *List:
+				prevTs = prev.(*List).maxTs
+			case uint64:
+				prevTs = prev.(uint64)
+			default:
+				x.AssertTruef(false, "Don't know about type %T in Dgraph cache", prev)
+			}
+
+			switch cur.(type) {
+			case *List:
+				curTs = cur.(*List).maxTs
+			case uint64:
+				curTs = cur.(uint64)
+			default:
+				x.AssertTruef(false, "Don't know about type %T in Dgraph cache", cur)
+			}
+			// Only update the value if we have a timestamp >= the previous
+			// value.
+			return curTs >= prevTs
+		},
+	})
+	x.Check(err)
+	go func() {
+		m := lCache.Metrics
+		ticker := time.NewTicker(10 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			// Record the posting list cache hit ratio
+			ostats.Record(context.Background(), x.PLCacheHitRatio.M(m.Ratio()))
+		}
+	}()
 }
 
 func UpdateMaxCost(maxCost int64) {

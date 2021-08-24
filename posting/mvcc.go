@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
-	"fmt"
 	"math"
 	"sort"
 	"strconv"
@@ -378,20 +377,6 @@ func ResetCache() {
 	lCache.Clear()
 }
 
-// RemoveCacheFor will delete the list corresponding to the given key.
-func RemoveCacheFor_Unused(key []byte) {
-	// lCache.UpdateIfPresent(key, &dummyPL{}, 0)
-	// v, ok := lCache.Get(key)
-	// if ok {
-	// 	l, ok := v.(*List)
-	// 	if ok {
-	// 		glog.Infof("-----Invalidated key: %x l.maxTs: %d\n", key, l.maxTs)
-	// 		lCache.Set(key, struct{}{}, 0)
-	// 		lCache.Wait()
-	// 	}
-	// }
-}
-
 // RemoveCachedKeys will delete the cached list by this txn.
 func (txn *Txn) UpdateCachedKeys(commitTs uint64) {
 	if txn == nil || txn.cache == nil {
@@ -399,7 +384,7 @@ func (txn *Txn) UpdateCachedKeys(commitTs uint64) {
 	}
 	x.AssertTrue(commitTs > 0)
 	for key := range txn.cache.deltas {
-		lCache.UpdateIfPresent([]byte(key), &dummyPL{writeTs: commitTs}, 0)
+		lCache.SetIfPresent([]byte(key), commitTs, 0)
 	}
 }
 
@@ -524,18 +509,12 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 	return l, nil
 }
 
-type dummyPL struct {
-	writeTs uint64
-}
-
 func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 	if pstore.IsClosed() {
 		return nil, badger.ErrDBClosed
 	}
 
-	var lCopy *List
 	var seenTs uint64
-	glog.Infof("Looking for key: %x readTs: %d\n", key, readTs)
 	// We use badger subscription to invalidate the cache. For every write we make the value
 	// corresponding to the key in the cache to nil. So, if we get some non-nil value from the cache
 	// then it means that no  writes have happened after the last set of this key in the cache.
@@ -546,21 +525,32 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 			// l.maxTs can be greater than readTs. We might have the latest
 			// version cached, while readTs is looking for an older version.
 			if l != nil && l.maxTs <= readTs {
-				glog.Infof("getNew Found in cache key: %x readTs: %d l.maxTs: %d\n", key, readTs, l.maxTs)
 				l.RLock()
-				lCopy = copyList(l)
+				lCopy := copyList(l)
 				l.RUnlock()
-				// return lCopy, nil
+				return lCopy, nil
 			}
 
-		case *dummyPL:
-			seenTs = val.(*dummyPL).writeTs
-			glog.Infof("getNew Found a dummy with write ts: %d for key: %x", seenTs, key)
+		case uint64:
+			seenTs = val.(uint64)
 		}
 	} else {
-		// We set the key upfront, so it has a chance to register the updated write
-		// ts coming from commits.
-		lCache.SetIfAbsent(key, &dummyPL{writeTs: 1}, 1)
+		// The key wasn't found in cache. So, we set the key upfront.  This
+		// gives it a chance to register in the cache, so it can capture any new
+		// writes comming from commits. Once we
+		// retrieve the value from Badger, we do an update if the key is already
+		// present in the cache.
+		// We must guarantee that the cache contains the latest version of the
+		// key. This mechanism avoids the following race condition:
+		// 1. We read from Badger at Ts 10.
+		// 2. New write comes in for the key at Ts 12. The key isn't in cache,
+		// so this write doesn't get registered with the cache.
+		// 3. Cache set the value read from Badger at Ts10.
+		//
+		// With this Set then Update mechanism, before we read from Badger, we
+		// already set the key in cache. So, any new writes coming in would get
+		// registered with cache correctly, before we update the value.
+		lCache.Set(key, uint64(1), 0)
 	}
 
 	txn := pstore.NewTransactionAt(readTs, false)
@@ -578,40 +568,33 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 	if err != nil {
 		return l, err
 	}
-
-	glog.Infof("getNew readTs: %d latestTs: %d seenTs: %d maxTs: %d key: %x\n", readTs, latestTs, seenTs, l.maxTs, key)
-	if lCopy != nil && lCopy.maxTs != l.maxTs {
-		panic(fmt.Sprintf("getNew lcopy: %d l.maxTs: %d key: %x\n", lCopy.maxTs, l.maxTs, key))
+	// Roll up upfront to avoid repetitive work later.
+	l.RLock()
+	out, err := l.rollup(math.MaxUint64, false)
+	l.RUnlock()
+	if err != nil {
+		return nil, err
 	}
-	if lCopy != nil && readTs >= latestTs && latestTs > lCopy.maxTs {
-		panic(fmt.Sprintf("getNew2 lcopy.maxTs: %d l.maxTs: %d key: %x\n", lCopy.maxTs, l.maxTs, key))
-	}
 
-	// Only set l to the cache if readTs >= latestTs, which implies that l is
-	// the latest version of the PL.
-	if readTs >= latestTs && latestTs >= seenTs {
-		// glog.Infof("Setting cache key: %x readTs: %d l.maxTs: %d latestTs: %d\n",
-		// 	key, readTs, l.maxTs, latestTs)
-		l.RLock()
-		defer l.RUnlock()
-		out, err := l.rollup(math.MaxUint64, false)
-		if err != nil {
-			return nil, err
-		}
-		lc := &List{
+	// TODO: We could also write this to Badger, considering we've already done
+	// the work of rollup.
+
+	newList := func() *List {
+		return &List{
 			minTs: out.newMinTs,
 			maxTs: l.maxTs,
 			key:   l.key,
 			plist: out.plist,
 		}
-		// TODO: We should return a rolled up version to the user. And cache a
-		// copy of it.
-		if lCopy == nil { // Remove this later.
-			lCache.UpdateIfPresent(key, lc, 0)
-		}
-		// lCache.Set(key, lc, 0)
 	}
-	return l, nil
+
+	// Only set l to the cache if readTs >= latestTs, which implies that l is
+	// the latest version of the PL. We also check that we're reading a version
+	// from Badger, which is higher than the write registered by the cache.
+	if readTs >= latestTs && latestTs >= seenTs {
+		lCache.SetIfPresent(key, newList(), 0)
+	}
+	return newList(), nil
 }
 
 func copyList(l *List) *List {
@@ -625,11 +608,5 @@ func copyList(l *List) *List {
 	}
 	// We do a rollup before storing PL in cache.
 	x.AssertTrue(len(l.mutationMap) == 0)
-	// if l.mutationMap != nil {
-	// 	lCopy.mutationMap = make(map[uint64]*pb.PostingList)
-	// 	for ts, pl := range l.mutationMap {
-	// 		lCopy.mutationMap[ts] = proto.Clone(pl).(*pb.PostingList)
-	// 	}
-	// }
 	return lCopy
 }
