@@ -521,11 +521,10 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 	}
 
 	// We could consider writing this to Badger here, as we already have a
-	// rolled up version. But, doing the write here to Badger wouldn't be
-	// ideal. We write to Badger using Skiplists, instead of writing one entry
-	// at a time. Secondly, sending it over to IncrRollup would require us to
-	// deal with the race between the write from here against the key being
-	// registered for a rollup. Ignore this optimization to maintain simplicity.
+	// rolled up version. But, doing the write here to Badger wouldn't be ideal.
+	// We write to Badger using Skiplists, instead of writing one entry at a
+	// time. In fact, rollups use getNew. So our cache here would get used by
+	// the roll up, hence achieving this optimization.
 
 	newList := func() *List {
 		return &List{
