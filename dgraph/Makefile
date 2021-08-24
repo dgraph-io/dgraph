@@ -74,10 +74,10 @@ JEMALLOC_URL = "https://github.com/jemalloc/jemalloc/releases/download/5.2.1/jem
 # nodejs
 HAS_NODEJS = $(shell command -v node > /dev/null && echo "nodejs")
 
-.PHONY: all $(BIN) jemalloc lambda
+.PHONY: all $(BIN) jemalloc nodejs
 all: $(BIN)
 
-$(BIN): clean jemalloc lambda
+$(BIN): clean jemalloc nodejs
 	@go build $(BUILD_FLAGS) -o $(BIN)
 
 clean:
@@ -86,7 +86,7 @@ clean:
 uninstall:
 	@go clean -i -x
 
-install: jemalloc lambda
+install: jemalloc nodejs
 	@echo "Commit SHA256: `git rev-parse HEAD`"
 	@echo "Old SHA256:" `sha256sum $(GOPATH)/bin/$(BIN) 2>/dev/null | cut -c-64`
 	@go install $(BUILD_FLAGS)
@@ -109,9 +109,7 @@ jemalloc:
 		fi \
 	fi
 
-lambda:
+nodejs:
 	@if [ -z "$(HAS_NODEJS)" ]; then \
 		echo "Error: NodeJS not installed"; \
-	else \
-		$(MAKE) -C ../lambda build; \
 	fi
