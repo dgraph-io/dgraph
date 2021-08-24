@@ -160,7 +160,7 @@ pushd $basedir/dgraph/protos
   go get -d -v ../dgraph
 
   make regenerate
-  if [[ "$(git status --porcelain)" ]]; then
+  if [[ "$(git status --porcelain .)" ]]; then
       echo >&2 "Generated protos different in release."
       exit 1
   fi
