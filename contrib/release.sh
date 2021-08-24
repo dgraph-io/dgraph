@@ -148,13 +148,12 @@ popd
 # The initial slash is taken from the repository name dgraph/dgraph:tag
 DOCKER_TAG=${2:-$release_version}
 
-# Build the JS lambda server
-pushd $basedir/dgraph/lambda
-  check_command_exists node
-  node --version
-  check_command_exists npm
-  make build
-popd
+# TODO: Build the JS lambda server. gce image needs to be updated to include npm.
+# pushd $basedir/dgraph/lambda
+#   check_command_exists node
+#   check_command_exists npm
+#   make build
+# popd
 
 # Regenerate protos. Should not be different from what's checked in.
 pushd $basedir/dgraph/protos
