@@ -47,16 +47,12 @@ Build dev/feature-branch branch and tag as dev-abc123 for the Docker image
   $0 dev/feature-branch dev-abc123"
 fi
 
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
 
-if [[ $DGRAPH_BUILD_RATEL =~ 1|true ]]; then
-  export NVM_DIR="$HOME/.nvm"
-  [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
-  [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
-
-  check_command_exists nvm
-  check_command_exists npm
-fi
-
+check_command_exists nvm
+check_command_exists npm
 # TODO Check if ports 8000, 9080, or 6080 are bound already and error out early.
 
 check_command_exists strip
@@ -69,6 +65,8 @@ check_command_exists protoc
 check_command_exists shasum
 check_command_exists tar
 check_command_exists zip
+
+nvm install --lts
 
 # Don't use standard GOPATH. Create a new one.
 unset GOBIN
@@ -179,7 +177,6 @@ if [[ $DGRAPH_BUILD_RATEL =~ 1|true ]]; then
 
   # build ratel client
   pushd $basedir/ratel
-    nvm install --lts
     (export GO111MODULE=off; ./scripts/build.prod.sh)
     ./scripts/test.sh
   popd
