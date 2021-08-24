@@ -1109,7 +1109,7 @@ func (n *node) commitOrAbort(_ uint64, delta *pb.OracleDelta) error {
 	// This would be used for callback via Badger when skiplist is pushed to
 	// disk.
 	deleteTxns := func() {
-		posting.Oracle().DeleteTxns(delta)
+		posting.Oracle().DeleteTxnsAndRollupKeys(delta)
 	}
 
 	if len(itrs) == 0 {

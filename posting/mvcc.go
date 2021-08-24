@@ -293,11 +293,10 @@ func (txn *Txn) ToSkiplist() error {
 	sort.Strings(keys)
 
 	// Add these keys to be rolled up after we're done writing them to Badger.
-	// TODO: We are no longer rolling up the keys on write. A simple way to achieve
-	// that would be to subscribe to Badger writes, and just push those to
-	// IncrRollup. Some full text indices could easily gain hundreds of
-	// thousands of mutations, while never being read. We do want to capture
-	// those cases.
+	// Some full text indices could easily gain hundreds of thousands of
+	// mutations, while never being read. We do want to capture those cases.
+	// Update: We roll up the keys in oracle.DeleteTxnsAndRollupKeys, which is a
+	// callback that happens after skip list gets handed over to Badger.
 
 	b := skl.NewBuilder(1 << 10)
 	for _, key := range keys {
