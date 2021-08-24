@@ -148,6 +148,14 @@ popd
 # The initial slash is taken from the repository name dgraph/dgraph:tag
 DOCKER_TAG=${2:-$release_version}
 
+# Build the JS lambda server
+pushd $basedir/dgraph/lambda
+  check_command_exists node
+  node --version
+  check_command_exists npm
+  make build
+popd
+
 # Regenerate protos. Should not be different from what's checked in.
 pushd $basedir/dgraph/protos
   # We need to fetch the modules to get the correct proto files. e.g., for
@@ -159,13 +167,6 @@ pushd $basedir/dgraph/protos
       echo >&2 "Generated protos different in release."
       exit 1
   fi
-popd
-
-# Build the JS lambda server
-pushd $basedir/dgraph/lambda
-  check_command_exists node
-  check_command_exists npm
-  make build
 popd
 
 # Clone Badger repo.
