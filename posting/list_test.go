@@ -464,7 +464,7 @@ func TestMillion(t *testing.T) {
 			kvs, err := ol.Rollup(nil)
 			require.NoError(t, err)
 			require.NoError(t, writePostingListToDisk(kvs))
-			ol, err = getNew(key, ps, math.MaxUint64)
+			ol, err = readPostingListFromDisk(key, ps, math.MaxUint64)
 			require.NoError(t, err)
 		}
 		commits++
@@ -1001,7 +1001,7 @@ func TestLargePlistSplit(t *testing.T) {
 	_, err = ol.Rollup(nil)
 	require.NoError(t, err)
 
-	ol, err = getNew(key, ps, math.MaxUint64)
+	ol, err = readPostingListFromDisk(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 	b = make([]byte, 5<<20)
 	rand.Read(b)
@@ -1020,7 +1020,7 @@ func TestLargePlistSplit(t *testing.T) {
 	kvs, err := ol.Rollup(nil)
 	require.NoError(t, err)
 	require.NoError(t, writePostingListToDisk(kvs))
-	ol, err = getNew(key, ps, math.MaxUint64)
+	ol, err = readPostingListFromDisk(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 	require.Nil(t, ol.plist.Bitmap)
 	require.Equal(t, 0, len(ol.plist.Postings))
@@ -1300,7 +1300,7 @@ func TestMultiPartListWriteToDisk(t *testing.T) {
 	require.Equal(t, len(kvs), len(originalList.plist.Splits)+1)
 
 	require.NoError(t, writePostingListToDisk(kvs))
-	newList, err := getNew(kvs[0].Key, ps, math.MaxUint64)
+	newList, err := readPostingListFromDisk(kvs[0].Key, ps, math.MaxUint64)
 	require.NoError(t, err)
 
 	opt := ListOptions{ReadTs: math.MaxUint64}
@@ -1369,7 +1369,7 @@ func TestMultiPartListDeleteAndAdd(t *testing.T) {
 			kvs, err := ol.Rollup(nil)
 			require.NoError(t, err)
 			require.NoError(t, writePostingListToDisk(kvs))
-			ol, err = getNew(key, ps, math.MaxUint64)
+			ol, err = readPostingListFromDisk(key, ps, math.MaxUint64)
 			require.NoError(t, err)
 		}
 		curTs++
@@ -1398,7 +1398,7 @@ func TestMultiPartListDeleteAndAdd(t *testing.T) {
 			kvs, err := ol.Rollup(nil)
 			require.NoError(t, err)
 			require.NoError(t, writePostingListToDisk(kvs))
-			ol, err = getNew(key, ps, math.MaxUint64)
+			ol, err = readPostingListFromDisk(key, ps, math.MaxUint64)
 			require.NoError(t, err)
 		}
 		curTs++
@@ -1409,7 +1409,7 @@ func TestMultiPartListDeleteAndAdd(t *testing.T) {
 	kvs, err := ol.Rollup(nil)
 	require.NoError(t, err)
 	require.NoError(t, writePostingListToDisk(kvs))
-	ol, err = getNew(key, ps, math.MaxUint64)
+	ol, err = readPostingListFromDisk(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 	for _, kv := range kvs {
 		require.Equal(t, curTs, kv.Version)
@@ -1438,7 +1438,7 @@ func TestMultiPartListDeleteAndAdd(t *testing.T) {
 			kvs, err := ol.Rollup(nil)
 			require.NoError(t, err)
 			require.NoError(t, writePostingListToDisk(kvs))
-			ol, err = getNew(key, ps, math.MaxUint64)
+			ol, err = readPostingListFromDisk(key, ps, math.MaxUint64)
 			require.NoError(t, err)
 		}
 		curTs++
@@ -1448,7 +1448,7 @@ func TestMultiPartListDeleteAndAdd(t *testing.T) {
 	kvs, err = ol.Rollup(nil)
 	require.NoError(t, err)
 	require.NoError(t, writePostingListToDisk(kvs))
-	ol, err = getNew(key, ps, math.MaxUint64)
+	ol, err = readPostingListFromDisk(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 
 	// Verify all entries are once again in the list.
