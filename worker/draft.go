@@ -1076,7 +1076,7 @@ func (n *node) commitOrAbort(_ uint64, delta *pb.OracleDelta) error {
 	var sz int64
 	for _, status := range delta.Txns {
 		txn := posting.Oracle().GetTxn(status.StartTs)
-		if txn == nil {
+		if txn == nil || status.CommitTs == 0 {
 			continue
 		}
 		for k := range txn.Deltas() {
@@ -1109,7 +1109,7 @@ func (n *node) commitOrAbort(_ uint64, delta *pb.OracleDelta) error {
 	// This would be used for callback via Badger when skiplist is pushed to
 	// disk.
 	deleteTxns := func() {
-		posting.Oracle().DeleteTxns(delta)
+		posting.Oracle().DeleteTxnsAndRollupKeys(delta)
 	}
 
 	if len(itrs) == 0 {
@@ -1157,9 +1157,10 @@ func (n *node) commitOrAbort(_ uint64, delta *pb.OracleDelta) error {
 	// Clear all the cached lists that were touched by this transaction.
 	for _, status := range delta.Txns {
 		txn := posting.Oracle().GetTxn(status.StartTs)
-		txn.RemoveCachedKeys()
+		if status.CommitTs > 0 {
+			txn.UpdateCachedKeys(status.CommitTs)
+		}
 	}
-	posting.WaitForCache()
 	span.Annotate(nil, "cache keys removed")
 
 	// Now advance Oracle(), so we can service waiting reads.
