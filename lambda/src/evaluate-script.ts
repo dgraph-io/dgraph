@@ -61,13 +61,6 @@ class GraphQLResolverEventTarget extends EventTarget {
 }
 
 function newContext(eventTarget: GraphQLResolverEventTarget, logger: any) {
-  function appendLogs(){
-    return function() {
-      var args = Array.from(arguments);
-      logger.logs = [logger.logs, ...args].join("\n")
-    }
-  }
-
   // Override the default fetch to blacklist certain IPs.
   const _fetch = function(url: RequestInfo, init?: RequestInit): Promise<Response> {
     try {
@@ -89,6 +82,12 @@ function newContext(eventTarget: GraphQLResolverEventTarget, logger: any) {
     return fetch(url, init)
   }
 
+  function appendLogs(){
+    return function() {
+      var args = Array.from(arguments);
+      logger.logs = [logger.logs, ...args].join("\n")
+    }
+  }
   // Override the console object to append to logger.logs.
   const _console = Object.assign({}, console)
   _console.debug = appendLogs()

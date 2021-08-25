@@ -64,7 +64,7 @@ export function buildApp() {
             {runner, bodyToEvent, req, res, logger},
             {timeout:10000}) // timeout after 10 seconds
         } catch(err) {
-          res.json({logs: logger.logs, error: err.toString()})
+          res.json({logs: logger.logs + err.toString()})
           res.status(500)
         }
     })

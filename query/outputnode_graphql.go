@@ -980,7 +980,7 @@ func (genc *graphQLEncoder) resolveCustomField(childField gqlSchema.Field,
 				genc.errCh <- append(errs, childField.GqlErrorf(nil,
 					"Evaluation of custom field failed because expected result of lambda"+
 						" BATCH request to be of map type, got: %v for field: %s within type: %s.",
-					reflect.TypeOf(response).Name(), childField.Name(), childField.GetObjectName()))
+					response, childField.Name(), childField.GetObjectName()))
 				return
 			}
 			logs, ok := res["logs"].(string)
