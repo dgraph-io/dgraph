@@ -268,10 +268,18 @@ func (o *oracle) WaitForTs(ctx context.Context, startTs uint64) error {
 	}
 }
 
-func (o *oracle) DeleteTxns(delta *pb.OracleDelta) {
+// DeleteTxnsAndRollupKeys is called via a callback when Skiplist is handled
+// over to Badger with latest commits in it.
+func (o *oracle) DeleteTxnsAndRollupKeys(delta *pb.OracleDelta) {
 	o.Lock()
-	for _, txn := range delta.Txns {
-		delete(o.pendingTxns, txn.StartTs)
+	for _, status := range delta.Txns {
+		txn := o.pendingTxns[status.StartTs]
+		if txn != nil && status.CommitTs > 0 {
+			for k := range txn.Deltas() {
+				IncrRollup.addKeyToBatch([]byte(k), 0)
+			}
+		}
+		delete(o.pendingTxns, status.StartTs)
 	}
 	o.Unlock()
 }

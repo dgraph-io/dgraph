@@ -24,7 +24,6 @@ import (
 	"sync/atomic"
 
 	"github.com/dgraph-io/badger/v3"
-	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
@@ -146,7 +145,7 @@ func (c *countIndexer) writeIndex(buf *z.Buffer) {
 			return
 		}
 
-		pl.Bitmap = codec.ToBytes(bm)
+		pl.Bitmap = bm.ToBuffer()
 
 		kv := posting.MarshalPostingList(&pl, nil)
 		kv.Key = append([]byte{}, lastCe.Key()...)

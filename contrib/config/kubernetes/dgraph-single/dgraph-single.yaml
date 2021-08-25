@@ -78,7 +78,7 @@ spec:
           - "-c"
           - |
             set -ex
-            dgraph alpha --my=$(hostname -f):7080 --zero dgraph-0.dgraph.${POD_NAMESPACE}.svc.cluster.local:5080
+            dgraph alpha --my=$(hostname -f):7080 --zero dgraph-0.dgraph.${POD_NAMESPACE}:5080
       terminationGracePeriodSeconds: 60
       volumes:
       - name: datadir

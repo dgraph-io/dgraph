@@ -277,7 +277,7 @@ func getRefreshJwt(userId string, namespace uint64) (string, error) {
 
 const queryUser = `
     query search($userid: string, $password: string){
-      user(func: eq(dgraph.xid, $userid)) {
+      user(func: eq(dgraph.xid, $userid)) @filter(type(dgraph.type.User)) {
 	    uid
         dgraph.xid
         password_match: checkpwd(dgraph.password, $password)
@@ -398,8 +398,8 @@ const queryAcls = `
 `
 
 var aclPrefixes = [][]byte{
-	x.PredicatePrefix(x.GalaxyAttr("dgraph.acl.permission")),
-	x.PredicatePrefix(x.GalaxyAttr("dgraph.acl.predicate")),
+	x.PredicatePrefix(x.GalaxyAttr("dgraph.rule.permission")),
+	x.PredicatePrefix(x.GalaxyAttr("dgraph.rule.predicate")),
 	x.PredicatePrefix(x.GalaxyAttr("dgraph.acl.rule")),
 	x.PredicatePrefix(x.GalaxyAttr("dgraph.user.group")),
 	x.PredicatePrefix(x.GalaxyAttr("dgraph.type.Group")),
@@ -455,7 +455,7 @@ func upsertGuardianAndGroot(closer *z.Closer, ns uint64) {
 func upsertGuardian(ctx context.Context) error {
 	query := fmt.Sprintf(`
 			{
-				guid as guardians(func: eq(dgraph.xid, "%s")){
+				guid as guardians(func: eq(dgraph.xid, "%s")) @filter(type(dgraph.type.Group)) {
 					uid
 				}
 			}
@@ -525,10 +525,10 @@ func upsertGroot(ctx context.Context, passwd string) error {
 	// groot is the default user of guardians group.
 	query := fmt.Sprintf(`
 			{
-				grootid as grootUser(func: eq(dgraph.xid, "%s")){
+				grootid as grootUser(func: eq(dgraph.xid, "%s")) @filter(type(dgraph.type.User)) {
 					uid
 				}
-				guid as var(func: eq(dgraph.xid, "%s"))
+				guid as var(func: eq(dgraph.xid, "%s")) @filter(type(dgraph.type.Group))
 			}
 		`, x.GrootId, x.GuardiansId)
 	userNQuads := acl.CreateUserNQuads(x.GrootId, passwd)
@@ -631,8 +631,15 @@ func authorizePreds(ctx context.Context, userData *userData, preds []string,
 			blockedPreds[pred] = struct{}{}
 		}
 	}
+
+	if hasAccessToAllPreds(ns, groupIds, aclOp) {
+		// Setting allowed to nil allows access to all predicates. Note that the access to ACL
+		// predicates will still be blocked.
+		return &authPredResult{allowed: nil, blocked: blockedPreds}
+	}
+
 	aclCachePtr.RLock()
-	allowedPreds := make([]string, len(aclCachePtr.userPredPerms[userId]))
+	allowedPreds := make([]string, 0, len(aclCachePtr.userPredPerms[userId]))
 	// User can have multiple permission for same predicate, add predicate
 	// only if the acl.Op is covered in the set of permissions for the user
 	for predicate, perm := range aclCachePtr.userPredPerms[userId] {

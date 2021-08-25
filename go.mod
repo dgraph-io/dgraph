@@ -19,14 +19,14 @@ require (
 	github.com/Shopify/sarama v1.27.2
 	github.com/blevesearch/bleve v1.0.13
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd
-	github.com/dgraph-io/badger/v3 v3.0.0-20210707084205-c40b2e9af902
+	github.com/dgraph-io/badger/v3 v3.0.0-20210825061050-c2b23c471f5e
 	github.com/dgraph-io/dgo/v210 v210.0.0-20210825123656-d3f867fe9cc3
 	github.com/dgraph-io/gqlgen v0.13.2
 	github.com/dgraph-io/gqlparser/v2 v2.2.0
 	github.com/dgraph-io/graphql-transport-ws v0.0.0-20210511143556-2cef522f1f15
-	github.com/dgraph-io/ristretto v0.1.0
+	github.com/dgraph-io/ristretto v0.1.1-0.20210824115121-89e99415887a
 	github.com/dgraph-io/simdjson-go v0.3.0
-	github.com/dgraph-io/sroar v0.0.0-20210604145002-865050cb7465
+	github.com/dgraph-io/sroar v0.0.0-20210816194026-bc614dc5ce67
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/dgrijalva/jwt-go/v4 v4.0.0-preview1
 	github.com/dgryski/go-farm v0.0.0-20200201041132-a6ae2369ad13
@@ -75,7 +75,7 @@ require (
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	golang.org/x/sys v0.0.0-20210511113859-b0526f3d8744
 	golang.org/x/text v0.3.6
-	golang.org/x/tools v0.1.1
+	golang.org/x/tools v0.1.6-0.20210802203754-9b21a8868e16
 	google.golang.org/api v0.46.0
 	google.golang.org/genproto v0.0.0-20210510173355-fb37daa5cd7a // indirect
 	google.golang.org/grpc v1.37.1
@@ -83,5 +83,6 @@ require (
 	gopkg.in/DataDog/dd-trace-go.v1 v1.13.1 // indirect
 	gopkg.in/square/go-jose.v2 v2.3.1
 	gopkg.in/yaml.v2 v2.2.8
+	honnef.co/go/tools v0.2.0 // indirect
 	src.techknowlogick.com/xgo v1.4.1-0.20210311222705-d25c33fcd864
 )
