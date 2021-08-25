@@ -1232,6 +1232,7 @@ func DeleteData(ns uint64) error {
 // based on DB options set.
 func DeletePredicate(ctx context.Context, attr string, ts uint64) error {
 	glog.Infof("Dropping predicate: [%s]", attr)
+	// TODO: We should only delete cache for certain keys, not all the keys.
 	ResetCache()
 	prefix := x.PredicatePrefix(attr)
 	if err := pstore.DropPrefix(prefix); err != nil {
@@ -1244,6 +1245,7 @@ func DeletePredicate(ctx context.Context, attr string, ts uint64) error {
 // writes.
 func DeletePredicateBlocking(ctx context.Context, attr string, ts uint64) error {
 	glog.Infof("Dropping predicate: [%s]", attr)
+	// TODO: We should only delete cache for certain keys, not all the keys.
 	ResetCache()
 	prefix := x.PredicatePrefix(attr)
 	if err := pstore.DropPrefixBlocking(prefix); err != nil {
@@ -1254,6 +1256,7 @@ func DeletePredicateBlocking(ctx context.Context, attr string, ts uint64) error 
 
 // DeleteNamespace bans the namespace and deletes its predicates/types from the schema.
 func DeleteNamespace(ns uint64) error {
+	// TODO: We should only delete cache for certain keys, not all the keys.
 	ResetCache()
 	schema.State().DeletePredsForNs(ns)
 	return pstore.BanNamespace(ns)

@@ -40,7 +40,6 @@ var (
 	pstore *badger.DB
 	closer *z.Closer
 	lCache *ristretto.Cache
-	// lCache *GoCache
 )
 
 // Init initializes the posting lists package, the in memory and dirty list hash.
