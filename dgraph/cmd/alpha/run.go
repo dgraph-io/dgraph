@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"embed"
 	"fmt"
 	"log"
 	"math"
@@ -28,7 +29,9 @@ import (
 	_ "net/http/pprof" // http profiler
 	"net/url"
 	"os"
+	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -78,6 +81,10 @@ var (
 	adminServer admin.IServeGraphQL
 	initDone    uint32
 )
+
+// Embed the Javascript Lambda Server's code to launch lambda server later on.
+//go:embed dist/*
+var jsLambda embed.FS
 
 func init() {
 	Alpha.Cmd = &cobra.Command{
@@ -223,8 +230,19 @@ they form a Raft group and provide synchronous replication.
 			"Enables extensions in GraphQL response body.").
 		Flag("poll-interval",
 			"The polling interval for GraphQL subscription.").
-		Flag("lambda-url",
-			"The URL of a lambda server that implements custom GraphQL Javascript resolvers.").
+		String())
+
+	flag.String("lambda", worker.LambdaDefaults, z.NewSuperFlagHelp(worker.LambdaDefaults).
+		Head("Lambda options").
+		Flag("url",
+			"The URL of a lambda server that implements custom GraphQL Javascript resolvers."+
+				" This should be used only when using custom lambda server."+
+				" Use cnt subflag to launch official lambda server."+
+				" This flag if set, overrides the other lambda flags.").
+		Flag("cnt",
+			"Number of JS lambda servers to be launched by alpha.").
+		Flag("port",
+			"The starting port at which the lambda server listens.").
 		String())
 
 	flag.String("cdc", worker.CDCDefaults, z.NewSuperFlagHelp(worker.CDCDefaults).
@@ -438,6 +456,62 @@ func setupListener(addr string, port int) (net.Listener, error) {
 	return net.Listen("tcp", fmt.Sprintf("%s:%d", addr, port))
 }
 
+func setupLambdaServer(closer *z.Closer) {
+	// If --lambda url is set, then don't launch the lambda servers from dgraph.
+	if len(x.Config.Lambda.Url) > 0 {
+		return
+	}
+
+	num := int(x.Config.Lambda.Num)
+	port := int(x.Config.Lambda.Port)
+	if num == 0 {
+		return
+	}
+
+	glog.Infoln("Setting up lambda servers")
+	dgraphUrl := fmt.Sprintf("http://localhost:%d", httpPort())
+	// Entry point of the script is index.js.
+	filename := filepath.Join(x.WorkerConfig.TmpDir, "index.js")
+
+	dir := "dist"
+	files, err := jsLambda.ReadDir(dir)
+	x.Check(err)
+	for _, file := range files {
+		// The separator for embedded files is forward-slash even on Windows.
+		data, err := jsLambda.ReadFile(dir + "/" + file.Name())
+		x.Check(err)
+		filename := filepath.Join(x.WorkerConfig.TmpDir, file.Name())
+		file, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+		x.Check(err)
+		_, err = file.Write(data)
+		x.Check(err)
+		x.Check(file.Close())
+	}
+
+	for i := 0; i < num; i++ {
+		go func(i int) {
+			for {
+				select {
+				case <-closer.HasBeenClosed():
+					break
+				default:
+					cmd := exec.CommandContext(closer.Ctx(), "node", filename)
+					cmd.Env = append(cmd.Env, fmt.Sprintf("PORT=%d", port+i))
+					cmd.Env = append(cmd.Env, fmt.Sprintf("DGRAPH_URL="+dgraphUrl))
+					cmd.Stdout = os.Stdout
+					cmd.Stderr = os.Stderr
+					glog.Infof("Running node command: %+v\n", cmd)
+					err := cmd.Run()
+					if err != nil {
+						glog.Errorf("Lambda server idx: %d stopped with error %v", i, err)
+					}
+					time.Sleep(2 * time.Second)
+				}
+			}
+		}(i)
+	}
+}
+
 func serveGRPC(l net.Listener, tlsCfg *tls.Config, closer *z.Closer) {
 	defer closer.Done()
 
@@ -504,7 +578,7 @@ func setupServer(closer *z.Closer) {
 	// TODO: Figure out what this is for?
 	http.HandleFunc("/debug/store", storeStatsHandler)
 
-	introspection := x.Config.GraphQL.GetBool("introspection")
+	introspection := x.Config.GraphQL.Introspection
 
 	// Global Epoch is a lockless synchronization mechanism for graphql service.
 	// It's is just an atomic counter used by the graphql subscription to update its state.
@@ -564,11 +638,12 @@ func setupServer(closer *z.Closer) {
 	baseMux.Handle("/", http.HandlerFunc(homeHandler))
 	baseMux.Handle("/ui/keywords", http.HandlerFunc(keywordHandler))
 
+	// Initialize the lambda server
+	setupLambdaServer(x.ServerCloser)
 	// Initialize the servers.
 	x.ServerCloser.AddRunning(3)
 	go serveGRPC(grpcListener, tlsCfg, x.ServerCloser)
 	go x.StartListenHttpAndHttps(httpListener, tlsCfg, x.ServerCloser)
-
 	go func() {
 		defer x.ServerCloser.Done()
 
@@ -723,17 +798,29 @@ func run() {
 	x.Config.MaxRetries = x.Config.Limit.GetInt64("max-retries")
 	x.Config.SharedInstance = x.Config.Limit.GetBool("shared-instance")
 
-	x.Config.GraphQL = z.NewSuperFlag(Alpha.Conf.GetString("graphql")).MergeAndCheckDefault(
+	graphql := z.NewSuperFlag(Alpha.Conf.GetString("graphql")).MergeAndCheckDefault(
 		worker.GraphQLDefaults)
-	x.Config.GraphQLDebug = x.Config.GraphQL.GetBool("debug")
-	if x.Config.GraphQL.GetString("lambda-url") != "" {
-		graphqlLambdaUrl, err := url.Parse(x.Config.GraphQL.GetString("lambda-url"))
+	x.Config.GraphQL = x.GraphQLOptions{
+		Introspection: graphql.GetBool("introspection"),
+		Debug:         graphql.GetBool("debug"),
+		Extensions:    graphql.GetBool("extensions"),
+		PollInterval:  graphql.GetDuration("poll-interval"),
+	}
+	lambda := z.NewSuperFlag(Alpha.Conf.GetString("lambda")).MergeAndCheckDefault(
+		worker.LambdaDefaults)
+	x.Config.Lambda = x.LambdaOptions{
+		Url:  lambda.GetString("url"),
+		Num:  lambda.GetUint32("num"),
+		Port: lambda.GetUint32("port"),
+	}
+	if x.Config.Lambda.Url != "" {
+		graphqlLambdaUrl, err := url.Parse(x.Config.Lambda.Url)
 		if err != nil {
-			glog.Errorf("unable to parse --graphql lambda-url: %v", err)
+			glog.Errorf("unable to parse --lambda url: %v", err)
 			return
 		}
 		if !graphqlLambdaUrl.IsAbs() {
-			glog.Errorf("expecting --graphql lambda-url to be an absolute URL, got: %s",
+			glog.Errorf("expecting --lambda url to be an absolute URL, got: %s",
 				graphqlLambdaUrl.String())
 			return
 		}

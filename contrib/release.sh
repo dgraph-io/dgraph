@@ -48,14 +48,12 @@ Build dev/feature-branch branch and tag as dev-abc123 for the Docker image
 fi
 
 
-if [[ $DGRAPH_BUILD_RATEL =~ 1|true ]]; then
-  export NVM_DIR="$HOME/.nvm"
-  [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
-  [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
 
-  check_command_exists nvm
-  check_command_exists npm
-fi
+check_command_exists nvm
+check_command_exists npm
 
 # TODO Check if ports 8000, 9080, or 6080 are bound already and error out early.
 
@@ -69,6 +67,8 @@ check_command_exists protoc
 check_command_exists shasum
 check_command_exists tar
 check_command_exists zip
+
+nvm install --lts
 
 # Don't use standard GOPATH. Create a new one.
 unset GOBIN
@@ -148,6 +148,11 @@ popd
 # The initial slash is taken from the repository name dgraph/dgraph:tag
 DOCKER_TAG=${2:-$release_version}
 
+# Build the JS lambda server.
+pushd $basedir/dgraph/lambda
+  make build
+popd
+
 # Regenerate protos. Should not be different from what's checked in.
 pushd $basedir/dgraph/protos
   # We need to fetch the modules to get the correct proto files. e.g., for
@@ -155,7 +160,7 @@ pushd $basedir/dgraph/protos
   go get -d -v ../dgraph
 
   make regenerate
-  if [[ "$(git status --porcelain)" ]]; then
+  if [[ "$(git status --porcelain .)" ]]; then
       echo >&2 "Generated protos different in release."
       exit 1
   fi
@@ -179,7 +184,6 @@ if [[ $DGRAPH_BUILD_RATEL =~ 1|true ]]; then
 
   # build ratel client
   pushd $basedir/ratel
-    nvm install --lts
     (export GO111MODULE=off; ./scripts/build.prod.sh)
     ./scripts/test.sh
   popd

@@ -1,7 +1,7 @@
 version: "3.5"
 services:
   zero1:
-    image: dgraph/dgraph:latest
+    image: namanj1811/dgraph:lambda
     working_dir: /data/zero1
     ports:
       - 5080
@@ -17,7 +17,7 @@ services:
     command: /gobin/dgraph zero --logtostderr -v=2 --bindall --expose_trace --profile_mode block --block_rate 10 --my=zero1:5080
 
   alpha1:
-    image: dgraph/dgraph:latest
+    image: namanj1811/dgraph:lambda
     working_dir: /data/alpha1
     volumes:
       - type: bind
@@ -33,16 +33,6 @@ services:
     command: /gobin/dgraph alpha --zero=zero1:5080 --expose_trace
       --profile_mode block --block_rate 10 --logtostderr -v=2 --my=alpha1:7080
       --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
-      --graphql "lambda-url=http://lambda:8686/graphql-worker;"
+      --lambda "num=2;"
       --trace "ratio=1.0;"
 
-  lambda:
-    image: namanj1811/lambda-test:v1
-    labels:
-      cluster: test
-    ports:
-      - 8686
-    depends_on:
-      - alpha1
-    environment:
-      DGRAPH_URL: http://alpha1:8080

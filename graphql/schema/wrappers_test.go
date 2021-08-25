@@ -953,7 +953,7 @@ func TestGraphQLQueryInCustomHTTPConfig(t *testing.T) {
 				field = q.SelectionSet()[0]
 			}
 
-			c, err := field.CustomHTTPConfig()
+			c, err := field.CustomHTTPConfig(x.GalaxyNamespace)
 			require.NoError(t, err)
 
 			remoteSchemaHandler, errs := NewHandler(tcase.RemoteSchema, false)

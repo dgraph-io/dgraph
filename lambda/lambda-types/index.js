@@ -1,7 +1,5 @@
-// +build oss
-
 /*
- * Copyright 2020 Dgraph Labs, Inc. and Contributors
+ * Copyright 2021 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,15 +14,7 @@
  * limitations under the License.
  */
 
-package ee
-
-import (
-	"github.com/spf13/viper"
-)
-
-// GetKeys returns the ACL and encryption keys as configured by the user
-// through the --acl, --encryption, and --vault flags. On OSS builds,
-// this function always returns an error.
-func GetKeys(config *viper.Viper) (*Keys, error) {
-	return &Keys{}, nil
+module.exports = {
+  addGraphQLResolvers: global.addGraphQLResolvers,
+  addMultiParentGraphQLResolvers: global.addMultiParentGraphQLResolvers,
 }

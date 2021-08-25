@@ -24,7 +24,6 @@ import (
 
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/ristretto/z"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 )
@@ -64,8 +63,10 @@ func TestMain(m *testing.M) {
 	}
 
 	// set up the lambda url for unit tests
-	x.Config.GraphQL = z.NewSuperFlag("lambda-url=http://localhost:8086/graphql-worker;").
-		MergeAndCheckDefault("lambda-url=;")
+	x.Config.Lambda = x.LambdaOptions{
+		Num:  2,
+		Port: 20000,
+	}
 
 	common.BootstrapServer(schema, data)
 	common.AddLambdaScript(base64.StdEncoding.EncodeToString(script))

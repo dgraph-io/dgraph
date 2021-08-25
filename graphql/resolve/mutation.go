@@ -248,6 +248,7 @@ func (mr *dgraphResolver) rewriteAndExecute(
 				},
 			},
 		},
+		Logs: make([]string, 0),
 	}
 
 	emptyResult := func(err error) *Resolved {
@@ -295,6 +296,7 @@ func (mr *dgraphResolver) rewriteAndExecute(
 			return emptyResult(gqlErr), resolverFailed
 		}
 		ext.TouchedUids += mutResp.GetMetrics().GetNumUids()[touchedUidsKey]
+		ext.Logs = append(ext.Logs, mutResp.GetMetrics().GetLogs()...)
 	}
 
 	// Parse the result of query.
@@ -404,6 +406,7 @@ func (mr *dgraphResolver) rewriteAndExecute(
 				queryErrs = err
 			}
 			ext.TouchedUids += qryResp.GetMetrics().GetNumUids()[touchedUidsKey]
+			ext.Logs = append(ext.Logs, qryResp.GetMetrics().GetLogs()...)
 		}
 	}
 
@@ -425,6 +428,7 @@ func (mr *dgraphResolver) rewriteAndExecute(
 		}
 
 		ext.TouchedUids += mutResp.GetMetrics().GetNumUids()[touchedUidsKey]
+		ext.Logs = append(ext.Logs, mutResp.GetMetrics().GetLogs()...)
 		if req.Query != "" && len(mutResp.GetJson()) != 0 {
 			if err := json.Unmarshal(mutResp.GetJson(), &result); err != nil {
 				return emptyResult(
@@ -504,6 +508,7 @@ func (mr *dgraphResolver) rewriteAndExecute(
 	// once committed, send async updates to configured webhooks, if any.
 	if mutation.HasLambdaOnMutate() {
 		rootUIDs := mr.mutationRewriter.MutatedRootUIDs(mutation, mutResp.GetUids(), result)
+		// NOTE: This is an async operation. We can't extract logs from webhooks.
 		go sendWebhookEvent(ctx, mutation, txnCtx.CommitTs, rootUIDs)
 	}
 
@@ -520,6 +525,7 @@ func (mr *dgraphResolver) rewriteAndExecute(
 		}
 		queryErrs = schema.AppendGQLErrs(queryErrs, err)
 		ext.TouchedUids += qryResp.GetMetrics().GetNumUids()[touchedUidsKey]
+		ext.Logs = append(ext.Logs, qryResp.GetMetrics().GetLogs()...)
 	}
 	numUids := getNumUids(mutation, mutResp.Uids, result)
 

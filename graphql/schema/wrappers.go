@@ -173,7 +173,7 @@ type Field interface {
 	TypeName(dgraphTypes []string) string
 	GetObjectName() string
 	IsAuthQuery() bool
-	CustomHTTPConfig() (*FieldHTTPConfig, error)
+	CustomHTTPConfig(ns uint64) (*FieldHTTPConfig, error)
 	EnumValues() []string
 	ConstructedFor() Type
 	ConstructedForDgraphPredicate() string
@@ -1487,7 +1487,7 @@ func (t *astType) IsInbuiltOrEnumType() bool {
 	return ok || (t.inSchema.schema.Types[t.Name()].Kind == ast.Enum)
 }
 
-func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (*FieldHTTPConfig, error) {
+func getCustomHTTPConfig(f *field, isQueryOrMutation bool, ns uint64) (*FieldHTTPConfig, error) {
 	custom := f.op.inSchema.customDirectives[f.GetObjectName()][f.Name()]
 	httpArg := custom.Arguments.ForName(httpArg)
 	fconf := &FieldHTTPConfig{
@@ -1584,11 +1584,19 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (*FieldHTTPConfig, er
 		}
 		fconf.Template = SubstituteVarsInBody(fconf.Template, bodyVars)
 	}
+
+	// If we are querying the lambda directive, update the URL using load balancer. Also, set the
+	// Accept-Encoding header to "*", so that no compression happens. Otherwise, http package sets
+	// gzip encoding which adds overhead for communication within the same machine.
+	if f.HasLambdaDirective() {
+		fconf.URL = x.LambdaUrl(ns)
+		fconf.ForwardHeaders.Set("Accept-Encoding", "*")
+	}
 	return fconf, nil
 }
 
-func (f *field) CustomHTTPConfig() (*FieldHTTPConfig, error) {
-	return getCustomHTTPConfig(f, false)
+func (f *field) CustomHTTPConfig(ns uint64) (*FieldHTTPConfig, error) {
+	return getCustomHTTPConfig(f, false, ns)
 }
 
 func (f *field) EnumValues() []string {
@@ -1900,8 +1908,8 @@ func (q *query) GetObjectName() string {
 	return q.field.ObjectDefinition.Name
 }
 
-func (q *query) CustomHTTPConfig() (*FieldHTTPConfig, error) {
-	return getCustomHTTPConfig((*field)(q), true)
+func (q *query) CustomHTTPConfig(ns uint64) (*FieldHTTPConfig, error) {
+	return getCustomHTTPConfig((*field)(q), true, ns)
 }
 
 func (q *query) EnumValues() []string {
@@ -2200,8 +2208,8 @@ func (m *mutation) MutatedType() Type {
 	return m.op.inSchema.mutatedType[m.Name()]
 }
 
-func (m *mutation) CustomHTTPConfig() (*FieldHTTPConfig, error) {
-	return getCustomHTTPConfig((*field)(m), true)
+func (m *mutation) CustomHTTPConfig(ns uint64) (*FieldHTTPConfig, error) {
+	return getCustomHTTPConfig((*field)(m), true, ns)
 }
 
 func (m *mutation) EnumValues() []string {

@@ -1472,10 +1472,22 @@ func (r *RateLimiter) RefillPeriodically() {
 	}
 }
 
-// LambdaUrl returns the correct lambda-url for the given namespace
+var loop uint32
+
+// LambdaUrl returns the correct lambda url for the given namespace
 func LambdaUrl(ns uint64) string {
-	return strings.Replace(Config.GraphQL.GetString("lambda-url"), "$ns", strconv.FormatUint(ns,
-		10), 1)
+	lambdaUrl := Config.Lambda.Url
+	if len(lambdaUrl) > 0 {
+		return strings.Replace(lambdaUrl, "$ns", strconv.FormatUint(ns, 10), 1)
+	}
+	// TODO: Should we check if this server is active and then consider it for load balancing?
+	num := Config.Lambda.Num
+	if num == 0 {
+		return ""
+	}
+	port := Config.Lambda.Port
+	url := fmt.Sprintf("http://localhost:%d/graphql-worker", port+(atomic.AddUint32(&loop, 1)%num))
+	return url
 }
 
 // IsJwtExpired returns true if the error indicates that the jwt has expired.
