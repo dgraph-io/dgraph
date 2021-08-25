@@ -155,6 +155,7 @@ func FromList(l *pb.List) *sroar.Bitmap {
 		bm.SetMany(l.SortedUids)
 		return bm
 	}
+	// TODO: Return nil here and handle nil for all the APIs in sroar itself.
 	return sroar.NewBitmap()
 }
 
@@ -171,7 +172,7 @@ func FromListNoCopy(l *pb.List) *sroar.Bitmap {
 		bm.SetMany(l.SortedUids)
 		return bm
 	}
-	return sroar.NewBitmap()
+	return nil
 }
 
 func FromBytes(buf []byte) *sroar.Bitmap {
