@@ -4,7 +4,49 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project will adhere to [Calendar Versioning](https://calver.org/) starting v20.03.
 
+## [21.03.2] - 2021-08-26
+[21.03.2]: https://github.com/dgraph-io/dgraph/compare/v21.03.1...v21.03.2
 
+### Fixed
+
+- GraphQL
+  - Handle extend keyword for Queries and Mutations ([#7923][])
+
+- Core Dgraph
+  - fix(Raft): Detect network partition when streaming ([#7908][])
+  - fix(Raft): Reconnect via a redial in case of disconnection. ([#7921][])
+  - fix(conn): JoinCluster loop should use latest conn ([#7952][])
+  - fix(pool): use write lock when getting health info ([#7967][])
+  - fix(acl): The Acl cache should be updated on restart and restore. ([#7964][])
+  - fix(acl): filter out the results based on type ([#7981][])
+  - fix(backup): Fix full backup request ([#7934][])
+  - fix(live): quote the xid when doing upsert ([#7999][])
+  - fix(export): Write temporary files for export to the t directory. ([#7998][])
+
+### Changed
+
+- protobuf: upgrade golang/protobuf library v1.4.1 -> v1.5.2 ([#7949][])
+- chore(raft): Log packets message less frequently. ([#7913][])
+
+### Added
+
+- feat(acl): allow access to all the predicates using wildcard. ([#7993][])
+- feat(Multi-tenancy): Add namespaces field to state. ([#7936][])
+
+[#7923]: https://github.com/dgraph-io/dgraph/issues/7923
+[#7908]: https://github.com/dgraph-io/dgraph/issues/7908
+[#7921]: https://github.com/dgraph-io/dgraph/issues/7921
+[#7952]: https://github.com/dgraph-io/dgraph/issues/7952
+[#7967]: https://github.com/dgraph-io/dgraph/issues/7967
+[#7964]: https://github.com/dgraph-io/dgraph/issues/7964
+[#7981]: https://github.com/dgraph-io/dgraph/issues/7981
+[#7934]: https://github.com/dgraph-io/dgraph/issues/7934
+[#7999]: https://github.com/dgraph-io/dgraph/issues/7999
+[#7998]: https://github.com/dgraph-io/dgraph/issues/7998
+[#7949]: https://github.com/dgraph-io/dgraph/issues/7949
+[#7913]: https://github.com/dgraph-io/dgraph/issues/7913
+[#7993]: https://github.com/dgraph-io/dgraph/issues/7993
+[#7936]: https://github.com/dgraph-io/dgraph/issues/7936
 
 ## [21.03.1] - 2021-06-16
 [21.03.1]: https://github.com/dgraph-io/dgraph/compare/v21.03.0...v21.03.1
