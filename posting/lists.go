@@ -61,9 +61,9 @@ func Init(ps *badger.DB, cacheSize int64) {
 		BufferItems: 64,
 		Metrics:     true,
 		Cost: func(val interface{}) int64 {
-			switch val.(type) {
+			switch val := val.(type) {
 			case *List:
-				return int64(val.(*List).DeepSize())
+				return int64(val.DeepSize())
 			case uint64:
 				return 8
 			default:
@@ -72,27 +72,22 @@ func Init(ps *badger.DB, cacheSize int64) {
 			}
 		},
 		ShouldUpdate: func(prev, cur interface{}) bool {
-			var prevTs, curTs uint64
-			switch prev.(type) {
-			case *List:
-				prevTs = prev.(*List).maxTs
-			case uint64:
-				prevTs = prev.(uint64)
-			default:
-				x.AssertTruef(false, "Don't know about type %T in Dgraph cache", prev)
+			getTs := func(ts interface{}) uint64 {
+				var t uint64
+				switch ts := ts.(type) {
+				case *List:
+					t = ts.maxTs
+				case uint64:
+					t = ts
+				default:
+					x.AssertTruef(false, "Don't know about type %T in Dgraph cache", ts)
+				}
+				return t
 			}
 
-			switch cur.(type) {
-			case *List:
-				curTs = cur.(*List).maxTs
-			case uint64:
-				curTs = cur.(uint64)
-			default:
-				x.AssertTruef(false, "Don't know about type %T in Dgraph cache", cur)
-			}
 			// Only update the value if we have a timestamp >= the previous
 			// value.
-			return curTs >= prevTs
+			return getTs(cur) >= getTs(prev)
 		},
 	})
 	x.Check(err)

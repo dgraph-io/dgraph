@@ -461,9 +461,9 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 	// corresponding to the key in the cache to nil. So, if we get some non-nil value from the cache
 	// then it means that no  writes have happened after the last set of this key in the cache.
 	if val, ok := lCache.Get(key); ok {
-		switch val.(type) {
+		switch val := val.(type) {
 		case *List:
-			l := val.(*List)
+			l := val
 			// l.maxTs can be greater than readTs. We might have the latest
 			// version cached, while readTs is looking for an older version.
 			if l != nil && l.maxTs <= readTs {
@@ -474,7 +474,7 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 			}
 
 		case uint64:
-			seenTs = val.(uint64)
+			seenTs = val
 		}
 	} else {
 		// The key wasn't found in cache. So, we set the key upfront.  This

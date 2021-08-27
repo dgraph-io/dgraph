@@ -84,8 +84,10 @@ function newContext(eventTarget: GraphQLResolverEventTarget, logger: any) {
 
   function appendLogs(){
     return function() {
-      var args = Array.from(arguments);
-      logger.logs = [logger.logs, ...args].join("\n")
+      for(const arg of Array.from(arguments)) {
+        logger.logs += JSON.stringify(arg) + " "
+      }
+      logger.logs += "\n"
     }
   }
   // Override the console object to append to logger.logs.
