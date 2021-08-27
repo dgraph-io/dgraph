@@ -80,7 +80,7 @@ func Init(ps *badger.DB, cacheSize int64) {
 				case uint64:
 					t = ts
 				default:
-					x.AssertTruef(false, "Don't know about type %T in Dgraph cache", prev)
+					x.AssertTruef(false, "Don't know about type %T in Dgraph cache", ts)
 				}
 				return t
 			}
