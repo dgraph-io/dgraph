@@ -245,6 +245,16 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// If rdf is set true, then response will be in rdf format.
+	rdfResponse, err := parseBool(r, "rdf")
+	if err != nil {
+		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+		return
+	}
+	if rdfResponse {
+		req.RespFormat = api.Request_RDF
+	}
+
 	// Core processing happens here.
 	resp, err := (&edgraph.Server{}).Query(ctx, &req)
 	if err != nil {
@@ -274,7 +284,11 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		x.Check2(out.Write(js))
 	}
 	x.Check2(out.WriteRune('{'))
-	writeEntry("data", resp.Json)
+	if rdfResponse {
+		writeEntry("data", resp.Rdf)
+	} else {
+		writeEntry("data", resp.Json)
+	}
 	x.Check2(out.WriteRune(','))
 	writeEntry("extensions", js)
 	x.Check2(out.WriteRune('}'))
