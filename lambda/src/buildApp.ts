@@ -16,7 +16,6 @@
 
 import express from "express";
 import timeout from "connect-timeout";
-import vm from 'vm';
 import atob from "atob";
 import btoa from "btoa";
 import { evaluateScript } from './evaluate-script'
@@ -48,30 +47,27 @@ var scripts = new Map()
 
 export function buildApp() {
     const app = express();
-    app.use(timeout('10s'))
     app.use(express.json({limit: '32mb'}))
+    app.get("/health", (_req, res) => {
+      res.status(200)
+      res.json("HEALTHY")
+    })
     app.post("/graphql-worker", async (req, res, next) => {
         try {
           const source = base64Decode(req.body.source) || req.body.source
-          const ns = req.body.ns || "0"
+          const ns = req.body.ns || 0
           const key = ns + source
           if (!scripts.has(key)) {
             scripts.set(key, evaluateScript(source, `[LAMBDA-${ns}] `))
           }
           const runner = scripts.get(key)
-          await vm.runInNewContext(
-            `runner(bodyToEvent(req.body)).then(result => {
-              if(result === undefined && req.body.resolver !== '$webhook') {
-                  res.status(400)
-              }
-              res.json(result)
-            })
-            `,
-            {runner, bodyToEvent, req, res},
-            {timeout:10000}) // timeout after 10 seconds
+          const result = await runner(bodyToEvent(req.body));
+          if(result === undefined && req.body.resolver !== '$webhook') {
+              res.status(400)
+          }
+          res.json(result)
         } catch(err) {
-          res.status(500)
-          // res.json({logs: err.toString()})
+          next(err)
         }
     })
     return app;

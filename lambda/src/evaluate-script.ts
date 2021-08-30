@@ -82,18 +82,18 @@ function newContext(eventTarget: GraphQLResolverEventTarget, prefix: string) {
     return fetch(url, init)
   }
 
-  function appendLogs(){
+  const appendPrefix = function(fn: (message?: any, ...optionalParams: any[]) => void, prefix: string) {
     return function() {
-      console.log(prefix + Array.from(arguments).map(arg => JSON.stringify(arg)).join(" "))
+      fn.apply(console, [prefix + Array.from(arguments).map(arg => JSON.stringify(arg)).join(" ")])
     }
   }
   // Override the console object to append to logger.logs.
   const _console = Object.assign({}, console)
-  _console.debug = appendLogs()
-  _console.error = appendLogs()
-  _console.info = appendLogs()
-  _console.log = appendLogs()
-  _console.warn = appendLogs()
+  _console.debug = appendPrefix(console.debug, prefix)
+  _console.error = appendPrefix(console.error, prefix)
+  _console.info = appendPrefix(console.info, prefix)
+  _console.log = appendPrefix(console.log, prefix)
+  _console.warn = appendPrefix(console.warn, prefix)
 
   return vm.createContext({
     // From fetch

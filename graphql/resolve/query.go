@@ -139,7 +139,6 @@ func (qr *queryResolver) rewriteAndExecute(ctx context.Context, query schema.Que
 	}
 
 	ext.TouchedUids = resp.GetMetrics().GetNumUids()[touchedUidsKey]
-	ext.Logs = append(ext.Logs, resp.GetMetrics().GetLogs()...)
 	resolved := &Resolved{
 		Data:       resp.GetJson(),
 		Field:      query,
@@ -222,7 +221,6 @@ func (qr *customDQLQueryResolver) rewriteAndExecute(ctx context.Context,
 		return emptyResult(schema.GQLWrapf(err, "Dgraph query failed"))
 	}
 	ext.TouchedUids = resp.GetMetrics().GetNumUids()[touchedUidsKey]
-	ext.Logs = append(ext.Logs, resp.GetMetrics().GetLogs()...)
 
 	var respJson map[string]interface{}
 	if err = schema.Unmarshal(resp.Json, &respJson); err != nil {

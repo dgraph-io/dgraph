@@ -35,8 +35,8 @@ func main() {
 			callDgraph(client, url)
 		}
 		if num := atomic.AddInt32(&count, 1); num%1000 == 0 {
-			elasped := time.Since(start).Round(time.Second).Seconds()
-			if elasped == 0 {
+			elasped := time.Since(start).Seconds()
+			if elasped < 1 {
 				return
 			}
 			fmt.Printf("[Chan: %d] Done %d requests in time: %f QPS: %d\n",
