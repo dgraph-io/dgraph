@@ -60,7 +60,7 @@ class GraphQLResolverEventTarget extends EventTarget {
   }
 }
 
-function newContext(eventTarget: GraphQLResolverEventTarget, logger: any) {
+function newContext(eventTarget: GraphQLResolverEventTarget, prefix: string) {
   // Override the default fetch to blacklist certain IPs.
   const _fetch = function(url: RequestInfo, init?: RequestInit): Promise<Response> {
     try {
@@ -84,10 +84,7 @@ function newContext(eventTarget: GraphQLResolverEventTarget, logger: any) {
 
   function appendLogs(){
     return function() {
-      for(const arg of Array.from(arguments)) {
-        logger.logs += JSON.stringify(arg) + " "
-      }
-      logger.logs += "\n"
+      console.log(prefix + Array.from(arguments).map(arg => JSON.stringify(arg)).join(" "))
     }
   }
   // Override the console object to append to logger.logs.
@@ -131,17 +128,10 @@ function newContext(eventTarget: GraphQLResolverEventTarget, logger: any) {
   });
 }
 
-
-var scripts = new Map();
-
-export function evaluateScript(source: string) {
-  const logger = {logs:""}
-  if(!scripts.has(source)){
-    scripts.set(source, new vm.Script(source))
-  }
-  const script = scripts.get(source)
+export function evaluateScript(source: string, prefix: string) {
+  const script = new vm.Script(source)
   const target = new GraphQLResolverEventTarget();
-  const context = newContext(target, logger)
+  const context = newContext(target, prefix)
   // Using the timeout or breakOnSigint options will result in new event loops and corresponding
   // threads being started, which have a non-zero performance overhead.
   // Ref: https://nodejs.org/api/vm.html#vm_script_runincontext_contextifiedobject_options
@@ -149,7 +139,6 @@ export function evaluateScript(source: string) {
   script.runInContext(context, {timeout: 1000});
 
   return async function(e: GraphQLEventFields): Promise<any | undefined> {
-    logger.logs = ""
     let retPromise: ResolverResponse | undefined = undefined;
     const event = {
       ...e,
@@ -173,6 +162,6 @@ export function evaluateScript(source: string) {
     }
 
     const response = await Promise.all(resolvedArray);
-    return {res: e.parents === null ? response[0] : response, logger};
+    return e.parents === null ? response[0] : response;
   }
 }

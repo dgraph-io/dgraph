@@ -51,26 +51,27 @@ export function buildApp() {
     app.use(timeout('10s'))
     app.use(express.json({limit: '32mb'}))
     app.post("/graphql-worker", async (req, res, next) => {
-        
         try {
           const source = base64Decode(req.body.source) || req.body.source
-          if (!scripts.has(source)) {
-            scripts.set(source, evaluateScript(source))
+          const ns = req.body.ns || "0"
+          const key = ns + source
+          if (!scripts.has(key)) {
+            scripts.set(key, evaluateScript(source, `[LAMBDA-${ns}] `))
           }
-          const runner = scripts.get(source)
+          const runner = scripts.get(key)
           await vm.runInNewContext(
             `runner(bodyToEvent(req.body)).then(result => {
               if(result === undefined && req.body.resolver !== '$webhook') {
                   res.status(400)
               }
-              res.json({res: result.res, logs: result.logger.logs})
+              res.json(result)
             })
             `,
             {runner, bodyToEvent, req, res},
             {timeout:10000}) // timeout after 10 seconds
         } catch(err) {
           res.status(500)
-          res.json({logs: err.toString()})
+          // res.json({logs: err.toString()})
         }
     })
     return app;
