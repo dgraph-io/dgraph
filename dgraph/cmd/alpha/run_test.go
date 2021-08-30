@@ -80,7 +80,7 @@ func processToFastJSON(q string) string {
 		log.Fatal(err)
 	}
 
-	buf, err := query.ToJson(context.Background(), &l, qr.Subgraphs, nil)
+	buf, _, err := query.ToJson(context.Background(), &l, qr.Subgraphs, nil)
 	if err != nil {
 		log.Fatal(err)
 	}

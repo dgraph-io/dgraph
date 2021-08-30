@@ -35,8 +35,9 @@ import "github.com/gogo/protobuf/gogoproto/gogo.proto";
 /* option (gogoproto.goproto_getters_all) = true; */
 
 message List {
-  repeated fixed64 uids = 1;
-  bytes bitmap_do_not_use = 2;
+  /* repeated fixed64 uids = 1; *1/ */
+  bytes bitmap = 2;
+  repeated fixed64 sortedUids = 3;
 }
 
 message TaskValue {
@@ -325,6 +326,8 @@ message RestoreRequest {
   string vault_format = 15;
 
   uint64 backup_num = 16;
+  uint64 incremental_from = 17;
+  bool is_partial = 18;
 }
 
 message Proposal {
@@ -738,10 +741,16 @@ message BackupPostingList {
 }
 
 message UpdateGraphQLSchemaRequest {
+  enum Op {
+    SCHEMA = 0;
+    SCRIPT = 1;
+  }
   uint64 start_ts = 1;
   string graphql_schema = 2;
   repeated SchemaUpdate dgraph_preds = 3;
   repeated TypeUpdate dgraph_types = 4;
+  string lambda_script = 5;
+  Op op = 6;
 }
 
 message UpdateGraphQLSchemaResponse {

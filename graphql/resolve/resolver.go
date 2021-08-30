@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -259,7 +260,7 @@ func (rf *resolverFactory) WithConventionResolvers(
 	for _, q := range s.Queries(schema.DQLQuery) {
 		rf.WithQueryResolver(q, func(q schema.Query) QueryResolver {
 			// DQL queries don't need any QueryRewriter
-			return NewCustomDQLQueryResolver(fns.Ex)
+			return NewCustomDQLQueryResolver(fns.Qrw, fns.Ex)
 		})
 	}
 
@@ -698,7 +699,8 @@ func (hr *httpResolver) Resolve(ctx context.Context, field schema.Field) *Resolv
 }
 
 func (hr *httpResolver) rewriteAndExecute(ctx context.Context, field schema.Field) *Resolved {
-	hrc, err := field.CustomHTTPConfig()
+	ns, _ := x.ExtractNamespace(ctx)
+	hrc, err := field.CustomHTTPConfig(ns)
 	if err != nil {
 		return EmptyResult(field, err)
 	}
@@ -721,7 +723,31 @@ func (hr *httpResolver) rewriteAndExecute(ctx context.Context, field schema.Fiel
 		}
 	}
 
-	return DataResult(field, map[string]interface{}{field.Name(): fieldData}, errs)
+	// Extract the logs from the lambda response and propagate it via extensions.
+	var ext *schema.Extensions
+	if field.HasLambdaDirective() {
+		res, ok := fieldData.(map[string]interface{})
+		if !ok {
+			return &Resolved{
+				Data:  field.NullResponse(),
+				Field: field,
+				Err: field.GqlErrorf(nil, "Evaluation of lambda resolver failed because expected"+
+					" result of lambda to be map type, got: %+v for field: %s within type: %s.",
+					res, field.Name(), field.GetObjectName()),
+			}
+		}
+		logs, ok := res["logs"].(string)
+		if !ok {
+			glog.Errorf("Expected lambda logs of type string, got %v for field: %s",
+				reflect.TypeOf(res).Name(), field.Name())
+		}
+		ext = &schema.Extensions{
+			Logs: []string{logs},
+		}
+		fieldData = res["res"]
+	}
+
+	return DataResultWithExt(field, map[string]interface{}{field.Name(): fieldData}, errs, ext)
 }
 
 func (h *httpQueryResolver) Resolve(ctx context.Context, query schema.Query) *Resolved {
@@ -750,6 +776,13 @@ func DataResult(f schema.Field, data map[string]interface{}, err error) *Resolve
 		Field: f,
 		Err:   schema.AppendGQLErrs(err, errs),
 	}
+}
+
+func DataResultWithExt(
+	f schema.Field, data map[string]interface{}, err error, ext *schema.Extensions) *Resolved {
+	r := DataResult(f, data, err)
+	r.Extensions = ext
+	return r
 }
 
 func newtimer(ctx context.Context, Duration *schema.OffsetDuration) schema.OffsetTimer {

@@ -28,6 +28,7 @@ import (
 
 	gqlSchema "github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 )
 
 // graphQLEncoder is used to encode JSON response for GraphQL queries.
@@ -55,6 +56,21 @@ type graphQLEncoder struct {
 	customFieldResultCh chan customFieldResult
 	// entityRepresentations stores the representations for the `_entities` query
 	entityRepresentations *gqlSchema.EntityRepresentations
+	// logs generated on the lambda server, resulting from lambda fields resolution
+	logs  []string
+	logMu sync.RWMutex
+}
+
+func (genc *graphQLEncoder) appendLogs(logs []string) {
+	genc.logMu.Lock()
+	defer genc.logMu.Unlock()
+	genc.logs = append(genc.logs, logs...)
+}
+
+func (genc *graphQLEncoder) getLogs() []string {
+	genc.logMu.RLock()
+	defer genc.logMu.RUnlock()
+	return genc.logs
 }
 
 // customFieldResult represents the fastJson tree updates for custom fields.
@@ -746,7 +762,8 @@ func (genc *graphQLEncoder) resolveCustomField(childField gqlSchema.Field,
 	parentNodeHeads []fastJsonNode, wg *sync.WaitGroup) {
 	defer wg.Done() // signal when this goroutine finishes execution
 
-	fconf, err := childField.CustomHTTPConfig()
+	ns, _ := x.ExtractNamespace(genc.ctx)
+	fconf, err := childField.CustomHTTPConfig(ns)
 	if err != nil {
 		genc.errCh <- x.GqlErrorList{childField.GqlErrorf(nil, err.Error())}
 		return
@@ -956,12 +973,34 @@ func (genc *graphQLEncoder) resolveCustomField(childField gqlSchema.Field,
 			genc.errCh <- hardErrs
 			return
 		}
+
+		if childField.HasLambdaDirective() {
+			res, ok := response.(map[string]interface{})
+			if !ok {
+				genc.errCh <- append(errs, childField.GqlErrorf(nil,
+					"Evaluation of custom field failed because expected result of lambda"+
+						" BATCH request to be of map type, got: %v for field: %s within type: %s.",
+					response, childField.Name(), childField.GetObjectName()))
+				return
+			}
+			logs, ok := res["logs"].(string)
+			if ok {
+				if len(logs) > 0 {
+					genc.appendLogs([]string{logs})
+				}
+			} else {
+				glog.Errorf("Expected lambda logs of type string, got %v for field: %s",
+					reflect.TypeOf(response).Name(), childField.Name())
+			}
+			response = res["res"]
+		}
+
 		batchedResult, ok := response.([]interface{})
 		if !ok {
 			genc.errCh <- append(errs, childField.GqlErrorf(nil,
 				"Evaluation of custom field failed because expected result of external"+
 					" BATCH request to be of list type, got: %v for field: %s within type: %s.",
-				reflect.TypeOf(response).Name(), childField.Name(), childField.GetObjectName()))
+				response, childField.Name(), childField.GetObjectName()))
 			return
 		}
 		if len(batchedResult) != len(uniqueParents) {

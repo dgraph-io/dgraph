@@ -47,8 +47,7 @@ type badgerWriter interface {
 
 // populateSnapshot gets data for a shard from the leader and writes it to BadgerDB on the follower.
 func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) error {
-	con := pl.Get()
-	c := pb.NewWorkerClient(con)
+	c := pb.NewWorkerClient(pl.Get())
 
 	// We should absolutely cancel the context when we return from this function, that way, the
 	// leader who is sending the snapshot would stop sending.
@@ -112,9 +111,11 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) error {
 		return err
 	}
 
-	if err := deleteStalePreds(ctx, done); err != nil {
+	if err := deleteStalePreds(ctx, done, snap.ReadTs); err != nil {
 		return err
 	}
+	// Reset the cache after having received a snapshot.
+	posting.ResetCache()
 
 	glog.Infof("Snapshot writes DONE. Sending ACK")
 	// Send an acknowledgement back to the leader.
@@ -127,7 +128,7 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) error {
 	return nil
 }
 
-func deleteStalePreds(ctx context.Context, kvs *pb.KVS) error {
+func deleteStalePreds(ctx context.Context, kvs *pb.KVS, ts uint64) error {
 	if kvs == nil {
 		return nil
 	}
@@ -147,7 +148,7 @@ func deleteStalePreds(ctx context.Context, kvs *pb.KVS) error {
 				// While retrieving the snapshot, we mark the node as unhealthy. So it is better to
 				// a blocking delete of predicate as we know that no new writes will arrive at
 				// this alpha.
-				err := posting.DeletePredicateBlocking(ctx, pred)
+				err := posting.DeletePredicateBlocking(ctx, pred, ts)
 				switch err {
 				case badger.ErrBlockedWrites:
 					time.Sleep(1 * time.Second)
@@ -174,7 +175,7 @@ func deleteStalePreds(ctx context.Context, kvs *pb.KVS) error {
 	}
 	for _, typ := range currTypes {
 		if _, ok := snapshotTypes[typ]; !ok {
-			if err := schema.State().DeleteType(typ); err != nil {
+			if err := schema.State().DeleteType(typ, ts); err != nil {
 				return errors.Wrapf(err, "cannot delete removed type %s after streaming snapshot",
 					typ)
 			}
@@ -211,26 +212,14 @@ func doStreamSnapshot(snap *pb.Snapshot, out pb.Worker_StreamSnapshotServer) err
 	// Use the default implementation. We no longer try to generate a rolled up posting list here.
 	// Instead, we just stream out all the versions as they are.
 	stream.KeyToList = nil
+	stream.SinceTs = snap.SinceTs
+	if snap.SinceTs == 0 {
+		// Do full table copy when streaming the entire data.
+		stream.FullCopy = true
+	}
 	stream.Send = func(buf *z.Buffer) error {
 		kvs := &pb.KVS{Data: buf.Bytes()}
 		return out.Send(kvs)
-	}
-	stream.ChooseKey = func(item *badger.Item) bool {
-		if item.Version() >= snap.SinceTs {
-			return true
-		}
-
-		if item.Version() != 1 {
-			return false
-		}
-
-		// Type and Schema keys always have a timestamp of 1. They all need to be sent
-		// with the snapshot.
-		pk, err := x.Parse(item.Key())
-		if err != nil {
-			return false
-		}
-		return pk.IsSchema() || pk.IsType()
 	}
 
 	// Get the list of all the predicate and types at the time of the snapshot so that the receiver

@@ -139,6 +139,7 @@ func (qr *queryResolver) rewriteAndExecute(ctx context.Context, query schema.Que
 	}
 
 	ext.TouchedUids = resp.GetMetrics().GetNumUids()[touchedUidsKey]
+	ext.Logs = append(ext.Logs, resp.GetMetrics().GetLogs()...)
 	resolved := &Resolved{
 		Data:       resp.GetJson(),
 		Field:      query,
@@ -149,12 +150,13 @@ func (qr *queryResolver) rewriteAndExecute(ctx context.Context, query schema.Que
 	return resolved
 }
 
-func NewCustomDQLQueryResolver(ex DgraphExecutor) QueryResolver {
-	return &customDQLQueryResolver{executor: ex}
+func NewCustomDQLQueryResolver(qr QueryRewriter, ex DgraphExecutor) QueryResolver {
+	return &customDQLQueryResolver{queryRewriter: qr, executor: ex}
 }
 
 type customDQLQueryResolver struct {
-	executor DgraphExecutor
+	queryRewriter QueryRewriter
+	executor      DgraphExecutor
 }
 
 func (qr *customDQLQueryResolver) Resolve(ctx context.Context, query schema.Query) *Resolved {
@@ -197,23 +199,22 @@ func (qr *customDQLQueryResolver) rewriteAndExecute(ctx context.Context,
 		return resolved
 	}
 
-	dgQuery := query.DQLQuery()
-	args := query.Arguments()
-	vars := make(map[string]string)
-	for k, v := range args {
-		// dgoapi.Request{}.Vars accepts only string values for variables,
-		// so need to convert all variable values to string
-		vStr, err := convertScalarToString(v)
-		if err != nil {
-			return emptyResult(schema.GQLWrapf(err, "couldn't convert argument %s to string", k))
-		}
-		// the keys in dgoapi.Request{}.Vars are assumed to be prefixed with $
-		vars["$"+k] = vStr
+	vars, err := dqlVars(query.Arguments())
+	if err != nil {
+		return emptyResult(err)
 	}
+
+	dgQuery, err := qr.queryRewriter.Rewrite(ctx, query)
+	if err != nil {
+		return emptyResult(schema.GQLWrapf(err, "got error while rewriting DQL query"))
+	}
+
+	qry := dgraph.AsString(dgQuery)
 
 	queryTimer := newtimer(ctx, &dgraphQueryDuration.OffsetDuration)
 	queryTimer.Start()
-	resp, err := qr.executor.Execute(ctx, &dgoapi.Request{Query: dgQuery, Vars: vars,
+
+	resp, err := qr.executor.Execute(ctx, &dgoapi.Request{Query: qry, Vars: vars,
 		ReadOnly: true}, nil)
 	queryTimer.Stop()
 
@@ -221,6 +222,7 @@ func (qr *customDQLQueryResolver) rewriteAndExecute(ctx context.Context,
 		return emptyResult(schema.GQLWrapf(err, "Dgraph query failed"))
 	}
 	ext.TouchedUids = resp.GetMetrics().GetNumUids()[touchedUidsKey]
+	ext.Logs = append(ext.Logs, resp.GetMetrics().GetLogs()...)
 
 	var respJson map[string]interface{}
 	if err = schema.Unmarshal(resp.Json, &respJson); err != nil {
@@ -262,4 +264,19 @@ func convertScalarToString(val interface{}) (string, error) {
 		return "", errNotScalar
 	}
 	return str, nil
+}
+
+func dqlVars(args map[string]interface{}) (map[string]string, error) {
+	vars := make(map[string]string)
+	for k, v := range args {
+		// dgoapi.Request{}.Vars accepts only string values for variables,
+		// so need to convert all variable values to string
+		vStr, err := convertScalarToString(v)
+		if err != nil {
+			return vars, schema.GQLWrapf(err, "couldn't convert argument %s to string", k)
+		}
+		// the keys in dgoapi.Request{}.Vars are assumed to be prefixed with $
+		vars["$"+k] = vStr
+	}
+	return vars, nil
 }

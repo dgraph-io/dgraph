@@ -34,19 +34,23 @@ func TestRDFResult(t *testing.T) {
 		}
 	  }`
 
-	rdf, err := processQueryRDF(context.Background(), t, query)
+	output, err := processQueryRDF(context.Background(), t, query)
 	require.NoError(t, err)
-	require.Equal(t, rdf, `<0x1> <name> "Michonne" .
-<0x1> <friend> <0x17> .
-<0x1> <friend> <0x18> .
-<0x1> <friend> <0x19> .
-<0x17> <name> "Rick Grimes" .
-<0x18> <name> "Glenn Rhee" .
-<0x19> <name> "Daryl Dixon" .
-<0x17> <age> "15" .
-<0x18> <age> "15" .
-<0x19> <age> "17" .
-`)
+	rdfs := []string{`<0x1> <name> "Michonne" .`,
+		`<0x1> <friend> <0x17> .`,
+		`<0x1> <friend> <0x18> .`,
+		`<0x1> <friend> <0x19> .`,
+		`<0x17> <name> "Rick Grimes" .`,
+		`<0x18> <name> "Glenn Rhee" .`,
+		`<0x19> <name> "Daryl Dixon" .`,
+		`<0x17> <age> "15" .`,
+		`<0x18> <age> "15" .`,
+		`<0x19> <age> "17" .`,
+	}
+	// TODO: We should do both size equality check.
+	for _, rdf := range rdfs {
+		require.Contains(t, output, rdf)
+	}
 }
 
 func TestRDFNormalize(t *testing.T) {
@@ -170,26 +174,30 @@ func TestRDFPredicateCount(t *testing.T) {
     }
 	`
 
-	rdf, err := processQueryRDF(context.Background(), t, query)
+	output, err := processQueryRDF(context.Background(), t, query)
 	require.NoError(t, err)
-	require.Equal(t, `<0x1> <name> "Michonne" .
-<0x17> <name> "Rick Grimes" .
-<0x19> <name> "Daryl Dixon" .
-<0x1> <count(friend)> "5" .
-<0x17> <count(friend)> "1" .
-<0x19> <count(friend)> "0" .
-<0x1> <friend> <0x17> .
-<0x1> <friend> <0x18> .
-<0x1> <friend> <0x19> .
-<0x1> <friend> <0x1f> .
-<0x1> <friend> <0x65> .
-<0x17> <friend> <0x1> .
-<0x1> <name> "Michonne" .
-<0x17> <name> "Rick Grimes" .
-<0x18> <name> "Glenn Rhee" .
-<0x19> <name> "Daryl Dixon" .
-<0x1f> <name> "Andrea" .
-`, rdf)
+	rdfs := []string{
+		`<0x1> <name> "Michonne" .`,
+		`<0x17> <name> "Rick Grimes" .`,
+		`<0x19> <name> "Daryl Dixon" .`,
+		`<0x1> <count(friend)> "5" .`,
+		`<0x17> <count(friend)> "1" .`,
+		`<0x19> <count(friend)> "0" .`,
+		`<0x1> <friend> <0x17> .`,
+		`<0x1> <friend> <0x18> .`,
+		`<0x1> <friend> <0x19> .`,
+		`<0x1> <friend> <0x1f> .`,
+		`<0x1> <friend> <0x65> .`,
+		`<0x17> <friend> <0x1> .`,
+		`<0x1> <name> "Michonne" .`,
+		`<0x17> <name> "Rick Grimes" .`,
+		`<0x18> <name> "Glenn Rhee" .`,
+		`<0x19> <name> "Daryl Dixon" .`,
+		`<0x1f> <name> "Andrea" .`,
+	}
+	for _, rdf := range rdfs {
+		require.Contains(t, output, rdf)
+	}
 }
 
 func TestRDFFacets(t *testing.T) {
@@ -217,23 +225,26 @@ func TestDateRDF(t *testing.T) {
 			}
 		}
 	`
-	rdf, err := processQueryRDF(context.Background(), t, query)
+	output, err := processQueryRDF(context.Background(), t, query)
 	require.NoError(t, err)
-	expected := `<0x1> <name> "Michonne" .
-<0x1> <gender> "female" .
-<0x1> <friend> <0x19> .
-<0x1> <friend> <0x18> .
-<0x1> <friend> <0x17> .
-<0x1> <friend> <0x1f> .
-<0x1> <friend> <0x65> .
-<0x17> <name> "Rick Grimes" .
-<0x18> <name> "Glenn Rhee" .
-<0x19> <name> "Daryl Dixon" .
-<0x1f> <name> "Andrea" .
-<0x17> <film.film.initial_release_date> "1900-01-02T00:00:00Z" .
-<0x18> <film.film.initial_release_date> "1909-05-05T00:00:00Z" .
-<0x19> <film.film.initial_release_date> "1929-01-10T00:00:00Z" .
-<0x1f> <film.film.initial_release_date> "1801-01-15T00:00:00Z" .
-`
-	require.Equal(t, expected, rdf)
+	rdfs := []string{
+		`<0x1> <name> "Michonne" .`,
+		`<0x1> <gender> "female" .`,
+		`<0x1> <friend> <0x19> .`,
+		`<0x1> <friend> <0x18> .`,
+		`<0x1> <friend> <0x17> .`,
+		`<0x1> <friend> <0x1f> .`,
+		`<0x1> <friend> <0x65> .`,
+		`<0x17> <name> "Rick Grimes" .`,
+		`<0x18> <name> "Glenn Rhee" .`,
+		`<0x19> <name> "Daryl Dixon" .`,
+		`<0x1f> <name> "Andrea" .`,
+		`<0x17> <film.film.initial_release_date> "1900-01-02T00:00:00Z" .`,
+		`<0x18> <film.film.initial_release_date> "1909-05-05T00:00:00Z" .`,
+		`<0x19> <film.film.initial_release_date> "1929-01-10T00:00:00Z" .`,
+		`<0x1f> <film.film.initial_release_date> "1801-01-15T00:00:00Z" .`,
+	}
+	for _, rdf := range rdfs {
+		require.Contains(t, output, rdf)
+	}
 }

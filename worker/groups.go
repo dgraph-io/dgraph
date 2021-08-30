@@ -58,6 +58,7 @@ type groupi struct {
 var gr = &groupi{
 	blockDeletes: new(sync.Mutex),
 	tablets:      make(map[string]*pb.Tablet),
+	closer:       z.NewCloser(3), // Match CLOSER:1 in this file.
 }
 
 func groups() *groupi {
@@ -150,20 +151,24 @@ func StartRaftNodes(walStore *raftwal.DiskStorage, bindall bool) {
 	gr.Node = newNode(walStore, gid, raftIdx, x.WorkerConfig.MyAddr)
 
 	x.Checkf(schema.LoadFromDb(), "Error while initializing schema")
+	glog.Infof("Load schema from DB: OK")
 	raftServer.UpdateNode(gr.Node.Node)
 	gr.Node.InitAndStartNode()
+	glog.Infof("Init and start Raft node: OK")
 
-	gr.closer = z.NewCloser(3) // Match CLOSER:1 in this file.
 	go gr.sendMembershipUpdates()
 	go gr.receiveMembershipUpdates()
 	go gr.processOracleDeltaStream()
 
 	gr.informZeroAboutTablets()
+
+	glog.Infof("Informed Zero about tablets I have: OK")
 	gr.applyInitialSchema()
 	gr.applyInitialTypes()
+	glog.Infof("Upserted Schema and Types: OK")
 
 	x.UpdateHealthStatus(true)
-	glog.Infof("Server is ready")
+	glog.Infof("Server is ready: OK")
 }
 
 func (g *groupi) Ctx() context.Context {
@@ -186,6 +191,10 @@ func (g *groupi) informZeroAboutTablets() {
 		failed := false
 		preds := schema.State().Predicates()
 		for _, pred := range preds {
+			if len(pred) == 0 {
+				glog.Warningf("Got an empty pred")
+				continue
+			}
 			if tablet, err := g.Tablet(pred); err != nil {
 				failed = true
 				glog.Errorf("Error while getting tablet for pred %q: %v", pred, err)
@@ -206,7 +215,8 @@ func (g *groupi) applyInitialTypes() {
 		if _, ok := schema.State().GetType(t.TypeName); ok {
 			continue
 		}
-		if err := updateType(t.GetTypeName(), *t); err != nil {
+		// It is okay to write initial types at ts=1.
+		if err := updateType(t.GetTypeName(), *t, 1); err != nil {
 			glog.Errorf("Error while applying initial type: %s", err)
 		}
 	}
@@ -220,7 +230,10 @@ func (g *groupi) applyInitialSchema() {
 	ctx := g.Ctx()
 
 	apply := func(s *pb.SchemaUpdate) {
-		if err := applySchema(s); err != nil {
+		// There are 2 cases: either the alpha is fresh or it restarted. If it is fresh cluster
+		// then we can write the schema at ts=1. If alpha restarted, then we will already have the
+		// schema at higher version and this operation will be a no-op.
+		if err := applySchema(s, 1); err != nil {
 			glog.Errorf("Error while applying initial schema: %s", err)
 		}
 	}
@@ -246,8 +259,8 @@ func (g *groupi) applyInitialSchema() {
 	}
 }
 
-func applySchema(s *pb.SchemaUpdate) error {
-	if err := updateSchema(s); err != nil {
+func applySchema(s *pb.SchemaUpdate, ts uint64) error {
+	if err := updateSchema(s, ts); err != nil {
 		return err
 	}
 	if servesTablet, err := groups().ServesTablet(s.Predicate); err != nil {
@@ -488,7 +501,7 @@ func (g *groupi) sendTablet(tablet *pb.Tablet) (*pb.Tablet, error) {
 	}
 
 	if out.GroupId == groups().groupId() {
-		glog.Infof("Serving tablet for: %v\n", x.FormatNsAttr(tablet.GetPredicate()))
+		glog.Infof("Serving tablet for: %v\n", tablet.GetPredicate())
 	}
 	return out, nil
 }

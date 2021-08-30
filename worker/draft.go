@@ -60,6 +60,11 @@ const (
 	sensitiveString = "******"
 )
 
+type operation struct {
+	*z.Closer
+	ts uint64
+}
+
 type node struct {
 	// This needs to be 64 bit aligned for atomics to work on 32 bit machine.
 	pendingSize int64
@@ -79,7 +84,7 @@ type node struct {
 	streaming    int32  // Used to avoid calculating snapshot
 
 	// Used to track the ops going on in the system.
-	ops         map[op]*z.Closer
+	ops         map[op]operation
 	opsLock     sync.Mutex
 	cdcTracker  *CDC
 	canCampaign bool
@@ -171,13 +176,20 @@ const (
 	opPredMove
 )
 
-// startTask is used to check whether an op is already running. If a rollup is running,
+// startTask is used for the tasks that do not require tracking of timestamp.
+// Currently, only the timestamps for backup and indexing needs to be tracked because they can
+// run concurrently.
+func (n *node) startTask(id op) (*z.Closer, error) {
+	return n.startTaskAtTs(id, 0)
+}
+
+// startTaskAtTs is used to check whether an op is already running. If a rollup is running,
 // it is canceled and startTask will wait until it completes before returning.
 // If the same task is already running, this method returns an errror.
 // Restore operations have preference and cancel all other operations, not just rollups.
 // You should only call Done() on the returned closer. Calling other functions (such as
 // SignalAndWait) for closer could result in panics. For more details, see GitHub issue #5034.
-func (n *node) startTask(id op) (*z.Closer, error) {
+func (n *node) startTaskAtTs(id op, ts uint64) (*z.Closer, error) {
 	n.opsLock.Lock()
 	defer n.opsLock.Unlock()
 
@@ -206,31 +218,50 @@ func (n *node) startTask(id op) (*z.Closer, error) {
 	case opRestore:
 		// Restores cancel all other operations, except for other restores since
 		// only one restore operation should be active any given moment.
-		for otherId, otherCloser := range n.ops {
+		for otherId, otherOp := range n.ops {
 			if otherId == opRestore {
 				return nil, errors.Errorf("another restore operation is already running")
 			}
 			// Remove from map and signal the closer to cancel the operation.
 			delete(n.ops, otherId)
-			otherCloser.SignalAndWait()
+			otherOp.SignalAndWait()
 		}
 	case opBackup:
 		// Backup cancels all other operations, except for other backups since
-		// only one restore operation should be active any given moment.
-		for otherId, otherCloser := range n.ops {
+		// only one backup operation should be active any given moment. Also, indexing at higher
+		// timestamp can also run concurrently with backup.
+		for otherId, otherOp := range n.ops {
 			if otherId == opBackup {
 				return nil, errors.Errorf("another backup operation is already running")
 			}
 			// Remove from map and signal the closer to cancel the operation.
 			delete(n.ops, otherId)
-			otherCloser.SignalAndWait()
+			otherOp.SignalAndWait()
 		}
-	case opSnapshot, opIndexing, opPredMove:
-		for otherId, otherCloser := range n.ops {
+	case opIndexing:
+		for otherId, otherOp := range n.ops {
+			switch otherId {
+			case opBackup:
+				if otherOp.ts < ts {
+					// If backup is running at higher timestamp, then indexing can't be executed.
+					continue
+				} else {
+					return nil, errors.Errorf("operation %s is already running", otherId)
+				}
+			case opRollup:
+				// Remove from map and signal the closer to cancel the operation.
+				delete(n.ops, otherId)
+				otherOp.SignalAndWait()
+			default:
+				return nil, errors.Errorf("operation %s is already running", otherId)
+			}
+		}
+	case opSnapshot, opPredMove:
+		for otherId, otherOp := range n.ops {
 			if otherId == opRollup {
 				// Remove from map and signal the closer to cancel the operation.
 				delete(n.ops, otherId)
-				otherCloser.SignalAndWait()
+				otherOp.SignalAndWait()
 			} else {
 				return nil, errors.Errorf("operation %s is already running", otherId)
 			}
@@ -240,7 +271,7 @@ func (n *node) startTask(id op) (*z.Closer, error) {
 		return nil, nil
 	}
 
-	n.ops[id] = closer
+	n.ops[id] = operation{Closer: closer, ts: ts}
 	glog.Infof("Operation started with id: %s", id)
 	go func(id op, closer *z.Closer) {
 		closer.Wait()
@@ -267,6 +298,13 @@ func (n *node) waitForTask(id op) {
 		return
 	}
 	closer.Wait()
+}
+
+func (n *node) isRunningTask(id op) bool {
+	n.opsLock.Lock()
+	_, ok := n.ops[id]
+	n.opsLock.Unlock()
+	return ok
 }
 
 func (n *node) stopAllTasks() {
@@ -327,7 +365,7 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		drainApplyCh: make(chan struct{}),
 		elog:         trace.NewEventLog("Dgraph", "ApplyCh"),
 		closer:       z.NewCloser(4), // Matches CLOSER:1
-		ops:          make(map[op]*z.Closer),
+		ops:          make(map[op]operation),
 		cdcTracker:   newCDC(),
 		keysWritten:  newKeysWritten(),
 	}
@@ -545,17 +583,20 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		// Clear entire cache.
 		posting.ResetCache()
 
+		// It should be okay to set the schema at timestamp 1 after drop all operation.
 		if groups().groupId() == 1 {
 			initialSchema := schema.InitialSchema(x.GalaxyNamespace)
 			for _, s := range initialSchema {
-				applySchema(s)
+				if err := applySchema(s, 1); err != nil {
+					return err
+				}
 			}
 		}
 
 		// Propose initial types as well after a drop all as they would have been cleared.
 		initialTypes := schema.InitialTypes(x.GalaxyNamespace)
 		for _, t := range initialTypes {
-			if err := updateType(t.GetTypeName(), *t); err != nil {
+			if err := updateType(t.GetTypeName(), *t, 1); err != nil {
 				return err
 			}
 		}
@@ -565,7 +606,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 
 	if proposal.Mutations.DropOp == pb.Mutations_TYPE {
 		n.keysWritten.rejectBeforeIndex = proposal.Index
-		return schema.State().DeleteType(proposal.Mutations.DropValue)
+		return schema.State().DeleteType(proposal.Mutations.DropValue, proposal.StartTs)
 	}
 
 	if proposal.Mutations.StartTs == 0 {
@@ -599,7 +640,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		}
 
 		for _, tupdate := range proposal.Mutations.Types {
-			if err := runTypeMutation(ctx, tupdate); err != nil {
+			if err := runTypeMutation(ctx, tupdate, startTs); err != nil {
 				return err
 			}
 		}
@@ -625,7 +666,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 			}
 			span.Annotatef(nil, "Deleting predicate: %s", edge.Attr)
 			n.keysWritten.rejectBeforeIndex = proposal.Index
-			return posting.DeletePredicate(ctx, edge.Attr)
+			return posting.DeletePredicate(ctx, edge.Attr, proposal.StartTs)
 		}
 		// Don't derive schema when doing deletion.
 		if edge.Op == pb.DirectedEdge_DEL {
@@ -655,7 +696,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 			if mutHint, ok := proposal.GetMutations().GetMetadata().GetPredHints()[attr]; ok {
 				hint = mutHint
 			}
-			if err := createSchema(attr, storageType, hint); err != nil {
+			if err := createSchema(attr, storageType, hint, proposal.StartTs); err != nil {
 				return err
 			}
 		}
@@ -738,7 +779,7 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 				proposal.CleanPredicate, proposal.ExpectedChecksum)
 			return nil
 		}
-		return posting.DeletePredicate(ctx, proposal.CleanPredicate)
+		return posting.DeletePredicate(ctx, proposal.CleanPredicate, proposal.StartTs)
 
 	case proposal.Delta != nil:
 		n.elog.Printf("Applying Oracle Delta for key: %d", key)
@@ -773,13 +814,16 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 			}
 			glog.Warningf("Error while calling CreateSnapshot: %v. Retrying...", err)
 		}
+		atomic.StoreInt64(&lastSnapshotTime, time.Now().Unix())
 		// We can now discard all invalid versions of keys below this ts.
 		pstore.SetDiscardTs(snap.ReadTs)
 		return nil
 	case proposal.Restore != nil:
 		// Enable draining mode for the duration of the restore processing.
 		x.UpdateDrainingMode(true)
-		defer x.UpdateDrainingMode(false)
+		if !proposal.Restore.IsPartial {
+			defer x.UpdateDrainingMode(false)
+		}
 
 		var err error
 		var closer *z.Closer
@@ -789,7 +833,7 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 		}
 		defer closer.Done()
 
-		glog.Infof("Got restore proposal at Index:%d, ReadTs:%d",
+		glog.Infof("Got restore proposal at Index: %d, ReadTs: %d",
 			proposal.Index, proposal.Restore.RestoreTs)
 		if err := handleRestoreProposal(ctx, proposal.Restore, proposal.Index); err != nil {
 			return err
@@ -1032,7 +1076,7 @@ func (n *node) commitOrAbort(_ uint64, delta *pb.OracleDelta) error {
 	var sz int64
 	for _, status := range delta.Txns {
 		txn := posting.Oracle().GetTxn(status.StartTs)
-		if txn == nil {
+		if txn == nil || status.CommitTs == 0 {
 			continue
 		}
 		for k := range txn.Deltas() {
@@ -1049,13 +1093,11 @@ func (n *node) commitOrAbort(_ uint64, delta *pb.OracleDelta) error {
 		// Iterate to set the commit timestamp for all keys.
 		// Skiplist can block if the conversion to Skiplist isn't done yet.
 		itr := txn.Skiplist().NewIterator()
-		itr.SeekToFirst()
-		for itr.Valid() {
+		for itr.SeekToFirst(); itr.Valid(); itr.Next() {
 			key := itr.Key()
 			// We don't expect the ordering of the keys to change due to setting their commit
 			// timestamps. Each key in the skiplist should be unique already.
 			y.SetKeyTs(key, status.CommitTs)
-			itr.Next()
 		}
 		itr.Close()
 
@@ -1067,7 +1109,7 @@ func (n *node) commitOrAbort(_ uint64, delta *pb.OracleDelta) error {
 	// This would be used for callback via Badger when skiplist is pushed to
 	// disk.
 	deleteTxns := func() {
-		posting.Oracle().DeleteTxns(delta)
+		posting.Oracle().DeleteTxnsAndRollupKeys(delta)
 	}
 
 	if len(itrs) == 0 {
@@ -1115,9 +1157,10 @@ func (n *node) commitOrAbort(_ uint64, delta *pb.OracleDelta) error {
 	// Clear all the cached lists that were touched by this transaction.
 	for _, status := range delta.Txns {
 		txn := posting.Oracle().GetTxn(status.StartTs)
-		txn.RemoveCachedKeys()
+		if status.CommitTs > 0 {
+			txn.UpdateCachedKeys(status.CommitTs)
+		}
 	}
-	posting.WaitForCache()
 	span.Annotate(nil, "cache keys removed")
 
 	// Now advance Oracle(), so we can service waiting reads.
@@ -1301,6 +1344,8 @@ func (n *node) updateRaftProgress() error {
 	return nil
 }
 
+var lastSnapshotTime int64 = time.Now().Unix()
+
 func (n *node) checkpointAndClose(done chan struct{}) {
 	snapshotAfterEntries := x.WorkerConfig.Raft.GetUint64("snapshot-after-entries")
 	x.AssertTruef(snapshotAfterEntries > 10, "raft.snapshot-after must be a number greater than 10")
@@ -1327,10 +1372,9 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 		glog.V(3).Infof("Evaluating snapshot first:%d chk:%d (chk-first:%d) "+
 			"snapshotAfterEntries:%d", first, chk, chk-first,
 			snapshotAfterEntries)
-		return chk-first > snapshotAfterEntries
+		return chk-first >= snapshotAfterEntries
 	}
 
-	lastSnapshotTime := time.Now()
 	snapshotFrequency := x.WorkerConfig.Raft.GetDuration("snapshot-after-duration")
 	for {
 		select {
@@ -1355,36 +1399,29 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 				}
 
 				// calculate would be true if:
-				// - snapshot is empty.
-				// - we have more than 4 log files in Raft WAL.
-				// - snapshot frequency is zero and exceeding threshold entries.
-				// - we have exceeded the threshold time since last snapshot and exceeding threshold
-				//   entries.
+				// - snapshot is empty [#0]
+				// - we have more than 4 log files in Raft WAL [#0]
+				//
+				// If snapshot entries is set (no frequency):
+				// - Just use entries [#1]
+				//
+				// If snapshot frequency is set (no entries):
+				// - Just use frequency based threshold time [#2]
+				//
+				// If both entries and frequency is set:
+				// - Take a snapshot after BOTH time and entries are exceeded [#3]
 				//
 				// Note: In case we're exceeding threshold entries, but have not exceeded the
 				// threshold time since last snapshot, calculate would be false.
-				calculate := raft.IsEmptySnap(snap) || n.Store.NumLogFiles() > 4
+				calculate := raft.IsEmptySnap(snap) || n.Store.NumLogFiles() > 4 // #0
+				lastSnapTime := time.Unix(atomic.LoadInt64(&lastSnapshotTime), 0)
 				if snapshotFrequency == 0 {
-					calculate = calculate || exceededSnapshotByEntries()
+					calculate = calculate || exceededSnapshotByEntries() // #1
 
-				} else if time.Since(lastSnapshotTime) > snapshotFrequency {
+				} else if time.Since(lastSnapTime) > snapshotFrequency {
 					// If we haven't taken a snapshot since snapshotFrequency, calculate would
 					// follow snapshot entries.
-					calculate = calculate || exceededSnapshotByEntries()
-				}
-
-				// Check if we're snapshotAfterEntries away from the FirstIndex based off the last
-				// checkpoint. This is a cheap operation. We're not iterating over the logs.
-				if chk, err := n.Store.Checkpoint(); err == nil {
-					if first, err := n.Store.FirstIndex(); err == nil {
-						// If we're over snapshotAfterEntries, calculate would be true.
-						if snapshotAfterEntries > 0 {
-							calculate = calculate || chk >= first+snapshotAfterEntries
-							glog.V(3).Infof("Evaluating snapshot first:%d chk:%d (chk-first:%d) "+
-								"snapshotAfterEntries:%d snap:%v", first, chk, chk-first,
-								snapshotAfterEntries, calculate)
-						}
-					}
+					calculate = calculate || exceededSnapshotByEntries() // #2, #3
 				}
 
 				// We keep track of the applied index in the p directory. Even if we don't take
@@ -1405,7 +1442,7 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 					if err := n.proposeSnapshot(); err != nil {
 						glog.Errorf("While calculating and proposing snapshot: %v", err)
 					} else {
-						lastSnapshotTime = time.Now()
+						atomic.StoreInt64(&lastSnapshotTime, time.Now().Unix())
 					}
 				}
 				go n.abortOldTransactions()
@@ -1643,7 +1680,7 @@ func (n *node) Run() {
 			// Send the whole lot to applyCh in one go, instead of sending proposals one by one.
 			if len(entries) > 0 {
 				// Apply the meter this before adding size to pending size so some crazy big
-				// proposal can be pushed to applyCh. If this do this after adding its size to
+				// proposal can be pushed to applyCh. If we do this after adding its size to
 				// pending size, we could block forever in rampMeter.
 				rampMeter(&n.pendingSize, maxPendingSize, nodeApplyChan)
 				var pendingSize int64
@@ -2043,8 +2080,7 @@ func (n *node) joinPeers() error {
 		return err
 	}
 
-	gconn := pl.Get()
-	c := pb.NewRaftClient(gconn)
+	c := pb.NewRaftClient(pl.Get())
 	glog.Infof("Calling JoinCluster via leader: %s", pl.Addr)
 	if _, err := c.JoinCluster(n.ctx, n.RaftContext); err != nil {
 		return errors.Wrapf(err, "error while joining cluster")

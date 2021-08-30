@@ -29,7 +29,7 @@ import (
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/roaring/roaring64"
+	"github.com/dgraph-io/sroar"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 )
@@ -86,8 +86,8 @@ func expandEdges(ctx context.Context, m *pb.Mutations) ([]*pb.DirectedEdge, erro
 			preds = []string{x.NamespaceAttr(namespace, edge.Attr)}
 		} else {
 			sg := &SubGraph{}
-			sg.DestMap = roaring64.New()
-			sg.DestMap.Add(edge.GetEntity())
+			sg.DestMap = sroar.NewBitmap()
+			sg.DestMap.Set(edge.GetEntity())
 			sg.ReadTs = m.StartTs
 			types, err := getNodeTypes(ctx, sg)
 			if err != nil {

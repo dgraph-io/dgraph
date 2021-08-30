@@ -113,6 +113,7 @@ type Schema interface {
 	IsFederated() bool
 	SetMeta(meta *metaInfo)
 	Meta() *metaInfo
+	Type(typeName string) Type
 }
 
 // An Operation is a single valid GraphQL operation.  It contains either
@@ -172,7 +173,7 @@ type Field interface {
 	TypeName(dgraphTypes []string) string
 	GetObjectName() string
 	IsAuthQuery() bool
-	CustomHTTPConfig() (*FieldHTTPConfig, error)
+	CustomHTTPConfig(ns uint64) (*FieldHTTPConfig, error)
 	EnumValues() []string
 	ConstructedFor() Type
 	ConstructedForDgraphPredicate() string
@@ -224,6 +225,7 @@ type Query interface {
 	// query
 	RepresentationsArg() (*EntityRepresentations, error)
 	AuthFor(jwtVars map[string]interface{}) Query
+	Schema() Schema
 }
 
 // A Type is a GraphQL type like: Float, T, T! and [T!]!.  If it's not a list, then
@@ -398,6 +400,17 @@ func (s *schema) SetMeta(meta *metaInfo) {
 
 func (s *schema) Meta() *metaInfo {
 	return s.meta
+}
+
+func (s *schema) Type(typeName string) Type {
+	if s.typeNameAst[typeName] != nil {
+		return &astType{
+			typ:             &ast.Type{NamedType: typeName},
+			inSchema:        s,
+			dgraphPredicate: s.dgraphPredicate,
+		}
+	}
+	return nil
 }
 
 func (o *operation) IsQuery() bool {
@@ -1474,7 +1487,7 @@ func (t *astType) IsInbuiltOrEnumType() bool {
 	return ok || (t.inSchema.schema.Types[t.Name()].Kind == ast.Enum)
 }
 
-func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (*FieldHTTPConfig, error) {
+func getCustomHTTPConfig(f *field, isQueryOrMutation bool, ns uint64) (*FieldHTTPConfig, error) {
 	custom := f.op.inSchema.customDirectives[f.GetObjectName()][f.Name()]
 	httpArg := custom.Arguments.ForName(httpArg)
 	fconf := &FieldHTTPConfig{
@@ -1571,11 +1584,19 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (*FieldHTTPConfig, er
 		}
 		fconf.Template = SubstituteVarsInBody(fconf.Template, bodyVars)
 	}
+
+	// If we are querying the lambda directive, update the URL using load balancer. Also, set the
+	// Accept-Encoding header to "*", so that no compression happens. Otherwise, http package sets
+	// gzip encoding which adds overhead for communication within the same machine.
+	if f.HasLambdaDirective() {
+		fconf.URL = x.LambdaUrl(ns)
+		fconf.ForwardHeaders.Set("Accept-Encoding", "*")
+	}
 	return fconf, nil
 }
 
-func (f *field) CustomHTTPConfig() (*FieldHTTPConfig, error) {
-	return getCustomHTTPConfig(f, false)
+func (f *field) CustomHTTPConfig(ns uint64) (*FieldHTTPConfig, error) {
+	return getCustomHTTPConfig(f, false, ns)
 }
 
 func (f *field) EnumValues() []string {
@@ -1787,6 +1808,10 @@ func (q *query) Rename(newName string) {
 	q.field.Name = newName
 }
 
+func (q *query) Schema() Schema {
+	return q.op.inSchema
+}
+
 func (q *query) Name() string {
 	return (*field)(q).Name()
 }
@@ -1883,8 +1908,8 @@ func (q *query) GetObjectName() string {
 	return q.field.ObjectDefinition.Name
 }
 
-func (q *query) CustomHTTPConfig() (*FieldHTTPConfig, error) {
-	return getCustomHTTPConfig((*field)(q), true)
+func (q *query) CustomHTTPConfig(ns uint64) (*FieldHTTPConfig, error) {
+	return getCustomHTTPConfig((*field)(q), true, ns)
 }
 
 func (q *query) EnumValues() []string {
@@ -2183,8 +2208,8 @@ func (m *mutation) MutatedType() Type {
 	return m.op.inSchema.mutatedType[m.Name()]
 }
 
-func (m *mutation) CustomHTTPConfig() (*FieldHTTPConfig, error) {
-	return getCustomHTTPConfig((*field)(m), true)
+func (m *mutation) CustomHTTPConfig(ns uint64) (*FieldHTTPConfig, error) {
+	return getCustomHTTPConfig((*field)(m), true, ns)
 }
 
 func (m *mutation) EnumValues() []string {
@@ -2361,6 +2386,9 @@ func isID(fd *ast.FieldDefinition) bool {
 }
 
 func (fd *fieldDefinition) Type() Type {
+	if fd.fieldDef == nil {
+		return nil
+	}
 	return &astType{
 		typ:             fd.fieldDef.Type,
 		inSchema:        fd.inSchema,
@@ -3134,4 +3162,19 @@ func parseRequiredArgsFromGQLRequest(req string) (map[string]bool, error) {
 	args := req[strings.Index(req, "(")+1 : strings.LastIndex(req, ")")]
 	_, rf, err := parseBodyTemplate("{"+args+"}", false)
 	return rf, err
+}
+
+// MaybeQuoteArg puts a quote on the function arguments.
+func MaybeQuoteArg(fn string, arg interface{}) string {
+	switch arg := arg.(type) {
+	case string: // dateTime also parsed as string
+		if fn == "regexp" {
+			return arg
+		}
+		return fmt.Sprintf("%q", arg)
+	case float64, float32:
+		return fmt.Sprintf("\"%v\"", arg)
+	default:
+		return fmt.Sprintf("%v", arg)
+	}
 }

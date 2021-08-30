@@ -1266,7 +1266,7 @@ func checkXIDExistsQuery(
 			Name: "eq",
 			Args: []gql.Arg{
 				{Value: typ.DgraphPredicate(xidPredicate)},
-				{Value: maybeQuoteArg("eq", xidString)},
+				{Value: schema.MaybeQuoteArg("eq", xidString)},
 			},
 		},
 		Children: []*gql.GraphQuery{{Attr: "uid"}, {Attr: "dgraph.type"}},

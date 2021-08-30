@@ -18,6 +18,7 @@ package worker
 
 import (
 	"context"
+	"encoding/json"
 	"sort"
 	"sync"
 	"time"
@@ -26,6 +27,7 @@ import (
 
 	"github.com/golang/glog"
 
+	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
@@ -48,7 +50,54 @@ var (
 	errUpdatingGraphQLSchemaOnNonGroupOneLeader = errors.New(
 		"while updating GraphQL schema: this server isn't group-1 leader, please retry")
 	ErrMultipleGraphQLSchemaNodes = errors.New("found multiple nodes for GraphQL schema")
+	gqlSchemaStore                *GQLSchemaStore
 )
+
+type GqlSchema struct {
+	ID              string `json:"id,omitempty"`
+	Schema          string `json:"schema,omitempty"`
+	Version         uint64
+	GeneratedSchema string
+	Loaded          bool // This indicate whether the schema has been loaded into graphql server
+	// or not
+}
+
+type GQLSchemaStore struct {
+	mux    sync.RWMutex
+	schema map[uint64]*GqlSchema
+}
+
+func NewGQLSchemaStore() *GQLSchemaStore {
+	gqlSchemaStore = &GQLSchemaStore{
+		mux:    sync.RWMutex{},
+		schema: make(map[uint64]*GqlSchema),
+	}
+	return gqlSchemaStore
+}
+
+func (gs *GQLSchemaStore) Set(ns uint64, sch *GqlSchema) {
+	gs.mux.Lock()
+	defer gs.mux.Unlock()
+	gs.schema[ns] = sch
+}
+
+func (gs *GQLSchemaStore) GetCurrent(ns uint64) (*GqlSchema, bool) {
+	gs.mux.RLock()
+	defer gs.mux.RUnlock()
+	sch, ok := gs.schema[ns]
+	return sch, ok
+}
+
+func (gs *GQLSchemaStore) resetGQLSchema() {
+	gs.mux.Lock()
+	defer gs.mux.Unlock()
+
+	gs.schema = make(map[uint64]*GqlSchema)
+}
+
+func ResetGQLSchemaStore() {
+	gqlSchemaStore.resetGQLSchema()
+}
 
 // UpdateGQLSchemaOverNetwork sends the request to the group one leader for execution.
 func UpdateGQLSchemaOverNetwork(ctx context.Context, req *pb.UpdateGraphQLSchemaRequest) (*pb.
@@ -70,6 +119,16 @@ func UpdateGQLSchemaOverNetwork(ctx context.Context, req *pb.UpdateGraphQLSchema
 	}
 
 	return c.UpdateGraphQLSchema(ctx, req)
+}
+
+func ParseAsSchemaAndScript(b []byte) (string, string) {
+	var data x.GQL
+	if err := json.Unmarshal(b, &data); err != nil {
+		glog.Warningf("Cannot unmarshal existing GQL schema into new format. Got err: %+v. "+
+			" Assuming old format.", err)
+		return string(b), ""
+	}
+	return data.Schema, data.Script
 }
 
 // UpdateGraphQLSchema updates the GraphQL schema node with the new GraphQL schema,
@@ -115,7 +174,8 @@ func (w *grpcWorker) UpdateGraphQLSchema(ctx context.Context,
 	creatingNode := false
 	var schemaNodeUid uint64
 	uidMtrxLen := len(res.GetUidMatrix())
-	if uidMtrxLen == 0 || (uidMtrxLen == 1 && len(res.GetUidMatrix()[0].GetUids()) == 0) {
+	c := codec.ListCardinality(res.GetUidMatrix()[0])
+	if uidMtrxLen == 0 || (uidMtrxLen == 1 && c == 0) {
 		// if there was no schema node earlier, then need to assign a new uid for the node
 		res, err := AssignUidsOverNetwork(ctx, &pb.Num{Val: 1, Type: pb.Num_UID})
 		if err != nil {
@@ -123,18 +183,49 @@ func (w *grpcWorker) UpdateGraphQLSchema(ctx context.Context,
 		}
 		creatingNode = true
 		schemaNodeUid = res.StartId
-	} else if uidMtrxLen == 1 && len(res.GetUidMatrix()[0].GetUids()) == 1 {
+	} else if uidMtrxLen == 1 && c == 1 {
 		// if there was already a schema node, then just use the uid from that node
-		schemaNodeUid = res.GetUidMatrix()[0].GetUids()[0]
+		schemaNodeUid = codec.GetUids(res.GetUidMatrix()[0])[0]
 	} else {
 		// there seems to be multiple nodes for GraphQL schema,Ideally we should never reach here
 		// But if by any bug we reach here then return the schema node which is added last
-		uidList := res.GetUidMatrix()[0].GetUids()
+		uidList := codec.GetUids(res.GetUidMatrix()[0])
 		sort.Slice(uidList, func(i, j int) bool {
 			return uidList[i] < uidList[j]
 		})
 		glog.Errorf("Multiple schema node found, using the last one")
 		schemaNodeUid = uidList[len(uidList)-1]
+	}
+
+	var gql x.GQL
+	if !creatingNode {
+		// Fetch the current graphql schema and script using the schema node uid.
+		res, err := ProcessTaskOverNetwork(ctx, &pb.Query{
+			Attr:    x.NamespaceAttr(namespace, GqlSchemaPred),
+			UidList: &pb.List{SortedUids: []uint64{schemaNodeUid}},
+			ReadTs:  req.StartTs,
+		})
+		if err != nil {
+			return nil, err
+		}
+		if len(res.GetValueMatrix()) == 0 || len(res.ValueMatrix[0].GetValues()) == 0 {
+			return nil,
+				errors.Errorf("Schema node was found but the corresponding schema does not exist")
+		}
+		gql.Schema, gql.Script = ParseAsSchemaAndScript(res.ValueMatrix[0].Values[0].Val)
+	}
+
+	switch req.Op {
+	case pb.UpdateGraphQLSchemaRequest_SCHEMA:
+		gql.Schema = req.GraphqlSchema
+	case pb.UpdateGraphQLSchemaRequest_SCRIPT:
+		gql.Script = req.LambdaScript
+	default:
+		panic("GraphQL update operation should be either SCHEMA or SCRIPT")
+	}
+	val, err := json.Marshal(gql)
+	if err != nil {
+		return nil, err
 	}
 
 	// prepare GraphQL schema mutation
@@ -144,7 +235,7 @@ func (w *grpcWorker) UpdateGraphQLSchema(ctx context.Context,
 			{
 				Entity:    schemaNodeUid,
 				Attr:      x.NamespaceAttr(namespace, GqlSchemaPred),
-				Value:     []byte(req.GraphqlSchema),
+				Value:     val,
 				ValueType: pb.Posting_STRING,
 				Op:        pb.DirectedEdge_SET,
 			},

@@ -17,10 +17,10 @@
 package schema
 
 import (
-	"bytes"
 	"context"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"sync"
 
 	"github.com/golang/glog"
@@ -29,6 +29,7 @@ import (
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/badger/v3"
+	badgerpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
@@ -96,17 +97,17 @@ func (s *state) DeleteAll() {
 }
 
 // Delete updates the schema in memory and disk
-func (s *state) Delete(attr string) error {
+func (s *state) Delete(attr string, ts uint64) error {
 	s.Lock()
 	defer s.Unlock()
 
 	glog.Infof("Deleting schema for predicate: [%s]", attr)
-	txn := pstore.NewTransactionAt(1, true)
+	txn := pstore.NewTransactionAt(ts, true)
 	if err := txn.Delete(x.SchemaKey(attr)); err != nil {
 		return err
 	}
 	// Delete is called rarely so sync write should be fine.
-	if err := txn.CommitAt(1, nil); err != nil {
+	if err := txn.CommitAt(ts, nil); err != nil {
 		return err
 	}
 
@@ -116,7 +117,7 @@ func (s *state) Delete(attr string) error {
 }
 
 // DeleteType updates the schema in memory and disk
-func (s *state) DeleteType(typeName string) error {
+func (s *state) DeleteType(typeName string, ts uint64) error {
 	if s == nil {
 		return nil
 	}
@@ -125,12 +126,12 @@ func (s *state) DeleteType(typeName string) error {
 	defer s.Unlock()
 
 	glog.Infof("Deleting type definition for type: [%s]", typeName)
-	txn := pstore.NewTransactionAt(1, true)
+	txn := pstore.NewTransactionAt(ts, true)
 	if err := txn.Delete(x.TypeKey(typeName)); err != nil {
 		return err
 	}
 	// Delete is called rarely so sync write should be fine.
-	if err := txn.CommitAt(1, nil); err != nil {
+	if err := txn.CommitAt(ts, nil); err != nil {
 		return err
 	}
 
@@ -466,14 +467,14 @@ func Init(ps *badger.DB) {
 	reset()
 }
 
-// Load reads the schema for the given predicate from the DB.
+// Load reads the latest schema for the given predicate from the DB.
 func Load(predicate string) error {
 	if len(predicate) == 0 {
 		return errors.Errorf("Empty predicate")
 	}
 	delete(State().mutSchema, predicate)
 	key := x.SchemaKey(predicate)
-	txn := pstore.NewTransactionAt(1, false)
+	txn := pstore.NewTransactionAt(math.MaxUint64, false)
 	defer txn.Discard()
 	item, err := txn.Get(key)
 	if err == badger.ErrKeyNotFound || err == badger.ErrBannedKey {
@@ -498,82 +499,76 @@ func Load(predicate string) error {
 
 // LoadFromDb reads schema information from db and stores it in memory
 func LoadFromDb() error {
-	if err := LoadSchemaFromDb(); err != nil {
+	// Reset the state because with the introduction of incremental restore, it can't be assumed
+	// that the state would be empty before loading the schema from the DB as we don't do drop all
+	// in case of incremental restores.
+	State().DeleteAll()
+	if err := loadFromDB(loadSchema); err != nil {
 		return err
 	}
-	return LoadTypesFromDb()
+	return loadFromDB(loadType)
 }
 
-// LoadSchemaFromDb iterates through the DB and loads all the stored schema updates.
-func LoadSchemaFromDb() error {
-	prefix := x.SchemaPrefix()
-	txn := pstore.NewTransactionAt(1, false)
-	defer txn.Discard()
-	itr := txn.NewIterator(badger.DefaultIteratorOptions) // Need values, reversed=false.
-	defer itr.Close()
+const (
+	loadSchema int = iota
+	loadType
+)
 
-	for itr.Seek(prefix); itr.Valid(); itr.Next() {
+// loadFromDb iterates through the DB and loads all the stored schema updates.
+func loadFromDB(loadType int) error {
+	stream := pstore.NewStreamAt(math.MaxUint64)
+
+	switch loadType {
+	case loadSchema:
+		stream.Prefix = x.SchemaPrefix()
+		stream.LogPrefix = "LoadFromDb Schema"
+	case loadType:
+		stream.Prefix = x.TypePrefix()
+		stream.LogPrefix = "LoadFromDb Type"
+	default:
+		glog.Fatalf("Invalid load type")
+	}
+
+	stream.KeyToList = func(key []byte, itr *badger.Iterator) (*badgerpb.KVList, error) {
 		item := itr.Item()
-		key := item.Key()
-		if !bytes.HasPrefix(key, prefix) {
-			break
-		}
 		pk, err := x.Parse(key)
 		if err != nil {
 			glog.Errorf("Error while parsing key %s: %v", hex.Dump(key), err)
-			continue
+			return nil, nil
 		}
-		attr := pk.Attr
-		var s pb.SchemaUpdate
-		err = item.Value(func(val []byte) error {
-			if len(val) == 0 {
-				s = pb.SchemaUpdate{Predicate: attr, ValueType: pb.Posting_DEFAULT}
-			}
-			x.Checkf(s.Unmarshal(val), "Error while loading schema from db")
-			State().Set(attr, &s)
-			return nil
-		})
-		if err != nil {
-			return err
+		if len(pk.Attr) == 0 {
+			glog.Warningf("Empty Attribute: %+v for Key: %x\n", pk, key)
+			return nil, nil
 		}
-	}
-	return nil
-}
 
-// LoadTypesFromDb iterates through the DB and loads all the stored type updates.
-func LoadTypesFromDb() error {
-	prefix := x.TypePrefix()
-	txn := pstore.NewTransactionAt(1, false)
-	defer txn.Discard()
-	itr := txn.NewIterator(badger.DefaultIteratorOptions) // Need values, reversed=false.
-	defer itr.Close()
-
-	for itr.Seek(prefix); itr.Valid(); itr.Next() {
-		item := itr.Item()
-		key := item.Key()
-		if !bytes.HasPrefix(key, prefix) {
-			break
+		switch loadType {
+		case loadSchema:
+			var s pb.SchemaUpdate
+			err := item.Value(func(val []byte) error {
+				if len(val) == 0 {
+					s = pb.SchemaUpdate{Predicate: pk.Attr, ValueType: pb.Posting_DEFAULT}
+				}
+				x.Checkf(s.Unmarshal(val), "Error while loading schema from db")
+				State().Set(pk.Attr, &s)
+				return nil
+			})
+			return nil, err
+		case loadType:
+			var t pb.TypeUpdate
+			err := item.Value(func(val []byte) error {
+				if len(val) == 0 {
+					t = pb.TypeUpdate{TypeName: pk.Attr}
+				}
+				x.Checkf(t.Unmarshal(val), "Error while loading types from db")
+				State().SetType(pk.Attr, t)
+				return nil
+			})
+			return nil, err
 		}
-		pk, err := x.Parse(key)
-		if err != nil {
-			glog.Errorf("Error while parsing key %s: %v", hex.Dump(key), err)
-			continue
-		}
-		attr := pk.Attr
-		var t pb.TypeUpdate
-		err = item.Value(func(val []byte) error {
-			if len(val) == 0 {
-				t = pb.TypeUpdate{TypeName: attr}
-			}
-			x.Checkf(t.Unmarshal(val), "Error while loading types from db")
-			State().SetType(attr, t)
-			return nil
-		})
-		if err != nil {
-			return err
-		}
+		glog.Fatalf("Invalid load type")
+		return nil, errors.New("shouldn't reach here")
 	}
-	return nil
+	return stream.Orchestrate(context.Background())
 }
 
 // InitialTypes returns the type updates to insert at the beginning of

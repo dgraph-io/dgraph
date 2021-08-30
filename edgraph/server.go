@@ -140,9 +140,26 @@ func PeriodicallyPostTelemetry() {
 	}
 }
 
-// GetGQLSchema queries for the GraphQL schema node, and returns the uid and the GraphQL schema.
-// If multiple schema nodes were found, it returns an error.
+func GetLambdaScript(namespace uint64) (uid, script string, err error) {
+	uid, gql, err := getGQLSchema(namespace)
+	if err != nil {
+		return "", "", err
+	}
+	return uid, gql.Script, nil
+}
+
 func GetGQLSchema(namespace uint64) (uid, graphQLSchema string, err error) {
+	uid, gql, err := getGQLSchema(namespace)
+	if err != nil {
+		return "", "", err
+	}
+	return uid, gql.Schema, nil
+}
+
+// getGQLSchema queries for the GraphQL schema node, and returns the uid and the GraphQL schema and
+// lambda script.
+// If multiple schema nodes were found, it returns an error.
+func getGQLSchema(namespace uint64) (string, *x.GQL, error) {
 	ctx := context.WithValue(context.Background(), Authorize, false)
 	ctx = x.AttachNamespace(ctx, namespace)
 	resp, err := (&Server{}).Query(ctx,
@@ -155,21 +172,24 @@ func GetGQLSchema(namespace uint64) (uid, graphQLSchema string, err error) {
 			  }
 			}`})
 	if err != nil {
-		return "", "", err
+		return "", nil, err
 	}
 
 	var result existingGQLSchemaQryResp
 	if err := json.Unmarshal(resp.GetJson(), &result); err != nil {
-		return "", "", errors.Wrap(err, "Couldn't unmarshal response from Dgraph query")
+		return "", nil, errors.Wrap(err, "Couldn't unmarshal response from Dgraph query")
 	}
+
+	data := &x.GQL{}
 	res := result.ExistingGQLSchema
 	if len(res) == 0 {
 		// no schema has been stored yet in Dgraph
-		return "", "", nil
+		return "", data, nil
 	} else if len(res) == 1 {
 		// we found an existing GraphQL schema
 		gqlSchemaNode := res[0]
-		return gqlSchemaNode.Uid, gqlSchemaNode.Schema, nil
+		data.Schema, data.Script = worker.ParseAsSchemaAndScript([]byte(gqlSchemaNode.Schema))
+		return gqlSchemaNode.Uid, data, nil
 	}
 
 	// found multiple GraphQL schema nodes, this should never happen
@@ -177,7 +197,7 @@ func GetGQLSchema(namespace uint64) (uid, graphQLSchema string, err error) {
 	for i := range res {
 		iUid, err := gql.ParseUid(res[i].Uid)
 		if err != nil {
-			return "", "", err
+			return "", nil, err
 		}
 		res[i].UidInt = iUid
 	}
@@ -187,7 +207,8 @@ func GetGQLSchema(namespace uint64) (uid, graphQLSchema string, err error) {
 	})
 	glog.Errorf("namespace: %d. Multiple schema nodes found, using the last one", namespace)
 	resLast := res[len(res)-1]
-	return resLast.Uid, resLast.Schema, nil
+	data.Schema, data.Script = worker.ParseAsSchemaAndScript([]byte(resLast.Schema))
+	return resLast.Uid, data, nil
 }
 
 // UpdateGQLSchema updates the GraphQL and Dgraph schemas using the given inputs.
@@ -218,6 +239,22 @@ func UpdateGQLSchema(ctx context.Context, gqlSchema,
 		GraphqlSchema: gqlSchema,
 		DgraphPreds:   parsedDgraphSchema.Preds,
 		DgraphTypes:   parsedDgraphSchema.Types,
+		Op:            pb.UpdateGraphQLSchemaRequest_SCHEMA,
+	})
+}
+
+// UpdateLambdaScript updates the Lambda Script using the given inputs.
+// It sends an update request to the worker, which is executed only on Group-1 leader.
+func UpdateLambdaScript(
+	ctx context.Context, script string) (*pb.UpdateGraphQLSchemaResponse, error) {
+	if !x.WorkerConfig.AclEnabled {
+		ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
+	}
+
+	return worker.UpdateGQLSchemaOverNetwork(ctx, &pb.UpdateGraphQLSchemaRequest{
+		StartTs:      worker.State.GetTimestamp(false),
+		LambdaScript: script,
+		Op:           pb.UpdateGraphQLSchemaRequest_SCRIPT,
 	})
 }
 
@@ -271,7 +308,9 @@ func parseSchemaFromAlterOperation(ctx context.Context, op *api.Operation) (*sch
 		// Only the guardian of the galaxy can do a galaxy wide query/mutation. This operation is
 		// needed by live loader.
 		if err := AuthGuardianOfTheGalaxy(ctx); err != nil {
-			return nil, errors.Wrap(err, "Non guardian of galaxy user cannot bypass namespaces.")
+			s := status.Convert(err)
+			return nil, status.Error(s.Code(),
+				"Non guardian of galaxy user cannot bypass namespaces. "+s.Message())
 		}
 		var err error
 		namespace, err = strconv.ParseUint(x.GetForceNamespace(ctx), 0, 64)
@@ -398,8 +437,9 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 			return empty, errors.New("Drop all operation is not permitted.")
 		}
 		if err := AuthGuardianOfTheGalaxy(ctx); err != nil {
-			return empty, errors.Wrapf(err, "Drop all can only be called by the guardian of the"+
-				" galaxy")
+			s := status.Convert(err)
+			return empty, status.Error(s.Code(),
+				"Drop all can only be called by the guardian of the galaxy. "+s.Message())
 		}
 		if len(op.DropValue) > 0 {
 			return empty, errors.Errorf("If DropOp is set to ALL, DropValue must be empty")
@@ -419,6 +459,8 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 
 		// insert empty GraphQL schema, so all alphas get notified to
 		// reset their in-memory GraphQL schema
+		// NOTE: As lambda script and graphql schema are stored in same predicate, there is no need
+		// to send a notification to update in-memory lambda script.
 		_, err = UpdateGQLSchema(ctx, "", "")
 		// recreate the admin account after a drop all operation
 		ResetAcl(nil)
@@ -432,6 +474,10 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 
 		// query the GraphQL schema and keep it in memory, so it can be inserted again
 		_, graphQLSchema, err := GetGQLSchema(namespace)
+		if err != nil {
+			return empty, err
+		}
+		_, lambdaScript, err := GetLambdaScript(namespace)
 		if err != nil {
 			return empty, err
 		}
@@ -450,7 +496,12 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		}
 
 		// just reinsert the GraphQL schema, no need to alter dgraph schema as this was drop_data
-		_, err = UpdateGQLSchema(ctx, graphQLSchema, "")
+		if _, err := UpdateGQLSchema(ctx, graphQLSchema, ""); err != nil {
+			return empty, errors.Wrap(err, "While updating gql schema ")
+		}
+		if _, err := UpdateLambdaScript(ctx, lambdaScript); err != nil {
+			return empty, errors.Wrap(err, "While updating lambda script ")
+		}
 		// recreate the admin account after a drop data operation
 		upsertGuardianAndGroot(nil, namespace)
 		return empty, err
@@ -690,8 +741,12 @@ func validateDQLSchemaForGraphQL(ctx context.Context,
 	return nil
 }
 
+func annotateNamespace(span *otrace.Span, ns uint64) {
+	span.AddAttributes(otrace.Int64Attribute("ns", int64(ns)))
+}
+
 func annotateStartTs(span *otrace.Span, ts uint64) {
-	span.Annotate([]otrace.Attribute{otrace.Int64Attribute("startTs", int64(ts))}, "")
+	span.AddAttributes(otrace.Int64Attribute("startTs", int64(ts)))
 }
 
 func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Response) error {
@@ -1195,16 +1250,7 @@ func filterTablets(ctx context.Context, ms *pb.MembershipState) error {
 		return errors.Errorf("Namespace not found in JWT.")
 	}
 	if namespace == x.GalaxyNamespace {
-		// For galaxy namespace, we don't want to filter out the predicates. We only format the
-		// namespace to human readable form.
-		for _, group := range ms.Groups {
-			tablets := make(map[string]*pb.Tablet)
-			for tabletName, tablet := range group.Tablets {
-				tablet.Predicate = x.FormatNsAttr(tablet.Predicate)
-				tablets[x.FormatNsAttr(tabletName)] = tablet
-			}
-			group.Tablets = tablets
-		}
+		// For galaxy namespace, we don't want to filter out the predicates.
 		return nil
 	}
 	for _, group := range ms.GetGroups() {
@@ -1258,6 +1304,16 @@ func getAuthMode(ctx context.Context) AuthMode {
 // QueryGraphQL handles only GraphQL queries, neither mutations nor DQL.
 func (s *Server) QueryGraphQL(ctx context.Context, req *api.Request,
 	field gqlSchema.Field) (*api.Response, error) {
+	// Add a timeout for queries which don't have a deadline set. We don't want to
+	// apply a timeout if it's a mutation, that's currently handled by flag
+	// "txn-abort-after".
+	if req.GetMutations() == nil && x.Config.QueryTimeout != 0 {
+		if d, _ := ctx.Deadline(); d.IsZero() {
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithTimeout(ctx, x.Config.QueryTimeout)
+			defer cancel()
+		}
+	}
 	// no need to attach namespace here, it is already done by GraphQL layer
 	return s.doQuery(ctx, &Request{req: req, gqlField: field, doAuth: getAuthMode(ctx)})
 }
@@ -1296,8 +1352,7 @@ func Init() {
 	maxPendingQueries = x.Config.Limit.GetInt64("max-pending-queries")
 }
 
-func (s *Server) doQuery(ctx context.Context, req *Request) (
-	resp *api.Response, rerr error) {
+func (s *Server) doQuery(ctx context.Context, req *Request) (resp *api.Response, rerr error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
@@ -1328,6 +1383,10 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (
 
 	var measurements []ostats.Measurement
 	ctx, span := otrace.StartSpan(ctx, methodRequest)
+	if ns, err := x.ExtractNamespace(ctx); err == nil {
+		annotateNamespace(span, ns)
+	}
+
 	ctx = x.WithMethod(ctx, methodRequest)
 	defer func() {
 		span.End()
@@ -1363,11 +1422,13 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (
 		ostats.Record(ctx, x.NumMutations.M(1))
 	}
 
-	if x.IsGalaxyOperation(ctx) {
+	if req.doAuth == NeedAuthorize && x.IsGalaxyOperation(ctx) {
 		// Only the guardian of the galaxy can do a galaxy wide query/mutation. This operation is
 		// needed by live loader.
 		if err := AuthGuardianOfTheGalaxy(ctx); err != nil {
-			return nil, errors.Wrap(err, "Non guardian of galaxy user cannot bypass namespaces.")
+			s := status.Convert(err)
+			return nil, status.Error(s.Code(),
+				"Non guardian of galaxy user cannot bypass namespaces. "+s.Message())
 		}
 	}
 
@@ -1503,6 +1564,7 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 		return resp, errors.Wrap(err, "")
 	}
 
+	var logs []string
 	if len(er.SchemaNode) > 0 || len(er.Types) > 0 {
 		if err = authorizeSchemaQuery(ctx, &er); err != nil {
 			return resp, err
@@ -1525,7 +1587,7 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 	} else if qc.req.RespFormat == api.Request_RDF {
 		resp.Rdf, err = query.ToRDF(qc.latency, er.Subgraphs)
 	} else {
-		resp.Json, err = query.ToJson(ctx, qc.latency, er.Subgraphs, qc.gqlField)
+		resp.Json, logs, err = query.ToJson(ctx, qc.latency, er.Subgraphs, qc.gqlField)
 	}
 	// if err is just some error from GraphQL encoding, then we need to continue the normal
 	// execution ignoring the error as we still need to assign metrics and latency info to resp.
@@ -1544,8 +1606,8 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 		// If the list of UIDs is empty but the map of values is not,
 		// we need to get the UIDs from the keys in the map.
 		var uidList []uint64
-		if v.OrderedUIDs != nil && len(v.OrderedUIDs.Uids) > 0 {
-			uidList = v.OrderedUIDs.Uids
+		if v.OrderedUIDs != nil && len(v.OrderedUIDs.SortedUids) > 0 {
+			uidList = v.OrderedUIDs.SortedUids
 		} else if !v.UidMap.IsEmpty() {
 			uidList = v.UidMap.ToArray()
 		} else {
@@ -1580,7 +1642,9 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 
 	resp.Metrics = &api.Metrics{
 		NumUids: er.Metrics,
+		Logs:    logs,
 	}
+
 	var total uint64
 	for _, num := range resp.Metrics.NumUids {
 		total += num
@@ -1685,6 +1749,9 @@ func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.Tx
 	if tc.StartTs == 0 {
 		return &api.TxnContext{}, errors.Errorf(
 			"StartTs cannot be zero while committing a transaction")
+	}
+	if ns, err := x.ExtractJWTNamespace(ctx); err == nil {
+		annotateNamespace(span, ns)
 	}
 	annotateStartTs(span, tc.StartTs)
 

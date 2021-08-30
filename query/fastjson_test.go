@@ -5,26 +5,27 @@ import (
 	"math"
 	"testing"
 
+	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/types"
-	"github.com/dgraph-io/roaring/roaring64"
+	"github.com/dgraph-io/sroar"
 	"github.com/stretchr/testify/require"
 )
 
 func subgraphWithSingleResultAndSingleValue(val *pb.TaskValue) *SubGraph {
-	r := roaring64.New()
-	r.Add(1)
+	r := sroar.NewBitmap()
+	r.Set(1)
 	return &SubGraph{
 		Params:    params{Alias: "query"},
-		SrcUIDs:   &pb.List{Uids: []uint64{1}},
+		SrcUIDs:   codec.OneUid(1),
 		DestMap:   r,
-		uidMatrix: []*pb.List{&pb.List{Uids: []uint64{1}}},
+		uidMatrix: []*pb.List{codec.OneUid(1)},
 		Children: []*SubGraph{
 			&SubGraph{
 				Attr:      "val",
-				SrcUIDs:   &pb.List{Uids: []uint64{1}},
+				SrcUIDs:   codec.OneUid(1),
 				uidMatrix: []*pb.List{&pb.List{}},
 				valueMatrix: []*pb.ValueList{
 					// UID 1
@@ -38,7 +39,7 @@ func subgraphWithSingleResultAndSingleValue(val *pb.TaskValue) *SubGraph {
 }
 
 func assertJSON(t *testing.T, expected string, sg *SubGraph) {
-	buf, err := ToJson(context.Background(), &Latency{}, []*SubGraph{sg}, nil)
+	buf, _, err := ToJson(context.Background(), &Latency{}, []*SubGraph{sg}, nil)
 	require.Nil(t, err)
 	require.Equal(t, expected, string(buf))
 }

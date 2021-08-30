@@ -24,12 +24,11 @@ import (
 	"sync/atomic"
 
 	"github.com/dgraph-io/badger/v3"
-	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
-	"github.com/dgraph-io/roaring/roaring64"
+	"github.com/dgraph-io/sroar"
 )
 
 // type countEntry struct {
@@ -137,7 +136,7 @@ func (c *countIndexer) writeIndex(buf *z.Buffer) {
 	defer alloc.Release()
 
 	var pl pb.PostingList
-	bm := roaring64.New()
+	bm := sroar.NewBitmap()
 
 	outBuf := z.NewBuffer(5<<20, "CountIndexer.Buffer.WriteIndex")
 	defer outBuf.Release()
@@ -146,7 +145,7 @@ func (c *countIndexer) writeIndex(buf *z.Buffer) {
 			return
 		}
 
-		pl.Bitmap = codec.ToBytes(bm)
+		pl.Bitmap = bm.ToBuffer()
 
 		kv := posting.MarshalPostingList(&pl, nil)
 		kv.Key = append([]byte{}, lastCe.Key()...)
@@ -155,7 +154,7 @@ func (c *countIndexer) writeIndex(buf *z.Buffer) {
 		badger.KVToBuffer(kv, outBuf)
 
 		alloc.Reset()
-		bm = roaring64.New()
+		bm = sroar.NewBitmap()
 		pl.Reset()
 
 		// flush out the buffer.
@@ -170,7 +169,7 @@ func (c *countIndexer) writeIndex(buf *z.Buffer) {
 		if !bytes.Equal(lastCe.Key(), ce.Key()) {
 			encode()
 		}
-		bm.Add(ce.Uid())
+		bm.Set(ce.Uid())
 		lastCe = ce
 		return nil
 	})

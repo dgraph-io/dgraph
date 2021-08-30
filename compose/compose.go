@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *	 http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -18,10 +18,12 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"io/ioutil"
 	"math"
 	"os"
 	"os/user"
+	"path"
 	"strconv"
 	"strings"
 
@@ -88,6 +90,7 @@ type options struct {
 	Acl            bool
 	AclSecret      string
 	DataDir        string
+	PDir           string
 	DataVol        bool
 	TmpFS          bool
 	UserOwnership  bool
@@ -117,6 +120,12 @@ type options struct {
 	Hostname       string
 	Cdc            bool
 	CdcConsumer    bool
+
+	// Alpha Configurations
+	CustomAlphaOptions []string
+
+	// Container Alias
+	ContainerPrefix string
 
 	// Extra flags
 	AlphaFlags string
@@ -167,8 +176,11 @@ func getHost(host string) string {
 
 func initService(basename string, idx, grpcPort int) service {
 	var svc service
-
-	svc.name = name(basename, idx)
+	containerPrefix := basename
+	if opts.ContainerPrefix != "" {
+		containerPrefix = opts.ContainerPrefix + "_" + basename
+	}
+	svc.name = name(containerPrefix, idx)
 	svc.Image = opts.Image + ":" + opts.Tag
 	svc.ContainerName = containerName(svc.name)
 	svc.WorkingDir = fmt.Sprintf("/data/%s", svc.name)
@@ -281,7 +293,7 @@ func getZero(idx int, raft string) service {
 	return svc
 }
 
-func getAlpha(idx int, raft string) service {
+func getAlpha(idx int, raft string, customFlags string) service {
 	basename := "alpha"
 	internalPort := alphaBasePort + opts.PortOffset + getOffset(idx)
 	grpcPort := internalPort + 1000
@@ -304,11 +316,16 @@ func getAlpha(idx int, raft string) service {
 		maxZeros = opts.NumZeros
 	}
 
-	zeroHostAddr := fmt.Sprintf("%s:%d", getHost("zero1"), zeroBasePort+opts.PortOffset)
+	zeroName := "zero"
+	if opts.ContainerPrefix != "" {
+		zeroName = opts.ContainerPrefix + "_" + zeroName
+	}
+
+	zeroHostAddr := fmt.Sprintf("%s:%d", getHost(zeroName+"1"), zeroBasePort+opts.PortOffset)
 	zeros := []string{zeroHostAddr}
 	for i := 2; i <= maxZeros; i++ {
 		port := zeroBasePort + opts.PortOffset + getOffset(i)
-		zeroHost := fmt.Sprintf("zero%d", i)
+		zeroHost := fmt.Sprintf("%s%d", zeroName, i)
 		zeroHostAddr = fmt.Sprintf("%s:%d", getHost(zeroHost), port)
 		zeros = append(zeros, zeroHostAddr)
 	}
@@ -380,6 +397,10 @@ func getAlpha(idx int, raft string) service {
 	svc.EnvFile = opts.AlphaEnvFile
 	if opts.AlphaFlags != "" {
 		svc.Command += " " + opts.AlphaFlags
+	}
+
+	if customFlags != "" {
+		svc.Command += " " + customFlags
 	}
 
 	return svc
@@ -554,6 +575,88 @@ func fatal(err error) {
 	os.Exit(1)
 }
 
+func makeDir(path string) error {
+	var err1 error
+	_, err := os.Stat(path)
+	if os.IsNotExist(err) {
+		if errs := os.MkdirAll(path, 0755); errs != nil {
+			err1 = errors.Wrapf(err, "Couldn't create directory %v.", path)
+		}
+	} else if err != nil {
+		err1 = errors.Wrapf(err, "Something went wrong while checking if directory %v still exists.",
+			path)
+	}
+	return err1
+}
+
+func copyFile(src, dst string) error {
+	var err, err1 error
+	var srcfd *os.File
+	var dstfd *os.File
+	var srcInfo os.FileInfo
+
+	if srcfd, err = os.Open(src); err != nil {
+		err1 = errors.Wrapf(err, "Error in opening source file %v.", src)
+		return err1
+	}
+	defer srcfd.Close()
+
+	if dstfd, err = os.Create(dst); err != nil {
+		err1 = errors.Wrapf(err, "Error in creating destination file %v.", dst)
+		return err1
+	}
+	defer dstfd.Close()
+
+	if _, err = io.Copy(dstfd, srcfd); err != nil {
+		err1 = errors.Wrapf(err, "Error in copying source file %v to destination file %v.",
+			src, dst)
+		return err1
+	}
+	if srcInfo, err = os.Stat(src); err != nil {
+		err1 = errors.Wrapf(err, "Error in doing stat of source file %v.", src)
+		return err1
+	}
+	return os.Chmod(dst, srcInfo.Mode())
+}
+
+func copyDir(src string, dst string) error {
+	var err, err1 error
+	var fds []os.FileInfo
+	var srcInfo os.FileInfo
+
+	if srcInfo, err = os.Stat(src); err != nil {
+		err1 = errors.Wrapf(err, "Error in doing stat of source dir %v.", src)
+		return err1
+	}
+
+	if err = os.MkdirAll(dst, srcInfo.Mode()); err != nil {
+		err1 = errors.Wrapf(err, "Error in making dir %v.", dst)
+		return err1
+	}
+
+	if fds, err = ioutil.ReadDir(src); err != nil {
+		err1 = errors.Wrapf(err, "Error in reading source dir %v.", src)
+		return err1
+	}
+	for _, fd := range fds {
+		srcfp := path.Join(src, fd.Name())
+		dstfp := path.Join(dst, fd.Name())
+
+		if fd.IsDir() {
+			if err = copyDir(srcfp, dstfp); err != nil {
+				err1 = errors.Wrapf(err, "Could not copy dir %v to %v.", srcfp, dstfp)
+				return err1
+			}
+		} else {
+			if err = copyFile(srcfp, dstfp); err != nil {
+				err1 = errors.Wrapf(err, "Could not copy file %v to %v.", srcfp, dstfp)
+				return err1
+			}
+		}
+	}
+	return nil
+}
+
 func main() {
 	var cmd = &cobra.Command{
 		Use:     "compose",
@@ -577,6 +680,12 @@ func main() {
 		"mount a docker volume as /data in containers")
 	cmd.PersistentFlags().StringVarP(&opts.DataDir, "data_dir", "d", "",
 		"mount a host directory as /data in containers")
+	cmd.PersistentFlags().StringVarP(&opts.PDir, "postings", "p", "",
+		"launch cluster with local path of p directory, data_vol must be set to true and a=r."+
+			"\nFor new cluster to pick postings, you might have to move uids and timestamp..."+
+			"\ncurl \"http://localhost:<zeroPort>/assign?what=timestamps&num=1000000\""+
+			"\ncurl \"http://localhost:<zeroPort>/assign?what=uids&num=1000000\"")
+
 	cmd.PersistentFlags().BoolVar(&opts.Acl, "acl", false, "Create ACL secret file and enable ACLs")
 	cmd.PersistentFlags().StringVar(&opts.AclSecret, "acl_secret", "",
 		"enable ACL feature with specified HMAC secret file")
@@ -634,6 +743,11 @@ func main() {
 		"minio service port")
 	cmd.PersistentFlags().StringArrayVar(&opts.MinioEnvFile, "minio_env_file", nil,
 		"minio service env_file")
+	cmd.PersistentFlags().StringVar(&opts.ContainerPrefix, "prefix", "",
+		"prefix for the container name")
+	cmd.PersistentFlags().StringArrayVar(&opts.CustomAlphaOptions, "custom_alpha_options", nil,
+		"Custom alpha flags for specific alphas,"+
+			" following {\"1:custom_flags\", \"2:custom_flags\"}, eg: {\"2: -p <bulk_path>\"")
 	cmd.PersistentFlags().StringVar(&opts.Hostname, "hostname", "",
 		"hostname for the alpha and zero servers")
 	cmd.PersistentFlags().BoolVar(&opts.Cdc, "cdc", false,
@@ -668,6 +782,13 @@ func main() {
 	if cmd.Flags().Changed("cdc-consumer") && !opts.Cdc {
 		fatal(errors.Errorf("--cdc_consumer requires --cdc"))
 	}
+	if opts.PDir != "" && opts.DataDir == "" {
+		fatal(errors.Errorf("--postings option requires --data_dir"))
+	}
+	if opts.PDir != "" && opts.NumAlphas > opts.NumReplicas {
+		fatal(errors.Errorf("--postings requires --num_replicas >= --num_alphas"))
+	}
+
 	services := make(map[string]service)
 
 	for i := 1; i <= opts.NumZeros; i++ {
@@ -675,10 +796,24 @@ func main() {
 		services[svc.name] = svc
 	}
 
+	// Alpha Customization
+	customAlphas := make(map[int]string)
+	for _, flag := range opts.CustomAlphaOptions {
+		splits := strings.SplitN(flag, ":", 2)
+		if len(splits) != 2 {
+			fatal(errors.Errorf("custom_alpha_options, requires string in index:options format."))
+		}
+		idx, err := strconv.Atoi(splits[0])
+		if err != nil {
+			fatal(errors.Errorf(" custom_alpha_options, captured erros while parsing index value %v", err))
+		}
+		customAlphas[idx] = splits[1]
+	}
+
 	for i := 1; i <= opts.NumAlphas; i++ {
 		gid := int(math.Ceil(float64(i) / float64(opts.NumReplicas)))
 		rs := fmt.Sprintf("idx=%d; group=%d", i, gid)
-		svc := getAlpha(i, rs)
+		svc := getAlpha(i, rs, customAlphas[i])
 		// Don't make Alphas depend on each other.
 		svc.DependsOn = nil
 		services[svc.name] = svc
@@ -697,7 +832,7 @@ func main() {
 		for i := 1; i <= opts.NumLearners; i++ {
 			lidx++
 			rs := fmt.Sprintf("idx=%d; group=%d; learner=true", lidx, gid)
-			svc := getAlpha(lidx, rs)
+			svc := getAlpha(lidx, rs, customAlphas[i])
 			services[svc.name] = svc
 		}
 	}
@@ -724,6 +859,27 @@ func main() {
 			if !isBindMount(srcDir) {
 				cfg.Volumes[srcDir] = stringMap{}
 			}
+		}
+	}
+
+	if opts.PDir != "" {
+		if _, err := os.Stat(opts.DataDir); !os.IsNotExist(err) {
+			fatal(errors.Errorf("Directory %v already exists.", opts.DataDir))
+		}
+
+		n := 1
+		for n <= opts.NumAlphas {
+			newDir := opts.DataDir + "/alpha" + strconv.Itoa(n) + "/p"
+			err := makeDir(newDir)
+			if err != nil {
+				fatal(errors.Errorf("Couldn't create directory %v. Error: %v.", newDir, err))
+			}
+			err = copyDir(opts.PDir, newDir)
+			if err != nil {
+				fatal(errors.Errorf("Couldn't copy directory from %v to %v. Error: %v.",
+					opts.PDir, newDir, err))
+			}
+			n++
 		}
 	}
 
@@ -779,5 +935,11 @@ func main() {
 		if err != nil {
 			fatal(errors.Errorf("unable to write file: %v", err))
 		}
+	}
+
+	if opts.PDir != "" {
+		fmt.Printf("For new cluster to pick \"postings\", you might have to move uids and timestamp..." +
+			"\n\tcurl \"http://localhost:<zeroPort>/assign?what=timestamps&num=1000000\"" +
+			"\n\tcurl \"http://localhost:<zeroPort>/assign?what=uids&num=1000000\"\n")
 	}
 }

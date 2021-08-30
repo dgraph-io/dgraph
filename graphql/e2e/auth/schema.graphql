@@ -972,3 +972,112 @@ type Home @auth(
     favouriteMember: HomeMember
 }
 # union testing - end
+
+
+## custom DQL testing start
+
+type GroupedIssueMapQ @remote {
+    groupby: [IssueMap] @remoteResponse(name: "@groupby")
+}
+
+type IssueMap {
+	owner: ID!
+	count: Int
+}
+
+type Query {
+
+    queryIssueSortedByOwnerAge: [Issue] @custom(dql: """
+        query {
+            iss as var(func: type(Issue)) @filter(has(Issue.owner)) {
+                Issue.owner {
+                    age as User.age
+                }
+                ownerAge as max(val(age))
+            }
+            queryIssueSortedByOwnerAge(func: uid(iss), orderdesc: val(ownerAge)) {
+                id : uid
+                msg : Issue.msg
+                random : Issue.random
+            }
+        }"""
+    )
+
+    queryIssueGroupedByOwner: [GroupedIssueMapQ] @custom(dql: """
+        query{
+            queryIssueGroupedByOwner(func: type(Issue)) @groupby(owner: Issue.owner) {
+                count(uid)
+            }
+        }"""
+    )
+
+    queryContacts: [Contact] @custom(dql: """
+        query {
+            queryContacts(func: type(Contact)) @cascade {
+                id : uid
+                nickName : Contact.nickName
+                adminTasks : Contact.adminTasks {
+                id : uid
+                name : AdminTask.name
+                occurrences : AdminTask.occurrences {
+                    due : TaskOccurrence.due
+                    comp : TaskOccurrence.comp
+                }
+                }
+            }
+        }"""
+    )
+
+    queryUsers: [User] @custom(dql: """
+        query {
+            queryUsers(func: uid("0x1", "0x2")) @filter(eq(User.username, "minhaj")) {
+                username: User.username
+                tickets: User.tickets {
+                id: uid
+                title: Ticket.title
+                }
+                tweets: User.tweets {
+                    id: uid
+                    text: Tweets.text
+                    score: Tweets.score
+                }
+            }
+        }"""
+    )
+
+    queryProjectsOrderByName: [Project] @custom(dql: """
+        query {
+            queryProjectsOrderByName(func: eq(Project.name, "Project1", "Project2"), orderasc: Project.name) {
+                name: Project.name
+            }
+        }"""
+    )
+    queryFirstTwoMovieWithNonNullRegion: [Movie] @ custom(dql: """
+        query {
+            queryFirstTwoMovieWithNonNullRegion(func: has(Movie.content), first: 2, offset: 0, orderasc: Movie.content) @cascade {
+                content: Movie.content
+                code: Movie.code
+                regionsAvailable: Movie.regionsAvailable(first: 1, orderasc: Region.name) {
+                    name: Region.name
+                }
+            }
+        }"""
+    )
+    queryQuestionAndAnswer: [Post] @custom(dql: """
+        query {
+            ques as var(func: type(Question))
+            ans as var(func: type(Answer))
+            queryQuestionAndAnswer(func: uid(ques, ans), orderasc: Post.text) {
+                id : uid
+                text : Post.text
+                topic : Post.topic
+                author : Post.author {
+                    id : Author.id
+                    name : Author.name
+                }
+            }
+        }"""
+    )
+}
+
+## custom DQL testing end

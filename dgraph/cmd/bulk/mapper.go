@@ -31,6 +31,7 @@ import (
 
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/chunker"
+	"github.com/dgraph-io/dgraph/ee/acl"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -215,6 +216,8 @@ func (m *mapper) writeMapEntriesToFile(cbuf *z.Buffer, shardIdx int) {
 	x.Check(err)
 }
 
+var once sync.Once
+
 func (m *mapper) run(inputFormat chunker.InputFormat) {
 	chunk := chunker.NewChunker(inputFormat, 1000)
 	nquads := chunk.NQuads()
@@ -227,6 +230,20 @@ func (m *mapper) run(inputFormat chunker.InputFormat) {
 				}
 			}
 		}
+		once.Do(func() {
+			if m.opt.Namespace != math.MaxUint64 && m.opt.Namespace != x.GalaxyNamespace {
+				// Insert ACL related RDFs force uploading the data into non-galaxy namespace.
+				aclNquads := make([]*api.NQuad, 0)
+				aclNquads = append(aclNquads, acl.CreateGroupNQuads(x.GuardiansId)...)
+				aclNquads = append(aclNquads, acl.CreateUserNQuads(x.GrootId, "password")...)
+				aclNquads = append(aclNquads, &api.NQuad{
+					Subject:   "_:newuser",
+					Predicate: "dgraph.user.group",
+					ObjectId:  "_:newgroup",
+				})
+				nquads.Push(aclNquads...)
+			}
+		})
 		nquads.Flush()
 	}()
 

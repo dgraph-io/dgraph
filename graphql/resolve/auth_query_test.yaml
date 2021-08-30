@@ -644,13 +644,10 @@
       queryGroup(func: uid(GroupRoot)) {
         Group.id : uid
       }
-      GroupRoot as var(func: uid(Group_1)) @filter((uid(Group_Auth2) OR uid(Group_Auth3)))
+      GroupRoot as var(func: uid(Group_1)) @filter(uid(Group_Auth2))
       Group_1 as var(func: type(Group))
       Group_Auth2 as var(func: uid(Group_1)) @cascade {
         Group.users : Group.users @filter(eq(User.username, "user1"))
-      }
-      Group_Auth3 as var(func: uid(Group_1)) @cascade {
-        Group.createdBy : Group.createdBy @filter(eq(User.username, "user1"))
       }
     }
 

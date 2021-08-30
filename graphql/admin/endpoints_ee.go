@@ -71,6 +71,18 @@ const adminTypes = `
 		backupNum: Int
 
 		"""
+		All the backups with num >= incrementalFrom will be restored.
+		"""
+		incrementalFrom: Int
+
+		"""
+		If isPartial is set to true then the cluster will be kept in draining mode after
+		restore. This makes sure that the db is not corrupted by any mutations or tablet moves in
+		between two restores.
+		"""
+		isPartial: Boolean
+
+		"""
 		Path to the key file needed to decrypt the backup. This file should be accessible
 		by all alphas in the group. The backup will be written using the encryption key
 		with which the cluster was started, which might be different than this key.

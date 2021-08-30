@@ -827,6 +827,11 @@ func TestAuthQueryRewriting(t *testing.T) {
 			mutationQueryRewriting(t, strSchema, metaInfo)
 		})
 
+		b = read(t, "custom_auth_query_test.yaml")
+		t.Run("Custom DQL Query Rewriting"+algo, func(t *testing.T) {
+			queryRewriting(t, strSchema, metaInfo, b)
+		})
+
 		b = read(t, "auth_add_test.yaml")
 		t.Run("Add Mutation "+algo, func(t *testing.T) {
 			mutationAdd(t, strSchema, metaInfo, b)

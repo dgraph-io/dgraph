@@ -109,18 +109,17 @@ func (cache *aclCache) update(ns uint64, groups []acl.Group) {
 
 func (cache *aclCache) authorizePredicate(groups []string, predicate string,
 	operation *acl.Operation) error {
-	if x.IsAclPredicate(x.ParseAttr(predicate)) {
+	ns, attr := x.ParseNamespaceAttr(predicate)
+	if x.IsAclPredicate(attr) {
 		return errors.Errorf("only groot is allowed to access the ACL predicate: %s", predicate)
 	}
 
-	aclCachePtr.RLock()
-	predPerms := aclCachePtr.predPerms
-	aclCachePtr.RUnlock()
-
-	if groupPerms, found := predPerms[predicate]; found {
-		if hasRequiredAccess(groupPerms, groups, operation) {
-			return nil
-		}
+	// Check if group has access to all the predicates (using "dgraph.all" wildcard).
+	if hasAccessToAllPreds(ns, groups, operation) {
+		return nil
+	}
+	if hasAccessToPred(predicate, groups, operation) {
+		return nil
 	}
 
 	// no rule has been defined that can match the predicate
@@ -128,6 +127,27 @@ func (cache *aclCache) authorizePredicate(groups []string, predicate string,
 	return errors.Errorf("unauthorized to do %s on predicate %s",
 		operation.Name, predicate)
 
+}
+
+// accessAllPredicate is a wildcard to allow access to all non-ACL predicates to non-guardian group.
+const accessAllPredicate = "dgraph.all"
+
+func hasAccessToAllPreds(ns uint64, groups []string, operation *acl.Operation) bool {
+	pred := x.NamespaceAttr(ns, accessAllPredicate)
+	return hasAccessToPred(pred, groups, operation)
+}
+
+func hasAccessToPred(pred string, groups []string, operation *acl.Operation) bool {
+	aclCachePtr.RLock()
+	defer aclCachePtr.RUnlock()
+	predPerms := aclCachePtr.predPerms
+
+	if groupPerms, found := predPerms[pred]; found {
+		if hasRequiredAccess(groupPerms, groups, operation) {
+			return true
+		}
+	}
+	return false
 }
 
 // hasRequiredAccess checks if any group in the passed in groups is allowed to perform the operation

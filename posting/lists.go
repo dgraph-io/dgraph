@@ -22,12 +22,11 @@ import (
 	"sync"
 	"time"
 
-	ostats "go.opencensus.io/stats"
-
 	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/ristretto"
 	"github.com/dgraph-io/ristretto/z"
+	ostats "go.opencensus.io/stats"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
@@ -48,10 +47,12 @@ func Init(ps *badger.DB, cacheSize int64) {
 	pstore = ps
 	closer = z.NewCloser(1)
 	go x.MonitorMemoryMetrics(closer)
+
 	// Initialize cache.
 	if cacheSize == 0 {
 		return
 	}
+
 	var err error
 	lCache, err = ristretto.NewCache(&ristretto.Config{
 		// Use 5% of cache memory for storing counters.
@@ -60,11 +61,33 @@ func Init(ps *badger.DB, cacheSize int64) {
 		BufferItems: 64,
 		Metrics:     true,
 		Cost: func(val interface{}) int64 {
-			l, ok := val.(*List)
-			if !ok {
-				return int64(0)
+			switch val := val.(type) {
+			case *List:
+				return int64(val.DeepSize())
+			case uint64:
+				return 8
+			default:
+				x.AssertTruef(false, "Don't know about type %T in Dgraph cache", val)
+				return 0
 			}
-			return int64(l.DeepSize())
+		},
+		ShouldUpdate: func(prev, cur interface{}) bool {
+			getTs := func(ts interface{}) uint64 {
+				var t uint64
+				switch ts := ts.(type) {
+				case *List:
+					t = ts.maxTs
+				case uint64:
+					t = ts
+				default:
+					x.AssertTruef(false, "Don't know about type %T in Dgraph cache", ts)
+				}
+				return t
+			}
+
+			// Only update the value if we have a timestamp >= the previous
+			// value.
+			return getTs(cur) >= getTs(prev)
 		},
 	})
 	x.Check(err)

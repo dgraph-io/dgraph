@@ -54,21 +54,9 @@ sudo apt-get update
 sudo apt-get install gcc make
 ```
 
-### macOS
-
-As a prerequisite, first install [XCode](https://apps.apple.com/us/app/xcode/id497799835?mt=12) (or the [XCode Command-line Tools](https://developer.apple.com/downloads/)) and [Homebrew](https://brew.sh/).
-
-Next, install the required dependencies:
-
-```bash
-brew update
-brew install jemalloc go
-```
-
 ### Build and Install
 
 Then clone the Dgraph repository and use `make install` to install the Dgraph binary to `$GOPATH/bin`.
-
 
 ```bash
 git clone https://github.com/dgraph-io/dgraph.git
@@ -121,7 +109,7 @@ makes it easy to build applications with it.
   play.dgraph.io](http://play.dgraph.io/).
 - Please see [releases tab](https://github.com/dgraph-io/dgraph/releases) to
   find the latest release and corresponding release notes.
-- [See the Roadmap](https://discuss.dgraph.io/t/product-roadmap-2020/8479) for a list of
+- [See the Roadmap](https://discuss.dgraph.io/t/dgraph-product-roadmap-2021/12284) for a list of
   working and planned features.
 - Read about the latest updates from the Dgraph team [on our
   blog](https://open.dgraph.io/).

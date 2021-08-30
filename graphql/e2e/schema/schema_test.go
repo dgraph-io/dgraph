@@ -296,7 +296,9 @@ func TestConcurrentSchemaUpdates(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(res.GetJson(), &resp))
 	require.Len(t, resp.GqlSchema, 1)
-	require.Equal(t, finalGraphQLSchema, resp.GqlSchema[0].Schema)
+	var sch x.GQL
+	require.NoError(t, json.Unmarshal([]byte(resp.GqlSchema[0].Schema), &sch))
+	require.Equal(t, finalGraphQLSchema, sch.Schema)
 }
 
 // TestIntrospectionQueryAfterDropAll make sure that Introspection query after drop_all doesn't give any internal error
@@ -603,24 +605,24 @@ func TestApolloServiceResolver(t *testing.T) {
 		startDate: String
 		endDate: String
 	}
-	
+
 	type Astronaut @key(fields: "id") @extends {
 		id: ID! @external
 		missions: [Mission]
 	}
-	
+
 	type User @remote {
 		id: ID!
 		name: String!
 	}
-	
+
 	type Car @auth(
 		password: { rule: "{$ROLE: { eq: \"Admin\" } }"}
 	){
 		id: ID!
 		name: String!
 	}
-	
+
 	type Query {
 		getMyFavoriteUsers(id: ID!): [User] @custom(http: {
 			url: "http://my-api.com",
@@ -672,12 +674,20 @@ func TestDeleteSchemaAndExport(t *testing.T) {
 	exportReq := &common.GraphQLParams{
 		Query: `mutation {
 		  export(input: {format: "rdf"}) {
-			exportedFiles
+			response { code }
+			taskId
 		  }
 		}`,
 	}
 	exportGqlResp := exportReq.ExecuteAsPost(t, groupOneAdminServer)
 	common.RequireNoGQLErrors(t, exportGqlResp)
+
+	var data interface{}
+	require.NoError(t, json.Unmarshal(exportGqlResp.Data, &data))
+
+	require.Equal(t, "Success", testutil.JsonGet(data, "export", "response", "code").(string))
+	taskId := testutil.JsonGet(data, "export", "taskId").(string)
+	testutil.WaitForTask(t, taskId, false)
 
 	// applying a new schema should still work
 	newSchemaResp := common.AssertUpdateGQLSchemaSuccess(t, groupOneHTTP, schema, nil)

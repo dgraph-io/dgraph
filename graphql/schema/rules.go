@@ -1275,7 +1275,7 @@ func lambdaDirectiveValidation(sch *ast.Schema,
 	if x.LambdaUrl(x.GalaxyNamespace) == "" {
 		return []*gqlerror.Error{gqlerror.ErrorPosf(dir.Position,
 			"Type %s; Field %s: has the @lambda directive, but the "+
-				`--graphql "lambda-url=...;" flag wasn't specified during alpha startup.`,
+				`--lambda "url=...;" flag wasn't specified during alpha startup.`,
 			typ.Name, field.Name)}
 	}
 	// reuse @custom directive validation
@@ -1299,7 +1299,7 @@ func lambdaOnMutateValidation(sch *ast.Schema, typ *ast.Definition) gqlerror.Lis
 	if x.LambdaUrl(x.GalaxyNamespace) == "" {
 		errs = append(errs, gqlerror.ErrorPosf(dir.Position,
 			"Type %s: has the @lambdaOnMutate directive, but the "+
-				"`--graphql lambda-url` flag wasn't specified during alpha startup.", typ.Name))
+				"`--lambda url` flag wasn't specified during alpha startup.", typ.Name))
 	}
 
 	if typ.Directives.ForName(remoteDirective) != nil {

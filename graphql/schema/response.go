@@ -75,11 +75,11 @@ func (r *Response) WithError(err error) {
 		return
 	}
 
-	if !x.Config.GraphQLDebug && strings.Contains(err.Error(), "authorization failed") {
+	if !x.Config.GraphQL.Debug && strings.Contains(err.Error(), "authorization failed") {
 		return
 	}
 
-	if !x.Config.GraphQLDebug && strings.Contains(err.Error(), "GraphQL debug:") {
+	if !x.Config.GraphQL.Debug && strings.Contains(err.Error(), "GraphQL debug:") {
 		return
 	}
 
@@ -172,7 +172,7 @@ func (r *Response) Output() interface{} {
 		Data:   r.Data.Bytes(),
 	}
 
-	if x.Config.GraphQL.GetBool("extensions") {
+	if x.Config.GraphQL.Extensions {
 		res.Extensions = r.Extensions
 	}
 	return res
@@ -180,8 +180,9 @@ func (r *Response) Output() interface{} {
 
 // Extensions represents GraphQL extensions
 type Extensions struct {
-	TouchedUids uint64 `json:"touched_uids,omitempty"`
-	Tracing     *Trace `json:"tracing,omitempty"`
+	TouchedUids uint64   `json:"touched_uids,omitempty"`
+	Tracing     *Trace   `json:"tracing,omitempty"`
+	Logs        []string `json:"logs,omitempty"`
 }
 
 // GetTouchedUids returns TouchedUids
@@ -199,6 +200,7 @@ func (e *Extensions) Merge(ext *Extensions) {
 	}
 
 	e.TouchedUids += ext.TouchedUids
+	e.Logs = append(e.Logs, ext.Logs...)
 
 	if e.Tracing == nil {
 		e.Tracing = ext.Tracing

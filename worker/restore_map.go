@@ -105,7 +105,7 @@ func (br *backupReader) WithCompression(comp string) *backupReader {
 type loadBackupInput struct {
 	preds      predicateSet
 	dropNs     map[uint64]struct{}
-	isOld      bool
+	version    int
 	keepSchema bool
 }
 
@@ -162,11 +162,6 @@ func (m *mapper) writeToDisk(buf *z.Buffer) error {
 	if buf.IsEmpty() {
 		return nil
 	}
-	buf.SortSlice(func(ls, rs []byte) bool {
-		lme := mapEntry(ls)
-		rme := mapEntry(rs)
-		return y.CompareKeys(lme.Key(), rme.Key()) < 0
-	})
 
 	f, err := m.newMapFile()
 	if err != nil {
@@ -239,6 +234,11 @@ func (mw *mapper) sendForWriting() error {
 	if mw.buf.IsEmpty() {
 		return nil
 	}
+	mw.buf.SortSlice(func(ls, rs []byte) bool {
+		lme := mapEntry(ls)
+		rme := mapEntry(rs)
+		return y.CompareKeys(lme.Key(), rme.Key()) < 0
+	})
 
 	if err := mw.thr.Do(); err != nil {
 		return err
@@ -336,12 +336,7 @@ func (m *mapper) processReqCh(ctx context.Context) error {
 			}
 			pl := posting.FromBackupPostingList(backupPl)
 
-			shouldSplit, err := posting.ShouldSplit(pl)
-			if err != nil {
-				return errors.Wrap(err, "Failed to get shouldSplit")
-			}
-
-			if !shouldSplit || parsedKey.HasStartUid || len(pl.GetSplits()) > 0 {
+			if !posting.ShouldSplit(pl) || parsedKey.HasStartUid || len(pl.GetSplits()) > 0 {
 				// This covers two cases.
 				// 1. The list is not big enough to be split.
 				// 2. This key is storing part of a multi-part list. Write each individual
@@ -370,7 +365,9 @@ func (m *mapper) processReqCh(ctx context.Context) error {
 					return err
 				}
 				for _, kv := range kvs {
-					if err := toBuffer(kv, kv.Version); err != nil {
+					version := kv.Version
+					kv.Version = m.restoreTs
+					if err := toBuffer(kv, version); err != nil {
 						return err
 					}
 				}
@@ -384,22 +381,73 @@ func (m *mapper) processReqCh(ctx context.Context) error {
 				if err := update.Unmarshal(kv.Value); err != nil {
 					return err
 				}
+				update.TypeName = x.GalaxyAttr(update.TypeName)
 				for _, sch := range update.Fields {
 					sch.Predicate = x.GalaxyAttr(sch.Predicate)
 				}
 				kv.Value, err = update.Marshal()
 				return err
 			}
-			if in.isOld && parsedKey.IsType() {
-				if err := appendNamespace(); err != nil {
-					glog.Errorf("Unable to (un)marshal type: %+v. Err=%v\n", parsedKey, err)
+			changeFormat := func() error {
+				// In the backup taken on 2103, we have the schemaUpdate.Predicate in format
+				// <namespace 8 bytes>|<attribute>. That had issues with JSON marshalling.
+				// So, we switched over to the format <namespace hex string>-<attribute>.
+				var err error
+				if parsedKey.IsSchema() {
+					var update pb.SchemaUpdate
+					if err := update.Unmarshal(kv.Value); err != nil {
+						return err
+					}
+					if update.Predicate, err = x.AttrFrom2103(update.Predicate); err != nil {
+						return err
+					}
+					kv.Value, err = update.Marshal()
+					return err
+				}
+				if parsedKey.IsType() {
+					var update pb.TypeUpdate
+					if err := update.Unmarshal(kv.Value); err != nil {
+						return err
+					}
+					if update.TypeName, err = x.AttrFrom2103(update.TypeName); err != nil {
+						return err
+					}
+					for _, sch := range update.Fields {
+						if sch.Predicate, err = x.AttrFrom2103(sch.Predicate); err != nil {
+							return err
+						}
+					}
+					kv.Value, err = update.Marshal()
+					return err
+				}
+				return nil
+			}
+			// We changed the format of predicate in 2103 and 2105. SchemaUpdate and TypeUpdate have
+			// predicate stored within them, so they also need to be updated accordingly.
+			switch in.version {
+			case 0:
+				if parsedKey.IsType() {
+					if err := appendNamespace(); err != nil {
+						glog.Errorf("Unable to (un)marshal type: %+v. Err=%v\n", parsedKey, err)
+						return nil
+					}
+				}
+			case 2103:
+				if err := changeFormat(); err != nil {
+					glog.Errorf("Unable to change format for: %+v Err=%+v", parsedKey, err)
 					return nil
 				}
+			default:
+				// for manifest versions >= 2015, do nothing.
 			}
+			// Reset the StreamId to prevent ordering issues while writing to stream writer.
+			kv.StreamId = 0
 			// Schema and type keys are not stored in an intermediate format so their
 			// value can be written as is.
+			version := kv.Version
+			kv.Version = m.restoreTs
 			kv.Key = restoreKey
-			if err := toBuffer(kv, kv.Version); err != nil {
+			if err := toBuffer(kv, version); err != nil {
 				return err
 			}
 
@@ -553,6 +601,15 @@ func (m *mapper) Map(r io.Reader, in *loadBackupInput) error {
 type mapResult struct {
 	maxUid uint64
 	maxNs  uint64
+
+	// shouldDropAll is used for incremental restores. In case of normal restore, we just don't
+	// process the backups after encountering a drop operation (while iterating from latest
+	// to the oldest baskup). But for incremental restore if a drop operation is encountered, we
+	// need to call a dropAll, so that the data written in the DB because of a normal restore is
+	// cleaned up before an incremental restore.
+	shouldDropAll bool
+	dropAttr      map[string]struct{}
+	dropNs        map[uint64]struct{}
 }
 
 // 1. RunMapper creates a mapper object
@@ -614,14 +671,21 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) (*mapResult, error) {
 	dropAll := false
 	dropAttr := make(map[string]struct{})
 	dropNs := make(map[uint64]struct{})
+	var maxBannedNs uint64
 
 	// manifests are ordered as: latest..full
 	for i, manifest := range manifests {
+
+		// We only need to consider the incremental backups.
+		if manifest.BackupNum < req.IncrementalFrom {
+			break
+		}
+
 		// A dropAll or DropData operation is encountered. No need to restore previous backups.
 		if dropAll {
 			break
 		}
-		if manifest.Since == 0 || len(manifest.Groups) == 0 {
+		if manifest.ValidReadTs() == 0 || len(manifest.Groups) == 0 {
 			continue
 		}
 		for gid := range manifest.Groups {
@@ -633,7 +697,7 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) (*mapResult, error) {
 
 			// Only restore the predicates that were assigned to this group at the time
 			// of the last backup.
-			file := filepath.Join(manifest.Path, backupName(manifest.Since, gid))
+			file := filepath.Join(manifest.Path, backupName(manifest.ValidReadTs(), gid))
 			br := readerFrom(h, file).WithEncryption(keys.EncKey).WithCompression(manifest.Compression)
 			if br.err != nil {
 				return nil, errors.Wrap(br.err, "newBackupReader")
@@ -652,9 +716,9 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) (*mapResult, error) {
 				localDropNs[ns] = struct{}{}
 			}
 			in := &loadBackupInput{
-				preds:  predSet,
-				dropNs: localDropNs,
-				isOld:  manifest.Version == 0,
+				preds:   predSet,
+				dropNs:  localDropNs,
+				version: manifest.Version,
 				// Only map the schema keys corresponding to the latest backup.
 				keepSchema: i == 0,
 			}
@@ -673,6 +737,11 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) (*mapResult, error) {
 			case pb.DropOperation_ALL:
 				dropAll = true
 			case pb.DropOperation_DATA:
+				if op.DropValue == "" {
+					// In 2103, we do not support namespace level drop data.
+					dropAll = true
+					continue
+				}
 				ns, err := strconv.ParseUint(op.DropValue, 0, 64)
 				if err != nil {
 					return nil, errors.Wrap(err, "Map phase failed to parse namespace")
@@ -689,7 +758,9 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) (*mapResult, error) {
 				if err := pstore.BanNamespace(ns); err != nil {
 					return nil, errors.Wrapf(err, "Map phase failed to ban namespace: %d", ns)
 				}
+				maxBannedNs = x.Max(maxBannedNs, ns)
 			}
+			glog.Infof("[MAP] Processed manifest %d\n", manifest.BackupNum)
 		}
 	} // done with all the manifests.
 
@@ -702,8 +773,13 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) (*mapResult, error) {
 		return nil, errors.Wrap(err, "failed to flush the mapper")
 	}
 	mapRes := &mapResult{
-		maxUid: mapper.maxUid,
-		maxNs:  mapper.maxNs,
+		maxUid:        mapper.maxUid,
+		maxNs:         mapper.maxNs,
+		shouldDropAll: dropAll,
+		dropAttr:      dropAttr,
+		dropNs:        dropNs,
 	}
+	// update the maxNsId considering banned namespaces.
+	mapRes.maxNs = x.Max(mapRes.maxNs, maxBannedNs)
 	return mapRes, nil
 }

@@ -53,19 +53,37 @@ type Options struct {
 	//
 	// extensions bool - Will be set to see extensions in GraphQL results
 	// debug bool - Will enable debug mode in GraphQL.
-	// lambda-url string - Stores the URL of lambda functions for custom GraphQL resolvers
-	// 			The configured lambda-url can have a parameter `$ns`,
+	// poll-interval duration - The polling interval for graphql subscription.
+	GraphQL GraphQLOptions
+
+	// Lambda options:
+	// url string - Stores the URL of lambda functions for custom GraphQL resolvers
+	// 			The configured url can have a parameter `$ns`,
 	//			which should be replaced with the correct namespace value at runtime.
 	// 	===========================================================================================
-	// 	|                lambda-url                | $ns |           namespacedLambdaUrl          |
+	// 	|                url                | $ns |           namespacedLambdaUrl          |
 	// 	|==========================================|=====|========================================|
 	// 	| http://localhost:8686/graphql-worker/$ns |  1  | http://localhost:8686/graphql-worker/1 |
 	// 	| http://localhost:8686/graphql-worker     |  1  | http://localhost:8686/graphql-worker   |
 	// 	|=========================================================================================|
 	//
-	// poll-interval duration - The polling interval for graphql subscription.
-	GraphQL      *z.SuperFlag
-	GraphQLDebug bool
+	// Update(Aug 2021): Now, alpha spins up lambda servers based on cnt and port sub-flags.
+	// Also, no special handling of namespace is needed from lambda as we send the script
+	// along with request body to lambda server. If url is set, these two flags are ignored.
+	Lambda LambdaOptions
+}
+
+type GraphQLOptions struct {
+	Introspection bool
+	Debug         bool
+	Extensions    bool
+	PollInterval  time.Duration
+}
+
+type LambdaOptions struct {
+	Url  string
+	Num  uint32
+	Port uint32
 }
 
 // Config stores the global instance of this package's options.

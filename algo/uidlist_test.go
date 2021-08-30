@@ -19,17 +19,18 @@ package algo
 import (
 	"testing"
 
+	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/stretchr/testify/require"
 )
 
 func newList(data []uint64) *pb.List {
-	return &pb.List{Uids: data}
+	return &pb.List{SortedUids: data}
 }
 
 func TestApplyFilterUint(t *testing.T) {
 	l := []uint64{1, 2, 3, 4, 5}
 	u := newList(l)
 	ApplyFilter(u, func(a uint64, idx int) bool { return (l[idx] % 2) == 1 })
-	require.Equal(t, []uint64{1, 3, 5}, u.Uids)
+	require.Equal(t, []uint64{1, 3, 5}, codec.GetUids(u))
 }
