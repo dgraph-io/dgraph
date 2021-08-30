@@ -134,7 +134,8 @@ function newContext(eventTarget: GraphQLResolverEventTarget, logger: any) {
 
 var scripts = new Map();
 
-export function evaluateScript(source: string, logger: any) {
+export function evaluateScript(source: string) {
+  const logger = {logs:""}
   if(!scripts.has(source)){
     scripts.set(source, new vm.Script(source))
   }
@@ -148,6 +149,7 @@ export function evaluateScript(source: string, logger: any) {
   script.runInContext(context, {timeout: 1000});
 
   return async function(e: GraphQLEventFields): Promise<any | undefined> {
+    logger.logs = ""
     let retPromise: ResolverResponse | undefined = undefined;
     const event = {
       ...e,
@@ -171,6 +173,6 @@ export function evaluateScript(source: string, logger: any) {
     }
 
     const response = await Promise.all(resolvedArray);
-    return e.parents === null ? response[0] : response;
+    return {res: e.parents === null ? response[0] : response, logger};
   }
 }

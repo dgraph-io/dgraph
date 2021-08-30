@@ -44,28 +44,33 @@ function base64Decode(str: string) {
   }
 }
 
+var scripts = new Map()
+
 export function buildApp() {
     const app = express();
     app.use(timeout('10s'))
     app.use(express.json({limit: '32mb'}))
     app.post("/graphql-worker", async (req, res, next) => {
-        const logger = {logs: ""}
+        
         try {
           const source = base64Decode(req.body.source) || req.body.source
-          const runner = evaluateScript(source, logger)
+          if (!scripts.has(source)) {
+            scripts.set(source, evaluateScript(source))
+          }
+          const runner = scripts.get(source)
           await vm.runInNewContext(
             `runner(bodyToEvent(req.body)).then(result => {
               if(result === undefined && req.body.resolver !== '$webhook') {
                   res.status(400)
               }
-              res.json({res: result, logs: logger.logs})
+              res.json({res: result.res, logs: result.logger.logs})
             })
             `,
-            {runner, bodyToEvent, req, res, logger},
+            {runner, bodyToEvent, req, res},
             {timeout:10000}) // timeout after 10 seconds
         } catch(err) {
           res.status(500)
-          res.json({logs: logger.logs + err.toString()})
+          res.json({logs: err.toString()})
         }
     })
     return app;
