@@ -38,11 +38,6 @@ var (
 	bitMask uint64 = 0xffffffff00000000
 )
 
-//TODO(Ahsan): Need to fix this.
-func ApproxLen(bitmap []byte) int {
-	return 0
-}
-
 func ToList(rm *sroar.Bitmap) *pb.List {
 	return &pb.List{
 		Bitmap: rm.ToBufferWithCopy(),
@@ -79,7 +74,7 @@ func GetUids(l *pb.List) []uint64 {
 	if len(l.SortedUids) > 0 {
 		return l.SortedUids
 	}
-	return FromList(l).ToArray()
+	return FromListNoCopy(l).ToArray()
 }
 
 func SetUids(l *pb.List, uids []uint64) {
@@ -98,11 +93,6 @@ func BitmapToSorted(l *pb.List) {
 	}
 	l.SortedUids = FromList(l).ToArray()
 	l.Bitmap = nil
-}
-
-func And(rm *sroar.Bitmap, l *pb.List) {
-	rl := FromList(l)
-	rm.And(rl)
 }
 
 func MatrixToBitmap(matrix []*pb.List) *sroar.Bitmap {

@@ -1255,14 +1255,6 @@ func (l *List) rollup(readTs uint64, split bool) (*rollupOutput, error) {
 	return out, nil
 }
 
-// ApproxLen returns an approximate count of the UIDs in the posting list.
-func (l *List) ApproxLen() int {
-	l.RLock()
-	defer l.RUnlock()
-
-	return len(l.mutationMap) + codec.ApproxLen(l.plist.Bitmap)
-}
-
 func abs(a int) int {
 	if a < 0 {
 		return -a

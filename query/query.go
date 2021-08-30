@@ -2140,7 +2140,8 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 				rch <- err
 				return
 			}
-			codec.And(sg.DestMap, sg.SrcUIDs)
+			srcBm := codec.FromListNoCopy(sg.SrcUIDs)
+			sg.DestMap.And(srcBm)
 			rch <- nil
 			return
 		}
