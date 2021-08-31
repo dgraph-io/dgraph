@@ -47,7 +47,11 @@ func init() {
 	validator.AddRule("Check variable type is correct", variableTypeCheck)
 	validator.AddRule("Check arguments of cascade directive", directiveArgumentsCheck)
 	validator.AddRule("Check range for Int type", intRangeCheck)
-	validator.AddRule("Input Coercion to List", listInputCoercion)
+	// Graphql accept both single object and array of objects as value when the schema is defined
+	// as an array. listInputCoercion changes the value to array if the single object is provided.
+	// Changing the value can mess up with the other data validation rules hence we are setting
+	// up the order to a high value so that it will be executed last.
+	validator.AddRuleWithOrder("Input Coercion to List", 100, listInputCoercion)
 	validator.AddRule("Check filter functions", filterCheck)
 
 }
