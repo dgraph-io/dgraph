@@ -53,12 +53,13 @@ export function buildApp() {
       res.json("HEALTHY")
     })
     app.post("/graphql-worker", async (req, res, next) => {
+        const ns = req.body.ns || 0
+        const logPrefix = `[LAMBDA-${ns}] `
         try {
           const source = base64Decode(req.body.source) || req.body.source
-          const ns = req.body.ns || 0
           const key = ns + source
           if (!scripts.has(key)) {
-            scripts.set(key, evaluateScript(source, `[LAMBDA-${ns}] `))
+            scripts.set(key, evaluateScript(source, logPrefix))
           }
           const runner = scripts.get(key)
           const result = await runner(bodyToEvent(req.body));
@@ -67,6 +68,7 @@ export function buildApp() {
           }
           res.json(result)
         } catch(err) {
+          console.error(logPrefix + err.toString())
           next(err)
         }
     })

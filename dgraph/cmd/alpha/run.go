@@ -530,7 +530,7 @@ func setupLambdaServer(closer *z.Closer) {
 	}
 
 	// Monitor the lambda servers.
-	client := http.Client{Timeout: 10 * time.Second}
+	client := http.Client{Timeout: 1 * time.Second}
 	go func() {
 		ticker := time.NewTicker(2 * time.Second)
 		defer ticker.Stop()
