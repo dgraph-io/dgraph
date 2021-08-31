@@ -148,6 +148,9 @@ func parseDuration(r *http.Request, name string) (time.Duration, error) {
 // This method should just build the request and proxy it to the Query method of dgraph.Server.
 // It can then encode the response as appropriate before sending it back to the user.
 func queryHandler(w http.ResponseWriter, r *http.Request) {
+	if glog.V(2) {
+		glog.Infof("HTTP Request headers: %+v\n", r.Header)
+	}
 	if commonHandler(w, r) {
 		return
 	}
@@ -283,6 +286,9 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		// If client crashes before server could write response, writeResponse will error out,
 		// Check2 will fatal and shut the server down in such scenario. We don't want that.
 		glog.Errorln("Unable to write response: ", err)
+	}
+	if glog.V(2) {
+		glog.Infof("HTTP response headers: %+v\n", w.Header)
 	}
 }
 
