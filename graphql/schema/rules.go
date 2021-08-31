@@ -47,7 +47,7 @@ func init() {
 	validator.AddRule("Check variable type is correct", variableTypeCheck)
 	validator.AddRule("Check arguments of cascade directive", directiveArgumentsCheck)
 	validator.AddRule("Check range for Int type", intRangeCheck)
-	validator.AddRule("Input Coercion to List", listInputCoercion)
+	validator.AddRuleWithOrder("Input Coercion to List", 100, listInputCoercion)
 	validator.AddRule("Check filter functions", filterCheck)
 
 }
