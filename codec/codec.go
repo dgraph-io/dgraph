@@ -134,7 +134,7 @@ func Merge(matrix []*pb.List) *sroar.Bitmap {
 
 func FromList(l *pb.List) *sroar.Bitmap {
 	if l == nil {
-		return nil
+		return sroar.NewBitmap()
 	}
 	// Keep the check for bitmap before sortedUids because we expect to have bitmap very often
 	if len(l.Bitmap) > 0 {
@@ -145,13 +145,12 @@ func FromList(l *pb.List) *sroar.Bitmap {
 		bm.SetMany(l.SortedUids)
 		return bm
 	}
-	// TODO: Return nil here and handle nil for all the APIs in sroar itself.
 	return sroar.NewBitmap()
 }
 
 func FromListNoCopy(l *pb.List) *sroar.Bitmap {
 	if l == nil {
-		return nil
+		return sroar.NewBitmap()
 	}
 	// Keep the check for bitmap before sortedUids because we expect to have bitmap very often
 	if len(l.Bitmap) > 0 {
@@ -162,7 +161,7 @@ func FromListNoCopy(l *pb.List) *sroar.Bitmap {
 		bm.SetMany(l.SortedUids)
 		return bm
 	}
-	return nil
+	return sroar.NewBitmap()
 }
 
 func FromBytes(buf []byte) *sroar.Bitmap {
