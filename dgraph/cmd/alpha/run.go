@@ -486,6 +486,7 @@ func setupLambdaServer(closer *z.Closer) {
 
 	type lambda struct {
 		cmd        *exec.Cmd
+		active     bool
 		lastActive int64
 		health     string
 		port       int
@@ -495,13 +496,13 @@ func setupLambdaServer(closer *z.Closer) {
 	for i := 0; i < num; i++ {
 		lambdas = append(lambdas, &lambda{
 			port:   port + i,
-			health: fmt.Sprintf("http://localhost:%d/health", port+i),
+			health: fmt.Sprintf("http://127.0.0.1:%d/health", port+i),
 		})
 	}
 
 	// Entry point of the script is index.js.
 	filename := filepath.Join(x.WorkerConfig.TmpDir, "index.js")
-	dgraphUrl := fmt.Sprintf("http://localhost:%d", httpPort())
+	dgraphUrl := fmt.Sprintf("http://127.0.0.1:%d", httpPort())
 
 	glog.Infoln("Setting up lambda servers")
 	for i := range lambdas {
@@ -518,6 +519,7 @@ func setupLambdaServer(closer *z.Closer) {
 					cmd.Stderr = os.Stderr
 					lambdas[i].cmd = cmd
 					lambdas[i].lastActive = time.Now().UnixNano()
+					lambdas[i].active = true
 					glog.Infof("Running node command: %+v\n", cmd)
 					if err := cmd.Run(); err != nil {
 						glog.Errorf("Lambda server at port: %d stopped with error: %v",
@@ -529,7 +531,8 @@ func setupLambdaServer(closer *z.Closer) {
 		}(i)
 	}
 
-	// Monitor the lambda servers.
+	// Monitor the lambda servers. If the server is unresponsive for more than 10 seconds,
+	// restart it.
 	client := http.Client{Timeout: 1 * time.Second}
 	go func() {
 		ticker := time.NewTicker(2 * time.Second)
@@ -541,12 +544,15 @@ func setupLambdaServer(closer *z.Closer) {
 			case <-ticker.C:
 				timestamp := time.Now().UnixNano()
 				for _, l := range lambdas {
+					if !l.active {
+						continue
+					}
 					resp, err := client.Get(l.health)
 					if err != nil || resp.StatusCode != 200 {
-						// If the server has been unresponsive for more than 10 seconds, restart it.
 						if time.Duration(timestamp-l.lastActive) > 10*time.Second {
 							glog.Warningf("Lambda Server at port: %d not responding."+
 								" Killed it with err: %v", l.port, l.cmd.Process.Kill())
+							l.active = false
 						}
 						continue
 					}

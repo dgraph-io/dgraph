@@ -15,7 +15,6 @@
  */
 
 import express from "express";
-import timeout from "connect-timeout";
 import atob from "atob";
 import btoa from "btoa";
 import { evaluateScript } from './evaluate-script'
@@ -67,9 +66,9 @@ export function buildApp() {
               res.status(400)
           }
           res.json(result)
-        } catch(err) {
-          console.error(logPrefix + err.toString())
-          next(err)
+        } catch(e) {
+          console.error(logPrefix + e.toString() + JSON.stringify(e.stack))
+          next(e)
         }
     })
     return app;
