@@ -19,7 +19,6 @@ package x
 import (
 	"bufio"
 	"bytes"
-	builtinGzip "compress/gzip"
 	"context"
 	"crypto/tls"
 	"encoding/json"
@@ -585,10 +584,13 @@ func WriteResponse(w http.ResponseWriter, r *http.Request, b []byte) (int, error
 	var out io.Writer = w
 
 	if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
-		w.Header().Set("Content-Encoding", "gzip")
-		gzw := builtinGzip.NewWriter(w)
-		defer gzw.Close()
-		out = gzw
+		// w.Header().Set("Content-Encoding", "gzip")
+		glog.Infof("HTTP: Ignoring Accept-Encoding")
+		// gzw := builtinGzip.NewWriter(w)
+		// defer gzw.Close()
+		// out = gzw
+	} else {
+		glog.Infof(`HTTP: Did not get "Accept-Encoding" header. Not compressing response.`)
 	}
 
 	bytesWritten, err := out.Write(b)
