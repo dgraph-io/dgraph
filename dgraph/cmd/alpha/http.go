@@ -287,9 +287,6 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		// Check2 will fatal and shut the server down in such scenario. We don't want that.
 		glog.Errorln("Unable to write response: ", err)
 	}
-	if glog.V(2) {
-		glog.Infof("HTTP response headers: %+v\n", w.Header)
-	}
 }
 
 func mutationHandler(w http.ResponseWriter, r *http.Request) {

@@ -596,6 +596,9 @@ func WriteResponse(w http.ResponseWriter, r *http.Request, b []byte) (int, error
 		return 0, err
 	}
 	w.Header().Set("Content-Length", strconv.FormatInt(int64(bytesWritten), 10))
+	if glog.V(2) {
+		glog.Infof("HTTP response headers: %+v\n", w.Header)
+	}
 	return bytesWritten, nil
 }
 
