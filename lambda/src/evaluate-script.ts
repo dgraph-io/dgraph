@@ -96,6 +96,7 @@ function newConsole(prefix: string) {
   return _console
 }
 
+const fetchTimeout = 10000 // 10s
 function fetchWithMiddleWare(url: RequestInfo, init?: RequestInit): Promise<Response> {
   // Override the default fetch to blacklist certain IPs.
   try {
@@ -117,8 +118,8 @@ function fetchWithMiddleWare(url: RequestInfo, init?: RequestInit): Promise<Resp
   if(init === undefined) {
     init = {}
   }
-  if(init.timeout === undefined || init.timeout < 10000) {
-    init.timeout = 10000
+  if(init.timeout === undefined || init.timeout > fetchTimeout) {
+    init.timeout = fetchTimeout
   }
   return fetch(url, init)
 }
