@@ -705,7 +705,8 @@ func main() {
 		"./docker-compose.yml", "name of output file")
 	cmd.PersistentFlags().BoolVarP(&opts.LocalBin, "local", "l", true,
 		"use locally-compiled binary if true, otherwise use binary from docker container")
-	cmd.PersistentFlags().StringVar(&opts.Image, "image", "dgraph/dgraph",
+	// TODO(Naman): Change this to dgraph/dgraph once the lambda changes are released.
+	cmd.PersistentFlags().StringVar(&opts.Image, "image", "public.ecr.aws/n1e3y0t3/dgraph-lambda",
 		"Docker image for alphas and zeros.")
 	cmd.PersistentFlags().StringVarP(&opts.Tag, "tag", "t", "latest",
 		"Docker tag for the --image image. Requires -l=false to use binary from docker container.")

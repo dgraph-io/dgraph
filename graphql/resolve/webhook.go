@@ -32,6 +32,7 @@ import (
 
 type webhookPayload struct {
 	Source     string             `json:"source"`
+	Namespace  uint64             `json:"namespace"`
 	Resolver   string             `json:"resolver"`
 	AccessJWT  string             `json:"X-Dgraph-AccessToken,omitempty"`
 	AuthHeader *authHeaderPayload `json:"authHeader,omitempty"`
@@ -83,6 +84,7 @@ func sendWebhookEvent(ctx context.Context, m schema.Mutation, commitTs uint64, r
 
 	payload := webhookPayload{
 		Source:     worker.GetLambdaScript(ns),
+		Namespace:  ns,
 		Resolver:   "$webhook",
 		AccessJWT:  accessJWT,
 		AuthHeader: authHeader,

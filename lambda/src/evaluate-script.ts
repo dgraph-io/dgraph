@@ -32,11 +32,21 @@ function getParents(e: GraphQLEventFields): (Record<string,any>|null)[] {
 }
 
 class GraphQLResolverEventTarget extends EventTarget {
+  console: Console;
+  constructor(c: Console) {
+    super();
+    this.console = c
+  }
   addMultiParentGraphQLResolvers(resolvers: {[key: string]: (e: GraphQLEvent) => ResolverResponse}) {
     for (const [name, resolver] of Object.entries(resolvers)) {
       this.addEventListener(name, e => {
-        const event = e as unknown as GraphQLEvent;
-        event.respondWith(resolver(event))
+        try {
+          const event = e as unknown as GraphQLEvent;
+          event.respondWith(resolver(event))
+        } catch(e) {
+          this.console.error(e.toString() + JSON.stringify(e.stack))
+          return
+        }
       })
     }
   }
@@ -44,8 +54,13 @@ class GraphQLResolverEventTarget extends EventTarget {
   addGraphQLResolvers(resolvers: { [key: string]: (e: GraphQLEventWithParent) => (any | Promise<any>) }) {
     for (const [name, resolver] of Object.entries(resolvers)) {
       this.addEventListener(name, e => {
-        const event = e as unknown as GraphQLEvent;
-        event.respondWith(getParents(event).map(parent => resolver({...event, parent})))
+        try {
+          const event = e as unknown as GraphQLEvent;
+          event.respondWith(getParents(event).map(parent => resolver({...event, parent})))
+        } catch(e) {
+          this.console.error(e.toString() + JSON.stringify(e.stack))
+          return
+        }
       })
     }
   }
@@ -53,54 +68,66 @@ class GraphQLResolverEventTarget extends EventTarget {
   addWebHookResolvers(resolvers: { [key: string]: (e: WebHookGraphQLEvent) => (any | Promise<any>) }) {
     for (const [name, resolver] of Object.entries(resolvers)) {
       this.addEventListener(name, e => {
-        const event = e as unknown as WebHookGraphQLEvent;
-        event.respondWith(resolver(event))
+        try {
+          const event = e as unknown as WebHookGraphQLEvent;
+          event.respondWith(resolver(event))
+        } catch(e) {
+          this.console.error(e.toString() + JSON.stringify(e.stack))
+          return
+        }
       })
     }
   }
 }
 
-function newContext(eventTarget: GraphQLResolverEventTarget, logger: any) {
+function newConsole(prefix: string) {
+  // Override the console object to append prefix to the logs.
+  const appendPrefix = function(fn: (message?: any, ...optionalParams: any[]) => void, prefix: string) {
+    return function() {
+      fn.apply(console, [prefix + Array.from(arguments).map(arg => JSON.stringify(arg)).join(" ")])
+    }
+  }
+  const _console = Object.assign({}, console)
+  _console.debug = appendPrefix(console.debug, prefix)
+  _console.error = appendPrefix(console.error, prefix)
+  _console.info = appendPrefix(console.info, prefix)
+  _console.log = appendPrefix(console.log, prefix)
+  _console.warn = appendPrefix(console.warn, prefix)
+  return _console
+}
+
+const fetchTimeout = 10000 // 10s
+function fetchWithMiddleWare(url: RequestInfo, init?: RequestInit): Promise<Response> {
   // Override the default fetch to blacklist certain IPs.
-  const _fetch = function(url: RequestInfo, init?: RequestInit): Promise<Response> {
-    try {
-      const u = new URL(url.toString())
-      if (isIp(u.hostname) || u.hostname == "localhost") {
-        return new Promise((_resolve, reject) => {
-          reject("Cannot send request to IP: " + url.toString()
-          + ". Please use domain names instead.")
-          return
-        })
-      }
-    } catch(error) {
+  try {
+    const u = new URL(url.toString())
+    if (isIp(u.hostname) || u.hostname == "localhost") {
       return new Promise((_resolve, reject) => {
-        reject(error)
+        reject("Cannot send request to IP: " + url.toString()
+        + ". Please use domain names instead.")
         return
       })
     }
-
-    return fetch(url, init)
+  } catch(error) {
+    return new Promise((_resolve, reject) => {
+      reject(error)
+      return
+    })
   }
-
-  function appendLogs(){
-    return function() {
-      for(const arg of Array.from(arguments)) {
-        logger.logs += JSON.stringify(arg) + " "
-      }
-      logger.logs += "\n"
-    }
+  // Add a timeout of 10s.
+  if(init === undefined) {
+    init = {}
   }
-  // Override the console object to append to logger.logs.
-  const _console = Object.assign({}, console)
-  _console.debug = appendLogs()
-  _console.error = appendLogs()
-  _console.info = appendLogs()
-  _console.log = appendLogs()
-  _console.warn = appendLogs()
+  if(init.timeout === undefined || init.timeout > fetchTimeout) {
+    init.timeout = fetchTimeout
+  }
+  return fetch(url, init)
+}
 
+function newContext(eventTarget: GraphQLResolverEventTarget, c: Console) {
   return vm.createContext({
     // From fetch
-    fetch:_fetch,
+    fetch:fetchWithMiddleWare,
     Request,
     Response,
     Headers,
@@ -119,7 +146,7 @@ function newContext(eventTarget: GraphQLResolverEventTarget, logger: any) {
     TextEncoder,
 
     // Debugging
-    console:_console,
+    console:c,
 
     // EventTarget
     self: eventTarget,
@@ -131,16 +158,11 @@ function newContext(eventTarget: GraphQLResolverEventTarget, logger: any) {
   });
 }
 
-
-var scripts = new Map();
-
-export function evaluateScript(source: string, logger: any) {
-  if(!scripts.has(source)){
-    scripts.set(source, new vm.Script(source))
-  }
-  const script = scripts.get(source)
-  const target = new GraphQLResolverEventTarget();
-  const context = newContext(target, logger)
+export function evaluateScript(source: string, prefix: string) {
+  const script = new vm.Script(source)
+  const _console = newConsole(prefix);
+  const target = new GraphQLResolverEventTarget(_console);
+  const context = newContext(target, _console)
   // Using the timeout or breakOnSigint options will result in new event loops and corresponding
   // threads being started, which have a non-zero performance overhead.
   // Ref: https://nodejs.org/api/vm.html#vm_script_runincontext_contextifiedobject_options

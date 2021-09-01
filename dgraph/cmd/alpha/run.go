@@ -26,7 +26,7 @@ import (
 	"math"
 	"net"
 	"net/http"
-	_ "net/http/pprof" // http profiler
+	_ "net/http/pprof" // http profile
 	"net/url"
 	"os"
 	"os/exec"
@@ -243,6 +243,8 @@ they form a Raft group and provide synchronous replication.
 			"Number of JS lambda servers to be launched by alpha.").
 		Flag("port",
 			"The starting port at which the lambda server listens.").
+		Flag("restart-after",
+			"Restarts the lambda server after given duration of unresponsiveness").
 		String())
 
 	flag.String("cdc", worker.CDCDefaults, z.NewSuperFlagHelp(worker.CDCDefaults).
@@ -468,11 +470,7 @@ func setupLambdaServer(closer *z.Closer) {
 		return
 	}
 
-	glog.Infoln("Setting up lambda servers")
-	dgraphUrl := fmt.Sprintf("http://localhost:%d", httpPort())
-	// Entry point of the script is index.js.
-	filename := filepath.Join(x.WorkerConfig.TmpDir, "index.js")
-
+	// Copy over all the embedded files to actual files.
 	dir := "dist"
 	files, err := jsLambda.ReadDir(dir)
 	x.Check(err)
@@ -488,28 +486,84 @@ func setupLambdaServer(closer *z.Closer) {
 		x.Check(file.Close())
 	}
 
+	type lambda struct {
+		cmd        *exec.Cmd
+		active     bool
+		lastActive int64
+		health     string
+		port       int
+	}
+
+	lambdas := make([]*lambda, 0, num)
 	for i := 0; i < num; i++ {
+		lambdas = append(lambdas, &lambda{
+			port:   port + i,
+			health: fmt.Sprintf("http://127.0.0.1:%d/health", port+i),
+		})
+	}
+
+	// Entry point of the script is index.js.
+	filename := filepath.Join(x.WorkerConfig.TmpDir, "index.js")
+	dgraphUrl := fmt.Sprintf("http://127.0.0.1:%d", httpPort())
+
+	glog.Infoln("Setting up lambda servers")
+	for i := range lambdas {
 		go func(i int) {
 			for {
 				select {
 				case <-closer.HasBeenClosed():
-					break
+					return
 				default:
 					cmd := exec.CommandContext(closer.Ctx(), "node", filename)
-					cmd.Env = append(cmd.Env, fmt.Sprintf("PORT=%d", port+i))
+					cmd.Env = append(cmd.Env, fmt.Sprintf("PORT=%d", lambdas[i].port))
 					cmd.Env = append(cmd.Env, fmt.Sprintf("DGRAPH_URL="+dgraphUrl))
 					cmd.Stdout = os.Stdout
 					cmd.Stderr = os.Stderr
+					lambdas[i].cmd = cmd
+					lambdas[i].lastActive = time.Now().UnixNano()
+					lambdas[i].active = true
 					glog.Infof("Running node command: %+v\n", cmd)
-					err := cmd.Run()
-					if err != nil {
-						glog.Errorf("Lambda server idx: %d stopped with error %v", i, err)
+					if err := cmd.Run(); err != nil {
+						glog.Errorf("Lambda server at port: %d stopped with error: %v",
+							lambdas[i].port, err)
 					}
 					time.Sleep(2 * time.Second)
 				}
 			}
 		}(i)
 	}
+
+	// Monitor the lambda servers. If the server is unresponsive for more than restart-after time,
+	// restart it.
+	client := http.Client{Timeout: 1 * time.Second}
+	go func() {
+		ticker := time.NewTicker(2 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-closer.HasBeenClosed():
+				return
+			case <-ticker.C:
+				timestamp := time.Now().UnixNano()
+				for _, l := range lambdas {
+					if !l.active {
+						continue
+					}
+					resp, err := client.Get(l.health)
+					if err != nil || resp.StatusCode != 200 {
+						if time.Duration(timestamp-l.lastActive) > x.Config.Lambda.RestartAfter {
+							glog.Warningf("Lambda Server at port: %d not responding."+
+								" Killed it with err: %v", l.port, l.cmd.Process.Kill())
+							l.active = false
+						}
+						continue
+					}
+					resp.Body.Close()
+					l.lastActive = timestamp
+				}
+			}
+		}
+	}()
 }
 
 func serveGRPC(l net.Listener, tlsCfg *tls.Config, closer *z.Closer) {
@@ -809,9 +863,10 @@ func run() {
 	lambda := z.NewSuperFlag(Alpha.Conf.GetString("lambda")).MergeAndCheckDefault(
 		worker.LambdaDefaults)
 	x.Config.Lambda = x.LambdaOptions{
-		Url:  lambda.GetString("url"),
-		Num:  lambda.GetUint32("num"),
-		Port: lambda.GetUint32("port"),
+		Url:          lambda.GetString("url"),
+		Num:          lambda.GetUint32("num"),
+		Port:         lambda.GetUint32("port"),
+		RestartAfter: lambda.GetDuration("restart-after"),
 	}
 	if x.Config.Lambda.Url != "" {
 		graphqlLambdaUrl, err := url.Parse(x.Config.Lambda.Url)

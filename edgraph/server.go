@@ -1564,7 +1564,6 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 		return resp, errors.Wrap(err, "")
 	}
 
-	var logs []string
 	if len(er.SchemaNode) > 0 || len(er.Types) > 0 {
 		if err = authorizeSchemaQuery(ctx, &er); err != nil {
 			return resp, err
@@ -1587,7 +1586,7 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 	} else if qc.req.RespFormat == api.Request_RDF {
 		resp.Rdf, err = query.ToRDF(qc.latency, er.Subgraphs)
 	} else {
-		resp.Json, logs, err = query.ToJson(ctx, qc.latency, er.Subgraphs, qc.gqlField)
+		resp.Json, err = query.ToJson(ctx, qc.latency, er.Subgraphs, qc.gqlField)
 	}
 	// if err is just some error from GraphQL encoding, then we need to continue the normal
 	// execution ignoring the error as we still need to assign metrics and latency info to resp.
@@ -1642,7 +1641,6 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 
 	resp.Metrics = &api.Metrics{
 		NumUids: er.Metrics,
-		Logs:    logs,
 	}
 
 	var total uint64
