@@ -81,9 +81,10 @@ type GraphQLOptions struct {
 }
 
 type LambdaOptions struct {
-	Url  string
-	Num  uint32
-	Port uint32
+	Url          string
+	Num          uint32
+	Port         uint32
+	RestartAfter time.Duration
 }
 
 // Config stores the global instance of this package's options.

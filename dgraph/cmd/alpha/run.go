@@ -243,6 +243,8 @@ they form a Raft group and provide synchronous replication.
 			"Number of JS lambda servers to be launched by alpha.").
 		Flag("port",
 			"The starting port at which the lambda server listens.").
+		Flag("restart-after",
+			"Restarts the lambda server after given duration of unresponsiveness").
 		String())
 
 	flag.String("cdc", worker.CDCDefaults, z.NewSuperFlagHelp(worker.CDCDefaults).
@@ -531,7 +533,7 @@ func setupLambdaServer(closer *z.Closer) {
 		}(i)
 	}
 
-	// Monitor the lambda servers. If the server is unresponsive for more than 10 seconds,
+	// Monitor the lambda servers. If the server is unresponsive for more than restart-after time,
 	// restart it.
 	client := http.Client{Timeout: 1 * time.Second}
 	go func() {
@@ -549,7 +551,7 @@ func setupLambdaServer(closer *z.Closer) {
 					}
 					resp, err := client.Get(l.health)
 					if err != nil || resp.StatusCode != 200 {
-						if time.Duration(timestamp-l.lastActive) > 10*time.Second {
+						if time.Duration(timestamp-l.lastActive) > x.Config.Lambda.RestartAfter {
 							glog.Warningf("Lambda Server at port: %d not responding."+
 								" Killed it with err: %v", l.port, l.cmd.Process.Kill())
 							l.active = false
@@ -861,9 +863,10 @@ func run() {
 	lambda := z.NewSuperFlag(Alpha.Conf.GetString("lambda")).MergeAndCheckDefault(
 		worker.LambdaDefaults)
 	x.Config.Lambda = x.LambdaOptions{
-		Url:  lambda.GetString("url"),
-		Num:  lambda.GetUint32("num"),
-		Port: lambda.GetUint32("port"),
+		Url:          lambda.GetString("url"),
+		Num:          lambda.GetUint32("num"),
+		Port:         lambda.GetUint32("port"),
+		RestartAfter: lambda.GetDuration("restart-after"),
 	}
 	if x.Config.Lambda.Url != "" {
 		graphqlLambdaUrl, err := url.Parse(x.Config.Lambda.Url)
