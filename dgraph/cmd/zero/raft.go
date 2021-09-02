@@ -18,6 +18,7 @@ package zero
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/binary"
 	"fmt"
 	"log"
@@ -84,9 +85,15 @@ func (n *node) AmLeader() bool {
 }
 
 // {2 bytes Node ID} {4 bytes for random} {2 bytes zero}
-func (n *node) initProposalKey(id uint64) {
+func (n *node) initProposalKey(id uint64) error {
 	x.AssertTrue(id != 0)
-	proposalKey = uint64(n.Id)<<48 | uint64(z.FastRand())<<16
+	randBytes := make([]byte, 8)
+	if _, err := rand.Read(randBytes); err != nil {
+		return err
+	}
+	randNum := binary.BigEndian.Uint64(randBytes)
+	proposalKey = uint64(n.Id)<<48 | uint64(randNum)<<16
+	return nil
 }
 
 func (n *node) uniqueKey() uint64 {
@@ -606,7 +613,7 @@ func (n *node) checkForCIDInEntries() (bool, error) {
 }
 
 func (n *node) initAndStartNode() error {
-	n.initProposalKey(n.Id)
+	x.Check(n.initProposalKey(n.Id))
 	_, restart, err := n.PastLife()
 	x.Check(err)
 
