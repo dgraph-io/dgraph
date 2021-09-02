@@ -129,7 +129,7 @@ func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error
 				} else {
 					ul := sg.uidMatrix[mIdx]
 					ur := codec.FromListNoCopy(ul)
-					if ur == nil {
+					if ur.IsEmpty() {
 						continue
 					}
 
