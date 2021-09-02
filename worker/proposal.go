@@ -18,6 +18,7 @@ package worker
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/binary"
 	"sync"
 	"sync/atomic"
@@ -27,7 +28,6 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/ristretto/z"
 
 	ostats "go.opencensus.io/stats"
 	"go.opencensus.io/tag"
@@ -112,9 +112,14 @@ func (rl *rateLimiter) decr(retry int) {
 var proposalKey uint64
 
 // {2 bytes Node ID} {4 bytes for random} {2 bytes zero}
-func initProposalKey(id uint64) {
+func initProposalKey(id uint64) error {
 	x.AssertTrue(id != 0)
-	proposalKey = uint64(groups().Node.Id)<<48 | uint64(z.FastRand())<<16
+	b := make([]byte, 8)
+	if _, err := rand.Read(b); err != nil {
+		return err
+	}
+	proposalKey = groups().Node.Id<<48 | binary.BigEndian.Uint64(b)<<16
+	return nil
 }
 
 // uniqueKey is meant to be unique across all the replicas.
