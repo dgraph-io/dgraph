@@ -114,12 +114,11 @@ var proposalKey uint64
 // {2 bytes Node ID} {4 bytes for random} {2 bytes zero}
 func initProposalKey(id uint64) error {
 	x.AssertTrue(id != 0)
-	randBytes := make([]byte, 8)
-	if _, err := rand.Read(randBytes); err != nil {
+	b := make([]byte, 8)
+	if _, err := rand.Read(b); err != nil {
 		return err
 	}
-	randNum := binary.BigEndian.Uint64(randBytes)
-	proposalKey = uint64(groups().Node.Id)<<48 | uint64(randNum)<<16
+	proposalKey = groups().Node.Id<<48 | binary.BigEndian.Uint64(b)<<16
 	return nil
 }
 
