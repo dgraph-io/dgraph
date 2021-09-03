@@ -538,9 +538,32 @@ func setupLambdaServer(closer *z.Closer) {
 		}(i)
 	}
 
+	client := http.Client{Timeout: 1 * time.Second}
+	healthCheck := func(l *lambda) {
+		l.Lock()
+		defer l.Unlock()
+
+		if !l.active {
+			return
+		}
+
+		timestamp := time.Now().UnixNano()
+		resp, err := client.Get(l.health)
+		if err != nil || resp.StatusCode != 200 {
+			if time.Duration(timestamp-l.lastActive) > x.Config.Lambda.RestartAfter {
+				glog.Warningf("Lambda Server at port: %d not responding."+
+					" Killed it with err: %v", l.port, l.cmd.Process.Kill())
+				l.active = false
+			}
+			return
+		}
+
+		resp.Body.Close()
+		l.lastActive = timestamp
+	}
+
 	// Monitor the lambda servers. If the server is unresponsive for more than restart-after time,
 	// restart it.
-	client := http.Client{Timeout: 1 * time.Second}
 	go func() {
 		ticker := time.NewTicker(2 * time.Second)
 		defer ticker.Stop()
@@ -549,29 +572,6 @@ func setupLambdaServer(closer *z.Closer) {
 			case <-closer.HasBeenClosed():
 				return
 			case <-ticker.C:
-				healthCheck := func(l *lambda) {
-					l.Lock()
-					defer l.Unlock()
-
-					if !l.active {
-						return
-					}
-
-					timestamp := time.Now().UnixNano()
-					resp, err := client.Get(l.health)
-					if err != nil || resp.StatusCode != 200 {
-						if time.Duration(timestamp-l.lastActive) > x.Config.Lambda.RestartAfter {
-							glog.Warningf("Lambda Server at port: %d not responding."+
-								" Killed it with err: %v", l.port, l.cmd.Process.Kill())
-							l.active = false
-						}
-						return
-					}
-
-					resp.Body.Close()
-					l.lastActive = timestamp
-				}
-
 				for _, l := range lambdas {
 					healthCheck(l)
 				}
