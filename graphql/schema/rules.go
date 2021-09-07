@@ -1291,6 +1291,21 @@ func lambdaDirectiveValidation(sch *ast.Schema,
 	return errs
 }
 
+func timestampDirectiveValidation(sch *ast.Schema,
+	typ *ast.Definition,
+	field *ast.FieldDefinition,
+	dir *ast.Directive,
+	secrets map[string]x.Sensitive) gqlerror.List {
+	if field.Type.NamedType == "DateTime" && field.Type.NonNull {
+		return nil
+	}
+	return []*gqlerror.Error{gqlerror.ErrorPosf(
+		dir.Position,
+		"Type %s; Field %s: with @%s directive must be of type DateTime!, not %s",
+		typ.Name, field.Name, dir.Name, field.Type.String())}
+
+}
+
 func lambdaOnMutateValidation(sch *ast.Schema, typ *ast.Definition) gqlerror.List {
 	dir := typ.Directives.ForName(lambdaOnMutateDirective)
 	if dir == nil {

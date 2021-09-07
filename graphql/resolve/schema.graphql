@@ -175,6 +175,21 @@ type Student implements People {
     taughtBy: [Teacher] @hasInverse(field: "teaches")
 }
 
+# For testing created/updated timestamps
+type Booking {
+    id: ID!
+    name: String!
+    created: DateTime! @created
+    updated: DateTime! @updated
+}
+
+type BookingXID {
+    id: String! @id
+    name: String!
+    created: DateTime! @created
+    updated: DateTime! @updated
+}
+
 type Comment {
     id: ID!
     author: String!

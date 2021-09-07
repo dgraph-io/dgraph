@@ -2405,3 +2405,38 @@
          "uid": "uid(x)"
        }
     cond: "@if(gt(len(x), 0))"
+
+-
+  name: "Update with @created and @updated directives"
+  gqlmutation: |
+    mutation updateBooking($patch: UpdateBookingInput!) {
+      updateBooking(input: $patch) {
+        booking {
+          id
+        }
+      }
+    }
+  gqlvariables: |
+    { "patch":
+      { "filter": {
+          "id": ["0x123", "0x124"]
+        },
+        "set": {
+          "name": "Flight to Antigua"
+        }
+      }
+    }
+  explanation: "The update patch should include a timestamp on the field with the @updated directive"
+  dgquerysec: |-
+    query {
+      x as updateBooking(func: uid(0x123, 0x124)) @filter(type(Booking)) {
+        uid
+      }
+    }
+  dgmutations:
+    - setjson: |
+        { "uid" : "uid(x)",
+          "Booking.name": "Flight to Antigua",
+          "Booking.updated": "2019-10-12T07:20:50.52Z"
+        }
+      cond: "@if(gt(len(x), 0))"

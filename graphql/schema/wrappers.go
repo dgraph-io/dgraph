@@ -271,6 +271,8 @@ type FieldDefinition interface {
 	IsID() bool
 	IsExternal() bool
 	HasIDDirective() bool
+	HasCreatedDirective() bool
+	HasUpdatedDirective() bool
 	HasInterfaceArg() bool
 	Inverse() FieldDefinition
 	WithMemberType(string) FieldDefinition
@@ -853,6 +855,15 @@ func (fd *fieldDefinition) IsExternal() bool {
 func hasCustomOrLambda(f *ast.FieldDefinition) bool {
 	for _, dir := range f.Directives {
 		if dir.Name == customDirective || dir.Name == lambdaDirective {
+			return true
+		}
+	}
+	return false
+}
+
+func hasCreatedOrUpdated(f *ast.FieldDefinition) bool {
+	for _, dir := range f.Directives {
+		if dir.Name == createdDirective || dir.Name == updatedDirective {
 			return true
 		}
 	}
@@ -2357,6 +2368,30 @@ func hasIDDirective(fd *ast.FieldDefinition) bool {
 	return id != nil
 }
 
+func (fd *fieldDefinition) HasCreatedDirective() bool {
+	if fd.fieldDef == nil {
+		return false
+	}
+	return hasCreatedDirective(fd.fieldDef)
+}
+
+func hasCreatedDirective(fd *ast.FieldDefinition) bool {
+	id := fd.Directives.ForName(createdDirective)
+	return id != nil
+}
+
+func (fd *fieldDefinition) HasUpdatedDirective() bool {
+	if fd.fieldDef == nil {
+		return false
+	}
+	return hasUpdatedDirective(fd.fieldDef)
+}
+
+func hasUpdatedDirective(fd *ast.FieldDefinition) bool {
+	id := fd.Directives.ForName(updatedDirective)
+	return id != nil
+}
+
 func (fd *fieldDefinition) HasInterfaceArg() bool {
 	if fd.fieldDef == nil {
 		return false
@@ -2383,6 +2418,10 @@ func hasInterfaceArg(fd *ast.FieldDefinition) bool {
 
 func isID(fd *ast.FieldDefinition) bool {
 	return fd.Type.Name() == "ID"
+}
+
+func isTimestamp(fd *ast.FieldDefinition) bool {
+	return fd.Directives.ForName(createdDirective) != nil || fd.Directives.ForName(updatedDirective) != nil
 }
 
 func (fd *fieldDefinition) Type() Type {
@@ -2752,7 +2791,7 @@ func (t *astType) ImplementingTypes() []Type {
 // satisfy a valid post.
 func (t *astType) EnsureNonNulls(obj map[string]interface{}, exclusion string) error {
 	for _, fld := range t.inSchema.schema.Types[t.Name()].Fields {
-		if fld.Type.NonNull && !isID(fld) && fld.Name != exclusion && t.inSchema.customDirectives[t.Name()][fld.Name] == nil {
+		if fld.Type.NonNull && !isID(fld) && !isTimestamp(fld) && fld.Name != exclusion && t.inSchema.customDirectives[t.Name()][fld.Name] == nil {
 			if val, ok := obj[fld.Name]; !ok || val == nil {
 				return errors.Errorf(
 					"type %s requires a value for field %s, but no value present",

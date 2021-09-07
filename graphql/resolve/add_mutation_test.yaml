@@ -5504,3 +5504,101 @@
          implementing types of same interfaces: T1 and T2"
     }
 
+-
+  name: "Add mutation with @created and @updated directive"
+  gqlmutation: |
+    mutation($input: [AddBookingInput!]!) {
+      addBooking(input: $input) {
+        booking {
+          name
+          created
+          updated
+        }
+      }
+    }
+  gqlvariables: |
+    {
+      "input": [
+        {
+          "name": "Holiday to Bermuda"
+        }
+      ]
+    }
+  explanation: "As booking has @created and @updated directives, these DateTime fields should be populated"
+  dgmutations:
+    - setjson: |
+        {
+            "Booking.created": "2019-10-12T07:20:50.52Z",
+            "Booking.name": "Holiday to Bermuda",
+            "Booking.updated": "2019-10-12T07:20:50.52Z",
+            "dgraph.type": [
+                    "Booking"
+                ],
+            "uid":"_:Booking_1"
+        }
+
+-
+  name: "Upsert mutation with @created and @updated directives where only one of the nodes exists"
+  explanation: "Booking1 should only have updated timestamp as it exists, Booking2 should have created and updated timestamps"
+  gqlmutation: |
+    mutation addBookingXID($input: [AddBookingXIDInput!]!) {
+      addBookingXID(input: $input, upsert: true) {
+        bookingXID {
+          name
+        }
+      }
+    }
+  gqlvariables: |
+    { "input":
+      [
+        {
+          "id": "Booking1",
+          "name": "Trip to Bermuda"
+        },
+        {
+          "id": "Booking2",
+          "name": "Trip to Antigua"
+        }
+      ]
+    }
+  dgquery: |-
+    query {
+      BookingXID_1(func: eq(BookingXID.id, "Booking1")) {
+        uid
+        dgraph.type
+      }
+      BookingXID_2(func: eq(BookingXID.id, "Booking2")) {
+        uid
+        dgraph.type
+      }
+    }
+  qnametouid: |-
+    {
+      "BookingXID_1": "0x11"
+    }
+  dgquerysec: |-
+    query {
+      BookingXID_1 as BookingXID_1(func: uid(0x11)) @filter(type(BookingXID)) {
+        uid
+      }
+    }
+  dgmutations:
+    - setjson: |
+        {
+          "uid" : "uid(BookingXID_1)",
+          "BookingXID.id": "Booking1",
+          "BookingXID.name": "Trip to Bermuda",
+          "BookingXID.updated": "2019-10-12T07:20:50.52Z"
+        }
+      cond: "@if(gt(len(BookingXID_1), 0))"
+    - setjson: |
+        {
+          "uid": "_:BookingXID_2",
+          "BookingXID.id": "Booking2",
+          "BookingXID.name": "Trip to Antigua",
+          "BookingXID.created": "2019-10-12T07:20:50.52Z",
+          "BookingXID.updated": "2019-10-12T07:20:50.52Z",
+          "dgraph.type": [
+            "BookingXID"
+          ]
+        }

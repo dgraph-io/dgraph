@@ -48,6 +48,8 @@ const (
 	remoteResponseDirective = "remoteResponse"
 	lambdaDirective         = "lambda"
 	lambdaOnMutateDirective = "lambdaOnMutate"
+	createdDirective        = "created"
+	updatedDirective        = "updated"
 
 	generateDirective       = "generate"
 	generateQueryArg        = "query"
@@ -278,6 +280,8 @@ directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id(interface: Boolean) on FIELD_DEFINITION
+directive @created on FIELD_DEFINITION
+directive @updated on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @auth(
@@ -309,6 +313,8 @@ directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id(interface: Boolean) on FIELD_DEFINITION
+directive @created on FIELD_DEFINITION
+directive @updated on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
@@ -570,6 +576,8 @@ var directiveValidators = map[string]directiveValidator{
 	remoteDirective:         ValidatorNoOp,
 	deprecatedDirective:     ValidatorNoOp,
 	lambdaDirective:         lambdaDirectiveValidation,
+	createdDirective:        timestampDirectiveValidation,
+	updatedDirective:        timestampDirectiveValidation,
 	lambdaOnMutateDirective: ValidatorNoOp,
 	generateDirective:       ValidatorNoOp,
 	apolloKeyDirective:      ValidatorNoOp,
@@ -1284,7 +1292,7 @@ func addPatchType(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[
 		return
 	}
 
-	nonIDFields := getNonIDFields(schema, defn, providesTypeMap)
+	nonIDFields := getPatchFields(schema, defn, providesTypeMap)
 	if len(nonIDFields) == 0 {
 		// The user might just have an predicate with reverse edge id field and nothing else.
 		// We don't generate patch type in that case.
@@ -2208,7 +2216,7 @@ func createField(schema *ast.Schema, fld *ast.FieldDefinition) *ast.FieldDefinit
 	return &newFld
 }
 
-func getNonIDFields(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[string]bool) ast.FieldList {
+func getPatchFields(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[string]bool) ast.FieldList {
 	fldList := make([]*ast.FieldDefinition, 0)
 	for _, fld := range defn.Fields {
 		if isIDField(defn, fld) {
@@ -2224,6 +2232,11 @@ func getNonIDFields(schema *ast.Schema, defn *ast.Definition, providesTypeMap ma
 		// Fields with @custom/@lambda directive should not be part of mutation input,
 		// hence we skip them.
 		if hasCustomOrLambda(fld) {
+			continue
+		}
+		// Fields with @created/@updated directive should not be part of mutation input,
+		// hence we skip them.
+		if hasCreatedOrUpdated(fld) {
 			continue
 		}
 		// We don't include fields in update patch, which corresponds to multiple language tags in dgraph
@@ -2279,7 +2292,12 @@ func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition,
 		if hasCustomOrLambda(fld) {
 			continue
 		}
-		// see the comment in getNonIDFields as well.
+		// Fields with @created/@updated directive should not be part of mutation input,
+		// hence we skip them.
+		if hasCreatedOrUpdated(fld) {
+			continue
+		}
+		// see the comment in getPatchFields as well.
 		if isMultiLangField(fld, true) && isAddingInput {
 			continue
 		}
@@ -2290,7 +2308,7 @@ func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition,
 			continue
 		}
 
-		// see also comment in getNonIDFields
+		// see also comment in getPatchFields
 		if schema.Types[fld.Type.Name()].Kind == ast.Interface &&
 			(!hasID(schema.Types[fld.Type.Name()]) && !hasXID(schema.Types[fld.Type.Name()])) {
 			continue

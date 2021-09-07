@@ -1598,6 +1598,8 @@ func rewriteObject(
 		}
 	}
 
+	var isNewNode = false;
+
 	// This is not an XID reference. This is also not a UID reference.
 	// This is definitely a new node.
 	// Create new node
@@ -1646,7 +1648,20 @@ func rewriteObject(
 		// "_:Project2" . myUID will store the variable generated to reference this node.
 		newObj["dgraph.type"] = dgraphTypes
 		newObj["uid"] = myUID
+		isNewNode = true
 	}
+
+	var timestamp = "2019-10-12T07:20:50.52Z"
+	// var timestamp = time.Now().Format(time.RFC3339)
+	for _, field := range typ.Fields() {
+		if field.HasCreatedDirective() && isNewNode {
+			newObj[field.DgraphPredicate()] = timestamp
+		}
+		if field.HasUpdatedDirective() {
+			newObj[field.DgraphPredicate()] = timestamp
+		}
+	}
+	
 
 	// Add Inverse Link if necessary
 	deleteInverseObject(obj, srcField)
