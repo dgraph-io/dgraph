@@ -1598,7 +1598,7 @@ func rewriteObject(
 		}
 	}
 
-	var isNewNode = false;
+	var isNewNode = false
 
 	// This is not an XID reference. This is also not a UID reference.
 	// This is definitely a new node.
@@ -1661,7 +1661,6 @@ func rewriteObject(
 			newObj[field.DgraphPredicate()] = timestamp
 		}
 	}
-	
 
 	// Add Inverse Link if necessary
 	deleteInverseObject(obj, srcField)
