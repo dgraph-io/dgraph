@@ -35,8 +35,8 @@ var (
 )
 
 type SchemaEntry struct {
-	Predicate string `json="predicate"`
-	Type      string `json="type"`
+	Predicate string `json:"predicate"`
+	Type      string `json:"type"`
 }
 
 type Schema struct {
@@ -152,7 +152,7 @@ func processLog(dcLeft, dcRight *dgo.Dgraph) {
 	defer f.Close()
 
 	var failed, total uint64
-	hist := newHistogram([]float64{0, 0.5, 1, 1.5, 2})
+	hist := newHistogram([]float64{0, 0.01, 0.1, 0.5, 1, 1.5, 2})
 
 	reqCh := make(chan *api.Request, opts.numGo*5)
 
@@ -160,20 +160,24 @@ func processLog(dcLeft, dcRight *dgo.Dgraph) {
 	worker := func(wg *sync.WaitGroup) {
 		defer wg.Done()
 		for r := range reqCh {
-			respL, err := runQuery(r, dcLeft)
-			if err != nil {
-				klog.Errorf("While running on left: %v\n", err)
+			atomic.AddUint64(&total, 1)
+
+			respL, errL := runQuery(r, dcLeft)
+			respR, errR := runQuery(r, dcRight)
+			if errL != nil || errR != nil {
+				if errL == nil || errR == nil || errL.Error() != errR.Error() {
+					atomic.AddUint64(&failed, 1)
+					klog.Infof("Failed Query: %s \nVars: %v\nLeft: %v Err: %v\nRight: %v Err: %v\n",
+						r.Query, r.Vars, respL, errL, respR, errR)
+				}
+				continue
 			}
-			respR, err := runQuery(r, dcRight)
-			if err != nil {
-				klog.Errorf("While running on right: %v\n", err)
-			}
-			if !areEqualJSON(string(respL.Json), string(respR.Json)) {
+
+			if !areEqualJSON(string(respL.GetJson()), string(respR.GetJson())) {
 				atomic.AddUint64(&failed, 1)
 				klog.Infof("Failed Query: %s \nVars: %v\nLeft: %v\nRight: %v\n",
 					r.Query, r.Vars, respL, respR)
 			}
-
 			lt := float64(respL.Latency.ProcessingNs) / 1e6
 			rt := float64(respR.Latency.ProcessingNs) / 1e6
 			// Only consider the processing time > 10 ms for histogram to avoid noise in ratios.
@@ -181,7 +185,6 @@ func processLog(dcLeft, dcRight *dgo.Dgraph) {
 				ratio := rt / lt
 				hist.add(ratio)
 			}
-			atomic.AddUint64(&total, 1)
 		}
 	}
 
@@ -212,6 +215,9 @@ func processLog(dcLeft, dcRight *dgo.Dgraph) {
 		}
 	}()
 	wg.Wait()
+	klog.Infof("Total: %d Failed: %d\n", atomic.LoadUint64(&total),
+		atomic.LoadUint64(&failed))
+	hist.show()
 }
 
 func getReq(s string) (*api.Request, error) {
