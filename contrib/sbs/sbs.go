@@ -35,8 +35,8 @@ var (
 )
 
 type SchemaEntry struct {
-	Predicate string `json="predicate"`
-	Type      string `json="type"`
+	Predicate string `json:"predicate"`
+	Type      string `json:"type"`
 }
 
 type Schema struct {
