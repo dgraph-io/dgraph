@@ -377,7 +377,7 @@ func (ld *loader) processGqlSchema(loadType chunker.InputFormat) {
 		}
 		gqlBuf := &bytes.Buffer{}
 		sch := x.GQL{
-			Schema: strconv.Quote(schema.Schema),
+			Schema: schema.Schema,
 			Script: schema.Script,
 		}
 		b, err := json.Marshal(sch)
@@ -385,11 +385,12 @@ func (ld *loader) processGqlSchema(loadType chunker.InputFormat) {
 			fmt.Printf("Error while marshalling schema for the namespace: %d. err: %v", ns, err)
 			return
 		}
+		quotedSch := strconv.Quote(string(b))
 		switch loadType {
 		case chunker.RdfFormat:
-			x.Check2(gqlBuf.Write([]byte(fmt.Sprintf(rdfSchema, ns, ns, b, ns))))
+			x.Check2(gqlBuf.Write([]byte(fmt.Sprintf(rdfSchema, ns, ns, quotedSch, ns))))
 		case chunker.JsonFormat:
-			x.Check2(gqlBuf.Write([]byte(fmt.Sprintf(jsonSchema, ns, b))))
+			x.Check2(gqlBuf.Write([]byte(fmt.Sprintf(jsonSchema, ns, quotedSch))))
 		}
 		ld.readerChunkCh <- gqlBuf
 	}
