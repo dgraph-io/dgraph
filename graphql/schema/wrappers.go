@@ -2356,15 +2356,15 @@ func (fd *fieldDefinition) GetDefaultValue(action string) interface{} {
 }
 
 func getDefaultValue(fd *ast.FieldDefinition, action string) interface{} {
-	var dir = fd.Directives.ForName(defaultDirective)
+	dir := fd.Directives.ForName(defaultDirective)
 	if dir == nil {
 		return nil
 	}
-	var arg = dir.Arguments.ForName(action)
+	arg := dir.Arguments.ForName(action)
 	if arg == nil {
 		return nil
 	}
-	var value = arg.Value.Children.ForName("value")
+	value := arg.Value.Children.ForName("value")
 	if value == nil {
 		return nil
 	}
