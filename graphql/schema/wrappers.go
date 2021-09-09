@@ -2378,7 +2378,7 @@ func getDefaultValue(fd *ast.FieldDefinition, name string) interface{} {
 		// return time.Now().Format(time.RFC3339)
 		return "2019-10-12T07:20:50.52Z"
 	}
-	return nil
+	return value.Raw
 }
 
 func (fd *fieldDefinition) HasIDDirective() bool {
