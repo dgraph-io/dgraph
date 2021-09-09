@@ -684,10 +684,13 @@ func setupServer(closer *z.Closer) {
 	baseMux.Handle("/probe/graphql", graphqlProbeHandler(gqlHealthStore, globalEpoch))
 
 	baseMux.HandleFunc("/admin", func(w http.ResponseWriter, r *http.Request) {
-		r.Header.Set("resolver", "0")
 		// We don't need to load the schema for all the admin operations.
 		// Only a few like getUser, queryGroup require this. So, this can be optimized.
-		if err := admin.LazyLoadSchema(x.ExtractNamespaceHTTP(r)); err != nil {
+		// All the namespaces share the same admin schema. So, it is okay to use Galaxy namespace
+		// over here. This also helps prevent cases where a bad GraphQL schema makes /admin
+		// unresponsive.
+		r.Header.Set("resolver", "0")
+		if err := admin.LazyLoadSchema(x.GalaxyNamespace); err != nil {
 			admin.WriteErrorResponse(w, r, err)
 			return
 		}
