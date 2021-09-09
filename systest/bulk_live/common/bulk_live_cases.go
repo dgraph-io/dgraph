@@ -32,6 +32,7 @@ import (
 	"testing"
 
 	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 
@@ -76,6 +77,8 @@ func RunBulkCases(t *testing.T) {
 	suite = deleteEdgeWithStarSetup(t, true)
 	testDeleteEdgeWithStar(t)
 	suite.cleanup(t)
+
+	testGqlSchema(t)
 }
 
 func RunBulkCasesAcl(t *testing.T) {
@@ -706,9 +709,14 @@ func testDeleteEdgeWithStar(t *testing.T) {
 }
 
 func testGqlSchema(t *testing.T) {
-	t.Skipf("Skipping: This is failing for some reason. Please fix this.")
 	s := newBulkOnlySuite(t, "", "", "abc")
 	defer s.cleanup(t)
+
+	var sch x.GQL
+	sch.Schema = "abc"
+	b, err := json.Marshal(sch)
+	require.NoError(t, err)
+	schema := strconv.Quote(string(b))
 
 	t.Run("Get GraphQL schema", testCase(`
 	{
@@ -717,14 +725,14 @@ func testGqlSchema(t *testing.T) {
 			dgraph.graphql.xid
 			dgraph.type
 		}
-	}`, `
+	}`, fmt.Sprintf(`
 		{
 			"schema": [{
-				"dgraph.graphql.schema": "abc",
+				"dgraph.graphql.schema": %s,
 				"dgraph.graphql.xid": "dgraph.graphql.schema",
 				"dgraph.type": ["dgraph.graphql"]
 			}]
-		}`))
+		}`, schema)))
 
 }
 
