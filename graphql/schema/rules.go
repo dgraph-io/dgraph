@@ -1302,8 +1302,7 @@ func defaultDirectiveValidation(sch *ast.Schema,
 			"Type %s; Field %s: cannot use @%s directive on a @remote type",
 			typ.Name, field.Name, dir.Name)}
 	}
-
-	if !isScalar(field.Type.Name()) {
+	if !isScalar(field.Type.Name()) && sch.Types[field.Type.Name()].Kind != ast.Enum {
 		return []*gqlerror.Error{gqlerror.ErrorPosf(
 			dir.Position,
 			"Type %s; Field %s: cannot use @%s directive on field with non-scalar type %s",

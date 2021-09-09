@@ -1598,7 +1598,7 @@ func rewriteObject(
 		}
 	}
 
-	var isNewNode = false
+	action := "update"
 
 	// This is not an XID reference. This is also not a UID reference.
 	// This is definitely a new node.
@@ -1648,7 +1648,7 @@ func rewriteObject(
 		// "_:Project2" . myUID will store the variable generated to reference this node.
 		newObj["dgraph.type"] = dgraphTypes
 		newObj["uid"] = myUID
-		isNewNode = true
+		action = "add"
 	}
 
 	// Now we know whether this is a new node or not, we can set @default(add/update) fields
@@ -1657,13 +1657,9 @@ func rewriteObject(
 		if newObj[pred] != nil {
 			continue
 		}
-		var add = field.DefaultAddValue()
-		if add != nil && isNewNode {
-			newObj[pred] = add
-		}
-		var update = field.DefaultUpdateValue()
-		if update != nil {
-			newObj[pred] = update
+		var value = field.GetDefaultValue(action)
+		if value != nil {
+			newObj[pred] = value
 		}
 	}
 

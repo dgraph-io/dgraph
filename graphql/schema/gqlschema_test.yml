@@ -2732,7 +2732,7 @@ invalid_schemas:
           review: String!
       }
     errlist: [
-      {"message": "Type Product; @remote directive cannot be defined with @key directive", "locations": [ { "line": 174, "column": 12} ] },
+      {"message": "Type Product; @remote directive cannot be defined with @key directive", "locations": [ { "line": 179, "column": 12} ] },
     ]
 
   - name: "directives defined on @external fields that are not @key."
