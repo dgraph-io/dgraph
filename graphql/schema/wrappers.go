@@ -271,8 +271,8 @@ type FieldDefinition interface {
 	IsID() bool
 	IsExternal() bool
 	HasIDDirective() bool
-	HasCreatedDirective() bool
-	HasUpdatedDirective() bool
+	DefaultAddValue() interface{}
+	DefaultUpdateValue() interface{}
 	HasInterfaceArg() bool
 	Inverse() FieldDefinition
 	WithMemberType(string) FieldDefinition
@@ -855,15 +855,6 @@ func (fd *fieldDefinition) IsExternal() bool {
 func hasCustomOrLambda(f *ast.FieldDefinition) bool {
 	for _, dir := range f.Directives {
 		if dir.Name == customDirective || dir.Name == lambdaDirective {
-			return true
-		}
-	}
-	return false
-}
-
-func hasCreatedOrUpdated(f *ast.FieldDefinition) bool {
-	for _, dir := range f.Directives {
-		if dir.Name == createdDirective || dir.Name == updatedDirective {
 			return true
 		}
 	}
@@ -2356,6 +2347,40 @@ func (fd *fieldDefinition) IsID() bool {
 	return isID(fd.fieldDef)
 }
 
+func (fd *fieldDefinition) DefaultAddValue() interface{} {
+	if fd.fieldDef == nil {
+		return nil
+	}
+	return getDefaultValue(fd.fieldDef, "add")
+}
+
+func (fd *fieldDefinition) DefaultUpdateValue() interface{} {
+	if fd.fieldDef == nil {
+		return nil
+	}
+	return getDefaultValue(fd.fieldDef, "update")
+}
+
+func getDefaultValue(fd *ast.FieldDefinition, name string) interface{} {
+	var dir = fd.Directives.ForName(defaultDirective)
+	if dir == nil {
+		return nil
+	}
+	var arg = dir.Arguments.ForName(name)
+	if arg == nil {
+		return nil
+	}
+	var value = arg.Value.Children.ForName("value")
+	if value == nil {
+		return nil
+	}
+	if value.Raw == "$now" {
+		// return time.Now().Format(time.RFC3339)
+		return "2019-10-12T07:20:50.52Z"
+	}
+	return nil
+}
+
 func (fd *fieldDefinition) HasIDDirective() bool {
 	if fd.fieldDef == nil {
 		return false
@@ -2365,30 +2390,6 @@ func (fd *fieldDefinition) HasIDDirective() bool {
 
 func hasIDDirective(fd *ast.FieldDefinition) bool {
 	id := fd.Directives.ForName(idDirective)
-	return id != nil
-}
-
-func (fd *fieldDefinition) HasCreatedDirective() bool {
-	if fd.fieldDef == nil {
-		return false
-	}
-	return hasCreatedDirective(fd.fieldDef)
-}
-
-func hasCreatedDirective(fd *ast.FieldDefinition) bool {
-	id := fd.Directives.ForName(createdDirective)
-	return id != nil
-}
-
-func (fd *fieldDefinition) HasUpdatedDirective() bool {
-	if fd.fieldDef == nil {
-		return false
-	}
-	return hasUpdatedDirective(fd.fieldDef)
-}
-
-func hasUpdatedDirective(fd *ast.FieldDefinition) bool {
-	id := fd.Directives.ForName(updatedDirective)
 	return id != nil
 }
 
@@ -2420,8 +2421,8 @@ func isID(fd *ast.FieldDefinition) bool {
 	return fd.Type.Name() == "ID"
 }
 
-func isTimestamp(fd *ast.FieldDefinition) bool {
-	return fd.Directives.ForName(createdDirective) != nil || fd.Directives.ForName(updatedDirective) != nil
+func hasDefault(fd *ast.FieldDefinition) bool {
+	return fd.Directives.ForName(defaultDirective) != nil
 }
 
 func (fd *fieldDefinition) Type() Type {
@@ -2791,7 +2792,7 @@ func (t *astType) ImplementingTypes() []Type {
 // satisfy a valid post.
 func (t *astType) EnsureNonNulls(obj map[string]interface{}, exclusion string) error {
 	for _, fld := range t.inSchema.schema.Types[t.Name()].Fields {
-		if fld.Type.NonNull && !isID(fld) && !isTimestamp(fld) && fld.Name != exclusion && t.inSchema.customDirectives[t.Name()][fld.Name] == nil {
+		if fld.Type.NonNull && !isID(fld) && !hasDefault(fld) && fld.Name != exclusion && t.inSchema.customDirectives[t.Name()][fld.Name] == nil {
 			if val, ok := obj[fld.Name]; !ok || val == nil {
 				return errors.Errorf(
 					"type %s requires a value for field %s, but no value present",

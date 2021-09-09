@@ -2935,26 +2935,6 @@ invalid_schemas:
         "locations": [ { "line": 2, "column": 18 } ] },
     ]
 
-  - name: "@created field must be of type DateTime!"
-    input: |
-      type Person  {
-        created: String @created
-      }
-    errlist: [
-      { "message": "Type Person; Field created: with @created directive must be of type DateTime!, not String",
-        "locations": [ { "line": 2, "column": 20 } ] },
-    ]
-
-  - name: "@updated field must be of type DateTime!"
-    input: |
-      type Person  {
-        updated: String @updated
-      }
-    errlist: [
-      { "message": "Type Person; Field updated: with @updated directive must be of type DateTime!, not String",
-        "locations": [ { "line": 2, "column": 20 } ] },
-    ]
-
 valid_schemas:
   - name: "Multiple fields with @id directive should be allowed"
     input: |

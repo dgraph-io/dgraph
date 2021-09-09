@@ -5505,7 +5505,7 @@
     }
 
 -
-  name: "Add mutation with @created and @updated directive"
+  name: "Add mutation with @default directive"
   gqlmutation: |
     mutation($input: [AddBookingInput!]!) {
       addBooking(input: $input) {
@@ -5524,7 +5524,7 @@
         }
       ]
     }
-  explanation: "As booking has @created and @updated directives, these DateTime fields should be populated"
+  explanation: "As booking has @default created and updated fields, these should be populated with timestamp"
   dgmutations:
     - setjson: |
         {
@@ -5538,7 +5538,7 @@
         }
 
 -
-  name: "Upsert mutation with @created and @updated directives where only one of the nodes exists"
+  name: "Upsert mutation with @default directives where only one of the nodes exists"
   explanation: "Booking1 should only have updated timestamp as it exists, Booking2 should have created and updated timestamps"
   gqlmutation: |
     mutation addBookingXID($input: [AddBookingXIDInput!]!) {

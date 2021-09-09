@@ -1291,19 +1291,40 @@ func lambdaDirectiveValidation(sch *ast.Schema,
 	return errs
 }
 
-func timestampDirectiveValidation(sch *ast.Schema,
+func defaultDirectiveValidation(sch *ast.Schema,
 	typ *ast.Definition,
 	field *ast.FieldDefinition,
 	dir *ast.Directive,
 	secrets map[string]x.Sensitive) gqlerror.List {
-	if field.Type.NamedType == "DateTime" && field.Type.NonNull {
-		return nil
+	if typ.Directives.ForName(remoteDirective) != nil {
+		return []*gqlerror.Error{gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s; Field %s: cannot use @%s directive on a @remote type",
+			typ.Name, field.Name, dir.Name)}
 	}
-	return []*gqlerror.Error{gqlerror.ErrorPosf(
-		dir.Position,
-		"Type %s; Field %s: with @%s directive must be of type DateTime!, not %s",
-		typ.Name, field.Name, dir.Name, field.Type.String())}
 
+	if !isScalar(field.Type.Name()) {
+		return []*gqlerror.Error{gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s; Field %s: cannot use @%s directive on field with non-scalar type %s",
+			typ.Name, field.Name, dir.Name, field.Type.Name())}
+	}
+
+	if field.Directives.ForName(idDirective) != nil {
+		return []*gqlerror.Error{gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s; Field %s: cannot use @%s directive on field with @id directive",
+			typ.Name, field.Name, dir.Name)}
+	}
+
+	if isID(field) {
+		return []*gqlerror.Error{gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s; Field %s: cannot use @%s directive on field with type ID",
+			typ.Name, field.Name, dir.Name)}
+	}
+
+	return nil
 }
 
 func lambdaOnMutateValidation(sch *ast.Schema, typ *ast.Definition) gqlerror.List {

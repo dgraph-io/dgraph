@@ -179,15 +179,15 @@ type Student implements People {
 type Booking {
     id: ID!
     name: String!
-    created: DateTime! @created
-    updated: DateTime! @updated
+    created: DateTime! @default(add: {value: "$now"})
+    updated: DateTime! @default(add: {value: "$now"}, update: {value: "$now"})
 }
 
 type BookingXID {
     id: String! @id
     name: String!
-    created: DateTime! @created
-    updated: DateTime! @updated
+    created: DateTime! @default(add: {value: "$now"})
+    updated: DateTime! @default(add: {value: "$now"}, update: {value: "$now"})
 }
 
 type Comment {

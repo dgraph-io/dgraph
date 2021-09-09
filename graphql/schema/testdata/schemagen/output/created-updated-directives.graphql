@@ -5,15 +5,15 @@
 type Booking {
 	id: ID!
 	name: String!
-	created: DateTime! @created
-	updated: DateTime! @updated
+	created: DateTime! @default(add: {value:"$now"})
+	updated: DateTime! @default(add: {value:"$now"}, update: {value:"$now"})
 }
 
 type BookingXID {
 	id: String! @id
 	name: String!
-	created: DateTime! @created
-	updated: DateTime! @updated
+	created: DateTime! @default(add: {value:"$now"})
+	updated: DateTime! @default(add: {value:"$now"}, update: {value:"$now"})
 }
 
 #######################
@@ -107,6 +107,10 @@ input CustomHTTP {
 	skipIntrospection: Boolean
 }
 
+input DgraphDefault {
+	value: String
+}
+
 type Point {
 	longitude: Float!
 	latitude: Float!
@@ -189,8 +193,7 @@ directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id(interface: Boolean) on FIELD_DEFINITION
-directive @created on FIELD_DEFINITION
-directive @updated on FIELD_DEFINITION
+directive @default(add: DgraphDefault, update: DgraphDefault) on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @auth(
@@ -374,11 +377,15 @@ enum BookingXIDOrderable {
 
 input AddBookingInput {
 	name: String!
+	created: DateTime
+	updated: DateTime
 }
 
 input AddBookingXIDInput {
 	id: String!
 	name: String!
+	created: DateTime
+	updated: DateTime
 }
 
 input BookingFilter {
@@ -397,11 +404,15 @@ input BookingOrder {
 
 input BookingPatch {
 	name: String
+	created: DateTime
+	updated: DateTime
 }
 
 input BookingRef {
 	id: ID
 	name: String
+	created: DateTime
+	updated: DateTime
 }
 
 input BookingXIDFilter {
@@ -421,11 +432,15 @@ input BookingXIDOrder {
 input BookingXIDPatch {
 	id: String
 	name: String
+	created: DateTime
+	updated: DateTime
 }
 
 input BookingXIDRef {
 	id: String
 	name: String
+	created: DateTime
+	updated: DateTime
 }
 
 input UpdateBookingInput {

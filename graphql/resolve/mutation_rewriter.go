@@ -1651,14 +1651,19 @@ func rewriteObject(
 		isNewNode = true
 	}
 
-	var timestamp = "2019-10-12T07:20:50.52Z"
-	// var timestamp = time.Now().Format(time.RFC3339)
+	// Now we know whether this is a new node or not, we can set @default(add/update) fields
 	for _, field := range typ.Fields() {
-		if field.HasCreatedDirective() && isNewNode {
-			newObj[field.DgraphPredicate()] = timestamp
+		var pred = field.DgraphPredicate()
+		if newObj[pred] != nil {
+			continue
 		}
-		if field.HasUpdatedDirective() {
-			newObj[field.DgraphPredicate()] = timestamp
+		var add = field.DefaultAddValue()
+		if add != nil && isNewNode {
+			newObj[pred] = add
+		}
+		var update = field.DefaultUpdateValue()
+		if update != nil {
+			newObj[pred] = update
 		}
 	}
 

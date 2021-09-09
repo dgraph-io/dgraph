@@ -2407,7 +2407,7 @@
     cond: "@if(gt(len(x), 0))"
 
 -
-  name: "Update with @created and @updated directives"
+  name: "Update with @default directive"
   gqlmutation: |
     mutation updateBooking($patch: UpdateBookingInput!) {
       updateBooking(input: $patch) {
@@ -2426,7 +2426,7 @@
         }
       }
     }
-  explanation: "The update patch should include a timestamp on the field with the @updated directive"
+  explanation: "The update patch should include a timestamp on the field with the @default(update:) directive"
   dgquerysec: |-
     query {
       x as updateBooking(func: uid(0x123, 0x124)) @filter(type(Booking)) {

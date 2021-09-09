@@ -48,8 +48,7 @@ const (
 	remoteResponseDirective = "remoteResponse"
 	lambdaDirective         = "lambda"
 	lambdaOnMutateDirective = "lambdaOnMutate"
-	createdDirective        = "created"
-	updatedDirective        = "updated"
+	defaultDirective        = "default"
 
 	generateDirective       = "generate"
 	generateQueryArg        = "query"
@@ -197,6 +196,10 @@ input CustomHTTP {
 	skipIntrospection: Boolean
 }
 
+input DgraphDefault {
+	value: String
+}
+
 type Point {
 	longitude: Float!
 	latitude: Float!
@@ -280,8 +283,7 @@ directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id(interface: Boolean) on FIELD_DEFINITION
-directive @created on FIELD_DEFINITION
-directive @updated on FIELD_DEFINITION
+directive @default(add: DgraphDefault, update: DgraphDefault) on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @auth(
@@ -313,8 +315,7 @@ directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id(interface: Boolean) on FIELD_DEFINITION
-directive @created on FIELD_DEFINITION
-directive @updated on FIELD_DEFINITION
+directive @default(add: DgraphDefault, update: DgraphDefault) on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
@@ -576,8 +577,7 @@ var directiveValidators = map[string]directiveValidator{
 	remoteDirective:         ValidatorNoOp,
 	deprecatedDirective:     ValidatorNoOp,
 	lambdaDirective:         lambdaDirectiveValidation,
-	createdDirective:        timestampDirectiveValidation,
-	updatedDirective:        timestampDirectiveValidation,
+	defaultDirective:        defaultDirectiveValidation,
 	lambdaOnMutateDirective: ValidatorNoOp,
 	generateDirective:       ValidatorNoOp,
 	apolloKeyDirective:      ValidatorNoOp,
@@ -2234,11 +2234,6 @@ func getPatchFields(schema *ast.Schema, defn *ast.Definition, providesTypeMap ma
 		if hasCustomOrLambda(fld) {
 			continue
 		}
-		// Fields with @created/@updated directive should not be part of mutation input,
-		// hence we skip them.
-		if hasCreatedOrUpdated(fld) {
-			continue
-		}
 		// We don't include fields in update patch, which corresponds to multiple language tags in dgraph
 		// Example, nameHi_En:  String @dgraph(pred:"Person.name@hi:en")
 		// We don't add above field in update patch because it corresponds to multiple languages
@@ -2292,11 +2287,6 @@ func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition,
 		if hasCustomOrLambda(fld) {
 			continue
 		}
-		// Fields with @created/@updated directive should not be part of mutation input,
-		// hence we skip them.
-		if hasCreatedOrUpdated(fld) {
-			continue
-		}
 		// see the comment in getPatchFields as well.
 		if isMultiLangField(fld, true) && isAddingInput {
 			continue
@@ -2313,7 +2303,14 @@ func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition,
 			(!hasID(schema.Types[fld.Type.Name()]) && !hasXID(schema.Types[fld.Type.Name()])) {
 			continue
 		}
-		fldList = append(fldList, createField(schema, fld))
+
+		// if the field has a @default(add) value it is optional in add input
+		var field = createField(schema, fld)
+		if getDefaultValue(fld, "add") != nil {
+			field.Type.NonNull = false
+		}
+
+		fldList = append(fldList, field)
 	}
 
 	pd := getPasswordField(defn)
