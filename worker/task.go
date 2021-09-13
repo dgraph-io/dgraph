@@ -733,6 +733,8 @@ func (qs *queryState) handleUidPostings(
 	outputs := make([]*pb.Result, numGo)
 
 	uids := codec.GetUids(q.UidList)
+	srcFnUidList := &pb.List{Bitmap: srcFn.uidsPresent.ToBuffer()}
+
 	calculate := func(start, end int) error {
 		x.AssertTrue(start%width == 0)
 		out := &pb.Result{}
@@ -811,7 +813,7 @@ func (qs *queryState) handleUidPostings(
 				topts := posting.ListOptions{
 					ReadTs:    args.q.ReadTs,
 					AfterUid:  0,
-					Intersect: &pb.List{Bitmap: srcFn.uidsPresent.ToBuffer()},
+					Intersect: srcFnUidList,
 					First:     int(args.q.First + args.q.Offset),
 				}
 				plist, err := pl.Uids(topts)
