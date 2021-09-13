@@ -808,14 +808,10 @@ func (qs *queryState) handleUidPostings(
 				if i == 0 {
 					span.Annotate(nil, "UidInFn")
 				}
-				reqBm := sroar.FromSortedList(srcFn.uidsPresent)
-				// reqBm := sroar.NewBitmap()
-				// reqBm.SetMany(srcFn.uidsPresent)
-				reqList := codec.ToListNoCopy(reqBm)
 				topts := posting.ListOptions{
 					ReadTs:    args.q.ReadTs,
 					AfterUid:  0,
-					Intersect: reqList,
+					Intersect: &pb.List{Bitmap: srcFn.uidsPresent.ToBuffer()},
 					First:     int(args.q.First + args.q.Offset),
 				}
 				plist, err := pl.Uids(topts)
@@ -1682,7 +1678,7 @@ type functionContext struct {
 	ineqValueToken []string
 	n              int
 	threshold      []int64
-	uidsPresent    []uint64
+	uidsPresent    *sroar.Bitmap
 	fname          string
 	fnType         FuncType
 	regex          *cregexp.Regexp
@@ -1948,6 +1944,7 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 		}
 		checkRoot(q, fc)
 	case uidInFn:
+		var uids []uint64
 		for _, arg := range q.SrcFunc.Args {
 			uidParsed, err := strconv.ParseUint(arg, 0, 64)
 			if err != nil {
@@ -1957,11 +1954,12 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 				}
 				return nil, err
 			}
-			fc.uidsPresent = append(fc.uidsPresent, uidParsed)
+			uids = append(uids, uidParsed)
 		}
-		sort.Slice(fc.uidsPresent, func(i, j int) bool {
-			return fc.uidsPresent[i] < fc.uidsPresent[j]
+		sort.Slice(uids, func(i, j int) bool {
+			return uids[i] < uids[j]
 		})
+		fc.uidsPresent = sroar.FromSortedList(uids)
 		checkRoot(q, fc)
 		if fc.isFuncAtRoot {
 			return nil, errors.Errorf("uid_in function not allowed at root")
