@@ -148,9 +148,6 @@ func FromList(l *pb.List) *sroar.Bitmap {
 		return sroar.FromBufferWithCopy(l.Bitmap)
 	}
 	if len(l.SortedUids) > 0 {
-		// bm := sroar.NewBitmap()
-		// bm.SetMany(l.SortedUids)
-		// return bm
 		uids := make([]uint64, len(l.SortedUids))
 		copy(uids, l.SortedUids)
 		sort.Slice(uids, func(i, j int) bool {
@@ -170,9 +167,6 @@ func FromListNoCopy(l *pb.List) *sroar.Bitmap {
 		return sroar.FromBuffer(l.Bitmap)
 	}
 	if len(l.SortedUids) > 0 {
-		// bm := sroar.NewBitmap()
-		// bm.SetMany(l.SortedUids)
-		// return bm
 		uids := make([]uint64, len(l.SortedUids))
 		copy(uids, l.SortedUids)
 		sort.Slice(uids, func(i, j int) bool {
