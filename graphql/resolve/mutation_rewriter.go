@@ -1215,7 +1215,20 @@ func updateAuthSelector(t schema.Type) *schema.RuleNode {
 		return nil
 	}
 
-	return auth.Rules.Update
+	if auth.Rules.Update != nil {
+		return auth.Rules.Update
+	}
+
+	return auth.Rules.PreUpdate
+}
+
+func postUpdateAuthSelector(t schema.Type) *schema.RuleNode {
+	auth := t.AuthRules()
+	if auth == nil || auth.Rules == nil {
+		return nil
+	}
+
+	return auth.Rules.PostUpdate
 }
 
 func deleteAuthSelector(t schema.Type) *schema.RuleNode {

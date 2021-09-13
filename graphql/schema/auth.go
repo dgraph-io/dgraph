@@ -19,6 +19,7 @@ package schema
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/pkg/errors"
 	"reflect"
 	"regexp"
 	"strings"
@@ -55,11 +56,15 @@ type RuleNode struct {
 }
 
 type AuthContainer struct {
-	Password *RuleNode
-	Query    *RuleNode
-	Add      *RuleNode
-	Update   *RuleNode
-	Delete   *RuleNode
+	Password   *RuleNode
+	Query      *RuleNode
+	Add        *RuleNode
+	PreUpdate  *RuleNode
+	PostUpdate *RuleNode
+	Delete     *RuleNode
+	// Deprecated: This is the deprecated option and users are advised not to use this anymore.
+	// Instead use PreUpdate and PostUpdate. PreUpdate has same application as Update
+	Update *RuleNode
 }
 
 type RuleResult int
@@ -305,11 +310,13 @@ func mergeAuthRules(
 	// to unnecessary errors
 	if objectAuthRules == nil {
 		return &AuthContainer{
-			Password: interfaceAuthRules.Password,
-			Query:    interfaceAuthRules.Query,
-			Add:      interfaceAuthRules.Add,
-			Delete:   interfaceAuthRules.Delete,
-			Update:   interfaceAuthRules.Update,
+			Password:   interfaceAuthRules.Password,
+			Query:      interfaceAuthRules.Query,
+			Add:        interfaceAuthRules.Add,
+			Delete:     interfaceAuthRules.Delete,
+			Update:     interfaceAuthRules.Update,
+			PreUpdate:  interfaceAuthRules.PreUpdate,
+			PostUpdate: interfaceAuthRules.PostUpdate,
 		}
 	}
 
@@ -318,6 +325,8 @@ func mergeAuthRules(
 	objectAuthRules.Add = mergeAuthNode(objectAuthRules.Add, interfaceAuthRules.Add)
 	objectAuthRules.Delete = mergeAuthNode(objectAuthRules.Delete, interfaceAuthRules.Delete)
 	objectAuthRules.Update = mergeAuthNode(objectAuthRules.Update, interfaceAuthRules.Update)
+	objectAuthRules.PreUpdate = mergeAuthNode(objectAuthRules.PreUpdate, interfaceAuthRules.PreUpdate)
+	objectAuthRules.PostUpdate = mergeAuthNode(objectAuthRules.PostUpdate, interfaceAuthRules.PostUpdate)
 	return objectAuthRules
 }
 
@@ -353,11 +362,25 @@ func parseAuthDirective(
 		errResult = AppendGQLErrs(errResult, err)
 	}
 
+	if pupd := dir.Arguments.ForName("preupdate"); pupd != nil && pupd.Value != nil {
+		result.PreUpdate, err = parseAuthNode(sch, typ, pupd.Value)
+		errResult = AppendGQLErrs(errResult, err)
+	}
+
+	if pupd := dir.Arguments.ForName("postupdate"); pupd != nil && pupd.Value != nil {
+		result.PostUpdate, err = parseAuthNode(sch, typ, pupd.Value)
+		errResult = AppendGQLErrs(errResult, err)
+	}
+
 	if del := dir.Arguments.ForName("delete"); del != nil && del.Value != nil {
 		result.Delete, err = parseAuthNode(sch, typ, del.Value)
 		errResult = AppendGQLErrs(errResult, err)
 	}
 
+	if result.Update != nil && result.PreUpdate != nil {
+		errResult = AppendGQLErrs(errResult, errors.New("update and preupdate have same application. "+
+			"Update is deprecated operation. Please use preupdate."))
+	}
 	return result, errResult
 }
 
