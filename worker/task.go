@@ -808,9 +808,10 @@ func (qs *queryState) handleUidPostings(
 				if i == 0 {
 					span.Annotate(nil, "UidInFn")
 				}
-				reqBm := sroar.NewBitmap()
-				reqBm.SetMany(srcFn.uidsPresent)
-				reqList := codec.ToList(reqBm)
+				reqBm := sroar.FromSortedList(srcFn.uidsPresent)
+				// reqBm := sroar.NewBitmap()
+				// reqBm.SetMany(srcFn.uidsPresent)
+				reqList := codec.ToListNoCopy(reqBm)
 				topts := posting.ListOptions{
 					ReadTs:    args.q.ReadTs,
 					AfterUid:  0,

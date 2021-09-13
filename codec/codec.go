@@ -44,6 +44,12 @@ func ToList(rm *sroar.Bitmap) *pb.List {
 	}
 }
 
+func ToListNoCopy(rm *sroar.Bitmap) *pb.List {
+	return &pb.List{
+		Bitmap: rm.ToBuffer(),
+	}
+}
+
 func ToSortedList(rm *sroar.Bitmap) *pb.List {
 	return &pb.List{
 		SortedUids: rm.ToArray(),
