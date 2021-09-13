@@ -516,7 +516,7 @@ func (l *List) bitmap(opt ListOptions) (*sroar.Bitmap, error) {
 
 	var iw *sroar.Bitmap
 	if opt.Intersect != nil {
-		iw = codec.FromList(opt.Intersect)
+		iw = codec.FromListNoCopy(opt.Intersect)
 	}
 	r := sroar.NewBitmap()
 	if deleteBelow == 0 {
