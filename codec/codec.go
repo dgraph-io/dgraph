@@ -18,6 +18,7 @@ package codec
 
 import (
 	"encoding/binary"
+	"sort"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
@@ -147,9 +148,15 @@ func FromList(l *pb.List) *sroar.Bitmap {
 		return sroar.FromBufferWithCopy(l.Bitmap)
 	}
 	if len(l.SortedUids) > 0 {
-		bm := sroar.NewBitmap()
-		bm.SetMany(l.SortedUids)
-		return bm
+		// bm := sroar.NewBitmap()
+		// bm.SetMany(l.SortedUids)
+		// return bm
+		uids := make([]uint64, len(l.SortedUids))
+		copy(uids, l.SortedUids)
+		sort.Slice(uids, func(i, j int) bool {
+			return uids[i] < uids[j]
+		})
+		return sroar.FromSortedList(uids)
 	}
 	return sroar.NewBitmap()
 }
@@ -163,9 +170,15 @@ func FromListNoCopy(l *pb.List) *sroar.Bitmap {
 		return sroar.FromBuffer(l.Bitmap)
 	}
 	if len(l.SortedUids) > 0 {
-		bm := sroar.NewBitmap()
-		bm.SetMany(l.SortedUids)
-		return bm
+		// bm := sroar.NewBitmap()
+		// bm.SetMany(l.SortedUids)
+		// return bm
+		uids := make([]uint64, len(l.SortedUids))
+		copy(uids, l.SortedUids)
+		sort.Slice(uids, func(i, j int) bool {
+			return uids[i] < uids[j]
+		})
+		return sroar.FromSortedList(uids)
 	}
 	return sroar.NewBitmap()
 }
