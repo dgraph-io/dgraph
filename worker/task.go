@@ -732,12 +732,12 @@ func (qs *queryState) handleUidPostings(
 	errCh := make(chan error, numGo)
 	outputs := make([]*pb.Result, numGo)
 
+	uids := codec.GetUids(q.UidList)
 	calculate := func(start, end int) error {
 		x.AssertTrue(start%width == 0)
 		out := &pb.Result{}
 		outputs[start/width] = out
 
-		uids := codec.GetUids(q.UidList)
 		for i := start; i < end; i++ {
 			if i%100 == 0 {
 				select {
