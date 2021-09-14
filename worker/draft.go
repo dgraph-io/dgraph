@@ -2038,6 +2038,15 @@ func (n *node) calculateSnapshot(startIdx, lastIdx, minPendingStart uint64) (*pb
 					maxCommitTs = x.Max(maxCommitTs, txn.CommitTs)
 				}
 			}
+
+			// If there is a restore proposal then consider the restoreTs as commitTs for the
+			// purpose of snapshot calculation.
+			if proposal.Restore != nil {
+				restoreTs := proposal.Restore.GetRestoreTs()
+				maxCommitTs = x.Max(maxCommitTs, restoreTs)
+				glog.Infof("Found restore proposal with restoreTs: %d", restoreTs)
+				span.Annotatef(nil, "Found restore proposal with restoreTs: %d", restoreTs)
+			}
 		}
 	}
 
