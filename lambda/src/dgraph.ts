@@ -39,7 +39,6 @@ async function dqlQuery(query: string, variables: Record<string, any> = {}, acce
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "X-Auth-Token": process.env.DGRAPH_TOKEN || "", // TODO(Naman): Is this field needed?
       "X-Dgraph-AccessToken": accessToken || "",
     },
     body: JSON.stringify({ query, variables })
@@ -55,7 +54,6 @@ async function dqlMutate(mutate: string | Object, accessToken?: string): Promise
     method: "POST",
     headers: {
       "Content-Type": typeof mutate === 'string' ? "application/rdf" : "application/json",
-      "X-Auth-Token": process.env.DGRAPH_TOKEN || "", // TODO(Naman): Is this field needed?
       "X-Dgraph-AccessToken": accessToken || "",
     },
     body: typeof mutate === 'string' ? mutate : JSON.stringify(mutate)

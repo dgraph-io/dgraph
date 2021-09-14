@@ -174,7 +174,7 @@ export function evaluateScript(source: string, prefix: string) {
     const event = {
       ...e,
       respondWith: (x: ResolverResponse) => { retPromise = x },
-      graphql: (query: string, variables: Record<string, any>, ah?: AuthHeaderField) => graphql(query, variables, ah || e.authHeader),
+      graphql: (query: string, variables: Record<string, any>, ah?: AuthHeaderField, token?: string) => graphql(query, variables, ah || e.authHeader, token || e.accessToken),
       dql: {
         query: (query: string, variables: Record<string, any> = {}, token?:string) => dql.query(query, variables, token || e.accessToken),
         mutate: (mutate: string | Object, token?: string) => dql.mutate(mutate, token || e.accessToken),
