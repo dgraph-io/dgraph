@@ -43,7 +43,7 @@ class GraphQLResolverEventTarget extends EventTarget {
         try {
           const event = e as unknown as GraphQLEvent;
           event.respondWith(resolver(event))
-        } catch(e) {
+        } catch(e: any) {
           this.console.error(e.toString() + JSON.stringify(e.stack))
           return
         }
@@ -57,7 +57,7 @@ class GraphQLResolverEventTarget extends EventTarget {
         try {
           const event = e as unknown as GraphQLEvent;
           event.respondWith(getParents(event).map(parent => resolver({...event, parent})))
-        } catch(e) {
+        } catch(e: any) {
           this.console.error(e.toString() + JSON.stringify(e.stack))
           return
         }
@@ -71,7 +71,7 @@ class GraphQLResolverEventTarget extends EventTarget {
         try {
           const event = e as unknown as WebHookGraphQLEvent;
           event.respondWith(resolver(event))
-        } catch(e) {
+        } catch(e: any) {
           this.console.error(e.toString() + JSON.stringify(e.stack))
           return
         }
@@ -174,8 +174,11 @@ export function evaluateScript(source: string, prefix: string) {
     const event = {
       ...e,
       respondWith: (x: ResolverResponse) => { retPromise = x },
-      graphql: (query: string, variables: Record<string, any>, ah?: AuthHeaderField) => graphql(query, variables, ah || e.authHeader),
-      dql,
+      graphql: (query: string, variables: Record<string, any>, ah?: AuthHeaderField, token?: string) => graphql(query, variables, ah || e.authHeader, token || e.accessToken),
+      dql: {
+        query: (query: string, variables: Record<string, any> = {}, token?:string) => dql.query(query, variables, token || e.accessToken),
+        mutate: (mutate: string | Object, token?: string) => dql.mutate(mutate, token || e.accessToken),
+      }
     }
     if (e.type === '$webhook' && e.event) {
       event.type = `${e.event?.__typename}.${e.event?.operation}` 
