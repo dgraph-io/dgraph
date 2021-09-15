@@ -518,8 +518,7 @@ func setupLambdaServer(closer *z.Closer) {
 					return
 				default:
 					cmd := exec.CommandContext(closer.Ctx(), "node", filename)
-					// When alpha dies, send the kill signal to node processes.
-					cmd.SysProcAttr = &syscall.SysProcAttr{Pdeathsig: syscall.SIGKILL}
+					cmd.SysProcAttr = childProcessConfig()
 					cmd.Env = append(cmd.Env, fmt.Sprintf("PORT=%d", lambdas[i].port))
 					cmd.Env = append(cmd.Env, fmt.Sprintf("DGRAPH_URL="+dgraphUrl))
 					cmd.Stdout = os.Stdout
