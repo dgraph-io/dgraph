@@ -18,6 +18,7 @@ package codec
 
 import (
 	"encoding/binary"
+	"sort"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
@@ -41,6 +42,12 @@ var (
 func ToList(rm *sroar.Bitmap) *pb.List {
 	return &pb.List{
 		Bitmap: rm.ToBufferWithCopy(),
+	}
+}
+
+func ToListNoCopy(rm *sroar.Bitmap) *pb.List {
+	return &pb.List{
+		Bitmap: rm.ToBuffer(),
 	}
 }
 
@@ -132,6 +139,15 @@ func Merge(matrix []*pb.List) *sroar.Bitmap {
 	return sroar.FastOr(bms...)
 }
 
+func fromSortedSlice(uids []uint64) *sroar.Bitmap {
+	uidsCopy := make([]uint64, len(uids))
+	copy(uidsCopy, uids)
+	sort.Slice(uidsCopy, func(i, j int) bool {
+		return uidsCopy[i] < uidsCopy[j]
+	})
+	return sroar.FromSortedList(uidsCopy)
+}
+
 func FromList(l *pb.List) *sroar.Bitmap {
 	if l == nil {
 		return sroar.NewBitmap()
@@ -141,9 +157,7 @@ func FromList(l *pb.List) *sroar.Bitmap {
 		return sroar.FromBufferWithCopy(l.Bitmap)
 	}
 	if len(l.SortedUids) > 0 {
-		bm := sroar.NewBitmap()
-		bm.SetMany(l.SortedUids)
-		return bm
+		return fromSortedSlice(l.SortedUids)
 	}
 	return sroar.NewBitmap()
 }
@@ -157,9 +171,7 @@ func FromListNoCopy(l *pb.List) *sroar.Bitmap {
 		return sroar.FromBuffer(l.Bitmap)
 	}
 	if len(l.SortedUids) > 0 {
-		bm := sroar.NewBitmap()
-		bm.SetMany(l.SortedUids)
-		return bm
+		return fromSortedSlice(l.SortedUids)
 	}
 	return sroar.NewBitmap()
 }

@@ -2040,6 +2040,21 @@ func (n *node) calculateSnapshot(startIdx, lastIdx, minPendingStart uint64) (*pb
 					maxCommitTs = x.Max(maxCommitTs, txn.CommitTs)
 				}
 			}
+
+			// If we encounter a restore proposal, we can immediately truncate the WAL and create
+			// a snapshot. This is to avoid the restore happening again if the server restarts.
+			if proposal.Restore != nil {
+				restoreTs := proposal.Restore.GetRestoreTs()
+				s := &pb.Snapshot{
+					Context:     n.RaftContext,
+					Index:       entry.Index,
+					ReadTs:      restoreTs,
+					MaxAssigned: restoreTs,
+				}
+				span.Annotatef(nil, "Found restore proposal with restoreTs: %d", restoreTs)
+				glog.Infof("calculated snapshot from restore proposal: %+v", s)
+				return s, nil
+			}
 		}
 	}
 
