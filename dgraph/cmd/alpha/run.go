@@ -34,6 +34,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -487,11 +488,13 @@ func setupLambdaServer(closer *z.Closer) {
 	}
 
 	type lambda struct {
+		sync.Mutex
 		cmd        *exec.Cmd
 		active     bool
 		lastActive int64
-		health     string
-		port       int
+
+		health string
+		port   int
 	}
 
 	lambdas := make([]*lambda, 0, num)
@@ -519,9 +522,11 @@ func setupLambdaServer(closer *z.Closer) {
 					cmd.Env = append(cmd.Env, fmt.Sprintf("DGRAPH_URL="+dgraphUrl))
 					cmd.Stdout = os.Stdout
 					cmd.Stderr = os.Stderr
+					lambdas[i].Lock()
 					lambdas[i].cmd = cmd
 					lambdas[i].lastActive = time.Now().UnixNano()
 					lambdas[i].active = true
+					lambdas[i].Unlock()
 					glog.Infof("Running node command: %+v\n", cmd)
 					if err := cmd.Run(); err != nil {
 						glog.Errorf("Lambda server at port: %d stopped with error: %v",
@@ -533,9 +538,32 @@ func setupLambdaServer(closer *z.Closer) {
 		}(i)
 	}
 
+	client := http.Client{Timeout: 1 * time.Second}
+	healthCheck := func(l *lambda) {
+		l.Lock()
+		defer l.Unlock()
+
+		if !l.active {
+			return
+		}
+
+		timestamp := time.Now().UnixNano()
+		resp, err := client.Get(l.health)
+		if err != nil || resp.StatusCode != 200 {
+			if time.Duration(timestamp-l.lastActive) > x.Config.Lambda.RestartAfter {
+				glog.Warningf("Lambda Server at port: %d not responding."+
+					" Killed it with err: %v", l.port, l.cmd.Process.Kill())
+				l.active = false
+			}
+			return
+		}
+
+		resp.Body.Close()
+		l.lastActive = timestamp
+	}
+
 	// Monitor the lambda servers. If the server is unresponsive for more than restart-after time,
 	// restart it.
-	client := http.Client{Timeout: 1 * time.Second}
 	go func() {
 		ticker := time.NewTicker(2 * time.Second)
 		defer ticker.Stop()
@@ -544,22 +572,8 @@ func setupLambdaServer(closer *z.Closer) {
 			case <-closer.HasBeenClosed():
 				return
 			case <-ticker.C:
-				timestamp := time.Now().UnixNano()
 				for _, l := range lambdas {
-					if !l.active {
-						continue
-					}
-					resp, err := client.Get(l.health)
-					if err != nil || resp.StatusCode != 200 {
-						if time.Duration(timestamp-l.lastActive) > x.Config.Lambda.RestartAfter {
-							glog.Warningf("Lambda Server at port: %d not responding."+
-								" Killed it with err: %v", l.port, l.cmd.Process.Kill())
-							l.active = false
-						}
-						continue
-					}
-					resp.Body.Close()
-					l.lastActive = timestamp
+					healthCheck(l)
 				}
 			}
 		}

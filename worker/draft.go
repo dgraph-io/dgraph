@@ -909,8 +909,10 @@ func (n *node) processApplyCh() {
 		var perr error
 		prev, ok := previous[prop.Key]
 		if ok && prev.err == nil {
-			n.elog.Printf("Proposal with key: %d already applied. Skipping index: %d.\n",
-				prop.Key, prop.Index)
+			msg := fmt.Sprintf("Proposal with key: %d already applied. Skipping index: %d."+
+				" Delta: %+v Snapshot: %+v.\n", prop.Key, prop.Index, prop.Delta, prop.Snapshot)
+			n.elog.Printf(msg)
+			glog.Infof(msg)
 			previous[prop.Key].seen = time.Now() // Update the ts.
 			// Don't break here. We still need to call the Done below.
 
