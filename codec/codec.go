@@ -139,6 +139,15 @@ func Merge(matrix []*pb.List) *sroar.Bitmap {
 	return sroar.FastOr(bms...)
 }
 
+func fromSortedSlice(uids []uint64) *sroar.Bitmap {
+	uidsCopy := make([]uint64, len(uids))
+	copy(uidsCopy, uids)
+	sort.Slice(uidsCopy, func(i, j int) bool {
+		return uidsCopy[i] < uidsCopy[j]
+	})
+	return sroar.FromSortedList(uidsCopy)
+}
+
 func FromList(l *pb.List) *sroar.Bitmap {
 	if l == nil {
 		return sroar.NewBitmap()
@@ -148,12 +157,7 @@ func FromList(l *pb.List) *sroar.Bitmap {
 		return sroar.FromBufferWithCopy(l.Bitmap)
 	}
 	if len(l.SortedUids) > 0 {
-		uids := make([]uint64, len(l.SortedUids))
-		copy(uids, l.SortedUids)
-		sort.Slice(uids, func(i, j int) bool {
-			return uids[i] < uids[j]
-		})
-		return sroar.FromSortedList(uids)
+		return fromSortedSlice(l.SortedUids)
 	}
 	return sroar.NewBitmap()
 }
@@ -167,12 +171,7 @@ func FromListNoCopy(l *pb.List) *sroar.Bitmap {
 		return sroar.FromBuffer(l.Bitmap)
 	}
 	if len(l.SortedUids) > 0 {
-		uids := make([]uint64, len(l.SortedUids))
-		copy(uids, l.SortedUids)
-		sort.Slice(uids, func(i, j int) bool {
-			return uids[i] < uids[j]
-		})
-		return sroar.FromSortedList(uids)
+		return fromSortedSlice(l.SortedUids)
 	}
 	return sroar.NewBitmap()
 }
