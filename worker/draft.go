@@ -2043,15 +2043,15 @@ func (n *node) calculateSnapshot(startIdx, lastIdx, minPendingStart uint64) (*pb
 			// a snapshot. This is to avoid the restore happening again if the server restarts.
 			if proposal.Restore != nil {
 				restoreTs := proposal.Restore.GetRestoreTs()
-				glog.Infof("Found restore proposal with restoreTs: %d", restoreTs)
-				span.Annotatef(nil, "Found restore proposal with restoreTs: %d", restoreTs)
-
-				return &pb.Snapshot{
+				s := &pb.Snapshot{
 					Context:     n.RaftContext,
 					Index:       entry.Index,
 					ReadTs:      restoreTs,
 					MaxAssigned: restoreTs,
-				}, nil
+				}
+				span.Annotatef(nil, "Found restore proposal with restoreTs: %d", restoreTs)
+				glog.Infof("calculated snapshot from restore proposal: %+v", s)
+				return s, nil
 			}
 		}
 	}
