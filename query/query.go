@@ -1151,9 +1151,10 @@ func (fromNode *varValue) transformTo(toPath []*SubGraph) (map[uint64]types.Val,
 			continue
 		}
 
+		srcUids := codec.GetUids(curNode.SrcUIDs)
 		for i := 0; i < len(curNode.uidMatrix); i++ {
 			ul := curNode.uidMatrix[i]
-			srcUid := codec.GetUids(curNode.SrcUIDs)[i]
+			srcUid := srcUids[i]
 			curVal, ok := newMap[srcUid]
 			if !ok || curVal.Value == nil {
 				continue
