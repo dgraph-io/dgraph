@@ -203,6 +203,7 @@ type Field interface {
 	CompleteAlias(buf *bytes.Buffer)
 	// GetAuthMeta returns the Dgraph.Authorization meta information stored in schema
 	GetAuthMeta() *authorization.AuthMeta
+	GetType(typeFor string) Type
 }
 
 // A Mutation is a field (from the schema's Mutation type) from an Operation
@@ -354,6 +355,10 @@ type field struct {
 	hasCustomHTTPChild *bool
 }
 
+func (f *field) GetType(typeFor string) Type {
+	return f.op.inSchema.Type(typeFor)
+}
+
 type fieldDefinition struct {
 	fieldDef        *ast.FieldDefinition
 	parentType      Type
@@ -362,7 +367,16 @@ type fieldDefinition struct {
 }
 
 type mutation field
+
+func (m *mutation) GetType(typeFor string) Type {
+	return (*field)(m).op.inSchema.Type(typeFor)
+}
+
 type query field
+
+func (q *query) GetType(typeFor string) Type {
+	return (*field)(q).op.inSchema.Type(typeFor)
+}
 
 func (s *schema) Queries(t QueryType) []string {
 	if s.schema.Query == nil {

@@ -37,6 +37,24 @@ func childAttrs(g *GraphQuery) []string {
 	return out
 }
 
+func TestQuery(t *testing.T) {
+	query := `
+		{
+			  x as updatePost(func: type(Post)) @filter(eq(Post.title, "title2")) {
+				uid
+			  }
+			  q(func: uid(x)) {
+				uid
+				dgraph.type
+              }
+		}
+`
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "len function only allowed inside inequality")
+
+}
+
 func TestLenFunctionInsideUidError(t *testing.T) {
 	query := `
 	{

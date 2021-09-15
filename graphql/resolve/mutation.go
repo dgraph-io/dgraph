@@ -278,6 +278,7 @@ func (mr *dgraphResolver) rewriteAndExecute(
 	}
 	// Execute queries and parse its result into a map
 	qry := dgraph.AsString(queries)
+	glog.Info("queries is ", string(qry))
 	req.Query = qry
 
 	// The query will be empty in case there is no reference XID / UID in the mutation.
@@ -373,6 +374,7 @@ func (mr *dgraphResolver) rewriteAndExecute(
 			resolverFailed
 	}
 
+	glog.Infof("upserts are %v", upserts)
 	if len(upserts) == 0 {
 		return &Resolved{
 			Data:       completeMutationResult(mutation, nil, 0),
@@ -413,9 +415,69 @@ func (mr *dgraphResolver) rewriteAndExecute(
 	mutationTimer := newtimer(ctx, &dgraphMutationDuration.OffsetDuration)
 	mutationTimer.Start()
 
+	updatedUids := make(map[string]string)
+	uidVsType := make(map[string]schema.Type)
 	for _, upsert := range upserts {
+		upsertQueries := upsert.Query
+		if len(upsertQueries) > 0 {
+			upsertQueries = append(upsertQueries, &gql.GraphQuery{
+				Attr: "q",
+				NeedsVar: []gql.VarContext{
+					{
+						Name: "x",
+						Typ: 1,
+					},
+				},
+				Func: &gql.Function{
+					Name: "uid",
+					NeedsVar: []gql.VarContext{
+						{
+							Name: "x",
+							Typ: 1,
+						},
+					},
+				},
+				Children: []*gql.GraphQuery{
+					{
+						Attr: "uid",
+					},
+					{
+						Attr: "dgraph.type",
+					},
+				},
+			})
+			qry = dgraph.AsString(upsertQueries)
+			glog.Info("new query for testing is ", qry)
+			req.Query = qry
+			mutResp, err = mr.executor.Execute(ctx, req, nil)
+			if err != nil {
+				gqlErr := schema.GQLWrapLocationf(
+					err, mutation.Location(), "mutation %s failed", mutation.Name())
+				return emptyResult(gqlErr), resolverFailed
+			}
+			glog.Info(string(mutResp.GetJson()))
+
+			// copy to the update map
+			type res struct {
+				Uid   string   `json:"uid"`
+				Types []string `json:"dgraph.type"`
+			}
+			queryResultMap := make(map[string][]res)
+			if mutResp != nil {
+				err = json.Unmarshal(mutResp.Json, &queryResultMap)
+			}
+
+			for _, result := range queryResultMap["q"] {
+				uidVsType[result.Uid] = mutation.GetType(result.Types[0])
+				updatedUids[result.Uid] = result.Uid
+			}
+
+			glog.Infof("update uid map is %+v %+v", req.Query, updatedUids)
+		}
+
 		req.Query = dgraph.AsString(upsert.Query)
 		req.Mutations = upsert.Mutations
+		glog.Infof("final request is %+v", req)
 		mutResp, err = mr.executor.Execute(ctx, req, nil)
 		if err != nil {
 			gqlErr := schema.GQLWrapLocationf(
@@ -424,6 +486,8 @@ func (mr *dgraphResolver) rewriteAndExecute(
 
 		}
 
+		r, _ := json.Marshal(mutResp)
+		glog.Infof("response is %+v", string(r))
 		ext.TouchedUids += mutResp.GetMetrics().GetNumUids()[touchedUidsKey]
 		if req.Query != "" && len(mutResp.GetJson()) != 0 {
 			if err := json.Unmarshal(mutResp.GetJson(), &result); err != nil {
@@ -480,13 +544,20 @@ func (mr *dgraphResolver) rewriteAndExecute(
 	}
 	mutationTimer.Stop()
 
+	glog.Info(mutResp.Uids, newNodes)
 	authErr := authorizeNewNodes(ctx, mutation, mutResp.Uids, newNodes, mr.executor, mutResp.Txn)
 	if authErr != nil {
 		return emptyResult(schema.GQLWrapf(authErr, "mutation failed")), resolverFailed
 	}
 
-	// check the updates
-	authErr = authorizeUpdatedNodes(ctx, mutation, mutResp.Uids, newNodes, mr.executor, mutResp.Txn)
+	//check the updates
+	authErr = authorizeUpdatedNodes(
+		ctx,
+		mutation,
+		updatedUids,
+		uidVsType,
+		mr.executor,
+		mutResp.Txn)
 	if authErr != nil {
 		return emptyResult(schema.GQLWrapf(authErr, "mutation failed")), resolverFailed
 	}
