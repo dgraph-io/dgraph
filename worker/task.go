@@ -732,12 +732,14 @@ func (qs *queryState) handleUidPostings(
 	errCh := make(chan error, numGo)
 	outputs := make([]*pb.Result, numGo)
 
+	uids := codec.GetUids(q.UidList)
+	srcFnUidList := &pb.List{Bitmap: srcFn.uidsPresent.ToBuffer()}
+
 	calculate := func(start, end int) error {
 		x.AssertTrue(start%width == 0)
 		out := &pb.Result{}
 		outputs[start/width] = out
 
-		uids := codec.GetUids(q.UidList)
 		for i := start; i < end; i++ {
 			if i%100 == 0 {
 				select {
@@ -808,13 +810,10 @@ func (qs *queryState) handleUidPostings(
 				if i == 0 {
 					span.Annotate(nil, "UidInFn")
 				}
-				reqBm := sroar.NewBitmap()
-				reqBm.SetMany(srcFn.uidsPresent)
-				reqList := codec.ToList(reqBm)
 				topts := posting.ListOptions{
 					ReadTs:    args.q.ReadTs,
 					AfterUid:  0,
-					Intersect: reqList,
+					Intersect: srcFnUidList,
 					First:     int(args.q.First + args.q.Offset),
 				}
 				plist, err := pl.Uids(topts)
@@ -1681,7 +1680,7 @@ type functionContext struct {
 	ineqValueToken []string
 	n              int
 	threshold      []int64
-	uidsPresent    []uint64
+	uidsPresent    *sroar.Bitmap
 	fname          string
 	fnType         FuncType
 	regex          *cregexp.Regexp
@@ -1947,6 +1946,7 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 		}
 		checkRoot(q, fc)
 	case uidInFn:
+		var uids []uint64
 		for _, arg := range q.SrcFunc.Args {
 			uidParsed, err := strconv.ParseUint(arg, 0, 64)
 			if err != nil {
@@ -1956,11 +1956,12 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 				}
 				return nil, err
 			}
-			fc.uidsPresent = append(fc.uidsPresent, uidParsed)
+			uids = append(uids, uidParsed)
 		}
-		sort.Slice(fc.uidsPresent, func(i, j int) bool {
-			return fc.uidsPresent[i] < fc.uidsPresent[j]
+		sort.Slice(uids, func(i, j int) bool {
+			return uids[i] < uids[j]
 		})
+		fc.uidsPresent = sroar.FromSortedList(uids)
 		checkRoot(q, fc)
 		if fc.isFuncAtRoot {
 			return nil, errors.Errorf("uid_in function not allowed at root")
