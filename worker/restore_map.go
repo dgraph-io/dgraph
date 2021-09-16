@@ -142,9 +142,10 @@ type mapper struct {
 	bufLock   *sync.Mutex
 	restoreTs uint64
 
-	mapDir string
-	reqCh  chan listReq
-	szHist *z.HistogramData
+	mapDir  string
+	reqCh   chan listReq
+	writeCh chan *z.Buffer
+	szHist  *z.HistogramData
 
 	maxUid uint64
 	maxNs  uint64
@@ -278,19 +279,24 @@ func fromBackupKey(key []byte) ([]byte, uint64, error) {
 	return x.FromBackupKey(backupKey), backupKey.Namespace, nil
 }
 
-func (m *mapper) mergeAndSend(writeCh chan *z.Buffer) error {
-	for buf := range writeCh {
-		atomic.AddUint64(&m.bytesProcessed, uint64(buf.LenNoPadding()))
-		m.buf.Write(buf.Bytes())
-		buf.Release()
+func (m *mapper) mergeAndSend(closer *z.Closer) error {
+	defer closer.Done()
+	for {
+		select {
+		case <-closer.HasBeenClosed():
+			return nil // Final sendForWriting would be called by Flush.
+		case buf := <-m.writeCh:
+			atomic.AddUint64(&m.bytesProcessed, uint64(buf.LenNoPadding()))
+			m.buf.Write(buf.Bytes())
+			buf.Release()
 
-		if m.buf.LenNoPadding() >= mapFileSz {
-			if err := m.sendForWriting(); err != nil {
-				return errors.Wrapf(err, "sendForWriting")
+			if m.buf.LenNoPadding() >= mapFileSz {
+				if err := m.sendForWriting(); err != nil {
+					return errors.Wrapf(err, "sendForWriting")
+				}
 			}
 		}
 	}
-	return m.sendForWriting()
 }
 
 type processor struct {
@@ -472,7 +478,7 @@ func (p *processor) processKV(buf *z.Buffer, in *loadBackupInput, kv *bpb.KV) er
 	return nil
 }
 
-func (m *mapper) processReqCh(ctx context.Context, writeCh chan *z.Buffer) error {
+func (m *mapper) processReqCh(ctx context.Context) error {
 	var list bpb.KVList
 	p := &processor{mapper: m}
 	buf := z.NewBuffer(256<<20, "processKVList")
@@ -494,7 +500,7 @@ func (m *mapper) processReqCh(ctx context.Context, writeCh chan *z.Buffer) error
 				}
 				if buf.LenNoPadding() > 228<<20 {
 					select {
-					case writeCh <- buf:
+					case m.writeCh <- buf:
 						// good.
 					case <-ctx.Done():
 						return errors.Wrapf(ctx.Err(), "processReqCh.SliceIterate")
@@ -652,21 +658,31 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) (*mapResult, error) {
 		bufLock:   &sync.Mutex{},
 		closer:    z.NewCloser(1),
 		reqCh:     make(chan listReq, 2*numGo),
+		writeCh:   make(chan *z.Buffer, numGo),
 		restoreTs: req.RestoreTs,
 		mapDir:    mapDir,
 		szHist:    z.NewHistogramData(z.HistogramBounds(10, 32)),
 	}
 
-	writeCh := make(chan *z.Buffer, numGo)
 	g, ctx := errgroup.WithContext(mapper.closer.Ctx())
-	g.Go(func() error {
-		return mapper.mergeAndSend(writeCh)
-	})
 	for i := 0; i < numGo; i++ {
 		g.Go(func() error {
-			return mapper.processReqCh(ctx, writeCh)
+			return mapper.processReqCh(ctx)
 		})
 	}
+
+	wCloser := z.NewCloser(1)
+	defer wCloser.Signal()
+	go func() {
+		err := mapper.mergeAndSend(wCloser)
+		if err != nil {
+			g.Go(func() error {
+				return errors.Wrapf(err, "mergeAndSend returned error")
+			})
+		}
+		glog.Infof("mapper.mergeAndSend done with error: %v", err)
+	}()
+
 	go mapper.Progress()
 	defer func() {
 		mapper.Flush()
@@ -774,7 +790,7 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) (*mapResult, error) {
 	if err := g.Wait(); err != nil {
 		return nil, errors.Wrapf(err, "from processKVList")
 	}
-	close(writeCh)
+	wCloser.SignalAndWait()
 	if err := mapper.Flush(); err != nil {
 		return nil, errors.Wrap(err, "failed to flush the mapper")
 	}
