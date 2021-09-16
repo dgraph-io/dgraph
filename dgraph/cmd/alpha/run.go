@@ -518,6 +518,7 @@ func setupLambdaServer(closer *z.Closer) {
 					return
 				default:
 					cmd := exec.CommandContext(closer.Ctx(), "node", filename)
+					cmd.SysProcAttr = childProcessConfig()
 					cmd.Env = append(cmd.Env, fmt.Sprintf("PORT=%d", lambdas[i].port))
 					cmd.Env = append(cmd.Env, fmt.Sprintf("DGRAPH_URL="+dgraphUrl))
 					cmd.Stdout = os.Stdout
