@@ -25,7 +25,7 @@ import (
 
 const (
 	// magicVersion is a unique uint16 number. Badger won't start if this magic number doesn't match
-	// with the one presnet in the manifest. It prevents starting up dgraph with new data format
+	// with the one present in the manifest. It prevents starting up dgraph with new data format
 	// (using roaring bitmap) on older p directory.
 	magicVersion = 1
 
