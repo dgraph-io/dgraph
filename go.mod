@@ -2,7 +2,7 @@ module github.com/dgraph-io/dgraph
 
 go 1.16
 
-// replace github.com/dgraph-io/badger/v3 => /home/ash/go/src/github.com/dgraph-io/badger
+// replace github.com/dgraph-io/badger/v3 => /home/mrjn/go/src/github.com/dgraph-io/badger
 // replace github.com/dgraph-io/ristretto => /home/mrjn/go/src/github.com/dgraph-io/ristretto
 // replace github.com/dgraph-io/sroar => /home/ash/go/src/github.com/dgraph-io/sroar
 
