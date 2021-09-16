@@ -65,7 +65,7 @@ get_token_graphql() {
 get_token() {
   USER="${1}"
   PASSWORD="${2}"
-  AUTH_TOKEN="${3:-""}"
+  AUTH_TOKEN="${3}"
   CACERT_PATH=${CACERT_PATH:-""}
   CLIENT_CERT_PATH=${CLIENT_CERT_PATH:-""}
   CLIENT_KEY_PATH=${CLIENT_KEY_PATH:-""}
