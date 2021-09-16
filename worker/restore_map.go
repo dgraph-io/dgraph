@@ -24,6 +24,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -543,8 +544,8 @@ func (m *mapper) Progress() {
 		proc := atomic.LoadUint64(&m.bytesProcessed)
 		since := time.Since(start)
 		rate := uint64(float64(proc) / since.Seconds())
-		glog.Infof("Restore MAP %s read: %s. output: %s. rate: %s/sec. jemalloc: %s.\n",
-			x.FixedDuration(since), humanize.IBytes(read), humanize.IBytes(proc),
+		glog.Infof("Restore MAP %s reqCh: %d read: %s. output: %s. rate: %s/sec. jemalloc: %s.\n",
+			x.FixedDuration(since), len(m.reqCh), humanize.IBytes(read), humanize.IBytes(proc),
 			humanize.IBytes(rate), humanize.IBytes(uint64(z.NumAllocBytes())))
 	}
 	for {
@@ -644,18 +645,18 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) (*mapResult, error) {
 		return nil, err
 	}
 
+	numGo := runtime.NumCPU()
 	mapper := &mapper{
 		buf:       newBuffer(),
 		thr:       y.NewThrottle(3),
 		bufLock:   &sync.Mutex{},
 		closer:    z.NewCloser(1),
-		reqCh:     make(chan listReq, 3),
+		reqCh:     make(chan listReq, 2*numGo),
 		restoreTs: req.RestoreTs,
 		mapDir:    mapDir,
 		szHist:    z.NewHistogramData(z.HistogramBounds(10, 32)),
 	}
 
-	numGo := 8
 	g, ctx := errgroup.WithContext(mapper.closer.Ctx())
 	for i := 0; i < numGo; i++ {
 		g.Go(func() error {
