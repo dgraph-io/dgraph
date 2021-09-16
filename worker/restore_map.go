@@ -138,8 +138,6 @@ type mapper struct {
 	bytesRead      uint64
 	closer         *z.Closer
 
-	buf       *z.Buffer
-	bufLock   *sync.Mutex
 	restoreTs uint64
 
 	mapDir  string
@@ -232,11 +230,12 @@ func newBuffer() *z.Buffer {
 	return buf.WithMaxSize(2 * mapFileSz)
 }
 
-func (mw *mapper) sendForWriting() error {
-	if mw.buf.IsEmpty() {
+func (mw *mapper) sendForWriting(mbuf *z.Buffer) error {
+	if mbuf.IsEmpty() {
+		mbuf.Release()
 		return nil
 	}
-	mw.buf.SortSlice(func(ls, rs []byte) bool {
+	mbuf.SortSlice(func(ls, rs []byte) bool {
 		lme := mapEntry(ls)
 		rme := mapEntry(rs)
 		return y.CompareKeys(lme.Key(), rme.Key()) < 0
@@ -248,25 +247,14 @@ func (mw *mapper) sendForWriting() error {
 	go func(buf *z.Buffer) {
 		err := mw.writeToDisk(buf)
 		mw.thr.Done(err)
-	}(mw.buf)
-	mw.buf = newBuffer()
+	}(mbuf)
 	return nil
 }
 
 func (mw *mapper) Flush() error {
-	cl := func() error {
-		if err := mw.sendForWriting(); err != nil {
-			return err
-		}
-		if err := mw.thr.Finish(); err != nil {
-			return err
-		}
-		return mw.buf.Release()
-	}
-
 	var rerr error
 	mw.once.Do(func() {
-		rerr = cl()
+		rerr = mw.thr.Finish()
 	})
 	return rerr
 }
@@ -285,18 +273,21 @@ func (m *mapper) mergeAndSend(closer *z.Closer) error {
 		<-closer.HasBeenClosed()
 		close(m.writeCh)
 	}()
+
+	mbuf := newBuffer()
 	for buf := range m.writeCh {
 		atomic.AddUint64(&m.bytesProcessed, uint64(buf.LenNoPadding()))
-		m.buf.Write(buf.Bytes())
+		mbuf.Write(buf.Bytes())
 		buf.Release()
 
-		if m.buf.LenNoPadding() >= mapFileSz {
-			if err := m.sendForWriting(); err != nil {
+		if mbuf.LenNoPadding() >= mapFileSz {
+			if err := m.sendForWriting(mbuf); err != nil {
 				return errors.Wrapf(err, "sendForWriting")
 			}
+			mbuf = newBuffer()
 		}
 	}
-	return m.sendForWriting()
+	return m.sendForWriting(mbuf)
 }
 
 type processor struct {
@@ -655,9 +646,7 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) (*mapResult, error) {
 
 	numGo := runtime.NumCPU()
 	mapper := &mapper{
-		buf:       newBuffer(),
 		thr:       y.NewThrottle(numGo),
-		bufLock:   &sync.Mutex{},
 		closer:    z.NewCloser(1),
 		reqCh:     make(chan listReq, 2*numGo),
 		writeCh:   make(chan *z.Buffer, numGo),
@@ -673,17 +662,19 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) (*mapResult, error) {
 		})
 	}
 
-	wCloser := z.NewCloser(1)
+	wCloser := z.NewCloser(numGo / 2)
 	defer wCloser.Signal()
-	go func() {
-		err := mapper.mergeAndSend(wCloser)
-		if err != nil {
-			g.Go(func() error {
-				return errors.Wrapf(err, "mergeAndSend returned error")
-			})
-		}
-		glog.Infof("mapper.mergeAndSend done with error: %v", err)
-	}()
+	for i := 0; i < numGo/2; i++ {
+		go func() {
+			err := mapper.mergeAndSend(wCloser)
+			if err != nil {
+				g.Go(func() error {
+					return errors.Wrapf(err, "mergeAndSend returned error")
+				})
+			}
+			glog.Infof("mapper.mergeAndSend done with error: %v", err)
+		}()
+	}
 
 	go mapper.Progress()
 	defer func() {
