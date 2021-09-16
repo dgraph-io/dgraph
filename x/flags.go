@@ -23,7 +23,7 @@ import (
 
 const (
 	TraceDefaults     = `ratio=0.01; jaeger=; datadog=;`
-	TelemetryDefaults = `reports=true; sentry=true;`
+	TelemetryDefaults = `reports=true; `
 )
 
 // FillCommonFlags stores flags common to Alpha and Zero.
@@ -58,7 +58,5 @@ func FillCommonFlags(flag *pflag.FlagSet) {
 		Head("Telemetry (diagnostic) options").
 		Flag("reports",
 			"Send anonymous telemetry data to Dgraph devs.").
-		Flag("sentry",
-			"Send crash events to Sentry.").
 		String())
 }
