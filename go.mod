@@ -2,7 +2,7 @@ module github.com/dgraph-io/dgraph
 
 go 1.16
 
-// replace github.com/dgraph-io/badger/v3 => /home/mrjn/go/src/github.com/dgraph-io/badger
+// replace github.com/dgraph-io/badger/v3 => /home/ash/go/src/github.com/dgraph-io/badger
 // replace github.com/dgraph-io/ristretto => /home/mrjn/go/src/github.com/dgraph-io/ristretto
 // replace github.com/dgraph-io/sroar => /home/ash/go/src/github.com/dgraph-io/sroar
 
@@ -19,7 +19,7 @@ require (
 	github.com/Shopify/sarama v1.27.2
 	github.com/blevesearch/bleve v1.0.13
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd
-	github.com/dgraph-io/badger/v3 v3.0.0-20210914152503-560e319d7ceb
+	github.com/dgraph-io/badger/v3 v3.0.0-20210916095630-2a9a524b649b
 	github.com/dgraph-io/dgo/v210 v210.0.0-20210421093152-78a2fece3ebd
 	github.com/dgraph-io/gqlgen v0.13.2
 	github.com/dgraph-io/gqlparser/v2 v2.2.1
