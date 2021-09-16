@@ -278,13 +278,28 @@ func fromBackupKey(key []byte) ([]byte, uint64, error) {
 	return x.FromBackupKey(backupKey), backupKey.Namespace, nil
 }
 
-func (m *mapper) processReqCh(ctx context.Context) error {
-	buf := z.NewBuffer(20<<20, "processKVList")
-	defer buf.Release()
+func (m *mapper) mergeAndSend(writeCh chan *z.Buffer) error {
+	for buf := range writeCh {
+		atomic.AddUint64(&m.bytesProcessed, uint64(buf.LenNoPadding()))
+		m.buf.Write(buf.Bytes())
+		buf.Release()
 
-	maxNs := uint64(0)
-	maxUid := uint64(0)
+		if m.buf.LenNoPadding() >= mapFileSz {
+			if err := m.sendForWriting(); err != nil {
+				return errors.Wrapf(err, "sendForWriting")
+			}
+		}
+	}
+	return m.sendForWriting()
+}
 
+type processor struct {
+	*mapper
+	maxUid uint64
+	maxNs  uint64
+}
+
+func (p *processor) processKV(buf *z.Buffer, in *loadBackupInput, kv *bpb.KV) error {
 	toBuffer := func(kv *bpb.KV, version uint64) error {
 		key := y.KeyWithTs(kv.Key, version)
 		sz := kv.Size()
@@ -295,189 +310,173 @@ func (m *mapper) processReqCh(ctx context.Context) error {
 		_, err := kv.MarshalToSizedBuffer(buf[2+len(key):])
 		return err
 	}
+	if len(kv.GetUserMeta()) != 1 {
+		return errors.Errorf(
+			"Unexpected meta: %v for key: %s", kv.UserMeta, hex.Dump(kv.Key))
+	}
 
-	processKV := func(in *loadBackupInput, kv *bpb.KV) error {
-		if len(kv.GetUserMeta()) != 1 {
-			return errors.Errorf(
-				"Unexpected meta: %v for key: %s", kv.UserMeta, hex.Dump(kv.Key))
-		}
+	restoreKey, ns, err := fromBackupKey(kv.Key)
+	if err != nil {
+		return errors.Wrap(err, "fromBackupKey")
+	}
 
-		restoreKey, ns, err := fromBackupKey(kv.Key)
-		if err != nil {
-			return errors.Wrap(err, "fromBackupKey")
-		}
+	// Filter keys using the preds set. Do not do this filtering for type keys
+	// as they are meant to be in every group and their Attr value does not
+	// match a predicate name.
+	parsedKey, err := x.Parse(restoreKey)
+	if err != nil {
+		return errors.Wrapf(err, "could not parse key %s", hex.Dump(restoreKey))
+	}
 
-		// Filter keys using the preds set. Do not do this filtering for type keys
-		// as they are meant to be in every group and their Attr value does not
-		// match a predicate name.
-		parsedKey, err := x.Parse(restoreKey)
-		if err != nil {
-			return errors.Wrapf(err, "could not parse key %s", hex.Dump(restoreKey))
-		}
+	// Update the local max uid and max namespace values.
+	p.maxUid = x.Max(p.maxUid, parsedKey.Uid)
+	p.maxNs = x.Max(p.maxNs, ns)
 
-		// Update the local max uid and max namespace values.
-		maxUid = x.Max(maxUid, parsedKey.Uid)
-		maxNs = x.Max(maxNs, ns)
+	if !in.keepSchema && (parsedKey.IsSchema() || parsedKey.IsType()) {
+		return nil
+	}
+	if _, ok := in.preds[parsedKey.Attr]; !parsedKey.IsType() && !ok {
+		return nil
+	}
 
-		if !in.keepSchema && (parsedKey.IsSchema() || parsedKey.IsType()) {
+	switch kv.GetUserMeta()[0] {
+	case posting.BitEmptyPosting, posting.BitCompletePosting, posting.BitDeltaPosting:
+		if _, ok := in.dropNs[ns]; ok {
 			return nil
 		}
-		if _, ok := in.preds[parsedKey.Attr]; !parsedKey.IsType() && !ok {
-			return nil
+		backupPl := &pb.BackupPostingList{}
+		if err := backupPl.Unmarshal(kv.Value); err != nil {
+			return errors.Wrapf(err, "while reading backup posting list")
+		}
+		pl := posting.FromBackupPostingList(backupPl)
+
+		if !posting.ShouldSplit(pl) || parsedKey.HasStartUid || len(pl.GetSplits()) > 0 {
+			// This covers two cases.
+			// 1. The list is not big enough to be split.
+			// 2. This key is storing part of a multi-part list. Write each individual
+			// part without rolling the key first. This part is here for backwards
+			// compatibility. New backups are not affected because there was a change
+			// to roll up lists into a single one.
+			newKv := posting.MarshalPostingList(pl, nil)
+			newKv.Key = restoreKey
+
+			// We are using kv.Version (from the key-value) to generate the key. But, using
+			// restoreTs to set the version of the KV. This way, when we sort the keys, we
+			// choose the latest key based on kv.Version. But, then set its version to
+			// restoreTs.
+			newKv.Version = p.restoreTs
+			if err := toBuffer(newKv, kv.Version); err != nil {
+				return err
+			}
+		} else {
+			// This is a complete list. It should be rolled up to avoid writing
+			// a list that is too big to be read back from disk.
+			// Rollup will take ownership of the Pack and will free the memory.
+			l := posting.NewList(restoreKey, pl, kv.Version)
+			kvs, err := l.Rollup(nil)
+			if err != nil {
+				// TODO: wrap errors in this file for easier debugging.
+				return err
+			}
+			for _, kv := range kvs {
+				version := kv.Version
+				kv.Version = p.restoreTs
+				if err := toBuffer(kv, version); err != nil {
+					return err
+				}
+			}
 		}
 
-		switch kv.GetUserMeta()[0] {
-		case posting.BitEmptyPosting, posting.BitCompletePosting, posting.BitDeltaPosting:
-			if _, ok := in.dropNs[ns]; ok {
-				return nil
+	case posting.BitSchemaPosting:
+		appendNamespace := func() error {
+			// If the backup was taken on old version, we need to append the namespace to
+			// the fields of TypeUpdate.
+			var update pb.TypeUpdate
+			if err := update.Unmarshal(kv.Value); err != nil {
+				return err
 			}
-			backupPl := &pb.BackupPostingList{}
-			if err := backupPl.Unmarshal(kv.Value); err != nil {
-				return errors.Wrapf(err, "while reading backup posting list")
+			update.TypeName = x.GalaxyAttr(update.TypeName)
+			for _, sch := range update.Fields {
+				sch.Predicate = x.GalaxyAttr(sch.Predicate)
 			}
-			pl := posting.FromBackupPostingList(backupPl)
-
-			if !posting.ShouldSplit(pl) || parsedKey.HasStartUid || len(pl.GetSplits()) > 0 {
-				// This covers two cases.
-				// 1. The list is not big enough to be split.
-				// 2. This key is storing part of a multi-part list. Write each individual
-				// part without rolling the key first. This part is here for backwards
-				// compatibility. New backups are not affected because there was a change
-				// to roll up lists into a single one.
-				newKv := posting.MarshalPostingList(pl, nil)
-				newKv.Key = restoreKey
-
-				// We are using kv.Version (from the key-value) to generate the key. But, using
-				// restoreTs to set the version of the KV. This way, when we sort the keys, we
-				// choose the latest key based on kv.Version. But, then set its version to
-				// restoreTs.
-				newKv.Version = m.restoreTs
-				if err := toBuffer(newKv, kv.Version); err != nil {
-					return err
-				}
-			} else {
-				// This is a complete list. It should be rolled up to avoid writing
-				// a list that is too big to be read back from disk.
-				// Rollup will take ownership of the Pack and will free the memory.
-				l := posting.NewList(restoreKey, pl, kv.Version)
-				kvs, err := l.Rollup(nil)
-				if err != nil {
-					// TODO: wrap errors in this file for easier debugging.
-					return err
-				}
-				for _, kv := range kvs {
-					version := kv.Version
-					kv.Version = m.restoreTs
-					if err := toBuffer(kv, version); err != nil {
-						return err
-					}
-				}
-			}
-
-		case posting.BitSchemaPosting:
-			appendNamespace := func() error {
-				// If the backup was taken on old version, we need to append the namespace to
-				// the fields of TypeUpdate.
-				var update pb.TypeUpdate
+			kv.Value, err = update.Marshal()
+			return err
+		}
+		changeFormat := func() error {
+			// In the backup taken on 2103, we have the schemaUpdate.Predicate in format
+			// <namespace 8 bytes>|<attribute>. That had issues with JSON marshalling.
+			// So, we switched over to the format <namespace hex string>-<attribute>.
+			var err error
+			if parsedKey.IsSchema() {
+				var update pb.SchemaUpdate
 				if err := update.Unmarshal(kv.Value); err != nil {
 					return err
 				}
-				update.TypeName = x.GalaxyAttr(update.TypeName)
-				for _, sch := range update.Fields {
-					sch.Predicate = x.GalaxyAttr(sch.Predicate)
+				if update.Predicate, err = x.AttrFrom2103(update.Predicate); err != nil {
+					return err
 				}
 				kv.Value, err = update.Marshal()
 				return err
 			}
-			changeFormat := func() error {
-				// In the backup taken on 2103, we have the schemaUpdate.Predicate in format
-				// <namespace 8 bytes>|<attribute>. That had issues with JSON marshalling.
-				// So, we switched over to the format <namespace hex string>-<attribute>.
-				var err error
-				if parsedKey.IsSchema() {
-					var update pb.SchemaUpdate
-					if err := update.Unmarshal(kv.Value); err != nil {
-						return err
-					}
-					if update.Predicate, err = x.AttrFrom2103(update.Predicate); err != nil {
-						return err
-					}
-					kv.Value, err = update.Marshal()
+			if parsedKey.IsType() {
+				var update pb.TypeUpdate
+				if err := update.Unmarshal(kv.Value); err != nil {
 					return err
 				}
-				if parsedKey.IsType() {
-					var update pb.TypeUpdate
-					if err := update.Unmarshal(kv.Value); err != nil {
-						return err
-					}
-					if update.TypeName, err = x.AttrFrom2103(update.TypeName); err != nil {
-						return err
-					}
-					for _, sch := range update.Fields {
-						if sch.Predicate, err = x.AttrFrom2103(sch.Predicate); err != nil {
-							return err
-						}
-					}
-					kv.Value, err = update.Marshal()
+				if update.TypeName, err = x.AttrFrom2103(update.TypeName); err != nil {
 					return err
 				}
-				return nil
-			}
-			// We changed the format of predicate in 2103 and 2105. SchemaUpdate and TypeUpdate have
-			// predicate stored within them, so they also need to be updated accordingly.
-			switch in.version {
-			case 0:
-				if parsedKey.IsType() {
-					if err := appendNamespace(); err != nil {
-						glog.Errorf("Unable to (un)marshal type: %+v. Err=%v\n", parsedKey, err)
-						return nil
+				for _, sch := range update.Fields {
+					if sch.Predicate, err = x.AttrFrom2103(sch.Predicate); err != nil {
+						return err
 					}
 				}
-			case 2103:
-				if err := changeFormat(); err != nil {
-					glog.Errorf("Unable to change format for: %+v Err=%+v", parsedKey, err)
-					return nil
-				}
-			default:
-				// for manifest versions >= 2015, do nothing.
-			}
-			// Reset the StreamId to prevent ordering issues while writing to stream writer.
-			kv.StreamId = 0
-			// Schema and type keys are not stored in an intermediate format so their
-			// value can be written as is.
-			version := kv.Version
-			kv.Version = m.restoreTs
-			kv.Key = restoreKey
-			if err := toBuffer(kv, version); err != nil {
+				kv.Value, err = update.Marshal()
 				return err
 			}
-
+			return nil
+		}
+		// We changed the format of predicate in 2103 and 2105. SchemaUpdate and TypeUpdate have
+		// predicate stored within them, so they also need to be updated accordingly.
+		switch in.version {
+		case 0:
+			if parsedKey.IsType() {
+				if err := appendNamespace(); err != nil {
+					glog.Errorf("Unable to (un)marshal type: %+v. Err=%v\n", parsedKey, err)
+					return nil
+				}
+			}
+		case 2103:
+			if err := changeFormat(); err != nil {
+				glog.Errorf("Unable to change format for: %+v Err=%+v", parsedKey, err)
+				return nil
+			}
 		default:
-			return errors.Errorf(
-				"Unexpected meta %d for key %s", kv.UserMeta[0], hex.Dump(kv.Key))
+			// for manifest versions >= 2015, do nothing.
 		}
-		return nil
+		// Reset the StreamId to prevent ordering issues while writing to stream writer.
+		kv.StreamId = 0
+		// Schema and type keys are not stored in an intermediate format so their
+		// value can be written as is.
+		version := kv.Version
+		kv.Version = p.restoreTs
+		kv.Key = restoreKey
+		if err := toBuffer(kv, version); err != nil {
+			return err
+		}
+
+	default:
+		return errors.Errorf(
+			"Unexpected meta %d for key %s", kv.UserMeta[0], hex.Dump(kv.Key))
 	}
+	return nil
+}
 
-	mergeBuffer := func() error {
-		if buf.IsEmpty() {
-			return nil
-		}
-		atomic.AddUint64(&m.bytesProcessed, uint64(buf.LenNoPadding()))
-
-		m.bufLock.Lock()
-		defer m.bufLock.Unlock()
-
-		x.Check2(m.buf.Write(buf.Bytes()))
-		buf.Reset()
-
-		if m.buf.LenNoPadding() < mapFileSz {
-			return nil
-		}
-		return m.sendForWriting()
-	}
-
+func (m *mapper) processReqCh(ctx context.Context, writeCh chan *z.Buffer) error {
 	var list bpb.KVList
+	p := &processor{mapper: m}
+	buf := z.NewBuffer(256<<20, "processKVList")
+
 	process := func(req listReq) error {
 		defer req.lbuf.Release()
 
@@ -490,13 +489,17 @@ func (m *mapper) processReqCh(ctx context.Context) error {
 				return err
 			}
 			for _, kv := range list.GetKv() {
-				if err := processKV(req.in, kv); err != nil {
+				if err := p.processKV(buf, req.in, kv); err != nil {
 					return err
 				}
-				if buf.LenNoPadding() > 256<<20 {
-					if err := mergeBuffer(); err != nil {
-						return err
+				if buf.LenNoPadding() > 228<<20 {
+					select {
+					case writeCh <- buf:
+						// good.
+					case <-ctx.Done():
+						return errors.Wrapf(ctx.Err(), "processReqCh.SliceIterate")
 					}
+					buf = z.NewBuffer(256<<20, "processKVList")
 				}
 			}
 			return nil
@@ -508,22 +511,19 @@ func (m *mapper) processReqCh(ctx context.Context) error {
 			return err
 		}
 	}
-	if err := mergeBuffer(); err != nil {
-		return err
-	}
 
 	// Update the global maxUid and maxNs. We need CAS here because mapping is
 	// being carried out concurrently.
 	for {
 		oldMaxUid := atomic.LoadUint64(&m.maxUid)
-		newMaxUid := x.Max(oldMaxUid, maxUid)
+		newMaxUid := x.Max(oldMaxUid, p.maxUid)
 		if swapped := atomic.CompareAndSwapUint64(&m.maxUid, oldMaxUid, newMaxUid); swapped {
 			break
 		}
 	}
 	for {
 		oldMaxNs := atomic.LoadUint64(&m.maxNs)
-		newMaxNs := x.Max(oldMaxNs, maxNs)
+		newMaxNs := x.Max(oldMaxNs, p.maxNs)
 		if swapped := atomic.CompareAndSwapUint64(&m.maxNs, oldMaxNs, newMaxNs); swapped {
 			break
 		}
@@ -657,10 +657,14 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) (*mapResult, error) {
 		szHist:    z.NewHistogramData(z.HistogramBounds(10, 32)),
 	}
 
+	writeCh := make(chan *z.Buffer, numGo)
 	g, ctx := errgroup.WithContext(mapper.closer.Ctx())
+	g.Go(func() error {
+		return mapper.mergeAndSend(writeCh)
+	})
 	for i := 0; i < numGo; i++ {
 		g.Go(func() error {
-			return mapper.processReqCh(ctx)
+			return mapper.processReqCh(ctx, writeCh)
 		})
 	}
 	go mapper.Progress()
@@ -770,6 +774,7 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) (*mapResult, error) {
 	if err := g.Wait(); err != nil {
 		return nil, errors.Wrapf(err, "from processKVList")
 	}
+	close(writeCh)
 	if err := mapper.Flush(); err != nil {
 		return nil, errors.Wrap(err, "failed to flush the mapper")
 	}
