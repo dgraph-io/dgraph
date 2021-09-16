@@ -281,22 +281,22 @@ func fromBackupKey(key []byte) ([]byte, uint64, error) {
 
 func (m *mapper) mergeAndSend(closer *z.Closer) error {
 	defer closer.Done()
-	for {
-		select {
-		case <-closer.HasBeenClosed():
-			return nil // Final sendForWriting would be called by Flush.
-		case buf := <-m.writeCh:
-			atomic.AddUint64(&m.bytesProcessed, uint64(buf.LenNoPadding()))
-			m.buf.Write(buf.Bytes())
-			buf.Release()
+	go func() {
+		<-closer.HasBeenClosed()
+		close(m.writeCh)
+	}()
+	for buf := range m.writeCh {
+		atomic.AddUint64(&m.bytesProcessed, uint64(buf.LenNoPadding()))
+		m.buf.Write(buf.Bytes())
+		buf.Release()
 
-			if m.buf.LenNoPadding() >= mapFileSz {
-				if err := m.sendForWriting(); err != nil {
-					return errors.Wrapf(err, "sendForWriting")
-				}
+		if m.buf.LenNoPadding() >= mapFileSz {
+			if err := m.sendForWriting(); err != nil {
+				return errors.Wrapf(err, "sendForWriting")
 			}
 		}
 	}
+	return m.sendForWriting()
 }
 
 type processor struct {
@@ -517,6 +517,7 @@ func (m *mapper) processReqCh(ctx context.Context) error {
 			return err
 		}
 	}
+	m.writeCh <- buf
 
 	// Update the global maxUid and maxNs. We need CAS here because mapping is
 	// being carried out concurrently.
@@ -790,6 +791,7 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) (*mapResult, error) {
 	if err := g.Wait(); err != nil {
 		return nil, errors.Wrapf(err, "from processKVList")
 	}
+	glog.Infof("mapper.processReqCh done")
 	wCloser.SignalAndWait()
 	if err := mapper.Flush(); err != nil {
 		return nil, errors.Wrap(err, "failed to flush the mapper")
