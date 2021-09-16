@@ -551,8 +551,9 @@ func (m *mapper) Progress() {
 		proc := atomic.LoadUint64(&m.bytesProcessed)
 		since := time.Since(start)
 		rate := uint64(float64(proc) / since.Seconds())
-		glog.Infof("Restore MAP %s reqCh: %d read: %s. output: %s. rate: %s/sec. jemalloc: %s.\n",
-			x.FixedDuration(since), len(m.reqCh), humanize.IBytes(read), humanize.IBytes(proc),
+		glog.Infof("Restore MAP %s len(reqCh): %d len(writeCh): %d read: %s. output: %s."+
+			" rate: %s/sec. jemalloc: %s.\n", x.FixedDuration(since), len(m.reqCh),
+			len(m.writeCh), humanize.IBytes(read), humanize.IBytes(proc),
 			humanize.IBytes(rate), humanize.IBytes(uint64(z.NumAllocBytes())))
 	}
 	for {
