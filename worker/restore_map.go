@@ -493,7 +493,7 @@ func (m *mapper) processReqCh(ctx context.Context) error {
 				if err := processKV(req.in, kv); err != nil {
 					return err
 				}
-				if buf.LenNoPadding() > 16<<20 {
+				if buf.LenNoPadding() > 256<<20 {
 					if err := mergeBuffer(); err != nil {
 						return err
 					}
