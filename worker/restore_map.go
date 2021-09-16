@@ -648,7 +648,7 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) (*mapResult, error) {
 	numGo := runtime.NumCPU()
 	mapper := &mapper{
 		buf:       newBuffer(),
-		thr:       y.NewThrottle(3),
+		thr:       y.NewThrottle(numGo),
 		bufLock:   &sync.Mutex{},
 		closer:    z.NewCloser(1),
 		reqCh:     make(chan listReq, 2*numGo),
