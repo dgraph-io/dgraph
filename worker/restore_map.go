@@ -545,10 +545,11 @@ func (m *mapper) Progress() {
 		since := time.Since(start)
 		rate := uint64(float64(proc) / since.Seconds())
 		glog.Infof("Restore MAP %s len(reqCh): %d len(writeCh): %d read: %s. output: %s."+
-			" rate: %s/sec. nextFileId: %d jemalloc: %s.\n",
+			" rate: %s/sec. nextFileId: %d writers: %d jemalloc: %s.\n",
 			x.FixedDuration(since), len(m.reqCh),
 			len(m.writeCh), humanize.IBytes(read), humanize.IBytes(proc),
 			humanize.IBytes(rate), atomic.LoadUint32(&m.nextId),
+			len(m.writers),
 			humanize.IBytes(uint64(z.NumAllocBytes())))
 	}
 	for {
@@ -648,6 +649,9 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) (*mapResult, error) {
 	}
 
 	numGo := int(float64(runtime.NumCPU()) * 0.75)
+	if numGo < 2 {
+		numGo = 2
+	}
 	glog.Infof("Setting numGo = %d\n", numGo)
 	mapper := &mapper{
 		closer:    z.NewCloser(1),
