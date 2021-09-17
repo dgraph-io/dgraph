@@ -655,7 +655,7 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) (*mapResult, error) {
 	glog.Infof("Setting numGo = %d\n", numGo)
 	mapper := &mapper{
 		closer:    z.NewCloser(1),
-		reqCh:     make(chan listReq, 2*numGo),
+		reqCh:     make(chan listReq, numGo+numGo/4),
 		writeCh:   make(chan *z.Buffer, numGo),
 		writers:   make(chan struct{}, numGo/2), // Only half the writers should be writing at the same time.
 		restoreTs: req.RestoreTs,
