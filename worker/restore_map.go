@@ -274,6 +274,9 @@ func (m *mapper) mergeAndSend(closer *z.Closer) error {
 			m.writers <- struct{}{}
 
 		} else if mbuf.LenNoPadding() >= mapFileSz/4 {
+			// This mechanism allows us to stagger our writes. So, if can do a
+			// write, and we have accumulated a large enough buffer, then go for
+			// it.
 			select {
 			case m.writers <- struct{}{}:
 				writeNow = true
@@ -654,10 +657,11 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) (*mapResult, error) {
 	}
 	glog.Infof("Setting numGo = %d\n", numGo)
 	mapper := &mapper{
-		closer:    z.NewCloser(1),
-		reqCh:     make(chan listReq, numGo+numGo/4),
-		writeCh:   make(chan *z.Buffer, numGo),
-		writers:   make(chan struct{}, numGo/2), // Only half the writers should be writing at the same time.
+		closer:  z.NewCloser(1),
+		reqCh:   make(chan listReq, numGo+numGo/4),
+		writeCh: make(chan *z.Buffer, numGo),
+		// Only half the writers should be writing at the same time.
+		writers:   make(chan struct{}, numGo/2),
 		restoreTs: req.RestoreTs,
 		mapDir:    mapDir,
 		szHist:    z.NewHistogramData(z.HistogramBounds(10, 32)),
