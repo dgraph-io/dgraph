@@ -273,7 +273,7 @@ func (m *mapper) mergeAndSend(closer *z.Closer) error {
 			writeNow = true
 			m.writers <- struct{}{}
 
-		} else if mbuf.LenNoPadding() >= mapFileSz/8 {
+		} else if mbuf.LenNoPadding() >= mapFileSz/4 {
 			select {
 			case m.writers <- struct{}{}:
 				writeNow = true
