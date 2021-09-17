@@ -240,15 +240,16 @@ func (mw *mapper) sendForWriting(mbuf *z.Buffer) error {
 		rme := mapEntry(rs)
 		return y.CompareKeys(lme.Key(), rme.Key()) < 0
 	})
+	return mw.writeToDisk(mbuf)
 
-	if err := mw.thr.Do(); err != nil {
-		return err
-	}
-	go func(buf *z.Buffer) {
-		err := mw.writeToDisk(buf)
-		mw.thr.Done(err)
-	}(mbuf)
-	return nil
+	// if err := mw.thr.Do(); err != nil {
+	// 	return err
+	// }
+	// go func(buf *z.Buffer) {
+	// 	err := mw.writeToDisk(buf)
+	// 	mw.thr.Done(err)
+	// }(mbuf)
+	// return nil
 }
 
 func (mw *mapper) Flush() error {
@@ -543,9 +544,11 @@ func (m *mapper) Progress() {
 		since := time.Since(start)
 		rate := uint64(float64(proc) / since.Seconds())
 		glog.Infof("Restore MAP %s len(reqCh): %d len(writeCh): %d read: %s. output: %s."+
-			" rate: %s/sec. jemalloc: %s.\n", x.FixedDuration(since), len(m.reqCh),
+			" rate: %s/sec. nextFileId: %d jemalloc: %s.\n",
+			x.FixedDuration(since), len(m.reqCh),
 			len(m.writeCh), humanize.IBytes(read), humanize.IBytes(proc),
-			humanize.IBytes(rate), humanize.IBytes(uint64(z.NumAllocBytes())))
+			humanize.IBytes(rate), atomic.LoadUint32(&m.nextId),
+			humanize.IBytes(uint64(z.NumAllocBytes())))
 	}
 	for {
 		select {
@@ -589,7 +592,6 @@ func (m *mapper) Map(r io.Reader, in *loadBackupInput) error {
 
 		if zbuf.LenNoPadding() > bufSoftLimit {
 			atomic.AddUint64(&m.bytesRead, uint64(zbuf.LenNoPadding()))
-			glog.Infof("Sending req of size: %s\n", humanize.IBytes(uint64(zbuf.LenNoPadding())))
 			m.reqCh <- listReq{zbuf, in}
 			zbuf = z.NewBuffer(bufSz, "Restore.Map")
 		}
@@ -644,7 +646,8 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) (*mapResult, error) {
 		return nil, err
 	}
 
-	numGo := runtime.NumCPU()
+	numGo := runtime.NumCPU() / 2
+	glog.Infof("Setting numGo = %d\n", numGo)
 	mapper := &mapper{
 		thr:       y.NewThrottle(numGo),
 		closer:    z.NewCloser(1),
