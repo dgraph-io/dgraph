@@ -333,17 +333,27 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest, pidx uin
 		}
 	}
 
-	mapDir, err := ioutil.TempDir(x.WorkerConfig.TmpDir, "restore-map")
-	x.Check(err)
-	defer os.RemoveAll(mapDir)
-	glog.Infof("Created temporary map directory: %s\n", mapDir)
+	// HACK: Use specific mapDir and don't remove it
+	mapDir := filepath.Join(x.WorkerConfig.TmpDir, "restore-map")
+	// mapDir, err := ioutil.TempDir(x.WorkerConfig.TmpDir, "restore-map")
+	// x.Check(err)
+	// defer os.RemoveAll(mapDir)
+	// glog.Infof("Created temporary map directory: %s\n", mapDir)
 
 	// Map the backup.
-	mapRes, err := RunMapper(req, mapDir)
-	if err != nil {
-		return errors.Wrapf(err, "Failed to map the backup files")
+	// HACK: Use specific mapRes
+	// mapRes, err := RunMapper(req, mapDir)
+	// if err != nil {
+	// 	return errors.Wrapf(err, "Failed to map the backup files")
+	// }
+	// glog.Infof("Backup map phase is complete. Map result is: %+v\n", mapRes)
+	mapRes := &mapResult{
+		maxUid:        671787946,
+		maxNs:         0,
+		shouldDropAll: false,
+		dropAttr:      map[string]struct{}{},
+		dropNs:        map[uint64]struct{}{},
 	}
-	glog.Infof("Backup map phase is complete. Map result is: %+v\n", mapRes)
 
 	sw := pstore.NewStreamWriter()
 	defer sw.Cancel()
