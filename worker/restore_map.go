@@ -646,7 +646,7 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) (*mapResult, error) {
 		return nil, err
 	}
 
-	numGo := runtime.NumCPU() / 2
+	numGo := int(float64(runtime.NumCPU()) * 0.75)
 	glog.Infof("Setting numGo = %d\n", numGo)
 	mapper := &mapper{
 		thr:       y.NewThrottle(numGo),
