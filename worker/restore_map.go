@@ -132,7 +132,6 @@ func (me mapEntry) Data() []byte {
 type mapper struct {
 	once   sync.Once
 	nextId uint32
-	thr    *y.Throttle
 
 	bytesProcessed uint64
 	bytesRead      uint64
@@ -143,6 +142,7 @@ type mapper struct {
 	mapDir  string
 	reqCh   chan listReq
 	writeCh chan *z.Buffer
+	writers chan struct{}
 	szHist  *z.HistogramData
 
 	maxUid uint64
@@ -230,7 +230,11 @@ func newBuffer() *z.Buffer {
 	return buf.WithMaxSize(2 * mapFileSz)
 }
 
-func (mw *mapper) sendForWriting(mbuf *z.Buffer) error {
+func (mw *mapper) writeNow(mbuf *z.Buffer) error {
+	defer func() {
+		<-mw.writers
+	}()
+
 	if mbuf.IsEmpty() {
 		mbuf.Release()
 		return nil
@@ -241,23 +245,10 @@ func (mw *mapper) sendForWriting(mbuf *z.Buffer) error {
 		return y.CompareKeys(lme.Key(), rme.Key()) < 0
 	})
 	return mw.writeToDisk(mbuf)
-
-	// if err := mw.thr.Do(); err != nil {
-	// 	return err
-	// }
-	// go func(buf *z.Buffer) {
-	// 	err := mw.writeToDisk(buf)
-	// 	mw.thr.Done(err)
-	// }(mbuf)
-	// return nil
 }
 
 func (mw *mapper) Flush() error {
-	var rerr error
-	mw.once.Do(func() {
-		rerr = mw.thr.Finish()
-	})
-	return rerr
+	return nil
 }
 
 func fromBackupKey(key []byte) ([]byte, uint64, error) {
@@ -270,10 +261,6 @@ func fromBackupKey(key []byte) ([]byte, uint64, error) {
 
 func (m *mapper) mergeAndSend(closer *z.Closer) error {
 	defer closer.Done()
-	go func() {
-		<-closer.HasBeenClosed()
-		close(m.writeCh)
-	}()
 
 	mbuf := newBuffer()
 	for buf := range m.writeCh {
@@ -281,14 +268,28 @@ func (m *mapper) mergeAndSend(closer *z.Closer) error {
 		mbuf.Write(buf.Bytes())
 		buf.Release()
 
+		var writeNow bool
 		if mbuf.LenNoPadding() >= mapFileSz {
-			if err := m.sendForWriting(mbuf); err != nil {
+			writeNow = true
+			m.writers <- struct{}{}
+
+		} else if mbuf.LenNoPadding() >= mapFileSz/8 {
+			select {
+			case m.writers <- struct{}{}:
+				writeNow = true
+			default:
+			}
+		}
+
+		if writeNow {
+			if err := m.writeNow(mbuf); err != nil {
 				return errors.Wrapf(err, "sendForWriting")
 			}
 			mbuf = newBuffer()
 		}
 	}
-	return m.sendForWriting(mbuf)
+	m.writers <- struct{}{}
+	return m.writeNow(mbuf)
 }
 
 type processor struct {
@@ -649,10 +650,10 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) (*mapResult, error) {
 	numGo := int(float64(runtime.NumCPU()) * 0.75)
 	glog.Infof("Setting numGo = %d\n", numGo)
 	mapper := &mapper{
-		thr:       y.NewThrottle(numGo),
 		closer:    z.NewCloser(1),
 		reqCh:     make(chan listReq, 2*numGo),
 		writeCh:   make(chan *z.Buffer, numGo),
+		writers:   make(chan struct{}, 3),
 		restoreTs: req.RestoreTs,
 		mapDir:    mapDir,
 		szHist:    z.NewHistogramData(z.HistogramBounds(10, 32)),
@@ -667,6 +668,10 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) (*mapResult, error) {
 
 	wCloser := z.NewCloser(numGo / 2)
 	defer wCloser.Signal()
+	go func() {
+		<-wCloser.HasBeenClosed()
+		close(mapper.writeCh)
+	}()
 	for i := 0; i < numGo/2; i++ {
 		go func() {
 			err := mapper.mergeAndSend(wCloser)
