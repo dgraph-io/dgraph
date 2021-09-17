@@ -653,7 +653,7 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) (*mapResult, error) {
 		closer:    z.NewCloser(1),
 		reqCh:     make(chan listReq, 2*numGo),
 		writeCh:   make(chan *z.Buffer, numGo),
-		writers:   make(chan struct{}, 3),
+		writers:   make(chan struct{}, numGo/2), // Only half the writers should be writing at the same time.
 		restoreTs: req.RestoreTs,
 		mapDir:    mapDir,
 		szHist:    z.NewHistogramData(z.HistogramBounds(10, 32)),
