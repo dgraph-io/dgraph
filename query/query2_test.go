@@ -1841,6 +1841,32 @@ func TestNormalizeDirective(t *testing.T) {
 		}`, js)
 }
 
+func TestNormalizeForUid(t *testing.T) {
+	query := `
+		{
+			me(func: uid(0x01)) @normalize {
+				uid
+				friend @filter(uid(0x17)) {
+					~friend @filter(uid(0x1)) {
+						uid
+					}
+				}
+			}
+		}`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+		{
+			"data": {
+			  "me": [
+				{
+				  "uid": "0x1"
+				}
+			  ]
+			}
+		}`, js)
+}
+
 func TestNormalizeDirectiveWithRecurseDirective(t *testing.T) {
 	query := `
 		{
