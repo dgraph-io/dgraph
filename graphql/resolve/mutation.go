@@ -418,6 +418,7 @@ func (mr *dgraphResolver) rewriteAndExecute(
 	updatedUids := make(map[string]string)
 	uidVsType := make(map[string]schema.Type)
 	for _, upsert := range upserts {
+		glog.Infof("queries are %+v",  dgraph.AsString(upsert.Query))
 		upsertQueries := upsert.Query
 		if len(upsertQueries) > 0 {
 			upsertQueries = append(upsertQueries, &gql.GraphQuery{
@@ -851,11 +852,13 @@ func authorizeUpdatedNodes(
 	queryExecutor DgraphExecutor,
 	txn *dgoapi.TxnContext) error {
 
+	glog.Infof("%+v", m.GetAuthMeta())
 	customClaims, err := m.GetAuthMeta().ExtractCustomClaims(ctx)
 	if err != nil {
 		return schema.GQLWrapf(err, "authorization failed")
 	}
 	authVariables := customClaims.AuthVariables
+	glog.Infof("%+v", authVariables)
 	newRw := &authRewriter{
 		authVariables: authVariables,
 		varGen:        NewVariableGenerator(),

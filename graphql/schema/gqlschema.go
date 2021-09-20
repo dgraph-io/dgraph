@@ -285,6 +285,8 @@ directive @auth(
 	query: AuthRule,
 	add: AuthRule,
 	update: AuthRule,
+	preupdate: AuthRule,
+	postupdate: AuthRule,
 	delete: AuthRule) on OBJECT | INTERFACE
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
