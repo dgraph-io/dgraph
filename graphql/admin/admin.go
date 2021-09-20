@@ -1077,12 +1077,9 @@ func (as *adminServer) resetSchema(ns uint64, gqlSchema schema.Schema) {
 
 func (as *adminServer) lazyLoadSchema(namespace uint64) error {
 	// if the schema is already in memory, no need to fetch it from disk
-	as.mux.RLock()
 	if currentSchema, ok := as.gqlSchemas.GetCurrent(namespace); ok && currentSchema.Loaded {
-		as.mux.RUnlock()
 		return nil
 	}
-	as.mux.RUnlock()
 
 	// otherwise, fetch the schema from disk
 	sch, err := getCurrentGraphQLSchema(namespace)
