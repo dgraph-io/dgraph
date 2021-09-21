@@ -1,3 +1,4 @@
+//go:build !oss
 // +build !oss
 
 /*
@@ -17,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/gorilla/websocket"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -92,6 +94,19 @@ func AuditRequestHttp(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
+
+		// Websocket connection in graphQl happens differently. We don't get access tokens and other things in
+		// payload later once the connection is upgraded to correct protocol.
+		// Related Doc: https://github.com/apollographql/subscriptions-transport-ws/blob/v0.9.4/PROTOCOL.md
+		//
+		// Therefore, Auditing for websocket connections will be handled by graphql/admin/http.go:154#Subscribe
+		for _, subprotocol := range websocket.Subprotocols(r) {
+			if subprotocol == "graphql-ws" {
+				next.ServeHTTP(w, r)
+				return
+			}
+		}
+
 		rw := NewResponseWriter(w)
 		var buf bytes.Buffer
 		tee := io.TeeReader(r.Body, &buf)
@@ -99,6 +114,30 @@ func AuditRequestHttp(next http.Handler) http.Handler {
 		next.ServeHTTP(rw, r)
 		r.Body = ioutil.NopCloser(bytes.NewReader(buf.Bytes()))
 		auditHttp(rw, r)
+	})
+}
+
+func AuditWebSockets(req *schema.Request) {
+	namespace := uint64(0)
+	var user string
+	if token := req.Header.Get("X-Dgraph-AccessToken"); token != "" {
+		user = getUser(token, false)
+		namespace, _ = x.ExtractNamespaceFromJwt(token)
+	} else if token := req.Header.Get("X-Dgraph-AuthToken"); token != "" {
+		user = getUser(token, true)
+	} else {
+		user = getUser("", false)
+	}
+
+	auditor.Audit(&AuditEvent{
+		User:        user,
+		Namespace:   namespace,
+		ServerHost:  x.WorkerConfig.MyAddr,
+		Endpoint:    "/graphql",
+		ReqType:     WebSocket,
+		Req:         req.Query,
+		Status:      http.StatusText(http.StatusOK),
+		QueryParams: nil,
 	})
 }
 
