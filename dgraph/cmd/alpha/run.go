@@ -238,9 +238,9 @@ they form a Raft group and provide synchronous replication.
 		Flag("url",
 			"The URL of a lambda server that implements custom GraphQL Javascript resolvers."+
 				" This should be used only when using custom lambda server."+
-				" Use cnt subflag to launch official lambda server."+
+				" Use num subflag to launch official lambda server."+
 				" This flag if set, overrides the other lambda flags.").
-		Flag("cnt",
+		Flag("num",
 			"Number of JS lambda servers to be launched by alpha.").
 		Flag("port",
 			"The starting port at which the lambda server listens.").
@@ -517,23 +517,30 @@ func setupLambdaServer(closer *z.Closer) {
 				case <-closer.HasBeenClosed():
 					return
 				default:
+					time.Sleep(2 * time.Second)
 					cmd := exec.CommandContext(closer.Ctx(), "node", filename)
 					cmd.SysProcAttr = childProcessConfig()
 					cmd.Env = append(cmd.Env, fmt.Sprintf("PORT=%d", lambdas[i].port))
 					cmd.Env = append(cmd.Env, fmt.Sprintf("DGRAPH_URL="+dgraphUrl))
 					cmd.Stdout = os.Stdout
 					cmd.Stderr = os.Stderr
+
 					lambdas[i].Lock()
 					lambdas[i].cmd = cmd
 					lambdas[i].lastActive = time.Now().UnixNano()
+					glog.Infof("Running node command: %+v", cmd)
+					if err := cmd.Start(); err != nil {
+						glog.Errorf("Failed to start lambda server at port: %d. Got err: %+v",
+							lambdas[i].port, err)
+						lambdas[i].Unlock()
+						continue
+					}
 					lambdas[i].active = true
 					lambdas[i].Unlock()
-					glog.Infof("Running node command: %+v\n", cmd)
-					if err := cmd.Run(); err != nil {
+					if err := cmd.Wait(); err != nil {
 						glog.Errorf("Lambda server at port: %d stopped with error: %v",
 							lambdas[i].port, err)
 					}
-					time.Sleep(2 * time.Second)
 				}
 			}
 		}(i)
