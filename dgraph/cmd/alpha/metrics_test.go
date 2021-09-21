@@ -182,7 +182,8 @@ func TestMetrics(t *testing.T) {
 		// Badger Metrics
 		"badger_disk_reads_total", "badger_disk_writes_total", "badger_gets_total",
 		"badger_memtable_gets_total", "badger_puts_total", "badger_read_bytes",
-		"badger_written_bytes",
+		"badger_written_bytes", "badger_blocked_puts_total",
+		"badger_compactions_current", "badger_pending_writes_total",
 		// The following metrics get exposed after 1 minute from Badger, so
 		// they're not available in time for this test
 		// "badger_lsm_size_bytes", "badger_vlog_size_bytes",
