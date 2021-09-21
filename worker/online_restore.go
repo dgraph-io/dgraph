@@ -542,10 +542,6 @@ func RunOfflineRestore(dir, location, backupId string, keyFile string,
 		}
 	}
 
-	mapDir, err := ioutil.TempDir(x.WorkerConfig.TmpDir, "restore-map")
-	x.Check(err)
-	defer os.RemoveAll(mapDir)
-
 	for gid := range manifest.Groups {
 		req := &pb.RestoreRequest{
 			Location:          location,
@@ -554,6 +550,12 @@ func RunOfflineRestore(dir, location, backupId string, keyFile string,
 			EncryptionKeyFile: keyFile,
 			RestoreTs:         1,
 		}
+		mapDir, err := ioutil.TempDir(x.WorkerConfig.TmpDir, "restore-map")
+		if err != nil {
+			return LoadResult{Err: errors.Wrapf(err, "Failed to create temp map directory")}
+		}
+		defer os.RemoveAll(mapDir)
+
 		if _, err := RunMapper(req, mapDir); err != nil {
 			return LoadResult{Err: errors.Wrap(err, "RunRestore failed to map")}
 		}
