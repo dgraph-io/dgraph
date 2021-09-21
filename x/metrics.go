@@ -515,7 +515,7 @@ func NewBadgerCollector() prometheus.Collector {
 		"badger_v3_pending_writes_total": prometheus.NewDesc(
 			"badger_pending_writes_total",
 			"Total number of pending writes",
-			nil, nil,
+			[]string{"dir"}, nil,
 		),
 		"badger_v3_compactions_current": prometheus.NewDesc(
 			"badger_compactions_current",
