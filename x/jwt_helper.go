@@ -56,6 +56,18 @@ func ExtractUserName(jwtToken string) (string, error) {
 	return userId, nil
 }
 
+func ExtractNamespaceFromJwt(jwtToken string) (uint64, error) {
+	claims, err := ParseJWT(jwtToken)
+	if err != nil {
+		return 0, err
+	}
+	namespace, ok := claims["namespace"].(float64)
+	if !ok {
+		return 0, errors.Errorf("namespace in claims is not valid:%v", namespace)
+	}
+	return uint64(namespace), nil
+}
+
 func ExtractJWTNamespace(ctx context.Context) (uint64, error) {
 	jwtString, err := ExtractJwt(ctx)
 	if err != nil {
