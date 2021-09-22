@@ -1,4 +1,3 @@
-//go:build !oss
 // +build !oss
 
 /*
@@ -96,11 +95,11 @@ func AuditRequestHttp(next http.Handler) http.Handler {
 			return
 		}
 
-		// Websocket connection in graphQl happens differently. We don't get access tokens and other things in
-		// payload later once the connection is upgraded to correct protocol.
-		// Related Doc: https://github.com/apollographql/subscriptions-transport-ws/blob/v0.9.4/PROTOCOL.md
+		// Websocket connection in graphQl happens differently. We don't get access tokens and
+		// metadata in payload later once the connection is upgraded to correct protocol.
+		// Doc: https://github.com/apollographql/subscriptions-transport-ws/blob/v0.9.4/PROTOCOL.md
 		//
-		// Therefore, Auditing for websocket connections will be handled by graphql/admin/http.go:154#Subscribe
+		// Auditing for websocket connections will be handled by graphql/admin/http.go:154#Subscribe
 		for _, subprotocol := range websocket.Subprotocols(r) {
 			if subprotocol == "graphql-ws" {
 				next.ServeHTTP(w, r)
