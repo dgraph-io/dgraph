@@ -305,11 +305,11 @@ func (p *processor) processKV(buf *z.Buffer, in *loadBackupInput, kv *bpb.KV) er
 	toBuffer := func(kv *bpb.KV, version uint64) error {
 		key := y.KeyWithTs(kv.Key, version)
 		sz := kv.Size()
-		buf := buf.SliceAllocate(2 + len(key) + sz)
+		b := buf.SliceAllocate(2 + len(key) + sz)
 
-		binary.BigEndian.PutUint16(buf[0:2], uint16(len(key)))
-		x.AssertTrue(copy(buf[2:], key) == len(key))
-		_, err := kv.MarshalToSizedBuffer(buf[2+len(key):])
+		binary.BigEndian.PutUint16(b[0:2], uint16(len(key)))
+		x.AssertTrue(copy(b[2:], key) == len(key))
+		_, err := kv.MarshalToSizedBuffer(b[2+len(key):])
 		return err
 	}
 	if len(kv.GetUserMeta()) != 1 {
