@@ -767,6 +767,8 @@ func printAlphaProposal(buf *bytes.Buffer, pr *pb.Proposal, pending map[uint64]b
 		fmt.Fprintf(buf, " Pending txns: %d .", len(pending))
 	case pr.Snapshot != nil:
 		fmt.Fprintf(buf, " Snapshot . %+v ", pr.Snapshot)
+	case pr.Restore != nil:
+		fmt.Fprintf(buf, " Restore . %+v ", pr.Restore)
 	}
 }
 
