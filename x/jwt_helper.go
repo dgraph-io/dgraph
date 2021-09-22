@@ -73,14 +73,5 @@ func ExtractJWTNamespace(ctx context.Context) (uint64, error) {
 	if err != nil {
 		return 0, err
 	}
-	claims, err := ParseJWT(jwtString)
-	if err != nil {
-		return 0, err
-	}
-
-	namespace, ok := claims["namespace"].(float64)
-	if !ok {
-		return 0, errors.Errorf("namespace in claims is not valid:%v", namespace)
-	}
-	return uint64(namespace), nil
+	return ExtractNamespaceFromJwt(jwtString)
 }
