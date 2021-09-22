@@ -196,7 +196,7 @@ func (gs *graphqlSubscription) Subscribe(
 		Header:        reqHeader,
 	}
 
-	audit.AuditWebSockets(req)
+	audit.AuditWebSockets(ctx, req)
 	namespace := x.ExtractNamespaceHTTP(&http.Request{Header: reqHeader})
 	glog.Infof("namespace: %d. Got GraphQL request over websocket.", namespace)
 	// first load the schema, then do anything else

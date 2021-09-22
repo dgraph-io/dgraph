@@ -21,6 +21,7 @@ import (
 	"github.com/gorilla/websocket"
 	"io"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -117,7 +118,11 @@ func AuditRequestHttp(next http.Handler) http.Handler {
 	})
 }
 
-func AuditWebSockets(req *schema.Request) {
+func AuditWebSockets(ctx context.Context, req *schema.Request) {
+	if atomic.LoadUint32(&auditEnabled) == 0 {
+		return
+	}
+
 	namespace := uint64(0)
 	var user string
 	if token := req.Header.Get("X-Dgraph-AccessToken"); token != "" {
@@ -129,10 +134,16 @@ func AuditWebSockets(req *schema.Request) {
 		user = getUser("", false)
 	}
 
+	ip := ""
+	if peerInfo, ok := peer.FromContext(ctx); ok {
+		ip, _, _ = net.SplitHostPort(peerInfo.Addr.String())
+	}
+
 	auditor.Audit(&AuditEvent{
 		User:        user,
 		Namespace:   namespace,
 		ServerHost:  x.WorkerConfig.MyAddr,
+		ClientHost:  ip,
 		Endpoint:    "/graphql",
 		ReqType:     WebSocket,
 		Req:         req.Query,
