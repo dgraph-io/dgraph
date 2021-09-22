@@ -71,6 +71,7 @@ type flagOptions struct {
 	namespace     uint64
 	key           x.Sensitive
 	onlySummary   bool
+	magic         uint16
 
 	// Options related to the WAL.
 	wdir           string
@@ -108,6 +109,7 @@ func init() {
 		"Show a histogram of the key and value sizes.")
 	flag.BoolVar(&opt.onlySummary, "only-summary", false,
 		"If true, only show the summary of the p directory.")
+	flag.Uint16Var(&opt.magic, "magic", 1, "Magic version of the p directory.")
 
 	// Flags related to WAL.
 	flag.StringVarP(&opt.wdir, "wal", "w", "", "Directory where Raft write-ahead logs are stored.")
@@ -878,6 +880,7 @@ func run() {
 		WithEncryptionKey(opt.key).
 		WithBlockCacheSize(1 << 30).
 		WithIndexCacheSize(1 << 30).
+		WithExternalMagic(opt.magic).
 		WithNamespaceOffset(x.NamespaceOffset) // We don't want to see the banned data.
 
 	x.AssertTruef(len(bopts.Dir) > 0, "No posting or wal dir specified.")
