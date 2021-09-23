@@ -828,8 +828,8 @@ func buildUpsertQuery(qc *queryContext) string {
 
 	qc.condVars = make([]string, len(qc.req.Mutations))
 
-        var b strings.Builder
-        b.WriteString(strings.TrimSuffix(qc.req.Query, "}"))
+	var b strings.Builder
+	b.WriteString(strings.TrimSuffix(qc.req.Query, "}"))
 
 	for i, gmu := range qc.gmuList {
 		isCondUpsert := strings.TrimSpace(gmu.Cond) != ""
