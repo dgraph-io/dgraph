@@ -22,6 +22,7 @@ import (
 	"sync"
 
 	"github.com/dgraph-io/dgraph/edgraph"
+	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
@@ -54,6 +55,9 @@ func resolveRestore(ctx context.Context, m schema.Mutation) (*resolve.Resolved, 
 	if err != nil {
 		return resolve.EmptyResult(m, err), false
 	}
+	glog.Infof("Got restore request with location: %s, id: %s, num: %d, incrementalFrom: %d,"+
+		"isPartial: %v", input.Location, input.BackupId, input.BackupNum, input.IncrementalFrom,
+		input.IsPartial)
 
 	req := pb.RestoreRequest{
 		Location:          input.Location,
