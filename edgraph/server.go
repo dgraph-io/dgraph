@@ -829,7 +829,7 @@ func buildUpsertQuery(qc *queryContext) string {
 	qc.condVars = make([]string, len(qc.req.Mutations))
 
 	var b strings.Builder
-	b.WriteString(strings.TrimSuffix(qc.req.Query, "}"))
+	x.Check2(b.WriteString(strings.TrimSuffix(qc.req.Query, "}")))
 
 	for i, gmu := range qc.gmuList {
 		isCondUpsert := strings.TrimSpace(gmu.Cond) != ""
@@ -855,11 +855,11 @@ func buildUpsertQuery(qc *queryContext) string {
 			// The variable __dgraph_0__ will -
 			//      * be empty if the condition is true
 			//      * have 1 UID (the 0 UID) if the condition is false
-			b.WriteString(qc.condVars[i] + ` as var(func: uid(0)) ` + cond + `
-			 `)
+			x.Check2(b.WriteString(qc.condVars[i] + ` as var(func: uid(0)) ` + cond + `
+			 `))
 		}
 	}
-	b.WriteString(`}`)
+	x.Check2(b.WriteString(`}`))
 
 	return b.String()
 }
