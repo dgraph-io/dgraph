@@ -231,9 +231,10 @@ func tryRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 	for i := 0; i < 10; i++ {
 		err = proposeRestoreOrSend(ctx, req)
 		if err == nil {
+			glog.Info("proposeRestoreOrSend done.")
 			return nil
 		}
-
+		glog.Errorf("Got error while proposeRestoreOrSend: %v, will retry...\n", err)
 		if retriableRestoreError(err) {
 			time.Sleep(time.Second)
 			continue
