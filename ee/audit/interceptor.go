@@ -23,6 +23,8 @@ import (
 	"net/http"
 
 	"google.golang.org/grpc"
+
+	"github.com/dgraph-io/dgraph/graphql/schema"
 )
 
 func AuditRequestGRPC(ctx context.Context, req interface{},
@@ -34,4 +36,8 @@ func AuditRequestHttp(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		next.ServeHTTP(w, r)
 	})
+}
+
+func AuditWebSockets(ctx context.Context, req *schema.Request) {
+	return
 }
