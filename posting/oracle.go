@@ -275,9 +275,11 @@ func (o *oracle) DeleteTxnsAndRollupKeys(delta *pb.OracleDelta) {
 	for _, status := range delta.Txns {
 		txn := o.pendingTxns[status.StartTs]
 		if txn != nil && status.CommitTs > 0 {
+			txn.Lock()
 			for k := range txn.Deltas() {
 				IncrRollup.addKeyToBatch([]byte(k), 0)
 			}
+			txn.Unlock()
 		}
 		delete(o.pendingTxns, status.StartTs)
 	}

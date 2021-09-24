@@ -247,15 +247,13 @@ func (txn *Txn) addConflictKey(conflictKey uint64) {
 	}
 }
 
+// The caller must take a lock on txn.
 func (txn *Txn) ReadKeys() map[uint64]struct{} {
-	txn.Lock()
-	defer txn.Unlock()
 	return txn.cache.readKeys
 }
 
+// The caller must take a lock on txn.
 func (txn *Txn) Deltas() map[string][]byte {
-	txn.Lock()
-	defer txn.Unlock()
 	return txn.cache.deltas
 }
 
