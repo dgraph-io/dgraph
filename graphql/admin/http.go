@@ -20,6 +20,7 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"github.com/dgraph-io/dgraph/ee/audit"
 	"io"
 	"io/ioutil"
 	"mime"
@@ -194,6 +195,8 @@ func (gs *graphqlSubscription) Subscribe(
 		Variables:     variableValues,
 		Header:        reqHeader,
 	}
+
+	audit.AuditWebSockets(ctx, req)
 	namespace := x.ExtractNamespaceHTTP(&http.Request{Header: reqHeader})
 	glog.Infof("namespace: %d. Got GraphQL request over websocket.", namespace)
 	// first load the schema, then do anything else
