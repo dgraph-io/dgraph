@@ -95,7 +95,7 @@ func AuditRequestHttp(next http.Handler) http.Handler {
 			return
 		}
 
-		// Websocket connection in graphQl happens differently. We don't get access tokens and
+		// Websocket connection in graphQl happens differently. We only get access tokens and
 		// metadata in payload later once the connection is upgraded to correct protocol.
 		// Doc: https://github.com/apollographql/subscriptions-transport-ws/blob/v0.9.4/PROTOCOL.md
 		//
