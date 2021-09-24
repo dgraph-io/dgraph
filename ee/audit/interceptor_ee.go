@@ -145,7 +145,7 @@ func AuditWebSockets(ctx context.Context, req *schema.Request) {
 		ClientHost:  ip,
 		Endpoint:    "/graphql",
 		ReqType:     WebSocket,
-		Req:         req.Query,
+		Req:         truncate(req.Query, maxReqLength),
 		Status:      http.StatusText(http.StatusOK),
 		QueryParams: nil,
 	})
