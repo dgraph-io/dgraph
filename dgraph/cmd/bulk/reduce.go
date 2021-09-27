@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -646,11 +647,22 @@ func (r *reducer) toList(req *encodeRequest) {
 			}
 		}
 
+		key := "00" + "0000000000000000" + "0004" + "4e616d65" + "02" + "0b40c303a2d539818addbeebdaf2ed49b812a56779d54ade50af164b7e3edaab39"
+		if hex.EncodeToString(currentKey) == key {
+			fmt.Println("FOUNT CULPRIT KEY")
+			p, _ := x.Parse(currentKey)
+			fmt.Printf("Parsed Key: %+v Size: %d ShouldSplit: %v numUids: %d bmSize: %d\n", p, pl.Size(), posting.ShouldSplit(pl), numUids, len(pl.Bitmap))
+		}
+
 		if posting.ShouldSplit(pl) {
 			// Give ownership of pl.Pack away to list. Rollup would deallocate the Pack.
 			l := posting.NewList(y.Copy(currentKey), pl, writeVersionTs)
 			kvs, err := l.Rollup(nil)
 			x.Check(err)
+
+			if hex.EncodeToString(currentKey) == key {
+				fmt.Printf("Len KVs: %d kv[0].size: %d\n", len(kvs), kvs[0].Size())
+			}
 
 			for _, kv := range kvs {
 				kv.StreamId = r.streamIdFor(pk.Attr)

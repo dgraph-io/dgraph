@@ -1078,6 +1078,9 @@ func ShouldSplit(plist *pb.PostingList) bool {
 }
 
 func (ro *rollupOutput) runSplits() error {
+	if len(ro.parts) == 0 {
+		ro.parts[1] = ro.plist
+	}
 top:
 	for startUid, pl := range ro.parts {
 		if ShouldSplit(pl) {
@@ -1108,6 +1111,9 @@ func (ro *rollupOutput) split(startUid uint64) error {
 	nr := r.Clone()
 	nr.RemoveRange(0, uid) // Keep all uids >= uid.
 	newpl.Bitmap = nr.ToBuffer()
+	if x := sroar.FromBuffer(newpl.Bitmap); x == nil {
+		panic("lol")
+	}
 
 	// Take everything from the first posting where posting.Uid >= uid.
 	idx := sort.Search(len(pl.Postings), func(i int) bool {
@@ -1119,6 +1125,10 @@ func (ro *rollupOutput) split(startUid uint64) error {
 	codec.RemoveRange(r, uid, math.MaxUint64)
 	pl.Bitmap = r.ToBuffer()
 	pl.Postings = pl.Postings[:idx]
+
+	if x := sroar.FromBuffer(pl.Bitmap); x == nil {
+		panic("lol")
+	}
 
 	return nil
 }
@@ -1245,6 +1255,7 @@ func (l *List) rollup(readTs uint64, split bool) (*rollupOutput, error) {
 	if split {
 		// Check if the list (or any of it's parts if it's been previously split) have
 		// become too big. Split the list if that is the case.
+		// FIXME: This would not create splits if there does not exist any splits already.
 		if err := out.runSplits(); err != nil {
 			return nil, err
 		}
@@ -1652,10 +1663,7 @@ func isPlistEmpty(plist *pb.PostingList) bool {
 		return false
 	}
 	r := sroar.FromBuffer(plist.Bitmap)
-	if r.IsEmpty() {
-		return true
-	}
-	return false
+	return r.IsEmpty()
 }
 
 // TODO: Remove this func.
