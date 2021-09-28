@@ -1356,7 +1356,7 @@ func Init() {
 }
 
 func Cleanup() {
-	// Mark the server unhealthy so that no new operations are started and wait for 5 seconds for
+	// Mark the server unhealthy so that no new operations starts and wait for 5 seconds for
 	// the pending queries to finish.
 	x.UpdateHealthStatus(false)
 	for i := 0; i < 10; i++ {
