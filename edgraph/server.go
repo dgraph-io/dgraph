@@ -1355,6 +1355,18 @@ func Init() {
 	maxPendingQueries = x.Config.Limit.GetInt64("max-pending-queries")
 }
 
+func Cleanup() {
+	// Mark the server unhealthy so that no new operations starts and wait for 5 seconds for
+	// the pending queries to finish.
+	x.UpdateHealthStatus(false)
+	for i := 0; i < 10; i++ {
+		if atomic.LoadInt64(&pendingQueries) == 0 {
+			return
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+}
+
 func (s *Server) doQuery(ctx context.Context, req *Request) (resp *api.Response, rerr error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
