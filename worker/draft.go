@@ -173,8 +173,8 @@ func (id op) String() string {
 
 const (
 	opRollup op = iota + 1
-	opSnapshot
 	opIndexing
+	opSnapshot
 	opPredMove
 	// From here onwards the priority of an operation is defined from low to high. i.e. restore
 	// operation has the highest priority while drop operation has the lowest.
@@ -193,8 +193,11 @@ func (n *node) startTask(id op) (*z.Closer, error) {
 
 // startTaskAtTs is used to check whether an op is already running. If a rollup is running,
 // it is canceled and startTask will wait until it completes before returning.
-// If the same task is already running, this method returns an errror.
+// If the same task is already running, this method returns an error.
 // Restore operations have preference and cancel all other operations, not just rollups.
+// It is followed by backup, export, and drop operations in decreasing order of preference.
+// Predicate move, snapshot transfer and indexing operations follow next with equal priority.
+// A task with higher preference cancels the lower preference tasks.
 // You should only call Done() on the returned closer. Calling other functions (such as
 // SignalAndWait) for closer could result in panics. For more details, see GitHub issue #5034.
 func (n *node) startTaskAtTs(id op, ts uint64) (*z.Closer, error) {
@@ -223,17 +226,6 @@ func (n *node) startTaskAtTs(id op, ts uint64) (*z.Closer, error) {
 			return nil, errors.Errorf("another operation is already running")
 		}
 		go posting.IncrRollup.Process(closer)
-	case opRestore, opBackup, opExport, opDrop:
-		// Restore, backup, export and drop operations fail when a high priority task is running.
-		// Else, they cancel all other operations.
-		for otherId, otherOp := range n.ops {
-			if otherId >= id {
-				return nil, errors.Errorf("operation %s is already running", otherId)
-			}
-			// Remove from map and signal the closer to cancel the operation.
-			delete(n.ops, otherId)
-			otherOp.SignalAndWait()
-		}
 	case opIndexing:
 		for otherId, otherOp := range n.ops {
 			switch otherId {
@@ -260,6 +252,17 @@ func (n *node) startTaskAtTs(id op, ts uint64) (*z.Closer, error) {
 			} else {
 				return nil, errors.Errorf("operation %s is already running", otherId)
 			}
+		}
+	case opRestore, opBackup, opExport, opDrop:
+		// Restore, backup, export and drop operations fail when a high priority task is running.
+		// Else, they cancel all other operations.
+		for otherId, otherOp := range n.ops {
+			if otherId >= id {
+				return nil, errors.Errorf("operation %s is already running", otherId)
+			}
+			// Remove from map and signal the closer to cancel the operation.
+			delete(n.ops, otherId)
+			otherOp.SignalAndWait()
 		}
 	default:
 		glog.Errorf("Got an unhandled operation %s. Ignoring...", id)
