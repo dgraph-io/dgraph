@@ -1078,6 +1078,9 @@ func ShouldSplit(plist *pb.PostingList) bool {
 }
 
 func (ro *rollupOutput) runSplits() error {
+	if len(ro.parts) == 0 {
+		ro.parts[1] = ro.plist
+	}
 top:
 	for startUid, pl := range ro.parts {
 		if ShouldSplit(pl) {
@@ -1652,10 +1655,7 @@ func isPlistEmpty(plist *pb.PostingList) bool {
 		return false
 	}
 	r := sroar.FromBuffer(plist.Bitmap)
-	if r.IsEmpty() {
-		return true
-	}
-	return false
+	return r.IsEmpty()
 }
 
 // TODO: Remove this func.
