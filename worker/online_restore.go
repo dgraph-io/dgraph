@@ -279,14 +279,7 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest, pidx uin
 	// Clean up the cluster if it is a full backup restore.
 	if req.IncrementalFrom == 0 {
 		// Drop all the current data. This also cancels all existing transactions.
-		dropProposal := pb.Proposal{
-			Mutations: &pb.Mutations{
-				GroupId: req.GroupId,
-				StartTs: req.RestoreTs,
-				DropOp:  pb.Mutations_ALL,
-			},
-		}
-		if err := groups().Node.applyMutations(ctx, &dropProposal); err != nil {
+		if err := dropAll(); err != nil {
 			return err
 		}
 	}
