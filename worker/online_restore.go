@@ -231,9 +231,10 @@ func tryRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 	for i := 0; i < 10; i++ {
 		err = proposeRestoreOrSend(ctx, req)
 		if err == nil {
+			glog.Info("proposeRestoreOrSend done.")
 			return nil
 		}
-
+		glog.Errorf("Got error while proposeRestoreOrSend: %v, will retry...\n", err)
 		if retriableRestoreError(err) {
 			time.Sleep(time.Second)
 			continue
@@ -256,6 +257,7 @@ func (w *grpcWorker) Restore(ctx context.Context, req *pb.RestoreRequest) (*pb.S
 		return nil, errors.Wrapf(err, "cannot wait for restore ts %d", req.RestoreTs)
 	}
 
+	glog.Infof("Proposing restore request")
 	err := groups().Node.proposeAndWait(ctx, &pb.Proposal{Restore: req})
 	if err != nil {
 		return &emptyRes, errors.Wrapf(err, errRestoreProposal)
@@ -424,12 +426,14 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest, pidx uin
 	go func(idx uint64) {
 		n := groups().Node
 		if !n.AmLeader() {
+			glog.Infof("I am not leader, not proposing snapshot.")
 			return
 		}
 		if err := n.Applied.WaitForMark(context.Background(), idx); err != nil {
 			glog.Errorf("Error waiting for mark for index %d: %+v", idx, err)
 			return
 		}
+		glog.Infof("I am the leader. Proposing snapshot after restore.")
 		if err := n.proposeSnapshot(); err != nil {
 			glog.Errorf("cannot propose snapshot after processing restore proposal %+v", err)
 		}
@@ -542,10 +546,6 @@ func RunOfflineRestore(dir, location, backupId string, keyFile string,
 		}
 	}
 
-	mapDir, err := ioutil.TempDir(x.WorkerConfig.TmpDir, "restore-map")
-	x.Check(err)
-	defer os.RemoveAll(mapDir)
-
 	for gid := range manifest.Groups {
 		req := &pb.RestoreRequest{
 			Location:          location,
@@ -554,6 +554,12 @@ func RunOfflineRestore(dir, location, backupId string, keyFile string,
 			EncryptionKeyFile: keyFile,
 			RestoreTs:         1,
 		}
+		mapDir, err := ioutil.TempDir(x.WorkerConfig.TmpDir, "restore-map")
+		if err != nil {
+			return LoadResult{Err: errors.Wrapf(err, "Failed to create temp map directory")}
+		}
+		defer os.RemoveAll(mapDir)
+
 		if _, err := RunMapper(req, mapDir); err != nil {
 			return LoadResult{Err: errors.Wrap(err, "RunRestore failed to map")}
 		}

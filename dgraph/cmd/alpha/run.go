@@ -977,6 +977,7 @@ func run() {
 	// wait for it after group is closed.
 	updaters.Signal()
 
+	edgraph.Cleanup()
 	worker.BlockingStop()
 	glog.Infoln("worker stopped.")
 

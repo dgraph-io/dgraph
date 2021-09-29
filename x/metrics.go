@@ -492,6 +492,11 @@ func NewBadgerCollector() prometheus.Collector {
 			"Total number of puts",
 			nil, nil,
 		),
+		"badger_v3_blocked_puts_total": prometheus.NewDesc(
+			"badger_blocked_puts_total",
+			"Total number of blocked puts",
+			nil, nil,
+		),
 		"badger_v3_memtable_gets_total": prometheus.NewDesc(
 			"badger_memtable_gets_total",
 			"Total number of memtable gets",
@@ -506,6 +511,16 @@ func NewBadgerCollector() prometheus.Collector {
 			"badger_vlog_size_bytes",
 			"Size of the value log in bytes",
 			[]string{"dir"}, nil,
+		),
+		"badger_v3_pending_writes_total": prometheus.NewDesc(
+			"badger_pending_writes_total",
+			"Total number of pending writes",
+			[]string{"dir"}, nil,
+		),
+		"badger_v3_compactions_current": prometheus.NewDesc(
+			"badger_compactions_current",
+			"Number of tables being actively compacted",
+			nil, nil,
 		),
 	})
 }

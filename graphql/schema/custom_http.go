@@ -163,7 +163,7 @@ func externalRequestError(err error, f Field) *x.GqlError {
 
 func GetBodyForLambda(ctx context.Context, field Field, parents,
 	args interface{}) map[string]interface{} {
-	ns, _ := x.ExtractNamespace(ctx)
+	ns, _ := x.ExtractJWTNamespace(ctx)
 	accessJWT, _ := x.ExtractJwt(ctx)
 	body := map[string]interface{}{
 		"source":               worker.GetLambdaScript(ns),
