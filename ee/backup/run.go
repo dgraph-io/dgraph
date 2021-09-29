@@ -16,6 +16,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -41,6 +42,7 @@ var ExportBackup x.SubCommand
 
 var opt struct {
 	backupId    string
+	backupNum   uint64
 	badger      string
 	location    string
 	pdir        string
@@ -51,6 +53,7 @@ var opt struct {
 	format      string
 	verbose     bool
 	upgrade     bool // used by export backup command.
+	namespace   uint64
 }
 
 func init() {
@@ -153,6 +156,10 @@ func initExportBackup() {
 		"The folder to which export the backups.")
 	flag.StringVarP(&opt.format, "format", "f", "rdf",
 		"The format of the export output. Accepts a value of either rdf or json")
+	flag.Uint64Var(&opt.backupNum, "backup_num", 0,
+		"Backup num to restore.")
+	flag.Uint64Var(&opt.namespace, "namespace", math.MaxUint64,
+		"Namespace to export (in decimal).")
 	flag.BoolVar(&opt.upgrade, "upgrade", false,
 		`If true, retrieve the CORS from DB and append at the end of GraphQL schema.
 		It also deletes the deprecated types and predicates.
@@ -264,6 +271,7 @@ func runExportBackup() error {
 			Location:          opt.location,
 			EncryptionKeyFile: ExportBackup.Conf.GetString("encryption_key_file"),
 			RestoreTs:         1,
+			BackupNum:         opt.backupNum,
 		}
 		if _, err := worker.RunMapper(req, mapDir); err != nil {
 			return errors.Wrap(err, "Failed to map the backups")
@@ -274,6 +282,7 @@ func runExportBackup() error {
 			UnixTs:      time.Now().Unix(),
 			Format:      opt.format,
 			Destination: exportDir,
+			Namespace:   opt.namespace,
 		}
 		uts := time.Unix(in.UnixTs, 0)
 		destPath := fmt.Sprintf("dgraph.r%d.u%s", in.ReadTs, uts.UTC().Format("0102.1504"))
