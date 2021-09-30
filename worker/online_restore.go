@@ -176,7 +176,7 @@ func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest, wg *sync
 		reqCopy.GroupId = gid
 		wg.Add(1)
 		go func() {
-			errCh <- proposeRestoreOrSend(ctx, req)
+			errCh <- proposeRestoreOrSend(ctx, reqCopy)
 		}()
 	}
 
