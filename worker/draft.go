@@ -132,7 +132,11 @@ func (kw *keysWritten) StillValid(txn *posting.Txn) bool {
 		kw.validTxns++
 		return true
 	}
-	for hash := range txn.ReadKeys() {
+
+	c := txn.Cache()
+	c.Lock()
+	defer c.Unlock()
+	for hash := range c.ReadKeys() {
 		// If the commitTs is between (MaxAssignedSeen, StartTs], the txn reads were invalid. If the
 		// commitTs is > StartTs, then it doesn't matter for reads. If the commit ts is <
 		// MaxAssignedSeen, that means our reads are valid.
@@ -1081,12 +1085,17 @@ func (n *node) commitOrAbort(_ uint64, delta *pb.OracleDelta) error {
 		if txn == nil || status.CommitTs == 0 {
 			continue
 		}
-		for k := range txn.Deltas() {
+		c := txn.Cache()
+		c.RLock()
+		for k := range c.Deltas() {
 			n.keysWritten.keyCommitTs[z.MemHashString(k)] = status.CommitTs
 		}
-		n.keysWritten.totalKeys += len(txn.Deltas())
-		numKeys += len(txn.Deltas())
-		if len(txn.Deltas()) == 0 {
+		num := len(c.Deltas())
+		c.RUnlock()
+
+		n.keysWritten.totalKeys += num
+		numKeys += num
+		if num == 0 {
 			continue
 		}
 		txns = append(txns, txn)

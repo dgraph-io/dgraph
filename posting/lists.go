@@ -171,6 +171,14 @@ func (lc *LocalCache) getNoStore(key string) *List {
 	return nil
 }
 
+func (lc *LocalCache) ReadKeys() map[uint64]struct{} {
+	return lc.readKeys
+}
+
+func (lc *LocalCache) Deltas() map[string][]byte {
+	return lc.deltas
+}
+
 // SetIfAbsent adds the list for the specified key to the cache. If a list for the same
 // key already exists, the cache will not be modified and the existing list
 // will be returned instead. This behavior is meant to prevent the goroutines
