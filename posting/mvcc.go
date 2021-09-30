@@ -247,16 +247,8 @@ func (txn *Txn) addConflictKey(conflictKey uint64) {
 	}
 }
 
-func (txn *Txn) ReadKeys() map[uint64]struct{} {
-	txn.Lock()
-	defer txn.Unlock()
-	return txn.cache.readKeys
-}
-
-func (txn *Txn) Deltas() map[string][]byte {
-	txn.Lock()
-	defer txn.Unlock()
-	return txn.cache.deltas
+func (txn *Txn) Cache() *LocalCache {
+	return txn.cache
 }
 
 // FillContext updates the given transaction context with data from this transaction.
