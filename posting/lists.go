@@ -91,21 +91,13 @@ func Init(ps *badger.DB, cacheSize int64) {
 		},
 	})
 	x.Check(err)
-
-	closer.AddRunning(1)
 	go func() {
-		defer closer.Done()
 		m := lCache.Metrics
 		ticker := time.NewTicker(10 * time.Second)
 		defer ticker.Stop()
 		for range ticker.C {
-			select {
-			case <-closer.HasBeenClosed():
-				return
-			default:
-				// Record the posting list cache hit ratio
-				ostats.Record(context.Background(), x.PLCacheHitRatio.M(m.Ratio()))
-			}
+			// Record the posting list cache hit ratio
+			ostats.Record(context.Background(), x.PLCacheHitRatio.M(m.Ratio()))
 		}
 	}()
 }
