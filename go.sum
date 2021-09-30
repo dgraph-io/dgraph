@@ -166,8 +166,6 @@ github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/dgraph-io/badger v1.6.0 h1:DshxFxZWXUcO0xX476VJC07Xsr6ZCBVRHKZ93Oh7Evo=
 github.com/dgraph-io/badger v1.6.0/go.mod h1:zwt7syl517jmP8s94KqSxTlM6IMsdhYy6psNgSztDR4=
-github.com/dgraph-io/badger/v3 v3.0.0-20210916095630-2a9a524b649b h1:t7Em1/gcmd4THIGLYDHhkxwLE/gbNLe08QFVM0dKxaQ=
-github.com/dgraph-io/badger/v3 v3.0.0-20210916095630-2a9a524b649b/go.mod h1:dULbq6ehJ5K0cGW/1TQ9iSfUk0gbSiToDWmWmTsJ53E=
 github.com/dgraph-io/badger/v3 v3.0.0-20210924144023-7677fcb1e0c2 h1:xVtqMIdhJV6Tu2LrymuqRVgzFMTen+cCfs4A3AunmMc=
 github.com/dgraph-io/badger/v3 v3.0.0-20210924144023-7677fcb1e0c2/go.mod h1:RHo4/GmYcKKh5Lxu63wLEMHJ70Pac2JqZRYGhlyAo2M=
 github.com/dgraph-io/dgo/v210 v210.0.0-20210421093152-78a2fece3ebd h1:bKck5FnruuJxL1oCmrDSYWRl634IxBwL/IwwWx4UgEM=
@@ -184,8 +182,8 @@ github.com/dgraph-io/ristretto v0.1.1-0.20210824115121-89e99415887a h1:2+hTlwc5y
 github.com/dgraph-io/ristretto v0.1.1-0.20210824115121-89e99415887a/go.mod h1:fux0lOrBhrVCJd3lcTHsIJhq1T2rokOu6v9Vcb3Q9ug=
 github.com/dgraph-io/simdjson-go v0.3.0 h1:h71LO7vR4LHMPUhuoGN8bqGm1VNfGOlAG8BI6iDUKw0=
 github.com/dgraph-io/simdjson-go v0.3.0/go.mod h1:Otpysdjaxj9OGaJusn4pgQV7OFh2bELuHANq0I78uvY=
-github.com/dgraph-io/sroar v0.0.0-20210915181338-8dc690a08d84 h1:vtPkk8vX4OzWs698+GIJ86c1MSCOPX08Uh3CpywWmt0=
-github.com/dgraph-io/sroar v0.0.0-20210915181338-8dc690a08d84/go.mod h1:bdNPtQmcxoIQVkZEWZvX0n0/IDlHFab397xdBlP4OoE=
+github.com/dgraph-io/sroar v0.0.0-20210930201544-8a9a0351f20f h1:/7NA7mug98b6QkBU+3BEfun5EpegFVx7cRZU86vTouQ=
+github.com/dgraph-io/sroar v0.0.0-20210930201544-8a9a0351f20f/go.mod h1:bdNPtQmcxoIQVkZEWZvX0n0/IDlHFab397xdBlP4OoE=
 github.com/dgrijalva/jwt-go v3.2.0+incompatible h1:7qlOGliEKZXTDg6OTjfoBKDXWrumCAMpl/TFQ4/5kLM=
 github.com/dgrijalva/jwt-go v3.2.0+incompatible/go.mod h1:E3ru+11k8xSBh+hMPgOLZmtrrCbhqsmaPHjLKYnJCaQ=
 github.com/dgrijalva/jwt-go/v4 v4.0.0-preview1 h1:CaO/zOnF8VvUfEbhRatPcwKVWamvbYd8tQGRWacE9kU=
@@ -315,8 +313,6 @@ github.com/google/btree v0.0.0-20180813153112-4030bb1f1f0c/go.mod h1:lNA+9X1NB3Z
 github.com/google/btree v1.0.0/go.mod h1:lNA+9X1NB3Zf8V7Ke586lFgjr2dZNuvo3lPJSGZ5JPQ=
 github.com/google/codesearch v1.0.0 h1:z4h5JoHkUS+GqxqPDrldC3Y0Qq0vHAGgaDEW5pWU/ys=
 github.com/google/codesearch v1.0.0/go.mod h1:qCnXDFnak/trCmLaE50kgPte3AX9jSeruZexWEOivi0=
-github.com/google/flatbuffers v1.12.0 h1:/PtAHvnBY4Kqnx/xCQ3OIV9uYcSFGScBsWI3Oogeh6w=
-github.com/google/flatbuffers v1.12.0/go.mod h1:1AeVuKshWv4vARoZatz6mlQ0JxURH0Kv5+zNeJKJCa8=
 github.com/google/flatbuffers v1.12.1 h1:MVlul7pQNoDzWRLTw5imwYsl+usrS1TXG2H4jg6ImGw=
 github.com/google/flatbuffers v1.12.1/go.mod h1:1AeVuKshWv4vARoZatz6mlQ0JxURH0Kv5+zNeJKJCa8=
 github.com/google/go-cmp v0.2.0/go.mod h1:oXzfMopK8JAjlY9xF4vHSVASa0yLyX7SntLO5aqRK0M=
