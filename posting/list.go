@@ -1078,6 +1078,9 @@ func ShouldSplit(plist *pb.PostingList) bool {
 }
 
 func (ro *rollupOutput) runSplits() error {
+	if len(ro.parts) == 0 {
+		ro.parts[1] = ro.plist
+	}
 top:
 	for startUid, pl := range ro.parts {
 		if ShouldSplit(pl) {
@@ -1601,6 +1604,10 @@ func (l *List) readListPart(startUid uint64) (*pb.PostingList, error) {
 func (out *rollupOutput) updateSplits() {
 	if out.plist == nil || len(out.parts) > 0 {
 		out.plist = &pb.PostingList{}
+	}
+
+	if len(out.parts) == 0 && len(out.plist.Splits) == 0 {
+		return
 	}
 
 	var splits []uint64
