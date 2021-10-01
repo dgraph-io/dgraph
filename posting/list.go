@@ -1098,19 +1098,17 @@ func (ro *rollupOutput) split(startUid uint64) error {
 	pl := ro.parts[startUid]
 
 	r := sroar.FromBuffer(pl.Bitmap)
-	num := r.GetCardinality()
-	uid, err := r.Select(uint64(num / 2))
+	a, b := r.Split()
+
+	uid, err := b.Select(0)
 	if err != nil {
-		return errors.Wrapf(err, "split Select rank: %d", num/2)
+		return errors.Errorf("Failed to get the first uid: %v\n", err)
 	}
 
 	newpl := &pb.PostingList{}
 	ro.parts[uid] = newpl
 
-	// Remove everything from startUid to uid.
-	nr := r.Clone()
-	nr.RemoveRange(0, uid) // Keep all uids >= uid.
-	newpl.Bitmap = nr.ToBuffer()
+	newpl.Bitmap = b.ToBuffer()
 
 	// Take everything from the first posting where posting.Uid >= uid.
 	idx := sort.Search(len(pl.Postings), func(i int) bool {
@@ -1119,8 +1117,7 @@ func (ro *rollupOutput) split(startUid uint64) error {
 	newpl.Postings = pl.Postings[idx:]
 
 	// Update pl as well. Keeps the lower UIDs.
-	codec.RemoveRange(r, uid, math.MaxUint64)
-	pl.Bitmap = r.ToBuffer()
+	pl.Bitmap = a.ToBuffer()
 	pl.Postings = pl.Postings[:idx]
 
 	return nil
