@@ -29,6 +29,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/dgraph-io/dgraph/backup"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/alpha"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/bulk"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/cert"
@@ -41,6 +42,7 @@ import (
 	"github.com/dgraph-io/dgraph/dgraph/cmd/migrate"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/version"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
+	"github.com/dgraph-io/dgraph/updatemanifest"
 	"github.com/dgraph-io/dgraph/upgrade"
 	"github.com/dgraph-io/dgraph/x"
 
@@ -83,9 +85,10 @@ var rootConf = viper.New()
 
 // subcommands initially contains all default sub-commands.
 var subcommands = []*x.SubCommand{
-	&bulk.Bulk, &cert.Cert, &conv.Conv, &live.Live, &alpha.Alpha, &zero.Zero, &version.Version,
-	&debug.Debug, &migrate.Migrate, &debuginfo.DebugInfo, &upgrade.Upgrade, &decrypt.Decrypt,
-	&increment.Increment,
+	&bulk.Bulk, &backup.LsBackup, &backup.ExportBackup, &cert.Cert, &conv.Conv, &live.Live,
+	&alpha.Alpha, &zero.Zero, &version.Version, &debug.Debug, &migrate.Migrate,
+	&debuginfo.DebugInfo, &upgrade.Upgrade, &decrypt.Decrypt, &increment.Increment,
+	&updatemanifest.UpdateManifest,
 }
 
 func initCmds() {

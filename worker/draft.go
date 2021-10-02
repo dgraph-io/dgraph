@@ -124,11 +124,11 @@ func newKeysWritten() *keysWritten {
 // 9. If multiple mutations happen for the same txn, the sequential mutations are always run
 //    serially by applyCh. This is to avoid edge cases.
 func (kw *keysWritten) StillValid(txn *posting.Txn) bool {
-	if txn.AppliedIndexSeen < kw.rejectBeforeIndex {
+	if atomic.LoadUint64(&txn.AppliedIndexSeen) < kw.rejectBeforeIndex {
 		kw.invalidTxns++
 		return false
 	}
-	if txn.MaxAssignedSeen >= txn.StartTs {
+	if atomic.LoadUint64(&txn.MaxAssignedSeen) >= txn.StartTs {
 		kw.validTxns++
 		return true
 	}
@@ -141,7 +141,7 @@ func (kw *keysWritten) StillValid(txn *posting.Txn) bool {
 		// commitTs is > StartTs, then it doesn't matter for reads. If the commit ts is <
 		// MaxAssignedSeen, that means our reads are valid.
 		commitTs := kw.keyCommitTs[hash]
-		if commitTs > txn.MaxAssignedSeen && commitTs <= txn.StartTs {
+		if commitTs > atomic.LoadUint64(&txn.MaxAssignedSeen) && commitTs <= txn.StartTs {
 			kw.invalidTxns++
 			return false
 		}
@@ -479,12 +479,8 @@ func (n *node) concMutations(ctx context.Context, m *pb.Mutations, txn *posting.
 	}()
 
 	// Update the applied index that we are seeing.
-	if txn.AppliedIndexSeen == 0 {
-		txn.AppliedIndexSeen = n.Applied.DoneUntil()
-	}
-	if txn.MaxAssignedSeen == 0 {
-		txn.MaxAssignedSeen = posting.Oracle().MaxAssigned()
-	}
+	atomic.CompareAndSwapUint64(&txn.AppliedIndexSeen, 0, n.Applied.DoneUntil())
+	atomic.CompareAndSwapUint64(&txn.MaxAssignedSeen, 0, posting.Oracle().MaxAssigned())
 
 	// This txn's Zero assigned start ts could be in the future, because we're
 	// trying to greedily run mutations concurrently as soon as we see them.
