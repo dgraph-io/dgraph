@@ -362,6 +362,71 @@ func TestVerificationWithMultipleJWKUrls(t *testing.T) {
 	}
 }
 
+func TestVerificationWithNone(t *testing.T) {
+	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")
+	require.NoError(t, err, "Unable to read schema file")
+
+	testCases := []struct {
+		name            string
+		verificationKey string
+		invalid         bool
+	}{
+		{
+			name:            `Invalid verification key`,
+			verificationKey: "invalid key",
+			invalid:         true,
+		},
+		{
+			name:            `Valid verification key`,
+			verificationKey: string(jwt.UnsafeAllowNoneSignatureType),
+			invalid:         false,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			authSchema, err := testutil.AppendAuthInfoWithAlgoAndVerificationkey(sch, jwt.SigningMethodNone.Alg(), testCase.verificationKey)
+
+			require.NoError(t, err)
+
+			schema := test.LoadSchemaFromString(t, string(authSchema))
+			require.NotNil(t, schema.Meta().AuthMeta())
+
+			// Token with custom claim:
+			// "https://xyz.io/jwt/claims": {
+			// 	"USERNAME": "Random User",
+			// 	"email": "random@dgraph.io"
+			//   }
+			//
+			// It also contains standard claim :  "email": "test@dgraph.io", but the
+			// value of "email" gets overwritten by the value present inside custom claim.
+			token := "eyJ0eXAiOiJKV1QiLCJhbGciOiJub25lIn0.eyJodHRwczovL3h5ei5pby9qd3QvY2xhaW1zIjp7IlVTRVJOQU1FIjoiUmFuZG9tIFVzZXIiLCJlbWFpbCI6InJhbmRvbUBkZ3JhcGguaW8ifSwic3ViIjoiMTIzNDU2Nzg5MCIsIm5hbWUiOiJKb2huIERvZSIsIlVTRVJOQU1FIjoiUmFuZG9tIFVzZXIiLCJlbWFpbCI6InJhbmRvbUBkZ3JhcGguaW8ifQ."
+			md := metadata.New(map[string]string{"authorizationJwt": token})
+			ctx := metadata.NewIncomingContext(context.Background(), md)
+
+			customClaims, err := schema.Meta().AuthMeta().ExtractCustomClaims(ctx)
+
+			if testCase.invalid {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+
+				authVar := customClaims.AuthVariables
+				result := map[string]interface{}{
+					"sub":      "1234567890",
+					"name":     "John Doe",
+					"USERNAME": "Random User",
+					"email":    "random@dgraph.io",
+				}
+				delete(authVar, "exp")
+				delete(authVar, "iat")
+				require.Equal(t, authVar, result)
+			}
+		})
+	}
+
+}
+
 // TODO(arijit): Generate the JWT token instead of using pre generated token.
 func TestJWTExpiry(t *testing.T) {
 	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")

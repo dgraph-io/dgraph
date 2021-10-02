@@ -45,6 +45,8 @@ const (
 
 var (
 	supportedAlgorithms = map[string]jwt.SigningMethod{
+		// Allow none signing for development environments
+		jwt.SigningMethodNone.Alg(): jwt.SigningMethodNone,
 		jwt.SigningMethodRS256.Name: jwt.SigningMethodRS256,
 		jwt.SigningMethodRS384.Name: jwt.SigningMethodRS384,
 		jwt.SigningMethodRS512.Name: jwt.SigningMethodRS512,
@@ -392,6 +394,12 @@ func (a *AuthMeta) validateJWTCustomClaims(jwtStr string) (*CustomClaims, error)
 				"jwt token cannot be validated because verification algorithm is not set")
 		}
 
+		// When algo is none the dgraphAuthorization header should explicitly state that the verification key has the value
+		// "none signing method allowed" (https://github.com/dgrijalva/jwt-go/blob/master/none.go#L27)
+		if a.Algo == jwt.SigningMethodNone.Alg() && a.VerificationKey != string(jwt.UnsafeAllowNoneSignatureType) {
+			return nil, errors.Errorf("selected algo is None but VerificationKey is not equal to \"%s\"", jwt.UnsafeAllowNoneSignatureType)
+		}
+
 		// The JWT library supports comparison of `aud` in JWT against a single string. Hence, we
 		// disable the `aud` claim verification at the library end using `WithoutAudienceValidation` and
 		// use our custom validation function `validateAudience`.
@@ -401,6 +409,13 @@ func (a *AuthMeta) validateJWTCustomClaims(jwtStr string) (*CustomClaims, error)
 				if algo != a.Algo {
 					return nil, errors.Errorf("unexpected signing method: Expected %s Found %s",
 						a.Algo, algo)
+				}
+
+				// SigningMethodNone should contain a verification key
+				// But the verify function uses a type check so we need to force it to retrun the proper type
+				// https://github.com/dgrijalva/jwt-go/blob/master/none.go#L31
+				if algo == jwt.SigningMethodNone.Alg() {
+					return jwt.UnsafeAllowNoneSignatureType, nil
 				}
 
 				switch a.SigningMethod.(type) {

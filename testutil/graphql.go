@@ -323,3 +323,9 @@ func AppendJWKAndVerificationKey(schema []byte) ([]byte, error) {
 	authInfo := `#Dgraph.Authorization{"VerificationKey":"some-key","Header":"X-Test-Auth","jwkurl":"some-url", "Namespace":"https://xyz.io/jwt/claims","Algo":"algo","Audience":["fir-project1-259e7"]}`
 	return append(schema, []byte(authInfo)...), nil
 }
+
+func AppendAuthInfoWithAlgoAndVerificationkey(schema []byte, algo, verificationKey string) ([]byte, error) {
+	authInfo := `# Dgraph.Authorization {"VerificationKey":"%s","Header":"X-Test-Auth","Namespace":"https://xyz.io/jwt/claims","Algo":"%s"}`
+	authInfo = fmt.Sprintf(authInfo, verificationKey, algo)
+	return append(schema, []byte(authInfo)...), nil
+}
