@@ -15,17 +15,12 @@ package cmd
 import (
 	acl "github.com/dgraph-io/dgraph/ee/acl"
 	"github.com/dgraph-io/dgraph/ee/audit"
-	"github.com/dgraph-io/dgraph/ee/backup"
-	"github.com/dgraph-io/dgraph/ee/updatemanifest"
 )
 
 func init() {
 	// subcommands already has the default subcommands, we append to EE ones to that.
 	subcommands = append(subcommands,
-		&backup.LsBackup,
-		&backup.ExportBackup,
 		&acl.CmdAcl,
 		&audit.CmdAudit,
-		&updatemanifest.UpdateManifest,
 	)
 }
