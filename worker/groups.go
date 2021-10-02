@@ -1084,11 +1084,6 @@ func GetEEFeaturesList() []string {
 		ee = append(ee, "acl")
 		ee = append(ee, "multi_tenancy")
 	}
-	if x.WorkerConfig.EncryptionKey != nil {
-		ee = append(ee, "encryption_at_rest", "encrypted_backup_restore", "encrypted_export")
-	} else {
-		ee = append(ee, "backup_restore")
-	}
 	if x.WorkerConfig.Audit {
 		ee = append(ee, "audit")
 	}
