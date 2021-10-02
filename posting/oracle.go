@@ -48,11 +48,11 @@ func init() {
 
 // Txn represents a transaction.
 type Txn struct {
-	StartTs          uint64
-	MaxAssignedSeen  uint64
-	AppliedIndexSeen uint64
+	StartTs          uint64 // This does not get modified.
+	MaxAssignedSeen  uint64 // atomic
+	AppliedIndexSeen uint64 // atomic
 
-	// Runs keeps track of how many times this txn has been through applyCh.
+	// atomic: Runs keeps track of how many times this txn has been through applyCh.
 	Runs int32
 
 	// atomic
@@ -155,7 +155,9 @@ func (o *oracle) RegisterStartTs(ts uint64) (*Txn, bool) {
 	defer o.Unlock()
 	txn, ok := o.pendingTxns[ts]
 	if ok {
+		txn.Lock()
 		txn.lastUpdate = time.Now()
+		txn.Unlock()
 	} else {
 		txn = NewTxn(ts)
 		o.pendingTxns[ts] = txn
@@ -200,8 +202,9 @@ func (o *oracle) MinMaxAssignedSeenTs() uint64 {
 	defer o.RUnlock()
 	min := o.MaxAssigned()
 	for _, txn := range o.pendingTxns {
-		if txn.MaxAssignedSeen < min {
-			min = txn.MaxAssignedSeen
+		ts := atomic.LoadUint64(&txn.MaxAssignedSeen)
+		if ts < min {
+			min = ts
 		}
 	}
 	return min
@@ -219,9 +222,11 @@ func (o *oracle) TxnOlderThan(dur time.Duration) (res []uint64) {
 
 	cutoff := time.Now().Add(-dur)
 	for startTs, txn := range o.pendingTxns {
+		txn.Lock()
 		if txn.lastUpdate.Before(cutoff) {
 			res = append(res, startTs)
 		}
+		txn.Unlock()
 	}
 	return res
 }
