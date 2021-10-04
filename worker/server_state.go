@@ -130,7 +130,7 @@ func (s *ServerState) initStorage() {
 			WithDir(Config.PostingDir).WithValueDir(Config.PostingDir).
 			WithNumVersionsToKeep(math.MaxInt32).
 			WithNamespaceOffset(x.NamespaceOffset).
-			WithExternalMagic(magicVersion)
+			WithExternalMagic(x.MagicVersion)
 		opt = setBadgerOptions(opt)
 
 		// Print the options w/o exposing key.
