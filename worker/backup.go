@@ -128,7 +128,8 @@ func StoreExport(request *pb.ExportRequest, dir string, key x.Sensitive) error {
 		WithSyncWrites(false).
 		WithValueThreshold(1 << 10).
 		WithNumVersionsToKeep(math.MaxInt32).
-		WithEncryptionKey(key))
+		WithEncryptionKey(key).
+		WithExternalMagic(x.MagicVersion))
 
 	if err != nil {
 		return err

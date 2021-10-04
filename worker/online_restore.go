@@ -540,7 +540,8 @@ func RunOfflineRestore(dir, location, backupId string, keyFile string,
 			WithIndexCacheSize(100 * (1 << 20)).
 			WithNumVersionsToKeep(math.MaxInt32).
 			WithEncryptionKey(key).
-			WithNamespaceOffset(x.NamespaceOffset))
+			WithNamespaceOffset(x.NamespaceOffset).
+			WithExternalMagic(x.MagicVersion))
 		if err != nil {
 			return LoadResult{Err: errors.Wrap(err, "RunRestore failed to open DB")}
 		}
