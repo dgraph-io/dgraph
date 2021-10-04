@@ -79,7 +79,6 @@ func (n *node) updateEnterpriseState(closer *z.Closer) {
 			n.server.closer.Signal()
 		}
 	}
-	expiry := time.Now().Add(20 * time.Second)
 	for {
 		select {
 		case <-ticker.C:
@@ -90,8 +89,7 @@ func (n *node) updateEnterpriseState(closer *z.Closer) {
 				continue
 			}
 
-			// expiry := time.Unix(license.GetExpiryTs(), 0).UTC()
-			// timeToExpire := expiry.Sub(time.Now().UTC())
+			expiry := time.Unix(license.GetExpiryTs(), 0).UTC()
 			timeToExpire := expiry.Sub(time.Now().UTC())
 			// We only want to print this log once a day.
 			if counter%intervalsInDay == 0 && timeToExpire > 0 && timeToExpire < humanize.Week {
