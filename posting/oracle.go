@@ -52,11 +52,10 @@ type Txn struct {
 	MaxAssignedSeen  uint64 // atomic
 	AppliedIndexSeen uint64 // atomic
 
-	// atomic: Runs keeps track of how many times this txn has been through applyCh.
-	Runs int32
+	// Runs keeps track of how many times this txn has been through applyCh.
+	Runs int32 // atomic
 
-	// atomic
-	shouldAbort uint32
+	shouldAbort uint32 // atomic
 	// Fields which can changed after init
 	sync.Mutex
 
