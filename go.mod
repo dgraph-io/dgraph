@@ -19,14 +19,14 @@ require (
 	github.com/Shopify/sarama v1.27.2
 	github.com/blevesearch/bleve v1.0.13
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd
-	github.com/dgraph-io/badger/v3 v3.0.0-20210825061050-c2b23c471f5e
+	github.com/dgraph-io/badger/v3 v3.0.0-20210924144023-7677fcb1e0c2
 	github.com/dgraph-io/dgo/v210 v210.0.0-20210421093152-78a2fece3ebd
 	github.com/dgraph-io/gqlgen v0.13.2
 	github.com/dgraph-io/gqlparser/v2 v2.2.1
 	github.com/dgraph-io/graphql-transport-ws v0.0.0-20210511143556-2cef522f1f15
 	github.com/dgraph-io/ristretto v0.1.1-0.20210824115121-89e99415887a
 	github.com/dgraph-io/simdjson-go v0.3.0
-	github.com/dgraph-io/sroar v0.0.0-20210831151133-ad6554cce45c
+	github.com/dgraph-io/sroar v0.0.0-20210930201544-8a9a0351f20f
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/dgrijalva/jwt-go/v4 v4.0.0-preview1
 	github.com/dgryski/go-farm v0.0.0-20200201041132-a6ae2369ad13

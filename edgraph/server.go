@@ -875,7 +875,10 @@ func buildUpsertQuery(qc *queryContext) string {
 	}
 
 	qc.condVars = make([]string, len(qc.req.Mutations))
-	upsertQuery := strings.TrimSuffix(qc.req.Query, "}")
+
+	var b strings.Builder
+	x.Check2(b.WriteString(strings.TrimSuffix(qc.req.Query, "}")))
+
 	for i, gmu := range qc.gmuList {
 		isCondUpsert := strings.TrimSpace(gmu.Cond) != ""
 		if isCondUpsert {
@@ -900,13 +903,13 @@ func buildUpsertQuery(qc *queryContext) string {
 			// The variable __dgraph_0__ will -
 			//      * be empty if the condition is true
 			//      * have 1 UID (the 0 UID) if the condition is false
-			upsertQuery += qc.condVars[i] + ` as var(func: uid(0)) ` + cond + `
-			 `
+			x.Check2(b.WriteString(qc.condVars[i] + ` as var(func: uid(0)) ` + cond + `
+			 `))
 		}
 	}
-	upsertQuery += `}`
+	x.Check2(b.WriteString(`}`))
 
-	return upsertQuery
+	return b.String()
 }
 
 // updateMutations updates the mutation and replaces uid(var) and val(var) with
@@ -1350,6 +1353,18 @@ var serverOverloadErr = errors.New("429 Too Many Requests. Please throttle your 
 
 func Init() {
 	maxPendingQueries = x.Config.Limit.GetInt64("max-pending-queries")
+}
+
+func Cleanup() {
+	// Mark the server unhealthy so that no new operations starts and wait for 5 seconds for
+	// the pending queries to finish.
+	x.UpdateHealthStatus(false)
+	for i := 0; i < 10; i++ {
+		if atomic.LoadInt64(&pendingQueries) == 0 {
+			return
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
 }
 
 func (s *Server) doQuery(ctx context.Context, req *Request) (resp *api.Response, rerr error) {

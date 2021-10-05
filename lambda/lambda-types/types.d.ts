@@ -82,6 +82,7 @@ declare module "@dgraph-lambda/lambda-types" {
     parents: (Record<string, any>)[] | null,
     args: Record<string, any>,
     authHeader?: AuthHeaderField,
+    accessToken?: string, 
     event?: eventPayload,
     info?: InfoField
   }
@@ -97,6 +98,7 @@ declare module "@dgraph-lambda/lambda-types" {
       mutate: (s: string) => Promise<GraphQLResponse>;
     };
     authHeader?: AuthHeaderField;
+    accessToken?: string;
   };
   
   type GraphQLEvent = GraphQLEventCommonFields & {

@@ -141,6 +141,11 @@ const (
 	DgraphCostHeader = "Dgraph-TouchedUids"
 
 	ManifestVersion = 2105
+
+	// MagicVersion is a unique uint16 number. Badger won't start if this magic number doesn't match
+	// with the one present in the manifest. It prevents starting up dgraph with new data format
+	// (eg. the change in 21.09 by using roaring bitmap) on older p directory.
+	MagicVersion = 1
 )
 
 var (

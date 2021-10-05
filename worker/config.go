@@ -24,6 +24,8 @@ import (
 )
 
 const (
+	magicVersion = 1
+
 	// AllowMutations is the mode allowing all mutations.
 	AllowMutations int = iota
 	// DisallowMutations is the mode that disallows all mutations.

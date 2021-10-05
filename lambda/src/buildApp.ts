@@ -26,6 +26,7 @@ function bodyToEvent(b: any): GraphQLEventFields {
     parents: b.parents || null,
     args: b.args || {},
     authHeader: b.authHeader,
+    accessToken: b['X-Dgraph-AccessToken'],
     event: b.event || {},
     info: b.info || null,
   }
@@ -52,7 +53,7 @@ export function buildApp() {
       res.json("HEALTHY")
     })
     app.post("/graphql-worker", async (req, res, next) => {
-        const ns = req.body.ns || 0
+        const ns = req.body.namespace || 0
         const logPrefix = `[LAMBDA-${ns}] `
         try {
           const source = base64Decode(req.body.source) || req.body.source
@@ -66,7 +67,7 @@ export function buildApp() {
               res.status(400)
           }
           res.json(result)
-        } catch(e) {
+        } catch(e: any) {
           console.error(logPrefix + e.toString() + JSON.stringify(e.stack))
           next(e)
         }

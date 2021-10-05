@@ -1,4 +1,4 @@
-// +build oss
+// +build linux
 
 /*
  * Copyright 2021 Dgraph Labs, Inc. and Contributors
@@ -16,28 +16,12 @@
  * limitations under the License.
  */
 
-package audit
+package alpha
 
-import (
-	"context"
-	"net/http"
+import "syscall"
 
-	"google.golang.org/grpc"
-
-	"github.com/dgraph-io/dgraph/graphql/schema"
-)
-
-func AuditRequestGRPC(ctx context.Context, req interface{},
-	info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-	return handler(ctx, req)
-}
-
-func AuditRequestHttp(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		next.ServeHTTP(w, r)
-	})
-}
-
-func AuditWebSockets(ctx context.Context, req *schema.Request) {
-	return
+func childProcessConfig() *syscall.SysProcAttr {
+	// When alpha dies, send the kill signal to child processes. Pdeathsig is a linux only option.
+	// Hence, in case of panics in other operating systems, the alpha would just hang.
+	return &syscall.SysProcAttr{Pdeathsig: syscall.SIGKILL}
 }

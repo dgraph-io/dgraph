@@ -91,13 +91,21 @@ func Init(ps *badger.DB, cacheSize int64) {
 		},
 	})
 	x.Check(err)
+
+	closer.AddRunning(1)
 	go func() {
+		defer closer.Done()
 		m := lCache.Metrics
 		ticker := time.NewTicker(10 * time.Second)
 		defer ticker.Stop()
 		for range ticker.C {
-			// Record the posting list cache hit ratio
-			ostats.Record(context.Background(), x.PLCacheHitRatio.M(m.Ratio()))
+			select {
+			case <-closer.HasBeenClosed():
+				return
+			default:
+				// Record the posting list cache hit ratio
+				ostats.Record(context.Background(), x.PLCacheHitRatio.M(m.Ratio()))
+			}
 		}
 	}()
 }
@@ -161,6 +169,14 @@ func (lc *LocalCache) getNoStore(key string) *List {
 		return l
 	}
 	return nil
+}
+
+func (lc *LocalCache) ReadKeys() map[uint64]struct{} {
+	return lc.readKeys
+}
+
+func (lc *LocalCache) Deltas() map[string][]byte {
+	return lc.deltas
 }
 
 // SetIfAbsent adds the list for the specified key to the cache. If a list for the same

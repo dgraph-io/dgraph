@@ -63,9 +63,9 @@ get_token_graphql() {
 #    CLIENT_KEY_PATH - path to client cert (e.g. client.dgraphuser.key) for client TLS
 ##########################
 get_token() {
-  USER=${1}
-  PASSWORD=${2}
-  AUTH_TOKEN=${3:-""}
+  USER="${1}"
+  PASSWORD="${2}"
+  AUTH_TOKEN="${3}"
   CACERT_PATH=${CACERT_PATH:-""}
   CLIENT_CERT_PATH=${CLIENT_CERT_PATH:-""}
   CLIENT_KEY_PATH=${CLIENT_KEY_PATH:-""}
