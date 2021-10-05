@@ -238,6 +238,10 @@ func getReq(s string) (*api.Request, error) {
 		if err := proto.UnmarshalText(m[1], &req); err != nil {
 			return nil, errors.Wrapf(err, "cannot unmarshal the query log")
 		}
+		// Allow alpha to lease out the timestamps for the requests otherwise there will be issues
+		// as zero does not know about these transactions.
+		req.StartTs = 0
+		req.CommitNow = true
 		return &req, nil
 	}
 	return nil, errors.Errorf("Not a valid query found in the string")
