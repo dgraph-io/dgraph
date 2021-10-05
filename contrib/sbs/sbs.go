@@ -9,13 +9,13 @@ import (
 	"io/ioutil"
 	"os"
 	"regexp"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -24,11 +24,7 @@ import (
 )
 
 var (
-	isQuery = regexp.MustCompile(`Got a query: query:(.*)`)
-	queryRe = regexp.MustCompile(`".*?"`)
-	varRe   = regexp.MustCompile(`vars:<.*?>`)
-	keyRe   = regexp.MustCompile(`key:"(.*?)"`)
-	valRe   = regexp.MustCompile(`value:"(.*?)"`)
+	isQuery = regexp.MustCompile(`Got a query: (.*)`)
 
 	Sbs  Command
 	opts Options
@@ -49,11 +45,13 @@ type Command struct {
 }
 
 type Options struct {
-	logPath    string
 	alphaLeft  string
 	alphaRight string
+	dryRun     bool
+	logPath    string
 	matchCount bool
 	queryFile  string
+	readOnly   bool
 	numGo      int
 }
 
@@ -65,16 +63,20 @@ func init() {
 	}
 
 	flags := Sbs.Cmd.Flags()
-	flags.StringVar(&opts.logPath,
-		"log-file", "", "Path of the alpha log file to replay")
 	flags.StringVar(&opts.alphaLeft,
 		"alpha-left", "", "GRPC endpoint of left alpha")
 	flags.StringVar(&opts.alphaRight,
 		"alpha-right", "", "GRPC endpoint of right alpha")
+	flags.BoolVar(&opts.dryRun,
+		"dry-run", false, "Dry-run the query/mutations")
+	flags.StringVar(&opts.logPath,
+		"log-file", "", "Path of the alpha log file to replay")
 	flags.BoolVar(&opts.matchCount,
 		"match-count", false, "Get the count and each predicate and verify")
 	flags.StringVar(&opts.queryFile,
 		"query-file", "", "The query in this file will be shot concurrently to left alpha")
+	flags.BoolVar(&opts.readOnly,
+		"read-only", true, "In read only mode, mutations are skipped.")
 	flags.IntVar(&opts.numGo,
 		"workers", 16, "Number of query request workers")
 	Sbs.Conf = viper.New()
@@ -160,6 +162,15 @@ func processLog(dcLeft, dcRight *dgo.Dgraph) {
 	worker := func(wg *sync.WaitGroup) {
 		defer wg.Done()
 		for r := range reqCh {
+			if opts.readOnly && len(r.Mutations) > 0 {
+				continue
+			}
+
+			if opts.dryRun {
+				klog.Infof("Req: %+v", r)
+				continue
+			}
+
 			atomic.AddUint64(&total, 1)
 
 			respL, errL := runQuery(r, dcLeft)
@@ -223,25 +234,11 @@ func processLog(dcLeft, dcRight *dgo.Dgraph) {
 func getReq(s string) (*api.Request, error) {
 	m := isQuery.FindStringSubmatch(s)
 	if len(m) > 1 {
-		qm := queryRe.FindStringSubmatch(m[1])
-		if len(qm) == 0 {
-			return nil, errors.Errorf("Not a valid query found in the string")
+		var req api.Request
+		if err := proto.UnmarshalText(m[1], &req); err != nil {
+			return nil, errors.Wrapf(err, "cannot unmarshal the query log")
 		}
-		query, err := strconv.Unquote(qm[0])
-		if err != nil {
-			return nil, errors.Wrap(err, "while unquoting")
-		}
-		varStr := varRe.FindAllStringSubmatch(m[1], -1)
-		mp := make(map[string]string)
-		for _, v := range varStr {
-			keys := keyRe.FindStringSubmatch(v[0])
-			vals := valRe.FindStringSubmatch(v[0])
-			mp[keys[1]] = vals[1]
-		}
-		return &api.Request{
-			Query: query,
-			Vars:  mp,
-		}, nil
+		return &req, nil
 	}
 	return nil, errors.Errorf("Not a valid query found in the string")
 }
