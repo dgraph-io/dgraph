@@ -593,23 +593,23 @@ func (r *reducer) toList(req *encodeRequest) {
 
 		startTs := time.Now()
 		t := time.NewTicker(1 * time.Second)
+		defer t.Stop()
 		closer := z.NewCloser(1)
 		printLogs := func() {
 			defer closer.Done()
 			for {
 				select {
+				case <-closer.HasBeenClosed():
+					return
 				case <-t.C:
 					if time.Since(startTs) > time.Minute {
 						fmt.Printf("[ROLLUP] time taken: %s, parsedKey: %+v",
 							time.Since(startTs), pk)
-						time.Sleep(1 * time.Minute)
+						time.Sleep(30 * time.Second)
 					}
-				case <-closer.HasBeenClosed():
-					return
 				}
 			}
 		}
-		closer.AddRunning(1)
 		go printLogs()
 		defer func() {
 			closer.SignalAndWait()

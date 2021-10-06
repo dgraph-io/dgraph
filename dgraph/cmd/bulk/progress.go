@@ -69,10 +69,9 @@ func (p *progress) setPhase(ph phase) {
 var r = y.NewRateMonitor(6)
 
 func (p *progress) report() {
-	t := time.NewTicker(time.Second)
+	t := time.NewTicker(5 * time.Second)
 	defer t.Stop()
 
-	r.Capture(uint64(atomic.LoadInt64(&p.reduceKeyCount)))
 	z.StatsPrint() // Just print once.
 	for {
 		select {
@@ -114,6 +113,7 @@ func (p *progress) reportOnce() {
 			elapsed = time.Second
 		}
 		reduceKeyCount := atomic.LoadInt64(&p.reduceKeyCount)
+		r.Capture(uint64(atomic.LoadInt64(&p.reduceKeyCount)))
 		reduceEdgeCount := atomic.LoadInt64(&p.reduceEdgeCount)
 		pct := ""
 		if mapEdgeCount != 0 {
