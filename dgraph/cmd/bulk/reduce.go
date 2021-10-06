@@ -591,30 +591,6 @@ func (r *reducer) toList(req *encodeRequest) {
 			}
 		}
 
-		startTs := time.Now()
-		t := time.NewTicker(1 * time.Second)
-		defer t.Stop()
-		closer := z.NewCloser(1)
-		printLogs := func() {
-			defer closer.Done()
-			for {
-				select {
-				case <-closer.HasBeenClosed():
-					return
-				case <-t.C:
-					if time.Since(startTs) > time.Minute {
-						fmt.Printf("[ROLLUP] time taken: %s, parsedKey: %+v",
-							time.Since(startTs), pk)
-						time.Sleep(30 * time.Second)
-					}
-				}
-			}
-		}
-		go printLogs()
-		defer func() {
-			closer.SignalAndWait()
-		}()
-
 		bm := sroar.NewBitmap()
 		var lastUid uint64
 		slice, next := []byte{}, start
@@ -635,6 +611,35 @@ func (r *reducer) toList(req *encodeRequest) {
 				pl.Postings = append(pl.Postings, p)
 			}
 		}
+
+		cpy := bm.Clone()
+
+		startTs := time.Now()
+		t := time.NewTicker(1 * time.Second)
+		defer t.Stop()
+		closer := z.NewCloser(1)
+		printLogs := func() {
+			defer closer.Done()
+			for {
+				select {
+				case <-closer.HasBeenClosed():
+					return
+				case <-t.C:
+					if time.Since(startTs) > time.Minute {
+						fmt.Printf("[ROLLUP] time taken: %s, parsedKey: %+v\n",
+							time.Since(startTs), pk)
+						if err := ioutil.WriteFile(fmt.Sprintf("bm_%x", currentKey), cpy.ToBuffer(), 0666); err != nil {
+							fmt.Printf("Got Error while dumping bm: %v\n", err)
+						}
+						time.Sleep(30 * time.Second)
+					}
+				}
+			}
+		}
+		go printLogs()
+		defer func() {
+			closer.SignalAndWait()
+		}()
 
 		// We should not do defer FreePack here, because we might be giving ownership of it away if
 		// we run Rollup.
