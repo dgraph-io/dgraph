@@ -21,6 +21,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/dgraph-io/badger/v3/y"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/dustin/go-humanize"
@@ -65,10 +66,13 @@ func (p *progress) setPhase(ph phase) {
 	atomic.StoreInt32((*int32)(&p.phase), int32(ph))
 }
 
+var r = y.NewRateMonitor(6)
+
 func (p *progress) report() {
 	t := time.NewTicker(time.Second)
 	defer t.Stop()
 
+	r.Capture(uint64(atomic.LoadInt64(&p.reduceKeyCount)))
 	z.StatsPrint() // Just print once.
 	for {
 		select {
@@ -116,7 +120,7 @@ func (p *progress) reportOnce() {
 			pct = fmt.Sprintf("%.2f%% ", 100*float64(reduceEdgeCount)/float64(mapEdgeCount))
 		}
 		fmt.Printf("[%s] REDUCE %s %sedge_count:%s edge_speed:%s/sec "+
-			"plist_count:%s plist_speed:%s/sec. Num Encoding MBs: %d. jemalloc: %s \n",
+			"plist_count:%s plist_speed:%s/sec [%s]. Num Encoding MBs: %d. jemalloc: %s \n",
 			timestamp,
 			x.FixedDuration(now.Sub(p.start)),
 			pct,
@@ -124,6 +128,7 @@ func (p *progress) reportOnce() {
 			niceFloat(float64(reduceEdgeCount)/elapsed.Seconds()),
 			niceFloat(float64(reduceKeyCount)),
 			niceFloat(float64(reduceKeyCount)/elapsed.Seconds()),
+			humanize.Comma(int64(r.Rate())),
 			atomic.LoadInt64(&p.numEncoding)/(1<<20),
 			humanize.IBytes(uint64(z.NumAllocBytes())),
 		)
