@@ -323,13 +323,17 @@ func getCounts(left, right *dgo.Dgraph) {
 }
 
 func runQuery(r *api.Request, client *dgo.Dgraph) (*api.Response, error) {
-	txn := client.NewReadOnlyTxn().BestEffort()
+	var txn *dgo.Txn
+	if len(r.Mutations) == 0 {
+		txn = client.NewReadOnlyTxn().BestEffort()
+	} else {
+		txn = client.NewTxn()
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 1800*time.Second)
 	defer cancel()
-	resp, err := txn.QueryWithVars(ctx, r.Query, r.Vars)
+	resp, err := txn.Do(ctx, r)
 	if err != nil {
-		return nil, errors.Errorf("While running query %s %+v  got error %v\n",
-			r.Query, r.Vars, err)
+		return nil, errors.Errorf("While running request %+v got error %v\n", r, err)
 	}
 	return resp, nil
 }
