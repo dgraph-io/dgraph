@@ -45,14 +45,15 @@ type Command struct {
 }
 
 type Options struct {
-	alphaLeft  string
-	alphaRight string
-	dryRun     bool
-	logPath    string
-	matchCount bool
-	queryFile  string
-	readOnly   bool
-	numGo      int
+	alphaLeft   string
+	alphaRight  string
+	dryRun      bool
+	singleAlpha bool
+	logPath     string
+	matchCount  bool
+	queryFile   string
+	readOnly    bool
+	numGo       int
 }
 
 func init() {
@@ -77,6 +78,9 @@ func init() {
 		"query-file", "", "The query in this file will be shot concurrently to left alpha")
 	flags.BoolVar(&opts.readOnly,
 		"read-only", true, "In read only mode, mutations are skipped.")
+	flags.BoolVar(&opts.singleAlpha,
+		"single-alpha", false, "Only alpha-left has to be specified. Should be used to check only "+
+			"to validate if the alpha does not crashes on queries/mutations.")
 	flags.IntVar(&opts.numGo,
 		"workers", 16, "Number of query request workers")
 	Sbs.Conf = viper.New()
@@ -104,6 +108,16 @@ func run(cmd *cobra.Command, args []string) error {
 	// single query is meant to be run on the left alpha only.
 	if len(opts.queryFile) > 0 {
 		singleQuery(dcLeft)
+		return nil
+	}
+
+	// When querying/mutating over a single cluster, there is not alphaRight.
+	if opts.singleAlpha {
+		if opts.matchCount {
+			getCounts(dcLeft, nil)
+			return nil
+		}
+		processLog(dcLeft, nil)
 		return nil
 	}
 
@@ -173,21 +187,29 @@ func processLog(dcLeft, dcRight *dgo.Dgraph) {
 
 			atomic.AddUint64(&total, 1)
 
+			if opts.singleAlpha {
+				resp, err := runQuery(r, dcLeft)
+				if err != nil {
+					atomic.AddUint64(&failed, 1)
+					klog.Infof("Failed Request: %+v \nResp: %v Err: %v\n", r, resp, err)
+				}
+				continue
+			}
+
 			respL, errL := runQuery(r, dcLeft)
 			respR, errR := runQuery(r, dcRight)
 			if errL != nil || errR != nil {
 				if errL == nil || errR == nil || errL.Error() != errR.Error() {
 					atomic.AddUint64(&failed, 1)
-					klog.Infof("Failed Query: %s \nVars: %v\nLeft: %v Err: %v\nRight: %v Err: %v\n",
-						r.Query, r.Vars, respL, errL, respR, errR)
+					klog.Infof("Failed Request: %+v \nLeft: %v Err: %v\nRight: %v Err: %v\n",
+						r, respL, errL, respR, errR)
 				}
 				continue
 			}
 
 			if !areEqualJSON(string(respL.GetJson()), string(respR.GetJson())) {
 				atomic.AddUint64(&failed, 1)
-				klog.Infof("Failed Query: %s \nVars: %v\nLeft: %v\nRight: %v\n",
-					r.Query, r.Vars, respL, respR)
+				klog.Infof("Failed Request: %+v \nLeft: %v\nRight: %v\n", r, respL, respR)
 			}
 			lt := float64(respL.Latency.ProcessingNs) / 1e6
 			rt := float64(respR.Latency.ProcessingNs) / 1e6
@@ -298,9 +320,16 @@ func getCounts(left, right *dgo.Dgraph) {
 				if err != nil {
 					klog.Errorf("While running on left alpha: %v\n", err)
 				}
-				rRight, err := runQuery(r.req, right)
-				if err != nil {
-					klog.Errorf("While running on right alpha: %v\n", err)
+				var rRight *api.Response
+				if opts.singleAlpha {
+					// If processing a single alpha, lets just copy the response.
+					rRight = rLeft
+				} else {
+					var err error
+					rRight, err = runQuery(r.req, right)
+					if err != nil {
+						klog.Errorf("While running on right alpha: %v\n", err)
+					}
 				}
 
 				cl, cr := parseCount(rLeft), parseCount(rRight)
