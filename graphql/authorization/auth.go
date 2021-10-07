@@ -45,6 +45,7 @@ const (
 
 var (
 	supportedAlgorithms = map[string]jwt.SigningMethod{
+		jwt.SigningMethodNone.Alg(): jwt.SigningMethodNone,
 		jwt.SigningMethodRS256.Name: jwt.SigningMethodRS256,
 		jwt.SigningMethodRS384.Name: jwt.SigningMethodRS384,
 		jwt.SigningMethodRS512.Name: jwt.SigningMethodRS512,
@@ -92,7 +93,7 @@ func (a *AuthMeta) validate() error {
 			fields = " `Audience` "
 		}
 	} else {
-		if a.VerificationKey == "" {
+		if a.Algo != "none" && a.VerificationKey == "" {
 			fields = " `Verification key`/`JWKUrl`/`JWKUrls`"
 		}
 
@@ -401,6 +402,10 @@ func (a *AuthMeta) validateJWTCustomClaims(jwtStr string) (*CustomClaims, error)
 				if algo != a.Algo {
 					return nil, errors.Errorf("unexpected signing method: Expected %s Found %s",
 						a.Algo, algo)
+				}
+
+				if a.Algo == "none" {
+					return jwt.UnsafeAllowNoneSignatureType, nil
 				}
 
 				switch a.SigningMethod.(type) {

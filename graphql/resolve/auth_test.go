@@ -177,8 +177,14 @@ func TestStringCustomClaim(t *testing.T) {
 	authSchema, err := testutil.AppendAuthInfo(sch, jwt.SigningMethodHS256.Name, "", false)
 	require.NoError(t, err)
 
-	schema := test.LoadSchemaFromString(t, string(authSchema))
-	require.NotNil(t, schema.Meta().AuthMeta())
+	h265Schema := test.LoadSchemaFromString(t, string(authSchema))
+	require.NotNil(t, h265Schema.Meta().AuthMeta())
+
+	noneAuthSchema, err := testutil.AppendAuthInfo(sch, jwt.SigningMethodNone.Alg(), "", false)
+	require.NoError(t, err)
+
+	noneSchema := test.LoadSchemaFromString(t, string(noneAuthSchema))
+	require.NotNil(t, noneSchema.Meta().AuthMeta())
 
 	// Token with custom claim:
 	// "https://xyz.io/jwt/claims": {
@@ -188,22 +194,43 @@ func TestStringCustomClaim(t *testing.T) {
 	//
 	// It also contains standard claim :  "email": "test@dgraph.io", but the
 	// value of "email" gets overwritten by the value present inside custom claim.
-	token := "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyLCJleHAiOjM1MTYyMzkwMjIsImVtYWlsIjoidGVzdEBkZ3JhcGguaW8iLCJodHRwczovL3h5ei5pby9qd3QvY2xhaW1zIjp7IlVTRVJOQU1FIjoiUmFuZG9tIFVzZXIiLCJlbWFpbCI6InJhbmRvbUBkZ3JhcGguaW8ifX0.6XvP9wlvHx8ZBBMH9iyy49cRiIk7H6NNoZf69USkg2c"
-	md := metadata.New(map[string]string{"authorizationJwt": token})
-	ctx := metadata.NewIncomingContext(context.Background(), md)
-
-	customClaims, err := schema.Meta().AuthMeta().ExtractCustomClaims(ctx)
-	require.NoError(t, err)
-	authVar := customClaims.AuthVariables
-	result := map[string]interface{}{
-		"sub":      "1234567890",
-		"name":     "John Doe",
-		"USERNAME": "Random User",
-		"email":    "random@dgraph.io",
+	testCases := []struct {
+		name   string
+		token  string
+		schema schema.Schema
+		err    error
+	}{
+		{
+			name:   `Token with H265 algo`,
+			token:  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyLCJleHAiOjM1MTYyMzkwMjIsImVtYWlsIjoidGVzdEBkZ3JhcGguaW8iLCJodHRwczovL3h5ei5pby9qd3QvY2xhaW1zIjp7IlVTRVJOQU1FIjoiUmFuZG9tIFVzZXIiLCJlbWFpbCI6InJhbmRvbUBkZ3JhcGguaW8ifX0.6XvP9wlvHx8ZBBMH9iyy49cRiIk7H6NNoZf69USkg2c",
+			schema: h265Schema,
+		},
+		{
+			name:   `Token with none algo`,
+			token:  "eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyLCJleHAiOjM1MTYyMzkwMjIsImVtYWlsIjoidGVzdEBkZ3JhcGguaW8iLCJodHRwczovL3h5ei5pby9qd3QvY2xhaW1zIjp7IlVTRVJOQU1FIjoiUmFuZG9tIFVzZXIiLCJlbWFpbCI6InJhbmRvbUBkZ3JhcGguaW8ifX0.",
+			schema: noneSchema,
+		},
 	}
-	delete(authVar, "exp")
-	delete(authVar, "iat")
-	require.Equal(t, authVar, result)
+
+	for _, tcase := range testCases {
+		t.Run(tcase.name, func(t *testing.T) {
+			md := metadata.New(map[string]string{"authorizationJwt": tcase.token})
+			ctx := metadata.NewIncomingContext(context.Background(), md)
+
+			customClaims, err := tcase.schema.Meta().AuthMeta().ExtractCustomClaims(ctx)
+			require.NoError(t, err)
+			authVar := customClaims.AuthVariables
+			result := map[string]interface{}{
+				"sub":      "1234567890",
+				"name":     "John Doe",
+				"USERNAME": "Random User",
+				"email":    "random@dgraph.io",
+			}
+			delete(authVar, "exp")
+			delete(authVar, "iat")
+			require.Equal(t, authVar, result)
+		})
+	}
 }
 
 func TestAudienceClaim(t *testing.T) {
