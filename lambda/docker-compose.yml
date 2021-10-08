@@ -14,4 +14,4 @@ services:
       DGRAPH_URL: http://dgraph:8080
       INTEGRATION_TEST: "true"
   dgraph:
-    image: "dgraph/dgraph:v21.03.2"
+    image: "dgraph/standalone:master"
