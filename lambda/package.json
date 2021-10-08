@@ -42,7 +42,7 @@
     "@types/jest": "^26.0.14",
     "@types/node-fetch": "^2.5.7",
     "@types/supertest": "^2.0.10",
-    "jest": "^26.4.2",
+    "jest": "^27.2.4",
     "node-loader": "^2.0.0",
     "supertest": "^4.0.2",
     "ts-jest": "^26.3.0",

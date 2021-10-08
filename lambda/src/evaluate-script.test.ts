@@ -60,7 +60,6 @@ describe(evaluateScript, () => {
       await waitForDgraph();
       await loadSchema(`type Todo { id: ID!, title: String! }`)
       await sleep(250)
-      await runQuery(`mutation { addTodo(input: [{title: "Kick Ass"}, {title: "Chew Bubblegum"}]) { numUids } }`)
     })
 
     it("works with dgraph graphql", async () => {
