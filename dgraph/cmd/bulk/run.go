@@ -91,6 +91,8 @@ func init() {
 	flag.Int64("partition_mb", 4, "Pick a partition key every N megabytes of data.")
 	flag.Bool("skip_map_phase", false,
 		"Skip the map phase (assumes that map output files already exist).")
+	flag.Bool("dry_run", false,
+		"Only do dry run to see if the data is correct.")
 	flag.Bool("cleanup_tmp", true,
 		"Clean up the tmp directory after the loader finishes. Setting this to false allows the"+
 			" bulk loader can be re-run while skipping the map phase.")
@@ -162,6 +164,7 @@ func run() {
 		MapBufSize:       uint64(Bulk.Conf.GetInt("mapoutput_mb")),
 		PartitionBufSize: int64(Bulk.Conf.GetInt("partition_mb")),
 		SkipMapPhase:     Bulk.Conf.GetBool("skip_map_phase"),
+		dryRun:           Bulk.Conf.GetBool("dry_run"),
 		CleanupTmp:       Bulk.Conf.GetBool("cleanup_tmp"),
 		NumReducers:      Bulk.Conf.GetInt("reducers"),
 		Version:          Bulk.Conf.GetBool("version"),
@@ -333,6 +336,10 @@ func run() {
 		loader.schema.types = bulkMeta.Types
 	} else {
 		loader.mapStage()
+		if opt.dryRun {
+			return
+		}
+
 		mergeMapShardsIntoReduceShards(&opt)
 		loader.leaseNamespaces()
 
@@ -351,6 +358,7 @@ func run() {
 			os.Exit(1)
 		}
 	}
+
 	loader.reduceStage()
 	loader.writeSchema()
 	loader.cleanup()

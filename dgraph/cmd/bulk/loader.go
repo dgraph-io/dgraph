@@ -81,6 +81,8 @@ type options struct {
 
 	shardOutputDirs []string
 
+	dryRun bool
+
 	// ........... Badger options ..........
 	// EncryptionKey is the key used for encryption. Enterprise only feature.
 	EncryptionKey x.Sensitive

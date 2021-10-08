@@ -225,6 +225,10 @@ func (m *mapper) run(inputFormat chunker.InputFormat) {
 		for chunkBuf := range m.readerChunkCh {
 			if err := chunk.Parse(chunkBuf); err != nil {
 				atomic.AddInt64(&m.prog.errCount, 1)
+				if m.opt.dryRun {
+					fmt.Printf("Got error: %v while parsing the chunk: \n%s\n", err, chunkBuf)
+					continue
+				}
 				if !m.opt.IgnoreErrors {
 					x.Check(err)
 				}
@@ -286,6 +290,9 @@ func (m *mapper) run(inputFormat chunker.InputFormat) {
 
 func (m *mapper) addMapEntry(key []byte, p *pb.Posting, shard int) {
 	atomic.AddInt64(&m.prog.mapEdgeCount, 1)
+	if m.opt.dryRun {
+		return
+	}
 
 	uid := p.Uid
 	if p.PostingType != pb.Posting_REF || len(p.Facets) > 0 {
