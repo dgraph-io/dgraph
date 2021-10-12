@@ -205,7 +205,7 @@ func (cdc *CDC) processCDCEvents() {
 			e.Meta.CommitTs = commitTs
 			b, err := json.Marshal(e)
 			if err != nil {
-				glog.Errorf("error while marshalling batch for event [%+v]: %v\n", e, err)
+				glog.Errorf("error while marshalling batch for event [%+v]: %v\n", e.Event, err)
 				continue
 			}
 			batch[i] = SinkMessage{
