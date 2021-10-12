@@ -28,6 +28,7 @@ import (
 	"github.com/dgraph-io/dgraph/schema"
 	wk "github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/pkg/errors"
 )
 
 type schemaStore struct {
@@ -113,7 +114,7 @@ func (s *schemaStore) checkAndSetInitialSchema(namespace uint64) {
 	return
 }
 
-func (s *schemaStore) validateType(de *pb.DirectedEdge, objectIsUID bool) {
+func (s *schemaStore) validateType(de *pb.DirectedEdge, objectIsUID bool) error {
 	if objectIsUID {
 		de.ValueType = pb.Posting_UID
 	}
@@ -135,9 +136,7 @@ func (s *schemaStore) validateType(de *pb.DirectedEdge, objectIsUID bool) {
 	}
 
 	err := wk.ValidateAndConvert(de, sch)
-	if err != nil {
-		log.Fatalf("RDF doesn't match schema: %v", err)
-	}
+	return errors.Wrapf(err, "RDF doesn't match schema: ")
 }
 
 func (s *schemaStore) getPredicates(db *badger.DB) []string {
