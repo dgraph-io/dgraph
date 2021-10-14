@@ -200,21 +200,21 @@ func (cdc *CDC) processCDCEvents() {
 	}
 
 	sendToSink := func(pending []CDCEvent, commitTs uint64) error {
-		batch := make([]SinkMessage, len(pending))
-		for i, e := range pending {
+		batch := make([]SinkMessage, 0)
+		for _, e := range pending {
 			e.Meta.CommitTs = commitTs
 			b, err := json.Marshal(e)
 			if err != nil {
 				glog.Errorf("error while marshalling batch for event [%+v]: %v\n", e.Event, err)
 				continue
 			}
-			batch[i] = SinkMessage{
+			batch = append(batch, SinkMessage{
 				Meta: SinkMeta{
 					Topic: defaultEventTopic,
 				},
 				Key:   e.Meta.Namespace,
 				Value: b,
-			}
+			})
 		}
 		if err := cdc.sink.Send(batch); err != nil {
 			glog.Errorf("error while sending cdc event to sink %+v", err)
