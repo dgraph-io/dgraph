@@ -762,6 +762,10 @@ func verifyTypes(ctx context.Context, m *pb.Mutations) error {
 
 	// Retrieve the schema for those predicates.
 	schemas, err := GetSchemaOverNetwork(ctx, &pb.SchemaRequest{Predicates: fields})
+	if len(schemas) == 0 {
+		return errors.Errorf("No schemas found. No need to proceed")
+			}
+	}
 	if err != nil {
 		return errors.Wrapf(err, "cannot retrieve predicate information")
 	}
