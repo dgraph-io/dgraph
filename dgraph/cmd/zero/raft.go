@@ -337,7 +337,6 @@ func (n *node) handleBulkTabletProposal(tablets []*pb.Tablet) error {
 		}
 		tablet.Force = false
 		group.Tablets[tablet.Predicate] = tablet
-
 	}
 
 	return nil

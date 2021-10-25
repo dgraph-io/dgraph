@@ -715,7 +715,7 @@ func setupServer(closer *z.Closer) {
 	baseMux.Handle("/ui/keywords", http.HandlerFunc(keywordHandler))
 
 	// Initialize the lambda server
-	setupLambdaServer(x.ServerCloser)
+	//setupLambdaServer(x.ServerCloser)
 	// Initialize the servers.
 	x.ServerCloser.AddRunning(3)
 	go serveGRPC(grpcListener, tlsCfg, x.ServerCloser)
