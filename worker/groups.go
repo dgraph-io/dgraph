@@ -189,14 +189,6 @@ func (g *groupi) informZeroAboutTablets() {
 			failed = true
 			glog.Errorf("Error while getting tablet for preds %v", err)
 		}
-		//for _, pred := range preds {
-		//	if tablet, err := g.Tablet(pred); err != nil {
-		//		failed = true
-		//		glog.Errorf("Error while getting tablet for pred %q: %v", pred, err)
-		//	} else if tablet == nil {
-		//		failed = true
-		//	}
-		//}
 		if !failed {
 			glog.V(1).Infof("Done informing Zero about the %d tablets I have", len(preds))
 			return
@@ -503,21 +495,24 @@ func (g *groupi) sendTablet(tablet *pb.Tablet) (*pb.Tablet, error) {
 
 func (g *groupi) Inform(preds []string) ([]*pb.Tablet, error) {
 	unknownPreds := make([]*pb.Tablet, 0)
+	tablets := make([]*pb.Tablet, 0)
 	g.RLock()
 	for _, p := range preds {
 		if len(p) == 0 {
 			continue
 		}
 
-		if _, ok := g.tablets[p]; !ok {
+		if tab, ok := g.tablets[p]; !ok {
 			unknownPreds = append(unknownPreds, &pb.Tablet{GroupId: g.groupId(), Predicate: p})
+		} else {
+			tablets = append(tablets, tab)
 		}
 	}
 	g.RUnlock()
+
 	if len(unknownPreds) == 0 {
 		return nil, nil
 	}
-
 	pl := g.connToZeroLeader()
 	zc := pb.NewZeroClient(pl.Get())
 	out, err := zc.Inform(g.Ctx(), &pb.TabletRequest{
@@ -525,7 +520,7 @@ func (g *groupi) Inform(preds []string) ([]*pb.Tablet, error) {
 		GroupId: g.groupId(),
 	})
 	if err != nil {
-		glog.Errorf("Error while ShouldServe grpc call %v", err)
+		glog.Errorf("Error while Inform grpc call %v", err)
 		return nil, err
 	}
 
@@ -535,10 +530,11 @@ func (g *groupi) Inform(preds []string) ([]*pb.Tablet, error) {
 	for _, t := range out.Tablets {
 		if t.GroupId > 0 {
 			g.tablets[t.GetPredicate()] = t
+			tablets = append(tablets, t)
 		}
 	}
 	g.Unlock()
-	return out.Tablets, nil
+	return tablets, nil
 }
 
 // Do not modify the returned Tablet

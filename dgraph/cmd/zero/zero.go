@@ -408,7 +408,7 @@ func (s *Server) Inform(ctx context.Context, req *pb.TabletRequest) (*pb.TabletR
 	ctx, span := otrace.StartSpan(ctx, "Zero.Inform")
 	defer span.End()
 	if req == nil || len(req.Tablets) == 0 {
-		return nil, errors.Errorf("Tablet predicate is empty in %+v", req)
+		return nil, errors.Errorf("Tablets are empty in %+v", req)
 	}
 
 	if req.GroupId == 0 {
@@ -417,15 +417,11 @@ func (s *Server) Inform(ctx context.Context, req *pb.TabletRequest) (*pb.TabletR
 
 	tablets := make([]*pb.Tablet, 0)
 	unknownTablets := make([]*pb.Tablet, 0)
-	// Check who is serving this tablet.
 	for _, t := range req.Tablets {
 		tab := s.ServingTablet(t.Predicate)
 		span.Annotatef(nil, "Tablet for %s: %+v", t.Predicate, tab)
 		switch {
 		case tab != nil && !t.Force:
-			// Someone is serving this tablet. Could be the caller as well.
-			// The caller should compare the returned group against the group it holds to check who's
-			// serving.
 			tablets = append(tablets, t)
 		case t.ReadOnly:
 			tablets = append(tablets, &pb.Tablet{})
