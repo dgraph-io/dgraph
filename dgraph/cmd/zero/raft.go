@@ -283,6 +283,51 @@ func (n *node) regenerateChecksum() {
 	}
 }
 
+func (n *node) handleBulkTabletProposal(tablets []*pb.Tablet) error {
+	n.server.AssertLock()
+	state := n.server.state
+
+	defer n.regenerateChecksum()
+
+	for _, tablet := range tablets {
+		if tablet.GroupId == 0 {
+			continue
+		}
+		group := state.Groups[tablet.GroupId]
+		if tablet.Remove {
+			glog.Infof("Removing tablet for attr: [%v], gid: [%v]\n", tablet.Predicate, tablet.GroupId)
+			if group != nil {
+				delete(group.Tablets, tablet.Predicate)
+			}
+			return nil
+		}
+		if group == nil {
+			group = newGroup()
+			state.Groups[tablet.GroupId] = group
+		}
+
+		// There's a edge case that we're handling.
+		// Two servers ask to serve the same tablet, then we need to ensure that
+		// only the first one succeeds.
+		if prev := n.server.servingTablet(tablet.Predicate); prev != nil {
+			if tablet.Force {
+				originalGroup := state.Groups[prev.GroupId]
+				delete(originalGroup.Tablets, tablet.Predicate)
+			} else if prev.GroupId != tablet.GroupId {
+				glog.Infof(
+					"Tablet for attr: [%s], gid: [%d] already served by group: [%d]\n",
+					prev.Predicate, tablet.GroupId, prev.GroupId)
+				return errTabletAlreadyServed
+			}
+		}
+		tablet.Force = false
+		group.Tablets[tablet.Predicate] = tablet
+
+	}
+
+	return nil
+}
+
 func (n *node) handleTabletProposal(tablet *pb.Tablet) error {
 	n.server.AssertLock()
 	state := n.server.state
@@ -416,6 +461,16 @@ func (n *node) applyProposal(e raftpb.Entry) (uint64, error) {
 			return key, err
 		}
 	}
+
+	if p.Tablets != nil && len(p.Tablets) > 0 {
+		if err := n.handleBulkTabletProposal(p.Tablets); err != nil {
+			span.Annotatef(nil, "While applying tablet proposal: %v", err)
+			glog.Errorf("While applying tablet proposal: %v", err)
+			return key, err
+		}
+	}
+
+
 	if p.License != nil {
 		// Check that the number of nodes in the cluster should be less than MaxNodes, otherwise
 		// reject the proposal.
