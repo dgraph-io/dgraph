@@ -190,18 +190,18 @@ func (g *groupi) informZeroAboutTablets() {
 	for range ticker.C {
 		failed := false
 		preds := schema.State().Predicates()
-		for _, pred := range preds {
-			if len(pred) == 0 {
-				glog.Warningf("Got an empty pred")
-				continue
-			}
-			if tablet, err := g.Tablet(pred); err != nil {
-				failed = true
-				glog.Errorf("Error while getting tablet for pred %q: %v", pred, err)
-			} else if tablet == nil {
-				failed = true
-			}
+		if _, err := g.Inform(preds); err != nil {
+			failed = true
+			glog.Errorf("Error while getting tablet for preds %v", err)
 		}
+		//for _, pred := range preds {
+		//	if tablet, err := g.Tablet(pred); err != nil {
+		//		failed = true
+		//		glog.Errorf("Error while getting tablet for pred %q: %v", pred, err)
+		//	} else if tablet == nil {
+		//		failed = true
+		//	}
+		//}
 		if !failed {
 			glog.V(1).Infof("Done informing Zero about the %d tablets I have", len(preds))
 			return
@@ -506,6 +506,38 @@ func (g *groupi) sendTablet(tablet *pb.Tablet) (*pb.Tablet, error) {
 	return out, nil
 }
 
+func (g *groupi) Inform(preds []string) ([]*pb.Tablet, error){
+	unknownPreds := make([]*pb.Tablet, 0)
+	g.RLock()
+	for _, p := range preds {
+		_, ok := g.tablets[p]
+		if !ok {
+			unknownPreds = append(unknownPreds, &pb.Tablet{GroupId: g.groupId(), Predicate: p})
+		}
+	}
+	g.RUnlock()
+
+	pl := g.connToZeroLeader()
+	zc := pb.NewZeroClient(pl.Get())
+	out, err := zc.Inform(g.Ctx(), &pb.TabletRequest{
+		Tablets: unknownPreds,
+	})
+	if err != nil {
+		glog.Errorf("Error while ShouldServe grpc call %v", err)
+		return nil, err
+	}
+
+	// Do not store tablets with group ID 0, as they are just dummy tablets for
+	// predicates that do no exist.
+	g.Lock()
+	for _, t := range out.Tablets {
+		if t.GroupId > 0 {
+			g.tablets[t.GetPredicate()] = t
+		}
+	}
+	g.Unlock()
+	return out.Tablets, nil
+}
 // Do not modify the returned Tablet
 func (g *groupi) Tablet(key string) (*pb.Tablet, error) {
 	// TODO: Remove all this later, create a membership state and apply it
