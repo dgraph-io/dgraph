@@ -314,10 +314,8 @@ func (s *Server) ServingTablet(tablet string) *pb.Tablet {
 	defer s.RUnlock()
 
 	for _, group := range s.state.Groups {
-		for key, tab := range group.Tablets {
-			if key == tablet {
-				return tab
-			}
+		if tab, ok := group.Tablets[tablet]; ok {
+			return tab
 		}
 	}
 	return nil
@@ -339,10 +337,8 @@ func (s *Server) servingTablet(tablet string) *pb.Tablet {
 	s.AssertRLock()
 
 	for _, group := range s.state.Groups {
-		for key, tab := range group.Tablets {
-			if key == tablet {
-				return tab
-			}
+		if tab, ok := group.Tablets[tablet]; ok {
+			return tab
 		}
 	}
 	return nil

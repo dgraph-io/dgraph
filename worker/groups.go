@@ -501,21 +501,28 @@ func (g *groupi) sendTablet(tablet *pb.Tablet) (*pb.Tablet, error) {
 	return out, nil
 }
 
-func (g *groupi) Inform(preds []string) ([]*pb.Tablet, error){
+func (g *groupi) Inform(preds []string) ([]*pb.Tablet, error) {
 	unknownPreds := make([]*pb.Tablet, 0)
 	g.RLock()
 	for _, p := range preds {
-		_, ok := g.tablets[p]
-		if !ok {
+		if len(p) == 0 {
+			continue
+		}
+
+		if _, ok := g.tablets[p]; !ok {
 			unknownPreds = append(unknownPreds, &pb.Tablet{GroupId: g.groupId(), Predicate: p})
 		}
 	}
 	g.RUnlock()
+	if len(unknownPreds) == 0 {
+		return nil, nil
+	}
 
 	pl := g.connToZeroLeader()
 	zc := pb.NewZeroClient(pl.Get())
 	out, err := zc.Inform(g.Ctx(), &pb.TabletRequest{
 		Tablets: unknownPreds,
+		GroupId: g.groupId(),
 	})
 	if err != nil {
 		glog.Errorf("Error while ShouldServe grpc call %v", err)
@@ -533,6 +540,7 @@ func (g *groupi) Inform(preds []string) ([]*pb.Tablet, error){
 	g.Unlock()
 	return out.Tablets, nil
 }
+
 // Do not modify the returned Tablet
 func (g *groupi) Tablet(key string) (*pb.Tablet, error) {
 	// TODO: Remove all this later, create a membership state and apply it

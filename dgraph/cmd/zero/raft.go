@@ -306,9 +306,6 @@ func (n *node) handleBulkTabletProposal(tablets []*pb.Tablet) error {
 			state.Groups[tablet.GroupId] = group
 		}
 
-		// There's a edge case that we're handling.
-		// Two servers ask to serve the same tablet, then we need to ensure that
-		// only the first one succeeds.
 		if prev := n.server.servingTablet(tablet.Predicate); prev != nil {
 			if tablet.Force {
 				originalGroup := state.Groups[prev.GroupId]
@@ -322,7 +319,6 @@ func (n *node) handleBulkTabletProposal(tablets []*pb.Tablet) error {
 		}
 		tablet.Force = false
 		group.Tablets[tablet.Predicate] = tablet
-
 	}
 
 	return nil
