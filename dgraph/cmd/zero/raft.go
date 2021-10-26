@@ -298,12 +298,25 @@ func (n *node) regenerateChecksum() {
 	}
 }
 
-func (n *node) handleTabletProposal(tablet *pb.Tablet) error {
+func (n *node) handleBulkTabletProposal(tablets []*pb.Tablet) error {
 	n.server.AssertLock()
-	state := n.server.state
-
 	defer n.regenerateChecksum()
+	for _, tablet := range tablets {
+		if err := n.handleTablet(tablet); err != nil {
+			glog.Warningf("not able to handle tablet %s. Got err: %+v", tablet.GetPredicate(), err)
+		}
+	}
 
+	return nil
+}
+
+// handleTablet will check if the given tablet is served by any group.
+// If not the tablet will be added to the current group predicate list
+//
+// This function doesn't take any locks.
+// It is the calling functions responsibility to manage the concurrency.
+func (n *node) handleTablet(tablet *pb.Tablet) error {
+	state := n.server.state
 	if tablet.GroupId == 0 {
 		return errors.Errorf("Tablet group id is zero: %+v", tablet)
 	}
@@ -337,6 +350,12 @@ func (n *node) handleTabletProposal(tablet *pb.Tablet) error {
 	tablet.Force = false
 	group.Tablets[tablet.Predicate] = tablet
 	return nil
+}
+
+func (n *node) handleTabletProposal(tablet *pb.Tablet) error {
+	n.server.AssertLock()
+	defer n.regenerateChecksum()
+	return n.handleTablet(tablet)
 }
 
 func (n *node) deleteNamespace(delNs uint64) error {
@@ -431,6 +450,15 @@ func (n *node) applyProposal(e raftpb.Entry) (uint64, error) {
 			return key, err
 		}
 	}
+
+	if p.Tablets != nil && len(p.Tablets) > 0 {
+		if err := n.handleBulkTabletProposal(p.Tablets); err != nil {
+			span.Annotatef(nil, "While applying bulk tablet proposal: %v", err)
+			glog.Errorf("While applying bulk tablet proposal: %v", err)
+			return key, err
+		}
+	}
+
 	if p.License != nil {
 		// Check that the number of nodes in the cluster should be less than MaxNodes, otherwise
 		// reject the proposal.
