@@ -314,10 +314,8 @@ func (s *Server) ServingTablet(tablet string) *pb.Tablet {
 	defer s.RUnlock()
 
 	for _, group := range s.state.Groups {
-		for key, tab := range group.Tablets {
-			if key == tablet {
-				return tab
-			}
+		if tab, ok := group.Tablets[tablet]; ok {
+			return tab
 		}
 	}
 	return nil
@@ -339,10 +337,8 @@ func (s *Server) servingTablet(tablet string) *pb.Tablet {
 	s.AssertRLock()
 
 	for _, group := range s.state.Groups {
-		for key, tab := range group.Tablets {
-			if key == tablet {
-				return tab
-			}
+		if tab, ok := group.Tablets[tablet]; ok {
+			return tab
 		}
 	}
 	return nil
@@ -406,6 +402,71 @@ func (s *Server) createProposals(dst *pb.Group) ([]*pb.ZeroProposal, error) {
 		}
 	}
 	return res, nil
+}
+
+func (s *Server) Inform(ctx context.Context, req *pb.TabletRequest) (*pb.TabletResponse, error) {
+	ctx, span := otrace.StartSpan(ctx, "Zero.Inform")
+	defer span.End()
+	if req == nil || len(req.Tablets) == 0 {
+		return nil, errors.Errorf("Tablets are empty in %+v", req)
+	}
+
+	if req.GroupId == 0 {
+		return nil, errors.Errorf("Group ID is Zero in %+v", req)
+	}
+
+	tablets := make([]*pb.Tablet, 0)
+	unknownTablets := make([]*pb.Tablet, 0)
+	for _, t := range req.Tablets {
+		tab := s.ServingTablet(t.Predicate)
+		span.Annotatef(nil, "Tablet for %s: %+v", t.Predicate, tab)
+		switch {
+		case tab != nil && !t.Force:
+			tablets = append(tablets, t)
+		case t.ReadOnly:
+			tablets = append(tablets, &pb.Tablet{})
+		default:
+			unknownTablets = append(unknownTablets, t)
+		}
+	}
+
+	if len(unknownTablets) == 0 {
+		return &pb.TabletResponse{
+			Tablets: tablets,
+		}, nil
+	}
+
+	// Set the tablet to be served by this server's group.
+	var proposal pb.ZeroProposal
+	proposal.Tablets = make([]*pb.Tablet, 0)
+	for _, t := range unknownTablets {
+		if x.IsReservedPredicate(t.Predicate) {
+			// Force all the reserved predicates to be allocated to group 1.
+			// This is to make it easier to stream ACL updates to all alpha servers
+			// since they only need to open one pipeline to receive updates for all
+			// ACL predicates.
+			// This will also make it easier to restore the reserved predicates after
+			// a DropAll operation.
+			t.GroupId = 1
+		}
+		proposal.Tablets = append(proposal.Tablets, t)
+	}
+
+	if err := s.Node.proposeAndWait(ctx, &proposal); err != nil && err != errTabletAlreadyServed {
+		span.Annotatef(nil, "While proposing tablet: %v", err)
+		return nil, err
+	}
+
+	for _, t := range unknownTablets {
+		tab := s.ServingTablet(t.Predicate)
+		x.AssertTrue(tab != nil)
+		span.Annotatef(nil, "Now serving tablet for %s: %+v", t.Predicate, tab)
+		tablets = append(tablets, tab)
+	}
+
+	return &pb.TabletResponse{
+		Tablets: tablets,
+	}, nil
 }
 
 // RemoveNode removes the given node from the given group.
