@@ -285,51 +285,23 @@ func (n *node) regenerateChecksum() {
 
 func (n *node) handleBulkTabletProposal(tablets []*pb.Tablet) error {
 	n.server.AssertLock()
-	state := n.server.state
-
 	defer n.regenerateChecksum()
-
 	for _, tablet := range tablets {
-		if tablet.GroupId == 0 {
-			continue
+		if err := n.handleTablet(tablet); err != nil {
+			glog.Infof("not able to handle tablet %s", tablet.GetPredicate())
 		}
-		group := state.Groups[tablet.GroupId]
-		if tablet.Remove {
-			glog.Infof("Removing tablet for attr: [%v], gid: [%v]\n", tablet.Predicate, tablet.GroupId)
-			if group != nil {
-				delete(group.Tablets, tablet.Predicate)
-			}
-			return nil
-		}
-		if group == nil {
-			group = newGroup()
-			state.Groups[tablet.GroupId] = group
-		}
-
-		if prev := n.server.servingTablet(tablet.Predicate); prev != nil {
-			if tablet.Force {
-				originalGroup := state.Groups[prev.GroupId]
-				delete(originalGroup.Tablets, tablet.Predicate)
-			} else if prev.GroupId != tablet.GroupId {
-				glog.Infof(
-					"Tablet for attr: [%s], gid: [%d] already served by group: [%d]\n",
-					prev.Predicate, tablet.GroupId, prev.GroupId)
-				return errTabletAlreadyServed
-			}
-		}
-		tablet.Force = false
-		group.Tablets[tablet.Predicate] = tablet
 	}
 
 	return nil
 }
 
-func (n *node) handleTabletProposal(tablet *pb.Tablet) error {
-	n.server.AssertLock()
+// handleTablet will check if the given tablet is served by any group.
+// If not the tablet will be added to the current group predicate list
+//
+// This function doesn't take any locks.
+// It is the calling functions responsibility to manage the concurrency.
+func (n *node) handleTablet(tablet *pb.Tablet) error {
 	state := n.server.state
-
-	defer n.regenerateChecksum()
-
 	if tablet.GroupId == 0 {
 		return errors.Errorf("Tablet group id is zero: %+v", tablet)
 	}
@@ -363,6 +335,12 @@ func (n *node) handleTabletProposal(tablet *pb.Tablet) error {
 	tablet.Force = false
 	group.Tablets[tablet.Predicate] = tablet
 	return nil
+}
+
+func (n *node) handleTabletProposal(tablet *pb.Tablet) error {
+	n.server.AssertLock()
+	defer n.regenerateChecksum()
+	return n.handleTablet(tablet)
 }
 
 func (n *node) deleteNamespace(delNs uint64) error {
@@ -460,12 +438,11 @@ func (n *node) applyProposal(e raftpb.Entry) (uint64, error) {
 
 	if p.Tablets != nil && len(p.Tablets) > 0 {
 		if err := n.handleBulkTabletProposal(p.Tablets); err != nil {
-			span.Annotatef(nil, "While applying tablet proposal: %v", err)
-			glog.Errorf("While applying tablet proposal: %v", err)
+			span.Annotatef(nil, "While applying bulk tablet proposal: %v", err)
+			glog.Errorf("While applying bulk tablet proposal: %v", err)
 			return key, err
 		}
 	}
-
 
 	if p.License != nil {
 		// Check that the number of nodes in the cluster should be less than MaxNodes, otherwise

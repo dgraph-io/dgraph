@@ -532,6 +532,10 @@ func (g *groupi) Inform(preds []string) ([]*pb.Tablet, error) {
 			g.tablets[t.GetPredicate()] = t
 			tablets = append(tablets, t)
 		}
+
+		if t.GroupId == groups().groupId() {
+			glog.Infof("Serving tablet for: %v\n", x.FormatNsAttr(t.GetPredicate()))
+		}
 	}
 	g.Unlock()
 	return tablets, nil
