@@ -183,13 +183,10 @@ func (g *groupi) informZeroAboutTablets() {
 	defer ticker.Stop()
 
 	for range ticker.C {
-		failed := false
 		preds := schema.State().Predicates()
 		if _, err := g.Inform(preds); err != nil {
-			failed = true
 			glog.Errorf("Error while getting tablet for preds %v", err)
-		}
-		if !failed {
+		} else {
 			glog.V(1).Infof("Done informing Zero about the %d tablets I have", len(preds))
 			return
 		}
@@ -513,6 +510,7 @@ func (g *groupi) Inform(preds []string) ([]*pb.Tablet, error) {
 	if len(unknownPreds) == 0 {
 		return nil, nil
 	}
+
 	pl := g.connToZeroLeader()
 	zc := pb.NewZeroClient(pl.Get())
 	out, err := zc.Inform(g.Ctx(), &pb.TabletRequest{

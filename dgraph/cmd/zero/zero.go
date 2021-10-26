@@ -430,6 +430,12 @@ func (s *Server) Inform(ctx context.Context, req *pb.TabletRequest) (*pb.TabletR
 		}
 	}
 
+	if len(unknownTablets) == 0 {
+		return &pb.TabletResponse{
+			Tablets: tablets,
+		}, nil
+	}
+
 	// Set the tablet to be served by this server's group.
 	var proposal pb.ZeroProposal
 	proposal.Tablets = make([]*pb.Tablet, 0)

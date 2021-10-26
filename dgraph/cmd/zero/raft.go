@@ -288,7 +288,7 @@ func (n *node) handleBulkTabletProposal(tablets []*pb.Tablet) error {
 	defer n.regenerateChecksum()
 	for _, tablet := range tablets {
 		if err := n.handleTablet(tablet); err != nil {
-			glog.Infof("not able to handle tablet %s", tablet.GetPredicate())
+			glog.Warningf("not able to handle tablet %s. Got err: %+v", tablet.GetPredicate(), err)
 		}
 	}
 
