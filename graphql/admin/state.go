@@ -91,10 +91,7 @@ func convertToGraphQLResp(ms pb.MembershipState) membershipState {
 		var tablets = make([]*pb.Tablet, 0, len(v.Tablets))
 		for name, v1 := range v.Tablets {
 			tablets = append(tablets, v1)
-			val, err := x.ExtractNamespaceFromPredicate(name)
-			if err == nil {
-				namespaces[val] = struct{}{}
-			}
+			namespaces[x.ParseNamespace(name)] = struct{}{}
 		}
 		state.Groups = append(state.Groups, clusterGroup{
 			Id:         k,
