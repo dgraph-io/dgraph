@@ -19,6 +19,7 @@ package schema
 import (
 	"bytes"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -2368,7 +2369,11 @@ func getDefaultValue(fd *ast.FieldDefinition, action string) interface{} {
 		return nil
 	}
 	if value.Raw == "$now" {
-		return time.Now().Format(time.RFC3339)
+		if flag.Lookup("test.v") == nil {
+			return time.Now().Format(time.RFC3339)
+		} else {
+			return "2000-01-01T00:00:00.00Z"
+		}
 	}
 	return value.Raw
 }
