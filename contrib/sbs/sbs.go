@@ -9,13 +9,13 @@ import (
 	"io/ioutil"
 	"os"
 	"regexp"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -24,11 +24,7 @@ import (
 )
 
 var (
-	isQuery = regexp.MustCompile(`Got a query: query:(.*)`)
-	queryRe = regexp.MustCompile(`".*?"`)
-	varRe   = regexp.MustCompile(`vars:<.*?>`)
-	keyRe   = regexp.MustCompile(`key:"(.*?)"`)
-	valRe   = regexp.MustCompile(`value:"(.*?)"`)
+	isQuery = regexp.MustCompile(`Got a query: (.*)`)
 
 	Sbs  Command
 	opts Options
@@ -49,12 +45,15 @@ type Command struct {
 }
 
 type Options struct {
-	logPath    string
-	alphaLeft  string
-	alphaRight string
-	matchCount bool
-	queryFile  string
-	numGo      int
+	alphaLeft   string
+	alphaRight  string
+	dryRun      bool
+	singleAlpha bool
+	logPath     string
+	matchCount  bool
+	queryFile   string
+	readOnly    bool
+	numGo       int
 }
 
 func init() {
@@ -65,16 +64,23 @@ func init() {
 	}
 
 	flags := Sbs.Cmd.Flags()
-	flags.StringVar(&opts.logPath,
-		"log-file", "", "Path of the alpha log file to replay")
 	flags.StringVar(&opts.alphaLeft,
 		"alpha-left", "", "GRPC endpoint of left alpha")
 	flags.StringVar(&opts.alphaRight,
 		"alpha-right", "", "GRPC endpoint of right alpha")
+	flags.BoolVar(&opts.dryRun,
+		"dry-run", false, "Dry-run the query/mutations")
+	flags.StringVar(&opts.logPath,
+		"log-file", "", "Path of the alpha log file to replay")
 	flags.BoolVar(&opts.matchCount,
 		"match-count", false, "Get the count and each predicate and verify")
 	flags.StringVar(&opts.queryFile,
 		"query-file", "", "The query in this file will be shot concurrently to left alpha")
+	flags.BoolVar(&opts.readOnly,
+		"read-only", true, "In read only mode, mutations are skipped.")
+	flags.BoolVar(&opts.singleAlpha,
+		"single-alpha", false, "Only alpha-left has to be specified. Should be used to check only "+
+			"to validate if the alpha does not crashes on queries/mutations.")
 	flags.IntVar(&opts.numGo,
 		"workers", 16, "Number of query request workers")
 	Sbs.Conf = viper.New()
@@ -102,6 +108,16 @@ func run(cmd *cobra.Command, args []string) error {
 	// single query is meant to be run on the left alpha only.
 	if len(opts.queryFile) > 0 {
 		singleQuery(dcLeft)
+		return nil
+	}
+
+	// When querying/mutating over a single cluster, there is not alphaRight.
+	if opts.singleAlpha {
+		if opts.matchCount {
+			getCounts(dcLeft, nil)
+			return nil
+		}
+		processLog(dcLeft, nil)
 		return nil
 	}
 
@@ -160,23 +176,40 @@ func processLog(dcLeft, dcRight *dgo.Dgraph) {
 	worker := func(wg *sync.WaitGroup) {
 		defer wg.Done()
 		for r := range reqCh {
+			if opts.readOnly && len(r.Mutations) > 0 {
+				continue
+			}
+
+			if opts.dryRun {
+				klog.Infof("Req: %+v", r)
+				continue
+			}
+
 			atomic.AddUint64(&total, 1)
+
+			if opts.singleAlpha {
+				resp, err := runQuery(r, dcLeft)
+				if err != nil {
+					atomic.AddUint64(&failed, 1)
+					klog.Infof("Failed Request: %+v \nResp: %v Err: %v\n", r, resp, err)
+				}
+				continue
+			}
 
 			respL, errL := runQuery(r, dcLeft)
 			respR, errR := runQuery(r, dcRight)
 			if errL != nil || errR != nil {
 				if errL == nil || errR == nil || errL.Error() != errR.Error() {
 					atomic.AddUint64(&failed, 1)
-					klog.Infof("Failed Query: %s \nVars: %v\nLeft: %v Err: %v\nRight: %v Err: %v\n",
-						r.Query, r.Vars, respL, errL, respR, errR)
+					klog.Infof("Failed Request: %+v \nLeft: %v Err: %v\nRight: %v Err: %v\n",
+						r, respL, errL, respR, errR)
 				}
 				continue
 			}
 
 			if !areEqualJSON(string(respL.GetJson()), string(respR.GetJson())) {
 				atomic.AddUint64(&failed, 1)
-				klog.Infof("Failed Query: %s \nVars: %v\nLeft: %v\nRight: %v\n",
-					r.Query, r.Vars, respL, respR)
+				klog.Infof("Failed Request: %+v \nLeft: %v\nRight: %v\n", r, respL, respR)
 			}
 			lt := float64(respL.Latency.ProcessingNs) / 1e6
 			rt := float64(respR.Latency.ProcessingNs) / 1e6
@@ -223,25 +256,15 @@ func processLog(dcLeft, dcRight *dgo.Dgraph) {
 func getReq(s string) (*api.Request, error) {
 	m := isQuery.FindStringSubmatch(s)
 	if len(m) > 1 {
-		qm := queryRe.FindStringSubmatch(m[1])
-		if len(qm) == 0 {
-			return nil, errors.Errorf("Not a valid query found in the string")
+		var req api.Request
+		if err := proto.UnmarshalText(m[1], &req); err != nil {
+			return nil, errors.Wrapf(err, "cannot unmarshal the query log")
 		}
-		query, err := strconv.Unquote(qm[0])
-		if err != nil {
-			return nil, errors.Wrap(err, "while unquoting")
-		}
-		varStr := varRe.FindAllStringSubmatch(m[1], -1)
-		mp := make(map[string]string)
-		for _, v := range varStr {
-			keys := keyRe.FindStringSubmatch(v[0])
-			vals := valRe.FindStringSubmatch(v[0])
-			mp[keys[1]] = vals[1]
-		}
-		return &api.Request{
-			Query: query,
-			Vars:  mp,
-		}, nil
+		// Allow alpha to lease out the timestamps for the requests otherwise there will be issues
+		// as zero does not know about these transactions.
+		req.StartTs = 0
+		req.CommitNow = true
+		return &req, nil
 	}
 	return nil, errors.Errorf("Not a valid query found in the string")
 }
@@ -297,9 +320,16 @@ func getCounts(left, right *dgo.Dgraph) {
 				if err != nil {
 					klog.Errorf("While running on left alpha: %v\n", err)
 				}
-				rRight, err := runQuery(r.req, right)
-				if err != nil {
-					klog.Errorf("While running on right alpha: %v\n", err)
+				var rRight *api.Response
+				if opts.singleAlpha {
+					// If processing a single alpha, lets just copy the response.
+					rRight = rLeft
+				} else {
+					var err error
+					rRight, err = runQuery(r.req, right)
+					if err != nil {
+						klog.Errorf("While running on right alpha: %v\n", err)
+					}
 				}
 
 				cl, cr := parseCount(rLeft), parseCount(rRight)
@@ -322,13 +352,17 @@ func getCounts(left, right *dgo.Dgraph) {
 }
 
 func runQuery(r *api.Request, client *dgo.Dgraph) (*api.Response, error) {
-	txn := client.NewReadOnlyTxn().BestEffort()
+	var txn *dgo.Txn
+	if len(r.Mutations) == 0 {
+		txn = client.NewReadOnlyTxn().BestEffort()
+	} else {
+		txn = client.NewTxn()
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 1800*time.Second)
 	defer cancel()
-	resp, err := txn.QueryWithVars(ctx, r.Query, r.Vars)
+	resp, err := txn.Do(ctx, r)
 	if err != nil {
-		return nil, errors.Errorf("While running query %s %+v  got error %v\n",
-			r.Query, r.Vars, err)
+		return nil, errors.Errorf("While running request %+v got error %v\n", r, err)
 	}
 	return resp, nil
 }
