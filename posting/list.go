@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
-	"fmt"
 	"log"
 	"math"
 	"sort"
@@ -1127,11 +1126,9 @@ func (ro *rollupOutput) split(startUid uint64) error {
 		x.Check(err)
 		endUid, err := bm.Select(uint64(bm.GetCardinality()) - 1)
 		x.Check(err)
-		fmt.Println(startUid, endUid, bm.GetCardinality())
 
 		newpl := &pb.PostingList{}
 		newpl.Bitmap = bm.ToBuffer()
-		// Take everything from the first posting where posting.Uid >= uid.
 		newpl.Postings = getPostings(startUid, endUid)
 
 		ro.parts[startUid] = newpl
