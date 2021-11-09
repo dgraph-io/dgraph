@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	"fmt"
 	"log"
 	"math"
 	"sort"
@@ -1081,14 +1082,13 @@ func (ro *rollupOutput) runSplits() error {
 	if len(ro.parts) == 0 {
 		ro.parts[1] = ro.plist
 	}
-top:
+	// top:
 	for startUid, pl := range ro.parts {
 		if ShouldSplit(pl) {
 			if err := ro.split(startUid); err != nil {
 				return err
 			}
-			// Had to split something. Let's run again.
-			goto top
+			// goto top
 		}
 	}
 	return nil
@@ -1098,30 +1098,69 @@ func (ro *rollupOutput) split(startUid uint64) error {
 	pl := ro.parts[startUid]
 
 	r := sroar.FromBuffer(pl.Bitmap)
-	num := r.GetCardinality()
-	uid, err := r.Select(uint64(num / 2))
-	if err != nil {
-		return errors.Wrapf(err, "split Select rank: %d", num/2)
+
+	getPostings := func(startUid, endUid uint64) []*pb.Posting {
+		startIdx := sort.Search(len(pl.Postings), func(i int) bool {
+			return pl.Postings[i].Uid >= startUid
+		})
+		endIdx := sort.Search(len(pl.Postings), func(i int) bool {
+			return pl.Postings[i].Uid > endUid
+		})
+		if endIdx == 0 {
+			return pl.Postings[startIdx:]
+		}
+		return pl.Postings[startIdx:endIdx]
 	}
 
-	newpl := &pb.PostingList{}
-	ro.parts[uid] = newpl
+	f := func(start, end uint64) uint64 {
+		var sz uint64
+		for _, p := range getPostings(start, end) {
+			sz += uint64(p.Size())
+		}
+		return sz
+	}
+	bms := r.NSplit(f, uint64(maxListSize))
 
-	// Remove everything from startUid to uid.
-	nr := r.Clone()
-	nr.RemoveRange(0, uid) // Keep all uids >= uid.
-	newpl.Bitmap = nr.ToBuffer()
+	for _, bm := range bms {
+		x.AssertTrue(bm.GetCardinality() > 0)
+		startUid, err := bm.Select(0)
+		x.Check(err)
+		endUid, err := bm.Select(uint64(bm.GetCardinality()) - 1)
+		x.Check(err)
+		fmt.Println(startUid, endUid, bm.GetCardinality())
 
-	// Take everything from the first posting where posting.Uid >= uid.
-	idx := sort.Search(len(pl.Postings), func(i int) bool {
-		return pl.Postings[i].Uid >= uid
-	})
-	newpl.Postings = pl.Postings[idx:]
+		newpl := &pb.PostingList{}
+		newpl.Bitmap = bm.ToBuffer()
+		// Take everything from the first posting where posting.Uid >= uid.
+		newpl.Postings = getPostings(startUid, endUid)
 
-	// Update pl as well. Keeps the lower UIDs.
-	codec.RemoveRange(r, uid, math.MaxUint64)
-	pl.Bitmap = r.ToBuffer()
-	pl.Postings = pl.Postings[:idx]
+		ro.parts[startUid] = newpl
+	}
+
+	// num := r.GetCardinality()
+	// uid, err := r.Select(uint64(num / 2))
+	// if err != nil {
+	// 	return errors.Wrapf(err, "split Select rank: %d", num/2)
+	// }
+
+	// newpl := &pb.PostingList{}
+	// ro.parts[uid] = newpl
+
+	// // Remove everything from startUid to uid.
+	// nr := r.Clone()
+	// nr.RemoveRange(0, uid) // Keep all uids >= uid.
+	// newpl.Bitmap = nr.ToBuffer()
+
+	// // Take everything from the first posting where posting.Uid >= uid.
+	// idx := sort.Search(len(pl.Postings), func(i int) bool {
+	// 	return pl.Postings[i].Uid >= uid
+	// })
+	// newpl.Postings = pl.Postings[idx:]
+
+	// // Update pl as well. Keeps the lower UIDs.
+	// codec.RemoveRange(r, uid, math.MaxUint64)
+	// pl.Bitmap = r.ToBuffer()
+	// pl.Postings = pl.Postings[:idx]
 
 	return nil
 }
