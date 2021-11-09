@@ -1081,13 +1081,11 @@ func (ro *rollupOutput) runSplits() error {
 	if len(ro.parts) == 0 {
 		ro.parts[1] = ro.plist
 	}
-	// top:
 	for startUid, pl := range ro.parts {
 		if ShouldSplit(pl) {
 			if err := ro.split(startUid); err != nil {
 				return err
 			}
-			// goto top
 		}
 	}
 	return nil
@@ -1122,6 +1120,9 @@ func (ro *rollupOutput) split(startUid uint64) error {
 
 	for _, bm := range bms {
 		x.AssertTrue(bm.GetCardinality() > 0)
+		if bm.GetCardinality() == 0 {
+			continue
+		}
 		startUid, err := bm.Select(0)
 		x.Check(err)
 		endUid, err := bm.Select(uint64(bm.GetCardinality()) - 1)
@@ -1133,6 +1134,8 @@ func (ro *rollupOutput) split(startUid uint64) error {
 
 		ro.parts[startUid] = newpl
 	}
+	pl.Bitmap = ro.parts[startUid].Bitmap
+	pl.Postings = ro.parts[startUid].Postings
 
 	// num := r.GetCardinality()
 	// uid, err := r.Select(uint64(num / 2))
