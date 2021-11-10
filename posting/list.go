@@ -1116,12 +1116,9 @@ func (ro *rollupOutput) split(startUid uint64) error {
 		}
 		return sz
 	}
-	bms := r.NSplit(f, uint64(maxListSize))
 
-	// fmt.Printf("Original: %s\n", r)
-	// for _, bm := range bms {
-	// 	fmt.Printf("BM: %s\n", bm)
-	// }
+	// Provide a 30% cushion, because NSplit doesn't do equal splitting based on maxListSize.
+	bms := r.NSplit(f, uint64(0.7*float64(maxListSize)))
 
 	for _, bm := range bms {
 		if bm.GetCardinality() == 0 {
