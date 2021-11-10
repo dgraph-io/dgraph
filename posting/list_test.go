@@ -30,8 +30,6 @@ import (
 	bpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/ristretto/z"
-	"github.com/dgraph-io/sroar"
-	"github.com/gogo/protobuf/proto"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
@@ -1030,7 +1028,7 @@ func TestLargePlistSplit(t *testing.T) {
 }
 
 func TestDeleteStarMultiPartList(t *testing.T) {
-	numEdges := 10000
+	numEdges := 100000
 
 	list, _ := createMultiPartList(t, numEdges, false)
 	parsedKey, err := x.Parse(list.key)
@@ -1102,120 +1100,6 @@ func TestMultiPartListBasic(t *testing.T) {
 
 var maxReadTs = ListOptions{ReadTs: math.MaxUint64}
 
-// Checks if the binSplit works correctly.
-func TestBinSplit(t *testing.T) {
-
-	createList := func(t *testing.T, size int) *List {
-		// This is a package level constant, so reset it after use.
-		originalListSize := maxListSize
-		maxListSize = math.MaxInt32
-		defer func() {
-			maxListSize = originalListSize
-		}()
-		key := x.DataKey(x.GalaxyAttr(uuid.New().String()), 1331)
-		ol, err := getNew(key, ps, math.MaxUint64)
-		require.NoError(t, err)
-		for i := 1; i <= size; i++ {
-			edge := &pb.DirectedEdge{
-				ValueId: uint64(i),
-				Facets:  []*api.Facet{{Key: strconv.Itoa(i)}},
-			}
-			txn := Txn{StartTs: uint64(i)}
-			addMutationHelper(t, ol, edge, Set, &txn)
-			require.NoError(t, ol.commitMutation(uint64(i), uint64(i)+1))
-		}
-		bm, err := ol.Bitmap(maxReadTs)
-		require.NoError(t, err)
-		t.Logf("createList Bitmap: %d\n", bm.GetCardinality())
-
-		kvs, err := ol.Rollup(nil)
-		require.NoError(t, err)
-		t.Logf("Num KVs: %d\n", len(kvs))
-		for _, kv := range kvs {
-			require.Equal(t, uint64(size+2), kv.Version)
-		}
-		require.NoError(t, writePostingListToDisk(kvs))
-		ol, err = readPostingListFromDisk(key, ps, math.MaxUint64)
-		require.NoError(t, err)
-		require.Equal(t, 0, len(ol.plist.Splits))
-		require.Equal(t, size, len(ol.plist.Postings))
-
-		bm, err = ol.Bitmap(maxReadTs)
-		require.NoError(t, err)
-		t.Logf("createList Bitmap after store: %d\n", bm.GetCardinality())
-		return ol
-	}
-	verifyBinSplit := func(t *testing.T, ol *List, ro *rollupOutput) {
-		require.Equal(t, 2, len(ro.parts))
-
-		var keys []uint64
-		for start := range ro.parts {
-			keys = append(keys, start)
-		}
-		sort.Slice(keys, func(i, j int) bool {
-			return keys[i] < keys[j]
-		})
-
-		low := codec.FromBytes(ro.parts[keys[0]].Bitmap)
-		high := codec.FromBytes(ro.parts[keys[1]].Bitmap)
-
-		bm, err := ol.Bitmap(maxReadTs)
-		require.NoError(t, err)
-		expected := bm.ToArray()
-
-		// Check if no data is lost in splitting.
-		t.Logf("expected: %d [%d -> %d] low: %d [%d -> %d] high: %d [%d -> %d]\n",
-			bm.GetCardinality(), bm.Minimum(), bm.Maximum(),
-			low.GetCardinality(), low.Minimum(), low.Maximum(),
-			high.GetCardinality(), high.Minimum(), high.Maximum())
-		require.Equal(t, 0, sroar.And(low, high).GetCardinality())
-		got := append(low.ToArray(), high.ToArray()...)
-		require.Equal(t, len(expected), len(got))
-		require.Equal(t, expected, got)
-		require.Equal(t, ol.plist.Postings,
-			append(ro.parts[keys[0]].Postings, ro.parts[keys[1]].Postings...))
-
-		// Check if the postings belong to the correct half.
-		midUid := high.Minimum()
-		require.Equal(t, keys[1], midUid)
-		for _, p := range ro.parts[keys[0]].Postings {
-			require.Less(t, p.Uid, midUid)
-		}
-		for _, p := range ro.parts[keys[1]].Postings {
-			require.GreaterOrEqual(t, p.Uid, midUid)
-		}
-	}
-	size := int(1e5)
-	ol := createList(t, size)
-
-	postings := make([]*pb.Posting, len(ol.plist.Postings))
-	copy(postings, ol.plist.Postings)
-
-	getRO := func(pl *pb.PostingList) *rollupOutput {
-		out := &rollupOutput{
-			plist: &pb.PostingList{},
-			parts: make(map[uint64]*pb.PostingList),
-		}
-		out.plist.Splits = append(out.plist.Splits, uint64(1))
-		out.parts[1] = proto.Clone(pl).(*pb.PostingList)
-		return out
-	}
-	out := getRO(ol.plist)
-	require.NoError(t, out.split(1))
-	verifyBinSplit(t, ol, out)
-
-	// Artifically modify the ol.plist.Posting for purpose of checking binSplit.
-	ol.plist.Postings = postings[:size/3]
-	out = getRO(ol.plist)
-	require.NoError(t, out.split(1))
-	verifyBinSplit(t, ol, out)
-
-	ol.plist.Postings = postings[:0]
-	out = getRO(ol.plist)
-	require.NoError(t, out.split(1))
-	verifyBinSplit(t, ol, out)
-}
-
 // Verify that iteration works with an afterUid value greater than zero.
 func TestMultiPartListIterAfterUid(t *testing.T) {
 	size := int(1e5)
@@ -1266,8 +1150,8 @@ func TestMultiPartListMarshal(t *testing.T) {
 		return string(kvs[i].Key) < string(kvs[j].Key)
 	})
 
+	ol.minTs += 1
 	for i, startUid := range ol.plist.Splits {
-		t.Log(startUid)
 		partKey, err := x.SplitKey(kvs[0].Key, startUid)
 		require.NoError(t, err)
 		require.Equal(t, partKey, kvs[i+1].Key)
@@ -1277,16 +1161,13 @@ func TestMultiPartListMarshal(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, data, kvs[i+1].Value)
 		require.Equal(t, []byte{BitCompletePosting}, kvs[i+1].UserMeta)
-		require.Equal(t, ol.minTs+1, kvs[i+1].Version)
-		break
+		require.Equal(t, ol.minTs, kvs[i+1].Version)
 	}
 }
 
 // Verify that writing a multi-part list to disk works correctly.
 func TestMultiPartListWriteToDisk(t *testing.T) {
-	// TODO(sroar): Revert back size
-	// size := int(1e5)
-	size := int(1e4)
+	size := int(1e5)
 	originalList, commits := createMultiPartList(t, size, false)
 
 	kvs, err := originalList.Rollup(nil)
@@ -1313,9 +1194,7 @@ func TestMultiPartListWriteToDisk(t *testing.T) {
 
 // Verify that adding and deleting all the entries returns an empty list.
 func TestMultiPartListDelete(t *testing.T) {
-	// TODO(sroar): Revert back size
-	// size := int(1e5)
-	size := int(1e4)
+	size := int(1e5)
 	ol, commits := createAndDeleteMultiPartList(t, size)
 	require.Equal(t, size*2, commits)
 
@@ -1458,9 +1337,7 @@ func TestMultiPartListDeleteAndAdd(t *testing.T) {
 
 func TestSingleListRollup(t *testing.T) {
 	// Generate a split posting list.
-	// TODO(sroar): Revert back size
-	// size := int(1e5)
-	size := int(1e4)
+	size := int(1e5)
 	ol, commits := createMultiPartList(t, size, true)
 
 	var facets []string

@@ -661,13 +661,13 @@ func (r *reducer) toList(req *encodeRequest) {
 				req.splitCh <- &bpb.KVList{Kv: splits}
 			}
 		} else {
-			kv := posting.MarshalPostingList(pl, nil)
-			// No need to FreePack here, because we are reusing alloc.
+			// kv := posting.MarshalPostingList(pl, nil)
+			// // No need to FreePack here, because we are reusing alloc.
 
-			kv.Key = y.Copy(currentKey)
-			kv.Version = writeVersionTs
-			kv.StreamId = r.streamIdFor(pk.Attr)
-			badger.KVToBuffer(kv, kvBuf)
+			// kv.Key = y.Copy(currentKey)
+			// kv.Version = writeVersionTs
+			// kv.StreamId = r.streamIdFor(pk.Attr)
+			// badger.KVToBuffer(kv, kvBuf)
 		}
 
 		for _, p := range pl.Postings {

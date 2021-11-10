@@ -1118,8 +1118,12 @@ func (ro *rollupOutput) split(startUid uint64) error {
 	}
 	bms := r.NSplit(f, uint64(maxListSize))
 
+	// fmt.Printf("Original: %s\n", r)
+	// for _, bm := range bms {
+	// 	fmt.Printf("BM: %s\n", bm)
+	// }
+
 	for _, bm := range bms {
-		x.AssertTrue(bm.GetCardinality() > 0)
 		if bm.GetCardinality() == 0 {
 			continue
 		}
@@ -1134,66 +1138,9 @@ func (ro *rollupOutput) split(startUid uint64) error {
 
 		ro.parts[startUid] = newpl
 	}
-	pl.Bitmap = ro.parts[startUid].Bitmap
-	pl.Postings = ro.parts[startUid].Postings
-
-	// num := r.GetCardinality()
-	// uid, err := r.Select(uint64(num / 2))
-	// if err != nil {
-	// 	return errors.Wrapf(err, "split Select rank: %d", num/2)
-	// }
-
-	// newpl := &pb.PostingList{}
-	// ro.parts[uid] = newpl
-
-	// // Remove everything from startUid to uid.
-	// nr := r.Clone()
-	// nr.RemoveRange(0, uid) // Keep all uids >= uid.
-	// newpl.Bitmap = nr.ToBuffer()
-
-	// // Take everything from the first posting where posting.Uid >= uid.
-	// idx := sort.Search(len(pl.Postings), func(i int) bool {
-	// 	return pl.Postings[i].Uid >= uid
-	// })
-	// newpl.Postings = pl.Postings[idx:]
-
-	// // Update pl as well. Keeps the lower UIDs.
-	// codec.RemoveRange(r, uid, math.MaxUint64)
-	// pl.Bitmap = r.ToBuffer()
-	// pl.Postings = pl.Postings[:idx]
 
 	return nil
 }
-
-/*
-// sanityCheck can be kept around for debugging, and can be called when deallocating Pack.
-func sanityCheck(prefix string, out *rollupOutput) {
-	seen := make(map[string]string)
-
-	hb := func(which string, pack *pb.UidPack, block *pb.UidBlock) {
-		paddr := fmt.Sprintf("%p", pack)
-		baddr := fmt.Sprintf("%p", block)
-		if pa, has := seen[baddr]; has {
-			glog.Fatalf("[%s %s] Have already seen this block: %s in pa:%s. Now found in pa: %s (num blocks: %d) as well. Block [base: %d. Len: %d] Full map size: %d. \n",
-				prefix, which, baddr, pa, paddr, len(pack.Blocks), block.Base, len(block.Deltas), len(seen))
-		}
-		seen[baddr] = which + "_" + paddr
-	}
-
-	if out.plist.Pack != nil {
-		for _, block := range out.plist.Pack.Blocks {
-			hb("main", out.plist.Pack, block)
-		}
-	}
-	for startUid, part := range out.parts {
-		if part.Pack != nil {
-			for _, block := range part.Pack.Blocks {
-				hb("part_"+strconv.Itoa(int(startUid)), part.Pack, block)
-			}
-		}
-	}
-}
-*/
 
 func (l *List) encode(out *rollupOutput, readTs uint64, split bool) error {
 	bm, err := l.bitmap(ListOptions{ReadTs: readTs})
