@@ -156,8 +156,8 @@ run_backup() {
   source ./backup_helper.sh
 
   ## login if user was specified
-  if ! [[ -z $ACL_USER ]]; then
-    ACCESS_TOKEN=$(get_token $ACL_USER $ACL_PASSWORD $AUTH_TOKEN)
+  if ! [[ -z "$ACL_USER" ]]; then
+    ACCESS_TOKEN=$(get_token "$ACL_USER" "$ACL_PASSWORD" "$AUTH_TOKEN")
   fi
 
   ## perform backup with valid options set

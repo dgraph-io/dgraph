@@ -124,20 +124,24 @@ func newKeysWritten() *keysWritten {
 // 9. If multiple mutations happen for the same txn, the sequential mutations are always run
 //    serially by applyCh. This is to avoid edge cases.
 func (kw *keysWritten) StillValid(txn *posting.Txn) bool {
-	if txn.AppliedIndexSeen < kw.rejectBeforeIndex {
+	if atomic.LoadUint64(&txn.AppliedIndexSeen) < kw.rejectBeforeIndex {
 		kw.invalidTxns++
 		return false
 	}
-	if txn.MaxAssignedSeen >= txn.StartTs {
+	if atomic.LoadUint64(&txn.MaxAssignedSeen) >= txn.StartTs {
 		kw.validTxns++
 		return true
 	}
-	for hash := range txn.ReadKeys() {
+
+	c := txn.Cache()
+	c.Lock()
+	defer c.Unlock()
+	for hash := range c.ReadKeys() {
 		// If the commitTs is between (MaxAssignedSeen, StartTs], the txn reads were invalid. If the
 		// commitTs is > StartTs, then it doesn't matter for reads. If the commit ts is <
 		// MaxAssignedSeen, that means our reads are valid.
 		commitTs := kw.keyCommitTs[hash]
-		if commitTs > txn.MaxAssignedSeen && commitTs <= txn.StartTs {
+		if commitTs > atomic.LoadUint64(&txn.MaxAssignedSeen) && commitTs <= txn.StartTs {
 			kw.invalidTxns++
 			return false
 		}
@@ -475,12 +479,8 @@ func (n *node) concMutations(ctx context.Context, m *pb.Mutations, txn *posting.
 	}()
 
 	// Update the applied index that we are seeing.
-	if txn.AppliedIndexSeen == 0 {
-		txn.AppliedIndexSeen = n.Applied.DoneUntil()
-	}
-	if txn.MaxAssignedSeen == 0 {
-		txn.MaxAssignedSeen = posting.Oracle().MaxAssigned()
-	}
+	atomic.CompareAndSwapUint64(&txn.AppliedIndexSeen, 0, n.Applied.DoneUntil())
+	atomic.CompareAndSwapUint64(&txn.MaxAssignedSeen, 0, posting.Oracle().MaxAssigned())
 
 	// This txn's Zero assigned start ts could be in the future, because we're
 	// trying to greedily run mutations concurrently as soon as we see them.
@@ -1081,12 +1081,17 @@ func (n *node) commitOrAbort(_ uint64, delta *pb.OracleDelta) error {
 		if txn == nil || status.CommitTs == 0 {
 			continue
 		}
-		for k := range txn.Deltas() {
+		c := txn.Cache()
+		c.RLock()
+		for k := range c.Deltas() {
 			n.keysWritten.keyCommitTs[z.MemHashString(k)] = status.CommitTs
 		}
-		n.keysWritten.totalKeys += len(txn.Deltas())
-		numKeys += len(txn.Deltas())
-		if len(txn.Deltas()) == 0 {
+		num := len(c.Deltas())
+		c.RUnlock()
+
+		n.keysWritten.totalKeys += num
+		numKeys += num
+		if num == 0 {
 			continue
 		}
 		txns = append(txns, txn)

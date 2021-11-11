@@ -133,7 +133,8 @@ func (r *reducer) createBadgerInternal(dir string, compression bool) *badger.DB 
 	opt := r.state.opt.Badger.
 		WithDir(dir).WithValueDir(dir).
 		WithSyncWrites(false).
-		WithEncryptionKey(key)
+		WithEncryptionKey(key).
+		WithExternalMagic(x.MagicVersion)
 
 	opt.Compression = bo.None
 	opt.ZSTDCompressionLevel = 0

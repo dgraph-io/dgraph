@@ -1078,6 +1078,9 @@ func ShouldSplit(plist *pb.PostingList) bool {
 }
 
 func (ro *rollupOutput) runSplits() error {
+	if len(ro.parts) == 0 {
+		ro.parts[1] = ro.plist
+	}
 top:
 	for startUid, pl := range ro.parts {
 		if ShouldSplit(pl) {
@@ -1189,10 +1192,7 @@ func (l *List) encode(out *rollupOutput, readTs uint64, split bool) error {
 		return nil
 	})
 	// Finish  writing the last part of the list (or the whole list if not a multi-part list).
-	if err != nil {
-		return errors.Wrapf(err, "cannot iterate through the list")
-	}
-	return nil
+	return errors.Wrapf(err, "cannot iterate through the list")
 }
 
 // Merge all entries in mutation layer with commitTs <= l.commitTs into
@@ -1223,7 +1223,7 @@ func (l *List) rollup(readTs uint64, split bool) (*rollupOutput, error) {
 	} else {
 		// We already have a nicely packed posting list. Just use it.
 		x.VerifyPack(l.plist)
-		out.plist = l.plist
+		out.plist = proto.Clone(l.plist).(*pb.PostingList)
 	}
 
 	maxCommitTs := l.minTs

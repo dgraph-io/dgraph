@@ -1,13 +1,17 @@
-// +build !oss
-
 /*
- * Copyright 2020 Dgraph Labs, Inc. and Contributors
+ * Copyright 2021 Dgraph Labs, Inc. and Contributors
  *
- * Licensed under the Dgraph Community License (the "License"); you
- * may not use this file except in compliance with the License. You
- * may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *     https://github.com/dgraph-io/dgraph/blob/master/licenses/DCL.txt
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package worker
@@ -22,7 +26,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/golang/glog"
 	"github.com/minio/minio-go/v6/pkg/credentials"
@@ -177,7 +180,7 @@ func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest, wg *sync
 		reqCopy.GroupId = gid
 		wg.Add(1)
 		go func() {
-			errCh <- tryRestoreProposal(ctx, reqCopy)
+			errCh <- proposeRestoreOrSend(ctx, reqCopy)
 		}()
 	}
 
@@ -209,40 +212,6 @@ func proposeRestoreOrSend(ctx context.Context, req *pb.RestoreRequest) error {
 	return err
 }
 
-func retriableRestoreError(err error) bool {
-	switch {
-	case err == conn.ErrNoConnection:
-		// Try to recover from temporary connection issues.
-		return true
-	case strings.Contains(err.Error(), "Raft isn't initialized yet"):
-		// Try to recover if raft has not been initialized.
-		return true
-	case strings.Contains(err.Error(), errRestoreProposal):
-		// Do not try to recover from other errors when sending the proposal.
-		return false
-	default:
-		// Try to recover from other errors (e.g wrong group, waiting for timestamp, etc).
-		return true
-	}
-}
-
-func tryRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
-	var err error
-	for i := 0; i < 10; i++ {
-		err = proposeRestoreOrSend(ctx, req)
-		if err == nil {
-			return nil
-		}
-
-		if retriableRestoreError(err) {
-			time.Sleep(time.Second)
-			continue
-		}
-		return err
-	}
-	return err
-}
-
 // Restore implements the Worker interface.
 func (w *grpcWorker) Restore(ctx context.Context, req *pb.RestoreRequest) (*pb.Status, error) {
 	var emptyRes pb.Status
@@ -256,6 +225,7 @@ func (w *grpcWorker) Restore(ctx context.Context, req *pb.RestoreRequest) (*pb.S
 		return nil, errors.Wrapf(err, "cannot wait for restore ts %d", req.RestoreTs)
 	}
 
+	glog.Infof("Proposing restore request")
 	err := groups().Node.proposeAndWait(ctx, &pb.Proposal{Restore: req})
 	if err != nil {
 		return &emptyRes, errors.Wrapf(err, errRestoreProposal)
@@ -424,12 +394,14 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest, pidx uin
 	go func(idx uint64) {
 		n := groups().Node
 		if !n.AmLeader() {
+			glog.Infof("I am not leader, not proposing snapshot.")
 			return
 		}
 		if err := n.Applied.WaitForMark(context.Background(), idx); err != nil {
 			glog.Errorf("Error waiting for mark for index %d: %+v", idx, err)
 			return
 		}
+		glog.Infof("I am the leader. Proposing snapshot after restore.")
 		if err := n.proposeSnapshot(); err != nil {
 			glog.Errorf("cannot propose snapshot after processing restore proposal %+v", err)
 		}
@@ -542,10 +514,6 @@ func RunOfflineRestore(dir, location, backupId string, keyFile string,
 		}
 	}
 
-	mapDir, err := ioutil.TempDir(x.WorkerConfig.TmpDir, "restore-map")
-	x.Check(err)
-	defer os.RemoveAll(mapDir)
-
 	for gid := range manifest.Groups {
 		req := &pb.RestoreRequest{
 			Location:          location,
@@ -554,6 +522,12 @@ func RunOfflineRestore(dir, location, backupId string, keyFile string,
 			EncryptionKeyFile: keyFile,
 			RestoreTs:         1,
 		}
+		mapDir, err := ioutil.TempDir(x.WorkerConfig.TmpDir, "restore-map")
+		if err != nil {
+			return LoadResult{Err: errors.Wrapf(err, "Failed to create temp map directory")}
+		}
+		defer os.RemoveAll(mapDir)
+
 		if _, err := RunMapper(req, mapDir); err != nil {
 			return LoadResult{Err: errors.Wrap(err, "RunRestore failed to map")}
 		}
@@ -566,7 +540,8 @@ func RunOfflineRestore(dir, location, backupId string, keyFile string,
 			WithIndexCacheSize(100 * (1 << 20)).
 			WithNumVersionsToKeep(math.MaxInt32).
 			WithEncryptionKey(key).
-			WithNamespaceOffset(x.NamespaceOffset))
+			WithNamespaceOffset(x.NamespaceOffset).
+			WithExternalMagic(x.MagicVersion))
 		if err != nil {
 			return LoadResult{Err: errors.Wrap(err, "RunRestore failed to open DB")}
 		}
