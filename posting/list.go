@@ -912,6 +912,11 @@ func (l *List) Rollup(alloc *z.Allocator) ([]*bpb.KV, error) {
 	}
 	// defer out.free()
 
+	if len(out.parts) > 0 {
+		out.plist.Postings = nil
+		out.plist.Bitmap = nil
+	}
+
 	var kvs []*bpb.KV
 	kv := MarshalPostingList(out.plist, alloc)
 	// We set kv.Version to newMinTs + 1 because if we write the rolled up keys at the same ts as
@@ -1120,20 +1125,24 @@ func (ro *rollupOutput) split(startUid uint64) error {
 	// Provide a 30% cushion, because NSplit doesn't do equal splitting based on maxListSize.
 	bms := r.NSplit(f, uint64(0.7*float64(maxListSize)))
 
-	for _, bm := range bms {
+	for i, bm := range bms {
 		if bm.GetCardinality() == 0 {
 			continue
 		}
-		startUid, err := bm.Select(0)
+		start, err := bm.Select(0)
 		x.Check(err)
-		endUid, err := bm.Select(uint64(bm.GetCardinality()) - 1)
+		end, err := bm.Select(uint64(bm.GetCardinality()) - 1)
 		x.Check(err)
 
 		newpl := &pb.PostingList{}
 		newpl.Bitmap = bm.ToBuffer()
-		newpl.Postings = getPostings(startUid, endUid)
+		newpl.Postings = getPostings(start, end)
+		// startUid = 1 is a special case. ro.parts should always have UID 1
+		if i == 0 && startUid == 1 {
+			start = 1
+		}
 
-		ro.parts[startUid] = newpl
+		ro.parts[start] = newpl
 	}
 
 	return nil
