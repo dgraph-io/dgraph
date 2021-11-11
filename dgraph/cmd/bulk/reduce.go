@@ -592,7 +592,7 @@ func (r *reducer) toList(req *encodeRequest) {
 			}
 		}
 
-		bm := sroar.NewBitmap()
+		var uids []uint64
 		var lastUid uint64
 		slice, next := []byte{}, start
 		for next >= 0 && (next < end || end == -1) {
@@ -605,7 +605,10 @@ func (r *reducer) toList(req *encodeRequest) {
 			}
 			lastUid = uid
 
-			bm.Set(uid)
+			uids = append(uids, uid)
+			// Don't do set here, because this would be slower for Roaring
+			// Bitmaps to build with. This might cause memory issues though.
+			// bm.Set(uid)
 			if pbuf := me.Plist(); len(pbuf) > 0 {
 				p := getPosting()
 				x.Check(p.Unmarshal(pbuf))
@@ -615,6 +618,7 @@ func (r *reducer) toList(req *encodeRequest) {
 
 		// We should not do defer FreePack here, because we might be giving ownership of it away if
 		// we run Rollup.
+		bm := sroar.FromSortedList(uids)
 		pl.Bitmap = bm.ToBuffer()
 		numUids := bm.GetCardinality()
 
