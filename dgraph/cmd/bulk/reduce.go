@@ -278,7 +278,7 @@ func (r *reducer) encode(entryCh chan *encodeRequest, closer *z.Closer) {
 	}
 }
 
-const maxSplitBatchLen = 1000
+const maxSplitBatchLen = 100
 
 func (r *reducer) writeTmpSplits(ci *countIndexer, wg *sync.WaitGroup) {
 	defer wg.Done()
