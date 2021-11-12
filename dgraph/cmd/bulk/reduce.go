@@ -309,7 +309,12 @@ func (r *reducer) writeTmpSplits(ci *countIndexer, wg *sync.WaitGroup) {
 				})
 		}
 		iwg.Add(1)
-		ci.tmpDb.HandoverSkiplist(b.Skiplist(), iwg.Done)
+		skl := b.Skiplist()
+		skl.MemSize()
+		if skl.MemSize() > 65<<20 {
+			glog.Infof("Unusually big Skiplist of size: %d\n", skl.MemSize())
+		}
+		ci.tmpDb.HandoverSkiplist(skl, iwg.Done)
 
 		// for i := 0; i < len(kvs.Kv); i += maxSplitBatchLen {
 		// 	// flush the write batch when the max batch length is reached to prevent the
