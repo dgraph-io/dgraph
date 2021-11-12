@@ -682,6 +682,7 @@ func (r *reducer) toList(req *encodeRequest) {
 
 			for _, kv := range kvs {
 				kv.StreamId = r.streamIdFor(pk.Attr)
+				glog.Infof("sroar kv size: %d\n", kv.Size())
 			}
 			badger.KVToBuffer(kvs[0], kvBuf)
 			if splits := kvs[1:]; len(splits) > 0 {

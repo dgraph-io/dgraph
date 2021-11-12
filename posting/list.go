@@ -37,6 +37,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/dgraph-io/sroar"
+	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 )
 
@@ -1143,6 +1144,7 @@ func (ro *rollupOutput) split(startUid uint64) error {
 		}
 
 		ro.parts[start] = newpl
+		glog.Infof("sroar split size: %d\n", newpl.Size())
 	}
 
 	return nil
