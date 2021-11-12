@@ -37,7 +37,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/dgraph-io/sroar"
-	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 )
 
@@ -914,8 +913,9 @@ func (l *List) Rollup(alloc *z.Allocator) ([]*bpb.KV, error) {
 	// defer out.free()
 
 	if len(out.parts) > 0 {
-		out.plist.Postings = nil
-		out.plist.Bitmap = nil
+		// The main list for the split postings should not contain postings and bitmap.
+		x.AssertTrue(out.plist.Postings == nil)
+		x.AssertTrue(out.plist.Bitmap == nil)
 	}
 
 	var kvs []*bpb.KV
@@ -1138,13 +1138,11 @@ func (ro *rollupOutput) split(startUid uint64) error {
 		newpl := &pb.PostingList{}
 		newpl.Bitmap = bm.ToBuffer()
 		newpl.Postings = getPostings(start, end)
-		// startUid = 1 is a special case. ro.parts should always have UID 1
+		// startUid = 1 is treated specially. ro.parts should always contain 1.
 		if i == 0 && startUid == 1 {
 			start = 1
 		}
-
 		ro.parts[start] = newpl
-		glog.Infof("sroar split size: %d\n", newpl.Size())
 	}
 
 	return nil

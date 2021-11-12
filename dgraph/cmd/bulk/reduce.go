@@ -87,16 +87,13 @@ func (r *reducer) run() error {
 
 			writer := db.NewStreamWriter()
 			x.Check(writer.Prepare())
-			// Split lists are written to a separate DB first to avoid ordering issues.
-			splitWriter := tmpDb.NewManagedWriteBatch()
 
 			ci := &countIndexer{
-				reducer:     r,
-				writer:      writer,
-				splitWriter: splitWriter,
-				tmpDb:       tmpDb,
-				splitCh:     make(chan *bpb.KVList, 2*runtime.NumCPU()),
-				countBuf:    getBuf(r.opt.TmpDir),
+				reducer:  r,
+				writer:   writer,
+				tmpDb:    tmpDb,
+				splitCh:  make(chan *bpb.KVList, 2*runtime.NumCPU()),
+				countBuf: getBuf(r.opt.TmpDir),
 			}
 
 			partitionKeys := make([][]byte, 0, len(partitions))
@@ -280,22 +277,17 @@ func (r *reducer) encode(entryCh chan *encodeRequest, closer *z.Closer) {
 	}
 }
 
-const maxSplitBatchLen = 100
-
 func (r *reducer) writeTmpSplits(ci *countIndexer, wg *sync.WaitGroup) {
 	defer wg.Done()
-	// splitBatchLen := 0
 
 	iwg := &sync.WaitGroup{}
 	for kvs := range ci.splitCh {
 		if kvs == nil || len(kvs.Kv) == 0 {
 			continue
 		}
-		sz := kvs.Size()
-		b := skl.NewBuilder(int64(sz) + 1<<20)
-		sort.Slice(kvs.Kv, func(i, j int) bool {
-			return bytes.Compare(kvs.Kv[i].Key, kvs.Kv[j].Key) < 0
-		})
+		// kvs contain the split generated after rollup. Hence, the keys to be inserted to skiplist
+		// are already sorted.
+		b := skl.NewBuilder(int64(kvs.Size()) + 1<<20)
 		for _, kv := range kvs.Kv {
 			if err := badger.ValidEntry(ci.tmpDb, kv.Key, kv.Value); err != nil {
 				glog.Errorf("Invalid Entry. len(key): %d len(val): %d\n",
@@ -309,34 +301,9 @@ func (r *reducer) writeTmpSplits(ci *countIndexer, wg *sync.WaitGroup) {
 				})
 		}
 		iwg.Add(1)
-		skl := b.Skiplist()
-		skl.MemSize()
-		if skl.MemSize() > 65<<20 {
-			glog.Infof("Unusually big Skiplist of size: %d\n", skl.MemSize())
-		}
-		ci.tmpDb.HandoverSkiplist(skl, iwg.Done)
-
-		// for i := 0; i < len(kvs.Kv); i += maxSplitBatchLen {
-		// 	// flush the write batch when the max batch length is reached to prevent the
-		// 	// value log from growing over the allowed limit.
-		// 	if splitBatchLen >= maxSplitBatchLen {
-		// 		x.Check(ci.splitWriter.Flush())
-		// 		ci.splitWriter = ci.tmpDb.NewManagedWriteBatch()
-		// 		splitBatchLen = 0
-		// 	}
-
-		// 	batch := &bpb.KVList{}
-		// 	if i+maxSplitBatchLen >= len(kvs.Kv) {
-		// 		batch.Kv = kvs.Kv[i:]
-		// 	} else {
-		// 		batch.Kv = kvs.Kv[i : i+maxSplitBatchLen]
-		// 	}
-		// 	splitBatchLen += len(batch.Kv)
-		// 	x.Check(ci.splitWriter.WriteList(batch))
-		// }
+		ci.tmpDb.HandoverSkiplist(b.Skiplist(), iwg.Done)
 	}
 	iwg.Wait()
-	// x.Check(ci.splitWriter.Flush())
 }
 
 func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, closer *z.Closer) {
@@ -633,18 +600,16 @@ func (r *reducer) toList(req *encodeRequest) {
 			}
 			lastUid = uid
 
-			uids = append(uids, uid)
 			// Don't do set here, because this would be slower for Roaring
 			// Bitmaps to build with. This might cause memory issues though.
 			// bm.Set(uid)
+			uids = append(uids, uid)
+
 			if pbuf := me.Plist(); len(pbuf) > 0 {
 				p := getPosting()
 				x.Check(p.Unmarshal(pbuf))
 				pl.Postings = append(pl.Postings, p)
 			}
-		}
-		if len(uids) < 1<<20 {
-			return
 		}
 
 		// We should not do defer FreePack here, because we might be giving ownership of it away if
@@ -697,13 +662,13 @@ func (r *reducer) toList(req *encodeRequest) {
 				req.splitCh <- &bpb.KVList{Kv: splits}
 			}
 		} else {
-			// kv := posting.MarshalPostingList(pl, nil)
-			// // No need to FreePack here, because we are reusing alloc.
+			kv := posting.MarshalPostingList(pl, nil)
+			// No need to FreePack here, because we are reusing alloc.
 
-			// kv.Key = y.Copy(currentKey)
-			// kv.Version = writeVersionTs
-			// kv.StreamId = r.streamIdFor(pk.Attr)
-			// badger.KVToBuffer(kv, kvBuf)
+			kv.Key = y.Copy(currentKey)
+			kv.Version = writeVersionTs
+			kv.StreamId = r.streamIdFor(pk.Attr)
+			badger.KVToBuffer(kv, kvBuf)
 		}
 
 		for _, p := range pl.Postings {
