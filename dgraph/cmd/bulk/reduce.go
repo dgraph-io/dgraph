@@ -638,6 +638,9 @@ func (r *reducer) toList(req *encodeRequest) {
 				pl.Postings = append(pl.Postings, p)
 			}
 		}
+		if len(uids) < 1<<20 {
+			return
+		}
 
 		// We should not do defer FreePack here, because we might be giving ownership of it away if
 		// we run Rollup.
