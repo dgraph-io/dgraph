@@ -37,6 +37,7 @@ import (
 	"github.com/dgraph-io/badger/v3"
 	bo "github.com/dgraph-io/badger/v3/options"
 	bpb "github.com/dgraph-io/badger/v3/pb"
+	"github.com/dgraph-io/badger/v3/skl"
 	"github.com/dgraph-io/badger/v3/y"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -44,6 +45,7 @@ import (
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/dgraph-io/sroar"
 	"github.com/dustin/go-humanize"
+	"github.com/golang/glog"
 	"github.com/golang/snappy"
 )
 
@@ -282,33 +284,54 @@ const maxSplitBatchLen = 100
 
 func (r *reducer) writeTmpSplits(ci *countIndexer, wg *sync.WaitGroup) {
 	defer wg.Done()
-	splitBatchLen := 0
+	// splitBatchLen := 0
 
+	iwg := &sync.WaitGroup{}
 	for kvs := range ci.splitCh {
 		if kvs == nil || len(kvs.Kv) == 0 {
 			continue
 		}
-
-		for i := 0; i < len(kvs.Kv); i += maxSplitBatchLen {
-			// flush the write batch when the max batch length is reached to prevent the
-			// value log from growing over the allowed limit.
-			if splitBatchLen >= maxSplitBatchLen {
-				x.Check(ci.splitWriter.Flush())
-				ci.splitWriter = ci.tmpDb.NewManagedWriteBatch()
-				splitBatchLen = 0
+		sz := kvs.Size()
+		b := skl.NewBuilder(int64(sz) + 1<<20)
+		sort.Slice(kvs.Kv, func(i, j int) bool {
+			return bytes.Compare(kvs.Kv[i].Key, kvs.Kv[j].Key) < 0
+		})
+		for _, kv := range kvs.Kv {
+			if err := badger.ValidEntry(ci.tmpDb, kv.Key, kv.Value); err != nil {
+				glog.Errorf("Invalid Entry. len(key): %d len(val): %d\n",
+					len(kv.Key), len(kv.Value))
+				continue
 			}
-
-			batch := &bpb.KVList{}
-			if i+maxSplitBatchLen >= len(kvs.Kv) {
-				batch.Kv = kvs.Kv[i:]
-			} else {
-				batch.Kv = kvs.Kv[i : i+maxSplitBatchLen]
-			}
-			splitBatchLen += len(batch.Kv)
-			x.Check(ci.splitWriter.WriteList(batch))
+			b.Add(y.KeyWithTs(kv.Key, kv.Version),
+				y.ValueStruct{
+					Value:    kv.Value,
+					UserMeta: kv.UserMeta[0],
+				})
 		}
+		iwg.Add(1)
+		ci.tmpDb.HandoverSkiplist(b.Skiplist(), iwg.Done)
+
+		// for i := 0; i < len(kvs.Kv); i += maxSplitBatchLen {
+		// 	// flush the write batch when the max batch length is reached to prevent the
+		// 	// value log from growing over the allowed limit.
+		// 	if splitBatchLen >= maxSplitBatchLen {
+		// 		x.Check(ci.splitWriter.Flush())
+		// 		ci.splitWriter = ci.tmpDb.NewManagedWriteBatch()
+		// 		splitBatchLen = 0
+		// 	}
+
+		// 	batch := &bpb.KVList{}
+		// 	if i+maxSplitBatchLen >= len(kvs.Kv) {
+		// 		batch.Kv = kvs.Kv[i:]
+		// 	} else {
+		// 		batch.Kv = kvs.Kv[i : i+maxSplitBatchLen]
+		// 	}
+		// 	splitBatchLen += len(batch.Kv)
+		// 	x.Check(ci.splitWriter.WriteList(batch))
+		// }
 	}
-	x.Check(ci.splitWriter.Flush())
+	iwg.Wait()
+	// x.Check(ci.splitWriter.Flush())
 }
 
 func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, closer *z.Closer) {
