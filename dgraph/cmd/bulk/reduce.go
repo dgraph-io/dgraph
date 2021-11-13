@@ -301,7 +301,9 @@ func (r *reducer) writeTmpSplits(ci *countIndexer, wg *sync.WaitGroup) {
 				})
 		}
 		iwg.Add(1)
-		ci.tmpDb.HandoverSkiplist(b.Skiplist(), iwg.Done)
+		if err := ci.tmpDb.HandoverSkiplist(b.Skiplist(), iwg.Done); err != nil {
+			glog.Errorf("writeTmpSplits: handover skiplist returned error: %v\n", err)
+		}
 	}
 	iwg.Wait()
 }
