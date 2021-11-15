@@ -1727,7 +1727,7 @@ func TestAllPredsPermission(t *testing.T) {
 			_:a <age> "23" .
 			_:a <nickname> "RG" .
 			_:a <dgraph.type> "TypeName" .
-            _:a <connects> _:b .
+			_:a <connects> _:b .
 			_:b <name> "RandomGuy2" .
 			_:b <age> "25" .
 			_:b <nickname> "RG2" .
@@ -1741,18 +1741,18 @@ func TestAllPredsPermission(t *testing.T) {
 	query := `{q1(func: has(name)){
 		v as name
 		a as age
-    }
-    q2(func: eq(val(v), "RandomGuy")) {
+	}
+	q2(func: eq(val(v), "RandomGuy")) {
 		val(v)
 		val(a)
-        connects {
-          name
-          age
-          ~connects {
-            name
-            age
-          }
-        }
+		connects {
+			name
+			age
+			~connects {
+				name
+				age
+			}
+		}
 	}}`
 
 	// Test that groot has access to all the predicates
@@ -1781,6 +1781,14 @@ func TestAllPredsPermission(t *testing.T) {
 				q2(func: eq(val(n), "RandomGuy")) {
 					val(n)
 					val(a)
+					connects {
+						name
+						age
+						~connects {
+							name
+							age
+						}
+					}
 				}
 			}
 			`,
@@ -1790,7 +1798,7 @@ func TestAllPredsPermission(t *testing.T) {
 			`alice has access to name`,
 			`{"q1":[{"name":"RandomGuy"},{"name":"RandomGuy2"}],"q2":[{"val(n)":"RandomGuy"}]}`,
 
-			"alice has access to name, age, connects, and ~connects",
+			"alice has access to all predicates",
 			`{"q1":[{"name":"RandomGuy","age":23},{"name":"RandomGuy2","age":25}],"q2":[{"val(v)":"RandomGuy","val(a)":23,"connects":[{"name":"RandomGuy2","age":25,"~connects":[{"name":"RandomGuy","age":23}]}]}]}`,
 		},
 	}
