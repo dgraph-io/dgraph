@@ -1748,24 +1748,28 @@ func TestAllPredsPermission(t *testing.T) {
         connects {
           name
           age
+          ~connects {
+            name
+            age
+          }
         }
 	}}`
 
 	// Test that groot has access to all the predicates
 	resp, err := dg.NewReadOnlyTxn().Query(ctx, query)
 	require.NoError(t, err, "Error while querying data")
-	testutil.CompareJSON(t, `{"q1":[{"name":"RandomGuy","age":23},{"name":"RandomGuy2","age":25}],"q2":[{"val(v)":"RandomGuy","val(a)":23,"connects":[{"name":"RandomGuy2","age":25}]}]}`,
+	testutil.CompareJSON(t, `{"q1":[{"name":"RandomGuy","age":23},{"name":"RandomGuy2","age":25}],"q2":[{"val(v)":"RandomGuy","val(a)":23,"connects":[{"name":"RandomGuy2","age":25,"~connects":[{"name":"RandomGuy","age":23}]}]}]}`,
 		string(resp.GetJson()))
 
 	// All test cases
 	tests := []struct {
-		input                  string
-		descriptionNoPerm      string
-		outputNoPerm           string
-		descriptionNamePerm    string
-		outputNamePerm         string
-		descriptionNameAgePerm string
-		outputNameAgePerm      string
+		input               string
+		descriptionNoPerm   string
+		outputNoPerm        string
+		descriptionNamePerm string
+		outputNamePerm      string
+		descriptionAllPerm  string
+		outputAllPerm       string
 	}{
 		{
 			`
@@ -1786,8 +1790,8 @@ func TestAllPredsPermission(t *testing.T) {
 			`alice has access to name`,
 			`{"q1":[{"name":"RandomGuy"},{"name":"RandomGuy2"}],"q2":[{"val(n)":"RandomGuy"}]}`,
 
-			"alice has access to name and age",
-			`{"q1":[{"name":"RandomGuy","age":23},{"name":"RandomGuy2","age":25}],"q2":[{"val(n)":"RandomGuy","val(a)":23}]}`,
+			"alice has access to name, age, connects, and ~connects",
+			`{"q1":[{"name":"RandomGuy","age":23},{"name":"RandomGuy2","age":25}],"q2":[{"val(v)":"RandomGuy","val(a)":23,"connects":[{"name":"RandomGuy2","age":25,"~connects":[{"name":"RandomGuy","age":23}]}]}]}`,
 		},
 	}
 
@@ -1822,11 +1826,11 @@ func TestAllPredsPermission(t *testing.T) {
 	time.Sleep(defaultTimeToSleep)
 
 	for _, tc := range tests {
-		desc := tc.descriptionNameAgePerm
+		desc := tc.descriptionAllPerm
 		t.Run(desc, func(t *testing.T) {
 			resp, err := userClient.NewTxn().Query(ctx, tc.input)
 			require.NoError(t, err)
-			testutil.CompareJSON(t, tc.outputNameAgePerm, string(resp.Json))
+			testutil.CompareJSON(t, tc.outputAllPerm, string(resp.Json))
 		})
 	}
 
@@ -1835,6 +1839,7 @@ func TestAllPredsPermission(t *testing.T) {
 		SetNquads: []byte(`
 			_:a <name> "RandomGuy" .
 			_:a <age> "23" .
+			_:a <connects> _:b .
 			_:a <dgraph.type> "TypeName" .
 		`),
 		CommitNow: true,
