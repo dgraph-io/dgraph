@@ -4,7 +4,7 @@ go 1.16
 
 // replace github.com/dgraph-io/badger/v3 => /home/mrjn/go/src/github.com/dgraph-io/badger
 // replace github.com/dgraph-io/ristretto => /home/mrjn/go/src/github.com/dgraph-io/ristretto
-// replace github.com/dgraph-io/sroar => /home/mrjn/go/src/github.com/dgraph-io/sroar
+// replace github.com/dgraph-io/sroar => /home/ash/go/src/github.com/dgraph-io/sroar
 
 require (
 	cloud.google.com/go/storage v1.15.0
@@ -26,7 +26,7 @@ require (
 	github.com/dgraph-io/graphql-transport-ws v0.0.0-20210511143556-2cef522f1f15
 	github.com/dgraph-io/ristretto v0.1.1-0.20210824115121-89e99415887a
 	github.com/dgraph-io/simdjson-go v0.3.0
-	github.com/dgraph-io/sroar v0.0.0-20211112182407-50743065f4b7
+	github.com/dgraph-io/sroar v0.0.0-20211115081721-e63e619e60cb
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/dgrijalva/jwt-go/v4 v4.0.0-preview1
 	github.com/dgryski/go-farm v0.0.0-20200201041132-a6ae2369ad13
