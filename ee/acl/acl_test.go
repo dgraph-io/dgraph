@@ -1697,10 +1697,12 @@ func TestAllPredsPermission(t *testing.T) {
 		name	 : string @index(exact) .
 		nickname : string @index(exact) .
 		age 	 : int .
+        connects : [uid] @reverse .
 		type TypeName {
 			name: string
 			nickname: string
 			age: int
+            connects: [uid]
 		}
 	`}
 	require.NoError(t, dg.Alter(ctx, &op))
@@ -1725,6 +1727,7 @@ func TestAllPredsPermission(t *testing.T) {
 			_:a <age> "23" .
 			_:a <nickname> "RG" .
 			_:a <dgraph.type> "TypeName" .
+            _:a <connects> _:b .
 			_:b <name> "RandomGuy2" .
 			_:b <age> "25" .
 			_:b <nickname> "RG2" .
@@ -1742,12 +1745,16 @@ func TestAllPredsPermission(t *testing.T) {
     q2(func: eq(val(v), "RandomGuy")) {
 		val(v)
 		val(a)
+        connects {
+          name
+          age
+        }
 	}}`
 
 	// Test that groot has access to all the predicates
 	resp, err := dg.NewReadOnlyTxn().Query(ctx, query)
 	require.NoError(t, err, "Error while querying data")
-	testutil.CompareJSON(t, `{"q1":[{"name":"RandomGuy","age":23},{"name":"RandomGuy2","age":25}],"q2":[{"val(v)":"RandomGuy","val(a)":23}]}`,
+	testutil.CompareJSON(t, `{"q1":[{"name":"RandomGuy","age":23},{"name":"RandomGuy2","age":25}],"q2":[{"val(v)":"RandomGuy","val(a)":23,"connects":[{"name":"RandomGuy2","age":25}]}]}`,
 		string(resp.GetJson()))
 
 	// All test cases
