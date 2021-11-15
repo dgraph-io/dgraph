@@ -1799,7 +1799,7 @@ func TestAllPredsPermission(t *testing.T) {
 			`{"q1":[{"name":"RandomGuy"},{"name":"RandomGuy2"}],"q2":[{"val(n)":"RandomGuy"}]}`,
 
 			"alice has access to all predicates",
-			`{"q1":[{"name":"RandomGuy","age":23},{"name":"RandomGuy2","age":25}],"q2":[{"val(v)":"RandomGuy","val(a)":23,"connects":[{"name":"RandomGuy2","age":25,"~connects":[{"name":"RandomGuy","age":23}]}]}]}`,
+			`{"q1":[{"name":"RandomGuy","age":23},{"name":"RandomGuy2","age":25}],"q2":[{"val(n)":"RandomGuy","val(a)":23,"connects":[{"name":"RandomGuy2","age":25,"~connects":[{"name":"RandomGuy","age":23}]}]}]}`,
 		},
 	}
 
