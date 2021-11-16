@@ -581,6 +581,10 @@ func (r *reducer) toList(req *encodeRequest) {
 		if num == 0 {
 			return
 		}
+		for _, p := range pl.Postings {
+			freePosting(p)
+		}
+		pl.Reset()
 		atomic.AddInt64(&r.prog.reduceEdgeCount, int64(num))
 
 		pk, err := x.Parse(currentKey)
@@ -627,23 +631,20 @@ func (r *reducer) toList(req *encodeRequest) {
 			}
 		}
 
-		// Not sure if we need to sort the postings here. But without sorting, we can't expect
-		// rollups to work. It does a binary search to split the posting list.
-		sort.Slice(pl.Postings, func(i, j int) bool {
-			return pl.Postings[i].Uid < pl.Postings[j].Uid
-		})
-
+		// TODO: Remove this check later.
 		last := uint64(0)
-		for _, u := range uids {
-			x.AssertTruef(u >= last, "last: %d, cur: %d\n", last, u)
-			last = u
+		for _, p := range pl.Postings {
+			if p.Uid < last {
+				for i, x := range pl.Postings {
+					glog.Infof("[%3d] Posting Uid: %-d\n", i, x.Uid)
+				}
+				for i, x := range uids {
+					glog.Infof("[%3d] Uid: %-d\n", i, x)
+				}
+			}
+			x.AssertTruef(p.Uid >= last, "last: %d, cur: %d\n", last, p.Uid)
+			last = p.Uid
 		}
-
-		// last := uint64(0)
-		// for _, p := range pl.Postings {
-		// 	x.AssertTruef(p.Uid >= last, "last: %d, cur: %d\n", last, p.Uid)
-		// 	last = p.Uid
-		// }
 
 		if len(uids) < 100000 {
 			// HACK
@@ -724,10 +725,6 @@ func (r *reducer) toList(req *encodeRequest) {
 			badger.KVToBuffer(kv, kvBuf)
 		}
 
-		for _, p := range pl.Postings {
-			freePosting(p)
-		}
-		pl.Reset()
 	}
 
 	for end >= 0 {
