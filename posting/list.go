@@ -37,6 +37,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/dgraph-io/sroar"
+	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 )
 
@@ -912,6 +913,16 @@ func (l *List) Rollup(alloc *z.Allocator) ([]*bpb.KV, error) {
 	}
 	// defer out.free()
 
+	if len(out.parts) > 1000 {
+		pk, _ := x.Parse(l.key)
+		glog.Warningf("ZEROING out JUPITER KEY: %x Number of out.parts: %d."+
+			" Parsed key: %+v\n", l.key, len(out.parts), pk)
+		kv := &bpb.KV{
+			Value:    nil,
+			UserMeta: []byte{BitEmptyPosting},
+		}
+		return []*bpb.KV{kv}, nil
+	}
 	if len(out.parts) > 0 {
 		// The main list for the split postings should not contain postings and bitmap.
 		x.AssertTrue(out.plist.Postings == nil)
@@ -1116,11 +1127,17 @@ func (ro *rollupOutput) split(startUid uint64) error {
 	}
 
 	f := func(start, end uint64) uint64 {
-		var sz uint64
-		for _, p := range getPostings(start, end) {
-			sz += uint64(p.Size())
+		// return 0
+		// var sz uint64
+		posts := getPostings(start, end)
+		if len(posts) == 0 {
+			return 0
 		}
-		return sz
+		return uint64(posts[0].Size() * len(posts)) // Just approximate by taking first postings size and multiplying it.
+		// for _, p := range getPostings(start, end) {
+		// 	sz += uint64(p.Size())
+		// }
+		// return sz
 	}
 
 	// Provide a 30% cushion, because NSplit doesn't do equal splitting based on maxListSize.

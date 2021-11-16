@@ -294,6 +294,10 @@ func (r *reducer) writeTmpSplits(ci *countIndexer, wg *sync.WaitGroup) {
 					len(kv.Key), len(kv.Value))
 				continue
 			}
+			if len(kv.Value) == 0 {
+				glog.Infof("KV.Value is zero with Key: %x . Skipping", kv.Key)
+				continue
+			}
 			b.Add(y.KeyWithTs(kv.Key, kv.Version),
 				y.ValueStruct{
 					Value:    kv.Value,
@@ -301,9 +305,14 @@ func (r *reducer) writeTmpSplits(ci *countIndexer, wg *sync.WaitGroup) {
 				})
 		}
 		iwg.Add(1)
-		if err := ci.tmpDb.HandoverSkiplist(b.Skiplist(), iwg.Done); err != nil {
-			glog.Errorf("writeTmpSplits: handover skiplist returned error: %v\n", err)
-		}
+		err := x.RetryUntilSuccess(1000, 5*time.Second, func() error {
+			err := ci.tmpDb.HandoverSkiplist(b.Skiplist(), iwg.Done)
+			if err != nil {
+				glog.Errorf("writeTmpSplits: handover skiplist returned error: %v. Retrying...\n", err)
+			}
+			return err
+		})
+		x.Check(err)
 	}
 	iwg.Wait()
 }
@@ -564,6 +573,10 @@ func (r *reducer) toList(req *encodeRequest) {
 	}
 
 	start, end, num := cbuf.StartOffset(), cbuf.StartOffset(), 0
+
+	// alloc := z.NewAllocator(128<<20, "Reducer.Allocator.toList")
+	// defer alloc.Release()
+
 	appendToList := func() {
 		if num == 0 {
 			return
@@ -613,6 +626,10 @@ func (r *reducer) toList(req *encodeRequest) {
 				pl.Postings = append(pl.Postings, p)
 			}
 		}
+		if len(uids) < 100000 {
+			// HACK
+			return
+		}
 
 		// We should not do defer FreePack here, because we might be giving ownership of it away if
 		// we run Rollup.
@@ -652,6 +669,7 @@ func (r *reducer) toList(req *encodeRequest) {
 		if posting.ShouldSplit(pl) {
 			// Give ownership of pl.Pack away to list. Rollup would deallocate the Pack.
 			l := posting.NewList(y.Copy(currentKey), pl, writeVersionTs)
+			// alloc.Reset()
 			kvs, err := l.Rollup(nil)
 			x.Check(err)
 
@@ -659,10 +677,25 @@ func (r *reducer) toList(req *encodeRequest) {
 				kv.StreamId = r.streamIdFor(pk.Attr)
 			}
 			badger.KVToBuffer(kvs[0], kvBuf)
+			// list := &bpb.KVList{}
+			// for _, split := range kvs[1:] {
+			// proto.Clone isn't working for some reason. Not investigating.
+			// kv := &bpb.KV{}
+			// kv.Key = append(kv.Key, split.Key...)
+			// kv.Value = append(kv.Value, split.Value...)
+			// kv.UserMeta = append(kv.UserMeta, split.UserMeta...)
+			// kv.Meta = append(kv.Meta, split.Meta...)
+			// kv.Version = split.Version
+
+			// list.Kv = append(list.Kv, kv)
+			// }
+			// if len(list.Kv) > 0 {
+			// 	req.splitCh <- &bpb.KVList{Kv: splits[1:]}
+			// }
 			if splits := kvs[1:]; len(splits) > 0 {
 				req.splitCh <- &bpb.KVList{Kv: splits}
 			}
-		} else {
+		} else if false { // HACK. Remove.
 			kv := posting.MarshalPostingList(pl, nil)
 			// No need to FreePack here, because we are reusing alloc.
 
