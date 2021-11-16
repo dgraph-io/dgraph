@@ -914,6 +914,15 @@ func (l *List) Rollup(alloc *z.Allocator) ([]*bpb.KV, error) {
 	// defer out.free()
 
 	if len(out.parts) > 1000 {
+		var sz uint64
+		for startUid, plist := range out.parts {
+			for _, p := range plist.Postings {
+				sz += uint64(p.Size())
+			}
+			bm := sroar.FromBuffer(plist.Bitmap)
+			glog.Infof("startUid: %d cardinality: %d bitmap size: %d postings size: %d\n",
+				startUid, bm.GetCardinality(), len(plist.Bitmap), sz)
+		}
 		pk, _ := x.Parse(l.key)
 		glog.Warningf("ZEROING out JUPITER KEY: %x Number of out.parts: %d."+
 			" Parsed key: %+v\n", l.key, len(out.parts), pk)
@@ -1113,48 +1122,60 @@ func (ro *rollupOutput) split(startUid uint64) error {
 
 	r := sroar.FromBuffer(pl.Bitmap)
 
-	getPostings := func(startUid, endUid uint64) []*pb.Posting {
+	getPostings := func(startUid, endUid uint64) ([]*pb.Posting, int, int) {
 		startIdx := sort.Search(len(pl.Postings), func(i int) bool {
 			return pl.Postings[i].Uid >= startUid
 		})
 		endIdx := sort.Search(len(pl.Postings), func(i int) bool {
 			return pl.Postings[i].Uid > endUid
 		})
-		if endIdx == 0 {
-			return pl.Postings[startIdx:]
-		}
-		return pl.Postings[startIdx:endIdx]
+		// if endIdx == 0 {
+		// 	return pl.Postings[startIdx:]
+		// }
+		return pl.Postings[startIdx:endIdx], startIdx, endIdx
 	}
 
 	f := func(start, end uint64) uint64 {
-		// return 0
-		// var sz uint64
-		posts := getPostings(start, end)
+		posts, _, _ := getPostings(start, end)
 		if len(posts) == 0 {
 			return 0
 		}
-		return uint64(posts[0].Size() * len(posts)) // Just approximate by taking first postings size and multiplying it.
-		// for _, p := range getPostings(start, end) {
-		// 	sz += uint64(p.Size())
-		// }
-		// return sz
+		var sz uint64
+		for _, p := range posts {
+			sz += uint64(p.Size())
+		}
+		return sz
+		// return uint64(posts[0].Size() * len(posts)) // Just approximate by taking first postings size and multiplying it.
 	}
 
 	// Provide a 30% cushion, because NSplit doesn't do equal splitting based on maxListSize.
 	bms := r.Split(f, uint64(0.7*float64(maxListSize)))
 
 	for i, bm := range bms {
-		if bm.GetCardinality() == 0 {
+		c := bm.GetCardinality()
+		if c == 0 {
 			continue
 		}
 		start, err := bm.Select(0)
 		x.Check(err)
-		end, err := bm.Select(uint64(bm.GetCardinality()) - 1)
+		end, err := bm.Select(uint64(c) - 1)
 		x.Check(err)
 
 		newpl := &pb.PostingList{}
 		newpl.Bitmap = bm.ToBuffer()
-		newpl.Postings = getPostings(start, end)
+		postings, sidx, eidx := getPostings(start, end)
+		newpl.Postings = postings
+
+		if c < len(newpl.Postings) {
+			for _, p := range postings {
+				if !bm.Contains(p.Uid) {
+					glog.Infof("Uid: %d is not present in bitmap\n", p.Uid)
+				}
+			}
+		}
+		x.AssertTruef(c >= len(newpl.Postings), "cardinality: %d, len(postings): %d, "+
+			"startUid: %d, endUid: %d, startIdx: %d endIdx: %d\n",
+			c, len(newpl.Postings), start, end, sidx, eidx)
 		// startUid = 1 is treated specially. ro.parts should always contain 1.
 		if i == 0 && startUid == 1 {
 			start = 1

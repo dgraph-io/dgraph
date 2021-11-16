@@ -4,7 +4,7 @@ go 1.16
 
 // replace github.com/dgraph-io/badger/v3 => /home/mrjn/go/src/github.com/dgraph-io/badger
 // replace github.com/dgraph-io/ristretto => /home/mrjn/go/src/github.com/dgraph-io/ristretto
-replace github.com/dgraph-io/sroar => /home/mrjn/go/src/github.com/dgraph-io/sroar
+// replace github.com/dgraph-io/sroar => /home/mrjn/go/src/github.com/dgraph-io/sroar
 
 require (
 	cloud.google.com/go/storage v1.15.0

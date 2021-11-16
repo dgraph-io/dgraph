@@ -626,6 +626,19 @@ func (r *reducer) toList(req *encodeRequest) {
 				pl.Postings = append(pl.Postings, p)
 			}
 		}
+
+		// Not sure if we need to sort the postings here. But without sorting, we can't expect
+		// rollups to work. It does a binary search to split the posting list.
+		sort.Slice(pl.Postings, func(i, j int) bool {
+			return pl.Postings[i].Uid < pl.Postings[j].Uid
+		})
+
+		// last := uint64(0)
+		// for _, p := range pl.Postings {
+		// 	x.AssertTruef(p.Uid >= last, "last: %d, cur: %d\n", last, p.Uid)
+		// 	last = p.Uid
+		// }
+
 		if len(uids) < 100000 {
 			// HACK
 			return
