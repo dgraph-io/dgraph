@@ -633,6 +633,12 @@ func (r *reducer) toList(req *encodeRequest) {
 			return pl.Postings[i].Uid < pl.Postings[j].Uid
 		})
 
+		last := uint64(0)
+		for _, u := range uids {
+			x.AssertTruef(u >= last, "last: %d, cur: %d\n", last, u)
+			last = u
+		}
+
 		// last := uint64(0)
 		// for _, p := range pl.Postings {
 		// 	x.AssertTruef(p.Uid >= last, "last: %d, cur: %d\n", last, p.Uid)
