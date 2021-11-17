@@ -394,6 +394,11 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 		}
 
 		switch item.UserMeta() {
+		case BitForbidPosting:
+			l.minTs = item.Version()
+			l.forbid = true
+			l.mutationMap = nil // Zero out the mutation map so the deltas are gone.
+			return l, nil
 		case BitEmptyPosting:
 			l.minTs = item.Version()
 			return l, nil

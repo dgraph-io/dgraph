@@ -67,6 +67,10 @@ const (
 	BitCompletePosting byte = 0x08
 	// BitEmptyPosting signals that the value stores an empty posting list.
 	BitEmptyPosting byte = 0x10
+	// BitForbidPosting signals that key should NEVER have postings. This would
+	// typically be due to this being considered a Jupiter key, i.e. the key has
+	// some very heavy fan-out, which we don't want to process.
+	BitForbidPosting byte = 0x11
 )
 
 // List stores the in-memory representation of a posting list.
@@ -77,6 +81,7 @@ type List struct {
 	mutationMap map[uint64]*pb.PostingList
 	minTs       uint64 // commit timestamp of immutable layer, reject reads before this ts.
 	maxTs       uint64 // max commit timestamp seen for this list.
+	forbid      bool
 }
 
 // NewList returns a new list with an immutable layer set to plist and the
@@ -882,6 +887,12 @@ func (l *List) Length(readTs, afterUid uint64) int {
 	return int(bm.GetCardinality())
 }
 
+var maxSplits int
+
+func init() {
+	maxSplits = int(x.Config.Limit.GetInt64("max-splits"))
+}
+
 // Rollup performs the rollup process, merging the immutable and mutable layers
 // and outputting the resulting list so it can be written to disk.
 // During this process, the list might be split into multiple lists if the main
@@ -913,25 +924,20 @@ func (l *List) Rollup(alloc *z.Allocator) ([]*bpb.KV, error) {
 	}
 	// defer out.free()
 
-	if len(out.parts) > 1000 {
-		var sz uint64
-		for startUid, plist := range out.parts {
-			for _, p := range plist.Postings {
-				sz += uint64(p.Size())
-			}
-			bm := sroar.FromBuffer(plist.Bitmap)
-			glog.Infof("startUid: %d cardinality: %d bitmap size: %d postings size: %d\n",
-				startUid, bm.GetCardinality(), len(plist.Bitmap), sz)
-		}
+	if l.forbid || len(out.parts) > maxSplits {
 		pk, _ := x.Parse(l.key)
-		glog.Warningf("ZEROING out JUPITER KEY: %x Number of out.parts: %d."+
-			" Parsed key: %+v\n", l.key, len(out.parts), pk)
+		if !l.forbid {
+			glog.Warningf("ZEROING out JUPITER KEY: %x Number of out.parts: %d."+
+				" Parsed key: %+v\n", l.key, len(out.parts), pk)
+		}
 		kv := &bpb.KV{
 			Value:    nil,
-			UserMeta: []byte{BitEmptyPosting},
+			UserMeta: []byte{BitForbidPosting},
 		}
 		kv.Key = append(kv.Key, l.key...)
 		kv.Version = out.newMinTs + 1
+
+		// TODO: Send deletion for the parts.
 		return []*bpb.KV{kv}, nil
 	}
 	if len(out.parts) > 0 {
