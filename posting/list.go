@@ -930,6 +930,8 @@ func (l *List) Rollup(alloc *z.Allocator) ([]*bpb.KV, error) {
 			Value:    nil,
 			UserMeta: []byte{BitEmptyPosting},
 		}
+		kv.Key = append(kv.Key, l.key...)
+		kv.Version = out.newMinTs + 1
 		return []*bpb.KV{kv}, nil
 	}
 	if len(out.parts) > 0 {
