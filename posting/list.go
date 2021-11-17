@@ -1151,6 +1151,7 @@ func (ro *rollupOutput) split(startUid uint64) error {
 	// Provide a 30% cushion, because NSplit doesn't do equal splitting based on maxListSize.
 	bms := r.Split(f, uint64(0.7*float64(maxListSize)))
 
+	var prev uint64 = 0
 	for i, bm := range bms {
 		c := bm.GetCardinality()
 		if c == 0 {
@@ -1180,6 +1181,8 @@ func (ro *rollupOutput) split(startUid uint64) error {
 		if i == 0 && startUid == 1 {
 			start = 1
 		}
+		x.AssertTruef(prev < start, "Bitmaps not sorted | prev: %d, curr: %d", prev, start)
+		prev = start
 		ro.parts[start] = newpl
 	}
 
