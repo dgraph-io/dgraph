@@ -1027,6 +1027,58 @@ func TestLargePlistSplit(t *testing.T) {
 	verifySplits(t, ol.plist.Splits)
 }
 
+func TestJupiterKeys(t *testing.T) {
+	key := x.DataKey(uuid.New().String(), 1331)
+	ol, err := getNew(key, ps, math.MaxUint64)
+	require.NoError(t, err)
+	b := make([]byte, 2<<20)
+	rand.Read(b)
+	for i := 1; i <= 2000; i++ {
+		edge := &pb.DirectedEdge{
+			ValueId: uint64(i),
+			Facets:  []*api.Facet{{Key: strconv.Itoa(i)}},
+			Value:   b,
+		}
+		txn := Txn{StartTs: uint64(i)}
+		addMutationHelper(t, ol, edge, Set, &txn)
+		require.NoError(t, ol.commitMutation(uint64(i), uint64(i)+1))
+	}
+
+	// There are 2000 postings, 2MB each. So, we expect 2000 splits to be created.
+	// We are setting max-splits to 1000, so this should ensure jupiter key consideration.
+	x.Config.Limit = z.NewSuperFlag("max-splits=1000;")
+	kvs, err := ol.Rollup(nil)
+	require.NoError(t, err)
+	require.NoError(t, writePostingListToDisk(kvs))
+
+	// We expect forbid=true on reading this posting list.
+	ol, err = readPostingListFromDisk(key, ps, math.MaxUint64)
+	require.NoError(t, err)
+	require.Nil(t, ol.mutationMap)
+	require.Nil(t, ol.plist.Bitmap)
+	require.True(t, ol.forbid)
+
+	// Adding more mutations should not change anything. We should still get forbid=true, and
+	// mutation-map/plist to be empty.
+	uid := 3000
+	edge := &pb.DirectedEdge{
+		ValueId: uint64(uid),
+		Facets:  []*api.Facet{{Key: strconv.Itoa(uid)}},
+		Value:   b,
+	}
+	txn := Txn{StartTs: uint64(3000)}
+	addMutationHelper(t, ol, edge, Set, &txn)
+	require.NoError(t, ol.commitMutation(uint64(3000), uint64(3000)+1))
+
+	require.NoError(t, writePostingListToDisk(kvs))
+
+	ol, err = readPostingListFromDisk(key, ps, math.MaxUint64)
+	require.NoError(t, err)
+	require.Nil(t, ol.mutationMap)
+	require.Nil(t, ol.plist.Bitmap)
+	require.True(t, ol.forbid)
+}
+
 func TestDeleteStarMultiPartList(t *testing.T) {
 	numEdges := 100000
 

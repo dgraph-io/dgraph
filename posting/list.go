@@ -922,7 +922,12 @@ func (l *List) Rollup(alloc *z.Allocator) ([]*bpb.KV, error) {
 	if out == nil {
 		return nil, nil
 	}
-	// defer out.free()
+
+	// Added this temporarily, beacuse while running tests in list_test.go, x.Config is not
+	// initialized. We can remove this check if we find a better way to run those tests.
+	if maxSplits == 0 {
+		maxSplits = int(x.Config.Limit.GetInt64("max-splits"))
+	}
 
 	if l.forbid || len(out.parts) > maxSplits {
 		pk, _ := x.Parse(l.key)
