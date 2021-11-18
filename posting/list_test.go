@@ -1046,7 +1046,7 @@ func TestJupiterKeys(t *testing.T) {
 
 	// There are 2000 postings, 2MB each. So, we expect 2000 splits to be created.
 	// We are setting max-splits to 1000, so this should ensure jupiter key consideration.
-	x.Config.Limit = z.NewSuperFlag("max-splits=1000;")
+	MaxSplits = 1000
 	kvs, err := ol.Rollup(nil)
 	require.NoError(t, err)
 	require.NoError(t, writePostingListToDisk(kvs))

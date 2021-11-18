@@ -887,10 +887,10 @@ func (l *List) Length(readTs, afterUid uint64) int {
 	return int(bm.GetCardinality())
 }
 
-var maxSplits int
+var MaxSplits int
 
 func init() {
-	maxSplits = int(x.Config.Limit.GetInt64("max-splits"))
+	MaxSplits = int(x.Config.Limit.GetInt64("max-splits"))
 }
 
 // Rollup performs the rollup process, merging the immutable and mutable layers
@@ -923,13 +923,7 @@ func (l *List) Rollup(alloc *z.Allocator) ([]*bpb.KV, error) {
 		return nil, nil
 	}
 
-	// Added this temporarily, beacuse while running tests in list_test.go, x.Config is not
-	// initialized. We can remove this check if we find a better way to run those tests.
-	if maxSplits == 0 {
-		maxSplits = int(x.Config.Limit.GetInt64("max-splits"))
-	}
-
-	if l.forbid || len(out.parts) > maxSplits {
+	if l.forbid || len(out.parts) > MaxSplits {
 		pk, _ := x.Parse(l.key)
 		if !l.forbid {
 			glog.Warningf("ZEROING out JUPITER KEY: %x Number of out.parts: %d."+
