@@ -1129,33 +1129,28 @@ func (ro *rollupOutput) split(startUid uint64) error {
 
 	r := sroar.FromBuffer(pl.Bitmap)
 
-	getPostings := func(startUid, endUid uint64) ([]*pb.Posting, int, int) {
+	getPostings := func(startUid, endUid uint64) []*pb.Posting {
 		startIdx := sort.Search(len(pl.Postings), func(i int) bool {
 			return pl.Postings[i].Uid >= startUid
 		})
 		endIdx := sort.Search(len(pl.Postings), func(i int) bool {
 			return pl.Postings[i].Uid > endUid
 		})
-		return pl.Postings[startIdx:endIdx], startIdx, endIdx
+		return pl.Postings[startIdx:endIdx]
 	}
 
 	f := func(start, end uint64) uint64 {
-		posts, _, _ := getPostings(start, end)
+		posts := getPostings(start, end)
 		if len(posts) == 0 {
 			return 0
 		}
-		var sz uint64
-		for _, p := range posts {
-			sz += uint64(p.Size())
-		}
-		return sz
-		// return uint64(posts[0].Size() * len(posts)) // Just approximate by taking first postings size and multiplying it.
+		// Just approximate by taking first postings size and multiplying it.
+		return uint64(posts[0].Size() * len(posts))
 	}
 
 	// Provide a 30% cushion, because NSplit doesn't do equal splitting based on maxListSize.
 	bms := r.Split(f, uint64(0.7*float64(maxListSize)))
 
-	var prev uint64 = 0
 	for i, bm := range bms {
 		c := bm.GetCardinality()
 		if c == 0 {
@@ -1168,25 +1163,13 @@ func (ro *rollupOutput) split(startUid uint64) error {
 
 		newpl := &pb.PostingList{}
 		newpl.Bitmap = bm.ToBuffer()
-		postings, sidx, eidx := getPostings(start, end)
+		postings := getPostings(start, end)
 		newpl.Postings = postings
 
-		if c < len(newpl.Postings) {
-			for _, p := range postings {
-				if !bm.Contains(p.Uid) {
-					glog.Infof("Uid: %d is not present in bitmap\n", p.Uid)
-				}
-			}
-		}
-		x.AssertTruef(c >= len(newpl.Postings), "cardinality: %d, len(postings): %d, "+
-			"startUid: %d, endUid: %d, startIdx: %d endIdx: %d\n",
-			c, len(newpl.Postings), start, end, sidx, eidx)
 		// startUid = 1 is treated specially. ro.parts should always contain 1.
 		if i == 0 && startUid == 1 {
 			start = 1
 		}
-		x.AssertTruef(prev < start, "Bitmaps not sorted | prev: %d, curr: %d", prev, start)
-		prev = start
 		ro.parts[start] = newpl
 	}
 
