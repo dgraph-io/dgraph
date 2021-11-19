@@ -1046,7 +1046,10 @@ func TestJupiterKeys(t *testing.T) {
 
 	// There are 2000 postings, 2MB each. So, we expect 2000 splits to be created.
 	// We are setting max-splits to 1000, so this should ensure jupiter key consideration.
+	original := MaxSplits
 	MaxSplits = 1000
+	defer func() { MaxSplits = original }()
+
 	kvs, err := ol.Rollup(nil)
 	require.NoError(t, err)
 	require.NoError(t, writePostingListToDisk(kvs))
@@ -1472,6 +1475,7 @@ var ps *badger.DB
 func TestMain(m *testing.M) {
 	x.Init()
 	Config.CommitFraction = 0.10
+	MaxSplits = math.MaxInt64
 
 	dir, err := ioutil.TempDir("", "storetest_")
 	x.Check(err)

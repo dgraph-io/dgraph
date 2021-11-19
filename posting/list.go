@@ -1136,9 +1136,6 @@ func (ro *rollupOutput) split(startUid uint64) error {
 		endIdx := sort.Search(len(pl.Postings), func(i int) bool {
 			return pl.Postings[i].Uid > endUid
 		})
-		// if endIdx == 0 {
-		// 	return pl.Postings[startIdx:]
-		// }
 		return pl.Postings[startIdx:endIdx], startIdx, endIdx
 	}
 
