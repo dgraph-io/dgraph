@@ -575,9 +575,6 @@ func (r *reducer) toList(req *encodeRequest) {
 
 	start, end, num := cbuf.StartOffset(), cbuf.StartOffset(), 0
 
-	// alloc := z.NewAllocator(128<<20, "Reducer.Allocator.toList")
-	// defer alloc.Release()
-
 	appendToList := func() {
 		if num == 0 {
 			return
@@ -632,26 +629,6 @@ func (r *reducer) toList(req *encodeRequest) {
 			}
 		}
 
-		// TODO: Remove this check later.
-		last := uint64(0)
-		for _, p := range pl.Postings {
-			if p.Uid < last {
-				for i, x := range pl.Postings {
-					glog.Infof("[%3d] Posting Uid: %-d\n", i, x.Uid)
-				}
-				for i, x := range uids {
-					glog.Infof("[%3d] Uid: %-d\n", i, x)
-				}
-			}
-			x.AssertTruef(p.Uid >= last, "last: %d, cur: %d\n", last, p.Uid)
-			last = p.Uid
-		}
-
-		if len(uids) < 100000 {
-			// HACK
-			return
-		}
-
 		// We should not do defer FreePack here, because we might be giving ownership of it away if
 		// we run Rollup.
 		bm := sroar.FromSortedList(uids)
@@ -698,25 +675,10 @@ func (r *reducer) toList(req *encodeRequest) {
 				kv.StreamId = r.streamIdFor(pk.Attr)
 			}
 			badger.KVToBuffer(kvs[0], kvBuf)
-			// list := &bpb.KVList{}
-			// for _, split := range kvs[1:] {
-			// proto.Clone isn't working for some reason. Not investigating.
-			// kv := &bpb.KV{}
-			// kv.Key = append(kv.Key, split.Key...)
-			// kv.Value = append(kv.Value, split.Value...)
-			// kv.UserMeta = append(kv.UserMeta, split.UserMeta...)
-			// kv.Meta = append(kv.Meta, split.Meta...)
-			// kv.Version = split.Version
-
-			// list.Kv = append(list.Kv, kv)
-			// }
-			// if len(list.Kv) > 0 {
-			// 	req.splitCh <- &bpb.KVList{Kv: splits[1:]}
-			// }
 			if splits := kvs[1:]; len(splits) > 0 {
 				req.splitCh <- &bpb.KVList{Kv: splits}
 			}
-		} else if false { // HACK. Remove.
+		} else {
 			kv := posting.MarshalPostingList(pl, nil)
 			// No need to FreePack here, because we are reusing alloc.
 
