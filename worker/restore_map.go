@@ -346,7 +346,9 @@ func (p *processor) processKV(buf *z.Buffer, in *loadBackupInput, kv *bpb.KV) er
 	}
 
 	switch kv.GetUserMeta()[0] {
-	case posting.BitEmptyPosting, posting.BitCompletePosting, posting.BitDeltaPosting:
+	case posting.BitEmptyPosting, posting.BitCompletePosting, posting.BitDeltaPosting,
+		posting.BitForbidPosting:
+
 		if _, ok := in.dropNs[ns]; ok {
 			return nil
 		}

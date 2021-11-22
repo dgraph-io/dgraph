@@ -37,7 +37,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/dgraph-io/sroar"
-	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 )
 
@@ -946,17 +945,11 @@ func (l *List) Rollup(alloc *z.Allocator) ([]*bpb.KV, error) {
 	}
 
 	if l.forbid || len(out.parts) > MaxSplits {
-		pk, _ := x.Parse(l.key)
-		if !l.forbid {
-			glog.Warningf("ZEROING out JUPITER KEY: %x Number of out.parts: %d."+
-				" Parsed key: %+v\n", l.key, len(out.parts), pk)
-		}
-
 		var kvs []*bpb.KV
 		kv := &bpb.KV{
 			Key:      alloc.Copy(l.key),
 			Value:    nil,
-			UserMeta: []byte{BitForbidPosting | BitEmptyPosting},
+			UserMeta: []byte{BitForbidPosting},
 			Version:  out.newMinTs + 1,
 		}
 		kvs = append(kvs, kv)

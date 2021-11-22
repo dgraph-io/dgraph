@@ -733,6 +733,8 @@ func (tl *threadLocal) toBackupList(key []byte, itr *badger.Iterator) (
 
 		kv.Key = backupKey
 		list.Kv = append(list.Kv, kv)
+	case posting.BitForbidPosting:
+		return list, nil, nil
 	default:
 		return nil, nil, errors.Errorf(
 			"Unexpected meta: %d for key: %s", item.UserMeta(), hex.Dump(key))

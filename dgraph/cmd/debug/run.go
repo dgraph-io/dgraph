@@ -624,6 +624,8 @@ func printKeys(db *badger.DB) {
 			case posting.BitCompletePosting, posting.BitEmptyPosting, posting.BitSchemaPosting:
 				sz += item.EstimatedSize()
 				break LOOP
+			case posting.BitForbidPosting:
+				break LOOP
 			case posting.BitDeltaPosting:
 				sz += item.EstimatedSize()
 				deltaCount++

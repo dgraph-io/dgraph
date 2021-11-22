@@ -88,7 +88,7 @@ func (w *TxnWriter) update(commitTs uint64, f func(txn *badger.Txn) error) error
 func (w *TxnWriter) SetAt(key, val []byte, meta byte, ts uint64) error {
 	return w.update(ts, func(txn *badger.Txn) error {
 		switch meta {
-		case BitCompletePosting, BitEmptyPosting:
+		case BitCompletePosting, BitEmptyPosting, BitForbidPosting:
 			err := txn.SetEntry((&badger.Entry{
 				Key:      key,
 				Value:    val,

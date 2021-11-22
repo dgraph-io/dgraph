@@ -110,7 +110,7 @@ func (ir *incrRollupi) rollupKey(sl *skl.Skiplist, key []byte) error {
 			vs.UserMeta = kv.UserMeta[0]
 		}
 		switch vs.UserMeta {
-		case BitCompletePosting, BitEmptyPosting:
+		case BitCompletePosting, BitEmptyPosting, BitForbidPosting:
 			vs.Meta = badger.BitDiscardEarlierVersions
 		default:
 		}
