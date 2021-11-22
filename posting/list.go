@@ -70,7 +70,7 @@ const (
 	// BitForbidPosting signals that key should NEVER have postings. This would
 	// typically be due to this being considered a Jupiter key, i.e. the key has
 	// some very heavy fan-out, which we don't want to process.
-	BitForbidPosting byte = 0x11
+	BitForbidPosting byte = 0x20 | BitEmptyPosting
 )
 
 // List stores the in-memory representation of a posting list.
@@ -923,21 +923,51 @@ func (l *List) Rollup(alloc *z.Allocator) ([]*bpb.KV, error) {
 		return nil, nil
 	}
 
+	deletionKvs := func(all bool) ([]*bpb.KV, error) {
+		var delKvs []*bpb.KV
+		for _, startUid := range l.plist.Splits {
+			if _, ok := out.parts[startUid]; !all && ok {
+				// Don't delete this split part because we are sending an update now.
+				continue
+			}
+			key, err := x.SplitKey(l.key, startUid)
+			if err != nil {
+				return nil, errors.Wrapf(err,
+					"cannot generate split key for list with base key %s and start UID %d",
+					hex.EncodeToString(l.key), startUid)
+			}
+			delKvs = append(delKvs, &bpb.KV{
+				Key:      key,
+				UserMeta: []byte{BitEmptyPosting},
+				Version:  out.newMinTs + 1,
+			})
+		}
+		return delKvs, nil
+	}
+
 	if l.forbid || len(out.parts) > MaxSplits {
 		pk, _ := x.Parse(l.key)
 		if !l.forbid {
 			glog.Warningf("ZEROING out JUPITER KEY: %x Number of out.parts: %d."+
 				" Parsed key: %+v\n", l.key, len(out.parts), pk)
 		}
-		kv := &bpb.KV{
-			Value:    nil,
-			UserMeta: []byte{BitForbidPosting},
-		}
-		kv.Key = append(kv.Key, l.key...)
-		kv.Version = out.newMinTs + 1
 
-		// TODO: Send deletion for the parts.
-		return []*bpb.KV{kv}, nil
+		var kvs []*bpb.KV
+		kv := &bpb.KV{
+			Key:      alloc.Copy(l.key),
+			Value:    nil,
+			UserMeta: []byte{BitForbidPosting | BitEmptyPosting},
+			Version:  out.newMinTs + 1,
+		}
+		kvs = append(kvs, kv)
+
+		// Send deletion for the parts.
+		delKvs, err := deletionKvs(true)
+		if err != nil {
+			return nil, err
+		}
+		kvs = append(kvs, delKvs...)
+		return kvs, nil
 	}
 	if len(out.parts) > 0 {
 		// The main list for the split postings should not contain postings and bitmap.
@@ -975,6 +1005,14 @@ func (l *List) Rollup(alloc *z.Allocator) ([]*bpb.KV, error) {
 	sort.Slice(kvs, func(i, j int) bool {
 		return bytes.Compare(kvs[i].Key, kvs[j].Key) <= 0
 	})
+
+	// When split happens, the split boundaries might change. In that case, we need to delete the
+	// old split parts from the DB. Otherwise, they would stay as zombie and eat up the memory.
+	delKvs, err := deletionKvs(false)
+	if err != nil {
+		return nil, err
+	}
+	kvs = append(kvs, delKvs...)
 
 	x.VerifyPostingSplits(kvs, out.plist, out.parts, l.key)
 	return kvs, nil
@@ -1095,7 +1133,7 @@ func (ro *rollupOutput) initRanges(split bool) {
 
 func (ro *rollupOutput) getRange(uid uint64) (uint64, uint64) {
 	for start, end := range ro.sranges {
-		if uid >= start && uid < end {
+		if uid >= start && uid <= end {
 			return start, end
 		}
 	}

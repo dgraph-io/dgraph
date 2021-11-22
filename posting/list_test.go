@@ -1082,6 +1082,79 @@ func TestJupiterKeys(t *testing.T) {
 	require.True(t, ol.forbid)
 }
 
+func TestDeletePartsOnForbid(t *testing.T) {
+	key := x.DataKey(uuid.New().String(), 1331)
+	ol, err := getNew(key, ps, math.MaxUint64)
+	require.NoError(t, err)
+	b := make([]byte, 2<<20)
+	rand.Read(b)
+	i := 1
+	for ; i <= 10; i++ {
+		edge := &pb.DirectedEdge{
+			ValueId: uint64(i),
+			Facets:  []*api.Facet{{Key: strconv.Itoa(i)}},
+			Value:   b,
+		}
+		txn := Txn{StartTs: uint64(i)}
+		addMutationHelper(t, ol, edge, Set, &txn)
+		require.NoError(t, ol.commitMutation(uint64(i), uint64(i)+1))
+	}
+
+	kvs, err := ol.Rollup(nil)
+	require.NoError(t, err)
+	require.NoError(t, writePostingListToDisk(kvs))
+
+	ol, err = readPostingListFromDisk(key, ps, math.MaxUint64)
+	require.NoError(t, err)
+	require.Nil(t, ol.mutationMap)
+	require.Nil(t, ol.plist.Bitmap)
+	require.Greater(t, len(ol.plist.Splits), 1)
+
+	baseKey := kvs[0].Key
+	splits := ol.plist.Splits
+
+	// There are 2000 postings, 2MB each. So, we expect 2000 splits to be created.
+	// We are setting max-splits to 1000, so this should ensure jupiter key consideration.
+	original := MaxSplits
+	MaxSplits = 1000
+	defer func() { MaxSplits = original }()
+
+	for ; i <= 2000; i++ {
+		edge := &pb.DirectedEdge{
+			ValueId: uint64(i),
+			Facets:  []*api.Facet{{Key: strconv.Itoa(i)}},
+			Value:   b,
+		}
+		txn := Txn{StartTs: uint64(i)}
+		addMutationHelper(t, ol, edge, Set, &txn)
+		require.NoError(t, ol.commitMutation(uint64(i), uint64(i)+1))
+	}
+
+	kvs, err = ol.Rollup(nil)
+	require.NoError(t, err)
+	require.NoError(t, writePostingListToDisk(kvs))
+
+	// We expect forbid=true on reading this posting list.
+	ol, err = readPostingListFromDisk(key, ps, math.MaxUint64)
+	require.NoError(t, err)
+	require.Nil(t, ol.mutationMap)
+	require.Nil(t, ol.plist.Bitmap)
+	require.True(t, ol.forbid)
+
+	// All the posting list split parts should be deleted.
+	for _, startUid := range splits {
+		key, err := x.SplitKey(baseKey, startUid)
+		require.NoError(t, err)
+
+		txn := pstore.NewTransactionAt(math.MaxUint64, false)
+		item, err := txn.Get(key)
+		require.NoError(t, err)
+		val, err := item.ValueCopy(nil)
+		require.NoError(t, err)
+		require.Nil(t, val)
+	}
+}
+
 func TestDeleteStarMultiPartList(t *testing.T) {
 	numEdges := 100000
 
