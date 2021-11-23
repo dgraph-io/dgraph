@@ -629,8 +629,6 @@ func (r *reducer) toList(req *encodeRequest) {
 			}
 		}
 
-		// We should not do defer FreePack here, because we might be giving ownership of it away if
-		// we run Rollup.
 		bm := sroar.FromSortedList(uids)
 		pl.Bitmap = bm.ToBuffer()
 		numUids := bm.GetCardinality()
@@ -643,7 +641,6 @@ func (r *reducer) toList(req *encodeRequest) {
 		// the full pb.Posting type is used (which pb.y contains the
 		// delta packed UID list).
 		if numUids == 0 {
-			// No need to FrePack here because we are reusing alloc.
 			return
 		}
 
@@ -665,9 +662,7 @@ func (r *reducer) toList(req *encodeRequest) {
 		}
 
 		if posting.ShouldSplit(pl) {
-			// Give ownership of pl.Pack away to list. Rollup would deallocate the Pack.
 			l := posting.NewList(y.Copy(currentKey), pl, writeVersionTs)
-			// alloc.Reset()
 			kvs, err := l.Rollup(nil)
 			x.Check(err)
 
@@ -687,7 +682,6 @@ func (r *reducer) toList(req *encodeRequest) {
 			kv.StreamId = r.streamIdFor(pk.Attr)
 			badger.KVToBuffer(kv, kvBuf)
 		}
-
 	}
 
 	for end >= 0 {

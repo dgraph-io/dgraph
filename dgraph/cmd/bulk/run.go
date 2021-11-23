@@ -123,7 +123,7 @@ func init() {
 			" When using this flag to load data into specific namespace, make sure that the "+
 			"load data do not have ACL data.")
 	flag.Int64("max-splits", 1000,
-		"The estimated size of each map file output. Increasing this increases memory usage.")
+		"How many splits can a single key have, before it is forbidden. Also known as Jupiter key.")
 
 	flag.String("badger", BulkBadgerDefaults, z.NewSuperFlagHelp(BulkBadgerDefaults).
 		Head("Badger options (Refer to badger documentation for all possible options)").

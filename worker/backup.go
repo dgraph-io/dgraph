@@ -708,7 +708,8 @@ func (tl *threadLocal) toBackupList(key []byte, itr *badger.Iterator) (
 	}
 
 	switch item.UserMeta() {
-	case posting.BitEmptyPosting, posting.BitCompletePosting, posting.BitDeltaPosting:
+	case posting.BitEmptyPosting, posting.BitCompletePosting, posting.BitDeltaPosting,
+		posting.BitForbidPosting:
 		l, err := posting.ReadPostingList(key, itr)
 		if err != nil {
 			return nil, nil, errors.Wrapf(err, "while reading posting list")
@@ -733,8 +734,6 @@ func (tl *threadLocal) toBackupList(key []byte, itr *badger.Iterator) (
 
 		kv.Key = backupKey
 		list.Kv = append(list.Kv, kv)
-	case posting.BitForbidPosting:
-		return list, nil, nil
 	default:
 		return nil, nil, errors.Errorf(
 			"Unexpected meta: %d for key: %s", item.UserMeta(), hex.Dump(key))

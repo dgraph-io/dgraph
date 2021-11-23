@@ -2419,7 +2419,7 @@ loop:
 			continue
 		}
 		if item.UserMeta()&posting.BitCompletePosting > 0 {
-			// This bit would only be set if there are valid uids in UidPack.
+			// This bit would only be set if there are valid uids in Bitmap.
 			err := checkInclusion(pk.Uid)
 			switch {
 			case err == posting.ErrNoValue:

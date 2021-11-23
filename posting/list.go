@@ -1028,11 +1028,19 @@ func (l *List) ToBackupPostingList(
 	// is math.MaxUint64 so that's not possible. Assert that's true.
 	x.AssertTrue(out != nil)
 
+	if l.forbid {
+		kv := y.NewKV(alloc)
+		kv.Key = alloc.Copy(l.key)
+		kv.Value = nil
+		kv.Version = out.newMinTs
+		kv.UserMeta = alloc.Copy([]byte{BitForbidPosting})
+		return kv, nil
+	}
+
 	ol := out.plist
 	bm := sroar.NewBitmap()
 	if ol.Bitmap != nil {
 		bm = sroar.FromBuffer(ol.Bitmap)
-
 	}
 
 	buf.Reset()
@@ -1051,8 +1059,8 @@ func (l *List) ToBackupPostingList(
 
 	kv := y.NewKV(alloc)
 	kv.Key = alloc.Copy(l.key)
-	kv.Version = out.newMinTs
 	kv.Value = val[:n]
+	kv.Version = out.newMinTs
 	if isPlistEmpty(ol) {
 		kv.UserMeta = alloc.Copy([]byte{BitEmptyPosting})
 	} else {
@@ -1179,7 +1187,7 @@ func (ro *rollupOutput) split(startUid uint64) error {
 		return uint64(posts[0].Size() * len(posts))
 	}
 
-	// Provide a 30% cushion, because NSplit doesn't do equal splitting based on maxListSize.
+	// Provide a 30% cushion, because Split doesn't do equal splitting based on maxListSize.
 	bms := r.Split(f, uint64(0.7*float64(maxListSize)))
 
 	for i, bm := range bms {
