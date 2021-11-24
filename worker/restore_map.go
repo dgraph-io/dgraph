@@ -346,9 +346,7 @@ func (p *processor) processKV(buf *z.Buffer, in *loadBackupInput, kv *bpb.KV) er
 	}
 
 	switch kv.GetUserMeta()[0] {
-	case posting.BitEmptyPosting, posting.BitCompletePosting, posting.BitDeltaPosting,
-		posting.BitForbidPosting:
-
+	case posting.BitEmptyPosting, posting.BitCompletePosting, posting.BitDeltaPosting:
 		if _, ok := in.dropNs[ns]; ok {
 			return nil
 		}
@@ -394,6 +392,18 @@ func (p *processor) processKV(buf *z.Buffer, in *loadBackupInput, kv *bpb.KV) er
 				}
 			}
 		}
+
+	case posting.BitForbidPosting:
+		if _, ok := in.dropNs[ns]; ok {
+			return nil
+		}
+		newKv := &bpb.KV{
+			Key:      restoreKey,
+			Value:    nil,
+			UserMeta: []byte{posting.BitForbidPosting},
+			Version:  p.restoreTs,
+		}
+		return toBuffer(newKv, kv.Version)
 
 	case posting.BitSchemaPosting:
 		appendNamespace := func() error {

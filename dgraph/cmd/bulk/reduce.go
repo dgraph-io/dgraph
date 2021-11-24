@@ -285,9 +285,6 @@ func (r *reducer) writeTmpSplits(ci *countIndexer, wg *sync.WaitGroup) {
 		if kvs == nil || len(kvs.Kv) == 0 {
 			continue
 		}
-		sort.Slice(kvs.Kv, func(i, j int) bool {
-			return bytes.Compare(kvs.Kv[i].Key, kvs.Kv[j].Key) < 0
-		})
 		b := skl.NewBuilder(int64(kvs.Size()) + 1<<20)
 		for _, kv := range kvs.Kv {
 			if err := badger.ValidEntry(ci.tmpDb, kv.Key, kv.Value); err != nil {
@@ -295,10 +292,10 @@ func (r *reducer) writeTmpSplits(ci *countIndexer, wg *sync.WaitGroup) {
 					len(kv.Key), len(kv.Value))
 				continue
 			}
-			if len(kv.Value) == 0 {
-				glog.Infof("KV.Value is zero with Key: %x . Skipping", kv.Key)
-				continue
-			}
+			// if len(kv.Value) == 0 {
+			// 	glog.Infof("KV.Value is zero with Key: %x . Skipping", kv.Key)
+			// 	continue
+			// }
 			b.Add(y.KeyWithTs(kv.Key, kv.Version),
 				y.ValueStruct{
 					Value:    kv.Value,
@@ -309,7 +306,8 @@ func (r *reducer) writeTmpSplits(ci *countIndexer, wg *sync.WaitGroup) {
 		err := x.RetryUntilSuccess(1000, 5*time.Second, func() error {
 			err := ci.tmpDb.HandoverSkiplist(b.Skiplist(), iwg.Done)
 			if err != nil {
-				glog.Errorf("writeTmpSplits: handover skiplist returned error: %v. Retrying...\n", err)
+				glog.Errorf("writeTmpSplits: handover skiplist returned error: %v. Retrying...\n",
+					err)
 			}
 			return err
 		})

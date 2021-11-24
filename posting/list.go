@@ -922,6 +922,9 @@ func (l *List) Rollup(alloc *z.Allocator) ([]*bpb.KV, error) {
 		return nil, nil
 	}
 
+	// deletionKvs returns the KVs corresponding to those splits, that are outdated.
+	// If 'all' is set to true, then it returns all the split KVs, else it returns only KVs
+	// corresponding to those splits that existed before rollup but not after it.
 	deletionKvs := func(all bool) ([]*bpb.KV, error) {
 		var delKvs []*bpb.KV
 		for _, startUid := range l.plist.Splits {
@@ -937,6 +940,7 @@ func (l *List) Rollup(alloc *z.Allocator) ([]*bpb.KV, error) {
 			}
 			delKvs = append(delKvs, &bpb.KV{
 				Key:      key,
+				Value:    nil,
 				UserMeta: []byte{BitEmptyPosting},
 				Version:  out.newMinTs + 1,
 			})
@@ -993,12 +997,6 @@ func (l *List) Rollup(alloc *z.Allocator) ([]*bpb.KV, error) {
 		kvs = append(kvs, kv)
 	}
 
-	// Sort the KVs by their key so that the main part of the list is at the
-	// start of the list and all other parts appear in the order of their start UID.
-	sort.Slice(kvs, func(i, j int) bool {
-		return bytes.Compare(kvs[i].Key, kvs[j].Key) <= 0
-	})
-
 	// When split happens, the split boundaries might change. In that case, we need to delete the
 	// old split parts from the DB. Otherwise, they would stay as zombie and eat up the memory.
 	delKvs, err := deletionKvs(false)
@@ -1006,6 +1004,12 @@ func (l *List) Rollup(alloc *z.Allocator) ([]*bpb.KV, error) {
 		return nil, err
 	}
 	kvs = append(kvs, delKvs...)
+
+	// Sort the KVs by their key so that the main part of the list is at the
+	// start of the list and all other parts appear in the order of their start UID.
+	sort.Slice(kvs, func(i, j int) bool {
+		return bytes.Compare(kvs[i].Key, kvs[j].Key) <= 0
+	})
 
 	x.VerifyPostingSplits(kvs, out.plist, out.parts, l.key)
 	return kvs, nil
@@ -1202,7 +1206,7 @@ func (ro *rollupOutput) split(startUid uint64) error {
 
 		newpl := &pb.PostingList{}
 		newpl.Bitmap = bm.ToBuffer()
-		postings := getPostings(start, end)
+		postings := getPostings(start, end+1)
 		newpl.Postings = postings
 
 		// startUid = 1 is treated specially. ro.parts should always contain 1.
