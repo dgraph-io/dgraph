@@ -292,10 +292,6 @@ func (r *reducer) writeTmpSplits(ci *countIndexer, wg *sync.WaitGroup) {
 					len(kv.Key), len(kv.Value))
 				continue
 			}
-			// if len(kv.Value) == 0 {
-			// 	glog.Infof("KV.Value is zero with Key: %x . Skipping", kv.Key)
-			// 	continue
-			// }
 			b.Add(y.KeyWithTs(kv.Key, kv.Version),
 				y.ValueStruct{
 					Value:    kv.Value,
