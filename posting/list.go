@@ -1206,7 +1206,7 @@ func (ro *rollupOutput) split(startUid uint64) error {
 
 		newpl := &pb.PostingList{}
 		newpl.Bitmap = bm.ToBuffer()
-		postings := getPostings(start, end+1)
+		postings := getPostings(start, end)
 		newpl.Postings = postings
 
 		// startUid = 1 is treated specially. ro.parts should always contain 1.
