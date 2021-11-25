@@ -1113,6 +1113,22 @@ func TestDeletePartsOnForbid(t *testing.T) {
 	baseKey := kvs[0].Key
 	splits := ol.plist.Splits
 
+	check := func(exist bool) {
+		for _, startUid := range splits {
+			key, err := x.SplitKey(baseKey, startUid)
+			require.NoError(t, err)
+
+			txn := pstore.NewTransactionAt(math.MaxUint64, false)
+			item, err := txn.Get(key)
+			require.NoError(t, err)
+			val, err := item.ValueCopy(nil)
+			require.NoError(t, err)
+			require.Equal(t, exist, val != nil)
+		}
+	}
+	// All the posting list split parts should exist.
+	check(true)
+
 	// There are 2000 postings, 2MB each. So, we expect 2000 splits to be created.
 	// We are setting max-splits to 1000, so this should ensure jupiter key consideration.
 	original := MaxSplits
@@ -1142,17 +1158,7 @@ func TestDeletePartsOnForbid(t *testing.T) {
 	require.True(t, ol.forbid)
 
 	// All the posting list split parts should be deleted.
-	for _, startUid := range splits {
-		key, err := x.SplitKey(baseKey, startUid)
-		require.NoError(t, err)
-
-		txn := pstore.NewTransactionAt(math.MaxUint64, false)
-		item, err := txn.Get(key)
-		require.NoError(t, err)
-		val, err := item.ValueCopy(nil)
-		require.NoError(t, err)
-		require.Nil(t, val)
-	}
+	check(false)
 }
 
 func TestDeleteStarMultiPartList(t *testing.T) {
