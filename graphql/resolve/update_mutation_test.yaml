@@ -2405,3 +2405,88 @@
          "uid": "uid(x)"
        }
     cond: "@if(gt(len(x), 0))"
+
+-
+  name: "Update with @default directive"
+  gqlmutation: |
+    mutation updateBooking($patch: UpdateBookingInput!) {
+      updateBooking(input: $patch) {
+        booking {
+          id
+        }
+      }
+    }
+  gqlvariables: |
+    { "patch":
+      { "filter": {
+          "id": ["0x123", "0x124"]
+        },
+        "set": {
+          "name": "Flight to Antigua"
+        }
+      }
+    }
+  explanation: "The update patch should include default values on the fields with the @default(update:) directive"
+  dgquerysec: |-
+    query {
+      x as updateBooking(func: uid(0x123, 0x124)) @filter(type(Booking)) {
+        uid
+      }
+    }
+  dgmutations:
+    - setjson: |
+        { "uid" : "uid(x)",
+          "Booking.name": "Flight to Antigua",
+          "Booking.updated": "2000-01-01T00:00:00.00Z",
+          "Booking.active": "true",
+          "Booking.count": "2",
+          "Booking.length": "1.2",
+          "Booking.status": "INACTIVE",
+          "Booking.hotel": "update"
+        }
+      cond: "@if(gt(len(x), 0))"
+
+-
+  name: "Update with @default directive uses provided values"
+  gqlmutation: |
+    mutation updateBooking($patch: UpdateBookingInput!) {
+      updateBooking(input: $patch) {
+        booking {
+          id
+        }
+      }
+    }
+  gqlvariables: |
+    { "patch":
+      { "filter": {
+          "id": ["0x123", "0x124"]
+        },
+        "set": {
+          "name": "Flight to Antigua",
+          "updated": "2022-10-12T07:20:50.52Z",
+          "active": false,
+          "length": 12.3,
+          "status": "ACTIVE",
+          "hotel": "provided"
+        }
+      }
+    }
+  explanation: "Fields with @default(update) should use input values if provided (note that count is still using default)"
+  dgquerysec: |-
+    query {
+      x as updateBooking(func: uid(0x123, 0x124)) @filter(type(Booking)) {
+        uid
+      }
+    }
+  dgmutations:
+    - setjson: |
+        { "uid" : "uid(x)",
+          "Booking.name": "Flight to Antigua",
+          "Booking.updated": "2022-10-12T07:20:50.52Z",
+          "Booking.active": false,
+          "Booking.count": "2",
+          "Booking.length": 12.3,
+          "Booking.status": "ACTIVE",
+          "Booking.hotel": "provided"
+        }
+      cond: "@if(gt(len(x), 0))"

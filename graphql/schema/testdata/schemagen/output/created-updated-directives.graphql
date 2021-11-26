@@ -2,14 +2,18 @@
 # Input Schema
 #######################
 
-type User @remote {
+type Booking {
 	id: ID!
 	name: String!
+	created: DateTime! @default(add: {value:"$now"})
+	updated: DateTime! @default(add: {value:"$now"}, update: {value:"$now"})
 }
 
-type Car @key(fields: "id") {
-	id: ID!
+type BookingXID {
+	id: String! @id
 	name: String!
+	created: DateTime! @default(add: {value:"$now"})
+	updated: DateTime! @default(add: {value:"$now"}, update: {value:"$now"})
 }
 
 #######################
@@ -192,10 +196,23 @@ directive @id(interface: Boolean) on FIELD_DEFINITION
 directive @default(add: DgraphDefault, update: DgraphDefault) on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
+directive @auth(
+	password: AuthRule
+	query: AuthRule,
+	add: AuthRule,
+	update: AuthRule,
+	delete: AuthRule) on OBJECT | INTERFACE
+directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
 directive @remoteResponse(name: String) on FIELD_DEFINITION
+directive @cascade(fields: [String]) on FIELD
 directive @lambda on FIELD_DEFINITION
 directive @lambdaOnMutate(add: Boolean, update: Boolean, delete: Boolean) on OBJECT | INTERFACE
+directive @cacheControl(maxAge: Int!) on QUERY
+directive @generate(
+	query: GenerateQueryParams,
+	mutation: GenerateMutationParams,
+	subscription: Boolean) on OBJECT | INTERFACE
 
 input IntFilter {
 	eq: Int
@@ -270,25 +287,57 @@ input StringHashFilter {
 # Generated Types
 #######################
 
-type AddCarPayload {
-	car(filter: CarFilter, order: CarOrder, first: Int, offset: Int): [Car]
+type AddBookingPayload {
+	booking(filter: BookingFilter, order: BookingOrder, first: Int, offset: Int): [Booking]
 	numUids: Int
 }
 
-type CarAggregateResult {
+type AddBookingXIDPayload {
+	bookingXID(filter: BookingXIDFilter, order: BookingXIDOrder, first: Int, offset: Int): [BookingXID]
+	numUids: Int
+}
+
+type BookingAggregateResult {
 	count: Int
 	nameMin: String
 	nameMax: String
+	createdMin: DateTime
+	createdMax: DateTime
+	updatedMin: DateTime
+	updatedMax: DateTime
 }
 
-type DeleteCarPayload {
-	car(filter: CarFilter, order: CarOrder, first: Int, offset: Int): [Car]
+type BookingXIDAggregateResult {
+	count: Int
+	idMin: String
+	idMax: String
+	nameMin: String
+	nameMax: String
+	createdMin: DateTime
+	createdMax: DateTime
+	updatedMin: DateTime
+	updatedMax: DateTime
+}
+
+type DeleteBookingPayload {
+	booking(filter: BookingFilter, order: BookingOrder, first: Int, offset: Int): [Booking]
 	msg: String
 	numUids: Int
 }
 
-type UpdateCarPayload {
-	car(filter: CarFilter, order: CarOrder, first: Int, offset: Int): [Car]
+type DeleteBookingXIDPayload {
+	bookingXID(filter: BookingXIDFilter, order: BookingXIDOrder, first: Int, offset: Int): [BookingXID]
+	msg: String
+	numUids: Int
+}
+
+type UpdateBookingPayload {
+	booking(filter: BookingFilter, order: BookingOrder, first: Int, offset: Int): [Booking]
+	numUids: Int
+}
+
+type UpdateBookingXIDPayload {
+	bookingXID(filter: BookingXIDFilter, order: BookingXIDOrder, first: Int, offset: Int): [BookingXID]
 	numUids: Int
 }
 
@@ -296,49 +345,114 @@ type UpdateCarPayload {
 # Generated Enums
 #######################
 
-enum CarHasFilter {
+enum BookingHasFilter {
 	name
+	created
+	updated
 }
 
-enum CarOrderable {
+enum BookingOrderable {
 	name
+	created
+	updated
+}
+
+enum BookingXIDHasFilter {
+	id
+	name
+	created
+	updated
+}
+
+enum BookingXIDOrderable {
+	id
+	name
+	created
+	updated
 }
 
 #######################
 # Generated Inputs
 #######################
 
-input AddCarInput {
+input AddBookingInput {
 	name: String!
+	created: DateTime
+	updated: DateTime
 }
 
-input CarFilter {
+input AddBookingXIDInput {
+	id: String!
+	name: String!
+	created: DateTime
+	updated: DateTime
+}
+
+input BookingFilter {
 	id: [ID!]
-	has: [CarHasFilter]
-	and: [CarFilter]
-	or: [CarFilter]
-	not: CarFilter
+	has: [BookingHasFilter]
+	and: [BookingFilter]
+	or: [BookingFilter]
+	not: BookingFilter
 }
 
-input CarOrder {
-	asc: CarOrderable
-	desc: CarOrderable
-	then: CarOrder
+input BookingOrder {
+	asc: BookingOrderable
+	desc: BookingOrderable
+	then: BookingOrder
 }
 
-input CarPatch {
+input BookingPatch {
 	name: String
+	created: DateTime
+	updated: DateTime
 }
 
-input CarRef {
+input BookingRef {
 	id: ID
 	name: String
+	created: DateTime
+	updated: DateTime
 }
 
-input UpdateCarInput {
-	filter: CarFilter!
-	set: CarPatch
-	remove: CarPatch
+input BookingXIDFilter {
+	id: StringHashFilter
+	has: [BookingXIDHasFilter]
+	and: [BookingXIDFilter]
+	or: [BookingXIDFilter]
+	not: BookingXIDFilter
+}
+
+input BookingXIDOrder {
+	asc: BookingXIDOrderable
+	desc: BookingXIDOrderable
+	then: BookingXIDOrder
+}
+
+input BookingXIDPatch {
+	id: String
+	name: String
+	created: DateTime
+	updated: DateTime
+}
+
+input BookingXIDRef {
+	id: String
+	name: String
+	created: DateTime
+	updated: DateTime
+}
+
+input UpdateBookingInput {
+	filter: BookingFilter!
+	set: BookingPatch
+	remove: BookingPatch
+}
+
+input UpdateBookingXIDInput {
+	filter: BookingXIDFilter!
+	set: BookingXIDPatch
+	remove: BookingXIDPatch
 }
 
 #######################
@@ -346,10 +460,12 @@ input UpdateCarInput {
 #######################
 
 type Query {
-	getMyFavoriteUsers(id: ID!): [User]
-	getCar(id: ID!): Car
-	queryCar(filter: CarFilter, order: CarOrder, first: Int, offset: Int): [Car]
-	aggregateCar(filter: CarFilter): CarAggregateResult
+	getBooking(id: ID!): Booking
+	queryBooking(filter: BookingFilter, order: BookingOrder, first: Int, offset: Int): [Booking]
+	aggregateBooking(filter: BookingFilter): BookingAggregateResult
+	getBookingXID(id: String!): BookingXID
+	queryBookingXID(filter: BookingXIDFilter, order: BookingXIDOrder, first: Int, offset: Int): [BookingXID]
+	aggregateBookingXID(filter: BookingXIDFilter): BookingXIDAggregateResult
 }
 
 #######################
@@ -357,8 +473,11 @@ type Query {
 #######################
 
 type Mutation {
-	addCar(input: [AddCarInput!]!): AddCarPayload
-	updateCar(input: UpdateCarInput!): UpdateCarPayload
-	deleteCar(filter: CarFilter!): DeleteCarPayload
+	addBooking(input: [AddBookingInput!]!): AddBookingPayload
+	updateBooking(input: UpdateBookingInput!): UpdateBookingPayload
+	deleteBooking(filter: BookingFilter!): DeleteBookingPayload
+	addBookingXID(input: [AddBookingXIDInput!]!, upsert: Boolean): AddBookingXIDPayload
+	updateBookingXID(input: UpdateBookingXIDInput!): UpdateBookingXIDPayload
+	deleteBookingXID(filter: BookingXIDFilter!): DeleteBookingXIDPayload
 }
 

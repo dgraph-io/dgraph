@@ -5504,3 +5504,160 @@
          implementing types of same interfaces: T1 and T2"
     }
 
+-
+  name: "Add mutation with @default directive"
+  gqlmutation: |
+    mutation($input: [AddBookingInput!]!) {
+      addBooking(input: $input) {
+        booking {
+          name
+          created
+          updated
+        }
+      }
+    }
+  gqlvariables: |
+    {
+      "input": [
+        {
+          "name": "Holiday to Bermuda"
+        }
+      ]
+    }
+  explanation: "As booking has @default fields and is being added, these should be set to the default add value"
+  dgmutations:
+    - setjson: |
+        {
+            "Booking.created": "2000-01-01T00:00:00.00Z",
+            "Booking.active": "false",
+            "Booking.count": "1",
+            "Booking.hotel": "add",
+            "Booking.length": "1.1",
+            "Booking.status": "ACTIVE",
+            "Booking.name": "Holiday to Bermuda",
+            "Booking.updated": "2000-01-01T00:00:00.00Z",
+            "dgraph.type": [
+                    "Booking"
+                ],
+            "uid":"_:Booking_1"
+        }
+
+-
+  name: "Add mutation with @default directive uses provided values"
+  gqlmutation: |
+    mutation($input: [AddBookingInput!]!) {
+      addBooking(input: $input) {
+        booking {
+          name
+          created
+          updated
+        }
+      }
+    }
+  gqlvariables: |
+    {
+      "input": [
+        {
+          "name": "Holiday to Bermuda",
+          "created": "2022-10-12T07:20:50.52Z",
+          "updated": "2023-10-12T07:20:50.52Z",
+          "active": false,
+          "length": 12.3,
+          "status": "INACTIVE",
+          "hotel": "provided"
+        }
+      ]
+    }
+  explanation: "Fields with @default(add) should use input values if provided (note that count is still using default)"
+  dgmutations:
+    - setjson: |
+        {
+            "Booking.name": "Holiday to Bermuda",
+            "Booking.created": "2022-10-12T07:20:50.52Z",
+            "Booking.updated": "2023-10-12T07:20:50.52Z",
+            "Booking.active": false,
+            "Booking.count": "1",
+            "Booking.hotel": "provided",
+            "Booking.length": 12.3,
+            "Booking.status": "INACTIVE",
+            "dgraph.type": [
+                    "Booking"
+                ],
+            "uid":"_:Booking_1"
+        }
+
+-
+  name: "Upsert mutation with @default directives where only one of the nodes exists"
+  explanation: "Booking1 should only have updated timestamp as it exists, Booking2 should have created and updated timestamps"
+  gqlmutation: |
+    mutation addBookingXID($input: [AddBookingXIDInput!]!) {
+      addBookingXID(input: $input, upsert: true) {
+        bookingXID {
+          name
+        }
+      }
+    }
+  gqlvariables: |
+    { "input":
+      [
+        {
+          "id": "Booking1",
+          "name": "Trip to Bermuda"
+        },
+        {
+          "id": "Booking2",
+          "name": "Trip to Antigua"
+        }
+      ]
+    }
+  dgquery: |-
+    query {
+      BookingXID_1(func: eq(BookingXID.id, "Booking1")) {
+        uid
+        dgraph.type
+      }
+      BookingXID_2(func: eq(BookingXID.id, "Booking2")) {
+        uid
+        dgraph.type
+      }
+    }
+  qnametouid: |-
+    {
+      "BookingXID_1": "0x11"
+    }
+  dgquerysec: |-
+    query {
+      BookingXID_1 as BookingXID_1(func: uid(0x11)) @filter(type(BookingXID)) {
+        uid
+      }
+    }
+  dgmutations:
+    - setjson: |
+        {
+          "uid" : "uid(BookingXID_1)",
+          "BookingXID.id": "Booking1",
+          "BookingXID.name": "Trip to Bermuda",
+          "BookingXID.updated": "2000-01-01T00:00:00.00Z",
+          "BookingXID.active": "true",
+          "BookingXID.count": "2",
+          "BookingXID.length": "1.2",
+          "BookingXID.status": "INACTIVE",
+          "BookingXID.hotel": "update"
+        }
+      cond: "@if(gt(len(BookingXID_1), 0))"
+    - setjson: |
+        {
+          "uid": "_:BookingXID_2",
+          "BookingXID.id": "Booking2",
+          "BookingXID.name": "Trip to Antigua",
+          "BookingXID.created": "2000-01-01T00:00:00.00Z",
+          "BookingXID.updated": "2000-01-01T00:00:00.00Z",
+          "BookingXID.active": "false",
+          "BookingXID.count": "1",
+          "BookingXID.length": "1.1",
+          "BookingXID.status": "ACTIVE",
+          "BookingXID.hotel": "add",
+          "dgraph.type": [
+            "BookingXID"
+          ]
+        }

@@ -2732,7 +2732,7 @@ invalid_schemas:
           review: String!
       }
     errlist: [
-      {"message": "Type Product; @remote directive cannot be defined with @key directive", "locations": [ { "line": 174, "column": 12} ] },
+      {"message": "Type Product; @remote directive cannot be defined with @key directive", "locations": [ { "line": 179, "column": 12} ] },
     ]
 
   - name: "directives defined on @external fields that are not @key."
@@ -2934,6 +2934,125 @@ invalid_schemas:
         can only be defined in interface,not in Type",
         "locations": [ { "line": 2, "column": 18 } ] },
     ]
+
+  - name: "@default validates field type for value $now"
+    input: |
+      type X {
+        field: String @default(add:{value:"$now"})
+      }
+    errlist: [
+      {"message": "Type X; Field field: @default directive provides value \"$now\" which cannot be used with String",
+      "locations":[{"line":2, "column":18}]}
+      ]
+
+  - name: "@default validates value for Int"
+    input: |
+      type X {
+        field: Int @default(add:{value:"apple"})
+      }
+    errlist: [
+      {"message": "Type X; Field field: @default directive provides value \"apple\" which cannot be used with Int",
+      "locations":[{"line":2, "column":15}]}
+      ]
+
+  - name: "@default validates value for Float"
+    input: |
+      type X {
+        field: Float @default(add:{value:"apple"})
+      }
+    errlist: [
+      {"message": "Type X; Field field: @default directive provides value \"apple\" which cannot be used with Float",
+      "locations":[{"line":2, "column":17}]}
+      ]
+
+  - name: "@default validates value for Boolean"
+    input: |
+      type X {
+        field: Boolean @default(add:{value:"apple"})
+      }
+    errlist: [
+      {"message": "Type X; Field field: @default directive provides value \"apple\" which cannot be used with Boolean",
+      "locations":[{"line":2, "column":19}]}
+      ]
+
+  - name: "@default validates type is not @remote"
+    input: |
+      type X @remote {
+        field: Int @default(add:{value:"1"})
+      }
+    errlist: [
+      {"message": "Type X; Field field: cannot use @default directive on a @remote type",
+      "locations":[{"line":2, "column":15}]}
+      ]
+
+  - name: "@default validates field type is scalar"
+    input: |
+      type X {
+        field: Y @default(add:{value:"1"})
+      }
+      type Y {
+        field: String
+      }
+    errlist: [
+      {"message": "Type X; Field field: cannot use @default directive on field with non-scalar type Y",
+      "locations":[{"line":2, "column":13}]}
+      ]
+
+  - name: "@default validates field type is not list"
+    input: |
+      type X {
+        field: [String] @default(add:{value:"1"})
+      }
+    errlist: [
+      {"message": "Type X; Field field: cannot use @default directive on field with list type [String]",
+      "locations":[{"line":2, "column":20}]}
+      ]
+
+  - name: "@default validates field type is not @id"
+    input: |
+      type X {
+        field: String! @id @default(add:{value:"foo"})
+      }
+    errlist: [
+      {"message": "Type X; Field field: cannot use @default directive on field with @id directive",
+      "locations":[{"line":2, "column":23}]}
+      ]
+
+  - name: "@default validates field type is not ID"
+    input: |
+      type X {
+        id: ID! @default(add:{value:"foo"})
+        field: String
+      }
+    errlist: [
+      {"message": "Type X; Field id: cannot use @default directive on field with type ID",
+      "locations":[{"line":2, "column":12}]}
+      ]
+
+  - name: "@default validates field type is not @custom"
+    input: |
+      type X {
+        id: String! @id
+        field: String! @default(add:{value:"foo"}) @custom(http: {
+          url: "http://blah.com",
+          method: "GET"
+        })
+      }
+    errlist: [
+      {"message": "Type X; Field field: cannot use @default directive on field with @custom directive",
+      "locations":[{"line":3, "column":19}]}
+      ]
+
+  - name: "@default validates field type is not @lambda"
+    input: |
+      type X {
+        id: String! @id
+        field: String! @default(add:{value:"foo"}) @lambda
+      }
+    errlist: [
+      {"message": "Type X; Field field: cannot use @default directive on field with @lambda directive",
+      "locations":[{"line":3, "column":19}]}
+      ]
 
 valid_schemas:
   - name: "Multiple fields with @id directive should be allowed"

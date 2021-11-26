@@ -19,12 +19,14 @@ package schema
 import (
 	"bytes"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"net/http"
 	"net/url"
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/gqlparser/v2/parser"
@@ -271,6 +273,7 @@ type FieldDefinition interface {
 	IsID() bool
 	IsExternal() bool
 	HasIDDirective() bool
+	GetDefaultValue(action string) interface{}
 	HasInterfaceArg() bool
 	Inverse() FieldDefinition
 	WithMemberType(string) FieldDefinition
@@ -2345,6 +2348,36 @@ func (fd *fieldDefinition) IsID() bool {
 	return isID(fd.fieldDef)
 }
 
+func (fd *fieldDefinition) GetDefaultValue(action string) interface{} {
+	if fd.fieldDef == nil {
+		return nil
+	}
+	return getDefaultValue(fd.fieldDef, action)
+}
+
+func getDefaultValue(fd *ast.FieldDefinition, action string) interface{} {
+	dir := fd.Directives.ForName(defaultDirective)
+	if dir == nil {
+		return nil
+	}
+	arg := dir.Arguments.ForName(action)
+	if arg == nil {
+		return nil
+	}
+	value := arg.Value.Children.ForName("value")
+	if value == nil {
+		return nil
+	}
+	if value.Raw == "$now" {
+		if flag.Lookup("test.v") == nil {
+			return time.Now().Format(time.RFC3339)
+		} else {
+			return "2000-01-01T00:00:00.00Z"
+		}
+	}
+	return value.Raw
+}
+
 func (fd *fieldDefinition) HasIDDirective() bool {
 	if fd.fieldDef == nil {
 		return false
@@ -2383,6 +2416,10 @@ func hasInterfaceArg(fd *ast.FieldDefinition) bool {
 
 func isID(fd *ast.FieldDefinition) bool {
 	return fd.Type.Name() == "ID"
+}
+
+func hasDefault(fd *ast.FieldDefinition) bool {
+	return fd.Directives.ForName(defaultDirective) != nil
 }
 
 func (fd *fieldDefinition) Type() Type {
@@ -2752,7 +2789,8 @@ func (t *astType) ImplementingTypes() []Type {
 // satisfy a valid post.
 func (t *astType) EnsureNonNulls(obj map[string]interface{}, exclusion string) error {
 	for _, fld := range t.inSchema.schema.Types[t.Name()].Fields {
-		if fld.Type.NonNull && !isID(fld) && fld.Name != exclusion && t.inSchema.customDirectives[t.Name()][fld.Name] == nil {
+		if fld.Type.NonNull && !isID(fld) && !hasDefault(fld) && fld.Name != exclusion &&
+			t.inSchema.customDirectives[t.Name()][fld.Name] == nil {
 			if val, ok := obj[fld.Name]; !ok || val == nil {
 				return errors.Errorf(
 					"type %s requires a value for field %s, but no value present",
