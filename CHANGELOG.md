@@ -33,7 +33,7 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
   - Feat(GRAPHQL): Zero HTTP endpoints are now available at GraphQL admin (GRAPHQL-1118) ([#6649][])
   - Feat(GRAPHQL): Webhooks on add/update/delete mutations (GRAPHQL-1045) ([#7494][])
   - Feat(GRAPHQL): Allow Multipe JWKUrls for auth. ([#7528][])
-  - Feat(GRAPHQL): Add support for passing OAuth Bearer token as authorization JWT ([#7490)
+  - Feat(GRAPHQL): Add support for passing OAuth Bearer token as authorization JWT ([#7490][])
 
 - Core Dgraph
   - Feat(metrics): Add Badger metrics. ([#8034][])
@@ -50,13 +50,9 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
   - Feat(DQL): `@groupby` on scalar fields and count duplicate  ([#7746][])
   - Feat(Query): Add random keyword in DQL ([#7693][])
   - Feat(tool): Neo4j CSV to RDF Converter ([#7545][])
-  - Feat(backup): Merge backup refactoring
-  - Feat(backup): Separate out writers from handlers
-  - Feat(Backup): Refactor the way backup code is structured.
   - Feat(query): Add mechanism to have a limit on number of pending queries ([#7603][])
   - Feat(flag): remove unused badger.max-retries option from bulk command ([#7591][])
   - Feat(sentry): clusterID flag added for alpha sentry reports (gql-services) ([#7580][])
-  - Feat(increment tool): Support queries to Dgraph Cloud
   - Feat(cmd/debuginfo) add new metrics to be collected ([#7439][])
   - Feat(flags): use Vault for ACL secrets ([#7492][])
   - Feat(Apollo): Add support for `@provides` and `@requires` directive.  ([#7503][])
@@ -65,16 +61,16 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 
 - Enterprise Features
   - Feat(Multi-tenancy): Add namespaces field to state ([#7808][])
-  - Feat(multi-tenancy): make drop data namespace aware ([#7789) ([#7795][])
+  - Feat(multi-tenancy): make drop data namespace aware ([#7789][]) ([#7795][])
   - Feat(cdc): Add support for SCRAM SASL mechanism ([#7765][])
   - Feat(acl): allow access to all the predicates using wildcard ([#7991][])
 
 ### Fixed
 
 - GraphQL
-  - Fix(GRAPHQL): add validation of null values with correct order of graphql rule validation ([#8007) ([#8008][])
+  - Fix(GRAPHQL): add validation of null values with correct order of graphql rule validation ([#8007][]) ([#8008][])
   - Fix(GRAPHQL): fix type assertion failure in graphql if resolver is not defined ([#8003][])
-  - Fix(GRAPHQL): fixing graphql schema update when the data is restored + skippin… ([#7970][])
+  - Fix(GRAPHQL): fixing graphql schema update when the data is restored ([#7970][])
   - Fix(GRAPHQL): Nested Auth Rules not working properly. ([#7915][])
   - Fix(GRAPHQL): optimize eq filter queries ([#7895][])
   - Fix(GRAPHQL): Fix duplicate XID error in case of interface XIDs ([#7776][])
@@ -93,7 +89,6 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
   - Fix(GRAPHQL): fix lambda querying a lambda field in case of no data. ([#7610][])
   - Fix(GRAPHQL): Add extra checks for deleting UpdateTypeInput ([#7595][])
   - Fix(GRAPHQL): remove support of `@id` directive on Float ([#7583][])
-  - Fix(GRAPHQL): fix error message when dgraph and graphql schema differ.
   - Fix(GRAPHQL): Fix mutation with Int Xid variables. ([#7565][])
   - Fix(GRAPHQL): Fix custom(dql: ...) with __typename (GRAPHQL-1098) ([#7569][])
   - Fix(GRAPHQL): Change variable name generation for interface auth rules ([#7559][])
@@ -102,7 +97,7 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
   - Fix(GRAPHQL): fix order of entities query result  ([#7542][])
   - Fix(GRAPHQL): Change variable name generation from Type<Num> to Type_<Num> ([#7556][])
   - Fix(GRAPHQL): fix duplicate xid error for multiple xid fields. ([#7546][])
-  - Fix(GRAPHQL): Added support for exact index on field having `@id` directive. ([#7534) ([#7551][])
+  - Fix(GRAPHQL): Added support for exact index on field having `@id` directive. ([#7534][]) ([#7551][])
   - Fix(GRAPHQL): fix query rewriting for multiple order on nested field. ([#7523][])
   - Fix(GRAPHQL) fix empty `type Query` with single extended type definition in the schema. ([#7517][])
 
@@ -130,22 +125,21 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
   - Fix(lambda): monitor lambda server, fix performance issue, remove lambda logs from extensions ([#8006][])
   - Fix(live): quote the xid when doing upsert ([#7983][])
   - Fix(sroar): Bring latest sroar to master ([#7977][])
-  - Fix(query): Do not execute filters if there are no source uids ([#7962) ([#7969][])
+  - Fix(query): Do not execute filters if there are no source uids ([#7962][]) ([#7969][])
   - Fix(snapshot): update last snapshot time across members ([#7968][])
   - Fix(pool): use write lock when getting health info ([#7963][])
   - Fix(JoinCluster): Avoid retrying JoinCluster indefinitely ([#7961][])
   - Fix(rollups): Write rolled-up keys at ts+1 ([#7957) ([#7959][])
   - Fix(conn): JoinCluster loop should use latest conn ([#7950][])
-  - Fix(restore): Set kv version to restoreTs for rolled up keys and schema keys ([#7930) ([#7935][])
+  - Fix(restore): Set kv version to restoreTs for rolled up keys and schema keys ([#7930][]) ([#7935][])
   - Fix(backup): Fix full backup request ([#7932][])
   - Fix(cmd/debug): Print banned namespaces correctly. ([#7929][])
   - Reconnect via a redial in case of disconnection. ([#7918][])
-  - Fix(Raft): Detect network partition when streaming
   - Fix(metrics): Expose dgraph_num_backups_failed_total metric view. ([#7900][])
   - Fix(sroar): Fix TestAuthWithCustomDQL failure because of roaring bitmaps ([#7902][])
   - Fix(DQL): revert changes related to cascade pagination with sort ([#7885][])
   - Fix(restore): append galaxy namespace to type name ([#7880][])
-  - Fix(Backup): use validReadTs from manifest for backward compatibility ([#7601) ([#7863][])
+  - Fix(Backup): use validReadTs from manifest for backward compatibility ([#7601][]) ([#7863][])
   - fix the predicate move ([#7862][])
   - Fix(restore): consider the banned namespaces while bumping ([#7839][])
   - Fix(restore): update the schema and type from 2103 ([#7838][])
@@ -156,7 +150,7 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
   - Fix(restore): reset the kv.StreamId before sending to stream writer ([#7833][])
   - Fix(auth): preserve the status code while returning error ([#7832][])
   - bug fix to permit audit streaming to stdout writer([#7803][])
-  - Fix(lease): don't do rate limiting when not limit is not specified ([#7787) ([#7801][])
+  - Fix(lease): don't do rate limiting when not limit is not specified ([#7787][]) ([#7801][])
   - Fix(restore): Bump uid and namespace after restore ([#7790][])
   - Fix(txn): ensure that txn hash is set ([#7782][])
   - Fix(export-backup): Fix double free in export backup ([#7780][])
@@ -172,7 +166,6 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
   - Fix(lsbackup): Fix profiler in lsBackup ([#7729][])
   - Fix(bulk): throw the error instead of crashing ([#7722][])
   - Fix(ee): GetKeys should return an error ([#7713][])
-  - Fix(compose): Set the IP address range correctly.
   - Fix(raftwal): take snapshot after restore ([#7719][])
   - Fix(pagination): Fix after for regexp, match functions ([#7700][])
   - Fix(query): Prevent multiple entries for same predicate/type in schema mutations. ([#7715][])
@@ -195,7 +188,6 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
   - Fix(flags): Add empty defaults to Vault superflag ([#7598][])
   - Fix(persistent): make persistent query namespace aware ([#7570][])
   - Fix(rollups): Fix splits in roll-up ([#7609][])
-  - Fix(backup): Refactor file handlers and make tests pass.
   - fix for xgo version to use ([#7620][])
   - Fix(flags): Expose global flags to dgraph subcommands. ([#7530][])
   - Fix(telemetry): fix zero crash due to telemetry ([#7575][])
@@ -253,10 +245,18 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 - Opt(predMove): hot tablet move ([#7703][])
 - Opt(Backup): Make backups faster ([#7680][])
 - Perf(restore): Implement map-reduce based restore ([#7664][])
-- Opt(bulk): Use the faster snappy instead of gzip compression.
 - Opt(reindex): do not try building indices when inserting a new predicate ([#7109][])
 - Perf(txn): de-duplicate the context keys and predicates ([#7478][])
+- perf(rollup): use NSplit API from sroar to improve rollup performance ([#8092][])
 
+[#7490]: https://github.com/dgraph-io/dgraph/issues/7490
+[#7789]: https://github.com/dgraph-io/dgraph/issues/7789
+[#8007]: https://github.com/dgraph-io/dgraph/issues/8007
+[#7534]: https://github.com/dgraph-io/dgraph/issues/7534
+[#7787]: https://github.com/dgraph-io/dgraph/issues/7787
+[#7601]: https://github.com/dgraph-io/dgraph/issues/7601
+[#7930]: https://github.com/dgraph-io/dgraph/issues/7930
+[#7962]: https://github.com/dgraph-io/dgraph/issues/7962
 [#7840]: https://github.com/dgraph-io/dgraph/issues/7840
 [#7631]: https://github.com/dgraph-io/dgraph/issues/7631
 [#7973]: https://github.com/dgraph-io/dgraph/issues/7973
@@ -475,6 +475,7 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 [#7664]: https://github.com/dgraph-io/dgraph/issues/7664
 [#7109]: https://github.com/dgraph-io/dgraph/issues/7109
 [#7478]: https://github.com/dgraph-io/dgraph/issues/7478
+[#8092]: https://github.com/dgraph-io/dgraph/issues/8092
 
 ## [21.03.2] - 2021-08-26
 [21.03.2]: https://github.com/dgraph-io/dgraph/compare/v21.03.1...v21.03.2
