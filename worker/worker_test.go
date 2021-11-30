@@ -74,7 +74,7 @@ func commitTransaction(t *testing.T, edge *pb.DirectedEdge, l *posting.List) {
 
 	var wg sync.WaitGroup
 	wg.Add(1)
-	pstore.HandoverSkiplist(sl, wg.Done)
+	require.NoError(t, pstore.HandoverSkiplist(sl, wg.Done))
 	wg.Wait()
 }
 

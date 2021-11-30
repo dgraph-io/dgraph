@@ -218,6 +218,8 @@ they form a Raft group and provide synchronous replication.
 			"It expects the access JWT to be constructed outside dgraph for those users as even "+
 			"login is denied to them. Additionally, this disables access to environment variables"+
 			"for minio, aws, etc.").
+		Flag("max-splits", "How many splits can a single key have, before it is forbidden. "+
+			"Also known as Jupiter key.").
 		String())
 
 	flag.String("graphql", worker.GraphQLDefaults, z.NewSuperFlagHelp(worker.GraphQLDefaults).

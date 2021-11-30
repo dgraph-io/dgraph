@@ -708,7 +708,8 @@ func (tl *threadLocal) toBackupList(key []byte, itr *badger.Iterator) (
 	}
 
 	switch item.UserMeta() {
-	case posting.BitEmptyPosting, posting.BitCompletePosting, posting.BitDeltaPosting:
+	case posting.BitEmptyPosting, posting.BitCompletePosting, posting.BitDeltaPosting,
+		posting.BitForbidPosting:
 		l, err := posting.ReadPostingList(key, itr)
 		if err != nil {
 			return nil, nil, errors.Wrapf(err, "while reading posting list")

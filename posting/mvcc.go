@@ -110,7 +110,7 @@ func (ir *incrRollupi) rollupKey(sl *skl.Skiplist, key []byte) error {
 			vs.UserMeta = kv.UserMeta[0]
 		}
 		switch vs.UserMeta {
-		case BitCompletePosting, BitEmptyPosting:
+		case BitCompletePosting, BitEmptyPosting, BitForbidPosting:
 			vs.Meta = badger.BitDiscardEarlierVersions
 		default:
 		}
@@ -394,6 +394,11 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 		}
 
 		switch item.UserMeta() {
+		case BitForbidPosting:
+			l.minTs = item.Version()
+			l.forbid = true
+			l.mutationMap = nil // Zero out the mutation map so the deltas are gone.
+			return l, nil
 		case BitEmptyPosting:
 			l.minTs = item.Version()
 			return l, nil

@@ -393,6 +393,18 @@ func (p *processor) processKV(buf *z.Buffer, in *loadBackupInput, kv *bpb.KV) er
 			}
 		}
 
+	case posting.BitForbidPosting:
+		if _, ok := in.dropNs[ns]; ok {
+			return nil
+		}
+		newKv := &bpb.KV{
+			Key:      restoreKey,
+			Value:    nil,
+			UserMeta: []byte{posting.BitForbidPosting},
+			Version:  p.restoreTs,
+		}
+		return toBuffer(newKv, kv.Version)
+
 	case posting.BitSchemaPosting:
 		appendNamespace := func() error {
 			// If the backup was taken on old version, we need to append the namespace to

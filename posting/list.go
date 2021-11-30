@@ -66,6 +66,10 @@ const (
 	BitCompletePosting byte = 0x08
 	// BitEmptyPosting signals that the value stores an empty posting list.
 	BitEmptyPosting byte = 0x10
+	// BitForbidPosting signals that key should NEVER have postings. This would
+	// typically be due to this being considered a Jupiter key, i.e. the key has
+	// some very heavy fan-out, which we don't want to process.
+	BitForbidPosting byte = 0x20 | BitEmptyPosting
 )
 
 // List stores the in-memory representation of a posting list.
@@ -76,6 +80,7 @@ type List struct {
 	mutationMap map[uint64]*pb.PostingList
 	minTs       uint64 // commit timestamp of immutable layer, reject reads before this ts.
 	maxTs       uint64 // max commit timestamp seen for this list.
+	forbid      bool
 }
 
 // NewList returns a new list with an immutable layer set to plist and the
@@ -881,6 +886,12 @@ func (l *List) Length(readTs, afterUid uint64) int {
 	return int(bm.GetCardinality())
 }
 
+var MaxSplits int
+
+func init() {
+	MaxSplits = int(x.Config.Limit.GetInt64("max-splits"))
+}
+
 // Rollup performs the rollup process, merging the immutable and mutable layers
 // and outputting the resulting list so it can be written to disk.
 // During this process, the list might be split into multiple lists if the main
@@ -910,7 +921,56 @@ func (l *List) Rollup(alloc *z.Allocator) ([]*bpb.KV, error) {
 	if out == nil {
 		return nil, nil
 	}
-	// defer out.free()
+
+	// deletionKvs returns the KVs corresponding to those splits, that are outdated.
+	// If 'all' is set to true, then it returns all the split KVs, else it returns only KVs
+	// corresponding to those splits that existed before rollup but not after it.
+	deletionKvs := func(all bool) ([]*bpb.KV, error) {
+		var delKvs []*bpb.KV
+		for _, startUid := range l.plist.Splits {
+			if _, ok := out.parts[startUid]; !all && ok {
+				// Don't delete this split part because we are sending an update now.
+				continue
+			}
+			key, err := x.SplitKey(l.key, startUid)
+			if err != nil {
+				return nil, errors.Wrapf(err,
+					"cannot generate split key for list with base key %s and start UID %d",
+					hex.EncodeToString(l.key), startUid)
+			}
+			delKvs = append(delKvs, &bpb.KV{
+				Key:      key,
+				Value:    nil,
+				UserMeta: []byte{BitEmptyPosting},
+				Version:  out.newMinTs + 1,
+			})
+		}
+		return delKvs, nil
+	}
+
+	if l.forbid || len(out.parts) > MaxSplits {
+		var kvs []*bpb.KV
+		kv := &bpb.KV{
+			Key:      alloc.Copy(l.key),
+			Value:    nil,
+			UserMeta: []byte{BitForbidPosting},
+			Version:  out.newMinTs + 1,
+		}
+		kvs = append(kvs, kv)
+
+		// Send deletion for the parts.
+		delKvs, err := deletionKvs(true)
+		if err != nil {
+			return nil, err
+		}
+		kvs = append(kvs, delKvs...)
+		return kvs, nil
+	}
+	if len(out.parts) > 0 {
+		// The main list for the split postings should not contain postings and bitmap.
+		x.AssertTrue(out.plist.Postings == nil)
+		x.AssertTrue(out.plist.Bitmap == nil)
+	}
 
 	var kvs []*bpb.KV
 	kv := MarshalPostingList(out.plist, alloc)
@@ -936,6 +996,14 @@ func (l *List) Rollup(alloc *z.Allocator) ([]*bpb.KV, error) {
 		}
 		kvs = append(kvs, kv)
 	}
+
+	// When split happens, the split boundaries might change. In that case, we need to delete the
+	// old split parts from the DB. Otherwise, they would stay as zombie and eat up the memory.
+	delKvs, err := deletionKvs(false)
+	if err != nil {
+		return nil, err
+	}
+	kvs = append(kvs, delKvs...)
 
 	// Sort the KVs by their key so that the main part of the list is at the
 	// start of the list and all other parts appear in the order of their start UID.
@@ -964,11 +1032,19 @@ func (l *List) ToBackupPostingList(
 	// is math.MaxUint64 so that's not possible. Assert that's true.
 	x.AssertTrue(out != nil)
 
+	if l.forbid {
+		kv := y.NewKV(alloc)
+		kv.Key = alloc.Copy(l.key)
+		kv.Value = nil
+		kv.Version = out.newMinTs
+		kv.UserMeta = alloc.Copy([]byte{BitForbidPosting})
+		return kv, nil
+	}
+
 	ol := out.plist
 	bm := sroar.NewBitmap()
 	if ol.Bitmap != nil {
 		bm = sroar.FromBuffer(ol.Bitmap)
-
 	}
 
 	buf.Reset()
@@ -987,8 +1063,8 @@ func (l *List) ToBackupPostingList(
 
 	kv := y.NewKV(alloc)
 	kv.Key = alloc.Copy(l.key)
-	kv.Version = out.newMinTs
 	kv.Value = val[:n]
+	kv.Version = out.newMinTs
 	if isPlistEmpty(ol) {
 		kv.UserMeta = alloc.Copy([]byte{BitEmptyPosting})
 	} else {
@@ -1062,7 +1138,7 @@ func (ro *rollupOutput) initRanges(split bool) {
 
 func (ro *rollupOutput) getRange(uid uint64) (uint64, uint64) {
 	for start, end := range ro.sranges {
-		if uid >= start && uid < end {
+		if uid >= start && uid <= end {
 			return start, end
 		}
 	}
@@ -1081,14 +1157,11 @@ func (ro *rollupOutput) runSplits() error {
 	if len(ro.parts) == 0 {
 		ro.parts[1] = ro.plist
 	}
-top:
 	for startUid, pl := range ro.parts {
 		if ShouldSplit(pl) {
 			if err := ro.split(startUid); err != nil {
 				return err
 			}
-			// Had to split something. Let's run again.
-			goto top
 		}
 	}
 	return nil
@@ -1098,63 +1171,53 @@ func (ro *rollupOutput) split(startUid uint64) error {
 	pl := ro.parts[startUid]
 
 	r := sroar.FromBuffer(pl.Bitmap)
-	num := r.GetCardinality()
-	uid, err := r.Select(uint64(num / 2))
-	if err != nil {
-		return errors.Wrapf(err, "split Select rank: %d", num/2)
+
+	getPostings := func(startUid, endUid uint64) []*pb.Posting {
+		startIdx := sort.Search(len(pl.Postings), func(i int) bool {
+			return pl.Postings[i].Uid >= startUid
+		})
+		endIdx := sort.Search(len(pl.Postings), func(i int) bool {
+			return pl.Postings[i].Uid > endUid
+		})
+		return pl.Postings[startIdx:endIdx]
 	}
 
-	newpl := &pb.PostingList{}
-	ro.parts[uid] = newpl
+	f := func(start, end uint64) uint64 {
+		posts := getPostings(start, end)
+		if len(posts) == 0 {
+			return 0
+		}
+		// Just approximate by taking first postings size and multiplying it.
+		return uint64(posts[0].Size() * len(posts))
+	}
 
-	// Remove everything from startUid to uid.
-	nr := r.Clone()
-	nr.RemoveRange(0, uid) // Keep all uids >= uid.
-	newpl.Bitmap = nr.ToBuffer()
+	// Provide a 30% cushion, because Split doesn't do equal splitting based on maxListSize.
+	bms := r.Split(f, uint64(0.7*float64(maxListSize)))
 
-	// Take everything from the first posting where posting.Uid >= uid.
-	idx := sort.Search(len(pl.Postings), func(i int) bool {
-		return pl.Postings[i].Uid >= uid
-	})
-	newpl.Postings = pl.Postings[idx:]
+	for i, bm := range bms {
+		c := bm.GetCardinality()
+		if c == 0 {
+			continue
+		}
+		start, err := bm.Select(0)
+		x.Check(err)
+		end, err := bm.Select(uint64(c) - 1)
+		x.Check(err)
 
-	// Update pl as well. Keeps the lower UIDs.
-	codec.RemoveRange(r, uid, math.MaxUint64)
-	pl.Bitmap = r.ToBuffer()
-	pl.Postings = pl.Postings[:idx]
+		newpl := &pb.PostingList{}
+		newpl.Bitmap = bm.ToBuffer()
+		postings := getPostings(start, end)
+		newpl.Postings = postings
+
+		// startUid = 1 is treated specially. ro.parts should always contain 1.
+		if i == 0 && startUid == 1 {
+			start = 1
+		}
+		ro.parts[start] = newpl
+	}
 
 	return nil
 }
-
-/*
-// sanityCheck can be kept around for debugging, and can be called when deallocating Pack.
-func sanityCheck(prefix string, out *rollupOutput) {
-	seen := make(map[string]string)
-
-	hb := func(which string, pack *pb.UidPack, block *pb.UidBlock) {
-		paddr := fmt.Sprintf("%p", pack)
-		baddr := fmt.Sprintf("%p", block)
-		if pa, has := seen[baddr]; has {
-			glog.Fatalf("[%s %s] Have already seen this block: %s in pa:%s. Now found in pa: %s (num blocks: %d) as well. Block [base: %d. Len: %d] Full map size: %d. \n",
-				prefix, which, baddr, pa, paddr, len(pack.Blocks), block.Base, len(block.Deltas), len(seen))
-		}
-		seen[baddr] = which + "_" + paddr
-	}
-
-	if out.plist.Pack != nil {
-		for _, block := range out.plist.Pack.Blocks {
-			hb("main", out.plist.Pack, block)
-		}
-	}
-	for startUid, part := range out.parts {
-		if part.Pack != nil {
-			for _, block := range part.Pack.Blocks {
-				hb("part_"+strconv.Itoa(int(startUid)), part.Pack, block)
-			}
-		}
-	}
-}
-*/
 
 func (l *List) encode(out *rollupOutput, readTs uint64, split bool) error {
 	bm, err := l.bitmap(ListOptions{ReadTs: readTs})

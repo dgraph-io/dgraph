@@ -33,6 +33,7 @@ import (
 	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/filestore"
+	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/ristretto/z"
@@ -121,6 +122,8 @@ func init() {
 		"Namespace onto which to load the data. If not set, will preserve the namespace."+
 			" When using this flag to load data into specific namespace, make sure that the "+
 			"load data do not have ACL data.")
+	flag.Int64("max-splits", 1000,
+		"How many splits can a single key have, before it is forbidden. Also known as Jupiter key.")
 
 	flag.String("badger", BulkBadgerDefaults, z.NewSuperFlagHelp(BulkBadgerDefaults).
 		Head("Badger options (Refer to badger documentation for all possible options)").
@@ -177,6 +180,10 @@ func run() {
 		Namespace:        Bulk.Conf.GetUint64("force-namespace"),
 		Badger:           bopts,
 	}
+
+	// set MaxSplits because while bulk-loading alpha won't be running and rollup would not be
+	// able to pick value for max-splits from x.Config.Limit.
+	posting.MaxSplits = Bulk.Conf.GetInt("max-splits")
 
 	x.PrintVersion()
 	if opt.Version {

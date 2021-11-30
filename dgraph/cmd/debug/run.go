@@ -621,7 +621,8 @@ func printKeys(db *badger.DB) {
 			}
 			switch item.UserMeta() {
 			// This is rather a default case as one of the 4 bit must be set.
-			case posting.BitCompletePosting, posting.BitEmptyPosting, posting.BitSchemaPosting:
+			case posting.BitCompletePosting, posting.BitEmptyPosting, posting.BitSchemaPosting,
+				posting.BitForbidPosting:
 				sz += item.EstimatedSize()
 				break LOOP
 			case posting.BitDeltaPosting:

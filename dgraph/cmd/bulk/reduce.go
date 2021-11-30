@@ -37,6 +37,7 @@ import (
 	"github.com/dgraph-io/badger/v3"
 	bo "github.com/dgraph-io/badger/v3/options"
 	bpb "github.com/dgraph-io/badger/v3/pb"
+	"github.com/dgraph-io/badger/v3/skl"
 	"github.com/dgraph-io/badger/v3/y"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -44,6 +45,7 @@ import (
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/dgraph-io/sroar"
 	"github.com/dustin/go-humanize"
+	"github.com/golang/glog"
 	"github.com/golang/snappy"
 )
 
@@ -85,16 +87,13 @@ func (r *reducer) run() error {
 
 			writer := db.NewStreamWriter()
 			x.Check(writer.Prepare())
-			// Split lists are written to a separate DB first to avoid ordering issues.
-			splitWriter := tmpDb.NewManagedWriteBatch()
 
 			ci := &countIndexer{
-				reducer:     r,
-				writer:      writer,
-				splitWriter: splitWriter,
-				tmpDb:       tmpDb,
-				splitCh:     make(chan *bpb.KVList, 2*runtime.NumCPU()),
-				countBuf:    getBuf(r.opt.TmpDir),
+				reducer:  r,
+				writer:   writer,
+				tmpDb:    tmpDb,
+				splitCh:  make(chan *bpb.KVList, 2*runtime.NumCPU()),
+				countBuf: getBuf(r.opt.TmpDir),
 			}
 
 			partitionKeys := make([][]byte, 0, len(partitions))
@@ -278,37 +277,39 @@ func (r *reducer) encode(entryCh chan *encodeRequest, closer *z.Closer) {
 	}
 }
 
-const maxSplitBatchLen = 1000
-
 func (r *reducer) writeTmpSplits(ci *countIndexer, wg *sync.WaitGroup) {
 	defer wg.Done()
-	splitBatchLen := 0
 
+	iwg := &sync.WaitGroup{}
 	for kvs := range ci.splitCh {
 		if kvs == nil || len(kvs.Kv) == 0 {
 			continue
 		}
-
-		for i := 0; i < len(kvs.Kv); i += maxSplitBatchLen {
-			// flush the write batch when the max batch length is reached to prevent the
-			// value log from growing over the allowed limit.
-			if splitBatchLen >= maxSplitBatchLen {
-				x.Check(ci.splitWriter.Flush())
-				ci.splitWriter = ci.tmpDb.NewManagedWriteBatch()
-				splitBatchLen = 0
+		b := skl.NewBuilder(int64(kvs.Size()) + 1<<20)
+		for _, kv := range kvs.Kv {
+			if err := badger.ValidEntry(ci.tmpDb, kv.Key, kv.Value); err != nil {
+				glog.Errorf("Invalid Entry. len(key): %d len(val): %d\n",
+					len(kv.Key), len(kv.Value))
+				continue
 			}
-
-			batch := &bpb.KVList{}
-			if i+maxSplitBatchLen >= len(kvs.Kv) {
-				batch.Kv = kvs.Kv[i:]
-			} else {
-				batch.Kv = kvs.Kv[i : i+maxSplitBatchLen]
-			}
-			splitBatchLen += len(batch.Kv)
-			x.Check(ci.splitWriter.WriteList(batch))
+			b.Add(y.KeyWithTs(kv.Key, kv.Version),
+				y.ValueStruct{
+					Value:    kv.Value,
+					UserMeta: kv.UserMeta[0],
+				})
 		}
+		iwg.Add(1)
+		err := x.RetryUntilSuccess(1000, 5*time.Second, func() error {
+			err := ci.tmpDb.HandoverSkiplist(b.Skiplist(), iwg.Done)
+			if err != nil {
+				glog.Errorf("writeTmpSplits: handover skiplist returned error: %v. Retrying...\n",
+					err)
+			}
+			return err
+		})
+		x.Check(err)
 	}
-	x.Check(ci.splitWriter.Flush())
+	iwg.Wait()
 }
 
 func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, closer *z.Closer) {
@@ -567,10 +568,15 @@ func (r *reducer) toList(req *encodeRequest) {
 	}
 
 	start, end, num := cbuf.StartOffset(), cbuf.StartOffset(), 0
+
 	appendToList := func() {
 		if num == 0 {
 			return
 		}
+		for _, p := range pl.Postings {
+			freePosting(p)
+		}
+		pl.Reset()
 		atomic.AddInt64(&r.prog.reduceEdgeCount, int64(num))
 
 		pk, err := x.Parse(currentKey)
@@ -592,7 +598,7 @@ func (r *reducer) toList(req *encodeRequest) {
 			}
 		}
 
-		bm := sroar.NewBitmap()
+		var uids []uint64
 		var lastUid uint64
 		slice, next := []byte{}, start
 		for next >= 0 && (next < end || end == -1) {
@@ -605,7 +611,11 @@ func (r *reducer) toList(req *encodeRequest) {
 			}
 			lastUid = uid
 
-			bm.Set(uid)
+			// Don't do set here, because this would be slower for Roaring
+			// Bitmaps to build with. This might cause memory issues though.
+			// bm.Set(uid)
+			uids = append(uids, uid)
+
 			if pbuf := me.Plist(); len(pbuf) > 0 {
 				p := getPosting()
 				x.Check(p.Unmarshal(pbuf))
@@ -613,8 +623,7 @@ func (r *reducer) toList(req *encodeRequest) {
 			}
 		}
 
-		// We should not do defer FreePack here, because we might be giving ownership of it away if
-		// we run Rollup.
+		bm := sroar.FromSortedList(uids)
 		pl.Bitmap = bm.ToBuffer()
 		numUids := bm.GetCardinality()
 
@@ -626,7 +635,6 @@ func (r *reducer) toList(req *encodeRequest) {
 		// the full pb.Posting type is used (which pb.y contains the
 		// delta packed UID list).
 		if numUids == 0 {
-			// No need to FrePack here because we are reusing alloc.
 			return
 		}
 
@@ -648,7 +656,6 @@ func (r *reducer) toList(req *encodeRequest) {
 		}
 
 		if posting.ShouldSplit(pl) {
-			// Give ownership of pl.Pack away to list. Rollup would deallocate the Pack.
 			l := posting.NewList(y.Copy(currentKey), pl, writeVersionTs)
 			kvs, err := l.Rollup(nil)
 			x.Check(err)
@@ -669,11 +676,6 @@ func (r *reducer) toList(req *encodeRequest) {
 			kv.StreamId = r.streamIdFor(pk.Attr)
 			badger.KVToBuffer(kv, kvBuf)
 		}
-
-		for _, p := range pl.Postings {
-			freePosting(p)
-		}
-		pl.Reset()
 	}
 
 	for end >= 0 {
