@@ -41,7 +41,7 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
   - Feat(lambda): allow access to access jwt in lambda ([#8023][])
   - Feat(rdf-response): Support RDF response via http query request ([#8004][])
   - Feat(sroar): Use rank() API from sroar and some cleanup ([#8002][])
-  - Feat(lambda): store lambda scripts within the dgraph, send it to JS s… ([#7955][])
+  - Feat(lambda): store lambda scripts within the dgraph ([#7955][])
   - Feat(query): handle extend keyword for Queries and Mutations ([#7916][])
   - Feat(Backup): Add native google cloud storage backup support ([#7829][])
   - Feat(Backup): Add native support for backup to Azure. ([#7843][])
@@ -58,12 +58,15 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
   - Feat(Apollo): Add support for `@provides` and `@requires` directive.  ([#7503][])
   - Feat(restore): Introduce incremental restore ([#7942][]) ([#7971][])
   - Feat(schema): do schema versioning and make backup non-blocking for indexing ([#7852][])
+  - Feat(zero bulk): adding bulk call for alpha to inform zero about the tablets ([#8100][])
+  - Feat(cdc): Add superflag to enable TLS without CA or certs. ([#8097][])
 
 - Enterprise Features
   - Feat(Multi-tenancy): Add namespaces field to state ([#7808][])
   - Feat(multi-tenancy): make drop data namespace aware ([#7789][]) ([#7795][])
   - Feat(cdc): Add support for SCRAM SASL mechanism ([#7765][])
   - Feat(acl): allow access to all the predicates using wildcard ([#7991][])
+  - Feat(cdc): Add superflag to enable TLS without CA or certs. ([#7946][])
 
 ### Fixed
 
@@ -209,6 +212,9 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
   - Fix(Dgraph): Throttle number of files to open while schema update ([#7480][])
   - Fix(metrics): Expose Badger LSM and vlog size bytes. ([#7488][])
   - Fix(schema): log error instead of panic if schema not found for predicate ([#7502][])
+  - Fix(tool): Don't ban namespace in export_backup (#8099)
+  - Fix(state): fix hex to uint64 response of list of namespaces (#8101)
+  - Fix(restore): return nil if there is error (#8098)
 
 - Enterprise Features
   - Fix(audit): fixing audit logs for websocket connections ([#8048][])
@@ -249,6 +255,12 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 - Perf(txn): de-duplicate the context keys and predicates ([#7478][])
 - perf(rollup): use NSplit API from sroar to improve rollup performance ([#8092][])
 
+[#8099]: https://github.com/dgraph-io/dgraph/issues/8099
+[#8101]: https://github.com/dgraph-io/dgraph/issues/8101
+[#8100]: https://github.com/dgraph-io/dgraph/issues/8100
+[#8097]: https://github.com/dgraph-io/dgraph/issues/8097
+[#8098]: https://github.com/dgraph-io/dgraph/issues/8098
+[#7946]: https://github.com/dgraph-io/dgraph/issues/7946
 [#7942]: https://github.com/dgraph-io/dgraph/issues/7942
 [#7490]: https://github.com/dgraph-io/dgraph/issues/7490
 [#7789]: https://github.com/dgraph-io/dgraph/issues/7789
