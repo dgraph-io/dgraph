@@ -56,7 +56,7 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
   - Feat(cmd/debuginfo) add new metrics to be collected ([#7439][])
   - Feat(flags): use Vault for ACL secrets ([#7492][])
   - Feat(Apollo): Add support for `@provides` and `@requires` directive.  ([#7503][])
-  - Feat(restore): Introduce incremental restore ([#7942) ([#7971][])
+  - Feat(restore): Introduce incremental restore ([#7942][]) ([#7971][])
   - Feat(schema): do schema versioning and make backup non-blocking for indexing ([#7852][])
 
 - Enterprise Features
@@ -249,6 +249,7 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 - Perf(txn): de-duplicate the context keys and predicates ([#7478][])
 - perf(rollup): use NSplit API from sroar to improve rollup performance ([#8092][])
 
+[#7942]: https://github.com/dgraph-io/dgraph/issues/7942
 [#7490]: https://github.com/dgraph-io/dgraph/issues/7490
 [#7789]: https://github.com/dgraph-io/dgraph/issues/7789
 [#8007]: https://github.com/dgraph-io/dgraph/issues/8007
