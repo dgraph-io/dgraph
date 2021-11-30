@@ -68,7 +68,7 @@ check_command_exists shasum
 check_command_exists tar
 check_command_exists zip
 
-nvm install --lts
+nvm install --lts=Fermium # Fermium is Node v14 LTS
 
 # Don't use standard GOPATH. Create a new one.
 unset GOBIN
@@ -83,7 +83,7 @@ mkdir $GOPATH
 PATH="$GOPATH/bin:$PATH"
 
 # The Go version used for release builds must match this version.
-GOVERSION=${GOVERSION:-"1.16.2"}
+GOVERSION=${GOVERSION:-"1.17.3"}
 
 TAG=$1
 
@@ -116,7 +116,7 @@ commitTime="github.com/dgraph-io/dgraph/x.lastCommitTime"
 jemallocXgoFlags=
 
 # Get xgo and docker image
-if [[ $GOVERSION =~ ^1\.16.* ]]; then
+if [[ $GOVERSION =~ ^1\.16.* ]] || [[ $GOVERSION =~ ^1\.17.* ]]; then
   # Build xgo docker image with 'go env -w GO111MODULE=auto' to support 1.16.x
   docker build -f release/xgo.Dockerfile -t dgraph/xgo:go-${GOVERSION} --build-arg GOVERSION=${GOVERSION} .
   # Instruct xgo to use alternative image
