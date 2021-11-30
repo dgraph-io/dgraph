@@ -176,6 +176,7 @@ message ZeroProposal {
   ZeroSnapshot snapshot = 11;  // Used to make Zeros take a snapshot.
   // 12 has already been used.
   DeleteNsRequest delete_ns = 13;  // Used to delete namespace.
+  repeated Tablet tablets = 14;
 }
 
 // MembershipState is used to pack together the current membership state of all
@@ -556,6 +557,7 @@ service Zero {
 
   rpc Oracle(api.Payload) returns (stream OracleDelta) {}
   rpc ShouldServe(Tablet) returns (Tablet) {}
+  rpc Inform(TabletRequest) returns (TabletResponse) {}
   rpc AssignIds(Num) returns (AssignedIds) {}
   rpc Timestamps(Num) returns (AssignedIds) {}
   rpc CommitOrAbort(api.TxnContext) returns (api.TxnContext) {}
@@ -583,6 +585,14 @@ service Worker {
       returns (UpdateGraphQLSchemaResponse) {}
   rpc DeleteNamespace(DeleteNsRequest) returns (Status) {}
   rpc TaskStatus(TaskStatusRequest) returns (TaskStatusResponse) {}
+}
+
+message TabletResponse {
+  repeated Tablet tablets = 1;
+}
+message TabletRequest {
+  repeated Tablet tablets = 1;
+  uint32 group_id = 2 [(gogoproto.jsontag) = "groupId,omitempty"];  // Served by which group.
 }
 
 message SubscriptionRequest {
