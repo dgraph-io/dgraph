@@ -132,7 +132,7 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
   - Fix(snapshot): update last snapshot time across members ([#7968][])
   - Fix(pool): use write lock when getting health info ([#7963][])
   - Fix(JoinCluster): Avoid retrying JoinCluster indefinitely ([#7961][])
-  - Fix(rollups): Write rolled-up keys at ts+1 ([#7957) ([#7959][])
+  - Fix(rollups): Write rolled-up keys at ts+1 ([#7957][]) ([#7959][])
   - Fix(conn): JoinCluster loop should use latest conn ([#7950][])
   - Fix(restore): Set kv version to restoreTs for rolled up keys and schema keys ([#7930][]) ([#7935][])
   - Fix(backup): Fix full backup request ([#7932][])
@@ -212,14 +212,14 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
   - Fix(Dgraph): Throttle number of files to open while schema update ([#7480][])
   - Fix(metrics): Expose Badger LSM and vlog size bytes. ([#7488][])
   - Fix(schema): log error instead of panic if schema not found for predicate ([#7502][])
-  - Fix(tool): Don't ban namespace in export_backup (#8099)
-  - Fix(state): fix hex to uint64 response of list of namespaces (#8101)
-  - Fix(restore): return nil if there is error (#8098)
+  - Fix(tool): Don't ban namespace in export_backup ([#8099][])
+  - Fix(state): fix hex to uint64 response of list of namespaces ([#8101][])
+  - Fix(restore): return nil if there is error ([#8098][])
 
 - Enterprise Features
   - Fix(audit): fixing audit logs for websocket connections ([#8048][])
   - Fix(acl): subscribe for the correct predicates ([#7992][])
-  - Fix(acl): filter out the results based on type ([#7978) ([#7980][])
+  - Fix(acl): filter out the results based on type ([#7978][]) ([#7980][])
   - Fix(groot): do not upsert groot for all namespaces on restart ([#7917][])
   - Fix(cdc): Show namespace info in event meta ([#7721][])
   - Fix(learner): Don't start a learner node with no peers ([#7582][])
@@ -240,7 +240,7 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 - Opt(recurse): Optimise recurse and bring range iterators from sroar ([#7989][])
 - Opt(restore): Sort the buffer before spinning the writeToDisk goroutine ([#7984][])
 - Perf(sroar): Use latest sroar and add histogram in the sbs tool ([#7982][])
-- Opt(Alpha): Load schema and types using Stream framework ([#7938) ([#7940][])
+- Opt(Alpha): Load schema and types using Stream framework ([#7938][]) ([#7940][])
 - Opt(query): Use sroar in pb.List ([#7864][])
 - Opt(snapshot): use full table copy when streaming the entire data ([#7870][])
 - Opt(snapshot): Optimize snapshot by using sinceTs ([#7826][])
@@ -255,6 +255,9 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 - Perf(txn): de-duplicate the context keys and predicates ([#7478][])
 - perf(rollup): use NSplit API from sroar to improve rollup performance ([#8092][])
 
+[#7957]: https://github.com/dgraph-io/dgraph/issues/7957
+[#7978]: https://github.com/dgraph-io/dgraph/issues/7978
+[#7938]: https://github.com/dgraph-io/dgraph/issues/7938
 [#8099]: https://github.com/dgraph-io/dgraph/issues/8099
 [#8101]: https://github.com/dgraph-io/dgraph/issues/8101
 [#8100]: https://github.com/dgraph-io/dgraph/issues/8100
