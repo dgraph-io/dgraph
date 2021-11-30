@@ -17,7 +17,7 @@
 USER_ID         = $(shell id -u)
 BIN             = dgraph
 BUILD          ?= $(shell git rev-parse --short HEAD)
-BUILD_CODENAME  = unnamed
+BUILD_CODENAME  = zion
 BUILD_DATE     ?= $(shell git log -1 --format=%ci)
 BUILD_BRANCH   ?= $(shell git rev-parse --abbrev-ref HEAD)
 
