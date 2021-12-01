@@ -69,6 +69,9 @@ func writeQuery(b *strings.Builder, query *gql.GraphQuery, prefix string) {
 
 	if query.IsCount {
 		x.Check2(b.WriteString(fmt.Sprintf("count(%s)", query.Attr)))
+	} else if query.Func.IsPasswordVerifier() {
+		val := schema.MaybeQuoteArg(query.Func.Name, query.Func.Args[0].Value)
+		x.Check2(b.WriteString(fmt.Sprintf("checkpwd(%s,%s", query.Attr, val)))
 	} else if query.Attr != "val" {
 		x.Check2(b.WriteString(query.Attr))
 	} else if isAggregateFn(query.Func) {
