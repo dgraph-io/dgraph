@@ -204,7 +204,7 @@ func writeUIDFunc(b *strings.Builder, uids []uint64, args []gql.Arg, needVar []g
 // writeRoot writes the root function as well as any ordering and paging
 // specified in q.
 //
-// Only uid(0x123, 0x124), type(...) and eq(Type.Predicate, ...) functions are supported at root.
+// Only uid(0x123, 0x124), type(...), eq(Type.Predicate, ...) and eq(val(var), ...) functions are supported at root.
 // Multiple arguments for `eq` filter will be required in case of resolving `entities` query.
 func writeRoot(b *strings.Builder, q *gql.GraphQuery) {
 	if q.Func == nil {
@@ -232,7 +232,11 @@ func writeRoot(b *strings.Builder, q *gql.GraphQuery) {
 // string since we add Attr in the argument itself.
 func writeFilterArguments(b *strings.Builder, q *gql.Function) {
 	if q.Attr != "" {
-		x.Check2(b.WriteString(q.Attr))
+		if q.IsValueVar {
+			x.Check2(b.WriteString(fmt.Sprintf("val(%s)", q.Attr)))
+		} else {
+			x.Check2(b.WriteString(q.Attr))
+		}
 	}
 
 	for i, arg := range q.Args {
