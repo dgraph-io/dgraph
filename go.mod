@@ -19,10 +19,10 @@ require (
 	github.com/Shopify/sarama v1.27.2
 	github.com/blevesearch/bleve v1.0.13
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd
-	github.com/dgraph-io/badger/v3 v3.0.0-20211108050342-6ed45ae41e5a
+	github.com/dgraph-io/badger/v3 v3.0.0-20211202135705-3f320f5df1bf
 	github.com/dgraph-io/dgo/v210 v210.0.0-20210421093152-78a2fece3ebd
 	github.com/dgraph-io/gqlgen v0.13.2
-	github.com/dgraph-io/gqlparser/v2 v2.2.1
+	github.com/dgraph-io/gqlparser/v2 v2.2.2
 	github.com/dgraph-io/graphql-transport-ws v0.0.0-20210511143556-2cef522f1f15
 	github.com/dgraph-io/ristretto v0.1.1-0.20210824115121-89e99415887a
 	github.com/dgraph-io/simdjson-go v0.3.0
