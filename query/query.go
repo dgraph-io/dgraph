@@ -112,6 +112,8 @@ type params struct {
 	Count int
 	// Offset is the value of the "offset" parameter.
 	Offset int
+	// Every is the value of the "every" parameter
+	Every int
 	// AfterUID is the value of the "after" parameter.
 	AfterUID uint64
 	// DoCount is true if the count of the predicate is requested instead of its value.
@@ -740,6 +742,14 @@ func (args *params) fill(gq *dql.GraphQuery) error {
 			return err
 		}
 		args.Count = int(first)
+	}
+
+	if v, ok := gq.Args["every"]; ok {
+		every, err := strconv.ParseInt(v, 0, 32)
+		if err != nil {
+			return err
+		}
+		args.Every = int(every)
 	}
 	return nil
 }
@@ -2286,6 +2296,14 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 	}
 
+	// We apply Every _after_ pagination, so it refers to the respective page
+	if sg.Params.Every > 1 {
+		if err = sg.applyEvery(ctx); err != nil {
+			rch <- err
+			return
+		}
+	}
+
 	// Here we consider handling count with filtering. We do this after
 	// pagination because otherwise, we need to do the count with pagination
 	// taken into account. For example, a PL might have only 50 entries but the
@@ -2381,6 +2399,27 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	}
 
 	rch <- childErr
+}
+
+// applies "every" to lists inside uidMatrix
+// the first node is selected from each of the uid lists, then every sg.Params.Every node
+// nodes are selected after applying first, offset and after
+func (sg *SubGraph) applyEvery(ctx context.Context) error {
+	sg.updateUidMatrix()
+
+	every := sg.Params.Every
+	for i := 0; i < len(sg.uidMatrix); i++ {
+		uidList := codec.GetUids(sg.uidMatrix[i])
+
+		r := sroar.NewBitmap()
+		for j := 0; j < len(uidList); j += every {
+			r.Set(uidList[j])
+		}
+		sg.uidMatrix[i].Bitmap = r.ToBuffer()
+	}
+
+	sg.DestMap = codec.Merge(sg.uidMatrix)
+	return nil
 }
 
 // applyPagination applies count and offset to lists inside uidMatrix.
@@ -2634,8 +2673,8 @@ func (sg *SubGraph) sortAndPaginateUsingVar(ctx context.Context) error {
 // isValidArg checks if arg passed is valid keyword.
 func isValidArg(a string) bool {
 	switch a {
-	case "numpaths", "from", "to", "orderasc", "orderdesc", "first", "offset", "after", "depth",
-		"minweight", "maxweight":
+	case "numpaths", "from", "to", "orderasc", "orderdesc", "first", "offset", "every", "after",
+	    "depth", "minweight", "maxweight":
 		return true
 	}
 	return false

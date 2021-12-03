@@ -770,7 +770,7 @@ func TestHasOrderAscOffset(t *testing.T) {
 
 func TestHasFirst(t *testing.T) {
 	query := `{
-		q(func:has(name),first:5) {
+		q(func:has(name), first:5) {
 			 name
 		 }
 	 }`
@@ -887,7 +887,7 @@ func TestRegExpVariableReplacement(t *testing.T) {
 
 func TestHasFirstOffset(t *testing.T) {
 	query := `{
-		q(func:has(name),first:5, offset: 5) {
+		q(func:has(name), first:5, offset: 5) {
 			 name
 		 }
 	 }`
@@ -953,6 +953,7 @@ func TestHasFilterOrderOffset(t *testing.T) {
 		  }
 	}`, js)
 }
+
 func TestCascadeSubQuery1(t *testing.T) {
 	query := `
 	{
@@ -985,6 +986,99 @@ func TestCascadeSubQuery1(t *testing.T) {
 				}
 			]
 		}
+	}`, js)
+}
+
+func TestHasEvery(t *testing.T) {
+	query := `{
+		q(func:has(name), every:10) {
+			 name
+		 }
+	 }`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{
+		"data": {
+			"q": [
+			  {
+				"name": "Michonne"
+			  },
+			  {
+				"name": "Daryl Dixon"
+			  },
+			  {
+				"name": "E"
+			  },
+			  {
+				"name": "Bob"
+			  },
+			  {
+				"name": "School A"
+			  },
+			  {
+				"name": "Alice"
+			  }
+			]
+		  }
+	}`, js)
+}
+
+func TestHasFirstEvery(t *testing.T) {
+	query := `{
+		q(func:has(name), first: 10, every:2) {
+			 name
+		 }
+	 }`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{
+		"data": {
+			"q": [
+			  {
+				"name": "Michonne"
+			  },
+			  {
+				"name": "Margaret"
+			  },
+			  {
+				"name": "Garfield"
+			  },
+			  {
+				"name": "Nemo"
+			  },
+			  {
+				"name": "Rick Grimes"
+			  }
+			]
+		  }
+	}`, js)
+}
+
+func TestHasFirstOffsetEvery(t *testing.T) {
+	query := `{
+		q(func:has(name), first: 10, offset:1, every:2) {
+			 name
+		 }
+	 }`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{
+		"data": {
+			"q": [
+			  {
+				"name": "King Lear"
+			  },
+			  {
+				"name": "Leonard"
+			  },
+			  {
+				"name": "Bear"
+			  },
+			  {
+				"name": "name"
+			  },
+			  {
+				"name": "Glenn Rhee"
+			  }
+			]
+		  }
 	}`, js)
 }
 
