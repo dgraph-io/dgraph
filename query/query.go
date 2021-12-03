@@ -2345,7 +2345,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 	}
 
-    // We apply Every _after_ pagination, so it refers to the respective page
+	// We apply Every _after_ pagination, so it refers to the respective page
 	if sg.Params.Every > 1 {
 		if err = sg.applyEvery(ctx); err != nil {
 			rch <- err
@@ -2353,7 +2353,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 	}
 
-    // We apply Random _after_ pagination, so it refers to the respective page
+	// We apply Random _after_ pagination, so it refers to the respective page
 	if sg.Params.Random > 0 {
 		if err = sg.applyRandom(ctx); err != nil {
 			rch <- err
@@ -2464,14 +2464,14 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 func (sg *SubGraph) applyEvery(ctx context.Context) error {
 	sg.updateUidMatrix()
 
-    every := sg.Params.Every
+	every := sg.Params.Every
 	for i := 0; i < len(sg.uidMatrix); i++ {
 		uidList := codec.GetUids(sg.uidMatrix[i])
 
 		r := sroar.NewBitmap()
-        for j := 0; j < len(uidList); j += every {
+		for j := 0; j < len(uidList); j += every {
 			r.Set(uidList[j])
-        }
+		}
 		sg.uidMatrix[i].Bitmap = r.ToBuffer()
 	}
 
