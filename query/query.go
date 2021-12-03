@@ -2459,28 +2459,20 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 }
 
 // applies "every" to lists inside uidMatrix
-// the first node is selected from the concatenation of all uid lists, then every sg.Params.Every node
+// the first node is selected from each of the uid lists, then every sg.Params.Every node
 // nodes are selected after applying first, offset and after
 func (sg *SubGraph) applyEvery(ctx context.Context) error {
 	sg.updateUidMatrix()
 
-    start := 0
     every := sg.Params.Every
 	for i := 0; i < len(sg.uidMatrix); i++ {
 		uidList := codec.GetUids(sg.uidMatrix[i])
 
-		if start >= len(uidList) {
-		    start -= len(uidList)
-			continue
-		}
-
 		r := sroar.NewBitmap()
-        for j := start; j < len(uidList); j += every {
+        for j := 0; j < len(uidList); j += every {
 			r.Set(uidList[j])
         }
 		sg.uidMatrix[i].Bitmap = r.ToBuffer()
-
-        start = every - (len(uidList) - start) % every - 1
 	}
 
 	sg.DestMap = codec.Merge(sg.uidMatrix)
