@@ -228,6 +228,9 @@ func (f *Function) IsAggregator() bool {
 
 // IsPasswordVerifier returns true if the function name is "checkpwd".
 func (f *Function) IsPasswordVerifier() bool {
+	if f == nil {
+		return false
+	}
 	return f.Name == "checkpwd"
 }
 
