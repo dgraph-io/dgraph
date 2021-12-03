@@ -115,6 +115,8 @@ type params struct {
 	Count int
 	// Offset is the value of the "offset" parameter.
 	Offset int
+	// Every is the value of the "every" parameter
+	Every int
 	// Random is the value of the "random" parameter
 	Random int
 	// AfterUID is the value of the "after" parameter.
@@ -747,6 +749,14 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 			return err
 		}
 		args.Count = int(first)
+	}
+
+	if v, ok := gq.Args["every"]; ok {
+		every, err := strconv.ParseInt(v, 0, 32)
+		if err != nil {
+			return err
+		}
+		args.Every = int(every)
 	}
 
 	if v, ok := gq.Args["random"]; ok {
@@ -2335,6 +2345,15 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 	}
 
+    // We apply Every _after_ pagination, so it refers to the respective page
+	if sg.Params.Every > 1 {
+		if err = sg.applyEvery(ctx); err != nil {
+			rch <- err
+			return
+		}
+	}
+
+    // We apply Random _after_ pagination, so it refers to the respective page
 	if sg.Params.Random > 0 {
 		if err = sg.applyRandom(ctx); err != nil {
 			rch <- err
@@ -2439,11 +2458,33 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	rch <- childErr
 }
 
-// stores index of a uid as the index in the uidMatrix (x)
-// and index in the corresponding list of the uidMatrix (y)
-type UidKey struct {
-	x int
-	y int
+// applies "every" to lists inside uidMatrix
+// the first node is selected from the concatenation of all uid lists, then every sg.Params.Every node
+// nodes are selected after applying first, offset and after
+func (sg *SubGraph) applyEvery(ctx context.Context) error {
+	sg.updateUidMatrix()
+
+    start := 0
+    every := sg.Params.Every
+	for i := 0; i < len(sg.uidMatrix); i++ {
+		uidList := codec.GetUids(sg.uidMatrix[i])
+
+		if start >= len(uidList) {
+		    start -= len(uidList)
+			continue
+		}
+
+		r := sroar.NewBitmap()
+        for j := start; j < len(uidList); j += every {
+			r.Set(uidList[j])
+        }
+		sg.uidMatrix[i].Bitmap = r.ToBuffer()
+
+        start = every - (len(uidList) - start) % every - 1
+	}
+
+	sg.DestMap = codec.Merge(sg.uidMatrix)
+	return nil
 }
 
 // applies "random" to lists inside uidMatrix
@@ -2730,7 +2771,7 @@ func (sg *SubGraph) sortAndPaginateUsingVar(ctx context.Context) error {
 // isValidArg checks if arg passed is valid keyword.
 func isValidArg(a string) bool {
 	switch a {
-	case "numpaths", "from", "to", "orderasc", "orderdesc", "first", "offset", "after", "depth",
+	case "numpaths", "from", "to", "orderasc", "orderdesc", "first", "offset", "every", "after", "depth",
 		"minweight", "maxweight", "random":
 		return true
 	}
