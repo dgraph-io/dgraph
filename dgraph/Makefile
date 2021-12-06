@@ -20,9 +20,6 @@ BUILD          ?= $(shell git rev-parse --short HEAD)
 BUILD_CODENAME  = zion
 BUILD_DATE     ?= $(shell git log -1 --format=%ci)
 BUILD_BRANCH   ?= $(shell git rev-parse --abbrev-ref HEAD)
-
-# Use the next build version on master branch
-# NOTE: this needs to be updated with each new release
 BUILD_VERSION ?= $(shell git describe --always --tags)
 
 GOOS          ?= $(shell go env GOOS)
