@@ -2763,8 +2763,8 @@ func (sg *SubGraph) sortAndPaginateUsingVar(ctx context.Context) error {
 // isValidArg checks if arg passed is valid keyword.
 func isValidArg(a string) bool {
 	switch a {
-	case "numpaths", "from", "to", "orderasc", "orderdesc", "first", "offset", "every", "after", "depth",
-		"minweight", "maxweight", "random":
+	case "numpaths", "from", "to", "orderasc", "orderdesc", "first", "offset", "every", "after",
+	    "depth", "minweight", "maxweight", "random":
 		return true
 	}
 	return false
