@@ -242,6 +242,14 @@ they form a Raft group and provide synchronous replication.
 				" This should be used only when using custom lambda server."+
 				" Use num subflag to launch official lambda server."+
 				" This flag if set, overrides the other lambda flags.").
+		Flag("docker-image",
+			"The Docker image.").
+		Flag("docker-user",
+			"The Docker user.").
+		Flag("docker-password",
+			"The Docker password.").
+		Flag("docker-registry",
+			"The Docker registry.").
 		Flag("num",
 			"Number of JS lambda servers to be launched by alpha.").
 		Flag("port",
@@ -473,22 +481,6 @@ func setupLambdaServer(closer *z.Closer) {
 		return
 	}
 
-	// Copy over all the embedded files to actual files.
-	dir := "dist"
-	files, err := jsLambda.ReadDir(dir)
-	x.Check(err)
-	for _, file := range files {
-		// The separator for embedded files is forward-slash even on Windows.
-		data, err := jsLambda.ReadFile(dir + "/" + file.Name())
-		x.Check(err)
-		filename := filepath.Join(x.WorkerConfig.TmpDir, file.Name())
-		file, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
-		x.Check(err)
-		_, err = file.Write(data)
-		x.Check(err)
-		x.Check(file.Close())
-	}
-
 	type lambda struct {
 		sync.Mutex
 		cmd        *exec.Cmd
@@ -497,19 +489,53 @@ func setupLambdaServer(closer *z.Closer) {
 
 		health string
 		port   int
+
+		container *Container
+		restart   chan bool
 	}
 
 	lambdas := make([]*lambda, 0, num)
 	for i := 0; i < num; i++ {
 		lambdas = append(lambdas, &lambda{
-			port:   port + i,
-			health: fmt.Sprintf("http://127.0.0.1:%d/health", port+i),
+			port:    port + i,
+			health:  fmt.Sprintf("http://127.0.0.1:%d/health", port+i),
+			restart: make(chan bool),
 		})
+	}
+	dgraphUrl := fmt.Sprintf("http://127.0.0.1:%d", httpPort())
+
+	var docker *Docker
+	var err error
+	if len(x.Config.Lambda.DockerImage) > 0 {
+		glog.Infoln("Running with docker")
+		docker, err = NewDockerClient(closer.Ctx(), x.Config.Lambda.DockerRegistry, x.Config.Lambda.DockerUser, x.Config.Lambda.DockerPassword)
+		if err != nil {
+			glog.Errorln(err.Error())
+		}
+		err = docker.PullImage(closer.Ctx(), x.Config.Lambda.DockerImage)
+		if err != nil {
+			glog.Errorln(err.Error())
+		}
+	} else {
+		// Copy over all the embedded files to actual files.
+		dir := "dist"
+		files, err := jsLambda.ReadDir(dir)
+		x.Check(err)
+		for _, file := range files {
+			// The separator for embedded files is forward-slash even on Windows.
+			data, err := jsLambda.ReadFile(dir + "/" + file.Name())
+			x.Check(err)
+			filename := filepath.Join(x.WorkerConfig.TmpDir, file.Name())
+			file, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+			x.Check(err)
+			_, err = file.Write(data)
+			x.Check(err)
+			x.Check(file.Close())
+		}
 	}
 
 	// Entry point of the script is index.js.
 	filename := filepath.Join(x.WorkerConfig.TmpDir, "index.js")
-	dgraphUrl := fmt.Sprintf("http://127.0.0.1:%d", httpPort())
 
 	glog.Infoln("Setting up lambda servers")
 	for i := range lambdas {
@@ -517,31 +543,59 @@ func setupLambdaServer(closer *z.Closer) {
 			for {
 				select {
 				case <-closer.HasBeenClosed():
+					if len(x.Config.Lambda.DockerImage) > 0 {
+						err := docker.RemoveContainer(closer.Ctx(), lambdas[i].container.id)
+						if err != nil {
+							glog.Errorf("Failed to remove lambda container at port: %d. Got err: %+v",
+								lambdas[i].port, err)
+							continue
+						}
+					}
 					return
 				default:
 					time.Sleep(2 * time.Second)
-					cmd := exec.CommandContext(closer.Ctx(), "node", filename)
-					cmd.SysProcAttr = childProcessConfig()
-					cmd.Env = append(cmd.Env, fmt.Sprintf("PORT=%d", lambdas[i].port))
-					cmd.Env = append(cmd.Env, fmt.Sprintf("DGRAPH_URL="+dgraphUrl))
-					cmd.Stdout = os.Stdout
-					cmd.Stderr = os.Stderr
 
-					lambdas[i].Lock()
-					lambdas[i].cmd = cmd
-					lambdas[i].lastActive = time.Now().UnixNano()
-					glog.Infof("Running node command: %+v", cmd)
-					if err := cmd.Start(); err != nil {
-						glog.Errorf("Failed to start lambda server at port: %d. Got err: %+v",
-							lambdas[i].port, err)
+					if len(x.Config.Lambda.DockerImage) > 0 {
+						lambdas[i].Lock()
+
+						glog.Infof("Starting lambda container: %s", x.Config.Lambda.DockerImage)
+						container, err := docker.RunContainer(closer.Ctx(), x.Config.Lambda.DockerImage, i, lambdas[i].port)
+						if err != nil {
+							glog.Errorf("Failed to start lambda container at port: %d. Got err: %+v",
+								lambdas[i].port, err)
+							lambdas[i].Unlock()
+							continue
+						}
+						lambdas[i].container = container
+						lambdas[i].active = true
 						lambdas[i].Unlock()
-						continue
-					}
-					lambdas[i].active = true
-					lambdas[i].Unlock()
-					if err := cmd.Wait(); err != nil {
-						glog.Errorf("Lambda server at port: %d stopped with error: %v",
-							lambdas[i].port, err)
+
+						<-lambdas[i].restart
+						// We need to stay here until the server is stopped
+					} else {
+						cmd := exec.CommandContext(closer.Ctx(), "node", filename)
+						cmd.SysProcAttr = childProcessConfig()
+						cmd.Env = append(cmd.Env, fmt.Sprintf("PORT=%d", lambdas[i].port))
+						cmd.Env = append(cmd.Env, fmt.Sprintf("DGRAPH_URL="+dgraphUrl))
+						cmd.Stdout = os.Stdout
+						cmd.Stderr = os.Stderr
+
+						lambdas[i].Lock()
+						lambdas[i].cmd = cmd
+						lambdas[i].lastActive = time.Now().UnixNano()
+						glog.Infof("Running node command: %+v", cmd)
+						if err := cmd.Start(); err != nil {
+							glog.Errorf("Failed to start lambda server at port: %d. Got err: %+v",
+								lambdas[i].port, err)
+							lambdas[i].Unlock()
+							continue
+						}
+						lambdas[i].active = true
+						lambdas[i].Unlock()
+						if err := cmd.Wait(); err != nil {
+							glog.Errorf("Lambda server at port: %d stopped with error: %v",
+								lambdas[i].port, err)
+						}
 					}
 				}
 			}
@@ -561,8 +615,14 @@ func setupLambdaServer(closer *z.Closer) {
 		resp, err := client.Get(l.health)
 		if err != nil || resp.StatusCode != 200 {
 			if time.Duration(timestamp-l.lastActive) > x.Config.Lambda.RestartAfter {
-				glog.Warningf("Lambda Server at port: %d not responding."+
-					" Killed it with err: %v", l.port, l.cmd.Process.Kill())
+				if l.container != nil && len(l.container.name) > 0 {
+					glog.Warningf("Lambda Server at port: %d not responding."+
+						" Restarting", l.port)
+					l.restart <- true
+				} else {
+					glog.Warningf("Lambda Server at port: %d not responding."+
+						" Killed it with err: %v", l.port, l.cmd.Process.Kill())
+				}
 				l.active = false
 			}
 			return
@@ -887,10 +947,14 @@ func run() {
 	lambda := z.NewSuperFlag(Alpha.Conf.GetString("lambda")).MergeAndCheckDefault(
 		worker.LambdaDefaults)
 	x.Config.Lambda = x.LambdaOptions{
-		Url:          lambda.GetString("url"),
-		Num:          lambda.GetUint32("num"),
-		Port:         lambda.GetUint32("port"),
-		RestartAfter: lambda.GetDuration("restart-after"),
+		Url:            lambda.GetString("url"),
+		DockerImage:    lambda.GetString("docker-image"),
+		DockerUser:     lambda.GetString("docker-user"),
+		DockerPassword: lambda.GetString("docker-password"),
+		DockerRegistry: lambda.GetString("docker-registry"),
+		Num:            lambda.GetUint32("num"),
+		Port:           lambda.GetUint32("port"),
+		RestartAfter:   lambda.GetDuration("restart-after"),
 	}
 	if x.Config.Lambda.Url != "" {
 		graphqlLambdaUrl, err := url.Parse(x.Config.Lambda.Url)

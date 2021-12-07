@@ -4,7 +4,7 @@
 # This gets built as part of release.sh. Must be run from /tmp/build, with the linux binaries
 # already built and placed there.
 
-FROM ubuntu:20.04
+FROM ghcr.io/schartey/ubuntu-dind:master
 LABEL maintainer="Dgraph Labs <contact@dgraph.io>"
 
 RUN apt-get update && \

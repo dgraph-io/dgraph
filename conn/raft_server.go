@@ -162,7 +162,7 @@ func (w *RaftServer) IsPeer(ctx context.Context, rc *pb.RaftContext) (
 		return &pb.PeerResponse{}, nil
 	}
 
-	for _, raftIdx := range confState.Nodes {
+	for _, raftIdx := range confState.Voters {
 		if rc.Id == raftIdx {
 			return &pb.PeerResponse{Status: true}, nil
 		}

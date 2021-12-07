@@ -656,7 +656,7 @@ func (n *node) initAndStartNode() error {
 			var zs pb.ZeroSnapshot
 			x.Check(zs.Unmarshal(sp.Data))
 			n.server.SetMembershipState(zs.State)
-			for _, id := range sp.Metadata.ConfState.Nodes {
+			for _, id := range sp.Metadata.ConfState.Voters {
 				n.Connect(id, zs.State.Zeros[id].Addr)
 			}
 		}

@@ -2178,7 +2178,7 @@ func (n *node) InitAndStartNode() {
 
 			// TODO: Making connections here seems unnecessary, evaluate.
 			members := groups().members(n.gid)
-			for _, id := range sp.Metadata.ConfState.Nodes {
+			for _, id := range sp.Metadata.ConfState.Voters {
 				m, ok := members[id]
 				if ok {
 					n.Connect(id, m.Addr)
