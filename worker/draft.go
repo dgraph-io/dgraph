@@ -1104,7 +1104,7 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 
 				// If we don't have a snapshot, or if there are too many log files in Raft,
 				// calculate a new snapshot.
-				calculate := raft.IsEmptySnap(snap) || n.Store.NumLogFiles() > 4
+				calculate := raft.IsEmptySnap(snap) || n.Store.NumLogFiles() > 16
 
 				// Only take snapshot if both snapshotFrequency and
 				// snapshotAfterEntries requirements are met. If set to 0,
