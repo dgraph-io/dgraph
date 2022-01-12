@@ -374,7 +374,19 @@ func entitiesQueryCompletion(ctx context.Context, resolved *Resolved) {
 	sort.Slice(uniqueKeyList, func(i, j int) bool {
 		switch val := uniqueKeyList[i].(type) {
 		case string:
-			return val < uniqueKeyList[j].(string)
+			val2 := uniqueKeyList[j].(string)
+			switch keyFieldType {
+			case "ID":
+				// If the type is ID, we actually have a hex number as a string, so we can't sort by string
+				// naively or we end up with the wrong sort example: (0x1, 0x10, 0x2, 0x3, 0x4)
+				if len(val) != len(val2) {
+					return len(val) < len(val2)
+				}
+
+				return val < val2
+			default:
+				return val < val2
+			}
 		case json.Number:
 			switch keyFieldType {
 			case "Int", "Int64":
