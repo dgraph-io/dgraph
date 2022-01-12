@@ -378,7 +378,7 @@ func entitiesQueryCompletion(ctx context.Context, resolved *Resolved) {
 			switch keyFieldType {
 			case "ID":
 				// If the type is ID, we actually have a hex number as a string, so we can't sort by string
-				// naively or we end up with the wrong sort example: (0x1, 0x10, 0x2, 0x3, 0x4)
+				// naively or we end up with the wrong sort. Example: (0x1, 0x10, 0x2, 0x3, 0x4)
 				if len(val) != len(val2) {
 					return len(val) < len(val2)
 				}
