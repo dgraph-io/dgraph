@@ -96,15 +96,14 @@ func schemaValidateHandler() http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 
 		err := admin.SchemaValidate(string(sch))
-		if err == nil {
-			w.WriteHeader(http.StatusOK)
-			x.SetStatus(w, "success", "Schema is valid")
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			errs := strings.Split(strings.TrimSpace(err.Error()), "\n")
+			x.SetStatusWithErrors(w, x.ErrorInvalidRequest, errs)
 			return
 		}
-
-		w.WriteHeader(http.StatusBadRequest)
-		errs := strings.Split(strings.TrimSpace(err.Error()), "\n")
-		x.SetStatusWithErrors(w, x.ErrorInvalidRequest, errs)
+		w.WriteHeader(http.StatusOK)
+		x.Check2(w.Write([]byte(fmt.Sprintf(`{"code": "Success", "message": "schema is valid`))))
 	})
 }
 
