@@ -824,7 +824,7 @@ func deleteCommonHeaders(headers http.Header) {
 func carsHandlerWithHeaders(w http.ResponseWriter, r *http.Request) {
 	deleteCommonHeaders(r.Header)
 	if err := compareHeaders(map[string][]string{
-		"Stripe-Api-Key": []string{"some-api-key"},
+		"Stripe-Api-Key": {"some-api-key"},
 	}, r.Header); err != nil {
 		check2(w.Write([]byte(err.Error())))
 		return
@@ -835,7 +835,7 @@ func carsHandlerWithHeaders(w http.ResponseWriter, r *http.Request) {
 func userNameHandlerWithHeaders(w http.ResponseWriter, r *http.Request) {
 	deleteCommonHeaders(r.Header)
 	if err := compareHeaders(map[string][]string{
-		"Github-Api-Token": []string{"some-api-token"},
+		"Github-Api-Token": {"some-api-token"},
 	}, r.Header); err != nil {
 		check2(w.Write([]byte(err.Error())))
 		return
@@ -1037,7 +1037,7 @@ func (_ *query) Countries(ctx context.Context, args struct {
 		Name string
 	}
 }) []countryResolver {
-	return []countryResolver{countryResolver{&country{
+	return []countryResolver{{&country{
 		Code: graphql.ID(args.Filter.Code),
 		Name: args.Filter.Name,
 	}}}
@@ -1142,7 +1142,7 @@ func (r *classResolver) Name() string {
 func (_ *query) Class(ctx context.Context, args struct {
 	Id string
 }) *[]*classResolver {
-	return &[]*classResolver{&classResolver{&class{ID: graphql.ID(args.Id)}}}
+	return &[]*classResolver{{&class{ID: graphql.ID(args.Id)}}}
 }
 
 func (_ *query) UserNames(ctx context.Context, args struct {
@@ -1190,7 +1190,7 @@ func (_ *query) Classes(ctx context.Context, args struct {
 	resolvers := make([]*[]*classResolver, 0, len(*args.Schools))
 	for _, user := range *args.Schools {
 		resolvers = append(resolvers, &[]*classResolver{
-			&classResolver{&class{ID: graphql.ID(user.Id)}}})
+			{&class{ID: graphql.ID(user.Id)}}})
 	}
 	return &resolvers
 }
@@ -1264,10 +1264,10 @@ func gqlCarsWithErrorHandler(w http.ResponseWriter, r *http.Request) {
 			"cars": output,
 		},
 		"errors": []map[string]interface{}{
-			map[string]interface{}{
+			{
 				"message": "error-1 from cars",
 			},
-			map[string]interface{}{
+			{
 				"message": "error-2 from cars",
 			},
 		},

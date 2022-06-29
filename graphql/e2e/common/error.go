@@ -95,10 +95,10 @@ func graphQLCompletionOn(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, 5, len(result.QueryCountry))
 			expected.QueryCountry = []*country{
-				&country{Name: "Angola"},
-				&country{Name: "Bangladesh"},
-				&country{Name: "India"},
-				&country{Name: "Mozambique"},
+				{Name: "Angola"},
+				{Name: "Bangladesh"},
+				{Name: "India"},
+				{Name: "Mozambique"},
 				nil,
 			}
 
@@ -269,8 +269,8 @@ func panicCatcher(t *testing.T) {
 	// the http stack.
 
 	tests := map[string]*GraphQLParams{
-		"query": &GraphQLParams{Query: `query { queryCountry { name } }`},
-		"mutation": &GraphQLParams{
+		"query": {Query: `query { queryCountry { name } }`},
+		"mutation": {
 			Query: `mutation {
 						addCountry(input: [{ name: "A Country" }]) { country { id } }
 					}`,
