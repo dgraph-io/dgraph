@@ -14,6 +14,9 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - name: golangci-lint
+        env:
+          # prevent OOM
+          GOGC: 20
         uses: golangci/golangci-lint-action@v2
         with:
           # Required: the version of golangci-lint is required and must be specified without patch version: we always use the latest patch version.
