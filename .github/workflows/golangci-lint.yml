@@ -22,3 +22,4 @@ jobs:
           version: v1.36
           only-new-issues: true
           args: --timeout=2m
+          skip-go-installation: true
