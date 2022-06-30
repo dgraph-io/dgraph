@@ -8,6 +8,9 @@
 # Data would be persisted to a docker volume called data-volume on the virtual machines which are
 # part of the swarm.
 # Run `docker stack deploy -c docker-compose-ha.yml` on the Swarm leader to start the cluster.
+# NOTE: whitelisting is set to private address ranges, this is ONLY for a local setup
+#       please change it accordingly for your production setup
+#       more here https://dgraph.io/docs/deploy/dgraph-administration/#whitelisting-admin-operations
 
 version: "3.2"
 networks:
@@ -70,7 +73,7 @@ services:
       placement:
         constraints:
           - node.hostname == aws01
-    command: dgraph alpha --my=alpha1:7080 --zero=zero1:5080,zero2:5081,zero3:5082
+    command: dgraph alpha --my=alpha1:7080 --security whitelist=10.0.0.0/8,172.0.0.0/8,192.168.0.0/16,127.0.0.1 --zero=zero1:5080,zero2:5081,zero3:5082
   alpha2:
     image: dgraph/dgraph:latest
     hostname: "alpha2"
@@ -86,7 +89,7 @@ services:
       placement:
         constraints:
           - node.hostname == aws02
-    command: dgraph alpha --my=alpha2:7081 --zero=zero1:5080,zero2:5081,zero3:5082 -o 1
+    command: dgraph alpha --my=alpha2:7081 --security whitelist=10.0.0.0/8,172.0.0.0/8,192.168.0.0/16,127.0.0.1 --zero=zero1:5080,zero2:5081,zero3:5082 -o 1
   alpha3:
     image: dgraph/dgraph:latest
     hostname: "alpha3"
@@ -102,7 +105,7 @@ services:
       placement:
         constraints:
           - node.hostname == aws03
-    command: dgraph alpha --my=alpha3:7082 --zero=zero1:5080,zero2:5081,zero3:5082 -o 2
+    command: dgraph alpha --my=alpha3:7082 --security whitelist=10.0.0.0/8,172.0.0.0/8,192.168.0.0/16,127.0.0.1 --zero=zero1:5080,zero2:5081,zero3:5082 -o 2
   alpha4:
     image: dgraph/dgraph:latest
     hostname: "alpha4"
@@ -117,7 +120,7 @@ services:
       placement:
         constraints:
           - node.hostname == aws04
-    command: dgraph alpha --my=alpha4:7083 --zero=zero1:5080,zero2:5081,zero3:5082 -o 3
+    command: dgraph alpha --my=alpha4:7083 --security whitelist=10.0.0.0/8,172.0.0.0/8,192.168.0.0/16,127.0.0.1 --zero=zero1:5080,zero2:5081,zero3:5082 -o 3
   alpha5:
     image: dgraph/dgraph:latest
     hostname: "alpha5"
@@ -132,7 +135,7 @@ services:
       placement:
         constraints:
           - node.hostname == aws05
-    command: dgraph alpha --my=alpha5:7084 --zero=zero1:5080,zero2:5081,zero3:5082 -o 4
+    command: dgraph alpha --my=alpha5:7084 --security whitelist=10.0.0.0/8,172.0.0.0/8,192.168.0.0/16,127.0.0.1 --zero=zero1:5080,zero2:5081,zero3:5082 -o 4
   alpha6:
     image: dgraph/dgraph:latest
     hostname: "alpha6"
@@ -147,6 +150,6 @@ services:
       placement:
         constraints:
           - node.hostname == aws06
-    command: dgraph alpha --my=alpha6:7085 --zero=zero1:5080,zero2:5081,zero3:5082 -o 5
+    command: dgraph alpha --my=alpha6:7085 --security whitelist=10.0.0.0/8,172.0.0.0/8,192.168.0.0/16,127.0.0.1 --zero=zero1:5080,zero2:5081,zero3:5082 -o 5
 volumes:
   data-volume:

@@ -4,6 +4,9 @@
 # It mounts /tmp/data on the host machine to /dgraph within the
 # container. You can change /tmp/data to a more appropriate location.
 # Run `docker-compose up` to start Dgraph.
+# NOTE: whitelisting is set to private address ranges, this is ONLY for a local setup
+#       please change it accordingly for your production setup
+#       more here https://dgraph.io/docs/deploy/dgraph-administration/#whitelisting-admin-operations
 
 version: "3.2"
 services:
@@ -24,4 +27,4 @@ services:
       - 8080:8080
       - 9080:9080
     restart: on-failure
-    command: dgraph alpha --my=alpha:7080 --zero=zero:5080
+    command: dgraph alpha --my=alpha:7080 --zero=zero:5080 --security whitelist=10.0.0.0/8,172.0.0.0/8,192.168.0.0/16,127.0.0.1

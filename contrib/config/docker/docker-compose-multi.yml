@@ -6,6 +6,9 @@
 # Data would be persisted to a Docker volume called data-volume on the virtual machines which are
 # part of the swarm.
 # Run `docker stack deploy -c docker-compose-multi.yml` on the Swarm leader to start the cluster.
+# NOTE: whitelisting is set to private address ranges, this is ONLY for a local setup
+#       please change it accordingly for your production setup
+#       more here https://dgraph.io/docs/deploy/dgraph-administration/#whitelisting-admin-operations
 
 version: "3.2"
 networks:
@@ -39,7 +42,7 @@ services:
       placement:
         constraints:
           - node.hostname == aws01
-    command: dgraph alpha --my=alpha1:7080 --zero=zero:5080
+    command: dgraph alpha --my=alpha1:7080 --security whitelist=10.0.0.0/8,172.0.0.0/8,192.168.0.0/16,127.0.0.1 --zero=zero:5080
   alpha2:
     image: dgraph/dgraph:latest
     hostname: "alpha2"
@@ -55,7 +58,7 @@ services:
       placement:
         constraints:
           - node.hostname == aws02
-    command: dgraph alpha --my=alpha2:7081 --zero=zero:5080 -o 1
+    command: dgraph alpha --my=alpha2:7081 --security whitelist=10.0.0.0/8,172.0.0.0/8,192.168.0.0/16,127.0.0.1 --zero=zero:5080 -o 1
   alpha3:
     image: dgraph/dgraph:latest
     hostname: "alpha3"
@@ -71,6 +74,6 @@ services:
       placement:
         constraints:
           - node.hostname == aws03
-    command: dgraph alpha --my=alpha3:7082 --zero=zero:5080 -o 2
+    command: dgraph alpha --my=alpha3:7082 --security whitelist=10.0.0.0/8,172.0.0.0/8,192.168.0.0/16,127.0.0.1 --zero=zero:5080 -o 2
 volumes:
   data-volume:
