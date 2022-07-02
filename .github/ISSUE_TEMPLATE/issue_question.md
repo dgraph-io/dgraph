@@ -1,5 +1,5 @@
 ---
-name: 'Issue: Question'
+name: Issue/Question
 
 about: The issue tracker is not for questions. Please ask questions on https://discuss.dgraph.io
 or our Slack Channel.
