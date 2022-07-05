@@ -9,6 +9,7 @@ about: File a bug report.
 
 ### What version of Dgraph are you using?
 
+
 ### Have you tried reproducing the issue with the latest release?
 
 
@@ -19,3 +20,4 @@ about: File a bug report.
 
 
 ### Expected behaviour and actual result.
+

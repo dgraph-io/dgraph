@@ -25,4 +25,5 @@ Please add a description with these things:
 <!--
 Please add a description with these things:
 1. Explain the solution to make it easier to review the PR.
+2. Make it easier for the reviewer by describing complex sections with comments.
 -->
