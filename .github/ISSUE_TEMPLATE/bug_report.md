@@ -10,6 +10,9 @@ about: File a bug report.
 ### What version of Dgraph are you using?
 
 
+### Tell us a little more about your go-environment?
+
+
 ### Have you tried reproducing the issue with the latest release?
 
 
