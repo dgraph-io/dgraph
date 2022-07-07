@@ -10,7 +10,7 @@ on:
     branches: 
       - '*'
 jobs:
-  vm:
+  CI:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -18,12 +18,12 @@ jobs:
         uses: actions/setup-go@v3
         with:
           go-version: 1.18
-      # - name: Make OSS Build
-      #  run: make oss
-      # - name: Make macOS build
-      #  run: make GOOS=darwin dgraph
-      # - name: Make Windows Build
-      #  run: make GOOS=windows dgraph
+      - name: Make OSS Build
+        run: make oss
+      - name: Make macOS build
+        run: make GOOS=darwin dgraph
+      - name: Make Windows Build
+        run: make GOOS=windows dgraph
       - name: Make Linux Build 
         run: make GOOS=linux dgraph
       - name: Install protobuf-compiler
@@ -46,11 +46,11 @@ jobs:
           if [ -d ./t ]; then
             #docker rmi dgraph/dgraph-lambda:latest
             export GOPATH=$HOME/go
-            ls -alrt ~/go || true
+            ls -alrt ~/go || true # TODO: fix later
             cd t; go build .
-            mkdir ~/go || true
-            mkdir ~/go/bin || true
-            cp ~/work/dgraph/dgraph/dgraph ~/go/bin || true
+            mkdir ~/go || true # TODO: fix later
+            mkdir ~/go/bin || true # TODO: fix later
+            cp ~/work/dgraph/dgraph/dgraph ~/go/bin || true # TODO: fix later $GOPATH issue
             export GOPATH=~/go
             ls -alrt $GOPATH/bin
             ./t -r
@@ -65,5 +65,3 @@ jobs:
 
             ./test.sh
           fi
-
-
