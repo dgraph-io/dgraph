@@ -63,5 +63,5 @@ jobs:
             docker ps -a --filter label="cluster=test" --format "{{.Names}}" \
             | xargs -r docker rm -f | sed 's/^/Removed /'
 
-            ./test.sh
+            ./test.sh # this was the older way to run tests
           fi
