@@ -44,11 +44,11 @@ jobs:
 
           # Run the Go test script. Or, run test.sh if the Go test script doesn't exist.
           if [ -d ./t ]; then
-            docker rmi dgraph/dgraph-lambda:latest
+            #docker rmi dgraph/dgraph-lambda:latest
             cd t; go build .
             ./t -r
             ./t --skip tlstest,systest/backup,systest/online-restore,systest/loader
-          else
+          else # unwanted
             # Stop running containers
             docker ps --filter label="cluster=test" --format "{{.Names}}" \
             | xargs -r docker stop | sed 's/^/Stopped /'
