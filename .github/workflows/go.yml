@@ -18,8 +18,8 @@ jobs:
         uses: actions/setup-go@v3
         with:
           go-version: 1.18
-      - name: Make OSS Build
-        run: make oss
+      # - name: Make OSS Build
+      #  run: make oss
       # - name: Make macOS build
       #  run: make GOOS=darwin dgraph
       # - name: Make Windows Build
@@ -48,11 +48,13 @@ jobs:
             export GOPATH=$HOME/go
             ls -alrt ~/go || true
             cd t; go build .
+            mkdir ~/go
+            mkdir ~/go/bin
+            cp ~/work/dgraph/dgraph/dgraph ~/go/bin
+            export GOPATH=~/go
+            ls -alrt $GOPATH/bin
             ./t -r
             ./t --skip tlstest,systest/backup,systest/online-restore,systest/loader || true
-            echo pwd
-            echo $GOPATH
-            ls $GOPATH/bin
           else # unwanted
             # Stop running containers
             docker ps --filter label="cluster=test" --format "{{.Names}}" \
