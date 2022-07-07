@@ -48,9 +48,9 @@ jobs:
             export GOPATH=$HOME/go
             ls -alrt ~/go || true
             cd t; go build .
-            mkdir ~/go
-            mkdir ~/go/bin
-            cp ~/work/dgraph/dgraph/dgraph ~/go/bin
+            mkdir ~/go || true
+            mkdir ~/go/bin || true
+            cp ~/work/dgraph/dgraph/dgraph ~/go/bin || true
             export GOPATH=~/go
             ls -alrt $GOPATH/bin
             ./t -r
