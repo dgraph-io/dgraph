@@ -26,6 +26,8 @@ jobs:
         run: make GOOS=windows dgraph
       - name: Make Linux Build 
         run: make GOOS=linux dgraph
+      - name: Install protobuf-compiler
+        run: sudo apt-get install -y protobuf-compiler
       - name: Check protobuf
         run: |
           cd ./protos
