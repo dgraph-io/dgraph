@@ -1,0 +1,22 @@
+name: CI
+on:
+  push:
+    tags:
+      - v*
+    branches:
+      - master
+      - 'release/**'
+  pull_request:
+    branches: 
+      - '*'
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Go
+      uses: actions/setup-go@v3
+      with:
+        go-version: 1.18
+    - name: Make OSS Build
+      run: make oss
