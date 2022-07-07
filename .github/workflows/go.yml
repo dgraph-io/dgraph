@@ -47,7 +47,10 @@ jobs:
             #docker rmi dgraph/dgraph-lambda:latest
             cd t; go build .
             ./t -r
-            ./t --skip tlstest,systest/backup,systest/online-restore,systest/loader
+            ./t --skip tlstest,systest/backup,systest/online-restore,systest/loader || true
+            echo pwd
+            echo $GOPATH
+            ls $GOPATH/bin
           else # unwanted
             # Stop running containers
             docker ps --filter label="cluster=test" --format "{{.Names}}" \
