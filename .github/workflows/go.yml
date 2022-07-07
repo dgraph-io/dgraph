@@ -20,10 +20,10 @@ jobs:
           go-version: 1.18
       - name: Make OSS Build
         run: make oss
-      - name: Make macOS build
-        run: make GOOS=darwin dgraph
-      - name: Make Windows Build
-        run: make GOOS=windows dgraph
+      # - name: Make macOS build
+      #  run: make GOOS=darwin dgraph
+      # - name: Make Windows Build
+      #  run: make GOOS=windows dgraph
       - name: Make Linux Build 
         run: make GOOS=linux dgraph
       - name: Install protobuf-compiler
@@ -46,6 +46,7 @@ jobs:
           if [ -d ./t ]; then
             #docker rmi dgraph/dgraph-lambda:latest
             export GOPATH=$HOME/go
+            ls -alrt ~/go || true
             cd t; go build .
             ./t -r
             ./t --skip tlstest,systest/backup,systest/online-restore,systest/loader || true
