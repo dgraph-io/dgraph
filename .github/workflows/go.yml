@@ -45,6 +45,7 @@ jobs:
           # Run the Go test script. Or, run test.sh if the Go test script doesn't exist.
           if [ -d ./t ]; then
             #docker rmi dgraph/dgraph-lambda:latest
+            export GOPATH=$HOME/go
             cd t; go build .
             ./t -r
             ./t --skip tlstest,systest/backup,systest/online-restore,systest/loader || true
