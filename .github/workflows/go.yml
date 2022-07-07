@@ -20,3 +20,12 @@ jobs:
         go-version: 1.18
     - name: Make OSS Build
       run: make oss
+    - name: Make macOS build
+      run: make GOOS=darwin dgraph
+    - name: Make Windows Build
+      run: make GOOS=windows dgraph
+    - name: Make Linux Build 
+      run: make GOOS=linux dgraph
+    - name: Check protobuf
+      run: echo "test"
+        
