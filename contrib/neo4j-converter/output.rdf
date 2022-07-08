@@ -46,10 +46,10 @@
 <_:k_195> <released> "" .
 <_:k_195> <tagline> "" .
 <_:k_195> <title> "" .
-<_:k_189> <ACTED_IN> <_:k_188> (  roles="Neo" ) .
-<_:k_190> <ACTED_IN> <_:k_188> (  roles="Trinity" ) .
-<_:k_191> <ACTED_IN> <_:k_188> (  roles="Morpheus" ) .
-<_:k_192> <ACTED_IN> <_:k_188> (  roles="Agent Smith" ) .
+<_:k_189> <ACTED_IN> <_:k_188> (  roles="\"Neo\"" ) .
+<_:k_190> <ACTED_IN> <_:k_188> (  roles="\"Trinity\"" ) .
+<_:k_191> <ACTED_IN> <_:k_188> (  roles="\"Morpheus\"" ) .
+<_:k_192> <ACTED_IN> <_:k_188> (  roles="\"Agent Smith\"" ) .
 <_:k_193> <DIRECTED> <_:k_188>  .
 <_:k_194> <DIRECTED> <_:k_188>  .
 <_:k_195> <PRODUCED> <_:k_188>  .
