@@ -1,0 +1,67 @@
+name: CI
+on:
+  push:
+    tags:
+      - v*
+    branches:
+      - master
+      - 'release/**'
+  pull_request:
+    branches: 
+      - '*'
+jobs:
+  CI:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.18
+      - name: Make OSS Build
+        run: make oss
+      - name: Make macOS build
+        run: make GOOS=darwin dgraph
+      - name: Make Windows Build
+        run: make GOOS=windows dgraph
+      - name: Make Linux Build 
+        run: make GOOS=linux dgraph
+      - name: Install protobuf-compiler
+        run: sudo apt-get install -y protobuf-compiler
+      - name: Check protobuf
+        run: |
+          cd ./protos
+          go mod tidy
+          make regenerate
+          git diff --exit-code -- .
+      - name: Run unit tests
+        run: |
+          #!/bin/bash
+          if [ -f go.mod ]; then
+            export GO111MODULE=on
+          fi
+
+
+          # Run the Go test script. Or, run test.sh if the Go test script doesn't exist.
+          if [ -d ./t ]; then
+            #docker rmi dgraph/dgraph-lambda:latest
+            export GOPATH=$HOME/go
+            ls -alrt ~/go || true # TODO: fix later
+            cd t; go build .
+            mkdir ~/go || true # TODO: fix later
+            mkdir ~/go/bin || true # TODO: fix later
+            cp ~/work/dgraph/dgraph/dgraph ~/go/bin || true # TODO: fix later $GOPATH issue
+            export GOPATH=~/go
+            ls -alrt $GOPATH/bin
+            ./t -r
+            ./t --skip tlstest,systest/backup,systest/online-restore,systest/loader || true
+          else # unwanted
+            # Stop running containers
+            docker ps --filter label="cluster=test" --format "{{.Names}}" \
+            | xargs -r docker stop | sed 's/^/Stopped /'
+            # Remove all containers
+            docker ps -a --filter label="cluster=test" --format "{{.Names}}" \
+            | xargs -r docker rm -f | sed 's/^/Removed /'
+
+            ./test.sh # this was the older way to run tests
+          fi

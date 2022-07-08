@@ -16,10 +16,11 @@ jobs:
       - name: golangci-lint
         env:
           # prevent OOM
-          GOGC: 20
+          GOGC: 10
         uses: golangci/golangci-lint-action@v2
         with:
           # Required: the version of golangci-lint is required and must be specified without patch version: we always use the latest patch version.
           version: v1.36
           only-new-issues: true
-          args: --timeout=2m
+          args: --timeout=10m
+          skip-go-installation: true

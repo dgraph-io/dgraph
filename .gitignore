@@ -4,6 +4,12 @@
 /dgraph-bulk-loader
 /osx-docker-gopath
 
+# test
+t/test*log
+
+# secrets
+compose/hmac_secret_file
+
 # fuzzing output
 gql/gql-fuzz.zip
 gql/fuzz-data/crashers
