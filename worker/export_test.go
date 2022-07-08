@@ -133,6 +133,8 @@ func populateGraphExport(t *testing.T) {
 }
 
 func initTestExport(t *testing.T, schemaStr string) {
+	// Export is needed by task framework, hence this initialization is needed.
+	groups().Node = &node{ops: make(map[op]operation)}
 	require.NoError(t, schema.ParseBytes([]byte(schemaStr), 1))
 
 	val, err := (&pb.SchemaUpdate{ValueType: pb.Posting_UID}).Marshal()

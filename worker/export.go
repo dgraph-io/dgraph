@@ -425,9 +425,16 @@ func export(ctx context.Context, in *pb.ExportRequest) (ExportedFiles, error) {
 	if err := posting.Oracle().WaitForTs(ctx, in.ReadTs); err != nil {
 		return nil, err
 	}
+
+	closer, err := groups().Node.startTask(opExport)
+	if err != nil {
+		return nil, errors.Wrapf(err, "cannot start export operation")
+	}
+	defer closer.Done()
+
 	glog.Infof("Running export for group %d at timestamp %d.", in.GroupId, in.ReadTs)
 
-	return exportInternal(ctx, in, pstore, false)
+	return exportInternal(closer.Ctx(), in, pstore, false)
 }
 
 func ToExportKvList(pk x.ParsedKey, pl *posting.List, in *pb.ExportRequest) (*bpb.KVList, error) {

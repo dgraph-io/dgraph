@@ -166,6 +166,10 @@ func (id op) String() string {
 		return "opBackup"
 	case opPredMove:
 		return "opPredMove"
+	case opExport:
+		return "opExport"
+	case opDrop:
+		return "opDrop"
 	default:
 		return "opUnknown"
 	}
@@ -173,11 +177,15 @@ func (id op) String() string {
 
 const (
 	opRollup op = iota + 1
-	opSnapshot
 	opIndexing
-	opRestore
-	opBackup
+	opSnapshot
 	opPredMove
+	// From here onwards the priority of an operation is defined from low to high. i.e. restore
+	// operation has the highest priority while drop operation has the lowest.
+	opDrop
+	opExport
+	opBackup
+	opRestore
 )
 
 // startTask is used for the tasks that do not require tracking of timestamp.
@@ -189,8 +197,11 @@ func (n *node) startTask(id op) (*z.Closer, error) {
 
 // startTaskAtTs is used to check whether an op is already running. If a rollup is running,
 // it is canceled and startTask will wait until it completes before returning.
-// If the same task is already running, this method returns an errror.
+// If the same task is already running, this method returns an error.
 // Restore operations have preference and cancel all other operations, not just rollups.
+// It is followed by backup, export, and drop operations in decreasing order of preference.
+// Predicate move, snapshot transfer and indexing operations follow next with equal priority.
+// A task with higher preference cancels the lower preference tasks.
 // You should only call Done() on the returned closer. Calling other functions (such as
 // SignalAndWait) for closer could result in panics. For more details, see GitHub issue #5034.
 func (n *node) startTaskAtTs(id op, ts uint64) (*z.Closer, error) {
@@ -219,29 +230,6 @@ func (n *node) startTaskAtTs(id op, ts uint64) (*z.Closer, error) {
 			return nil, errors.Errorf("another operation is already running")
 		}
 		go posting.IncrRollup.Process(closer)
-	case opRestore:
-		// Restores cancel all other operations, except for other restores since
-		// only one restore operation should be active any given moment.
-		for otherId, otherOp := range n.ops {
-			if otherId == opRestore {
-				return nil, errors.Errorf("another restore operation is already running")
-			}
-			// Remove from map and signal the closer to cancel the operation.
-			delete(n.ops, otherId)
-			otherOp.SignalAndWait()
-		}
-	case opBackup:
-		// Backup cancels all other operations, except for other backups since
-		// only one backup operation should be active any given moment. Also, indexing at higher
-		// timestamp can also run concurrently with backup.
-		for otherId, otherOp := range n.ops {
-			if otherId == opBackup {
-				return nil, errors.Errorf("another backup operation is already running")
-			}
-			// Remove from map and signal the closer to cancel the operation.
-			delete(n.ops, otherId)
-			otherOp.SignalAndWait()
-		}
 	case opIndexing:
 		for otherId, otherOp := range n.ops {
 			switch otherId {
@@ -249,9 +237,8 @@ func (n *node) startTaskAtTs(id op, ts uint64) (*z.Closer, error) {
 				if otherOp.ts < ts {
 					// If backup is running at higher timestamp, then indexing can't be executed.
 					continue
-				} else {
-					return nil, errors.Errorf("operation %s is already running", otherId)
 				}
+				return nil, errors.Errorf("operation %s is already running", otherId)
 			case opRollup:
 				// Remove from map and signal the closer to cancel the operation.
 				delete(n.ops, otherId)
@@ -269,6 +256,17 @@ func (n *node) startTaskAtTs(id op, ts uint64) (*z.Closer, error) {
 			} else {
 				return nil, errors.Errorf("operation %s is already running", otherId)
 			}
+		}
+	case opRestore, opBackup, opExport, opDrop:
+		// Restore, backup, export and drop operations fail when a high priority task is running.
+		// Else, they cancel all other operations.
+		for otherId, otherOp := range n.ops {
+			if otherId >= id {
+				return nil, errors.Errorf("operation %s is already running", otherId)
+			}
+			// Remove from map and signal the closer to cancel the operation.
+			delete(n.ops, otherId)
+			otherOp.SignalAndWait()
 		}
 	default:
 		glog.Errorf("Got an unhandled operation %s. Ignoring...", id)
@@ -536,6 +534,38 @@ func (n *node) concMutations(ctx context.Context, m *pb.Mutations, txn *posting.
 	return rerr
 }
 
+func dropAll() error {
+	posting.Oracle().ResetTxns()
+	schema.State().DeleteAll()
+
+	if err := posting.DeleteAll(); err != nil {
+		return err
+	}
+
+	// Clear entire cache.
+	posting.ResetCache()
+
+	// It should be okay to set the schema at timestamp 1 after drop all operation.
+	if groups().groupId() == 1 {
+		initialSchema := schema.InitialSchema(x.GalaxyNamespace)
+		for _, s := range initialSchema {
+			if err := applySchema(s, 1); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Propose initial types as well after a drop all as they would have been cleared.
+	initialTypes := schema.InitialTypes(x.GalaxyNamespace)
+	for _, t := range initialTypes {
+		if err := updateType(t.GetTypeName(), *t, 1); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // We don't support schema mutations across nodes in a transaction.
 // Wait for all transactions to either abort or complete and all write transactions
 // involving the predicate are aborted until schema mutations are done.
@@ -550,18 +580,19 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		// Ensures nothing get written to disk due to commit proposals.
 		n.keysWritten.rejectBeforeIndex = proposal.Index
 
-		// Stop rollups, otherwise we might end up overwriting some new data.
-		n.stopTask(opRollup)
-		defer n.startTask(opRollup)
+		closer, err := n.startTask(opDrop)
+		if err != nil {
+			return errors.Wrapf(err, "unable to start task opDrop")
+		}
+		defer closer.Done()
 
 		posting.Oracle().ResetTxnsForNs(ns)
 		if err := posting.DeleteData(ns); err != nil {
 			return err
 		}
 
-		// TODO: Revisit this when we work on posting cache. Clear entire cache.
-		// We don't want to drop entire cache, just due to one namespace.
-		// posting.ResetCache()
+		// TODO: We don't want to drop entire cache, just due to one namespace.
+		posting.ResetCache()
 		return nil
 	}
 
@@ -569,39 +600,12 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		// Ensures nothing get written to disk due to commit proposals.
 		n.keysWritten.rejectBeforeIndex = proposal.Index
 
-		// Stop rollups, otherwise we might end up overwriting some new data.
-		n.stopTask(opRollup)
-		defer n.startTask(opRollup)
-
-		posting.Oracle().ResetTxns()
-		schema.State().DeleteAll()
-
-		if err := posting.DeleteAll(); err != nil {
-			return err
+		closer, err := n.startTask(opDrop)
+		if err != nil {
+			return errors.Wrapf(err, "unable to start task opDrop")
 		}
-
-		// Clear entire cache.
-		posting.ResetCache()
-
-		// It should be okay to set the schema at timestamp 1 after drop all operation.
-		if groups().groupId() == 1 {
-			initialSchema := schema.InitialSchema(x.GalaxyNamespace)
-			for _, s := range initialSchema {
-				if err := applySchema(s, 1); err != nil {
-					return err
-				}
-			}
-		}
-
-		// Propose initial types as well after a drop all as they would have been cleared.
-		initialTypes := schema.InitialTypes(x.GalaxyNamespace)
-		for _, t := range initialTypes {
-			if err := updateType(t.GetTypeName(), *t, 1); err != nil {
-				return err
-			}
-		}
-
-		return nil
+		defer closer.Done()
+		return dropAll()
 	}
 
 	if proposal.Mutations.DropOp == pb.Mutations_TYPE {
