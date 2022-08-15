@@ -2026,7 +2026,7 @@ func validatePredName(name string) error {
 // formatTypes takes a list of TypeUpdates and converts them in to a list of
 // maps in a format that is human-readable to be marshaled into JSON.
 func formatTypes(typeList []*pb.TypeUpdate) []map[string]interface{} {
-	var res []map[string]interface{}
+	res := make([]map[string]interface{}, 0, len(typeList))
 	for _, typ := range typeList {
 		typeMap := make(map[string]interface{})
 		typeMap["name"] = typ.TypeName

@@ -1950,7 +1950,7 @@ func idFilter(filter map[string]interface{}, idField schema.FieldDefinition) []u
 	if idsFilter == nil {
 		return nil
 	}
-	idsSlice := idsFilter.([]interface{})
+	ids := idsFilter.([]interface{})
 	return convertIDs(idsSlice)
 }
 
@@ -2026,7 +2026,7 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 	var ands []*gql.FilterTree
 	var or *gql.FilterTree
 	// Get a stable ordering so we generate the same thing each time.
-	var keys []string
+	keys := make([]string, 0, len(filter))
 	for key := range filter {
 		keys = append(keys, key)
 	}
@@ -2271,7 +2271,7 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 }
 
 func buildHasFilterList(typ schema.Type, fieldsSlice []interface{}) []*gql.FilterTree {
-	var ands []*gql.FilterTree
+	ands := make([]*gql.FilterTree, 0, len(fieldsSlice))
 	fn := "has"
 	for _, fieldName := range fieldsSlice {
 		ands = append(ands, &gql.FilterTree{

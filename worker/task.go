@@ -1477,7 +1477,7 @@ func (qs *queryState) filterGeoFunction(ctx context.Context, arg funcArgs) error
 	attr := arg.q.Attr
 
 	uids := sroar.NewBitmap()
-	var matrix []*sroar.Bitmap
+	matrix := make([]*sroar.Bitmap, 0, len(arg.out.UidMatrix))
 	for _, l := range arg.out.UidMatrix {
 		bm := codec.FromList(l)
 		matrix = append(matrix, bm)
@@ -1561,7 +1561,7 @@ func (qs *queryState) filterStringFunction(arg funcArgs) error {
 	attr := arg.q.Attr
 
 	uids := sroar.NewBitmap()
-	var matrix []*sroar.Bitmap
+	matrix := make([]*sroar.Bitmap, 0, len(arg.out.UidMatrix))
 	for _, l := range arg.out.UidMatrix {
 		bm := codec.FromList(l)
 		matrix = append(matrix, bm)

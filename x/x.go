@@ -1019,8 +1019,6 @@ func GetDgraphClient(conf *viper.Viper, login bool) (*dgo.Dgraph, CloseFunc) {
 	Checkf(err, "While loading TLS configuration")
 
 	ds := strings.Split(alphas, ",")
-	var conns []*grpc.ClientConn
-	var clients []api.DgraphClient
 
 	retries := 1
 	if conf.IsSet("retries") {
@@ -1034,6 +1032,9 @@ func GetDgraphClient(conf *viper.Viper, login bool) (*dgo.Dgraph, CloseFunc) {
 	if conf.GetString("slash_grpc_endpoint") != "" && conf.IsSet("auth_token") {
 		dialOpts = append(dialOpts, WithAuthorizationCredentials(conf.GetString("auth_token")))
 	}
+
+	conns := make([]*grpc.ClientConn, 0, len(ds))
+	clients := make([]api.DgraphClient, 0, len(ds))
 
 	for _, d := range ds {
 		var conn *grpc.ClientConn

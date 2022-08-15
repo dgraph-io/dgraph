@@ -51,7 +51,7 @@ func (g *usingColumns) generate(info *sqlTable, values []interface{}) string {
 	}
 
 	// use the primary key indices to retrieve values in the current row
-	var parts []string
+	parts := make([]string, 0, len(g.primaryKeyIndices)+1)
 	parts = append(parts, info.tableName)
 	for _, columnIndex := range g.primaryKeyIndices {
 		strVal, err := getValue(info.columns[columnIndex.name].dataType,

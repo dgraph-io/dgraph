@@ -258,7 +258,7 @@ func (c *CustomClaims) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	var result map[string]interface{}
+	result map[string]interface{}
 	if err := json.Unmarshal(data, &result); err != nil {
 		return err
 	}

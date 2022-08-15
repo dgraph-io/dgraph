@@ -1,3 +1,4 @@
+//go:build !oss
 // +build !oss
 
 /*
@@ -953,7 +954,7 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) er
 
 	// Need this to efficiently identify blocked variables from the
 	// list of blocked predicates
-	predToVarsMap := make(map[string]string)
+	predToVarsMap := make(map[string]string, len(varsToPredMap))
 	for k, v := range varsToPredMap {
 		predToVarsMap[v] = k
 	}

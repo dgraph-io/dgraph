@@ -86,7 +86,7 @@ func NamespaceAttr(ns uint64, attr string) string {
 }
 
 func NamespaceAttrList(ns uint64, preds []string) []string {
-	var resp []string
+	resp := make([]string, 0, len(preds))
 	for _, pred := range preds {
 		resp = append(resp, NamespaceAttr(ns, pred))
 	}
@@ -121,7 +121,7 @@ func ParseNamespace(attr string) uint64 {
 }
 
 func ParseAttrList(attrs []string) []string {
-	var resp []string
+	resp := make([]string, 0, len(attrs))
 	for _, attr := range attrs {
 		resp = append(resp, ParseAttr(attr))
 	}

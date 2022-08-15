@@ -285,7 +285,7 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest) error {
 
 	// Get the current membership state and parse it for easier processing.
 	state := GetMembershipState()
-	var groups []uint32
+	groups := make([]uint32, 0, len(state.Groups))
 	predMap := make(map[uint32][]string)
 	for gid, group := range state.Groups {
 		groups = append(groups, gid)

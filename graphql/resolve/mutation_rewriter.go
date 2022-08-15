@@ -1935,7 +1935,7 @@ func existenceQueries(
 	}
 
 	// Iterate on fields and call the same function recursively.
-	var fields []string
+	fields := make([]string, 0, len(obj))
 	for field := range obj {
 		fields = append(fields, field)
 	}

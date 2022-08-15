@@ -2317,9 +2317,9 @@ func (t *astType) Field(name string) FieldDefinition {
 }
 
 func (t *astType) Fields() []FieldDefinition {
-	var result []FieldDefinition
-
-	for _, fld := range t.inSchema.schema.Types[t.Name()].Fields {
+	fields := t.inSchema.schema.Types[t.Name()].Fields
+	result := make([]FieldDefinition, 0, len(fields))
+	for _, fld := range fields {
 		result = append(result,
 			&fieldDefinition{
 				fieldDef:        fld,

@@ -2607,7 +2607,7 @@ func (sg *SubGraph) sortAndPaginateUsingFacet(ctx context.Context) error {
 	}
 
 	orderbyKeys := make(map[string]int)
-	var orderDesc []bool
+	orderDesc := make([]bool, 0, len(sg.Params.FacetsOrder))
 	for i, order := range sg.Params.FacetsOrder {
 		orderbyKeys[order.Key] = i
 		orderDesc = append(orderDesc, order.Desc)

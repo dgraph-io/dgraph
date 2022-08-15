@@ -65,7 +65,7 @@ func toGqlErrorList(errs gqlerror.List) x.GqlErrorList {
 }
 
 func convertLocations(locs []gqlerror.Location) []x.Location {
-	var result []x.Location
+	result := make([]x.Location, 0, len(locs))
 	for _, loc := range locs {
 		result = append(result, x.Location{Line: loc.Line, Column: loc.Column})
 	}

@@ -159,7 +159,7 @@ func (s *schemaStore) getPredicates(db *badger.DB) []string {
 		continue
 	}
 
-	var preds []string
+	preds := make([]string, 0, len(m))
 	for pred := range m {
 		preds = append(preds, pred)
 	}

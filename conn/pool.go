@@ -94,7 +94,7 @@ func (p *Pools) Get(addr string) (*Pool, error) {
 func (p *Pools) GetAll() []*Pool {
 	p.RLock()
 	defer p.RUnlock()
-	var pool []*Pool
+	pool := make([]*Pool, 0, len(p.all))
 	for _, v := range p.all {
 		pool = append(pool, v)
 	}

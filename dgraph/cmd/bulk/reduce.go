@@ -70,8 +70,7 @@ func (r *reducer) run() error {
 			defer thr.Done(nil)
 
 			mapFiles := filenamesInTree(dirs[shardId])
-			var mapItrs []*mapIterator
-
+			mapItrs := make([]*mapIterator, 0, len(mapFiles))
 			// Dedup the partition keys.
 			partitions := make(map[string]struct{})
 			for _, mapFile := range mapFiles {

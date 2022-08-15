@@ -205,9 +205,9 @@ func (s *Server) Leader(gid uint32) *conn.Pool {
 
 // KnownGroups returns a list of the known groups.
 func (s *Server) KnownGroups() []uint32 {
-	var groups []uint32
 	s.RLock()
 	defer s.RUnlock()
+	groups := make([]uint32, 0, len(s.state.Groups))
 	for group := range s.state.Groups {
 		groups = append(groups, group)
 	}

@@ -66,7 +66,7 @@ func main() {
 		word  string
 		count int
 	}
-	var wcs []wc
+	wcs := make([]wc, 0, len(wordCount))
 	for w, c := range wordCount {
 		wcs = append(wcs, wc{w, c})
 	}
@@ -195,8 +195,9 @@ func setup(c *dgo.Dgraph, sentences []string) []string {
 	x.Check(err)
 	x.Check(txn.Commit(ctx))
 
-	var uids []string
-	for _, uid := range assigned.GetUids() {
+	uidMap := assigned.GetUids()
+	uids := make([]string, 0, len(uidMap))
+	for _, uid := range uidMap {
 		uids = append(uids, uid)
 	}
 	return uids
@@ -321,7 +322,7 @@ func checkInvariants(c *dgo.Dgraph, uids []string, sentences []string) error {
 	x.AssertTrue(len(decode.Q) == len(sentences))
 
 	index := map[string][]string{} // term to uid list
-	var gotSentences []string
+	gotSentences := make([]string, 0, len(decode.Q))
 	for _, node := range decode.Q {
 		x.AssertTrue(node.Sentence != nil)
 		x.AssertTrue(node.Uid != nil)
@@ -359,7 +360,7 @@ func checkInvariants(c *dgo.Dgraph, uids []string, sentences []string) error {
 			}
 		}{}
 		x.Check(json.Unmarshal(resp.GetJson(), &decode))
-		var gotUids []string
+		gotUids := make([]string, 0, len(decode.Q))
 		for _, node := range decode.Q {
 			x.AssertTrue(node.Uid != nil)
 			gotUids = append(gotUids, *node.Uid)

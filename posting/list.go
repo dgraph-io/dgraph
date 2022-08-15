@@ -1666,7 +1666,7 @@ func (out *rollupOutput) updateSplits() {
 		out.plist = &pb.PostingList{}
 	}
 
-	var splits []uint64
+	splits := make([]uint64, 0, len(out.parts))
 	for startUid := range out.parts {
 		splits = append(splits, startUid)
 	}

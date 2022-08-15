@@ -278,7 +278,7 @@ func (txn *Txn) ToSkiplist() error {
 	cache.Lock()
 	defer cache.Unlock()
 
-	var keys []string
+	keys := make([]string, 0, len(cache.deltas))
 	for key := range cache.deltas {
 		keys = append(keys, key)
 	}

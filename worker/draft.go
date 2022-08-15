@@ -334,7 +334,7 @@ func GetOngoingTasks() []string {
 
 	n.opsLock.Lock()
 	defer n.opsLock.Unlock()
-	var tasks []string
+	tasks := make([]string, 0, len(n.ops))
 	for id := range n.ops {
 		tasks = append(tasks, id.String())
 	}

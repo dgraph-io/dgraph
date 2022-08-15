@@ -81,7 +81,7 @@ func (s *state) createAccounts(dg *dgo.Dgraph) {
 	`
 	x.Check(dg.Alter(context.Background(), &op))
 
-	var all []account
+	all := make([]account, 0, *users)
 	for i := 1; i <= *users; i++ {
 		a := account{
 			Key: i,

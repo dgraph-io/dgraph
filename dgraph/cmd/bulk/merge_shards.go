@@ -51,7 +51,7 @@ func mergeMapShardsIntoReduceShards(opt *options) {
 	shardDirs = shardDirs[1:]
 	sortBySize(shardDirs)
 
-	var reduceShards []string
+	reduceShards := make([]string, 0, opt.ReduceShards)
 	for i := 0; i < opt.ReduceShards; i++ {
 		shardDir := filepath.Join(opt.TmpDir, reduceShardDir, fmt.Sprintf("shard_%d", i))
 		x.Check(os.MkdirAll(shardDir, 0750))
