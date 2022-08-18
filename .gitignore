@@ -34,3 +34,13 @@ dgraph.iml
 
 vendor
 .minio.sys
+
+# Local test files
+contrib/local-test/dql-data.json
+contrib/local-test/dql-data.rdf
+contrib/local-test/gql-data.json
+contrib/local-test/query.dql
+contrib/local-test/query.gql
+contrib/local-test/schema.dql
+contrib/local-test/schema.graphql
+contrib/local-test/variables.json

@@ -69,6 +69,13 @@ image:
 	@docker build -f contrib/Dockerfile -t dgraph/dgraph:$(subst /,-,${BUILD_BRANCH}) .
 	@rm -r linux
 
+image-local:
+	@GOOS=linux $(MAKE) dgraph
+	@mkdir -p linux
+	@mv ./dgraph/dgraph ./linux/dgraph
+	@docker build -f contrib/Dockerfile -t dgraph/dgraph:local .
+	@rm -r linux
+
 help:
 	@echo
 	@echo Build commands:

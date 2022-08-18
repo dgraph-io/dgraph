@@ -1,0 +1,25 @@
+version: "3.8"
+
+#
+# A simple compose file for running single zero and alpha
+#
+services:
+
+  alpha:
+    # override the root command with the lambda arguments
+    command: >
+      dgraph alpha --my=alpha:7080 --zero=zero:5080
+        --security whitelist=0.0.0.0/0
+        --logtostderr -v=2
+        --graphql lambda-url=http://host.docker.internal:8686/graphql-worker
+        --telemetry sentry=false
+  lambda: 
+    image: dgraph/dgraph-lambda:1.4.0
+    volumes:
+      - ./scripts/script.js:/app/script/script.js:ro
+    environment:
+      - DGRAPH_URL=http://host.docker.internal:8080
+      - MAX_MEMORY_LIMIT=256M
+    ports:
+      - 8686:8686
+  
