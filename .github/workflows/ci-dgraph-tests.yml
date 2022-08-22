@@ -22,12 +22,9 @@ jobs:
       - name: Run unit tests
         run: |
           #!/bin/bash
-          if [ -f go.mod ]; then
-            export GO111MODULE=on
-          fi
           # go env settings
           export GOPATH=~/go
-          # create go path structures
+          # move the binary
           cp ~/work/dgraph/dgraph/dgraph/dgraph ~/go/bin 
           # build the test binary
           cd t; go build .
