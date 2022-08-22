@@ -1,4 +1,4 @@
-name: Labeler
+name: labeler
 on:
   pull_request:
     branches:

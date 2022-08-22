@@ -23,4 +23,3 @@ problems: they should not focus on and need not propose solutions.
 
 
 ### Any external references to support your case
-
