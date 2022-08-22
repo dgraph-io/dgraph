@@ -30,4 +30,4 @@ jobs:
           cd t; go build .
           # run the tests
           ./t -r
-          ./t --skip tlstest,systest,dgraph,ee
+          ./t --skip tlstest,systest/backup,systest/online-restore,systest/loader
