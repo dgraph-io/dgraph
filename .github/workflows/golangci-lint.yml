@@ -1,22 +1,19 @@
-name: golangci-lint
-on:
-  push:
-    tags:
-      - v*
-    branches:
-      - master
-      - 'release/**'
-  pull_request:
+name: ci-golang-lint
+on: [push, pull_request]
 jobs:
-  golangci:
+  golang-lint:
     name: lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - name: golangci-lint
+      - name: golang-lint
+        env:
+          # prevent OOM
+          GOGC: 10
         uses: golangci/golangci-lint-action@v2
         with:
           # Required: the version of golangci-lint is required and must be specified without patch version: we always use the latest patch version.
           version: v1.36
           only-new-issues: true
-          args: --timeout=2m
+          args: --timeout=10m
+          skip-go-installation: true

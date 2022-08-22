@@ -1,10 +1,10 @@
 # CODEOWNERS info: https://help.github.com/en/articles/about-code-owners
 # Owners are automatically requested for review for PRs that changes code
 # that they own.
-* @manishrjain @vvbalaji-dgraph
-/posting/ @manishrjain @martinmr
-/ee/acl/ @manishrjain @gitlw
-/wiki/ @danielmai @MichaelJCompton
-/contrib/config/ @danielmai
-/query/ @pawanrawal
-/graphql/ @pawanrawal @MichaelJCompton
+* @akon-dey @nosql22
+/posting/ @akon-dey
+/ee/ @akon-dey
+/wiki/ @MichelDiz
+/contrib/ @skrdgraph @darkn3rd
+/query/ @akon-dey
+/graphql/ @akon-dey @MichelDiz @matthewmcneely
