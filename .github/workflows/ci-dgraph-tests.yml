@@ -9,6 +9,10 @@ jobs:
         uses: actions/setup-go@v3
         with:
           go-version: 1.18
+      - name: Set up Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 16
       - name: Install protobuf-compiler
         run: sudo apt-get install -y protobuf-compiler
       - name: Make Linux Build
