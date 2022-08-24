@@ -1,9 +1,9 @@
 # CODEOWNERS info: https://help.github.com/en/articles/about-code-owners
 # Owners are automatically requested for review for PRs that changes code
 # that they own.
-* @akon-dey @nosql22
-/posting/ @akon-dey
-/ee/ @akon-dey
+* @akon-dey @nosql22 @skrdgraph @darkn3rd
+/posting/ @akon-dey @skrdgraph @darkn3rd
+/ee/ @akon-dey @skrdgraph @darkn3rd
 /contrib/ @skrdgraph @darkn3rd
-/query/ @akon-dey
+/query/ @akon-dey @skrdgraph @darkn3rd
 /graphql/ @akon-dey @MichelDiz @matthewmcneely
