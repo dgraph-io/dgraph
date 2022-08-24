@@ -22,4 +22,4 @@ about: File a bug report.
 ### Steps to reproduce the issue (command/config used to run Dgraph).
 
 
-### Expected behaviour and actual result.
+### Expected behavior and actual result.
