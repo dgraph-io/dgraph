@@ -847,12 +847,9 @@
       }
     }
 
-<<<<<<< HEAD
--
-  name: "Filter gets rewritten as @filter"
-=======
+
 - name: "eq Filter gets rewritten as root func"
->>>>>>> 314091adb (fix(GraphQL): optimize eq filter queries (#7895))
+
   gqlquery: |
     query {
       queryAuthor(filter: { name: { eq: "A. N. Author" } }) {
