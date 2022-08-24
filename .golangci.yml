@@ -3,7 +3,7 @@ run:
 
 linters-settings:
   lll:
-    line-length: 100
+    line-length: 120
 
 linters:
   disable-all: true
