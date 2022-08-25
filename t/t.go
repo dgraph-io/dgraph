@@ -156,6 +156,8 @@ func detectRace(prefix string) bool {
 }
 
 func outputLogs(prefix string) {
+	f, err := ioutil.TempFile(".", prefix+"*.log")
+	x.Check(err)
 	printLogs := func(container string) {
 		in := testutil.GetContainerInstance(prefix, container)
 		c := in.GetContainer()
