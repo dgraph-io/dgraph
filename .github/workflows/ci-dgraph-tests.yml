@@ -16,7 +16,13 @@ jobs:
       - name: Install protobuf-compiler
         run: sudo apt-get install -y protobuf-compiler
       - name: Make Linux Build
-        run: make GOOS=linux dgraph
+        run: |
+          #!/bin/bash
+          # go settings
+          export GOOS=linux
+          export GOARCH=amd64
+          # make dgraph binary
+          make dgraph
       - name: Check protobuf
         run: |
           cd ./protos
