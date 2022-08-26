@@ -29,8 +29,9 @@ MODIFIED = $(shell git diff-index --quiet HEAD || echo "-mod")
 .PHONY: dgraph all oss version install install_oss oss_install uninstall test help image image-local local-image
 all: dgraph
 
+# Make Dgraph binary and place in dgraph subdirectory
 dgraph:
-	$(MAKE) -w -C $@ all
+	GOOS=linux GOARCH=amd64 $(MAKE) -w -C $@ all
 
 oss:
 	$(MAKE) BUILD_TAGS=oss
