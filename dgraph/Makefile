@@ -25,12 +25,12 @@ BUILD_BRANCH   ?= $(shell git rev-parse --abbrev-ref HEAD)
 # NOTE: this needs to be updated with each new release
 ifeq ($(BUILD_BRANCH),master)
 # Version on master is of the format <next-release-version>-g<commit-id>
-BUILD_VERSION ?= 'v21.03.1-g'$(BUILD)
+BUILD_VERSION ?= 'v21.03.2-g'$(BUILD)
 else
 BUILD_VERSION ?= $(shell git describe --always --tags)
 endif
 
-GOOS          ?= $(shell go env GOOS)
+#GOOS          ?= $(shell go env GOOS)
 # Only build with jemalloc on Linux, mac
 ifeq ($(GOOS),$(filter $(GOOS),linux darwin))
 	BUILD_TAGS ?= jemalloc
@@ -39,6 +39,10 @@ GOPATH        ?= $(shell go env GOPATH)
 MODIFIED = $(shell git diff-index --quiet HEAD || echo "-mod")
 
 export GO111MODULE := on
+
+# Currently tests fail when Dgraph is built in arm64 (e.g. auth package)
+export GOOS := linux
+export GOARCH := amd64
 
 # Build-time Go variables
 dgraphVersion   = github.com/dgraph-io/dgraph/x.dgraphVersion

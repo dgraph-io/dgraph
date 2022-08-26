@@ -22,14 +22,14 @@ BUILD_VERSION  ?= $(shell git describe --always --tags)
 
 MODIFIED = $(shell git diff-index --quiet HEAD || echo "-mod")
 
-SUBDIRS = dgraph
+#SUBDIRS = dgraph
 
 ###############
 
-.PHONY: $(SUBDIRS) all oss version install install_oss oss_install uninstall test help image
-all: $(SUBDIRS)
+.PHONY: dgraph all oss version install install_oss oss_install uninstall test help image image-local local-image
+all: dgraph
 
-$(SUBDIRS):
+dgraph:
 	$(MAKE) -w -C $@ all
 
 oss:
@@ -58,23 +58,27 @@ uninstall:
 		$(MAKE) -C $$i uninstall; \
 	done)
 
+# ./test.sh is defunct
+# use t.go in t directory
 test:
 	@echo Running ./test.sh
 	./test.sh
 
 image:
-	@GOOS=linux $(MAKE) dgraph
+	@GOOS=linux GOARCH=amd64 $(MAKE) dgraph
 	@mkdir -p linux
 	@mv ./dgraph/dgraph ./linux/dgraph
 	@docker build -f contrib/Dockerfile -t dgraph/dgraph:$(subst /,-,${BUILD_BRANCH}) .
 	@rm -r linux
 
 image-local:
-	@GOOS=linux $(MAKE) dgraph
+	@GOOS=linux GOARCH=amd64 $(MAKE) dgraph
 	@mkdir -p linux
 	@mv ./dgraph/dgraph ./linux/dgraph
 	@docker build -f contrib/Dockerfile -t dgraph/dgraph:local .
 	@rm -r linux
+
+local-image: image-local
 
 help:
 	@echo
