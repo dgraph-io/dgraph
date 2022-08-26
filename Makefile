@@ -22,8 +22,6 @@ BUILD_VERSION  ?= $(shell git describe --always --tags)
 
 MODIFIED = $(shell git diff-index --quiet HEAD || echo "-mod")
 
-#SUBDIRS = dgraph
-
 ###############
 
 .PHONY: dgraph all oss version install install_oss oss_install uninstall test help image image-local local-image
@@ -45,19 +43,15 @@ version:
 	@echo Go version: $(shell go version)
 
 install:
-	@(set -e;for i in $(SUBDIRS); do \
-		echo Installing $$i ...; \
-		$(MAKE) -C $$i install; \
-	done)
+	@echo "Installing dgraph..."
+	@$(MAKE) -C dgraph install
 
 install_oss oss_install:
 	$(MAKE) BUILD_TAGS=oss install
 
 uninstall:
-	@(set -e;for i in $(SUBDIRS); do \
-		echo Uninstalling $$i ...; \
-		$(MAKE) -C $$i uninstall; \
-	done)
+	@echo "Uninstalling dgraph..."
+	@$(MAKE) -C dgraph uninstall
 
 # ./test.sh is defunct
 # use t.go in t directory
