@@ -30,7 +30,7 @@ else
 BUILD_VERSION ?= $(shell git describe --always --tags)
 endif
 
-#GOOS          ?= $(shell go env GOOS)
+GOOS          ?= $(shell go env GOOS)
 # Only build with jemalloc on Linux, mac
 ifeq ($(GOOS),$(filter $(GOOS),linux darwin))
 	BUILD_TAGS ?= jemalloc
@@ -39,10 +39,6 @@ GOPATH        ?= $(shell go env GOPATH)
 MODIFIED = $(shell git diff-index --quiet HEAD || echo "-mod")
 
 export GO111MODULE := on
-
-# Currently tests fail when Dgraph is built in arm64 (e.g. auth package)
-export GOOS := linux
-export GOARCH := amd64
 
 # Build-time Go variables
 dgraphVersion   = github.com/dgraph-io/dgraph/x.dgraphVersion
