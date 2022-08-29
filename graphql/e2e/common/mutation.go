@@ -3437,7 +3437,8 @@ func parallelMutations(t *testing.T) {
 }
 
 func cyclicMutation(t *testing.T) {
-	// Student HS1 -->taught by --> Teacher T0 --> teaches --> Student HS2 --> taught by --> Teacher T1 --> teaches --> Student HS1
+	// Student HS1 -->taught by --> Teacher T0 --> teaches --> Student HS2 --> taught by --> Teacher T1 --> teaches -->
+	// Student HS1
 	newStudent := &student{
 		Xid:  "HS1",
 		Name: "Stud1",
@@ -4049,7 +4050,8 @@ func int64BoundaryTesting(t *testing.T) {
 	//(2^63)=9223372036854775808
 	addPost1Params := &GraphQLParams{
 		Query: `mutation {
-            addpost1(input: [{title: "Dgraph", numLikes: 9223372036854775807 },{title: "Dgraph1", numLikes: -9223372036854775808 }]) {
+            addpost1(input: [{title: "Dgraph", numLikes: 9223372036854775807 },
+				{title: "Dgraph1", numLikes: -9223372036854775808 }]) {
                 post1 {
                     title
                     numLikes
@@ -4899,7 +4901,8 @@ func filterInUpdateMutationsWithFilterAndOr(t *testing.T) {
 	}{
 		{name: "Filter with Nested OR-AND in Update Mutation",
 			query: `mutation updatepost1{
-                        updatepost1(input:{filter:{or:[{title:{eq:"Dgraph1"}},{and:{numLikes:{eq:130}}}]},set:{numLikes:200}}){
+                        updatepost1(input:{filter:{or:[{title:{eq:"Dgraph1"}},{and:{numLikes:{eq:130}}}]},
+							set:{numLikes:200}}){
                             post1{
                                 title
                                 numLikes
@@ -5136,8 +5139,10 @@ func addMutationWithDeepExtendedTypeObjects(t *testing.T) {
 
 func addMutationOnExtendedTypeWithIDasKeyField(t *testing.T) {
 	addAstronautParams := &GraphQLParams{
-		Query: `mutation addAstronaut($id1: ID!, $name1: String!, $missionId1: String!, $id2: ID!, $name2: String!, $missionId2: String! ) {
-			addAstronaut(input: [{id: $id1, name: $name1, missions: [{id: $missionId1, designation: "Apollo1"}]}, {id: $id2, name: $name2, missions: [{id: $missionId2, designation: "Apollo11"}]}]) {
+		Query: `mutation addAstronaut($id1: ID!, $name1: String!, $missionId1: String!, $id2: ID!, 
+				$name2: String!, $missionId2: String! ) {
+			addAstronaut(input: [{id: $id1, name: $name1, missions: [{id: $missionId1, designation: "Apollo1"}]}, 
+				{id: $id2, name: $name2, missions: [{id: $missionId2, designation: "Apollo11"}]}]) {
 				astronaut(order: {asc: id}){
 					id
 					name
@@ -5198,7 +5203,8 @@ func addMutationOnExtendedTypeWithIDasKeyField(t *testing.T) {
 }
 
 func threeLevelDoubleXID(t *testing.T) {
-	// Query added to test if the bug https://discuss.dgraph.io/t/mutation-fails-because-of-error-some-variables-are-defined-twice/9487
+	// Query added to test if the bug
+	// https://discuss.dgraph.io/t/mutation-fails-because-of-error-some-variables-are-defined-twice/9487
 	// has been fixed.
 	mutation := &GraphQLParams{
 		Query: `mutation {
@@ -5568,7 +5574,8 @@ func multipleXidsTests(t *testing.T) {
 	                   	}
 	                   }
                     }`,
-			error: `couldn't rewrite mutation addWorker because failed to rewrite mutation payload because id 1 already exists for field reg_No inside type Worker`,
+			error: `couldn't rewrite mutation addWorker because failed to rewrite mutation payload because id 1 
+					already exists for field reg_No inside type Worker`,
 		},
 		{
 			name: "adding worker with same emp_Id will return error",
@@ -5595,7 +5602,8 @@ func multipleXidsTests(t *testing.T) {
 	                  	}
 	                  }
                   }`,
-			error: `couldn't rewrite mutation addWorker because failed to rewrite mutation payload because id E01 already exists for field emp_Id inside type Worker`,
+			error: `couldn't rewrite mutation addWorker because failed to rewrite mutation payload because id E01 
+						already exists for field emp_Id inside type Worker`,
 		},
 		{
 			name: "adding worker with different reg_No and emp_id will succeed",

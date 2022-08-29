@@ -1769,7 +1769,8 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 						gql.Arg{Value: fmt.Sprintf("%v", near["distance"])})
 				case "within":
 					// For Geo type we have `within` filter which is written as follows:
-					// { within: { polygon: { coordinates: [ { points: [{ latitude: 11.11, longitude: 22.22}, { latitude: 15.15, longitude: 16.16} , { latitude: 20.20, longitude: 21.21} ]}] } } }
+					// { within: { polygon: { coordinates: [ { points: [{ latitude: 11.11, longitude: 22.22},
+					// { latitude: 15.15, longitude: 16.16} , { latitude: 20.20, longitude: 21.21} ]}] } } }
 					within := val.(map[string]interface{})
 					polygon := within["polygon"].(map[string]interface{})
 					var buf bytes.Buffer
