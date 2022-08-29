@@ -279,7 +279,8 @@ func getFavMoviesErrorHandler(w http.ResponseWriter, r *http.Request) {
 	getRestError(
 		w,
 		[]byte(
-			`{"errors":[{"message": "Rest API returns Error for myFavoriteMovies query","locations": [ { "line": 5, "column": 4 } ],"path": ["Movies","name"]}]}`,
+			`{"errors":[{"message": "Rest API returns Error for myFavoriteMovies query",
+			"locations": [ { "line": 5, "column": 4 } ],"path": ["Movies","name"]}]}`,
 		),
 	)
 }

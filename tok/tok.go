@@ -292,7 +292,8 @@ func (t TermTokenizer) Tokens(v interface{}) ([]string, error) {
 	lang := LangBase(t.lang)
 	switch lang {
 	case "zh", "ja", "th", "lo", "my", "bo", "km", "kxm":
-		// Chinese, Japanese, Thai, Lao, Burmese, Tibetan and Khmer (km, kxm) do not use spaces as delimiters. We simply split by space.
+		// Chinese, Japanese, Thai, Lao, Burmese, Tibetan and Khmer (km, kxm) do not use spaces as delimiters.
+		// We simply split by space.
 		tokens := strings.Split(str, " ")
 		return x.RemoveDuplicates(tokens), nil
 	default:

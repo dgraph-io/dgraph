@@ -3120,7 +3120,8 @@ func persistedQuery(t *testing.T) {
 	require.Len(t, gqlResponse.Errors, 1)
 	require.Contains(t, gqlResponse.Errors[0].Message, "provided sha does not match query")
 
-	queryCountryParams.Extensions.PersistedQuery.Sha256Hash = "bbc0af44f82ce5c38e775f7f14c71e5eba1936b12b3e66c452ee262ef147f1ed"
+	queryCountryParams.Extensions.PersistedQuery.Sha256Hash =
+		"bbc0af44f82ce5c38e775f7f14c71e5eba1936b12b3e66c452ee262ef147f1ed"
 	gqlResponse = queryCountryParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 

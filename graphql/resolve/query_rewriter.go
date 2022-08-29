@@ -1285,7 +1285,8 @@ func buildAggregateFields(
 }
 
 // Generate Unique Dgraph Alias for the field based on number of time it has been
-// seen till now in the given query at current level. If it is seen first time then simply returns the field's DgraphAlias,
+// seen till now in the given query at current level.
+// If it is seen first time then simply returns the field's DgraphAlias,
 // and if  it is seen let's say 3rd time  then return "fieldAlias.3" where "fieldAlias"
 // is the  DgraphAlias of the field.
 func generateUniqueDgraphAlias(f schema.Field, fieldSeenCount map[string]int) string {
@@ -1777,7 +1778,9 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 				case "contains":
 					// For Geo type we have `contains` filter which is either point or polygon and is written as follows:
 					// For point: { contains: { point: { latitude: 11.11, longitude: 22.22 }}}
-					// For polygon: { contains: { polygon: { coordinates: [ { points: [{ latitude: 11.11, longitude: 22.22}, { latitude: 15.15, longitude: 16.16} , { latitude: 20.20, longitude: 21.21} ]}] } } }
+					// For polygon: { contains: { polygon: { coordinates:
+					// [ { points: [{ latitude: 11.11, longitude: 22.22}, { latitude: 15.15, longitude: 16.16} ,
+					// { latitude: 20.20, longitude: 21.21} ]}] } } }
 					contains := val.(map[string]interface{})
 					var buf bytes.Buffer
 					if polygon, ok := contains["polygon"].(map[string]interface{}); ok {
@@ -1793,9 +1796,14 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 					// and "point" are given, we only use polygon. If none of them are given,
 					// an incorrect DQL query will be formed and will error out from Dgraph.
 				case "intersects":
-					// For Geo type we have `intersects` filter which is either multi-polygon or polygon and is written as follows:
-					// For polygon: { intersect: { polygon: { coordinates: [ { points: [{ latitude: 11.11, longitude: 22.22}, { latitude: 15.15, longitude: 16.16} , { latitude: 20.20, longitude: 21.21} ]}] } } }
-					// For multi-polygon : { intersect: { multiPolygon: { polygons: [{ coordinates: [ { points: [{ latitude: 11.11, longitude: 22.22}, { latitude: 15.15, longitude: 16.16} , { latitude: 20.20, longitude: 21.21} ]}] }] } } }
+					// For Geo type we have `intersects` filter which is either multi-polygon or polygon and is
+					// written as follows:
+					// For polygon: { intersect: { polygon: { coordinates: [
+					// { points: [{ latitude: 11.11, longitude: 22.22}, { latitude: 15.15, longitude: 16.16} ,
+					// { latitude: 20.20, longitude: 21.21} ]}] } } }
+					// For multi-polygon : { intersect: { multiPolygon: { polygons: [{ coordinates: [ { points: [{
+					// latitude: 11.11, longitude: 22.22}, { latitude: 15.15, longitude: 16.16} , { latitude: 20.20,
+					// longitude: 21.21} ]}] }] } } }
 					intersects := val.(map[string]interface{})
 					var buf bytes.Buffer
 					if polygon, ok := intersects["polygon"].(map[string]interface{}); ok {

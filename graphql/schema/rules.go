@@ -1953,7 +1953,8 @@ func customDirectiveValidation(sch *ast.Schema,
 				if len(key) > 2 {
 					return append(errs, gqlerror.ErrorPosf(
 						errPos,
-						"Type %s; Field %s; forwardHeaders in @custom directive should be of the form 'remote_headername:local_headername' or just 'headername'"+
+						"Type %s; Field %s; forwardHeaders in @custom directive should be of the form "+
+							"'remote_headername:local_headername' or just 'headername'"+
 							", found: `%s`.",
 						typ.Name,
 						field.Name,
