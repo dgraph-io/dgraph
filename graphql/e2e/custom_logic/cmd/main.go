@@ -114,7 +114,8 @@ func commonGraphqlHandler(handlerName string) func(w http.ResponseWriter, r *htt
 		if err != nil {
 			log.Fatal(err)
 		}
-		if req.Query == strings.TrimSpace(graphqlResponses[handlerName].Request) && string(req.Variables) == strings.TrimSpace(graphqlResponses[handlerName].Variables) {
+		if req.Query == strings.TrimSpace(graphqlResponses[handlerName].Request) &&
+			string(req.Variables) == strings.TrimSpace(graphqlResponses[handlerName].Variables) {
 			fmt.Fprintf(w, graphqlResponses[handlerName].Response)
 			return
 		}
@@ -275,7 +276,12 @@ func getFavMoviesErrorHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	getRestError(w, []byte(`{"errors":[{"message": "Rest API returns Error for myFavoriteMovies query","locations": [ { "line": 5, "column": 4 } ],"path": ["Movies","name"]}]}`))
+	getRestError(
+		w,
+		[]byte(
+			`{"errors":[{"message": "Rest API returns Error for myFavoriteMovies query","locations": [ { "line": 5, "column": 4 } ],"path": ["Movies","name"]}]}`,
+		),
+	)
 }
 
 func getFavMoviesHandler(w http.ResponseWriter, r *http.Request) {

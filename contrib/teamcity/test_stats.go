@@ -138,7 +138,12 @@ func fetchTestsForBuild(buildID int, ch chan<- map[string]TestData) {
 }
 
 func fetchAllBuildsSince(buildType string, date string) []BuildData {
-	url := fmt.Sprintf("%s/app/rest/builds/?locator=branch:refs/heads/master,buildType:%s,sinceDate:%s", TEAMCITY_BASEURL, buildType, date)
+	url := fmt.Sprintf(
+		"%s/app/rest/builds/?locator=branch:refs/heads/master,buildType:%s,sinceDate:%s",
+		TEAMCITY_BASEURL,
+		buildType,
+		date,
+	)
 	url = strings.ReplaceAll(url, "+", "%2B")
 	var buildDatas []BuildData
 	for {
