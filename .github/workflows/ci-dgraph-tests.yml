@@ -41,3 +41,5 @@ jobs:
           # run the tests
           ./t -r
           ./t --skip algo,chunker,codec,compose,conn,contrib,dgraph,edgraph,ee,filestore,gql,graphql,lex,licenses,ocagent,paper,posting,present,protos,query,raftwal,schema,static,systest,t,task,telemetry,testutil,tlstest,tok,types,upgrade,wiki,worker,x,xidmap 
+          # clean up docker containers after test execution
+          ./t -r
