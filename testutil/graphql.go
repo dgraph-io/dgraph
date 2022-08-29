@@ -92,7 +92,12 @@ func MakeGQLRequestWithAccessJwt(t *testing.T, params *GraphQLParams, accessToke
 	return MakeGQLRequestWithAccessJwtAndTLS(t, params, nil, accessToken)
 }
 
-func MakeGQLRequestWithAccessJwtAndTLS(t *testing.T, params *GraphQLParams, tls *tls.Config, accessToken string) *GraphQLResponse {
+func MakeGQLRequestWithAccessJwtAndTLS(
+	t *testing.T,
+	params *GraphQLParams,
+	tls *tls.Config,
+	accessToken string,
+) *GraphQLResponse {
 	var adminUrl string
 	if tls != nil {
 		adminUrl = "https://" + SockAddrHttp + "/admin"
