@@ -530,7 +530,7 @@ func getPackages() []task {
 	valid = moveSlowToFront(valid)
 	if len(valid) == 0 {
 		fmt.Println("Couldn't find any packages. Exiting...")
-		os.Exit(1)
+		os.Exit(0) // this should not have a non-zero exit code; we should be able to skip all folders & exit-0
 	}
 	for _, task := range valid {
 		fmt.Printf("Found valid task: %s isCommon:%v\n", task.pkg.ID, task.isCommon)
