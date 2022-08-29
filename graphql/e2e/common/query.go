@@ -384,7 +384,10 @@ func allPosts(t *testing.T) []*post {
 func entitiesQueryWithKeyFieldOfTypeString(t *testing.T) {
 	addSpaceShipParams := &GraphQLParams{
 		Query: `mutation addSpaceShip($id1: String!, $id2: String!, $id3: String!, $id4: String! ) {
-			addSpaceShip(input: [{id: $id1, missions: [{id: "Mission1", designation: "Apollo1"}]},{id: $id2, missions: [{id: "Mission2", designation: "Apollo2"}]},{id: $id3, missions: [{id: "Mission3", designation: "Apollo3"}]}, {id: $id4, missions: [{id: "Mission4", designation: "Apollo4"}]}]){
+			addSpaceShip(input: [{id: $id1, missions: [{id: "Mission1", designation: "Apollo1"}]},{id: $id2, missions: 
+				[{id: "Mission2", designation: "Apollo2"}]},{id: $id3, missions: 
+					[{id: "Mission3", designation: "Apollo3"}]}, {id: $id4, missions: 
+						[{id: "Mission4", designation: "Apollo4"}]}]){
 				spaceShip {
 					id
 					missions {
@@ -464,7 +467,8 @@ func entitiesQueryWithKeyFieldOfTypeInt(t *testing.T) {
 
 	entitiesQueryParams := &GraphQLParams{
 		Query: `query _entities($typeName: String!, $id1: Int!, $id2: Int!, $id3: Int!, $id4: Int!){
-			_entities(representations: [{__typename: $typeName, id: $id4},{__typename: $typeName, id: $id2},{__typename: $typeName, id: $id1},{__typename: $typeName, id: $id3},{__typename: $typeName, id: $id1}]) {
+			_entities(representations: [{__typename: $typeName, id: $id4},{__typename: $typeName, id: $id2},{
+				__typename: $typeName, id: $id1},{__typename: $typeName, id: $id3},{__typename: $typeName, id: $id1}]) {
 				... on Planet {
 					missions(order: {asc: id}){
 						id
@@ -485,7 +489,7 @@ func entitiesQueryWithKeyFieldOfTypeInt(t *testing.T) {
 	entitiesResp := entitiesQueryParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, entitiesResp)
 
-	expectedJSON := `{"_entities":[{"missions":[{"designation":"Apollo4","id":"Mission4"}]},{"missions":[{"designation":"Apollo2","id":"Mission2"}]},{"missions":[{"designation":"Apollo1","id":"Mission1"}]},{"missions":[{"designation":"Apollo3","id":"Mission3"}]},{"missions":[{"designation":"Apollo1","id":"Mission1"}]}]}`
+	expectedJSON := `{"_entities":[{"missions":[{"designation":"Apollo4","id":"Mission4"}]},{"missions":[{"designation":"Apollo2","id":"Mission2"}]},{"missions":[{"designation":"Apollo1","id":"Mission1"}]},{"missions":[{"designation":"Apollo3","id":"Mission3"}]},{"missions":[{"designation":"Apollo1","id":"Mission1"}]}]}` //nolint:lll
 
 	JSONEqGraphQL(t, expectedJSON, string(entitiesResp.Data))
 
@@ -2963,7 +2967,8 @@ func filterInQueriesWithArrayForAndOr(t *testing.T) {
 							}
 						  ]
 						}`,
-			variables: `{"filter":{"and": [{"name":{"eq": "George"}},{"reputation":{"eq": 4.5}},{"qualification": {"eq": "Phd in CSE"}}]}}`,
+			variables: `{"filter":{"and": [{"name":{"eq": "George"}},{"reputation":{"eq": 4.5}},{"qualification": ` +
+				`{"eq": "Phd in CSE"}}]}}`,
 		},
 		{
 			name: "(A OR B OR C) using variables",
@@ -2993,7 +2998,8 @@ func filterInQueriesWithArrayForAndOr(t *testing.T) {
 							}
 						  ]
 						}`,
-			variables: `{"filter":{"or": [{"name": {"eq": "George"}}, {"reputation": {"eq": 4.6}}, {"qualification": {"eq": "PostDoc in CSE"}}]}}`,
+			variables: `{"filter":{"or": [{"name": {"eq": "George"}}, {"reputation": {"eq": 4.6}}, {"qualification": ` +
+				`{"eq": "PostDoc in CSE"}}]}}`,
 		},
 	}
 
@@ -3133,7 +3139,8 @@ func persistedQuery(t *testing.T) {
 	queryCountryParams.Extensions = nil
 	gqlResponse = queryCountryParams.ExecuteAsGet(
 		t,
-		GraphqlURL+`?extensions={"persistedQuery":{"sha256Hash":"bbc0af44f82ce5c38e775f7f14c71e5eba1936b12b3e66c452ee262ef147f1ed"}}`,
+		GraphqlURL+`?extensions={"persistedQuery":{`+
+			`"sha256Hash":"bbc0af44f82ce5c38e775f7f14c71e5eba1936b12b3e66c452ee262ef147f1ed"}}`,
 	)
 	RequireNoGQLErrors(t, gqlResponse)
 }

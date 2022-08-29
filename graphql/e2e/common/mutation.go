@@ -5581,7 +5581,8 @@ func multipleXidsTests(t *testing.T) {
 	                   	}
 	                   }
                     }`,
-			error: `couldn't rewrite mutation addWorker because failed to rewrite mutation payload because id E01 already exists for field emp_Id inside type Worker`,
+			error: `couldn't rewrite mutation addWorker because failed to rewrite mutation payload because id E01 
+					already exists for field emp_Id inside type Worker`,
 		},
 		{
 			name: "adding worker with same reg_No and emp_id will return error",
@@ -5897,7 +5898,8 @@ func multipleXidsTests(t *testing.T) {
 	                   	}
 	                   }
                      }`,
-			error: `couldn't rewrite mutation updateEmployer because failed to rewrite mutation payload because field reg_No cannot be empty`,
+			error: `couldn't rewrite mutation updateEmployer because failed to rewrite mutation payload because 
+field reg_No cannot be empty`,
 		},
 	}
 
@@ -5994,7 +5996,8 @@ func upsertMutationTests(t *testing.T) {
 	require.NotNil(t, gqlResponse.Errors)
 	require.Equal(
 		t,
-		"couldn't rewrite mutation addState because failed to rewrite mutation payload because id S1 already exists for field xcode inside type State",
+		"couldn't rewrite mutation addState because failed to rewrite mutation payload because id S1 "+
+			"already exists for field xcode inside type State",
 		gqlResponse.Errors[0].Error(),
 	)
 
