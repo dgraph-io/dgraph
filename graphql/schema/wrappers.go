@@ -2144,7 +2144,10 @@ func (m *mutation) QueryField() Field {
 		// gets executed to fetch the results of that mutation, so propagating it to the QueryField.
 		if len(m.Cascade()) != 0 && len(f.Cascade()) == 0 {
 			field := f.(*field).field
-			field.Directives = append(field.Directives, &ast.Directive{Name: cascadeDirective, Definition: m.op.inSchema.schema.Directives[cascadeDirective]})
+			field.Directives = append(
+				field.Directives,
+				&ast.Directive{Name: cascadeDirective, Definition: m.op.inSchema.schema.Directives[cascadeDirective]},
+			)
 		}
 		return f
 	}
@@ -2699,7 +2702,8 @@ func (t *astType) ImplementingTypes() []Type {
 // satisfy a valid post.
 func (t *astType) EnsureNonNulls(obj map[string]interface{}, exclusion string) error {
 	for _, fld := range t.inSchema.schema.Types[t.Name()].Fields {
-		if fld.Type.NonNull && !isID(fld) && fld.Name != exclusion && t.inSchema.customDirectives[t.Name()][fld.Name] == nil {
+		if fld.Type.NonNull && !isID(fld) && fld.Name != exclusion &&
+			t.inSchema.customDirectives[t.Name()][fld.Name] == nil {
 			if val, ok := obj[fld.Name]; !ok || val == nil {
 				return errors.Errorf(
 					"type %s requires a value for field %s, but no value present",
