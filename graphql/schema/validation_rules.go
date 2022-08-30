@@ -28,8 +28,8 @@ import (
 )
 
 var allowedFilters = []string{"StringHashFilter", "StringExactFilter", "StringFullTextFilter",
-	"StringRegExpFilter", "StringTermFilter", "DateTimeFilter", "FloatFilter", "Int64Filter", "IntFilter", "PointGeoFilter",
-	"ContainsFilter", "IntersectsFilter", "PolygonGeoFilter"}
+	"StringRegExpFilter", "StringTermFilter", "DateTimeFilter", "FloatFilter", "Int64Filter",
+	"IntFilter", "PointGeoFilter", "ContainsFilter", "IntersectsFilter", "PolygonGeoFilter"}
 
 func listInputCoercion(observers *validator.Events, addError validator.AddErrFunc) {
 	observers.OnValue(func(walker *validator.Walker, value *ast.Value) {
