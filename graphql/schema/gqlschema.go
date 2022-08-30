@@ -926,7 +926,12 @@ func applyFieldValidations(typ *ast.Definition, field *ast.FieldDefinition) gqle
 // query/mutation/update for all the types mentioned in the schema.
 // In case of Apollo service Query, input types from queries and mutations
 // are excluded due to the limited support currently.
-func completeSchema(sch *ast.Schema, definitions []string, providesFieldsMap map[string]map[string]bool, apolloServiceQuery bool) {
+func completeSchema(
+	sch *ast.Schema,
+	definitions []string,
+	providesFieldsMap map[string]map[string]bool,
+	apolloServiceQuery bool,
+) {
 	query := sch.Types["Query"]
 	if query != nil {
 		query.Kind = ast.Object
@@ -1315,7 +1320,12 @@ func addPatchType(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[
 //     ...
 //   }
 // }
-func addFieldFilters(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[string]bool, apolloServiceQuery bool) {
+func addFieldFilters(
+	schema *ast.Schema,
+	defn *ast.Definition,
+	providesTypeMap map[string]bool,
+	apolloServiceQuery bool,
+) {
 	for _, fld := range defn.Fields {
 		// Filtering and ordering for fields with @custom/@lambda directive is handled by the remote
 		// endpoint.
@@ -1985,7 +1995,12 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[s
 	}
 }
 
-func addFilterQuery(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[string]bool, generateSubscription bool) {
+func addFilterQuery(
+	schema *ast.Schema,
+	defn *ast.Definition,
+	providesTypeMap map[string]bool,
+	generateSubscription bool,
+) {
 	qry := &ast.FieldDefinition{
 		Name: "query" + defn.Name,
 		Type: &ast.Type{
@@ -2061,7 +2076,12 @@ func addPasswordQuery(schema *ast.Schema, defn *ast.Definition, providesTypeMap 
 	schema.Query.Fields = append(schema.Query.Fields, qry)
 }
 
-func addQueries(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[string]bool, params *GenerateDirectiveParams) {
+func addQueries(
+	schema *ast.Schema,
+	defn *ast.Definition,
+	providesTypeMap map[string]bool,
+	params *GenerateDirectiveParams,
+) {
 	if params.generateGetQuery {
 		addGetQuery(schema, defn, providesTypeMap, params.generateSubscription)
 	}
