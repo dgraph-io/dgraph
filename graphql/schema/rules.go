@@ -1951,10 +1951,14 @@ func customDirectiveValidation(sch *ast.Schema,
 			for _, h := range forwardHeaders.Children {
 				key := strings.Split(h.Value.Raw, ":")
 				if len(key) > 2 {
-					return append(errs, gqlerror.ErrorPosf(errPos,
+					return append(errs, gqlerror.ErrorPosf(
+						errPos,
 						"Type %s; Field %s; forwardHeaders in @custom directive should be of the form 'remote_headername:local_headername' or just 'headername'"+
 							", found: `%s`.",
-						typ.Name, field.Name, h.Value.Raw))
+						typ.Name,
+						field.Name,
+						h.Value.Raw,
+					))
 				}
 				fHeaders[key[0]] = true
 			}
@@ -1965,17 +1969,25 @@ func customDirectiveValidation(sch *ast.Schema,
 			for _, h := range secretHeaders.Children {
 				secretKey := strings.Split(h.Value.Raw, ":")
 				if len(secretKey) > 2 {
-					return append(errs, gqlerror.ErrorPosf(errPos,
+					return append(errs, gqlerror.ErrorPosf(
+						errPos,
 						"Type %s; Field %s; secretHeaders in @custom directive should be of the form 'remote_headername:local_headername' or just 'headername'"+
 							", found: `%s`.",
-						typ.Name, field.Name, h.Value.Raw))
+						typ.Name,
+						field.Name,
+						h.Value.Raw,
+					))
 				}
 				if fHeaders != nil {
 					if fHeaders[secretKey[0]] {
-						return append(errs, gqlerror.ErrorPosf(errPos,
+						return append(errs, gqlerror.ErrorPosf(
+							errPos,
 							"Type %s; Field %s; secretHeaders and forwardHeaders in @custom directive cannot have overlapping headers"+
 								", found: `%s`.",
-							typ.Name, field.Name, h.Value.Raw))
+							typ.Name,
+							field.Name,
+							h.Value.Raw,
+						))
 					}
 				}
 			}
@@ -1989,10 +2001,14 @@ func customDirectiveValidation(sch *ast.Schema,
 					key = []string{h.Value.Raw, h.Value.Raw}
 				}
 				if len(key) > 2 {
-					return append(errs, gqlerror.ErrorPosf(errPos,
+					return append(errs, gqlerror.ErrorPosf(
+						errPos,
 						"Type %s; Field %s; introspectionHeaders in @custom directive should be of the form 'remote_headername:local_headername' or just 'headername'"+
 							", found: `%s`.",
-						typ.Name, field.Name, h.Value.Raw))
+						typ.Name,
+						field.Name,
+						h.Value.Raw,
+					))
 				}
 				iHeaders[key[0]] = key[1]
 			}
@@ -2009,9 +2025,13 @@ func customDirectiveValidation(sch *ast.Schema,
 			// We try and fetch the value from the stored secrets.
 			value, ok := secrets[val]
 			if !ok {
-				return append(errs, gqlerror.ErrorPosf(graphql.Position,
+				return append(errs, gqlerror.ErrorPosf(
+					graphql.Position,
 					"Type %s; Field %s; introspectionHeaders in @custom directive should use secrets to store the header value. To do that specify `%s` in this format '#Dgraph.Secret name value' at the bottom of your schema file.",
-					typ.Name, field.Name, val))
+					typ.Name,
+					field.Name,
+					val,
+				))
 			}
 			headers.Add(key, string(value))
 		}
@@ -2078,7 +2098,10 @@ func apolloKeyValidation(sch *ast.Schema, typ *ast.Definition) gqlerror.List {
 	if !(isID(fld) || hasIDDirective(fld)) {
 		return []*gqlerror.Error{gqlerror.ErrorPosf(
 			arg.Position,
-			"Type %s: Field %s: used inside @key directive should be of type ID or have @id directive.", typ.Name, fld.Name)}
+			"Type %s: Field %s: used inside @key directive should be of type ID or have @id directive.",
+			typ.Name,
+			fld.Name,
+		)}
 	}
 
 	remoteDirective := typ.Directives.ForName(remoteDirective)
@@ -2120,7 +2143,10 @@ func apolloRequiresValidation(sch *ast.Schema,
 	if extendsDirective == nil {
 		return []*gqlerror.Error{gqlerror.ErrorPosf(
 			dir.Position,
-			"Type %s: Field %s: @requires directive can only be defined on fields in type extensions. i.e., the type must have `@extends` or use `extend` keyword.", typ.Name, field.Name)}
+			"Type %s: Field %s: @requires directive can only be defined on fields in type extensions. i.e., the type must have `@extends` or use `extend` keyword.",
+			typ.Name,
+			field.Name,
+		)}
 	}
 
 	arg := dir.Arguments.ForName(apolloKeyArg)
@@ -2174,7 +2200,12 @@ func apolloProvidesValidation(sch *ast.Schema,
 		if fldDefn == nil {
 			return []*gqlerror.Error{gqlerror.ErrorPosf(
 				dir.Position,
-				"Type %s; Field %s: @provides field %s doesn't exist for type %s.", typ.Name, field.Name, fld, fldTypeDefn.Name)}
+				"Type %s; Field %s: @provides field %s doesn't exist for type %s.",
+				typ.Name,
+				field.Name,
+				fld,
+				fldTypeDefn.Name,
+			)}
 		}
 	}
 	return nil
@@ -2190,13 +2221,19 @@ func apolloExternalValidation(sch *ast.Schema,
 	if extendsDirective == nil {
 		return []*gqlerror.Error{gqlerror.ErrorPosf(
 			dir.Position,
-			"Type %s: Field %s: @external directive can only be defined on fields in type extensions. i.e., the type must have `@extends` or use `extend` keyword.", typ.Name, field.Name)}
+			"Type %s: Field %s: @external directive can only be defined on fields in type extensions. i.e., the type must have `@extends` or use `extend` keyword.",
+			typ.Name,
+			field.Name,
+		)}
 	}
 
 	if hasCustomOrLambda(field) {
 		return []*gqlerror.Error{gqlerror.ErrorPosf(
 			dir.Position,
-			"Type %s: Field %s: @external directive can not be defined on  fields with @custom or @lambda directive.", typ.Name, field.Name)}
+			"Type %s: Field %s: @external directive can not be defined on  fields with @custom or @lambda directive.",
+			typ.Name,
+			field.Name,
+		)}
 	}
 
 	if !isKeyField(field, typ) {
@@ -2206,7 +2243,11 @@ func apolloExternalValidation(sch *ast.Schema,
 			if dirDefn != nil {
 				return []*gqlerror.Error{gqlerror.ErrorPosf(
 					dirDefn.Position,
-					"Type %s: Field %s: @%s directive can not be defined on @external fields that are not @key.", typ.Name, field.Name, directive)}
+					"Type %s: Field %s: @%s directive can not be defined on @external fields that are not @key.",
+					typ.Name,
+					field.Name,
+					directive,
+				)}
 			}
 		}
 	}
@@ -2223,14 +2264,21 @@ func remoteResponseValidation(sch *ast.Schema,
 	if remoteDirectiveDefn == nil {
 		return []*gqlerror.Error{gqlerror.ErrorPosf(
 			dir.Position,
-			"Type %s: Field %s: @remoteResponse directive can only be defined on fields of @remote type.", typ.Name, field.Name)}
+			"Type %s: Field %s: @remoteResponse directive can only be defined on fields of @remote type.",
+			typ.Name,
+			field.Name,
+		)}
 	}
 
 	arg := dir.Arguments.ForName("name")
 	if arg == nil || arg.Value.Raw == "" {
 		return []*gqlerror.Error{gqlerror.ErrorPosf(
 			dir.Position,
-			"Type %s: Field %s: Argument %s inside @remoteResponse directive must be defined.", typ.Name, field.Name, "name")}
+			"Type %s: Field %s: Argument %s inside @remoteResponse directive must be defined.",
+			typ.Name,
+			field.Name,
+			"name",
+		)}
 	}
 	return nil
 }
@@ -2282,7 +2330,8 @@ func isReservedKeyWord(name string) bool {
 		"as": true, // this is reserved keyword because DQL uses this for variables
 	}
 
-	if isScalar(name) || isQueryOrMutation(name) || reservedTypeNames[name] || caseInsensitiveKeywords[strings.ToLower(name)] {
+	if isScalar(name) || isQueryOrMutation(name) || reservedTypeNames[name] ||
+		caseInsensitiveKeywords[strings.ToLower(name)] {
 		return true
 	}
 
