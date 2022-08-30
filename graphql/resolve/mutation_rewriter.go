@@ -1428,10 +1428,12 @@ func rewriteObject(
 							// tries to add duplicate data to the field with @id.
 							var err error
 							if queryAuthSelector(typ) == nil {
-								err = x.GqlErrorf("id %s already exists for field %s inside type %s", xidString, xid.Name(), typ.Name())
+								err = x.GqlErrorf("id %s already exists "+
+									"for field %s inside type %s", xidString, xid.Name(), typ.Name())
 							} else {
 								// This error will only be reported in debug mode.
-								err = x.GqlErrorf("GraphQL debug: id %s already exists for field %s inside type %s", xidString, xid.Name(), typ.Name())
+								err = x.GqlErrorf("GraphQL debug: id %s already exists for "+
+									"field %s inside type %s", xidString, xid.Name(), typ.Name())
 							}
 							retErrors = append(retErrors, err)
 							return nil, upsertVar, retErrors
