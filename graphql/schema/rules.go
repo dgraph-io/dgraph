@@ -1953,8 +1953,12 @@ func customDirectiveValidation(sch *ast.Schema,
 				if len(key) > 2 {
 					return append(errs, gqlerror.ErrorPosf(
 						errPos,
+<<<<<<< HEAD
 						"Type %s; Field %s; forwardHeaders in @custom directive should be of the form "+
 							"'remote_headername:local_headername' or just 'headername'"+
+=======
+						"Type %s; Field %s; forwardHeaders in @custom directive should be of the form 'remote_headername:local_headername' or just 'headername'"+
+>>>>>>> 9efa04ba9 (line length fixes (automatic) using golines)
 							", found: `%s`.",
 						typ.Name,
 						field.Name,
@@ -1972,8 +1976,12 @@ func customDirectiveValidation(sch *ast.Schema,
 				if len(secretKey) > 2 {
 					return append(errs, gqlerror.ErrorPosf(
 						errPos,
+<<<<<<< HEAD
 						"Type %s; Field %s; secretHeaders in @custom directive should be of the form "+
 							"'remote_headername:local_headername' or just 'headername'"+
+=======
+						"Type %s; Field %s; secretHeaders in @custom directive should be of the form 'remote_headername:local_headername' or just 'headername'"+
+>>>>>>> 9efa04ba9 (line length fixes (automatic) using golines)
 							", found: `%s`.",
 						typ.Name,
 						field.Name,
@@ -2030,9 +2038,13 @@ func customDirectiveValidation(sch *ast.Schema,
 			if !ok {
 				return append(errs, gqlerror.ErrorPosf(
 					graphql.Position,
+<<<<<<< HEAD
 					"Type %s; Field %s; introspectionHeaders in @custom directive should use secrets to "+
 						"store the header value. To do that specify `%s` in this format '#Dgraph.Secret name value' "+
 						"at the bottom of your schema file.",
+=======
+					"Type %s; Field %s; introspectionHeaders in @custom directive should use secrets to store the header value. To do that specify `%s` in this format '#Dgraph.Secret name value' at the bottom of your schema file.",
+>>>>>>> 9efa04ba9 (line length fixes (automatic) using golines)
 					typ.Name,
 					field.Name,
 					val,
@@ -2148,8 +2160,12 @@ func apolloRequiresValidation(sch *ast.Schema,
 	if extendsDirective == nil {
 		return []*gqlerror.Error{gqlerror.ErrorPosf(
 			dir.Position,
+<<<<<<< HEAD
 			"Type %s: Field %s: @requires directive can only be defined on fields in type extensions. "+
 				"i.e., the type must have `@extends` or use `extend` keyword.",
+=======
+			"Type %s: Field %s: @requires directive can only be defined on fields in type extensions. i.e., the type must have `@extends` or use `extend` keyword.",
+>>>>>>> 9efa04ba9 (line length fixes (automatic) using golines)
 			typ.Name,
 			field.Name,
 		)}
@@ -2227,8 +2243,12 @@ func apolloExternalValidation(sch *ast.Schema,
 	if extendsDirective == nil {
 		return []*gqlerror.Error{gqlerror.ErrorPosf(
 			dir.Position,
+<<<<<<< HEAD
 			"Type %s: Field %s: @external directive can only be defined on fields in type extensions. "+
 				"i.e., the type must have `@extends` or use `extend` keyword.",
+=======
+			"Type %s: Field %s: @external directive can only be defined on fields in type extensions. i.e., the type must have `@extends` or use `extend` keyword.",
+>>>>>>> 9efa04ba9 (line length fixes (automatic) using golines)
 			typ.Name,
 			field.Name,
 		)}
