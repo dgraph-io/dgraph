@@ -1,5 +1,16 @@
 run:
   tests: false
+  skip-dirs:
+    - contrib
+    - compose
+    - graphql/bench
+    - graphql/e2e
+    - graphql/test
+    - graphql/testdata
+    - systest
+    - t
+  skip-files:
+    - ".*test.go$"
 
 linters-settings:
   lll:
@@ -13,7 +24,7 @@ linters:
     - gas
     - gofmt
     - golint
-    - gosimple
+    #- gosimple
     - govet
     - lll
     - varcheck
