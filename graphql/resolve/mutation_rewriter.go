@@ -1974,7 +1974,8 @@ func rewritePolygon(val map[string]interface{}) []interface{} {
 // For MultiPolygon type, the mutation json is as follows:
 //	{
 //		"type": "MultiPolygon",
-//		"coordinates": [[[[22.22,11.11],[16.16,15.15],[21.21,20.2]],[[22.28,11.18],[16.18,15.18],[21.28,20.28]]],[[[92.22,91.11],[16.16,15.15],[21.21,20.2]],[[22.28,11.18],[16.18,15.18],[21.28,20.28]]]]
+//		"coordinates": [[[[22.22,11.11],[16.16,15.15],[21.21,20.2]],[[22.28,11.18],[16.18,15.18],[21.28,20.28]]],
+//	 	[[[92.22,91.11],[16.16,15.15],[21.21,20.2]],[[22.28,11.18],[16.18,15.18],[21.28,20.28]]]]
 //	}
 func rewriteMultiPolygon(val map[string]interface{}) []interface{} {
 	// type casting this is safe, because of strict GraphQL schema
