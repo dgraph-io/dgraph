@@ -1613,7 +1613,15 @@ func rewriteObject(
 		switch val := val.(type) {
 		case map[string]interface{}:
 			if fieldDef.Type().IsUnion() {
-				fieldMutationFragment, _, err := rewriteUnionField(ctx, fieldDef, myUID, varGen, val, xidMetadata, idExistence, mutationType)
+				fieldMutationFragment, _, err := rewriteUnionField(
+					ctx,
+					fieldDef,
+					myUID,
+					varGen,
+					val,
+					xidMetadata,
+					idExistence,
+					mutationType)
 				if fieldMutationFragment != nil {
 					newObj[fieldName] = fieldMutationFragment.fragment
 					updateFromChildren(frag, fieldMutationFragment)
@@ -1626,7 +1634,16 @@ func rewriteObject(
 						"coordinates": rewriteGeoObject(val, fieldDef.Type()),
 					}
 			} else {
-				fieldMutationFragment, _, err := rewriteObject(ctx, fieldDef.Type(), fieldDef, myUID, varGen, val, xidMetadata, idExistence, mutationType)
+				fieldMutationFragment, _, err := rewriteObject(
+					ctx,
+					fieldDef.Type(),
+					fieldDef,
+					myUID,
+					varGen,
+					val,
+					xidMetadata,
+					idExistence,
+					mutationType)
 				if fieldMutationFragment != nil {
 					newObj[fieldName] = fieldMutationFragment.fragment
 					updateFromChildren(frag, fieldMutationFragment)
@@ -1641,7 +1658,15 @@ func rewriteObject(
 				switch object := object.(type) {
 				case map[string]interface{}:
 					if fieldDef.Type().IsUnion() {
-						fieldMutationFragment, _, err = rewriteUnionField(ctx, fieldDef, myUID, varGen, object, xidMetadata, idExistence, mutationType)
+						fieldMutationFragment, _, err = rewriteUnionField(
+							ctx,
+							fieldDef,
+							myUID,
+							varGen,
+							object,
+							xidMetadata,
+							idExistence,
+							mutationType)
 					} else if fieldDef.Type().IsGeo() {
 						fieldMutationFragment = newFragment(
 							map[string]interface{}{
@@ -1650,7 +1675,16 @@ func rewriteObject(
 							},
 						)
 					} else {
-						fieldMutationFragment, _, err = rewriteObject(ctx, fieldDef.Type(), fieldDef, myUID, varGen, object, xidMetadata, idExistence, mutationType)
+						fieldMutationFragment, _, err = rewriteObject(
+							ctx,
+							fieldDef.Type(),
+							fieldDef,
+							myUID,
+							varGen,
+							object,
+							xidMetadata,
+							idExistence,
+							mutationType)
 					}
 					if fieldMutationFragment != nil {
 						mutationFragments = append(mutationFragments, fieldMutationFragment.fragment)

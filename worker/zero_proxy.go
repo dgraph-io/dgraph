@@ -39,7 +39,11 @@ func RegisterZeroProxyServer(s *grpc.Server) {
 		Methods: []grpc.MethodDesc{
 			{
 				MethodName: "AssignIds",
-				Handler: func(srv interface{}, ctx context.Context, dec func(interface{}) error, _ grpc.UnaryServerInterceptor) (interface{}, error) {
+				Handler: func(
+					srv interface{},
+					ctx context.Context,
+					dec func(interface{}) error,
+					_ grpc.UnaryServerInterceptor) (interface{}, error) {
 					in := new(pb.Num)
 					if err := dec(in); err != nil {
 						return nil, err
