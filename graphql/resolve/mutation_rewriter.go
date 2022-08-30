@@ -464,7 +464,17 @@ func (arw *AddRewriter) Rewrite(
 
 	for _, i := range val {
 		obj := i.(map[string]interface{})
-		fragment, upsertVar, errs := rewriteObject(ctx, mutatedType, nil, "", varGen, obj, xidMetadata, idExistence, mutationType)
+		fragment, upsertVar, errs := rewriteObject(
+			ctx,
+			mutatedType,
+			nil,
+			"",
+			varGen,
+			obj,
+			xidMetadata,
+			idExistence,
+			mutationType,
+		)
 		if len(errs) > 0 {
 			var gqlErrors x.GqlErrorList
 			for _, err := range errs {
@@ -626,7 +636,17 @@ func (urw *UpdateRewriter) Rewrite(
 
 	if setArg != nil {
 		if len(objSet) != 0 {
-			fragment, _, errs := rewriteObject(ctx, mutatedType, nil, srcUID, varGen, objSet, xidMetadata, idExistence, UpdateWithSet)
+			fragment, _, errs := rewriteObject(
+				ctx,
+				mutatedType,
+				nil,
+				srcUID,
+				varGen,
+				objSet,
+				xidMetadata,
+				idExistence,
+				UpdateWithSet,
+			)
 			if len(errs) > 0 {
 				var gqlErrors x.GqlErrorList
 				for _, err := range errs {
@@ -644,7 +664,17 @@ func (urw *UpdateRewriter) Rewrite(
 	if delArg != nil {
 		if len(objDel) != 0 {
 			// Set additional deletes to false
-			fragment, _, errs := rewriteObject(ctx, mutatedType, nil, srcUID, varGen, objDel, xidMetadata, idExistence, UpdateWithRemove)
+			fragment, _, errs := rewriteObject(
+				ctx,
+				mutatedType,
+				nil,
+				srcUID,
+				varGen,
+				objDel,
+				xidMetadata,
+				idExistence,
+				UpdateWithRemove,
+			)
 			if len(errs) > 0 {
 				var gqlErrors x.GqlErrorList
 				for _, err := range errs {

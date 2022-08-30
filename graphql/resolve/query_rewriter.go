@@ -627,7 +627,8 @@ func addCommonRules(
 		return []*gql.GraphQuery{dgQuery}, rbac
 	}
 
-	if authRw != nil && (authRw.isWritingAuth || authRw.filterByUid) && (authRw.varName != "" || authRw.parentVarName != "") {
+	if authRw != nil && (authRw.isWritingAuth || authRw.filterByUid) &&
+		(authRw.varName != "" || authRw.parentVarName != "") {
 		// When rewriting auth rules, they always start like
 		// Todo2 as var(func: uid(Todo1)) @cascade {
 		// Where Todo1 is the variable generated from the filter of the field
@@ -1211,7 +1212,9 @@ func buildAggregateFields(
 				}
 				aggregateChild := &gql.GraphQuery{
 					Alias: aggregateField.DgraphAlias() + "_" + f.DgraphAlias(),
-					Attr:  strings.ToLower(function) + "(val(" + "" + f.DgraphAlias() + "_" + constructedForField + "Var))",
+					Attr: strings.ToLower(
+						function,
+					) + "(val(" + "" + f.DgraphAlias() + "_" + constructedForField + "Var))",
 				}
 				// This adds the following DQL query
 				// PostAggregateResult.nameMin_Author.postsAggregate : min(val(Author.postsAggregate_nameVar))
