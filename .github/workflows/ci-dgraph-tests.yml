@@ -38,8 +38,9 @@ jobs:
           cp ~/work/dgraph/dgraph/dgraph/dgraph ~/go/bin 
           # build the test binary
           cd t; go build .
-          # run the tests
+          # clean up docker containers before test execution
           ./t -r
-          ./t --skip algo,chunker,codec,conn,contrib,dgraph,edgraph,ee,filestore,gql,graphql,lex,ocagent,paper,posting,present,protos,query,raftwal,schema,static,systest,t,task,telemetry,testutil,tlstest,tok,types,upgrade,worker,x,xidmap 
+          # run the tests
+          ./t --skip chunker,contrib,dgraph,edgraph,ee,filestore,gql,graphql,lex,paper,present,protos,query,systest,t,task,testutil,tlstest,tok,upgrade,worker,x,xidmap 
           # clean up docker containers after test execution
           ./t -r
