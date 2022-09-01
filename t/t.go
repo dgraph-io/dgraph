@@ -457,7 +457,7 @@ func composeFileFor(pkg string) string {
 func getPackages() []task {
 	has := func(list []string, in string) bool {
 		for _, l := range list {
-			if len(l) > 0 && strings.Contains(in, l) {
+			if len(l) > 0 && strings.Contains(in+"/", "github.com/dgraph-io/dgraph/"+l+"/") {
 				return true
 			}
 		}
