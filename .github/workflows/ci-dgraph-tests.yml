@@ -41,10 +41,6 @@ jobs:
           # clean up docker containers before test execution
           ./t -r
           # run the tests
-<<<<<<< HEAD
-          ./t --skip chunker,contrib,dgraph,ee,filestore,graphql,lex,paper,present,protos,systest,t,tlstest,tok,upgrade,worker,xidmap 
-=======
-          ./t --skip algo,codec,conn,contrib,dgraph,edgraph,ee,filestore,gql,graphql,lex,licenses,ocagent,paper,posting,present,protos,query,raftwal,schema,static,systest,t,task,telemetry,testutil,tlstest,tok,types,upgrade,worker,x,xidmap 
->>>>>>> 3b2f287e1 (unskipped chunker)
+          ./t --skip contrib,dgraph,ee,filestore,graphql,lex,paper,present,protos,systest,t,tlstest,tok,upgrade,worker,xidmap 
           # clean up docker containers after test execution
           ./t -r
