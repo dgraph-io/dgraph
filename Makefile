@@ -78,12 +78,12 @@ local-image: image-local
 help:
 	@echo
 	@echo Build commands:
-	@echo "  make [all]      - Build all targets [EE]"
-	@echo "  make oss       - Build all targets [OSS]"
-	@echo "  make dgraph    - Build dgraph binary"
-	@echo "  make install   - Install all targets"
-	@echo "  make uninstall - Uninstall known targets"
+	@echo "  make [all]		  - Build all targets [EE]"
+	@echo "  make oss         - Build all targets [OSS]"
+	@echo "  make dgraph      - Build dgraph binary"
+	@echo "  make install     - Install all targets"
+	@echo "  make uninstall	  - Uninstall known targets"
 	@echo "  make local-image - Make local Docker image"
-	@echo "  make version   - Show current build info"
-	@echo "  make help      - This help"
+	@echo "  make version     - Show current build info"
+	@echo "  make help        - This help"
 	@echo
