@@ -32,7 +32,7 @@ dgraph:
 	GOOS=linux GOARCH=amd64 $(MAKE) -w -C $@ all
 
 oss:
-	$(MAKE) BUILD_TAGS=oss
+	GOOS=linux GOARCH=amd64 $(MAKE) BUILD_TAGS=oss
 
 version:
 	@echo Dgraph ${BUILD_VERSION}
@@ -44,20 +44,19 @@ version:
 
 install:
 	@echo "Installing dgraph..."
-	@$(MAKE) -C dgraph install
+	@GOOS=linux GOARCH=amd64 $(MAKE) -C dgraph install
 
 install_oss oss_install:
-	$(MAKE) BUILD_TAGS=oss install
+	GOOS=linux GOARCH=amd64 $(MAKE) BUILD_TAGS=oss install
 
 uninstall:
 	@echo "Uninstalling dgraph..."
 	@$(MAKE) -C dgraph uninstall
 
-# ./test.sh is defunct
-# use t.go in t directory
+# Run tests in t directory
 test:
-	@echo Running ./test.sh
-	./test.sh
+	@echo Running ./t
+	$(MAKE) -C t test
 
 image:
 	@GOOS=linux GOARCH=amd64 $(MAKE) dgraph
