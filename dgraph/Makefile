@@ -21,11 +21,11 @@ BUILD_CODENAME  = rocket-2
 BUILD_DATE     ?= $(shell git log -1 --format=%ci)
 BUILD_BRANCH   ?= $(shell git rev-parse --abbrev-ref HEAD)
 
-# Use the next build version on main branch
+# Use the next build version on master branch
 # NOTE: this needs to be updated with each new release
-ifeq ($(BUILD_BRANCH),main)
-# Version on main is of the format <next-release-version>-g<commit-id>
-BUILD_VERSION ?= 'v21.03.2-g'$(BUILD)
+ifeq ($(BUILD_BRANCH),master)
+# Version on master is of the format <next-release-version>-g<commit-id>
+BUILD_VERSION ?= 'v21.03.1-g'$(BUILD)
 else
 BUILD_VERSION ?= $(shell git describe --always --tags)
 endif
