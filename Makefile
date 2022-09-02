@@ -29,10 +29,10 @@ all: dgraph
 
 # Make Dgraph binary and place in dgraph subdirectory
 dgraph:
-	GOOS=linux GOARCH=amd64 $(MAKE) -w -C $@ all
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 $(MAKE) -w -C $@ all
 
 oss:
-	GOOS=linux GOARCH=amd64 $(MAKE) BUILD_TAGS=oss
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 $(MAKE) BUILD_TAGS=oss
 
 version:
 	@echo Dgraph ${BUILD_VERSION}
@@ -44,29 +44,30 @@ version:
 
 install:
 	@echo "Installing dgraph..."
-	@GOOS=linux GOARCH=amd64 $(MAKE) -C dgraph install
+	@GOOS=linux GOARCH=amd64 CGO_ENABLED=0 $(MAKE) -C dgraph install
 
 install_oss oss_install:
-	GOOS=linux GOARCH=amd64 $(MAKE) BUILD_TAGS=oss install
+	@GOOS=linux GOARCH=amd64 CGO_ENABLED=0 $(MAKE) BUILD_TAGS=oss install
 
 uninstall:
 	@echo "Uninstalling dgraph..."
 	@$(MAKE) -C dgraph uninstall
 
-# Run tests in t directory
+# test.sh is deprecated
+# use t.go in t directory
+# TODO: change this to t.go
 test:
-	@echo Running ./t
-	$(MAKE) -C t test
+	@echo "Use t.go in t directory"
 
 image:
-	@GOOS=linux GOARCH=amd64 $(MAKE) dgraph
+	@GOOS=linux GOARCH=amd64 CGO_ENABLED=0 $(MAKE) dgraph
 	@mkdir -p linux
 	@mv ./dgraph/dgraph ./linux/dgraph
 	@docker build -f contrib/Dockerfile -t dgraph/dgraph:$(subst /,-,${BUILD_BRANCH}) .
 	@rm -r linux
 
 image-local:
-	@GOOS=linux GOARCH=amd64 $(MAKE) dgraph
+	@GOOS=linux GOARCH=amd64 CGO_ENABLED=0 $(MAKE) dgraph
 	@mkdir -p linux
 	@mv ./dgraph/dgraph ./linux/dgraph
 	@docker build -f contrib/Dockerfile -t dgraph/dgraph:local .
@@ -77,11 +78,12 @@ local-image: image-local
 help:
 	@echo
 	@echo Build commands:
-	@echo "  make [all]     - Build all targets [EE]"
+	@echo "  make [all]      - Build all targets [EE]"
 	@echo "  make oss       - Build all targets [OSS]"
 	@echo "  make dgraph    - Build dgraph binary"
 	@echo "  make install   - Install all targets"
 	@echo "  make uninstall - Uninstall known targets"
+	@echo "  make local-image - Make local Docker image"
 	@echo "  make version   - Show current build info"
 	@echo "  make help      - This help"
 	@echo
