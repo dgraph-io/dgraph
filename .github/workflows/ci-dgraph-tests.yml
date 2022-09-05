@@ -41,6 +41,6 @@ jobs:
           # clean up docker containers before test execution
           ./t -r
           # run the tests
-          ./t --skip contrib,dgraph,ee,filestore,graphql,protos,systest,t,tok,upgrade,worker,xidmap
+          ./t --skip contrib,dgraph/cmd/live/load-json,ee,filestore,protos,systest,t,tlstest/acl,tok,upgrade,worker,xidmap
           # clean up docker containers after test execution
           ./t -r
