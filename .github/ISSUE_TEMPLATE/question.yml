@@ -12,4 +12,4 @@ body:
         - If it is code related, you could open it here
   - type: textarea
     attributes:
-      label: Question
+      label: Question.

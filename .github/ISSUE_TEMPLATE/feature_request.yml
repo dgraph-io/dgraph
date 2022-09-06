@@ -10,14 +10,6 @@ body:
         If you think we can make Dgraph better, describe your feature request here.
         Note: Feature requests are judged based on user experience and modeled on [Go Experience Reports](https://github.com/golang/go/wiki/ExperienceReports). These reports should focus on the
         problems: they should not focus on and need not propose solutions.
-  - type: textarea
-    attributes:
-      label: What version of Dgraph are you using?
-      description: Copy and paste all you see using the command 'dgraph version'
-      placeholder: |
-        Paste here.
-    validations:
-      required: false
   - type: dropdown
     attributes:
       label: Have you tried Dgraph before this proposal? and did not find anything similar?
@@ -28,7 +20,7 @@ body:
       required: false
   - type: textarea
     attributes:
-      label: What you wanted to do
+      label: What you wanted to do.
       description: Enter details about your expectations.
       placeholder: |
           Please, explain here.
@@ -44,7 +36,7 @@ body:
       required: false
   - type: textarea
     attributes:
-      label: Why that wasn't it great, with examples.
+      label: Why wasn't it great, with examples.
       description: Enter details about your expectations.
       placeholder: |
           Please, explain here.
@@ -52,5 +44,5 @@ body:
       required: false
   - type: textarea
     attributes:
-      label: Additional information
-      description: Any external references to support your case. Tell us anything else you think we should know.
+      label: Additional information.
+      description: Any external references to support your case.

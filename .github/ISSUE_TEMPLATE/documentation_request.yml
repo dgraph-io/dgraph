@@ -13,7 +13,7 @@ body:
       label: What version of Dgraph is the target?
       description: Is it latest? old/stale?
       placeholder: |
-        Paste here.
+        Type here.
     validations:
       required: false
   - type: textarea
@@ -26,5 +26,5 @@ body:
       required: true
   - type: textarea
     attributes:
-      label: Additional information
+      label: Additional information.
       description: Tell us anything else you think we should know.

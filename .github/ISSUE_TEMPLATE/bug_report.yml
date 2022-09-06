@@ -11,7 +11,7 @@ body:
   - type: textarea
     attributes:
       label: What version of Dgraph are you using?
-      description: Copy and paste all you see using the command 'dgraph version'
+      description: Copy and paste all you see using the command 'dgraph version'.
       placeholder: |
         Paste here.
     validations:
@@ -19,7 +19,7 @@ body:
   - type: textarea
     attributes:
       label: Tell us a little more about your go-environment?
-      description: Copy and paste all you see using the command 'go version'
+      description: Copy and paste all you see using the command 'go version'.
       placeholder: |
         Paste here.
     validations:
@@ -34,10 +34,10 @@ body:
       required: false
   - type: textarea
     attributes:
-      label: What is the hardware spec (RAM, CPU, OS)
+      label: What is the hardware spec (RAM, CPU, OS).
       description: Share all possible context of your side.
       placeholder: |
-        Paste here.
+        Type here.
     validations:
       required: true
   - type: textarea
