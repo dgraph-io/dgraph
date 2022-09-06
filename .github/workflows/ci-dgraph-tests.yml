@@ -41,6 +41,6 @@ jobs:
           # clean up docker containers before test execution
           ./t -r
           # run the tests
-          ./t --skip contrib,ee,protos,systest,t,tlstest,upgrade,worker
+          ./t --skip systest,tlstest,upgrade,worker
           # clean up docker containers after test execution
           ./t -r
