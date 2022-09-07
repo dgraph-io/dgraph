@@ -699,7 +699,7 @@ func appendTestCoverageFile(src, des string) error {
 		return nil
 	}
 
-	cmd := command("bash", "cat", src, "|", "grep", "-v", covFileHeader, ">>", des)
+	cmd := command("bash", "-c", fmt.Sprintf("cat %s | grep -v \"%s\" >> %s", src, covFileHeader, des))
 	fmt.Println(cmd.String())
 	if err := cmd.Run(); err != nil {
 		return err
