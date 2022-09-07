@@ -235,17 +235,16 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 		}
 	}
 
+	dur := time.Since(start).Round(time.Second)
+	tid, _ := ctx.Value("threadId").(int32)
+	oc.Took(tid, pkg, dur)
+	fmt.Printf("Ran tests for package: %s in %s\n", pkg, dur)
 	if len(*covFile) > 0 {
 		fmt.Println("APPEND")
 		if err = appendTestCoverageFile(tmpCovFile, *covFile); err != nil {
 			return err
 		}
 	}
-
-	dur := time.Since(start).Round(time.Second)
-	tid, _ := ctx.Value("threadId").(int32)
-	oc.Took(tid, pkg, dur)
-	fmt.Printf("Ran tests for package: %s in %s\n", pkg, dur)
 	if detectRace(prefix) {
 		return fmt.Errorf("race condition detected for test package %s and cluster with prefix"+
 			" %s. check logs for more details", pkg, prefix)
