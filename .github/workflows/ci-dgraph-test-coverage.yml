@@ -1,5 +1,7 @@
 name: ci-dgraph-test-coverage
 on: [push, pull_request]
+env:
+  COVERAGE_REPORT=coverage.out
 jobs:
   dgraph-test-coverage:
     runs-on: ubuntu-latest
@@ -33,7 +35,6 @@ jobs:
         run: |
           #!/bin/bash
           # env settings
-          export COVERAGE_REPORT=coverage.out
           export GOPATH=~/go
           # move the binary
           cp ~/work/dgraph/dgraph/dgraph/dgraph ~/go/bin 
@@ -45,6 +46,8 @@ jobs:
           ./t --coverage $COVERAGE_REPORT --skip systest,tlstest,upgrade
           # clean up docker containers after test execution
           ./t -r
+          # print
+          cat $COVERAGE_REPORT
       - name: Install goveralls
         run: go install github.com/mattn/goveralls@latest
       - name: Send coverage

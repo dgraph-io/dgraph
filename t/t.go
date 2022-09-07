@@ -689,7 +689,7 @@ func appendTestCoverageFile(src, des string) error {
 		return nil
 	}
 
-	cmd := command("cat", tmpCovFile, "|", "grep", "-v", covFileHeader, ">>", *covFile)
+	cmd := command("cat", src, "|", "grep", "-v", covFileHeader, ">>", des)
 	fmt.Println(cmd.String())
 	if err := cmd.Run(); err != nil {
 		return err
