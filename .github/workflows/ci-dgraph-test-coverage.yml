@@ -1,7 +1,7 @@
 name: ci-dgraph-test-coverage
 on: [push, pull_request]
 env:
-  COVERAGE_REPORT=coverage.out
+  COVERAGE_REPORT: coverage.out
 jobs:
   dgraph-test-coverage:
     runs-on: ubuntu-latest
