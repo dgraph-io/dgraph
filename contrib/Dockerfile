@@ -7,8 +7,11 @@
 FROM ubuntu:20.04
 LABEL maintainer="Dgraph Labs <contact@dgraph.io>"
 
-RUN apt-get update && \
-  apt-get install -y --no-install-recommends \
+RUN export DEBIAN_FRONTEND=noninteractive && \
+  apt-get update -qq && \
+  apt-get install -yq --no-install-recommends apt-utils && \
+  apt-get dist-upgrade -yq && \
+  apt-get install -yq --no-install-recommends \
     ca-certificates \
     curl \
     htop \
