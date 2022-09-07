@@ -47,11 +47,14 @@ import (
 )
 
 var (
-	ctxb       = context.Background()
-	oc         = &outputCatcher{}
-	procId     int
-	isTeamcity bool
-	testId     int32
+	ctxb          = context.Background()
+	oc            = &outputCatcher{}
+	procId        int
+	isTeamcity    bool
+	testId        int32
+	tmpCovFile    = "tmp.out"
+	testCovMode   = "atomic"
+	covFileHeader = fmt.Sprintf("\"mode: %s\"", testCovMode)
 
 	baseDir = pflag.StringP("base", "", "../",
 		"Base dir for Dgraph")
@@ -88,6 +91,7 @@ var (
 	skip = pflag.String("skip", "",
 		"comma separated list of packages that needs to be skipped. "+
 			"Package Check uses string.Contains(). Please check the flag carefully")
+	covFile = pflag.String("coverage", "", "Directory used to store test coverage report.")
 )
 
 func commandWithContext(ctx context.Context, args ...string) *exec.Cmd {
@@ -100,9 +104,12 @@ func commandWithContext(ctx context.Context, args ...string) *exec.Cmd {
 
 // command takes a list of args and executes them as a program.
 // Example:
-//   docker-compose up -f "./my docker compose.yml"
+//
+//	docker-compose up -f "./my docker compose.yml"
+//
 // would become:
-//   command("docker-compose", "up", "-f", "./my docker compose.yml")
+//
+//	command("docker-compose", "up", "-f", "./my docker compose.yml")
 func command(args ...string) *exec.Cmd {
 	return commandWithContext(ctxb, args...)
 }
@@ -203,6 +210,9 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 	if isTeamcity {
 		args = append(args, "-json")
 	}
+	if len(*covFile) > 0 {
+		args = append(args, fmt.Sprintf("-covermode=%s", testCovMode), fmt.Sprintf("-coverprofile=%s", *covFile))
+	}
 	args = append(args, pkg)
 	cmd := commandWithContext(ctx, args...)
 	cmd.Env = append(cmd.Env, "TEST_DOCKER_PREFIX="+prefix)
@@ -222,6 +232,12 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 	} else {
 		if err := cmd.Run(); err != nil {
 			return fmt.Errorf("While running command: %v Error: %v", args, err)
+		}
+	}
+
+	if len(*covFile) > 0 {
+		if err = appendTestCoverageFile(tmpCovFile, *covFile); err != nil {
+			return err
 		}
 	}
 
@@ -650,8 +666,44 @@ func downloadDataFiles() {
 	}
 }
 
+func createTestCoverageFile(path string) error {
+	cmd := command("echo", covFileHeader, ">", path)
+	fmt.Println(cmd.String())
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func fileExists(path string) bool {
+	fi, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	return fi.Mode().IsRegular()
+}
+
+func appendTestCoverageFile(src, des string) error {
+	if !fileExists(src) || !fileExists(des) {
+		fmt.Println("src or des does not exist")
+		return nil
+	}
+
+	cmd := command("cat", tmpCovFile, "|", "grep", "-v", covFileHeader, ">>", *covFile)
+	fmt.Println(cmd.String())
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+	return nil
+}
+
 func executePreRunSteps() error {
 	testutil.GeneratePlugins(*race)
+	if len(*covFile) > 0 {
+		if err := createTestCoverageFile(*covFile); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
