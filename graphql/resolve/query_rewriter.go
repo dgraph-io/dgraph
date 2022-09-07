@@ -1212,9 +1212,8 @@ func buildAggregateFields(
 				}
 				aggregateChild := &gql.GraphQuery{
 					Alias: aggregateField.DgraphAlias() + "_" + f.DgraphAlias(),
-					Attr: strings.ToLower(
-						function,
-					) + "(val(" + "" + f.DgraphAlias() + "_" + constructedForField + "Var))",
+					Attr: strings.ToLower(function) +
+						"(val(" + "" + f.DgraphAlias() + "_" + constructedForField + "Var))",
 				}
 				// This adds the following DQL query
 				// PostAggregateResult.nameMin_Author.postsAggregate : min(val(Author.postsAggregate_nameVar))
