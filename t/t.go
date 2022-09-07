@@ -53,7 +53,7 @@ var (
 	isTeamcity    bool
 	testId        int32
 	tmpCovFile    = "tmp.out"
-	testCovMode   = "atomic"
+	testCovMode   = "count"
 	covFileHeader = fmt.Sprintf("mode: %s", testCovMode)
 
 	baseDir = pflag.StringP("base", "", "../",
