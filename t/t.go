@@ -54,7 +54,7 @@ var (
 	testId        int32
 	tmpCovFile    = "tmp.out"
 	testCovMode   = "atomic"
-	covFileHeader = fmt.Sprintf("\"mode: %s\"", testCovMode)
+	covFileHeader = fmt.Sprintf("mode: %s", testCovMode)
 
 	baseDir = pflag.StringP("base", "", "../",
 		"Base dir for Dgraph")
@@ -211,7 +211,7 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 		args = append(args, "-json")
 	}
 	if len(*covFile) > 0 {
-		args = append(args, fmt.Sprintf("-covermode=%s", testCovMode), fmt.Sprintf("-coverprofile=%s", *covFile))
+		args = append(args, fmt.Sprintf("-covermode=%s", testCovMode), fmt.Sprintf("-coverprofile=%s", tmpCovFile))
 	}
 	args = append(args, pkg)
 	cmd := commandWithContext(ctx, args...)
@@ -236,6 +236,7 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 	}
 
 	if len(*covFile) > 0 {
+		fmt.Println("APPEND")
 		if err = appendTestCoverageFile(tmpCovFile, *covFile); err != nil {
 			return err
 		}
@@ -667,11 +668,20 @@ func downloadDataFiles() {
 }
 
 func createTestCoverageFile(path string) error {
-	cmd := command("echo", covFileHeader, ">", path)
-	fmt.Println(cmd.String())
-	if err := cmd.Run(); err != nil {
+	outFile, err := os.Create(path)
+	if err != nil {
 		return err
 	}
+	defer outFile.Close()
+
+	cmd := command("echo", covFileHeader)
+	cmd.Stdout = outFile
+	if err := cmd.Run(); err != nil {
+		fmt.Println("ERR", err)
+		return err
+	}
+	cmd.Wait()
+
 	return nil
 }
 
@@ -689,7 +699,7 @@ func appendTestCoverageFile(src, des string) error {
 		return nil
 	}
 
-	cmd := command("cat", src, "|", "grep", "-v", covFileHeader, ">>", des)
+	cmd := command("bash", "cat", src, "|", "grep", "-v", covFileHeader, ">>", des)
 	fmt.Println(cmd.String())
 	if err := cmd.Run(); err != nil {
 		return err
