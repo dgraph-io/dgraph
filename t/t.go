@@ -100,9 +100,9 @@ func commandWithContext(ctx context.Context, args ...string) *exec.Cmd {
 
 // command takes a list of args and executes them as a program.
 // Example:
-//	docker-compose up -f "./my docker compose.yml"
+//docker-compose up -f "./my docker compose.yml"
 // would become:
-//	command("docker-compose", "up", "-f", "./my docker compose.yml")
+//command("docker-compose", "up", "-f", "./my docker compose.yml")
 func command(args ...string) *exec.Cmd {
 	return commandWithContext(ctxb, args...)
 }
