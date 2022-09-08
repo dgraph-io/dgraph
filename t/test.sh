@@ -13,5 +13,4 @@ do
   fi
   go clean -testcache
   echo Finish iteration: $i
-  echo "\n"
 done

@@ -1,4 +1,4 @@
-name: ci-dgraph-tests-json
+name: ci-dgraph-tests-query
 on:
   push:
     branches:
@@ -48,4 +48,4 @@ jobs:
           cd t;
           # run test 10 times
           chmod +x test.sh
-          ./test.sh dgraph/cmd/live/load-json
+          ./test.sh query
