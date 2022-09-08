@@ -10,7 +10,7 @@ LABEL maintainer="Dgraph Labs <contact@dgraph.io>"
 RUN export DEBIAN_FRONTEND=noninteractive && \
   apt-get update -qq && \
   apt-get install -yq --no-install-recommends apt-utils && \
-  apt-get dist-upgrade -yq && \
+  apt-get upgrade -yq && \
   apt-get install -yq --no-install-recommends \
     ca-certificates \
     curl \
