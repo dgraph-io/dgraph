@@ -1,0 +1,54 @@
+name: ci-dgraph-test-coverage
+on: [push, pull_request]
+env:
+  COVERAGE_REPORT: coverage.out
+jobs:
+  dgraph-test-coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.18
+      - name: Set up Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 16
+      - name: Install protobuf-compiler
+        run: sudo apt-get install -y protobuf-compiler
+      - name: Make Linux Build
+        run: |
+          #!/bin/bash
+          # go settings
+          export GOOS=linux
+          export GOARCH=amd64
+          # make dgraph binary
+          make dgraph
+      - name: Check protobuf
+        run: |
+          cd ./protos
+          go mod tidy
+          make regenerate
+          git diff --exit-code -- .
+      - name: Run unit tests
+        run: |
+          #!/bin/bash
+          # env settings
+          export GOPATH=~/go
+          # move the binary
+          cp ~/work/dgraph/dgraph/dgraph/dgraph ~/go/bin 
+          # build the test binary
+          cd t; go build .
+          # clean up docker containers before test execution
+          ./t -r
+          # run the tests
+          ./t --coverage $COVERAGE_REPORT --skip ee,testutil,dgraph,graphql,protos,contrib,systest,tlstest,worker
+          # clean up docker containers after test execution
+          ./t -r
+          # print
+          cat $COVERAGE_REPORT
+      - name: Install goveralls
+        run: go install github.com/mattn/goveralls@latest
+      - name: Send coverage
+        run: cd t && goveralls -repotoken ${{ secrets.COVERALLSIO_TOKEN }} -coverprofile=$COVERAGE_REPORT
