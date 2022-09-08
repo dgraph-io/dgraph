@@ -45,10 +45,7 @@ jobs:
           # move the binary
           cp ~/work/dgraph/dgraph/dgraph/dgraph ~/go/bin 
           # build the test binary
-          cd t; go build .
-          # clean up docker containers before test execution
-          ./t -r
-          # run the tests
-          ./t --skip systest,tlstest
-          # clean up docker containers after test execution
-          ./t -r
+          cd t;
+          # run test 10 times
+          chmod +x test.sh
+          ./test.sh
