@@ -34,8 +34,8 @@ body:
       required: false
   - type: textarea
     attributes:
-      label: What is the hardware spec (RAM, CPU, OS).
-      description: Share all possible context of your side.
+      label: What is the hardware spec (RAM, CPU, OS)?
+      description: Share all possible context of your machine.
       placeholder: |
         Type here.
     validations:
@@ -45,10 +45,7 @@ body:
       label: What steps will reproduce the bug?
       description: Enter details about your bug (command/config used to run Dgraph).
       placeholder: |
-        1. Using the command curl https://get.dgraph.io -sSf | VERSION=v20.03.1-beta1 bash
-        2. Started Dgraph locally(or docker for example) With this config...
-        3. Using the client X
-        4. See error...
+        Type here.
     validations:
       required: true
   - type: textarea
@@ -56,7 +53,7 @@ body:
       label: Expected behavior and actual result.
       description: Enter details about your expectations.
       placeholder: |
-          Please, explain here.
+        Type here.
     validations:
       required: false
   - type: textarea
