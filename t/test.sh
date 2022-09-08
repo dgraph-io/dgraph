@@ -4,7 +4,7 @@ do
   echo Iteration: $i
   go build .
   ./t -r
-  ./t --pkg=query
+  ./t --pkg=$1
   if [ $? -eq 1 ]; then
     echo "FAIL"
     exit 1
