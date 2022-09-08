@@ -19,16 +19,16 @@ linters-settings:
 linters:
   disable-all: true
   enable:
-    - errcheck
-    - ineffassign
-    - gas
-    - gofmt
-    - golint
-    #- gosimple
-    - govet
+#    - errcheck
+#    - ineffassign
+#    - gas
+#    - gofmt
+#    - golint
+#    #- gosimple
+#    - govet
     - lll
-    - varcheck
-    - unused
+#    - varcheck
+#    - unused
 
 issues:
   # Excluding configuration per-path, per-linter, per-text and per-source

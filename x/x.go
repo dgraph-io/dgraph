@@ -898,7 +898,8 @@ func DivideAndRule(num int) (numGo, width int) {
 }
 
 // SetupConnection starts a secure gRPC connection to the given host.
-func SetupConnection(host string, tlsCfg *tls.Config, useGz bool, dialOpts ...grpc.DialOption) (*grpc.ClientConn, error) {
+func SetupConnection(host string, tlsCfg *tls.Config, useGz bool,
+	dialOpts ...grpc.DialOption) (*grpc.ClientConn, error) {
 	callOpts := append([]grpc.CallOption{},
 		grpc.MaxCallRecvMsgSize(GrpcMaxSize),
 		grpc.MaxCallSendMsgSize(GrpcMaxSize))

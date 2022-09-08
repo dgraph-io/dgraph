@@ -462,7 +462,8 @@ func nameCheck(schema *ast.Schema, defn *ast.Definition) gqlerror.List {
 }
 
 // This could be removed once the following gqlparser bug is fixed:
-// 	https://github.com/dgraph-io/gqlparser/issues/128
+//
+//	https://github.com/dgraph-io/gqlparser/issues/128
 func directiveLocationCheck(schema *ast.Schema, defn *ast.Definition) gqlerror.List {
 	var errs []*gqlerror.Error
 	for _, dir := range defn.Directives {
@@ -1952,7 +1953,8 @@ func customDirectiveValidation(sch *ast.Schema,
 				key := strings.Split(h.Value.Raw, ":")
 				if len(key) > 2 {
 					return append(errs, gqlerror.ErrorPosf(errPos,
-						"Type %s; Field %s; forwardHeaders in @custom directive should be of the form 'remote_headername:local_headername' or just 'headername'"+
+						"Type %s; Field %s; forwardHeaders in @custom directive should be of the form"+
+							" 'remote_headername:local_headername' or just 'headername'"+
 							", found: `%s`.",
 						typ.Name, field.Name, h.Value.Raw))
 				}
@@ -1966,7 +1968,8 @@ func customDirectiveValidation(sch *ast.Schema,
 				secretKey := strings.Split(h.Value.Raw, ":")
 				if len(secretKey) > 2 {
 					return append(errs, gqlerror.ErrorPosf(errPos,
-						"Type %s; Field %s; secretHeaders in @custom directive should be of the form 'remote_headername:local_headername' or just 'headername'"+
+						"Type %s; Field %s; secretHeaders in @custom directive should be of the form"+
+							" 'remote_headername:local_headername' or just 'headername'"+
 							", found: `%s`.",
 						typ.Name, field.Name, h.Value.Raw))
 				}
@@ -1990,7 +1993,8 @@ func customDirectiveValidation(sch *ast.Schema,
 				}
 				if len(key) > 2 {
 					return append(errs, gqlerror.ErrorPosf(errPos,
-						"Type %s; Field %s; introspectionHeaders in @custom directive should be of the form 'remote_headername:local_headername' or just 'headername'"+
+						"Type %s; Field %s; introspectionHeaders in @custom directive should be of the form"+
+							" 'remote_headername:local_headername' or just 'headername'"+
 							", found: `%s`.",
 						typ.Name, field.Name, h.Value.Raw))
 				}
@@ -2010,7 +2014,9 @@ func customDirectiveValidation(sch *ast.Schema,
 			value, ok := secrets[val]
 			if !ok {
 				return append(errs, gqlerror.ErrorPosf(graphql.Position,
-					"Type %s; Field %s; introspectionHeaders in @custom directive should use secrets to store the header value. To do that specify `%s` in this format '#Dgraph.Secret name value' at the bottom of your schema file.",
+					"Type %s; Field %s; introspectionHeaders in @custom directive should use secrets to store"+
+						" the header value. To do that specify `%s` in this format '#Dgraph.Secret name value' at the "+
+						"bottom of your schema file.",
 					typ.Name, field.Name, val))
 			}
 			headers.Add(key, string(value))
@@ -2120,7 +2126,8 @@ func apolloRequiresValidation(sch *ast.Schema,
 	if extendsDirective == nil {
 		return []*gqlerror.Error{gqlerror.ErrorPosf(
 			dir.Position,
-			"Type %s: Field %s: @requires directive can only be defined on fields in type extensions. i.e., the type must have `@extends` or use `extend` keyword.", typ.Name, field.Name)}
+			"Type %s: Field %s: @requires directive can only be defined on fields in type extensions."+
+				" i.e., the type must have `@extends` or use `extend` keyword.", typ.Name, field.Name)}
 	}
 
 	arg := dir.Arguments.ForName(apolloKeyArg)
@@ -2190,13 +2197,15 @@ func apolloExternalValidation(sch *ast.Schema,
 	if extendsDirective == nil {
 		return []*gqlerror.Error{gqlerror.ErrorPosf(
 			dir.Position,
-			"Type %s: Field %s: @external directive can only be defined on fields in type extensions. i.e., the type must have `@extends` or use `extend` keyword.", typ.Name, field.Name)}
+			"Type %s: Field %s: @external directive can only be defined on fields in type extensions."+
+				" i.e., the type must have `@extends` or use `extend` keyword.", typ.Name, field.Name)}
 	}
 
 	if hasCustomOrLambda(field) {
 		return []*gqlerror.Error{gqlerror.ErrorPosf(
 			dir.Position,
-			"Type %s: Field %s: @external directive can not be defined on  fields with @custom or @lambda directive.", typ.Name, field.Name)}
+			"Type %s: Field %s: @external directive can not be defined on  fields with @custom or @lambda"+
+				" directive.", typ.Name, field.Name)}
 	}
 
 	if !isKeyField(field, typ) {
@@ -2206,7 +2215,8 @@ func apolloExternalValidation(sch *ast.Schema,
 			if dirDefn != nil {
 				return []*gqlerror.Error{gqlerror.ErrorPosf(
 					dirDefn.Position,
-					"Type %s: Field %s: @%s directive can not be defined on @external fields that are not @key.", typ.Name, field.Name, directive)}
+					"Type %s: Field %s: @%s directive can not be defined on @external fields that "+
+						"are not @key.", typ.Name, field.Name, directive)}
 			}
 		}
 	}
@@ -2282,7 +2292,8 @@ func isReservedKeyWord(name string) bool {
 		"as": true, // this is reserved keyword because DQL uses this for variables
 	}
 
-	if isScalar(name) || isQueryOrMutation(name) || reservedTypeNames[name] || caseInsensitiveKeywords[strings.ToLower(name)] {
+	if isScalar(name) || isQueryOrMutation(name) || reservedTypeNames[name] ||
+		caseInsensitiveKeywords[strings.ToLower(name)] {
 		return true
 	}
 

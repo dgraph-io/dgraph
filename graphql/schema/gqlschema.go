@@ -115,7 +115,8 @@ scalar Int64
 
 """
 The DateTime scalar type represents date and time as a string in RFC3339 format.
-For example: "1985-04-12T23:20:50.52Z" represents 20 minutes and 50.52 seconds after the 23rd hour of April 12th, 1985 in UTC.
+For example: "1985-04-12T23:20:50.52Z" represents 20 minutes and 50.52 seconds after the 23rd hour of April 12th,
+1985 in UTC.
 """
 scalar DateTime
 
@@ -926,7 +927,8 @@ func applyFieldValidations(typ *ast.Definition, field *ast.FieldDefinition) gqle
 // query/mutation/update for all the types mentioned in the schema.
 // In case of Apollo service Query, input types from queries and mutations
 // are excluded due to the limited support currently.
-func completeSchema(sch *ast.Schema, definitions []string, providesFieldsMap map[string]map[string]bool, apolloServiceQuery bool) {
+func completeSchema(sch *ast.Schema, definitions []string, providesFieldsMap map[string]map[string]bool,
+	apolloServiceQuery bool) {
 	query := sch.Types["Query"]
 	if query != nil {
 		query.Kind = ast.Object
@@ -1308,14 +1310,16 @@ func addPatchType(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[
 // and defn has a field of type R, e.g. if defn is like
 // `type T { ... g: R ... }`
 // then a query should be able to filter on g by term search on f, like
-// query {
-//   getT(id: 0x123) {
-//     ...
-//     g(filter: { f: { anyofterms: "something" } }, first: 10) { ... }
-//     ...
-//   }
-// }
-func addFieldFilters(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[string]bool, apolloServiceQuery bool) {
+//
+//	query {
+//	  getT(id: 0x123) {
+//	    ...
+//	    g(filter: { f: { anyofterms: "something" } }, first: 10) { ... }
+//	    ...
+//	  }
+//	}
+func addFieldFilters(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[string]bool,
+	apolloServiceQuery bool) {
 	for _, fld := range defn.Fields {
 		// Filtering and ordering for fields with @custom/@lambda directive is handled by the remote
 		// endpoint.
@@ -1524,10 +1528,11 @@ func mergeAndAddFilters(filterTypes []string, schema *ast.Schema, filterName str
 // in constructing the corresponding query
 // queryT(filter: TFilter, ... )
 // and in adding search to any fields of this type, like:
-// type R {
-//   f(filter: TFilter, ... ): T
-//   ...
-// }
+//
+//	type R {
+//	  f(filter: TFilter, ... ): T
+//	  ...
+//	}
 func addFilterType(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[string]bool) {
 	filterName := defn.Name + "Filter"
 	filter := &ast.Definition{
@@ -1985,7 +1990,8 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[s
 	}
 }
 
-func addFilterQuery(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[string]bool, generateSubscription bool) {
+func addFilterQuery(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[string]bool,
+	generateSubscription bool) {
 	qry := &ast.FieldDefinition{
 		Name: "query" + defn.Name,
 		Type: &ast.Type{
@@ -2061,7 +2067,8 @@ func addPasswordQuery(schema *ast.Schema, defn *ast.Definition, providesTypeMap 
 	schema.Query.Fields = append(schema.Query.Fields, qry)
 }
 
-func addQueries(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[string]bool, params *GenerateDirectiveParams) {
+func addQueries(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[string]bool,
+	params *GenerateDirectiveParams) {
 	if params.generateGetQuery {
 		addGetQuery(schema, defn, providesTypeMap, params.generateSubscription)
 	}

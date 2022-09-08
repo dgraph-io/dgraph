@@ -28,7 +28,8 @@ import (
 )
 
 var allowedFilters = []string{"StringHashFilter", "StringExactFilter", "StringFullTextFilter",
-	"StringRegExpFilter", "StringTermFilter", "DateTimeFilter", "FloatFilter", "Int64Filter", "IntFilter", "PointGeoFilter",
+	"StringRegExpFilter", "StringTermFilter", "DateTimeFilter", "FloatFilter", "Int64Filter",
+	"IntFilter", "PointGeoFilter",
 	"ContainsFilter", "IntersectsFilter", "PolygonGeoFilter"}
 
 func listInputCoercion(observers *validator.Events, addError validator.AddErrFunc) {
@@ -53,7 +54,8 @@ func listInputCoercion(observers *validator.Events, addError validator.AddErrFun
 		}
 		val := *value
 		child := &ast.ChildValue{Value: &val}
-		valueNew := ast.Value{Children: []*ast.ChildValue{child}, Kind: ast.ListValue, Position: val.Position, Definition: val.Definition}
+		valueNew := ast.Value{Children: []*ast.ChildValue{child}, Kind: ast.ListValue, Position: val.Position,
+			Definition: val.Definition}
 		*value = valueNew
 	})
 }
@@ -65,7 +67,8 @@ func filterCheck(observers *validator.Events, addError validator.AddErrFunc) {
 		}
 
 		if x.HasString(allowedFilters, value.Definition.Name) && len(value.Children) > 1 {
-			addError(validator.Message("%s filter expects only one filter function, got: %d", value.Definition.Name, len(value.Children)), validator.At(value.Position))
+			addError(validator.Message("%s filter expects only one filter function, got: %d",
+				value.Definition.Name, len(value.Children)), validator.At(value.Position))
 		}
 	})
 }
