@@ -58,3 +58,4 @@ jobs:
         run: go install github.com/mattn/goveralls@latest
       - name: Send coverage
         run: cd t && goveralls -repotoken ${{ secrets.COVERALLSIO_TOKEN }} -coverprofile=$COVERAGE_REPORT
+        
