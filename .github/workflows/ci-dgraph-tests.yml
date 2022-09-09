@@ -41,8 +41,6 @@ jobs:
         run: |
           #!/bin/bash
           # go env settings
-          export DOCKER_TLS_VERIFY=1
-
           export GOPATH=~/go
           # move the binary
           cp ~/work/dgraph/dgraph/dgraph/dgraph ~/go/bin 
