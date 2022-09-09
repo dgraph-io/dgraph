@@ -47,8 +47,14 @@ jobs:
           # build the test binary
           cd t; go build .
           # clean up docker containers before test execution
-          ./t -r
-          # run the tests
-          ./t --pkg=schema
+          counter=1
+          while [ $counter -le 10 ]
+          do
+            ./t -r
+            # run the tests
+            ./t --pkg=schema
+            ((counter++))
+          done
           # clean up docker containers after test execution
+
           ./t -r
