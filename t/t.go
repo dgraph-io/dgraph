@@ -176,7 +176,7 @@ func stopCluster(composeFile, prefix string, wg *sync.WaitGroup, err error) {
 			outputLogs(prefix)
 		}
 		//cmd := command("docker-compose", "-f", composeFile, "-p", prefix, "down", "-v")
-		cmd := command("docker", "stop", "$(docker ps -a -q)", "&&", "docker", "rm", "$(docker ps -a -q)")
+		cmd := command("docker", "ps", "-aq", "|", "xargs", "docker", "stop", "|", "xargs", "docker", "rm")
 
 		cmd.Stderr = nil
 		if err := cmd.Run(); err != nil {
