@@ -29,6 +29,7 @@ jobs:
           # go settings
           export GOOS=linux
           export GOARCH=amd64
+          DOCKER_TLS_VERIFY=1
           # make dgraph binary
           make dgraph
       - name: Check protobuf
@@ -53,6 +54,7 @@ jobs:
             ./t -r
             # run the tests
             ./t --pkg=schema
+            go clean -testcache
             ((counter++))
           done
           # clean up docker containers after test execution
