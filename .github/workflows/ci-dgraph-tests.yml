@@ -29,7 +29,6 @@ jobs:
           # go settings
           export GOOS=linux
           export GOARCH=amd64
-          DOCKER_TLS_VERIFY=1
           # make dgraph binary
           make dgraph
       - name: Check protobuf
@@ -42,6 +41,8 @@ jobs:
         run: |
           #!/bin/bash
           # go env settings
+          export DOCKER_TLS_VERIFY=1
+
           export GOPATH=~/go
           # move the binary
           cp ~/work/dgraph/dgraph/dgraph/dgraph ~/go/bin 
