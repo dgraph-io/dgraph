@@ -1258,7 +1258,10 @@ func completePoint(field gqlSchema.Field, coordinate []interface{}, buf *bytes.B
 
 // completePolygon converts the Dgraph result to GraphQL Polygon type.
 // Dgraph output: coordinate: [[[22.22,11.11],[16.16,15.15],[21.21,20.2]],[[22.28,11.18],[16.18,15.18],[21.28,20.28]]]
-// Graphql output: { coordinates: [ { points: [{ latitude: 11.11, longitude: 22.22}, { latitude: 15.15, longitude: 16.16} , { latitude: 20.20, longitude: 21.21} ]}, { points: [{ latitude: 11.18, longitude: 22.28}, { latitude: 15.18, longitude: 16.18} , { latitude: 20.28, longitude: 21.28}]} ] }
+// Graphql output: { coordinates: [ { points: [{ latitude: 11.11, longitude: 22.22},
+// { latitude: 15.15, longitude: 16.16} , { latitude: 20.20, longitude: 21.21} ]}, { points: [
+// { latitude: 11.18, longitude: 22.28}, { latitude: 15.18, longitude: 16.18} ,
+// { latitude: 20.28, longitude: 21.28}]} ] }
 func completePolygon(field gqlSchema.Field, polygon []interface{}, buf *bytes.Buffer) {
 	comma1 := ""
 

@@ -464,7 +464,17 @@ func (arw *AddRewriter) Rewrite(
 
 	for _, i := range val {
 		obj := i.(map[string]interface{})
-		fragment, upsertVar, errs := rewriteObject(ctx, mutatedType, nil, "", varGen, obj, xidMetadata, idExistence, mutationType)
+		fragment, upsertVar, errs := rewriteObject(
+			ctx,
+			mutatedType,
+			nil,
+			"",
+			varGen,
+			obj,
+			xidMetadata,
+			idExistence,
+			mutationType,
+		)
 		if len(errs) > 0 {
 			var gqlErrors x.GqlErrorList
 			for _, err := range errs {
@@ -626,7 +636,17 @@ func (urw *UpdateRewriter) Rewrite(
 
 	if setArg != nil {
 		if len(objSet) != 0 {
-			fragment, _, errs := rewriteObject(ctx, mutatedType, nil, srcUID, varGen, objSet, xidMetadata, idExistence, UpdateWithSet)
+			fragment, _, errs := rewriteObject(
+				ctx,
+				mutatedType,
+				nil,
+				srcUID,
+				varGen,
+				objSet,
+				xidMetadata,
+				idExistence,
+				UpdateWithSet,
+			)
 			if len(errs) > 0 {
 				var gqlErrors x.GqlErrorList
 				for _, err := range errs {
@@ -644,7 +664,17 @@ func (urw *UpdateRewriter) Rewrite(
 	if delArg != nil {
 		if len(objDel) != 0 {
 			// Set additional deletes to false
-			fragment, _, errs := rewriteObject(ctx, mutatedType, nil, srcUID, varGen, objDel, xidMetadata, idExistence, UpdateWithRemove)
+			fragment, _, errs := rewriteObject(
+				ctx,
+				mutatedType,
+				nil,
+				srcUID,
+				varGen,
+				objDel,
+				xidMetadata,
+				idExistence,
+				UpdateWithRemove,
+			)
 			if len(errs) > 0 {
 				var gqlErrors x.GqlErrorList
 				for _, err := range errs {
@@ -1398,10 +1428,12 @@ func rewriteObject(
 							// tries to add duplicate data to the field with @id.
 							var err error
 							if queryAuthSelector(typ) == nil {
-								err = x.GqlErrorf("id %s already exists for field %s inside type %s", xidString, xid.Name(), typ.Name())
+								err = x.GqlErrorf("id %s already exists "+
+									"for field %s inside type %s", xidString, xid.Name(), typ.Name())
 							} else {
 								// This error will only be reported in debug mode.
-								err = x.GqlErrorf("GraphQL debug: id %s already exists for field %s inside type %s", xidString, xid.Name(), typ.Name())
+								err = x.GqlErrorf("GraphQL debug: id %s already exists for "+
+									"field %s inside type %s", xidString, xid.Name(), typ.Name())
 							}
 							retErrors = append(retErrors, err)
 							return nil, upsertVar, retErrors
@@ -1581,7 +1613,15 @@ func rewriteObject(
 		switch val := val.(type) {
 		case map[string]interface{}:
 			if fieldDef.Type().IsUnion() {
-				fieldMutationFragment, _, err := rewriteUnionField(ctx, fieldDef, myUID, varGen, val, xidMetadata, idExistence, mutationType)
+				fieldMutationFragment, _, err := rewriteUnionField(
+					ctx,
+					fieldDef,
+					myUID,
+					varGen,
+					val,
+					xidMetadata,
+					idExistence,
+					mutationType)
 				if fieldMutationFragment != nil {
 					newObj[fieldName] = fieldMutationFragment.fragment
 					updateFromChildren(frag, fieldMutationFragment)
@@ -1594,7 +1634,16 @@ func rewriteObject(
 						"coordinates": rewriteGeoObject(val, fieldDef.Type()),
 					}
 			} else {
-				fieldMutationFragment, _, err := rewriteObject(ctx, fieldDef.Type(), fieldDef, myUID, varGen, val, xidMetadata, idExistence, mutationType)
+				fieldMutationFragment, _, err := rewriteObject(
+					ctx,
+					fieldDef.Type(),
+					fieldDef,
+					myUID,
+					varGen,
+					val,
+					xidMetadata,
+					idExistence,
+					mutationType)
 				if fieldMutationFragment != nil {
 					newObj[fieldName] = fieldMutationFragment.fragment
 					updateFromChildren(frag, fieldMutationFragment)
@@ -1609,7 +1658,15 @@ func rewriteObject(
 				switch object := object.(type) {
 				case map[string]interface{}:
 					if fieldDef.Type().IsUnion() {
-						fieldMutationFragment, _, err = rewriteUnionField(ctx, fieldDef, myUID, varGen, object, xidMetadata, idExistence, mutationType)
+						fieldMutationFragment, _, err = rewriteUnionField(
+							ctx,
+							fieldDef,
+							myUID,
+							varGen,
+							object,
+							xidMetadata,
+							idExistence,
+							mutationType)
 					} else if fieldDef.Type().IsGeo() {
 						fieldMutationFragment = newFragment(
 							map[string]interface{}{
@@ -1618,7 +1675,16 @@ func rewriteObject(
 							},
 						)
 					} else {
-						fieldMutationFragment, _, err = rewriteObject(ctx, fieldDef.Type(), fieldDef, myUID, varGen, object, xidMetadata, idExistence, mutationType)
+						fieldMutationFragment, _, err = rewriteObject(
+							ctx,
+							fieldDef.Type(),
+							fieldDef,
+							myUID,
+							varGen,
+							object,
+							xidMetadata,
+							idExistence,
+							mutationType)
 					}
 					if fieldMutationFragment != nil {
 						mutationFragments = append(mutationFragments, fieldMutationFragment.fragment)
@@ -1944,7 +2010,8 @@ func rewritePolygon(val map[string]interface{}) []interface{} {
 // For MultiPolygon type, the mutation json is as follows:
 //	{
 //		"type": "MultiPolygon",
-//		"coordinates": [[[[22.22,11.11],[16.16,15.15],[21.21,20.2]],[[22.28,11.18],[16.18,15.18],[21.28,20.28]]],[[[92.22,91.11],[16.16,15.15],[21.21,20.2]],[[22.28,11.18],[16.18,15.18],[21.28,20.28]]]]
+//		"coordinates": [[[[22.22,11.11],[16.16,15.15],[21.21,20.2]],[[22.28,11.18],[16.18,15.18],[21.28,20.28]]],
+//	 	[[[92.22,91.11],[16.16,15.15],[21.21,20.2]],[[22.28,11.18],[16.18,15.18],[21.28,20.28]]]]
 //	}
 func rewriteMultiPolygon(val map[string]interface{}) []interface{} {
 	// type casting this is safe, because of strict GraphQL schema
