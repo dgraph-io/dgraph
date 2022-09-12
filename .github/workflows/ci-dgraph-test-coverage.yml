@@ -6,8 +6,6 @@ on:
   pull_request:
     branches:
       - main
-env:
-  COVERAGE_REPORT: coverage.out
 jobs:
   dgraph-test-coverage:
     runs-on: ubuntu-latest
@@ -49,7 +47,7 @@ jobs:
           # clean up docker containers before test execution
           ./t -r
           # run the tests
-          ./t --coverage $COVERAGE_REPORT --skip ee,testutil,dgraph,graphql,protos,contrib,systest,tlstest,worker
+          ./t --coverage --skip ee,testutil,dgraph,graphql,protos,contrib,systest,tlstest,worker
           # clean up docker containers after test execution
           ./t -r
           # print
@@ -57,4 +55,4 @@ jobs:
       - name: Install goveralls
         run: go install github.com/mattn/goveralls@latest
       - name: Send coverage
-        run: cd t && goveralls -repotoken ${{ secrets.COVERALLSIO_TOKEN }} -coverprofile=$COVERAGE_REPORT
+        run: cd t && goveralls -repotoken ${{ secrets.COVERALLSIO_TOKEN }} -coverprofile=coverage.out
