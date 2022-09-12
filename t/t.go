@@ -52,6 +52,7 @@ var (
 	procId        int
 	isTeamcity    bool
 	testId        int32
+	covFile       = "coverage.out"
 	tmpCovFile    = "tmp.out"
 	testCovMode   = "atomic"
 	covFileHeader = fmt.Sprintf("mode: %s", testCovMode)
@@ -91,7 +92,7 @@ var (
 	skip = pflag.String("skip", "",
 		"comma separated list of packages that needs to be skipped. "+
 			"Package Check uses string.Contains(). Please check the flag carefully")
-	covFile = pflag.String("coverage", "", "Directory used to store test coverage report.")
+	runCov = pflag.Bool("coverage", false, "Set true to calculate test coverage")
 )
 
 func commandWithContext(ctx context.Context, args ...string) *exec.Cmd {
@@ -210,7 +211,7 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 	if isTeamcity {
 		args = append(args, "-json")
 	}
-	if len(*covFile) > 0 {
+	if *runCov {
 		args = append(args, fmt.Sprintf("-covermode=%s", testCovMode), fmt.Sprintf("-coverprofile=%s", tmpCovFile))
 	}
 	args = append(args, pkg)
@@ -239,8 +240,8 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 	tid, _ := ctx.Value("threadId").(int32)
 	oc.Took(tid, pkg, dur)
 	fmt.Printf("Ran tests for package: %s in %s\n", pkg, dur)
-	if len(*covFile) > 0 {
-		if err = appendTestCoverageFile(tmpCovFile, *covFile); err != nil {
+	if *runCov {
+		if err = appendTestCoverageFile(tmpCovFile, covFile); err != nil {
 			return err
 		}
 	}
@@ -705,8 +706,8 @@ func appendTestCoverageFile(src, des string) error {
 
 func executePreRunSteps() error {
 	testutil.GeneratePlugins(*race)
-	if len(*covFile) > 0 {
-		if err := createTestCoverageFile(*covFile); err != nil {
+	if *runCov {
+		if err := createTestCoverageFile(covFile); err != nil {
 			return err
 		}
 	}
