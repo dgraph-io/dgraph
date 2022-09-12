@@ -200,11 +200,12 @@ func NewXidMetadata() *xidMetadata {
 }
 
 // isDuplicateXid returns true if:
-// 1. we are at top level and this xid has already been seen at top level, OR
-// 2. we are in a deep mutation and:
-//		a. this newXidObj has a field which is inverse of srcField and that
-//		invField is not of List type, OR
-//		b. newXidObj has some values other than xid and isn't equal to existingXidObject
+//  1. we are at top level and this xid has already been seen at top level, OR
+//  2. we are in a deep mutation and:
+//     a. this newXidObj has a field which is inverse of srcField and that
+//     invField is not of List type, OR
+//     b. newXidObj has some values other than xid and isn't equal to existingXidObject
+//
 // It is used in places where we don't want to allow duplicates.
 func (xidMetadata *xidMetadata) isDuplicateXid(atTopLevel bool, xidVar string,
 	newXidObj map[string]interface{}, srcField schema.FieldDefinition) bool {
@@ -238,22 +239,23 @@ func (xidMetadata *xidMetadata) isDuplicateXid(atTopLevel bool, xidVar string,
 // For example, a GraphQL add mutation to add an object of type Author,
 // with GraphQL input object (where country code is @id)
 //
-// {
-//   name: "A.N. Author",
-//   country: { code: "ind", name: "India" },
-//   posts: [ { title: "A Post", text: "Some text" }]
-//   friends: [ { id: "0x123" } ]
-// }
+//	{
+//	  name: "A.N. Author",
+//	  country: { code: "ind", name: "India" },
+//	  posts: [ { title: "A Post", text: "Some text" }]
+//	  friends: [ { id: "0x123" } ]
+//	}
 //
 // The following queries would be generated
-// query {
-//   Country2(func: eq(Country.code, "ind")) @filter(type: Country) {
-//     uid
-//   }
-//   Person3(func: uid(0x123)) @filter(type: Person) {
-//     uid
-//   }
-// }
+//
+//	query {
+//	  Country2(func: eq(Country.code, "ind")) @filter(type: Country) {
+//	    uid
+//	  }
+//	  Person3(func: uid(0x123)) @filter(type: Person) {
+//	    uid
+//	  }
+//	}
 //
 // This query will be executed and depending on the result it would be decided whether
 // to create a new country as part of this mutation or link it to an existing country.
@@ -296,11 +298,11 @@ func (arw *AddRewriter) RewriteQueries(
 // RewriteQueries creates and rewrites set and remove update patches queries.
 // The GraphQL updates look like:
 //
-// input UpdateAuthorInput {
-// 	filter: AuthorFilter!
-// 	set: PatchAuthor
-// 	remove: PatchAuthor
-// }
+//	input UpdateAuthorInput {
+//		filter: AuthorFilter!
+//		set: PatchAuthor
+//		remove: PatchAuthor
+//	}
 //
 // which gets rewritten in to a DQL queries to check if
 // - referenced UIDs and XIDs in set and remove exist or not.
@@ -387,35 +389,37 @@ func (urw *UpdateRewriter) RewriteQueries(
 // For example, a GraphQL add mutation to add an object of type Author,
 // with GraphQL input object (where country code is @id) :
 //
-// {
-//   name: "A.N. Author",
-//   country: { code: "ind", name: "India" },
-//   posts: [ { title: "A Post", text: "Some text" }]
-//   friends: [ { id: "0x123" } ]
-// }
+//	{
+//	  name: "A.N. Author",
+//	  country: { code: "ind", name: "India" },
+//	  posts: [ { title: "A Post", text: "Some text" }]
+//	  friends: [ { id: "0x123" } ]
+//	}
+//
 // and idExistence
-// {
-//   "Country2": "0x234",
-//   "Person3": "0x123"
-// }
+//
+//	{
+//	  "Country2": "0x234",
+//	  "Person3": "0x123"
+//	}
 //
 // becomes an unconditional mutation.
 //
-// {
-//   "uid":"_:Author1",
-//   "dgraph.type":["Author"],
-//   "Author.name":"A.N. Author",
-//   "Author.country": {
-//     "uid":"0x234"
-//   },
-//   "Author.posts": [ {
-//     "uid":"_:Post3"
-//     "dgraph.type":["Post"],
-//     "Post.text":"Some text",
-//     "Post.title":"A Post",
-//   } ],
-//   "Author.friends":[ {"uid":"0x123"} ],
-// }
+//	{
+//	  "uid":"_:Author1",
+//	  "dgraph.type":["Author"],
+//	  "Author.name":"A.N. Author",
+//	  "Author.country": {
+//	    "uid":"0x234"
+//	  },
+//	  "Author.posts": [ {
+//	    "uid":"_:Post3"
+//	    "dgraph.type":["Post"],
+//	    "Post.text":"Some text",
+//	    "Post.title":"A Post",
+//	  } ],
+//	  "Author.friends":[ {"uid":"0x123"} ],
+//	}
 func (arw *AddRewriter) Rewrite(
 	ctx context.Context,
 	m schema.Mutation,
@@ -554,11 +558,11 @@ func (arw *AddRewriter) Rewrite(
 // Rewrite rewrites set and remove update patches into dql upsert mutations.
 // The GraphQL updates look like:
 //
-// input UpdateAuthorInput {
-// 	filter: AuthorFilter!
-// 	set: PatchAuthor
-// 	remove: PatchAuthor
-// }
+//	input UpdateAuthorInput {
+//		filter: AuthorFilter!
+//		set: PatchAuthor
+//		remove: PatchAuthor
+//	}
 //
 // which gets rewritten in to a Dgraph upsert mutation
 // - filter becomes the query
@@ -566,11 +570,11 @@ func (arw *AddRewriter) Rewrite(
 // - remove becomes the Dgraph delete mutation
 //
 // The semantics is the same as the Dgraph mutation semantics.
-// - Any values in set become the new values for those predicates (or add to the existing
-//   values for lists)
-// - Any nulls in set are ignored.
-// - Explicit values in remove mean delete this if it is the actual value
-// - Nulls in remove become like delete * for the corresponding predicate.
+//   - Any values in set become the new values for those predicates (or add to the existing
+//     values for lists)
+//   - Any nulls in set are ignored.
+//   - Explicit values in remove mean delete this if it is the actual value
+//   - Nulls in remove become like delete * for the corresponding predicate.
 //
 // See AddRewriter for how the set and remove fragments get created.
 func (urw *UpdateRewriter) Rewrite(
@@ -1313,7 +1317,7 @@ func asIDReference(
 // types.
 //
 // Currently adds enforce the schema ! restrictions, but updates don't.
-// e.g. a Post might have `title: String!`` in the schema, but,  a Post update could
+// e.g. a Post might have `title: String!“ in the schema, but,  a Post update could
 // set that to to null. ATM we allow this and it'll just triggers GraphQL error propagation
 // when that is in a query result.  This is the same case as deletes: e.g. deleting
 // an author might make the `author: Author!` field of a bunch of Posts invalid.
@@ -1744,7 +1748,7 @@ func existenceQueries(
 		if idVal, ok := obj[id.Name()]; ok {
 			if idVal != nil {
 				// No need to add query if the UID is already been seen.
-				if xidMetadata.seenUIDs[idVal.(string)] == true {
+				if xidMetadata.seenUIDs[idVal.(string)] {
 					return ret, retTypes, retErrors
 				}
 				// Mark this UID as seen.
@@ -1986,6 +1990,7 @@ func rewritePoint(point map[string]interface{}) []interface{} {
 
 // rewritePolygon constructs coordinates for Polygon type.
 // For Polygon type, the mutation json is as follows:
+//
 //	{
 //		"type": "Polygon",
 //		"coordinates": [[[22.22,11.11],[16.16,15.15],[21.21,20.2]],[[22.28,11.18],[16.18,15.18],[21.28,20.28]]]
@@ -2008,6 +2013,7 @@ func rewritePolygon(val map[string]interface{}) []interface{} {
 
 // rewriteMultiPolygon constructs coordinates for MultiPolygon type.
 // For MultiPolygon type, the mutation json is as follows:
+//
 //	{
 //		"type": "MultiPolygon",
 //		"coordinates": [[[[22.22,11.11],[16.16,15.15],[21.21,20.2]],[[22.28,11.18],[16.18,15.18],[21.28,20.28]]],
@@ -2081,19 +2087,19 @@ func addAdditionalDeletes(
 //
 // Post2 --- author --> Author1
 //
-// So Post2 should get removed from Author3's posts edge
+// # So Post2 should get removed from Author3's posts edge
 //
 // qryVar - is the variable storing Post2's uid
 // excludeVar - is the uid we might have to exclude from the query
 //
 // e.g. if qryVar = Post2, we'll generate
 //
-// query {
-//   ...
-// 	 var(func: uid(Post2)) {
-// 	  Author3 as Post.author
-// 	 }
-//  }
+//	query {
+//	  ...
+//		 var(func: uid(Post2)) {
+//		  Author3 as Post.author
+//		 }
+//	 }
 //
 // and delete Json
 //
@@ -2105,9 +2111,9 @@ func addAdditionalDeletes(
 // e.g. the update isn't really changing an existing edge, we have to definitely not
 // do the delete. So we add a condition using the excludeVar
 //
-// 	 var(func: uid(Post2)) {
-// 	  Author3 as Post.author @filter(NOT(uid(Author1)))
-// 	 }
+//	var(func: uid(Post2)) {
+//	 Author3 as Post.author @filter(NOT(uid(Author1)))
+//	}
 //
 // and the delete won't run.
 func addDelete(

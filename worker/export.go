@@ -230,7 +230,7 @@ func (e *exporter) toRDF() (*bpb.KVList, error) {
 	err := e.pl.Iterate(e.readTs, 0, func(p *pb.Posting) error {
 		fmt.Fprint(bp, prefix)
 		if p.PostingType == pb.Posting_REF {
-			fmt.Fprint(bp, fmt.Sprintf(uidFmtStrRdf, p.Uid))
+			fmt.Fprintf(bp, fmt.Sprintf(uidFmtStrRdf, p.Uid))
 		} else {
 			val := types.Val{Tid: types.TypeID(p.ValType), Value: p.Value}
 			str, err := valToStr(val)
