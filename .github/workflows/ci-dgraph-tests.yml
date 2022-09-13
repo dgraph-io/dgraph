@@ -10,7 +10,7 @@ on:
     - cron: "*/30 * * * *"
 jobs:
   dgraph-tests:
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v3
       - name: Set up Go
@@ -21,8 +21,6 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: 16
-      - name: Install protobuf-compiler
-        run: sudo apt-get install -y protobuf-compiler
       - name: Make Linux Build
         run: |
           #!/bin/bash
@@ -31,12 +29,6 @@ jobs:
           export GOARCH=amd64
           # make dgraph binary
           make dgraph
-      - name: Check protobuf
-        run: |
-          cd ./protos
-          go mod tidy
-          make regenerate
-          git diff --exit-code -- .
       - name: Run unit tests
         run: |
           #!/bin/bash
@@ -49,6 +41,6 @@ jobs:
           # clean up docker containers before test execution
           ./t -r
           # run the tests
-          ./t --skip systest,tlstest,dgraph/cmd,graphql/e2e
+          ./t --skip systest,tlstest
           # clean up docker containers after test execution
           ./t -r
