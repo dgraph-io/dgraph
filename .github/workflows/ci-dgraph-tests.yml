@@ -43,6 +43,9 @@ jobs:
           #!/bin/bash
           # go env settings
           export GOPATH=~/go
+          export PATH=$PATH:/home/ubuntu/actions-runner/work/_tool/go/1.18.6/x64/bin
+          alias go="/home/ubuntu/actions-runner/work/_tool/go/1.18.6/x64/bin/go"
+          which go
           cd /home/ubuntu/actions-runner/work/dgraph/dgraph/
           # move the binary
           cp dgraph/dgraph ~/go/bin 
