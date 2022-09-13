@@ -49,6 +49,6 @@ jobs:
           # clean up docker containers before test execution
           ./t -r
           # run the tests
-          ./t --pkg=systest
+          ./t --skip algo,chunker,codec,compose,conn,contrib,dgraph,edgraph,ee,filestore,gql,graphql,lex,licenses,ocagent,paper,posting,present,protos,query,raftwal,schema,static,t,task,telemetry,testutil,tlstest,tok,types,upgrade,wiki,worker,x,xidmap 
           # clean up docker containers after test execution
           ./t -r
