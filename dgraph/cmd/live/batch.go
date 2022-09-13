@@ -118,6 +118,7 @@ func handleError(err error, isRetry bool) {
 	case s.Code() == codes.Internal, s.Code() == codes.Unavailable:
 		// Let us not crash live loader due to this. Instead, we should infinitely retry to
 		// reconnect and retry the request.
+		//nolint:gosec // random generator in closed set does not require cryptographic precision
 		dur := time.Duration(1+rand.Intn(60)) * time.Second
 		fmt.Printf("Connection has been possibly interrupted. Got error: %v."+
 			" Will retry after %s.\n", err, dur.Round(time.Second))
@@ -129,6 +130,7 @@ func handleError(err error, isRetry bool) {
 			fmt.Printf("Transaction aborted. Will retry in background.\n")
 		}
 	case strings.Contains(s.Message(), "Server overloaded."):
+		//nolint:gosec // random generator in closed set does not require cryptographic precision
 		dur := time.Duration(1+rand.Intn(10)) * time.Minute
 		fmt.Printf("Server is overloaded. Will retry after %s.\n", dur.Round(time.Minute))
 		time.Sleep(dur)
