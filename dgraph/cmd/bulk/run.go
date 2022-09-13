@@ -23,6 +23,8 @@ import (
 	"log"
 	"math"
 	"net/http"
+
+	//nolint:gosec // profiling on bulk-loader tool considered noncritical
 	_ "net/http/pprof" // http profiler
 	"os"
 	"path/filepath"

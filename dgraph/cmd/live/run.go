@@ -28,6 +28,8 @@ import (
 	"math"
 	"math/rand"
 	"net/http"
+
+	//nolint:gosec // profiling on live-loader tool considered noncritical
 	_ "net/http/pprof" // http profiler
 	"os"
 	"sort"
