@@ -168,6 +168,7 @@ func SlashTLSConfig(endpoint string) (*tls.Config, error) {
 	return &tls.Config{
 		RootCAs:    pool,
 		ServerName: hostWithoutPort,
+		MinVersion: tls.VersionTLS12,
 	}, nil
 }
 
@@ -184,7 +185,9 @@ func LoadClientTLSConfig(v *viper.Viper) (*tls.Config, error) {
 	// server requires a client certificate.
 	caCert := tlsFlag.GetPath("ca-cert")
 	if caCert != "" {
-		tlsCfg := tls.Config{}
+		tlsCfg := tls.Config{
+			MinVersion: tls.VersionTLS12,
+		}
 
 		// 1. set up the root CA
 		pool, err := generateCertPool(caCert, tlsFlag.GetBool("use-system-ca"))
@@ -312,7 +315,9 @@ func GenerateServerTLSConfig(config *TLSHelperConfig) (tlsCfg *tls.Config, err e
 // configuration provided.
 func GenerateClientTLSConfig(config *TLSHelperConfig) (tlsCfg *tls.Config, err error) {
 	if config.CertRequired {
-		tlsCfg := tls.Config{}
+		tlsCfg := tls.Config{
+			MinVersion: tls.VersionTLS12,
+		}
 		// 1. set up the root CA
 		pool, err := generateCertPool(config.RootCACert, config.UseSystemCACerts)
 		if err != nil {
