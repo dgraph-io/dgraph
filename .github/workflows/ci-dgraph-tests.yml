@@ -42,6 +42,7 @@ jobs:
           #!/bin/bash
           # go env settings
           export GOPATH=~/go
+          export GOGC=10
           # move the binary
           cp ~/work/dgraph/dgraph/dgraph/dgraph ~/go/bin 
           # build the test binary
@@ -49,6 +50,6 @@ jobs:
           # clean up docker containers before test execution
           ./t -r
           # run the tests
-          ./t --skip systest,tlstest,dgraph/cmd,graphql/e2e
+          ./t --skip systest,tlstest
           # clean up docker containers after test execution
           ./t -r
