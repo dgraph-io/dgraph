@@ -47,8 +47,8 @@ jobs:
           # build the test binary
           cd t; go build .
           # clean up docker containers before test execution
-          sudo ./t -r
+          sudo env “GOPATH=$GOPATH” “PATH=$PATH” ./t -r
           # run the tests
-          sudo ./t --skip systest,tlstest,dgraph/cmd,graphql/e2e
+          sudo env “GOPATH=$GOPATH” “PATH=$PATH” ./t --skip systest,tlstest,dgraph/cmd,graphql/e2e
           # clean up docker containers after test execution
-          sudo ./t -r
+          sudo env “GOPATH=$GOPATH” “PATH=$PATH” ./t -r
