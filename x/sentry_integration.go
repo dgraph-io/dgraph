@@ -126,7 +126,7 @@ func WriteCidFile(cid string) {
 	if cid == "" {
 		return
 	}
-	if err := ioutil.WriteFile(cidPath, []byte(cid), 0644); err != nil {
+	if err := ioutil.WriteFile(cidPath, []byte(cid), 0600); err != nil {
 		glog.Warningf("unable to write CID to file %v %v", cidPath, err)
 		return
 	}
