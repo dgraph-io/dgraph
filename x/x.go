@@ -954,7 +954,7 @@ func SpanTimer(span *trace.Span, name string) func() {
 	if span == nil {
 		return func() {}
 	}
-	uniq := int64(rand.Int31())
+	uniq := int64(rand.Int31()) //nolint:gosec // unique id for tracing does not require cryptographic precision
 	attrs := []trace.Attribute{
 		trace.Int64Attribute("funcId", uniq),
 		trace.StringAttribute("funcName", name),

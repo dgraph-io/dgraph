@@ -110,13 +110,15 @@ func handleBasicFacetsType(key string, facetVal interface{}) (*api.Facet, error)
 // parseMapFacets parses facets which are of map type. Facets for scalar list predicates are
 // specified in map format. For example below predicate nickname and kind facet associated with it.
 // Here nickname "bob" doesn't have any facet associated with it.
-// {
+//
+//	{
 //		"nickname": ["alice", "bob", "josh"],
 //		"nickname|kind": {
 //			"0": "friends",
 //			"2": "official"
-// 		}
-// }
+//		}
+//	}
+//
 // Parsed response would a slice of maps[int]*api.Facet, one map for each facet.
 // Map key would be the index of scalar value for respective facets.
 func parseMapFacets(m map[string]interface{}, prefix string) ([]map[int]*api.Facet, error) {
@@ -385,6 +387,7 @@ var nextIdx uint64
 var randomID uint32
 
 func init() {
+	//nolint:gosec // random node id generator does not require cryptographic precision
 	randomID = rand.Uint32()
 }
 
