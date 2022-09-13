@@ -245,7 +245,7 @@ func (l *LogWriter) open() error {
 		l.writer = bufio.NewWriterSize(l.file, bufferSize)
 
 		if l.EncryptionKey != nil {
-			rand.Read(l.baseIv[:])
+			rand.Read(l.baseIv[:]) //nolint:gosec // cryptographic precision not required for randomly selecting from slice
 			bytes, err := encrypt(l.EncryptionKey, l.baseIv, []byte(VerificationText))
 			if err != nil {
 				return err
