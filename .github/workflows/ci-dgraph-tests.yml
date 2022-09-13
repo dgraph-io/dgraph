@@ -43,7 +43,7 @@ jobs:
           # go env settings
           export GOPATH=~/go
           # move the binary
-          cp ~/work/dgraph/dgraph/dgraph/dgraph ~/go/bin 
+          cp dgraph/dgraph ~/go/bin 
           # build the test binary
           cd t; go build .
           # clean up docker containers before test execution
