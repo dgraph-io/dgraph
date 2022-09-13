@@ -13,6 +13,10 @@ jobs:
     runs-on: self-hosted
     steps:
       - uses: actions/checkout@v3
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+           go-version: 1.18
       - name: Set up Node
         uses: actions/setup-node@v3
         with:
@@ -25,7 +29,6 @@ jobs:
           # go settings
           export GOOS=linux
           export GOARCH=amd64
-          alias go="/usr/local/go/bin/go"
           cd /home/ubuntu/actions-runner/work/dgraph/dgraph/
           # make dgraph binary
           make dgraph
