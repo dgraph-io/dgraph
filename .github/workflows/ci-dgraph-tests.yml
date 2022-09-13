@@ -10,7 +10,7 @@ on:
     - cron: "*/30 * * * *"
 jobs:
   dgraph-tests:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@v3
       - name: Set up Go
@@ -49,6 +49,6 @@ jobs:
           # clean up docker containers before test execution
           ./t -r
           # run the tests
-          ./t --skip systest,tlstest,dgraph/cmd,graphql/e2e
+          ./t --skip systest,tlstest
           # clean up docker containers after test execution
           ./t -r
