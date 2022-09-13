@@ -47,8 +47,8 @@ jobs:
           # build the test binary
           cd t; go build .
           # clean up docker containers before test execution
-          ./t -r
+          sudo ./t -r
           # run the tests
-          ./t --skip systest,tlstest
+          sudo ./t --skip systest,tlstest
           # clean up docker containers after test execution
           ./t -r
