@@ -47,8 +47,8 @@ jobs:
           # build the test binary
           cd t; go build .
           # clean up docker containers before test execution
-          sudo env “GOPATH=$GOPATH” “PATH=$PATH:/home/ubuntu/actions-runner/_work/_tool/go/1.18.6/x64/bin” ./t -r
+          sudo env "GOPATH=$GOPATH" "PATH=$PATH:/home/ubuntu/actions-runner/_work/_tool/go/1.18.6/x64/bin" ./t -r
           # run the tests
-          sudo env “GOPATH=$GOPATH” “PATH=$PATH:/home/ubuntu/actions-runner/_work/_tool/go/1.18.6/x64/bin” ./t --skip systest,tlstest,dgraph/cmd,graphql/e2e
+          sudo env "GOPATH=$GOPATH" "PATH=$PATH:/home/ubuntu/actions-runner/_work/_tool/go/1.18.6/x64/bin" ./t --skip systest,tlstest,dgraph/cmd,graphql/e2e
           # clean up docker containers after test execution
-          sudo env “GOPATH=$GOPATH” “PATH=$PATH:/home/ubuntu/actions-runner/_work/_tool/go/1.18.6/x64/bin” ./t -r
+          sudo env "GOPATH=$GOPATH" "PATH=$PATH:/home/ubuntu/actions-runner/_work/_tool/go/1.18.6/x64/bin" ./t -r
