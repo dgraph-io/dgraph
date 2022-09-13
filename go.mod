@@ -60,7 +60,7 @@ require (
 	go.opencensus.io v0.22.5
 	go.uber.org/zap v1.16.0
 	golang.org/x/crypto v0.0.0-20220314234659-1baeb1ce4c0b
-	golang.org/x/net v0.0.0-20211209124913-491a49abca63
+	golang.org/x/net v0.0.0-20220906165146-f3363e06e74c
 	golang.org/x/sync v0.0.0-20201207232520-09787c993a3a
 	golang.org/x/sys v0.0.0-20210615035016-665e8c7367d1
 	golang.org/x/text v0.3.7
