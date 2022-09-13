@@ -21,7 +21,7 @@ linters:
   enable:
     #- errcheck
     #- ineffassign
-    #- gas
+    - gas
     #- gofmt
     #- golint
     #- gosimple
