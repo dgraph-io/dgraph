@@ -17,5 +17,5 @@ sh gh-runner.sh
 NOTE: this will reboot the machine, once the machine is back up follow the next steps
 4. Restart the Github Actions Runner agent
 ```
-cd /home/ubuntu/actions-runner && ./run.sh
+cd /home/ubuntu/actions-runner && ./run.sh &
 ```
