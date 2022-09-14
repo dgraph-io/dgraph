@@ -40,6 +40,9 @@ jobs:
       - name: Run unit tests
         run: |
           #!/bin/bash
+          echo "**********"
+          echo ${USER}
+          echo "**********"
           # go env settings
           export GOPATH=~/go
           # move the binary
