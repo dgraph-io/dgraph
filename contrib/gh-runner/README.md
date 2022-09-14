@@ -14,8 +14,4 @@ wget https://raw.githubusercontent.com/dgraph-io/dgraph/main/contrib/gh-runner/g
 ```
 sh gh-runner.sh
 ```
-NOTE: this will reboot the machine, once the machine is back up follow the next steps
-4. Restart the Github Actions Runner agent
-```
-cd /home/ubuntu/actions-runner && ./run.sh &
-```
+NOTE: this will reboot the machine, once the machine is back up it will connect to Github
