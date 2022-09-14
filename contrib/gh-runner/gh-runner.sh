@@ -18,9 +18,8 @@ sudo apt-get -y update
 sudo apt-get -y install docker-ce docker-ce-cli containerd.io docker-compose-plugin
 sudo apt-get -y install docker-compose
 #Add Docker to sudoers group
-sudo groupadd docker
 sudo usermod -aG docker ${USER}
-newgrp docker
+newgrp docker &
 #Hook up to GH Actions
 mkdir actions-runner && cd actions-runner
 curl -o actions-runner-linux-x64-2.296.2.tar.gz -L https://github.com/actions/runner/releases/download/v2.296.2/actions-runner-linux-x64-2.296.2.tar.gz
