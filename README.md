@@ -3,7 +3,7 @@
 **The Only Native GraphQL Database With A Graph Backend.**
 
 [![Wiki](https://img.shields.io/badge/res-wiki-blue.svg)](https://dgraph.io/docs/)
-[![Build Status](https://teamcity.dgraph.io/guestAuth/app/rest/builds/buildType:(id:Dgraph_Ci)/statusIcon.svg)](https://teamcity.dgraph.io/viewLog.html?buildTypeId=Dgraph_Ci&buildId=lastFinished&guest=1)
+![CI](https://github.com/dgraph-io/dgraph/actions/workflows/ci-dgraph-tests.yml/badge.svg)
 [![Coverage Status](https://coveralls.io/repos/github/dgraph-io/dgraph/badge.svg?branch=main)](https://coveralls.io/github/dgraph-io/dgraph?branch=main)
 [![Go Report Card](https://goreportcard.com/badge/github.com/dgraph-io/dgraph)](https://goreportcard.com/report/github.com/dgraph-io/dgraph)
 [![TODOs](https://badgen.net/https/api.tickgit.com/badgen/github.com/dgraph-io/dgraph)](https://www.tickgit.com/browse?repo=github.com/dgraph-io/dgraph)
