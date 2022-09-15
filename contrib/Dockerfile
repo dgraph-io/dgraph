@@ -16,6 +16,8 @@ RUN apt-get install -y --no-install-recommends iputils-ping
 RUN apt-get install -y --no-install-recommends jq
 RUN apt-get install -y --no-install-recommends less
 RUN apt-get install -y --no-install-recommends sysstat
+RUN apt-get update -y
+RUN apt-get dist-upgrade -y
 
 ADD linux /usr/local/bin
 
