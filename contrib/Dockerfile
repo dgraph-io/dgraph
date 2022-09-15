@@ -8,7 +8,7 @@ FROM ubuntu:20.04
 LABEL maintainer="Dgraph Labs <contact@dgraph.io>"
 
 RUN apt-get update -y
-RUN apt-get upgrade -y
+RUN apt-get dist-upgrade -y
 RUN apt-get install -y --no-install-recommends ca-certificates
 RUN apt-get install -y --no-install-recommends curl
 RUN apt-get install -y --no-install-recommends htop
