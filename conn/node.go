@@ -137,8 +137,9 @@ func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage, tlsConfig *tls.Conf
 		},
 		// processConfChange etc are not throttled so some extra delta, so that we don't
 		// block tick when applyCh is full
-		Applied:         y.WaterMark{Name: "Applied watermark"},
-		RaftContext:     rc,
+		Applied:     y.WaterMark{Name: "Applied watermark"},
+		RaftContext: rc,
+		//nolint:gosec // random node id generator does not require cryptographic precision
 		Rand:            rand.New(&lockedSource{src: rand.NewSource(time.Now().UnixNano())}),
 		confChanges:     make(map[uint64]chan error),
 		messages:        make(chan sendmsg, 100),
@@ -205,6 +206,7 @@ func (n *Node) DoneConfChange(id uint64, err error) {
 	ch <- err
 }
 
+//nolint:gosec // random node id generator does not require cryptographic precision
 func (n *Node) storeConfChange(che chan error) uint64 {
 	n.Lock()
 	defer n.Unlock()

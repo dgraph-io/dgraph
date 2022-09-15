@@ -23,6 +23,8 @@ import (
 	"log"
 	"math"
 	"net/http"
+
+	//nolint:gosec // profiling on bulk-loader tool considered noncritical
 	_ "net/http/pprof" // http profiler
 	"os"
 	"path/filepath"
@@ -344,7 +346,7 @@ func run() {
 			fmt.Fprintln(os.Stderr, "Error serializing bulk meta file")
 			os.Exit(1)
 		}
-		if err = ioutil.WriteFile(bulkMetaPath, bulkMetaData, 0644); err != nil {
+		if err = ioutil.WriteFile(bulkMetaPath, bulkMetaData, 0600); err != nil {
 			fmt.Fprintln(os.Stderr, "Error writing to bulk meta file")
 			os.Exit(1)
 		}

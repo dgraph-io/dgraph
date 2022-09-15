@@ -63,9 +63,10 @@ func startServers(m cmux.CMux, tlsConf *tls.Config) {
 
 func startListen(l net.Listener) {
 	srv := &http.Server{
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 600 * time.Second,
-		IdleTimeout:  2 * time.Minute,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      600 * time.Second,
+		IdleTimeout:       2 * time.Minute,
+		ReadHeaderTimeout: 60 * time.Second,
 	}
 
 	err := srv.Serve(l)

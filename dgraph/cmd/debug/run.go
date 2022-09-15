@@ -26,7 +26,9 @@ import (
 	"log"
 	"math"
 	"net/http"
-	_ "net/http/pprof"
+
+	//nolint:gosec // profiling on debug tool considered noncritical
+	_ "net/http/pprof" // http profiler
 	"os"
 	"sort"
 	"strconv"

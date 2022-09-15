@@ -167,6 +167,7 @@ func (o *Oracle) newSubscriber() (<-chan pb.OracleDelta, int) {
 	defer o.Unlock()
 	var id int
 	for {
+		//nolint:gosec // random generator for node id does not require cryptographic precision
 		id = rand.Int()
 		if _, has := o.subscribers[id]; !has {
 			break
