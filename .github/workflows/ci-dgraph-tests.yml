@@ -61,7 +61,8 @@ jobs:
           ./t --coverage --skip systest/backup,systest/online-restore,systest/loader,tlstest
           # clean up docker containers after test execution
           ./t -r
-      - name: Install goveralls
-        run: go install github.com/mattn/goveralls@latest
-      - name: Send coverage
-        run: cd t && goveralls -repotoken ${{ secrets.COVERALLSIO_TOKEN }} -coverprofile=coverage.out
+      - name: Upload Coverage to coveralls.io
+        uses: coverallsapp/github-action@master
+          with:
+            github-token: ${{ secrets.COVERALLSIO_TOKEN }}
+            path-to-lcov: coverage.out
