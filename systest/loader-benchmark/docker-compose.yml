@@ -3,7 +3,7 @@
 version: "3.5"
 services:
   zero1:
-    image: dgraph/dgraph:latest
+    image: dgraph/dgraph:local
     container_name: bank-dg0.1
     working_dir: /data/dg0.1
     ports:
@@ -19,7 +19,7 @@ services:
     command: /gobin/dgraph zero -o 100 --my=zero1:5180 --logtostderr --bindall
 
   dg1:
-    image: dgraph/dgraph:latest
+    image: dgraph/dgraph:local
     container_name: bank-dg1
     working_dir: /data/dg1
     volumes:

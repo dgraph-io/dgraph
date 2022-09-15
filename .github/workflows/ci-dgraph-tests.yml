@@ -29,6 +29,8 @@ jobs:
           go mod tidy
           make regenerate
           git diff --exit-code -- .
+      - name: Make Docker Image
+        run: make image-local
       - name: Make Linux Build
         run: |
           #!/bin/bash
