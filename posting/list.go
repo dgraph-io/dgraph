@@ -1588,7 +1588,6 @@ func (out *rollupOutput) splits() []uint64 {
 	for startUid := range out.parts {
 		splits = append(splits, startUid)
 	}
-
 	sortSplits(splits)
 	return splits
 }
