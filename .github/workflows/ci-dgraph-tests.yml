@@ -58,7 +58,7 @@ jobs:
           # build the test binary
           cd t; go build .
           # run the tests
-          ./t --coverage --skip systest/backup,systest/online-restore,systest/loader,tlstest
+          ./t --coverage --pkg=posting
           # clean up docker containers after test execution
           ./t -r
       - name: Upload Coverage to coveralls.io
