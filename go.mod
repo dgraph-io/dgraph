@@ -19,7 +19,7 @@ require (
 	github.com/dgraph-io/gqlgen v0.13.2
 	github.com/dgraph-io/gqlparser/v2 v2.2.0
 	github.com/dgraph-io/graphql-transport-ws v0.0.0-20210223074046-e5b8b80bb4ed
-	github.com/dgraph-io/ristretto v0.1.0
+	github.com/dgraph-io/ristretto v0.1.1-0.20220915174238-c8ff866b39bb
 	github.com/dgraph-io/simdjson-go v0.3.0
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/dgrijalva/jwt-go/v4 v4.0.0-preview1
@@ -32,7 +32,7 @@ require (
 	github.com/go-sql-driver/mysql v0.0.0-20190330032241-c0f6b444ad8f
 	github.com/gogo/protobuf v1.3.2
 	github.com/golang/geo v0.0.0-20170810003146-31fb0106dc4a
-	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
+	github.com/golang/glog v1.0.0
 	github.com/golang/protobuf v1.5.2
 	github.com/golang/snappy v0.0.3
 	github.com/google/codesearch v1.0.0
