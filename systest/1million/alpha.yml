@@ -1,7 +1,7 @@
 version: "3.5"
 services:
   alpha1:
-    image: dgraph/dgraph:latest
+    image: dgraph/dgraph:local
     working_dir: /data/alpha1
     labels:
       cluster: test

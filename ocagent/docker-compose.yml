@@ -1,7 +1,7 @@
 version: "3.5"
 services:
   alpha1:
-    image: dgraph/dgraph:latest
+    image: dgraph/dgraph:local
     container_name: alpha1
     working_dir: /data/alpha1
     labels:
@@ -17,7 +17,7 @@ services:
     command: /gobin/dgraph alpha -o 100 --my=alpha1:7180 --zero=zero1:5180 --logtostderr -v=2
       --trace "jaeger=http://ocagent:14268;"
   zero1:
-    image: dgraph/dgraph:latest
+    image: dgraph/dgraph:local
     container_name: zero1
     working_dir: /data/zero1
     labels:
