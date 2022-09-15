@@ -46,7 +46,7 @@ jobs:
           cd t; go build .
           # clean up docker containers before test execution
           ./t -r
-      - name: Run unit tests
+      - name: Run Unit Tests
         run: |
           #!/bin/bash
           # clean cache
@@ -61,8 +61,7 @@ jobs:
           ./t --coverage --pkg=posting
           # clean up docker containers after test execution
           ./t -r
-      - name: Upload Coverage to coveralls.io
-        uses: coverallsapp/github-action@master
-        with:
-          github-token: ${{ secrets.COVERALLSIO_TOKEN }}
-          path-to-lcov: t/coverage.out
+      - name: Install Goveralls
+          run: go install github.com/mattn/goveralls@latest
+      - name: Send Coverage Results
+        run: cd t && goveralls -repotoken ${{ secrets.COVERALLSIO_TOKEN }} -coverprofile=coverage.out
