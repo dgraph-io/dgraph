@@ -21,7 +21,7 @@ services:
       --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
       --tls "ca-cert=/dgraph-tls/ca.crt; server-cert=/dgraph-tls/node.crt; server-key=/dgraph-tls/node.key; internal-port=true; client-cert=/dgraph-tls/client.alpha1.crt; client-key=/dgraph-tls/client.alpha1.key;"
   alpha2:
-    image: dgraph/dgraph:latest
+    image: dgraph/dgraph:local
     working_dir: /data/alpha2
     labels:
       cluster: test
@@ -41,7 +41,7 @@ services:
       --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
       --tls "ca-cert=/dgraph-tls/ca.crt; server-cert=/dgraph-tls/node.crt; server-key=/dgraph-tls/node.key; internal-port=true; client-cert=/dgraph-tls/client.alpha2.crt; client-key=/dgraph-tls/client.alpha2.key;"
   alpha3:
-    image: dgraph/dgraph:latest
+    image: dgraph/dgraph:local
     working_dir: /data/alpha3
     labels:
       cluster: test
@@ -61,7 +61,7 @@ services:
       --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
       --tls "ca-cert=/dgraph-tls/ca.crt; server-cert=/dgraph-tls/node.crt; server-key=/dgraph-tls/node.key; internal-port=true; client-cert=/dgraph-tls/client.alpha3.crt; client-key=/dgraph-tls/client.alpha3.key;"
   zero1:
-    image: dgraph/dgraph:latest
+    image: dgraph/dgraph:local
     working_dir: /data/zero1
     labels:
       cluster: test

@@ -99,7 +99,7 @@ services:
     command: /gobin/dgraph zero --raft "idx=2;" --replicas 3 --my=zero2:5080 --logtostderr --peer zero1:5080 -v=2 --bindall
       --tls "ca-cert=/dgraph-tls/ca.crt; server-cert=/dgraph-tls/node.crt; server-key=/dgraph-tls/node.key; internal-port=true; client-cert=/dgraph-tls/client.zero2.crt; client-key=/dgraph-tls/client.zero2.key;"
   zero3:
-    image: dgraph/dgraph:latest
+    image: dgraph/dgraph:local
     working_dir: /data/zero3
     labels:
       cluster: test
