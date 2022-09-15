@@ -567,7 +567,7 @@ func (l *List) setMutation(startTs uint64, data []byte) {
 // The function will loop until either the posting List is fully iterated, or you return a false
 // in the provided function, which will indicate to the function to break out of the iteration.
 //
-//	pl.Iterate(..., func(p *pb.posting) error {
+//		pl.Iterate(..., func(p *pb.posting) error {
 //	   // Use posting p
 //	   return nil // to continue iteration.
 //	   return errStopIteration // to break iteration.
