@@ -63,6 +63,6 @@ jobs:
           ./t -r
       - name: Upload Coverage to coveralls.io
         uses: coverallsapp/github-action@master
-          with:
-            github-token: ${{ secrets.COVERALLSIO_TOKEN }}
-            path-to-lcov: coverage.out
+        with:
+          github-token: ${{ secrets.COVERALLSIO_TOKEN }}
+          path-to-lcov: coverage.out
