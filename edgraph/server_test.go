@@ -138,31 +138,56 @@ func TestParseSchemaFromAlterOperation(t *testing.T) {
 	x.Check(err)
 	ps, err := badger.OpenManaged(badger.DefaultOptions(dir))
 	x.Check(err)
-	// TODO: add test case with duplicate custom Types
-
 	schema.Init(ps)
+
 	tests := []struct {
 		name    string
 		schema  string
 		noError bool
 	}{
-		{name: "test 1", schema: `
-  name: string @index(fulltext, term) .
-  age: int @index(int) @upsert .
-  friend: [uid] @count @reverse .
-`, noError: true},
-		{name: "test 2", schema: `
-  name: string @index(fulltext, term) .
-  age: int @index(int) @upsert .
-  friend: [uid] @count @reverse .
-friend: [uid] @count @reverse .
-`, noError: false},
-		{name: "test 3", schema: `
-  name: string @index(fulltext, term) .
-  age: int @index(int) @upsert .
-  friend: [uid] @count @reverse .
-friend: int @index(int) @count @reverse .
-`, noError: false},
+		{
+			name: "test no duplicate predicates and types",
+			schema: `
+  				name: string @index(fulltext, term) .
+  				age: int @index(int) @upsert .
+  				friend: [uid] @count @reverse .
+			`,
+			noError: true,
+		},
+		{
+			name: "test duplicate predicates error",
+			schema: `
+				name: string @index(fulltext, term) .
+				age: int @index(int) @upsert .
+				friend: [uid] @count @reverse .
+				friend: [uid] @count @reverse .
+			`,
+			noError: false,
+		},
+		{
+			name: "test duplicate predicates error 2",
+			schema: `
+				name: string @index(fulltext, term) .
+				age: int @index(int) @upsert .
+				friend: [uid] @count @reverse .
+				friend: int @index(int) @count @reverse .
+			`,
+			noError: false,
+		},
+		{
+			name: "test duplicate types error",
+			schema: `
+				name: string .
+				age: int .
+				type Person {
+					name
+				}
+				type Person {
+					age
+				}
+			`,
+			noError: false,
+		},
 	}
 
 	for _, tc := range tests {
