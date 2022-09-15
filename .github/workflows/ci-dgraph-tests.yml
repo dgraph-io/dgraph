@@ -46,7 +46,7 @@ jobs:
           cd t; go build .
           # clean up docker containers before test execution
           ./t -r
-      - name: Run unit tests
+      - name: Run Unit Tests
         run: |
           #!/bin/bash
           # clean cache
@@ -58,6 +58,10 @@ jobs:
           # build the test binary
           cd t; go build .
           # run the tests
-          ./t --skip systest/backup,systest/online-restore,systest/loader,tlstest
+          ./t --coverage=true --skip systest/backup,systest/online-restore,systest/loader,tlstest
           # clean up docker containers after test execution
           ./t -r
+      - name: Install Goveralls
+        run: go install github.com/mattn/goveralls@latest
+      - name: Send Coverage Results
+        run: cd t && goveralls -repotoken ${{ secrets.COVERALLSIO_TOKEN }} -coverprofile=coverage.out
