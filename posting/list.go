@@ -951,70 +951,7 @@ func (out *rollupOutput) free() {
 	for _, part := range out.parts {
 		codec.FreePack(part.Pack)
 	}
-	/*
-	   	<<<<<<< HEAD
 
-	   =======
-
-	   		return false, nil
-	   	}
-
-	   func (ro *rollupOutput) runSplits() error {
-	   top:
-
-	   		for startUid, pl := range ro.parts {
-	   			should, err := ShouldSplit(pl)
-	   			if err != nil {
-	   				return err
-	   			}
-	   			if should {
-	   				if err := ro.split(startUid); err != nil {
-	   					return err
-	   				}
-	   				// Had to split something. Let's run again.
-	   				goto top
-	   			}
-	   		}
-	   		return nil
-	   	}
-
-	   	func (ro *rollupOutput) split(startUid uint64) error {
-	   		pl := ro.parts[startUid]
-
-	   		r := roaring64.New()
-	   		if err := codec.FromPostingList(r, pl); err != nil {
-	   			return errors.Wrapf(err, "split codec.FromPostingList")
-	   		}
-
-	   		num := r.GetCardinality()
-	   		uid, err := r.Select(num / 2)
-	   		if err != nil {
-	   			return errors.Wrapf(err, "split Select rank: %d", num/2)
-	   		}
-
-	   		newpl := &pb.PostingList{}
-	   		ro.parts[uid] = newpl
-
-	   		// Remove everything from startUid to uid.
-	   		nr := r.Clone()
-	   		nr.RemoveRange(0, uid) // Keep all uids >= uid.
-	   		newpl.Bitmap = codec.ToBytes(nr)
-
-	   		// Take everything from the first posting where posting.Uid >= uid.
-	   		idx := sort.Search(len(pl.Postings), func(i int) bool {
-	   			return pl.Postings[i].Uid >= uid
-	   		})
-	   		newpl.Postings = pl.Postings[idx:]
-
-	   		// Update pl as well. Keeps the lower UIDs.
-	   		codec.RemoveRange(r, uid, math.MaxUint64)
-	   		pl.Bitmap = codec.ToBytes(r)
-	   		pl.Postings = pl.Postings[:idx]
-
-	   		return nil
-
-	   >>>>>>> d9ffc2cfe (Fix(rollups): Fix splits in roll-up (#7609))
-	*/
 }
 
 /*
