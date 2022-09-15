@@ -47,15 +47,15 @@ import (
 )
 
 var (
-	ctxb          = context.Background()
-	oc            = &outputCatcher{}
-	procId        int
-	isTeamcity    bool
-	testId        int32
-	covFile       = "coverage.out"
-	tmpCovFile    = "tmp.out"
-	testCovMode   = "atomic"
-	covFileHeader = fmt.Sprintf("mode: %s", testCovMode)
+	ctxb               = context.Background()
+	oc                 = &outputCatcher{}
+	procId             int
+	isTeamcity         bool
+	testId             int32
+	coverageFile       = "coverage.out"
+	tmpCoverageFile    = "tmp.out"
+	testCovMode        = "atomic"
+	coverageFileHeader = fmt.Sprintf("mode: %s", testCovMode)
 
 	baseDir = pflag.StringP("base", "", "../",
 		"Base dir for Dgraph")
@@ -92,7 +92,7 @@ var (
 	skip = pflag.String("skip", "",
 		"comma separated list of packages that needs to be skipped. "+
 			"Package Check uses string.Contains(). Please check the flag carefully")
-	runCov = pflag.Bool("coverage", false, "Set true to calculate test coverage")
+	runCoverage = pflag.Bool("coverage", false, "Set true to calculate test coverage")
 )
 
 func commandWithContext(ctx context.Context, args ...string) *exec.Cmd {
@@ -211,8 +211,9 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 	if isTeamcity {
 		args = append(args, "-json")
 	}
-	if *runCov {
-		args = append(args, fmt.Sprintf("-covermode=%s", testCovMode), fmt.Sprintf("-coverprofile=%s", tmpCovFile))
+	if *runCoverage {
+		// TODO: this breaks where we parallelize the tests, add coverage support for parallel tests
+		args = append(args, fmt.Sprintf("-covermode=%s", testCovMode), fmt.Sprintf("-coverprofile=%s", tmpCoverageFile))
 	}
 	args = append(args, pkg)
 	cmd := commandWithContext(ctx, args...)
@@ -240,8 +241,8 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 	tid, _ := ctx.Value("threadId").(int32)
 	oc.Took(tid, pkg, dur)
 	fmt.Printf("Ran tests for package: %s in %s\n", pkg, dur)
-	if *runCov {
-		if err = appendTestCoverageFile(tmpCovFile, covFile); err != nil {
+	if *runCoverage {
+		if err = appendTestCoverageFile(tmpCoverageFile, coverageFile); err != nil {
 			return err
 		}
 	}
@@ -673,7 +674,7 @@ func createTestCoverageFile(path string) error {
 	}
 	defer outFile.Close()
 
-	cmd := command("echo", covFileHeader)
+	cmd := command("echo", coverageFileHeader)
 	cmd.Stdout = outFile
 	if err := cmd.Run(); err != nil {
 		return err
@@ -726,7 +727,7 @@ func appendTestCoverageFile(src, des string) error {
 		return nil
 	}
 
-	cmd := command("bash", "-c", fmt.Sprintf("cat %s | grep -v \"%s\" >> %s", src, covFileHeader, des))
+	cmd := command("bash", "-c", fmt.Sprintf("cat %s | grep -v \"%s\" >> %s", src, coverageFileHeader, des))
 	if err := cmd.Run(); err != nil {
 		return err
 	}
@@ -736,8 +737,8 @@ func appendTestCoverageFile(src, des string) error {
 
 func executePreRunSteps() error {
 	testutil.GeneratePlugins(*race)
-	if *runCov {
-		if err := createTestCoverageFile(covFile); err != nil {
+	if *runCoverage {
+		if err := createTestCoverageFile(coverageFile); err != nil {
 			return err
 		}
 	}
