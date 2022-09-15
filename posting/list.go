@@ -567,7 +567,7 @@ func (l *List) setMutation(startTs uint64, data []byte) {
 // The function will loop until either the posting List is fully iterated, or you return a false
 // in the provided function, which will indicate to the function to break out of the iteration.
 //
-//		pl.Iterate(..., func(p *pb.posting) error {
+//	pl.Iterate(..., func(p *pb.posting) error {
 //	   // Use posting p
 //	   return nil // to continue iteration.
 //	   return errStopIteration // to break iteration.
@@ -865,7 +865,6 @@ func (l *List) ToBackupPostingList(bl *pb.BackupPostingList, alloc *z.Allocator,
 	// out is only nil when the list's minTs is greater than readTs but readTs
 	// is math.MaxUint64 so that's not possible. Assert that's true.
 	x.AssertTrue(out != nil)
-
 	defer out.free()
 
 	ol := out.plist
@@ -951,7 +950,6 @@ func (out *rollupOutput) free() {
 	for _, part := range out.parts {
 		codec.FreePack(part.Pack)
 	}
-
 }
 
 /*
@@ -1596,14 +1594,9 @@ func (out *rollupOutput) splits() []uint64 {
 	for startUid := range out.parts {
 		splits = append(splits, startUid)
 	}
-	//<<<<<<< HEAD
+
 	sortSplits(splits)
 	return splits
-	// =======
-	//
-	//	out.updateSplits()
-	//
-	// >>>>>>> d9ffc2cfe (Fix(rollups): Fix splits in roll-up (#7609))
 }
 
 // isPlistEmpty returns true if the given plist is empty. Plists with splits are
