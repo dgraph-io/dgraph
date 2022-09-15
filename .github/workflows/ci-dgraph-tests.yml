@@ -42,6 +42,8 @@ jobs:
           #!/bin/bash
           # clean cache
           go clean -testcache
+          # build the test binary
+          cd t; go build .
           # clean up docker containers before test execution
           ./t -r
       - name: Run unit tests
