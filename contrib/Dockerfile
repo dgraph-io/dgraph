@@ -7,16 +7,16 @@
 FROM ubuntu:20.04
 LABEL maintainer="Dgraph Labs <contact@dgraph.io>"
 
-RUN apt-get update && \
-  apt-get install -y --no-install-recommends \
-    ca-certificates \
-    curl \
-    htop \
-    iputils-ping \
-    jq \
-    less \
-    sysstat && \
-  rm -rf /var/lib/apt/lists/*
+RUN apt-get update
+RUN apt-get -y --no-install-recommends ca-certificates
+RUN apt-get -y --no-install-recommends curl
+RUN apt-get -y --no-install-recommends htop
+RUN apt-get -y --no-install-recommends iputils-ping
+RUN apt-get -y --no-install-recommends jq
+RUN apt-get -y --no-install-recommends less
+RUN apt-get -y --no-install-recommends sysstat
+
+# rm -rf /var/lib/apt/lists/* # TODO: clean this up only if necessary
 
 ADD linux /usr/local/bin
 
