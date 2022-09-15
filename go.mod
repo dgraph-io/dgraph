@@ -12,7 +12,7 @@ require (
 	github.com/OneOfOne/xxhash v1.2.5 // indirect
 	github.com/Shopify/sarama v1.27.2
 	github.com/apache/thrift v0.13.0 // indirect
-	github.com/blevesearch/bleve v1.0.14
+	github.com/blevesearch/bleve v1.0.13
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd
 	github.com/dgraph-io/badger/v3 v3.2103.1
 	github.com/dgraph-io/dgo/v210 v210.0.0-20210407152819-261d1c2a6987
