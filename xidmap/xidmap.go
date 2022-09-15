@@ -342,6 +342,7 @@ func (m *XidMap) BumpTo(uid uint64) {
 
 // AllocateUid gives a single uid without creating an xid to uid mapping.
 func (m *XidMap) AllocateUid() uint64 {
+	//nolint:gosec // random index in slice does not require cryptographic precision
 	sh := m.shards[rand.Intn(len(m.shards))]
 	sh.Lock()
 	defer sh.Unlock()

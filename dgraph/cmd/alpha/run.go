@@ -25,6 +25,8 @@ import (
 	"math"
 	"net"
 	"net/http"
+
+	//nolint:gosec // profiling on alpha server accepted and documented
 	_ "net/http/pprof" // http profiler
 	"net/url"
 	"os"

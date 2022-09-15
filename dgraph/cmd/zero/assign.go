@@ -204,6 +204,7 @@ func (s *Server) AssignIds(ctx context.Context, num *pb.Num) (*pb.AssignedIds, e
 
 		if !s.rateLimiter.Allow(ns, int64(num.Val)) {
 			// Return error after random delay.
+			//nolint:gosec // random generator in closed set does not require cryptographic precision
 			delay := rand.Intn(int(opts.limiterConfig.RefillAfter))
 			time.Sleep(time.Duration(delay) * time.Second)
 			return errors.Errorf("Cannot lease UID because UID lease for the namespace %#x is "+

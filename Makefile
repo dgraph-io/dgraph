@@ -70,7 +70,7 @@ image:
 	@rm -r linux
 
 image-local:
-	@GOOS=linux $(MAKE) dgraph
+	@GOOS=linux GOARCH=amd64 $(MAKE) dgraph
 	@mkdir -p linux
 	@mv ./dgraph/dgraph ./linux/dgraph
 	@docker build -f contrib/Dockerfile -t dgraph/dgraph:local .
