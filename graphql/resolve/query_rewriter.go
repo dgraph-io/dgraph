@@ -627,15 +627,6 @@ func addCommonRules(
 		return []*gql.GraphQuery{dgQuery}, rbac
 	}
 
-<<<<<<< HEAD
-	if authRw != nil && (authRw.isWritingAuth || authRw.filterByUid) &&
-		(authRw.varName != "" || authRw.parentVarName != "") {
-		// When rewriting auth rules, they always start like
-		// Todo2 as var(func: uid(Todo1)) @cascade {
-		// Where Todo1 is the variable generated from the filter of the field
-		// we are adding auth to.
-
-=======
 	// When rewriting auth rules, they always start like
 	// Todo2 as var(func: uid(Todo1)) @cascade {
 	// Where Todo1 is the variable generated from the filter of the field
@@ -649,7 +640,6 @@ func addCommonRules(
 	// Todo: Add more comments to this block.
 	if authRw != nil && (authRw.isWritingAuth || authRw.filterByUid) &&
 		(authRw.varName != "" || authRw.parentVarName != "") && ids == nil {
->>>>>>> c82c4adc9 (commenting out potentially unnecessary blocks (should verify))
 		authRw.addVariableUIDFunc(dgQuery)
 		// This is executed when querying while performing delete mutation request since
 		// in case of delete mutation we already have variable `MutationQueryVar` at root level.
