@@ -13,7 +13,7 @@ services:
       read_only: false
     command: minio server /data/minio --address :9001
   zero1:
-    image: dgraph/dgraph:latest
+    image: dgraph/dgraph:local
     working_dir: /data/zero1
     labels:
       cluster: test
