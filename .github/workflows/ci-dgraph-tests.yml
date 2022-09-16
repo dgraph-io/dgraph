@@ -12,6 +12,9 @@ jobs:
   dgraph-tests:
     runs-on: self-hosted
     steps:
+      #TODO: WE NEED TO REMOVE THIS CLEANUP, and handle it more elegantly, it makes us incompatible with gh-hosted-runners
+      - name: Cleaning Up $GITHUB_WORKSPACE
+        run: find /__w/${{ github.event.repository.name }}/${{ github.event.repository.name }}/. -name . -o -prune -exec rm -rf -- {} + || true
       - uses: actions/checkout@v3
       - name: Set up Go
         uses: actions/setup-go@v3
