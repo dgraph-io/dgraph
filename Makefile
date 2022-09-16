@@ -30,10 +30,10 @@ SUBDIRS = dgraph
 all: $(SUBDIRS)
 
 $(SUBDIRS):
-	$(MAKE) -w -C $@ all
+	GOOS=linux GOARCH=amd64 $(MAKE) -w -C $@ all
 
 oss:
-	$(MAKE) BUILD_TAGS=oss
+	GOOS=linux GOARCH=amd64 $(MAKE) BUILD_TAGS=oss
 
 version:
 	@echo Dgraph ${BUILD_VERSION}
@@ -46,11 +46,11 @@ version:
 install:
 	@(set -e;for i in $(SUBDIRS); do \
 		echo Installing $$i ...; \
-		$(MAKE) -C $$i install; \
+		GOOS=linux GOARCH=amd64 $(MAKE) -C $$i install; \
 	done)
 
 install_oss oss_install:
-	$(MAKE) BUILD_TAGS=oss install
+	GOOS=linux GOARCH=amd64 $(MAKE) BUILD_TAGS=oss install
 
 uninstall:
 	@(set -e;for i in $(SUBDIRS); do \
@@ -58,18 +58,18 @@ uninstall:
 		$(MAKE) -C $$i uninstall; \
 	done)
 
-test:
+test: image-local dgraph
 	@echo Running ./test.sh
 	./test.sh
 
 image:
-	@GOOS=linux $(MAKE) dgraph
+	@GOOS=linux GOARCH=amd64 $(MAKE) dgraph
 	@mkdir -p linux
 	@mv ./dgraph/dgraph ./linux/dgraph
 	@docker build -f contrib/Dockerfile -t dgraph/dgraph:$(subst /,-,${BUILD_BRANCH}) .
 	@rm -r linux
 
-image-local:
+image-local local-image:
 	@GOOS=linux GOARCH=amd64 $(MAKE) dgraph
 	@mkdir -p linux
 	@mv ./dgraph/dgraph ./linux/dgraph
