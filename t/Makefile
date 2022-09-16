@@ -28,6 +28,6 @@ test:
 #	clean go testcache
 	go clean -testcache
 #	run the tests
-	@./t --pkg=posting
+	@./t --skip systest/backup,systest/online-restore,systest/loader,tlstest
 #	clean up docker containers after test execution
 	./t -r
