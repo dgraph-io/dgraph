@@ -48,7 +48,7 @@ jobs:
           cd t; go build .
           # clean up docker containers before test execution
           ./t -r
-      - name: Run Unit Tests
+      - name: Run Load Tests
         run: |
           #!/bin/bash
           # clean cache
