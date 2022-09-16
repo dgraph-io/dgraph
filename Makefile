@@ -24,10 +24,10 @@ MODIFIED = $(shell git diff-index --quiet HEAD || echo "-mod")
 
 ###############
 
-.PHONY: dgraoh all oss version install install_oss oss_install uninstall test help image
+.PHONY: dgraph all oss version install install_oss oss_install uninstall test help image image-local local-image
 all: $(SUBDIRS)
 
-dgraoh:
+dgraph:
 	GOOS=linux GOARCH=amd64 $(MAKE) -w -C $@ all
 
 oss:
@@ -56,7 +56,7 @@ uninstall:
 		$(MAKE) -C $$i uninstall; \
 	done)
 
-test: image-local dgraph
+test: image-local
 	@cp dgraph/dgraph ${GOPATH}/bin
 	@rm dgraph/dgraph
 	@$(MAKE) -C t test
@@ -71,7 +71,7 @@ image:
 image-local local-image:
 	@GOOS=linux GOARCH=amd64 $(MAKE) dgraph
 	@mkdir -p linux
-	@mv ./dgraph/dgraph ./linux/dgraph
+	@cp ./dgraph/dgraph ./linux/dgraph
 	@docker build -f contrib/Dockerfile -t dgraph/dgraph:local .
 	@rm -r linux
 
