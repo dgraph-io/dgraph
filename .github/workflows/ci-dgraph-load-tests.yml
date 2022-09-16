@@ -9,7 +9,7 @@ on:
   schedule:
     - cron: "*/30 * * * *"
 jobs:
-  dgraph-tests:
+  dgraph-load-tests:
     runs-on: self-hosted
     steps:
       - uses: actions/checkout@v3
