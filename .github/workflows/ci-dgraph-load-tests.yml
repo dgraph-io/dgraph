@@ -63,7 +63,3 @@ jobs:
           ./t --suite=load
           # clean up docker containers after test execution
           ./t -r
-      - name: Install Goveralls
-        run: go install github.com/mattn/goveralls@latest
-      - name: Send Coverage Results
-        run: cd t && goveralls -repotoken ${{ secrets.COVERALLSIO_TOKEN }} -coverprofile=coverage.out
