@@ -20,20 +20,20 @@ BUILD_DATE     ?= $(shell git log -1 --format=%ci)
 BUILD_BRANCH   ?= $(shell git rev-parse --abbrev-ref HEAD)
 BUILD_VERSION  ?= $(shell git describe --always --tags)
 
-MODIFIED = $(shell git diff-index --quiet HEAD || echo "-mod")
+MODIFIED        = $(shell git diff-index --quiet HEAD || echo "-mod")
 
-SUBDIRS = dgraph
+GOPATH         ?= $(shell go env GOPATH)
 
 ###############
 
-.PHONY: $(SUBDIRS) all oss version install install_oss oss_install uninstall test help image
+.PHONY: dgraph all oss version install install_oss oss_install uninstall test help image image-local local-image
 all: $(SUBDIRS)
 
-$(SUBDIRS):
-	$(MAKE) -w -C $@ all
+dgraph:
+	GOOS=linux GOARCH=amd64 $(MAKE) -w -C $@ all
 
 oss:
-	$(MAKE) BUILD_TAGS=oss
+	GOOS=linux GOARCH=amd64 $(MAKE) BUILD_TAGS=oss
 
 version:
 	@echo Dgraph ${BUILD_VERSION}
@@ -46,11 +46,11 @@ version:
 install:
 	@(set -e;for i in $(SUBDIRS); do \
 		echo Installing $$i ...; \
-		$(MAKE) -C $$i install; \
+		GOOS=linux GOARCH=amd64 $(MAKE) -C $$i install; \
 	done)
 
 install_oss oss_install:
-	$(MAKE) BUILD_TAGS=oss install
+	GOOS=linux GOARCH=amd64 $(MAKE) BUILD_TAGS=oss install
 
 uninstall:
 	@(set -e;for i in $(SUBDIRS); do \
@@ -58,21 +58,22 @@ uninstall:
 		$(MAKE) -C $$i uninstall; \
 	done)
 
-test:
-	@echo Running ./test.sh
-	./test.sh
+test: image-local
+	@cp dgraph/dgraph ${GOPATH}/bin
+	@rm dgraph/dgraph
+	@$(MAKE) -C t test
 
 image:
-	@GOOS=linux $(MAKE) dgraph
+	@GOOS=linux GOARCH=amd64 $(MAKE) dgraph
 	@mkdir -p linux
 	@mv ./dgraph/dgraph ./linux/dgraph
 	@docker build -f contrib/Dockerfile -t dgraph/dgraph:$(subst /,-,${BUILD_BRANCH}) .
 	@rm -r linux
 
-image-local:
+image-local local-image:
 	@GOOS=linux GOARCH=amd64 $(MAKE) dgraph
 	@mkdir -p linux
-	@mv ./dgraph/dgraph ./linux/dgraph
+	@cp ./dgraph/dgraph ./linux/dgraph
 	@docker build -f contrib/Dockerfile -t dgraph/dgraph:local .
 	@rm -r linux
 
@@ -86,4 +87,5 @@ help:
 	@echo "  make uninstall - Uninstall known targets"
 	@echo "  make version   - Show current build info"
 	@echo "  make help      - This help"
+	@echo "  make test      - Make local image and run t.go"
 	@echo
