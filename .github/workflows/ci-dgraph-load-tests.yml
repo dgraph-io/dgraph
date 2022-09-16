@@ -63,3 +63,6 @@ jobs:
           ./t --suite=load
           # clean up docker containers after test execution
           ./t -r
+      - name: Cleaning Up $GITHUB_WORKSPACE
+        # Volume auto mounted by gh actions pointing to the current working-directory
+        run: find /__w/${{ github.event.repository.name }}/${{ github.event.repository.name }}/. -name . -o -prune -exec rm -rf -- {} + || true
