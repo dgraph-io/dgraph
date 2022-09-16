@@ -22,19 +22,7 @@ GOPATH        ?= $(shell go env GOPATH)
 
 all: test
 
-rosetta:
-#	Install Rosetta if on MacOS
-	@if [ "$(GOOS)" = 'darwin' ]; then \
-		/usr/bin/pgrep -q oahd; \
-		if [ $$? -eq 0 ]; then \
-			echo "Rosetta already installed"; \
-		else \
-			echo "Rosetta is not installed, installing..."; \
-			/usr/sbin/softwareupdate --install-rosetta; \
-		fi \
-	fi
-
-test: rosetta node protobuf
+test: 
 # 	build the t.go binary
 	@go build .
 #	clean go testcache

@@ -22,14 +22,12 @@ BUILD_VERSION  ?= $(shell git describe --always --tags)
 
 MODIFIED = $(shell git diff-index --quiet HEAD || echo "-mod")
 
-SUBDIRS = dgraph
-
 ###############
 
-.PHONY: $(SUBDIRS) all oss version install install_oss oss_install uninstall test help image
+.PHONY: dgraoh all oss version install install_oss oss_install uninstall test help image
 all: $(SUBDIRS)
 
-$(SUBDIRS):
+dgraoh:
 	GOOS=linux GOARCH=amd64 $(MAKE) -w -C $@ all
 
 oss:
@@ -59,8 +57,9 @@ uninstall:
 	done)
 
 test: image-local dgraph
-	@echo Running ./test.sh
-	./test.sh
+	@cp dgraph/dgraph ${GOPATH}/bin
+	@rm dgraph/dgraph
+	@$(MAKE) -C t test
 
 image:
 	@GOOS=linux GOARCH=amd64 $(MAKE) dgraph
@@ -86,4 +85,5 @@ help:
 	@echo "  make uninstall - Uninstall known targets"
 	@echo "  make version   - Show current build info"
 	@echo "  make help      - This help"
+	@echo "  make test      - Make local image and run t.go"
 	@echo
