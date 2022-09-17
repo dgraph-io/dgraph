@@ -9,14 +9,6 @@ on:
   schedule:
     - cron: "*/30 * * * *"
 jobs:
-  #TODO: WE NEED TO REMOVE THIS CLEANUP, and handle it more elegantly, it makes us incompatible with gh-hosted-runners
-  cleanup:
-    runs-on: self-hosted
-    container:
-      image: ubuntu:latest
-    steps:
-      - name: Cleaning up the $GITHUB_WORKSPACE as root from a Docker image
-        run: find /__w/${{ github.event.repository.name }}/${{ github.event.repository.name }}/. -name . -o -prune -exec rm -rf -- {} + || true
   dgraph-tests:
     runs-on: self-hosted
     steps:
