@@ -9,7 +9,7 @@ on:
   schedule:
     - cron: "*/30 * * * *"
 env:
-  RUNNER_ALLOW_RUNASROOT: 1
+  RUNNER_ALLOW_RUNASROOT: 1 # run as root
 jobs:
   dgraph-load-tests:
     runs-on: self-hosted
