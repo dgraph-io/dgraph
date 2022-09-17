@@ -27,6 +27,6 @@ echo "34a8f34956cdacd2156d4c658cce8dd54c5aef316a16bbbc95eb3ca4fd76429a  actions-
 tar xzf ./actions-runner-linux-x64-2.296.2.tar.gz
 ./config.sh --url https://github.com/dgraph-io/dgraph --token $TOKEN
 sudo ./svc.sh install
-sudo ./svc.sh start
+sudo ./svc.sh start root
 # Reboot Machine
 sudo reboot
