@@ -8,6 +8,8 @@ on:
       - main
   schedule:
     - cron: "*/30 * * * *"
+env:
+  RUNNER_ALLOW_RUNASROOT: 1
 jobs:
   dgraph-load-tests:
     runs-on: self-hosted
