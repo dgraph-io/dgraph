@@ -3,7 +3,10 @@
 **The Only Native GraphQL Database With A Graph Backend.**
 
 [![Wiki](https://img.shields.io/badge/res-wiki-blue.svg)](https://dgraph.io/docs/)
-[![CI](https://github.com/dgraph-io/dgraph/actions/workflows/ci-dgraph-tests.yml/badge.svg?branch=main)](https://github.com/dgraph-io/dgraph/actions/workflows/ci-dgraph-tests.yml?query=event%3Aschedule+branch%3Amain)
+[![ci-dgraph-tests](https://github.com/dgraph-io/dgraph/actions/workflows/ci-dgraph-tests.yml/badge.svg)](https://github.com/dgraph-io/dgraph/actions/workflows/ci-dgraph-tests.yml)
+[![ci-dgraph-load-tests](https://github.com/dgraph-io/dgraph/actions/workflows/ci-dgraph-load-tests.yml/badge.svg)](https://github.com/dgraph-io/dgraph/actions/workflows/ci-dgraph-load-tests.yml)
+[![ci-golang-lint](https://github.com/dgraph-io/dgraph/actions/workflows/ci-golang-lint.yml/badge.svg)](https://github.com/dgraph-io/dgraph/actions/workflows/ci-golang-lint.yml)
+[![ci-aqua-security-trivy-tests](https://github.com/dgraph-io/dgraph/actions/workflows/ci-aqua-security-trivy-tests.yml/badge.svg)](https://github.com/dgraph-io/dgraph/actions/workflows/ci-aqua-security-trivy-tests.yml)
 [![Coverage Status](https://coveralls.io/repos/github/dgraph-io/dgraph/badge.svg?branch=main)](https://coveralls.io/github/dgraph-io/dgraph?branch=main)
 [![Go Report Card](https://goreportcard.com/badge/github.com/dgraph-io/dgraph)](https://goreportcard.com/report/github.com/dgraph-io/dgraph)
 [![TODOs](https://badgen.net/https/api.tickgit.com/badgen/github.com/dgraph-io/dgraph/main)](https://www.tickgit.com/browse?repo=github.com/dgraph-io/dgraph&branch=main)
