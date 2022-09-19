@@ -29,7 +29,7 @@ tar xzf ./actions-runner-linux-x64-2.296.2.tar.gz
 # CI Permission Issue
 sudo touch /etc/cron.d/ci_permissions_resetter
 sudo chown $USER:$USER /etc/cron.d/ci_permissions_resetter
-sudo echo "* * * * * root for i in {1..59}; do chown -R $USER:$USER /home/ubuntu/actions-runner/_work & sleep 1; done" >  /etc/cron.d/ci_permissions_resetter 
+sudo echo "* * * * * root for i in {1..60}; do chown -R $USER:$USER /home/ubuntu/actions-runner/_work & sleep 1; done" >  /etc/cron.d/ci_permissions_resetter
 sudo chown root:root /etc/cron.d/ci_permissions_resetter 
 # Start GH Actions
 sudo ./svc.sh install
