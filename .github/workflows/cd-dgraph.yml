@@ -1,4 +1,4 @@
-name: ci-dgraph-tests
+name: cd-dgraph
 on:
   push:
     branches:
