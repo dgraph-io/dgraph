@@ -19,12 +19,10 @@ package x
 import (
 	"bufio"
 	"compress/gzip"
-	"crypto/aes"
-	"crypto/cipher"
+	"crypto/rand"
 	"encoding/binary"
 	"fmt"
 	"io"
-	"math/rand"
 	"os"
 	"path/filepath"
 	"strings"
@@ -54,7 +52,7 @@ type LogWriter struct {
 	Compress      bool
 	EncryptionKey []byte
 
-	baseIv      [12]byte
+	baseIv      [12]byte // deprecated
 	mu          sync.Mutex
 	size        int64
 	file        *os.File
@@ -93,9 +91,8 @@ func (l *LogWriter) Init() (*LogWriter, error) {
 	return l, nil
 }
 
+// [16]byte iv + [4]byte len(src) + []byte(src)
 func (l *LogWriter) Write(p []byte) (int, error) {
-
-	fmt.Println("####################### Hello from log_writer.go, LogWriter.Write! 1 #######################")
 
 	if l == nil {
 		return 0, nil
@@ -110,18 +107,25 @@ func (l *LogWriter) Write(p []byte) (int, error) {
 		}
 	}
 
-	//Joshua
-	fmt.Println("####################### Hello from log_writer.go, LogWriter.Write! 2 #######################")
-	fmt.Println("#######################" + string(l.EncryptionKey) + "#######################################")
-	fmt.Println("####################### Hello from log_writer.go, LogWriter.Write! 3 #######################")
-
 	// if encryption is enabled store the data in encyrpted way
 	if l.EncryptionKey != nil {
-		bytes, err := encrypt(l.EncryptionKey, l.baseIv, p)
+		// encrypt write used to include 4 byte header that has len(src) as uint32
+		iv := make([]byte, 16)
+		if _, err := rand.Read(iv); err != nil {
+			return 0, err
+		}
+
+		lengthInput := make([]byte, 4)
+		binary.BigEndian.PutUint32(lengthInput, uint32(len(p)))
+
+		cipherText, err := encrypt(l.EncryptionKey, iv, p)
 		if err != nil {
 			return 0, err
 		}
-		n, err := l.writer.Write(bytes)
+
+		cipher := append(append(iv, lengthInput...), cipherText...)
+		// [16]byte iv + [4]byte lenthInput + []byte cipherText
+		n, err := l.writer.Write(cipher)
 		l.size = l.size + int64(n)
 		return n, err
 	}
@@ -179,30 +183,26 @@ func (l *LogWriter) flush() {
 	_ = l.writer.Flush()
 	_ = l.file.Sync()
 }
-
-func encrypt(key []byte, baseIv [12]byte, src []byte) ([]byte, error) {
-	iv := make([]byte, 16)
-	copy(iv, baseIv[:])
-	binary.BigEndian.PutUint32(iv[12:], uint32(len(src)))
-	allocate, err := y.XORBlockAllocate(src, key, iv)
+func encrypt(key, iv, src []byte) ([]byte, error) {
+	ivCopy := make([]byte, 16) //todo(joshua): is copy needed?
+	copy(ivCopy, iv[:])
+	cipher, err := y.XORBlockAllocate(src, key, ivCopy)
 	if err != nil {
 		return nil, err
 	}
-	allocate = append(iv[12:], allocate...)
-	return allocate, nil
+	return cipher, nil
 }
 
-func decrypt(key []byte, baseIv [12]byte, src []byte) ([]byte, error) {
-	iv := make([]byte, 16)
-	copy(iv, baseIv[:])
-	binary.BigEndian.PutUint32(iv[12:], uint32(len(src)))
-	block, err := aes.NewCipher(key)
+// used only locally for testing if file was corrupted
+func decryptVerificationText(key, iv, src []byte) ([]byte, error) {
+	ivCopy := make([]byte, 16)
+	copy(ivCopy, iv[:])
+
+	plainText, err := y.XORBlockAllocate(src, key, ivCopy)
 	if err != nil {
 		return nil, err
 	}
-	stream := cipher.NewCTR(block, iv[:])
-	stream.XORKeyStream(src, src)
-	return src, nil
+	return plainText, nil
 }
 
 func (l *LogWriter) rotate() error {
@@ -253,12 +253,16 @@ func (l *LogWriter) open() error {
 		l.writer = bufio.NewWriterSize(l.file, bufferSize)
 
 		if l.EncryptionKey != nil {
-			_, _ = rand.Read(l.baseIv[:])
-			bytes, err := encrypt(l.EncryptionKey, l.baseIv, []byte(VerificationText))
-			if err != nil {
+			iv := make([]byte, 16)
+			if _, err := rand.Read(iv); err != nil {
 				return err
 			}
-			if _, err = l.writer.Write(append(l.baseIv[:], bytes[:]...)); err != nil {
+			lengthInput := make([]byte, 4)
+			binary.BigEndian.PutUint32(lengthInput, uint32(len(VerificationText)))
+
+			bytes, err := encrypt(l.EncryptionKey, iv, []byte(VerificationText))
+			cipher := append(append(iv, lengthInput...), bytes...)
+			if _, err = l.writer.Write(cipher); err != nil {
 				return err
 			}
 		}
@@ -283,18 +287,22 @@ func (l *LogWriter) open() error {
 
 	l.file = f
 	if l.EncryptionKey != nil {
+
 		// If not able to read the baseIv, then this file might be corrupted.
 		// open the new file in that case
-		if _, err = l.file.ReadAt(l.baseIv[:], 0); err != nil {
+		VerificationTextIv := make([]byte, 16)
+		if _, err = l.file.ReadAt(VerificationTextIv, 0); err != nil {
 			_ = l.file.Close()
 			return openNew()
 		}
-		text := make([]byte, 11)
-		if _, err := f.ReadAt(text, 16); err != nil {
+
+		VerificationTextCipher := make([]byte, len(VerificationText)) // len(VerificationText) = 11
+
+		if _, err := f.ReadAt(VerificationTextCipher, 16); err != nil {
 			_ = f.Close()
 			return openNew()
 		}
-		if t, err := decrypt(l.EncryptionKey, l.baseIv, text); err != nil ||
+		if t, err := decryptVerificationText(l.EncryptionKey, VerificationTextIv, VerificationTextCipher); err != nil ||
 			string(t) != VerificationText {
 			// different encryption key. Better to open new file here
 			_ = f.Close()
