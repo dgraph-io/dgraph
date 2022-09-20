@@ -94,6 +94,9 @@ func (l *LogWriter) Init() (*LogWriter, error) {
 }
 
 func (l *LogWriter) Write(p []byte) (int, error) {
+
+	fmt.Println("####################### Hello from log_writer.go, LogWriter.Write! 1 #######################")
+
 	if l == nil {
 		return 0, nil
 	}
@@ -106,6 +109,11 @@ func (l *LogWriter) Write(p []byte) (int, error) {
 			return 0, err
 		}
 	}
+
+	//Joshua
+	fmt.Println("####################### Hello from log_writer.go, LogWriter.Write! 2 #######################")
+	fmt.Println("#######################" + string(l.EncryptionKey) + "#######################################")
+	fmt.Println("####################### Hello from log_writer.go, LogWriter.Write! 3 #######################")
 
 	// if encryption is enabled store the data in encyrpted way
 	if l.EncryptionKey != nil {

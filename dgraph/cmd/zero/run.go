@@ -226,7 +226,8 @@ func run() {
 	x.PrintVersion()
 	tlsConf, err := x.LoadClientTLSConfigForInternalPort(Zero.Conf)
 	x.Check(err)
-
+	// In dgraph/cmd/zero/run.go ~L230 Zero.Conf.GetString("audit") only parses first flags
+	// e.g. --audit output=audit-log-dir;compress=false;encrypt-file=enc-key is parsed as output=audit-log-dir
 	raft := z.NewSuperFlag(Zero.Conf.GetString("raft")).MergeAndCheckDefault(
 		raftDefaults)
 	auditConf := audit.GetAuditConf(Zero.Conf.GetString("audit"))
