@@ -7,7 +7,7 @@ services:
 
   # Dgraph Zero controls the cluster
   zero:
-    image: dgraph/dgraph:$DGRAPH_VERSION
+    image: dgraph/dgraph:${DGRAPH_VERSION}
     container_name: local_dgraph_zero
     volumes:
       - ~/local-dgraph-data:/dgraph
@@ -23,7 +23,7 @@ services:
   
   # Dgraph Alpha hosts the graph and indexes
   alpha:
-    image: dgraph/dgraph:$DGRAPH_VERSION
+    image: dgraph/dgraph:${DGRAPH_VERSION}
     container_name: local_dgraph_alpha
     volumes:
       - ~/local-dgraph-data:/dgraph
