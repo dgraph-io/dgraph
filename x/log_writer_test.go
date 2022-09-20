@@ -63,6 +63,8 @@ func TestLogWriterWithCompression(t *testing.T) {
 
 // if this test failed and you changed anything, please check the dgraph audit decrypt command.
 // The dgraph audit decrypt command uses the same decryption method
+
+// todo(joshua): this test must be rewritten to accomodate changes
 func skipTestLogWriterWithEncryption(t *testing.T) {
 	path, _ := filepath.Abs("./log_test/audit.log.enc")
 	defer os.RemoveAll(filepath.Dir(path))
@@ -102,6 +104,8 @@ func skipTestLogWriterWithEncryption(t *testing.T) {
 	_, err = file.ReadAt(iv, 0)
 	require.Nil(t, err)
 
+	// joshua: why is there custom logic in the test?
+	// joshua: test should call methods from log_writer.go
 	var iterator int64 = 16
 	for {
 		content := make([]byte, binary.BigEndian.Uint32(iv[12:]))
