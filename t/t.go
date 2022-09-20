@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -200,6 +201,15 @@ type profResult struct {
 	avgMem float64
 }
 
+type dockerMemStats struct {
+	Usage float64 `json:"usage"`
+	Limit float64 `json:"limit"`
+}
+
+type dockerStats struct {
+	MemoryStats dockerMemStats `json:"memory_stats"`
+}
+
 func runTestsFor(ctx context.Context, pkg, prefix string) error {
 	var args = []string{"go", "test", "-failfast", "-v"}
 	if *race {
@@ -244,7 +254,7 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 					totalMem := float64(vm.Total) / math.Pow(10, 9)
 					usedMem := float64(vm.Used) / math.Pow(10, 9)
 					availableMem := float64(vm.Available) / math.Pow(10, 9)
-					fmt.Printf("memory total: %.3fGB, used: %.3fGB, available: %.3fGB\n",
+					fmt.Printf("Memory total: %.3fGB, used: %.3fGB, available: %.3fGB\n",
 						totalMem,
 						usedMem,
 						availableMem,
@@ -254,16 +264,22 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 						max = usedMem
 					}
 
-					sm, err := mem.SwapMemory()
-					if err != nil {
-						return
-					}
+					cli, err := client.NewEnvClient()
+					x.Check(err)
+					list, err := cli.ContainerList(ctx, types.ContainerListOptions{All: true})
+					x.Check(err)
+					for _, c := range list {
+						stats, err := cli.ContainerStats(ctx, c.ID, false)
+						x.Check(err)
 
-					fmt.Printf("swap memory total: %.3fGB, used: %.3fGB, free: %.3fGB\n",
-						float64(sm.Total)/math.Pow(10, 9),
-						float64(sm.Used)/math.Pow(10, 9),
-						float64(sm.Free)/math.Pow(10, 9),
-					)
+						var data dockerStats
+						err = json.NewDecoder(stats.Body).Decode(&data)
+						x.Check(err)
+						dockerMemUsed := data.MemoryStats.Usage / math.Pow(10, 9)
+						dockerMemLimit := data.MemoryStats.Limit / math.Pow(10, 9)
+
+						fmt.Printf("Container %s used:%.3fGB, limit:%.3fGB\n", c.Names[0], dockerMemUsed, dockerMemLimit)
+					}
 
 					i++
 					time.Sleep(time.Millisecond * 500)
