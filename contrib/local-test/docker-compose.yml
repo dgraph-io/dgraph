@@ -39,7 +39,7 @@ services:
         --security whitelist=0.0.0.0/0
         --logtostderr -v=2
         --telemetry sentry=false
-        --audit output=audit-log-dir;compress=false;encrypt-file=enc-key
+        --audit "output=audit-log-dir;compress=false;encrypt-file=enc-key"
     restart: unless-stopped
 
   # Watchtower is a third party tool that will restart a container if an updated image is found
