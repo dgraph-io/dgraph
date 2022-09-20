@@ -107,19 +107,44 @@ func run() error {
 		glog.Info("audit file is empty")
 		return nil
 	}
-	var iterator int64 = 0 //iterator = 0
 
+	/*
+		var iterator int64 = 0 //iterator = 0
+
+		iv := make([]byte, aes.BlockSize)
+		x.Check2(file.ReadAt(iv, iterator)) //get iv from first 16 bytes
+		iterator = iterator + aes.BlockSize // iterator = 16
+
+		t := make([]byte, len(x.VerificationText))
+		x.Check2(file.ReadAt(t, iterator))
+		iterator = iterator + int64(len(x.VerificationText)) // iterator = 16 + len("hello world")
+
+		stream := cipher.NewCTR(block, iv)
+		stream.XORKeyStream(t, t)
+		if string(t) != x.VerificationText {
+			return errors.New("invalid encryption key provided. Please check your encryption key")
+		}*/
+
+	var iterator int64 = 0
 	iv := make([]byte, aes.BlockSize)
-	x.Check2(file.ReadAt(iv, iterator)) //get iv from first 16 bytes
+	length := make([]byte, 4)
+	x.Check2(file.ReadAt(iv, iterator)) // get first iv
 	iterator = iterator + aes.BlockSize // iterator = 16
 
-	t := make([]byte, len(x.VerificationText))
-	x.Check2(file.ReadAt(t, iterator))
-	iterator = iterator + int64(len(x.VerificationText)) // iterator = 16 + len("hello world")
+	verificationTextLength := make([]byte, 4)
+	x.Check2(file.ReadAt(verificationTextLength, iterator))
+	verificationTextLengthInt64 := int64(binary.BigEndian.Uint32(verificationTextLength)) // = 11
+	iterator = iterator + 4                                                               //iterator = 20
+
+	VerificationTextCipher := make([]byte, len(x.VerificationText))
+	x.Check2(file.ReadAt(VerificationTextCipher, iterator))
+	iterator = iterator + verificationTextLengthInt64 // iterator = 20 + len("hello world") = 31
+
+	verificationTextPlain := make([]byte, len(x.VerificationText))
 
 	stream := cipher.NewCTR(block, iv)
-	stream.XORKeyStream(t, t)
-	if string(t) != x.VerificationText {
+	stream.XORKeyStream(verificationTextPlain, VerificationTextCipher)
+	if string(verificationTextPlain) != x.VerificationText {
 		return errors.New("invalid encryption key provided. Please check your encryption key")
 	}
 
@@ -128,12 +153,20 @@ func run() error {
 		if iterator >= stat.Size() {
 			break
 		}
-		x.Check2(file.ReadAt(iv[12:], iterator))
-		iterator = iterator + 4 //iterator + 4
+		x.Check2(file.ReadAt(iv, iterator))
+		iterator = iterator + 16
 
-		content := make([]byte, binary.BigEndian.Uint32(iv[12:]))
+		x.Check2(file.ReadAt(length, iterator))
+		lengthInt64 := int64(binary.BigEndian.Uint32(length))
+		iterator = iterator + 4
+
+		content := make([]byte, lengthInt64)
 		x.Check2(file.ReadAt(content, iterator))
-		iterator = iterator + int64(binary.BigEndian.Uint32(iv[12:]))
+		iterator = iterator + lengthInt64
+
+		//content := make([]byte, binary.BigEndian.Uint32(iv[12:]))
+		//x.Check2(file.ReadAt(content, iterator))
+		//iterator = iterator + int64(binary.BigEndian.Uint32(iv[12:]))
 		stream := cipher.NewCTR(block, iv)
 		stream.XORKeyStream(content, content)
 		x.Check2(outfile.Write(content))
