@@ -19,6 +19,8 @@ package x
 import (
 	"bufio"
 	"compress/gzip"
+	"crypto/aes"
+	"crypto/cipher"
 	"crypto/rand"
 	"encoding/binary"
 	"fmt"
@@ -39,7 +41,9 @@ const (
 	backupTimeFormat = "2006-01-02T15-04-05.000"
 	bufferSize       = 256 * 1024
 	flushInterval    = 10 * time.Second
-	VerificationText = "Hello World"
+	//	old logs contain deprecated verification text in header
+	VerificationText_Deprecated = "Hello World"
+	VerificationText            = "dlroW olloH"
 )
 
 // This is done to ensure LogWriter always implement io.WriterCloser
@@ -91,7 +95,6 @@ func (l *LogWriter) Init() (*LogWriter, error) {
 	return l, nil
 }
 
-// [16]byte iv + [4]byte len(src) + []byte(src)
 func (l *LogWriter) Write(p []byte) (int, error) {
 
 	if l == nil {
@@ -107,25 +110,27 @@ func (l *LogWriter) Write(p []byte) (int, error) {
 		}
 	}
 
-	// if encryption is enabled store the data in encyrpted way
+	// if encryption is enabled store the data in encrypted way
+	// encrypted writes will be preceded by the following header
+	// #################################################################
+	// #####   [16]byte iv + [4]byte uint32(len(p)) + [:]byte p    #####
+	// #################################################################
 	if l.EncryptionKey != nil {
-		// encrypt write used to include 4 byte header that has len(src) as uint32
 		iv := make([]byte, 16)
 		if _, err := rand.Read(iv); err != nil {
 			return 0, err
 		}
 
-		lengthInput := make([]byte, 4)
-		binary.BigEndian.PutUint32(lengthInput, uint32(len(p)))
+		lengthHeader := make([]byte, 4)
+		binary.BigEndian.PutUint32(lengthHeader, uint32(len(p)))
 
 		cipherText, err := encrypt(l.EncryptionKey, iv, p)
 		if err != nil {
 			return 0, err
 		}
 
-		cipher := append(append(iv, lengthInput...), cipherText...)
-		// [16]byte iv + [4]byte lenthInput + []byte cipherText
-		n, err := l.writer.Write(cipher)
+		allocation := append(append(iv, lengthHeader...), cipherText...)
+		n, err := l.writer.Write(allocation)
 		l.size = l.size + int64(n)
 		return n, err
 	}
@@ -183,6 +188,7 @@ func (l *LogWriter) flush() {
 	_ = l.writer.Flush()
 	_ = l.file.Sync()
 }
+
 func encrypt(key, iv, src []byte) ([]byte, error) {
 	ivCopy := make([]byte, 16) //todo(joshua): is copy needed?
 	copy(ivCopy, iv[:])
@@ -193,16 +199,30 @@ func encrypt(key, iv, src []byte) ([]byte, error) {
 	return cipher, nil
 }
 
-// used only locally for testing if file was corrupted
-func decryptVerificationText(key, iv, src []byte) ([]byte, error) {
+// used locally to verify client has correct key and can decrypt audit log header
+func decryptAuditLogHeader(key, iv, src []byte) ([]byte, error) {
 	ivCopy := make([]byte, 16)
-	copy(ivCopy, iv[:])
+	copy(ivCopy, iv[:]) //todo(joshua): do we need to copy here?
 
 	plainText, err := y.XORBlockAllocate(src, key, ivCopy)
 	if err != nil {
 		return nil, err
 	}
 	return plainText, nil
+}
+
+// we need this to decrypt header in old audit logs
+func decryptAuditLogHeader_Deprecated(key, iv, src []byte) ([]byte, error) {
+	ivCopy := make([]byte, 16) //todo(joshua) do we need to copy?
+	copy(ivCopy, iv[:])
+	binary.BigEndian.PutUint32(iv[12:], uint32(len(src)))
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+	stream := cipher.NewCTR(block, iv[:])
+	stream.XORKeyStream(src, src)
+	return src, nil
 }
 
 func (l *LogWriter) rotate() error {
@@ -288,23 +308,28 @@ func (l *LogWriter) open() error {
 	l.file = f
 	if l.EncryptionKey != nil {
 
-		// If not able to read the baseIv, then this file might be corrupted.
+		// initialize byte slice for iv
+		iv := make([]byte, 16)
+
+		// If not able to read the iv, then this file might be corrupted.
 		// open the new file in that case
-		VerificationTextIv := make([]byte, 16)
-		if _, err = l.file.ReadAt(VerificationTextIv, 0); err != nil {
+		if _, err = l.file.ReadAt(iv, 0); err != nil {
 			_ = l.file.Close()
 			return openNew()
 		}
 
-		VerificationTextCipher := make([]byte, len(VerificationText)) // len(VerificationText) = 11
+		encryptedVerificationText := make([]byte, len(VerificationText)) // 11
 
-		if _, err := f.ReadAt(VerificationTextCipher, 16); err != nil {
+		if _, err := f.ReadAt(encryptedVerificationText, 20); err != nil {
 			_ = f.Close()
 			return openNew()
 		}
-		if t, err := decryptVerificationText(l.EncryptionKey, VerificationTextIv, VerificationTextCipher); err != nil ||
-			string(t) != VerificationText {
-			// different encryption key. Better to open new file here
+
+		if unencryptedVerificationText, err := decryptAuditLogHeader(l.EncryptionKey, iv, encryptedVerificationText); err != nil || string(unencryptedVerificationText) != VerificationText {
+
+			// might have a deprecated audit log file, try deprecated decrypt
+			//unencryptedVerificationText, err = decryptAuditLogHeader_Deprecated(l.EncryptionKey, iv, unencryptedVerificationText)
+			//todo(joshua): check for old audit log files
 			_ = f.Close()
 			return openNew()
 		}
