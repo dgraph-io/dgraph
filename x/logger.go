@@ -17,7 +17,6 @@
 package x
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 
@@ -35,9 +34,6 @@ type LoggerConf struct {
 }
 
 func InitLogger(conf *LoggerConf, filename string) (*Logger, error) {
-
-	fmt.Println("####################### Hello from logger.go, InitLogger! #######################")
-
 	config := zap.NewProductionEncoderConfig()
 	config.MessageKey = conf.MessageKey
 	config.LevelKey = zapcore.OmitKey
