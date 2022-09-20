@@ -60,6 +60,6 @@ jobs:
           # build the test binary
           cd t; go build .
           # run the load tests
-          ./t --suite=load
+          ./t --profiling=true --suite=load
           # clean up docker containers after test execution
           ./t -r
