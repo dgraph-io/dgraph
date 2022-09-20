@@ -108,23 +108,7 @@ func run() error {
 		return nil
 	}
 
-	/*
-		var iterator int64 = 0 //iterator = 0
-
-		iv := make([]byte, aes.BlockSize)
-		x.Check2(file.ReadAt(iv, iterator)) //get iv from first 16 bytes
-		iterator = iterator + aes.BlockSize // iterator = 16
-
-		t := make([]byte, len(x.VerificationText))
-		x.Check2(file.ReadAt(t, iterator))
-		iterator = iterator + int64(len(x.VerificationText)) // iterator = 16 + len("hello world")
-
-		stream := cipher.NewCTR(block, iv)
-		stream.XORKeyStream(t, t)
-		if string(t) != x.VerificationText {
-			return errors.New("invalid encryption key provided. Please check your encryption key")
-		}*/
-
+	// decrypt header in audit log, verify encryption key
 	var iterator int64 = 0
 	iv := make([]byte, aes.BlockSize)
 	length := make([]byte, 4)
@@ -138,7 +122,7 @@ func run() error {
 
 	VerificationTextCipher := make([]byte, len(x.VerificationText))
 	x.Check2(file.ReadAt(VerificationTextCipher, iterator))
-	iterator = iterator + verificationTextLengthInt64 // iterator = 20 + len("hello world") = 31
+	iterator = iterator + verificationTextLengthInt64 // iterator = 20 + 11 = 31
 
 	verificationTextPlain := make([]byte, len(x.VerificationText))
 
@@ -148,6 +132,9 @@ func run() error {
 		return errors.New("invalid encryption key provided. Please check your encryption key")
 	}
 
+	//todo(joshua): we should check if we have an deprecated audit log and if yes, decrypt it
+
+	// decrypt body of audit log
 	for {
 		// if its the end of data. finish decrypting
 		if iterator >= stat.Size() {
@@ -164,9 +151,6 @@ func run() error {
 		x.Check2(file.ReadAt(content, iterator))
 		iterator = iterator + lengthInt64
 
-		//content := make([]byte, binary.BigEndian.Uint32(iv[12:]))
-		//x.Check2(file.ReadAt(content, iterator))
-		//iterator = iterator + int64(binary.BigEndian.Uint32(iv[12:]))
 		stream := cipher.NewCTR(block, iv)
 		stream.XORKeyStream(content, content)
 		x.Check2(outfile.Write(content))
