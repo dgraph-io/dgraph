@@ -36,7 +36,7 @@ require (
 	github.com/golang/protobuf v1.5.2
 	github.com/golang/snappy v0.0.3
 	github.com/google/codesearch v1.0.0
-	github.com/google/go-cmp v0.5.5
+	github.com/google/go-cmp v0.5.8
 	github.com/google/uuid v1.0.0
 	github.com/gorilla/websocket v1.4.2
 	github.com/graph-gophers/graphql-go v0.0.0-20200309224638-dae41bde9ef9
@@ -49,12 +49,13 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/pkg/profile v1.2.1
 	github.com/prometheus/client_golang v1.11.1
+	github.com/shirou/gopsutil/v3 v3.22.8
 	github.com/soheilhy/cmux v0.1.4
 	github.com/spf13/cast v1.3.0
 	github.com/spf13/cobra v0.0.5
 	github.com/spf13/pflag v1.0.3
 	github.com/spf13/viper v1.7.1
-	github.com/stretchr/testify v1.6.1
+	github.com/stretchr/testify v1.8.0
 	github.com/twpayne/go-geom v1.0.5
 	github.com/xdg/scram v0.0.0-20180814205039-7eeb5667e42c
 	go.etcd.io/etcd v0.5.0-alpha.5.0.20190108173120-83c051b701d3

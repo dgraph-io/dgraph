@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"math"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -42,6 +43,7 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
+	"github.com/shirou/gopsutil/v3/mem"
 	"github.com/spf13/pflag"
 	"golang.org/x/tools/go/packages"
 )
@@ -93,6 +95,7 @@ var (
 		"comma separated list of packages that needs to be skipped. "+
 			"Package Check uses string.Contains(). Please check the flag carefully")
 	runCoverage = pflag.Bool("coverage", false, "Set true to calculate test coverage")
+	runProf     = pflag.Bool("profiling", false, "Set true to profile memory usage")
 )
 
 func commandWithContext(ctx context.Context, args ...string) *exec.Cmd {
@@ -192,6 +195,11 @@ func stopCluster(composeFile, prefix string, wg *sync.WaitGroup, err error) {
 	}()
 }
 
+type profResult struct {
+	maxMem float64
+	avgMem float64
+}
+
 func runTestsFor(ctx context.Context, pkg, prefix string) error {
 	var args = []string{"go", "test", "-failfast", "-v"}
 	if *race {
@@ -214,6 +222,54 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 	if *runCoverage {
 		// TODO: this breaks where we parallelize the tests, add coverage support for parallel tests
 		args = append(args, fmt.Sprintf("-covermode=%s", testCovMode), fmt.Sprintf("-coverprofile=%s", tmpCoverageFile))
+	}
+	done := make(chan bool, 1)
+	prof := make(chan *profResult, 1)
+	if *runProf {
+		go func(done <-chan bool, prof chan<- *profResult) {
+			i, used, max := 0, 0.0, 0.0
+
+			for {
+				select {
+				case _ = <-done:
+					prof <- &profResult{maxMem: max, avgMem: used / float64(i)}
+					close(prof)
+					return
+				default:
+					vm, err := mem.VirtualMemory()
+					if err != nil {
+						return
+					}
+
+					totalMem := float64(vm.Total) / math.Pow(10, 9)
+					usedMem := float64(vm.Used) / math.Pow(10, 9)
+					availableMem := float64(vm.Available) / math.Pow(10, 9)
+					fmt.Printf("memory total: %.3fGB, used: %.3fGB, available: %.3fGB\n",
+						totalMem,
+						usedMem,
+						availableMem,
+					)
+					used = used + float64(vm.Used)/math.Pow(10, 9)
+					if usedMem > max {
+						max = usedMem
+					}
+
+					sm, err := mem.SwapMemory()
+					if err != nil {
+						return
+					}
+
+					fmt.Printf("swap memory total: %.3fGB, used: %.3fGB, free: %.3fGB\n",
+						float64(sm.Total)/math.Pow(10, 9),
+						float64(sm.Used)/math.Pow(10, 9),
+						float64(sm.Free)/math.Pow(10, 9),
+					)
+
+					i++
+					time.Sleep(time.Millisecond * 500)
+				}
+			}
+		}(done, prof)
 	}
 	args = append(args, pkg)
 	cmd := commandWithContext(ctx, args...)
@@ -241,6 +297,13 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 	tid, _ := ctx.Value("threadId").(int32)
 	oc.Took(tid, pkg, dur)
 	fmt.Printf("Ran tests for package: %s in %s\n", pkg, dur)
+	if *runProf {
+		done <- true
+		close(done)
+
+		res := *<-prof
+		fmt.Printf("Max RAM: %.3fGB, Avg RAM: %.3fGB\n", res.maxMem, res.avgMem)
+	}
 	if *runCoverage {
 		if err = appendTestCoverageFile(tmpCoverageFile, coverageFile); err != nil {
 			return err
