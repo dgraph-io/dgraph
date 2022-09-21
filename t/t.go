@@ -272,7 +272,10 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 					var sb strings.Builder
 					for _, c := range list {
 						stats, err := cli.ContainerStats(ctx, c.ID, false)
-						x.Check(err)
+						if err != nil {
+							fmt.Println(err)
+							continue
+						}
 
 						var data dockerStats
 						err = json.NewDecoder(stats.Body).Decode(&data)
