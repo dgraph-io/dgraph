@@ -268,6 +268,8 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 					x.Check(err)
 					list, err := cli.ContainerList(ctx, types.ContainerListOptions{All: true})
 					x.Check(err)
+
+					var sb strings.Builder
 					for _, c := range list {
 						stats, err := cli.ContainerStats(ctx, c.ID, false)
 						x.Check(err)
@@ -278,8 +280,9 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 						dockerMemUsed := data.MemoryStats.Usage / math.Pow(10, 9)
 						dockerMemLimit := data.MemoryStats.Limit / math.Pow(10, 9)
 
-						fmt.Printf("Container %s used:%.3fGB, limit:%.3fGB\n", c.Names[0], dockerMemUsed, dockerMemLimit)
+						sb.WriteString(fmt.Sprintf("Container %s used:%.3fGB, limit:%.3fGB\n", c.Names[0], dockerMemUsed, dockerMemLimit))
 					}
+					fmt.Println(sb.String())
 
 					i++
 					time.Sleep(time.Millisecond * 500)
