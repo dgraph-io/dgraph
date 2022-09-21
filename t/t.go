@@ -276,7 +276,10 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 
 						var data dockerStats
 						err = json.NewDecoder(stats.Body).Decode(&data)
-						x.Check(err)
+						if err != nil {
+							fmt.Println(err)
+							continue
+						}
 						dockerMemUsed := data.MemoryStats.Usage / math.Pow(10, 9)
 						dockerMemLimit := data.MemoryStats.Limit / math.Pow(10, 9)
 
