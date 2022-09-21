@@ -30,6 +30,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -202,12 +203,16 @@ type profResult struct {
 }
 
 type dockerMemStats struct {
-	Usage float64 `json:"usage"`
-	Limit float64 `json:"limit"`
+	Usage uint64 `json:"usage"`
+	Limit uint64 `json:"limit"`
 }
 
 type dockerStats struct {
 	MemoryStats dockerMemStats `json:"memory_stats"`
+}
+
+func bytesToGiB(bytes uint64) float64 {
+	return float64(bytes) / math.Pow(2, 30)
 }
 
 func runTestsFor(ctx context.Context, pkg, prefix string) error {
@@ -251,17 +256,23 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 						return
 					}
 
-					totalMem := float64(vm.Total) / math.Pow(10, 9)
-					usedMem := float64(vm.Used) / math.Pow(10, 9)
-					availableMem := float64(vm.Available) / math.Pow(10, 9)
-					fmt.Printf("Memory total: %.3fGB, used: %.3fGB, available: %.3fGB\n",
+					totalMem := bytesToGiB(vm.Total)
+					usedMem := bytesToGiB(vm.Used)
+					availableMem := bytesToGiB(vm.Available)
+					fmt.Printf("Memory total (gopsutil): %.3f GiB, used: %.3f GiB, available: %.3f GiB\n",
 						totalMem,
 						usedMem,
 						availableMem,
 					)
-					used = used + float64(vm.Used)/math.Pow(10, 9)
+					used = used + usedMem
 					if usedMem > max {
 						max = usedMem
+					}
+
+					if runtime.GOOS == "linux" {
+						fmt.Println("free -h output:")
+						cmd := commandWithContext(ctx, "free", "-h")
+						cmd.Run()
 					}
 
 					cli, err := client.NewEnvClient()
@@ -270,6 +281,7 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 					x.Check(err)
 
 					var sb strings.Builder
+					sb.WriteString("Container stats:\n")
 					for _, c := range list {
 						stats, err := cli.ContainerStats(ctx, c.ID, false)
 						if err != nil {
@@ -283,10 +295,10 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 							fmt.Println(err)
 							continue
 						}
-						dockerMemUsed := data.MemoryStats.Usage / math.Pow(10, 9)
-						dockerMemLimit := data.MemoryStats.Limit / math.Pow(10, 9)
+						dockerMemUsed := bytesToGiB(data.MemoryStats.Usage)
+						dockerMemLimit := bytesToGiB(data.MemoryStats.Limit)
 
-						sb.WriteString(fmt.Sprintf("Container %s used:%.3fGB, limit:%.3fGB\n", c.Names[0], dockerMemUsed, dockerMemLimit))
+						sb.WriteString(fmt.Sprintf("Container %s used:%.3f GiB, limit:%.3f GiB\n", c.Names[0], dockerMemUsed, dockerMemLimit))
 					}
 					fmt.Println(sb.String())
 
