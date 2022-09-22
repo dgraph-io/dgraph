@@ -68,3 +68,7 @@ jobs:
         run: |
           #!/bin/bash
           sudo egrep -i -r 'killed process' /var/log/
+          echo -------------------------------------
+          grep -i 'killed process' /var/log/messages
+          echo -------------------------------------
+          sudo dmesg -T | egrep -i 'killed process'
