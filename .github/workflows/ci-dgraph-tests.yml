@@ -60,7 +60,7 @@ jobs:
           # build the test binary
           cd t; go build .
           # run the tests
-          ./t --coverage=true --skip systest/online-restore,systest/loader
+          ./t --coverage=true --skip systest/loader
           # clean up docker containers after test execution
           ./t -r
       - name: Install Goveralls
