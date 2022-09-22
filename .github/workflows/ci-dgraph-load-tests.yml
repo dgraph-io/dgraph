@@ -67,8 +67,4 @@ jobs:
         if: always()
         run: |
           #!/bin/bash
-          sudo egrep -i -r 'killed process' /var/log/
-          echo -------------------------------------
           grep -i 'killed process' /var/log/syslog
-          echo -------------------------------------
-          sudo dmesg -T | egrep -i 'killed process'
