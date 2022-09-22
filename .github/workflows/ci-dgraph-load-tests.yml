@@ -63,3 +63,8 @@ jobs:
           ./t --profiling=true --suite=load
           # clean up docker containers after test execution
           ./t -r
+      - name: Check for Out of Memory
+        if: always()
+        run: |
+          #!/bin/bash
+          sudo egrep -i -r 'killed process' /var/log/
