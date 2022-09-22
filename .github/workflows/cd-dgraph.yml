@@ -29,3 +29,6 @@ jobs:
           export GOARCH=amd64
           # make dgraph binary
           make dgraph
+      - name: Make Docker Image
+        run: make image-latest # this creates dgraph/dgraph:latest
+      
