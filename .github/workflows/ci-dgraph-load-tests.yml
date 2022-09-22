@@ -63,3 +63,5 @@ jobs:
           ./t --suite=load
           # clean up docker containers after test execution
           ./t -r
+          # sleep
+          sleep 5

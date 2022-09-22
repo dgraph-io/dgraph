@@ -63,6 +63,8 @@ jobs:
           ./t --coverage=true --skip systest/backup,systest/online-restore,systest/loader 
           # clean up docker containers after test execution
           ./t -r
+          # sleep
+          sleep 5
       - name: Install Goveralls
         run: go install github.com/mattn/goveralls@latest
       - name: Send Coverage Results
