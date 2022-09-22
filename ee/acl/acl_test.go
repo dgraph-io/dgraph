@@ -1204,6 +1204,7 @@ func TestQueryRemoveUnauthorizedPred(t *testing.T) {
 	}
 
 	for _, tc := range tests {
+		tc := tc // capture range variable
 		t.Run(tc.description, func(t *testing.T) {
 			t.Parallel()
 			resp, err := userClient.NewTxn().Query(ctx, tc.input)
@@ -1889,6 +1890,7 @@ func TestNewACLPredicates(t *testing.T) {
 	}
 
 	for _, tc := range queryTests {
+		tc := tc // capture range variable
 		t.Run(tc.description, func(t *testing.T) {
 			t.Parallel()
 			resp, err := userClient.NewTxn().Query(ctx, tc.input)

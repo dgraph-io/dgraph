@@ -7,7 +7,7 @@ on:
     branches:
       - main
   schedule:
-    - cron: "*/30 * * * *"
+    - cron: "0 * * * *"
 jobs:
   dgraph-tests:
     runs-on: self-hosted
@@ -60,7 +60,7 @@ jobs:
           # build the test binary
           cd t; go build .
           # run the tests
-          ./t --profiling=true --coverage=true --skip systest/backup,systest/online-restore,systest/loader
+          ./t --profiling=true --coverage=true --skip systest/loader
           # clean up docker containers after test execution
           ./t -r
       - name: Install Goveralls
