@@ -77,6 +77,13 @@ image-local local-image:
 	@docker build -f contrib/Dockerfile -t dgraph/dgraph:local .
 	@rm -r linux
 
+image-latest latest-image:
+	@GOOS=linux GOARCH=amd64 $(MAKE) dgraph
+	@mkdir -p linux
+	@cp ./dgraph/dgraph ./linux/dgraph
+	@docker build -f contrib/Dockerfile -t dgraph/dgraph:latest .
+	@rm -r linux
+
 help:
 	@echo
 	@echo Build commands:
