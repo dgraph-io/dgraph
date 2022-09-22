@@ -1,13 +1,5 @@
 name: cd-dgraph
-on:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
-  schedule:
-    - cron: "*/30 * * * *"
+on: workflow_dispatch
 jobs:
   dgraph-build:
     runs-on: self-hosted
