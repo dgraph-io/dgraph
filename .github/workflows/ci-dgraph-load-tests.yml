@@ -67,4 +67,6 @@ jobs:
         if: always()
         run: |
           #!/bin/bash
-          grep -i 'killed process' /var/log/syslog
+          grep oom-killer /var/log/kern.log || true
+          echo ---------------------------
+          grep -i 'killed process' /var/log/syslog || true
