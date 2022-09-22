@@ -69,4 +69,7 @@ jobs:
           #!/bin/bash
           grep oom-killer /var/log/kern.log || true
           echo ---------------------------
-          grep -i 'killed process' /var/log/syslog || true
+          grep -i 'killed process' /var/log/* || true
+          echo ---------------------------
+          grep -i 'OOM killer' /var/log/* || true
+
