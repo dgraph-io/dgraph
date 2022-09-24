@@ -23,6 +23,8 @@ jobs:
           node-version: 16
       - name: Install protobuf-compiler
         run: sudo apt-get install -y protobuf-compiler
+      - name: Install sysstat
+        run: sudo apt-get install -y sysstat
       - name: Check protobuf
         run: |
           cd ./protos

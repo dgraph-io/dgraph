@@ -282,6 +282,18 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 						fmt.Println("free -h output:")
 						cmd := commandWithContext(ctx, "free", "-h")
 						cmd.Run()
+
+						fmt.Println("vmstat output (MiB):")
+						cmd = commandWithContext(ctx, "vmstat", "-S", "M")
+						cmd.Run()
+
+						fmt.Println("mpstat (CPU time):")
+						cmd = commandWithContext(ctx, "mpstat", "-P", "ALL")
+						cmd.Run()
+
+						fmt.Println("iostat:")
+						cmd = commandWithContext(ctx, "iostat", "-xz")
+						cmd.Run()
 					}
 
 					cli, err := client.NewEnvClient()
