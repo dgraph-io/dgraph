@@ -1573,7 +1573,18 @@ func idFilter(filter map[string]interface{}, idField schema.FieldDefinition) []u
 	if idsFilter == nil {
 		return nil
 	}
-	idsSlice := idsFilter.([]interface{})
+	var idsSlice []interface{}
+	// idsFilter can be an single string value (most common) or
+	// an interface{} slice
+	switch idsFilter.(type) {
+	case string:
+		idsSlice = append(idsSlice, idsFilter)
+	case []interface{}:
+		idsSlice = idsFilter.([]interface{})
+	default:
+		// if an unexpected type is encountered, fail silently
+		return nil
+	}
 	return convertIDs(idsSlice)
 }
 
