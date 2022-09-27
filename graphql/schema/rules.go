@@ -31,9 +31,6 @@ import (
 	"github.com/dgraph-io/gqlparser/v2/validator"
 )
 
-const MaxUint = ^uint(0)
-const MaxInt = int(MaxUint >> 1)
-
 func init() {
 	schemaDocValidations = append(schemaDocValidations, typeNameValidation,
 		customQueryNameValidation, customMutationNameValidation)
@@ -54,7 +51,7 @@ func init() {
 	// as an array. listInputCoercion changes the value to array if the single object is provided.
 	// Changing the value can mess up with the other data validation rules hence we are setting
 	// up the order to a high value so that it will be executed last.
-	validator.AddRuleWithOrder("Input Coercion to List", MaxInt, listInputCoercion)
+	validator.AddRuleWithOrder("Input Coercion to List", int(^uint(0)>>1), listInputCoercion)
 	validator.AddRule("Check filter functions", filterCheck)
 
 }
