@@ -36,6 +36,6 @@ six==1.14.0
 tabulate==0.8.7
 taskcat==0.9.17
 typing-extensions==3.7.4.2
-urllib3==1.25.9
+urllib3==1.26.5
 websocket-client==0.57.0
 yattag==1.13.2
