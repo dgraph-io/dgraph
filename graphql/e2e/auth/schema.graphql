@@ -848,6 +848,22 @@ type State @auth(
     country: Country
 }
 
+type Person
+  @auth(
+    query: {
+      rule: """
+      query ($USER: [ID!]) {
+        queryPerson(filter: {id: $USER}) {
+          id
+        }
+      }
+      """
+    }
+  ) {
+  id: ID!
+  name: String!
+}
+
 # union testing - start
 enum AnimalCategory {
     Fish

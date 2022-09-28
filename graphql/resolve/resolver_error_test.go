@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"io/ioutil"
+	"sync"
 	"testing"
 
 	dgoapi "github.com/dgraph-io/dgo/v210/protos/api"
@@ -47,6 +48,7 @@ type executor struct {
 	// counter is used to count how many times Execute function has been called.
 	existenceQueriesResp string
 	counter              int
+	counterLock          sync.Mutex
 	resp                 string
 	assigned             map[string]string
 	result               map[string]interface{}
@@ -92,7 +94,9 @@ func (ex *executor) Execute(ctx context.Context, req *dgoapi.Request,
 	// In case ex.existenceQueriesResp is non empty, its an Add or an Update mutation. In this case,
 	// every third call to Execute
 	// query is an existence query and existenceQueriesResp is returned.
+	ex.counterLock.Lock()
 	ex.counter++
+	defer ex.counterLock.Unlock()
 	if ex.existenceQueriesResp != "" && ex.counter%3 == 1 {
 		return &dgoapi.Response{
 			Json: []byte(ex.existenceQueriesResp),
