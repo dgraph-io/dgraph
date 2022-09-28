@@ -17,8 +17,13 @@
 package edgraph
 
 import (
+	"context"
+	"github.com/dgraph-io/dgraph/schema"
+	"google.golang.org/grpc/metadata"
+	"io/ioutil"
 	"testing"
 
+	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/x"
@@ -38,6 +43,12 @@ func makeNquadEdge(sub, pred, obj string) *api.NQuad {
 		Subject:   sub,
 		Predicate: pred,
 		ObjectId:  obj,
+	}
+}
+
+func makeOp(schema string) *api.Operation {
+	return &api.Operation{
+		Schema: schema,
 	}
 }
 
@@ -118,4 +129,79 @@ func TestValidateKeys(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestParseSchemaFromAlterOperation(t *testing.T) {
+	md := metadata.New(map[string]string{"namespace": "123"})
+	ctx := metadata.NewIncomingContext(context.Background(), md)
+	dir, err := ioutil.TempDir("", "storetest_")
+	x.Check(err)
+	ps, err := badger.OpenManaged(badger.DefaultOptions(dir))
+	x.Check(err)
+	schema.Init(ps)
+
+	tests := []struct {
+		name    string
+		schema  string
+		noError bool
+	}{
+		{
+			name: "test no duplicate predicates and types",
+			schema: `
+  				name: string @index(fulltext, term) .
+  				age: int @index(int) @upsert .
+  				friend: [uid] @count @reverse .
+			`,
+			noError: true,
+		},
+		{
+			name: "test duplicate predicates error",
+			schema: `
+				name: string @index(fulltext, term) .
+				age: int @index(int) @upsert .
+				friend: [uid] @count @reverse .
+				friend: [uid] @count @reverse .
+			`,
+			noError: false,
+		},
+		{
+			name: "test duplicate predicates error 2",
+			schema: `
+				name: string @index(fulltext, term) .
+				age: int @index(int) @upsert .
+				friend: [uid] @count @reverse .
+				friend: int @index(int) @count @reverse .
+			`,
+			noError: false,
+		},
+		{
+			name: "test duplicate types error",
+			schema: `
+				name: string .
+				age: int .
+				type Person {
+					name
+				}
+				type Person {
+					age
+				}
+			`,
+			noError: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			op := makeOp(tc.schema)
+
+			_, err := parseSchemaFromAlterOperation(context.WithValue(ctx, 1, 1), op)
+
+			if tc.noError {
+				require.NoError(t, err, "Unexpected error for: %+v", tc.schema)
+			} else {
+				require.Error(t, err, "Expected an error: %+v", tc.schema)
+			}
+		})
+	}
+
 }
