@@ -18,7 +18,7 @@
 GOOS          ?= $(shell go env GOOS)
 GOPATH        ?= $(shell go env GOPATH)
 
-.PHONY: test
+.PHONY: all test
 
 all: test
 
@@ -27,7 +27,14 @@ test:
 	@go build .
 #	clean go testcache
 	go clean -testcache
-#	run the tests
-	@./t --skip systest/backup,systest/online-restore,systest/loader,tlstest
+#	run the tests specified in pkg; otherwise run standard suite
+	@if [ -n "$(PKG)" ]; then \
+		./t --pkg=$(PKG); \
+	else \
+		./t --skip systest/backup,systest/online-restore,systest/loader,tlstest; \
+	fi
 #	clean up docker containers after test execution
 	./t -r
+#	Exit message
+	@echo "Testing complete, goodbye!"
+		
