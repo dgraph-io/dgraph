@@ -27,7 +27,7 @@ GOPATH         ?= $(shell go env GOPATH)
 ###############
 
 .PHONY: dgraph all oss version install install_oss oss_install uninstall test help image image-local local-image
-all: $(SUBDIRS)
+all: dgraph
 
 dgraph:
 	GOOS=linux GOARCH=amd64 $(MAKE) -w -C $@ all
@@ -44,23 +44,18 @@ version:
 	@echo Go version: $(shell go version)
 
 install:
-	@(set -e;for i in $(SUBDIRS); do \
-		echo Installing $$i ...; \
-		GOOS=linux GOARCH=amd64 $(MAKE) -C $$i install; \
-	done)
+	@echo Installing dgraph ...; \
+		GOOS=linux GOARCH=amd64 $(MAKE) -C dgraph install; \
 
 install_oss oss_install:
 	GOOS=linux GOARCH=amd64 $(MAKE) BUILD_TAGS=oss install
 
 uninstall:
-	@(set -e;for i in $(SUBDIRS); do \
-		echo Uninstalling $$i ...; \
-		$(MAKE) -C $$i uninstall; \
-	done)
+	@echo Uninstalling dgraph ...; \
+		$(MAKE) -C dgraph uninstall; \
 
 test: image-local
-	@cp dgraph/dgraph ${GOPATH}/bin
-	@rm dgraph/dgraph
+	@mv dgraph/dgraph ${GOPATH}/bin
 	@$(MAKE) -C t test
 
 image:
