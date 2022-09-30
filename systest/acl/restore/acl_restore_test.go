@@ -35,7 +35,11 @@ func disableDraining(t *testing.T) {
 	require.NoError(t, err)
 
 	token := testutil.Login(t, &testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: 0})
-
+	fmt.Println("TOKEN:*****")
+	fmt.Println(token)
+	fmt.Println("jwt*****")
+	fmt.Println(token.AccessJwt)
+	fmt.Println("*****")
 	client := &http.Client{}
 	req, err := http.NewRequest("POST", testutil.AdminUrl(), bytes.NewBuffer(b))
 	require.Nil(t, err)
