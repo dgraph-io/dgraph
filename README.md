@@ -55,7 +55,7 @@ If you want to install from source, install Go 1.13+ or later and the following 
 
 ```bash
 sudo apt-get update
-sudo apt-get install gcc make
+sudo apt-get install build-essential
 ```
 
 ### macOS
