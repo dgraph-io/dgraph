@@ -7,7 +7,7 @@ on:
     branches:
       - main
   schedule:
-    - cron: "0 * * * *"
+    - cron: "*/30 * * * *"
 jobs:
   dgraph-tests:
     runs-on: self-hosted
@@ -63,6 +63,8 @@ jobs:
           ./t --coverage=true
           # clean up docker containers after test execution
           ./t -r
+          # sleep
+          sleep 5
       - name: Install Goveralls
         run: go install github.com/mattn/goveralls@latest
       - name: Send Coverage Results
