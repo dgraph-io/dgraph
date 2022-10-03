@@ -7,7 +7,7 @@ on:
     branches:
       - main
   schedule:
-    - cron: "*/30 * * * *"
+    - cron: "*/15 * * * *"
 jobs:
   dgraph-tests:
     runs-on: self-hosted
