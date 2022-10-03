@@ -4,6 +4,440 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project will adhere to [Calendar Versioning](https://calver.org/) starting v20.03.
 
+## v22.0.0 - 20221003
+
+### Added
+- GraphQL
+  - fix(GraphQL): optimize eq filter queries (#7895)
+  - fix(GraphQL): add validation of null values with correct order of graphql rule validation (#8333)
+  - fix(GraphQL) fix auth query rewriting with ID filter (#8157)
+- EDgraph
+  - fix(query): Prevent multiple entries for same predicate in mutations (#8332)
+- Posting
+  - fix(rollups): Fix splits in roll-up (#8297)
+
+### Changed
+- CI Test Infrastructure
+  - Stability Improvements to test harness
+  - Enabled [Unit/Integration Tests](https://github.com/dgraph-io/dgraph/actions/workflows/ci-dgraph-tests.yml)
+  - Enabled [Load Tests](https://github.com/dgraph-io/dgraph/actions/workflows/ci-dgraph-load-tests.yml)
+  - Enabled [Linters](https://github.com/dgraph-io/dgraph/actions/workflows/ci-golang-lint.yml)
+  - Enabled [Code Coverage](https://coveralls.io/github/dgraph-io/dgraph?branch=main)
+  - Configured to run with [Github Actions](https://github.com/dgraph-io/dgraph/tree/main/.github/workflows)
+- CI Security
+  - Enabled [Trivy Scans](https://github.com/dgraph-io/dgraph/actions/workflows/ci-aqua-security-trivy-tests.yml)
+  - Enabled dependabot scans
+  - Configured to run with [Github Actions](https://github.com/dgraph-io/dgraph/blob/main/.github/workflows/ci-aqua-security-trivy-tests.yml)
+
+### Fixed
+- Bug
+  - fix(bug): use copy of loop variable in Go routines (#8163)
+- Security
+  - fix(sec): fixing HIGH CVEs (#8289)
+  - fix(sec): CVE High Vulnerability (#8277)
+  - fix(sec): Fixing CVE-2021-31525 (#8274)
+  - fix(sec): CVE-2019-11254 (#8270)
+  - <details>
+    <summary>CVE Fixes (387 total)</summary>
+    #### CVE Fixes (387 total)
+    - CVE-2019-0210
+    - CVE-2019-0205
+    - CVE-2021-43565
+    - CVE-2022-27664
+    - CVE-2021-38561
+    - CVE-2021-44716
+    - CVE-2021-33194
+    - CVE-2022-27191
+    - CVE-2020-29652
+    - CVE-2018-16886
+    - CVE-2022-21698
+    - CVE-2022-37434
+    - CVE-2020-16156
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2022-37434
+    - CVE-2020-16156
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2022-37434
+    - CVE-2020-16156
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2022-37434
+    - CVE-2020-16156
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2022-37434
+    - CVE-2020-16156
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2022-37434
+    - CVE-2020-16156
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2022-37434
+    - CVE-2020-16156
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2022-37434
+    - CVE-2020-16156
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2022-37434
+    - CVE-2020-16156
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2022-37434
+    - CVE-2020-16156
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2022-37434
+    - CVE-2020-16156
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2020-35525
+    - CVE-2020-35527
+    - CVE-2021-20223
+    - CVE-2020-9794
+    - CVE-2022-29526
+    - CVE-2021-31525
+    - CVE-2019-11254
+    - CVE-2022-3219
+    - CVE-2019-16167
+    - CVE-2013-4235
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2013-4235
+    - CVE-2021-3671
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2021-3671
+    - CVE-2017-11164
+    - CVE-2022-1587
+    - CVE-2022-1586
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2021-3671
+    - CVE-2021-43618
+    - CVE-2016-20013
+    - CVE-2021-3671
+    - CVE-2016-2781
+    - CVE-2019-16167
+    - CVE-2013-4235
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2013-4235
+    - CVE-2021-3671
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2021-3671
+    - CVE-2017-11164
+    - CVE-2022-1587
+    - CVE-2022-1586
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2021-3671
+    - CVE-2021-43618
+    - CVE-2016-20013
+    - CVE-2021-3671
+    - CVE-2022-3219
+    - CVE-2016-2781
+    - CVE-2022-3219
+    - CVE-2022-1587
+    - CVE-2022-1586
+    - CVE-2019-16167
+    - CVE-2013-4235
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2013-4235
+    - CVE-2021-3671
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2021-3671
+    - CVE-2017-11164
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2021-3671
+    - CVE-2021-43618
+    - CVE-2016-20013
+    - CVE-2021-3671
+    - CVE-2016-2781
+    - CVE-2019-16167
+    - CVE-2013-4235
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2013-4235
+    - CVE-2021-3671
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2021-3671
+    - CVE-2017-11164
+    - CVE-2022-1587
+    - CVE-2022-1586
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2021-3671
+    - CVE-2021-43618
+    - CVE-2016-20013
+    - CVE-2021-3671
+    - CVE-2022-3219
+    - CVE-2016-2781
+    - CVE-2019-16167
+    - CVE-2013-4235
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2013-4235
+    - CVE-2021-3671
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2021-3671
+    - CVE-2017-11164
+    - CVE-2022-1587
+    - CVE-2022-1586
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2021-3671
+    - CVE-2021-43618
+    - CVE-2016-20013
+    - CVE-2021-3671
+    - CVE-2016-2781
+    - CVE-2019-16167
+    - CVE-2013-4235
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2013-4235
+    - CVE-2021-3671
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2021-3671
+    - CVE-2017-11164
+    - CVE-2022-1587
+    - CVE-2022-1586
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2021-3671
+    - CVE-2021-43618
+    - CVE-2016-20013
+    - CVE-2021-3671
+    - CVE-2016-2781
+    - CVE-2019-16167
+    - CVE-2013-4235
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2013-4235
+    - CVE-2021-3671
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2021-3671
+    - CVE-2017-11164
+    - CVE-2022-1587
+    - CVE-2022-1586
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2021-3671
+    - CVE-2021-43618
+    - CVE-2016-20013
+    - CVE-2021-3671
+    - CVE-2016-2781
+    - CVE-2019-16167
+    - CVE-2013-4235
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2013-4235
+    - CVE-2021-3671
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2021-3671
+    - CVE-2017-11164
+    - CVE-2022-1587
+    - CVE-2022-1586
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2021-3671
+    - CVE-2021-43618
+    - CVE-2016-20013
+    - CVE-2021-3671
+    - CVE-2016-2781
+    - CVE-2019-16167
+    - CVE-2013-4235
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2013-4235
+    - CVE-2021-3671
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2021-3671
+    - CVE-2017-11164
+    - CVE-2022-1587
+    - CVE-2022-1586
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2021-3671
+    - CVE-2021-43618
+    - CVE-2016-20013
+    - CVE-2021-3671
+    - CVE-2016-2781
+    - CVE-2019-16167
+    - CVE-2013-4235
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2013-4235
+    - CVE-2021-3671
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2021-3671
+    - CVE-2017-11164
+    - CVE-2022-1587
+    - CVE-2022-1586
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2021-3671
+    - CVE-2021-43618
+    - CVE-2016-20013
+    - CVE-2021-3671
+    - CVE-2016-2781
+    - CVE-2019-16167
+    - CVE-2013-4235
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2013-4235
+    - CVE-2021-3671
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2021-3671
+    - CVE-2017-11164
+    - CVE-2022-1587
+    - CVE-2022-1586
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2021-3671
+    - CVE-2021-43618
+    - CVE-2016-20013
+    - CVE-2021-3671
+    - CVE-2016-2781
+    - CVE-2020-9991
+    - CVE-2020-9849
+    </details>
+  - <details>
+    <summary>GHSA Fixes (7 total)</summary>
+    #### GHSA Fixes (7 total)
+    - GHSA-jq7p-26h5-w78r
+    - GHSA-8c26-wmh5-6g9v
+    - GHSA-h6xx-pmxh-3wgp
+    - GHSA-cg3q-j54f-5p7p
+    - GHSA-wxc4-f4m6-wwqv
+    </details>
+ 
 ## [21.03.2] - 2021-08-26
 [21.03.2]: https://github.com/dgraph-io/dgraph/compare/v21.03.1...v21.03.2
 
