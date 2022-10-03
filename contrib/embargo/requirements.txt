@@ -8,7 +8,7 @@ embargo==0.1.1
 Flask==1.0
 gevent==1.4.0
 greenlet==0.4.15
-httpie==2.1.0
+httpie==3.1.0
 idna==2.9
 itsdangerous==1.1.0
 Jinja2==2.11.3
