@@ -39,6 +39,7 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
   - fix(sec): CVE-2019-11254 (#8270)
   - <details>
     <summary>CVE Fixes (387 total)</summary>
+    
     #### CVE Fixes (387 total)
     - CVE-2019-0210
     - CVE-2019-0205
@@ -430,6 +431,7 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
     </details>
   - <details>
     <summary>GHSA Fixes (7 total)</summary>
+    
     #### GHSA Fixes (7 total)
     - GHSA-jq7p-26h5-w78r
     - GHSA-8c26-wmh5-6g9v
