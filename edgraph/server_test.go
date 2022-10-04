@@ -21,6 +21,7 @@ import (
 	"github.com/dgraph-io/dgraph/schema"
 	"google.golang.org/grpc/metadata"
 	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/dgraph-io/badger/v3"
@@ -137,6 +138,7 @@ func TestParseSchemaFromAlterOperation(t *testing.T) {
 	dir, err := ioutil.TempDir("", "storetest_")
 	x.Check(err)
 	ps, err := badger.OpenManaged(badger.DefaultOptions(dir))
+	defer ps.Close()
 	x.Check(err)
 	schema.Init(ps)
 
@@ -203,5 +205,6 @@ func TestParseSchemaFromAlterOperation(t *testing.T) {
 			}
 		})
 	}
+	defer os.RemoveAll(os.TempDir())
 
 }
