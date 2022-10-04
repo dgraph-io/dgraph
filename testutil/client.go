@@ -291,24 +291,28 @@ func HttpLogin(params *LoginParams) (*HttpToken, error) {
 	if err != nil {
 		return nil, errors.Wrapf(err, "unable to marshal body")
 	}
+	fmt.Println("HttpLogin: body", body)
 
 	req, err := http.NewRequest("POST", params.Endpoint, bytes.NewBuffer(body))
 	if err != nil {
 		return nil, errors.Wrapf(err, "unable to create request")
 	}
 	req.Header.Set("Content-Type", "application/json")
+	fmt.Println("HttpLogin: req", req)
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, errors.Wrapf(err, "login through curl failed")
 	}
+	fmt.Println("HttpLogin: resp", resp)
 	defer resp.Body.Close()
 
 	respBody, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return nil, errors.Wrapf(err, "unable to read from response")
 	}
+	fmt.Println("HttpLogin: respBody", respBody)
 	if resp.StatusCode != http.StatusOK {
 		return nil, errors.New(fmt.Sprintf("got non 200 response from the server with %s ",
 			string(respBody)))
@@ -323,6 +327,7 @@ func HttpLogin(params *LoginParams) (*HttpToken, error) {
 		}
 		return nil, errors.Wrapf(err, "unable to unmarshal the output to get JWTs")
 	}
+	fmt.Println("HttpLogin: outputJson", outputJson)
 
 	data, found := outputJson["data"].(map[string]interface{})
 	if !found {
