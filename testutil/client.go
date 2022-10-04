@@ -258,13 +258,16 @@ type LoginParams struct {
 // and returns the access JWT and refresh JWT extracted from
 // the HTTP response
 func HttpLogin(params *LoginParams) (*HttpToken, error) {
+	fmt.Println("HttpLogin: params data ", params)
 	loginPayload := api.LoginRequest{}
+	fmt.Println("HttpLogin: login payload at start", loginPayload)
 	if len(params.RefreshJwt) > 0 {
 		loginPayload.RefreshToken = params.RefreshJwt
 	} else {
 		loginPayload.Userid = params.UserID
 		loginPayload.Password = params.Passwd
 	}
+	fmt.Println("HttpLogin: login payload at end", loginPayload)
 
 	login := `mutation login($userId: String, $password: String, $namespace: Int, $refreshToken: String) {
 		login(userId: $userId, password: $password, namespace: $namespace, refreshToken: $refreshToken) {
@@ -344,7 +347,11 @@ func HttpLogin(params *LoginParams) (*HttpToken, error) {
 	if !found || newRefreshJwt == "" {
 		return nil, errors.Errorf("no refresh JWT found in the output")
 	}
-
+	fmt.Println("HttpLogin: http token ", &HttpToken{UserId: params.UserID,
+		Password:     params.Passwd,
+		AccessJwt:    newAccessJwt,
+		RefreshToken: newRefreshJwt,
+	})
 	return &HttpToken{
 		UserId:       params.UserID,
 		Password:     params.Passwd,
