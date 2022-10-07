@@ -60,8 +60,14 @@ jobs:
           # build the test binary
           cd t; go build .
           # run the tests
-          ./t --coverage=true
+          ./t --coverage=true --skip=restore,multi-tenancy,minio
           # clean up docker containers after test execution
+          ./t -r
+          ./t --pkg=restore
+          ./t -r
+          ./t --pkg=multi-tenancy
+          ./t -r
+          ./t --pkg=minio
           ./t -r
           # sleep
           sleep 5
