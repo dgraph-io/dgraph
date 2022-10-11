@@ -1,3 +1,4 @@
+//go:build !oss
 // +build !oss
 
 /*
@@ -14,6 +15,7 @@ package zero
 
 import (
 	"context"
+	"fmt"
 	"io/ioutil"
 	"math"
 	"net/http"
@@ -38,6 +40,7 @@ func (n *node) proposeTrialLicense() error {
 			ExpiryTs: time.Now().UTC().Add(humanize.Month).Unix(),
 		},
 	}
+	fmt.Println("****EXPIRYTS:", proposal.GetLicense().ExpiryTs)
 	err := n.proposeAndWait(context.Background(), proposal)
 	if err != nil {
 		return err
