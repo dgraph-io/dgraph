@@ -1,4 +1,4 @@
-name: ci-dgraph-tests
+name: ci-dgraph-tests-default-runner
 on:
   push:
     branches:
