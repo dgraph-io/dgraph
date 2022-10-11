@@ -48,14 +48,14 @@ version:
 	@echo Go version: $(shell go version)
 
 install:
-	@echo "Installing dgraph ..."; \
-		GOOS=linux GOARCH=amd64 $(MAKE) -C dgraph install; \
+	@echo "Installing Dgraph..."; \
+		$(MAKE) -C dgraph install; \
 
 install_oss oss_install:
-	GOOS=linux GOARCH=amd64 $(MAKE) BUILD_TAGS=oss install
+	$(MAKE) BUILD_TAGS=oss install
 
 uninstall:
-	@echo "Uninstalling dgraph ..."; \
+	@echo "Uninstalling Dgraph ..."; \
 		$(MAKE) -C dgraph uninstall; \
 
 test: image-local
