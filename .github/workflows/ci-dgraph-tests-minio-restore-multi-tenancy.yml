@@ -63,6 +63,8 @@ jobs:
           ./t --coverage=true --pkg=restore
           ./t -r
           ./t --coverage=true --pkg=minio
+          ./t -r
+          ./t --coverage=true --pkg=multi-tenancy
 
           # clean up docker containers after test execution
           ./t -r
