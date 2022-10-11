@@ -224,22 +224,23 @@ Run `go test` in the root folder.
 
 Over years of writing big scalable systems, we are convinced that striving for simplicity wherever possible is the only way to build robust systems. This simplicity could be in design, could be in coding, or could be achieved by rewriting an entire module, that you may have painstakingly finished yesterday.
 
-
-- **Pull requests are welcome**, as long as you're willing to put in the effort to meet the guidelines.
-- Aim for clear, well written, maintainable code.
-- Simple and minimal approach to features, like Go.
-- Refactoring existing code now for better performance, better readability or better testability wins over adding a new feature.
-- Don't add a function to a module that you don't use right now, or doesn't clearly enable a planned functionality.
-- Don't ship a half done feature, which would require significant alterations to work fully.
-- Avoid [Technical debt](https://en.wikipedia.org/wiki/Technical_debt) like cancer.
-- Leave the code cleaner than when you began.
+- **Pull requests are welcome**, as long as you're willing to put in the effort to meet the guidelines. After you fork dgraph, create your pull request against our `main` branch
+- Contributors are required to execute our [Individual Contributor License Agreement](https://cla-assistant.io/dgraph-io/dgraph)
+- Aim for clear, well written, maintainable code
+- Simple and minimal approach to features, like Go
+- New features must include passing unit tests, and integration tests when appropriate
+- Refactoring existing code now for better performance, better readability or better testability wins over adding a new feature
+- Don't add a function to a module that you don't use right now, or doesn't clearly enable a planned functionality
+- Don't ship a half done feature, which would require significant alterations to work fully
+- Avoid [Technical debt](https://en.wikipedia.org/wiki/Technical_debt) like cancer
+- Leave the code cleaner than when you began
 
 ### Code style
-- We're following [Go Code Review](https://github.com/golang/go/wiki/CodeReviewComments).
-- Use `go fmt` to format your code before committing.
-- If you see *any code* which clearly violates the style guide, please fix it and send a pull request. No need to ask for permission.
-- Avoid unnecessary vertical spaces. Use your judgment or follow the code review comments.
-- Wrap your code and comments to 100 characters, unless doing so makes the code less legible.
+- We're following [Go Code Review](https://github.com/golang/go/wiki/CodeReviewComments)
+- Use `go fmt` to format your code before committing
+- If you see *any code* which clearly violates the style guide, please fix it and send a pull request. No need to ask for permission
+- Avoid unnecessary vertical spaces. Use your judgment or follow the code review comments
+- Wrap your code and comments to 120 characters, unless doing so makes the code less legible
 
 ### License Header
 
@@ -248,7 +249,7 @@ Every new source file must begin with a license header.
 Most of Dgraph, Badger, and the Dgraph clients (dgo, dgraph-js, pydgraph and dgraph4j) are licensed under the Apache 2.0 license:
 
     /*
-     * Copyright 2016-2018 Dgraph Labs, Inc. and Contributors
+     * Copyright 2016-2022 Dgraph Labs, Inc. and Contributors
      *
      * Licensed under the Apache License, Version 2.0 (the "License");
      * you may not use this file except in compliance with the License.
