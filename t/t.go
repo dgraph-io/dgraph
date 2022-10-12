@@ -168,6 +168,7 @@ func outputLogs(prefix string) {
 		out, err := logCmd.CombinedOutput()
 		x.Check(err)
 		f.Write(out)
+		fmt.Println(string(out))
 		// fmt.Printf("Docker logs for %s is %s with error %+v ", c.ID, string(out), err)
 	}
 	for i := 0; i <= 3; i++ {
