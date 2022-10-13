@@ -34,6 +34,7 @@ func disableDraining(t *testing.T) {
 	}
 	b, err := json.Marshal(params)
 	require.NoError(t, err)
+	// TODO: this is NOT a correct fix, we have a race condition we should be validating with /status instead of /health
 	time.Sleep(time.Second * 60)
 	token := testutil.Login(t, &testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: 0})
 
