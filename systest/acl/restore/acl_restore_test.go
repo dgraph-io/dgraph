@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
@@ -33,7 +34,7 @@ func disableDraining(t *testing.T) {
 	}
 	b, err := json.Marshal(params)
 	require.NoError(t, err)
-
+	time.Sleep(time.Second * 60)
 	token := testutil.Login(t, &testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: 0})
 
 	client := &http.Client{}
