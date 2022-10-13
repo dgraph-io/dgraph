@@ -1135,12 +1135,16 @@ func GetEEFeaturesList() []string {
 // EnterpriseEnabled returns whether enterprise features can be used or not.
 func EnterpriseEnabled() bool {
 	if !enc.EeBuild {
+		fmt.Println("EnterpriseEnabled: enc.EeBuild ", enc.EeBuild)
 		return false
 	}
 	state := GetMembershipState()
+	fmt.Println("EnterpriseEnabled: GetMembershipState ", state)
 	if state == nil {
+		fmt.Println("EnterpriseEnabled: groups.askZeroForEE ", groups().askZeroForEE())
 		return groups().askZeroForEE()
 	}
+	fmt.Println("EnterpriseEnabled: state.GetLicense.GetEnabled ", state.GetLicense().GetEnabled())
 	return state.GetLicense().GetEnabled()
 }
 
