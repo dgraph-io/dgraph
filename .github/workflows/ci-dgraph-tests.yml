@@ -60,14 +60,8 @@ jobs:
           # build the test binary
           cd t; go build .
           # run the tests
-          ./t --coverage=true --skip=systest/acl/restore,systest/multi-tenancy,systest/backup/minio
+          ./t --coverage=true
           # clean up docker containers after test execution
-          ./t -r
-          ./t --pkg=systest/acl/restore
-          ./t -r
-          ./t --pkg=systest/multi-tenancy
-          ./t -r
-          ./t --pkg=systest/backup/minio
           ./t -r
           # sleep
           sleep 5
