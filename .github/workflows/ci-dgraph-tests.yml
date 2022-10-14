@@ -65,7 +65,3 @@ jobs:
           ./t -r
           # sleep
           sleep 5
-      - name: Install Goveralls
-        run: go install github.com/mattn/goveralls@latest
-      - name: Send Coverage Results
-        run: cd t && goveralls -repotoken ${{ secrets.COVERALLSIO_TOKEN }} -coverprofile=coverage.out
