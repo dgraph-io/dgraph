@@ -59,8 +59,8 @@ jobs:
           cp dgraph/dgraph ~/go/bin 
           # build the test binary
           cd t; go build .
-          # run the load tests
-          ./t --suite=load
+          # run the tests
+          ./t --coverage=true
           # clean up docker containers after test execution
           ./t -r
           # sleep
