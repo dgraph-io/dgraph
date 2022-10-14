@@ -624,6 +624,8 @@ var loadPackages = []string{
 	"/systest/bgindex",
 	"/contrib/scripts",
 	"/dgraph/cmd/bulk/systest",
+	"/systest/ldbc/bulk",
+	"/systest/ldbc/query",
 }
 
 func isValidPackageForSuite(pkg string) bool {
@@ -631,6 +633,8 @@ func isValidPackageForSuite(pkg string) bool {
 	case "all":
 		return true
 	case "load":
+		return isLoadPackage(pkg)
+	case "ldbc":
 		return isLoadPackage(pkg)
 	case "unit":
 		return !isLoadPackage(pkg)
@@ -655,6 +659,7 @@ var datafiles = map[string]string{
 	"1million.rdf.gz":         "https://github.com/dgraph-io/benchmarks/blob/master/data/1million.rdf.gz?raw=true",
 	"21million.schema":        "https://github.com/dgraph-io/benchmarks/blob/master/data/21million.schema?raw=true",
 	"21million.rdf.gz":        "https://github.com/dgraph-io/benchmarks/blob/master/data/21million.rdf.gz?raw=true",
+	"ldbcTypes.schema":        "https://github.com/dgraph-io/benchmarks/blob/master/ldbc/sf0.3/ldbcTypes.schema?raw=true",
 }
 
 func downloadDataFiles() {
