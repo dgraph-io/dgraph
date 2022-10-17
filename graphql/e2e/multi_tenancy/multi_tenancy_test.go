@@ -53,7 +53,7 @@ var (
 // that update should also be propagated to alpha nodes in other groups.
 func TestSchemaSubscribe(t *testing.T) {
 	// TODO: need to fix the race condition for license propagation, the sleep helps propagate the EE license correctly
-	time.Sleep(time.Second * 60)
+	time.Sleep(time.Second * 10)
 	header := http.Header{}
 	header.Set(accessJwtHeader, testutil.GrootHttpLogin(groupOneAdminServer).AccessJwt)
 	schema := `
