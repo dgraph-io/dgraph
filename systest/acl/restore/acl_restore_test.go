@@ -86,7 +86,7 @@ func sendRestoreRequest(t *testing.T, location, backupId string, backupNum int) 
 
 func TestAclCacheRestore(t *testing.T) {
 	// TODO: need to fix the race condition for license propagation, the sleep helps propagate the EE license correctly
-	time.Sleep(time.Second * 60)
+	time.Sleep(time.Second * 10)
 	disableDraining(t)
 	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
 	require.NoError(t, err)
