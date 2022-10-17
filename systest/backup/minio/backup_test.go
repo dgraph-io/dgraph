@@ -117,6 +117,10 @@ func TestBackupMinio(t *testing.T) {
 	dirSetup(t)
 
 	// Send backup request.
+	// TODO: minio backup request fails when the environment is not ready, 
+	//       mostly because of a race condition
+	//       adding sleep
+	time.Sleep(time.Second * 10)
 	_ = runBackup(t, 3, 1)
 	restored := runRestore(t, "", math.MaxUint64)
 
