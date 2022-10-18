@@ -35,6 +35,4 @@ test:
 	fi
 #	clean up docker containers after test execution
 	./t -r
-#	Exit message
-	@echo "Testing complete, goodbye!"
 		
