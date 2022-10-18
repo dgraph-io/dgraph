@@ -12,6 +12,11 @@ jobs:
   dgraph-load-tests:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout LDBC query repo
+        uses: actions/checkout@v3
+        with:
+          repository: dgraph-io/ldbc
+          path: ldbc
       - uses: actions/checkout@v3
       - name: Set up Go
         uses: actions/setup-go@v3
