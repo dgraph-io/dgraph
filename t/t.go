@@ -624,8 +624,6 @@ var loadPackages = []string{
 	"/systest/bgindex",
 	"/contrib/scripts",
 	"/dgraph/cmd/bulk/systest",
-	"/systest/ldbc/bulk",
-	"/systest/ldbc/query",
 }
 
 func isValidPackageForSuite(pkg string) bool {
@@ -635,7 +633,7 @@ func isValidPackageForSuite(pkg string) bool {
 	case "load":
 		return isLoadPackage(pkg)
 	case "ldbc":
-		return isLoadPackage(pkg)
+		return strings.HasSuffix(pkg, "/systest/ldbc")
 	case "unit":
 		return !isLoadPackage(pkg)
 	default:
@@ -659,7 +657,39 @@ var datafiles = map[string]string{
 	"1million.rdf.gz":         "https://github.com/dgraph-io/benchmarks/blob/master/data/1million.rdf.gz?raw=true",
 	"21million.schema":        "https://github.com/dgraph-io/benchmarks/blob/master/data/21million.schema?raw=true",
 	"21million.rdf.gz":        "https://github.com/dgraph-io/benchmarks/blob/master/data/21million.rdf.gz?raw=true",
-	"ldbcTypes.schema":        "https://github.com/dgraph-io/benchmarks/blob/master/ldbc/sf0.3/ldbcTypes.schema?raw=true",
+}
+
+var baseUrl = "https://github.com/dgraph-io/benchmarks/blob/master/ldbc/sf0.3/ldbc_rdf_0.3/"
+var suffix = "?raw=true"
+
+var rdfFileNames = [...]string{
+	"Deltas.rdf",
+	"comment_0.rdf",
+	"containerOf_0.rdf",
+	"forum_0.rdf",
+	"hasCreator_0.rdf",
+	"hasInterest_0.rdf",
+	"hasMember_0.rdf",
+	"hasModerator_0.rdf",
+	"hasTag_0.rdf",
+	"hasType_0.rdf",
+	"isLocatedIn_0.rdf",
+	"isPartOf_0.rdf",
+	"isSubclassOf_0.rdf",
+	"knows_0.rdf",
+	"likes_0.rdf",
+	"organisation_0.rdf",
+	"person_0.rdf",
+	"place_0.rdf",
+	"post_0.rdf",
+	"replyOf_0.rdf",
+	"studyAt_0.rdf",
+	"tag_0.rdf",
+	"tagclass_0.rdf",
+	"workAt_0.rdf"}
+
+var ldbcDataFiles = map[string]string{
+	"ldbcTypes.schema": "https://github.com/dgraph-io/benchmarks/blob/master/ldbc/sf0.3/ldbcTypes.schema?raw=true",
 }
 
 func downloadDataFiles() {
@@ -680,6 +710,34 @@ func downloadDataFiles() {
 			fmt.Printf("Output %v", out)
 		}
 	}
+}
+
+func downloadLDBCFiles() {
+	if !*downloadResources {
+		fmt.Print("Skipping downloading of resources\n")
+		return
+	}
+	if *tmp == "" {
+		*tmp = os.TempDir() + "/ldbcData"
+	}
+
+	x.Check(testutil.MakeDirEmpty([]string{*tmp}))
+
+	for _, name := range rdfFileNames {
+		filepath := baseUrl + name + suffix
+		ldbcDataFiles[name] = filepath
+	}
+
+	for fname, link := range ldbcDataFiles {
+		cmd := exec.Command("wget", "-O", fname, link)
+		cmd.Dir = *tmp
+
+		if out, err := cmd.CombinedOutput(); err != nil {
+			fmt.Printf("Error %v", err)
+			fmt.Printf("Output %v", out)
+		}
+	}
+
 }
 
 func createTestCoverageFile(path string) error {
@@ -836,6 +894,9 @@ func run() error {
 		valid := getPackages()
 		if *suite == "load" || *suite == "all" {
 			downloadDataFiles()
+		}
+		if *suite == "ldbc" || *suite == "all" {
+			downloadLDBCFiles()
 		}
 		for i, task := range valid {
 			select {

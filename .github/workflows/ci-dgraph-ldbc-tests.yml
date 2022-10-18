@@ -1,0 +1,65 @@
+name: ci-dgraph-ldbc-tests
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  schedule:
+    - cron: "30 * * * *"
+jobs:
+  dgraph-load-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.18
+      - name: Set up Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 16
+      - name: Install protobuf-compiler
+        run: sudo apt-get install -y protobuf-compiler
+      - name: Check protobuf
+        run: |
+          cd ./protos
+          go mod tidy
+          make regenerate
+          git diff --exit-code -- .
+      - name: Make Docker Image
+        run: make image-local
+      - name: Make Linux Build
+        run: |
+          #!/bin/bash
+          # go settings
+          export GOOS=linux
+          export GOARCH=amd64
+          # make dgraph binary
+          make dgraph
+      - name: Clean Up Environment
+        run: |
+          #!/bin/bash
+          # clean cache
+          go clean -testcache
+          # build the test binary
+          cd t; go build .
+          # clean up docker containers before test execution
+          ./t -r
+      - name: Run Load Tests
+        run: |
+          #!/bin/bash
+          # clean cache
+          go clean -testcache
+          # go env settings
+          export GOPATH=~/go
+          # move the binary
+          cp dgraph/dgraph ~/go/bin 
+          # build the test binary
+          cd t; go build .
+          # run the ldbc tests
+          ./t --suite=ldbc
+          # clean up docker containers after test execution
+          ./t -r
