@@ -31,6 +31,12 @@ sudo touch /etc/cron.d/ci_permissions_resetter
 sudo chown $USER:$USER /etc/cron.d/ci_permissions_resetter
 sudo echo "* * * * * root for i in {0..60}; do chown -R $USER:$USER /home/ubuntu/actions-runner/_work & sleep 1; done" >  /etc/cron.d/ci_permissions_resetter 
 sudo chown root:root /etc/cron.d/ci_permissions_resetter 
+# Increase file descriptor limit
+sudo sh -c 'echo "*         hard    nofile      2000000" >> /etc/security/limits.conf'
+sudo sh -c 'echo "*         soft    nofile      2000000" >> /etc/security/limits.conf'
+sudo sh -c 'echo "root      hard    nofile      2000000" >> /etc/security/limits.conf'
+sudo sh -c 'echo "root      soft    nofile      2000000" >> /etc/security/limits.conf'
+sudo sh -c 'echo "fs.nr_open = 2000000" >> /etc/sysctl.conf'
 # Start GH Actions
 sudo ./svc.sh install
 sudo ./svc.sh start
