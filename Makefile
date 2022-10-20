@@ -26,10 +26,11 @@ GOPATH         ?= $(shell go env GOPATH)
 # Release Paramaters #
 # by default will be set to local
 
-# make docker-image DOCKER_TAG=22.0.0
-DOCKER_TAG     ?= local
+# also docker tag
 # make dgraph DGRAPH_RELEASE_VERSION=22.0.0
-DGRAPH_RELEASE_VERSION ?= local
+# by default set to local 
+# our release scripts will specify this parameter during CD process
+DGRAPH_VERSION ?= local
 
 ######################
 
