@@ -37,7 +37,7 @@ DGRAPH_RELEASE_VERSION ?= local
 all: dgraph
 
 dgraph:
-	@GOOS=linux GOARCH=amd64 $(MAKE) -w -C $@ all
+	GOOS=linux GOARCH=amd64 $(MAKE) -w -C $@ all
 
 oss:
 	GOOS=linux GOARCH=amd64 $(MAKE) BUILD_TAGS=oss
@@ -52,7 +52,7 @@ version:
 
 install:
 	@echo "Installing dgraph ..."; \
-		$(MAKE) -C dgraph install; \
+		GOOS=linux GOARCH=amd64 $(MAKE) -C dgraph install; \
 
 install_oss oss_install:
 	GOOS=linux GOARCH=amd64 $(MAKE) BUILD_TAGS=oss install
@@ -74,13 +74,12 @@ docker-image-standalone: dgraph
 dependency:
 	sudo apt-get update
 	sudo apt-get -y upgrade
-	sudo apt-get -y install \
-    	ca-certificates \
-    	curl \
-    	gnupg \
-    	lsb-release \
-    	build-essential \
-		protobuf-compiler
+	sudo apt-get -y install ca-certificates
+	sudo apt-get -y install curl
+	sudo apt-get -y	install gnupg
+	sudo apt-get -y install lsb-release
+	sudo apt-get -y install build-essential
+	sudo apt-get -y install protobuf-compiler
 
 help:
 	@echo
