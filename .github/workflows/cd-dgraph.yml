@@ -28,15 +28,15 @@ jobs:
           export GOOS=linux
           export GOARCH=amd64
           # make dgraph binary
-          make dgraph $VERSION
+          make dgraph $(VERSION)
       - name: Make Dgraph Docker Image
         run: |
-        make image-version latest 
-        make image-version $(VERSION)
+        make docker-image latest 
+        make docker-image $(VERSION)
       - name: Make Dgraph Standalone Docker Image with Version
         run: |
-        make standalone-image-version latest
-        make standalone-image-version $(VERSION)
+        make standalone-docker-image latest
+        make standalone-docker-image $(VERSION)
       - name: Push Images to DockerHub
         run: |
           docker login --username=$DOCKERHUB_USER_TEST --password=$DOCKERHUB_PASSWORD_TOKEN_TEST
