@@ -38,12 +38,12 @@ jobs:
         run: make dgraph DGRAPH_RELASE_VERSION=${{ env.DGRAPH_RELEASE_VERSION }}
       - name: Make Dgraph Docker Image
         run: |
-        make docker-image DOCKER_TAG=latest
-        make docker-image DOCKER_TAG=${{ env.DGRAPH_RELEASE_VERSION }}
+          make docker-image DOCKER_TAG=latest
+          make docker-image DOCKER_TAG=${{ env.DGRAPH_RELEASE_VERSION }}
       - name: Make Dgraph Standalone Docker Image with Version
         run: |
-        make docker-image-standalone DOCKER_TAG=latest
-        make docker-image-standalone DOCKER_TAG=${{ env.DGRAPH_RELEASE_VERSION }}
+          make docker-image-standalone DOCKER_TAG=latest
+          make docker-image-standalone DOCKER_TAG=${{ env.DGRAPH_RELEASE_VERSION }}
       - name: Push Images to DockerHub
         run: |
           docker login --username=$DOCKERHUB_USER_TEST --password=$DOCKERHUB_PASSWORD_TOKEN_TEST
