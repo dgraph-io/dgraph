@@ -28,7 +28,11 @@ jobs:
           export GOOS=linux
           export GOARCH=amd64
           # make dgraph binary
-          make dgraph
-      - name: Make Docker Image
-        run: make image-latest # this creates dgraph/dgraph:latest
-
+          make dgraph $VERSION
+      - name: Make Dgraph Docker Image
+        run: |
+        make image-version $VERSION # this creates dgraph/dgraph:latest
+      - name: Make Dgraph Standalone Docker Image
+        run: echo 123
+      - name: Push Images to DockerHub
+        run: echo "docker push"
