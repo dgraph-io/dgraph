@@ -20,15 +20,18 @@ BUILD_DATE     ?= $(shell git log -1 --format=%ci)
 BUILD_BRANCH   ?= $(shell git rev-parse --abbrev-ref HEAD)
 BUILD_VERSION  ?= $(shell git describe --always --tags)
 
-MODIFIED        = $(shell git diff-index --quiet HEAD || echo "-mod")
-
 GOPATH         ?= $(shell go env GOPATH)
 
-# when making release, use e.g.
+######################
+# Release Paramaters #
+# by default will be set to local
+
 # make docker-image DOCKER_TAG=22.0.0
 DOCKER_TAG     ?= local
+# make dgraph DGRAPH_RELEASE_VERSION=v22.0.0
+DGRAPH_RELEASE_VERSION ?= local
 
-###############
+######################
 
 .PHONY: dgraph all oss version install install_oss oss_install uninstall test help image image-local local-image
 all: dgraph
@@ -42,7 +45,7 @@ oss:
 version:
 	@echo Dgraph ${BUILD_VERSION}
 	@echo Build: ${BUILD}
-	@echo Codename: ${BUILD_CODENAME}${MODIFIED}
+	@echo Codename: ${BUILD_CODENAME}
 	@echo Build date: ${BUILD_DATE}
 	@echo Branch: ${BUILD_BRANCH}
 	@echo Go version: $(shell go version)
@@ -65,9 +68,19 @@ test: image-local
 docker-image: dgraph
 	@docker build -f contrib/Dockerfile -t dgraph/dgraph:$(DOCKER_TAG) .
 
-standalone-docker-image: dgraph
+docker-image-standalone: dgraph
 	$(MAKE) -w -C contrib/standalone all $VERSION
-	@rm -r linux
+
+dependency:
+	sudo apt-get update
+	sudo apt-get -y upgrade
+	sudo apt-get -y install \
+    	ca-certificates \
+    	curl \
+    	gnupg \
+    	lsb-release \
+    	build-essential \
+		protobuf-compiler
 
 help:
 	@echo
