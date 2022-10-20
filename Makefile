@@ -65,10 +65,10 @@ test: dgraph
 	@$(MAKE) -C t test
 
 docker-image: dgraph
-	docker build -f contrib/Dockerfile -t dgraph/dgraph:$(DOCKER_TAG) .
+	docker build -f contrib/Dockerfile -t dgraph/dgraph:$(DGRAPH_RELEASE_VERSION) .
 
 docker-image-standalone: dgraph
-	$(MAKE) -w -C contrib/standalone all DOCKER_TAG=$(DOCKER_TAG) DGRAPH_VERSION=$(DGRAPH_RELEASE_VERSION)
+	$(MAKE) -w -C contrib/standalone all DOCKER_TAG=$(DGRAPH_RELEASE_VERSION) DGRAPH_VERSION=$(DGRAPH_RELEASE_VERSION)
 
 # build and run dependencies for ubuntu linux
 dependency:
