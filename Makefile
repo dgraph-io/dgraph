@@ -28,7 +28,7 @@ GOPATH         ?= $(shell go env GOPATH)
 
 # make docker-image DOCKER_TAG=22.0.0
 DOCKER_TAG     ?= local
-# make dgraph DGRAPH_RELEASE_VERSION=v22.0.0
+# make dgraph DGRAPH_RELEASE_VERSION=22.0.0
 DGRAPH_RELEASE_VERSION ?= local
 
 ######################

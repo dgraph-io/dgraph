@@ -21,27 +21,28 @@ jobs:
         run: |
           #!/bin/bash
           pushd protos
-          go mod tidy
           make regenerate
           popd
           if [[ "$(git status --porcelain)" ]]; then \
              echo "Generated protos different in release."
+             echo "Or need to go mod tidy"
              exit 1
           fi
       - name: Set Dgraph Release Version
         run: |
           #!/bin/bash
+#         This must be set for each new release
           DGRAPH_RELEASE_VERSION=22.0.0
           echo "DGRAPH_RELEASE_VERSION=$DGRAPH_RELEASE_VERSION" >> $GITHUB_ENV
       - name: Make Linux Build
         run: make dgraph DGRAPH_RELASE_VERSION=${{ env.DGRAPH_RELEASE_VERSION }}
       - name: Make Dgraph Docker Image
         run: |
-        make docker-image DOCKER_TAG="latest"
+        make docker-image DOCKER_TAG=latest
         make docker-image DOCKER_TAG=${{ env.DGRAPH_RELEASE_VERSION }}
       - name: Make Dgraph Standalone Docker Image with Version
         run: |
-        make docker-image-standalone DOCKER_TAG="latest"
+        make docker-image-standalone DOCKER_TAG=latest
         make docker-image-standalone DOCKER_TAG=${{ env.DGRAPH_RELEASE_VERSION }}
       - name: Push Images to DockerHub
         run: |
