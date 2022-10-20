@@ -4,7 +4,6 @@ jobs:
   dgraph-build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Dgraph Repository
       - uses: actions/checkout@v3
       - name: Install Dependencies
         run: make dependency
