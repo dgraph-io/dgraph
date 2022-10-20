@@ -24,9 +24,9 @@ jobs:
           make regenerate
           popd
           if [[ "$(git status --porcelain)" ]]; then \
-             echo "Generated protos different in release."
-             echo "Or need to go mod tidy"
-             exit 1
+             echo "Generated protos different in release."; \
+             echo "Or need to go mod tidy"; \
+             exit 1; \
           fi
       - name: Set Dgraph Release Version
         run: |
