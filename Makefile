@@ -24,13 +24,17 @@ MODIFIED        = $(shell git diff-index --quiet HEAD || echo "-mod")
 
 GOPATH         ?= $(shell go env GOPATH)
 
+# when making release, use e.g.
+# make docker-image DOCKER_TAG=22.0.0
+DOCKER_TAG     ?= local
+
 ###############
 
 .PHONY: dgraph all oss version install install_oss oss_install uninstall test help image image-local local-image
 all: dgraph
 
 dgraph:
-	GOOS=linux GOARCH=amd64 $(MAKE) -w -C $@ all
+	@GOOS=linux GOARCH=amd64 $(MAKE) -w -C $@ all
 
 oss:
 	GOOS=linux GOARCH=amd64 $(MAKE) BUILD_TAGS=oss
@@ -58,32 +62,11 @@ test: image-local
 	@mv dgraph/dgraph ${GOPATH}/bin
 	@$(MAKE) -C t test
 
-image:
-	@GOOS=linux GOARCH=amd64 $(MAKE) dgraph
-	@mkdir -p linux
-	@mv ./dgraph/dgraph ./linux/dgraph
-	@docker build -f contrib/Dockerfile -t dgraph/dgraph:$(subst /,-,${BUILD_BRANCH}) .
-	@rm -r linux
+docker-image: dgraph
+	@docker build -f contrib/Dockerfile -t dgraph/dgraph:$(DOCKER_TAG) .
 
-image-local local-image:
-	@GOOS=linux GOARCH=amd64 $(MAKE) dgraph
-	@mkdir -p linux
-	@cp ./dgraph/dgraph ./linux/dgraph
-	@docker build -f contrib/Dockerfile -t dgraph/dgraph:local .
-	@rm -r linux
-
-standalone-docker-image:
-	@GOOS=linux GOARCH=amd64 $(MAKE) dgraph
-	@mkdir -p linux
-	@cp ./dgraph/dgraph ./linux/dgraph
+standalone-docker-image: dgraph
 	$(MAKE) -w -C contrib/standalone all $VERSION
-	@rm -r linux
-
-docker-image:
-	@GOOS=linux GOARCH=amd64 $(MAKE) dgraph
-	@mkdir -p linux
-	@cp ./dgraph/dgraph ./linux/dgraph
-	@docker build -f contrib/Dockerfile -t dgraph/dgraph:$VERSION .
 	@rm -r linux
 
 help:
