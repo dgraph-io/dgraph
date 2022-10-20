@@ -79,6 +79,13 @@ image-latest latest-image:
 	@docker build -f contrib/Dockerfile -t dgraph/dgraph:latest .
 	@rm -r linux
 
+standalone-image-latest standalone-latest-image:
+	@GOOS=linux GOARCH=amd64 $(MAKE) dgraph
+	@mkdir -p linux
+	@cp ./dgraph/dgraph ./linux/dgraph
+	$(MAKE) -w -C contrib/standalone all
+	@rm -r linux
+
 # TODO pass $VERSION args
 image-version version-image:
 	@GOOS=linux GOARCH=amd64 $(MAKE) dgraph

@@ -31,8 +31,16 @@ jobs:
           make dgraph $VERSION
       - name: Make Dgraph Docker Image
         run: |
-        make image-version $VERSION # this creates dgraph/dgraph:latest
-      - name: Make Dgraph Standalone Docker Image
-        run: echo 123
+        make image-version latest 
+        make image-version $(VERSION)
+      - name: Make Dgraph Standalone Docker Image with Version
+        run: |
+        make standalone-image-version latest
+        make standalone-image-version $(VERSION)
       - name: Push Images to DockerHub
-        run: echo "docker push"
+        run: |
+          docker login --username=$DOCKERHUB_USER_TEST --password=$DOCKERHUB_PASSWORD_TOKEN_TEST
+          docker push dgraph/standalone:latest
+          docker push dgraph/standalone:$(VERSION)
+          docker push dgraph/dgraph:latest
+          docker push dgraph/dgraph:$(VERSION)
