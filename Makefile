@@ -72,22 +72,14 @@ image-local local-image:
 	@docker build -f contrib/Dockerfile -t dgraph/dgraph:local .
 	@rm -r linux
 
-image-latest latest-image:
+standalone-docker-image:
 	@GOOS=linux GOARCH=amd64 $(MAKE) dgraph
 	@mkdir -p linux
 	@cp ./dgraph/dgraph ./linux/dgraph
-	@docker build -f contrib/Dockerfile -t dgraph/dgraph:latest .
+	$(MAKE) -w -C contrib/standalone all $VERSION
 	@rm -r linux
 
-standalone-image-latest standalone-latest-image:
-	@GOOS=linux GOARCH=amd64 $(MAKE) dgraph
-	@mkdir -p linux
-	@cp ./dgraph/dgraph ./linux/dgraph
-	$(MAKE) -w -C contrib/standalone all
-	@rm -r linux
-
-# TODO pass $VERSION args
-image-version version-image:
+docker-image:
 	@GOOS=linux GOARCH=amd64 $(MAKE) dgraph
 	@mkdir -p linux
 	@cp ./dgraph/dgraph ./linux/dgraph
