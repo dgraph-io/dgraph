@@ -17,16 +17,17 @@ jobs:
         uses: actions/setup-go@v3
         with:
           go-version: ${{ env.GOVERSION }}
-      - name: Set up Node
-        uses: actions/setup-node@v3
-        with:
-          node-version: 16
-      - name: Check protobuf
+      - name: Check protobuf and go mod tidy
         run: |
-          cd ./protos
+          #!/bin/bash
+          pushd protos
           go mod tidy
           make regenerate
-          git diff --exit-code -- .
+          popd
+          if [[ "$(git status --porcelain)" ]]; then \
+             echo "Generated protos different in release."
+             exit 1
+          fi
       - name: Set Dgraph Release Version
         run: |
           #!/bin/bash
@@ -40,8 +41,8 @@ jobs:
         make docker-image DOCKER_TAG=${{ env.DGRAPH_RELEASE_VERSION }}
       - name: Make Dgraph Standalone Docker Image with Version
         run: |
-        make standalone-docker-image DOCKER_TAG="latest"
-        make standalone-docker-image DOCKER_TAG=${{ env.DGRAPH_RELEASE_VERSION }}
+        make docker-image-standalone DOCKER_TAG="latest"
+        make docker-image-standalone DOCKER_TAG=${{ env.DGRAPH_RELEASE_VERSION }}
       - name: Push Images to DockerHub
         run: |
           docker login --username=$DOCKERHUB_USER_TEST --password=$DOCKERHUB_PASSWORD_TOKEN_TEST

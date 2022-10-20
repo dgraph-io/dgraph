@@ -52,7 +52,7 @@ version:
 
 install:
 	@echo "Installing dgraph ..."; \
-		GOOS=linux GOARCH=amd64 $(MAKE) -C dgraph install; \
+		$(MAKE) -C dgraph install; \
 
 install_oss oss_install:
 	GOOS=linux GOARCH=amd64 $(MAKE) BUILD_TAGS=oss install
@@ -61,16 +61,16 @@ uninstall:
 	@echo "Uninstalling dgraph ..."; \
 		$(MAKE) -C dgraph uninstall; \
 
-test: image-local
-	@mv dgraph/dgraph ${GOPATH}/bin
+test: dgraph
 	@$(MAKE) -C t test
 
 docker-image: dgraph
-	@docker build -f contrib/Dockerfile -t dgraph/dgraph:$(DOCKER_TAG) .
+	docker build -f contrib/Dockerfile -t dgraph/dgraph:$(DOCKER_TAG) .
 
 docker-image-standalone: dgraph
-	$(MAKE) -w -C contrib/standalone all $VERSION
+	$(MAKE) -w -C contrib/standalone all DOCKER_TAG=$(DOCKER_TAG) DGRAPH_VERSION=$(DGRAPH_RELEASE_VERSION)
 
+# build and run dependencies for ubuntu linux
 dependency:
 	sudo apt-get update
 	sudo apt-get -y upgrade
