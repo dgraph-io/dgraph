@@ -16,15 +16,15 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
 > This will be a breaking change for anyone moving from `v21.12.0` to `v.22.0.0`.
 
 ### Fixed
-- GraphQL
+- **GraphQL**
   - fix(GraphQL): optimize eq filter queries (https://github.com/dgraph-io/dgraph/pull/7895)
   - fix(GraphQL): add validation of null values with correct order of graphql rule validation (https://github.com/dgraph-io/dgraph/pull/8333)
   - fix(GraphQL) fix auth query rewriting with ID filter (https://github.com/dgraph-io/dgraph/pull/8157)
-- EDgraph
+- **EDgraph**
   - fix(query): Prevent multiple entries for same predicate in mutations (https://github.com/dgraph-io/dgraph/pull/8332)
-- Posting
+- **Posting**
   - fix(rollups): Fix splits in roll-up (https://github.com/dgraph-io/dgraph/pull/8297)
-  - Security
+- **Security**
     - <details>
       <summary>CVE Fixes (417 total)</summary>
       
@@ -463,21 +463,21 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
     - fix(sec): CVE-2019-11254 (https://github.com/dgraph-io/dgraph/pull/8270)
 
 ### Changed
-- CI Test Infrastructure
+- **CI Test Infrastructure**
   - Configured to run with [Github Actions](https://github.com/dgraph-io/dgraph/tree/main/.github/workflows)
   - Stability Improvements to test harness
   - Enabled [Unit/Integration Tests](https://github.com/dgraph-io/dgraph/actions/workflows/ci-dgraph-tests.yml)
   - Enabled [Load Tests](https://github.com/dgraph-io/dgraph/actions/workflows/ci-dgraph-load-tests.yml)
   - Enabled [Linters](https://github.com/dgraph-io/dgraph/actions/workflows/ci-golang-lint.yml)
   - Enabled [Code Coverage](https://coveralls.io/github/dgraph-io/dgraph?branch=main)
-- CI Security
+- **CI Security**
   - Configured to run with [Github Actions](https://github.com/dgraph-io/dgraph/blob/main/.github/workflows/ci-aqua-security-trivy-tests.yml)
   - Enabled [Trivy Scans](https://github.com/dgraph-io/dgraph/actions/workflows/ci-aqua-security-trivy-tests.yml)
   - Enabled dependabot scans
   - Configured to run with [Github Actions](https://github.com/dgraph-io/dgraph/blob/main/.github/workflows/ci-aqua-security-trivy-tests.yml)
-- CD Release Pipeline
+- **CD Release Pipeline**
   - Automated [Release Pipeline](https://github.com/dgraph-io/dgraph/blob/main/.github/workflows/cd-dgraph.yml) to facilitate building of dgraph-binary & corresponding docker-images. The built artifacts are published to repositories through the same pipeline.
-- [Github Issues Enabled](https://github.com/dgraph-io/dgraph/issues/new/choose)
+- [**Github Issues Enabled**](https://github.com/dgraph-io/dgraph/issues/new/choose)
 
 
 ## [21.03.2] - 2021-08-26
