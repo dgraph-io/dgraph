@@ -49,8 +49,8 @@ jobs:
       - name: Login to DockerHub
         uses: docker/login-action@v2
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME_TEST }}
-          password: ${{ secrets.DOCKERHUB_PASSWORD_TOKEN_TEST }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD_TOKEN }}
       - name: Push Images to DockerHub
         run: |
           docker push dgraph/standalone:latest
