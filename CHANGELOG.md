@@ -2,7 +2,7 @@
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
-and this project will adhere to [Calendar Versioning](https://calver.org/) starting v20.03.
+and this project will adhere to [Semantic Versioning]([https://calver.org/](https://semver.org)) starting `v22.0.0`.
 
 ## v22.0.0 - 20221021
 
