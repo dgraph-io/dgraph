@@ -48,7 +48,7 @@ jobs:
           make docker-image-standalone DGRAPH_VERSION=${{ env.DGRAPH_RELEASE_VERSION }}
       - name: Push Images to DockerHub
         run: |
-          docker login --username=$DOCKERHUB_USER_TEST --password=$DOCKERHUB_PASSWORD_TOKEN_TEST
+          docker login --username=${{ secrets.DOCKERHUB_USER_TEST }} --password=${{ secrets.DOCKERHUB_PASSWORD_TOKEN_TEST }}
           docker push dgraph/standalone:latest
           docker push dgraph/standalone:${{ env.DGRAPH_RELEASE_VERSION }}
           docker push dgraph/dgraph:latest
