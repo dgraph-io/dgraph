@@ -16,9 +16,14 @@ jobs:
         uses: actions/setup-go@v3
         with:
           go-version: ${{ env.GOVERSION }}
+      - name: go mod tidy check
+        run: |
+          #!/bin/bash
+          echo "hello"
       - name: Check protobuf and go mod tidy
         run: |
           #!/bin/bash
+          go mod tidy
           pushd protos
           make regenerate
           popd
