@@ -16,21 +16,12 @@ jobs:
         uses: actions/setup-go@v3
         with:
           go-version: ${{ env.GOVERSION }}
-      - name: go mod tidy check
+      - name: Check protobuf
         run: |
-          #!/bin/bash
+          cd ./protos
           go mod tidy
-      - name: Check protobuf and go mod tidy
-        run: |
-          #!/bin/bash
-          pushd protos
           make regenerate
-          popd
-          if [[ "$(git status --porcelain)" ]]; then \
-             echo "Generated protos different in release."; \
-             echo "Or need to go mod tidy"; \
-             exit 1; \
-          fi
+          git diff --exit-code -- .
       - name: Set Dgraph Release Version
         run: |
           #!/bin/bash
