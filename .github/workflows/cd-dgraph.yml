@@ -39,7 +39,7 @@ jobs:
       - name: Make Linux Build
         run: make dgraph DGRAPH_VERSION=${{ env.DGRAPH_RELEASE_VERSION }}
       - name: Generate SHA for Linux Build
-        run: sha256sum dgraph/dgraph | cut -c-64 > dgraph/dgraph-linux-amd64.sha256
+        run: sha256sum dgraph/dgraph | cut -c-64 > dgraph/dgraph-checksum-linux-amd64.sha256
       - name: Tar Archive for Linux Build
         run: tar -zcvf dgraph/dgraph-linux-amd64.tar.gz dgraph/dgraph
       - name: Upload Dgraph Binary Build Artifacts
