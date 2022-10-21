@@ -24,8 +24,7 @@
 #
 .PHONY: all build
 
-export DOCKER_TAG ?= latest
-export DGRAPH_VERSION ?= latest
+export DGRAPH_VERSION ?= local
 
 all: build
 

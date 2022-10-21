@@ -21,10 +21,10 @@ BUILD_CODENAME ?= unnamed
 BUILD_DATE     ?= $(shell git log -1 --format=%ci)
 BUILD_BRANCH   ?= $(shell git rev-parse --abbrev-ref HEAD)
 
-ifeq ($(DGRAPH_RELEASE_VERSION),local)
-BUILD_VERSION ?= $(shell git describe --always --tags)
+ifeq ($(DGRAPH_VERSION),local)
+BUILD_VERSION ?= "local"
 else
-BUILD_VERSION ?= 'local'-$(BUILD)
+BUILD_VERSION ?= $(DGRAPH_VERSION)
 endif
 
 GOOS          ?= $(shell go env GOOS)

@@ -27,7 +27,7 @@ GOPATH         ?= $(shell go env GOPATH)
 # by default will be set to local
 
 # also docker tag
-# make dgraph DGRAPH_RELEASE_VERSION=22.0.0
+# make dgraph DGRAPH_VERSION=v22.0.0
 # by default set to local 
 # our release scripts will specify this parameter during CD process
 DGRAPH_VERSION ?= local
@@ -62,8 +62,23 @@ uninstall:
 	@echo "Uninstalling dgraph ..."; \
 		$(MAKE) -C dgraph uninstall; \
 
-test: dgraph
+test: image-local
+	@mv dgraph/dgraph ${GOPATH}/bin
 	@$(MAKE) -C t test
+
+image:
+	@GOOS=linux GOARCH=amd64 $(MAKE) dgraph
+	@mkdir -p linux
+	@mv ./dgraph/dgraph ./linux/dgraph
+	@docker build -f contrib/Dockerfile -t dgraph/dgraph:$(subst /,-,${BUILD_BRANCH}) .
+	@rm -r linux
+
+image-local local-image:
+	@GOOS=linux GOARCH=amd64 $(MAKE) dgraph
+	@mkdir -p linux
+	@cp ./dgraph/dgraph ./linux/dgraph
+	@docker build -f contrib/Dockerfile -t dgraph/dgraph:local .
+	@rm -r linux
 
 docker-image: dgraph
 	docker build -f contrib/Dockerfile -t dgraph/dgraph:$(DGRAPH_RELEASE_VERSION) .
@@ -72,7 +87,7 @@ docker-image-standalone: dgraph
 	$(MAKE) -w -C contrib/standalone all DOCKER_TAG=$(DGRAPH_RELEASE_VERSION) DGRAPH_VERSION=$(DGRAPH_RELEASE_VERSION)
 
 # build and run dependencies for ubuntu linux
-dependency:
+linux-dependency:
 	sudo apt-get update
 	sudo apt-get -y upgrade
 	sudo apt-get -y install ca-certificates

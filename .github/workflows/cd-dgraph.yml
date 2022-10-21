@@ -19,11 +19,10 @@ jobs:
       - name: go mod tidy check
         run: |
           #!/bin/bash
-          echo "hello"
+          go mod tidy
       - name: Check protobuf and go mod tidy
         run: |
           #!/bin/bash
-          go mod tidy
           pushd protos
           make regenerate
           popd
