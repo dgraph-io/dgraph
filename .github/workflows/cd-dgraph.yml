@@ -26,7 +26,7 @@ jobs:
         run: |
           #!/bin/bash
           GIT_BRANCH_NAME=$(git rev-parse --abbrev-ref HEAD)
-          if [[ "$GIT_BRANCH_NAME" == *"release/"* ]]; 
+          if [[ "$GIT_BRANCH_NAME" == "release/v"* ]]; 
           then
             echo "this is a release branch"
           else
