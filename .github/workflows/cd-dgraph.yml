@@ -58,8 +58,8 @@ jobs:
         with:
           name: dgraph
           path: |
-            dgraph/dgraph.sha256
-            dgraph/dgraph.tar.gz
+            dgraph/dgraph-linux-amd64.sha256
+            dgraph/dgraph-linux-amd64.tar.gz
       - name: Make Dgraph Docker Image
         run: |
           make docker-image DGRAPH_VERSION=latest
