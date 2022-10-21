@@ -456,10 +456,10 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
       - GHSA-cg3q-j54f-5p7p
       - GHSA-wxc4-f4m6-wwqv
       </details>
-    - fix(sec): fixing HIGH CVEs (#8289)
-    - fix(sec): CVE High Vulnerability (#8277)
-    - fix(sec): Fixing CVE-2021-31525 (#8274)
-    - fix(sec): CVE-2019-11254 (#8270)
+    - fix(sec): fixing HIGH CVEs (https://github.com/dgraph-io/dgraph/pull/8289)
+    - fix(sec): CVE High Vulnerability (https://github.com/dgraph-io/dgraph/pull/8277)
+    - fix(sec): Fixing CVE-2021-31525 (https://github.com/dgraph-io/dgraph/pull/8274)
+    - fix(sec): CVE-2019-11254 (https://github.com/dgraph-io/dgraph/pull/8270)
 
 ### Changed
 - CI Test Infrastructure
