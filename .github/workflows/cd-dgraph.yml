@@ -5,23 +5,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - name: Get Go Version
-        run: |
-          #!/bin/bash
-          GOVERSION=$({ [ -f .go-version ] && cat .go-version; })
-          echo "GOVERSION=$GOVERSION" >> $GITHUB_ENV
-      - name: Set up Go
-        uses: actions/setup-go@v3
-        with:
-          go-version: ${{ env.GOVERSION }}
-      - name: Install protobuf-compiler
-        run: sudo apt-get install -y protobuf-compiler
-      - name: Check protobuf
-        run: |
-          cd ./protos
-          go mod tidy
-          make regenerate
-          git diff --exit-code -- .
       - name: Set Dgraph Release Version
         run: |
           #!/bin/bash
@@ -34,18 +17,48 @@ jobs:
             exit 1
           fi
           DGRAPH_RELEASE_VERSION=$(git rev-parse --abbrev-ref HEAD | sed  's/release\///')
-          echo "making a new release for "$DGRAPH_RELEASE_VERSION
-          echo "DGRAPH_RELEASE_VERSION=$DGRAPH_RELEASE_VERSION" >> $GITHUB_ENV
+          echo "making a new release for "$DGRAPH_VERSION
+          echo "DGRAPH_VERSION=$DGRAPH_VERSION" >> $GITHUB_ENV
+      - name: Get Go Version
+        run: |
+          #!/bin/bash
+          GOVERSION=$({ [ -f .go-version ] && cat .go-version; })
+          echo "GOVERSION=$GOVERSION" >> $GITHUB_ENV
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: ${{ env.GOVERSION }}
+      - name: Install dependencies
+        run: make linux-dependency
+      - name: go mod tidy check
+        run: |
+          #!/bin/bash
+          go mod tidy
+          if [[ "$(git status --porcelain)" ]]; then \
+             echo "need to run go mod tidy"
+             exit 1
+          fi
+      - name: protobuf check
+        run: |
+          #!/bin/bash
+          pushd protos
+          make regenerate
+          popd
+          if [[ "$(git status --porcelain)" ]]; then \
+            echo "Generated protos different in release."
+            echo "Or need to go mod tidy"
+            exit 1
+          fi
       - name: Make Linux Build
-        run: make dgraph DGRAPH_VERSION=${{ env.DGRAPH_RELEASE_VERSION }}
+        run: make dgraph DGRAPH_VERSION=${{ env.DGRAPH_VERSION }}
       - name: Make Dgraph Docker Image
         run: |
           make docker-image DGRAPH_VERSION=latest
-          make docker-image DGRAPH_VERSION=${{ env.DGRAPH_RELEASE_VERSION }}
-      - name: Make Dgraph Standalone Docker Image with Version
+          make docker-image DGRAPH_VERSION=${{ env.DGRAPH_VERSION }}
+      - name: Make Dgraph Standalone Docker Image
         run: |
           make docker-image-standalone DGRAPH_VERSION=latest
-          make docker-image-standalone DGRAPH_VERSION=${{ env.DGRAPH_RELEASE_VERSION }}
+          make docker-image-standalone DGRAPH_VERSION=${{ env.DGRAPH_VERSION }}
       - name: Login to DockerHub
         uses: docker/login-action@v2
         with:
@@ -54,6 +67,6 @@ jobs:
       - name: Push Images to DockerHub
         run: |
           docker push dgraph/standalone:latest
-          docker push dgraph/standalone:${{ env.DGRAPH_RELEASE_VERSION }}
+          docker push dgraph/standalone:${{ env.DGRAPH_VERSION }}
           docker push dgraph/dgraph:latest
-          docker push dgraph/dgraph:${{ env.DGRAPH_RELEASE_VERSION }}
+          docker push dgraph/dgraph:${{ env.DGRAPH_VERSION }}
