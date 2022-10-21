@@ -7,11 +7,11 @@
 #     Push:
 #       make push
 #
-# For $TAG tag, set DOCKER_TAG:
+# For $TAG tag, set DGRAPH_VERSION:
 #     Build, based on dgraph/dgraph:latest:
-#       make DOCKER_TAG=$TAG
+#       make DGRAPH_VERSION=$TAG
 #     Push:
-#       make DOCKER_TAG=$TAG push
+#       make DGRAPH_VERSION=$TAG push
 #
 # Examples
 #     Build and push latest:

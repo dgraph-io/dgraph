@@ -15,7 +15,7 @@
 #
 
 BUILD          ?= $(shell git rev-parse --short HEAD)
-BUILD_CODENAME  = unnamed
+BUILD_CODENAME  = dgraph
 BUILD_DATE     ?= $(shell git log -1 --format=%ci)
 BUILD_BRANCH   ?= $(shell git rev-parse --abbrev-ref HEAD)
 #BUILD_VERSION  ?= $(shell git describe --always --tags)
@@ -23,16 +23,12 @@ BUILD_BRANCH   ?= $(shell git rev-parse --abbrev-ref HEAD)
 GOPATH         ?= $(shell go env GOPATH)
 
 ######################
-# Release Paramaters #
-# by default will be set to local
-
-# also docker tag
-# make dgraph DGRAPH_VERSION=v22.0.0
-# by default set to local 
-# our release scripts will specify this parameter during CD process
-DGRAPH_VERSION ?= local
-
+# Build & Release Paramaters
+# DGRAPH_VERSION flag facilicates setting the dgraph version
+# DGRAPH_VERSION flag is used for our release pipelines, where it is set to our release version number automatically
+# DGRAPH_VERSION defaults to local, if not specified, for development purposes
 ######################
+DGRAPH_VERSION ?= local
 
 .PHONY: dgraph all oss version install install_oss oss_install uninstall test help image image-local local-image
 all: dgraph
