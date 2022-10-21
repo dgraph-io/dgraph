@@ -15,7 +15,6 @@
 #
 
 USER_ID         = $(shell id -u)
-BIN             = dgraph
 BUILD          ?= $(shell git rev-parse --short HEAD)
 BUILD_CODENAME ?= dgraph
 BUILD_DATE     ?= $(shell git log -1 --format=%ci)
@@ -65,23 +64,23 @@ endif
 HAS_JEMALLOC = $(shell test -f /usr/local/lib/libjemalloc.a && echo "jemalloc")
 JEMALLOC_URL = "https://github.com/jemalloc/jemalloc/releases/download/5.2.1/jemalloc-5.2.1.tar.bz2"
 
-.PHONY: all $(BIN)
-all: $(BIN)
+.PHONY: all dgraph
+all: dgraph
 
-$(BIN): clean jemalloc
-	@go build $(BUILD_FLAGS) -o $(BIN)
+dgraph: clean jemalloc
+	@go build $(BUILD_FLAGS) -o dgraph
 
 clean:
-	@rm -f $(BIN)
+	@rm -f dgraph
 
 uninstall:
 	@go clean -i -x
 
 install: jemalloc
 	@echo "Commit SHA256: `git rev-parse HEAD`"
-	@echo "Old SHA256:" `sha256sum $(GOPATH)/bin/$(BIN) 2>/dev/null | cut -c-64`
+	@echo "Old SHA256:" `sha256sum $(GOPATH)/bin/dgraph 2>/dev/null | cut -c-64`
 	@go install $(BUILD_FLAGS)
-	@echo "New SHA256:" `sha256sum $(GOPATH)/bin/$(BIN) 2>/dev/null | cut -c-64`
+	@echo "New SHA256:" `sha256sum $(GOPATH)/bin/dgraph 2>/dev/null | cut -c-64`
 
 jemalloc:
 	@if [ -z "$(HAS_JEMALLOC)" ] ; then \
@@ -99,4 +98,12 @@ jemalloc:
 			sudo make install ; \
 		fi \
 	fi
+
+version:
+	@echo Dgraph Version: ${BUILD_VERSION}
+	@echo Build: ${BUILD}
+	@echo Codename: ${BUILD_CODENAME}
+	@echo Build date: ${BUILD_DATE}
+	@echo Branch: ${BUILD_BRANCH}
+	@echo Go version: $(shell go version)
 

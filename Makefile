@@ -14,12 +14,6 @@
 # limitations under the License.
 #
 
-BUILD          ?= $(shell git rev-parse --short HEAD)
-BUILD_CODENAME  = dgraph
-BUILD_DATE     ?= $(shell git log -1 --format=%ci)
-BUILD_BRANCH   ?= $(shell git rev-parse --abbrev-ref HEAD)
-#BUILD_VERSION  ?= $(shell git describe --always --tags)
-
 GOPATH         ?= $(shell go env GOPATH)
 
 ######################
@@ -38,14 +32,6 @@ dgraph:
 
 oss:
 	GOOS=linux GOARCH=amd64 $(MAKE) BUILD_TAGS=oss
-
-version:
-	@echo Dgraph ${BUILD_VERSION}
-	@echo Build: ${BUILD}
-	@echo Codename: ${BUILD_CODENAME}
-	@echo Build date: ${BUILD_DATE}
-	@echo Branch: ${BUILD_BRANCH}
-	@echo Go version: $(shell go version)
 
 install:
 	@echo "Installing dgraph ..."; \
@@ -86,7 +72,7 @@ docker-image-standalone: dgraph docker-image
 	@cp ./dgraph/dgraph ./linux/dgraph
 	$(MAKE) -w -C contrib/standalone all DOCKER_TAG=$(DGRAPH_VERSION) DGRAPH_VERSION=$(DGRAPH_VERSION)
 
-# build and run dependencies for ubuntu linux
+# build and runtime dependencies for ubuntu linux
 linux-dependency:
 	sudo apt-get update
 	sudo apt-get -y upgrade
@@ -96,6 +82,9 @@ linux-dependency:
 	sudo apt-get -y install lsb-release
 	sudo apt-get -y install build-essential
 	sudo apt-get -y install protobuf-compiler
+
+version:
+	@$(MAKE) -C dgraph version
 
 help:
 	@echo
