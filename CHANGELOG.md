@@ -4,7 +4,8 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project will adhere to [Semantic Versioning](https://semver.org) starting `v22.0.0`.
 
-## v22.0.0 - 20221021
+## [v22.0.0] - 2022-10-21
+[v22.0.0]: https://github.com/dgraph-io/dgraph/compare/v21.03.2...v22.0.0
 
 > **Note**
 > `v22.0.0` release is based of `v21.03.2` release.
@@ -16,13 +17,13 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
 
 ### Fixed
 - GraphQL
-  - fix(GraphQL): optimize eq filter queries (#7895)
-  - fix(GraphQL): add validation of null values with correct order of graphql rule validation (#8333)
-  - fix(GraphQL) fix auth query rewriting with ID filter (#8157)
+  - fix(GraphQL): optimize eq filter queries (https://github.com/dgraph-io/dgraph/pull/7895)
+  - fix(GraphQL): add validation of null values with correct order of graphql rule validation (https://github.com/dgraph-io/dgraph/pull/8333)
+  - fix(GraphQL) fix auth query rewriting with ID filter (https://github.com/dgraph-io/dgraph/pull/8157)
 - EDgraph
-  - fix(query): Prevent multiple entries for same predicate in mutations (#8332)
+  - fix(query): Prevent multiple entries for same predicate in mutations (https://github.com/dgraph-io/dgraph/pull/8332)
 - Posting
-  - fix(rollups): Fix splits in roll-up (#8297)
+  - fix(rollups): Fix splits in roll-up (https://github.com/dgraph-io/dgraph/pull/8297)
   - Security
     - <details>
       <summary>CVE Fixes (417 total)</summary>
@@ -456,10 +457,10 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
       - GHSA-cg3q-j54f-5p7p
       - GHSA-wxc4-f4m6-wwqv
       </details>
-    - fix(sec): fixing HIGH CVEs (#8289)
-    - fix(sec): CVE High Vulnerability (#8277)
-    - fix(sec): Fixing CVE-2021-31525 (#8274)
-    - fix(sec): CVE-2019-11254 (#8270)
+    - fix(sec): fixing HIGH CVEs (https://github.com/dgraph-io/dgraph/pull/8289)
+    - fix(sec): CVE High Vulnerability (https://github.com/dgraph-io/dgraph/pull/8277)
+    - fix(sec): Fixing CVE-2021-31525 (https://github.com/dgraph-io/dgraph/pull/8274)
+    - fix(sec): CVE-2019-11254 (https://github.com/dgraph-io/dgraph/pull/8270)
 
 ### Changed
 - CI Test Infrastructure
