@@ -81,10 +81,10 @@ image-local local-image:
 	@rm -r linux
 
 docker-image: dgraph
-	docker build -f contrib/Dockerfile -t dgraph/dgraph:$(DGRAPH_RELEASE_VERSION) .
+	docker build -f contrib/Dockerfile -t dgraph/dgraph:$(DGRAPH_VERSION) .
 
-docker-image-standalone: dgraph
-	$(MAKE) -w -C contrib/standalone all DOCKER_TAG=$(DGRAPH_RELEASE_VERSION) DGRAPH_VERSION=$(DGRAPH_RELEASE_VERSION)
+docker-image-standalone: dgraph docker-image
+	$(MAKE) -w -C contrib/standalone all DOCKER_TAG=$(DGRAPH_VERSION) DGRAPH_VERSION=$(DGRAPH_VERSION)
 
 # build and run dependencies for ubuntu linux
 linux-dependency:
