@@ -5,20 +5,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - name: Set Dgraph Release Version
-        run: |
-          #!/bin/bash
-          GIT_BRANCH_NAME=$(git rev-parse --abbrev-ref HEAD)
-          if [[ "$GIT_BRANCH_NAME" == "release/v"* ]]; 
-          then
-            echo "this is a release branch"
-          else
-            echo "this is NOT a release branch"
-            exit 1
-          fi
-          DGRAPH_RELEASE_VERSION=$(git rev-parse --abbrev-ref HEAD | sed  's/release\///')
-          echo "making a new release for "$DGRAPH_VERSION
-          echo "DGRAPH_VERSION=$DGRAPH_VERSION" >> $GITHUB_ENV
       - name: Get Go Version
         run: |
           #!/bin/bash
@@ -49,6 +35,20 @@ jobs:
             echo "Or need to go mod tidy"
             exit 1
           fi
+      - name: Set Dgraph Release Version
+        run: |
+          #!/bin/bash
+          GIT_BRANCH_NAME=$(git rev-parse --abbrev-ref HEAD)
+          if [[ "$GIT_BRANCH_NAME" == "release/v"* ]]; 
+          then
+            echo "this is a release branch"
+          else
+            echo "this is NOT a release branch"
+            exit 1
+          fi
+          DGRAPH_RELEASE_VERSION=$(git rev-parse --abbrev-ref HEAD | sed  's/release\///')
+          echo "making a new release for "$DGRAPH_VERSION
+          echo "DGRAPH_VERSION=$DGRAPH_VERSION" >> $GITHUB_ENV
       - name: Make Linux Build
         run: make dgraph DGRAPH_VERSION=${{ env.DGRAPH_VERSION }}
       - name: Make Dgraph Docker Image
