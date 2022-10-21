@@ -21,7 +21,7 @@ BUILD_CODENAME ?= dgraph
 BUILD_DATE     ?= $(shell git log -1 --format=%ci)
 BUILD_BRANCH   ?= $(shell git rev-parse --abbrev-ref HEAD)
 
-ifeq ($(DGRAPH_VERSION),local)
+ifeq ($(strip $(DGRAPH_VERSION)),)
 BUILD_VERSION ?= "local"
 else
 BUILD_VERSION ?= $(DGRAPH_VERSION)
