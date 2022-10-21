@@ -32,7 +32,6 @@ jobs:
           popd
           if [[ "$(git status --porcelain)" ]]; then \
             echo "Generated protos different in release."
-            echo "Or need to go mod tidy"
             exit 1
           fi
       - name: Set Dgraph Release Version
@@ -46,7 +45,7 @@ jobs:
             echo "this is NOT a release branch"
             exit 1
           fi
-          DGRAPH_RELEASE_VERSION=$(git rev-parse --abbrev-ref HEAD | sed  's/release\///')
+          DGRAPH_VERSION=$(git rev-parse --abbrev-ref HEAD | sed  's/release\///')
           echo "making a new release for "$DGRAPH_VERSION
           echo "DGRAPH_VERSION=$DGRAPH_VERSION" >> $GITHUB_ENV
       - name: Make Linux Build
