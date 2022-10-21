@@ -50,6 +50,16 @@ jobs:
           echo "DGRAPH_VERSION=$DGRAPH_VERSION" >> $GITHUB_ENV
       - name: Make Linux Build
         run: make dgraph DGRAPH_VERSION=${{ env.DGRAPH_VERSION }}
+      - name: Get SHA
+        run: sha256sum dgraph/dgraph | cut -c-64 > dgraph/dgraph-linux-amd64.sha256
+      - name: Make Archive
+        run: tar -zcvf dgraph/dgraph-linux-amd64.tar.gz dgraph/dgraph
+      - uses: actions/upload-artifact@v3
+        with:
+          name: dgraph
+          path: |
+            dgraph/dgraph.sha256
+            dgraph/dgraph.tar.gz
       - name: Make Dgraph Docker Image
         run: |
           make docker-image DGRAPH_VERSION=latest
