@@ -16,13 +16,13 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
 
 ### Fixed
 - GraphQL
-  - fix(GraphQL): optimize eq filter queries (#7895)
-  - fix(GraphQL): add validation of null values with correct order of graphql rule validation (#8333)
-  - fix(GraphQL) fix auth query rewriting with ID filter (#8157)
+  - fix(GraphQL): optimize eq filter queries (https://github.com/dgraph-io/dgraph/pull/7895)
+  - fix(GraphQL): add validation of null values with correct order of graphql rule validation (https://github.com/dgraph-io/dgraph/pull/8333)
+  - fix(GraphQL) fix auth query rewriting with ID filter (https://github.com/dgraph-io/dgraph/pull/8157)
 - EDgraph
-  - fix(query): Prevent multiple entries for same predicate in mutations (#8332)
+  - fix(query): Prevent multiple entries for same predicate in mutations (https://github.com/dgraph-io/dgraph/pull/8332)
 - Posting
-  - fix(rollups): Fix splits in roll-up (#8297)
+  - fix(rollups): Fix splits in roll-up (https://github.com/dgraph-io/dgraph/pull/8297)
   - Security
     - <details>
       <summary>CVE Fixes (417 total)</summary>
