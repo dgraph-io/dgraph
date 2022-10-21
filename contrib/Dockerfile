@@ -18,7 +18,7 @@ RUN apt-get install -y --no-install-recommends sysstat
 
 # rm -rf /var/lib/apt/lists/* # TODO: clean this up only if necessary
 
-ADD dgraph /usr/local/bin
+ADD linux /usr/local/bin
 
 EXPOSE 8080
 EXPOSE 9080

@@ -30,7 +30,7 @@ GOPATH         ?= $(shell go env GOPATH)
 ######################
 DGRAPH_VERSION ?= local
 
-.PHONY: dgraph all oss version install install_oss oss_install uninstall test help image image-local local-image
+.PHONY: dgraph all oss version install install_oss oss_install uninstall test help image image-local local-image docker-image docker-image-standalone
 all: dgraph
 
 dgraph:
@@ -72,14 +72,18 @@ image:
 image-local local-image:
 	@GOOS=linux GOARCH=amd64 $(MAKE) dgraph
 	@mkdir -p linux
-	@cp ./dgraph/dgraph ./linux/dgraph
+	@mv ./dgraph/dgraph ./linux/dgraph
 	@docker build -f contrib/Dockerfile -t dgraph/dgraph:local .
 	@rm -r linux
 
 docker-image: dgraph
+	@mkdir -p linux
+	@mv ./dgraph/dgraph ./linux/dgraph
 	docker build -f contrib/Dockerfile -t dgraph/dgraph:$(DGRAPH_VERSION) .
 
 docker-image-standalone: dgraph docker-image
+	@mkdir -p linux
+	@mv ./dgraph/dgraph ./linux/dgraph
 	$(MAKE) -w -C contrib/standalone all DOCKER_TAG=$(DGRAPH_VERSION) DGRAPH_VERSION=$(DGRAPH_VERSION)
 
 # build and run dependencies for ubuntu linux
