@@ -40,12 +40,12 @@ jobs:
         run: make dgraph DGRAPH_VERSION=${{ env.DGRAPH_RELEASE_VERSION }}
       - name: Make Dgraph Docker Image
         run: |
-          make docker-image DGRAPH_VERSION=latest
           make docker-image DGRAPH_VERSION=${{ env.DGRAPH_RELEASE_VERSION }}
+          docker tag dgraph/dgraph:${{ env.DGRAPH_RELEASE_VERSION }} dgraph/dgraph:latest
       - name: Make Dgraph Standalone Docker Image with Version
         run: |
-          make docker-image-standalone DGRAPH_VERSION=latest
           make docker-image-standalone DGRAPH_VERSION=${{ env.DGRAPH_RELEASE_VERSION }}
+          docker tag dgraph/standalone:${{ env.DGRAPH_RELEASE_VERSION }} dgraph/standalone:latest
       - name: Login to DockerHub
         uses: docker/login-action@v2
         with:
