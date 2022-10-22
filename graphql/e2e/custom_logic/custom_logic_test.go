@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Dgraph Labs, Inc. and Contributors
+ * Copyright 2022 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -2708,7 +2708,7 @@ func TestCustomDQL(t *testing.T) {
 				screen_name: "minhaj"
 				followers: 10
 			  }
-			  timestamp: "2021-02-23"
+			  timestamp: "2022-02-23"
 			}
 		  ]) {
 			numUids
