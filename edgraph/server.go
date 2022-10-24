@@ -1188,8 +1188,8 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (resp *api.Response,
 		return nil, serverOverloadErr
 	}
 
-	if bool(glog.V(3)) || worker.LogRequestEnabled() {
-		glog.Infof("Got a query: %+v", req.req)
+	if bool(glog.V(3)) || worker.LogDQLRequestEnabled() {
+		glog.Infof("Got a DQL query: %+v", req.req)
 	}
 
 	isGraphQL, _ := ctx.Value(IsGraphql).(bool)
