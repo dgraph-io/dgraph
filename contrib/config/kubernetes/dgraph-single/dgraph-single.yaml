@@ -44,13 +44,11 @@ spec:
     spec:
       containers:
       - name: ratel
-        image: dgraph/dgraph:latest
+        image: dgraph/ratel:latest
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8000
           name: http-ratel
-        command:
-          - dgraph-ratel
       - name: zero
         image: dgraph/dgraph:latest
         imagePullPolicy: IfNotPresent

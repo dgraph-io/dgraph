@@ -434,12 +434,11 @@ func getRatel() service {
 		portFlag = fmt.Sprintf(" -port=%d", opts.RatelPort)
 	}
 	svc := service{
-		Image:         opts.Image + ":" + opts.Tag,
+		Image:         opts.RatelImage + ":" + opts.Tag,
 		ContainerName: containerName("ratel"),
 		Ports: []string{
 			toPort(opts.RatelPort),
 		},
-		Command: "dgraph-ratel" + portFlag,
 	}
 	return svc
 }
@@ -570,6 +569,8 @@ func main() {
 		"use locally-compiled binary if true, otherwise use binary from docker container")
 	cmd.PersistentFlags().StringVar(&opts.Image, "image", "dgraph/dgraph",
 		"Docker image for alphas and zeros.")
+	cmd.PersistentFlags().StringVar(&opts.RatelImage, "ratelImage", "dgraph/ratel",
+		"Docker image for Ratel.")
 	cmd.PersistentFlags().StringVarP(&opts.Tag, "tag", "t", "latest",
 		"Docker tag for the --image image. Requires -l=false to use binary from docker container.")
 	cmd.PersistentFlags().BoolVarP(&opts.WhiteList, "whitelist", "w", true,

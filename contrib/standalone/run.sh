@@ -13,4 +13,4 @@ export DGRAPH_ALPHA_WHITELIST=0.0.0.0/0
 export DGRAPH_ALPHA_SECURITY='whitelist=0.0.0.0/0'
 
 # TODO properly handle SIGTERM for all three processes.
-dgraph-ratel & dgraph zero & dgraph alpha
+dgraph zero & dgraph alpha
