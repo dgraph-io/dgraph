@@ -103,6 +103,7 @@ type options struct {
 	WhiteList      bool
 	Ratel          bool
 	RatelPort      int
+	RatelImage     string
 	MemLimit       string
 	ExposePorts    bool
 	Encryption     bool
