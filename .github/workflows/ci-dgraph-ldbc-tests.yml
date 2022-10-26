@@ -12,13 +12,14 @@ jobs:
   dgraph-load-tests:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout Dgraph
+        uses: actions/checkout@v3
       - name: Checkout LDBC query repo
         uses: actions/checkout@v3
         with:
           repository: dgraph-io/ldbc
           token: ${{ secrets.GITHUB_TOKEN }}
           path: ldbc
-      - uses: actions/checkout@v3
       - name: Set up Go
         uses: actions/setup-go@v3
         with:
@@ -54,7 +55,7 @@ jobs:
           cd t; go build .
           # clean up docker containers before test execution
           ./t -r
-      - name: Run Load Tests
+      - name: Run LDBC Tests
         run: |
           #!/bin/bash
           # clean cache
