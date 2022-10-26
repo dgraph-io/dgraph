@@ -411,7 +411,7 @@ const adminTypes = `
 
 	input AddNamespaceInput {
 		"""
-		Enter a new password for groot. If you leave it blank, the password will be the default.
+		Enter a new password for groot in that namespace. If you leave it blank, the password will be the default.
 		"""
 		password: String
 	}
