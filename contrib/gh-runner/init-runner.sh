@@ -9,7 +9,7 @@ mkdir actions-runner && cd actions-runner
 curl -o actions-runner-linux-x64-2.296.2.tar.gz -L https://github.com/actions/runner/releases/download/v2.296.2/actions-runner-linux-x64-2.296.2.tar.gz
 echo "34a8f34956cdacd2156d4c658cce8dd54c5aef316a16bbbc95eb3ca4fd76429a  actions-runner-linux-x64-2.296.2.tar.gz" | shasum -a 256 -c
 tar xzf ./actions-runner-linux-x64-2.296.2.tar.gz
-./config.sh --url https://github.com/dgraph-io/dgraph --token $TOKEN
+./config.sh --unattended --url https://github.com/dgraph/dgraph --token $TOKEN --name $EC2_INSTANCE_NAME
 # Start GH Actions
 ./svc.sh install
 ./svc.sh start

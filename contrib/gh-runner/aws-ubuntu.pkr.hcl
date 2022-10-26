@@ -9,7 +9,8 @@ packer {
 
 variable "instance_type" {
   type    = string
-  default = "m6a.4xlarge"
+  default = "t2.medium"
+  description = "Instance type to use for creating the image"
 }
 
 variable "region" {
@@ -23,7 +24,7 @@ variable "aws_profile" {
 }
 
 source "amazon-ebs" "ubuntu" {
-  ami_name      = "gh-runner-linux-aws"
+  ami_name      = "gh-runner-linux-aws-v4"
   profile       = var.aws_profile
   instance_type = var.instance_type
   region        = var.region
