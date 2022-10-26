@@ -9,7 +9,7 @@ on:
   schedule:
     - cron: "30 * * * *"
 jobs:
-  dgraph-load-tests:
+  dgraph-ldbc-tests:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Dgraph
