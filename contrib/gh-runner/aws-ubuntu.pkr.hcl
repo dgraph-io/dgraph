@@ -8,8 +8,8 @@ packer {
 }
 
 variable "instance_type" {
-  type    = string
-  default = "t2.medium"
+  type        = string
+  default     = "t2.medium"
   description = "Instance type to use for creating the image"
 }
 
@@ -24,7 +24,7 @@ variable "aws_profile" {
 }
 
 source "amazon-ebs" "ubuntu" {
-  ami_name      = "gh-runner-linux-aws-v4"
+  ami_name      = "gh-runner-linux-aws"
   profile       = var.aws_profile
   instance_type = var.instance_type
   region        = var.region
@@ -53,6 +53,14 @@ build {
   }
   provisioner "file" {
     source      = "init-runner.sh"
-    destination = "/home/ubuntu/init-runner.sh"
+    destination = "/tmp/init-runner.sh"
+  }
+  provisioner "shell" {
+    inline = [
+      # A hack to make cloud-init run the script when a new instance is first booted
+      # Ref: https://cloudinit.readthedocs.io/en/latest/topics/modules.html?highlight=per%20instance#scripts-per-instance
+      "sudo mv /tmp/init-runner.sh /var/lib/cloud/scripts/per-instance/init-runner.sh",
+      "sudo chmod 744 /var/lib/cloud/scripts/per-instance/init-runner.sh"
+    ]
   }
 }
