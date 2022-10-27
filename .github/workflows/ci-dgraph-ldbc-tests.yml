@@ -18,7 +18,7 @@ jobs:
         uses: actions/checkout@v3
         with:
           repository: dgraph-io/ldbc
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.DEPLOY_KEYS_GH_DGRAPHIO_LDBC }}
           path: ldbc
       - name: Set up Go
         uses: actions/setup-go@v3
