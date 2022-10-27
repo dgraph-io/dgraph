@@ -22,6 +22,13 @@ sudo usermod -aG docker ${USER}
 newgrp docker &
 # Install & Setup GH Actions Runner
 mkdir actions-runner && cd actions-runner
+if [ "$(uname -m)" = "aarch64" ]; then
+    echo "Detected arm64 architecture"
+elif [ "$(uname -m)" = "x86_64" ]; then
+    echo "Detected amd64 architecture"
+else
+    echo "Unrecognized architecture"
+fi
 curl -o actions-runner-linux-x64-2.296.2.tar.gz -L https://github.com/actions/runner/releases/download/v2.296.2/actions-runner-linux-x64-2.296.2.tar.gz
 echo "34a8f34956cdacd2156d4c658cce8dd54c5aef316a16bbbc95eb3ca4fd76429a  actions-runner-linux-x64-2.296.2.tar.gz" | shasum -a 256 -c
 tar xzf ./actions-runner-linux-x64-2.296.2.tar.gz
