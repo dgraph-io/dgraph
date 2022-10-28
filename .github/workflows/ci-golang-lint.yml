@@ -4,12 +4,18 @@ on:
     branches:
       - main
   pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
     branches:
       - main
   schedule:
     - cron: "0 * * * *"
 jobs:
   golang-lint:
+    if: github.event.pull_request.draft == false
     name: lint
     runs-on: ubuntu-latest
     steps:
