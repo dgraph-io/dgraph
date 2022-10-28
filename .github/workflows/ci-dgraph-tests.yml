@@ -10,6 +10,7 @@ on:
     - cron: "0 * * * *"
 jobs:
   dgraph-tests:
+    if: ! github.event.pull_request.draft
     runs-on: self-hosted
     steps:
       - uses: actions/checkout@v3
