@@ -40,6 +40,7 @@ elif [ "$(uname -m)" = "x86_64" ]; then
     tar xzf ./actions-runner-linux-x64-2.298.2.tar.gz
 else
     echo "Unrecognized architecture"
+    exit 1
 fi
 # Create the runner and start the configuration experience
 ./config.sh --url https://github.com/dgraph-io/dgraph --token $TOKEN
