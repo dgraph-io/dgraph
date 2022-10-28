@@ -10,6 +10,7 @@ on:
     - cron: "0 * * * *"
 jobs:
   golang-lint:
+    if: ! github.event.pull_request.draft
     name: lint
     runs-on: ubuntu-latest
     steps:
