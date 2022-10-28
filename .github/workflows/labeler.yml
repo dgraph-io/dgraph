@@ -2,7 +2,7 @@ name: labeler
 on:
   pull_request:
     branches:
-      - master
+      - main
       - 'release/**'
     types: [opened]
 jobs:
