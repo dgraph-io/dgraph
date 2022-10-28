@@ -17,8 +17,8 @@ jobs:
       - name: Checkout LDBC query repo
         uses: actions/checkout@v3
         with:
-          repository: dgraph-io/ldbc
-          token: ${{ secrets.DEPLOY_KEYS_GH_DGRAPHIO_LDBC }}
+          repository: dgraph-io/ldbc_dgraph
+          token: ${{ secrets.DEPLOY_KEYS_GH_DGRAPHIO_LDBC-DGRAPH }}
           path: ldbc
       - name: Set up Go
         uses: actions/setup-go@v3
