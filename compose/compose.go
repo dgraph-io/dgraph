@@ -430,10 +430,6 @@ func getMinio(minioDataDir string) service {
 }
 
 func getRatel() service {
-	portFlag := ""
-	if opts.RatelPort != 8000 {
-		portFlag = fmt.Sprintf(" -port=%d", opts.RatelPort)
-	}
 	svc := service{
 		Image:         opts.RatelImage + ":" + opts.Tag,
 		ContainerName: containerName("ratel"),
