@@ -19,6 +19,7 @@ jobs:
         with:
           repository: dgraph-io/ldbc_dgraph
           token: ${{ secrets.DEPLOY_KEYS_GH_DGRAPHIO_LDBC_DGRAPH }}
+          ref: main
           path: ldbc
       - name: Set up Go
         uses: actions/setup-go@v3
