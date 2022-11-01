@@ -8,7 +8,7 @@ export TOKEN=<GITHUB ACTIONS RUNNER TOKEN>
 ```
 2. Download the setup script onto the machine
 ```
-wget https://raw.githubusercontent.com/dgraph-io/dgraph/main/contrib/gh-runner/gh-runner.sh
+wget https://raw.githubusercontent.com/adityasadalage/dgraph/main/contrib/gh-runner/gh-runner.sh
 ```
 3. Run the script to attach this machine to Github Actions Runner Pool
 ```
