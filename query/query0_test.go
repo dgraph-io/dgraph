@@ -2496,7 +2496,7 @@ func TestDateTimeQuery(t *testing.T) {
 	// Test 21
 	query = `
 {
-  q(func: between(created_at, "2022-03-28T14:41:57+30:00", "2019-03-28T15:41:57+30:00"), orderdesc: created_at) {
+  q(func: between(created_at, "2021-03-28T14:41:57+30:00", "2019-03-28T15:41:57+30:00"), orderdesc: created_at) {
 	  uid
 	  created_at
   }

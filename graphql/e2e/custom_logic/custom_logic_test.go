@@ -2708,7 +2708,7 @@ func TestCustomDQL(t *testing.T) {
 				screen_name: "minhaj"
 				followers: 10
 			  }
-			  timestamp: "2022-02-23"
+			  timestamp: "2021-02-23"
 			}
 		  ]) {
 			numUids

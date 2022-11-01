@@ -1,4 +1,3 @@
-//go:build !oss
 // +build !oss
 
 /*

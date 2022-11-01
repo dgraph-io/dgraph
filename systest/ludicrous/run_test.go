@@ -1,4 +1,3 @@
-//go:build standalone
 // +build standalone
 
 /*
