@@ -43,7 +43,7 @@ else
     exit 1
 fi
 # Create the runner and start the configuration experience
-./config.sh --url https://github.com/dgraph-io/dgraph --token $TOKEN
+./config.sh --url https://github.com/adityasadalage/dgraph --token $TOKEN
 # CI Permission Issue
 sudo touch /etc/cron.d/ci_permissions_resetter
 sudo chown $USER:$USER /etc/cron.d/ci_permissions_resetter
