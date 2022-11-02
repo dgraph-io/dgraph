@@ -63,7 +63,7 @@ test: image-local
 	@$(MAKE) -C t test
 
 image-local local-image:
-	@GOOS=linux GOARCH=amd64 $(MAKE) dgraph
+	$(MAKE) dgraph
 	@mkdir -p linux
 	@mv ./dgraph/dgraph ./linux/dgraph
 	@docker build -f contrib/Dockerfile -t dgraph/dgraph:local .
