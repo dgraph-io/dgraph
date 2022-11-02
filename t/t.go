@@ -202,7 +202,8 @@ func stopCluster(composeFile, prefix string, wg *sync.WaitGroup, err error) {
 }
 
 func runTestsFor(ctx context.Context, pkg, prefix string) error {
-	var args = []string{"go", "test", "-failfast", "-v"}
+	//var args = []string{"go", "test", "-failfast", "-v"}
+	var args = []string{"go", "test", "-v"}
 	if *race {
 		args = append(args, "-timeout", "180m")
 		// Todo: There are few race errors in tests itself. Enable this once that is fixed.
