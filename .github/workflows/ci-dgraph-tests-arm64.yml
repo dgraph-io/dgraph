@@ -66,7 +66,7 @@ jobs:
           # build the test binary
           cd t; go build .
           # Trial: Singular test PKG
-          ./t --pkg=worker
+          ./t --pkg=xidmap
           # clean up docker containers after test execution
           ./t -r
           # sleep
