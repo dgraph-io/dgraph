@@ -30,14 +30,16 @@ GOPATH         ?= $(shell go env GOPATH)
 ######################
 DGRAPH_VERSION ?= local
 
-.PHONY: dgraph all oss version install install_oss oss_install uninstall test help image image-local local-image docker-image docker-image-standalone
+.PHONY: dgraph all oss version install install_oss oss_install uninstall test help image-local local-image docker-image docker-image-standalone
 all: dgraph
 
 dgraph:
-	$(MAKE) -w -C $@ all
+	@echo "Compiling Dgraph binary..."
+	@$(MAKE) -w -C $@ all
+	@echo "Dgraph binary placed in dgraph directory."
 
 oss:
-	$(MAKE) BUILD_TAGS=oss
+	@$(MAKE) BUILD_TAGS=oss
 
 version:
 	@echo Dgraph ${BUILD_VERSION}
@@ -48,26 +50,19 @@ version:
 	@echo Go version: $(shell go version)
 
 install:
-	@echo "Installing dgraph ..."; \
+	@echo "Installing Dgraph ..."; \
 		$(MAKE) -C dgraph install; \
 
 install_oss oss_install:
 	$(MAKE) BUILD_TAGS=oss install
 
 uninstall:
-	@echo "Uninstalling dgraph ..."; \
+	@echo "Uninstalling Dgraph ..."; \
 		$(MAKE) -C dgraph uninstall; \
 
 test: image-local
 	@mv dgraph/dgraph ${GOPATH}/bin
 	@$(MAKE) -C t test
-
-image:
-	@$(MAKE) dgraph
-	@mkdir -p linux
-	@mv ./dgraph/dgraph ./linux/dgraph
-	@docker build -f contrib/Dockerfile -t dgraph/dgraph:$(subst /,-,${BUILD_BRANCH}) .
-	@rm -r linux
 
 image-local local-image:
 	@$(MAKE) dgraph
