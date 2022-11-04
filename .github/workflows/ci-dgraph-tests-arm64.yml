@@ -12,7 +12,7 @@ on:
     branches:
       - main
   schedule:
-    - cron: "30 * * * *"
+    - cron: "0 * * * *"
 jobs:
   dgraph-tests:
     if: github.event.pull_request.draft == false
