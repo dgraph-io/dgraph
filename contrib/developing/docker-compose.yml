@@ -1,0 +1,10 @@
+version: '3.8'
+services:
+  dgraph-debug:
+    image: golang:1.18.8-alpine3.16
+    ports:
+      - "8080:8080"
+    volumes:
+      - ../../:/dgraph
+    working_dir: /dgraph
+    command: /bin/sh -c "while sleep 1000; do :; done"
