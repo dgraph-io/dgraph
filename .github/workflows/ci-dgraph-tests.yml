@@ -46,8 +46,6 @@ jobs:
         run: |
           #!/bin/bash
           # go settings
-          export GOOS=linux
-          export GOARCH=amd64
           # make dgraph binary
           make dgraph
       - name: Clean Up Environment
