@@ -19,10 +19,15 @@ jobs:
     runs-on: [self-hosted, ARM64]
     steps:
       - uses: actions/checkout@v3
+      - name: Get Go Version
+        run: |
+          #!/bin/bash
+          GOVERSION=$({ [ -f .go-version ] && cat .go-version; })
+          echo "GOVERSION=$GOVERSION" >> $GITHUB_ENV
       - name: Set up Go
         uses: actions/setup-go@v3
         with:
-          go-version: 1.18
+          go-version: ${{ env.GOVERSION }}
       - name: Set up Node
         uses: actions/setup-node@v3
         with:
