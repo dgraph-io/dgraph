@@ -6,5 +6,6 @@ services:
       - "8080:8080"
     volumes:
       - ../../:/dgraph
+      - /var/run/docker.sock:/var/run/docker.sock
     working_dir: /dgraph
     command: /bin/sh -c "while sleep 1000; do :; done"

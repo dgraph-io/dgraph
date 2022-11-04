@@ -15,16 +15,31 @@ Follow the step by step:
 ```bash
 go get -d -v ../dgraph
 
-apk add libc-dev
-apk add make
-apk add gcc
-apk add protobuf
+apk update
+
+apk add --update libc-dev make gcc protobuf
 
 optional:
 
-apk add curl
-apk add ca-certificates
-apk add less
+apk add --update curl ca-certificates less
+
+```
+
+## Adding Docker
+
+In order to run some tests you need to have Docker installed. It's a little tricky to have Docker installed inside a container. So the solution is to add sock to connect the Docker host with the Daemon inside the container. That way you can run the tests normally.
+
+```bash
+# First add the docker daemon
+
+apk update
+apk add --update docker openrc docker-compose
+
+rc-update add docker boot
+
+#Now run this to make sure it is running/bound
+
+docker ps -a
 
 ```
 
