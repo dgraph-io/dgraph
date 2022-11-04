@@ -1,4 +1,4 @@
-name: ci-dgraph-tests-amd64
+name: ci-dgraph-tests
 on:
   push:
     branches:
