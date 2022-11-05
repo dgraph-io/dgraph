@@ -44,3 +44,15 @@ contrib/local-test/query.gql
 contrib/local-test/schema.dql
 contrib/local-test/schema.graphql
 contrib/local-test/variables.json
+
+# Test logs and test files
+*.enc
+
+systest/bulk_live/live/data/*
+systest/bulk_live/bulk/data/*
+
+*/t
+*/p
+*/w
+*/zw
+*/export
