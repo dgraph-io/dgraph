@@ -11,7 +11,7 @@
             "mode": "debug",
             "program": "${workspaceRoot}/dgraph/",
             "env": {},
-            "args": ["alpha"],
+            "args": ["alpha", "--telemetry", "sentry=false;", "--security", "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"],
             "showLog": true
         },
         {
@@ -23,12 +23,26 @@
             "env": {},
             "args": ["zero"],
             "showLog": true
+        },
+        {
+            "name": "AlphaACL",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceRoot}/dgraph/", 
+            "env": {},
+            "args": ["alpha", "--telemetry", "sentry=false;", "--security", "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;", "--acl", "secret-file=../ee/acl/hmac-secret; access-ttl=3000s;",],
+            "showLog": true
         }
     ],
     "compounds": [
         {
-            "name": "Alpha_Zero",
+            "name": "normalCluster",
             "configurations": ["Alpha", "Zero"]
+        },
+        {
+            "name": "ACLCluster",
+            "configurations": ["AlphaACL", "Zero"]
         }
     ]
 }

@@ -1,5 +1,5 @@
 FROM golang:1.18.8-alpine3.16
-LABEL maintainer Dgraph.io
+LABEL maintainer="Dgraph Labs <contact@dgraph.io>"
 
 RUN apk add --update --no-cache docker openrc docker-compose \
     libc-dev make gcc protobuf \
