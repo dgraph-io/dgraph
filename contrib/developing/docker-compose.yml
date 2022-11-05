@@ -1,7 +1,7 @@
 version: '3.8'
 services:
   dgraph-debug:
-    image: golang:1.18.8-alpine3.16
+    build: ../../.devcontainer
     ports:
       - "8080:8080"
     volumes:

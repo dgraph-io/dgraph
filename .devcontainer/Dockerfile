@@ -1,4 +1,4 @@
-FROM golang:1.18-alpine
+FROM golang:1.18.8-alpine3.16
 LABEL maintainer Dgraph.io
 RUN apk add libc-dev make gcc protobuf
 RUN go install -v golang.org/x/tools/gopls@latest 2>&1
