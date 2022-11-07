@@ -1,3 +1,4 @@
+//go:build !oss
 // +build !oss
 
 /*
@@ -18,6 +19,7 @@ import (
 	"github.com/dgraph-io/dgraph/ee/acl"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
+	"golang.org/x/exp/maps"
 )
 
 // aclCache is the cache mapping group names to the corresponding group acls
@@ -133,8 +135,8 @@ func (cache *AclCache) Update(ns uint64, groups []acl.Group) {
 
 	AclCachePtr.Lock()
 	defer AclCachePtr.Unlock()
-	AclCachePtr.predPerms = predPerms
-	AclCachePtr.userPredPerms = userPredPerms
+	maps.Copy(AclCachePtr.predPerms, predPerms)
+	maps.Copy(AclCachePtr.userPredPerms, userPredPerms)
 }
 
 func (cache *AclCache) AuthorizePredicate(groups []string, predicate string,
