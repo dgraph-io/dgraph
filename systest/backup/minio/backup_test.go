@@ -54,7 +54,7 @@ var (
 )
 
 func TestBackupMinio(t *testing.T) {
-	time.Sleep(time.Second * 20)
+	time.Sleep(time.Second * 30)
 	backupDst = "minio://minio:9001/dgraph-backup?secure=false"
 
 	addr := testutil.ContainerAddr("minio", 9001)
