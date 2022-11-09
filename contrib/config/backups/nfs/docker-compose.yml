@@ -25,10 +25,9 @@ services:
         volume:
           nocopy: true
   ratel:
-    image: dgraph/dgraph:${DGRAPH_VERSION}
+    image: dgraph/ratel:${DGRAPH_VERSION}
     ports:
       - 8000:8000
-    command: dgraph-ratel
     container_name: ratel
 
 volumes:
