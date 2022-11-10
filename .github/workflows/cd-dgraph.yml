@@ -33,8 +33,8 @@ jobs:
           #!/bin/bash
           mkdir badger
           cd badger
-          wget https://github.com/dgraph-io/badger/releases/download/$BADGER_RELEASE_VERSION/badger-checksum-linux-amd64.sha256
-          wget https://github.com/dgraph-io/badger/releases/download/$BADGER_RELEASE_VERSION/badger-linux-amd64.tar.gz
+          wget https://github.com/dgraph-io/badger/releases/download/${{ env.BADGER_RELEASE_VERSION }}/badger-checksum-linux-amd64.sha256
+          wget https://github.com/dgraph-io/badger/releases/download/${{ env.BADGER_RELEASE_VERSION }}/badger-linux-amd64.tar.gz
       - name: Set Dgraph Release Version
         run: |
           #!/bin/bash
