@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project will adhere to [Semantic Versioning](https://semver.org) starting `v22.0.0`.
 
+## [v22.0.1] - 2022-11-10
+[v22.0.1]: https://github.com/dgraph-io/dgraph/compare/v22.0.0...v22.0.1
+
+### Fixed
+- Badger Binary added to release artifacts
+
+
 ## [v22.0.0] - 2022-10-21
 [v22.0.0]: https://github.com/dgraph-io/dgraph/compare/v21.03.2...v22.0.0
 
