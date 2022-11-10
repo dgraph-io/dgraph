@@ -9,7 +9,7 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
 
 ### Fixed
 - Badger Binary added to release CD pipeline (https://github.com/dgraph-io/dgraph/pull/8422)
-- Corresponding Badger artifacts will be generated & uploaded on our future releases
+- Corresponding Badger artifacts will be generated & uploaded from v22.0.1 onwards
 
 
 ## [v22.0.0] - 2022-10-21
