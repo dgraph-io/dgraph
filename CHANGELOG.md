@@ -8,7 +8,7 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
 [v22.0.1]: https://github.com/dgraph-io/dgraph/compare/v22.0.0...v22.0.1
 
 ### Fixed
-- Badger Binary added to release artifacts
+- Badger Binary added to release artifacts (https://github.com/dgraph-io/dgraph/pull/8422)
 
 
 ## [v22.0.0] - 2022-10-21
