@@ -19,7 +19,6 @@ import (
 	"github.com/dgraph-io/dgraph/ee/acl"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
-	"golang.org/x/exp/maps"
 )
 
 // aclCache is the cache mapping group names to the corresponding group acls
@@ -135,8 +134,30 @@ func (cache *AclCache) Update(ns uint64, groups []acl.Group) {
 
 	AclCachePtr.Lock()
 	defer AclCachePtr.Unlock()
-	maps.Copy(AclCachePtr.predPerms, predPerms)
-	maps.Copy(AclCachePtr.userPredPerms, userPredPerms)
+
+	// We have a new set of rules for a ns namespace, hence clear old rules from the cache
+	for k := range AclCachePtr.predPerms {
+		if x.ParseNamespace(k) == ns {
+			delete(AclCachePtr.predPerms, k)
+		}
+	}
+
+	for _, v := range AclCachePtr.userPredPerms {
+		for k := range v {
+			if x.ParseNamespace(k) == ns {
+				delete(v, k)
+			}
+		}
+	}
+
+	// Set new rules in the cache
+	for k, v := range predPerms {
+		AclCachePtr.predPerms[k] = v
+	}
+
+	for k, v := range userPredPerms {
+		AclCachePtr.userPredPerms[k] = v
+	}
 }
 
 func (cache *AclCache) AuthorizePredicate(groups []string, predicate string,
