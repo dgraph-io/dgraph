@@ -19,8 +19,15 @@ BUILD_CODENAME  = dgraph
 BUILD_DATE     ?= $(shell git log -1 --format=%ci)
 BUILD_BRANCH   ?= $(shell git rev-parse --abbrev-ref HEAD)
 #BUILD_VERSION  ?= $(shell git describe --always --tags)
+#Get version of Badger CLI tool associated with current Dgraph build
+BADGER_VERSION ?= $(shell go list -f '{{.Version}}' -m github.com/dgraph-io/badger/v3)
 
 GOPATH         ?= $(shell go env GOPATH)
+
+BADGER_TARGET = $(GOPATH)/bin/badger
+ifneq ($(strip $(shell go env GOBIN)),)
+ 	BADGER_TARGET = $(shell go env GOBIN)/badger
+endif
 
 ######################
 # Build & Release Paramaters
@@ -30,15 +37,24 @@ GOPATH         ?= $(shell go env GOPATH)
 ######################
 DGRAPH_VERSION ?= local
 
-.PHONY: dgraph all oss version install install_oss oss_install uninstall test help image image-local local-image docker-image docker-image-standalone
+ifneq ($(DGRAPH_VERSION), local)
+	RELEASE ?= true
+else
+	RELEASE ?= false
+endif
+
+.PHONY: all
 all: dgraph
 
+.PHONY: dgraph
 dgraph:
 	$(MAKE) -w -C $@ all
 
+.PHONY: oss
 oss:
 	$(MAKE) BUILD_TAGS=oss
 
+.PHONY: version
 version:
 	@echo Dgraph ${BUILD_VERSION}
 	@echo Build: ${BUILD}
@@ -47,21 +63,26 @@ version:
 	@echo Branch: ${BUILD_BRANCH}
 	@echo Go version: $(shell go version)
 
+.PHONY: install
 install:
 	@echo "Installing Dgraph..."; \
 		$(MAKE) -C dgraph install; \
 
+.PHONY: install_oss oss_install
 install_oss oss_install:
 	$(MAKE) BUILD_TAGS=oss install
 
+.PHONY: uninstall
 uninstall:
 	@echo "Uninstalling Dgraph ..."; \
 		$(MAKE) -C dgraph uninstall; \
 
+.PHONY: test
 test: image-local
 	@mv dgraph/dgraph ${GOPATH}/bin
 	@$(MAKE) -C t test
 
+.PHONY: image-local local-image
 image-local local-image:
 	@GOOS=linux GOARCH=amd64 $(MAKE) dgraph
 	@mkdir -p linux
@@ -69,17 +90,34 @@ image-local local-image:
 	@docker build -f contrib/Dockerfile -t dgraph/dgraph:local .
 	@rm -r linux
 
+.PHONY: docker-image
 docker-image: dgraph
 	@mkdir -p linux
 	@cp ./dgraph/dgraph ./linux/dgraph
 	docker build -f contrib/Dockerfile -t dgraph/dgraph:$(DGRAPH_VERSION) .
 
+.PHONY: docker-image-standalone
 docker-image-standalone: dgraph docker-image
 	@mkdir -p linux
 	@cp ./dgraph/dgraph ./linux/dgraph
 	$(MAKE) -w -C contrib/standalone all DOCKER_TAG=$(DGRAPH_VERSION) DGRAPH_VERSION=$(DGRAPH_VERSION)
 
+.PHONY: badger
+badger:
+#	if Badger CLI tool already installed, remove it
+	@if [ -f "$(BADGER_TARGET)" ]; then \
+		rm -r $(BADGER_TARGET); \
+	fi
+#	install badger CLI tool at version matching current dependency in Dgraph
+	@go install github.com/dgraph-io/badger/v3/badger@$(BADGER_VERSION)
+	@echo "Installed Badger to $(BADGER_TARGET)"
+	@if [ $(RELEASE) == "true" ]; then \
+		mkdir -p badger; \
+		cp $(BADGER_TARGET) badger; \
+	fi
+
 # build and run dependencies for ubuntu linux
+.PHONY: linux-dependency
 linux-dependency:
 	sudo apt-get update
 	sudo apt-get -y upgrade
@@ -90,6 +128,7 @@ linux-dependency:
 	sudo apt-get -y install build-essential
 	sudo apt-get -y install protobuf-compiler
 
+.PHONY: help
 help:
 	@echo
 	@echo Build commands:
