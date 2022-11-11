@@ -20,7 +20,7 @@ BUILD_DATE     ?= $(shell git log -1 --format=%ci)
 BUILD_BRANCH   ?= $(shell git rev-parse --abbrev-ref HEAD)
 #BUILD_VERSION  ?= $(shell git describe --always --tags)
 #Get version of Badger CLI tool associated with current Dgraph build
-BADGER_VERSION ?= $(shell go list -f '{{.Version}}' -m github.com/dgraph-io/badger/v3)
+BADGER_VERSION ?= $(shell cat go.mod | grep -i "github.com/dgraph-io/badger" | awk '{print $2}')
 
 GOPATH         ?= $(shell go env GOPATH)
 
@@ -36,12 +36,6 @@ endif
 # DGRAPH_VERSION defaults to local, if not specified, for development purposes
 ######################
 DGRAPH_VERSION ?= local
-
-ifneq ($(DGRAPH_VERSION), local)
-	RELEASE ?= true
-else
-	RELEASE ?= false
-endif
 
 .PHONY: all
 all: dgraph
@@ -111,10 +105,6 @@ badger:
 #	install badger CLI tool at version matching current dependency in Dgraph
 	@go install github.com/dgraph-io/badger/v3/badger@$(BADGER_VERSION)
 	@echo "Installed Badger to $(BADGER_TARGET)"
-	@if [ $(RELEASE) == "true" ]; then \
-		mkdir -p badger; \
-		cp $(BADGER_TARGET) badger; \
-	fi
 
 # build and run dependencies for ubuntu linux
 .PHONY: linux-dependency
