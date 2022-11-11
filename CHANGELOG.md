@@ -8,8 +8,9 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
 [v22.0.1]: https://github.com/dgraph-io/dgraph/compare/v22.0.0...v22.0.1
 
 ### Fixed
-- Badger Binary fetch steps added to the release CD pipeline (https://github.com/dgraph-io/dgraph/pull/8425)
-- Corresponding Badger artifacts will be fetched & uploaded from v22.0.1 onwards
+- **CD Release Pipeline**
+  - Badger Binary fetch steps added to the release CD pipeline (https://github.com/dgraph-io/dgraph/pull/8425)
+  - Corresponding Badger artifacts will be fetched & uploaded from v22.0.1 onwards
 
 
 ## [v22.0.0] - 2022-10-21
