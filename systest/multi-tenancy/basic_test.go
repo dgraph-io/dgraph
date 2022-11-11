@@ -41,6 +41,8 @@ func prepare(t *testing.T) {
 	require.NoError(t, dc.Alter(context.Background(), &api.Operation{DropAll: true}))
 }
 
+var timeout = 5 * time.Second
+
 // TODO(Ahsan): This is just a basic test, for the purpose of development. The functions used in
 // this file can me made common to the other acl tests as well. Needs some refactoring as well.
 func TestAclBasic(t *testing.T) {
@@ -91,13 +93,9 @@ func TestAclBasic(t *testing.T) {
 	testutil.AddRulesToGroup(t, token, "dev",
 		[]testutil.Rule{{Predicate: "name", Permission: acl.Read.Code}}, true)
 
-	// Wait for acl cache to get updated
-	time.Sleep(5 * time.Second)
-
 	// Now alice should see the name predicate but not nickname.
 	dc = testutil.DgClientWithLogin(t, "alice", "newpassword", ns)
-	resp = testutil.QueryData(t, dc, query)
-	testutil.CompareJSON(t, `{"me": [{"name":"guy1"},{"name": "guy2"}]}`, string(resp))
+	testutil.PollTillPassOrTimeout(t, dc, query, `{"me": [{"name":"guy1"},{"name": "guy2"}]}`, timeout)
 
 }
 
@@ -140,13 +138,9 @@ func TestTwoPermissionSetsInNameSpacesWithAcl(t *testing.T) {
 	// Create a new group, add alice to that group and give read access of <name> to dev group.
 	createGroupAndSetPermissions(t, ns1, "dev", "alice", "name")
 
-	// Wait for acl cache to get updated
-	time.Sleep(5 * time.Second)
-
 	// Alice should not be able to see <nickname> in namespace 1
 	dc = testutil.DgClientWithLogin(t, "alice", "newpassword", ns1)
-	resp := testutil.QueryData(t, dc, query)
-	testutil.CompareJSON(t, `{"me": [{"name":"guy2"}, {"name":"guy1"}]}`, string(resp))
+	testutil.PollTillPassOrTimeout(t, dc, query, `{"me": [{"name":"guy2"}, {"name":"guy1"}]}`, timeout)
 
 	// Create second namespace
 	ns2, err := testutil.CreateNamespaceWithRetry(t, galaxyToken)
@@ -164,17 +158,13 @@ func TestTwoPermissionSetsInNameSpacesWithAcl(t *testing.T) {
 	// Create a new group, add bob to that group and give read access of <nickname> to dev group.
 	createGroupAndSetPermissions(t, ns2, "dev", "bob", "nickname")
 
-	// Wait for acl cache to get updated
-	time.Sleep(5 * time.Second)
-
 	// Query via bob and check result
 	dc = testutil.DgClientWithLogin(t, "bob", "newpassword", ns2)
-	resp = testutil.QueryData(t, dc, query)
-	testutil.CompareJSON(t, `{}`, string(resp))
+	testutil.PollTillPassOrTimeout(t, dc, query, `{}`, timeout)
 
 	// Query namespace-1 via alice and check result to ensure it still works
 	dc = testutil.DgClientWithLogin(t, "alice", "newpassword", ns1)
-	resp = testutil.QueryData(t, dc, query)
+	resp := testutil.QueryData(t, dc, query)
 	testutil.CompareJSON(t, `{"me": [{"name":"guy2"}, {"name":"guy1"}]}`, string(resp))
 
 	// Change permissions in namespace-2
@@ -185,8 +175,8 @@ func TestTwoPermissionSetsInNameSpacesWithAcl(t *testing.T) {
 
 	// Query namespace-2
 	dc = testutil.DgClientWithLogin(t, "bob", "newpassword", ns2)
-	resp = testutil.QueryData(t, dc, query)
-	testutil.CompareJSON(t, `{"me": [{"name":"guy2", "nickname": "RG2"}, {"name":"guy1", "nickname": "RG"}]}`, string(resp))
+	testutil.PollTillPassOrTimeout(t, dc, query,
+		`{"me": [{"name":"guy2", "nickname": "RG2"}, {"name":"guy1", "nickname": "RG"}]}`, timeout)
 
 	// Query namespace-1
 	dc = testutil.DgClientWithLogin(t, "alice", "newpassword", ns1)
