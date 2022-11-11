@@ -58,7 +58,7 @@ For more information on a variety Docker deployment methods including Docker Com
 ## Run a Quick Standalone Cluster
 
 ```
-docker run --rm -it -p 8080:8080 -p 9080:9080 -p 8000:8000 -v ~/dgraph:/dgraph dgraph/standalone:latest
+docker run -it -p 8080:8080 -p 9080:9080 -v ~/dgraph:/dgraph dgraph/standalone:latest
 ```
 
 ## Install from Source
