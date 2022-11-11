@@ -26,7 +26,7 @@ jobs:
         run: |
           #!/bin/bash
           BADGER_RELEASE_VERSION=$(cat go.mod | grep -i "github.com/dgraph-io/badger" | awk '{print $2}')
-          echo "making a new release for badger "$BADGER_RELEASE_VERSION
+          echo "setting badger version "$BADGER_RELEASE_VERSION
           echo "BADGER_RELEASE_VERSION=$BADGER_RELEASE_VERSION" >> $GITHUB_ENV
       - name: Download Badger Artifacts
         run: |
