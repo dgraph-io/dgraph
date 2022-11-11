@@ -31,8 +31,6 @@ Dgraph's goal is to provide [Google](https://www.google.com) production level sc
 with low enough latency to serve real-time user queries over terabytes of structured data.
 Dgraph supports [GraphQL query syntax](https://dgraph.io/docs/master/query-language/), and responds in [JSON](http://www.json.org/) and [Protocol Buffers](https://developers.google.com/protocol-buffers/) over [GRPC](http://www.grpc.io/) and HTTP. Dgraph is written using the Go Programming Language.
 
-**Use [Discuss Issues](https://discuss.dgraph.io/c/issues/dgraph/38) for reporting issues about this repository.**
-
 ## Status
 
 Dgraph is at [version v22.0.0][rel] and is production-ready. Apart from the vast open source community, it is being used in
