@@ -18,16 +18,18 @@
 GOOS          ?= $(shell go env GOOS)
 GOPATH        ?= $(shell go env GOPATH)
 
-.PHONY: test
-
+.PHONY: all
 all: test
 
+.PHONY: test
 test: 
-# 	build the t.go binary
+	@echo "Building t.go executable..."
 	@go build .
-#	clean go testcache
-	go clean -testcache
-#	run the tests
-	@./t --skip systest/backup,systest/online-restore,systest/loader,tlstest
-#	clean up docker containers after test execution
-	./t -r
+	@go clean -testcache
+	@if [ -n "$(args)" ]; then \
+ 		./t $(args); \
+ 	else \
+ 		./t --dry=true -p="xxxx"; \
+ 	fi
+	@echo "Cleaning up test containers..."
+	@./t -r

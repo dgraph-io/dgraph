@@ -58,8 +58,7 @@ uninstall:
 	@echo "Uninstalling Dgraph ..."; \
 		$(MAKE) -C dgraph uninstall; \
 
-test: image-local
-	@mv dgraph/dgraph ${GOPATH}/bin
+test: local-image
 	@$(MAKE) -C t test
 
 image-local local-image:
@@ -72,12 +71,13 @@ image-local local-image:
 docker-image: dgraph
 	@mkdir -p linux
 	@cp ./dgraph/dgraph ./linux/dgraph
-	docker build -f contrib/Dockerfile -t dgraph/dgraph:$(DGRAPH_VERSION) .
+	@echo "Building Docker image..."
+	@docker build -f contrib/Dockerfile -t dgraph/dgraph:$(DGRAPH_VERSION) .
 
 docker-image-standalone: dgraph docker-image
 	@mkdir -p linux
 	@cp ./dgraph/dgraph ./linux/dgraph
-	$(MAKE) -w -C contrib/standalone all DOCKER_TAG=$(DGRAPH_VERSION) DGRAPH_VERSION=$(DGRAPH_VERSION)
+	@$(MAKE) -w -C contrib/standalone all DOCKER_TAG=$(DGRAPH_VERSION) DGRAPH_VERSION=$(DGRAPH_VERSION)
 
 # build and run dependencies for ubuntu linux
 linux-dependency:

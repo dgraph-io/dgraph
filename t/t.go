@@ -50,7 +50,6 @@ var (
 	ctxb               = context.Background()
 	oc                 = &outputCatcher{}
 	procId             int
-	isTeamcity         bool
 	testId             int32
 	coverageFile       = "coverage.out"
 	tmpCoverageFile    = "tmp.out"
@@ -67,7 +66,7 @@ var (
 		"Run only custom cluster tests.")
 	count = pflag.IntP("count", "c", 0,
 		"If set, would add -count arg to go test.")
-	// formerly 3
+	// We use 1 goroutine due to race conditions in test suite
 	concurrency = pflag.IntP("concurrency", "j", 1,
 		"Number of clusters to run concurrently.")
 	keepCluster = pflag.BoolP("keep", "k", false,
@@ -77,8 +76,6 @@ var (
 	dry = pflag.BoolP("dry", "", false,
 		"Just show how the packages would be executed, without running tests.")
 	// earlier default was true, want to use binary we build manually
-	rebuildBinary = pflag.BoolP("rebuild-binary", "", false,
-		"Build Dgraph before running tests.")
 	useExisting = pflag.String("prefix", "",
 		"Don't bring up a cluster, instead use an existing cluster with this prefix.")
 	skipSlow = pflag.BoolP("skip-slow", "s", false,
@@ -210,15 +207,11 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 	} else {
 		args = append(args, "-timeout", "30m")
 	}
-
 	if *count > 0 {
 		args = append(args, "-count="+strconv.Itoa(*count))
 	}
 	if len(*runTest) > 0 {
 		args = append(args, "-run="+*runTest)
-	}
-	if isTeamcity {
-		args = append(args, "-json")
 	}
 	if *runCoverage {
 		// TODO: this breaks where we parallelize the tests, add coverage support for parallel tests
@@ -332,7 +325,11 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 			err = ctx.Err()
 			return err
 		}
+		// Joshua: comments
+		fmt.Printf("task.pkg.ID is %s\n", task.pkg.ID)
 		if !hasTestFiles(task.pkg.ID) {
+			//Joshua: comments
+			fmt.Println("did not have test files")
 			continue
 		}
 
@@ -358,11 +355,7 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 }
 
 func getGlobalPrefix() string {
-	var tc string
-	if isTeamcity {
-		tc = "tc-"
-	}
-	return "test-" + tc
+	return "test-"
 }
 
 func getClusterPrefix() string {
@@ -391,11 +384,17 @@ func runCustomClusterTest(ctx context.Context, pkg string, wg *sync.WaitGroup) e
 	return err
 }
 
+// if we want to run one particular test in a particular package, we must
+// 1. find the file that contains this test
+// 2. find the directory (i.e. package) that contains this test
+// this is only invoked when running e.g. ./t -t=indexTokensForTest
+// returns e.g. [ postings ]
 func findPackagesFor(testName string) []string {
 	if len(testName) == 0 {
 		return []string{}
 	}
 
+	// e.g. ack indexTokensForTest .. -l
 	cmd := command("ack", testName, *baseDir, "-l")
 	var b bytes.Buffer
 	cmd.Stdout = &b
@@ -408,9 +407,14 @@ func findPackagesFor(testName string) []string {
 	scan := bufio.NewScanner(&b)
 	for scan.Scan() {
 		fname := scan.Text()
+		// e.g. fname = ../posting/index_test.go
 		if strings.HasSuffix(fname, "_test.go") {
+			// get directory from fname and delete *baseDir
+			// default *baseDir = ../
+			// e.g. dir = posting
 			dir := strings.Replace(filepath.Dir(fname), *baseDir, "", 1)
 			dirs = append(dirs, dir)
+			fmt.Printf("found %v in %v\n", testName, fname)
 		}
 	}
 	fmt.Printf("dirs: %+v\n", dirs)
@@ -475,7 +479,7 @@ func (o *outputCatcher) Print() {
 
 type task struct {
 	pkg      *packages.Package
-	isCommon bool
+	isCommon bool // false if package has custom docker-compose.yml
 }
 
 func composeFileFor(pkg string) string {
@@ -518,6 +522,7 @@ func getPackages() []task {
 		return out
 	}
 
+	// packages.Load finds all packages in repo matching specified pattern
 	pkgs, err := packages.Load(nil, *baseDir+"/...")
 	x.Check(err)
 	for _, pkg := range pkgs {
@@ -526,6 +531,8 @@ func getPackages() []task {
 			os.Exit(1)
 		}
 	}
+
+	// if runTest is specified, limit to directories that contain given test
 	limitTo := findPackagesFor(*runTest)
 
 	var valid []task
@@ -756,10 +763,8 @@ func executePreRunSteps() error {
 }
 
 func run() error {
-	if tc := os.Getenv("TEAMCITY_VERSION"); len(tc) > 0 {
-		fmt.Printf("Found Teamcity: %s\n", tc)
-		isTeamcity = true
-	}
+	// no longer using teamcity
+
 	if *clear {
 		removeAllTestContainers()
 		return nil
@@ -772,19 +777,7 @@ func run() error {
 	start := time.Now()
 	oc.Took(0, "START", time.Millisecond)
 
-	if *rebuildBinary {
-		var cmd *exec.Cmd
-		if *race {
-			cmd = command("make", "BUILD_RACE=y", "install")
-		} else {
-			cmd = command("make", "install")
-		}
-		cmd.Dir = *baseDir
-		if err := cmd.Run(); err != nil {
-			return err
-		}
-		oc.Took(0, "COMPILE", time.Since(start))
-	}
+	// do not rebuild binary as part of t.go
 
 	tmpDir, err := ioutil.TempDir("", "dgraph-test")
 	x.Check(err)
@@ -793,9 +786,6 @@ func run() error {
 	err = executePreRunSteps()
 	x.Check(err)
 	N := *concurrency
-	if len(*runPkg) > 0 || len(*runTest) > 0 {
-		N = 1
-	}
 	closer := z.NewCloser(N)
 	testCh := make(chan task)
 	errCh := make(chan error, 1000)
