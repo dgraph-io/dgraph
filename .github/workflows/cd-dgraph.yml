@@ -22,6 +22,19 @@ jobs:
           go mod tidy
           make regenerate
           git diff --exit-code -- .
+      - name: Set Badger Release Version
+        run: |
+          #!/bin/bash
+          BADGER_RELEASE_VERSION=$(cat go.mod | grep -i "github.com/dgraph-io/badger" | awk '{print $2}')
+          echo "setting badger version "$BADGER_RELEASE_VERSION
+          echo "BADGER_RELEASE_VERSION=$BADGER_RELEASE_VERSION" >> $GITHUB_ENV
+      - name: Download Badger Artifacts
+        run: |
+          #!/bin/bash
+          mkdir badger
+          cd badger
+          wget https://github.com/dgraph-io/badger/releases/download/${{ env.BADGER_RELEASE_VERSION }}/badger-checksum-linux-amd64.sha256
+          wget https://github.com/dgraph-io/badger/releases/download/${{ env.BADGER_RELEASE_VERSION }}/badger-linux-amd64.tar.gz
       - name: Set Dgraph Release Version
         run: |
           #!/bin/bash
@@ -34,18 +47,20 @@ jobs:
             exit 1
           fi
           DGRAPH_RELEASE_VERSION=$(git rev-parse --abbrev-ref HEAD | sed  's/release\///')
-          echo "making a new release for "$DGRAPH_RELEASE_VERSION
+          echo "making a new release for dgraph "$DGRAPH_RELEASE_VERSION
           echo "DGRAPH_RELEASE_VERSION=$DGRAPH_RELEASE_VERSION" >> $GITHUB_ENV
-      - name: Make Linux Build
+      - name: Make Dgraph Linux Build
         run: make dgraph DGRAPH_VERSION=${{ env.DGRAPH_RELEASE_VERSION }}
-      - name: Generate SHA for Linux Build
+      - name: Generate SHA for Dgraph Linux Build
         run: cd dgraph && sha256sum dgraph | cut -c-64 > dgraph-checksum-linux-amd64.sha256
-      - name: Tar Archive for Linux Build
+      - name: Tar Archive for Dgraph Linux Build
         run: cd dgraph && tar -zcvf dgraph-linux-amd64.tar.gz dgraph
-      - name: Upload Dgraph Binary Build Artifacts
+      - name: Upload Build Artifacts
         uses: actions/upload-artifact@v3
         with:
           path: |
+            badger/badger-checksum-linux-amd64.sha256
+            badger/badger-linux-amd64.tar.gz
             dgraph/dgraph-checksum-linux-amd64.sha256
             dgraph/dgraph-linux-amd64.tar.gz
       - name: Make Dgraph Docker Image
