@@ -4,19 +4,30 @@ on:
     branches:
       - main
   pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
     branches:
       - main
   schedule:
-    - cron: "*/15 * * * *"
+    - cron: "0 * * * *"
 jobs:
   dgraph-tests:
-    runs-on: self-hosted
+    if: github.event.pull_request.draft == false
+    runs-on: [self-hosted, x64]
     steps:
       - uses: actions/checkout@v3
+      - name: Get Go Version
+        run: |
+          #!/bin/bash
+          GOVERSION=$({ [ -f .go-version ] && cat .go-version; })
+          echo "GOVERSION=$GOVERSION" >> $GITHUB_ENV
       - name: Set up Go
         uses: actions/setup-go@v3
         with:
-          go-version: 1.18
+          go-version: ${{ env.GOVERSION }}
       - name: Set up Node
         uses: actions/setup-node@v3
         with:
@@ -35,8 +46,6 @@ jobs:
         run: |
           #!/bin/bash
           # go settings
-          export GOOS=linux
-          export GOARCH=amd64
           # make dgraph binary
           make dgraph
       - name: Clean Up Environment

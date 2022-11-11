@@ -355,8 +355,6 @@ spec:
     spec:
       containers:
       - name: ratel
-        image: dgraph/dgraph:latest
+        image: dgraph/ratel:latest
         ports:
         - containerPort: 8000
-        command:
-          - dgraph-ratel

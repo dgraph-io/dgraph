@@ -73,12 +73,11 @@ services:
           - node.hostname == aws03
     command: dgraph alpha --my=alpha3:7082 --zero=zero:5080 -o 2
   ratel:
-    image: dgraph/dgraph:latest
+    image: dgraph/ratel:latest
     hostname: "ratel"
     ports:
       - 8000:8000
     networks:
       - dgraph
-    command: dgraph-ratel
 volumes:
   data-volume:

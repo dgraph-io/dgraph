@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 Dgraph Labs, Inc. and Contributors
+ * Copyright 2022 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -62,6 +62,8 @@ func (l *List) DeepSize() uint64 {
 		// we'll calculate the number of buckets based on pointer arithmetic in hmap struct.
 		// reflect value give us access to the hmap struct.
 		hmap := reflect.ValueOf(l.mutationMap)
+		// Note: this will fail if the -race detector flag is used with go tools (test, run),
+		// see: https://github.com/golang/go/issues/48501
 		numBuckets := int(math.Pow(2, float64((*(*uint8)(
 			unsafe.Pointer(hmap.Pointer() + uintptr(9))))))) // skipcq: GSC-G103
 		// skipcq: GSC-G103

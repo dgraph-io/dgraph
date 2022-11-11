@@ -1,7 +1,7 @@
 // +build !oss
 
 /*
- * Copyright 2020 Dgraph Labs, Inc. All rights reserved.
+ * Copyright 2022 Dgraph Labs, Inc. All rights reserved.
  *
  * Licensed under the Dgraph Community License (the "License"); you
  * may not use this file except in compliance with the License. You
@@ -410,6 +410,9 @@ const adminTypes = `
 	}
 
 	input AddNamespaceInput {
+		"""
+		Enter a new password for groot in that namespace. If you leave it blank, the password will be the default.
+		"""
 		password: String
 	}
 

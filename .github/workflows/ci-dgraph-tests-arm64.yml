@@ -1,4 +1,4 @@
-name: ci-dgraph-load-tests
+name: ci-dgraph-tests-arm64
 on:
   push:
     branches:
@@ -14,9 +14,9 @@ on:
   schedule:
     - cron: "0 * * * *"
 jobs:
-  dgraph-load-tests:
+  dgraph-tests:
     if: github.event.pull_request.draft == false
-    runs-on: [self-hosted, x64]
+    runs-on: [self-hosted, ARM64]
     steps:
       - uses: actions/checkout@v3
       - name: Get Go Version
@@ -46,8 +46,6 @@ jobs:
         run: |
           #!/bin/bash
           # go settings
-          export GOOS=linux
-          export GOARCH=amd64
           # make dgraph binary
           make dgraph
       - name: Clean Up Environment
@@ -59,7 +57,7 @@ jobs:
           cd t; go build .
           # clean up docker containers before test execution
           ./t -r
-      - name: Run Load Tests
+      - name: Run Unit Tests
         run: |
           #!/bin/bash
           # clean cache
@@ -70,9 +68,10 @@ jobs:
           cp dgraph/dgraph ~/go/bin 
           # build the test binary
           cd t; go build .
-          # run the load tests
-          ./t --suite=load
+          # run the tests
+          ./t --skip systest/export, graphql
           # clean up docker containers after test execution
           ./t -r
           # sleep
           sleep 5
+

@@ -1,4 +1,14 @@
-![](/logo.png)
+<picture>
+      <source 
+        srcset="/logo-dark.png"
+        media="(prefers-color-scheme: dark)"
+      />
+      <source
+        srcset="/logo.png"
+        media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)"
+      />
+      <img alt="Dgraph Logo" src="/logo.png">
+</picture>
 
 **The Only Native GraphQL Database With A Graph Backend.**
 
@@ -18,26 +28,22 @@ reducing disk seeks and network calls in a cluster.
 
 
 Dgraph's goal is to provide [Google](https://www.google.com) production level scale and throughput,
-with low enough latency to be serving real-time user queries, over terabytes of structured data.
-Dgraph supports [GraphQL query syntax](https://dgraph.io/docs/master/query-language/), and responds in [JSON](http://www.json.org/) and [Protocol Buffers](https://developers.google.com/protocol-buffers/) over [GRPC](http://www.grpc.io/) and HTTP.
-
-**Use [Discuss Issues](https://discuss.dgraph.io/c/issues/dgraph/38) for reporting issues about this repository.**
+with low enough latency to serve real-time user queries over terabytes of structured data.
+Dgraph supports [GraphQL query syntax](https://dgraph.io/docs/master/query-language/), and responds in [JSON](http://www.json.org/) and [Protocol Buffers](https://developers.google.com/protocol-buffers/) over [GRPC](http://www.grpc.io/) and HTTP. Dgraph is written using the Go Programming Language.
 
 ## Status
 
 Dgraph is [at version v22.0.1][rel] and is production-ready. Apart from the vast open source community, it is being used in
 production at multiple Fortune 500 companies, and by
-[Intuit Katlas](https://github.com/intuit/katlas) and [VMware Purser](https://github.com/vmware/purser).
+[Intuit Katlas](https://github.com/intuit/katlas) and [VMware Purser](https://github.com/vmware/purser). A hosted version of Dgraph is available at [https://cloud.dgraph.io](https://cloud.dgraph.io).
 
-[rel]: https://github.com/dgraph-io/dgraph/releases/tag/v21.03.0
+[rel]: https://github.com/dgraph-io/dgraph/releases/tag/v22.0.0
 
-## Quick Install
+## Supported Platforms
 
-The quickest way to install Dgraph is to run this command on Linux or Mac.
+Dgraph officially supports the Linux/amd64 architecture. Support for Linux/arm64 is in development. In order to take advantage of memory performance gains and other architecture-specific advancements in Linux, we dropped official support Mac and Windows in 2021, see [this blog post](https://discuss.dgraph.io/t/dropping-support-for-windows-and-mac/12913) for more information. You can still build and use Dgraph on other platforms (for live or bulk loading for instance), but support for platforms other than Linux/amd64 is not available.
 
-```bash
-curl https://get.dgraph.io -sSf | bash
-```
+Running Dgraph in a Docker environment is the recommended testing and deployment method.
 
 ## Install with Docker
 
@@ -47,18 +53,26 @@ If you're using Docker, you can use the [official Dgraph image](https://hub.dock
 docker pull dgraph/dgraph:latest
 ```
 
+For more information on a variety Docker deployment methods including Docker Compose and Kubernetes, see the [docs](https://dgraph.io/docs/deploy/single-host-setup/#run-using-docker).
+
+## Run a Quick Standalone Cluster
+
+```
+docker run -it -p 8080:8080 -p 9080:9080 -v ~/dgraph:/dgraph dgraph/standalone:latest
+```
+
 ## Install from Source
 
 If you want to install from source, install Go 1.13+ or later and the following dependencies:
 
-### Ubuntu
+#### Ubuntu
 
 ```bash
 sudo apt-get update
 sudo apt-get install build-essential
 ```
 
-### macOS
+#### macOS
 
 As a prerequisite, first install [XCode](https://apps.apple.com/us/app/xcode/id497799835?mt=12) (or the [XCode Command-line Tools](https://developer.apple.com/downloads/)) and [Homebrew](https://brew.sh/).
 
@@ -71,12 +85,12 @@ brew install jemalloc go
 
 ### Build and Install
 
-Then clone the Dgraph repository and use `make install` to install the Dgraph binary to `$GOPATH/bin`.
+Then clone the Dgraph repository and use `make install` to install the Dgraph binary in the directory named by the GOBIN environment variable, which defaults to $GOPATH/bin or $HOME/go/bin if the GOPATH environment variable is not set. 
 
 
 ```bash
 git clone https://github.com/dgraph-io/dgraph.git
-cd ./dgraph
+cd dgraph
 make install
 ```
 

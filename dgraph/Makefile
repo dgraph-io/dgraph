@@ -65,6 +65,13 @@ endif
 HAS_JEMALLOC = $(shell test -f /usr/local/lib/libjemalloc.a && echo "jemalloc")
 JEMALLOC_URL = "https://github.com/jemalloc/jemalloc/releases/download/5.2.1/jemalloc-5.2.1.tar.bz2"
 
+# go install variables
+HAS_SHA256SUM = $(shell which sha256sum)
+INSTALL_TARGET = $(GOPATH)/bin/$(BIN)
+ifneq ($(strip $(shell go env GOBIN)),)
+	INSTALL_TARGET = $(shell go env GOBIN)/$(BIN)
+endif
+
 .PHONY: all $(BIN)
 all: $(BIN)
 
@@ -79,9 +86,14 @@ uninstall:
 
 install: jemalloc
 	@echo "Commit SHA256: `git rev-parse HEAD`"
-	@echo "Old SHA256:" `sha256sum $(GOPATH)/bin/$(BIN) 2>/dev/null | cut -c-64`
+	@if [ "$(HAS_SHA256SUM)" ] ; then \
+		echo "Old SHA256:" `sha256sum $(INSTALL_TARGET) 2>/dev/null | cut -c-64` ; \
+	fi
 	@go install $(BUILD_FLAGS)
-	@echo "New SHA256:" `sha256sum $(GOPATH)/bin/$(BIN) 2>/dev/null | cut -c-64`
+	@echo "Installed $(BIN) to $(INSTALL_TARGET)"
+	@if [ "$(HAS_SHA256SUM)" ] ; then \
+		echo "New SHA256:" `sha256sum $(INSTALL_TARGET) 2>/dev/null | cut -c-64` ; \
+	fi
 
 jemalloc:
 	@if [ -z "$(HAS_JEMALLOC)" ] ; then \
