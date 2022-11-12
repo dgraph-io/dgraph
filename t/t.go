@@ -198,6 +198,9 @@ func stopCluster(composeFile, prefix string, wg *sync.WaitGroup, err error) {
 	}()
 }
 
+// run go test <pkg> for given package
+// prefix is prefix of docker cluster
+// only used for common cluster test (i.e. those using dgraph/docker-compose.yml)
 func runTestsFor(ctx context.Context, pkg, prefix string) error {
 	var args = []string{"go", "test", "-failfast", "-v"}
 	if *race {
@@ -366,6 +369,7 @@ func getClusterPrefix() string {
 	return fmt.Sprintf("%s%03d-%d", getGlobalPrefix(), procId, id)
 }
 
+// only used for custom cluster tests (i.e. those packages with custom docker-compose)
 func runCustomClusterTest(ctx context.Context, pkg string, wg *sync.WaitGroup) error {
 	fmt.Printf("Bringing up cluster for package: %s\n", pkg)
 	var err error
@@ -785,8 +789,9 @@ func run() error {
 
 	err = executePreRunSteps()
 	x.Check(err)
-	N := *concurrency
-	closer := z.NewCloser(N)
+
+	//	N := *concurrency
+	closer := z.NewCloser(1)
 	testCh := make(chan task)
 	errCh := make(chan error, 1000)
 	for i := 0; i < N; i++ {
