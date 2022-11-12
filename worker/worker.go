@@ -172,17 +172,17 @@ func UpdateCacheMb(memoryMB int64) error {
 	return nil
 }
 
-// UpdateLogRequest updates value of x.WorkerConfig.LogRequest.
-func UpdateLogRequest(val bool) {
+// UpdateLogDQLRequest updates value of x.WorkerConfig.LogDQLRequest.
+func UpdateLogDQLRequest(val bool) {
 	if val {
-		atomic.StoreInt32(&x.WorkerConfig.LogRequest, 1)
+		atomic.StoreInt32(&x.WorkerConfig.LogDQLRequest, 1)
 		return
 	}
 
-	atomic.StoreInt32(&x.WorkerConfig.LogRequest, 0)
+	atomic.StoreInt32(&x.WorkerConfig.LogDQLRequest, 0)
 }
 
-// LogRequestEnabled returns true if logging of requests is enabled otherwise false.
-func LogRequestEnabled() bool {
-	return atomic.LoadInt32(&x.WorkerConfig.LogRequest) > 0
+// LogDQLRequestEnabled returns true if logging of requests is enabled otherwise false.
+func LogDQLRequestEnabled() bool {
+	return atomic.LoadInt32(&x.WorkerConfig.LogDQLRequest) > 0
 }
