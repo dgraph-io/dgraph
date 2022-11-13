@@ -9,6 +9,10 @@ gql/gql-fuzz.zip
 gql/fuzz-data/crashers
 gql/fuzz-data/suppressions
 
+dql/dql-fuzz.zip
+dql/fuzz-data/crashers
+dql/fuzz-data/suppressions
+
 # goland project folder
 .idea
 dgraph.iml
