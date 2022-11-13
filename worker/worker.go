@@ -186,3 +186,18 @@ func UpdateLogDQLRequest(val bool) {
 func LogDQLRequestEnabled() bool {
 	return atomic.LoadInt32(&x.WorkerConfig.LogDQLRequest) > 0
 }
+
+// LogGraphQLRequestEnabled returns true if logging of requests is enabled otherwise false.
+func LogGraphQLRequestEnabled() bool {
+	return atomic.LoadInt32(&x.WorkerConfig.LogGraphQLRequest) > 0
+}
+
+// UpdateLogGraphQLRequest updates value of x.WorkerConfig.LogGraphQLRequest.
+func UpdateLogGraphQLRequest(val bool) {
+	if val {
+		atomic.StoreInt32(&x.WorkerConfig.LogGraphQLRequest, 1)
+		return
+	}
+
+	atomic.StoreInt32(&x.WorkerConfig.LogGraphQLRequest, 0)
+}

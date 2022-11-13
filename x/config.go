@@ -135,6 +135,8 @@ type WorkerOptions struct {
 	// queries hence it has been kept as int32. LogDQLRequest value 1 enables logging of requests
 	// coming to alphas and 0 disables it.
 	LogDQLRequest int32
+	// LogGraphQLRequest adds logs to GraphQL too.
+	LogGraphQLRequest int32
 	// If true, we should call msync or fsync after every write to survive hard reboots.
 	HardSync bool
 	// Audit contains the audit flags that enables the audit.

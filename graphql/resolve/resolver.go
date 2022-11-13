@@ -29,6 +29,7 @@ import (
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/api"
 	"github.com/dgraph-io/dgraph/graphql/dgraph"
+	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"
@@ -509,7 +510,7 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) (
 		return
 	}
 
-	if glog.V(3) {
+	if bool(glog.V(3)) || worker.LogGraphQLRequestEnabled() {
 		// don't log the introspection queries they are sent too frequently
 		// by GraphQL dev tools
 		if !op.IsQuery() ||
@@ -518,7 +519,7 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) (
 			if err != nil {
 				glog.Infof("Failed to marshal variables for logging : %s", err)
 			}
-			glog.Infof("Resolving GQL request: \n%s\nWith Variables: \n%s\n",
+			glog.Infof("Resolving GraphQL request: \n%s\nWith Variables: \n%s\n",
 				gqlReq.Query, string(b))
 		}
 	}

@@ -887,8 +887,8 @@ func updateValInMutations(gmu *gql.Mutation, qc *queryContext) error {
 }
 
 // updateUIDInMutations does following transformations:
-//   * uid(v) -> 0x123     -- If v is defined in query block
-//   * uid(v) -> _:uid(v)  -- Otherwise
+//   - uid(v) -> 0x123     -- If v is defined in query block
+//   - uid(v) -> _:uid(v)  -- Otherwise
 func updateUIDInMutations(gmu *gql.Mutation, qc *queryContext) error {
 	// usedMutationVars keeps track of variables that are used in mutations.
 	getNewVals := func(s string) []string {
@@ -1189,7 +1189,7 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (resp *api.Response,
 	}
 
 	if bool(glog.V(3)) || worker.LogDQLRequestEnabled() {
-		glog.Infof("Got a DQL query: %+v", req.req)
+		glog.Infof("Got a DQL query: \n%+v\n", req.req)
 	}
 
 	isGraphQL, _ := ctx.Value(IsGraphql).(bool)
@@ -1616,9 +1616,9 @@ func (s *Server) CheckVersion(ctx context.Context, c *api.Check) (v *api.Version
 	return v, nil
 }
 
-//-------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------
 // HELPER FUNCTIONS
-//-------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------
 func isMutationAllowed(ctx context.Context) bool {
 	if worker.Config.MutationsMode != worker.DisallowMutations {
 		return true

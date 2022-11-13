@@ -32,7 +32,8 @@ type configInput struct {
 	// LogDQLRequest is used to update WorkerOptions.LogDQLRequest. true value of LogDQLRequest enables
 	// logging of all requests coming to alphas. LogDQLRequest type has been kept as *bool instead of
 	// bool to avoid updating WorkerOptions.LogDQLRequest when it has default value of false.
-	LogDQLRequest *bool
+	LogDQLRequest     *bool
+	LogGraphQLRequest *bool
 }
 
 func resolveUpdateConfig(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
@@ -53,6 +54,10 @@ func resolveUpdateConfig(ctx context.Context, m schema.Mutation) (*resolve.Resol
 	// input.LogDQLRequest will be nil, when it is not specified explicitly in config request.
 	if input.LogDQLRequest != nil {
 		worker.UpdateLogDQLRequest(*input.LogDQLRequest)
+	}
+
+	if input.LogGraphQLRequest != nil {
+		worker.UpdateLogGraphQLRequest(*input.LogGraphQLRequest)
 	}
 
 	return resolve.DataResult(

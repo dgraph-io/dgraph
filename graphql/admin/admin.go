@@ -299,10 +299,16 @@ const (
 		cacheMb: Float
 
 		"""
-		True value of logDQLRequest enables logging of all the requests coming to alphas.
+		True value of logDQLRequest enables logging of all DQL requests coming to alphas.
 		False value of logDQLRequest disables above.
 		"""
 		logDQLRequest: Boolean
+
+		"""
+		True value of LogGraphQLRequest enables logging of all GraphQL requests coming to alphas.
+		False value of LogGraphQLRequest disables above.
+		"""
+		LogGraphQLRequest: Boolean
 	}
 
 	type ConfigPayload {
