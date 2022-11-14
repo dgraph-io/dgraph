@@ -148,12 +148,12 @@ func GetGQLSchema(namespace uint64) (uid, graphQLSchema string, err error) {
 	resp, err := (&Server{}).Query(ctx,
 		&api.Request{
 			Query: `
-			query {
-			  ExistingGQLSchema(func: has(dgraph.graphql.schema)) {
-				uid
-				dgraph.graphql.schema
-			  }
-			}`})
+			 query {
+			   ExistingGQLSchema(func: has(dgraph.graphql.schema)) {
+				 uid
+				 dgraph.graphql.schema
+			   }
+			 }`})
 	if err != nil {
 		return "", "", err
 	}
@@ -719,7 +719,7 @@ func buildUpsertQuery(qc *queryContext) string {
 			//      * be empty if the condition is true
 			//      * have 1 UID (the 0 UID) if the condition is false
 			upsertQuery += qc.condVars[i] + ` as var(func: uid(0)) ` + cond + `
-			 `
+			  `
 		}
 	}
 	upsertQuery += `}`
@@ -887,8 +887,8 @@ func updateValInMutations(gmu *gql.Mutation, qc *queryContext) error {
 }
 
 // updateUIDInMutations does following transformations:
-//   * uid(v) -> 0x123     -- If v is defined in query block
-//   * uid(v) -> _:uid(v)  -- Otherwise
+//   - uid(v) -> 0x123     -- If v is defined in query block
+//   - uid(v) -> _:uid(v)  -- Otherwise
 func updateUIDInMutations(gmu *gql.Mutation, qc *queryContext) error {
 	// usedMutationVars keeps track of variables that are used in mutations.
 	getNewVals := func(s string) []string {
@@ -1035,13 +1035,19 @@ func (s *Server) Health(ctx context.Context, all bool) (*api.Response, error) {
 		}
 	}
 
+	var Version = x.Version()
+
+	if Version == "" {
+		Version = "dev"
+	}
+
 	// Append self.
 	healthAll = append(healthAll, pb.HealthInfo{
 		Instance:    "alpha",
 		Address:     x.WorkerConfig.MyAddr,
 		Status:      "healthy",
 		Group:       strconv.Itoa(int(worker.GroupId())),
-		Version:     x.Version(),
+		Version:     Version,
 		Uptime:      int64(time.Since(x.WorkerConfig.StartTime) / time.Second),
 		LastEcho:    time.Now().Unix(),
 		Ongoing:     worker.GetOngoingTasks(),
@@ -1616,9 +1622,9 @@ func (s *Server) CheckVersion(ctx context.Context, c *api.Check) (v *api.Version
 	return v, nil
 }
 
-//-------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------
 // HELPER FUNCTIONS
-//-------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------
 func isMutationAllowed(ctx context.Context) bool {
 	if worker.Config.MutationsMode != worker.DisallowMutations {
 		return true
