@@ -150,10 +150,10 @@ func GetGQLSchema(namespace uint64) (uid, graphQLSchema string, err error) {
 			Query: `
 			query {
 				ExistingGQLSchema(func: has(dgraph.graphql.schema)) {
-				  uid
-				  dgraph.graphql.schema
-				}
-			  }`})
+					uid
+					dgraph.graphql.schema
+				  }
+				}`})
 	if err != nil {
 		return "", "", err
 	}
@@ -719,7 +719,7 @@ func buildUpsertQuery(qc *queryContext) string {
 			//      * be empty if the condition is true
 			//      * have 1 UID (the 0 UID) if the condition is false
 			upsertQuery += qc.condVars[i] + ` as var(func: uid(0)) ` + cond + `
-			`
+			 `
 		}
 	}
 	upsertQuery += `}`
