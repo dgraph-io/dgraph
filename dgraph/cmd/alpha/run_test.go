@@ -1471,6 +1471,9 @@ func TestIPStringParsing(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEqual(t, net.IPv6zero, addrRange[0].Lower)
 	require.NotEqual(t, addrRange[0].Lower, addrRange[0].Upper)
+
+	addrRange, err = getIPsFromString("")
+	require.Equal(t, addrRange, []x.IPRange{})
 }
 
 func TestJSONQueryWithVariables(t *testing.T) {
@@ -1662,8 +1665,8 @@ type Token struct {
 	sync.RWMutex
 }
 
-//// the grootAccessJWT stores the access JWT extracted from the response
-//// of http login
+// // the grootAccessJWT stores the access JWT extracted from the response
+// // of http login
 var token *Token
 
 func (t *Token) getAccessJWTToken() string {
