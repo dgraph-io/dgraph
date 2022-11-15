@@ -1076,7 +1076,7 @@ func TestListTypeSchemaChange(t *testing.T) {
 	res, err = runGraphqlQuery(q)
 	require.NoError(t, err)
 	testutil.CompareJSON(t, testutil.GetFullSchemaHTTPResponse(testutil.
-		SchemaOptions{UserPreds: `{"predicate":"occupations","type":"string"}`}), res)
+	SchemaOptions{UserPreds: `{"predicate":"occupations","type":"string"}`}), res)
 }
 
 func TestDeleteAllSP2(t *testing.T) {
@@ -1473,7 +1473,29 @@ func TestIPStringParsing(t *testing.T) {
 	require.NotEqual(t, addrRange[0].Lower, addrRange[0].Upper)
 
 	addrRange, err = getIPsFromString("")
+	require.NoError(t, err)
 	require.Equal(t, addrRange, []x.IPRange{})
+
+	addrRange, err = getIPsFromString("fd03:b188:0f3c:9ec4")
+	require.Nil(t, addrRange)
+	require.Error(t, err)
+
+	addrRange, err = getIPsFromString("192.168.0.0/160")
+	require.Nil(t, addrRange)
+	require.Error(t, err)
+
+	addrRange, err = getIPsFromString("192.0.2:192.0.2.1")
+	require.Nil(t, addrRange)
+	require.Error(t, err)
+
+	addrRange, err = getIPsFromString("192.0.2.1:192.0.2")
+	require.Nil(t, addrRange)
+	require.Error(t, err)
+
+	addrRange, err = getIPsFromString("w.x.y.z:a.b.c.d")
+	require.Nil(t, addrRange)
+	require.Error(t, err)
+
 }
 
 func TestJSONQueryWithVariables(t *testing.T) {
