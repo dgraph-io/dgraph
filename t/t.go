@@ -790,7 +790,7 @@ func run() error {
 	err = executePreRunSteps()
 	x.Check(err)
 
-	//	N := *concurrency
+	N := *concurrency
 	closer := z.NewCloser(1)
 	testCh := make(chan task)
 	errCh := make(chan error, 1000)
