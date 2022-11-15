@@ -96,7 +96,6 @@ func TestAclBasic(t *testing.T) {
 	// Now alice should see the name predicate but not nickname.
 	dc = testutil.DgClientWithLogin(t, "alice", "newpassword", ns)
 	testutil.PollTillPassOrTimeout(t, dc, query, `{"me": [{"name":"guy1"},{"name": "guy2"}]}`, timeout)
-
 }
 
 func createGroupAndSetPermissions(t *testing.T, namespace uint64, group, user, predicate string) {
@@ -106,7 +105,6 @@ func createGroupAndSetPermissions(t *testing.T, namespace uint64, group, user, p
 	testutil.AddToGroup(t, token, user, group)
 	testutil.AddRulesToGroup(t, token, group,
 		[]testutil.Rule{{Predicate: predicate, Permission: acl.Read.Code}}, true)
-
 }
 
 func TestTwoPermissionSetsInNameSpacesWithAcl(t *testing.T) {
