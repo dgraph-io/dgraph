@@ -57,7 +57,7 @@ jobs:
           # go env settings
           export GOPATH=~/go
           # move the binary
-          cp dgraph/dgraph ~/go/bin 
+          cp dgraph/dgraph ~/go/bin/dgraph
           # run the tests
           cd t
           ./t --skip="systest/export,systest/backup/minio,systest/backup/minio-large,graphql/e2e/normal,graphql/e2e/directives,graphql/e2e/custom_logic"
