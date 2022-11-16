@@ -69,7 +69,7 @@ jobs:
           # build the test binary
           cd t; go build .
           # run the tests
-          ./t --skip systest/export, graphql
+          ./t --skip systest, graphql
           # clean up docker containers after test execution
           ./t -r
           # sleep
