@@ -203,7 +203,7 @@ func initService(basename string, idx, grpcPort int) service {
 
 	svc.Command = "dgraph"
 	if opts.LocalBin {
-		svc.Command = "/gobin/dgraph"
+		svc.Command = "dgraph"
 	}
 	if opts.UserOwnership {
 		user, err := user.Current()

@@ -10,12 +10,7 @@ services:
     ports:
     - "8080"
     - "9080"
-    volumes:
-    - type: bind
-      source: $GOPATH/bin
-      target: /gobin
-      read_only: true
-    command: /gobin/dgraph alpha --trace "jaeger=http://jaeger:14268;" --my=alpha1:7080
+    command: dgraph alpha --trace "jaeger=http://jaeger:14268;" --my=alpha1:7080
       --zero=zero1:5080,zero2:5080,zero3:5080 --logtostderr -v=2 --raft "idx=1; group=1;
       snapshot-after-entries=100; snapshot-after-duration=1m" --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
   alpha2:
@@ -26,12 +21,7 @@ services:
     ports:
     - "8080"
     - "9080"
-    volumes:
-    - type: bind
-      source: $GOPATH/bin
-      target: /gobin
-      read_only: true
-    command: /gobin/dgraph alpha --trace "jaeger=http://jaeger:14268;" --my=alpha2:7080
+    command: dgraph alpha --trace "jaeger=http://jaeger:14268;" --my=alpha2:7080
       --zero=zero1:5080,zero2:5080,zero3:5080 --logtostderr -v=2 --raft "idx=2; group=1;
       snapshot-after-entries=100; snapshot-after-duration=1m" --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
   alpha3:
@@ -42,12 +32,7 @@ services:
     ports:
     - "8080"
     - "9080"
-    volumes:
-    - type: bind
-      source: $GOPATH/bin
-      target: /gobin
-      read_only: true
-    command: /gobin/dgraph alpha --trace "jaeger=http://jaeger:14268;" --my=alpha3:7080
+    command: dgraph alpha --trace "jaeger=http://jaeger:14268;" --my=alpha3:7080
       --zero=zero1:5080,zero2:5080,zero3:5080 --logtostderr -v=2 --raft "idx=3; group=1;
       snapshot-after-entries=100; snapshot-after-duration=1m" --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
   alpha4:
@@ -58,12 +43,7 @@ services:
     ports:
     - "8080"
     - "9080"
-    volumes:
-    - type: bind
-      source: $GOPATH/bin
-      target: /gobin
-      read_only: true
-    command: /gobin/dgraph alpha --trace "jaeger=http://jaeger:14268;" --my=alpha4:7080
+    command: dgraph alpha --trace "jaeger=http://jaeger:14268;" --my=alpha4:7080
       --zero=zero1:5080,zero2:5080,zero3:5080 --logtostderr -v=2 --raft "idx=4; group=2;
       snapshot-after-entries=100; snapshot-after-duration=1m" --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
   alpha5:
@@ -74,12 +54,7 @@ services:
     ports:
     - "8080"
     - "9080"
-    volumes:
-    - type: bind
-      source: $GOPATH/bin
-      target: /gobin
-      read_only: true
-    command: /gobin/dgraph alpha --trace "jaeger=http://jaeger:14268;" --my=alpha5:7080
+    command: dgraph alpha --trace "jaeger=http://jaeger:14268;" --my=alpha5:7080
       --zero=zero1:5080,zero2:5080,zero3:5080 --logtostderr -v=2 --raft "idx=5; group=2;
       snapshot-after-entries=100; snapshot-after-duration=1m" --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
   alpha6:
@@ -90,12 +65,7 @@ services:
     ports:
     - "8080"
     - "9080"
-    volumes:
-    - type: bind
-      source: $GOPATH/bin
-      target: /gobin
-      read_only: true
-    command: /gobin/dgraph alpha --trace "jaeger=http://jaeger:14268;" --my=alpha6:7080
+    command: dgraph alpha --trace "jaeger=http://jaeger:14268;" --my=alpha6:7080
       --zero=zero1:5080,zero2:5080,zero3:5080 --logtostderr -v=2 --raft "idx=6; group=2;
       snapshot-after-entries=100; snapshot-after-duration=1m" --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
   jaeger:
@@ -116,12 +86,7 @@ services:
     ports:
     - "5080"
     - "6080"
-    volumes:
-    - type: bind
-      source: $GOPATH/bin
-      target: /gobin
-      read_only: true
-    command: /gobin/dgraph zero --trace "jaeger=http://jaeger:14268;" --raft='idx=1'
+    command: dgraph zero --trace "jaeger=http://jaeger:14268;" --raft='idx=1'
       --my=zero1:5080 --replicas=3 --logtostderr -v=2 --bindall
   zero2:
     image: dgraph/dgraph:local
@@ -133,12 +98,7 @@ services:
     ports:
     - "5080"
     - "6080"
-    volumes:
-    - type: bind
-      source: $GOPATH/bin
-      target: /gobin
-      read_only: true
-    command: /gobin/dgraph zero --trace "jaeger=http://jaeger:14268;" --raft='idx=2'
+    command: dgraph zero --trace "jaeger=http://jaeger:14268;" --raft='idx=2'
       --my=zero2:5080 --replicas=3 --logtostderr -v=2 --peer=zero1:5080
   zero3:
     image: dgraph/dgraph:local
@@ -150,11 +110,6 @@ services:
     ports:
     - "5080"
     - "6080"
-    volumes:
-    - type: bind
-      source: $GOPATH/bin
-      target: /gobin
-      read_only: true
-    command: /gobin/dgraph zero --trace "jaeger=http://jaeger:14268;" --raft='idx=3'
+    command: dgraph zero --trace "jaeger=http://jaeger:14268;" --raft='idx=3'
       --my=zero3:5080 --replicas=3 --logtostderr -v=2 --peer=zero1:5080
 volumes: {}

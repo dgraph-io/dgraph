@@ -14,14 +14,10 @@ services:
     - "9080"
     volumes:
     - type: bind
-      source: $GOPATH/bin
-      target: /gobin
-      read_only: true
-    - type: bind
       source: ../../../tlstest/mtls_internal/tls/alpha1
       target: /dgraph-tls
       read_only: true
-    command: /gobin/dgraph alpha --my=alpha1:7080 --zero=zero1:5080 --logtostderr -v=2 
+    command: dgraph alpha --my=alpha1:7080 --zero=zero1:5080 --logtostderr -v=2 
       --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
       --tls "ca-cert=/dgraph-tls/ca.crt; server-cert=/dgraph-tls/node.crt; server-key=/dgraph-tls/node.key; internal-port=true; client-cert=/dgraph-tls/client.alpha1.crt; client-key=/dgraph-tls/client.alpha1.key;"
   alpha2:
@@ -36,14 +32,10 @@ services:
     - "9080"
     volumes:
     - type: bind
-      source: $GOPATH/bin
-      target: /gobin
-      read_only: true
-    - type: bind
       source: ../../../tlstest/mtls_internal/tls/alpha2
       target: /dgraph-tls
       read_only: true
-    command: /gobin/dgraph alpha --my=alpha2:7080 --zero=zero1:5080 --logtostderr -v=2 
+    command: dgraph alpha --my=alpha2:7080 --zero=zero1:5080 --logtostderr -v=2 
       --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
       --tls "ca-cert=/dgraph-tls/ca.crt; server-cert=/dgraph-tls/node.crt; server-key=/dgraph-tls/node.key; internal-port=true; client-cert=/dgraph-tls/client.alpha2.crt; client-key=/dgraph-tls/client.alpha2.key;"
   alpha3:
@@ -58,14 +50,10 @@ services:
     - "9080"
     volumes:
     - type: bind
-      source: $GOPATH/bin
-      target: /gobin
-      read_only: true
-    - type: bind
       source: ../../../tlstest/mtls_internal/tls/alpha3
       target: /dgraph-tls
       read_only: true
-    command: /gobin/dgraph alpha --my=alpha3:7080 --zero=zero1:5080 --logtostderr -v=2 
+    command: dgraph alpha --my=alpha3:7080 --zero=zero1:5080 --logtostderr -v=2 
       --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
       --tls "ca-cert=/dgraph-tls/ca.crt; server-cert=/dgraph-tls/node.crt; server-key=/dgraph-tls/node.key; internal-port=true; client-cert=/dgraph-tls/client.alpha3.crt; client-key=/dgraph-tls/client.alpha3.key;"
   minio:
@@ -85,13 +73,9 @@ services:
     - "6080"
     volumes:
     - type: bind
-      source: $GOPATH/bin
-      target: /gobin
-      read_only: true
-    - type: bind
       source: ../../../tlstest/mtls_internal/tls/zero1
       target: /dgraph-tls
       read_only: true
-    command: /gobin/dgraph zero --raft "idx=1;" --my=zero1:5080 --replicas=1 --logtostderr -v=2 --bindall
+    command: dgraph zero --raft "idx=1;" --my=zero1:5080 --replicas=1 --logtostderr -v=2 --bindall
       --tls "ca-cert=/dgraph-tls/ca.crt; server-cert=/dgraph-tls/node.crt; server-key=/dgraph-tls/node.key; internal-port=true; client-cert=/dgraph-tls/client.zero1.crt; client-key=/dgraph-tls/client.zero1.key;"
 volumes: {}

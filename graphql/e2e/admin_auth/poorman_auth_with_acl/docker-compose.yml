@@ -9,21 +9,12 @@ services:
     labels:
       cluster: test
       service: zero1
-    volumes:
-      - type: bind
-        source: $GOPATH/bin
-        target: /gobin
-        read_only: true
-    command: /gobin/dgraph zero --my=zero1:5080 --logtostderr -v=2 --bindall --expose_trace --profile_mode block --block_rate 10
+    command: dgraph zero --my=zero1:5080 --logtostderr -v=2 --bindall --expose_trace --profile_mode block --block_rate 10
 
   alpha1:
     image: dgraph/dgraph:local
     working_dir: /data/alpha1
     volumes:
-      - type: bind
-        source: $GOPATH/bin
-        target: /gobin
-        read_only: true
       - type: bind
         source: ../../../../ee/acl/hmac-secret
         target: /dgraph-acl/hmac-secret
@@ -34,7 +25,7 @@ services:
     labels:
       cluster: test
       service: alpha1
-    command: /gobin/dgraph alpha --my=alpha1:7080 --zero=zero1:5080 --expose_trace --profile_mode block --block_rate 10 --logtostderr -v=2 
+    command: dgraph alpha --my=alpha1:7080 --zero=zero1:5080 --expose_trace --profile_mode block --block_rate 10 --logtostderr -v=2 
       --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16; token=itIsSecret;"
       --acl "secret-file=/dgraph-acl/hmac-secret; access-ttl=3s;" 
       --trace "ratio=1.0;"

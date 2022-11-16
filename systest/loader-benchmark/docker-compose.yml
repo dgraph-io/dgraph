@@ -16,7 +16,7 @@ services:
         source: $GOPATH/bin
         target: /gobin
         read_only: true
-    command: /gobin/dgraph zero -o 100 --my=zero1:5180 --logtostderr --bindall
+    command: dgraph zero -o 100 --my=zero1:5180 --logtostderr --bindall
 
   dg1:
     image: dgraph/dgraph:local
@@ -36,7 +36,7 @@ services:
     labels:
       cluster: test
     command: >
-      /gobin/dgraph alpha --my=dg1:7180 --zero=zero1:5180 -o 100 --logtostderr
+      dgraph alpha --my=dg1:7180 --zero=zero1:5180 -o 100 --logtostderr
                           --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
 
 volumes:

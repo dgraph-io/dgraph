@@ -12,10 +12,6 @@ services:
     - "9080"
     volumes:
     - type: bind
-      source: $GOPATH/bin
-      target: /gobin
-      read_only: true
-    - type: bind
       source: ./acl-secret
       target: /secret/hmac
       read_only: true
@@ -23,7 +19,7 @@ services:
       source: ./data/backups
       target: /data/backups/
       read_only: false
-    command: /gobin/dgraph alpha --my=alpha1:7080 --zero=zero1:5080 --logtostderr
+    command: dgraph alpha --my=alpha1:7080 --zero=zero1:5080 --logtostderr
       -v=2 --raft "idx=1; group=1;" 
       --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
       --acl "secret-file=/secret/hmac;"
@@ -37,10 +33,6 @@ services:
     - "9080"
     volumes:
     - type: bind
-      source: $GOPATH/bin
-      target: /gobin
-      read_only: true
-    - type: bind
       source: ./acl-secret
       target: /secret/hmac
       read_only: true
@@ -48,7 +40,7 @@ services:
       source: ./data/backups
       target: /data/backups/
       read_only: false
-    command: /gobin/dgraph alpha --my=alpha2:7080 --zero=zero1:5080 --logtostderr
+    command: dgraph alpha --my=alpha2:7080 --zero=zero1:5080 --logtostderr
       -v=2 --raft "idx=2; group=2;" 
       --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
       --acl "secret-file=/secret/hmac;"
@@ -62,10 +54,6 @@ services:
     - "9080"
     volumes:
     - type: bind
-      source: $GOPATH/bin
-      target: /gobin
-      read_only: true
-    - type: bind
       source: ./acl-secret
       target: /secret/hmac
       read_only: true
@@ -73,7 +61,7 @@ services:
       source: ./data/backups
       target: /data/backups/
       read_only: false
-    command: /gobin/dgraph alpha --my=alpha3:7080 --zero=zero1:5080 --logtostderr
+    command: dgraph alpha --my=alpha3:7080 --zero=zero1:5080 --logtostderr
       -v=2 --raft "idx=3; group=3;" 
       --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
       --acl "secret-file=/secret/hmac;"
@@ -87,13 +75,9 @@ services:
     - "6080"
     volumes:
     - type: bind
-      source: $GOPATH/bin
-      target: /gobin
-      read_only: true
-    - type: bind
       source: ./data/backups
       target: /data/backups/
       read_only: false
-    command: /gobin/dgraph zero --raft "idx=1;" --my=zero1:5080 --replicas=1 --logtostderr
+    command: dgraph zero --raft "idx=1;" --my=zero1:5080 --replicas=1 --logtostderr
       -v=2 --bindall
 volumes: {}

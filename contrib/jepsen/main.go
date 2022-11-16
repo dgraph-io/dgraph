@@ -117,7 +117,7 @@ var (
 		"Interval of Dgraph's tablet rebalancing.")
 	nemesisInterval = pflag.String("nemesis-interval", "10",
 		"Roughly how long to wait (in seconds) between nemesis operations.")
-	localBinary = pflag.StringP("local-binary", "b", "/gobin/dgraph",
+	localBinary = pflag.StringP("local-binary", "b", "dgraph",
 		"Path to Dgraph binary within the Jepsen control node.")
 	nodes     = pflag.String("nodes", "n1,n2,n3,n4,n5", "Nodes to run on.")
 	replicas  = pflag.Int("replicas", 3, "How many replicas of data should dgraph store?")
