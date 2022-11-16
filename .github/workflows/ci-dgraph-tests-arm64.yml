@@ -59,6 +59,7 @@ jobs:
           # move the binary
           cp dgraph/dgraph ~/go/bin 
           # run the tests
+          cd t
           ./t --skip="systest/export,systest/backup/minio,systest/backup/minio-large,graphql/e2e/normal,graphql/e2e/directives,graphql/e2e/custom_logic"
           # clean up docker containers after test execution
           ./t -r
