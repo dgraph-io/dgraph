@@ -69,7 +69,7 @@ jobs:
           # build the test binary
           cd t; go build .
           # run the tests
-          ./t --skip="systest/export,systest/backup/minio,graphql/e2e/normal,graphql/e2e/directives,graphql/e2e/custom_logic"
+          ./t --skip="systest/export,systest/backup/minio,systest/backup/minio-large,graphql/e2e/normal,graphql/e2e/directives,graphql/e2e/custom_logic"
           # clean up docker containers after test execution
           ./t -r
           # sleep
