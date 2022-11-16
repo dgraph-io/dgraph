@@ -76,6 +76,8 @@ var (
 	dry = pflag.BoolP("dry", "", false,
 		"Just show how the packages would be executed, without running tests.")
 	// earlier default was true, want to use binary we build manually
+	veryDry = pflag.BoolP("verydry", "", false,
+		"Do not spin up clusters for tests")
 	useExisting = pflag.String("prefix", "",
 		"Don't bring up a cluster, instead use an existing cluster with this prefix.")
 	skipSlow = pflag.BoolP("skip-slow", "s", false,
@@ -113,6 +115,11 @@ func command(args ...string) *exec.Cmd {
 }
 
 func startCluster(composeFile, prefix string) error {
+
+	if *veryDry {
+		return nil
+	}
+
 	cmd := command(
 		"docker-compose", "--compatibility", "-f", composeFile, "-p", prefix,
 		"up", "--force-recreate", "--build", "--remove-orphans", "--detach")
@@ -182,6 +189,10 @@ func outputLogs(prefix string) {
 }
 
 func stopCluster(composeFile, prefix string, wg *sync.WaitGroup, err error) {
+
+	if *veryDry {
+		return
+	}
 	go func() {
 		if err != nil {
 			outputLogs(prefix)
@@ -278,6 +289,7 @@ func hasTestFiles(pkg string) bool {
 
 var _threadId int32
 
+// main test execution starts here (both custom and not custom)
 func runTests(taskCh chan task, closer *z.Closer) error {
 	var err error
 	threadId := atomic.AddInt32(&_threadId, 1)
@@ -299,6 +311,7 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 	prefix := getClusterPrefix()
 
 	var started, stopped bool
+	// used only for "isCommon" tests i.e. those using default docker-compose
 	start := func() {
 		if len(*useExisting) > 0 || started {
 			return
@@ -336,6 +349,7 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 			continue
 		}
 
+		// for tests using default docker-compose
 		if task.isCommon {
 			if *runCustom {
 				// If we only need to run custom cluster tests, then skip this one.
@@ -346,7 +360,7 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 				// fmt.Printf("ERROR for package: %s. Err: %v\n", task.pkg.ID, err)
 				return err
 			}
-		} else {
+		} else { // tests using custom docker-compose enter here
 			// we are not using err variable here because we dont want to
 			// print logs of default cluster in case of custom test fail.
 			if cerr := runCustomClusterTest(ctx, task.pkg.ID, wg); cerr != nil {
@@ -491,9 +505,16 @@ func composeFileFor(pkg string) string {
 	return filepath.Join(*baseDir, dir, "docker-compose.yml")
 }
 
+// get all packages that should be run
+// skip list logic is here
 func getPackages() []task {
+	// if has(skipPkgs, pkg.ID)
 	has := func(list []string, in string) bool {
 		for _, l := range list {
+			// in is package that we are checking, should it run or not
+			// second argument is our skiplist
+			fmt.Printf("checking should %v run\n", in)
+			fmt.Printf("skiplist pattern: %v\n", "github.com/dgraph-io/dgraph/"+l+"/")
 			if len(l) > 0 && strings.Contains(in+"/", "github.com/dgraph-io/dgraph/"+l+"/") {
 				return true
 			}
@@ -501,10 +522,11 @@ func getPackages() []task {
 		return false
 	}
 
-	slowPkgs := []string{"systest", "ee/acl", "cmd/alpha", "worker", "e2e"}
+	// slowPkgs := []string{"systest", "ee/acl", "cmd/alpha", "worker", "e2e"}
 	skipPkgs := strings.Split(*skip, ",")
 
-	moveSlowToFront := func(list []task) []task {
+	// we are no longer running tests concurrently, do not need to run "slow packags" first
+	/*moveSlowToFront := func(list []task) []task {
 		// These packages typically take over a minute to run.
 		left := 0
 		for i := 0; i < len(list); i++ {
@@ -524,7 +546,7 @@ func getPackages() []task {
 			}
 		}
 		return out
-	}
+	}*/
 
 	// packages.Load finds all packages in repo matching specified pattern
 	pkgs, err := packages.Load(nil, *baseDir+"/...")
@@ -567,7 +589,7 @@ func getPackages() []task {
 		t := task{pkg: pkg, isCommon: os.IsNotExist(err)}
 		valid = append(valid, t)
 	}
-	valid = moveSlowToFront(valid)
+	// valid = moveSlowToFront(valid)
 	if len(valid) == 0 {
 		fmt.Println("Couldn't find any packages. Exiting...")
 		os.Exit(0) // this should not have a non-zero exit code; we should be able to skip all folders & exit-0
@@ -576,6 +598,7 @@ func getPackages() []task {
 		fmt.Printf("Found valid task: %s isCommon:%v\n", task.pkg.ID, task.isCommon)
 	}
 	fmt.Printf("Running tests for %d packages.\n", len(valid))
+	fmt.Printf("Valid list: %v\n", valid)
 	return valid
 }
 
@@ -829,6 +852,7 @@ func run() error {
 		}
 		for i, task := range valid {
 			select {
+			// testCh is where all "valid" tasks are sent (i.e. those that should run)
 			case testCh <- task:
 				fmt.Printf("Sent %d/%d packages for processing.\n", i+1, len(valid))
 			case <-closer.HasBeenClosed():
