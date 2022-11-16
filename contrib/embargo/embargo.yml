@@ -18,10 +18,6 @@ containers:
       - 5080
       - 6080
     command: /gobin/dgraph zero --my=zero1:5080 --replicas 3 --raft="idx=1;" --bindall --expose_trace --logtostderr -v=3
-    volumes:
-      # Note: Any environment variables must use the ${} syntax.
-      # ${GOPATH} works, $GOPATH does not.
-      "${GOPATH}/bin": "/gobin"
 
   zero2:
     image: dgraph/dgraph:latest
@@ -34,8 +30,6 @@ containers:
       - 5082
       - 6082
     command: /gobin/dgraph zero -o 2 --my=zero2:5082 --replicas 3 --peer=zero1:5080 --raft="idx=2;" --bindall --expose_trace --logtostderr -v=3
-    volumes:
-      "${GOPATH}/bin": "/gobin"
 
   zero3:
     image: dgraph/dgraph:latest
@@ -48,8 +42,6 @@ containers:
       - 5083
       - 6083
     command: /gobin/dgraph zero -o 3 --my=zero3:5083 --replicas 3 --peer=zero1:5080 --raft="idx=3;" --bindall --expose_trace --logtostderr -v=3
-    volumes:
-      "${GOPATH}/bin": "/gobin"
 
   dg1:
     image: dgraph/dgraph:latest
@@ -63,8 +55,6 @@ containers:
       - 9180
     command: /gobin/dgraph alpha --my=dg1:7180 --zero=zero1:5080,zero2:5082,zero3:5083 -o 100 --expose_trace --logtostderr -v=3
       --trace "ratio=1.0;"
-    volumes:
-      "${GOPATH}/bin": "/gobin"
 
   dg2:
     image: dgraph/dgraph:latest
@@ -79,8 +69,6 @@ containers:
     start_delay: 8
     command: /gobin/dgraph alpha --my=dg2:7182 --zero=zero1:5080,zero2:5082,zero3:5083 -o 102 --expose_trace --logtostderr -v=3
       --trace "ratio=1.0;"
-    volumes:
-      "${GOPATH}/bin": "/gobin"
 
   dg3:
     image: dgraph/dgraph:latest
@@ -95,8 +83,6 @@ containers:
     start_delay: 16
     command: /gobin/dgraph alpha --my=dg3:7183 --zero=zero1:5080,zero2:5082,zero3:5083 -o 103 --expose_trace --logtostderr -v=3
       --trace "ratio=1.0;"
-    volumes:
-      "${GOPATH}/bin": "/gobin"
 
 network:
   driver: "udn"
