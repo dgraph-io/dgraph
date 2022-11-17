@@ -15,7 +15,8 @@ on:
     - cron: "0 * * * *"
 jobs:
   dgraph-tests:
-    if: github.event.pull_request.draft == false
+    # TODO: uncomment this after release work
+    # if: github.event.pull_request.draft == false
     runs-on: [self-hosted, ARM64]
     steps:
       - uses: actions/checkout@v3
