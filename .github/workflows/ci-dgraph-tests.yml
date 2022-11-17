@@ -57,6 +57,7 @@ jobs:
           # go env settings
           export GOPATH=~/go
           # run the tests
+          cd t
           ./t --coverage=true
           # clean up docker containers after test execution
           ./t -r
