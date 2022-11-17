@@ -41,13 +41,7 @@ jobs:
           make regenerate
           git diff --exit-code -- .
       - name: Make Docker Image
-        run: make image-local
-      - name: Make Linux Build
-        run: |
-          #!/bin/bash
-          # go settings
-          # make dgraph binary
-          make dgraph
+        run: make docker-image
       - name: Clean Up Environment
         run: |
           #!/bin/bash
@@ -60,14 +54,8 @@ jobs:
       - name: Run Unit Tests
         run: |
           #!/bin/bash
-          # clean cache
-          go clean -testcache
           # go env settings
           export GOPATH=~/go
-          # move the binary
-          cp dgraph/dgraph ~/go/bin 
-          # build the test binary
-          cd t; go build .
           # run the tests
           ./t --coverage=true
           # clean up docker containers after test execution
