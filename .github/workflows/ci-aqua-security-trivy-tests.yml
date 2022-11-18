@@ -24,7 +24,7 @@ jobs:
         uses: actions/checkout@v3
       - name: Build Docker image
         run: |
-          make image-local
+          make docker-image
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
