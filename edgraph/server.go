@@ -1035,19 +1035,13 @@ func (s *Server) Health(ctx context.Context, all bool) (*api.Response, error) {
 		}
 	}
 
-	var Version = x.Version()
-
-	if Version == "" {
-		Version = "dev"
-	}
-
 	// Append self.
 	healthAll = append(healthAll, pb.HealthInfo{
 		Instance:    "alpha",
 		Address:     x.WorkerConfig.MyAddr,
 		Status:      "healthy",
 		Group:       strconv.Itoa(int(worker.GroupId())),
-		Version:     Version,
+		Version:     x.Version(),
 		Uptime:      int64(time.Since(x.WorkerConfig.StartTime) / time.Second),
 		LastEcho:    time.Now().Unix(),
 		Ongoing:     worker.GetOngoingTasks(),

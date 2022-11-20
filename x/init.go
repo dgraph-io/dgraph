@@ -65,6 +65,10 @@ func Init() {
 	// TODO: why is this here?
 	// Config.QueryEdgeLimit = 1e6
 
+	if dgraphVersion == "" {
+		dgraphVersion = "dev"
+	}
+
 	// Next, run all the init functions that have been added.
 	for _, f := range initFunc {
 		f()
