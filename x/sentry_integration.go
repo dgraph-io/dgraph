@@ -48,7 +48,7 @@ func SentryOptOutNote() {
 	glog.Infof("This instance of Dgraph will send anonymous reports of panics back " +
 		"to Dgraph Labs via Sentry. No confidential information is sent. These reports " +
 		`help improve Dgraph. To opt-out, restart your instance with the --telemetry "sentry=false;" ` +
-		"flag. For more info, see https://dgraph.io/docs/howto/#data-handling.")
+		"flag. For more info, see https://dgraph.io/docs/howto/dgraph-sentry-integration/#data-handling.")
 }
 
 // InitSentry initializes the sentry machinery.
