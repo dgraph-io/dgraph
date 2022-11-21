@@ -505,7 +505,6 @@ var (
 		"config":       gogQryMWs,
 		"listBackups":  gogQryMWs,
 		"getGQLSchema": stdAdminQryMWs,
-		//	"getLambdaScript": stdAdminQryMWs,
 		// for queries and mutations related to User/Group, dgraph handles Guardian auth,
 		// so no need to apply GuardianAuth Middleware
 		"queryUser":      minimalAdminQryMWs,
