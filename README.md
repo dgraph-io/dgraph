@@ -29,7 +29,7 @@ reducing disk seeks and network calls in a cluster.
 
 Dgraph's goal is to provide [Google](https://www.google.com) production level scale and throughput,
 with low enough latency to serve real-time user queries over terabytes of structured data.
-Dgraph supports [GraphQL query syntax](https://dgraph.io/docs/master/query-language/), and responds in [JSON](http://www.json.org/) and [Protocol Buffers](https://developers.google.com/protocol-buffers/) over [GRPC](http://www.grpc.io/) and HTTP. Dgraph is written using the Go Programming Language.
+Dgraph supports [GraphQL query syntax](https://dgraph.io/docs/main/query-language/), and responds in [JSON](http://www.json.org/) and [Protocol Buffers](https://developers.google.com/protocol-buffers/) over [GRPC](http://www.grpc.io/) and HTTP. Dgraph is written using the Go Programming Language.
 
 ## Status
 
@@ -148,7 +148,7 @@ makes it easy to build applications with it.
 
 ## Developers
 - See a list of issues [that we need help with](https://github.com/dgraph-io/dgraph/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22).
-- Please see [Contributing to Dgraph](https://github.com/dgraph-io/dgraph/blob/master/CONTRIBUTING.md) for guidelines on contributions.
+- Please see [Contributing to Dgraph](https://github.com/dgraph-io/dgraph/blob/main/CONTRIBUTING.md) for guidelines on contributions.
 
 ## Client Libraries
 The Dgraph team maintains several [officially supported client libraries](https://dgraph.io/docs/clients/). There are also libraries contributed by the community [unofficial client libraries](https://dgraph.io/docs/clients#unofficial-dgraph-clients).

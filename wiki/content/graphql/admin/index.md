@@ -14,7 +14,7 @@ This article presents the Admin API and explains how to run a Dgraph database wi
 The simplest way to start with Dgraph GraphQL is to run the all-in-one Docker image.
 
 ```
-docker run -it -p 8080:8080 dgraph/standalone:master
+docker run -it -p 8080:8080 dgraph/standalone:latest
 ```
 
 That brings up GraphQL at `localhost:8080/graphql` and `localhost:8080/admin`, but is intended for quickstart and doesn't persist data.
