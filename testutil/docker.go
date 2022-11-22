@@ -17,11 +17,14 @@
 package testutil
 
 import (
+	"archive/tar"
 	"bytes"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -226,9 +229,22 @@ func DockerRun(instance string, op int) error {
 
 // DockerCp copies from/to a container. Paths inside a container have the format
 // container_name:path.
-func DockerCp(srcPath, dstPath string) error {
-	argv := []string{"docker", "cp", srcPath, dstPath}
-	return Exec(argv...)
+func DockerCp(containerID, srcPath, dstPath string) error {
+	cli, err := client.NewEnvClient()
+	x.Check(err)
+
+	tarStream, _, err := cli.CopyFromContainer(context.Background(), containerID, srcPath)	
+	if err != nil {
+		fmt.Println(err)
+		return nil
+	}
+	tr := tar.NewReader(tarStream)
+	tr.Next()
+
+	data, err := io.ReadAll(tr)
+	x.Check(err)
+
+    return os.WriteFile(dstPath, data, 0644)
 }
 
 // DockerExec executes a command inside the given container.
@@ -241,4 +257,10 @@ func DockerExec(instance string, cmd ...string) error {
 	argv := []string{"docker", "exec", "--user", "root", c.ID}
 	argv = append(argv, cmd...)
 	return Exec(argv...)
+}
+
+func DockerInspect(containerID string) (types.ContainerJSON, error) {
+	cli, err := client.NewEnvClient()
+	x.Check(err)
+	return cli.ContainerInspect(context.Background(), containerID)
 }
