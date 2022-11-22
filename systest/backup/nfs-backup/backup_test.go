@@ -19,6 +19,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -102,7 +103,7 @@ func TestBackupNFS(t *testing.T) {
 	//       adding sleep
 	time.Sleep(time.Second * 10)
 	_ = runBackup(t, 3, 1)
-	restored := runRestore(t, "")
+	restored := runRestore(t, "", false, 1)
 	require.Equal(t, "Success", restored)
 	testutil.WaitForRestore(t, dg, testutil.R_SockAddrHttp)
 
@@ -127,16 +128,13 @@ func TestBackupNFS(t *testing.T) {
 
 	// Perform first incremental backup.
 	_ = runBackup(t, 6, 2)
-	restored = runRestore(t, "")
 	require.Equal(t, "Success", restored)
-	testutil.WaitForRestore(t, dg, testutil.R_SockAddrHttp)
 
 	// Check the predicates and types in the schema are as expected.
 	preds = append(preds, "actor")
 	types = append(types, "NewNode")
 
 	// We check expected Objects vs Received Objects from restoreed db
-	checkObjectCount(t, 7, 7)
 
 	// Add more data for a second incremental backup.
 	_, err = dg.NewTxn().Mutate(ctx, &api.Mutation{
@@ -150,7 +148,14 @@ func TestBackupNFS(t *testing.T) {
 	require.NoError(t, err)
 
 	_ = runBackup(t, 9, 3)
-	restored = runRestore(t, "")
+	//take first incremental restore
+	restored = runRestore(t, "", true, 2)
+	require.Equal(t, "Success", restored)
+	testutil.WaitForRestore(t, dg, testutil.R_SockAddrHttp)
+
+	checkObjectCount(t, 7, 7)
+	//take second incremental restore
+	restored = runRestore(t, "", true, 3)
 	require.Equal(t, "Success", restored)
 	testutil.WaitForRestore(t, dg, testutil.R_SockAddrHttp)
 
@@ -169,7 +174,7 @@ func TestBackupNFS(t *testing.T) {
 
 	// Perform second full backup.
 	_ = runBackupInternal(t, true, 12, 4)
-	restored = runRestore(t, "")
+	restored = runRestore(t, "", false, 4)
 	testutil.WaitForRestore(t, dg, testutil.R_SockAddrHttp)
 
 	require.Equal(t, "Success", restored)
@@ -190,7 +195,7 @@ func TestBackupNFS(t *testing.T) {
 
 	// perform an incremental backup and then restore
 	_ = runBackup(t, 15, 5)
-	restored = runRestore(t, "")
+	restored = runRestore(t, "", false, 5)
 	testutil.WaitForRestore(t, dg, testutil.R_SockAddrHttp)
 
 	require.Equal(t, "Success", restored)
@@ -300,22 +305,33 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 
 }
 
-func runRestore(t *testing.T, lastDir string) string {
+func runRestore(t *testing.T, lastDir string, isIncrementalRestore bool, backupNum int) string {
 
-	restoreRequest := `mutation restore($loc: String!, ) {
-		 restore(input: {location: $loc}) {
-				 code
-				 message
-			 }
-	 }`
+	var restoreRequest string
+
+	if isIncrementalRestore == true {
+
+		restoreRequest = fmt.Sprintf(`mutation restore() {
+			restore(input: {location: "%s", backupNum: %d}) {
+			   code
+			   message
+		   }
+	   }`, backupDst, backupNum)
+
+	} else {
+		restoreRequest = fmt.Sprintf(`mutation restore() {
+	restore(input: {location: "%s"}) {
+	   code
+	   message
+   }
+}`, backupDst)
+
+	}
 
 	// For restore we have to always use newly added restore cluster
 	adminUrl := "https://" + testutil.R_SockAddrHttp + "/admin"
 	params := testutil.GraphQLParams{
 		Query: restoreRequest,
-		Variables: map[string]interface{}{
-			"loc": backupDst,
-		},
 	}
 	b, err := json.Marshal(params)
 	require.NoError(t, err)
