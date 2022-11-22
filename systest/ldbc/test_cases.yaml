@@ -178,7 +178,7 @@ q3:
       {
          "knows": [
             {
-               "id": 24189255814069,
+               "id": 24189255814068,
                "firstName": "Karl",
                "lastName": "Wagner",
                "knows|creationDate": "2011-11-16T09:47:46.750+00:00"
@@ -217,5 +217,222 @@ q4:
       }
     ]
   }'
-
-
+q5:
+  tag: 'IS05'
+  query: '{
+    q(func: eq(fqid, "post_3")) {
+			hasCreator{
+				id
+				firstName
+				lastName
+			}
+		}
+  }'
+  resp: '
+  {
+   "q": [
+      {
+         "hasCreator": [
+            {
+               "id": 933,
+               "firstName": "Mahinda",
+               "lastName": "Perera"
+            }
+         ]
+      }
+    ]
+  }'
+q6:
+  tag: 'IS06'
+  query: '{
+    q(func: eq(fqid, "post_3")) {
+			~containerOf{
+				id
+				title
+				hasModerator{
+					id
+					firstName
+					lastName
+				}
+			}
+		}
+  }'
+  resp: '
+  {
+   "q": [
+      {
+         "~containerOf": [
+            {
+               "id": 0,
+               "title": "Wall of Mahinda Perera",
+               "hasModerator": [
+                  {
+                     "id": 933,
+                     "firstName": "Mahinda",
+                     "lastName": "Perera"
+                  }
+               ]
+            }
+         ]
+      }
+   ]
+  }'
+q7:
+  tag: 'IS07'
+  query: '{
+    mid as var(func: eq(fqid, "post_549755864897")){
+				c as hasCreator
+			}
+		q(func: uid(mid)) {
+			~replyOf (orderdesc: creationDate){
+				id
+				content
+				creationDate
+				hasCreator{
+					id
+					firstName
+					lastName
+					knows @filter(uid(c)){
+						id
+						firstName
+						lastName
+					}
+				}
+		  }
+		}
+  }'
+  resp: '
+  {
+   "q": [
+      {
+         "~replyOf": [
+            {
+               "id": 549755864902,
+               "content": "About Jan Hus, ech priest, philoAbout Islands in the Stream,  Bend, Indiana raAbout ",
+               "creationDate": "2011-06-23T06:36:48.528Z",
+               "hasCreator": [
+                  {
+                     "id": 10995116279491,
+                     "firstName": "Ouwo Moussa",
+                     "lastName": "Maazou",
+                     "knows": [
+                        {
+                           "id": 13194139535450,
+                           "firstName": "Christopher",
+                           "lastName": "Jones"
+                        }
+                     ]
+                  }
+               ]
+            },
+            {
+               "id": 549755864909,
+               "content": "maybe",
+               "creationDate": "2011-06-22T15:56:44.755Z",
+               "hasCreator": [
+                  {
+                     "id": 6597069767708,
+                     "firstName": "Abdou",
+                     "lastName": "Dia",
+                     "knows": [
+                        {
+                           "id": 13194139535450,
+                           "firstName": "Christopher",
+                           "lastName": "Jones"
+                        }
+                     ]
+                  }
+               ]
+            },
+            {
+               "id": 549755864900,
+               "content": "yes",
+               "creationDate": "2011-06-22T13:34:41.791Z",
+               "hasCreator": [
+                  {
+                     "id": 2199023256077,
+                     "firstName": "Ibrahim Bare",
+                     "lastName": "Ousmane",
+                     "knows": [
+                        {
+                           "id": 13194139535450,
+                           "firstName": "Christopher",
+                           "lastName": "Jones"
+                        }
+                     ]
+                  }
+               ]
+            },
+            {
+               "id": 549755864904,
+               "content": "About Jan Hus, . Their defenAbout Bob Dylan, er Bob Dylan,About Michael Jordan, majority ",
+               "creationDate": "2011-06-22T10:03:28.337Z",
+               "hasCreator": [
+                  {
+                     "id": 10995116279491,
+                     "firstName": "Ouwo Moussa",
+                     "lastName": "Maazou",
+                     "knows": [
+                        {
+                           "id": 13194139535450,
+                           "firstName": "Christopher",
+                           "lastName": "Jones"
+                        }
+                     ]
+                  }
+               ]
+            },
+            {
+               "id": 549755864899,
+               "content": "ok",
+               "creationDate": "2011-06-22T09:50:14.117Z",
+               "hasCreator": [
+                  {
+                     "id": 10995116279491,
+                     "firstName": "Ouwo Moussa",
+                     "lastName": "Maazou",
+                     "knows": [
+                        {
+                           "id": 13194139535450,
+                           "firstName": "Christopher",
+                           "lastName": "Jones"
+                        }
+                     ]
+                  }
+               ]
+            },
+            {
+               "id": 549755864898,
+               "content": "yes",
+               "creationDate": "2011-06-22T09:34:53.014Z",
+               "hasCreator": [
+                  {
+                     "id": 6597069767708,
+                     "firstName": "Abdou",
+                     "lastName": "Dia",
+                     "knows": [
+                        {
+                           "id": 13194139535450,
+                           "firstName": "Christopher",
+                           "lastName": "Jones"
+                        }
+                     ]
+                  }
+               ]
+            },
+            {
+               "id": 549755864901,
+               "content": "maybe",
+               "creationDate": "2011-06-22T07:06:07.735Z",
+               "hasCreator": [
+                  {
+                     "id": 15393162789569,
+                     "firstName": "Bechir",
+                     "lastName": "Cardinale"
+                  }
+               ]
+            }
+         ]
+      }
+   ]
+  }'
