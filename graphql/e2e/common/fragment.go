@@ -80,29 +80,6 @@ func fragmentInMutation(t *testing.T) {
 	cleanupStarwars(t, result.AddStarship.Starship[0].ID, "", "")
 }
 
-func fragmentFieldCollectionQuery(t *testing.T) {
-	newStarship := addStarship(t)
-	newHuman := addHuman(t, newStarship.ID)
-	queryHumanParams := &GraphQLParams{
-		Query: `query queryHuman($id: ID!) {
-			queryHuman(filter: {
-					id: [$id]
-			}) {
-				...humanFrag
-			}
-		}
-		fragment humanFrag on Human {
-			id
-			name
-			length
-		}
-		`,
-		Variables: map[string]interface{}{
-			"id": newHuman.ID,
-		},
-	}
-}
-
 func fragmentInQuery(t *testing.T) {
 	newStarship := addStarship(t)
 
@@ -590,6 +567,37 @@ func fragmentInQueryOnObject(t *testing.T) {
 	}`, humanID, newStarship.ID)
 
 	JSONEqGraphQL(t, queryCharacterExpected, string(gqlResponse.Data))
+
+	query2HumanParams := &GraphQLParams{
+		Query: `query  {
+    queryHuman() {
+        id
+        starships {
+            id
+        }
+        ...HumanFrag
+    }
+}
+
+fragment HumanFrag on Human {
+    
+    starships {
+        
+				... {
+					__typename
+					id
+					name
+					length
+				}
+			}
+    }
+
+		`,
+	}
+	gqlResponse2 := query2HumanParams.ExecuteAsPost(t, GraphqlURL)
+	fmt.Println(" response:")
+	fmt.Println(string(gqlResponse2.Data))
+	RequireNoGQLErrors(t, gqlResponse2)
 
 	cleanupStarwars(t, newStarship.ID, humanID, "")
 }
