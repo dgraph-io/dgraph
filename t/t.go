@@ -633,9 +633,9 @@ func isValidPackageForSuite(pkg string) bool {
 	case "load":
 		return isLoadPackage(pkg)
 	case "ldbc":
-		return strings.HasSuffix(pkg, "/systest/ldbc")
+		return isLDBCPackage(pkg)
 	case "unit":
-		return !isLoadPackage(pkg)
+		return !isLoadPackage(pkg) && !isLDBCPackage(pkg)
 	default:
 		fmt.Printf("wrong suite is provide %s. valid values are all/load/unit \n", *suite)
 		return false
@@ -649,6 +649,10 @@ func isLoadPackage(pkg string) bool {
 		}
 	}
 	return false
+}
+
+func isLDBCPackage(pkg string) bool {
+	return strings.HasSuffix(pkg, "/systest/ldbc")
 }
 
 var datafiles = map[string]string{

@@ -436,3 +436,908 @@ q7:
       }
    ]
   }'
+q8: 
+  tag: "IC01"
+  query: '{
+    pid as var(func: type(person)) @filter(eq(id, "4398046514948" ))
+		nid as var(func: eq(firstName, "Deepak"))
+
+		var(func: uid(pid)) {
+			f11 as knows{
+				dist11 as math(1)
+				f21 as knows @filter(NOT uid(pid)){
+					dist21 as math(2)
+					f31 as knows @filter(NOT uid(pid)){
+						dist31 as math(3)
+					}
+					f32 as ~knows @filter(NOT uid(pid)){
+						dist32 as math(3)
+					}
+				}
+				f22 as ~knows @filter(NOT uid(pid)){
+					dist22 as math(2)
+					f33 as knows @filter(NOT uid(pid)){
+						dist33 as math(3)
+					}
+					f34 as ~knows @filter(NOT uid(pid)){
+						dist34 as math(3)
+					}
+				}
+			}
+			f12 as ~knows{
+				dist12 as math(1)
+				f23 as knows @filter(NOT uid(pid)){
+					dist23 as math(2)
+					f35 as knows @filter(NOT uid(pid)){
+						dist35 as math(3)
+					}
+					f36 as ~knows @filter(NOT uid(pid)){
+						dist36 as math(3)
+					}
+				}
+				f24 as ~knows @filter(NOT uid(pid)){
+					dist24 as math(2)
+					f37 as knows @filter(NOT uid(pid)){
+						dist37 as math(3)
+					}
+					f38 as ~knows @filter(NOT uid(pid)){
+						dist38 as math(3)
+					}
+				}
+			}
+		}
+
+		ppl as var(func: uid(f11, f12, f21, f22, f23, f24, f31, f32, f33, f34, f35, f36, f37, f38)) @filter(uid(nid))
+
+		q(func: uid(ppl), orderasc: lastName, orderasc: id, first: 20) {
+			distance11: val(dist11)
+			distance12: val(dist12)
+			distance21: val(dist21)
+			distance22: val(dist22)
+			distance23: val(dist23)
+			distance24: val(dist24)
+			distance31: val(dist31)
+			distance32: val(dist32)
+			distance33: val(dist33)
+			distance34: val(dist34)
+			distance35: val(dist35)
+			distance36: val(dist36)
+			distance37: val(dist37)
+			distance38: val(dist38)
+			id
+			lastName
+			birthday
+			gender
+			browserUsed
+			locationIP
+			email
+			language
+			creationDate
+			isLocatedIn{
+				name
+			}
+			studyAt{
+				name
+				isLocatedIn{
+					name
+				}
+			}
+		}
+	}'
+  resp: '
+  {
+  "q": [
+            {
+                "distance31": 3,
+                "distance32": 3,
+                "distance33": 3,
+                "distance35": 3,
+                "id": 30786325580679,
+                "lastName": "Adhia",
+                "birthday": "1980-11-04T00:00:00Z",
+                "gender": "male",
+                "browserUsed": "Internet Explorer",
+                "locationIP": "41.222.181.85",
+                "email": [
+                    "Deepak30786325580679@gmx.com",
+                    "Deepak30786325580679@yahoo.com",
+                    "Deepak30786325580679@gmail.com"
+                ],
+                "language": [
+                    "en",
+                    "ar"
+                ],
+                "creationDate": "2012-06-09T16:36:11.499Z",
+                "isLocatedIn": [
+                    {
+                        "name": "Dodoma"
+                    }
+                ],
+                "studyAt": [
+                    {
+                        "name": "Aga_Khan_University",
+                        "isLocatedIn": [
+                            {
+                                "name": "Karachi"
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "distance22": 2,
+                "distance23": 2,
+                "distance32": 3,
+                "distance33": 3,
+                "distance34": 3,
+                "distance36": 3,
+                "distance37": 3,
+                "distance38": 3,
+                "id": 2874,
+                "lastName": "Bose",
+                "birthday": "1986-02-01T00:00:00Z",
+                "gender": "male",
+                "browserUsed": "Firefox",
+                "locationIP": "61.11.14.149",
+                "email": [
+                    "Deepak2874@yahoo.com",
+                    "Deepak2874@gmail.com"
+                ],
+                "language": [
+                    "en",
+                    "hi",
+                    "gu"
+                ],
+                "creationDate": "2010-02-24T21:54:09.1Z",
+                "isLocatedIn": [
+                    {
+                        "name": "Ghaziabad"
+                    }
+                ],
+                "studyAt": [
+                    {
+                        "name": "Christ_University",
+                        "isLocatedIn": [
+                            {
+                                "name": "Bangalore"
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "distance11": 1,
+                "distance21": 2,
+                "distance22": 2,
+                "distance31": 3,
+                "distance32": 3,
+                "distance33": 3,
+                "distance34": 3,
+                "distance35": 3,
+                "distance36": 3,
+                "distance37": 3,
+                "id": 24189255812226,
+                "lastName": "Bose",
+                "birthday": "1985-08-11T00:00:00Z",
+                "gender": "male",
+                "browserUsed": "Internet Explorer",
+                "locationIP": "27.116.34.188",
+                "email": [
+                    "Deepak24189255812226@gmail.com",
+                    "Deepak24189255812226@speedymail.net",
+                    "Deepak24189255812226@gmx.com"
+                ],
+                "language": [
+                    "en",
+                    "mr",
+                    "bn"
+                ],
+                "creationDate": "2011-12-07T08:11:20.015Z",
+                "isLocatedIn": [
+                    {
+                        "name": "Patna"
+                    }
+                ]
+            },
+            {
+                "distance22": 2,
+                "distance32": 3,
+                "distance33": 3,
+                "distance34": 3,
+                "distance36": 3,
+                "distance37": 3,
+                "id": 2199023257545,
+                "lastName": "Khan",
+                "birthday": "1980-10-21T00:00:00Z",
+                "gender": "male",
+                "browserUsed": "Chrome",
+                "locationIP": "49.238.39.235",
+                "email": [
+                    "Deepak2199023257545@gmail.com",
+                    "Deepak2199023257545@gmx.com"
+                ],
+                "language": [
+                    "en",
+                    "te",
+                    "ur"
+                ],
+                "creationDate": "2010-03-14T17:22:39.914Z",
+                "isLocatedIn": [
+                    {
+                        "name": "Guwahati"
+                    }
+                ],
+                "studyAt": [
+                    {
+                        "name": "CMR_Law_School",
+                        "isLocatedIn": [
+                            {
+                                "name": "Bangalore"
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "distance21": 2,
+                "distance22": 2,
+                "distance23": 2,
+                "distance31": 3,
+                "distance32": 3,
+                "distance33": 3,
+                "distance34": 3,
+                "distance35": 3,
+                "distance36": 3,
+                "distance37": 3,
+                "id": 21990232555586,
+                "lastName": "Khan",
+                "birthday": "1980-11-10T00:00:00Z",
+                "gender": "male",
+                "browserUsed": "Chrome",
+                "locationIP": "49.12.225.25",
+                "email": [
+                    "Deepak21990232555586@yahoo.com",
+                    "Deepak21990232555586@gmail.com",
+                    "Deepak21990232555586@gmx.com"
+                ],
+                "language": [
+                    "en",
+                    "mr",
+                    "bn"
+                ],
+                "creationDate": "2011-09-12T21:30:38.614Z",
+                "isLocatedIn": [
+                    {
+                        "name": "Kota"
+                    }
+                ],
+                "studyAt": [
+                    {
+                        "name": "CMR_Law_School",
+                        "isLocatedIn": [
+                            {
+                                "name": "Bangalore"
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "distance21": 2,
+                "distance22": 2,
+                "distance31": 3,
+                "distance32": 3,
+                "distance33": 3,
+                "distance34": 3,
+                "distance35": 3,
+                "distance36": 3,
+                "distance37": 3,
+                "id": 21990232556621,
+                "lastName": "Khan",
+                "birthday": "1984-06-12T00:00:00Z",
+                "gender": "male",
+                "browserUsed": "Chrome",
+                "locationIP": "14.140.246.54",
+                "email": [
+                    "Deepak21990232556621@gmail.com",
+                    "Deepak21990232556621@hotmail.com"
+                ],
+                "language": [
+                    "en",
+                    "as",
+                    "ta"
+                ],
+                "creationDate": "2011-10-16T18:54:45.142Z",
+                "isLocatedIn": [
+                    {
+                        "name": "Bandra"
+                    }
+                ],
+                "studyAt": [
+                    {
+                        "name": "CMR_Law_School",
+                        "isLocatedIn": [
+                            {
+                                "name": "Bangalore"
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "distance22": 2,
+                "distance23": 2,
+                "distance32": 3,
+                "distance33": 3,
+                "distance34": 3,
+                "distance35": 3,
+                "distance36": 3,
+                "distance37": 3,
+                "id": 4398046513018,
+                "lastName": "Kumar",
+                "birthday": "1981-03-02T00:00:00Z",
+                "gender": "male",
+                "browserUsed": "Safari",
+                "locationIP": "101.209.68.58",
+                "email": [
+                    "Deepak4398046513018@gmx.com",
+                    "Deepak4398046513018@gmail.com",
+                    "Deepak4398046513018@yahoo.com"
+                ],
+                "language": [
+                    "en",
+                    "hi",
+                    "ur"
+                ],
+                "creationDate": "2010-05-19T07:45:57.238Z",
+                "isLocatedIn": [
+                    {
+                        "name": "Kollam"
+                    }
+                ],
+                "studyAt": [
+                    {
+                        "name": "Indian_Institute_of_Science",
+                        "isLocatedIn": [
+                            {
+                                "name": "Bangalore"
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "distance22": 2,
+                "distance23": 2,
+                "distance32": 3,
+                "distance33": 3,
+                "distance34": 3,
+                "distance35": 3,
+                "distance36": 3,
+                "distance37": 3,
+                "id": 6597069768426,
+                "lastName": "Kumar",
+                "birthday": "1980-02-21T00:00:00Z",
+                "gender": "male",
+                "browserUsed": "Chrome",
+                "locationIP": "59.182.74.137",
+                "email": [
+                    "Deepak6597069768426@gmail.com",
+                    "Deepak6597069768426@zoho.com",
+                    "Deepak6597069768426@gmx.com"
+                ],
+                "language": [
+                    "en",
+                    "te",
+                    "mr"
+                ],
+                "creationDate": "2010-08-20T11:31:57.167Z",
+                "isLocatedIn": [
+                    {
+                        "name": "Malappuram"
+                    }
+                ],
+                "studyAt": [
+                    {
+                        "name": "CMR_Law_School",
+                        "isLocatedIn": [
+                            {
+                                "name": "Bangalore"
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "distance21": 2,
+                "distance22": 2,
+                "distance31": 3,
+                "distance32": 3,
+                "distance33": 3,
+                "distance34": 3,
+                "distance35": 3,
+                "distance36": 3,
+                "distance37": 3,
+                "id": 10995116278799,
+                "lastName": "Kumar",
+                "birthday": "1982-05-26T00:00:00Z",
+                "gender": "male",
+                "browserUsed": "Internet Explorer",
+                "locationIP": "61.17.75.169",
+                "email": [
+                    "Deepak10995116278799@gmail.com",
+                    "Deepak10995116278799@zoho.com",
+                    "Deepak10995116278799@gmx.com",
+                    "Deepak10995116278799@yahoo.com"
+                ],
+                "language": [
+                    "en",
+                    "hi",
+                    "ta"
+                ],
+                "creationDate": "2010-12-19T06:01:33.806Z",
+                "isLocatedIn": [
+                    {
+                        "name": "Nellore"
+                    }
+                ],
+                "studyAt": [
+                    {
+                        "name": "Rajiv_Gandhi_University_of_Health_Sciences",
+                        "isLocatedIn": [
+                            {
+                                "name": "Bangalore"
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "distance23": 2,
+                "distance31": 3,
+                "distance32": 3,
+                "distance33": 3,
+                "distance34": 3,
+                "distance35": 3,
+                "distance36": 3,
+                "distance37": 3,
+                "id": 10995116281487,
+                "lastName": "Kumar",
+                "birthday": "1988-06-12T00:00:00Z",
+                "gender": "male",
+                "browserUsed": "Firefox",
+                "locationIP": "14.142.245.184",
+                "email": [
+                    "Deepak10995116281487@yahoo.com"
+                ],
+                "language": [
+                    "en",
+                    "ml",
+                    "te"
+                ],
+                "creationDate": "2010-11-14T04:37:57.908Z",
+                "isLocatedIn": [
+                    {
+                        "name": "English_Bazar"
+                    }
+                ],
+                "studyAt": [
+                    {
+                        "name": "Christ_University",
+                        "isLocatedIn": [
+                            {
+                                "name": "Bangalore"
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "distance21": 2,
+                "distance22": 2,
+                "distance23": 2,
+                "distance31": 3,
+                "distance32": 3,
+                "distance33": 3,
+                "distance34": 3,
+                "distance35": 3,
+                "distance36": 3,
+                "distance37": 3,
+                "id": 21990232557419,
+                "lastName": "Kumar",
+                "birthday": "1983-12-08T00:00:00Z",
+                "gender": "male",
+                "browserUsed": "Internet Explorer",
+                "locationIP": "14.102.188.68",
+                "email": [
+                    "Deepak21990232557419@gmail.com",
+                    "Deepak21990232557419@gmx.com"
+                ],
+                "language": [
+                    "en",
+                    "ur",
+                    "or"
+                ],
+                "creationDate": "2011-09-12T01:46:02.005Z",
+                "isLocatedIn": [
+                    {
+                        "name": "Tezpur"
+                    }
+                ],
+                "studyAt": [
+                    {
+                        "name": "Indian_Institute_of_Science",
+                        "isLocatedIn": [
+                            {
+                                "name": "Bangalore"
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "distance31": 3,
+                "distance33": 3,
+                "distance35": 3,
+                "id": 35184372090643,
+                "lastName": "Kumar",
+                "birthday": "1984-01-21T00:00:00Z",
+                "gender": "male",
+                "browserUsed": "Firefox",
+                "locationIP": "42.107.228.203",
+                "email": [
+                    "Deepak35184372090643@gmail.com",
+                    "Deepak35184372090643@yahoo.com"
+                ],
+                "language": [
+                    "en",
+                    "hi",
+                    "kn"
+                ],
+                "creationDate": "2012-09-11T13:35:19.789Z",
+                "isLocatedIn": [
+                    {
+                        "name": "Nashik"
+                    }
+                ],
+                "studyAt": [
+                    {
+                        "name": "Ramakrishna_Mission_Residential_College,_Narendrapur",
+                        "isLocatedIn": [
+                            {
+                                "name": "Kolkata"
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "distance23": 2,
+                "distance32": 3,
+                "distance33": 3,
+                "distance35": 3,
+                "distance37": 3,
+                "id": 24189255813921,
+                "lastName": "Nair",
+                "birthday": "1983-10-25T00:00:00Z",
+                "gender": "male",
+                "browserUsed": "Firefox",
+                "locationIP": "61.95.236.10",
+                "email": [
+                    "Deepak24189255813921@gmx.com",
+                    "Deepak24189255813921@yahoo.com",
+                    "Deepak24189255813921@zoho.com",
+                    "Deepak24189255813921@gmail.com"
+                ],
+                "language": [
+                    "en",
+                    "as"
+                ],
+                "creationDate": "2011-12-19T21:55:52.83Z",
+                "isLocatedIn": [
+                    {
+                        "name": "Gwalior"
+                    }
+                ],
+                "studyAt": [
+                    {
+                        "name": "National_Institute_of_Business_Management",
+                        "isLocatedIn": [
+                            {
+                                "name": "Bangalore"
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "distance21": 2,
+                "distance31": 3,
+                "distance33": 3,
+                "distance35": 3,
+                "id": 28587302325292,
+                "lastName": "Rao",
+                "birthday": "1981-08-06T00:00:00Z",
+                "gender": "male",
+                "browserUsed": "Opera",
+                "locationIP": "1.7.203.237",
+                "email": [
+                    "Deepak28587302325292@maghreb.cc",
+                    "Deepak28587302325292@yahoo.com",
+                    "Deepak28587302325292@hotmail.com",
+                    "Deepak28587302325292@gmail.com"
+                ],
+                "language": [
+                    "en",
+                    "or",
+                    "mr"
+                ],
+                "creationDate": "2012-05-06T19:16:53.342Z",
+                "isLocatedIn": [
+                    {
+                        "name": "Asansol"
+                    }
+                ],
+                "studyAt": [
+                    {
+                        "name": "G.H.Raisoni_Institute_of_Information_Technology",
+                        "isLocatedIn": [
+                            {
+                                "name": "Nagpur"
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "distance21": 2,
+                "distance31": 3,
+                "distance32": 3,
+                "distance33": 3,
+                "distance34": 3,
+                "distance35": 3,
+                "distance36": 3,
+                "distance37": 3,
+                "id": 30786325580290,
+                "lastName": "Rao",
+                "birthday": "1981-10-14T00:00:00Z",
+                "gender": "male",
+                "browserUsed": "Chrome",
+                "locationIP": "27.4.211.176",
+                "email": [
+                    "Deepak30786325580290@hotmail.com",
+                    "Deepak30786325580290@gmail.com",
+                    "Deepak30786325580290@gmx.com"
+                ],
+                "language": [
+                    "en",
+                    "mr",
+                    "ta"
+                ],
+                "creationDate": "2012-05-26T14:49:06.671Z",
+                "isLocatedIn": [
+                    {
+                        "name": "Munsirhat"
+                    }
+                ],
+                "studyAt": [
+                    {
+                        "name": "Christ_University",
+                        "isLocatedIn": [
+                            {
+                                "name": "Bangalore"
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "distance22": 2,
+                "distance23": 2,
+                "distance24": 2,
+                "distance32": 3,
+                "distance33": 3,
+                "distance34": 3,
+                "distance35": 3,
+                "distance36": 3,
+                "distance37": 3,
+                "distance38": 3,
+                "id": 2199023258552,
+                "lastName": "Reddy",
+                "birthday": "1983-03-15T00:00:00Z",
+                "gender": "male",
+                "browserUsed": "Firefox",
+                "locationIP": "58.146.102.178",
+                "email": [
+                    "Deepak2199023258552@gmail.com"
+                ],
+                "language": [
+                    "en",
+                    "hi",
+                    "mr"
+                ],
+                "creationDate": "2010-03-21T05:15:01.12Z",
+                "isLocatedIn": [
+                    {
+                        "name": "Cuttack"
+                    }
+                ],
+                "studyAt": [
+                    {
+                        "name": "CMR_Law_School",
+                        "isLocatedIn": [
+                            {
+                                "name": "Bangalore"
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "distance21": 2,
+                "distance22": 2,
+                "distance31": 3,
+                "distance32": 3,
+                "distance33": 3,
+                "distance34": 3,
+                "distance35": 3,
+                "distance36": 3,
+                "distance37": 3,
+                "id": 21990232555934,
+                "lastName": "Reddy",
+                "birthday": "1986-07-21T00:00:00Z",
+                "gender": "male",
+                "browserUsed": "Chrome",
+                "locationIP": "27.116.22.98",
+                "email": [
+                    "Deepak21990232555934@gmail.com",
+                    "Deepak21990232555934@gmx.com",
+                    "Deepak21990232555934@zoho.com"
+                ],
+                "language": [
+                    "en",
+                    "te",
+                    "bn"
+                ],
+                "creationDate": "2011-10-17T00:58:35.708Z",
+                "isLocatedIn": [
+                    {
+                        "name": "Barrackpore"
+                    }
+                ],
+                "studyAt": [
+                    {
+                        "name": "Rajiv_Gandhi_University_of_Health_Sciences",
+                        "isLocatedIn": [
+                            {
+                                "name": "Bangalore"
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "distance21": 2,
+                "distance22": 2,
+                "distance23": 2,
+                "distance31": 3,
+                "distance32": 3,
+                "distance33": 3,
+                "distance34": 3,
+                "distance35": 3,
+                "distance36": 3,
+                "distance37": 3,
+                "id": 28587302325768,
+                "lastName": "Roy",
+                "birthday": "1980-03-03T00:00:00Z",
+                "gender": "male",
+                "browserUsed": "Internet Explorer",
+                "locationIP": "27.34.252.85",
+                "email": [
+                    "Deepak28587302325768@hotmail.com",
+                    "Deepak28587302325768@gmail.com",
+                    "Deepak28587302325768@gmx.com"
+                ],
+                "language": [
+                    "en",
+                    "ml",
+                    "ur"
+                ],
+                "creationDate": "2012-03-26T15:22:34.731Z",
+                "isLocatedIn": [
+                    {
+                        "name": "Kashipur"
+                    }
+                ],
+                "studyAt": [
+                    {
+                        "name": "The_Oxford_Educational_Institutions",
+                        "isLocatedIn": [
+                            {
+                                "name": "Bangalore"
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "distance22": 2,
+                "distance32": 3,
+                "distance33": 3,
+                "distance34": 3,
+                "distance36": 3,
+                "distance37": 3,
+                "id": 8796093022970,
+                "lastName": "Sharma",
+                "birthday": "1986-04-27T00:00:00Z",
+                "gender": "male",
+                "browserUsed": "Firefox",
+                "locationIP": "103.1.198.132",
+                "email": [
+                    "Deepak8796093022970@gmx.com",
+                    "Deepak8796093022970@gmail.com"
+                ],
+                "language": [
+                    "en",
+                    "ml",
+                    "bn"
+                ],
+                "creationDate": "2010-10-16T11:32:10.76Z",
+                "isLocatedIn": [
+                    {
+                        "name": "Brahmavar"
+                    }
+                ],
+                "studyAt": [
+                    {
+                        "name": "International_Management_Institute",
+                        "isLocatedIn": [
+                            {
+                                "name": "New_Delhi"
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "distance31": 3,
+                "distance32": 3,
+                "distance33": 3,
+                "distance34": 3,
+                "distance35": 3,
+                "distance36": 3,
+                "id": 15393162791080,
+                "lastName": "Sharma",
+                "birthday": "1987-10-08T00:00:00Z",
+                "gender": "male",
+                "browserUsed": "Internet Explorer",
+                "locationIP": "27.50.4.151",
+                "email": [
+                    "Deepak15393162791080@yahoo.com",
+                    "Deepak15393162791080@hotmail.com",
+                    "Deepak15393162791080@gmail.com"
+                ],
+                "language": [
+                    "en",
+                    "te",
+                    "ta"
+                ],
+                "creationDate": "2011-04-23T03:00:28.216Z",
+                "isLocatedIn": [
+                    {
+                        "name": "Srinagar"
+                    }
+                ],
+                "studyAt": [
+                    {
+                        "name": "Ecumenical_Christian_Centre",
+                        "isLocatedIn": [
+                            {
+                                "name": "Bangalore"
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+        }'
