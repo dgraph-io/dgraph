@@ -84,7 +84,7 @@ docker-image-standalone: dgraph docker-image
 
 test-docker-image: dgraph-test
 	@mkdir -p linux
-	@cp ./dgraph/dgraph.test ./linux/dgraph
+	@cp ./dgraph/dgraph ./linux/dgraph
 	docker build -f contrib/Dockerfile -t dgraph/dgraph:$(DGRAPH_VERSION) .
 
 # build and run dependencies for ubuntu linux
