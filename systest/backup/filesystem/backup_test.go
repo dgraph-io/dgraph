@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors *
+ * Copyright 2018 Dgraph Labs, Inc. and Contributors *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -104,7 +104,7 @@ func TestBackupOfOldRestore(t *testing.T) {
 	_ = runBackup(t, 3, 1)
 
 	sendRestoreRequest(t, oldBackupDir1)
-	testutil.WaitForRestore(t, dg)
+	testutil.WaitForRestore(t, dg, testutil.SockAddr)
 
 	resp, err := dg.NewTxn().Query(context.Background(), `{ authors(func: has(Author.name)) { count(uid) } }`)
 	require.NoError(t, err)
@@ -116,7 +116,7 @@ func TestBackupOfOldRestore(t *testing.T) {
 	testutil.DropAll(t, dg)
 	time.Sleep(2 * time.Second)
 	sendRestoreRequest(t, alphaBackupDir)
-	testutil.WaitForRestore(t, dg)
+	testutil.WaitForRestore(t, dg, testutil.SockAddr)
 
 	resp, err = dg.NewTxn().Query(context.Background(), `{ authors(func: has(Author.name)) { count(uid) } }`)
 	require.NoError(t, err)
@@ -143,7 +143,7 @@ func TestRestoreOfOldBackup(t *testing.T) {
 		time.Sleep(2 * time.Second)
 
 		sendRestoreRequest(t, dir)
-		testutil.WaitForRestore(t, dg)
+		testutil.WaitForRestore(t, dg, testutil.SockAddr)
 
 		queryAndCheck := func(pred string, cnt int) {
 			q := fmt.Sprintf(`{ me(func: has(%s)) { count(uid) } }`, pred)
@@ -416,6 +416,8 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 		}`
 
 	adminUrl := "https://" + testutil.SockAddrHttp + "/admin"
+	fmt.Print("=====================================================", adminUrl)
+
 	params := testutil.GraphQLParams{
 		Query: backupRequest,
 		Variables: map[string]interface{}{
@@ -427,6 +429,7 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	require.NoError(t, err)
 
 	client := testutil.GetHttpsClient(t)
+	fmt.Print("=============================================", client)
 	resp, err := client.Post(adminUrl, "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
 	defer resp.Body.Close()

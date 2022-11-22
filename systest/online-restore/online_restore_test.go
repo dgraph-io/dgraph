@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors *
+ * Copyright 2020 Dgraph Labs, Inc. and Contributors *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -208,7 +208,7 @@ func TestBasicRestore(t *testing.T) {
 
 	snapshotTs := getSnapshotTs(t)
 	sendRestoreRequest(t, "", "youthful_rhodes3", 0)
-	testutil.WaitForRestore(t, dg)
+	testutil.WaitForRestore(t, dg, testutil.SockAddrHttp)
 	// Snapshot must be taken just after the restore and hence the snapshotTs be updated.
 	require.NoError(t, x.RetryUntilSuccess(3, 1*time.Second, func() error {
 		if getSnapshotTs(t) <= snapshotTs {
@@ -232,7 +232,7 @@ func TestRestoreBackupNum(t *testing.T) {
 	runQueries(t, dg, true)
 
 	sendRestoreRequest(t, "", "youthful_rhodes3", 1)
-	testutil.WaitForRestore(t, dg)
+	testutil.WaitForRestore(t, dg, testutil.SockAddrHttp)
 	runQueries(t, dg, true)
 	runMutations(t, dg)
 }
@@ -305,13 +305,13 @@ func TestMoveTablets(t *testing.T) {
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
 
 	sendRestoreRequest(t, "", "youthful_rhodes3", 0)
-	testutil.WaitForRestore(t, dg)
+	testutil.WaitForRestore(t, dg, testutil.SockAddrHttp)
 	runQueries(t, dg, false)
 
 	// Send another restore request with a different backup. This backup has some of the
 	// same predicates as the previous one but they are stored in different groups.
 	sendRestoreRequest(t, "", "blissful_hermann1", 0)
-	testutil.WaitForRestore(t, dg)
+	testutil.WaitForRestore(t, dg, testutil.SockAddrHttp)
 
 	resp, err := dg.NewTxn().Query(context.Background(), `{
 	  q(func: has(name), orderasc: name) {
@@ -607,7 +607,7 @@ func backupRestoreAndVerify(t *testing.T, dg *dgo.Dgraph, backupDir, queryToVeri
 	schemaVerificationOpts.ExcludeAclSchema = true
 	backup(t, backupDir)
 	sendRestoreRequest(t, backupDir, "", 0)
-	testutil.WaitForRestore(t, dg)
+	testutil.WaitForRestore(t, dg, testutil.SockAddrHttp)
 	testutil.VerifyQueryResponse(t, dg, queryToVerify, expectedResponse)
 	testutil.VerifySchema(t, dg, schemaVerificationOpts)
 }

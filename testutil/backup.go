@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2019 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -64,10 +64,10 @@ func openDgraph(pdir string) (*badger.DB, error) {
 	return badger.OpenManaged(opt)
 }
 
-func WaitForRestore(t *testing.T, dg *dgo.Dgraph) {
+func WaitForRestore(t *testing.T, dg *dgo.Dgraph, HttpSocket string) {
 	restoreDone := false
 	for {
-		resp, err := http.Get("http://" + SockAddrHttp + "/health")
+		resp, err := http.Get("http://" + HttpSocket + "/health")
 		require.NoError(t, err)
 		buf, err := ioutil.ReadAll(resp.Body)
 		require.NoError(t, err)
