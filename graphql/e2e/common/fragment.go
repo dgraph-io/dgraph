@@ -80,6 +80,29 @@ func fragmentInMutation(t *testing.T) {
 	cleanupStarwars(t, result.AddStarship.Starship[0].ID, "", "")
 }
 
+func fragmentFieldCollectionQuery(t *testing.T) {
+	newStarship := addStarship(t)
+	newHuman := addHuman(t, newStarship.ID)
+	queryHumanParams := &GraphQLParams{
+		Query: `query queryHuman($id: ID!) {
+			queryHuman(filter: {
+					id: [$id]
+			}) {
+				...humanFrag
+			}
+		}
+		fragment humanFrag on Human {
+			id
+			name
+			length
+		}
+		`,
+		Variables: map[string]interface{}{
+			"id": newHuman.ID,
+		},
+	}
+}
+
 func fragmentInQuery(t *testing.T) {
 	newStarship := addStarship(t)
 
