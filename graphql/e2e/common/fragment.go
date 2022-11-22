@@ -598,6 +598,11 @@ fragment HumanFrag on Human {
 	fmt.Println(" response:")
 	fmt.Println(string(gqlResponse2.Data))
 	RequireNoGQLErrors(t, gqlResponse2)
+	queryCharacterExpected2 := fmt.Sprintf(`
+	
+		{"queryHuman":[{"id":"%s","starships":[{"id":"%s","__typename":"Starship","name":"Millennium Falcon","length":2.000000}]}]}
+	`, humanID, newStarship.ID)
+	JSONEqGraphQL(t, queryCharacterExpected2, string(gqlResponse2.Data))
 
 	cleanupStarwars(t, newStarship.ID, humanID, "")
 }
