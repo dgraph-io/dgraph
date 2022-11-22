@@ -51,7 +51,7 @@ func TestQueries(t *testing.T) {
 }
 
 func TestMain(m *testing.M) {
-	noschemaFile := filepath.Join(testutil.TestDataDirectory, "ldbcData", "ldbcTypes.schema")
+	noschemaFile := filepath.Join(testutil.TestDataDirectory, "ldbcTypes.schema")
 	rdfFile := filepath.Join(testutil.TestDataDirectory, "ldbcData")
 	if err := testutil.MakeDirEmpty([]string{"out/0", "out/1", "out/2"}); err != nil {
 		os.Exit(1)
