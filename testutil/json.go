@@ -41,7 +41,7 @@ func CompareJSONMaps(t *testing.T, wantMap, gotMap map[string]interface{}) bool 
 	return DiffJSONMaps(t, wantMap, gotMap, "", false)
 }
 
-//EqualJSON compares two JSON objects for equality.
+// EqualJSON compares two JSON objects for equality.
 func EqualJSON(t *testing.T, want, got string, savepath string, quiet bool) bool {
 	wantMap := UnmarshalJSON(t, want)
 	gotMap := UnmarshalJSON(t, got)
