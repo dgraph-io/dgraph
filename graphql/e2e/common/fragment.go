@@ -595,8 +595,7 @@ fragment HumanFrag on Human {
 		`,
 	}
 	gqlResponse2 := query2HumanParams.ExecuteAsPost(t, GraphqlURL)
-	fmt.Println(" response:")
-	fmt.Println(string(gqlResponse2.Data))
+
 	RequireNoGQLErrors(t, gqlResponse2)
 	queryCharacterExpected2 := fmt.Sprintf(`
 	
