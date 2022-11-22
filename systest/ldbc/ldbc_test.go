@@ -7,10 +7,48 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v2"
 )
+
+type TestCases struct {
+	Tag   string `yaml:"tag"`
+	Query string `yaml:"query"`
+	Resp  string `yaml:"resp"`
+}
+
+func TestQueries(t *testing.T) {
+	dg, err := testutil.DgraphClient(testutil.ContainerAddr("alpha1", 9080))
+	if err != nil {
+		t.Fatalf("Error while getting a dgraph client: %v", err)
+	}
+
+	yfile, _ := ioutil.ReadFile("test_cases.yaml")
+
+	tc := make(map[string]TestCases)
+
+	err = yaml.Unmarshal(yfile, &tc)
+
+	if err != nil {
+		t.Fatalf("Error while greading test cases yaml: %v", err)
+	}
+
+	for _, tt := range tc {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+		resp, err := dg.NewTxn().Query(ctx, tt.Query)
+		cancel()
+
+		if ctx.Err() == context.DeadlineExceeded {
+			t.Fatal("aborting test due to query timeout")
+		}
+		require.NoError(t, err)
+		testutil.CompareJSON(t, tt.Resp, string(resp.Json))
+	}
+}
 
 func TestMain(m *testing.M) {
 	noschemaFile := filepath.Join(testutil.TestDataDirectory, "ldbcTypes.schema")
@@ -19,6 +57,8 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
+	start := time.Now()
+	fmt.Println("Bulkupload started")
 	if err := testutil.BulkLoad(testutil.BulkOpts{
 		Zero:       testutil.SockAddrZero,
 		Shards:     1,
@@ -28,11 +68,13 @@ func TestMain(m *testing.M) {
 		cleanupAndExit(1)
 	}
 
+	fmt.Printf("Took %s to bulkupload LDBC dataset\n", time.Since(start))
+
 	if err := testutil.StartAlphas("./alpha.yml"); err != nil {
 		fmt.Printf("Error while bringin up alphas. Error: %v\n", err)
 		cleanupAndExit(1)
 	}
-	schemaFile := filepath.Join(testutil.TestDataDirectory, "1million.schema")
+	schemaFile := filepath.Join(testutil.TestDataDirectory, "ldbcTypes.schema")
 	client, err := testutil.DgraphClient(testutil.ContainerAddr("alpha1", 9080))
 	if err != nil {
 		fmt.Printf("Error while creating client. Error: %v\n", err)

@@ -1,0 +1,221 @@
+q1:
+  query: 
+    '{q(func: eq(fqid, "person_4398046514948")) {
+				firstName
+				lastName
+				birthday
+				locationIP
+				browserUsed
+				gender
+				creationDate
+				isLocatedIn{
+					id
+					name
+				}
+			}}'
+  tag: "IS01"
+  resp: '{
+			"q":[
+			   {
+				  "firstName":"Abhishek",
+				  "lastName":"Roy",
+				  "birthday":"1985-09-06T00:00:00Z",
+				  "locationIP":"27.54.166.12",
+				  "browserUsed":"Internet Explorer",
+				  "gender":"male",
+				  "creationDate":"2010-06-06T23:43:29.643Z",
+				  "isLocatedIn":[
+					{
+						"id":231,
+						"name":"Thanjavur"
+					}
+					]
+			   }
+			]
+		}'
+q2:
+  query: '{
+      q(func: eq(fqid, "person_933")) {
+				~hasCreator( orderdesc: creationDate, orderdesc: id, first:10){
+					id
+					content
+					creationDate
+					dgraph.type
+					replyOf{
+						id
+						hasCreator{
+							id
+							firstName
+							lastName
+						}
+					}
+				}
+		  }
+    }'
+  tag: 'IS02'
+  resp: '{
+      "q": [
+        {
+           "~hasCreator": [
+            {
+               "id": 1099511778677,
+               "content": "I see",
+               "creationDate": "2012-09-12T18:07:52.711Z",
+               "dgraph.type": [
+                  "comment"
+               ],
+               "replyOf": {
+                  "id": 1099511778673,
+                  "hasCreator": [
+                     {
+                        "id": 19791209303315,
+                        "firstName": "Chutima",
+                        "lastName": "Wattansin"
+                     }
+                  ]
+               }
+            },
+            {
+               "id": 1099511797152,
+               "content": "About East Germany, state''s commitment to communism was a holloAbout Almohad Caliphat",
+               "creationDate": "2012-09-10T12:39:32.701Z",
+               "dgraph.type": [
+                  "comment"
+               ],
+               "replyOf": {
+                  "id": 1099511797149,
+                  "hasCreator": [
+                     {
+                        "id": 26388279068783,
+                        "firstName": "Farhad",
+                        "lastName": "Qaderi"
+                     }
+                  ]
+               }
+            },
+            {
+               "id": 1099511627888,
+               "content": "",
+               "creationDate": "2012-09-09T20:23:20.268Z",
+               "dgraph.type": [
+                  "post"
+               ]
+            },
+            {
+               "id": 1099511627887,
+               "content": "",
+               "creationDate": "2012-09-09T20:23:19.268Z",
+               "dgraph.type": [
+                  "post"
+               ]
+            },
+            {
+               "id": 1099511627886,
+               "content": "",
+               "creationDate": "2012-09-09T20:23:18.268Z",
+               "dgraph.type": [
+                  "post"
+               ]
+            },
+            {
+               "id": 1099511627885,
+               "content": "",
+               "creationDate": "2012-09-09T20:23:17.268Z",
+               "dgraph.type": [
+                  "post"
+               ]
+            },
+            {
+               "id": 1099511627884,
+               "content": "",
+               "creationDate": "2012-09-09T20:23:16.268Z",
+               "dgraph.type": [
+                  "post"
+               ]
+            },
+            {
+               "id": 1099511627883,
+               "content": "",
+               "creationDate": "2012-09-09T20:23:15.268Z",
+               "dgraph.type": [
+                  "post"
+               ]
+            },
+            {
+               "id": 1099511627882,
+               "content": "",
+               "creationDate": "2012-09-09T20:23:14.268Z",
+               "dgraph.type": [
+                  "post"
+               ]
+            },
+            {
+               "id": 1099511627881,
+               "content": "",
+               "creationDate": "2012-09-09T20:23:13.268Z",
+               "dgraph.type": [
+                  "post"
+               ]
+            }
+          ]
+        }
+      ]
+    }'
+q3:
+  tag: "IS03"
+  query: '{
+			q(func: eq(fqid, "person_933")) {
+				knows @facets( orderdesc: creationDate, orderdesc: id){
+					id
+					firstName
+					lastName
+				}
+			}
+  }'
+  resp: '
+  {
+   "q": [
+      {
+         "knows": [
+            {
+               "id": 24189255814068,
+               "firstName": "Karl",
+               "lastName": "Wagner",
+               "knows|creationDate": "2011-11-16T09:47:46.750+00:00"
+            },
+            {
+               "id": 15393162790400,
+               "firstName": "Jose",
+               "lastName": "Costa",
+               "knows|creationDate": "2011-04-02T21:17:40.919+00:00"
+            },
+            {
+               "id": 2199023256437,
+               "firstName": "Rudolf",
+               "lastName": "Engel",
+               "knows|creationDate": "2010-04-08T04:18:41.298+00:00"
+            }
+          ]
+        }
+      ]
+  }'
+q4:
+  tag: 'IS04'
+  query: '{
+		q(func: eq(fqid, "post_3")) {
+			creationDate
+			content
+			imageFile
+		}
+  }'
+  resp: '{
+   "q": [
+      {
+         "creationDate": "2010-02-14T20:30:21.451Z",
+         "content": "About Rupert Murdoch, alised US citizen iAbout Napoleon, tinuation of the waAbout Ferdinand II of Aragon, (1",
+         "imageFile": ""
+      }
+    ]
+  }'
+
+

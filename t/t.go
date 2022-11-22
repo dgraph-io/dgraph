@@ -728,14 +728,18 @@ func downloadLDBCFiles() {
 		ldbcDataFiles[name] = filepath
 	}
 
+	i := 0
 	for fname, link := range ldbcDataFiles {
+		start := time.Now()
 		cmd := exec.Command("wget", "-O", fname, link)
 		cmd.Dir = *tmp
-
+		i++
+		fmt.Printf("Downloading %d of %d files\n", i, len(ldbcDataFiles))
 		if out, err := cmd.CombinedOutput(); err != nil {
 			fmt.Printf("Error %v", err)
 			fmt.Printf("Output %v", out)
 		}
+		fmt.Printf("Downloaded %s to %s in %s\n", fname, *tmp, time.Since(start))
 	}
 
 }
