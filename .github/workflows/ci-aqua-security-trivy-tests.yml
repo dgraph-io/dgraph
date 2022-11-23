@@ -16,14 +16,15 @@ on:
 jobs:
   build:
     name: trivy-tests
-    if: github.event.pull_request.draft == false
+    # TODO: uncomment this after release work
+    # if: github.event.pull_request.draft == false
     runs-on: ubuntu-20.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
       - name: Build Docker image
         run: |
-          make image-local
+          make docker-image
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
