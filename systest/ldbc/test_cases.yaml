@@ -1341,3 +1341,1752 @@ q8:
             }
         ]
         }'
+q9:
+  tag: "IC02"
+  query: '{
+    var(func: type(person))@filter(eq(id, "4398046514948")){
+				knows{
+					msgs1 as ~hasCreator @filter(le(creationDate, "2011-06-10T14:02:42.274+00:00"))
+				}
+				~knows{
+					msgs2 as ~hasCreator @filter(le(creationDate, "2011-06-10T14:02:42.274+00:00"))
+				}
+			}
+		q(func: uid(msgs1,msgs2), orderdesc: creationDate, orderasc: fqid, first:20){
+			id
+			content
+			creationDate
+			hasCreator{
+				id
+				firstName
+				lastName
+			}
+		}
+  }'
+  resp: '
+  {
+  "q": [
+      {
+          "id": 549756454080,
+          "content": "duh",
+          "creationDate": "2011-06-10T11:27:35.591Z",
+          "hasCreator": [
+              {
+                  "id": 13194139533535,
+                  "firstName": "Shweta",
+                  "lastName": "Singh"
+              }
+          ]
+      },
+      {
+          "id": 549755858245,
+          "content": "About Ethiopian Empire, hiopian Empire also known as Abyssinia, covered a geo",
+          "creationDate": "2011-06-10T11:23:15.209Z",
+          "hasCreator": [
+              {
+                  "id": 15393162790400,
+                  "firstName": "Jose",
+                  "lastName": "Costa"
+              }
+          ]
+      },
+      {
+          "id": 549756436318,
+          "content": "About Sigmund Freud,  use of free association (in which patients report theirAbout 20 Y.O., d States. The album",
+          "creationDate": "2011-06-10T09:10:15.474Z",
+          "hasCreator": [
+              {
+                  "id": 2194,
+                  "firstName": "Alexander",
+                  "lastName": "Dobrunov"
+              }
+          ]
+      },
+      {
+          "id": 549756765765,
+          "content": "maybe",
+          "creationDate": "2011-06-10T08:46:12.266Z",
+          "hasCreator": [
+              {
+                  "id": 2199023256816,
+                  "firstName": "K.",
+                  "lastName": "Bose"
+              }
+          ]
+      },
+      {
+          "id": 549756523284,
+          "content": "About T-Pain, he founder of the record label Nappy Boy Entertainment, establ",
+          "creationDate": "2011-06-10T04:54:12.086Z",
+          "hasCreator": [
+              {
+                  "id": 4398046511667,
+                  "firstName": "John",
+                  "lastName": "Chopra"
+              }
+          ]
+      },
+      {
+          "id": 549756523283,
+          "content": "About Clint Eastwood, Line of Fire (1993), The Bridges of Madison County (1995),",
+          "creationDate": "2011-06-10T04:42:04.366Z",
+          "hasCreator": [
+              {
+                  "id": 10995116279521,
+                  "firstName": "Rahul",
+                  "lastName": "Nair"
+              }
+          ]
+      },
+      {
+          "id": 549755858244,
+          "content": "no",
+          "creationDate": "2011-06-10T03:32:04.194Z",
+          "hasCreator": [
+              {
+                  "id": 2194,
+                  "firstName": "Alexander",
+                  "lastName": "Dobrunov"
+              }
+          ]
+      },
+      {
+          "id": 549756454075,
+          "content": "right",
+          "creationDate": "2011-06-10T02:57:50.697Z",
+          "hasCreator": [
+              {
+                  "id": 8796093024661,
+                  "firstName": "Rahul",
+                  "lastName": "Sharma"
+              }
+          ]
+      },
+      {
+          "id": 549756013206,
+          "content": "thanks",
+          "creationDate": "2011-06-09T21:48:49.051Z",
+          "hasCreator": [
+              {
+                  "id": 10995116279390,
+                  "firstName": "Arjun",
+                  "lastName": "Rao"
+              }
+          ]
+      },
+      {
+          "id": 549756346967,
+          "content": "good",
+          "creationDate": "2011-06-09T20:35:39.693Z",
+          "hasCreator": [
+              {
+                  "id": 15393162790400,
+                  "firstName": "Jose",
+                  "lastName": "Costa"
+              }
+          ]
+      },
+      {
+          "id": 549756523280,
+          "content": "About Hamid Karzai, hanistan. After the 2004 presidential electAbout Indonesia, ian h",
+          "creationDate": "2011-06-09T19:08:21.924Z",
+          "hasCreator": [
+              {
+                  "id": 10995116279521,
+                  "firstName": "Rahul",
+                  "lastName": "Nair"
+              }
+          ]
+      },
+      {
+          "id": 549756454087,
+          "content": "right",
+          "creationDate": "2011-06-09T18:36:50.237Z",
+          "hasCreator": [
+              {
+                  "id": 8796093024661,
+                  "firstName": "Rahul",
+                  "lastName": "Sharma"
+              }
+          ]
+      },
+      {
+          "id": 549756454083,
+          "content": "LOL",
+          "creationDate": "2011-06-09T18:23:06.521Z",
+          "hasCreator": [
+              {
+                  "id": 4398046514661,
+                  "firstName": "Rajiv",
+                  "lastName": "Singh"
+              }
+          ]
+      },
+      {
+          "id": 549756299858,
+          "content": "About Hamid Karzai, term as Interim President during the 2About Carl Jung, ",
+          "creationDate": "2011-06-09T16:36:12.012Z",
+          "hasCreator": [
+              {
+                  "id": 8796093025552,
+                  "firstName": "Arjun",
+                  "lastName": "Nair"
+              }
+          ]
+      },
+      {
+          "id": 549756434913,
+          "content": "About Sigmund Freud, al psychotherapy by creatingAbout Kelly Clarkson, f the 2000s, as well as alsoAbout D. W. ",
+          "creationDate": "2011-06-09T14:16:18.699Z",
+          "hasCreator": [
+              {
+                  "id": 2194,
+                  "firstName": "Alexander",
+                  "lastName": "Dobrunov"
+              }
+          ]
+      },
+      {
+          "id": 549756828490,
+          "content": "About Lebanon, ast. At the end of the war, tAbout She Hates Me, tes Me made it become",
+          "creationDate": "2011-06-09T14:11:35.666Z",
+          "hasCreator": [
+              {
+                  "id": 13194139537010,
+                  "firstName": "Rahul",
+                  "lastName": "Rao"
+              }
+          ]
+      },
+      {
+          "id": 549755820093,
+          "content": "yes",
+          "creationDate": "2011-06-09T10:21:36.487Z",
+          "hasCreator": [
+              {
+                  "id": 10995116279390,
+                  "firstName": "Arjun",
+                  "lastName": "Rao"
+              }
+          ]
+      },
+      {
+          "id": 549755820095,
+          "content": "About Pope Benedict XVI, ''s closest confidants. Like his predecessAbout Stephen King, lette nominee, and in 2003, the National About Sean Combs, g names). In Au",
+          "creationDate": "2011-06-09T05:53:54.12Z",
+          "hasCreator": [
+              {
+                  "id": 10995116279390,
+                  "firstName": "Arjun",
+                  "lastName": "Rao"
+              }
+          ]
+      },
+      {
+          "id": 549755936694,
+          "content": "About Norodom Sihanouk,  as The King-Father of Cambodia (PreahmâhaviAbout Boris Yeltsi",
+          "creationDate": "2011-06-09T04:34:32.795Z",
+          "hasCreator": [
+              {
+                  "id": 13194139533535,
+                  "firstName": "Shweta",
+                  "lastName": "Singh"
+              }
+          ]
+      },
+      {
+          "id": 549756013199,
+          "content": "thanks",
+          "creationDate": "2011-06-08T23:24:38.62Z",
+          "hasCreator": [
+              {
+                  "id": 10995116279521,
+                  "firstName": "Rahul",
+                  "lastName": "Nair"
+              }
+          ]
+      }
+  ]
+  }'
+q10:
+  tag: "IC04"
+  query: '{
+		var(func: type(person))@filter(eq(id, "933")) {
+			knows {
+				p1 as ~hasCreator @filter(lt(creationDate, "2011-10-10T14:02:42.274+00:00") AND type(post))
+			}
+			~knows {
+				p2 as ~hasCreator @filter(lt(creationDate, "2011-10-10T14:02:42.274+00:00")AND type(post))
+			}
+		}
+
+		var(func: uid(p1,p2)) @filter(le(creationDate, "2011-06-10T14:02:42.274+00:00")) {
+			oldTags as hasTag
+		}
+
+		pbw as var(func: uid(p1,p2)) @filter(gt(creationDate, "2011-06-10T14:02:42.274+00:00"))
+
+		var(func: uid(pbw)) {
+			newTags as hasTag @filter(NOT uid(oldTags))
+		}
+
+		var(func: uid(newTags)) {
+			pc as count(~hasTag) @filter(uid(pbw))
+		}
+
+		q(func: uid(newTags), orderdesc: val(pc), first: 10) {
+			name
+			val(pc)
+		}
+  }'
+  resp: '{
+    "q": [
+        {
+            "name": "Maurice_Ravel",
+            "val(pc)": 3
+        },
+        {
+            "name": "Mohammad_Reza_Pahlavi",
+            "val(pc)": 2
+        },
+        {
+            "name": "99_Problems",
+            "val(pc)": 1
+        }
+    ]
+  }'
+q10:
+  tag: "IC05"
+  query: '{
+    pid as var(func: type(person))@filter(eq(id, "102"))
+		
+    var(func: uid(pid)){
+			f11 as knows{
+				f21 as knows @filter(NOT uid(pid))
+				f22 as ~knows @filter(NOT uid(pid))
+			}
+			f12 as ~knows{
+				f23 as knows @filter(NOT uid(pid))
+				f24 as ~knows @filter(NOT uid(pid))
+			}
+		}
+			
+    f as var(func: uid(f11, f12, f21, f22, f23, f24))
+
+		vr as var(func: uid(f)) @cascade {
+			id
+			forums as ~hasMember @facets(ge(joinDate, "2011-07-18T18:52:55.426+00:00")){
+				id
+			}
+		}
+
+		var(func: uid(vr)) {
+			pr as ~hasCreator @filter(ge(creationDate, "2011-07-18T18:52:55.426+00:00") AND uid_in(~containerOf, uid(forums)) AND type(post))
+		}
+
+		var(func: uid(pr)) @cascade{
+			id
+			creationDate
+			hasCreator{
+				id
+			}
+			c as math(1)
+			~containerOf @filter(eq(title, "Group for Buddy_Holly in Aligarh")){
+				fposts as math(c)
+			}
+		}
+
+		q(func: uid(fposts), orderdesc: val(fposts)) {
+			fqid
+			title
+			val(fposts)
+		}
+  }'
+  resp: '{
+    "q": [
+        {
+          "fqid": "forum_618475321331",
+          "title": "Group for Buddy_Holly in Aligarh",
+          "val(fposts)": 33
+        }
+    ]
+  }'
+q11:
+  tag: "IC06"
+  query: '{
+    pid as var(func: type(person))@filter(eq(id, "102"))
+		var(func: uid(pid)){
+			f11 as knows{
+				f12 as knows @filter(NOT uid(pid))
+				f13 as ~knows @filter(NOT uid(pid))
+			}
+			f21 as ~knows{
+				f22 as knows @filter(NOT uid(pid))
+				f23 as ~knows @filter(NOT uid(pid))
+			}
+		}
+		tag as var(func: eq(name, "Rumi")) {
+			posts as ~hasTag @filter(type(post))
+		}
+		var(func: uid(f11 ,f12, f13, f21, f22, f23)){
+			tc as math(1)
+			~hasCreator @filter(uid(posts)) {
+				otherTag as hasTag {
+					tagCount as math(tc)
+				}
+			}
+		}
+		tags as var(func: uid(otherTag)) @filter(NOT uid(tag))
+		q(func: uid(tags), orderdesc: val(tagCount), first:10){
+			name
+			postCount: val(tagCount)
+		}
+  }'
+  resp: '
+  {
+    "q": [
+      {
+          "name": "Henry_IV_of_France",
+          "postCount": 6
+      },
+      {
+          "name": "Peggy_Lee",
+          "postCount": 5
+      },
+      {
+          "name": "Mary_J._Blige",
+          "postCount": 5
+      },
+      {
+          "name": "Thomas_Edison",
+          "postCount": 4
+      },
+      {
+          "name": "P._G._Wodehouse",
+          "postCount": 4
+      },
+      {
+          "name": "Jacques_Offenbach",
+          "postCount": 4
+      },
+      {
+          "name": "Meryl_Streep",
+          "postCount": 4
+      },
+      {
+          "name": "Roger_Federer",
+          "postCount": 4
+      },
+      {
+          "name": "Sarah_McLachlan",
+          "postCount": 3
+      },
+      {
+          "name": "Jay-Z",
+          "postCount": 3
+      }
+    ]
+  }'
+q12:
+  tag: "IC07"
+  query: '{
+    pid as var(func: type(person))@filter(eq(id, "102"))
+		var(func: uid(pid))@cascade {
+			messages as ~hasCreator {
+				personLikes as ~likes
+			}
+			friends1 as knows{
+				friend1 as math(1)
+			}
+			friends2 as ~knows{
+				friend2 as math(1)
+			}
+		}
+
+		q(func: uid(friends1, friends2, personLikes), orderdesc: id, first:20) @filter(uid_in(likes, uid(messages) )){
+			isFriend2: val(friend2)
+			isFriend1: val(friend1)
+			id
+			firstName
+			lastName
+			likes @facets(orderdesc: creationDate) @filter(uid(messages)) (first:1){
+				id
+				creationDate
+			}
+		}
+	}'
+  resp: '
+  {
+    "q": [
+        {
+          "isFriend1": 1,
+          "id": 32985348835356,
+          "firstName": "Sirak",
+          "lastName": "Dego",
+          "likes": [
+              {
+                  "id": 137439165539,
+                  "creationDate": "2010-05-28T03:42:06.013Z",
+                  "likes|creationDate": "2012-09-02T13:22:05.986+00:00"
+              }
+          ]
+        },
+        {
+          "isFriend1": 1,
+          "id": 32985348833796,
+          "firstName": "Eugene",
+          "lastName": "Roindefo",
+          "likes": [
+              {
+                  "id": 687194982445,
+                  "creationDate": "2011-10-25T03:52:33.775Z",
+                  "likes|creationDate": "2012-08-29T11:59:24.376+00:00"
+              }
+          ]
+        },
+        {
+          "id": 30786325580709,
+          "firstName": "Maria",
+          "lastName": "Adhia",
+          "likes": [
+              {
+                  "id": 1030792495067,
+                  "creationDate": "2012-07-15T09:13:03.666Z",
+                  "likes|creationDate": "2012-07-17T12:32:40.126+00:00"
+              }
+          ]
+        },
+        {
+          "isFriend1": 1,
+          "id": 30786325580521,
+          "firstName": "A. K.",
+          "lastName": "Kapoor",
+          "likes": [
+              {
+                  "id": 206158645460,
+                  "creationDate": "2010-07-25T20:55:24.529Z",
+                  "likes|creationDate": "2012-09-04T00:30:34.431+00:00"
+              }
+          ]
+        },
+        {
+          "isFriend1": 1,
+          "id": 30786325579731,
+          "firstName": "Angel",
+          "lastName": "Dego",
+          "likes": [
+              {
+                  "id": 755914459308,
+                  "creationDate": "2011-12-21T19:23:33.148Z",
+                  "likes|creationDate": "2012-07-17T06:54:31.413+00:00"
+              }
+          ]
+        },
+        {
+          "id": 30786325579579,
+          "firstName": "John",
+          "lastName": "Murray",
+          "likes": [
+              {
+                  "id": 1030792495067,
+                  "creationDate": "2012-07-15T09:13:03.666Z",
+                  "likes|creationDate": "2012-08-03T11:44:46.719+00:00"
+              }
+          ]
+        },
+        {
+          "isFriend1": 1,
+          "id": 30786325579016,
+          "firstName": "Anucha",
+          "lastName": "Paphunga",
+          "likes": [
+              {
+                  "id": 274878122242,
+                  "creationDate": "2010-09-12T00:25:25.967Z",
+                  "likes|creationDate": "2012-09-05T13:29:08.889+00:00"
+              }
+          ]
+        },
+        {
+          "isFriend1": 1,
+          "id": 30786325578258,
+          "firstName": "Angel",
+          "lastName": "Melaku",
+          "likes": [
+              {
+                  "id": 549756028924,
+                  "creationDate": "2011-06-09T04:49:24.699Z",
+                  "likes|creationDate": "2012-08-26T12:42:22.138+00:00"
+              }
+          ]
+        },
+        {
+          "id": 30786325577877,
+          "firstName": "Gary",
+          "lastName": "Hill",
+          "likes": [
+              {
+                  "id": 274878974105,
+                  "creationDate": "2010-10-16T02:41:59.6Z",
+                  "likes|creationDate": "2012-06-08T15:19:17.784+00:00"
+              }
+          ]
+        },
+        {
+          "id": 28587302325553,
+          "firstName": "Jan",
+          "lastName": "Andrle",
+          "likes": [
+              {
+                  "id": 137439467278,
+                  "creationDate": "2010-05-10T05:04:31.487Z",
+                  "likes|creationDate": "2012-05-13T23:59:36.997+00:00"
+              }
+          ]
+        },
+        {
+          "id": 28587302325465,
+          "firstName": "Francis",
+          "lastName": "Sotto",
+          "likes": [
+              {
+                  "id": 137439467278,
+                  "creationDate": "2010-05-10T05:04:31.487Z",
+                  "likes|creationDate": "2012-05-28T21:38:55.530+00:00"
+              }
+          ]
+        },
+        {
+          "id": 28587302325298,
+          "firstName": "Yacine",
+          "lastName": "Abdeslam",
+          "likes": [
+              {
+                  "id": 137439467278,
+                  "creationDate": "2010-05-10T05:04:31.487Z",
+                  "likes|creationDate": "2012-03-29T09:18:21.406+00:00"
+              }
+          ]
+        },
+        {
+          "id": 28587302325169,
+          "firstName": "Stefano",
+          "lastName": "Bianchi",
+          "likes": [
+              {
+                  "id": 274878974105,
+                  "creationDate": "2010-10-16T02:41:59.6Z",
+                  "likes|creationDate": "2012-03-26T19:33:06.543+00:00"
+              }
+          ]
+        },
+        {
+          "id": 28587302325046,
+          "firstName": "Abraham",
+          "lastName": "Raghu",
+          "likes": [
+              {
+                  "id": 137439467278,
+                  "creationDate": "2010-05-10T05:04:31.487Z",
+                  "likes|creationDate": "2012-03-30T07:06:27.795+00:00"
+              }
+          ]
+        },
+        {
+          "id": 28587302325012,
+          "firstName": "Josef",
+          "lastName": "Lederer",
+          "likes": [
+              {
+                  "id": 274878974105,
+                  "creationDate": "2010-10-16T02:41:59.6Z",
+                  "likes|creationDate": "2012-04-28T05:28:48.748+00:00"
+              }
+          ]
+        },
+        {
+          "id": 28587302324990,
+          "firstName": "Abdoulatifou",
+          "lastName": "Tsiranana",
+          "likes": [
+              {
+                  "id": 274878974105,
+                  "creationDate": "2010-10-16T02:41:59.6Z",
+                  "likes|creationDate": "2012-05-04T21:25:23.472+00:00"
+              }
+          ]
+        },
+        {
+          "id": 28587302324670,
+          "firstName": "Faisal",
+          "lastName": "Abdel Fattah",
+          "likes": [
+              {
+                  "id": 274878974105,
+                  "creationDate": "2010-10-16T02:41:59.6Z",
+                  "likes|creationDate": "2012-04-30T14:28:59.031+00:00"
+              }
+          ]
+        },
+        {
+          "isFriend1": 1,
+          "id": 28587302323895,
+          "firstName": "พงศธร สุภิญโญ",
+          "lastName": "Bua",
+          "likes": [
+              {
+                  "id": 206158645460,
+                  "creationDate": "2010-07-25T20:55:24.529Z",
+                  "likes|creationDate": "2012-08-17T22:26:16.180+00:00"
+              }
+          ]
+        },
+        {
+          "isFriend1": 1,
+          "id": 28587302323175,
+          "firstName": "Aisso",
+          "lastName": "Gerima",
+          "likes": [
+              {
+                  "id": 274878122242,
+                  "creationDate": "2010-09-12T00:25:25.967Z",
+                  "likes|creationDate": "2012-06-01T07:12:15.282+00:00"
+              }
+          ]
+        },
+        {
+          "isFriend1": 1,
+          "id": 28587302322530,
+          "firstName": "David",
+          "lastName": "Taylor",
+          "likes": [
+              {
+                  "id": 755914459308,
+                  "creationDate": "2011-12-21T19:23:33.148Z",
+                  "likes|creationDate": "2012-08-14T00:46:37.967+00:00"
+              }
+          ]
+        }
+    ]
+  }'
+q13:
+  tag: "IC08"
+  query: '{
+    var(func: type(person))@filter(eq(id, "4398046514948"))@cascade{
+			~hasCreator{
+				replies as ~replyOf
+			}
+		}
+	  q(func: uid(replies), orderdesc: creationDate, orderasc: id, first:20 ){
+	  	id
+	  	content
+	  	creationDate
+	  	hasCreator{
+	  		id
+	  		firstName
+	  		lastName
+	  	}
+	  }
+  }'
+  resp: '
+  {
+   "q":[
+      {
+         "id":1030792574454,
+         "content":"good",
+         "creationDate":"2012-09-02T13:06:03.784Z",
+         "hasCreator":[
+            {
+               "id":4398046511667,
+               "firstName":"John",
+               "lastName":"Chopra"
+            }
+         ]
+      },
+      {
+         "id":1030792574449,
+         "content":"roflol",
+         "creationDate":"2012-09-02T04:35:03.877Z",
+         "hasCreator":[
+            {
+               "id":19791209301054,
+               "firstName":"Ana",
+               "lastName":"Alves"
+            }
+         ]
+      },
+      {
+         "id":1030792574453,
+         "content":"good",
+         "creationDate":"2012-09-02T04:26:48.008Z",
+         "hasCreator":[
+            {
+               "id":4398046513018,
+               "firstName":"Deepak",
+               "lastName":"Kumar"
+            }
+         ]
+      },
+      {
+         "id":1030792278590,
+         "content":"About Bing Crosby, s. The company also developed equipmentAbout Fiji, ation i",
+         "creationDate":"2012-08-31T04:27:46.054Z",
+         "hasCreator":[
+            {
+               "id":26388279067551,
+               "firstName":"Anand",
+               "lastName":"Rao"
+            }
+         ]
+      },
+      {
+         "id":1030792571689,
+         "content":"ok",
+         "creationDate":"2012-08-13T14:20:23.266Z",
+         "hasCreator":[
+            {
+               "id":8796093025528,
+               "firstName":"Wei",
+               "lastName":"Li"
+            }
+         ]
+      },
+      {
+         "id":1030792635989,
+         "content":"yes",
+         "creationDate":"2012-08-06T09:47:16.093Z",
+         "hasCreator":[
+            {
+               "id":2199023259059,
+               "firstName":"Joseph",
+               "lastName":"Chopra"
+            }
+         ]
+      },
+      {
+         "id":1030792635986,
+         "content":"About William Pitt the Younger, ithout anAbout Tony Bennett, o — that About Ukraine, GDP g",
+         "creationDate":"2012-08-06T09:42:08.981Z",
+         "hasCreator":[
+            {
+               "id":2199023258456,
+               "firstName":"Alfonso",
+               "lastName":"Campos"
+            }
+         ]
+      },
+      {
+         "id":1030792521966,
+         "content":"About John McEnroe, mmy Connors and About Ehud Olmert, nt against formeAbout Amy Winehouse, ted at number",
+         "creationDate":"2012-08-06T04:05:25.263Z",
+         "hasCreator":[
+            {
+               "id":6597069767432,
+               "firstName":"Abhishek",
+               "lastName":"Rao"
+            }
+         ]
+      },
+      {
+         "id":1030792521953,
+         "content":"good",
+         "creationDate":"2012-08-06T00:22:06.917Z",
+         "hasCreator":[
+            {
+               "id":21990232555934,
+               "firstName":"Deepak",
+               "lastName":"Reddy"
+            }
+         ]
+      },
+      {
+         "id":1030792521952,
+         "content":"maybe",
+         "creationDate":"2012-08-05T21:26:40.818Z",
+         "hasCreator":[
+            {
+               "id":609,
+               "firstName":"Shweta",
+               "lastName":"Sharma"
+            }
+         ]
+      },
+      {
+         "id":1030792521962,
+         "content":"thx",
+         "creationDate":"2012-08-05T19:18:39.998Z",
+         "hasCreator":[
+            {
+               "id":8796093022765,
+               "firstName":"Rahul",
+               "lastName":"Singh"
+            }
+         ]
+      },
+      {
+         "id":1030792521957,
+         "content":"right",
+         "creationDate":"2012-08-05T17:08:47.684Z",
+         "hasCreator":[
+            {
+               "id":2874,
+               "firstName":"Deepak",
+               "lastName":"Bose"
+            }
+         ]
+      },
+      {
+         "id":1030792521954,
+         "content":"About Ehud Olmert, nterim Prime MiAbout Gordon Brown, erformed poorlyAbout Quentin Tarant",
+         "creationDate":"2012-08-05T16:02:27.975Z",
+         "hasCreator":[
+            {
+               "id":26388279067183,
+               "firstName":"Shweta",
+               "lastName":"Sharma"
+            }
+         ]
+      },
+      {
+         "id":1030792359095,
+         "content":"yes",
+         "creationDate":"2012-07-21T08:05:13.263Z",
+         "hasCreator":[
+            {
+               "id":21990232556992,
+               "firstName":"Shweta",
+               "lastName":"Kumar"
+            }
+         ]
+      },
+      {
+         "id":1030792359091,
+         "content":"About Mahmud of Ghazni, zni in modern-day Afghanistan into the wealthy capital of an extensive empire which coveredAbout São Tomé and Príncipe, ão Tomé and Príncipe held presidentia",
+         "creationDate":"2012-07-20T20:21:48.762Z",
+         "hasCreator":[
+            {
+               "id":10995116280723,
+               "firstName":"Abhishek",
+               "lastName":"Sharma"
+            }
+         ]
+      },
+      {
+         "id":1030792359092,
+         "content":"no",
+         "creationDate":"2012-07-20T17:47:11.493Z",
+         "hasCreator":[
+            {
+               "id":17592186048023,
+               "firstName":"Abhishek",
+               "lastName":"Reddy"
+            }
+         ]
+      },
+      {
+         "id":1030792359090,
+         "content":"roflol",
+         "creationDate":"2012-07-20T16:48:47.505Z",
+         "hasCreator":[
+            {
+               "id":8796093025410,
+               "firstName":"Priyanka",
+               "lastName":"Singh"
+            }
+         ]
+      },
+      {
+         "id":1030792359098,
+         "content":"roflol",
+         "creationDate":"2012-07-20T08:32:07.044Z",
+         "hasCreator":[
+            {
+               "id":19791209300814,
+               "firstName":"A.",
+               "lastName":"Kapoor"
+            }
+         ]
+      },
+      {
+         "id":1030792359130,
+         "content":"fine",
+         "creationDate":"2012-07-12T12:42:46.077Z",
+         "hasCreator":[
+            {
+               "id":2199023258155,
+               "firstName":"Rahul",
+               "lastName":"Rao"
+            }
+         ]
+      },
+      {
+         "id":1030792359122,
+         "content":"I see",
+         "creationDate":"2012-07-12T05:24:53.898Z",
+         "hasCreator":[
+            {
+               "id":17592186048023,
+               "firstName":"Abhishek",
+               "lastName":"Reddy"
+            }
+         ]
+      }
+   ]
+  }'
+q14:
+  tag: "IC09"
+  query: '{
+    pid as var(func: type(person))@filter(eq(id, "4398046514948"))
+		var(func: uid(pid)){
+			f11 as knows{
+				f21 as knows @filter(NOT uid(pid))
+				f22 as ~knows @filter(NOT uid(pid))
+			}
+			f12 as ~knows{
+				f23 as knows @filter(NOT uid(pid))
+				f24 as ~knows @filter(NOT uid(pid))
+			}
+		}
+		var(func: uid(f11, f12, f21, f22, f23, f24) ){
+			msgs as ~hasCreator @filter(le(creationDate, "2011-06-10T14:02:42.274+00:00" ))
+		}
+
+		q1(func: uid(msgs), orderdesc: creationDate, orderasc: id, first:20){
+			id
+			content
+			creationDate
+			hasCreator{
+				id
+				firstName
+				lastName
+			}
+		}
+  }'
+  resp: '
+  {
+   "q1":[
+      {
+         "id":549756657940,
+         "content":"fine",
+         "creationDate":"2011-06-10T13:56:00.791Z",
+         "hasCreator":[
+            {
+               "id":13194139536019,
+               "firstName":"Said Suwailim",
+               "lastName":"Al-Shoon"
+            }
+         ]
+      },
+      {
+         "id":549756765767,
+         "content":"About Misty Mountain Hop, ide of the Black Dog single, but still received considerable F",
+         "creationDate":"2011-06-10T13:42:22.948Z",
+         "hasCreator":[
+            {
+               "id":4398046511145,
+               "firstName":"John",
+               "lastName":"Kumar"
+            }
+         ]
+      },
+      {
+         "id":549756527217,
+         "content":"About Francis of Assisi, r scene. In 1224, he received the stigmata, making him the first recorded person to bear the wounds of Christ''s Passion.",
+         "creationDate":"2011-06-10T13:09:23.012Z",
+         "hasCreator":[
+            {
+               "id":2783,
+               "firstName":"Rafael",
+               "lastName":"Alonso"
+            }
+         ]
+      },
+      {
+         "id":549755988758,
+         "content":"no",
+         "creationDate":"2011-06-10T12:59:25.702Z",
+         "hasCreator":[
+            {
+               "id":13194139536501,
+               "firstName":"Yang",
+               "lastName":"Zhang"
+            }
+         ]
+      },
+      {
+         "id":549756828497,
+         "content":"yes",
+         "creationDate":"2011-06-10T12:33:37.68Z",
+         "hasCreator":[
+            {
+               "id":8796093025361,
+               "firstName":"Arjun",
+               "lastName":"Khan"
+            }
+         ]
+      },
+      {
+         "id":549756812779,
+         "content":"About Constantine the Great,  22 May 337), also known as Constantine I or Sain",
+         "creationDate":"2011-06-10T12:30:21.154Z",
+         "hasCreator":[
+            {
+               "id":10995116278259,
+               "firstName":"Rahul",
+               "lastName":"Singh"
+            }
+         ]
+      },
+      {
+         "id":549756812775,
+         "content":"cool",
+         "creationDate":"2011-06-10T12:24:17.811Z",
+         "hasCreator":[
+            {
+               "id":10995116281248,
+               "firstName":"Arjun",
+               "lastName":"Sharma"
+            }
+         ]
+      },
+      {
+         "id":549756333087,
+         "content":"thx",
+         "creationDate":"2011-06-10T12:08:46.175Z",
+         "hasCreator":[
+            {
+               "id":6597069767117,
+               "firstName":"Eli",
+               "lastName":"Peretz"
+            }
+         ]
+      },
+      {
+         "id":549756635642,
+         "content":"no",
+         "creationDate":"2011-06-10T12:01:47.407Z",
+         "hasCreator":[
+            {
+               "id":6597069767242,
+               "firstName":"Salim Ahmed",
+               "lastName":"Binalshibh"
+            }
+         ]
+      },
+      {
+         "id":549755858247,
+         "content":"maybe",
+         "creationDate":"2011-06-10T11:49:17.782Z",
+         "hasCreator":[
+            {
+               "id":6597069767747,
+               "firstName":"Fali Sam",
+               "lastName":"Nariman"
+            }
+         ]
+      },
+      {
+         "id":549756657938,
+         "content":"roflol",
+         "creationDate":"2011-06-10T11:46:39.373Z",
+         "hasCreator":[
+            {
+               "id":3748,
+               "firstName":"Chen",
+               "lastName":"Yang"
+            }
+         ]
+      },
+      {
+         "id":549755970443,
+         "content":"LOL",
+         "creationDate":"2011-06-10T11:44:56.482Z",
+         "hasCreator":[
+            {
+               "id":13194139534652,
+               "firstName":"Rodrigo",
+               "lastName":"Alves"
+            }
+         ]
+      },
+      {
+         "id":549756098361,
+         "content":"yes",
+         "creationDate":"2011-06-10T11:37:08.4Z",
+         "hasCreator":[
+            {
+               "id":15393162790796,
+               "firstName":"Bingbing",
+               "lastName":"Xu"
+            }
+         ]
+      },
+      {
+         "id":549756657937,
+         "content":"About Augustine of Hippo, oman Empire was starting to disintegrate, Augustine developed the concept of the About Francis Bacon, served both as Attorney General a",
+         "creationDate":"2011-06-10T11:30:38.153Z",
+         "hasCreator":[
+            {
+               "id":3412,
+               "firstName":"Lei",
+               "lastName":"Wang"
+            }
+         ]
+      },
+      {
+         "id":549756454086,
+         "content":"thanks",
+         "creationDate":"2011-06-10T11:28:54.455Z",
+         "hasCreator":[
+            {
+               "id":2199023256181,
+               "firstName":"John",
+               "lastName":"Rao"
+            }
+         ]
+      },
+      {
+         "id":549756454080,
+         "content":"duh",
+         "creationDate":"2011-06-10T11:27:35.591Z",
+         "hasCreator":[
+            {
+               "id":13194139533535,
+               "firstName":"Shweta",
+               "lastName":"Singh"
+            }
+         ]
+      },
+      {
+         "id":549756812772,
+         "content":"right",
+         "creationDate":"2011-06-10T11:26:56.247Z",
+         "hasCreator":[
+            {
+               "id":8796093023060,
+               "firstName":"Karim",
+               "lastName":"Akhmadiyeva"
+            }
+         ]
+      },
+      {
+         "id":549755858245,
+         "content":"About Ethiopian Empire, hiopian Empire also known as Abyssinia, covered a geo",
+         "creationDate":"2011-06-10T11:23:15.209Z",
+         "hasCreator":[
+            {
+               "id":15393162790400,
+               "firstName":"Jose",
+               "lastName":"Costa"
+            }
+         ]
+      },
+      {
+         "id":549756812778,
+         "content":"good",
+         "creationDate":"2011-06-10T11:05:22.351Z",
+         "hasCreator":[
+            {
+               "id":15393162789787,
+               "firstName":"Bakhytzan",
+               "lastName":"Aab"
+            }
+         ]
+      },
+      {
+         "id":549756330472,
+         "content":"",
+         "creationDate":"2011-06-10T11:00:54.828Z",
+         "hasCreator":[
+            {
+               "id":2199023256097,
+               "firstName":"Walter",
+               "lastName":"Schmidt"
+            }
+         ]
+      }
+   ]
+  }'
+q15:
+  tag: "IC10"
+  query: '{
+    pid as var(func: type(person))@filter(eq(id, "933"))
+		var(func: uid(pid)){
+			exf1 as knows{
+				f1 as knows
+				f2 as ~knows
+			}
+			exf2 as ~knows{
+				f3 as knows
+				f4 as ~knows
+			}
+		}
+		friendsOfInterest as var(func:uid(f1,f2,f3,f4)) @filter(NOT uid(exf1, exf2, pid))
+		var(func: uid(pid)){
+			tagsOfInterest as hasInterest (orderasc: fqid)
+		}
+		var(func: uid(friendsOfInterest)){
+			common as count(~hasCreator) @filter(uid_in(hasTag, uid(tagsOfInterest)) AND type(post))
+		}
+		var(func: uid(friendsOfInterest)){
+			uncommon as count(~hasCreator) @filter(NOT uid_in(hasTag, uid(tagsOfInterest)) AND type(post))
+		}
+		var(func: uid(friendsOfInterest) ){
+			interest as math(common - uncommon )
+		}
+	  q(func: uid(friendsOfInterest), orderdesc: val(interest), first:10){
+	  	fqid
+	  	firstName
+	  	lastName
+	  	gender
+	  	isLocatedIn{
+	  		name
+	  	}
+	  	co: val(common)
+	  	un: val(uncommon)
+	  	interest: val(interest)
+	  }
+  }'
+  resp: '
+  {
+   "q":[
+      {
+         "fqid":"person_30786325578932",
+         "firstName":"Alexander",
+         "lastName":"Hleb",
+         "gender":"female",
+         "isLocatedIn":[
+            {
+               "name":"Barysaw"
+            }
+         ],
+         "co":10,
+         "un":0,
+         "interest":10
+      },
+      {
+         "fqid":"person_2788",
+         "firstName":"Peter",
+         "lastName":"Schmidt",
+         "gender":"female",
+         "isLocatedIn":[
+            {
+               "name":"Wernigerode"
+            }
+         ],
+         "co":7,
+         "un":0,
+         "interest":7
+      },
+      {
+         "fqid":"person_30786325580189",
+         "firstName":"Carlos",
+         "lastName":"Alonso",
+         "gender":"female",
+         "isLocatedIn":[
+            {
+               "name":"Madrid"
+            }
+         ],
+         "co":1,
+         "un":0,
+         "interest":1
+      },
+      {
+         "fqid":"person_30786325578711",
+         "firstName":"Aad De",
+         "lastName":"Bos",
+         "gender":"female",
+         "isLocatedIn":[
+            {
+               "name":"Maastricht"
+            }
+         ],
+         "co":0,
+         "un":0,
+         "interest":0
+      },
+      {
+         "fqid":"person_30786325580642",
+         "firstName":"Heikki",
+         "lastName":"Blomqvist",
+         "gender":"male",
+         "isLocatedIn":[
+            {
+               "name":"Helsinki"
+            }
+         ],
+         "co":0,
+         "un":0,
+         "interest":0
+      },
+      {
+         "fqid":"person_28587302325169",
+         "firstName":"Stefano",
+         "lastName":"Bianchi",
+         "gender":"male",
+         "isLocatedIn":[
+            {
+               "name":"Florence"
+            }
+         ],
+         "co":1,
+         "un":1,
+         "interest":0
+      },
+      {
+         "fqid":"person_32985348836951",
+         "firstName":"Ismael",
+         "lastName":"Lo",
+         "gender":"female",
+         "isLocatedIn":[
+            {
+               "name":"Dosso"
+            }
+         ],
+         "co":0,
+         "un":0,
+         "interest":0
+      },
+      {
+         "fqid":"person_32985348833670",
+         "firstName":"Alfred",
+         "lastName":"Berg",
+         "gender":"male",
+         "isLocatedIn":[
+            {
+               "name":"Amsterdam"
+            }
+         ],
+         "co":0,
+         "un":0,
+         "interest":0
+      },
+      {
+         "fqid":"person_32985348834284",
+         "firstName":"Bobby",
+         "lastName":"Garcia",
+         "gender":"female",
+         "isLocatedIn":[
+            {
+               "name":"Legazpi"
+            }
+         ],
+         "co":0,
+         "un":0,
+         "interest":0
+      },
+      {
+         "fqid":"person_30786325580376",
+         "firstName":"Bibit",
+         "lastName":"Budjana",
+         "gender":"female",
+         "isLocatedIn":[
+            {
+               "name":"Medan"
+            }
+         ],
+         "co":0,
+         "un":0,
+         "interest":0
+      }
+   ]
+  }'
+q16:
+  tag: "IC11"
+  query: '{
+    pid as var(func: type(person))@filter(eq(id, "4398046514948"))
+		var(func: uid(pid)){
+			f1 as knows @filter(NOT uid(pid)){
+				f11 as knows @filter(NOT uid(pid))
+				f12 as ~knows @filter(NOT uid(pid))
+			}
+			f2 as ~knows @filter(NOT uid(pid)){
+				f21 as knows @filter(NOT uid(pid))
+				f22 as ~knows @filter(NOT uid(pid))
+			}
+		}
+		friendsAndFoF as var(func:uid(f1, f2, f11, f12, f21, f22))
+		country as var(func: eq(name, "Sri_Lanka"))
+		organisation as var(func: type(organisation)) @filter(uid_in(isLocatedIn, uid(country)))
+		relevantFriends as var(func: uid(friendsAndFoF))@filter(uid_in(workAt, uid(organisation)))
+		q(func: uid(relevantFriends), orderasc: id) @cascade{
+				id
+				firstName
+				lastName
+				workAt @filter( uid(organisation)) @facets(workFrom) @facets(le(workFrom, "2007-12-31T18:52:55.426+00:00")){
+					id
+					name
+				}
+		}
+  }'
+  resp: '
+  {
+   "q": [
+      {
+         "id": 8796093025833,
+         "firstName": "Rahul",
+         "lastName": "Khan",
+         "workAt": [
+            {
+               "id": 1226,
+               "name": "SriLankan_Airlines",
+               "workAt|workFrom": "2006"
+            }
+         ]
+      },
+      {
+         "id": 15393162791199,
+         "firstName": "Alawwe",
+         "lastName": "Fernando",
+         "workAt": [
+            {
+               "id": 1226,
+               "name": "SriLankan_Airlines",
+               "workAt|workFrom": "2004"
+            }
+         ]
+      },
+      {
+         "id": 19791209300504,
+         "firstName": "M",
+         "lastName": "Perera",
+         "workAt": [
+            {
+               "id": 1226,
+               "name": "SriLankan_Airlines",
+               "workAt|workFrom": "2007"
+            },
+            {
+               "id": 1228,
+               "name": "Expo_Aviation",
+               "workAt|workFrom": "2006"
+            }
+         ]
+      },
+      {
+         "id": 21990232557705,
+         "firstName": "Ernest B",
+         "lastName": "Goenka",
+         "workAt": [
+            {
+               "id": 1226,
+               "name": "SriLankan_Airlines",
+               "workAt|workFrom": "2001"
+            }
+         ]
+      },
+      {
+         "id": 24189255811381,
+         "firstName": "Mahinda",
+         "lastName": "De Silva",
+         "workAt": [
+            {
+               "id": 1228,
+               "name": "Expo_Aviation",
+               "workAt|workFrom": "2004"
+            }
+         ]
+      },
+      {
+         "id": 30786325580960,
+         "firstName": "Duleep",
+         "lastName": "Banda",
+         "workAt": [
+            {
+               "id": 1230,
+               "name": "Deccan_Lanka",
+               "workAt|workFrom": "2004"
+            },
+            {
+               "id": 1228,
+               "name": "Expo_Aviation",
+               "workAt|workFrom": "2004"
+            }
+         ]
+      },
+      {
+         "id": 32985348836556,
+         "firstName": "Maithripala",
+         "lastName": "Gunasekera",
+         "workAt": [
+            {
+               "id": 1229,
+               "name": "Mihin_Lanka",
+               "workAt|workFrom": "2005"
+            }
+         ]
+      }
+   ]
+  }'
+q17:
+  tag: "IC12"
+  query: '{
+    mainTagClass as var(func: eq(name, "Artist")) @recurse{
+			subClasses as ~isSubclassOf
+		}
+		var(func: uid(mainTagClass, subClasses) ){
+			tags as ~hasType
+		}
+		var(func: type(person))@filter(eq(id, "102")){
+			friends1 as knows
+			friends2 as ~knows
+		}
+		friends as var(func: uid(friends1, friends2), first:5000)
+		relevantPosts as var(func: type(post)) @filter(uid_in(hasTag, uid(tags)))
+		var(func: uid(relevantPosts)){
+			~replyOf @filter(uid_in(hasCreator, uid(friends))){
+				relevantFriends as hasCreator
+			}
+		}
+		var(func: uid(relevantFriends)){
+			replyCount as count(~hasCreator) @filter(uid_in(replyOf, uid(relevantPosts) ))
+		}
+		q(func: uid(relevantFriends), orderdesc: val(replyCount), first:20){
+			id
+			firstName
+			lastName
+			replyCount : val(replyCount)
+		}
+  }'
+  resp: '
+  {
+   "q":[
+      {
+         "id":6597069767242,
+         "firstName":"Salim Ahmed",
+         "lastName":"Binalshibh",
+         "replyCount":882
+      },
+      {
+         "id":2783,
+         "firstName":"Rafael",
+         "lastName":"Alonso",
+         "replyCount":832
+      },
+      {
+         "id":6597069770047,
+         "firstName":"Edward",
+         "lastName":"Popov",
+         "replyCount":272
+      },
+      {
+         "id":4398046514225,
+         "firstName":"Ricardo",
+         "lastName":"Calvert",
+         "replyCount":246
+      },
+      {
+         "id":6597069768780,
+         "firstName":"Carlos",
+         "lastName":"Martins",
+         "replyCount":220
+      },
+      {
+         "id":3587,
+         "firstName":"Ahmad",
+         "lastName":"Chedid",
+         "replyCount":205
+      },
+      {
+         "id":2199023259354,
+         "firstName":"Aisso",
+         "lastName":"Mamo",
+         "replyCount":185
+      },
+      {
+         "id":2845,
+         "firstName":"Frederick",
+         "lastName":"Kawawa",
+         "replyCount":181
+      },
+      {
+         "id":318,
+         "firstName":"Claude",
+         "lastName":"Radafison",
+         "replyCount":181
+      },
+      {
+         "id":10995116281261,
+         "firstName":"Aleksandr",
+         "lastName":"Basov",
+         "replyCount":164
+      },
+      {
+         "id":24189255811566,
+         "firstName":"The",
+         "lastName":"Kunda",
+         "replyCount":154
+      },
+      {
+         "id":1355,
+         "firstName":"Peter",
+         "lastName":"Taylor",
+         "replyCount":145
+      },
+      {
+         "id":2199023257239,
+         "firstName":"Mikhail",
+         "lastName":"Basov",
+         "replyCount":115
+      },
+      {
+         "id":6597069766850,
+         "firstName":"Claude",
+         "lastName":"Aly",
+         "replyCount":109
+      },
+      {
+         "id":3688,
+         "firstName":"Ismail Omar",
+         "lastName":"Mamo",
+         "replyCount":103
+      },
+      {
+         "id":6597069767470,
+         "firstName":"George",
+         "lastName":"Antoniou",
+         "replyCount":100
+      },
+      {
+         "id":26388279067534,
+         "firstName":"Emperor of Brazil",
+         "lastName":"Dom Pedro II",
+         "replyCount":97
+      },
+      {
+         "id":24189255813579,
+         "firstName":"Alfred",
+         "lastName":"Jong",
+         "replyCount":69
+      },
+      {
+         "id":19791209303109,
+         "firstName":"Bing",
+         "lastName":"Yang",
+         "replyCount":44
+      },
+      {
+         "id":19791209300020,
+         "firstName":"Akira",
+         "lastName":"Yamamoto",
+         "replyCount":39
+      }
+   ]
+  }'
+q18:
+  tag: "IC13"
+  query: '{
+    A as var(func: eq(fqid, "398046514948"))
+		M as var(func: eq(fqid, "28587302326035"))
+		path as shortest(from: uid(A), to: uid(M)) {
+		 knows
+		 ~knows
+		}
+		path(func: uid(path)) {
+		  id
+    }
+  }'
+  resp: '{
+    "path": []
+  }'
