@@ -216,6 +216,8 @@ func stopCluster(composeFile, prefix string, wg *sync.WaitGroup, err error) {
 				fmt.Printf("Error while bringing down cluster. Prefix: %s. Error: %v\n",
 					prefix, err)
 			}
+			
+			os.Remove(tmp)
 		}
 
 		cmd = command("docker-compose", "--compatibility", "-f", composeFile, "-p", prefix, "rm", "-v", "--force")
