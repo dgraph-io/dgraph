@@ -39,6 +39,11 @@ func TestQueries(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	for _, tt := range tc {
 		desc := tt.Tag
+		// TODO(anurag): IC06 and IC10 have non-deterministic results because of dataset.
+		// Find a way to modify the queries to include them in the tests
+		if desc == "IC06" || desc == "IC10" {
+			continue
+		}
 		t.Run(desc, func(t *testing.T) {
 			resp, err := dg.NewTxn().Query(ctx, tt.Query)
 			require.NoError(t, err)
@@ -76,25 +81,6 @@ func TestMain(m *testing.M) {
 		fmt.Printf("Error while bringin up alphas. Error: %v\n", err)
 		cleanupAndExit(1)
 	}
-	// schemaFile := filepath.Join(testutil.TestDataDirectory, "ldbcTypes.schema")
-	// client, err := testutil.DgraphClient(testutil.ContainerAddr("alpha1", 9080))
-	// if err != nil {
-	// 	fmt.Printf("Error while creating client. Error: %v\n", err)
-	// 	cleanupAndExit(1)
-	// }
-
-	// file, err := ioutil.ReadFile(schemaFile)
-	// if err != nil {
-	// 	fmt.Printf("Error while reading schema file. Error: %v\n", err)
-	// 	cleanupAndExit(1)
-	// }
-
-	// if err = client.Alter(context.Background(), &api.Operation{
-	// 	Schema: string(file),
-	// }); err != nil {
-	// 	fmt.Printf("Error while indexing. Error: %v\n", err)
-	// 	cleanupAndExit(1)
-	// }
 
 	exitCode := m.Run()
 	cleanupAndExit(exitCode)
