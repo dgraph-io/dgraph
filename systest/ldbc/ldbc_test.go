@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v2"
@@ -77,25 +76,25 @@ func TestMain(m *testing.M) {
 		fmt.Printf("Error while bringin up alphas. Error: %v\n", err)
 		cleanupAndExit(1)
 	}
-	schemaFile := filepath.Join(testutil.TestDataDirectory, "ldbcTypes.schema")
-	client, err := testutil.DgraphClient(testutil.ContainerAddr("alpha1", 9080))
-	if err != nil {
-		fmt.Printf("Error while creating client. Error: %v\n", err)
-		cleanupAndExit(1)
-	}
+	// schemaFile := filepath.Join(testutil.TestDataDirectory, "ldbcTypes.schema")
+	// client, err := testutil.DgraphClient(testutil.ContainerAddr("alpha1", 9080))
+	// if err != nil {
+	// 	fmt.Printf("Error while creating client. Error: %v\n", err)
+	// 	cleanupAndExit(1)
+	// }
 
-	file, err := ioutil.ReadFile(schemaFile)
-	if err != nil {
-		fmt.Printf("Error while reading schema file. Error: %v\n", err)
-		cleanupAndExit(1)
-	}
+	// file, err := ioutil.ReadFile(schemaFile)
+	// if err != nil {
+	// 	fmt.Printf("Error while reading schema file. Error: %v\n", err)
+	// 	cleanupAndExit(1)
+	// }
 
-	if err = client.Alter(context.Background(), &api.Operation{
-		Schema: string(file),
-	}); err != nil {
-		fmt.Printf("Error while indexing. Error: %v\n", err)
-		cleanupAndExit(1)
-	}
+	// if err = client.Alter(context.Background(), &api.Operation{
+	// 	Schema: string(file),
+	// }); err != nil {
+	// 	fmt.Printf("Error while indexing. Error: %v\n", err)
+	// 	cleanupAndExit(1)
+	// }
 
 	exitCode := m.Run()
 	cleanupAndExit(exitCode)
