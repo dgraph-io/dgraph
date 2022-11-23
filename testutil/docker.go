@@ -227,9 +227,15 @@ func DockerRun(instance string, op int) error {
 	return nil
 }
 
-// DockerCp copies from/to a container. Paths inside a container have the format
+// MARKED FOR DEPRECATION: DockerCp copies from/to a container. Paths inside a container have the format
 // container_name:path.
-func DockerCp(containerID, srcPath, dstPath string) error {
+func DockerCp(srcPath, dstPath string) error {
+	argv := []string{"docker", "cp", srcPath, dstPath}
+	return Exec(argv...)
+}
+
+// DockerCpFromContainer copies from a container.
+func DockerCpFromContainer(containerID, srcPath, dstPath string) error {
 	cli, err := client.NewEnvClient()
 	x.Check(err)
 

@@ -206,7 +206,7 @@ func stopCluster(composeFile, prefix string, wg *sync.WaitGroup, err error) {
 			containerInfo, err := testutil.DockerInspect(c.ID)
 			workDir := containerInfo.Config.WorkingDir
 
-			err = testutil.DockerCp(c.ID, workDir + "/coverage.out", tmp)
+			err = testutil.DockerCpFromContainer(c.ID, workDir + "/coverage.out", tmp)
 			if err != nil {
 				fmt.Printf("Error while bringing down cluster. Prefix: %s. Error: %v\n",
 					prefix, err)
