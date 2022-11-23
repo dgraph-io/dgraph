@@ -4,6 +4,11 @@ on:
     branches:
       - main
   pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
     branches:
       - main
   schedule:
@@ -14,17 +19,15 @@ jobs:
     steps:
       - name: Checkout Dgraph
         uses: actions/checkout@v3
-      - name: Checkout LDBC query repo
-        uses: actions/checkout@v3
-        with:
-          repository: dgraph-io/ldbc
-          token: ${{ secrets.DEPLOY_KEYS_GH_DGRAPHIO_LDBC }}
-          ref: master
-          path: ldbc
+      - name: Get Go Version
+        run: |
+          #!/bin/bash
+          GOVERSION=$({ [ -f .go-version ] && cat .go-version; })
+          echo "GOVERSION=$GOVERSION" >> $GITHUB_ENV
       - name: Set up Go
         uses: actions/setup-go@v3
         with:
-          go-version: 1.18
+          go-version: ${{ env.GOVERSION }}
       - name: Set up Node
         uses: actions/setup-node@v3
         with:
@@ -37,37 +40,28 @@ jobs:
           go mod tidy
           make regenerate
           git diff --exit-code -- .
-      - name: Make Docker Image
-        run: make image-local
-      - name: Make Linux Build
-        run: |
+      - name: Make Linux Build and Docker Image
+        run: make docker-image
+      - name: Build Test Binary
+        run : |
           #!/bin/bash
-          # go settings
-          export GOOS=linux
-          export GOARCH=amd64
-          # make dgraph binary
-          make dgraph
+          # build the test binary
+          cd t; go build .
       - name: Clean Up Environment
         run: |
           #!/bin/bash
           # clean cache
           go clean -testcache
-          # build the test binary
-          cd t; go build .
           # clean up docker containers before test execution
-          ./t -r
+          cd t; ./t -r
       - name: Run LDBC Tests
         run: |
           #!/bin/bash
-          # clean cache
-          go clean -testcache
           # go env settings
           export GOPATH=~/go
           # move the binary
-          cp dgraph/dgraph ~/go/bin 
-          # build the test binary
-          cd t; go build .
+          cp dgraph/dgraph ~/go/bin/dgraph 
           # run the ldbc tests
-          ./t --suite=ldbc
+          cd t; ./t --suite=ldbc
           # clean up docker containers after test execution
           ./t -r
