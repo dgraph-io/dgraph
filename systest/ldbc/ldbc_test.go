@@ -37,17 +37,19 @@ func TestQueries(t *testing.T) {
 		t.Fatalf("Error while greading test cases yaml: %v", err)
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	for _, tt := range tc {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-		resp, err := dg.NewTxn().Query(ctx, tt.Query)
-		cancel()
-
+		desc := tt.Tag
+		t.Run(desc, func(t *testing.T) {
+			resp, err := dg.NewTxn().Query(ctx, tt.Query)
+			require.NoError(t, err)
+			testutil.CompareJSON(t, tt.Resp, string(resp.Json))
+		})
 		if ctx.Err() == context.DeadlineExceeded {
 			t.Fatal("aborting test due to query timeout")
 		}
-		require.NoError(t, err)
-		testutil.CompareJSON(t, tt.Resp, string(resp.Json))
 	}
+	cancel()
 }
 
 func TestMain(m *testing.M) {
