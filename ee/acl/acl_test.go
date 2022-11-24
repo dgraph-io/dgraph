@@ -2270,6 +2270,70 @@ func TestQueryUserInfo(t *testing.T) {
 	testutil.CompareJSON(t, `{"getGroup": null}`, string(gqlResp.Data))
 }
 
+func TestQueriesWithUserAndGroupOfSameName(t *testing.T) {
+	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+
+	testutil.DropAll(t, dg)
+	resetUser(t)
+
+	txn := dg.NewTxn()
+	mutation := &api.Mutation{
+		SetNquads: []byte(`
+			_:a <name> "RandomGuy" .
+			_:a <age> "23" .
+			_:a <nickname> "RG" .
+			_:a <dgraph.type> "TypeName" .
+			_:b <name> "RandomGuy2" .
+			_:b <age> "25" .
+			_:b <nickname> "RG2" .
+			_:b <dgraph.type> "TypeName" .
+		`),
+		CommitNow: true,
+	}
+	_, err = txn.Mutate(ctx, mutation)
+	require.NoError(t, err)
+
+	token, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint:  adminEndpoint,
+		UserID:    "groot",
+		Passwd:    "password",
+		Namespace: x.GalaxyNamespace,
+	})
+	require.NoError(t, err, "login failed")
+
+	createGroup(t, token, "alice")
+	addToGroup(t, token, userid, "alice")
+
+	// add rules to groups
+	addRulesToGroup(t, token, "alice", []rule{{Predicate: "name", Permission: Read.Code}})
+
+	query := `
+	{
+		q(func: has(name)) {
+			name
+			age
+		}
+	}
+	`
+
+	userClient, err := testutil.DgraphClient(testutil.SockAddr)
+	require.NoError(t, err)
+	time.Sleep(defaultTimeToSleep)
+
+	err = userClient.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace)
+	require.NoError(t, err)
+
+	time.Sleep(defaultTimeToSleep)
+
+	resp, err := userClient.NewTxn().Query(ctx, query)
+	require.NoError(t, err)
+	testutil.CompareJSON(t, `{"q":[{"name":"RandomGuy"},{"name":"RandomGuy2"}]}`, string(resp.Json))
+
+}
+
 func TestQueriesForNonGuardianUserWithoutGroup(t *testing.T) {
 	// Create a new user without any groups, queryGroup should return an empty result.
 	resetUser(t)
