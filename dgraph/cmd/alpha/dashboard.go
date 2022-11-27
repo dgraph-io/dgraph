@@ -38,8 +38,17 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "404 page not found", http.StatusNotFound)
 		return
 	}
-	x.Check2(w.Write([]byte(
-		"Dgraph browser is available for running separately using the dgraph-ratel binary")))
+
+	dgraph := "\nDgraph is up and running...\n\n"
+	dgraph = dgraph + "Now you can access your cluster via Ratel Dashboard. Remember, the PORT to use there to connect to Alpha is 8080 + offset if the case.\n"
+	dgraph = dgraph + "if you are running GraphQL you can use any GraphQL Client from the open source community.\n"
+	dgraph = dgraph + "\nThank you for using Dgraph!\n"
+	dgraph = dgraph + "\nImportant Links:\n\nhttps://dgraph.io/docs\nhttps://discuss.dgraph.io/\nhttps://cloud.dgraph.io/"
+	dgraph = dgraph + "\n\n\nCopyright 2016-2022 Dgraph Labs, Inc. and Contributors.\n"
+
+	all := []byte(dgraph)
+
+	x.Check2(w.Write([]byte(all)))
 }
 
 // Used to return a list of keywords, so that UI can show them for autocompletion.
