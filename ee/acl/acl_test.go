@@ -2277,6 +2277,7 @@ func TestQueriesWithUserAndGroupOfSameName(t *testing.T) {
 	require.NoError(t, err)
 
 	testutil.DropAll(t, dg)
+	// Creates a user -- alice
 	resetUser(t)
 
 	txn := dg.NewTxn()
