@@ -349,6 +349,9 @@ func getGrootAndGuardiansUid(t *testing.T, dg *dgo.Dgraph) (string, string) {
 }
 
 const defaultTimeToSleep = 500 * time.Millisecond
+
+const timeout = 5 * time.Second
+
 const expireJwtSleep = 21 * time.Second
 
 func testAuthorization(t *testing.T, dg *dgo.Dgraph) {
@@ -2320,19 +2323,8 @@ func TestQueriesWithUserAndGroupOfSameName(t *testing.T) {
 	}
 	`
 
-	userClient, err := testutil.DgraphClient(testutil.SockAddr)
-	require.NoError(t, err)
-	time.Sleep(defaultTimeToSleep)
-
-	err = userClient.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace)
-	require.NoError(t, err)
-
-	time.Sleep(defaultTimeToSleep)
-
-	resp, err := userClient.NewTxn().Query(ctx, query)
-	require.NoError(t, err)
-	testutil.CompareJSON(t, `{"q":[{"name":"RandomGuy"},{"name":"RandomGuy2"}]}`, string(resp.Json))
-
+	dc := testutil.DgClientWithLogin(t, userid, userpassword, x.GalaxyNamespace)
+	testutil.PollTillPassOrTimeout(t, dc, query, `{"q":[{"name":"RandomGuy"},{"name":"RandomGuy2"}]}`, timeout)
 }
 
 func TestQueriesForNonGuardianUserWithoutGroup(t *testing.T) {
