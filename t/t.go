@@ -119,12 +119,21 @@ func startCluster(composeFile, prefix string) error {
 	cmd := command(
 		"docker-compose", "--compatibility", "-f", composeFile, "-p", prefix,
 		"up", "--force-recreate", "--build", "--remove-orphans", "--detach")
-	cmd.Stderr = nil
+
+	stderr, _ := cmd.StderrPipe()
 
 	fmt.Printf("Bringing up cluster %s for package: %s ...\n", prefix, composeFile)
 	if err := cmd.Run(); err != nil {
 		fmt.Printf("While running command: %q Error: %v\n",
 			strings.Join(cmd.Args, " "), err)
+
+		fmt.Println("DEBUG")
+		scanner := bufio.NewScanner(stderr)
+		for scanner.Scan() {
+			fmt.Println(scanner.Text())
+		}
+		fmt.Println("DEBUG")
+
 		return err
 	}
 	fmt.Printf("CLUSTER UP: %s. Package: %s\n", prefix, composeFile)
