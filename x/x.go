@@ -286,6 +286,7 @@ func ExtractNamespace(ctx context.Context) (uint64, error) {
 }
 
 // Format tablets namespaces.
+// Filter out the tablets that do not belong to the requestor's namespace.
 func FilterTablets(ctx context.Context, ms *pdgraph.MembershipState, from int) error {
 	if !WorkerConfig.AclEnabled && from == 1 {
 		return nil
