@@ -46,6 +46,13 @@ func SetTestRun() {
 	isTest = true
 }
 
+// check if any version is set by ldflags. If not so, it should be set as "dev"
+func checkDev() {
+	if dgraphVersion == "" {
+		dgraphVersion = "dev"
+	}
+}
+
 // IsTestRun indicates whether a test is being executed. Useful to handle special
 // conditions during tests that differ from normal execution.
 func IsTestRun() bool {
@@ -65,9 +72,7 @@ func Init() {
 	// TODO: why is this here?
 	// Config.QueryEdgeLimit = 1e6
 
-	if dgraphVersion == "" {
-		dgraphVersion = "dev"
-	}
+	checkDev()
 
 	// Next, run all the init functions that have been added.
 	for _, f := range initFunc {
@@ -116,6 +121,7 @@ func PrintVersion() {
 
 // Version returns a string containing the dgraphVersion.
 func Version() string {
+	checkDev()
 	return dgraphVersion
 }
 
