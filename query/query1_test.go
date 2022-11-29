@@ -2377,6 +2377,19 @@ func TestFilterRoot(t *testing.T) {
 	require.JSONEq(t, `{"data": {"me": []}}`, js)
 }
 
+func TestFilterWithNoSrcUid(t *testing.T) {
+
+	query := `{
+		me(func: eq(name, "Does Not Exist")) @filter(eq(name, "Michonne")) {
+			uid
+			name
+		}
+	}
+	`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me": []}}`, js)
+}
+
 func TestMathAlias(t *testing.T) {
 
 	query := `{
