@@ -865,8 +865,8 @@ func updateValInMutations(gmu *gql.Mutation, qc *queryContext) error {
 }
 
 // updateUIDInMutations does following transformations:
-//   * uid(v) -> 0x123     -- If v is defined in query block
-//   * uid(v) -> _:uid(v)  -- Otherwise
+//   - uid(v) -> 0x123     -- If v is defined in query block
+//   - uid(v) -> _:uid(v)  -- Otherwise
 func updateUIDInMutations(gmu *gql.Mutation, qc *queryContext) error {
 	// usedMutationVars keeps track of variables that are used in mutations.
 	getNewVals := func(s string) []string {
@@ -1157,6 +1157,8 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (resp *api.Response,
 		return nil, serverOverloadErr
 	}
 
+	// TODO LOGGING (Damon): nice to create a fast correlation ID here and log the query with
+	// the id, then log time/error with the id too
 	if bool(glog.V(3)) || worker.LogRequestEnabled() {
 		glog.Infof("Got a query: %+v", req.req)
 	}
@@ -1207,6 +1209,8 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (resp *api.Response,
 		return nil, errors.Errorf("empty request")
 	}
 
+	// TODO LOGGING (Damon): we usually lose this request info since OpenTelemetry only keeps 256 items
+	// TODO LOGGING (Damon): change span.Annotatef to span.SetAttributes() to set a "tag" instead
 	span.Annotatef(nil, "Request received: %v", req.req)
 	if isQuery {
 		ostats.Record(ctx, x.PendingQueries.M(1), x.NumQueries.M(1))
@@ -1363,7 +1367,12 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 	// Core processing happens here.
 	er, err := qr.Process(ctx)
 
+	// TODO LOGGING (Damon): log the time taken. e.g.:   glog.Infof("Query completed. time=%+v\n", time.Since(qc.latency.Start)
+	// possibly only do this is query logging is turned on
+	// Nice to have: create a (fast, reasonably unique) ID and log the query (above) and the time taken and the error with this ID
+
 	if err != nil {
+		// TODO LOGGING (Damon): log any errors encountered. e.g.:  glog.Infof("Error processing query: %+v\n", err.Error())
 		return resp, errors.Wrap(err, "")
 	}
 
@@ -1585,9 +1594,9 @@ func (s *Server) CheckVersion(ctx context.Context, c *api.Check) (v *api.Version
 	return v, nil
 }
 
-//-------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------
 // HELPER FUNCTIONS
-//-------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------
 func isMutationAllowed(ctx context.Context) bool {
 	if worker.Config.MutationsMode != worker.DisallowMutations {
 		return true
