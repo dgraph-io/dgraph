@@ -10,8 +10,7 @@ func init() {
 }
 
 func TestSystem(t *testing.T) {
-  // if *systemTest {
-  //    main()
-  // }
-  main()
+  if *systemTest {
+     main()
+  }
 }

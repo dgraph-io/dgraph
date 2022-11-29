@@ -37,7 +37,7 @@ dgraph:
 	$(MAKE) -w -C $@ all
 
 dgraph-test:
-	$(MAKE) -w -C dgraph test
+	$(MAKE) -w -C dgraph test-binary
 
 oss:
 	$(MAKE) BUILD_TAGS=oss
