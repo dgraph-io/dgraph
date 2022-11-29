@@ -433,7 +433,16 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 		e.Txn.Keys = e.Txn.Keys[:0]
 	}
 
+	tablets := []string{}
+	//This will humanize predicate values in extensions.txn.preds
+	//removing hex of zeros value from predicate name
+	for k := range e.Txn.Preds {
+		local := strings.ReplaceAll(e.Txn.Preds[k], "\x00", "")
+		tablets = append(tablets, local)
+	}
+
 	response := map[string]interface{}{}
+	e.Txn.Preds = tablets
 	response["extensions"] = e
 	mp := map[string]interface{}{}
 	mp["code"] = x.Success
