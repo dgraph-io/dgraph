@@ -685,16 +685,16 @@ func deleteQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMeta,
 
 // In an add mutation
 //
-// mutation {
-// 	addAnswer(input: [
-// 	  {
-// 		text: "...",
-// 		datePublished: "2020-03-26",
-// 		author: { username: "u1" },
-// 		inAnswerTo: { id: "0x7e" }
-// 	  }
-// 	]) {
-// 	  answer { ... }
+//	mutation {
+//		addAnswer(input: [
+//		  {
+//			text: "...",
+//			datePublished: "2020-03-26",
+//			author: { username: "u1" },
+//			inAnswerTo: { id: "0x7e" }
+//		  }
+//		]) {
+//		  answer { ... }
 //
 // There's no initial auth verification.  We add the nodes and then check the auth rules.
 // So the only auth to check is through authorizeNewNodes() function.
@@ -792,8 +792,7 @@ func checkAddUpdateCase(
 		require.NotNil(t, resolved.Err)
 		require.Equal(t, tcase.Error.Error(), resolved.Err.Error())
 	} else {
-		require.True(t, success, "Mutation should have not failed as it did not"+
-			" throw an error")
+		require.True(t, success, "Mutation should have not failed as it did not throw an error")
 	}
 }
 
