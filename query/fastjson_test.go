@@ -43,6 +43,7 @@ func assertJSON(t *testing.T, expected string, sg *SubGraph) {
 }
 
 func TestSubgraphToFastJSON(t *testing.T) {
+	t.Parallel()
 	t.Run("With a string result", func(t *testing.T) {
 		sg := subgraphWithSingleResultAndSingleValue(task.FromString("ABC"))
 		assertJSON(t, `{"query":[{"val":"ABC"}]}`, sg)
@@ -65,6 +66,7 @@ func TestSubgraphToFastJSON(t *testing.T) {
 }
 
 func TestEncode(t *testing.T) {
+	t.Parallel()
 	enc := newEncoder()
 
 	t.Run("with uid list predicate", func(t *testing.T) {

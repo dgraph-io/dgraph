@@ -40,6 +40,7 @@ func TestEncodeMemory(t *testing.T) {
 	//	}
 	var wg sync.WaitGroup
 
+	t.Parallel()
 	for i := 0; i < runtime.NumCPU(); i++ {
 		enc := newEncoder()
 		n := enc.newNode(0)
@@ -71,6 +72,7 @@ func TestNormalizeJSONLimit(t *testing.T) {
 		t.Skip("Skipping TestNormalizeJSONLimit")
 	}
 
+	t.Parallel()
 	enc := newEncoder()
 	n := enc.newNode(enc.idForAttr("root"))
 	require.NotNil(t, n)
@@ -127,6 +129,8 @@ func BenchmarkJsonMarshal(b *testing.B) {
 }
 
 func TestStringJsonMarshal(t *testing.T) {
+	t.Parallel()
+
 	inputs := []string{
 		"",
 		"0",
@@ -149,6 +153,8 @@ func TestStringJsonMarshal(t *testing.T) {
 }
 
 func TestFastJsonNode(t *testing.T) {
+	t.Parallel()
+
 	attrId := uint16(20)
 	scalarVal := bytes.Repeat([]byte("a"), 160)
 	list := true
@@ -226,6 +232,8 @@ func BenchmarkFastJsonNode2Chilren(b *testing.B) {
 }
 
 func TestChildrenOrder(t *testing.T) {
+	t.Parallel()
+
 	enc := newEncoder()
 	root := enc.newNode(1)
 	root.meta = 0

@@ -27,6 +27,8 @@ import (
 )
 
 func TestProcessBinary(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		in  *mathTree
 		out types.Val
@@ -381,6 +383,8 @@ func TestProcessBinary(t *testing.T) {
 }
 
 func TestProcessUnary(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		in  *mathTree
 		out types.Val
@@ -490,6 +494,8 @@ func TestProcessUnary(t *testing.T) {
 }
 
 func TestProcessBinaryBoolean(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		in  *mathTree
 		out types.Val
@@ -558,6 +564,8 @@ func TestProcessBinaryBoolean(t *testing.T) {
 }
 
 func TestProcessTernary(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		in  *mathTree
 		out types.Val
