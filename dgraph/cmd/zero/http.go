@@ -222,7 +222,10 @@ func (st *state) getState(w http.ResponseWriter, r *http.Request) {
 		x.SetStatus(w, x.ErrorNoData, "No membership state found.")
 		return
 	}
-
+	//This will humanize the predicate in zero state
+	if err := x.FilterTablets(ctx, mstate, 0); err != nil {
+		return
+	}
 	m := jsonpb.Marshaler{EmitDefaults: true}
 	if err := m.Marshal(w, mstate); err != nil {
 		x.SetStatus(w, x.ErrorNoData, err.Error())
