@@ -169,7 +169,7 @@
     }
   queryjson: |
     {
-      "Project_1": [ { "uid": "0x123" } ]
+      "Project_1": [ { "uid": "0x123", "dgraph.type": ["Project"] } ]
     }
   uids: |
     {
@@ -464,8 +464,8 @@
     }
   queryjson: |
     {
-      "Project_1": [ { "uid": "0x123" } ],
-      "Ticket_2": [ { "uid": "0x789" } ]
+      "Project_1": [ { "uid": "0x123", "dgraph.type": ["Project"] } ],
+      "Ticket_2": [ { "uid": "0x789", "dgraph.type": ["Ticket"] } ]
     }
   dgquerysec: |-
     query {
@@ -627,7 +627,7 @@
     }
   queryjson: |
     {
-      "Ticket_1": [ { "uid": "0x789" } ]
+      "Ticket_1": [ { "uid": "0x789", "dgraph.type": ["Ticket"] } ]
     }
   dgquerysec: |-
     query {
