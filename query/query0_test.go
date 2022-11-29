@@ -31,6 +31,9 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+/*
+Relocated to query_suite_example_test.go
+
 func TestGetUID(t *testing.T) {
 	query := `
 		{
@@ -77,6 +80,7 @@ func TestQueryEmptyDefaultNameWithLanguage(t *testing.T) {
 		`{"data":{"people": [{"name@ko:en:hi":"상현"},{"name@ko:en:hi":"Amit"}]}}`,
 		js)
 }
+*/
 
 func TestQueryNamesThatAreEmptyInLanguage(t *testing.T) {
 	query := `{
