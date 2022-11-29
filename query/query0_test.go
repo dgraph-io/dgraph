@@ -3505,7 +3505,7 @@ func TestMatchingWithPagination(t *testing.T) {
 
 var client *dgo.Dgraph
 
-func TestMain(m *testing.M) {
+func __TestMain(m *testing.M) {
 	var err error
 	client, err = testutil.DgraphClientWithGroot(testutil.SockAddr)
 	x.CheckfNoTrace(err)
