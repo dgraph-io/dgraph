@@ -343,7 +343,9 @@ func populateCluster() {
 	}
 
 	setSchema(testSchema)
-	testutil.AssignUids(100000)
+	if err = testutil.AssignUids(100000); err != nil {
+		panic(fmt.Sprintf("Could not perform assignUids op. Got error %v", err.Error()))
+	}
 
 	err = addTriplesToCluster(`
 		<1> <name> "Michonne" .
