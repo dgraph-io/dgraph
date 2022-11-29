@@ -878,6 +878,10 @@ START:
 		for i := 0; ; i++ {
 			// Blocking, should return if sending on stream fails(Need to verify).
 			state, err := stream.Recv()
+			//This will humanize logs in the terminal output
+			if err := x.FilterTablets(ctx, state, 1); err != nil {
+				return
+			}
 			if err != nil || state == nil {
 				if err == io.EOF {
 					glog.Infoln("Membership sync stream closed.")
