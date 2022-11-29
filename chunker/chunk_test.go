@@ -225,3 +225,41 @@ func TestJSONLoadSuccessAll(t *testing.T) {
 	}
 	require.Equal(t, io.EOF, err, "end reading JSON document")
 }
+
+type isJsonDataTest struct {
+	arg1     string
+	expected bool
+}
+
+var isJsonDataTests = []isJsonDataTest{
+	isJsonDataTest{`[{
+	"id": 1,
+	"first_name": "Jeanette",
+	"last_name": "Penddreth",
+	"email": "jpenddreth0@census.gov",
+	"gender": "Female",
+	"ip_address": "26.58.193.2"
+  }, {
+	"id": 2,
+	"first_name": "Giavani",
+	"last_name": "Frediani",
+	"email": "gfrediani1@senate.gov",
+	"gender": "Male",
+	"ip_address": "229.179.4.212"
+  }]
+  `,
+		true},
+	isJsonDataTest{`Just a simple string`,
+		false},
+}
+
+func TestIsJSONData(t *testing.T) {
+
+	for _, jsonTestData := range isJsonDataTests {
+		reader := bufioReader(jsonTestData.arg1)
+		if output, error := IsJSONData(reader); output != jsonTestData.expected {
+			fmt.Println(error)
+			t.Errorf("got: %t, wanted: %t", output, jsonTestData.expected)
+		}
+	}
+}
