@@ -1073,7 +1073,7 @@ func (s *Server) State(ctx context.Context) (*api.Response, error) {
 		return nil, errors.Errorf("No membership state found")
 	}
 
-	if err := filterTablets(ctx, ms); err != nil {
+	if err := x.FilterTablets(ctx, ms, 1); err != nil {
 		return nil, err
 	}
 
