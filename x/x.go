@@ -48,6 +48,7 @@ import (
 	badgerpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
+	pdgraph "github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/dustin/go-humanize"
 
@@ -282,6 +283,45 @@ func ExtractNamespace(ctx context.Context) (uint64, error) {
 		return 0, errors.Wrapf(err, "Error while parsing namespace from metadata")
 	}
 	return namespace, nil
+}
+
+// Format tablets namespaces.
+func FilterTablets(ctx context.Context, ms *pdgraph.MembershipState, from int) error {
+	if !WorkerConfig.AclEnabled && from == 1 {
+		return nil
+	}
+
+	namespace, err := ExtractJWTNamespace(ctx)
+	if err != nil && from == 1 {
+		return errors.Errorf("Namespace not found in JWT.")
+	}
+
+	if namespace == GalaxyNamespace {
+		// For galaxy namespace, we don't want to filter out the predicates. We only format the
+		// namespace to human readable form.
+		for _, group := range ms.Groups {
+			tablets := make(map[string]*pdgraph.Tablet)
+			for tabletName, tablet := range group.Tablets {
+				tablet.Predicate = FormatNsAttr(tablet.Predicate)
+				tablets[FormatNsAttr(tabletName)] = tablet
+			}
+			group.Tablets = tablets
+		}
+		return nil
+	}
+
+	for _, group := range ms.GetGroups() {
+		tablets := make(map[string]*pdgraph.Tablet)
+		for pred, tablet := range group.GetTablets() {
+			if ns, attr := ParseNamespaceAttr(pred); namespace == ns {
+				tablets[attr] = tablet
+				tablets[attr].Predicate = attr
+			}
+		}
+		group.Tablets = tablets
+	}
+
+	return nil
 }
 
 func IsGalaxyOperation(ctx context.Context) bool {
