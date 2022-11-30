@@ -10,10 +10,6 @@ services:
       - 9080
     volumes:
       - type: bind
-        source: $GOPATH/bin
-        target: /gobin
-        read_only: true
-      - type: bind
         source: ../tls/alpha1
         target: /dgraph-tls
         read_only: true
@@ -29,10 +25,6 @@ services:
       - 8080
       - 9080
     volumes:
-      - type: bind
-        source: $GOPATH/bin
-        target: /gobin
-        read_only: true
       - type: bind
         source: ../tls/alpha2
         target: /dgraph-tls
@@ -50,10 +42,6 @@ services:
       - 9080
     volumes:
       - type: bind
-        source: $GOPATH/bin
-        target: /gobin
-        read_only: true
-      - type: bind
         source: ../tls/alpha3
         target: /dgraph-tls
         read_only: true
@@ -69,10 +57,6 @@ services:
       - 5080
       - 6080
     volumes:
-      - type: bind
-        source: $GOPATH/bin
-        target: /gobin
-        read_only: true
       - type: bind
         source: ../tls/zero1
         target: /dgraph-tls
