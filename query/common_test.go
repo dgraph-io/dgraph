@@ -209,6 +209,12 @@ func addGeoMultiPolygonToCluster(uid uint64, polygons [][][][]float64) error {
 }
 
 const testSchema = `
+type Person2 {
+	name2
+	age2
+	friend2
+}
+
 type Person {
 	name
 	pet
@@ -332,6 +338,8 @@ tweet-a                        : string @index(trigram) .
 tweet-b                        : string @index(term) .
 tweet-c                        : string @index(fulltext) .
 tweet-d                        : string @index(trigram) .
+name2                          : string @index(term)  .
+age2                           : int @index(int) .
 `
 
 func populateCluster() {
@@ -487,8 +495,12 @@ func populateCluster() {
 		<10006> <age> "25" .
 		<10007> <age> "25" .
 
+		<40> <age2> "10" .
+		<41> <age2> "20" .
+
+		<40> <name2> "Alice" .
+
 		<1> <alive> "true" .
-		<8> <alive> "true" .
 		<23> <alive> "true" .
 		<25> <alive> "false" .
 		<31> <alive> "false" .
@@ -630,7 +642,7 @@ func populateCluster() {
 		<5> <dgraph.type> "Pet" .
 		<6> <dgraph.type> "Animal" .
 		<6> <dgraph.type> "Pet" .
-		<8> <dgraph.type> "Person" .
+
 		<23> <dgraph.type> "Person" .
 		<24> <dgraph.type> "Person" .
 		<25> <dgraph.type> "Person" .
@@ -640,6 +652,8 @@ func populateCluster() {
 		<34> <dgraph.type> "SchoolInfo" .
 		<35> <dgraph.type> "SchoolInfo" .
 		<36> <dgraph.type> "SchoolInfo" .
+		<40> <dgraph.type> "Person2" .
+		<41> <dgraph.type> "Person2" .
 		<11100> <dgraph.type> "Node" .
 
 		<2> <pet> <5> .
