@@ -209,18 +209,17 @@ func addGeoMultiPolygonToCluster(uid uint64, polygons [][][][]float64) error {
 }
 
 const testSchema = `
-type Person2 {
-	name2
-	age2
-	friend2
-}
-
 type Person {
 	name
 	pet
 	friend
 	gender
 	alive
+}
+
+type Person2 {
+	name2
+	age2
 }
 
 type Animal {
