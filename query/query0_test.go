@@ -543,7 +543,7 @@ func TestCascadeWithSort(t *testing.T) {
 	}
 	`
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data":{"me":[{"name": "Daryl Dixon","alive": false},{"name": "Rick Grimes","alive": true}]}}`, js)
+	require.JSONEq(t, `{"data":{"me":[{"name":"Andrea"},{"name":"Daryl Dixon"},{"name":"Glenn Rhee"},{"name":"King Lear"},{"name":"Leonard"},{"name":"Margaret"},{"name":"Rick Grimes"},{"alive":true}]}}`, js)
 }
 
 // Resolved in PR #8441
