@@ -5,10 +5,6 @@
 /osx-docker-gopath
 
 # fuzzing output
-gql/gql-fuzz.zip
-gql/fuzz-data/crashers
-gql/fuzz-data/suppressions
-
 dql/dql-fuzz.zip
 dql/fuzz-data/crashers
 dql/fuzz-data/suppressions
