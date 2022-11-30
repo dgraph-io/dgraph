@@ -10,10 +10,6 @@ services:
       - "9080"
     volumes:
       - type: bind
-        source: $GOPATH/bin
-        target: /gobin
-        read_only: true
-      - type: bind
         source: ./cdc_logs
         target: /cdc
     command: dgraph alpha --my=alpha1:7080 --zero=zero1:5080 --logtostderr
@@ -27,10 +23,5 @@ services:
     ports:
       - "5080"
       - "6080"
-    volumes:
-      - type: bind
-        source: $GOPATH/bin
-        target: /gobin
-        read_only: true
     command: dgraph zero --my=zero1:5080 --logtostderr -v=2 --bindall
 volumes: {}
