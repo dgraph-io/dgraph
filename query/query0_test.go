@@ -557,7 +557,7 @@ func TestNegativeOffset(t *testing.T) {
 	}
 	`
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data":{"me":[{"name":"Andrea"},{"name":"Daryl Dixon"},{"name":"Glenn Rhee"},{"name":"King Lear"},{"name":"Leonard"},{"name":"Margaret"},{"name":"Rick Grimes"},{"alive":true}]}}`, js)
+	require.JSONEq(t, `{"data":{"me":[{"name":"Andrea","alive":false},{"name":"Daryl Dixon","alive":false},{"name":"Glenn Rhee"},{"name":"King Lear"},{"name":"Leonard"},{"name":"Margaret"},{"name":"Rick Grimes","alive":true},{"alive":true}]}}`, js)
 }
 
 func TestLevelBasedFacetVarAggSum(t *testing.T) {
