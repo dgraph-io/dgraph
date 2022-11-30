@@ -11,11 +11,6 @@ services:
       - 6180:6180
     labels:
       cluster: test
-    volumes:
-      - type: bind
-        source: $GOPATH/bin
-        target: /gobin
-        read_only: true
     command: dgraph zero -o 100 --my=zero1:5180 --logtostderr --bindall
 
   dg1:
@@ -23,10 +18,6 @@ services:
     container_name: bank-dg1
     working_dir: /data/dg1
     volumes:
-      - type: bind
-        source: $GOPATH/bin
-        target: /gobin
-        read_only: true
       - type: volume
         source: data
         target: /data/dg1
