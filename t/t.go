@@ -119,20 +119,12 @@ func startCluster(composeFile, prefix string) error {
 	cmd := command(
 		"docker-compose", "--compatibility", "-f", composeFile, "-p", prefix,
 		"up", "--force-recreate", "--build", "--remove-orphans", "--detach")
-	
-	var errb bytes.Buffer
-    cmd.Stderr = &errb
+	cmd.Stderr = nil
 
 	fmt.Printf("Bringing up cluster %s for package: %s ...\n", prefix, composeFile)
 	if err := cmd.Run(); err != nil {
 		fmt.Printf("While running command: %q Error: %v\n",
 			strings.Join(cmd.Args, " "), err)
-
-		fmt.Println("DEBUG")
-    	stderr := errb.String()
-		fmt.Println(stderr)
-		fmt.Println("DEBUG")
-
 		return err
 	}
 	fmt.Printf("CLUSTER UP: %s. Package: %s\n", prefix, composeFile)
@@ -228,12 +220,12 @@ func stopCluster(composeFile, prefix string, wg *sync.WaitGroup, err error) {
 			os.Remove(tmp)
 		}
 
-		cmd = command("docker-compose", "--compatibility", "-f", composeFile, "-p", prefix, "rm", "-v", "--force")
+		cmd = command("docker-compose", "--compatibility", "-f", composeFile, "-p", prefix, "down", "-v")
 		if err := cmd.Run(); err != nil {
-			fmt.Printf("4. Error while bringing down cluster. Prefix: %s. Error: %v\n",
+			fmt.Printf("Error while bringing down cluster. Prefix: %s. Error: %v\n",
 				prefix, err)
 		} else {
-			fmt.Printf("CLUSTER REMOVED: %s\n", prefix)
+			fmt.Printf("CLUSTER AND NETWORK REMOVED: %s\n", prefix)
 		}
 
 		wg.Done()
