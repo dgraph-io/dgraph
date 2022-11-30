@@ -488,6 +488,7 @@ func populateCluster() {
 		<10007> <age> "25" .
 
 		<1> <alive> "true" .
+		<8> <alive> "true" .
 		<23> <alive> "true" .
 		<25> <alive> "false" .
 		<31> <alive> "false" .
@@ -629,6 +630,7 @@ func populateCluster() {
 		<5> <dgraph.type> "Pet" .
 		<6> <dgraph.type> "Animal" .
 		<6> <dgraph.type> "Pet" .
+		<8> <dgraph.type> "Person" .
 		<23> <dgraph.type> "Person" .
 		<24> <dgraph.type> "Person" .
 		<25> <dgraph.type> "Person" .

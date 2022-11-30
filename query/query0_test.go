@@ -546,6 +546,20 @@ func TestCascadeWithSort(t *testing.T) {
 	require.JSONEq(t, `{"data":{"me":[{"name": "Daryl Dixon","alive": false},{"name": "Rick Grimes","alive": true}]}}`, js)
 }
 
+// Resolved in PR #8441
+func TestNegativeOffset(t *testing.T) {
+	query := `
+	{
+		me(func: type(Person), offset: -1, orderasc: name) {
+			name
+			alive
+		}
+	}
+	`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data":{"me":[{"name":"King Lear"},{"name":"Leonard"},{"name":"Margaret"},{"alive":true}]}}`, js)
+}
+
 func TestLevelBasedFacetVarAggSum(t *testing.T) {
 	query := `
 		{
