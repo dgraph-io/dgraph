@@ -39,12 +39,13 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dgraph := "\nDgraph is up and running...\n\n" //nolint:all
-	dgraph = dgraph + `Now you can access your cluster via Ratel Dashboard.Remember, the PORT to use there to connect to Alpha is 8080 + offset if the case.\n`
-	dgraph = dgraph + "if you are running GraphQL you can use any GraphQL Client from the open source community.\n"
-	dgraph = dgraph + "\nThank you for using Dgraph!\n"
-	dgraph = dgraph + "\nImportant Links:\n\nhttps://dgraph.io/docs\nhttps://discuss.dgraph.io/\nhttps://cloud.dgraph.io/"
-	dgraph = dgraph + "\n\n\nCopyright 2016-2022 Dgraph Labs, Inc. and Contributors.\n"
+	dgraph := "\nDgraph is up and running...\n\n" +
+		"Now you can access your cluster via Ratel Dashboard.\n" +
+		"Remember, the PORT to use there to connect to Alpha is 8080 + offset if the case.\n" +
+		"if you are running GraphQL you can use any GraphQL Client from the open source community.\n" +
+		"\nThank you for using Dgraph!\n" +
+		"\nImportant Links:\n\nhttps://dgraph.io/docs\nhttps://discuss.dgraph.io/\nhttps://cloud.dgraph.io/ " +
+		"\n\n\nCopyright 2016-2022 Dgraph Labs, Inc. and Contributors.\n"
 
 	all := []byte(dgraph)
 
