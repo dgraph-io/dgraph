@@ -494,11 +494,6 @@ func populateCluster() {
 		<10006> <age> "25" .
 		<10007> <age> "25" .
 
-		<40> <age2> "10" .
-		<41> <age2> "20" .
-
-		<40> <name2> "Alice" .
-
 		<1> <alive> "true" .
 		<23> <alive> "true" .
 		<25> <alive> "false" .
@@ -866,6 +861,9 @@ func populateCluster() {
 		<61> <tweet-d> "aaabxxx" .
 		<62> <tweet-d> "aaacdxx" .
 		<63> <tweet-d> "aaabcd" .
+
+		<40> <name2> "Alice" .
+		<41> <age2> "20" .
 	`)
 	if err != nil {
 		panic(fmt.Sprintf("Could not able add triple to the cluster. Got error %v", err.Error()))
