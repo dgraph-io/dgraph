@@ -39,7 +39,7 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dgraph := "\nDgraph is up and running...\n\n" // swiftlint:disable:next line_length
+	dgraph := "\nDgraph is up and running...\n\n" //nolint:all
 	dgraph = dgraph + `Now you can access your cluster via Ratel Dashboard.Remember, the PORT to use there to connect to Alpha is 8080 + offset if the case.\n`
 	dgraph = dgraph + "if you are running GraphQL you can use any GraphQL Client from the open source community.\n"
 	dgraph = dgraph + "\nThank you for using Dgraph!\n"
