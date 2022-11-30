@@ -1188,20 +1188,18 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (resp *api.Response,
 		return nil, serverOverloadErr
 	}
 
-	if bool(glog.V(3)) || worker.LogDQLRequestEnabled() {
-		glog.Infof("Got a DQL query: %+v", req.req)
-	// TODO LOGGING (Damon): nice to create a fast correlation ID here and log the query with
-	// the id, then log time/error with the id too
-
 	isGraphQL, _ := ctx.Value(IsGraphql).(bool)
 	if isGraphQL {
 		atomic.AddUint64(&numGraphQL, 1)
 	} else {
 		atomic.AddUint64(&numGraphQLPM, 1)
 	}
-
 	l := &query.Latency{}
 	l.Start = time.Now()
+
+	if bool(glog.V(3)) || worker.LogDQLRequestEnabled() {
+		glog.Infof("Got a query, DQL form: %+v at %+v", req.req, l.Start)
+	}
 
 	isMutation := len(req.req.Mutations) > 0
 	methodRequest := methodQuery
@@ -1397,10 +1395,9 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 	// Core processing happens here.
 	er, err := qr.Process(ctx)
 
-	// TODO LOGGING (Damon): log the time taken. e.g.:   glog.Infof("Query completed. time=%+v\n", time.Since(qc.latency.Start)
-	// possibly only do this is query logging is turned on
-	// Nice to have: create a (fast, reasonably unique) ID and log the query (above) and the time taken and the error with this ID
-
+	if bool(glog.V(3)) || worker.LogDQLRequestEnabled() {
+		glog.Infof("Finished a query that started at: %+v", qr.Latency.Start)
+	}
 	if err != nil {
 		// TODO LOGGING (Damon): log any errors encountered. e.g.:  glog.Infof("Error processing query: %+v\n", err.Error())
 		return resp, errors.Wrap(err, "")
