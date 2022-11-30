@@ -42,7 +42,7 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 	dgraph := "\nDgraph is up and running...\n\n" +
 		"Now you can access your cluster via Ratel Dashboard.\n" +
 		"Remember, the PORT to use there to connect to Alpha is 8080 + offset if the case.\n" +
-		"if you are running GraphQL you can use any GraphQL Client from the open source community.\n" +
+		"If you are running GraphQL you can use any GraphQL Client from the open source community.\n" +
 		"\nThank you for using Dgraph!\n" +
 		"\nImportant Links:\n\nhttps://dgraph.io/docs\nhttps://discuss.dgraph.io/\nhttps://cloud.dgraph.io/ " +
 		"\n\n\nCopyright 2016-2022 Dgraph Labs, Inc. and Contributors.\n"
