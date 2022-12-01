@@ -39,17 +39,62 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dgraph := "\nDgraph is up and running...\n\n" +
-		"Now you can access your cluster via Ratel Dashboard.\n" +
-		"Remember, the PORT to use there to connect to Alpha is 8080 + offset if the case.\n" +
-		"If you are running GraphQL you can use any GraphQL Client from the open source community.\n" +
-		"\nThank you for using Dgraph!\n" +
-		"\nImportant Links:\n\nhttps://dgraph.io/docs\nhttps://discuss.dgraph.io/\nhttps://cloud.dgraph.io/ " +
-		"\n\n\nCopyright 2016-2022 Dgraph Labs, Inc. and Contributors.\n"
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 
-	all := []byte(dgraph)
+	dgraph := `<body>
+	<BR><h2>Dgraph is up and running...🎉🎉<BR><BR></h2>
+	<p>Now you can access your cluster via Ratel Dashboard.<BR>
+	Remember, the PORT to use there to connect to Alpha is 8080 + offset if the case.<BR>
+	if you are running GraphQL you can use any GraphQL Client from the open source community.</p><BR>
+	<p><BR>Thank you for using Dgraph!</p><BR>
+	<p><BR>Important Links: <BR>
+	<a href="https://dgraph.io/docs" target="_blank">https://dgraph.io/docs</a> <BR>
+	<a href="https://discuss.dgraph.io/" target="_blank">https://discuss.dgraph.io/</a> <BR>
+	<a href="https://cloud.dgraph.io/" target="_blank">https://cloud.dgraph.io/</a></p> <BR>
+	<p><BR><BR><BR> <div>Copyright 2016-2022 Dgraph Labs, Inc. and Contributors.</div>
+	</html>`
 
-	x.Check2(w.Write([]byte(all)))
+	head := `<!DOCTYPE html>
+	<html>
+	<head>
+	<title> Dgraph Alpha 🚀</title>
+	<style>
+	html {
+	    background-color: rgb(19, 21, 22) !important
+       }
+	html, body {
+		background-color: #181a1b;
+	}
+	h2 {
+		color: white;
+		font-family: verdana;
+		font-size: 157%;
+	  }
+	p {
+		color: white;
+		font-family: courier;
+		font-size: 107%;
+	  }
+	a:link {
+        color: #3391ff;
+      }
+    a:hover {
+        color: hotpink;
+      }
+	 div {
+		color: white;
+		font-family: verdana;
+		position: absolute; 
+		left: 0; 
+		right: 0; 
+		margin-left: auto; 
+		margin-right: auto; 
+		width: 469px;
+	  }
+	</style>
+	</head> `
+
+	x.Check2(w.Write([]byte(head + dgraph)))
 }
 
 // Used to return a list of keywords, so that UI can show them for autocompletion.
