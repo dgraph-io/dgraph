@@ -44,9 +44,9 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 	dgraph := `<body>
 	<BR><h2>Dgraph is up and running...🎉🎉<BR><BR></h2>
 	<p>Now you can access your cluster via Ratel Dashboard.<BR>
-	Remember, the PORT to use there to connect to Alpha is 8080 + offset if the case.<BR>
-	if you are running GraphQL you can use any GraphQL Client from the open source community.</p><BR>
-	<p><BR>Thank you for using Dgraph!</p><BR>
+	Remember, the PORT to use there to connect to Alpha is 8080 + offset if the case.<BR><BR>
+	if you are running GraphQL you can use any GraphQL Client from the open source community.</p>
+	<p><BR><em>Thank you for using Dgraph!</em></p>
 	<p><BR>Important Links: <BR>
 	<a href="https://dgraph.io/docs" target="_blank">https://dgraph.io/docs</a> <BR>
 	<a href="https://discuss.dgraph.io/" target="_blank">https://discuss.dgraph.io/</a> <BR>
@@ -59,31 +59,24 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 	<head>
 	<title> Dgraph Alpha 🚀</title>
 	<style>
-	html {
-	    background-color: rgb(19, 21, 22) !important
-       }
-	html, body {
-		background-color: #181a1b;
-	}
+	body{
+		width:35em;
+		margin:0 auto;
+		font-family:Tahoma,Verdana,Arial,sans-serif;
+	     }
 	h2 {
-		color: white;
-		font-family: verdana;
-		font-size: 157%;
-	  }
+		font-size: 150%;
+	   }
 	p {
-		color: white;
-		font-family: courier;
 		font-size: 107%;
 	  }
 	a:link {
-        color: #3391ff;
-      }
-    a:hover {
-        color: hotpink;
-      }
+		color: #3391ff;
+	  }
+	a:hover {
+		color: hotpink;
+	  }
 	 div {
-		color: white;
-		font-family: verdana;
 		position: absolute; 
 		left: 0; 
 		right: 0; 
