@@ -495,7 +495,7 @@ func getPackages() []task {
 
 	slowPkgs := []string{"systest", "ee/acl", "cmd/alpha", "worker", "e2e"}
 	skipPkgs := strings.Split(*skip, ",")
-	runPkgs := strings.Split(*runPkg, ",")
+	runPkgs  := strings.Split(*runPkg, ",")
 
 	moveSlowToFront := func(list []task) []task {
 		// These packages typically take over a minute to run.
@@ -535,12 +535,12 @@ func getPackages() []task {
 			found := false
 			for _, eachPkg := range runPkgs {
 				if strings.HasSuffix(pkg.ID, eachPkg) {
-					fmt.Printf("******* breaking for %s\n", pkg.ID)
 					found = true
 					break
 				}
 			}
 			if !found {
+				// pkg did not match any element of runPkg
 				continue
 			}
 		}
