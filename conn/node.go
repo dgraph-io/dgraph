@@ -573,7 +573,7 @@ var errInternalRetry = errors.New("Retry proposal again")
 func (n *Node) proposeConfChange(ctx context.Context, conf raftpb.ConfChange) error {
 	if ctx.Err() != nil {
 		// If ctx has already errored out, return without proposing.
-		return errors.Wrapf(ctx.Err(), "while proposeConfChange")
+		return errors.Wrap(ctx.Err(), "while proposeConfChange")
 	}
 	// Don't use ctx here, so we can give a proper shot to the proposal. We
 	// don't want to error out due to ctx after having proposed.
