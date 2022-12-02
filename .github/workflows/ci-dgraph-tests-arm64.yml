@@ -15,20 +15,14 @@ on:
     - cron: "0 * * * *"
 jobs:
   dgraph-tests:
-    # TODO: uncomment this after release work
-    # if: github.event.pull_request.draft == false
+    if: github.event.pull_request.draft == false
     runs-on: [self-hosted, ARM64]
     steps:
       - uses: actions/checkout@v3
-      - name: Get Go Version
-        run: |
-          #!/bin/bash
-          GOVERSION=$({ [ -f .go-version ] && cat .go-version; })
-          echo "GOVERSION=$GOVERSION" >> $GITHUB_ENV
       - name: Set up Go
         uses: actions/setup-go@v3
         with:
-          go-version: ${{ env.GOVERSION }}
+          go-version: 1.18
       - name: Set up Node
         uses: actions/setup-node@v3
         with:
@@ -41,39 +35,35 @@ jobs:
           go mod tidy
           make regenerate
           git diff --exit-code -- .
-      - name: Make Linux Build and Docker Image
-        run: make docker-image # this internally builds dgraph binary
-      - name: Build Test Binary
+      - name: Make Docker Image
+        run: make image-local
+      - name: Make Linux Build
         run: |
           #!/bin/bash
-          # build the test binary
-          cd t; go build .
+          # go settings
+          export GOOS=linux
+          export GOARCH=arm64
+          # make dgraph binary
+          make dgraph
       - name: Clean Up Environment
         run: |
           #!/bin/bash
           # clean cache
           go clean -testcache
+          # build the test binary
+          cd t; go build .
           # clean up docker containers before test execution
-          cd t; ./t -r
+          ./t -r
       - name: Run Unit Tests
         run: |
-<<<<<<< HEAD
-           #!/bin/bash
-=======
           #!/bin/bash
->>>>>>> 9ce27b44d8ba42cf8fc1a3e3913001d354e74654
           # go env settings
           export GOPATH=~/go
           # move the binary
           cp dgraph/dgraph ~/go/bin/dgraph
           # run the tests
-<<<<<<< HEAD
           cd t; ./t --skip="systest/export,systest/backup/minio,systest/backup/minio-large"
-=======
-          cd t; ./t --skip="systest/export,systest/backup/minio,systest/backup/minio-large,graphql/e2e/normal,graphql/e2e/directives,graphql/e2e/custom_logic"
->>>>>>> 9ce27b44d8ba42cf8fc1a3e3913001d354e74654
           # clean up docker containers after test execution
           ./t -r
           # sleep
           sleep 5
-
