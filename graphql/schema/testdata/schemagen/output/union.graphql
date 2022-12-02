@@ -771,4 +771,3 @@ type Mutation {
 	updatePlanet(input: UpdatePlanetInput!): UpdatePlanetPayload
 	deletePlanet(filter: PlanetFilter!): DeletePlanetPayload
 }
-

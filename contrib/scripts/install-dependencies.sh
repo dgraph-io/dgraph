@@ -11,4 +11,3 @@ govendor fetch github.com/prometheus/client_golang/prometheus/...@v0.9.2
 govendor fetch google.golang.org/grpc/...@v1.13.0
 # Vendor dgo (latest version before API changes).
 govendor fetch github.com/dgraph-io/dgo...@v1.0.0
-

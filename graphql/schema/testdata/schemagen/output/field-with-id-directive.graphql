@@ -523,4 +523,3 @@ type Mutation {
 	addGenre(input: [AddGenreInput!]!, upsert: Boolean): AddGenrePayload
 	deleteGenre(filter: GenreFilter!): DeleteGenrePayload
 }
-

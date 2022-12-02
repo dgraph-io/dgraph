@@ -526,4 +526,3 @@ type Mutation {
 	updateHuman(input: UpdateHumanInput!): UpdateHumanPayload
 	deleteHuman(filter: HumanFilter!): DeleteHumanPayload
 }
-

@@ -55,4 +55,3 @@ run_index_test releasedate_geq release_date 60992
 run_index_test gen_anyof_good_bad name 1104
 
 popd &> /dev/null
-

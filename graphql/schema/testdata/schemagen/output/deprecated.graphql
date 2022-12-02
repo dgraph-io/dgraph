@@ -367,4 +367,3 @@ type Mutation {
 	updateAtype(input: UpdateAtypeInput!): UpdateAtypePayload
 	deleteAtype(filter: AtypeFilter!): DeleteAtypePayload
 }
-

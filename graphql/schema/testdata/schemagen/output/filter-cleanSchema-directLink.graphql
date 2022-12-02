@@ -434,4 +434,3 @@ type Mutation {
 	deleteY(filter: YFilter!): DeleteYPayload
 	deleteZ(filter: ZFilter!): DeleteZPayload
 }
-

@@ -460,4 +460,3 @@ type Mutation {
 	updateB(input: UpdateBInput!): UpdateBPayload
 	deleteB(filter: BFilter!): DeleteBPayload
 }
-

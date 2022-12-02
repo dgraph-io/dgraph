@@ -8,4 +8,3 @@
 				maxfriendcount: max(val(x))
 			}
 		}
-	

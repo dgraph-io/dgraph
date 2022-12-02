@@ -519,4 +519,3 @@ type Mutation {
 	updateGenre(input: UpdateGenreInput!): UpdateGenrePayload
 	deleteGenre(filter: GenreFilter!): DeleteGenrePayload
 }
-

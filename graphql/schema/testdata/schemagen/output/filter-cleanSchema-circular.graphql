@@ -475,4 +475,3 @@ type Mutation {
 	updateZ(input: UpdateZInput!): UpdateZPayload
 	deleteZ(filter: ZFilter!): DeleteZPayload
 }
-

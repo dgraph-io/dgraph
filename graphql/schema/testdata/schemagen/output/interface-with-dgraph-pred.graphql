@@ -519,4 +519,3 @@ type Mutation {
 	updatePerson(input: UpdatePersonInput!): UpdatePersonPayload
 	deletePerson(filter: PersonFilter!): DeletePersonPayload
 }
-

@@ -467,4 +467,3 @@ type Mutation {
 	updateT(input: UpdateTInput!): UpdateTPayload
 	deleteT(filter: TFilter!): DeleteTPayload
 }
-
