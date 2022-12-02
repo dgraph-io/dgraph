@@ -19,7 +19,7 @@ services:
       source: ../../../ee/acl/hmac-secret
       target: /dgraph-acl/hmac-secret
       read_only: true
-    command: /gobin/dgraph  --test.coverprofile=coverage.outalpha --my=alpha1:7080 --zero=zero1:5080
+    command: /gobin/dgraph  --test.coverprofile=coverage.out alpha --my=alpha1:7080 --zero=zero1:5080
       --logtostderr -v=2 --raft "idx=1;"
       --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
       --acl "secret-file=/dgraph-acl/hmac-secret; access-ttl=3000s;"
@@ -42,7 +42,7 @@ services:
       source: ../../../ee/acl/hmac-secret
       target: /dgraph-acl/hmac-secret
       read_only: true
-    command: /gobin/dgraph  --test.coverprofile=coverage.outalpha --my=alpha2:7080 --zero=zero1:5080
+    command: /gobin/dgraph  --test.coverprofile=coverage.out alpha --my=alpha2:7080 --zero=zero1:5080
       --logtostderr -v=2 --raft "idx=2;" 
       --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
       --acl "secret-file=/dgraph-acl/hmac-secret; access-ttl=3000s;"
@@ -65,7 +65,7 @@ services:
       source: ../../../ee/acl/hmac-secret
       target: /dgraph-acl/hmac-secret
       read_only: true
-    command: /gobin/dgraph  --test.coverprofile=coverage.outalpha --my=alpha3:7080 --zero=zero1:5080
+    command: /gobin/dgraph  --test.coverprofile=coverage.out alpha --my=alpha3:7080 --zero=zero1:5080
       --logtostderr -v=2 --raft "idx=3;" 
       --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
       --acl "secret-file=/dgraph-acl/hmac-secret; access-ttl=3000s;"
@@ -82,6 +82,6 @@ services:
       source: $GOPATH/bin
       target: /gobin
       read_only: true
-    command: /gobin/dgraph  --test.coverprofile=coverage.outzero --raft "idx=1;" --my=zero1:5080 --replicas=1 --logtostderr
+    command: /gobin/dgraph  --test.coverprofile=coverage.out zero --raft "idx=1;" --my=zero1:5080 --replicas=1 --logtostderr
       -v=2 --bindall
 volumes: {}

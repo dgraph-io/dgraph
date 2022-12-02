@@ -21,7 +21,7 @@ services:
       source: data
       target: /data
       read_only: false
-    command: /gobin/dgraph  --test.coverprofile=coverage.outalpha --my=alpha1:7080 --zero=zero1:5080 --logtostderr
+    command: /gobin/dgraph  --test.coverprofile=coverage.out alpha --my=alpha1:7080 --zero=zero1:5080 --logtostderr
       -v=2 
       --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
   alpha2:
@@ -43,7 +43,7 @@ services:
       source: data
       target: /data
       read_only: false
-    command: /gobin/dgraph  --test.coverprofile=coverage.outalpha --my=alpha2:7080 --zero=zero1:5080 --logtostderr
+    command: /gobin/dgraph  --test.coverprofile=coverage.out alpha --my=alpha2:7080 --zero=zero1:5080 --logtostderr
       -v=2 
       --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
   alpha3:
