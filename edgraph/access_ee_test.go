@@ -12,8 +12,6 @@ import (
 )
 
 var (
-	secretkey string = "secretkey"
-
 	userDataList = []userData{
 		userData{1234567890, "user1", []string{"701", "702"}},
 		userData{2345678901, "user2", []string{"703", "701"}},
@@ -68,6 +66,28 @@ func sliceCompare(x, y []string) bool {
 	return true
 }
 
+func compareTokenParts (tok1 string, tok2 string, part ...int) bool {
+	var (
+		match bool         = true
+	)
+
+	t1 := strings.Split (tok1, ".")
+	t2 := strings.Split (tok2, ".")
+
+	for _, p := range part {
+		if p <= 0 {
+			continue
+		}
+
+		if t1 [p - 1] != t2 [p - 1] {
+			match = false
+			break
+		}
+	}
+
+	return match
+}
+
 func TestValidateToken(t *testing.T) {
 	var (
 		err         error
@@ -93,7 +113,6 @@ func TestValidateToken(t *testing.T) {
 
 func TestGetAccessJwt(t *testing.T) {
 	var (
-		err    error
 		tokstr string
 		jwtstr string
 		exp    int64 = time.Now().Add(worker.Config.AccessJwtTtl).Unix()
@@ -122,59 +141,34 @@ func TestGetAccessJwt(t *testing.T) {
 
 	for _, userdata := range userDataList {
 		g := acl.GetGroupIDs(grpLst)
-		if tokstr, err = generateJWT(userdata.namespace, userdata.userId, g, exp); err != nil {
-			t.Errorf("JWT token string generation error: %s", err)
-			return
-		}
-		t1 := strings.Split(tokstr, ".")
-
-		jwtstr, err = getAccessJwt(userdata.userId, grpLst, userdata.namespace)
-		if err != nil {
-			t.Errorf("getAccessJwt () error: %s", err)
-			return
-		}
-		t2 := strings.Split(jwtstr, ".")
+		tokstr, _ = generateJWT(userdata.namespace, userdata.userId, g, exp)
+		jwtstr, _ = getAccessJwt(userdata.userId, grpLst, userdata.namespace)
 
 		/*
 		 * JWT token format = [header].[payload].[signature].
 		 * One of the factor [signature] would differ is based on the expiry time.
 		 * This will differ for tokstr and jwtstr and hence ignoring it.
 		 */
-		if t1[0] != t2[0] || t1[1] != t2[1] {
-			t.Errorf("Actual output is not equal to the expected output")
-		}
+		compareTokenParts (tokstr, jwtstr, 1, 2 ,0) // compare 1st and 2nd part, ignore the 3rd.
 	}
 }
 
 func TestGetRefreshJwt(t *testing.T) {
 	var (
-		err    error
 		tokstr string
 		jwtstr string
 		exp    int64 = time.Now().Add(worker.Config.RefreshJwtTtl).Unix()
 	)
 
 	for _, userdata := range userDataList {
-		if tokstr, err = generateJWT(userdata.namespace, userdata.userId, nil, exp); err != nil {
-			t.Errorf("JWT token string generation error: %s", err)
-			return
-		}
-		t1 := strings.Split(tokstr, ".")
-
-		jwtstr, err = getRefreshJwt(userdata.userId, userdata.namespace)
-		if err != nil {
-			t.Errorf("getAccessJwt () error: %s", err)
-			return
-		}
-		t2 := strings.Split(jwtstr, ".")
+		tokstr, _ = generateJWT(userdata.namespace, userdata.userId, nil, exp)
+		jwtstr, _ = getRefreshJwt(userdata.userId, userdata.namespace)
 
 		/*
-		 * JWT token format = [header].[payload].[signature].
+		 * JWT token format = [header].[payload].[signature]
 		 * One of the factor [signature] would differ is based on the expiry time.
 		 * This will differ for tokstr and jwtstr and hence ignoring it.
 		 */
-		if t1[0] != t2[0] || t1[1] != t2[1] {
-			t.Errorf("Actual output is not equal to the expected output")
-		}
+		compareTokenParts (tokstr, jwtstr, 1, 2 ,0) // compare 1st and 2nd part, ignore the 3rd.
 	}
 }
