@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Dgraph Labs, Inc. and Contributors
+ * Copyright 2022 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -266,7 +266,7 @@ func AddToGroup(t *testing.T, token *HttpToken, userName, group string) {
 	require.True(t, foundGroup)
 }
 
-func AddRulesToGroup(t *testing.T, token *HttpToken, group string, rules []Rule) {
+func AddRulesToGroup(t *testing.T, token *HttpToken, group string, rules []Rule, newGroup bool) {
 	addRuleToGroup := `mutation updateGroup($name: String!, $rules: [RuleRef!]!) {
 		updateGroup(input: {
 			filter: {
@@ -309,7 +309,9 @@ func AddRulesToGroup(t *testing.T, token *HttpToken, group string, rules []Rule)
 			]
 		  }
 	  }`, group, rulesb)
-	CompareJSON(t, expectedOutput, string(resp.Data))
+	if newGroup {
+		CompareJSON(t, expectedOutput, string(resp.Data))
+	}
 }
 
 func DgClientWithLogin(t *testing.T, id, password string, ns uint64) *dgo.Dgraph {

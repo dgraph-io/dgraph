@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 Dgraph Labs, Inc. and Contributors
+ * Copyright 2022 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -299,10 +299,10 @@ const (
 		cacheMb: Float
 
 		"""
-		True value of logRequest enables logging of all the requests coming to alphas.
-		False value of logRequest disables above.
+		True value of logDQLRequest enables logging of all the requests coming to alphas.
+		False value of logDQLRequest disables above.
 		"""
-		logRequest: Boolean
+		logDQLRequest: Boolean
 	}
 
 	type ConfigPayload {
@@ -502,7 +502,7 @@ var (
 	adminQueryMWConfig = map[string]resolve.QueryMiddlewares{
 		"health":       minimalAdminQryMWs, // dgraph checks Guardian auth for health
 		"state":        minimalAdminQryMWs, // dgraph checks Guardian auth for state
-		"config":       stdAdminQryMWs,
+		"config":       gogQryMWs,
 		"listBackups":  gogQryMWs,
 		"getGQLSchema": stdAdminQryMWs,
 		// for queries and mutations related to User/Group, dgraph handles Guardian auth,

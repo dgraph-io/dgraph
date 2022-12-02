@@ -15,14 +15,20 @@ on:
     - cron: "0 * * * *"
 jobs:
   dgraph-tests:
-    if: github.event.pull_request.draft == false
+    # TODO: uncomment this after release work
+    # if: github.event.pull_request.draft == false
     runs-on: [self-hosted, ARM64]
     steps:
       - uses: actions/checkout@v3
+      - name: Get Go Version
+        run: |
+          #!/bin/bash
+          GOVERSION=$({ [ -f .go-version ] && cat .go-version; })
+          echo "GOVERSION=$GOVERSION" >> $GITHUB_ENV
       - name: Set up Go
         uses: actions/setup-go@v3
         with:
-          go-version: 1.18
+          go-version: ${{ env.GOVERSION }}
       - name: Set up Node
         uses: actions/setup-node@v3
         with:
@@ -35,39 +41,31 @@ jobs:
           go mod tidy
           make regenerate
           git diff --exit-code -- .
-      - name: Make Docker Image
-        run: make image-local
-      - name: Make Linux Build
+      - name: Make Linux Build and Docker Image
+        run: make docker-image # this internally builds dgraph binary
+      - name: Build Test Binary
         run: |
           #!/bin/bash
-          # go settings
-          export GOOS=linux
-          export GOARCH=arm64
-          # make dgraph binary
-          make dgraph
+          # build the test binary
+          cd t; go build .
       - name: Clean Up Environment
         run: |
           #!/bin/bash
           # clean cache
           go clean -testcache
-          # build the test binary
-          cd t; go build .
           # clean up docker containers before test execution
-          ./t -r
+          cd t; ./t -r
       - name: Run Unit Tests
         run: |
           #!/bin/bash
-          # clean cache
-          go clean -testcache
           # go env settings
           export GOPATH=~/go
           # move the binary
-          cp dgraph/dgraph ~/go/bin 
-          # build the test binary
-          cd t; go build .
-          # Trial: Singular test PKG
-          ./t --pkg=worker
+          cp dgraph/dgraph ~/go/bin/dgraph
+          # run the tests
+          cd t; ./t --skip="systest/export,systest/backup/minio,systest/backup/minio-large,graphql/e2e/normal,graphql/e2e/directives,graphql/e2e/custom_logic"
           # clean up docker containers after test execution
           ./t -r
           # sleep
           sleep 5
+

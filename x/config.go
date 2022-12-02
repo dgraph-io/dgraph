@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2022 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -130,11 +130,11 @@ type WorkerOptions struct {
 	Security *z.SuperFlag
 	// EncryptionKey is the key used for encryption at rest, backups, exports. Enterprise only feature.
 	EncryptionKey SensitiveByteSlice
-	// LogRequest indicates whether alpha should log all query/mutation requests coming to it.
-	// Ideally LogRequest should be a bool value. But we are reading it using atomics across
-	// queries hence it has been kept as int32. LogRequest value 1 enables logging of requests
+	// LogDQLRequest indicates whether alpha should log all query/mutation requests coming to it.
+	// Ideally LogDQLRequest should be a bool value. But we are reading it using atomics across
+	// queries hence it has been kept as int32. LogDQLRequest value 1 enables logging of requests
 	// coming to alphas and 0 disables it.
-	LogRequest int32
+	LogDQLRequest int32
 	// If true, we should call msync or fsync after every write to survive hard reboots.
 	HardSync bool
 	// Audit contains the audit flags that enables the audit.

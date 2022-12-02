@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 Dgraph Labs, Inc. and Contributors
+ * Copyright 2022 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -203,6 +203,9 @@ func recursivelyExpandFragmentSelections(field *ast.Field, op *operation) {
 	}, field.SelectionSet, satisfies)
 	field.SelectionSet = make([]ast.Selection, 0, len(collectedFields))
 	for _, collectedField := range collectedFields {
+		if len(collectedField.Selections) > 0 {
+			collectedField.Field.SelectionSet = collectedField.Selections
+		}
 		field.SelectionSet = append(field.SelectionSet, collectedField.Field)
 	}
 

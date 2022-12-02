@@ -26,7 +26,6 @@ services:
     restart: on-failure
     command: dgraph alpha --my=alpha:7080 --zero=zero:5080
   ratel:
-    image: dgraph/dgraph:latest
+    image: dgraph/ratel:latest
     ports:
       - 8000:8000
-    command: dgraph-ratel

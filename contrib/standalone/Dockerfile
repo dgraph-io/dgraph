@@ -3,7 +3,7 @@ FROM dgraph/dgraph:${DGRAPH_VERSION}
 LABEL MAINTAINER="Dgraph Labs <contact@dgraph.io>"
 
 # Ratel port
-EXPOSE 8000
+# EXPOSE 8000 ## Ratel is not supported in the standalone image
 # REST API port
 EXPOSE 8080
 # gRPC API port
