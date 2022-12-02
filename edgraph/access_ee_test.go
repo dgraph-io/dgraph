@@ -149,7 +149,10 @@ func TestGetAccessJwt(t *testing.T) {
 		 * One of the factor [signature] would differ is based on the expiry time.
 		 * This will differ for tokstr and jwtstr and hence ignoring it.
 		 */
-		compareTokenParts (tokstr, jwtstr, 1, 2 ,0) // compare 1st and 2nd part, ignore the 3rd.
+		match := compareTokenParts (tokstr, jwtstr, 1, 2 ,0) // compare 1st and 2nd part, ignore the 3rd.
+		if match == false {
+			t.Errorf ("Actual output is not equal to the expected output")
+		}
 	}
 }
 
@@ -169,6 +172,9 @@ func TestGetRefreshJwt(t *testing.T) {
 		 * One of the factor [signature] would differ is based on the expiry time.
 		 * This will differ for tokstr and jwtstr and hence ignoring it.
 		 */
-		compareTokenParts (tokstr, jwtstr, 1, 2 ,0) // compare 1st and 2nd part, ignore the 3rd.
+		match := compareTokenParts (tokstr, jwtstr, 1, 2 ,0) // compare 1st and 2nd part, ignore the 3rd.
+		if match == false {
+			t.Errorf ("Actual output is not equal to the expected output")
+		}
 	}
 }
