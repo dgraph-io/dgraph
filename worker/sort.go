@@ -329,7 +329,9 @@ BUCKETS:
 
 		// Apply the offset on null nodes, if the nodes with value were not enough.
 		if out[i].offset < len(nullNodes) {
-			nullNodes = nullNodes[out[i].offset:]
+			if out[i].offset >= 0 {
+				nullNodes = nullNodes[out[i].offset:]
+			}
 		} else {
 			nullNodes = nullNodes[:0]
 		}
