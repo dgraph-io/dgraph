@@ -22,8 +22,7 @@ services:
       --security "whitelist=10.0.0.0/8,172.0.0.0/8,192.168.0.0/16,127.0.0.1;"
 
   ratel:
-    image: dgraph/dgraph:${DGRAPH_VERSION}
+    image: dgraph/ratel:${DGRAPH_VERSION}
     ports:
       - 8000:8000
-    command: dgraph-ratel
     container_name: ratel

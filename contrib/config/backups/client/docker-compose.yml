@@ -33,7 +33,7 @@ services:
 
   ratel:
     ## DGRAPH_VERSION set by ./compose-setup.sh
-    image: dgraph/dgraph:$DGRAPH_VERSION
+    image: dgraph/ratel:$DGRAPH_VERSION
     volumes:
       - type: bind
         source: ./data
@@ -41,5 +41,4 @@ services:
         read_only: false
     ports:
       - 8000:8000
-    command: dgraph-ratel
     container_name: ratel

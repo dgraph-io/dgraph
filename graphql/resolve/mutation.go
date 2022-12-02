@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 Dgraph Labs, Inc. and Contributors
+ * Copyright 2022 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -446,7 +446,7 @@ func (mr *dgraphResolver) rewriteAndExecute(
 	dgQuery, err = mr.mutationRewriter.FromMutationResult(ctx, mutation, mutResp.GetUids(), result)
 	queryErrs = schema.AppendGQLErrs(queryErrs, schema.GQLWrapf(err,
 		"couldn't rewrite query for mutation %s", mutation.Name()))
-	if dgQuery == nil && err != nil {
+	if err != nil {
 		return emptyResult(queryErrs), resolverFailed
 	}
 

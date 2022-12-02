@@ -251,10 +251,10 @@ Here are the important types, queries, and mutations from the `admin` schema.
 		cacheMb: Float
 
 		"""
-		True value of logRequest enables logging of all the requests coming to alphas.
-		False value of logRequest disables above.
+		True value of logDQLRequest enables logging of all the requests coming to alphas.
+		False value of logDQLRequest disables above.
 		"""
-		logRequest: Boolean
+		logDQLRequest: Boolean
 	}
 
 	type ConfigPayload {

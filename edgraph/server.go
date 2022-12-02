@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2022 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1188,8 +1188,8 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (resp *api.Response,
 		return nil, serverOverloadErr
 	}
 
-	if bool(glog.V(3)) || worker.LogRequestEnabled() {
-		glog.Infof("Got a query: %+v", req.req)
+	if bool(glog.V(3)) || worker.LogDQLRequestEnabled() {
+		glog.Infof("Got a DQL query: %+v", req.req)
 	}
 
 	isGraphQL, _ := ctx.Value(IsGraphql).(bool)

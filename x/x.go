@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2021 Dgraph Labs, Inc. and Contributors
+ * Copyright 2015-2022 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1135,12 +1135,11 @@ func IsGuardian(groups []string) bool {
 	return false
 }
 
-// RunVlogGC runs value log gc on store. It runs GC unconditionally after every 10 minutes.
-// Additionally it also runs GC if vLogSize has grown more than 1 GB in last minute.
+// RunVlogGC runs value log gc on store. It runs GC unconditionally after every 1 minute.
 func RunVlogGC(store *badger.DB, closer *z.Closer) {
 	defer closer.Done()
 
-	// Runs every 1m, checks size of vlog and runs GC conditionally.
+	// Runs every 1m
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
 

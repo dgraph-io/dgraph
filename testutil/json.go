@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 Dgraph Labs, Inc. and Contributors
+ * Copyright 2022 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,7 +41,7 @@ func CompareJSONMaps(t *testing.T, wantMap, gotMap map[string]interface{}) bool 
 	return DiffJSONMaps(t, wantMap, gotMap, "", false)
 }
 
-//EqualJSON compares two JSON objects for equality.
+// EqualJSON compares two JSON objects for equality.
 func EqualJSON(t *testing.T, want, got string, savepath string, quiet bool) bool {
 	wantMap := UnmarshalJSON(t, want)
 	gotMap := UnmarshalJSON(t, got)
