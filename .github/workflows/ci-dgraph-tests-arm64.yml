@@ -56,17 +56,13 @@ jobs:
           ./t -r
       - name: Run Unit Tests
         run: |
-          #!/bin/bash
-          # clean cache
-          go clean -testcache
+           #!/bin/bash
           # go env settings
           export GOPATH=~/go
           # move the binary
-          cp dgraph/dgraph ~/go/bin 
-          # build the test binary
-          cd t; go build .
-          # Trial: Singular test PKG
-          ./t --pkg=worker
+          cp dgraph/dgraph ~/go/bin/dgraph
+          # run the tests
+          cd t; ./t --skip="systest/export,systest/backup/minio,systest/backup/minio-large"
           # clean up docker containers after test execution
           ./t -r
           # sleep
