@@ -79,7 +79,7 @@ $(BIN): clean jemalloc
 	@go build $(BUILD_FLAGS) -o $(BIN)
 
 test-binary: clean jemalloc
-	@go test -c -covermode=atomic -coverpkg ./... $(BUILD_FLAGS) -o $(BIN)
+	@go test -c -covermode=atomic -coverpkg ../... $(BUILD_FLAGS) -o $(BIN)
 
 clean:
 	@rm -f $(BIN)
