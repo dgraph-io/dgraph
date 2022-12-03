@@ -15,7 +15,7 @@ on:
     - cron: "30 * * * *"
 jobs:
   dgraph-ldbc-tests:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - name: Checkout Dgraph
         uses: actions/checkout@v3
