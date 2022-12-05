@@ -110,7 +110,7 @@ func CreateNamespaceWithRetry(t *testing.T, token *HttpToken) (uint64, error) {
 					 addNamespace
 					  {
 					    namespaceId
-						message
+					    message
 					  }
 					}`
 
