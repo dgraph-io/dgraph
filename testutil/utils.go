@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Dgraph Labs, Inc. and Contributors
+ * Copyright 2022 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -59,7 +59,7 @@ func GalaxyCountKey(attr string, count uint32, reverse bool) []byte {
 	return x.CountKey(attr, count, reverse)
 }
 
-func WaitForTask(t *testing.T, taskId string, useHttps bool, socketAddrHttp string) {
+func WaitForTask(t *testing.T, taskId string, useHttps bool) {
 	const query = `query task($id: String!) {
 		task(input: {id: $id}) {
 			status
@@ -78,10 +78,10 @@ func WaitForTask(t *testing.T, taskId string, useHttps bool, socketAddrHttp stri
 		var adminUrl string
 		var client http.Client
 		if useHttps {
-			adminUrl = "https://" + socketAddrHttp + "/admin"
+			adminUrl = "https://" + SockAddrHttp + "/admin"
 			client = GetHttpsClient(t)
 		} else {
-			adminUrl = "http://" + socketAddrHttp + "/admin"
+			adminUrl = "http://" + SockAddrHttp + "/admin"
 			client = *http.DefaultClient
 		}
 		response, err := client.Post(adminUrl, "application/json", bytes.NewBuffer(request))

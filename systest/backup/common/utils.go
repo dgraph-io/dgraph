@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Dgraph Labs, Inc. and Contributors *
+ * Copyright 2022 Dgraph Labs, Inc. and Contributors *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -89,15 +89,5 @@ func CopyToLocalFs(t *testing.T) {
 	// "docker cp" to create a copy that is not owned by the root user.
 	require.NoError(t, os.RemoveAll(copyBackupDir))
 	srcPath := testutil.DockerPrefix + "_alpha1_1:/data/backups"
-	require.NoError(t, testutil.DockerCp(srcPath, copyBackupDir))
-}
-
-// to copy files fron nfs server
-func CopyToLocalFsFromNFS(t *testing.T, backupDst string) {
-	// The original backup files are not accessible because docker creates all files in
-	// the shared volume as the root user. This restriction is circumvented by using
-	// "docker cp" to create a copy that is not owned by the root user.
-	require.NoError(t, os.RemoveAll(copyBackupDir))
-	srcPath := testutil.DockerPrefix + "_nfs_1:/dgraph-data/backup" + backupDst
 	require.NoError(t, testutil.DockerCp(srcPath, copyBackupDir))
 }

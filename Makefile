@@ -34,10 +34,10 @@ DGRAPH_VERSION ?= local
 all: dgraph
 
 dgraph:
-	GOOS=linux GOARCH=amd64 $(MAKE) -w -C $@ all
+	$(MAKE) -w -C $@ all
 
 oss:
-	GOOS=linux GOARCH=amd64 $(MAKE) BUILD_TAGS=oss
+	$(MAKE) BUILD_TAGS=oss
 
 version:
 	@echo Dgraph ${BUILD_VERSION}
@@ -48,26 +48,19 @@ version:
 	@echo Go version: $(shell go version)
 
 install:
-	@echo "Installing dgraph ..."; \
-		GOOS=linux GOARCH=amd64 $(MAKE) -C dgraph install; \
+	@echo "Installing Dgraph..."; \
+		$(MAKE) -C dgraph install; \
 
 install_oss oss_install:
-	GOOS=linux GOARCH=amd64 $(MAKE) BUILD_TAGS=oss install
+	$(MAKE) BUILD_TAGS=oss install
 
 uninstall:
-	@echo "Uninstalling dgraph ..."; \
+	@echo "Uninstalling Dgraph ..."; \
 		$(MAKE) -C dgraph uninstall; \
 
 test: image-local
 	@mv dgraph/dgraph ${GOPATH}/bin
 	@$(MAKE) -C t test
-
-image:
-	@GOOS=linux GOARCH=amd64 $(MAKE) dgraph
-	@mkdir -p linux
-	@mv ./dgraph/dgraph ./linux/dgraph
-	@docker build -f contrib/Dockerfile -t dgraph/dgraph:$(subst /,-,${BUILD_BRANCH}) .
-	@rm -r linux
 
 image-local local-image:
 	@GOOS=linux GOARCH=amd64 $(MAKE) dgraph
@@ -76,20 +69,7 @@ image-local local-image:
 	@docker build -f contrib/Dockerfile -t dgraph/dgraph:local .
 	@rm -r linux
 
-
-dgraph-nfs-client :
-	@GOOS=linux GOARCH=amd64 $(MAKE) dgraph
-	@mkdir -p systest/backup/nfs-backup/docker-utils/dgraph-nfs-client/linux
-	@cp ./dgraph/dgraph ./systest/backup/nfs-backup/docker-utils/dgraph-nfs-client/linux/dgraph
-	@cd systest/backup/nfs-backup/docker-utils/dgraph-nfs-client ; \
-	     docker build   -t dgraph-nfs-client .
-	@rm -r ./systest/backup/nfs-backup/docker-utils/dgraph-nfs-client/linux
-
-nfs-server :
-	@cd  systest/backup/nfs-backup/docker-utils/docker-nfs-server ; \
-	     docker build   -t nfs-docker-server:latest .
-
-docker-image: dgraph nfs-server dgraph-nfs-client
+docker-image: dgraph
 	@mkdir -p linux
 	@cp ./dgraph/dgraph ./linux/dgraph
 	docker build -f contrib/Dockerfile -t dgraph/dgraph:$(DGRAPH_VERSION) .
