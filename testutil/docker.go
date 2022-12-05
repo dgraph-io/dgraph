@@ -72,7 +72,7 @@ func (in ContainerInstance) BestEffortWaitForHealthy(privatePort uint16) error {
 			resp.Body.Close()
 		}
 		if err == nil && resp.StatusCode == http.StatusOK {
-			fmt.Println("------------> Healthy ", i + port)
+			fmt.Println("------------> Healthy ", strconv.Itoa(i)+port)
 			return checkACL(body)
 		}
 		fmt.Printf("Health for %s failed: %v. Response: %q. Retrying...\n", in, err, body)
