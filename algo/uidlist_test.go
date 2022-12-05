@@ -260,7 +260,6 @@ func TestUIDListIntersect5(t *testing.T) {
 
 func TestUIDListIntersect6(t *testing.T) {
 	common, other, _ := fillNums(10, 500)
-	// fmt.Println(common, other)
 	u := newList(common)
 	v := newList(other)
 	IntersectWith(u, v, u)
