@@ -230,25 +230,27 @@ type Function struct {
 // SubGraph is the way to represent data. It contains both the request parameters and the response.
 // Once generated, this can then be encoded to other client convenient formats, like GraphQL / JSON.
 // SubGraphs are recursively nested. Each SubGraph contain the following:
-// * SrcUIDS: A list of UIDs that were sent to this query. If this subgraph is a child graph, then the
-//            DestUIDs of the parent must match the SrcUIDs of the children.
-// * DestUIDs: A list of UIDs for which there can be output found in the Children field
-// * Children: A list of child results for this query
-// * valueMatrix: A list of values, against a single attribute, such as name (for a scalar subgraph).
-//                This must be the same length as the SrcUIDs
-// * uidMatrix: A list of outgoing edges. This must be same length as the SrcUIDs list.
+//   - SrcUIDS: A list of UIDs that were sent to this query. If this subgraph is a child graph, then the
+//     DestUIDs of the parent must match the SrcUIDs of the children.
+//   - DestUIDs: A list of UIDs for which there can be output found in the Children field
+//   - Children: A list of child results for this query
+//   - valueMatrix: A list of values, against a single attribute, such as name (for a scalar subgraph).
+//     This must be the same length as the SrcUIDs
+//   - uidMatrix: A list of outgoing edges. This must be same length as the SrcUIDs list.
+//
 // Example, say we are creating a SubGraph for a query "users", which returns one user with name 'Foo', you may get
 // SubGraph
-//   Params: { Alias: "users" }
-//   SrcUIDs: [1]
-//   DestUIDs: [1]
-//   uidMatrix: [[1]]
-//   Children:
-//     SubGraph:
-//       Attr: "name"
-//       SrcUIDs: [1]
-//       uidMatrix: [[]]
-//       valueMatrix: [["Foo"]]
+//
+//	Params: { Alias: "users" }
+//	SrcUIDs: [1]
+//	DestUIDs: [1]
+//	uidMatrix: [[1]]
+//	Children:
+//	  SubGraph:
+//	    Attr: "name"
+//	    SrcUIDs: [1]
+//	    uidMatrix: [[]]
+//	    valueMatrix: [["Foo"]]
 type SubGraph struct {
 	ReadTs      uint64
 	Cache       int
@@ -933,8 +935,8 @@ func createTaskQuery(ctx context.Context, sg *SubGraph) (*pb.Query, error) {
 		sg.Params.ExpandAll = true
 	}
 
-	// count is to limit how many results we want.
-	first := calculateFirstN(sg)
+	// first is to limit how many results we want.
+	first, offset := calculatePaginationParams(sg)
 
 	out := &pb.Query{
 		ReadTs:       sg.ReadTs,
@@ -949,6 +951,7 @@ func createTaskQuery(ctx context.Context, sg *SubGraph) (*pb.Query, error) {
 		FacetsFilter: sg.facetsFilter,
 		ExpandAll:    sg.Params.ExpandAll,
 		First:        first,
+		Offset:       offset,
 	}
 
 	if sg.SrcUIDs != nil {
@@ -957,8 +960,9 @@ func createTaskQuery(ctx context.Context, sg *SubGraph) (*pb.Query, error) {
 	return out, nil
 }
 
-// calculateFirstN returns the count of result we need to proceed query further down.
-func calculateFirstN(sg *SubGraph) int32 {
+// calculatePaginationParams returns the (count, offset) of result
+// we need to proceed query further down.
+func calculatePaginationParams(sg *SubGraph) (int32, int32) {
 	// by default count is zero. (zero will retrieve all the results)
 	count := math.MaxInt32
 	// In order to limit we have to make sure that the this level met the following conditions
@@ -991,12 +995,12 @@ func calculateFirstN(sg *SubGraph) int32 {
 	}
 
 	if len(sg.Filters) == 0 && len(sg.Params.Order) == 0 && !shouldExclude {
-		// Offset also added because, we need n results to trim the offset.
 		if sg.Params.Count != 0 {
-			count = sg.Params.Count + sg.Params.Offset
+			return int32(sg.Params.Count), int32(sg.Params.Offset)
 		}
 	}
-	return int32(count)
+	// make offset = 0, if there is need to fetch all the results.
+	return int32(count), 0
 }
 
 // varValue is a generic representation of a variable and holds multiple things.
@@ -2210,6 +2214,10 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			}
 
 			filter.SrcUIDs = sg.DestUIDs
+			if len(filter.SrcUIDs.Uids) == 0 {
+				filterChan <- nil
+				continue
+			}
 			// Passing the pointer is okay since the filter only reads.
 			filter.Params.ParentVars = sg.Params.ParentVars // Pass to the child.
 			go ProcessGraph(ctx, filter, sg, filterChan)
@@ -2256,10 +2264,14 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	}
 
 	if len(sg.Params.Order) == 0 && len(sg.Params.FacetsOrder) == 0 {
-		// There is no ordering. Just apply pagination and return.
-		if err = sg.applyPagination(ctx); err != nil {
-			rch <- err
-			return
+		// for `has` function when there is no filtering and ordering, we fetch
+		// correct paginated results so no need to apply pagination here.
+		if !(len(sg.Filters) == 0 && sg.SrcFunc != nil && sg.SrcFunc.Name == "has") {
+			// There is no ordering. Just apply pagination and return.
+			if err = sg.applyPagination(ctx); err != nil {
+				rch <- err
+				return
+			}
 		}
 	} else {
 		// If we are asked for count, we don't need to change the order of results.

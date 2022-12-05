@@ -495,6 +495,7 @@ func getPackages() []task {
 
 	slowPkgs := []string{"systest", "ee/acl", "cmd/alpha", "worker", "e2e"}
 	skipPkgs := strings.Split(*skip, ",")
+	runPkgs  := strings.Split(*runPkg, ",")
 
 	moveSlowToFront := func(list []task) []task {
 		// These packages typically take over a minute to run.
@@ -530,8 +531,18 @@ func getPackages() []task {
 
 	var valid []task
 	for _, pkg := range pkgs {
-		if len(*runPkg) > 0 && !strings.HasSuffix(pkg.ID, "/"+*runPkg) {
-			continue
+		if len(*runPkg) > 0 {
+			found := false
+			for _, eachPkg := range runPkgs {
+				if strings.HasSuffix(pkg.ID, eachPkg) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				// pkg did not match any element of runPkg
+				continue
+			}
 		}
 
 		if len(*runTest) > 0 {
@@ -632,8 +643,10 @@ func isValidPackageForSuite(pkg string) bool {
 		return true
 	case "load":
 		return isLoadPackage(pkg)
+	case "ldbc":
+		return isLDBCPackage(pkg)
 	case "unit":
-		return !isLoadPackage(pkg)
+		return !isLoadPackage(pkg) && !isLDBCPackage(pkg)
 	default:
 		fmt.Printf("wrong suite is provide %s. valid values are all/load/unit \n", *suite)
 		return false
@@ -649,12 +662,49 @@ func isLoadPackage(pkg string) bool {
 	return false
 }
 
+func isLDBCPackage(pkg string) bool {
+	return strings.HasSuffix(pkg, "/systest/ldbc")
+}
+
 var datafiles = map[string]string{
 	"1million-noindex.schema": "https://github.com/dgraph-io/benchmarks/blob/master/data/1million-noindex.schema?raw=true",
 	"1million.schema":         "https://github.com/dgraph-io/benchmarks/blob/master/data/1million.schema?raw=true",
 	"1million.rdf.gz":         "https://github.com/dgraph-io/benchmarks/blob/master/data/1million.rdf.gz?raw=true",
 	"21million.schema":        "https://github.com/dgraph-io/benchmarks/blob/master/data/21million.schema?raw=true",
 	"21million.rdf.gz":        "https://github.com/dgraph-io/benchmarks/blob/master/data/21million.rdf.gz?raw=true",
+}
+
+var baseUrl = "https://github.com/dgraph-io/benchmarks/blob/master/ldbc/sf0.3/ldbc_rdf_0.3/"
+var suffix = "?raw=true"
+
+var rdfFileNames = [...]string{
+	"Deltas.rdf",
+	"comment_0.rdf",
+	"containerOf_0.rdf",
+	"forum_0.rdf",
+	"hasCreator_0.rdf",
+	"hasInterest_0.rdf",
+	"hasMember_0.rdf",
+	"hasModerator_0.rdf",
+	"hasTag_0.rdf",
+	"hasType_0.rdf",
+	"isLocatedIn_0.rdf",
+	"isPartOf_0.rdf",
+	"isSubclassOf_0.rdf",
+	"knows_0.rdf",
+	"likes_0.rdf",
+	"organisation_0.rdf",
+	"person_0.rdf",
+	"place_0.rdf",
+	"post_0.rdf",
+	"replyOf_0.rdf",
+	"studyAt_0.rdf",
+	"tag_0.rdf",
+	"tagclass_0.rdf",
+	"workAt_0.rdf"}
+
+var ldbcDataFiles = map[string]string{
+	"ldbcTypes.schema": "https://github.com/dgraph-io/benchmarks/blob/master/ldbc/sf0.3/ldbcTypes.schema?raw=true",
 }
 
 func downloadDataFiles() {
@@ -675,6 +725,38 @@ func downloadDataFiles() {
 			fmt.Printf("Output %v", out)
 		}
 	}
+}
+
+func downloadLDBCFiles() {
+	if !*downloadResources {
+		fmt.Print("Skipping downloading of resources\n")
+		return
+	}
+	if *tmp == "" {
+		*tmp = os.TempDir() + "/ldbcData"
+	}
+
+	x.Check(testutil.MakeDirEmpty([]string{*tmp}))
+
+	for _, name := range rdfFileNames {
+		filepath := baseUrl + name + suffix
+		ldbcDataFiles[name] = filepath
+	}
+
+	i := 0
+	for fname, link := range ldbcDataFiles {
+		start := time.Now()
+		cmd := exec.Command("wget", "-O", fname, link)
+		cmd.Dir = *tmp
+		i++
+		fmt.Printf("Downloading %d of %d files\n", i, len(ldbcDataFiles))
+		if out, err := cmd.CombinedOutput(); err != nil {
+			fmt.Printf("Error %v", err)
+			fmt.Printf("Output %v", out)
+		}
+		fmt.Printf("Downloaded %s to %s in %s\n", fname, *tmp, time.Since(start))
+	}
+
 }
 
 func createTestCoverageFile(path string) error {
@@ -831,6 +913,9 @@ func run() error {
 		valid := getPackages()
 		if *suite == "load" || *suite == "all" {
 			downloadDataFiles()
+		}
+		if *suite == "ldbc" || *suite == "all" {
+			downloadLDBCFiles()
 		}
 		for i, task := range valid {
 			select {

@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
 )
@@ -105,4 +106,26 @@ func JsonGet(j interface{}, components ...string) interface{} {
 		j = j.(map[string]interface{})[component]
 	}
 	return j
+}
+
+func PollTillPassOrTimeout(t *testing.T, dc *dgo.Dgraph, query, want string, timeout time.Duration) {
+	ticker := time.NewTicker(time.Millisecond)
+	defer ticker.Stop()
+	to := time.NewTimer(timeout)
+	defer to.Stop()
+	for {
+		select {
+		case <-to.C:
+			wantMap := UnmarshalJSON(t, want)
+			gotMap := UnmarshalJSON(t, string(QueryData(t, dc, query)))
+			DiffJSONMaps(t, wantMap, gotMap, "", false)
+			return // timeout
+		case <-ticker.C:
+			wantMap := UnmarshalJSON(t, want)
+			gotMap := UnmarshalJSON(t, string(QueryData(t, dc, query)))
+			if DiffJSONMaps(t, wantMap, gotMap, "", true) {
+				return
+			}
+		}
+	}
 }

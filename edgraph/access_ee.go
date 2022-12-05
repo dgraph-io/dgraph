@@ -1,3 +1,4 @@
+//go:build !oss
 // +build !oss
 
 /*
@@ -936,7 +937,7 @@ func logAccess(log *accessEntry) {
 	}
 }
 
-//authorizeQuery authorizes the query using the aclCachePtr. It will silently drop all
+// authorizeQuery authorizes the query using the aclCachePtr. It will silently drop all
 // unauthorized predicates from query.
 // At this stage, namespace is not attached in the predicates.
 func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) error {
@@ -1149,14 +1150,13 @@ func AuthorizeGuardians(ctx context.Context) error {
 }
 
 /*
-	addUserFilterToQuery applies makes sure that a user can access only its own
-	acl info by applying filter of userid and groupid to acl predicates. A query like
-	Conversion pattern:
-		* me(func: type(dgraph.type.Group)) ->
-				me(func: type(dgraph.type.Group)) @filter(eq("dgraph.xid", groupIds...))
-		* me(func: type(dgraph.type.User)) ->
-				me(func: type(dgraph.type.User)) @filter(eq("dgraph.xid", userId))
-
+addUserFilterToQuery applies makes sure that a user can access only its own
+acl info by applying filter of userid and groupid to acl predicates. A query like
+Conversion pattern:
+  - me(func: type(dgraph.type.Group)) ->
+    me(func: type(dgraph.type.Group)) @filter(eq("dgraph.xid", groupIds...))
+  - me(func: type(dgraph.type.User)) ->
+    me(func: type(dgraph.type.User)) @filter(eq("dgraph.xid", userId))
 */
 func addUserFilterToQuery(gq *gql.GraphQuery, userId string, groupIds []string) {
 	if gq.Func != nil && gq.Func.Name == "type" {
@@ -1243,17 +1243,17 @@ func groupFilter(groupIds []string) *gql.FilterTree {
 }
 
 /*
- addUserFilterToFilter makes sure that user can't misue filters to access other user's info.
- If the *filter* have type(dgraph.type.Group) or type(dgraph.type.User) functions,
- it generate a *newFilter* with function like eq(dgraph.xid, userId) or eq(dgraph.xid,groupId...)
- and return a filter of the form
+	 addUserFilterToFilter makes sure that user can't misue filters to access other user's info.
+	 If the *filter* have type(dgraph.type.Group) or type(dgraph.type.User) functions,
+	 it generate a *newFilter* with function like eq(dgraph.xid, userId) or eq(dgraph.xid,groupId...)
+	 and return a filter of the form
 
-		&gql.FilterTree{
-			Op: "AND",
-			Child: []gql.FilterTree{
-				{filter, newFilter}
+			&gql.FilterTree{
+				Op: "AND",
+				Child: []gql.FilterTree{
+					{filter, newFilter}
+				}
 			}
-		}
 */
 func addUserFilterToFilter(filter *gql.FilterTree, userId string,
 	groupIds []string) *gql.FilterTree {

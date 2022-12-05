@@ -217,6 +217,11 @@ type Person {
 	alive
 }
 
+type Person2 {
+	name2
+	age2
+}
+
 type Animal {
 	name
 }
@@ -332,6 +337,8 @@ tweet-a                        : string @index(trigram) .
 tweet-b                        : string @index(term) .
 tweet-c                        : string @index(fulltext) .
 tweet-d                        : string @index(trigram) .
+name2                          : string @index(term)  .
+age2                           : int @index(int) .
 `
 
 func populateCluster() {
@@ -629,6 +636,7 @@ func populateCluster() {
 		<5> <dgraph.type> "Pet" .
 		<6> <dgraph.type> "Animal" .
 		<6> <dgraph.type> "Pet" .
+
 		<23> <dgraph.type> "Person" .
 		<24> <dgraph.type> "Person" .
 		<25> <dgraph.type> "Person" .
@@ -638,6 +646,8 @@ func populateCluster() {
 		<34> <dgraph.type> "SchoolInfo" .
 		<35> <dgraph.type> "SchoolInfo" .
 		<36> <dgraph.type> "SchoolInfo" .
+		<40> <dgraph.type> "Person2" .
+		<41> <dgraph.type> "Person2" .
 		<11100> <dgraph.type> "Node" .
 
 		<2> <pet> <5> .
@@ -851,6 +861,9 @@ func populateCluster() {
 		<61> <tweet-d> "aaabxxx" .
 		<62> <tweet-d> "aaacdxx" .
 		<63> <tweet-d> "aaabcd" .
+
+		<40> <name2> "Alice" .
+		<41> <age2> "20" .
 	`)
 	if err != nil {
 		panic(fmt.Sprintf("Could not able add triple to the cluster. Got error %v", err.Error()))
