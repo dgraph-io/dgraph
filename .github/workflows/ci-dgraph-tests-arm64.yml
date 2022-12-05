@@ -63,7 +63,7 @@ jobs:
           # move the binary
           cp dgraph/dgraph ~/go/bin/dgraph
           # run the tests
-          cd t; ./t --pkg="graphql/e2e/custom_logic"
+          cd t; ./t --pkg="graphql/e2e/normal"
           # clean up docker containers after test execution
           ./t -r
           # sleep
