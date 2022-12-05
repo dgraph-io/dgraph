@@ -44,6 +44,11 @@ jobs:
           # clean up docker containers before test execution
           cd t; ./t -r
       - name: Run Unit Tests
+        env:
+          S3_REGION: ${{ secrets.S3_REGION }}
+          S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
+          S3_SECRET_KEY: ${{ secrets.S3_SECRET_KEY }}
+          S3_ACCESS_KEY: ${{ secrets.S3_ACCESS_KEY }}
         run: |
           #!/bin/bash
           # go env settings
