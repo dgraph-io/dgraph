@@ -162,7 +162,7 @@ func initBackupLs() {
 		Short: "List info on backups in a given location",
 		Args:  cobra.NoArgs,
 		Run: func(cmd *cobra.Command, args []string) {
-			defer x.StartProfile(Restore.Conf).Stop()
+			defer x.StartProfile(LsBackup.Conf).Stop()
 			if err := runLsbackupCmd(); err != nil {
 				fmt.Fprintln(os.Stderr, err)
 				os.Exit(1)
