@@ -5,7 +5,7 @@ jobs:
   dgraph-tests:
     # TODO: uncomment this after release work
     # if: github.event.pull_request.draft == false
-    runs-on: [self-hosted, ARM64]
+    runs-on: [ubuntu-latest]
     steps:
       - uses: actions/checkout@v3
       - name: Get Go Version
@@ -52,7 +52,7 @@ jobs:
           cp dgraph/dgraph ~/go/bin/dgraph
           # run the tests
           # Only run the s3-backup package
-          cd t; ./t ./t --pkg=systest/backup/s3-backup
+          cd t; ./t --pkg=systest/backup/s3-backup
           # clean up docker containers after test execution
           ./t -r
           # sleep
