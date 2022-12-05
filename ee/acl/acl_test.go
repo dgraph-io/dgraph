@@ -1211,9 +1211,7 @@ func TestQueryRemoveUnauthorizedPred(t *testing.T) {
 		tc := tc // capture range variable
 		t.Run(tc.description, func(t *testing.T) {
 			t.Parallel()
-			resp, err := userClient.NewTxn().Query(ctx, tc.input)
-			require.Nil(t, err)
-			testutil.CompareJSON(t, tc.output, string(resp.Json))
+			testutil.PollTillPassOrTimeout(t, userClient, tc.input, tc.output, timeout)
 		})
 	}
 }
@@ -1287,9 +1285,7 @@ func TestExpandQueryWithACLPermissions(t *testing.T) {
 	require.NoError(t, err)
 
 	// Query via user when user has no permissions
-	resp, err = userClient.NewReadOnlyTxn().Query(ctx, query)
-	require.NoError(t, err, "Error while querying data")
-	testutil.CompareJSON(t, `{}`, string(resp.GetJson()))
+	testutil.PollTillPassOrTimeout(t, userClient, query, `{}`, timeout)
 
 	// Login to groot to modify accesses (1)
 	token, err = testutil.HttpLogin(&testutil.LoginParams{
@@ -1302,12 +1298,9 @@ func TestExpandQueryWithACLPermissions(t *testing.T) {
 
 	// Give read access of <name>, write access of <age> to dev
 	addRulesToGroup(t, token, devGroup, []rule{{"age", Write.Code}, {"name", Read.Code}})
-	time.Sleep(defaultTimeToSleep)
 
-	resp, err = userClient.NewReadOnlyTxn().Query(ctx, query)
-	require.NoError(t, err, "Error while querying data")
-	testutil.CompareJSON(t, `{"me":[{"name":"RandomGuy"},{"name":"RandomGuy2"}]}`,
-		string(resp.GetJson()))
+	testutil.PollTillPassOrTimeout(t, userClient, query,
+		`{"me":[{"name":"RandomGuy"},{"name":"RandomGuy2"}]}`, timeout)
 
 	// Login to groot to modify accesses (2)
 	token, err = testutil.HttpLogin(&testutil.LoginParams{
@@ -1319,13 +1312,9 @@ func TestExpandQueryWithACLPermissions(t *testing.T) {
 	require.NoError(t, err, "login failed")
 	// Add alice to sre group which has read access to <age> and write access to <name>
 	addToGroup(t, token, userid, sreGroup)
-	time.Sleep(defaultTimeToSleep)
 
-	resp, err = userClient.NewReadOnlyTxn().Query(ctx, query)
-	require.Nil(t, err)
-
-	testutil.CompareJSON(t, `{"me":[{"name":"RandomGuy","age":23},{"name":"RandomGuy2","age":25}]}`,
-		string(resp.GetJson()))
+	testutil.PollTillPassOrTimeout(t, userClient, query,
+		`{"me":[{"name":"RandomGuy","age":23},{"name":"RandomGuy2","age":25}]}`, timeout)
 
 	// Login to groot to modify accesses (3)
 	token, err = testutil.HttpLogin(&testutil.LoginParams{
@@ -1338,13 +1327,9 @@ func TestExpandQueryWithACLPermissions(t *testing.T) {
 
 	// Give read access of <name> and <nickname>, write access of <age> to dev
 	addRulesToGroup(t, token, devGroup, []rule{{"age", Write.Code}, {"name", Read.Code}, {"nickname", Read.Code}})
-	time.Sleep(defaultTimeToSleep)
 
-	resp, err = userClient.NewReadOnlyTxn().Query(ctx, query)
-	require.Nil(t, err)
-
-	testutil.CompareJSON(t, `{"me":[{"name":"RandomGuy","age":23, "nickname":"RG"},{"name":"RandomGuy2","age":25, "nickname":"RG2"}]}`,
-		string(resp.GetJson()))
+	testutil.PollTillPassOrTimeout(t, userClient, query,
+		`{"me":[{"name":"RandomGuy","age":23, "nickname":"RG"},{"name":"RandomGuy2","age":25, "nickname":"RG2"}]}`, timeout)
 
 }
 func TestDeleteQueryWithACLPermissions(t *testing.T) {
