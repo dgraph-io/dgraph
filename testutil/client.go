@@ -60,6 +60,7 @@ var (
 	SockAddrZero string
 	// SockAddrZeroHttp is the address to the HTTP endpoint of the zero used during tests.
 	SockAddrZeroHttp string
+
 	// R_SockAddr is the address to the gRPC endpoint of the alpha4 used during restore tests.
 	R_SockAddr string
 	// R_SockAddrHttp is the address to the HTTP of alpha4 used during restore tests.
@@ -84,6 +85,7 @@ var (
 	R_SockAddrZero8 string
 	// R_SockAddrZeroHttp is the address to the HTTP endpoint of the zero2 used during restore tests.
 	R_SockAddrZero8Http string
+
 )
 
 func AdminUrlHttps() string {
@@ -116,6 +118,12 @@ func init() {
 	R_SockAddrAlpha8Http = ContainerAddr("alpha8", 8080)
 	R_SockAddrZero8 = ContainerAddr("zero8", 5080)
 	R_SockAddrZero8Http = ContainerAddr("zero8", 6080)
+
+	R_SockAddrZero = ContainerAddr("zero2", 5080)
+	R_SockAddrZeroHttp = ContainerAddr("zero2", 6080)
+
+	R_SockAddr = ContainerAddr("alpha4", 9080)
+	R_SockAddrHttp = ContainerAddr("alpha4", 8080)
 
 	R_SockAddrZero = ContainerAddr("zero2", 5080)
 	R_SockAddrZeroHttp = ContainerAddr("zero2", 6080)
