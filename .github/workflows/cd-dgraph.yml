@@ -2,7 +2,7 @@ name: cd-dgraph
 on: workflow_dispatch
 jobs:
   dgraph-build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v3
       - name: Get Go Version

@@ -652,6 +652,18 @@ func TestHasFuncAtRoot(t *testing.T) {
 	require.JSONEq(t, `{"data": {"me":[{"friend":[{"count":5}],"name":"Michonne"},{"friend":[{"count":1}],"name":"Rick Grimes"},{"friend":[{"count":1}],"name":"Andrea"}]}}`, js)
 }
 
+func TestHasFuncAtRootWithFirstAndOffset(t *testing.T) {
+	query := `
+	{
+		me(func: has(name), first: 5, offset: 5) {
+			name
+		}
+	}
+	`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{ "data": {"me":[{"name": "Bear"},{"name": "Nemo"},{"name": "name"},{"name": "Rick Grimes"},{"name": "Glenn Rhee"}]}}`, js)
+}
+
 func TestHasFuncAtRootWithAfter(t *testing.T) {
 
 	query := `
@@ -2368,6 +2380,19 @@ func TestFilterRoot(t *testing.T) {
 
 	query := `{
 		me(func: eq(name, "Michonne")) @filter(eq(name, "Rick Grimes")) {
+			uid
+			name
+		}
+	}
+	`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me": []}}`, js)
+}
+
+func TestFilterWithNoSrcUid(t *testing.T) {
+
+	query := `{
+		me(func: eq(name, "Does Not Exist")) @filter(eq(name, "Michonne")) {
 			uid
 			name
 		}
