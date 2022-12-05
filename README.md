@@ -10,6 +10,10 @@
       <img alt="Dgraph Logo" src="/logo.png">
 </picture>
 
+*Aditya Sadalage's fork*
+*https://github.com/adityasadalage*
+
+
 **The Only Native GraphQL Database With A Graph Backend.**
 
 [![Wiki](https://img.shields.io/badge/res-wiki-blue.svg)](https://dgraph.io/docs/)
