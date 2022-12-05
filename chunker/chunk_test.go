@@ -19,8 +19,10 @@ package chunker
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -262,4 +264,70 @@ func TestIsJSONData(t *testing.T) {
 			t.Errorf("got: %t, wanted: %t", output, jsonTestData.expected)
 		}
 	}
+}
+
+func TestRdfChunker_Parse_Positive(t *testing.T) {
+	reader := bufioReader(`<0x01> <name> "Alice" .
+	<0x01> <dgraph.type> "Person" .
+
+`)
+
+	chunk := NewChunker(RdfFormat, 1024)
+	chunkBuff, _ := chunk.Chunk(reader)
+	got := chunk.Parse(chunkBuff)
+
+	if got != nil {
+		t.Errorf("got : %t, wanted : nil", got)
+	}
+}
+
+type error interface {
+	Error() string
+}
+
+func TestRdfChunker_Parse_Negative(t *testing.T) {
+	reader := bufioReader(` <name> "Alice" .
+	<0x01> <dgraph.type> "Person" .
+
+`)
+
+	chunk := NewChunker(RdfFormat, 1024)
+	chunkBuff, _ := chunk.Chunk(reader)
+
+	got := strings.Contains(chunk.Parse(chunkBuff).Error(), "while parsing line")
+
+	if got != true {
+		t.Errorf("got : %t, wanted : true", got)
+	}
+}
+
+type client struct {
+	Hostname string `json:"Hostname"`
+	IP       string `json:"IP"`
+}
+
+type connection struct {
+	Clients []*client `json:"Clients"`
+}
+
+func TestJsonFormat_Chunk(t *testing.T) {
+
+	var clients []*client
+
+	for lineCount := 0; lineCount < 1e5+2; lineCount++ {
+		clients = append(clients, &client{Hostname: strconv.Itoa(lineCount), IP: strconv.Itoa(lineCount) + ":" + strconv.Itoa(lineCount)})
+	}
+
+	res, err := json.MarshalIndent(connection{Clients: clients}, "", "  ")
+	Indented_Json := bytes.NewBuffer(res).String()
+
+	reader := bufioReader(Indented_Json)
+
+	chunk := NewChunker(JsonFormat, -1)
+	bytesBuff, err := chunk.Chunk(reader)
+
+	if err.Error() != "EOF" && bytesBuff == nil {
+		t.Errorf("bytesBuff is null !")
+	}
+
 }
