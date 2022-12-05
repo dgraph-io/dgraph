@@ -19,7 +19,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -39,17 +38,40 @@ import (
 )
 
 var (
-	copyBackupDir = "./data/backups_copy"
-	backupDir     = "./data/backup"
-	restoreDir    = "./data/restore"
-	manifestDir   = "./data"
-	testDirs      = []string{backupDir, restoreDir}
-	backupDst     = "/mnt"
+	copyBackupDir  = "./data/backups_copy"
+	backupDir      = "./data/backup"
+	restoreDir     = "./data/restore"
+	manifestDir    = "./data"
+	testDirs       = []string{backupDir, restoreDir}
+	backupDstHA    = "/ha_backup"
+	backupDstNonHA = "/non_ha_backup"
 )
 
-func TestBackupNFS(t *testing.T) {
+func TestBackupHAClust(t *testing.T) {
+	BackupAlphaSocketAddr := testutil.SockAddr
+	BackupAlphaSocketAddrHttp := testutil.SockAddrHttp
 
-	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))))
+	BackupZeroSockerAddr := testutil.SockAddrZeroHttp
+	RestoreAlphaSocketAddr := testutil.R_SockAddrHttp
+
+	testnfs(t, BackupAlphaSocketAddr, RestoreAlphaSocketAddr, BackupZeroSockerAddr, backupDstHA, BackupAlphaSocketAddrHttp)
+
+}
+
+func TestBackupNonHAClust(t *testing.T) {
+	BackupAlphaSocketAddr := testutil.SockAddrAlpha7
+	BackupAlphaSocketAddrHttp := testutil.SockAddrAlpha7Http
+
+	BackupZeroSockerAddr := testutil.SockAddrZero7Http
+	RestoreAlphaSocketAddr := testutil.R_SockAddrAlpha8Http
+
+	testnfs(t, BackupAlphaSocketAddr, RestoreAlphaSocketAddr, BackupZeroSockerAddr, backupDstNonHA, BackupAlphaSocketAddrHttp)
+
+}
+
+func testnfs(t *testing.T, backupAlphaSocketAddr string, restoreAlphaAddr string, backupZeroAddr string, backupDst string, backupAlphaSocketAddrHttp string) {
+
+	conn, err := grpc.Dial(backupAlphaSocketAddr, grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))))
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 
@@ -78,7 +100,7 @@ func TestBackupNFS(t *testing.T) {
 
 	// Move tablet to group 1 to avoid messes later.
 	client := testutil.GetHttpsClient(t)
-	_, err = client.Get("https://" + testutil.SockAddrZeroHttp + "/moveTablet?tablet=movie&group=1")
+	_, err = client.Get("https://" + backupZeroAddr + "/moveTablet?tablet=movie&group=1")
 	require.NoError(t, err)
 
 	// After the move, we need to pause a bit to give zero a chance to quorum.
@@ -102,10 +124,10 @@ func TestBackupNFS(t *testing.T) {
 	//       mostly because of a race condition
 	//       adding sleep
 	time.Sleep(time.Second * 10)
-	_ = runBackup(t, 3, 1)
-	restored := runRestore(t, "", false, 1)
+	_ = runBackup(t, 1, 1, backupAlphaSocketAddrHttp, backupDst)
+	restored := runRestore(t, "", restoreAlphaAddr, backupDst)
 	require.Equal(t, "Success", restored)
-	testutil.WaitForRestore(t, dg, testutil.R_SockAddrHttp)
+	testutil.WaitForRestore(t, dg, restoreAlphaAddr)
 
 	// Check the predicates and types in the schema are as expected.
 	preds := []string{"dgraph.graphql.schema", "dgraph.graphql.xid", "dgraph.type", "movie",
@@ -113,7 +135,7 @@ func TestBackupNFS(t *testing.T) {
 	types := []string{"Node", "dgraph.graphql", "dgraph.graphql.persisted_query"}
 
 	// We check expected Objects vs Received Objects from restoreed db
-	checkObjectCount(t, 5, 5)
+	checkObjectCount(t, 5, 5, restoreAlphaAddr)
 
 	// Add more data for the incremental backup.
 	incr1, err := dg.NewTxn().Mutate(ctx, &api.Mutation{
@@ -127,14 +149,17 @@ func TestBackupNFS(t *testing.T) {
 	require.NoError(t, err)
 
 	// Perform first incremental backup.
-	_ = runBackup(t, 6, 2)
+	_ = runBackup(t, 2, 2, backupAlphaSocketAddrHttp, backupDst)
+	restored = runRestore(t, "", restoreAlphaAddr, backupDst)
 	require.Equal(t, "Success", restored)
+	testutil.WaitForRestore(t, dg, restoreAlphaAddr)
 
 	// Check the predicates and types in the schema are as expected.
 	preds = append(preds, "actor")
 	types = append(types, "NewNode")
 
 	// We check expected Objects vs Received Objects from restoreed db
+	checkObjectCount(t, 7, 7, restoreAlphaAddr)
 
 	// Add more data for a second incremental backup.
 	_, err = dg.NewTxn().Mutate(ctx, &api.Mutation{
@@ -147,19 +172,12 @@ func TestBackupNFS(t *testing.T) {
 	t.Logf("%+v", incr1)
 	require.NoError(t, err)
 
-	_ = runBackup(t, 9, 3)
-	//take first incremental restore
-	restored = runRestore(t, "", true, 2)
+	_ = runBackup(t, 3, 3, backupAlphaSocketAddrHttp, backupDst)
+	restored = runRestore(t, "", restoreAlphaAddr, backupDst)
 	require.Equal(t, "Success", restored)
-	testutil.WaitForRestore(t, dg, testutil.R_SockAddrHttp)
+	testutil.WaitForRestore(t, dg, restoreAlphaAddr)
 
-	checkObjectCount(t, 7, 7)
-	//take second incremental restore
-	restored = runRestore(t, "", true, 3)
-	require.Equal(t, "Success", restored)
-	testutil.WaitForRestore(t, dg, testutil.R_SockAddrHttp)
-
-	checkObjectCount(t, 9, 9)
+	checkObjectCount(t, 9, 9, restoreAlphaAddr)
 
 	// Add more data for a second full backup.
 	_, err = dg.NewTxn().Mutate(ctx, &api.Mutation{
@@ -173,13 +191,12 @@ func TestBackupNFS(t *testing.T) {
 	require.NoError(t, err)
 
 	// Perform second full backup.
-	_ = runBackupInternal(t, true, 12, 4)
-	restored = runRestore(t, "", false, 4)
-	testutil.WaitForRestore(t, dg, testutil.R_SockAddrHttp)
-
+	_ = runBackupInternal(t, true, 4, 4, backupAlphaSocketAddrHttp, backupDst)
+	restored = runRestore(t, "", restoreAlphaAddr, backupDst)
 	require.Equal(t, "Success", restored)
+	testutil.WaitForRestore(t, dg, restoreAlphaAddr)
 
-	checkObjectCount(t, 11, 11)
+	checkObjectCount(t, 11, 11, restoreAlphaAddr)
 	// Do a DROP_DATA
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropOp: api.Operation_DATA}))
 
@@ -194,20 +211,19 @@ func TestBackupNFS(t *testing.T) {
 	require.NoError(t, err)
 
 	// perform an incremental backup and then restore
-	_ = runBackup(t, 15, 5)
-	restored = runRestore(t, "", false, 5)
-	testutil.WaitForRestore(t, dg, testutil.R_SockAddrHttp)
-
+	_ = runBackup(t, 5, 5, backupAlphaSocketAddrHttp, backupDst)
+	restored = runRestore(t, "", restoreAlphaAddr, backupDst)
 	require.Equal(t, "Success", restored)
+	testutil.WaitForRestore(t, dg, restoreAlphaAddr)
 
-	checkObjectCount(t, 2, 2)
+	checkObjectCount(t, 2, 2, restoreAlphaAddr)
 
 	// Clean up test directories.
 	dirCleanup(t)
 }
 
 // function to check object count
-func checkObjectCount(t *testing.T, expectedCount, receivedCount int) {
+func checkObjectCount(t *testing.T, expectedCount, receivedCount int, restoreAlphaAddr string) {
 
 	checkCountRequest := `query {
 		 movieCount(func: has(movie)) {
@@ -217,7 +233,7 @@ func checkObjectCount(t *testing.T, expectedCount, receivedCount int) {
 
 	//Check object count from newly created restore alpha
 
-	adminUrl := "https://" + testutil.R_SockAddrHttp + "/query"
+	adminUrl := "https://" + restoreAlphaAddr + "/query"
 	params := testutil.GraphQLParams{
 		Query: checkCountRequest,
 	}
@@ -240,12 +256,12 @@ func checkObjectCount(t *testing.T, expectedCount, receivedCount int) {
 
 }
 
-func runBackup(t *testing.T, numExpectedFiles, numExpectedDirs int) []string {
-	return runBackupInternal(t, false, numExpectedFiles, numExpectedDirs)
+func runBackup(t *testing.T, numExpectedFiles, numExpectedDirs int, backupAlphaSocketAddrHttp string, backupDst string) []string {
+	return runBackupInternal(t, false, numExpectedFiles, numExpectedDirs, backupAlphaSocketAddrHttp, backupDst)
 }
 
 func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
-	numExpectedDirs int) []string {
+	numExpectedDirs int, backupAlphaSocketAddrHttp string, backupDst string) []string {
 
 	backupRequest := `mutation backup($dst: String!, $ff: Boolean!) {
 		backup(input: {destination: $dst, forceFull: $ff}) {
@@ -256,11 +272,11 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 		}
 	}`
 
-	adminUrl := "https://" + testutil.SockAddrHttp + "/admin"
+	adminUrl := "https://" + backupAlphaSocketAddrHttp + "/admin"
 	params := testutil.GraphQLParams{
 		Query: backupRequest,
 		Variables: map[string]interface{}{
-			"dst": backupDst,
+			"dst": "/mnt" + backupDst,
 			"ff":  forceFull,
 		},
 	}
@@ -277,10 +293,10 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 
 	require.Equal(t, "Success", testutil.JsonGet(data, "data", "backup", "response", "code").(string))
 	taskId := testutil.JsonGet(data, "data", "backup", "taskId").(string)
-	testutil.WaitForTask(t, taskId, true)
+	testutil.WaitForTask(t, taskId, true, backupAlphaSocketAddrHttp)
 	// Verify that the right amount of files and directories were created.
 	// We are not using local folder to back up.
-	common.CopyToLocalFsFromNFS(t)
+	common.CopyToLocalFsFromNFS(t, backupDst)
 
 	// List all the folders in the NFS mounted directory.
 
@@ -305,33 +321,22 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 
 }
 
-func runRestore(t *testing.T, lastDir string, isIncrementalRestore bool, backupNum int) string {
+func runRestore(t *testing.T, lastDir string, restoreAlphaAddr string, backupDst string) string {
 
-	var restoreRequest string
-
-	if isIncrementalRestore == true {
-
-		restoreRequest = fmt.Sprintf(`mutation restore() {
-			restore(input: {location: "%s", backupNum: %d}) {
-			   code
-			   message
-		   }
-	   }`, backupDst, backupNum)
-
-	} else {
-		restoreRequest = fmt.Sprintf(`mutation restore() {
-	restore(input: {location: "%s"}) {
-	   code
-	   message
-   }
-}`, backupDst)
-
-	}
+	restoreRequest := `mutation restore($loc: String!, ) {
+		 restore(input: {location: $loc}) {
+				 code
+				 message
+			 }
+	 }`
 
 	// For restore we have to always use newly added restore cluster
-	adminUrl := "https://" + testutil.R_SockAddrHttp + "/admin"
+	adminUrl := "https://" + restoreAlphaAddr + "/admin"
 	params := testutil.GraphQLParams{
 		Query: restoreRequest,
+		Variables: map[string]interface{}{
+			"loc": "/mnt" + backupDst,
+		},
 	}
 	b, err := json.Marshal(params)
 	require.NoError(t, err)

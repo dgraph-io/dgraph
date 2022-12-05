@@ -50,7 +50,7 @@ jobs:
           # move the binary
           cp dgraph/dgraph ~/go/bin/dgraph
           # run the tests
-          cd t; ./t --coverage=true
+          cd t; ./t --pkg=systest/backup/nfs-backup
           # clean up docker containers after test execution
           ./t -r
           # sleep

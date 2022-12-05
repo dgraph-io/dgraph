@@ -89,7 +89,7 @@ nfs-server :
 	@cd  systest/backup/nfs-backup/docker-utils/docker-nfs-server ; \
 	     docker build   -t nfs-docker-server:latest .
 
-docker-image: dgraph  nfs-server dgraph-nfs-client
+docker-image: dgraph nfs-server dgraph-nfs-client
 	@mkdir -p linux
 	@cp ./dgraph/dgraph ./linux/dgraph
 	docker build -f contrib/Dockerfile -t dgraph/dgraph:$(DGRAPH_VERSION) .

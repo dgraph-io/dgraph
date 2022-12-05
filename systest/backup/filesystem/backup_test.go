@@ -416,7 +416,6 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 		}`
 
 	adminUrl := "https://" + testutil.SockAddrHttp + "/admin"
-	fmt.Print("=====================================================", adminUrl)
 
 	params := testutil.GraphQLParams{
 		Query: backupRequest,
@@ -429,7 +428,6 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	require.NoError(t, err)
 
 	client := testutil.GetHttpsClient(t)
-	fmt.Print("=============================================", client)
 	resp, err := client.Post(adminUrl, "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
 	defer resp.Body.Close()
@@ -438,7 +436,7 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
 	require.Equal(t, "Success", testutil.JsonGet(data, "data", "backup", "response", "code").(string))
 	taskId := testutil.JsonGet(data, "data", "backup", "taskId").(string)
-	testutil.WaitForTask(t, taskId, true)
+	testutil.WaitForTask(t, taskId, true, testutil.SockAddrHttp)
 
 	// Verify that the right amount of files and directories were created.
 	common.CopyToLocalFs(t)
