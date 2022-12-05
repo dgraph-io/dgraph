@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Dgraph Labs, Inc. and Contributors *
+ * Copyright 2022 Dgraph Labs, Inc. and Contributors *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -338,7 +338,7 @@ func runBackupInternal(t *testing.T, token *testutil.HttpToken, forceFull bool, 
 	require.NoError(t, json.Unmarshal(resp.Data, &data))
 	require.Equal(t, "Success", testutil.JsonGet(data, "backup", "response", "code").(string))
 	taskId := testutil.JsonGet(data, "backup", "taskId").(string)
-	testutil.WaitForTask(t, taskId, false, testutil.SockAddrHttp)
+	testutil.WaitForTask(t, taskId, false)
 
 	// Verify that the right amount of files and directories were created.
 	common.CopyToLocalFs(t)
