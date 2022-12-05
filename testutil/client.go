@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2019 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -69,6 +69,23 @@ var (
 	R_SockAddrZero string
 	// R_SockAddrZeroHttp is the address to the HTTP endpoint of the zero2 used during restore tests.
 	R_SockAddrZeroHttp string
+	// R_SockAddr is the address to the gRPC endpoint of the alpha4 used during restore tests.
+	SockAddrAlpha7 string
+	// R_SockAddrHttp is the address to the HTTP of alpha4 used during restore tests.
+	SockAddrAlpha7Http string
+	// R_SockAddrZero is the address to the gRPC endpoint of the zero2 used during restore tests.
+	SockAddrZero7 string
+	// R_SockAddrZeroHttp is the address to the HTTP endpoint of the zero2 used during restore tests.
+	SockAddrZero7Http string
+	// R_SockAddr is the address to the gRPC endpoint of the alpha4 used during restore tests.
+	R_SockAddrAlpha8 string
+	// R_SockAddrHttp is the address to the HTTP of alpha4 used during restore tests.
+	R_SockAddrAlpha8Http string
+	// R_SockAddrZero is the address to the gRPC endpoint of the zero2 used during restore tests.
+	R_SockAddrZero8 string
+	// R_SockAddrZeroHttp is the address to the HTTP endpoint of the zero2 used during restore tests.
+	R_SockAddrZero8Http string
+
 )
 
 func AdminUrlHttps() string {
@@ -91,6 +108,19 @@ func init() {
 
 	SockAddrZero = ContainerAddr("zero1", 5080)
 	SockAddrZeroHttp = ContainerAddr("zero1", 6080)
+	R_SockAddr = ContainerAddr("alpha4", 9080)
+	R_SockAddrHttp = ContainerAddr("alpha4", 8080)
+	SockAddrAlpha7 = ContainerAddr("alpha7", 9080)
+	SockAddrAlpha7Http = ContainerAddr("alpha7", 8080)
+	SockAddrZero7 = ContainerAddr("zero7", 5080)
+	SockAddrZero7Http = ContainerAddr("zero7", 6080)
+	R_SockAddrAlpha8 = ContainerAddr("alpha8", 9080)
+	R_SockAddrAlpha8Http = ContainerAddr("alpha8", 8080)
+	R_SockAddrZero8 = ContainerAddr("zero8", 5080)
+	R_SockAddrZero8Http = ContainerAddr("zero8", 6080)
+
+	R_SockAddrZero = ContainerAddr("zero2", 5080)
+	R_SockAddrZeroHttp = ContainerAddr("zero2", 6080)
 
 	R_SockAddr = ContainerAddr("alpha4", 9080)
 	R_SockAddrHttp = ContainerAddr("alpha4", 8080)
