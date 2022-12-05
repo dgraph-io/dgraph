@@ -1687,8 +1687,8 @@ type Token struct {
 	sync.RWMutex
 }
 
-// // the grootAccessJWT stores the access JWT extracted from the response
-// // of http login
+//// the grootAccessJWT stores the access JWT extracted from the response
+//// of http login
 var token *Token
 
 func (t *Token) getAccessJWTToken() string {
