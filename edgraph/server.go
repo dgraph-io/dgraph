@@ -1398,8 +1398,11 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 		glog.Infof("Finished a query that started at: %+v",
 			qr.Latency.Start.Format(time.RFC3339))
 	}
+
 	if err != nil {
-		glog.Infof("Error processing query: %+v\n", err.Error())
+		if bool(glog.V(3)) {
+			glog.Infof("Error processing query: %+v\n", err.Error())
+		}
 		return resp, errors.Wrap(err, "")
 	}
 
