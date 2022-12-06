@@ -351,9 +351,7 @@ func SetStatus(w http.ResponseWriter, code, msg string) {
 	qr.Errors = append(qr.Errors, &GqlError{Message: msg, Extensions: ext})
 	if js, err := json.Marshal(qr); err == nil {
 		if _, err := w.Write(js); err != nil {
-			// TODO LOGGING (Damon): include the code and msg in the logs. We are dropping them and only reporting the http issue
-			// e.g. printf("Could not send error msg=%+v code=%+v due to http error %+v", msg, code, err)
-			glog.Errorf("Error while writing: %+v", err)
+			glog.Errorf("Could not send error msg=%+v code=%+v due to http error %+v", msg, code, err)
 		}
 	} else {
 		Panic(errors.Errorf("Unable to marshal: %+v", qr))

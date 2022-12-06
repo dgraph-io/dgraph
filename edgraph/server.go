@@ -1237,8 +1237,7 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (resp *api.Response,
 		return nil, errors.Errorf("empty request")
 	}
 
-	// TODO LOGGING (Damon): we usually lose this request info since OpenTelemetry only keeps 256 items
-	// TODO LOGGING (Damon): change span.Annotatef to span.SetAttributes() to set a "tag" instead
+	span.AddAttributes(trace.StringAttribute("Query", req.req.Query))
 	span.Annotatef(nil, "Request received: %v", req.req)
 	if isQuery {
 		ostats.Record(ctx, x.PendingQueries.M(1), x.NumQueries.M(1))
@@ -1399,7 +1398,7 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 		glog.Infof("Finished a query that started at: %+v", qr.Latency.Start)
 	}
 	if err != nil {
-		// TODO LOGGING (Damon): log any errors encountered. e.g.:  glog.Infof("Error processing query: %+v\n", err.Error())
+		glog.Infof("Error processing query: %+v\n", err.Error())
 		return resp, errors.Wrap(err, "")
 	}
 
