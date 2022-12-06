@@ -63,7 +63,7 @@ jobs:
           # move the binary
           cp dgraph/dgraph ~/go/bin/dgraph
           # run the tests
-          cd t; ./t --skip="systest/export,systest/backup/minio,systest/backup/minio-large"
+          cd t; ./t --pkg="systest/export"
           # clean up docker containers after test execution
           ./t -r
           # sleep
