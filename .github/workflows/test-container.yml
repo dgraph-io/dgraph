@@ -1,4 +1,4 @@
-name: ci-dgraph-s3-tests
+name: test-containers
 #Because we can trigger the test manually
 on: workflow_dispatch
 jobs:
