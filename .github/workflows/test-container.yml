@@ -1,0 +1,19 @@
+# This is a basic workflow that is manually triggered
+
+name: Workflow to test container creation
+
+# Controls when the action will run. Workflow runs when manually triggered using the UI
+# or API.
+on: workflow_dispatch
+jobs:
+  all:
+    name: My test
+    runs-on: [ubuntu-latest]
+    steps:
+      - name: Docker compose up
+        run: docker-compose up -d
+      - name: Test
+        run: |
+          #!/bin/bash
+          cd ../../systest/backup/s3-backup
+          test.sh
