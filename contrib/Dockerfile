@@ -7,6 +7,7 @@
 FROM ubuntu:20.04
 LABEL maintainer="Dgraph Labs <contact@dgraph.io>"
 
+# only update, don't run upgrade
 RUN apt-get update
 # pin package versions always & bring in CVE fixes as needed
 RUN apt-get install -y --no-install-recommends ca-certificates=20211016~20.04.1
