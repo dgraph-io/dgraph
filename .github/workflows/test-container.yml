@@ -52,8 +52,9 @@ jobs:
         run: |
           #!/bin/bash
           # go env settings
+          echo "Test started....."
           export GOPATH=~/go
           # move the binary
           cp dgraph/dgraph ~/go/bin/dgraph
           # run the test.sh for checking containers
-          cd systest/backup/s3-backup; test.sh
+          ./systest/backup/s3-backup/test.sh
