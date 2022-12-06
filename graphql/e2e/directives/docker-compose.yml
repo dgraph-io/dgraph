@@ -37,7 +37,7 @@ services:
       --trace "ratio=1.0;"
 
   lambda:
-    image: dgraph/dgraph-lambda:latest # Need to push arm lambda image to dockerhub
+    image: dgraph/dgraph-lambda:latest # Need to push arm lambda image to dockerhub and then uncomment
     labels:
       cluster: test
     ports:
