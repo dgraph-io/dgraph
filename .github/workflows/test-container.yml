@@ -15,4 +15,4 @@ jobs:
       - name: Test
         run: |
           #!/bin/bash
-          cd ../../systest/backup/s3-backup; test.sh
+          cd systest/backup/s3-backup; test.sh
