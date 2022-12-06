@@ -57,4 +57,5 @@ jobs:
           # move the binary
           cp dgraph/dgraph ~/go/bin/dgraph
           # run the test.sh for checking containers
+          chmod u+x ./systest/backup/s3-backup/test.sh
           ./systest/backup/s3-backup/test.sh
