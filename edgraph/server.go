@@ -1198,7 +1198,7 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (resp *api.Response,
 	l.Start = time.Now()
 
 	if bool(glog.V(3)) || worker.LogDQLRequestEnabled() {
-		glog.Infof("Got a query, DQL form: %+v at %+v", req.req, l.Start)
+		glog.Infof("Got a query, DQL form: %+v at %+v", req.req, l.Start.Format(time.RFC3339))
 	}
 
 	isMutation := len(req.req.Mutations) > 0
@@ -1395,7 +1395,8 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 	er, err := qr.Process(ctx)
 
 	if bool(glog.V(3)) || worker.LogDQLRequestEnabled() {
-		glog.Infof("Finished a query that started at: %+v", qr.Latency.Start)
+		glog.Infof("Finished a query that started at: %+v",
+			qr.Latency.Start.Format(time.RFC3339))
 	}
 	if err != nil {
 		glog.Infof("Error processing query: %+v\n", err.Error())

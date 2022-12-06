@@ -46,7 +46,8 @@ import (
 	"github.com/pkg/errors"
 )
 
-func invokeNetworkRequest(ctx context.Context, addr string, f func(context.Context, pb.WorkerClient) (interface{}, error)) (interface{}, error) {
+func invokeNetworkRequest(ctx context.Context, addr string,
+	f func(context.Context, pb.WorkerClient) (interface{}, error)) (interface{}, error) {
 	pl, err := conn.GetPools().Get(addr)
 	if err != nil {
 		return nil, errors.Wrapf(err, "dispatchTaskOverNetwork: while retrieving connection.")
