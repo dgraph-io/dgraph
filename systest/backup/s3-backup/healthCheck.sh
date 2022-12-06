@@ -1,3 +1,4 @@
+#!/bin/sh
 container_name="$1"
 # Timeout in seconds. Default: 60
 timeout=$((${2:-60}));
