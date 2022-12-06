@@ -1,4 +1,5 @@
 # Create containers
+#!/bin/sh
 pwd
 docker-compose --compatibility -f docker-compose.yml  up --force-recreate --build --remove-orphans --detach
 healthcheck.sh zero1_1 120
