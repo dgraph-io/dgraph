@@ -1,18 +1,59 @@
-# This is a basic workflow that is manually triggered
-
-name: Workflow to test container creation
-
-# Controls when the action will run. Workflow runs when manually triggered using the UI
-# or API.
+name: ci-dgraph-s3-tests
+#Because we can trigger the test manually
 on: workflow_dispatch
 jobs:
-  all:
-    name: My test
+  dgraph-tests:
+    # TODO: uncomment this after release work
+    # if: github.event.pull_request.draft == false
     runs-on: [ubuntu-latest]
     steps:
-      - name: Docker compose up
-        run: docker-compose up -d
-      - name: Test
+      - uses: actions/checkout@v3
+      - name: Get Go Version
         run: |
           #!/bin/bash
+          GOVERSION=$({ [ -f .go-version ] && cat .go-version; })
+          echo "GOVERSION=$GOVERSION" >> $GITHUB_ENV
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: ${{ env.GOVERSION }}
+      - name: Set up Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 16
+      - name: Install protobuf-compiler
+        run: sudo apt-get install -y protobuf-compiler
+      - name: Check protobuf
+        run: |
+          cd ./protos
+          go mod tidy
+          make regenerate
+          git diff --exit-code -- .
+      - name: Make Linux Build and Docker Image
+        run: make docker-image # this internally builds dgraph binary
+      - name: Build Test Binary
+        run: |
+          #!/bin/bash
+          # build the test binary
+          cd t; go build .
+      - name: Clean Up Environment
+        run: |
+          #!/bin/bash
+          # clean cache
+          go clean -testcache
+          # clean up docker containers before test execution
+          cd t; ./t -r
+      - name: Run Unit Tests
+        env:
+          S3_REGION: ${{ secrets.S3_REGION }}
+          S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
+          S3_SECRET_KEY: ${{ secrets.S3_SECRET_KEY }}
+          S3_ACCESS_KEY: ${{ secrets.S3_ACCESS_KEY }}
+        run: |
+          #!/bin/bash
+          # go env settings
+          export GOPATH=~/go
+          # move the binary
+          cp dgraph/dgraph ~/go/bin/dgraph
+          # run the test.sh for checking containers
           cd systest/backup/s3-backup; test.sh
