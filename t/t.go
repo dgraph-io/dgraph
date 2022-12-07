@@ -875,6 +875,28 @@ func appendTestCoverageFile(src, des string) error {
 		return nil
 	}
 
+	fmt.Printf("Printing some lines from the coverage file %s\n", src)
+
+	readFile, err := os.Open(src)
+
+	if err != nil {
+		fmt.Println(err)
+	}
+	fileScanner := bufio.NewScanner(readFile)
+
+	fileScanner.Split(bufio.ScanLines)
+
+	count := 1
+	for fileScanner.Scan() {
+		fmt.Println(fileScanner.Text())
+		count++
+		if count == 6 {
+			break
+		}
+	}
+
+	readFile.Close()
+
 	cmd := command("bash", "-c", fmt.Sprintf("cat %s | grep -v \"%s\" >> %s", src, coverageFileHeader, des))
 	if err := cmd.Run(); err != nil {
 		return err
