@@ -495,7 +495,7 @@ func getPackages() []task {
 
 	slowPkgs := []string{"systest", "ee/acl", "cmd/alpha", "worker", "e2e"}
 	skipPkgs := strings.Split(*skip, ",")
-	runPkgs  := strings.Split(*runPkg, ",")
+	runPkgs := strings.Split(*runPkg, ",")
 
 	moveSlowToFront := func(list []task) []task {
 		// These packages typically take over a minute to run.
@@ -743,19 +743,24 @@ func downloadLDBCFiles() {
 		ldbcDataFiles[name] = filepath
 	}
 
-	i := 0
+	start := time.Now()
+	var wg sync.WaitGroup
 	for fname, link := range ldbcDataFiles {
-		start := time.Now()
-		cmd := exec.Command("wget", "-O", fname, link)
-		cmd.Dir = *tmp
-		i++
-		fmt.Printf("Downloading %d of %d files\n", i, len(ldbcDataFiles))
-		if out, err := cmd.CombinedOutput(); err != nil {
-			fmt.Printf("Error %v", err)
-			fmt.Printf("Output %v", out)
-		}
-		fmt.Printf("Downloaded %s to %s in %s\n", fname, *tmp, time.Since(start))
+		wg.Add(1)
+		go func(fname, link string, wg *sync.WaitGroup) {
+			defer wg.Done()
+			start := time.Now()
+			cmd := exec.Command("wget", "-O", fname, link)
+			cmd.Dir = *tmp
+			if out, err := cmd.CombinedOutput(); err != nil {
+				fmt.Printf("Error %v", err)
+				fmt.Printf("Output %v", out)
+			}
+			fmt.Printf("Downloaded %s to %s in %s \n", fname, *tmp, time.Since(start))
+		}(fname, link, &wg)
 	}
+	wg.Wait()
+	fmt.Printf("Downloaded %d files in %s \n", len(ldbcDataFiles), time.Since(start))
 
 }
 
