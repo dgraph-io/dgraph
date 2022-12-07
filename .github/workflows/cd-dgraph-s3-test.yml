@@ -62,4 +62,16 @@ jobs:
           ./t -r
           # sleep
           sleep 5
-
+      - name: Run NFS Unit Tests
+        run: |
+          #!/bin/bash
+          # go env settings
+          export GOPATH=~/go
+          # move the binary
+          cp dgraph/dgraph ~/go/bin/dgraph
+          # run the tests
+          # Only run the s3-backup package
+          cd t; ./t --pkg=systest/backup/nfs-backup
+          # clean up docker containers after test execution
+          ./t -r
+          # sleep
