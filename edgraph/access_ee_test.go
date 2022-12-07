@@ -13,36 +13,34 @@ import (
 
 var (
 	userDataList = []userData{
-		userData{1234567890, "user1", []string{"701", "702"}},
-		userData{2345678901, "user2", []string{"703", "701"}},
-		userData{3456789012, "user3", []string{"702", "703"}},
+		{1234567890, "user1", []string{"701", "702"}},
+		{2345678901, "user2", []string{"703", "701"}},
+		{3456789012, "user3", []string{"702", "703"}},
 	}
 )
 
 func generateJWT(namespace uint64, userId string, groupIds []string, exp int64) (string, error) {
-	var e1 int64
 	var token *jwt.Token
 
-	if exp == 0 {
+	e1 := exp
+	if e1 == 0 {
 		e1 = time.Now().Add(time.Minute * 30).Unix()
-	} else {
-		e1 = exp
 	}
 
+	claims := &jwt.MapClaims{
+		"namespace": namespace,
+		"userid":    userId,
+		"exp":       e1,
+	}
 	if groupIds != nil {
-		token = jwt.NewWithClaims(jwt.SigningMethodHS256, &jwt.MapClaims{
+		claims = &jwt.MapClaims{
 			"namespace": namespace,
 			"userid":    userId,
 			"groups":    groupIds,
 			"exp":       e1,
-		})
-	} else {
-		token = jwt.NewWithClaims(jwt.SigningMethodHS256, &jwt.MapClaims{
-			"namespace": namespace,
-			"userid":    userId,
-			"exp":       e1,
-		})
+		}
 	}
+	token = jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
 	tokenString, err := token.SignedString([]byte(worker.Config.HmacSecret))
 	if err != nil {
@@ -66,20 +64,20 @@ func sliceCompare(x, y []string) bool {
 	return true
 }
 
-func compareTokenParts (tok1 string, tok2 string, part ...int) bool {
+func compareTokenParts(tok1 string, tok2 string, part ...int) bool {
 	var (
-		match bool         = true
+		match bool = true
 	)
 
-	t1 := strings.Split (tok1, ".")
-	t2 := strings.Split (tok2, ".")
+	t1 := strings.Split(tok1, ".")
+	t2 := strings.Split(tok2, ".")
 
 	for _, p := range part {
 		if p <= 0 {
 			continue
 		}
 
-		if t1 [p - 1] != t2 [p - 1] {
+		if t1[p-1] != t2[p-1] {
 			match = false
 			break
 		}
@@ -97,13 +95,11 @@ func TestValidateToken(t *testing.T) {
 	for _, userdata := range userDataList {
 		if tokenString, err = generateJWT(userdata.namespace, userdata.userId, userdata.groupIds, 0); err != nil {
 			t.Errorf("JWT token string generation error: %s", err)
-			return
 		}
 
 		ud, err := validateToken(tokenString)
 		if err != nil {
 			t.Errorf("validateToken() error: %s", err)
-			return
 		}
 		if ud.namespace != userdata.namespace || ud.userId != userdata.userId || !sliceCompare(ud.groupIds, userdata.groupIds) {
 			t.Errorf("Actual output %+v is not equal to the expected output %+v", userdata, ud)
@@ -149,9 +145,9 @@ func TestGetAccessJwt(t *testing.T) {
 		 * One of the factor [signature] would differ is based on the expiry time.
 		 * This will differ for tokstr and jwtstr and hence ignoring it.
 		 */
-		match := compareTokenParts (tokstr, jwtstr, 1, 2 ,0) // compare 1st and 2nd part, ignore the 3rd.
+		match := compareTokenParts(tokstr, jwtstr, 1, 2, 0) // compare 1st and 2nd part, ignore the 3rd.
 		if match == false {
-			t.Errorf ("Actual output is not equal to the expected output")
+			t.Errorf("Actual output is not equal to the expected output")
 		}
 	}
 }
@@ -172,9 +168,9 @@ func TestGetRefreshJwt(t *testing.T) {
 		 * One of the factor [signature] would differ is based on the expiry time.
 		 * This will differ for tokstr and jwtstr and hence ignoring it.
 		 */
-		match := compareTokenParts (tokstr, jwtstr, 1, 2 ,0) // compare 1st and 2nd part, ignore the 3rd.
+		match := compareTokenParts(tokstr, jwtstr, 1, 2, 0) // compare 1st and 2nd part, ignore the 3rd.
 		if match == false {
-			t.Errorf ("Actual output is not equal to the expected output")
+			t.Errorf("Actual output is not equal to the expected output")
 		}
 	}
 }
