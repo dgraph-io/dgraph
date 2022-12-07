@@ -64,14 +64,16 @@ func (in ContainerInstance) BestEffortWaitForHealthy(privatePort uint16) error {
 		return nil
 	}
 
-	for i := 0; i < 30; i++ {
+	for i := 0; i < 60; i++ {
 		resp, err := http.Get("http://localhost:" + port + "/health")
+		fmt.Println("------------> Status Code: ", resp)
 		var body []byte
 		if resp != nil && resp.Body != nil {
 			body, _ = ioutil.ReadAll(resp.Body)
 			resp.Body.Close()
 		}
 		if err == nil && resp.StatusCode == http.StatusOK {
+			fmt.Println("------------> Healthy ", strconv.Itoa(i)+port)
 			return checkACL(body)
 		}
 		fmt.Printf("Health for %s failed: %v. Response: %q. Retrying...\n", in, err, body)

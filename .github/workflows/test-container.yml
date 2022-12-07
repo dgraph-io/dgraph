@@ -1,4 +1,4 @@
-name: ci-dgraph-s3-tests
+name: test-containers
 #Because we can trigger the test manually
 on: workflow_dispatch
 jobs:
@@ -52,14 +52,11 @@ jobs:
         run: |
           #!/bin/bash
           # go env settings
+          echo "Test started....."
           export GOPATH=~/go
           # move the binary
           cp dgraph/dgraph ~/go/bin/dgraph
-          # run the tests
-          # Only run the s3-backup package
-          cd t; ./t --pkg=systest/backup/s3-backup
-          # clean up docker containers after test execution
-          ./t -r
-          # sleep
-          sleep 5
-
+          # run the test.sh for checking containers
+          chmod u+x ./systest/backup/s3-backup/test.sh
+          chmod u+x ./systest/backup/s3-backup/healthCheck.sh
+          cd systest/backup/s3-backup; ./test.sh
