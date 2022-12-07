@@ -22,7 +22,7 @@ do
   echo "Container $container_name: $is_healthy"
   sleep 1;
   if [[ $try -eq $timeout ]]; then
-    echo " Container did not boot within timeout";
+    echo " Container $container_name did not boot within timeout";
     exit 1;
   fi
 done
