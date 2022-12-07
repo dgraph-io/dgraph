@@ -21,8 +21,8 @@ type TestCases struct {
 }
 
 func TestQueries(t *testing.T) {
-	// dg, err := testutil.DgraphClient(testutil.ContainerAddr("alpha1", 9080))
-	dg, err := testutil.DgraphClient("127.0.0.1:9080")
+	dg, err := testutil.DgraphClient(testutil.ContainerAddr("alpha1", 9080))
+	// dg, err := testutil.DgraphClient("127.0.0.1:9080")
 
 	if err != nil {
 		t.Fatalf("Error while getting a dgraph client: %v", err)
