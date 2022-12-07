@@ -11,3 +11,5 @@ docker-compose --compatibility -f docker-compose.yml  up --force-recreate --buil
 ./healthCheck.sh s3-backup_alpha4_1 120
 ./healthCheck.sh s3-backup_alpha5_1 120
 ./healthCheck.sh s3-backup_alpha6_1 120
+
+docker ps -a
