@@ -197,6 +197,7 @@ func stopCluster(composeFile, prefix string, wg *sync.WaitGroup, err error) {
 		}
 		cmd := command("docker-compose", "--compatibility", "-f", composeFile, "-p", prefix, "stop")
 		cmd.Stderr = nil
+		fmt.Println("Running: ", cmd.String())
 		if err := cmd.Run(); err != nil {
 			fmt.Printf("Error while bringing down cluster. Prefix: %s. Error: %v\n",
 				prefix, err)
