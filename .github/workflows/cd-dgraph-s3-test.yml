@@ -43,6 +43,19 @@ jobs:
           go clean -testcache
           # clean up docker containers before test execution
           cd t; ./t -r
+      - name: Run NFS Unit Tests
+        run: |
+          #!/bin/bash
+          # go env settings
+          export GOPATH=~/go
+          # move the binary
+          cp dgraph/dgraph ~/go/bin/dgraph
+          # run the tests
+          # Only run the s3-backup package
+          cd t; ./t --pkg=systest/backup/nfs-backup
+          # clean up docker containers after test execution
+          ./t -r
+          # sleep
       - name: Run Unit Tests
         env:
           S3_REGION: ${{ secrets.S3_REGION }}
@@ -62,16 +75,4 @@ jobs:
           ./t -r
           # sleep
           sleep 5
-      - name: Run NFS Unit Tests
-        run: |
-          #!/bin/bash
-          # go env settings
-          export GOPATH=~/go
-          # move the binary
-          cp dgraph/dgraph ~/go/bin/dgraph
-          # run the tests
-          # Only run the s3-backup package
-          cd t; ./t --pkg=systest/backup/nfs-backup
-          # clean up docker containers after test execution
-          ./t -r
-          # sleep
+
