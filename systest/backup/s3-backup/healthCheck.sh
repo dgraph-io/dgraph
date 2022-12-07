@@ -13,11 +13,11 @@ echo "Timeout: $timeout sec";
 
 try=0;
 is_healthy="false";
-while [ $is_healthy != "true" ];
+while [ $is_healthy != "running" ];
 do
   try=$(($try + 1));
   printf "■";
-  is_healthy=$(docker inspect --format='{{json .State.Health}}' $container_name | jq '.Status == "healthy"');
+  is_healthy=$(docker inspect --format='{{json .State.Status}}' $container_name);
   echo " Container status "
   echo "Container $container_name: $is_healthy"
   sleep 1;
