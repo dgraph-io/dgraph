@@ -78,7 +78,7 @@ all: $(BIN)
 $(BIN): clean jemalloc
 	@go build $(BUILD_FLAGS) -o $(BIN)
 
-test-binary: clean jemalloc
+test-coverage-binary: clean jemalloc
 	@go test -c -covermode=atomic -coverpkg ../... $(BUILD_FLAGS) -o $(BIN)
 
 clean:
