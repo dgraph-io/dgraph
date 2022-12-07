@@ -338,7 +338,7 @@ func runBackupInternal(t *testing.T, token *testutil.HttpToken, forceFull bool, 
 	require.NoError(t, json.Unmarshal(resp.Data, &data))
 	require.Equal(t, "Success", testutil.JsonGet(data, "backup", "response", "code").(string))
 	taskId := testutil.JsonGet(data, "backup", "taskId").(string)
-	testutil.WaitForTask(t, taskId, false)
+	testutil.WaitForTask(t, taskId, false, testutil.SockAddrHttp)
 
 	// Verify that the right amount of files and directories were created.
 	common.CopyToLocalFs(t)
