@@ -42,7 +42,7 @@ jobs:
           make regenerate
           git diff --exit-code -- .
       - name: Make Linux Build and Docker Image
-        run: make test-docker-image
+        run: make docker-image
       - name: Build Test Binary
         run: |
           #!/bin/bash
@@ -68,7 +68,3 @@ jobs:
           ./t -r
           # sleep
           sleep 5
-      - name: Install Goveralls
-        run: go install github.com/mattn/goveralls@latest
-      - name: Send Coverage Results
-        run: cd t && goveralls -repotoken ${{ secrets.COVERALLSIO_TOKEN }} -coverprofile=coverage.out

@@ -14,7 +14,7 @@ on:
   schedule:
     - cron: "30 0 * * *"
 jobs:
-  dgraph-tests:
+  dgraph-code-coverage:
     # TODO: uncomment this after release work
     # if: github.event.pull_request.draft == false
     runs-on: [self-hosted, x64]
@@ -41,7 +41,7 @@ jobs:
           go mod tidy
           make regenerate
           git diff --exit-code -- .
-      - name: Make Linux Build and Docker Image
+      - name: Make Linux Build and Docker Image with coverage enabled
         run: make test-docker-image
       - name: Build Test Binary
         run: |
@@ -63,7 +63,7 @@ jobs:
           # move the binary
           cp dgraph/dgraph ~/go/bin/dgraph
           # run the tests
-          cd t; ./t --coverage=true
+          cd t; ./t --coverage=true --suite=ldbc
           # clean up docker containers after test execution
           ./t -r
           # sleep
