@@ -1678,6 +1678,8 @@ func (n *node) calculateSnapshot(startIdx, lastIdx, minPendingStart uint64) (*pb
 	span.Annotatef(nil, "Found Raft entries: %d", lastIdx-first)
 
 	if num := posting.Oracle().NumPendingTxns(); num > 0 {
+		// TODO (Damon): this is associated with stuck alphas. Is there anything else we should log here
+		// such as the transaction IDs so we can see in logs if a specific tx is stuck for a long time and how long?
 		glog.V(2).Infof("Num pending txns: %d", num)
 	}
 
