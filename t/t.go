@@ -206,10 +206,13 @@ func stopCluster(composeFile, prefix string, wg *sync.WaitGroup, err error) {
 
 		// get all matching containers, copy /usr/local/bin/coverage.out
 		containers := testutil.AllContainers(prefix)
+		fmt.Println("Found following containers: ", containers)
 		for _, c := range containers {
 			tmp := fmt.Sprintf("%s.%s", tmpCoverageFile, c.ID)
 
-			containerInfo, err := testutil.DockerInspect(c.ID)
+			fmt.Printf("Temp coverage file: %s\n", tmp)
+
+			containerInfo, _ := testutil.DockerInspect(c.ID)
 			workDir := containerInfo.Config.WorkingDir
 
 			err = testutil.DockerCpFromContainer(c.ID, workDir+"/coverage.out", tmp)
@@ -859,7 +862,7 @@ func isTestCoverageEmpty(path string) (bool, error) {
 
 func appendTestCoverageFile(src, des string) error {
 	if !fileExists(src) {
-		fmt.Println("src does not exist, skipping file")
+		fmt.Printf("src: %s does not exist, skipping file\n", src)
 		return nil
 	}
 
@@ -868,7 +871,7 @@ func appendTestCoverageFile(src, des string) error {
 		return err
 	}
 	if isEmpty {
-		fmt.Println("no test files or no test coverage statement generated, skipping file")
+		fmt.Printf("no test files or no test coverage statement generated for %s, skipping file\n", src)
 		return nil
 	}
 
