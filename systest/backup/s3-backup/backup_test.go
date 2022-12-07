@@ -293,7 +293,7 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 
 	require.Equal(t, "Success", testutil.JsonGet(data, "data", "backup", "response", "code").(string))
 	taskId := testutil.JsonGet(data, "data", "backup", "taskId").(string)
-	testutil.WaitForTask(t, taskId, true)
+	testutil.WaitForTask(t, taskId, true, testutil.SockAddrHttp)
 
 	sess, err := session.NewSessionWithOptions(session.Options{
 		Profile: "default",

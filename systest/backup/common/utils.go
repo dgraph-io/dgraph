@@ -91,3 +91,13 @@ func CopyToLocalFs(t *testing.T) {
 	srcPath := testutil.DockerPrefix + "_alpha1_1:/data/backups"
 	require.NoError(t, testutil.DockerCp(srcPath, copyBackupDir))
 }
+
+// to copy files fron nfs server
+func CopyToLocalFsFromNFS(t *testing.T, backupDst string) {
+	// The original backup files are not accessible because docker creates all files in
+	// the shared volume as the root user. This restriction is circumvented by using
+	// "docker cp" to create a copy that is not owned by the root user.
+	require.NoError(t, os.RemoveAll(copyBackupDir))
+	srcPath := testutil.DockerPrefix + "_nfs_1:/dgraph-data/backup" + backupDst
+	require.NoError(t, testutil.DockerCp(srcPath, copyBackupDir))
+}
