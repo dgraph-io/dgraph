@@ -56,6 +56,7 @@ var (
 	tmpCoverageFile    = "tmp.out"
 	testCovMode        = "atomic"
 	coverageFileHeader = fmt.Sprintf("mode: %s", testCovMode)
+	testsuite          []string
 
 	baseDir = pflag.StringP("base", "", "../",
 		"Base dir for Dgraph")
@@ -84,7 +85,8 @@ var (
 	skipSlow = pflag.BoolP("skip-slow", "s", false,
 		"If true, don't run tests on slow packages.")
 	suite = pflag.String("suite", "unit", "This flag is used to specify which "+
-		"test suites to run. Possible values are all, load, unit")
+		"test suites to run. Possible values are all, ldbc, load, unit. Multiple suites can be "+
+		"selected like --suite=ldbc,load")
 	tmp               = pflag.String("tmp", "", "Temporary directory used to download data.")
 	downloadResources = pflag.BoolP("download", "d", true,
 		"Flag to specify whether to download resources or not")
@@ -100,6 +102,10 @@ func commandWithContext(ctx context.Context, args ...string) *exec.Cmd {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Env = os.Environ()
+	if *runCoverage {
+		cmd.Env = append(cmd.Env, "COVERAGE_OUTPUT=--test.coverprofile=coverage.out")
+	}
+
 	return cmd
 }
 
@@ -206,7 +212,7 @@ func stopCluster(composeFile, prefix string, wg *sync.WaitGroup, err error) {
 			containerInfo, err := testutil.DockerInspect(c.ID)
 			workDir := containerInfo.Config.WorkingDir
 
-			err = testutil.DockerCpFromContainer(c.ID, workDir + "/coverage.out", tmp)
+			err = testutil.DockerCpFromContainer(c.ID, workDir+"/coverage.out", tmp)
 			if err != nil {
 				fmt.Printf("Error while bringing down cluster. Prefix: %s. Error: %v\n",
 					prefix, err)
@@ -216,7 +222,7 @@ func stopCluster(composeFile, prefix string, wg *sync.WaitGroup, err error) {
 				fmt.Printf("Error while bringing down cluster. Prefix: %s. Error: %v\n",
 					prefix, err)
 			}
-			
+
 			os.Remove(tmp)
 		}
 
@@ -584,7 +590,7 @@ func getPackages() []task {
 		}
 
 		if !isValidPackageForSuite(pkg.ID) {
-			fmt.Printf("Skipping package %s as its not valid for the selected suite %s \n", pkg.ID, *suite)
+			fmt.Printf("Skipping package %s as its not valid for the selected suite %+v \n", pkg.ID, testsuite)
 			continue
 		}
 
@@ -668,20 +674,31 @@ var loadPackages = []string{
 	"/dgraph/cmd/bulk/systest",
 }
 
-func isValidPackageForSuite(pkg string) bool {
-	switch *suite {
-	case "all":
-		return true
-	case "load":
-		return isLoadPackage(pkg)
-	case "ldbc":
-		return isLDBCPackage(pkg)
-	case "unit":
-		return !isLoadPackage(pkg) && !isLDBCPackage(pkg)
-	default:
-		fmt.Printf("wrong suite is provide %s. valid values are all/load/unit \n", *suite)
-		return false
+func testSuiteContains(suite string) bool {
+	for _, str := range testsuite {
+		if suite == str {
+			return true
+		}
 	}
+	return false
+}
+
+func isValidPackageForSuite(pkg string) bool {
+	if testSuiteContains("all") {
+		return true
+	}
+	if testSuiteContains("ldbc") {
+		return isLDBCPackage(pkg)
+	}
+	if testSuiteContains("load") {
+		return isLoadPackage(pkg)
+	}
+	if testSuiteContains("unit") {
+		return !isLoadPackage(pkg) && !isLDBCPackage(pkg)
+	}
+
+	fmt.Printf("wrong suite is provide %+v. valid values are all/load/unit/ldbc \n", testsuite)
+	return false
 }
 
 func isLoadPackage(pkg string) bool {
@@ -947,10 +964,10 @@ func run() error {
 	go func() {
 		defer close(testCh)
 		valid := getPackages()
-		if *suite == "load" || *suite == "all" {
+		if testSuiteContains("load") || testSuiteContains("all") {
 			downloadDataFiles()
 		}
-		if *suite == "ldbc" || *suite == "all" {
+		if testSuiteContains("ldbc") || testSuiteContains("all") {
 			downloadLDBCFiles()
 		}
 		for i, task := range valid {
@@ -978,8 +995,27 @@ func run() error {
 	return nil
 }
 
+func validateAllowed(testSuite []string) {
+
+	allowed := []string{"all", "ldbc", "load", "unit"}
+	for _, str := range testSuite {
+		onlyAllowed := false
+		for _, allowedStr := range allowed {
+			if str == allowedStr {
+				onlyAllowed = true
+			}
+		}
+		if !onlyAllowed {
+			log.Fatalf("Allowed options for suite are only all, load, ldbc or unit; passed in %+v", testSuite)
+		}
+	}
+}
+
 func main() {
 	pflag.Parse()
+	testsuite = strings.Split(*suite, ",")
+	validateAllowed(testsuite)
+
 	rand.Seed(time.Now().UnixNano())
 	procId = rand.Intn(1000)
 

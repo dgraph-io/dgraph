@@ -16,7 +16,7 @@ services:
       - type: bind
         source: ./cdc_logs
         target: /cdc
-    command: /gobin/dgraph  --test.coverprofile=coverage.out alpha --my=alpha1:7080 --zero=zero1:5080 --logtostderr
+    command: /gobin/dgraph ${COVERAGE_OUTPUT} alpha --my=alpha1:7080 --zero=zero1:5080 --logtostderr
       --cdc "file=/cdc;" -v=2
       --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
   zero1:
@@ -32,5 +32,5 @@ services:
         source: $GOPATH/bin
         target: /gobin
         read_only: true
-    command: /gobin/dgraph  --test.coverprofile=coverage.out zero --my=zero1:5080 --logtostderr -v=2 --bindall
+    command: /gobin/dgraph  ${COVERAGE_OUTPUT} zero --my=zero1:5080 --logtostderr -v=2 --bindall
 volumes: {}
