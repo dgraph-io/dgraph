@@ -1076,7 +1076,7 @@ func TestListTypeSchemaChange(t *testing.T) {
 	res, err = runGraphqlQuery(q)
 	require.NoError(t, err)
 	testutil.CompareJSON(t, testutil.GetFullSchemaHTTPResponse(testutil.
-	SchemaOptions{UserPreds: `{"predicate":"occupations","type":"string"}`}), res)
+		SchemaOptions{UserPreds: `{"predicate":"occupations","type":"string"}`}), res)
 }
 
 func TestDeleteAllSP2(t *testing.T) {
