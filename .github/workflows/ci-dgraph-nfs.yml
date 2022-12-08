@@ -53,6 +53,8 @@ jobs:
           # run the tests
           # Only run the nfs backup package
           cd t; ./t --pkg=systest/backup/nfs-backup
+          #check docker containers
+          docker ps -a
           # clean up docker containers after test execution
           ./t -r
           # sleep
