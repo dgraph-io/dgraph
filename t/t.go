@@ -197,7 +197,6 @@ func stopCluster(composeFile, prefix string, wg *sync.WaitGroup, err error) {
 		}
 		cmd := command("docker-compose", "--compatibility", "-f", composeFile, "-p", prefix, "stop")
 		cmd.Stderr = nil
-		fmt.Println("Running: ", cmd.String())
 		if err := cmd.Run(); err != nil {
 			fmt.Printf("Error while bringing down cluster. Prefix: %s. Error: %v\n",
 				prefix, err)
@@ -207,7 +206,6 @@ func stopCluster(composeFile, prefix string, wg *sync.WaitGroup, err error) {
 
 		// get all matching containers, copy /usr/local/bin/coverage.out
 		containers := testutil.AllContainers(prefix)
-		fmt.Println("Found following containers: ", containers)
 		for _, c := range containers {
 			tmp := fmt.Sprintf("%s.%s", tmpCoverageFile, c.ID)
 
@@ -875,28 +873,6 @@ func appendTestCoverageFile(src, des string) error {
 		fmt.Printf("no test files or no test coverage statement generated for %s, skipping file\n", src)
 		return nil
 	}
-
-	fmt.Printf("Printing some lines from the coverage file %s\n", src)
-
-	readFile, err := os.Open(src)
-
-	if err != nil {
-		fmt.Println(err)
-	}
-	fileScanner := bufio.NewScanner(readFile)
-
-	fileScanner.Split(bufio.ScanLines)
-
-	count := 1
-	for fileScanner.Scan() {
-		fmt.Println(fileScanner.Text())
-		count++
-		if count == 6 {
-			break
-		}
-	}
-
-	readFile.Close()
 
 	cmd := command("bash", "-c", fmt.Sprintf("cat %s | grep -v \"%s\" >> %s", src, coverageFileHeader, des))
 	if err := cmd.Run(); err != nil {
