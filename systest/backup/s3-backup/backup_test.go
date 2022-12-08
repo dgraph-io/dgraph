@@ -295,12 +295,10 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	taskId := testutil.JsonGet(data, "data", "backup", "taskId").(string)
 	testutil.WaitForTask(t, taskId, true, testutil.SockAddrHttp)
 
-	sess, err := session.NewSessionWithOptions(session.Options{
-		Profile: "default",
-		Config: aws.Config{
-			Region: aws.String(MapIGet[3]),
-		},
-	})
+	sess, _ := session.NewSession(&aws.Config{
+		Region:                        aws.String(MapIGet[3]),
+		CredentialsChainVerboseErrors: aws.Bool(true)},
+	)
 	if err != nil {
 		fmt.Println("------------------------------>failed to create a new aws session: ", sess)
 	}
