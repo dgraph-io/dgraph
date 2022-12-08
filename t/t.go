@@ -700,7 +700,6 @@ func isValidPackageForSuite(pkg string) bool {
 	if valid {
 		return valid
 	}
-	fmt.Printf("wrong suite is provide %+v. valid values are all/load/unit/ldbc \n", testsuite)
 	return false
 }
 
