@@ -372,7 +372,7 @@ func RemoveDuplicateDirectories(s []string) []string {
 	}
 
 	var result []string
-	for item, _ := range m {
+	for item := range m {
 		result = append(result, item)
 	}
 	return result
@@ -402,16 +402,22 @@ func runRestore(t *testing.T, lastDir string, commitTs uint64) string {
 	b, err := json.Marshal(params)
 	require.NoError(t, err)
 
+	fmt.Println("Admin URL for Restore------------>", adminUrl)
+
 	client := testutil.GetHttpsClient(t)
 	resp, err := client.Post(adminUrl, "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
 	defer resp.Body.Close()
+
+	fmt.Println("Response of the post request------------>", resp)
 
 	var data interface{}
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
 
 	//require.Equal(t, "Success", testutil.JsonGet(data, "data", "restore", "code").(string))
 	receivedcode := testutil.JsonGet(data, "data", "restore", "code").(string)
+
+	fmt.Println("Received code from post request------------>", receivedcode)
 
 	//Waiting for 2 seconds, allowing restore to finish, since restore dosen't give us taskID and data is small
 	//For larger data/payload, please increase the waiting time.
