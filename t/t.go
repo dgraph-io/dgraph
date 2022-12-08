@@ -132,9 +132,7 @@ func startCluster(composeFile, prefix string) error {
 	// Wait for cluster to be healthy.
 	for i := 1; i <= 3; i++ {
 		in := testutil.GetContainerInstance(prefix, "zero"+strconv.Itoa(i))
-		fmt.Println("Checking health for zero ", i)
 		if err := in.BestEffortWaitForHealthy(6080); err != nil {
-			fmt.Printf("Error while checking zero health %s. Error %v", in.Name, err)
 		}
 
 	}
