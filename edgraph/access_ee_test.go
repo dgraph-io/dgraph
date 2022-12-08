@@ -27,20 +27,15 @@ func generateJWT(namespace uint64, userId string, groupIds []string, exp int64) 
 		e1 = time.Now().Add(time.Minute * 30).Unix()
 	}
 
-	claims := &jwt.MapClaims{
+	claims := jwt.MapClaims{
 		"namespace": namespace,
 		"userid":    userId,
 		"exp":       e1,
 	}
 	if groupIds != nil {
-		claims = &jwt.MapClaims{
-			"namespace": namespace,
-			"userid":    userId,
-			"groups":    groupIds,
-			"exp":       e1,
-		}
+			claims["groups"] = groupIds
 	}
-	token = jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	token = jwt.NewWithClaims(jwt.SigningMethodHS256, &claims)
 
 	tokenString, err := token.SignedString([]byte(worker.Config.HmacSecret))
 	if err != nil {
