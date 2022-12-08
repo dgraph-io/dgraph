@@ -258,6 +258,30 @@ func TestUIDListIntersect5(t *testing.T) {
 	require.Equal(t, []uint64{3}, u.Uids)
 }
 
+func TestUIDListIntersect6(t *testing.T) {
+	common, other, _ := fillNums(10, 500)
+	u := newList(common)
+	v := newList(other)
+	IntersectWith(u, v, u)
+	require.Equal(t, common, u.Uids)
+}
+
+func TestUIDListIntersect7(t *testing.T) {
+	common, other, _ := fillNums(10, 2500)
+	u := newList(common)
+	v := newList(other)
+	IntersectWith(u, v, u)
+	require.Equal(t, common, u.Uids)
+}
+
+func TestUIDListIntersect8(t *testing.T) {
+	common, other, _ := fillNums(10, 20000)
+	u := newList(common)
+	v := newList(other)
+	IntersectWith(u, v, newList(nil))
+	require.Equal(t, common, u.Uids)
+}
+
 func TestUIDListIntersectDupFirst(t *testing.T) {
 	u := newList([]uint64{1, 1, 2, 3})
 	v := newList([]uint64{1, 2})
