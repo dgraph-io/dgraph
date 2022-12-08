@@ -8,7 +8,6 @@ jobs:
     runs-on: [ubuntu-20.04]
     steps:
       - uses: actions/checkout@v3
-      - uses: ItsKarma/aws-cli@v1.70.0
       - name: Get Go Version
         run: |
           #!/bin/bash
@@ -44,6 +43,15 @@ jobs:
           go clean -testcache
           # clean up docker containers before test execution
           cd t; ./t -r
+      - name: install aws cli
+        run: |
+          #!/bin/bash
+          sudo apt update && apt upgrade -y
+          sudo apt install curl -y
+          sudo apt install unzip
+          sudo curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+          sudo unzip awscliv2.zip 
+          sudo ./aws/install
       - name: Run Unit Tests
         env:
           S3_REGION: ${{ secrets.S3_REGION }}
