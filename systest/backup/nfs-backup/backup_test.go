@@ -21,12 +21,10 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
-	"fmt"
 
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
@@ -50,12 +48,7 @@ var (
 )
 
 func TestBackupHAClust(t *testing.T) {
-	stdout, err := exec.Command("/bin/sh", "test.sh").CombinedOutput()
-	if err != nil {
-		fmt.Println(err.Error())
-		return
-	}
-	fmt.Print(string(stdout))
+
 	BackupAlphaSocketAddr := testutil.SockAddr
 	BackupAlphaSocketAddrHttp := testutil.SockAddrHttp
 
@@ -72,13 +65,6 @@ func TestBackupNonHAClust(t *testing.T) {
 
 	BackupZeroSockerAddr := testutil.SockAddrZero7Http
 	RestoreAlphaSocketAddr := testutil.R_SockAddrAlpha8Http
-	stdout, err := exec.Command("/bin/sh", "test.sh").CombinedOutput()
-	if err != nil {
-		fmt.Println(err.Error())
-		return
-	}
-	fmt.Print(string(stdout))
-
 	testnfs(t, BackupAlphaSocketAddr, RestoreAlphaSocketAddr, BackupZeroSockerAddr, backupDstNonHA, BackupAlphaSocketAddrHttp)
 
 }
