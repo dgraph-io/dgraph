@@ -21,9 +21,9 @@ RUN apt-get update
 RUN apt-get install -y --no-install-recommends ca-certificates
 RUN apt-get install -y --no-install-recommends curl
 RUN apt-get install -y --no-install-recommends htop
-RUN apt-get install -y --no-install-recommends iputils-ping
-RUN apt-get install -y --no-install-recommends jq
-RUN apt-get install -y --no-install-recommends less
+RUN apt-get install -y --no-install-recommends iputils-ping="3:20190709-3"
+RUN apt-get install -y --no-install-recommends jq="1.6-1ubuntu0.20.04.1"
+RUN apt-get install -y --no-install-recommends less="551-1ubuntu0.1"
 RUN apt-get install -y --no-install-recommends sysstat
 
 # rm -rf /var/lib/apt/lists/* # TODO: clean this up only if necessary
