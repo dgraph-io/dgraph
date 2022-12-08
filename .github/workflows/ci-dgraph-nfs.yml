@@ -46,6 +46,8 @@ jobs:
       - name: Run NFS Unit Tests
         run: |
           #!/bin/bash
+          #install nfs kernal on host machine
+          sudo apt-get install nfs-kernel-server
           # go env settings
           export GOPATH=~/go
           # move the binary
