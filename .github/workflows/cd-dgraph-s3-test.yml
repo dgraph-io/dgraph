@@ -8,7 +8,7 @@ jobs:
     runs-on: [ubuntu-20.04]
     steps:
       - uses: actions/checkout@v3
-      - uses: chrislennon/action-aws-cli@v1.1
+      - uses: ItsKarma/aws-cli@v1.70.0
       - name: Get Go Version
         run: |
           #!/bin/bash
