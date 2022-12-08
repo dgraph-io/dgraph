@@ -455,9 +455,9 @@ func dirCleanup(t *testing.T) {
 	//Cleanup the s3 too
 
 	sess, _ := session.NewSession(&aws.Config{
-		Region: aws.String(MapIGet[3])},
+		Region:                        aws.String(MapIGet[3]),
+		CredentialsChainVerboseErrors: aws.Bool(true)},
 	)
-
 	// Create S3 service client
 	svc := s3.New(sess)
 
