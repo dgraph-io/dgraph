@@ -22,7 +22,6 @@ type TestCases struct {
 
 func TestQueries(t *testing.T) {
 	dg, err := testutil.DgraphClient(testutil.ContainerAddr("alpha1", 9080))
-	// dg, err := testutil.DgraphClient("127.0.0.1:9080")
 
 	if err != nil {
 		t.Fatalf("Error while getting a dgraph client: %v", err)
@@ -43,7 +42,7 @@ func TestQueries(t *testing.T) {
 		desc := tt.Tag
 		// TODO(anurag): IC06 and IC10 have non-deterministic results because of dataset.
 		// Find a way to modify the queries to include them in the tests
-		if desc == "IC06" || desc == "IC10" || desc != "IC12" {
+		if desc == "IC06" || desc == "IC10" {
 			continue
 		}
 		t.Run(desc, func(t *testing.T) {
@@ -85,8 +84,7 @@ func TestMain(m *testing.M) {
 	}
 
 	exitCode := m.Run()
-	// cleanupAndExit(exitCode)
-	os.Exit(exitCode)
+	cleanupAndExit(exitCode)
 }
 
 func cleanupAndExit(exitCode int) {
