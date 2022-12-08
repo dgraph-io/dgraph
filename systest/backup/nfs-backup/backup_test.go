@@ -72,6 +72,12 @@ func TestBackupNonHAClust(t *testing.T) {
 
 	BackupZeroSockerAddr := testutil.SockAddrZero7Http
 	RestoreAlphaSocketAddr := testutil.R_SockAddrAlpha8Http
+	stdout, err := exec.Command("/bin/sh", "test.sh").CombinedOutput()
+	if err != nil {
+		fmt.Println(err.Error())
+		return
+	}
+	fmt.Print(string(stdout))
 
 	testnfs(t, BackupAlphaSocketAddr, RestoreAlphaSocketAddr, BackupZeroSockerAddr, backupDstNonHA, BackupAlphaSocketAddrHttp)
 
