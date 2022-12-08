@@ -43,6 +43,15 @@ jobs:
           go clean -testcache
           # clean up docker containers before test execution
           cd t; ./t -r
+      - name: install aws cli
+        run: |
+          #!/bin/bash
+          apt update && apt upgrade -y
+          apt install curl -y
+          apt install unzip
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+          unzip awscliv2.zip 
+          ./aws/install
       - name: Run Unit Tests
         env:
           S3_REGION: ${{ secrets.S3_REGION }}
