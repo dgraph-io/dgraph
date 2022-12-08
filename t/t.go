@@ -209,9 +209,7 @@ func stopCluster(composeFile, prefix string, wg *sync.WaitGroup, err error) {
 		for _, c := range containers {
 			tmp := fmt.Sprintf("%s.%s", tmpCoverageFile, c.ID)
 
-			fmt.Printf("Temp coverage file: %s\n", tmp)
-
-			containerInfo, _ := testutil.DockerInspect(c.ID)
+			containerInfo, err := testutil.DockerInspect(c.ID)
 			workDir := containerInfo.Config.WorkingDir
 
 			err = testutil.DockerCpFromContainer(c.ID, workDir+"/coverage.out", tmp)
@@ -388,7 +386,7 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 		} else {
 			// we are not using err variable here because we dont want to
 			// print logs of default cluster in case of custom test fail.
-			if cerr := runCustomClusterTest(ctx, task.pkg.ID, prefix, wg); cerr != nil {
+			if cerr := runCustomClusterTest(ctx, task.pkg.ID, wg); cerr != nil {
 				return cerr
 			}
 		}
@@ -412,11 +410,11 @@ func getClusterPrefix() string {
 	return fmt.Sprintf("%s%03d-%d", getGlobalPrefix(), procId, id)
 }
 
-func runCustomClusterTest(ctx context.Context, pkg, prefix string, wg *sync.WaitGroup) error {
+func runCustomClusterTest(ctx context.Context, pkg string, wg *sync.WaitGroup) error {
 	fmt.Printf("Bringing up cluster for package: %s\n", pkg)
 	var err error
 	compose := composeFileFor(pkg)
-	// prefix := getClusterPrefix()
+	prefix := getClusterPrefix()
 	err = startCluster(compose, prefix)
 	if err != nil {
 		return err

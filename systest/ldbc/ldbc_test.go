@@ -22,7 +22,6 @@ type TestCases struct {
 
 func TestQueries(t *testing.T) {
 	dg, err := testutil.DgraphClient(testutil.ContainerAddr("alpha1", 9080))
-
 	if err != nil {
 		t.Fatalf("Error while getting a dgraph client: %v", err)
 	}
