@@ -686,19 +686,22 @@ func testSuiteContains(suite string) bool {
 }
 
 func isValidPackageForSuite(pkg string) bool {
+	valid := false
 	if testSuiteContains("all") {
-		return true
+		valid = true
 	}
 	if testSuiteContains("ldbc") {
-		return isLDBCPackage(pkg)
+		valid = valid || isLDBCPackage(pkg)
 	}
 	if testSuiteContains("load") {
-		return isLoadPackage(pkg)
+		valid = valid || isLoadPackage(pkg)
 	}
 	if testSuiteContains("unit") {
-		return !isLoadPackage(pkg) && !isLDBCPackage(pkg)
+		valid = valid || (!isLoadPackage(pkg) && !isLDBCPackage(pkg))
 	}
-
+	if valid {
+		return valid
+	}
 	fmt.Printf("wrong suite is provide %+v. valid values are all/load/unit/ldbc \n", testsuite)
 	return false
 }
