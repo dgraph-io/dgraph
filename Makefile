@@ -30,11 +30,14 @@ GOPATH         ?= $(shell go env GOPATH)
 ######################
 DGRAPH_VERSION ?= local
 
-.PHONY: dgraph all oss version install install_oss oss_install uninstall test help image image-local local-image docker-image docker-image-standalone
+.PHONY: dgraph dgraph-coverage all oss version install install_oss oss_install uninstall test help image image-local local-image docker-image docker-image-standalone
 all: dgraph
 
 dgraph:
 	$(MAKE) -w -C $@ all
+
+dgraph-coverage:
+	$(MAKE) -w -C dgraph test-coverage-binary
 
 oss:
 	$(MAKE) BUILD_TAGS=oss
@@ -78,6 +81,11 @@ docker-image-standalone: dgraph docker-image
 	@mkdir -p linux
 	@cp ./dgraph/dgraph ./linux/dgraph
 	$(MAKE) -w -C contrib/standalone all DOCKER_TAG=$(DGRAPH_VERSION) DGRAPH_VERSION=$(DGRAPH_VERSION)
+
+coverage-docker-image: dgraph-coverage
+	@mkdir -p linux
+	@cp ./dgraph/dgraph ./linux/dgraph
+	docker build -f contrib/Dockerfile -t dgraph/dgraph:$(DGRAPH_VERSION) .
 
 # build and run dependencies for ubuntu linux
 linux-dependency:

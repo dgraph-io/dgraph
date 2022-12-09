@@ -56,6 +56,7 @@ var (
 	tmpCoverageFile    = "tmp.out"
 	testCovMode        = "atomic"
 	coverageFileHeader = fmt.Sprintf("mode: %s", testCovMode)
+	testsuite          []string
 
 	baseDir = pflag.StringP("base", "", "../",
 		"Base dir for Dgraph")
@@ -84,7 +85,8 @@ var (
 	skipSlow = pflag.BoolP("skip-slow", "s", false,
 		"If true, don't run tests on slow packages.")
 	suite = pflag.String("suite", "unit", "This flag is used to specify which "+
-		"test suites to run. Possible values are all, load, unit")
+		"test suites to run. Possible values are all, ldbc, load, unit. Multiple suites can be "+
+		"selected like --suite=ldbc,load")
 	tmp               = pflag.String("tmp", "", "Temporary directory used to download data.")
 	downloadResources = pflag.BoolP("download", "d", true,
 		"Flag to specify whether to download resources or not")
@@ -100,6 +102,10 @@ func commandWithContext(ctx context.Context, args ...string) *exec.Cmd {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Env = os.Environ()
+	if *runCoverage {
+		cmd.Env = append(cmd.Env, "COVERAGE_OUTPUT=--test.coverprofile=coverage.out")
+	}
+
 	return cmd
 }
 
@@ -189,14 +195,45 @@ func stopCluster(composeFile, prefix string, wg *sync.WaitGroup, err error) {
 		if err != nil {
 			outputLogs(prefix)
 		}
-		cmd := command("docker-compose", "--compatibility", "-f", composeFile, "-p", prefix, "down", "-v")
+		cmd := command("docker-compose", "--compatibility", "-f", composeFile, "-p", prefix, "stop")
 		cmd.Stderr = nil
 		if err := cmd.Run(); err != nil {
 			fmt.Printf("Error while bringing down cluster. Prefix: %s. Error: %v\n",
 				prefix, err)
 		} else {
-			fmt.Printf("CLUSTER DOWN: %s\n", prefix)
+			fmt.Printf("CLUSTER STOPPED: %s\n", prefix)
 		}
+
+		// get all matching containers, copy /usr/local/bin/coverage.out
+		containers := testutil.AllContainers(prefix)
+		for _, c := range containers {
+			tmp := fmt.Sprintf("%s.%s", tmpCoverageFile, c.ID)
+
+			containerInfo, err := testutil.DockerInspect(c.ID)
+			workDir := containerInfo.Config.WorkingDir
+
+			err = testutil.DockerCpFromContainer(c.ID, workDir+"/coverage.out", tmp)
+			if err != nil {
+				fmt.Printf("Error while bringing down cluster. Prefix: %s. Error: %v\n",
+					prefix, err)
+			}
+
+			if err = appendTestCoverageFile(tmp, coverageFile); err != nil {
+				fmt.Printf("Error while bringing down cluster. Prefix: %s. Error: %v\n",
+					prefix, err)
+			}
+
+			os.Remove(tmp)
+		}
+
+		cmd = command("docker-compose", "--compatibility", "-f", composeFile, "-p", prefix, "down", "-v")
+		if err := cmd.Run(); err != nil {
+			fmt.Printf("Error while bringing down cluster. Prefix: %s. Error: %v\n",
+				prefix, err)
+		} else {
+			fmt.Printf("CLUSTER AND NETWORK REMOVED: %s\n", prefix)
+		}
+
 		wg.Done()
 	}()
 }
@@ -553,7 +590,7 @@ func getPackages() []task {
 		}
 
 		if !isValidPackageForSuite(pkg.ID) {
-			fmt.Printf("Skipping package %s as its not valid for the selected suite %s \n", pkg.ID, *suite)
+			fmt.Printf("Skipping package %s as its not valid for the selected suite %+v \n", pkg.ID, testsuite)
 			continue
 		}
 
@@ -637,20 +674,33 @@ var loadPackages = []string{
 	"/dgraph/cmd/bulk/systest",
 }
 
-func isValidPackageForSuite(pkg string) bool {
-	switch *suite {
-	case "all":
-		return true
-	case "load":
-		return isLoadPackage(pkg)
-	case "ldbc":
-		return isLDBCPackage(pkg)
-	case "unit":
-		return !isLoadPackage(pkg) && !isLDBCPackage(pkg)
-	default:
-		fmt.Printf("wrong suite is provide %s. valid values are all/load/unit \n", *suite)
-		return false
+func testSuiteContains(suite string) bool {
+	for _, str := range testsuite {
+		if suite == str {
+			return true
+		}
 	}
+	return false
+}
+
+func isValidPackageForSuite(pkg string) bool {
+	valid := false
+	if testSuiteContains("all") {
+		valid = true
+	}
+	if testSuiteContains("ldbc") {
+		valid = valid || isLDBCPackage(pkg)
+	}
+	if testSuiteContains("load") {
+		valid = valid || isLoadPackage(pkg)
+	}
+	if testSuiteContains("unit") {
+		valid = valid || (!isLoadPackage(pkg) && !isLDBCPackage(pkg))
+	}
+	if valid {
+		return valid
+	}
+	return false
 }
 
 func isLoadPackage(pkg string) bool {
@@ -811,7 +861,7 @@ func isTestCoverageEmpty(path string) (bool, error) {
 
 func appendTestCoverageFile(src, des string) error {
 	if !fileExists(src) {
-		fmt.Println("src does not exist, skipping file")
+		fmt.Printf("src: %s does not exist, skipping file\n", src)
 		return nil
 	}
 
@@ -820,7 +870,7 @@ func appendTestCoverageFile(src, des string) error {
 		return err
 	}
 	if isEmpty {
-		fmt.Println("no test files or no test coverage statement generated, skipping file")
+		fmt.Printf("no test files or no test coverage statement generated for %s, skipping file\n", src)
 		return nil
 	}
 
@@ -916,10 +966,10 @@ func run() error {
 	go func() {
 		defer close(testCh)
 		valid := getPackages()
-		if *suite == "load" || *suite == "all" {
+		if testSuiteContains("load") || testSuiteContains("all") {
 			downloadDataFiles()
 		}
-		if *suite == "ldbc" || *suite == "all" {
+		if testSuiteContains("ldbc") || testSuiteContains("all") {
 			downloadLDBCFiles()
 		}
 		for i, task := range valid {
@@ -947,8 +997,27 @@ func run() error {
 	return nil
 }
 
+func validateAllowed(testSuite []string) {
+
+	allowed := []string{"all", "ldbc", "load", "unit"}
+	for _, str := range testSuite {
+		onlyAllowed := false
+		for _, allowedStr := range allowed {
+			if str == allowedStr {
+				onlyAllowed = true
+			}
+		}
+		if !onlyAllowed {
+			log.Fatalf("Allowed options for suite are only all, load, ldbc or unit; passed in %+v", testSuite)
+		}
+	}
+}
+
 func main() {
 	pflag.Parse()
+	testsuite = strings.Split(*suite, ",")
+	validateAllowed(testsuite)
+
 	rand.Seed(time.Now().UnixNano())
 	procId = rand.Intn(1000)
 
