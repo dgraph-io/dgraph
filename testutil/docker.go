@@ -239,7 +239,7 @@ func DockerCpFromContainer(containerID, srcPath, dstPath string) error {
 	cli, err := client.NewEnvClient()
 	x.Check(err)
 
-	tarStream, _, err := cli.CopyFromContainer(context.Background(), containerID, srcPath)	
+	tarStream, _, err := cli.CopyFromContainer(context.Background(), containerID, srcPath)
 	if err != nil {
 		fmt.Println(err)
 		return nil
@@ -250,7 +250,7 @@ func DockerCpFromContainer(containerID, srcPath, dstPath string) error {
 	data, err := io.ReadAll(tr)
 	x.Check(err)
 
-    return os.WriteFile(dstPath, data, 0644)
+	return os.WriteFile(dstPath, data, 0644)
 }
 
 // DockerExec executes a command inside the given container.
