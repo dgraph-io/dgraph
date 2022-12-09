@@ -203,6 +203,9 @@ func recursivelyExpandFragmentSelections(field *ast.Field, op *operation) {
 	}, field.SelectionSet, satisfies)
 	field.SelectionSet = make([]ast.Selection, 0, len(collectedFields))
 	for _, collectedField := range collectedFields {
+		if len(collectedField.Selections) > 0 {
+			collectedField.Field.SelectionSet = collectedField.Selections
+		}
 		field.SelectionSet = append(field.SelectionSet, collectedField.Field)
 	}
 

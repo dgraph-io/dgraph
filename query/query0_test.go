@@ -546,6 +546,20 @@ func TestCascadeWithSort(t *testing.T) {
 	require.JSONEq(t, `{"data":{"me":[{"name": "Daryl Dixon","alive": false},{"name": "Rick Grimes","alive": true}]}}`, js)
 }
 
+// Regression test for issue described in https://github.com/dgraph-io/dgraph/pull/8441
+func TestNegativeOffset(t *testing.T) {
+	query := `
+	{
+		me(func: type(Person2), offset: -1, orderasc: age2) {
+			name2
+			age2
+		}
+	}
+	`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data":{"me":[{"age2":20},{"name2":"Alice"}]}}`, js)
+}
+
 func TestLevelBasedFacetVarAggSum(t *testing.T) {
 	query := `
 		{
