@@ -140,7 +140,8 @@ const (
 		"X-CSRF-Token, X-Auth-Token, X-Requested-With"
 	DgraphCostHeader = "Dgraph-TouchedUids"
 
-	DgraphVersion = 2103
+	// todo: we should use ldflag in init.go (currently not exported) to set this version
+	DgraphVersion = 2200
 )
 
 var (

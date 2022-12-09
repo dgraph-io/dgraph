@@ -1,3 +1,4 @@
+//go:build !oss
 // +build !oss
 
 /*
@@ -214,6 +215,9 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest) error {
 		}
 	}
 
+	// DgraphVersion hard coded in x.go
+	// todo: dgraph version probably should not be hard coded in source
+	// todo: we should use ldflag in init.go (currently not exported)
 	dir := fmt.Sprintf(backupPathFmt, req.UnixTs)
 	m := Manifest{
 		ReadTs:         req.ReadTs,
