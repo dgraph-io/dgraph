@@ -37,7 +37,7 @@ services:
       --trace "ratio=1.0;"
 
   lambda:
-    image: adityasadalage/dgraph-lambda:1.4.0
+    image: adityasadalage/dgraph-lambda:latest
     labels:
       cluster: test
     ports:
