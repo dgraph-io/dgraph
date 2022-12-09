@@ -20,10 +20,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"math"
+	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -47,22 +46,19 @@ import (
 )
 
 var (
-	backupDir     = "s3://s3.ap-south-1.amazonaws.com/test-the-dgraph-backup"
-	restoreDir    = "./data/restore"
-	manifestDir   = "./data"
-	testDirs      = []string{backupDir, restoreDir}
-	bucketName    = "test-the-dgraph-backup"
-	backupDst     string
-	files_found   int
-	fileList      = []string{}
-	directoryList = []string{}
+	backupDir                = "s3://s3.ap-south-1.amazonaws.com/test-the-dgraph-backup"
+	restoreDir               = "./data/restore"
+	manifestDir              = "./data"
+	testDirs                 = []string{restoreDir}
+	bucketName               = "test-the-dgraph-backup"
+	backupDst                string
+	files_found              int
+	fileList                 = []string{}
+	directoryList            = []string{}
+	folderNameForCurrentTest string
 )
 
 func TestBackupS3(t *testing.T) {
-
-	MapIGet := getEnvs()
-
-	backupDst = "s3://s3." + MapIGet[3] + ".amazonaws.com/" + MapIGet[2]
 
 	files_found = 0
 
@@ -114,6 +110,17 @@ func TestBackupS3(t *testing.T) {
 
 	// Setup test directories.
 	dirSetup(t)
+
+	dt := time.Now()
+	fmt.Println(dt.Format("01-02-2006" + "_" + "15-04-05"))
+
+	folderNameForCurrentTest = "Test_" + dt.Format("01-02-2006"+"_"+"15-04-05")
+
+	createBackupFolder(t, folderNameForCurrentTest)
+
+	MapIGet := getEnvs()
+
+	backupDst = "s3://s3." + MapIGet[3] + ".amazonaws.com/" + MapIGet[2] + "/" + folderNameForCurrentTest
 
 	// Send backup request.
 	// TODO: minio backup request fails when the environment is not ready,
@@ -291,6 +298,9 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	var data interface{}
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
 
+	fmt.Println("------------> resp", resp.Body)
+	fmt.Println("------------> Data", data)
+
 	require.Equal(t, "Success", testutil.JsonGet(data, "data", "backup", "response", "code").(string))
 	taskId := testutil.JsonGet(data, "data", "backup", "taskId").(string)
 	testutil.WaitForTask(t, taskId, true, testutil.SockAddrHttp)
@@ -306,58 +316,62 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	s3client := s3.New(sess)
 
 	// List all the folders in the bucket.
-	s3resp, s3err := s3client.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(MapIGet[2])})
+	s3resp, s3err := s3client.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(MapIGet[2]), Prefix: aws.String(folderNameForCurrentTest + "/")})
 	if s3err != nil {
 		fmt.Println("------------------------>Unable to list items in bucket :-", err)
 	}
 
 	for _, item := range s3resp.Contents {
+		fmt.Println("}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} Items", *item.Key)
 		if *item.Key != "manifest.json" {
 			files_found++
 
-			fileList = append(fileList, "s3://"+MapIGet[3]+".amazonaws.com/test-the-dgraph-backup"+*item.Key)
+			fileList = append(fileList, "s3://"+MapIGet[3]+".amazonaws.com/test-the-dgraph-backup/"+*item.Key)
 
-			directoryList = append(directoryList, "s3://"+MapIGet[3]+".amazonaws.com/test-the-dgraph-backup"+strings.Split(*item.Key, "/")[0])
+			directoryList = append(directoryList, "s3://"+MapIGet[3]+".amazonaws.com/test-the-dgraph-backup/"+strings.Split(*item.Key, "/")[1])
 		}
 	}
 
 	files := fileList
 
-	require.Equal(t, numExpectedFiles, len(files))
+	require.Equal(t, numExpectedFiles, len(files)-2)
 
 	dirs := RemoveDuplicateDirectories(directoryList)
 
-	require.Equal(t, numExpectedDirs, len(dirs))
+	require.Equal(t, numExpectedDirs, len(dirs)-2)
 
-	downloader := s3manager.NewDownloader(sess)
+	fmt.Println("File List = ", files)
+	fmt.Println("Dir List = ", dirs)
 
-	item := manifestDir + "/manifest.json"
+	// downloader := s3manager.NewDownloader(sess)
 
-	file, err := os.Create(item)
-	if err != nil {
-		fmt.Println(err)
-	}
+	// item := manifestDir + "/manifest.json"
 
-	defer file.Close()
+	// file, err := os.Create(item)
+	// if err != nil {
+	// 	fmt.Println(err)
+	// }
 
-	numBytes, err := downloader.Download(file,
-		&s3.GetObjectInput{
-			Bucket: aws.String(MapIGet[2]),
-			Key:    aws.String("manifest.json"),
-		})
-	if err != nil {
-		fmt.Println(err)
-	}
+	// defer file.Close()
 
-	fmt.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!Downloaded", file.Name(), numBytes, "bytes")
+	// numBytes, err := downloader.Download(file,
+	// 	&s3.GetObjectInput{
+	// 		Bucket: aws.String(MapIGet[2]),
+	// 		Key:    aws.String("manifest.json"),
+	// 	})
+	// if err != nil {
+	// 	fmt.Println(err)
+	// }
 
-	b, err = ioutil.ReadFile(filepath.Join(manifestDir, "manifest.json"))
-	require.NoError(t, err)
+	// fmt.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!Downloaded", file.Name(), numBytes, "bytes")
 
-	var manifest worker.MasterManifest
-	err = json.Unmarshal(b, &manifest)
-	require.NoError(t, err)
-	require.Equal(t, numExpectedDirs, len(manifest.Manifests))
+	// b, err = ioutil.ReadFile(filepath.Join(manifestDir, "manifest.json"))
+	// require.NoError(t, err)
+
+	// var manifest worker.MasterManifest
+	// err = json.Unmarshal(b, &manifest)
+	// require.NoError(t, err)
+	// require.Equal(t, numExpectedDirs, len(manifest.Manifests))
 
 	return dirs
 }
@@ -409,7 +423,7 @@ func runRestore(t *testing.T, lastDir string, commitTs uint64) string {
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
-	fmt.Println("Response of the post request------------>", resp)
+	//fmt.Println("Response of the post request------------>", resp)
 
 	var data interface{}
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
@@ -417,7 +431,7 @@ func runRestore(t *testing.T, lastDir string, commitTs uint64) string {
 	//require.Equal(t, "Success", testutil.JsonGet(data, "data", "restore", "code").(string))
 	receivedcode := testutil.JsonGet(data, "data", "restore", "code").(string)
 
-	fmt.Println("Received code from post request------------>", receivedcode)
+	//fmt.Println("Received code from post request------------>", receivedcode)
 
 	//Waiting for 2 seconds, allowing restore to finish, since restore dosen't give us taskID and data is small
 	//For larger data/payload, please increase the waiting time.
@@ -440,7 +454,7 @@ func runFailingRestore(t *testing.T, backupLocation, lastDir string, commitTs ui
 
 func dirSetup(t *testing.T) {
 	// Clean up data from previous runs.
-	dirCleanup(t)
+	//dirCleanup(t)
 
 	for _, dir := range testDirs {
 		if err := os.MkdirAll(dir, os.ModePerm); err != nil {
@@ -479,6 +493,43 @@ func dirCleanup(t *testing.T) {
 func exitErrorf(msg string, args ...interface{}) {
 	fmt.Fprintf(os.Stderr, msg+"\n", args...)
 	os.Exit(1)
+}
+
+func createBackupFolder(t *testing.T, dir string) {
+
+	fmt.Println("???????????????????????????????????")
+
+	MapIGet := getEnvs()
+
+	sess, _ := session.NewSession(&aws.Config{
+		Region:                        aws.String(MapIGet[3]),
+		CredentialsChainVerboseErrors: aws.Bool(true)},
+	)
+
+	upFile, err := os.Open("backup_test.go")
+	if err != nil {
+		fmt.Println("Cant open file")
+	}
+	defer upFile.Close()
+
+	upFileInfo, _ := upFile.Stat()
+	var fileSize int64 = upFileInfo.Size()
+	fileBuffer := make([]byte, fileSize)
+	upFile.Read(fileBuffer)
+
+	_, err = s3.New(sess).PutObject(&s3.PutObjectInput{
+		Bucket:               aws.String(MapIGet[2]),
+		Key:                  aws.String(dir + "/test.txt"),
+		Body:                 bytes.NewReader(fileBuffer),
+		ContentLength:        aws.Int64(fileSize),
+		ContentType:          aws.String(http.DetectContentType(fileBuffer)),
+		ContentDisposition:   aws.String("attachment"),
+		ServerSideEncryption: aws.String("AES256"),
+	})
+
+	if err != nil {
+		fmt.Println("Error while creating folder ", err)
+	}
 }
 
 func getEnvs() [4]string {
