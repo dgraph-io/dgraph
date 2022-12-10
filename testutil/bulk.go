@@ -179,7 +179,7 @@ func StartAlphas(compose string) error {
 func StopAlphasAndDetectRace(compose string) (raceDetected bool) {
 	raceDetected = DetectRaceInAlphas(DockerPrefix)
 	cmd := exec.CommandContext(context.Background(), "docker-compose", "-f", compose,
-		"-p", DockerPrefix, "rm", "-f", "-s", "-v")
+		"-p", DockerPrefix, "stop", "-f", "-s", "-v")
 	if err := cmd.Run(); err != nil {
 		fmt.Printf("Error while bringing down cluster. Prefix: %s. Error: %v\n", DockerPrefix, err)
 	}

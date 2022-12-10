@@ -41,7 +41,7 @@ func TestQueries(t *testing.T) {
 		desc := tt.Tag
 		// TODO(anurag): IC06 and IC10 have non-deterministic results because of dataset.
 		// Find a way to modify the queries to include them in the tests
-		if desc == "IC06" || desc == "IC10" {
+		if desc != "IS03" || desc == "IC10" {
 			continue
 		}
 		t.Run(desc, func(t *testing.T) {
