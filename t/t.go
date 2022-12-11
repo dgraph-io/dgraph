@@ -95,6 +95,7 @@ var (
 		"comma separated list of packages that needs to be skipped. "+
 			"Package Check uses string.Contains(). Please check the flag carefully")
 	runCoverage = pflag.Bool("coverage", false, "Set true to calculate test coverage")
+	arch        = pflag.String("arch", "x86", "Machine architecture (required for systest/export test)")
 )
 
 func commandWithContext(ctx context.Context, args ...string) *exec.Cmd {
@@ -410,6 +411,7 @@ func getClusterPrefix() string {
 	return fmt.Sprintf("%s%03d-%d", getGlobalPrefix(), procId, id)
 }
 
+// for tests that require custom docker-compose file (located in test directory)
 func runCustomClusterTest(ctx context.Context, pkg string, wg *sync.WaitGroup) error {
 	fmt.Printf("Bringing up cluster for package: %s\n", pkg)
 	var err error
@@ -515,8 +517,12 @@ type task struct {
 	isCommon bool
 }
 
+// for custom cluster tests (i.e. those not using default docker-compose.yml)
 func composeFileFor(pkg string) string {
 	dir := strings.Replace(pkg, "github.com/dgraph-io/dgraph/", "", 1)
+	if *arch == "arm64" {
+		return filepath.Join(*baseDir, dir, "docker-compose-arm64.yml")
+	} // else default x86
 	return filepath.Join(*baseDir, dir, "docker-compose.yml")
 }
 
