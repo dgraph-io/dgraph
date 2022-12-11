@@ -521,7 +521,11 @@ type task struct {
 func composeFileFor(pkg string) string {
 	dir := strings.Replace(pkg, "github.com/dgraph-io/dgraph/", "", 1)
 	if *arch == "arm64" {
-		return filepath.Join(*baseDir, dir, "docker-compose-arm64.yml")
+		//todo: remove this custom logic
+		if dir == "systest/export" {
+			return filepath.Join(*baseDir, dir, "docker-compose-arm64.yml")
+		}
+		filepath.Join(*baseDir, dir, "docker-compose.yml")
 	} // else default x86
 	return filepath.Join(*baseDir, dir, "docker-compose.yml")
 }
