@@ -524,7 +524,7 @@ func composeFileFor(pkg string) string {
 	dir := strings.Replace(pkg, "github.com/dgraph-io/dgraph/", "", 1)
 	if *arch == "arm64" {
 		//todo: remove this custom logic
-		if dir == "systest/export" {
+		if dir == "systest/export" || dir == "systest/backup/minio" || dir == "systest/backup/minio-large" {
 			return filepath.Join(*baseDir, dir, "docker-compose-arm64.yml")
 		}
 		filepath.Join(*baseDir, dir, "docker-compose.yml")
