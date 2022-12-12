@@ -28,6 +28,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -95,8 +96,6 @@ var (
 		"comma separated list of packages that needs to be skipped. "+
 			"Package Check uses string.Contains(). Please check the flag carefully")
 	runCoverage = pflag.Bool("coverage", false, "Set true to calculate test coverage")
-	arch        = pflag.String("arch", "x86", "Machine architecture.  Possible values are [arm64, x86]."+
-		"Used to select appropriate minio image in systest/{export,backup}")
 )
 
 func commandWithContext(ctx context.Context, args ...string) *exec.Cmd {
@@ -107,7 +106,7 @@ func commandWithContext(ctx context.Context, args ...string) *exec.Cmd {
 	if *runCoverage {
 		cmd.Env = append(cmd.Env, "COVERAGE_OUTPUT=--test.coverprofile=coverage.out")
 	}
-	if *arch == "arm64" {
+	if runtime.GOARCH == "arm64" {
 		cmd.Env = append(cmd.Env, "MINIO_IMAGE_ARCH=RELEASE.2020-11-13T20-10-18Z-arm64")
 	} else {
 		cmd.Env = append(cmd.Env, "MINIO_IMAGE_ARCH=RELEASE.2020-11-13T20-10-18Z")
