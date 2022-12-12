@@ -915,6 +915,7 @@ func run() error {
 		log.Fatalf("Both pkg and test can't be set.\n")
 	}
 	fmt.Printf("Proc ID is %d\n", procId)
+	fmt.Printf("Detected architecture: %s", runtime.GOARCH)
 
 	start := time.Now()
 	oc.Took(0, "START", time.Millisecond)
