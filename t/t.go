@@ -95,7 +95,8 @@ var (
 		"comma separated list of packages that needs to be skipped. "+
 			"Package Check uses string.Contains(). Please check the flag carefully")
 	runCoverage = pflag.Bool("coverage", false, "Set true to calculate test coverage")
-	arch        = pflag.String("arch", "x86", "Machine architecture (required for systest/export test)")
+	// used to select minio image in systest/{export,backup}
+	arch = pflag.String("arch", "x86", "Machine architecture.  Possible values are [arm64, x86].")
 )
 
 func commandWithContext(ctx context.Context, args ...string) *exec.Cmd {
