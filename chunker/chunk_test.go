@@ -21,6 +21,10 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"io/ioutil"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -224,4 +228,70 @@ func TestJSONLoadSuccessAll(t *testing.T) {
 		}
 	}
 	require.Equal(t, io.EOF, err, "end reading JSON document")
+}
+
+func TestFileReader(t *testing.T) {
+	//create sample files
+	_, thisFile, _, _ := runtime.Caller(0)
+	dir := "test-files"
+	require.NoError(t, os.MkdirAll(dir, os.ModePerm))
+	testFilesDir := filepath.Join(filepath.Dir(thisFile), "test-files")
+	var expectedOutcomes [2]string
+
+	file_data := []struct {
+		filename string
+		content  string
+	}{
+		{"test-1", "This is test file 1."},
+		{"test-2", "This is test file 2."},
+	}
+	for i, data := range file_data {
+		filePath := filepath.Join(testFilesDir, data.filename)
+		f, err := os.Create(filePath)
+		require.NoError(t, err)
+		defer f.Close()
+		_, err = f.WriteString(data.content)
+		require.NoError(t, err)
+		expectedOutcomes[i] = data.content
+	}
+
+	files, err := ioutil.ReadDir(testFilesDir)
+	require.NoError(t, err)
+
+	for i, file := range files {
+
+		testfilename := filepath.Join(testFilesDir, file.Name())
+		reader, cleanup := FileReader(testfilename, nil)
+
+		bytes, err := ioutil.ReadAll(reader)
+
+		require.NoError(t, err)
+		contents := string(bytes)
+		//compare file content with correct string
+		require.Equal(t, contents, expectedOutcomes[i])
+		cleanup()
+	}
+
+	if err := os.RemoveAll(dir); err != nil {
+		t.Fatalf("Error removing direcotory: %s", err.Error())
+	}
+
+}
+
+func TestDataFormat(t *testing.T) {
+	_, thisFile, _, _ := runtime.Caller(0)
+	dir := "test-files"
+	require.NoError(t, os.MkdirAll(dir, os.ModePerm))
+	testFilesDir := filepath.Join(filepath.Dir(thisFile), "test-files")
+	expectedOutcomes := [5]InputFormat{2, 1, 0, 2, 1}
+
+	file_data := [5]string{"test-1.json", "test-2.rdf", "test-3.txt", "test-4.json.gz", "test-5.rdf.gz"}
+	for i, data := range file_data {
+		filePath := filepath.Join(testFilesDir, data)
+		format := DataFormat(filePath, "")
+
+		require.Equal(t, format, expectedOutcomes[i])
+
+	}
+
 }
