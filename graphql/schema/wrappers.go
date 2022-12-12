@@ -220,9 +220,13 @@ type Query interface {
 	QueryType() QueryType
 	DQLQuery() string
 	Rename(newName string)
+
 	// RepresentationsArg returns a parsed version of the `representations` argument for `_entities`
 	// query
 	RepresentationsArg() (*EntityRepresentations, error)
+	// Used by the `_entities` query resolution to add the entity "key" field to the query
+	AddFieldToQuery(alias string, fieldDef FieldDefinition)
+
 	AuthFor(jwtVars map[string]interface{}) Query
 }
 
@@ -1757,6 +1761,24 @@ func (q *query) RepresentationsArg() (*EntityRepresentations, error) {
 	}
 
 	return entityReprs, nil
+}
+
+func (q *query) AddFieldToQuery(alias string, fieldDef FieldDefinition) {
+	fieldDefImpl, ok := fieldDef.(*fieldDefinition)
+	if !ok {
+		// TODO WIP Return error instead
+		panic("Should never happen: query.AddFieldToQuery has been invoked with a fieldDef that is not of type fieldDefinition.")
+	}
+
+	q.field.SelectionSet = append(q.field.SelectionSet, &ast.Field{
+		Alias: alias,
+		Name:  fieldDef.Name(),
+		// Using parent position as position, just to not leave it empty
+		Position:   q.field.Position,
+		Definition: fieldDefImpl.fieldDef,
+		// TODO WIP Is that safe? (Are we using Dgraph types or GQL type names?)
+		ObjectDefinition: q.op.inSchema.schema.Types[fieldDef.ParentType().Name()],
+	})
 }
 
 func (q *query) AuthFor(jwtVars map[string]interface{}) Query {

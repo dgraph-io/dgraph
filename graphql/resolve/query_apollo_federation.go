@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 
-	dgoapi "github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/dql"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 )
@@ -43,8 +42,24 @@ import (
 // * First of all, it works :) But the results are too different, and I didn't
 //   find a straightforward way of converting them to GraphQL. What about a
 //   compromise?
+// * I started trying a compromise: Adding a single method to the schema wrapper
+//   to enable adding the entity key field to the selection set, but in all
+//   other regards proceeding as before.
+// * I now believe that my current idea is actually less clean than changing the
+//   code in `outputnode_graphql.go`. However, since it's easier to implement,
+//   and since I'm almost finished, I'll stick to my current idea. Revisit
+//   later.
+// * It works! Now on to cleanup and tests.
 
 //// QueryResolver Implementation ////
+
+const (
+	// Used as alias for the custom id field that is added to the selection set.
+	// It's quintessential that the alias contains a dot (".") - since a dot
+	// is not a a valid character in a GraphQL alias, we can be sure that there
+	// won't be a client-provided selection/field with the same alias.
+	dgraphEntityKey = "dgraph.entityKey"
+)
 
 type entitiesQueryResolver struct {
 	nested QueryResolver
@@ -57,7 +72,8 @@ func NewEntitiesQueryResolver(rewriter QueryRewriter, executor DgraphExecutor) Q
 	return &entitiesQueryResolver{
 		NewQueryResolver(
 			&entitiesQueryRewriter{rewriter},
-			&entitiesQueryExecutor{executor},
+			// &entitiesQueryExecutor{executor},
+			executor,
 		),
 	}
 }
@@ -122,9 +138,8 @@ func (resolver *entitiesQueryResolver) complete(result *Resolved) {
 			continue
 		}
 
-		// TODO WIP WIP WIP How to convert DQL results to GraphQL results?
-
-		key := entity["dgraph.entityKey"]
+		key := entity[dgraphEntityKey]
+		delete(entity, dgraphEntityKey)
 		entitiesMap[key] = entity
 	}
 
@@ -145,12 +160,6 @@ func (resolver *entitiesQueryResolver) complete(result *Resolved) {
 	for i, key := range representationsArg.KeyVals {
 		// TODO WIP Do we need to convert any keys?
 		orderedEntities[i] = entitiesMap[key]
-
-		// TODO WIP Remove
-		// if !ok {
-		// 	result[i] = representationsArg.
-		// 		KeyValToRepresentation[key.(string)]
-		// }
 	}
 
 	// replace the result obtained from the dgraph and marshal back.
@@ -169,6 +178,7 @@ type entitiesQueryRewriter struct {
 
 func (rewriter *entitiesQueryRewriter) Rewrite(context context.Context, query schema.Query) ([]*dql.GraphQuery, error) {
 	if query.QueryType() != schema.EntitiesQuery {
+		// TODO WIP Return error instead?
 		panic("Should never happen: entitiesQueryRewriter.Rewrite has been invoked for a query other than schema.EntitiesQuery.")
 	}
 
@@ -191,7 +201,7 @@ func (rewriter *entitiesQueryRewriter) Rewrite(context context.Context, query sc
 // Rewrites the Apollo `_entities` Query which is sent from the federation
 // router to a DQL query. This query is sent to the Dgraph service to resolve
 // types `extended` and defined by this service (in Federation v1 lingo).
-func (rewriter *entitiesQueryRewriter) rewriteImpl(query schema.Query, authRw *authRewriter) ([]*dql.GraphQuery, error) {
+func (rewriter *entitiesQueryRewriter) rewriteImpl(gqlQuery schema.Query, authRw *authRewriter) ([]*dql.GraphQuery, error) {
 	// Input Argument to the Query is a List of "__typename" and "keyField" pair.
 	// For this type Extension:-
 	// 	extend type Product @key(fields: "upc") {
@@ -207,7 +217,7 @@ func (rewriter *entitiesQueryRewriter) rewriteImpl(query schema.Query, authRw *a
 	// 		...
 	//   ]
 
-	parsedRepr, err := query.RepresentationsArg()
+	parsedRepr, err := gqlQuery.RepresentationsArg()
 	if err != nil {
 		return nil, err
 	}
@@ -216,7 +226,7 @@ func (rewriter *entitiesQueryRewriter) rewriteImpl(query schema.Query, authRw *a
 	rbac := authRw.evaluateStaticRules(typeDefn)
 
 	dgQuery := &dql.GraphQuery{
-		Attr: query.Name(),
+		Attr: gqlQuery.Name(),
 	}
 
 	if rbac == schema.Negative {
@@ -251,19 +261,22 @@ func (rewriter *entitiesQueryRewriter) rewriteImpl(query schema.Query, authRw *a
 	// 	}
 	addTypeFilter(dgQuery, typeDefn)
 
-	selectionAuth := addSelectionSetFrom(dgQuery, query, authRw)
+	gqlQuery.AddFieldToQuery(dgraphEntityKey, parsedRepr.KeyField)
+
+	selectionAuth := addSelectionSetFrom(dgQuery, gqlQuery, authRw)
 	addUID(dgQuery)
 
-	// Add the key field back to the selection set - this will be used
-	// by `entitiesQueryCompletion` in 'resolver.go' to rearrange/map
-	// the entities according to the `representations` arg.
-	// Make sure to add any custom fields like this one after the
-	// original selection set, or else it breaks (see
-	// 'query/outputnode_graphql.go').
-	dgQuery.Children = append(dgQuery.Children, &dql.GraphQuery{
-		Attr:  parsedRepr.KeyField.DgraphPredicate(),
-		Alias: "dgraph.entityKey",
-	})
+	// TODO Remove
+	// // Add the key field back to the selection set - this will be used
+	// // by `entitiesQueryCompletion` in 'resolver.go' to rearrange/map
+	// // the entities according to the `representations` arg.
+	// // Make sure to add any custom fields like this one after the
+	// // original selection set, or else it breaks (see
+	// // 'query/outputnode_graphql.go').
+	// dgQuery.Children = append(dgQuery.Children, &dql.GraphQuery{
+	// 	Attr:  parsedRepr.KeyField.DgraphPredicate(),
+	// 	Alias: "dgraph.entityKey",
+	// })
 
 	dgQueries := authRw.addAuthQueries(typeDefn, []*dql.GraphQuery{dgQuery}, rbac)
 	return append(dgQueries, selectionAuth...), nil
@@ -271,20 +284,21 @@ func (rewriter *entitiesQueryRewriter) rewriteImpl(query schema.Query, authRw *a
 
 //// DgraphExecutor Wrapper ////
 
-type entitiesQueryExecutor struct {
-	nested DgraphExecutor
-}
-
-// Wraps the Executor. Doesn't pass through the `field´ variable, making Dgraph
-// run in DQL mode, so that we can add aditional fields to the query without
-// actually changing the GQL query.
-func (executor *entitiesQueryExecutor) Execute(ctx context.Context, req *dgoapi.Request, field schema.Field) (*dgoapi.Response, error) {
-	return executor.nested.Execute(ctx, req, nil)
-}
-
-func (executor *entitiesQueryExecutor) CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext) (*dgoapi.TxnContext, error) {
-	panic("Should never happen: entitiesQueryExecutor.CommitOrAbort has been invoked.")
-}
+// TODO Remove. This was used for option "B" (see beginning of the file).
+// type entitiesQueryExecutor struct {
+// 	nested DgraphExecutor
+// }
+//
+// // Wraps the Executor. Doesn't pass through the `field` variable, making Dgraph
+// // run in DQL mode, so that we can add aditional fields to the query without
+// // actually changing the GQL query.
+// func (executor *entitiesQueryExecutor) Execute(ctx context.Context, req *dgoapi.Request, field schema.Field) (*dgoapi.Response, error) {
+// 	return executor.nested.Execute(ctx, req, nil)
+// }
+//
+// func (executor *entitiesQueryExecutor) CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext) (*dgoapi.TxnContext, error) {
+// 	panic("Should never happen: entitiesQueryExecutor.CommitOrAbort has been invoked.")
+// }
 
 //// Other stuff ////
 
