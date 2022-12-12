@@ -1,4 +1,4 @@
-# Auto-generated with: [./compose -l -a 3 -z 1 -r 1 --alpha_volume data:/data --minio --minio_port=9001 --minio_env_file=export.env --port_offset=0 --expose_ports=false --alpha_env_file=export.env --mem= --names=false -O ../systest/export/docker-compose.yml]
+# Based on systest/export/docker-compose.yml but uses minio/minio:RELEASE.2020-11-13T20-10-18Z-arm64
 #
 version: "3.5"
 services:

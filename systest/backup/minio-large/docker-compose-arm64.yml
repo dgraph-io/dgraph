@@ -1,4 +1,4 @@
-# Auto-generated with: [./compose -a 3 -z 1 -r 1 --minio --minio_port=9001 --minio_env_file=../../backup.env -w --port_offset=0 --expose_ports=false --mem= --names=false -O ../systest/backup/minio-large/docker-compose.yml]
+# Based on systest/backup/minio-large/docker-compose.yml but uses minio/minio:RELEASE.2020-11-13T20-10-18Z-arm64
 #
 version: "3.5"
 services:
