@@ -95,7 +95,8 @@ var (
 		"comma separated list of packages that needs to be skipped. "+
 			"Package Check uses string.Contains(). Please check the flag carefully")
 	runCoverage = pflag.Bool("coverage", false, "Set true to calculate test coverage")
-	arch        = pflag.String("arch", "x86", "Machine architecture (required for systest/export test)")
+	arch        = pflag.String("arch", "x86", "Machine architecture (required for systest/export test)."+
+		"Possible values are arm64 and x86.")
 )
 
 func commandWithContext(ctx context.Context, args ...string) *exec.Cmd {
@@ -105,6 +106,11 @@ func commandWithContext(ctx context.Context, args ...string) *exec.Cmd {
 	cmd.Env = os.Environ()
 	if *runCoverage {
 		cmd.Env = append(cmd.Env, "COVERAGE_OUTPUT=--test.coverprofile=coverage.out")
+	}
+	if *arch == "arm64" {
+		cmd.Env = append(cmd.Env, "MINIO_IMAGE_ARCH=RELEASE.2020-11-13T20-10-18Z-arm64")
+	} else {
+		cmd.Env = append(cmd.Env, "MINIO_IMAGE_ARCH=RELEASE.2020-11-13T20-10-18Z")
 	}
 
 	return cmd
@@ -522,13 +528,6 @@ type task struct {
 // for custom cluster tests (i.e. those not using default docker-compose.yml)
 func composeFileFor(pkg string) string {
 	dir := strings.Replace(pkg, "github.com/dgraph-io/dgraph/", "", 1)
-	if *arch == "arm64" {
-		//todo: remove this custom logic
-		if dir == "systest/export" || dir == "systest/backup/minio" || dir == "systest/backup/minio-large" {
-			return filepath.Join(*baseDir, dir, "docker-compose-arm64.yml")
-		}
-		filepath.Join(*baseDir, dir, "docker-compose.yml")
-	} // else default x86
 	return filepath.Join(*baseDir, dir, "docker-compose.yml")
 }
 
