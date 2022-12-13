@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - main
+      - release/v21.03-slash # do we want glob here?
   pull_request:
     types:
       - opened
@@ -11,6 +12,7 @@ on:
       - ready_for_review
     branches:
       - main
+      - release/v21.03-slash # do we want glob here?
   schedule:
     - cron: "0 * * * *"
 jobs:
@@ -18,7 +20,7 @@ jobs:
     if: github.event.pull_request.draft == false
     runs-on: [self-hosted, x64]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v3 # need to checkout release branch?
       - name: Get Go Version
         run: |
           #!/bin/bash
