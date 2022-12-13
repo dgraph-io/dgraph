@@ -119,7 +119,7 @@ services:
       source: ../../../tlstest/mtls_internal/tls/alpha5
       target: /dgraph-tls
       read_only: true
-    command: /gobin/dgraph alpha --my=alpha2:7080 --zero=zero2:5080 --logtostderr -v=2 
+    command: /gobin/dgraph alpha --my=alpha5:7080 --zero=zero2:5080 --logtostderr -v=2 
       --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
       --tls "ca-cert=/dgraph-tls/ca.crt; server-cert=/dgraph-tls/node.crt; server-key=/dgraph-tls/node.key; internal-port=true; client-cert=/dgraph-tls/client.alpha5.crt; client-key=/dgraph-tls/client.alpha5.key;"
   alpha6:

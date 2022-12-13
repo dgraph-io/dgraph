@@ -23,6 +23,7 @@ import (
 	"math"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -30,7 +31,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 
 	"google.golang.org/grpc/credentials"
 
@@ -111,10 +111,7 @@ func TestBackupS3(t *testing.T) {
 	// Setup test directories.
 	dirSetup(t)
 
-	dt := time.Now()
-	fmt.Println(dt.Format("01-02-2006" + "_" + "15-04-05"))
-
-	folderNameForCurrentTest = "Test_" + dt.Format("01-02-2006"+"_"+"15-04-05")
+	folderNameForCurrentTest = strconv.FormatInt(time.Now().UnixNano(), 10)
 
 	createBackupFolder(t, folderNameForCurrentTest)
 
@@ -266,6 +263,8 @@ func runBackup(t *testing.T, numExpectedFiles, numExpectedDirs int) []string {
 func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	numExpectedDirs int) []string {
 
+	fmt.Println("*****************1] Entered the backup")
+
 	MapIGet := getEnvs()
 
 	backupRequest := `mutation backup($dst: String!, $ak: String!, $sk: String! $ff: Boolean!) {
@@ -298,9 +297,6 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	var data interface{}
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
 
-	fmt.Println("------------> resp", resp.Body)
-	fmt.Println("------------> Data", data)
-
 	require.Equal(t, "Success", testutil.JsonGet(data, "data", "backup", "response", "code").(string))
 	taskId := testutil.JsonGet(data, "data", "backup", "taskId").(string)
 	testutil.WaitForTask(t, taskId, true, testutil.SockAddrHttp)
@@ -322,7 +318,6 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	}
 
 	for _, item := range s3resp.Contents {
-		fmt.Println("}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} Items", *item.Key)
 		if *item.Key != "manifest.json" {
 			files_found++
 
@@ -339,9 +334,6 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	dirs := RemoveDuplicateDirectories(directoryList)
 
 	require.Equal(t, numExpectedDirs, len(dirs)-2)
-
-	fmt.Println("File List = ", files)
-	fmt.Println("Dir List = ", dirs)
 
 	// downloader := s3manager.NewDownloader(sess)
 
@@ -373,6 +365,8 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	// require.NoError(t, err)
 	// require.Equal(t, numExpectedDirs, len(manifest.Manifests))
 
+	fmt.Println("*****************2] Exiting the backup")
+
 	return dirs
 }
 
@@ -393,6 +387,8 @@ func RemoveDuplicateDirectories(s []string) []string {
 }
 
 func runRestore(t *testing.T, lastDir string, commitTs uint64) string {
+
+	fmt.Println("*****************3] Entered the restore")
 
 	MapIGet := getEnvs()
 
@@ -416,8 +412,6 @@ func runRestore(t *testing.T, lastDir string, commitTs uint64) string {
 	b, err := json.Marshal(params)
 	require.NoError(t, err)
 
-	fmt.Println("Admin URL for Restore------------>", adminUrl)
-
 	client := testutil.GetHttpsClient(t)
 	resp, err := client.Post(adminUrl, "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
@@ -431,12 +425,15 @@ func runRestore(t *testing.T, lastDir string, commitTs uint64) string {
 	//require.Equal(t, "Success", testutil.JsonGet(data, "data", "restore", "code").(string))
 	receivedcode := testutil.JsonGet(data, "data", "restore", "code").(string)
 
+	fmt.Println("*****************4] Exiting the restore")
+
 	//fmt.Println("Received code from post request------------>", receivedcode)
 
 	//Waiting for 2 seconds, allowing restore to finish, since restore dosen't give us taskID and data is small
 	//For larger data/payload, please increase the waiting time.
 
-	time.Sleep(2 * time.Second)
+	time.Sleep(5 * time.Second)
+	fmt.Println("*****************5] 5 sec sleep finished before exiting restore")
 
 	return receivedcode
 }
@@ -454,7 +451,6 @@ func runFailingRestore(t *testing.T, backupLocation, lastDir string, commitTs ui
 
 func dirSetup(t *testing.T) {
 	// Clean up data from previous runs.
-	//dirCleanup(t)
 
 	for _, dir := range testDirs {
 		if err := os.MkdirAll(dir, os.ModePerm); err != nil {
@@ -464,6 +460,9 @@ func dirSetup(t *testing.T) {
 }
 
 func dirCleanup(t *testing.T) {
+
+	fmt.Println("*****Cleaning the folder now.", folderNameForCurrentTest)
+
 	MapIGet := getEnvs()
 
 	if err := os.RemoveAll("./data"); err != nil {
@@ -479,15 +478,35 @@ func dirCleanup(t *testing.T) {
 	// Create S3 service client
 	svc := s3.New(sess)
 
-	// Setup BatchDeleteIterator to iterate through a list of objects.
-	iter := s3manager.NewDeleteListIterator(svc, &s3.ListObjectsInput{
+	// // Setup BatchDeleteIterator to iterate through a list of objects.
+	// iter := s3manager.NewDeleteListIterator(svc, &s3.ListObjectsInput{
+	// 	Bucket: aws.String(MapIGet[2]),
+	// })
+
+	// // Traverse iterator deleting each object
+	// if err := s3manager.NewBatchDeleteWithClient(svc).Delete(aws.BackgroundContext(), iter); err != nil {
+	// 	exitErrorf("Can't delete object(s) from bucket because %v", err)
+	// }
+
+	resp, err := svc.ListObjects(&s3.ListObjectsInput{
 		Bucket: aws.String(MapIGet[2]),
+		Prefix: aws.String(folderNameForCurrentTest + "/"),
 	})
 
-	// Traverse iterator deleting each object
-	if err := s3manager.NewBatchDeleteWithClient(svc).Delete(aws.BackgroundContext(), iter); err != nil {
-		exitErrorf("Can't delete object(s) from bucket because %v", err)
+	for _, key := range resp.Contents {
+		fmt.Println(">>>>>>>>>>>>>>>>>>>>>>>>>> WHich files are there?", *key.Key)
+		_, err = svc.DeleteObject(&s3.DeleteObjectInput{Bucket: aws.String(MapIGet[2]), Key: aws.String(*key.Key)})
+		if err != nil {
+			exitErrorf("Unable to delete object %q from bucket %q, %v", folderNameForCurrentTest, MapIGet[2], err)
+		}
 	}
+
+	err = svc.WaitUntilObjectNotExists(&s3.HeadObjectInput{
+		Bucket: aws.String(MapIGet[2]),
+		Key:    aws.String(folderNameForCurrentTest),
+	})
+
+	fmt.Println("*****Any Problem while deleting the s3 folder"+folderNameForCurrentTest+"? ", err)
 }
 
 func exitErrorf(msg string, args ...interface{}) {
@@ -497,7 +516,7 @@ func exitErrorf(msg string, args ...interface{}) {
 
 func createBackupFolder(t *testing.T, dir string) {
 
-	fmt.Println("???????????????????????????????????")
+	fmt.Println("*****Creating a backup folder on S3", dir)
 
 	MapIGet := getEnvs()
 
