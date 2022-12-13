@@ -28,6 +28,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -104,6 +105,9 @@ func commandWithContext(ctx context.Context, args ...string) *exec.Cmd {
 	cmd.Env = os.Environ()
 	if *runCoverage {
 		cmd.Env = append(cmd.Env, "COVERAGE_OUTPUT=--test.coverprofile=coverage.out")
+	}
+	if runtime.GOARCH == "arm64" {
+		cmd.Env = append(cmd.Env, "MINIO_IMAGE_ARCH=RELEASE.2020-11-13T20-10-18Z-arm64")
 	}
 
 	return cmd
@@ -204,26 +208,28 @@ func stopCluster(composeFile, prefix string, wg *sync.WaitGroup, err error) {
 			fmt.Printf("CLUSTER STOPPED: %s\n", prefix)
 		}
 
-		// get all matching containers, copy /usr/local/bin/coverage.out
-		containers := testutil.AllContainers(prefix)
-		for _, c := range containers {
-			tmp := fmt.Sprintf("%s.%s", tmpCoverageFile, c.ID)
+		if *runCoverage == true {
+			// get all matching containers, copy /usr/local/bin/coverage.out
+			containers := testutil.AllContainers(prefix)
+			for _, c := range containers {
+				tmp := fmt.Sprintf("%s.%s", tmpCoverageFile, c.ID)
 
-			containerInfo, err := testutil.DockerInspect(c.ID)
-			workDir := containerInfo.Config.WorkingDir
+				containerInfo, err := testutil.DockerInspect(c.ID)
+				workDir := containerInfo.Config.WorkingDir
 
-			err = testutil.DockerCpFromContainer(c.ID, workDir+"/coverage.out", tmp)
-			if err != nil {
-				fmt.Printf("Error while bringing down cluster. Prefix: %s. Error: %v\n",
-					prefix, err)
+				err = testutil.DockerCpFromContainer(c.ID, workDir+"/coverage.out", tmp)
+				if err != nil {
+					fmt.Printf("Error while bringing down cluster. Prefix: %s. Error: %v\n",
+						prefix, err)
+				}
+
+				if err = appendTestCoverageFile(tmp, coverageFile); err != nil {
+					fmt.Printf("Error while bringing down cluster. Prefix: %s. Error: %v\n",
+						prefix, err)
+				}
+
+				os.Remove(tmp)
 			}
-
-			if err = appendTestCoverageFile(tmp, coverageFile); err != nil {
-				fmt.Printf("Error while bringing down cluster. Prefix: %s. Error: %v\n",
-					prefix, err)
-			}
-
-			os.Remove(tmp)
 		}
 
 		cmd = command("docker-compose", "--compatibility", "-f", composeFile, "-p", prefix, "down", "-v")
@@ -410,6 +416,7 @@ func getClusterPrefix() string {
 	return fmt.Sprintf("%s%03d-%d", getGlobalPrefix(), procId, id)
 }
 
+// for tests that require custom docker-compose file (located in test directory)
 func runCustomClusterTest(ctx context.Context, pkg string, wg *sync.WaitGroup) error {
 	fmt.Printf("Bringing up cluster for package: %s\n", pkg)
 	var err error
@@ -515,6 +522,7 @@ type task struct {
 	isCommon bool
 }
 
+// for custom cluster tests (i.e. those not using default docker-compose.yml)
 func composeFileFor(pkg string) string {
 	dir := strings.Replace(pkg, "github.com/dgraph-io/dgraph/", "", 1)
 	return filepath.Join(*baseDir, dir, "docker-compose.yml")
@@ -905,6 +913,7 @@ func run() error {
 		log.Fatalf("Both pkg and test can't be set.\n")
 	}
 	fmt.Printf("Proc ID is %d\n", procId)
+	fmt.Printf("Detected architecture: %s", runtime.GOARCH)
 
 	start := time.Now()
 	oc.Took(0, "START", time.Millisecond)

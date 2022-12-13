@@ -61,8 +61,8 @@ uninstall:
 	@echo "Uninstalling Dgraph ..."; \
 		$(MAKE) -C dgraph uninstall; \
 
-test: image-local
-	@mv dgraph/dgraph ${GOPATH}/bin
+test: docker-image
+	@mv dgraph/dgraph ${GOPATH}/bin/dgraph
 	@$(MAKE) -C t test
 
 image-local local-image:

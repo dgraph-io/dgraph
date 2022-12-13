@@ -26,8 +26,12 @@ test:
 # 	build the t.go binary
 	@go build .
 #	clean go testcache
-	go clean -testcache
-#	run the tests
-	@./t --skip systest/backup,systest/online-restore,systest/loader,tlstest
+	@go clean -testcache
+#	run t.go with specified arguments; otherwise run standard suite
+	@if [ -n "$(args)" ]; then \
+		./t $(args); \
+	else \
+		./t; \
+	fi
 #	clean up docker containers after test execution
-	./t -r
+	@./t -r
