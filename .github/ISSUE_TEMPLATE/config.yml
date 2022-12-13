@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Dgraph Community Support.
+    url: https://discuss.dgraph.io/
+    about: Please ask and answer questions here.
