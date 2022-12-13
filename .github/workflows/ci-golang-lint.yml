@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - main
+      - release/*
   pull_request:
     types:
       - opened
@@ -11,12 +12,12 @@ on:
       - ready_for_review
     branches:
       - main
+      - release/*
   schedule:
     - cron: "0 * * * *"
 jobs:
   golang-lint:
-    # TODO: uncomment this after release work
-    # if: github.event.pull_request.draft == false
+    if: github.event.pull_request.draft == false
     name: lint
     runs-on: ubuntu-20.04
     steps:
