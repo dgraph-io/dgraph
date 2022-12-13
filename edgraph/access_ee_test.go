@@ -1,7 +1,6 @@
 package edgraph
 
 import (
-	"strings"
 	"testing"
 	"time"
 
@@ -30,23 +29,6 @@ func sliceCompare(x, y []string) bool {
 
 	for i := range x {
 		if x[i] != y[i] {
-			return false
-		}
-	}
-
-	return true
-}
-
-func compareTokenParts(tok1 string, tok2 string, part []bool) bool {
-	t1 := strings.Split(tok1, ".")
-	t2 := strings.Split(tok2, ".")
-
-	for i := range part {
-		if !part[i] {
-			continue
-		}
-
-		if t1[i] != t2[i] {
 			return false
 		}
 	}
@@ -95,6 +77,7 @@ func TestGetAccessJwt(t *testing.T) {
 		},
 	}
 
+	g := acl.GetGroupIDs(grpLst)
 	expiry := time.Now().Add(worker.Config.AccessJwtTtl).Unix()
 	userDataList := []userData{
 		{1234567890, "user1", []string{"701", "702"}},
@@ -103,20 +86,13 @@ func TestGetAccessJwt(t *testing.T) {
 	}
 
 	for _, userdata := range userDataList {
-		g := acl.GetGroupIDs(grpLst)
 		tokstr := generateJWT(userdata.namespace, userdata.userId, g, expiry)
+        ud1, _ := validateToken (tokstr)
 		jwtstr, _ := getAccessJwt(userdata.userId, grpLst, userdata.namespace)
+        ud2, _ := validateToken (jwtstr)
 
-		/*
-		 * JWT token format = [header].[payload].[signature].
-		 * One of the factor [signature] would differ is based on the expiry time.
-		 * This will differ for tokstr and jwtstr and hence ignoring it.
-		 */
-
-		// compare 1st and 2nd part, ignore the 3rd.
-		testTokParts := []bool{true, true, false}
-		if !compareTokenParts(tokstr, jwtstr, testTokParts) {
-			t.Errorf("Actual output is not equal to the expected output")
+		if ud1.namespace != ud2.namespace || ud1.userId != ud2.userId || !sliceCompare(ud1.groupIds, ud2.groupIds) {
+			t.Errorf("Generated jwt output %+v is not equal to the access jwt output %+v", ud1, ud2)
 		}
 	}
 }
@@ -131,18 +107,12 @@ func TestGetRefreshJwt(t *testing.T) {
 
 	for _, userdata := range userDataList {
 		tokstr := generateJWT(userdata.namespace, userdata.userId, nil, expiry)
+        ud1, _ := validateToken (tokstr)
 		jwtstr, _ := getRefreshJwt(userdata.userId, userdata.namespace)
+        ud2, _ := validateToken (jwtstr)
 
-		/*
-		 * JWT token format = [header].[payload].[signature]
-		 * One of the factor [signature] would differ is based on the expiry time.
-		 * This will differ for tokstr and jwtstr and hence ignoring it.
-		 */
-
-		// compare 1st and 2nd part, ignore the 3rd.
-		testTokParts := []bool{true, true, false}
-		if !compareTokenParts(tokstr, jwtstr, testTokParts) {
-			t.Errorf("Actual output is not equal to the expected output")
+		if ud1.namespace != ud2.namespace || ud1.userId != ud2.userId || !sliceCompare(ud1.groupIds, ud2.groupIds) {
+			t.Errorf("Generated jwt output %+v is not equal to the refresh jwt output %+v", ud1, ud2)
 		}
 	}
 }
