@@ -1,23 +1,34 @@
 run:
   tests: false
+  skip-dirs:
+    - contrib
+    - compose
+    - graphql/bench
+    - graphql/e2e
+    - graphql/test
+    - graphql/testdata
+    - systest
+    - t
+  skip-files:
+    - ".*test.go$"
 
 linters-settings:
   lll:
-    line-length: 100
+    line-length: 120
 
 linters:
   disable-all: true
   enable:
-    - errcheck
-    - ineffassign
-    - gas
-    - gofmt
-    - golint
-    - gosimple
-    - govet
+    #- errcheck
+    #- ineffassign
+    #- gas
+    #- gofmt
+    #- golint
+    #- gosimple
+    #- govet
     - lll
-    - varcheck
-    - unused
+    #- varcheck
+    #- unused
 
 issues:
   # Excluding configuration per-path, per-linter, per-text and per-source
