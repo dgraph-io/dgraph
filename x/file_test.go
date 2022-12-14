@@ -58,12 +58,8 @@ func TestFindDataFiles(t *testing.T) {
 	filesList = FindDataFiles("", []string{".rdf", ".rdf.gz", ".json", ".json.gz"})
 	require.Equal(t, 0, len(filesList))
 
-	if err := os.RemoveAll(validTestFiles); err != nil {
-		t.Fatalf("Error removing direcotory: %s", err.Error())
-	}
-	if err := os.RemoveAll(invalidTestFiles); err != nil {
-		t.Fatalf("Error removing direcotory: %s", err.Error())
-	}
+	defer deleteDirs(t, validTestFiles)
+	defer deleteDirs(t, invalidTestFiles)
 
 }
 
@@ -95,7 +91,12 @@ func TestIsMissingOrEmptyDir(t *testing.T) {
 	output = IsMissingOrEmptyDir("./doesnotexist")
 	require.NotEqual(t, nil, output)
 
-	if err := os.RemoveAll(testFilesDir); err != nil {
+	defer deleteDirs(t, testFilesDir)
+
+}
+
+func deleteDirs(t *testing.T, dir string) {
+	if err := os.RemoveAll(dir); err != nil {
 		t.Fatalf("Error removing direcotory: %s", err.Error())
 	}
 
