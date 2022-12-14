@@ -125,15 +125,9 @@ func testnfs(t *testing.T, backupAlphaSocketAddr string, restoreAlphaAddr string
 	//       adding sleep
 	time.Sleep(time.Second * 10)
 	_ = runBackup(t, 1, 1, backupAlphaSocketAddrHttp, backupDst)
-	restored := runRestore(t, "", restoreAlphaAddr, backupDst)
+	restored := runRestore(t, "", restoreAlphaAddr, backupDst, false, 1)
 	require.Equal(t, "Success", restored)
 	testutil.WaitForRestore(t, dg, restoreAlphaAddr)
-
-	// Check the predicates and types in the schema are as expected.
-	preds := []string{"dgraph.graphql.schema", "dgraph.graphql.xid", "dgraph.type", "movie",
-		"dgraph.graphql.p_query", "dgraph.drop.op"}
-	types := []string{"Node", "dgraph.graphql", "dgraph.graphql.persisted_query"}
-
 	// We check expected Objects vs Received Objects from restoreed db
 	checkObjectCount(t, 5, 5, restoreAlphaAddr)
 
@@ -150,16 +144,6 @@ func testnfs(t *testing.T, backupAlphaSocketAddr string, restoreAlphaAddr string
 
 	// Perform first incremental backup.
 	_ = runBackup(t, 2, 2, backupAlphaSocketAddrHttp, backupDst)
-	restored = runRestore(t, "", restoreAlphaAddr, backupDst)
-	require.Equal(t, "Success", restored)
-	testutil.WaitForRestore(t, dg, restoreAlphaAddr)
-
-	// Check the predicates and types in the schema are as expected.
-	preds = append(preds, "actor")
-	types = append(types, "NewNode")
-
-	// We check expected Objects vs Received Objects from restoreed db
-	checkObjectCount(t, 7, 7, restoreAlphaAddr)
 
 	// Add more data for a second incremental backup.
 	_, err = dg.NewTxn().Mutate(ctx, &api.Mutation{
@@ -173,10 +157,16 @@ func testnfs(t *testing.T, backupAlphaSocketAddr string, restoreAlphaAddr string
 	require.NoError(t, err)
 
 	_ = runBackup(t, 3, 3, backupAlphaSocketAddrHttp, backupDst)
-	restored = runRestore(t, "", restoreAlphaAddr, backupDst)
+
+	restored = runRestore(t, "", restoreAlphaAddr, backupDst, true, 2)
 	require.Equal(t, "Success", restored)
 	testutil.WaitForRestore(t, dg, restoreAlphaAddr)
 
+	checkObjectCount(t, 7, 7, restoreAlphaAddr)
+
+	restored = runRestore(t, "", restoreAlphaAddr, backupDst, true, 3)
+	require.Equal(t, "Success", restored)
+	testutil.WaitForRestore(t, dg, restoreAlphaAddr)
 	checkObjectCount(t, 9, 9, restoreAlphaAddr)
 
 	// Add more data for a second full backup.
@@ -192,7 +182,7 @@ func testnfs(t *testing.T, backupAlphaSocketAddr string, restoreAlphaAddr string
 
 	// Perform second full backup.
 	_ = runBackupInternal(t, true, 4, 4, backupAlphaSocketAddrHttp, backupDst)
-	restored = runRestore(t, "", restoreAlphaAddr, backupDst)
+	restored = runRestore(t, "", restoreAlphaAddr, backupDst, false, 4)
 	require.Equal(t, "Success", restored)
 	testutil.WaitForRestore(t, dg, restoreAlphaAddr)
 
@@ -212,7 +202,7 @@ func testnfs(t *testing.T, backupAlphaSocketAddr string, restoreAlphaAddr string
 
 	// perform an incremental backup and then restore
 	_ = runBackup(t, 5, 5, backupAlphaSocketAddrHttp, backupDst)
-	restored = runRestore(t, "", restoreAlphaAddr, backupDst)
+	restored = runRestore(t, "", restoreAlphaAddr, backupDst, false, 5)
 	require.Equal(t, "Success", restored)
 	testutil.WaitForRestore(t, dg, restoreAlphaAddr)
 
@@ -321,14 +311,26 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 
 }
 
-func runRestore(t *testing.T, lastDir string, restoreAlphaAddr string, backupDst string) string {
+func runRestore(t *testing.T, lastDir string, restoreAlphaAddr string, backupDst string, isIncremental bool, backupNum int) string {
+	var restoreRequest string
 
-	restoreRequest := `mutation restore($loc: String!, ) {
-		 restore(input: {location: $loc}) {
-				 code
-				 message
-			 }
-	 }`
+	if isIncremental == false {
+		restoreRequest = `mutation restore($loc: String!) {
+			restore(input: {location: $loc}) {
+					code
+					message
+				}
+		}`
+
+	} else {
+		restoreRequest = `mutation restore($loc: String!, $bn: Int) {
+			restore(input: {location: $loc, backupNum: $bn}) {
+					code
+					message
+				}
+		}`
+
+	}
 
 	// For restore we have to always use newly added restore cluster
 	adminUrl := "https://" + restoreAlphaAddr + "/admin"
@@ -336,6 +338,7 @@ func runRestore(t *testing.T, lastDir string, restoreAlphaAddr string, backupDst
 		Query: restoreRequest,
 		Variables: map[string]interface{}{
 			"loc": "/mnt" + backupDst,
+			"bn":  backupNum,
 		},
 	}
 	b, err := json.Marshal(params)
