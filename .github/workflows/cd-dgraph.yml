@@ -83,7 +83,7 @@ jobs:
           docker push dgraph/dgraph:latest
           docker push dgraph/dgraph:${{ env.DGRAPH_RELEASE_VERSION }}
 
-  dgraph-build-arm64:
+  -dgraph-build-arm64:
     runs-on: [self-hosted, arm64]
     steps:
       - uses: actions/checkout@v3
