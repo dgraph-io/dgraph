@@ -195,6 +195,18 @@ func validateToken(jwtStr string) (*userData, error) {
 		return nil, errors.Errorf("userid in claims is not a string:%v", userId)
 	}
 
+	/*  
+	 * Since, JSON numbers follow JavaScript's double-precision floating-point
+	 * format . . .
+	 * -- references: https://restfulapi.net/json-data-types/
+	 * --             https://www.tutorialspoint.com/json/json_data_types.htm
+	 * . . . and fraction in IEEE 754 double precision binary floating-point
+	 * format has 52 bits, . . .
+	 * -- references: https://en.wikipedia.org/wiki/Double-precision_floating-point_format
+	 * . . . the namespace field of the struct userData below can
+	 * only accomodate a maximum value of (1 << 52) despite it being declared as
+	 * uint64. Numbers bigger than this are likely to fail the test.
+	 */
 	namespace, ok := claims["namespace"].(float64)
 	if !ok {
 		return nil, errors.Errorf("namespace in claims is not valid:%v", namespace)
