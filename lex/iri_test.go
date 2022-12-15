@@ -31,9 +31,7 @@ func TestHasUChars(t *testing.T) {
 		r := l.Next()
 		result := HasUChars(r, l)
 		require.Equal(t, expectedResult[i], result)
-
 	}
-
 }
 
 func TestHasXChars(t *testing.T) {
@@ -45,9 +43,7 @@ func TestHasXChars(t *testing.T) {
 		r := l.Next()
 		result := HasXChars(r, l)
 		require.Equal(t, expectedResult[i], result)
-
 	}
-
 }
 
 func TestIsHex(t *testing.T) {
@@ -57,7 +53,6 @@ func TestIsHex(t *testing.T) {
 		result := isHex(char)
 		require.Equal(t, expectedResult[i], result)
 	}
-
 }
 
 func TestIsIRIRefChar(t *testing.T) {
@@ -69,7 +64,5 @@ func TestIsIRIRefChar(t *testing.T) {
 		r := l.Next()
 		result := isIRIRefChar(r, l)
 		require.Equal(t, expectedResult[i], result)
-
 	}
-
 }

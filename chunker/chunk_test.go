@@ -237,6 +237,7 @@ func TestFileReader(t *testing.T) {
 	_, thisFile, _, _ := runtime.Caller(0)
 	dir := "test-files"
 	require.NoError(t, os.MkdirAll(dir, os.ModePerm))
+	defer deleteDirs(t, dir)
 	testFilesDir := filepath.Join(filepath.Dir(thisFile), "test-files")
 	var expectedOutcomes [2]string
 
@@ -256,17 +257,12 @@ func TestFileReader(t *testing.T) {
 		require.NoError(t, err)
 		expectedOutcomes[i] = data.content
 	}
-
 	files, err := ioutil.ReadDir(testFilesDir)
 	require.NoError(t, err)
-
 	for i, file := range files {
-
 		testfilename := filepath.Join(testFilesDir, file.Name())
 		reader, cleanup := FileReader(testfilename, nil)
-
 		bytes, err := ioutil.ReadAll(reader)
-
 		require.NoError(t, err)
 		contents := string(bytes)
 		//compare file content with correct string
@@ -274,26 +270,22 @@ func TestFileReader(t *testing.T) {
 		cleanup()
 	}
 
-	defer deleteDirs(t, dir)
-
 }
 
 func TestDataFormat(t *testing.T) {
 	_, thisFile, _, _ := runtime.Caller(0)
 	dir := "test-files"
 	require.NoError(t, os.MkdirAll(dir, os.ModePerm))
+	defer deleteDirs(t, dir)
 	testFilesDir := filepath.Join(filepath.Dir(thisFile), "test-files")
 	expectedOutcomes := [5]InputFormat{2, 1, 0, 2, 1}
-
 	file_data := [5]string{"test-1.json", "test-2.rdf", "test-3.txt", "test-4.json.gz", "test-5.rdf.gz"}
 	for i, data := range file_data {
 		filePath := filepath.Join(testFilesDir, data)
 		format := DataFormat(filePath, "")
-
 		require.Equal(t, format, expectedOutcomes[i])
 
 	}
-	defer deleteDirs(t, dir)
 
 }
 
@@ -301,8 +293,8 @@ func TestRDFChunkerChunk(t *testing.T) {
 	_, thisFile, _, _ := runtime.Caller(0)
 	dir := "test-files"
 	require.NoError(t, os.MkdirAll(dir, os.ModePerm))
+	defer deleteDirs(t, dir)
 	testFilesDir := filepath.Join(filepath.Dir(thisFile), "test-files")
-
 	dataFile := filepath.Join(testFilesDir, "data.rdf")
 	resultData := filepath.Join(testFilesDir, "result.rdf")
 	//download data
@@ -317,37 +309,29 @@ func TestRDFChunkerChunk(t *testing.T) {
 	rd, _ := FileReader(dataFile, nil)
 	chunkBuf, _ := chunker.Chunk(rd)
 	for chunkBuf.Len() > 0 {
-
 		str, err := chunkBuf.ReadString('\n')
 		require.NoError(t, err)
 		_, err = f.WriteString(str)
 		require.NoError(t, err)
-
 	}
-
 	if err != nil {
 		log.Fatal(err)
 	}
-
 	f1, err1 := ioutil.ReadFile(dataFile)
 	if err1 != nil {
 		log.Fatal(err1)
 	}
-
 	f2, err2 := ioutil.ReadFile(resultData)
-
 	if err2 != nil {
 		log.Fatal(err2)
 	}
-
 	require.Equal(t, true, bytes.Equal(f1, f2))
-	defer deleteDirs(t, testFilesDir)
 
 }
 
 func deleteDirs(t *testing.T, dir string) {
 	if err := os.RemoveAll(dir); err != nil {
-		t.Fatalf("Error removing direcotory: %s", err.Error())
+		fmt.Printf("Error removing direcotory: %s", err.Error())
 	}
 
 }
