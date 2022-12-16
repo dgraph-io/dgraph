@@ -24,7 +24,8 @@ BUILD_BRANCH   ?= $(shell git rev-parse --abbrev-ref HEAD)
 ifeq ($(DGRAPH_VERSION),)
 BUILD_VERSION ?= local
 else
-BUILD_VERSION ?= $(DGRAPH_VERSION)
+# remove arch suffix from DGRAPH_VERSION for CD steps only
+BUILD_VERSION := $(shell echo ${DGRAPH_VERSION} | cut -d "-" -f 1)
 endif
 
 GOOS          ?= $(shell go env GOOS)
