@@ -11,7 +11,7 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
 - **CD Release Pipeline**
   - Badger Binary fetch steps added to the release CD pipeline (https://github.com/dgraph-io/dgraph/pull/8425)
   - Corresponding Badger artifacts will be fetched & uploaded from v22.0.1 onwards
-
+## [v22.0.2] - 2022-12-16
 
 ## [v22.0.0] - 2022-10-21
 [v22.0.0]: https://github.com/dgraph-io/dgraph/compare/v21.03.2...v22.0.0
