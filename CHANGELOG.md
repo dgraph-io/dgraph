@@ -10,7 +10,7 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
 ### Added
 
 - **ARM Support** -  Dgraph now supports ARM64 Architecture for development(https://github.com/dgraph-io/dgraph/pull/8543 https://github.com/dgraph-io/dgraph/pull/8520 https://github.com/dgraph-io/dgraph/pull/8503 https://github.com/dgraph-io/dgraph/pull/8436 https://github.com/dgraph-io/dgraph/pull/8405 https://github.com/dgraph-io/dgraph/pull/8395)
-- **Additional logging and trace tags for debugging** (https://github.com/dgraph-io/dgraph/pull/8490)
+- Additional logging and trace tags for debugging** (https://github.com/dgraph-io/dgraph/pull/8490)
 
 ### Fixed
 
@@ -80,9 +80,14 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
 
 ### Changed
 
-- CI enhancements
-- Binary tooling for Coverall on CI to capture code coverage for integration tests (https://github.com/dgraph-io/dgraph/pull/8494)
-- **LDBC** 
+- **CI Enhancements**
+    - Added more unit tests(https://github.com/dgraph-io/dgraph/pull/8470 https://github.com/dgraph-io/dgraph/pull/8489 https://github.com/dgraph-io/dgraph/pull/8479 https://github.com/dgraph-io/dgraph/pull/8488 https://github.com/dgraph-io/dgraph/pull/8433)
+    - [Coveralls](https://coveralls.io/github/dgraph-io/dgraph?branch=main) on CI is enhanced to measure code coverage for integration tests (https://github.com/dgraph-io/dgraph/pull/8494)
+    - [**LDBC**](https://ldbcouncil.org) [CI-Job for benchmarking](https://github.com/dgraph-io/dgraph/actions/workflows/ci-dgraph-ldbc-tests.yml) is now enabled
+  
+  - **CD Enhancements**
+    - Enahnced our [CD Pipeline](https://github.com/dgraph-io/dgraph/actions/workflows/cd-dgraph.yml) to support ARM64 binaries and docker-images(https://github.com/dgraph-io/dgraph/pull/8520)
+    -
 
 
 ## [v22.0.1] - 2022-11-10
