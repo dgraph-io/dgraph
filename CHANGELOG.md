@@ -9,8 +9,8 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
 
 ### Added
 
-- **ARM Support** (Details) https://github.com/dgraph-io/dgraph/pull/8543 (Badger)
-- **Add logging and trace tags for debugging** (https://github.com/dgraph-io/dgraph/pull/8490)
+- **ARM Support** -  Dgraph now supports ARM64 Architecture for development(https://github.com/dgraph-io/dgraph/pull/8543 https://github.com/dgraph-io/dgraph/pull/8520 https://github.com/dgraph-io/dgraph/pull/8503 https://github.com/dgraph-io/dgraph/pull/8436 https://github.com/dgraph-io/dgraph/pull/8405 https://github.com/dgraph-io/dgraph/pull/8395)
+- **Additional logging and trace tags for debugging** (https://github.com/dgraph-io/dgraph/pull/8490)
 
 ### Fixed
 
@@ -82,7 +82,7 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
 
 - CI enhancements
 - Binary tooling for Coverall on CI to capture code coverage for integration tests (https://github.com/dgraph-io/dgraph/pull/8494)
-- LDBC 
+- **LDBC** 
 
 
 ## [v22.0.1] - 2022-11-10
