@@ -4,6 +4,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project will adhere to [Semantic Versioning](https://semver.org) starting `v22.0.0`.
 
+## [v22.0.2] - 2022-12-16
+[v22.0.2]: https://github.com/dgraph-io/dgraph/compare/v22.0.1...v22.0.2
+
+### Added
+
+- **ARM Support** (Details) https://github.com/dgraph-io/dgraph/pull/8543 (Badger)
+- **Add logging and trace tags for debugging** (https://github.com/dgraph-io/dgraph/pull/8490)
+
+### Fixed
+
+- **EDgraph**
+  - fix(ACL): Prevents permissions overrride and merges acl cache to persist permissions across different namespaces (https://github.com/dgraph-io/dgraph/pull/8506)
+
+- **Core Dgraph**
+  - Fix(badger): Upgrade badger version to fix  manifest corruption (https://github.com/dgraph-io/dgraph/pull/8365)
+  - fix(pagination): Fix after for regexp, match functions (https://github.com/dgraph-io/dgraph/pull/8471)
+  - fix(query): Do not execute filters if there are no source uids(https://github.com/dgraph-io/dgraph/pull/8452)
+  - fix(admin): make config changes to pass through gog middlewares (https://github.com/dgraph-io/dgraph/pull/8442)
+  - fix(sort): Only filter out nodes with positive offsets (https://github.com/dgraph-io/dgraph/pull/8441)
+  - fix(fragment): merge the nested fragments fields (https://github.com/dgraph-io/dgraph/pull/8435)
+  - Fix(lsbackup): Fix profiler in lsBackup (https://github.com/dgraph-io/dgraph/pull/8432)
+  - fix(DQL): optimize query for has function with offset (https://github.com/dgraph-io/dgraph/pull/8431)
+
+- **GraphQL**
+  - Fix(GraphQL): Make mutation rewriting tests more robust (https://github.com/dgraph-io/dgraph/pull/8449)
+
+- **Security**
+
+### Changed
+
+- CI enhancements
+- Binary tooling for Coverall on CI to capture code coverage for integration tests (https://github.com/dgraph-io/dgraph/pull/8494)
+- LDBC 
+
+
 ## [v22.0.1] - 2022-11-10
 [v22.0.1]: https://github.com/dgraph-io/dgraph/compare/v22.0.0...v22.0.1
 
@@ -11,7 +46,6 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
 - **CD Release Pipeline**
   - Badger Binary fetch steps added to the release CD pipeline (https://github.com/dgraph-io/dgraph/pull/8425)
   - Corresponding Badger artifacts will be fetched & uploaded from v22.0.1 onwards
-## [v22.0.2] - 2022-12-16
 
 ## [v22.0.0] - 2022-10-21
 [v22.0.0]: https://github.com/dgraph-io/dgraph/compare/v21.03.2...v22.0.0
