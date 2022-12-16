@@ -88,7 +88,7 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
 - **CD Enhancements**
     - Enhanced our [CD Pipeline](https://github.com/dgraph-io/dgraph/actions/workflows/cd-dgraph.yml) to support ARM64 binaries and docker-images(https://github.com/dgraph-io/dgraph/pull/8520)
     - Enhanced [dgraph-lambda](https://github.com/dgraph-io/dgraph-lambda) to support arm64 (https://github.com/dgraph-io/dgraph-lambda/pull/39 https://github.com/dgraph-io/dgraph-lambda/pull/38 https://github.com/dgraph-io/dgraph-lambda/pull/37)
-    - Enhanced [badger](https://github.com/dgraph-io/badger) to support arm64 (https://github.com/dgraph-io/badger/pull/1838)
+    - Enhanced [Badger](https://github.com/dgraph-io/badger) to support arm64 (https://github.com/dgraph-io/badger/pull/1838)
 
 
 ## [v22.0.1] - 2022-11-10
