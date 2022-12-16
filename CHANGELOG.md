@@ -9,7 +9,7 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
 
 ### Added
 
-- **ARM Support** -  Dgraph now supports ARM64 Architecture for development(https://github.com/dgraph-io/dgraph/pull/8543 https://github.com/dgraph-io/dgraph/pull/8520 https://github.com/dgraph-io/dgraph/pull/8503 https://github.com/dgraph-io/dgraph/pull/8436 https://github.com/dgraph-io/dgraph/pull/8405 https://github.com/dgraph-io/dgraph/pull/8395)
+- **ARM Support** -  Dgraph now supports ARM64 Architecture for development (https://github.com/dgraph-io/dgraph/pull/8543 https://github.com/dgraph-io/dgraph/pull/8520 https://github.com/dgraph-io/dgraph/pull/8503 https://github.com/dgraph-io/dgraph/pull/8436 https://github.com/dgraph-io/dgraph/pull/8405 https://github.com/dgraph-io/dgraph/pull/8395)
 - Additional logging and trace tags for debugging (https://github.com/dgraph-io/dgraph/pull/8490)
 
 ### Fixed
@@ -80,12 +80,12 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
 ### Changed
 
 - **CI Enhancements**
-    - Added more unit tests(https://github.com/dgraph-io/dgraph/pull/8470 https://github.com/dgraph-io/dgraph/pull/8489 https://github.com/dgraph-io/dgraph/pull/8479 https://github.com/dgraph-io/dgraph/pull/8488 https://github.com/dgraph-io/dgraph/pull/8433)
+    - Added more unit tests (https://github.com/dgraph-io/dgraph/pull/8470 https://github.com/dgraph-io/dgraph/pull/8489 https://github.com/dgraph-io/dgraph/pull/8479 https://github.com/dgraph-io/dgraph/pull/8488 https://github.com/dgraph-io/dgraph/pull/8433)
     - [Coveralls](https://coveralls.io/github/dgraph-io/dgraph?branch=main) on CI is enhanced to measure code coverage for integration tests (https://github.com/dgraph-io/dgraph/pull/8494)
     - [**LDBC Benchmarking**](https://ldbcouncil.org) in enabled on [CI](https://github.com/dgraph-io/dgraph/actions/workflows/ci-dgraph-ldbc-tests.yml)
   
 - **CD Enhancements**
-    - Enhanced our [CD Pipeline](https://github.com/dgraph-io/dgraph/actions/workflows/cd-dgraph.yml) to support ARM64 binaries and docker-images(https://github.com/dgraph-io/dgraph/pull/8520)
+    - Enhanced our [CD Pipeline](https://github.com/dgraph-io/dgraph/actions/workflows/cd-dgraph.yml) to support ARM64 binaries and docker-images (https://github.com/dgraph-io/dgraph/pull/8520)
     - Enhanced [dgraph-lambda](https://github.com/dgraph-io/dgraph-lambda) to support arm64 (https://github.com/dgraph-io/dgraph-lambda/pull/39 https://github.com/dgraph-io/dgraph-lambda/pull/38 https://github.com/dgraph-io/dgraph-lambda/pull/37)
     - Enhanced [Badger](https://github.com/dgraph-io/badger) to support arm64 (https://github.com/dgraph-io/badger/pull/1838)
 
