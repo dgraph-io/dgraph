@@ -259,6 +259,7 @@ func TestFileReader(t *testing.T) {
 	}
 	files, err := ioutil.ReadDir(testFilesDir)
 	require.NoError(t, err)
+
 	for i, file := range files {
 		testfilename := filepath.Join(testFilesDir, file.Name())
 		reader, cleanup := FileReader(testfilename, nil)
@@ -269,7 +270,6 @@ func TestFileReader(t *testing.T) {
 		require.Equal(t, contents, expectedOutcomes[i])
 		cleanup()
 	}
-
 }
 
 func TestDataFormat(t *testing.T) {
@@ -280,13 +280,14 @@ func TestDataFormat(t *testing.T) {
 	testFilesDir := filepath.Join(filepath.Dir(thisFile), "test-files")
 	expectedOutcomes := [5]InputFormat{2, 1, 0, 2, 1}
 	file_data := [5]string{"test-1.json", "test-2.rdf", "test-3.txt", "test-4.json.gz", "test-5.rdf.gz"}
+
 	for i, data := range file_data {
 		filePath := filepath.Join(testFilesDir, data)
+
 		format := DataFormat(filePath, "")
 		require.Equal(t, format, expectedOutcomes[i])
 
 	}
-
 }
 
 func TestRDFChunkerChunk(t *testing.T) {
@@ -299,6 +300,7 @@ func TestRDFChunkerChunk(t *testing.T) {
 	resultData := filepath.Join(testFilesDir, "result.rdf")
 	//download data
 	cmd := exec.Command("wget", "-O", dataFile, "https://media.githubusercontent.com/media/dgraph-io/benchmarks/master/ldbc/sf0.3/ldbc_rdf_0.3/Deltas.rdf")
+
 	if out, err := cmd.CombinedOutput(); err != nil {
 		fmt.Printf("Error %v", err)
 		fmt.Printf("Output %v", out)
@@ -308,6 +310,7 @@ func TestRDFChunkerChunk(t *testing.T) {
 	chunker := NewChunker(RdfFormat, 1000)
 	rd, _ := FileReader(dataFile, nil)
 	chunkBuf, _ := chunker.Chunk(rd)
+
 	for chunkBuf.Len() > 0 {
 		str, err := chunkBuf.ReadString('\n')
 		require.NoError(t, err)
@@ -326,12 +329,10 @@ func TestRDFChunkerChunk(t *testing.T) {
 		log.Fatal(err2)
 	}
 	require.Equal(t, true, bytes.Equal(f1, f2))
-
 }
 
 func deleteDirs(t *testing.T, dir string) {
 	if err := os.RemoveAll(dir); err != nil {
 		fmt.Printf("Error removing direcotory: %s", err.Error())
 	}
-
 }

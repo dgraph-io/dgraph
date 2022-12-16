@@ -91,5 +91,4 @@ func deleteDirs(t *testing.T, dir string) {
 	if err := os.RemoveAll(dir); err != nil {
 		fmt.Printf("Error removing direcotory: %s", err.Error())
 	}
-
 }
