@@ -35,7 +35,6 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
       <summary>CVE Fixes (35 total)</summary>
       
       #### CVE Fixes (35 total)
-      - CVE-2019-0210
       - CVE-2013-4235
       - CVE-2016-20013
       - CVE-2016-2781
