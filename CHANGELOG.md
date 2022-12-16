@@ -31,6 +31,52 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
   - Fix(GraphQL): Make mutation rewriting tests more robust (https://github.com/dgraph-io/dgraph/pull/8449)
 
 - **Security**
+   - <details>
+      <summary>CVE Fixes (35 total)</summary>
+      
+      #### CVE Fixes (35 total)
+      - CVE-2019-0210
+      - CVE-2013-4235
+      - CVE-2016-20013
+      - CVE-2016-2781
+      - CVE-2017-11164
+      - CVE-2018-16886
+      - CVE-2019-0205
+      - CVE-2019-0210
+      - CVE-2019-11254
+      - CVE-2019-16167
+      - CVE-2020-29652
+      - CVE-2021-31525
+      - CVE-2021-33194
+      - CVE-2021-36222
+      - CVE-2021-37750
+      - CVE-2021-38561
+      - CVE-2021-39537
+      - CVE-2021-43565
+      - CVE-2021-44716
+      - CVE-2021-44758
+      - CVE-2022-21698
+      - CVE-2022-27191
+      - CVE-2022-27664
+      - CVE-2022-29458
+      - CVE-2022-29526
+      - CVE-2022-3219
+      - CVE-2022-32221
+      - CVE-2022-3437
+      - CVE-2022-35737
+      - CVE-2022-3715
+      - CVE-2022-3821
+      - CVE-2022-39377
+      - CVE-2022-41916
+      - CVE-2022-42800
+      - CVE-2022-42898
+      - CVE-2022-44640
+   - <details>
+      <summary>GHSA Fixes (2 total)</summary>
+      
+      #### GHSE Fixes (2 total)
+      - GHSA-69ch-w2m2-3vjp
+      - GHSA-m332-53r6-2w93
 
 ### Changed
 
