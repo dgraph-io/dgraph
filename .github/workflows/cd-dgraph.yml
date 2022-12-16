@@ -54,7 +54,7 @@ jobs:
       - name: Generate SHA for Dgraph Linux Build
         run: cd dgraph && sha256sum dgraph | cut -c-64 > dgraph-checksum-linux-amd64.sha256
       - name: Tar Archive for Dgraph Linux Build
-        run: cd dgraph && tar -zcvf dgraph-linux-amd64.tar.gz dgraph
+        run: cd dgraph && tar -zcvf dgraph-linux-amd64.tar.gz dgraph-linux-amd64
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v3
         with:
@@ -134,7 +134,7 @@ jobs:
       - name: Generate SHA for Dgraph Linux Build
         run: cd dgraph && sha256sum dgraph | cut -c-64 > dgraph-checksum-linux-arm64.sha256
       - name: Tar Archive for Dgraph Linux Build
-        run: cd dgraph && tar -zcvf dgraph-linux-arm64.tar.gz dgraph
+        run: cd dgraph && tar -zcvf dgraph-linux-arm64.tar.gz dgraph-linux-arm64
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v3
         with:
