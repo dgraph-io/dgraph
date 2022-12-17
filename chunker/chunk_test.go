@@ -283,10 +283,8 @@ func TestDataFormat(t *testing.T) {
 
 	for i, data := range file_data {
 		filePath := filepath.Join(testFilesDir, data)
-
 		format := DataFormat(filePath, "")
 		require.Equal(t, format, expectedOutcomes[i])
-
 	}
 }
 
