@@ -1,3 +1,4 @@
+//go:build !oss
 // +build !oss
 
 /*
@@ -348,6 +349,9 @@ func getGrootAndGuardiansUid(t *testing.T, dg *dgo.Dgraph) (string, string) {
 }
 
 const defaultTimeToSleep = 500 * time.Millisecond
+
+const timeout = 5 * time.Second
+
 const expireJwtSleep = 21 * time.Second
 
 func testAuthorization(t *testing.T, dg *dgo.Dgraph) {
@@ -1207,9 +1211,7 @@ func TestQueryRemoveUnauthorizedPred(t *testing.T) {
 		tc := tc // capture range variable
 		t.Run(tc.description, func(t *testing.T) {
 			t.Parallel()
-			resp, err := userClient.NewTxn().Query(ctx, tc.input)
-			require.Nil(t, err)
-			testutil.CompareJSON(t, tc.output, string(resp.Json))
+			testutil.PollTillPassOrTimeout(t, userClient, tc.input, tc.output, timeout)
 		})
 	}
 }
@@ -1283,9 +1285,7 @@ func TestExpandQueryWithACLPermissions(t *testing.T) {
 	require.NoError(t, err)
 
 	// Query via user when user has no permissions
-	resp, err = userClient.NewReadOnlyTxn().Query(ctx, query)
-	require.NoError(t, err, "Error while querying data")
-	testutil.CompareJSON(t, `{}`, string(resp.GetJson()))
+	testutil.PollTillPassOrTimeout(t, userClient, query, `{}`, timeout)
 
 	// Login to groot to modify accesses (1)
 	token, err = testutil.HttpLogin(&testutil.LoginParams{
@@ -1298,12 +1298,9 @@ func TestExpandQueryWithACLPermissions(t *testing.T) {
 
 	// Give read access of <name>, write access of <age> to dev
 	addRulesToGroup(t, token, devGroup, []rule{{"age", Write.Code}, {"name", Read.Code}})
-	time.Sleep(defaultTimeToSleep)
 
-	resp, err = userClient.NewReadOnlyTxn().Query(ctx, query)
-	require.NoError(t, err, "Error while querying data")
-	testutil.CompareJSON(t, `{"me":[{"name":"RandomGuy"},{"name":"RandomGuy2"}]}`,
-		string(resp.GetJson()))
+	testutil.PollTillPassOrTimeout(t, userClient, query,
+		`{"me":[{"name":"RandomGuy"},{"name":"RandomGuy2"}]}`, timeout)
 
 	// Login to groot to modify accesses (2)
 	token, err = testutil.HttpLogin(&testutil.LoginParams{
@@ -1315,13 +1312,9 @@ func TestExpandQueryWithACLPermissions(t *testing.T) {
 	require.NoError(t, err, "login failed")
 	// Add alice to sre group which has read access to <age> and write access to <name>
 	addToGroup(t, token, userid, sreGroup)
-	time.Sleep(defaultTimeToSleep)
 
-	resp, err = userClient.NewReadOnlyTxn().Query(ctx, query)
-	require.Nil(t, err)
-
-	testutil.CompareJSON(t, `{"me":[{"name":"RandomGuy","age":23},{"name":"RandomGuy2","age":25}]}`,
-		string(resp.GetJson()))
+	testutil.PollTillPassOrTimeout(t, userClient, query,
+		`{"me":[{"name":"RandomGuy","age":23},{"name":"RandomGuy2","age":25}]}`, timeout)
 
 	// Login to groot to modify accesses (3)
 	token, err = testutil.HttpLogin(&testutil.LoginParams{
@@ -1334,13 +1327,9 @@ func TestExpandQueryWithACLPermissions(t *testing.T) {
 
 	// Give read access of <name> and <nickname>, write access of <age> to dev
 	addRulesToGroup(t, token, devGroup, []rule{{"age", Write.Code}, {"name", Read.Code}, {"nickname", Read.Code}})
-	time.Sleep(defaultTimeToSleep)
 
-	resp, err = userClient.NewReadOnlyTxn().Query(ctx, query)
-	require.Nil(t, err)
-
-	testutil.CompareJSON(t, `{"me":[{"name":"RandomGuy","age":23, "nickname":"RG"},{"name":"RandomGuy2","age":25, "nickname":"RG2"}]}`,
-		string(resp.GetJson()))
+	testutil.PollTillPassOrTimeout(t, userClient, query,
+		`{"me":[{"name":"RandomGuy","age":23, "nickname":"RG"},{"name":"RandomGuy2","age":25, "nickname":"RG2"}]}`, timeout)
 
 }
 func TestDeleteQueryWithACLPermissions(t *testing.T) {
@@ -2267,6 +2256,60 @@ func TestQueryUserInfo(t *testing.T) {
 	gqlResp = makeRequestAndRefreshTokenIfNecessary(t, token, params)
 	gqlResp.RequireNoGraphQLErrors(t)
 	testutil.CompareJSON(t, `{"getGroup": null}`, string(gqlResp.Data))
+}
+
+func TestQueriesWithUserAndGroupOfSameName(t *testing.T) {
+	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+
+	testutil.DropAll(t, dg)
+	// Creates a user -- alice
+	resetUser(t)
+
+	txn := dg.NewTxn()
+	mutation := &api.Mutation{
+		SetNquads: []byte(`
+			_:a <name> "RandomGuy" .
+			_:a <age> "23" .
+			_:a <nickname> "RG" .
+			_:a <dgraph.type> "TypeName" .
+			_:b <name> "RandomGuy2" .
+			_:b <age> "25" .
+			_:b <nickname> "RG2" .
+			_:b <dgraph.type> "TypeName" .
+		`),
+		CommitNow: true,
+	}
+	_, err = txn.Mutate(ctx, mutation)
+	require.NoError(t, err)
+
+	token, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint:  adminEndpoint,
+		UserID:    "groot",
+		Passwd:    "password",
+		Namespace: x.GalaxyNamespace,
+	})
+	require.NoError(t, err, "login failed")
+
+	createGroup(t, token, "alice")
+	addToGroup(t, token, userid, "alice")
+
+	// add rules to groups
+	addRulesToGroup(t, token, "alice", []rule{{Predicate: "name", Permission: Read.Code}})
+
+	query := `
+	{
+		q(func: has(name)) {
+			name
+			age
+		}
+	}
+	`
+
+	dc := testutil.DgClientWithLogin(t, userid, userpassword, x.GalaxyNamespace)
+	testutil.PollTillPassOrTimeout(t, dc, query, `{"q":[{"name":"RandomGuy"},{"name":"RandomGuy2"}]}`, timeout)
 }
 
 func TestQueriesForNonGuardianUserWithoutGroup(t *testing.T) {

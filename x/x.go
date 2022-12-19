@@ -351,7 +351,7 @@ func SetStatus(w http.ResponseWriter, code, msg string) {
 	qr.Errors = append(qr.Errors, &GqlError{Message: msg, Extensions: ext})
 	if js, err := json.Marshal(qr); err == nil {
 		if _, err := w.Write(js); err != nil {
-			glog.Errorf("Error while writing: %+v", err)
+			glog.Errorf("Could not send error msg=%+v code=%+v due to http error %+v", msg, code, err)
 		}
 	} else {
 		Panic(errors.Errorf("Unable to marshal: %+v", qr))
@@ -1135,12 +1135,11 @@ func IsGuardian(groups []string) bool {
 	return false
 }
 
-// RunVlogGC runs value log gc on store. It runs GC unconditionally after every 10 minutes.
-// Additionally it also runs GC if vLogSize has grown more than 1 GB in last minute.
+// RunVlogGC runs value log gc on store. It runs GC unconditionally after every 1 minute.
 func RunVlogGC(store *badger.DB, closer *z.Closer) {
 	defer closer.Done()
 
-	// Runs every 1m, checks size of vlog and runs GC conditionally.
+	// Runs every 1m
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
 

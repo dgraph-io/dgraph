@@ -70,6 +70,41 @@ func Login(t *testing.T, loginParams *LoginParams) *HttpToken {
 	return token
 }
 
+func ResetPassword(t *testing.T, token *HttpToken, userID, newPass string, nsID uint64) (string, error) {
+	resetpasswd := `mutation resetPassword($userID: String!, $newpass: String!, $namespaceId: Int!){
+		resetPassword(input: {userId: $userID, password: $newpass, namespace: $namespaceId}) {
+		  userId
+		  message
+		}
+	  }`
+
+	params := GraphQLParams{
+		Query: resetpasswd,
+		Variables: map[string]interface{}{
+			"namespaceId": nsID,
+			"userID":      userID,
+			"newpass":     newPass,
+		},
+	}
+
+	resp := MakeRequest(t, token, params)
+
+	if len(resp.Errors) > 0 {
+		return "", errors.Errorf(resp.Errors.Error())
+	}
+
+	var result struct {
+		ResetPassword struct {
+			UserId  string `json:"userId"`
+			Message string `json:"message"`
+		}
+	}
+	require.NoError(t, json.Unmarshal(resp.Data, &result))
+	require.Equal(t, userID, result.ResetPassword.UserId)
+	require.Contains(t, result.ResetPassword.Message, "Reset password is successful")
+	return result.ResetPassword.UserId, nil
+}
+
 func CreateNamespaceWithRetry(t *testing.T, token *HttpToken) (uint64, error) {
 	createNs := `mutation {
 					 addNamespace
@@ -266,7 +301,7 @@ func AddToGroup(t *testing.T, token *HttpToken, userName, group string) {
 	require.True(t, foundGroup)
 }
 
-func AddRulesToGroup(t *testing.T, token *HttpToken, group string, rules []Rule) {
+func AddRulesToGroup(t *testing.T, token *HttpToken, group string, rules []Rule, newGroup bool) {
 	addRuleToGroup := `mutation updateGroup($name: String!, $rules: [RuleRef!]!) {
 		updateGroup(input: {
 			filter: {
@@ -309,7 +344,9 @@ func AddRulesToGroup(t *testing.T, token *HttpToken, group string, rules []Rule)
 			]
 		  }
 	  }`, group, rulesb)
-	CompareJSON(t, expectedOutput, string(resp.Data))
+	if newGroup {
+		CompareJSON(t, expectedOutput, string(resp.Data))
+	}
 }
 
 func DgClientWithLogin(t *testing.T, id, password string, ns uint64) *dgo.Dgraph {

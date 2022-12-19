@@ -7,7 +7,7 @@ for f in $files; do
   # Start from year.
   year=$(git log --format=%aD $f | tail -1 | awk '{print $4}')
   if [ "$year" != "2018" ]; then
-    sed -i "s/Copyright 2018 Dgraph/Copyright $year-2018 Dgraph/g" $f
+    sed -i "s/Copyright 2022 Dgraph/Copyright $year-2022 Dgraph/g" $f
   fi
 
   # Format it.

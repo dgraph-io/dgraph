@@ -155,6 +155,9 @@ func freePort(port int) int {
 func StartAlphas(compose string) error {
 	cmd := exec.Command("docker-compose", "-f", compose, "-p", DockerPrefix,
 		"up", "-d", "--force-recreate")
+
+	fmt.Println("Starting alphas with: ", cmd.String())
+
 	if out, err := cmd.CombinedOutput(); err != nil {
 		fmt.Printf("Error while bringing up alpha node. Prefix: %s. Error: %v\n", DockerPrefix, err)
 		fmt.Printf("Output %v\n", string(out))

@@ -15,9 +15,10 @@ on:
     - cron: "0 * * * *"
 jobs:
   golang-lint:
-    if: github.event.pull_request.draft == false
+    # TODO: uncomment this after release work
+    # if: github.event.pull_request.draft == false
     name: lint
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v3
       - name: Get Go Version

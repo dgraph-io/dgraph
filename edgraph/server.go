@@ -1188,19 +1188,18 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (resp *api.Response,
 		return nil, serverOverloadErr
 	}
 
-	if bool(glog.V(3)) || worker.LogDQLRequestEnabled() {
-		glog.Infof("Got a DQL query: \n%+v\n", req.req)
-	}
-
 	isGraphQL, _ := ctx.Value(IsGraphql).(bool)
 	if isGraphQL {
 		atomic.AddUint64(&numGraphQL, 1)
 	} else {
 		atomic.AddUint64(&numGraphQLPM, 1)
 	}
-
 	l := &query.Latency{}
 	l.Start = time.Now()
+
+	if bool(glog.V(3)) || worker.LogDQLRequestEnabled() {
+		glog.Infof("Got a query, DQL form: %+v at %+v", req.req, l.Start.Format(time.RFC3339))
+	}
 
 	isMutation := len(req.req.Mutations) > 0
 	methodRequest := methodQuery
@@ -1238,6 +1237,7 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (resp *api.Response,
 		return nil, errors.Errorf("empty request")
 	}
 
+	span.AddAttributes(trace.StringAttribute("Query", req.req.Query))
 	span.Annotatef(nil, "Request received: %v", req.req)
 	if isQuery {
 		ostats.Record(ctx, x.PendingQueries.M(1), x.NumQueries.M(1))
@@ -1394,7 +1394,15 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 	// Core processing happens here.
 	er, err := qr.Process(ctx)
 
+	if bool(glog.V(3)) || worker.LogDQLRequestEnabled() {
+		glog.Infof("Finished a query that started at: %+v",
+			qr.Latency.Start.Format(time.RFC3339))
+	}
+
 	if err != nil {
+		if bool(glog.V(3)) {
+			glog.Infof("Error processing query: %+v\n", err.Error())
+		}
 		return resp, errors.Wrap(err, "")
 	}
 

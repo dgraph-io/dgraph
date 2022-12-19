@@ -508,7 +508,7 @@ var (
 	adminQueryMWConfig = map[string]resolve.QueryMiddlewares{
 		"health":       minimalAdminQryMWs, // dgraph checks Guardian auth for health
 		"state":        minimalAdminQryMWs, // dgraph checks Guardian auth for state
-		"config":       stdAdminQryMWs,
+		"config":       gogQryMWs,
 		"listBackups":  gogQryMWs,
 		"getGQLSchema": stdAdminQryMWs,
 		// for queries and mutations related to User/Group, dgraph handles Guardian auth,
