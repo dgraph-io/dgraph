@@ -22,10 +22,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -229,8 +234,8 @@ func TestJSONLoadSuccessAll(t *testing.T) {
 }
 
 type isJsonDataTest struct {
-	arg1     string
-	expected bool
+	possibleJsonData string
+	expected         bool
 }
 
 var isJsonDataTests = []isJsonDataTest{
@@ -258,10 +263,11 @@ var isJsonDataTests = []isJsonDataTest{
 func TestIsJSONData(t *testing.T) {
 
 	for _, jsonTestData := range isJsonDataTests {
-		reader := bufioReader(jsonTestData.arg1)
+		reader := bufioReader(jsonTestData.possibleJsonData)
 		if output, error := IsJSONData(reader); output != jsonTestData.expected {
 			fmt.Println(error)
-			t.Errorf("got: %t, wanted: %t", output, jsonTestData.expected)
+			// t.Errorf("got: %t, wanted: %t", output, jsonTestData.expected)
+			assert.Equal(t, output, jsonTestData.expected, "Actual result is different than Expected result")
 		}
 	}
 }
@@ -276,16 +282,13 @@ func TestRdfChunker_Parse_Positive(t *testing.T) {
 	chunkBuff, _ := chunk.Chunk(reader)
 	got := chunk.Parse(chunkBuff)
 
-	if got != nil {
-		t.Errorf("got : %t, wanted : nil", got)
-	}
-}
-
-type error interface {
-	Error() string
+	assert.Nil(t, got, "If the data passed has correct format, Pares() func returns <nil>")
 }
 
 func TestRdfChunker_Parse_Negative(t *testing.T) {
+
+	expectedResult := `while parsing line " <name> \"Alice\" .\n": while lexing <name> "Alice" . at line 1 column 6: Invalid quote for non-object.`
+
 	reader := bufioReader(` <name> "Alice" .
 	<0x01> <dgraph.type> "Person" .
 
@@ -293,12 +296,10 @@ func TestRdfChunker_Parse_Negative(t *testing.T) {
 
 	chunk := NewChunker(RdfFormat, 1024)
 	chunkBuff, _ := chunk.Chunk(reader)
+	got := chunk.Parse(chunkBuff)
 
-	got := strings.Contains(chunk.Parse(chunkBuff).Error(), "while parsing line")
-
-	if got != true {
-		t.Errorf("got : %t, wanted : true", got)
-	}
+	// In this test we are passing incorrect data, hence an error is expected in got. If we do not receive any error then assert.
+	assert.Equal(t, expectedResult, got.Error(), "If the data passed has incorrect format, Pares() func returns Some error")
 }
 
 type client struct {
@@ -311,6 +312,8 @@ type connection struct {
 }
 
 func TestJsonFormat_Chunk(t *testing.T) {
+
+	expectedResult := "EOF"
 
 	var clients []*client
 
@@ -326,8 +329,71 @@ func TestJsonFormat_Chunk(t *testing.T) {
 	chunk := NewChunker(JsonFormat, -1)
 	bytesBuff, err := chunk.Chunk(reader)
 
-	if err.Error() != "EOF" && bytesBuff == nil {
-		t.Errorf("bytesBuff is null !")
+	assert := assert.New(t)
+	assert.Equal(expectedResult, err.Error(), "If the data passed has JSON format, Chunk() func returns EOF as error")
+	assert.True(bytesBuff.Len() > 1, "If the data passed has JSON format, Chunk() func returns *bufio.Reader")
+}
+func TestFileReader(t *testing.T) {
+	//create sample files
+	_, thisFile, _, _ := runtime.Caller(0)
+	dir := "test-files"
+	require.NoError(t, os.MkdirAll(dir, os.ModePerm))
+	testFilesDir := filepath.Join(filepath.Dir(thisFile), "test-files")
+	var expectedOutcomes [2]string
+
+	file_data := []struct {
+		filename string
+		content  string
+	}{
+		{"test-1", "This is test file 1."},
+		{"test-2", "This is test file 2."},
+	}
+	for i, data := range file_data {
+		filePath := filepath.Join(testFilesDir, data.filename)
+		f, err := os.Create(filePath)
+		require.NoError(t, err)
+		defer f.Close()
+		_, err = f.WriteString(data.content)
+		require.NoError(t, err)
+		expectedOutcomes[i] = data.content
+	}
+
+	files, err := ioutil.ReadDir(testFilesDir)
+	require.NoError(t, err)
+
+	for i, file := range files {
+
+		testfilename := filepath.Join(testFilesDir, file.Name())
+		reader, cleanup := FileReader(testfilename, nil)
+
+		bytes, err := ioutil.ReadAll(reader)
+
+		require.NoError(t, err)
+		contents := string(bytes)
+		//compare file content with correct string
+		require.Equal(t, contents, expectedOutcomes[i])
+		cleanup()
+	}
+
+	if err := os.RemoveAll(dir); err != nil {
+		t.Fatalf("Error removing direcotory: %s", err.Error())
+	}
+
+}
+
+func TestDataFormat(t *testing.T) {
+	_, thisFile, _, _ := runtime.Caller(0)
+	dir := "test-files"
+	require.NoError(t, os.MkdirAll(dir, os.ModePerm))
+	testFilesDir := filepath.Join(filepath.Dir(thisFile), "test-files")
+	expectedOutcomes := [5]InputFormat{2, 1, 0, 2, 1}
+
+	file_data := [5]string{"test-1.json", "test-2.rdf", "test-3.txt", "test-4.json.gz", "test-5.rdf.gz"}
+	for i, data := range file_data {
+		filePath := filepath.Join(testFilesDir, data)
+		format := DataFormat(filePath, "")
+
+		require.Equal(t, format, expectedOutcomes[i])
 	}
 
 }

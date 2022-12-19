@@ -200,6 +200,33 @@ func TestCreateNamespace(t *testing.T) {
 	require.Contains(t, err.Error(), "Only guardian of galaxy is allowed to do this operation")
 }
 
+func TestResetPassword(t *testing.T) {
+	prepare(t)
+
+	galaxyToken := testutil.Login(t,
+		&testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: x.GalaxyNamespace})
+
+	// Create a new namespace
+	ns, err := testutil.CreateNamespaceWithRetry(t, galaxyToken)
+	require.NoError(t, err)
+
+	// Reset Password
+	_, err = testutil.ResetPassword(t, galaxyToken, "groot", "newpassword", ns)
+	require.NoError(t, err)
+
+	// Try and Fail with old password for groot
+	token := testutil.Login(t,
+		&testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: ns})
+
+	require.Nil(t, token, "nil token because incorrect login")
+
+	// Try and success with new password for groot
+	token = testutil.Login(t,
+		&testutil.LoginParams{UserID: "groot", Passwd: "newpassword", Namespace: ns})
+
+	require.Equal(t, token.Password, "newpassword", "new password matches the reset password")
+}
+
 func TestDeleteNamespace(t *testing.T) {
 	prepare(t)
 	galaxyToken := testutil.Login(t,

@@ -14,7 +14,7 @@ services:
         --graphql lambda-url=http://host.docker.internal:8686/graphql-worker
         --telemetry sentry=false
   lambda: 
-    image: dgraph/dgraph-lambda:1.4.0
+    image: dgraph/dgraph-lambda:latest
     volumes:
       - ./scripts/script.js:/app/script/script.js:ro
     environment:

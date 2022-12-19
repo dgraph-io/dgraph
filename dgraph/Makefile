@@ -24,7 +24,8 @@ BUILD_BRANCH   ?= $(shell git rev-parse --abbrev-ref HEAD)
 ifeq ($(DGRAPH_VERSION),)
 BUILD_VERSION ?= local
 else
-BUILD_VERSION ?= $(DGRAPH_VERSION)
+# remove arch suffix from DGRAPH_VERSION for CD steps only
+BUILD_VERSION := $(shell echo ${DGRAPH_VERSION} | cut -d "-" -f 1)
 endif
 
 GOOS          ?= $(shell go env GOOS)
@@ -77,6 +78,9 @@ all: $(BIN)
 
 $(BIN): clean jemalloc
 	@go build $(BUILD_FLAGS) -o $(BIN)
+
+test-coverage-binary: clean jemalloc
+	@go test -c -covermode=atomic -coverpkg ../... $(BUILD_FLAGS) -o $(BIN)
 
 clean:
 	@rm -f $(BIN)

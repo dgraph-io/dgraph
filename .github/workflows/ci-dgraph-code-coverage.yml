@@ -1,4 +1,4 @@
-name: ci-dgraph-tests-arm64
+name: ci-dgraph-code-coverage
 on:
   push:
     branches:
@@ -14,9 +14,10 @@ on:
   schedule:
     - cron: "0 0,6,12,18 * * *"
 jobs:
-  dgraph-tests:
+  dgraph-code-coverage:
     if: github.event.pull_request.draft == false
-    runs-on: [self-hosted, ARM64]
+    runs-on: [self-hosted, x64]
+    # runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v3
       - name: Get Go Version
@@ -40,8 +41,8 @@ jobs:
           go mod tidy
           make regenerate
           git diff --exit-code -- .
-      - name: Make Linux Build and Docker Image
-        run: make docker-image # this internally builds dgraph binary
+      - name: Make Linux Build and Docker Image with coverage enabled
+        run: make coverage-docker-image
       - name: Build Test Binary
         run: |
           #!/bin/bash
@@ -62,9 +63,12 @@ jobs:
           # move the binary
           cp dgraph/dgraph ~/go/bin/dgraph
           # run the tests
-          cd t; ./t
+          cd t; ./t --coverage=true --suite=unit
           # clean up docker containers after test execution
           ./t -r
           # sleep
           sleep 5
-
+      - name: Install Goveralls
+        run: go install github.com/mattn/goveralls@latest
+      - name: Send Coverage Results
+        run: cd t && goveralls -repotoken ${{ secrets.COVERALLSIO_TOKEN }} -coverprofile=coverage.out
