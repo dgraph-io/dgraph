@@ -28,11 +28,16 @@ import (
 )
 
 type configInput struct {
+	// A nil value for any of the attributes of configInput (CacheMb, LogDQLRequest, LogGraphQLRequest)
+	// implies no change for the target config parameter. A non-nil implies setting the appropriate config
+	// to the specified target value.
 	CacheMb *float64
 	// LogDQLRequest is used to update WorkerOptions.LogDQLRequest. true value of LogDQLRequest enables
-	// logging of all requests coming to alphas. LogDQLRequest type has been kept as *bool instead of
+	// logging of all requests coming to Alphas. LogDQLRequest type has been kept as *bool instead of
 	// bool to avoid updating WorkerOptions.LogDQLRequest when it has default value of false.
 	LogDQLRequest     *bool
+	// LogGraphQLRequest follows the same logic as LogDQLRequest. Just differentiating in the objective.
+	// While LogDQLRequest prints only Logs referring to DQL, LogGraphQLRequest prints logs only from GraphQL queries.
 	LogGraphQLRequest *bool
 }
 
