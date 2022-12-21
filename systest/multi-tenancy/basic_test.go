@@ -41,6 +41,8 @@ func prepare(t *testing.T) {
 	require.NoError(t, dc.Alter(context.Background(), &api.Operation{DropAll: true}))
 }
 
+var timeout = 5 * time.Second
+
 // TODO(Ahsan): This is just a basic test, for the purpose of development. The functions used in
 // this file can me made common to the other acl tests as well. Needs some refactoring as well.
 func TestAclBasic(t *testing.T) {
@@ -89,16 +91,95 @@ func TestAclBasic(t *testing.T) {
 	testutil.CreateGroup(t, token, "dev")
 	testutil.AddToGroup(t, token, "alice", "dev")
 	testutil.AddRulesToGroup(t, token, "dev",
-		[]testutil.Rule{{Predicate: "name", Permission: acl.Read.Code}})
-
-	// Wait for acl cache to get updated
-	time.Sleep(5 * time.Second)
+		[]testutil.Rule{{Predicate: "name", Permission: acl.Read.Code}}, true)
 
 	// Now alice should see the name predicate but not nickname.
 	dc = testutil.DgClientWithLogin(t, "alice", "newpassword", ns)
-	resp = testutil.QueryData(t, dc, query)
-	testutil.CompareJSON(t, `{"me": [{"name":"guy1"},{"name": "guy2"}]}`, string(resp))
+	testutil.PollTillPassOrTimeout(t, dc, query, `{"me": [{"name":"guy1"},{"name": "guy2"}]}`, timeout)
+}
 
+func createGroupAndSetPermissions(t *testing.T, namespace uint64, group, user, predicate string) {
+	token := testutil.Login(t,
+		&testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: namespace})
+	testutil.CreateGroup(t, token, group)
+	testutil.AddToGroup(t, token, user, group)
+	testutil.AddRulesToGroup(t, token, group,
+		[]testutil.Rule{{Predicate: predicate, Permission: acl.Read.Code}}, true)
+}
+
+func TestTwoPermissionSetsInNameSpacesWithAcl(t *testing.T) {
+	prepare(t)
+	galaxyToken := testutil.Login(t,
+		&testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: x.GalaxyNamespace})
+
+	query := `
+		{
+			me(func: has(name)) {
+				nickname
+				name
+			}
+		}
+	`
+	// Create first namespace
+	ns1, err := testutil.CreateNamespaceWithRetry(t, galaxyToken)
+	require.NoError(t, err)
+
+	// Add data
+	dc := testutil.DgClientWithLogin(t, "groot", "password", ns1)
+	testutil.AddData(t, dc)
+
+	// Create user alice
+	token1 := testutil.Login(t,
+		&testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: ns1})
+	testutil.CreateUser(t, token1, "alice", "newpassword")
+
+	// Create a new group, add alice to that group and give read access of <name> to dev group.
+	createGroupAndSetPermissions(t, ns1, "dev", "alice", "name")
+
+	// Alice should not be able to see <nickname> in namespace 1
+	dc = testutil.DgClientWithLogin(t, "alice", "newpassword", ns1)
+	testutil.PollTillPassOrTimeout(t, dc, query, `{"me": [{"name":"guy2"}, {"name":"guy1"}]}`, timeout)
+
+	// Create second namespace
+	ns2, err := testutil.CreateNamespaceWithRetry(t, galaxyToken)
+	require.NoError(t, err)
+
+	// Add data
+	dc = testutil.DgClientWithLogin(t, "groot", "password", ns2)
+	testutil.AddData(t, dc)
+
+	// Create user bob
+	token2 := testutil.Login(t,
+		&testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: ns2})
+	testutil.CreateUser(t, token2, "bob", "newpassword")
+
+	// Create a new group, add bob to that group and give read access of <nickname> to dev group.
+	createGroupAndSetPermissions(t, ns2, "dev", "bob", "nickname")
+
+	// Query via bob and check result
+	dc = testutil.DgClientWithLogin(t, "bob", "newpassword", ns2)
+	testutil.PollTillPassOrTimeout(t, dc, query, `{}`, timeout)
+
+	// Query namespace-1 via alice and check result to ensure it still works
+	dc = testutil.DgClientWithLogin(t, "alice", "newpassword", ns1)
+	resp := testutil.QueryData(t, dc, query)
+	testutil.CompareJSON(t, `{"me": [{"name":"guy2"}, {"name":"guy1"}]}`, string(resp))
+
+	// Change permissions in namespace-2
+	token := testutil.Login(t,
+		&testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: ns2})
+	testutil.AddRulesToGroup(t, token, "dev",
+		[]testutil.Rule{{Predicate: "name", Permission: acl.Read.Code}}, false)
+
+	// Query namespace-2
+	dc = testutil.DgClientWithLogin(t, "bob", "newpassword", ns2)
+	testutil.PollTillPassOrTimeout(t, dc, query,
+		`{"me": [{"name":"guy2", "nickname": "RG2"}, {"name":"guy1", "nickname": "RG"}]}`, timeout)
+
+	// Query namespace-1
+	dc = testutil.DgClientWithLogin(t, "alice", "newpassword", ns1)
+	resp = testutil.QueryData(t, dc, query)
+	testutil.CompareJSON(t, `{"me": [{"name":"guy2"}, {"name":"guy1"}]}`, string(resp))
 }
 
 func TestCreateNamespace(t *testing.T) {
