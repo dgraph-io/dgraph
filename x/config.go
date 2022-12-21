@@ -137,7 +137,7 @@ type WorkerOptions struct {
 	// Ideally LogRequest should be a bool value. But we are reading it using atomics across
 	// queries hence it has been kept as int32. LogRequest value 1 enables logging of requests
 	// coming to alphas and 0 disables it.
-	LogRequest int32
+	LogDQLRequest int32
 	// If true, we should call msync or fsync after every write to survive hard reboots.
 	HardSync bool
 	// Audit contains the audit flags that enables the audit.

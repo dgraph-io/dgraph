@@ -29,10 +29,10 @@ import (
 
 type configInput struct {
 	CacheMb *float64
-	// LogRequest is used to update WorkerOptions.LogRequest. true value of LogRequest enables
-	// logging of all requests coming to alphas. LogRequest type has been kept as *bool instead of
-	// bool to avoid updating WorkerOptions.LogRequest when it has default value of false.
-	LogRequest *bool
+	// LogDQLRequest is used to update WorkerOptions.LogDQLRequest. true value of LogDQLRequest enables
+	// logging of all requests coming to alphas. LogDQLRequest type has been kept as *bool instead of
+	// bool to avoid updating WorkerOptions.LogDQLRequest when it has default value of false.
+	LogDQLRequest *bool
 }
 
 func resolveUpdateConfig(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
@@ -50,9 +50,9 @@ func resolveUpdateConfig(ctx context.Context, m schema.Mutation) (*resolve.Resol
 		}
 	}
 
-	// input.LogRequest will be nil, when it is not specified explicitly in config request.
-	if input.LogRequest != nil {
-		worker.UpdateLogRequest(*input.LogRequest)
+	// input.LogDQLRequest will be nil, when it is not specified explicitly in config request.
+	if input.LogDQLRequest != nil {
+		worker.UpdateLogDQLRequest(*input.LogDQLRequest)
 	}
 
 	return resolve.DataResult(
