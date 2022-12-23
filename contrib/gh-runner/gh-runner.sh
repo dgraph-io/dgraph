@@ -7,6 +7,7 @@ sudo apt-get -y install \
     curl \
     gnupg \
     lsb-release \
+    nfs-kernel-server\
     build-essential #Libc Packages
 # Docker Setup
 sudo mkdir -p /etc/apt/keyrings
