@@ -47,35 +47,27 @@ var (
 )
 
 func TestBackupHAClust(t *testing.T) {
-
 	BackupAlphaSocketAddr := testutil.SockAddr
 	BackupAlphaSocketAddrHttp := testutil.SockAddrHttp
-
 	BackupZeroSockerAddr := testutil.SockAddrZeroHttp
 	RestoreAlphaSocketAddr := testutil.R_SockAddrHttp
-
 	backupRestoreTest(t, BackupAlphaSocketAddr, RestoreAlphaSocketAddr, BackupZeroSockerAddr, backupDstHA, BackupAlphaSocketAddrHttp)
 }
 
 func TestBackupNonHAClust(t *testing.T) {
 	BackupAlphaSocketAddr := testutil.SockAddrAlpha7
 	BackupAlphaSocketAddrHttp := testutil.SockAddrAlpha7Http
-
 	BackupZeroSockerAddr := testutil.SockAddrZero7Http
 	RestoreAlphaSocketAddr := testutil.R_SockAddrAlpha8Http
-
 	backupRestoreTest(t, BackupAlphaSocketAddr, RestoreAlphaSocketAddr, BackupZeroSockerAddr, backupDstNonHA, BackupAlphaSocketAddrHttp)
 }
 
 func backupRestoreTest(t *testing.T, backupAlphaSocketAddr string, restoreAlphaAddr string, backupZeroAddr string, backupDst string, backupAlphaSocketAddrHttp string) {
-
 	conn, err := grpc.Dial(backupAlphaSocketAddr, grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))))
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
-
 	ctx := context.Background()
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
-
 	// Add schema and types.
 	require.NoError(t, dg.Alter(ctx, &api.Operation{Schema: `movie: string .
 		 type Node {
@@ -93,15 +85,12 @@ func backupRestoreTest(t *testing.T, backupAlphaSocketAddr string, restoreAlphaA
 			 <_:x5> <movie> "BLACK PUNTER" .
 		 `),
 	})
-
 	require.NoError(t, err)
 	t.Logf("--- Original uid mapping: %+v\n", original.Uids)
-
 	// Move tablet to group 1 to avoid messes later.
 	client := testutil.GetHttpsClient(t)
 	_, err = client.Get("https://" + backupZeroAddr + "/moveTablet?tablet=movie&group=1")
 	require.NoError(t, err)
-
 	// After the move, we need to pause a bit to give zero a chance to quorum.
 	t.Log("Pausing to let zero move tablet...")
 	moveOk := false
@@ -115,21 +104,18 @@ func backupRestoreTest(t *testing.T, backupAlphaSocketAddr string, restoreAlphaA
 		time.Sleep(1 * time.Second)
 	}
 	require.True(t, moveOk)
-
 	// Setup test directories.
 	dirSetup(t)
-
 	// Send backup request.
 	//       mostly because of a race condition
 	//       adding sleep
 	time.Sleep(time.Second * 10)
 	_ = runBackup(t, 1, 1, backupAlphaSocketAddrHttp, backupDst)
-	restored := runRestore(t, "", restoreAlphaAddr, backupDst, false, 1)
-	require.Equal(t, "Success", restored)
+	restoreStatusCode := runRestore(t, "", restoreAlphaAddr, backupDst, false, 1)
+	require.Equal(t, "Success", restoreStatusCode)
 	testutil.WaitForRestore(t, dg, restoreAlphaAddr)
 	// We check expected Objects vs Received Objects from restoreed db
 	checkObjectCount(t, 5, 5, restoreAlphaAddr)
-
 	// Add more data for the incremental backup.
 	incr1, err := dg.NewTxn().Mutate(ctx, &api.Mutation{
 		CommitNow: true,
@@ -140,10 +126,8 @@ func backupRestoreTest(t *testing.T, backupAlphaSocketAddr string, restoreAlphaA
 	})
 	t.Logf("%+v", incr1)
 	require.NoError(t, err)
-
 	// Perform first incremental backup.
 	_ = runBackup(t, 2, 2, backupAlphaSocketAddrHttp, backupDst)
-
 	// Add more data for a second incremental backup.
 	_, err = dg.NewTxn().Mutate(ctx, &api.Mutation{
 		CommitNow: true,
@@ -154,20 +138,15 @@ func backupRestoreTest(t *testing.T, backupAlphaSocketAddr string, restoreAlphaA
 	})
 	t.Logf("%+v", incr1)
 	require.NoError(t, err)
-
 	_ = runBackup(t, 3, 3, backupAlphaSocketAddrHttp, backupDst)
-
-	restored = runRestore(t, "", restoreAlphaAddr, backupDst, true, 2)
-	require.Equal(t, "Success", restored)
+	restoreStatusCode = runRestore(t, "", restoreAlphaAddr, backupDst, true, 2)
+	require.Equal(t, "Success", restoreStatusCode)
 	testutil.WaitForRestore(t, dg, restoreAlphaAddr)
-
 	checkObjectCount(t, 7, 7, restoreAlphaAddr)
-
-	restored = runRestore(t, "", restoreAlphaAddr, backupDst, true, 3)
-	require.Equal(t, "Success", restored)
+	restoreStatusCode = runRestore(t, "", restoreAlphaAddr, backupDst, true, 3)
+	require.Equal(t, "Success", restoreStatusCode)
 	testutil.WaitForRestore(t, dg, restoreAlphaAddr)
 	checkObjectCount(t, 9, 9, restoreAlphaAddr)
-
 	// Add more data for a second full backup.
 	_, err = dg.NewTxn().Mutate(ctx, &api.Mutation{
 		CommitNow: true,
@@ -178,17 +157,14 @@ func backupRestoreTest(t *testing.T, backupAlphaSocketAddr string, restoreAlphaA
 	})
 	t.Logf("%+v", incr1)
 	require.NoError(t, err)
-
 	// Perform second full backup.
 	_ = runBackupInternal(t, true, 4, 4, backupAlphaSocketAddrHttp, backupDst)
-	restored = runRestore(t, "", restoreAlphaAddr, backupDst, false, 4)
-	require.Equal(t, "Success", restored)
+	restoreStatusCode = runRestore(t, "", restoreAlphaAddr, backupDst, false, 4)
+	require.Equal(t, "Success", restoreStatusCode)
 	testutil.WaitForRestore(t, dg, restoreAlphaAddr)
-
 	checkObjectCount(t, 11, 11, restoreAlphaAddr)
 	// Do a DROP_DATA
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropOp: api.Operation_DATA}))
-
 	// add some data
 	_, err = dg.NewTxn().Mutate(ctx, &api.Mutation{
 		CommitNow: true,
@@ -198,22 +174,18 @@ func backupRestoreTest(t *testing.T, backupAlphaSocketAddr string, restoreAlphaA
 			 `),
 	})
 	require.NoError(t, err)
-
 	// perform an incremental backup and then restore
 	_ = runBackup(t, 5, 5, backupAlphaSocketAddrHttp, backupDst)
-	restored = runRestore(t, "", restoreAlphaAddr, backupDst, false, 5)
-	require.Equal(t, "Success", restored)
+	restoreStatusCode = runRestore(t, "", restoreAlphaAddr, backupDst, false, 5)
+	require.Equal(t, "Success", restoreStatusCode)
 	testutil.WaitForRestore(t, dg, restoreAlphaAddr)
-
 	checkObjectCount(t, 2, 2, restoreAlphaAddr)
-
 	// Clean up test directories.
 	dirCleanup(t)
 }
 
 // function to check object count
 func checkObjectCount(t *testing.T, expectedCount, receivedCount int, restoreAlphaAddr string) {
-
 	checkCountRequest := `query {
 		 movieCount(func: has(movie)) {
 		   count(uid)
@@ -221,25 +193,21 @@ func checkObjectCount(t *testing.T, expectedCount, receivedCount int, restoreAlp
 	   }`
 
 	//Check object count from newly created restore alpha
-
 	adminUrl := "https://" + restoreAlphaAddr + "/query"
 	params := testutil.GraphQLParams{
 		Query: checkCountRequest,
 	}
 	b, err := json.Marshal(params)
 	require.NoError(t, err)
-
 	client := testutil.GetHttpsClient(t)
 	resp, err := client.Post(adminUrl, "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
 	defer resp.Body.Close()
-
 	var data interface{}
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
-
 	receivedMap := testutil.JsonGet(data, "data", "movieCount").([]interface{})
-	receivedNumber := testutil.JsonGet(receivedMap[0], "count").(float64)
-	require.Equal(t, expectedCount, int(receivedNumber))
+	movieCount := testutil.JsonGet(receivedMap[0], "count").(float64)
+	require.Equal(t, expectedCount, int(movieCount))
 }
 
 func runBackup(t *testing.T, numExpectedFiles, numExpectedDirs int, backupAlphaSocketAddrHttp string, backupDst string) []string {
@@ -248,7 +216,6 @@ func runBackup(t *testing.T, numExpectedFiles, numExpectedDirs int, backupAlphaS
 
 func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	numExpectedDirs int, backupAlphaSocketAddrHttp string, backupDst string) []string {
-
 	backupRequest := `mutation backup($dst: String!, $ff: Boolean!) {
 		backup(input: {destination: $dst, forceFull: $ff}) {
 			response {
@@ -267,15 +234,12 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	}
 	b, err := json.Marshal(params)
 	require.NoError(t, err)
-
 	client := testutil.GetHttpsClient(t)
 	resp, err := client.Post(adminUrl, "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
 	defer resp.Body.Close()
-
 	var data interface{}
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
-
 	require.Equal(t, "Success", testutil.JsonGet(data, "data", "backup", "response", "code").(string))
 	taskId := testutil.JsonGet(data, "data", "backup", "taskId").(string)
 	testutil.WaitForTask(t, taskId, true, backupAlphaSocketAddrHttp)
@@ -287,25 +251,21 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 		return !isdir && strings.HasSuffix(path, ".backup") && strings.HasPrefix(path, "data/backups_copy/dgraph.")
 	})
 	require.Equal(t, numExpectedFiles, len(files))
-
 	dirs := x.WalkPathFunc(copyBackupDir, func(path string, isdir bool) bool {
 		return isdir && strings.HasPrefix(path, "data/backups_copy/dgraph.")
 	})
 	require.Equal(t, numExpectedDirs, len(dirs))
-
 	b, err = ioutil.ReadFile(filepath.Join(copyBackupDir, "manifest.json"))
 	require.NoError(t, err)
 	var manifest worker.MasterManifest
 	err = json.Unmarshal(b, &manifest)
 	require.NoError(t, err)
 	require.Equal(t, numExpectedDirs, len(manifest.Manifests))
-
 	return dirs
 }
 
 func runRestore(t *testing.T, lastDir string, restoreAlphaAddr string, backupDst string, isIncremental bool, backupNum int) string {
 	var restoreRequest string
-
 	if isIncremental == false {
 		restoreRequest = `mutation restore($loc: String!) {
 			restore(input: {location: $loc}) {
@@ -323,7 +283,6 @@ func runRestore(t *testing.T, lastDir string, restoreAlphaAddr string, backupDst
 		}`
 
 	}
-
 	// For restore we have to always use newly added restore cluster
 	adminUrl := "https://" + restoreAlphaAddr + "/admin"
 	params := testutil.GraphQLParams{
@@ -335,23 +294,19 @@ func runRestore(t *testing.T, lastDir string, restoreAlphaAddr string, backupDst
 	}
 	b, err := json.Marshal(params)
 	require.NoError(t, err)
-
 	client := testutil.GetHttpsClient(t)
 	resp, err := client.Post(adminUrl, "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
 	defer resp.Body.Close()
-
 	var data interface{}
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
-	receivedcode := testutil.JsonGet(data, "data", "restore", "code").(string)
-
-	return receivedcode
+	restoreStatusCode := testutil.JsonGet(data, "data", "restore", "code").(string)
+	return restoreStatusCode
 }
 
 func dirSetup(t *testing.T) {
 	// Clean up data from previous runs.
 	dirCleanup(t)
-
 	for _, dir := range testDirs {
 		if err := os.MkdirAll(dir, os.ModePerm); err != nil {
 			t.Fatalf("Error while creating directory: %s", err.Error())
