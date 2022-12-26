@@ -19,9 +19,9 @@ jobs:
     runs-on: [self-hosted, ARM64]
     steps:
       - uses: actions/checkout@v3
-      - uses: actions/setup-python@v3
+      - uses: actions/setup-python@v4
         with:
-          python-version: "3.8"
+          python-version: "3.12.0-alpha.3"
       - uses: aws-actions/setup-sam@v2
       - uses: aws-actions/configure-aws-credentials@v1
         with:
