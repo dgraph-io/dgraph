@@ -545,4 +545,3 @@ type Mutation {
 	updateQuestion(input: UpdateQuestionInput!): UpdateQuestionPayload
 	deleteQuestion(filter: QuestionFilter!): DeleteQuestionPayload
 }
-

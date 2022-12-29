@@ -361,4 +361,3 @@ type Mutation {
 	updateData(input: UpdateDataInput!): UpdateDataPayload
 	deleteData(filter: DataFilter!): DeleteDataPayload
 }
-

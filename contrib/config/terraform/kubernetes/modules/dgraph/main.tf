@@ -56,4 +56,3 @@ module "ratel" {
 
   namespace_resource = kubernetes_namespace.dgraph_namespace
 }
-

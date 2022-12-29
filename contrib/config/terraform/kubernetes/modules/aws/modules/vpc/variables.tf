@@ -19,4 +19,3 @@ variable "ingress_ports" {
   default     = [5080, 6080, 8000, 8080, 9080]
   description = "The ingress ports opened at the LB NACL. The specific IP whitelists are applied at the security group level"
 }
-

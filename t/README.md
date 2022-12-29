@@ -19,5 +19,3 @@ script, they can get the address for any instance by passing in the name of the
 instance and the port:
 
 `testutil.ContainerAddr("alpha2", 9080)`
-
-

@@ -22,4 +22,3 @@ nomutations: true
 group_conf: groups.conf
 
 peer: localhost:12345
-

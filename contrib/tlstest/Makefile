@@ -57,4 +57,3 @@ test6: cert
 
 clean:
 	git clean -d -f
-

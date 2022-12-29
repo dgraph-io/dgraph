@@ -21,4 +21,3 @@ groups: 0,1
 nomutations: true
 
 group_conf: groups.conf
-

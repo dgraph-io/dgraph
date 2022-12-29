@@ -23,4 +23,3 @@ install: jepsen
 
 jepsen: main.go
 	go build -v .
-

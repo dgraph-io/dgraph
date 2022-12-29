@@ -269,4 +269,3 @@ Most of Dgraph, Badger, and the Dgraph clients (dgo, dgraph-js, pydgraph and dgr
 Signed commits help in verifying the authenticity of the contributor. We use signed commits in Dgraph, and we prefer it, though it's not compulsory to have signed commits. This is a recommended step for people who intend to contribute to Dgraph on a regular basis.
 
 Follow instructions to generate and setup GPG keys for signing code commits on this [Github Help page](https://help.github.com/articles/signing-commits-with-gpg/).
-

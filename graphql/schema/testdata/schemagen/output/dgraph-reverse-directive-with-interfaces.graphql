@@ -522,4 +522,3 @@ type Mutation {
 	updateDirector(input: UpdateDirectorInput!): UpdateDirectorPayload
 	deleteDirector(filter: DirectorFilter!): DeleteDirectorPayload
 }
-
