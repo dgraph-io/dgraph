@@ -149,11 +149,11 @@ func GetGQLSchema(namespace uint64) (uid, graphQLSchema string, err error) {
 		&api.Request{
 			Query: `
 			query {
-			  ExistingGQLSchema(func: has(dgraph.graphql.schema)) {
-				uid
-				dgraph.graphql.schema
-			  }
-			}`})
+				ExistingGQLSchema(func: has(dgraph.graphql.schema)) {
+					uid
+					dgraph.graphql.schema
+				  }
+				}`})
 	if err != nil {
 		return "", "", err
 	}

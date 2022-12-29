@@ -96,7 +96,7 @@ func (t *Telemetry) Post() error {
 	}
 
 	var requestURL string
-	if len(t.Version) > 0 {
+	if t.Version != "dev" {
 		requestURL = url + "/pings"
 	} else {
 		requestURL = url + "/dev"
