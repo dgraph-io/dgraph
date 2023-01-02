@@ -14,7 +14,7 @@ require (
 	github.com/apache/thrift v0.13.0 // indirect
 	github.com/blevesearch/bleve v1.0.13
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd
-	github.com/dgraph-io/badger/v3 v3.2103.5
+	github.com/dgraph-io/badger/v3 v3.0.0-20221216181207-499b1424621c
 	github.com/dgraph-io/dgo/v210 v210.0.0-20210407152819-261d1c2a6987
 	github.com/dgraph-io/gqlgen v0.13.2
 	github.com/dgraph-io/gqlparser/v2 v2.2.1
@@ -49,6 +49,7 @@ require (
 	github.com/pkg/profile v1.2.1
 	github.com/prometheus/client_golang v1.11.1
 	github.com/soheilhy/cmux v0.1.4
+	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/spf13/cast v1.3.0
 	github.com/spf13/cobra v0.0.5
 	github.com/spf13/pflag v1.0.3
