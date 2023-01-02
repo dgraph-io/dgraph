@@ -37,7 +37,8 @@ const versionKey = 1
 // === wal.meta file ===
 // This file is generally around 4KB, so it can fit nicely in one Linux page.
 //
-//   Layout:
+//	Layout:
+//
 // 00-08 Bytes: Raft ID
 // 08-16 Bytes: Group ID
 // 16-24 Bytes: Checkpoint Index
@@ -87,7 +88,7 @@ func Init(dir string) *DiskStorage {
 
 // InitEncrypted initializes returns a properly initialized instance of DiskStorage.
 // To gracefully shutdown DiskStorage, store.Closer.SignalAndWait() should be called.
-func InitEncrypted(dir string, encKey x.SensitiveByteSlice) (*DiskStorage, error) {
+func InitEncrypted(dir string, encKey x.Sensitive) (*DiskStorage, error) {
 	w := &DiskStorage{
 		dir: dir,
 	}

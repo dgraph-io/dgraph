@@ -1,3 +1,4 @@
+//go:build !oss
 // +build !oss
 
 /*
@@ -39,7 +40,7 @@ import (
 )
 
 // RunRestore calls badger.Load and tries to load data into a new DB.
-func RunRestore(pdir, location, backupId string, key x.SensitiveByteSlice,
+func RunRestore(pdir, location, backupId string, key x.Sensitive,
 	ctype options.CompressionType, clevel int) LoadResult {
 	// Create the pdir if it doesn't exist.
 	if err := os.MkdirAll(pdir, 0700); err != nil {
@@ -97,7 +98,7 @@ type loadBackupInput struct {
 	compression    string
 }
 
-func (l *loadBackupInput) getReader(key x.SensitiveByteSlice) (io.Reader, error) {
+func (l *loadBackupInput) getReader(key x.Sensitive) (io.Reader, error) {
 	r, err := enc.GetReader(key, l.r)
 	if err != nil {
 		return nil, err
