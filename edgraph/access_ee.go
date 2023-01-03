@@ -634,6 +634,10 @@ type authPredResult struct {
 func authorizePreds(ctx context.Context, userData *userData, preds []string,
 	aclOp *acl.Operation) *authPredResult {
 
+	if !worker.AclCachePtr.Loaded() {
+		RefreshACLs(ctx)
+	}
+
 	userId := userData.userId
 	groupIds := userData.groupIds
 	ns := userData.namespace
