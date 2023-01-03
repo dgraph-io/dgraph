@@ -466,7 +466,7 @@ func runRestore(t *testing.T, backupLocation, lastDir string, commitTs uint64) m
 	require.NoError(t, os.RemoveAll(restoreDir))
 
 	t.Logf("--- Restoring from: %q", backupLocation)
-	result := worker.RunRestore("./data/restore", backupLocation, lastDir, x.SensitiveByteSlice(nil), options.Snappy, 0)
+	result := worker.RunRestore("./data/restore", backupLocation, lastDir, x.Sensitive(nil), options.Snappy, 0)
 	require.NoError(t, result.Err)
 
 	for i, pdir := range []string{"p1", "p2", "p3"} {

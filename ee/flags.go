@@ -28,10 +28,10 @@ import (
 
 // Keys holds the configuration for ACL and encryption.
 type Keys struct {
-	AclKey        x.SensitiveByteSlice
+	AclKey        x.Sensitive
 	AclAccessTtl  time.Duration
 	AclRefreshTtl time.Duration
-	EncKey        x.SensitiveByteSlice
+	EncKey        x.Sensitive
 }
 
 const (
