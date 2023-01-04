@@ -4,7 +4,7 @@ awscli==1.18.40
 backports.shutil-get-terminal-size==1.0.0
 boto3==1.12.40
 botocore==1.15.40
-certifi==2020.4.5.1
+certifi==2022.12.7
 cfn-lint==0.29.5
 chardet==3.0.4
 colorama==0.4.3
