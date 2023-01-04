@@ -974,9 +974,7 @@ func createAndDeleteMultiPartList(t *testing.T, size int) (*List, int) {
 }
 
 func TestLargePlistSplit(t *testing.T) {
-	if true {
-		t.Skip()
-	}
+	t.Skip()
 	key := x.DataKey(uuid.New().String(), 1331)
 	ol, err := getNew(key, ps, math.MaxUint64)
 	require.NoError(t, err)
