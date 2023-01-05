@@ -18,8 +18,8 @@ jobs:
     if: github.event.pull_request.draft == false
     runs-on: [self-hosted, x64]
     steps:
-      - uses: webiny/action-post-run@3.0.0
-        name: Post Run Sleep
+      - name: Setup Post Action Run CleanUp
+        uses: webiny/action-post-run@3.0.0
         with:
           run: sleep 30
       - uses: actions/checkout@v3
