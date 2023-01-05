@@ -18,6 +18,10 @@ jobs:
     if: github.event.pull_request.draft == false
     runs-on: [self-hosted, x64]
     steps:
+      - uses: webiny/action-post-run@3.0.0
+        name: Post Run Sleep
+        with:
+          run: sleep 30
       - uses: actions/checkout@v3
       - name: Get Go Version
         run: |
@@ -65,6 +69,3 @@ jobs:
           cd t; ./t
           # clean up docker containers after test execution
           ./t -r
-          # sleep
-          sleep 5
-          
