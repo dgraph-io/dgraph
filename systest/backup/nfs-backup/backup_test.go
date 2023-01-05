@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -34,7 +35,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
 )
 
 var (
@@ -63,7 +63,7 @@ func TestBackupNonHAClust(t *testing.T) {
 }
 
 func backupRestoreTest(t *testing.T, backupAlphaSocketAddr string, restoreAlphaAddr string, backupZeroAddr string, backupDst string, backupAlphaSocketAddrHttp string) {
-	conn, err := grpc.Dial(backupAlphaSocketAddr, grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))))
+	conn, err := grpc.Dial(backupAlphaSocketAddr, grpc.WithInsecure())
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 	ctx := context.Background()
@@ -88,14 +88,14 @@ func backupRestoreTest(t *testing.T, backupAlphaSocketAddr string, restoreAlphaA
 	require.NoError(t, err)
 	t.Logf("--- Original uid mapping: %+v\n", original.Uids)
 	// Move tablet to group 1 to avoid messes later.
-	client := testutil.GetHttpsClient(t)
-	_, err = client.Get("https://" + backupZeroAddr + "/moveTablet?tablet=movie&group=1")
+	client := *http.DefaultClient
+	_, err = client.Get("http://" + backupZeroAddr + "/moveTablet?tablet=movie&group=1")
 	require.NoError(t, err)
 	// After the move, we need to pause a bit to give zero a chance to quorum.
 	t.Log("Pausing to let zero move tablet...")
 	moveOk := false
 	for retry := 5; retry > 0; retry-- {
-		state, err := testutil.GetStateHttps(testutil.GetAlphaClientConfig(t))
+		state, err := testutil.GetState()
 		require.NoError(t, err)
 		if _, ok := state.Groups["1"].Tablets[x.NamespaceAttr(x.GalaxyNamespace, "movie")]; ok {
 			moveOk = true
@@ -193,13 +193,13 @@ func checkObjectCount(t *testing.T, expectedCount, receivedCount int, restoreAlp
 	   }`
 
 	//Check object count from newly created restore alpha
-	adminUrl := "https://" + restoreAlphaAddr + "/query"
+	adminUrl := "http://" + restoreAlphaAddr + "/query"
 	params := testutil.GraphQLParams{
 		Query: checkCountRequest,
 	}
 	b, err := json.Marshal(params)
 	require.NoError(t, err)
-	client := testutil.GetHttpsClient(t)
+	client := *http.DefaultClient
 	resp, err := client.Post(adminUrl, "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
 	defer resp.Body.Close()
@@ -224,7 +224,7 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 			taskId
 		}
 	}`
-	adminUrl := "https://" + backupAlphaSocketAddrHttp + "/admin"
+	adminUrl := "http://" + backupAlphaSocketAddrHttp + "/admin"
 	params := testutil.GraphQLParams{
 		Query: backupRequest,
 		Variables: map[string]interface{}{
@@ -234,7 +234,7 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	}
 	b, err := json.Marshal(params)
 	require.NoError(t, err)
-	client := testutil.GetHttpsClient(t)
+	client := *http.DefaultClient
 	resp, err := client.Post(adminUrl, "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
 	defer resp.Body.Close()
@@ -242,7 +242,7 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
 	require.Equal(t, "Success", testutil.JsonGet(data, "data", "backup", "response", "code").(string))
 	taskId := testutil.JsonGet(data, "data", "backup", "taskId").(string)
-	testutil.WaitForTask(t, taskId, true, backupAlphaSocketAddrHttp)
+	testutil.WaitForTask(t, taskId, false, backupAlphaSocketAddrHttp)
 	// Verify that the right amount of files and directories were created.
 	// We are not using local folder to back up.
 	common.CopyToLocalFsFromNFS(t, backupDst)
@@ -284,7 +284,7 @@ func runRestore(t *testing.T, lastDir string, restoreAlphaAddr string, backupDst
 
 	}
 	// For restore we have to always use newly added restore cluster
-	adminUrl := "https://" + restoreAlphaAddr + "/admin"
+	adminUrl := "http://" + restoreAlphaAddr + "/admin"
 	params := testutil.GraphQLParams{
 		Query: restoreRequest,
 		Variables: map[string]interface{}{
@@ -294,7 +294,7 @@ func runRestore(t *testing.T, lastDir string, restoreAlphaAddr string, backupDst
 	}
 	b, err := json.Marshal(params)
 	require.NoError(t, err)
-	client := testutil.GetHttpsClient(t)
+	client := *http.DefaultClient
 	resp, err := client.Post(adminUrl, "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
 	defer resp.Body.Close()

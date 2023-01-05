@@ -4,7 +4,7 @@
 # This gets built as part of release.sh. Must be run from /tmp/build, with the linux binaries
 # already built and placed there.
 
-FROM ubuntu:20.04
+FROM ubuntu:22.04
 LABEL maintainer="Dgraph Labs <contact@dgraph.io>"
 
 # need to remove the cache of sources lists
