@@ -1480,7 +1480,7 @@ func customDirectiveValidation(sch *ast.Schema,
 				typ.Name, field.Name))
 		}
 		// TODO: parse the DQL request here and validate it for errors. Not doing it now because the
-		// gql.Parse() method requires the variables to be present with the query, which can't be
+		// dql.Parse() method requires the variables to be present with the query, which can't be
 		// there at schema input time. Also check for following special conditions:
 		// * same query name as GraphQL
 		// * correct return type mapping
