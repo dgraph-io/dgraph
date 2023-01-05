@@ -19,6 +19,10 @@ jobs:
     runs-on: [self-hosted, x64]
     # runs-on: ubuntu-20.04
     steps:
+      - name: Setup Post Action Run CleanUp
+        uses: webiny/action-post-run@3.0.0
+        with:
+          run: sleep 30
       - uses: actions/checkout@v3
       - name: Get Go Version
         run: |
@@ -66,8 +70,6 @@ jobs:
           cd t; ./t --coverage=true --suite=unit
           # clean up docker containers after test execution
           ./t -r
-          # sleep
-          sleep 5
       - name: Install Goveralls
         run: go install github.com/mattn/goveralls@latest
       - name: Send Coverage Results
