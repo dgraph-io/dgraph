@@ -57,11 +57,11 @@ func (s *mathTreeStack) peek() *MathTree {
 
 // MathTree represents math operations in tree form for evaluation.
 type MathTree struct {
-	Fn    string
-	Var   string
-	Const types.Val // This will always be parsed as a float value
-	Val   map[uint64]types.Val
-	Child []*MathTree
+	Fn    string               `json:"fn,omitempty"`
+	Var   string               `json:"var,omitempty"`
+	Const types.Val            `json:"const,omitempty"` // This will always be parsed as a float value
+	Val   map[uint64]types.Val `json:"val,omitempty"`
+	Child []*MathTree          `json:"child,omitempty"`
 }
 
 func isUnary(f string) bool {

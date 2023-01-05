@@ -60,6 +60,7 @@ func ToJson(ctx context.Context, l *Latency, sgl []*SubGraph, field gqlSchema.Fi
 		sgr.Children = append(sgr.Children, sg)
 	}
 	data, err := sgr.toFastJSON(ctx, l, field)
+	fmt.Println("data", string(data))
 
 	// don't log or wrap GraphQL errors
 	if x.IsGqlErrorList(err) {

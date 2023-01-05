@@ -111,8 +111,8 @@ func (t TypeID) Name() string {
 
 // Val is a value with type information.
 type Val struct {
-	Tid   TypeID
-	Value interface{}
+	Tid   TypeID      `json:"tid,omitempty"`
+	Value interface{} `json:"value,omitempty"`
 }
 
 // Safe ensures that Val's Value is not nil. This is useful when doing type

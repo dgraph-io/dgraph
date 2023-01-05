@@ -47,38 +47,38 @@ var (
 // GraphQuery stores the parsed Query in a tree format. This gets converted to
 // pb.y used query.SubGraph before processing the query.
 type GraphQuery struct {
-	UID        []uint64
-	Attr       string
-	Langs      []string
-	Alias      string
-	IsCount    bool
-	IsInternal bool
-	IsGroupby  bool
-	Var        string
-	NeedsVar   []VarContext
-	Func       *Function
-	Expand     string // Which variable to expand with.
+	UID        []uint64     `json:"uid,omitempty"`
+	Attr       string       `json:"attr,omitempty"`
+	Langs      []string     `json:"langs,omitempty"`
+	Alias      string       `json:"alias,omitempty"`
+	IsCount    bool         `json:"isCount"`
+	IsInternal bool         `json:"isInternal"`
+	IsGroupby  bool         `json:"isGroupby"`
+	Var        string       `json:"var,omitempty"`
+	NeedsVar   []VarContext `json:"needsVar,omitempty"`
+	Func       *Function    `json:"func,omitempty"`
+	Expand     string       `json:"expand,omitempty"` // Which variable to expand with.
 
-	Args map[string]string
+	Args map[string]string `json:"args,omitempty"`
 	// Query can have multiple sort parameters.
-	Order            []*pb.Order
-	Children         []*GraphQuery
-	Filter           *FilterTree
-	MathExp          *MathTree
-	Normalize        bool
-	Recurse          bool
-	RecurseArgs      RecurseArgs
-	ShortestPathArgs ShortestPathArgs
-	Cascade          []string
-	IgnoreReflex     bool
-	Facets           *pb.FacetParams
-	FacetsFilter     *FilterTree
-	GroupbyAttrs     []GroupByAttr
-	FacetVar         map[string]string
-	FacetsOrder      []*FacetOrder
+	Order            []*pb.Order       `json:"order,omitempty"`
+	Children         []*GraphQuery     `json:"children,omitempty"`
+	Filter           *FilterTree       `json:"filter,omitempty"`
+	MathExp          *MathTree         `json:"mathExp,omitempty"`
+	Normalize        bool              `json:"normalize,omitempty"`
+	Recurse          bool              `json:"recurse,omitempty"`
+	RecurseArgs      RecurseArgs       `json:"recurseArgs,omitempty"`
+	ShortestPathArgs ShortestPathArgs  `json:"shortestPathArgs,omitempty"`
+	Cascade          []string          `json:"cascade,omitempty"`
+	IgnoreReflex     bool              `json:"ignoreReflex,omitempty"`
+	Facets           *pb.FacetParams   `json:"facets,omitempty"`
+	FacetsFilter     *FilterTree       `json:"facetsFilter,omitempty"`
+	GroupbyAttrs     []GroupByAttr     `json:"groupbyAttrs,omitempty"`
+	FacetVar         map[string]string `json:"facetVar,omitempty"`
+	FacetsOrder      []*FacetOrder     `json:"facetsOrder,omitempty"`
 
 	// Used for ACL enabled queries to curtail results to only accessible params
-	AllowedPreds []string
+	AllowedPreds []string `json:"allowedPreds,omitempty"`
 
 	// Internal fields below.
 	// If gq.fragment is nonempty, then it is a fragment reference / spread.
@@ -86,15 +86,15 @@ type GraphQuery struct {
 
 	// True for blocks that don't have a starting function and hence no starting nodes. They are
 	// used to aggregate and get variables defined in another block.
-	IsEmpty bool
+	IsEmpty bool `json:"isEmpty"`
 }
 
 // RecurseArgs stores the arguments needed to process the @recurse directive.
 type RecurseArgs struct {
-	Depth     uint64
-	AllowLoop bool
-	varMap    map[string]string //varMap holds the variable args name. So, that we can substitute the
-	// argument in the substitution part.
+	Depth     uint64 `json:"depth,omitempty"`
+	AllowLoop bool   `json:"allowLoop"`
+	//varMap holds the variable args name so that we can substitute the argument in the substitution part
+	varMap map[string]string
 }
 
 // ShortestPathArgs stores the arguments needed to process the shortest path query.
@@ -103,21 +103,21 @@ type ShortestPathArgs struct {
 	// 1. from: 0x01
 	// 2. from: uid(0x01)
 	// 3. from: uid(p) // a variable
-	From *Function
-	To   *Function
+	From *Function `json:"from,omitempty"`
+	To   *Function `json:"to,omitempty"`
 }
 
 // GroupByAttr stores the arguments needed to process the @groupby directive.
 type GroupByAttr struct {
-	Attr  string
-	Alias string
-	Langs []string
+	Attr  string   `json:"attr,omitempty"`
+	Alias string   `json:"alias,omitempty"`
+	Langs []string `json:"langs,omitempty"`
 }
 
 // FacetOrder stores ordering for single facet key.
 type FacetOrder struct {
-	Key  string
-	Desc bool // true if ordering should be decending by this facet.
+	Key  string `json:"key,omitempty"`
+	Desc bool   `json:"desc"` // true if ordering should be decending by this facet.
 }
 
 // pair denotes the key value pair that is part of the GraphQL query root in parenthesis.
@@ -146,8 +146,8 @@ const (
 
 // VarContext stores information about the vars needed to complete a query.
 type VarContext struct {
-	Name string
-	Typ  int //  1 for UID vars, 2 for value vars
+	Name string `json:"name"`
+	Typ  int    `json:"typ"` //  1 for UID vars, 2 for value vars
 }
 
 // varInfo holds information on GQL variables.
@@ -163,9 +163,9 @@ type varMap map[string]varInfo
 // Either you can have `Op and Children` on non-leaf nodes
 // Or Func at leaf nodes.
 type FilterTree struct {
-	Op    string
-	Child []*FilterTree
-	Func  *Function
+	Op    string        `json:"op,omitempty"`
+	Child []*FilterTree `json:"child,omitempty"`
+	Func  *Function     `json:"func,omitempty"`
 }
 
 // Arg stores an argument to a function.
@@ -177,15 +177,15 @@ type Arg struct {
 
 // Function holds the information about dql functions.
 type Function struct {
-	Attr       string
-	Lang       string // language of the attribute value
-	Name       string // Specifies the name of the function.
-	Args       []Arg  // Contains the arguments of the function.
-	UID        []uint64
-	NeedsVar   []VarContext // If the function requires some variable
-	IsCount    bool         // gt(count(friends),0)
-	IsValueVar bool         // eq(val(s), 5)
-	IsLenVar   bool         // eq(len(s), 5)
+	Attr       string       `json:"attr,omitempty"`
+	Lang       string       `json:"lang,omitempty"` // language of the attribute value
+	Name       string       `json:"name,omitempty"` // Specifies the name of the function.
+	Args       []Arg        `json:"args,omitempty"` // Contains the arguments of the function.
+	UID        []uint64     `json:"uid,omitempty"`
+	NeedsVar   []VarContext `json:"needsVar,omitempty"` // If the function requires some variable
+	IsCount    bool         `json:"isCount"`            // gt(count(friends),0)
+	IsValueVar bool         `json:"isValueVar"`         // eq(val(s), 5)
+	IsLenVar   bool         `json:"isLenVar"`           // eq(len(s), 5)
 }
 
 // filterOpPrecedence is a map from filterOp (a string) to its precedence.
@@ -525,9 +525,9 @@ type Vars struct {
 // Result struct contains the Query list, its corresponding variable use list
 // and the mutation block.
 type Result struct {
-	Query     []*GraphQuery
-	QueryVars []*Vars
-	Schema    *pb.SchemaRequest
+	Query     []*GraphQuery     `json:"query,omitempty"`
+	QueryVars []*Vars           `json:"queryVars,omitempty"`
+	Schema    *pb.SchemaRequest `json:"schema,omitempty"`
 }
 
 // Parse initializes and runs the lexer. It also constructs the GraphQuery subgraph
