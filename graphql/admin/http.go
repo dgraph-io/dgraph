@@ -155,8 +155,7 @@ func (gs *graphqlSubscription) Subscribe(
 	ctx context.Context,
 	document,
 	operationName string,
-	variableValues map[string]interface{}) (payloads <-chan interface{},
-	err error) {
+	variableValues map[string]interface{}) (<-chan interface{}, error) {
 
 	reqHeader := http.Header{}
 	// library (graphql-transport-ws) passes the headers which are part of the INIT payload to us
@@ -164,7 +163,7 @@ func (gs *graphqlSubscription) Subscribe(
 	headerPayload, _ := ctx.Value("Header").(json.RawMessage)
 	if len(headerPayload) > 0 {
 		headers := make(map[string]interface{})
-		if err = json.Unmarshal(headerPayload, &headers); err != nil {
+		if err := json.Unmarshal(headerPayload, &headers); err != nil {
 			return nil, err
 		}
 
@@ -197,10 +196,10 @@ func (gs *graphqlSubscription) Subscribe(
 	namespace := x.ExtractNamespaceHTTP(&http.Request{Header: reqHeader})
 	glog.Infof("namespace: %d. Got GraphQL request over websocket.", namespace)
 	// first load the schema, then do anything else
-	if err = LazyLoadSchema(namespace); err != nil {
+	if err := LazyLoadSchema(namespace); err != nil {
 		return nil, err
 	}
-	if err = gs.isValid(namespace); err != nil {
+	if err := gs.isValid(namespace); err != nil {
 		glog.Errorf("namespace: %d. graphqlSubscription not initialized: %s", namespace, err)
 		return nil, errors.New(resolve.ErrInternal)
 	}
@@ -400,8 +399,8 @@ func recoveryHandler(next http.Handler) http.Handler {
 
 // addDynamicHeaders adds any headers which are stored in the schema to the HTTP response.
 // At present, it handles following headers:
-//  * Access-Control-Allow-Headers
-//  * Access-Control-Allow-Origin
+//   - Access-Control-Allow-Headers
+//   - Access-Control-Allow-Origin
 func addDynamicHeaders(reqResolver *resolve.RequestResolver, origin string, w http.ResponseWriter) {
 	schemaMeta := reqResolver.Schema().Meta()
 
