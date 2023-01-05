@@ -74,7 +74,7 @@ services:
     labels:
       cluster: test
       service: alpha
-    command: /gobin/dgraph  ${COVERAGE_OUTPUT} alpha --encryption "key-file=/dgraph-enc/enc-key;" --my=alpha1:7080 --zero=zero1:5080,zero2:5080,zero3:5080 --expose_trace --profile_mode block --block_rate 10 --logtostderr -v=2 
+    command: /gobin/dgraph  ${COVERAGE_OUTPUT} alpha --encryption "key-file=/dgraph-enc/enc-key;" --my=alpha1:7080 --zero=zero1:5080,zero2:5080,zero3:5080 --expose_trace --profile_mode block --block_rate 10 --logtostderr -v=2
       --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
       --acl "secret-file=/dgraph-acl/hmac-secret; access-ttl=20s;"
 
@@ -102,7 +102,7 @@ services:
     labels:
       cluster: test
       service: alpha
-    command: /gobin/dgraph  ${COVERAGE_OUTPUT} alpha --encryption "key-file=/dgraph-enc/enc-key;" --my=alpha2:7080 --zero=zero1:5080,zero2:5080,zero3:5080 --expose_trace --profile_mode block --block_rate 10 --logtostderr -v=2 
+    command: /gobin/dgraph  ${COVERAGE_OUTPUT} alpha --encryption "key-file=/dgraph-enc/enc-key;" --my=alpha2:7080 --zero=zero1:5080,zero2:5080,zero3:5080 --expose_trace --profile_mode block --block_rate 10 --logtostderr -v=2
       --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
       --acl "secret-file=/dgraph-acl/hmac-secret; access-ttl=20s;"
 
@@ -130,8 +130,8 @@ services:
     labels:
       cluster: test
       service: alpha
-    command: /gobin/dgraph  ${COVERAGE_OUTPUT} alpha --encryption "key-file=/dgraph-enc/enc-key;" --my=alpha3:7080 --zero=zero1:5080,zero2:5080,zero3:5080 --expose_trace --profile_mode block --block_rate 10 --logtostderr -v=2 
-      --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;" 
+    command: /gobin/dgraph  ${COVERAGE_OUTPUT} alpha --encryption "key-file=/dgraph-enc/enc-key;" --my=alpha3:7080 --zero=zero1:5080,zero2:5080,zero3:5080 --expose_trace --profile_mode block --block_rate 10 --logtostderr -v=2
+      --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
       --acl "secret-file=/dgraph-acl/hmac-secret; access-ttl=20s;"
 
   alpha4:
@@ -158,8 +158,8 @@ services:
     labels:
       cluster: test
       service: alpha
-    command: /gobin/dgraph  ${COVERAGE_OUTPUT} alpha --encryption "key-file=/dgraph-enc/enc-key;" --my=alpha4:7080 --zero=zero1:5080,zero2:5080,zero3:5080 --expose_trace --profile_mode block --block_rate 10 --logtostderr -v=2 
-      --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;" 
+    command: /gobin/dgraph  ${COVERAGE_OUTPUT} alpha --encryption "key-file=/dgraph-enc/enc-key;" --my=alpha4:7080 --zero=zero1:5080,zero2:5080,zero3:5080 --expose_trace --profile_mode block --block_rate 10 --logtostderr -v=2
+      --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
       --acl "secret-file=/dgraph-acl/hmac-secret; access-ttl=20s;"
 
   alpha5:
@@ -186,8 +186,8 @@ services:
     labels:
       cluster: test
       service: alpha
-    command: /gobin/dgraph  ${COVERAGE_OUTPUT} alpha --encryption "key-file=/dgraph-enc/enc-key;" --my=alpha5:7080 --zero=zero1:5080,zero2:5080,zero3:5080 --expose_trace --profile_mode block --block_rate 10 --logtostderr -v=2 
-      --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;" 
+    command: /gobin/dgraph  ${COVERAGE_OUTPUT} alpha --encryption "key-file=/dgraph-enc/enc-key;" --my=alpha5:7080 --zero=zero1:5080,zero2:5080,zero3:5080 --expose_trace --profile_mode block --block_rate 10 --logtostderr -v=2
+      --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
       --acl "secret-file=/dgraph-acl/hmac-secret; access-ttl=20s;"
 
   alpha6:
@@ -214,8 +214,8 @@ services:
     labels:
       cluster: test
       service: alpha
-    command: /gobin/dgraph  ${COVERAGE_OUTPUT} alpha --encryption "key-file=/dgraph-enc/enc-key;" --my=alpha6:7080 --zero=zero1:5080,zero2:5080,zero3:5080 --expose_trace --profile_mode block --block_rate 10 --logtostderr -v=2 
-      --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;" 
+    command: /gobin/dgraph  ${COVERAGE_OUTPUT} alpha --encryption "key-file=/dgraph-enc/enc-key;" --my=alpha6:7080 --zero=zero1:5080,zero2:5080,zero3:5080 --expose_trace --profile_mode block --block_rate 10 --logtostderr -v=2
+      --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
       --acl "secret-file=/dgraph-acl/hmac-secret; access-ttl=20s;"
 
   minio:

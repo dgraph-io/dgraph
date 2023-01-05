@@ -55,7 +55,7 @@ func TestMain(m *testing.M) {
 }
 
 func cleanupAndExit(exitCode int) {
-	if testutil.StopAlphasAndDetectRace("./alpha.yml") {
+	if testutil.StopAlphasAndDetectRace([]string{"alpha1"}) {
 		// if there is race fail the test
 		exitCode = 1
 	}

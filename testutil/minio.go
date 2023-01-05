@@ -20,12 +20,7 @@ import (
 	"github.com/minio/minio-go/v6"
 )
 
-var (
-	accessKey = "accesskey"
-	secretKey = "secretkey"
-)
-
 // NewMinioClient returns a minio client.
 func NewMinioClient() (*minio.Client, error) {
-	return minio.New(MinioInstance, accessKey, secretKey, false)
+	return minio.New(MinioInstance, "accesskey", "secretkey", false)
 }

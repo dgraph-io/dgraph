@@ -153,8 +153,8 @@ func freePort(port int) int {
 }
 
 func StartAlphas(compose string) error {
-	cmd := exec.Command("docker-compose", "-f", compose, "-p", DockerPrefix,
-		"up", "-d", "--force-recreate")
+	cmd := exec.Command("docker-compose", "--compatibility", "-f", compose,
+		"-p", DockerPrefix, "up", "-d", "--force-recreate")
 
 	fmt.Println("Starting alphas with: ", cmd.String())
 
@@ -176,10 +176,11 @@ func StartAlphas(compose string) error {
 	return nil
 }
 
-func StopAlphasAndDetectRace(compose string) (raceDetected bool) {
+func StopAlphasAndDetectRace(alphas []string) (raceDetected bool) {
 	raceDetected = DetectRaceInAlphas(DockerPrefix)
-	cmd := exec.CommandContext(context.Background(), "docker-compose", "-f", compose,
-		"-p", DockerPrefix, "rm", "-f", "-s", "-v")
+	args := []string{"-p", DockerPrefix, "rm", "-f", "-s", "-v"}
+	args = append(args, alphas...)
+	cmd := exec.CommandContext(context.Background(), "docker-compose", args...)
 	if err := cmd.Run(); err != nil {
 		fmt.Printf("Error while bringing down cluster. Prefix: %s. Error: %v\n", DockerPrefix, err)
 	}
