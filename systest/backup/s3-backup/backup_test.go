@@ -31,8 +31,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 
-	"google.golang.org/grpc/credentials"
-
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/stretchr/testify/require"
@@ -83,38 +81,38 @@ func tests3(t *testing.T, backupAlphaSocketAddr string, restoreAlphaAddr string,
 	files_found = 0
 	createS3BucketIfNotExists()
 	fmt.Println(":) We have the desired bucket. Running the backup/restore now")
-	conn, err := grpc.Dial(backupAlphaSocketAddr, grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))))
+	conn, err := grpc.Dial(backupAlphaSocketAddr, grpc.WithInsecure())
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 	ctx := context.Background()
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
 	// Add schema and types.
 	require.NoError(t, dg.Alter(ctx, &api.Operation{Schema: `movie: string .
-		  type Node {
-			  movie
-		  }`}))
+		   type Node {
+			   movie
+		   }`}))
 	// Add initial data.
 	original, err := dg.NewTxn().Mutate(ctx, &api.Mutation{
 		CommitNow: true,
 		SetNquads: []byte(`
-			  <_:x1> <movie> "BIRDS MAN OR (THE UNEXPECTED VIRTUE OF IGNORANCE)" .
-			  <_:x2> <movie> "Spotlight" .
-			  <_:x3> <movie> "Moonlight" .
-			  <_:x4> <movie> "THE SHAPE OF WATERLOO" .
-			  <_:x5> <movie> "BLACK PUNTER" .
-		  `),
+			   <_:x1> <movie> "BIRDS MAN OR (THE UNEXPECTED VIRTUE OF IGNORANCE)" .
+			   <_:x2> <movie> "Spotlight" .
+			   <_:x3> <movie> "Moonlight" .
+			   <_:x4> <movie> "THE SHAPE OF WATERLOO" .
+			   <_:x5> <movie> "BLACK PUNTER" .
+		   `),
 	})
 	require.NoError(t, err)
 	t.Logf("--- Original uid mapping: %+v\n", original.Uids)
 	// Move tablet to group 1 to avoid messes later.
-	client := testutil.GetHttpsClient(t)
-	_, err = client.Get("https://" + backupZeroAddr + "/moveTablet?tablet=movie&group=1")
+	client := *http.DefaultClient
+	_, err = client.Get("http://" + backupZeroAddr + "/moveTablet?tablet=movie&group=1")
 	require.NoError(t, err)
 	// After the move, we need to pause a bit to give zero a chance to quorum.
 	t.Log("Pausing to let zero move tablet...")
 	moveOk := false
 	for retry := 5; retry > 0; retry-- {
-		state, err := testutil.GetStateHttps(testutil.GetAlphaClientConfig(t))
+		state, err := testutil.GetState()
 		require.NoError(t, err)
 		if _, ok := state.Groups["1"].Tablets[x.NamespaceAttr(x.GalaxyNamespace, "movie")]; ok {
 			moveOk = true
@@ -130,7 +128,6 @@ func tests3(t *testing.T, backupAlphaSocketAddr string, restoreAlphaAddr string,
 	S3Config := getEnvs()
 	backupDst = "s3://s3." + S3Config[s3_REGION] + ".amazonaws.com/" + S3Config[s3_BUCKET_NAME] + "/" + folderNameForCurrentTest
 	// Send backup request.
-	// TODO: minio backup request fails when the environment is not ready,
 	//       mostly because of a race condition
 	//       adding sleep
 	time.Sleep(time.Second * 10)
@@ -144,9 +141,9 @@ func tests3(t *testing.T, backupAlphaSocketAddr string, restoreAlphaAddr string,
 	incr1, err := dg.NewTxn().Mutate(ctx, &api.Mutation{
 		CommitNow: true,
 		SetNquads: []byte(`
-			  <_:x6> <movie> "Inception" .
-			  <_:x7> <movie> "The Lord of the Rings" .
-		  `),
+			   <_:x6> <movie> "Inception" .
+			   <_:x7> <movie> "The Lord of the Rings" .
+		   `),
 	})
 	t.Logf("%+v", incr1)
 	require.NoError(t, err)
@@ -156,9 +153,9 @@ func tests3(t *testing.T, backupAlphaSocketAddr string, restoreAlphaAddr string,
 	_, err = dg.NewTxn().Mutate(ctx, &api.Mutation{
 		CommitNow: true,
 		SetNquads: []byte(`
-		  <_:x8> <movie> "The Shawshank Redemption" .
-		  <_:x9> <movie> "12 Angary Man" .
-	  `),
+		   <_:x8> <movie> "The Shawshank Redemption" .
+		   <_:x9> <movie> "12 Angary Man" .
+	   `),
 	})
 	require.NoError(t, err)
 	// Perform second incremental backup.
@@ -180,9 +177,9 @@ func tests3(t *testing.T, backupAlphaSocketAddr string, restoreAlphaAddr string,
 	_, err = dg.NewTxn().Mutate(ctx, &api.Mutation{
 		CommitNow: true,
 		SetNquads: []byte(`
-		  <_:x10> <movie> "Harry Potter Part 1" .
-		  <_:x11> <movie> "Harry Potter Part 2" .
-	  `),
+		   <_:x10> <movie> "Harry Potter Part 1" .
+		   <_:x11> <movie> "Harry Potter Part 2" .
+	   `),
 	})
 	require.NoError(t, err)
 	// Perform second full backup.
@@ -198,9 +195,9 @@ func tests3(t *testing.T, backupAlphaSocketAddr string, restoreAlphaAddr string,
 	_, err = dg.NewTxn().Mutate(ctx, &api.Mutation{
 		CommitNow: true,
 		SetNquads: []byte(`
-		  <_:x12> <movie> "Titanic" .
-		  <_:x13> <movie> "The Dark Knight" .
-	  `),
+		   <_:x12> <movie> "Titanic" .
+		   <_:x13> <movie> "The Dark Knight" .
+	   `),
 	})
 	require.NoError(t, err)
 	// perform an incremental backup and then restore
@@ -216,18 +213,18 @@ func tests3(t *testing.T, backupAlphaSocketAddr string, restoreAlphaAddr string,
 
 func checkObjectCount(t *testing.T, expectedCount, receivedCount int, restoreAlphaAddr string) {
 	checkCountRequest := `query {
-		   movieCount(func: has(movie)) {
-			 count(uid)
-		   }
-		 }`
+			movieCount(func: has(movie)) {
+			  count(uid)
+			}
+		  }`
 	//Check object count from newly created restore alpha
-	adminUrl := "https://" + restoreAlphaAddr + "/query"
+	adminUrl := "http://" + restoreAlphaAddr + "/query"
 	params := testutil.GraphQLParams{
 		Query: checkCountRequest,
 	}
 	b, err := json.Marshal(params)
 	require.NoError(t, err)
-	client := testutil.GetHttpsClient(t)
+	client := *http.DefaultClient
 	resp, err := client.Post(adminUrl, "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
 	defer resp.Body.Close()
@@ -252,14 +249,14 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	bucketList = []string{}
 	S3Config := getEnvs()
 	backupRequest := `mutation backup($dst: String!, $ak: String!, $sk: String! $ff: Boolean!) {
-		  backup(input: {destination: $dst, accessKey: $ak, secretKey: $sk, forceFull: $ff}) {
-			  response {
-				  code
-			  }
-			  taskId
-		  }
-	  }`
-	adminUrl := "https://" + backupAlphaSocketAddrHttp + "/admin"
+		   backup(input: {destination: $dst, accessKey: $ak, secretKey: $sk, forceFull: $ff}) {
+			   response {
+				   code
+			   }
+			   taskId
+		   }
+	   }`
+	adminUrl := "http://" + backupAlphaSocketAddrHttp + "/admin"
 	params := testutil.GraphQLParams{
 		Query: backupRequest,
 		Variables: map[string]interface{}{
@@ -271,7 +268,7 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	}
 	b, err := json.Marshal(params)
 	require.NoError(t, err)
-	client := testutil.GetHttpsClient(t)
+	client := *http.DefaultClient
 	resp, err := client.Post(adminUrl, "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
 	defer resp.Body.Close()
@@ -279,7 +276,7 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
 	require.Equal(t, "Success", testutil.JsonGet(data, "data", "backup", "response", "code").(string))
 	taskId := testutil.JsonGet(data, "data", "backup", "taskId").(string)
-	testutil.WaitForTask(t, taskId, true, backupAlphaSocketAddrHttp)
+	testutil.WaitForTask(t, taskId, false, backupAlphaSocketAddrHttp)
 	s3Session, _ := session.NewSession(&aws.Config{
 		Region:                        aws.String(S3Config[s3_REGION]),
 		CredentialsChainVerboseErrors: aws.Bool(true)},
@@ -330,22 +327,22 @@ func runRestore(t *testing.T, lastDir string, restoreAlphaAddr string, isIncreme
 	S3Config := getEnvs()
 	if isIncremental == false {
 		restoreRequest = `mutation restore($loc: String!, $ak: String!, $sk: String!) {
-			  restore(input: {location: $loc, accessKey: $ak, secretKey: $sk}) {
-					  code
-					  message
-				  }
-		  }`
+			   restore(input: {location: $loc, accessKey: $ak, secretKey: $sk}) {
+					   code
+					   message
+				   }
+		   }`
 	} else {
 		restoreRequest = `mutation restore($loc: String!, $ak: String!, $sk: String!, $bn: Int) {
-			  restore(input: {location: $loc, accessKey: $ak, secretKey: $sk, backupNum: $bn}) {
-					  code
-					  message
-				  }
-		  }`
+			   restore(input: {location: $loc, accessKey: $ak, secretKey: $sk, backupNum: $bn}) {
+					   code
+					   message
+				   }
+		   }`
 
 	}
 	// For restore we always have to use newly added restore cluster
-	adminUrl := "https://" + restoreAlphaAddr + "/admin"
+	adminUrl := "http://" + restoreAlphaAddr + "/admin"
 	params := testutil.GraphQLParams{
 		Query: restoreRequest,
 		Variables: map[string]interface{}{
@@ -357,7 +354,7 @@ func runRestore(t *testing.T, lastDir string, restoreAlphaAddr string, isIncreme
 	}
 	b, err := json.Marshal(params)
 	require.NoError(t, err)
-	client := testutil.GetHttpsClient(t)
+	client := *http.DefaultClient
 	resp, err := client.Post(adminUrl, "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
 	defer resp.Body.Close()
