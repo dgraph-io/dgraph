@@ -38,7 +38,7 @@ import (
 	"github.com/dgraph-io/dgo/v210/protos/api"
 
 	"github.com/dgraph-io/dgraph/chunker"
-	"github.com/dgraph-io/dgraph/dql"
+	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/lex"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -111,7 +111,7 @@ func populateGraphExport(t *testing.T) {
 	processEdge := func(edge string, set bool) {
 		nq, err := chunker.ParseRDF(edge, l)
 		require.NoError(t, err)
-		rnq := dql.NQuad{NQuad: &nq}
+		rnq := gql.NQuad{NQuad: &nq}
 		err = facets.SortAndValidate(rnq.Facets)
 		require.NoError(t, err)
 		e, err := rnq.ToEdgeUsing(idMap)

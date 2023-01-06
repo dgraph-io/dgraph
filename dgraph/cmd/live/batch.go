@@ -34,7 +34,7 @@ import (
 	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
-	"github.com/dgraph-io/dgraph/dql"
+	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
@@ -191,7 +191,7 @@ func (l *loader) request(req *request) {
 }
 
 func getTypeVal(val *api.Value) (types.Val, error) {
-	p := dql.TypeValFrom(val)
+	p := gql.TypeValFrom(val)
 	//Convert value to bytes
 
 	if p.Tid == types.GeoID || p.Tid == types.DateTimeID {

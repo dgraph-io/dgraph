@@ -25,7 +25,8 @@ import (
 
 	"github.com/spf13/cast"
 
-	"github.com/dgraph-io/dgraph/dql"
+	"github.com/dgraph-io/dgraph/gql"
+
 	"github.com/dgraph-io/gqlparser/v2/ast"
 	"github.com/dgraph-io/gqlparser/v2/gqlerror"
 	"github.com/dgraph-io/gqlparser/v2/parser"
@@ -48,7 +49,7 @@ type RuleNode struct {
 	And       []*RuleNode
 	Not       *RuleNode
 	Rule      Query
-	DQLRule   *dql.GraphQuery
+	DQLRule   *gql.GraphQuery
 	RBACRule  *RBACQuery
 	Variables ast.VariableDefinitionList
 }
@@ -202,12 +203,12 @@ type TypeAuth struct {
 }
 
 func createEmptyDQLRule(typeName string) *RuleNode {
-	return &RuleNode{DQLRule: &dql.GraphQuery{
+	return &RuleNode{DQLRule: &gql.GraphQuery{
 		Attr: typeName + "Root",
 		Var:  typeName + "Root",
-		Func: &dql.Function{
+		Func: &gql.Function{
 			Name: "type",
-			Args: []dql.Arg{{Value: typeName}},
+			Args: []gql.Arg{{Value: typeName}},
 		},
 	},
 	}

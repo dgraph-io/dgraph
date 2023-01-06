@@ -8,7 +8,7 @@ area/bulk-loader:
 area/live-loader:
   - dgraph/cmd/live/**/*
 area/querylang:
-  - dql/**/*
+  - gql/**/*
 area/integrations:
   - contrib/**/*
   - .github/**/*

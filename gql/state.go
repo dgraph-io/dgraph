@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-// Package dql is responsible for lexing and parsing a GraphQL query/mutation.
-package dql
+// Package gql is responsible for lexing and parsing a GraphQL query/mutation.
+package gql
 
 import (
 	"github.com/dgraph-io/dgraph/lex"

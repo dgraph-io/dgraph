@@ -30,8 +30,8 @@ import (
 
 	bpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/dgo/v210/protos/api"
-	"github.com/dgraph-io/dgraph/dql"
 	"github.com/dgraph-io/dgraph/ee/acl"
+	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -802,7 +802,7 @@ func isAclPredMutation(nquads []*api.NQuad) bool {
 // authorizeMutation authorizes the mutation using the worker.AclCachePtr. It will return permission
 // denied error if any one of the predicates in mutation(set or delete) is unauthorized.
 // At this stage, namespace is not attached in the predicates.
-func authorizeMutation(ctx context.Context, gmu *dql.Mutation) error {
+func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 	if len(worker.Config.HmacSecret) == 0 {
 		// the user has not turned on the acl feature
 		return nil
@@ -871,10 +871,10 @@ func authorizeMutation(ctx context.Context, gmu *dql.Mutation) error {
 	return err
 }
 
-func parsePredsFromQuery(dqls []*dql.GraphQuery) predsAndvars {
+func parsePredsFromQuery(gqls []*gql.GraphQuery) predsAndvars {
 	predsMap := make(map[string]struct{})
 	varsMap := make(map[string]string)
-	for _, gq := range dqls {
+	for _, gq := range gqls {
 		if gq.Func != nil {
 			predsMap[gq.Func.Attr] = struct{}{}
 		}
@@ -915,7 +915,7 @@ func parsePredsFromQuery(dqls []*dql.GraphQuery) predsAndvars {
 	return pv
 }
 
-func parsePredsFromFilter(f *dql.FilterTree) []string {
+func parsePredsFromFilter(f *gql.FilterTree) []string {
 	var preds []string
 	if f == nil {
 		return preds
@@ -952,7 +952,7 @@ func logAccess(log *accessEntry) {
 // authorizeQuery authorizes the query using the aclCachePtr. It will silently drop all
 // unauthorized predicates from query.
 // At this stage, namespace is not attached in the predicates.
-func authorizeQuery(ctx context.Context, parsedReq *dql.Result, graphql bool) error {
+func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) error {
 	if len(worker.Config.HmacSecret) == 0 {
 		// the user has not turned on the acl feature
 		return nil
@@ -1170,7 +1170,7 @@ Conversion pattern:
   - me(func: type(dgraph.type.User)) ->
     me(func: type(dgraph.type.User)) @filter(eq("dgraph.xid", userId))
 */
-func addUserFilterToQuery(gq *dql.GraphQuery, userId string, groupIds []string) {
+func addUserFilterToQuery(gq *gql.GraphQuery, userId string, groupIds []string) {
 	if gq.Func != nil && gq.Func.Name == "type" {
 		// type function only supports one argument
 		if len(gq.Func.Args) != 1 {
@@ -1204,34 +1204,34 @@ func addUserFilterToQuery(gq *dql.GraphQuery, userId string, groupIds []string) 
 	}
 }
 
-func parentFilter(newFilter, filter *dql.FilterTree) *dql.FilterTree {
+func parentFilter(newFilter, filter *gql.FilterTree) *gql.FilterTree {
 	if filter == nil {
 		return newFilter
 	}
-	parentFilter := &dql.FilterTree{
+	parentFilter := &gql.FilterTree{
 		Op:    "AND",
-		Child: []*dql.FilterTree{filter, newFilter},
+		Child: []*gql.FilterTree{filter, newFilter},
 	}
 	return parentFilter
 }
 
-func userFilter(userId string) *dql.FilterTree {
+func userFilter(userId string) *gql.FilterTree {
 	// A logged in user should always have a userId.
-	return &dql.FilterTree{
-		Func: &dql.Function{
+	return &gql.FilterTree{
+		Func: &gql.Function{
 			Attr: "dgraph.xid",
 			Name: "eq",
-			Args: []dql.Arg{{Value: userId}},
+			Args: []gql.Arg{{Value: userId}},
 		},
 	}
 }
 
-func groupFilter(groupIds []string) *dql.FilterTree {
+func groupFilter(groupIds []string) *gql.FilterTree {
 	// The user doesn't have any groups, so add an empty filter @filter(uid([])) so that all
 	// groups are filtered out.
 	if len(groupIds) == 0 {
-		filter := &dql.FilterTree{
-			Func: &dql.Function{
+		filter := &gql.FilterTree{
+			Func: &gql.Function{
 				Name: "uid",
 				UID:  []uint64{},
 			},
@@ -1239,8 +1239,8 @@ func groupFilter(groupIds []string) *dql.FilterTree {
 		return filter
 	}
 
-	filter := &dql.FilterTree{
-		Func: &dql.Function{
+	filter := &gql.FilterTree{
+		Func: &gql.Function{
 			Attr: "dgraph.xid",
 			Name: "eq",
 		},
@@ -1248,7 +1248,7 @@ func groupFilter(groupIds []string) *dql.FilterTree {
 
 	for _, gid := range groupIds {
 		filter.Func.Args = append(filter.Func.Args,
-			dql.Arg{Value: gid})
+			gql.Arg{Value: gid})
 	}
 
 	return filter
@@ -1260,15 +1260,15 @@ func groupFilter(groupIds []string) *dql.FilterTree {
 	 it generate a *newFilter* with function like eq(dgraph.xid, userId) or eq(dgraph.xid,groupId...)
 	 and return a filter of the form
 
-			&dql.FilterTree{
+			&gql.FilterTree{
 				Op: "AND",
-				Child: []dql.FilterTree{
+				Child: []gql.FilterTree{
 					{filter, newFilter}
 				}
 			}
 */
-func addUserFilterToFilter(filter *dql.FilterTree, userId string,
-	groupIds []string) *dql.FilterTree {
+func addUserFilterToFilter(filter *gql.FilterTree, userId string,
+	groupIds []string) *gql.FilterTree {
 
 	if filter == nil {
 		return nil
@@ -1281,7 +1281,7 @@ func addUserFilterToFilter(filter *dql.FilterTree, userId string,
 			return nil
 		}
 		arg := filter.Func.Args[0]
-		var newFilter *dql.FilterTree
+		var newFilter *gql.FilterTree
 		switch arg.Value {
 		case "dgraph.type.User":
 			newFilter = userFilter(userId)
@@ -1302,8 +1302,8 @@ func addUserFilterToFilter(filter *dql.FilterTree, userId string,
 
 // removePredsFromQuery removes all the predicates in blockedPreds
 // from all the queries in gqs.
-func removePredsFromQuery(gqs []*dql.GraphQuery,
-	blockedPreds map[string]struct{}) []*dql.GraphQuery {
+func removePredsFromQuery(gqs []*gql.GraphQuery,
+	blockedPreds map[string]struct{}) []*gql.GraphQuery {
 
 	filteredGQs := gqs[:0]
 L:
@@ -1346,8 +1346,8 @@ L:
 	return filteredGQs
 }
 
-func removeVarsFromQueryVars(gqs []*dql.Vars,
-	blockedVars map[string]struct{}) []*dql.Vars {
+func removeVarsFromQueryVars(gqs []*gql.Vars,
+	blockedVars map[string]struct{}) []*gql.Vars {
 
 	filteredGQs := gqs[:0]
 	for _, gq := range gqs {
@@ -1370,7 +1370,7 @@ func removeVarsFromQueryVars(gqs []*dql.Vars,
 	return filteredGQs
 }
 
-func removeFilters(f *dql.FilterTree, blockedPreds map[string]struct{}) *dql.FilterTree {
+func removeFilters(f *gql.FilterTree, blockedPreds map[string]struct{}) *gql.FilterTree {
 	if f == nil {
 		return nil
 	}
@@ -1394,8 +1394,8 @@ func removeFilters(f *dql.FilterTree, blockedPreds map[string]struct{}) *dql.Fil
 	return f
 }
 
-func removeGroupBy(gbAttrs []dql.GroupByAttr,
-	blockedPreds map[string]struct{}) []dql.GroupByAttr {
+func removeGroupBy(gbAttrs []gql.GroupByAttr,
+	blockedPreds map[string]struct{}) []gql.GroupByAttr {
 
 	filteredGbAttrs := gbAttrs[:0]
 	for _, gbAttr := range gbAttrs {

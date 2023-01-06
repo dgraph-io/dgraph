@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/dgraph-io/dgraph/dql"
+	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
@@ -23,7 +23,7 @@ func NewAddGroupRewriter() resolve.MutationRewriter {
 // AddRewriter.
 func (mrw *addGroupRewriter) RewriteQueries(
 	ctx context.Context,
-	m schema.Mutation) ([]*dql.GraphQuery, []string, error) {
+	m schema.Mutation) ([]*gql.GraphQuery, []string, error) {
 
 	return ((*resolve.AddRewriter)(mrw)).RewriteQueries(ctx, m)
 }
@@ -55,7 +55,7 @@ func (mrw *addGroupRewriter) FromMutationResult(
 	ctx context.Context,
 	mutation schema.Mutation,
 	assigned map[string]string,
-	result map[string]interface{}) ([]*dql.GraphQuery, error) {
+	result map[string]interface{}) ([]*gql.GraphQuery, error) {
 
 	return ((*resolve.AddRewriter)(mrw)).FromMutationResult(ctx, mutation, assigned, result)
 }

@@ -824,7 +824,7 @@ func TestFetchingNoFacets(t *testing.T) {
 
 func TestFacetsSortOrder(t *testing.T) {
 	populateClusterWithFacets()
-	// order of facets in dql query should not matter.
+	// order of facets in gql query should not matter.
 	query := `
 		{
 			me(func: uid(0x1)) {

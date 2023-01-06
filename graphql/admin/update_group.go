@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	dgoapi "github.com/dgraph-io/dgo/v210/protos/api"
-	"github.com/dgraph-io/dgraph/dql"
+	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
@@ -22,12 +22,12 @@ func NewUpdateGroupRewriter() resolve.MutationRewriter {
 // nodes. It does not rewrite any queries.
 func (urw *updateGroupRewriter) RewriteQueries(
 	ctx context.Context,
-	m schema.Mutation) ([]*dql.GraphQuery, []string, error) {
+	m schema.Mutation) ([]*gql.GraphQuery, []string, error) {
 
 	urw.VarGen = resolve.NewVariableGenerator()
 	urw.XidMetadata = resolve.NewXidMetadata()
 
-	return []*dql.GraphQuery{}, []string{}, nil
+	return []*gql.GraphQuery{}, []string{}, nil
 }
 
 // Rewrite rewrites set and remove update patches into dql upsert mutations
@@ -150,7 +150,7 @@ func (urw *updateGroupRewriter) FromMutationResult(
 	ctx context.Context,
 	mutation schema.Mutation,
 	assigned map[string]string,
-	result map[string]interface{}) ([]*dql.GraphQuery, error) {
+	result map[string]interface{}) ([]*gql.GraphQuery, error) {
 
 	return ((*resolve.UpdateRewriter)(urw)).FromMutationResult(ctx, mutation, assigned, result)
 }
@@ -162,19 +162,19 @@ func (urw *updateGroupRewriter) MutatedRootUIDs(
 	return ((*resolve.UpdateRewriter)(urw)).MutatedRootUIDs(mutation, assigned, result)
 }
 
-// addAclRuleQuery adds a *dql.GraphQuery to upsertQuery.Children to query a rule inside a group
+// addAclRuleQuery adds a *gql.GraphQuery to upsertQuery.Children to query a rule inside a group
 // based on its predicate value.
-func addAclRuleQuery(upsertQuery []*dql.GraphQuery, predicate, variable string) {
-	upsertQuery[0].Children = append(upsertQuery[0].Children, &dql.GraphQuery{
+func addAclRuleQuery(upsertQuery []*gql.GraphQuery, predicate, variable string) {
+	upsertQuery[0].Children = append(upsertQuery[0].Children, &gql.GraphQuery{
 		Attr:  "dgraph.acl.rule",
 		Alias: variable,
 		Var:   variable,
-		Filter: &dql.FilterTree{
+		Filter: &gql.FilterTree{
 			Op:    "",
 			Child: nil,
-			Func: &dql.Function{
+			Func: &gql.Function{
 				Name: "eq",
-				Args: []dql.Arg{
+				Args: []gql.Arg{
 					{
 						Value: "dgraph.rule.predicate",
 					},

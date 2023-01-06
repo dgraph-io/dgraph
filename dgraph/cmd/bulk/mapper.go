@@ -31,7 +31,7 @@ import (
 
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/chunker"
-	"github.com/dgraph-io/dgraph/dql"
+	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/tok"
@@ -239,7 +239,7 @@ func (m *mapper) run(inputFormat chunker.InputFormat) {
 				}
 			}
 
-			m.processNQuad(dql.NQuad{NQuad: nq})
+			m.processNQuad(gql.NQuad{NQuad: nq})
 			atomic.AddInt64(&m.prog.nquadCount, 1)
 		}
 
@@ -285,7 +285,7 @@ func (m *mapper) addMapEntry(key []byte, p *pb.Posting, shard int) {
 	marshalMapEntry(dst, uid, key, p)
 }
 
-func (m *mapper) processNQuad(nq dql.NQuad) {
+func (m *mapper) processNQuad(nq gql.NQuad) {
 	if m.opt.Namespace != math.MaxUint64 {
 		// Use the specified namespace passed through '--force-namespace' flag.
 		nq.Namespace = m.opt.Namespace
@@ -359,7 +359,7 @@ func (m *mapper) lookupUid(xid string, ns uint64) uint64 {
 		// Don't store xids for blank nodes.
 		return uid
 	}
-	nq := dql.NQuad{NQuad: &api.NQuad{
+	nq := gql.NQuad{NQuad: &api.NQuad{
 		Subject:   xid,
 		Predicate: "xid",
 		ObjectValue: &api.Value{
@@ -371,7 +371,7 @@ func (m *mapper) lookupUid(xid string, ns uint64) uint64 {
 	return uid
 }
 
-func (m *mapper) createPostings(nq dql.NQuad,
+func (m *mapper) createPostings(nq gql.NQuad,
 	de *pb.DirectedEdge) (*pb.Posting, *pb.Posting) {
 
 	m.schema.validateType(de, nq.ObjectValue == nil)
@@ -407,7 +407,7 @@ func (m *mapper) createPostings(nq dql.NQuad,
 	return p, rp
 }
 
-func (m *mapper) addIndexMapEntries(nq dql.NQuad, de *pb.DirectedEdge) {
+func (m *mapper) addIndexMapEntries(nq gql.NQuad, de *pb.DirectedEdge) {
 	if nq.GetObjectValue() == nil {
 		return // Cannot index UIDs
 	}

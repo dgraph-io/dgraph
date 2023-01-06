@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package dql
+package gql
 
 import (
 	"github.com/dgraph-io/dgo/v210/protos/api"

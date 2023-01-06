@@ -24,7 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/v210"
-	"github.com/dgraph-io/dgraph/dql"
+	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -2018,7 +2018,7 @@ func TestVarInAggError(t *testing.T) {
 			}
 		}
   `
-	_, err := dql.Parse(dql.Request{Str: query})
+	_, err := gql.Parse(gql.Request{Str: query})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Function name: min is not valid.")
 }
