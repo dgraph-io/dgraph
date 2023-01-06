@@ -2,7 +2,7 @@
 #
 version: "3.5"
 services:
-  alpha1:
+  alpha1_backup_clust_ha:
     image: dgraph/dgraph:local
     working_dir: /data/alpha1
     labels:
@@ -16,12 +16,9 @@ services:
       target: /gobin
       read_only: true
 
-    - type: bind
-      source: ../../../tlstest/mtls_internal/tls/alpha1
-      target: /dgraph-tls
-      read_only: true
-    command: /gobin/dgraph  ${COVERAGE_OUTPUT}  alpha --my=alpha1:7080 --zero=zero1:5080,zero2:5080,zero3:5080 --logtostderr -v=2  --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"  --tls "ca-cert=/dgraph-tls/ca.crt; server-cert=/dgraph-tls/node.crt; server-key=/dgraph-tls/node.key; internal-port=true; client-cert=/dgraph-tls/client.alpha1.crt; client-key=/dgraph-tls/client.alpha1.key;" 
-  alpha2:
+    command: /gobin/dgraph  ${COVERAGE_OUTPUT}  alpha   --my=alpha1_backup_clust_ha:7080  --zero=zero1_backup_clust_ha:5080,zero2:5080_backup_clust_ha,zero3_backup_clust_ha:5080 --logtostderr -v=2  --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
+
+  alpha2_backup_clust_ha:
     image: dgraph/dgraph:local
     working_dir: /data/alpha2
     labels:
@@ -34,13 +31,10 @@ services:
       source: $GOPATH/bin
       target: /gobin
       read_only: true
-    - type: bind
-      source: ../../../tlstest/mtls_internal/tls/alpha2
-      target: /dgraph-tls
-      read_only: true
 
-    command: /gobin/dgraph  ${COVERAGE_OUTPUT}  alpha --my=alpha2:7080 --zero=zero1:5080,zero2:5080,zero3:5080 --logtostderr -v=2  --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"  --tls "ca-cert=/dgraph-tls/ca.crt; server-cert=/dgraph-tls/node.crt; server-key=/dgraph-tls/node.key; internal-port=true; client-cert=/dgraph-tls/client.alpha2.crt; client-key=/dgraph-tls/client.alpha2.key;"
-  alpha3:
+    command: /gobin/dgraph  ${COVERAGE_OUTPUT}  alpha   --my=alpha2_backup_clust_ha:7080  --zero=zero1_backup_clust_ha:5080,zero2:5080_backup_clust_ha,zero3_backup_clust_ha:5080 --logtostderr -v=2  --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
+
+  alpha3_backup_clust_ha:
     image: dgraph/dgraph:local
     working_dir: /data/alpha3
     labels:
@@ -53,12 +47,9 @@ services:
       source: $GOPATH/bin
       target: /gobin
       read_only: true
-    - type: bind
-      source: ../../../tlstest/mtls_internal/tls/alpha3
-      target: /dgraph-tls
-      read_only: true
-    command: /gobin/dgraph  ${COVERAGE_OUTPUT}  alpha --my=alpha3:7080 --zero=zero1:5080,zero2:5080,zero3:5080 --logtostderr -v=2  --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"  --tls "ca-cert=/dgraph-tls/ca.crt; server-cert=/dgraph-tls/node.crt; server-key=/dgraph-tls/node.key; internal-port=true; client-cert=/dgraph-tls/client.alpha3.crt; client-key=/dgraph-tls/client.alpha3.key;"
-  zero1:
+
+    command: /gobin/dgraph  ${COVERAGE_OUTPUT}  alpha   --my=alpha3_backup_clust_ha:7080  --zero=zero1_backup_clust_ha:5080,zero2:5080_backup_clust_ha,zero3_backup_clust_ha:5080 --logtostderr -v=2  --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
+  zero1_backup_clust_ha:
     image: dgraph/dgraph:local
     working_dir: /data/zero1
     labels:
@@ -71,19 +62,14 @@ services:
       source: $GOPATH/bin
       target: /gobin
       read_only: true
-    - type: bind
-      source: ../../../tlstest/mtls_internal/tls/zero1
-      target: /dgraph-tls
-      read_only: true
-    command: /gobin/dgraph  ${COVERAGE_OUTPUT} zero --raft "idx=1;" --my=zero1:5080 --replicas=3 --logtostderr -v=2 --bindall
-            --tls "ca-cert=/dgraph-tls/ca.crt; server-cert=/dgraph-tls/node.crt; server-key=/dgraph-tls/node.key; internal-port=true; client-cert=/dgraph-tls/client.zero1.crt; client-key=/dgraph-tls/client.zero1.key;"
 
+    command: /gobin/dgraph  ${COVERAGE_OUTPUT} zero --raft "idx=1;" --my=zero1_backup_clust_ha:5080 --replicas=3 --logtostderr -v=2 --bindall
   
-  zero2:
+  zero2_backup_clust_ha:
     image: dgraph/dgraph:local
     working_dir: /data/zero2
     depends_on:
-      - zero1
+      - zero1_backup_clust_ha
     ports:
       - 5080
       - 6080
@@ -95,18 +81,14 @@ services:
       source: $GOPATH/bin
       target: /gobin
       read_only: true
-    - type: bind
-      source: ../../../tlstest/mtls_internal/tls/zero2
-      target: /dgraph-tls
-      read_only: true
-    command: /gobin/dgraph  ${COVERAGE_OUTPUT} zero --raft "idx=2;" --my=zero2:5080 --replicas=3 --logtostderr -v=2 --bindall  --peer=zero1:5080
-            --tls "ca-cert=/dgraph-tls/ca.crt; server-cert=/dgraph-tls/node.crt; server-key=/dgraph-tls/node.key; internal-port=true; client-cert=/dgraph-tls/client.zero2.crt; client-key=/dgraph-tls/client.zero2.key;"
 
-  zero3:
+    command:  /gobin/dgraph  ${COVERAGE_OUTPUT} zero --raft "idx=2;" --my=zero2_backup_clust_ha:5080 --replicas=3 --logtostderr -v=2 --bindall  --peer=zero1_backup_clust_ha:5080
+
+  zero3_backup_clust_ha:
     image: dgraph/dgraph:local
     working_dir: /data/zero3
     depends_on:
-      - zero2
+      - zero2_backup_clust_ha
     ports:
       - 5080
       - 6080
@@ -118,17 +100,13 @@ services:
       source: $GOPATH/bin
       target: /gobin
       read_only: true
-    - type: bind
-      source: ../../../tlstest/mtls_internal/tls/zero3
-      target: /dgraph-tls
-      read_only: true
-    command: /gobin/dgraph  ${COVERAGE_OUTPUT} zero --raft "idx=3;" --my=zero3:5080 --replicas=3 --logtostderr -v=2 --bindall  --peer=zero1:5080
-        --tls "ca-cert=/dgraph-tls/ca.crt; server-cert=/dgraph-tls/node.crt; server-key=/dgraph-tls/node.key; internal-port=true; client-cert=/dgraph-tls/client.zero3.crt; client-key=/dgraph-tls/client.zero3.key;"
+
+    command: /gobin/dgraph  ${COVERAGE_OUTPUT} zero --raft "idx=3;" --my=zero3_backup_clust_ha:5080 --replicas=3 --logtostderr -v=2 --bindall  --peer=zero1_backup_clust_ha:5080
 
 #HA restore cluster
 
 
-  alpha4:
+  alpha4_restore_clust_ha:
     image: dgraph/dgraph:local
     working_dir: /data/alpha4
     labels:
@@ -142,12 +120,9 @@ services:
       target: /gobin
       read_only: true
 
-    - type: bind
-      source: ../../../tlstest/mtls_internal/tls/alpha4
-      target: /dgraph-tls
-      read_only: true
-    command: /gobin/dgraph  ${COVERAGE_OUTPUT}  alpha --my=alpha4:7080 --zero=zero4:5080,zero5:5080,zero6:5080 --logtostderr -v=2  --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"  --tls "ca-cert=/dgraph-tls/ca.crt; server-cert=/dgraph-tls/node.crt; server-key=/dgraph-tls/node.key; internal-port=true; client-cert=/dgraph-tls/client.alpha4.crt; client-key=/dgraph-tls/client.alpha4.key;"
-  alpha5:
+    command:  /gobin/dgraph  ${COVERAGE_OUTPUT}  alpha   --my=alpha4_restore_clust_ha:7080  --zero=zero4_restore_clust_ha:5080,zero5_restore_clust_ha:5080,zero6_restore_clust_ha:5080 --logtostderr -v=2  --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
+
+  alpha5_restore_clust_ha:
     image: dgraph/dgraph:local
     working_dir: /data/alpha5
     labels:
@@ -161,13 +136,9 @@ services:
       target: /gobin
       read_only: true
 
-    - type: bind
-      source: ../../../tlstest/mtls_internal/tls/alpha5
-      target: /dgraph-tls
-      read_only: true
+    command: /gobin/dgraph  ${COVERAGE_OUTPUT}  alpha   --my=alpha5_restore_clust_ha:7080  --zero=zero4_restore_clust_ha:5080,zero5_restore_clust_ha:5080,zero6_restore_clust_ha:5080 --logtostderr -v=2  --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
 
-    command: /gobin/dgraph  ${COVERAGE_OUTPUT}  alpha --my=alpha5:7080 --zero=zero4:5080,zero5:5080,zero6:5080 --logtostderr -v=2  --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"  --tls "ca-cert=/dgraph-tls/ca.crt; server-cert=/dgraph-tls/node.crt; server-key=/dgraph-tls/node.key; internal-port=true; client-cert=/dgraph-tls/client.alpha5.crt; client-key=/dgraph-tls/client.alpha5.key;"
-  alpha6:
+  alpha6_restore_clust_ha:
     image: dgraph/dgraph:local
     working_dir: /data/alpha6
     labels:
@@ -180,12 +151,10 @@ services:
       source: $GOPATH/bin
       target: /gobin
       read_only: true
-    - type: bind
-      source: ../../../tlstest/mtls_internal/tls/alpha6
-      target: /dgraph-tls
-      read_only: true
-    command: /gobin/dgraph  ${COVERAGE_OUTPUT}  alpha --my=alpha6:7080 --zero=zero4:5080,zero5:5080,zero6:5080 --logtostderr -v=2  --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"  --tls "ca-cert=/dgraph-tls/ca.crt; server-cert=/dgraph-tls/node.crt; server-key=/dgraph-tls/node.key; internal-port=true; client-cert=/dgraph-tls/client.alpha6.crt; client-key=/dgraph-tls/client.alpha6.key;"
-  zero4:
+
+    command: /gobin/dgraph  ${COVERAGE_OUTPUT}  alpha   --my=alpha6_restore_clust_ha:7080  --zero=zero4_restore_clust_ha:5080,zero5_restore_clust_ha:5080,zero6_restore_clust_ha:5080 --logtostderr -v=2  --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
+
+  zero4_restore_clust_ha:
     image: dgraph/dgraph:local
     working_dir: /data/zero4
     labels:
@@ -198,19 +167,15 @@ services:
       source: $GOPATH/bin
       target: /gobin
       read_only: true
-    - type: bind
-      source: ../../../tlstest/mtls_internal/tls/zero4
-      target: /dgraph-tls
-      read_only: true
-    command: /gobin/dgraph  ${COVERAGE_OUTPUT} zero --raft "idx=1;" --my=zero4:5080 --replicas=3 --logtostderr -v=2 --bindall
-            --tls "ca-cert=/dgraph-tls/ca.crt; server-cert=/dgraph-tls/node.crt; server-key=/dgraph-tls/node.key; internal-port=true; client-cert=/dgraph-tls/client.zero4.crt; client-key=/dgraph-tls/client.zero4.key;"
+
+    command: /gobin/dgraph  ${COVERAGE_OUTPUT} zero --raft "idx=1;" --my=zero4_restore_clust_ha:5080 --replicas=3 --logtostderr -v=2 --bindall
 
   
-  zero5:
+  zero5_restore_clust_ha:
     image: dgraph/dgraph:local
     working_dir: /data/zero5
     depends_on:
-      - zero4
+      - zero4_restore_clust_ha
     ports:
       - 5080
       - 6080
@@ -219,21 +184,16 @@ services:
       service: zero
     volumes:
       - type: bind
-        source: ../../../tlstest/mtls_internal/tls/zero5
-        target: /dgraph-tls
-        read_only: true
-      - type: bind
         source: $GOPATH/bin
         target: /gobin
         read_only: true
-    command: /gobin/dgraph  ${COVERAGE_OUTPUT} zero --raft "idx=2;" --my=zero5:5080 --replicas=3 --logtostderr -v=2 --bindall  --peer=zero4:5080
-            --tls "ca-cert=/dgraph-tls/ca.crt; server-cert=/dgraph-tls/node.crt; server-key=/dgraph-tls/node.key; internal-port=true; client-cert=/dgraph-tls/client.zero5.crt; client-key=/dgraph-tls/client.zero5.key;"
+    command: /gobin/dgraph  ${COVERAGE_OUTPUT} zero --raft "idx=2;" --my=zero5_restore_clust_ha:5080 --replicas=3 --logtostderr -v=2 --bindall  --peer=zero4_restore_clust_ha:5080
 
-  zero6:
+  zero6_restore_clust_ha:
     image: dgraph/dgraph:local
     working_dir: /data/zero3
     depends_on:
-      - zero5
+      - zero5_restore_clust_ha
     ports:
       - 5080
       - 6080
@@ -242,19 +202,14 @@ services:
       service: zero
     volumes:
       - type: bind
-        source: ../../../tlstest/mtls_internal/tls/zero6
-        target: /dgraph-tls
-        read_only: true
-      - type: bind
         source: $GOPATH/bin
         target: /gobin
         read_only: true
-    command: /gobin/dgraph  ${COVERAGE_OUTPUT} zero --raft "idx=3;" --my=zero6:5080 --replicas=3 --logtostderr -v=2 --bindall  --peer=zero4:5080
-        --tls "ca-cert=/dgraph-tls/ca.crt; server-cert=/dgraph-tls/node.crt; server-key=/dgraph-tls/node.key; internal-port=true; client-cert=/dgraph-tls/client.zero6.crt; client-key=/dgraph-tls/client.zero6.key;"
+    command: /gobin/dgraph  ${COVERAGE_OUTPUT} zero --raft "idx=3;" --my=zero6_restore_clust_ha:5080 --replicas=3 --logtostderr -v=2 --bindall  --peer=zero4_restore_clust_ha:5080
 
 #non HA cluster
 
-  zero7:
+  zero7_backup_clust_non_ha:
     image: dgraph/dgraph:local
     working_dir: /data/zero7
     labels:
@@ -267,14 +222,10 @@ services:
       source: $GOPATH/bin
       target: /gobin
       read_only: true
-    - type: bind
-      source: ../../../tlstest/mtls_internal/tls/zero7
-      target: /dgraph-tls
-      read_only: true
-    command: /gobin/dgraph  ${COVERAGE_OUTPUT} zero --raft "idx=1;" --my=zero7:5080 --replicas=1 --logtostderr -v=2 --bindall
-          --tls "ca-cert=/dgraph-tls/ca.crt; server-cert=/dgraph-tls/node.crt; server-key=/dgraph-tls/node.key; internal-port=true; client-cert=/dgraph-tls/client.zero7.crt; client-key=/dgraph-tls/client.zero7.key;"
 
-  alpha7:
+    command:  /gobin/dgraph  ${COVERAGE_OUTPUT} zero --raft "idx=1;" --my=zero7_backup_clust_non_ha:5080 --replicas=1 --logtostderr -v=2 --bindall
+
+  alpha7_backup_clust_non_ha:
     image: dgraph/dgraph:local
     working_dir: /data/alpha7
     labels:
@@ -287,16 +238,12 @@ services:
       source: $GOPATH/bin
       target: /gobin
       read_only: true
-    - type: bind
-      source: ../../../tlstest/mtls_internal/tls/alpha7
-      target: /dgraph-tls
-      read_only: true
 
-    command: /gobin/dgraph  ${COVERAGE_OUTPUT}  alpha --my=alpha7:7080 --zero=zero7:5080 --logtostderr -v=2  --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"  --tls "ca-cert=/dgraph-tls/ca.crt; server-cert=/dgraph-tls/node.crt; server-key=/dgraph-tls/node.key; internal-port=true; client-cert=/dgraph-tls/client.alpha7.crt; client-key=/dgraph-tls/client.alpha7.key;"
+    command: /gobin/dgraph  ${COVERAGE_OUTPUT}  alpha   --my=alpha7_backup_clust_non_ha:7080  --zero=zero7_backup_clust_non_ha:5080 --logtostderr -v=2  --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
 
 #non HA cluster
 
-  zero8:
+  zero8_restore_clust_non_ha:
     image: dgraph/dgraph:local
     working_dir: /data/zero8
     labels:
@@ -309,14 +256,10 @@ services:
       source: $GOPATH/bin
       target: /gobin
       read_only: true
-    - type: bind
-      source: ../../../tlstest/mtls_internal/tls/zero8
-      target: /dgraph-tls
-      read_only: true
-    command: /gobin/dgraph  ${COVERAGE_OUTPUT} zero --raft "idx=1;" --my=zero8:5080 --replicas=1 --logtostderr -v=2 --bindall
-        --tls "ca-cert=/dgraph-tls/ca.crt; server-cert=/dgraph-tls/node.crt; server-key=/dgraph-tls/node.key; internal-port=true; client-cert=/dgraph-tls/client.zero8.crt; client-key=/dgraph-tls/client.zero8.key;"
 
-  alpha8:
+    command: /gobin/dgraph  ${COVERAGE_OUTPUT} zero --raft "idx=1;" --my=zero8_restore_clust_non_ha:5080 --replicas=1 --logtostderr -v=2 --bindall
+
+  alpha8_restore_clust_non_ha:
     image: dgraph/dgraph:local
     working_dir: /data/alpha8
     labels:
@@ -330,10 +273,5 @@ services:
       target: /gobin
       read_only: true
 
-    - type: bind
-      source: ../../../tlstest/mtls_internal/tls/alpha8
-      target: /dgraph-tls
-      read_only: true
-
-    command: /gobin/dgraph  ${COVERAGE_OUTPUT}  alpha --my=alpha8:7080 --zero=zero8:5080 --logtostderr -v=2  --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"  --tls "ca-cert=/dgraph-tls/ca.crt; server-cert=/dgraph-tls/node.crt; server-key=/dgraph-tls/node.key; internal-port=true; client-cert=/dgraph-tls/client.alpha8.crt; client-key=/dgraph-tls/client.alpha8.key;"
+    command: /gobin/dgraph  ${COVERAGE_OUTPUT}  alpha   --my=alpha8_restore_clust_non_ha:7080  --zero=zero8_restore_clust_non_ha:5080 --logtostderr -v=2  --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
 volumes: {}
