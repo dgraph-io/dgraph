@@ -22,9 +22,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -294,39 +292,32 @@ func TestRDFChunkerChunk(t *testing.T) {
 	require.NoError(t, os.MkdirAll(dir, os.ModePerm))
 	defer deleteDirs(t, dir)
 	testFilesDir := filepath.Join(filepath.Dir(thisFile), "test-files")
-	dataFile := filepath.Join(testFilesDir, "data.rdf")
+	dataFile := filepath.Join(filepath.Dir(thisFile), "data.rdf")
 	resultData := filepath.Join(testFilesDir, "result.rdf")
-	//download data
-	cmd := exec.Command("wget", "-O", dataFile, "https://media.githubusercontent.com/media/dgraph-io/benchmarks/master/ldbc/sf0.3/ldbc_rdf_0.3/Deltas.rdf")
-
-	if out, err := cmd.CombinedOutput(); err != nil {
-		fmt.Printf("Error %v", err)
-		fmt.Printf("Output %v", out)
-	}
 	f, err := os.Create(resultData)
 	require.NoError(t, err)
 	chunker := NewChunker(RdfFormat, 1000)
-	rd, _ := FileReader(dataFile, nil)
-	chunkBuf, _ := chunker.Chunk(rd)
+	rd, cleanup := FileReader(dataFile, nil)
+	chunkBuf, err := chunker.Chunk(rd)
+	if err != io.EOF {
+		require.NoError(t, err)
+	}
 
 	for chunkBuf.Len() > 0 {
 		str, err := chunkBuf.ReadString('\n')
-		require.NoError(t, err)
+		if err != io.EOF {
+			require.NoError(t, err)
+		}
 		_, err = f.WriteString(str)
 		require.NoError(t, err)
 	}
-	if err != nil {
-		log.Fatal(err)
-	}
+
 	f1, err1 := ioutil.ReadFile(dataFile)
-	if err1 != nil {
-		log.Fatal(err1)
-	}
+	require.NoError(t, err1)
 	f2, err2 := ioutil.ReadFile(resultData)
-	if err2 != nil {
-		log.Fatal(err2)
-	}
+	require.NoError(t, err2)
 	require.Equal(t, true, bytes.Equal(f1, f2))
+	cleanup()
 }
 
 func deleteDirs(t *testing.T, dir string) {
