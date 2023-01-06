@@ -154,9 +154,11 @@ func IsMissingOrEmptyDir(path string) (err error) {
 
 // WriteGroupIdFile writes the given group ID to the group_id file inside the given
 // postings directory.
+const BadGroupID string = "ID written to group_id file must be a positive number"
+
 func WriteGroupIdFile(pdir string, group_id uint32) error {
 	if group_id == 0 {
-		return errors.Errorf("ID written to group_id file must be a positive number")
+		return errors.Errorf(BadGroupID)
 	}
 
 	groupFile := filepath.Join(pdir, GroupIdFileName)

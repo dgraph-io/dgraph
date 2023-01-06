@@ -1,29 +1,138 @@
-/*
- * Copyright 2017-2022 Dgraph Labs, Inc. and Contributors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package x
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
+	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+var dir string
+
+func TestWalkPathFunc_Positive(t *testing.T) {
+
+	xDir, err := os.Getwd()
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	filesGot := WalkPathFunc(xDir, func(path string, isdir bool) bool {
+		return !isdir && strings.HasSuffix(path, ".go")
+	})
+	assert.True(t, len(filesGot) > 0, "Path doesn't exist: %s", xDir)
+}
+
+func TestWalkPathFunc_Negative(t *testing.T) {
+
+	xDir, err := os.Getwd()
+	if err != nil {
+		fmt.Println(err)
+	}
+	dir = xDir + "/x"
+
+	filesGot := WalkPathFunc(dir, func(path string, isdir bool) bool {
+		return !isdir && strings.HasSuffix(path, ".go")
+	})
+
+	assert.True(t, len(filesGot) == 0, "This is a negative test case, please pass any wrong dir")
+}
+
+func TestWriteGroupIdFile(t *testing.T) {
+
+	for i := 0; i < 3; i++ {
+		dir, err := os.Getwd()
+		if err != nil {
+			fmt.Println(err)
+		}
+		dir = filepath.Join(dir+"/For_WriteGroupIdFile", strconv.Itoa(i))
+		os.MkdirAll(dir, 0700)
+
+		switch i {
+		case 0:
+			got := WriteGroupIdFile(dir, uint32(i))
+			assert.Equal(t, BadGroupID, got.Error(), "If group_id passed to a WriteGroupIdFile(), It returns 'ID written to group_id file must be a positive number' as an error")
+
+		default:
+			got := WriteGroupIdFile(dir, uint32(i))
+
+			assert.True(t, got == nil, "Something Wrong")
+
+		}
+	}
+
+	//Delete dirs
+	defer deleteDirs("./For_WriteGroupIdFile")
+
+}
+
+func TestReadGroupIdFile(t *testing.T) {
+
+	for i := 0; i < 3; i++ {
+
+		xDir, err := os.Getwd()
+		if err != nil {
+			fmt.Println(err)
+		}
+		dir = filepath.Join(xDir+"/For_WriteGroupIdFile", strconv.Itoa(i))
+		os.MkdirAll(dir, 0700)
+		groupFile := filepath.Join(dir, GroupIdFileName)
+		f, _ := os.OpenFile(groupFile, os.O_CREATE|os.O_WRONLY, 0600)
+		f.WriteString(strconv.Itoa(int(i)))
+		f.WriteString("\n")
+		f.Close()
+
+	}
+
+	for i := 0; i < 3; i++ {
+		xDir, err := os.Getwd()
+		if err != nil {
+			fmt.Println(err)
+		}
+		switch i {
+		case 0:
+			dir = filepath.Join("./ABC")
+			group_id, err := ReadGroupIdFile(dir)
+
+			assert := assert.New(t)
+			assert.Equal(uint32(0), group_id, "If passed path is not a directory, ReadGroupIdFile() returns 0")
+			assert.Nil(err, "If passed path is not a directory, ReadGroupIdFile() returns nil as an error")
+
+		case 1:
+			expectedErr := "Group ID file at /home/siddesh/workspace/dgraph_unit/x/For_WriteGroupIdFile/1/p/group_id is a directory"
+			os.MkdirAll(xDir+"/For_WriteGroupIdFile/1/p/group_id", os.ModePerm)
+			dir = filepath.Join(xDir+"/For_WriteGroupIdFile", strconv.Itoa(i), "p")
+			group_id, err := ReadGroupIdFile(dir)
+
+			assert := assert.New(t)
+			assert.Equal(uint32(0), group_id, "If passed path is directory, ReadGroupIdFile() returns 0")
+			assert.Equal(expectedErr, err.Error(), "If passed path is directory, ReadGroupIdFile() returns 'Group ID file at <dir> is a directory' as an error")
+
+		case 2:
+			dir = filepath.Join(xDir+"/For_WriteGroupIdFile", strconv.Itoa(i))
+			group_id, err := ReadGroupIdFile(dir)
+
+			assert := assert.New(t)
+			assert.Equal(uint32(2), group_id, "If passed path is a group_id file, ReadGroupIdFile() returns <group_id>")
+			assert.Nil(err, "If passed path is directory, ReadGroupIdFile() returns nil as an error")
+		}
+	}
+
+	//Delete dirs
+	defer deleteDirs("./For_WriteGroupIdFile")
+}
+
+func deleteDirs(dir string) {
+	err := os.RemoveAll(dir)
+	if err != nil {
+		fmt.Println(err)
+	}
+}
 
 func TestFindDataFiles(t *testing.T) {
 	_, thisFile, _, _ := runtime.Caller(0)
@@ -98,5 +207,4 @@ func TestIsMissingOrEmptyDir(t *testing.T) {
 	if err := os.RemoveAll(testFilesDir); err != nil {
 		t.Fatalf("Error removing direcotory: %s", err.Error())
 	}
-
 }

@@ -19,15 +19,18 @@ package chunker
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -230,6 +233,106 @@ func TestJSONLoadSuccessAll(t *testing.T) {
 	require.Equal(t, io.EOF, err, "end reading JSON document")
 }
 
+type isJsonDataTest struct {
+	possibleJsonData string
+	expected         bool
+}
+
+var isJsonDataTests = []isJsonDataTest{
+	isJsonDataTest{`[{
+	"id": 1,
+	"first_name": "Jeanette",
+	"last_name": "Penddreth",
+	"email": "jpenddreth0@census.gov",
+	"gender": "Female",
+	"ip_address": "26.58.193.2"
+  }, {
+	"id": 2,
+	"first_name": "Giavani",
+	"last_name": "Frediani",
+	"email": "gfrediani1@senate.gov",
+	"gender": "Male",
+	"ip_address": "229.179.4.212"
+  }]
+  `,
+		true},
+	isJsonDataTest{`Just a simple string`,
+		false},
+}
+
+func TestIsJSONData(t *testing.T) {
+
+	for _, jsonTestData := range isJsonDataTests {
+		reader := bufioReader(jsonTestData.possibleJsonData)
+		if output, error := IsJSONData(reader); output != jsonTestData.expected {
+			fmt.Println(error)
+			// t.Errorf("got: %t, wanted: %t", output, jsonTestData.expected)
+			assert.Equal(t, output, jsonTestData.expected, "Actual result is different than Expected result")
+		}
+	}
+}
+
+func TestRdfChunker_Parse_Positive(t *testing.T) {
+	reader := bufioReader(`<0x01> <name> "Alice" .
+	<0x01> <dgraph.type> "Person" .
+
+`)
+
+	chunk := NewChunker(RdfFormat, 1024)
+	chunkBuff, _ := chunk.Chunk(reader)
+	got := chunk.Parse(chunkBuff)
+
+	assert.Nil(t, got, "If the data passed has correct format, Pares() func returns <nil>")
+}
+
+func TestRdfChunker_Parse_Negative(t *testing.T) {
+
+	expectedResult := `while parsing line " <name> \"Alice\" .\n": while lexing <name> "Alice" . at line 1 column 6: Invalid quote for non-object.`
+
+	reader := bufioReader(` <name> "Alice" .
+	<0x01> <dgraph.type> "Person" .
+
+`)
+
+	chunk := NewChunker(RdfFormat, 1024)
+	chunkBuff, _ := chunk.Chunk(reader)
+	got := chunk.Parse(chunkBuff)
+
+	// In this test we are passing incorrect data, hence an error is expected in got. If we do not receive any error then assert.
+	assert.Equal(t, expectedResult, got.Error(), "If the data passed has incorrect format, Pares() func returns Some error")
+}
+
+type client struct {
+	Hostname string `json:"Hostname"`
+	IP       string `json:"IP"`
+}
+
+type connection struct {
+	Clients []*client `json:"Clients"`
+}
+
+func TestJsonFormat_Chunk(t *testing.T) {
+
+	expectedResult := "EOF"
+
+	var clients []*client
+
+	for lineCount := 0; lineCount < 1e5+2; lineCount++ {
+		clients = append(clients, &client{Hostname: strconv.Itoa(lineCount), IP: strconv.Itoa(lineCount) + ":" + strconv.Itoa(lineCount)})
+	}
+
+	res, err := json.MarshalIndent(connection{Clients: clients}, "", "  ")
+	Indented_Json := bytes.NewBuffer(res).String()
+
+	reader := bufioReader(Indented_Json)
+
+	chunk := NewChunker(JsonFormat, -1)
+	bytesBuff, err := chunk.Chunk(reader)
+
+	assert := assert.New(t)
+	assert.Equal(expectedResult, err.Error(), "If the data passed has JSON format, Chunk() func returns EOF as error")
+	assert.True(bytesBuff.Len() > 1, "If the data passed has JSON format, Chunk() func returns *bufio.Reader")
+}
 func TestFileReader(t *testing.T) {
 	//create sample files
 	_, thisFile, _, _ := runtime.Caller(0)
@@ -291,7 +394,6 @@ func TestDataFormat(t *testing.T) {
 		format := DataFormat(filePath, "")
 
 		require.Equal(t, format, expectedOutcomes[i])
-
 	}
 
 }
