@@ -22,47 +22,52 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+type testCases struct {
+	input     string
+	expResult bool
+}
+
 func TestHasUChars(t *testing.T) {
 	l := &Lexer{}
-	testInputs := []string{"u1def", "UADEFABCD", "uYDQW", "Uydvxypqt", "abc", "uabcdg"}
-	expectedResult := []bool{true, true, false, false, false, true}
-	for i, line := range testInputs {
-		l.Reset(line)
+	testInputs := []testCases{{"u1def", true}, {"UADEFABCD", true}, {"uYDQW", false}, {"Uydvxypqt", false}, {"abc", false}, {"uabcdg", true}}
+	for _, test := range testInputs {
+		l.Reset(test.input)
 		r := l.Next()
 		result := HasUChars(r, l)
-		require.Equal(t, expectedResult[i], result)
+		require.Equal(t, test.expResult, result)
 	}
 }
 
 func TestHasXChars(t *testing.T) {
 	l := &Lexer{}
-	testInputs := []string{"xad", "xAD", "xYD", "xyd", "abc"}
-	expectedResult := []bool{true, true, false, false, false}
-	for i, line := range testInputs {
-		l.Reset(line)
+	testInputs := []testCases{{"xad", true}, {"xAD", true}, {"xYD", false}, {"xyd", false}, {"abc", false}}
+	for _, test := range testInputs {
+		l.Reset(test.input)
 		r := l.Next()
 		result := HasXChars(r, l)
-		require.Equal(t, expectedResult[i], result)
+		require.Equal(t, test.expResult, result)
 	}
 }
 
 func TestIsHex(t *testing.T) {
-	testinputs := []int32{'x', 'X', 'L', 'x', 'b', 'B'}
-	expectedResult := []bool{false, false, false, false, true, true}
-	for i, char := range testinputs {
-		result := isHex(char)
-		require.Equal(t, expectedResult[i], result)
+	type testCases struct {
+		input     int32
+		expResult bool
+	}
+	testInput := []testCases{{'x', false}, {'X', false}, {'L', false}, {'A', true}, {'b', true}}
+	for _, test := range testInput {
+		result := isHex(test.input)
+		require.Equal(t, test.expResult, result)
 	}
 }
 
 func TestIsIRIRefChar(t *testing.T) {
-	testInputs := []string{"\\u1def", "\\UADEFABCD", "A", "a", "<", ">", "{", "}", "`", "	", "\\abc"}
-	expectedResult := []bool{true, true, true, true, false, false, false, false, false, false, false}
+	testInputs := []testCases{{"\\u1def", true}, {"\\UADEFABCD", true}, {"A", true}, {"a", true}, {"<", false}, {">", false}, {"{", false}, {"`", false}, {"	", false}, {"\\abc", false}}
 	l := &Lexer{}
-	for i, line := range testInputs {
-		l.Reset(line)
+	for _, test := range testInputs {
+		l.Reset(test.input)
 		r := l.Next()
 		result := isIRIRefChar(r, l)
-		require.Equal(t, expectedResult[i], result)
+		require.Equal(t, test.expResult, result)
 	}
 }
