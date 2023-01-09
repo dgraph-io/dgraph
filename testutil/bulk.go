@@ -96,7 +96,7 @@ func BulkLoad(opts BulkOpts) error {
 	coverage := os.Getenv("COVERAGE_OUTPUT")
 	var args []string
 	if coverage == "--test.coverprofile=coverage.out" {
-		args = append(args, coverage)
+		args = append(args, "--test.coverprofile=coverage_bulk.out")
 	}
 	args = append(args, "bulk",
 		"-f", opts.RdfFile,
