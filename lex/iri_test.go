@@ -22,14 +22,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type testCases struct {
+type testCase struct {
 	input     string
 	expResult bool
 }
 
 func TestHasUChars(t *testing.T) {
 	l := &Lexer{}
-	testInputs := []testCases{{"u1def", true}, {"UADEFABCD", true}, {"uYDQW", false}, {"Uydvxypqt", false}, {"abc", false}, {"uabcdg", true}}
+	testInputs := []testCase{{"u1def", true}, {"UADEFABCD", true}, {"uYDQW", false}, {"Uydvxypqt", false}, {"abc", false}, {"uabcdg", true}}
 	for _, test := range testInputs {
 		l.Reset(test.input)
 		r := l.Next()
@@ -40,7 +40,7 @@ func TestHasUChars(t *testing.T) {
 
 func TestHasXChars(t *testing.T) {
 	l := &Lexer{}
-	testInputs := []testCases{{"xad", true}, {"xAD", true}, {"xYD", false}, {"xyd", false}, {"abc", false}}
+	testInputs := []testCase{{"xad", true}, {"xAD", true}, {"xYD", false}, {"xyd", false}, {"abc", false}}
 	for _, test := range testInputs {
 		l.Reset(test.input)
 		r := l.Next()
@@ -50,19 +50,19 @@ func TestHasXChars(t *testing.T) {
 }
 
 func TestIsHex(t *testing.T) {
-	type testCases struct {
+	type testCase struct {
 		input     int32
 		expResult bool
 	}
-	testInput := []testCases{{'x', false}, {'X', false}, {'L', false}, {'A', true}, {'b', true}}
-	for _, test := range testInput {
+	testInputs := []testCase{{'x', false}, {'X', false}, {'L', false}, {'A', true}, {'b', true}}
+	for _, test := range testInputs {
 		result := isHex(test.input)
 		require.Equal(t, test.expResult, result)
 	}
 }
 
 func TestIsIRIRefChar(t *testing.T) {
-	testInputs := []testCases{{"\\u1def", true}, {"\\UADEFABCD", true}, {"A", true}, {"a", true}, {"<", false}, {">", false}, {"{", false}, {"`", false}, {"	", false}, {"\\abc", false}}
+	testInputs := []testCase{{"\\u1def", true}, {"\\UADEFABCD", true}, {"A", true}, {"a", true}, {"<", false}, {">", false}, {"{", false}, {"`", false}, {"	", false}, {"\\abc", false}}
 	l := &Lexer{}
 	for _, test := range testInputs {
 		l.Reset(test.input)
