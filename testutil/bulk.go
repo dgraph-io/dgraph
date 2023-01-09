@@ -93,9 +93,12 @@ type BulkOpts struct {
 }
 
 func BulkLoad(opts BulkOpts) error {
-	bulkCmd := exec.Command(DgraphBinaryPath(),
-		os.Getenv("COVERAGE_OUTPUT"),
-		"bulk",
+	coverage := os.Getenv("COVERAGE_OUTPUT")
+	var args []string
+	if coverage == "--test.coverprofile=coverage.out" {
+		args = append(args, coverage)
+	}
+	args = append(args, "bulk",
 		"-f", opts.RdfFile,
 		"-s", opts.SchemaFile,
 		"-g", opts.GQLSchemaFile,
@@ -104,8 +107,9 @@ func BulkLoad(opts BulkOpts) error {
 		"--map_shards="+strconv.Itoa(opts.Shards),
 		"--store_xids=true",
 		"--zero", opts.Zero,
-		"--force-namespace", strconv.FormatUint(opts.Namespace, 10),
-	)
+		"--force-namespace", strconv.FormatUint(opts.Namespace, 10))
+
+	bulkCmd := exec.Command(DgraphBinaryPath(), args...)
 
 	fmt.Println("Running: ", bulkCmd.Args)
 
