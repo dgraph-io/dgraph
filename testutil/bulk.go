@@ -93,7 +93,9 @@ type BulkOpts struct {
 }
 
 func BulkLoad(opts BulkOpts) error {
-	bulkCmd := exec.Command(DgraphBinaryPath(), "bulk",
+	bulkCmd := exec.Command(DgraphBinaryPath(),
+		os.Getenv("COVERAGE_OUTPUT"),
+		"bulk",
 		"-f", opts.RdfFile,
 		"-s", opts.SchemaFile,
 		"-g", opts.GQLSchemaFile,
@@ -104,6 +106,8 @@ func BulkLoad(opts BulkOpts) error {
 		"--zero", opts.Zero,
 		"--force-namespace", strconv.FormatUint(opts.Namespace, 10),
 	)
+
+	fmt.Println("Running: ", bulkCmd.Args)
 
 	if opts.Dir != "" {
 		bulkCmd.Dir = opts.Dir
@@ -176,11 +180,21 @@ func StartAlphas(compose string) error {
 	return nil
 }
 
+func StopAlphasForCoverage(composeFile string) {
+	args := []string{"--compatibility", "-f", composeFile, "-p", DockerPrefix, "stop"}
+	cmd := exec.CommandContext(context.Background(), "docker-compose", args...)
+	fmt.Printf("Running: %s with %s\n", cmd, DockerPrefix)
+	if err := cmd.Run(); err != nil {
+		fmt.Printf("Error while bringing down cluster. Prefix: %s. Error: %v\n", DockerPrefix, err)
+	}
+}
+
 func StopAlphasAndDetectRace(alphas []string) (raceDetected bool) {
 	raceDetected = DetectRaceInAlphas(DockerPrefix)
 	args := []string{"-p", DockerPrefix, "rm", "-f", "-s", "-v"}
 	args = append(args, alphas...)
 	cmd := exec.CommandContext(context.Background(), "docker-compose", args...)
+	fmt.Printf("Running: %s with %s\n", cmd, DockerPrefix)
 	if err := cmd.Run(); err != nil {
 		fmt.Printf("Error while bringing down cluster. Prefix: %s. Error: %v\n", DockerPrefix, err)
 	}
