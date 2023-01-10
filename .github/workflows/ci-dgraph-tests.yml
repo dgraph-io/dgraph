@@ -19,15 +19,6 @@ jobs:
     runs-on: [self-hosted, x64]
     steps:
       - uses: actions/checkout@v3
-      - uses: actions/setup-python@v3
-        with:
-          python-version: "3.8"
-      - uses: aws-actions/setup-sam@v2
-      - uses: aws-actions/configure-aws-credentials@v1
-        with:
-          aws-access-key-id: ${{ secrets.S3_ACCESS_KEY }}
-          aws-secret-access-key: ${{ secrets.S3_SECRET_KEY }}
-          aws-region: ${{ secrets.S3_REGION }}
       - name: Get Go Version
         run: |
           #!/bin/bash
@@ -64,11 +55,6 @@ jobs:
           # clean up docker containers before test execution
           cd t; ./t -r
       - name: Run Unit Tests
-        env:
-          S3_REGION: ${{ secrets.S3_REGION }}
-          S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
-          S3_SECRET_KEY: ${{ secrets.S3_SECRET_KEY }}
-          S3_ACCESS_KEY: ${{ secrets.S3_ACCESS_KEY }}
         run: |
           #!/bin/bash
           # go env settings
