@@ -163,9 +163,9 @@ func TestSchemaSubscribe(t *testing.T) {
 
 // TestConcurrentSchemaUpdates checks that if there are too many concurrent requests to update the
 // GraphQL schema, then the system works as expected by either:
-// 	1. failing the schema update because there is another one in progress, OR
-// 	2. if the schema update succeeds, then the last successful schema update is reflected by both
-//	Dgraph and GraphQL schema
+//  1. failing the schema update because there is another one in progress, OR
+//  2. if the schema update succeeds, then the last successful schema update is reflected by both
+//     Dgraph and GraphQL schema
 //
 // It also tests that only one node exists for GraphQL schema in Dgraph after all the
 // concurrent requests have executed.
@@ -673,6 +673,7 @@ func TestDeleteSchemaAndExport(t *testing.T) {
 		Query: `mutation {
 		  export(input: {format: "rdf"}) {
 			response { code }
+			taskId
 		  }
 		}`,
 	}
@@ -681,7 +682,10 @@ func TestDeleteSchemaAndExport(t *testing.T) {
 
 	var data interface{}
 	require.NoError(t, json.Unmarshal(exportGqlResp.Data, &data))
+
 	require.Equal(t, "Success", testutil.JsonGet(data, "export", "response", "code").(string))
+	taskId := testutil.JsonGet(data, "export", "taskId").(string)
+	testutil.WaitForTask(t, taskId, false)
 
 	// applying a new schema should still work
 	newSchemaResp := common.AssertUpdateGQLSchemaSuccess(t, groupOneHTTP, schema, nil)

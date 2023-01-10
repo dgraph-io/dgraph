@@ -24,20 +24,10 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/dustin/go-humanize"
-	"github.com/golang/glog"
-	"github.com/pkg/errors"
-	"go.etcd.io/etcd/raft"
-	"go.etcd.io/etcd/raft/raftpb"
-	"golang.org/x/net/trace"
-
-	ostats "go.opencensus.io/stats"
-	"go.opencensus.io/tag"
-	otrace "go.opencensus.io/trace"
 
 	"github.com/dgraph-io/badger/v3"
 	bpb "github.com/dgraph-io/badger/v3/pb"
@@ -49,6 +39,16 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
+
+	"github.com/dustin/go-humanize"
+	"github.com/golang/glog"
+	"github.com/pkg/errors"
+	"go.etcd.io/etcd/raft"
+	"go.etcd.io/etcd/raft/raftpb"
+	ostats "go.opencensus.io/stats"
+	"go.opencensus.io/tag"
+	otrace "go.opencensus.io/trace"
+	"golang.org/x/net/trace"
 )
 
 type operation struct {
@@ -352,14 +352,19 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	span := otrace.FromContext(ctx)
 
 	if proposal.Mutations.DropOp == pb.Mutations_DATA {
+		ns, err := strconv.ParseUint(proposal.Mutations.DropValue, 0, 64)
+		if err != nil {
+			return err
+		}
 		// Ensures nothing get written to disk due to commit proposals.
-		posting.Oracle().ResetTxns()
-		if err := posting.DeleteData(); err != nil {
+		posting.Oracle().ResetTxnsForNs(ns)
+		if err := posting.DeleteData(ns); err != nil {
 			return err
 		}
 
-		// Clear entire cache.
-		posting.ResetCache()
+		// TODO: Revisit this when we work on posting cache. Clear entire cache.
+		// We don't want to drop entire cache, just due to one namespace.
+		// posting.ResetCache()
 		return nil
 	}
 
