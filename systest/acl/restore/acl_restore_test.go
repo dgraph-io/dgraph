@@ -36,7 +36,8 @@ func disableDraining(t *testing.T) {
 	b, err := json.Marshal(params)
 	require.NoError(t, err)
 
-	token := testutil.Login(t, &testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: 0})
+	token, err := testutil.Login(t, &testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: 0})
+	require.NoError(t, err, "login failed")
 
 	client := &http.Client{}
 	req, err := http.NewRequest("POST", testutil.AdminUrl(), bytes.NewBuffer(b))
@@ -70,7 +71,9 @@ func sendRestoreRequest(t *testing.T, location, backupId string, backupNum int) 
 		},
 	}
 
-	token := testutil.Login(t, &testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: 0})
+	token, err := testutil.Login(t, &testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: 0})
+	require.NoError(t, err, "login failed")
+
 	resp := testutil.MakeGQLRequestWithAccessJwt(t, params, token.AccessJwt)
 	resp.RequireNoGraphQLErrors(t)
 
@@ -97,8 +100,9 @@ func TestAclCacheRestore(t *testing.T) {
 	sendRestoreRequest(t, "/backups", "vibrant_euclid5", 1)
 	testutil.WaitForRestore(t, dg)
 
-	token := testutil.Login(t,
+	token, err := testutil.Login(t,
 		&testutil.LoginParams{UserID: "alice1", Passwd: "password", Namespace: 0})
+	require.NoError(t, err, "login failed")
 	params := &common.GraphQLParams{
 		Query: `query{
 					queryPerson{
