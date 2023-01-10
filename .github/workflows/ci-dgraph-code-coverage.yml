@@ -63,7 +63,7 @@ jobs:
           # move the binary
           cp dgraph/dgraph ~/go/bin/dgraph
           # run the tests
-          cd t; ./t --coverage=true --suite=unit
+          cd t; ./t --coverage=true --suite=unit,ldbc
           # clean up docker containers after test execution
           ./t -r
           # sleep
