@@ -56,7 +56,7 @@ func MakeRequest(t *testing.T, token *HttpToken, params GraphQLParams) *GraphQLR
 	return MakeGQLRequestWithAccessJwt(t, &params, token.AccessJwt)
 }
 
-func Login(t *testing.T, loginParams *LoginParams) *HttpToken {
+func Login(t *testing.T, loginParams *LoginParams) (*HttpToken, error) {
 	if loginParams.Endpoint == "" {
 		loginParams.Endpoint = AdminUrl()
 	}
@@ -66,8 +66,7 @@ func Login(t *testing.T, loginParams *LoginParams) *HttpToken {
 		token, err = HttpLogin(loginParams)
 		return err
 	})
-	require.NoError(t, err, "login failed")
-	return token
+	return token, err
 }
 
 func ResetPassword(t *testing.T, token *HttpToken, userID, newPass string, nsID uint64) (string, error) {
