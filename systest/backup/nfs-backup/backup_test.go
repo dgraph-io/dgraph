@@ -19,9 +19,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -317,5 +319,13 @@ func dirSetup(t *testing.T) {
 func dirCleanup(t *testing.T) {
 	if err := os.RemoveAll("./data"); err != nil {
 		t.Fatalf("Error removing direcotory: %s", err.Error())
+	}
+	nfsContainerName := testutil.DockerPrefix + "_nfs_1"
+	cmdStr := "docker exec -d " + nfsContainerName + " rm -rf" + " /data" + backupDstHA + " /data" + backupDstNonHA
+	cmd := exec.Command("/bin/sh", "-c", cmdStr)
+	_, err := cmd.Output()
+	if err != nil {
+		// if there was any error, print it here
+		fmt.Println("could not run command: ", err)
 	}
 }
