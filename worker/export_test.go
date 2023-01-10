@@ -32,11 +32,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/proto"
-	"github.com/stretchr/testify/require"
-
 	"github.com/dgraph-io/dgo/v210/protos/api"
-
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/dql"
 	"github.com/dgraph-io/dgraph/lex"
@@ -47,6 +43,9 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
+
+	"github.com/golang/protobuf/proto"
+	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -403,6 +402,7 @@ func TestExportJson(t *testing.T) {
 const exportRequest = `mutation export($format: String!) {
 	export(input: {format: $format}) {
 		response { code }
+		taskId
 	}
 }`
 
@@ -428,6 +428,8 @@ func TestExportFormat(t *testing.T) {
 	var data interface{}
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
 	require.Equal(t, "Success", testutil.JsonGet(data, "data", "export", "response", "code").(string))
+	taskId := testutil.JsonGet(data, "data", "export", "taskId").(string)
+	testutil.WaitForTask(t, taskId, false)
 
 	params.Variables["format"] = "rdf"
 	b, err = json.Marshal(params)

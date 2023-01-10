@@ -1,3 +1,4 @@
+//go:build !oss
 // +build !oss
 
 /*
@@ -17,6 +18,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/ee/acl"
 	"github.com/dgraph-io/dgraph/x"
+
 	"github.com/stretchr/testify/require"
 )
 

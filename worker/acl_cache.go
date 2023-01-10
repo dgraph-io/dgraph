@@ -18,6 +18,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/ee/acl"
 	"github.com/dgraph-io/dgraph/x"
+
 	"github.com/pkg/errors"
 )
 
