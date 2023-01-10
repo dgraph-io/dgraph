@@ -41,6 +41,11 @@ type LiveOpts struct {
 	ForceNs    int64
 }
 
+var (
+	COVERAGE_FLAG         = "COVERAGE_OUTPUT"
+	EXPECTED_COVERAGE_ENV = "--test.coverprofile=coverage.out"
+)
+
 func LiveLoad(opts LiveOpts) error {
 	args := []string{
 		"live",
@@ -93,11 +98,13 @@ type BulkOpts struct {
 }
 
 func BulkLoad(opts BulkOpts) error {
-	coverage := os.Getenv("COVERAGE_OUTPUT")
+
 	var args []string
-	if coverage == "--test.coverprofile=coverage.out" {
+
+	if cc := os.Getenv(COVERAGE_FLAG); cc == EXPECTED_COVERAGE_ENV {
 		args = append(args, "--test.coverprofile=coverage_bulk.out")
 	}
+
 	args = append(args, "bulk",
 		"-f", opts.RdfFile,
 		"-s", opts.SchemaFile,

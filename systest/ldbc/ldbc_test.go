@@ -20,6 +20,11 @@ type TestCases struct {
 	Resp  string `yaml:"resp"`
 }
 
+var (
+	COVERAGE_FLAG         = "COVERAGE_OUTPUT"
+	EXPECTED_COVERAGE_ENV = "--test.coverprofile=coverage.out"
+)
+
 func TestQueries(t *testing.T) {
 	dg, err := testutil.DgraphClient(testutil.ContainerAddr("alpha1", 9080))
 	if err != nil {
@@ -39,9 +44,15 @@ func TestQueries(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	for _, tt := range tc {
 		desc := tt.Tag
+		if cc := os.Getenv(COVERAGE_FLAG); cc == EXPECTED_COVERAGE_ENV {
+			// LDBC test (IC05) times out for test-binaries (code coverage enabled)
+			if desc == "IC05" {
+				continue
+			}
+		}
 		// TODO(anurag): IC06 and IC10 have non-deterministic results because of dataset.
 		// Find a way to modify the queries to include them in the tests
-		if desc == "IC06" || desc == "IC10" || desc == "IC05" {
+		if desc == "IC06" || desc == "IC10" {
 			continue
 		}
 		t.Run(desc, func(t *testing.T) {
@@ -87,7 +98,7 @@ func TestMain(m *testing.M) {
 }
 
 func cleanupAndExit(exitCode int) {
-	if _, ok := os.LookupEnv("COVERAGE_OUTPUT"); ok {
+	if cc := os.Getenv(COVERAGE_FLAG); cc == EXPECTED_COVERAGE_ENV {
 		testutil.StopAlphasForCoverage("./alpha.yml")
 		os.Exit(exitCode)
 	}
