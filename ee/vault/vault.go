@@ -1,5 +1,8 @@
+//go:build oss
+// +build oss
+
 /*
- * Copyright 2017-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2020-2021 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,27 +17,16 @@
  * limitations under the License.
  */
 
-package worker
+package vault
 
 import (
-	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/dgraph/ee"
+
+	"github.com/golang/glog"
+	"github.com/spf13/viper"
 )
 
-func couldApplyAggregatorOn(agrtr string, typ types.TypeID) bool {
-	if !typ.IsScalar() {
-		return false
-	}
-	switch agrtr {
-	case "min", "max":
-		return (typ == types.IntID ||
-			typ == types.FloatID ||
-			typ == types.DateTimeID ||
-			typ == types.StringID ||
-			typ == types.DefaultID)
-	case "sum", "avg":
-		return (typ == types.IntID ||
-			typ == types.FloatID)
-	default:
-		return false
-	}
+func GetKeys(config *viper.Viper) (*ee.Keys, error) {
+	glog.Exit("flags: vault is an enterprise-only feature")
+	return nil, nil
 }

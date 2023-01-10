@@ -618,6 +618,9 @@ message Num {
   uint64 val = 1;
   bool read_only = 2;
   bool forwarded = 3;  // True if this request was forwarded by a peer.
+  // If bump is set to true then we bump the lease to val. If false, we assign new ids with count
+  // equal to val.
+  bool bump = 5;
   enum leaseType {
     NS_ID = 0;
     UID = 1;

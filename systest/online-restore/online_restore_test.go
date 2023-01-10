@@ -210,7 +210,7 @@ func TestBasicRestore(t *testing.T) {
 	sendRestoreRequest(t, "", "youthful_rhodes3", 0)
 	testutil.WaitForRestore(t, dg)
 	// Snapshot must be taken just after the restore and hence the snapshotTs be updated.
-	require.NoError(t, x.RetryUntilSuccess(3, 1*time.Second, func() error {
+	require.NoError(t, x.RetryUntilSuccess(3, 2*time.Second, func() error {
 		if getSnapshotTs(t) <= snapshotTs {
 			return errors.Errorf("snapshot not taken after restore")
 		}
