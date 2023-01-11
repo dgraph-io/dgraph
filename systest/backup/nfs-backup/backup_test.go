@@ -49,6 +49,12 @@ var (
 )
 
 func TestBackupHAClust(t *testing.T) {
+	cmd, err := exec.Command("/bin/sh", "test.sh", testutil.DockerPrefix+"_nfs_1").Output()
+	if err != nil {
+		fmt.Printf("error %s", err)
+	}
+	output := string(cmd)
+	fmt.Println(output)
 	BackupAlphaSocketAddr := testutil.SockAddr
 	BackupAlphaSocketAddrHttp := testutil.SockAddrHttp
 	BackupZeroSockerAddr := testutil.SockAddrZeroHttp
@@ -57,6 +63,12 @@ func TestBackupHAClust(t *testing.T) {
 }
 
 func TestBackupNonHAClust(t *testing.T) {
+	cmd, err := exec.Command("/bin/sh", "test.sh", testutil.DockerPrefix+"_nfs_1").Output()
+	if err != nil {
+		fmt.Printf("error %s", err)
+	}
+	output := string(cmd)
+	fmt.Println(output)
 	BackupAlphaSocketAddr := testutil.SockAddrAlpha7
 	BackupAlphaSocketAddrHttp := testutil.SockAddrAlpha7Http
 	BackupZeroSockerAddr := testutil.SockAddrZero7Http
