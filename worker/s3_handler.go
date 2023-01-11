@@ -85,7 +85,7 @@ func NewS3Handler(uri *url.URL, creds *x.MinioCredentials) (*s3Handler, error) {
 	return h, nil
 }
 
-func (h *s3Handler) createObject(mc *x.MinioClient, objectPath string) {
+func (h *s3Handler) createObject(objectPath string) {
 
 	// The backup object is: folder1...folderN/dgraph.20181106.0113/r110001-g1.backup
 	object := filepath.Join(h.objectPrefix, objectPath)
@@ -94,7 +94,7 @@ func (h *s3Handler) createObject(mc *x.MinioClient, objectPath string) {
 	h.cerr = make(chan error, 1)
 	h.preader, h.pwriter = io.Pipe()
 	go func() {
-		h.cerr <- h.upload(mc, object)
+		h.cerr <- h.upload(h.mc, object)
 	}()
 }
 
@@ -122,7 +122,7 @@ func (h *s3Handler) CreateBackupFile(uri *url.URL, req *pb.BackupRequest) error 
 
 	fileName := backupName(req.ReadTs, req.GroupId)
 	objectPath := filepath.Join(fmt.Sprintf(backupPathFmt, req.UnixTs), fileName)
-	h.createObject(h.mc, objectPath)
+	h.createObject(objectPath)
 	return nil
 }
 
@@ -134,7 +134,7 @@ func (h *s3Handler) CreateManifest(uri *url.URL, manifest *MasterManifest) error
 	// will be used to replace original manifest.
 	objectPath := filepath.Join(h.objectPrefix, backupManifest)
 	if h.objectExists(objectPath) {
-		h.createObject(h.mc, tmpManifest)
+		h.createObject(tmpManifest)
 		if err := json.NewEncoder(h).Encode(manifest); err != nil {
 			return err
 		}
@@ -170,7 +170,7 @@ func (h *s3Handler) CreateManifest(uri *url.URL, manifest *MasterManifest) error
 		err = h.mc.RemoveObject(h.bucketName, tmpObject)
 		return errors.Wrap(err, "CreateManifest failed to remove temporary manifest")
 	}
-	h.createObject(h.mc, backupManifest)
+	h.createObject(backupManifest)
 	err := json.NewEncoder(h).Encode(manifest)
 	return errors.Wrap(err, "CreateManifest failed to create a new master manifest")
 }
