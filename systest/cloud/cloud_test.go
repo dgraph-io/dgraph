@@ -33,7 +33,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func prepare(t *testing.T) {
+func setup(t *testing.T) {
 	dc := testutil.DgClientWithLogin(t, "groot", "password", x.GalaxyNamespace)
 	require.NoError(t, dc.Alter(context.Background(), &api.Operation{DropAll: true}))
 }
@@ -72,7 +72,7 @@ func graphqlHelper(t *testing.T, query string, headers http.Header,
 }
 
 func TestDisallowNonGalaxy(t *testing.T) {
-	prepare(t)
+	setup(t)
 
 	galaxyToken := getHttpToken(t, "groot", "password", x.GalaxyNamespace)
 	// Create a new namespace
@@ -145,7 +145,7 @@ func TestDisallowNonGalaxy(t *testing.T) {
 }
 
 func TestEnvironmentAccess(t *testing.T) {
-	prepare(t)
+	setup(t)
 
 	galaxyToken := getHttpToken(t, "groot", "password", x.GalaxyNamespace)
 	// Create a new namespace

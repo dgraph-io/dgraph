@@ -1,7 +1,7 @@
 version: "3.5"
 services:
   zero1:
-    image: dgraph/dgraph:latest
+    image: dgraph/dgraph:local
     working_dir: /data/zero1
     ports:
       - 5080
@@ -17,10 +17,10 @@ services:
     command: /gobin/dgraph zero --my=zero1:5080 --raft="idx=1" --logtostderr -v=2 --bindall --expose_trace --profile_mode block --block_rate 10
 
   alpha1:
-    image: dgraph/dgraph:latest
+    image: dgraph/dgraph:local
     working_dir: /data/alpha1
     env_file:
-        - ./minio.env
+        - ./../../dgraph/minio.env
     volumes:
       - type: bind
         source: $GOPATH/bin
@@ -44,7 +44,7 @@ services:
   minio:
     image: minio/minio:latest
     env_file:
-      - ./minio.env
+      - ./../../dgraph/minio.env
     working_dir: /data/minio
     ports:
       - 9001
