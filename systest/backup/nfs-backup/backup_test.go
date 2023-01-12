@@ -59,8 +59,6 @@ func TestBackupNonHAClust(t *testing.T) {
 }
 
 func backupRestoreTest(t *testing.T, backupAlphaSocketAddr string, restoreAlphaAddr string, backupZeroAddr string, backupDst string, backupAlphaSocketAddrHttp string) {
-	expObjCount := []int{5, 7, 9, 11, 2}
-
 	conn, err := grpc.Dial(backupAlphaSocketAddr, grpc.WithInsecure())
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
@@ -84,6 +82,7 @@ func backupRestoreTest(t *testing.T, backupAlphaSocketAddr string, restoreAlphaA
 		 `),
 	})
 	require.NoError(t, err)
+	totalObjectCount := 5
 	t.Logf("--- Original uid mapping: %+v\n", original.Uids)
 	// Move tablet to group 1 to avoid messes later.
 	_, err = http.Get("http://" + backupZeroAddr + "/moveTablet?tablet=movie&group=1")
@@ -91,7 +90,6 @@ func backupRestoreTest(t *testing.T, backupAlphaSocketAddr string, restoreAlphaA
 	// After the move, we need to pause a bit to give zero a chance to quorum.
 	t.Log("Pausing to let zero move tablet...")
 	moveOk := false
-
 	for !moveOk {
 		state, err := testutil.GetState()
 		require.NoError(t, err)
@@ -106,11 +104,11 @@ func backupRestoreTest(t *testing.T, backupAlphaSocketAddr string, restoreAlphaA
 	// //mostly because of a race condition adding sleep
 	// time.Sleep(time.Second * 10)
 	_ = runBackup(t, 1, 1, backupAlphaSocketAddrHttp, backupDst)
-	restoreStatusCode := runRestore(t, "", restoreAlphaAddr, backupDst, false, 1)
+	restoreStatusCode := restore(t, "", restoreAlphaAddr, backupDst, "non-incremantal", 1)
 	require.Equal(t, "Success", restoreStatusCode)
 	testutil.WaitForRestore(t, dg, restoreAlphaAddr)
 	// We check expected Objects vs Received Objects from restoreed db
-	checkObjectCount(t, expObjCount[0], restoreAlphaAddr)
+	checkObjectCount(t, totalObjectCount, restoreAlphaAddr)
 	// Add more data for the incremental backup.
 	incr1, err := dg.NewTxn().Mutate(ctx, &api.Mutation{
 		CommitNow: true,
@@ -122,6 +120,7 @@ func backupRestoreTest(t *testing.T, backupAlphaSocketAddr string, restoreAlphaA
 	t.Logf("%+v", incr1)
 	require.NoError(t, err)
 	// Perform first incremental backup.
+	totalObjectCount = totalObjectCount + 2
 	_ = runBackup(t, 2, 2, backupAlphaSocketAddrHttp, backupDst)
 	// Add more data for a second incremental backup.
 	_, err = dg.NewTxn().Mutate(ctx, &api.Mutation{
@@ -134,14 +133,15 @@ func backupRestoreTest(t *testing.T, backupAlphaSocketAddr string, restoreAlphaA
 	t.Logf("%+v", incr1)
 	require.NoError(t, err)
 	_ = runBackup(t, 3, 3, backupAlphaSocketAddrHttp, backupDst)
-	restoreStatusCode = runRestore(t, "", restoreAlphaAddr, backupDst, true, 2)
+	restoreStatusCode = restore(t, "", restoreAlphaAddr, backupDst, "incremental", 2)
 	require.Equal(t, "Success", restoreStatusCode)
 	testutil.WaitForRestore(t, dg, restoreAlphaAddr)
-	checkObjectCount(t, expObjCount[1], restoreAlphaAddr)
-	restoreStatusCode = runRestore(t, "", restoreAlphaAddr, backupDst, true, 3)
+	checkObjectCount(t, totalObjectCount, restoreAlphaAddr)
+	restoreStatusCode = restore(t, "", restoreAlphaAddr, backupDst, "incremental", 3)
 	require.Equal(t, "Success", restoreStatusCode)
 	testutil.WaitForRestore(t, dg, restoreAlphaAddr)
-	checkObjectCount(t, expObjCount[2], restoreAlphaAddr)
+	totalObjectCount = totalObjectCount + 2
+	checkObjectCount(t, totalObjectCount, restoreAlphaAddr)
 	// Add more data for a second full backup.
 	_, err = dg.NewTxn().Mutate(ctx, &api.Mutation{
 		CommitNow: true,
@@ -152,12 +152,13 @@ func backupRestoreTest(t *testing.T, backupAlphaSocketAddr string, restoreAlphaA
 	})
 	t.Logf("%+v", incr1)
 	require.NoError(t, err)
+	totalObjectCount = totalObjectCount + 2
 	// Perform second full backup.
 	_ = runBackupInternal(t, true, 4, 4, backupAlphaSocketAddrHttp, backupDst)
-	restoreStatusCode = runRestore(t, "", restoreAlphaAddr, backupDst, false, 4)
+	restoreStatusCode = restore(t, "", restoreAlphaAddr, backupDst, "non-incremental", 4)
 	require.Equal(t, "Success", restoreStatusCode)
 	testutil.WaitForRestore(t, dg, restoreAlphaAddr)
-	checkObjectCount(t, expObjCount[3], restoreAlphaAddr)
+	checkObjectCount(t, totalObjectCount, restoreAlphaAddr)
 	// Do a DROP_DATA
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropOp: api.Operation_DATA}))
 	// add some data
@@ -169,12 +170,13 @@ func backupRestoreTest(t *testing.T, backupAlphaSocketAddr string, restoreAlphaA
 			 `),
 	})
 	require.NoError(t, err)
+	totalObjectCount = 2
 	// perform an incremental backup and then restore
 	_ = runBackup(t, 5, 5, backupAlphaSocketAddrHttp, backupDst)
-	restoreStatusCode = runRestore(t, "", restoreAlphaAddr, backupDst, false, 5)
+	restoreStatusCode = restore(t, "", restoreAlphaAddr, backupDst, "non-incremental", 5)
 	require.Equal(t, "Success", restoreStatusCode)
 	testutil.WaitForRestore(t, dg, restoreAlphaAddr)
-	checkObjectCount(t, expObjCount[4], restoreAlphaAddr)
+	checkObjectCount(t, totalObjectCount, restoreAlphaAddr)
 	// Clean up test directories.
 	dirCleanup(t)
 }
@@ -257,9 +259,9 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	return dirs
 }
 
-func runRestore(t *testing.T, lastDir string, restoreAlphaAddr string, backupDst string, isIncremental bool, backupNum int) string {
+func restore(t *testing.T, lastDir string, restoreAlphaAddr string, backupDst string, backupType string, backupNum int) string {
 	var restoreRequest string
-	if isIncremental == false {
+	if backupType != "incremental" {
 		restoreRequest = `mutation restore($loc: String!) {
 			restore(input: {location: $loc}) {
 					code
