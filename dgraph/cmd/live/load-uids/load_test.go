@@ -94,6 +94,7 @@ func TestLiveLoadUpsertAtOnce(t *testing.T) {
 	testutil.DropAll(t, dg)
 
 	file := testDataDir + "/xid_a.rdf, " + testDataDir + "/xid_b.rdf"
+
 	pipeline := [][]string{
 		{testutil.DgraphBinaryPath(), "live",
 			"--schema", testDataDir + "/xid.schema", "--files", file, "--alpha",
