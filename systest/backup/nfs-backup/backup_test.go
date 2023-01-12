@@ -27,7 +27,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/dgraph-io/dgraph/systest/backup/common"
 	"github.com/dgraph-io/dgraph/testutil"
@@ -60,6 +59,8 @@ func TestBackupNonHAClust(t *testing.T) {
 }
 
 func backupRestoreTest(t *testing.T, backupAlphaSocketAddr string, restoreAlphaAddr string, backupZeroAddr string, backupDst string, backupAlphaSocketAddrHttp string) {
+	expObjCount := []int{5, 7, 9, 11, 2}
+
 	conn, err := grpc.Dial(backupAlphaSocketAddr, grpc.WithInsecure())
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
@@ -85,34 +86,31 @@ func backupRestoreTest(t *testing.T, backupAlphaSocketAddr string, restoreAlphaA
 	require.NoError(t, err)
 	t.Logf("--- Original uid mapping: %+v\n", original.Uids)
 	// Move tablet to group 1 to avoid messes later.
-	// client := *http.DefaultClient
 	_, err = http.Get("http://" + backupZeroAddr + "/moveTablet?tablet=movie&group=1")
 	require.NoError(t, err)
 	// After the move, we need to pause a bit to give zero a chance to quorum.
 	t.Log("Pausing to let zero move tablet...")
 	moveOk := false
-	for retry := 5; retry > 0; retry-- {
+
+	for !moveOk {
 		state, err := testutil.GetState()
 		require.NoError(t, err)
 		if _, ok := state.Groups["1"].Tablets[x.NamespaceAttr(x.GalaxyNamespace, "movie")]; ok {
 			moveOk = true
 			break
 		}
-		time.Sleep(1 * time.Second)
 	}
 	require.True(t, moveOk)
 	// Setup test directories.
 	dirSetup(t)
-	// Send backup request.
-	//       mostly because of a race condition
-	//       adding sleep
-	time.Sleep(time.Second * 10)
+	// //mostly because of a race condition adding sleep
+	// time.Sleep(time.Second * 10)
 	_ = runBackup(t, 1, 1, backupAlphaSocketAddrHttp, backupDst)
 	restoreStatusCode := runRestore(t, "", restoreAlphaAddr, backupDst, false, 1)
 	require.Equal(t, "Success", restoreStatusCode)
 	testutil.WaitForRestore(t, dg, restoreAlphaAddr)
 	// We check expected Objects vs Received Objects from restoreed db
-	checkObjectCount(t, 5, 5, restoreAlphaAddr)
+	checkObjectCount(t, expObjCount[0], restoreAlphaAddr)
 	// Add more data for the incremental backup.
 	incr1, err := dg.NewTxn().Mutate(ctx, &api.Mutation{
 		CommitNow: true,
@@ -139,11 +137,11 @@ func backupRestoreTest(t *testing.T, backupAlphaSocketAddr string, restoreAlphaA
 	restoreStatusCode = runRestore(t, "", restoreAlphaAddr, backupDst, true, 2)
 	require.Equal(t, "Success", restoreStatusCode)
 	testutil.WaitForRestore(t, dg, restoreAlphaAddr)
-	checkObjectCount(t, 7, 7, restoreAlphaAddr)
+	checkObjectCount(t, expObjCount[1], restoreAlphaAddr)
 	restoreStatusCode = runRestore(t, "", restoreAlphaAddr, backupDst, true, 3)
 	require.Equal(t, "Success", restoreStatusCode)
 	testutil.WaitForRestore(t, dg, restoreAlphaAddr)
-	checkObjectCount(t, 9, 9, restoreAlphaAddr)
+	checkObjectCount(t, expObjCount[2], restoreAlphaAddr)
 	// Add more data for a second full backup.
 	_, err = dg.NewTxn().Mutate(ctx, &api.Mutation{
 		CommitNow: true,
@@ -159,7 +157,7 @@ func backupRestoreTest(t *testing.T, backupAlphaSocketAddr string, restoreAlphaA
 	restoreStatusCode = runRestore(t, "", restoreAlphaAddr, backupDst, false, 4)
 	require.Equal(t, "Success", restoreStatusCode)
 	testutil.WaitForRestore(t, dg, restoreAlphaAddr)
-	checkObjectCount(t, 11, 11, restoreAlphaAddr)
+	checkObjectCount(t, expObjCount[3], restoreAlphaAddr)
 	// Do a DROP_DATA
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropOp: api.Operation_DATA}))
 	// add some data
@@ -176,13 +174,13 @@ func backupRestoreTest(t *testing.T, backupAlphaSocketAddr string, restoreAlphaA
 	restoreStatusCode = runRestore(t, "", restoreAlphaAddr, backupDst, false, 5)
 	require.Equal(t, "Success", restoreStatusCode)
 	testutil.WaitForRestore(t, dg, restoreAlphaAddr)
-	checkObjectCount(t, 2, 2, restoreAlphaAddr)
+	checkObjectCount(t, expObjCount[4], restoreAlphaAddr)
 	// Clean up test directories.
 	dirCleanup(t)
 }
 
 // function to check object count
-func checkObjectCount(t *testing.T, expectedCount, receivedCount int, restoreAlphaAddr string) {
+func checkObjectCount(t *testing.T, expectedCount int, restoreAlphaAddr string) {
 	checkCountRequest := `query {
 		 movieCount(func: has(movie)) {
 		   count(uid)
@@ -196,7 +194,6 @@ func checkObjectCount(t *testing.T, expectedCount, receivedCount int, restoreAlp
 	}
 	b, err := json.Marshal(params)
 	require.NoError(t, err)
-	// client := *http.DefaultClient
 	resp, err := http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
 	defer resp.Body.Close()
@@ -231,7 +228,6 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	}
 	b, err := json.Marshal(params)
 	require.NoError(t, err)
-	// client := *http.DefaultClient
 	resp, err := http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
 	defer resp.Body.Close()
@@ -291,7 +287,6 @@ func runRestore(t *testing.T, lastDir string, restoreAlphaAddr string, backupDst
 	}
 	b, err := json.Marshal(params)
 	require.NoError(t, err)
-	// client := *http.DefaultClient
 	resp, err := http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
 	defer resp.Body.Close()
