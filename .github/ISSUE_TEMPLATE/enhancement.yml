@@ -1,13 +1,13 @@
 name: "⚡ Enhancement Request"
 description: Something could be better.
 title: "[ENHANCEMENT]: <Title>"
-labels: ["kind/enhancement "]
+labels: ["kind/enhancement","status/triage"]
 body:
   - type: markdown
     attributes:
       value: |
         Something could be better?
-        If you request is about a net new feature please use the Feature Request template.
+        If your request is about a net new feature please use the Feature Request template.
         Enhancements are tagged `kind/enhancement`.
   - type: textarea
     attributes:
