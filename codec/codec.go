@@ -406,8 +406,7 @@ func Decode(pack *pb.UidPack, seek uint64) []uint64 {
 
 // DecodeToBuffer is the same as Decode but it returns a z.Buffer which is
 // calloc'ed and can be SHOULD be freed up by calling buffer.Release().
-func DecodeToBuffer(buf *z.Buffer, pack *pb.UidPack) *z.Buffer {
-
+func DecodeToBuffer(buf *z.Buffer, pack *pb.UidPack) {
 	var last uint64
 	tmp := make([]byte, 16)
 	dec := Decoder{Pack: pack}
@@ -418,7 +417,6 @@ func DecodeToBuffer(buf *z.Buffer, pack *pb.UidPack) *z.Buffer {
 			last = u
 		}
 	}
-	return buf
 }
 
 func match32MSB(num1, num2 uint64) bool {
