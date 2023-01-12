@@ -1,13 +1,13 @@
 name: "⚡ Feature Request"
 description: Suggest a new feature
 title: "[FEATURE]: <Title>"
-labels: ["kind/feature"]
+labels: ["kind/feature","status/triage"]
 body:
   - type: markdown
     attributes:
       value: |
         You have an idea for making Dgraph better? We'd love to hear about it.
-        Please search the issue list first as there is a chance that someone else had the same idea.
+        Please search the issue list first as there is a chance that someone else has had the same idea.
         Feature requests are tagged `kind/feature`.
         If you find a similar request, add a thumbs-up to vote for it and optionally add a comment to be part of the conversation.
   - type: textarea
