@@ -72,7 +72,7 @@ image-local local-image:
 	@docker build -f contrib/Dockerfile -t dgraph/dgraph:local .
 	@rm -r linux
 
-docker-image: dgraph 
+docker-image: dgraph
 	@mkdir -p linux
 	@cp ./dgraph/dgraph ./linux/dgraph
 	docker build -f contrib/Dockerfile -t dgraph/dgraph:$(DGRAPH_VERSION) .
