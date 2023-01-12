@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors *
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -29,12 +29,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgo/v210"
-	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/systest/backup/common"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+
+	"github.com/dgraph-io/dgo/v210"
+	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 )
@@ -49,31 +50,13 @@ var (
 )
 
 func TestBackupHAClust(t *testing.T) {
-	cmd, err := exec.Command("/bin/sh", "test.sh", testutil.DockerPrefix+"_nfs_1").Output()
-	if err != nil {
-		fmt.Printf("error %s", err)
-	}
-	output := string(cmd)
-	fmt.Println(output)
-	BackupAlphaSocketAddr := testutil.SockAddr
-	BackupAlphaSocketAddrHttp := testutil.SockAddrHttp
-	BackupZeroSockerAddr := testutil.SockAddrZeroHttp
-	RestoreAlphaSocketAddr := testutil.R_SockAddrHttp
-	backupRestoreTest(t, BackupAlphaSocketAddr, RestoreAlphaSocketAddr, BackupZeroSockerAddr, backupDstHA, BackupAlphaSocketAddrHttp)
+
+	backupRestoreTest(t, testutil.SockAddr, testutil.SockAddrAlpha4Http, testutil.SockAddrZeroHttp, backupDstHA, testutil.SockAddrHttp)
 }
 
 func TestBackupNonHAClust(t *testing.T) {
-	cmd, err := exec.Command("/bin/sh", "test.sh", testutil.DockerPrefix+"_nfs_1").Output()
-	if err != nil {
-		fmt.Printf("error %s", err)
-	}
-	output := string(cmd)
-	fmt.Println(output)
-	BackupAlphaSocketAddr := testutil.SockAddrAlpha7
-	BackupAlphaSocketAddrHttp := testutil.SockAddrAlpha7Http
-	BackupZeroSockerAddr := testutil.SockAddrZero7Http
-	RestoreAlphaSocketAddr := testutil.R_SockAddrAlpha8Http
-	backupRestoreTest(t, BackupAlphaSocketAddr, RestoreAlphaSocketAddr, BackupZeroSockerAddr, backupDstNonHA, BackupAlphaSocketAddrHttp)
+
+	backupRestoreTest(t, testutil.SockAddrAlpha7, testutil.SockAddrAlpha8Http, testutil.SockAddrZero7Http, backupDstNonHA, testutil.SockAddrAlpha7Http)
 }
 
 func backupRestoreTest(t *testing.T, backupAlphaSocketAddr string, restoreAlphaAddr string, backupZeroAddr string, backupDst string, backupAlphaSocketAddrHttp string) {
@@ -102,8 +85,8 @@ func backupRestoreTest(t *testing.T, backupAlphaSocketAddr string, restoreAlphaA
 	require.NoError(t, err)
 	t.Logf("--- Original uid mapping: %+v\n", original.Uids)
 	// Move tablet to group 1 to avoid messes later.
-	client := *http.DefaultClient
-	_, err = client.Get("http://" + backupZeroAddr + "/moveTablet?tablet=movie&group=1")
+	// client := *http.DefaultClient
+	_, err = http.Get("http://" + backupZeroAddr + "/moveTablet?tablet=movie&group=1")
 	require.NoError(t, err)
 	// After the move, we need to pause a bit to give zero a chance to quorum.
 	t.Log("Pausing to let zero move tablet...")
@@ -213,8 +196,8 @@ func checkObjectCount(t *testing.T, expectedCount, receivedCount int, restoreAlp
 	}
 	b, err := json.Marshal(params)
 	require.NoError(t, err)
-	client := *http.DefaultClient
-	resp, err := client.Post(adminUrl, "application/json", bytes.NewBuffer(b))
+	// client := *http.DefaultClient
+	resp, err := http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
 	defer resp.Body.Close()
 	var data interface{}
@@ -248,8 +231,8 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	}
 	b, err := json.Marshal(params)
 	require.NoError(t, err)
-	client := *http.DefaultClient
-	resp, err := client.Post(adminUrl, "application/json", bytes.NewBuffer(b))
+	// client := *http.DefaultClient
+	resp, err := http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
 	defer resp.Body.Close()
 	var data interface{}
@@ -308,8 +291,8 @@ func runRestore(t *testing.T, lastDir string, restoreAlphaAddr string, backupDst
 	}
 	b, err := json.Marshal(params)
 	require.NoError(t, err)
-	client := *http.DefaultClient
-	resp, err := client.Post(adminUrl, "application/json", bytes.NewBuffer(b))
+	// client := *http.DefaultClient
+	resp, err := http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
 	defer resp.Body.Close()
 	var data interface{}

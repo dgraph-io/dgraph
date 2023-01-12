@@ -61,30 +61,30 @@ var (
 	// SockAddrZeroHttp is the address to the HTTP endpoint of the zero used during tests.
 	SockAddrZeroHttp string
 
-	// R_SockAddr is the address to the gRPC endpoint of the alpha4 used during restore tests.
-	R_SockAddr string
-	// R_SockAddrHttp is the address to the HTTP of alpha4 used during restore tests.
-	R_SockAddrHttp string
-	// R_SockAddrZero is the address to the gRPC endpoint of the zero2 used during restore tests.
-	R_SockAddrZero string
-	// R_SockAddrZeroHttp is the address to the HTTP endpoint of the zero2 used during restore tests.
-	R_SockAddrZeroHttp string
-	// R_SockAddr is the address to the gRPC endpoint of the alpha4 used during restore tests.
+	// SockAddrAlpha4 is the address to the gRPC endpoint of the alpha4 used during restore tests.
+	SockAddrAlpha4 string
+	// SockAddrAlpha4Http is the address to the HTTP of alpha4 used during restore tests.
+	SockAddrAlpha4Http string
+	// SockAddrZero4 is the address to the gRPC endpoint of the zero4 used during restore tests.
+	SockAddrZero4 string
+	// SockAddrZero4Http is the address to the HTTP endpoint of the zero4 used during restore tests.
+	SockAddrZero4Http string
+	// SockAddrAlpha7 is the address to the gRPC endpoint of the alpha4 used during restore tests.
 	SockAddrAlpha7 string
-	// R_SockAddrHttp is the address to the HTTP of alpha4 used during restore tests.
+	// SockAddrAlpha7Http is the address to the HTTP of alpha7 used during restore tests.
 	SockAddrAlpha7Http string
-	// R_SockAddrZero is the address to the gRPC endpoint of the zero2 used during restore tests.
+	// SockAddrZero7 is the address to the gRPC endpoint of the zero7 used during restore tests.
 	SockAddrZero7 string
-	// R_SockAddrZeroHttp is the address to the HTTP endpoint of the zero2 used during restore tests.
+	// SockAddrZero7Http is the address to the HTTP endpoint of the zero7 used during restore tests.
 	SockAddrZero7Http string
-	// R_SockAddr is the address to the gRPC endpoint of the alpha4 used during restore tests.
-	R_SockAddrAlpha8 string
-	// R_SockAddrHttp is the address to the HTTP of alpha4 used during restore tests.
-	R_SockAddrAlpha8Http string
-	// R_SockAddrZero is the address to the gRPC endpoint of the zero2 used during restore tests.
-	R_SockAddrZero8 string
-	// R_SockAddrZeroHttp is the address to the HTTP endpoint of the zero2 used during restore tests.
-	R_SockAddrZero8Http string
+	// SockAddrAlpha8 is the address to the gRPC endpoint of the alpha8 used during restore tests.
+	SockAddrAlpha8 string
+	// SockAddrAlpha8Http is the address to the HTTP of alpha8 used during restore tests.
+	SockAddrAlpha8Http string
+	// SockAddrZero8 is the address to the gRPC endpoint of the zero8 used during restore tests.
+	SockAddrZero8 string
+	// SockAddrZero8Http is the address to the HTTP endpoint of the zero8 used during restore tests.
+	SockAddrZero8Http string
 )
 
 func AdminUrlHttps() string {
@@ -108,19 +108,19 @@ func init() {
 	SockAddrZero = ContainerAddr("zero1", 5080)
 	SockAddrZeroHttp = ContainerAddr("zero1", 6080)
 
-	R_SockAddr = ContainerAddr("alpha4", 9080)
-	R_SockAddrHttp = ContainerAddr("alpha4", 8080)
+	SockAddrAlpha4 = ContainerAddr("alpha4", 9080)
+	SockAddrAlpha4Http = ContainerAddr("alpha4", 8080)
 	SockAddrAlpha7 = ContainerAddr("alpha7", 9080)
 	SockAddrAlpha7Http = ContainerAddr("alpha7", 8080)
 	SockAddrZero7 = ContainerAddr("zero7", 5080)
 	SockAddrZero7Http = ContainerAddr("zero7", 6080)
-	R_SockAddrAlpha8 = ContainerAddr("alpha8", 9080)
-	R_SockAddrAlpha8Http = ContainerAddr("alpha8", 8080)
-	R_SockAddrZero8 = ContainerAddr("zero8", 5080)
-	R_SockAddrZero8Http = ContainerAddr("zero8", 6080)
+	SockAddrAlpha8 = ContainerAddr("alpha8", 9080)
+	SockAddrAlpha8Http = ContainerAddr("alpha8", 8080)
+	SockAddrZero8 = ContainerAddr("zero8", 5080)
+	SockAddrZero8Http = ContainerAddr("zero8", 6080)
 
-	R_SockAddrZero = ContainerAddr("zero2", 5080)
-	R_SockAddrZeroHttp = ContainerAddr("zero2", 6080)
+	SockAddrZero4 = ContainerAddr("zero2", 5080)
+	SockAddrZero4Http = ContainerAddr("zero2", 6080)
 
 	fmt.Printf("testutil: %q %s %s\n", DockerPrefix, SockAddr, SockAddrZero)
 }
