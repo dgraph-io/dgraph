@@ -2,7 +2,7 @@
 // +build !oss
 
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Dgraph Community License (the "License"); you
  * may not use this file except in compliance with the License. You
@@ -18,7 +18,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/gorilla/websocket"
 	"io"
 	"io/ioutil"
 	"net"
@@ -28,17 +27,18 @@ import (
 	"strings"
 	"sync/atomic"
 
+	"github.com/dgraph-io/dgraph/graphql/schema"
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/gqlparser/v2/ast"
+	"github.com/dgraph-io/gqlparser/v2/parser"
+
 	"github.com/golang/glog"
+	"github.com/gorilla/websocket"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
-
-	"github.com/dgraph-io/dgraph/graphql/schema"
-	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/gqlparser/v2/ast"
-	"github.com/dgraph-io/gqlparser/v2/parser"
 )
 
 const (
@@ -123,11 +123,15 @@ func AuditWebSockets(ctx context.Context, req *schema.Request) {
 	}
 
 	namespace := uint64(0)
+	var err error
 	var user string
 	// TODO(anurag): X-Dgraph-AccessToken should be exported as a constant
 	if token := req.Header.Get("X-Dgraph-AccessToken"); token != "" {
 		user = getUser(token, false)
-		namespace, _ = x.ExtractNamespaceFromJwt(token)
+		namespace, err = x.ExtractNamespaceFromJwt(token)
+		if err != nil {
+			glog.Warningf("Error while auditing websockets: %s", err)
+		}
 	} else if token := req.Header.Get("X-Dgraph-AuthToken"); token != "" {
 		user = getUser(token, true)
 	} else {
