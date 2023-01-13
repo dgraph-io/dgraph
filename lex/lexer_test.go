@@ -425,54 +425,64 @@ import (
 // 	}
 // }
 
-// func TestLexer_Run(t *testing.T) {
-// 	type fields struct {
-// 		Input      string
-// 		Start      int
-// 		Pos        int
-// 		Width      int
-// 		widthStack []*RuneWidth
-// 		items      []Item
-// 		Depth      int
-// 		BlockDepth int
-// 		ArgDepth   int
-// 		Mode       StateFn
-// 		Line       int
-// 		Column     int
-// 	}
-// 	type args struct {
-// 		f StateFn
-// 	}
-// 	tests := []struct {
-// 		name   string
-// 		fields fields
-// 		args   args
-// 		want   *Lexer
-// 	}{
-// 		// TODO: Add test cases.
-// 	}
-// 	for _, tt := range tests {
-// 		t.Run(tt.name, func(t *testing.T) {
-// 			l := &Lexer{
-// 				Input:      tt.fields.Input,
-// 				Start:      tt.fields.Start,
-// 				Pos:        tt.fields.Pos,
-// 				Width:      tt.fields.Width,
-// 				widthStack: tt.fields.widthStack,
-// 				items:      tt.fields.items,
-// 				Depth:      tt.fields.Depth,
-// 				BlockDepth: tt.fields.BlockDepth,
-// 				ArgDepth:   tt.fields.ArgDepth,
-// 				Mode:       tt.fields.Mode,
-// 				Line:       tt.fields.Line,
-// 				Column:     tt.fields.Column,
-// 			}
-// 			if got := l.Run(tt.args.f); !reflect.DeepEqual(got, tt.want) {
-// 				t.Errorf("Lexer.Run() = %v, want %v", got, tt.want)
-// 			}
-// 		})
-// 	}
-// }
+// to do: need to understand how it works completely for to do false cases
+func TestLexer_Run(t *testing.T) {
+	type fields struct {
+		Input      string
+		Start      int
+		Pos        int
+		Width      int
+		widthStack []*RuneWidth
+		items      []Item
+		Depth      int
+		BlockDepth int
+		ArgDepth   int
+		Mode       StateFn
+		Line       int
+		Column     int
+	}
+	type args struct {
+		f StateFn
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		args   args
+		want   *Lexer
+	}{
+		{
+			name:   "TestLexer_Run 1",
+			fields: fields{},
+			args: args{
+				f: func(*Lexer) StateFn {
+					return nil
+				},
+			},
+			want: &Lexer{},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := &Lexer{
+				Input:      tt.fields.Input,
+				Start:      tt.fields.Start,
+				Pos:        tt.fields.Pos,
+				Width:      tt.fields.Width,
+				widthStack: tt.fields.widthStack,
+				items:      tt.fields.items,
+				Depth:      tt.fields.Depth,
+				BlockDepth: tt.fields.BlockDepth,
+				ArgDepth:   tt.fields.ArgDepth,
+				Mode:       tt.fields.Mode,
+				Line:       tt.fields.Line,
+				Column:     tt.fields.Column,
+			}
+			if got := l.Run(tt.args.f); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("Lexer.Run() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
 
 // func TestLexer_Errorf(t *testing.T) {
 // 	type fields struct {
@@ -499,7 +509,29 @@ import (
 // 		args   args
 // 		want   StateFn
 // 	}{
-// 		// TODO: Add test cases.
+// 		{
+// 			name: "TestLexer_Errorf 1",
+// 			fields: fields{
+// 				Input:      "test",
+// 				Start:      0,
+// 				Pos:        0,
+// 				Width:      0,
+// 				widthStack: []*RuneWidth{},
+// 				items:      []Item{},
+// 				Depth:      0,
+// 				BlockDepth: 0,
+// 				ArgDepth:   0,
+// 				Mode: func(*Lexer) StateFn {
+// 					return nil
+// 				},
+// 				Line:   0,
+// 				Column: 0,
+// 			},
+// 			args: args{format: "", args: []interface{}{}},
+// 			want: func(l *Lexer) StateFn {
+// 				return nil
+// 			},
+// 		},
 // 	}
 // 	for _, tt := range tests {
 // 		t.Run(tt.name, func(t *testing.T) {
@@ -524,6 +556,7 @@ import (
 // 	}
 // }
 
+// need to understand this func*****
 // func TestLexer_Emit(t *testing.T) {
 // 	type fields struct {
 // 		Input      string
@@ -547,7 +580,30 @@ import (
 // 		fields fields
 // 		args   args
 // 	}{
-// 		// TODO: Add test cases.
+// 		{
+// 			name: "TestLexer_Emit 1",
+// 			fields: fields{
+// 				Input:      "test",
+// 				Start:      0,
+// 				Pos:        0,
+// 				Width:      0,
+// 				widthStack: []*RuneWidth{},
+// 				items:      []Item{},
+// 				Depth:      0,
+// 				BlockDepth: 0,
+// 				ArgDepth:   0,
+// 				Line:       0,
+// 				Column:     0,
+// 			},
+// 			args: args{
+// 				t: 5,
+// 			},
+// 		},
+// 		{
+// 			name:   "TestLexer_Emit 2",
+// 			fields: fields{},
+// 			args:   args{t: 5},
+// 		},
 // 	}
 // 	for _, tt := range tests {
 // 		t.Run(tt.name, func(t *testing.T) {
@@ -570,138 +626,198 @@ import (
 // 	}
 // }
 
-// func TestLexer_pushWidth(t *testing.T) {
-// 	type fields struct {
-// 		Input      string
-// 		Start      int
-// 		Pos        int
-// 		Width      int
-// 		widthStack []*RuneWidth
-// 		items      []Item
-// 		Depth      int
-// 		BlockDepth int
-// 		ArgDepth   int
-// 		Mode       StateFn
-// 		Line       int
-// 		Column     int
-// 	}
-// 	type args struct {
-// 		width int
-// 	}
-// 	tests := []struct {
-// 		name   string
-// 		fields fields
-// 		args   args
-// 	}{
-// 		// TODO: Add test cases.
-// 	}
-// 	for _, tt := range tests {
-// 		t.Run(tt.name, func(t *testing.T) {
-// 			l := &Lexer{
-// 				Input:      tt.fields.Input,
-// 				Start:      tt.fields.Start,
-// 				Pos:        tt.fields.Pos,
-// 				Width:      tt.fields.Width,
-// 				widthStack: tt.fields.widthStack,
-// 				items:      tt.fields.items,
-// 				Depth:      tt.fields.Depth,
-// 				BlockDepth: tt.fields.BlockDepth,
-// 				ArgDepth:   tt.fields.ArgDepth,
-// 				Mode:       tt.fields.Mode,
-// 				Line:       tt.fields.Line,
-// 				Column:     tt.fields.Column,
-// 			}
-// 			l.pushWidth(tt.args.width)
-// 		})
-// 	}
-// }
+// need to understand this func*****
+func TestLexer_pushWidth(t *testing.T) {
+	type fields struct {
+		Input      string
+		Start      int
+		Pos        int
+		Width      int
+		widthStack []*RuneWidth
+		items      []Item
+		Depth      int
+		BlockDepth int
+		ArgDepth   int
+		Mode       StateFn
+		Line       int
+		Column     int
+	}
+	type args struct {
+		width int
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		args   args
+	}{
+		{
+			name: "TestLexer_pushWidth 1",
+			fields: fields{
+				Input: "testing",
+				Start: 0,
+				Pos:   0,
+				Width: 0,
+				widthStack: []*RuneWidth{
+					{width: 0, count: 0},
+				},
+				items:      []Item{},
+				Depth:      0,
+				BlockDepth: 0,
+				ArgDepth:   0,
+				Line:       0,
+				Column:     0,
+			},
+			args: args{width: 6},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := &Lexer{
+				Input:      tt.fields.Input,
+				Start:      tt.fields.Start,
+				Pos:        tt.fields.Pos,
+				Width:      tt.fields.Width,
+				widthStack: tt.fields.widthStack,
+				items:      tt.fields.items,
+				Depth:      tt.fields.Depth,
+				BlockDepth: tt.fields.BlockDepth,
+				ArgDepth:   tt.fields.ArgDepth,
+				Mode:       tt.fields.Mode,
+				Line:       tt.fields.Line,
+				Column:     tt.fields.Column,
+			}
+			l.pushWidth(tt.args.width)
+		})
+	}
+}
 
-// func TestLexer_Next(t *testing.T) {
-// 	type fields struct {
-// 		Input      string
-// 		Start      int
-// 		Pos        int
-// 		Width      int
-// 		widthStack []*RuneWidth
-// 		items      []Item
-// 		Depth      int
-// 		BlockDepth int
-// 		ArgDepth   int
-// 		Mode       StateFn
-// 		Line       int
-// 		Column     int
-// 	}
-// 	tests := []struct {
-// 		name       string
-// 		fields     fields
-// 		wantResult rune
-// 	}{
-// 		// TODO: Add test cases.
-// 	}
-// 	for _, tt := range tests {
-// 		t.Run(tt.name, func(t *testing.T) {
-// 			l := &Lexer{
-// 				Input:      tt.fields.Input,
-// 				Start:      tt.fields.Start,
-// 				Pos:        tt.fields.Pos,
-// 				Width:      tt.fields.Width,
-// 				widthStack: tt.fields.widthStack,
-// 				items:      tt.fields.items,
-// 				Depth:      tt.fields.Depth,
-// 				BlockDepth: tt.fields.BlockDepth,
-// 				ArgDepth:   tt.fields.ArgDepth,
-// 				Mode:       tt.fields.Mode,
-// 				Line:       tt.fields.Line,
-// 				Column:     tt.fields.Column,
-// 			}
-// 			if gotResult := l.Next(); gotResult != tt.wantResult {
-// 				t.Errorf("Lexer.Next() = %v, want %v", gotResult, tt.wantResult)
-// 			}
-// 		})
-// 	}
-// }
+// to do: more tests with other positions*****
+func TestLexer_Next(t *testing.T) {
+	type fields struct {
+		Input      string
+		Start      int
+		Pos        int
+		Width      int
+		widthStack []*RuneWidth
+		items      []Item
+		Depth      int
+		BlockDepth int
+		ArgDepth   int
+		Mode       StateFn
+		Line       int
+		Column     int
+	}
+	tests := []struct {
+		name       string
+		fields     fields
+		wantResult rune
+	}{
+		{
+			name: "TestLexer_Next 1",
+			fields: fields{
+				Input:      "test",
+				Start:      0,
+				Pos:        0,
+				Width:      0,
+				widthStack: []*RuneWidth{},
+				items:      []Item{},
+				Depth:      0,
+				BlockDepth: 0,
+				ArgDepth:   0,
+				Line:       0,
+				Column:     0,
+			},
+			wantResult: 't',
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := &Lexer{
+				Input:      tt.fields.Input,
+				Start:      tt.fields.Start,
+				Pos:        tt.fields.Pos,
+				Width:      tt.fields.Width,
+				widthStack: tt.fields.widthStack,
+				items:      tt.fields.items,
+				Depth:      tt.fields.Depth,
+				BlockDepth: tt.fields.BlockDepth,
+				ArgDepth:   tt.fields.ArgDepth,
+				Mode:       tt.fields.Mode,
+				Line:       tt.fields.Line,
+				Column:     tt.fields.Column,
+			}
+			if gotResult := l.Next(); gotResult != tt.wantResult {
+				t.Errorf("Lexer.Next() = %v, want %v", gotResult, tt.wantResult)
+			}
+		})
+	}
+}
 
-// func TestLexer_Backup(t *testing.T) {
-// 	type fields struct {
-// 		Input      string
-// 		Start      int
-// 		Pos        int
-// 		Width      int
-// 		widthStack []*RuneWidth
-// 		items      []Item
-// 		Depth      int
-// 		BlockDepth int
-// 		ArgDepth   int
-// 		Mode       StateFn
-// 		Line       int
-// 		Column     int
-// 	}
-// 	tests := []struct {
-// 		name   string
-// 		fields fields
-// 	}{
-// 		// TODO: Add test cases.
-// 	}
-// 	for _, tt := range tests {
-// 		t.Run(tt.name, func(t *testing.T) {
-// 			l := &Lexer{
-// 				Input:      tt.fields.Input,
-// 				Start:      tt.fields.Start,
-// 				Pos:        tt.fields.Pos,
-// 				Width:      tt.fields.Width,
-// 				widthStack: tt.fields.widthStack,
-// 				items:      tt.fields.items,
-// 				Depth:      tt.fields.Depth,
-// 				BlockDepth: tt.fields.BlockDepth,
-// 				ArgDepth:   tt.fields.ArgDepth,
-// 				Mode:       tt.fields.Mode,
-// 				Line:       tt.fields.Line,
-// 				Column:     tt.fields.Column,
-// 			}
-// 			l.Backup()
-// 		})
-// 	}
-// }
+// need understand how to fill 'widthStack' to activate Backup() func [ok]
+// what is happen if fields.Pos be? (chack this) ****
+func TestLexer_Backup(t *testing.T) {
+	type fields struct {
+		Input      string
+		Start      int
+		Pos        int
+		Width      int
+		widthStack []*RuneWidth
+		items      []Item
+		Depth      int
+		BlockDepth int
+		ArgDepth   int
+		Mode       StateFn
+		Line       int
+		Column     int
+	}
+	tests := []struct {
+		name   string
+		fields fields
+	}{
+		{
+			name: "TestLexer_Backup 1",
+			fields: fields{
+				Input: "Test",
+				Start: 0,
+				Pos:   3,
+				Width: 0,
+				widthStack: []*RuneWidth{
+					{width: 1, count: 1},
+				},
+				items:      []Item{},
+				Depth:      0,
+				BlockDepth: 0,
+				ArgDepth:   0,
+				Line:       0,
+				Column:     0,
+			},
+		},
+		// Test false case (fields must be empty)
+		// {
+		// 	name:   "TestLexer_Backup 2",
+		// 	fields: fields{},
+		// },
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := &Lexer{
+				Input:      tt.fields.Input,
+				Start:      tt.fields.Start,
+				Pos:        tt.fields.Pos,
+				Width:      tt.fields.Width,
+				widthStack: tt.fields.widthStack,
+				items:      tt.fields.items,
+				Depth:      tt.fields.Depth,
+				BlockDepth: tt.fields.BlockDepth,
+				ArgDepth:   tt.fields.ArgDepth,
+				Mode:       tt.fields.Mode,
+				Line:       tt.fields.Line,
+				Column:     tt.fields.Column,
+			}
+			l.Backup()
+		})
+	}
+}
 
 // need write more tests from other positions (fields.Pos)
 func TestLexer_Peek(t *testing.T) {
@@ -789,7 +905,7 @@ func TestLexer_PeekTwo(t *testing.T) {
 		{
 			name: "TestLexer_PeekTwo 1",
 			fields: fields{
-				Input:      "test string",
+				Input:      "test",
 				Start:      0,
 				Pos:        0,
 				Width:      0,
@@ -850,9 +966,9 @@ func TestLexer_moveStartToPos(t *testing.T) {
 		{
 			name: "TestLexer_moveStartToPos 1",
 			fields: fields{
-				Input:      "This\n a simple\n test",
+				Input:      "This a simple test",
 				Start:      0,
-				Pos:        0,
+				Pos:        2,
 				Width:      0,
 				widthStack: []*RuneWidth{},
 				items:      []Item{},
@@ -868,7 +984,7 @@ func TestLexer_moveStartToPos(t *testing.T) {
 			fields: fields{
 				Input:      " ",
 				Start:      0,
-				Pos:        0,
+				Pos:        1,
 				Width:      0,
 				widthStack: []*RuneWidth{},
 				items:      []Item{},
@@ -924,9 +1040,9 @@ func TestLexer_Ignore(t *testing.T) {
 		{
 			name: "TestLexer_Ignore 1",
 			fields: fields{
-				Input:      "Test comments",
+				Input:      "Test",
 				Start:      0,
-				Pos:        0,
+				Pos:        1,
 				Width:      0,
 				widthStack: []*RuneWidth{},
 				items:      []Item{},
@@ -959,59 +1075,84 @@ func TestLexer_Ignore(t *testing.T) {
 	}
 }
 
-// func TestLexer_AcceptRun(t *testing.T) {
-// 	type fields struct {
-// 		Input      string
-// 		Start      int
-// 		Pos        int
-// 		Width      int
-// 		widthStack []*RuneWidth
-// 		items      []Item
-// 		Depth      int
-// 		BlockDepth int
-// 		ArgDepth   int
-// 		Mode       StateFn
-// 		Line       int
-// 		Column     int
-// 	}
-// 	type args struct {
-// 		c CheckRune
-// 	}
-// 	tests := []struct {
-// 		name       string
-// 		fields     fields
-// 		args       args
-// 		wantLastr  rune
-// 		wantValidr bool
-// 	}{
-// 		// TODO: Add test cases.
-// 	}
-// 	for _, tt := range tests {
-// 		t.Run(tt.name, func(t *testing.T) {
-// 			l := &Lexer{
-// 				Input:      tt.fields.Input,
-// 				Start:      tt.fields.Start,
-// 				Pos:        tt.fields.Pos,
-// 				Width:      tt.fields.Width,
-// 				widthStack: tt.fields.widthStack,
-// 				items:      tt.fields.items,
-// 				Depth:      tt.fields.Depth,
-// 				BlockDepth: tt.fields.BlockDepth,
-// 				ArgDepth:   tt.fields.ArgDepth,
-// 				Mode:       tt.fields.Mode,
-// 				Line:       tt.fields.Line,
-// 				Column:     tt.fields.Column,
-// 			}
-// 			gotLastr, gotValidr := l.AcceptRun(tt.args.c)
-// 			if gotLastr != tt.wantLastr {
-// 				t.Errorf("Lexer.AcceptRun() gotLastr = %v, want %v", gotLastr, tt.wantLastr)
-// 			}
-// 			if gotValidr != tt.wantValidr {
-// 				t.Errorf("Lexer.AcceptRun() gotValidr = %v, want %v", gotValidr, tt.wantValidr)
-// 			}
-// 		})
-// 	}
-// }
+func TestLexer_AcceptRun(t *testing.T) {
+	type fields struct {
+		Input      string
+		Start      int
+		Pos        int
+		Width      int
+		widthStack []*RuneWidth
+		items      []Item
+		Depth      int
+		BlockDepth int
+		ArgDepth   int
+		Mode       StateFn
+		Line       int
+		Column     int
+	}
+	type args struct {
+		c CheckRune
+	}
+	tests := []struct {
+		name       string
+		fields     fields
+		args       args
+		wantLastr  rune
+		wantValidr bool
+	}{
+		{
+			name: "TestLexer_AcceptRun 1",
+			fields: fields{
+				Input:      "test",
+				Start:      0,
+				Pos:        0,
+				Width:      0,
+				widthStack: []*RuneWidth{},
+				items:      []Item{},
+				Depth:      0,
+				BlockDepth: 0,
+				ArgDepth:   0,
+				Line:       0,
+				Column:     0,
+			},
+			args: args{
+				c: func(r rune) bool {
+					if r == 't' {
+						return true
+					}
+					return false
+				},
+			},
+			wantLastr:  't',
+			wantValidr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := &Lexer{
+				Input:      tt.fields.Input,
+				Start:      tt.fields.Start,
+				Pos:        tt.fields.Pos,
+				Width:      tt.fields.Width,
+				widthStack: tt.fields.widthStack,
+				items:      tt.fields.items,
+				Depth:      tt.fields.Depth,
+				BlockDepth: tt.fields.BlockDepth,
+				ArgDepth:   tt.fields.ArgDepth,
+				Mode:       tt.fields.Mode,
+				Line:       tt.fields.Line,
+				Column:     tt.fields.Column,
+			}
+			gotLastr, gotValidr := l.AcceptRun(tt.args.c)
+			if gotLastr != tt.wantLastr {
+				t.Errorf("Lexer.AcceptRun() gotLastr = %v, want %v", gotLastr, tt.wantLastr)
+			}
+			if gotValidr != tt.wantValidr {
+				t.Errorf("Lexer.AcceptRun() gotValidr = %v, want %v", gotValidr, tt.wantValidr)
+			}
+		})
+	}
+}
 
 // func TestLexer_AcceptRunRec(t *testing.T) {
 // 	type fields struct {
@@ -1036,7 +1177,30 @@ func TestLexer_Ignore(t *testing.T) {
 // 		fields fields
 // 		args   args
 // 	}{
-// 		// TODO: Add test cases.
+// 		{
+// 			name: "TestLexer_AcceptRunRec 1",
+// 			fields: fields{
+// 				Input:      "test",
+// 				Start:      0,
+// 				Pos:        0,
+// 				Width:      0,
+// 				widthStack: []*RuneWidth{},
+// 				items:      []Item{},
+// 				Depth:      0,
+// 				BlockDepth: 0,
+// 				ArgDepth:   0,
+// 				Line:       0,
+// 				Column:     0,
+// 			},
+// 			args: args{
+// 				c: func(r rune, l *Lexer) bool {
+// 					if r == 'a' {
+// 						return true
+// 					}
+// 					return false
+// 				},
+// 			},
+// 		},
 // 	}
 // 	for _, tt := range tests {
 // 		t.Run(tt.name, func(t *testing.T) {
