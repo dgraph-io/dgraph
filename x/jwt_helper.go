@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -59,7 +59,7 @@ func ExtractUserName(jwtToken string) (string, error) {
 func ExtractNamespaceFromJwt(jwtToken string) (uint64, error) {
 	claims, err := ParseJWT(jwtToken)
 	if err != nil {
-		return 0, err
+		return 0, errors.Wrap(err, "extracting namespace from JWT")
 	}
 	namespace, ok := claims["namespace"].(float64)
 	if !ok {
