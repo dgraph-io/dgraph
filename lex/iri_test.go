@@ -1,6 +1,7 @@
 package lex
 
 import (
+	"errors"
 	"testing"
 )
 
@@ -108,6 +109,23 @@ func Test_isIRIRefChar(t *testing.T) {
 	}
 }
 
+func Test_isIRIRefCharFalse(t *testing.T) {
+	type args struct {
+		r    rune
+		l    *Lexer
+		want bool
+	}
+	tests := []args{
+		{r: '\\', l: &Lexer{}},
+	}
+	for _, tt := range tests {
+		got := isIRIRefChar(tt.r, tt.l)
+		if got != false {
+			t.Errorf("isIRIRefChar() = %v", got)
+		}
+	}
+}
+
 func TestIRIRef(t *testing.T) {
 	type args struct {
 		l    *Lexer
@@ -133,39 +151,80 @@ func TestIRIRef(t *testing.T) {
 		if got != nil {
 			t.Error("Expected: ", nil, " got: ", got)
 		}
-		// print("Got: ", got)
 	}
 }
 
-// func TestHasXChars(t *testing.T) {
-// 	type chars struct {
-// 		r rune
-// 		l *Lexer
-// 	}
+func TestIRIRefEOF(t *testing.T) {
+	type args struct {
+		l    *Lexer
+		styp ItemType
+		want error
+	}
+	tests := []args{
+		{
+			l: &Lexer{
+				Input:      "test",
+				Start:      0,
+				Pos:        4,
+				Width:      0,
+				widthStack: []*RuneWidth{},
+				items:      []Item{},
+				Depth:      0,
+				BlockDepth: 0,
+				ArgDepth:   0,
+				Mode: func(*Lexer) StateFn {
+					return nil
+				},
+				Line:   0,
+				Column: 0,
+			},
+			styp: 5,
+			want: errors.New(""),
+		},
+	}
+	for _, tt := range tests {
+		got := IRIRef(tt.l, tt.styp)
+		if got == nil {
+			t.Error("Expected: ", got.Error(), " got: ", got)
+		}
+	}
+}
 
-// 	tests := []chars{
-// 		{r: 'x',
-// 			l: &Lexer{
-// 				Input:      "ex machine",
-// 				Start:      0,
-// 				Pos:        0,
-// 				Width:      0,
-// 				widthStack: []*RuneWidth{},
-// 				items:      []Item{},
-// 				Depth:      0,
-// 				BlockDepth: 0,
-// 				ArgDepth:   0,
-// 				Line:       2,
-// 				Column:     0,
-// 			}},
-// 	}
-// 	for _, test := range tests {
-// 		got := HasXChars(test.r, test.l)
-// 		if got == false {
-// 			t.Error("Expected: ", true, " got: ", got)
-// 		}
-// 	}
-// }
+func TestIRIRefErrorf(t *testing.T) {
+	type args struct {
+		l    *Lexer
+		styp ItemType
+		want error
+	}
+	tests := []args{
+		{
+			l: &Lexer{
+				Input:      " ",
+				Start:      0,
+				Pos:        0,
+				Width:      0,
+				widthStack: []*RuneWidth{},
+				items:      []Item{},
+				Depth:      0,
+				BlockDepth: 0,
+				ArgDepth:   0,
+				Mode: func(*Lexer) StateFn {
+					return nil
+				},
+				Line:   0,
+				Column: 0,
+			},
+			styp: 5,
+			want: errors.New(""),
+		},
+	}
+	for _, tt := range tests {
+		got := IRIRef(tt.l, tt.styp)
+		if got == nil {
+			t.Error("Expected: ", got.Error(), " got: ", got)
+		}
+	}
+}
 
 // func TestHasUChars(t *testing.T) {
 // 	type args struct {
@@ -200,6 +259,49 @@ func TestIRIRef(t *testing.T) {
 // 		t.Run(tt.name, func(t *testing.T) {
 // 			if got := HasUChars(tt.args.r, tt.args.l); got != tt.want {
 // 				t.Errorf("HasUChars() = %v, want %v", got, tt.want)
+// 			}
+// 		})
+// 	}
+// }
+
+// func TestHasUChars(t *testing.T) {
+// 	type args struct {
+// 		r rune
+// 		l *Lexer
+// 	}
+// 	tests := []struct {
+// 		name string
+// 		args args
+// 		want bool
+// 	}{
+// 		{name: "TestHasUChars 1", args: args{r: 'u', l: &Lexer{}}, want: true},
+// 	}
+// 	for _, tt := range tests {
+// 		t.Run(tt.name, func(t *testing.T) {
+// 			if got := HasUChars(tt.args.r, tt.args.l); got != tt.want {
+// 				t.Errorf("HasUChars() = %v, want %v", got, tt.want)
+// 			}
+// 		})
+// 	}
+// }
+
+// func TestHasXChars(t *testing.T) {
+// 	type args struct {
+// 		r rune
+// 		l *Lexer
+// 	}
+// 	tests := []struct {
+// 		name string
+// 		args args
+// 		want bool
+// 	}{
+// 		{name: "TestHasXChars 1", args: args{r: 'x', l: &Lexer{}}, want: true},
+// 	}
+
+// 	for _, tt := range tests {
+// 		t.Run(tt.name, func(t *testing.T) {
+// 			if got := HasXChars(tt.args.r, tt.args.l); got != tt.want {
+// 				t.Errorf("HasXChars() = %v, want %v", got, tt.want)
 // 			}
 // 		})
 // 	}
