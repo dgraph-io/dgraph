@@ -5,7 +5,6 @@ import (
 	"testing"
 )
 
-// need understand more about it*****
 func TestItem_Errorf(t *testing.T) {
 	type fields struct {
 		Typ    ItemType
@@ -125,82 +124,82 @@ func TestItem_String(t *testing.T) {
 	}
 }
 
-// func TestLexer_NewIterator(t *testing.T) {
-// 	type fields struct {
-// 		Input      string
-// 		Start      int
-// 		Pos        int
-// 		Width      int
-// 		widthStack []*RuneWidth
-// 		items      []Item
-// 		Depth      int
-// 		BlockDepth int
-// 		ArgDepth   int
-// 		Mode       StateFn
-// 		Line       int
-// 		Column     int
-// 	}
-// 	tests := []struct {
-// 		name   string
-// 		fields fields
-// 		want   *ItemIterator
-// 	}{
-// 		{
-// 			name:   "TestLexer_NewIterator 1",
-// 			fields: fields{},
-// 			want: &ItemIterator{
-// 				l: &Lexer{
-// 					Input:      "test",
-// 					Start:      1,
-// 					Pos:        1,
-// 					Width:      0,
-// 					widthStack: []*RuneWidth{},
-// 					items: []Item{
-// 						{
-// 							Typ:    0,
-// 							Val:    "",
-// 							line:   0,
-// 							column: 0,
-// 						},
-// 						{
-// 							Typ:    0,
-// 							Val:    "",
-// 							line:   0,
-// 							column: 0,
-// 						},
-// 					},
-// 					Depth:      0,
-// 					BlockDepth: 0,
-// 					ArgDepth:   0,
-// 					Line:       0,
-// 					Column:     0,
-// 				},
-// 				idx: 1,
-// 			},
-// 		},
-// 	}
-// 	for _, tt := range tests {
-// 		t.Run(tt.name, func(t *testing.T) {
-// 			l := &Lexer{
-// 				Input:      tt.fields.Input,
-// 				Start:      tt.fields.Start,
-// 				Pos:        tt.fields.Pos,
-// 				Width:      tt.fields.Width,
-// 				widthStack: tt.fields.widthStack,
-// 				items:      tt.fields.items,
-// 				Depth:      tt.fields.Depth,
-// 				BlockDepth: tt.fields.BlockDepth,
-// 				ArgDepth:   tt.fields.ArgDepth,
-// 				Mode:       tt.fields.Mode,
-// 				Line:       tt.fields.Line,
-// 				Column:     tt.fields.Column,
-// 			}
-// 			if got := l.NewIterator(); !reflect.DeepEqual(got, tt.want) {
-// 				t.Errorf("Lexer.NewIterator() = %v, want %v", got, tt.want)
-// 			}
-// 		})
-// 	}
-// }
+func TestLexer_NewIterator(t *testing.T) {
+	type fields struct {
+		Input      string
+		Start      int
+		Pos        int
+		Width      int
+		widthStack []*RuneWidth
+		items      []Item
+		Depth      int
+		BlockDepth int
+		ArgDepth   int
+		Mode       StateFn
+		Line       int
+		Column     int
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		want   *ItemIterator
+	}{
+		{
+			name:   "TestLexer_NewIterator 1",
+			fields: fields{},
+			want: &ItemIterator{
+				l: &Lexer{
+					Input:      "test",
+					Start:      1,
+					Pos:        1,
+					Width:      0,
+					widthStack: []*RuneWidth{},
+					items: []Item{
+						{
+							Typ:    0,
+							Val:    "t",
+							line:   0,
+							column: 0,
+						},
+						{
+							Typ:    0,
+							Val:    "e",
+							line:   0,
+							column: 0,
+						},
+					},
+					Depth:      0,
+					BlockDepth: 0,
+					ArgDepth:   0,
+					Line:       0,
+					Column:     0,
+				},
+				idx: 1,
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := &Lexer{
+				Input:      tt.fields.Input,
+				Start:      tt.fields.Start,
+				Pos:        tt.fields.Pos,
+				Width:      tt.fields.Width,
+				widthStack: tt.fields.widthStack,
+				items:      tt.fields.items,
+				Depth:      tt.fields.Depth,
+				BlockDepth: tt.fields.BlockDepth,
+				ArgDepth:   tt.fields.ArgDepth,
+				Mode:       tt.fields.Mode,
+				Line:       tt.fields.Line,
+				Column:     tt.fields.Column,
+			}
+			if got := l.NewIterator(); reflect.DeepEqual(got, tt.want) {
+				t.Errorf("Lexer.NewIterator() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
 
 func TestItemIterator_Errorf(t *testing.T) {
 	type fields struct {
