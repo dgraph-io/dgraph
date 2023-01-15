@@ -2676,7 +2676,7 @@ func TestLexer_LexQuotedString(t *testing.T) {
 	}
 }
 
-func TestLexer_LexQuotedStringQuote(t *testing.T) {
+func TestLexer_LexQuotedStringForEOF(t *testing.T) {
 	type fields struct {
 		Input      string
 		Start      int
@@ -2699,42 +2699,215 @@ func TestLexer_LexQuotedStringQuote(t *testing.T) {
 		{
 			name: "TestLexer_LexQuotedString 1",
 			fields: fields{
-				Input: "test",
+				Input: `"aaa`,
 				Start: 0,
 				Pos:   4,
 				Width: 4,
 				widthStack: []*RuneWidth{
 					{
 						width: 4,
-						count: 0,
+						count: 3,
 					},
 				},
-				items: []Item{
+				items:      []Item{},
+				Depth:      0,
+				BlockDepth: 0,
+				ArgDepth:   0,
+				Line:       0,
+				Column:     0,
+			},
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := &Lexer{
+				Input:      tt.fields.Input,
+				Start:      tt.fields.Start,
+				Pos:        tt.fields.Pos,
+				Width:      tt.fields.Width,
+				widthStack: tt.fields.widthStack,
+				items:      tt.fields.items,
+				Depth:      tt.fields.Depth,
+				BlockDepth: tt.fields.BlockDepth,
+				ArgDepth:   tt.fields.ArgDepth,
+				Mode:       tt.fields.Mode,
+				Line:       tt.fields.Line,
+				Column:     tt.fields.Column,
+			}
+			if err := l.LexQuotedString(); (err != nil) != tt.wantErr {
+				t.Errorf("Lexer.LexQuotedString() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestLexer_LexQuotedStringFor1(t *testing.T) {
+	type fields struct {
+		Input      string
+		Start      int
+		Pos        int
+		Width      int
+		widthStack []*RuneWidth
+		items      []Item
+		Depth      int
+		BlockDepth int
+		ArgDepth   int
+		Mode       StateFn
+		Line       int
+		Column     int
+	}
+	tests := []struct {
+		name    string
+		fields  fields
+		wantErr bool
+	}{
+		{
+			name: "TestLexer_LexQuotedString 1",
+			fields: fields{
+				Input: `"aa"`,
+				Start: 0,
+				Pos:   4,
+				Width: 4,
+				widthStack: []*RuneWidth{
 					{
-						Typ:    5,
-						Val:    "'",
-						line:   0,
-						column: 0,
-					},
-					{
-						Typ:    5,
-						Val:    "e",
-						line:   0,
-						column: 0,
-					},
-					{
-						Typ:    5,
-						Val:    "s",
-						line:   0,
-						column: 0,
-					},
-					{
-						Typ:    5,
-						Val:    "t",
-						line:   0,
-						column: 0,
+						width: 4,
+						count: 3,
 					},
 				},
+				items:      []Item{},
+				Depth:      0,
+				BlockDepth: 0,
+				ArgDepth:   0,
+				Line:       0,
+				Column:     0,
+			},
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := &Lexer{
+				Input:      tt.fields.Input,
+				Start:      tt.fields.Start,
+				Pos:        tt.fields.Pos,
+				Width:      tt.fields.Width,
+				widthStack: tt.fields.widthStack,
+				items:      tt.fields.items,
+				Depth:      tt.fields.Depth,
+				BlockDepth: tt.fields.BlockDepth,
+				ArgDepth:   tt.fields.ArgDepth,
+				Mode:       tt.fields.Mode,
+				Line:       tt.fields.Line,
+				Column:     tt.fields.Column,
+			}
+			if err := l.LexQuotedString(); (err != nil) == tt.wantErr {
+				t.Errorf("Lexer.LexQuotedString() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestLexer_LexQuotedStringFor2(t *testing.T) {
+	type fields struct {
+		Input      string
+		Start      int
+		Pos        int
+		Width      int
+		widthStack []*RuneWidth
+		items      []Item
+		Depth      int
+		BlockDepth int
+		ArgDepth   int
+		Mode       StateFn
+		Line       int
+		Column     int
+	}
+	tests := []struct {
+		name    string
+		fields  fields
+		wantErr bool
+	}{
+		{
+			name: "TestLexer_LexQuotedString 1",
+			fields: fields{
+				Input: `"\\`,
+				Start: 0,
+				Pos:   4,
+				Width: 4,
+				widthStack: []*RuneWidth{
+					{
+						width: 4,
+						count: 3,
+					},
+				},
+				items:      []Item{},
+				Depth:      0,
+				BlockDepth: 0,
+				ArgDepth:   0,
+				Line:       0,
+				Column:     0,
+			},
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := &Lexer{
+				Input:      tt.fields.Input,
+				Start:      tt.fields.Start,
+				Pos:        tt.fields.Pos,
+				Width:      tt.fields.Width,
+				widthStack: tt.fields.widthStack,
+				items:      tt.fields.items,
+				Depth:      tt.fields.Depth,
+				BlockDepth: tt.fields.BlockDepth,
+				ArgDepth:   tt.fields.ArgDepth,
+				Mode:       tt.fields.Mode,
+				Line:       tt.fields.Line,
+				Column:     tt.fields.Column,
+			}
+			if err := l.LexQuotedString(); (err != nil) != tt.wantErr {
+				t.Errorf("Lexer.LexQuotedString() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestLexer_LexQuotedStringFor3(t *testing.T) {
+	type fields struct {
+		Input      string
+		Start      int
+		Pos        int
+		Width      int
+		widthStack []*RuneWidth
+		items      []Item
+		Depth      int
+		BlockDepth int
+		ArgDepth   int
+		Mode       StateFn
+		Line       int
+		Column     int
+	}
+	tests := []struct {
+		name    string
+		fields  fields
+		wantErr bool
+	}{
+		{
+			name: "TestLexer_LexQuotedString 1",
+			fields: fields{
+				Input: `"'\\'a\`,
+				Start: 0,
+				Pos:   3,
+				Width: 3,
+				widthStack: []*RuneWidth{
+					{
+						width: 3,
+						count: 2,
+					},
+				},
+				items:      []Item{},
 				Depth:      0,
 				BlockDepth: 0,
 				ArgDepth:   0,
