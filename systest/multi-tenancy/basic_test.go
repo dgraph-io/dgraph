@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,6 +51,7 @@ func TestAclBasic(t *testing.T) {
 	galaxyToken, err := testutil.Login(t,
 		&testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: x.GalaxyNamespace})
 
+	require.NotNil(t, galaxyToken, "galaxy token is nil")
 	require.NoError(t, err, "login failed")
 	// Create a new namespace
 	ns, err := testutil.CreateNamespaceWithRetry(t, galaxyToken)

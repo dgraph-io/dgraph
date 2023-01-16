@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -207,8 +207,8 @@ they form a Raft group and provide synchronous replication.
 			" The liveness of a transaction is determined by its last mutation.").
 		Flag("shared-instance", "When set to true, it disables ACLs for non-galaxy users. "+
 			"It expects the access JWT to be contructed outside dgraph for those users as even "+
-			"login is denied to them. Additionally, this disables access to environment variables"+
-			"for minio, aws, etc.").
+			"login is denied to them. This can be done via online tools or jwt libraries. Additionally, "+
+			"this disables access to environment variables for minio, aws, etc.").
 		String())
 
 	flag.String("graphql", worker.GraphQLDefaults, z.NewSuperFlagHelp(worker.GraphQLDefaults).
