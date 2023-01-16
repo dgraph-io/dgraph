@@ -17,6 +17,7 @@
 package x
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -30,11 +31,11 @@ func TestFindDataFiles(t *testing.T) {
 	dir := [2]string{"test-files-valid", "test-files-invalid"}
 	require.NoError(t, os.MkdirAll(dir[0], os.ModePerm))
 	require.NoError(t, os.MkdirAll(dir[1], os.ModePerm))
-
+	defer deleteDirs(t, dir[0])
+	defer deleteDirs(t, dir[1])
 	validTestFiles := filepath.Join(filepath.Dir(thisFile), "test-files-valid")
 	invalidTestFiles := filepath.Join(filepath.Dir(thisFile), "test-files-invalid")
 	expectedFilesArray := []string{"test-files-valid/test-2.rdf.gz", "test-files-valid/test-3.json", "test-files-valid/test-4.json.gz"}
-
 	file_data := [7]string{"test-1.txt", "test-2.rdf.gz", "test-3.json", "test-4.json.gz", "test-5.txt", "test-6.txt.gz", "test-7.go"}
 
 	for i, data := range file_data {
@@ -57,31 +58,21 @@ func TestFindDataFiles(t *testing.T) {
 
 	filesList = FindDataFiles("", []string{".rdf", ".rdf.gz", ".json", ".json.gz"})
 	require.Equal(t, 0, len(filesList))
-
-	if err := os.RemoveAll(validTestFiles); err != nil {
-		t.Fatalf("Error removing direcotory: %s", err.Error())
-	}
-	if err := os.RemoveAll(invalidTestFiles); err != nil {
-		t.Fatalf("Error removing direcotory: %s", err.Error())
-	}
-
 }
 
 func TestIsMissingOrEmptyDir(t *testing.T) {
 	_, thisFile, _, _ := runtime.Caller(0)
 	dir := "test-files"
 	require.NoError(t, os.MkdirAll(dir, os.ModePerm))
+	defer deleteDirs(t, dir)
 	testFilesDir := filepath.Join(filepath.Dir(thisFile), "test-files")
-
 	file_data := [2]string{"test-1.txt", "test-2.txt"}
-
 	for _, data := range file_data {
 		filePath := filepath.Join(testFilesDir, data)
 		f, err := os.Create(filePath)
 		require.NoError(t, err)
 		defer f.Close()
 	}
-
 	//checking function with file which exist
 	output := IsMissingOrEmptyDir("./test-files/test-1.txt")
 	require.Equal(t, nil, output)
@@ -94,9 +85,10 @@ func TestIsMissingOrEmptyDir(t *testing.T) {
 	//checking function with directory which does not exist
 	output = IsMissingOrEmptyDir("./doesnotexist")
 	require.NotEqual(t, nil, output)
+}
 
-	if err := os.RemoveAll(testFilesDir); err != nil {
-		t.Fatalf("Error removing direcotory: %s", err.Error())
+func deleteDirs(t *testing.T, dir string) {
+	if err := os.RemoveAll(dir); err != nil {
+		fmt.Printf("Error removing direcotory: %s", err.Error())
 	}
-
 }

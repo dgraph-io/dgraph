@@ -1,7 +1,7 @@
 name: cd-dgraph
 on: workflow_dispatch
 jobs:
-  dgraph-build:
+  dgraph-build-amd64:
     runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v3
@@ -65,12 +65,12 @@ jobs:
             dgraph/dgraph-linux-amd64.tar.gz
       - name: Make Dgraph Docker Image
         run: |
-          make docker-image DGRAPH_VERSION=${{ env.DGRAPH_RELEASE_VERSION }}
-          docker tag dgraph/dgraph:${{ env.DGRAPH_RELEASE_VERSION }} dgraph/dgraph:latest
+          make docker-image DGRAPH_VERSION=${{ env.DGRAPH_RELEASE_VERSION }}-amd64
+          docker tag dgraph/dgraph:${{ env.DGRAPH_RELEASE_VERSION }}-amd64 dgraph/dgraph:latest-amd64
       - name: Make Dgraph Standalone Docker Image with Version
         run: |
-          make docker-image-standalone DGRAPH_VERSION=${{ env.DGRAPH_RELEASE_VERSION }}
-          docker tag dgraph/standalone:${{ env.DGRAPH_RELEASE_VERSION }} dgraph/standalone:latest
+          make docker-image-standalone DGRAPH_VERSION=${{ env.DGRAPH_RELEASE_VERSION }}-amd64
+          docker tag dgraph/standalone:${{ env.DGRAPH_RELEASE_VERSION }}-amd64 dgraph/standalone:latest-amd64
       - name: Login to DockerHub
         uses: docker/login-action@v2
         with:
@@ -78,7 +78,122 @@ jobs:
           password: ${{ secrets.DOCKERHUB_PASSWORD_TOKEN }}
       - name: Push Images to DockerHub
         run: |
-          docker push dgraph/standalone:latest
-          docker push dgraph/standalone:${{ env.DGRAPH_RELEASE_VERSION }}
-          docker push dgraph/dgraph:latest
-          docker push dgraph/dgraph:${{ env.DGRAPH_RELEASE_VERSION }}
+          docker push dgraph/standalone:${{ env.DGRAPH_RELEASE_VERSION }}-amd64
+          docker push dgraph/dgraph:${{ env.DGRAPH_RELEASE_VERSION }}-amd64
+
+  dgraph-build-arm64:
+    runs-on: [self-hosted, arm64]
+    steps:
+      - uses: actions/checkout@v3
+      - name: Get Go Version
+        run: |
+          #!/bin/bash
+          GOVERSION=$({ [ -f .go-version ] && cat .go-version; })
+          echo "GOVERSION=$GOVERSION" >> $GITHUB_ENV
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: ${{ env.GOVERSION }}
+      - name: Install protobuf-compiler
+        run: sudo apt-get install -y protobuf-compiler
+      - name: Check protobuf
+        run: |
+          cd ./protos
+          go mod tidy
+          make regenerate
+          git diff --exit-code -- .
+      - name: Set Badger Release Version
+        run: |
+          #!/bin/bash
+          BADGER_RELEASE_VERSION=$(cat go.mod | grep -i "github.com/dgraph-io/badger" | awk '{print $2}')
+          echo "setting badger version "$BADGER_RELEASE_VERSION
+          echo "BADGER_RELEASE_VERSION=$BADGER_RELEASE_VERSION" >> $GITHUB_ENV
+      - name: Download Badger Artifacts
+        run: |
+          #!/bin/bash
+          mkdir badger
+          cd badger
+          wget https://github.com/dgraph-io/badger/releases/download/${{ env.BADGER_RELEASE_VERSION }}/badger-checksum-linux-arm64.sha256
+          wget https://github.com/dgraph-io/badger/releases/download/${{ env.BADGER_RELEASE_VERSION }}/badger-linux-arm64.tar.gz
+      - name: Set Dgraph Release Version
+        run: |
+          #!/bin/bash
+          GIT_BRANCH_NAME=$(git rev-parse --abbrev-ref HEAD)
+          if [[ "$GIT_BRANCH_NAME" == "release/v"* ]]; 
+          then
+            echo "this is a release branch"
+          else
+            echo "this is NOT a release branch"
+            exit 1
+          fi
+          DGRAPH_RELEASE_VERSION=$(git rev-parse --abbrev-ref HEAD | sed  's/release\///')
+          echo "making a new release for dgraph "$DGRAPH_RELEASE_VERSION
+          echo "DGRAPH_RELEASE_VERSION=$DGRAPH_RELEASE_VERSION" >> $GITHUB_ENV
+      - name: Make Dgraph Linux Build
+        run: make dgraph DGRAPH_VERSION=${{ env.DGRAPH_RELEASE_VERSION }}
+      - name: Generate SHA for Dgraph Linux Build
+        run: cd dgraph && sha256sum dgraph | cut -c-64 > dgraph-checksum-linux-arm64.sha256
+      - name: Tar Archive for Dgraph Linux Build
+        run: cd dgraph && tar -zcvf dgraph-linux-arm64.tar.gz dgraph
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          path: |
+            badger/badger-checksum-linux-arm64.sha256
+            badger/badger-linux-arm64.tar.gz
+            dgraph/dgraph-checksum-linux-arm64.sha256
+            dgraph/dgraph-linux-arm64.tar.gz
+      - name: Make Dgraph Docker Image
+        run: |
+          make docker-image DGRAPH_VERSION=${{ env.DGRAPH_RELEASE_VERSION }}-arm64
+          docker tag dgraph/dgraph:${{ env.DGRAPH_RELEASE_VERSION }}-arm64 dgraph/dgraph:latest-arm64
+      - name: Make Dgraph Standalone Docker Image with Version
+        run: |
+          make docker-image-standalone DGRAPH_VERSION=${{ env.DGRAPH_RELEASE_VERSION }}-arm64
+          docker tag dgraph/standalone:${{ env.DGRAPH_RELEASE_VERSION }}-arm64 dgraph/standalone:latest-arm64
+      - name: Login to DockerHub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD_TOKEN }}
+      - name: Push Images to DockerHub
+        run: |
+          docker push dgraph/standalone:${{ env.DGRAPH_RELEASE_VERSION }}-arm64
+          docker push dgraph/dgraph:${{ env.DGRAPH_RELEASE_VERSION }}-arm64
+
+  dgraph-docker-manifest:
+    needs: [dgraph-build-amd64, dgraph-build-arm64]
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set Dgraph Release Version
+        run: |
+          #!/bin/bash
+          GIT_BRANCH_NAME=$(git rev-parse --abbrev-ref HEAD)
+          if [[ "$GIT_BRANCH_NAME" == "release/v"* ]]; 
+          then
+            echo "this is a release branch"
+          else
+            echo "this is NOT a release branch"
+            exit 1
+          fi
+          DGRAPH_RELEASE_VERSION=$(git rev-parse --abbrev-ref HEAD | sed  's/release\///')
+          echo "making a new release for dgraph "$DGRAPH_RELEASE_VERSION
+          echo "DGRAPH_RELEASE_VERSION=$DGRAPH_RELEASE_VERSION" >> $GITHUB_ENV
+      - name: Login to DockerHub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD_TOKEN }}
+      - name: Docker Manifest
+        run: |
+          # standalone
+          docker manifest create dgraph/standalone:${{ env.DGRAPH_RELEASE_VERSION }} --amend dgraph/standalone:${{ env.DGRAPH_RELEASE_VERSION }}-amd64 --amend dgraph/standalone:${{ env.DGRAPH_RELEASE_VERSION }}-arm64
+          docker manifest push dgraph/standalone:${{ env.DGRAPH_RELEASE_VERSION }}
+          docker manifest create dgraph/standalone:latest --amend dgraph/standalone:${{ env.DGRAPH_RELEASE_VERSION }}-amd64 --amend dgraph/standalone:${{ env.DGRAPH_RELEASE_VERSION }}-arm64
+          docker manifest push dgraph/standalone:latest
+          # dgraph
+          docker manifest create dgraph/dgraph:${{ env.DGRAPH_RELEASE_VERSION }} --amend dgraph/dgraph:${{ env.DGRAPH_RELEASE_VERSION }}-amd64 --amend dgraph/dgraph:${{ env.DGRAPH_RELEASE_VERSION }}-arm64
+          docker manifest push dgraph/dgraph:${{ env.DGRAPH_RELEASE_VERSION }}
+          docker manifest create dgraph/dgraph:latest --amend dgraph/dgraph:${{ env.DGRAPH_RELEASE_VERSION }}-amd64 --amend dgraph/dgraph:${{ env.DGRAPH_RELEASE_VERSION }}-arm64
+          docker manifest push dgraph/dgraph:latest

@@ -48,7 +48,7 @@ import (
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/conn"
-	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/dql"
 	gqlSchema "github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -149,11 +149,11 @@ func GetGQLSchema(namespace uint64) (uid, graphQLSchema string, err error) {
 		&api.Request{
 			Query: `
 			query {
-			  ExistingGQLSchema(func: has(dgraph.graphql.schema)) {
-				uid
-				dgraph.graphql.schema
-			  }
-			}`})
+				ExistingGQLSchema(func: has(dgraph.graphql.schema)) {
+					uid
+					dgraph.graphql.schema
+				  }
+				}`})
 	if err != nil {
 		return "", "", err
 	}
@@ -175,7 +175,7 @@ func GetGQLSchema(namespace uint64) (uid, graphQLSchema string, err error) {
 	// found multiple GraphQL schema nodes, this should never happen
 	// returning the schema node which is added last
 	for i := range res {
-		iUid, err := gql.ParseUid(res[i].Uid)
+		iUid, err := dql.ParseUid(res[i].Uid)
 		if err != nil {
 			return "", "", err
 		}
@@ -489,7 +489,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 			Predicate:   x.ParseAttr(attr),
 			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: x.Star}},
 		}
-		wnq := &gql.NQuad{NQuad: nq}
+		wnq := &dql.NQuad{NQuad: nq}
 		edge, err := wnq.ToDeletePredEdge()
 		if err != nil {
 			return empty, err
@@ -876,7 +876,7 @@ func updateValInNQuads(nquads []*api.NQuad, qc *queryContext, isSet bool) []*api
 
 // updateValInMutations does following transformations:
 // 0x123 <amount> val(v) -> 0x123 <amount> 13.0
-func updateValInMutations(gmu *gql.Mutation, qc *queryContext) error {
+func updateValInMutations(gmu *dql.Mutation, qc *queryContext) error {
 	gmu.Del = updateValInNQuads(gmu.Del, qc, false)
 	gmu.Set = updateValInNQuads(gmu.Set, qc, true)
 	if qc.nquadsCount > x.Config.LimitMutationsNquad {
@@ -889,7 +889,8 @@ func updateValInMutations(gmu *gql.Mutation, qc *queryContext) error {
 // updateUIDInMutations does following transformations:
 //   - uid(v) -> 0x123     -- If v is defined in query block
 //   - uid(v) -> _:uid(v)  -- Otherwise
-func updateUIDInMutations(gmu *gql.Mutation, qc *queryContext) error {
+
+func updateUIDInMutations(gmu *dql.Mutation, qc *queryContext) error {
 	// usedMutationVars keeps track of variables that are used in mutations.
 	getNewVals := func(s string) []string {
 		if strings.HasPrefix(s, "uid(") {
@@ -971,9 +972,9 @@ type queryContext struct {
 	// a query or more than one mutations or both (in case of upsert)
 	req *api.Request
 	// gmuList is the list of mutations after parsing req.Mutations
-	gmuList []*gql.Mutation
-	// gqlRes contains result of parsing the req.Query
-	gqlRes gql.Result
+	gmuList []*dql.Mutation
+	// dqlRes contains result of parsing the req.Query
+	dqlRes dql.Result
 	// condVars are conditional variables used in the (modified) query to figure out
 	// whether the condition in Conditional Upsert is true. The string would be empty
 	// if the corresponding mutation is not a conditional upsert.
@@ -1356,7 +1357,7 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 	}
 	qr := query.Request{
 		Latency:  qc.latency,
-		GqlQuery: &qc.gqlRes,
+		GqlQuery: &qc.dqlRes,
 	}
 
 	// Here we try our best effort to not contact Zero for a timestamp. If we succeed,
@@ -1502,7 +1503,7 @@ func parseRequest(qc *queryContext) error {
 	upsertQuery := qc.req.Query
 	if len(qc.req.Mutations) > 0 {
 		// parsing mutations
-		qc.gmuList = make([]*gql.Mutation, 0, len(qc.req.Mutations))
+		qc.gmuList = make([]*dql.Mutation, 0, len(qc.req.Mutations))
 		for _, mu := range qc.req.Mutations {
 			gmu, err := parseMutationObject(mu, qc)
 			if err != nil {
@@ -1527,18 +1528,18 @@ func parseRequest(qc *queryContext) error {
 
 	// parsing the updated query
 	var err error
-	qc.gqlRes, err = gql.ParseWithNeedVars(gql.Request{
+	qc.dqlRes, err = dql.ParseWithNeedVars(dql.Request{
 		Str:       upsertQuery,
 		Variables: qc.req.Vars,
 	}, needVars)
 	if err != nil {
 		return err
 	}
-	return validateQuery(qc.gqlRes.Query)
+	return validateQuery(qc.dqlRes.Query)
 }
 
 func authorizeRequest(ctx context.Context, qc *queryContext) error {
-	if err := authorizeQuery(ctx, &qc.gqlRes, qc.graphql); err != nil {
+	if err := authorizeQuery(ctx, &qc.dqlRes, qc.graphql); err != nil {
 		return err
 	}
 
@@ -1671,12 +1672,12 @@ func hasPoormansAuth(ctx context.Context) error {
 }
 
 // parseMutationObject tries to consolidate fields of the api.Mutation into the
-// corresponding field of the returned gql.Mutation. For example, the 3 fields,
+// corresponding field of the returned dql.Mutation. For example, the 3 fields,
 // api.Mutation#SetJson, api.Mutation#SetNquads and api.Mutation#Set are consolidated into the
-// gql.Mutation.Set field. Similarly the 3 fields api.Mutation#DeleteJson, api.Mutation#DelNquads
-// and api.Mutation#Del are merged into the gql.Mutation#Del field.
-func parseMutationObject(mu *api.Mutation, qc *queryContext) (*gql.Mutation, error) {
-	res := &gql.Mutation{Cond: mu.Cond}
+// dql.Mutation.Set field. Similarly the 3 fields api.Mutation#DeleteJson, api.Mutation#DelNquads
+// and api.Mutation#Del are merged into the dql.Mutation#Del field.
+func parseMutationObject(mu *api.Mutation, qc *queryContext) (*dql.Mutation, error) {
+	res := &dql.Mutation{Cond: mu.Cond}
 
 	if len(mu.SetJson) > 0 {
 		nqs, md, err := chunker.ParseJSON(mu.SetJson, chunker.SetNquads)
@@ -1825,7 +1826,7 @@ func validateKeys(nq *api.NQuad) error {
 
 // validateQuery verifies that the query does not contain any preds that
 // are longer than the limit (2^16).
-func validateQuery(queries []*gql.GraphQuery) error {
+func validateQuery(queries []*dql.GraphQuery) error {
 	for _, q := range queries {
 		if err := validatePredName(q.Attr); err != nil {
 			return err

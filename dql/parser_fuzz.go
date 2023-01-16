@@ -1,3 +1,4 @@
+//go:build gofuzz
 // +build gofuzz
 
 /*
@@ -16,13 +17,13 @@
  * limitations under the License.
  */
 
-package gql
+package dql
 
 // GQL parser fuzzer for use with https://github.com/dvyukov/go-fuzz.
 //
-// Build: go-fuzz-build github.com/dgraph-io/dgraph/gql
+// Build: go-fuzz-build github.com/dgraph-io/dgraph/dql
 //
-// Run: go-fuzz -bin=./gql-fuzz.zip -workdir fuzz-data
+// Run: go-fuzz -bin=./dql-fuzz.zip -workdir fuzz-data
 
 const (
 	fuzzInteresting = 1

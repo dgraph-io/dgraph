@@ -31,7 +31,7 @@ import (
 	"google.golang.org/grpc/metadata"
 
 	"github.com/dgraph-io/dgraph/algo"
-	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/dql"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
@@ -127,7 +127,7 @@ type params struct {
 	Facet *pb.FacetParams
 	// FacetsOrder keeps ordering for facets. Each entry stores name of the facet key and
 	// OrderDesc(will be true if results should be ordered by desc order of key) information for it.
-	FacetsOrder []*gql.FacetOrder
+	FacetsOrder []*dql.FacetOrder
 
 	// Var is the name of the variable defined in this SubGraph
 	// (e.g. in "x as name", this would be x).
@@ -136,7 +136,7 @@ type params struct {
 	// for e.g. @facets(L1 as weight) the map would be { "weight": "L1" }
 	FacetVar map[string]string
 	// NeedsVar is the list of variables required by this SubGraph along with their type.
-	NeedsVar []gql.VarContext
+	NeedsVar []dql.VarContext
 
 	// ParentVars is a map of variables passed down recursively to children of a SubGraph in a query
 	// block. These are used to filter uids defined in a parent using a variable.
@@ -155,7 +155,7 @@ type params struct {
 	// Recurse is true if the @recurse directive is specified.
 	Recurse bool
 	// RecurseArgs stores the arguments passed to the @recurse directive.
-	RecurseArgs gql.RecurseArgs
+	RecurseArgs dql.RecurseArgs
 	// Cascade is the list of predicates to apply @cascade to.
 	// __all__ is special to mean @cascade i.e. all the children of this subgraph are mandatory
 	// and should have values otherwise the node will be excluded.
@@ -164,7 +164,7 @@ type params struct {
 	IgnoreReflex bool
 
 	// ShortestPathArgs contains the from and to functions to execute a shortest path query.
-	ShortestPathArgs gql.ShortestPathArgs
+	ShortestPathArgs dql.ShortestPathArgs
 	// From is the node from which to run the shortest path algorithm.
 	From uint64
 	// To is the destination node of the shortest path algorithm
@@ -190,7 +190,7 @@ type params struct {
 	// IsGroupBy is true if @groupby is specified.
 	IsGroupBy bool // True if @groupby is specified.
 	// GroupbyAttrs holds the list of attributes to group by.
-	GroupbyAttrs []gql.GroupByAttr
+	GroupbyAttrs []dql.GroupByAttr
 
 	// ParentIds is a stack that is maintained and passed down to children.
 	ParentIds []uint64
@@ -218,10 +218,10 @@ type pathMetadata struct {
 	weight float64 // Total weight of the path.
 }
 
-// Function holds the information about gql functions.
+// Function holds the information about dql functions.
 type Function struct {
 	Name       string    // Specifies the name of the function.
-	Args       []gql.Arg // Contains the arguments of the function.
+	Args       []dql.Arg // Contains the arguments of the function.
 	IsCount    bool      // gt(count(friends),0)
 	IsValueVar bool      // eq(val(s), 10)
 	IsLenVar   bool      // eq(len(s), 10)
@@ -320,7 +320,7 @@ func (sg *SubGraph) IsInternal() bool {
 	return sg.Params.IsInternal
 }
 
-func (sg *SubGraph) createSrcFunction(gf *gql.Function) {
+func (sg *SubGraph) createSrcFunction(gf *dql.Function) {
 	if gf == nil {
 		return
 	}
@@ -441,7 +441,7 @@ func convertWithBestEffort(tv *pb.TaskValue, attr string) (types.Val, error) {
 	return sv, nil
 }
 
-func mathCopy(dst *mathTree, src *gql.MathTree) error {
+func mathCopy(dst *mathTree, src *dql.MathTree) error {
 	// Either we'll have an operation specified, or the function specified.
 	dst.Const = src.Const
 	dst.Fn = src.Fn
@@ -458,7 +458,7 @@ func mathCopy(dst *mathTree, src *gql.MathTree) error {
 	return nil
 }
 
-func filterCopy(sg *SubGraph, ft *gql.FilterTree) error {
+func filterCopy(sg *SubGraph, ft *dql.FilterTree) error {
 	// Either we'll have an operation specified, or the function specified.
 	if len(ft.Op) > 0 {
 		sg.FilterOp = ft.Op
@@ -491,7 +491,7 @@ func filterCopy(sg *SubGraph, ft *gql.FilterTree) error {
 	return nil
 }
 
-func uniqueKey(gchild *gql.GraphQuery) string {
+func uniqueKey(gchild *dql.GraphQuery) string {
 	key := gchild.Attr
 	if gchild.Func != nil {
 		key += fmt.Sprintf("%v", gchild.Func)
@@ -529,7 +529,7 @@ func uniqueKey(gchild *gql.GraphQuery) string {
 	return key
 }
 
-func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
+func treeCopy(gq *dql.GraphQuery, sg *SubGraph) error {
 	// Typically you act on the current node, and leave recursion to deal with
 	// children. But, in this case, we don't want to muck with the current
 	// node, because of the way we're dealing with the root node.
@@ -663,14 +663,14 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 	return nil
 }
 
-func (args *params) addCascadePaginationArguments(gq *gql.GraphQuery) {
+func (args *params) addCascadePaginationArguments(gq *dql.GraphQuery) {
 	args.Cascade.First, _ = strconv.Atoi(gq.Args["first"])
 	delete(gq.Args, "first")
 	args.Cascade.Offset, _ = strconv.Atoi(gq.Args["offset"])
 	delete(gq.Args, "offset")
 }
 
-func (args *params) fill(gq *gql.GraphQuery) error {
+func (args *params) fill(gq *dql.GraphQuery) error {
 	if v, ok := gq.Args["offset"]; ok {
 		offset, err := strconv.ParseInt(v, 0, 32)
 		if err != nil {
@@ -745,7 +745,7 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 }
 
 // ToSubGraph converts the GraphQuery into the pb.SubGraph instance type.
-func ToSubGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
+func ToSubGraph(ctx context.Context, gq *dql.GraphQuery) (*SubGraph, error) {
 	sg, err := newGraph(ctx, gq)
 	if err != nil {
 		return nil, err
@@ -793,7 +793,7 @@ func (sg *SubGraph) populate(uids []uint64) error {
 }
 
 // newGraph returns the SubGraph and its task query.
-func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
+func newGraph(ctx context.Context, gq *dql.GraphQuery) (*SubGraph, error) {
 	// This would set the Result field in SubGraph,
 	// and populate the children for attributes.
 
@@ -877,7 +877,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	return sg, nil
 }
 
-func toFacetsFilter(gft *gql.FilterTree) (*pb.FilterTree, error) {
+func toFacetsFilter(gft *dql.FilterTree) (*pb.FilterTree, error) {
 	if gft == nil {
 		return nil, nil
 	}
@@ -1722,32 +1722,32 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 			continue
 		}
 		switch {
-		case (v.Typ == gql.AnyVar || v.Typ == gql.ListVar) && l.strList != nil:
+		case (v.Typ == dql.AnyVar || v.Typ == dql.ListVar) && l.strList != nil:
 			// This is for the case when we use expand(val(x)) with a value variable.
 			// We populate the list of values into ExpandPreds and use that for the expand query
 			// later.
 			// TODO: If we support value vars for list type then this needn't be true
 			sg.ExpandPreds = l.strList
 
-		case (v.Typ == gql.UidVar && sg.SrcFunc != nil && sg.SrcFunc.Name == "uid_in"):
+		case (v.Typ == dql.UidVar && sg.SrcFunc != nil && sg.SrcFunc.Name == "uid_in"):
 			srcFuncArgs := sg.SrcFunc.Args[:0]
 
 			for _, uid := range l.Uids.GetUids() {
 				// We use base 10 here because the uid parser expects the uid to be in base 10.
-				arg := gql.Arg{Value: strconv.FormatUint(uid, 10)}
+				arg := dql.Arg{Value: strconv.FormatUint(uid, 10)}
 				srcFuncArgs = append(srcFuncArgs, arg)
 			}
 			sg.SrcFunc.Args = srcFuncArgs
 
-		case (v.Typ == gql.AnyVar || v.Typ == gql.UidVar) && l.Uids != nil:
+		case (v.Typ == dql.AnyVar || v.Typ == dql.UidVar) && l.Uids != nil:
 			lists = append(lists, l.Uids)
 
-		case (v.Typ == gql.AnyVar || v.Typ == gql.ValueVar):
+		case (v.Typ == dql.AnyVar || v.Typ == dql.ValueVar):
 			// This should happen only once.
 			// TODO: This allows only one value var per subgraph, change it later
 			sg.Params.UidToVal = l.Vals
 
-		case (v.Typ == gql.AnyVar || v.Typ == gql.UidVar) && len(l.Vals) != 0:
+		case (v.Typ == dql.AnyVar || v.Typ == dql.UidVar) && len(l.Vals) != 0:
 			// Derive the UID list from value var.
 			uids := make([]uint64, 0, len(l.Vals))
 			for k := range l.Vals {
@@ -1785,7 +1785,7 @@ func (sg *SubGraph) replaceVarInFunc() error {
 	if sg.SrcFunc == nil {
 		return nil
 	}
-	var args []gql.Arg
+	var args []dql.Arg
 	// Iterate over the args and replace value args with their values
 	for _, arg := range sg.SrcFunc.Args {
 		if !arg.IsValueVar {
@@ -1810,7 +1810,7 @@ func (sg *SubGraph) replaceVarInFunc() error {
 				continue
 			}
 			seenArgs[val] = struct{}{}
-			args = append(args, gql.Arg{Value: val})
+			args = append(args, dql.Arg{Value: val})
 		}
 	}
 	sg.SrcFunc.Args = args
@@ -2415,7 +2415,7 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 	for _, it := range sg.Params.NeedsVar {
 		// TODO(pawan) - Return error if user uses var order with predicates.
 		if len(sg.Params.Order) > 0 && it.Name == sg.Params.Order[0].Attr &&
-			(it.Typ == gql.ValueVar) {
+			(it.Typ == dql.ValueVar) {
 			// If the Order name is same as var name and it's a value variable, we sort using that variable.
 			return sg.sortAndPaginateUsingVar(ctx)
 		}
@@ -2665,7 +2665,7 @@ func isAggregatorFn(f string) bool {
 	return false
 }
 
-func isUidFnWithoutVar(f *gql.Function) bool {
+func isUidFnWithoutVar(f *dql.Function) bool {
 	return f != nil && f.Name == "uid" && len(f.NeedsVar) == 0
 }
 
@@ -2741,7 +2741,7 @@ type Request struct {
 	ReadTs   uint64 // ReadTs for the transaction.
 	Cache    int    // 0 represents use txn cache, 1 represents not to use cache.
 	Latency  *Latency
-	GqlQuery *gql.Result
+	GqlQuery *dql.Result
 
 	Subgraphs []*SubGraph
 

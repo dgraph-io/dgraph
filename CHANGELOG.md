@@ -4,6 +4,92 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project will adhere to [Semantic Versioning](https://semver.org) starting `v22.0.0`.
 
+## [v22.0.2] - 2022-12-16
+[v22.0.2]: https://github.com/dgraph-io/dgraph/compare/v22.0.1...v22.0.2
+
+### Added
+
+- **ARM Support** -  Dgraph now supports ARM64 Architecture for development (https://github.com/dgraph-io/dgraph/pull/8543 https://github.com/dgraph-io/dgraph/pull/8520 https://github.com/dgraph-io/dgraph/pull/8503 https://github.com/dgraph-io/dgraph/pull/8436 https://github.com/dgraph-io/dgraph/pull/8405 https://github.com/dgraph-io/dgraph/pull/8395)
+- Additional logging and trace tags for debugging (https://github.com/dgraph-io/dgraph/pull/8490)
+
+### Fixed
+
+- **EDgraph**
+  - fix(ACL): Prevents permissions overrride and merges acl cache to persist permissions across different namespaces (https://github.com/dgraph-io/dgraph/pull/8506)
+
+- **Core Dgraph**
+  - Fix(badger): Upgrade badger version to fix  manifest corruption (https://github.com/dgraph-io/dgraph/pull/8365)
+  - fix(pagination): Fix after for regexp, match functions (https://github.com/dgraph-io/dgraph/pull/8471)
+  - fix(query): Do not execute filters if there are no source uids(https://github.com/dgraph-io/dgraph/pull/8452)
+  - fix(admin): make config changes to pass through gog middlewares (https://github.com/dgraph-io/dgraph/pull/8442)
+  - fix(sort): Only filter out nodes with positive offsets (https://github.com/dgraph-io/dgraph/pull/8441)
+  - fix(fragment): merge the nested fragments fields (https://github.com/dgraph-io/dgraph/pull/8435)
+  - Fix(lsbackup): Fix profiler in lsBackup (https://github.com/dgraph-io/dgraph/pull/8432)
+  - fix(DQL): optimize query for has function with offset (https://github.com/dgraph-io/dgraph/pull/8431)
+
+- **GraphQL**
+  - Fix(GraphQL): Make mutation rewriting tests more robust (https://github.com/dgraph-io/dgraph/pull/8449)
+
+- **Security**
+   - <details>
+      <summary>CVE Fixes (35 total)</summary>
+      
+      #### CVE Fixes (35 total)
+      - CVE-2013-4235
+      - CVE-2016-20013
+      - CVE-2016-2781
+      - CVE-2017-11164
+      - CVE-2018-16886
+      - CVE-2019-0205
+      - CVE-2019-0210
+      - CVE-2019-11254
+      - CVE-2019-16167
+      - CVE-2020-29652
+      - CVE-2021-31525
+      - CVE-2021-33194
+      - CVE-2021-36222
+      - CVE-2021-37750
+      - CVE-2021-38561
+      - CVE-2021-39537
+      - CVE-2021-43565
+      - CVE-2021-44716
+      - CVE-2021-44758
+      - CVE-2022-21698
+      - CVE-2022-27191
+      - CVE-2022-27664
+      - CVE-2022-29458
+      - CVE-2022-29526
+      - CVE-2022-3219
+      - CVE-2022-32221
+      - CVE-2022-3437
+      - CVE-2022-35737
+      - CVE-2022-3715
+      - CVE-2022-3821
+      - CVE-2022-39377
+      - CVE-2022-41916
+      - CVE-2022-42800
+      - CVE-2022-42898
+      - CVE-2022-44640
+   - <details>
+      <summary>GHSA Fixes (2 total)</summary>
+      
+      #### GHSE Fixes (2 total)
+      - GHSA-69ch-w2m2-3vjp
+      - GHSA-m332-53r6-2w93
+
+### Changed
+
+- **CI Enhancements**
+    - Added more unit tests (https://github.com/dgraph-io/dgraph/pull/8470 https://github.com/dgraph-io/dgraph/pull/8489 https://github.com/dgraph-io/dgraph/pull/8479 https://github.com/dgraph-io/dgraph/pull/8488 https://github.com/dgraph-io/dgraph/pull/8433)
+    - [Coveralls](https://coveralls.io/github/dgraph-io/dgraph?branch=main) on CI is enhanced to measure code coverage for integration tests (https://github.com/dgraph-io/dgraph/pull/8494)
+    - [**LDBC Benchmarking**](https://ldbcouncil.org) in enabled on [CI](https://github.com/dgraph-io/dgraph/actions/workflows/ci-dgraph-ldbc-tests.yml)
+  
+- **CD Enhancements**
+    - Enhanced our [CD Pipeline](https://github.com/dgraph-io/dgraph/actions/workflows/cd-dgraph.yml) to support ARM64 binaries and docker-images (https://github.com/dgraph-io/dgraph/pull/8520)
+    - Enhanced [dgraph-lambda](https://github.com/dgraph-io/dgraph-lambda) to support arm64 (https://github.com/dgraph-io/dgraph-lambda/pull/39 https://github.com/dgraph-io/dgraph-lambda/pull/38 https://github.com/dgraph-io/dgraph-lambda/pull/37)
+    - Enhanced [badger](https://github.com/dgraph-io/badger) to support arm64 (https://github.com/dgraph-io/badger/pull/1838)
+
+
 ## [v22.0.1] - 2022-11-10
 [v22.0.1]: https://github.com/dgraph-io/dgraph/compare/v22.0.0...v22.0.1
 
@@ -11,7 +97,6 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
 - **CD Release Pipeline**
   - Badger Binary fetch steps added to the release CD pipeline (https://github.com/dgraph-io/dgraph/pull/8425)
   - Corresponding Badger artifacts will be fetched & uploaded from v22.0.1 onwards
-
 
 ## [v22.0.0] - 2022-10-21
 [v22.0.0]: https://github.com/dgraph-io/dgraph/compare/v21.03.2...v22.0.0

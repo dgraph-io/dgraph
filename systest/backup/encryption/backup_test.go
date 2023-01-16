@@ -323,7 +323,7 @@ func runRestore(t *testing.T, lastDir string, commitTs uint64) map[string]string
 	key, err := ioutil.ReadFile("../../../ee/enc/test-fixtures/enc-key")
 	require.NoError(t, err)
 	result := worker.RunRestore("./data/restore", localBackupDst, lastDir,
-		x.SensitiveByteSlice(key), options.Snappy, 0)
+		x.Sensitive(key), options.Snappy, 0)
 	require.NoError(t, result.Err)
 
 	for i, pdir := range []string{"p1", "p2", "p3"} {

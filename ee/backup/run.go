@@ -1,3 +1,4 @@
+//go:build !oss
 // +build !oss
 
 /*
@@ -55,7 +56,7 @@ var opt struct {
 	location    string
 	pdir        string
 	zero        string
-	key         x.SensitiveByteSlice
+	key         x.Sensitive
 	forceZero   bool
 	destination string
 	format      string

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package gql
+package dql
 
 import (
 	"bytes"
@@ -174,7 +174,7 @@ type Arg struct {
 	IsGraphQLVar bool
 }
 
-// Function holds the information about gql functions.
+// Function holds the information about dql functions.
 type Function struct {
 	Attr       string
 	Lang       string // language of the attribute value
@@ -362,7 +362,7 @@ func substituteVar(f string, res *string, vmap varMap) error {
 
 func substituteVariables(gq *GraphQuery, vmap varMap) error {
 	for k, v := range gq.Args {
-		// v won't be empty as its handled in parseGqlVariables.
+		// v won't be empty as its handled in parseDqlVariables.
 		val := gq.Args[k]
 		if err := substituteVar(v, &val, vmap); err != nil {
 			return err
@@ -539,20 +539,21 @@ func Parse(r Request) (Result, error) {
 //
 // The needVars parameter is passed in the case of upsert block.
 // For example, when parsing the query block inside -
-// upsert {
-//   query {
-//     me(func: eq(email, "someone@gmail.com"), first: 1) {
-//       v as uid
-//     }
-//   }
 //
-//   mutation {
-//     set {
-//       uid(v) <name> "Some One" .
-//       uid(v) <email> "someone@gmail.com" .
-//     }
-//   }
-// }
+//	upsert {
+//	  query {
+//	    me(func: eq(email, "someone@gmail.com"), first: 1) {
+//	      v as uid
+//	    }
+//	  }
+//
+//	  mutation {
+//	    set {
+//	      uid(v) <name> "Some One" .
+//	      uid(v) <email> "someone@gmail.com" .
+//	    }
+//	  }
+//	}
 //
 // The variable name v needs to be passed through the needVars parameter. Otherwise, an error
 // is reported complaining that the variable v is defined but not used in the query block.
@@ -794,7 +795,7 @@ L2:
 				return nil, item.Errorf("Variables can be defined only in named queries.")
 			}
 
-			if rerr = parseGqlVariables(it, vmap); rerr != nil {
+			if rerr = parseDqlVariables(it, vmap); rerr != nil {
 				return nil, rerr
 			}
 
@@ -1150,8 +1151,8 @@ func getSchema(it *lex.ItemIterator) (*pb.SchemaRequest, error) {
 	return nil, it.Errorf("Invalid schema block.")
 }
 
-// parseGqlVariables parses the the graphQL variable declaration.
-func parseGqlVariables(it *lex.ItemIterator, vmap varMap) error {
+// parseDqlVariables parses the the graphQL variable declaration.
+func parseDqlVariables(it *lex.ItemIterator, vmap varMap) error {
 	expectArg := true
 	if item, ok := it.PeekOne(); ok && item.Typ == itemRightRound {
 		return nil
@@ -1557,7 +1558,7 @@ loop:
 }
 
 // parseFuncArgs will try to parse the arguments inside an array ([]). If the values
-// are prefixed with $ they are treated as Gql variables, otherwise they are used as scalar values.
+// are prefixed with $ they are treated as Dql variables, otherwise they are used as scalar values.
 // Returns nil on success while appending arguments to the function Args slice. Otherwise
 // returns an error, which can be a parsing or value error.
 func parseFuncArgs(it *lex.ItemIterator, g *Function) error {
@@ -2113,7 +2114,7 @@ func tryParseFacetList(it *lex.ItemIterator) (res facetRes, parseOk bool, err er
 
 // parseCascade parses the cascade directive.
 // Two formats:
-// 	1. @cascade
+//  1. @cascade
 //  2. @cascade(pred1, pred2, ...)
 func parseCascade(it *lex.ItemIterator, gq *GraphQuery) error {
 	item := it.Item()

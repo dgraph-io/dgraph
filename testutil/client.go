@@ -32,10 +32,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgraph/gql"
-
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/dgraph/dql"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
@@ -474,7 +473,7 @@ func AssignUids(num uint64) error {
 }
 
 func RequireUid(t *testing.T, uid string) {
-	_, err := gql.ParseUid(uid)
+	_, err := dql.ParseUid(uid)
 	require.NoErrorf(t, err, "expecting a uid, got: %s", uid)
 }
 
