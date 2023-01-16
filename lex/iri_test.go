@@ -81,7 +81,6 @@ func Test_isHexFalse(t *testing.T) {
 	}
 }
 
-// Test IsIRIRefChar ok (but need review)
 func Test_isIRIRefChar(t *testing.T) {
 	type args struct {
 		r rune
@@ -91,22 +90,6 @@ func Test_isIRIRefChar(t *testing.T) {
 		{r: 'a', l: &Lexer{}},
 		{r: 'u', l: &Lexer{}},
 		{r: 'U', l: &Lexer{}},
-		{r: 't', l: &Lexer{}},
-	}
-	for _, tt := range tests {
-		got := isIRIRefChar(tt.r, tt.l)
-		if got == false {
-			t.Errorf("isIRIRefChar() = %v", got)
-		}
-	}
-}
-
-func Test_isIRIRefCharTrue(t *testing.T) {
-	type args struct {
-		r rune
-		l *Lexer
-	}
-	tests := []args{
 		{r: 't', l: &Lexer{}},
 	}
 	for _, tt := range tests {
@@ -281,19 +264,18 @@ func TestHasUCharsFalse(t *testing.T) {
 	tests := []struct {
 		name string
 		args args
-		// want bool
+		want bool
 	}{
 		{
 			name: "TestHasUChars 1",
 			args: args{r: 'a', l: &Lexer{}},
-			// want: true,
+			want: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := HasUChars(tt.args.r, tt.args.l)
-			if got != false {
-				t.Errorf("TestHasUChars() = %v", got)
+			if got := HasUChars(tt.args.r, tt.args.l); got != tt.want {
+				t.Errorf("HasUChars() = %v, want %v", got, tt.want)
 			}
 		})
 	}
@@ -353,28 +335,6 @@ func TestHasXCharsFalse(t *testing.T) {
 		want bool
 	}{
 		{name: "TestHasXChars False", args: args{r: 'a', l: &Lexer{}}, want: false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := HasXChars(tt.args.r, tt.args.l); got != tt.want {
-				t.Errorf("HasXChars() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestHasXChars(t *testing.T) {
-	type args struct {
-		r rune
-		l *Lexer
-	}
-	tests := []struct {
-		name string
-		args args
-		want bool
-	}{
-		{name: "TestHasXChars 1", args: args{r: 'a', l: &Lexer{}}, want: false},
 	}
 
 	for _, tt := range tests {
