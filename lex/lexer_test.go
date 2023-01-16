@@ -467,7 +467,6 @@ func TestItemIterator_ItemFalse(t *testing.T) {
 	}
 }
 
-// test[ok] > trying more false cases*****
 func TestItemIterator_Prev(t *testing.T) {
 	type fields struct {
 		l   *Lexer
@@ -564,7 +563,6 @@ func TestItemIterator_Prev(t *testing.T) {
 	}
 }
 
-// understand more about it
 func TestItemIterator_Restore(t *testing.T) {
 	type fields struct {
 		l   *Lexer
@@ -629,7 +627,6 @@ func TestItemIterator_Restore(t *testing.T) {
 	}
 }
 
-// check conditions for test*****
 func TestItemIterator_Save(t *testing.T) {
 	type fields struct {
 		l   *Lexer
@@ -910,49 +907,6 @@ func TestItemIterator_PeekOne(t *testing.T) {
 			},
 			want1: true,
 		},
-		// can't test false case
-		// {
-		// 	name: "TestItemIterator_PeekOne 2",
-		// 	fields: fields{
-		// 		l: &Lexer{
-		// 			Input:      "test2",
-		// 			Start:      0,
-		// 			Pos:        0,
-		// 			Width:      0,
-		// 			widthStack: []*RuneWidth{},
-		// 			items: []Item{
-		// 				{
-		// 					Typ:    0,
-		// 					Val:    "test2",
-		// 					line:   0,
-		// 					column: 0,
-		// 				},
-		// 				{
-		// 					Typ:    0,
-		// 					Val:    "test2",
-		// 					line:   0,
-		// 					column: 0,
-		// 				},
-		// 			},
-		// 			Depth:      0,
-		// 			BlockDepth: 0,
-		// 			ArgDepth:   0,
-		// 			Mode: func(*Lexer) StateFn {
-		// 				return nil
-		// 			},
-		// 			Line:   0,
-		// 			Column: 0,
-		// 		},
-		// 		idx: 1,
-		// 	},
-		// 	want: Item{
-		// 		Typ:    0,
-		// 		Val:    "test2",
-		// 		line:   0,
-		// 		column: 0,
-		// 	},
-		// 	want1: false,
-		// },
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1244,7 +1198,6 @@ func TestLexer_ValidateResultNextItemError(t *testing.T) {
 	}
 }
 
-// to do: need to understand how it works completely for to do false cases *****
 func TestLexer_Run(t *testing.T) {
 	type fields struct {
 		Input      string
@@ -1303,7 +1256,6 @@ func TestLexer_Run(t *testing.T) {
 	}
 }
 
-// TODO: check how works errof
 func TestLexer_Errorf(t *testing.T) {
 	type fields struct {
 		Input      string
@@ -1383,7 +1335,6 @@ func TestLexer_Errorf(t *testing.T) {
 	}
 }
 
-// need to understand this func*****
 func TestLexer_Emit(t *testing.T) {
 	type fields struct {
 		Input      string
@@ -1460,7 +1411,6 @@ func TestLexer_Emit(t *testing.T) {
 	}
 }
 
-// need to understand this func*****
 func TestLexer_pushWidth(t *testing.T) {
 	type fields struct {
 		Input      string
@@ -1525,7 +1475,6 @@ func TestLexer_pushWidth(t *testing.T) {
 	}
 }
 
-// to do: more tests with other positions*****
 func TestLexer_Next(t *testing.T) {
 	type fields struct {
 		Input      string
@@ -1587,8 +1536,6 @@ func TestLexer_Next(t *testing.T) {
 	}
 }
 
-// need understand how to fill 'widthStack' to activate Backup() func [ok]
-// what is happen if fields.Pos be? (chack this) ****
 func TestLexer_Backup(t *testing.T) {
 	type fields struct {
 		Input      string
@@ -1626,11 +1573,6 @@ func TestLexer_Backup(t *testing.T) {
 				Column:     0,
 			},
 		},
-		// Test false case (fields must be empty)
-		// {
-		// 	name:   "TestLexer_Backup 2",
-		// 	fields: fields{},
-		// },
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1653,7 +1595,6 @@ func TestLexer_Backup(t *testing.T) {
 	}
 }
 
-// need write more tests from other positions (fields.Pos)
 func TestLexer_Peek(t *testing.T) {
 	type fields struct {
 		Input      string
@@ -1715,7 +1656,6 @@ func TestLexer_Peek(t *testing.T) {
 	}
 }
 
-// need write more tests from other positions (fields.Pos)
 func TestLexer_PeekTwo(t *testing.T) {
 	type fields struct {
 		Input      string
@@ -1845,7 +1785,6 @@ func TestLexer_PeekTwoEOF(t *testing.T) {
 	}
 }
 
-// need to understand this func*****
 func TestLexer_moveStartToPos(t *testing.T) {
 	type fields struct {
 		Input      string
@@ -1992,7 +1931,6 @@ func TestLexer_moveStartToPosEOL(t *testing.T) {
 	}
 }
 
-// need to understand this func*****
 func TestLexer_Ignore(t *testing.T) {
 	type fields struct {
 		Input      string
@@ -2465,7 +2403,6 @@ func TestLexer_IgnoreRun(t *testing.T) {
 	}
 }
 
-// use this example for iri_test.go
 func TestLexer_IsEscChar(t *testing.T) {
 	type fields struct {
 		Input      string
