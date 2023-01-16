@@ -66,7 +66,7 @@ func Test_isHex(t *testing.T) {
 	}
 }
 
-func Test_isHexTableFalse(t *testing.T) {
+func Test_isHexFalse(t *testing.T) {
 	tests := []test{
 		{data: 'G', want: false},
 		{data: 'g', want: false},
@@ -91,6 +91,7 @@ func Test_isIRIRefChar(t *testing.T) {
 		{r: 'a', l: &Lexer{}},
 		{r: 'u', l: &Lexer{}},
 		{r: 'U', l: &Lexer{}},
+		{r: 't', l: &Lexer{}},
 	}
 	for _, tt := range tests {
 		got := isIRIRefChar(tt.r, tt.l)
@@ -117,22 +118,6 @@ func Test_isIRIRefCharTrue(t *testing.T) {
 }
 
 func Test_isIRIRefCharFalse(t *testing.T) {
-	type args struct {
-		r rune
-		l *Lexer
-	}
-	tests := []args{
-		{r: '\\', l: &Lexer{}},
-	}
-	for _, tt := range tests {
-		got := isIRIRefChar(tt.r, tt.l)
-		if got != false {
-			t.Errorf("isIRIRefChar() = %v", got)
-		}
-	}
-}
-
-func Test_isIRIRefCharFalseHasUChars(t *testing.T) {
 	type args struct {
 		r rune
 		l *Lexer
