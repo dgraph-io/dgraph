@@ -138,6 +138,9 @@ func Test_isIRIRefCharFalseHasUChars(t *testing.T) {
 		l *Lexer
 	}
 	tests := []args{
+		{r: ' ', l: &Lexer{}},
+		{r: '>', l: &Lexer{}},
+		{r: '\\', l: &Lexer{}},
 		{
 			r: '\\',
 			l: &Lexer{
@@ -175,14 +178,6 @@ func Test_isIRIRefCharFalseHasUChars(t *testing.T) {
 				Line:   0,
 				Column: 0,
 			},
-		},
-		{
-			r: '>',
-			l: &Lexer{},
-		},
-		{
-			r: ' ',
-			l: &Lexer{},
 		},
 	}
 	for _, tt := range tests {
