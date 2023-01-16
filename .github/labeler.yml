@@ -1,8 +1,9 @@
 area/graphql:
   - graphql/**/*
-  - wiki/content/graphql/**/*
-area/documentation :
-  - wiki/content/**/*
+area/documentation:
+  - "**/*.md"
+  - "**/*.pdf"
+  - "**/*.tex"
 area/bulk-loader:
   - dgraph/cmd/bulk/**/*
 area/live-loader:
@@ -14,11 +15,37 @@ area/integrations:
   - .github/**/*
   - .travis/**/*
 area/testing/jepsen:
-  - contrib/jepsen/**/* 
+  - contrib/jepsen/**/*
 area/commercial:
   - ee/**/*
-  - wiki/content/enterprise-features/**/*
+area/enterprise:
+  - ee/**/*
+area/enterprise/backup:
+  - ee/backup/**/*
+area/enterprise/acl:
+  - ee/acl/**/*
 area/schema:
   - schema/**/*
 area/testing:
   - systest/**/*
+  - "**/*test.go"
+  - graphql/e2e/**/*
+  - "**/*test.yaml"
+  - t/**/*
+  - testutil/**/*
+  - tlstest/**/*
+area/core:
+  - protos/**/*
+  - posting/**/*
+  - raftwal/**/*
+  - query/**/*
+  - schema/**/*
+  - protos/**/*
+  - x/**/*
+  - xidmap/**/*
+  - worker/**/*
+  - graphql/**/*
+go:
+  - "**/*.go"
+python:
+  - "**/*.py"
