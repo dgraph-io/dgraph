@@ -33,15 +33,6 @@ type testChars struct {
 	l *Lexer
 }
 
-// func TestIsHex(t *testing.T) {
-// 	got := '0'
-// 	r := isHex(got)
-// 	if r == false {
-// 		t.Error("Expected: a character beteween '0' and '9", "got: ", r)
-// 	}
-
-// }
-
 func Test_isHex(t *testing.T) {
 	tests := []test{
 		{data: '0', want: true},
@@ -109,6 +100,22 @@ func Test_isIRIRefChar(t *testing.T) {
 	}
 }
 
+func Test_isIRIRefCharTrue(t *testing.T) {
+	type args struct {
+		r rune
+		l *Lexer
+	}
+	tests := []args{
+		{r: 't', l: &Lexer{}},
+	}
+	for _, tt := range tests {
+		got := isIRIRefChar(tt.r, tt.l)
+		if got == false {
+			t.Errorf("isIRIRefChar() = %v", got)
+		}
+	}
+}
+
 func Test_isIRIRefCharFalse(t *testing.T) {
 	type args struct {
 		r rune
@@ -131,22 +138,52 @@ func Test_isIRIRefCharFalseHasUChars(t *testing.T) {
 		l *Lexer
 	}
 	tests := []args{
-		{r: '\\', l: &Lexer{
-			Input:      "u",
-			Start:      0,
-			Pos:        0,
-			Width:      0,
-			widthStack: []*RuneWidth{},
-			items:      []Item{},
-			Depth:      0,
-			BlockDepth: 0,
-			ArgDepth:   0,
-			Mode: func(*Lexer) StateFn {
-				return nil
+		{
+			r: '\\',
+			l: &Lexer{
+				Input:      "u",
+				Start:      0,
+				Pos:        0,
+				Width:      0,
+				widthStack: []*RuneWidth{},
+				items:      []Item{},
+				Depth:      0,
+				BlockDepth: 0,
+				ArgDepth:   0,
+				Mode: func(*Lexer) StateFn {
+					return nil
+				},
+				Line:   0,
+				Column: 0,
 			},
-			Line:   0,
-			Column: 0,
-		}},
+		},
+		{
+			r: '\\',
+			l: &Lexer{
+				Input:      "a",
+				Start:      0,
+				Pos:        0,
+				Width:      0,
+				widthStack: []*RuneWidth{},
+				items:      []Item{},
+				Depth:      0,
+				BlockDepth: 0,
+				ArgDepth:   0,
+				Mode: func(*Lexer) StateFn {
+					return nil
+				},
+				Line:   0,
+				Column: 0,
+			},
+		},
+		{
+			r: '>',
+			l: &Lexer{},
+		},
+		{
+			r: ' ',
+			l: &Lexer{},
+		},
 	}
 	for _, tt := range tests {
 		got := isIRIRefChar(tt.r, tt.l)
