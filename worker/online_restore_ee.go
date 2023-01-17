@@ -1,3 +1,4 @@
+//go:build !oss
 // +build !oss
 
 /*
@@ -264,7 +265,7 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest, pidx uin
 	}
 
 	// Load schema back.
-	if err := schema.LoadFromDb(); err != nil {
+	if err := schema.LoadFromDb(ctx); err != nil {
 		return errors.Wrapf(err, "cannot load schema after restore")
 	}
 

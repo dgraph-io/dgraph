@@ -340,14 +340,14 @@ func createSchema(attr string, typ types.TypeID, hint pb.Metadata_HintType, ts u
 
 func runTypeMutation(ctx context.Context, update *pb.TypeUpdate, ts uint64) error {
 	current := *update
-	schema.State().SetType(update.TypeName, current)
+	schema.State().SetType(update.TypeName, &current)
 	return updateType(update.TypeName, *update, ts)
 }
 
 // We commit schema to disk in blocking way, should be ok because this happens
 // only during schema mutations or we see a new predicate.
 func updateType(typeName string, t pb.TypeUpdate, ts uint64) error {
-	schema.State().SetType(typeName, t)
+	schema.State().SetType(typeName, &t)
 	txn := pstore.NewTransactionAt(ts, true)
 	defer txn.Discard()
 	data, err := t.Marshal()

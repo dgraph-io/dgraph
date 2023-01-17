@@ -968,7 +968,7 @@ func (n *node) retrieveSnapshot(snap pb.Snapshot) error {
 	}
 	// Populate shard stores the streamed data directly into db, so we need to refresh
 	// schema for current group id
-	if err := schema.LoadFromDb(); err != nil {
+	if err := schema.LoadFromDb(closer.Ctx()); err != nil {
 		return errors.Wrapf(err, "while initializing schema")
 	}
 	groups().triggerMembershipSync()

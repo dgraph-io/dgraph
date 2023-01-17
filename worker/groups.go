@@ -150,20 +150,24 @@ func StartRaftNodes(walStore *raftwal.DiskStorage, bindall bool) {
 
 	gr.Node = newNode(walStore, gid, raftIdx, x.WorkerConfig.MyAddr)
 
-	x.Checkf(schema.LoadFromDb(), "Error while initializing schema")
+	x.Checkf(schema.LoadFromDb(context.Background()), "Error while initializing schema")
+	glog.Infof("Load schema from DB: OK")
 	raftServer.UpdateNode(gr.Node.Node)
 	gr.Node.InitAndStartNode()
+	glog.Infof("Init and start Raft node: OK")
 
 	go gr.sendMembershipUpdates()
 	go gr.receiveMembershipUpdates()
 	go gr.processOracleDeltaStream()
 
 	gr.informZeroAboutTablets()
+	glog.Infof("Informed Zero about tablets I have: OK")
 	gr.applyInitialSchema()
 	gr.applyInitialTypes()
+	glog.Infof("Upserted Schema and Types: OK")
 
 	x.UpdateHealthStatus(true)
-	glog.Infof("Server is ready")
+	glog.Infof("Server is ready: OK")
 }
 
 func (g *groupi) Ctx() context.Context {
