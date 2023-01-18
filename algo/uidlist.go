@@ -60,7 +60,7 @@ func IntersectCompressedWith(pack *pb.UidPack, afterUID uint64, v, o *pb.List) {
 
 	// Select appropriate function based on heuristics.
 	ratio := float64(m) / float64(n)
-	if ratio < 500 {
+	if ratio < 100 {
 		IntersectCompressedWithLinJump(&dec, v.Uids, &dst)
 	} else {
 		IntersectCompressedWithBin(&dec, v.Uids, &dst)
