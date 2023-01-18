@@ -22,7 +22,7 @@ jsonschema==3.2.0
 MarkupSafe==1.1.1
 mock==2.0.0
 mypy-extensions==0.4.3
-networkx==2.4
+networkx==2.6
 pbr==5.4.5
 pyasn1==0.4.8
 pyrsistent==0.16.0
