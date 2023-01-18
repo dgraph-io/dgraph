@@ -33,6 +33,7 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
+
 	"github.com/dgryski/go-farm"
 	"github.com/golang/glog"
 )

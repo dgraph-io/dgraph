@@ -1,3 +1,4 @@
+//go:build !oss
 // +build !oss
 
 /*
@@ -27,6 +28,7 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
+
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"go.etcd.io/etcd/raft/raftpb"
