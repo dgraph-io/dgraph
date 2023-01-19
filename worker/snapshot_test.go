@@ -83,7 +83,10 @@ func TestSnapshot(t *testing.T) {
 	require.NoError(t, err)
 
 	// Wait for the container to start.
-	time.Sleep(time.Second * 2)
+	err = testutil.CheckHealthContainer(testutil.ContainerAddr("alpha2", 8080))
+	if err != nil {
+		fmt.Print("error while getting alpha container health")
+	}
 	dg2, err := testutil.DgraphClient(testutil.ContainerAddr("alpha2", 9080))
 	if err != nil {
 		t.Fatalf("Error while getting a dgraph client: %v", err)
@@ -107,6 +110,10 @@ func TestSnapshot(t *testing.T) {
 	t.Logf("Starting alpha2.\n")
 	err = testutil.DockerRun("alpha2", testutil.Start)
 	require.NoError(t, err)
+	err = testutil.CheckHealthContainer(testutil.ContainerAddr("alpha2", 8080))
+	if err != nil {
+		fmt.Print("error while getting alpha container health")
+	}
 
 	dg2, err = testutil.DgraphClient(testutil.ContainerAddr("alpha2", 9080))
 	if err != nil {

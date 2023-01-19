@@ -158,9 +158,6 @@ func UpdateGQLSchema(t *testing.T, sockAddrHttp, schema string) {
 	resp, err := http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
 	defer resp.Body.Close()
-	var data interface{}
-	require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
-	// return JsonGet(data, "data", "updateGQLSchema", "gqlSchema", "schema").(string)
 }
 
 func GetGQLSchema(t *testing.T, sockAddrHttp string) string {
@@ -174,6 +171,5 @@ func GetGQLSchema(t *testing.T, sockAddrHttp string) string {
 	defer resp.Body.Close()
 	var data interface{}
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
-	fmt.Println("data is ", data)
 	return JsonGet(data, "data", "getGQLSchema", "schema").(string)
 }
