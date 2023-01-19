@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
-	"github.com/dgraph-io/dgraph/ee/audit"
 	"io"
 	"io/ioutil"
 	"mime"
@@ -34,6 +33,7 @@ import (
 	"go.opencensus.io/trace"
 
 	"github.com/dgraph-io/dgraph/edgraph"
+	"github.com/dgraph-io/dgraph/ee/audit"
 	"github.com/dgraph-io/dgraph/graphql/api"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"

@@ -71,7 +71,7 @@ func ExtractNamespaceFromJwt(jwtToken string) (uint64, error) {
 func ExtractJWTNamespace(ctx context.Context) (uint64, error) {
 	jwtString, err := ExtractJwt(ctx)
 	if err != nil {
-		return 0, err
+		return 0, errors.Errorf("extracting namespace from JWT %w", err)
 	}
 	return ExtractNamespaceFromJwt(jwtString)
 }
