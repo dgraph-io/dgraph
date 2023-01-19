@@ -115,14 +115,6 @@ type WorkerOptions struct {
 	ProposedGroupId uint32
 	// StartTime is the start time of the alpha
 	StartTime time.Time
-	// Ludicrous options:
-	//
-	// enabled bool - turn Ludicrous mode on or off
-	// concurrency int - number of concurrent threads in Ludicrous mode
-	Ludicrous *z.SuperFlag
-	// LudicrousEnabled mirrors the "enabled" flag of the Ludicrous SuperFlag for usage in critical
-	// paths.
-	LudicrousEnabled bool
 	// Security options:
 	//
 	// whitelist string - comma separated IP addresses
@@ -148,12 +140,8 @@ func (w *WorkerOptions) Parse(conf *viper.Viper) {
 	w.MyAddr = conf.GetString("my")
 	w.Trace = z.NewSuperFlag(conf.GetString("trace")).MergeAndCheckDefault(TraceDefaults)
 
-	if w.LudicrousEnabled {
-		w.HardSync = false
-	} else {
-		survive := conf.GetString("survive")
-		AssertTruef(survive == "process" || survive == "filesystem",
-			"Invalid survival mode: %s", survive)
-		w.HardSync = survive == "filesystem"
-	}
+	survive := conf.GetString("survive")
+	AssertTruef(survive == "process" || survive == "filesystem",
+		"Invalid survival mode: %s", survive)
+	w.HardSync = survive == "filesystem"
 }

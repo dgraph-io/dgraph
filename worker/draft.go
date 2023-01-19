@@ -291,9 +291,6 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		ops:        make(map[op]operation),
 		cdcTracker: newCDC(),
 	}
-	if x.WorkerConfig.LudicrousEnabled {
-		n.ex = newExecutor(&m.Applied, int(x.WorkerConfig.Ludicrous.GetInt64("concurrency")))
-	}
 	return n
 }
 
@@ -417,16 +414,6 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 			}
 		}
 
-		// If Dgraph is running in ludicrous mode and we get some schema we should wait for all
-		// active mutations to finish. Previously we were thinking of only waiting for active
-		// mutations related to predicates present in schema mutation. But this might cause issues
-		// as we call DropPrefix() on Badger while running schema mutations. DropPrefix() blocks
-		// writes on Badger and returns error if writes are tried. To avoid this we should wait for
-		// all active mutations to finish irrespective of predicates present in schema mutation.
-		if x.WorkerConfig.LudicrousEnabled && len(proposal.Mutations.Schema) > 0 {
-			n.ex.waitForActiveMutations()
-		}
-
 		if err := runSchemaMutation(ctx, proposal.Mutations.Schema, startTs); err != nil {
 			return err
 		}
@@ -514,11 +501,6 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		}
 		return ei.GetEntity() < ej.GetEntity()
 	})
-
-	if x.WorkerConfig.LudicrousEnabled {
-		n.ex.addEdges(ctx, proposal)
-		return nil
-	}
 
 	txn := posting.Oracle().RegisterStartTs(m.StartTs)
 	if txn.ShouldAbort() {
@@ -754,15 +736,6 @@ func (n *node) processApplyCh() {
 			proposal.Index = entry.Index
 			updateStartTs(&proposal)
 
-			// Ignore the start ts in case of ludicrous mode. We get a new ts and use that as the
-			// commit ts.
-			// WARNING: This would cause the leader and the follower to diverge in the timestamp
-			// they use to commit the same thing.
-			// TODO: This is broken. We need to find a way to fix this.
-			if x.WorkerConfig.LudicrousEnabled && proposal.Mutations != nil {
-				proposal.Mutations.StartTs = State.GetTimestamp(false)
-			}
-
 			var perr error
 			p, ok := previous[key]
 			if ok && p.err == nil && p.size == psz {
@@ -861,14 +834,8 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 	for _, status := range delta.Txns {
 		toDisk(status.StartTs, status.CommitTs)
 	}
-	if x.WorkerConfig.LudicrousEnabled {
-		if err := writer.Wait(); err != nil {
-			glog.Errorf("Error while waiting to commit: +%v", err)
-		}
-	} else {
-		if err := writer.Flush(); err != nil {
-			return errors.Wrapf(err, "while flushing to disk")
-		}
+	if err := writer.Flush(); err != nil {
+		return errors.Wrapf(err, "while flushing to disk")
 	}
 	if x.WorkerConfig.HardSync {
 		if err := pstore.Sync(); err != nil {
@@ -1144,9 +1111,6 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 				time.Sleep(time.Second) // Let transfer happen.
 			}
 			n.Raft().Stop()
-			if x.WorkerConfig.LudicrousEnabled {
-				n.ex.closer.SignalAndWait()
-			}
 			close(done)
 			return
 		}
@@ -1382,22 +1346,6 @@ func (n *node) Run() {
 						atomic.AddUint32(&pctx.Found, 1)
 						if span := otrace.FromContext(pctx.Ctx); span != nil {
 							span.Annotate(nil, "Proposal found in CommittedEntries")
-						}
-						if x.WorkerConfig.LudicrousEnabled {
-							var p pb.Proposal
-							if err := p.Unmarshal(entry.Data[8:]); err != nil {
-								glog.Errorf("Unable to unmarshal proposal: %v %x\n",
-									err, entry.Data)
-								break
-							}
-							if len(p.Mutations.GetEdges()) > 0 {
-								// Assuming that there will be no error while applying. But this
-								// assumption is only made for data mutations and not schema
-								// mutations.
-								// TODO: This should not be done here. Instead, it should be done
-								// within the ludicrous mode scheduler.
-								n.Proposals.Done(key, nil)
-							}
 						}
 					}
 					entries = append(entries, entry)
@@ -1715,10 +1663,7 @@ func (n *node) calculateSnapshot(startIdx, lastIdx, minPendingStart uint64) (*pb
 					snapshotIdx = entry.Index - 1
 				}
 			}
-			// In ludicrous mode commitTs for any transaction is same as startTs.
-			if x.WorkerConfig.LudicrousEnabled {
-				maxCommitTs = x.Max(maxCommitTs, start)
-			} else if proposal.Delta != nil {
+			if proposal.Delta != nil {
 				for _, txn := range proposal.Delta.GetTxns() {
 					maxCommitTs = x.Max(maxCommitTs, txn.CommitTs)
 				}
