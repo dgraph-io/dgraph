@@ -201,10 +201,6 @@ func readMasterManifest(h UriHandler, path string) (*MasterManifest, error) {
 }
 
 func GetManifest(h UriHandler, uri *url.URL) (*MasterManifest, error) {
-	if !h.DirExists("") {
-		return &MasterManifest{}, errors.Errorf("getManifest: The uri path: %q doesn't exists",
-			uri.Path)
-	}
 	manifest, err := getConsolidatedManifest(h, uri)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get consolidated manifest: ")

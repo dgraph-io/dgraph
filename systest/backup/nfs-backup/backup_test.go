@@ -301,14 +301,6 @@ func restore(t *testing.T, lastDir string, restoreAlphaAddr string, backupDst st
 func dirSetup(t *testing.T) {
 	// Clean up data from previous runs.
 	dirCleanup(t)
-	nfsContainerName := testutil.DockerPrefix + "_nfs_1"
-	cmdStr := "docker exec -d " + nfsContainerName + " mkdir -p" + " /data" + backupDstHA + " /data" + backupDstNonHA
-	cmd := exec.Command("/bin/sh", "-c", cmdStr)
-	_, err := cmd.Output()
-	if err != nil {
-		// if there was any error, print it here
-		fmt.Println("could not run command: ", err)
-	}
 	for _, dir := range testDirs {
 		if err := os.MkdirAll(dir, os.ModePerm); err != nil {
 			t.Fatalf("Error while creating directory: %s", err.Error())
