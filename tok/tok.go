@@ -23,13 +23,13 @@ import (
 	"time"
 
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 	geom "github.com/twpayne/go-geom"
 	"golang.org/x/crypto/blake2b"
 	"golang.org/x/text/collate"
 
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/pkg/errors"
 )
 
 // Tokenizer identifiers are unique and can't be reused.

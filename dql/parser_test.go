@@ -22,11 +22,12 @@ import (
 	"runtime/debug"
 	"testing"
 
+	"github.com/pkg/errors"
+	"github.com/stretchr/testify/require"
+
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/lex"
-	"github.com/pkg/errors"
-	"github.com/stretchr/testify/require"
 )
 
 func childAttrs(g *GraphQuery) []string {

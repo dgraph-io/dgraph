@@ -12,12 +12,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
+
 	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
-	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
 )
 
 // Opens a badger db and runs a a test on it.

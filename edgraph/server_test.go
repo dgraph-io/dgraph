@@ -18,16 +18,17 @@ package edgraph
 
 import (
 	"context"
-	"github.com/dgraph-io/dgraph/schema"
-	"google.golang.org/grpc/metadata"
 	"io/ioutil"
 	"testing"
+
+	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/metadata"
 
 	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/chunker"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/stretchr/testify/require"
 )
 
 func makeNquad(sub, pred string, val *api.Value) *api.NQuad {

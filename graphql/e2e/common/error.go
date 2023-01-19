@@ -27,20 +27,20 @@ import (
 	"strings"
 	"testing"
 
-	admin2 "github.com/dgraph-io/dgraph/graphql/admin"
-
-	"github.com/dgraph-io/dgo/v210"
-	"github.com/dgraph-io/dgo/v210/protos/api"
-	dgoapi "github.com/dgraph-io/dgo/v210/protos/api"
-	"github.com/dgraph-io/dgraph/graphql/resolve"
-	"github.com/dgraph-io/dgraph/graphql/schema"
-	"github.com/dgraph-io/dgraph/graphql/test"
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/peer"
 	"gopkg.in/yaml.v2"
+
+	"github.com/dgraph-io/dgo/v210"
+	"github.com/dgraph-io/dgo/v210/protos/api"
+	dgoapi "github.com/dgraph-io/dgo/v210/protos/api"
+	admin2 "github.com/dgraph-io/dgraph/graphql/admin"
+	"github.com/dgraph-io/dgraph/graphql/resolve"
+	"github.com/dgraph-io/dgraph/graphql/schema"
+	"github.com/dgraph-io/dgraph/graphql/test"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 const (

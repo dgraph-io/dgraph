@@ -17,8 +17,9 @@ import (
 	"fmt"
 	"io/ioutil"
 
-	"github.com/dgraph-io/ristretto/z"
 	"github.com/spf13/viper"
+
+	"github.com/dgraph-io/ristretto/z"
 )
 
 // GetKeys returns the ACL and encryption keys as configured by the user

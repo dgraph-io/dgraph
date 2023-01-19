@@ -32,18 +32,18 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dgraph-io/dgraph/graphql/admin"
-
-	"github.com/dgraph-io/dgo/v210/protos/api"
-	"github.com/dgraph-io/dgraph/dql"
-	"github.com/dgraph-io/dgraph/edgraph"
-	"github.com/dgraph-io/dgraph/graphql/schema"
-	"github.com/dgraph-io/dgraph/query"
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/gogo/protobuf/jsonpb"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/metadata"
+
+	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/dgraph/dql"
+	"github.com/dgraph-io/dgraph/edgraph"
+	"github.com/dgraph-io/dgraph/graphql/admin"
+	"github.com/dgraph-io/dgraph/graphql/schema"
+	"github.com/dgraph-io/dgraph/query"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 func allowed(method string) bool {

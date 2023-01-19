@@ -26,8 +26,6 @@ import (
 	"log"
 	"math"
 	"net/http"
-
-	//nolint:gosec // profiling on debug tool considered noncritical
 	_ "net/http/pprof" // http profiler
 	"os"
 	"sort"
@@ -35,11 +33,11 @@ import (
 	"strings"
 	"sync/atomic"
 
+	"github.com/dustin/go-humanize"
+	"github.com/spf13/cobra"
+
 	"github.com/dgraph-io/badger/v3"
 	bpb "github.com/dgraph-io/badger/v3/pb"
-	"github.com/dgraph-io/ristretto/z"
-	"github.com/dustin/go-humanize"
-
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/posting"
@@ -47,7 +45,7 @@ import (
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/spf13/cobra"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 var (

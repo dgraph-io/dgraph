@@ -28,10 +28,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/Shopify/sarama"
 	"github.com/pkg/errors"
 	"github.com/xdg/scram"
-
-	"github.com/Shopify/sarama"
 
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"

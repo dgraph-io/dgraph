@@ -19,12 +19,10 @@ package bulk
 import (
 	"os"
 	"path/filepath"
-
-	"github.com/dgraph-io/dgraph/testutil"
+	"testing"
 
 	"github.com/dgraph-io/dgraph/systest/21million/common"
-
-	"testing"
+	"github.com/dgraph-io/dgraph/testutil"
 )
 
 func TestQueries(t *testing.T) {

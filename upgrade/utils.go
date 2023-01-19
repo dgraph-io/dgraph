@@ -26,11 +26,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pkg/errors"
+
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/pkg/errors"
 )
 
 func hasAclCreds() bool {
@@ -250,24 +251,29 @@ func alterWithClient(dg *dgo.Dgraph, operation *api.Operation) error {
 // will contain the new name for that predicate. Also, if some predicates need to be
 // removed from the type, then they can be supplied in predsToRemove. For example:
 // initialType:
-// 	type Person {
-// 		name
-// 		age
-// 		unnecessaryEdge
-// 	}
+//
+//	type Person {
+//		name
+//		age
+//		unnecessaryEdge
+//	}
+//
 // also,
-// 	newTypeName = "Human"
-// 	newPredNames = {
-// 		"age": "ageOnEarth'
-// 	}
-// 	predsToRemove = {
-// 		"unnecessaryEdge": {}
-// 	}
+//
+//	newTypeName = "Human"
+//	newPredNames = {
+//		"age": "ageOnEarth'
+//	}
+//	predsToRemove = {
+//		"unnecessaryEdge": {}
+//	}
+//
 // then returned type string will be:
-// 	type Human {
-// 		name
-// 		ageOnEarth
-// 	}
+//
+//	type Human {
+//		name
+//		ageOnEarth
+//	}
 func getTypeSchemaString(newTypeName string, typeNode *schemaTypeNode,
 	newPredNames map[string]string, predsToRemove map[string]struct{}) string {
 	var builder strings.Builder

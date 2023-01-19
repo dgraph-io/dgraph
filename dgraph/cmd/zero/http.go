@@ -24,10 +24,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/gogo/protobuf/jsonpb"
 	"github.com/golang/glog"
+
+	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 // intFromQueryParam checks for name as a query param, converts it to uint64 and returns it.

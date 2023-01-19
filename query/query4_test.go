@@ -22,10 +22,11 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/dgraph-io/dgo/v210/protos/api"
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 func TestBigMathValue(t *testing.T) {

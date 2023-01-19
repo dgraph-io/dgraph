@@ -22,13 +22,14 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/pkg/errors"
+
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/lex"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/pkg/errors"
 )
 
 var (

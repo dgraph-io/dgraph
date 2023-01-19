@@ -25,11 +25,12 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
-	"github.com/stretchr/testify/require"
 )
 
 func TestEncodeMemory(t *testing.T) {

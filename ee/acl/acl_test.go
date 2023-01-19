@@ -24,13 +24,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/glog"
+	"github.com/stretchr/testify/require"
+
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
-
-	"github.com/golang/glog"
-	"github.com/stretchr/testify/require"
 )
 
 var (

@@ -39,8 +39,20 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/dustin/go-humanize"
+	"github.com/golang/glog"
+	"github.com/pkg/errors"
+	"github.com/spf13/viper"
+	"go.opencensus.io/plugin/ocgrpc"
+	"go.opencensus.io/trace"
+	"golang.org/x/crypto/ssh/terminal"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/encoding/gzip"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
+	"google.golang.org/grpc/status"
 
 	"github.com/dgraph-io/badger/v3"
 	bo "github.com/dgraph-io/badger/v3/options"
@@ -49,19 +61,6 @@ import (
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/ristretto/z"
-	"github.com/dustin/go-humanize"
-
-	"github.com/golang/glog"
-	"github.com/pkg/errors"
-	"github.com/spf13/viper"
-	"go.opencensus.io/plugin/ocgrpc"
-	"go.opencensus.io/trace"
-	"golang.org/x/crypto/ssh/terminal"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/encoding/gzip"
-	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/status"
 )
 
 // Error constants representing different types of errors.

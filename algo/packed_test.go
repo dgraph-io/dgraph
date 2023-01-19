@@ -20,9 +20,10 @@ import (
 	"math"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/stretchr/testify/require"
 )
 
 func newUidPack(data []uint64) *pb.UidPack {

@@ -10,12 +10,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
+
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
 )
 
 // disableDraining disables draining mode before each test for increased reliability.

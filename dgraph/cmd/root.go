@@ -28,6 +28,10 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/pkg/errors"
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
+
 	"github.com/dgraph-io/dgraph/dgraph/cmd/alpha"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/bulk"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/cert"
@@ -42,10 +46,6 @@ import (
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
 	"github.com/dgraph-io/dgraph/upgrade"
 	"github.com/dgraph-io/dgraph/x"
-
-	"github.com/pkg/errors"
-	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 // RootCmd represents the base command when called without any subcommands
@@ -262,29 +262,29 @@ http://zsh.sourceforge.net/Doc/Release/Completion-System.html
 // respective subcommands. If JSON hierarchical config objects are not used, convertJSON doesn't
 // change anything and returns the config file string as it is. For example:
 //
-//  {
-//    "mutations": "strict",
-//    "badger": {
-//      "compression": "zstd:1",
-//      "goroutines": 5
-//    },
-//    "raft": {
-//      "idx": 2,
-//      "learner": true
-//    },
-//    "security": {
-//      "whitelist": "127.0.0.1,0.0.0.0"
-//    }
-//  }
+//	{
+//	  "mutations": "strict",
+//	  "badger": {
+//	    "compression": "zstd:1",
+//	    "goroutines": 5
+//	  },
+//	  "raft": {
+//	    "idx": 2,
+//	    "learner": true
+//	  },
+//	  "security": {
+//	    "whitelist": "127.0.0.1,0.0.0.0"
+//	  }
+//	}
 //
 // Is converted into:
 //
-//  {
-//    "mutations": "strict",
-//    "badger": "compression=zstd:1; goroutines=5;",
-//    "raft": "idx=2; learner=true;",
-//    "security": "whitelist=127.0.0.1,0.0.0.0;"
-//  }
+//	{
+//	  "mutations": "strict",
+//	  "badger": "compression=zstd:1; goroutines=5;",
+//	  "raft": "idx=2; learner=true;",
+//	  "security": "whitelist=127.0.0.1,0.0.0.0;"
+//	}
 //
 // Viper then uses the "converted" JSON to set the z.SuperFlag strings in subcommand option structs.
 func convertJSON(old string) io.Reader {
@@ -325,22 +325,22 @@ func convertJSON(old string) io.Reader {
 // subcommands. If YAML hierarchical notation is not used, convertYAML doesn't change anything and
 // returns the config file string as it is. For example:
 //
-//  mutations: strict
-//  badger:
-//    compression: zstd:1
-//    goroutines: 5
-//  raft:
-//    idx: 2
-//    learner: true
-//  security:
-//    whitelist: "127.0.0.1,0.0.0.0"
+//	mutations: strict
+//	badger:
+//	  compression: zstd:1
+//	  goroutines: 5
+//	raft:
+//	  idx: 2
+//	  learner: true
+//	security:
+//	  whitelist: "127.0.0.1,0.0.0.0"
 //
 // Is converted into:
 //
-//  mutations: strict
-//  badger: "compression=zstd:1; goroutines=5;"
-//  raft: "idx=2; learner=true;"
-//  security: "whitelist=127.0.0.1,0.0.0.0;"
+//	mutations: strict
+//	badger: "compression=zstd:1; goroutines=5;"
+//	raft: "idx=2; learner=true;"
+//	security: "whitelist=127.0.0.1,0.0.0.0;"
 //
 // Viper then uses the "converted" YAML to set the z.SuperFlag strings in subcommand option structs.
 func convertYAML(old string) io.Reader {

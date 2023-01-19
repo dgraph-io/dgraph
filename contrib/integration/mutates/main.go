@@ -23,10 +23,11 @@ import (
 	"fmt"
 	"log"
 
+	"google.golang.org/grpc"
+
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/x"
-	"google.golang.org/grpc"
 )
 
 var alpha = flag.String("alpha", "localhost:9080", "Dgraph alpha addr")

@@ -32,15 +32,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgo/v210"
-	"github.com/dgraph-io/dgo/v210/protos/api"
-	"github.com/dgraph-io/dgraph/dql"
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+
+	"github.com/dgraph-io/dgo/v210"
+	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/dgraph/dql"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 // socket addr = IP address and port number

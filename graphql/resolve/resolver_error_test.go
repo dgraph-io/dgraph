@@ -23,14 +23,15 @@ import (
 	"sync"
 	"testing"
 
-	dgoapi "github.com/dgraph-io/dgo/v210/protos/api"
-	"github.com/dgraph-io/dgraph/graphql/schema"
-	"github.com/dgraph-io/dgraph/graphql/test"
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v2"
+
+	dgoapi "github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/dgraph/graphql/schema"
+	"github.com/dgraph-io/dgraph/graphql/test"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 // Tests that result completion and GraphQL error propagation are working properly.

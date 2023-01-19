@@ -82,8 +82,8 @@ func matchFuzzy(query, val string, max int) bool {
 // Returns the list of uids even if empty, or an error otherwise.
 func uidsForMatch(attr string, arg funcArgs) (*pb.List, error) {
 	opts := posting.ListOptions{
-		ReadTs: arg.q.ReadTs,
-		First:  int(arg.q.First),
+		ReadTs:   arg.q.ReadTs,
+		First:    int(arg.q.First),
 		AfterUid: arg.q.AfterUid,
 	}
 	uidsForNgram := func(ngram string) (*pb.List, error) {

@@ -1,3 +1,4 @@
+//go:build !oss
 // +build !oss
 
 /*
@@ -19,11 +20,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dgraph-io/ristretto/z"
+	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/glog"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 const (

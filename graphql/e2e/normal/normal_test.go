@@ -21,12 +21,12 @@ import (
 	"os"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/ristretto/z"
-
-	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dgraph-io/dgraph/graphql/e2e/common"
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 func TestRunAll_Normal(t *testing.T) {

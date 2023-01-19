@@ -29,8 +29,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
+
+	"github.com/dgraph-io/dgraph/x"
 )
 
 type certInfo struct {

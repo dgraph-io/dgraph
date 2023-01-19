@@ -21,13 +21,13 @@ import (
 	"math/rand"
 	"time"
 
+	"github.com/golang/glog"
+	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"
 	"google.golang.org/grpc/metadata"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/glog"
-	"github.com/pkg/errors"
 )
 
 var emptyAssignedIds pb.AssignedIds

@@ -470,7 +470,7 @@ func (ec *executionContext) marshalType(sel ast.SelectionSet, v *introspection.T
 }
 
 // Returns all the types associated with the schema, including the ones that are part
-//of introspection system (i.e., the type name begins with __ )
+// of introspection system (i.e., the type name begins with __ )
 func getAllTypes(s *ast.Schema) []introspection.Type {
 	types := make([]introspection.Type, 0, len(s.Types))
 	for _, typ := range s.Types {

@@ -27,6 +27,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/dgryski/go-farm"
+	"github.com/golang/glog"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 
@@ -35,8 +37,6 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
-	"github.com/dgryski/go-farm"
-	"github.com/golang/glog"
 )
 
 var maxLeaseRegex = regexp.MustCompile(`currMax:([0-9]+)`)

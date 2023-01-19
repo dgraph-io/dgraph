@@ -25,6 +25,7 @@ import (
 	"sort"
 
 	"github.com/dgryski/go-farm"
+	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 
 	bpb "github.com/dgraph-io/badger/v3/pb"
@@ -37,7 +38,6 @@ import (
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
-	"github.com/golang/protobuf/proto"
 )
 
 var (
