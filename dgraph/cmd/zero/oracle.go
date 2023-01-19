@@ -34,11 +34,6 @@ import (
 	"github.com/dgraph-io/ristretto/z"
 )
 
-type syncMark struct {
-	index uint64
-	ts    uint64
-}
-
 // Oracle stores and manages the transaction state and conflict detection.
 type Oracle struct {
 	x.SafeMutex

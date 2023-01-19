@@ -152,9 +152,9 @@ func TestCustomHTTPQuery(t *testing.T) {
 					Query:     tcase.GQLQuery,
 					Variables: vars,
 					Header: map[string][]string{
-						"bogus":       []string{"header"},
-						"X-App-Token": []string{"val"},
-						"Auth0-Token": []string{"tok"},
+						"bogus":       {"header"},
+						"X-App-Token": {"val"},
+						"Auth0-Token": {"tok"},
 					},
 				})
 			require.NoError(t, err)

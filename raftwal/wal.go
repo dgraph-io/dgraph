@@ -375,7 +375,6 @@ func (l *wal) deleteBefore(raftIndex uint64) {
 			glog.Errorf("while deleting file: %s, err: %v\n", ef.Fd.Name(), err)
 		}
 	}
-	return
 }
 
 // reset deletes all the previous log files, and resets the current log file.

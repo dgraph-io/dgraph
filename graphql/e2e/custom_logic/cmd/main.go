@@ -824,7 +824,7 @@ func deleteCommonHeaders(headers http.Header) {
 func carsHandlerWithHeaders(w http.ResponseWriter, r *http.Request) {
 	deleteCommonHeaders(r.Header)
 	if err := compareHeaders(map[string][]string{
-		"Stripe-Api-Key": []string{"some-api-key"},
+		"Stripe-Api-Key": {"some-api-key"},
 	}, r.Header); err != nil {
 		check2(w.Write([]byte(err.Error())))
 		return
@@ -835,7 +835,7 @@ func carsHandlerWithHeaders(w http.ResponseWriter, r *http.Request) {
 func userNameHandlerWithHeaders(w http.ResponseWriter, r *http.Request) {
 	deleteCommonHeaders(r.Header)
 	if err := compareHeaders(map[string][]string{
-		"Github-Api-Token": []string{"some-api-token"},
+		"Github-Api-Token": {"some-api-token"},
 	}, r.Header); err != nil {
 		check2(w.Write([]byte(err.Error())))
 		return
@@ -1025,45 +1025,45 @@ func (r countryResolver) Name() *string {
 	return &(r.c.Name)
 }
 
-func (_ *query) Country(ctx context.Context, args struct {
+func (*query) Country(ctx context.Context, args struct {
 	Code string
 }) countryResolver {
 	return countryResolver{&country{Code: graphql.ID(args.Code), Name: "Burundi"}}
 }
 
-func (_ *query) Countries(ctx context.Context, args struct {
+func (*query) Countries(ctx context.Context, args struct {
 	Filter struct {
 		Code string
 		Name string
 	}
 }) []countryResolver {
-	return []countryResolver{countryResolver{&country{
+	return []countryResolver{{&country{
 		Code: graphql.ID(args.Filter.Code),
 		Name: args.Filter.Name,
 	}}}
 }
 
-func (_ *query) ValidCountries(ctx context.Context, args struct {
+func (*query) ValidCountries(ctx context.Context, args struct {
 	Code string
 }) *[]*countryResolver {
 	return &[]*countryResolver{{&country{Code: graphql.ID(args.Code), Name: "Burundi"}}}
 }
 
-func (_ *query) UserName(ctx context.Context, args struct {
+func (*query) UserName(ctx context.Context, args struct {
 	Id string
 }) *string {
 	s := fmt.Sprintf(`uname-%s`, args.Id)
 	return &s
 }
 
-func (_ *query) TeacherName(ctx context.Context, args struct {
+func (*query) TeacherName(ctx context.Context, args struct {
 	Id string
 }) *string {
 	s := fmt.Sprintf(`tname-%s`, args.Id)
 	return &s
 }
 
-func (_ *query) SchoolName(ctx context.Context, args struct {
+func (*query) SchoolName(ctx context.Context, args struct {
 	Id string
 }) *string {
 	s := fmt.Sprintf(`sname-%s`, args.Id)
@@ -1117,7 +1117,7 @@ func (r *carResolver) Name() string {
 	return "car-" + string(r.c.ID)
 }
 
-func (_ *query) Car(ctx context.Context, args struct {
+func (*query) Car(ctx context.Context, args struct {
 	Id string
 }) *carResolver {
 	return &carResolver{&car{ID: graphql.ID(args.Id)}}
@@ -1139,13 +1139,13 @@ func (r *classResolver) Name() string {
 	return "class-" + string(r.c.ID)
 }
 
-func (_ *query) Class(ctx context.Context, args struct {
+func (*query) Class(ctx context.Context, args struct {
 	Id string
 }) *[]*classResolver {
-	return &[]*classResolver{&classResolver{&class{ID: graphql.ID(args.Id)}}}
+	return &[]*classResolver{{&class{ID: graphql.ID(args.Id)}}}
 }
 
-func (_ *query) UserNames(ctx context.Context, args struct {
+func (*query) UserNames(ctx context.Context, args struct {
 	Users *[]*struct {
 		Id  string
 		Age float64
@@ -1162,7 +1162,7 @@ func (_ *query) UserNames(ctx context.Context, args struct {
 	return &res
 }
 
-func (_ *query) Cars(ctx context.Context, args struct {
+func (*query) Cars(ctx context.Context, args struct {
 	Users *[]*struct {
 		Id  string
 		Age float64
@@ -1178,7 +1178,7 @@ func (_ *query) Cars(ctx context.Context, args struct {
 	return &resolvers
 }
 
-func (_ *query) Classes(ctx context.Context, args struct {
+func (*query) Classes(ctx context.Context, args struct {
 	Schools *[]*struct {
 		Id          string
 		Established float64
@@ -1190,12 +1190,12 @@ func (_ *query) Classes(ctx context.Context, args struct {
 	resolvers := make([]*[]*classResolver, 0, len(*args.Schools))
 	for _, user := range *args.Schools {
 		resolvers = append(resolvers, &[]*classResolver{
-			&classResolver{&class{ID: graphql.ID(user.Id)}}})
+			{&class{ID: graphql.ID(user.Id)}}})
 	}
 	return &resolvers
 }
 
-func (_ *query) TeacherNames(ctx context.Context, args struct {
+func (*query) TeacherNames(ctx context.Context, args struct {
 	Teachers *[]*struct {
 		Tid string
 		Age float64
@@ -1212,7 +1212,7 @@ func (_ *query) TeacherNames(ctx context.Context, args struct {
 	return &res
 }
 
-func (_ *query) SchoolNames(ctx context.Context, args struct {
+func (*query) SchoolNames(ctx context.Context, args struct {
 	Schools *[]*struct {
 		Id          string
 		Established float64
@@ -1264,10 +1264,10 @@ func gqlCarsWithErrorHandler(w http.ResponseWriter, r *http.Request) {
 			"cars": output,
 		},
 		"errors": []map[string]interface{}{
-			map[string]interface{}{
+			{
 				"message": "error-1 from cars",
 			},
-			map[string]interface{}{
+			{
 				"message": "error-2 from cars",
 			},
 		},

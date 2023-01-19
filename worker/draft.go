@@ -77,8 +77,6 @@ type node struct {
 	cdcTracker  *CDC
 	canCampaign bool
 	elog        trace.EventLog
-
-	ex *executor
 }
 
 type op int

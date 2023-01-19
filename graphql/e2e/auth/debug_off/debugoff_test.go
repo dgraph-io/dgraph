@@ -25,7 +25,6 @@ type TestCase struct {
 	user      string
 	role      string
 	result    string
-	name      string
 	variables map[string]interface{}
 }
 

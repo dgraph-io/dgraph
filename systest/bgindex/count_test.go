@@ -82,7 +82,7 @@ func TestCountIndex(t *testing.T) {
 				CommitNow: true,
 				SetNquads: bb.Bytes(),
 			}); err != nil {
-				t.Fatalf("error in mutation :: %v", err)
+				panic(fmt.Sprintf("error in mutation :: %v", err))
 			}
 		}(i)
 	}

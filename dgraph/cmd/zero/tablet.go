@@ -91,7 +91,7 @@ func (s *Server) MoveTablet(ctx context.Context, req *pb.MoveTabletRequest) (*pb
 	}
 	if !isKnown {
 		return &pb.Status{Code: 1, Msg: x.ErrorInvalidRequest},
-			fmt.Errorf("Group: [%d] is not a known group.", req.DstGroup)
+			fmt.Errorf("group: [%d] is not a known group", req.DstGroup)
 	}
 
 	tablet := x.NamespaceAttr(req.Namespace, req.Tablet)

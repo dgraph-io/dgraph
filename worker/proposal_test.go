@@ -121,6 +121,7 @@ func TestLimiterDeadlock(t *testing.T) {
 func BenchmarkRateLimiter(b *testing.B) {
 	ious := []int{256}
 	retries := []int{3}
+	var failed, success uint64
 
 	for _, iou := range ious {
 		for _, retry := range retries {
@@ -133,15 +134,15 @@ func BenchmarkRateLimiter(b *testing.B) {
 					r := rand.New(rand.NewSource(time.Now().UnixNano()))
 					for pb.Next() {
 						if err := proposeAndWaitEmulator(l, r, retry, false); err != nil {
-							// atomic.AddUint64(&failed, 1)
+							atomic.AddUint64(&failed, 1)
 						} else {
-							// atomic.AddUint64(&success, 1)
+							atomic.AddUint64(&success, 1)
 						}
 					}
 				})
 
-				// fmt.Println("IOU:", iou, "Max Retries:", retry, "Success:",
-				// 	success, "Failed:", failed)
+				fmt.Println("IOU:", iou, "Max Retries:", retry, "Success:",
+					success, "Failed:", failed)
 			})
 		}
 	}

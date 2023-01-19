@@ -379,7 +379,7 @@ func (t FullTextTokenizer) IsSortable() bool { return false }
 func (t FullTextTokenizer) IsLossy() bool    { return true }
 
 // Sha256Tokenizer generates tokens for the sha256 hash part from string data.
-type Sha256Tokenizer struct{ text string }
+type Sha256Tokenizer struct{ _ string }
 
 func (t Sha256Tokenizer) Name() string { return "sha256" }
 func (t Sha256Tokenizer) Type() string { return "string" }

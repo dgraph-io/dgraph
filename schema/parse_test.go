@@ -110,12 +110,6 @@ func TestSchema3_Error(t *testing.T) {
 	require.Error(t, ParseBytes([]byte(schemaVal3), 1))
 }
 
-var schemaIndexVal1 = `
-age:int @index(int) .
-
-name: string .
-address: string @index(term) .`
-
 var schemaIndexVal2 = `
 name: string @index(exact, exact) .
 address: string @index(term) .

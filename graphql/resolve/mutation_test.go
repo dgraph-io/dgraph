@@ -345,8 +345,8 @@ func TestMutationQueryRewriting(t *testing.T) {
 	}
 
 	allowedTestTypes := map[string][]string{
-		"UPDATE_MUTATION":     []string{"Update Post "},
-		"ADD_UPDATE_MUTATION": []string{"Add Post ", "Update Post "},
+		"UPDATE_MUTATION":     {"Update Post "},
+		"ADD_UPDATE_MUTATION": {"Add Post ", "Update Post "},
 	}
 
 	b, err := ioutil.ReadFile("mutation_query_test.yaml")
@@ -421,9 +421,9 @@ func TestCustomHTTPMutation(t *testing.T) {
 					Query:     tcase.GQLQuery,
 					Variables: vars,
 					Header: map[string][]string{
-						"bogus":       []string{"header"},
-						"X-App-Token": []string{"val"},
-						"Auth0-Token": []string{"tok"},
+						"bogus":       {"header"},
+						"X-App-Token": {"val"},
+						"Auth0-Token": {"tok"},
 					},
 				})
 			require.NoError(t, err)
