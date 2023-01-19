@@ -24,10 +24,11 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/dgraph-io/dgo/v210"
-	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
+
+	"github.com/dgraph-io/dgo/v210"
+	"github.com/dgraph-io/dgo/v210/protos/api"
 )
 
 type Member struct {

@@ -25,12 +25,12 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/pkg/errors"
+
 	dgoapi "github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/dql"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
-
-	"github.com/pkg/errors"
 )
 
 const (

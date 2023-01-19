@@ -27,8 +27,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/dgraph-io/dgraph/x"
 	geojson "github.com/paulmach/go.geojson"
+
+	"github.com/dgraph-io/dgraph/x"
 )
 
 // TODO: Reconsider if we need this binary.

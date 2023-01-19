@@ -25,8 +25,6 @@ import (
 	"math"
 	"net"
 	"net/http"
-
-	//nolint:gosec // profiling on alpha server accepted and documented
 	_ "net/http/pprof" // http profiler
 	"net/url"
 	"os"
@@ -37,20 +35,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/dgraph-io/badger/v3"
-	"github.com/dgraph-io/dgraph/ee"
-	"github.com/dgraph-io/dgraph/ee/audit"
-
-	"github.com/dgraph-io/dgo/v210/protos/api"
-	"github.com/dgraph-io/dgraph/edgraph"
-	"github.com/dgraph-io/dgraph/ee/enc"
-	"github.com/dgraph-io/dgraph/graphql/admin"
-	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/tok"
-	"github.com/dgraph-io/dgraph/worker"
-	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
@@ -64,7 +48,20 @@ import (
 	"google.golang.org/grpc/health"
 	hapi "google.golang.org/grpc/health/grpc_health_v1"
 
+	"github.com/dgraph-io/badger/v3"
+	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/dgraph/edgraph"
+	"github.com/dgraph-io/dgraph/ee"
+	"github.com/dgraph-io/dgraph/ee/audit"
+	"github.com/dgraph-io/dgraph/ee/enc"
+	"github.com/dgraph-io/dgraph/graphql/admin"
+	"github.com/dgraph-io/dgraph/posting"
+	"github.com/dgraph-io/dgraph/schema"
+	"github.com/dgraph-io/dgraph/tok"
+	"github.com/dgraph-io/dgraph/worker"
+	"github.com/dgraph-io/dgraph/x"
 	_ "github.com/dgraph-io/gqlparser/v2/validator/rules" // make gql validator init() all rules
+	"github.com/dgraph-io/ristretto/z"
 )
 
 var (

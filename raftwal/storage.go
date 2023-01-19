@@ -20,12 +20,13 @@ import (
 	"math"
 	"sync"
 
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"go.etcd.io/etcd/raft"
 	"go.etcd.io/etcd/raft/raftpb"
 	"golang.org/x/net/trace"
+
+	"github.com/dgraph-io/dgraph/x"
 )
 
 // versionKey is hardcoded into the special key used to fetch the maximum version from the DB.

@@ -21,25 +21,23 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/ristretto/z"
-
-	"github.com/dgraph-io/dgraph/query"
-
+	jwt "github.com/dgrijalva/jwt-go"
+	"github.com/golang/glog"
 	"github.com/pkg/errors"
+	otrace "go.opencensus.io/trace"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	bpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/dql"
 	"github.com/dgraph-io/dgraph/ee/acl"
+	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
-	jwt "github.com/dgrijalva/jwt-go"
-	"github.com/golang/glog"
-	otrace "go.opencensus.io/trace"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 type predsAndvars struct {
@@ -195,7 +193,7 @@ func validateToken(jwtStr string) (*userData, error) {
 		return nil, errors.Errorf("userid in claims is not a string:%v", userId)
 	}
 
-	/*  
+	/*
 	 * Since, JSON numbers follow JavaScript's double-precision floating-point
 	 * format . . .
 	 * -- references: https://restfulapi.net/json-data-types/

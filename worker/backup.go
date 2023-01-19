@@ -20,11 +20,11 @@ import (
 	"context"
 	"math"
 
+	"github.com/pkg/errors"
+
 	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
-
-	"github.com/pkg/errors"
 )
 
 // predicateSet is a map whose keys are predicates. It is meant to be used as a set.

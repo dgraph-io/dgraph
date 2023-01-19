@@ -23,12 +23,13 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/raftwal"
-	"github.com/dgraph-io/dgraph/x"
 	humanize "github.com/dustin/go-humanize"
 	"go.etcd.io/etcd/raft"
 	"go.etcd.io/etcd/raft/raftpb"
+
+	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/raftwal"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 func printEntry(es raftpb.Entry, pending map[uint64]bool, isZero bool) {

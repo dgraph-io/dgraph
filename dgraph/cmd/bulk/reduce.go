@@ -34,6 +34,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/dustin/go-humanize"
+	"github.com/golang/snappy"
+
 	"github.com/dgraph-io/badger/v3"
 	bo "github.com/dgraph-io/badger/v3/options"
 	bpb "github.com/dgraph-io/badger/v3/pb"
@@ -43,8 +46,6 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
-	"github.com/dustin/go-humanize"
-	"github.com/golang/snappy"
 )
 
 type reducer struct {

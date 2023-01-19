@@ -28,6 +28,10 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/golang/glog"
+	"github.com/pkg/errors"
+	"go.opencensus.io/trace"
+
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/api"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
@@ -35,9 +39,6 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/subscription"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/graphql-transport-ws/graphqlws"
-	"github.com/golang/glog"
-	"github.com/pkg/errors"
-	"go.opencensus.io/trace"
 )
 
 type Headerkey string

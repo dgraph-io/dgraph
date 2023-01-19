@@ -29,20 +29,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgo/v210"
-	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/spf13/cast"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
-	"github.com/spf13/cast"
-
-	"github.com/google/go-cmp/cmp/cmpopts"
-
+	"github.com/dgraph-io/dgo/v210"
+	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/graphql/schema"
-
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/google/go-cmp/cmp"
-	"github.com/stretchr/testify/require"
 )
 
 func queryCountryByRegExp(t *testing.T, regexp string, expectedCountries []*country) {

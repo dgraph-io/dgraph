@@ -19,8 +19,9 @@ package dql
 import (
 	"testing"
 
-	"github.com/dgraph-io/dgraph/schema"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dgraph-io/dgraph/schema"
 )
 
 var sc = `type.object.name.en: string @index .

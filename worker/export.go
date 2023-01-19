@@ -32,6 +32,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/golang/glog"
+	"github.com/minio/minio-go/v6"
+	"github.com/pkg/errors"
+
 	"github.com/dgraph-io/badger/v3"
 	bpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/dgo/v210/protos/api"
@@ -42,10 +46,6 @@ import (
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
-
-	"github.com/golang/glog"
-	"github.com/minio/minio-go/v6"
-	"github.com/pkg/errors"
 )
 
 // DefaultExportFormat stores the name of the default format for exports.

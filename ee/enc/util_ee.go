@@ -18,9 +18,10 @@ import (
 	"crypto/cipher"
 	"io"
 
+	"github.com/pkg/errors"
+
 	"github.com/dgraph-io/badger/v3/y"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/pkg/errors"
 )
 
 // EeBuild indicates if this is a Enterprise build.

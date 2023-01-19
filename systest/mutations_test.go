@@ -30,10 +30,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/stretchr/testify/require"
 )
 
 // TestSystem uses the externally run Dgraph cluster for testing. Most other

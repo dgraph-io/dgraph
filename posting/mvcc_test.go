@@ -20,9 +20,10 @@ import (
 	"math"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/stretchr/testify/require"
 )
 
 func TestRollupTimestamp(t *testing.T) {

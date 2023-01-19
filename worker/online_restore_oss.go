@@ -1,3 +1,4 @@
+//go:build oss
 // +build oss
 
 /*
@@ -22,9 +23,10 @@ import (
 	"context"
 	"sync"
 
+	"github.com/golang/glog"
+
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/glog"
 )
 
 func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest, wg *sync.WaitGroup) error {

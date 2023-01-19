@@ -20,10 +20,11 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/gqlparser/v2/gqlerror"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/gqlparser/v2/gqlerror"
 )
 
 func TestDataAndErrors(t *testing.T) {

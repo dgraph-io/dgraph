@@ -21,11 +21,11 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/gqlparser/v2/gqlerror"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/gqlparser/v2/gqlerror"
 )
 
 func TestGQLWrapf_Error(t *testing.T) {

@@ -70,16 +70,18 @@ func Unmarshal(data []byte, v interface{}) error {
 // CompleteObject builds a json GraphQL result object for the current query level.
 // It returns a bracketed json object like { f1:..., f2:..., ... }.
 // At present, it is only used for building custom results by:
-//  * Admin Server
-//  * @custom(http: {...}) query/mutation
-//  * @custom(dql: ...) queries
+//   - Admin Server
+//   - @custom(http: {...}) query/mutation
+//   - @custom(dql: ...) queries
 //
 // fields are all the fields from this bracketed level in the GraphQL  query, e.g:
-//  {
-//    name
-//    dob
-//    friends {...}
-//  }
+//
+//	{
+//	  name
+//	  dob
+//	  friends {...}
+//	}
+//
 // If it's the top level of a query then it'll be the top level query name.
 //
 // typ is the expected type matching those fields, e.g. above that'd be something
@@ -331,13 +333,15 @@ func mismatched(path []interface{}, field Field) ([]byte, x.GqlErrorList) {
 // defined in the GraphQL spec. If this is not possible, then it returns an error. The crux of
 // coercion rules defined in the spec is to not lose information during coercion.
 // Note that, admin server specifically uses these:
-//  * json.Number
-//  * schema.Unmarshal() everywhere else
+//   - json.Number
+//   - schema.Unmarshal() everywhere else
+//
 // And, @custom(http: {...}) query/mutation would always use schema.Unmarshal().
 // Now, schema.Unmarshal() can only give one of the following types for scalars:
-//  * bool
-//  * string
-//  * json.Number (because it uses custom JSON decoder which preserves number precision)
+//   - bool
+//   - string
+//   - json.Number (because it uses custom JSON decoder which preserves number precision)
+//
 // So, we need to consider only these cases at present.
 func coerceScalar(val interface{}, field Field, path []interface{}) (interface{},
 	x.GqlErrorList) {

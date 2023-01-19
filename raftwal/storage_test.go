@@ -41,11 +41,12 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
 	"go.etcd.io/etcd/raft"
 	"go.etcd.io/etcd/raft/raftpb"
 	pb "go.etcd.io/etcd/raft/raftpb"
+
+	"github.com/dgraph-io/dgraph/x"
 )
 
 func TestStorageTerm(t *testing.T) {

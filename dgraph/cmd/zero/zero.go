@@ -25,6 +25,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gogo/protobuf/proto"
+	"github.com/golang/glog"
+	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"
 
 	"github.com/dgraph-io/dgo/v210/protos/api"
@@ -33,9 +36,6 @@ import (
 	"github.com/dgraph-io/dgraph/telemetry"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
-	"github.com/gogo/protobuf/proto"
-	"github.com/golang/glog"
-	"github.com/pkg/errors"
 )
 
 var (

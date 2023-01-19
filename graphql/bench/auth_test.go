@@ -23,10 +23,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/stretchr/testify/require"
 )
 
 const (

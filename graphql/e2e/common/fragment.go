@@ -21,11 +21,11 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/testutil"
-
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dgraph-io/dgraph/testutil"
 )
 
 func fragmentInMutation(t *testing.T) {

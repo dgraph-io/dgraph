@@ -5,8 +5,9 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 )
 
 func (c *Column) add(t *testing.T, user, role string) {

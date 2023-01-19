@@ -25,17 +25,16 @@ import (
 	"sync"
 	"time"
 
+	"github.com/golang/glog"
+	"github.com/pkg/errors"
+	otrace "go.opencensus.io/trace"
+
 	dgoapi "github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/api"
 	"github.com/dgraph-io/dgraph/graphql/dgraph"
-	"github.com/dgraph-io/dgraph/x"
-	"github.com/pkg/errors"
-	otrace "go.opencensus.io/trace"
-
-	"github.com/golang/glog"
-
 	"github.com/dgraph-io/dgraph/graphql/schema"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 type resolveCtxKey string

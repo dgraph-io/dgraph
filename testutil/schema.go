@@ -21,8 +21,9 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/dgraph-io/dgo/v210"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dgraph-io/dgo/v210"
 )
 
 const (
@@ -87,10 +88,11 @@ func GetInternalTypes(excludeAclTypes bool) string {
 // GetFullSchemaJSON returns a string representation of the JSON object returned by the full
 // schema{} query. It uses the user provided predicates and types along with the initial internal
 // schema to generate the string. Example response looks like:
-// 	{
-// 		"schema": [ ... ],
-// 		"types": [ ... ]
-// 	}
+//
+//	{
+//		"schema": [ ... ],
+//		"types": [ ... ]
+//	}
 func GetFullSchemaJSON(opts SchemaOptions) string {
 	expectedPreds := GetInternalPreds(opts.ExcludeAclSchema)
 	if len(opts.UserPreds) > 0 {
@@ -112,12 +114,13 @@ func GetFullSchemaJSON(opts SchemaOptions) string {
 // GetFullSchemaHTTPResponse returns a string representation of the HTTP response returned by the
 // full schema{} query. It uses the user provided predicates and types along with the initial
 // internal schema to generate the string. Example response looks like:
-// 	{
-// 		"data": {
-// 			"schema": [ ... ],
-// 			"types": [ ... ]
-// 		}
-// 	}
+//
+//	{
+//		"data": {
+//			"schema": [ ... ],
+//			"types": [ ... ]
+//		}
+//	}
 func GetFullSchemaHTTPResponse(opts SchemaOptions) string {
 	return `{"data":` + GetFullSchemaJSON(opts) + `}`
 }

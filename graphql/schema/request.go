@@ -108,41 +108,42 @@ func (s *schema) Operation(req *Request) (Operation, error) {
 // field's selection set, and does it recursively for all the fields in this field's selection
 // set. This eventually expands all the fragment references anywhere in the hierarchy.
 // To understand how expansion works, let's consider following graphql schema (Reference: Starwars):
-// 			interface Employee { ... }
-// 			interface Character { ... }
-// 			type Human implements Character & Employee { ... }
-// 			type Droid implements Character { ... }
-// 1. field returns an Interface: Consider executing following query:
-//			query {
-//				queryCharacter {
-//					...commonCharacterFrag
-//					...humanFrag
-//					...droidFrag
-//				}
-//			}
-//			fragment commonCharacterFrag on Character { ... }
-//			fragment humanFrag on Human { ... }
-//			fragment droidFrag on Droid { ... }
-//    As queryCharacter returns Characters, so any fragment reference used inside queryCharacter and
-//    defined on Character interface should be expanded. Also, any fragments defined on the types
-//    which implement Character interface should also be expanded. That means, any fragments on
-//    Character, Human and Droid will be expanded in the result of queryCharacter.
-// 2. field returns an Object: Consider executing following query:
-// 			query {
-//				queryHuman {
-//					...employeeFrag
-//					...characterFrag
-//					...humanFrag
-//				}
-//			}
-//			fragment employeeFrag on Employee { ... }
-//			fragment characterFrag on Character { ... }
-//			fragment humanFrag on Human { ... }
-//    As queryHuman returns Humans, so any fragment reference used inside queryHuman and
-//    defined on Human type should be expanded. Also, any fragments defined on the interfaces
-//    which are implemented by Human type should also be expanded. That means, any fragments on
-//    Human, Character and Employee will be expanded in the result of queryHuman.
-// 3. field returns a Union: process is similar to the case when field returns an interface.
+//
+//		interface Employee { ... }
+//		interface Character { ... }
+//		type Human implements Character & Employee { ... }
+//		type Droid implements Character { ... }
+//	 1. field returns an Interface: Consider executing following query:
+//	    query {
+//	    queryCharacter {
+//	    ...commonCharacterFrag
+//	    ...humanFrag
+//	    ...droidFrag
+//	    }
+//	    }
+//	    fragment commonCharacterFrag on Character { ... }
+//	    fragment humanFrag on Human { ... }
+//	    fragment droidFrag on Droid { ... }
+//	    As queryCharacter returns Characters, so any fragment reference used inside queryCharacter and
+//	    defined on Character interface should be expanded. Also, any fragments defined on the types
+//	    which implement Character interface should also be expanded. That means, any fragments on
+//	    Character, Human and Droid will be expanded in the result of queryCharacter.
+//	 2. field returns an Object: Consider executing following query:
+//	    query {
+//	    queryHuman {
+//	    ...employeeFrag
+//	    ...characterFrag
+//	    ...humanFrag
+//	    }
+//	    }
+//	    fragment employeeFrag on Employee { ... }
+//	    fragment characterFrag on Character { ... }
+//	    fragment humanFrag on Human { ... }
+//	    As queryHuman returns Humans, so any fragment reference used inside queryHuman and
+//	    defined on Human type should be expanded. Also, any fragments defined on the interfaces
+//	    which are implemented by Human type should also be expanded. That means, any fragments on
+//	    Human, Character and Employee will be expanded in the result of queryHuman.
+//	 3. field returns a Union: process is similar to the case when field returns an interface.
 func recursivelyExpandFragmentSelections(field *ast.Field, op *operation) {
 	// This happens in case of introspection queries, as they don't have any types in graphql schema
 	// but explicit resolvers defined. So, when the parser parses the raw request, it is not able to

@@ -22,16 +22,16 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v2"
 
 	dschema "github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/gqlparser/v2/gqlerror"
 	_ "github.com/dgraph-io/gqlparser/v2/validator/rules"
 	"github.com/dgraph-io/ristretto/z"
-	"github.com/google/go-cmp/cmp"
-	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v2"
 )
 
 type Tests map[string][]TestCase

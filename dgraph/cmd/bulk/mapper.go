@@ -29,6 +29,9 @@ import (
 	"sync"
 	"sync/atomic"
 
+	farm "github.com/dgryski/go-farm"
+	"github.com/golang/snappy"
+
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/dql"
@@ -39,8 +42,6 @@ import (
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
-	farm "github.com/dgryski/go-farm"
-	"github.com/golang/snappy"
 )
 
 type mapper struct {

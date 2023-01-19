@@ -10,9 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
 	"github.com/soheilhy/cmux"
+
+	"github.com/dgraph-io/ristretto/z"
 )
 
 var (

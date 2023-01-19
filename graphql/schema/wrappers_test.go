@@ -22,13 +22,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/x"
-
-	"github.com/dgraph-io/gqlparser/v2/ast"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v2"
+
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/gqlparser/v2/ast"
 )
 
 func TestDgraphMapping_WithoutDirectives(t *testing.T) {

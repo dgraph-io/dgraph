@@ -19,14 +19,15 @@ package admin
 import (
 	"context"
 	"encoding/json"
-	"github.com/dgraph-io/dgraph/worker"
+
+	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/query"
+	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/glog"
 )
 
 type getSchemaResolver struct {

@@ -21,9 +21,10 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/dustin/go-humanize"
+
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
-	"github.com/dustin/go-humanize"
 )
 
 type phase int32
