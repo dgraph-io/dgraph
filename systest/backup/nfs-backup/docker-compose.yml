@@ -334,11 +334,13 @@ services:
     image: itsthenetwork/nfs-server-alpine:${NFS_SERVER_IMAGE_ARCH:-12}
     restart: unless-stopped
     privileged: true
+
     environment:
       - SHARED_DIRECTORY=/data
     volumes:
-      - /data/nfs-storage:/data
+      - data-volume:/data
     ports:
       - 2089:2049
 
-volumes: {}
+volumes:
+  data-volume:
