@@ -38,7 +38,6 @@ func TestMain(m *testing.M) {
 		Zero:       testutil.SockAddrZero,
 		RdfFile:    rdfFile,
 		SchemaFile: schemaFile,
-		Ludicrous:  true,
 	}); err != nil {
 		cleanupAndExit(1)
 	}

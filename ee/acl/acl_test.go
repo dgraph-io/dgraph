@@ -906,7 +906,9 @@ func TestAccessWithoutLoggingIn(t *testing.T) {
 }
 
 func TestUnauthorizedDeletion(t *testing.T) {
-	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	defer cancel()
+
 	unAuthPred := "unauthorizedPredicate"
 
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
@@ -962,7 +964,8 @@ func TestUnauthorizedDeletion(t *testing.T) {
 }
 
 func TestGuardianAccess(t *testing.T) {
-	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	defer cancel()
 
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
@@ -1074,7 +1077,8 @@ func removeUserFromGroup(t *testing.T, userName, groupName string) *testutil.Gra
 }
 
 func TestQueryRemoveUnauthorizedPred(t *testing.T) {
-	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	defer cancel()
 
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
@@ -1430,14 +1434,6 @@ func TestDeleteQueryWithACLPermissions(t *testing.T) {
 	// delete S * * (user now has permission to name, age and dgraph.type)
 	_, err = deleteUsingNQuad(userClient, "<"+nodeUID+">", "*", "*")
 	require.NoError(t, err)
-
-	token, err = testutil.HttpLogin(&testutil.LoginParams{
-		Endpoint:  adminEndpoint,
-		UserID:    "groot",
-		Passwd:    "password",
-		Namespace: x.GalaxyNamespace,
-	})
-	require.NoError(t, err, "login failed")
 
 	resp, err = dg.NewReadOnlyTxn().Query(ctx, query)
 	require.NoError(t, err, "Error while querying data")
@@ -1835,7 +1831,8 @@ func TestAllPredsPermission(t *testing.T) {
 	require.NoError(t, err)
 }
 func TestNewACLPredicates(t *testing.T) {
-	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	defer cancel()
 
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
@@ -1954,7 +1951,8 @@ func removeRuleFromGroup(t *testing.T, token *testutil.HttpToken, group string,
 }
 
 func TestDeleteRule(t *testing.T) {
-	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	defer cancel()
 
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
@@ -2080,7 +2078,8 @@ func TestNonExistentGroup(t *testing.T) {
 }
 
 func TestQueryUserInfo(t *testing.T) {
-	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	defer cancel()
 
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
@@ -2260,7 +2259,8 @@ func TestQueryUserInfo(t *testing.T) {
 }
 
 func TestQueriesWithUserAndGroupOfSameName(t *testing.T) {
-	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	defer cancel()
 
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
@@ -2539,7 +2539,8 @@ func TestSchemaQueryWithACL(t *testing.T) {
 
 	// add another user and some data for that user with permissions on predicates
 	resetUser(t)
-	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	defer cancel()
 	addDataAndRules(ctx, t, dg)
 	time.Sleep(defaultTimeToSleep) // wait for ACL cache to refresh, otherwise it will be flaky test
 
@@ -2555,7 +2556,8 @@ func TestSchemaQueryWithACL(t *testing.T) {
 func TestDeleteUserShouldDeleteUserFromGroup(t *testing.T) {
 	resetUser(t)
 
-	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	defer cancel()
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
 	addDataAndRules(ctx, t, dg)
@@ -2631,7 +2633,8 @@ func TestDeleteUserShouldDeleteUserFromGroup(t *testing.T) {
 func TestGroupDeleteShouldDeleteGroupFromUser(t *testing.T) {
 	resetUser(t)
 
-	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	defer cancel()
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
 	addDataAndRules(ctx, t, dg)
@@ -2702,7 +2705,8 @@ func TestGroupDeleteShouldDeleteGroupFromUser(t *testing.T) {
 }
 
 func TestWrongPermission(t *testing.T) {
-	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	defer cancel()
 
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
@@ -3137,7 +3141,8 @@ func TestAddUpdateGroupWithDuplicateRules(t *testing.T) {
 }
 
 func TestAllowUIDAccess(t *testing.T) {
-	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	defer cancel()
 
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
@@ -3194,7 +3199,8 @@ func TestAllowUIDAccess(t *testing.T) {
 }
 
 func TestAddNewPredicate(t *testing.T) {
-	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	defer cancel()
 
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
@@ -3231,7 +3237,8 @@ func TestAddNewPredicate(t *testing.T) {
 }
 
 func TestCrossGroupPermission(t *testing.T) {
-	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	defer cancel()
 
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
@@ -3343,7 +3350,8 @@ func TestCrossGroupPermission(t *testing.T) {
 }
 
 func TestMutationWithValueVar(t *testing.T) {
-	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	defer cancel()
 
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
@@ -3441,7 +3449,8 @@ func TestMutationWithValueVar(t *testing.T) {
 }
 
 func TestFailedLogin(t *testing.T) {
-	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	defer cancel()
 
 	grootClient, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
@@ -3467,7 +3476,8 @@ func TestFailedLogin(t *testing.T) {
 }
 
 func TestDeleteGuardiansGroupShouldFail(t *testing.T) {
-	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	defer cancel()
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
 	addDataAndRules(ctx, t, dg)
@@ -3486,7 +3496,8 @@ func TestDeleteGuardiansGroupShouldFail(t *testing.T) {
 }
 
 func TestDeleteGrootUserShouldFail(t *testing.T) {
-	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	defer cancel()
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
 	addDataAndRules(ctx, t, dg)
@@ -3505,7 +3516,8 @@ func TestDeleteGrootUserShouldFail(t *testing.T) {
 }
 
 func TestDeleteGrootUserFromGuardiansGroupShouldFail(t *testing.T) {
-	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	defer cancel()
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
 	addDataAndRules(ctx, t, dg)
@@ -3519,7 +3531,8 @@ func TestDeleteGrootUserFromGuardiansGroupShouldFail(t *testing.T) {
 }
 
 func TestDeleteGrootAndGuardiansUsingDelNQuadShouldFail(t *testing.T) {
-	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	defer cancel()
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
 	addDataAndRules(ctx, t, dg)
@@ -3558,7 +3571,8 @@ func deleteGuardiansGroupAndGrootUserShouldFail(t *testing.T) {
 }
 
 func TestDropAllShouldResetGuardiansAndGroot(t *testing.T) {
-	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	defer cancel()
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
 	addDataAndRules(ctx, t, dg)

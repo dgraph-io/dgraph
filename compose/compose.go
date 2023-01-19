@@ -245,7 +245,7 @@ func getZero(idx int, raft string) service {
 		svc.Command += fmt.Sprintf(" --vmodule=%s", opts.Vmodule)
 	}
 	if idx == 1 {
-		svc.Command += fmt.Sprintf(" --bindall")
+		svc.Command += " --bindall"
 	} else {
 		svc.Command += fmt.Sprintf(" --peer=%s:%d", name(basename, 1), basePort)
 	}
@@ -734,9 +734,9 @@ func main() {
 
 	doc := fmt.Sprintf("# Auto-generated with: %v\n#\n", os.Args)
 	if opts.UserOwnership {
-		doc += fmt.Sprint("# NOTE: Env var UID must be exported by the shell\n#\n")
+		doc += "# NOTE: Env var UID must be exported by the shell\n#\n"
 	}
-	doc += fmt.Sprintf("%s", yml)
+	doc += string(yml)
 	if opts.OutFile == "-" {
 		x.Check2(fmt.Printf("%s", doc))
 	} else {

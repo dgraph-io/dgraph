@@ -100,7 +100,7 @@ func (br *backupReader) WithCompression(comp string) *backupReader {
 		br.r = r
 		br.toClose = append(br.toClose, r)
 	default:
-		br.setErr(fmt.Errorf("Unknown compression for backup: %s", comp))
+		br.setErr(fmt.Errorf("unknown compression for backup: %s", comp))
 	}
 	return br
 }

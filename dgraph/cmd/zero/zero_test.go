@@ -71,7 +71,7 @@ func TestIdBump(t *testing.T) {
 	bumpTo := res.GetEndId() + 100000
 
 	// Bump the lease to (last result + 100000).
-	res, err = zc.AssignIds(ctx, &pb.Num{Val: bumpTo, Type: pb.Num_UID, Bump: true})
+	_, err = zc.AssignIds(ctx, &pb.Num{Val: bumpTo, Type: pb.Num_UID, Bump: true})
 	require.NoError(t, err)
 
 	// Next assignemnt's startId should be greater than bumpTo.
@@ -81,6 +81,6 @@ func TestIdBump(t *testing.T) {
 	require.Equal(t, uint64(10), res.GetEndId()-res.GetStartId()+1)
 
 	// If bump request is less than maxLease, then it should result in no-op.
-	res, err = zc.AssignIds(ctx, &pb.Num{Val: 10, Type: pb.Num_UID, Bump: true})
+	_, err = zc.AssignIds(ctx, &pb.Num{Val: 10, Type: pb.Num_UID, Bump: true})
 	require.Contains(t, err.Error(), "Nothing to be leased")
 }
