@@ -32,12 +32,12 @@ func TestEntryReadWrite(t *testing.T) {
 	key := []byte("badger16byteskey")
 	dir, err := ioutil.TempDir("", "raftwal")
 	require.NoError(t, err)
+	defer os.RemoveAll(dir)
 	ds, err := InitEncrypted(dir, key)
 	require.NoError(t, err)
-	defer os.RemoveAll(dir)
 
 	// generate some random data
-	data := make([]byte, rand.Intn(1000))
+	data := make([]byte, 1+rand.Intn(1000))
 	rand.Read(data)
 
 	require.NoError(t, ds.wal.AddEntries([]raftpb.Entry{{Index: 1, Term: 1, Data: data}}))
