@@ -25,8 +25,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dgraph-io/dgraph/testutil"
 )
 
 func TestZeroAudit(t *testing.T) {

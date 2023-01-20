@@ -20,10 +20,11 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/golang/glog"
+
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/glog"
 )
 
 func resolveDraining(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {

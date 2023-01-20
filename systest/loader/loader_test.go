@@ -25,7 +25,6 @@ import (
 	"testing"
 
 	"github.com/spf13/viper"
-
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/v210/protos/api"

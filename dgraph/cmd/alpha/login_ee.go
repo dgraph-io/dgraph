@@ -1,3 +1,4 @@
+//go:build !oss
 // +build !oss
 
 /*
@@ -17,10 +18,11 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/golang/glog"
+
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/glog"
 )
 
 func loginHandler(w http.ResponseWriter, r *http.Request) {

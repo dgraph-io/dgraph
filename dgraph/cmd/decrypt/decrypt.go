@@ -22,11 +22,12 @@ import (
 	"os"
 	"strings"
 
+	"github.com/golang/glog"
+	"github.com/spf13/cobra"
+
 	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/glog"
-	"github.com/spf13/cobra"
 )
 
 type options struct {

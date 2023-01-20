@@ -23,8 +23,6 @@ import (
 	"log"
 	"math"
 	"net/http"
-
-	//nolint:gosec // profiling on bulk-loader tool considered noncritical
 	_ "net/http/pprof" // http profiler
 	"os"
 	"path/filepath"
@@ -32,16 +30,16 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/spf13/cobra"
+
 	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/filestore"
 	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/worker"
-	"github.com/dgraph-io/ristretto/z"
-
 	"github.com/dgraph-io/dgraph/tok"
+	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/spf13/cobra"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 // Bulk is the sub-command invoked when running "dgraph bulk".

@@ -25,8 +25,9 @@ import (
 	"testing"
 
 	"github.com/dgrijalva/jwt-go/v4"
-
+	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/metadata"
+	"gopkg.in/yaml.v2"
 
 	dgoapi "github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/dql"
@@ -37,8 +38,6 @@ import (
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 	_ "github.com/dgraph-io/gqlparser/v2/validator/rules" // make gql validator init() all rules
-	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v2"
 )
 
 type AuthQueryRewritingCase struct {

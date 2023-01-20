@@ -22,11 +22,12 @@ import (
 	"strconv"
 	"unicode"
 
+	"github.com/pkg/errors"
+
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
-	"github.com/pkg/errors"
 )
 
 // SortAndValidate sorts And validates the facets.

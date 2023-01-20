@@ -6,8 +6,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dgraph-io/dgraph/testutil"
 )
 
 // Test `dgraph version` with an empty config file.

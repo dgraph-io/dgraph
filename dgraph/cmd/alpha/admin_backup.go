@@ -1,3 +1,4 @@
+//go:build !oss
 // +build !oss
 
 /*
@@ -21,10 +22,10 @@ package alpha
 import (
 	"net/http"
 
-	"github.com/dgraph-io/dgraph/graphql/schema"
-
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
+
+	"github.com/dgraph-io/dgraph/graphql/schema"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 func init() {

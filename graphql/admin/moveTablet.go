@@ -19,14 +19,13 @@ package admin
 import (
 	"context"
 
-	"github.com/dgraph-io/dgraph/x"
-
 	"github.com/pkg/errors"
 
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/worker"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 type moveTabletInput struct {

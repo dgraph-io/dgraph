@@ -19,11 +19,12 @@ package resolve
 import (
 	"context"
 
+	"github.com/golang/glog"
+	"github.com/pkg/errors"
+
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/glog"
-	"github.com/pkg/errors"
 )
 
 // QueryMiddleware represents a middleware for queries
@@ -43,17 +44,23 @@ type QueryMiddlewares []QueryMiddleware
 type MutationMiddlewares []MutationMiddleware
 
 // Then chains the middlewares and returns the final QueryResolver.
-//     QueryMiddlewares{m1, m2, m3}.Then(r)
+//
+//	QueryMiddlewares{m1, m2, m3}.Then(r)
+//
 // is equivalent to:
-//     m1(m2(m3(r)))
+//
+//	m1(m2(m3(r)))
+//
 // When the request comes in, it will be passed to m1, then m2, then m3
 // and finally, the given resolverFunc
 // (assuming every middleware calls the following one).
 //
 // A chain can be safely reused by calling Then() several times.
-//     commonMiddlewares := QueryMiddlewares{authMiddleware, loggingMiddleware}
-//     healthResolver = commonMiddlewares.Then(resolveHealth)
-//     stateResolver = commonMiddlewares.Then(resolveState)
+//
+//	commonMiddlewares := QueryMiddlewares{authMiddleware, loggingMiddleware}
+//	healthResolver = commonMiddlewares.Then(resolveHealth)
+//	stateResolver = commonMiddlewares.Then(resolveState)
+//
 // Note that middlewares are called on every call to Then()
 // and thus several instances of the same middleware will be created
 // when a chain is reused in this way.
@@ -76,17 +83,23 @@ func (mws QueryMiddlewares) Then(resolver QueryResolver) QueryResolver {
 }
 
 // Then chains the middlewares and returns the final MutationResolver.
-//     MutationMiddlewares{m1, m2, m3}.Then(r)
+//
+//	MutationMiddlewares{m1, m2, m3}.Then(r)
+//
 // is equivalent to:
-//     m1(m2(m3(r)))
+//
+//	m1(m2(m3(r)))
+//
 // When the request comes in, it will be passed to m1, then m2, then m3
 // and finally, the given resolverFunc
 // (assuming every middleware calls the following one).
 //
 // A chain can be safely reused by calling Then() several times.
-//     commonMiddlewares := MutationMiddlewares{authMiddleware, loggingMiddleware}
-//     backupResolver = commonMiddlewares.Then(resolveBackup)
-//     configResolver = commonMiddlewares.Then(resolveConfig)
+//
+//	commonMiddlewares := MutationMiddlewares{authMiddleware, loggingMiddleware}
+//	backupResolver = commonMiddlewares.Then(resolveBackup)
+//	configResolver = commonMiddlewares.Then(resolveConfig)
+//
 // Note that middlewares are called on every call to Then()
 // and thus several instances of the same middleware will be created
 // when a chain is reused in this way.

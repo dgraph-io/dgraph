@@ -21,9 +21,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/spf13/pflag"
+
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
-	"github.com/spf13/pflag"
 )
 
 // Keys holds the configuration for ACL and encryption.

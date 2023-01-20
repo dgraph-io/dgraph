@@ -5,11 +5,12 @@ import (
 	"math"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/types"
-	"github.com/stretchr/testify/require"
 )
 
 func subgraphWithSingleResultAndSingleValue(val *pb.TaskValue) *SubGraph {

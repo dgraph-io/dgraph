@@ -29,11 +29,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
 	"github.com/golang/glog"
 	"golang.org/x/net/context"
+
+	"github.com/dgraph-io/dgraph/x"
 )
 
 const (

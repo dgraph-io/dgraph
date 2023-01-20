@@ -1,3 +1,4 @@
+//go:build !oss
 // +build !oss
 
 /*
@@ -25,18 +26,17 @@ import (
 	"strings"
 	"sync/atomic"
 
-	"github.com/dgraph-io/dgraph/graphql/schema"
-	"github.com/dgraph-io/gqlparser/v2/ast"
-	"github.com/dgraph-io/gqlparser/v2/parser"
 	"github.com/golang/glog"
-
-	"github.com/dgraph-io/dgraph/x"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 
-	"google.golang.org/grpc"
+	"github.com/dgraph-io/dgraph/graphql/schema"
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/gqlparser/v2/ast"
+	"github.com/dgraph-io/gqlparser/v2/parser"
 )
 
 const (

@@ -20,13 +20,14 @@ import (
 	"bytes"
 	"sort"
 
-	"github.com/dgraph-io/badger/v3/y"
-	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"go.etcd.io/etcd/raft"
 	"go.etcd.io/etcd/raft/raftpb"
+
+	"github.com/dgraph-io/badger/v3/y"
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 var errNotFound = errors.New("Unable to find raft entry")

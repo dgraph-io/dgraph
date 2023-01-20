@@ -23,24 +23,25 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/golang/glog"
+	"github.com/pkg/errors"
+
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/glog"
-	"github.com/pkg/errors"
 )
 
 // ProcessPersistedQuery stores and retrieves persisted queries by following waterfall logic:
-// 1. If sha256Hash is not provided process queries without persisting
-// 2. If sha256Hash is provided try retrieving persisted queries
-//		2a. Persisted Query not found
-//		    i) If query is not provided then throw "PersistedQueryNotFound"
-//			ii) If query is provided then store query in dgraph only if sha256 of the query is correct
-//				otherwise throw "provided sha does not match query"
-//      2b. Persisted Query found
-//		    i)  If query is not provided then update gqlRes with the found query and proceed
-//			ii) If query is provided then match query retrieved, if identical do nothing else
-//				throw "query does not match persisted query"
+//  1. If sha256Hash is not provided process queries without persisting
+//  2. If sha256Hash is provided try retrieving persisted queries
+//     2a. Persisted Query not found
+//     i) If query is not provided then throw "PersistedQueryNotFound"
+//     ii) If query is provided then store query in dgraph only if sha256 of the query is correct
+//     otherwise throw "provided sha does not match query"
+//     2b. Persisted Query found
+//     i)  If query is not provided then update gqlRes with the found query and proceed
+//     ii) If query is provided then match query retrieved, if identical do nothing else
+//     throw "query does not match persisted query"
 func ProcessPersistedQuery(ctx context.Context, gqlReq *schema.Request) error {
 	query := gqlReq.Query
 	sha256Hash := gqlReq.Extensions.PersistedQuery.Sha256Hash

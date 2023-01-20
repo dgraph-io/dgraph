@@ -1,3 +1,4 @@
+//go:build oss
 // +build oss
 
 /*
@@ -19,8 +20,9 @@
 package audit
 
 import (
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/cobra"
+
+	"github.com/dgraph-io/dgraph/x"
 )
 
 var CmdAudit x.SubCommand

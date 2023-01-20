@@ -22,9 +22,10 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/minio/minio-go/v6"
+
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/minio/minio-go/v6"
 )
 
 type remoteFiles struct {

@@ -24,16 +24,14 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dgraph-io/badger/v3/y"
-	"google.golang.org/grpc/metadata"
-
-	ostats "go.opencensus.io/stats"
-
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
+	ostats "go.opencensus.io/stats"
 	otrace "go.opencensus.io/trace"
+	"google.golang.org/grpc/metadata"
 
 	"github.com/dgraph-io/badger/v3"
+	"github.com/dgraph-io/badger/v3/y"
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/conn"

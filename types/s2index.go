@@ -20,10 +20,10 @@ import (
 	"log"
 
 	"github.com/golang/geo/s2"
+	"github.com/pkg/errors"
 	geom "github.com/twpayne/go-geom"
 
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/pkg/errors"
 )
 
 func parentCoverTokens(parents s2.CellUnion, cover s2.CellUnion) []string {

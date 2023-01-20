@@ -28,8 +28,6 @@ import (
 	"math"
 	"math/rand"
 	"net/http"
-
-	//nolint:gosec // profiling on live-loader tool considered noncritical
 	_ "net/http/pprof" // http profiler
 	"os"
 	"sort"
@@ -37,6 +35,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dgryski/go-farm"
+	"github.com/golang/glog"
+	"github.com/pkg/errors"
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 
@@ -44,9 +47,6 @@ import (
 	bopt "github.com/dgraph-io/badger/v3/options"
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
-	"github.com/dgraph-io/ristretto/z"
-	"github.com/dgryski/go-farm"
-
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/ee/enc"
@@ -55,11 +55,7 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/xidmap"
-
-	"github.com/golang/glog"
-	"github.com/pkg/errors"
-	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 type options struct {

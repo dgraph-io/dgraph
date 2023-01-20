@@ -5,13 +5,14 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/gogo/protobuf/jsonpb"
+	"github.com/pkg/errors"
+
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/gogo/protobuf/jsonpb"
-	"github.com/pkg/errors"
 )
 
 type membershipState struct {

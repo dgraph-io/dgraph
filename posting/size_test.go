@@ -22,6 +22,7 @@ import (
 	"io/ioutil"
 	"log"
 	"math"
+	_ "net/http/pprof"
 	"os"
 	"os/exec"
 	"runtime"
@@ -30,15 +31,13 @@ import (
 	"strings"
 	"testing"
 
-	_ "net/http/pprof"
+	"github.com/dustin/go-humanize"
+	"github.com/pkg/errors"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dustin/go-humanize"
-	"github.com/pkg/errors"
-
-	"github.com/stretchr/testify/require"
 )
 
 var manual = flag.Bool("manual", false, "Set when manually running some tests.")

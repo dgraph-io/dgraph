@@ -20,8 +20,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/cobra"
+
+	"github.com/dgraph-io/dgraph/x"
 )
 
 // Conv is the sub-command invoked when running "dgraph conv".
