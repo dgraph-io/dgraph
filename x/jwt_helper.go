@@ -18,6 +18,7 @@ package x
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/pkg/errors"
@@ -71,7 +72,7 @@ func ExtractNamespaceFromJwt(jwtToken string) (uint64, error) {
 func ExtractNamespaceFrom(ctx context.Context) (uint64, error) {
 	jwtString, err := ExtractJwt(ctx)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("extracting namespace from JWT %w", err)
 	}
 	return ExtractNamespaceFromJwt(jwtString)
 }
