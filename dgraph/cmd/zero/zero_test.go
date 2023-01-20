@@ -107,16 +107,16 @@ func TestProposalKey(t *testing.T) {
 	node := &node{Node: n, ctx: context.Background(), closer: z.NewCloser(1)}
 	node.initProposalKey(node.Id)
 
-	pkey := node.proposalKey()
-	require.Equal(t, id, extractNodeIdFrom(pkey), "id extracted from proposal key is not equal to initial value")
+	pkey := proposalKey
+	require.Equal(t, id, extractNodeIdFrom(proposalKey), "id extracted from proposal key is not equal to initial value")
 
 	node.uniqueKey()
-	require.Equal(t, pkey+1, node.proposalKey(), "proposal key should increment by 1 at each call of unique key")
+	require.Equal(t, pkey+1, proposalKey, "proposal key should increment by 1 at each call of unique key")
 
 	uniqueKeys := make(map[uint64]struct{})
 	for i := 0; i < 10; i++ {
 		node.uniqueKey()
-		uniqueKeys[node.proposalKey()] = struct{}{}
+		uniqueKeys[proposalKey] = struct{}{}
 	}
 	require.Equal(t, len(uniqueKeys), 10, "each iteration should create unique key")
 }

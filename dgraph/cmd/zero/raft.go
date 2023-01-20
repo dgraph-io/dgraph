@@ -96,10 +96,6 @@ func (n *node) initProposalKey(id uint64) error {
 	return nil
 }
 
-func (n *node) proposalKey() uint64 {
-	return proposalKey
-}
-
 func (n *node) uniqueKey() uint64 {
 	return atomic.AddUint64(&proposalKey, 1)
 }
