@@ -18,14 +18,20 @@ package zero
 
 import (
 	"context"
+	"encoding/binary"
+	"io/ioutil"
 	"math"
+	"os"
 	"testing"
+
+	"github.com/dgraph-io/dgraph/conn"
+	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/raftwal"
+	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/ristretto/z"
 
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
-
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/testutil"
 )
 
 func TestRemoveNode(t *testing.T) {
@@ -83,4 +89,31 @@ func TestIdBump(t *testing.T) {
 	// If bump request is less than maxLease, then it should result in no-op.
 	_, err = zc.AssignIds(ctx, &pb.Num{Val: 10, Type: pb.Num_UID, Bump: true})
 	require.Contains(t, err.Error(), "Nothing to be leased")
+}
+
+func extractNodeIdFrom(proposalKey uint64) uint64 {
+	pkeybyteSlice := make([]byte, 8)
+	binary.BigEndian.PutUint64(pkeybyteSlice, proposalKey)
+
+	numSlice := make([]byte, 8)
+	// First two bytes in proposalKey are reserved for node Id.
+	copy(numSlice[6:8], pkeybyteSlice[0:2])
+
+	return binary.BigEndian.Uint64(numSlice)
+}
+
+func TestProposalKey(t *testing.T) {
+	dir, err := ioutil.TempDir("", "test_pk")
+	require.NoError(t, err)
+	defer os.RemoveAll(dir)
+
+	store := raftwal.Init(dir)
+
+	id := uint64(2)
+	rc := &pb.RaftContext{Id: id}
+	n := conn.NewNode(rc, store, nil)
+	node := &node{Node: n, ctx: context.Background(), closer: z.NewCloser(1)}
+	node.initProposalKey(node.Id)
+
+	require.Equal(t, id, extractNodeIdFrom(node.proposalKey()), "id extracted from proposal key is not equal to initial value")
 }

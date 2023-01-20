@@ -89,11 +89,18 @@ func (n *node) AmLeader() bool {
 func (n *node) initProposalKey(id uint64) error {
 	x.AssertTrue(id != 0)
 	b := make([]byte, 8)
-	if _, err := rand.Read(b); err != nil {
+
+	random4Bytes := make([]byte, 4)
+	if _, err := rand.Read(random4Bytes); err != nil {
 		return err
 	}
+	copy(b[4:8], random4Bytes)
 	proposalKey = n.Id<<48 | binary.BigEndian.Uint64(b)<<16
 	return nil
+}
+
+func (n *node) proposalKey() uint64 {
+	return proposalKey
 }
 
 func (n *node) uniqueKey() uint64 {
