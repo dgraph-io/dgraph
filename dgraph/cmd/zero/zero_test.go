@@ -18,14 +18,11 @@ package zero
 
 import (
 	"context"
-	"io/ioutil"
 	"math"
-	"os"
 	"testing"
 
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/ristretto/z"
 
@@ -91,16 +88,9 @@ func TestIdBump(t *testing.T) {
 }
 
 func TestProposalKey(t *testing.T) {
-	dir, err := ioutil.TempDir("", "test_pk")
-	require.NoError(t, err)
-	defer os.RemoveAll(dir)
-
-	store := raftwal.Init(dir)
 
 	id := uint64(2)
-	rc := &pb.RaftContext{Id: id}
-	n := conn.NewNode(rc, store, nil)
-	node := &node{Node: n, ctx: context.Background(), closer: z.NewCloser(1)}
+	node := &node{Node: &conn.Node{Id: id}, ctx: context.Background(), closer: z.NewCloser(1)}
 	node.initProposalKey(node.Id)
 
 	pkey := proposalKey
