@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"math/rand"
 	"sort"
 	"strings"
 	"sync"
@@ -88,6 +89,9 @@ func (n *node) AmLeader() bool {
 func (n *node) initProposalKey(id uint64) error {
 	x.AssertTrue(id != 0)
 	random4Bytes := make([]byte, 4)
+	if _, err := rand.Read(random4Bytes); err != nil {
+		return err
+	}
 	proposalKey = n.Id<<48 | uint64(binary.BigEndian.Uint32(random4Bytes))<<16
 	return nil
 }
