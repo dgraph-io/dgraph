@@ -1876,7 +1876,7 @@ func CountIndexConcurrentSetDelScalarPredicate(t *testing.T, c *dgo.Dgraph) {
 	var s struct {
 		Q []struct {
 			Name string `json:"name"`
-		} `json:q`
+		} `json:"q"`
 	}
 	require.NoError(t, json.Unmarshal(resp.GetJson(), &s))
 	require.Equal(t, 1, len(s.Q))

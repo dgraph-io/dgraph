@@ -37,7 +37,6 @@ import (
 	"github.com/pkg/errors"
 	ostats "go.opencensus.io/stats"
 	"go.opencensus.io/tag"
-	"go.opencensus.io/trace"
 	otrace "go.opencensus.io/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -255,8 +254,9 @@ func validateAlterOperation(ctx context.Context, op *api.Operation) error {
 
 // parseSchemaFromAlterOperation parses the string schema given in input operation to a Go
 // struct, and performs some checks to make sure that the schema is valid.
-func parseSchemaFromAlterOperation(ctx context.Context, op *api.Operation) (*schema.ParsedSchema,
-	error) {
+func parseSchemaFromAlterOperation(ctx context.Context, op *api.Operation) (
+	*schema.ParsedSchema, error) {
+
 	// If a background task is already running, we should reject all the new alter requests.
 	if schema.State().IndexingInProgress() {
 		return nil, errIndexingInProgress
@@ -980,7 +980,7 @@ type queryContext struct {
 	// l stores latency numbers
 	latency *query.Latency
 	// span stores a opencensus span used throughout the query processing
-	span *trace.Span
+	span *otrace.Span
 	// graphql indicates whether the given request is from graphql admin or not.
 	graphql bool
 	// gqlField stores the GraphQL field for which the query is being processed.
@@ -1228,7 +1228,7 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (resp *api.Response,
 		return nil, errors.Errorf("empty request")
 	}
 
-	span.AddAttributes(trace.StringAttribute("Query", req.req.Query))
+	span.AddAttributes(otrace.StringAttribute("Query", req.req.Query))
 	span.Annotatef(nil, "Request received: %v", req.req)
 	if isQuery {
 		ostats.Record(ctx, x.PendingQueries.M(1), x.NumQueries.M(1))

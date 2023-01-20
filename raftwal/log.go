@@ -318,7 +318,7 @@ func (lf *logFile) generateIV(offset uint64) []byte {
 	iv := make([]byte, aes.BlockSize)
 	// IV is of 16 bytes, in which first 8 bytes are obtained from baseIV
 	// and the remaining 8 bytes is obtained from the offset.
-	y.AssertTrue(8 == copy(iv[:8], lf.baseIV))
+	y.AssertTrue(copy(iv[:8], lf.baseIV) == 8)
 	binary.BigEndian.PutUint64(iv[8:], offset)
 	return iv
 }

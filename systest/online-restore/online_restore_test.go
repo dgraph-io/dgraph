@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -563,24 +562,6 @@ func TestRestoreWithDropOperations(t *testing.T) {
 				"name": "Flower"
 			}`,
 		})
-}
-
-func setupDirs(t *testing.T, dirs []string) {
-	// first, clean them up
-	cleanupDirs(t, dirs)
-
-	// then create them
-	for _, dir := range dirs {
-		require.NoError(t, os.MkdirAll(dir, os.ModePerm))
-	}
-}
-
-func cleanupDirs(t *testing.T, dirs []string) {
-	for _, dir := range dirs {
-		if err := os.RemoveAll(dir); err != nil {
-			t.Logf("Got error while removing: %s: %v\n", dir, err)
-		}
-	}
 }
 
 func backup(t *testing.T, backupDir string) {

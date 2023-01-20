@@ -456,10 +456,6 @@ func TestSubscriptionErrorWhenNoneDefined(t *testing.T) {
 		" doesn't have any fields defined for subscription operation."}}, resp.Errors)
 }
 
-func resolve(gqlSchema schema.Schema, gqlQuery string, dgResponse string) *schema.Response {
-	return resolveWithClient(gqlSchema, gqlQuery, nil, &executor{resp: dgResponse})
-}
-
 func resolveWithClient(
 	gqlSchema schema.Schema,
 	gqlQuery string,

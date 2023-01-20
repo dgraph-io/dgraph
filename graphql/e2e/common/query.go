@@ -158,10 +158,10 @@ func queryByTypeWithEncoding(t *testing.T, acceptGzip, gzipEncoding bool) {
 		QueryCountry []*country
 	}
 	expected.QueryCountry = []*country{
-		&country{Name: "Angola"},
-		&country{Name: "Bangladesh"},
-		&country{Name: "India"},
-		&country{Name: "Mozambique"},
+		{Name: "Angola"},
+		{Name: "Bangladesh"},
+		{Name: "India"},
+		{Name: "Mozambique"},
 	}
 	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
 	require.NoError(t, err)
@@ -194,10 +194,10 @@ func uidAlias(t *testing.T) {
 		QueryCountry []*countryUID
 	}
 	expected.QueryCountry = []*countryUID{
-		&countryUID{UID: "Angola"},
-		&countryUID{UID: "Bangladesh"},
-		&countryUID{UID: "India"},
-		&countryUID{UID: "Mozambique"},
+		{UID: "Angola"},
+		{UID: "Bangladesh"},
+		{UID: "India"},
+		{UID: "Mozambique"},
 	}
 	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
 	require.NoError(t, err)
@@ -223,10 +223,10 @@ func orderAtRoot(t *testing.T) {
 		QueryCountry []*country
 	}
 	expected.QueryCountry = []*country{
-		&country{Name: "Angola"},
-		&country{Name: "Bangladesh"},
-		&country{Name: "India"},
-		&country{Name: "Mozambique"},
+		{Name: "Angola"},
+		{Name: "Bangladesh"},
+		{Name: "India"},
+		{Name: "Mozambique"},
 	}
 	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
 	require.NoError(t, err)
@@ -252,8 +252,8 @@ func pageAtRoot(t *testing.T) {
 		QueryCountry []*country
 	}
 	expected.QueryCountry = []*country{
-		&country{Name: "India"},
-		&country{Name: "Bangladesh"},
+		{Name: "India"},
+		{Name: "Bangladesh"},
 	}
 	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
 	require.NoError(t, err)
@@ -266,8 +266,8 @@ func pageAtRoot(t *testing.T) {
 func regExp(t *testing.T) {
 	queryCountryByRegExp(t, "/[Aa]ng/",
 		[]*country{
-			&country{Name: "Angola"},
-			&country{Name: "Bangladesh"},
+			{Name: "Angola"},
+			{Name: "Bangladesh"},
 		})
 }
 
@@ -297,7 +297,7 @@ func multipleSearchIndexes(t *testing.T) {
 		}
 
 		expected.QueryPost = []*post{
-			&post{Title: "Introducing GraphQL in Dgraph"},
+			{Title: "Introducing GraphQL in Dgraph"},
 		}
 		err := json.Unmarshal([]byte(gqlResponse.Data), &result)
 		require.NoError(t, err)

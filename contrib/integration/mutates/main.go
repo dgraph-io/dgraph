@@ -107,7 +107,7 @@ func testInsert3Quads(ctx context.Context, c *dgo.Dgraph) {
 
 func testQuery3Quads(ctx context.Context, c *dgo.Dgraph) {
 	txn := c.NewTxn()
-	q := fmt.Sprint(`{ me(func: uid(200, 300, 400)) { name }}`)
+	q := `{ me(func: uid(200, 300, 400)) { name }}`
 	resp, err := txn.Query(ctx, q)
 	if err != nil {
 		log.Fatalf("Error while running query: %v\n", err)

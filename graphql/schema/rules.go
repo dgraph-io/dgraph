@@ -1990,17 +1990,15 @@ func customDirectiveValidation(sch *ast.Schema,
 						h.Value.Raw,
 					))
 				}
-				if fHeaders != nil {
-					if fHeaders[secretKey[0]] {
-						return append(errs, gqlerror.ErrorPosf(
-							errPos,
-							"Type %s; Field %s; secretHeaders and forwardHeaders in @custom directive cannot have overlapping headers"+
-								", found: `%s`.",
-							typ.Name,
-							field.Name,
-							h.Value.Raw,
-						))
-					}
+				if fHeaders[secretKey[0]] {
+					return append(errs, gqlerror.ErrorPosf(
+						errPos,
+						"Type %s; Field %s; secretHeaders and forwardHeaders in @custom directive cannot have overlapping headers"+
+							", found: `%s`.",
+						typ.Name,
+						field.Name,
+						h.Value.Raw,
+					))
 				}
 			}
 		}

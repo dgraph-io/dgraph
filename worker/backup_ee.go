@@ -263,10 +263,8 @@ func ProcessListBackups(ctx context.Context, location string, creds *x.MinioCred
 		return nil, errors.Wrapf(err, "cannot read manifests at location %s", location)
 	}
 
-	res := make([]*Manifest, 0)
-	for _, m := range manifests {
-		res = append(res, m)
-	}
+	res := make([]*Manifest, 0, len(manifests))
+	res = append(res, manifests...)
 	return res, nil
 }
 
@@ -284,8 +282,6 @@ type BackupProcessor struct {
 
 type threadLocal struct {
 	Request *pb.BackupRequest
-	// pre-allocated pb.PostingList object.
-	pl pb.PostingList
 	// pre-allocated pb.BackupPostingList object.
 	bpl   pb.BackupPostingList
 	alloc *z.Allocator

@@ -1203,7 +1203,7 @@ func SubscribeForUpdates(prefixes [][]byte, ignore string, cb func(kvs *badgerpb
 		members := groups().AnyTwoServers(group)
 		// There may be a lag while starting so keep retrying.
 		if len(members) == 0 {
-			return fmt.Errorf("Unable to find any servers for group: %d", group)
+			return fmt.Errorf("unable to find any servers for group: %d", group)
 		}
 		pool := conn.GetPools().Connect(members[0], x.WorkerConfig.TLSClientConfig)
 		client := pb.NewWorkerClient(pool.Get())

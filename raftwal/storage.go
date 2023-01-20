@@ -29,9 +29,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-// versionKey is hardcoded into the special key used to fetch the maximum version from the DB.
-const versionKey = 1
-
 // DiskStorage handles disk access and writing for the RAFT write-ahead log.
 // Dir contains wal.meta file and <start idx zero padded>.wal files.
 //
