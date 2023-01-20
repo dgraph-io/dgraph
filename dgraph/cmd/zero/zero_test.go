@@ -18,7 +18,6 @@ package zero
 
 import (
 	"context"
-	"encoding/binary"
 	"io/ioutil"
 	"math"
 	"os"
@@ -92,14 +91,7 @@ func TestIdBump(t *testing.T) {
 }
 
 func extractNodeIdFrom(proposalKey uint64) uint64 {
-	pkeybyteSlice := make([]byte, 8)
-	binary.BigEndian.PutUint64(pkeybyteSlice, proposalKey)
-
-	numSlice := make([]byte, 8)
-	// First two bytes in proposalKey are reserved for node Id.
-	copy(numSlice[6:8], pkeybyteSlice[0:2])
-
-	return binary.BigEndian.Uint64(numSlice)
+	return proposalKey >> 48
 }
 
 func TestProposalKey(t *testing.T) {
@@ -115,5 +107,16 @@ func TestProposalKey(t *testing.T) {
 	node := &node{Node: n, ctx: context.Background(), closer: z.NewCloser(1)}
 	node.initProposalKey(node.Id)
 
-	require.Equal(t, id, extractNodeIdFrom(node.proposalKey()), "id extracted from proposal key is not equal to initial value")
+	pkey := node.proposalKey()
+	require.Equal(t, id, extractNodeIdFrom(pkey), "id extracted from proposal key is not equal to initial value")
+
+	node.uniqueKey()
+	require.Equal(t, pkey+1, node.proposalKey(), "proposal key should increment by 1 at each call of unique key")
+
+	uniqueKeys := make(map[uint64]struct{})
+	for i := 0; i < 10; i++ {
+		node.uniqueKey()
+		uniqueKeys[node.proposalKey()] = struct{}{}
+	}
+	require.Equal(t, len(uniqueKeys), 10, "each iteration should create unique key")
 }
