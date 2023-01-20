@@ -18,10 +18,10 @@ package x
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/pkg/errors"
-	"golang.org/x/xerrors"
 )
 
 func ParseJWT(jwtStr string) (jwt.MapClaims, error) {
@@ -73,7 +73,7 @@ func ExtractJWTNamespace(ctx context.Context) (uint64, error) {
 	jwtString, err := ExtractJwt(ctx)
 
 	if err != nil {
-		return 0, xerrors.Errorf("extracting namespace from JWT %w", err)
+		return 0, fmt.Errorf("extracting namespace from JWT %w", err)
 	}
 	return ExtractNamespaceFromJwt(jwtString)
 }
