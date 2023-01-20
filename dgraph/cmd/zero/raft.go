@@ -18,11 +18,11 @@ package zero
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/binary"
 	"fmt"
 	"log"
 	"math"
-	"math/rand"
 	"sort"
 	"strings"
 	"sync"

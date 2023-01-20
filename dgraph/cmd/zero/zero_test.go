@@ -90,10 +90,6 @@ func TestIdBump(t *testing.T) {
 	require.Contains(t, err.Error(), "Nothing to be leased")
 }
 
-func extractNodeIdFrom(proposalKey uint64) uint64 {
-	return proposalKey >> 48
-}
-
 func TestProposalKey(t *testing.T) {
 	dir, err := ioutil.TempDir("", "test_pk")
 	require.NoError(t, err)
@@ -108,7 +104,8 @@ func TestProposalKey(t *testing.T) {
 	node.initProposalKey(node.Id)
 
 	pkey := proposalKey
-	require.Equal(t, id, extractNodeIdFrom(proposalKey), "id extracted from proposal key is not equal to initial value")
+	nodeIdFromKey := proposalKey >> 48
+	require.Equal(t, id, nodeIdFromKey, "id extracted from proposal key is not equal to initial value")
 
 	node.uniqueKey()
 	require.Equal(t, pkey+1, proposalKey, "proposal key should increment by 1 at each call of unique key")
