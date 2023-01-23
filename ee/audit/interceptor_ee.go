@@ -124,6 +124,7 @@ func AuditWebSockets(ctx context.Context, req *schema.Request) {
 
 	namespace := uint64(0)
 	var user string
+	// TODO(anurag): X-Dgraph-AccessToken should be exported as a constant
 	if token := req.Header.Get("X-Dgraph-AccessToken"); token != "" {
 		user = getUser(token, false)
 		namespace, _ = x.ExtractNamespaceFromJwt(token)

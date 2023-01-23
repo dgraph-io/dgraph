@@ -68,7 +68,7 @@ func ExtractNamespaceFromJwt(jwtToken string) (uint64, error) {
 	return uint64(namespace), nil
 }
 
-func ExtractJWTNamespace(ctx context.Context) (uint64, error) {
+func ExtractNamespaceFrom(ctx context.Context) (uint64, error) {
 	jwtString, err := ExtractJwt(ctx)
 	if err != nil {
 		return 0, err
