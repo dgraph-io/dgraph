@@ -54,6 +54,7 @@ const (
 	PoorManAuth      = "PoorManAuth"
 	Grpc             = "Grpc"
 	Http             = "Http"
+	WebSocket        = "Websocket"
 )
 
 var auditor = &auditLogger{}
