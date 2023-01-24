@@ -260,7 +260,7 @@ func GqlErrorf(message string, args ...interface{}) *GqlError {
 func ExtractNamespaceHTTP(r *http.Request) uint64 {
 	ctx := AttachAccessJwt(context.Background(), r)
 	// Ignoring error because the default value is zero anyways.
-	namespace, _ := ExtractNamespaceFrom(ctx)
+	namespace, _ := ExtractJWTNamespace(ctx)
 	return namespace
 }
 
@@ -441,7 +441,7 @@ func AttachJWTNamespace(ctx context.Context) context.Context {
 		return AttachNamespace(ctx, GalaxyNamespace)
 	}
 
-	ns, err := ExtractNamespaceFrom(ctx)
+	ns, err := ExtractJWTNamespace(ctx)
 	if err == nil {
 		// Attach the namespace only if we got one from JWT.
 		// This preserves any namespace directly present in the context which is needed for
@@ -469,7 +469,7 @@ func AttachJWTNamespaceOutgoing(ctx context.Context) (context.Context, error) {
 	if !WorkerConfig.AclEnabled {
 		return AttachNamespaceOutgoing(ctx, GalaxyNamespace), nil
 	}
-	ns, err := ExtractNamespaceFrom(ctx)
+	ns, err := ExtractJWTNamespace(ctx)
 	if err != nil {
 		return ctx, err
 	}

@@ -1111,7 +1111,7 @@ func AuthGuardianOfTheGalaxy(ctx context.Context) error {
 	if !x.WorkerConfig.AclEnabled {
 		return nil
 	}
-	ns, err := x.ExtractNamespaceFrom(ctx)
+	ns, err := x.ExtractJWTNamespace(ctx)
 	if err != nil {
 		return status.Error(codes.Unauthenticated,
 			"AuthGuardianOfTheGalaxy: extracting jwt token, error: "+err.Error())
