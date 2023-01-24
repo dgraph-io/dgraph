@@ -252,7 +252,7 @@ func GetManifestForListbackup(h UriHandler, uri *url.URL) (*MasterManifest, erro
 		return &MasterManifest{}, errors.Errorf("getManifest: The uri path: %q doesn't exists",
 			uri.Path)
 	}
-	manifest, err := readMasterManifest(h, backupManifest)
+	manifest, err := getConsolidatedManifest(h, uri)
 	if err != nil {
 		return &MasterManifest{}, errors.Wrap(err, "failed to read master manifest: ")
 	}
