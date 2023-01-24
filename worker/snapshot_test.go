@@ -121,6 +121,7 @@ func TestSnapshot(t *testing.T) {
 	}
 	verifySnapshot(t, dg2, 400)
 	resp := testutil.GetGQLSchema(t, testutil.ContainerAddr("alpha2", 8080))
+	//comparing uploaded graphql schema and schema acquired from stopped container
 	require.Equal(t, testSchema, resp)
 }
 
