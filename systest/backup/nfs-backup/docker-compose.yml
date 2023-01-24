@@ -339,8 +339,7 @@ services:
       - SHARED_DIRECTORY=/data
     volumes:
       - data-volume:/data
-    ports:
-      - 2089:2049
+
 
 volumes:
   data-volume:

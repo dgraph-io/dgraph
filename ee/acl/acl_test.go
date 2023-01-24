@@ -2982,7 +2982,7 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 					}`,
 			queryName:          "moveTablet",
 			testGuardianAccess: true,
-			guardianErr:        "group: [2147483640] is not a known group",
+			guardianErr:        "Group: [2147483640] is not a known group",
 			guardianData:       `{"moveTablet": null}`,
 		},
 		{
@@ -3075,11 +3075,12 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 			if tcase.testGuardianAccess {
 				token := testutil.GrootHttpLogin(adminEndpoint)
 				resp := makeRequestAndRefreshTokenIfNecessary(t, token, params)
-
 				if tcase.guardianErr == "" {
 					resp.RequireNoGraphQLErrors(t)
 				} else {
 					require.Len(t, resp.Errors, 1)
+					fmt.Println("res is ============", resp.Errors[0].Message)
+
 					require.Contains(t, resp.Errors[0].Message, tcase.guardianErr)
 				}
 
