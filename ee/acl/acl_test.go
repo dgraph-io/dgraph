@@ -3079,8 +3079,6 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 					resp.RequireNoGraphQLErrors(t)
 				} else {
 					require.Len(t, resp.Errors, 1)
-					fmt.Println("res is ============", resp.Errors[0].Message)
-
 					require.Contains(t, resp.Errors[0].Message, tcase.guardianErr)
 				}
 
