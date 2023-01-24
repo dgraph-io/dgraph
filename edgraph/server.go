@@ -1047,7 +1047,7 @@ func filterTablets(ctx context.Context, ms *pb.MembershipState) error {
 	if !x.WorkerConfig.AclEnabled {
 		return nil
 	}
-	namespace, err := x.ExtractJWTNamespace(ctx)
+	namespace, err := x.ExtractNamespaceFrom(ctx)
 	if err != nil {
 		return errors.Errorf("Namespace not found in JWT.")
 	}
@@ -1540,7 +1540,7 @@ func validateNamespace(ctx context.Context, tc *api.TxnContext) error {
 		return nil
 	}
 
-	ns, err := x.ExtractJWTNamespace(ctx)
+	ns, err := x.ExtractNamespaceFrom(ctx)
 	if err != nil {
 		return err
 	}
@@ -1564,7 +1564,7 @@ func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.Tx
 		return &api.TxnContext{}, errors.Errorf(
 			"StartTs cannot be zero while committing a transaction")
 	}
-	if ns, err := x.ExtractJWTNamespace(ctx); err == nil {
+	if ns, err := x.ExtractNamespaceFrom(ctx); err == nil {
 		annotateNamespace(span, ns)
 	}
 	annotateStartTs(span, tc.StartTs)
