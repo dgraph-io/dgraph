@@ -214,10 +214,6 @@ func formatAsFlagParsingError(flag string, err error) error {
 	return fmt.Errorf("error parsing flag `%s`: %w", flag, err)
 }
 
-func formatAsFlagRequiredError(flag string) error {
-	return formatAsFlagParsingError(flag, fmt.Errorf("`%s` is required", flag))
-}
-
 // parseVersionFromString parses a version given as string to internal representation.
 // Some examples for input and output:
 //  1. input : v1.2.2

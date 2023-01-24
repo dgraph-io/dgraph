@@ -365,6 +365,7 @@ func (enc *encoder) setCustom(fj fastJsonNode) {
 	fj.meta |= customBit
 }
 
+//nolint:unused // appendAttrs is used in outputnode_test.go as a helper function
 func (enc *encoder) appendAttrs(fj, child fastJsonNode) {
 	enc.addChildren(fj, child)
 }
@@ -907,7 +908,7 @@ func (enc *encoder) normalize(fj fastJsonNode) ([]fastJsonNode, error) {
 	var shead, curScalar fastJsonNode
 	chead = enc.children(fj)
 	for chead != nil {
-		if enc.children(chead) != nil && enc.getFacetsParent(chead) == false {
+		if enc.children(chead) != nil && !enc.getFacetsParent(chead) {
 			chead = chead.next
 			continue
 		}
