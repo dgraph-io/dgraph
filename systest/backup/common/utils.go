@@ -54,7 +54,7 @@ var (
 
 const (
 	accessJwtHeader = "X-Dgraph-AccessToken"
-	ShellToUse      = "bash"
+	shellToUse      = "bash"
 )
 
 // RunFailingRestore is like runRestore but expects an error during restore.
@@ -129,9 +129,9 @@ func RemoveContentsOfPerticularDir(t *testing.T, dir string) error {
 	return nil
 }
 
-func AddNamespaces(t *testing.T, namespaceQuant int, headerAlpha1 http.Header) uint64 {
+func AddNamespaces(t *testing.T, namespaceQuant int, header http.Header) uint64 {
 	for index := 1; index <= namespaceQuant; index++ {
-		namespaceId = common.CreateNamespace(t, headerAlpha1)
+		namespaceId = common.CreateNamespace(t, header)
 
 		fmt.Printf("\nSucessfully added Namespace with Id: %d ", namespaceId)
 	}
@@ -139,7 +139,7 @@ func AddNamespaces(t *testing.T, namespaceQuant int, headerAlpha1 http.Header) u
 	return namespaceId
 }
 
-func DeleteNamespace(t *testing.T, id uint64, jwtTokenAlpha1 string) {
+func DeleteNamespace(t *testing.T, id uint64, jwtToken string) {
 	query := `mutation deleteNamespace($id:Int!){
 					deleteNamespace(input:{namespaceId:$id}){
 						namespaceId
@@ -155,7 +155,7 @@ func DeleteNamespace(t *testing.T, id uint64, jwtTokenAlpha1 string) {
 
 	req, err := http.NewRequest(http.MethodPost, adminUrl, bytes.NewBuffer(b))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set(accessJwtHeader, jwtTokenAlpha1)
+	req.Header.Set(accessJwtHeader, jwtToken)
 	client := &http.Client{}
 	resp, err := client.Do(req)
 
@@ -167,7 +167,7 @@ func DeleteNamespace(t *testing.T, id uint64, jwtTokenAlpha1 string) {
 	fmt.Println("..................................................>Deleted Schema id? ", deletedNamespaceID)
 }
 
-func AddSchema(t *testing.T, jwtTokenAlpha1 string) {
+func AddSchema(t *testing.T, jwtToken string) {
 	query := `mutation {
         updateGQLSchema(
           input: { set: { schema: "type Item {id: ID!, name: String! @search(by: [hash]), price: String!}, type Post { postID: ID!, title: String! @search(by: [term, fulltext]), text: String @search(by: [fulltext, term]), datePublished: DateTime }"}})
@@ -184,7 +184,7 @@ func AddSchema(t *testing.T, jwtTokenAlpha1 string) {
 
 	req, err := http.NewRequest(http.MethodPost, adminUrl, bytes.NewBuffer(b))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set(accessJwtHeader, jwtTokenAlpha1)
+	req.Header.Set(accessJwtHeader, jwtToken)
 	client := &http.Client{}
 	resp, err := client.Do(req)
 
@@ -201,7 +201,7 @@ func CheckSchemaExists(t *testing.T, SockAddrHttp string, header http.Header) {
 	fmt.Println("????????? Schema Exists? ", resp)
 }
 
-func AddData(t *testing.T, minSuffixVal int, maxSuffixVal int, jwtTokenAlpha1 string) {
+func AddData(t *testing.T, minSuffixVal int, maxSuffixVal int, jwtToken string) {
 
 	query := `mutation addItem($name: String!, $price: String!){
 		addItem(input: [{ name: $name, price: $price}]) {
@@ -225,7 +225,7 @@ func AddData(t *testing.T, minSuffixVal int, maxSuffixVal int, jwtTokenAlpha1 st
 
 		req, err := http.NewRequest(http.MethodPost, adminUrl, bytes.NewBuffer(b))
 		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set(accessJwtHeader, jwtTokenAlpha1)
+		req.Header.Set(accessJwtHeader, jwtToken)
 		client := &http.Client{}
 		resp, err := client.Do(req)
 
@@ -234,7 +234,7 @@ func AddData(t *testing.T, minSuffixVal int, maxSuffixVal int, jwtTokenAlpha1 st
 	}
 }
 
-func CheckDataExists(t *testing.T, sockAdder string, desriedSuffix int, jwtTokenAlpha1 string) {
+func CheckDataExists(t *testing.T, sockAdder string, desriedSuffix int, jwtToken string) {
 	checkData := `query queryItem($name: String!){
 		queryItem(filter: {
 			name: {eq: $name}
@@ -259,7 +259,9 @@ func CheckDataExists(t *testing.T, sockAdder string, desriedSuffix int, jwtToken
 
 	req, err := http.NewRequest(http.MethodPost, adminUrl, bytes.NewBuffer(b))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set(accessJwtHeader, jwtTokenAlpha1)
+	if jwtToken != "" {
+		req.Header.Set(accessJwtHeader, jwtToken)
+	}
 	client := &http.Client{}
 	resp, err := client.Do(req)
 
@@ -271,7 +273,7 @@ func CheckDataExists(t *testing.T, sockAdder string, desriedSuffix int, jwtToken
 	fmt.Println("Details of the recently added record", lastInsertDetails)
 }
 
-func TakeBackup(t *testing.T, jwtTokenAlpha1 string, backupDst string) {
+func TakeBackup(t *testing.T, jwtToken string, backupDst string) {
 
 	backupRequest := `mutation backup($dst: String!) {
 		backup(input: {destination: $dst}) {
@@ -294,7 +296,9 @@ func TakeBackup(t *testing.T, jwtTokenAlpha1 string, backupDst string) {
 
 	req, err := http.NewRequest(http.MethodPost, adminUrl, bytes.NewBuffer(b))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set(accessJwtHeader, jwtTokenAlpha1)
+	if jwtToken != "" {
+		req.Header.Set(accessJwtHeader, jwtToken)
+	}
 	client := &http.Client{}
 	resp, err := client.Do(req)
 
@@ -335,7 +339,7 @@ func changeFolderPermission() {
 func Shellout(command string) (string, string, error) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
-	cmd := exec.Command(ShellToUse, "-c", command)
+	cmd := exec.Command(shellToUse, "-c", command)
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	err := cmd.Run()
@@ -362,7 +366,9 @@ func RunRestore(t *testing.T, jwtTokenAlpha2 string, restoreLocation string) str
 
 	req, err := http.NewRequest(http.MethodPost, adminUrl, bytes.NewBuffer(b))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set(accessJwtHeader, jwtTokenAlpha2)
+	if jwtTokenAlpha2 != "" {
+		req.Header.Set(accessJwtHeader, jwtTokenAlpha2)
+	}
 	client := &http.Client{}
 	resp, err := client.Do(req)
 
