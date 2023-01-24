@@ -686,7 +686,7 @@ func TestDeleteSchemaAndExport(t *testing.T) {
 
 	require.Equal(t, "Success", testutil.JsonGet(data, "export", "response", "code").(string))
 	taskId := testutil.JsonGet(data, "export", "taskId").(string)
-	testutil.WaitForTask(t, taskId, false)
+	testutil.WaitForTask(t, taskId, false, testutil.SockAddrHttp)
 
 	// applying a new schema should still work
 	newSchemaResp := common.AssertUpdateGQLSchemaSuccess(t, groupOneHTTP, schema, nil)
