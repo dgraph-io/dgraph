@@ -404,7 +404,6 @@ func (ld *loader) processGqlSchema(loadType chunker.InputFormat) {
 		}
 		process(ld.opt.Namespace, schemas[ld.opt.Namespace])
 	}
-	return
 }
 
 func (ld *loader) reduceStage() {

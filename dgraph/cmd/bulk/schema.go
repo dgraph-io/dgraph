@@ -110,7 +110,6 @@ func (s *schemaStore) checkAndSetInitialSchema(namespace uint64) {
 		}
 	}
 	s.namespaces.Store(namespace, struct{}{})
-	return
 }
 
 func (s *schemaStore) validateType(de *pb.DirectedEdge, objectIsUID bool) {
