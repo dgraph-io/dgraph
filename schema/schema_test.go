@@ -90,44 +90,171 @@ func Test_state_DeleteAll(t *testing.T) {
 	}
 }
 
-// func Test_state_Delete(t *testing.T) {
-// 	type args struct {
-// 		attr string
-// 		ts   uint64
-// 	}
-// 	tests := []struct {
-// 		name    string
-// 		fields  *state
-// 		args    args
-// 		wantErr bool
-// 	}{
-// 		{
-// 			name: "Test_state_Delete",
-// 			fields: &state{
-// 				RWMutex: sync.RWMutex{},
-// 				predicate: map[string]*pb.SchemaUpdate{
-// 					"pred1": &pb.SchemaUpdate{},
-// 					"pred2": &pb.SchemaUpdate{},
-// 				},
-// 				types:     map[string]*pb.TypeUpdate{},
-// 				elog:      nil,
-// 				mutSchema: map[string]*pb.SchemaUpdate{},
-// 			},
-// 			args: args{
-// 				attr: "pred1",
-// 				ts:   1,
-// 			},
-// 			wantErr: false,
-// 		},
-// 	}
-// 	for _, tt := range tests {
-// 		t.Run(tt.name, func(t *testing.T) {
-// 			if err := tt.fields.Delete(tt.args.attr, tt.args.ts); (err != nil) != tt.wantErr {
-// 				t.Errorf("state.Delete() error = %v, wantErr %v", err, tt.wantErr)
-// 			}
-// 		})
-// 	}
-// }
+func Test_state_Delete(t *testing.T) {
+	type args struct {
+		attr string
+		ts   uint64
+	}
+	tests := []struct {
+		name    string
+		fields  *state
+		args    args
+		wantErr bool
+	}{
+		{
+			name: "Test_state_Delete 1",
+			fields: &state{
+				RWMutex: sync.RWMutex{},
+				predicate: map[string]*pb.SchemaUpdate{
+					"predtest": &pb.SchemaUpdate{},
+				},
+				types:     map[string]*pb.TypeUpdate{},
+				elog:      nil,
+				mutSchema: map[string]*pb.SchemaUpdate{},
+			},
+			args: args{
+				attr: "predtest",
+				ts:   1,
+			},
+			wantErr: false,
+		},
+		{
+			name: "Test_state_Delete 2",
+			fields: &state{
+				RWMutex: sync.RWMutex{},
+				predicate: map[string]*pb.SchemaUpdate{
+					"predtest": nil,
+				},
+				types:     map[string]*pb.TypeUpdate{},
+				elog:      nil,
+				mutSchema: map[string]*pb.SchemaUpdate{},
+			},
+			args: args{
+				attr: "predtest",
+				ts:   0,
+			},
+			wantErr: false,
+		},
+		{
+			name: "Test_state_Delete 3",
+			fields: &state{
+				RWMutex:   sync.RWMutex{},
+				predicate: nil,
+				types:     map[string]*pb.TypeUpdate{},
+				elog:      nil,
+				mutSchema: map[string]*pb.SchemaUpdate{},
+			},
+			args: args{
+				attr: "predtest",
+				ts:   0,
+			},
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.fields.Delete(tt.args.attr, tt.args.ts)
+		})
+	}
+}
+
+func Test_state_DeleteType(t *testing.T) {
+	type args struct {
+		typeName string
+		ts       uint64
+	}
+	tests := []struct {
+		name    string
+		fields  *state
+		args    args
+		wantErr bool
+	}{
+		{
+			name:    "Test_state_DeleteType 1",
+			fields:  nil,
+			args:    args{},
+			wantErr: false,
+		},
+		{
+			name: "Test_state_DeleteType 2",
+			fields: &state{
+				RWMutex:   sync.RWMutex{},
+				predicate: map[string]*pb.SchemaUpdate{},
+				types: map[string]*pb.TypeUpdate{
+					"typetest": &pb.TypeUpdate{},
+				},
+				elog:      nil,
+				mutSchema: map[string]*pb.SchemaUpdate{},
+			},
+			args: args{
+				typeName: "typetest",
+				ts:       1,
+			},
+			wantErr: false,
+		},
+		{
+			name: "Test_state_DeleteType 3",
+			fields: &state{
+				RWMutex:   sync.RWMutex{},
+				predicate: map[string]*pb.SchemaUpdate{},
+				types: map[string]*pb.TypeUpdate{
+					"typetest": &pb.TypeUpdate{},
+				},
+				elog:      nil,
+				mutSchema: map[string]*pb.SchemaUpdate{},
+			},
+			args: args{
+				typeName: "typetest",
+				ts:       2,
+			},
+			wantErr: false,
+		},
+		{
+			name: "Test_state_DeleteType 4",
+			fields: &state{
+				RWMutex:   sync.RWMutex{},
+				predicate: map[string]*pb.SchemaUpdate{},
+				types: map[string]*pb.TypeUpdate{
+					"typetest": nil,
+				},
+				elog:      nil,
+				mutSchema: map[string]*pb.SchemaUpdate{},
+			},
+			args: args{
+				typeName: "typetest",
+				ts:       0,
+			},
+			wantErr: true,
+		},
+		// {
+		// 	name: "Test_state_DeleteType 5",
+		// 	fields: &state{
+		// 		RWMutex:   sync.RWMutex{},
+		// 		predicate: map[string]*pb.SchemaUpdate{},
+		// 		types: map[string]*pb.TypeUpdate{
+		// 			"typetest": &pb.TypeUpdate{
+		// 				TypeName: "test",
+		// 				Fields:   nil,
+		// 			},
+		// 		},
+		// 		elog:      nil,
+		// 		mutSchema: map[string]*pb.SchemaUpdate{},
+		// 	},
+		// 	args: args{
+		// 		typeName: "typetest",
+		// 		ts:       9,
+		// 	},
+		// 	wantErr: true,
+		// },
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.fields.DeleteType(tt.args.typeName, tt.args.ts); (err != nil) != tt.wantErr {
+				t.Errorf("state.DeleteType() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
 
 func Test_state_Set(t *testing.T) {
 	type args struct {
@@ -145,6 +272,35 @@ func Test_state_Set(t *testing.T) {
 			args: args{
 				pred:   "",
 				schema: nil,
+			},
+		},
+		{
+			name: "Test_state_Set",
+			fields: &fields{
+				RWMutex: sync.RWMutex{},
+				predicate: map[string]*pb.SchemaUpdate{
+					"predtest": &pb.SchemaUpdate{},
+				},
+				types:     map[string]*pb.TypeUpdate{},
+				elog:      trace.NewEventLog("", "Test_state_Set"),
+				mutSchema: map[string]*pb.SchemaUpdate{},
+			},
+			args: args{
+				pred: "predtest",
+				schema: &pb.SchemaUpdate{
+					Predicate:       "",
+					ValueType:       0,
+					Directive:       0,
+					Tokenizer:       []string{},
+					Count:           false,
+					List:            false,
+					Upsert:          false,
+					Lang:            false,
+					NonNullable:     false,
+					NonNullableList: false,
+					ObjectTypeName:  "",
+					NoConflict:      false,
+				},
 			},
 		},
 	}
@@ -766,10 +922,7 @@ func Test_state_Namespaces(t *testing.T) {
 		// 		RWMutex:   sync.RWMutex{},
 		// 		predicate: map[string]*pb.SchemaUpdate{},
 		// 		types: map[string]*pb.TypeUpdate{
-		// 			"type1": &pb.TypeUpdate{
-		// 				TypeName: "typeName1",
-		// 				Fields:   []*pb.SchemaUpdate{},
-		// 			},
+		// 			"typetest": &pb.TypeUpdate{},
 		// 		},
 		// 		elog:      nil,
 		// 		mutSchema: map[string]*pb.SchemaUpdate{},
@@ -802,23 +955,36 @@ func Test_state_DeletePredsForNs(t *testing.T) {
 				delNs: 0,
 			},
 		},
-		// {
-		// 	name: "Test_state_DeletePredsForNs Predicate",
-		// 	fields: &state{
-		// 		RWMutex: sync.RWMutex{},
-		// 		predicate: map[string]*pb.SchemaUpdate{
-		// 			"string": &pb.SchemaUpdate{},
-		// 		},
-		// 		types: map[string]*pb.TypeUpdate{},
-		// 		elog:  nil,
-		// 		mutSchema: map[string]*pb.SchemaUpdate{
-		// 			"string": &pb.SchemaUpdate{},
-		// 		},
-		// 	},
-		// 	args: args{
-		// 		delNs: 184469551615,
-		// 	},
-		// },
+		{
+			name: "Test_state_DeletePredsForNs Predicate",
+			fields: &state{
+				RWMutex: sync.RWMutex{},
+				predicate: map[string]*pb.SchemaUpdate{
+					"predtest": &pb.SchemaUpdate{},
+				},
+				types:     map[string]*pb.TypeUpdate{},
+				elog:      nil,
+				mutSchema: map[string]*pb.SchemaUpdate{},
+			},
+			args: args{
+				delNs: 8102650161716884340,
+			},
+		},
+		{
+			name: "Test_state_DeletePredsForNs Typ",
+			fields: &state{
+				RWMutex:   sync.RWMutex{},
+				predicate: map[string]*pb.SchemaUpdate{},
+				types: map[string]*pb.TypeUpdate{
+					"typetest": &pb.TypeUpdate{},
+				},
+				elog:      nil,
+				mutSchema: map[string]*pb.SchemaUpdate{},
+			},
+			args: args{
+				delNs: 8392862961628443508,
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1286,6 +1452,186 @@ func Test_state_IndexingInProgress(t *testing.T) {
 			if got := tt.fields.IndexingInProgress(); got != tt.want {
 				t.Errorf("state.IndexingInProgress() = %v, want %v", got, tt.want)
 			}
+		})
+	}
+}
+
+func TestLoad(t *testing.T) {
+	type args struct {
+		predicate string
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantErr bool
+	}{
+		{
+			name: "TestLoad",
+			args: args{
+				predicate: "",
+			},
+			wantErr: true,
+		},
+		{
+			name: "TestLoad > 0",
+			args: args{
+				predicate: "testkeyw",
+			},
+			wantErr: false,
+		},
+		// {
+		// 	name: "TestLoad != nil",
+		// 	args: args{
+		// 		predicate: "test test",
+		// 	},
+		// 	wantErr: false,
+		// },
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := Load(tt.args.predicate); (err != nil) != tt.wantErr {
+				t.Errorf("Load() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestLoadFromDb(t *testing.T) {
+	tests := []struct {
+		name    string
+		wantErr bool
+	}{
+		{
+			name:    "TestLoadFromDb",
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := LoadFromDb(); (err != nil) != tt.wantErr {
+				t.Errorf("LoadFromDb() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// func Test_initialTypesInternal(t *testing.T) {
+// 	type args struct {
+// 		namespace uint64
+// 		all       bool
+// 	}
+// 	tests := []struct {
+// 		name string
+// 		args args
+// 		want []*pb.TypeUpdate
+// 	}{
+// 		{
+// 			name: "Test_initialTypesInternal",
+// 			args: args{
+// 				namespace: 0,
+// 				all:       false,
+// 			},
+// 			want: []*pb.TypeUpdate{},
+// 		},
+// 	}
+// 	for _, tt := range tests {
+// 		t.Run(tt.name, func(t *testing.T) {
+// 			if got := initialTypesInternal(tt.args.namespace, tt.args.all); !reflect.DeepEqual(got, tt.want) {
+// 				t.Errorf("initialTypesInternal() = %v, want %v", got, tt.want)
+// 			}
+// 		})
+// 	}
+// }
+
+func TestIsPreDefPredChanged(t *testing.T) {
+	type args struct {
+		update *pb.SchemaUpdate
+	}
+	tests := []struct {
+		name string
+		args args
+		want bool
+	}{
+		// {
+		// 	name: "TestIsPreDefPredChanged true",
+		// 	args: args{
+		// 		update: &pb.SchemaUpdate{
+		// 			Predicate:       "*dgraph.",
+		// 			ValueType:       0,
+		// 			Directive:       0,
+		// 			Tokenizer:       []string{},
+		// 			Count:           false,
+		// 			List:            false,
+		// 			Upsert:          false,
+		// 			Lang:            false,
+		// 			NonNullable:     false,
+		// 			NonNullableList: false,
+		// 			ObjectTypeName:  "",
+		// 			NoConflict:      false,
+		// 		},
+		// 	},
+		// 	want: true,
+		// },
+		{
+			name: "TestIsPreDefPredChanged false",
+			args: args{
+				update: &pb.SchemaUpdate{
+					Predicate:       "dgraph.t",
+					ValueType:       0,
+					Directive:       0,
+					Tokenizer:       []string{},
+					Count:           false,
+					List:            false,
+					Upsert:          false,
+					Lang:            false,
+					NonNullable:     false,
+					NonNullableList: false,
+					ObjectTypeName:  "",
+					NoConflict:      false,
+				},
+			},
+			want: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := IsPreDefPredChanged(tt.args.update); got != tt.want {
+				t.Errorf("IsPreDefPredChanged() = %v, want %v", tt.args.update, tt.want)
+			}
+		})
+	}
+}
+
+func Test_state_SetType(t *testing.T) {
+	type args struct {
+		typeName string
+		typ      pb.TypeUpdate
+	}
+	tests := []struct {
+		name   string
+		fields *state
+		args   args
+	}{
+		{
+			name: "Test_state_SetType",
+			fields: &state{
+				RWMutex:   sync.RWMutex{},
+				predicate: map[string]*pb.SchemaUpdate{},
+				types: map[string]*pb.TypeUpdate{
+					"typetest": &pb.TypeUpdate{},
+				},
+				elog:      trace.NewEventLog("", "typetest"),
+				mutSchema: map[string]*pb.SchemaUpdate{},
+			},
+			args: args{
+				typeName: "typetest",
+				typ:      pb.TypeUpdate{},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.fields.SetType(tt.args.typeName, tt.args.typ)
 		})
 	}
 }
