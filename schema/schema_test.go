@@ -24,6 +24,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/tok"
+	"github.com/dgraph-io/dgraph/x"
 	"golang.org/x/net/trace"
 )
 
@@ -1528,10 +1529,19 @@ func TestLoadFromDb(t *testing.T) {
 // 		{
 // 			name: "Test_initialTypesInternal",
 // 			args: args{
-// 				namespace: 0,
+// 				namespace: 10,
 // 				all:       false,
 // 			},
-// 			want: []*pb.TypeUpdate{},
+// 			want: []*pb.TypeUpdate{
+// 				{
+// 					TypeName: "",
+// 					Fields:   []*pb.SchemaUpdate{},
+// 				},
+// 				{
+// 					TypeName: "",
+// 					Fields:   []*pb.SchemaUpdate{},
+// 				},
+// 			},
 // 		},
 // 	}
 // 	for _, tt := range tests {
@@ -1544,6 +1554,16 @@ func TestLoadFromDb(t *testing.T) {
 // }
 
 func TestIsPreDefPredChanged(t *testing.T) {
+	var original []*pb.SchemaUpdate
+
+	original = append(original,
+		&pb.SchemaUpdate{
+			Predicate: "dgraphtest1",
+		}, &pb.SchemaUpdate{
+			Predicate: "dgraphtest2",
+		},
+	)
+
 	type args struct {
 		update *pb.SchemaUpdate
 	}
@@ -1552,42 +1572,29 @@ func TestIsPreDefPredChanged(t *testing.T) {
 		args args
 		want bool
 	}{
-		// {
-		// 	name: "TestIsPreDefPredChanged true",
-		// 	args: args{
-		// 		update: &pb.SchemaUpdate{
-		// 			Predicate:       "*dgraph.",
-		// 			ValueType:       0,
-		// 			Directive:       0,
-		// 			Tokenizer:       []string{},
-		// 			Count:           false,
-		// 			List:            false,
-		// 			Upsert:          false,
-		// 			Lang:            false,
-		// 			NonNullable:     false,
-		// 			NonNullableList: false,
-		// 			ObjectTypeName:  "",
-		// 			NoConflict:      false,
-		// 		},
-		// 	},
-		// 	want: true,
-		// },
+		{
+			name: "TestIsPreDefPredChanged true",
+			args: args{
+				update: &pb.SchemaUpdate{
+					Predicate: x.NamespaceAttr(10, "dgraph.type"),
+				},
+			},
+			want: true,
+		},
+		{
+			name: "TestIsPreDefPredChanged true",
+			args: args{
+				update: &pb.SchemaUpdate{
+					Predicate: x.NamespaceAttr(0, "dgraph.type"),
+				},
+			},
+			want: true,
+		},
 		{
 			name: "TestIsPreDefPredChanged false",
 			args: args{
 				update: &pb.SchemaUpdate{
-					Predicate:       "dgraph.t",
-					ValueType:       0,
-					Directive:       0,
-					Tokenizer:       []string{},
-					Count:           false,
-					List:            false,
-					Upsert:          false,
-					Lang:            false,
-					NonNullable:     false,
-					NonNullableList: false,
-					ObjectTypeName:  "",
-					NoConflict:      false,
+					Predicate: x.NamespaceAttr(10, "predtest"),
 				},
 			},
 			want: false,
@@ -1596,7 +1603,7 @@ func TestIsPreDefPredChanged(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := IsPreDefPredChanged(tt.args.update); got != tt.want {
-				t.Errorf("IsPreDefPredChanged() = %v, want %v", tt.args.update, tt.want)
+				t.Errorf("IsPreDefPredChanged() = %v, want %v", got, tt.want)
 			}
 		})
 	}
@@ -1635,3 +1642,165 @@ func Test_state_SetType(t *testing.T) {
 		})
 	}
 }
+
+func Test_state_Get(t *testing.T) {
+	type args struct {
+		ctx  context.Context
+		pred string
+	}
+	tests := []struct {
+		name   string
+		fields *state
+		args   args
+		want   pb.SchemaUpdate
+		want1  bool
+	}{
+		{
+			name: "Test_state_Get 1",
+			fields: &state{
+				RWMutex: sync.RWMutex{},
+				predicate: map[string]*pb.SchemaUpdate{
+					"predtest": &pb.SchemaUpdate{},
+				},
+				types: map[string]*pb.TypeUpdate{},
+				elog:  nil,
+				mutSchema: map[string]*pb.SchemaUpdate{
+					"predtest": &pb.SchemaUpdate{},
+				},
+			},
+			args: args{
+				ctx:  context.WithValue(context.Background(), isWrite, true),
+				pred: "predtest",
+			},
+			want:  pb.SchemaUpdate{},
+			want1: true,
+		},
+		{
+			name: "Test_state_Get 2",
+			fields: &state{
+				RWMutex:   sync.RWMutex{},
+				predicate: map[string]*pb.SchemaUpdate{},
+				types:     map[string]*pb.TypeUpdate{},
+				elog:      nil,
+				mutSchema: map[string]*pb.SchemaUpdate{},
+			},
+			args: args{
+				ctx:  context.WithValue(context.Background(), isWrite, true),
+				pred: "predtest",
+			},
+			want:  pb.SchemaUpdate{},
+			want1: false,
+		},
+		{
+			name: "Test_state_Get 3",
+			fields: &state{
+				RWMutex: sync.RWMutex{},
+				predicate: map[string]*pb.SchemaUpdate{
+					"predtest": &pb.SchemaUpdate{},
+				},
+				types:     map[string]*pb.TypeUpdate{},
+				elog:      nil,
+				mutSchema: map[string]*pb.SchemaUpdate{},
+			},
+			args: args{
+				ctx:  context.WithValue(context.Background(), isWrite, false),
+				pred: "predtest",
+			},
+			want:  pb.SchemaUpdate{},
+			want1: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, got1 := tt.fields.Get(tt.args.ctx, tt.args.pred)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("state.Get() got = %v, want %v", got, tt.want)
+			}
+			if got1 != tt.want1 {
+				t.Errorf("state.Get() got1 = %v, want %v", got1, tt.want1)
+			}
+		})
+	}
+}
+
+func TestIsPreDefTypeChanged(t *testing.T) {
+	type args struct {
+		update *pb.TypeUpdate
+	}
+	tests := []struct {
+		name string
+		args args
+		want bool
+	}{
+		{
+			name: "TestIsPreDefTypeChanged false",
+			args: args{
+				update: &pb.TypeUpdate{
+					TypeName: "typetest",
+					Fields:   []*pb.SchemaUpdate{},
+				},
+			},
+			want: false,
+		},
+		{
+			name: "TestIsPreDefTypeChanged True",
+			args: args{
+				update: &pb.TypeUpdate{
+					TypeName: x.NamespaceAttr(10, "dgraph.graphql"),
+					Fields:   []*pb.SchemaUpdate{},
+				},
+			},
+			want: true,
+		},
+		{
+			name: "TestIsPreDefTypeChanged True",
+			args: args{
+				update: &pb.TypeUpdate{
+					TypeName: x.NamespaceAttr(10, "dgraph.graphql"),
+					Fields: []*pb.SchemaUpdate{
+						{
+							Predicate: "dgraphtest",
+						},
+						{
+							Predicate: "dgraphtest2",
+						},
+					},
+				},
+			},
+			want: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := IsPreDefTypeChanged(tt.args.update); got != tt.want {
+				t.Errorf("IsPreDefTypeChanged() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// func TestInitialSchema(t *testing.T) {
+// 	type args struct {
+// 		namespace uint64
+// 	}
+// 	tests := []struct {
+// 		name string
+// 		args args
+// 		want []*pb.SchemaUpdate
+// 	}{
+// 		{
+// 			name: "TestInitialSchema",
+// 			args: args{
+// 				namespace: 10,
+// 			},
+// 			want: []*pb.SchemaUpdate{},
+// 		},
+// 	}
+// 	for _, tt := range tests {
+// 		t.Run(tt.name, func(t *testing.T) {
+// 			if got := InitialSchema(tt.args.namespace); !reflect.DeepEqual(got, tt.want) {
+// 				t.Errorf("InitialSchema() = %v, want %v", got, tt.want)
+// 			}
+// 		})
+// 	}
+// }
