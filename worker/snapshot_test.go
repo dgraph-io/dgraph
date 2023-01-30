@@ -34,8 +34,6 @@ import (
 	"github.com/dgraph-io/dgraph/testutil"
 )
 
-const testSchema = "type Person { name: String }"
-
 func TestSnapshot(t *testing.T) {
 	snapshotTs := uint64(0)
 
@@ -85,7 +83,7 @@ func TestSnapshot(t *testing.T) {
 	// Wait for the container to start.
 	err = testutil.CheckHealthContainer(testutil.ContainerAddr("alpha2", 8080))
 	if err != nil {
-		fmt.Print("error while getting alpha container health")
+		t.Fatalf("error while getting alpha container health: %v", err)
 	}
 	dg2, err := testutil.DgraphClient(testutil.ContainerAddr("alpha2", 9080))
 	if err != nil {
@@ -104,6 +102,7 @@ func TestSnapshot(t *testing.T) {
 		})
 		require.NoError(t, err)
 	}
+	const testSchema = "type Person { name: String }"
 	testutil.UpdateGQLSchema(t, testutil.SockAddrHttp, testSchema)
 	_ = waitForSnapshot(t, snapshotTs)
 
@@ -112,7 +111,7 @@ func TestSnapshot(t *testing.T) {
 	require.NoError(t, err)
 	err = testutil.CheckHealthContainer(testutil.ContainerAddr("alpha2", 8080))
 	if err != nil {
-		fmt.Print("error while getting alpha container health")
+		t.Fatalf("error while getting alpha container health: %v", err)
 	}
 
 	dg2, err = testutil.DgraphClient(testutil.ContainerAddr("alpha2", 9080))
