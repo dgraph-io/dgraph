@@ -35,59 +35,59 @@ func TestDeletedNamespaceID(t *testing.T) {
 	jwtTokenAlpha2 := testutil.GrootHttpLogin("http://" + testutil.ContainerAddr("alpha2", 8080) + "/admin").AccessJwt
 	headerAlpha2.Set(accessJwtHeader, jwtTokenAlpha2)
 
-	common.AddNamespaces(t, 20, headerAlpha1)
+	common.AddNamespaces(t, 20, headerAlpha1, "")
 
-	common.AddSchema(t, jwtTokenAlpha1)
+	common.AddSchema(t, headerAlpha1, "alpha1")
 
-	common.CheckSchemaExists(t, testutil.SockAddrHttp, headerAlpha1)
+	common.CheckSchemaExists(t, headerAlpha1, "alpha1")
 
-	common.AddData(t, 1, 10, jwtTokenAlpha1)
+	common.AddData(t, 1, 10, jwtTokenAlpha1, "alpha1")
 
-	common.CheckDataExists(t, testutil.SockAddrHttp, 10, jwtTokenAlpha1)
+	common.CheckDataExists(t, 10, jwtTokenAlpha1, "alpha1")
 
-	common.AddNamespaces(t, 20, headerAlpha1)
+	common.AddNamespaces(t, 20, headerAlpha1, "")
 
-	common.AddData(t, 11, 20, jwtTokenAlpha1)
+	common.AddData(t, 11, 20, jwtTokenAlpha1, "alpha1")
 
-	common.CheckDataExists(t, testutil.SockAddrHttp, 20, jwtTokenAlpha1)
+	common.CheckDataExists(t, 20, jwtTokenAlpha1, "alpha1")
 
-	common.AddNamespaces(t, 20, headerAlpha1)
+	common.AddNamespaces(t, 20, headerAlpha1, "")
 
-	common.AddData(t, 21, 30, jwtTokenAlpha1)
+	common.AddData(t, 21, 30, jwtTokenAlpha1, "alpha1")
 
-	common.CheckDataExists(t, testutil.SockAddrHttp, 30, jwtTokenAlpha1)
+	common.CheckDataExists(t, 30, jwtTokenAlpha1, "alpha1")
 
-	common.AddNamespaces(t, 20, headerAlpha1)
+	common.AddNamespaces(t, 20, headerAlpha1, "")
 
-	common.AddData(t, 31, 40, jwtTokenAlpha1)
+	common.AddData(t, 31, 40, jwtTokenAlpha1, "alpha1")
 
-	common.CheckDataExists(t, testutil.SockAddrHttp, 40, jwtTokenAlpha1)
+	common.CheckDataExists(t, 40, jwtTokenAlpha1, "alpha1")
 
-	common.AddNamespaces(t, 20, headerAlpha1)
+	common.AddNamespaces(t, 20, headerAlpha1, "")
 
-	common.AddData(t, 41, 50, jwtTokenAlpha1)
+	common.AddData(t, 41, 50, jwtTokenAlpha1, "alpha1")
 
-	common.CheckDataExists(t, testutil.SockAddrHttp, 50, jwtTokenAlpha1)
+	common.CheckDataExists(t, 50, jwtTokenAlpha1, "alpha1")
 
-	common.AddNamespaces(t, 20, headerAlpha1)
+	common.AddNamespaces(t, 20, headerAlpha1, "")
 
-	common.AddData(t, 51, 60, jwtTokenAlpha1)
+	common.AddData(t, 51, 60, jwtTokenAlpha1, "alpha1")
 
-	common.CheckDataExists(t, testutil.SockAddrHttp, 60, jwtTokenAlpha1)
+	common.CheckDataExists(t, 60, jwtTokenAlpha1, "alpha1")
 
-	common.AddNamespaces(t, 30, headerAlpha1)
+	common.AddNamespaces(t, 30, headerAlpha1, "")
 
-	common.AddData(t, 61, 70, jwtTokenAlpha1)
+	common.AddData(t, 61, 70, jwtTokenAlpha1, "alpha1")
 
-	common.CheckDataExists(t, testutil.SockAddrHttp, 70, jwtTokenAlpha1)
+	common.CheckDataExists(t, 70, jwtTokenAlpha1, "alpha1")
 
-	common.TakeBackup(t, jwtTokenAlpha1, backupDst)
+	common.TakeBackup(t, jwtTokenAlpha1, backupDst, "alpha1")
 
-	restored := common.RunRestore(t, jwtTokenAlpha2, restoreLocation)
+	restored := common.RunRestore(t, jwtTokenAlpha2, restoreLocation, "alpha2")
 	require.Equal(t, "Success", restored)
-	common.WaitForRestore(t)
+	common.WaitForRestore(t, "alpha2")
 
-	common.CheckSchemaExists(t, testutil.ContainerAddr("alpha2", 8080), headerAlpha2)
+	common.CheckSchemaExists(t, headerAlpha2, "alpha2")
 
-	common.CheckDataExists(t, testutil.ContainerAddr("alpha2", 8080), 70, jwtTokenAlpha2)
+	common.CheckDataExists(t, 70, jwtTokenAlpha2, "alpha2")
 }
