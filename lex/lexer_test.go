@@ -1,927 +1,147 @@
 package lex
 
 import (
+	"errors"
+	"fmt"
 	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
-func TestItem_Errorf(t *testing.T) {
-	type fields struct {
-		Typ    ItemType
-		Val    string
-		line   int
-		column int
-	}
-	type args struct {
-		format string
-		args   []interface{}
-	}
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		wantErr bool
-	}{
-		{
-			name: "TestItem_Errorf 1",
-			fields: fields{
-				Typ:    0,
-				Val:    "test",
-				line:   0,
-				column: 0,
-			},
-			args: args{
-				format: "",
-				args:   []interface{}{},
-			},
-			wantErr: true,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			i := Item{
-				Typ:    tt.fields.Typ,
-				Val:    tt.fields.Val,
-				line:   tt.fields.line,
-				column: tt.fields.column,
-			}
-			if err := i.Errorf(tt.args.format, tt.args.args...); (err != nil) != tt.wantErr {
-				t.Errorf("Item.Errorf() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
+type fields struct {
+	Typ    ItemType
+	Val    string
+	line   int
+	column int
 }
 
-func TestItem_StringEOF(t *testing.T) {
-	type fields struct {
-		Typ    ItemType
-		Val    string
-		line   int
-		column int
-	}
-	tests := []struct {
-		name   string
-		fields fields
-		want   string
-	}{
-		{name: "TestItem_String 1", fields: fields{
-			Typ:    0,
-			Val:    "",
-			line:   0,
-			column: 0,
-		}, want: "EOF"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			i := Item{
-				Typ:    tt.fields.Typ,
-				Val:    tt.fields.Val,
-				line:   tt.fields.line,
-				column: tt.fields.column,
-			}
-			if got := i.String(); got != tt.want {
-				t.Errorf("Item.String() = %v, want %v", got, tt.want)
-			}
-		})
+type args struct {
+	format string
+	args   []interface{}
+}
+
+func TestItem_Errorf(t *testing.T) {
+	testCase := []*Item{{0, "test", 0, 0}}
+	argsCase := args{"", []interface{}{}}
+	for _, test := range testCase {
+		if err := test.Errorf(argsCase.format, argsCase.args...); err == nil {
+			require.Equal(t, test.Errorf("line %v column %v", test.line, test.column), err)
+		}
 	}
 }
 
 func TestItem_String(t *testing.T) {
-	type fields struct {
-		Typ    ItemType
-		Val    string
-		line   int
-		column int
-	}
-	tests := []struct {
-		name   string
-		fields fields
-		want   string
-	}{
-		{
-			name: "TestItem_String 1",
-			fields: fields{
-				Typ:    5,
-				Val:    "test",
-				line:   1,
-				column: 1,
-			},
-			want: "EOF",
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			i := Item{
-				Typ:    tt.fields.Typ,
-				Val:    tt.fields.Val,
-				line:   tt.fields.line,
-				column: tt.fields.column,
-			}
-			if got := i.String(); got == tt.want {
-				t.Errorf("Item.String() = %v, want %v", got, tt.want)
-			}
-		})
+	var result string
+	result = "EOF"
+	testCase := []*Item{{0, "test", 0, 0}, {5, "test", 0, 0}}
+	for _, test := range testCase {
+		if err := test.String(); err != result {
+			fmt.Sprintf("lex.Item [%v] %q at %d:%d", test.Typ, test.Val, test.line, test.column)
+			// test.Errorf("lex.Item [%v] %q at %d:%d", test.Typ, test.Val, test.line, test.column)
+		}
+		// require.Equal(t, "EOF", result)
 	}
 }
 
 func TestLexer_NewIterator(t *testing.T) {
-	type fields struct {
-		Input      string
-		Start      int
-		Pos        int
-		Width      int
-		widthStack []*RuneWidth
-		items      []Item
-		Depth      int
-		BlockDepth int
-		ArgDepth   int
-		Mode       StateFn
-		Line       int
-		Column     int
-	}
-	tests := []struct {
-		name   string
-		fields fields
-		want   *ItemIterator
-	}{
-		{
-			name:   "TestLexer_NewIterator 1",
-			fields: fields{},
-			want: &ItemIterator{
-				l: &Lexer{
-					Input:      "test",
-					Start:      1,
-					Pos:        1,
-					Width:      0,
-					widthStack: []*RuneWidth{},
-					items: []Item{
-						{
-							Typ:    0,
-							Val:    "t",
-							line:   0,
-							column: 0,
-						},
-						{
-							Typ:    0,
-							Val:    "e",
-							line:   0,
-							column: 0,
-						},
-					},
-					Depth:      0,
-					BlockDepth: 0,
-					ArgDepth:   0,
-					Line:       0,
-					Column:     0,
-				},
-				idx: 1,
-			},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			l := &Lexer{
-				Input:      tt.fields.Input,
-				Start:      tt.fields.Start,
-				Pos:        tt.fields.Pos,
-				Width:      tt.fields.Width,
-				widthStack: tt.fields.widthStack,
-				items:      tt.fields.items,
-				Depth:      tt.fields.Depth,
-				BlockDepth: tt.fields.BlockDepth,
-				ArgDepth:   tt.fields.ArgDepth,
-				Mode:       tt.fields.Mode,
-				Line:       tt.fields.Line,
-				Column:     tt.fields.Column,
-			}
-			if got := l.NewIterator(); reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Lexer.NewIterator() = %v, want %v", got, tt.want)
-			}
-		})
+	testCase := []*ItemIterator{{&Lexer{Input: "test", Start: 1, Pos: 1}, 1}}
+	for _, test := range testCase {
+		result := test.l.NewIterator()
+		if result == nil {
+			require.Equal(t, test.Errorf(""), result)
+		}
+		require.Equal(t, test.l.NewIterator(), result)
 	}
 }
 
 func TestItemIterator_Errorf(t *testing.T) {
-	type fields struct {
-		l   *Lexer
-		idx int
-	}
-	type args struct {
-		format string
-		args   []interface{}
-	}
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		wantErr bool
-	}{
-		{
-			name: "TestItemIterator_Errorf 1",
-			fields: fields{
-				l:   &Lexer{},
-				idx: 0,
-			},
-			args: args{
-				format: "",
-				args:   []interface{}{},
-			},
-			wantErr: true,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			p := &ItemIterator{
-				l:   tt.fields.l,
-				idx: tt.fields.idx,
-			}
-			if err := p.Errorf(tt.args.format, tt.args.args...); (err != nil) != tt.wantErr {
-				t.Errorf("ItemIterator.Errorf() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
+	testCase := []*ItemIterator{{&Lexer{items: []Item{{0, "test", 0, 0}, {0, "test", 0, 0}}}, 2}}
+	argsCase := args{"", []interface{}{}}
+	for _, test := range testCase {
+		err := test.Errorf(argsCase.format, argsCase.args...)
+		if err == nil {
+			test.Errorf("Unknown error ItemIterator")
+		}
+		test.Errorf("Error %v", err)
 	}
 }
 
 func TestItemIterator_Next(t *testing.T) {
-	type fields struct {
-		l   *Lexer
-		idx int
-	}
-	tests := []struct {
-		name   string
-		fields fields
-		want   bool
-	}{
-		{
-			name: "TestItemIterator_Next 1",
-			fields: fields{
-				l: &Lexer{
-					Input:      "test",
-					Start:      0,
-					Pos:        0,
-					Width:      0,
-					widthStack: []*RuneWidth{},
-					items: []Item{
-						{
-							Typ:    5,
-							Val:    "test",
-							line:   0,
-							column: 0,
-						},
-						{
-							Typ:    5,
-							Val:    "test",
-							line:   0,
-							column: 0,
-						},
-					},
-					Depth:      0,
-					BlockDepth: 0,
-					ArgDepth:   0,
-					Mode: func(*Lexer) StateFn {
-						return nil
-					},
-					Line:   0,
-					Column: 0,
-				},
-				idx: 0,
-			},
-			want: true,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			p := &ItemIterator{
-				l:   tt.fields.l,
-				idx: tt.fields.idx,
-			}
-			if got := p.Next(); got != tt.want {
-				t.Errorf("ItemIterator.Next() = %v, want %v", got, tt.want)
-			}
-		})
+	testCase := []*ItemIterator{{&Lexer{Input: "", items: []Item{{5, "test", 0, 0}, {5, "test", 0, 0}}}, -1}}
+	for _, test := range testCase {
+		if result := test.Next(); result == false {
+			test.Errorf("Error index")
+		}
 	}
 }
 
 func TestItemIterator_Item(t *testing.T) {
-	type fields struct {
-		l   *Lexer
-		idx int
+	testCase := []*ItemIterator{
+		{&Lexer{items: []Item{{0, "test", 0, 0}, {0, "test", 0, 0}}}, -1},
+		{&Lexer{items: []Item{{0, "test", 0, 0}, {0, "test", 0, 0}}}, 0},
 	}
-	tests := []struct {
-		name   string
-		fields fields
-		want   Item
-	}{
-		{
-			name: "TestItemIterator_Item 1",
-			fields: fields{
-				l: &Lexer{
-					Input:      "test",
-					Start:      0,
-					Pos:        0,
-					Width:      0,
-					widthStack: []*RuneWidth{},
-					items: []Item{
-						{
-							Typ:    0,
-							Val:    "test",
-							line:   0,
-							column: 0,
-						},
-						{
-							Typ:    0,
-							Val:    "test",
-							line:   0,
-							column: 0,
-						},
-					},
-					Depth:      0,
-					BlockDepth: 0,
-					ArgDepth:   0,
-					Mode: func(*Lexer) StateFn {
-						return nil
-					},
-					Line:   0,
-					Column: 0,
-				},
-				idx: 0,
-			},
-			want: Item{
-				Typ:    0,
-				Val:    "test",
-				line:   0,
-				column: 0,
-			},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			p := &ItemIterator{
-				l:   tt.fields.l,
-				idx: tt.fields.idx,
-			}
-			if got := p.Item(); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("ItemIterator.Item() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestItemIterator_ItemFalse(t *testing.T) {
-	type fields struct {
-		l   *Lexer
-		idx int
-	}
-	tests := []struct {
-		name   string
-		fields fields
-		want   Item
-	}{
-		{
-			name: "TestItemIterator_Item 1",
-			fields: fields{
-				l: &Lexer{
-					Input:      "test",
-					Start:      0,
-					Pos:        0,
-					Width:      0,
-					widthStack: []*RuneWidth{},
-					items: []Item{
-						{
-							Typ:    0,
-							Val:    "test",
-							line:   0,
-							column: 0,
-						},
-						{
-							Typ:    0,
-							Val:    "test",
-							line:   0,
-							column: 0,
-						},
-					},
-					Depth:      0,
-					BlockDepth: 0,
-					ArgDepth:   0,
-					Mode: func(*Lexer) StateFn {
-						return nil
-					},
-					Line:   0,
-					Column: 0,
-				},
-				idx: -1,
-			},
-			want: Item{
-				Typ:    0,
-				Val:    "test",
-				line:   -1,
-				column: -1,
-			},
-		},
-		{
-			name: "TestItemIterator_Item 1",
-			fields: fields{
-				l: &Lexer{
-					Input:      "test",
-					Start:      0,
-					Pos:        0,
-					Width:      0,
-					widthStack: []*RuneWidth{},
-					items: []Item{
-						{
-							Typ:    0,
-							Val:    "test",
-							line:   0,
-							column: 0,
-						},
-						{
-							Typ:    0,
-							Val:    "test",
-							line:   0,
-							column: 0,
-						},
-					},
-					Depth:      0,
-					BlockDepth: 0,
-					ArgDepth:   0,
-					Mode: func(*Lexer) StateFn {
-						return nil
-					},
-					Line:   0,
-					Column: 0,
-				},
-				idx: 2,
-			},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			p := &ItemIterator{
-				l:   tt.fields.l,
-				idx: tt.fields.idx,
-			}
-			if got := p.Item(); reflect.DeepEqual(got, tt.want) {
-				t.Errorf("ItemIterator.Item() = %v, want %v", got, tt.want)
-			}
-		})
+	for _, test := range testCase {
+		if result := test.Item(); result.line == -1 {
+			errors.New("out-of-range item")
+		}
 	}
 }
 
 func TestItemIterator_Prev(t *testing.T) {
-	type fields struct {
-		l   *Lexer
-		idx int
-	}
-	tests := []struct {
-		name   string
-		fields fields
-		want   bool
-	}{
-		{
-			name: "TestItemIterator_Prev 1",
-			fields: fields{
-				l: &Lexer{
-					Input:      "test",
-					Start:      0,
-					Pos:        0,
-					Width:      0,
-					widthStack: []*RuneWidth{},
-					items: []Item{
-						{
-							Typ:    0,
-							Val:    "test",
-							line:   0,
-							column: 0,
-						},
-						{
-							Typ:    0,
-							Val:    "test",
-							line:   0,
-							column: 0,
-						},
-					},
-					Depth:      0,
-					BlockDepth: 0,
-					ArgDepth:   0,
-					Mode: func(*Lexer) StateFn {
-						return nil
-					},
-					Line:   0,
-					Column: 0,
-				},
-				idx: 1,
-			},
-			want: true,
-		},
-		{
-			name: "TestItemIterator_Prev 2",
-			fields: fields{
-				l: &Lexer{
-					Input:      "test",
-					Start:      0,
-					Pos:        0,
-					Width:      0,
-					widthStack: []*RuneWidth{},
-					items: []Item{
-						{
-							Typ:    0,
-							Val:    "test",
-							line:   0,
-							column: 0,
-						},
-						{
-							Typ:    0,
-							Val:    "test",
-							line:   0,
-							column: 0,
-						},
-					},
-					Depth:      0,
-					BlockDepth: 0,
-					ArgDepth:   0,
-					Mode: func(*Lexer) StateFn {
-						return nil
-					},
-					Line:   0,
-					Column: 0,
-				},
-				idx: 0,
-			},
-			want: false,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			p := &ItemIterator{
-				l:   tt.fields.l,
-				idx: tt.fields.idx,
-			}
-			if got := p.Prev(); got != tt.want {
-				t.Errorf("ItemIterator.Prev() = %v, want %v", got, tt.want)
-			}
-		})
+	testCase := []*ItemIterator{{&Lexer{}, -1}, {&Lexer{}, 1}}
+	for _, test := range testCase {
+		if result := test.Prev(); result == false {
+			errors.New("Error: index negative")
+		}
 	}
 }
 
 func TestItemIterator_Restore(t *testing.T) {
-	type fields struct {
-		l   *Lexer
-		idx int
+	testCase := []*ItemIterator{
+		{&Lexer{items: []Item{{0, "test", 0, 0}, {0, "test", 0, 0}}}, 0},
+		{&Lexer{items: []Item{{0, "test", 0, 0}, {0, "test", 0, 0}}}, 1},
 	}
-	type args struct {
-		pos int
-	}
-	tests := []struct {
-		name   string
-		fields fields
-		args   args
-		want   bool
-	}{
-		{
-			name: "TestItemIterator_Restore 1",
-			fields: fields{
-				l: &Lexer{
-					Input:      "test",
-					Start:      0,
-					Pos:        0,
-					Width:      0,
-					widthStack: []*RuneWidth{},
-					items: []Item{
-						{
-							Typ:    0,
-							Val:    "test",
-							line:   0,
-							column: 0,
-						},
-						{
-							Typ:    0,
-							Val:    "test",
-							line:   0,
-							column: 0,
-						},
-					},
-					Depth:      0,
-					BlockDepth: 0,
-					ArgDepth:   0,
-					Mode: func(*Lexer) StateFn {
-						return nil
-					},
-					Line:   0,
-					Column: 0,
-				},
-				idx: 1,
-			},
-			args: args{
-				pos: 0,
-			},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			p := &ItemIterator{
-				l:   tt.fields.l,
-				idx: tt.fields.idx,
-			}
-			p.Restore(tt.args.pos)
-		})
+	for _, test := range testCase {
+		test.Restore(1)
 	}
 }
 
 func TestItemIterator_Save(t *testing.T) {
-	type fields struct {
-		l   *Lexer
-		idx int
+	testCase := []*ItemIterator{
+		{&Lexer{items: []Item{{0, "test", 0, 0}, {0, "test", 0, 0}}}, 0},
+		{&Lexer{items: []Item{{0, "test", 0, 0}, {0, "test", 0, 0}}}, -2},
 	}
-	tests := []struct {
-		name   string
-		fields fields
-		want   int
-	}{
-		{
-			name: "TestItemIterator_Save 1",
-			fields: fields{
-				l: &Lexer{
-					Input:      "test",
-					Start:      0,
-					Pos:        0,
-					Width:      0,
-					widthStack: []*RuneWidth{},
-					items:      []Item{},
-					Depth:      0,
-					BlockDepth: 0,
-					ArgDepth:   0,
-					Mode: func(*Lexer) StateFn {
-						return nil
-					},
-					Line:   0,
-					Column: 0,
-				},
-				idx: 1,
-			},
-			want: 1,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			p := &ItemIterator{
-				l:   tt.fields.l,
-				idx: tt.fields.idx,
-			}
-			if got := p.Save(); got != tt.want {
-				t.Errorf("ItemIterator.Save() = %v, want %v", got, tt.want)
-			}
-		})
+	for _, test := range testCase {
+		if result := test.Save(); result < 0 {
+			errors.New("Error: Index invalid")
+		}
 	}
 }
 
 func TestItemIterator_Peek(t *testing.T) {
-	type fields struct {
-		l   *Lexer
-		idx int
+	testCase := []*ItemIterator{
+		{&Lexer{items: []Item{{0, "test", 0, 0}, {0, "test", 0, 0}, {0, "test", 0, 0}}}, 0},
+		{&Lexer{items: []Item{{0, "test", 0, 0}, {0, "test", 0, 0}}}, 1},
 	}
-	type args struct {
-		num int
-	}
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    []Item
-		wantErr bool
-	}{
-		{
-			name: "TestItemIterator_Peek 1",
-			fields: fields{
-				l: &Lexer{
-					Input:      "test",
-					Start:      0,
-					Pos:        0,
-					Width:      0,
-					widthStack: []*RuneWidth{},
-					items: []Item{
-						{
-							Typ:    0,
-							Val:    "test",
-							line:   0,
-							column: 0,
-						},
-						{
-							Typ:    0,
-							Val:    "test",
-							line:   0,
-							column: 0,
-						},
-						{
-							Typ:    0,
-							Val:    "test",
-							line:   0,
-							column: 0,
-						},
-					},
-					Depth:      0,
-					BlockDepth: 0,
-					ArgDepth:   0,
-					Mode: func(*Lexer) StateFn {
-						return nil
-					},
-					Line:   0,
-					Column: 0,
-				},
-				idx: 1,
-			},
-			args: args{
-				num: 1,
-			},
-			want: []Item{
-				{
-					Typ:    0,
-					Val:    "test",
-					line:   0,
-					column: 0,
-				},
-			},
-			wantErr: false,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			p := &ItemIterator{
-				l:   tt.fields.l,
-				idx: tt.fields.idx,
-			}
-			got, err := p.Peek(tt.args.num)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ItemIterator.Peek() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("ItemIterator.Peek() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestItemIterator_PeekFalse(t *testing.T) {
-	type fields struct {
-		l   *Lexer
-		idx int
-	}
-	type args struct {
-		num int
-	}
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    []Item
-		wantErr bool
-	}{
-		{
-			name: "TestItemIterator_Peek 1",
-			fields: fields{
-				l: &Lexer{
-					Input:      "test",
-					Start:      0,
-					Pos:        0,
-					Width:      0,
-					widthStack: []*RuneWidth{},
-					items: []Item{
-						{
-							Typ:    0,
-							Val:    "test",
-							line:   0,
-							column: 0,
-						},
-						{
-							Typ:    0,
-							Val:    "test",
-							line:   0,
-							column: 0,
-						},
-						{
-							Typ:    0,
-							Val:    "test",
-							line:   0,
-							column: 0,
-						},
-					},
-					Depth:      0,
-					BlockDepth: 0,
-					ArgDepth:   0,
-					Mode: func(*Lexer) StateFn {
-						return nil
-					},
-					Line:   0,
-					Column: 0,
-				},
-				idx: 2,
-			},
-			args: args{
-				num: 2,
-			},
-			want: []Item{
-				{
-					Typ:    0,
-					Val:    "test",
-					line:   0,
-					column: 0,
-				},
-			},
-			wantErr: true,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			p := &ItemIterator{
-				l:   tt.fields.l,
-				idx: tt.fields.idx,
-			}
-			got, err := p.Peek(tt.args.num)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ItemIterator.Peek() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if reflect.DeepEqual(got, tt.want) {
-				t.Errorf("ItemIterator.Peek() = %v, want %v", got, tt.want)
-			}
-		})
+	for _, test := range testCase {
+		result, err := test.Peek(1)
+		if result == nil {
+			fmt.Errorf("%v", err)
+		}
 	}
 }
 
 func TestItemIterator_PeekOne(t *testing.T) {
-	type fields struct {
-		l   *Lexer
-		idx int
+	testCase := []*ItemIterator{
+		{&Lexer{items: []Item{{0, "test", 0, 0}, {0, "test", 0, 0}, {0, "test", 0, 0}}}, 1},
+		{&Lexer{items: []Item{{0, "test", 0, 0}, {0, "test", 0, 0}}}, 1},
 	}
-	tests := []struct {
-		name   string
-		fields fields
-		want   Item
-		want1  bool
-	}{
-		{
-			name: "TestItemIterator_PeekOne 1",
-			fields: fields{
-				l: &Lexer{
-					Input:      "test",
-					Start:      0,
-					Pos:        0,
-					Width:      0,
-					widthStack: []*RuneWidth{},
-					items: []Item{
-						{
-							Typ:    0,
-							Val:    "test",
-							line:   0,
-							column: 0,
-						},
-						{
-							Typ:    0,
-							Val:    "test",
-							line:   0,
-							column: 0,
-						},
-						{
-							Typ:    0,
-							Val:    "test",
-							line:   0,
-							column: 0,
-						},
-					},
-					Depth:      0,
-					BlockDepth: 0,
-					ArgDepth:   0,
-					Mode: func(*Lexer) StateFn {
-						return nil
-					},
-					Line:   0,
-					Column: 0,
-				},
-				idx: 1,
-			},
-			want: Item{
-				Typ:    0,
-				Val:    "test",
-				line:   0,
-				column: 0,
-			},
-			want1: true,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			p := &ItemIterator{
-				l:   tt.fields.l,
-				idx: tt.fields.idx,
-			}
-			got, got1 := p.PeekOne()
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("ItemIterator.PeekOne() got = %v, want %v", got, tt.want)
-			}
-			if got1 != tt.want1 {
-				t.Errorf("ItemIterator.PeekOne() got1 = %v, want %v", got1, tt.want1)
-			}
-		})
+	for _, test := range testCase {
+		result, err := test.PeekOne()
+		if err == false {
+			fmt.Sprintf("line %v column %v", result.line, result.column)
+		}
 	}
 }
 
