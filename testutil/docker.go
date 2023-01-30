@@ -279,6 +279,9 @@ func CheckHealthContainer(socketAddrHttp string) error {
 	url := "http://" + socketAddrHttp + "/health"
 	for i := 0; i < 30; i++ {
 		resp, err = http.Get(url)
+		if err == nil && resp.StatusCode == http.StatusOK {
+			return nil
+		}
 		var body []byte
 		if resp != nil && resp.Body != nil {
 			body, err = ioutil.ReadAll(resp.Body)
@@ -286,9 +289,6 @@ func CheckHealthContainer(socketAddrHttp string) error {
 				return err
 			}
 			resp.Body.Close()
-		}
-		if err == nil && resp.StatusCode == http.StatusOK {
-			return nil
 		}
 		fmt.Printf("health check for container failed: %v. Response: %q. Retrying...\n", err, body)
 		time.Sleep(time.Second)

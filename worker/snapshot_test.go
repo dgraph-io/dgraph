@@ -103,6 +103,7 @@ func TestSnapshot(t *testing.T) {
 		require.NoError(t, err)
 	}
 	const testSchema = "type Person { name: String }"
+	// uploading new schema while alpha2 is not running so we can test whether the stopped alpha gets new schema in snapshot
 	testutil.UpdateGQLSchema(t, testutil.SockAddrHttp, testSchema)
 	_ = waitForSnapshot(t, snapshotTs)
 
@@ -120,7 +121,7 @@ func TestSnapshot(t *testing.T) {
 	}
 	verifySnapshot(t, dg2, 400)
 	resp := testutil.GetGQLSchema(t, testutil.ContainerAddr("alpha2", 8080))
-	//comparing uploaded graphql schema and schema acquired from stopped container
+	// comparing uploaded graphql schema and schema acquired from stopped container
 	require.Equal(t, testSchema, resp)
 }
 
