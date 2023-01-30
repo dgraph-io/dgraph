@@ -147,6 +147,11 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest) error {
 	if err != nil {
 		return err
 	}
+	if !handler.DirExists("./") {
+		if err := handler.CreateDir("./"); err != nil {
+			return errors.Wrap(err, "while creating backup directory")
+		}
+	}
 	latestManifest, err := GetLatestManifest(handler, uri)
 	if err != nil {
 		return err
