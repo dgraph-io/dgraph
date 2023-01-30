@@ -62,11 +62,6 @@ const (
 )
 
 func createBackupFile(h UriHandler, uri *url.URL, req *pb.BackupRequest) (io.WriteCloser, error) {
-	if !h.DirExists("./") {
-		if err := h.CreateDir("./"); err != nil {
-			return nil, errors.Wrap(err, "while creating backup file")
-		}
-	}
 	fileName := backupName(req.ReadTs, req.GroupId)
 	dir := fmt.Sprintf(backupPathFmt, req.UnixTs)
 	if err := h.CreateDir(dir); err != nil {
