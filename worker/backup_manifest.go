@@ -201,6 +201,10 @@ func readMasterManifest(h UriHandler, path string) (*MasterManifest, error) {
 }
 
 func GetManifest(h UriHandler, uri *url.URL) (*MasterManifest, error) {
+	if !h.DirExists("") {
+		return &MasterManifest{}, errors.Errorf("getManifest: The uri path: %q doesn't exists",
+			uri.Path)
+	}
 	manifest, err := getConsolidatedManifest(h, uri)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get consolidated manifest: ")
@@ -240,21 +244,9 @@ func ListBackupManifests(l string, creds *x.MinioCredentials) ([]*Manifest, erro
 		return nil, errors.Wrap(err, "error in listBackupManifests")
 	}
 
-	m, err := GetManifestForListbackup(h, uri)
+	m, err := GetManifest(h, uri)
 	if err != nil {
 		return nil, err
 	}
 	return m.Manifests, nil
-}
-
-func GetManifestForListbackup(h UriHandler, uri *url.URL) (*MasterManifest, error) {
-	if !h.DirExists("") {
-		return &MasterManifest{}, errors.Errorf("getManifest: The uri path: %q doesn't exists",
-			uri.Path)
-	}
-	manifest, err := getConsolidatedManifest(h, uri)
-	if err != nil {
-		return &MasterManifest{}, errors.Wrap(err, "failed to read master manifest: ")
-	}
-	return manifest, nil
 }
