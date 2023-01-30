@@ -19,6 +19,7 @@ package testutil
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"testing"
@@ -60,7 +61,7 @@ func GalaxyCountKey(attr string, count uint32, reverse bool) []byte {
 	return x.CountKey(attr, count, reverse)
 }
 
-func WaitForTask(t *testing.T, taskId string, useHttps bool) {
+func WaitForTask(t *testing.T, taskId string, useHttps bool, whichAlpha ...string) {
 	const query = `query task($id: String!) {
 		task(input: {id: $id}) {
 			status
@@ -85,12 +86,23 @@ func WaitForTask(t *testing.T, taskId string, useHttps bool) {
 			adminUrl = "http://" + SockAddrHttp + "/admin"
 			client = *http.DefaultClient
 		}
+
+		if len(whichAlpha) > 0 {
+			if useHttps {
+				adminUrl = "https://" + ContainerAddr(whichAlpha[0], 8080) + "/admin"
+				client = GetHttpsClient(t)
+			} else {
+				adminUrl = "http://" + ContainerAddr(whichAlpha[0], 8080) + "/admin"
+				client = *http.DefaultClient
+			}
+		}
 		response, err := client.Post(adminUrl, "application/json", bytes.NewBuffer(request))
 		require.NoError(t, err)
 		defer response.Body.Close()
 
 		var data interface{}
 		require.NoError(t, json.NewDecoder(response.Body).Decode(&data))
+		fmt.Println("WAIT FOR BACKUP ???????? ", data)
 		status := JsonGet(data, "data", "task", "status").(string)
 		switch status {
 		case "Success":

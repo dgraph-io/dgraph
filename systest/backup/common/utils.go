@@ -129,17 +129,20 @@ func RemoveContentsOfPerticularDir(t *testing.T, dir string) error {
 	return nil
 }
 
-func AddNamespaces(t *testing.T, namespaceQuant int, header http.Header) uint64 {
+func AddNamespaces(t *testing.T, namespaceQuant int, header http.Header, customAdminURL string) uint64 {
 	for index := 1; index <= namespaceQuant; index++ {
-		namespaceId = common.CreateNamespace(t, header)
-
-		fmt.Printf("\nSucessfully added Namespace with Id: %d ", namespaceId)
+		if customAdminURL != "" {
+			namespaceId = common.CreateNamespace(t, header, customAdminURL)
+		} else {
+			namespaceId = common.CreateNamespace(t, header)
+		}
+		t.Logf("\nSucessfully added Namespace with Id: %d ", namespaceId)
 	}
 
 	return namespaceId
 }
 
-func DeleteNamespace(t *testing.T, id uint64, jwtToken string) {
+func DeleteNamespace(t *testing.T, id uint64, jwtToken string, whichAlpha string) {
 	query := `mutation deleteNamespace($id:Int!){
 					deleteNamespace(input:{namespaceId:$id}){
 						namespaceId
@@ -150,7 +153,7 @@ func DeleteNamespace(t *testing.T, id uint64, jwtToken string) {
 			"id": id,
 		}}
 	b, err := json.Marshal(params)
-	adminUrl := "http://" + testutil.SockAddrHttp + "/admin"
+	adminUrl := "http://" + testutil.ContainerAddr(whichAlpha, 8080) + "/admin"
 	require.NoError(t, err)
 
 	req, err := http.NewRequest(http.MethodPost, adminUrl, bytes.NewBuffer(b))
@@ -163,45 +166,40 @@ func DeleteNamespace(t *testing.T, id uint64, jwtToken string) {
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
 
 	deletedNamespaceID := testutil.JsonGet(data, "data", "deleteNamespace", "namespaceId").(float64)
-	fmt.Println("")
-	fmt.Println("..................................................>Deleted Schema id? ", deletedNamespaceID)
+	t.Logf("Sucessfully deleted namespace with id %v.", deletedNamespaceID)
 }
 
-func AddSchema(t *testing.T, jwtToken string) {
-	query := `mutation {
-        updateGQLSchema(
-          input: { set: { schema: "type Item {id: ID!, name: String! @search(by: [hash]), price: String!}, type Post { postID: ID!, title: String! @search(by: [term, fulltext]), text: String @search(by: [fulltext, term]), datePublished: DateTime }"}})
-        {
-          gqlSchema {
-			schema
-          }
-        }
-      }`
-	params := testutil.GraphQLParams{Query: query}
-	b, err := json.Marshal(params)
-	adminUrl := "http://" + testutil.SockAddrHttp + "/admin"
-	require.NoError(t, err)
+func AddSchema(t *testing.T, header http.Header, whichAlpha string) {
+	updateSchemaParams := &common.GraphQLParams{
+		Query: `mutation {
+			    updateGQLSchema(
+			      input: { set: { schema: "type Item {id: ID!, name: String! @search(by: [hash]), price: String!}, type Post { postID: ID!, title: String! @search(by: [term, fulltext]), text: String @search(by: [fulltext, term]), datePublished: DateTime }"}})
+			    {
+			      gqlSchema {
+					schema
+			      }
+			    }
+			  }`,
+		Variables: map[string]interface{}{},
+		Headers:   header,
+	}
 
-	req, err := http.NewRequest(http.MethodPost, adminUrl, bytes.NewBuffer(b))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set(accessJwtHeader, jwtToken)
-	client := &http.Client{}
-	resp, err := client.Do(req)
+	updateSchemaResp := updateSchemaParams.ExecuteAsPost(t, "http://"+testutil.ContainerAddr(whichAlpha, 8080)+"/admin")
 
-	var data interface{}
-	require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
-
-	fmt.Println("")
-	fmt.Println("..................................................>Add Schema ", data)
+	if len(updateSchemaResp.Errors) > 0 {
+		t.Log("Failed to add Schema, Error: ", updateSchemaResp.Errors)
+	} else {
+		t.Log("Schema added sucessfully")
+	}
 }
 
-func CheckSchemaExists(t *testing.T, SockAddrHttp string, header http.Header) {
-	resp := common.AssertGetGQLSchema(t, SockAddrHttp, header)
+func CheckSchemaExists(t *testing.T, header http.Header, whichAlpha string) {
+	resp := common.AssertGetGQLSchema(t, testutil.ContainerAddr(whichAlpha, 8080), header)
 	require.NotNil(t, resp)
-	fmt.Println("????????? Schema Exists? ", resp)
+	//fmt.Println("????????? Schema Exists? ", resp)
 }
 
-func AddData(t *testing.T, minSuffixVal int, maxSuffixVal int, jwtToken string) {
+func AddData(t *testing.T, minSuffixVal int, maxSuffixVal int, jwtToken string, whichAlpha string) {
 
 	query := `mutation addItem($name: String!, $price: String!){
 		addItem(input: [{ name: $name, price: $price}]) {
@@ -220,7 +218,7 @@ func AddData(t *testing.T, minSuffixVal int, maxSuffixVal int, jwtToken string) 
 				"price": strconv.Itoa(i) + strconv.Itoa(i) + strconv.Itoa(i),
 			}}
 		b, err := json.Marshal(params)
-		adminUrl := "http://" + testutil.SockAddrHttp + "/graphql"
+		adminUrl := "http://" + testutil.ContainerAddr(whichAlpha, 8080) + "/graphql"
 		require.NoError(t, err)
 
 		req, err := http.NewRequest(http.MethodPost, adminUrl, bytes.NewBuffer(b))
@@ -234,7 +232,7 @@ func AddData(t *testing.T, minSuffixVal int, maxSuffixVal int, jwtToken string) 
 	}
 }
 
-func CheckDataExists(t *testing.T, sockAdder string, desriedSuffix int, jwtToken string) {
+func CheckDataExists(t *testing.T, desriedSuffix int, jwtToken string, whichAlpha string) {
 	checkData := `query queryItem($name: String!){
 		queryItem(filter: {
 			name: {eq: $name}
@@ -254,7 +252,7 @@ func CheckDataExists(t *testing.T, sockAdder string, desriedSuffix int, jwtToken
 	}
 
 	b, err := json.Marshal(params)
-	adminUrl := "http://" + sockAdder + "/graphql"
+	adminUrl := "http://" + testutil.ContainerAddr(whichAlpha, 8080) + "/graphql"
 	require.NoError(t, err)
 
 	req, err := http.NewRequest(http.MethodPost, adminUrl, bytes.NewBuffer(b))
@@ -273,7 +271,7 @@ func CheckDataExists(t *testing.T, sockAdder string, desriedSuffix int, jwtToken
 	fmt.Println("Details of the recently added record", lastInsertDetails)
 }
 
-func TakeBackup(t *testing.T, jwtToken string, backupDst string) {
+func TakeBackup(t *testing.T, jwtToken string, backupDst string, whichAlpha string) {
 
 	backupRequest := `mutation backup($dst: String!) {
 		backup(input: {destination: $dst}) {
@@ -291,7 +289,7 @@ func TakeBackup(t *testing.T, jwtToken string, backupDst string) {
 	}
 
 	b, err := json.Marshal(params)
-	adminUrl := "http://" + testutil.SockAddrHttp + "/admin"
+	adminUrl := "http://" + testutil.ContainerAddr(whichAlpha, 8080) + "/admin"
 	require.NoError(t, err)
 
 	req, err := http.NewRequest(http.MethodPost, adminUrl, bytes.NewBuffer(b))
@@ -309,9 +307,9 @@ func TakeBackup(t *testing.T, jwtToken string, backupDst string) {
 	fmt.Println("********************** BACKUP OUTPUT **********************", data)
 	require.Equal(t, "Success", testutil.JsonGet(data, "data", "backup", "response", "code").(string))
 	taskId := testutil.JsonGet(data, "data", "backup", "taskId").(string)
-	testutil.WaitForTask(t, taskId, false)
+	testutil.WaitForTask(t, taskId, false, whichAlpha)
 
-	changeFolderPermission()
+	defer changeFolderPermission()
 }
 
 func changeFolderPermission() {
@@ -346,7 +344,7 @@ func Shellout(command string) (string, string, error) {
 	return stdout.String(), stderr.String(), err
 }
 
-func RunRestore(t *testing.T, jwtTokenAlpha2 string, restoreLocation string) string {
+func RunRestore(t *testing.T, jwtToken string, restoreLocation string, whichAlpha string) string {
 	restoreRequest := `mutation restore($loc: String!) {
 		restore(input: {location: $loc}) {
 				code
@@ -361,13 +359,13 @@ func RunRestore(t *testing.T, jwtTokenAlpha2 string, restoreLocation string) str
 	}
 
 	b, err := json.Marshal(params)
-	adminUrl := "http://" + testutil.ContainerAddr("alpha2", 8080) + "/admin"
+	adminUrl := "http://" + testutil.ContainerAddr(whichAlpha, 8080) + "/admin"
 	require.NoError(t, err)
 
 	req, err := http.NewRequest(http.MethodPost, adminUrl, bytes.NewBuffer(b))
 	req.Header.Set("Content-Type", "application/json")
-	if jwtTokenAlpha2 != "" {
-		req.Header.Set(accessJwtHeader, jwtTokenAlpha2)
+	if jwtToken != "" {
+		req.Header.Set(accessJwtHeader, jwtToken)
 	}
 	client := &http.Client{}
 	resp, err := client.Do(req)
@@ -383,10 +381,10 @@ func RunRestore(t *testing.T, jwtTokenAlpha2 string, restoreLocation string) str
 	return receivedcode
 }
 
-func WaitForRestore(t *testing.T) {
+func WaitForRestore(t *testing.T, whichAlpha string) {
 	restoreDone := false
 	for {
-		resp, err := http.Get("http://" + testutil.ContainerAddr("alpha2", 8080) + "/health")
+		resp, err := http.Get("http://" + testutil.ContainerAddr(whichAlpha, 8080) + "/health")
 		require.NoError(t, err)
 		buf, err := ioutil.ReadAll(resp.Body)
 		require.NoError(t, err)

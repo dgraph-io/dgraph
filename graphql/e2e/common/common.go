@@ -70,6 +70,8 @@ var (
 		"indicating that the GraphQL layer didn't get the updated schema even after 10" +
 		" retries. The most probable cause is the new GraphQL schema is same as the old" +
 		" GraphQL schema."
+
+	customAdminURL string
 )
 
 // GraphQLParams is parameters for constructing a GraphQL query - that's
@@ -329,7 +331,7 @@ func containsRetryableCreateNamespaceError(resp *GraphQLResponse) bool {
 	return false
 }
 
-func CreateNamespace(t *testing.T, headers http.Header) uint64 {
+func CreateNamespace(t *testing.T, headers http.Header, customgraphAdminURLs ...string) uint64 {
 	createNamespace := &GraphQLParams{
 		Query: `mutation {
 					addNamespace{
@@ -340,9 +342,13 @@ func CreateNamespace(t *testing.T, headers http.Header) uint64 {
 	}
 
 	// keep retrying as long as we get a retryable error
+	customAdminURL = GraphqlAdminURL
+	if len(customgraphAdminURLs) > 0 {
+		customAdminURL = customgraphAdminURLs[0]
+	}
 	var gqlResponse *GraphQLResponse
 	for {
-		gqlResponse = createNamespace.ExecuteAsPost(t, GraphqlAdminURL)
+		gqlResponse = createNamespace.ExecuteAsPost(t, customAdminURL)
 		if containsRetryableCreateNamespaceError(gqlResponse) {
 			continue
 		}
