@@ -125,7 +125,7 @@ func TestBackupMultiTenancy(t *testing.T) {
 	_ = runBackup(t, galaxyToken, 6, 2)
 	testutil.DropAll(t, dg)
 	sendRestoreRequest(t, alphaBackupDir, galaxyToken.AccessJwt)
-	testutil.WaitForRestore(t, dg)
+	testutil.WaitForRestore(t, dg, testutil.SockAddrHttp)
 	testutil.VerifyQueryResponse(t, dg, query, expectedResponse)
 	testutil.VerifyQueryResponse(t, dg1, query, expectedResponse)
 	testutil.VerifyQueryResponse(t, dg2, query, `{ "q": [{ "count": 0 }]}`)
