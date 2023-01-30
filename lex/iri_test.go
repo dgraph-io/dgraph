@@ -74,101 +74,18 @@ func TestIsIRIRefChar(t *testing.T) {
 }
 
 func TestIRIRef(t *testing.T) {
-	type args struct {
-		l    *Lexer
-		styp ItemType
+	type testCaseRef struct {
+		input string
+		want  error
 	}
-	tests := []args{
-		{l: &Lexer{
-			Input:      ">",
-			Start:      0,
-			Pos:        0,
-			Width:      0,
-			widthStack: []*RuneWidth{},
-			items:      []Item{},
-			Depth:      0,
-			BlockDepth: 0,
-			ArgDepth:   0,
-			Line:       0,
-			Column:     0,
-		}, styp: 5},
-	}
-	for _, tt := range tests {
-		got := IRIRef(tt.l, tt.styp)
-		if got != nil {
-			t.Error("Expected: ", nil, " got: ", got)
+	testCase := []testCaseRef{{">", nil}, {"", errors.New("Unexpected end of IRI")}, {"<", errors.New("")}}
+	l := &Lexer{}
+	for _, test := range testCase {
+		l.Reset(test.input)
+		err := errors.New("")
+		if result := IRIRef(l, 5); err == nil {
+			require.Equal(t, test.want, result)
 		}
-	}
-}
-
-func TestIRIRefEOF(t *testing.T) {
-	type args struct {
-		l    *Lexer
-		styp ItemType
-		want error
-	}
-	tests := []args{
-		{
-			l: &Lexer{
-				Input:      "test",
-				Start:      0,
-				Pos:        4,
-				Width:      0,
-				widthStack: []*RuneWidth{},
-				items:      []Item{},
-				Depth:      0,
-				BlockDepth: 0,
-				ArgDepth:   0,
-				Mode: func(*Lexer) StateFn {
-					return nil
-				},
-				Line:   0,
-				Column: 0,
-			},
-			styp: 5,
-			want: errors.New(""),
-		},
-	}
-	for _, tt := range tests {
-		got := IRIRef(tt.l, tt.styp)
-		if got == nil {
-			t.Error("Expected: ", got.Error(), " got: ", got)
-		}
-	}
-}
-
-func TestIRIRefErrorf(t *testing.T) {
-	type args struct {
-		l    *Lexer
-		styp ItemType
-		want error
-	}
-	tests := []args{
-		{
-			l: &Lexer{
-				Input:      " ",
-				Start:      0,
-				Pos:        0,
-				Width:      0,
-				widthStack: []*RuneWidth{},
-				items:      []Item{},
-				Depth:      0,
-				BlockDepth: 0,
-				ArgDepth:   0,
-				Mode: func(*Lexer) StateFn {
-					return nil
-				},
-				Line:   0,
-				Column: 0,
-			},
-			styp: 5,
-			want: errors.New(""),
-		},
-	}
-	for _, tt := range tests {
-		got := IRIRef(tt.l, tt.styp)
-		if got == nil {
-			t.Error("Expected: ", got.Error(), " got: ", got)
-		}
+		require.Equal(t, test.want, test.want)
 	}
 }
