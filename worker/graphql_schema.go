@@ -258,6 +258,7 @@ func (w *grpcWorker) UpdateGraphQLSchema(ctx context.Context,
 // WaitForIndexing does a busy wait for indexing to finish or the context to error out,
 // if the input flag shouldWait is true. Otherwise, it just returns nil straight away.
 // If the context errors, it returns that error.
+// TODO(aman): we should return an error if the indexing fails
 func WaitForIndexing(ctx context.Context, shouldWait bool) error {
 	for shouldWait {
 		if ctx.Err() != nil {

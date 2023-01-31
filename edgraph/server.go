@@ -54,6 +54,7 @@ import (
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/telemetry"
+	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
@@ -608,6 +609,11 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 		},
 	}
 
+	// ensure that we do not insert very large (> 64 KB) value
+	if err := validateMutation(ctx, edges); err != nil {
+		return err
+	}
+
 	qc.span.Annotatef(nil, "Applying mutations: %+v", m)
 	resp.Txn, err = query.ApplyMutations(ctx, m)
 	qc.span.Annotatef(nil, "Txn Context: %+v. Err=%v", resp.Txn, err)
@@ -665,6 +671,58 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 	resp.Txn.Keys = resp.Txn.Keys[:0]
 	resp.Txn.CommitTs = cts
 	calculateMutationMetrics()
+	return nil
+}
+
+// validateMutation ensures that the value in the edge is not too big.
+// The challange here is that the keys in badger have a limitation on their size (< 2<<16).
+// We need to ensure that no key, either primary or secondary index key is bigger than that.
+// See here for more details: https://github.com/dgraph-io/projects/issues/73
+func validateMutation(ctx context.Context, edges []*pb.DirectedEdge) error {
+	errValueTooBigForIndex := errors.New("value in the mutation is too large for the index")
+
+	// key = meta data + predicate + actual key, this all needs to fit into 64 KB
+	// we are keeping 536 bytes aside for meta information we put into the key and we
+	// use 65000 bytes for the rest, that is predicate and the actual key.
+	const maxKeySize = 65000
+
+	for _, e := range edges {
+		maxSizeForDataKey := maxKeySize - len(e.Attr)
+
+		// seems reasonable to assume, the tokens for indexes won't be bigger than the value itself
+		if len(e.Value) <= maxSizeForDataKey {
+			continue
+		}
+		pred := x.NamespaceAttr(e.Namespace, e.Attr)
+		update, ok := schema.State().Get(ctx, pred)
+		if !ok {
+			continue
+		}
+		// only string type can have large values that could cause us issues later
+		if update.GetValueType() != pb.Posting_STRING {
+			continue
+		}
+
+		storageVal := types.Val{Tid: types.TypeID(e.GetValueType()), Value: e.GetValue()}
+		schemaVal, err := types.Convert(storageVal, types.TypeID(update.GetValueType()))
+		if err != nil {
+			return err
+		}
+
+		for _, tokenizer := range schema.State().Tokenizer(ctx, pred) {
+			toks, err := tok.BuildTokens(schemaVal.Value, tok.GetTokenizerForLang(tokenizer, e.Lang))
+			if err != nil {
+				return fmt.Errorf("error while building index tokens: %w", err)
+			}
+
+			for _, tok := range toks {
+				if len(tok) > maxSizeForDataKey {
+					return errValueTooBigForIndex
+				}
+			}
+		}
+	}
+
 	return nil
 }
 
