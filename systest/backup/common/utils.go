@@ -20,10 +20,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -164,9 +162,6 @@ func DeleteNamespace(t *testing.T, id uint64, jwtToken string, whichAlpha string
 
 	var data interface{}
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
-
-	deletedNamespaceID := testutil.JsonGet(data, "data", "deleteNamespace", "namespaceId").(float64)
-	t.Logf("Sucessfully deleted namespace with id %v.", deletedNamespaceID)
 }
 
 func AddSchema(t *testing.T, header http.Header, whichAlpha string) {
@@ -188,15 +183,12 @@ func AddSchema(t *testing.T, header http.Header, whichAlpha string) {
 
 	if len(updateSchemaResp.Errors) > 0 {
 		t.Log("Failed to add Schema, Error: ", updateSchemaResp.Errors)
-	} else {
-		t.Log("Schema added sucessfully")
 	}
 }
 
 func CheckSchemaExists(t *testing.T, header http.Header, whichAlpha string) {
 	resp := common.AssertGetGQLSchema(t, testutil.ContainerAddr(whichAlpha, 8080), header)
 	require.NotNil(t, resp)
-	//fmt.Println("????????? Schema Exists? ", resp)
 }
 
 func AddData(t *testing.T, minSuffixVal int, maxSuffixVal int, jwtToken string, whichAlpha string) {
@@ -265,10 +257,6 @@ func CheckDataExists(t *testing.T, desriedSuffix int, jwtToken string, whichAlph
 
 	var data interface{}
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
-
-	lastInsertDetails := testutil.JsonGet(data, "data", "queryItem")
-	fmt.Println("")
-	fmt.Println("Details of the recently added record", lastInsertDetails)
 }
 
 func TakeBackup(t *testing.T, jwtToken string, backupDst string, whichAlpha string) {
@@ -303,48 +291,21 @@ func TakeBackup(t *testing.T, jwtToken string, backupDst string, whichAlpha stri
 	var data interface{}
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
 
-	fmt.Println("")
-	fmt.Println("********************** BACKUP OUTPUT **********************", data)
 	require.Equal(t, "Success", testutil.JsonGet(data, "data", "backup", "response", "code").(string))
 	taskId := testutil.JsonGet(data, "data", "backup", "taskId").(string)
 	testutil.WaitForTask(t, taskId, false, whichAlpha)
 
-	defer changeFolderPermission()
+	defer changeFolderPermission(t, whichAlpha)
 }
 
-func changeFolderPermission() {
+func changeFolderPermission(t *testing.T, whichAlpha string) {
 
-	out, errout, err := Shellout("cd data/backup")
-	if err != nil {
-		log.Printf("error: %v\n", err)
-	}
-	fmt.Println("--- stdout ---")
-	fmt.Println(out)
-	fmt.Println("--- stderr ---")
-	fmt.Println(errout)
-
-	out1, errout1, err1 := Shellout("echo 'Darksiders@1997' | sudo -S chmod -R a+rwx *")
-	if err1 != nil {
-		log.Printf("error: %v\n", err1)
-	}
-	fmt.Println("--- stdout ---")
-	fmt.Println(out1)
-	fmt.Println("--- stderr ---")
-	fmt.Println(errout1)
+	cmd := []string{"bash", "-c", "chmod -R 777 /data/backups"}
+	require.NoError(t, testutil.DockerExec(whichAlpha, cmd...))
 
 }
 
-func Shellout(command string) (string, string, error) {
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	cmd := exec.Command(shellToUse, "-c", command)
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err := cmd.Run()
-	return stdout.String(), stderr.String(), err
-}
-
-func RunRestore(t *testing.T, jwtToken string, restoreLocation string, whichAlpha string) string {
+func RunRestore(t *testing.T, jwtToken string, restoreLocation string, whichAlpha string) {
 	restoreRequest := `mutation restore($loc: String!) {
 		restore(input: {location: $loc}) {
 				code
@@ -373,12 +334,7 @@ func RunRestore(t *testing.T, jwtToken string, restoreLocation string, whichAlph
 	var data interface{}
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
 
-	fmt.Println("")
-	fmt.Println("********************** RESTORE OUTPUT **********************", data)
-
-	//require.Equal(t, "Success", testutil.JsonGet(data, "data", "restore", "code").(string))
-	receivedcode := testutil.JsonGet(data, "data", "restore", "code").(string)
-	return receivedcode
+	require.Equal(t, "Success", testutil.JsonGet(data, "data", "restore", "code").(string))
 }
 
 func WaitForRestore(t *testing.T, whichAlpha string) {

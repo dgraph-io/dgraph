@@ -8,12 +8,12 @@ import (
 
 	"github.com/dgraph-io/dgraph/systest/backup/common"
 	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/stretchr/testify/require"
 )
 
 var (
-	restoreLocation = "/data/backup/"
-	backupDst       = "/data/backup/"
+	restoreLocation = "/data/backups/"
+	backupDst       = "/data/backups/"
+	localBackupDest = "./data/backups"
 	headerAlpha1    = http.Header{}
 	headerAlpha2    = http.Header{}
 )
@@ -23,7 +23,7 @@ const (
 )
 
 func TestDeletedNamespaceID(t *testing.T) {
-	err := common.RemoveContentsOfPerticularDir(t, "./data/backup/")
+	err := common.RemoveContentsOfPerticularDir(t, "./data/backups/")
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
@@ -82,9 +82,7 @@ func TestDeletedNamespaceID(t *testing.T) {
 	common.CheckDataExists(t, 70, jwtTokenAlpha1, "alpha1")
 
 	common.TakeBackup(t, jwtTokenAlpha1, backupDst, "alpha1")
-
-	restored := common.RunRestore(t, jwtTokenAlpha2, restoreLocation, "alpha2")
-	require.Equal(t, "Success", restored)
+	common.RunRestore(t, jwtTokenAlpha2, restoreLocation, "alpha2")
 	common.WaitForRestore(t, "alpha2")
 
 	common.CheckSchemaExists(t, headerAlpha2, "alpha2")
