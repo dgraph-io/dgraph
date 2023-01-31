@@ -213,13 +213,6 @@ func GetManifest(h UriHandler, uri *url.URL) (*MasterManifest, error) {
 }
 
 func createManifest(h UriHandler, uri *url.URL, manifest *MasterManifest) error {
-	var err error
-	if !h.DirExists("./") {
-		if err := h.CreateDir("./"); err != nil {
-			return errors.Wrap(err, "createManifest failed to create path: ")
-		}
-	}
-
 	w, err := h.CreateFile(tmpManifest)
 	if err != nil {
 		return errors.Wrap(err, "createManifest failed to create tmp path: ")
