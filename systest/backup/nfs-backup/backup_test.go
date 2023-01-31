@@ -28,11 +28,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dgraph-io/dgo/v210"
-	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
+	"github.com/dgraph-io/dgo/v210"
+	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/systest/backup/common"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/worker"
@@ -40,10 +40,8 @@ import (
 )
 
 var (
-	copyBackupDir  = "./data/backups_copy"
-	backupDir      = "./data/backup"
-	restoreDir     = "./data/restore"
-	testDirs       = []string{backupDir, restoreDir}
+	copyBackupDir  = "./data/copied_backups"
+	testDir        = "./data"
 	backupDstHA    = "/ha_backup"
 	backupDstNonHA = "/non_ha_backup"
 )
@@ -240,14 +238,14 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	testutil.WaitForTask(t, taskId, false, backupAlphaSocketAddrHttp)
 	// Verify that the right amount of files and directories were created.
 	// We are not using local folder to back up.
-	common.CopyToLocalFsFromNFS(t, backupDst)
+	common.CopyToLocalFsFromNFS(t, backupDst, copyBackupDir)
 	// List all the folders in the NFS mounted directory.
 	files := x.WalkPathFunc(copyBackupDir, func(path string, isdir bool) bool {
-		return !isdir && strings.HasSuffix(path, ".backup") && strings.HasPrefix(path, "data/backups_copy/dgraph.")
+		return !isdir && strings.HasSuffix(path, ".backup") && strings.HasPrefix(path, "data/copied_backups/dgraph.")
 	})
 	require.Equal(t, numExpectedFiles, len(files))
 	dirs := x.WalkPathFunc(copyBackupDir, func(path string, isdir bool) bool {
-		return isdir && strings.HasPrefix(path, "data/backups_copy/dgraph.")
+		return isdir && strings.HasPrefix(path, "data/copied_backups/dgraph.")
 	})
 	require.Equal(t, numExpectedDirs, len(dirs))
 	b, err = ioutil.ReadFile(filepath.Join(copyBackupDir, "manifest.json"))
@@ -301,10 +299,8 @@ func restore(t *testing.T, lastDir string, restoreAlphaAddr string, backupDst st
 func dirSetup(t *testing.T) {
 	// Clean up data from previous runs.
 	dirCleanup(t)
-	for _, dir := range testDirs {
-		if err := os.MkdirAll(dir, os.ModePerm); err != nil {
-			t.Fatalf("Error while creating directory: %s", err.Error())
-		}
+	if err := os.Mkdir(testDir, os.ModePerm); err != nil {
+		t.Fatalf("Error while creating directory: %s", err.Error())
 	}
 }
 
