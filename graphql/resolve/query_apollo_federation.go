@@ -1,3 +1,19 @@
+/*
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package resolve
 
 import (
@@ -149,9 +165,8 @@ func (resolver *entitiesQueryResolver) complete(result *Resolved) {
 	// have been requested by the client.
 	// If there are any non-unique keys, then the entity should
 	// accordingly be placed multiple times in the result.
-	// If there are any entites which have not been found/returned
-	// by Dgraph, it's essential to add the original representation
-	// in their place.
+	// And if there are any entites which have not been found by
+	// Dgraph, then 'null' should be placed in the resulting list.
 	// Should this not be implemented properly, the Apollo Router
 	// (or equivalent) will end up merging the results incorrectly.
 
