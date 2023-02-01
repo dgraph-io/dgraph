@@ -16,13 +16,22 @@
 package common
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"net/http"
 	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/badger/v3/options"
+	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/worker"
 )
@@ -38,6 +47,12 @@ var (
 		"alpha2",
 		"alpha3",
 	}
+	namespaceId uint64
+)
+
+const (
+	accessJwtHeader = "X-Dgraph-AccessToken"
+	shellToUse      = "bash"
 )
 
 // RunFailingRestore is like runRestore but expects an error during restore.
@@ -89,6 +104,258 @@ func CopyToLocalFs(t *testing.T) {
 	require.NoError(t, os.RemoveAll(copyBackupDir))
 	srcPath := testutil.DockerPrefix + "_alpha1_1:/data/backups"
 	require.NoError(t, testutil.DockerCp(srcPath, copyBackupDir))
+}
+
+//***************************************New Adds
+
+func RemoveContentsOfPerticularDir(t *testing.T, dir string) error {
+	d, err := os.Open(dir)
+	if err != nil {
+		return err
+	}
+	defer d.Close()
+	names, err := d.Readdirnames(-1)
+	if err != nil {
+		return err
+	}
+	for _, name := range names {
+		if name != ".gitkeep" {
+			err = os.RemoveAll(filepath.Join(dir, name))
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func AddNamespaces(t *testing.T, namespaceQuant int, header http.Header, customAdminURL string) uint64 {
+	for index := 1; index <= namespaceQuant; index++ {
+		if customAdminURL != "" {
+			namespaceId = common.CreateNamespace(t, header, customAdminURL)
+		} else {
+			namespaceId = common.CreateNamespace(t, header)
+		}
+	}
+	t.Logf("\nSucessfully added Namespace with Id: %d ", namespaceId)
+
+	return namespaceId
+}
+
+func DeleteNamespace(t *testing.T, id uint64, jwtToken string, whichAlpha string) {
+	query := `mutation deleteNamespace($id:Int!){
+					deleteNamespace(input:{namespaceId:$id}){
+						namespaceId
+					}
+				}`
+	params := testutil.GraphQLParams{Query: query,
+		Variables: map[string]interface{}{
+			"id": id,
+		}}
+	b, err := json.Marshal(params)
+	adminUrl := "http://" + testutil.ContainerAddr(whichAlpha, 8080) + "/admin"
+	require.NoError(t, err)
+
+	req, err := http.NewRequest(http.MethodPost, adminUrl, bytes.NewBuffer(b))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(accessJwtHeader, jwtToken)
+	client := &http.Client{}
+	resp, err := client.Do(req)
+
+	var data interface{}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
+}
+
+func AddSchema(t *testing.T, header http.Header, whichAlpha string) {
+	updateSchemaParams := &common.GraphQLParams{
+		Query: `mutation {
+			    updateGQLSchema(
+			      input: { set: { schema: "type Item {id: ID!, name: String! @search(by: [hash]), price: String!}, type Post { postID: ID!, title: String! @search(by: [term, fulltext]), text: String @search(by: [fulltext, term]), datePublished: DateTime }"}})
+			    {
+			      gqlSchema {
+					schema
+			      }
+			    }
+			  }`,
+		Variables: map[string]interface{}{},
+		Headers:   header,
+	}
+
+	updateSchemaResp := updateSchemaParams.ExecuteAsPost(t, "http://"+testutil.ContainerAddr(whichAlpha, 8080)+"/admin")
+
+	if len(updateSchemaResp.Errors) > 0 {
+		t.Log("Failed to add Schema, Error: ", updateSchemaResp.Errors)
+	}
+}
+
+func CheckSchemaExists(t *testing.T, header http.Header, whichAlpha string) {
+	resp := common.AssertGetGQLSchema(t, testutil.ContainerAddr(whichAlpha, 8080), header)
+	require.NotNil(t, resp)
+}
+
+func AddData(t *testing.T, minSuffixVal int, maxSuffixVal int, jwtToken string, whichAlpha string) {
+
+	query := `mutation addItem($name: String!, $price: String!){
+		addItem(input: [{ name: $name, price: $price}]) {
+		  item {
+			id
+			name
+			price
+		  }
+		}
+	  }`
+
+	for i := minSuffixVal; i <= maxSuffixVal; i++ {
+		params := testutil.GraphQLParams{Query: query,
+			Variables: map[string]interface{}{
+				"name":  "Item" + strconv.Itoa(i),
+				"price": strconv.Itoa(i) + strconv.Itoa(i) + strconv.Itoa(i),
+			}}
+		b, err := json.Marshal(params)
+		adminUrl := "http://" + testutil.ContainerAddr(whichAlpha, 8080) + "/graphql"
+		require.NoError(t, err)
+
+		req, err := http.NewRequest(http.MethodPost, adminUrl, bytes.NewBuffer(b))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set(accessJwtHeader, jwtToken)
+		client := &http.Client{}
+		resp, err := client.Do(req)
+
+		var data interface{}
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
+	}
+}
+
+func CheckDataExists(t *testing.T, desriedSuffix int, jwtToken string, whichAlpha string) {
+	checkData := `query queryItem($name: String!){
+		queryItem(filter: {
+			name: {eq: $name}
+		})
+		{
+		id
+		name
+		price
+	  }
+	}`
+
+	params := testutil.GraphQLParams{
+		Query: checkData,
+		Variables: map[string]interface{}{
+			"name": "Item" + strconv.Itoa(desriedSuffix),
+		},
+	}
+
+	b, err := json.Marshal(params)
+	adminUrl := "http://" + testutil.ContainerAddr(whichAlpha, 8080) + "/graphql"
+	require.NoError(t, err)
+
+	req, err := http.NewRequest(http.MethodPost, adminUrl, bytes.NewBuffer(b))
+	req.Header.Set("Content-Type", "application/json")
+	if jwtToken != "" {
+		req.Header.Set(accessJwtHeader, jwtToken)
+	}
+	client := &http.Client{}
+	resp, err := client.Do(req)
+
+	var data interface{}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
+}
+
+func TakeBackup(t *testing.T, jwtToken string, backupDst string, whichAlpha string) {
+
+	backupRequest := `mutation backup($dst: String!) {
+		backup(input: {destination: $dst}) {
+			response {
+				code
+			}
+			taskId
+		}
+	}`
+	params := testutil.GraphQLParams{
+		Query: backupRequest,
+		Variables: map[string]interface{}{
+			"dst": backupDst,
+		},
+	}
+
+	b, err := json.Marshal(params)
+	adminUrl := "http://" + testutil.ContainerAddr(whichAlpha, 8080) + "/admin"
+	require.NoError(t, err)
+
+	req, err := http.NewRequest(http.MethodPost, adminUrl, bytes.NewBuffer(b))
+	req.Header.Set("Content-Type", "application/json")
+	if jwtToken != "" {
+		req.Header.Set(accessJwtHeader, jwtToken)
+	}
+	client := &http.Client{}
+	resp, err := client.Do(req)
+
+	var data interface{}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
+
+	require.Equal(t, "Success", testutil.JsonGet(data, "data", "backup", "response", "code").(string))
+	taskId := testutil.JsonGet(data, "data", "backup", "taskId").(string)
+	testutil.WaitForTask(t, taskId, false, testutil.ContainerAddr(whichAlpha, 8080))
+
+	defer changeFolderPermission(t, whichAlpha)
+}
+
+func changeFolderPermission(t *testing.T, whichAlpha string) {
+
+	cmd := []string{"bash", "-c", "chmod -R 777 /data/backups"}
+	require.NoError(t, testutil.DockerExec(whichAlpha, cmd...))
+
+}
+
+func RunRestore(t *testing.T, jwtToken string, restoreLocation string, whichAlpha string) {
+	restoreRequest := `mutation restore($loc: String!) {
+		restore(input: {location: $loc}) {
+				code
+				message
+			}
+	}`
+	params := testutil.GraphQLParams{
+		Query: restoreRequest,
+		Variables: map[string]interface{}{
+			"loc": restoreLocation,
+		},
+	}
+
+	b, err := json.Marshal(params)
+	adminUrl := "http://" + testutil.ContainerAddr(whichAlpha, 8080) + "/admin"
+	require.NoError(t, err)
+
+	req, err := http.NewRequest(http.MethodPost, adminUrl, bytes.NewBuffer(b))
+	req.Header.Set("Content-Type", "application/json")
+	if jwtToken != "" {
+		req.Header.Set(accessJwtHeader, jwtToken)
+	}
+	client := &http.Client{}
+	resp, err := client.Do(req)
+
+	var data interface{}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
+
+	require.Equal(t, "Success", testutil.JsonGet(data, "data", "restore", "code").(string))
+}
+
+func WaitForRestore(t *testing.T, whichAlpha string) {
+	restoreDone := false
+	for {
+		resp, err := http.Get("http://" + testutil.ContainerAddr(whichAlpha, 8080) + "/health")
+		require.NoError(t, err)
+		buf, err := ioutil.ReadAll(resp.Body)
+		require.NoError(t, err)
+		sbuf := string(buf)
+		if !strings.Contains(sbuf, "opRestore") {
+			restoreDone = true
+			break
+		}
+		time.Sleep(4 * time.Second)
+	}
+	require.True(t, restoreDone)
+
+	time.Sleep(5 * time.Second)
 }
 
 // to copy files fron nfs server
