@@ -19,6 +19,7 @@ package testutil
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"testing"
@@ -121,6 +122,7 @@ func WaitForTask(t *testing.T, taskId string, useHttps bool, socketAddrHttp stri
 
 		var data interface{}
 		require.NoError(t, json.NewDecoder(response.Body).Decode(&data))
+		fmt.Println("WAIT FOR BACKUP ???????? ", data)
 		status := JsonGet(data, "data", "task", "status").(string)
 		switch status {
 		case "Success":
