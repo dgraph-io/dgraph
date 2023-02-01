@@ -27,7 +27,7 @@ data is arranged on disk to optimize for query performance and throughput,
 reducing disk seeks and network calls in a cluster.
 
 
-Dgraph's goal is to provide Google production level scale and throughput,
+Dgraph's goal is to provide Google production-level scale and throughput,
 with low enough latency to serve real-time user queries over terabytes of structured data.
 Dgraph supports [GraphQL query syntax](https://dgraph.io/docs/master/query-language/), and responds in [JSON](http://www.json.org/) and [Protocol Buffers](https://developers.google.com/protocol-buffers/) over [GRPC](http://www.grpc.io/) and HTTP. Dgraph is written using the Go Programming Language.
 
