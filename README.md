@@ -53,7 +53,7 @@ If you're using Docker, you can use the [official Dgraph image](https://hub.dock
 docker pull dgraph/dgraph:latest
 ```
 
-For more information on a variety Docker deployment methods including Docker Compose and Kubernetes, see the [docs](https://dgraph.io/docs/deploy/single-host-setup/#run-using-docker).
+For more information on a variety Docker deployment methods including Docker Compose and Kubernetes, see the [docs](https://dgraph.io/docs/installation/single-host-setup/#docker).
 
 ## Run a Quick Standalone Cluster
 
