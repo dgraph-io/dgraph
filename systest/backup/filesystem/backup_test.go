@@ -103,7 +103,7 @@ func TestBackupOfOldRestore(t *testing.T) {
 	_ = runBackup(t, 3, 1)
 
 	sendRestoreRequest(t, oldBackupDir1)
-	testutil.WaitForRestore(t, dg)
+	testutil.WaitForRestore(t, dg, testutil.SockAddrHttp)
 
 	resp, err := dg.NewTxn().Query(context.Background(), `{ authors(func: has(Author.name)) { count(uid) } }`)
 	require.NoError(t, err)
@@ -115,7 +115,7 @@ func TestBackupOfOldRestore(t *testing.T) {
 	testutil.DropAll(t, dg)
 	time.Sleep(2 * time.Second)
 	sendRestoreRequest(t, alphaBackupDir)
-	testutil.WaitForRestore(t, dg)
+	testutil.WaitForRestore(t, dg, testutil.SockAddrHttp)
 
 	resp, err = dg.NewTxn().Query(context.Background(), `{ authors(func: has(Author.name)) { count(uid) } }`)
 	require.NoError(t, err)
@@ -142,7 +142,7 @@ func TestRestoreOfOldBackup(t *testing.T) {
 		time.Sleep(2 * time.Second)
 
 		sendRestoreRequest(t, dir)
-		testutil.WaitForRestore(t, dg)
+		testutil.WaitForRestore(t, dg, testutil.SockAddrHttp)
 
 		queryAndCheck := func(pred string, cnt int) {
 			q := fmt.Sprintf(`{ me(func: has(%s)) { count(uid) } }`, pred)
@@ -434,7 +434,7 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
 	require.Equal(t, "Success", testutil.JsonGet(data, "data", "backup", "response", "code").(string))
 	taskId := testutil.JsonGet(data, "data", "backup", "taskId").(string)
-	testutil.WaitForTask(t, taskId, true)
+	testutil.WaitForTask(t, taskId, true, testutil.SockAddrHttp)
 
 	// Verify that the right amount of files and directories were created.
 	common.CopyToLocalFs(t)
