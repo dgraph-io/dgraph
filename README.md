@@ -21,7 +21,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/dgraph-io/dgraph)](https://goreportcard.com/report/github.com/dgraph-io/dgraph)
 [![TODOs](https://badgen.net/https/api.tickgit.com/badgen/github.com/dgraph-io/dgraph/main)](https://www.tickgit.com/browse?repo=github.com/dgraph-io/dgraph&branch=main)
 
-Dgraph is a horizontally scalable and distributed GraphQL database with a graph backend. It provides ACID transactions, consistent replication, and linearizable reads. It's built from the ground up to perform for
+Dgraph is a horizontally scalable and distributed GraphQL database with a graph backend. It provides ACID transactions, consistent replication, and linearizable reads. It's built from the ground up to perform 
 a rich set of queries. Being a native GraphQL database, it tightly controls how the
 data is arranged on disk to optimize for query performance and throughput,
 reducing disk seeks and network calls in a cluster.
