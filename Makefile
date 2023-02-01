@@ -72,7 +72,19 @@ image-local local-image:
 	@docker build -f contrib/Dockerfile -t dgraph/dgraph:local .
 	@rm -r linux
 
-docker-image: dgraph
+dgraph-nfs-client :
+	@GOOS=linux GOARCH=amd64 $(MAKE) dgraph
+	@mkdir -p systest/backup/nfs-backup/docker-utils/dgraph-nfs-client/linux
+	@cp ./dgraph/dgraph ./systest/backup/nfs-backup/docker-utils/dgraph-nfs-client/linux/dgraph
+	@cd systest/backup/nfs-backup/docker-utils/dgraph-nfs-client ; \
+	     docker build   -t dgraph-nfs-client .
+	@rm -r ./systest/backup/nfs-backup/docker-utils/dgraph-nfs-client/linux
+
+nfs-server :
+	@cd  systest/backup/nfs-backup/docker-utils/docker-nfs-server ; \
+	     docker build   -t nfs-docker-server:latest .
+
+docker-image: dgraph nfs-server dgraph-nfs-client
 	@mkdir -p linux
 	@cp ./dgraph/dgraph ./linux/dgraph
 	docker build -f contrib/Dockerfile -t dgraph/dgraph:$(DGRAPH_VERSION) .

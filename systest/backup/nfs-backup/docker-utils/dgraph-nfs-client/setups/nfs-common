@@ -1,0 +1,14 @@
+# If you do not set values for the NEED_ options, they will be attempted
+# autodetected; this should be sufficient for most people. Valid alternatives
+# for the NEED_ options are "yes" and "no".
+
+
+# Options for rpc.statd.
+#   Should rpc.statd listen on a specific port? This is especially useful
+#   when you have a port-based firewall. To use a fixed port, set this
+#   this variable to a statd argument like: "--port 4000 --outgoing-port 4001".
+#   For more information, see rpc.statd(8) or http://wiki.debian.org/SecuringNFS
+STATDOPTS="--port 32765 --outgoing-port 32766 --nlm-port 32768 --nlm-udp-port 32768"
+
+# Do you want to start the gssd daemon? It is required for Kerberos mounts.
+NEED_GSSD=
