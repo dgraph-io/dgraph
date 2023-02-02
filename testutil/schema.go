@@ -17,8 +17,11 @@
 package testutil
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -132,4 +135,41 @@ func VerifySchema(t *testing.T, dg *dgo.Dgraph, opts SchemaOptions) {
 	require.NoError(t, err)
 
 	CompareJSON(t, GetFullSchemaJSON(opts), string(resp.GetJson()))
+}
+
+func UpdateGQLSchema(t *testing.T, sockAddrHttp, schema string) {
+	query := `mutation updateGQLSchema($sch: String!) {
+		updateGQLSchema(input: { set: { schema: $sch }}) {
+			gqlSchema {
+				schema
+			}
+		}
+	}`
+	adminUrl := "http://" + sockAddrHttp + "/admin"
+
+	params := GraphQLParams{
+		Query: query,
+		Variables: map[string]interface{}{
+			"sch": schema,
+		},
+	}
+	b, err := json.Marshal(params)
+	require.NoError(t, err)
+	resp, err := http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
+	require.NoError(t, err)
+	defer resp.Body.Close()
+}
+
+func GetGQLSchema(t *testing.T, sockAddrHttp string) string {
+	query := `{getGQLSchema {schema}}`
+	params := GraphQLParams{Query: query}
+	b, err := json.Marshal(params)
+	adminUrl := "http://" + sockAddrHttp + "/admin"
+	require.NoError(t, err)
+	resp, err := http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	var data interface{}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
+	return JsonGet(data, "data", "getGQLSchema", "schema").(string)
 }
