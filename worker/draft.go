@@ -819,8 +819,10 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 			return
 		}
 		txn.Update()
-		err := x.RetryUntilSuccess(int(x.Config.MaxRetries),
-			10*time.Millisecond, func() error {
+		// We start with 20 ms, so that we end up waiting 5 mins by the end.
+		// If there is any transient issue, it should get fixed within that timeframe.
+		err := x.ExponentialRetry(int(x.Config.MaxRetries),
+			20*time.Millisecond, func() error {
 				err := txn.CommitToDisk(writer, commit)
 				if err == badger.ErrBannedKey {
 					glog.Errorf("Error while writing to banned namespace.")
@@ -832,6 +834,7 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 		if err != nil {
 			glog.Errorf("Error while applying txn status to disk (%d -> %d): %v",
 				start, commit, err)
+			panic(err)
 		}
 	}
 

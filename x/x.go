@@ -613,11 +613,27 @@ func Max(a, b uint64) uint64 {
 	return b
 }
 
+// ExponentialRetry runs the given function until it succeeds or can no longer be retried.
+func ExponentialRetry(maxRetries int, waitAfterFailure time.Duration,
+	f func() error) error {
+	var err error
+	for retry := maxRetries; retry > 0; retry-- {
+		if err = f(); err == nil {
+			return nil
+		}
+		if waitAfterFailure > 0 {
+			time.Sleep(waitAfterFailure)
+			waitAfterFailure *= 2
+		}
+	}
+	return err
+}
+
 // RetryUntilSuccess runs the given function until it succeeds or can no longer be retried.
 func RetryUntilSuccess(maxRetries int, waitAfterFailure time.Duration,
 	f func() error) error {
 	var err error
-	for retry := maxRetries; retry != 0; retry-- {
+	for retry := maxRetries; retry > 0; retry-- {
 		if err = f(); err == nil {
 			return nil
 		}
