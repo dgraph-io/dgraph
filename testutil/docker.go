@@ -271,3 +271,28 @@ func DockerInspect(containerID string) (types.ContainerJSON, error) {
 	x.Check(err)
 	return cli.ContainerInspect(context.Background(), containerID)
 }
+
+// checkHealthContainer checks health of container and determines wheather container is ready to accept request
+func CheckHealthContainer(socketAddrHttp string) error {
+	var err error
+	var resp *http.Response
+	url := "http://" + socketAddrHttp + "/health"
+	for i := 0; i < 30; i++ {
+		resp, err = http.Get(url)
+		if err == nil && resp.StatusCode == http.StatusOK {
+			return nil
+		}
+		var body []byte
+		if resp != nil && resp.Body != nil {
+			body, err = ioutil.ReadAll(resp.Body)
+			if err != nil {
+				return err
+			}
+			resp.Body.Close()
+		}
+		fmt.Printf("health check for container failed: %v. Response: %q. Retrying...\n", err, body)
+		time.Sleep(time.Second)
+
+	}
+	return err
+}
