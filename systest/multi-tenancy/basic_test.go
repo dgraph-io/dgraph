@@ -37,6 +37,11 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+type inputTriplets_Count struct {
+	lower_limit int
+	upper_limit int
+}
+
 func prepare(t *testing.T) {
 	dc := testutil.DgClientWithLogin(t, "groot", "password", x.GalaxyNamespace)
 	require.NoError(t, dc.Alter(context.Background(), &api.Operation{DropAll: true}))
@@ -563,6 +568,26 @@ func TestTokenExpired(t *testing.T) {
 	_, err = testutil.CreateNamespaceWithRetry(t, token)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Only guardian of galaxy is allowed to do this operation")
+}
+
+func TestNameSpaceLimitFlag(t *testing.T) {
+	testInputs := []inputTriplets_Count{{1, 53}, {1, 40}, {41, 53}}
+	galaxyToken := testutil.Login(t,
+		&testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: x.GalaxyNamespace})
+	// Create a new namespace
+	ns, err := testutil.CreateNamespaceWithRetry(t, galaxyToken)
+	require.NoError(t, err)
+	dc := testutil.DgClientWithLogin(t, "groot", "password", ns)
+	// trying to load more tripletes than allowed
+	_, err = testutil.AddNumberOfTriplets(t, dc, testInputs[0].lower_limit, testInputs[0].upper_limit)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Requested UID lease(53) is greater than allowed(50).")
+	_, err = testutil.AddNumberOfTriplets(t, dc, testInputs[1].lower_limit, testInputs[1].upper_limit)
+	require.NoError(t, err)
+	// we have set uid-lease=50 so we are trying lease more uids it will through error
+	_, err = testutil.AddNumberOfTriplets(t, dc, testInputs[2].lower_limit, testInputs[2].upper_limit)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Cannot lease UID because UID lease for the namespace")
 }
 
 func TestMain(m *testing.M) {
