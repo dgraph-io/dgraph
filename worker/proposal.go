@@ -20,7 +20,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/binary"
-	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -211,10 +210,6 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 	// whether it has already done this work, and if so, skip it.
 	key := uniqueKey()
 	data := make([]byte, 8+proposal.Size())
-	fmt.Println("---------------------------------------------")
-	fmt.Println("Key: ", key, " Data: ", data)
-	fmt.Printf("Proposal: %+v\n", proposal)
-	fmt.Println("#############################################")
 	binary.BigEndian.PutUint64(data, key)
 	sz, err := proposal.MarshalToSizedBuffer(data[8:])
 	if err != nil {
