@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,16 +28,18 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/golang/glog"
+	"github.com/pkg/errors"
+	"go.opencensus.io/trace"
+
 	"github.com/dgraph-io/dgraph/edgraph"
+	"github.com/dgraph-io/dgraph/ee/audit"
 	"github.com/dgraph-io/dgraph/graphql/api"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/graphql/subscription"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/graphql-transport-ws/graphqlws"
-	"github.com/golang/glog"
-	"github.com/pkg/errors"
-	"go.opencensus.io/trace"
 )
 
 type Headerkey string
@@ -193,6 +195,8 @@ func (gs *graphqlSubscription) Subscribe(
 		Variables:     variableValues,
 		Header:        reqHeader,
 	}
+
+	audit.AuditWebSockets(ctx, req)
 	namespace := x.ExtractNamespaceHTTP(&http.Request{Header: reqHeader})
 	glog.Infof("namespace: %d. Got GraphQL request over websocket.", namespace)
 	// first load the schema, then do anything else

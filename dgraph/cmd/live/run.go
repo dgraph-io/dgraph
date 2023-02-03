@@ -28,8 +28,6 @@ import (
 	"math"
 	"math/rand"
 	"net/http"
-
-	//nolint:gosec // profiling on live-loader tool considered noncritical
 	_ "net/http/pprof" // http profiler
 	"os"
 	"sort"
@@ -37,6 +35,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dgryski/go-farm"
+	"github.com/golang/glog"
+	"github.com/pkg/errors"
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 
@@ -44,9 +47,6 @@ import (
 	bopt "github.com/dgraph-io/badger/v3/options"
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
-	"github.com/dgraph-io/ristretto/z"
-	"github.com/dgryski/go-farm"
-
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/ee/enc"
@@ -55,11 +55,7 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/xidmap"
-
-	"github.com/golang/glog"
-	"github.com/pkg/errors"
-	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 type options struct {
@@ -76,7 +72,6 @@ type options struct {
 	verbose         bool
 	httpAddr        string
 	bufferSize      int
-	ludicrousMode   bool
 	upsertPredicate string
 	tmpDir          string
 	key             x.Sensitive
@@ -183,8 +178,6 @@ func init() {
 	Sample flag could look like --creds user=username;password=mypass;namespace=2`)
 
 	flag.StringP("bufferSize", "m", "100", "Buffer for each thread")
-	flag.Bool("ludicrous", false, "Run live loader in ludicrous mode (Should "+
-		"only be done when alpha is under ludicrous mode)")
 	flag.StringP("upsertPredicate", "U", "", "run in upsertPredicate mode. the value would "+
 		"be used to store blank nodes as an xid")
 	flag.String("tmp", "t", "Directory to store temporary buffers.")
@@ -719,7 +712,6 @@ func run() error {
 		verbose:         Live.Conf.GetBool("verbose"),
 		httpAddr:        Live.Conf.GetString("http"),
 		bufferSize:      Live.Conf.GetInt("bufferSize"),
-		ludicrousMode:   Live.Conf.GetBool("ludicrous"),
 		upsertPredicate: Live.Conf.GetString("upsertPredicate"),
 		tmpDir:          Live.Conf.GetString("tmp"),
 		key:             keys.EncKey,

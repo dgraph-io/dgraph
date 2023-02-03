@@ -20,8 +20,9 @@ import (
 	"fmt"
 	"unicode/utf8"
 
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
+
+	"github.com/dgraph-io/dgraph/x"
 )
 
 // EOF indicates the end of the an input.

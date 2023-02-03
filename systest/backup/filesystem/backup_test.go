@@ -28,14 +28,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
 	"github.com/dgraph-io/badger/v3/options"
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
-	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
-
 	"github.com/dgraph-io/dgraph/systest/backup/common"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/worker"
@@ -104,7 +103,7 @@ func TestBackupOfOldRestore(t *testing.T) {
 	_ = runBackup(t, 3, 1)
 
 	sendRestoreRequest(t, oldBackupDir1)
-	testutil.WaitForRestore(t, dg)
+	testutil.WaitForRestore(t, dg, testutil.SockAddrHttp)
 
 	resp, err := dg.NewTxn().Query(context.Background(), `{ authors(func: has(Author.name)) { count(uid) } }`)
 	require.NoError(t, err)
@@ -116,7 +115,7 @@ func TestBackupOfOldRestore(t *testing.T) {
 	testutil.DropAll(t, dg)
 	time.Sleep(2 * time.Second)
 	sendRestoreRequest(t, alphaBackupDir)
-	testutil.WaitForRestore(t, dg)
+	testutil.WaitForRestore(t, dg, testutil.SockAddrHttp)
 
 	resp, err = dg.NewTxn().Query(context.Background(), `{ authors(func: has(Author.name)) { count(uid) } }`)
 	require.NoError(t, err)
@@ -143,7 +142,7 @@ func TestRestoreOfOldBackup(t *testing.T) {
 		time.Sleep(2 * time.Second)
 
 		sendRestoreRequest(t, dir)
-		testutil.WaitForRestore(t, dg)
+		testutil.WaitForRestore(t, dg, testutil.SockAddrHttp)
 
 		queryAndCheck := func(pred string, cnt int) {
 			q := fmt.Sprintf(`{ me(func: has(%s)) { count(uid) } }`, pred)
@@ -435,7 +434,7 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
 	require.Equal(t, "Success", testutil.JsonGet(data, "data", "backup", "response", "code").(string))
 	taskId := testutil.JsonGet(data, "data", "backup", "taskId").(string)
-	testutil.WaitForTask(t, taskId, true)
+	testutil.WaitForTask(t, taskId, true, testutil.SockAddrHttp)
 
 	// Verify that the right amount of files and directories were created.
 	common.CopyToLocalFs(t)
@@ -466,7 +465,8 @@ func runRestore(t *testing.T, backupLocation, lastDir string, commitTs uint64) m
 	require.NoError(t, os.RemoveAll(restoreDir))
 
 	t.Logf("--- Restoring from: %q", backupLocation)
-	result := worker.RunRestore("./data/restore", backupLocation, lastDir, x.Sensitive(nil), options.Snappy, 0)
+	result := worker.RunOfflineRestore(restoreDir, backupLocation,
+		lastDir, "", nil, options.Snappy, 0)
 	require.NoError(t, result.Err)
 
 	for i, pdir := range []string{"p1", "p2", "p3"} {

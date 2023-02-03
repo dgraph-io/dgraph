@@ -1,3 +1,4 @@
+//go:build !oss
 // +build !oss
 
 /*
@@ -21,10 +22,11 @@ import (
 	"io/ioutil"
 	"os"
 
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+
+	"github.com/dgraph-io/dgraph/x"
 )
 
 var CmdAudit x.SubCommand

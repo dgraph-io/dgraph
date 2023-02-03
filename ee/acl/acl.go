@@ -1,3 +1,4 @@
+//go:build !oss
 // +build !oss
 
 /*
@@ -19,12 +20,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dgraph-io/dgo/v210"
-	"github.com/dgraph-io/dgo/v210/protos/api"
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
+
+	"github.com/dgraph-io/dgo/v210"
+	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 func getUserAndGroup(conf *viper.Viper) (userId string, groupId string, err error) {

@@ -25,8 +25,9 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
+
+	"github.com/dgraph-io/ristretto/z"
 )
 
 var (

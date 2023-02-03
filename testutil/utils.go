@@ -24,9 +24,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/stretchr/testify/require"
 )
 
 func GalaxySchemaKey(attr string) []byte {
@@ -59,7 +60,7 @@ func GalaxyCountKey(attr string, count uint32, reverse bool) []byte {
 	return x.CountKey(attr, count, reverse)
 }
 
-func WaitForTask(t *testing.T, taskId string, useHttps bool) {
+func WaitForTask(t *testing.T, taskId string, useHttps bool, socketAddrHttp string) {
 	const query = `query task($id: String!) {
 		task(input: {id: $id}) {
 			status
@@ -78,10 +79,10 @@ func WaitForTask(t *testing.T, taskId string, useHttps bool) {
 		var adminUrl string
 		var client http.Client
 		if useHttps {
-			adminUrl = "https://" + SockAddrHttp + "/admin"
+			adminUrl = "https://" + socketAddrHttp + "/admin"
 			client = GetHttpsClient(t)
 		} else {
-			adminUrl = "http://" + SockAddrHttp + "/admin"
+			adminUrl = "http://" + socketAddrHttp + "/admin"
 			client = *http.DefaultClient
 		}
 		response, err := client.Post(adminUrl, "application/json", bytes.NewBuffer(request))

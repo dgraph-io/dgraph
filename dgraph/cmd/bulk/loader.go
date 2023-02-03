@@ -33,11 +33,11 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
 	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/badger/v3/y"
-
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/filestore"
@@ -45,8 +45,6 @@ import (
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/xidmap"
-
-	"google.golang.org/grpc"
 )
 
 type options struct {
@@ -406,7 +404,6 @@ func (ld *loader) processGqlSchema(loadType chunker.InputFormat) {
 		}
 		process(ld.opt.Namespace, schemas[ld.opt.Namespace])
 	}
-	return
 }
 
 func (ld *loader) reduceStage() {

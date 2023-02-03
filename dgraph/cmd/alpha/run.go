@@ -25,8 +25,6 @@ import (
 	"math"
 	"net"
 	"net/http"
-
-	//nolint:gosec // profiling on alpha server accepted and documented
 	_ "net/http/pprof" // http profiler
 	"net/url"
 	"os"
@@ -37,20 +35,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/dgraph-io/badger/v3"
-	"github.com/dgraph-io/dgraph/ee"
-	"github.com/dgraph-io/dgraph/ee/audit"
-
-	"github.com/dgraph-io/dgo/v210/protos/api"
-	"github.com/dgraph-io/dgraph/edgraph"
-	"github.com/dgraph-io/dgraph/ee/enc"
-	"github.com/dgraph-io/dgraph/graphql/admin"
-	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/tok"
-	"github.com/dgraph-io/dgraph/worker"
-	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
@@ -64,7 +48,20 @@ import (
 	"google.golang.org/grpc/health"
 	hapi "google.golang.org/grpc/health/grpc_health_v1"
 
+	"github.com/dgraph-io/badger/v3"
+	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/dgraph/edgraph"
+	"github.com/dgraph-io/dgraph/ee"
+	"github.com/dgraph-io/dgraph/ee/audit"
+	"github.com/dgraph-io/dgraph/ee/enc"
+	"github.com/dgraph-io/dgraph/graphql/admin"
+	"github.com/dgraph-io/dgraph/posting"
+	"github.com/dgraph-io/dgraph/schema"
+	"github.com/dgraph-io/dgraph/tok"
+	"github.com/dgraph-io/dgraph/worker"
+	"github.com/dgraph-io/dgraph/x"
 	_ "github.com/dgraph-io/gqlparser/v2/validator/rules" // make gql validator init() all rules
+	"github.com/dgraph-io/ristretto/z"
 )
 
 var (
@@ -208,14 +205,6 @@ they form a Raft group and provide synchronous replication.
 				"worker in a failed state. Use -1 to retry infinitely.").
 		Flag("txn-abort-after", "Abort any pending transactions older than this duration."+
 			" The liveness of a transaction is determined by its last mutation.").
-		String())
-
-	flag.String("ludicrous", worker.LudicrousDefaults, z.NewSuperFlagHelp(worker.LudicrousDefaults).
-		Head("Ludicrous options").
-		Flag("enabled",
-			"Set enabled to true to run Dgraph in Ludicrous mode.").
-		Flag("concurrency",
-			"The number of concurrent threads to use in Ludicrous mode.").
 		String())
 
 	flag.String("graphql", worker.GraphQLDefaults, z.NewSuperFlagHelp(worker.GraphQLDefaults).
@@ -690,8 +679,6 @@ func run() {
 	tlsServerConf, err := x.LoadServerTLSConfigForInternalPort(Alpha.Conf)
 	x.Check(err)
 
-	ludicrous := z.NewSuperFlag(Alpha.Conf.GetString("ludicrous")).MergeAndCheckDefault(
-		worker.LudicrousDefaults)
 	raft := z.NewSuperFlag(Alpha.Conf.GetString("raft")).MergeAndCheckDefault(worker.RaftDefaults)
 	x.WorkerConfig = x.WorkerOptions{
 		TmpDir:              Alpha.Conf.GetString("tmp"),
@@ -703,8 +690,6 @@ func run() {
 		AclEnabled:          keys.AclKey != nil,
 		AbortOlderThan:      abortDur,
 		StartTime:           startTime,
-		Ludicrous:           ludicrous,
-		LudicrousEnabled:    ludicrous.GetBool("enabled"),
 		Security:            security,
 		TLSClientConfig:     tlsClientConf,
 		TLSServerConfig:     tlsServerConf,

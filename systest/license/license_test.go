@@ -23,8 +23,9 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dgraph-io/dgraph/testutil"
 )
 
 var expiredKey = []byte(`-----BEGIN PGP MESSAGE-----

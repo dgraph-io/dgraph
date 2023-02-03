@@ -23,8 +23,9 @@ import (
 	"math/rand"
 	"net/http"
 
-	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/gorilla/websocket"
+
+	"github.com/dgraph-io/dgraph/graphql/schema"
 )
 
 // Reference: https://github.com/apollographql/subscriptions-transport-ws/blob/master/PROTOCOL.md

@@ -189,7 +189,8 @@ func TypeKey(attr string) []byte {
 // next byte: data type prefix (set to ByteData)
 // next eight bytes: value of uid
 // next eight bytes (optional): if the key corresponds to a split list, the startUid of
-//   the split stored in this key and the first byte will be sets to ByteSplit.
+//
+//	the split stored in this key and the first byte will be sets to ByteSplit.
 func DataKey(attr string, uid uint64) []byte {
 	prefixLen := 1 + 2 + len(attr)
 	totalLen := prefixLen + 1 + 8
@@ -212,7 +213,8 @@ func DataKey(attr string, uid uint64) []byte {
 // next byte: data type prefix (set to ByteReverse)
 // next eight bytes: value of uid
 // next eight bytes (optional): if the key corresponds to a split list, the startUid of
-//   the split stored in this key.
+//
+//	the split stored in this key.
 func ReverseKey(attr string, uid uint64) []byte {
 	prefixLen := 1 + 2 + len(attr)
 	totalLen := prefixLen + 1 + 8
@@ -235,7 +237,8 @@ func ReverseKey(attr string, uid uint64) []byte {
 // next byte: data type prefix (set to ByteIndex)
 // next len(term) bytes: value of term
 // next eight bytes (optional): if the key corresponds to a split list, the startUid of
-//   the split stored in this key.
+//
+//	the split stored in this key.
 func IndexKey(attr, term string) []byte {
 	prefixLen := 1 + 2 + len(attr)
 	totalLen := prefixLen + 1 + len(term)
@@ -710,9 +713,9 @@ func IsGraphqlReservedPredicate(pred string) bool {
 // actually defined internally or not.
 //
 // As an example, consider below predicates:
-// 	1. dgraph.type (reserved = true,  pre_defined = true )
-// 	2. dgraph.blah (reserved = true,  pre_defined = false)
-// 	3. person.name (reserved = false, pre_defined = false)
+//  1. dgraph.type (reserved = true,  pre_defined = true )
+//  2. dgraph.blah (reserved = true,  pre_defined = false)
+//  3. person.name (reserved = false, pre_defined = false)
 func IsReservedPredicate(pred string) bool {
 	return isReservedName(ParseAttr(pred))
 }

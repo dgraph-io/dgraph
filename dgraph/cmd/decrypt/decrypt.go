@@ -22,15 +22,16 @@ import (
 	"os"
 	"strings"
 
+	"github.com/golang/glog"
+	"github.com/spf13/cobra"
+
 	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/glog"
-	"github.com/spf13/cobra"
 )
 
 type options struct {
-	// keyfile comes from the encryption or Vault flags
+	// keyfile comes from the encryption_key_file or Vault flags
 	keyfile x.Sensitive
 	file    string
 	output  string

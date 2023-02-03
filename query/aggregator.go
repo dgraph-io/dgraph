@@ -21,10 +21,11 @@ import (
 	"math"
 	"time"
 
+	"github.com/pkg/errors"
+
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/pkg/errors"
 )
 
 type aggregator struct {

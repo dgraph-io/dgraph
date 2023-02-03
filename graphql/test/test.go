@@ -21,13 +21,13 @@ import (
 	"io/ioutil"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/graphql/schema"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/gqlparser/v2/ast"
 	"github.com/dgraph-io/gqlparser/v2/parser"
 	"github.com/dgraph-io/gqlparser/v2/validator"
-	"github.com/stretchr/testify/require"
 )
 
 // Various helpers used in GQL testing

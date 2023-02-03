@@ -21,13 +21,13 @@ import (
 	"encoding/json"
 	"sync"
 
-	"github.com/dgraph-io/dgraph/edgraph"
+	"github.com/pkg/errors"
 
+	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/worker"
-	"github.com/pkg/errors"
 )
 
 type restoreInput struct {

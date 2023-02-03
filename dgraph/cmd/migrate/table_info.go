@@ -21,8 +21,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
+
+	"github.com/dgraph-io/dgraph/x"
 )
 
 type keyType int

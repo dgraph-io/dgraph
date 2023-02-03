@@ -37,14 +37,15 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/ristretto/z"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
 	"github.com/spf13/pflag"
 	"golang.org/x/tools/go/packages"
+
+	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 var (
@@ -108,6 +109,7 @@ func commandWithContext(ctx context.Context, args ...string) *exec.Cmd {
 	}
 	if runtime.GOARCH == "arm64" {
 		cmd.Env = append(cmd.Env, "MINIO_IMAGE_ARCH=RELEASE.2020-11-13T20-10-18Z-arm64")
+		cmd.Env = append(cmd.Env, "NFS_SERVER_IMAGE_ARCH=11-arm")
 	}
 
 	return cmd
@@ -678,7 +680,6 @@ func removeAllTestContainers() {
 
 var loadPackages = []string{
 	"/systest/21million/bulk",
-	"/systest/21million/ludicrous",
 	"/systest/21million/live",
 	"/systest/1million",
 	"/systest/bulk_live/bulk",

@@ -17,14 +17,14 @@
 package tok
 
 import (
-	"github.com/dgraph-io/dgraph/x"
-
 	"github.com/blevesearch/bleve/analysis"
 	"github.com/blevesearch/bleve/analysis/analyzer/custom"
 	"github.com/blevesearch/bleve/analysis/token/lowercase"
 	"github.com/blevesearch/bleve/analysis/token/unicodenorm"
 	"github.com/blevesearch/bleve/analysis/tokenizer/unicode"
 	"github.com/blevesearch/bleve/registry"
+
+	"github.com/dgraph-io/dgraph/x"
 )
 
 const unicodenormName = "unicodenorm_nfkc"

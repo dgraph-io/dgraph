@@ -20,16 +20,14 @@ import (
 	"math"
 	"sync"
 
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"go.etcd.io/etcd/raft"
 	"go.etcd.io/etcd/raft/raftpb"
 	"golang.org/x/net/trace"
-)
 
-// versionKey is hardcoded into the special key used to fetch the maximum version from the DB.
-const versionKey = 1
+	"github.com/dgraph-io/dgraph/x"
+)
 
 // DiskStorage handles disk access and writing for the RAFT write-ahead log.
 // Dir contains wal.meta file and <start idx zero padded>.wal files.

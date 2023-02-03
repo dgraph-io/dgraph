@@ -23,13 +23,13 @@ import (
 	"time"
 
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 	geom "github.com/twpayne/go-geom"
 	"golang.org/x/crypto/blake2b"
 	"golang.org/x/text/collate"
 
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/pkg/errors"
 )
 
 // Tokenizer identifiers are unique and can't be reused.
@@ -379,7 +379,7 @@ func (t FullTextTokenizer) IsSortable() bool { return false }
 func (t FullTextTokenizer) IsLossy() bool    { return true }
 
 // Sha256Tokenizer generates tokens for the sha256 hash part from string data.
-type Sha256Tokenizer struct{ text string }
+type Sha256Tokenizer struct{ _ string }
 
 func (t Sha256Tokenizer) Name() string { return "sha256" }
 func (t Sha256Tokenizer) Type() string { return "string" }

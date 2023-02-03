@@ -24,11 +24,12 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/pkg/errors"
+
 	"github.com/dgraph-io/dgraph/dql"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/pkg/errors"
 )
 
 type queryRewriter struct{}
@@ -792,7 +793,7 @@ func (authRw *authRewriter) addAuthQueries(
 
 		// For an interface having Auth rules in some of the implementing types, len(qrys) = 0
 		// indicates that None of the type satisfied the Auth rules, We must return Empty Query here.
-		if implementingTypesHasAuthRules == true && len(qrys) == 0 {
+		if implementingTypesHasAuthRules && len(qrys) == 0 {
 			return []*dql.GraphQuery{{
 				Attr: dgQuery[0].Attr + "()",
 			}}
@@ -817,7 +818,7 @@ func (authRw *authRewriter) addAuthQueries(
 
 		// Adding the case of Query on interface in which None of the implementing type have
 		// Auth Query Rules, in that case, we also return simple query.
-		if typ.IsInterface() == true && implementingTypesHasAuthRules == false {
+		if typ.IsInterface() && !implementingTypesHasAuthRules {
 			return dgQuery
 		}
 
@@ -1305,19 +1306,6 @@ func buildAggregateFields(
 	return aggregateChildren, retAuthQueries
 }
 
-// Generate Unique Dgraph Alias for the field based on number of time it has been
-// seen till now in the given query at current level.
-// If it is seen first time then simply returns the field's DgraphAlias,
-// and if  it is seen let's say 3rd time  then return "fieldAlias.3" where "fieldAlias"
-// is the  DgraphAlias of the field.
-func generateUniqueDgraphAlias(f schema.Field, fieldSeenCount map[string]int) string {
-	alias := f.DgraphAlias()
-	if fieldSeenCount[alias] == 0 {
-		return alias
-	}
-	return alias + "." + strconv.Itoa(fieldSeenCount[alias])
-}
-
 // TODO(GRAPHQL-874), Optimise Query rewriting in case of multiple alias with same filter.
 // addSelectionSetFrom adds all the selections from field into q, and returns a list
 // of extra queries needed to satisfy auth requirements
@@ -1592,11 +1580,11 @@ func idFilter(filter map[string]interface{}, idField schema.FieldDefinition) []u
 	var idsSlice []interface{}
 	// idsFilter can be an single string value (most common) or
 	// an interface{} slice
-	switch idsFilter.(type) {
+	switch f := idsFilter.(type) {
 	case string:
-		idsSlice = append(idsSlice, idsFilter)
+		idsSlice = append(idsSlice, f)
 	case []interface{}:
-		idsSlice = idsFilter.([]interface{})
+		idsSlice = f
 	default:
 		// if an unexpected type is encountered, fail silently
 		return nil

@@ -19,11 +19,12 @@ import (
 	"io/ioutil"
 	"reflect"
 
-	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
 	"github.com/hashicorp/vault/api"
 	"github.com/spf13/viper"
+
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 func vaultGetKeys(config *viper.Viper) (aclKey, encKey x.Sensitive) {

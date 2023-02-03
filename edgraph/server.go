@@ -37,7 +37,6 @@ import (
 	"github.com/pkg/errors"
 	ostats "go.opencensus.io/stats"
 	"go.opencensus.io/tag"
-	"go.opencensus.io/trace"
 	otrace "go.opencensus.io/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -55,6 +54,7 @@ import (
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/telemetry"
+	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
@@ -255,8 +255,9 @@ func validateAlterOperation(ctx context.Context, op *api.Operation) error {
 
 // parseSchemaFromAlterOperation parses the string schema given in input operation to a Go
 // struct, and performs some checks to make sure that the schema is valid.
-func parseSchemaFromAlterOperation(ctx context.Context, op *api.Operation) (*schema.ParsedSchema,
-	error) {
+func parseSchemaFromAlterOperation(ctx context.Context, op *api.Operation) (
+	*schema.ParsedSchema, error) {
+
 	// If a background task is already running, we should reject all the new alter requests.
 	if schema.State().IndexingInProgress() {
 		return nil, errIndexingInProgress
@@ -429,14 +430,6 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	}
 
 	if op.DropOp == api.Operation_DATA {
-		if x.Config.BlockClusterWideDrop {
-			glog.V(2).Info("Blocked drop-data because it is not permitted.")
-			return empty, errors.New("Drop data operation is not permitted.")
-		}
-		if err := AuthGuardianOfTheGalaxy(ctx); err != nil {
-			return empty, errors.Wrapf(err, "Drop data can only be called by the guardian of the"+
-				" galaxy")
-		}
 		if len(op.DropValue) > 0 {
 			return empty, errors.Errorf("If DropOp is set to DATA, DropValue must be empty")
 		}
@@ -448,13 +441,14 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		}
 
 		m.DropOp = pb.Mutations_DATA
+		m.DropValue = fmt.Sprintf("%#x", namespace)
 		_, err = query.ApplyMutations(ctx, m)
 		if err != nil {
 			return empty, err
 		}
 
 		// insert a helper record for backup & restore, indicating that drop_data was done
-		err = InsertDropRecord(ctx, "DROP_DATA;")
+		err = InsertDropRecord(ctx, fmt.Sprintf("DROP_DATA;%#x", namespace))
 		if err != nil {
 			return empty, err
 		}
@@ -615,20 +609,15 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 		},
 	}
 
+	// ensure that we do not insert very large (> 64 KB) value
+	if err := validateMutation(ctx, edges); err != nil {
+		return err
+	}
+
 	qc.span.Annotatef(nil, "Applying mutations: %+v", m)
 	resp.Txn, err = query.ApplyMutations(ctx, m)
 	qc.span.Annotatef(nil, "Txn Context: %+v. Err=%v", resp.Txn, err)
 
-	if x.WorkerConfig.LudicrousEnabled {
-		// Mutations are automatically committed in case of ludicrous mode, so we don't
-		// need to manually commit.
-		if resp.Txn == nil {
-			return errors.Wrapf(err, "Txn Context is nil")
-		}
-		resp.Txn.Keys = resp.Txn.Keys[:0]
-		resp.Txn.CommitTs = qc.req.StartTs
-		return err
-	}
 	// calculateMutationMetrics calculate cost for the mutation.
 	calculateMutationMetrics := func() {
 		cost := uint64(len(newUids) + len(edges))
@@ -682,6 +671,58 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 	resp.Txn.Keys = resp.Txn.Keys[:0]
 	resp.Txn.CommitTs = cts
 	calculateMutationMetrics()
+	return nil
+}
+
+// validateMutation ensures that the value in the edge is not too big.
+// The challange here is that the keys in badger have a limitation on their size (< 2<<16).
+// We need to ensure that no key, either primary or secondary index key is bigger than that.
+// See here for more details: https://github.com/dgraph-io/projects/issues/73
+func validateMutation(ctx context.Context, edges []*pb.DirectedEdge) error {
+	errValueTooBigForIndex := errors.New("value in the mutation is too large for the index")
+
+	// key = meta data + predicate + actual key, this all needs to fit into 64 KB
+	// we are keeping 536 bytes aside for meta information we put into the key and we
+	// use 65000 bytes for the rest, that is predicate and the actual key.
+	const maxKeySize = 65000
+
+	for _, e := range edges {
+		maxSizeForDataKey := maxKeySize - len(e.Attr)
+
+		// seems reasonable to assume, the tokens for indexes won't be bigger than the value itself
+		if len(e.Value) <= maxSizeForDataKey {
+			continue
+		}
+		pred := x.NamespaceAttr(e.Namespace, e.Attr)
+		update, ok := schema.State().Get(ctx, pred)
+		if !ok {
+			continue
+		}
+		// only string type can have large values that could cause us issues later
+		if update.GetValueType() != pb.Posting_STRING {
+			continue
+		}
+
+		storageVal := types.Val{Tid: types.TypeID(e.GetValueType()), Value: e.GetValue()}
+		schemaVal, err := types.Convert(storageVal, types.TypeID(update.GetValueType()))
+		if err != nil {
+			return err
+		}
+
+		for _, tokenizer := range schema.State().Tokenizer(ctx, pred) {
+			toks, err := tok.BuildTokens(schemaVal.Value, tok.GetTokenizerForLang(tokenizer, e.Lang))
+			if err != nil {
+				return fmt.Errorf("error while building index tokens: %w", err)
+			}
+
+			for _, tok := range toks {
+				if len(tok) > maxSizeForDataKey {
+					return errValueTooBigForIndex
+				}
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -990,7 +1031,7 @@ type queryContext struct {
 	// l stores latency numbers
 	latency *query.Latency
 	// span stores a opencensus span used throughout the query processing
-	span *trace.Span
+	span *otrace.Span
 	// graphql indicates whether the given request is from graphql admin or not.
 	graphql bool
 	// gqlField stores the GraphQL field for which the query is being processed.
@@ -1064,7 +1105,7 @@ func filterTablets(ctx context.Context, ms *pb.MembershipState) error {
 	if !x.WorkerConfig.AclEnabled {
 		return nil
 	}
-	namespace, err := x.ExtractJWTNamespace(ctx)
+	namespace, err := x.ExtractNamespaceFrom(ctx)
 	if err != nil {
 		return errors.Errorf("Namespace not found in JWT.")
 	}
@@ -1238,7 +1279,7 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (resp *api.Response,
 		return nil, errors.Errorf("empty request")
 	}
 
-	span.AddAttributes(trace.StringAttribute("Query", req.req.Query))
+	span.AddAttributes(otrace.StringAttribute("Query", req.req.Query))
 	span.Annotatef(nil, "Request received: %v", req.req)
 	if isQuery {
 		ostats.Record(ctx, x.PendingQueries.M(1), x.NumQueries.M(1))
@@ -1282,13 +1323,9 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (resp *api.Response,
 	defer annotateStartTs(qc.span, qc.req.StartTs)
 	// For mutations, we update the startTs if necessary.
 	if isMutation && req.req.StartTs == 0 {
-		if x.WorkerConfig.LudicrousEnabled {
-			req.req.StartTs = posting.Oracle().MaxAssigned()
-		} else {
-			start := time.Now()
-			req.req.StartTs = worker.State.GetTimestamp(false)
-			qc.latency.AssignTimestamp = time.Since(start)
-		}
+		start := time.Now()
+		req.req.StartTs = worker.State.GetTimestamp(false)
+		qc.latency.AssignTimestamp = time.Since(start)
 	}
 	if x.WorkerConfig.AclEnabled {
 		ns, err := x.ExtractNamespace(ctx)
@@ -1351,9 +1388,6 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 	}
 	if ctx.Err() != nil {
 		return resp, ctx.Err()
-	}
-	if x.WorkerConfig.LudicrousEnabled {
-		qc.req.StartTs = posting.Oracle().MaxAssigned()
 	}
 	qr := query.Request{
 		Latency:  qc.latency,
@@ -1564,7 +1598,7 @@ func validateNamespace(ctx context.Context, tc *api.TxnContext) error {
 		return nil
 	}
 
-	ns, err := x.ExtractJWTNamespace(ctx)
+	ns, err := x.ExtractNamespaceFrom(ctx)
 	if err != nil {
 		return err
 	}
@@ -1588,7 +1622,7 @@ func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.Tx
 		return &api.TxnContext{}, errors.Errorf(
 			"StartTs cannot be zero while committing a transaction")
 	}
-	if ns, err := x.ExtractJWTNamespace(ctx); err == nil {
+	if ns, err := x.ExtractNamespaceFrom(ctx); err == nil {
 		annotateNamespace(span, ns)
 	}
 	annotateStartTs(span, tc.StartTs)

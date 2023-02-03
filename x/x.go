@@ -39,18 +39,7 @@ import (
 	"syscall"
 	"time"
 
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/peer"
-
-	"github.com/dgraph-io/badger/v3"
-	bo "github.com/dgraph-io/badger/v3/options"
-	"github.com/dgraph-io/badger/v3/pb"
-	badgerpb "github.com/dgraph-io/badger/v3/pb"
-	"github.com/dgraph-io/dgo/v210"
-	"github.com/dgraph-io/dgo/v210/protos/api"
-	"github.com/dgraph-io/ristretto/z"
 	"github.com/dustin/go-humanize"
-
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
@@ -58,10 +47,19 @@ import (
 	"go.opencensus.io/trace"
 	"golang.org/x/crypto/ssh/terminal"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/encoding/gzip"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
+
+	"github.com/dgraph-io/badger/v3"
+	bo "github.com/dgraph-io/badger/v3/options"
+	badgerpb "github.com/dgraph-io/badger/v3/pb"
+	"github.com/dgraph-io/dgo/v210"
+	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 // Error constants representing different types of errors.
@@ -262,7 +260,7 @@ func GqlErrorf(message string, args ...interface{}) *GqlError {
 func ExtractNamespaceHTTP(r *http.Request) uint64 {
 	ctx := AttachAccessJwt(context.Background(), r)
 	// Ignoring error because the default value is zero anyways.
-	namespace, _ := ExtractJWTNamespace(ctx)
+	namespace, _ := ExtractNamespaceFrom(ctx)
 	return namespace
 }
 
@@ -443,7 +441,7 @@ func AttachJWTNamespace(ctx context.Context) context.Context {
 		return AttachNamespace(ctx, GalaxyNamespace)
 	}
 
-	ns, err := ExtractJWTNamespace(ctx)
+	ns, err := ExtractNamespaceFrom(ctx)
 	if err == nil {
 		// Attach the namespace only if we got one from JWT.
 		// This preserves any namespace directly present in the context which is needed for
@@ -471,7 +469,7 @@ func AttachJWTNamespaceOutgoing(ctx context.Context) (context.Context, error) {
 	if !WorkerConfig.AclEnabled {
 		return AttachNamespaceOutgoing(ctx, GalaxyNamespace), nil
 	}
-	ns, err := ExtractJWTNamespace(ctx)
+	ns, err := ExtractNamespaceFrom(ctx)
 	if err != nil {
 		return ctx, err
 	}
@@ -615,11 +613,27 @@ func Max(a, b uint64) uint64 {
 	return b
 }
 
+// ExponentialRetry runs the given function until it succeeds or can no longer be retried.
+func ExponentialRetry(maxRetries int, waitAfterFailure time.Duration,
+	f func() error) error {
+	var err error
+	for retry := maxRetries; retry > 0; retry-- {
+		if err = f(); err == nil {
+			return nil
+		}
+		if waitAfterFailure > 0 {
+			time.Sleep(waitAfterFailure)
+			waitAfterFailure *= 2
+		}
+	}
+	return err
+}
+
 // RetryUntilSuccess runs the given function until it succeeds or can no longer be retried.
 func RetryUntilSuccess(maxRetries int, waitAfterFailure time.Duration,
 	f func() error) error {
 	var err error
-	for retry := maxRetries; retry != 0; retry-- {
+	for retry := maxRetries; retry > 0; retry-- {
 		if err = f(); err == nil {
 			return nil
 		}
@@ -1402,10 +1416,10 @@ func KvWithMaxVersion(kvs *badgerpb.KVList, prefixes [][]byte) *badgerpb.KV {
 }
 
 // PrefixesToMatches converts the prefixes for subscription to a list of match.
-func PrefixesToMatches(prefixes [][]byte, ignore string) []*pb.Match {
-	matches := make([]*pb.Match, 0, len(prefixes))
+func PrefixesToMatches(prefixes [][]byte, ignore string) []*badgerpb.Match {
+	matches := make([]*badgerpb.Match, 0, len(prefixes))
 	for _, prefix := range prefixes {
-		matches = append(matches, &pb.Match{
+		matches = append(matches, &badgerpb.Match{
 			Prefix:      prefix,
 			IgnoreBytes: ignore,
 		})

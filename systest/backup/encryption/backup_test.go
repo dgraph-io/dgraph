@@ -28,16 +28,17 @@ import (
 	"testing"
 	"time"
 
+	minio "github.com/minio/minio-go/v6"
+	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
+	"github.com/stretchr/testify/require"
+
 	"github.com/dgraph-io/badger/v3/options"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
-	minio "github.com/minio/minio-go/v6"
-	"github.com/spf13/pflag"
-	"github.com/spf13/viper"
-	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -288,7 +289,7 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
 	require.Equal(t, "Success", testutil.JsonGet(data, "data", "backup", "response", "code").(string))
 	taskId := testutil.JsonGet(data, "data", "backup", "taskId").(string)
-	testutil.WaitForTask(t, taskId, true)
+	testutil.WaitForTask(t, taskId, true, testutil.SockAddrHttp)
 
 	// Verify that the right amount of files and directories were created.
 	copyToLocalFs(t)
@@ -320,10 +321,8 @@ func runRestore(t *testing.T, lastDir string, commitTs uint64) map[string]string
 
 	t.Logf("--- Restoring from: %q", localBackupDst)
 	testutil.KeyFile = "../../../ee/enc/test-fixtures/enc-key"
-	key, err := ioutil.ReadFile("../../../ee/enc/test-fixtures/enc-key")
-	require.NoError(t, err)
-	result := worker.RunRestore("./data/restore", localBackupDst, lastDir,
-		x.Sensitive(key), options.Snappy, 0)
+	result := worker.RunOfflineRestore(restoreDir, localBackupDst, lastDir,
+		testutil.KeyFile, nil, options.Snappy, 0)
 	require.NoError(t, result.Err)
 
 	for i, pdir := range []string{"p1", "p2", "p3"} {
@@ -358,15 +357,10 @@ func runFailingRestore(t *testing.T, backupLocation, lastDir string, commitTs ui
 	// Recreate the restore directory to make sure there's no previous data when
 	// calling restore.
 	require.NoError(t, os.RemoveAll(restoreDir))
+	keyFile := "../../../ee/enc/test-fixtures/enc-key"
 
-	// Get key.
-	config := getEncConfig()
-	config.Set("encryption", ee.BuildEncFlag("../../../ee/enc/test-fixtures/enc-key"))
-	keys, err := ee.GetKeys(config)
-	require.NoError(t, err)
-	require.NotNil(t, keys.EncKey)
-
-	result := worker.RunRestore("./data/restore", backupLocation, lastDir, keys.EncKey, options.Snappy, 0)
+	result := worker.RunOfflineRestore(restoreDir, backupLocation, lastDir, keyFile, nil,
+		options.Snappy, 0)
 	require.Error(t, result.Err)
 	require.Contains(t, result.Err.Error(), "expected a BackupNum value of 1")
 }

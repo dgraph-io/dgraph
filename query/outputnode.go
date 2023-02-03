@@ -30,8 +30,6 @@ import (
 	"unicode/utf8"
 	"unsafe"
 
-	gqlSchema "github.com/dgraph-io/dgraph/graphql/schema"
-
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	geom "github.com/twpayne/go-geom"
@@ -39,6 +37,7 @@ import (
 
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/algo"
+	gqlSchema "github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
@@ -287,21 +286,21 @@ const (
 
 // fastJsonNode represents node of a tree, which is formed to convert a subgraph into json response
 // for a query. A fastJsonNode has following meta data:
-// 1. Attr => predicate associated with this node.
-// 2. ScalarVal => Any value associated with node, if it is a leaf node.
-// 3. List => Stores boolean value, true if this node is part of list.
-// 4. FacetsParent => Stores boolean value, true if this node is a facetsParent. facetsParent is
-//    node which is parent for facets values for a scalar list predicate. Eg: node "city|country"
-//    will have FacetsParent value as true.
-//    {
-//		"city": ["Bengaluru", "San Francisco"],
-//		"city|country": {
-//			"0": "india",
-//			"1": "US"
-//		}
-//	  }
-// 5. Children(Attrs) => List of all children.
-// 6. Visited => Stores boolen values, true if node has been visited for fixing children's order.
+//  1. Attr => predicate associated with this node.
+//  2. ScalarVal => Any value associated with node, if it is a leaf node.
+//  3. List => Stores boolean value, true if this node is part of list.
+//  4. FacetsParent => Stores boolean value, true if this node is a facetsParent. facetsParent is
+//     node which is parent for facets values for a scalar list predicate. Eg: node "city|country"
+//     will have FacetsParent value as true.
+//     {
+//     "city": ["Bengaluru", "San Francisco"],
+//     "city|country": {
+//     "0": "india",
+//     "1": "US"
+//     }
+//     }
+//  5. Children(Attrs) => List of all children.
+//  6. Visited => Stores boolen values, true if node has been visited for fixing children's order.
 //
 // All of the data for fastJsonNode tree is stored in encoder to optimise memory usage. fastJsonNode
 // struct is pointer to node object. node object stores below information.
@@ -366,6 +365,7 @@ func (enc *encoder) setCustom(fj fastJsonNode) {
 	fj.meta |= customBit
 }
 
+//nolint:unused // appendAttrs is used in outputnode_test.go as a helper function
 func (enc *encoder) appendAttrs(fj, child fastJsonNode) {
 	enc.addChildren(fj, child)
 }
@@ -908,7 +908,7 @@ func (enc *encoder) normalize(fj fastJsonNode) ([]fastJsonNode, error) {
 	var shead, curScalar fastJsonNode
 	chead = enc.children(fj)
 	for chead != nil {
-		if enc.children(chead) != nil && enc.getFacetsParent(chead) == false {
+		if enc.children(chead) != nil && !enc.getFacetsParent(chead) {
 			chead = chead.next
 			continue
 		}

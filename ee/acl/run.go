@@ -1,3 +1,4 @@
+//go:build oss
 // +build oss
 
 /*
@@ -19,8 +20,9 @@
 package acl
 
 import (
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/cobra"
+
+	"github.com/dgraph-io/dgraph/x"
 )
 
 var CmdAcl x.SubCommand
@@ -30,6 +32,6 @@ func init() {
 		Use:         "acl",
 		Short:       "Enterprise feature. Not supported in oss version",
 		Annotations: map[string]string{"group": "security"},
-	},
-		Acl.Cmd.SetHelpTemplate(x.NonRootTemplate)
+	}
+	CmdAcl.Cmd.SetHelpTemplate(x.NonRootTemplate)
 }

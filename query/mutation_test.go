@@ -21,9 +21,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/stretchr/testify/require"
 )
 
 func TestReserverPredicateForMutation(t *testing.T) {
@@ -32,7 +33,9 @@ func TestReserverPredicateForMutation(t *testing.T) {
 }
 
 func TestAlteringReservedTypesAndPredicatesShouldFail(t *testing.T) {
-	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	defer cancel()
+
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
 

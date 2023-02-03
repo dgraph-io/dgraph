@@ -21,25 +21,23 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/ristretto/z"
-
-	"github.com/dgraph-io/dgraph/query"
-
+	jwt "github.com/dgrijalva/jwt-go"
+	"github.com/golang/glog"
 	"github.com/pkg/errors"
+	otrace "go.opencensus.io/trace"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	bpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/dql"
 	"github.com/dgraph-io/dgraph/ee/acl"
+	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
-	jwt "github.com/dgrijalva/jwt-go"
-	"github.com/golang/glog"
-	otrace "go.opencensus.io/trace"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 type predsAndvars struct {
@@ -195,7 +193,7 @@ func validateToken(jwtStr string) (*userData, error) {
 		return nil, errors.Errorf("userid in claims is not a string:%v", userId)
 	}
 
-	/*  
+	/*
 	 * Since, JSON numbers follow JavaScript's double-precision floating-point
 	 * format . . .
 	 * -- references: https://restfulapi.net/json-data-types/
@@ -436,35 +434,37 @@ func InitializeAcl(closer *z.Closer) {
 		// The acl feature is not turned on.
 		return
 	}
+	upsertGuardianAndGroot(closer, x.GalaxyNamespace)
+}
 
-	upsertGuardianAndGroot := func(ns uint64) {
-		for closer.Ctx().Err() == nil {
-			ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
-			defer cancel()
-			ctx = x.AttachNamespace(ctx, ns)
-			if err := upsertGuardian(ctx); err != nil {
-				glog.Infof("Unable to upsert the guardian group. Error: %v", err)
-				time.Sleep(100 * time.Millisecond)
-				continue
-			}
-			break
+// Note: The handling of closer should be done by caller.
+func upsertGuardianAndGroot(closer *z.Closer, ns uint64) {
+	if len(worker.Config.HmacSecret) == 0 {
+		// The acl feature is not turned on.
+		return
+	}
+	for closer.Ctx().Err() == nil {
+		ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
+		defer cancel()
+		ctx = x.AttachNamespace(ctx, ns)
+		if err := upsertGuardian(ctx); err != nil {
+			glog.Infof("Unable to upsert the guardian group. Error: %v", err)
+			time.Sleep(100 * time.Millisecond)
+			continue
 		}
-
-		for closer.Ctx().Err() == nil {
-			ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
-			defer cancel()
-			ctx = x.AttachNamespace(ctx, ns)
-			if err := upsertGroot(ctx, "password"); err != nil {
-				glog.Infof("Unable to upsert the groot account. Error: %v", err)
-				time.Sleep(100 * time.Millisecond)
-				continue
-			}
-			break
-		}
+		break
 	}
 
-	for ns := range schema.State().Namespaces() {
-		upsertGuardianAndGroot(ns)
+	for closer.Ctx().Err() == nil {
+		ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
+		defer cancel()
+		ctx = x.AttachNamespace(ctx, ns)
+		if err := upsertGroot(ctx, "password"); err != nil {
+			glog.Infof("Unable to upsert the groot account. Error: %v", err)
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+		break
 	}
 }
 
@@ -1113,7 +1113,7 @@ func AuthGuardianOfTheGalaxy(ctx context.Context) error {
 	if !x.WorkerConfig.AclEnabled {
 		return nil
 	}
-	ns, err := x.ExtractJWTNamespace(ctx)
+	ns, err := x.ExtractNamespaceFrom(ctx)
 	if err != nil {
 		return status.Error(codes.Unauthenticated,
 			"AuthGuardianOfTheGalaxy: extracting jwt token, error: "+err.Error())

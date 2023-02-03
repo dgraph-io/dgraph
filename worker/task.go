@@ -24,6 +24,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/golang/glog"
+	"github.com/golang/protobuf/proto"
+	cindex "github.com/google/codesearch/index"
+	cregexp "github.com/google/codesearch/regexp"
+	"github.com/pkg/errors"
+	otrace "go.opencensus.io/trace"
+	"golang.org/x/sync/errgroup"
+
 	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/algo"
@@ -36,14 +44,6 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/glog"
-	otrace "go.opencensus.io/trace"
-	"golang.org/x/sync/errgroup"
-
-	"github.com/golang/protobuf/proto"
-	cindex "github.com/google/codesearch/index"
-	cregexp "github.com/google/codesearch/regexp"
-	"github.com/pkg/errors"
 )
 
 func invokeNetworkRequest(ctx context.Context, addr string,

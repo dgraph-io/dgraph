@@ -18,7 +18,7 @@ require (
 	github.com/dgraph-io/dgo/v210 v210.0.0-20210407152819-261d1c2a6987
 	github.com/dgraph-io/gqlgen v0.13.2
 	github.com/dgraph-io/gqlparser/v2 v2.2.1
-	github.com/dgraph-io/graphql-transport-ws v0.0.0-20210511143556-2cef522f1f15
+	github.com/dgraph-io/graphql-transport-ws v0.0.0-20210223074046-e5b8b80bb4ed
 	github.com/dgraph-io/ristretto v0.1.1
 	github.com/dgraph-io/simdjson-go v0.3.0
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
@@ -40,6 +40,7 @@ require (
 	github.com/google/uuid v1.0.0
 	github.com/gorilla/websocket v1.4.2
 	github.com/graph-gophers/graphql-go v0.0.0-20200309224638-dae41bde9ef9
+	github.com/graph-gophers/graphql-transport-ws v0.0.2 // indirect
 	github.com/hashicorp/vault/api v1.0.4
 	github.com/minio/minio-go/v6 v6.0.55
 	github.com/mitchellh/panicwrap v1.0.0
@@ -53,18 +54,18 @@ require (
 	github.com/spf13/cobra v0.0.5
 	github.com/spf13/pflag v1.0.3
 	github.com/spf13/viper v1.7.1
-	github.com/stretchr/testify v1.6.1
+	github.com/stretchr/testify v1.7.0
 	github.com/twpayne/go-geom v1.0.5
 	github.com/xdg/scram v0.0.0-20180814205039-7eeb5667e42c
 	go.etcd.io/etcd v0.5.0-alpha.5.0.20190108173120-83c051b701d3
 	go.opencensus.io v0.22.5
 	go.uber.org/zap v1.16.0
 	golang.org/x/crypto v0.0.0-20220314234659-1baeb1ce4c0b
-	golang.org/x/net v0.0.0-20220906165146-f3363e06e74c
-	golang.org/x/sync v0.0.0-20201207232520-09787c993a3a
-	golang.org/x/sys v0.0.0-20221010170243-090e33056c14
-	golang.org/x/text v0.3.7
-	golang.org/x/tools v0.0.0-20210106214847-113979e3529a
+	golang.org/x/net v0.4.0
+	golang.org/x/sync v0.0.0-20220722155255-886fb9371eb4
+	golang.org/x/sys v0.3.0
+	golang.org/x/text v0.5.0
+	golang.org/x/tools v0.1.12
 	google.golang.org/grpc v1.27.0
 	gopkg.in/DataDog/dd-trace-go.v1 v1.13.1 // indirect
 	gopkg.in/square/go-jose.v2 v2.3.1

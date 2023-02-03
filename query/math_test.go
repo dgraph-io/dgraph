@@ -20,8 +20,9 @@ import (
 	"math"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/types"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dgraph-io/dgraph/types"
 )
 
 func TestProcessBinary(t *testing.T) {

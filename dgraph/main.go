@@ -21,10 +21,11 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/dgraph-io/dgraph/dgraph/cmd"
-	"github.com/dgraph-io/ristretto/z"
 	"github.com/dustin/go-humanize"
 	"github.com/golang/glog"
+
+	"github.com/dgraph-io/dgraph/dgraph/cmd"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 func main() {
@@ -57,7 +58,7 @@ func main() {
 		for range ticker.C {
 			// Read Jemalloc stats first. Print if there's a big difference.
 			z.ReadMemStats(&js)
-			if diff := absDiff(uint64(z.NumAllocBytes()), lastAlloc); diff > 256<<20 {
+			if diff := absDiff(uint64(z.NumAllocBytes()), lastAlloc); diff > 1<<30 {
 				glog.V(2).Infof("NumAllocBytes: %s jemalloc: Active %s Allocated: %s"+
 					" Resident: %s Retained: %s\n",
 					humanize.IBytes(uint64(z.NumAllocBytes())),

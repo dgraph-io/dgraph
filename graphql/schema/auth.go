@@ -201,18 +201,6 @@ type TypeAuth struct {
 	Fields map[string]*AuthContainer
 }
 
-func createEmptyDQLRule(typeName string) *RuleNode {
-	return &RuleNode{DQLRule: &dql.GraphQuery{
-		Attr: typeName + "Root",
-		Var:  typeName + "Root",
-		Func: &dql.Function{
-			Name: "type",
-			Args: []dql.Arg{{Value: typeName}},
-		},
-	},
-	}
-}
-
 func authRules(sch *schema) (map[string]*TypeAuth, error) {
 	s := sch.schema
 	//TODO: Add position in error.
@@ -265,20 +253,6 @@ func authRules(sch *schema) (map[string]*TypeAuth, error) {
 	}
 
 	return authRules, errResult
-}
-
-func mergeAuthNodeWithOr(objectAuth, interfaceAuth *RuleNode) *RuleNode {
-	if objectAuth == nil {
-		return interfaceAuth
-	}
-
-	if interfaceAuth == nil {
-		return objectAuth
-	}
-
-	ruleNode := &RuleNode{}
-	ruleNode.Or = append(ruleNode.Or, objectAuth, interfaceAuth)
-	return ruleNode
 }
 
 func mergeAuthNodeWithAnd(objectAuth, interfaceAuth *RuleNode) *RuleNode {

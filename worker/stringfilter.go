@@ -19,24 +19,24 @@ package worker
 import (
 	"strings"
 
+	"github.com/golang/glog"
+
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/glog"
 )
 
 type matchFunc func(types.Val, *stringFilter) bool
 
 type stringFilter struct {
-	funcName  string
-	funcType  FuncType
-	lang      string
-	tokens    []string
-	match     matchFunc
-	ineqValue types.Val
-	eqVals    []types.Val
-	tokName   string
+	funcName string
+	funcType FuncType
+	lang     string
+	tokens   []string
+	match    matchFunc
+	eqVals   []types.Val
+	tokName  string
 }
 
 func matchStrings(uids *pb.List, values [][]types.Val, filter *stringFilter) *pb.List {

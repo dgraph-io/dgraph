@@ -30,10 +30,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/stretchr/testify/require"
 )
 
 // TestSystem uses the externally run Dgraph cluster for testing. Most other
@@ -1875,7 +1876,7 @@ func CountIndexConcurrentSetDelScalarPredicate(t *testing.T, c *dgo.Dgraph) {
 	var s struct {
 		Q []struct {
 			Name string `json:"name"`
-		} `json:q`
+		} `json:"q"`
 	}
 	require.NoError(t, json.Unmarshal(resp.GetJson(), &s))
 	require.Equal(t, 1, len(s.Q))

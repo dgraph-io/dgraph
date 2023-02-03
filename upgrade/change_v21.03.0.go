@@ -22,6 +22,9 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/golang/glog"
+	"github.com/pkg/errors"
+
 	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
@@ -29,8 +32,6 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/glog"
-	"github.com/pkg/errors"
 )
 
 const (

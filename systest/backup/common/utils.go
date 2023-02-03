@@ -20,12 +20,11 @@ import (
 	"os"
 	"testing"
 
-	"github.com/dgraph-io/badger/v3/options"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dgraph-io/badger/v3/options"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/worker"
-	"github.com/dgraph-io/dgraph/x"
 )
 
 var (
@@ -47,8 +46,8 @@ func RunFailingRestore(t *testing.T, backupLocation, lastDir string, commitTs ui
 	// calling restore.
 	require.NoError(t, os.RemoveAll(restoreDir))
 
-	result := worker.RunRestore("./data/restore", backupLocation, lastDir,
-		x.Sensitive(nil), options.Snappy, 0)
+	result := worker.RunOfflineRestore(restoreDir, backupLocation, lastDir,
+		"", nil, options.Snappy, 0)
 	require.Error(t, result.Err)
 	require.Contains(t, result.Err.Error(), "expected a BackupNum value of 1")
 }
@@ -90,4 +89,14 @@ func CopyToLocalFs(t *testing.T) {
 	require.NoError(t, os.RemoveAll(copyBackupDir))
 	srcPath := testutil.DockerPrefix + "_alpha1_1:/data/backups"
 	require.NoError(t, testutil.DockerCp(srcPath, copyBackupDir))
+}
+
+// to copy files fron nfs server
+func CopyToLocalFsFromNFS(t *testing.T, backupDst string, copyBackupDirectory string) {
+	// The original backup files are not accessible because docker creates all files in
+	// the shared volume as the root user. This restriction is circumvented by using
+	// "docker cp" to create a copy that is not owned by the root user.
+	require.NoError(t, os.RemoveAll(copyBackupDirectory))
+	srcPath := testutil.DockerPrefix + "_nfs_1:/data" + backupDst
+	require.NoError(t, testutil.DockerCp(srcPath, copyBackupDirectory))
 }

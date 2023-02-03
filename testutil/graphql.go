@@ -27,14 +27,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pkg/errors"
-
 	"github.com/dgrijalva/jwt-go/v4"
+	"github.com/pkg/errors"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/metadata"
 
 	"github.com/dgraph-io/dgraph/x"
-
-	"github.com/stretchr/testify/require"
 )
 
 const ExportRequest = `mutation {

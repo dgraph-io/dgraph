@@ -21,6 +21,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/golang/glog"
+	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"
 
 	"github.com/dgraph-io/dgo/v210/protos/api"
@@ -29,8 +31,6 @@ import (
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/glog"
-	"github.com/pkg/errors"
 )
 
 // ApplyMutations performs the required edge expansions and forwards the results to the

@@ -1,3 +1,4 @@
+//go:build !oss
 // +build !oss
 
 /*
@@ -16,8 +17,9 @@ import (
 	"fmt"
 	"io/ioutil"
 
-	"github.com/dgraph-io/ristretto/z"
 	"github.com/spf13/viper"
+
+	"github.com/dgraph-io/ristretto/z"
 )
 
 // GetKeys returns the ACL and encryption keys as configured by the user
@@ -25,7 +27,6 @@ import (
 // this function always returns an error.
 func GetKeys(config *viper.Viper) (*Keys, error) {
 	keys := &Keys{}
-	var err error
 
 	aclSuperFlag := z.NewSuperFlag(config.GetString("acl")).MergeAndCheckDefault(AclDefaults)
 	encSuperFlag := z.NewSuperFlag(config.GetString("encryption")).MergeAndCheckDefault(EncDefaults)
@@ -37,6 +38,7 @@ func GetKeys(config *viper.Viper) (*Keys, error) {
 		if keys.AclKey != nil {
 			return nil, fmt.Errorf("flags: ACL secret key set in both vault and acl flags")
 		}
+		var err error
 		if keys.AclKey, err = ioutil.ReadFile(aclKeyFile); err != nil {
 			return nil, fmt.Errorf("error reading ACL secret key from file: %s: %s", aclKeyFile, err)
 		}
@@ -50,6 +52,7 @@ func GetKeys(config *viper.Viper) (*Keys, error) {
 		if keys.EncKey != nil {
 			return nil, fmt.Errorf("flags: Encryption key set in both vault and encryption flags")
 		}
+		var err error
 		if keys.EncKey, err = ioutil.ReadFile(encKeyFile); err != nil {
 			return nil, fmt.Errorf("error reading encryption key from file: %s: %s", encKeyFile, err)
 		}

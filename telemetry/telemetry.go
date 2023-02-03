@@ -24,11 +24,12 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/golang/glog"
+	"github.com/pkg/errors"
+
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/glog"
-	"github.com/pkg/errors"
 )
 
 // Telemetry holds information about the state of the zero and alpha server.

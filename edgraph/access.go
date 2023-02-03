@@ -1,3 +1,4 @@
+//go:build oss
 // +build oss
 
 /*
@@ -21,12 +22,13 @@ package edgraph
 import (
 	"context"
 
+	"github.com/golang/glog"
+
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/dql"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
-	"github.com/golang/glog"
 )
 
 // Login handles login requests from clients. This version rejects all requests

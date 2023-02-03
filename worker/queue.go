@@ -26,13 +26,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/golang/glog"
+	"github.com/pkg/errors"
+
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
-	"github.com/golang/glog"
-	"github.com/pkg/errors"
 )
 
 // TaskStatusOverNetwork fetches the status of a task over the network. Alphas only know about the

@@ -26,15 +26,14 @@ import (
 	"testing"
 	"time"
 
+	minio "github.com/minio/minio-go/v6"
+	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
 	"github.com/dgraph-io/badger/v3/options"
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
-	minio "github.com/minio/minio-go/v6"
-	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
-
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -173,7 +172,7 @@ func runBackup(t *testing.T) {
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
 	require.Equal(t, "Success", testutil.JsonGet(data, "data", "backup", "response", "code").(string))
 	taskId := testutil.JsonGet(data, "data", "backup", "taskId").(string)
-	testutil.WaitForTask(t, taskId, true)
+	testutil.WaitForTask(t, taskId, true, testutil.SockAddrHttp)
 
 	// Verify that the right amount of files and directories were created.
 	copyToLocalFs(t)
@@ -186,7 +185,8 @@ func runRestore(t *testing.T, backupLocation, lastDir string, commitTs uint64) m
 	require.NoError(t, os.MkdirAll(restoreDir, os.ModePerm))
 
 	t.Logf("--- Restoring from: %q", backupLocation)
-	result := worker.RunRestore("./data/restore", backupLocation, lastDir, x.Sensitive(nil), options.Snappy, 0)
+	result := worker.RunOfflineRestore(restoreDir, backupLocation,
+		lastDir, "", nil, options.Snappy, 0)
 	require.NoError(t, result.Err)
 
 	restored1, err := testutil.GetPredicateValues("./data/restore/p1", x.GalaxyAttr("name1"), commitTs)

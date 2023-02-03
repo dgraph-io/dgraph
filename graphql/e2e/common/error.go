@@ -27,20 +27,19 @@ import (
 	"strings"
 	"testing"
 
-	admin2 "github.com/dgraph-io/dgraph/graphql/admin"
-
-	"github.com/dgraph-io/dgo/v210"
-	"github.com/dgraph-io/dgo/v210/protos/api"
-	dgoapi "github.com/dgraph-io/dgo/v210/protos/api"
-	"github.com/dgraph-io/dgraph/graphql/resolve"
-	"github.com/dgraph-io/dgraph/graphql/schema"
-	"github.com/dgraph-io/dgraph/graphql/test"
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/peer"
 	"gopkg.in/yaml.v2"
+
+	"github.com/dgraph-io/dgo/v210"
+	"github.com/dgraph-io/dgo/v210/protos/api"
+	admin2 "github.com/dgraph-io/dgraph/graphql/admin"
+	"github.com/dgraph-io/dgraph/graphql/resolve"
+	"github.com/dgraph-io/dgraph/graphql/schema"
+	"github.com/dgraph-io/dgraph/graphql/test"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 const (
@@ -95,10 +94,10 @@ func graphQLCompletionOn(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, 5, len(result.QueryCountry))
 			expected.QueryCountry = []*country{
-				&country{Name: "Angola"},
-				&country{Name: "Bangladesh"},
-				&country{Name: "India"},
-				&country{Name: "Mozambique"},
+				{Name: "Angola"},
+				{Name: "Bangladesh"},
+				{Name: "India"},
+				{Name: "Mozambique"},
 				nil,
 			}
 
@@ -269,8 +268,8 @@ func panicCatcher(t *testing.T) {
 	// the http stack.
 
 	tests := map[string]*GraphQLParams{
-		"query": &GraphQLParams{Query: `query { queryCountry { name } }`},
-		"mutation": &GraphQLParams{
+		"query": {Query: `query { queryCountry { name } }`},
+		"mutation": {
 			Query: `mutation {
 						addCountry(input: [{ name: "A Country" }]) { country { id } }
 					}`,
@@ -313,15 +312,15 @@ func panicCatcher(t *testing.T) {
 
 type panicClient struct{}
 
-func (dg *panicClient) Execute(ctx context.Context, req *dgoapi.Request,
-	field schema.Field) (*dgoapi.Response, error) {
+func (dg *panicClient) Execute(ctx context.Context, req *api.Request,
+	field schema.Field) (*api.Response, error) {
 	x.Panic(errors.New(panicMsg))
 	return nil, nil
 }
 
 func (dg *panicClient) CommitOrAbort(ctx context.Context,
-	tc *dgoapi.TxnContext) (*dgoapi.TxnContext, error) {
-	return &dgoapi.TxnContext{}, nil
+	tc *api.TxnContext) (*api.TxnContext, error) {
+	return &api.TxnContext{}, nil
 }
 
 // clientInfoLogin check whether the client info(IP address) is propagated in the request.

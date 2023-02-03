@@ -27,11 +27,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dgraph-io/dgraph/conn"
-	"github.com/dgraph-io/dgraph/ee/audit"
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/ristretto/z"
 	farm "github.com/dgryski/go-farm"
 	"github.com/golang/glog"
 	"github.com/google/uuid"
@@ -41,6 +36,12 @@ import (
 	ostats "go.opencensus.io/stats"
 	"go.opencensus.io/tag"
 	otrace "go.opencensus.io/trace"
+
+	"github.com/dgraph-io/dgraph/conn"
+	"github.com/dgraph-io/dgraph/ee/audit"
+	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 const (

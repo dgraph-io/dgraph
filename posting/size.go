@@ -65,8 +65,7 @@ func (l *List) DeepSize() uint64 {
 		// Note: this will fail if the -race detector flag is used with go tools (test, run),
 		// see: https://github.com/golang/go/issues/48501
 		numBuckets := int(math.Pow(2, float64((*(*uint8)(
-			unsafe.Pointer(hmap.Pointer() + uintptr(9))))))) // skipcq: GSC-G103
-		// skipcq: GSC-G103
+			unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
 		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
 		size += uint64(numOldBuckets * sizeOfBucket)
 		if len(l.mutationMap) > 0 || numBuckets > 1 {

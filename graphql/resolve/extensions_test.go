@@ -20,8 +20,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgraph/graphql/test"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dgraph-io/dgraph/graphql/test"
 )
 
 func TestQueriesPropagateExtensions(t *testing.T) {
