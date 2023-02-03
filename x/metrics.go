@@ -33,119 +33,119 @@ import (
 	"contrib.go.opencensus.io/exporter/jaeger"
 	oc_prom "contrib.go.opencensus.io/exporter/prometheus"
 	datadog "github.com/DataDog/opencensus-go-exporter-datadog"
-	"github.com/dgraph-io/badger/v3"
-	"github.com/dgraph-io/ristretto/z"
 	"github.com/dustin/go-humanize"
 	"github.com/golang/glog"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/spf13/viper"
-	"go.opencensus.io/stats"
 	ostats "go.opencensus.io/stats"
 	"go.opencensus.io/stats/view"
 	"go.opencensus.io/tag"
 	"go.opencensus.io/trace"
+
+	"github.com/dgraph-io/badger/v3"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 var (
 	// Cumulative metrics.
 
 	// NumQueries is the total number of queries processed so far.
-	NumQueries = stats.Int64("num_queries_total",
-		"Total number of queries", stats.UnitDimensionless)
+	NumQueries = ostats.Int64("num_queries_total",
+		"Total number of queries", ostats.UnitDimensionless)
 	// NumMutations is the total number of mutations processed so far.
-	NumMutations = stats.Int64("num_mutations_total",
-		"Total number of mutations", stats.UnitDimensionless)
+	NumMutations = ostats.Int64("num_mutations_total",
+		"Total number of mutations", ostats.UnitDimensionless)
 	// NumEdges is the total number of edges created so far.
-	NumEdges = stats.Int64("num_edges_total",
-		"Total number of edges created", stats.UnitDimensionless)
+	NumEdges = ostats.Int64("num_edges_total",
+		"Total number of edges created", ostats.UnitDimensionless)
 	// NumBackups is the number of backups requested
-	NumBackups = stats.Int64("num_backups_total",
-		"Total number of backups requested", stats.UnitDimensionless)
+	NumBackups = ostats.Int64("num_backups_total",
+		"Total number of backups requested", ostats.UnitDimensionless)
 	// NumBackupsSuccess is the number of backups successfully completed
-	NumBackupsSuccess = stats.Int64("num_backups_success_total",
-		"Total number of backups completed", stats.UnitDimensionless)
+	NumBackupsSuccess = ostats.Int64("num_backups_success_total",
+		"Total number of backups completed", ostats.UnitDimensionless)
 	// NumBackupsFailed is the number of backups failed
-	NumBackupsFailed = stats.Int64("num_backups_failed_total",
-		"Total number of backups failed", stats.UnitDimensionless)
+	NumBackupsFailed = ostats.Int64("num_backups_failed_total",
+		"Total number of backups failed", ostats.UnitDimensionless)
 	// LatencyMs is the latency of the various Dgraph operations.
-	LatencyMs = stats.Float64("latency",
-		"Latency of the various methods", stats.UnitMilliseconds)
+	LatencyMs = ostats.Float64("latency",
+		"Latency of the various methods", ostats.UnitMilliseconds)
 
 	// Point-in-time metrics.
 
 	// PendingQueries records the current number of pending queries.
-	PendingQueries = stats.Int64("pending_queries_total",
-		"Number of pending queries", stats.UnitDimensionless)
+	PendingQueries = ostats.Int64("pending_queries_total",
+		"Number of pending queries", ostats.UnitDimensionless)
 	// PendingProposals records the current number of pending RAFT proposals.
-	PendingProposals = stats.Int64("pending_proposals_total",
-		"Number of pending proposals", stats.UnitDimensionless)
+	PendingProposals = ostats.Int64("pending_proposals_total",
+		"Number of pending proposals", ostats.UnitDimensionless)
 	// PendingBackups records if a backup is currently in progress
-	PendingBackups = stats.Int64("pending_backups_total",
-		"Number of backups", stats.UnitDimensionless)
+	PendingBackups = ostats.Int64("pending_backups_total",
+		"Number of backups", ostats.UnitDimensionless)
 	// MemoryAlloc records the amount of memory allocated via jemalloc
-	MemoryAlloc = stats.Int64("memory_alloc_bytes",
-		"Amount of memory allocated", stats.UnitBytes)
+	MemoryAlloc = ostats.Int64("memory_alloc_bytes",
+		"Amount of memory allocated", ostats.UnitBytes)
 	// MemoryInUse records the current amount of used memory by Dgraph.
-	MemoryInUse = stats.Int64("memory_inuse_bytes",
-		"Amount of memory in use", stats.UnitBytes)
+	MemoryInUse = ostats.Int64("memory_inuse_bytes",
+		"Amount of memory in use", ostats.UnitBytes)
 	// MemoryIdle records the amount of memory held by the runtime but not in-use by Dgraph.
-	MemoryIdle = stats.Int64("memory_idle_bytes",
-		"Amount of memory in idle spans", stats.UnitBytes)
+	MemoryIdle = ostats.Int64("memory_idle_bytes",
+		"Amount of memory in idle spans", ostats.UnitBytes)
 	// MemoryProc records the amount of memory used in processes.
-	MemoryProc = stats.Int64("memory_proc_bytes",
-		"Amount of memory used in processes", stats.UnitBytes)
+	MemoryProc = ostats.Int64("memory_proc_bytes",
+		"Amount of memory used in processes", ostats.UnitBytes)
 	// DiskFree records the number of bytes free on the disk
-	DiskFree = stats.Int64("disk_free_bytes",
-		"Total number of bytes free on disk", stats.UnitBytes)
+	DiskFree = ostats.Int64("disk_free_bytes",
+		"Total number of bytes free on disk", ostats.UnitBytes)
 	// DiskUsed records the number of bytes free on the disk
-	DiskUsed = stats.Int64("disk_used_bytes",
-		"Total number of bytes used on disk", stats.UnitBytes)
+	DiskUsed = ostats.Int64("disk_used_bytes",
+		"Total number of bytes used on disk", ostats.UnitBytes)
 	// DiskTotal records the number of bytes free on the disk
-	DiskTotal = stats.Int64("disk_total_bytes",
-		"Total number of bytes on disk", stats.UnitBytes)
+	DiskTotal = ostats.Int64("disk_total_bytes",
+		"Total number of bytes on disk", ostats.UnitBytes)
 	// ActiveMutations is the current number of active mutations.
-	ActiveMutations = stats.Int64("active_mutations_total",
-		"Number of active mutations", stats.UnitDimensionless)
+	ActiveMutations = ostats.Int64("active_mutations_total",
+		"Number of active mutations", ostats.UnitDimensionless)
 	// AlphaHealth status records the current health of the alphas.
-	AlphaHealth = stats.Int64("alpha_health_status",
-		"Status of the alphas", stats.UnitDimensionless)
+	AlphaHealth = ostats.Int64("alpha_health_status",
+		"Status of the alphas", ostats.UnitDimensionless)
 	// RaftAppliedIndex records the latest applied RAFT index.
-	RaftAppliedIndex = stats.Int64("raft_applied_index",
-		"Latest applied Raft index", stats.UnitDimensionless)
-	RaftApplyCh = stats.Int64("raft_applych_size",
-		"Number of proposals in Raft apply channel", stats.UnitDimensionless)
-	RaftPendingSize = stats.Int64("pending_proposal_bytes",
-		"Size of Raft pending proposal", stats.UnitBytes)
+	RaftAppliedIndex = ostats.Int64("raft_applied_index",
+		"Latest applied Raft index", ostats.UnitDimensionless)
+	RaftApplyCh = ostats.Int64("raft_applych_size",
+		"Number of proposals in Raft apply channel", ostats.UnitDimensionless)
+	RaftPendingSize = ostats.Int64("pending_proposal_bytes",
+		"Size of Raft pending proposal", ostats.UnitBytes)
 	// MaxAssignedTs records the latest max assigned timestamp.
-	MaxAssignedTs = stats.Int64("max_assigned_ts",
-		"Latest max assigned timestamp", stats.UnitDimensionless)
+	MaxAssignedTs = ostats.Int64("max_assigned_ts",
+		"Latest max assigned timestamp", ostats.UnitDimensionless)
 	// TxnCommits records count of committed transactions.
-	TxnCommits = stats.Int64("txn_commits_total",
-		"Number of transaction commits", stats.UnitDimensionless)
+	TxnCommits = ostats.Int64("txn_commits_total",
+		"Number of transaction commits", ostats.UnitDimensionless)
 	// TxnDiscards records count of discarded transactions by the client.
-	TxnDiscards = stats.Int64("txn_discards_total",
-		"Number of transaction discards by the client", stats.UnitDimensionless)
+	TxnDiscards = ostats.Int64("txn_discards_total",
+		"Number of transaction discards by the client", ostats.UnitDimensionless)
 	// TxnAborts records count of aborted transactions by the server.
-	TxnAborts = stats.Int64("txn_aborts_total",
-		"Number of transaction aborts by the server", stats.UnitDimensionless)
+	TxnAborts = ostats.Int64("txn_aborts_total",
+		"Number of transaction aborts by the server", ostats.UnitDimensionless)
 	// PBlockHitRatio records the hit ratio of posting store block cache.
-	PBlockHitRatio = stats.Float64("hit_ratio_postings_block",
-		"Hit ratio of p store block cache", stats.UnitDimensionless)
+	PBlockHitRatio = ostats.Float64("hit_ratio_postings_block",
+		"Hit ratio of p store block cache", ostats.UnitDimensionless)
 	// PIndexHitRatio records the hit ratio of posting store index cache.
-	PIndexHitRatio = stats.Float64("hit_ratio_postings_index",
-		"Hit ratio of p store index cache", stats.UnitDimensionless)
+	PIndexHitRatio = ostats.Float64("hit_ratio_postings_index",
+		"Hit ratio of p store index cache", ostats.UnitDimensionless)
 	// PLCacheHitRatio records the hit ratio of posting list cache.
-	PLCacheHitRatio = stats.Float64("hit_ratio_posting_cache",
-		"Hit ratio of posting list cache", stats.UnitDimensionless)
+	PLCacheHitRatio = ostats.Float64("hit_ratio_posting_cache",
+		"Hit ratio of posting list cache", ostats.UnitDimensionless)
 	// RaftHasLeader records whether this instance has a leader
-	RaftHasLeader = stats.Int64("raft_has_leader",
-		"Whether or not a leader exists for the group", stats.UnitDimensionless)
+	RaftHasLeader = ostats.Int64("raft_has_leader",
+		"Whether or not a leader exists for the group", ostats.UnitDimensionless)
 	// RaftIsLeader records whether this instance is the leader
-	RaftIsLeader = stats.Int64("raft_is_leader",
-		"Whether or not this instance is the leader of the group", stats.UnitDimensionless)
+	RaftIsLeader = ostats.Int64("raft_is_leader",
+		"Whether or not this instance is the leader of the group", ostats.UnitDimensionless)
 	// RaftLeaderChanges records the total number of leader changes seen.
-	RaftLeaderChanges = stats.Int64("raft_leader_changes_total",
-		"Total number of leader changes seen", stats.UnitDimensionless)
+	RaftLeaderChanges = ostats.Int64("raft_leader_changes_total",
+		"Total number of leader changes seen", ostats.UnitDimensionless)
 
 	// Conf holds the metrics config.
 	// TODO: Request statistics, latencies, 500, timeouts
@@ -426,7 +426,7 @@ func init() {
 			cctx, _ := tag.New(ctx, tag.Upsert(KeyStatus, v))
 			// TODO: Do we need to set health to zero, or would this tag be sufficient to
 			// indicate if Alpha is up but HealthCheck is failing.
-			stats.Record(cctx, AlphaHealth.M(1))
+			ostats.Record(cctx, AlphaHealth.M(1))
 		}
 	}()
 

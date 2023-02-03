@@ -26,12 +26,12 @@ import (
 	"time"
 
 	"github.com/dgrijalva/jwt-go/v4"
+	"github.com/dgryski/go-farm"
+	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgryski/go-farm"
-	"github.com/golang/glog"
 )
 
 // Poller is used to poll user subscription query.

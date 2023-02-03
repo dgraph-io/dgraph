@@ -425,7 +425,7 @@ type directiveValidator func(
 	typ *ast.Definition,
 	field *ast.FieldDefinition,
 	dir *ast.Directive,
-	secrets map[string]x.SensitiveByteSlice) gqlerror.List
+	secrets map[string]x.Sensitive) gqlerror.List
 
 type searchTypeIndex struct {
 	gqlType string
@@ -553,7 +553,7 @@ func ValidatorNoOp(
 	typ *ast.Definition,
 	field *ast.FieldDefinition,
 	dir *ast.Directive,
-	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
+	secrets map[string]x.Sensitive) gqlerror.List {
 	return nil
 }
 
@@ -852,7 +852,7 @@ func preGQLValidation(schema *ast.SchemaDocument) gqlerror.List {
 // has fleshed out the schema structure; we just need to check if it also satisfies
 // the extra rules.
 func postGQLValidation(schema *ast.Schema, definitions []string,
-	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
+	secrets map[string]x.Sensitive) gqlerror.List {
 	var errs []*gqlerror.Error
 
 	for _, defn := range definitions {
@@ -1313,13 +1313,14 @@ func addPatchType(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[
 // and defn has a field of type R, e.g. if defn is like
 // `type T { ... g: R ... }`
 // then a query should be able to filter on g by term search on f, like
-// query {
-//   getT(id: 0x123) {
-//     ...
-//     g(filter: { f: { anyofterms: "something" } }, first: 10) { ... }
-//     ...
-//   }
-// }
+//
+//	query {
+//	  getT(id: 0x123) {
+//	    ...
+//	    g(filter: { f: { anyofterms: "something" } }, first: 10) { ... }
+//	    ...
+//	  }
+//	}
 func addFieldFilters(
 	schema *ast.Schema,
 	defn *ast.Definition,
@@ -1534,10 +1535,11 @@ func mergeAndAddFilters(filterTypes []string, schema *ast.Schema, filterName str
 // in constructing the corresponding query
 // queryT(filter: TFilter, ... )
 // and in adding search to any fields of this type, like:
-// type R {
-//   f(filter: TFilter, ... ): T
-//   ...
-// }
+//
+//	type R {
+//	  f(filter: TFilter, ... ): T
+//	  ...
+//	}
 func addFilterType(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[string]bool) {
 	filterName := defn.Name + "Filter"
 	filter := &ast.Definition{

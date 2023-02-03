@@ -22,12 +22,13 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"go.etcd.io/etcd/raft"
 	"go.etcd.io/etcd/raft/raftpb"
+
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 type MetaInfo int
@@ -80,10 +81,6 @@ func readSlice(dst []byte, offset int) []byte {
 func writeSlice(dst []byte, src []byte) {
 	binary.BigEndian.PutUint32(dst[:4], uint32(len(src)))
 	copy(dst[4:], src)
-}
-func allocateSlice(dst []byte, sz int) []byte {
-	binary.BigEndian.PutUint32(dst[:4], uint32(sz))
-	return dst[4 : 4+sz]
 }
 func sliceSize(dst []byte, offset int) int {
 	sz := binary.BigEndian.Uint32(dst[offset:])

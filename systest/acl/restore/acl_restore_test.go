@@ -10,12 +10,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
+
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
 )
 
 // disableDraining disables draining mode before each test for increased reliability.
@@ -94,7 +95,7 @@ func TestAclCacheRestore(t *testing.T) {
 	dg.Login(context.Background(), "groot", "password")
 
 	sendRestoreRequest(t, "/backups", "vibrant_euclid5", 1)
-	testutil.WaitForRestore(t, dg)
+	testutil.WaitForRestore(t, dg, testutil.SockAddrHttp)
 
 	token := testutil.Login(t,
 		&testutil.LoginParams{UserID: "alice1", Passwd: "password", Namespace: 0})

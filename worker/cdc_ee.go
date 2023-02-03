@@ -1,3 +1,4 @@
+//go:build !oss
 // +build !oss
 
 /*
@@ -17,19 +18,21 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"math"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/golang/glog"
+	"github.com/pkg/errors"
+	"go.etcd.io/etcd/raft/raftpb"
 
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
-	"github.com/golang/glog"
-	"github.com/pkg/errors"
-	"go.etcd.io/etcd/raft/raftpb"
 )
 
 const (
@@ -45,9 +48,6 @@ const (
 // With Badger Subscribe, if we lose the connection, we would have no way to send over the "missed"
 // events. Even if we scan over Badger, we'd still not get those events in the right order, i.e.
 // order of their commit timestamp. So, this approach would be tricky to get right.
-//
-// Now, with ludicrous mode, Raft WAL does not help as well. It does NOT contain the commit
-// timestamps. So, for now we're going to not support it.
 type CDC struct {
 	sync.Mutex
 	sink             Sink
@@ -66,9 +66,6 @@ type CDC struct {
 func newCDC() *CDC {
 	if Config.ChangeDataConf == "" || Config.ChangeDataConf == CDCDefaults {
 		return nil
-	}
-	if x.WorkerConfig.LudicrousEnabled {
-		x.Fatalf("cdc is not supported in ludicrous mode")
 	}
 
 	cdcFlag := z.NewSuperFlag(Config.ChangeDataConf).MergeAndCheckDefault(CDCDefaults)
@@ -109,6 +106,19 @@ func (cdc *CDC) resetPendingEvents() {
 	cdc.Lock()
 	defer cdc.Unlock()
 	cdc.pendingTxnEvents = make(map[uint64][]CDCEvent)
+}
+
+func (cdc *CDC) resetPendingEventsForNs(ns uint64) {
+	if cdc == nil {
+		return
+	}
+	cdc.Lock()
+	defer cdc.Unlock()
+	for ts, events := range cdc.pendingTxnEvents {
+		if len(events) > 0 && binary.BigEndian.Uint64(events[0].Meta.Namespace) == ns {
+			delete(cdc.pendingTxnEvents, ts)
+		}
+	}
 }
 
 func (cdc *CDC) hasPending(attr string) bool {
@@ -233,17 +243,19 @@ func (cdc *CDC) processCDCEvents() {
 			if len(events) == 0 {
 				return
 			}
-			// In ludicrous, we execute the mutations as soon as we get the proposal.
-			// TODO: We should get a confirmation from ludicrous scheduler about this.
-			// It should tell you what the commit ts used was.
-			// TODO: For now, do NOT support ludicrous mode.
 			edges := proposal.Mutations.Edges
 			switch {
 			case proposal.Mutations.DropOp != pb.Mutations_NONE: // this means its a drop operation
 				// if there is DROP ALL or DROP DATA operation, clear pending events also.
-				if proposal.Mutations.DropOp == pb.Mutations_ALL ||
-					proposal.Mutations.DropOp == pb.Mutations_DATA {
+				if proposal.Mutations.DropOp == pb.Mutations_ALL {
 					cdc.resetPendingEvents()
+				} else if proposal.Mutations.DropOp == pb.Mutations_DATA {
+					ns, err := strconv.ParseUint(proposal.Mutations.DropValue, 0, 64)
+					if err != nil {
+						glog.Warningf("CDC: parsing namespace failed with error %v. Ignoring.", err)
+						return
+					}
+					cdc.resetPendingEventsForNs(ns)
 				}
 				if err := sendToSink(events, proposal.Mutations.StartTs); err != nil {
 					rerr = errors.Wrapf(err, "unable to send messages to sink")
@@ -391,15 +403,24 @@ func toCDCEvent(index uint64, mutation *pb.Mutations) []CDCEvent {
 	}
 
 	// If drop operation
-	// todo (aman): right now drop all and data operations are still cluster wide.
-	// Fix these once we have namespace specific operations.
 	if mutation.DropOp != pb.Mutations_NONE {
-		ns := make([]byte, 8)
-		binary.BigEndian.PutUint64(ns, x.GalaxyNamespace)
+		namespace := make([]byte, 8)
 		var t string
-		if mutation.DropOp == pb.Mutations_TYPE {
-			// drop type are namespace specific.
-			ns, t = x.ParseNamespaceBytes(mutation.DropValue)
+		switch mutation.DropOp {
+		case pb.Mutations_ALL:
+			// Drop all is cluster wide.
+			binary.BigEndian.PutUint64(namespace, x.GalaxyNamespace)
+		case pb.Mutations_DATA:
+			ns, err := strconv.ParseUint(mutation.DropValue, 0, 64)
+			if err != nil {
+				glog.Warningf("CDC: parsing namespace failed with error %v. Ignoring.", err)
+				return nil
+			}
+			binary.BigEndian.PutUint64(namespace, ns)
+		case pb.Mutations_TYPE:
+			namespace, t = x.ParseNamespaceBytes(mutation.DropValue)
+		default:
+			glog.Error("CDC: got unhandled drop operation")
 		}
 
 		return []CDCEvent{
@@ -411,7 +432,7 @@ func toCDCEvent(index uint64, mutation *pb.Mutations) []CDCEvent {
 				},
 				Meta: &EventMeta{
 					RaftIndex: index,
-					Namespace: ns,
+					Namespace: namespace,
 				},
 			},
 		}

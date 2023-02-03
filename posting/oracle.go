@@ -18,15 +18,17 @@ package posting
 
 import (
 	"context"
+	"encoding/hex"
 	"math"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	ostats "go.opencensus.io/stats"
+
+	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 var o *oracle
@@ -246,6 +248,23 @@ func (o *oracle) ResetTxns() {
 	o.Lock()
 	defer o.Unlock()
 	o.pendingTxns = make(map[uint64]*Txn)
+}
+
+// ResetTxnForNs deletes all the pending transactions for a given namespace.
+func (o *oracle) ResetTxnsForNs(ns uint64) {
+	txns := o.IterateTxns(func(key []byte) bool {
+		pk, err := x.Parse(key)
+		if err != nil {
+			glog.Errorf("error %v while parsing key %v", err, hex.EncodeToString(key))
+			return false
+		}
+		return x.ParseNamespace(pk.Attr) == ns
+	})
+	o.Lock()
+	defer o.Unlock()
+	for _, txn := range txns {
+		delete(o.pendingTxns, txn)
+	}
 }
 
 func (o *oracle) GetTxn(startTs uint64) *Txn {

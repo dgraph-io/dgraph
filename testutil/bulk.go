@@ -25,8 +25,9 @@ import (
 	"os/exec"
 	"strconv"
 
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
+
+	"github.com/dgraph-io/dgraph/x"
 )
 
 type LiveOpts struct {
@@ -35,11 +36,15 @@ type LiveOpts struct {
 	RdfFile    string
 	SchemaFile string
 	Dir        string
-	Ludicrous  bool
 	Env        []string
 	Creds      *LoginParams
 	ForceNs    int64
 }
+
+var (
+	COVERAGE_FLAG         = "COVERAGE_OUTPUT"
+	EXPECTED_COVERAGE_ENV = "--test.coverprofile=coverage.out"
+)
 
 func LiveLoad(opts LiveOpts) error {
 	args := []string{
@@ -48,9 +53,6 @@ func LiveLoad(opts LiveOpts) error {
 		"--schema", opts.SchemaFile,
 		"--alpha", opts.Alpha,
 		"--zero", opts.Zero,
-	}
-	if opts.Ludicrous {
-		args = append(args, "--ludicrous")
 	}
 	if opts.Creds != nil {
 		if opts.Creds.Namespace == x.GalaxyNamespace || opts.ForceNs != 0 {
@@ -93,7 +95,14 @@ type BulkOpts struct {
 }
 
 func BulkLoad(opts BulkOpts) error {
-	bulkCmd := exec.Command(DgraphBinaryPath(), "bulk",
+
+	var args []string
+
+	if cc := os.Getenv(COVERAGE_FLAG); cc == EXPECTED_COVERAGE_ENV {
+		args = append(args, "--test.coverprofile=coverage_bulk.out")
+	}
+
+	args = append(args, "bulk",
 		"-f", opts.RdfFile,
 		"-s", opts.SchemaFile,
 		"-g", opts.GQLSchemaFile,
@@ -102,8 +111,11 @@ func BulkLoad(opts BulkOpts) error {
 		"--map_shards="+strconv.Itoa(opts.Shards),
 		"--store_xids=true",
 		"--zero", opts.Zero,
-		"--force-namespace", strconv.FormatUint(opts.Namespace, 10),
-	)
+		"--force-namespace", strconv.FormatUint(opts.Namespace, 10))
+
+	bulkCmd := exec.Command(DgraphBinaryPath(), args...)
+
+	fmt.Println("Running: ", bulkCmd.Args)
 
 	if opts.Dir != "" {
 		bulkCmd.Dir = opts.Dir
@@ -153,8 +165,8 @@ func freePort(port int) int {
 }
 
 func StartAlphas(compose string) error {
-	cmd := exec.Command("docker-compose", "-f", compose, "-p", DockerPrefix,
-		"up", "-d", "--force-recreate")
+	cmd := exec.Command("docker-compose", "--compatibility", "-f", compose,
+		"-p", DockerPrefix, "up", "-d", "--force-recreate")
 
 	fmt.Println("Starting alphas with: ", cmd.String())
 
@@ -176,10 +188,21 @@ func StartAlphas(compose string) error {
 	return nil
 }
 
-func StopAlphasAndDetectRace(compose string) (raceDetected bool) {
+func StopAlphasForCoverage(composeFile string) {
+	args := []string{"--compatibility", "-f", composeFile, "-p", DockerPrefix, "stop"}
+	cmd := exec.CommandContext(context.Background(), "docker-compose", args...)
+	fmt.Printf("Running: %s with %s\n", cmd, DockerPrefix)
+	if err := cmd.Run(); err != nil {
+		fmt.Printf("Error while bringing down cluster. Prefix: %s. Error: %v\n", DockerPrefix, err)
+	}
+}
+
+func StopAlphasAndDetectRace(alphas []string) (raceDetected bool) {
 	raceDetected = DetectRaceInAlphas(DockerPrefix)
-	cmd := exec.CommandContext(context.Background(), "docker-compose", "-f", compose,
-		"-p", DockerPrefix, "rm", "-f", "-s", "-v")
+	args := []string{"-p", DockerPrefix, "rm", "-f", "-s", "-v"}
+	args = append(args, alphas...)
+	cmd := exec.CommandContext(context.Background(), "docker-compose", args...)
+	fmt.Printf("Running: %s with %s\n", cmd, DockerPrefix)
 	if err := cmd.Run(); err != nil {
 		fmt.Printf("Error while bringing down cluster. Prefix: %s. Error: %v\n", DockerPrefix, err)
 	}

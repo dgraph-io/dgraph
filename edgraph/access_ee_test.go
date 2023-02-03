@@ -1,5 +1,5 @@
 //go:build !oss
-//+build !oss
+// +build !oss
 
 /*
  * Copyright 2022 Dgraph Labs, Inc. All rights reserved.
@@ -17,17 +17,17 @@ import (
 	"testing"
 	"time"
 
+	jwt "github.com/dgrijalva/jwt-go"
+	"github.com/stretchr/testify/require"
+
 	"github.com/dgraph-io/dgraph/ee/acl"
 	"github.com/dgraph-io/dgraph/worker"
-
-	"github.com/stretchr/testify/require"
-	jwt "github.com/dgrijalva/jwt-go"
 )
 
 func generateJWT(namespace uint64, userId string, groupIds []string, expiry int64) string {
 	claims := jwt.MapClaims{"namespace": namespace, "userid": userId, "exp": expiry}
 	if groupIds != nil {
-			claims["groups"] = groupIds
+		claims["groups"] = groupIds
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, &claims)
 
@@ -100,11 +100,11 @@ func TestGetAccessJwt(t *testing.T) {
 
 	for _, userdata := range userDataList {
 		jwtstr, _ := getAccessJwt(userdata.userId, grpLst, userdata.namespace)
-		ud, err := validateToken (jwtstr)
+		ud, err := validateToken(jwtstr)
 		require.Nil(t, err)
 		if ud.namespace != userdata.namespace || ud.userId != userdata.userId || !sliceCompare(ud.groupIds, g) {
 			t.Errorf("Actual output {%v %v %v} is not equal to the output %v generated from"+
-					 " getAccessJwt() token", userdata.namespace, userdata.userId, grpLst, ud)
+				" getAccessJwt() token", userdata.namespace, userdata.userId, grpLst, ud)
 		}
 	}
 }
@@ -118,11 +118,11 @@ func TestGetRefreshJwt(t *testing.T) {
 
 	for _, userdata := range userDataList {
 		jwtstr, _ := getRefreshJwt(userdata.userId, userdata.namespace)
-		ud, err := validateToken (jwtstr)
+		ud, err := validateToken(jwtstr)
 		require.Nil(t, err)
 		if ud.namespace != userdata.namespace || ud.userId != userdata.userId {
 			t.Errorf("Actual output {%v %v} is not equal to the output {%v %v} generated from"+
-					 "getRefreshJwt() token", userdata.namespace, userdata.userId, ud.namespace, ud.userId)
+				"getRefreshJwt() token", userdata.namespace, userdata.userId, ud.namespace, ud.userId)
 		}
 	}
 }

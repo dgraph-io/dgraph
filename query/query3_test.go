@@ -23,9 +23,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/metadata"
+
+	"github.com/dgraph-io/dgraph/testutil"
 )
 
 func TestRecurseError(t *testing.T) {

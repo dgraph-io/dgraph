@@ -29,11 +29,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dgraph-io/gqlparser/v2/gqlerror"
 	"github.com/dgrijalva/jwt-go/v4"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/metadata"
 	"gopkg.in/square/go-jose.v2"
+
+	"github.com/dgraph-io/gqlparser/v2/gqlerror"
 )
 
 type ctxKey string

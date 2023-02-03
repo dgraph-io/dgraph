@@ -23,14 +23,15 @@ import (
 	"sync"
 	"testing"
 
-	dgoapi "github.com/dgraph-io/dgo/v210/protos/api"
-	"github.com/dgraph-io/dgraph/graphql/schema"
-	"github.com/dgraph-io/dgraph/graphql/test"
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v2"
+
+	dgoapi "github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/dgraph/graphql/schema"
+	"github.com/dgraph-io/dgraph/graphql/test"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 // Tests that result completion and GraphQL error propagation are working properly.
@@ -453,10 +454,6 @@ func TestSubscriptionErrorWhenNoneDefined(t *testing.T) {
 	resp := resolveWithClient(gqlSchema, `subscription { foo }`, nil, nil)
 	test.RequireJSONEq(t, x.GqlErrorList{{Message: "Not resolving subscription because schema" +
 		" doesn't have any fields defined for subscription operation."}}, resp.Errors)
-}
-
-func resolve(gqlSchema schema.Schema, gqlQuery string, dgResponse string) *schema.Response {
-	return resolveWithClient(gqlSchema, gqlQuery, nil, &executor{resp: dgResponse})
 }
 
 func resolveWithClient(

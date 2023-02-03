@@ -25,6 +25,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gogo/protobuf/proto"
+	"github.com/golang/glog"
+	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"
 
 	"github.com/dgraph-io/dgo/v210/protos/api"
@@ -33,9 +36,6 @@ import (
 	"github.com/dgraph-io/dgraph/telemetry"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
-	"github.com/gogo/protobuf/proto"
-	"github.com/golang/glog"
-	"github.com/pkg/errors"
 )
 
 var (
@@ -380,6 +380,8 @@ func (s *Server) createProposals(dst *pb.Group) ([]*pb.ZeroProposal, error) {
 			})
 		}
 	}
+
+	var tablets []*pb.Tablet
 	for key, dstTablet := range dst.Tablets {
 		group, has := s.state.Groups[dstTablet.GroupId]
 		if !has {
@@ -395,11 +397,12 @@ func (s *Server) createProposals(dst *pb.Group) ([]*pb.ZeroProposal, error) {
 		d := float64(dstTablet.OnDiskBytes)
 		if dstTablet.Remove || (s == 0 && d > 0) || (s > 0 && math.Abs(d/s-1) > 0.1) {
 			dstTablet.Force = false
-			proposal := &pb.ZeroProposal{
-				Tablet: dstTablet,
-			}
-			res = append(res, proposal)
+			tablets = append(tablets, dstTablet)
 		}
+	}
+
+	if len(tablets) > 0 {
+		res = append(res, &pb.ZeroProposal{Tablets: tablets})
 	}
 	return res, nil
 }

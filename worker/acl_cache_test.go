@@ -1,3 +1,4 @@
+//go:build !oss
 // +build !oss
 
 /*
@@ -15,9 +16,10 @@ package worker
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/dgraph-io/dgraph/ee/acl"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/stretchr/testify/require"
 )
 
 func TestAclCache(t *testing.T) {

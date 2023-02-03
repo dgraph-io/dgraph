@@ -20,12 +20,14 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/golang/glog"
+
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/query"
+	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/glog"
 )
 
 type getSchemaResolver struct {
@@ -33,7 +35,7 @@ type getSchemaResolver struct {
 }
 
 type updateGQLSchemaInput struct {
-	Set gqlSchema `json:"set,omitempty"`
+	Set worker.GqlSchema `json:"set,omitempty"`
 }
 
 type updateSchemaResolver struct {
@@ -88,7 +90,7 @@ func (gsr *getSchemaResolver) Resolve(ctx context.Context, q schema.Query) *reso
 		return resolve.EmptyResult(q, err)
 	}
 
-	cs := gsr.admin.schema[ns]
+	cs, _ := gsr.admin.gqlSchemas.GetCurrent(ns)
 	if cs == nil || cs.ID == "" {
 		data = map[string]interface{}{q.Name(): nil}
 	} else {

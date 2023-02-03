@@ -26,6 +26,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
+	"github.com/stretchr/testify/require"
+
 	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgraph/ee"
@@ -33,10 +37,6 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
-
-	"github.com/spf13/pflag"
-	"github.com/spf13/viper"
-	"github.com/stretchr/testify/require"
 )
 
 // KeyFile is set to the path of the file containing the key. Used for testing purposes only.
@@ -64,10 +64,10 @@ func openDgraph(pdir string) (*badger.DB, error) {
 	return badger.OpenManaged(opt)
 }
 
-func WaitForRestore(t *testing.T, dg *dgo.Dgraph) {
+func WaitForRestore(t *testing.T, dg *dgo.Dgraph, HttpSocket string) {
 	restoreDone := false
 	for {
-		resp, err := http.Get("http://" + SockAddrHttp + "/health")
+		resp, err := http.Get("http://" + HttpSocket + "/health")
 		require.NoError(t, err)
 		buf, err := ioutil.ReadAll(resp.Body)
 		require.NoError(t, err)

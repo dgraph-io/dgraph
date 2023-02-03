@@ -25,9 +25,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/stretchr/testify/require"
 )
 
 var tc = []struct {
@@ -9329,7 +9330,7 @@ func TestMain(m *testing.M) {
 }
 
 func cleanupAndExit(exitCode int) {
-	if testutil.StopAlphasAndDetectRace("./alpha.yml") {
+	if testutil.StopAlphasAndDetectRace([]string{"alpha1"}) {
 		// if there is race fail the test
 		exitCode = 1
 	}

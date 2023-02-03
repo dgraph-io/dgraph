@@ -25,8 +25,9 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
+
+	"github.com/dgraph-io/ristretto/z"
 )
 
 var (
@@ -44,6 +45,13 @@ var (
 // SetTestRun sets a variable to indicate that the current execution is a test.
 func SetTestRun() {
 	isTest = true
+}
+
+// check if any version is set by ldflags. If not so, it should be set as "dev"
+func checkDev() {
+	if dgraphVersion == "" {
+		dgraphVersion = "dev"
+	}
 }
 
 // IsTestRun indicates whether a test is being executed. Useful to handle special
@@ -64,6 +72,8 @@ func Init() {
 	//
 	// TODO: why is this here?
 	// Config.QueryEdgeLimit = 1e6
+
+	checkDev()
 
 	// Next, run all the init functions that have been added.
 	for _, f := range initFunc {
@@ -112,6 +122,7 @@ func PrintVersion() {
 
 // Version returns a string containing the dgraphVersion.
 func Version() string {
+	checkDev()
 	return dgraphVersion
 }
 

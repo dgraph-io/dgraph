@@ -26,14 +26,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dgraph-io/dgo/v210"
-	"github.com/dgraph-io/dgo/v210/protos/api"
-	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/ristretto/z"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"go.opencensus.io/trace"
+
+	"github.com/dgraph-io/dgo/v210"
+	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 // Increment is the sub-command invoked when calling "dgraph increment".
@@ -199,32 +200,42 @@ func run(conf *viper.Viper) {
 		dg = dgTmp
 	}
 
-	// Run things serially first.
-	for i := 0; i < conc; i++ {
-		_, err := process(dg, conf)
-		x.Check(err)
-		num--
+	processOne := func(i int) error {
+		txnStart := time.Now() // Start time of transaction
+		cnt, err := process(dg, conf)
+		now := time.Now().UTC().Format(format)
+		if err != nil {
+			return err
+		}
+		serverLat := cnt.qLatency + cnt.mLatency
+		clientLat := time.Since(txnStart).Round(time.Millisecond)
+		fmt.Printf(
+			"[w%d] %-17s Counter VAL: %d   [ Ts: %d ] Latency: Q %s M %s S %s C %s D %s\n",
+			i, now, cnt.Val, cnt.startTs, cnt.qLatency, cnt.mLatency,
+			serverLat, clientLat, clientLat-serverLat)
+		return nil
+	}
+
+	// Run things serially first, if conc > 1.
+	if conc > 1 {
+		for i := 0; i < conc; i++ {
+			err := processOne(0)
+			x.Check(err)
+			num--
+		}
 	}
 
 	var wg sync.WaitGroup
-	f := func(i int) {
+	f := func(worker int) {
 		defer wg.Done()
 		count := 0
 		for count < num {
-			txnStart := time.Now() // Start time of transaction
-			cnt, err := process(dg, conf)
-			now := time.Now().UTC().Format(format)
-			if err != nil {
+			if err := processOne(worker); err != nil {
+				now := time.Now().UTC().Format(format)
 				fmt.Printf("%-17s While trying to process counter: %v. Retrying...\n", now, err)
 				time.Sleep(time.Second)
 				continue
 			}
-			serverLat := cnt.qLatency + cnt.mLatency
-			clientLat := time.Since(txnStart).Round(time.Millisecond)
-			fmt.Printf(
-				"[%d] %-17s Counter VAL: %d   [ Ts: %d ] Latency: Q %s M %s S %s C %s D %s\n",
-				i, now, cnt.Val, cnt.startTs, cnt.qLatency, cnt.mLatency,
-				serverLat, clientLat, clientLat-serverLat)
 			time.Sleep(waitDur)
 			count++
 		}
@@ -232,7 +243,7 @@ func run(conf *viper.Viper) {
 
 	for i := 0; i < conc; i++ {
 		wg.Add(1)
-		go f(i)
+		go f(i + 1)
 	}
 	wg.Wait()
 }

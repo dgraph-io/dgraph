@@ -17,8 +17,9 @@
 package x
 
 import (
-	"github.com/dgraph-io/ristretto/z"
 	"github.com/spf13/pflag"
+
+	"github.com/dgraph-io/ristretto/z"
 )
 
 const (

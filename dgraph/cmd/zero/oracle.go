@@ -23,21 +23,16 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dgraph-io/ristretto/z"
+	"github.com/golang/glog"
+	"github.com/pkg/errors"
+	otrace "go.opencensus.io/trace"
 
 	"github.com/dgraph-io/badger/v3/y"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/glog"
-	"github.com/pkg/errors"
-	otrace "go.opencensus.io/trace"
+	"github.com/dgraph-io/ristretto/z"
 )
-
-type syncMark struct {
-	index uint64
-	ts    uint64
-}
 
 // Oracle stores and manages the transaction state and conflict detection.
 type Oracle struct {
@@ -370,7 +365,7 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 	checkPreds := func() error {
 		// Check if any of these tablets is being moved. If so, abort the transaction.
 		for _, pkey := range src.Preds {
-			splits := strings.Split(pkey, "-")
+			splits := strings.SplitN(pkey, "-", 2)
 			if len(splits) < 2 {
 				return errors.Errorf("Unable to find group id in %s", pkey)
 			}
@@ -378,7 +373,7 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 			if err != nil {
 				return errors.Wrapf(err, "unable to parse group id from %s", pkey)
 			}
-			pred := strings.Join(splits[1:], "-")
+			pred := splits[1]
 			tablet := s.ServingTablet(pred)
 			if tablet == nil {
 				return errors.Errorf("Tablet for %s is nil", pred)

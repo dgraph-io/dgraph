@@ -19,8 +19,9 @@ package types
 import (
 	"time"
 
-	"github.com/dgraph-io/dgraph/protos/pb"
 	geom "github.com/twpayne/go-geom"
+
+	"github.com/dgraph-io/dgraph/protos/pb"
 )
 
 const nanoSecondsInSec = 1000000000

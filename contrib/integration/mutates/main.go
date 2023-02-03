@@ -23,10 +23,11 @@ import (
 	"fmt"
 	"log"
 
+	"google.golang.org/grpc"
+
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/x"
-	"google.golang.org/grpc"
 )
 
 var alpha = flag.String("alpha", "localhost:9080", "Dgraph alpha addr")
@@ -106,7 +107,7 @@ func testInsert3Quads(ctx context.Context, c *dgo.Dgraph) {
 
 func testQuery3Quads(ctx context.Context, c *dgo.Dgraph) {
 	txn := c.NewTxn()
-	q := fmt.Sprint(`{ me(func: uid(200, 300, 400)) { name }}`)
+	q := `{ me(func: uid(200, 300, 400)) { name }}`
 	resp, err := txn.Query(ctx, q)
 	if err != nil {
 		log.Fatalf("Error while running query: %v\n", err)

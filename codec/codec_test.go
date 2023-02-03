@@ -26,11 +26,12 @@ import (
 	"testing"
 	"time"
 
+	humanize "github.com/dustin/go-humanize"
+	"github.com/stretchr/testify/require"
+
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
-	humanize "github.com/dustin/go-humanize"
-	"github.com/stretchr/testify/require"
 )
 
 func getUids(size int) []uint64 {

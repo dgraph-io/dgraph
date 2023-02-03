@@ -689,21 +689,23 @@ func (genc *graphQLEncoder) processCustomFields(field gqlSchema.Field, n fastJso
 
 // resolveCustomFields resolves fields with custom directive. Here is the rough algorithm that it
 // follows.
-// queryUser {
-// 	name @custom
-// 	age
-// 	school {
-// 		name
-// 		children
-// 		class @custom {
-// 			name
-// 			numChildren
-// 		}
-// 	}
-// 	cars @custom {
-// 		name
-// 	}
-// }
+//
+//	queryUser {
+//		name @custom
+//		age
+//		school {
+//			name
+//			children
+//			class @custom {
+//				name
+//				numChildren
+//			}
+//		}
+//		cars @custom {
+//			name
+//		}
+//	}
+//
 // For fields with @custom directive
 // 1. There would be one query sent to the remote endpoint.
 // 2. In the above example, to fetch class all the school ids would be aggregated across different
@@ -734,14 +736,15 @@ func (genc *graphQLEncoder) resolveCustomFields(childFields []gqlSchema.Field,
 // resolveCustomField resolves the @custom childField by making an external HTTP request and then
 // updates the fastJson tree with results of that HTTP request.
 // It accepts the following arguments:
-//  - childField: the @custom field which needs to be resolved
-//  - parentNodeHeads: a list of head pointers to the parent nodes of childField
-//  - wg: a wait group to signal the calling goroutine when the execution of this goroutine is
-//    finished
+//   - childField: the @custom field which needs to be resolved
+//   - parentNodeHeads: a list of head pointers to the parent nodes of childField
+//   - wg: a wait group to signal the calling goroutine when the execution of this goroutine is
+//     finished
+//
 // TODO:
-//  - benchmark concurrency for the worker goroutines: channels vs mutexes?
-//    https://medium.com/@_orcaman/when-too-much-concurrency-slows-you-down-golang-9c144ca305a
-//  - worry about path in errors and how to deal with them, specially during completion step
+//   - benchmark concurrency for the worker goroutines: channels vs mutexes?
+//     https://medium.com/@_orcaman/when-too-much-concurrency-slows-you-down-golang-9c144ca305a
+//   - worry about path in errors and how to deal with them, specially during completion step
 func (genc *graphQLEncoder) resolveCustomField(childField gqlSchema.Field,
 	parentNodeHeads []fastJsonNode, wg *sync.WaitGroup) {
 	defer wg.Done() // signal when this goroutine finishes execution
@@ -1012,12 +1015,13 @@ func (genc *graphQLEncoder) resolveCustomField(childField gqlSchema.Field,
 // resolveNestedFields resolves fields which themselves don't have the @custom directive but their
 // children might.
 //
-// queryUser {
-// 	id
-// 	classes {
-// 		name @custom...
-// 	}
-// }
+//	queryUser {
+//		id
+//		classes {
+//			name @custom...
+//		}
+//	}
+//
 // In the example above, resolveNestedFields would be called on classes field and parentNodeHeads
 // would be the list of head pointers for all the user fastJson nodes.
 func (genc *graphQLEncoder) resolveNestedFields(childField gqlSchema.Field,
@@ -1060,32 +1064,38 @@ func (genc *graphQLEncoder) resolveNestedFields(childField gqlSchema.Field,
 // objects, each object having only one property. So we need to handle encoding root aggregate
 // queries accordingly.
 // Dgraph result:
-// 		{
-// 		  "aggregateCountry": [
-// 		    {
-// 		      "CountryAggregateResult.count": 3
-// 		    }, {
-// 		      "CountryAggregateResult.nameMin": "US1"
-// 		    }, {
-// 		      "CountryAggregateResult.nameMax": "US2"
-// 		    }
-// 		  ]
-// 		}
+//
+//	{
+//	  "aggregateCountry": [
+//	    {
+//	      "CountryAggregateResult.count": 3
+//	    }, {
+//	      "CountryAggregateResult.nameMin": "US1"
+//	    }, {
+//	      "CountryAggregateResult.nameMax": "US2"
+//	    }
+//	  ]
+//	}
+//
 // GraphQL Result:
-// 		{
-// 		  "aggregateCountry": {
-// 		    "count": 3,
-// 		    "nameMin": "US1",
-// 		    "nameMax": "US2"
-// 		  }
-// 		}
+//
+//	{
+//	  "aggregateCountry": {
+//	    "count": 3,
+//	    "nameMin": "US1",
+//	    "nameMax": "US2"
+//	  }
+//	}
+//
 // Note that there can't be the case when an aggregate property was requested in DQL and not
 // returned by Dgraph because aggregate properties are calculated using math functions which
 // always give some result.
 // But, auth queries may lead to generation of following DQL:
-// 		query {
-// 			aggregateCountry()
-// 		}
+//
+//	query {
+//		aggregateCountry()
+//	}
+//
 // which doesn't request any aggregate properties. In this case the fastJson node won't have any
 // children and we just need to write null as the value of the query.
 func (genc *graphQLEncoder) completeRootAggregateQuery(fj fastJsonNode, query gqlSchema.Field,
@@ -1133,25 +1143,28 @@ func (genc *graphQLEncoder) completeRootAggregateQuery(fj fastJsonNode, query gq
 
 // completeAggregateChildren build GraphQL JSON for aggregate fields at child levels.
 // Dgraph result:
-// 		{
-// 		  "Country.statesAggregate": [
-// 		    {
-// 		      "State.name": "Calgary",
-// 		      "dgraph.uid": "0x2712"
-// 		    }
-// 		  ],
-// 		  "StateAggregateResult.count_Country.statesAggregate": 1,
-// 		  "StateAggregateResult.nameMin_Country.statesAggregate": "Calgary",
-// 		  "StateAggregateResult.nameMax_Country.statesAggregate": "Calgary"
-// 		}
+//
+//	{
+//	  "Country.statesAggregate": [
+//	    {
+//	      "State.name": "Calgary",
+//	      "dgraph.uid": "0x2712"
+//	    }
+//	  ],
+//	  "StateAggregateResult.count_Country.statesAggregate": 1,
+//	  "StateAggregateResult.nameMin_Country.statesAggregate": "Calgary",
+//	  "StateAggregateResult.nameMax_Country.statesAggregate": "Calgary"
+//	}
+//
 // GraphQL result:
-// 		{
-// 		  "statesAggregate": {
-// 		    "count": 1,
-// 		    "nameMin": "Calgary",
-// 		    "nameMax": "Calgary"
-// 		  }
-// 		}
+//
+//	{
+//	  "statesAggregate": {
+//	    "count": 1,
+//	    "nameMin": "Calgary",
+//	    "nameMax": "Calgary"
+//	  }
+//	}
 func (genc *graphQLEncoder) completeAggregateChildren(fj fastJsonNode,
 	field gqlSchema.Field, fieldPath []interface{}, respIsNull bool) fastJsonNode {
 	if !respIsNull {

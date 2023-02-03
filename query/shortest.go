@@ -22,12 +22,13 @@ import (
 	"math"
 	"sync"
 
+	"github.com/pkg/errors"
+
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/pkg/errors"
 )
 
 type pathInfo struct {
@@ -437,7 +438,6 @@ func runKShortestPaths(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 }
 
 // Djikstras algorithm pseudocode for reference.
-//
 //
 // 1  function Dijkstra(Graph, source):
 // 2      dist[source] ← 0                                    // Initialization

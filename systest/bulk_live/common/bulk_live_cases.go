@@ -31,12 +31,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/v210/protos/api"
-	"github.com/stretchr/testify/require"
+	"github.com/dgraph-io/dgraph/testutil"
 )
 
 // TODO: This test was used just to make sure some really basic examples work.

@@ -22,12 +22,13 @@ import (
 	"os"
 	"time"
 
+	"github.com/golang/glog"
+
 	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
-	"github.com/golang/glog"
 )
 
 const (
@@ -42,13 +43,12 @@ const (
 	BadgerDefaults = `compression=snappy; numgoroutines=8;`
 	RaftDefaults   = `learner=false; snapshot-after-entries=10000; ` +
 		`snapshot-after-duration=30m; pending-proposals=256; idx=; group=;`
-	SecurityDefaults  = `token=; whitelist=;`
-	LudicrousDefaults = `enabled=false; concurrency=2000;`
-	CDCDefaults       = `file=; kafka=; sasl_user=; sasl_password=; ca_cert=; client_cert=; ` +
-		`client_key=; sasl-mechanism=PLAIN;`
+	SecurityDefaults = `token=; whitelist=;`
+	CDCDefaults      = `file=; kafka=; sasl_user=; sasl_password=; ca_cert=; client_cert=; ` +
+		`client_key=; sasl-mechanism=PLAIN; tls=false;`
 	LimitDefaults = `mutations=allow; query-edge=1000000; normalize-node=10000; ` +
 		`mutations-nquad=1000000; disallow-drop=false; query-timeout=0ms; txn-abort-after=5m; ` +
-		` max-retries=-1;max-pending-queries=10000`
+		` max-retries=10;max-pending-queries=10000`
 	ZeroLimitsDefaults = `uid-lease=0; refill-interval=30s; disable-admin-http=false;`
 	GraphQLDefaults    = `introspection=true; debug=false; extensions=true; poll-interval=1s; ` +
 		`lambda-url=;`

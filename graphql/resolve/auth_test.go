@@ -25,11 +25,12 @@ import (
 	"testing"
 
 	"github.com/dgrijalva/jwt-go/v4"
-
+	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/metadata"
+	"gopkg.in/yaml.v2"
 
 	dgoapi "github.com/dgraph-io/dgo/v210/protos/api"
-	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/dql"
 	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/graphql/schema"
@@ -37,8 +38,6 @@ import (
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 	_ "github.com/dgraph-io/gqlparser/v2/validator/rules" // make gql validator init() all rules
-	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v2"
 )
 
 type AuthQueryRewritingCase struct {
@@ -452,7 +451,7 @@ func queryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMeta, b []b
 				require.Equal(t, tcase.DGQuery, dgraph.AsString(dgQuery))
 			}
 			// Check for unused variables.
-			_, err = gql.Parse(gql.Request{Str: dgraph.AsString(dgQuery)})
+			_, err = dql.Parse(dql.Request{Str: dgraph.AsString(dgQuery)})
 			require.NoError(t, err)
 		})
 	}
@@ -598,7 +597,7 @@ func mutationQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMet
 			require.Equal(t, tt.dgQuery, dgraph.AsString(dgQuery))
 
 			// Check for unused variables.
-			_, err = gql.Parse(gql.Request{Str: dgraph.AsString(dgQuery)})
+			_, err = dql.Parse(dql.Request{Str: dgraph.AsString(dgQuery)})
 			require.NoError(t, err)
 		})
 

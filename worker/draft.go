@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -33,11 +34,10 @@ import (
 	"github.com/pkg/errors"
 	"go.etcd.io/etcd/raft"
 	"go.etcd.io/etcd/raft/raftpb"
-	"golang.org/x/net/trace"
-
 	ostats "go.opencensus.io/stats"
 	"go.opencensus.io/tag"
 	otrace "go.opencensus.io/trace"
+	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/badger/v3"
 	bpb "github.com/dgraph-io/badger/v3/pb"
@@ -78,8 +78,6 @@ type node struct {
 	cdcTracker  *CDC
 	canCampaign bool
 	elog        trace.EventLog
-
-	ex *executor
 }
 
 type op int
@@ -292,9 +290,6 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		ops:        make(map[op]operation),
 		cdcTracker: newCDC(),
 	}
-	if x.WorkerConfig.LudicrousEnabled {
-		n.ex = newExecutor(&m.Applied, int(x.WorkerConfig.Ludicrous.GetInt64("concurrency")))
-	}
 	return n
 }
 
@@ -352,14 +347,19 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	span := otrace.FromContext(ctx)
 
 	if proposal.Mutations.DropOp == pb.Mutations_DATA {
+		ns, err := strconv.ParseUint(proposal.Mutations.DropValue, 0, 64)
+		if err != nil {
+			return err
+		}
 		// Ensures nothing get written to disk due to commit proposals.
-		posting.Oracle().ResetTxns()
-		if err := posting.DeleteData(); err != nil {
+		posting.Oracle().ResetTxnsForNs(ns)
+		if err := posting.DeleteData(ns); err != nil {
 			return err
 		}
 
-		// Clear entire cache.
-		posting.ResetCache()
+		// TODO: Revisit this when we work on posting cache. Clear entire cache.
+		// We don't want to drop entire cache, just due to one namespace.
+		// posting.ResetCache()
 		return nil
 	}
 
@@ -416,16 +416,6 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 			if err := detectPendingTxns(supdate.Predicate); err != nil {
 				return err
 			}
-		}
-
-		// If Dgraph is running in ludicrous mode and we get some schema we should wait for all
-		// active mutations to finish. Previously we were thinking of only waiting for active
-		// mutations related to predicates present in schema mutation. But this might cause issues
-		// as we call DropPrefix() on Badger while running schema mutations. DropPrefix() blocks
-		// writes on Badger and returns error if writes are tried. To avoid this we should wait for
-		// all active mutations to finish irrespective of predicates present in schema mutation.
-		if x.WorkerConfig.LudicrousEnabled && len(proposal.Mutations.Schema) > 0 {
-			n.ex.waitForActiveMutations()
 		}
 
 		if err := runSchemaMutation(ctx, proposal.Mutations.Schema, startTs); err != nil {
@@ -515,11 +505,6 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		}
 		return ei.GetEntity() < ej.GetEntity()
 	})
-
-	if x.WorkerConfig.LudicrousEnabled {
-		n.ex.addEdges(ctx, proposal)
-		return nil
-	}
 
 	txn := posting.Oracle().RegisterStartTs(m.StartTs)
 	if txn.ShouldAbort() {
@@ -755,20 +740,14 @@ func (n *node) processApplyCh() {
 			proposal.Index = entry.Index
 			updateStartTs(&proposal)
 
-			// Ignore the start ts in case of ludicrous mode. We get a new ts and use that as the
-			// commit ts.
-			// WARNING: This would cause the leader and the follower to diverge in the timestamp
-			// they use to commit the same thing.
-			// TODO: This is broken. We need to find a way to fix this.
-			if x.WorkerConfig.LudicrousEnabled && proposal.Mutations != nil {
-				proposal.Mutations.StartTs = State.GetTimestamp(false)
-			}
-
 			var perr error
 			p, ok := previous[key]
 			if ok && p.err == nil && p.size == psz {
-				n.elog.Printf("Proposal with key: %s already applied. Skipping index: %d.\n",
-					key, proposal.Index)
+				msg := fmt.Sprintf("Proposal with key: %d already applied. Skipping index: %d."+
+					" Delta: %+v Snapshot: %+v.\n",
+					key, proposal.Index, proposal.Delta, proposal.Snapshot)
+				n.elog.Printf(msg)
+				glog.Infof(msg)
 				previous[key].seen = time.Now() // Update the ts.
 				// Don't break here. We still need to call the Done below.
 
@@ -840,8 +819,10 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 			return
 		}
 		txn.Update()
-		err := x.RetryUntilSuccess(int(x.Config.MaxRetries),
-			10*time.Millisecond, func() error {
+		// We start with 20 ms, so that we end up waiting 5 mins by the end.
+		// If there is any transient issue, it should get fixed within that timeframe.
+		err := x.ExponentialRetry(int(x.Config.MaxRetries),
+			20*time.Millisecond, func() error {
 				err := txn.CommitToDisk(writer, commit)
 				if err == badger.ErrBannedKey {
 					glog.Errorf("Error while writing to banned namespace.")
@@ -853,20 +834,15 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 		if err != nil {
 			glog.Errorf("Error while applying txn status to disk (%d -> %d): %v",
 				start, commit, err)
+			panic(err)
 		}
 	}
 
 	for _, status := range delta.Txns {
 		toDisk(status.StartTs, status.CommitTs)
 	}
-	if x.WorkerConfig.LudicrousEnabled {
-		if err := writer.Wait(); err != nil {
-			glog.Errorf("Error while waiting to commit: +%v", err)
-		}
-	} else {
-		if err := writer.Flush(); err != nil {
-			return errors.Wrapf(err, "while flushing to disk")
-		}
+	if err := writer.Flush(); err != nil {
+		return errors.Wrapf(err, "while flushing to disk")
 	}
 	if x.WorkerConfig.HardSync {
 		if err := pstore.Sync(); err != nil {
@@ -965,7 +941,7 @@ func (n *node) retrieveSnapshot(snap pb.Snapshot) error {
 	}
 	// Populate shard stores the streamed data directly into db, so we need to refresh
 	// schema for current group id
-	if err := schema.LoadFromDb(); err != nil {
+	if err := schema.LoadFromDb(closer.Ctx()); err != nil {
 		return errors.Wrapf(err, "while initializing schema")
 	}
 	groups().triggerMembershipSync()
@@ -1142,9 +1118,6 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 				time.Sleep(time.Second) // Let transfer happen.
 			}
 			n.Raft().Stop()
-			if x.WorkerConfig.LudicrousEnabled {
-				n.ex.closer.SignalAndWait()
-			}
 			close(done)
 			return
 		}
@@ -1380,22 +1353,6 @@ func (n *node) Run() {
 						atomic.AddUint32(&pctx.Found, 1)
 						if span := otrace.FromContext(pctx.Ctx); span != nil {
 							span.Annotate(nil, "Proposal found in CommittedEntries")
-						}
-						if x.WorkerConfig.LudicrousEnabled {
-							var p pb.Proposal
-							if err := p.Unmarshal(entry.Data[8:]); err != nil {
-								glog.Errorf("Unable to unmarshal proposal: %v %x\n",
-									err, entry.Data)
-								break
-							}
-							if len(p.Mutations.GetEdges()) > 0 {
-								// Assuming that there will be no error while applying. But this
-								// assumption is only made for data mutations and not schema
-								// mutations.
-								// TODO: This should not be done here. Instead, it should be done
-								// within the ludicrous mode scheduler.
-								n.Proposals.Done(key, nil)
-							}
 						}
 					}
 					entries = append(entries, entry)
@@ -1713,10 +1670,7 @@ func (n *node) calculateSnapshot(startIdx, lastIdx, minPendingStart uint64) (*pb
 					snapshotIdx = entry.Index - 1
 				}
 			}
-			// In ludicrous mode commitTs for any transaction is same as startTs.
-			if x.WorkerConfig.LudicrousEnabled {
-				maxCommitTs = x.Max(maxCommitTs, start)
-			} else if proposal.Delta != nil {
+			if proposal.Delta != nil {
 				for _, txn := range proposal.Delta.GetTxns() {
 					maxCommitTs = x.Max(maxCommitTs, txn.CommitTs)
 				}

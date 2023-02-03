@@ -24,16 +24,14 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dgraph-io/badger/v3/y"
-	"google.golang.org/grpc/metadata"
-
-	ostats "go.opencensus.io/stats"
-
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
+	ostats "go.opencensus.io/stats"
 	otrace "go.opencensus.io/trace"
+	"google.golang.org/grpc/metadata"
 
 	"github.com/dgraph-io/badger/v3"
+	"github.com/dgraph-io/badger/v3/y"
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/conn"
@@ -340,14 +338,14 @@ func createSchema(attr string, typ types.TypeID, hint pb.Metadata_HintType, ts u
 
 func runTypeMutation(ctx context.Context, update *pb.TypeUpdate, ts uint64) error {
 	current := *update
-	schema.State().SetType(update.TypeName, current)
+	schema.State().SetType(update.TypeName, &current)
 	return updateType(update.TypeName, *update, ts)
 }
 
 // We commit schema to disk in blocking way, should be ok because this happens
 // only during schema mutations or we see a new predicate.
 func updateType(typeName string, t pb.TypeUpdate, ts uint64) error {
-	schema.State().SetType(typeName, t)
+	schema.State().SetType(typeName, &t)
 	txn := pstore.NewTransactionAt(ts, true)
 	defer txn.Discard()
 	data, err := t.Marshal()

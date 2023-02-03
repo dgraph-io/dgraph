@@ -34,6 +34,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/dustin/go-humanize"
+	"github.com/golang/snappy"
+
 	"github.com/dgraph-io/badger/v3"
 	bo "github.com/dgraph-io/badger/v3/options"
 	bpb "github.com/dgraph-io/badger/v3/pb"
@@ -43,8 +46,6 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
-	"github.com/dustin/go-humanize"
-	"github.com/golang/snappy"
 )
 
 type reducer struct {
@@ -481,8 +482,8 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 		partitionKeys = append(partitionKeys, nil)
 
 		for i := 0; i < len(partitionKeys); i++ {
+			pkey := partitionKeys[i]
 			for _, itr := range mapItrs {
-				pkey := partitionKeys[i]
 				itr.Next(cbuf, pkey)
 			}
 			if cbuf.LenNoPadding() < 256<<20 {

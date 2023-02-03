@@ -19,12 +19,12 @@ package resolve
 import (
 	"testing"
 
-	"github.com/dgraph-io/dgraph/graphql/schema"
-
-	"github.com/dgraph-io/dgraph/graphql/test"
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dgraph-io/dgraph/graphql/schema"
+	"github.com/dgraph-io/dgraph/graphql/test"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 func TestErrorOnIncorrectValueType(t *testing.T) {
@@ -35,7 +35,7 @@ func TestErrorOnIncorrectValueType(t *testing.T) {
 			Expected: `{ "getAuthor": { "dob": null }}`,
 			Errors: x.GqlErrorList{{
 				Message:   schema.ErrExpectedScalar,
-				Locations: []x.Location{x.Location{Line: 1, Column: 32}},
+				Locations: []x.Location{{Line: 1, Column: 32}},
 				Path:      []interface{}{"getAuthor", "dob"},
 			}}},
 
@@ -45,7 +45,7 @@ func TestErrorOnIncorrectValueType(t *testing.T) {
 			Expected: `{ "getAuthor": { "dob": null }}`,
 			Errors: x.GqlErrorList{{
 				Message:   schema.ErrExpectedScalar,
-				Locations: []x.Location{x.Location{Line: 1, Column: 32}},
+				Locations: []x.Location{{Line: 1, Column: 32}},
 				Path:      []interface{}{"getAuthor", "dob"},
 			}}},
 
@@ -55,7 +55,7 @@ func TestErrorOnIncorrectValueType(t *testing.T) {
 			Expected: `{ "getAuthor": { "country": null }}`,
 			Errors: x.GqlErrorList{{
 				Message:   "Error coercing value 'Rwanda' for field 'country' to type Country.",
-				Locations: []x.Location{x.Location{Line: 1, Column: 32}},
+				Locations: []x.Location{{Line: 1, Column: 32}},
 				Path:      []interface{}{"getAuthor", "country"},
 			}}},
 		{Name: "return error when array is returned instead of object value",
@@ -64,7 +64,7 @@ func TestErrorOnIncorrectValueType(t *testing.T) {
 			Expected: `{ "getAuthor": { "country": null }}`,
 			Errors: x.GqlErrorList{{
 				Message:   schema.ErrExpectedSingleItem,
-				Locations: []x.Location{x.Location{Line: 1, Column: 32}},
+				Locations: []x.Location{{Line: 1, Column: 32}},
 				Path:      []interface{}{"getAuthor", "country"},
 			}}},
 
@@ -74,7 +74,7 @@ func TestErrorOnIncorrectValueType(t *testing.T) {
 			Expected: `{ "getAuthor": null}`,
 			Errors: x.GqlErrorList{{
 				Message:   schema.ErrExpectedList,
-				Locations: []x.Location{x.Location{Line: 1, Column: 32}},
+				Locations: []x.Location{{Line: 1, Column: 32}},
 				Path:      []interface{}{"getAuthor"},
 			}}},
 		{Name: "return error when object is returned instead of array value",
@@ -83,7 +83,7 @@ func TestErrorOnIncorrectValueType(t *testing.T) {
 			Expected: `{ "getAuthor": null}`,
 			Errors: x.GqlErrorList{{
 				Message:   schema.ErrExpectedList,
-				Locations: []x.Location{x.Location{Line: 1, Column: 32}},
+				Locations: []x.Location{{Line: 1, Column: 32}},
 				Path:      []interface{}{"getAuthor"},
 			}}},
 	}
@@ -123,7 +123,7 @@ func TestValueCoercion(t *testing.T) {
 			Response: `{ "getPost": { "postType": [2] }}`,
 			Errors: x.GqlErrorList{{
 				Message:   "Error coercing value '2' for field 'postType' to type PostType.",
-				Locations: []x.Location{x.Location{Line: 1, Column: 34}},
+				Locations: []x.Location{{Line: 1, Column: 34}},
 				Path:      []interface{}{"getPost", "postType", 0},
 			}},
 			Expected: `{ "getPost": { "postType": [null] }}`},
@@ -132,7 +132,7 @@ func TestValueCoercion(t *testing.T) {
 			Response: `{ "getPost": { "postType": [2.134] }}`,
 			Errors: x.GqlErrorList{{
 				Message:   "Error coercing value '2.134' for field 'postType' to type PostType.",
-				Locations: []x.Location{x.Location{Line: 1, Column: 34}},
+				Locations: []x.Location{{Line: 1, Column: 34}},
 				Path:      []interface{}{"getPost", "postType", 0},
 			}},
 			Expected: `{ "getPost": { "postType": [null] }}`},
@@ -141,7 +141,7 @@ func TestValueCoercion(t *testing.T) {
 			Response: `{ "getPost": { "postType": [false] }}`,
 			Errors: x.GqlErrorList{{
 				Message:   "Error coercing value 'false' for field 'postType' to type PostType.",
-				Locations: []x.Location{x.Location{Line: 1, Column: 34}},
+				Locations: []x.Location{{Line: 1, Column: 34}},
 				Path:      []interface{}{"getPost", "postType", 0},
 			}},
 			Expected: `{ "getPost": { "postType": [null] }}`},
@@ -150,7 +150,7 @@ func TestValueCoercion(t *testing.T) {
 			Response: `{ "getPost": { "postType": ["Random"] }}`,
 			Errors: x.GqlErrorList{{
 				Message:   "Error coercing value 'Random' for field 'postType' to type PostType.",
-				Locations: []x.Location{x.Location{Line: 1, Column: 34}},
+				Locations: []x.Location{{Line: 1, Column: 34}},
 				Path:      []interface{}{"getPost", "postType", 0},
 			}},
 			Expected: `{ "getPost": { "postType": [null] }}`},
@@ -213,7 +213,7 @@ func TestValueCoercion(t *testing.T) {
 			Errors: x.GqlErrorList{{
 				Message: "Error coercing value '2147483648' for field 'numLikes' to type" +
 					" Int.",
-				Locations: []x.Location{x.Location{Line: 1, Column: 34}},
+				Locations: []x.Location{{Line: 1, Column: 34}},
 				Path:      []interface{}{"getPost", "numLikes"},
 			}},
 			Expected: `{"getPost": {"numLikes": null}}`,
@@ -224,7 +224,7 @@ func TestValueCoercion(t *testing.T) {
 			Response: `{ "getPost": { "numLikes": 123.23 }}`,
 			Errors: x.GqlErrorList{{
 				Message:   "Error coercing value '123.23' for field 'numLikes' to type Int.",
-				Locations: []x.Location{x.Location{Line: 1, Column: 34}},
+				Locations: []x.Location{{Line: 1, Column: 34}},
 				Path:      []interface{}{"getPost", "numLikes"},
 			}},
 			Expected: `{"getPost": {"numLikes": null}}`,
@@ -235,7 +235,7 @@ func TestValueCoercion(t *testing.T) {
 			Response: `{ "getPost": { "numLikes": "123.23" }}`,
 			Errors: x.GqlErrorList{{
 				Message:   "Error coercing value '123.23' for field 'numLikes' to type Int.",
-				Locations: []x.Location{x.Location{Line: 1, Column: 34}},
+				Locations: []x.Location{{Line: 1, Column: 34}},
 				Path:      []interface{}{"getPost", "numLikes"},
 			}},
 			Expected: `{"getPost": {"numLikes": null}}`,
@@ -265,7 +265,7 @@ func TestValueCoercion(t *testing.T) {
 			Response: `{ "getAuthor": { "dob": "23.123" }}`,
 			Errors: x.GqlErrorList{{
 				Message:   "Error coercing value '23.123' for field 'dob' to type DateTime.",
-				Locations: []x.Location{x.Location{Line: 1, Column: 32}},
+				Locations: []x.Location{{Line: 1, Column: 32}},
 				Path:      []interface{}{"getAuthor", "dob"},
 			}},
 			Expected: `{ "getAuthor": { "dob": null }}`},
@@ -274,7 +274,7 @@ func TestValueCoercion(t *testing.T) {
 			Response: `{ "getAuthor": { "dob": true }}`,
 			Errors: x.GqlErrorList{{
 				Message:   "Error coercing value 'true' for field 'dob' to type DateTime.",
-				Locations: []x.Location{x.Location{Line: 1, Column: 32}},
+				Locations: []x.Location{{Line: 1, Column: 32}},
 				Path:      []interface{}{"getAuthor", "dob"},
 			}},
 			Expected: `{ "getAuthor": { "dob": null }}`},
@@ -283,7 +283,7 @@ func TestValueCoercion(t *testing.T) {
 			Response: `{ "getAuthor": { "dob": "123" }}`,
 			Errors: x.GqlErrorList{{
 				Message:   "Error coercing value '123' for field 'dob' to type DateTime.",
-				Locations: []x.Location{x.Location{Line: 1, Column: 32}},
+				Locations: []x.Location{{Line: 1, Column: 32}},
 				Path:      []interface{}{"getAuthor", "dob"},
 			}},
 			Expected: `{ "getAuthor": { "dob": null}}`},

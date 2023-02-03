@@ -24,14 +24,15 @@ import (
 	"sort"
 	"strconv"
 
-	dgoapi "github.com/dgraph-io/dgo/v210/protos/api"
-	"github.com/dgraph-io/dgraph/gql"
-	"github.com/dgraph-io/dgraph/graphql/dgraph"
-	"github.com/dgraph-io/dgraph/graphql/schema"
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"
+
+	dgoapi "github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/dgraph/dql"
+	"github.com/dgraph-io/dgraph/graphql/dgraph"
+	"github.com/dgraph-io/dgraph/graphql/schema"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 const touchedUidsKey = "_total"
@@ -68,18 +69,18 @@ type MutationResolver interface {
 }
 
 // A MutationRewriter can transform a GraphQL mutation into a Dgraph mutation and
-// can build a Dgraph gql.GraphQuery to follow a GraphQL mutation.
+// can build a Dgraph dql.GraphQuery to follow a GraphQL mutation.
 //
 // Mutations come in like:
 //
-// mutation addAuthor($auth: AuthorInput!) {
-//   addAuthor(input: $auth) {
-// 	   author {
-// 	     id
-// 	     name
-// 	   }
-//   }
-// }
+//	mutation addAuthor($auth: AuthorInput!) {
+//	  addAuthor(input: $auth) {
+//		   author {
+//		     id
+//		     name
+//		   }
+//	  }
+//	}
 //
 // Where `addAuthor(input: $auth)` implies a mutation that must get run - written
 // to a Dgraph mutation by Rewrite.  The GraphQL following `addAuthor(...)`implies
@@ -102,7 +103,7 @@ type MutationRewriter interface {
 	//     }
 	// These query will be created in case of Add or Update Mutation which references node
 	// 0x127 or Computer of name "computer1"
-	RewriteQueries(ctx context.Context, m schema.Mutation) ([]*gql.GraphQuery, []string, error)
+	RewriteQueries(ctx context.Context, m schema.Mutation) ([]*dql.GraphQuery, []string, error)
 	// Rewrite rewrites GraphQL mutation m into a Dgraph mutation - that could
 	// be as simple as a single DelNquads, or could be a Dgraph upsert mutation
 	// with a query and multiple mutations guarded by conditions.
@@ -115,7 +116,7 @@ type MutationRewriter interface {
 		ctx context.Context,
 		m schema.Mutation,
 		assigned map[string]string,
-		result map[string]interface{}) ([]*gql.GraphQuery, error)
+		result map[string]interface{}) ([]*dql.GraphQuery, error)
 	// MutatedRootUIDs returns a list of Root UIDs that were mutated as part of the mutation.
 	MutatedRootUIDs(
 		mutation schema.Mutation,
@@ -136,7 +137,7 @@ type DgraphExecutor interface {
 // The node types is a blank node name -> Type mapping of nodes that could
 // be created by the upsert.
 type UpsertMutation struct {
-	Query     []*gql.GraphQuery
+	Query     []*dql.GraphQuery
 	Mutations []*dgoapi.Mutation
 	NewNodes  map[string]schema.Type
 }
@@ -267,9 +268,9 @@ func (mr *dgraphResolver) rewriteAndExecute(
 	// are then executed and the results processed and returned.
 	var upserts []*UpsertMutation
 	var err error
-	// queries stores rewritten []*gql.GraphQuery by RewriteQueries function. These queries
+	// queries stores rewritten []*dql.GraphQuery by RewriteQueries function. These queries
 	// are then executed and the results are processed
-	var queries []*gql.GraphQuery
+	var queries []*dql.GraphQuery
 	var filterTypes []string
 	queries, filterTypes, err = mr.mutationRewriter.RewriteQueries(ctx, mutation)
 	if err != nil {
@@ -442,7 +443,7 @@ func (mr *dgraphResolver) rewriteAndExecute(
 		return emptyResult(schema.GQLWrapf(authErr, "mutation failed")), resolverFailed
 	}
 
-	var dgQuery []*gql.GraphQuery
+	var dgQuery []*dql.GraphQuery
 	dgQuery, err = mr.mutationRewriter.FromMutationResult(ctx, mutation, mutResp.GetUids(), result)
 	queryErrs = schema.AppendGQLErrs(queryErrs, schema.GQLWrapf(err,
 		"couldn't rewrite query for mutation %s", mutation.Name()))
@@ -492,9 +493,12 @@ func (mr *dgraphResolver) rewriteAndExecute(
 // completeMutationResult takes in the result returned for the query field of mutation and builds
 // the JSON required for data field in GraphQL response.
 // The input qryResult can either be nil or of the form:
-//  {"qryFieldAlias":...}
+//
+//	{"qryFieldAlias":...}
+//
 // and the output will look like:
-//  {"addAuthor":{"qryFieldAlias":...,"numUids":2,"msg":"Deleted"}}
+//
+//	{"addAuthor":{"qryFieldAlias":...,"numUids":2,"msg":"Deleted"}}
 func completeMutationResult(mutation schema.Mutation, qryResult []byte, numUids int) []byte {
 	comma := ""
 	var buf bytes.Buffer
@@ -603,7 +607,7 @@ func authorizeNewNodes(
 	// Write auth queries for each set of node types
 
 	var needsAuth []string
-	authQrys := make(map[string][]*gql.GraphQuery)
+	authQrys := make(map[string][]*dql.GraphQuery)
 	for _, typeName := range createdTypes {
 		typ := namesToType[typeName]
 		varName := newRw.varGen.Next(typ, "", "", false)
@@ -633,27 +637,27 @@ func authorizeNewNodes(
 		// Todo2 as var(func: uid(Todo1)) @cascade { ...auth query 1... }
 		// Todo3 as var(func: uid(Todo1)) @cascade { ...auth query 2... }
 
-		typQuery := &gql.GraphQuery{
+		typQuery := &dql.GraphQuery{
 			Attr: typ.Name(),
-			Func: &gql.Function{
+			Func: &dql.Function{
 				Name: "uid",
-				Args: []gql.Arg{{Value: varName}}},
+				Args: []dql.Arg{{Value: varName}}},
 			Filter:   authFilter,
-			Children: []*gql.GraphQuery{{Attr: "uid"}}}
+			Children: []*dql.GraphQuery{{Attr: "uid"}}}
 
 		nodes := newByType[typeName]
 		sort.Slice(nodes, func(i, j int) bool { return nodes[i] < nodes[j] })
-		varQry := &gql.GraphQuery{
+		varQry := &dql.GraphQuery{
 			Var:  varName,
 			Attr: "var",
-			Func: &gql.Function{
+			Func: &dql.Function{
 				Name: "uid",
 				UID:  nodes,
 			},
 		}
 
 		needsAuth = append(needsAuth, typeName)
-		authQrys[typeName] = append([]*gql.GraphQuery{typQuery, varQry}, authQueries...)
+		authQrys[typeName] = append([]*dql.GraphQuery{typQuery, varQry}, authQueries...)
 
 	}
 
@@ -664,7 +668,7 @@ func authorizeNewNodes(
 
 	// create the query in order so we get a stable query
 	sort.Strings(needsAuth)
-	var qs []*gql.GraphQuery
+	var qs []*dql.GraphQuery
 	for _, typeName := range needsAuth {
 		qs = append(qs, authQrys[typeName]...)
 	}

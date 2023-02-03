@@ -26,17 +26,17 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/dgraph-io/badger/v3"
-	bpb "github.com/dgraph-io/badger/v3/pb"
-	"github.com/dgraph-io/dgo/v210/protos/api"
-	"github.com/dgraph-io/ristretto/z"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dgraph-io/badger/v3"
+	bpb "github.com/dgraph-io/badger/v3/pb"
+	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 func setMaxListSize(newMaxListSize int) {
@@ -559,7 +559,7 @@ func TestAddMutation_mrjn2(t *testing.T) {
 }
 
 func TestAddMutation_gru(t *testing.T) {
-	key := x.DataKey("question.tag", 0x01)
+	key := x.DataKey(x.GalaxyAttr("question.tag"), 0x01)
 	ol, err := getNew(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 
@@ -592,7 +592,7 @@ func TestAddMutation_gru(t *testing.T) {
 }
 
 func TestAddMutation_gru2(t *testing.T) {
-	key := x.DataKey("question.tag", 0x100)
+	key := x.DataKey(x.GalaxyAttr("question.tag"), 0x100)
 	ol, err := getNew(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 
@@ -639,7 +639,7 @@ func TestAddMutation_gru2(t *testing.T) {
 func TestAddAndDelMutation(t *testing.T) {
 	// Ensure each test uses unique key since we don't clear the postings
 	// after each test
-	key := x.DataKey("dummy_key", 0x927)
+	key := x.DataKey(x.GalaxyAttr("dummy_key"), 0x927)
 	ol, err := getNew(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 
@@ -878,7 +878,7 @@ func createMultiPartList(t *testing.T, size int, addFacet bool) (*List, int) {
 	defer setMaxListSize(maxListSize)
 	maxListSize = 5000
 
-	key := x.DataKey(uuid.New().String(), 1331)
+	key := x.DataKey(x.GalaxyAttr(uuid.New().String()), 1331)
 	ol, err := getNew(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 	commits := 0
@@ -926,7 +926,7 @@ func createAndDeleteMultiPartList(t *testing.T, size int) (*List, int) {
 	defer setMaxListSize(maxListSize)
 	maxListSize = 10000
 
-	key := x.DataKey(uuid.New().String(), 1331)
+	key := x.DataKey(x.GalaxyAttr(uuid.New().String()), 1331)
 	ol, err := getNew(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 	commits := 0
@@ -1087,7 +1087,7 @@ func TestBinSplit(t *testing.T) {
 		defer func() {
 			maxListSize = originalListSize
 		}()
-		key := x.DataKey(uuid.New().String(), 1331)
+		key := x.DataKey(x.GalaxyAttr(uuid.New().String()), 1331)
 		ol, err := getNew(key, ps, math.MaxUint64)
 		require.NoError(t, err)
 		for i := 1; i <= size; i++ {
@@ -1268,7 +1268,7 @@ func TestMultiPartListDeleteAndAdd(t *testing.T) {
 	maxListSize = 5000
 
 	// Add entries to the maps.
-	key := x.DataKey(uuid.New().String(), 1331)
+	key := x.DataKey(x.GalaxyAttr(uuid.New().String()), 1331)
 	ol, err := getNew(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 	for i := 1; i <= size; i++ {
@@ -1407,7 +1407,7 @@ func TestRecursiveSplits(t *testing.T) {
 
 	// Create a list that should be split recursively.
 	size := int(1e5)
-	key := x.DataKey(uuid.New().String(), 1331)
+	key := x.DataKey(x.GalaxyAttr(uuid.New().String()), 1331)
 	ol, err := getNew(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 	commits := 0

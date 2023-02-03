@@ -22,12 +22,12 @@ import (
 	"strings"
 
 	"github.com/golang/geo/s2"
+	"github.com/pkg/errors"
 	geom "github.com/twpayne/go-geom"
+	"github.com/twpayne/go-geom/xy"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/pkg/errors"
-	"github.com/twpayne/go-geom/xy"
 )
 
 // QueryType indicates the type of geo query.
