@@ -109,7 +109,7 @@ type loadBackupInput struct {
 	restoreTs   uint64
 	preds       predicateSet
 	dropNs      map[uint64]struct{}
-	isOld       bool
+	version     int
 	keepSchema  bool
 	compression string
 }
@@ -390,11 +390,57 @@ func (m *mapper) processReqCh(ctx context.Context) error {
 				kv.Value, err = update.Marshal()
 				return err
 			}
-			if in.isOld && parsedKey.IsType() {
-				if err := appendNamespace(); err != nil {
-					glog.Errorf("Unable to (un)marshal type: %+v. Err=%v\n", parsedKey, err)
+			changeFormat := func() error {
+				// In the backup taken on 2103, we have the schemaUpdate.Predicate in format
+				// <namespace 8 bytes>|<attribute>. That had issues with JSON marshalling.
+				// So, we switched over to the format <namespace hex string>-<attribute>.
+				var err error
+				if parsedKey.IsSchema() {
+					var update pb.SchemaUpdate
+					if err := update.Unmarshal(kv.Value); err != nil {
+						return err
+					}
+					if update.Predicate, err = x.AttrFrom2103(update.Predicate); err != nil {
+						return err
+					}
+					kv.Value, err = update.Marshal()
+					return err
+				}
+				if parsedKey.IsType() {
+					var update pb.TypeUpdate
+					if err := update.Unmarshal(kv.Value); err != nil {
+						return err
+					}
+					if update.TypeName, err = x.AttrFrom2103(update.TypeName); err != nil {
+						return err
+					}
+					for _, sch := range update.Fields {
+						if sch.Predicate, err = x.AttrFrom2103(sch.Predicate); err != nil {
+							return err
+						}
+					}
+					kv.Value, err = update.Marshal()
+					return err
+				}
+				return nil
+			}
+			// We changed the format of predicate in 2103 and 2105. SchemaUpdate and TypeUpdate have
+			// predicate stored within them, so they also need to be updated accordingly.
+			switch in.version {
+			case 0:
+				if parsedKey.IsType() {
+					if err := appendNamespace(); err != nil {
+						glog.Errorf("Unable to (un)marshal type: %+v. Err=%v\n", parsedKey, err)
+						return nil
+					}
+				}
+			case 2103:
+				if err := changeFormat(); err != nil {
+					glog.Errorf("Unable to change format for: %+v Err=%+v", parsedKey, err)
 					return nil
 				}
+			default:
+				// for manifest versions >= 2015, do nothing.
 			}
 			// Reset the StreamId to prevent ordering issues while writing to stream writer.
 			kv.StreamId = 0
@@ -665,7 +711,7 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) (*mapResult, error) {
 			in := &loadBackupInput{
 				preds:     predSet,
 				dropNs:    localDropNs,
-				isOld:     manifest.Version == 0,
+				version:   manifest.Version,
 				restoreTs: req.RestoreTs,
 				// Only map the schema keys corresponding to the latest backup.
 				keepSchema:  i == 0,
@@ -686,23 +732,18 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) (*mapResult, error) {
 			case pb.DropOperation_ALL:
 				dropAll = true
 			case pb.DropOperation_DATA:
-				var ns uint64
-				if manifest.Version == 0 {
-					ns = x.GalaxyNamespace
-				} else {
-					var err error
-					ns, err = strconv.ParseUint(op.DropValue, 0, 64)
-					if err != nil {
-						return nil, errors.Wrap(err, "Map phase failed to parse namespace")
-					}
+				if op.DropValue == "" {
+					// In 2103, we do not support namespace level drop data.
+					dropAll = true
+					continue
+				}
+				ns, err := strconv.ParseUint(op.DropValue, 0, 64)
+				if err != nil {
+					return nil, errors.Wrap(err, "map phase failed to parse namespace")
 				}
 				dropNs[ns] = struct{}{}
 			case pb.DropOperation_ATTR:
-				p := op.DropValue
-				if manifest.Version == 0 {
-					p = x.NamespaceAttr(x.GalaxyNamespace, p)
-				}
-				dropAttr[p] = struct{}{}
+				dropAttr[op.DropValue] = struct{}{}
 			case pb.DropOperation_NS:
 				// pstore will be nil for export_backup tool. In that case we don't need to ban ns.
 				if pstore == nil {
