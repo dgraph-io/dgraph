@@ -1,5 +1,4 @@
 //go:build !oss
-// +build !oss
 
 /*
  * Copyright 2021 Dgraph Labs, Inc. and Contributors
@@ -8,7 +7,7 @@
  * may not use this file except in compliance with the License. You
  * may obtain a copy of the License at
  *
- *     https://github.com/dgraph-io/dgraph/blob/master/licenses/DCL.txt
+ *     https://github.com/dgraph-io/dgraph/blob/main/licenses/DCL.txt
  */
 
 package worker
@@ -123,18 +122,18 @@ func getFilteredManifests(h UriHandler, manifests []*Manifest,
 	return manifests, nil
 }
 
-// getConsolidatedManifest walks over all the backup directories and generates a master manifest.
-func getConsolidatedManifest(h UriHandler, uri *url.URL) (*MasterManifest, error) {
-	// If there is a master manifest already, we just return it.
+// getConsolidatedManifest walks over all the backup directories and generates a main manifest.
+func getConsolidatedManifest(h UriHandler, uri *url.URL) (*mainManifest, error) {
+	// If there is a main manifest already, we just return it.
 	if h.FileExists(backupManifest) {
-		manifest, err := readMasterManifest(h, backupManifest)
+		manifest, err := readmainManifest(h, backupManifest)
 		if err != nil {
-			return &MasterManifest{}, errors.Wrap(err, "failed to read master manifest: ")
+			return &mainManifest{}, errors.Wrap(err, "failed to read main manifest: ")
 		}
 		return manifest, nil
 	}
 
-	// Otherwise, we create a master manifest by going through all the backup directories.
+	// Otherwise, we create a main manifest by going through all the backup directories.
 	paths := h.ListPaths("")
 
 	var manifestPaths []string
@@ -158,7 +157,7 @@ func getConsolidatedManifest(h UriHandler, uri *url.URL) (*MasterManifest, error
 		m.Path = path
 		mlist = append(mlist, m)
 	}
-	return &MasterManifest{Manifests: mlist}, nil
+	return &mainManifest{Manifests: mlist}, nil
 }
 
 // upgradeManifest updates the in-memory manifest from various versions to the latest version.
@@ -240,22 +239,22 @@ func GetLatestManifest(h UriHandler, uri *url.URL) (*Manifest, error) {
 	return manifest.Manifests[len(manifest.Manifests)-1], nil
 }
 
-func readMasterManifest(h UriHandler, path string) (*MasterManifest, error) {
-	var m MasterManifest
+func readmainManifest(h UriHandler, path string) (*mainManifest, error) {
+	var m mainManifest
 	b, err := h.Read(path)
 	if err != nil {
-		return &m, errors.Wrap(err, "readMasterManifest failed to read the file: ")
+		return &m, errors.Wrap(err, "readmainManifest failed to read the file: ")
 	}
 	if err := json.Unmarshal(b, &m); err != nil {
-		return &m, errors.Wrap(err, "readMasterManifest failed to unmarshal: ")
+		return &m, errors.Wrap(err, "readmainManifest failed to unmarshal: ")
 	}
 	return &m, nil
 }
 
-// GetManifestNoUpgrade returns the master manifest using the given handler and uri.
-func GetManifestNoUpgrade(h UriHandler, uri *url.URL) (*MasterManifest, error) {
+// GetManifestNoUpgrade returns the main manifest using the given handler and uri.
+func GetManifestNoUpgrade(h UriHandler, uri *url.URL) (*mainManifest, error) {
 	if !h.DirExists("") {
-		return &MasterManifest{},
+		return &mainManifest{},
 			errors.Errorf("getManifestWithoutUpgrade: The uri path: %q doesn't exists", uri.Path)
 	}
 	manifest, err := getConsolidatedManifest(h, uri)
@@ -265,11 +264,11 @@ func GetManifestNoUpgrade(h UriHandler, uri *url.URL) (*MasterManifest, error) {
 	return manifest, nil
 }
 
-// GetManifest returns the master manifest using the given handler and uri. Additionally, it also
+// GetManifest returns the main manifest using the given handler and uri. Additionally, it also
 // upgrades the manifest for the in-memory processing.
 // Note: This function must not be used when using the returned manifest for the purpose of
 // overwriting the old manifest.
-func GetManifest(h UriHandler, uri *url.URL) (*MasterManifest, error) {
+func GetManifest(h UriHandler, uri *url.URL) (*mainManifest, error) {
 	manifest, err := GetManifestNoUpgrade(h, uri)
 	if err != nil {
 		return manifest, err
@@ -282,7 +281,7 @@ func GetManifest(h UriHandler, uri *url.URL) (*MasterManifest, error) {
 	return manifest, nil
 }
 
-func CreateManifest(h UriHandler, uri *url.URL, manifest *MasterManifest) error {
+func CreateManifest(h UriHandler, uri *url.URL, manifest *mainManifest) error {
 	var err error
 
 	w, err := h.CreateFile(tmpManifest)
