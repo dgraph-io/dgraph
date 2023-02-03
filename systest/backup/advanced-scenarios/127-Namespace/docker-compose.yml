@@ -18,7 +18,7 @@ services:
       target: /gobin
       read_only: true
     - type: bind
-      source: ./acl-secret
+      source: ../../../acl/restore/acl-secret
       target: /secret/hmac
       read_only: true
     - type: bind
@@ -64,7 +64,7 @@ services:
       target: /gobin
       read_only: true
     - type: bind
-      source: ./acl-secret
+      source: ../../../acl/restore/acl-secret
       target: /secret/hmac
       read_only: true
     - type: bind

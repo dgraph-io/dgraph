@@ -47,7 +47,6 @@ var (
 		"alpha2",
 		"alpha3",
 	}
-	namespaceId uint64
 )
 
 const (
@@ -108,28 +107,28 @@ func CopyToLocalFs(t *testing.T) {
 
 //***************************************New Adds
 
-func RemoveContentsOfPerticularDir(t *testing.T, dir string) error {
+func RemoveContentsOfPerticularDir(t *testing.T, dir string) {
 	d, err := os.Open(dir)
 	if err != nil {
-		return err
+		t.Fatal(err)
 	}
 	defer d.Close()
 	names, err := d.Readdirnames(-1)
 	if err != nil {
-		return err
+		t.Fatal(err)
 	}
 	for _, name := range names {
 		if name != ".gitkeep" {
 			err = os.RemoveAll(filepath.Join(dir, name))
 			if err != nil {
-				return err
+				t.Fatal(err)
 			}
 		}
 	}
-	return nil
 }
 
 func AddNamespaces(t *testing.T, namespaceQuant int, header http.Header, customAdminURL string) uint64 {
+	var namespaceId uint64
 	for index := 1; index <= namespaceQuant; index++ {
 		if customAdminURL != "" {
 			namespaceId = common.CreateNamespace(t, header, customAdminURL)
@@ -137,7 +136,7 @@ func AddNamespaces(t *testing.T, namespaceQuant int, header http.Header, customA
 			namespaceId = common.CreateNamespace(t, header)
 		}
 	}
-	t.Logf("\nSucessfully added Namespace with Id: %d ", namespaceId)
+	t.Logf("Sucessfully added Namespace with Id: %d ", namespaceId)
 
 	return namespaceId
 }
@@ -230,12 +229,11 @@ func CheckDataExists(t *testing.T, desriedSuffix int, jwtToken string, whichAlph
 	checkData := `query queryItem($name: String!){
 		queryItem(filter: {
 			name: {eq: $name}
-		})
-		{
-		id
-		name
-		price
-	  }
+		}) {
+			id
+			name
+			price
+		}
 	}`
 
 	params := testutil.GraphQLParams{
