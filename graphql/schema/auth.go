@@ -25,8 +25,7 @@ import (
 
 	"github.com/spf13/cast"
 
-	"github.com/dgraph-io/dgraph/gql"
-
+	"github.com/dgraph-io/dgraph/dql"
 	"github.com/dgraph-io/gqlparser/v2/ast"
 	"github.com/dgraph-io/gqlparser/v2/gqlerror"
 	"github.com/dgraph-io/gqlparser/v2/parser"
@@ -49,7 +48,7 @@ type RuleNode struct {
 	And       []*RuleNode
 	Not       *RuleNode
 	Rule      Query
-	DQLRule   *gql.GraphQuery
+	DQLRule   *dql.GraphQuery
 	RBACRule  *RBACQuery
 	Variables ast.VariableDefinitionList
 }
@@ -202,18 +201,6 @@ type TypeAuth struct {
 	Fields map[string]*AuthContainer
 }
 
-func createEmptyDQLRule(typeName string) *RuleNode {
-	return &RuleNode{DQLRule: &gql.GraphQuery{
-		Attr: typeName + "Root",
-		Var:  typeName + "Root",
-		Func: &gql.Function{
-			Name: "type",
-			Args: []gql.Arg{{Value: typeName}},
-		},
-	},
-	}
-}
-
 func authRules(sch *schema) (map[string]*TypeAuth, error) {
 	s := sch.schema
 	//TODO: Add position in error.
@@ -266,20 +253,6 @@ func authRules(sch *schema) (map[string]*TypeAuth, error) {
 	}
 
 	return authRules, errResult
-}
-
-func mergeAuthNodeWithOr(objectAuth, interfaceAuth *RuleNode) *RuleNode {
-	if objectAuth == nil {
-		return interfaceAuth
-	}
-
-	if interfaceAuth == nil {
-		return objectAuth
-	}
-
-	ruleNode := &RuleNode{}
-	ruleNode.Or = append(ruleNode.Or, objectAuth, interfaceAuth)
-	return ruleNode
 }
 
 func mergeAuthNodeWithAnd(objectAuth, interfaceAuth *RuleNode) *RuleNode {

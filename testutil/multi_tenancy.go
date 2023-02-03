@@ -25,12 +25,12 @@ import (
 	"time"
 
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/pkg/errors"
-	"github.com/stretchr/testify/require"
 )
 
 type Rule struct {
@@ -68,6 +68,41 @@ func Login(t *testing.T, loginParams *LoginParams) *HttpToken {
 	})
 	require.NoError(t, err, "login failed")
 	return token
+}
+
+func ResetPassword(t *testing.T, token *HttpToken, userID, newPass string, nsID uint64) (string, error) {
+	resetpasswd := `mutation resetPassword($userID: String!, $newpass: String!, $namespaceId: Int!){
+		resetPassword(input: {userId: $userID, password: $newpass, namespace: $namespaceId}) {
+		  userId
+		  message
+		}
+	  }`
+
+	params := GraphQLParams{
+		Query: resetpasswd,
+		Variables: map[string]interface{}{
+			"namespaceId": nsID,
+			"userID":      userID,
+			"newpass":     newPass,
+		},
+	}
+
+	resp := MakeRequest(t, token, params)
+
+	if len(resp.Errors) > 0 {
+		return "", errors.Errorf(resp.Errors.Error())
+	}
+
+	var result struct {
+		ResetPassword struct {
+			UserId  string `json:"userId"`
+			Message string `json:"message"`
+		}
+	}
+	require.NoError(t, json.Unmarshal(resp.Data, &result))
+	require.Equal(t, userID, result.ResetPassword.UserId)
+	require.Contains(t, result.ResetPassword.Message, "Reset password is successful")
+	return result.ResetPassword.UserId, nil
 }
 
 func CreateNamespaceWithRetry(t *testing.T, token *HttpToken) (uint64, error) {

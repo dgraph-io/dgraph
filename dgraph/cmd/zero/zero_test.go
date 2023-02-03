@@ -21,9 +21,11 @@ import (
 	"math"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
+
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/stretchr/testify/require"
 )
 
 func TestRemoveNode(t *testing.T) {
@@ -43,4 +45,42 @@ func TestIdLeaseOverflow(t *testing.T) {
 	err := testutil.AssignUids(math.MaxUint64 - 10)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "limit has reached")
+}
+
+func TestIdBump(t *testing.T) {
+	dialOpts := []grpc.DialOption{
+		grpc.WithBlock(),
+		grpc.WithInsecure(),
+	}
+	ctx := context.Background()
+	con, err := grpc.DialContext(ctx, testutil.SockAddrZero, dialOpts...)
+	require.NoError(t, err)
+
+	zc := pb.NewZeroClient(con)
+
+	res, err := zc.AssignIds(ctx, &pb.Num{Val: 10, Type: pb.Num_UID})
+	require.NoError(t, err)
+	require.Equal(t, uint64(10), res.GetEndId()-res.GetStartId()+1)
+
+	// Next assignemnt's startId should be greater than 10.
+	res, err = zc.AssignIds(ctx, &pb.Num{Val: 50, Type: pb.Num_UID})
+	require.NoError(t, err)
+	require.Greater(t, res.GetStartId(), uint64(10))
+	require.Equal(t, uint64(50), res.GetEndId()-res.GetStartId()+1)
+
+	bumpTo := res.GetEndId() + 100000
+
+	// Bump the lease to (last result + 100000).
+	_, err = zc.AssignIds(ctx, &pb.Num{Val: bumpTo, Type: pb.Num_UID, Bump: true})
+	require.NoError(t, err)
+
+	// Next assignemnt's startId should be greater than bumpTo.
+	res, err = zc.AssignIds(ctx, &pb.Num{Val: 10, Type: pb.Num_UID})
+	require.NoError(t, err)
+	require.Greater(t, res.GetStartId(), bumpTo)
+	require.Equal(t, uint64(10), res.GetEndId()-res.GetStartId()+1)
+
+	// If bump request is less than maxLease, then it should result in no-op.
+	_, err = zc.AssignIds(ctx, &pb.Num{Val: 10, Type: pb.Num_UID, Bump: true})
+	require.Contains(t, err.Error(), "Nothing to be leased")
 }

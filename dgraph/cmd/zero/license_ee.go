@@ -1,3 +1,4 @@
+//go:build !oss
 // +build !oss
 
 /*
@@ -19,14 +20,14 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/dgraph-io/dgraph/ee/audit"
-
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/ristretto/z"
 	humanize "github.com/dustin/go-humanize"
 	"github.com/gogo/protobuf/proto"
 	"github.com/golang/glog"
+
+	"github.com/dgraph-io/dgraph/ee/audit"
+	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 // proposeTrialLicense proposes an enterprise license valid for 30 days.

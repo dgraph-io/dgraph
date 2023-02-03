@@ -184,7 +184,7 @@
     }
   queryjson: |
     {
-      "Ticket_1": [ { "uid": "0x789" } ]
+      "Ticket_1": [ { "uid": "0x789", "dgraph.type": ["Ticket"] } ]
     }
   dgquerysec: |-
     query {

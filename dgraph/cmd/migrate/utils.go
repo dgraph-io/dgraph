@@ -24,9 +24,10 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/go-sql-driver/mysql"
 	"github.com/pkg/errors"
+
+	"github.com/dgraph-io/dgraph/x"
 )
 
 func getPool(host, port, user, password, db string) (*sql.DB,

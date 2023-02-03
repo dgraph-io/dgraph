@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,16 +28,18 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/golang/glog"
+	"github.com/pkg/errors"
+	"go.opencensus.io/trace"
+
 	"github.com/dgraph-io/dgraph/edgraph"
+	"github.com/dgraph-io/dgraph/ee/audit"
 	"github.com/dgraph-io/dgraph/graphql/api"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/graphql/subscription"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/graphql-transport-ws/graphqlws"
-	"github.com/golang/glog"
-	"github.com/pkg/errors"
-	"go.opencensus.io/trace"
 )
 
 type Headerkey string
@@ -155,16 +157,15 @@ func (gs *graphqlSubscription) Subscribe(
 	ctx context.Context,
 	document,
 	operationName string,
-	variableValues map[string]interface{}) (payloads <-chan interface{},
-	err error) {
+	variableValues map[string]interface{}) (<-chan interface{}, error) {
 
+	reqHeader := http.Header{}
 	// library (graphql-transport-ws) passes the headers which are part of the INIT payload to us
 	// in the context. We are extracting those headers and passing them along.
 	headerPayload, _ := ctx.Value("Header").(json.RawMessage)
-	reqHeader := http.Header{}
 	if len(headerPayload) > 0 {
 		headers := make(map[string]interface{})
-		if err = json.Unmarshal(headerPayload, &headers); err != nil {
+		if err := json.Unmarshal(headerPayload, &headers); err != nil {
 			return nil, err
 		}
 
@@ -175,15 +176,34 @@ func (gs *graphqlSubscription) Subscribe(
 		}
 	}
 
+	// Earlier the graphql-transport-ws library was ignoring the http headers in the request.
+	// The library was relying upon the information present in the request payload. This was
+	// blocker for the cloud team because the only control cloud has is over the HTTP headers.
+	// This fix ensures that we are setting the request headers if not provided in the payload.
+	httpHeaders, _ := ctx.Value("RequestHeader").(http.Header)
+	if len(httpHeaders) > 0 {
+		for k := range httpHeaders {
+			if len(strings.TrimSpace(reqHeader.Get(k))) == 0 {
+				reqHeader.Set(k, httpHeaders.Get(k))
+			}
+		}
+	}
+
 	req := &schema.Request{
 		OperationName: operationName,
 		Query:         document,
 		Variables:     variableValues,
 		Header:        reqHeader,
 	}
+
+	audit.AuditWebSockets(ctx, req)
 	namespace := x.ExtractNamespaceHTTP(&http.Request{Header: reqHeader})
-	LazyLoadSchema(namespace) // first load the schema, then do anything else
-	if err = gs.isValid(namespace); err != nil {
+	glog.Infof("namespace: %d. Got GraphQL request over websocket.", namespace)
+	// first load the schema, then do anything else
+	if err := LazyLoadSchema(namespace); err != nil {
+		return nil, err
+	}
+	if err := gs.isValid(namespace); err != nil {
 		glog.Errorf("namespace: %d. graphqlSubscription not initialized: %s", namespace, err)
 		return nil, errors.New(resolve.ErrInternal)
 	}
@@ -220,6 +240,7 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 
 	ns, _ := strconv.ParseUint(r.Header.Get("resolver"), 10, 64)
+	glog.Infof("namespace: %d. Got GraphQL request over HTTP.", ns)
 	if err := gh.isValid(ns); err != nil {
 		glog.Errorf("namespace: %d. graphqlHandler not initialised: %s", ns, err)
 		WriteErrorResponse(w, r, errors.New(resolve.ErrInternal))
@@ -382,8 +403,8 @@ func recoveryHandler(next http.Handler) http.Handler {
 
 // addDynamicHeaders adds any headers which are stored in the schema to the HTTP response.
 // At present, it handles following headers:
-//  * Access-Control-Allow-Headers
-//  * Access-Control-Allow-Origin
+//   - Access-Control-Allow-Headers
+//   - Access-Control-Allow-Origin
 func addDynamicHeaders(reqResolver *resolve.RequestResolver, origin string, w http.ResponseWriter) {
 	schemaMeta := reqResolver.Schema().Meta()
 

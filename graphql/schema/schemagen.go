@@ -23,13 +23,14 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/pkg/errors"
+
 	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/gqlparser/v2/ast"
 	"github.com/dgraph-io/gqlparser/v2/gqlerror"
 	"github.com/dgraph-io/gqlparser/v2/parser"
 	"github.com/dgraph-io/gqlparser/v2/validator"
-	"github.com/pkg/errors"
 )
 
 // A Handler can produce valid GraphQL and Dgraph schemas given an input of
@@ -178,7 +179,7 @@ func (s *handler) GQLSchemaWithoutApolloExtras() string {
 type metaInfo struct {
 	// secrets are key value pairs stored in the GraphQL schema which can be added as headers
 	// to requests which resolve custom queries/mutations. These are extracted from # Dgraph.Secret.
-	secrets map[string]x.SensitiveByteSlice
+	secrets map[string]x.Sensitive
 	// extraCorsHeaders are the allowed CORS Headers in addition to x.AccessControlAllowedHeaders.
 	// These are parsed from the forwardHeaders specified in the @custom directive.
 	// The header for Dgraph.Authorization is also part of this.
@@ -208,7 +209,7 @@ func parseMetaInfo(sch string) (*metaInfo, error) {
 	scanner := bufio.NewScanner(strings.NewReader(sch))
 	authSecret := ""
 	schMetaInfo := &metaInfo{
-		secrets:            make(map[string]x.SensitiveByteSlice),
+		secrets:            make(map[string]x.Sensitive),
 		allowedCorsOrigins: make(map[string]bool),
 	}
 	var err error
@@ -262,7 +263,7 @@ func parseMetaInfo(sch string) (*metaInfo, error) {
 			val = strings.Trim(val, `"`)
 			key := strings.Trim(parts[2], `"`)
 			// lets obfuscate the value of the secrets from here on.
-			schMetaInfo.secrets[key] = x.SensitiveByteSlice(val)
+			schMetaInfo.secrets[key] = x.Sensitive(val)
 		}
 	}
 

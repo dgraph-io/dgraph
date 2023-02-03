@@ -22,9 +22,10 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/minio/minio-go/v6"
+
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/minio/minio-go/v6"
 )
 
 type remoteFiles struct {
@@ -77,7 +78,7 @@ func (rf *remoteFiles) FindDataFiles(str string, ext []string) (paths []string) 
 	return
 }
 
-func (rf *remoteFiles) ChunkReader(file string, key x.SensitiveByteSlice) (*bufio.Reader, func()) {
+func (rf *remoteFiles) ChunkReader(file string, key x.Sensitive) (*bufio.Reader, func()) {
 	url, err := url.Parse(file)
 	x.Check(err)
 

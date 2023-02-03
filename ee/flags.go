@@ -21,17 +21,18 @@ import (
 	"strings"
 	"time"
 
+	"github.com/spf13/pflag"
+
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
-	"github.com/spf13/pflag"
 )
 
 // Keys holds the configuration for ACL and encryption.
 type Keys struct {
-	AclKey        x.SensitiveByteSlice
+	AclKey        x.Sensitive
 	AclAccessTtl  time.Duration
 	AclRefreshTtl time.Duration
-	EncKey        x.SensitiveByteSlice
+	EncKey        x.Sensitive
 }
 
 const (

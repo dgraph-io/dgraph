@@ -24,13 +24,14 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v2"
+
 	"github.com/dgraph-io/dgraph/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/graphql/test"
 	"github.com/dgraph-io/dgraph/testutil"
 	_ "github.com/dgraph-io/gqlparser/v2/validator/rules" // make gql validator init() all rules
-	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v2"
 )
 
 // Tests showing that the query rewriter produces the expected Dgraph queries
@@ -151,9 +152,9 @@ func TestCustomHTTPQuery(t *testing.T) {
 					Query:     tcase.GQLQuery,
 					Variables: vars,
 					Header: map[string][]string{
-						"bogus":       []string{"header"},
-						"X-App-Token": []string{"val"},
-						"Auth0-Token": []string{"tok"},
+						"bogus":       {"header"},
+						"X-App-Token": {"val"},
+						"Auth0-Token": {"tok"},
 					},
 				})
 			require.NoError(t, err)

@@ -1,3 +1,4 @@
+//go:build oss
 // +build oss
 
 /*
@@ -21,12 +22,13 @@ package edgraph
 import (
 	"context"
 
+	"github.com/golang/glog"
+
 	"github.com/dgraph-io/dgo/v210/protos/api"
-	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/dql"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
-	"github.com/golang/glog"
 )
 
 // Login handles login requests from clients. This version rejects all requests
@@ -66,11 +68,11 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 	return nil
 }
 
-func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
+func authorizeMutation(ctx context.Context, gmu *dql.Mutation) error {
 	return nil
 }
 
-func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) error {
+func authorizeQuery(ctx context.Context, parsedReq *dql.Result, graphql bool) error {
 	// always allow access
 	return nil
 }

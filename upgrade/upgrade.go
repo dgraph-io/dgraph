@@ -24,8 +24,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/cobra"
+
+	"github.com/dgraph-io/dgraph/x"
 )
 
 var (
@@ -131,7 +132,7 @@ type changeSet struct {
 
 // changeList represents a list of changeSet, i.e., a list of all the changes that were ever
 // introduced since the beginning of Dgraph.
-//The changeSets in this list are supposed to be in sorted order based on when they were introduced.
+// The changeSets in this list are supposed to be in sorted order based on when they were introduced.
 type changeList []*changeSet
 
 type commandInput struct {
@@ -213,20 +214,16 @@ func formatAsFlagParsingError(flag string, err error) error {
 	return fmt.Errorf("error parsing flag `%s`: %w", flag, err)
 }
 
-func formatAsFlagRequiredError(flag string) error {
-	return formatAsFlagParsingError(flag, fmt.Errorf("`%s` is required", flag))
-}
-
 // parseVersionFromString parses a version given as string to internal representation.
 // Some examples for input and output:
-// 	1. input : v1.2.2
-// 	   output: &version{major: 1, minor: 2, patch: 2}, nil
-// 	2. input : v20.03.0-beta.20200320
-// 	   output: &version{major: 20, minor: 3, patch: 0}, nil
-// 	3. input : 1.2.2
-// 	   output: nil, error
-// 	4. input : v1.2.2s
-// 	   output: nil, error
+//  1. input : v1.2.2
+//     output: &version{major: 1, minor: 2, patch: 2}, nil
+//  2. input : v20.03.0-beta.20200320
+//     output: &version{major: 20, minor: 3, patch: 0}, nil
+//  3. input : 1.2.2
+//     output: nil, error
+//  4. input : v1.2.2s
+//     output: nil, error
 func parseVersionFromString(v string) (*version, error) {
 	v = strings.TrimSpace(v)
 	if v == "" || v[:1] != "v" {

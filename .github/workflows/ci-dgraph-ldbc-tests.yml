@@ -12,10 +12,10 @@ on:
     branches:
       - main
   schedule:
-    - cron: "30 * * * *"
+    - cron: "0 0 * * *" # 1-run per day
 jobs:
   dgraph-ldbc-tests:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - name: Checkout Dgraph
         uses: actions/checkout@v3

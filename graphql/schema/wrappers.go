@@ -26,12 +26,12 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/dgraph-io/dgraph/graphql/authorization"
-	"github.com/dgraph-io/gqlparser/v2/parser"
+	"github.com/pkg/errors"
 
+	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/gqlparser/v2/ast"
-	"github.com/pkg/errors"
+	"github.com/dgraph-io/gqlparser/v2/parser"
 )
 
 // Wrap the github.com/dgraph-io/gqlparser/ast defintions so that the bulk of the GraphQL
@@ -454,14 +454,15 @@ func (o *operation) CacheControl() string {
 // typDef inherited from. If there is no such interface, then it returns an empty string.
 //
 // Given the following schema
-// interface A {
-//   name: String
-// }
 //
-// type B implements A {
-//	 name: String
-//   age: Int
-// }
+//	interface A {
+//	  name: String
+//	}
+//
+//	type B implements A {
+//		 name: String
+//	  age: Int
+//	}
 //
 // calling parentInterface on the fieldName name with type definition for B, would return A.
 func parentInterface(sch *ast.Schema, typDef *ast.Definition, fieldName string) *ast.Definition {
@@ -674,24 +675,24 @@ func typeMappings(s *ast.Schema) map[string][]*ast.Definition {
 }
 
 // customAndLambdaMappings does following things:
-// * If there is @custom on any field, it removes the directive from the list of directives on
-//	 that field. Instead, it puts it in a map of typeName->fieldName->custom directive definition.
-//	 This mapping is returned as the first return value, which is later used to determine if some
-//	 field has custom directive or not, and accordingly construct the HTTP request for the field.
-// * If there is @lambda on any field, it removes the directive from the list of directives on
-//	 that field. Instead, it puts it in a map of typeName->fieldName->bool. This mapping is returned
-//	 as the second return value, which is later used to determine if some field has lambda directive
-//	 or not. An appropriate @custom directive is also constructed for the field with @lambda and
-//	 put into the first mapping. Both of these mappings together are used to construct the HTTP
-//	 request for @lambda field. Internally, @lambda is just @custom(http: {
-//	   url: "<graphql_lambda_url: a-fixed-pre-defined-url>",
-//	   method: POST,
-//	   body: "<all-the-args-for-a-query-or-mutation>/<all-the-scalar-fields-from-parent-type-for-a
-//	   -@lambda-on-field>"
-//	   mode: BATCH (set only if @lambda was on a non query/mutation field)
-//	 })
-//	 So, by constructing an appropriate custom directive for @lambda fields,
-//	 we just reuse logic from @custom.
+//   - If there is @custom on any field, it removes the directive from the list of directives on
+//     that field. Instead, it puts it in a map of typeName->fieldName->custom directive definition.
+//     This mapping is returned as the first return value, which is later used to determine if some
+//     field has custom directive or not, and accordingly construct the HTTP request for the field.
+//   - If there is @lambda on any field, it removes the directive from the list of directives on
+//     that field. Instead, it puts it in a map of typeName->fieldName->bool. This mapping is returned
+//     as the second return value, which is later used to determine if some field has lambda directive
+//     or not. An appropriate @custom directive is also constructed for the field with @lambda and
+//     put into the first mapping. Both of these mappings together are used to construct the HTTP
+//     request for @lambda field. Internally, @lambda is just @custom(http: {
+//     url: "<graphql_lambda_url: a-fixed-pre-defined-url>",
+//     method: POST,
+//     body: "<all-the-args-for-a-query-or-mutation>/<all-the-scalar-fields-from-parent-type-for-a
+//     -@lambda-on-field>"
+//     mode: BATCH (set only if @lambda was on a non query/mutation field)
+//     })
+//     So, by constructing an appropriate custom directive for @lambda fields,
+//     we just reuse logic from @custom.
 func customAndLambdaMappings(s *ast.Schema, ns uint64) (map[string]map[string]*ast.Directive,
 	map[string]map[string]bool) {
 	customDirectives := make(map[string]map[string]*ast.Directive)
@@ -816,10 +817,6 @@ func hasExternal(f *ast.FieldDefinition) bool {
 	return f.Directives.ForName(apolloExternalDirective) != nil
 }
 
-func isEntityUnion(typ *ast.Definition) bool {
-	return typ.Kind == ast.Union && typ.Name == "_Entity"
-}
-
 func (f *field) IsExternal() bool {
 	return hasExternal(f.field.Definition)
 }
@@ -874,6 +871,7 @@ func externalAndNonKeyField(fld *ast.FieldDefinition, defn *ast.Definition, prov
 
 // buildCustomDirectiveForLambda returns custom directive for the given field to be used for @lambda
 // The constructed @custom looks like this:
+//
 //	@custom(http: {
 //	   url: "<graphql_lambda_url: a-fixed-pre-defined-url>",
 //	   method: POST,
@@ -1017,14 +1015,6 @@ func (f *field) DgraphAlias() string {
 
 func (f *field) ResponseName() string {
 	return responseName(f.field)
-}
-
-func remoteResponseDirectiveArgument(fd *ast.FieldDefinition) string {
-	remoteResponseDirectiveDefn := fd.Directives.ForName(remoteResponseDirective)
-	if remoteResponseDirectiveDefn != nil {
-		return remoteResponseDirectiveDefn.Arguments.ForName("name").Value.Raw
-	}
-	return ""
 }
 
 func (f *field) RemoteResponseName() string {
@@ -2670,33 +2660,33 @@ func (t *astType) ImplementingTypes() []Type {
 //
 // For our reference types for adding/linking objects, we'd like to have something like
 //
-// input PostRef {
-// 	id: ID!
-// }
+//	input PostRef {
+//		id: ID!
+//	}
 //
-// input PostNew {
-// 	title: String!
-// 	text: String
-// 	author: AuthorRef!
-// }
+//	input PostNew {
+//		title: String!
+//		text: String
+//		author: AuthorRef!
+//	}
 //
 // and then have something like this
 //
 // input PostNewOrReference = PostRef | PostNew
 //
-// input AuthorNew {
-//   ...
-//   posts: [PostNewOrReference]
-// }
+//	input AuthorNew {
+//	  ...
+//	  posts: [PostNewOrReference]
+//	}
 //
 // but GraphQL doesn't allow union types in input, so best we can do is
 //
-// input PostRef {
-// 	id: ID
-// 	title: String
-// 	text: String
-// 	author: AuthorRef
-// }
+//	input PostRef {
+//		id: ID
+//		title: String
+//		text: String
+//		author: AuthorRef
+//	}
 //
 // and then check ourselves that either there's an ID, or there's all the bits to
 // satisfy a valid post.
@@ -2983,24 +2973,27 @@ func substituteVarInSliceInBody(slice []interface{}, variables map[string]interf
 // Given a JSON representation for a body with variables defined, this function substitutes
 // the variables and returns the final JSON.
 // for e.g.
-// {
-//		"author" : "$id",
-//		"name" : "Jerry",
-//		"age" : 23,
-//		"post": {
-//			"id": "$postID"
-//		}
-// }
+//
+//	{
+//			"author" : "$id",
+//			"name" : "Jerry",
+//			"age" : 23,
+//			"post": {
+//				"id": "$postID"
+//			}
+//	}
+//
 // with variables {"id": "0x3",	postID: "0x9"}
 // should return
-// {
-//		"author" : "0x3",
-//		"name" : "Jerry",
-//		"age" : 23,
-//		"post": {
-//			"id": "0x9"
-//		}
-// }
+//
+//	{
+//			"author" : "0x3",
+//			"name" : "Jerry",
+//			"age" : 23,
+//			"post": {
+//				"id": "0x9"
+//			}
+//	}
 func SubstituteVarsInBody(jsonTemplate interface{}, variables map[string]interface{}) interface{} {
 	if jsonTemplate == nil {
 		return nil
@@ -3040,19 +3033,22 @@ func (t *astType) FieldOriginatedFrom(fieldName string) string {
 
 // buildGraphqlRequestFields will build graphql request body from ast.
 // for eg:
-// Hello{
-// 	name {
-// 		age
-// 	}
-// 	friend
-// }
+//
+//	Hello{
+//		name {
+//			age
+//		}
+//		friend
+//	}
+//
 // will return
-// {
-// 	name {
-// 		age
-// 	}
-// 	friend
-// }
+//
+//	{
+//		name {
+//			age
+//		}
+//		friend
+//	}
 func buildGraphqlRequestFields(writer *bytes.Buffer, field *ast.Field) {
 	// Add beginning curly braces
 	if len(field.SelectionSet) == 0 {

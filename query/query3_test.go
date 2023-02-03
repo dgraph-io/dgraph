@@ -23,9 +23,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/metadata"
+
+	"github.com/dgraph-io/dgraph/testutil"
 )
 
 func TestRecurseError(t *testing.T) {
@@ -3215,4 +3216,18 @@ func TestMultiRegexInFilter2(t *testing.T) {
 		res := processQueryNoErr(t, query)
 		require.JSONEq(t, `{"data": {"q": [{"firstName": "Han", "lastName":"Solo"}]}}`, res)
 	}
+}
+
+func TestRegexFuncWithAfter(t *testing.T) {
+	query := `
+		{
+			q(func: regexp(name, /^Ali/i), after: 0x2710) {
+				uid
+				name
+			}
+		}
+	`
+
+	res := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"q": [{"name": "Alice", "uid": "0x2712"}, {"name": "Alice", "uid": "0x2714"}]}}`, res)
 }

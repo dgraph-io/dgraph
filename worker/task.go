@@ -24,6 +24,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/golang/glog"
+	"github.com/golang/protobuf/proto"
+	cindex "github.com/google/codesearch/index"
+	cregexp "github.com/google/codesearch/regexp"
+	"github.com/pkg/errors"
+	otrace "go.opencensus.io/trace"
+	"golang.org/x/sync/errgroup"
+
 	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/algo"
@@ -36,14 +44,6 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/glog"
-	otrace "go.opencensus.io/trace"
-	"golang.org/x/sync/errgroup"
-
-	"github.com/golang/protobuf/proto"
-	cindex "github.com/google/codesearch/index"
-	cregexp "github.com/google/codesearch/regexp"
-	"github.com/pkg/errors"
 )
 
 func invokeNetworkRequest(ctx context.Context, addr string,
@@ -801,7 +801,7 @@ func (qs *queryState) handleUidPostings(
 					ReadTs:    args.q.ReadTs,
 					AfterUid:  0,
 					Intersect: reqList,
-					First:     int(args.q.First),
+					First:     int(args.q.First + args.q.Offset),
 				}
 				plist, err := pl.Uids(topts)
 				if err != nil {
@@ -983,7 +983,7 @@ func (qs *queryState) helpProcessTask(ctx context.Context, q *pb.Query, gid uint
 	opts := posting.ListOptions{
 		ReadTs:   q.ReadTs,
 		AfterUid: q.AfterUid,
-		First:    int(q.First),
+		First:    int(q.First + q.Offset),
 	}
 	// If we have srcFunc and Uids, it means its a filter. So we intersect.
 	if srcFn.fnType != notAFunction && q.UidList != nil && len(q.UidList.Uids) > 0 {
@@ -2349,6 +2349,7 @@ func (qs *queryState) handleHasFunction(ctx context.Context, q *pb.Query, out *p
 		return err
 	}
 
+	cnt := int32(0)
 loop:
 	// This function could be switched to the stream.Lists framework, but after the change to use
 	// BitCompletePosting, the speed here is already pretty fast. The slowdown for @lang predicates
@@ -2390,6 +2391,11 @@ loop:
 			case err != nil:
 				return err
 			}
+			// skip entries upto Offset and do not store in the result.
+			if cnt < q.Offset {
+				cnt++
+				continue
+			}
 			result.Uids = append(result.Uids, pk.Uid)
 
 			// We'll stop fetching if we fetch the required count.
@@ -2415,6 +2421,11 @@ loop:
 				continue
 			case err != nil:
 				return err
+			}
+			// skip entries upto Offset and do not store in the result.
+			if cnt < q.Offset {
+				cnt++
+				continue
 			}
 			result.Uids = append(result.Uids, pk.Uid)
 

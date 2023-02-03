@@ -21,13 +21,13 @@ import (
 	"math/rand"
 	"time"
 
+	"github.com/golang/glog"
+	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"
 	"google.golang.org/grpc/metadata"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/glog"
-	"github.com/pkg/errors"
 )
 
 var emptyAssignedIds pb.AssignedIds
@@ -175,7 +175,9 @@ func (s *Server) lease(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error
 }
 
 // AssignIds is used to assign new ids (UIDs, NsIDs) by communicating with the leader of the
-// RAFT group responsible for handing out ids.
+// RAFT group responsible for handing out ids. If bump is set to true in the request then the
+// lease for the given id type is bumped to num.Val and {startId, endId} of the newly leased ids
+// in the process of bump is returned.
 func (s *Server) AssignIds(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error) {
 	if ctx.Err() != nil {
 		return &emptyAssignedIds, ctx.Err()
@@ -244,6 +246,25 @@ func (s *Server) AssignIds(ctx context.Context, num *pb.Num) (*pb.AssignedIds, e
 		}
 		reply, err = zc.AssignIds(ctx, num)
 		return err
+	}
+
+	// If this is a bump request and the current node is the leader then we create a normal lease
+	// request based on the number of required ids to reach the asked bump value. If the current
+	// node is not the leader then the bump request will be forwarded to the leader by lease().
+	if num.GetBump() && s.Node.AmLeader() {
+		s.leaseLock.Lock()
+		cur := s.nextLease[num.GetType()] - 1
+		s.leaseLock.Unlock()
+
+		// We need to lease more UIDs if bump request is more than current max lease.
+		req := num.GetVal()
+		if cur >= req {
+			return &emptyAssignedIds, errors.Errorf("Nothing to be leased")
+		}
+		num.Val = req - cur
+
+		// Set bump to false because we want to lease the required ids in the following request.
+		num.Bump = false
 	}
 
 	c := make(chan error, 1)

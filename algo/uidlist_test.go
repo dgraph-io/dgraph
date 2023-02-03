@@ -23,9 +23,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/stretchr/testify/require"
 )
 
 func newList(data []uint64) *pb.List {
@@ -256,6 +257,30 @@ func TestUIDListIntersect5(t *testing.T) {
 	v := newList([]uint64{3, 5})
 	IntersectWith(u, v, u)
 	require.Equal(t, []uint64{3}, u.Uids)
+}
+
+func TestUIDListIntersect6(t *testing.T) {
+	common, other, _ := fillNums(10, 500)
+	u := newList(common)
+	v := newList(other)
+	IntersectWith(u, v, u)
+	require.Equal(t, common, u.Uids)
+}
+
+func TestUIDListIntersect7(t *testing.T) {
+	common, other, _ := fillNums(10, 2500)
+	u := newList(common)
+	v := newList(other)
+	IntersectWith(u, v, u)
+	require.Equal(t, common, u.Uids)
+}
+
+func TestUIDListIntersect8(t *testing.T) {
+	common, other, _ := fillNums(10, 20000)
+	u := newList(common)
+	v := newList(other)
+	IntersectWith(u, v, newList(nil))
+	require.Equal(t, common, u.Uids)
 }
 
 func TestUIDListIntersectDupFirst(t *testing.T) {

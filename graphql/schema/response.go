@@ -249,7 +249,7 @@ func (t *Trace) Merge(other *Trace) {
 	}
 }
 
-//ExecutionTrace records all the resolvers
+// ExecutionTrace records all the resolvers
 type ExecutionTrace struct {
 	Resolvers []*ResolverTrace `json:"resolvers"`
 }

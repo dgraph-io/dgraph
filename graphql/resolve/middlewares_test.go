@@ -20,8 +20,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dgraph-io/dgraph/graphql/schema"
 )
 
 func TestQueryMiddlewares_Then_ExecutesMiddlewaresInOrder(t *testing.T) {

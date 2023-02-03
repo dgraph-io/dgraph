@@ -17,20 +17,24 @@
 package testutil
 
 import (
+	"archive/tar"
 	"bytes"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
 	"github.com/golang/glog"
 	"golang.org/x/net/context"
+
+	"github.com/dgraph-io/dgraph/x"
 )
 
 const (
@@ -224,11 +228,30 @@ func DockerRun(instance string, op int) error {
 	return nil
 }
 
-// DockerCp copies from/to a container. Paths inside a container have the format
+// MARKED FOR DEPRECATION: DockerCp copies from/to a container. Paths inside a container have the format
 // container_name:path.
 func DockerCp(srcPath, dstPath string) error {
 	argv := []string{"docker", "cp", srcPath, dstPath}
 	return Exec(argv...)
+}
+
+// DockerCpFromContainer copies from a container.
+func DockerCpFromContainer(containerID, srcPath, dstPath string) error {
+	cli, err := client.NewEnvClient()
+	x.Check(err)
+
+	tarStream, _, err := cli.CopyFromContainer(context.Background(), containerID, srcPath)
+	if err != nil {
+		fmt.Println(err)
+		return nil
+	}
+	tr := tar.NewReader(tarStream)
+	tr.Next()
+
+	data, err := io.ReadAll(tr)
+	x.Check(err)
+
+	return os.WriteFile(dstPath, data, 0644)
 }
 
 // DockerExec executes a command inside the given container.
@@ -241,4 +264,35 @@ func DockerExec(instance string, cmd ...string) error {
 	argv := []string{"docker", "exec", "--user", "root", c.ID}
 	argv = append(argv, cmd...)
 	return Exec(argv...)
+}
+
+func DockerInspect(containerID string) (types.ContainerJSON, error) {
+	cli, err := client.NewEnvClient()
+	x.Check(err)
+	return cli.ContainerInspect(context.Background(), containerID)
+}
+
+// checkHealthContainer checks health of container and determines wheather container is ready to accept request
+func CheckHealthContainer(socketAddrHttp string) error {
+	var err error
+	var resp *http.Response
+	url := "http://" + socketAddrHttp + "/health"
+	for i := 0; i < 30; i++ {
+		resp, err = http.Get(url)
+		if err == nil && resp.StatusCode == http.StatusOK {
+			return nil
+		}
+		var body []byte
+		if resp != nil && resp.Body != nil {
+			body, err = ioutil.ReadAll(resp.Body)
+			if err != nil {
+				return err
+			}
+			resp.Body.Close()
+		}
+		fmt.Printf("health check for container failed: %v. Response: %q. Retrying...\n", err, body)
+		time.Sleep(time.Second)
+
+	}
+	return err
 }

@@ -1,3 +1,4 @@
+//go:build linux
 // +build linux
 
 package x
@@ -9,10 +10,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
 	"go.opencensus.io/stats"
 	"go.opencensus.io/tag"
+
+	"github.com/dgraph-io/ristretto/z"
 )
 
 func MonitorDiskMetrics(dirTag string, dir string, lc *z.Closer) {

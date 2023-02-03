@@ -17,9 +17,8 @@
 package types
 
 import (
-	"golang.org/x/crypto/bcrypt"
-
 	"github.com/pkg/errors"
+	"golang.org/x/crypto/bcrypt"
 )
 
 const (

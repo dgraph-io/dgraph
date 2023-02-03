@@ -29,9 +29,13 @@ import (
 	"sync"
 	"sync/atomic"
 
+	farm "github.com/dgryski/go-farm"
+	"github.com/golang/snappy"
+
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/chunker"
-	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/dql"
+	"github.com/dgraph-io/dgraph/ee/acl"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/tok"
@@ -39,8 +43,10 @@ import (
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
-	farm "github.com/dgryski/go-farm"
-	"github.com/golang/snappy"
+)
+
+var (
+	aclOnce sync.Once
 )
 
 type mapper struct {
@@ -227,6 +233,20 @@ func (m *mapper) run(inputFormat chunker.InputFormat) {
 				}
 			}
 		}
+		aclOnce.Do(func() {
+			if m.opt.Namespace != math.MaxUint64 && m.opt.Namespace != x.GalaxyNamespace {
+				// Insert ACL related RDFs force uploading the data into non-galaxy namespace.
+				aclNquads := make([]*api.NQuad, 0)
+				aclNquads = append(aclNquads, acl.CreateGroupNQuads(x.GuardiansId)...)
+				aclNquads = append(aclNquads, acl.CreateUserNQuads(x.GrootId, "password")...)
+				aclNquads = append(aclNquads, &api.NQuad{
+					Subject:   "_:newuser",
+					Predicate: "dgraph.user.group",
+					ObjectId:  "_:newgroup",
+				})
+				nquads.Push(aclNquads...)
+			}
+		})
 		nquads.Flush()
 	}()
 
@@ -239,7 +259,7 @@ func (m *mapper) run(inputFormat chunker.InputFormat) {
 				}
 			}
 
-			m.processNQuad(gql.NQuad{NQuad: nq})
+			m.processNQuad(dql.NQuad{NQuad: nq})
 			atomic.AddInt64(&m.prog.nquadCount, 1)
 		}
 
@@ -285,7 +305,7 @@ func (m *mapper) addMapEntry(key []byte, p *pb.Posting, shard int) {
 	marshalMapEntry(dst, uid, key, p)
 }
 
-func (m *mapper) processNQuad(nq gql.NQuad) {
+func (m *mapper) processNQuad(nq dql.NQuad) {
 	if m.opt.Namespace != math.MaxUint64 {
 		// Use the specified namespace passed through '--force-namespace' flag.
 		nq.Namespace = m.opt.Namespace
@@ -359,7 +379,7 @@ func (m *mapper) lookupUid(xid string, ns uint64) uint64 {
 		// Don't store xids for blank nodes.
 		return uid
 	}
-	nq := gql.NQuad{NQuad: &api.NQuad{
+	nq := dql.NQuad{NQuad: &api.NQuad{
 		Subject:   xid,
 		Predicate: "xid",
 		ObjectValue: &api.Value{
@@ -371,7 +391,7 @@ func (m *mapper) lookupUid(xid string, ns uint64) uint64 {
 	return uid
 }
 
-func (m *mapper) createPostings(nq gql.NQuad,
+func (m *mapper) createPostings(nq dql.NQuad,
 	de *pb.DirectedEdge) (*pb.Posting, *pb.Posting) {
 
 	m.schema.validateType(de, nq.ObjectValue == nil)
@@ -407,7 +427,7 @@ func (m *mapper) createPostings(nq gql.NQuad,
 	return p, rp
 }
 
-func (m *mapper) addIndexMapEntries(nq gql.NQuad, de *pb.DirectedEdge) {
+func (m *mapper) addIndexMapEntries(nq dql.NQuad, de *pb.DirectedEdge) {
 	if nq.GetObjectValue() == nil {
 		return // Cannot index UIDs
 	}

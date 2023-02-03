@@ -25,10 +25,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/metadata"
+
+	"github.com/dgraph-io/dgo/v210/protos/api"
 )
 
 func TestSchemaBlock2(t *testing.T) {
@@ -650,6 +651,18 @@ func TestHasFuncAtRoot(t *testing.T) {
 
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t, `{"data": {"me":[{"friend":[{"count":5}],"name":"Michonne"},{"friend":[{"count":1}],"name":"Rick Grimes"},{"friend":[{"count":1}],"name":"Andrea"}]}}`, js)
+}
+
+func TestHasFuncAtRootWithFirstAndOffset(t *testing.T) {
+	query := `
+	{
+		me(func: has(name), first: 5, offset: 5) {
+			name
+		}
+	}
+	`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{ "data": {"me":[{"name": "Bear"},{"name": "Nemo"},{"name": "name"},{"name": "Rick Grimes"},{"name": "Glenn Rhee"}]}}`, js)
 }
 
 func TestHasFuncAtRootWithAfter(t *testing.T) {
@@ -2377,6 +2390,19 @@ func TestFilterRoot(t *testing.T) {
 	require.JSONEq(t, `{"data": {"me": []}}`, js)
 }
 
+func TestFilterWithNoSrcUid(t *testing.T) {
+
+	query := `{
+		me(func: eq(name, "Does Not Exist")) @filter(eq(name, "Michonne")) {
+			uid
+			name
+		}
+	}
+	`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me": []}}`, js)
+}
+
 func TestMathAlias(t *testing.T) {
 
 	query := `{
@@ -2544,4 +2570,60 @@ func TestExpandAll_empty_panic(t *testing.T) {
 	`
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t, `{"data":{"me":[]}}`, js)
+}
+
+func TestMatchFuncWithAfterWithValidUid(t *testing.T) {
+	query := `
+		{
+			q(func: match(name, Ali, 5), after: 0x2710) {
+				uid
+				name
+			}
+		}
+	`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"q": [{"name": "Alice", "uid": "0x2712"}, {"name": "Alice", "uid": "0x2714"}]}}`, js)
+}
+
+func TestMatchFuncWithAfterWithInvalidUid(t *testing.T) {
+	query := `
+		{
+			q(func: match(name, Ali, 5), after: -1) {
+				uid
+				name
+			}
+		}
+	`
+	_, err := processQuery(context.Background(), t, query)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "parsing \"-1\": invalid syntax")
+}
+
+func TestMatchFuncWithAfterWithLastUid(t *testing.T) {
+	query := `
+		{
+			q(func: match(name, Ali, 5), after: 0x2714) {
+				uid
+				name
+			}
+		}
+	`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"q":[] } }`, js)
+}
+
+func TestCompareFuncWithAfter(t *testing.T) {
+	query := `
+		{
+			q(func: eq(name, Alice), after: 0x2710) {
+				uid
+				name
+			}
+		}
+	`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"q": [{"name": "Alice", "uid": "0x2712"}, {"name": "Alice", "uid": "0x2714"}]}}`, js)
 }

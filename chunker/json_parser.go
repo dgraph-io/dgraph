@@ -26,15 +26,16 @@ import (
 	"sync/atomic"
 	"unicode"
 
+	"github.com/pkg/errors"
+	geom "github.com/twpayne/go-geom"
+	"github.com/twpayne/go-geom/encoding/geojson"
+
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
 	simdjson "github.com/dgraph-io/simdjson-go"
-	"github.com/pkg/errors"
-	geom "github.com/twpayne/go-geom"
-	"github.com/twpayne/go-geom/encoding/geojson"
 )
 
 func stripSpaces(str string) string {

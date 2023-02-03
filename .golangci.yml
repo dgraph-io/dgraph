@@ -22,13 +22,13 @@ linters:
     #- errcheck
     #- ineffassign
     #- gas
-    #- gofmt
+    - gofmt
     #- golint
-    #- gosimple
-    #- govet
+    - gosimple
+    - govet
     - lll
-    #- varcheck
-    #- unused
+    - varcheck
+    - unused
 
 issues:
   # Excluding configuration per-path, per-linter, per-text and per-source

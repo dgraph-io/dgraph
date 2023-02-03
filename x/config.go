@@ -21,9 +21,10 @@ import (
 	"net"
 	"time"
 
+	"github.com/spf13/viper"
+
 	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/ristretto/z"
-	"github.com/spf13/viper"
 )
 
 // Options stores the options for this package.
@@ -107,7 +108,7 @@ type WorkerOptions struct {
 	// AclEnabled indicates whether the enterprise ACL feature is turned on.
 	AclEnabled bool
 	// HmacSecret stores the secret used to sign JSON Web Tokens (JWT).
-	HmacSecret SensitiveByteSlice
+	HmacSecret Sensitive
 	// AbortOlderThan tells Dgraph to discard transactions that are older than this duration.
 	AbortOlderThan time.Duration
 	// ProposedGroupId will be used if there's a file in the p directory called group_id with the
@@ -115,21 +116,13 @@ type WorkerOptions struct {
 	ProposedGroupId uint32
 	// StartTime is the start time of the alpha
 	StartTime time.Time
-	// Ludicrous options:
-	//
-	// enabled bool - turn Ludicrous mode on or off
-	// concurrency int - number of concurrent threads in Ludicrous mode
-	Ludicrous *z.SuperFlag
-	// LudicrousEnabled mirrors the "enabled" flag of the Ludicrous SuperFlag for usage in critical
-	// paths.
-	LudicrousEnabled bool
 	// Security options:
 	//
 	// whitelist string - comma separated IP addresses
 	// token string - if set, all Admin requests to Dgraph will have this token.
 	Security *z.SuperFlag
 	// EncryptionKey is the key used for encryption at rest, backups, exports. Enterprise only feature.
-	EncryptionKey SensitiveByteSlice
+	EncryptionKey Sensitive
 	// LogDQLRequest indicates whether alpha should log all query/mutation requests coming to it.
 	// Ideally LogDQLRequest should be a bool value. But we are reading it using atomics across
 	// queries hence it has been kept as int32. LogDQLRequest value 1 enables logging of requests
@@ -148,12 +141,8 @@ func (w *WorkerOptions) Parse(conf *viper.Viper) {
 	w.MyAddr = conf.GetString("my")
 	w.Trace = z.NewSuperFlag(conf.GetString("trace")).MergeAndCheckDefault(TraceDefaults)
 
-	if w.LudicrousEnabled {
-		w.HardSync = false
-	} else {
-		survive := conf.GetString("survive")
-		AssertTruef(survive == "process" || survive == "filesystem",
-			"Invalid survival mode: %s", survive)
-		w.HardSync = survive == "filesystem"
-	}
+	survive := conf.GetString("survive")
+	AssertTruef(survive == "process" || survive == "filesystem",
+		"Invalid survival mode: %s", survive)
+	w.HardSync = survive == "filesystem"
 }

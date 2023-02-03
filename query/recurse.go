@@ -21,9 +21,10 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/pkg/errors"
+
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/pkg/errors"
 )
 
 func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error {

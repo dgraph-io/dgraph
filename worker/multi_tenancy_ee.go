@@ -1,3 +1,4 @@
+//go:build !oss
 // +build !oss
 
 /*
@@ -16,12 +17,13 @@ import (
 	"context"
 	"time"
 
-	"github.com/dgraph-io/dgraph/conn"
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/dgraph-io/dgraph/conn"
+	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 func (w *grpcWorker) DeleteNamespace(ctx context.Context,

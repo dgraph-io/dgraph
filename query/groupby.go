@@ -21,10 +21,11 @@ import (
 	"sort"
 	"strconv"
 
+	"github.com/pkg/errors"
+
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
-	"github.com/pkg/errors"
 )
 
 type groupPair struct {

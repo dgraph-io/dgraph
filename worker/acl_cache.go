@@ -16,9 +16,10 @@ package worker
 import (
 	"sync"
 
+	"github.com/pkg/errors"
+
 	"github.com/dgraph-io/dgraph/ee/acl"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/pkg/errors"
 )
 
 // aclCache is the cache mapping group names to the corresponding group acls
