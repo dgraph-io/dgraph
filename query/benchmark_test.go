@@ -19,7 +19,7 @@ package query
 /*
 // TODO: Fix this test.
 func prepareTest(b *testing.B) (dgs.Store, string, string) {
-	dir, err := ioutil.TempDir("", "storetest_")
+	dir, err := os.MkdirTemp("", "storetest_")
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -34,7 +34,7 @@ func prepareTest(b *testing.B) (dgs.Store, string, string) {
 	worker.Init(ps)
 
 	group.ParseGroupConfig("")
-	dir2, err := ioutil.TempDir("", "wal_")
+	dir2, err := os.MkdirTemp("", "wal_")
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -78,7 +78,7 @@ func benchmarkHelper(b *testing.B, f func(*testing.B, *SubGraph)) {
 			if !b.Run(label, func(b *testing.B) {
 				b.ReportAllocs()
 				sg := new(SubGraph)
-				data, err := ioutil.ReadFile(filename)
+				data, err := os.ReadFile(filename)
 				if err != nil {
 					b.Fatal(err)
 				}

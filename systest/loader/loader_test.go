@@ -19,7 +19,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -47,7 +46,7 @@ func TestLoaderXidmap(t *testing.T) {
 	require.NoError(t, err)
 	ctx := context.Background()
 	testutil.DropAll(t, dg)
-	tmpDir, err := ioutil.TempDir("", "loader_test")
+	tmpDir, err := os.MkdirTemp("", "loader_test")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 

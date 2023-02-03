@@ -15,8 +15,8 @@ package audit
 
 import (
 	"fmt"
-	"io/ioutil"
 	"math"
+	"os"
 	"sync/atomic"
 	"time"
 
@@ -92,7 +92,7 @@ func readAuditEncKey(conf *z.SuperFlag) ([]byte, error) {
 	if encFile == "" {
 		return nil, nil
 	}
-	encKey, err := ioutil.ReadFile(encFile)
+	encKey, err := os.ReadFile(encFile)
 	if err != nil {
 		return nil, err
 	}

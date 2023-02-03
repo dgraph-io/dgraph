@@ -123,7 +123,7 @@ package worker
 // func TestPopulateShard(t *testing.T) {
 //	x.SetTestRun()
 //	var err error
-//	dir, err := ioutil.TempDir("", "store0")
+//	dir, err := os.MkdirTemp("", "store0")
 //	if err != nil {
 //		t.Fatal(err)
 //	}
@@ -142,7 +142,7 @@ package worker
 //
 //	writePLs(t, "name", 0, 100, 2)
 //
-//	dir1, err := ioutil.TempDir("", "store1")
+//	dir1, err := os.MkdirTemp("", "store1")
 //	if err != nil {
 //		t.Fatal(err)
 //	}
@@ -294,7 +294,7 @@ func TestJoinCluster(t *testing.T) {
 	// Requires adding functions around group(). So waiting for RAFT code to stabilize a bit.
 	t.Skip()
 	var err error
-	dir, err := ioutil.TempDir("", "store0")
+	dir, err := os.MkdirTemp("", "store0")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -316,7 +316,7 @@ func TestJoinCluster(t *testing.T) {
 	defer s.Stop()
 	go serve(s, ln)
 
-	dir1, err := ioutil.TempDir("", "store1")
+	dir1, err := os.MkdirTemp("", "store1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -349,7 +349,7 @@ func TestJoinCluster(t *testing.T) {
 /*
  * TODO: Fix this when we find a way to mock grpc.
  *func TestGenerateGroup(t *testing.T) {
- *  dir, err := ioutil.TempDir("", "store3")
+ *  dir, err := os.MkdirTemp("", "store3")
  *  if err != nil {
  *    t.Fatal(err)
  *  }

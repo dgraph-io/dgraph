@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"hash/adler32"
 	"io"
-	"io/ioutil"
 	"log"
 	"math"
 	"os"
@@ -35,6 +34,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/badger/v3/y"
@@ -123,7 +123,7 @@ func newLoader(opt *options) *loader {
 	if tlsConf != nil {
 		dialOpts = append(dialOpts, grpc.WithTransportCredentials(credentials.NewTLS(tlsConf)))
 	} else {
-		dialOpts = append(dialOpts, grpc.WithInsecure())
+		dialOpts = append(dialOpts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
 	zero, err := grpc.DialContext(ctx, opt.ZeroAddr, dialOpts...)
 	x.Checkf(err, "Unable to connect to zero, Is it running at %s?", opt.ZeroAddr)
@@ -209,7 +209,7 @@ func readSchema(opt *options) *schema.ParsedSchema {
 		x.Check(err)
 	}
 
-	buf, err := ioutil.ReadAll(r)
+	buf, err := io.ReadAll(r)
 	x.Check(err)
 
 	result, err := schema.ParseWithNamespace(string(buf), opt.Namespace)
@@ -347,7 +347,7 @@ func (ld *loader) processGqlSchema(loadType chunker.InputFormat) {
 		x.Check(err)
 	}
 
-	buf, err := ioutil.ReadAll(r)
+	buf, err := io.ReadAll(r)
 	x.Check(err)
 
 	rdfSchema := `_:gqlschema <dgraph.type> "dgraph.graphql" <%#x> .

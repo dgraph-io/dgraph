@@ -17,7 +17,6 @@
 package schema
 
 import (
-	"io/ioutil"
 	"os"
 	"strings"
 	"testing"
@@ -45,7 +44,7 @@ type TestCase struct {
 
 func TestDGSchemaGen(t *testing.T) {
 	fileName := "dgraph_schemagen_test.yml"
-	byts, err := ioutil.ReadFile(fileName)
+	byts, err := os.ReadFile(fileName)
 	require.NoError(t, err, "Unable to read file %s", fileName)
 
 	var tests Tests
@@ -75,14 +74,14 @@ func TestSchemaString(t *testing.T) {
 	inputDir := "testdata/schemagen/input/"
 	outputDir := "testdata/schemagen/output/"
 
-	files, err := ioutil.ReadDir(inputDir)
+	files, err := os.ReadDir(inputDir)
 	require.NoError(t, err)
 
 	for _, testFile := range files {
 		t.Run(testFile.Name(), func(t *testing.T) {
 
 			inputFileName := inputDir + testFile.Name()
-			str1, err := ioutil.ReadFile(inputFileName)
+			str1, err := os.ReadFile(inputFileName)
 			require.NoError(t, err)
 
 			schHandler, errs := NewHandler(string(str1), false)
@@ -93,7 +92,7 @@ func TestSchemaString(t *testing.T) {
 			_, err = FromString(newSchemaStr, x.GalaxyNamespace)
 			require.NoError(t, err)
 			outputFileName := outputDir + testFile.Name()
-			str2, err := ioutil.ReadFile(outputFileName)
+			str2, err := os.ReadFile(outputFileName)
 			require.NoError(t, err)
 			if diff := cmp.Diff(string(str2), newSchemaStr); diff != "" {
 				// fmt.Printf("Generated Schema (%s):\n%s\n", testFile.Name(), newSchemaStr)
@@ -107,13 +106,13 @@ func TestApolloServiceQueryResult(t *testing.T) {
 	inputDir := "testdata/apolloservice/input/"
 	outputDir := "testdata/apolloservice/output/"
 
-	files, err := ioutil.ReadDir(inputDir)
+	files, err := os.ReadDir(inputDir)
 	require.NoError(t, err)
 
 	for _, testFile := range files {
 		t.Run(testFile.Name(), func(t *testing.T) {
 			inputFileName := inputDir + testFile.Name()
-			str1, err := ioutil.ReadFile(inputFileName)
+			str1, err := os.ReadFile(inputFileName)
 			require.NoError(t, err)
 
 			schHandler, errs := NewHandler(string(str1), true)
@@ -124,7 +123,7 @@ func TestApolloServiceQueryResult(t *testing.T) {
 			_, err = FromString(schHandler.GQLSchema(), x.GalaxyNamespace)
 			require.NoError(t, err)
 			outputFileName := outputDir + testFile.Name()
-			str2, err := ioutil.ReadFile(outputFileName)
+			str2, err := os.ReadFile(outputFileName)
 			require.NoError(t, err)
 			if diff := cmp.Diff(string(str2), apolloServiceResult); diff != "" {
 				t.Errorf("result mismatch - diff (- want +got):\n%s", diff)
@@ -135,7 +134,7 @@ func TestApolloServiceQueryResult(t *testing.T) {
 
 func TestSchemas(t *testing.T) {
 	fileName := "gqlschema_test.yml"
-	byts, err := ioutil.ReadFile(fileName)
+	byts, err := os.ReadFile(fileName)
 	require.NoError(t, err, "Unable to read file %s", fileName)
 
 	var tests Tests
@@ -173,7 +172,7 @@ func TestSchemas(t *testing.T) {
 
 func TestAuthSchemas(t *testing.T) {
 	fileName := "auth_schemas_test.yaml"
-	byts, err := ioutil.ReadFile(fileName)
+	byts, err := os.ReadFile(fileName)
 	require.NoError(t, err, "Unable to read file %s", fileName)
 
 	var tests map[string][]struct {

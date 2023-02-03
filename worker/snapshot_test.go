@@ -20,7 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -178,7 +178,7 @@ func waitForSnapshot(t *testing.T, prevSnapTs uint64) uint64 {
 	for {
 		res, err := http.Get("http://" + testutil.SockAddrZeroHttp + "/state")
 		require.NoError(t, err)
-		body, err := ioutil.ReadAll(res.Body)
+		body, err := io.ReadAll(res.Body)
 		res.Body.Close()
 		require.NoError(t, err)
 

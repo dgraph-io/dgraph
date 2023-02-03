@@ -16,7 +16,6 @@ package worker
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"math"
 	"net/url"
 	"os"
@@ -302,7 +301,7 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest, pidx uin
 		}
 	}
 
-	mapDir, err := ioutil.TempDir(x.WorkerConfig.TmpDir, "restore-map")
+	mapDir, err := os.MkdirTemp(x.WorkerConfig.TmpDir, "restore-map")
 	x.Check(err)
 	defer os.RemoveAll(mapDir)
 	glog.Infof("Created temporary map directory: %s\n", mapDir)
@@ -459,13 +458,13 @@ func RunOfflineRestore(dir, location, backupId, keyFile string, key x.Sensitive,
 		return LoadResult{Err: errors.Wrapf(err, "cannot retrieve manifests")}
 	}
 	if len(keyFile) > 0 {
-		key, err = ioutil.ReadFile(keyFile)
+		key, err = os.ReadFile(keyFile)
 		if err != nil {
 			return LoadResult{Err: errors.Wrapf(err, "RunRestore failed to read enc-key")}
 		}
 	}
 
-	mapDir, err := ioutil.TempDir(x.WorkerConfig.TmpDir, "restore-map")
+	mapDir, err := os.MkdirTemp(x.WorkerConfig.TmpDir, "restore-map")
 	x.Check(err)
 	defer os.RemoveAll(mapDir)
 

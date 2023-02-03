@@ -209,7 +209,7 @@ func TestMetrics(t *testing.T) {
 
 func extractMetrics(metrics string) (map[string]interface{}, error) {
 	lines := strings.Split(metrics, "\n")
-	metricRegex, err := regexp.Compile("(^\\w+|\\d+$)")
+	metricRegex, err := regexp.Compile(`(^\w+|\d+$)`)
 
 	if err != nil {
 		return nil, err

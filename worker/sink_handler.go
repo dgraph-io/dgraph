@@ -23,7 +23,6 @@ import (
 	"crypto/x509"
 	"encoding/binary"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -102,7 +101,7 @@ func newKafkaSink(config *z.SuperFlag) (Sink, error) {
 		if pool, err = x509.SystemCertPool(); err != nil {
 			return nil, err
 		}
-		caFile, err := ioutil.ReadFile(config.GetPath("ca-cert"))
+		caFile, err := os.ReadFile(config.GetPath("ca-cert"))
 		if err != nil {
 			return nil, errors.Wrap(err, "unable to read ca cert file")
 		}

@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
@@ -138,7 +139,7 @@ func initialData() string {
 func makeClient() *dgo.Dgraph {
 	var dgcs []api.DgraphClient
 	for _, addr := range strings.Split(*addrs, ",") {
-		c, err := grpc.Dial(addr, grpc.WithInsecure())
+		c, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		x.Check(err)
 		dgcs = append(dgcs, api.NewDgraphClient(c))
 	}

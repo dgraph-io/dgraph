@@ -22,7 +22,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -153,7 +152,7 @@ func initCmds() {
 			if err != nil {
 				x.Fatalf("unable to open config file for reading: %v", err)
 			}
-			cfgData, err := ioutil.ReadAll(cfgFile)
+			cfgData, err := io.ReadAll(cfgFile)
 			if err != nil {
 				x.Fatalf("unable to read config file: %v", err)
 			}

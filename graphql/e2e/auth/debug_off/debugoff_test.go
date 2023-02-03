@@ -2,7 +2,6 @@ package debugoff
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"os"
 	"testing"
 
@@ -125,13 +124,13 @@ func TestAddMutationWithXid(t *testing.T) {
 
 func TestMain(m *testing.M) {
 	schemaFile := "../schema.graphql"
-	schema, err := ioutil.ReadFile(schemaFile)
+	schema, err := os.ReadFile(schemaFile)
 	if err != nil {
 		panic(err)
 	}
 
 	jsonFile := "../test_data.json"
-	data, err := ioutil.ReadFile(jsonFile)
+	data, err := os.ReadFile(jsonFile)
 	if err != nil {
 		panic(errors.Wrapf(err, "Unable to read file %s.", jsonFile))
 	}

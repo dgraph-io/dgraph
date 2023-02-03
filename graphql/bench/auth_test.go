@@ -18,8 +18,8 @@ package bench
 
 import (
 	"fmt"
-	"io/ioutil"
 	"net/http"
+	"os"
 	"testing"
 	"time"
 
@@ -190,7 +190,7 @@ func clearAll(b require.TestingT, metaInfo *testutil.AuthMeta) {
 
 func BenchmarkNestedQuery(b *testing.B) {
 	schemaFile := "schema_auth.graphql"
-	schema, err := ioutil.ReadFile(schemaFile)
+	schema, err := os.ReadFile(schemaFile)
 	require.NoError(b, err)
 
 	metaInfo := getAuthMeta(string(schema))
@@ -231,7 +231,7 @@ func BenchmarkNestedQuery(b *testing.B) {
 
 func BenchmarkOneLevelQuery(b *testing.B) {
 	schemaFile := "schema_auth.graphql"
-	schema, err := ioutil.ReadFile(schemaFile)
+	schema, err := os.ReadFile(schemaFile)
 	require.NoError(b, err)
 
 	metaInfo := getAuthMeta(string(schema))
@@ -344,7 +344,7 @@ func (r Restaurants) add(b require.TestingT, metaInfo *testutil.AuthMeta) {
 
 func BenchmarkOneLevelMutation(b *testing.B) {
 	schemaFile := "schema_auth.graphql"
-	schema, err := ioutil.ReadFile(schemaFile)
+	schema, err := os.ReadFile(schemaFile)
 	require.NoError(b, err)
 
 	metaInfo := getAuthMeta(string(schema))
@@ -434,7 +434,7 @@ func generateMultiLevelMutationData(items int) Restaurants {
 
 func BenchmarkMultiLevelMutation(b *testing.B) {
 	schemaFile := "schema_auth.graphql"
-	schema, err := ioutil.ReadFile(schemaFile)
+	schema, err := os.ReadFile(schemaFile)
 	require.NoError(b, err)
 
 	metaInfo := getAuthMeta(string(schema))
@@ -509,7 +509,7 @@ func (o Owners) add(b *testing.B, metaInfo *testutil.AuthMeta) {
 
 func BenchmarkMutation(b *testing.B) {
 	schemaFile := "schema_auth.graphql"
-	schema, err := ioutil.ReadFile(schemaFile)
+	schema, err := os.ReadFile(schemaFile)
 	require.NoError(b, err)
 
 	metaInfo := getAuthMeta(string(schema))

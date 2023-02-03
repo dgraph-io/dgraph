@@ -18,7 +18,7 @@ package schema
 
 import (
 	"encoding/json"
-	"io/ioutil"
+	"os"
 	"strings"
 	"testing"
 
@@ -907,7 +907,7 @@ type CustomHTTPConfigCase struct {
 }
 
 func TestGraphQLQueryInCustomHTTPConfig(t *testing.T) {
-	b, err := ioutil.ReadFile("custom_http_config_test.yaml")
+	b, err := os.ReadFile("custom_http_config_test.yaml")
 	require.NoError(t, err, "Unable to read test file")
 
 	var tests []CustomHTTPConfigCase

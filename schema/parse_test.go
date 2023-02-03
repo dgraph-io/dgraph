@@ -18,7 +18,6 @@ package schema
 
 import (
 	"context"
-	"io/ioutil"
 	"os"
 	"testing"
 
@@ -652,7 +651,7 @@ var ps *badger.DB
 func TestMain(m *testing.M) {
 	x.Init()
 
-	dir, err := ioutil.TempDir("", "storetest_")
+	dir, err := os.MkdirTemp("", "storetest_")
 	x.Check(err)
 	kvOpt := badger.DefaultOptions(dir)
 	ps, err = badger.OpenManaged(kvOpt)

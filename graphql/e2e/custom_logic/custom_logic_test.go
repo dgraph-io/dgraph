@@ -19,7 +19,6 @@ package custom_logic
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"sort"
@@ -960,7 +959,7 @@ func verifyData(t *testing.T, users []*user, teachers []*teacher, schools []*sch
 }
 
 func readFile(t *testing.T, name string) string {
-	b, err := ioutil.ReadFile(name)
+	b, err := os.ReadFile(name)
 	require.NoError(t, err)
 	return string(b)
 }

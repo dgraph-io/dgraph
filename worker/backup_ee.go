@@ -324,7 +324,7 @@ func (pr *BackupProcessor) Close() {
 		if pr.txn != nil {
 			th.itr.Close()
 		}
-		th.buf.Release()
+		_ = th.buf.Release()
 	}
 	if pr.txn != nil {
 		pr.txn.Discard()

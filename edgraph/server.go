@@ -145,7 +145,7 @@ func PeriodicallyPostTelemetry() {
 func GetGQLSchema(namespace uint64) (uid, graphQLSchema string, err error) {
 	ctx := context.WithValue(context.Background(), Authorize, false)
 	ctx = x.AttachNamespace(ctx, namespace)
-	resp, err := (&Server{}).Query(ctx,
+	resp, err := (&Server{}).QueryNoGrpc(ctx,
 		&api.Request{
 			Query: `
 			query {
@@ -1178,8 +1178,20 @@ func (s *Server) QueryGraphQL(ctx context.Context, req *api.Request,
 	return s.doQuery(ctx, &Request{req: req, gqlField: field, doAuth: getAuthMode(ctx)})
 }
 
-// Query handles queries or mutations
 func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, error) {
+	resp, err := s.QueryNoGrpc(ctx, req)
+	if err != nil {
+		return resp, err
+	}
+	md := metadata.Pairs(x.DgraphCostHeader, fmt.Sprint(resp.Metrics.NumUids["_total"]))
+	if err := grpc.SendHeader(ctx, md); err != nil {
+		glog.Warningf("error in sending grpc headers: %v", err)
+	}
+	return resp, nil
+}
+
+// Query handles queries or mutations
+func (s *Server) QueryNoGrpc(ctx context.Context, req *api.Request) (*api.Response, error) {
 	ctx = x.AttachJWTNamespace(ctx)
 	if x.WorkerConfig.AclEnabled && req.GetStartTs() != 0 {
 		// A fresh StartTs is assigned if it is 0.
@@ -1363,8 +1375,6 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (resp *api.Response,
 		EncodingNs:        uint64(l.Json.Nanoseconds()),
 		TotalNs:           uint64((time.Since(l.Start)).Nanoseconds()),
 	}
-	md := metadata.Pairs(x.DgraphCostHeader, fmt.Sprint(resp.Metrics.NumUids["_total"]))
-	grpc.SendHeader(ctx, md)
 	return resp, gqlErrs
 }
 

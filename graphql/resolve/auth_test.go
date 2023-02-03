@@ -20,7 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strings"
 	"testing"
 
@@ -170,7 +170,7 @@ func (ex *authExecutor) CommitOrAbort(ctx context.Context,
 }
 
 func TestStringCustomClaim(t *testing.T) {
-	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")
+	sch, err := os.ReadFile("../e2e/auth/schema.graphql")
 	require.NoError(t, err, "Unable to read schema file")
 
 	authSchema, err := testutil.AppendAuthInfo(sch, jwt.SigningMethodHS256.Name, "", false)
@@ -206,7 +206,7 @@ func TestStringCustomClaim(t *testing.T) {
 }
 
 func TestAudienceClaim(t *testing.T) {
-	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")
+	sch, err := os.ReadFile("../e2e/auth/schema.graphql")
 	require.NoError(t, err, "Unable to read schema file")
 
 	authSchema, err := testutil.AppendAuthInfo(sch, jwt.SigningMethodHS256.Name, "", false)
@@ -259,7 +259,7 @@ func TestAudienceClaim(t *testing.T) {
 }
 
 func TestInvalidAuthInfo(t *testing.T) {
-	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")
+	sch, err := os.ReadFile("../e2e/auth/schema.graphql")
 	require.NoError(t, err, "Unable to read schema file")
 	authSchema, err := testutil.AppendJWKAndVerificationKey(sch)
 	require.NoError(t, err)
@@ -268,7 +268,7 @@ func TestInvalidAuthInfo(t *testing.T) {
 }
 
 func TestMissingAudienceWithJWKUrl(t *testing.T) {
-	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")
+	sch, err := os.ReadFile("../e2e/auth/schema.graphql")
 	require.NoError(t, err, "Unable to read schema file")
 	authSchema, err := testutil.AppendAuthInfoWithJWKUrlAndWithoutAudience(sch)
 	require.NoError(t, err)
@@ -277,7 +277,7 @@ func TestMissingAudienceWithJWKUrl(t *testing.T) {
 }
 
 func TestVerificationWithJWKUrl(t *testing.T) {
-	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")
+	sch, err := os.ReadFile("../e2e/auth/schema.graphql")
 	require.NoError(t, err, "Unable to read schema file")
 
 	authSchema, err := testutil.AppendAuthInfoWithJWKUrl(sch)
@@ -311,7 +311,7 @@ func TestVerificationWithJWKUrl(t *testing.T) {
 }
 
 func TestVerificationWithMultipleJWKUrls(t *testing.T) {
-	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")
+	sch, err := os.ReadFile("../e2e/auth/schema.graphql")
 	require.NoError(t, err, "Unable to read schema file")
 
 	authSchema, err := testutil.AppendAuthInfoWithMultipleJWKUrls(sch)
@@ -363,7 +363,7 @@ func TestVerificationWithMultipleJWKUrls(t *testing.T) {
 
 // TODO(arijit): Generate the JWT token instead of using pre generated token.
 func TestJWTExpiry(t *testing.T) {
-	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")
+	sch, err := os.ReadFile("../e2e/auth/schema.graphql")
 	require.NoError(t, err, "Unable to read schema file")
 
 	authSchema, err := testutil.AppendAuthInfo(sch, jwt.SigningMethodHS256.Name, "", false)
@@ -796,7 +796,7 @@ func checkAddUpdateCase(
 }
 
 func TestAuthQueryRewriting(t *testing.T) {
-	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")
+	sch, err := os.ReadFile("../e2e/auth/schema.graphql")
 	require.NoError(t, err, "Unable to read schema file")
 
 	jwtAlgo := []string{jwt.SigningMethodHS256.Name, jwt.SigningMethodRS256.Name}
@@ -843,7 +843,7 @@ func TestAuthQueryRewriting(t *testing.T) {
 }
 
 func TestAuthQueryRewritingWithDefaultClosedByFlag(t *testing.T) {
-	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")
+	sch, err := os.ReadFile("../e2e/auth/schema.graphql")
 	require.NoError(t, err, "Unable to read schema file")
 	algo := jwt.SigningMethodHS256.Name
 	result, err := testutil.AppendAuthInfo(sch, algo, "../e2e/auth/sample_public_key.pem", true)
@@ -882,7 +882,7 @@ func TestAuthQueryRewritingWithDefaultClosedByFlag(t *testing.T) {
 }
 
 func read(t *testing.T, file string) []byte {
-	b, err := ioutil.ReadFile(file)
+	b, err := os.ReadFile(file)
 	require.NoError(t, err, "Unable to read test file")
 	return b
 }
