@@ -122,18 +122,18 @@ func getFilteredManifests(h UriHandler, manifests []*Manifest,
 	return manifests, nil
 }
 
-// getConsolidatedManifest walks over all the backup directories and generates a main manifest.
-func getConsolidatedManifest(h UriHandler, uri *url.URL) (*mainManifest, error) {
-	// If there is a main manifest already, we just return it.
+// getConsolidatedManifest walks over all the backup directories and generates a master manifest.
+func getConsolidatedManifest(h UriHandler, uri *url.URL) (*MasterManifest, error) {
+	// If there is a master manifest already, we just return it.
 	if h.FileExists(backupManifest) {
-		manifest, err := readmainManifest(h, backupManifest)
+		manifest, err := readMasterManifest(h, backupManifest)
 		if err != nil {
-			return &mainManifest{}, errors.Wrap(err, "failed to read main manifest: ")
+			return &MasterManifest{}, errors.Wrap(err, "failed to read master manifest: ")
 		}
 		return manifest, nil
 	}
 
-	// Otherwise, we create a main manifest by going through all the backup directories.
+	// Otherwise, we create a master manifest by going through all the backup directories.
 	paths := h.ListPaths("")
 
 	var manifestPaths []string
@@ -157,7 +157,7 @@ func getConsolidatedManifest(h UriHandler, uri *url.URL) (*mainManifest, error) 
 		m.Path = path
 		mlist = append(mlist, m)
 	}
-	return &mainManifest{Manifests: mlist}, nil
+	return &MasterManifest{Manifests: mlist}, nil
 }
 
 // upgradeManifest updates the in-memory manifest from various versions to the latest version.
@@ -239,22 +239,22 @@ func GetLatestManifest(h UriHandler, uri *url.URL) (*Manifest, error) {
 	return manifest.Manifests[len(manifest.Manifests)-1], nil
 }
 
-func readmainManifest(h UriHandler, path string) (*mainManifest, error) {
-	var m mainManifest
+func readMasterManifest(h UriHandler, path string) (*MasterManifest, error) {
+	var m MasterManifest
 	b, err := h.Read(path)
 	if err != nil {
-		return &m, errors.Wrap(err, "readmainManifest failed to read the file: ")
+		return &m, errors.Wrap(err, "readMasterManifest failed to read the file: ")
 	}
 	if err := json.Unmarshal(b, &m); err != nil {
-		return &m, errors.Wrap(err, "readmainManifest failed to unmarshal: ")
+		return &m, errors.Wrap(err, "readMasterManifest failed to unmarshal: ")
 	}
 	return &m, nil
 }
 
-// GetManifestNoUpgrade returns the main manifest using the given handler and uri.
-func GetManifestNoUpgrade(h UriHandler, uri *url.URL) (*mainManifest, error) {
+// GetManifestNoUpgrade returns the master manifest using the given handler and uri.
+func GetManifestNoUpgrade(h UriHandler, uri *url.URL) (*MasterManifest, error) {
 	if !h.DirExists("") {
-		return &mainManifest{},
+		return &MasterManifest{},
 			errors.Errorf("getManifestWithoutUpgrade: The uri path: %q doesn't exists", uri.Path)
 	}
 	manifest, err := getConsolidatedManifest(h, uri)
@@ -264,11 +264,11 @@ func GetManifestNoUpgrade(h UriHandler, uri *url.URL) (*mainManifest, error) {
 	return manifest, nil
 }
 
-// GetManifest returns the main manifest using the given handler and uri. Additionally, it also
+// GetManifest returns the master manifest using the given handler and uri. Additionally, it also
 // upgrades the manifest for the in-memory processing.
 // Note: This function must not be used when using the returned manifest for the purpose of
 // overwriting the old manifest.
-func GetManifest(h UriHandler, uri *url.URL) (*mainManifest, error) {
+func GetManifest(h UriHandler, uri *url.URL) (*MasterManifest, error) {
 	manifest, err := GetManifestNoUpgrade(h, uri)
 	if err != nil {
 		return manifest, err
@@ -281,7 +281,7 @@ func GetManifest(h UriHandler, uri *url.URL) (*mainManifest, error) {
 	return manifest, nil
 }
 
-func CreateManifest(h UriHandler, uri *url.URL, manifest *mainManifest) error {
+func CreateManifest(h UriHandler, uri *url.URL, manifest *MasterManifest) error {
 	var err error
 
 	w, err := h.CreateFile(tmpManifest)
@@ -297,7 +297,7 @@ func CreateManifest(h UriHandler, uri *url.URL, manifest *mainManifest) error {
 	// Move the tmpManifest to backupManifest, this operation is not atomic for s3.
 	// We try our best to move the file but if it fails then the user must move it manually.
 	err = h.Rename(tmpManifest, backupManifest)
-	return errors.Wrapf(err, "MOVING TEMPORARY MANIFEST TO MAIN MANIFEST FAILED!\n"+
+	return errors.Wrapf(err, "MOVING TEMPORARY MANIFEST TO MASTER MANIFEST FAILED!\n"+
 		"It is possible that the manifest would have been corrupted. You must move "+
 		"the file: %s to: %s in order to "+
 		"fix the backup manifest.", tmpManifest, backupManifest)
