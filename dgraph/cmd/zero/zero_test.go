@@ -97,6 +97,9 @@ func TestProposalKey(t *testing.T) {
 	nodeIdFromKey := proposalKey >> 48
 	require.Equal(t, id, nodeIdFromKey, "id extracted from proposal key is not equal to initial value")
 
+	valueOf48thBit := int(pkey & (1 << 48))
+	require.Equal(t, 0, valueOf48thBit, "48th bit is not set to zero on initialisation")
+
 	node.uniqueKey()
 	require.Equal(t, pkey+1, proposalKey, "proposal key should increment by 1 at each call of unique key")
 

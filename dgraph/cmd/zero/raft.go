@@ -93,6 +93,9 @@ func (n *node) initProposalKey(id uint64) error {
 		return err
 	}
 	proposalKey = n.Id<<48 | uint64(binary.BigEndian.Uint32(random4Bytes))<<16
+	// We want to avoid spillage to node id in case of overflow. So by setting 48th bit to
+	// 0 we ensure that we never overflow even if our random bytes are all 1s
+	proposalKey &= ^(uint64(1) << 47)
 	return nil
 }
 
