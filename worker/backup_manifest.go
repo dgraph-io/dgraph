@@ -297,7 +297,7 @@ func CreateManifest(h UriHandler, uri *url.URL, manifest *MasterManifest) error 
 	// Move the tmpManifest to backupManifest, this operation is not atomic for s3.
 	// We try our best to move the file but if it fails then the user must move it manually.
 	err = h.Rename(tmpManifest, backupManifest)
-	return errors.Wrapf(err, "MOVING TEMPORARY MANIFEST TO MASTER MANIFEST FAILED!\n"+
+	return errors.Wrapf(err, "MOVING TEMPORARY MANIFEST TO MAIN MANIFEST FAILED!\n"+
 		"It is possible that the manifest would have been corrupted. You must move "+
 		"the file: %s to: %s in order to "+
 		"fix the backup manifest.", tmpManifest, backupManifest)
