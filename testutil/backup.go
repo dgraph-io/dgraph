@@ -64,10 +64,10 @@ func openDgraph(pdir string) (*badger.DB, error) {
 	return badger.OpenManaged(opt)
 }
 
-func WaitForRestore(t *testing.T, dg *dgo.Dgraph, HttpSocket string) {
+func WaitForRestore(t *testing.T, dg *dgo.Dgraph) {
 	restoreDone := false
 	for {
-		resp, err := http.Get("http://" + HttpSocket + "/health")
+		resp, err := http.Get("http://" + SockAddrHttp + "/health")
 		require.NoError(t, err)
 		buf, err := ioutil.ReadAll(resp.Body)
 		require.NoError(t, err)

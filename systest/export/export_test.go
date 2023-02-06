@@ -319,5 +319,5 @@ func requestExport(t *testing.T, dest string, format string) {
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
 	require.Equal(t, "Success", testutil.JsonGet(data, "data", "export", "response", "code").(string))
 	taskId := testutil.JsonGet(data, "data", "export", "taskId").(string)
-	testutil.WaitForTask(t, taskId, false, testutil.SockAddrHttp)
+	testutil.WaitForTask(t, taskId, false)
 }

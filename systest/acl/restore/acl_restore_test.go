@@ -95,7 +95,7 @@ func TestAclCacheRestore(t *testing.T) {
 	dg.Login(context.Background(), "groot", "password")
 
 	sendRestoreRequest(t, "/backups", "vibrant_euclid5", 1)
-	testutil.WaitForRestore(t, dg, testutil.SockAddrHttp)
+	testutil.WaitForRestore(t, dg)
 
 	token := testutil.Login(t,
 		&testutil.LoginParams{UserID: "alice1", Passwd: "password", Namespace: 0})

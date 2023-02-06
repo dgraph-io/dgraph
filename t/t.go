@@ -109,7 +109,6 @@ func commandWithContext(ctx context.Context, args ...string) *exec.Cmd {
 	}
 	if runtime.GOARCH == "arm64" {
 		cmd.Env = append(cmd.Env, "MINIO_IMAGE_ARCH=RELEASE.2020-11-13T20-10-18Z-arm64")
-		cmd.Env = append(cmd.Env, "NFS_SERVER_IMAGE_ARCH=11-arm")
 	}
 
 	return cmd

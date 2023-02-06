@@ -172,7 +172,7 @@ func runBackup(t *testing.T) {
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
 	require.Equal(t, "Success", testutil.JsonGet(data, "data", "backup", "response", "code").(string))
 	taskId := testutil.JsonGet(data, "data", "backup", "taskId").(string)
-	testutil.WaitForTask(t, taskId, true, testutil.SockAddrHttp)
+	testutil.WaitForTask(t, taskId, true)
 
 	// Verify that the right amount of files and directories were created.
 	copyToLocalFs(t)
