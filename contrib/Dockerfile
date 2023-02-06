@@ -16,11 +16,10 @@ RUN rm -rf /var/lib/apt/lists/*
 # use cache busting to avoid old versions
 # remove /var/lib/apt/lists/* to reduce image size. 
 # see: https://docs.docker.com/develop/develop-images/dockerfile_best-practices 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update --fix-missing && apt-get install -y --no-install-recommends \
     ca-certificates \
     htop \
     curl \
-    htop \
     iputils-ping \
     jq \
     less \
