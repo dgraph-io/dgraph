@@ -518,11 +518,9 @@ func loadFromDB(ctx context.Context, loadType int) error {
 	case loadSchema:
 		stream.Prefix = x.SchemaPrefix()
 		stream.LogPrefix = "LoadFromDb Schema"
-	case loadType:
+	default:
 		stream.Prefix = x.TypePrefix()
 		stream.LogPrefix = "LoadFromDb Type"
-	default:
-		glog.Fatalf("Invalid load type")
 	}
 
 	stream.KeyToList = func(key []byte, itr *badger.Iterator) (*badgerpb.KVList, error) {
@@ -549,7 +547,7 @@ func loadFromDB(ctx context.Context, loadType int) error {
 				return nil
 			})
 			return nil, err
-		case loadType:
+		default:
 			var t pb.TypeUpdate
 			err := item.Value(func(val []byte) error {
 				if len(val) == 0 {
@@ -561,8 +559,6 @@ func loadFromDB(ctx context.Context, loadType int) error {
 			})
 			return nil, err
 		}
-		glog.Fatalf("Invalid load type")
-		return nil, errors.New("shouldn't reach here")
 	}
 	return stream.Orchestrate(ctx)
 }
