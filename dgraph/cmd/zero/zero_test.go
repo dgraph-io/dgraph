@@ -21,11 +21,13 @@ import (
 	"math"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
-
+	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/ristretto/z"
+
+	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
 )
 
 func TestRemoveNode(t *testing.T) {
@@ -83,4 +85,28 @@ func TestIdBump(t *testing.T) {
 	// If bump request is less than maxLease, then it should result in no-op.
 	_, err = zc.AssignIds(ctx, &pb.Num{Val: 10, Type: pb.Num_UID, Bump: true})
 	require.Contains(t, err.Error(), "Nothing to be leased")
+}
+
+func TestProposalKey(t *testing.T) {
+
+	id := uint64(2)
+	node := &node{Node: &conn.Node{Id: id}, ctx: context.Background(), closer: z.NewCloser(1)}
+	node.initProposalKey(node.Id)
+
+	pkey := proposalKey
+	nodeIdFromKey := proposalKey >> 48
+	require.Equal(t, id, nodeIdFromKey, "id extracted from proposal key is not equal to initial value")
+
+	valueOf48thBit := int(pkey & (1 << 48))
+	require.Equal(t, 0, valueOf48thBit, "48th bit is not set to zero on initialisation")
+
+	node.uniqueKey()
+	require.Equal(t, pkey+1, proposalKey, "proposal key should increment by 1 at each call of unique key")
+
+	uniqueKeys := make(map[uint64]struct{})
+	for i := 0; i < 10; i++ {
+		node.uniqueKey()
+		uniqueKeys[proposalKey] = struct{}{}
+	}
+	require.Equal(t, len(uniqueKeys), 10, "each iteration should create unique key")
 }
