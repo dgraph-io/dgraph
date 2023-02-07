@@ -18,7 +18,6 @@ package worker
 
 import (
 	"context"
-	"crypto/rand"
 	"encoding/binary"
 	"sync"
 	"sync/atomic"
@@ -113,11 +112,11 @@ var proposalKey uint64
 // {2 bytes Node ID} {4 bytes for random} {2 bytes zero}
 func initProposalKey(id uint64) error {
 	x.AssertTrue(id != 0)
-	b := make([]byte, 8)
-	if _, err := rand.Read(b); err != nil {
+	var err error
+	proposalKey, err = x.ProposalKey(groups().Node.Id)
+	if err != nil {
 		return err
 	}
-	proposalKey = groups().Node.Id<<48 | binary.BigEndian.Uint64(b)<<16
 	return nil
 }
 

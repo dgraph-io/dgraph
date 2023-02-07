@@ -18,7 +18,6 @@ package zero
 
 import (
 	"context"
-	"crypto/rand"
 	"encoding/binary"
 	"fmt"
 	"log"
@@ -88,16 +87,11 @@ func (n *node) AmLeader() bool {
 // {2 bytes Node ID} {4 bytes for random} {2 bytes zero}
 func (n *node) initProposalKey(id uint64) error {
 	x.AssertTrue(id != 0)
-	random4Bytes := make([]byte, 4)
-	if _, err := rand.Read(random4Bytes); err != nil {
+	var err error
+	proposalKey, err = x.ProposalKey(n.Id)
+	if err != nil {
 		return err
 	}
-	proposalKey = n.Id<<48 | uint64(binary.BigEndian.Uint32(random4Bytes))<<16
-	// We want to avoid spillage to node id in case of overflow. For instance, if the
-	// random bytes end up being [xx,xx, 255, 255, 255, 255, 0 , 0] (xx, xx being the node id)
-	// we would spill to node id after 65535 calls to unique key.
-	// So by setting 48th bit to 0 we ensure that we never spill out to node ids.
-	proposalKey &= ^(uint64(1) << 47)
 	return nil
 }
 
