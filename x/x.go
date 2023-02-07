@@ -21,13 +21,14 @@ import (
 	"bytes"
 	builtinGzip "compress/gzip"
 	"context"
-	"crypto/rand"
+	cr "crypto/rand"
 	"crypto/tls"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
 	"math"
+	"math/rand"
 	"net"
 	"net/http"
 	"os"
@@ -648,7 +649,7 @@ func RetryUntilSuccess(maxRetries int, waitAfterFailure time.Duration,
 // {2 bytes Node ID} {4 bytes for random} {2 bytes zero}
 func ProposalKey(id uint64) (uint64, error) {
 	random4Bytes := make([]byte, 4)
-	if _, err := rand.Read(random4Bytes); err != nil {
+	if _, err := cr.Read(random4Bytes); err != nil {
 		return 0, err
 	}
 	proposalKey := id<<48 | uint64(binary.BigEndian.Uint32(random4Bytes))<<16
