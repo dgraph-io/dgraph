@@ -23,15 +23,15 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dgraph-io/dgraph/conn"
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/x"
-
 	"github.com/pkg/errors"
 	ostats "go.opencensus.io/stats"
 	tag "go.opencensus.io/tag"
 	otrace "go.opencensus.io/trace"
+
+	"github.com/dgraph-io/dgraph/conn"
+	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/schema"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 const baseTimeout time.Duration = 4 * time.Second
