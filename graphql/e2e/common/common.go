@@ -21,6 +21,7 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -333,7 +334,13 @@ func containsRetryableCreateNamespaceError(resp *GraphQLResponse) bool {
 	return false
 }
 
-func CreateNamespace(t *testing.T, headers http.Header, customgraphAdminURLs ...string) uint64 {
+type CreateNamespaceParams struct {
+	CustomGraphAdminURLs string
+	NamespaceQuant       int
+}
+
+func CreateNamespace(t *testing.T, headers http.Header, createNamespaceParams ...CreateNamespaceParams) uint64 {
+	fmt.Println("URL: ", createNamespaceParams)
 	createNamespace := &GraphQLParams{
 		Query: `mutation {
 					addNamespace{
@@ -345,17 +352,19 @@ func CreateNamespace(t *testing.T, headers http.Header, customgraphAdminURLs ...
 
 	// keep retrying as long as we get a retryable error
 	customAdminURL = GraphqlAdminURL
-	if len(customgraphAdminURLs) > 0 {
-		customAdminURL = customgraphAdminURLs[0]
+	if createNamespaceParams[0].CustomGraphAdminURLs != "" {
+		customAdminURL = createNamespaceParams[0].CustomGraphAdminURLs
 	}
 	var gqlResponse *GraphQLResponse
-	for {
-		gqlResponse = createNamespace.ExecuteAsPost(t, customAdminURL)
-		if containsRetryableCreateNamespaceError(gqlResponse) {
-			continue
+	for count := 1; count <= createNamespaceParams[0].NamespaceQuant; count++ {
+		for {
+			gqlResponse = createNamespace.ExecuteAsPost(t, customAdminURL)
+			if containsRetryableCreateNamespaceError(gqlResponse) {
+				continue
+			}
+			RequireNoGQLErrors(t, gqlResponse)
+			break
 		}
-		RequireNoGQLErrors(t, gqlResponse)
-		break
 	}
 
 	var resp struct {

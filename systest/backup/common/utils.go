@@ -19,14 +19,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -105,8 +102,6 @@ func CopyToLocalFs(t *testing.T) {
 	require.NoError(t, testutil.DockerCp(srcPath, copyBackupDir))
 }
 
-//***************************************New Adds
-
 func RemoveContentsOfPerticularDir(t *testing.T, dir string) {
 	d, err := os.Open(dir)
 	if err != nil {
@@ -118,27 +113,12 @@ func RemoveContentsOfPerticularDir(t *testing.T, dir string) {
 		t.Fatal(err)
 	}
 	for _, name := range names {
-		if name != ".gitkeep" {
-			err = os.RemoveAll(filepath.Join(dir, name))
-			if err != nil {
-				t.Fatal(err)
-			}
+		err = os.RemoveAll(filepath.Join(dir, name))
+		if err != nil {
+			t.Fatal(err)
 		}
-	}
-}
 
-func AddNamespaces(t *testing.T, namespaceQuant int, header http.Header, customAdminURL string) uint64 {
-	var namespaceId uint64
-	for index := 1; index <= namespaceQuant; index++ {
-		if customAdminURL != "" {
-			namespaceId = common.CreateNamespace(t, header, customAdminURL)
-		} else {
-			namespaceId = common.CreateNamespace(t, header)
-		}
 	}
-	t.Logf("Sucessfully added Namespace with Id: %d ", namespaceId)
-
-	return namespaceId
 }
 
 func DeleteNamespace(t *testing.T, id uint64, jwtToken string, whichAlpha string) {
@@ -335,25 +315,6 @@ func RunRestore(t *testing.T, jwtToken string, restoreLocation string, whichAlph
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
 
 	require.Equal(t, "Success", testutil.JsonGet(data, "data", "restore", "code").(string))
-}
-
-func WaitForRestore(t *testing.T, whichAlpha string) {
-	restoreDone := false
-	for {
-		resp, err := http.Get("http://" + testutil.ContainerAddr(whichAlpha, 8080) + "/health")
-		require.NoError(t, err)
-		buf, err := ioutil.ReadAll(resp.Body)
-		require.NoError(t, err)
-		sbuf := string(buf)
-		if !strings.Contains(sbuf, "opRestore") {
-			restoreDone = true
-			break
-		}
-		time.Sleep(4 * time.Second)
-	}
-	require.True(t, restoreDone)
-
-	time.Sleep(5 * time.Second)
 }
 
 // to copy files fron nfs server
