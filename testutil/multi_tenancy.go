@@ -414,13 +414,11 @@ export(input: {destination: $dst, format: $f, accessKey: $acc, secretKey: $sec})
 func AddNumberOfTriplets(t *testing.T, dg *dgo.Dgraph, start, end int) (*api.Response, error) {
 	triplets := ""
 	for i := start; i <= end; i++ {
-		str := fmt.Sprintf(`_:person%[1]v <name> "person%[1]v" .`, i)
-		triplets = triplets + str + "\n"
+		triples.WriteString(fmt.Sprintf("_:person%[1]v <name> \"person%[1]v\" .\n", i))
 	}
-	mutation := &api.Mutation{
-		SetNquads: []byte(triplets),
+	resp, err := dg.NewTxn().Mutate(context.Background(), &api.Mutation{
+		SetNquads: []byte(triples.String()),
 		CommitNow: true,
-	}
-	resp, err := dg.NewTxn().Mutate(context.Background(), mutation)
+	})
 	return resp, err
 }
