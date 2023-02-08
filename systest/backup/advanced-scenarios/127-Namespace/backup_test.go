@@ -2,7 +2,6 @@ package main
 
 import (
 	"net/http"
-	"os"
 	"testing"
 
 	e2eCommon "github.com/dgraph-io/dgraph/graphql/e2e/common"
@@ -24,14 +23,16 @@ const (
 )
 
 func TestDeletedNamespaceID(t *testing.T) {
-	dirSetup(t)
+	defer utilsCommon.DirCleanup(t)
 	jwtTokenAlpha1 := testutil.GrootHttpLogin("http://" + testutil.SockAddrHttp + "/admin").AccessJwt
 	headerAlpha1.Set(accessJwtHeader, jwtTokenAlpha1)
+	headerAlpha1.Set("Content-Type", "application/json")
 	jwtTokenAlpha2 := testutil.GrootHttpLogin("http://" + testutil.ContainerAddr("alpha2", 8080) + "/admin").AccessJwt
 	headerAlpha2.Set(accessJwtHeader, jwtTokenAlpha2)
+	headerAlpha2.Set("Content-Type", "application/json")
 	_ = e2eCommon.CreateNamespace(t, headerAlpha1, e2eCommon.CreateNamespaceParams{CustomGraphAdminURLs: "", NamespaceQuant: 20})
 	utilsCommon.AddSchema(t, headerAlpha1, "alpha1")
-	utilsCommon.CheckSchemaExists(t, headerAlpha1, "alpha1")
+	e2eCommon.AssertGetGQLSchema(t, testutil.ContainerAddr("alpha1", 8080), headerAlpha1)
 	utilsCommon.AddData(t, 1, 10, jwtTokenAlpha1, "alpha1")
 	utilsCommon.CheckDataExists(t, 10, jwtTokenAlpha1, "alpha1")
 	_ = e2eCommon.CreateNamespace(t, headerAlpha1, e2eCommon.CreateNamespaceParams{CustomGraphAdminURLs: "", NamespaceQuant: 20})
@@ -56,22 +57,6 @@ func TestDeletedNamespaceID(t *testing.T) {
 	utilsCommon.RunRestore(t, jwtTokenAlpha2, restoreLocation, "alpha2")
 	dg := testutil.DgClientWithLogin(t, "groot", "password", x.GalaxyNamespace)
 	testutil.WaitForRestore(t, dg, testutil.ContainerAddr("alpha2", 8080))
-	utilsCommon.CheckSchemaExists(t, headerAlpha2, "alpha2")
+	e2eCommon.AssertGetGQLSchema(t, testutil.ContainerAddr("alpha2", 8080), headerAlpha2)
 	utilsCommon.CheckDataExists(t, 70, jwtTokenAlpha2, "alpha2")
-	defer dirCleanup(t)
-}
-
-func dirCleanup(t *testing.T) {
-	if err := os.RemoveAll("." + backupDst); err != nil {
-		t.Fatalf("Error removing direcotory: %s", err.Error())
-	}
-}
-
-func dirSetup(t *testing.T) {
-	// Clean up data from previous runs.
-	dirCleanup(t)
-
-	if err := os.MkdirAll(localBackupDest, os.ModePerm); err != nil {
-		t.Fatalf("Error while creaing directory: %s", err.Error())
-	}
 }

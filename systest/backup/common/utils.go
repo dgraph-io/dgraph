@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strconv"
 	"testing"
 
@@ -102,49 +101,6 @@ func CopyToLocalFs(t *testing.T) {
 	require.NoError(t, testutil.DockerCp(srcPath, copyBackupDir))
 }
 
-func RemoveContentsOfPerticularDir(t *testing.T, dir string) {
-	d, err := os.Open(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer d.Close()
-	names, err := d.Readdirnames(-1)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, name := range names {
-		err = os.RemoveAll(filepath.Join(dir, name))
-		if err != nil {
-			t.Fatal(err)
-		}
-
-	}
-}
-
-func DeleteNamespace(t *testing.T, id uint64, jwtToken string, whichAlpha string) {
-	query := `mutation deleteNamespace($id:Int!){
-					deleteNamespace(input:{namespaceId:$id}){
-						namespaceId
-					}
-				}`
-	params := testutil.GraphQLParams{Query: query,
-		Variables: map[string]interface{}{
-			"id": id,
-		}}
-	b, err := json.Marshal(params)
-	adminUrl := "http://" + testutil.ContainerAddr(whichAlpha, 8080) + "/admin"
-	require.NoError(t, err)
-
-	req, err := http.NewRequest(http.MethodPost, adminUrl, bytes.NewBuffer(b))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set(accessJwtHeader, jwtToken)
-	client := &http.Client{}
-	resp, err := client.Do(req)
-
-	var data interface{}
-	require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
-}
-
 func AddSchema(t *testing.T, header http.Header, whichAlpha string) {
 	updateSchemaParams := &common.GraphQLParams{
 		Query: `mutation {
@@ -165,11 +121,6 @@ func AddSchema(t *testing.T, header http.Header, whichAlpha string) {
 	if len(updateSchemaResp.Errors) > 0 {
 		t.Log("Failed to add Schema, Error: ", updateSchemaResp.Errors)
 	}
-}
-
-func CheckSchemaExists(t *testing.T, header http.Header, whichAlpha string) {
-	resp := common.AssertGetGQLSchema(t, testutil.ContainerAddr(whichAlpha, 8080), header)
-	require.NotNil(t, resp)
 }
 
 func AddData(t *testing.T, minSuffixVal int, maxSuffixVal int, jwtToken string, whichAlpha string) {
@@ -274,15 +225,6 @@ func TakeBackup(t *testing.T, jwtToken string, backupDst string, whichAlpha stri
 	require.Equal(t, "Success", testutil.JsonGet(data, "data", "backup", "response", "code").(string))
 	taskId := testutil.JsonGet(data, "data", "backup", "taskId").(string)
 	testutil.WaitForTask(t, taskId, false, testutil.ContainerAddr(whichAlpha, 8080))
-
-	defer changeFolderPermission(t, whichAlpha)
-}
-
-func changeFolderPermission(t *testing.T, whichAlpha string) {
-
-	cmd := []string{"bash", "-c", "chmod -R 777 /data/backups"}
-	require.NoError(t, testutil.DockerExec(whichAlpha, cmd...))
-
 }
 
 func RunRestore(t *testing.T, jwtToken string, restoreLocation string, whichAlpha string) {

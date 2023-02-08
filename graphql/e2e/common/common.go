@@ -21,7 +21,6 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -339,8 +338,7 @@ type CreateNamespaceParams struct {
 	NamespaceQuant       int
 }
 
-func CreateNamespace(t *testing.T, headers http.Header, createNamespaceParams ...CreateNamespaceParams) uint64 {
-	fmt.Println("URL: ", createNamespaceParams)
+func CreateNamespace(t *testing.T, headers http.Header, cnp ...CreateNamespaceParams) uint64 {
 	createNamespace := &GraphQLParams{
 		Query: `mutation {
 					addNamespace{
@@ -352,14 +350,15 @@ func CreateNamespace(t *testing.T, headers http.Header, createNamespaceParams ..
 
 	// keep retrying as long as we get a retryable error
 	customAdminURL = GraphqlAdminURL
-	if createNamespaceParams[0].CustomGraphAdminURLs != "" {
-		customAdminURL = createNamespaceParams[0].CustomGraphAdminURLs
+	if cnp[0].CustomGraphAdminURLs != "" {
+		customAdminURL = cnp[0].CustomGraphAdminURLs
 	}
 	var gqlResponse *GraphQLResponse
-	for count := 1; count <= createNamespaceParams[0].NamespaceQuant; count++ {
+	for count := 1; count <= cnp[0].NamespaceQuant; count++ {
 		for {
 			gqlResponse = createNamespace.ExecuteAsPost(t, customAdminURL)
 			if containsRetryableCreateNamespaceError(gqlResponse) {
+				time.Sleep(1 * time.Second)
 				continue
 			}
 			RequireNoGQLErrors(t, gqlResponse)
@@ -377,7 +376,7 @@ func CreateNamespace(t *testing.T, headers http.Header, createNamespaceParams ..
 	return resp.AddNamespace.NamespaceId
 }
 
-func DeleteNamespace(t *testing.T, id uint64, header http.Header) {
+func DeleteNamespace(t *testing.T, id uint64, header http.Header, whichAlpha ...string) {
 	deleteNamespace := &GraphQLParams{
 		Query: `mutation deleteNamespace($id:Int!){
 					deleteNamespace(input:{namespaceId:$id}){
@@ -386,6 +385,10 @@ func DeleteNamespace(t *testing.T, id uint64, header http.Header) {
 				}`,
 		Variables: map[string]interface{}{"id": id},
 		Headers:   header,
+	}
+
+	if whichAlpha[0] != "" {
+		GraphqlAdminURL = "http://" + testutil.ContainerAddr(whichAlpha[0], 8080) + "/admin"
 	}
 
 	gqlResponse := deleteNamespace.ExecuteAsPost(t, GraphqlAdminURL)
