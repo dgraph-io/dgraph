@@ -17,13 +17,11 @@ var (
 
 const (
 	accessJwtHeader = "X-Dgraph-AccessToken"
-	restoreLocation = "/data/backups/backupTemp/"
-	backupDst       = "/data/backups/backupTemp/"
-	localBackupDest = "./data/backups"
+	restoreLocation = "/data/backups/"
+	backupDst       = "/data/backups/"
 )
 
 func TestDeletedNamespaceID(t *testing.T) {
-	defer utilsCommon.DirCleanup(t)
 	jwtTokenAlpha1 := testutil.GrootHttpLogin("http://" + testutil.SockAddrHttp + "/admin").AccessJwt
 	headerAlpha1.Set(accessJwtHeader, jwtTokenAlpha1)
 	headerAlpha1.Set("Content-Type", "application/json")
