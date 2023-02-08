@@ -21,7 +21,9 @@ import (
 	"bytes"
 	builtinGzip "compress/gzip"
 	"context"
+	cr "crypto/rand"
 	"crypto/tls"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -642,6 +644,21 @@ func RetryUntilSuccess(maxRetries int, waitAfterFailure time.Duration,
 		}
 	}
 	return err
+}
+
+// {2 bytes Node ID} {4 bytes for random} {2 bytes zero}
+func ProposalKey(id uint64) (uint64, error) {
+	random4Bytes := make([]byte, 4)
+	if _, err := cr.Read(random4Bytes); err != nil {
+		return 0, err
+	}
+	proposalKey := id<<48 | uint64(binary.BigEndian.Uint32(random4Bytes))<<16
+	// We want to avoid spillage to node id in case of overflow. For instance, if the
+	// random bytes end up being [xx,xx, 255, 255, 255, 255, 0 , 0] (xx, xx being the node id)
+	// we would spill to node id after 65535 calls to unique key.
+	// So by setting 48th bit to 0 we ensure that we never spill out to node ids.
+	proposalKey &= ^(uint64(1) << 47)
+	return proposalKey, nil
 }
 
 // HasString returns whether the slice contains the given string.
