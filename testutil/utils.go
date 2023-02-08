@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dgrijalva/jwt-go"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/v210"
@@ -58,6 +59,30 @@ func GalaxyIndexKey(attr, term string) []byte {
 func GalaxyCountKey(attr string, count uint32, reverse bool) []byte {
 	attr = x.GalaxyAttr(attr)
 	return x.CountKey(attr, count, reverse)
+}
+
+type JwtParams struct {
+	User   string
+	Groups []string
+	Ns     uint64
+	Exp    time.Duration
+	Secret []byte
+}
+
+// GetAccessJwt constructs an access jwt with the given user id, groupIds, namespace
+// and expiration TTL.
+func GetAccessJwt(t *testing.T, params JwtParams) string {
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"userid":    params.User,
+		"groups":    params.Groups,
+		"namespace": params.Ns,
+		// set the jwt exp according to the ttl
+		"exp": time.Now().Add(params.Exp).Unix(),
+	})
+
+	jwtString, err := token.SignedString(params.Secret)
+	require.NoError(t, err)
+	return jwtString
 }
 
 func WaitForTask(t *testing.T, taskId string, useHttps bool, socketAddrHttp string) {
