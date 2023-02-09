@@ -30,6 +30,7 @@ import (
 // Keys holds the configuration for ACL and encryption.
 type Keys struct {
 	AclKey        x.Sensitive
+	UsePublicKey  bool
 	AclAccessTtl  time.Duration
 	AclRefreshTtl time.Duration
 	EncKey        x.Sensitive
@@ -40,6 +41,7 @@ const (
 	flagAclAccessTtl  = "access-ttl"
 	flagAclRefreshTtl = "refresh-ttl"
 	flagAclSecretFile = "secret-file"
+	flagAclKeyFile    = "key-file"
 
 	flagEnc        = "encryption"
 	flagEncKeyFile = "key-file"
@@ -67,10 +69,11 @@ func RegisterEncFlag(flag *pflag.FlagSet) {
 }
 
 var (
-	AclDefaults = fmt.Sprintf("%s=%s; %s=%s; %s=%s",
+	AclDefaults = fmt.Sprintf("%s=%s; %s=%s; %s=%s; %s=%s",
 		flagAclAccessTtl, "6h",
 		flagAclRefreshTtl, "30d",
-		flagAclSecretFile, "")
+		flagAclSecretFile, "",
+		flagAclKeyFile, "")
 	EncDefaults = fmt.Sprintf("%s=%s", flagEncKeyFile, "")
 )
 
@@ -132,6 +135,8 @@ func registerAclFlag(flag *pflag.FlagSet) {
 			"The TTL for the access JWT.").
 		Flag("refresh-ttl",
 			"The TTL for the refresh JWT.").
+		Flag("key-file",
+			"The file that stores the RS256 public key, which is used for verifyinh ACL JWT.").
 		String()
 	flag.String(flagAcl, AclDefaults, helpText)
 }

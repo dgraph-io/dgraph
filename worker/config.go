@@ -43,8 +43,11 @@ type Options struct {
 	// AuthToken is the token to be passed for Alter HTTP requests.
 	AuthToken string
 
-	// HmacSecret stores the secret used to sign JSON Web Tokens (JWT).
+	// HmacSecret stores the secret (HMAC) or public key (RS256) used to sign (HMAC) or verify  JSON Web Tokens (JWT).
+	// and is used to test if ACL is on !
 	HmacSecret x.Sensitive
+	// are we using  public key to verify JSON Web Tokens for external ACL (JWT).
+	UsePublicKey bool
 	// AccessJwtTtl is the TTL for the access JWT.
 	AccessJwtTtl time.Duration
 	// RefreshJwtTtl is the TTL of the refresh JWT.

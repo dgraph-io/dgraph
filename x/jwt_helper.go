@@ -20,17 +20,31 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/dgrijalva/jwt-go"
+	"github.com/golang-jwt/jwt"
 	"github.com/pkg/errors"
 )
 
 func ParseJWT(jwtStr string) (jwt.MapClaims, error) {
 	token, err := jwt.Parse(jwtStr, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, errors.Errorf("unexpected signing method: %v",
-				token.Header["alg"])
+		if WorkerConfig.UsePublicKey {
+			if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
+				return nil, errors.Errorf("unexpected signing method: %v",
+					token.Header["alg"])
+			}
+
+			key, err := jwt.ParseRSAPublicKeyFromPEM([]byte(WorkerConfig.HmacSecret))
+			if err == nil {
+				return key, nil
+			}
+			return nil, err
+		} else {
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, errors.Errorf("unexpected signing method: %v",
+					token.Header["alg"])
+			}
+			return []byte(WorkerConfig.HmacSecret), nil
 		}
-		return []byte(WorkerConfig.HmacSecret), nil
+
 	})
 
 	if err != nil {

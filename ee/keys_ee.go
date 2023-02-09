@@ -47,6 +47,16 @@ func GetKeys(config *viper.Viper) (*Keys, error) {
 		return nil, fmt.Errorf(
 			"ACL secret key must have length of at least 32 bytes, got %d bytes instead", l)
 	}
+	// read public key after the length test because public key can be longer - no limit
+	aclPublicKeyFile := aclSuperFlag.GetPath(flagAclKeyFile)
+	if aclPublicKeyFile != "" {
+		var err error
+		if keys.AclKey, err = ioutil.ReadFile(aclPublicKeyFile); err != nil {
+			return nil, fmt.Errorf("error reading ACL publlic key from file: %s: %s", aclPublicKeyFile, err)
+		}
+		keys.UsePublicKey = true
+	}
+
 	encKeyFile := encSuperFlag.GetPath(flagEncKeyFile)
 	if encKeyFile != "" {
 		if keys.EncKey != nil {

@@ -114,7 +114,8 @@ type WorkerOptions struct {
 	// AclEnabled indicates whether the enterprise ACL feature is turned on.
 	AclEnabled bool
 	// HmacSecret stores the secret used to sign JSON Web Tokens (JWT).
-	HmacSecret Sensitive
+	HmacSecret   Sensitive
+	UsePublicKey bool
 	// AbortOlderThan tells Dgraph to discard transactions that are older than this duration.
 	AbortOlderThan time.Duration
 	// ProposedGroupId will be used if there's a file in the p directory called group_id with the
