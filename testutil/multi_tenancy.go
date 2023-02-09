@@ -56,7 +56,7 @@ func MakeRequest(t *testing.T, token *HttpToken, params GraphQLParams) *GraphQLR
 	return MakeGQLRequestWithAccessJwt(t, &params, token.AccessJwt)
 }
 
-func Login(t *testing.T, loginParams *LoginParams) *HttpToken {
+func Login(t *testing.T, loginParams *LoginParams) (*HttpToken, error) {
 	if loginParams.Endpoint == "" {
 		loginParams.Endpoint = AdminUrl()
 	}
@@ -66,8 +66,7 @@ func Login(t *testing.T, loginParams *LoginParams) *HttpToken {
 		token, err = HttpLogin(loginParams)
 		return err
 	})
-	require.NoError(t, err, "login failed")
-	return token
+	return token, err
 }
 
 func ResetPassword(t *testing.T, token *HttpToken, userID, newPass string, nsID uint64) (string, error) {
@@ -177,7 +176,7 @@ func DeleteNamespace(t *testing.T, token *HttpToken, nsID uint64) error {
 }
 
 func CreateUser(t *testing.T, token *HttpToken, username,
-	password string) {
+	password string) *GraphQLResponse {
 	addUser := `
 	mutation addUser($name: String!, $pass: String!) {
 		addUser(input: [{name: $name, password: $pass}]) {
@@ -205,6 +204,7 @@ func CreateUser(t *testing.T, token *HttpToken, username,
 	var r Response
 	err := json.Unmarshal(resp.Data, &r)
 	require.NoError(t, err)
+	return resp
 }
 
 func CreateGroup(t *testing.T, token *HttpToken, name string) {
@@ -377,4 +377,37 @@ func QueryData(t *testing.T, dg *dgo.Dgraph, query string) []byte {
 	resp, err := dg.NewReadOnlyTxn().Query(context.Background(), query)
 	require.NoError(t, err)
 	return resp.GetJson()
+}
+
+func Export(t *testing.T, token *HttpToken, dest, accessKey, secretKey string) *GraphQLResponse {
+	exportRequest := `mutation export($dst: String!, $f: String!, $acc: String!, $sec: String!){
+export(input: {destination: $dst, format: $f, accessKey: $acc, secretKey: $sec}) {
+			response {
+				message
+			}
+		}
+	}`
+
+	params := GraphQLParams{
+		Query: exportRequest,
+		Variables: map[string]interface{}{
+			"dst": dest,
+			"f":   "rdf",
+			"acc": accessKey,
+			"sec": secretKey,
+		},
+	}
+
+	resp := MakeRequest(t, token, params)
+	type Response struct {
+		Export struct {
+			Response struct {
+				Message string
+			}
+		}
+	}
+	var r Response
+	err := json.Unmarshal(resp.Data, &r)
+	require.NoError(t, err)
+	return resp
 }
