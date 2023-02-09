@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -32,109 +33,112 @@ import (
 func TestBigMathValue(t *testing.T) {
 	s1 := testSchema + "\n money: int .\n"
 	setSchema(s1)
-	triples := `
-		_:user1 <money> "48038396025285290" .
-	`
+	triples := ` _:user1 <money> "48038396025285290" .`
 	require.NoError(t, addTriplesToCluster(triples))
 
 	t.Run("div", func(t *testing.T) {
 		q1 := `
-	{
-		q(func: has(money)) {
-			f as money
-			g: math(f/2)
-		}
-	}
-	`
-
+	       {
+	               q(func: has(money)) {
+	                       f as money
+	                       g: math(f/2)
+	               }
+	       }`
 		js := processQueryNoErr(t, q1)
 		require.JSONEq(t, `{"data":{"q":[
-		{"money":48038396025285290,
-		"g":24019198012642645}
-	]}}`, js)
-
+	               {"money":48038396025285290,
+	               "g":24019198012642645}
+	       ]}}`, js)
 	})
 
 	t.Run("add", func(t *testing.T) {
 		q1 := `
-	{
-		q(func: has(money)) {
-			f as money
-			g: math(2+f)
-		}
-	}
-	`
-
+	       {
+	               q(func: has(money)) {
+	                       f as money
+	                       g: math(2+f)
+	               }
+	       }`
 		js := processQueryNoErr(t, q1)
 		require.JSONEq(t, `{"data":{"q":[
-		{"money":48038396025285290,
-		"g":48038396025285292}
-	]}}`, js)
-
+               {"money":48038396025285290,
+               "g":48038396025285292}
+       ]}}`, js)
 	})
 
 	t.Run("sub", func(t *testing.T) {
 		q1 := `
-	{
-		q(func: has(money)) {
-			f as money
-			g: math(f-2)
-		}
-	}
-	`
+           {
+               q(func: has(money)) {
+                       f as money
+                       g: math(f2)
+               }
+           }`
 
 		js := processQueryNoErr(t, q1)
 		require.JSONEq(t, `{"data":{"q":[
-		{"money":48038396025285290,
-		"g":48038396025285288}
-	]}}`, js)
+               {"money":48038396025285290,
+               "g":48038396025285288}
+       ]}}`, js)
+	})
 
+	t.Run("sub", func(t *testing.T) {
+		q1 := `
+           {
+               q(func: has(money)) {
+                       f as money
+                       g: math(f2)
+               }
+           }`
+
+		js := processQueryNoErr(t, q1)
+		require.JSONEq(t, `{"data":{"q":[
+               {"money":48038396025285290,
+               "g":48038396025285288}
+       ]}}`, js)
 	})
 }
 
 func TestFloatConverstion(t *testing.T) {
 	t.Run("Convert up to float", func(t *testing.T) {
 		query := `
-	{
-		me as var(func: eq(name, "Michonne"))
-		var(func: uid(me)) {
-			friend {
-				x as age
-			}
-			x2 as sum(val(x))
-			c as count(friend)
-		}
-
-		me(func: uid(me)) {
-			ceilAge: math(ceil((1.0*x2)/c))
-		}
-	}
-	`
+	       {
+	               me as var(func: eq(name, "Michonne"))
+	               var(func: uid(me)) {
+	                       friend {
+	                               x as age
+	                       }
+	                       x2 as sum(val(x))
+	                       c as count(friend)
+	               }
+	               me(func: uid(me)) {
+	                       ceilAge: math(ceil((1.0*x2)/c))
+	               }
+	       }
+	       `
 		js := processQueryNoErr(t, query)
 		require.JSONEq(t, `{"data": {"me":[{"ceilAge":14.000000}]}}`, js)
 	})
 
 	t.Run("Int aggregation only", func(t *testing.T) {
 		query := `
-	{
-		me as var(func: eq(name, "Michonne"))
-		var(func: uid(me)) {
-			friend {
-				x as age
-			}
-			x2 as sum(val(x))
-			c as count(friend)
-		}
-
-		me(func: uid(me)) {
-			ceilAge: math(ceil(x2/c))
-		}
-	}
-	`
+	       {
+	               me as var(func: eq(name, "Michonne"))
+	               var(func: uid(me)) {
+	                       friend {
+	                               x as age
+	                       }
+	                       x2 as sum(val(x))
+	                       c as count(friend)
+	               }
+	               me(func: uid(me)) {
+	                       ceilAge: math(ceil(x2/c))
+	               }
+	       }
+	       `
 		js := processQueryNoErr(t, query)
 		require.JSONEq(t, `{"data": {"me":[{"ceilAge":13.000000}]}}`, js)
 	})
-
 }
 
 func TestDeleteAndReadIndex(t *testing.T) {
@@ -1561,4 +1565,279 @@ func TestNumUids(t *testing.T) {
 	require.Equal(t, metrics.NumUids["friend"], uint64(10))
 	require.Equal(t, metrics.NumUids["name"], uint64(16))
 	require.Equal(t, metrics.NumUids["_total"], uint64(26))
+}
+
+func TestBigFloatTypeTokenizer(t *testing.T) {
+	s1 := testSchema + "\n amount: bigfloat @index(bigfloat) .\n"
+
+	setSchema(s1)
+	triples := `
+		<0x666> <amount> "10.0000000000000000000123"  .
+		<0x777> <amount> "10.0000000000000000000124"  .
+	`
+	addTriplesToCluster(triples)
+
+	q1 := `
+	{
+		me(func: eq(amount, "10.0000000000000000000124")) {
+			uid 
+			amount
+		}
+	}`
+	js := processQueryNoErr(t, q1)
+	require.JSONEq(t, `{"data":{"me":[{"uid":"0x777","amount":10.0000000000000000000124}]}}`,
+		js)
+}
+
+func TestBigFloatCeil(t *testing.T) {
+	s1 := testSchema + "\n amount: bigfloat @index(bigfloat) .\n"
+
+	setSchema(s1)
+	triples := `
+		<0x666> <amount> "2.1"  .
+	`
+	addTriplesToCluster(triples)
+
+	q1 := `
+	{
+		me(func: eq(amount, "2.1")) {
+			uid
+			amount as amount
+			amt : math(ceil(amount))
+		}
+	}`
+	js := processQueryNoErr(t, q1)
+	float2 := *new(big.Float).SetPrec(200).SetFloat64(2.1)
+	ceil2 := *new(big.Float).SetPrec(200).SetFloat64(3)
+	expectedRes := fmt.Sprintf(`{"data": {"me":[{"uid":"0x666", "amount":%s, "amt":%s}]}}`,
+		float2.Text('f', 200), ceil2.Text('f', 200))
+	require.JSONEq(t, js, expectedRes)
+}
+
+func TestBigFloatFloor(t *testing.T) {
+	s1 := testSchema + "\n amount: bigfloat @index(bigfloat) .\n"
+
+	setSchema(s1)
+	triples := `
+		<0x666> <amount> "2.1"  .
+	`
+	addTriplesToCluster(triples)
+
+	q1 := `
+	{
+		me(func: eq(amount, "2.1")) {
+			uid
+			amount as amount
+			amt : math(floor(amount))
+		}
+	}`
+	js := processQueryNoErr(t, q1)
+	float2 := *new(big.Float).SetPrec(200).SetFloat64(2.1)
+	floor2 := *new(big.Float).SetPrec(200).SetFloat64(2)
+	expectedRes := fmt.Sprintf(`{"data": {"me":[{"uid":"0x666", "amount":%s, "amt":%s}]}}`,
+		float2.Text('f', 200), floor2.Text('f', 200))
+	require.JSONEq(t, js, expectedRes)
+}
+
+func TestBigFloatSqrt(t *testing.T) {
+	s1 := testSchema + "\n amount: bigfloat @index(bigfloat) .\n"
+
+	setSchema(s1)
+	triples := `
+		<0x666> <amount> "2"  .
+	`
+	addTriplesToCluster(triples)
+
+	q1 := `
+	{
+		me(func: eq(amount, "2")) {
+			uid
+			amount as amount
+			amt : math(sqrt(amount))
+		}
+	}`
+	js := processQueryNoErr(t, q1)
+	float2 := *new(big.Float).SetPrec(200).SetFloat64(2)
+	sqrt2 := *new(big.Float).SetPrec(200).Sqrt(&float2)
+	expectedRes := fmt.Sprintf(`{"data": {"me":[{"uid":"0x666", "amount":%s, "amt":%s}]}}`,
+		float2.Text('f', 200), sqrt2.Text('f', 200))
+	require.JSONEq(t, js, expectedRes)
+}
+
+func TestBigFloatSort(t *testing.T) {
+	s1 := testSchema + "\n amount: bigfloat @index(bigfloat) .\n"
+
+	setSchema(s1)
+	triples := `
+		<0x666> <amount> "100"  .
+		<0x124> <amount> "99.1231231233" .
+		<0x777> <amount> "99" .
+		<0x888> <amount> "99.0000000000000000000001" .
+		<0x123> <amount> "123123.123123123132" .
+	`
+	addTriplesToCluster(triples)
+
+	q1 := `
+	{
+		me(func: has(amount), orderasc: amount) {
+			uid
+		}
+	}`
+	js := processQueryNoErr(t, q1)
+	expectedRes := `{"data":{"me":[{"uid":"0x777"},{"uid":"0x888"}` +
+		`,{"uid":"0x124"},{"uid":"0x666"},{"uid":"0x123"}]}}`
+	require.JSONEq(t, js, expectedRes)
+}
+
+func TestBigFloatMax(t *testing.T) {
+	s1 := testSchema + "\n amount: bigfloat @index(bigfloat) .\n"
+
+	setSchema(s1)
+	triples := `
+		<0x666> <amount> "100"  .
+		<0x124> <amount> "99.1231231233" .
+		<0x777> <amount> "99" .
+		<0x888> <amount> "99.0000000000000000000001" .
+		<0x123> <amount> "123123.123123123132" .
+	`
+	addTriplesToCluster(triples)
+
+	q1 := `
+	{
+		me(func: has(amount)) {
+			uid
+			amount as amount
+		}
+		q() {
+			max_amt : max(val(amount))
+		}
+	}`
+	js := processQueryNoErr(t, q1)
+	require.Contains(t, js, `"max_amt":123123.123123123132`)
+}
+
+func TestBigFloatSum(t *testing.T) {
+	s1 := testSchema + "\n amount: bigfloat @index(bigfloat) .\n"
+
+	setSchema(s1)
+	triples := `
+		<0x666> <amount> "100"  .
+		<0x124> <amount> "99.1231231233" .
+		<0x777> <amount> "99" .
+		<0x888> <amount> "99.0000000000000000000001" .
+		<0x123> <amount> "123123.123123123132" .
+	`
+	addTriplesToCluster(triples)
+
+	q1 := `
+	{
+		me(func: has(amount)) {
+			uid
+			amount as amount
+		}
+		q() {
+			sum_amt : sum(val(amount))
+		}
+	}`
+	js := processQueryNoErr(t, q1)
+	require.Contains(t, js, `"sum_amt":123520.2462462464320000000001`)
+}
+
+func TestBigFloatAvg(t *testing.T) {
+	s1 := testSchema + "\n amount: bigfloat @index(bigfloat) .\n"
+
+	setSchema(s1)
+	triples := `
+		<0x666> <amount> "100"  .
+		<0x124> <amount> "99.1231231233" .
+		<0x777> <amount> "99" .
+		<0x888> <amount> "99.0000000000000000000001" .
+		<0x123> <amount> "123123.123123123132" .
+	`
+	addTriplesToCluster(triples)
+
+	q1 := `
+	{
+		me(func: has(amount)) {
+			uid
+			amount as amount
+		}
+		q() {
+			avg_amt : avg(val(amount))
+		}
+	}`
+	js := processQueryNoErr(t, q1)
+	require.Contains(t, js, `"avg_amt":24704.04924924928640000000002`)
+}
+
+func TestBigFloatLt(t *testing.T) {
+	s1 := testSchema + "\n amount: bigfloat @index(bigfloat) .\n"
+
+	setSchema(s1)
+	triples := `
+		<0x666> <amount> "100"  .
+		<0x124> <amount> "99.1231231233" .
+		<0x777> <amount> "99" .
+		<0x888> <amount> "99.0000000000000000000001" .
+		<0x123> <amount> "123123.123123123132" .
+	`
+	addTriplesToCluster(triples)
+
+	q1 := `
+	{
+		me(func: has(amount)) @filter(lt(amount, 100)){
+			uid
+		}
+	}`
+	js := processQueryNoErr(t, q1)
+	expectedRes := `{"data":{"me":[{"uid":"0x124"},{"uid":"0x777"},{"uid":"0x888"}]}}`
+	require.JSONEq(t, js, expectedRes)
+}
+
+func TestBigFloatGt(t *testing.T) {
+	s1 := testSchema + "\n amount: bigfloat @index(bigfloat) .\n"
+
+	setSchema(s1)
+	triples := `
+		<0x666> <amount> "100"  .
+		<0x124> <amount> "99.1231231233" .
+		<0x777> <amount> "99" .
+		<0x888> <amount> "99.0000000000000000000001" .
+		<0x123> <amount> "123123.123123123132" .
+	`
+	addTriplesToCluster(triples)
+
+	q1 := `
+	{
+		me(func: has(amount)) @filter(ge(amount, 100)){
+			uid
+		}
+	}`
+	js := processQueryNoErr(t, q1)
+	expectedRes := `{"data":{"me":[{"uid":"0x123"},{"uid":"0x666"}]}}`
+	require.JSONEq(t, js, expectedRes)
+}
+
+func TestBigFloatConnectingFilters(t *testing.T) {
+	s1 := testSchema + "\n amount: bigfloat @index(bigfloat) .\n"
+
+	setSchema(s1)
+	triples := `
+		<0x666> <amount> "100"  .
+		<0x124> <amount> "99.1231231233" .
+		<0x777> <amount> "99" .
+		<0x888> <amount> "99.0000000000000000000001" .
+		<0x123> <amount> "123123.123123123132" .
+	`
+	addTriplesToCluster(triples)
+
+	q1 := `
+	{
+		me(func: has(amount)) @filter(gt(amount, 99.1231231233) AND lt(amount, 1000)) {
+			uid
+		}
+	}`
+	js := processQueryNoErr(t, q1)
+	expectedRes := `{"data":{"me":[{"uid":"0x666"}]}}`
+	require.JSONEq(t, js, expectedRes)
 }

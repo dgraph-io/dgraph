@@ -90,6 +90,7 @@ var rdfTypeMap = map[types.TypeID]string{
 	types.GeoID:      "geo:geojson",
 	types.BinaryID:   "xs:base64Binary",
 	types.PasswordID: "xs:password",
+	types.BigFloatID: "xs:decimal",
 }
 
 // UIDs like 0x1 look weird but 64-bit ones like 0x0000000000000001 are too long.
