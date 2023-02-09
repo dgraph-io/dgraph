@@ -21,13 +21,13 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/dgraph-io/dgraph)](https://goreportcard.com/report/github.com/dgraph-io/dgraph)
 [![TODOs](https://badgen.net/https/api.tickgit.com/badgen/github.com/dgraph-io/dgraph/main)](https://www.tickgit.com/browse?repo=github.com/dgraph-io/dgraph&branch=main)
 
-Dgraph is a horizontally scalable and distributed GraphQL database with a graph backend. It provides ACID transactions, consistent replication, and linearizable reads. It's built from the ground up to perform for
+Dgraph is a horizontally scalable and distributed GraphQL database with a graph backend. It provides ACID transactions, consistent replication, and linearizable reads. It's built from the ground up to perform 
 a rich set of queries. Being a native GraphQL database, it tightly controls how the
 data is arranged on disk to optimize for query performance and throughput,
 reducing disk seeks and network calls in a cluster.
 
 
-Dgraph's goal is to provide [Google](https://www.google.com) production level scale and throughput,
+Dgraph's goal is to provide Google production-level scale and throughput,
 with low enough latency to serve real-time user queries over terabytes of structured data.
 Dgraph supports [GraphQL query syntax](https://dgraph.io/docs/master/query-language/), and responds in [JSON](http://www.json.org/) and [Protocol Buffers](https://developers.google.com/protocol-buffers/) over [GRPC](http://www.grpc.io/) and HTTP. Dgraph is written using the Go Programming Language.
 
@@ -53,7 +53,7 @@ If you're using Docker, you can use the [official Dgraph image](https://hub.dock
 docker pull dgraph/dgraph:latest
 ```
 
-For more information on a variety Docker deployment methods including Docker Compose and Kubernetes, see the [docs](https://dgraph.io/docs/deploy/single-host-setup/#run-using-docker).
+For more information on a variety Docker deployment methods including Docker Compose and Kubernetes, see the [docs](https://dgraph.io/docs/installation/single-host-setup/#docker).
 
 ## Run a Quick Standalone Cluster
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -205,6 +205,9 @@ they form a Raft group and provide synchronous replication.
 				"worker in a failed state. Use -1 to retry infinitely.").
 		Flag("txn-abort-after", "Abort any pending transactions older than this duration."+
 			" The liveness of a transaction is determined by its last mutation.").
+		Flag("shared-instance", "When set to true, it disables ACLs for non-galaxy users. "+
+			"It expects the access JWT to be constructed outside dgraph for non-galaxy users as "+
+			"login is denied to them. Additionally, this disables access to environment variables for minio, aws, etc.").
 		String())
 
 	flag.String("graphql", worker.GraphQLDefaults, z.NewSuperFlagHelp(worker.GraphQLDefaults).
@@ -628,7 +631,6 @@ func run() {
 		pstoreBlockCacheSize, pstoreIndexCacheSize)
 	bopts := badger.DefaultOptions("").FromSuperFlag(worker.BadgerDefaults + cacheOpts).
 		FromSuperFlag(Alpha.Conf.GetString("badger"))
-
 	security := z.NewSuperFlag(Alpha.Conf.GetString("security")).MergeAndCheckDefault(
 		worker.SecurityDefaults)
 	conf := audit.GetAuditConf(Alpha.Conf.GetString("audit"))
@@ -717,6 +719,7 @@ func run() {
 	x.Config.LimitNormalizeNode = int(x.Config.Limit.GetInt64("normalize-node"))
 	x.Config.QueryTimeout = x.Config.Limit.GetDuration("query-timeout")
 	x.Config.MaxRetries = x.Config.Limit.GetInt64("max-retries")
+	x.Config.SharedInstance = x.Config.Limit.GetBool("shared-instance")
 
 	x.Config.GraphQL = z.NewSuperFlag(Alpha.Conf.GetString("graphql")).MergeAndCheckDefault(
 		worker.GraphQLDefaults)
