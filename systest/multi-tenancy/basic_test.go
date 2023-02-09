@@ -572,12 +572,15 @@ func TestTokenExpired(t *testing.T) {
 
 func TestNameSpaceLimitFlag(t *testing.T) {
 	testInputs := []inputTripletsCount{{1, 53}, {60, 100}, {141, 153}}
-	galaxyToken := testutil.Login(t,
+	galaxyToken, err := testutil.Login(t,
 		&testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: x.GalaxyNamespace})
+	require.NoError(t, err)
 	// Create a new namespace
 	ns, err := testutil.CreateNamespaceWithRetry(t, galaxyToken)
 	require.NoError(t, err)
 	dc := testutil.DgClientWithLogin(t, "groot", "password", ns)
+	require.NoError(t, dc.Alter(context.Background(), &api.Operation{
+		Schema: `name: string .`}))
 	// trying to load more tripletes than allowed. It should through error.
 	_, err = testutil.AddNumberOfTriples(t, dc, testInputs[0].lowerLimit, testInputs[0].upperLimit)
 	require.Error(t, err)

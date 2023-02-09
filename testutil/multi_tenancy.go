@@ -411,8 +411,9 @@ export(input: {destination: $dst, format: $f, accessKey: $acc, secretKey: $sec})
 	require.NoError(t, err)
 	return resp
 }
-func AddNumberOfTriplets(t *testing.T, dg *dgo.Dgraph, start, end int) (*api.Response, error) {
-	triplets := ""
+
+func AddNumberOfTriples(t *testing.T, dg *dgo.Dgraph, start, end int) (*api.Response, error) {
+	triples := strings.Builder{}
 	for i := start; i <= end; i++ {
 		triples.WriteString(fmt.Sprintf("_:person%[1]v <name> \"person%[1]v\" .\n", i))
 	}
