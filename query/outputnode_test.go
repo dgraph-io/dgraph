@@ -24,6 +24,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -101,9 +102,9 @@ func TestNormalizeJSONLimit(t *testing.T) {
 
 func BenchmarkJsonMarshal(b *testing.B) {
 	inputStrings := [][]string{
-		[]string{"largestring", strings.Repeat("a", 1024)},
-		[]string{"smallstring", "abcdef"},
-		[]string{"specialchars", "<><>^)(*&(%*&%&^$*&%)(*&)^)"},
+		{"largestring", strings.Repeat("a", 1024)},
+		{"smallstring", "abcdef"},
+		{"specialchars", "<><>^)(*&(%*&%&^$*&%)(*&)^)"},
 	}
 
 	var result []byte
@@ -261,4 +262,48 @@ func TestChildrenOrder(t *testing.T) {
 		child = child.next
 	}
 	require.Nil(t, child)
+}
+
+func TestMarshalTimeJson(t *testing.T) {
+	var timesToMarshal = []struct {
+		in  time.Time
+		out string
+	}{
+		{in: time.Date(2018, 5, 30, 9, 30, 10, 0, time.FixedZone("", -6*60*60)),
+			out: "\"2018-05-30T09:30:10-06:00\""},
+		{in: time.Date(2018, 5, 30, 9, 30, 10, 500000000, time.UTC),
+			out: "\"2018-05-30T09:30:10.5Z\""},
+		{in: time.Date(2018, 5, 30, 9, 30, 10, 0, time.FixedZone("", -23*60*60)),
+			out: "\"2018-05-30T09:30:10-23:00\""},
+		{in: time.Date(2018, 5, 30, 9, 30, 10, 0, time.FixedZone("", -24*60*60)),
+			out: "\"2018-05-30T09:30:10-24:00\""},
+		{in: time.Date(2018, 5, 30, 9, 30, 10, 0, time.FixedZone("", 23*60*60)),
+			out: "\"2018-05-30T09:30:10+23:00\""},
+		{in: time.Date(2018, 5, 30, 9, 30, 10, 0, time.FixedZone("", 23*60*60+58*60)),
+			out: "\"2018-05-30T09:30:10+23:58\""},
+		{in: time.Date(2018, 5, 30, 9, 30, 10, 0, time.FixedZone("", 24*60*60)),
+			out: "\"2018-05-30T09:30:10+24:00\""},
+		{in: time.Date(2018, 5, 30, 9, 30, 10, 0, time.FixedZone("", -30*60*60)),
+			out: "\"2018-05-30T09:30:10-30:00\""},
+		{in: time.Date(2018, 5, 30, 9, 30, 10, 0, time.FixedZone("", 30*60*60)),
+			out: "\"2018-05-30T09:30:10+30:00\""},
+		{in: time.Date(2018, 5, 30, 9, 30, 10, 0, time.FixedZone("", 45*60*60)),
+			out: "\"2018-05-30T09:30:10+45:00\""},
+		{in: time.Date(2018, 5, 30, 9, 30, 10, 0, time.FixedZone("", 45*60*60+34*60)),
+			out: "\"2018-05-30T09:30:10+45:34\""},
+		{in: time.Date(2018, 5, 30, 9, 30, 10, 0, time.FixedZone("", 49*60*60+59*60)),
+			out: "\"2018-05-30T09:30:10+49:59\""},
+		{in: time.Date(2018, 5, 30, 9, 30, 10, 0, time.FixedZone("", -99*60*60)),
+			out: "\"2018-05-30T09:30:10-99:00\""},
+		{in: time.Date(2018, 5, 30, 9, 30, 10, 0, time.FixedZone("", 99*60*60)),
+			out: "\"2018-05-30T09:30:10+99:00\""},
+		{in: time.Date(2018, 5, 30, 9, 30, 10, 0, time.FixedZone("", 100*60*60+23*60)),
+			out: "\"2018-05-30T09:30:10+100:23\""},
+	}
+
+	for _, tc := range timesToMarshal {
+		out, err := marshalTimeJson(tc.in)
+		require.Nil(t, err)
+		require.Equal(t, tc.out, string(out))
+	}
 }

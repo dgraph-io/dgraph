@@ -677,7 +677,7 @@ func valToBytes(v types.Val) ([]byte, error) {
 		return boolFalse, nil
 	case types.DateTimeID:
 		t := v.Value.(time.Time)
-		return t.MarshalJSON()
+		return marshalTimeJson(t)
 	case types.GeoID:
 		return geojson.Marshal(v.Value.(geom.T))
 	case types.UidID:
@@ -687,6 +687,36 @@ func valToBytes(v types.Val) ([]byte, error) {
 	default:
 		return nil, errors.New("Unsupported types.Val.Tid")
 	}
+}
+
+// marshalTimeJson does what time.MarshalJson does along with supporting RFC3339 non compliant
+// time zones in a timestamp. While go 1.20 changes the behaviour of time.MarshalJSON, we do
+// not want to throw error suddenly because we can't marshal the stored data correctly any more.
+func marshalTimeJson(t time.Time) ([]byte, error) {
+	_, offset := t.Zone()
+	// normal case
+	if types.GoodTimeZone(offset) {
+		return t.MarshalJSON()
+	}
+
+	// If zone >23 or <-23, we need to handle this case ourselves.
+	// This is because, in go1.20, MarshalJSON fails for invalid zones.
+	// We, for now, call MarshalJSON for timestamp without the zone (or making it UTC zone).
+	b, err := t.Add(time.Duration(offset) * time.Second).UTC().MarshalJSON()
+	if err != nil {
+		return nil, err
+	}
+
+	// we will get a byte slice that has Z appended at the end along with a quote (")
+	// e.g.: []byte("2018-05-28T14:41:57Z"). We replace Z with -/+.
+	zone := offset / 60
+	if zone < 0 {
+		b[len(b)-2] = '-'
+		zone = -zone
+	} else {
+		b[len(b)-2] = '+'
+	}
+	return append(b[:len(b)-1], []byte(fmt.Sprintf("%02d:%02d\"", zone/60, zone%60))...), nil
 }
 
 func (enc *encoder) writeKey(fj fastJsonNode) error {
