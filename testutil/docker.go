@@ -81,7 +81,7 @@ func (in ContainerInstance) BestEffortWaitForHealthy(privatePort uint16) error {
 		fmt.Printf("Health for %s failed: %v. Response: %q. Retrying...\n", in, err, body)
 		time.Sleep(time.Second)
 	}
-	return nil
+	return fmt.Errorf("did not pass health check on %s", "http://localhost:"+port+"/health\n")
 }
 
 func (in ContainerInstance) publicPort(privatePort uint16) string {

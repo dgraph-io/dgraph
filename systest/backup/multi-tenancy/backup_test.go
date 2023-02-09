@@ -50,9 +50,9 @@ func TestBackupMultiTenancy(t *testing.T) {
 	dg := testutil.DgClientWithLogin(t, "groot", "password", x.GalaxyNamespace)
 	testutil.DropAll(t, dg)
 
-	galaxyCreds := &testutil.LoginParams{
-		UserID: "groot", Passwd: "password", Namespace: x.GalaxyNamespace}
-	galaxyToken := testutil.Login(t, galaxyCreds)
+	galaxyCreds := &testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: x.GalaxyNamespace}
+	galaxyToken, err := testutil.Login(t, galaxyCreds)
+	require.NoError(t, err, "login failed")
 
 	// Create a new namespace
 	ns1, err := testutil.CreateNamespaceWithRetry(t, galaxyToken)
