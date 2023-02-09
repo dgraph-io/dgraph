@@ -21,7 +21,7 @@ const (
 	backupDst       = "/data/backups/"
 )
 
-func TestDeletedNamespaceID(t *testing.T) {
+func Test127PlusNamespaces(t *testing.T) {
 	jwtTokenAlpha1 := testutil.GrootHttpLogin("http://" + testutil.SockAddrHttp + "/admin").AccessJwt
 	headerAlpha1.Set(accessJwtHeader, jwtTokenAlpha1)
 	headerAlpha1.Set("Content-Type", "application/json")
