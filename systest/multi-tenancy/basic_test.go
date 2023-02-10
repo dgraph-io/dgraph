@@ -581,13 +581,13 @@ func TestNameSpaceLimitFlag(t *testing.T) {
 	dc := testutil.DgClientWithLogin(t, "groot", "password", ns)
 	require.NoError(t, dc.Alter(context.Background(), &api.Operation{
 		Schema: `name: string .`}))
-	// trying to load more tripletes than allowed. It should through error.
+	// trying to load more triplets than allowed,It should return error.
 	_, err = testutil.AddNumberOfTriples(t, dc, testInputs[0].lowerLimit, testInputs[0].upperLimit)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Requested UID lease(53) is greater than allowed(50).")
 	_, err = testutil.AddNumberOfTriples(t, dc, testInputs[1].lowerLimit, testInputs[1].upperLimit)
 	require.NoError(t, err)
-	// we have set uid-lease=50 so we are trying lease more uids. It should through error.
+	// we have set uid-lease=50 so we are trying lease more uids,it should return error.
 	_, err = testutil.AddNumberOfTriples(t, dc, testInputs[2].lowerLimit, testInputs[2].upperLimit)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Cannot lease UID because UID lease for the namespace")
