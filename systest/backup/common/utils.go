@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -178,7 +179,7 @@ func CheckDataExists(t *testing.T, desriedSuffix int, jwtToken string, whichAlph
 	adminUrl := "http://" + testutil.ContainerAddr(whichAlpha, 8080) + "/graphql"
 	require.NoError(t, err)
 
-	req, err := http.NewRequest(http.MethodPost, adminUrl, bytes.NewBuffer(b))
+	req, _ := http.NewRequest(http.MethodPost, adminUrl, bytes.NewBuffer(b))
 	req.Header.Set("Content-Type", "application/json")
 	if jwtToken != "" {
 		req.Header.Set(accessJwtHeader, jwtToken)
@@ -186,8 +187,13 @@ func CheckDataExists(t *testing.T, desriedSuffix int, jwtToken string, whichAlph
 	client := &http.Client{}
 	resp, err := client.Do(req)
 
+	require.NoError(t, err)
+
 	var data interface{}
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
+	if strings.Contains(fmt.Sprint(data), "errors") {
+		t.Fatalf("Item%v is not available in database", desriedSuffix)
+	}
 }
 
 func TakeBackup(t *testing.T, jwtToken string, backupDst string, whichAlpha string) {

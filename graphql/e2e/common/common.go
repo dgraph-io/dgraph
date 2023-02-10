@@ -336,7 +336,7 @@ func containsRetryableCreateNamespaceError(resp *GraphQLResponse) bool {
 
 type CreateNamespaceParams struct {
 	CustomGraphAdminURLs string
-	NamespaceQuant       int
+	Count                int
 }
 
 func CreateNamespace(t *testing.T, headers http.Header, cnp ...CreateNamespaceParams) uint64 {
@@ -355,12 +355,12 @@ func CreateNamespace(t *testing.T, headers http.Header, cnp ...CreateNamespacePa
 		if cnp[0].CustomGraphAdminURLs != "" {
 			customAdminURL = cnp[0].CustomGraphAdminURLs
 		}
-		if cnp[0].NamespaceQuant != 0 {
-			namespaceCount = cnp[0].NamespaceQuant
+		if cnp[0].Count != 0 {
+			namespaceCount = cnp[0].Count
 		}
 	}
 	var gqlResponse *GraphQLResponse
-	for count := 1; count <= namespaceCount; count++ {
+	for index := 1; index <= namespaceCount; index++ {
 		for {
 			gqlResponse = createNamespace.ExecuteAsPost(t, customAdminURL)
 			if containsRetryableCreateNamespaceError(gqlResponse) {
