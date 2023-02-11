@@ -32,6 +32,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
@@ -340,7 +341,11 @@ func HttpLogin(params *LoginParams) (*HttpToken, error) {
 	if err != nil {
 		return nil, errors.Wrapf(err, "login through curl failed")
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			glog.Warningf("error closing body: %v", err)
+		}
+	}()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {

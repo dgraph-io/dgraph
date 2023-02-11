@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/dgrijalva/jwt-go/v4"
+	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/metadata"
@@ -70,7 +71,12 @@ func (resp *GraphQLResponse) RequireNoGraphQLErrors(t *testing.T) {
 }
 
 func RequireNoGraphQLErrors(t *testing.T, resp *http.Response) {
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			glog.Warningf("error closing body: %v", err)
+		}
+	}()
+
 	b, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 
@@ -120,7 +126,12 @@ func MakeGQLRequestWithAccessJwtAndTLS(t *testing.T, params *GraphQLParams,
 	resp, err := client.Do(req)
 	require.NoError(t, err)
 
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			glog.Warningf("error closing body: %v", err)
+		}
+	}()
+
 	b, err = io.ReadAll(resp.Body)
 	require.NoError(t, err)
 

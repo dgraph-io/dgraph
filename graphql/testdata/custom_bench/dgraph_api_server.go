@@ -24,6 +24,8 @@ import (
 	"log"
 	"net/http"
 	"strings"
+
+	"github.com/golang/glog"
 )
 
 const (
@@ -198,7 +200,11 @@ func makeGqlRequest(query string) (*Response, error) {
 		return nil, err
 	}
 
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			glog.Warningf("error closing body: %v", err)
+		}
+	}()
 	b, err = io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err

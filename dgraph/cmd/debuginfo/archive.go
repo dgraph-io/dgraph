@@ -57,7 +57,11 @@ func (w *walker) walkPath(path string, info os.FileInfo, err error) error {
 		glog.Errorf("Failed to open %s: %s", path, err)
 		return nil
 	}
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			glog.Warningf("error closing file: %v", err)
+		}
+	}()
 
 	if info.IsDir() {
 		if info.Name() == w.baseDir {
@@ -96,10 +100,18 @@ func createArchive(debugDir string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			glog.Warningf("error closing file: %v", err)
+		}
+	}()
 
 	writer := tar.NewWriter(file)
-	defer writer.Close()
+	defer func() {
+		if err := writer.Close(); err != nil {
+			glog.Warningf("error closing writer: %v", err)
+		}
+	}()
 
 	var baseDir string
 	if info, err := os.Stat(debugDir); os.IsNotExist(err) {
@@ -134,11 +146,19 @@ func createGzipArchive(debugDir string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer writer.Close()
+	defer func() {
+		if err := writer.Close(); err != nil {
+			glog.Warningf("error closing writer: %v", err)
+		}
+	}()
 
 	archiver := gzip.NewWriter(writer)
 	archiver.Name = filename
-	defer archiver.Close()
+	defer func() {
+		if err := archiver.Close(); err != nil {
+			glog.Warningf("error closing archiver: %v", err)
+		}
+	}()
 
 	_, err = io.Copy(archiver, reader)
 	if err != nil {

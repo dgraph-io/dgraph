@@ -177,7 +177,11 @@ func (m *mapper) writeToDisk(buf *z.Buffer) error {
 	if err != nil {
 		return errors.Wrap(err, "openOutputFile")
 	}
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			glog.Warningf("error while closing fd: %v", err)
+		}
+	}()
 
 	// Create partition keys for the map file.
 	header := &pb.MapHeader{PartitionKeys: [][]byte{}}
@@ -680,7 +684,9 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) (*mapResult, error) {
 	}
 	go mapper.Progress()
 	defer func() {
-		mapper.Flush()
+		if err := mapper.Flush(); err != nil {
+			glog.Warningf("error calling flush during map: %v", err)
+		}
 		mapper.closer.SignalAndWait()
 	}()
 

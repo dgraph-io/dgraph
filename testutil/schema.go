@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/golang/glog"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/v210"
@@ -157,7 +158,11 @@ func UpdateGQLSchema(t *testing.T, sockAddrHttp, schema string) {
 	require.NoError(t, err)
 	resp, err := http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			glog.Warningf("error closing body: %v", err)
+		}
+	}()
 }
 
 func GetGQLSchema(t *testing.T, sockAddrHttp string) string {
@@ -168,7 +173,11 @@ func GetGQLSchema(t *testing.T, sockAddrHttp string) string {
 	require.NoError(t, err)
 	resp, err := http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			glog.Warningf("error closing body: %v", err)
+		}
+	}()
 	var data interface{}
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
 	return JsonGet(data, "data", "getGQLSchema", "schema").(string)

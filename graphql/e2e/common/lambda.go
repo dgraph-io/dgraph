@@ -26,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/glog"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/testutil"
@@ -373,11 +374,21 @@ func lambdaOnMutateHooks(t *testing.T) {
 	// let's listen to the changes coming in from the lambda hook and store them in this array
 	var changelog []string
 	server := http.Server{Addr: lambdaHookServerAddr, Handler: http.NewServeMux()}
-	defer server.Shutdown(context.Background())
+	defer func() {
+		if err := server.Shutdown(context.Background()); err != nil {
+			glog.Warningf("error while shutting down server: %v", err)
+		}
+	}()
+
 	go func() {
 		serverMux := server.Handler.(*http.ServeMux)
 		serverMux.HandleFunc("/changelog", func(w http.ResponseWriter, r *http.Request) {
-			defer r.Body.Close()
+			defer func() {
+				if err := r.Body.Close(); err != nil {
+					glog.Warningf("error closing body: %v", err)
+				}
+			}()
+
 			b, err := io.ReadAll(r.Body)
 			require.NoError(t, err)
 
