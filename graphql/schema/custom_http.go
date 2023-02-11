@@ -27,6 +27,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 )
 
 var (
@@ -89,7 +90,11 @@ func (fconf *FieldHTTPConfig) MakeAndDecodeHTTPRequest(client *http.Client, url 
 		return nil, nil, x.GqlErrorList{externalRequestError(err, field)}
 	}
 
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			glog.Warningf("error closing body: %v", err)
+		}
+	}()
 	b, err = io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, nil, x.GqlErrorList{externalRequestError(err, field)}

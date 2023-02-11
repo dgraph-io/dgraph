@@ -20,6 +20,7 @@ import (
 	"context"
 	"math"
 
+	"github.com/golang/glog"
 	"github.com/pkg/errors"
 
 	"github.com/dgraph-io/badger/v3"
@@ -110,14 +111,15 @@ func StoreExport(request *pb.ExportRequest, dir string, key x.Sensitive) error {
 		WithValueThreshold(1 << 10).
 		WithNumVersionsToKeep(math.MaxInt32).
 		WithEncryptionKey(key))
-
 	if err != nil {
 		return err
 	}
+	defer func() {
+		if err := db.Close(); err != nil {
+			glog.Warningf("error closing the DB: %v", err)
+		}
+	}()
 
 	_, err = exportInternal(context.Background(), request, db, true)
-	// It is important to close the db before sending err to ch. Else, we will see a memory
-	// leak.
-	db.Close()
 	return errors.Wrapf(err, "cannot export data inside DB at %s", dir)
 }

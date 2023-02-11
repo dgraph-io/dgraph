@@ -241,7 +241,11 @@ func (l *loader) processSchemaFile(ctx context.Context, file string, key x.Sensi
 
 	f, err := filestore.Open(file)
 	x.CheckfNoTrace(err)
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			glog.Warningf("error while closing fd: %v", err)
+		}
+	}()
 
 	reader, err := enc.GetReader(key, f)
 	x.Check(err)

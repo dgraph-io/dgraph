@@ -25,6 +25,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/golang/glog"
 	"github.com/pkg/errors"
 
 	"github.com/dgraph-io/gqlparser/v2/ast"
@@ -73,7 +74,11 @@ func introspectRemoteSchema(url string, headers http.Header) (*introspectedSchem
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			glog.Warningf("error closing body: %v", err)
+		}
+	}()
 	body, err = io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err

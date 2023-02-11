@@ -26,6 +26,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/golang/glog"
 	geojson "github.com/paulmach/go.geojson"
 
 	"github.com/dgraph-io/dgraph/x"
@@ -38,7 +39,11 @@ func writeToFile(fpath string, ch chan []byte) error {
 		return err
 	}
 
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			glog.Warningf("error while closing fd: %v", err)
+		}
+	}()
 	x.Check(err)
 	w := bufio.NewWriterSize(f, 1e6)
 	gw, err := gzip.NewWriterLevel(w, gzip.BestCompression)
@@ -66,7 +71,11 @@ func convertGeoFile(input string, output string) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			glog.Warningf("error while closing fd: %v", err)
+		}
+	}()
 
 	var gz io.Reader
 	if filepath.Ext(input) == ".gz" {

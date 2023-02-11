@@ -39,6 +39,7 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
+	"github.com/golang/glog"
 	"github.com/spf13/pflag"
 	"golang.org/x/tools/go/packages"
 
@@ -169,6 +170,11 @@ func detectRace(prefix string) bool {
 func outputLogs(prefix string) {
 	f, err := os.CreateTemp(".", prefix+"*.log")
 	x.Check(err)
+	defer func() {
+		if err := f.Close(); err != nil {
+			fmt.Printf("error closing file: %v", err)
+		}
+	}()
 	printLogs := func(container string) {
 		in := testutil.GetContainerInstance(prefix, container)
 		c := in.GetContainer()
@@ -178,7 +184,9 @@ func outputLogs(prefix string) {
 		logCmd := exec.Command("docker", "logs", c.ID)
 		out, err := logCmd.CombinedOutput()
 		x.Check(err)
-		f.Write(out)
+		if _, err := f.Write(out); err != nil {
+			fmt.Printf("error writing container logs to file: %v", err)
+		}
 		fmt.Printf("Docker logs for %s is %s with error %+v ", c.ID, string(out), err)
 	}
 	for i := 0; i <= 3; i++ {
@@ -188,8 +196,6 @@ func outputLogs(prefix string) {
 	for i := 0; i <= 6; i++ {
 		printLogs("alpha" + strconv.Itoa(i))
 	}
-	f.Sync()
-	f.Close()
 	s := fmt.Sprintf("---> LOGS for %s written to %s .\n", prefix, f.Name())
 	_, err = oc.Write([]byte(s))
 	x.Check(err)
@@ -234,7 +240,7 @@ func stopCluster(composeFile, prefix string, wg *sync.WaitGroup, err error) {
 					)
 				}
 
-				os.Remove(tmp)
+				_ = os.Remove(tmp)
 
 				coverageBulk := strings.Replace(composeFile, "docker-compose.yml", "coverage_bulk.out", -1)
 				if err = appendTestCoverageFile(coverageBulk, coverageFile); err != nil {
@@ -322,7 +328,7 @@ func hasTestFiles(pkg string) bool {
 	dir = filepath.Join(*baseDir, dir)
 
 	hasTests := false
-	filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if hasTests {
 			return filepath.SkipDir
 		}
@@ -332,6 +338,7 @@ func hasTestFiles(pkg string) bool {
 		}
 		return nil
 	})
+	x.Check(err)
 	return hasTests
 }
 
@@ -830,7 +837,6 @@ func downloadLDBCFiles() {
 	}
 	wg.Wait()
 	fmt.Printf("Downloaded %d files in %s \n", len(ldbcDataFiles), time.Since(start))
-
 }
 
 func createTestCoverageFile(path string) error {
@@ -838,7 +844,11 @@ func createTestCoverageFile(path string) error {
 	if err != nil {
 		return err
 	}
-	defer outFile.Close()
+	defer func() {
+		if err := outFile.Close(); err != nil {
+			glog.Warningf("error closing file: %v", err)
+		}
+	}()
 
 	cmd := command("echo", coverageFileHeader)
 	cmd.Stdout = outFile
@@ -864,7 +874,11 @@ func isTestCoverageEmpty(path string) (bool, error) {
 	if err != nil {
 		return true, err
 	}
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			glog.Warningf("error closing file: %v", err)
+		}
+	}()
 
 	var l int
 	scanner := bufio.NewScanner(file)
