@@ -232,7 +232,7 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest) error {
 	m := Manifest{
 		ReadTs:         req.ReadTs,
 		Groups:         predMap,
-		Version:        x.DgraphVersion,
+		Version:        x.ManifestVersion,
 		DropOperations: dropOperations,
 		Path:           dir,
 		Compression:    "snappy",
@@ -555,14 +555,14 @@ func (pr *BackupProcessor) CompleteBackup(ctx context.Context, m *Manifest) erro
 		return err
 	}
 
-	manifest, err := GetManifest(handler, uri)
+	manifest, err := GetManifestNoUpgrade(handler, uri)
 	if err != nil {
 		return err
 	}
 	manifest.Manifests = append(manifest.Manifests, m)
 
-	if err := createManifest(handler, uri, manifest); err != nil {
-		return errors.Wrap(err, "Complete backup failed")
+	if err := CreateManifest(handler, uri, manifest); err != nil {
+		return errors.Wrap(err, "complete backup failed")
 	}
 	glog.Infof("Backup completed OK.")
 	return nil

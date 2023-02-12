@@ -20,11 +20,11 @@ import (
 	"context"
 	"expvar"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
 	"os/exec"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -36,6 +36,7 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/golang/glog"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/spf13/viper"
 	ostats "go.opencensus.io/stats"
 	"go.opencensus.io/stats/view"
@@ -432,12 +433,15 @@ func init() {
 
 	CheckfNoTrace(view.Register(allViews...))
 
-	prometheus.MustRegister(NewBadgerCollector())
+	promRegistry := prometheus.NewRegistry()
+	promRegistry.MustRegister(NewBadgerCollector())
+	promRegistry.MustRegister(collectors.NewGoCollector(collectors.WithGoCollectorRuntimeMetrics(
+		collectors.GoRuntimeMetricsRule{Matcher: regexp.MustCompile("/.*")})))
+	promRegistry.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 
 	pe, err := oc_prom.NewExporter(oc_prom.Options{
-		// DefaultRegisterer includes a ProcessCollector for process_* metrics, a GoCollector for
-		// go_* metrics, and the badger_* metrics.
-		Registry:  prometheus.DefaultRegisterer.(*prometheus.Registry),
+		// includes a process_* metrics, a GoCollector for go_* metrics, and the badger_* metrics.
+		Registry:  promRegistry,
 		Namespace: "dgraph",
 		OnError:   func(err error) { glog.Errorf("%v", err) },
 	})
@@ -451,7 +455,7 @@ func init() {
 
 // NewBadgerCollector returns a prometheus Collector for Badger metrics from expvar.
 func NewBadgerCollector() prometheus.Collector {
-	return prometheus.NewExpvarCollector(map[string]*prometheus.Desc{
+	return collectors.NewExpvarCollector(map[string]*prometheus.Desc{
 		"badger_v3_disk_reads_total": prometheus.NewDesc(
 			"badger_disk_reads_total",
 			"Number of cumulative reads by Badger",
@@ -678,7 +682,7 @@ func getMemUsage() int {
 		return megs
 	}
 
-	contents, err := ioutil.ReadFile("/proc/self/stat")
+	contents, err := os.ReadFile("/proc/self/stat")
 	if err != nil {
 		glog.Errorf("Can't read the proc file. Err: %v\n", err)
 		return 0

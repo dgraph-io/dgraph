@@ -2510,7 +2510,7 @@ func TestDateTimeQuery(t *testing.T) {
 	// Test 21
 	query = `
 {
-  q(func: between(created_at, "2021-03-28T14:41:57+30:00", "2019-03-28T15:41:57+30:00"), orderdesc: created_at) {
+  q(func: between(created_at, "2021-03-28T07:41:57+23:00", "2019-03-28T08:41:57+23:00"), orderdesc: created_at) {
 	  uid
 	  created_at
   }
@@ -2521,14 +2521,14 @@ func TestDateTimeQuery(t *testing.T) {
 	// Test 20
 	query = `
 {
-  q(func: between(created_at, "2019-03-28T14:41:57+30:00", "2019-03-28T15:41:57+30:00"), orderdesc: created_at) {
+  q(func: between(created_at, "2019-03-28T07:41:57+23:00", "2019-03-28T08:41:57+23:00"), orderdesc: created_at) {
 	  uid
 	  created_at
 	}
 }
 `
 	require.JSONEq(t,
-		`{"data":{"q":[{"uid":"0x130","created_at":"2019-03-28T15:41:57+30:00"},{"uid":"0x12d","created_at":"2019-03-28T14:41:57+30:00"},{"uid":"0x12e","created_at":"2019-03-28T13:41:57+29:00"},{"uid":"0x12f","created_at":"2019-03-27T14:41:57+06:00"}]}}`,
+		`{"data":{"q":[{"uid":"0x130","created_at":"2019-03-28T08:41:57+23:00"},{"uid":"0x12d","created_at":"2019-03-28T07:41:57+23:00"},{"uid":"0x12e","created_at":"2019-03-28T07:41:57+23:00"},{"uid":"0x12f","created_at":"2019-03-27T14:41:57+06:00"}]}}`,
 		processQueryNoErr(t, query))
 
 	// Test 19
@@ -2541,7 +2541,7 @@ func TestDateTimeQuery(t *testing.T) {
 }
 `
 	require.JSONEq(t,
-		`{"data":{"q":[{"uid":"0x133","created_at":"2019-05-28T14:41:57+30:00"},{"uid":"0x130","created_at":"2019-03-28T15:41:57+30:00"},{"uid":"0x12d","created_at":"2019-03-28T14:41:57+30:00"},{"uid":"0x12e","created_at":"2019-03-28T13:41:57+29:00"},{"uid":"0x12f","created_at":"2019-03-27T14:41:57+06:00"},{"uid":"0x131","created_at":"2019-03-28T13:41:57+30:00"},{"uid":"0x132","created_at":"2019-03-24T14:41:57+05:30"}]}}`,
+		`{"data":{"q":[{"uid":"0x133","created_at":"2019-05-28T07:41:57+23:00"},{"uid":"0x130","created_at":"2019-03-28T08:41:57+23:00"},{"uid":"0x12d","created_at":"2019-03-28T07:41:57+23:00"},{"uid":"0x12e","created_at":"2019-03-28T07:41:57+23:00"},{"uid":"0x12f","created_at":"2019-03-27T14:41:57+06:00"},{"uid":"0x131","created_at":"2019-03-28T06:41:57+23:00"},{"uid":"0x132","created_at":"2019-03-24T14:41:57+05:30"}]}}`,
 		processQueryNoErr(t, query))
 
 	// Test 18
@@ -2591,7 +2591,7 @@ func TestDateTimeQuery(t *testing.T) {
 				  "uid": "0x2",
 				  "best_friend": {
 					"uid": "0x40",
-				    "best_friend|since": "2019-03-28T14:41:57+30:00"
+				    "best_friend|since": "2019-03-28T07:41:57+23:00"
 				  }
 				}
 			  ]
@@ -2610,7 +2610,7 @@ func TestDateTimeQuery(t *testing.T) {
 }
 `
 	require.JSONEq(t,
-		`{"data":{"q":[{"uid":"0x133","created_at":"2019-05-28T14:41:57+30:00","updated_at|modified_at":"2019-03-24T14:41:57+05:30","updated_at":"2019-05-28T00:00:00Z"}]}}`,
+		`{"data":{"q":[{"uid":"0x133","created_at":"2019-05-28T07:41:57+23:00","updated_at|modified_at":"2019-03-24T14:41:57+05:30","updated_at":"2019-05-28T00:00:00Z"}]}}`,
 		processQueryNoErr(t, query))
 
 	// Test 15
@@ -2740,7 +2740,7 @@ func TestDateTimeQuery(t *testing.T) {
 }
 `
 	require.JSONEq(t,
-		`{"data":{"q":[{"uid":"0x131","updated_at":"2019-03-28T13:41:57+30:00"},{"uid":"0x132","updated_at":"2019-03-24T14:41:57+05:30"}]}}`,
+		`{"data":{"q":[{"uid":"0x131","updated_at":"2019-03-28T06:41:57+23:00"},{"uid":"0x132","updated_at":"2019-03-24T14:41:57+05:30"}]}}`,
 		processQueryNoErr(t, query))
 
 	// Test 5
@@ -2779,7 +2779,7 @@ func TestDateTimeQuery(t *testing.T) {
 }
 `
 	require.JSONEq(t,
-		`{"data":{"q":[{"uid":"0x131","created_at":"2019-03-28T13:41:57+30:00"},{"uid":"0x132","created_at":"2019-03-24T14:41:57+05:30"}]}}`,
+		`{"data":{"q":[{"uid":"0x131","created_at":"2019-03-28T06:41:57+23:00"},{"uid":"0x132","created_at":"2019-03-24T14:41:57+05:30"}]}}`,
 		processQueryNoErr(t, query))
 
 	// Test 2
@@ -2792,7 +2792,7 @@ func TestDateTimeQuery(t *testing.T) {
 }
 `
 	require.JSONEq(t,
-		`{"data":{"q":[{"uid":"0x133","created_at":"2019-05-28T14:41:57+30:00"}]}}`,
+		`{"data":{"q":[{"uid":"0x133","created_at":"2019-05-28T07:41:57+23:00"}]}}`,
 		processQueryNoErr(t, query))
 
 	// Test 1
@@ -2805,7 +2805,7 @@ func TestDateTimeQuery(t *testing.T) {
 }
 `
 	require.JSONEq(t,
-		`{"data":{"q":[{"uid":"0x133","created_at":"2019-05-28T14:41:57+30:00"}]}}`,
+		`{"data":{"q":[{"uid":"0x133","created_at":"2019-05-28T07:41:57+23:00"}]}}`,
 		processQueryNoErr(t, query))
 }
 

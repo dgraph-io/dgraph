@@ -176,7 +176,7 @@ func TestMetrics(t *testing.T) {
 
 	requiredMetrics := []string{
 		// Go Runtime Metrics
-		"go_goroutines", "go_memstats_gc_cpu_fraction", "go_memstats_heap_alloc_bytes",
+		"go_goroutines", "go_memstats_heap_alloc_bytes",
 		"go_memstats_heap_idle_bytes", "go_memstats_heap_inuse_bytes", "dgraph_latency_bucket",
 
 		// Badger Metrics
