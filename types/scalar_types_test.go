@@ -1,5 +1,3 @@
-//go:build unit_test
-
 /*
  * Copyright (C) 2022 Dgraph Labs, Inc. and Contributors
  *

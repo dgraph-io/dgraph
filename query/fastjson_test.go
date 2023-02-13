@@ -1,5 +1,3 @@
-//go:build unit_test
-
 package query
 
 import (
