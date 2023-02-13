@@ -1,3 +1,5 @@
+//go:build integration_test
+
 package ha_6_node
 
 import (

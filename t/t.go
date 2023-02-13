@@ -66,6 +66,8 @@ var (
 		"Only run tests for this package")
 	runTest = pflag.StringP("test", "t", "",
 		"Only run this test")
+	testType = pflag.StringP("test-type", "", "",
+		"Test type e.g unit,integration,upgrade")
 	runCustom = pflag.BoolP("custom-only", "o", false,
 		"Run only custom cluster tests.")
 	count = pflag.IntP("count", "c", 0,
@@ -275,6 +277,9 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 	if *count > 0 {
 		args = append(args, "-count="+strconv.Itoa(*count))
 	}
+	if len(*testType) > 0 {
+		args = append(args, "-tags="+*testType)
+	}
 	if len(*runTest) > 0 {
 		args = append(args, "-run="+*runTest)
 	}
@@ -405,7 +410,11 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 				// If we only need to run custom cluster tests, then skip this one.
 				continue
 			}
-			start()
+			fmt.Println("test types is ", *testType)
+			if strings.Contains(*testType, "integration_test") {
+				start()
+			}
+
 			if err = runTestsFor(ctx, task.pkg.ID, prefix); err != nil {
 				// fmt.Printf("ERROR for package: %s. Err: %v\n", task.pkg.ID, err)
 				return err
@@ -443,7 +452,10 @@ func runCustomClusterTest(ctx context.Context, pkg string, wg *sync.WaitGroup) e
 	var err error
 	compose := composeFileFor(pkg)
 	prefix := getClusterPrefix()
-	err = startCluster(compose, prefix)
+	if strings.Contains(*testType, "integration_test") {
+		err = startCluster(compose, prefix)
+	}
+
 	if err != nil {
 		return err
 	}
@@ -457,6 +469,7 @@ func runCustomClusterTest(ctx context.Context, pkg string, wg *sync.WaitGroup) e
 }
 
 func findPackagesFor(testName string) []string {
+	fmt.Println("testname is ", testName)
 	if len(testName) == 0 {
 		return []string{}
 	}

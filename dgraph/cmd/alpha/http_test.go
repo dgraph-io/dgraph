@@ -1,3 +1,5 @@
+//go:build integration_test
+
 /*
  * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
@@ -737,6 +739,7 @@ func TestDebugSupport(t *testing.T) {
 	  set {
 		_:a <name> "Alice" .
 		_:b <name> "Bob" .
+
 		_:c <name> "Charlie" .
 		_:d <name> "David" .
 		_:e <name> "Emily" .
