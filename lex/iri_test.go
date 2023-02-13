@@ -29,7 +29,8 @@ type testCase struct {
 
 func TestHasUChars(t *testing.T) {
 	l := &Lexer{}
-	testInputs := []testCase{{"u1def", true}, {"UADEFABCD", true}, {"uYDQW", false}, {"Uydvxypqt", false}, {"abc", false}, {"uabcdg", true}}
+	testInputs := []testCase{{"u1def", true}, {"UADEFABCD", true},
+		{"uYDQW", false}, {"Uydvxypqt", false}, {"abc", false}, {"uabcdg", true}}
 	for _, test := range testInputs {
 		l.Reset(test.input)
 		r := l.Next()
@@ -62,7 +63,8 @@ func TestIsHex(t *testing.T) {
 }
 
 func TestIsIRIRefChar(t *testing.T) {
-	testInputs := []testCase{{"\\u1def", true}, {"\\UADEFABCD", true}, {"A", true}, {"a", true}, {"<", false}, {">", false}, {"{", false}, {"`", false}, {"	", false}, {"\\abc", false}}
+	testInputs := []testCase{{"\\u1def", true}, {"\\UADEFABCD", true}, {"A", true}, {"a", true},
+		{"<", false}, {">", false}, {"{", false}, {"`", false}, {"	", false}, {"\\abc", false}}
 	l := &Lexer{}
 	for _, test := range testInputs {
 		l.Reset(test.input)

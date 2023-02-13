@@ -430,10 +430,14 @@ func entitiesQueryWithKeyFieldOfTypeString(t *testing.T) {
 
 	JSONEqGraphQL(t, expectedJSON, string(entitiesResp.Data))
 
-	spaceShipDeleteFilter := map[string]interface{}{"id": map[string]interface{}{"in": []string{"SpaceShip1", "SpaceShip2", "SpaceShip3", "SpaceShip4"}}}
+	spaceShipDeleteFilter := map[string]interface{}{
+		"id": map[string]interface{}{"in": []string{"SpaceShip1", "SpaceShip2", "SpaceShip3", "SpaceShip4"}},
+	}
 	DeleteGqlType(t, "SpaceShip", spaceShipDeleteFilter, 4, nil)
 
-	missionDeleteFilter := map[string]interface{}{"id": map[string]interface{}{"in": []string{"Mission1", "Mission2", "Mission3", "Mission4"}}}
+	missionDeleteFilter := map[string]interface{}{
+		"id": map[string]interface{}{"in": []string{"Mission1", "Mission2", "Mission3", "Mission4"}},
+	}
 	DeleteGqlType(t, "Mission", missionDeleteFilter, 4, nil)
 
 }
@@ -486,7 +490,9 @@ func entitiesQueryWithKeyFieldOfTypeInt(t *testing.T) {
 	planetDeleteFilter := map[string]interface{}{"id": map[string]interface{}{"in": []int{1, 2, 3, 4}}}
 	DeleteGqlType(t, "Planet", planetDeleteFilter, 4, nil)
 
-	missionDeleteFilter := map[string]interface{}{"id": map[string]interface{}{"in": []string{"Mission1", "Mission2", "Mission3", "Mission4"}}}
+	missionDeleteFilter := map[string]interface{}{
+		"id": map[string]interface{}{"in": []string{"Mission1", "Mission2", "Mission3", "Mission4"}},
+	}
 	DeleteGqlType(t, "Mission", missionDeleteFilter, 4, nil)
 
 }
@@ -2518,7 +2524,11 @@ func queryWithCascade(t *testing.T) {
 							}
 						}
 					}`,
-			variables: map[string]interface{}{"ids": authorIds, "fieldsRoot": []string{"reputation", "name"}, "fieldsDeep": []string{"text"}},
+			variables: map[string]interface{}{
+				"ids":        authorIds,
+				"fieldsRoot": []string{"reputation", "name"},
+				"fieldsDeep": []string{"text"},
+			},
 			respData: `{
 						  "queryAuthor": [
 							{
@@ -3118,7 +3128,10 @@ func persistedQuery(t *testing.T) {
 
 	// test get method as well
 	queryCountryParams.Extensions = nil
-	gqlResponse = queryCountryParams.ExecuteAsGet(t, GraphqlURL+`?extensions={"persistedQuery":{"sha256Hash":"bbc0af44f82ce5c38e775f7f14c71e5eba1936b12b3e66c452ee262ef147f1ed"}}`)
+	gqlResponse = queryCountryParams.ExecuteAsGet(
+		t,
+		GraphqlURL+`?extensions={"persistedQuery":{"sha256Hash":"bbc0af44f82ce5c38e775f7f14c71e5eba1936b12b3e66c452ee262ef147f1ed"}}`,
+	)
 	RequireNoGQLErrors(t, gqlResponse)
 }
 
@@ -3763,7 +3776,9 @@ func queryFilterWithIDInputCoercion(t *testing.T) {
                         }
                       }
 				    }`,
-			variables: map[string]interface{}{"filter": map[string]interface{}{"id": []int{cast.ToInt(authors[0].ID), cast.ToInt(authors[1].ID)}}},
+			variables: map[string]interface{}{
+				"filter": map[string]interface{}{"id": []int{cast.ToInt(authors[0].ID), cast.ToInt(authors[1].ID)}},
+			},
 			respData: `{
 						  "queryAuthor": [
 							{

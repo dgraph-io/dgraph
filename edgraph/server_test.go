@@ -100,21 +100,21 @@ func TestValidateKeys(t *testing.T) {
 		nquad   string
 		noError bool
 	}{
-		{name: "test 1", nquad: `_:alice <knows> "stuff" ( "key 1" = 12 ) .`, noError: false},
-		{name: "test 2", nquad: `_:alice <knows> "stuff" ( "key	1" = 12 ) .`, noError: false},
-		{name: "test 3", nquad: `_:alice <knows> "stuff" ( ~key1 = 12 ) .`, noError: false},
-		{name: "test 4", nquad: `_:alice <knows> "stuff" ( "~key1" = 12 ) .`, noError: false},
-		{name: "test 5", nquad: `_:alice <~knows> "stuff" ( "key 1" = 12 ) .`, noError: false},
-		{name: "test 6", nquad: `_:alice <~knows> "stuff" ( "key	1" = 12 ) .`, noError: false},
-		{name: "test 7", nquad: `_:alice <~knows> "stuff" ( key1 = 12 ) .`, noError: false},
-		{name: "test 8", nquad: `_:alice <~knows> "stuff" ( "key1" = 12 ) .`, noError: false},
-		{name: "test 9", nquad: `_:alice <~knows> "stuff" ( "key	1" = 12 ) .`, noError: false},
-		{name: "test 10", nquad: `_:alice <knows> "stuff" ( key1 = 12 , "key 2" = 13 ) .`, noError: false},
-		{name: "test 11", nquad: `_:alice <knows> "stuff" ( "key1" = 12, key2 = 13 , "key	3" = "a b" ) .`, noError: false},
-		{name: "test 12", nquad: `_:alice <knows~> "stuff" ( key1 = 12 ) .`, noError: false},
+		{name: "test 1", nquad: `_:alice <knows> "stuff" ( "key 1" = 12 ) .`},
+		{name: "test 2", nquad: `_:alice <knows> "stuff" ( "key	1" = 12 ) .`},
+		{name: "test 3", nquad: `_:alice <knows> "stuff" ( ~key1 = 12 ) .`},
+		{name: "test 4", nquad: `_:alice <knows> "stuff" ( "~key1" = 12 ) .`},
+		{name: "test 5", nquad: `_:alice <~knows> "stuff" ( "key 1" = 12 ) .`},
+		{name: "test 6", nquad: `_:alice <~knows> "stuff" ( "key	1" = 12 ) .`},
+		{name: "test 7", nquad: `_:alice <~knows> "stuff" ( key1 = 12 ) .`},
+		{name: "test 8", nquad: `_:alice <~knows> "stuff" ( "key1" = 12 ) .`},
+		{name: "test 9", nquad: `_:alice <~knows> "stuff" ( "key	1" = 12 ) .`},
+		{name: "test 10", nquad: `_:alice <knows> "stuff" ( key1 = 12 , "key 2" = 13 ) .`},
+		{name: "test 11", nquad: `_:alice <knows> "stuff" ( "key1" = 12, key2 = 13 , "key	3" = "a b" ) .`},
+		{name: "test 12", nquad: `_:alice <knows~> "stuff" ( key1 = 12 ) .`},
 		{name: "test 13", nquad: `_:alice <knows> "stuff" ( key1 = 12 ) .`, noError: true},
 		{name: "test 14", nquad: `_:alice <knows@some> "stuff" .`, noError: true},
-		{name: "test 15", nquad: `_:alice <knows@some@en> "stuff" .`, noError: false},
+		{name: "test 15", nquad: `_:alice <knows@some@en> "stuff" .`},
 	}
 
 	for _, tc := range tests {
