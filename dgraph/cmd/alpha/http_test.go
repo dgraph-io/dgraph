@@ -739,7 +739,6 @@ func TestDebugSupport(t *testing.T) {
 	  set {
 		_:a <name> "Alice" .
 		_:b <name> "Bob" .
-
 		_:c <name> "Charlie" .
 		_:d <name> "David" .
 		_:e <name> "Emily" .
