@@ -24,7 +24,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"math"
 	"net/url"
 	"os"
@@ -475,7 +474,7 @@ func (l *localExportStorage) FinishWriting(w *Writers) (ExportedFiles, error) {
 }
 
 func newRemoteExportStorage(in *pb.ExportRequest, backupName string) (*remoteExportStorage, error) {
-	tmpDir, err := ioutil.TempDir(x.WorkerConfig.TmpDir, "export")
+	tmpDir, err := os.MkdirTemp(x.WorkerConfig.TmpDir, "export")
 	if err != nil {
 		return nil, err
 	}

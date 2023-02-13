@@ -19,7 +19,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 
 	"github.com/golang/glog"
@@ -77,7 +76,7 @@ func initSubcommands() []*x.SubCommand {
 }
 
 func run() error {
-	key, err := ioutil.ReadFile(decryptCmd.Conf.GetString("encryption_key_file"))
+	key, err := os.ReadFile(decryptCmd.Conf.GetString("encryption_key_file"))
 	x.Check(err)
 	if key == nil {
 		return errors.New("no encryption key provided")
@@ -93,6 +92,8 @@ func run() error {
 	defer outfile.Close()
 
 	block, err := aes.NewCipher(key)
+	x.Check(err)
+
 	stat, err := os.Stat(decryptCmd.Conf.GetString("in"))
 	x.Check(err)
 	if stat.Size() == 0 {

@@ -18,8 +18,8 @@ package main
 
 import (
 	"context"
-	"io/ioutil"
 	"net/http"
+	"os"
 	"testing"
 	"time"
 
@@ -37,7 +37,7 @@ func setup(t *testing.T) {
 }
 
 func readFile(t *testing.T, path string) []byte {
-	data, err := ioutil.ReadFile(path)
+	data, err := os.ReadFile(path)
 	require.NoError(t, err)
 	return data
 }

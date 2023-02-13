@@ -21,8 +21,9 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"net/http"
+	"os"
 	"runtime/debug"
 	"strconv"
 	"strings"
@@ -33,6 +34,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
@@ -267,7 +269,7 @@ func probeGraphQL(authority string, header http.Header) (*ProbeGraphQLResp, erro
 		probeResp.Healthy = true
 	}
 
-	b, err := ioutil.ReadAll(resp.Body)
+	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -557,7 +559,7 @@ func updateGQLSchemaUsingAdminSchemaEndpt(t *testing.T, authority, schema string
 	resp, err := http.Post("http://"+authority+"/admin/schema", "", strings.NewReader(schema))
 	require.NoError(t, err)
 
-	b, err := ioutil.ReadAll(resp.Body)
+	b, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 
 	return string(b)
@@ -716,7 +718,7 @@ func BootstrapServer(schema, data []byte) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	d, err := grpc.DialContext(ctx, Alpha1gRPC, grpc.WithInsecure())
+	d, err := grpc.DialContext(ctx, Alpha1gRPC, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		x.Panic(err)
 	}
@@ -1162,7 +1164,7 @@ func RunGQLRequest(req *http.Request) ([]byte, error) {
 	}
 
 	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, errors.Errorf("unable to read response body: %v", err)
 	}
@@ -1404,13 +1406,13 @@ func GetJWTForInterfaceAuth(t *testing.T, user, role string, ans bool, metaInfo 
 
 func BootstrapAuthData() ([]byte, []byte) {
 	schemaFile := "../auth/schema.graphql"
-	schema, err := ioutil.ReadFile(schemaFile)
+	schema, err := os.ReadFile(schemaFile)
 	if err != nil {
 		panic(err)
 	}
 
 	jsonFile := "../auth/test_data.json"
-	data, err := ioutil.ReadFile(jsonFile)
+	data, err := os.ReadFile(jsonFile)
 	if err != nil {
 		panic(errors.Wrapf(err, "Unable to read file %s.", jsonFile))
 	}

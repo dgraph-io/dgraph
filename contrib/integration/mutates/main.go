@@ -24,6 +24,7 @@ import (
 	"log"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
@@ -38,7 +39,7 @@ func main() {
 
 	// Setup dgraph client
 	ctx := context.Background()
-	conn, err := grpc.Dial(*alpha, grpc.WithInsecure())
+	conn, err := grpc.Dial(*alpha, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatal(err)
 	}

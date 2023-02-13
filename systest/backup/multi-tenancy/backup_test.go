@@ -32,16 +32,8 @@ import (
 )
 
 var (
-	copyBackupDir   = "./data/backups_copy"
-	restoreDir      = "./data/restore"
-	testDirs        = []string{restoreDir}
-	alphaBackupDir  = "/data/backups"
-	oldBackupDir    = "/data/to_restore"
-	alphaContainers = []string{
-		"alpha1",
-		"alpha2",
-		"alpha3",
-	}
+	copyBackupDir  = "./data/backups_copy"
+	alphaBackupDir = "/data/backups"
 )
 
 func TestBackupMultiTenancy(t *testing.T) {
@@ -219,5 +211,4 @@ func sendRestoreRequest(t *testing.T, location string, token string) {
 
 	require.NoError(t, json.Unmarshal(resp.Data, &restoreResp))
 	require.Equal(t, restoreResp.Restore.Code, "Success")
-	return
 }

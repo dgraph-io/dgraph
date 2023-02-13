@@ -23,7 +23,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"math"
 	"net/http"
 	"os"
@@ -241,7 +241,7 @@ func TestExportRdf(t *testing.T) {
 		[0x2] name: string @index(exact) .
 		`)
 
-	bdir, err := ioutil.TempDir("", "export")
+	bdir, err := os.MkdirTemp("", "export")
 	require.NoError(t, err)
 	defer os.RemoveAll(bdir)
 
@@ -343,7 +343,7 @@ func TestExportJson(t *testing.T) {
 	initTestExport(t, `name: string @index(exact) .
 				 [0x2] name: string @index(exact) .`)
 
-	bdir, err := ioutil.TempDir("", "export")
+	bdir, err := os.MkdirTemp("", "export")
 	require.NoError(t, err)
 	defer os.RemoveAll(bdir)
 
@@ -384,7 +384,7 @@ func TestExportJson(t *testing.T) {
 		{"uid":"0x9","namespace":"0x2","name":"ns2"}
 	]
 	`
-	gotJson, err := ioutil.ReadAll(r)
+	gotJson, err := io.ReadAll(r)
 	require.NoError(t, err)
 	var expected interface{}
 	err = json.Unmarshal([]byte(wantJson), &expected)
@@ -407,7 +407,7 @@ const exportRequest = `mutation export($format: String!) {
 }`
 
 func TestExportFormat(t *testing.T) {
-	tmpdir, err := ioutil.TempDir("", "export")
+	tmpdir, err := os.MkdirTemp("", "export")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpdir)
 
@@ -446,7 +446,7 @@ func TestExportFormat(t *testing.T) {
 	require.NoError(t, err)
 
 	defer resp.Body.Close()
-	b, err = ioutil.ReadAll(resp.Body)
+	b, err = io.ReadAll(resp.Body)
 	require.NoError(t, err)
 
 	var result *testutil.GraphQLResponse

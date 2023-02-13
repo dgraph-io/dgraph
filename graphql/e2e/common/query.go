@@ -20,7 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"math/rand"
 	"net/http"
 	"sort"
@@ -34,6 +34,7 @@ import (
 	"github.com/spf13/cast"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
@@ -94,7 +95,7 @@ func touchedUidsHeader(t *testing.T) {
 
 	// confirm that the value in header is same as the value in body
 	var gqlResp GraphQLResponse
-	b, err := ioutil.ReadAll(resp.Body)
+	b, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal(b, &gqlResp))
 	require.Equal(t, touchedUidsInHeader, uint64(gqlResp.Extensions["touched_uids"].(float64)))
@@ -2095,7 +2096,7 @@ func erroredQueriesHaveTouchedUids(t *testing.T) {
 	// The schema states type Country `{ ... name: String! ... }`
 	// so a query error will be raised if we ask for the country's name in a
 	// query.  Don't think a GraphQL update can do this ATM, so do through Dgraph.
-	d, err := grpc.Dial(Alpha1gRPC, grpc.WithInsecure())
+	d, err := grpc.Dial(Alpha1gRPC, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
 	client := dgo.NewDgraphClient(api.NewDgraphClient(d))
 	mu := &api.Mutation{

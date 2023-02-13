@@ -163,7 +163,12 @@ func (mw *mapper) newMapFile() (*os.File, error) {
 }
 
 func (m *mapper) writeToDisk(buf *z.Buffer) error {
-	defer buf.Release()
+	defer func() {
+		if err := buf.Release(); err != nil {
+			glog.Warningf("error in releasing buffer: %v", err)
+		}
+	}()
+
 	if buf.IsEmpty() {
 		return nil
 	}
@@ -177,7 +182,7 @@ func (m *mapper) writeToDisk(buf *z.Buffer) error {
 	// Create partition keys for the map file.
 	header := &pb.MapHeader{PartitionKeys: [][]byte{}}
 	var bufSize int
-	buf.SliceIterate(func(slice []byte) error {
+	err = buf.SliceIterate(func(slice []byte) error {
 		bufSize += 4 + len(slice)
 		if bufSize < partitionBufSz {
 			return nil
@@ -192,6 +197,10 @@ func (m *mapper) writeToDisk(buf *z.Buffer) error {
 		bufSize = 0
 		return nil
 	})
+	if err != nil {
+		glog.Errorf("error in iterating over buffer: %v", err)
+		return err
+	}
 
 	// Write the header to the map file.
 	headerBuf, err := header.Marshal()
@@ -278,7 +287,11 @@ func fromBackupKey(key []byte) ([]byte, uint64, error) {
 
 func (m *mapper) processReqCh(ctx context.Context) error {
 	buf := z.NewBuffer(20<<20, "processKVList")
-	defer buf.Release()
+	defer func() {
+		if err := buf.Release(); err != nil {
+			glog.Warningf("error in releasing buffer: %v", err)
+		}
+	}()
 
 	maxNs := uint64(0)
 	maxUid := uint64(0)
@@ -480,7 +493,11 @@ func (m *mapper) processReqCh(ctx context.Context) error {
 
 	var list bpb.KVList
 	process := func(req listReq) error {
-		defer req.lbuf.Release()
+		defer func() {
+			if err := req.lbuf.Release(); err != nil {
+				glog.Warningf("error in releasing buffer: %v", err)
+			}
+		}()
 
 		if ctx.Err() != nil {
 			return ctx.Err()

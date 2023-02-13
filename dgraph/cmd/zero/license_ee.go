@@ -15,9 +15,10 @@ package zero
 
 import (
 	"context"
-	"io/ioutil"
+	"io"
 	"math"
 	"net/http"
+	"os"
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
@@ -130,7 +131,7 @@ func (st *state) applyEnterpriseLicense(w http.ResponseWriter, r *http.Request) 
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	b, err := ioutil.ReadAll(r.Body)
+	b, err := io.ReadAll(r.Body)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
@@ -150,7 +151,7 @@ func (st *state) applyEnterpriseLicense(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *Server) applyLicenseFile(path string) {
-	content, err := ioutil.ReadFile(path)
+	content, err := os.ReadFile(path)
 	if err != nil {
 		glog.Infof("Unable to apply license at %v due to error %v", path, err)
 		return

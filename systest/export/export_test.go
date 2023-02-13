@@ -20,7 +20,7 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -30,6 +30,7 @@ import (
 	minio "github.com/minio/minio-go/v6"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
@@ -37,11 +38,9 @@ import (
 )
 
 var (
-	mc             *minio.Client
-	bucketName     = "dgraph-backup"
-	minioDest      = "minio://minio:9001/dgraph-backup?secure=false"
-	localBackupDst = "minio://localhost:9001/dgraph-backup?secure=false"
-	copyExportDir  = "./data/export-copy"
+	bucketName    = "dgraph-backup"
+	minioDest     = "minio://minio:9001/dgraph-backup?secure=false"
+	copyExportDir = "./data/export-copy"
 )
 
 // TestExportSchemaToMinio. This test does an export, then verifies that the
@@ -73,7 +72,7 @@ func TestExportSchemaToMinio(t *testing.T) {
 	require.NoError(t, err)
 	defer reader.Close()
 
-	bytes, err := ioutil.ReadAll(reader)
+	bytes, err := io.ReadAll(reader)
 	require.NoError(t, err)
 	require.Equal(t, expectedSchema, string(bytes))
 }
@@ -113,7 +112,7 @@ func TestExportAndLoadJson(t *testing.T) {
 	// Run export
 	requestExport(t, "/data/export-data", "json")
 	copyToLocalFs(t)
-	files, err := ioutil.ReadDir(copyExportDir)
+	files, err := os.ReadDir(copyExportDir)
 	require.NoError(t, err)
 	require.Len(t, files, 1)
 
@@ -132,7 +131,7 @@ func TestExportAndLoadJson(t *testing.T) {
 	require.JSONEq(t, `{"data": {"q": [{"count":0}]}}`, res)
 
 	// Live load the exported data
-	files, err = ioutil.ReadDir(copyExportDir)
+	files, err = os.ReadDir(copyExportDir)
 	require.NoError(t, err)
 	require.Len(t, files, 1)
 	exportName := files[0].Name()
@@ -172,7 +171,7 @@ func TestExportAndLoadJsonFacets(t *testing.T) {
 	// Run export
 	requestExport(t, "/data/export-data", "json")
 	copyToLocalFs(t)
-	files, err := ioutil.ReadDir(copyExportDir)
+	files, err := os.ReadDir(copyExportDir)
 	require.NoError(t, err)
 	require.Len(t, files, 1)
 
@@ -214,7 +213,7 @@ func TestExportAndLoadJsonFacets(t *testing.T) {
 	require.JSONEq(t, `{"data": {"q": []}}`, res)
 
 	// Live load the exported data and verify that exported data is loaded correctly.
-	files, err = ioutil.ReadDir(copyExportDir)
+	files, err = os.ReadDir(copyExportDir)
 	require.NoError(t, err)
 	require.Len(t, files, 1)
 	exportName := files[0].Name()
@@ -272,7 +271,7 @@ func dirCleanup(t *testing.T) {
 func setupDgraph(t *testing.T, nquads, schema string) {
 
 	require.NoError(t, os.MkdirAll("./data", os.ModePerm))
-	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
+	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 

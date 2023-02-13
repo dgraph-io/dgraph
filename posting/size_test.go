@@ -19,7 +19,7 @@ package posting
 import (
 	"encoding/binary"
 	"flag"
-	"io/ioutil"
+	"io"
 	"log"
 	"math"
 	_ "net/http/pprof"
@@ -177,7 +177,7 @@ func Test21MillionDataSetSize(t *testing.T) {
 	}
 	fp, err := os.Open("size.data")
 	require.NoError(t, err)
-	buf, err := ioutil.ReadAll(fp)
+	buf, err := io.ReadAll(fp)
 	require.NoError(t, err)
 	calculatedSize := binary.BigEndian.Uint32(buf)
 	var pprofSize uint32

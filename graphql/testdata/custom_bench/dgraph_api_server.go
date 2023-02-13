@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"strings"
@@ -87,7 +87,7 @@ func getType(w http.ResponseWriter, r *http.Request) {
 func getBatchType(w http.ResponseWriter, r *http.Request) {
 	field := r.URL.Query().Get("field")
 	typ := r.URL.Query().Get("type")
-	idBytes, err := ioutil.ReadAll(r.Body)
+	idBytes, err := io.ReadAll(r.Body)
 
 	if err != nil || field == "" || typ == "" {
 		log.Println("err: ", err, ", field: ", field, ", type: ", typ)
@@ -199,7 +199,7 @@ func makeGqlRequest(query string) (*Response, error) {
 	}
 
 	defer resp.Body.Close()
-	b, err = ioutil.ReadAll(resp.Body)
+	b, err = io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}

@@ -22,7 +22,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -80,7 +79,7 @@ func convertGeoFile(input string, output string) error {
 	}
 
 	// TODO - This might not be a good idea for large files. Use json.Decode to read features.
-	b, err := ioutil.ReadAll(gz)
+	b, err := io.ReadAll(gz)
 	if err != nil {
 		return err
 	}

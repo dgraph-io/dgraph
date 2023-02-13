@@ -56,8 +56,7 @@ func verifyCDC(t *testing.T, path string) {
 	require.Nil(t, err)
 	f, err := os.Open(abs)
 	require.Nil(t, err)
-	var fileScanner *bufio.Scanner
-	fileScanner = bufio.NewScanner(f)
+	fileScanner := bufio.NewScanner(f)
 	iter := 1
 	for fileScanner.Scan() {
 		bytes := fileScanner.Bytes()

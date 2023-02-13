@@ -16,7 +16,7 @@ package ee
 import (
 	"encoding/base64"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"reflect"
 
 	"github.com/golang/glog"
@@ -131,14 +131,14 @@ func vaultNewClient(address, roleIdPath, secretIdPath string) (*api.Client, erro
 
 	// Read Vault credentials from disk.
 	loginData := make(map[string]interface{}, 2)
-	roleId, err := ioutil.ReadFile(roleIdPath)
+	roleId, err := os.ReadFile(roleIdPath)
 	if err != nil {
 		return nil, fmt.Errorf("vault: error reading from role ID file: %s", err)
 	}
 	loginData["role_id"] = string(roleId)
 	// If we configure a bound_cidr_list in Vault, we don't need to use a secret_id.
 	if secretIdPath != "" {
-		secretId, err := ioutil.ReadFile(secretIdPath)
+		secretId, err := os.ReadFile(secretIdPath)
 		if err != nil {
 			return nil, fmt.Errorf("vault: error reading from secret ID file: %s", err)
 		}

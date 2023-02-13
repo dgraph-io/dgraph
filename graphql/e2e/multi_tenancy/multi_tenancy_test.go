@@ -18,7 +18,7 @@ package multi_tenancy
 
 import (
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -427,7 +427,7 @@ func testCORS(t *testing.T, namespace uint64, reqOrigin, expectedAllowedOrigin,
 
 	gqlRes := &common.GraphQLResponse{}
 	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal(body, gqlRes))
 	common.RequireNoGQLErrors(t, gqlRes)

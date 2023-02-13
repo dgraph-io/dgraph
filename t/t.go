@@ -21,7 +21,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"math/rand"
 	"os"
@@ -168,7 +167,7 @@ func detectRace(prefix string) bool {
 }
 
 func outputLogs(prefix string) {
-	f, err := ioutil.TempFile(".", prefix+"*.log")
+	f, err := os.CreateTemp(".", prefix+"*.log")
 	x.Check(err)
 	printLogs := func(container string) {
 		in := testutil.GetContainerInstance(prefix, container)
@@ -217,11 +216,15 @@ func stopCluster(composeFile, prefix string, wg *sync.WaitGroup, err error) {
 				tmp := fmt.Sprintf("%s.%s", tmpCoverageFile, c.ID)
 
 				containerInfo, err := testutil.DockerInspect(c.ID)
+				if err != nil {
+					fmt.Printf("error while inspecting container. Prefix: %s. Error: %v\n", prefix, err)
+				}
+
 				workDir := containerInfo.Config.WorkingDir
 
 				err = testutil.DockerCpFromContainer(c.ID, workDir+"/coverage.out", tmp)
 				if err != nil {
-					fmt.Printf("Error while bringing down cluster. Failed at copying coverage file. Prefix: %s. Error: %v\n",
+					fmt.Printf("error while bringing down cluster. Failed at copying coverage file. Prefix: %s. Error: %v\n",
 						prefix, err)
 				}
 
@@ -280,7 +283,7 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 	cmd.Env = append(cmd.Env, "TEST_DOCKER_PREFIX="+prefix)
 	abs, err := filepath.Abs(*tmp)
 	if err != nil {
-		return fmt.Errorf("while getting absolute path of tmp directory: %v Error: %v\n", *tmp, err)
+		return fmt.Errorf("while getting absolute path of tmp directory: %v Error: %v", *tmp, err)
 	}
 	cmd.Env = append(cmd.Env, "TEST_DATA_DIRECTORY="+abs)
 	// Use failureCatcher.
@@ -293,7 +296,7 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 		time.Sleep(time.Second)
 	} else {
 		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("While running command: %v Error: %v", args, err)
+			return fmt.Errorf("while running command: %v, error: %v", args, err)
 		}
 	}
 
@@ -492,8 +495,8 @@ func (o *outputCatcher) Write(p []byte) (n int, err error) {
 	o.Lock()
 	defer o.Unlock()
 
-	if bytes.Index(p, []byte("FAIL")) >= 0 ||
-		bytes.Index(p, []byte("TODO")) >= 0 {
+	if bytes.Contains(p, []byte("FAIL")) ||
+		bytes.Contains(p, []byte("TODO")) {
 		o.failure.Write(p)
 	}
 	return os.Stdout.Write(p)
@@ -939,7 +942,7 @@ func run() error {
 		oc.Took(0, "COMPILE", time.Since(start))
 	}
 
-	tmpDir, err := ioutil.TempDir("", "dgraph-test")
+	tmpDir, err := os.MkdirTemp("", "dgraph-test")
 	x.Check(err)
 	defer os.RemoveAll(tmpDir)
 

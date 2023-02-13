@@ -15,7 +15,7 @@ package ee
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 
 	"github.com/spf13/viper"
 
@@ -39,7 +39,7 @@ func GetKeys(config *viper.Viper) (*Keys, error) {
 			return nil, fmt.Errorf("flags: ACL secret key set in both vault and acl flags")
 		}
 		var err error
-		if keys.AclKey, err = ioutil.ReadFile(aclKeyFile); err != nil {
+		if keys.AclKey, err = os.ReadFile(aclKeyFile); err != nil {
 			return nil, fmt.Errorf("error reading ACL secret key from file: %s: %s", aclKeyFile, err)
 		}
 	}
@@ -53,7 +53,7 @@ func GetKeys(config *viper.Viper) (*Keys, error) {
 			return nil, fmt.Errorf("flags: Encryption key set in both vault and encryption flags")
 		}
 		var err error
-		if keys.EncKey, err = ioutil.ReadFile(encKeyFile); err != nil {
+		if keys.EncKey, err = os.ReadFile(encKeyFile); err != nil {
 			return nil, fmt.Errorf("error reading encryption key from file: %s: %s", encKeyFile, err)
 		}
 	}

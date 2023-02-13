@@ -21,7 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"math"
 	"net/http"
 	"os"
@@ -801,7 +801,7 @@ func matchExportCount(opts matchExport) error {
 		return err
 	}
 
-	b, err = ioutil.ReadAll(resp.Body)
+	b, err = io.ReadAll(resp.Body)
 	if err != nil {
 		return err
 	}

@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -153,7 +153,7 @@ func bootstrapApiServer() error {
 		maxTxnTs+1)); err != nil || not2xx(resp.StatusCode) {
 		return fmt.Errorf("resp: %v, err: %w", resp, err)
 	}
-	respBody, _ := ioutil.ReadAll(resp.Body)
+	respBody, _ := io.ReadAll(resp.Body)
 	log.Println("maxTxnTs is set, got response status-code: ", resp.StatusCode, ", body: ",
 		string(respBody))
 	log.Println("waiting for 5 seconds before applying initial schema ...")
@@ -220,8 +220,8 @@ func startHostDgraphForProfiling(benchmarkDirName string) (*os.Process, *os.Proc
 	log.Println("dgraph zero")
 	zeroCmd := exec.Command("dgraph", "zero", "--log_dir", zeroLogDir)
 	zeroCmd.Dir = hostDgraphDir
-	zeroCmd.Stderr = ioutil.Discard
-	zeroCmd.Stdout = ioutil.Discard
+	zeroCmd.Stderr = io.Discard
+	zeroCmd.Stdout = io.Discard
 	zeroCmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if err := zeroCmd.Start(); err != nil {
 		return zeroCmd.Process, nil, err
@@ -230,8 +230,8 @@ func startHostDgraphForProfiling(benchmarkDirName string) (*os.Process, *os.Proc
 	log.Println("dgraph alpha")
 	alphaCmd := exec.Command("dgraph", "alpha", "--log_dir", alphaLogDir)
 	alphaCmd.Dir = hostDgraphDir
-	alphaCmd.Stderr = ioutil.Discard
-	alphaCmd.Stdout = ioutil.Discard
+	alphaCmd.Stderr = io.Discard
+	alphaCmd.Stdout = io.Discard
 	alphaCmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if err := alphaCmd.Start(); err != nil {
 		return zeroCmd.Process, alphaCmd.Process, err
@@ -310,7 +310,7 @@ func removeDir(dir string) {
 
 func collectProfilingData() error {
 	log.Println("Starting to collect profiling data ...\n")
-	benchmarkDirs, err := ioutil.ReadDir(benchmarksDir)
+	benchmarkDirs, err := os.ReadDir(benchmarksDir)
 	if err != nil {
 		return err
 	}
@@ -330,7 +330,7 @@ func collectProfilingData() error {
 		}
 
 		benchQueriesDir := filepath.Join(benchmarksDir, benchmarkDir.Name(), benchQueriesDirName)
-		queryFiles, err := ioutil.ReadDir(benchQueriesDir)
+		queryFiles, err := os.ReadDir(benchQueriesDir)
 		if err != nil {
 			skipBenchmark(err)
 			continue
@@ -363,7 +363,7 @@ func collectProfilingData() error {
 				continue
 			}
 
-			b, err := ioutil.ReadAll(f)
+			b, err := io.ReadAll(f)
 			if err != nil {
 				skipQuery(err)
 				continue
@@ -479,7 +479,7 @@ func applySchema(alphaAuthority string, schemaFilePath string) error {
 	if err != nil {
 		return err
 	}
-	b, err := ioutil.ReadAll(resp.Body)
+	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return err
 	}
@@ -553,7 +553,7 @@ func saveProfile(profType PprofProfile, profilePath string, profileOpts *Profili
 		return
 	}
 
-	b, err := ioutil.ReadAll(resp.Body)
+	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		log.Println(err)
 		return
@@ -684,7 +684,7 @@ All timing information is in nanoseconds, except '% GraphQL Time' which is a per
 	return avg
 }
 
-func saveBenchmarkStats(queryFiles []os.FileInfo, respDataSizes []int, avgStats []*DurationStats,
+func saveBenchmarkStats(queryFiles []os.DirEntry, respDataSizes []int, avgStats []*DurationStats,
 	outputDir string) {
 	statsFileName := filepath.Join(outputDir, "_Stats.txt")
 	f, err := os.OpenFile(statsFileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, os.ModePerm)
@@ -804,7 +804,7 @@ func makeGqlRequest(query string) (*Response, int64, int64, error) {
 	totalProcessingTime, _ := strconv.Atoi(resp.Header.Get("Graphql-Time"))
 
 	defer resp.Body.Close()
-	b, err = ioutil.ReadAll(resp.Body)
+	b, err = io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, rtt, int64(totalProcessingTime), err
 	}
