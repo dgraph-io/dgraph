@@ -410,7 +410,6 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 				// If we only need to run custom cluster tests, then skip this one.
 				continue
 			}
-			fmt.Println("test types is ", *testType)
 			if strings.Contains(*testType, "integration_test") {
 				start()
 			}
@@ -469,7 +468,6 @@ func runCustomClusterTest(ctx context.Context, pkg string, wg *sync.WaitGroup) e
 }
 
 func findPackagesFor(testName string) []string {
-	fmt.Println("testname is ", testName)
 	if len(testName) == 0 {
 		return []string{}
 	}
