@@ -1,5 +1,5 @@
-//go:build !oss && integration_test
-// +build !oss,integration_test
+//go:build !oss && integration
+// +build !oss,integration
 
 /*
  * Copyright 2023 Dgraph Labs, Inc. and Contributors

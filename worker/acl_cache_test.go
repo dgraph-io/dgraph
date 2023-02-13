@@ -1,5 +1,5 @@
-//go:build !oss || unit_test
-// +build !oss unit_test
+//go:build !oss
+// +build !oss
 
 /*
  * Copyright 2023 Dgraph Labs, Inc. All rights reserved.
