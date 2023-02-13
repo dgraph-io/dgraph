@@ -20,7 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -378,7 +378,7 @@ func lambdaOnMutateHooks(t *testing.T) {
 		serverMux := server.Handler.(*http.ServeMux)
 		serverMux.HandleFunc("/changelog", func(w http.ResponseWriter, r *http.Request) {
 			defer r.Body.Close()
-			b, err := ioutil.ReadAll(r.Body)
+			b, err := io.ReadAll(r.Body)
 			require.NoError(t, err)
 
 			var event map[string]interface{}

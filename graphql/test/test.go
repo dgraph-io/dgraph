@@ -18,7 +18,7 @@ package test
 
 import (
 	"encoding/json"
-	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -51,7 +51,7 @@ func LoadSchema(t *testing.T, gqlSchema string) schema.Schema {
 // definition.  It runs all validation, generates the completed schema and
 // returns that.
 func LoadSchemaFromFile(t *testing.T, gqlFile string) schema.Schema {
-	gql, err := ioutil.ReadFile(gqlFile)
+	gql, err := os.ReadFile(gqlFile)
 	require.NoError(t, err, "Unable to read schema file")
 
 	return LoadSchemaFromString(t, string(gql))

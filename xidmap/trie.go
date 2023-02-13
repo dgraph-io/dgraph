@@ -20,6 +20,8 @@ import (
 	"math"
 	"unsafe"
 
+	"github.com/golang/glog"
+
 	"github.com/dgraph-io/ristretto/z"
 )
 
@@ -73,7 +75,9 @@ func (t *Trie) Iterate(fn iterFn) error {
 
 // Release would release the resources used by the Arena.
 func (t *Trie) Release() {
-	t.buf.Release()
+	if err := t.buf.Release(); err != nil {
+		glog.Warningf("error in releasing buffer: %v", err)
+	}
 }
 
 // node uses 4-byte offsets to save the cost of storing 8-byte pointers. Also, offsets allow us to

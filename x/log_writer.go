@@ -24,7 +24,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -244,7 +243,7 @@ func (l *LogWriter) open() error {
 		l.writer = bufio.NewWriterSize(l.file, bufferSize)
 
 		if l.EncryptionKey != nil {
-			rand.Read(l.baseIv[:]) //nolint:gosec // cryptographic precision not required for randomly selecting from slice
+			rand.Read(l.baseIv[:])
 			bytes, err := encrypt(l.EncryptionKey, l.baseIv, []byte(VerificationText))
 			if err != nil {
 				return err
@@ -383,7 +382,7 @@ func prefixAndExt(file string) (prefix, ext string) {
 
 func processOldLogFiles(fp string, maxAge int64) ([]string, []string, error) {
 	dir := filepath.Dir(fp)
-	files, err := ioutil.ReadDir(dir)
+	files, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, nil, fmt.Errorf("can't read log file directory: %s", err)
 	}

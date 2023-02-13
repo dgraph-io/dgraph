@@ -1819,7 +1819,7 @@ func CountIndexConcurrentSetDelUIDList(t *testing.T, c *dgo.Dgraph) {
 	// Delete all friends now.
 	mu := &api.Mutation{
 		CommitNow: true,
-		DelNquads: []byte(fmt.Sprintf("<0x1> <friend> * .")),
+		DelNquads: []byte("<0x1> <friend> * ."),
 	}
 	_, err = c.NewTxn().Mutate(context.Background(), mu)
 	require.NoError(t, err, "mutation to delete all friends should have been succeeded")

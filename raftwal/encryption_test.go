@@ -17,7 +17,6 @@
 package raftwal
 
 import (
-	"io/ioutil"
 	"log"
 	"math"
 	"math/rand"
@@ -30,7 +29,7 @@ import (
 
 func TestEntryReadWrite(t *testing.T) {
 	key := []byte("badger16byteskey")
-	dir, err := ioutil.TempDir("", "raftwal")
+	dir, err := os.MkdirTemp("", "raftwal")
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 	ds, err := InitEncrypted(dir, key)
@@ -68,7 +67,7 @@ func TestEntryReadWrite(t *testing.T) {
 
 // TestLogRotate writes enough log file entries to cause 1 file rotation.
 func TestLogRotate(t *testing.T) {
-	dir, err := ioutil.TempDir("", "raftwal")
+	dir, err := os.MkdirTemp("", "raftwal")
 	require.NoError(t, err)
 	el, err := openWal(dir)
 	require.NoError(t, err)
@@ -124,7 +123,7 @@ func TestLogRotate(t *testing.T) {
 // TestLogGrow writes data of sufficient size to grow the log file.
 func TestLogGrow(t *testing.T) {
 	test := func(t *testing.T, key []byte) {
-		dir, err := ioutil.TempDir("", "raftwal")
+		dir, err := os.MkdirTemp("", "raftwal")
 		require.NoError(t, err)
 		ds, err := InitEncrypted(dir, key)
 		require.NoError(t, err)

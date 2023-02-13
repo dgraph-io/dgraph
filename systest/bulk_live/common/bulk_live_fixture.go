@@ -18,7 +18,6 @@ package common
 
 import (
 	"context"
-	"io/ioutil"
 	"math"
 	"os"
 	"path/filepath"
@@ -65,11 +64,11 @@ func newSuiteInternal(t *testing.T, opts suiteOpts) *suite {
 	}
 	require.NoError(s.t, makeDirEmpty(rootDir))
 	rdfFile := filepath.Join(rootDir, "rdfs.rdf")
-	require.NoError(s.t, ioutil.WriteFile(rdfFile, []byte(opts.rdfs), 0644))
+	require.NoError(s.t, os.WriteFile(rdfFile, []byte(opts.rdfs), 0644))
 	schemaFile := filepath.Join(rootDir, "schema.txt")
-	require.NoError(s.t, ioutil.WriteFile(schemaFile, []byte(opts.schema), 0644))
+	require.NoError(s.t, os.WriteFile(schemaFile, []byte(opts.schema), 0644))
 	gqlSchemaFile := filepath.Join(rootDir, "gql_schema.txt")
-	require.NoError(s.t, ioutil.WriteFile(gqlSchemaFile, []byte(opts.gqlSchema), 0644))
+	require.NoError(s.t, os.WriteFile(gqlSchemaFile, []byte(opts.gqlSchema), 0644))
 
 	var schemaPath, dataPath, gqlSchemaPath string = "schema.txt", "rdfs.rdf", "gql_schema.txt"
 

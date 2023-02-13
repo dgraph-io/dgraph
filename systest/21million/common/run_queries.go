@@ -18,7 +18,8 @@ package common
 
 import (
 	"context"
-	"io/ioutil"
+	"io"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -47,7 +48,7 @@ func TestQueriesFor21Million(t *testing.T) {
 		t.Fatalf("Error while getting a dgraph client: %v", err)
 	}
 
-	files, err := ioutil.ReadDir(queryDir)
+	files, err := os.ReadDir(queryDir)
 	if err != nil {
 		t.Fatalf("Error reading directory: %s", err.Error())
 	}
@@ -61,7 +62,7 @@ func TestQueriesFor21Million(t *testing.T) {
 		t.Run(file.Name(), func(t *testing.T) {
 			filename := filepath.Join(queryDir, file.Name())
 			reader, cleanup := chunker.FileReader(filename, nil)
-			bytes, err := ioutil.ReadAll(reader)
+			bytes, err := io.ReadAll(reader)
 			if err != nil {
 				t.Fatalf("Error reading file: %s", err.Error())
 			}

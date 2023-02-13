@@ -19,7 +19,6 @@ package worker
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"math"
 	"os"
 	"strings"
@@ -378,7 +377,7 @@ func TestMain(m *testing.M) {
 	addTablets([]string{"friend_not_served"}, 2, x.GalaxyNamespace)
 	addTablets([]string{"name"}, 1, 0x2)
 
-	dir, err := ioutil.TempDir("", "storetest_")
+	dir, err := os.MkdirTemp("", "storetest_")
 	x.Check(err)
 	defer os.RemoveAll(dir)
 

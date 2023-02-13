@@ -18,7 +18,6 @@ package live
 
 import (
 	"context"
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -189,7 +188,7 @@ func TestMain(m *testing.M) {
 
 	// Try to create any files in a dedicated temp directory that gets cleaned up
 	// instead of all over /tmp or the working directory.
-	tmpDir, err := ioutil.TempDir("", "test.tmp-")
+	tmpDir, err := os.MkdirTemp("", "test.tmp-")
 	x.Check(err)
 	os.Chdir(tmpDir)
 	defer os.RemoveAll(tmpDir)

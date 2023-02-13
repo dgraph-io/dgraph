@@ -20,8 +20,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"net/http"
+	"os"
 	"testing"
 
 	"github.com/gogo/protobuf/jsonpb"
@@ -30,6 +31,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
@@ -160,7 +162,7 @@ const (
 )
 
 func admin(t *testing.T) {
-	d, err := grpc.Dial(Alpha1gRPC, grpc.WithInsecure())
+	d, err := grpc.Dial(Alpha1gRPC, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
 
 	oldCounter := RetryProbeGraphQL(t, Alpha1HTTP, nil).SchemaUpdateCounter
@@ -182,13 +184,13 @@ func admin(t *testing.T) {
 	testutil.DropAll(t, client)
 
 	schemaFile := "schema.graphql"
-	schema, err := ioutil.ReadFile(schemaFile)
+	schema, err := os.ReadFile(schemaFile)
 	if err != nil {
 		panic(err)
 	}
 
 	jsonFile := "test_data.json"
-	data, err := ioutil.ReadFile(jsonFile)
+	data, err := os.ReadFile(jsonFile)
 	if err != nil {
 		panic(errors.Wrapf(err, "Unable to read file %s.", jsonFile))
 	}
@@ -302,7 +304,7 @@ func health(t *testing.T) {
 	resp, err := http.Get(dgraphHealthURL)
 	require.NoError(t, err)
 	defer resp.Body.Close()
-	healthRes, err := ioutil.ReadAll(resp.Body)
+	healthRes, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal(healthRes, &health))
 
@@ -473,7 +475,7 @@ func adminState(t *testing.T) {
 	resp, err := http.Get(dgraphStateURL)
 	require.NoError(t, err)
 	defer resp.Body.Close()
-	stateRes, err := ioutil.ReadAll(resp.Body)
+	stateRes, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	require.NoError(t, jsonpb.Unmarshal(bytes.NewReader(stateRes), &state))
 
