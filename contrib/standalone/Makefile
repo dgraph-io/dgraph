@@ -18,9 +18,9 @@
 #       make
 #       make push
 #
-#     Build and push master:
-#       make DGRAPH_VERSION=master
-#       make DGRAPH_VERSION=master push
+#     Build and push main:
+#       make DGRAPH_VERSION=main
+#       make DGRAPH_VERSION=main push
 #
 .PHONY: all build
 
