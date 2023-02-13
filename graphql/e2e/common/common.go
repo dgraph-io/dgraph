@@ -72,9 +72,6 @@ var (
 		"indicating that the GraphQL layer didn't get the updated schema even after 10" +
 		" retries. The most probable cause is the new GraphQL schema is same as the old" +
 		" GraphQL schema."
-
-	customAdminURL string
-	namespaceCount = 1
 )
 
 // GraphQLParams is parameters for constructing a GraphQL query - that's
@@ -335,11 +332,13 @@ func containsRetryableCreateNamespaceError(resp *GraphQLResponse) bool {
 }
 
 type CreateNamespaceParams struct {
-	CustomGraphAdminURLs string
-	Count                int
+	GraphAdminURLs string
+	Count          int
 }
 
 func CreateNamespace(t *testing.T, headers http.Header, cnp ...CreateNamespaceParams) uint64 {
+	var customAdminURL string
+	var namespaceCount = 1
 	createNamespace := &GraphQLParams{
 		Query: `mutation {
 					addNamespace{
@@ -352,8 +351,8 @@ func CreateNamespace(t *testing.T, headers http.Header, cnp ...CreateNamespacePa
 	// keep retrying as long as we get a retryable error
 	customAdminURL = GraphqlAdminURL
 	if len(cnp) != 0 {
-		if cnp[0].CustomGraphAdminURLs != "" {
-			customAdminURL = cnp[0].CustomGraphAdminURLs
+		if cnp[0].GraphAdminURLs != "" {
+			customAdminURL = cnp[0].GraphAdminURLs
 		}
 		if cnp[0].Count != 0 {
 			namespaceCount = cnp[0].Count

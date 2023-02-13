@@ -48,7 +48,6 @@ var (
 
 const (
 	accessJwtHeader = "X-Dgraph-AccessToken"
-	shellToUse      = "bash"
 )
 
 // RunFailingRestore is like runRestore but expects an error during restore.
@@ -263,6 +262,16 @@ func RunRestore(t *testing.T, jwtToken string, restoreLocation string, whichAlph
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
 
 	require.Equal(t, "Success", testutil.JsonGet(data, "data", "restore", "code").(string))
+}
+
+func GetJwtTokenAndHeader(t *testing.T, whichAlpha string, namespaceId uint64) (string, http.Header) {
+	var header = http.Header{}
+
+	jwtToken := testutil.GrootHttpLoginNamespace("http://"+testutil.ContainerAddr(whichAlpha, 8080)+"/admin", 0).AccessJwt
+	header.Set(accessJwtHeader, jwtToken)
+	header.Set("Content-Type", "application/json")
+
+	return jwtToken, header
 }
 
 // to copy files fron nfs server
