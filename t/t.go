@@ -410,7 +410,7 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 				// If we only need to run custom cluster tests, then skip this one.
 				continue
 			}
-			if strings.Contains(*testType, "integration_test") {
+			if strings.Contains(*testType, "integration") {
 				start()
 			}
 
@@ -451,7 +451,7 @@ func runCustomClusterTest(ctx context.Context, pkg string, wg *sync.WaitGroup) e
 	var err error
 	compose := composeFileFor(pkg)
 	prefix := getClusterPrefix()
-	if strings.Contains(*testType, "integration_test") {
+	if strings.Contains(*testType, "integration") {
 		err = startCluster(compose, prefix)
 	}
 
