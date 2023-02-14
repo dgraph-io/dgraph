@@ -23,7 +23,7 @@ import (
 	"crypto/subtle"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"regexp"
 	"strings"
@@ -463,7 +463,7 @@ func (a *AuthMeta) FetchJWK(i int) error {
 	}
 	defer resp.Body.Close()
 
-	data, err := ioutil.ReadAll(resp.Body)
+	data, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return err
 	}

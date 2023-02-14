@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"math"
 	"os"
 	"path/filepath"
@@ -29,13 +28,11 @@ import (
 	"time"
 
 	minio "github.com/minio/minio-go/v6"
-	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/badger/v3/options"
 	"github.com/dgraph-io/dgo/v210/protos/api"
-	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -304,7 +301,7 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	})
 	require.Equal(t, numExpectedDirs, len(dirs))
 
-	b, err = ioutil.ReadFile(filepath.Join(backupDir, "manifest.json"))
+	b, err = os.ReadFile(filepath.Join(backupDir, "manifest.json"))
 	require.NoError(t, err)
 
 	var manifest worker.MasterManifest
@@ -363,14 +360,6 @@ func runFailingRestore(t *testing.T, backupLocation, lastDir string, commitTs ui
 		options.Snappy, 0)
 	require.Error(t, result.Err)
 	require.Contains(t, result.Err.Error(), "expected a BackupNum value of 1")
-}
-
-func getEncConfig() *viper.Viper {
-	config := viper.New()
-	flags := &pflag.FlagSet{}
-	ee.RegisterEncFlag(flags)
-	config.BindPFlags(flags)
-	return config
 }
 
 func dirSetup(t *testing.T) {

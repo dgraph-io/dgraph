@@ -21,7 +21,7 @@ import (
 	"bytes"
 	builtinGzip "compress/gzip"
 	"context"
-	cr "crypto/rand"
+	cryptorand "crypto/rand"
 	"crypto/tls"
 	"encoding/binary"
 	"encoding/json"
@@ -51,6 +51,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/encoding/gzip"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
@@ -649,7 +650,7 @@ func RetryUntilSuccess(maxRetries int, waitAfterFailure time.Duration,
 // {2 bytes Node ID} {4 bytes for random} {2 bytes zero}
 func ProposalKey(id uint64) (uint64, error) {
 	random4Bytes := make([]byte, 4)
-	if _, err := cr.Read(random4Bytes); err != nil {
+	if _, err := cryptorand.Read(random4Bytes); err != nil {
 		return 0, err
 	}
 	proposalKey := id<<48 | uint64(binary.BigEndian.Uint32(random4Bytes))<<16
@@ -952,7 +953,7 @@ func SetupConnection(
 	if tlsCfg != nil {
 		dialOpts = append(dialOpts, grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)))
 	} else {
-		dialOpts = append(dialOpts, grpc.WithInsecure())
+		dialOpts = append(dialOpts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

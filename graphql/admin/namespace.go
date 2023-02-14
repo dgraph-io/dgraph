@@ -67,7 +67,7 @@ func resolveDeleteNamespace(ctx context.Context, m schema.Mutation) (*resolve.Re
 	}
 	// No one can delete the galaxy(default) namespace.
 	if uint64(req.NamespaceId) == x.GalaxyNamespace {
-		return resolve.EmptyResult(m, errors.New("Cannot delete default namespace.")), false
+		return resolve.EmptyResult(m, errors.New("Cannot delete default namespace")), false
 	}
 	if err = (&edgraph.Server{}).DeleteNamespace(ctx, uint64(req.NamespaceId)); err != nil {
 		return resolve.EmptyResult(m, err), false

@@ -8,7 +8,7 @@
  * may not use this file except in compliance with the License. You
  * may obtain a copy of the License at
  *
- *     https://github.com/dgraph-io/dgraph/blob/master/licenses/DCL.txt
+ *     https://github.com/dgraph-io/dgraph/blob/main/licenses/DCL.txt
  */
 
 package worker
@@ -324,7 +324,7 @@ func (pr *BackupProcessor) Close() {
 		if pr.txn != nil {
 			th.itr.Close()
 		}
-		th.buf.Release()
+		_ = th.buf.Release()
 	}
 	if pr.txn != nil {
 		pr.txn.Discard()

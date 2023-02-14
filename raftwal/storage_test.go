@@ -35,7 +35,6 @@ package raftwal
 import (
 	"crypto/rand"
 	"fmt"
-	"io/ioutil"
 	"math"
 	"os"
 	"reflect"
@@ -49,7 +48,7 @@ import (
 )
 
 func TestStorageTerm(t *testing.T) {
-	dir, err := ioutil.TempDir("", "badger")
+	dir, err := os.MkdirTemp("", "badger")
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
@@ -97,7 +96,7 @@ func TestStorageTerm(t *testing.T) {
 }
 
 func TestStorageEntries(t *testing.T) {
-	dir, err := ioutil.TempDir("", "badger")
+	dir, err := os.MkdirTemp("", "badger")
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
@@ -142,7 +141,7 @@ func TestStorageEntries(t *testing.T) {
 }
 
 func TestStorageLastIndex(t *testing.T) {
-	dir, err := ioutil.TempDir("", "badger")
+	dir, err := os.MkdirTemp("", "badger")
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
@@ -170,7 +169,7 @@ func TestStorageLastIndex(t *testing.T) {
 }
 
 func TestStorageFirstIndex(t *testing.T) {
-	dir, err := ioutil.TempDir("", "badger")
+	dir, err := os.MkdirTemp("", "badger")
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
@@ -185,7 +184,7 @@ func TestStorageFirstIndex(t *testing.T) {
 }
 
 func TestStorageCreateSnapshot(t *testing.T) {
-	dir, err := ioutil.TempDir("", "badger")
+	dir, err := os.MkdirTemp("", "badger")
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
@@ -220,7 +219,7 @@ func TestStorageCreateSnapshot(t *testing.T) {
 }
 
 func TestStorageAppend(t *testing.T) {
-	dir, err := ioutil.TempDir("", "badger")
+	dir, err := os.MkdirTemp("", "badger")
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
@@ -282,7 +281,7 @@ func TestStorageAppend(t *testing.T) {
 }
 
 func TestMetaFile(t *testing.T) {
-	dir, err := ioutil.TempDir("", "badger-test")
+	dir, err := os.MkdirTemp("", "badger-test")
 	require.NoError(t, err)
 
 	mf, err := newMetaFile(dir)
@@ -329,7 +328,7 @@ func TestMetaFile(t *testing.T) {
 }
 
 func TestEntryFile(t *testing.T) {
-	dir, err := ioutil.TempDir("", "raftwal")
+	dir, err := os.MkdirTemp("", "raftwal")
 	require.NoError(t, err)
 	el, err := openWal(dir)
 	require.NoError(t, err)
@@ -349,7 +348,7 @@ func TestEntryFile(t *testing.T) {
 }
 
 func TestTruncateStorage(t *testing.T) {
-	dir, err := ioutil.TempDir("", "raftwal")
+	dir, err := os.MkdirTemp("", "raftwal")
 	require.NoError(t, err)
 	ds, err := InitEncrypted(dir, nil)
 	require.NoError(t, err)
@@ -429,7 +428,7 @@ func TestTruncateStorage(t *testing.T) {
 func TestStorageOnlySnap(t *testing.T) {
 	test := func(t *testing.T, key []byte) {
 		x.WorkerConfig.EncryptionKey = key
-		dir, err := ioutil.TempDir("", "raftwal")
+		dir, err := os.MkdirTemp("", "raftwal")
 		require.NoError(t, err)
 		ds, err := InitEncrypted(dir, key)
 		require.NoError(t, err)
@@ -464,7 +463,7 @@ func TestStorageOnlySnap(t *testing.T) {
 
 func TestStorageBig(t *testing.T) {
 	test := func(t *testing.T, key []byte) {
-		dir, err := ioutil.TempDir("", "raftwal")
+		dir, err := os.MkdirTemp("", "raftwal")
 		require.NoError(t, err)
 		ds, err := InitEncrypted(dir, key)
 		require.NoError(t, err)

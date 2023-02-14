@@ -37,6 +37,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
@@ -327,7 +328,7 @@ func (a *authorizationCredentials) RequireTransportSecurity() bool {
 
 func grpcConnection(one string) (*grpc.ClientConn, error) {
 	if slashToken == nil || *slashToken == "" {
-		return grpc.Dial(one, grpc.WithInsecure())
+		return grpc.Dial(one, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
 	pool, err := x509.SystemCertPool()
 	if err != nil {

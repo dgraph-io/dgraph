@@ -8,7 +8,7 @@
  * may not use this file except in compliance with the License. You
  * may obtain a copy of the License at
  *
- *     https://github.com/dgraph-io/dgraph/blob/master/licenses/DCL.txt
+ *     https://github.com/dgraph-io/dgraph/blob/main/licenses/DCL.txt
  */
 
 package backup
@@ -17,7 +17,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -28,6 +27,7 @@ import (
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 
 	bpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/dgraph/ee"
@@ -196,7 +196,7 @@ func runRestoreCmd() error {
 		if tlsConfig != nil {
 			callOpts = append(callOpts, grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)))
 		} else {
-			callOpts = append(callOpts, grpc.WithInsecure())
+			callOpts = append(callOpts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		}
 
 		zero, err := grpc.DialContext(ctx, opt.zero, callOpts...)
@@ -427,7 +427,7 @@ func runExportBackup() error {
 		return errors.Wrapf(err, "runExportBackup")
 	}
 
-	mapDir, err := ioutil.TempDir(x.WorkerConfig.TmpDir, "restore-export")
+	mapDir, err := os.MkdirTemp(x.WorkerConfig.TmpDir, "restore-export")
 	x.Check(err)
 	defer os.RemoveAll(mapDir)
 	glog.Infof("Created temporary map directory: %s\n", mapDir)

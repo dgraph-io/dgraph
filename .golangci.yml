@@ -19,11 +19,10 @@ linters-settings:
 linters:
   disable-all: true
   enable:
-    #- errcheck
-    #- ineffassign
-    #- gas
+    - errcheck
+    - ineffassign
+  # - gas
     - gofmt
-    #- golint
     - gosimple
     - govet
     - lll

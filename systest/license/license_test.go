@@ -19,7 +19,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"testing"
 
@@ -132,7 +132,7 @@ func TestEnterpriseLicense(t *testing.T) {
 		require.NoError(t, err)
 
 		var enterpriseResponse responseStruct
-		responseBody, err := ioutil.ReadAll(response.Body)
+		responseBody, err := io.ReadAll(response.Body)
 		require.NoError(t, err)
 		err = json.Unmarshal(responseBody, &enterpriseResponse)
 		require.NoError(t, err)
@@ -177,7 +177,7 @@ func assertLicenseNotEnabled(t *testing.T, user string) {
 	require.NoError(t, err)
 
 	var stateResponse responseStruct
-	responseBody, err := ioutil.ReadAll(response.Body)
+	responseBody, err := io.ReadAll(response.Body)
 	require.NoError(t, err)
 	err = json.Unmarshal(responseBody, &stateResponse)
 	require.NoError(t, err)

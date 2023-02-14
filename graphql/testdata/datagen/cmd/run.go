@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"math/rand"
 	"net/http"
@@ -237,7 +237,7 @@ func readRestaurantData() (dataFile, error) {
 		restaurantDataFile = filepath.Join(dir, restaurantDataFile)
 	}
 
-	b, err := ioutil.ReadFile(restaurantDataFile)
+	b, err := os.ReadFile(restaurantDataFile)
 	if err != nil {
 		return nil, err
 	}
@@ -355,7 +355,7 @@ func makeGqlReq(query string, vars interface{}) (*gqlResp, error) {
 	}
 
 	defer resp.Body.Close()
-	b, err = ioutil.ReadAll(resp.Body)
+	b, err = io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}

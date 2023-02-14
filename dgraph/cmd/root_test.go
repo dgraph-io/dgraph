@@ -2,7 +2,7 @@ package cmd
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"strings"
 	"testing"
 )
@@ -22,11 +22,11 @@ func TestConvertJSON(t *testing.T) {
 	    "whitelist": "127.0.0.1,0.0.0.0"
 	  }
 	}`
-	conv, err := ioutil.ReadAll(convertJSON(hier))
+	conv, err := io.ReadAll(convertJSON(hier))
 	if err != nil {
 		t.Fatal("error reading from convertJSON")
 	}
-	unchanged, err := ioutil.ReadAll(convertJSON(string(conv)))
+	unchanged, err := io.ReadAll(convertJSON(string(conv)))
 	if err != nil {
 		t.Fatal("error reading from convertJSON")
 	}
@@ -56,11 +56,11 @@ func TestConvertYAML(t *testing.T) {
       security:
         whitelist: "127.0.0.1,0.0.0.0"`
 
-	conv, err := ioutil.ReadAll(convertYAML(hier))
+	conv, err := io.ReadAll(convertYAML(hier))
 	if err != nil {
 		t.Fatal("error reading from convertYAML")
 	}
-	unchanged, err := ioutil.ReadAll(convertYAML(string(conv)))
+	unchanged, err := io.ReadAll(convertYAML(string(conv)))
 	if err != nil {
 		t.Fatal("error reading from convertYAML")
 	}

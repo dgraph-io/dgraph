@@ -19,7 +19,6 @@ package bulk
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"math"
 	"net/http"
@@ -316,7 +315,7 @@ func run() {
 	bulkMetaPath := filepath.Join(opt.TmpDir, bulkMetaFilename)
 
 	if opt.SkipMapPhase {
-		bulkMetaData, err := ioutil.ReadFile(bulkMetaPath)
+		bulkMetaData, err := os.ReadFile(bulkMetaPath)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "Error reading from bulk meta file")
 			os.Exit(1)
@@ -346,7 +345,7 @@ func run() {
 			fmt.Fprintln(os.Stderr, "Error serializing bulk meta file")
 			os.Exit(1)
 		}
-		if err = ioutil.WriteFile(bulkMetaPath, bulkMetaData, 0600); err != nil {
+		if err = os.WriteFile(bulkMetaPath, bulkMetaData, 0600); err != nil {
 			fmt.Fprintln(os.Stderr, "Error writing to bulk meta file")
 			os.Exit(1)
 		}

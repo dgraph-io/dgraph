@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"os/exec"
@@ -30,6 +29,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
@@ -57,7 +57,7 @@ func TestBackupNonHAClust(t *testing.T) {
 }
 
 func backupRestoreTest(t *testing.T, backupAlphaSocketAddr string, restoreAlphaAddr string, backupZeroAddr string, backupDst string, backupAlphaSocketAddrHttp string) {
-	conn, err := grpc.Dial(backupAlphaSocketAddr, grpc.WithInsecure())
+	conn, err := grpc.Dial(backupAlphaSocketAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 	ctx := context.Background()
@@ -248,7 +248,7 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 		return isdir && strings.HasPrefix(path, "data/copied_backups/dgraph.")
 	})
 	require.Equal(t, numExpectedDirs, len(dirs))
-	b, err = ioutil.ReadFile(filepath.Join(copyBackupDir, "manifest.json"))
+	b, err = os.ReadFile(filepath.Join(copyBackupDir, "manifest.json"))
 	require.NoError(t, err)
 	var manifest worker.MasterManifest
 	err = json.Unmarshal(b, &manifest)

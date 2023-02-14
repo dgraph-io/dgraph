@@ -18,7 +18,6 @@ package posting
 
 import (
 	"context"
-	"io/ioutil"
 	"math"
 	"math/rand"
 	"os"
@@ -1455,7 +1454,7 @@ func TestMain(m *testing.M) {
 	x.Init()
 	Config.CommitFraction = 0.10
 
-	dir, err := ioutil.TempDir("", "storetest_")
+	dir, err := os.MkdirTemp("", "storetest_")
 	x.Check(err)
 
 	ps, err = badger.OpenManaged(badger.DefaultOptions(dir))

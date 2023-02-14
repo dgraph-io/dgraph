@@ -19,7 +19,6 @@ package debuginfo
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -105,7 +104,7 @@ func fetchURL(source string, timeout time.Duration) (io.ReadCloser, error) {
 func statusCodeError(resp *http.Response) error {
 	if resp.Header.Get("X-Go-Pprof") != "" &&
 		strings.Contains(resp.Header.Get("Content-Type"), "text/plain") {
-		if body, err := ioutil.ReadAll(resp.Body); err == nil {
+		if body, err := io.ReadAll(resp.Body); err == nil {
 			return fmt.Errorf("server response: %s - %s", resp.Status, body)
 		}
 	}

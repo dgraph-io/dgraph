@@ -151,13 +151,12 @@ func newEncoder() *encoder {
 
 // Sort the given fastJson list
 func (enc *encoder) MergeSort(headRef *fastJsonNode) {
-	head := *headRef
-	if headRef == nil || head.next == nil {
+	if headRef == nil || (*headRef).next == nil {
 		return
 	}
 
 	var a, b fastJsonNode
-	frontBackSplit(head, &a, &b)
+	frontBackSplit(*headRef, &a, &b)
 	enc.MergeSort(&a)
 	enc.MergeSort(&b)
 	*headRef = enc.mergeSortedLists(a, b)
@@ -988,7 +987,6 @@ func (enc *encoder) normalize(fj fastJsonNode) ([]fastJsonNode, error) {
 		for cur != nil {
 			if enc.getAttr(cur) == enc.uidAttr {
 				if prev == nil {
-					slice = cur
 					cur = cur.next
 					continue
 				} else {
@@ -997,9 +995,6 @@ func (enc *encoder) normalize(fj fastJsonNode) ([]fastJsonNode, error) {
 			}
 			prev = cur
 			cur = cur.next
-		}
-		if prev == nil {
-			slice = nil
 		}
 	}
 

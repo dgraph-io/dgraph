@@ -20,7 +20,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -90,7 +91,7 @@ func disableDraining(t *testing.T) {
 	client := testutil.GetHttpsClient(t)
 	resp, err := client.Post(testutil.AdminUrlHttps(), "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
-	buf, err := ioutil.ReadAll(resp.Body)
+	buf, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	require.Contains(t, string(buf), "draining mode has been set to false")
 }
@@ -127,7 +128,7 @@ func runQueries(t *testing.T, dg *dgo.Dgraph, shouldFail bool) {
 	_, thisFile, _, _ := runtime.Caller(0)
 	queryDir := filepath.Join(filepath.Dir(thisFile), "queries")
 
-	files, err := ioutil.ReadDir(queryDir)
+	files, err := os.ReadDir(queryDir)
 	require.NoError(t, err)
 
 	for _, file := range files {
@@ -136,7 +137,7 @@ func runQueries(t *testing.T, dg *dgo.Dgraph, shouldFail bool) {
 		}
 		filename := filepath.Join(queryDir, file.Name())
 		reader, cleanup := chunker.FileReader(filename, nil)
-		bytes, err := ioutil.ReadAll(reader)
+		bytes, err := io.ReadAll(reader)
 		require.NoError(t, err)
 		contents := string(bytes)
 		cleanup()
@@ -264,7 +265,7 @@ func TestRestoreBackupNumInvalid(t *testing.T) {
 	client := testutil.GetHttpsClient(t)
 	resp, err := client.Post(testutil.AdminUrlHttps(), "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
-	buf, err := ioutil.ReadAll(resp.Body)
+	buf, err := io.ReadAll(resp.Body)
 	bufString := string(buf)
 	require.NoError(t, err)
 	require.Contains(t, bufString, "not enough backups")
@@ -286,7 +287,7 @@ func TestRestoreBackupNumInvalid(t *testing.T) {
 
 	resp, err = client.Post(testutil.AdminUrlHttps(), "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
-	buf, err = ioutil.ReadAll(resp.Body)
+	buf, err = io.ReadAll(resp.Body)
 	bufString = string(buf)
 	require.NoError(t, err)
 	require.Contains(t, bufString, "backupNum value should be equal or greater than zero")
@@ -349,7 +350,7 @@ func TestInvalidBackupId(t *testing.T) {
 	client := testutil.GetHttpsClient(t)
 	resp, err := client.Post(testutil.AdminUrlHttps(), "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
-	buf, err := ioutil.ReadAll(resp.Body)
+	buf, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	require.Contains(t, string(buf), "failed to verify backup")
 }
@@ -379,7 +380,7 @@ func TestListBackups(t *testing.T) {
 	client := testutil.GetHttpsClient(t)
 	resp, err := client.Post(testutil.AdminUrlHttps(), "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
-	buf, err := ioutil.ReadAll(resp.Body)
+	buf, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	sbuf := string(buf)
 	require.Contains(t, sbuf, `"backupId":"youthful_rhodes3"`)

@@ -3,8 +3,9 @@ package all_routes_tls
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"io/ioutil"
+	"io"
 	"net/http"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -106,7 +107,7 @@ func TestZeroWithAllRoutesTLSWithTLSClient(t *testing.T) {
 
 func readResponseBody(t *testing.T, do *http.Response) []byte {
 	defer func() { _ = do.Body.Close() }()
-	body, err := ioutil.ReadAll(do.Body)
+	body, err := io.ReadAll(do.Body)
 	require.NoError(t, err)
 	return body
 }
@@ -123,7 +124,7 @@ func generateCertPool(certPath string, useSystemCA bool) (*x509.CertPool, error)
 	}
 
 	if len(certPath) > 0 {
-		caFile, err := ioutil.ReadFile(certPath)
+		caFile, err := os.ReadFile(certPath)
 		if err != nil {
 			return nil, err
 		}

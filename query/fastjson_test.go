@@ -18,15 +18,15 @@ func subgraphWithSingleResultAndSingleValue(val *pb.TaskValue) *SubGraph {
 		Params:    params{Alias: "query"},
 		SrcUIDs:   &pb.List{Uids: []uint64{1}},
 		DestUIDs:  &pb.List{Uids: []uint64{1}},
-		uidMatrix: []*pb.List{&pb.List{Uids: []uint64{1}}},
+		uidMatrix: []*pb.List{{Uids: []uint64{1}}},
 		Children: []*SubGraph{
-			&SubGraph{
+			{
 				Attr:      "val",
 				SrcUIDs:   &pb.List{Uids: []uint64{1}},
-				uidMatrix: []*pb.List{&pb.List{}},
+				uidMatrix: []*pb.List{{}},
 				valueMatrix: []*pb.ValueList{
 					// UID 1
-					&pb.ValueList{
+					{
 						Values: []*pb.TaskValue{val},
 					},
 				},

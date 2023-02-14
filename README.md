@@ -21,15 +21,15 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/dgraph-io/dgraph)](https://goreportcard.com/report/github.com/dgraph-io/dgraph)
 [![TODOs](https://badgen.net/https/api.tickgit.com/badgen/github.com/dgraph-io/dgraph/main)](https://www.tickgit.com/browse?repo=github.com/dgraph-io/dgraph&branch=main)
 
-Dgraph is a horizontally scalable and distributed GraphQL database with a graph backend. It provides ACID transactions, consistent replication, and linearizable reads. It's built from the ground up to perform for
+Dgraph is a horizontally scalable and distributed GraphQL database with a graph backend. It provides ACID transactions, consistent replication, and linearizable reads. It's built from the ground up to perform 
 a rich set of queries. Being a native GraphQL database, it tightly controls how the
 data is arranged on disk to optimize for query performance and throughput,
 reducing disk seeks and network calls in a cluster.
 
 
-Dgraph's goal is to provide [Google](https://www.google.com) production level scale and throughput,
+Dgraph's goal is to provide Google production-level scale and throughput,
 with low enough latency to serve real-time user queries over terabytes of structured data.
-Dgraph supports [GraphQL query syntax](https://dgraph.io/docs/master/query-language/), and responds in [JSON](http://www.json.org/) and [Protocol Buffers](https://developers.google.com/protocol-buffers/) over [GRPC](http://www.grpc.io/) and HTTP. Dgraph is written using the Go Programming Language.
+Dgraph supports [GraphQL query syntax](https://dgraph.io/docs/main/query-language/), and responds in [JSON](http://www.json.org/) and [Protocol Buffers](https://developers.google.com/protocol-buffers/) over [GRPC](http://www.grpc.io/) and HTTP. Dgraph is written using the Go Programming Language.
 
 ## Status
 
@@ -53,7 +53,7 @@ If you're using Docker, you can use the [official Dgraph image](https://hub.dock
 docker pull dgraph/dgraph:latest
 ```
 
-For more information on a variety Docker deployment methods including Docker Compose and Kubernetes, see the [docs](https://dgraph.io/docs/deploy/single-host-setup/#run-using-docker).
+For more information on a variety Docker deployment methods including Docker Compose and Kubernetes, see the [docs](https://dgraph.io/docs/installation/single-host-setup/#docker).
 
 ## Run a Quick Standalone Cluster
 
@@ -148,7 +148,7 @@ makes it easy to build applications with it.
 
 ## Developers
 - See a list of issues [that we need help with](https://github.com/dgraph-io/dgraph/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22).
-- Please see [Contributing to Dgraph](https://github.com/dgraph-io/dgraph/blob/master/CONTRIBUTING.md) for guidelines on contributions.
+- Please see [Contributing to Dgraph](https://github.com/dgraph-io/dgraph/blob/main/CONTRIBUTING.md) for guidelines on contributions.
 
 ## Client Libraries
 The Dgraph team maintains several [officially supported client libraries](https://dgraph.io/docs/clients/). There are also libraries contributed by the community [unofficial client libraries](https://dgraph.io/docs/clients#unofficial-dgraph-clients).

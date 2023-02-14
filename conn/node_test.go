@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"sync"
 	"testing"
@@ -61,7 +60,7 @@ func (n *Node) run(wg *sync.WaitGroup) {
 }
 
 func TestProposal(t *testing.T) {
-	dir, err := ioutil.TempDir("", "badger")
+	dir, err := os.MkdirTemp("", "badger")
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
