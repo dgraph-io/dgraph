@@ -10,7 +10,7 @@ require (
 	github.com/Masterminds/semver/v3 v3.1.0
 	github.com/Shopify/sarama v1.27.2
 	github.com/blevesearch/bleve v1.0.13
-	github.com/dgraph-io/badger/v4 v4.0.1
+	github.com/dgraph-io/badger/v4 v4.0.2-0.20230301071524-f59c00d079f3
 	github.com/dgraph-io/dgo/v210 v210.0.0-20210407152819-261d1c2a6987
 	github.com/dgraph-io/gqlgen v0.13.2
 	github.com/dgraph-io/gqlparser/v2 v2.2.1
@@ -88,7 +88,6 @@ require (
 	github.com/fsnotify/fsnotify v1.4.7 // indirect
 	github.com/golang/groupcache v0.0.0-20200121045136-8c9f03a8e57e // indirect
 	github.com/google/flatbuffers v1.12.1 // indirect
-	github.com/graph-gophers/graphql-transport-ws v0.0.2 // indirect
 	github.com/hashicorp/errwrap v1.0.0 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.1 // indirect
 	github.com/hashicorp/go-multierror v1.0.0 // indirect
