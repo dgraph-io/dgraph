@@ -163,10 +163,10 @@ func TestParseTimeNonRFC3339(t *testing.T) {
 func BenchmarkParseTime(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		for _, tc := range datesWithTz {
-			ParseTime(tc.in)
+			_, _ = ParseTime(tc.in)
 		}
 		for _, tc := range datesWithoutTz {
-			ParseTime(tc.in)
+			_, _ = ParseTime(tc.in)
 		}
 	}
 }
@@ -174,7 +174,7 @@ func BenchmarkParseTime(b *testing.B) {
 func BenchmarkParseTimeRejections(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		for _, invalidDate := range invalidDates {
-			ParseTime(invalidDate)
+			_, _ = ParseTime(invalidDate)
 		}
 	}
 }

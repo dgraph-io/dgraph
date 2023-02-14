@@ -190,7 +190,7 @@ func TestMain(m *testing.M) {
 	// instead of all over /tmp or the working directory.
 	tmpDir, err := os.MkdirTemp("", "test.tmp-")
 	x.Check(err)
-	os.Chdir(tmpDir)
+	x.Check(os.Chdir(tmpDir))
 	defer os.RemoveAll(tmpDir)
 
 	os.Exit(m.Run())

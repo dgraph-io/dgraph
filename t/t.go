@@ -308,7 +308,7 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 	}
 
 	dur := time.Since(start).Round(time.Second)
-	tid, _ := ctx.Value("threadId").(int32)
+	tid, _ := ctx.Value(_threadIdKey{}).(int32)
 	oc.Took(tid, pkg, dur)
 	fmt.Printf("Ran tests for package: %s in %s\n", pkg, dur)
 	if *runCoverage {
@@ -341,6 +341,8 @@ func hasTestFiles(pkg string) bool {
 	x.Check(err)
 	return hasTests
 }
+
+type _threadIdKey struct{}
 
 var _threadId int32
 
@@ -387,7 +389,7 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 	defer stop()
 
 	ctx := closer.Ctx()
-	ctx = context.WithValue(ctx, "threadId", threadId)
+	ctx = context.WithValue(ctx, _threadIdKey{}, threadId)
 
 	for task := range taskCh {
 		if ctx.Err() != nil {

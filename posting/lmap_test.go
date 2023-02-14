@@ -29,7 +29,7 @@ func BenchmarkGet(b *testing.B) {
 		for pb.Next() {
 			// i := uint64(rand.Int63())
 			_ = uint64(rand.Int63())
-			getNew(key, nil, math.MaxUint64)
+			_, _ = getNew(key, nil, math.MaxUint64)
 			// lmap.Get(i)
 		}
 	})

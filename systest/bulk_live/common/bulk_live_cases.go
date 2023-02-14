@@ -705,8 +705,7 @@ func testDeleteEdgeWithStar(t *testing.T) {
 
 }
 
-func testGqlSchema(t *testing.T) {
-	t.Skipf("Skipping: This is failing for some reason. Please fix this.")
+func TestGqlSchema(t *testing.T) {
 	s := newBulkOnlySuite(t, "", "", "abc")
 	defer s.cleanup(t)
 
@@ -728,8 +727,7 @@ func testGqlSchema(t *testing.T) {
 
 }
 
-// TODO: Fix this later.
-func DONOTRUNTestGoldenData(t *testing.T) {
+func TestGoldenData(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping test in short mode")
 	}

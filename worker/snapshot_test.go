@@ -103,7 +103,8 @@ func TestSnapshot(t *testing.T) {
 		require.NoError(t, err)
 	}
 	const testSchema = "type Person { name: String }"
-	// uploading new schema while alpha2 is not running so we can test whether the stopped alpha gets new schema in snapshot
+	// uploading new schema while alpha2 is not running so we can
+	// test whether the stopped alpha gets new schema in snapshot
 	testutil.UpdateGQLSchema(t, testutil.SockAddrHttp, testSchema)
 	_ = waitForSnapshot(t, snapshotTs)
 

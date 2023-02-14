@@ -1,20 +1,14 @@
 run:
-  tests: false
   skip-dirs:
-    - contrib
-    - compose
-    - graphql/bench
-    - graphql/e2e
-    - graphql/test
-    - graphql/testdata
-    - systest
-    - t
   skip-files:
-    - ".*test.go$"
 
 linters-settings:
   lll:
     line-length: 120
+  staticcheck:
+    checks:
+      - all
+      - '-SA1019' # disable the rule
 
 linters:
   disable-all: true
@@ -26,15 +20,6 @@ linters:
     - gosimple
     - govet
     - lll
-    - varcheck
     - unused
-
-issues:
-  # Excluding configuration per-path, per-linter, per-text and per-source
-  exclude-rules:
-    - linters:
-        - golint
-      text: "(const|var|type|method|func|struct field) .+ should be"
-    - linters:
-        - golint
-      text: "(method parameter|func parameter|func result) .+ should be"
+    - staticcheck
+    - goimports

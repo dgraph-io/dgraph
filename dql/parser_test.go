@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+//nolint:lll
 package dql
 
 import (
@@ -4246,7 +4247,8 @@ func TestParserFuzz(t *testing.T) {
 				}
 			}()
 
-			Parse(Request{Str: test.in})
+			_, err := Parse(Request{Str: test.in})
+			require.NoError(t, err)
 		})
 	}
 }

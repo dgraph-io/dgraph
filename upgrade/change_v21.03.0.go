@@ -292,7 +292,7 @@ func getData(db *badger.DB, attr string, fn func(item *badger.Item) error) error
 			if err := fn(item); err != nil {
 				return err
 			}
-			break
+			break //nolint:staticcheck
 		}
 		return nil
 	})
