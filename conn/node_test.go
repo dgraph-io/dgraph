@@ -46,7 +46,9 @@ func (n *Node) run(wg *sync.WaitGroup) {
 			for _, entry := range rd.CommittedEntries {
 				if entry.Type == raftpb.EntryConfChange {
 					var cc raftpb.ConfChange
-					cc.Unmarshal(entry.Data)
+					if err := cc.Unmarshal(entry.Data); err != nil {
+						fmt.Printf("error in unmarshalling: %v\n", err)
+					}
 					n.Raft().ApplyConfChange(cc)
 				} else if entry.Type == raftpb.EntryNormal {
 					if bytes.HasPrefix(entry.Data, []byte("hey")) {

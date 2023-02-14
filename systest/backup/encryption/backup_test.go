@@ -397,7 +397,7 @@ func copyToLocalFs(t *testing.T) {
 		for object := range objectCh2 {
 			require.NoError(t, object.Err)
 			dstFile := backupDir + "/" + object.Key
-			mc.FGetObject(bucketName, object.Key, dstFile, minio.GetObjectOptions{})
+			require.NoError(t, mc.FGetObject(bucketName, object.Key, dstFile, minio.GetObjectOptions{}))
 		}
 		close(lsCh2)
 	}

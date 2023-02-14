@@ -96,7 +96,7 @@ func TestAclCacheRestore(t *testing.T) {
 	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
-	dg.Login(context.Background(), "groot", "password")
+	require.NoError(t, dg.Login(context.Background(), "groot", "password"))
 
 	sendRestoreRequest(t, "/backups", "vibrant_euclid5", 1)
 	testutil.WaitForRestore(t, dg, testutil.SockAddrHttp)

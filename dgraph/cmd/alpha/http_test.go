@@ -108,8 +108,8 @@ func queryWithGz(queryText, contentType, debug, timeout string, gzReq, gzResp bo
 	if gzReq {
 		var b bytes.Buffer
 		gz := gzip.NewWriter(&b)
-		gz.Write([]byte(queryText))
-		gz.Close()
+		_, _ = gz.Write([]byte(queryText))
+		_ = gz.Close()
 		buf = &b
 	} else {
 		buf = bytes.NewBufferString(queryText)
@@ -311,7 +311,7 @@ func runRequest(req *http.Request) (*x.QueryResWithData, []byte, *http.Response,
 	}
 
 	qr := new(x.QueryResWithData)
-	json.Unmarshal(body, qr) // Don't check error.
+	_ = json.Unmarshal(body, qr) // Don't check error.
 	if len(qr.Errors) > 0 {
 		return nil, nil, resp, errors.New(qr.Errors[0].Message)
 	}
