@@ -16,8 +16,6 @@ area/integrations:
   - .travis/**/*
 area/testing/jepsen:
   - contrib/jepsen/**/*
-area/commercial:
-  - ee/**/*
 area/enterprise:
   - ee/**/*
 area/enterprise/backup:
