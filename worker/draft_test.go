@@ -17,7 +17,6 @@
 package worker
 
 import (
-	"io/ioutil"
 	"os"
 	"testing"
 
@@ -51,7 +50,7 @@ func getEntryForCommit(index, startTs, commitTs uint64) raftpb.Entry {
 }
 
 func TestCalculateSnapshot(t *testing.T) {
-	dir, err := ioutil.TempDir("", "raftwal")
+	dir, err := os.MkdirTemp("", "raftwal")
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 

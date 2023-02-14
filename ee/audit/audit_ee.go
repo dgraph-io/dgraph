@@ -8,15 +8,15 @@
  * may not use this file except in compliance with the License. You
  * may obtain a copy of the License at
  *
- *     https://github.com/dgraph-io/dgraph/blob/master/licenses/DCL.txt
+ *     https://github.com/dgraph-io/dgraph/blob/main/licenses/DCL.txt
  */
 
 package audit
 
 import (
 	"fmt"
-	"io/ioutil"
 	"math"
+	"os"
 	"sync/atomic"
 	"time"
 
@@ -92,7 +92,7 @@ func readAuditEncKey(conf *z.SuperFlag) ([]byte, error) {
 	if encFile == "" {
 		return nil, nil
 	}
-	encKey, err := ioutil.ReadFile(encFile)
+	encKey, err := os.ReadFile(encFile)
 	if err != nil {
 		return nil, err
 	}

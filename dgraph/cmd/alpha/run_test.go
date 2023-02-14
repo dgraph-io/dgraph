@@ -38,6 +38,7 @@ import (
 	"github.com/twpayne/go-geom/encoding/geojson"
 	"github.com/twpayne/go-geom/encoding/wkb"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/encoding/gzip"
 
 	"github.com/dgraph-io/dgo/v210"
@@ -1373,7 +1374,7 @@ func TestJsonUnicode(t *testing.T) {
 
 func TestGrpcCompressionSupport(t *testing.T) {
 	conn, err := grpc.Dial(testutil.SockAddr,
-		grpc.WithInsecure(),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultCallOptions(grpc.UseCompressor(gzip.Name)),
 	)
 	defer func() {
@@ -1716,7 +1717,7 @@ func (t *Token) refreshToken() error {
 func TestMain(m *testing.M) {
 	addr = "http://" + testutil.SockAddrHttp
 	// Increment lease, so that mutations work.
-	conn, err := grpc.Dial(testutil.SockAddrZero, grpc.WithInsecure())
+	conn, err := grpc.Dial(testutil.SockAddrZero, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatal(err)
 	}

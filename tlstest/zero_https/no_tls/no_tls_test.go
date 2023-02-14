@@ -1,7 +1,7 @@
 package no_tls
 
 import (
-	"io/ioutil"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -54,7 +54,7 @@ func TestZeroWithNoTLS(t *testing.T) {
 
 func readResponseBody(t *testing.T, do *http.Response) []byte {
 	defer func() { _ = do.Body.Close() }()
-	body, err := ioutil.ReadAll(do.Body)
+	body, err := io.ReadAll(do.Body)
 	require.NoError(t, err)
 	return body
 }

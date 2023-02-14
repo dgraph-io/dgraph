@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -32,7 +31,7 @@ func TestQueries(t *testing.T) {
 		t.Fatalf("Error while getting a dgraph client: %v", err)
 	}
 
-	yfile, _ := ioutil.ReadFile("test_cases.yaml")
+	yfile, _ := os.ReadFile("test_cases.yaml")
 
 	tc := make(map[string]TestCases)
 

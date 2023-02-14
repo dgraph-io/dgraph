@@ -18,7 +18,6 @@ package x
 
 import (
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -189,7 +188,7 @@ func ReadGroupIdFile(pdir string) (uint32, error) {
 		return 0, errors.Errorf("Group ID file at %s is a directory", path)
 	}
 
-	contents, err := ioutil.ReadFile(path)
+	contents, err := os.ReadFile(path)
 	if err != nil {
 		return 0, err
 	}

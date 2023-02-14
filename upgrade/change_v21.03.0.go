@@ -277,7 +277,7 @@ func getData(db *badger.DB, attr string, fn func(item *badger.Item) error) error
 			Attr: attr,
 		}
 		prefix := initKey.DataPrefix()
-		startKey := append(x.DataKey(attr, math.MaxUint64))
+		startKey := x.DataKey(attr, math.MaxUint64)
 
 		itOpt := badger.DefaultIteratorOptions
 		itOpt.AllVersions = true

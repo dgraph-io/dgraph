@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"math"
 	"os"
 	"path/filepath"
@@ -327,7 +326,7 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	})
 	require.Equal(t, numExpectedDirs, len(dirs))
 
-	b, err = ioutil.ReadFile(filepath.Join(backupDir, "manifest.json"))
+	b, err = os.ReadFile(filepath.Join(backupDir, "manifest.json"))
 	require.NoError(t, err)
 
 	var manifest worker.MasterManifest

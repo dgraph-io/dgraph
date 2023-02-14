@@ -19,7 +19,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -307,17 +306,17 @@ type liveOpts struct {
 
 func liveLoadData(t *testing.T, opts *liveOpts) error {
 	// Prepare directories.
-	dir, err := ioutil.TempDir("", "multi")
+	dir, err := os.MkdirTemp("", "multi")
 	require.NoError(t, err)
 	defer func() {
 		os.RemoveAll(dir)
 	}()
 	rdfFile := filepath.Join(dir, "rdfs.rdf")
-	require.NoError(t, ioutil.WriteFile(rdfFile, []byte(opts.rdfs), 0644))
+	require.NoError(t, os.WriteFile(rdfFile, []byte(opts.rdfs), 0644))
 	schemaFile := filepath.Join(dir, "schema.txt")
-	require.NoError(t, ioutil.WriteFile(schemaFile, []byte(opts.schema), 0644))
+	require.NoError(t, os.WriteFile(schemaFile, []byte(opts.schema), 0644))
 	gqlSchemaFile := filepath.Join(dir, "gql_schema.txt")
-	require.NoError(t, ioutil.WriteFile(gqlSchemaFile, []byte(opts.gqlSchema), 0644))
+	require.NoError(t, os.WriteFile(gqlSchemaFile, []byte(opts.gqlSchema), 0644))
 	// Load the data.
 	return testutil.LiveLoad(testutil.LiveOpts{
 		Zero:       testutil.ContainerAddr("zero1", 5080),
@@ -434,7 +433,7 @@ func TestLiveLoadMulti(t *testing.T) {
 	require.Contains(t, err.Error(), "Namespace 0x123456 doesn't exist for pred")
 
 	err = liveLoadData(t, &liveOpts{
-		rdfs:    fmt.Sprintf(`_:c <name> "ns eon" <0x123456> .`),
+		rdfs:    `_:c <name> "ns eon" <0x123456> .`,
 		schema:  `name: string @index(term) .`,
 		creds:   galaxyCreds,
 		forceNs: -1,

@@ -1,7 +1,6 @@
 package version
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -13,7 +12,7 @@ import (
 
 // Test `dgraph version` with an empty config file.
 func TestDgraphVersion(t *testing.T) {
-	tmpPath, err := ioutil.TempDir("", "test.tmp-")
+	tmpPath, err := os.MkdirTemp("", "test.tmp-")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpPath)
 

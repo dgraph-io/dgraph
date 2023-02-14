@@ -23,6 +23,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -52,7 +53,7 @@ func TestIdLeaseOverflow(t *testing.T) {
 func TestIdBump(t *testing.T) {
 	dialOpts := []grpc.DialOption{
 		grpc.WithBlock(),
-		grpc.WithInsecure(),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	}
 	ctx := context.Background()
 	con, err := grpc.DialContext(ctx, testutil.SockAddrZero, dialOpts...)

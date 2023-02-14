@@ -8,7 +8,7 @@
  * may not use this file except in compliance with the License. You
  * may obtain a copy of the License at
  *
- *     https://github.com/dgraph-io/dgraph/blob/master/licenses/DCL.txt
+ *     https://github.com/dgraph-io/dgraph/blob/main/licenses/DCL.txt
  */
 
 package worker
@@ -17,7 +17,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -158,7 +157,7 @@ func NewFileHandler(uri *url.URL) *fileHandler {
 
 func (h *fileHandler) DirExists(path string) bool       { return pathExist(h.JoinPath(path)) }
 func (h *fileHandler) FileExists(path string) bool      { return pathExist(h.JoinPath(path)) }
-func (h *fileHandler) Read(path string) ([]byte, error) { return ioutil.ReadFile(h.JoinPath(path)) }
+func (h *fileHandler) Read(path string) ([]byte, error) { return os.ReadFile(h.JoinPath(path)) }
 
 func (h *fileHandler) JoinPath(path string) string {
 	return filepath.Join(h.rootDir, h.prefix, path)

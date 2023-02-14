@@ -21,7 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -459,7 +459,7 @@ func testCORS(t *testing.T, schema, reqOrigin, expectedAllowedOrigin,
 
 	gqlRes := &common.GraphQLResponse{}
 	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal(body, gqlRes))
 	common.RequireNoGQLErrors(t, gqlRes)
@@ -545,7 +545,7 @@ func TestUpdateGQLSchemaFields(t *testing.T) {
 		name: String!
 	}`
 
-	generatedSchema, err := ioutil.ReadFile("generatedSchema.graphql")
+	generatedSchema, err := os.ReadFile("generatedSchema.graphql")
 	require.NoError(t, err)
 	require.Equal(t, string(generatedSchema), common.SafelyUpdateGQLSchema(t, groupOneHTTP,
 		schema, nil).GeneratedSchema)
@@ -581,7 +581,7 @@ func TestIntrospection(t *testing.T) {
 		name: String
 	}`
 	common.SafelyUpdateGQLSchema(t, groupOneHTTP, schema, nil)
-	query, err := ioutil.ReadFile("../../schema/testdata/introspection/input/full_query.graphql")
+	query, err := os.ReadFile("../../schema/testdata/introspection/input/full_query.graphql")
 	require.NoError(t, err)
 
 	introspectionParams := &common.GraphQLParams{Query: string(query)}
@@ -645,7 +645,7 @@ func TestApolloServiceResolver(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(resp.Data, &gqlRes))
 
-	sdl, err := ioutil.ReadFile("apollo_service_response.graphql")
+	sdl, err := os.ReadFile("apollo_service_response.graphql")
 	require.NoError(t, err)
 
 	require.Equal(t, string(sdl), gqlRes.Service.S)

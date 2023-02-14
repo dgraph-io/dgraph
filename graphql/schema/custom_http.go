@@ -22,7 +22,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"time"
 
@@ -91,7 +90,7 @@ func (fconf *FieldHTTPConfig) MakeAndDecodeHTTPRequest(client *http.Client, url 
 	}
 
 	defer resp.Body.Close()
-	b, err = ioutil.ReadAll(resp.Body)
+	b, err = io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, nil, x.GqlErrorList{externalRequestError(err, field)}
 	}

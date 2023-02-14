@@ -21,8 +21,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net/http/httptest"
+	"os"
 	"sort"
 	"strings"
 	"testing"
@@ -30,6 +30,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/peer"
 	"gopkg.in/yaml.v2"
 
@@ -61,7 +62,7 @@ func graphQLCompletionOn(t *testing.T) {
 	// The schema states type Country `{ ... name: String! ... }`
 	// so a query error will be raised if we ask for the country's name in a
 	// query.  Don't think a GraphQL update can do this ATM, so do through Dgraph.
-	d, err := grpc.Dial(Alpha1gRPC, grpc.WithInsecure())
+	d, err := grpc.Dial(Alpha1gRPC, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
 	client := dgo.NewDgraphClient(api.NewDgraphClient(d))
 	mu := &api.Mutation{
@@ -182,7 +183,7 @@ func deepMutationErrors(t *testing.T) {
 // requestValidationErrors just makes sure we are catching validation failures.
 // Mostly this is provided by an external lib, so just checking we hit common cases.
 func requestValidationErrors(t *testing.T) {
-	b, err := ioutil.ReadFile("../common/error_test.yaml")
+	b, err := os.ReadFile("../common/error_test.yaml")
 	require.NoError(t, err, "Unable to read test file")
 
 	var tests []ErrorCase

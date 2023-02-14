@@ -19,7 +19,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -9312,7 +9311,7 @@ func TestMain(m *testing.M) {
 		cleanupAndExit(1)
 	}
 
-	file, err := ioutil.ReadFile(schemaFile)
+	file, err := os.ReadFile(schemaFile)
 	if err != nil {
 		fmt.Printf("Error while reading schema file. Error: %v\n", err)
 		cleanupAndExit(1)

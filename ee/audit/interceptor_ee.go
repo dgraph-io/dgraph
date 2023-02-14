@@ -8,7 +8,7 @@
  * may not use this file except in compliance with the License. You
  * may obtain a copy of the License at
  *
- *     https://github.com/dgraph-io/dgraph/blob/master/licenses/DCL.txt
+ *     https://github.com/dgraph-io/dgraph/blob/main/licenses/DCL.txt
  */
 package audit
 
@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"regexp"
@@ -110,9 +109,9 @@ func AuditRequestHttp(next http.Handler) http.Handler {
 		rw := NewResponseWriter(w)
 		var buf bytes.Buffer
 		tee := io.TeeReader(r.Body, &buf)
-		r.Body = ioutil.NopCloser(tee)
+		r.Body = io.NopCloser(tee)
 		next.ServeHTTP(rw, r)
-		r.Body = ioutil.NopCloser(bytes.NewReader(buf.Bytes()))
+		r.Body = io.NopCloser(bytes.NewReader(buf.Bytes()))
 		auditHttp(rw, r)
 	})
 }
@@ -352,7 +351,7 @@ func getRequestBody(r *http.Request) []byte {
 		}
 	}
 
-	body, err := ioutil.ReadAll(in)
+	body, err := io.ReadAll(in)
 	if err != nil {
 		return []byte(err.Error())
 	}

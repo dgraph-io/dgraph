@@ -2,7 +2,6 @@ package xidmap
 
 import (
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"runtime"
@@ -23,7 +22,7 @@ import (
 
 // Opens a badger db and runs a a test on it.
 func withDB(t *testing.T, test func(db *badger.DB)) {
-	dir, err := ioutil.TempDir(".", "badger-test")
+	dir, err := os.MkdirTemp(".", "badger-test")
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 

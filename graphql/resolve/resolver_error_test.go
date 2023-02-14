@@ -19,7 +19,7 @@ package resolve
 import (
 	"context"
 	"encoding/json"
-	"io/ioutil"
+	"os"
 	"sync"
 	"testing"
 
@@ -170,7 +170,7 @@ func complete(t *testing.T, gqlSchema schema.Schema, gqlQuery, dgResponse string
 // The []bytes built by Resolve() have some other properties, such as ordering of
 // fields, which are tested by TestResponseOrder().
 func TestGraphQLErrorPropagation(t *testing.T) {
-	b, err := ioutil.ReadFile("resolver_error_test.yaml")
+	b, err := os.ReadFile("resolver_error_test.yaml")
 	require.NoError(t, err, "Unable to read test file")
 
 	var tests []QueryCase
