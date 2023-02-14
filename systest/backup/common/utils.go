@@ -105,7 +105,7 @@ func AddSchema(t *testing.T, header http.Header, whichAlpha string) {
 	updateSchemaParams := &common.GraphQLParams{
 		Query: `mutation {
 			    updateGQLSchema(
-			      input: { set: { schema: "type Item {id: ID!, name: String! @search(by: [hash]), price: String!}, type Post { postID: ID!, title: String! @search(by: [term, fulltext]), text: String @search(by: [fulltext, term]), datePublished: DateTime }"}})
+			      input: { set: { schema: "type Item {id: ID!, name: String! @search(by: [hash]), price: String!}"}})
 			    {
 			      gqlSchema {
 					schema
@@ -123,7 +123,7 @@ func AddSchema(t *testing.T, header http.Header, whichAlpha string) {
 	}
 }
 
-func AddData(t *testing.T, minSuffixVal int, maxSuffixVal int, jwtToken string, whichAlpha string) {
+func AddItem(t *testing.T, minSuffixVal int, maxSuffixVal int, jwtToken string, whichAlpha string) {
 
 	query := `mutation addItem($name: String!, $price: String!){
 		addItem(input: [{ name: $name, price: $price}]) {
@@ -156,7 +156,7 @@ func AddData(t *testing.T, minSuffixVal int, maxSuffixVal int, jwtToken string, 
 	}
 }
 
-func CheckDataExists(t *testing.T, desriedSuffix int, jwtToken string, whichAlpha string) {
+func CheckItemExists(t *testing.T, desriedSuffix int, jwtToken string, whichAlpha string) {
 	checkData := `query queryItem($name: String!){
 		queryItem(filter: {
 			name: {eq: $name}

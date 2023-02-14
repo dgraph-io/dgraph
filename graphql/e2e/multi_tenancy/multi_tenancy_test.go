@@ -116,7 +116,7 @@ func TestSchemaSubscribe(t *testing.T) {
 
 	// Now update schema on an alpha node for group 3 for new namespace and see if nodes in group 1
 	// and 2 also get it.
-	ns := common.CreateNamespace(t, header)
+	ns := common.CreateNamespace(t, header, "alpha1")
 	header.Set(accessJwtHeader, testutil.GrootHttpLoginNamespace(groupOneAdminServer, ns).AccessJwt)
 	schema = `
 	type Author {
@@ -168,7 +168,7 @@ func TestSchemaSubscribe(t *testing.T) {
 	testutil.CompareJSON(t, expectedResult, string(introspectionResult.Data))
 
 	header.Set(accessJwtHeader, testutil.GrootHttpLogin(groupOneAdminServer).AccessJwt)
-	common.DeleteNamespace(t, ns, header)
+	common.DeleteNamespace(t, ns, header, "alpha1")
 }
 
 // This test ensures that even though different namespaces have the same GraphQL schema, if their
@@ -180,7 +180,7 @@ func TestGraphQLResponse(t *testing.T) {
 	header := http.Header{}
 	header.Set(accessJwtHeader, testutil.GrootHttpLogin(groupOneAdminServer).AccessJwt)
 
-	ns := common.CreateNamespace(t, header)
+	ns := common.CreateNamespace(t, header, "alpha1")
 	header1 := http.Header{}
 	header1.Set(accessJwtHeader, testutil.GrootHttpLoginNamespace(groupOneAdminServer,
 		ns).AccessJwt)
@@ -245,7 +245,7 @@ func TestGraphQLResponse(t *testing.T) {
 			"queryAuthor": []
 		}`)
 
-	common.DeleteNamespace(t, ns, header)
+	common.DeleteNamespace(t, ns, header, "alpha1")
 }
 
 func TestAuth(t *testing.T) {
@@ -270,7 +270,7 @@ func TestAuth(t *testing.T) {
 	# Dgraph.Authorization  {"VerificationKey":"secret","Header":"Authorization","Namespace":"https://dgraph.io/jwt/claims","Algo":"HS256"}`
 	common.SafelyUpdateGQLSchema(t, common.Alpha1HTTP, schema, header)
 
-	ns := common.CreateNamespace(t, header)
+	ns := common.CreateNamespace(t, header, "alpha1")
 	header1 := http.Header{}
 	header1.Set(accessJwtHeader, testutil.GrootHttpLoginNamespace(groupOneAdminServer,
 		ns).AccessJwt)
@@ -338,7 +338,7 @@ func TestAuth(t *testing.T) {
 		}
 	}`)
 
-	common.DeleteNamespace(t, ns, header)
+	common.DeleteNamespace(t, ns, header, "alpha1")
 }
 
 // TestCORS checks that all the CORS headers are correctly set in the response for each namespace.
@@ -359,7 +359,7 @@ func TestCORS(t *testing.T) {
 	# Dgraph.Authorization  {"VerificationKey":"secret","Header":"X-Test-Dgraph","Namespace":"https://dgraph.io/jwt/claims","Algo":"HS256"}
 	`, header)
 
-	ns := common.CreateNamespace(t, header)
+	ns := common.CreateNamespace(t, header, "alpha1")
 	header1 := http.Header{}
 	header1.Set(accessJwtHeader, testutil.GrootHttpLoginNamespace(groupOneAdminServer,
 		ns).AccessJwt)
@@ -386,7 +386,7 @@ func TestCORS(t *testing.T) {
 		strings.Join([]string{x.AccessControlAllowedHeaders, "Test-CORS1", "X-Test-Dgraph1"}, ","))
 
 	// cleanup
-	common.DeleteNamespace(t, ns, header)
+	common.DeleteNamespace(t, ns, header, "alpha1")
 }
 
 func queryHelper(t *testing.T, server, query string, headers http.Header,
@@ -456,8 +456,8 @@ func TestNamespacesQueryField(t *testing.T) {
 			}
 		}`)
 
-	ns1 := common.CreateNamespace(t, header)
-	ns2 := common.CreateNamespace(t, header)
+	ns1 := common.CreateNamespace(t, header, "alpha1")
+	ns2 := common.CreateNamespace(t, header, "alpha1")
 	header1 := http.Header{}
 	header1.Set(accessJwtHeader, testutil.GrootHttpLoginNamespace(groupOneAdminServer,
 		ns1).AccessJwt)
@@ -481,6 +481,6 @@ func TestNamespacesQueryField(t *testing.T) {
 		}`)
 
 	// cleanup
-	common.DeleteNamespace(t, ns1, header)
-	common.DeleteNamespace(t, ns2, header)
+	common.DeleteNamespace(t, ns1, header, "alpha1")
+	common.DeleteNamespace(t, ns2, header, "alpha1")
 }
