@@ -268,7 +268,8 @@ func (s *state) runTransaction(dg *dgo.Dgraph, buf *bytes.Buffer) error {
 		return err
 	}
 	if len(assigned.GetUids()) > 0 {
-		fmt.Fprintf(w, "[StartTs: %v] CREATED K_%02d: %+v for %+v\n", assigned.Txn.StartTs, dst.Key, assigned.GetUids(), dst)
+		fmt.Fprintf(w, "[StartTs: %v] CREATED K_%02d: %+v for %+v\n", assigned.Txn.StartTs,
+			dst.Key, assigned.GetUids(), dst)
 		for _, uid := range assigned.GetUids() {
 			dst.Uid = uid
 		}

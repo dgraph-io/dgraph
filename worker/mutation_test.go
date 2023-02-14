@@ -176,13 +176,26 @@ func TestCheckSchema(t *testing.T) {
 	require.Error(t, checkSchema(s1))
 
 	// reverse on non-uid type
-	s1 = &pb.SchemaUpdate{Predicate: x.GalaxyAttr("name"), ValueType: pb.Posting_STRING, Directive: pb.SchemaUpdate_REVERSE}
+	s1 = &pb.SchemaUpdate{
+		Predicate: x.GalaxyAttr("name"),
+		ValueType: pb.Posting_STRING,
+		Directive: pb.SchemaUpdate_REVERSE,
+	}
 	require.Error(t, checkSchema(s1))
 
-	s1 = &pb.SchemaUpdate{Predicate: x.GalaxyAttr("name"), ValueType: pb.Posting_FLOAT, Directive: pb.SchemaUpdate_INDEX, Tokenizer: []string{"term"}}
+	s1 = &pb.SchemaUpdate{
+		Predicate: x.GalaxyAttr("name"),
+		ValueType: pb.Posting_FLOAT,
+		Directive: pb.SchemaUpdate_INDEX,
+		Tokenizer: []string{"term"},
+	}
 	require.NoError(t, checkSchema(s1))
 
-	s1 = &pb.SchemaUpdate{Predicate: x.GalaxyAttr("friend"), ValueType: pb.Posting_UID, Directive: pb.SchemaUpdate_REVERSE}
+	s1 = &pb.SchemaUpdate{
+		Predicate: x.GalaxyAttr("friend"),
+		ValueType: pb.Posting_UID,
+		Directive: pb.SchemaUpdate_REVERSE,
+	}
 	require.NoError(t, checkSchema(s1))
 
 	// Schema with internal predicate.

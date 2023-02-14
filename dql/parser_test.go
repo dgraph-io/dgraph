@@ -2378,7 +2378,8 @@ func TestParseFilter_opNot2(t *testing.T) {
 	require.NotNil(t, res.Query[0])
 	require.Equal(t, []string{"friends", "gender", "age", "hometown"}, childAttrs(res.Query[0]))
 	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
-	require.Equal(t, `(AND (NOT (OR (a aa "aaa") (b bb "bbb"))) (c cc "ccc"))`, res.Query[0].Children[0].Filter.debugString())
+	require.Equal(t, `(AND (NOT (OR (a aa "aaa") (b bb "bbb"))) (c cc "ccc"))`,
+		res.Query[0].Children[0].Filter.debugString())
 }
 
 // Test operator precedence. Let brackets make or evaluates before and.
@@ -2421,9 +2422,11 @@ func TestParseFilter_brac(t *testing.T) {
 	require.NotNil(t, res.Query[0])
 	require.Equal(t, []string{"friends", "gender", "age", "hometown"}, childAttrs(res.Query[0]))
 	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
-	require.Equal(t,
+	require.Equal(
+		t,
 		`(OR (a name "hello") (AND (AND (b name "world" "is") (OR (c aa "aaa") (OR (d dd "haha") (e ee "aaa")))) (f ff "aaa")))`,
-		res.Query[0].Children[0].Filter.debugString())
+		res.Query[0].Children[0].Filter.debugString(),
+	)
 }
 
 // Test if unbalanced brac will lead to errors.
@@ -2479,7 +2482,11 @@ func TestParseFilter_Geo2(t *testing.T) {
 `
 	resp, err := Parse(Request{Str: query})
 	require.NoError(t, err)
-	require.Equal(t, "[[11.2,-2.234],[-31.23,4.3214],[5.312,6.53]]", resp.Query[0].Children[0].Filter.Func.Args[0].Value)
+	require.Equal(
+		t,
+		"[[11.2,-2.234],[-31.23,4.3214],[5.312,6.53]]",
+		resp.Query[0].Children[0].Filter.Func.Args[0].Value,
+	)
 }
 
 func TestParseFilter_Geo3(t *testing.T) {
@@ -4234,7 +4241,8 @@ func TestParserFuzz(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			defer func() {
 				if r := recover(); r != nil {
-					t.Errorf("parser panic caused by test: '%s', input: '%s': %v\n%s", test.name, test.in, r, debug.Stack())
+					t.Errorf("parser panic caused by test: '%s', input: '%s': %v\n%s", test.name,
+						test.in, r, debug.Stack())
 				}
 			}()
 

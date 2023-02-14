@@ -505,8 +505,12 @@ func TestGQLSchemaValidate(t *testing.T) {
 					f1: String! @dgraph(pred:"~movie")
 				}
 			`,
-			errors: x.GqlErrorList{{Message: "input:3: Type X; Field id: has the @dgraph directive but fields of type ID can't have the @dgraph directive."}, {Message: "input:7: Type Y; Field f1 is of type String, but reverse predicate in @dgraph directive only applies to fields with object types."}},
-			valid:  false,
+			errors: x.GqlErrorList{
+				{Message: "input:3: Type X; Field id: has the @dgraph directive " +
+					"but fields of type ID can't have the @dgraph directive."},
+				{Message: "input:7: Type Y; Field f1 is of type String, " +
+					"but reverse predicate in @dgraph directive only applies to fields with object types."}},
+			valid: false,
 		},
 	}
 

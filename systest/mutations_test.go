@@ -817,7 +817,8 @@ func ListToScalar(t *testing.T, c *dgo.Dgraph) {
 
 	err := c.Alter(ctx, &api.Operation{Schema: `pred: string @index(exact) .`})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), `Type can't be changed from list to scalar for attr: [pred] without dropping it first.`)
+	require.Contains(t, err.Error(),
+		`Type can't be changed from list to scalar for attr: [pred] without dropping it first.`)
 
 	require.NoError(t, c.Alter(ctx, &api.Operation{DropAttr: `pred`}))
 	op = &api.Operation{Schema: `pred: string @index(exact) .`}

@@ -224,20 +224,21 @@ func stopCluster(composeFile, prefix string, wg *sync.WaitGroup, err error) {
 
 				err = testutil.DockerCpFromContainer(c.ID, workDir+"/coverage.out", tmp)
 				if err != nil {
-					fmt.Printf("error while bringing down cluster. Failed at copying coverage file. Prefix: %s. Error: %v\n",
+					fmt.Printf("error bringing down cluster. Failed at copying coverage file. Prefix: %s. Error: %v\n",
 						prefix, err)
 				}
 
 				if err = appendTestCoverageFile(tmp, coverageFile); err != nil {
-					fmt.Printf("Error while bringing down cluster. Failed at appending coverage file. Prefix: %s. Error: %v\n",
-						prefix, err)
+					fmt.Printf("error bringing down cluster. Failed at appending coverage file. Prefix: %s. Error: %v\n",
+						prefix, err,
+					)
 				}
 
 				os.Remove(tmp)
 
 				coverageBulk := strings.Replace(composeFile, "docker-compose.yml", "coverage_bulk.out", -1)
 				if err = appendTestCoverageFile(coverageBulk, coverageFile); err != nil {
-					fmt.Printf("Error while bringing down cluster. Failed at appending coverage file. Prefix: %s. Error: %v\n",
+					fmt.Printf("Error bringing down cluster. Failed at appending coverage file. Prefix: %s. Error: %v\n",
 						prefix, err)
 				}
 			}

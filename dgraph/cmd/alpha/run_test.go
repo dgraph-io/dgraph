@@ -248,9 +248,9 @@ func TestDeletePredicate(t *testing.T) {
 	output, err = runGraphqlQuery(`schema{}`)
 	require.NoError(t, err)
 
-	testutil.CompareJSON(t, testutil.GetFullSchemaHTTPResponse(testutil.SchemaOptions{UserPreds: `{"predicate":"age","type":"default"},` +
-		`{"predicate":"name","type":"string","index":true, "tokenizer":["term"]}`}),
-		output)
+	testutil.CompareJSON(t, testutil.GetFullSchemaHTTPResponse(testutil.SchemaOptions{
+		UserPreds: `{"predicate":"age","type":"default"},` +
+			`{"predicate":"name","type":"string","index":true, "tokenizer":["term"]}`}), output)
 
 	output, err = runGraphqlQuery(q1)
 	require.NoError(t, err)
@@ -1142,7 +1142,9 @@ func TestDeleteAllSP2(t *testing.T) {
 
 	output, err := runGraphqlQuery(q)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"data": {"me":[{"name":"July 3 2017","date":"2017-07-03T03:49:03Z","weight":262.3,"lifeLoad":5,"stressLevel":3}]}}`, output)
+	require.JSONEq(t,
+		`{"data": {"me":[{"name":"July 3 2017","date":"2017-07-03T03:49:03Z",`+
+			`"weight":262.3,"lifeLoad":5,"stressLevel":3}]}}`, output)
 
 	m = fmt.Sprintf(`
 		{
