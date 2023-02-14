@@ -35,8 +35,20 @@ func TestFindDataFiles(t *testing.T) {
 	defer deleteDirs(t, dir[1])
 	validTestFiles := filepath.Join(filepath.Dir(thisFile), "test-files-valid")
 	invalidTestFiles := filepath.Join(filepath.Dir(thisFile), "test-files-invalid")
-	expectedFilesArray := []string{"test-files-valid/test-2.rdf.gz", "test-files-valid/test-3.json", "test-files-valid/test-4.json.gz"}
-	file_data := [7]string{"test-1.txt", "test-2.rdf.gz", "test-3.json", "test-4.json.gz", "test-5.txt", "test-6.txt.gz", "test-7.go"}
+	expectedFilesArray := []string{
+		"test-files-valid/test-2.rdf.gz",
+		"test-files-valid/test-3.json",
+		"test-files-valid/test-4.json.gz",
+	}
+	file_data := [7]string{
+		"test-1.txt",
+		"test-2.rdf.gz",
+		"test-3.json",
+		"test-4.json.gz",
+		"test-5.txt",
+		"test-6.txt.gz",
+		"test-7.go",
+	}
 
 	for i, data := range file_data {
 		var filePath string

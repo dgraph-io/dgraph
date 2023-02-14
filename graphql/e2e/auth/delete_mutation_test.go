@@ -132,7 +132,8 @@ func (f *FbPost) add(t *testing.T, user, role string) {
 			}
 		  }
 		`,
-		Variables: map[string]interface{}{"text": f.Text, "id1": f.Author.Id, "id2": f.Sender.Id, "id3": f.Receiver.Id, "postCount": f.PostCount, "pwd": "password"},
+		Variables: map[string]interface{}{"text": f.Text, "id1": f.Author.Id, "id2": f.Sender.Id,
+			"id3": f.Receiver.Id, "postCount": f.PostCount, "pwd": "password"},
 	}
 	gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
 	common.RequireNoGQLErrors(t, gqlResponse)
@@ -205,13 +206,19 @@ func TestAuth_DeleteOnInterfaceWithAuthRules(t *testing.T) {
 
 	for _, tcase := range testCases {
 		// Fetch all the types implementing `Post` interface.
-		allQuestions, allAnswers, allFbPosts, allPostsIds := getAllPosts(t, []string{"user1@dgraph.io", "user2@dgraph.io"}, []string{"ADMIN"}, []bool{true, false})
+		allQuestions, allAnswers, allFbPosts, allPostsIds := getAllPosts(t,
+			[]string{"user1@dgraph.io", "user2@dgraph.io"}, []string{"ADMIN"}, []bool{true, false})
 		require.True(t, len(allQuestions) == 3)
 		require.True(t, len(allAnswers) == 2)
 		require.True(t, len(allFbPosts) == 2)
 		require.True(t, len(allPostsIds) == 7)
 
-		deleteQuestions, deleteAnswers, deleteFbPosts, _ := getAllPosts(t, []string{tcase.user}, []string{tcase.role}, []bool{tcase.ans})
+		deleteQuestions, deleteAnswers, deleteFbPosts, _ := getAllPosts(
+			t,
+			[]string{tcase.user},
+			[]string{tcase.role},
+			[]bool{tcase.ans},
+		)
 
 		params := &common.GraphQLParams{
 			Headers:   common.GetJWTForInterfaceAuth(t, tcase.user, tcase.role, tcase.ans, metaInfo),
@@ -321,7 +328,8 @@ func TestAuth_DeleteOnTypeWithGraphTraversalAuthRuleOnInterface(t *testing.T) {
 	for _, tcase := range testCases {
 		t.Run(tcase.user+strconv.FormatBool(tcase.ans), func(t *testing.T) {
 			// Get all Question ids.
-			_, allQuestionsIds := getAllQuestions(t, []string{"user1@dgraph.io", "user2@dgraph.io"}, []bool{true, false})
+			_, allQuestionsIds := getAllQuestions(t,
+				[]string{"user1@dgraph.io", "user2@dgraph.io"}, []bool{true, false})
 			require.True(t, len(allQuestionsIds) == 3)
 			deleteQuestions, _ := getAllQuestions(t, []string{tcase.user}, []bool{tcase.ans})
 

@@ -62,7 +62,9 @@ func TestValidateToken(t *testing.T) {
 		tokenString := generateJWT(userdata.namespace, userdata.userId, userdata.groupIds, expiry)
 		ud, err := validateToken(tokenString)
 		require.Nil(t, err)
-		if ud.namespace != userdata.namespace || ud.userId != userdata.userId || !sliceCompare(ud.groupIds, userdata.groupIds) {
+		if ud.namespace != userdata.namespace || ud.userId != userdata.userId ||
+			!sliceCompare(ud.groupIds, userdata.groupIds) {
+
 			t.Errorf("Actual output %+v is not equal to the expected output %+v", userdata, ud)
 		}
 	}

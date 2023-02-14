@@ -327,7 +327,10 @@ func TestVerificationWithMultipleJWKUrls(t *testing.T) {
 	require.Equal(t, metainfo.Namespace, "https://xyz.io/jwt/claims")
 	require.Equal(t, metainfo.VerificationKey, "")
 	require.Equal(t, metainfo.JWKUrl, "")
-	require.Equal(t, metainfo.JWKUrls, []string{"https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com", "https://dev-hr2kugfp.us.auth0.com/.well-known/jwks.json"})
+	require.Equal(t, metainfo.JWKUrls,
+		[]string{"https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com",
+			"https://dev-hr2kugfp.us.auth0.com/.well-known/jwks.json"},
+	)
 
 	testCases := []struct {
 		name    string
@@ -353,7 +356,8 @@ func TestVerificationWithMultipleJWKUrls(t *testing.T) {
 
 			_, err := metainfo.ExtractCustomClaims(ctx)
 			if tcase.invalid {
-				require.True(t, strings.Contains(err.Error(), "unable to parse jwt token:token is unverifiable: Keyfunc returned an error"))
+				require.True(t, strings.Contains(err.Error(),
+					"unable to parse jwt token:token is unverifiable: Keyfunc returned an error"))
 			} else {
 				require.Nil(t, err)
 			}

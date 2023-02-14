@@ -396,7 +396,8 @@ func TestJsonNumberParsing(t *testing.T) {
 		out *api.Value
 	}{
 		{`{"uid": "1", "key": 9223372036854775299}`, &api.Value{Val: &api.Value_IntVal{IntVal: 9223372036854775299}}},
-		{`{"uid": "1", "key": 9223372036854775299.0}`, &api.Value{Val: &api.Value_DoubleVal{DoubleVal: 9223372036854775299.0}}},
+		{`{"uid": "1", "key": 9223372036854775299.0}`,
+			&api.Value{Val: &api.Value_DoubleVal{DoubleVal: 9223372036854775299.0}}},
 		{`{"uid": "1", "key": 27670116110564327426}`, nil},
 		{`{"uid": "1", "key": "23452786"}`, &api.Value{Val: &api.Value_StrVal{StrVal: "23452786"}}},
 		{`{"uid": "1", "key": "23452786.2378"}`, &api.Value{Val: &api.Value_StrVal{StrVal: "23452786.2378"}}},
