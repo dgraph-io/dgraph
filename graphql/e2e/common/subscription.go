@@ -72,6 +72,7 @@ func NewGraphQLSubscription(url string, req *schema.Request, subscriptionPayload
 	if err != nil {
 		return nil, err
 	}
+
 	// Initialize subscription.
 	init := operationMessage{
 		Type:    initMsg,
@@ -85,7 +86,6 @@ func NewGraphQLSubscription(url string, req *schema.Request, subscriptionPayload
 
 	msg := operationMessage{}
 	if err = conn.ReadJSON(&msg); err != nil {
-		conn.Close()
 		return nil, err
 	}
 
@@ -97,7 +97,6 @@ func NewGraphQLSubscription(url string, req *schema.Request, subscriptionPayload
 	// We got ack, now send start the subscription by sending the query to the server.
 	payload, err := json.Marshal(req)
 	if err != nil {
-		conn.Close()
 		return nil, err
 	}
 
@@ -108,7 +107,6 @@ func NewGraphQLSubscription(url string, req *schema.Request, subscriptionPayload
 	msg.Payload = payload
 
 	if err = conn.WriteJSON(msg); err != nil {
-		conn.Close()
 		return nil, err
 	}
 	return &GraphQLSubscriptionClient{

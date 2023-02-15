@@ -26,6 +26,7 @@ import (
 	"testing"
 
 	"github.com/gogo/protobuf/jsonpb"
+	"github.com/golang/glog"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
@@ -303,7 +304,11 @@ func health(t *testing.T) {
 	var health []pb.HealthInfo
 	resp, err := http.Get(dgraphHealthURL)
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			glog.Warningf("error closing body: %v", err)
+		}
+	}()
 	healthRes, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal(healthRes, &health))
@@ -474,7 +479,11 @@ func adminState(t *testing.T) {
 	var state pb.MembershipState
 	resp, err := http.Get(dgraphStateURL)
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			glog.Warningf("error closing body: %v", err)
+		}
+	}()
 	stateRes, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	require.NoError(t, jsonpb.Unmarshal(bytes.NewReader(stateRes), &state))

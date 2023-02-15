@@ -73,7 +73,11 @@ func run() {
 	if err != nil {
 		glog.Fatalf("Error opening file: %v\n", err)
 	}
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			glog.Warningf("error while closing fd: %v", err)
+		}
+	}()
 	reader, err := enc.GetReader(opts.keyfile, f)
 	x.Checkf(err, "could not open key reader")
 	if strings.HasSuffix(strings.ToLower(opts.file), ".gz") {

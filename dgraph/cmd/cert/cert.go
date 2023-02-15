@@ -29,6 +29,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/golang/glog"
 	"github.com/pkg/errors"
 )
 
@@ -128,7 +129,11 @@ func (c *certConfig) generatePair(keyFile, certFile string) error {
 		}
 		return err
 	}
-	defer fp.Close()
+	defer func() {
+		if err := fp.Close(); err != nil {
+			glog.Warningf("error closing file: %v", err)
+		}
+	}()
 
 	err = pem.Encode(fp, &pem.Block{
 		Type:  "CERTIFICATE",

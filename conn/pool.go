@@ -304,14 +304,18 @@ func (p *Pool) MonitorHealth() {
 			cancel()
 			if err == nil {
 				p.Lock()
-				p.conn.Close()
+				if err := p.conn.Close(); err != nil {
+					glog.Warningf("error while closing connection: %v", err)
+				}
 				p.conn = conn
 				p.Unlock()
 				return
 			}
 			glog.Errorf("CONN: Unable to connect with %s : %s\n", p.Addr, err)
 			if conn != nil {
-				conn.Close()
+				if err := conn.Close(); err != nil {
+					glog.Warningf("error while closing connection: %v", err)
+				}
 			}
 		}
 	}

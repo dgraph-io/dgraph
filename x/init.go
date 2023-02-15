@@ -148,7 +148,11 @@ func ExecutableChecksum() []byte {
 	if err != nil {
 		return nil
 	}
-	defer execFile.Close()
+	defer func() {
+		if err := execFile.Close(); err != nil {
+			glog.Warningf("error closing file: %v", err)
+		}
+	}()
 
 	h := sha256.New()
 	if _, err := io.Copy(h, execFile); err != nil {

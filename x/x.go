@@ -428,7 +428,12 @@ func Reply(w http.ResponseWriter, rep interface{}) {
 
 // ParseRequest parses the body of the given request.
 func ParseRequest(w http.ResponseWriter, r *http.Request, data interface{}) bool {
-	defer r.Body.Close()
+	defer func() {
+		if err := r.Body.Close(); err != nil {
+			glog.Warningf("error closing body: %v", err)
+		}
+	}()
+
 	decoder := json.NewDecoder(r.Body)
 	if err := decoder.Decode(&data); err != nil {
 		SetStatus(w, Error, fmt.Sprintf("While parsing request: %v", err))

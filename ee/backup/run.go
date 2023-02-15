@@ -299,7 +299,7 @@ func runLsbackupCmd() error {
 	if err != nil {
 		fmt.Println("error:", err)
 	}
-	os.Stdout.Write(b)
+	_, _ = os.Stdout.Write(b)
 	fmt.Println()
 	return nil
 }

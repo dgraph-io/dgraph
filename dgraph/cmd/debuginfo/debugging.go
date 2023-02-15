@@ -74,8 +74,12 @@ func saveDebug(sourceURL, filePath string, duration time.Duration) error {
 	if err != nil {
 		return err
 	}
+	defer func() {
+		if err := resp.Close(); err != nil {
+			glog.Warningf("error closing resp reader: %v", err)
+		}
+	}()
 
-	defer resp.Close()
 	out, err := os.Create(filePath)
 	if err != nil {
 		return fmt.Errorf("error while creating debug file: %s", err)
@@ -94,7 +98,11 @@ func fetchURL(source string, timeout time.Duration) (io.ReadCloser, error) {
 		return nil, fmt.Errorf("http fetch: %v", err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		defer resp.Body.Close()
+		defer func() {
+			if err := resp.Body.Close(); err != nil {
+				glog.Warningf("error closing body: %v", err)
+			}
+		}()
 		return nil, statusCodeError(resp)
 	}
 

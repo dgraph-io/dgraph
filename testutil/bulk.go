@@ -25,6 +25,7 @@ import (
 	"os/exec"
 	"strconv"
 
+	"github.com/golang/glog"
 	"github.com/pkg/errors"
 
 	"github.com/dgraph-io/dgraph/x"
@@ -158,7 +159,9 @@ func freePort(port int) int {
 		p := port + offset
 		listener, err := net.Listen("tcp", fmt.Sprintf(":%d", p))
 		if err == nil {
-			listener.Close()
+			if err := listener.Close(); err != nil {
+				glog.Warningf("error closing listener: %v", err)
+			}
 			return offset
 		}
 	}

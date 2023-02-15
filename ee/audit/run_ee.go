@@ -84,13 +84,20 @@ func run() error {
 
 	file, err := os.Open(decryptCmd.Conf.GetString("in"))
 	x.Check(err)
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			glog.Warningf("error closing file: %v", err)
+		}
+	}()
 
 	outfile, err := os.OpenFile(decryptCmd.Conf.GetString("out"),
 		os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
 	x.Check(err)
-	defer outfile.Close()
-
+	defer func() {
+		if err := outfile.Close(); err != nil {
+			glog.Warningf("error closing file: %v", err)
+		}
+	}()
 	block, err := aes.NewCipher(key)
 	x.Check(err)
 

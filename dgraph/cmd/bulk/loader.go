@@ -32,6 +32,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/golang/glog"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
@@ -196,7 +197,11 @@ func (ld *loader) leaseNamespaces() {
 func readSchema(opt *options) *schema.ParsedSchema {
 	f, err := filestore.Open(opt.SchemaFile)
 	x.Check(err)
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			glog.Warningf("error while closing fd: %v", err)
+		}
+	}()
 
 	key := opt.EncryptionKey
 	if !opt.Encrypted {
@@ -334,7 +339,11 @@ func (ld *loader) processGqlSchema(loadType chunker.InputFormat) {
 
 	f, err := filestore.Open(ld.opt.GqlSchemaFile)
 	x.Check(err)
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			glog.Warningf("error while closing fd: %v", err)
+		}
+	}()
 
 	key := ld.opt.EncryptionKey
 	if !ld.opt.Encrypted {

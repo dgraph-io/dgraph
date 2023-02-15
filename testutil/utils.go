@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
+	"github.com/golang/glog"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/v210"
@@ -112,7 +113,11 @@ func WaitForTask(t *testing.T, taskId string, useHttps bool, socketAddrHttp stri
 		}
 		response, err := client.Post(adminUrl, "application/json", bytes.NewBuffer(request))
 		require.NoError(t, err)
-		defer response.Body.Close()
+		defer func() {
+			if err := response.Body.Close(); err != nil {
+				glog.Warningf("error closing body: %v", err)
+			}
+		}()
 
 		var data interface{}
 		require.NoError(t, json.NewDecoder(response.Body).Decode(&data))

@@ -667,7 +667,7 @@ func printKeys(db *badger.DB) {
 		return err
 	}
 	x.Check(stream.Orchestrate(context.Background()))
-	w.Flush()
+	x.Check(w.Flush())
 	fmt.Println()
 	fmt.Printf("Found %d keys\n", atomic.LoadUint64(&total))
 }

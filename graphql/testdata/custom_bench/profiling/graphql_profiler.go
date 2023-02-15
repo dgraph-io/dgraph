@@ -32,6 +32,8 @@ import (
 	"sync/atomic"
 	"syscall"
 	"time"
+
+	"github.com/golang/glog"
 )
 
 type PprofProfile string
@@ -473,7 +475,11 @@ func applySchema(alphaAuthority string, schemaFilePath string) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			glog.Warningf("error while closing fd: %v", err)
+		}
+	}()
 
 	resp, err := http.Post(alphaAuthority+"/admin/schema", "", f)
 	if err != nil {
@@ -564,7 +570,11 @@ func saveProfile(profType PprofProfile, profilePath string, profileOpts *Profili
 		log.Println("could not create file: ", profilePath, ", err: ", err)
 		return
 	}
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			glog.Warningf("error while closing fd: %v", err)
+		}
+	}()
 
 	_, err = f.Write(b)
 	if err != nil {
@@ -585,7 +595,11 @@ func saveTracing(resp *Response, outputDir string, iteration int) (int64, int64,
 		log.Println(err)
 		return 0, 0, err
 	}
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			glog.Warningf("error while closing fd: %v", err)
+		}
+	}()
 
 	b, err := json.Marshal(resp)
 	if err != nil {
@@ -804,7 +818,11 @@ func makeGqlRequest(query string) (*Response, int64, int64, error) {
 
 	totalProcessingTime, _ := strconv.Atoi(resp.Header.Get("Graphql-Time"))
 
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			glog.Warningf("error closing body: %v", err)
+		}
+	}()
 	b, err = io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, rtt, int64(totalProcessingTime), err
