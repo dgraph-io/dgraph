@@ -18,12 +18,16 @@ package x
 
 import (
 	"flag"
+	"fmt"
 	"os"
 	"testing"
 )
 
 func TestMain(m *testing.M) {
 	flag.Parse()
-	flag.Set("debugmode", "true")
+	if err := flag.Set("debugmode", "true"); err != nil {
+		fmt.Printf("error setting debug mode: %v\n", err)
+	}
+
 	os.Exit(m.Run())
 }

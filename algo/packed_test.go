@@ -42,6 +42,7 @@ func TestMergeSorted1Packed(t *testing.T) {
 	require.Equal(t, []uint64{55}, codec.Decode(MergeSortedPacked(input), 0))
 }
 
+//nolint:unused
 func printPack(t *testing.T, pack *pb.UidPack) {
 	for _, block := range pack.Blocks {
 		t.Logf("[%x]Block base: %d. Num uids: %d. Deltas: %x\n",

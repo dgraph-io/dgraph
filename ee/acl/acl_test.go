@@ -994,8 +994,7 @@ func TestGuardianAccess(t *testing.T) {
 	time.Sleep(defaultTimeToSleep)
 	gClient, err := testutil.DgraphClient(testutil.SockAddr)
 	require.NoError(t, err, "Error while creating client")
-
-	gClient.LoginIntoNamespace(ctx, "guardian", "guardianpass", x.GalaxyNamespace)
+	require.NoError(t, gClient.LoginIntoNamespace(ctx, "guardian", "guardianpass", x.GalaxyNamespace))
 
 	mutString := fmt.Sprintf("<%s> <unauthpred> \"testdata\" .", nodeUID)
 	mutation = &api.Mutation{SetNquads: []byte(mutString), CommitNow: true}
@@ -1593,7 +1592,7 @@ func TestValQueryWithACLPermissions(t *testing.T) {
 
 			"alice has access to name and age",
 			`{"q1":[{"name":"RandomGuy","age":23},{"name":"RandomGuy2","age":25}],
-			"q2":[{"name":"RandomGuy2","val(n)":"RandomGuy2","val(a)":25},{"name":"RandomGuy","val(n)":"RandomGuy","val(a)":23}]}`,
+			"q2":[{"name":"RandomGuy2","val(n)":"RandomGuy2","val(a)":25},{"name":"RandomGuy","val(n)":"RandomGuy","val(a)":23}]}`, //nolint:lll
 		},
 		{
 			`{

@@ -744,7 +744,7 @@ func TestUpdateNestedFilter(t *testing.T) {
 	}, {
 		user:   "user2",
 		role:   "USER",
-		result: `{"updateMovie": {"movie": [{ "content": "Movie1" }, { "content": "Movie2" }, { "content": "Movie3" }, { "content": "Movie4" }]}}`,
+		result: `{"updateMovie": {"movie": [{ "content": "Movie1" }, { "content": "Movie2" }, { "content": "Movie3" }, { "content": "Movie4" }]}}`, //nolint:lll
 	}}
 
 	query := `
