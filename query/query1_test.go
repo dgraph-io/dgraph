@@ -20,7 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -356,7 +356,7 @@ func TestGraphQLVarsInUpsert(t *testing.T) {
 		}`,
 		Vars: map[string]string{"$a": "2"},
 		Mutations: []*api.Mutation{
-			&api.Mutation{
+			{
 				SetNquads: []byte(`_:user <pred> "value" .`),
 				Cond:      `@if(eq(len(v), 0))`,
 			},
@@ -1854,7 +1854,7 @@ func TestMultipleValueGroupByError(t *testing.T) {
 
 func TestMultiPolygonIntersects(t *testing.T) {
 
-	usc, err := ioutil.ReadFile("testdata/us-coordinates.txt")
+	usc, err := os.ReadFile("testdata/us-coordinates.txt")
 	require.NoError(t, err)
 	query := `{
 		me(func: intersects(geometry, "` + strings.TrimSpace(string(usc)) + `" )) {
@@ -1869,7 +1869,7 @@ func TestMultiPolygonIntersects(t *testing.T) {
 
 func TestMultiPolygonWithin(t *testing.T) {
 
-	usc, err := ioutil.ReadFile("testdata/us-coordinates.txt")
+	usc, err := os.ReadFile("testdata/us-coordinates.txt")
 	require.NoError(t, err)
 	query := `{
 		me(func: within(geometry, "` + strings.TrimSpace(string(usc)) + `" )) {

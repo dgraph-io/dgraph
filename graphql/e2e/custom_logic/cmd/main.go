@@ -20,9 +20,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
+	"os"
 	"os/exec"
 	"reflect"
 	"sort"
@@ -61,7 +62,7 @@ type graphqlResponseObject struct {
 var graphqlResponses map[string]graphqlResponseObject
 
 func init() {
-	b, err := ioutil.ReadFile("graphqlresponse.yaml")
+	b, err := os.ReadFile("graphqlresponse.yaml")
 	if err != nil {
 		panic(err)
 	}
@@ -88,7 +89,7 @@ func generateIntrospectionResult(schema string) string {
 	if err := cmd.Start(); err != nil {
 		log.Fatal(err)
 	}
-	b, err := ioutil.ReadAll(stdout)
+	b, err := io.ReadAll(stdout)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -97,7 +98,7 @@ func generateIntrospectionResult(schema string) string {
 
 func commonGraphqlHandler(handlerName string) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		body, err := ioutil.ReadAll(r.Body)
+		body, err := io.ReadAll(r.Body)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -114,7 +115,9 @@ func commonGraphqlHandler(handlerName string) func(w http.ResponseWriter, r *htt
 		if err != nil {
 			log.Fatal(err)
 		}
-		if req.Query == strings.TrimSpace(graphqlResponses[handlerName].Request) && string(req.Variables) == strings.TrimSpace(graphqlResponses[handlerName].Variables) {
+		if req.Query == strings.TrimSpace(graphqlResponses[handlerName].Request) &&
+			string(req.Variables) == strings.TrimSpace(graphqlResponses[handlerName].Variables) {
+
 			fmt.Fprintf(w, graphqlResponses[handlerName].Response)
 			return
 		}
@@ -191,7 +194,7 @@ func verifyRequest(r *http.Request, expectedRequest expectedRequest) error {
 		return getError("Expected No body", "but got some body to read")
 	}
 
-	b, err := ioutil.ReadAll(r.Body)
+	b, err := io.ReadAll(r.Body)
 	if err != nil {
 		return getError("Unable to read request body", err.Error())
 	}
@@ -216,7 +219,7 @@ func verifyGraphqlRequest(r *http.Request, expectedRequest expectedGraphqlReques
 		return false, getError("Invalid URL", r.URL.String())
 	}
 
-	b, err := ioutil.ReadAll(r.Body)
+	b, err := io.ReadAll(r.Body)
 	if err != nil {
 		return false, getError("Unable to read request body", err.Error())
 	}
@@ -275,7 +278,9 @@ func getFavMoviesErrorHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	getRestError(w, []byte(`{"errors":[{"message": "Rest API returns Error for myFavoriteMovies query","locations": [ { "line": 5, "column": 4 } ],"path": ["Movies","name"]}]}`))
+	getRestError(w, []byte(
+		`{"errors":[{"message": "Rest API returns Error for myFavoriteMovies query",`+
+			`"locations": [ { "line": 5, "column": 4 } ],"path": ["Movies","name"]}]}`))
 }
 
 func getFavMoviesHandler(w http.ResponseWriter, r *http.Request) {
@@ -721,7 +726,7 @@ func (i input) Name() string {
 }
 
 func getInput(r *http.Request, v interface{}) error {
-	b, err := ioutil.ReadAll(r.Body)
+	b, err := io.ReadAll(r.Body)
 	if err != nil {
 		fmt.Println("while reading body: ", err)
 		return err
@@ -918,7 +923,7 @@ func userNameWithoutAddressHandler(w http.ResponseWriter, r *http.Request) {
 		body: `{"uid":"0x5"}`,
 	}
 
-	b, err := ioutil.ReadAll(r.Body)
+	b, err := io.ReadAll(r.Body)
 	fmt.Println(b, err)
 	if err != nil {
 		err = getError("Unable to read request body", err.Error())
@@ -1071,7 +1076,7 @@ func (*query) SchoolName(ctx context.Context, args struct {
 }
 
 func gqlUserNameWithErrorHandler(w http.ResponseWriter, r *http.Request) {
-	b, err := ioutil.ReadAll(r.Body)
+	b, err := io.ReadAll(r.Body)
 	if err != nil {
 		return
 	}
@@ -1243,7 +1248,7 @@ func buildCarBatchOutput(b []byte, req request) []interface{} {
 }
 
 func gqlCarsWithErrorHandler(w http.ResponseWriter, r *http.Request) {
-	b, err := ioutil.ReadAll(r.Body)
+	b, err := io.ReadAll(r.Body)
 	if err != nil {
 		return
 	}

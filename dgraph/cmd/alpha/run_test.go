@@ -38,6 +38,7 @@ import (
 	"github.com/twpayne/go-geom/encoding/geojson"
 	"github.com/twpayne/go-geom/encoding/wkb"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/encoding/gzip"
 
 	"github.com/dgraph-io/dgo/v210"
@@ -247,9 +248,9 @@ func TestDeletePredicate(t *testing.T) {
 	output, err = runGraphqlQuery(`schema{}`)
 	require.NoError(t, err)
 
-	testutil.CompareJSON(t, testutil.GetFullSchemaHTTPResponse(testutil.SchemaOptions{UserPreds: `{"predicate":"age","type":"default"},` +
-		`{"predicate":"name","type":"string","index":true, "tokenizer":["term"]}`}),
-		output)
+	testutil.CompareJSON(t, testutil.GetFullSchemaHTTPResponse(testutil.SchemaOptions{
+		UserPreds: `{"predicate":"age","type":"default"},` +
+			`{"predicate":"name","type":"string","index":true, "tokenizer":["term"]}`}), output)
 
 	output, err = runGraphqlQuery(q1)
 	require.NoError(t, err)
@@ -1141,7 +1142,9 @@ func TestDeleteAllSP2(t *testing.T) {
 
 	output, err := runGraphqlQuery(q)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"data": {"me":[{"name":"July 3 2017","date":"2017-07-03T03:49:03Z","weight":262.3,"lifeLoad":5,"stressLevel":3}]}}`, output)
+	require.JSONEq(t,
+		`{"data": {"me":[{"name":"July 3 2017","date":"2017-07-03T03:49:03Z",`+
+			`"weight":262.3,"lifeLoad":5,"stressLevel":3}]}}`, output)
 
 	m = fmt.Sprintf(`
 		{
@@ -1373,7 +1376,7 @@ func TestJsonUnicode(t *testing.T) {
 
 func TestGrpcCompressionSupport(t *testing.T) {
 	conn, err := grpc.Dial(testutil.SockAddr,
-		grpc.WithInsecure(),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultCallOptions(grpc.UseCompressor(gzip.Name)),
 	)
 	defer func() {
@@ -1716,7 +1719,7 @@ func (t *Token) refreshToken() error {
 func TestMain(m *testing.M) {
 	addr = "http://" + testutil.SockAddrHttp
 	// Increment lease, so that mutations work.
-	conn, err := grpc.Dial(testutil.SockAddrZero, grpc.WithInsecure())
+	conn, err := grpc.Dial(testutil.SockAddrZero, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatal(err)
 	}

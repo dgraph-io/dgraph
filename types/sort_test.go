@@ -158,7 +158,8 @@ func TestEqual(t *testing.T) {
 		"equal should return false when either parameter cannot have its value converted")
 	require.False(t, equal(Val{Tid: IntID}, Val{Tid: IntID, Value: int64(3)}),
 		"equal should return false when either parameter cannot have its value converted")
-	require.False(t, equal(Val{Tid: IntID}, Val{Tid: IntID}), "equal should return false when either parameter cannot have its value converted")
+	require.False(t, equal(Val{Tid: IntID}, Val{Tid: IntID}),
+		"equal should return false when either parameter cannot have its value converted")
 
 	// not equal when there is a type mismatch between value and tid for either parameter
 	require.False(t, equal(Val{Tid: IntID, Value: float64(3.0)}, Val{Tid: FloatID, Value: float64(3.0)}),

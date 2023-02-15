@@ -8,7 +8,7 @@
  * may not use this file except in compliance with the License. You
  * may obtain a copy of the License at
  *
- *     https://github.com/dgraph-io/dgraph/blob/master/licenses/DCL.txt
+ *     https://github.com/dgraph-io/dgraph/blob/main/licenses/DCL.txt
  */
 
 package worker
@@ -252,7 +252,12 @@ func (r *reducer) blockingRead() error {
 	for _, pkey := range r.partitionKeys {
 		for _, itr := range r.mapItrs {
 			if err := itr.Next(cbuf, pkey); err != nil {
-				cbuf.Release()
+				defer func() {
+					if ierr := cbuf.Release(); ierr != nil {
+						glog.Warningf("error in releasing buffer: %v", ierr)
+					}
+				}()
+
 				return err
 			}
 		}
@@ -267,7 +272,9 @@ func (r *reducer) blockingRead() error {
 	if !cbuf.IsEmpty() {
 		sortAndPush(cbuf)
 	} else {
-		cbuf.Release()
+		if err := cbuf.Release(); err != nil {
+			glog.Warningf("error in releasing buffer: %v", err)
+		}
 	}
 	close(r.bufferCh)
 	return nil
@@ -281,7 +288,9 @@ func (r *reducer) process() error {
 
 	kvBuf := z.NewBuffer(64<<20, "Restore.GetBuf")
 	defer func() {
-		kvBuf.Release()
+		if ierr := kvBuf.Release(); ierr != nil {
+			glog.Warningf("error in releasing buffer: %v", ierr)
+		}
 	}()
 
 	var lastKey []byte
@@ -308,7 +317,9 @@ func (r *reducer) process() error {
 			return err
 		}
 		kvBuf.Reset()
-		cbuf.Release()
+		if err := cbuf.Release(); err != nil {
+			glog.Warningf("error in releasing buffer: %v", err)
+		}
 	} // end loop for bufferCh
 	return nil
 }

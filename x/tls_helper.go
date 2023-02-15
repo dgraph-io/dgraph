@@ -19,7 +19,7 @@ package x
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"io/ioutil"
+	"os"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -236,7 +236,7 @@ func generateCertPool(certPath string, useSystemCA bool) (*x509.CertPool, error)
 	}
 
 	if len(certPath) > 0 {
-		caFile, err := ioutil.ReadFile(certPath)
+		caFile, err := os.ReadFile(certPath)
 		if err != nil {
 			return nil, err
 		}

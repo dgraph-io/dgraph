@@ -19,7 +19,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -36,6 +35,11 @@ import (
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 )
+
+type inputTripletsCount struct {
+	lowerLimit int
+	upperLimit int
+}
 
 func prepare(t *testing.T) {
 	dc := testutil.DgClientWithLogin(t, "groot", "password", x.GalaxyNamespace)
@@ -302,17 +306,17 @@ type liveOpts struct {
 
 func liveLoadData(t *testing.T, opts *liveOpts) error {
 	// Prepare directories.
-	dir, err := ioutil.TempDir("", "multi")
+	dir, err := os.MkdirTemp("", "multi")
 	require.NoError(t, err)
 	defer func() {
 		os.RemoveAll(dir)
 	}()
 	rdfFile := filepath.Join(dir, "rdfs.rdf")
-	require.NoError(t, ioutil.WriteFile(rdfFile, []byte(opts.rdfs), 0644))
+	require.NoError(t, os.WriteFile(rdfFile, []byte(opts.rdfs), 0644))
 	schemaFile := filepath.Join(dir, "schema.txt")
-	require.NoError(t, ioutil.WriteFile(schemaFile, []byte(opts.schema), 0644))
+	require.NoError(t, os.WriteFile(schemaFile, []byte(opts.schema), 0644))
 	gqlSchemaFile := filepath.Join(dir, "gql_schema.txt")
-	require.NoError(t, ioutil.WriteFile(gqlSchemaFile, []byte(opts.gqlSchema), 0644))
+	require.NoError(t, os.WriteFile(gqlSchemaFile, []byte(opts.gqlSchema), 0644))
 	// Load the data.
 	return testutil.LiveLoad(testutil.LiveOpts{
 		Zero:       testutil.ContainerAddr("zero1", 5080),
@@ -429,7 +433,7 @@ func TestLiveLoadMulti(t *testing.T) {
 	require.Contains(t, err.Error(), "Namespace 0x123456 doesn't exist for pred")
 
 	err = liveLoadData(t, &liveOpts{
-		rdfs:    fmt.Sprintf(`_:c <name> "ns eon" <0x123456> .`),
+		rdfs:    `_:c <name> "ns eon" <0x123456> .`,
 		schema:  `name: string @index(term) .`,
 		creds:   galaxyCreds,
 		forceNs: -1,
@@ -563,6 +567,29 @@ func TestTokenExpired(t *testing.T) {
 	_, err = testutil.CreateNamespaceWithRetry(t, token)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Only guardian of galaxy is allowed to do this operation")
+}
+
+func TestNameSpaceLimitFlag(t *testing.T) {
+	testInputs := []inputTripletsCount{{1, 53}, {60, 100}, {141, 153}}
+	galaxyToken, err := testutil.Login(t,
+		&testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: x.GalaxyNamespace})
+	require.NoError(t, err)
+	// Create a new namespace
+	ns, err := testutil.CreateNamespaceWithRetry(t, galaxyToken)
+	require.NoError(t, err)
+	dc := testutil.DgClientWithLogin(t, "groot", "password", ns)
+	require.NoError(t, dc.Alter(context.Background(), &api.Operation{
+		Schema: `name: string .`}))
+	// trying to load more triplets than allowed,It should return error.
+	_, err = testutil.AddNumberOfTriples(t, dc, testInputs[0].lowerLimit, testInputs[0].upperLimit)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Requested UID lease(53) is greater than allowed(50).")
+	_, err = testutil.AddNumberOfTriples(t, dc, testInputs[1].lowerLimit, testInputs[1].upperLimit)
+	require.NoError(t, err)
+	// we have set uid-lease=50 so we are trying lease more uids,it should return error.
+	_, err = testutil.AddNumberOfTriples(t, dc, testInputs[2].lowerLimit, testInputs[2].upperLimit)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Cannot lease UID because UID lease for the namespace")
 }
 
 func TestMain(m *testing.M) {

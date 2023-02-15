@@ -28,6 +28,7 @@ import (
 	"go.opencensus.io/plugin/ocgrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -180,7 +181,7 @@ func newPool(addr string, tlsClientConf *tls.Config) (*Pool, error) {
 	if tlsClientConf != nil {
 		conOpts = append(conOpts, grpc.WithTransportCredentials(credentials.NewTLS(tlsClientConf)))
 	} else {
-		conOpts = append(conOpts, grpc.WithInsecure())
+		conOpts = append(conOpts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
 
 	conn, err := grpc.Dial(addr, conOpts...)

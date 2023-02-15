@@ -8,7 +8,7 @@
  * may not use this file except in compliance with the License. You
  * may obtain a copy of the License at
  *
- *     https://github.com/dgraph-io/dgraph/blob/master/licenses/DCL.txt
+ *     https://github.com/dgraph-io/dgraph/blob/main/licenses/DCL.txt
  */
 
 package acl
@@ -38,7 +38,9 @@ var (
 	userpassword = "simplepassword"
 )
 
-func makeRequestAndRefreshTokenIfNecessary(t *testing.T, token *testutil.HttpToken, params testutil.GraphQLParams) *testutil.GraphQLResponse {
+func makeRequestAndRefreshTokenIfNecessary(t *testing.T, token *testutil.HttpToken,
+	params testutil.GraphQLParams) *testutil.GraphQLResponse {
+
 	resp := testutil.MakeGQLRequestWithAccessJwt(t, &params, token.AccessJwt)
 	if len(resp.Errors) == 0 || !strings.Contains(resp.Errors.Error(), "Token is expired") {
 		return resp
@@ -55,6 +57,7 @@ func makeRequestAndRefreshTokenIfNecessary(t *testing.T, token *testutil.HttpTok
 	token.RefreshToken = newtoken.RefreshToken
 	return testutil.MakeGQLRequestWithAccessJwt(t, &params, token.AccessJwt)
 }
+
 func createUser(t *testing.T, token *testutil.HttpToken, username, password string) *testutil.GraphQLResponse {
 	addUser := `
 	mutation addUser($name: String!, $pass: String!) {
@@ -103,7 +106,9 @@ func checkUserCount(t *testing.T, resp []byte, expected int) {
 	require.Equal(t, expected, len(r.AddUser.User))
 }
 
-func deleteUser(t *testing.T, token *testutil.HttpToken, username string, confirmDeletion bool) *testutil.GraphQLResponse {
+func deleteUser(t *testing.T, token *testutil.HttpToken, username string,
+	confirmDeletion bool) *testutil.GraphQLResponse {
+
 	delUser := `
 	mutation deleteUser($name: String!) {
 		deleteUser(filter: {name: {eq: $name}}) {
@@ -1279,7 +1284,8 @@ func TestExpandQueryWithACLPermissions(t *testing.T) {
 	// Test that groot has access to all the predicates
 	resp, err := dg.NewReadOnlyTxn().Query(ctx, query)
 	require.NoError(t, err, "Error while querying data")
-	testutil.CompareJSON(t, `{"me":[{"name":"RandomGuy","age":23, "nickname":"RG"},{"name":"RandomGuy2","age":25, "nickname":"RG2"}]}`,
+	testutil.CompareJSON(t,
+		`{"me":[{"name":"RandomGuy","age":23, "nickname":"RG"},{"name":"RandomGuy2","age":25, "nickname":"RG2"}]}`,
 		string(resp.GetJson()))
 
 	userClient, err := testutil.DgraphClient(testutil.SockAddr)
@@ -1334,7 +1340,8 @@ func TestExpandQueryWithACLPermissions(t *testing.T) {
 	addRulesToGroup(t, token, devGroup, []rule{{"age", Write.Code}, {"name", Read.Code}, {"nickname", Read.Code}})
 
 	testutil.PollTillPassOrTimeout(t, userClient, query,
-		`{"me":[{"name":"RandomGuy","age":23, "nickname":"RG"},{"name":"RandomGuy2","age":25, "nickname":"RG2"}]}`, timeout)
+		`{"me":[{"name":"RandomGuy","age":23, "nickname":"RG"},{"name":"RandomGuy2","age":25, "nickname":"RG2"}]}`,
+		timeout)
 
 }
 func TestDeleteQueryWithACLPermissions(t *testing.T) {
@@ -1396,8 +1403,11 @@ func TestDeleteQueryWithACLPermissions(t *testing.T) {
 	// Test that groot has access to all the predicates
 	resp, err = dg.NewReadOnlyTxn().Query(ctx, query)
 	require.NoError(t, err, "Error while querying data")
-	testutil.CompareJSON(t, `{"q1":[{"name":"RandomGuy","age":23, "nickname": "RG"},{"name":"RandomGuy2","age":25,  "nickname": "RG2"}]}`,
-		string(resp.GetJson()))
+	testutil.CompareJSON(
+		t,
+		`{"q1":[{"name":"RandomGuy","age":23, "nickname": "RG"},{"name":"RandomGuy2","age":25,  "nickname": "RG2"}]}`,
+		string(resp.GetJson()),
+	)
 
 	// Give Write Access to alice for name and age predicate
 	addRulesToGroup(t, token, devGroup, []rule{{"name", Write.Code}, {"age", Write.Code}})
@@ -1508,8 +1518,9 @@ func TestValQueryWithACLPermissions(t *testing.T) {
 	// Test that groot has access to all the predicates
 	resp, err := dg.NewReadOnlyTxn().Query(ctx, query)
 	require.NoError(t, err, "Error while querying data")
-	testutil.CompareJSON(t, `{"q1":[{"name":"RandomGuy","age":23},{"name":"RandomGuy2","age":25}],"q2":[{"val(v)":"RandomGuy","val(a)":23}]}`,
-		string(resp.GetJson()))
+	testutil.CompareJSON(t,
+		`{"q1":[{"name":"RandomGuy","age":23},{"name":"RandomGuy2","age":25}],`+
+			`"q2":[{"val(v)":"RandomGuy","val(a)":23}]}`, string(resp.GetJson()))
 
 	// All test cases
 	tests := []struct {
@@ -1733,8 +1744,9 @@ func TestAllPredsPermission(t *testing.T) {
 	// Test that groot has access to all the predicates
 	resp, err := dg.NewReadOnlyTxn().Query(ctx, query)
 	require.NoError(t, err, "Error while querying data")
-	testutil.CompareJSON(t, `{"q1":[{"name":"RandomGuy","age":23},{"name":"RandomGuy2","age":25}],"q2":[{"val(v)":"RandomGuy","val(a)":23}]}`,
-		string(resp.GetJson()))
+	testutil.CompareJSON(t,
+		`{"q1":[{"name":"RandomGuy","age":23},{"name":"RandomGuy2","age":25}],`+
+			`"q2":[{"val(v)":"RandomGuy","val(a)":23}]}`, string(resp.GetJson()))
 
 	// All test cases
 	tests := []struct {

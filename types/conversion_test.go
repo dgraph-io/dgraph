@@ -240,7 +240,8 @@ func TestConvertToBinary(t *testing.T) {
 		{in: Val{BinaryID, []byte("2016")}, out: []byte("2016")},
 		{in: Val{IntID, bs(int64(3))}, out: bs(int64(3))},
 		{in: Val{FloatID, bs(float64(-3.5))}, out: bs(float64(-3.5))},
-		{in: Val{DateTimeID, bs(time.Date(2006, 01, 02, 15, 04, 05, 0, time.UTC))}, out: bs(time.Date(2006, 01, 02, 15, 04, 05, 0, time.UTC))},
+		{in: Val{DateTimeID, bs(time.Date(2006, 01, 02, 15, 04, 05, 0, time.UTC))},
+			out: bs(time.Date(2006, 01, 02, 15, 04, 05, 0, time.UTC))},
 	}
 
 	for _, tc := range tests {
@@ -265,7 +266,8 @@ func TestConvertFromBinary(t *testing.T) {
 		{in: []byte(""), out: Val{BinaryID, []byte("")}},
 		{in: []byte("hello"), out: Val{StringID, "hello"}},
 		{in: []byte(""), out: Val{StringID, ""}},
-		{in: bs(time.Date(2016, 1, 1, 0, 0, 0, 0, time.UTC)), out: Val{DateTimeID, time.Date(2016, 1, 1, 0, 0, 0, 0, time.UTC)}},
+		{in: bs(time.Date(2016, 1, 1, 0, 0, 0, 0, time.UTC)),
+			out: Val{DateTimeID, time.Date(2016, 1, 1, 0, 0, 0, 0, time.UTC)}},
 		{in: bs(time.Time{}), out: Val{DateTimeID, time.Time{}}},
 	}
 
@@ -723,7 +725,7 @@ func TestConvertStringToFloat(t *testing.T) {
 		{in: "1", out: float64(1)},
 		{in: "13816.251", out: float64(13816.251)},
 		{in: "-1221.12", out: float64(-1221.12)},
-		{in: "-0.0", out: float64(-0.0)},
+		{in: "-0.0", out: float64(0.0)},
 		{in: "1e10", out: float64(1e10)},
 		{in: "1e-2", out: float64(0.01)},
 		{
@@ -840,7 +842,8 @@ func TestConvertToString(t *testing.T) {
 		{in: Val{Tid: BoolID, Value: bs(true)}, out: "true"},
 		{in: Val{Tid: StringID, Value: []byte("srfrog")}, out: "srfrog"},
 		{in: Val{Tid: PasswordID, Value: []byte("password")}, out: "password"},
-		{in: Val{Tid: DateTimeID, Value: bs(time.Date(2006, time.January, 2, 15, 4, 5, 0, time.UTC))}, out: "2006-01-02T15:04:05Z"},
+		{in: Val{Tid: DateTimeID, Value: bs(time.Date(2006, time.January, 2, 15, 4, 5, 0, time.UTC))},
+			out: "2006-01-02T15:04:05Z"},
 	}
 
 	for _, tc := range tests {

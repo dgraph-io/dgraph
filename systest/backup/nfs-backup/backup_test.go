@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"os/exec"
@@ -30,6 +29,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
@@ -48,16 +48,20 @@ var (
 
 func TestBackupHAClust(t *testing.T) {
 
-	backupRestoreTest(t, testutil.SockAddr, testutil.SockAddrAlpha4Http, testutil.SockAddrZeroHttp, backupDstHA, testutil.SockAddrHttp)
+	backupRestoreTest(t, testutil.SockAddr, testutil.SockAddrAlpha4Http,
+		testutil.SockAddrZeroHttp, backupDstHA, testutil.SockAddrHttp)
 }
 
 func TestBackupNonHAClust(t *testing.T) {
 
-	backupRestoreTest(t, testutil.SockAddrAlpha7, testutil.SockAddrAlpha8Http, testutil.SockAddrZero7Http, backupDstNonHA, testutil.SockAddrAlpha7Http)
+	backupRestoreTest(t, testutil.SockAddrAlpha7, testutil.SockAddrAlpha8Http,
+		testutil.SockAddrZero7Http, backupDstNonHA, testutil.SockAddrAlpha7Http)
 }
 
-func backupRestoreTest(t *testing.T, backupAlphaSocketAddr string, restoreAlphaAddr string, backupZeroAddr string, backupDst string, backupAlphaSocketAddrHttp string) {
-	conn, err := grpc.Dial(backupAlphaSocketAddr, grpc.WithInsecure())
+func backupRestoreTest(t *testing.T, backupAlphaSocketAddr string, restoreAlphaAddr string,
+	backupZeroAddr string, backupDst string, backupAlphaSocketAddrHttp string) {
+
+	conn, err := grpc.Dial(backupAlphaSocketAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 	ctx := context.Background()
@@ -204,7 +208,9 @@ func checkObjectCount(t *testing.T, expectedCount int, restoreAlphaAddr string) 
 	require.Equal(t, expectedCount, int(movieCount))
 }
 
-func runBackup(t *testing.T, numExpectedFiles, numExpectedDirs int, backupAlphaSocketAddrHttp string, backupDst string) []string {
+func runBackup(t *testing.T, numExpectedFiles, numExpectedDirs int,
+	backupAlphaSocketAddrHttp string, backupDst string) []string {
+
 	return runBackupInternal(t, false, numExpectedFiles, numExpectedDirs, backupAlphaSocketAddrHttp, backupDst)
 }
 
@@ -248,7 +254,7 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 		return isdir && strings.HasPrefix(path, "data/copied_backups/dgraph.")
 	})
 	require.Equal(t, numExpectedDirs, len(dirs))
-	b, err = ioutil.ReadFile(filepath.Join(copyBackupDir, "manifest.json"))
+	b, err = os.ReadFile(filepath.Join(copyBackupDir, "manifest.json"))
 	require.NoError(t, err)
 	var manifest worker.MasterManifest
 	err = json.Unmarshal(b, &manifest)
@@ -257,7 +263,9 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	return dirs
 }
 
-func restore(t *testing.T, lastDir string, restoreAlphaAddr string, backupDst string, backupType string, backupNum int) string {
+func restore(t *testing.T, lastDir string, restoreAlphaAddr string,
+	backupDst string, backupType string, backupNum int) string {
+
 	var restoreRequest string
 	if backupType != "incremental" {
 		restoreRequest = `mutation restore($loc: String!) {
