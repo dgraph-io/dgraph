@@ -28,6 +28,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/golang/glog"
 	"github.com/pkg/errors"
 )
 
@@ -59,7 +60,11 @@ func makeKey(keyFile string, c *certConfig) (crypto.PrivateKey, error) {
 		}
 		return nil, err
 	}
-	defer fp.Close()
+	defer func() {
+		if err := fp.Close(); err != nil {
+			glog.Warningf("error closing file: %v", err)
+		}
+	}()
 
 	var key crypto.PrivateKey
 	switch c.curve {

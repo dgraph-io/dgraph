@@ -72,7 +72,7 @@ func (in ContainerInstance) BestEffortWaitForHealthy(privatePort uint16) error {
 		var body []byte
 		if resp != nil && resp.Body != nil {
 			body, _ = io.ReadAll(resp.Body)
-			resp.Body.Close()
+			_ = resp.Body.Close()
 		}
 		if err == nil && resp.StatusCode == http.StatusOK {
 			return checkACL(body)
@@ -245,7 +245,8 @@ func DockerCpFromContainer(containerID, srcPath, dstPath string) error {
 		return nil
 	}
 	tr := tar.NewReader(tarStream)
-	tr.Next()
+	_, err = tr.Next()
+	x.Check(err)
 
 	data, err := io.ReadAll(tr)
 	x.Check(err)
@@ -287,7 +288,7 @@ func CheckHealthContainer(socketAddrHttp string) error {
 			if err != nil {
 				return err
 			}
-			resp.Body.Close()
+			_ = resp.Body.Close()
 		}
 		fmt.Printf("health check for container failed: %v. Response: %q. Retrying...\n", err, body)
 		time.Sleep(time.Second)

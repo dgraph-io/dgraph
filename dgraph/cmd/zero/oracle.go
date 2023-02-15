@@ -63,7 +63,9 @@ func (o *Oracle) Init() {
 
 // close releases the memory associated with btree used for keycommit.
 func (o *Oracle) close() {
-	o.keyCommit.Close()
+	if err := o.keyCommit.Close(); err != nil {
+		glog.Warningf("error while closing tree: %v", err)
+	}
 }
 
 func (o *Oracle) updateStartTxnTs(ts uint64) {

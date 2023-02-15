@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -66,7 +67,11 @@ func GetState() (*StateResponse, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			glog.Warningf("error closing body: %v", err)
+		}
+	}()
 
 	b, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -95,7 +100,11 @@ func GetStateHttps(tlsConfig *tls.Config) (*StateResponse, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			glog.Warningf("error closing body: %v", err)
+		}
+	}()
 
 	b, err := io.ReadAll(resp.Body)
 	if err != nil {

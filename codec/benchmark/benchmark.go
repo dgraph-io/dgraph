@@ -32,6 +32,8 @@ import (
 	"sort"
 	"time"
 
+	"github.com/golang/glog"
+
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
@@ -62,7 +64,11 @@ func read(filename string) []int {
 	if err != nil {
 		x.Panic(err)
 	}
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			glog.Warningf("error while closing fd: %v", err)
+		}
+	}()
 
 	fgzip, err := gzip.NewReader(f)
 	if err != nil {

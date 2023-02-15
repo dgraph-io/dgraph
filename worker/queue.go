@@ -229,7 +229,9 @@ func (t *tasks) worker() {
 		var task taskRequest
 		select {
 		case <-x.ServerCloser.HasBeenClosed():
-			t.log.Close()
+			if err := t.log.Close(); err != nil {
+				glog.Warningf("error closing log file: %v", err)
+			}
 			return
 		case <-shouldCleanup.C:
 			t.cleanup()
