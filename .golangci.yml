@@ -9,14 +9,26 @@ linters-settings:
     checks:
       - all
       - '-SA1019' # it is okay to use math/rand at times.
-                  # we should review this again when we upgrade to go 1.20
+  gosec:
+    excludes: # these are not relevant for us right now
+      - G101
+      - G107
+      - G108
+      - G110
+      - G112
+      - G114
+      - G201
+      - G204
+      - G306
+      - G402
+      - G404
 
 linters:
   disable-all: true
   enable:
     - errcheck
     - ineffassign
-  # - gas
+    - gosec
     - gofmt
     - gosimple
     - govet
