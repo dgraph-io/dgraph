@@ -1721,8 +1721,15 @@ L:
 							itemInFunc.Errorf("len function only allowed inside inequality" +
 								" function")
 					}
-					function.Attr = nestedFunc.NeedsVar[0].Name
-					function.IsLenVar = true
+					if len(function.Attr) == 0 {
+						// eq(len(a), 1)
+						function.Attr = nestedFunc.NeedsVar[0].Name
+						function.IsLenVar = true
+					} else {
+						// eq(1, len(a))
+						return nil, itemInFunc.Errorf("incorrect order of value and len" +
+							" try eq(len(), val)")
+					}
 					function.NeedsVar = append(function.NeedsVar, nestedFunc.NeedsVar...)
 				case countFunc:
 					function.Attr = nestedFunc.Attr
