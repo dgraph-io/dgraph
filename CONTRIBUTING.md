@@ -95,7 +95,7 @@ For Dgraph official documentation, visit https://dgraph.io/docs/.
 For discussions about Dgraph     , visit https://discuss.dgraph.io.
 
 Licensed variously under the Apache Public License 2.0 and Dgraph Community License.
-Copyright 2015-2018 Dgraph Labs, Inc.
+Copyright 2015-2023 Dgraph Labs, Inc.
 ```
 
 ### Build Docker Image
@@ -129,7 +129,7 @@ For Dgraph official documentation, visit https://dgraph.io/docs/.
 For discussions about Dgraph     , visit https://discuss.dgraph.io.
 
 Licensed variously under the Apache Public License 2.0 and Dgraph Community License.
-Copyright 2015-2018 Dgraph Labs, Inc.
+Copyright 2015-2023 Dgraph Labs, Inc.
 ```
 
 For release images, follow [Doing a release](#doing-a-release). It creates
@@ -249,7 +249,7 @@ Every new source file must begin with a license header.
 Most of Dgraph, Badger, and the Dgraph clients (dgo, dgraph-js, pydgraph and dgraph4j) are licensed under the Apache 2.0 license:
 
     /*
-     * Copyright 2016-2022 Dgraph Labs, Inc. and Contributors
+     * Copyright 2016-2023 Dgraph Labs, Inc. and Contributors
      *
      * Licensed under the Apache License, Version 2.0 (the "License");
      * you may not use this file except in compliance with the License.
