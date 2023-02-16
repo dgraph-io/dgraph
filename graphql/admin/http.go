@@ -135,10 +135,6 @@ type graphqlSubscription struct {
 }
 
 func (gs *graphqlSubscription) isValid(namespace uint64) error {
-	if gs == nil {
-		return errors.New("gs is nil")
-	}
-
 	gs.graphqlHandler.pollerMux.RLock()
 	defer gs.graphqlHandler.pollerMux.RUnlock()
 	if err := gs.graphqlHandler.isValid(namespace); err != nil {
@@ -281,10 +277,6 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (gh *graphqlHandler) isValid(namespace uint64) error {
-	if gh == nil {
-		return errors.New("gh is nil")
-	}
-
 	gh.resolverMux.RLock()
 	defer gh.resolverMux.RUnlock()
 	switch {

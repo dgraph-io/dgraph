@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+//nolint:lll
 package chunker
 
 import (
@@ -1229,7 +1230,7 @@ func BenchmarkNoFacets(b *testing.B) {
 	// we're parsing 125 nquads at a time, so the MB/s == MNquads/s
 	b.SetBytes(125)
 	for n := 0; n < b.N; n++ {
-		Parse([]byte(json), SetNquads)
+		_, _ = Parse([]byte(json), SetNquads)
 	}
 }
 
@@ -1370,6 +1371,6 @@ func BenchmarkNoFacetsFast(b *testing.B) {
 	// we're parsing 125 nquads at a time, so the MB/s == MNquads/s
 	b.SetBytes(125)
 	for n := 0; n < b.N; n++ {
-		FastParse([]byte(json), SetNquads)
+		_, _ = FastParse([]byte(json), SetNquads)
 	}
 }

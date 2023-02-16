@@ -49,7 +49,7 @@ var (
 func TestExportSchemaToMinio(t *testing.T) {
 	mc, err := testutil.NewMinioClient()
 	require.NoError(t, err)
-	mc.MakeBucket(bucketName, "")
+	require.NoError(t, mc.MakeBucket(bucketName, ""))
 
 	setupDgraph(t, moviesData, movieSchema)
 	requestExport(t, minioDest, "rdf")

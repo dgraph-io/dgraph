@@ -202,7 +202,8 @@ func checkExportSchema(t *testing.T, schemaFileList []string) {
 	r, err := gzip.NewReader(f)
 	require.NoError(t, err)
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, err = buf.ReadFrom(r)
+	require.NoError(t, err)
 
 	result, err := schema.Parse(buf.String())
 	require.NoError(t, err)
@@ -226,7 +227,8 @@ func checkExportGqlSchema(t *testing.T, gqlSchemaFiles []string) {
 	r, err := gzip.NewReader(f)
 	require.NoError(t, err)
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, err = buf.ReadFrom(r)
+	require.NoError(t, err)
 	expected := []x.ExportedGQLSchema{{Namespace: x.GalaxyNamespace, Schema: gqlSchema}}
 	b, err := json.Marshal(expected)
 	require.NoError(t, err)

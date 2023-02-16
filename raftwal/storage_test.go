@@ -161,7 +161,7 @@ func TestStorageLastIndex(t *testing.T) {
 		t.Errorf("term = %d, want %d", last, 5)
 	}
 
-	ds.reset([]raftpb.Entry{{Index: 6, Term: 5}})
+	require.NoError(t, ds.reset([]raftpb.Entry{{Index: 6, Term: 5}}))
 	last, err = ds.LastIndex()
 	if err != nil {
 		t.Errorf("err = %v, want nil", err)
@@ -376,7 +376,7 @@ func TestTruncateStorage(t *testing.T) {
 			Type:  typ,
 			Data:  []byte(fmt.Sprintf("entry %d", idx)),
 		}
-		ds.addEntries([]raftpb.Entry{entry})
+		require.NoError(t, ds.addEntries([]raftpb.Entry{entry}))
 	}
 
 	// Verify all entries.
@@ -412,7 +412,7 @@ func TestTruncateStorage(t *testing.T) {
 			Type:  raftpb.EntryNormal,
 			Data:  []byte(fmt.Sprintf("entry %d", idx)),
 		}
-		ds.addEntries([]raftpb.Entry{entry})
+		require.NoError(t, ds.addEntries([]raftpb.Entry{entry}))
 	}
 
 	// Verify all entries.
@@ -438,7 +438,7 @@ func TestStorageOnlySnap(t *testing.T) {
 		t.Logf("Creating dir: %s\n", dir)
 
 		buf := make([]byte, 128)
-		rand.Read(buf)
+		_, _ = rand.Read(buf)
 		N := uint64(1000)
 
 		snap := &raftpb.Snapshot{}
@@ -532,7 +532,7 @@ func TestStorageBig(t *testing.T) {
 		check(N, N+1)
 
 		buf := make([]byte, 128)
-		rand.Read(buf)
+		_, _ = rand.Read(buf)
 
 		cs := &raftpb.ConfState{}
 		require.NoError(t, ds.CreateSnapshot(N-100, cs, buf))

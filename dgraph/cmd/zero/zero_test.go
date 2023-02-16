@@ -89,10 +89,9 @@ func TestIdBump(t *testing.T) {
 }
 
 func TestProposalKey(t *testing.T) {
-
 	id := uint64(2)
 	node := &node{Node: &conn.Node{Id: id}, ctx: context.Background(), closer: z.NewCloser(1)}
-	node.initProposalKey(node.Id)
+	require.NoError(t, node.initProposalKey(node.Id))
 
 	pkey := proposalKey
 	nodeIdFromKey := proposalKey >> 48

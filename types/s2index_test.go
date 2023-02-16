@@ -213,7 +213,7 @@ func BenchmarkKeyGeneratorPoint(b *testing.B) {
 
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		IndexGeoTokens(g)
+		_, _ = IndexGeoTokens(g)
 	}
 }
 
@@ -235,7 +235,7 @@ func BenchmarkKeyGeneratorPolygon(b *testing.B) {
 
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		IndexGeoTokens(g)
+		_, _ = IndexGeoTokens(g)
 	}
 }
 

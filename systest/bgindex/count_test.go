@@ -67,7 +67,8 @@ func TestCountIndex(t *testing.T) {
 	fmt.Println("inserting values")
 	th := y.NewThrottle(10000)
 	for i := 1; i <= int(numUIDs); i++ {
-		th.Do()
+		require.NoError(t, th.Do())
+
 		go func(uid int) {
 			defer th.Done(nil)
 			bb := &bytes.Buffer{}
@@ -86,7 +87,7 @@ func TestCountIndex(t *testing.T) {
 			}
 		}(i)
 	}
-	th.Finish()
+	require.NoError(t, th.Finish())
 
 	fmt.Println("building indexes in background")
 	if err := dg.Alter(context.Background(), &api.Operation{
@@ -250,7 +251,7 @@ func TestCountIndex(t *testing.T) {
 	fmt.Println("starting to query")
 	var count uint64
 	th = y.NewThrottle(50000)
-	th.Do()
+	require.NoError(t, th.Do())
 	go func() {
 		defer th.Done(nil)
 		for {
@@ -264,7 +265,7 @@ func TestCountIndex(t *testing.T) {
 	}()
 
 	for value, uids := range countIndex {
-		th.Do()
+		require.NoError(t, th.Do())
 		go func(val int, uidList []int) {
 			defer th.Done(nil)
 			if val <= 0 {
@@ -281,7 +282,7 @@ func TestCountIndex(t *testing.T) {
 			atomic.AddUint64(&count, 1)
 		}(value, uids)
 	}
-	th.Finish()
+	require.NoError(t, th.Finish())
 
 	close(ch)
 	for p := range ch {

@@ -128,7 +128,7 @@ func PasswordImport(t *testing.T, c *dgo.Dgraph) {
 		require.JSONEq(t, fmt.Sprintf(`{"q":[{"secret":%t}]}`, uid == assigned.Uids["uid2"]),
 			string(resp.Json))
 	}
-	txn.Discard(ctx)
+	require.NoError(t, txn.Discard(ctx))
 
 	resp, err := c.NewTxn().Query(ctx, `
 	{

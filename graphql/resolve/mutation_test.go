@@ -151,8 +151,8 @@ func benchmark3LevelDeep(num int, b *testing.B) {
 	addRewriter := NewAddRewriter()
 	idExistence := make(map[string]string)
 	for n := 0; n < b.N; n++ {
-		addRewriter.RewriteQueries(context.Background(), mut)
-		addRewriter.Rewrite(context.Background(), mut, idExistence)
+		_, _, _ = addRewriter.RewriteQueries(context.Background(), mut)
+		_, _ = addRewriter.Rewrite(context.Background(), mut, idExistence)
 	}
 }
 

@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+//nolint:lll
 package dql
 
 import (
@@ -28,7 +29,7 @@ var sc = `type.object.name.en: string @index .
 film.film.initial_release_date: date @index .`
 
 func benchmarkParsingHelper(b *testing.B, q string) {
-	schema.ParseBytes([]byte(sc), 1)
+	_ = schema.ParseBytes([]byte(sc), 1)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, err := Parse(Request{Str: q})
@@ -37,7 +38,7 @@ func benchmarkParsingHelper(b *testing.B, q string) {
 }
 
 func benchmarkParsingParallelHelper(b *testing.B, q string) {
-	schema.ParseBytes([]byte(sc), 1)
+	_ = schema.ParseBytes([]byte(sc), 1)
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {

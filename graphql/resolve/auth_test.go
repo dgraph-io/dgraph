@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+//nolint:lll
 package resolve
 
 import (

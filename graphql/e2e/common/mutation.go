@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+//nolint:lll
 package common
 
 // Tests that mutate the GraphQL database should return the database state to what it

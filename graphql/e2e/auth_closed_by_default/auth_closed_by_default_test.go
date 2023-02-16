@@ -203,13 +203,5 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 	common.BootstrapServer(authSchema, data)
-	// Data is added only in the first iteration, but the schema is added every iteration.
-	if data != nil {
-		data = nil
-	}
-	exitCode := m.Run()
-	if exitCode != 0 {
-		os.Exit(exitCode)
-	}
-	os.Exit(0)
+	os.Exit(m.Run())
 }

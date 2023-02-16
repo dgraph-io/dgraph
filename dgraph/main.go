@@ -65,8 +65,6 @@ func main() {
 					humanize.IBytes(js.Active), humanize.IBytes(js.Allocated),
 					humanize.IBytes(js.Resident), humanize.IBytes(js.Retained))
 				lastAlloc = uint64(z.NumAllocBytes())
-			} else {
-				// Don't update the lastJs here.
 			}
 
 			runtime.ReadMemStats(&ms)

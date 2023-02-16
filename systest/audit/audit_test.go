@@ -71,7 +71,7 @@ func TestAlphaAudit(t *testing.T) {
 			fmt.Sprintf("%s/admin", testutil.SockAddrHttp),
 			"--header", "Content-Type: application/json",
 			"--data-raw", `'{"query":"mutation {\n  backup(
-input: {destination: \"/Users/sankalanparajuli/work/backup\"}) {\n    response {\n      message\n      code\n    }\n  }\n}\n","variables":{}}'`},
+input: {destination: \"/Users/sankalanparajuli/work/backup\"}) {\n    response {\n      message\n      code\n    }\n  }\n}\n","variables":{}}'`}, //nolint:lll
 
 		"/graphql": {"--location", "--request", "POST", fmt.Sprintf("%s/graphql", testutil.SockAddrHttp),
 			"--header", "Content-Type: application/json",
