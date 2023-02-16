@@ -353,7 +353,6 @@ func CreateNamespace(t *testing.T, headers http.Header, whichAlpha string) uint6
 	// keep retrying as long as we get a retryable error
 	var gqlResponse *GraphQLResponse
 	for {
-		// gqlResponse = createNamespace.ExecuteAsPost(t, GraphqlAdminURL)
 		gqlResponse = createNamespace.ExecuteAsPost(t, adminUrl)
 		if containsRetryableCreateNamespaceError(gqlResponse) {
 			continue

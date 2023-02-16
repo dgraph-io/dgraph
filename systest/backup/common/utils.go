@@ -101,7 +101,7 @@ func CopyToLocalFs(t *testing.T) {
 	require.NoError(t, testutil.DockerCp(srcPath, copyBackupDir))
 }
 
-func AddSchema(t *testing.T, header http.Header, whichAlpha string) {
+func AddItemSchema(t *testing.T, header http.Header, whichAlpha string) {
 	updateSchemaParams := &common.GraphQLParams{
 		Query: `mutation {
 			    updateGQLSchema(
