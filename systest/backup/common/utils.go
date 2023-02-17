@@ -146,10 +146,12 @@ func AddItem(t *testing.T, minSuffixVal int, maxSuffixVal int, jwtToken string, 
 		require.NoError(t, err)
 
 		req, err := http.NewRequest(http.MethodPost, adminUrl, bytes.NewBuffer(b))
+		require.NoError(t, err)
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set(accessJwtHeader, jwtToken)
 		client := &http.Client{}
 		resp, err := client.Do(req)
+		require.NoError(t, err)
 
 		var data interface{}
 		require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
@@ -217,12 +219,14 @@ func TakeBackup(t *testing.T, jwtToken string, backupDst string, whichAlpha stri
 	require.NoError(t, err)
 
 	req, err := http.NewRequest(http.MethodPost, adminUrl, bytes.NewBuffer(b))
+	require.NoError(t, err)
 	req.Header.Set("Content-Type", "application/json")
 	if jwtToken != "" {
 		req.Header.Set(accessJwtHeader, jwtToken)
 	}
 	client := &http.Client{}
 	resp, err := client.Do(req)
+	require.NoError(t, err)
 
 	var data interface{}
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
@@ -251,12 +255,14 @@ func RunRestore(t *testing.T, jwtToken string, restoreLocation string, whichAlph
 	require.NoError(t, err)
 
 	req, err := http.NewRequest(http.MethodPost, adminUrl, bytes.NewBuffer(b))
+	require.NoError(t, err)
 	req.Header.Set("Content-Type", "application/json")
 	if jwtToken != "" {
 		req.Header.Set(accessJwtHeader, jwtToken)
 	}
 	client := &http.Client{}
 	resp, err := client.Do(req)
+	require.NoError(t, err)
 
 	var data interface{}
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
