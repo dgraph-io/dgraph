@@ -331,7 +331,16 @@ func containsRetryableCreateNamespaceError(resp *GraphQLResponse) bool {
 	return false
 }
 
-func CreateNamespace(t *testing.T, headers http.Header) uint64 {
+func CreateNamespaces(t *testing.T, headers http.Header, whichAlpha string, count int) []uint64 {
+	var ns []uint64
+	for i := 1; i <= count; i++ {
+		ns = append(ns, CreateNamespace(t, headers, whichAlpha))
+	}
+	return ns
+}
+
+func CreateNamespace(t *testing.T, headers http.Header, whichAlpha string) uint64 {
+	adminUrl := "http://" + testutil.ContainerAddr(whichAlpha, 8080) + "/admin"
 	createNamespace := &GraphQLParams{
 		Query: `mutation {
 					addNamespace{
@@ -344,7 +353,7 @@ func CreateNamespace(t *testing.T, headers http.Header) uint64 {
 	// keep retrying as long as we get a retryable error
 	var gqlResponse *GraphQLResponse
 	for {
-		gqlResponse = createNamespace.ExecuteAsPost(t, GraphqlAdminURL)
+		gqlResponse = createNamespace.ExecuteAsPost(t, adminUrl)
 		if containsRetryableCreateNamespaceError(gqlResponse) {
 			continue
 		}
@@ -362,7 +371,8 @@ func CreateNamespace(t *testing.T, headers http.Header) uint64 {
 	return resp.AddNamespace.NamespaceId
 }
 
-func DeleteNamespace(t *testing.T, id uint64, header http.Header) {
+func DeleteNamespace(t *testing.T, id uint64, header http.Header, whichAlpha string) {
+	adminUrl := "http://" + testutil.ContainerAddr(whichAlpha, 8080) + "/admin"
 	deleteNamespace := &GraphQLParams{
 		Query: `mutation deleteNamespace($id:Int!){
 					deleteNamespace(input:{namespaceId:$id}){
@@ -373,7 +383,7 @@ func DeleteNamespace(t *testing.T, id uint64, header http.Header) {
 		Headers:   header,
 	}
 
-	gqlResponse := deleteNamespace.ExecuteAsPost(t, GraphqlAdminURL)
+	gqlResponse := deleteNamespace.ExecuteAsPost(t, adminUrl)
 	RequireNoGQLErrors(t, gqlResponse)
 }
 
