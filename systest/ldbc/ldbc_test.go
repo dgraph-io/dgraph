@@ -68,33 +68,39 @@ func TestQueries(t *testing.T) {
 }
 
 func TestMain(m *testing.M) {
-	noschemaFile := filepath.Join(testutil.TestDataDirectory, "ldbcTypes.schema")
-	rdfFile := testutil.TestDataDirectory
-	if err := testutil.MakeDirEmpty([]string{"out/0"}); err != nil {
-		os.Exit(1)
+
+	if os.Getenv("LDBC_QUERY_ONLY") == "false" {
+		noschemaFile := filepath.Join(testutil.TestDataDirectory, "ldbcTypes.schema")
+		rdfFile := testutil.TestDataDirectory
+		if err := testutil.MakeDirEmpty([]string{"out/0"}); err != nil {
+			os.Exit(1)
+		}
+
+		start := time.Now()
+		fmt.Println("Bulkupload started")
+		if err := testutil.BulkLoad(testutil.BulkOpts{
+			Zero:       testutil.SockAddrZero,
+			Shards:     1,
+			RdfFile:    rdfFile,
+			SchemaFile: noschemaFile,
+		}); err != nil {
+			fmt.Println(err)
+			cleanupAndExit(1)
+		}
+
+		fmt.Printf("Took %s to bulkupload LDBC dataset\n", time.Since(start))
 	}
 
-	start := time.Now()
-	fmt.Println("Bulkupload started")
-	if err := testutil.BulkLoad(testutil.BulkOpts{
-		Zero:       testutil.SockAddrZero,
-		Shards:     1,
-		RdfFile:    rdfFile,
-		SchemaFile: noschemaFile,
-	}); err != nil {
-		fmt.Println(err)
-		cleanupAndExit(1)
+	if os.Getenv("LDBC_BULK_LOAD_ONLY") == "false" {
+		if err := testutil.StartAlphas("./alpha.yml"); err != nil {
+			fmt.Printf("Error while bringin up alphas. Error: %v\n", err)
+			cleanupAndExit(1)
+		}
+
+		exitCode := m.Run()
+		cleanupAndExit(exitCode)
 	}
 
-	fmt.Printf("Took %s to bulkupload LDBC dataset\n", time.Since(start))
-
-	if err := testutil.StartAlphas("./alpha.yml"); err != nil {
-		fmt.Printf("Error while bringin up alphas. Error: %v\n", err)
-		cleanupAndExit(1)
-	}
-
-	exitCode := m.Run()
-	cleanupAndExit(exitCode)
 }
 
 func cleanupAndExit(exitCode int) {

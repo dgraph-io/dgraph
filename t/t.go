@@ -96,7 +96,9 @@ var (
 	skip = pflag.String("skip", "",
 		"comma separated list of packages that needs to be skipped. "+
 			"Package Check uses string.Contains(). Please check the flag carefully")
-	runCoverage = pflag.Bool("coverage", false, "Set true to calculate test coverage")
+	runCoverage   = pflag.Bool("coverage", false, "Set true to calculate test coverage")
+	ldbcLoadOnly  = pflag.Bool("ldbcLoadOnly", false, "Set true to run only bulkloader of ldbc suite")
+	ldbcQueryOnly = pflag.Bool("ldbcQueryOnly", false, "Set true to run only queries of ldbc suite")
 )
 
 func commandWithContext(ctx context.Context, args ...string) *exec.Cmd {
@@ -110,6 +112,16 @@ func commandWithContext(ctx context.Context, args ...string) *exec.Cmd {
 	if runtime.GOARCH == "arm64" {
 		cmd.Env = append(cmd.Env, "MINIO_IMAGE_ARCH=RELEASE.2020-11-13T20-10-18Z-arm64")
 		cmd.Env = append(cmd.Env, "NFS_SERVER_IMAGE_ARCH=11-arm")
+	}
+	if *ldbcLoadOnly {
+		cmd.Env = append(cmd.Env, "LDBC_BULK_LOAD_ONLY=true")
+	} else {
+		cmd.Env = append(cmd.Env, "LDBC_BULK_LOAD_ONLY=false")
+	}
+	if *ldbcQueryOnly {
+		cmd.Env = append(cmd.Env, "LDBC_QUERY_ONLY=true")
+	} else {
+		cmd.Env = append(cmd.Env, "LDBC_QUERY_ONLY=false")
 	}
 
 	return cmd
