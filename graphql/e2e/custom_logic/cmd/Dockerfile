@@ -1,5 +1,5 @@
 
-FROM golang:1.14.2-alpine3.11
+FROM golang:1.19-alpine3.17
 
 COPY . .
 
