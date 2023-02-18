@@ -5,9 +5,12 @@ COPY . .
 
 RUN apk update && apk add git && apk add nodejs && apk add npm
 
-RUN go install gopkg.in/yaml.v2@latest
+# As of Go 1.16 modules are on by default
+RUN go env -w GO111MODULE=auto
 
-RUN go install github.com/graph-gophers/graphql-go@latest
+RUN go get gopkg.in/yaml.v2
+
+RUN go get github.com/graph-gophers/graphql-go
 
 RUN npm install
 
