@@ -5,7 +5,8 @@ COPY . .
 
 RUN apk update && apk add git && apk add nodejs && apk add npm
 
-# As of Go 1.16 modules are on by default
+# As of Go 1.16 modules are always on by default
+# See https://go.dev/blog/go116-module-changes
 RUN go env -w GO111MODULE=auto
 
 RUN go get gopkg.in/yaml.v2
