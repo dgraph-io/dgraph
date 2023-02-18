@@ -5,9 +5,9 @@ COPY . .
 
 RUN apk update && apk add git && apk add nodejs && apk add npm
 
-RUN go get gopkg.in/yaml.v2
+RUN go install gopkg.in/yaml.v2@latest
 
-RUN go get github.com/graph-gophers/graphql-go
+RUN go install github.com/graph-gophers/graphql-go@latest
 
 RUN npm install
 
