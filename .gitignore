@@ -1,5 +1,7 @@
 /build
 /installs
+/t/bin
+/linux
 /coverage.out
 /dgraph-bulk-loader
 /osx-docker-gopath

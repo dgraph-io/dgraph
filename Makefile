@@ -65,6 +65,14 @@ test: docker-image
 	@mv dgraph/dgraph ${GOPATH}/bin/dgraph
 	@$(MAKE) -C t test
 
+test-upgrade: docker-image
+	@echo "Loading LDBC data using dgraph.old..."
+	@cp t/bin/dgraph.old ${GOPATH}/bin/dgraph
+	@$(MAKE) -C t test args="--suite=ldbc --ldbcLoadOnly=true"
+	@echo "Querying LDBC data using dgraph.new..."
+	@cp t/bin/dgraph.new ${GOPATH}/bin/dgraph
+	@$(MAKE) -C t test args="--suite=ldbc --ldbcQueryOnly=true --download=false"
+
 image-local local-image:
 	@GOOS=linux GOARCH=amd64 $(MAKE) dgraph
 	@mkdir -p linux
