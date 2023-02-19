@@ -50,11 +50,11 @@ func formData(t *testing.T, str string) string {
 	require.NoError(t, err)
 
 	src := ValueForType(GeoID)
-	src.Value = []byte(d)
+	src.Value = d
 	gd, err := Convert(src, StringID)
 	require.NoError(t, err)
 	gb := gd.Value.(string)
-	return string(gb)
+	return gb
 }
 
 func formDataPoint(t *testing.T, p *geom.Point) string {
@@ -62,12 +62,12 @@ func formDataPoint(t *testing.T, p *geom.Point) string {
 	require.NoError(t, err)
 
 	src := ValueForType(GeoID)
-	src.Value = []byte(d)
+	src.Value = d
 	gd, err := Convert(src, StringID)
 	require.NoError(t, err)
 	gb := gd.Value.(string)
 
-	return string(gb)
+	return gb
 }
 
 func formDataPolygon(t *testing.T, g geom.T) string {
@@ -75,12 +75,12 @@ func formDataPolygon(t *testing.T, g geom.T) string {
 	require.NoError(t, err)
 
 	src := ValueForType(GeoID)
-	src.Value = []byte(d)
+	src.Value = d
 	gd, err := Convert(src, StringID)
 	require.NoError(t, err)
 	gb := gd.Value.(string)
 
-	return string(gb)
+	return gb
 }
 
 func TestQueryTokensPolygon(t *testing.T) {
@@ -440,7 +440,7 @@ func BenchmarkMatchesFilterContainsPoint(b *testing.B) {
 
 		d, _ := wkb.Marshal(p, binary.LittleEndian)
 		src := ValueForType(GeoID)
-		src.Value = []byte(d)
+		src.Value = d
 		gd, _ := Convert(src, StringID)
 		gb := gd.Value.(string)
 		_, qd, _ := queryTokens(QueryTypeContains, gb, 0.0)

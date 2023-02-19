@@ -192,7 +192,7 @@ func (l *loader) request(req *request) {
 
 func getTypeVal(val *api.Value) (types.Val, error) {
 	p := dql.TypeValFrom(val)
-	//Convert value to bytes
+	// Convert value to bytes
 
 	if p.Tid == types.GeoID || p.Tid == types.DateTimeID {
 		// Already in bytes format
@@ -319,7 +319,7 @@ func (l *loader) conflictKeysForNQuad(nq *api.NQuad) ([]uint64, error) {
 			Value: de.GetValue(),
 		}
 
-		schemaVal, err := types.Convert(storageVal, types.TypeID(pred.ValueType))
+		schemaVal, err := types.Convert(storageVal, pred.ValueType)
 		if err != nil {
 			errs = append(errs, err.Error())
 		}

@@ -26,7 +26,7 @@ import (
 	"testing"
 	"time"
 
-	humanize "github.com/dustin/go-humanize"
+	"github.com/dustin/go-humanize"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -115,7 +115,7 @@ func TestBufferUidPack(t *testing.T) {
 			uid, n := binary.Uvarint(outBuf)
 			outBuf = outBuf[n:]
 
-			next := uint64(prev) + uid
+			next := prev + uid
 			prev = next
 			uids = append(uids, next)
 		}
@@ -194,7 +194,7 @@ func TestLinearSeek(t *testing.T) {
 		}
 	}
 
-	//blockIdx points to last block.
+	// blockIdx points to last block.
 	for i := 0; i < 9990; i += 10 {
 		uids := dec.LinearSeek(uint64(i))
 

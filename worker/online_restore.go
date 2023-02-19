@@ -294,9 +294,11 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest, pidx uin
 	for _, pred := range preds {
 		// Force the tablet to be moved to this group, even if it's currently being served
 		// by another group.
-		if tablet, err := groups().ForceTablet(pred); err != nil {
+		tablet, err := groups().ForceTablet(pred)
+		if err != nil {
 			return errors.Wrapf(err, "cannot create tablet for restored predicate %s", pred)
-		} else if tablet.GetGroupId() != req.GroupId {
+		}
+		if tablet.GetGroupId() != req.GroupId {
 			return errors.Errorf("cannot assign tablet for pred %s to group %d", pred, req.GroupId)
 		}
 	}
@@ -504,7 +506,7 @@ func RunOfflineRestore(dir, location, backupId, keyFile string, key x.Sensitive,
 		if err := sw.Flush(); err != nil {
 			return LoadResult{Err: errors.Wrap(err, "while stream writer flush")}
 		}
-		if err := x.WriteGroupIdFile(pdir, uint32(gid)); err != nil {
+		if err := x.WriteGroupIdFile(pdir, gid); err != nil {
 			return LoadResult{Err: errors.Wrap(err, "RunRestore failed to write group id file")}
 		}
 	}

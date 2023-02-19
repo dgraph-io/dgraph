@@ -34,7 +34,7 @@ var (
 func FromInt(val int) *pb.TaskValue {
 	bs := make([]byte, 8)
 	binary.LittleEndian.PutUint64(bs, uint64(val))
-	return &pb.TaskValue{Val: []byte(bs), ValType: pb.Posting_INT}
+	return &pb.TaskValue{Val: bs, ValType: pb.Posting_INT}
 }
 
 // ToInt converts the given pb.TaskValue object into an integer.
@@ -78,7 +78,7 @@ func ToString(val *pb.TaskValue) string {
 func FromFloat(val float64) *pb.TaskValue {
 	bs := make([]byte, 8)
 	binary.LittleEndian.PutUint64(bs, math.Float64bits(val))
-	return &pb.TaskValue{Val: []byte(bs), ValType: pb.Posting_FLOAT}
+	return &pb.TaskValue{Val: bs, ValType: pb.Posting_FLOAT}
 }
 
 // ToFloat converts the given pb.TaskValue object into an integer.

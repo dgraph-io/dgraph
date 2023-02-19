@@ -93,7 +93,7 @@ func valAndValType(val string) (interface{}, api.Facet_ValType, error) {
 		return uq, api.Facet_STRING, errors.Wrapf(err, "could not unquote %q:", val)
 	}
 	if intVal, err := strconv.ParseInt(val, 0, 64); err == nil {
-		return int64(intVal), api.Facet_INT, nil
+		return intVal, api.Facet_INT, nil
 	} else if numErr := err.(*strconv.NumError); numErr.Err == strconv.ErrRange {
 		// if we have only digits in val, then val is a big integer : return error
 		// otherwise try to parse as float.

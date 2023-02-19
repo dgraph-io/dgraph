@@ -1119,7 +1119,7 @@ func AskUserPassword(userid string, pwdType string, times int) (string, error) {
 	AssertTrue(pwdType == "Current" || pwdType == "New")
 	// ask for the user's password
 	fmt.Printf("%s password for %v:", pwdType, userid)
-	pd, err := term.ReadPassword(int(syscall.Stdin))
+	pd, err := term.ReadPassword(syscall.Stdin)
 	if err != nil {
 		return "", errors.Wrapf(err, "while reading password")
 	}
@@ -1128,7 +1128,7 @@ func AskUserPassword(userid string, pwdType string, times int) (string, error) {
 
 	if times == 2 {
 		fmt.Printf("Retype %s password for %v:", strings.ToLower(pwdType), userid)
-		pd2, err := term.ReadPassword(int(syscall.Stdin))
+		pd2, err := term.ReadPassword(syscall.Stdin)
 		if err != nil {
 			return "", errors.Wrapf(err, "while reading password")
 		}
