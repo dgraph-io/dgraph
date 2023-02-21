@@ -139,8 +139,8 @@ func TestParseSchemaFromAlterOperation(t *testing.T) {
 	defer os.RemoveAll(dir)
 	x.Check(err)
 	ps, err := badger.OpenManaged(badger.DefaultOptions(dir))
-	defer ps.Close()
 	x.Check(err)
+	defer ps.Close()
 	schema.Init(ps)
 
 	tests := []struct {
