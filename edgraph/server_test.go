@@ -136,8 +136,10 @@ func TestParseSchemaFromAlterOperation(t *testing.T) {
 	md := metadata.New(map[string]string{"namespace": "123"})
 	ctx := metadata.NewIncomingContext(context.Background(), md)
 	dir, err := os.MkdirTemp("", "storetest_")
+	defer os.RemoveAll(dir)
 	x.Check(err)
 	ps, err := badger.OpenManaged(badger.DefaultOptions(dir))
+	defer ps.Close()
 	x.Check(err)
 	schema.Init(ps)
 
