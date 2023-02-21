@@ -269,20 +269,11 @@ func RunRestore(t *testing.T, jwtToken string, restoreLocation string, whichAlph
 
 	require.Equal(t, "Success", testutil.JsonGet(data, "data", "restore", "code").(string))
 }
-func GetJwtTokenAndHeader(t *testing.T, whichAlpha string, namespaceId uint64) (string, http.Header) {
-	var header = http.Header{}
-
-	jwtToken := testutil.GrootHttpLoginNamespace("http://"+testutil.ContainerAddr(whichAlpha, 8080)+"/admin", 0).AccessJwt
-	header.Set(accessJwtHeader, jwtToken)
-	header.Set("Content-Type", "application/json")
-
-	return jwtToken, header
-}
 
 func GetJwtTokenAndHeader(t *testing.T, whichAlpha string, namespaceId uint64) (string, http.Header) {
 	var header = http.Header{}
-
-	jwtToken := testutil.GrootHttpLoginNamespace("http://"+testutil.ContainerAddr(whichAlpha, 8080)+"/admin", 0).AccessJwt
+	adminUrl := "http://" + testutil.ContainerAddr(whichAlpha, 8080) + "/admin"
+	jwtToken := testutil.GrootHttpLoginNamespace(adminUrl, namespaceId).AccessJwt
 	header.Set(accessJwtHeader, jwtToken)
 	header.Set("Content-Type", "application/json")
 
