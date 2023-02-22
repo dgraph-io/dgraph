@@ -191,7 +191,8 @@ func TestMain(m *testing.M) {
 		log.Println(err)
 	}
 	dataDir := path + "/ldbcData"
-	downloadLDBCFiles(m, dataDir)
+	fmt.Println("Datadir: ", dataDir)
+	// downloadLDBCFiles(m, dataDir)
 
 	// noschemaFile := filepath.Join(testutil.TestDataDirectory, "ldbcTypes.schema")
 	// rdfFile := dataDir
