@@ -4,6 +4,7 @@ on:
     inputs:
       latest:
         type: boolean
+        default: false
         description: Release latest tag on Dockerhub
 jobs:
   dgraph-build-amd64:
