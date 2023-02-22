@@ -104,14 +104,14 @@ func CopyToLocalFs(t *testing.T) {
 func AddItemSchema(t *testing.T, header http.Header, whichAlpha string) {
 	updateSchemaParams := &common.GraphQLParams{
 		Query: `mutation {
-				 updateGQLSchema(
-				   input: { set: { schema: "type Item {id: ID!, name: String! @search(by: [hash]), price: String!}"}})
-				 {
-				   gqlSchema {
-					 schema
-				   }
-				 }
-			   }`,
+			updateGQLSchema(
+			  input: { set: { schema: "type Item {id: ID!, name: String! @search(by: [hash]), price: String!}"}})
+			{
+			  gqlSchema {
+				schema
+			  }
+			}
+		  }`,
 		Variables: map[string]interface{}{},
 		Headers:   header,
 	}
@@ -126,14 +126,14 @@ func AddItemSchema(t *testing.T, header http.Header, whichAlpha string) {
 func AddItem(t *testing.T, minSuffixVal int, maxSuffixVal int, jwtToken string, whichAlpha string) {
 
 	query := `mutation addItem($name: String!, $price: String!){
-		 addItem(input: [{ name: $name, price: $price}]) {
-		   item {
-			 id
-			 name
-			 price
-		   }
-		 }
-	   }`
+		addItem(input: [{ name: $name, price: $price}]) {
+		  item {
+			id
+			name
+			price
+		  }
+		}
+	  }`
 
 	for i := minSuffixVal; i <= maxSuffixVal; i++ {
 		params := testutil.GraphQLParams{Query: query,
@@ -160,14 +160,14 @@ func AddItem(t *testing.T, minSuffixVal int, maxSuffixVal int, jwtToken string, 
 
 func CheckItemExists(t *testing.T, desriedSuffix int, jwtToken string, whichAlpha string) {
 	checkData := `query queryItem($name: String!){
-		 queryItem(filter: {
-			 name: {eq: $name}
-		 }) {
-			 id
-			 name
-			 price
-		 }
-	 }`
+		queryItem(filter: {
+			name: {eq: $name}
+		}) {
+			id
+			name
+			price
+		}
+	}`
 
 	params := testutil.GraphQLParams{
 		Query: checkData,
@@ -200,13 +200,13 @@ func CheckItemExists(t *testing.T, desriedSuffix int, jwtToken string, whichAlph
 func TakeBackup(t *testing.T, jwtToken string, backupDst string, whichAlpha string) {
 
 	backupRequest := `mutation backup($dst: String!) {
-		 backup(input: {destination: $dst}) {
-			 response {
-				 code
-			 }
-			 taskId
-		 }
-	 }`
+		backup(input: {destination: $dst}) {
+			response {
+				code
+			}
+			taskId
+		}
+	}`
 	params := testutil.GraphQLParams{
 		Query: backupRequest,
 		Variables: map[string]interface{}{
@@ -238,11 +238,11 @@ func TakeBackup(t *testing.T, jwtToken string, backupDst string, whichAlpha stri
 
 func RunRestore(t *testing.T, jwtToken string, restoreLocation string, whichAlpha string) {
 	restoreRequest := `mutation restore($loc: String!) {
-		 restore(input: {location: $loc}) {
-				 code
-				 message
-			 }
-	 }`
+		restore(input: {location: $loc}) {
+				code
+				message
+			}
+	}`
 	params := testutil.GraphQLParams{
 		Query: restoreRequest,
 		Variables: map[string]interface{}{
