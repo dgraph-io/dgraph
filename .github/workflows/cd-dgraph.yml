@@ -48,7 +48,7 @@ jobs:
           then
             echo "this is a release branch"
             DGRAPH_RELEASE_VERSION=$(git rev-parse --abbrev-ref HEAD | sed  's/release\///')
-            if [[ "$DGRAPH_RELEASE_VERSION" == "*slash"]];
+            if [[ "$DGRAPH_RELEASE_VERSION" == *"slash" ]];
             then
               echo "making a slash release"
               # for cloud release tag should look like v21.03.0-92-g0c9f60156
