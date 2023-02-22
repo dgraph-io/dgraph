@@ -99,8 +99,8 @@ coverage-docker-image: dgraph-coverage
 	@cp ./dgraph/dgraph ./linux/dgraph
 	docker build -f contrib/Dockerfile -t dgraph/dgraph:$(DGRAPH_VERSION) .
 
-.PHONY: linux-dependency
 # build and run dependencies for ubuntu linux
+.PHONY: linux-dependency
 linux-dependency:
 	sudo apt-get update
 	sudo apt-get -y upgrade
