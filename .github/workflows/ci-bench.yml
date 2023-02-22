@@ -41,14 +41,14 @@ jobs:
           # clean cache
           go clean -testcache
       - name: Run benchmark
-        run: cd dgraph/systest/bench && go test -benchmem -run=^$ -bench ^BenchmarkBulkload | tee output.txt
+        run: cd systest/bench && go test -benchmem -run=^$ -bench ^BenchmarkBulkload | tee output.txt
       
       - name: Store benchmark result
         uses: benchmark-action/github-action-benchmark@v1
         with:
           name: Go Benchmark
           tool: 'go'
-          output-file-path: dgraph/systest/bench/output.txt
+          output-file-path: systest/bench/output.txt
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: true
           # Show alert with commit comment on detecting possible performance regression
@@ -62,7 +62,7 @@ jobs:
         with:
           name: Go Benchmark
           tool: 'go'
-          output-file-path: dgraph/systest/bench/output.txt
+          output-file-path: systest/bench/output.txt
           github-token: ${{ secrets.BENCHMARK_ACTION_BOT_TOKEN }}
           auto-push: true
           # Show alert with commit comment on detecting possible performance regression
