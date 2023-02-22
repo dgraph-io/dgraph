@@ -167,6 +167,31 @@ func freePort(port int) int {
 	}
 }
 
+func StartZeros(compose string) error {
+	cmd := exec.Command("docker-compose", "--compatibility", "-f", compose,
+		"-p", DockerPrefix, "up", "-d", "--force-recreate")
+
+	fmt.Println("Starting zeros with: ", cmd.String())
+
+	if out, err := cmd.CombinedOutput(); err != nil {
+		fmt.Printf("Error while bringing up zero node. Prefix: %s. Error: %v\n", DockerPrefix, err)
+		fmt.Printf("Output %v\n", string(out))
+		return err
+	}
+
+	for i := 1; i <= 6; i++ {
+		in := GetContainerInstance(DockerPrefix, "zero"+strconv.Itoa(i))
+		err := in.BestEffortWaitForHealthy(6080)
+		if err != nil {
+			fmt.Printf("Error while checking alpha health %s. Error %v", in.Name, err)
+			return err
+		}
+	}
+
+	return nil
+
+}
+
 func StartAlphas(compose string) error {
 	cmd := exec.Command("docker-compose", "--compatibility", "-f", compose,
 		"-p", DockerPrefix, "up", "-d", "--force-recreate")

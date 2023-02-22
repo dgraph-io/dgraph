@@ -6,6 +6,8 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -30,7 +32,8 @@ var (
 
 var baseUrl = "https://github.com/dgraph-io/benchmarks/blob/master/ldbc/sf0.3/ldbc_rdf_0.3/"
 var suffix = "?raw=true"
-
+var schemaFile string
+var rdfFile string
 var rdfFileNames = [...]string{
 	"Deltas.rdf",
 	"comment_0.rdf",
@@ -157,30 +160,43 @@ func testFunction() {
 	time.Sleep(20 * time.Millisecond)
 }
 
+var res []byte
+
 func BenchmarkBulkload(b *testing.B) {
+	var args []string
 
-	/*
+	args = append(args, "bulk",
+		"-f", rdfFile,
+		"-s", schemaFile,
+		"--http", "localhost:8000",
+		"--reduce_shards=1",
+		"--map_shards=1",
+		"--store_xids=true",
+		"--zero", testutil.SockAddrZero,
+		"--force-namespace", strconv.FormatUint(0, 10))
 
-		start := time.Now()
-			fmt.Println("Bulkupload started")
-			if err := testutil.BulkLoad(testutil.BulkOpts{
-				Zero:       testutil.SockAddrZero,
-				Shards:     1,
-				RdfFile:    rdfFile,
-				SchemaFile: noschemaFile,
-			}); err != nil {
-				fmt.Println(err)
-				cleanupAndExit(1)
-			}
-
-	*/
+	bulkCmd := exec.Command(testutil.DgraphBinaryPath(), args...)
+	fmt.Printf("Running %s\n", bulkCmd)
 
 	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+		if err := testutil.MakeDirEmpty([]string{"out/0"}); err != nil {
+			os.Exit(1)
+		}
+		bulkCmd = exec.Command(testutil.DgraphBinaryPath(), args...)
+		b.StartTimer()
+		out, err := bulkCmd.CombinedOutput()
+		b.StopTimer()
+		if err != nil {
+			b.Fatal(err)
+		}
+		res = out
+	}
+}
+
+func BenchmarkTestFunction(b *testing.B) {
+	for i := 0; i < b.N; i++ {
 		testFunction()
-		// b.StopTimer()
-		//	setup()
-		// b.StartTimer()
-		//	stuff()
 	}
 }
 
@@ -192,13 +208,18 @@ func TestMain(m *testing.M) {
 	}
 	dataDir := path + "/ldbcData"
 	fmt.Println("Datadir: ", dataDir)
-	// downloadLDBCFiles(m, dataDir)
+	downloadLDBCFiles(m, dataDir)
+	schemaFile = filepath.Join(dataDir, "ldbcTypes.schema")
+	rdfFile = dataDir
 
-	// noschemaFile := filepath.Join(testutil.TestDataDirectory, "ldbcTypes.schema")
-	// rdfFile := dataDir
-	// if err := testutil.MakeDirEmpty([]string{"out/0"}); err != nil {
-	// 	os.Exit(1)
-	// }
+	if err := testutil.MakeDirEmpty([]string{"out/0"}); err != nil {
+		os.Exit(1)
+	}
+
+	if err := testutil.StartZeros("./docker-compose.yml"); err != nil {
+		fmt.Printf("Error while bringin up zeros. Error: %v\n", err)
+		cleanupAndExit(1)
+	}
 
 	// fmt.Printf("Took %s to bulkupload LDBC dataset\n", time.Since(start))
 
