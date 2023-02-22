@@ -584,8 +584,9 @@ func getPackages() []task {
 		}
 		return out
 	}
+	cfg := &packages.Config{BuildFlags: []string{"-tags=integration"}}
 
-	pkgs, err := packages.Load(nil, *baseDir+"/...")
+	pkgs, err := packages.Load(cfg, *baseDir+"/...")
 	x.Check(err)
 	for _, pkg := range pkgs {
 		if len(pkg.Errors) > 0 {
