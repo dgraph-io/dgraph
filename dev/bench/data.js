@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1677066958380,
+  "lastUpdate": 1677068704871,
   "repoUrl": "https://github.com/dgraph-io/dgraph",
   "entries": {
     "Go Benchmark": [
@@ -78,6 +78,32 @@ window.BENCHMARK_DATA = {
             "value": 400627234,
             "unit": "ns/op\t       0 B/op\t       0 allocs/op",
             "extra": "3 times\n2 procs"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "dgraph-io",
+            "username": "dgraph-io"
+          },
+          "committer": {
+            "name": "dgraph-io",
+            "username": "dgraph-io"
+          },
+          "id": "1eae48f59296c092866a0c60376d47405f324237",
+          "message": "Add benchmark code",
+          "timestamp": "2023-02-22T04:39:33Z",
+          "url": "https://github.com/dgraph-io/dgraph/pull/8694/commits/1eae48f59296c092866a0c60376d47405f324237"
+        },
+        "date": 1677068703365,
+        "tool": "go",
+        "benches": [
+          {
+            "name": "BenchmarkBulkload",
+            "value": 20241486,
+            "unit": "ns/op\t       1 B/op\t       0 allocs/op",
+            "extra": "58 times\n2 procs"
           }
         ]
       }
