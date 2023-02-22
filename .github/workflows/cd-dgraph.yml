@@ -47,11 +47,19 @@ jobs:
           if [[ "$GIT_BRANCH_NAME" == "release/v"* ]]; 
           then
             echo "this is a release branch"
+            DGRAPH_RELEASE_VERSION=$(git rev-parse --abbrev-ref HEAD | sed  's/release\///')
+            if [[ "$DGRAPH_RELEASE_VERSION" == "*slash"]];
+            then
+              echo "making a slash release"
+              # for cloud release tag should look like v21.03.0-92-g0c9f60156
+              DGRAPH_RELEASE_VERSION=$(git describe --always --tags)
+            else
+              echo "this is not a slash release"
+            fi
           else
             echo "this is NOT a release branch"
             exit 1
           fi
-          DGRAPH_RELEASE_VERSION=$(git rev-parse --abbrev-ref HEAD | sed  's/release\///')
           echo "making a new release for dgraph "$DGRAPH_RELEASE_VERSION
           echo "DGRAPH_RELEASE_VERSION=$DGRAPH_RELEASE_VERSION" >> $GITHUB_ENV
       - name: Make Dgraph Linux Build
