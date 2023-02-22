@@ -1,4 +1,4 @@
-name: Go Example
+name: ci-bench
 on: [pull_request]
 
 permissions:
