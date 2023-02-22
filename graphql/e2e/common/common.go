@@ -343,10 +343,10 @@ func CreateNamespace(t *testing.T, headers http.Header, whichAlpha string) uint6
 	adminUrl := "http://" + testutil.ContainerAddr(whichAlpha, 8080) + "/admin"
 	createNamespace := &GraphQLParams{
 		Query: `mutation {
-					addNamespace{
-						namespaceId
-					}
-				}`,
+					 addNamespace{
+						 namespaceId
+					 }
+				 }`,
 		Headers: headers,
 	}
 
@@ -371,14 +371,38 @@ func CreateNamespace(t *testing.T, headers http.Header, whichAlpha string) uint6
 	return resp.AddNamespace.NamespaceId
 }
 
+func ListNamespaces(t *testing.T, jwtToken string, headers http.Header, whichAlpha string) []uint64 {
+	adminUrl := "http://" + testutil.ContainerAddr(whichAlpha, 8080) + "/admin"
+
+	listNamespaces := &GraphQLParams{
+		Query: `query{
+			 state {
+			 namespaces
+			 }
+		 }`,
+		Headers: headers,
+	}
+
+	gqlResponse := listNamespaces.ExecuteAsPost(t, adminUrl)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	var resp struct {
+		State struct {
+			Namespaces []uint64 `json:"namespaces"`
+		} `json:"state"`
+	}
+	require.NoError(t, json.Unmarshal(gqlResponse.Data, &resp))
+	return resp.State.Namespaces
+}
+
 func DeleteNamespace(t *testing.T, id uint64, header http.Header, whichAlpha string) {
 	adminUrl := "http://" + testutil.ContainerAddr(whichAlpha, 8080) + "/admin"
 	deleteNamespace := &GraphQLParams{
 		Query: `mutation deleteNamespace($id:Int!){
-					deleteNamespace(input:{namespaceId:$id}){
-						namespaceId
-					}
-				}`,
+					 deleteNamespace(input:{namespaceId:$id}){
+						 namespaceId
+					 }
+				 }`,
 		Variables: map[string]interface{}{"id": id},
 		Headers:   header,
 	}
@@ -390,12 +414,12 @@ func DeleteNamespace(t *testing.T, id uint64, header http.Header, whichAlpha str
 func getGQLSchema(t *testing.T, authority string, header http.Header) *GraphQLResponse {
 	getSchemaParams := &GraphQLParams{
 		Query: `query {
-			getGQLSchema {
-				id
-				schema
-				generatedSchema
-			}
-		}`,
+			 getGQLSchema {
+				 id
+				 schema
+				 generatedSchema
+			 }
+		 }`,
 		Headers: header,
 	}
 	return getSchemaParams.ExecuteAsPost(t, "http://"+authority+"/admin")
@@ -427,14 +451,14 @@ func AssertGetGQLSchemaRequireId(t *testing.T, authority string, header http.Hea
 func updateGQLSchema(t *testing.T, authority, schema string, headers http.Header) *GraphQLResponse {
 	updateSchemaParams := &GraphQLParams{
 		Query: `mutation updateGQLSchema($sch: String!) {
-			updateGQLSchema(input: { set: { schema: $sch }}) {
-				gqlSchema {
-					id
-					schema
-					generatedSchema
-				}
-			}
-		}`,
+			 updateGQLSchema(input: { set: { schema: $sch }}) {
+				 gqlSchema {
+					 id
+					 schema
+					 generatedSchema
+				 }
+			 }
+		 }`,
 		Variables: map[string]interface{}{"sch": schema},
 		Headers:   headers,
 	}
@@ -643,12 +667,12 @@ func (twt *Tweets) DeleteByID(t *testing.T, user string, metaInfo *testutil.Auth
 	getParams := &GraphQLParams{
 		Headers: GetJWT(t, user, "", metaInfo),
 		Query: `
-			mutation delTweets ($filter : TweetsFilter!){
-			  	deleteTweets (filter: $filter) {
-					numUids
-			  	}
-			}
-		`,
+			 mutation delTweets ($filter : TweetsFilter!){
+				   deleteTweets (filter: $filter) {
+					 numUids
+				   }
+			 }
+		 `,
 		Variables: map[string]interface{}{"filter": map[string]interface{}{
 			"id": map[string]interface{}{"eq": twt.Id},
 		}},
@@ -661,12 +685,12 @@ func (us *UserSecret) Delete(t *testing.T, user, role string, metaInfo *testutil
 	getParams := &GraphQLParams{
 		Headers: GetJWT(t, user, role, metaInfo),
 		Query: `
-			mutation deleteUserSecret($ids: [ID!]) {
-				deleteUserSecret(filter:{id:$ids}) {
-					msg
-				}
-			}
-		`,
+			 mutation deleteUserSecret($ids: [ID!]) {
+				 deleteUserSecret(filter:{id:$ids}) {
+					 msg
+				 }
+			 }
+		 `,
 		Variables: map[string]interface{}{"ids": []string{us.Id}},
 	}
 	gqlResponse := getParams.ExecuteAsPost(t, GraphqlURL)
@@ -964,10 +988,10 @@ func gzipData(data []byte) ([]byte, error) {
 func gzipCompressionHeader(t *testing.T) {
 	queryCountry := &GraphQLParams{
 		Query: `query {
-			queryCountry {
-				name
-			}
-		}`,
+			 queryCountry {
+				 name
+			 }
+		 }`,
 	}
 
 	req, err := queryCountry.CreateGQLPost(GraphqlURL)
@@ -990,10 +1014,10 @@ func gzipCompressionHeader(t *testing.T) {
 func gzipCompressionNoHeader(t *testing.T) {
 	queryCountry := &GraphQLParams{
 		Query: `query {
-			queryCountry {
-				name
-			}
-		}`,
+			 queryCountry {
+				 name
+			 }
+		 }`,
 		gzipEncoding: true,
 	}
 
@@ -1018,10 +1042,10 @@ func getRequest(t *testing.T) {
 func getQueryEmptyVariable(t *testing.T) {
 	queryCountry := &GraphQLParams{
 		Query: `query {
-			queryCountry {
-				name
-			}
-		}`,
+			 queryCountry {
+				 name
+			 }
+		 }`,
 	}
 	req, err := queryCountry.createGQLGet(GraphqlURL)
 	require.NoError(t, err)
@@ -1322,12 +1346,12 @@ func hasCurrentGraphQLSchema(url string) (bool, error) {
 func addSchema(url, schema string) error {
 	add := &GraphQLParams{
 		Query: `mutation updateGQLSchema($sch: String!) {
-			updateGQLSchema(input: { set: { schema: $sch }}) {
-				gqlSchema {
-					schema
-				}
-			}
-		}`,
+			 updateGQLSchema(input: { set: { schema: $sch }}) {
+				 gqlSchema {
+					 schema
+				 }
+			 }
+		 }`,
 		Variables: map[string]interface{}{"sch": schema},
 	}
 	req, err := add.CreateGQLPost(url)
