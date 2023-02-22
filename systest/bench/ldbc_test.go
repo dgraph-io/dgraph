@@ -154,7 +154,7 @@ func exists(path string) (bool, error) {
 }
 
 func testFunction() {
-	time.Sleep(40 * time.Millisecond)
+	time.Sleep(400 * time.Millisecond)
 }
 
 func BenchmarkBulkload(b *testing.B) {
