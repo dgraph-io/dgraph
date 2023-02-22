@@ -40,8 +40,12 @@ jobs:
           #!/bin/bash
           # clean cache
           go clean -testcache
+          # go env settings
+          export GOPATH=~/go
+          # move the binary
+          cp dgraph/dgraph ~/go/bin/dgraph
       - name: Run benchmark
-        run: cd systest/bench && go test -benchmem -run=^$ -bench ^BenchmarkBulkload | tee output.txt
+        run: cd systest/bench && go test -benchmem -benchtime=60s -run=^$ -bench ^BenchmarkBulkload | tee output.txt
       
       - name: Store benchmark result
         uses: benchmark-action/github-action-benchmark@v1
