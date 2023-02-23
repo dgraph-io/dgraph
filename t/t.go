@@ -937,7 +937,7 @@ func run() error {
 			downloadDataFiles()
 		}
 		if testSuiteContains("ldbc") || testSuiteContains("all") {
-			testutil.DownloadLDBCFiles(*tmp, *downloadResources)
+			*tmp, _ = testutil.DownloadLDBCFiles(*tmp, *downloadResources)
 		}
 		for i, task := range valid {
 			select {
