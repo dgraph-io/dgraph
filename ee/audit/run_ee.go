@@ -129,7 +129,7 @@ func run() error {
 		return iv, iterator, nil
 	}
 
-	// [12]byte baseIV + [4]byte len(x.VerificationText) + [11]byte x.VerificationText
+	// [12]byte baseIV + [4]byte len(x.VerificationText_Deprecated) + [11]byte x.VerificationText_Deprecated
 	decryptHeader_Deprecated := func() ([]byte, int64, error) {
 		var iterator int64 = 0
 		iv := make([]byte, aes.BlockSize)
@@ -142,7 +142,7 @@ func run() error {
 
 		stream := cipher.NewCTR(block, iv)
 		stream.XORKeyStream(t, t)
-		if string(t) != x.VerificationText {
+		if string(t) != x.VerificationText_Deprecated {
 			return nil, 0, errors.New("invalid encryption key provided. Please check your encryption key")
 		}
 		return iv, iterator, nil
