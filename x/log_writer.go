@@ -231,7 +231,7 @@ func encrypt(key, iv, src []byte) ([]byte, error) {
 func encrypt_deprecated(key []byte, baseIv [12]byte, src []byte) ([]byte, error) {
 	iv := make([]byte, 16)
 	copy(iv, baseIv[:])
-	binary.BigEndian.PutUint32(iv[12:], uint32(len(src)))
+	binary.BigEndian.PutUint32(iv[12:], uint32(len(src))) // collisions in len(src) create vulnerability
 	allocate, err := y.XORBlockAllocate(src, key, iv)
 	if err != nil {
 		return nil, err
@@ -242,10 +242,10 @@ func encrypt_deprecated(key []byte, baseIv [12]byte, src []byte) ([]byte, error)
 
 // used to verify client has correct key and can decrypt audit log header
 func decrypt(key, iv, src []byte) ([]byte, error) {
-	ivCopy := make([]byte, 16)
-	copy(ivCopy, iv[:]) //todo(joshua): do we need to copy here?
+	// ivCopy := make([]byte, 16)
+	// copy(ivCopy, iv[:]) // do we need to copy here?
 
-	plainText, err := y.XORBlockAllocate(src, key, ivCopy)
+	plainText, err := y.XORBlockAllocate(src, key, iv)
 	if err != nil {
 		return nil, err
 	}
@@ -316,11 +316,11 @@ func (l *LogWriter) open() error {
 
 		if l.EncryptionKey != nil {
 			iv := make([]byte, 16)
-			if _, err := rand.Read(iv); err != nil {
+			if _, err := rand.Read(iv); err != nil { // cve fix is here
 				return err
 			}
 			lengthInput := make([]byte, 4)
-			binary.BigEndian.PutUint32(lengthInput, uint32(len(VerificationText)))
+			binary.BigEndian.PutUint32(lengthInput, uint32(len(VerificationText))) // header has 4 more bytes now
 
 			bytes, err := encrypt(l.EncryptionKey, iv, []byte(VerificationText))
 			cipher := append(append(iv, lengthInput...), bytes...)
@@ -349,31 +349,41 @@ func (l *LogWriter) open() error {
 
 	l.file = f
 	if l.EncryptionKey != nil {
-
 		// initialize byte slice for iv
 		iv := make([]byte, 16)
-
 		// If not able to read the iv, then this file might be corrupted.
 		// open the new file in that case
 		if _, err = l.file.ReadAt(iv, 0); err != nil {
 			_ = l.file.Close()
 			return openNew()
 		}
-
-		encryptedVerificationText := make([]byte, len(VerificationText)) // 11
-
-		if _, err := f.ReadAt(encryptedVerificationText, 20); err != nil {
+		text := make([]byte, 4+len(VerificationText)) // size=4+11
+		// veritification text starts at offset 20, however in old audit logs it starts at 16
+		// we may encounter an old audit log and need to decrypt it
+		if _, err := f.ReadAt(text, 16); err != nil {
 			_ = f.Close()
 			return openNew()
 		}
-
-		if unencryptedVerificationText, err := decrypt(l.EncryptionKey, iv, encryptedVerificationText); err != nil || string(unencryptedVerificationText) != VerificationText {
-
-			// might have a deprecated audit log file, try deprecated decrypt
-			//unencryptedVerificationText, err = decryptAuditLogHeader_Deprecated(l.EncryptionKey, iv, unencryptedVerificationText)
-			//todo(joshua): check for old audit log files
+		t, err := decrypt(l.EncryptionKey, iv, text[4:])
+		if err != nil {
 			_ = f.Close()
 			return openNew()
+		} else if string(t) != VerificationText {
+			// try old decrypt method in case we have old audit log
+			t = make([]byte, 11)
+			copy(t, text[:11]) // decrypt_deprecated destroys bytes, need copy here
+			t, err = decrypt_deprecated(l.EncryptionKey, l.baseIv, t)
+			if err != nil || string(t) != VerificationText_Deprecated {
+				// file corrupted or wrong key
+				_ = f.Close()
+				return openNew()
+			} else {
+				// rotate old audit log
+				if err := l.rotate(); err != nil {
+					return err
+				}
+				return nil
+			}
 		}
 	}
 
