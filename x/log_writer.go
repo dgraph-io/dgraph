@@ -242,10 +242,10 @@ func encrypt_deprecated(key []byte, baseIv [12]byte, src []byte) ([]byte, error)
 
 // used to verify client has correct key and can decrypt audit log header
 func decrypt(key, iv, src []byte) ([]byte, error) {
-	// ivCopy := make([]byte, 16)
-	// copy(ivCopy, iv[:]) // do we need to copy here?
+	ivCopy := make([]byte, 16)
+	copy(ivCopy, iv[:]) // todo: do we need to copy here?
 
-	plainText, err := y.XORBlockAllocate(src, key, iv)
+	plainText, err := y.XORBlockAllocate(src, key, ivCopy)
 	if err != nil {
 		return nil, err
 	}
