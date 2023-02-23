@@ -241,7 +241,7 @@ func encrypt_deprecated(key []byte, baseIv [12]byte, src []byte) ([]byte, error)
 }
 
 // used locally to verify client has correct key and can decrypt audit log header
-func decryptAuditLogHeader(key, iv, src []byte) ([]byte, error) {
+func decrypt(key, iv, src []byte) ([]byte, error) {
 	ivCopy := make([]byte, 16)
 	copy(ivCopy, iv[:]) //todo(joshua): do we need to copy here?
 
@@ -252,21 +252,7 @@ func decryptAuditLogHeader(key, iv, src []byte) ([]byte, error) {
 	return plainText, nil
 }
 
-// we need this to decrypt header in old audit logs
-func decryptAuditLogHeader_Deprecated(key, iv, src []byte) ([]byte, error) {
-	ivCopy := make([]byte, 16) //todo(joshua) do we need to copy?
-	copy(ivCopy, iv[:])
-	binary.BigEndian.PutUint32(iv[12:], uint32(len(src)))
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return nil, err
-	}
-	stream := cipher.NewCTR(block, iv[:])
-	stream.XORKeyStream(src, src)
-	return src, nil
-}
-
-// decrupt audit log header
+// decrypt audit log header
 func decrypt_deprecated(key []byte, baseIv [12]byte, src []byte) ([]byte, error) {
 	iv := make([]byte, 16)
 	copy(iv, baseIv[:])
@@ -380,7 +366,7 @@ func (l *LogWriter) open() error {
 			return openNew()
 		}
 
-		if unencryptedVerificationText, err := decryptAuditLogHeader(l.EncryptionKey, iv, encryptedVerificationText); err != nil || string(unencryptedVerificationText) != VerificationText {
+		if unencryptedVerificationText, err := decrypt(l.EncryptionKey, iv, encryptedVerificationText); err != nil || string(unencryptedVerificationText) != VerificationText {
 
 			// might have a deprecated audit log file, try deprecated decrypt
 			//unencryptedVerificationText, err = decryptAuditLogHeader_Deprecated(l.EncryptionKey, iv, unencryptedVerificationText)
