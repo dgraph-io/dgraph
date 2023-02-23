@@ -219,7 +219,7 @@ func (l *LogWriter) flush() {
 }
 
 func encrypt(key, iv, src []byte) ([]byte, error) {
-	ivCopy := make([]byte, 16) //todo(joshua): is copy needed?
+	ivCopy := make([]byte, 16)
 	copy(ivCopy, iv[:])
 	cipher, err := y.XORBlockAllocate(src, key, ivCopy)
 	if err != nil {
@@ -252,7 +252,8 @@ func decrypt(key, iv, src []byte) ([]byte, error) {
 	return plainText, nil
 }
 
-// decrypt audit log header
+// decrypt audit log header of old audit logs
+// see https://github.com/dgraph-io/dgraph/pull/8323
 func decrypt_deprecated(key []byte, baseIv [12]byte, src []byte) ([]byte, error) {
 	iv := make([]byte, 16)
 	copy(iv, baseIv[:])
