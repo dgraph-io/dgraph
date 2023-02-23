@@ -226,8 +226,7 @@ func run() {
 	x.PrintVersion()
 	tlsConf, err := x.LoadClientTLSConfigForInternalPort(Zero.Conf)
 	x.Check(err)
-	// todo(joshua): figure out parsing issue with Zero.Conf.GetString("audit")
-	// e.g. --audit output=audit-log-dir;compress=false;encrypt-file=enc-key is parsed as output=audit-log-dir
+
 	raft := z.NewSuperFlag(Zero.Conf.GetString("raft")).MergeAndCheckDefault(
 		raftDefaults)
 	auditConf := audit.GetAuditConf(Zero.Conf.GetString("audit"))
