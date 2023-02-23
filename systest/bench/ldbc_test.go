@@ -169,7 +169,7 @@ func TestMain(m *testing.M) {
 	}
 	dataDir := path + "/ldbcData"
 	fmt.Println("Datadir: ", dataDir)
-	err = testutil.DownloadLDBCFiles(dataDir, true)
+	_, err = testutil.DownloadLDBCFiles(dataDir, true)
 	if err != nil {
 		os.Exit(1)
 	}
