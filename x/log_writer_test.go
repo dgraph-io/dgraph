@@ -72,7 +72,7 @@ func TestLogWriterWithEncryptionDeprecated(t *testing.T) {
 		MaxSize:       1,
 		MaxAge:        1,
 		Compress:      false,
-		EncryptionKey: []byte("1234567890123456"), // 16 bytes
+		EncryptionKey: []byte("1234567890123456"),
 	}
 
 	lw, _ = lw.Init()
