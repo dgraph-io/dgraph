@@ -691,7 +691,7 @@ func initialSchemaInternal(namespace uint64, all bool) []*pb.SchemaUpdate {
 			Predicate: "dgraph.type",
 			ValueType: pb.Posting_STRING,
 			Directive: pb.SchemaUpdate_INDEX,
-			Tokenizer: []string{"exact"},
+			Tokenizer: []string{"hash"},
 			List:      true,
 		}, &pb.SchemaUpdate{
 			Predicate: "dgraph.drop.op",
@@ -703,7 +703,7 @@ func initialSchemaInternal(namespace uint64, all bool) []*pb.SchemaUpdate {
 			Predicate: "dgraph.graphql.xid",
 			ValueType: pb.Posting_STRING,
 			Directive: pb.SchemaUpdate_INDEX,
-			Tokenizer: []string{"exact"},
+			Tokenizer: []string{"hash"},
 			Upsert:    true,
 		}, &pb.SchemaUpdate{
 			Predicate: "dgraph.graphql.p_query",
@@ -720,7 +720,7 @@ func initialSchemaInternal(namespace uint64, all bool) []*pb.SchemaUpdate {
 				ValueType: pb.Posting_STRING,
 				Directive: pb.SchemaUpdate_INDEX,
 				Upsert:    true,
-				Tokenizer: []string{"exact"},
+				Tokenizer: []string{"hash"},
 			},
 			{
 				Predicate: "dgraph.password",
