@@ -80,7 +80,7 @@ func TestLogWriterWithEncryptionDeprecated(t *testing.T) {
 	msg = bytes.Repeat(msg, 256)
 	msg[1023] = '\n'
 	for i := 0; i < 10000; i++ {
-		n, err := lw.Write_deprecated(msg)
+		n, err := lw.Write(msg)
 		require.Nil(t, err)
 		require.Equal(t, n, len(msg)+4, "write length is not equal")
 	}
