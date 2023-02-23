@@ -1727,7 +1727,7 @@ L:
 						function.IsLenVar = true
 					} else {
 						// eq(1, len(a))
-						return nil, itemInFunc.Errorf("incorrect order of value and nested function")
+						return nil, itemInFunc.Errorf("incorrect order, the first argument should be len function")
 					}
 					function.NeedsVar = append(function.NeedsVar, nestedFunc.NeedsVar...)
 				case countFunc:

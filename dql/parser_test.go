@@ -5358,7 +5358,7 @@ func TestFilterWithEqAndLenInWrongOrderArgs(t *testing.T) {
 		Str: query,
 	})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "incorrect order of value and nested function")
+	require.Contains(t, err.Error(), "incorrect order, the first argument should be len function")
 }
 
 func TestFilterWithVar(t *testing.T) {
