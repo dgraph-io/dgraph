@@ -2408,7 +2408,7 @@ func TestSchemaQueryWithACL(t *testing.T) {
       "type": "string",
       "index": true,
       "tokenizer": [
-        "exact"
+        "hash"
       ],
       "upsert": true
     },
