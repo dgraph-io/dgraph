@@ -130,7 +130,6 @@ func run() error {
 
 	decryptHeader_Deprecated := func() ([]byte, int64, error) {
 		var iterator int64 = 0
-
 		iv := make([]byte, aes.BlockSize)
 		x.Check2(file.ReadAt(iv, iterator))
 		iterator = iterator + aes.BlockSize
