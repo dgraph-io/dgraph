@@ -183,7 +183,7 @@ func StartZeros(compose string) error {
 		in := GetContainerInstance(DockerPrefix, "zero"+strconv.Itoa(i))
 		err := in.BestEffortWaitForHealthy(6080)
 		if err != nil {
-			fmt.Printf("Error while checking alpha health %s. Error %v", in.Name, err)
+			fmt.Printf("Error while checking zero health %s. Error %v", in.Name, err)
 			return err
 		}
 	}
@@ -235,4 +235,16 @@ func StopAlphasAndDetectRace(alphas []string) (raceDetected bool) {
 		fmt.Printf("Error while bringing down cluster. Prefix: %s. Error: %v\n", DockerPrefix, err)
 	}
 	return raceDetected
+}
+
+func StopZeros(zeros []string) error {
+	args := []string{"-p", DockerPrefix, "rm", "-f", "-s", "-v"}
+	args = append(args, zeros...)
+	cmd := exec.CommandContext(context.Background(), "docker-compose", args...)
+	fmt.Printf("Running: %s with %s\n", cmd, DockerPrefix)
+	if err := cmd.Run(); err != nil {
+		fmt.Printf("Error while bringing down cluster. Prefix: %s. Error: %v\n", DockerPrefix, err)
+		return err
+	}
+	return nil
 }
