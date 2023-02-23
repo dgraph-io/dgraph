@@ -76,19 +76,19 @@ func exists(path string) (bool, error) {
 	return false, err
 }
 
-func DownloadLDBCFiles(dataDir string, downloadResources bool) error {
+func DownloadLDBCFiles(dataDir string, downloadResources bool) (string, error) {
 	if !downloadResources {
 		fmt.Print("Skipping downloading of resources\n")
-		return nil
+		return dataDir, nil
 	}
 	if dataDir != "" {
 		ok, err := exists(dataDir)
 		if err != nil {
-			return errors.Wrapf(err, "while downloading data in %s", dataDir)
+			return dataDir, errors.Wrapf(err, "while downloading data in %s", dataDir)
 		}
 		if ok {
 			fmt.Print("Skipping downloading as files already present\n")
-			return nil
+			return dataDir, nil
 		}
 	} else {
 		dataDir = os.TempDir() + "/ldbcData"
@@ -122,11 +122,11 @@ func DownloadLDBCFiles(dataDir string, downloadResources bool) error {
 	}
 
 	if err := eg.Wait(); err != nil {
-		return err
+		return dataDir, err
 	}
 
 	fmt.Printf("Downloaded %d files in %s \n", len(ldbcDataFiles), time.Since(start))
-	return nil
+	return dataDir, nil
 }
 
 // CompareJSON compares two JSON objects (passed as strings).
