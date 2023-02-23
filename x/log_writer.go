@@ -240,7 +240,7 @@ func encrypt_deprecated(key []byte, baseIv [12]byte, src []byte) ([]byte, error)
 	return allocate, nil
 }
 
-// used locally to verify client has correct key and can decrypt audit log header
+// used to verify client has correct key and can decrypt audit log header
 func decrypt(key, iv, src []byte) ([]byte, error) {
 	ivCopy := make([]byte, 16)
 	copy(ivCopy, iv[:]) //todo(joshua): do we need to copy here?
