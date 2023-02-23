@@ -1,3 +1,5 @@
+//go:build integration
+
 package all_routes_tls
 
 import (

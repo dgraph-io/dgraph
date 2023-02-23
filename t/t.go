@@ -263,7 +263,7 @@ func stopCluster(composeFile, prefix string, wg *sync.WaitGroup, err error) {
 }
 
 func runTestsFor(ctx context.Context, pkg, prefix string) error {
-	var args = []string{"go", "test", "-failfast", "-v"}
+	var args = []string{"go", "test", "-failfast", "-v", "-tags=integration"}
 	if *race {
 		args = append(args, "-timeout", "180m")
 		// Todo: There are few race errors in tests itself. Enable this once that is fixed.
@@ -584,8 +584,9 @@ func getPackages() []task {
 		}
 		return out
 	}
+	cfg := &packages.Config{BuildFlags: []string{"-tags=integration"}}
 
-	pkgs, err := packages.Load(nil, *baseDir+"/...")
+	pkgs, err := packages.Load(cfg, *baseDir+"/...")
 	x.Check(err)
 	for _, pkg := range pkgs {
 		if len(pkg.Errors) > 0 {
