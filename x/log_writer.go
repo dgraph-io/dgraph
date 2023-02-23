@@ -41,7 +41,7 @@ const (
 	backupTimeFormat = "2006-01-02T15-04-05.000"
 	bufferSize       = 256 * 1024
 	flushInterval    = 10 * time.Second
-	//	old logs contain deprecated verification text in header
+	//  old logs before https://github.com/dgraph-io/dgraph/pull/8323 contain deprecated verification text in header
 	VerificationText_Deprecated = "Hello World"
 	VerificationText            = "dlroW olloH"
 )
@@ -96,7 +96,6 @@ func (l *LogWriter) Init() (*LogWriter, error) {
 }
 
 func (l *LogWriter) Write(p []byte) (int, error) {
-
 	if l == nil {
 		return 0, nil
 	}
@@ -131,6 +130,36 @@ func (l *LogWriter) Write(p []byte) (int, error) {
 
 		allocation := append(append(iv, lengthHeader...), cipherText...)
 		n, err := l.writer.Write(allocation)
+		l.size = l.size + int64(n)
+		return n, err
+	}
+
+	n, err := l.writer.Write(p)
+	l.size = l.size + int64(n)
+	return n, err
+}
+
+func (l *LogWriter) Write_deprecated(p []byte) (int, error) {
+	if l == nil {
+		return 0, nil
+	}
+
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	if l.size+int64(len(p)) >= l.MaxSize*1024*1024 {
+		if err := l.rotate(); err != nil {
+			return 0, err
+		}
+	}
+
+	// if encryption is enabled store the data in encyrpted way
+	if l.EncryptionKey != nil {
+		bytes, err := encrypt_deprecated(l.EncryptionKey, l.baseIv, p)
+		if err != nil {
+			return 0, err
+		}
+		n, err := l.writer.Write(bytes)
 		l.size = l.size + int64(n)
 		return n, err
 	}
@@ -199,6 +228,18 @@ func encrypt(key, iv, src []byte) ([]byte, error) {
 	return cipher, nil
 }
 
+func encrypt_deprecated(key []byte, baseIv [12]byte, src []byte) ([]byte, error) {
+	iv := make([]byte, 16)
+	copy(iv, baseIv[:])
+	binary.BigEndian.PutUint32(iv[12:], uint32(len(src)))
+	allocate, err := y.XORBlockAllocate(src, key, iv)
+	if err != nil {
+		return nil, err
+	}
+	allocate = append(iv[12:], allocate...)
+	return allocate, nil
+}
+
 // used locally to verify client has correct key and can decrypt audit log header
 func decryptAuditLogHeader(key, iv, src []byte) ([]byte, error) {
 	ivCopy := make([]byte, 16)
@@ -215,6 +256,20 @@ func decryptAuditLogHeader(key, iv, src []byte) ([]byte, error) {
 func decryptAuditLogHeader_Deprecated(key, iv, src []byte) ([]byte, error) {
 	ivCopy := make([]byte, 16) //todo(joshua) do we need to copy?
 	copy(ivCopy, iv[:])
+	binary.BigEndian.PutUint32(iv[12:], uint32(len(src)))
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+	stream := cipher.NewCTR(block, iv[:])
+	stream.XORKeyStream(src, src)
+	return src, nil
+}
+
+// decrupt audit log header
+func decrypt_deprecated(key []byte, baseIv [12]byte, src []byte) ([]byte, error) {
+	iv := make([]byte, 16)
+	copy(iv, baseIv[:])
 	binary.BigEndian.PutUint32(iv[12:], uint32(len(src)))
 	block, err := aes.NewCipher(key)
 	if err != nil {
@@ -330,6 +385,86 @@ func (l *LogWriter) open() error {
 			// might have a deprecated audit log file, try deprecated decrypt
 			//unencryptedVerificationText, err = decryptAuditLogHeader_Deprecated(l.EncryptionKey, iv, unencryptedVerificationText)
 			//todo(joshua): check for old audit log files
+			_ = f.Close()
+			return openNew()
+		}
+	}
+
+	l.writer = bufio.NewWriterSize(l.file, bufferSize)
+	l.size = size()
+	return nil
+}
+
+func (l *LogWriter) open_deprecated() error {
+	if l == nil {
+		return nil
+	}
+
+	if err := os.MkdirAll(filepath.Dir(l.FilePath), 0755); err != nil {
+		return err
+	}
+
+	size := func() int64 {
+		info, err := os.Stat(l.FilePath)
+		if err != nil {
+			return 0
+		}
+		return info.Size()
+	}
+
+	openNew := func() error {
+		f, err := os.OpenFile(l.FilePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
+		if err != nil {
+			return err
+		}
+		l.file = f
+		l.writer = bufio.NewWriterSize(l.file, bufferSize)
+
+		if l.EncryptionKey != nil {
+			_, _ = rand.Read(l.baseIv[:])
+			bytes, err := encrypt_deprecated(l.EncryptionKey, l.baseIv, []byte(VerificationText))
+			if err != nil {
+				return err
+			}
+			if _, err = l.writer.Write(append(l.baseIv[:], bytes[:]...)); err != nil {
+				return err
+			}
+		}
+		l.size = size()
+		return nil
+	}
+
+	info, err := os.Stat(l.FilePath)
+	if err != nil { // if any error try to open new log file itself
+		return openNew()
+	}
+
+	// encryption is enabled and file is corrupted as not able to read the IV
+	if l.EncryptionKey != nil && info.Size() < 12 {
+		return openNew()
+	}
+
+	f, err := os.OpenFile(l.FilePath, os.O_APPEND|os.O_RDWR, os.ModePerm)
+	if err != nil {
+		return openNew()
+	}
+
+	l.file = f
+	if l.EncryptionKey != nil {
+		// If not able to read the baseIv, then this file might be corrupted.
+		// open the new file in that case
+		if _, err = l.file.ReadAt(l.baseIv[:], 0); err != nil {
+			_ = l.file.Close()
+			return openNew()
+		}
+		text := make([]byte, 11)
+		if _, err := f.ReadAt(text, 16); err != nil {
+			_ = f.Close()
+			return openNew()
+		}
+		if t, err := decrypt_deprecated(l.EncryptionKey, l.baseIv, text); err != nil ||
+			string(t) != VerificationText {
+			// different encryption key. Better to open new file here
 			_ = f.Close()
 			return openNew()
 		}
