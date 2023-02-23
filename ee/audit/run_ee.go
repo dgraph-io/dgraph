@@ -117,7 +117,7 @@ func run() error {
 
 		t := make([]byte, len(x.VerificationText))
 		x.Check2(file.ReadAt(t, iterator))
-		iterator = iterator + 11 // len(x.VerificationText) = 11
+		iterator = iterator + int64(len(x.VerificationText))
 
 		text := make([]byte, len(x.VerificationText))
 		stream := cipher.NewCTR(block, iv)
