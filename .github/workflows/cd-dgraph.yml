@@ -33,6 +33,15 @@ jobs:
             echo "this is NOT a release branch"
             exit 1
           fi
+          # check if HEAD points to tagged commit, which is needed for tagging docker image
+          if [[ -z git tag --points-at HEAD ]]
+          then
+            echo "current commit is not tagged, aborting"
+            exit 1
+          fi
+          # DGRAPH_RELEASE_VERSION=$(git rev-parse --abbrev-ref HEAD | sed  's/release\///')
+          # For slash we get version from tag off of release/v21.03-slash branch
+          DGRAPH_RELEASE_VERSION=$(git tag --points-at HEAD)
           DGRAPH_RELEASE_VERSION=$(git rev-parse --abbrev-ref HEAD | sed  's/release\///')
           echo "making a new release for dgraph "$DGRAPH_RELEASE_VERSION
           echo "DGRAPH_RELEASE_VERSION=$DGRAPH_RELEASE_VERSION" >> $GITHUB_ENV
