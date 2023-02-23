@@ -5343,6 +5343,24 @@ func TestFilterWithDollarError(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestFilterWithEqAndLenInWrongOrderArgs(t *testing.T) {
+	query := `
+	{
+		var(func: has(school), first: 3) {
+			f as uid
+		}
+
+		me(func: uid(f)) @filter(eq(3, len(f))) {
+			count(uid)
+		}
+	}`
+	_, err := Parse(Request{
+		Str: query,
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "incorrect order, the first argument should be len function")
+}
+
 func TestFilterWithVar(t *testing.T) {
 	query := `query data($a: string = "dgraph")
 	{
