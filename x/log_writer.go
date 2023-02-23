@@ -320,7 +320,7 @@ func (l *LogWriter) open() error {
 				return err
 			}
 			lengthInput := make([]byte, 4)
-			binary.BigEndian.PutUint32(lengthInput, uint32(len(VerificationText))) // header has 4 more bytes now
+			binary.BigEndian.PutUint32(lengthInput, uint32(len(VerificationText))) // header has 16+4 bytes now
 
 			bytes, err := encrypt(l.EncryptionKey, iv, []byte(VerificationText))
 			cipher := append(append(iv, lengthInput...), bytes...)

@@ -109,6 +109,7 @@ func run() error {
 	}
 
 	// decrypt header in audit log to verify encryption key
+	// [16]byte IV + [4]byte len(x.VerificationText) + [11]byte x.VerificationText
 	decryptHeader := func() ([]byte, int64, error) {
 		var iterator int64 = 0
 		iv := make([]byte, aes.BlockSize)
@@ -128,6 +129,7 @@ func run() error {
 		return iv, iterator, nil
 	}
 
+	// [12]byte baseIV + [4]byte len(x.VerificationText) + [11]byte x.VerificationText
 	decryptHeader_Deprecated := func() ([]byte, int64, error) {
 		var iterator int64 = 0
 		iv := make([]byte, aes.BlockSize)
@@ -159,6 +161,11 @@ func run() error {
 		iv, iterator = iv2, iterator2
 	}
 
+	// encrypted writes each have the form below
+	// IV generated for each write
+	// #################################################################
+	// #####   [16]byte IV + [4]byte uint32(len(p)) + [:]byte p    #####
+	// #################################################################
 	decryptBody := func() {
 		for {
 			// if its the end of data. finish decrypting
@@ -171,7 +178,7 @@ func run() error {
 			x.Check2(file.ReadAt(length, iterator))
 			iterator = iterator + 4
 
-			content := make([]byte, int64(binary.BigEndian.Uint32(length)))
+			content := make([]byte, binary.BigEndian.Uint32(length))
 			x.Check2(file.ReadAt(content, iterator))
 			iterator = iterator + int64(binary.BigEndian.Uint32(length))
 
@@ -181,6 +188,11 @@ func run() error {
 		}
 	}
 
+	// encrypted writes in body have the form
+	// baseIV is constant, last 4 bytes vary
+	// ########################################################
+	// #####   [4]byte uint32(len(p)) + [:]byte p         #####
+	// ########################################################
 	decryptBody_Deprecated := func() {
 		for {
 			// if its the end of data. finish decrypting
