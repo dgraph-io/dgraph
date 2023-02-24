@@ -35,6 +35,7 @@ func TestZeroAudit(t *testing.T) {
 	require.NoError(t, err)
 	nId := state.Zeros["1"].Id
 	defer os.RemoveAll(fmt.Sprintf("audit_dir/za/zero_audit_0_%s.log", nId))
+	defer os.RemoveAll(fmt.Sprintf("audit_dir/za/zero_audit_0_%s.log.enc", nId))
 	zeroCmd := map[string][]string{
 		"/removeNode": {`--location`, "--request", "GET",
 			fmt.Sprintf("%s/removeNode?id=3&group=1", testutil.SockAddrZeroHttp)},
@@ -83,6 +84,7 @@ func TestAlphaAudit(t *testing.T) {
 		nId = key
 	}
 	defer os.Remove(fmt.Sprintf("audit_dir/aa/alpha_audit_1_%s.log", nId))
+	defer os.Remove(fmt.Sprintf("audit_dir/aa/alpha_audit_1_%s.log.enc", nId))
 	testCommand := map[string][]string{
 		"/admin": {"--location", "--request", "POST",
 			fmt.Sprintf("%s/admin", testutil.SockAddrHttp),
