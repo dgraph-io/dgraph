@@ -27,7 +27,8 @@ func TestNonAclToAclBackupRestore(t *testing.T) {
 	BackupRestore(t, "", jwtTokenAlpha3, headerAlpha3, "alpha4", "alpha3")
 }
 
-func BackupRestore(t *testing.T, jwtTokenBackupAlpha string, jwtTokenRestoreAlpha string, header http.Header, backupAlpha string, restoreAlpha string) { //nolint:lll
+func BackupRestore(t *testing.T, jwtTokenBackupAlpha string, jwtTokenRestoreAlpha string,
+	header http.Header, backupAlpha string, restoreAlpha string) {
 
 	utilsCommon.AddItemSchema(t, header, backupAlpha)
 	e2eCommon.AssertGetGQLSchema(t, testutil.ContainerAddr(backupAlpha, 8080), header)
