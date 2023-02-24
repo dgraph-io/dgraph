@@ -319,7 +319,7 @@ func (l *loader) conflictKeysForNQuad(nq *api.NQuad) ([]uint64, error) {
 			Value: de.GetValue(),
 		}
 
-		schemaVal, err := types.Convert(storageVal, types.TypeID(pred.ValueType))
+		schemaVal, err := types.Convert(storageVal, pred.ValueType)
 		if err != nil {
 			errs = append(errs, err.Error())
 		}

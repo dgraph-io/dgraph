@@ -128,7 +128,7 @@ func (ex *executor) Execute(ctx context.Context, req *dgoapi.Request,
 	}
 
 	return &dgoapi.Response{
-		Json: []byte(res),
+		Json: res,
 		Uids: ex.assigned,
 		Metrics: &dgoapi.Metrics{
 			NumUids: map[string]uint64{touchedUidsKey: ex.mutationTouched}},

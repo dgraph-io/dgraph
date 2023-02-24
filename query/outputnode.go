@@ -278,7 +278,7 @@ const (
 	// Value with all bits set to 1 for bytes 7 and 6.
 	setBytes76 = uint64(0x00FFFF0000000000)
 	// Compliment value of setBytes76.
-	unsetBytes76 = uint64(^setBytes76)
+	unsetBytes76 = ^setBytes76
 	// Value with all bits set to 1 for bytes 4 to 1.
 	setBytes4321 = 0x00000000FFFFFFFF
 )

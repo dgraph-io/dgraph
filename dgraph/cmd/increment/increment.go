@@ -181,7 +181,7 @@ func run(conf *viper.Viper) {
 
 	waitDur := conf.GetDuration("wait")
 	num := conf.GetInt("num")
-	conc := int(conf.GetInt("conc"))
+	conc := conf.GetInt("conc")
 	format := "0102 03:04:05.999"
 
 	// Do a sanity check on the passed credentials.

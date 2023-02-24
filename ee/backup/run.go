@@ -445,7 +445,7 @@ func runExportBackup() error {
 			return errors.Wrap(err, "Failed to map the backups")
 		}
 		in := &pb.ExportRequest{
-			GroupId:     uint32(gid),
+			GroupId:     gid,
 			ReadTs:      latestManifest.ValidReadTs(),
 			UnixTs:      time.Now().Unix(),
 			Format:      opt.format,

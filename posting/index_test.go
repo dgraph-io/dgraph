@@ -84,7 +84,7 @@ func TestIndexing(t *testing.T) {
 	require.NoError(t, schema.ParseBytes([]byte("name:string @index(term) ."), 1))
 	a, err := indexTokensForTest("name", "", types.Val{Tid: types.StringID, Value: []byte("abc")})
 	require.NoError(t, err)
-	require.EqualValues(t, "\x01abc", string(a[0]))
+	require.EqualValues(t, "\x01abc", a[0])
 }
 
 func TestIndexingMultiLang(t *testing.T) {
@@ -94,25 +94,25 @@ func TestIndexingMultiLang(t *testing.T) {
 	a, err := indexTokensForTest("name", "", types.Val{Tid: types.StringID,
 		Value: []byte("stemming")})
 	require.NoError(t, err)
-	require.EqualValues(t, "\x08stem", string(a[0]))
+	require.EqualValues(t, "\x08stem", a[0])
 
 	// ensure that Finnish tokenizer is used
 	a, err = indexTokensForTest("name", "fi", types.Val{Tid: types.StringID,
 		Value: []byte("edeltäneessä")})
 	require.NoError(t, err)
-	require.EqualValues(t, "\x08edeltän", string(a[0]))
+	require.EqualValues(t, "\x08edeltän", a[0])
 
 	// ensure that German tokenizer is used
 	a, err = indexTokensForTest("name", "de", types.Val{Tid: types.StringID,
 		Value: []byte("Auffassungsvermögen")})
 	require.NoError(t, err)
-	require.EqualValues(t, "\x08auffassungsvermog", string(a[0]))
+	require.EqualValues(t, "\x08auffassungsvermog", a[0])
 
 	// ensure that default tokenizer works differently than German
 	a, err = indexTokensForTest("name", "", types.Val{Tid: types.StringID,
 		Value: []byte("Auffassungsvermögen")})
 	require.NoError(t, err)
-	require.EqualValues(t, "\x08auffassungsvermögen", string(a[0]))
+	require.EqualValues(t, "\x08auffassungsvermögen", a[0])
 }
 
 func TestIndexingInvalidLang(t *testing.T) {
@@ -429,13 +429,13 @@ func TestNeedsTokIndexRebuild(t *testing.T) {
 	rb.OldSchema = &pb.SchemaUpdate{ValueType: pb.Posting_UID}
 	rb.CurrentSchema = &pb.SchemaUpdate{ValueType: pb.Posting_UID}
 	rebuildInfo := rb.needsTokIndexRebuild()
-	require.Equal(t, indexOp(indexNoop), rebuildInfo.op)
+	require.Equal(t, indexNoop, rebuildInfo.op)
 	require.Equal(t, []string(nil), rebuildInfo.tokenizersToDelete)
 	require.Equal(t, []string(nil), rebuildInfo.tokenizersToRebuild)
 
 	rb.OldSchema = nil
 	rebuildInfo = rb.needsTokIndexRebuild()
-	require.Equal(t, indexOp(indexNoop), rebuildInfo.op)
+	require.Equal(t, indexNoop, rebuildInfo.op)
 	require.Equal(t, []string(nil), rebuildInfo.tokenizersToDelete)
 	require.Equal(t, []string(nil), rebuildInfo.tokenizersToRebuild)
 
@@ -445,7 +445,7 @@ func TestNeedsTokIndexRebuild(t *testing.T) {
 		Directive: pb.SchemaUpdate_INDEX,
 		Tokenizer: []string{"exact"}}
 	rebuildInfo = rb.needsTokIndexRebuild()
-	require.Equal(t, indexOp(indexNoop), rebuildInfo.op)
+	require.Equal(t, indexNoop, rebuildInfo.op)
 	require.Equal(t, []string(nil), rebuildInfo.tokenizersToDelete)
 	require.Equal(t, []string(nil), rebuildInfo.tokenizersToRebuild)
 
@@ -489,7 +489,7 @@ func TestNeedsCountIndexRebuild(t *testing.T) {
 
 	rb.OldSchema = &pb.SchemaUpdate{ValueType: pb.Posting_UID, Count: false}
 	rb.CurrentSchema = &pb.SchemaUpdate{ValueType: pb.Posting_UID, Count: false}
-	require.Equal(t, indexOp(indexNoop), rb.needsCountIndexRebuild())
+	require.Equal(t, indexNoop, rb.needsCountIndexRebuild())
 
 	rb.OldSchema = &pb.SchemaUpdate{ValueType: pb.Posting_UID, Count: true}
 	rb.CurrentSchema = &pb.SchemaUpdate{ValueType: pb.Posting_UID, Count: false}
@@ -509,7 +509,7 @@ func TestNeedsReverseEdgesRebuild(t *testing.T) {
 	rb.OldSchema = &pb.SchemaUpdate{ValueType: pb.Posting_UID, Directive: pb.SchemaUpdate_REVERSE}
 	rb.CurrentSchema = &pb.SchemaUpdate{ValueType: pb.Posting_UID,
 		Directive: pb.SchemaUpdate_REVERSE}
-	require.Equal(t, indexOp(indexNoop), rb.needsReverseEdgesRebuild())
+	require.Equal(t, indexNoop, rb.needsReverseEdgesRebuild())
 
 	rb.CurrentSchema = &pb.SchemaUpdate{ValueType: pb.Posting_UID,
 		Directive: pb.SchemaUpdate_REVERSE}

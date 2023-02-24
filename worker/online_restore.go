@@ -504,7 +504,7 @@ func RunOfflineRestore(dir, location, backupId, keyFile string, key x.Sensitive,
 		if err := sw.Flush(); err != nil {
 			return LoadResult{Err: errors.Wrap(err, "while stream writer flush")}
 		}
-		if err := x.WriteGroupIdFile(pdir, uint32(gid)); err != nil {
+		if err := x.WriteGroupIdFile(pdir, gid); err != nil {
 			return LoadResult{Err: errors.Wrap(err, "RunRestore failed to write group id file")}
 		}
 	}

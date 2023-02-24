@@ -36,3 +36,4 @@ linters:
     - unused
     - staticcheck
     - goimports
+    - unconvert

@@ -115,7 +115,7 @@ func TestBufferUidPack(t *testing.T) {
 			uid, n := binary.Uvarint(outBuf)
 			outBuf = outBuf[n:]
 
-			next := uint64(prev) + uid
+			next := prev + uid
 			prev = next
 			uids = append(uids, next)
 		}

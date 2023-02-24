@@ -54,6 +54,7 @@ var (
 	dgraphStateURL  = "http://" + Alpha1HTTP + "/state"
 
 	// this port is used on the host machine to spin up a test HTTP server
+	//nolint:unused
 	lambdaHookServerAddr = ":8888"
 
 	retryableUpdateGQLSchemaErrors = []string{

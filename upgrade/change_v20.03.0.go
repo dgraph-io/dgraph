@@ -70,7 +70,7 @@ func upgradeACLRules() error {
 
 		var rs rules
 		if err := json.Unmarshal([]byte(group.ACL), &rs); err != nil {
-			return fmt.Errorf("unable to unmarshal ACL: %v :: %w", string(group.ACL), err)
+			return fmt.Errorf("unable to unmarshal ACL: %v :: %w", group.ACL, err)
 		}
 
 		for _, r := range rs {

@@ -1177,7 +1177,7 @@ func TestMultiPartListWithPostings(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, commits, len(facets))
 	for i, facet := range facets {
-		require.Equal(t, facet, strconv.Itoa(int(i+1)))
+		require.Equal(t, facet, strconv.Itoa(i+1))
 	}
 }
 
@@ -1383,7 +1383,7 @@ func TestSingleListRollup(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, commits, len(facets))
 	for i, facet := range facets {
-		require.Equal(t, facet, strconv.Itoa(int(i+1)))
+		require.Equal(t, facet, strconv.Itoa(i+1))
 	}
 
 	var bl pb.BackupPostingList
@@ -1446,7 +1446,7 @@ func TestRecursiveSplits(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, commits, len(facets))
 	for i, facet := range facets {
-		require.Equal(t, facet, strconv.Itoa(int(i+1)))
+		require.Equal(t, facet, strconv.Itoa(i+1))
 	}
 }
 

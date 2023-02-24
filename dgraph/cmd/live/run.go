@@ -288,7 +288,7 @@ func (l *loader) uid(val string, ns uint64) string {
 	x.Check2(sb.WriteString(x.NamespaceAttr(ns, val)))
 	uid, _ := l.alloc.AssignUid(sb.String())
 
-	return fmt.Sprintf("%#x", uint64(uid))
+	return fmt.Sprintf("%#x", uid)
 }
 
 func generateBlankNode(val string) string {
