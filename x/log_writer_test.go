@@ -63,66 +63,6 @@ func TestLogWriterWithCompression(t *testing.T) {
 
 // if this test failed and you changed anything, please check the dgraph audit decrypt command.
 // The dgraph audit decrypt command uses the same decryption method
-func TestLogWriterWithEncryptionDeprecated(t *testing.T) {
-	t.Skip()
-	path, _ := filepath.Abs("./log_test/audit.log.enc")
-	defer os.RemoveAll(filepath.Dir(path))
-	lw := &LogWriter{
-		FilePath:      path,
-		MaxSize:       1,
-		MaxAge:        1,
-		Compress:      false,
-		EncryptionKey: []byte("1234567890123456"),
-	}
-
-	lw, _ = lw.Init()
-	msg := []byte("abcd")
-	msg = bytes.Repeat(msg, 256)
-	msg[1023] = '\n'
-	for i := 0; i < 10000; i++ {
-		n, err := lw.Write(msg)
-		require.Nil(t, err)
-		require.Equal(t, n, len(msg)+4, "write length is not equal")
-	}
-
-	time.Sleep(time.Second * 10)
-	require.NoError(t, lw.Close())
-	file, err := os.Open(path)
-	require.Nil(t, err)
-	defer file.Close()
-	outPath, _ := filepath.Abs("./log_test/audit_out.log")
-	outfile, err := os.OpenFile(outPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
-	require.Nil(t, err)
-	defer outfile.Close()
-
-	block, err := aes.NewCipher(lw.EncryptionKey)
-	require.Nil(t, err)
-	stat, err := os.Stat(path)
-	require.Nil(t, err)
-	iv := make([]byte, aes.BlockSize)
-	_, err = file.ReadAt(iv, 0)
-	require.Nil(t, err)
-
-	var iterator int64 = 16
-	for {
-		content := make([]byte, binary.BigEndian.Uint32(iv[12:]))
-		_, err = file.ReadAt(content, iterator)
-		require.Nil(t, err)
-		iterator = iterator + int64(binary.BigEndian.Uint32(iv[12:]))
-		stream := cipher.NewCTR(block, iv)
-		stream.XORKeyStream(content, content)
-		//require.True(t, bytes.Equal(content, msg))
-		_, err = outfile.Write(content)
-		require.Nil(t, err)
-		if iterator >= stat.Size() {
-			break
-		}
-		_, err = file.ReadAt(iv[12:], iterator)
-		require.Nil(t, err)
-		iterator = iterator + 4
-	}
-}
-
 func TestLogWriterWithEncryption(t *testing.T) {
 	path, _ := filepath.Abs("./log_test/audit.log.enc")
 	defer os.RemoveAll(filepath.Dir(path))
