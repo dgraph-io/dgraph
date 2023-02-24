@@ -970,7 +970,7 @@ func run() error {
 	if len(*runPkg) > 0 || len(*runTest) > 0 {
 		N = 1
 	}
-	closer := z.NewCloser(N)
+	closer := z.NewCloser(N + 1)
 	testCh := make(chan task)
 	errCh := make(chan error, 1000)
 	for i := 0; i < N; i++ {
