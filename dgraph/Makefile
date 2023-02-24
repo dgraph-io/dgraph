@@ -42,7 +42,7 @@ gitBranch       = github.com/dgraph-io/dgraph/x.gitBranch
 lastCommitSHA   = github.com/dgraph-io/dgraph/x.lastCommitSHA
 lastCommitTime  = github.com/dgraph-io/dgraph/x.lastCommitTime
 
-BUILD_FLAGS   ?= -ldflags '-X ${lastCommitSHA}=${BUILD} -X "${lastCommitTime}=${BUILD_DATE}" -X "${dgraphVersion}=${BUILD_VERSION}" -X "${dgraphCodename}=${BUILD_CODENAME}" -X ${gitBranch}=${BUILD_BRANCH}'
+BUILD_FLAGS   ?= -ldflags '-extldflags "-static" -X ${lastCommitSHA}=${BUILD} -X "${lastCommitTime}=${BUILD_DATE}" -X "${dgraphVersion}=${BUILD_VERSION}" -X "${dgraphCodename}=${BUILD_CODENAME}" -X ${gitBranch}=${BUILD_BRANCH}'
 
 # Insert build tags if specified
 ifneq ($(strip $(BUILD_TAGS)),)
