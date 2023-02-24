@@ -11,21 +11,20 @@
   Superseded-By: NUMBER # It can be left blank if the RFC has not been superseded.
 ```
 
-
-
 ## Title: RFC + number: [Title of RFC]
 
 ### Summary:
 
 A brief summary of the RFC. Provide a brief overview of the main topics covered in the document.
 
-###  Motivation:
+### Motivation:
 
 An explanation of the need for the RFC and the problem it aims to solve.
 
 ### Abstract Design:
 
-If necessary, a high-level description of the design of the solution proposed in the RFC. This section may include pseudocode to clarify concepts.
+If necessary, a high-level description of the design of the solution proposed in the RFC. This section may include
+pseudocode to clarify concepts.
 
 ### Technical Details:
 
@@ -44,12 +43,12 @@ An exploration of other potential solutions to the problem addressed by the RFC.
 
 A plan for how the proposed solution in the RFC will be adopted and integrated into the Dgraph Core.
 
-
 --------
 
 Explanation(Delete this in your RFC):
 
-The "Type" field in an RFC template is used to categorize the type of proposal that the RFC represents. In the context of Dgraph, it can be used to indicate the nature or purpose of the proposal.
+The "Type" field in an RFC template is used to categorize the type of proposal that the RFC represents. In the context
+of Dgraph, it can be used to indicate the nature or purpose of the proposal.
 
 Here are some examples of types that might be used in an RFC for Dgraph:
 
