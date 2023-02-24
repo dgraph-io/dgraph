@@ -30,6 +30,9 @@ import (
 	"github.com/dgraph-io/dgraph/testutil"
 )
 
+var zeroMsgs []string
+var alphaMsgs []string
+
 func TestZeroAuditEncrypted(t *testing.T) {
 	state, err := testutil.GetState()
 	require.NoError(t, err)
@@ -56,6 +59,7 @@ func TestZeroAuditEncrypted(t *testing.T) {
 			}
 		}
 	}
+	zeroMsgs = msgs
 
 	var args []string
 	args = append(args, "audit", "decrypt",
@@ -135,6 +139,7 @@ input: {destination: \"/Users/sankalanparajuli/work/backup\"}) {\n    response {
 			}
 		}
 	}
+	alphaMsgs = msgs
 
 	var args []string
 	args = append(args, "audit", "decrypt",
@@ -154,6 +159,64 @@ input: {destination: \"/Users/sankalanparajuli/work/backup\"}) {\n    response {
 	}
 
 	verifyLogs(t, fmt.Sprintf("audit_dir/aa/alpha_audit_1_%s.log", nId), msgs)
+}
+
+// deprecated logs generated with dgraph v22.0.2
+func TestZeroAuditDecryptDeprecated(t *testing.T) {
+	if len(zeroMsgs) == 0 {
+		t.Log("need to run TestZeroAuditEncrypted first")
+		t.Skip()
+	}
+
+	var args []string
+	args = append(args, "audit", "decrypt",
+		"--encryption_key_file=../../ee/enc/test-fixtures/enc-key",
+		"--in", "audit_dir_deprecated/za/zero_audit_0_1.log.enc",
+		"--out", "audit_dir_deprecated/za/zero_audit_0_1.log")
+
+	decrypt := exec.Command(testutil.DgraphBinaryPath(), args...)
+
+	fmt.Println("Running: ", decrypt.Args)
+
+	defer os.Remove("audit_dir_deprecated/za/zero_audit_0_1.log")
+	out, err := decrypt.CombinedOutput()
+	if err != nil {
+		fmt.Printf("Error %v\n", err)
+		fmt.Printf("Output %v\n", string(out))
+		t.Fatal(err)
+	}
+
+	verifyLogs(t, "audit_dir_deprecated/za/zero_audit_0_1.log", zeroMsgs)
+
+}
+
+// deprecated logs generated with dgraph v22.0.2
+func TestAlphaAuditDecryptDeprecated(t *testing.T) {
+	if len(alphaMsgs) == 0 {
+		t.Log("need to run TestAlphaAuditEncrypted first")
+		t.Skip()
+	}
+
+	var args []string
+	args = append(args, "audit", "decrypt",
+		"--encryption_key_file=../../ee/enc/test-fixtures/enc-key",
+		"--in", "audit_dir_deprecated/aa/alpha_audit_1_1.log.enc",
+		"--out", "audit_dir_deprecated/aa/alpha_audit_1_1.log")
+
+	decrypt := exec.Command(testutil.DgraphBinaryPath(), args...)
+
+	fmt.Println("Running: ", decrypt.Args)
+
+	defer os.Remove("audit_dir_deprecated/aa/alpha_audit_1_1.log")
+	out, err := decrypt.CombinedOutput()
+	if err != nil {
+		fmt.Printf("Error %v\n", err)
+		fmt.Printf("Output %v\n", string(out))
+		t.Fatal(err)
+	}
+
+	verifyLogs(t, "audit_dir_deprecated/aa/alpha_audit_1_1.log", alphaMsgs)
+
 }
 
 func verifyLogs(t *testing.T, path string, cmds []string) {
