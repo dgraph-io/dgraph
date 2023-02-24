@@ -30,7 +30,7 @@ import (
 	"github.com/dgraph-io/dgraph/testutil"
 )
 
-func TestZeroAudit(t *testing.T) {
+func TestZeroAuditEncrypted(t *testing.T) {
 	state, err := testutil.GetState()
 	require.NoError(t, err)
 	nId := state.Zeros["1"].Id
@@ -76,7 +76,7 @@ func TestZeroAudit(t *testing.T) {
 
 	verifyLogs(t, fmt.Sprintf("audit_dir/za/zero_audit_0_%s.log", nId), msgs)
 }
-func TestAlphaAudit(t *testing.T) {
+func TestAlphaAuditEncrypted(t *testing.T) {
 	state, err := testutil.GetState()
 	require.NoError(t, err)
 	var nId string
