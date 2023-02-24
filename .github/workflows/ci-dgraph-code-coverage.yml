@@ -14,7 +14,7 @@ on:
       - main
       - 'release/**'
   schedule:
-    - cron: "0 0 * * *" # 1-run per day
+    - cron: "0 */2 * * *" # every 2hrs
 jobs:
   dgraph-code-coverage:
     if: github.event.pull_request.draft == false

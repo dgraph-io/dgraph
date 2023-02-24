@@ -14,7 +14,7 @@ on:
       - main
       - 'release/**'
   schedule:
-    - cron: "0 0,12 * * *" # 2-runs per day
+    - cron: "0 */2 * * *" # every 2hrs
 jobs:
   dgraph-tests:
     if: github.event.pull_request.draft == false
