@@ -146,7 +146,7 @@ func run() error {
 		iterator = iterator + aes.BlockSize
 
 		ct := make([]byte, len(x.VerificationTextDeprecated))
-		_, err = file.ReadAt(iv, iterator)
+		_, err = file.ReadAt(ct, iterator)
 		if err != nil {
 			return nil, 0, err
 		}
