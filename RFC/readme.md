@@ -49,7 +49,7 @@ Here follows the RFC structure.
 
 The RFC process provides a structured way to discuss and evaluate potential changes, while the deprecation process allows
 us to provide an estimated timeline (ETA) for determining whether to continue with the process or cancel it based on
-community interest. The POSTMORTEM directory will allow us to document and analyze the outcomes of resolved RFCs and
+community interest. The Post-mortem directory will allow us to document and analyze the outcomes of resolved RFCs and
 deprecation processes, which will help us improve our decision-making process in the future.
 
 ### How to start
