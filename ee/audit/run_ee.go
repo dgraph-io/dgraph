@@ -113,11 +113,17 @@ func run() error {
 	decryptHeader := func() ([]byte, int64, error) {
 		var iterator int64 = 0
 		iv := make([]byte, aes.BlockSize)
-		x.Check2(file.ReadAt(iv, iterator))     // get first iv
+		_, err := file.ReadAt(iv, iterator) // get first iv
+		if err != nil {
+			return nil, 0, err
+		}
 		iterator = iterator + aes.BlockSize + 4 // length of verification text encoded in uint32
 
 		ct := make([]byte, len(x.VerificationText))
-		x.Check2(file.ReadAt(ct, iterator))
+		_, err = file.ReadAt(ct, iterator)
+		if err != nil {
+			return nil, 0, err
+		}
 		iterator = iterator + int64(len(x.VerificationText))
 
 		text := make([]byte, len(x.VerificationText))
@@ -133,11 +139,17 @@ func run() error {
 	decryptHeaderDeprecated := func() ([]byte, int64, error) {
 		var iterator int64 = 0
 		iv := make([]byte, aes.BlockSize)
-		x.Check2(file.ReadAt(iv, iterator))
+		_, err := file.ReadAt(iv, iterator)
+		if err != nil {
+			return nil, 0, err
+		}
 		iterator = iterator + aes.BlockSize
 
 		ct := make([]byte, len(x.VerificationTextDeprecated))
-		x.Check2(file.ReadAt(ct, iterator))
+		_, err = file.ReadAt(iv, iterator)
+		if err != nil {
+			return nil, 0, err
+		}
 		iterator = iterator + int64(len(x.VerificationTextDeprecated))
 
 		text := make([]byte, len(x.VerificationTextDeprecated))
