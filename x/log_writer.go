@@ -19,8 +19,6 @@ package x
 import (
 	"bufio"
 	"compress/gzip"
-	"crypto/aes"
-	"crypto/cipher"
 	"crypto/rand"
 	"encoding/binary"
 	"fmt"
@@ -209,22 +207,6 @@ func decrypt(key, iv, src []byte) ([]byte, error) {
 	return plainText, nil
 }
 
-// decrypt audit log header of old audit logs
-// see https://github.com/dgraph-io/dgraph/pull/8323
-func decryptDeprecated(key []byte, baseIv [12]byte, src []byte) ([]byte, error) {
-	iv := make([]byte, 16)
-	copy(iv, baseIv[:])
-	binary.BigEndian.PutUint32(iv[12:], uint32(len(src)))
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return nil, err
-	}
-	stream := cipher.NewCTR(block, iv[:])
-	dst := make([]byte, len(src))
-	stream.XORKeyStream(dst, src)
-	return dst, nil
-}
-
 func (l *LogWriter) rotate() error {
 	if l == nil {
 		return nil
@@ -281,6 +263,9 @@ func (l *LogWriter) open() error {
 			binary.BigEndian.PutUint32(lengthInput, uint32(len(VerificationText))) // header has 16+4 bytes now
 
 			bytes, err := encrypt(l.EncryptionKey, iv, []byte(VerificationText))
+			if err != nil {
+				return err
+			}
 			cipher := append(append(iv, lengthInput...), bytes...)
 			if _, err = l.writer.Write(cipher); err != nil {
 				return err
