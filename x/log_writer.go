@@ -56,7 +56,6 @@ type LogWriter struct {
 	Compress      bool
 	EncryptionKey []byte
 
-	baseIv      [12]byte // deprecated
 	mu          sync.Mutex
 	size        int64
 	file        *os.File
@@ -221,8 +220,9 @@ func decryptDeprecated(key []byte, baseIv [12]byte, src []byte) ([]byte, error) 
 		return nil, err
 	}
 	stream := cipher.NewCTR(block, iv[:])
-	stream.XORKeyStream(src, src)
-	return src, nil
+	dst := make([]byte, len(src))
+	stream.XORKeyStream(dst, src)
+	return dst, nil
 }
 
 func (l *LogWriter) rotate() error {
@@ -315,33 +315,17 @@ func (l *LogWriter) open() error {
 			_ = l.file.Close()
 			return openNew()
 		}
-		text := make([]byte, 4+len(VerificationText)) // size=4+11
-		// veritification text starts at offset 20, however in old audit logs it starts at 16
-		// we may encounter an old audit log and need to decrypt it
-		if _, err := f.ReadAt(text, 16); err != nil {
+		ct := make([]byte, len(VerificationText)) // size=11
+		// veritification text starts at offset 20
+		if _, err := f.ReadAt(ct, 20); err != nil {
 			_ = f.Close()
 			return openNew()
 		}
-		t, err := decrypt(l.EncryptionKey, iv, text[4:])
-		if err != nil {
+		t, err := decrypt(l.EncryptionKey, iv, ct)
+		if err != nil || string(t) != VerificationText {
+			// different encryption key. Better to open new file here
 			_ = f.Close()
 			return openNew()
-		} else if string(t) != VerificationText {
-			// try old decrypt method in case we have old audit log
-			t = make([]byte, 11)
-			copy(t, text[:11]) // decrypt_deprecated destroys bytes, need copy here
-			t, err = decryptDeprecated(l.EncryptionKey, l.baseIv, t)
-			if err != nil || string(t) != VerificationTextDeprecated {
-				// file corrupted or wrong key
-				_ = f.Close()
-				return openNew()
-			} else {
-				// rotate old audit log
-				if err := l.rotate(); err != nil {
-					return err
-				}
-				return nil
-			}
 		}
 	}
 
