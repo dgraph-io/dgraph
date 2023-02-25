@@ -116,33 +116,34 @@ func run() error {
 		x.Check2(file.ReadAt(iv, iterator))     // get first iv
 		iterator = iterator + aes.BlockSize + 4 // length of verification text encoded in uint32
 
-		t := make([]byte, len(x.VerificationText))
-		x.Check2(file.ReadAt(t, iterator))
+		ct := make([]byte, len(x.VerificationText))
+		x.Check2(file.ReadAt(ct, iterator))
 		iterator = iterator + int64(len(x.VerificationText))
 
 		text := make([]byte, len(x.VerificationText))
 		stream := cipher.NewCTR(block, iv)
-		stream.XORKeyStream(text, t)
+		stream.XORKeyStream(text, ct)
 		if string(text) != x.VerificationText {
 			return nil, 0, errors.New("invalid encryption key provided. Please check your encryption key")
 		}
 		return iv, iterator, nil
 	}
 
-	// [12]byte baseIV + [4]byte len(x.VerificationText_Deprecated) + [11]byte x.VerificationText_Deprecated
-	decryptHeader_Deprecated := func() ([]byte, int64, error) {
+	// [12]byte baseIV + [4]byte len(x.VerificationTextDeprecated) + [11]byte x.VerificationTextDeprecated
+	decryptHeaderDeprecated := func() ([]byte, int64, error) {
 		var iterator int64 = 0
 		iv := make([]byte, aes.BlockSize)
 		x.Check2(file.ReadAt(iv, iterator))
 		iterator = iterator + aes.BlockSize
 
-		t := make([]byte, len(x.VerificationText_Deprecated))
-		x.Check2(file.ReadAt(t, iterator))
-		iterator = iterator + int64(len(x.VerificationText_Deprecated))
+		ct := make([]byte, len(x.VerificationTextDeprecated))
+		x.Check2(file.ReadAt(ct, iterator))
+		iterator = iterator + int64(len(x.VerificationTextDeprecated))
 
+		text := make([]byte, len(x.VerificationTextDeprecated))
 		stream := cipher.NewCTR(block, iv)
-		stream.XORKeyStream(t, t)
-		if string(t) != x.VerificationText_Deprecated {
+		stream.XORKeyStream(text, ct)
+		if string(text) != x.VerificationTextDeprecated {
 			return nil, 0, errors.New("invalid encryption key provided. Please check your encryption key")
 		}
 		return iv, iterator, nil
@@ -152,7 +153,7 @@ func run() error {
 	iv, iterator, err := decryptHeader()
 	if err != nil {
 		// might have an old audit log
-		iv2, iterator2, err := decryptHeader_Deprecated()
+		iv2, iterator2, err := decryptHeaderDeprecated()
 		if err != nil {
 			return errors.New("invalid encryption key provided. Please check your encryption key")
 		}
@@ -193,7 +194,7 @@ func run() error {
 	// ########################################################
 	// #####   [4]byte uint32(len(p)) + [:]byte p         #####
 	// ########################################################
-	decryptBody_Deprecated := func() {
+	decryptBodyDeprecated := func() {
 		for {
 			// if its the end of data. finish decrypting
 			if iterator >= stat.Size() {
@@ -212,7 +213,7 @@ func run() error {
 	}
 
 	if useDeprecated {
-		decryptBody_Deprecated()
+		decryptBodyDeprecated()
 	} else {
 		decryptBody()
 	}

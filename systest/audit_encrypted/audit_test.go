@@ -69,7 +69,7 @@ func TestZeroAuditEncrypted(t *testing.T) {
 
 	decrypt := exec.Command(testutil.DgraphBinaryPath(), args...)
 
-	fmt.Println("Running: ", decrypt.Args)
+	t.Log("Running: ", decrypt.Args)
 
 	out, err := decrypt.CombinedOutput()
 	if err != nil {
@@ -80,6 +80,7 @@ func TestZeroAuditEncrypted(t *testing.T) {
 
 	verifyLogs(t, fmt.Sprintf("audit_dir/za/zero_audit_0_%s.log", nId), msgs)
 }
+
 func TestAlphaAuditEncrypted(t *testing.T) {
 	state, err := testutil.GetState()
 	require.NoError(t, err)
@@ -149,7 +150,7 @@ input: {destination: \"/Users/sankalanparajuli/work/backup\"}) {\n    response {
 
 	decrypt := exec.Command(testutil.DgraphBinaryPath(), args...)
 
-	fmt.Println("Running: ", decrypt.Args)
+	t.Log("Running: ", decrypt.Args)
 
 	out, err := decrypt.CombinedOutput()
 	if err != nil {
@@ -176,7 +177,7 @@ func TestZeroAuditDecryptDeprecated(t *testing.T) {
 
 	decrypt := exec.Command(testutil.DgraphBinaryPath(), args...)
 
-	fmt.Println("Running: ", decrypt.Args)
+	t.Log("Running: ", decrypt.Args)
 
 	defer os.Remove("audit_dir_deprecated/za/zero_audit_0_1.log")
 	out, err := decrypt.CombinedOutput()
@@ -205,7 +206,7 @@ func TestAlphaAuditDecryptDeprecated(t *testing.T) {
 
 	decrypt := exec.Command(testutil.DgraphBinaryPath(), args...)
 
-	fmt.Println("Running: ", decrypt.Args)
+	t.Log("Running: ", decrypt.Args)
 
 	defer os.Remove("audit_dir_deprecated/aa/alpha_audit_1_1.log")
 	out, err := decrypt.CombinedOutput()

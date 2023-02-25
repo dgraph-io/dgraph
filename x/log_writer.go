@@ -42,8 +42,8 @@ const (
 	bufferSize       = 256 * 1024
 	flushInterval    = 10 * time.Second
 	//  old logs before https://github.com/dgraph-io/dgraph/pull/8323 contain deprecated verification text in header
-	VerificationText_Deprecated = "Hello World"
-	VerificationText            = "dlroW olloH"
+	VerificationTextDeprecated = "Hello World"
+	VerificationText           = "dlroW olloH"
 )
 
 // This is done to ensure LogWriter always implement io.WriterCloser
@@ -139,36 +139,6 @@ func (l *LogWriter) Write(p []byte) (int, error) {
 	return n, err
 }
 
-func (l *LogWriter) Write_deprecated(p []byte) (int, error) {
-	if l == nil {
-		return 0, nil
-	}
-
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
-	if l.size+int64(len(p)) >= l.MaxSize*1024*1024 {
-		if err := l.rotate(); err != nil {
-			return 0, err
-		}
-	}
-
-	// if encryption is enabled store the data in encyrpted way
-	if l.EncryptionKey != nil {
-		bytes, err := encrypt_deprecated(l.EncryptionKey, l.baseIv, p)
-		if err != nil {
-			return 0, err
-		}
-		n, err := l.writer.Write(bytes)
-		l.size = l.size + int64(n)
-		return n, err
-	}
-
-	n, err := l.writer.Write(p)
-	l.size = l.size + int64(n)
-	return n, err
-}
-
 func (l *LogWriter) Close() error {
 	if l == nil {
 		return nil
@@ -228,18 +198,6 @@ func encrypt(key, iv, src []byte) ([]byte, error) {
 	return cipher, nil
 }
 
-func encrypt_deprecated(key []byte, baseIv [12]byte, src []byte) ([]byte, error) {
-	iv := make([]byte, 16)
-	copy(iv, baseIv[:])
-	binary.BigEndian.PutUint32(iv[12:], uint32(len(src))) // collisions in len(src) create vulnerability
-	allocate, err := y.XORBlockAllocate(src, key, iv)
-	if err != nil {
-		return nil, err
-	}
-	allocate = append(iv[12:], allocate...)
-	return allocate, nil
-}
-
 // used to verify client has correct key and can decrypt audit log header
 func decrypt(key, iv, src []byte) ([]byte, error) {
 	ivCopy := make([]byte, 16)
@@ -254,7 +212,7 @@ func decrypt(key, iv, src []byte) ([]byte, error) {
 
 // decrypt audit log header of old audit logs
 // see https://github.com/dgraph-io/dgraph/pull/8323
-func decrypt_deprecated(key []byte, baseIv [12]byte, src []byte) ([]byte, error) {
+func decryptDeprecated(key []byte, baseIv [12]byte, src []byte) ([]byte, error) {
 	iv := make([]byte, 16)
 	copy(iv, baseIv[:])
 	binary.BigEndian.PutUint32(iv[12:], uint32(len(src)))
@@ -372,8 +330,8 @@ func (l *LogWriter) open() error {
 			// try old decrypt method in case we have old audit log
 			t = make([]byte, 11)
 			copy(t, text[:11]) // decrypt_deprecated destroys bytes, need copy here
-			t, err = decrypt_deprecated(l.EncryptionKey, l.baseIv, t)
-			if err != nil || string(t) != VerificationText_Deprecated {
+			t, err = decryptDeprecated(l.EncryptionKey, l.baseIv, t)
+			if err != nil || string(t) != VerificationTextDeprecated {
 				// file corrupted or wrong key
 				_ = f.Close()
 				return openNew()
@@ -384,86 +342,6 @@ func (l *LogWriter) open() error {
 				}
 				return nil
 			}
-		}
-	}
-
-	l.writer = bufio.NewWriterSize(l.file, bufferSize)
-	l.size = size()
-	return nil
-}
-
-func (l *LogWriter) open_deprecated() error {
-	if l == nil {
-		return nil
-	}
-
-	if err := os.MkdirAll(filepath.Dir(l.FilePath), 0755); err != nil {
-		return err
-	}
-
-	size := func() int64 {
-		info, err := os.Stat(l.FilePath)
-		if err != nil {
-			return 0
-		}
-		return info.Size()
-	}
-
-	openNew := func() error {
-		f, err := os.OpenFile(l.FilePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
-		if err != nil {
-			return err
-		}
-		l.file = f
-		l.writer = bufio.NewWriterSize(l.file, bufferSize)
-
-		if l.EncryptionKey != nil {
-			_, _ = rand.Read(l.baseIv[:])
-			bytes, err := encrypt_deprecated(l.EncryptionKey, l.baseIv, []byte(VerificationText))
-			if err != nil {
-				return err
-			}
-			if _, err = l.writer.Write(append(l.baseIv[:], bytes[:]...)); err != nil {
-				return err
-			}
-		}
-		l.size = size()
-		return nil
-	}
-
-	info, err := os.Stat(l.FilePath)
-	if err != nil { // if any error try to open new log file itself
-		return openNew()
-	}
-
-	// encryption is enabled and file is corrupted as not able to read the IV
-	if l.EncryptionKey != nil && info.Size() < 12 {
-		return openNew()
-	}
-
-	f, err := os.OpenFile(l.FilePath, os.O_APPEND|os.O_RDWR, os.ModePerm)
-	if err != nil {
-		return openNew()
-	}
-
-	l.file = f
-	if l.EncryptionKey != nil {
-		// If not able to read the baseIv, then this file might be corrupted.
-		// open the new file in that case
-		if _, err = l.file.ReadAt(l.baseIv[:], 0); err != nil {
-			_ = l.file.Close()
-			return openNew()
-		}
-		text := make([]byte, 11)
-		if _, err := f.ReadAt(text, 16); err != nil {
-			_ = f.Close()
-			return openNew()
-		}
-		if t, err := decrypt_deprecated(l.EncryptionKey, l.baseIv, text); err != nil ||
-			string(t) != VerificationText {
-			// different encryption key. Better to open new file here
-			_ = f.Close()
-			return openNew()
 		}
 	}
 
