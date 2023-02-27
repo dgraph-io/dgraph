@@ -1,10 +1,18 @@
 name: cd-dgraph
-on: workflow_dispatch
+on:
+  workflow_dispatch:
+    inputs:
+      releasetag:
+        description: 'releasetag'
+        required: true
+        type: string
 jobs:
   dgraph-build-amd64:
     runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v3
+        with:
+          ref: '${{ github.event.inputs.releasetag }}'
       - name: Get Go Version
         run: |
           #!/bin/bash
@@ -38,15 +46,15 @@ jobs:
       - name: Set Dgraph Release Version
         run: |
           #!/bin/bash
-          GIT_BRANCH_NAME=$(git rev-parse --abbrev-ref HEAD)
-          if [[ "$GIT_BRANCH_NAME" == "release/v"* ]]; 
+          GIT_TAG_NAME='${{ github.event.inputs.releasetag }}'
+          if [[ "$GIT_TAG_NAME" == "v"* ]]; 
           then
             echo "this is a release branch"
           else
             echo "this is NOT a release branch"
             exit 1
           fi
-          DGRAPH_RELEASE_VERSION=$(git rev-parse --abbrev-ref HEAD | sed  's/release\///')
+          DGRAPH_RELEASE_VERSION='${{ github.event.inputs.releasetag }}'
           echo "making a new release for dgraph "$DGRAPH_RELEASE_VERSION
           echo "DGRAPH_RELEASE_VERSION=$DGRAPH_RELEASE_VERSION" >> $GITHUB_ENV
       - name: Make Dgraph Linux Build
@@ -85,6 +93,8 @@ jobs:
     runs-on: [self-hosted, arm64]
     steps:
       - uses: actions/checkout@v3
+        with:
+          ref: '${{ github.event.inputs.releasetag }}'
       - name: Get Go Version
         run: |
           #!/bin/bash
@@ -118,15 +128,15 @@ jobs:
       - name: Set Dgraph Release Version
         run: |
           #!/bin/bash
-          GIT_BRANCH_NAME=$(git rev-parse --abbrev-ref HEAD)
-          if [[ "$GIT_BRANCH_NAME" == "release/v"* ]]; 
+          GIT_TAG_NAME='${{ github.event.inputs.releasetag }}'
+          if [[ "$GIT_TAG_NAME" == "v"* ]]; 
           then
             echo "this is a release branch"
           else
             echo "this is NOT a release branch"
             exit 1
           fi
-          DGRAPH_RELEASE_VERSION=$(git rev-parse --abbrev-ref HEAD | sed  's/release\///')
+          DGRAPH_RELEASE_VERSION='${{ github.event.inputs.releasetag }}'
           echo "making a new release for dgraph "$DGRAPH_RELEASE_VERSION
           echo "DGRAPH_RELEASE_VERSION=$DGRAPH_RELEASE_VERSION" >> $GITHUB_ENV
       - name: Make Dgraph Linux Build
@@ -166,18 +176,20 @@ jobs:
     runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v3
+        with:
+          ref: '${{ github.event.inputs.releasetag }}'
       - name: Set Dgraph Release Version
         run: |
           #!/bin/bash
-          GIT_BRANCH_NAME=$(git rev-parse --abbrev-ref HEAD)
-          if [[ "$GIT_BRANCH_NAME" == "release/v"* ]]; 
+          GIT_TAG_NAME='${{ github.event.inputs.releasetag }}'
+          if [[ "$GIT_TAG_NAME" == "v"* ]]; 
           then
             echo "this is a release branch"
           else
             echo "this is NOT a release branch"
             exit 1
           fi
-          DGRAPH_RELEASE_VERSION=$(git rev-parse --abbrev-ref HEAD | sed  's/release\///')
+          DGRAPH_RELEASE_VERSION='${{ github.event.inputs.releasetag }}'
           echo "making a new release for dgraph "$DGRAPH_RELEASE_VERSION
           echo "DGRAPH_RELEASE_VERSION=$DGRAPH_RELEASE_VERSION" >> $GITHUB_ENV
       - name: Login to DockerHub
