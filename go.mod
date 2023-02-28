@@ -143,3 +143,5 @@ require (
 	gopkg.in/jcmturner/rpc.v1 v1.1.0 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20200615113413-eeeca48fe776 // indirect
 )
+
+replace github.com/dgraph-io/badger/v4 => github.com/joshua-goldstein/badger/v4 v4.0.1
