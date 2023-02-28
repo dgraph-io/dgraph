@@ -5,7 +5,7 @@ on:
       latest:
         type: boolean
         default: false
-        description: Release latest tag on Dockerhub
+        description: release latest tag on Dockerhub
 jobs:
   dgraph-build-amd64:
     runs-on: ubuntu-20.04
