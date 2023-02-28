@@ -11,6 +11,7 @@ require (
 	github.com/Shopify/sarama v1.27.2
 	github.com/blevesearch/bleve v1.0.13
 	github.com/dgraph-io/badger/v3 v3.2103.6-0.20230209075919-3045f88d615c
+	github.com/dgraph-io/badger/v4 v4.0.0
 	github.com/dgraph-io/dgo/v210 v210.0.0-20210407152819-261d1c2a6987
 	github.com/dgraph-io/gqlgen v0.13.2
 	github.com/dgraph-io/gqlparser/v2 v2.2.1
@@ -143,3 +144,7 @@ require (
 	gopkg.in/jcmturner/rpc.v1 v1.1.0 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20200615113413-eeeca48fe776 // indirect
 )
+
+// replace github.com/dgraph-io/badger/v3 => /home/joshua/Developer/badger
+
+replace github.com/dgraph-io/badger/v4 => /home/joshua/Developer/badger
