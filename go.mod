@@ -10,7 +10,7 @@ require (
 	github.com/Masterminds/semver/v3 v3.1.0
 	github.com/Shopify/sarama v1.27.2
 	github.com/blevesearch/bleve v1.0.13
-	github.com/dgraph-io/badger/v4 v4.0.1-0.20230228111748-e09e92b8a063
+	github.com/dgraph-io/badger/v4 v4.0.1
 	github.com/dgraph-io/dgo/v210 v210.0.0-20210407152819-261d1c2a6987
 	github.com/dgraph-io/gqlgen v0.13.2
 	github.com/dgraph-io/gqlparser/v2 v2.2.1
@@ -143,5 +143,3 @@ require (
 	gopkg.in/jcmturner/rpc.v1 v1.1.0 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20200615113413-eeeca48fe776 // indirect
 )
-
-replace github.com/dgraph-io/badger/v4 => github.com/joshua-goldstein/badger/v4 v4.0.1
