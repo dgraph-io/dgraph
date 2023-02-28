@@ -20,10 +20,10 @@ BUILD          ?= $(shell git rev-parse --short HEAD)
 BUILD_CODENAME ?= dgraph
 BUILD_DATE     ?= $(shell git log -1 --format=%ci)
 BUILD_BRANCH   ?= $(shell git rev-parse --abbrev-ref HEAD)
+BUILD_VERSION  ?= $(shell git describe --always --tags)
 
-ifeq ($(DGRAPH_VERSION),)
-BUILD_VERSION ?= local
-else
+# check if DGRAPH_VERSION flag is set (used for release pipeline)
+ifneq ($(DGRAPH_VERSION),)
 # remove arch suffix from DGRAPH_VERSION for CD steps only
 BUILD_VERSION := $(shell echo ${DGRAPH_VERSION} | cut -d "-" -f 1)
 endif
