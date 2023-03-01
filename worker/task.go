@@ -32,7 +32,7 @@ import (
 	otrace "go.opencensus.io/trace"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/dgraph-io/badger/v3"
+	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/conn"

@@ -22,8 +22,8 @@ import (
 
 	"github.com/golang/glog"
 
-	"github.com/dgraph-io/badger/v3"
-	"github.com/dgraph-io/badger/v3/pb"
+	"github.com/dgraph-io/badger/v4"
+	"github.com/dgraph-io/badger/v4/pb"
 )
 
 // TxnWriter is in charge or writing transactions to badger.

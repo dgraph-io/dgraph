@@ -57,9 +57,9 @@ import (
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 
-	"github.com/dgraph-io/badger/v3"
-	bo "github.com/dgraph-io/badger/v3/options"
-	badgerpb "github.com/dgraph-io/badger/v3/pb"
+	"github.com/dgraph-io/badger/v4"
+	bo "github.com/dgraph-io/badger/v4/options"
+	badgerpb "github.com/dgraph-io/badger/v4/pb"
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/ristretto/z"

@@ -20,7 +20,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/dgraph-io/badger/v3/y"
+	"github.com/dgraph-io/badger/v4/y"
 	"github.com/dgraph-io/dgraph/x"
 )
 
