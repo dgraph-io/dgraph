@@ -56,16 +56,12 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
   - chore(deps): update min go build version ([#8423][])
 
 - **Security**
-   - <details>
-      <summary>CVE Fixes (???)</summary>
-
-      #### CVE Fixes (35 total)
-      - chore(deps): bump certifi from 2020.4.5.1 to 2022.12.7 in /contrib/config/marketplace/aws/tests ([#8496][])
-      - chore(deps): bump github.com/docker/distribution from 2.7.1+incompatible to 2.8.0+incompatible ([#8575][])
-      - chore(deps): bump werkzeug from 0.16.1 to 2.2.3 in /contrib/embargo ([#8676][])
-      - fix(sec): upgrade networkx to  ([#8613][])
-      - fix(sec): CVE-2022-41721 ([#8633][])
-      - fix(sec): CVE & OS Patching ([#8634][])
+  - chore(deps): bump certifi from 2020.4.5.1 to 2022.12.7 in /contrib/config/marketplace/aws/tests ([#8496][])
+  - chore(deps): bump github.com/docker/distribution from 2.7.1+incompatible to 2.8.0+incompatible ([#8575][])
+  - chore(deps): bump werkzeug from 0.16.1 to 2.2.3 in /contrib/embargo ([#8676][])
+  - fix(sec): upgrade networkx to  ([#8613][])
+  - fix(sec): CVE-2022-41721 ([#8633][])
+  - fix(sec): CVE & OS Patching ([#8634][])
 
 ### Changed
 
@@ -86,29 +82,6 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
     - chore(linter): fix some of the warnings from gas linter ([#8664][])
     - chore(linter): fix golangci config and some issues in tests ([#8669][])
     - fix(linter): address gosimple linter reports & errors ([#8628][])
-
-### Not Included
-
-- chore(ci): remove arch from ldflag ([#8546][])
-- fix(ci): reduce cron runs for self-hosted runners ([#8549][])
-- fix(chore): add the word "dev" to the version to avoid breaking the local test ([#8430][])
-- rename SensitiveByteSlice to Sensitive ([#8553][])
-- feat(DQL): Rename gql package to dql ([#8429][])
-- chore(github): update feature request issue template ([#8461][])
-- fix(ci): Uncomment draft PR logic ([#8644][])
-- fix(readme): Update docs link ([#8645][])
-- chore(linter): enable errcheck and ineffassign linters ([#8647][])
-- chore(other): Rename Master's references remaining ([#8649][])
-- chore(linter): fix files to limit line width to 120 chars ([#8663][])
-- chore(CI): Update Labeler ([#8607][])
-- chore(mod): run go mod tidy ([#8672][])
-- Update the copyright ([#8675][])
-- chore(ci): run CI jobs on release branches ([#8680][])
-- refactor(metrics) record function is not needed as both calls are always made sequentially ([#8650][])
-- chore: fix imports order across the repo ([#8618][])
-- chore(ci): update readme ([#8632][])
-- 693677e71 Revert "fix: fixing audit logs for websocket connections  ([#8626][])
-- 8c5ce6547 fix: fixing audit logs for websocket connections ([#8572][])
 
 ## [v22.0.2] - 2022-12-16
 [v22.0.2]: https://github.com/dgraph-io/dgraph/compare/v22.0.1...v22.0.2
