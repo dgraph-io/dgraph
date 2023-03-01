@@ -13,7 +13,7 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
   - fix(GraphQL): pass on HTTP request headers for subscriptions (https://github.com/dgraph-io/dgraph/pull/8574)
 
 - **Core Dgraph**
-  - chore(debug): add -`--only-summary` flag in `dgraph debug` to show LSM tree and namespace size (https://github.com/dgraph-io/dgraph/pull/8516)
+  - chore(debug): add `--only-summary` flag in `dgraph debug` to show LSM tree and namespace size (https://github.com/dgraph-io/dgraph/pull/8516)
   - feat(cloud): add shared-instance flag in limit superflag in alpha (https://github.com/dgraph-io/dgraph/pull/8625)
   - chore(deps): update prometheus dependency, adds new metrics (https://github.com/dgraph-io/dgraph/pull/8655)
   - feat(cdc): add superflag to enable TLS without CA or certs (https://github.com/dgraph-io/dgraph/pull/8564)
