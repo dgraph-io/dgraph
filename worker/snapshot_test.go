@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -103,7 +103,8 @@ func TestSnapshot(t *testing.T) {
 		require.NoError(t, err)
 	}
 	const testSchema = "type Person { name: String }"
-	// uploading new schema while alpha2 is not running so we can test whether the stopped alpha gets new schema in snapshot
+	// uploading new schema while alpha2 is not running so we can
+	// test whether the stopped alpha gets new schema in snapshot
 	testutil.UpdateGQLSchema(t, testutil.SockAddrHttp, testSchema)
 	_ = waitForSnapshot(t, snapshotTs)
 
@@ -178,7 +179,7 @@ func waitForSnapshot(t *testing.T, prevSnapTs uint64) uint64 {
 	for {
 		res, err := http.Get("http://" + testutil.SockAddrZeroHttp + "/state")
 		require.NoError(t, err)
-		body, err := ioutil.ReadAll(res.Body)
+		body, err := io.ReadAll(res.Body)
 		res.Body.Close()
 		require.NoError(t, err)
 

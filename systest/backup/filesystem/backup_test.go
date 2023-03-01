@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors *
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"math"
 	"os"
 	"path/filepath"
@@ -42,18 +41,12 @@ import (
 )
 
 var (
-	copyBackupDir   = "./data/backups_copy"
-	restoreDir      = "./data/restore"
-	testDirs        = []string{restoreDir}
-	alphaBackupDir  = "/data/backups"
-	oldBackupDir1   = "/data/to_restore/1"
-	oldBackupDir2   = "/data/to_restore/2"
-	oldBackupDir3   = "/data/to_restore/3"
-	alphaContainers = []string{
-		"alpha1",
-		"alpha2",
-		"alpha3",
-	}
+	copyBackupDir  = "./data/backups_copy"
+	restoreDir     = "./data/restore"
+	alphaBackupDir = "/data/backups"
+	oldBackupDir1  = "/data/to_restore/1"
+	oldBackupDir2  = "/data/to_restore/2"
+	oldBackupDir3  = "/data/to_restore/3"
 )
 
 func sendRestoreRequest(t *testing.T, location string) {
@@ -83,7 +76,6 @@ func sendRestoreRequest(t *testing.T, location string) {
 
 	require.NoError(t, json.Unmarshal(resp.Data, &restoreResp))
 	require.Equal(t, restoreResp.Restore.Code, "Success")
-	return
 }
 
 // This test takes a backup and then restores an old backup in a cluster incrementally.
@@ -457,7 +449,7 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	})
 	require.Equal(t, numExpectedDirs, len(dirs))
 
-	b, err = ioutil.ReadFile(filepath.Join(copyBackupDir, "manifest.json"))
+	b, err = os.ReadFile(filepath.Join(copyBackupDir, "manifest.json"))
 	require.NoError(t, err)
 	var manifest worker.MasterManifest
 	err = json.Unmarshal(b, &manifest)

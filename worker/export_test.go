@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"math"
 	"net/http"
 	"os"
@@ -202,7 +202,8 @@ func checkExportSchema(t *testing.T, schemaFileList []string) {
 	r, err := gzip.NewReader(f)
 	require.NoError(t, err)
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, err = buf.ReadFrom(r)
+	require.NoError(t, err)
 
 	result, err := schema.Parse(buf.String())
 	require.NoError(t, err)
@@ -226,7 +227,8 @@ func checkExportGqlSchema(t *testing.T, gqlSchemaFiles []string) {
 	r, err := gzip.NewReader(f)
 	require.NoError(t, err)
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, err = buf.ReadFrom(r)
+	require.NoError(t, err)
 	expected := []x.ExportedGQLSchema{{Namespace: x.GalaxyNamespace, Schema: gqlSchema}}
 	b, err := json.Marshal(expected)
 	require.NoError(t, err)
@@ -241,7 +243,7 @@ func TestExportRdf(t *testing.T) {
 		[0x2] name: string @index(exact) .
 		`)
 
-	bdir, err := ioutil.TempDir("", "export")
+	bdir, err := os.MkdirTemp("", "export")
 	require.NoError(t, err)
 	defer os.RemoveAll(bdir)
 
@@ -343,7 +345,7 @@ func TestExportJson(t *testing.T) {
 	initTestExport(t, `name: string @index(exact) .
 				 [0x2] name: string @index(exact) .`)
 
-	bdir, err := ioutil.TempDir("", "export")
+	bdir, err := os.MkdirTemp("", "export")
 	require.NoError(t, err)
 	defer os.RemoveAll(bdir)
 
@@ -384,7 +386,7 @@ func TestExportJson(t *testing.T) {
 		{"uid":"0x9","namespace":"0x2","name":"ns2"}
 	]
 	`
-	gotJson, err := ioutil.ReadAll(r)
+	gotJson, err := io.ReadAll(r)
 	require.NoError(t, err)
 	var expected interface{}
 	err = json.Unmarshal([]byte(wantJson), &expected)
@@ -407,7 +409,7 @@ const exportRequest = `mutation export($format: String!) {
 }`
 
 func TestExportFormat(t *testing.T) {
-	tmpdir, err := ioutil.TempDir("", "export")
+	tmpdir, err := os.MkdirTemp("", "export")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpdir)
 
@@ -446,7 +448,7 @@ func TestExportFormat(t *testing.T) {
 	require.NoError(t, err)
 
 	defer resp.Body.Close()
-	b, err = ioutil.ReadAll(resp.Body)
+	b, err = io.ReadAll(resp.Body)
 	require.NoError(t, err)
 
 	var result *testutil.GraphQLResponse

@@ -5,13 +5,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
@@ -47,7 +48,7 @@ func disableDraining(t *testing.T) {
 
 	resp, err := client.Do(req)
 	require.NoError(t, err)
-	buf, err := ioutil.ReadAll(resp.Body)
+	buf, err := io.ReadAll(resp.Body)
 	fmt.Println(string(buf))
 	require.NoError(t, err)
 	require.Contains(t, string(buf), "draining mode has been set to false")
@@ -92,10 +93,10 @@ func TestAclCacheRestore(t *testing.T) {
 	// TODO: need to fix the race condition for license propagation, the sleep helps propagate the EE license correctly
 	time.Sleep(time.Second * 10)
 	disableDraining(t)
-	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
+	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
-	dg.Login(context.Background(), "groot", "password")
+	require.NoError(t, dg.Login(context.Background(), "groot", "password"))
 
 	sendRestoreRequest(t, "/backups", "vibrant_euclid5", 1)
 	testutil.WaitForRestore(t, dg, testutil.SockAddrHttp)

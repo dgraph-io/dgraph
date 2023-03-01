@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2015-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -760,7 +760,7 @@ var testNQuads = []struct {
 	},
 	// Should parse dates
 	{
-		input: `_:alice <knows> "stuff" (key1=2002-10-02T15:00:00.05Z, key2=2006-01-02T15:04:05, key3=2006-01-02T00:00:00Z) .`,
+		input: `_:alice <knows> "stuff" (key1=2002-10-02T15:00:00.05Z, key2=2006-01-02T15:04:05, key3=2006-01-02T00:00:00Z) .`, //nolint:lll
 		nq: api.NQuad{
 			Subject:     "_:alice",
 			Predicate:   "knows",

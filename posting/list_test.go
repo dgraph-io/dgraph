@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2015-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,6 @@ package posting
 
 import (
 	"context"
-	"io/ioutil"
 	"math"
 	"math/rand"
 	"os"
@@ -51,10 +50,10 @@ func (l *List) PostingList() *pb.PostingList {
 
 func listToArray(t *testing.T, afterUid uint64, l *List, readTs uint64) []uint64 {
 	out := make([]uint64, 0, 10)
-	l.Iterate(readTs, afterUid, func(p *pb.Posting) error {
+	require.NoError(t, l.Iterate(readTs, afterUid, func(p *pb.Posting) error {
 		out = append(out, p.Uid)
 		return nil
-	})
+	}))
 	return out
 }
 
@@ -125,7 +124,7 @@ func TestAddMutation(t *testing.T) {
 
 	require.Equal(t, listToArray(t, 0, l, 1), []uint64{9})
 
-	p := getFirst(l, 1)
+	p := getFirst(t, l, 1)
 	require.NotNil(t, p, "Unable to retrieve posting")
 	require.EqualValues(t, "testing", p.Facets[0].Key)
 
@@ -151,26 +150,26 @@ func TestAddMutation(t *testing.T) {
 	edge.ValueId = 9
 	edge.Facets = []*api.Facet{{Key: "anti-testing"}}
 	addMutationHelper(t, l, edge, Set, txn)
-	l.commitMutation(1, 2)
+	require.NoError(t, l.commitMutation(1, 2))
 
 	uids := []uint64{9, 69, 81}
 	checkUids(t, l, uids, 3)
 
-	p = getFirst(l, 3)
+	p = getFirst(t, l, 3)
 	require.NotNil(t, p, "Unable to retrieve posting")
 	require.EqualValues(t, "anti-testing", p.Facets[0].Key)
 }
 
-func getFirst(l *List, readTs uint64) (res pb.Posting) {
-	l.Iterate(readTs, 0, func(p *pb.Posting) error {
+func getFirst(t *testing.T, l *List, readTs uint64) (res pb.Posting) {
+	require.NoError(t, l.Iterate(readTs, 0, func(p *pb.Posting) error {
 		res = *p
 		return ErrStopIteration
-	})
+	}))
 	return res
 }
 
 func checkValue(t *testing.T, ol *List, val string, readTs uint64) {
-	p := getFirst(ol, readTs)
+	p := getFirst(t, ol, readTs)
 	require.Equal(t, uint64(math.MaxUint64), p.Uid) // Cast to prevent overflow.
 	require.EqualValues(t, val, p.Value)
 }
@@ -188,7 +187,7 @@ func TestAddMutation_Value(t *testing.T) {
 	checkValue(t, ol, "oh hey there", txn.StartTs)
 
 	// Run the same check after committing.
-	ol.commitMutation(txn.StartTs, txn.StartTs+1)
+	require.NoError(t, ol.commitMutation(txn.StartTs, txn.StartTs+1))
 	checkValue(t, ol, "oh hey there", uint64(3))
 
 	// The value made it to the posting list. Changing it now.
@@ -209,7 +208,7 @@ func TestAddMutation_jchiu1(t *testing.T) {
 	}
 	txn := &Txn{StartTs: 1}
 	addMutationHelper(t, ol, edge, Set, txn)
-	ol.commitMutation(1, uint64(2))
+	require.NoError(t, ol.commitMutation(1, uint64(2)))
 
 	// TODO: Read at commitTimestamp with all committed
 	require.EqualValues(t, 1, ol.Length(uint64(3), 0))
@@ -262,7 +261,7 @@ func TestAddMutation_DelSet(t *testing.T) {
 	}
 	txn = &Txn{StartTs: 2}
 	addMutationHelper(t, ol, edge, Set, txn)
-	ol.commitMutation(2, uint64(3))
+	require.NoError(t, ol.commitMutation(2, uint64(3)))
 	require.EqualValues(t, 1, ol.Length(3, 0))
 	checkValue(t, ol, "newcars", 3)
 }
@@ -278,7 +277,7 @@ func TestAddMutation_DelRead(t *testing.T) {
 	}
 	txn := &Txn{StartTs: 1}
 	addMutationHelper(t, ol, edge, Set, txn)
-	ol.commitMutation(1, uint64(2))
+	require.NoError(t, ol.commitMutation(1, uint64(2)))
 	require.EqualValues(t, 1, ol.Length(2, 0))
 	checkValue(t, ol, "newcars", 2)
 
@@ -297,7 +296,7 @@ func TestAddMutation_DelRead(t *testing.T) {
 	require.EqualValues(t, 0, ol.Length(3, 0))
 
 	// Commit sp* only in oracle, don't apply to pl yet
-	ol.commitMutation(3, 5)
+	require.NoError(t, ol.commitMutation(3, 5))
 
 	// This read should ignore sp*, since readts is 4 and it was committed at 5
 	require.EqualValues(t, 1, ol.Length(4, 0))
@@ -339,7 +338,7 @@ func TestAddMutation_jchiu2_Commit(t *testing.T) {
 	}
 	txn := &Txn{StartTs: 1}
 	addMutationHelper(t, ol, edge, Del, txn)
-	ol.commitMutation(1, uint64(2))
+	require.NoError(t, ol.commitMutation(1, uint64(2)))
 	require.EqualValues(t, 0, ol.Length(uint64(3), 0))
 
 	// Set value to newcars, but don't merge yet.
@@ -348,7 +347,7 @@ func TestAddMutation_jchiu2_Commit(t *testing.T) {
 	}
 	txn = &Txn{StartTs: 3}
 	addMutationHelper(t, ol, edge, Set, txn)
-	ol.commitMutation(3, uint64(4))
+	require.NoError(t, ol.commitMutation(3, uint64(4)))
 	require.EqualValues(t, 1, ol.Length(5, 0))
 	checkValue(t, ol, "newcars", 5)
 }
@@ -364,7 +363,7 @@ func TestAddMutation_jchiu3(t *testing.T) {
 	}
 	txn := &Txn{StartTs: 1}
 	addMutationHelper(t, ol, edge, Set, txn)
-	ol.commitMutation(1, uint64(2))
+	require.NoError(t, ol.commitMutation(1, uint64(2)))
 	require.Equal(t, 1, ol.Length(uint64(3), 0))
 	require.EqualValues(t, 1, ol.Length(uint64(3), 0))
 	checkValue(t, ol, "cars", uint64(3))
@@ -404,7 +403,7 @@ func TestAddMutation_mrjn1(t *testing.T) {
 	}
 	txn := &Txn{StartTs: 1}
 	addMutationHelper(t, ol, edge, Set, txn)
-	ol.commitMutation(1, uint64(2))
+	require.NoError(t, ol.commitMutation(1, uint64(2)))
 
 	// Delete the previously committed value cars. But don't merge.
 	txn = &Txn{StartTs: 3}
@@ -574,7 +573,7 @@ func TestAddMutation_gru(t *testing.T) {
 			ValueId: 0x29bf442b48a772e0,
 		}
 		addMutationHelper(t, ol, edge, Set, txn)
-		ol.commitMutation(1, uint64(2))
+		require.NoError(t, ol.commitMutation(1, uint64(2)))
 	}
 
 	{
@@ -587,7 +586,7 @@ func TestAddMutation_gru(t *testing.T) {
 			ValueId: 0x2b693088816b04b7,
 		}
 		addMutationHelper(t, ol, edge, Del, txn)
-		ol.commitMutation(3, uint64(4))
+		require.NoError(t, ol.commitMutation(3, uint64(4)))
 	}
 }
 
@@ -608,7 +607,7 @@ func TestAddMutation_gru2(t *testing.T) {
 		}
 		txn = &Txn{StartTs: 1}
 		addMutationHelper(t, ol, edge, Set, txn)
-		ol.commitMutation(1, uint64(2))
+		require.NoError(t, ol.commitMutation(1, uint64(2)))
 	}
 
 	{
@@ -628,7 +627,7 @@ func TestAddMutation_gru2(t *testing.T) {
 		}
 		addMutationHelper(t, ol, edge, Set, txn)
 
-		ol.commitMutation(3, uint64(4))
+		require.NoError(t, ol.commitMutation(3, uint64(4)))
 	}
 
 	// Posting list should just have the new tag.
@@ -649,7 +648,7 @@ func TestAddAndDelMutation(t *testing.T) {
 		}
 		txn := &Txn{StartTs: 1}
 		addMutationHelper(t, ol, edge, Set, txn)
-		ol.commitMutation(1, uint64(2))
+		require.NoError(t, ol.commitMutation(1, uint64(2)))
 	}
 
 	{
@@ -659,7 +658,7 @@ func TestAddAndDelMutation(t *testing.T) {
 		txn := &Txn{StartTs: 3}
 		addMutationHelper(t, ol, edge, Del, txn)
 		addMutationHelper(t, ol, edge, Del, txn)
-		ol.commitMutation(3, uint64(4))
+		require.NoError(t, ol.commitMutation(3, uint64(4)))
 
 		checkUids(t, ol, []uint64{}, 5)
 	}
@@ -781,7 +780,7 @@ func TestDelete(t *testing.T) {
 	edge.Value = []byte(x.Star)
 	addMutationHelper(t, ol, edge, Del, txn)
 	require.EqualValues(t, 0, ol.Length(txn.StartTs, 0))
-	ol.commitMutation(txn.StartTs, txn.StartTs+1)
+	require.NoError(t, ol.commitMutation(txn.StartTs, txn.StartTs+1))
 
 	require.EqualValues(t, 0, ol.Length(txn.StartTs+2, 0))
 }
@@ -804,7 +803,7 @@ func TestAfterUIDCountWithCommit(t *testing.T) {
 	require.EqualValues(t, 0, ol.Length(txn.StartTs, 400))
 
 	// Commit to database.
-	ol.commitMutation(txn.StartTs, txn.StartTs+1)
+	require.NoError(t, ol.commitMutation(txn.StartTs, txn.StartTs+1))
 
 	txn = &Txn{StartTs: 3}
 	// Mutation layer starts afresh from here.
@@ -978,7 +977,7 @@ func TestLargePlistSplit(t *testing.T) {
 	ol, err := getNew(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 	b := make([]byte, 30<<20)
-	rand.Read(b)
+	_, _ = rand.Read(b)
 	for i := 1; i <= 2; i++ {
 		edge := &pb.DirectedEdge{
 			ValueId: uint64(i),
@@ -995,7 +994,7 @@ func TestLargePlistSplit(t *testing.T) {
 	ol, err = getNew(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 	b = make([]byte, 10<<20)
-	rand.Read(b)
+	_, _ = rand.Read(b)
 	for i := 0; i < 63; i++ {
 		edge := &pb.DirectedEdge{
 			Entity:  uint64(1 << uint32(i)),
@@ -1029,10 +1028,10 @@ func TestDeleteStarMultiPartList(t *testing.T) {
 
 	validateCount := func(expected int) {
 		count := 0
-		list.Iterate(math.MaxUint64, 0, func(posting *pb.Posting) error {
+		require.NoError(t, list.Iterate(math.MaxUint64, 0, func(posting *pb.Posting) error {
 			count++
 			return nil
-		})
+		}))
 		require.Equal(t, expected, count)
 	}
 	validateCount(numEdges)
@@ -1153,10 +1152,10 @@ func TestMultiPartListIterAfterUid(t *testing.T) {
 	ol, _ := createMultiPartList(t, size, false)
 
 	var visitedUids []uint64
-	ol.Iterate(uint64(size+1), 50000, func(p *pb.Posting) error {
+	require.NoError(t, ol.Iterate(uint64(size+1), 50000, func(p *pb.Posting) error {
 		visitedUids = append(visitedUids, p.Uid)
 		return nil
-	})
+	}))
 	require.Equal(t, 50000, len(visitedUids))
 	for i, uid := range visitedUids {
 		require.Equal(t, uint64(50000+i+1), uid)
@@ -1242,10 +1241,10 @@ func TestMultiPartListDelete(t *testing.T) {
 	require.Equal(t, size*2, commits)
 
 	counter := 0
-	ol.Iterate(math.MaxUint64, 0, func(p *pb.Posting) error {
+	require.NoError(t, ol.Iterate(math.MaxUint64, 0, func(p *pb.Posting) error {
 		counter++
 		return nil
-	})
+	}))
 	require.Equal(t, 0, counter)
 
 	kvs, err := ol.Rollup(nil)
@@ -1389,7 +1388,9 @@ func TestSingleListRollup(t *testing.T) {
 
 	var bl pb.BackupPostingList
 	buf := z.NewBuffer(10<<10, "TestSingleListRollup")
-	defer buf.Release()
+	defer func() {
+		require.NoError(t, buf.Release())
+	}()
 	kv, err := ol.ToBackupPostingList(&bl, nil, buf)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(kv.UserMeta))
@@ -1455,7 +1456,7 @@ func TestMain(m *testing.M) {
 	x.Init()
 	Config.CommitFraction = 0.10
 
-	dir, err := ioutil.TempDir("", "storetest_")
+	dir, err := os.MkdirTemp("", "storetest_")
 	x.Check(err)
 
 	ps, err = badger.OpenManaged(badger.DefaultOptions(dir))

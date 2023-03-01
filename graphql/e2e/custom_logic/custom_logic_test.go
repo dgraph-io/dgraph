@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
+//nolint:lll
 package custom_logic
 
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"sort"
@@ -201,9 +201,9 @@ func TestCustomQueryShouldForwardHeaders(t *testing.T) {
 	params := &common.GraphQLParams{
 		Query: query,
 		Headers: map[string][]string{
-			"X-App-Token":   []string{"app-token"},
-			"X-User-Id":     []string{"123"},
-			"Random-header": []string{"random"},
+			"X-App-Token":   {"app-token"},
+			"X-User-Id":     {"123"},
+			"Random-header": {"random"},
 		},
 	}
 
@@ -239,9 +239,9 @@ func TestCustomNameForwardHeaders(t *testing.T) {
 	params := &common.GraphQLParams{
 		Query: query,
 		Headers: map[string][]string{
-			"App":           []string{"app-token"},
-			"X-User-Id":     []string{"123"},
-			"Random-header": []string{"random"},
+			"App":           {"app-token"},
+			"X-User-Id":     {"123"},
+			"Random-header": {"random"},
 		},
 	}
 
@@ -960,7 +960,7 @@ func verifyData(t *testing.T, users []*user, teachers []*teacher, schools []*sch
 }
 
 func readFile(t *testing.T, name string) string {
-	b, err := ioutil.ReadFile(name)
+	b, err := os.ReadFile(name)
 	require.NoError(t, err)
 	return string(b)
 }
@@ -2619,7 +2619,7 @@ func TestCustomDQL(t *testing.T) {
 			}
 		}
 		""")
-		
+
 	  dqlTweetsByAuthorFollowers: [Tweets] @custom(dql: """
 		query {
 			var(func: type(Tweets)) @filter(anyoftext(Tweets.text, "DQL")) {
@@ -2635,7 +2635,7 @@ func TestCustomDQL(t *testing.T) {
 			}
 		}
 		""")
-		
+
 	  filteredTweetsByAuthorFollowers(search: String!): [Tweets] @custom(dql: """
 		query t($search: string) {
 			var(func: type(Tweets)) @filter(anyoftext(Tweets.text, $search)) {
@@ -2815,9 +2815,13 @@ func TestCustomDQL(t *testing.T) {
 		  ]
 	  }`, string(result.Data))
 
-	userFilter := map[string]interface{}{"screen_name": map[string]interface{}{"in": []string{"minhaj", "pawan", "abhimanyu"}}}
+	userFilter := map[string]interface{}{
+		"screen_name": map[string]interface{}{"in": []string{"minhaj", "pawan", "abhimanyu"}},
+	}
 	common.DeleteGqlType(t, "User", userFilter, 3, nil)
-	tweetFilter := map[string]interface{}{"text": map[string]interface{}{"in": []string{"Hello DQL!", "Woah DQL works!", "hmm, It worked.", "Nice."}}}
+	tweetFilter := map[string]interface{}{
+		"text": map[string]interface{}{"in": []string{"Hello DQL!", "Woah DQL works!", "hmm, It worked.", "Nice."}},
+	}
 	common.DeleteGqlType(t, "Tweets", tweetFilter, 4, nil)
 }
 
@@ -2860,7 +2864,7 @@ func TestCustomGetQuerywithRESTError(t *testing.T) {
 func TestCustomFieldsWithRestError(t *testing.T) {
 	schema := `
     type Car @remote {
-		id: ID! 
+		id: ID!
 		name: String!
 	}
 
@@ -2884,7 +2888,7 @@ func TestCustomFieldsWithRestError(t *testing.T) {
 			body: "{uid: $id}"
 			mode: BATCH,
 			}
-	      )		
+	      )
   	}
   `
 
@@ -2932,7 +2936,7 @@ func TestCustomFieldsWithRestError(t *testing.T) {
           "age": 10,
           "cars": {
             "name": "car-0x1"
-          }	
+          }
         }
       ]
     }`
@@ -3006,7 +3010,7 @@ func TestCustomResolverInInterfaceImplFrag(t *testing.T) {
 		id: ID!
 		name: String! @id
 	}
-	
+
 	type Human implements Character {
 		totalCredits: Int
 		bio: String @custom(http: {
@@ -3080,23 +3084,23 @@ func TestCustomFieldIsResolvedWhenNoModeGiven(t *testing.T) {
 		skipIntrospection: true,
 	  })
 	}
-	
+
 	type Blueprint {
 	  blueprintId: String! @id
 	  shallowProducts: [ItemType]
 	  deepProducts: [BlueprintProduct]
 	}
-	
+
 	type BlueprintProduct {
 	  itemType: ItemType
 	  amount: Int
 	}
-	
+
 	type MarketStats  {
 	  typeId: String! @id
-	  price: Float 
+	  price: Float
 	}
-	
+
 	type MarketStatsR @remote {
 	  typeId: String
 	  price: Float

@@ -18,15 +18,15 @@ func subgraphWithSingleResultAndSingleValue(val *pb.TaskValue) *SubGraph {
 		Params:    params{Alias: "query"},
 		SrcUIDs:   &pb.List{Uids: []uint64{1}},
 		DestUIDs:  &pb.List{Uids: []uint64{1}},
-		uidMatrix: []*pb.List{&pb.List{Uids: []uint64{1}}},
+		uidMatrix: []*pb.List{{Uids: []uint64{1}}},
 		Children: []*SubGraph{
-			&SubGraph{
+			{
 				Attr:      "val",
 				SrcUIDs:   &pb.List{Uids: []uint64{1}},
-				uidMatrix: []*pb.List{&pb.List{}},
+				uidMatrix: []*pb.List{{}},
 				valueMatrix: []*pb.ValueList{
 					// UID 1
-					&pb.ValueList{
+					{
 						Values: []*pb.TaskValue{val},
 					},
 				},
@@ -69,11 +69,11 @@ func TestEncode(t *testing.T) {
 	t.Run("with uid list predicate", func(t *testing.T) {
 		root := enc.newNode(0)
 		friendNode1 := enc.newNode(enc.idForAttr("friend"))
-		enc.AddValue(friendNode1, enc.idForAttr("name"),
-			types.Val{Tid: types.StringID, Value: "alice"})
+		require.NoError(t, enc.AddValue(friendNode1, enc.idForAttr("name"),
+			types.Val{Tid: types.StringID, Value: "alice"}))
 		friendNode2 := enc.newNode(enc.idForAttr("friend"))
-		enc.AddValue(friendNode2, enc.idForAttr("name"),
-			types.Val{Tid: types.StringID, Value: "bob"})
+		require.NoError(t, enc.AddValue(friendNode2, enc.idForAttr("name"),
+			types.Val{Tid: types.StringID, Value: "bob"}))
 
 		enc.AddListChild(root, friendNode1)
 		enc.AddListChild(root, friendNode2)
@@ -96,10 +96,10 @@ func TestEncode(t *testing.T) {
 
 	t.Run("with value list predicate", func(t *testing.T) {
 		root := enc.newNode(0)
-		enc.AddValue(root, enc.idForAttr("name"),
-			types.Val{Tid: types.StringID, Value: "alice"})
-		enc.AddValue(root, enc.idForAttr("name"),
-			types.Val{Tid: types.StringID, Value: "bob"})
+		require.NoError(t, enc.AddValue(root, enc.idForAttr("name"),
+			types.Val{Tid: types.StringID, Value: "alice"}))
+		require.NoError(t, enc.AddValue(root, enc.idForAttr("name"),
+			types.Val{Tid: types.StringID, Value: "bob"}))
 
 		enc.buf.Reset()
 		require.NoError(t, enc.encode(root))
@@ -117,9 +117,8 @@ func TestEncode(t *testing.T) {
 		root := enc.newNode(0)
 
 		person := enc.newNode(enc.idForAttr("person"))
-		enc.AddValue(person, enc.idForAttr("name"), types.Val{Tid: types.StringID, Value: "alice"})
-		enc.AddValue(person, enc.idForAttr("age"), types.Val{Tid: types.IntID, Value: 25})
-
+		require.NoError(t, enc.AddValue(person, enc.idForAttr("name"), types.Val{Tid: types.StringID, Value: "alice"}))
+		require.NoError(t, enc.AddValue(person, enc.idForAttr("age"), types.Val{Tid: types.IntID, Value: 25}))
 		enc.AddListChild(root, person)
 
 		enc.buf.Reset()

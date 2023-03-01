@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -52,7 +53,7 @@ func TestIdLeaseOverflow(t *testing.T) {
 func TestIdBump(t *testing.T) {
 	dialOpts := []grpc.DialOption{
 		grpc.WithBlock(),
-		grpc.WithInsecure(),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	}
 	ctx := context.Background()
 	con, err := grpc.DialContext(ctx, testutil.SockAddrZero, dialOpts...)
@@ -88,10 +89,9 @@ func TestIdBump(t *testing.T) {
 }
 
 func TestProposalKey(t *testing.T) {
-
 	id := uint64(2)
 	node := &node{Node: &conn.Node{Id: id}, ctx: context.Background(), closer: z.NewCloser(1)}
-	node.initProposalKey(node.Id)
+	require.NoError(t, node.initProposalKey(node.Id))
 
 	pkey := proposalKey
 	nodeIdFromKey := proposalKey >> 48

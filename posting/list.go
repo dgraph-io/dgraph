@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2015-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -957,7 +957,8 @@ func sanityCheck(prefix string, out *rollupOutput) {
 		paddr := fmt.Sprintf("%p", pack)
 		baddr := fmt.Sprintf("%p", block)
 		if pa, has := seen[baddr]; has {
-			glog.Fatalf("[%s %s] Have already seen this block: %s in pa:%s. Now found in pa: %s (num blocks: %d) as well. Block [base: %d. Len: %d] Full map size: %d. \n",
+			glog.Fatalf("[%s %s] Have already seen this block: %s in pa:%s. "+
+				"Now found in pa: %s (num blocks: %d) as well. Block [base: %d. Len: %d] Full map size: %d",
 				prefix, which, baddr, pa, paddr, len(pack.Blocks), block.Base, len(block.Deltas), len(seen))
 		}
 		seen[baddr] = which + "_" + paddr

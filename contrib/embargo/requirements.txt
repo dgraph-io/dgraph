@@ -19,5 +19,5 @@ requests==2.23.0
 six==1.15.0
 urllib3==1.26.5
 websocket-client==0.57.0
-Werkzeug==0.16.1
+Werkzeug==2.2.3
 

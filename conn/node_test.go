@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"sync"
 	"testing"
@@ -47,7 +46,9 @@ func (n *Node) run(wg *sync.WaitGroup) {
 			for _, entry := range rd.CommittedEntries {
 				if entry.Type == raftpb.EntryConfChange {
 					var cc raftpb.ConfChange
-					cc.Unmarshal(entry.Data)
+					if err := cc.Unmarshal(entry.Data); err != nil {
+						fmt.Printf("error in unmarshalling: %v\n", err)
+					}
 					n.Raft().ApplyConfChange(cc)
 				} else if entry.Type == raftpb.EntryNormal {
 					if bytes.HasPrefix(entry.Data, []byte("hey")) {
@@ -61,7 +62,7 @@ func (n *Node) run(wg *sync.WaitGroup) {
 }
 
 func TestProposal(t *testing.T) {
-	dir, err := ioutil.TempDir("", "badger")
+	dir, err := os.MkdirTemp("", "badger")
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 

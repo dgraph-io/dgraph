@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -583,27 +583,15 @@ func RegisterExporters(conf *viper.Viper, service string) {
 func MonitorCacheHealth(db *badger.DB, closer *z.Closer) {
 	defer closer.Done()
 
-	record := func(ct string) {
-		switch ct {
-		case "pstore-block":
-			metrics := db.BlockCacheMetrics()
-			ostats.Record(context.Background(), PBlockHitRatio.M(metrics.Ratio()))
-		case "pstore-index":
-			metrics := db.IndexCacheMetrics()
-			ostats.Record(context.Background(), PIndexHitRatio.M(metrics.Ratio()))
-		default:
-			panic("invalid cache type")
-		}
-	}
-
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
+	backgroundContext := context.Background()
 
 	for {
 		select {
 		case <-ticker.C:
-			record("pstore-block")
-			record("pstore-index")
+			ostats.Record(backgroundContext, PBlockHitRatio.M(db.BlockCacheMetrics().Ratio()))
+			ostats.Record(backgroundContext, PIndexHitRatio.M(db.IndexCacheMetrics().Ratio()))
 		case <-closer.HasBeenClosed():
 			return
 		}

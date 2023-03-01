@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@ import (
 	"sync/atomic"
 
 	farm "github.com/dgryski/go-farm"
+	"github.com/golang/glog"
 	"github.com/golang/snappy"
 
 	"github.com/dgraph-io/dgo/v210/protos/api"
@@ -155,7 +156,9 @@ func (m *mapper) openOutputFile(shardIdx int) (*os.File, error) {
 func (m *mapper) writeMapEntriesToFile(cbuf *z.Buffer, shardIdx int) {
 	defer func() {
 		m.shards[shardIdx].mu.Unlock() // Locked by caller.
-		cbuf.Release()
+		if err := cbuf.Release(); err != nil {
+			glog.Warningf("error in releasing buffer: %v", err)
+		}
 	}()
 
 	cbuf.SortSlice(func(ls, rs []byte) bool {
@@ -183,7 +186,7 @@ func (m *mapper) writeMapEntriesToFile(cbuf *z.Buffer, shardIdx int) {
 	}
 
 	var bufSize int64
-	cbuf.SliceIterate(func(slice []byte) error {
+	if err := cbuf.SliceIterate(func(slice []byte) error {
 		me := MapEntry(slice)
 		bufSize += int64(4 + len(me))
 		if bufSize < m.opt.PartitionBufSize {
@@ -197,7 +200,10 @@ func (m *mapper) writeMapEntriesToFile(cbuf *z.Buffer, shardIdx int) {
 		header.PartitionKeys = append(header.PartitionKeys, me.Key())
 		bufSize = 0
 		return nil
-	})
+	}); err != nil {
+		glog.Errorf("error while iterating over buf: %v", err)
+		x.Check(err)
+	}
 
 	// Write the header to the map file.
 	headerBuf, err := header.Marshal()
@@ -281,7 +287,9 @@ func (m *mapper) run(inputFormat chunker.InputFormat) {
 			sh.mu.Lock() // One write at a time.
 			m.writeMapEntriesToFile(sh.cbuf, i)
 		} else {
-			sh.cbuf.Release()
+			if err := sh.cbuf.Release(); err != nil {
+				glog.Warningf("error in releasing buffer: %v", err)
+			}
 		}
 		m.shards[i].mu.Lock() // Ensure that the last file write finishes.
 	}

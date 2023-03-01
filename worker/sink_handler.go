@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,6 @@ import (
 	"crypto/x509"
 	"encoding/binary"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -102,7 +101,7 @@ func newKafkaSink(config *z.SuperFlag) (Sink, error) {
 		if pool, err = x509.SystemCertPool(); err != nil {
 			return nil, err
 		}
-		caFile, err := ioutil.ReadFile(config.GetPath("ca-cert"))
+		caFile, err := os.ReadFile(config.GetPath("ca-cert"))
 		if err != nil {
 			return nil, errors.Wrap(err, "unable to read ca cert file")
 		}

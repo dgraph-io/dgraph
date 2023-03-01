@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -182,7 +182,7 @@ func TestParallelIndexing(t *testing.T) {
 	fmt.Println("starting to query")
 	var count uint64
 	th := y.NewThrottle(50000)
-	th.Do()
+	require.NoError(t, th.Do())
 	go func() {
 		defer th.Done(nil)
 		for {
@@ -202,7 +202,7 @@ func TestParallelIndexing(t *testing.T) {
 	ch := make(chan pair, total*3)
 	for _, predicate := range []string{"balance_str", "balance_int", "balance_float"} {
 		for i := 1; i <= total; i++ {
-			th.Do()
+			require.NoError(t, th.Do())
 			go func(bal int, pred string) {
 				defer th.Done(nil)
 				if err := checkBalance(bal, pred); err != nil {
@@ -212,7 +212,7 @@ func TestParallelIndexing(t *testing.T) {
 			}(i, predicate)
 		}
 	}
-	th.Finish()
+	require.NoError(t, th.Finish())
 
 	close(ch)
 	for p := range ch {

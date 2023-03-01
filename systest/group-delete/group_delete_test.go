@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -53,7 +52,7 @@ func NodesSetup(t *testing.T, c *dgo.Dgraph) {
 	}
 	require.NoError(t, err, "error while dropping all the data")
 
-	schema, err := ioutil.ReadFile(`../data/goldendata.schema`)
+	schema, err := os.ReadFile(`../data/goldendata.schema`)
 	require.NoError(t, err)
 	require.NoError(t, c.Alter(ctx, &api.Operation{Schema: string(schema)}))
 
@@ -125,7 +124,7 @@ func doTestQuery(t *testing.T, c *dgo.Dgraph) {
 
 func getError(rc io.ReadCloser) error {
 	defer rc.Close()
-	b, err := ioutil.ReadAll(rc)
+	b, err := io.ReadAll(rc)
 	if err != nil {
 		return errors.Wrapf(err, "while reading")
 	}

@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2015-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1387,9 +1387,12 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue, sgPath []*SubGr
 		child.updateUidMatrix()
 
 		// Apply pagination after the @cascade.
-		if len(child.Params.Cascade.Fields) > 0 && (child.Params.Cascade.First != 0 || child.Params.Cascade.Offset != 0) {
+		if len(child.Params.Cascade.Fields) > 0 &&
+			(child.Params.Cascade.First != 0 || child.Params.Cascade.Offset != 0) {
+
 			for i := 0; i < len(child.uidMatrix); i++ {
-				start, end := x.PageRange(child.Params.Cascade.First, child.Params.Cascade.Offset, len(child.uidMatrix[i].Uids))
+				start, end := x.PageRange(child.Params.Cascade.First,
+					child.Params.Cascade.Offset, len(child.uidMatrix[i].Uids))
 				child.uidMatrix[i].Uids = child.uidMatrix[i].Uids[start:end]
 			}
 		}
@@ -2083,7 +2086,8 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			})
 		}
 		if sg.Params.AfterUID > 0 {
-			i := sort.Search(len(sg.DestUIDs.Uids), func(i int) bool { return sg.DestUIDs.Uids[i] > sg.Params.AfterUID })
+			i := sort.Search(len(sg.DestUIDs.Uids),
+				func(i int) bool { return sg.DestUIDs.Uids[i] > sg.Params.AfterUID })
 			sg.DestUIDs.Uids = sg.DestUIDs.Uids[i:]
 		}
 
@@ -2881,7 +2885,8 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 			if len(sg.Params.Cascade.Fields) > 0 && (sg.Params.Cascade.First != 0 || sg.Params.Cascade.Offset != 0) {
 				sg.updateUidMatrix()
 				for i := 0; i < len(sg.uidMatrix); i++ {
-					start, end := x.PageRange(sg.Params.Cascade.First, sg.Params.Cascade.Offset, len(sg.uidMatrix[i].Uids))
+					start, end := x.PageRange(sg.Params.Cascade.First,
+						sg.Params.Cascade.Offset, len(sg.uidMatrix[i].Uids))
 					sg.uidMatrix[i].Uids = sg.uidMatrix[i].Uids[start:end]
 				}
 			}

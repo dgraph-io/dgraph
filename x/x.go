@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2015-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@ import (
 	"bytes"
 	builtinGzip "compress/gzip"
 	"context"
-	cr "crypto/rand"
+	cryptorand "crypto/rand"
 	"crypto/tls"
 	"encoding/binary"
 	"encoding/json"
@@ -47,10 +47,11 @@ import (
 	"github.com/spf13/viper"
 	"go.opencensus.io/plugin/ocgrpc"
 	"go.opencensus.io/trace"
-	"golang.org/x/crypto/ssh/terminal"
+	"golang.org/x/term"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/encoding/gzip"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
@@ -427,7 +428,12 @@ func Reply(w http.ResponseWriter, rep interface{}) {
 
 // ParseRequest parses the body of the given request.
 func ParseRequest(w http.ResponseWriter, r *http.Request, data interface{}) bool {
-	defer r.Body.Close()
+	defer func() {
+		if err := r.Body.Close(); err != nil {
+			glog.Warningf("error closing body: %v", err)
+		}
+	}()
+
 	decoder := json.NewDecoder(r.Body)
 	if err := decoder.Decode(&data); err != nil {
 		SetStatus(w, Error, fmt.Sprintf("While parsing request: %v", err))
@@ -649,7 +655,7 @@ func RetryUntilSuccess(maxRetries int, waitAfterFailure time.Duration,
 // {2 bytes Node ID} {4 bytes for random} {2 bytes zero}
 func ProposalKey(id uint64) (uint64, error) {
 	random4Bytes := make([]byte, 4)
-	if _, err := cr.Read(random4Bytes); err != nil {
+	if _, err := cryptorand.Read(random4Bytes); err != nil {
 		return 0, err
 	}
 	proposalKey := id<<48 | uint64(binary.BigEndian.Uint32(random4Bytes))<<16
@@ -952,7 +958,7 @@ func SetupConnection(
 	if tlsCfg != nil {
 		dialOpts = append(dialOpts, grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)))
 	} else {
-		dialOpts = append(dialOpts, grpc.WithInsecure())
+		dialOpts = append(dialOpts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -1113,7 +1119,7 @@ func AskUserPassword(userid string, pwdType string, times int) (string, error) {
 	AssertTrue(pwdType == "Current" || pwdType == "New")
 	// ask for the user's password
 	fmt.Printf("%s password for %v:", pwdType, userid)
-	pd, err := terminal.ReadPassword(int(syscall.Stdin))
+	pd, err := term.ReadPassword(int(syscall.Stdin))
 	if err != nil {
 		return "", errors.Wrapf(err, "while reading password")
 	}
@@ -1122,7 +1128,7 @@ func AskUserPassword(userid string, pwdType string, times int) (string, error) {
 
 	if times == 2 {
 		fmt.Printf("Retype %s password for %v:", strings.ToLower(pwdType), userid)
-		pd2, err := terminal.ReadPassword(int(syscall.Stdin))
+		pd2, err := term.ReadPassword(int(syscall.Stdin))
 		if err != nil {
 			return "", errors.Wrapf(err, "while reading password")
 		}

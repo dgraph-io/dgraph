@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -357,7 +357,9 @@ func (m *XidMap) Flush() error {
 	// memory and causing OOM sometimes. Making shards explicitly nil in this method fixes this.
 	// TODO: find why xidmap is not getting GCed without below line.
 	for _, shards := range m.shards {
-		shards.tree.Close()
+		if err := shards.tree.Close(); err != nil {
+			glog.Warningf("error closing shards tree: %v", err)
+		}
 	}
 	m.shards = nil
 	if m.writer == nil {

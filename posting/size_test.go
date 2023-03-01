@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@ package posting
 import (
 	"encoding/binary"
 	"flag"
-	"io/ioutil"
+	"io"
 	"log"
 	"math"
 	_ "net/http/pprof"
@@ -177,7 +177,7 @@ func Test21MillionDataSetSize(t *testing.T) {
 	}
 	fp, err := os.Open("size.data")
 	require.NoError(t, err)
-	buf, err := ioutil.ReadAll(fp)
+	buf, err := io.ReadAll(fp)
 	require.NoError(t, err)
 	calculatedSize := binary.BigEndian.Uint32(buf)
 	var pprofSize uint32

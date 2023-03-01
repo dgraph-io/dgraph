@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -239,7 +239,7 @@ func TestStringIndex(t *testing.T) {
 	fmt.Println("starting to query")
 	var count uint64
 	th := y.NewThrottle(50000)
-	th.Do()
+	require.NoError(t, th.Do())
 	go func() {
 		defer th.Done(nil)
 		for {
@@ -253,7 +253,7 @@ func TestStringIndex(t *testing.T) {
 	}()
 
 	for balance, uids := range balIndex {
-		th.Do()
+		require.NoError(t, th.Do())
 		go func(bal int, uidList []int) {
 			defer th.Done(nil)
 			if bal == -1 {
@@ -270,7 +270,7 @@ func TestStringIndex(t *testing.T) {
 			atomic.AddUint64(&count, 1)
 		}(balance, uids)
 	}
-	th.Finish()
+	require.NoError(t, th.Finish())
 
 	close(ch)
 	for p := range ch {

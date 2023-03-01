@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -72,8 +71,8 @@ func (in ContainerInstance) BestEffortWaitForHealthy(privatePort uint16) error {
 		resp, err := http.Get("http://localhost:" + port + "/health")
 		var body []byte
 		if resp != nil && resp.Body != nil {
-			body, _ = ioutil.ReadAll(resp.Body)
-			resp.Body.Close()
+			body, _ = io.ReadAll(resp.Body)
+			_ = resp.Body.Close()
 		}
 		if err == nil && resp.StatusCode == http.StatusOK {
 			return checkACL(body)
@@ -130,11 +129,11 @@ func (in ContainerInstance) bestEffortTryLogin() error {
 			// This is TLS enabled cluster. We won't be able to login.
 			return nil
 		}
-		fmt.Printf("Login failed for %s: %v. Retrying...\n", in, err)
+		fmt.Printf("login failed for %s: %v. Retrying...\n", in, err)
 		time.Sleep(time.Second)
 	}
-	fmt.Printf("Unable to login to %s\n", in)
-	return fmt.Errorf("Unable to login to %s\n", in)
+	fmt.Printf("unable to login to %s\n", in)
+	return fmt.Errorf("unable to login to %s", in)
 }
 
 func (in ContainerInstance) GetContainer() *types.Container {
@@ -246,7 +245,8 @@ func DockerCpFromContainer(containerID, srcPath, dstPath string) error {
 		return nil
 	}
 	tr := tar.NewReader(tarStream)
-	tr.Next()
+	_, err = tr.Next()
+	x.Check(err)
 
 	data, err := io.ReadAll(tr)
 	x.Check(err)
@@ -284,11 +284,11 @@ func CheckHealthContainer(socketAddrHttp string) error {
 		}
 		var body []byte
 		if resp != nil && resp.Body != nil {
-			body, err = ioutil.ReadAll(resp.Body)
+			body, err = io.ReadAll(resp.Body)
 			if err != nil {
 				return err
 			}
-			resp.Body.Close()
+			_ = resp.Body.Close()
 		}
 		fmt.Printf("health check for container failed: %v. Response: %q. Retrying...\n", err, body)
 		time.Sleep(time.Second)

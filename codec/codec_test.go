@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -78,7 +78,10 @@ func TestBufferUidPack(t *testing.T) {
 	FreePack(pack)
 
 	buf := z.NewBuffer(10<<10, "TestBufferUidPack")
-	defer buf.Release()
+	defer func() {
+		require.NoError(t, buf.Release())
+	}()
+
 	DecodeToBuffer(buf, &pb.UidPack{})
 	require.Equal(t, 0, buf.LenNoPadding())
 	require.NoError(t, buf.Release())
@@ -96,7 +99,9 @@ func TestBufferUidPack(t *testing.T) {
 		require.Equal(t, expected, actual)
 
 		actualbuffer := z.NewBuffer(10<<10, "TestBufferUidPack")
-		defer actualbuffer.Release()
+		defer func() {
+			require.NoError(t, actualbuffer.Release())
+		}()
 
 		DecodeToBuffer(actualbuffer, pack)
 		enc := EncodeFromBuffer(actualbuffer.Bytes(), 256)

@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -229,7 +229,9 @@ func (t *tasks) worker() {
 		var task taskRequest
 		select {
 		case <-x.ServerCloser.HasBeenClosed():
-			t.log.Close()
+			if err := t.log.Close(); err != nil {
+				glog.Warningf("error closing log file: %v", err)
+			}
 			return
 		case <-shouldCleanup.C:
 			t.cleanup()

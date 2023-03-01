@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -158,7 +157,6 @@ func TestJSONLoadSuccessFirst(t *testing.T) {
 		} else {
 			require.NoError(t, err, test.desc)
 		}
-		//fmt.Fprintf(os.Stderr, "err = %v, json = %v\n", err, json)
 		require.Equal(t, test.expt, json.String(), test.desc)
 	}
 }
@@ -221,7 +219,6 @@ func TestJSONLoadSuccessAll(t *testing.T) {
 	for idx = 0; err == nil; idx++ {
 		desc := fmt.Sprintf("reading chunk #%d", idx+1)
 		json, err = chunker.Chunk(reader)
-		//fmt.Fprintf(os.Stderr, "err = %v, json = %v\n", err, json)
 		if err != io.EOF {
 			require.NoError(t, err, desc)
 			require.Equal(t, testChunks[idx], json.String(), desc)
@@ -255,13 +252,13 @@ func TestFileReader(t *testing.T) {
 		require.NoError(t, err)
 		expectedOutcomes[i] = data.content
 	}
-	files, err := ioutil.ReadDir(testFilesDir)
+	files, err := os.ReadDir(testFilesDir)
 	require.NoError(t, err)
 
 	for i, file := range files {
 		testfilename := filepath.Join(testFilesDir, file.Name())
 		reader, cleanup := FileReader(testfilename, nil)
-		bytes, err := ioutil.ReadAll(reader)
+		bytes, err := io.ReadAll(reader)
 		require.NoError(t, err)
 		contents := string(bytes)
 		//compare file content with correct string
@@ -312,9 +309,9 @@ func TestRDFChunkerChunk(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	f1, err1 := ioutil.ReadFile(dataFile)
+	f1, err1 := os.ReadFile(dataFile)
 	require.NoError(t, err1)
-	f2, err2 := ioutil.ReadFile(resultData)
+	f2, err2 := os.ReadFile(resultData)
 	require.NoError(t, err2)
 	require.Equal(t, true, bytes.Equal(f1, f2))
 	cleanup()

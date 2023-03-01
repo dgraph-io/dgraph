@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+//nolint:lll
 package testutil
 
 import (
@@ -22,12 +23,14 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/dgrijalva/jwt-go/v4"
+	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/metadata"
@@ -62,14 +65,20 @@ type GraphQLResponse struct {
 func (resp *GraphQLResponse) RequireNoGraphQLErrors(t *testing.T) {
 	if resp == nil {
 		require.Fail(t, "got nil response")
+	} else {
+		require.Nil(t, resp.Errors, "required no GraphQL errors, but received :\n%s",
+			resp.Errors.Error())
 	}
-	require.Nil(t, resp.Errors, "required no GraphQL errors, but received :\n%s",
-		resp.Errors.Error())
 }
 
 func RequireNoGraphQLErrors(t *testing.T, resp *http.Response) {
-	defer resp.Body.Close()
-	b, err := ioutil.ReadAll(resp.Body)
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			glog.Warningf("error closing body: %v", err)
+		}
+	}()
+
+	b, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 
 	var result *GraphQLResponse
@@ -90,7 +99,9 @@ func MakeGQLRequestWithAccessJwt(t *testing.T, params *GraphQLParams, accessToke
 	return MakeGQLRequestWithAccessJwtAndTLS(t, params, nil, accessToken)
 }
 
-func MakeGQLRequestWithAccessJwtAndTLS(t *testing.T, params *GraphQLParams, tls *tls.Config, accessToken string) *GraphQLResponse {
+func MakeGQLRequestWithAccessJwtAndTLS(t *testing.T, params *GraphQLParams,
+	tls *tls.Config, accessToken string) *GraphQLResponse {
+
 	var adminUrl string
 	if tls != nil {
 		adminUrl = "https://" + SockAddrHttp + "/admin"
@@ -116,8 +127,13 @@ func MakeGQLRequestWithAccessJwtAndTLS(t *testing.T, params *GraphQLParams, tls 
 	resp, err := client.Do(req)
 	require.NoError(t, err)
 
-	defer resp.Body.Close()
-	b, err = ioutil.ReadAll(resp.Body)
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			glog.Warningf("error closing body: %v", err)
+		}
+	}()
+
+	b, err = io.ReadAll(resp.Body)
 	require.NoError(t, err)
 
 	var gqlResp GraphQLResponse
@@ -249,7 +265,7 @@ func (a *AuthMeta) GetSignedToken(privateKeyFile string,
 		return signedString, err
 
 	}
-	keyData, err := ioutil.ReadFile(privateKeyFile)
+	keyData, err := os.ReadFile(privateKeyFile)
 	if err != nil {
 		return signedString, errors.Errorf("unable to read private key file: %v", err)
 	}
@@ -287,7 +303,7 @@ func AppendAuthInfo(schema []byte, algo, publicKeyFile string, closedByDefault b
 	case "HS256":
 		verificationKey = "secretkey"
 	case "RS256":
-		keyData, err := ioutil.ReadFile(publicKeyFile)
+		keyData, err := os.ReadFile(publicKeyFile)
 		if err != nil {
 			return nil, err
 		}

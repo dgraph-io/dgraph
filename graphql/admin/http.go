@@ -21,7 +21,6 @@ import (
 	"context"
 	"encoding/json"
 	"io"
-	"io/ioutil"
 	"mime"
 	"net/http"
 	"strconv"
@@ -138,9 +137,6 @@ type graphqlSubscription struct {
 func (gs *graphqlSubscription) isValid(namespace uint64) error {
 	gs.graphqlHandler.pollerMux.RLock()
 	defer gs.graphqlHandler.pollerMux.RUnlock()
-	if gs == nil {
-		return errors.New("gs is nil")
-	}
 	if err := gs.graphqlHandler.isValid(namespace); err != nil {
 		return err
 	}
@@ -284,8 +280,6 @@ func (gh *graphqlHandler) isValid(namespace uint64) error {
 	gh.resolverMux.RLock()
 	defer gh.resolverMux.RUnlock()
 	switch {
-	case gh == nil:
-		return errors.New("gh is nil")
 	case gh.resolver == nil:
 		return errors.New("resolver is nil")
 	case gh.resolver[namespace] == nil:
@@ -359,7 +353,7 @@ func getRequest(r *http.Request) (*schema.Request, error) {
 				return nil, errors.Wrap(err, "Not a valid GraphQL request body")
 			}
 		case "application/graphql":
-			bytes, err := ioutil.ReadAll(r.Body)
+			bytes, err := io.ReadAll(r.Body)
 			if err != nil {
 				return nil, errors.Wrap(err, "Could not read GraphQL request body")
 			}

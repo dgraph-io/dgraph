@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+//nolint:lll
 package query
 
 import (
@@ -54,7 +55,11 @@ func dropPredicate(pred string) {
 
 func processQuery(ctx context.Context, t *testing.T, query string) (string, error) {
 	txn := client.NewTxn()
-	defer txn.Discard(ctx)
+	defer func() {
+		if err := txn.Discard(ctx); err != nil {
+			t.Logf("error discarding txn: %v", err)
+		}
+	}()
 
 	res, err := txn.Query(ctx, query)
 	if err != nil {
@@ -71,7 +76,7 @@ func processQuery(ctx context.Context, t *testing.T, query string) (string, erro
 
 func processQueryRDF(ctx context.Context, t *testing.T, query string) (string, error) {
 	txn := client.NewTxn()
-	defer txn.Discard(ctx)
+	defer func() { _ = txn.Discard(ctx) }()
 
 	res, err := txn.Do(ctx, &api.Request{
 		Query:      query,
@@ -92,7 +97,7 @@ func processQueryNoErr(t *testing.T, query string) string {
 // processQueryForMetrics works like processQuery but returns metrics instead of response.
 func processQueryForMetrics(t *testing.T, query string) *api.Metrics {
 	txn := client.NewTxn()
-	defer txn.Discard(context.Background())
+	defer func() { _ = txn.Discard(context.Background()) }()
 
 	res, err := txn.Query(context.Background(), query)
 	require.NoError(t, err)
@@ -102,7 +107,7 @@ func processQueryForMetrics(t *testing.T, query string) *api.Metrics {
 func processQueryWithVars(t *testing.T, query string,
 	vars map[string]string) (string, error) {
 	txn := client.NewTxn()
-	defer txn.Discard(context.Background())
+	defer func() { _ = txn.Discard(context.Background()) }()
 
 	res, err := txn.QueryWithVars(context.Background(), query, vars)
 	if err != nil {
@@ -120,7 +125,7 @@ func processQueryWithVars(t *testing.T, query string,
 func addTriplesToCluster(triples string) error {
 	txn := client.NewTxn()
 	ctx := context.Background()
-	defer txn.Discard(ctx)
+	defer func() { _ = txn.Discard(ctx) }()
 
 	_, err := txn.Mutate(ctx, &api.Mutation{
 		SetNquads: []byte(triples),
@@ -132,7 +137,7 @@ func addTriplesToCluster(triples string) error {
 func deleteTriplesInCluster(triples string) {
 	txn := client.NewTxn()
 	ctx := context.Background()
-	defer txn.Discard(ctx)
+	defer func() { _ = txn.Discard(ctx) }()
 
 	_, err := txn.Mutate(ctx, &api.Mutation{
 		DelNquads: []byte(triples),
@@ -342,15 +347,16 @@ age2                           : int @index(int) .
 `
 
 func populateCluster() {
-	err := client.Alter(context.Background(), &api.Operation{DropAll: true})
-	if err != nil {
+	if err := client.Alter(context.Background(), &api.Operation{DropAll: true}); err != nil {
 		panic(fmt.Sprintf("Could not perform DropAll op. Got error %v", err.Error()))
 	}
 
 	setSchema(testSchema)
-	testutil.AssignUids(100000)
+	if err := testutil.AssignUids(100000); err != nil {
+		panic(fmt.Sprintf("Could not perform DropAll op. Got error %v", err.Error()))
+	}
 
-	err = addTriplesToCluster(`
+	err := addTriplesToCluster(`
 		<1> <name> "Michonne" .
 		<2> <name> "King Lear" .
 		<3> <name> "Margaret" .

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,8 +45,8 @@ func TestEncodeMemory(t *testing.T) {
 		n := enc.newNode(0)
 		require.NotNil(t, n)
 		for i := 0; i < 15000; i++ {
-			enc.AddValue(n, enc.idForAttr(fmt.Sprintf("very long attr name %06d", i)),
-				types.ValueForType(types.StringID))
+			require.NoError(t, enc.AddValue(n, enc.idForAttr(fmt.Sprintf("very long attr name %06d", i)),
+				types.ValueForType(types.StringID)))
 			enc.AddListChild(n,
 				enc.newNode(enc.idForAttr(fmt.Sprintf("another long child %06d", i))))
 		}
@@ -55,7 +55,7 @@ func TestEncodeMemory(t *testing.T) {
 			defer wg.Done()
 			for j := 0; j < 1000; j++ {
 				enc.buf.Reset()
-				enc.encode(n)
+				require.NoError(t, enc.encode(n))
 			}
 		}()
 	}
@@ -75,25 +75,25 @@ func TestNormalizeJSONLimit(t *testing.T) {
 	n := enc.newNode(enc.idForAttr("root"))
 	require.NotNil(t, n)
 	for i := 0; i < 1000; i++ {
-		enc.AddValue(n, enc.idForAttr(fmt.Sprintf("very long attr name %06d", i)),
-			types.ValueForType(types.StringID))
+		require.NoError(t, enc.AddValue(n, enc.idForAttr(fmt.Sprintf("very long attr name %06d", i)),
+			types.ValueForType(types.StringID)))
 		child1 := enc.newNode(enc.idForAttr("child1"))
 		enc.AddListChild(n, child1)
 		for j := 0; j < 100; j++ {
-			enc.AddValue(child1, enc.idForAttr(fmt.Sprintf("long child1 attr %06d", j)),
-				types.ValueForType(types.StringID))
+			require.NoError(t, enc.AddValue(child1, enc.idForAttr(fmt.Sprintf("long child1 attr %06d", j)),
+				types.ValueForType(types.StringID)))
 		}
 		child2 := enc.newNode(enc.idForAttr("child2"))
 		enc.AddListChild(n, child2)
 		for j := 0; j < 100; j++ {
-			enc.AddValue(child2, enc.idForAttr(fmt.Sprintf("long child2 attr %06d", j)),
-				types.ValueForType(types.StringID))
+			require.NoError(t, enc.AddValue(child2, enc.idForAttr(fmt.Sprintf("long child2 attr %06d", j)),
+				types.ValueForType(types.StringID)))
 		}
 		child3 := enc.newNode(enc.idForAttr("child3"))
 		enc.AddListChild(n, child3)
 		for j := 0; j < 100; j++ {
-			enc.AddValue(child3, enc.idForAttr(fmt.Sprintf("long child3 attr %06d", j)),
-				types.ValueForType(types.StringID))
+			require.NoError(t, enc.AddValue(child3, enc.idForAttr(fmt.Sprintf("long child3 attr %06d", j)),
+				types.ValueForType(types.StringID)))
 		}
 	}
 	_, err := enc.normalize(n)

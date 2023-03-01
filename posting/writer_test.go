@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,6 @@ package posting
 
 import (
 	"fmt"
-	"io/ioutil"
 	"math"
 	"os"
 	"sync"
@@ -90,7 +89,7 @@ func BenchmarkWriter(b *testing.B) {
 
 	// Vanilla TxnWriter
 	b.Run("TxnWriter", func(b *testing.B) {
-		tmpIndexDir, err := ioutil.TempDir("", "dgraph")
+		tmpIndexDir, err := os.MkdirTemp("", "dgraph")
 		require.NoError(b, err)
 		defer os.RemoveAll(tmpIndexDir)
 
@@ -115,7 +114,7 @@ func BenchmarkWriter(b *testing.B) {
 	})
 	// Single threaded BatchWriter
 	b.Run("WriteBatch1", func(b *testing.B) {
-		tmpIndexDir, err := ioutil.TempDir("", "dgraph")
+		tmpIndexDir, err := os.MkdirTemp("", "dgraph")
 		require.NoError(b, err)
 		defer os.RemoveAll(tmpIndexDir)
 
@@ -138,7 +137,7 @@ func BenchmarkWriter(b *testing.B) {
 	})
 	// Multi threaded Batchwriter with thread contention in WriteBatch
 	b.Run("WriteBatchMultThreadDiffWB", func(b *testing.B) {
-		tmpIndexDir, err := ioutil.TempDir("", "dgraph")
+		tmpIndexDir, err := os.MkdirTemp("", "dgraph")
 		require.NoError(b, err)
 		defer os.RemoveAll(tmpIndexDir)
 
@@ -166,7 +165,7 @@ func BenchmarkWriter(b *testing.B) {
 	})
 	// Multi threaded Batchwriter with thread contention in SetEntry
 	b.Run("WriteBatchMultThreadSameWB", func(b *testing.B) {
-		tmpIndexDir, err := ioutil.TempDir("", "dgraph")
+		tmpIndexDir, err := os.MkdirTemp("", "dgraph")
 		require.NoError(b, err)
 		defer os.RemoveAll(tmpIndexDir)
 
@@ -194,7 +193,7 @@ func BenchmarkWriter(b *testing.B) {
 		}
 	})
 	b.Run("WriteBatchSingleThreadDiffWB", func(b *testing.B) {
-		tmpIndexDir, err := ioutil.TempDir("", "dgraph")
+		tmpIndexDir, err := os.MkdirTemp("", "dgraph")
 		require.NoError(b, err)
 		defer os.RemoveAll(tmpIndexDir)
 
@@ -216,7 +215,7 @@ func BenchmarkWriter(b *testing.B) {
 		}
 	})
 	b.Run("WriteBatchSingleThreadSameWB", func(b *testing.B) {
-		tmpIndexDir, err := ioutil.TempDir("", "dgraph")
+		tmpIndexDir, err := os.MkdirTemp("", "dgraph")
 		require.NoError(b, err)
 		defer os.RemoveAll(tmpIndexDir)
 

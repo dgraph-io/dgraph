@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math"
 	"math/rand"
 	"net/http"
@@ -188,7 +187,11 @@ func init() {
 
 func getSchema(ctx context.Context, dgraphClient *dgo.Dgraph, galaxyOperation bool) (*schema, error) {
 	txn := dgraphClient.NewTxn()
-	defer txn.Discard(ctx)
+	defer func() {
+		if err := txn.Discard(ctx); err != nil {
+			glog.Warningf("error in discarding txn: %v", err)
+		}
+	}()
 
 	res, err := txn.Query(ctx, "schema {}")
 	if err != nil {
@@ -238,7 +241,11 @@ func (l *loader) processSchemaFile(ctx context.Context, file string, key x.Sensi
 
 	f, err := filestore.Open(file)
 	x.CheckfNoTrace(err)
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			glog.Warningf("error while closing fd: %v", err)
+		}
+	}()
 
 	reader, err := enc.GetReader(key, f)
 	x.Check(err)
@@ -247,7 +254,7 @@ func (l *loader) processSchemaFile(ctx context.Context, file string, key x.Sensi
 		x.Check(err)
 	}
 
-	b, err := ioutil.ReadAll(reader)
+	b, err := io.ReadAll(reader)
 	if err != nil {
 		x.Checkf(err, "Error while reading file")
 	}
@@ -611,7 +618,7 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph, conf *viper.Viper) *loader
 		dialOpts = append(dialOpts, x.WithAuthorizationCredentials(conf.GetString("auth_token")))
 	}
 
-	var tlsConfig *tls.Config = nil
+	var tlsConfig *tls.Config
 	if conf.GetString("slash_grpc_endpoint") != "" {
 		var tlsErr error
 		tlsConfig, tlsErr = x.SlashTLSConfig(conf.GetString("slash_grpc_endpoint"))
@@ -664,7 +671,12 @@ func (l *loader) populateNamespaces(ctx context.Context, dc *dgo.Dgraph, singleN
 	}
 
 	txn := dc.NewTxn()
-	defer txn.Discard(ctx)
+	defer func() {
+		if err := txn.Discard(ctx); err != nil {
+			glog.Warningf("error in discarding txn: %v", err)
+		}
+	}()
+
 	res, err := txn.Query(ctx, "schema {}")
 	if err != nil {
 		return err

@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,6 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"math"
 	"os"
 	"os/user"
@@ -715,14 +714,14 @@ func main() {
 	}
 
 	if opts.Acl {
-		err = ioutil.WriteFile("acl-secret", []byte("12345678901234567890123456789012"), 0644)
+		err = os.WriteFile("acl-secret", []byte("12345678901234567890123456789012"), 0644)
 		x.Check2(fmt.Fprintf(os.Stdout, "Writing file: %s\n", "acl-secret"))
 		if err != nil {
 			fatal(errors.Errorf("unable to write file: %v", err))
 		}
 	}
 	if opts.Encryption {
-		err = ioutil.WriteFile("enc-secret", []byte("12345678901234567890123456789012"), 0644)
+		err = os.WriteFile("enc-secret", []byte("12345678901234567890123456789012"), 0644)
 		x.Check2(fmt.Fprintf(os.Stdout, "Writing file: %s\n", "enc-secret"))
 		if err != nil {
 			fatal(errors.Errorf("unable to write file: %v", err))
@@ -742,7 +741,7 @@ func main() {
 	} else {
 		fmt.Printf("Options: %+v\n", opts)
 		fmt.Printf("Writing file: %s\n", opts.OutFile)
-		err = ioutil.WriteFile(opts.OutFile, []byte(doc), 0644)
+		err = os.WriteFile(opts.OutFile, []byte(doc), 0644)
 		if err != nil {
 			fatal(errors.Errorf("unable to write file: %v", err))
 		}

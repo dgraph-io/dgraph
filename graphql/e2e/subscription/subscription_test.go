@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+//nolint:lll
 package subscription_test
 
 import (
@@ -1043,7 +1044,9 @@ func TestSubscriptionWithCustomDQL(t *testing.T) {
 	common.RequireNoGQLErrors(t, &subscriptionResp)
 
 	// Check the latest update.
-	require.JSONEq(t, `{"queryUserTweetCounts":[{"screen_name":"001","tweetCount": 2},{"screen_name":"002","tweetCount": 1}]}`, string(subscriptionResp.Data))
+	require.JSONEq(t,
+		`{"queryUserTweetCounts":[{"screen_name":"001","tweetCount": 2},{"screen_name":"002","tweetCount": 1}]}`,
+		string(subscriptionResp.Data))
 	require.Contains(t, subscriptionResp.Extensions, touchedUidskey)
 	require.Greater(t, int(subscriptionResp.Extensions[touchedUidskey].(float64)), 0)
 

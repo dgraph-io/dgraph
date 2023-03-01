@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,8 +20,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"net/http"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -44,7 +45,7 @@ type QueryRewritingCase struct {
 }
 
 func TestQueryRewriting(t *testing.T) {
-	b, err := ioutil.ReadFile("query_test.yaml")
+	b, err := os.ReadFile("query_test.yaml")
 	require.NoError(t, err, "Unable to read test file")
 
 	var tests []QueryRewritingCase
@@ -109,7 +110,7 @@ func newClient(t *testing.T, hrc HTTPRewritingCase) *http.Client {
 		require.Equal(t, hrc.Method, req.Method)
 		require.Equal(t, hrc.URL, req.URL.String())
 		if hrc.Body != "" {
-			body, err := ioutil.ReadAll(req.Body)
+			body, err := io.ReadAll(req.Body)
 			require.NoError(t, err)
 			require.JSONEq(t, hrc.Body, string(body))
 		}
@@ -122,7 +123,7 @@ func newClient(t *testing.T, hrc HTTPRewritingCase) *http.Client {
 		return &http.Response{
 			StatusCode: 200,
 			// Send response to be tested
-			Body: ioutil.NopCloser(bytes.NewBufferString(hrc.HTTPResponse)),
+			Body: io.NopCloser(bytes.NewBufferString(hrc.HTTPResponse)),
 			// Must be set to non-nil value or it panics
 			Header: make(http.Header),
 		}
@@ -130,7 +131,7 @@ func newClient(t *testing.T, hrc HTTPRewritingCase) *http.Client {
 }
 
 func TestCustomHTTPQuery(t *testing.T) {
-	b, err := ioutil.ReadFile("custom_query_test.yaml")
+	b, err := os.ReadFile("custom_query_test.yaml")
 	require.NoError(t, err, "Unable to read test file")
 
 	var tests []HTTPRewritingCase

@@ -19,7 +19,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/codahale/hdrhistogram"
+	"github.com/HdrHistogram/hdrhistogram-go"
 )
 
 const (

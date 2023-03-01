@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"math"
 	"os"
@@ -35,6 +34,7 @@ import (
 	"time"
 
 	"github.com/dustin/go-humanize"
+	"github.com/golang/glog"
 	"github.com/golang/snappy"
 
 	"github.com/dgraph-io/badger/v3"
@@ -159,7 +159,7 @@ func (r *reducer) createBadger(i int) *badger.DB {
 }
 
 func (r *reducer) createTmpBadger() *badger.DB {
-	tmpDir, err := ioutil.TempDir(r.opt.TmpDir, "split")
+	tmpDir, err := os.MkdirTemp(r.opt.TmpDir, "split")
 	x.Check(err)
 	// Do not enable compression in temporary badger to improve performance.
 	db := r.createBadgerInternal(tmpDir, false)
@@ -320,7 +320,11 @@ func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, c
 	go r.writeTmpSplits(ci, tmpWg)
 
 	count := func(req *encodeRequest) {
-		defer req.countBuf.Release()
+		defer func() {
+			if err := req.countBuf.Release(); err != nil {
+				glog.Warningf("error in releasing buffer: %v", err)
+			}
+		}()
 		if req.countBuf.IsEmpty() {
 			return
 		}
@@ -329,11 +333,14 @@ func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, c
 		sz := req.countBuf.LenNoPadding()
 		ci.countBuf.Grow(sz)
 
-		req.countBuf.SliceIterate(func(slice []byte) error {
+		if err := req.countBuf.SliceIterate(func(slice []byte) error {
 			ce := countEntry(slice)
 			ci.addCountEntry(ce)
 			return nil
-		})
+		}); err != nil {
+			glog.Errorf("error while iterating over buf: %v", err)
+			x.Check(err)
+		}
 	}
 
 	var lastStreamId uint32
@@ -356,17 +363,25 @@ func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, c
 					}
 
 					buf := z.NewBuffer(512, "Reducer.Write")
-					defer buf.Release()
+					defer func() {
+						if err := buf.Release(); err != nil {
+							glog.Warningf("error in releasing buffer: %v", err)
+						}
+					}()
 					badger.KVToBuffer(doneKV, buf)
 
-					ci.writer.Write(buf)
+					if err := ci.writer.Write(buf); err != nil {
+						glog.Warningf("error in releasing buffer: %v", err)
+					}
 				}
 				lastStreamId = kv.StreamId
 				return nil
 
 			})
 			x.Check(err)
-			kvBuf.Release()
+			if err := kvBuf.Release(); err != nil {
+				glog.Warningf("error in releasing buffer: %v", err)
+			}
 		}
 	}
 
@@ -420,12 +435,16 @@ func bufferStats(cbuf *z.Buffer) {
 	// Just check how many keys do we have in this giant buffer.
 	keys := make(map[uint64]int64)
 	var numEntries int
-	cbuf.SliceIterate(func(slice []byte) error {
+	if err := cbuf.SliceIterate(func(slice []byte) error {
 		me := MapEntry(slice)
 		keys[z.MemHash(me.Key())]++
 		numEntries++
 		return nil
-	})
+	}); err != nil {
+		glog.Errorf("error while iterating over buf: %v", err)
+		x.Check(err)
+	}
+
 	keyHist := z.NewHistogramData(z.HistogramBounds(10, 32))
 	for _, num := range keys {
 		keyHist.Update(num)
@@ -505,7 +524,9 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 			hd.Update(int64(cbuf.LenNoPadding()))
 			buffers <- cbuf
 		} else {
-			cbuf.Release()
+			if err := cbuf.Release(); err != nil {
+				glog.Warningf("error in releasing buffer: %v", err)
+			}
 		}
 		fmt.Printf("Final Histogram of buffer sizes: %s\n", hd.String())
 		close(buffers)
@@ -534,7 +555,9 @@ func (r *reducer) toList(req *encodeRequest) {
 	cbuf := req.cbuf
 	defer func() {
 		atomic.AddInt64(&r.prog.numEncoding, -int64(cbuf.LenNoPadding()))
-		cbuf.Release()
+		if err := cbuf.Release(); err != nil {
+			glog.Warningf("error in releasing buffer: %v", err)
+		}
 	}()
 
 	cbuf.SortSlice(func(ls, rs []byte) bool {
@@ -601,7 +624,8 @@ func (r *reducer) toList(req *encodeRequest) {
 		alloc.Reset()
 		enc := codec.Encoder{BlockSize: 256, Alloc: alloc}
 		var lastUid uint64
-		slice, next := []byte{}, start
+		var slice []byte
+		next := start
 		for next >= 0 && (next < end || end == -1) {
 			slice, next = cbuf.Slice(next)
 			me := MapEntry(slice)
@@ -710,7 +734,9 @@ func (r *reducer) toList(req *encodeRequest) {
 	if kvBuf.LenNoPadding() > 0 {
 		req.listCh <- kvBuf
 	} else {
-		kvBuf.Release()
+		if err := kvBuf.Release(); err != nil {
+			glog.Warningf("error in releasing buffer: %v", err)
+		}
 	}
 	close(req.listCh)
 

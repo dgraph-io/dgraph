@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors *
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -32,16 +32,8 @@ import (
 )
 
 var (
-	copyBackupDir   = "./data/backups_copy"
-	restoreDir      = "./data/restore"
-	testDirs        = []string{restoreDir}
-	alphaBackupDir  = "/data/backups"
-	oldBackupDir    = "/data/to_restore"
-	alphaContainers = []string{
-		"alpha1",
-		"alpha2",
-		"alpha3",
-	}
+	copyBackupDir  = "./data/backups_copy"
+	alphaBackupDir = "/data/backups"
 )
 
 func TestBackupMultiTenancy(t *testing.T) {
@@ -219,5 +211,4 @@ func sendRestoreRequest(t *testing.T, location string, token string) {
 
 	require.NoError(t, json.Unmarshal(resp.Data, &restoreResp))
 	require.Equal(t, restoreResp.Restore.Code, "Success")
-	return
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2019-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2019-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,6 @@ package debuginfo
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -106,7 +105,7 @@ func init() {
 
 func collectDebugInfo() (err error) {
 	if debugInfoCmd.directory == "" {
-		debugInfoCmd.directory, err = ioutil.TempDir("/tmp", "dgraph-debuginfo")
+		debugInfoCmd.directory, err = os.MkdirTemp("/tmp", "dgraph-debuginfo")
 		if err != nil {
 			return fmt.Errorf("error while creating temporary directory: %s", err)
 		}

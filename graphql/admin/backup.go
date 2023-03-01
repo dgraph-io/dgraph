@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,7 +38,7 @@ func resolveBackup(ctx context.Context, m schema.Mutation) (*resolve.Resolved, b
 	glog.Info("Got backup request")
 	if !worker.EnterpriseEnabled() {
 		err := fmt.Errorf("you must enable enterprise features first. " +
-			"Supply the appropriate license file to Dgraph Zero using the HTTP endpoint.")
+			"Supply the appropriate license file to Dgraph Zero using the HTTP endpoint")
 		return resolve.EmptyResult(m, err), false
 	}
 

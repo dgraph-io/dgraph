@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -47,7 +46,7 @@ func TestLoaderXidmap(t *testing.T) {
 	require.NoError(t, err)
 	ctx := context.Background()
 	testutil.DropAll(t, dg)
-	tmpDir, err := ioutil.TempDir("", "loader_test")
+	tmpDir, err := os.MkdirTemp("", "loader_test")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 

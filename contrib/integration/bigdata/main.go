@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
@@ -138,7 +139,7 @@ func initialData() string {
 func makeClient() *dgo.Dgraph {
 	var dgcs []api.DgraphClient
 	for _, addr := range strings.Split(*addrs, ",") {
-		c, err := grpc.Dial(addr, grpc.WithInsecure())
+		c, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		x.Check(err)
 		dgcs = append(dgcs, api.NewDgraphClient(c))
 	}

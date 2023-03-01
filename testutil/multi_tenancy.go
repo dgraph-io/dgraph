@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -410,4 +410,16 @@ export(input: {destination: $dst, format: $f, accessKey: $acc, secretKey: $sec})
 	err := json.Unmarshal(resp.Data, &r)
 	require.NoError(t, err)
 	return resp
+}
+
+func AddNumberOfTriples(t *testing.T, dg *dgo.Dgraph, start, end int) (*api.Response, error) {
+	triples := strings.Builder{}
+	for i := start; i <= end; i++ {
+		triples.WriteString(fmt.Sprintf("_:person%[1]v <name> \"person%[1]v\" .\n", i))
+	}
+	resp, err := dg.NewTxn().Mutate(context.Background(), &api.Mutation{
+		SetNquads: []byte(triples.String()),
+		CommitNow: true,
+	})
+	return resp, err
 }

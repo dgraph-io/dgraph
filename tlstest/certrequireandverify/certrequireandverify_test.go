@@ -6,8 +6,9 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
+	"os"
 	"testing"
 	"time"
 
@@ -76,7 +77,7 @@ func TestCurlAccessWithClientCert(t *testing.T) {
 
 func TestGQLAdminHealthWithClientCert(t *testing.T) {
 	// Read the root cert file.
-	caCert, err := ioutil.ReadFile("../tls/ca.crt")
+	caCert, err := os.ReadFile("../tls/ca.crt")
 	require.NoError(t, err, "Unable to read root cert file : %v", err)
 	pool := x509.NewCertPool()
 	pool.AppendCertsFromPEM(caCert)
@@ -106,14 +107,14 @@ func TestGQLAdminHealthWithClientCert(t *testing.T) {
 	require.NoError(t, err, "Https request failed: %v", err)
 	defer resp.Body.Close()
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err, "Error while reading http response: %v", err)
 	require.Contains(t, string(body), `"status":"healthy"`)
 }
 
 func TestGQLAdminHealthWithoutClientCert(t *testing.T) {
 	// Read the root cert file.
-	caCert, err := ioutil.ReadFile("../tls/ca.crt")
+	caCert, err := os.ReadFile("../tls/ca.crt")
 	require.NoError(t, err, "Unable to read root cert file : %v", err)
 	pool := x509.NewCertPool()
 	pool.AppendCertsFromPEM(caCert)

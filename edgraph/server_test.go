@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@ package edgraph
 
 import (
 	"context"
-	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -100,21 +100,21 @@ func TestValidateKeys(t *testing.T) {
 		nquad   string
 		noError bool
 	}{
-		{name: "test 1", nquad: `_:alice <knows> "stuff" ( "key 1" = 12 ) .`, noError: false},
-		{name: "test 2", nquad: `_:alice <knows> "stuff" ( "key	1" = 12 ) .`, noError: false},
-		{name: "test 3", nquad: `_:alice <knows> "stuff" ( ~key1 = 12 ) .`, noError: false},
-		{name: "test 4", nquad: `_:alice <knows> "stuff" ( "~key1" = 12 ) .`, noError: false},
-		{name: "test 5", nquad: `_:alice <~knows> "stuff" ( "key 1" = 12 ) .`, noError: false},
-		{name: "test 6", nquad: `_:alice <~knows> "stuff" ( "key	1" = 12 ) .`, noError: false},
-		{name: "test 7", nquad: `_:alice <~knows> "stuff" ( key1 = 12 ) .`, noError: false},
-		{name: "test 8", nquad: `_:alice <~knows> "stuff" ( "key1" = 12 ) .`, noError: false},
-		{name: "test 9", nquad: `_:alice <~knows> "stuff" ( "key	1" = 12 ) .`, noError: false},
-		{name: "test 10", nquad: `_:alice <knows> "stuff" ( key1 = 12 , "key 2" = 13 ) .`, noError: false},
-		{name: "test 11", nquad: `_:alice <knows> "stuff" ( "key1" = 12, key2 = 13 , "key	3" = "a b" ) .`, noError: false},
-		{name: "test 12", nquad: `_:alice <knows~> "stuff" ( key1 = 12 ) .`, noError: false},
+		{name: "test 1", nquad: `_:alice <knows> "stuff" ( "key 1" = 12 ) .`},
+		{name: "test 2", nquad: `_:alice <knows> "stuff" ( "key	1" = 12 ) .`},
+		{name: "test 3", nquad: `_:alice <knows> "stuff" ( ~key1 = 12 ) .`},
+		{name: "test 4", nquad: `_:alice <knows> "stuff" ( "~key1" = 12 ) .`},
+		{name: "test 5", nquad: `_:alice <~knows> "stuff" ( "key 1" = 12 ) .`},
+		{name: "test 6", nquad: `_:alice <~knows> "stuff" ( "key	1" = 12 ) .`},
+		{name: "test 7", nquad: `_:alice <~knows> "stuff" ( key1 = 12 ) .`},
+		{name: "test 8", nquad: `_:alice <~knows> "stuff" ( "key1" = 12 ) .`},
+		{name: "test 9", nquad: `_:alice <~knows> "stuff" ( "key	1" = 12 ) .`},
+		{name: "test 10", nquad: `_:alice <knows> "stuff" ( key1 = 12 , "key 2" = 13 ) .`},
+		{name: "test 11", nquad: `_:alice <knows> "stuff" ( "key1" = 12, key2 = 13 , "key	3" = "a b" ) .`},
+		{name: "test 12", nquad: `_:alice <knows~> "stuff" ( key1 = 12 ) .`},
 		{name: "test 13", nquad: `_:alice <knows> "stuff" ( key1 = 12 ) .`, noError: true},
 		{name: "test 14", nquad: `_:alice <knows@some> "stuff" .`, noError: true},
-		{name: "test 15", nquad: `_:alice <knows@some@en> "stuff" .`, noError: false},
+		{name: "test 15", nquad: `_:alice <knows@some@en> "stuff" .`},
 	}
 
 	for _, tc := range tests {
@@ -135,7 +135,7 @@ func TestValidateKeys(t *testing.T) {
 func TestParseSchemaFromAlterOperation(t *testing.T) {
 	md := metadata.New(map[string]string{"namespace": "123"})
 	ctx := metadata.NewIncomingContext(context.Background(), md)
-	dir, err := ioutil.TempDir("", "storetest_")
+	dir, err := os.MkdirTemp("", "storetest_")
 	x.Check(err)
 	ps, err := badger.OpenManaged(badger.DefaultOptions(dir))
 	x.Check(err)

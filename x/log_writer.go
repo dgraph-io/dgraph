@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,13 +24,14 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/golang/glog"
 
 	"github.com/dgraph-io/badger/v3/y"
 	"github.com/dgraph-io/ristretto/z"
@@ -244,7 +245,7 @@ func (l *LogWriter) open() error {
 		l.writer = bufio.NewWriterSize(l.file, bufferSize)
 
 		if l.EncryptionKey != nil {
-			rand.Read(l.baseIv[:]) //nolint:gosec // cryptographic precision not required for randomly selecting from slice
+			_, _ = rand.Read(l.baseIv[:])
 			bytes, err := encrypt(l.EncryptionKey, l.baseIv, []byte(VerificationText))
 			if err != nil {
 				return err
@@ -311,17 +312,32 @@ func compress(src string) error {
 		return err
 	}
 
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			glog.Warningf("error while closing fd: %v", err)
+		}
+	}()
 	gzf, err := os.OpenFile(src+".gz", os.O_CREATE|os.O_TRUNC|os.O_WRONLY, os.ModePerm)
 	if err != nil {
 		return err
 	}
+	defer func() {
+		if err := gzf.Close(); err != nil {
+			glog.Warningf("error closing file: %v", err)
+		}
+	}()
 
-	defer gzf.Close()
 	gz := gzip.NewWriter(gzf)
-	defer gz.Close()
+	defer func() {
+		if err := gz.Close(); err != nil {
+			glog.Warningf("error closing gzip writer: %v", err)
+		}
+	}()
+
 	if _, err := io.Copy(gz, f); err != nil {
-		os.Remove(src + ".gz")
+		if err := os.Remove(src + ".gz"); err != nil {
+			glog.Warningf("error deleting file [%v]: %v", src, err)
+		}
 		return err
 	}
 	// close the descriptors because we need to delete the file
@@ -383,7 +399,7 @@ func prefixAndExt(file string) (prefix, ext string) {
 
 func processOldLogFiles(fp string, maxAge int64) ([]string, []string, error) {
 	dir := filepath.Dir(fp)
-	files, err := ioutil.ReadDir(dir)
+	files, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, nil, fmt.Errorf("can't read log file directory: %s", err)
 	}

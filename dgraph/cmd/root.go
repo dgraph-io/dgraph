@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +22,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -153,7 +152,7 @@ func initCmds() {
 			if err != nil {
 				x.Fatalf("unable to open config file for reading: %v", err)
 			}
-			cfgData, err := ioutil.ReadAll(cfgFile)
+			cfgData, err := io.ReadAll(cfgFile)
 			if err != nil {
 				x.Fatalf("unable to read config file: %v", err)
 			}

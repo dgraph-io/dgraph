@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2016-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -108,7 +108,7 @@ For discussions about Dgraph     , visit https://discuss.dgraph.io.
 For fully-managed Dgraph Cloud   , visit https://dgraph.io/cloud.
 
 %s.
-Copyright 2015-2022 Dgraph Labs, Inc.
+Copyright 2015-2023 Dgraph Labs, Inc.
 
 `,
 		dgraphVersion, dgraphCodename, ExecutableChecksum(), lastCommitSHA, lastCommitTime, gitBranch,
@@ -148,7 +148,11 @@ func ExecutableChecksum() []byte {
 	if err != nil {
 		return nil
 	}
-	defer execFile.Close()
+	defer func() {
+		if err := execFile.Close(); err != nil {
+			glog.Warningf("error closing file: %v", err)
+		}
+	}()
 
 	h := sha256.New()
 	if _, err := io.Copy(h, execFile); err != nil {

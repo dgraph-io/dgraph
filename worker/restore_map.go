@@ -8,7 +8,7 @@
  * may not use this file except in compliance with the License. You
  * may obtain a copy of the License at
  *
- *     https://github.com/dgraph-io/dgraph/blob/master/licenses/DCL.txt
+ *     https://github.com/dgraph-io/dgraph/blob/main/licenses/DCL.txt
  */
 
 package worker
@@ -163,7 +163,12 @@ func (mw *mapper) newMapFile() (*os.File, error) {
 }
 
 func (m *mapper) writeToDisk(buf *z.Buffer) error {
-	defer buf.Release()
+	defer func() {
+		if err := buf.Release(); err != nil {
+			glog.Warningf("error in releasing buffer: %v", err)
+		}
+	}()
+
 	if buf.IsEmpty() {
 		return nil
 	}
@@ -172,12 +177,16 @@ func (m *mapper) writeToDisk(buf *z.Buffer) error {
 	if err != nil {
 		return errors.Wrap(err, "openOutputFile")
 	}
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			glog.Warningf("error while closing fd: %v", err)
+		}
+	}()
 
 	// Create partition keys for the map file.
 	header := &pb.MapHeader{PartitionKeys: [][]byte{}}
 	var bufSize int
-	buf.SliceIterate(func(slice []byte) error {
+	err = buf.SliceIterate(func(slice []byte) error {
 		bufSize += 4 + len(slice)
 		if bufSize < partitionBufSz {
 			return nil
@@ -192,6 +201,10 @@ func (m *mapper) writeToDisk(buf *z.Buffer) error {
 		bufSize = 0
 		return nil
 	})
+	if err != nil {
+		glog.Errorf("error in iterating over buffer: %v", err)
+		return err
+	}
 
 	// Write the header to the map file.
 	headerBuf, err := header.Marshal()
@@ -278,7 +291,11 @@ func fromBackupKey(key []byte) ([]byte, uint64, error) {
 
 func (m *mapper) processReqCh(ctx context.Context) error {
 	buf := z.NewBuffer(20<<20, "processKVList")
-	defer buf.Release()
+	defer func() {
+		if err := buf.Release(); err != nil {
+			glog.Warningf("error in releasing buffer: %v", err)
+		}
+	}()
 
 	maxNs := uint64(0)
 	maxUid := uint64(0)
@@ -480,7 +497,11 @@ func (m *mapper) processReqCh(ctx context.Context) error {
 
 	var list bpb.KVList
 	process := func(req listReq) error {
-		defer req.lbuf.Release()
+		defer func() {
+			if err := req.lbuf.Release(); err != nil {
+				glog.Warningf("error in releasing buffer: %v", err)
+			}
+		}()
 
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -663,7 +684,9 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) (*mapResult, error) {
 	}
 	go mapper.Progress()
 	defer func() {
-		mapper.Flush()
+		if err := mapper.Flush(); err != nil {
+			glog.Warningf("error calling flush during map: %v", err)
+		}
 		mapper.closer.SignalAndWait()
 	}()
 

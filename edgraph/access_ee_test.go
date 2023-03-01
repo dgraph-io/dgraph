@@ -2,13 +2,13 @@
 // +build !oss
 
 /*
- * Copyright 2022 Dgraph Labs, Inc. All rights reserved.
+ * Copyright 2023 Dgraph Labs, Inc. All rights reserved.
  *
  * Licensed under the Dgraph Community License (the "License"); you
  * may not use this file except in compliance with the License. You
  * may obtain a copy of the License at
  *
- *     https://github.com/dgraph-io/dgraph/blob/master/licenses/DCL.txt
+ *     https://github.com/dgraph-io/dgraph/blob/main/licenses/DCL.txt
  */
 
 package edgraph
@@ -62,7 +62,9 @@ func TestValidateToken(t *testing.T) {
 		tokenString := generateJWT(userdata.namespace, userdata.userId, userdata.groupIds, expiry)
 		ud, err := validateToken(tokenString)
 		require.Nil(t, err)
-		if ud.namespace != userdata.namespace || ud.userId != userdata.userId || !sliceCompare(ud.groupIds, userdata.groupIds) {
+		if ud.namespace != userdata.namespace || ud.userId != userdata.userId ||
+			!sliceCompare(ud.groupIds, userdata.groupIds) {
+
 			t.Errorf("Actual output %+v is not equal to the expected output %+v", userdata, ud)
 		}
 	}

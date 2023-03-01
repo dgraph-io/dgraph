@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+//nolint:lll
 package alpha
 
 import (
@@ -38,6 +39,7 @@ import (
 	"github.com/twpayne/go-geom/encoding/geojson"
 	"github.com/twpayne/go-geom/encoding/wkb"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/encoding/gzip"
 
 	"github.com/dgraph-io/dgo/v210"
@@ -215,7 +217,7 @@ func TestDeletePredicate(t *testing.T) {
 	friend: string @index(term) .
 	`
 	require.NoError(t, dropAll())
-	schema.ParseBytes([]byte(""), 1)
+	require.NoError(t, schema.ParseBytes([]byte(""), 1))
 	err := alterSchemaWithRetry(s1)
 	require.NoError(t, err)
 
@@ -247,9 +249,9 @@ func TestDeletePredicate(t *testing.T) {
 	output, err = runGraphqlQuery(`schema{}`)
 	require.NoError(t, err)
 
-	testutil.CompareJSON(t, testutil.GetFullSchemaHTTPResponse(testutil.SchemaOptions{UserPreds: `{"predicate":"age","type":"default"},` +
-		`{"predicate":"name","type":"string","index":true, "tokenizer":["term"]}`}),
-		output)
+	testutil.CompareJSON(t, testutil.GetFullSchemaHTTPResponse(testutil.SchemaOptions{
+		UserPreds: `{"predicate":"age","type":"default"},` +
+			`{"predicate":"name","type":"string","index":true, "tokenizer":["term"]}`}), output)
 
 	output, err = runGraphqlQuery(q1)
 	require.NoError(t, err)
@@ -445,7 +447,7 @@ func TestSchemaMutationIndexAdd(t *testing.T) {
 	`
 
 	// reset Schema
-	schema.ParseBytes([]byte(""), 1)
+	require.NoError(t, schema.ParseBytes([]byte(""), 1))
 	err := runMutation(m)
 	require.NoError(t, err)
 
@@ -485,7 +487,7 @@ func TestSchemaMutationIndexRemove(t *testing.T) {
 	`
 
 	// reset Schema
-	schema.ParseBytes([]byte(""), 1)
+	require.NoError(t, schema.ParseBytes([]byte(""), 1))
 	// add index to name
 	err := alterSchemaWithRetry(s1)
 	require.NoError(t, err)
@@ -529,7 +531,7 @@ func TestSchemaMutationReverseAdd(t *testing.T) {
 	var s = `friend: [uid] @reverse .`
 
 	// reset Schema
-	schema.ParseBytes([]byte(""), 1)
+	require.NoError(t, schema.ParseBytes([]byte(""), 1))
 	err := runMutation(m)
 	require.NoError(t, err)
 
@@ -573,7 +575,7 @@ func TestSchemaMutationReverseRemove(t *testing.T) {
 	`
 
 	// reset Schema
-	schema.ParseBytes([]byte(""), 1)
+	require.NoError(t, schema.ParseBytes([]byte(""), 1))
 	err := runMutation(m)
 	require.NoError(t, err)
 
@@ -620,7 +622,7 @@ func TestSchemaMutationCountAdd(t *testing.T) {
 	`
 
 	// reset Schema
-	schema.ParseBytes([]byte(""), 1)
+	require.NoError(t, schema.ParseBytes([]byte(""), 1))
 	err := runMutation(m)
 	require.NoError(t, err)
 
@@ -676,7 +678,7 @@ func TestJsonMutation(t *testing.T) {
             name: string @index(exact) .
 	`
 	require.NoError(t, dropAll())
-	schema.ParseBytes([]byte(""), 1)
+	require.NoError(t, schema.ParseBytes([]byte(""), 1))
 	err := alterSchemaWithRetry(s1)
 	require.NoError(t, err)
 
@@ -731,7 +733,7 @@ func TestJsonMutationNumberParsing(t *testing.T) {
 	}
 	`
 	require.NoError(t, dropAll())
-	schema.ParseBytes([]byte(""), 1)
+	require.NoError(t, schema.ParseBytes([]byte(""), 1))
 	err := runJSONMutation(m1)
 	require.NoError(t, err)
 
@@ -817,7 +819,7 @@ func TestDeleteAll(t *testing.T) {
       		friend: [uid] @reverse .
 		name: string @index(term) .
 	`
-	schema.ParseBytes([]byte(""), 1)
+	require.NoError(t, schema.ParseBytes([]byte(""), 1))
 	err := alterSchemaWithRetry(s1)
 	require.NoError(t, err)
 
@@ -925,7 +927,7 @@ func TestSchemaMutation4Error(t *testing.T) {
             age:int .
 	`
 	// reset Schema
-	schema.ParseBytes([]byte(""), 1)
+	require.NoError(t, schema.ParseBytes([]byte(""), 1))
 	err := alterSchemaWithRetry(m)
 	require.NoError(t, err)
 
@@ -956,7 +958,7 @@ func TestSchemaMutation5Error(t *testing.T) {
             friends: [uid] .
 	`
 	// reset Schema
-	schema.ParseBytes([]byte(""), 1)
+	require.NoError(t, schema.ParseBytes([]byte(""), 1))
 	err := alterSchemaWithRetry(m)
 	require.NoError(t, err)
 
@@ -979,7 +981,7 @@ func TestSchemaMutation5Error(t *testing.T) {
 
 // A basic sanity check. We will do more extensive testing for multiple values in query.
 func TestMultipleValues(t *testing.T) {
-	schema.ParseBytes([]byte(""), 1)
+	require.NoError(t, schema.ParseBytes([]byte(""), 1))
 	m := `
 			occupations: [string] .
 `
@@ -1010,7 +1012,7 @@ func TestMultipleValues(t *testing.T) {
 
 func TestListTypeSchemaChange(t *testing.T) {
 	require.NoError(t, dropAll())
-	schema.ParseBytes([]byte(""), 1)
+	require.NoError(t, schema.ParseBytes([]byte(""), 1))
 	m := `
 			occupations: [string] @index(term) .
 	`
@@ -1105,7 +1107,7 @@ func TestDeleteAllSP2(t *testing.T) {
 	}
 	`
 	require.NoError(t, dropAll())
-	schema.ParseBytes([]byte(""), 1)
+	require.NoError(t, schema.ParseBytes([]byte(""), 1))
 	err := alterSchemaWithRetry(s)
 	require.NoError(t, err)
 
@@ -1141,7 +1143,9 @@ func TestDeleteAllSP2(t *testing.T) {
 
 	output, err := runGraphqlQuery(q)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"data": {"me":[{"name":"July 3 2017","date":"2017-07-03T03:49:03Z","weight":262.3,"lifeLoad":5,"stressLevel":3}]}}`, output)
+	require.JSONEq(t,
+		`{"data": {"me":[{"name":"July 3 2017","date":"2017-07-03T03:49:03Z",`+
+			`"weight":262.3,"lifeLoad":5,"stressLevel":3}]}}`, output)
 
 	m = fmt.Sprintf(`
 		{
@@ -1373,7 +1377,7 @@ func TestJsonUnicode(t *testing.T) {
 
 func TestGrpcCompressionSupport(t *testing.T) {
 	conn, err := grpc.Dial(testutil.SockAddr,
-		grpc.WithInsecure(),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultCallOptions(grpc.UseCompressor(gzip.Name)),
 	)
 	defer func() {
@@ -1382,7 +1386,7 @@ func TestGrpcCompressionSupport(t *testing.T) {
 	require.NoError(t, err)
 
 	dc := dgo.NewDgraphClient(api.NewDgraphClient(conn))
-	dc.LoginIntoNamespace(context.Background(), x.GrootId, "password", x.GalaxyNamespace)
+	require.NoError(t, dc.LoginIntoNamespace(context.Background(), x.GrootId, "password", x.GalaxyNamespace))
 	q := `schema {}`
 	tx := dc.NewTxn()
 	_, err = tx.Query(context.Background(), q)
@@ -1500,7 +1504,7 @@ func TestIPStringParsing(t *testing.T) {
 }
 
 func TestJSONQueryWithVariables(t *testing.T) {
-	schema.ParseBytes([]byte(""), 1)
+	require.NoError(t, schema.ParseBytes([]byte(""), 1))
 	m := `
 			user_id: string @index(exact) @upsert .
 			user_name: string @index(hash) .
@@ -1716,7 +1720,7 @@ func (t *Token) refreshToken() error {
 func TestMain(m *testing.M) {
 	addr = "http://" + testutil.SockAddrHttp
 	// Increment lease, so that mutations work.
-	conn, err := grpc.Dial(testutil.SockAddrZero, grpc.WithInsecure())
+	conn, err := grpc.Dial(testutil.SockAddrZero, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatal(err)
 	}

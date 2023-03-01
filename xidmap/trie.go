@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,8 @@ package xidmap
 import (
 	"math"
 	"unsafe"
+
+	"github.com/golang/glog"
 
 	"github.com/dgraph-io/ristretto/z"
 )
@@ -73,7 +75,9 @@ func (t *Trie) Iterate(fn iterFn) error {
 
 // Release would release the resources used by the Arena.
 func (t *Trie) Release() {
-	t.buf.Release()
+	if err := t.buf.Release(); err != nil {
+		glog.Warningf("error in releasing buffer: %v", err)
+	}
 }
 
 // node uses 4-byte offsets to save the cost of storing 8-byte pointers. Also, offsets allow us to

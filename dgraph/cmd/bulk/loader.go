@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"hash/adler32"
 	"io"
-	"io/ioutil"
 	"log"
 	"math"
 	"os"
@@ -33,8 +32,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/golang/glog"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/badger/v3/y"
@@ -123,7 +124,7 @@ func newLoader(opt *options) *loader {
 	if tlsConf != nil {
 		dialOpts = append(dialOpts, grpc.WithTransportCredentials(credentials.NewTLS(tlsConf)))
 	} else {
-		dialOpts = append(dialOpts, grpc.WithInsecure())
+		dialOpts = append(dialOpts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
 	zero, err := grpc.DialContext(ctx, opt.ZeroAddr, dialOpts...)
 	x.Checkf(err, "Unable to connect to zero, Is it running at %s?", opt.ZeroAddr)
@@ -196,7 +197,11 @@ func (ld *loader) leaseNamespaces() {
 func readSchema(opt *options) *schema.ParsedSchema {
 	f, err := filestore.Open(opt.SchemaFile)
 	x.Check(err)
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			glog.Warningf("error while closing fd: %v", err)
+		}
+	}()
 
 	key := opt.EncryptionKey
 	if !opt.Encrypted {
@@ -209,7 +214,7 @@ func readSchema(opt *options) *schema.ParsedSchema {
 		x.Check(err)
 	}
 
-	buf, err := ioutil.ReadAll(r)
+	buf, err := io.ReadAll(r)
 	x.Check(err)
 
 	result, err := schema.ParseWithNamespace(string(buf), opt.Namespace)
@@ -334,7 +339,11 @@ func (ld *loader) processGqlSchema(loadType chunker.InputFormat) {
 
 	f, err := filestore.Open(ld.opt.GqlSchemaFile)
 	x.Check(err)
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			glog.Warningf("error while closing fd: %v", err)
+		}
+	}()
 
 	key := ld.opt.EncryptionKey
 	if !ld.opt.Encrypted {
@@ -347,7 +356,7 @@ func (ld *loader) processGqlSchema(loadType chunker.InputFormat) {
 		x.Check(err)
 	}
 
-	buf, err := ioutil.ReadAll(r)
+	buf, err := io.ReadAll(r)
 	x.Check(err)
 
 	rdfSchema := `_:gqlschema <dgraph.type> "dgraph.graphql" <%#x> .

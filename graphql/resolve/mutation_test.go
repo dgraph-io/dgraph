@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strings"
 	"testing"
 
@@ -80,7 +80,7 @@ func TestMutationRewriting(t *testing.T) {
 }
 
 func mutationValidation(t *testing.T, file string, rewriterFactory func() MutationRewriter) {
-	b, err := ioutil.ReadFile(file)
+	b, err := os.ReadFile(file)
 	require.NoError(t, err, "Unable to read test file")
 
 	var tests []testCase
@@ -151,8 +151,8 @@ func benchmark3LevelDeep(num int, b *testing.B) {
 	addRewriter := NewAddRewriter()
 	idExistence := make(map[string]string)
 	for n := 0; n < b.N; n++ {
-		addRewriter.RewriteQueries(context.Background(), mut)
-		addRewriter.Rewrite(context.Background(), mut, idExistence)
+		_, _, _ = addRewriter.RewriteQueries(context.Background(), mut)
+		_, _ = addRewriter.Rewrite(context.Background(), mut, idExistence)
 	}
 }
 
@@ -163,7 +163,7 @@ func Benchmark3LevelDeep1000(b *testing.B)  { benchmark3LevelDeep(1000, b) }
 func Benchmark3LevelDeep10000(b *testing.B) { benchmark3LevelDeep(10000, b) }
 
 func deleteMutationRewriting(t *testing.T, file string, rewriterFactory func() MutationRewriter) {
-	b, err := ioutil.ReadFile(file)
+	b, err := os.ReadFile(file)
 	require.NoError(t, err, "Unable to read test file")
 
 	var tests []testCase
@@ -233,7 +233,7 @@ func deleteMutationRewriting(t *testing.T, file string, rewriterFactory func() M
 }
 
 func mutationRewriting(t *testing.T, file string, rewriterFactory func() MutationRewriter) {
-	b, err := ioutil.ReadFile(file)
+	b, err := os.ReadFile(file)
 	require.NoError(t, err, "Unable to read test file")
 
 	var tests []testCase
@@ -349,7 +349,7 @@ func TestMutationQueryRewriting(t *testing.T) {
 		"ADD_UPDATE_MUTATION": {"Add Post ", "Update Post "},
 	}
 
-	b, err := ioutil.ReadFile("mutation_query_test.yaml")
+	b, err := os.ReadFile("mutation_query_test.yaml")
 	require.NoError(t, err, "Unable to read test file")
 
 	var tests map[string][]QueryRewritingCase
@@ -399,7 +399,7 @@ func TestMutationQueryRewriting(t *testing.T) {
 }
 
 func TestCustomHTTPMutation(t *testing.T) {
-	b, err := ioutil.ReadFile("custom_mutation_test.yaml")
+	b, err := os.ReadFile("custom_mutation_test.yaml")
 	require.NoError(t, err, "Unable to read test file")
 
 	var tests []HTTPRewritingCase

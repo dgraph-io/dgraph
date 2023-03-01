@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2016-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -292,7 +292,8 @@ func (t TermTokenizer) Tokens(v interface{}) ([]string, error) {
 	lang := LangBase(t.lang)
 	switch lang {
 	case "zh", "ja", "th", "lo", "my", "bo", "km", "kxm":
-		// Chinese, Japanese, Thai, Lao, Burmese, Tibetan and Khmer (km, kxm) do not use spaces as delimiters. We simply split by space.
+		// Chinese, Japanese, Thai, Lao, Burmese, Tibetan and Khmer (km, kxm)
+		// do not use spaces as delimiters. We simply split by space.
 		tokens := strings.Split(str, " ")
 		return x.RemoveDuplicates(tokens), nil
 	default:

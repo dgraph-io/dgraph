@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -667,7 +667,7 @@ func printKeys(db *badger.DB) {
 		return err
 	}
 	x.Check(stream.Orchestrate(context.Background()))
-	w.Flush()
+	x.Check(w.Flush())
 	fmt.Println()
 	fmt.Printf("Found %d keys\n", atomic.LoadUint64(&total))
 }
