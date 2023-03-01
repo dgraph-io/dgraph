@@ -25,7 +25,7 @@ BUILD_VERSION  ?= $(shell git describe --always --tags)
 # check if DGRAPH_VERSION flag is set (used for release pipeline)
 ifneq ($(DGRAPH_VERSION),)
 # remove arch suffix from DGRAPH_VERSION for CD steps only
-BUILD_VERSION := $(shell echo ${DGRAPH_VERSION} | cut -d "-" -f 1)
+BUILD_VERSION := $(shell echo ${DGRAPH_VERSION} | sed -e 's/-amd64//' -e 's/-arm64//')
 endif
 
 GOOS          ?= $(shell go env GOOS)
