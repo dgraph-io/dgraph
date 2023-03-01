@@ -13,11 +13,12 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
   - fix(GraphQL): pass on HTTP request headers for subscriptions (https://github.com/dgraph-io/dgraph/pull/8574)
 
 - **Core Dgraph**
-  - chore(debug): add `--only-summary` flag in `dgraph debug` to show LSM tree and namespace size (https://github.com/dgraph-io/dgraph/pull/8516)
-  - feat(cloud): add shared-instance flag in limit superflag in alpha (https://github.com/dgraph-io/dgraph/pull/8625)
+  - chore(debug): add `only-summary` flag in `dgraph debug` to show LSM tree and namespace size (https://github.com/dgraph-io/dgraph/pull/8516)
+  - feat(cloud): add `shared-instance` flag in limit superflag in alpha (https://github.com/dgraph-io/dgraph/pull/8625)
   - chore(deps): update prometheus dependency, adds new metrics (https://github.com/dgraph-io/dgraph/pull/8655)
-  - feat(cdc): add superflag to enable TLS without CA or certs (https://github.com/dgraph-io/dgraph/pull/8564)
+  - feat(cdc): add superflag `tls` to enable TLS without CA or certs (https://github.com/dgraph-io/dgraph/pull/8564)
   - chore(deps): bump badger up to v4 (https://github.com/dgraph-io/dgraph/pull/8709)
+  - feat(multitenancy): namespace aware drop data (https://github.com/dgraph-io/dgraph/pull/8511)
 
 ### Fixed
 
@@ -71,7 +72,6 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
   - fix(query): handle bad timezone correctly (https://github.com/dgraph-io/dgraph/pull/8657)
   - chore(ludicroud): remove ludicrous mode from the code (https://github.com/dgraph-io/dgraph/pull/8612)
   - fix(backup): make the /admin/backup and /admin/export API asynchronous (https://github.com/dgraph-io/dgraph/pull/8554)
-  - feat(multitenancy): namespace aware drop data (https://github.com/dgraph-io/dgraph/pull/8511)
   - fix(mutation): validate mutation before applying it (https://github.com/dgraph-io/dgraph/pull/8623)
 
 - **CI Enhancements**
