@@ -1,6 +1,6 @@
 name: labeler
 on:
-  pull_request:
+  pull_request_target:
     branches:
       - main
       - "release/v**"
@@ -14,4 +14,4 @@ jobs:
     steps:
       - uses: actions/labeler@v4
         with:
-          repo-token: "${{ secrets.GITHUB_TOKEN }}"
+          repo-token: "${{ secrets.GH_TOKEN }}"
