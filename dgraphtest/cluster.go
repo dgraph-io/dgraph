@@ -79,29 +79,31 @@ func (c *Cluster) init() error {
 		return errors.Wrap(err, "unable to talk to docker daemon")
 	}
 
-	if err = c.createNetwork(); err != nil {
+	if err := c.createNetwork(); err != nil {
 		return errors.Wrap(err, "error creating network")
 	}
 
 	for i := 0; i < c.conf.numZeros; i++ {
 		zo := &zero{id: i}
-		zo.cname = fmt.Sprintf(zeroNameFmt, c.conf.prefix, zo.id)
+		zo.coname = fmt.Sprintf(zeroNameFmt, c.conf.prefix, zo.id)
+		zo.loname = fmt.Sprintf(zeroLNameFmt, zo.id)
 		cid, err := c.createContainer(zo)
 		if err != nil {
 			return err
 		}
-		zo.crid = cid
+		zo.coid = cid
 		c.zeros = append(c.zeros, zo)
 	}
 
 	for i := 0; i < c.conf.numAlphas; i++ {
 		aa := &alpha{id: i}
-		aa.cname = fmt.Sprintf(alphaNameFmt, c.conf.prefix, aa.id)
+		aa.coname = fmt.Sprintf(alphaNameFmt, c.conf.prefix, aa.id)
+		aa.loname = fmt.Sprintf(alphaLNameFmt, aa.id)
 		cid, err := c.createContainer(aa)
 		if err != nil {
 			return err
 		}
-		aa.crid = cid
+		aa.coid = cid
 		c.alphas = append(c.alphas, aa)
 	}
 
@@ -161,7 +163,7 @@ func (c *Cluster) startContainer(dc dnode) error {
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 	defer cancel()
 	if err := c.dcli.ContainerStart(ctx, dc.cid(), types.ContainerStartOptions{}); err != nil {
-		return errors.Wrapf(err, "error starting container [%v]", dc.name())
+		return errors.Wrapf(err, "error starting container [%v]", dc.cname())
 	}
 	return nil
 }
@@ -199,7 +201,7 @@ func (c *Cluster) stopContainer(dc dnode) error {
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 	defer cancel()
 	if err := c.dcli.ContainerStop(ctx, dc.cid(), &stopTimeout); err != nil {
-		return errors.Wrapf(err, "error stopping container [%v]", dc.name())
+		return errors.Wrapf(err, "error stopping container [%v]", dc.cname())
 	}
 	return nil
 }
@@ -212,13 +214,13 @@ func (c *Cluster) Cleanup() {
 
 	ro := types.ContainerRemoveOptions{RemoveVolumes: true, Force: true}
 	for _, aa := range c.alphas {
-		if err := c.dcli.ContainerRemove(ctx, aa.name(), ro); err != nil {
-			c.log("error removing alpha [%v]: %v", aa.name(), err)
+		if err := c.dcli.ContainerRemove(ctx, aa.cid(), ro); err != nil {
+			c.log("error removing alpha [%v]: %v", aa.cname(), err)
 		}
 	}
 	for _, zo := range c.zeros {
-		if err := c.dcli.ContainerRemove(ctx, zo.name(), ro); err != nil {
-			c.log("error removing zero [%v]: %v", zo.name(), err)
+		if err := c.dcli.ContainerRemove(ctx, zo.cid(), ro); err != nil {
+			c.log("error removing zero [%v]: %v", zo.cname(), err)
 		}
 	}
 	if err := c.dcli.NetworkRemove(ctx, c.net.id); err != nil {
@@ -227,31 +229,29 @@ func (c *Cluster) Cleanup() {
 }
 
 func (c *Cluster) createContainer(dc dnode) (string, error) {
-	name := dc.name()
-	ps := dc.ports()
 	cmd := dc.cmd(c)
 	image := c.dgraphImage()
-	wd := dc.workingDir()
 	mts, err := dc.mounts(c.conf)
 	if err != nil {
 		return "", err
 	}
 
-	cconf := &container.Config{Cmd: cmd, Image: image, WorkingDir: wd, ExposedPorts: ps}
+	cconf := &container.Config{Cmd: cmd, Image: image, WorkingDir: dc.workingDir(), ExposedPorts: dc.ports()}
 	hconf := &container.HostConfig{Mounts: mts, PublishAllPorts: true}
 	networkConfig := &network.NetworkingConfig{
 		EndpointsConfig: map[string]*network.EndpointSettings{
 			c.net.name: {
-				Aliases: []string{name}, NetworkID: c.net.id,
+				Aliases:   []string{dc.cname(), dc.lname()},
+				NetworkID: c.net.id,
 			},
 		},
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 	defer cancel()
-	resp, err := c.dcli.ContainerCreate(ctx, cconf, hconf, networkConfig, name)
+	resp, err := c.dcli.ContainerCreate(ctx, cconf, hconf, networkConfig, dc.cname())
 	if err != nil {
-		return "", errors.Wrapf(err, "error creating container %v", name)
+		return "", errors.Wrapf(err, "error creating container %v", dc.cname())
 	}
 
 	return resp.ID, nil

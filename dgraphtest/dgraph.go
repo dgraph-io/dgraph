@@ -29,8 +29,10 @@ import (
 )
 
 const (
-	zeroNameFmt  = "%v_zero%d"
-	alphaNameFmt = "%v_alpha%d"
+	zeroNameFmt   = "%v_zero%d"
+	zeroLNameFmt  = "zero%d"
+	alphaNameFmt  = "%v_alpha%d"
+	alphaLNameFmt = "alpha%d"
 
 	zeroGrpcPort   = "5080"
 	zeroHttpPort   = "6080"
@@ -48,7 +50,8 @@ const (
 )
 
 type dnode interface {
-	name() string
+	cname() string
+	lname() string
 	cid() string
 	ports() nat.PortSet
 	cmd(*Cluster) []string
@@ -58,17 +61,22 @@ type dnode interface {
 }
 
 type zero struct {
-	id    int
-	crid  string
-	cname string
+	id     int    // 0, 1, 2
+	coid   string // container ID in docker world
+	coname string // something like test-1234_zero2
+	loname string // something like alpha0, zero1
 }
 
-func (z *zero) name() string {
-	return z.cname
+func (z *zero) cname() string {
+	return z.coname
+}
+
+func (z *zero) lname() string {
+	return z.loname
 }
 
 func (z *zero) cid() string {
-	return z.crid
+	return z.coid
 }
 
 func (z *zero) ports() nat.PortSet {
@@ -79,11 +87,11 @@ func (z *zero) ports() nat.PortSet {
 }
 
 func (z *zero) cmd(c *Cluster) []string {
-	zcmd := []string{"/gobin/dgraph", "zero", fmt.Sprintf("--my=%s:%v", z.cname, zeroGrpcPort), "--bindall",
+	zcmd := []string{"/gobin/dgraph", "zero", fmt.Sprintf("--my=%s:%v", z.lname(), zeroGrpcPort), "--bindall",
 		fmt.Sprintf(`--replicas=%v`, c.conf.replicas), fmt.Sprintf(`--raft=idx=%v`, z.id+1), "--logtostderr",
 		fmt.Sprintf("-v=%d", c.conf.verbosity)}
 	if z.id > 0 {
-		zcmd = append(zcmd, "--peer="+c.zeros[0].name()+":"+zeroGrpcPort)
+		zcmd = append(zcmd, "--peer="+c.zeros[0].lname()+":"+zeroGrpcPort)
 	}
 
 	return zcmd
@@ -113,17 +121,22 @@ func (z *zero) healthURL(c *Cluster) (string, error) {
 }
 
 type alpha struct {
-	id    int
-	crid  string
-	cname string
+	id     int
+	coid   string
+	coname string
+	loname string
 }
 
-func (a *alpha) name() string {
-	return a.cname
+func (a *alpha) cname() string {
+	return a.coname
 }
 
 func (a *alpha) cid() string {
-	return a.crid
+	return a.coid
+}
+
+func (a *alpha) lname() string {
+	return a.loname
 }
 
 func (a *alpha) ports() nat.PortSet {
@@ -134,7 +147,7 @@ func (a *alpha) ports() nat.PortSet {
 }
 
 func (a *alpha) cmd(c *Cluster) []string {
-	acmd := []string{"/gobin/dgraph", "alpha", fmt.Sprintf("--my=%s:%v", a.cname, alphaInterPort),
+	acmd := []string{"/gobin/dgraph", "alpha", fmt.Sprintf("--my=%s:%v", a.lname(), alphaInterPort),
 		"--bindall", "--logtostderr", fmt.Sprintf("-v=%d", c.conf.verbosity),
 		`--security=whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16`}
 
@@ -147,7 +160,7 @@ func (a *alpha) cmd(c *Cluster) []string {
 
 	zeroAddrsArg, delimiter := "--zero=", ""
 	for _, zo := range c.zeros {
-		zeroAddrsArg += fmt.Sprintf("%s%v:%v", delimiter, zo.name(), zeroGrpcPort)
+		zeroAddrsArg += fmt.Sprintf("%s%v:%v", delimiter, zo.lname(), zeroGrpcPort)
 		delimiter = ","
 	}
 	acmd = append(acmd, zeroAddrsArg)
@@ -221,5 +234,5 @@ func publicPort(dcli *docker.Client, dc dnode, privatePort string) (string, erro
 		}
 	}
 
-	return "", fmt.Errorf("no mapping found for private port [%v] for container [%v]", privatePort, dc.name())
+	return "", fmt.Errorf("no mapping found for private port [%v] for container [%v]", privatePort, dc.cname())
 }
