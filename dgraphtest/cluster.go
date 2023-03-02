@@ -17,22 +17,17 @@
 package dgraphtest
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/network"
-	"github.com/docker/docker/client"
+	docker "github.com/docker/docker/client"
 	"github.com/pkg/errors"
-	"go.uber.org/multierr"
-
-	"github.com/dgraph-io/dgraph/testutil"
 )
 
 var (
@@ -40,26 +35,41 @@ var (
 	stopTimeout    = time.Minute
 )
 
+type cnet struct {
+	id   string
+	name string
+}
+
 type Cluster struct {
 	conf ClusterConfig
 
 	// resources
-	dcli   *client.Client
-	zeros  []*zero
-	alphas []*alpha
+	dcli   *docker.Client
+	net    cnet
+	zeros  []dnode
+	alphas []dnode
 }
 
 func NewCluster(conf ClusterConfig) (*Cluster, error) {
 	c := &Cluster{conf: conf}
 	if err := c.init(); err != nil {
+		c.Cleanup()
 		return nil, err
 	}
+
 	return c, nil
+}
+
+func (c *Cluster) log(format string, args ...any) {
+	if c == nil || c.conf.logr == nil {
+		return
+	}
+	c.conf.logr.Logf(format, args...)
 }
 
 func (c *Cluster) init() error {
 	var err error
-	c.dcli, err = client.NewEnvClient()
+	c.dcli, err = docker.NewEnvClient()
 	if err != nil {
 		return errors.Wrap(err, "error setting up docker client")
 	}
@@ -69,29 +79,53 @@ func (c *Cluster) init() error {
 		return errors.Wrap(err, "unable to talk to docker daemon")
 	}
 
-	err = c.createNetwork()
+	if err = c.createNetwork(); err != nil {
+		return errors.Wrap(err, "error creating network")
+	}
+
+	for i := 0; i < c.conf.numZeros; i++ {
+		zo := &zero{id: i}
+		zo.cname = fmt.Sprintf(zeroNameFmt, c.conf.prefix, zo.id)
+		cid, err := c.createContainer(zo)
+		if err != nil {
+			return err
+		}
+		zo.crid = cid
+		c.zeros = append(c.zeros, zo)
+	}
+
+	for i := 0; i < c.conf.numAlphas; i++ {
+		aa := &alpha{id: i}
+		aa.cname = fmt.Sprintf(alphaNameFmt, c.conf.prefix, aa.id)
+		cid, err := c.createContainer(aa)
+		if err != nil {
+			return err
+		}
+		aa.crid = cid
+		c.alphas = append(c.alphas, aa)
+	}
+
+	return nil
+}
+
+func (c *Cluster) createNetwork() error {
+	c.net.name = c.conf.prefix + "-net"
+	opts := types.NetworkCreate{
+		Driver: "bridge",
+		IPAM:   &network.IPAM{Driver: "default"},
+	}
+
+	network, err := c.dcli.NetworkCreate(context.Background(), c.net.name, opts)
 	if err != nil {
-		panic(err)
+		return errors.Wrap(err, "error creating network")
 	}
-	for i := 1; i <= c.conf.numZeros; i++ {
-		zo, err := c.createContainer(&zero{id: i})
-		if err != nil {
-			return err
-		}
-		c.zeros = append(c.zeros, &zero{containerId: zo})
-	}
-	for i := 1; i <= c.conf.numAlphas; i++ {
-		aa, err := c.createContainer(&alpha{id: i})
-		if err != nil {
-			return err
-		}
-		c.alphas = append(c.alphas, &alpha{containerId: aa})
-	}
+	c.net.id = network.ID
+
 	return nil
 }
 
 func (c *Cluster) Start() error {
-	c.conf.w.Logf("Starting Cluster")
+	c.log("starting cluster with prefix [%v]", c.conf.prefix)
 	for i := 0; i < c.conf.numZeros; i++ {
 		if err := c.StartZero(i); err != nil {
 			return err
@@ -102,8 +136,10 @@ func (c *Cluster) Start() error {
 			return err
 		}
 	}
-	//check health
-	c.healthCheck()
+
+	if err := c.healthCheck(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -111,55 +147,27 @@ func (c *Cluster) StartZero(id int) error {
 	if id >= c.conf.numZeros {
 		return fmt.Errorf("invalid id of zero: %v", id)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
-	defer cancel()
-	if err := c.dcli.ContainerStart(ctx, c.zeros[id].containerId, types.ContainerStartOptions{}); err != nil {
-		return errors.Wrap(err, "error starting zero container")
-	}
-	return nil
+	return c.startContainer(c.zeros[id])
 }
 
 func (c *Cluster) StartAlpha(id int) error {
 	if id >= c.conf.numAlphas {
 		return fmt.Errorf("invalid id of alpha: %v", id)
 	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
-	defer cancel()
-	if err := c.dcli.ContainerStart(ctx, c.alphas[id].containerId, types.ContainerStartOptions{}); err != nil {
-		return errors.Wrap(err, "error starting zero container")
-	}
-	return nil
+	return c.startContainer(c.alphas[id])
 }
 
-func (c *Cluster) StopZero(id int) error {
-	if id >= c.conf.numZeros {
-		return fmt.Errorf("invalid id of zero: %v", id)
-	}
-
+func (c *Cluster) startContainer(dc dnode) error {
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 	defer cancel()
-	if err := c.dcli.ContainerStop(ctx, c.zeros[id].containerId, &stopTimeout); err != nil {
-		return errors.Wrap(err, "error stopping zero container")
-	}
-	return nil
-}
-
-func (c *Cluster) StopAlpha(id int) error {
-	if id >= c.conf.numAlphas {
-		return fmt.Errorf("invalid id of alpha: %v", id)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
-	defer cancel()
-	if err := c.dcli.ContainerStop(ctx, c.alphas[id].containerId, &stopTimeout); err != nil {
-		return errors.Wrap(err, "error stopping alpha container")
+	if err := c.dcli.ContainerStart(ctx, dc.cid(), types.ContainerStartOptions{}); err != nil {
+		return errors.Wrapf(err, "error starting container [%v]", dc.name())
 	}
 	return nil
 }
 
 func (c *Cluster) Stop() error {
-	c.conf.w.Logf("Stopping Cluster")
+	c.log("stopping cluster with prefix [%v]", c.conf.prefix)
 	for i := range c.alphas {
 		if err := c.StopAlpha(i); err != nil {
 			return err
@@ -173,41 +181,71 @@ func (c *Cluster) Stop() error {
 	return nil
 }
 
-func (c *Cluster) Cleanup() error {
-	c.conf.w.Logf("Cleaning up cluster")
+func (c *Cluster) StopZero(id int) error {
+	if id >= c.conf.numZeros {
+		return fmt.Errorf("invalid id of zero: %v", id)
+	}
+	return c.stopContainer(c.zeros[id])
+}
+
+func (c *Cluster) StopAlpha(id int) error {
+	if id >= c.conf.numAlphas {
+		return fmt.Errorf("invalid id of alpha: %v", id)
+	}
+	return c.stopContainer(c.alphas[id])
+}
+
+func (c *Cluster) stopContainer(dc dnode) error {
+	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+	defer cancel()
+	if err := c.dcli.ContainerStop(ctx, dc.cid(), &stopTimeout); err != nil {
+		return errors.Wrapf(err, "error stopping container [%v]", dc.name())
+	}
+	return nil
+}
+
+func (c *Cluster) Cleanup() {
+	c.log("cleaning up cluster with prefix [%v]", c.conf.prefix)
 
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 	defer cancel()
 
-	var merr error
-
 	ro := types.ContainerRemoveOptions{RemoveVolumes: true, Force: true}
 	for _, aa := range c.alphas {
-		if err := c.dcli.ContainerRemove(ctx, aa.containerId, ro); err != nil {
-			merr = multierr.Combine(merr, err)
+		if err := c.dcli.ContainerRemove(ctx, aa.name(), ro); err != nil {
+			c.log("error removing alpha [%v]: %v", aa.name(), err)
 		}
 	}
 	for _, zo := range c.zeros {
-		if err := c.dcli.ContainerRemove(ctx, zo.containerId, ro); err != nil {
-			merr = multierr.Append(merr, err)
+		if err := c.dcli.ContainerRemove(ctx, zo.name(), ro); err != nil {
+			c.log("error removing zero [%v]: %v", zo.name(), err)
 		}
 	}
-	if err := c.dcli.NetworkRemove(ctx, c.conf.networkId); err != nil {
-		merr = multierr.Append(merr, err)
+	if err := c.dcli.NetworkRemove(ctx, c.net.id); err != nil {
+		c.log("error removing network [%v]: %v", c.net.name, err)
 	}
-	return merr
 }
 
-func (c *Cluster) createContainer(dc dcontainer) (string, error) {
-	name := dc.name(c.conf.prefix)
+func (c *Cluster) createContainer(dc dnode) (string, error) {
+	name := dc.name()
 	ps := dc.ports()
-	cmd := dc.cmd(c.conf)
+	cmd := dc.cmd(c)
 	image := c.dgraphImage()
 	wd := dc.workingDir()
-	mts := dc.mounts(c.conf)
+	mts, err := dc.mounts(c.conf)
+	if err != nil {
+		return "", err
+	}
+
 	cconf := &container.Config{Cmd: cmd, Image: image, WorkingDir: wd, ExposedPorts: ps}
 	hconf := &container.HostConfig{Mounts: mts, PublishAllPorts: true}
-	networkConfig := &network.NetworkingConfig{EndpointsConfig: map[string]*network.EndpointSettings{c.conf.prefix + "-net": {Aliases: []string{name}, NetworkID: c.conf.networkId}}}
+	networkConfig := &network.NetworkingConfig{
+		EndpointsConfig: map[string]*network.EndpointSettings{
+			c.net.name: {
+				Aliases: []string{name}, NetworkID: c.net.id,
+			},
+		},
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 	defer cancel()
@@ -219,157 +257,45 @@ func (c *Cluster) createContainer(dc dcontainer) (string, error) {
 	return resp.ID, nil
 }
 
-func (c *Cluster) UpgradeWithBinary() error {
-	//stop all containers
-	err := c.Stop()
-	if err != nil {
-		return errors.Wrapf(err, "error stopping containers  %v", err)
+func (c *Cluster) healthCheck() error {
+	c.log("checking health of containers")
+	for i := 0; i < c.conf.numZeros; i++ {
+		url, err := c.zeros[i].healthURL(c)
+		if err != nil {
+			return errors.Wrap(err, "error getting health URL")
+		}
+		if err := c.containerHealthCheck(url); err != nil {
+			return err
+		}
 	}
-
-	//setup function make binaries
-
-	//start cluster
-	err = c.Start()
-	if err != nil {
-		return errors.Wrapf(err, "error starting containers  %v", err)
+	for i := 0; i < c.conf.numAlphas; i++ {
+		url, err := c.alphas[i].healthURL(c)
+		if err != nil {
+			return errors.Wrap(err, "error getting health URL")
+		}
+		if err := c.containerHealthCheck(url); err != nil {
+			return err
+		}
 	}
-
 	return nil
 }
 
-func (c *Cluster) healthCheck() {
-	c.conf.w.Logf("Checking health of containers")
-	for i := 0; i < c.conf.numZeros; i++ {
-		c.conf.w.Logf("Checking health of Zeros")
-		containerInfo, err := c.dcli.ContainerInspect(context.Background(), c.zeros[i].containerId)
-		if err != nil {
-			panic(err)
-		}
-		publicPort := c.publicPort(containerInfo, "6080")
-		err = c.bestHealthCheck(publicPort, c.zeros[i].containerName)
-		if err != nil {
-			panic(err)
+func (c *Cluster) containerHealthCheck(url string) error {
+	for i := 0; i < 60; i++ {
+		resp, err := http.Get(url)
+		if err == nil && resp != nil && resp.StatusCode == http.StatusOK {
+			return nil
 		}
 
-	}
-	for i := 0; i < c.conf.numAlphas; i++ {
-		c.conf.w.Logf("Checking health of Alphas")
-		containerInfo, err := c.dcli.ContainerInspect(context.Background(), c.alphas[i].containerId)
-		if err != nil {
-			panic(err)
-		}
-		publicPort := c.publicPort(containerInfo, "8080")
-		err = c.bestHealthCheck(publicPort, c.alphas[i].containerName)
-		if err != nil {
-			panic(err)
-		}
-
-	}
-}
-
-func (c *Cluster) publicPort(containerInfo types.ContainerJSON, privatePort string) string {
-	var publicPort string
-	for port, bindings := range containerInfo.NetworkSettings.Ports {
-		if port.Port() == privatePort {
-			publicPort = bindings[0].HostPort
-		}
-	}
-	return publicPort
-}
-
-func (c *Cluster) bestHealthCheck(publicPort, containerName string) error {
-	checkACL := func(body []byte) error {
-		const acl string = "\"acl\""
-		if bytes.Index(body, []byte(acl)) > 0 {
-			return c.bestEffortTryLogin(containerName, publicPort)
-		}
-		return nil
-	}
-
-	for i := 0; i < 30; i++ {
-		resp, err := http.Get("http://localhost:" + publicPort + "/health")
 		var body []byte
 		if resp != nil && resp.Body != nil {
 			body, _ = io.ReadAll(resp.Body)
 			_ = resp.Body.Close()
 		}
-		if err == nil && resp.StatusCode == http.StatusOK {
-			return checkACL(body)
-		}
-		c.conf.w.Logf("Health for %s failed: %v. Response: %q. Retrying...\n", containerName, err, body)
+
+		c.log("health for [%v] failed, err: [%v], response: [%v]", url, err, body)
 		time.Sleep(time.Second)
 	}
-	return fmt.Errorf("did not pass health check on http://localhost:%v/health", publicPort)
-}
 
-func (c *Cluster) bestEffortTryLogin(containerName, publicPort string) error {
-	for i := 0; i < 30; i++ {
-		err := c.login(publicPort)
-		if err == nil {
-			return nil
-		}
-		if strings.Contains(err.Error(), "Invalid X-Dgraph-AuthToken") {
-			// This is caused by Poor Man's auth. Return.
-			return nil
-		}
-		if strings.Contains(err.Error(), "Client sent an HTTP request to an HTTPS server.") {
-			// This is TLS enabled cluster. We won't be able to login.
-			return nil
-		}
-		c.conf.w.Logf("login failed for %s: %v. Retrying...\n", containerName, err)
-		time.Sleep(time.Second)
-	}
-	c.conf.w.Logf("unable to login to %s\n", containerName)
-	return fmt.Errorf("unable to login to %s", containerName)
-}
-
-func (c *Cluster) login(publicPort string) error {
-	_, err := testutil.HttpLogin(&testutil.LoginParams{
-		Endpoint: "http://localhost:" + publicPort + "/admin",
-		UserID:   "groot",
-		Passwd:   "password",
-	})
-
-	if err != nil {
-		return fmt.Errorf("while connecting: %v", err)
-	}
-	return nil
-}
-
-func (c *Cluster) createNetwork() error {
-	networkOptions := types.NetworkCreate{
-		Driver: "bridge",
-		IPAM: &network.IPAM{
-			Driver: "default",
-		},
-	}
-	// c.dcli.NetworkCreate(context.Background(), "my_network", networkOptions)
-	network, err := c.dcli.NetworkCreate(context.Background(), c.conf.prefix+"-net", networkOptions)
-	if err != nil {
-		return err
-	}
-	c.conf.networkId = network.ID
-	return nil
-}
-
-func (c *Cluster) GetPublicPortOfAlpha(index int, privatePort string) string {
-
-	containerInfo, err := c.dcli.ContainerInspect(context.Background(), c.alphas[index].containerId)
-	if err != nil {
-		panic(err)
-	}
-	publicPort := c.publicPort(containerInfo, privatePort)
-	return publicPort
-
-}
-
-func (c *Cluster) GetPublicPortOfZero(index int, privatePort string) string {
-
-	containerInfo, err := c.dcli.ContainerInspect(context.Background(), c.zeros[index].containerId)
-	if err != nil {
-		panic(err)
-	}
-	publicPort := c.publicPort(containerInfo, privatePort)
-	return publicPort
-
+	return fmt.Errorf("failed health check on [%v]", url)
 }

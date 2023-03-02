@@ -17,43 +17,58 @@
 package dgraphtest
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 
 	"github.com/docker/docker/api/types/mount"
+	docker "github.com/docker/docker/client"
 	"github.com/docker/go-connections/nat"
+	"github.com/pkg/errors"
 )
 
 const (
-	zeroNameFmt  = "%v-1_zero%d_1"
-	alphaNameFmt = "%v-1_alpha%d_1"
-	//remove
+	zeroNameFmt  = "%v_zero%d"
+	alphaNameFmt = "%v_alpha%d"
+
+	zeroGrpcPort   = "5080"
+	zeroHttpPort   = "6080"
+	alphaInterPort = "7080"
+	alphaHttpPort  = "8080"
+	alphaGrpcPort  = "9080"
+
 	alphaWorkingDir = "/data/alpha"
 	zeroWorkingDir  = "/data/zero"
-	zeroGrpcPort    = "5080"
-	zeroHttpPort    = "6080"
-	alphaGrpcPort   = "9080"
-	alphaHttpPort   = "8080"
+
+	aclSecretPath      = "data/hmac-secret"
+	aclSecretMountPath = "/dgraph-acl/hmac-secret"
+	encKeyPath         = "data/enc-key"
+	encKeyMountPath    = "/dgraph-enc/enc-key"
 )
 
-type dcontainer interface {
-	name(string) string
+type dnode interface {
+	name() string
+	cid() string
 	ports() nat.PortSet
-	cmd(ClusterConfig) []string
+	cmd(*Cluster) []string
 	workingDir() string
-	mounts(ClusterConfig) []mount.Mount
+	mounts(ClusterConfig) ([]mount.Mount, error)
+	healthURL(c *Cluster) (string, error)
 }
 
 type zero struct {
-	id            int
-	containerId   string
-	containerName string
+	id    int
+	crid  string
+	cname string
 }
 
-func (z *zero) name(prefix string) string {
-	z.containerName = fmt.Sprintf(zeroNameFmt, prefix, z.id)
-	return z.containerName
+func (z *zero) name() string {
+	return z.cname
+}
+
+func (z *zero) cid() string {
+	return z.crid
 }
 
 func (z *zero) ports() nat.PortSet {
@@ -63,12 +78,12 @@ func (z *zero) ports() nat.PortSet {
 	}
 }
 
-func (z *zero) cmd(conf ClusterConfig) []string {
-	zcmd := []string{"/gobin/dgraph", "zero", fmt.Sprintf("--my=%s:5080", z.containerName), "--bindall", fmt.Sprintf(`--replicas=%v`, conf.replicas),
-		fmt.Sprintf(`--raft=idx=%v`, z.id), "--logtostderr", fmt.Sprintf("-v=%d", conf.verbosity)}
-
-	if z.id > 1 {
-		zcmd = append(zcmd, "--peer="+z.containerName+":5080")
+func (z *zero) cmd(c *Cluster) []string {
+	zcmd := []string{"/gobin/dgraph", "zero", fmt.Sprintf("--my=%s:%v", z.cname, zeroGrpcPort), "--bindall",
+		fmt.Sprintf(`--replicas=%v`, c.conf.replicas), fmt.Sprintf(`--raft=idx=%v`, z.id+1), "--logtostderr",
+		fmt.Sprintf("-v=%d", c.conf.verbosity)}
+	if z.id > 0 {
+		zcmd = append(zcmd, "--peer="+c.zeros[0].name()+":"+zeroGrpcPort)
 	}
 
 	return zcmd
@@ -78,35 +93,37 @@ func (z *zero) workingDir() string {
 	return zeroWorkingDir
 }
 
-func (z *zero) mounts(conf ClusterConfig) []mount.Mount {
-	mounts := []mount.Mount{}
-	if conf.isUpgrade {
-		mounts = append(mounts, mount.Mount{
-			Type:     mount.TypeBind,
-			Source:   "./upgrade/old_version",
-			Target:   "/gobin",
-			ReadOnly: true,
-		})
-	} else {
-		mounts = append(mounts, mount.Mount{
+func (z *zero) mounts(conf ClusterConfig) ([]mount.Mount, error) {
+	return []mount.Mount{
+		{
 			Type:     mount.TypeBind,
 			Source:   os.Getenv("GOPATH") + "/bin",
 			Target:   "/gobin",
 			ReadOnly: true,
-		})
+		},
+	}, nil
+}
+
+func (z *zero) healthURL(c *Cluster) (string, error) {
+	publicPort, err := publicPort(c.dcli, z, zeroHttpPort)
+	if err != nil {
+		return "", err
 	}
-	return mounts
+	return "http://localhost:" + publicPort + "/health", nil
 }
 
 type alpha struct {
-	id            int
-	containerId   string
-	containerName string
+	id    int
+	crid  string
+	cname string
 }
 
-func (a *alpha) name(prefix string) string {
-	a.containerName = fmt.Sprintf(alphaNameFmt, prefix, a.id)
-	return a.containerName
+func (a *alpha) name() string {
+	return a.cname
+}
+
+func (a *alpha) cid() string {
+	return a.crid
 }
 
 func (a *alpha) ports() nat.PortSet {
@@ -116,21 +133,24 @@ func (a *alpha) ports() nat.PortSet {
 	}
 }
 
-func (a *alpha) cmd(conf ClusterConfig) []string {
-	acmd := []string{"/gobin/dgraph", "alpha", fmt.Sprintf("--my=%s:7080", a.containerName), "--bindall", "--logtostderr", fmt.Sprintf("-v=%d", conf.verbosity), `--security=whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16`}
+func (a *alpha) cmd(c *Cluster) []string {
+	acmd := []string{"/gobin/dgraph", "alpha", fmt.Sprintf("--my=%s:%v", a.cname, alphaInterPort),
+		"--bindall", "--logtostderr", fmt.Sprintf("-v=%d", c.conf.verbosity),
+		`--security=whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16`}
 
-	zeroAddrs, delimiter := "--zero=", ""
-	if conf.acl {
-		acmd = append(acmd, `--acl=secret-file=/dgraph-acl/hmac-secret ; access-ttl=20s`)
+	if c.conf.acl {
+		acmd = append(acmd, fmt.Sprintf(`--acl=secret-file=%v; access-ttl=20s`, aclSecretMountPath))
 	}
-	if conf.encryption {
-		acmd = append(acmd, `--encryption=key-file=/dgraph-enc/enc-key`)
+	if c.conf.encryption {
+		acmd = append(acmd, fmt.Sprintf(`--encryption=key-file=%v`, encKeyMountPath))
 	}
-	for i := 1; i <= conf.numZeros; i++ {
-		zeroAddrs += fmt.Sprintf("%s%v-1_zero%d_1:5080", delimiter, conf.prefix, i)
+
+	zeroAddrsArg, delimiter := "--zero=", ""
+	for _, zo := range c.zeros {
+		zeroAddrsArg += fmt.Sprintf("%s%v:%v", delimiter, zo.name(), zeroGrpcPort)
 		delimiter = ","
 	}
-	acmd = append(acmd, zeroAddrs)
+	acmd = append(acmd, zeroAddrsArg)
 
 	return acmd
 }
@@ -139,47 +159,67 @@ func (a *alpha) workingDir() string {
 	return alphaWorkingDir
 }
 
-func (a *alpha) mounts(conf ClusterConfig) []mount.Mount {
-	mounts := []mount.Mount{}
-	if conf.isUpgrade {
-		mounts = append(mounts, mount.Mount{
-			Type:     mount.TypeBind,
-			Source:   "./upgrade/old_version",
-			Target:   "/gobin",
-			ReadOnly: true,
-		})
-	} else {
-		mounts = append(mounts, mount.Mount{
+func (a *alpha) mounts(conf ClusterConfig) ([]mount.Mount, error) {
+	mounts := []mount.Mount{
+		{
 			Type:     mount.TypeBind,
 			Source:   os.Getenv("GOPATH") + "/bin",
 			Target:   "/gobin",
 			ReadOnly: true,
-		})
+		},
 	}
 
 	if conf.acl {
-		absPath, err := filepath.Abs("data/hmac-secret")
+		absPath, err := filepath.Abs(aclSecretPath)
 		if err != nil {
-			fmt.Print("error while getting abs path")
+			return nil, errors.Wrap(err, "error finding absolute path for acl secret path")
 		}
 		mounts = append(mounts, mount.Mount{
 			Type:     mount.TypeBind,
 			Source:   absPath,
-			Target:   "/dgraph-acl/hmac-secret",
+			Target:   aclSecretMountPath,
 			ReadOnly: true,
 		})
 	}
+
 	if conf.encryption {
-		absPath, err := filepath.Abs("../dgraphtest/data/enc-key")
+		absPath, err := filepath.Abs(encKeyPath)
 		if err != nil {
-			fmt.Print("error while getting abs path")
+			return nil, errors.Wrap(err, "error finding absolute path for enc key path")
 		}
 		mounts = append(mounts, mount.Mount{
 			Type:     mount.TypeBind,
 			Source:   absPath,
-			Target:   "/dgraph-enc/enc-key",
+			Target:   encKeyMountPath,
 			ReadOnly: true,
 		})
 	}
-	return mounts
+
+	return mounts, nil
+}
+
+func (a *alpha) healthURL(c *Cluster) (string, error) {
+	publicPort, err := publicPort(c.dcli, a, alphaHttpPort)
+	if err != nil {
+		return "", err
+	}
+	return "http://localhost:" + publicPort + "/health", nil
+}
+
+func publicPort(dcli *docker.Client, dc dnode, privatePort string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+	defer cancel()
+
+	info, err := dcli.ContainerInspect(ctx, dc.cid())
+	if err != nil {
+		return "", errors.Wrap(err, "error inspecting container")
+	}
+
+	for port, bindings := range info.NetworkSettings.Ports {
+		if port.Port() == privatePort {
+			return bindings[0].HostPort, nil
+		}
+	}
+
+	return "", fmt.Errorf("no mapping found for private port [%v] for container [%v]", privatePort, dc.name())
 }
