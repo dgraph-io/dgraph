@@ -2,10 +2,6 @@ name: cd-dgraph
 on:
   workflow_dispatch:
     inputs:
-      latest:
-        type: boolean
-        default: false
-        description: release latest tag docker-images on dockerhub
       releasetag:
         description: releasetag
         required: true
