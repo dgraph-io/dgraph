@@ -102,6 +102,7 @@ func run() error {
 	x.Check(err)
 
 	stat, err := os.Stat(decryptCmd.Conf.GetString("in"))
+	fmt.Println("is this a regular file?: ", stat.Mode().IsRegular())
 	x.Check(err)
 	if stat.Size() == 0 {
 		glog.Info("audit file is empty")
@@ -174,6 +175,8 @@ func run() error {
 		iv, iterator = iv2, iterator2
 	}
 
+	var count int
+
 	// encrypted writes each have the form below
 	// IV generated for each write
 	// #################################################################
@@ -181,7 +184,9 @@ func run() error {
 	// #################################################################
 	decryptBody := func() {
 		for {
+			count++
 			// if its the end of data. finish decrypting
+			fmt.Println("size: ", stat.Size())
 			if iterator >= stat.Size() {
 				break
 			}
@@ -191,6 +196,7 @@ func run() error {
 			x.Check2(file.ReadAt(length, iterator))
 			iterator = iterator + 4
 
+			fmt.Println("count: ", count)
 			content := make([]byte, binary.BigEndian.Uint32(length))
 			x.Check2(file.ReadAt(content, iterator))
 			iterator = iterator + int64(binary.BigEndian.Uint32(length))
