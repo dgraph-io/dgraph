@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"math"
 	"net"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -148,12 +149,12 @@ func GetGQLSchema(namespace uint64) (uid, graphQLSchema string, err error) {
 	resp, err := (&Server{}).QueryNoGrpc(ctx,
 		&api.Request{
 			Query: `
-			query {
-				ExistingGQLSchema(func: has(dgraph.graphql.schema)) {
-					uid
-					dgraph.graphql.schema
-				  }
-				}`})
+			 query {
+				 ExistingGQLSchema(func: has(dgraph.graphql.schema)) {
+					 uid
+					 dgraph.graphql.schema
+				   }
+				 }`})
 	if err != nil {
 		return "", "", err
 	}
@@ -546,6 +547,19 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 func annotateNamespace(span *otrace.Span, ns uint64) {
 	span.AddAttributes(otrace.Int64Attribute("ns", int64(ns)))
 }
+func validateComment(span *otrace.Span, Query string, q bool) {
+	// grab with regex the comment from the query. That starts with # and ends with dot
+	re := regexp.MustCompile(`(?m)#tag:(\w+)`)
+	querytag := re.FindStringSubmatch(Query)
+	if len(querytag) > 1 {
+		switch {
+		case !q:
+			span.AddAttributes(otrace.StringAttribute("mutation.tag", querytag[1]))
+		case q:
+			span.AddAttributes(otrace.StringAttribute("query.tag", querytag[1]))
+		}
+	}
+}
 
 func annotateStartTs(span *otrace.Span, ts uint64) {
 	span.AddAttributes(otrace.Int64Attribute("startTs", int64(ts)))
@@ -760,7 +774,7 @@ func buildUpsertQuery(qc *queryContext) string {
 			//      * be empty if the condition is true
 			//      * have 1 UID (the 0 UID) if the condition is false
 			upsertQuery += qc.condVars[i] + ` as var(func: uid(0)) ` + cond + `
-			 `
+			  `
 		}
 	}
 	upsertQuery += `}`
@@ -1292,6 +1306,18 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (resp *api.Response,
 	}
 	if isMutation {
 		ostats.Record(ctx, x.NumMutations.M(1))
+	}
+
+	if isQuery || isMutation {
+		m := req.req.Query
+		if !isQuery {
+			m = req.req.String()
+		}
+		print(strings.Contains(m, "#"))
+		if strings.Contains(m, "#") {
+			q := isQuery
+			validateComment(span, m, q)
+		}
 	}
 
 	if req.doAuth == NeedAuthorize && x.IsGalaxyOperation(ctx) {
