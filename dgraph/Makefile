@@ -56,6 +56,7 @@ endif
 ifneq ($(strip $(BUILD_DEBUG)),)
 	BUILD_FLAGS += -gcflags="all=-N -l"
 endif
+BUILD_FLAGS += -gcflags="all=-N -l"
 
 # Build with race detector enabled.
 ifneq ($(strip $(BUILD_RACE)),)
