@@ -548,7 +548,7 @@ func annotateNamespace(span *otrace.Span, ns uint64) {
 	span.AddAttributes(otrace.Int64Attribute("ns", int64(ns)))
 }
 func validateComment(span *otrace.Span, Query string, q bool) {
-	// grab with regex the comment from the query. That starts with # and ends with dot
+	// grab with regex the comment from the query.
 	re := regexp.MustCompile(`(?m)#tag:(\w+)`)
 	querytag := re.FindStringSubmatch(Query)
 	if len(querytag) > 1 {
@@ -1313,7 +1313,6 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (resp *api.Response,
 		if !isQuery {
 			m = req.req.String()
 		}
-		print(strings.Contains(m, "#"))
 		if strings.Contains(m, "#") {
 			q := isQuery
 			validateComment(span, m, q)
