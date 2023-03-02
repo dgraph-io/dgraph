@@ -198,7 +198,13 @@ func run() error {
 
 			fmt.Println("count: ", count)
 			content := make([]byte, binary.BigEndian.Uint32(length))
-			x.Check2(file.ReadAt(content, iterator))
+			fmt.Println("===============================>", iterator, "===========>", binary.BigEndian.Uint32(length))
+			n, err := file.ReadAt(content, iterator)
+			if err != nil {
+				fmt.Println("=============++++>", n)
+				fmt.Println("size: ", stat.Size())
+				panic(err)
+			}
 			iterator = iterator + int64(binary.BigEndian.Uint32(length))
 
 			stream := cipher.NewCTR(block, iv)
