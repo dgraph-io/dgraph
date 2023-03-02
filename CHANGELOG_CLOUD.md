@@ -1,0 +1,688 @@
+# Changelog
+All notable changes to this project for *Dgraph's cloud releases* will be documented in this file.
+The v23.0.0 release combines the open source and cloud releases and we won't have any
+separate cloud releases going forward.
+
+The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
+
+
+## [v23.0.0-beta1] - 2021-10-30
+[v23.0.0-beta1]: https://github.com/dgraph-io/dgraph/compare/v21.03.0-96-g65fff46c4-slash...v23.0.0-beta1
+
+### Added
+
+- **Core Dgraph**
+  - chore(deps): update prometheus dependency, adds new metrics (https://github.com/dgraph-io/dgraph/pull/8655)
+  - chore(deps): bump badger up to v4 (https://github.com/dgraph-io/dgraph/pull/8709)
+  - Add asynchronous task API (https://github.com/dgraph-io/dgraph/pull/7781)
+  - make exports synchronous again (https://github.com/dgraph-io/dgraph/pull/7877)
+
+### Fixed
+
+- **GraphQL**
+  - fix(GraphQL): Make mutation rewriting tests more robust (https://github.com/dgraph-io/dgraph/pull/8449)
+  - fix(GraphQL): add validation of null values with correct order of graphql rule validation (https://github.com/dgraph-io/dgraph/pull/8333)
+  - fix(GraphQL): fix auth query rewriting with ID filter (https://github.com/dgraph-io/dgraph/pull/8157)
+  - fix(GraphQL): handle extend keyword for Queries and Mutations (https://github.com/dgraph-io/dgraph/pull/7923)
+  - fix(Graphql): Fix error message of lambdaOnMutate directive  (https://github.com/dgraph-io/dgraph/pull/7754)
+
+- **Core Dgraph**
+  - fix(core): fixed infinite loop in CommitToDisk (https://github.com/dgraph-io/dgraph/pull/8614)
+  - fix(zero): fix waiting for random time while rate limiting (https://github.com/dgraph-io/dgraph/pull/8656)
+  - chore(deps): upgrade badger (https://github.com/dgraph-io/dgraph/pull/8654, https://github.com/dgraph-io/dgraph/pull/8658)
+  - fix(backup): create directory before writing backup (https://github.com/dgraph-io/dgraph/pull/8638)
+  - opt(schema): load schema and types using Stream framework  (https://github.com/dgraph-io/dgraph/pull/8562)
+  - fix(restore): consider the banned namespaces while bumping (https://github.com/dgraph-io/dgraph/pull/8559)
+  - Fix(badger): Upgrade badger version to fix  manifest corruption (https://github.com/dgraph-io/dgraph/pull/8365)
+  - fix(pagination): Fix after for regexp, match functions (https://github.com/dgraph-io/dgraph/pull/8471)
+  - fix(admin): make config changes to pass through gog middlewares (https://github.com/dgraph-io/dgraph/pull/8442)
+  - fix(DQL): optimize query for has function with offset (https://github.com/dgraph-io/dgraph/pull/8431)
+  - fix(query): Prevent multiple entries for same predicate in mutations (https://github.com/dgraph-io/dgraph/pull/8332)
+  - fix(rollups): Fix splits in roll-up (https://github.com/dgraph-io/dgraph/pull/8297)
+  - fix(backup): Fix full backup request (https://github.com/dgraph-io/dgraph/pull/7934)
+  - fix(Chunker): don't delete node with empty facet in mutation (https://github.com/dgraph-io/dgraph/pull/7745)
+  - fix(bulk): throw the error instead of crashing (https://github.com/dgraph-io/dgraph/pull/7749)
+  - fix(raftwal): take snapshot after restore (https://github.com/dgraph-io/dgraph/pull/7750)
+  - fix(drop): attach galaxy namespace to drop attr done on 20.11 backup (https://github.com/dgraph-io/dgraph/pull/7827)
+  - fix(ee): GetKeys should return an error (https://github.com/dgraph-io/dgraph/pull/7797)
+  - fix(metrics): Expose dgraph_num_backups_failed_total metric view. (https://github.com/dgraph-io/dgraph/pull/7904)
+
+- **Security**
+  - chore(deps): bump certifi from 2020.4.5.1 to 2022.12.7 in /contrib/config/marketplace/aws/tests (https://github.com/dgraph-io/dgraph/pull/8496)
+  - chore(deps): bump github.com/docker/distribution from 2.7.1+incompatible to 2.8.0+incompatible (https://github.com/dgraph-io/dgraph/pull/8575)
+  - chore(deps): bump werkzeug from 0.16.1 to 2.2.3 in /contrib/embargo (https://github.com/dgraph-io/dgraph/pull/8676)
+  - fix(sec): upgrade networkx to  (https://github.com/dgraph-io/dgraph/pull/8613)
+  - fix(sec): CVE-2022-41721 (https://github.com/dgraph-io/dgraph/pull/8633)
+  - fix(sec): CVE & OS Patching (https://github.com/dgraph-io/dgraph/pull/8634)
+  - <details>
+      <summary>CVE Fixes (35 total)</summary>
+
+      #### CVE Fixes (35 total)
+      - CVE-2013-4235
+      - CVE-2016-20013
+      - CVE-2016-2781
+      - CVE-2017-11164
+      - CVE-2018-16886
+      - CVE-2019-0205
+      - CVE-2019-0210
+      - CVE-2019-11254
+      - CVE-2019-16167
+      - CVE-2020-29652
+      - CVE-2021-31525
+      - CVE-2021-33194
+      - CVE-2021-36222
+      - CVE-2021-37750
+      - CVE-2021-38561
+      - CVE-2021-39537
+      - CVE-2021-43565
+      - CVE-2021-44716
+      - CVE-2021-44758
+      - CVE-2022-21698
+      - CVE-2022-27191
+      - CVE-2022-27664
+      - CVE-2022-29458
+      - CVE-2022-29526
+      - CVE-2022-3219
+      - CVE-2022-32221
+      - CVE-2022-3437
+      - CVE-2022-35737
+      - CVE-2022-3715
+      - CVE-2022-3821
+      - CVE-2022-39377
+      - CVE-2022-41916
+      - CVE-2022-42800
+      - CVE-2022-42898
+      - CVE-2022-44640
+    </details>
+  - <details>
+      <summary>GHSA Fixes (2 total)</summary>
+
+      #### GHSE Fixes (2 total)
+      - GHSA-69ch-w2m2-3vjp
+      - GHSA-m332-53r6-2w93
+    </details>
+  - <details>
+    <summary>CVE Fixes (417 total)</summary>
+
+    #### CVE Fixes (417 total)
+    - CVE-2019-0210
+    - CVE-2019-0205
+    - CVE-2021-43565
+    - CVE-2022-27664
+    - CVE-2021-38561
+    - CVE-2021-44716
+    - CVE-2021-33194
+    - CVE-2022-27191
+    - CVE-2020-29652
+    - CVE-2018-16886
+    - CVE-2022-21698
+    - CVE-2022-37434
+    - CVE-2020-16156
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2022-37434
+    - CVE-2020-16156
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2022-37434
+    - CVE-2020-16156
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2022-3116
+    - CVE-2022-37434
+    - CVE-2020-16156
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2022-37434
+    - CVE-2020-16156
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2022-37434
+    - CVE-2020-16156
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2022-37434
+    - CVE-2020-16156
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2022-37434
+    - CVE-2020-16156
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2022-37434
+    - CVE-2020-16156
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2022-37434
+    - CVE-2020-16156
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2022-37434
+    - CVE-2020-16156
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2022-37434
+    - CVE-2020-16156
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2021-37750
+    - CVE-2021-36222
+    - CVE-2020-35525
+    - CVE-2020-35527
+    - CVE-2021-20223
+    - CVE-2020-9794
+    - CVE-2022-29526
+    - CVE-2021-31525
+    - CVE-2019-11254
+    - CVE-2022-3219
+    - CVE-2019-16167
+    - CVE-2013-4235
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2013-4235
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2017-11164
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2021-43618
+    - CVE-2016-20013
+    - CVE-2016-2781
+    - CVE-2022-1587
+    - CVE-2022-1586
+    - CVE-2019-16167
+    - CVE-2013-4235
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2013-4235
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2017-11164
+    - CVE-2022-1587
+    - CVE-2022-1586
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2021-43618
+    - CVE-2016-20013
+    - CVE-2022-3219
+    - CVE-2016-2781
+    - CVE-2022-1587
+    - CVE-2022-1586
+    - CVE-2019-16167
+    - CVE-2013-4235
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2013-4235
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2017-11164
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2021-43618
+    - CVE-2016-20013
+    - CVE-2022-3219
+    - CVE-2016-2781
+    - CVE-2021-3671
+    - CVE-2022-3219
+    - CVE-2019-16167
+    - CVE-2013-4235
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2013-4235
+    - CVE-2021-3671
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2021-3671
+    - CVE-2017-11164
+    - CVE-2022-1587
+    - CVE-2022-1586
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2021-3671
+    - CVE-2021-43618
+    - CVE-2016-20013
+    - CVE-2021-3671
+    - CVE-2016-2781
+    - CVE-2021-3671
+    - CVE-2022-3219
+    - CVE-2019-16167
+    - CVE-2013-4235
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2013-4235
+    - CVE-2021-3671
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2021-3671
+    - CVE-2017-11164
+    - CVE-2022-1587
+    - CVE-2022-1586
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2021-3671
+    - CVE-2021-43618
+    - CVE-2016-20013
+    - CVE-2021-3671
+    - CVE-2016-2781
+    - CVE-2019-16167
+    - CVE-2013-4235
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2013-4235
+    - CVE-2021-3671
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2021-3671
+    - CVE-2017-11164
+    - CVE-2022-1587
+    - CVE-2022-1586
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2021-3671
+    - CVE-2021-43618
+    - CVE-2016-20013
+    - CVE-2021-3671
+    - CVE-2022-3219
+    - CVE-2016-2781
+    - CVE-2019-16167
+    - CVE-2013-4235
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2013-4235
+    - CVE-2021-3671
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2021-3671
+    - CVE-2017-11164
+    - CVE-2022-1587
+    - CVE-2022-1586
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2021-3671
+    - CVE-2021-43618
+    - CVE-2016-20013
+    - CVE-2021-3671
+    - CVE-2016-2781
+    - CVE-2019-16167
+    - CVE-2013-4235
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2013-4235
+    - CVE-2021-3671
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2021-3671
+    - CVE-2017-11164
+    - CVE-2022-1587
+    - CVE-2022-1586
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2021-3671
+    - CVE-2021-43618
+    - CVE-2016-20013
+    - CVE-2021-3671
+    - CVE-2016-2781
+    - CVE-2019-16167
+    - CVE-2013-4235
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2013-4235
+    - CVE-2021-3671
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2021-3671
+    - CVE-2017-11164
+    - CVE-2022-1587
+    - CVE-2022-1586
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2021-3671
+    - CVE-2021-43618
+    - CVE-2016-20013
+    - CVE-2021-3671
+    - CVE-2016-2781
+    - CVE-2019-16167
+    - CVE-2013-4235
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2013-4235
+    - CVE-2021-3671
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2021-3671
+    - CVE-2017-11164
+    - CVE-2022-1587
+    - CVE-2022-1586
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2021-3671
+    - CVE-2021-43618
+    - CVE-2016-20013
+    - CVE-2021-3671
+    - CVE-2016-2781
+    - CVE-2019-16167
+    - CVE-2013-4235
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2013-4235
+    - CVE-2021-3671
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2021-3671
+    - CVE-2017-11164
+    - CVE-2022-1587
+    - CVE-2022-1586
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2021-3671
+    - CVE-2021-43618
+    - CVE-2016-20013
+    - CVE-2021-3671
+    - CVE-2016-2781
+    - CVE-2019-16167
+    - CVE-2013-4235
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2013-4235
+    - CVE-2021-3671
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2021-3671
+    - CVE-2017-11164
+    - CVE-2022-1587
+    - CVE-2022-1586
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2022-29458
+    - CVE-2021-39537
+    - CVE-2021-3671
+    - CVE-2021-43618
+    - CVE-2016-20013
+    - CVE-2021-3671
+    - CVE-2016-2781
+    - CVE-2021-3671
+    - CVE-2022-1587
+    - CVE-2022-1586
+    - CVE-2021-3671
+    - CVE-2020-9991
+    - CVE-2020-9849
+    </details>
+  - <details>
+    <summary>GHSA Fixes (5 total)</summary>
+
+    #### GHSA Fixes (5 total)
+    - GHSA-jq7p-26h5-w78r
+    - GHSA-8c26-wmh5-6g9v
+    - GHSA-h6xx-pmxh-3wgp
+    - GHSA-cg3q-j54f-5p7p
+    - GHSA-wxc4-f4m6-wwqv
+    </details>
+  - fix(sec): fixing HIGH CVEs (https://github.com/dgraph-io/dgraph/pull/8289)
+  - fix(sec): CVE High Vulnerability (https://github.com/dgraph-io/dgraph/pull/8277)
+  - fix(sec): Fixing CVE-2021-31525 (https://github.com/dgraph-io/dgraph/pull/8274)
+  - fix(sec): CVE-2019-11254 (https://github.com/dgraph-io/dgraph/pull/8270)
+
+- **CD**
+  - fix(build): update dockerfile to use cache busting and reduce image size (https://github.com/dgraph-io/dgraph/pull/8652)
+  - chore(deps): update min go build version (https://github.com/dgraph-io/dgraph/pull/8423)
+
+- **Test**
+  - fix(test): avoid host volume mount in minio container (https://github.com/dgraph-io/dgraph/pull/8569)
+  - chore(test): add tests for lex/iri.go,chunker/chunk.go (https://github.com/dgraph-io/dgraph/pull/8515)
+  - chore(test): add Backup/Restore test for NFS (https://github.com/dgraph-io/dgraph/pull/8551)
+  - chore(test): add test that after snapshot is applied, GraphQL schema is refreshed (https://github.com/dgraph-io/dgraph/pull/8619)
+  - chore(test): upgrade graphql tests to use go 1.19 (https://github.com/dgraph-io/dgraph/pull/8662)
+  - chore(test): add automated test to test multitenant --limit flag (https://github.com/dgraph-io/dgraph/pull/8646)
+  - chore(test): add restore test for more than 127 namespaces (https://github.com/dgraph-io/dgraph/pull/8643)
+  - fix(test): fix the corner case for raft entries test (https://github.com/dgraph-io/dgraph/pull/8617)
+
+### Changed
+
+- **Core Dgraph**
+  - *REVERTED* fix(rollups): Write rolled-up keys at ts+1 (https://github.com/dgraph-io/dgraph/pull/7957)
+  - *REVERTED* add update_manifest tool (https://github.com/dgraph-io/dgraph/pull/7815)
+  - *REVERTED* opt(dropPrefix): allow logical drop for deleting predicates and indexing (https://github.com/dgraph-io/dgraph/pull/7779)
+  - fix(query): handle bad timezone correctly (https://github.com/dgraph-io/dgraph/pull/8657)
+  - chore(ludicroud): remove ludicrous mode from the code (https://github.com/dgraph-io/dgraph/pull/8612)
+  - fix(mutation): validate mutation before applying it (https://github.com/dgraph-io/dgraph/pull/8623)
+
+- **CI Test Infrastructure**
+  - fix(ci): unpin curl (https://github.com/dgraph-io/dgraph/pull/8577)
+  - fix(ci): adjust cron schedules (https://github.com/dgraph-io/dgraph/pull/8592)
+  - chore(ci): Capture coverage from bulk load and LDBC tests (https://github.com/dgraph-io/dgraph/pull/8478)
+  - chore(linter): enable gosec linter (https://github.com/dgraph-io/dgraph/pull/8678)
+  - chore: apply go vet improvements (https://github.com/dgraph-io/dgraph/pull/8620)
+  - chore(linter): fix some of the warnings from gas linter (https://github.com/dgraph-io/dgraph/pull/8664)
+  - chore(linter): fix golangci config and some issues in tests (https://github.com/dgraph-io/dgraph/pull/8669)
+  - fix(linter): address gosimple linter reports & errors (https://github.com/dgraph-io/dgraph/pull/8628)
+  - Added more unit tests (https://github.com/dgraph-io/dgraph/pull/8470 https://github.com/dgraph-io/dgraph/pull/8489 https://github.com/dgraph-io/dgraph/pull/8479 https://github.com/dgraph-io/dgraph/pull/8488 https://github.com/dgraph-io/dgraph/pull/8433)
+  - [Coveralls](https://coveralls.io/github/dgraph-io/dgraph?branch=main) on CI is enhanced to measure code coverage for integration tests (https://github.com/dgraph-io/dgraph/pull/8494)
+  - [**LDBC Benchmarking**](https://ldbcouncil.org) in enabled on [CI](https://github.com/dgraph-io/dgraph/actions/workflows/ci-dgraph-ldbc-tests.yml)
+  - Configured to run with [Github Actions](https://github.com/dgraph-io/dgraph/tree/main/.github/workflows)
+  - Stability Improvements to test harness
+  - Enabled [Unit/Integration Tests](https://github.com/dgraph-io/dgraph/actions/workflows/ci-dgraph-tests.yml)
+  - Enabled [Load Tests](https://github.com/dgraph-io/dgraph/actions/workflows/ci-dgraph-load-tests.yml)
+  - Enabled [Linters](https://github.com/dgraph-io/dgraph/actions/workflows/ci-golang-lint.yml)
+  - Enabled [Code Coverage](https://coveralls.io/github/dgraph-io/dgraph?branch=main)
+
+- **CI Security**
+  - Configured to run with [Github Actions](https://github.com/dgraph-io/dgraph/blob/main/.github/workflows/ci-aqua-security-trivy-tests.yml)
+  - Enabled [Trivy Scans](https://github.com/dgraph-io/dgraph/actions/workflows/ci-aqua-security-trivy-tests.yml)
+  - Enabled dependabot scans
+  - Configured to run with [Github Actions](https://github.com/dgraph-io/dgraph/blob/main/.github/workflows/ci-aqua-security-trivy-tests.yml)
+
+- **CD Release Pipeline**
+  - Enhanced our [CD Pipeline](https://github.com/dgraph-io/dgraph/actions/workflows/cd-dgraph.yml) to support ARM64 binaries and docker-images (https://github.com/dgraph-io/dgraph/pull/8520)
+  - Enhanced [dgraph-lambda](https://github.com/dgraph-io/dgraph-lambda) to support arm64 (https://github.com/dgraph-io/dgraph-lambda/pull/39 https://github.com/dgraph-io/dgraph-lambda/pull/38 https://github.com/dgraph-io/dgraph-lambda/pull/37)
+  - Enhanced [badger](https://github.com/dgraph-io/badger) to support arm64 (https://github.com/dgraph-io/badger/pull/1838)
+  - Badger Binary fetch steps added to the release CD pipeline (https://github.com/dgraph-io/dgraph/pull/8425)
+  - Corresponding Badger artifacts will be fetched & uploaded from v22.0.1 onwards
+  - Automated [Release Pipeline](https://github.com/dgraph-io/dgraph/blob/main/.github/workflows/cd-dgraph.yml) to facilitate building of dgraph-binary & corresponding docker-images. The built artifacts are published to repositories through the same pipeline.
+
+
+## [v21.03.0-96-g65fff46c4-slash] - 2023-03-02
+[v21.03.0-96-g65fff46c4-slash]: https://github.com/dgraph-io/dgraph/compare/v21.03.0-92-g0c9f60156...v21.03.0-96-g65fff46c4-slash
+
+  - fix(ACL): Prevents permissions overrride and merges acl cache to persist permissions across different namespaces (https://github.com/dgraph-io/dgraph/pull/8506)
+  - fix(chore): Add more logging for cloud instances (https://github.com/dgraph-io/dgraph/pull/8507)
+
+
+## [v21.03.0-92-g0c9f60156] - 2021-10-30
+[v21.03.0-92-g0c9f60156]: https://github.com/dgraph-io/dgraph/compare/v21.03.0...v21.03.0-92-g0c9f60156
+
+### Added
+
+- **GraphQL**
+  - fix(GraphQL): pass on HTTP request headers for subscriptions (https://github.com/dgraph-io/dgraph/pull/8574)
+
+- **Core Dgraph**
+  - feat(acl): allow access to all the predicates using wildcard. (https://github.com/dgraph-io/dgraph/pull/7993)
+  - feat(cdc): add superflag `tls` to enable TLS without CA or certs (https://github.com/dgraph-io/dgraph/pull/8564)
+  - feat(Multi-tenancy): Add namespaces field to state. (https://github.com/dgraph-io/dgraph/pull/7936)
+  - chore(debug): add `only-summary` flag in `dgraph debug` to show LSM tree and namespace size (https://github.com/dgraph-io/dgraph/pull/8516)
+  - feat(schema): do schema versioning and make backup non-blocking (https://github.com/dgraph-io/dgraph/pull/7873)
+  - add update_manifest tool (https://github.com/dgraph-io/dgraph/pull/7815)
+  - feat(multitenancy): namespace aware drop data (https://github.com/dgraph-io/dgraph/pull/8511)
+  - feat(cloud): add `shared-instance` flag in limit superflag in alpha (https://github.com/dgraph-io/dgraph/pull/8625)
+  - feat(cdc): Add support for SCRAM SASL mechanism (https://github.com/dgraph-io/dgraph/pull/7767)
+
+### Fixed
+
+- **GraphQL**
+  - fix(GraphQL): nested Auth Rules not working properly (https://github.com/dgraph-io/dgraph/pull/8571)
+  - fix(GraphQL): optimize eq filter queries (https://github.com/dgraph-io/dgraph/pull/7895)
+  - chore(graphql): fixing query timeouts for graphql queries too (https://github.com/dgraph-io/dgraph/pull/7796)
+  - fix(GraphQL): fix @cascade with Pagination for @auth queries (https://github.com/dgraph-io/dgraph/pull/7695)
+  - Fix(GraphQL): Fix GraphQL encoding in case of empty list (https://github.com/dgraph-io/dgraph/pull/7730)
+  - Fix(GraphQL): Add filter in DQL query in case of reverse predicate (https://github.com/dgraph-io/dgraph/pull/7733)
+
+- **Core Dgraph**
+  - fix(groot): do not upsert groot for all namespaces on restart (https://github.com/dgraph-io/dgraph/pull/8561)
+  - fix(zero): fix update membership to make bulk tablet proposal instead of multiple small (https://github.com/dgraph-io/dgraph/pull/8573)
+  - fix(fragment): merge the nested fragments fields- fix(vault): Hide ACL flags when not required (https://github.com/dgraph-io/dgraph/pull/7701) (https://github.com/dgraph-io/dgraph/pull/8435)
+  - fix(sort): Only filter out nodes with positive offsets (https://github.com/dgraph-io/dgraph/pull/8441)
+  - opt(schema): optimize populateSchema() (https://github.com/dgraph-io/dgraph/pull/8565)
+  - fix(probe): do not contend for lock in lazy load (https://github.com/dgraph-io/dgraph/pull/8566)
+  - fix(audit): fixing audit logs for websocket connections (https://github.com/dgraph-io/dgraph/pull/8627)
+  - chore(logs): add logs to track dropped proposals (https://github.com/dgraph-io/dgraph/pull/8568)
+  - fix(proposals): incremental proposal key for zero proposals (https://github.com/dgraph-io/dgraph/pull/8567)
+  - fix(live): quote the xid when doing upsert (https://github.com/dgraph-io/dgraph/pull/7999)
+  - fix(acl): filter out the results based on type (https://github.com/dgraph-io/dgraph/pull/7981)
+  - fix(export): Write temporary files for export to the t directory. (https://github.com/dgraph-io/dgraph/pull/7998)
+  - fix(pool): use write lock when getting health info (https://github.com/dgraph-io/dgraph/pull/7967)
+  - fix(query): Do not execute filters if there are no source uids(https://github.com/dgraph-io/dgraph/pull/8452)
+  - fix(conn): JoinCluster loop should use latest conn (https://github.com/dgraph-io/dgraph/pull/7952)
+  - fix(acl): The Acl cache should be updated on restart and restore. (https://github.com/dgraph-io/dgraph/pull/7964)
+  - fix(restore): set kv version to restoreTs for all keys (https://github.com/dgraph-io/dgraph/pull/8563)
+  - fix(Raft): Reconnect via a redial in case of disconnection. (https://github.com/dgraph-io/dgraph/pull/7921)
+  - fix(Raft): Detect network partition when streaming (https://github.com/dgraph-io/dgraph/pull/7908)
+  - fix(debug): check length of wal entry before parsing (https://github.com/dgraph-io/dgraph/pull/8560)
+  - fix(DQL): revert changes related to cascade pagination with sort (https://github.com/dgraph-io/dgraph/pull/7888)
+  - fix(restore): append galaxy namespace to type name (https://github.com/dgraph-io/dgraph/pull/7881)
+  - fix(schema-update): Start opIndexing only when index creation is required. (https://github.com/dgraph-io/dgraph/pull/7847)
+  - fix(admin): remove exportedFiles field (https://github.com/dgraph-io/dgraph/pull/7836)
+  - fix(auth): preserve the status code while returning error (https://github.com/dgraph-io/dgraph/pull/7834)
+  - fix: Prevent proposal from being dropped accidentally (https://github.com/dgraph-io/dgraph/pull/7811)
+  - bug fix to permit audit streaming to stdout write (https://github.com/dgraph-io/dgraph/pull/7804)
+  - fix(lease): prevent ID lease overflow (https://github.com/dgraph-io/dgraph/pull/7802)
+  - fix(lease): don't do rate limiting when not limit is not specified (https://github.com/dgraph-io/dgraph/pull/7787)
+  - fix(txn): ensure that txn hash is set (https://github.com/dgraph-io/dgraph/pull/7784)
+  - fix(bulk): upsert guardian/groot for all existing namespaces (https://github.com/dgraph-io/dgraph/pull/7769)
+  - fix(backup): use StreamWriter instead of KVLoader during backup restore (https://github.com/dgraph-io/dgraph/pull/8510)
+  - Fix(lsbackup): Fix profiler in lsBackup (https://github.com/dgraph-io/dgraph/pull/8432)
+  - fix(export): Fix facet export of reference type postings to JSON format (https://github.com/dgraph-io/dgraph/pull/7756)
+  - fix(vault): Hide ACL flags when not required (https://github.com/dgraph-io/dgraph/pull/7701)
+
+### Changed
+
+- **GraphQL**
+  - opt(GraphQL): filter existence queries on GraphQL side instead of using @filter(type) (https://github.com/dgraph-io/dgraph/pull/7760)
+
+- **Core Dgraph**
+  - fix(rollups): Write rolled-up keys at ts+1 (https://github.com/dgraph-io/dgraph/pull/7957)
+  - protobuf: upgrade golang/protobuf library v1.4.1 -> v1.5.2 (https://github.com/dgraph-io/dgraph/pull/7949)
+  - chore(raft): Log packets message less frequently. (https://github.com/dgraph-io/dgraph/pull/7913)
+  - fix(multitenancy) store namespace in predicate as a hex separated by a hyphen to prevent json marshal issues (https://github.com/dgraph-io/dgraph/pull/8601)
+  - opt(dropPrefix): allow logical drop for deleting predicates and indexing (https://github.com/dgraph-io/dgraph/pull/7779)
+  - fix(backup): make the /admin/backup and /admin/export API asynchronous (https://github.com/dgraph-io/dgraph/pull/8554)
+
+
+## [v21.03.0] - 2021-04-07
+
+see [CHANGELOG.md](https://github.com/dgraph-io/dgraph/blob/main/CHANGELOG.md)
