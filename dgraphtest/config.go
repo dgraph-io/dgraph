@@ -21,6 +21,9 @@ import (
 	"math/rand"
 )
 
+type Logger interface {
+	Logf(format string, args ...any)
+}
 type ClusterConfig struct {
 	prefix     string
 	numAlphas  int
@@ -29,11 +32,25 @@ type ClusterConfig struct {
 	verbosity  int
 	acl        bool
 	encryption bool
+	isUpgrade  bool
+	w          Logger
+	networkId  string
+}
+
+// loger
+func (o ClusterConfig) log(format string, args ...any) {
+	if o.w == nil {
+		return
+	}
+	o.w.Logf(format, args...)
 }
 
 func NewClusterConfig() ClusterConfig {
 	return ClusterConfig{
-		prefix:    fmt.Sprintf("test-%06d", rand.Intn(1000000)),
+		prefix:    fmt.Sprintf("test-%d", rand.Intn(9999)),
+		numAlphas: 6,
+		numZeros:  3,
+		replicas:  3,
 		verbosity: 2,
 	}
 }
@@ -60,5 +77,15 @@ func (o ClusterConfig) WithACL() ClusterConfig {
 
 func (o ClusterConfig) WithEncryption() ClusterConfig {
 	o.encryption = true
+	return o
+}
+
+func (o ClusterConfig) IsUpgradeCluster() ClusterConfig {
+	o.isUpgrade = true
+	return o
+}
+
+func (o ClusterConfig) WithLogger(w Logger) ClusterConfig {
+	o.w = w
 	return o
 }

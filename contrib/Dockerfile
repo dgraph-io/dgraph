@@ -29,8 +29,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 ADD linux /usr/local/bin
 
-EXPOSE 8080
-EXPOSE 9080
 
 RUN mkdir /dgraph
 WORKDIR /dgraph
