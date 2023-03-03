@@ -352,7 +352,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 	}
 	if srcFn.fnType == passwordFn && srcFn.atype != types.PasswordID {
 		return errors.Errorf("checkpwd fn can only be used on attr: [%s] with schema type "+
-			"password. Got type: %s", x.ParseAttr(q.Attr), types.TypeID(srcFn.atype).Name())
+			"password. Got type: %s", x.ParseAttr(q.Attr), srcFn.atype.Name())
 	}
 	if srcFn.n == 0 {
 		return nil
@@ -412,9 +412,9 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 			switch {
 			case err == posting.ErrNoValue || (err == nil && len(vals) == 0):
 				// This branch is taken when the value does not exist in the pl or
-				// the number of values retreived is zero (there could still be facets).
+				// the number of values retrieved is zero (there could still be facets).
 				// We add empty lists to the UidMatrix, FaceMatrix, ValueMatrix and
-				// LangMatrix so that all these data structure have predicatble layouts.
+				// LangMatrix so that all these data structure have predictable layouts.
 				out.UidMatrix = append(out.UidMatrix, &pb.List{})
 				out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{})
 				out.ValueMatrix = append(out.ValueMatrix,
@@ -1827,7 +1827,7 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 		}
 		fc.n = len(q.UidList.Uids)
 	case standardFn, fullTextSearchFn:
-		// srcfunc 0th val is func name and and [2:] are args.
+		// srcfunc 0th val is func name and [2:] are args.
 		// we tokenize the arguments of the query.
 		if err = ensureArgsCount(q.SrcFunc, 1); err != nil {
 			return nil, err
@@ -1862,7 +1862,7 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 		if max < 0 {
 			return nil, errors.Errorf("Levenshtein distance value must be greater than 0, got %v", s)
 		}
-		fc.threshold = []int64{int64(max)}
+		fc.threshold = []int64{max}
 		fc.tokens = q.SrcFunc.Args
 		fc.n = len(fc.tokens)
 	case customIndexFn:

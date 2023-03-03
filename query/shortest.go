@@ -142,7 +142,7 @@ func (sg *SubGraph) getCost(matrix, list int) (cost float64,
 	case tv.Tid == types.IntID:
 		cost = float64(tv.Value.(int64))
 	case tv.Tid == types.FloatID:
-		cost = float64(tv.Value.(float64))
+		cost = tv.Value.(float64)
 	default:
 		rerr = errFacet
 	}

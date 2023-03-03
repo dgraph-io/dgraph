@@ -1012,7 +1012,7 @@ func TestLargePlistSplit(t *testing.T) {
 	require.NoError(t, writePostingListToDisk(kvs))
 	ol, err = getNew(key, ps, math.MaxUint64)
 	require.NoError(t, err)
-	//require.Nil(t, ol.plist.Bitmap)
+	// require.Nil(t, ol.plist.Bitmap)
 	require.Equal(t, 0, len(ol.plist.Postings))
 	t.Logf("Num splits: %d\n", len(ol.plist.Splits))
 	require.True(t, len(ol.plist.Splits) > 0)
@@ -1177,7 +1177,7 @@ func TestMultiPartListWithPostings(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, commits, len(facets))
 	for i, facet := range facets {
-		require.Equal(t, facet, strconv.Itoa(int(i+1)))
+		require.Equal(t, facet, strconv.Itoa(i+1))
 	}
 }
 
@@ -1383,7 +1383,7 @@ func TestSingleListRollup(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, commits, len(facets))
 	for i, facet := range facets {
-		require.Equal(t, facet, strconv.Itoa(int(i+1)))
+		require.Equal(t, facet, strconv.Itoa(i+1))
 	}
 
 	var bl pb.BackupPostingList
@@ -1446,7 +1446,7 @@ func TestRecursiveSplits(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, commits, len(facets))
 	for i, facet := range facets {
-		require.Equal(t, facet, strconv.Itoa(int(i+1)))
+		require.Equal(t, facet, strconv.Itoa(i+1))
 	}
 }
 
