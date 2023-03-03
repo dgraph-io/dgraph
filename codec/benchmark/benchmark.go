@@ -54,8 +54,7 @@ import (
 // TODO: Improve performance here, using SIMD instructions.
 
 const (
-	// chunkByteSize is the number
-	// of bytes per chunk of data.
+	// chunkByteSize is the number of bytes per chunk of data.
 	chunkByteSize = 262144
 )
 
@@ -188,10 +187,9 @@ func main() {
 	}
 
 	chunks64 := chunkify64(data)
-	mis := 0
 	const ntrials = 100
 
-	mis = benchmarkPack(ntrials, chunks64)
+	mis := benchmarkPack(ntrials, chunks64)
 	fmtBenchmark("BenchmarkDeltaPack64", mis)
 
 	mis = benchmarkUnpack(ntrials, chunks64)

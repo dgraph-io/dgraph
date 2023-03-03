@@ -384,7 +384,7 @@ have been successfully applied by the destination group, Zero would mark the
 shard as being served by the destination group. Zero would then tell source
 group to delete the shard from its storage, thus finalizing the process.
 
-While this process sounds pretty straighforward, there are many race and edge
+While this process sounds pretty straightforward, there are many race and edge
 conditions here which can cause transactional correctness to be violated as
 shown by Jepsen tests \cite{jepsen}. We'll showcase some of these violations
 here:
@@ -647,7 +647,7 @@ are updated.
 %     if foundTs > startTs:
 %       return 0  // Found a conflict
 %   // No conflicts found.
-%   commitTs := leaseTimetamp(1)
+%   commitTs := leaseTimestamp(1)
 %   for key in conflictKeys:
 %     Oracle.ConflictMap[key] = commitTs
 %   return commitTs

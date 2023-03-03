@@ -27,7 +27,7 @@ import (
 	"unicode"
 
 	"github.com/pkg/errors"
-	geom "github.com/twpayne/go-geom"
+	"github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
 
 	"github.com/dgraph-io/dgo/v210/protos/api"
@@ -35,7 +35,7 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
-	simdjson "github.com/dgraph-io/simdjson-go"
+	"github.com/dgraph-io/simdjson-go"
 )
 
 func stripSpaces(str string) string {
@@ -398,8 +398,7 @@ func getNextBlank() string {
 }
 
 // TODO - Abstract these parameters to a struct.
-func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred string) (
-	mapResponse, error) {
+func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred string) (mapResponse, error) {
 	var mr mapResponse
 
 	// move all facets from global map to smaller mr.rawFacets map
@@ -562,7 +561,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 				return mr, err
 			}
 
-			// Add the connecting edge beteween the entities.
+			// Add the connecting edge between the entities.
 			nq.ObjectId = cr.uid
 			nq.Facets = cr.fcts
 			buf.Push(&nq)

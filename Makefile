@@ -23,8 +23,8 @@ BUILD_VERSION  ?= $(shell git describe --always --tags)
 GOPATH         ?= $(shell go env GOPATH)
 
 ######################
-# Build & Release Paramaters
-# DGRAPH_VERSION flag facilicates setting the dgraph version
+# Build & Release Parameters
+# DGRAPH_VERSION flag facilitates setting the dgraph version
 # DGRAPH_VERSION flag is used for our release pipelines, where it is set to our release version number automatically
 # DGRAPH_VERSION defaults to local, if not specified, for development purposes
 ######################

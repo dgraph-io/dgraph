@@ -24,7 +24,7 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
-	geom "github.com/twpayne/go-geom"
+	"github.com/twpayne/go-geom"
 	"golang.org/x/crypto/blake2b"
 	"golang.org/x/text/collate"
 
@@ -54,7 +54,7 @@ const (
 	IdentHash      = 0xB
 	IdentSha       = 0xC
 	IdentCustom    = 0x80
-	IdentDelimiter = 0x1f // ASCII 31 - Unit seperator
+	IdentDelimiter = 0x1f // ASCII 31 - Unit separator
 )
 
 // Tokenizer defines what a tokenizer must provide.
@@ -78,7 +78,7 @@ type Tokenizer interface {
 	// IsSortable returns true if the tokenizer can be used for sorting/ordering.
 	IsSortable() bool
 
-	// IsLossy() returns true if we don't store the values directly as index keys
+	// IsLossy returns true if we don't store the values directly as index keys
 	// during tokenization. If a predicate is tokenized using an IsLossy() tokenizer,
 	// then we need to fetch the actual value and compare.
 	IsLossy() bool

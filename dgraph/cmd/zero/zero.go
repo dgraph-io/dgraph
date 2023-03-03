@@ -592,7 +592,7 @@ func (s *Server) Connect(ctx context.Context,
 		if m.Id == 0 {
 			// In certain situations, the proposal can be sent and return with an error.
 			// However,  Dgraph will keep retrying the proposal. To avoid assigning duplicating
-			// IDs, the couter is incremented every time a proposal is created.
+			// IDs, the counter is incremented every time a proposal is created.
 			m.Id = s.nextRaftId
 			s.nextRaftId += 1
 			proposal.MaxRaftId = m.Id
