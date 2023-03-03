@@ -18,6 +18,7 @@ package dgraphtest
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -52,7 +53,7 @@ type LocalCluster struct {
 	alphas []dnode
 }
 
-func NewCluster(conf ClusterConfig) (LocalCluster, error) {
+func NewLocalCluster(conf ClusterConfig) (LocalCluster, error) {
 	c := LocalCluster{conf: conf}
 	if err := c.init(); err != nil {
 		c.Cleanup()
@@ -224,12 +225,12 @@ func (c *LocalCluster) Cleanup() {
 	ro := types.ContainerRemoveOptions{RemoveVolumes: true, Force: true}
 	for _, aa := range c.alphas {
 		if err := c.dcli.ContainerRemove(ctx, aa.cid(), ro); err != nil {
-			c.log("error removing alpha [%v]: %v", aa.cname(), err)
+			log(c.conf.logr, "error removing alpha [%v]: %v", aa.cname(), err)
 		}
 	}
 	for _, zo := range c.zeros {
 		if err := c.dcli.ContainerRemove(ctx, zo.cid(), ro); err != nil {
-			c.log("error removing zero [%v]: %v", zo.cname(), err)
+			log(c.conf.logr, "error removing zero [%v]: %v", zo.cname(), err)
 		}
 	}
 	if c.net.id != "" {
@@ -330,4 +331,44 @@ func (c *LocalCluster) Upgrade(version string) error {
 		return err
 	}
 	return c.Start()
+}
+
+// AssignUids talks to zero to assign the given number of uids
+func (c *LocalCluster) AssignUids(num uint64) error {
+	if len(c.zeros) == 0 {
+		return errors.New("no zero running")
+	}
+
+	url, err := c.zeros[0].assignURL(c)
+	if err != nil {
+		return err
+	}
+
+	resp, err := http.Get(fmt.Sprintf("%v?what=uids&num=%d", url, num))
+	if err != nil {
+		return errors.Wrapf(err, "error talking to zero [%v]", url)
+	}
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			log(c.conf.logr, "error closing response body: %v", err)
+		}
+	}()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return errors.Wrap(err, "error reading response body")
+	}
+	var data struct {
+		Errors []struct {
+			Message string
+			Code    string
+		}
+	}
+	if err := json.Unmarshal(body, &data); err != nil {
+		return errors.Wrap(err, "error unmarshaling response")
+	}
+	if len(data.Errors) > 0 {
+		return fmt.Errorf("error received from zero: %v", data.Errors[0].Message)
+	}
+	return nil
 }

@@ -1,4 +1,4 @@
-//go:build integration
+//go:build integration || cloud
 
 /*
  * Copyright 2016-2023 Dgraph Labs, Inc. and Contributors
@@ -26,7 +26,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/v210/protos/api"
-	"github.com/dgraph-io/dgraph/testutil"
 )
 
 func TestReserverPredicateForMutation(t *testing.T) {
@@ -38,9 +37,6 @@ func TestAlteringReservedTypesAndPredicatesShouldFail(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 	defer cancel()
 
-	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
-	require.NoError(t, err)
-
 	op := &api.Operation{Schema: `
 		type dgraph.Person {
 			name: string
@@ -49,7 +45,7 @@ func TestAlteringReservedTypesAndPredicatesShouldFail(t *testing.T) {
 		name: string .
 		age: int .
 	`}
-	err = dg.Alter(ctx, op)
+	err := client.Alter(context.Background(), op)
 	require.Error(t, err, "altering type in dgraph namespace shouldn't have succeeded")
 	require.Contains(t, err.Error(), "Can't alter type `dgraph.Person` as it is prefixed with "+
 		"`dgraph.` which is reserved as the namespace for dgraph's internal types/predicates.")
@@ -62,12 +58,12 @@ func TestAlteringReservedTypesAndPredicatesShouldFail(t *testing.T) {
 		dgraph.name: string .
 		age: int .
 	`}
-	err = dg.Alter(ctx, op)
+	err = client.Alter(ctx, op)
 	require.Error(t, err, "altering predicate in dgraph namespace shouldn't have succeeded")
 	require.Contains(t, err.Error(), "Can't alter predicate `dgraph.name` as it is prefixed with "+
 		"`dgraph.` which is reserved as the namespace for dgraph's internal types/predicates.")
 
-	_, err = dg.NewTxn().Mutate(ctx, &api.Mutation{
+	_, err = client.NewTxn().Mutate(ctx, &api.Mutation{
 		SetNquads: []byte(`_:new <dgraph.name> "Alice" .`),
 	})
 	require.Error(t, err, "storing predicate in dgraph namespace shouldn't have succeeded")

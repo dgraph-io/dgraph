@@ -1,4 +1,4 @@
-//go:build integration
+//go:build integration || cloud
 
 /*
  * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
@@ -29,7 +29,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/v210/protos/api"
-	"github.com/dgraph-io/dgraph/testutil"
 )
 
 func setSchema(schema string) {
@@ -350,13 +349,13 @@ age2                           : int @index(int) .
 
 func populateCluster() {
 	if err := client.Alter(context.Background(), &api.Operation{DropAll: true}); err != nil {
-		panic(fmt.Sprintf("Could not perform DropAll op. Got error %v", err.Error()))
+		panic(err)
 	}
 
-	setSchema(testSchema)
-	if err := testutil.AssignUids(100000); err != nil {
-		panic(fmt.Sprintf("Could not perform DropAll op. Got error %v", err.Error()))
+	if err := dc.AssignUids(21000); err != nil {
+		panic(err)
 	}
+	setSchema(testSchema)
 
 	err := addTriplesToCluster(`
 		<1> <name> "Michonne" .

@@ -1,4 +1,4 @@
-//go:build integration
+//go:build integration || cloud
 
 /*
  * Copyright 2023 Dgraph Labs, Inc. and Contributors

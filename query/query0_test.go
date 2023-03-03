@@ -1,4 +1,4 @@
-//go:build integration
+//go:build integration || cloud
 
 /*
  * Copyright 2023 Dgraph Labs, Inc. and Contributors
@@ -22,16 +22,14 @@ package query
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/v210"
+	"github.com/dgraph-io/dgraph/dgraphtest"
 	"github.com/dgraph-io/dgraph/dql"
-	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/dgraph-io/dgraph/x"
 )
 
 func TestGetUID(t *testing.T) {
@@ -3537,12 +3535,4 @@ func TestInvalidRegex(t *testing.T) {
 }
 
 var client *dgo.Dgraph
-
-func TestMain(m *testing.M) {
-	var err error
-	client, err = testutil.DgraphClientWithGroot(testutil.SockAddr)
-	x.CheckfNoTrace(err)
-
-	populateCluster()
-	os.Exit(m.Run())
-}
+var dc dgraphtest.Cluster
