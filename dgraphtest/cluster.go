@@ -35,6 +35,7 @@ var (
 	stopTimeout    = time.Minute
 )
 
+// cluster network struct
 type cnet struct {
 	id   string
 	name string
@@ -50,11 +51,11 @@ type Cluster struct {
 	alphas []dnode
 }
 
-func NewCluster(conf ClusterConfig) (*Cluster, error) {
-	c := &Cluster{conf: conf}
+func NewCluster(conf ClusterConfig) (Cluster, error) {
+	c := Cluster{conf: conf}
 	if err := c.init(); err != nil {
 		c.Cleanup()
-		return nil, err
+		return Cluster{}, err
 	}
 
 	return c, nil

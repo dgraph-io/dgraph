@@ -35,6 +35,7 @@ type ClusterConfig struct {
 	acl        bool
 	encryption bool
 	logr       Logger
+	accessTTL  string
 }
 
 func NewClusterConfig() ClusterConfig {
@@ -62,8 +63,9 @@ func (cc ClusterConfig) WithReplicas(n int) ClusterConfig {
 	return cc
 }
 
-func (cc ClusterConfig) WithACL() ClusterConfig {
+func (cc ClusterConfig) WithACL(accessTTL string) ClusterConfig {
 	cc.acl = true
+	cc.accessTTL = accessTTL
 	return cc
 }
 

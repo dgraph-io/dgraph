@@ -152,7 +152,7 @@ func (a *alpha) cmd(c *Cluster) []string {
 		`--security=whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16`}
 
 	if c.conf.acl {
-		acmd = append(acmd, fmt.Sprintf(`--acl=secret-file=%v; access-ttl=20s`, aclSecretMountPath))
+		acmd = append(acmd, fmt.Sprintf(`--acl=secret-file=%v; access-ttl=%v`, aclSecretMountPath, c.conf.accessTTL))
 	}
 	if c.conf.encryption {
 		acmd = append(acmd, fmt.Sprintf(`--encryption=key-file=%v`, encKeyMountPath))
