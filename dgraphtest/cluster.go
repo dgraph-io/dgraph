@@ -86,25 +86,25 @@ func (c *Cluster) init() error {
 
 	for i := 0; i < c.conf.numZeros; i++ {
 		zo := &zero{id: i}
-		zo.coname = fmt.Sprintf(zeroNameFmt, c.conf.prefix, zo.id)
-		zo.loname = fmt.Sprintf(zeroLNameFmt, zo.id)
+		zo.containerName = fmt.Sprintf(zeroNameFmt, c.conf.prefix, zo.id)
+		zo.aliasName = fmt.Sprintf(zeroAliasNameFmt, zo.id)
 		cid, err := c.createContainer(zo)
 		if err != nil {
 			return err
 		}
-		zo.coid = cid
+		zo.containerID = cid
 		c.zeros = append(c.zeros, zo)
 	}
 
 	for i := 0; i < c.conf.numAlphas; i++ {
 		aa := &alpha{id: i}
-		aa.coname = fmt.Sprintf(alphaNameFmt, c.conf.prefix, aa.id)
-		aa.loname = fmt.Sprintf(alphaLNameFmt, aa.id)
+		aa.containerName = fmt.Sprintf(alphaNameFmt, c.conf.prefix, aa.id)
+		aa.aliasName = fmt.Sprintf(alphaLNameFmt, aa.id)
 		cid, err := c.createContainer(aa)
 		if err != nil {
 			return err
 		}
-		aa.coid = cid
+		aa.containerID = cid
 		c.alphas = append(c.alphas, aa)
 	}
 
@@ -242,7 +242,7 @@ func (c *Cluster) createContainer(dc dnode) (string, error) {
 	networkConfig := &network.NetworkingConfig{
 		EndpointsConfig: map[string]*network.EndpointSettings{
 			c.net.name: {
-				Aliases:   []string{dc.cname(), dc.lname()},
+				Aliases:   []string{dc.cname(), dc.aname()},
 				NetworkID: c.net.id,
 			},
 		},

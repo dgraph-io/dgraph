@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/docker/docker/api/types/mount"
 	docker "github.com/docker/docker/client"
@@ -29,10 +30,10 @@ import (
 )
 
 const (
-	zeroNameFmt   = "%v_zero%d"
-	zeroLNameFmt  = "zero%d"
-	alphaNameFmt  = "%v_alpha%d"
-	alphaLNameFmt = "alpha%d"
+	zeroNameFmt      = "%v_zero%d"
+	zeroAliasNameFmt = "zero%d"
+	alphaNameFmt     = "%v_alpha%d"
+	alphaLNameFmt    = "alpha%d"
 
 	zeroGrpcPort   = "5080"
 	zeroHttpPort   = "6080"
@@ -51,7 +52,7 @@ const (
 
 type dnode interface {
 	cname() string
-	lname() string
+	aname() string
 	cid() string
 	ports() nat.PortSet
 	cmd(*Cluster) []string
@@ -61,22 +62,22 @@ type dnode interface {
 }
 
 type zero struct {
-	id     int    // 0, 1, 2
-	coid   string // container ID in docker world
-	coname string // something like test-1234_zero2
-	loname string // something like alpha0, zero1
+	id            int    // 0, 1, 2
+	containerID   string // container ID in docker world
+	containerName string // something like test-1234_zero2
+	aliasName     string // something like alpha0, zero1
 }
 
 func (z *zero) cname() string {
-	return z.coname
+	return z.containerName
 }
 
-func (z *zero) lname() string {
-	return z.loname
+func (z *zero) aname() string {
+	return z.aliasName
 }
 
 func (z *zero) cid() string {
-	return z.coid
+	return z.containerID
 }
 
 func (z *zero) ports() nat.PortSet {
@@ -87,11 +88,11 @@ func (z *zero) ports() nat.PortSet {
 }
 
 func (z *zero) cmd(c *Cluster) []string {
-	zcmd := []string{"/gobin/dgraph", "zero", fmt.Sprintf("--my=%s:%v", z.lname(), zeroGrpcPort), "--bindall",
+	zcmd := []string{"/gobin/dgraph", "zero", fmt.Sprintf("--my=%s:%v", z.aname(), zeroGrpcPort), "--bindall",
 		fmt.Sprintf(`--replicas=%v`, c.conf.replicas), fmt.Sprintf(`--raft=idx=%v`, z.id+1), "--logtostderr",
 		fmt.Sprintf("-v=%d", c.conf.verbosity)}
 	if z.id > 0 {
-		zcmd = append(zcmd, "--peer="+c.zeros[0].lname()+":"+zeroGrpcPort)
+		zcmd = append(zcmd, "--peer="+c.zeros[0].aname()+":"+zeroGrpcPort)
 	}
 
 	return zcmd
@@ -121,22 +122,22 @@ func (z *zero) healthURL(c *Cluster) (string, error) {
 }
 
 type alpha struct {
-	id     int
-	coid   string
-	coname string
-	loname string
+	id            int
+	containerID   string
+	containerName string
+	aliasName     string
 }
 
 func (a *alpha) cname() string {
-	return a.coname
+	return a.containerName
 }
 
 func (a *alpha) cid() string {
-	return a.coid
+	return a.containerID
 }
 
-func (a *alpha) lname() string {
-	return a.loname
+func (a *alpha) aname() string {
+	return a.aliasName
 }
 
 func (a *alpha) ports() nat.PortSet {
@@ -147,12 +148,13 @@ func (a *alpha) ports() nat.PortSet {
 }
 
 func (a *alpha) cmd(c *Cluster) []string {
-	acmd := []string{"/gobin/dgraph", "alpha", fmt.Sprintf("--my=%s:%v", a.lname(), alphaInterPort),
+	acmd := []string{"/gobin/dgraph", "alpha", fmt.Sprintf("--my=%s:%v", a.aname(), alphaInterPort),
 		"--bindall", "--logtostderr", fmt.Sprintf("-v=%d", c.conf.verbosity),
 		`--security=whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16`}
 
 	if c.conf.acl {
-		acmd = append(acmd, fmt.Sprintf(`--acl=secret-file=%s; access-ttl=%v`, aclSecretMountPath, c.conf.aclTTL))
+		acmd = append(acmd, fmt.Sprintf(`--acl=secret-file=%s; access-ttl=%vs`,
+			aclSecretMountPath, c.conf.aclTTL/time.Second))
 	}
 	if c.conf.encryption {
 		acmd = append(acmd, fmt.Sprintf(`--encryption=key-file=%v`, encKeyMountPath))
@@ -160,7 +162,7 @@ func (a *alpha) cmd(c *Cluster) []string {
 
 	zeroAddrsArg, delimiter := "--zero=", ""
 	for _, zo := range c.zeros {
-		zeroAddrsArg += fmt.Sprintf("%s%v:%v", delimiter, zo.lname(), zeroGrpcPort)
+		zeroAddrsArg += fmt.Sprintf("%s%v:%v", delimiter, zo.aname(), zeroGrpcPort)
 		delimiter = ","
 	}
 	acmd = append(acmd, zeroAddrsArg)
@@ -229,6 +231,9 @@ func publicPort(dcli *docker.Client, dc dnode, privatePort string) (string, erro
 	}
 
 	for port, bindings := range info.NetworkSettings.Ports {
+		if len(bindings) == 0 {
+			continue
+		}
 		if port.Port() == privatePort {
 			return bindings[0].HostPort, nil
 		}

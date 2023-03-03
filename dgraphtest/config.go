@@ -33,9 +33,9 @@ type ClusterConfig struct {
 	replicas   int
 	verbosity  int
 	acl        bool
+	aclTTL     time.Duration
 	encryption bool
 	logr       Logger
-	aclTTL     string
 }
 
 func NewClusterConfig() ClusterConfig {
@@ -63,7 +63,12 @@ func (cc ClusterConfig) WithReplicas(n int) ClusterConfig {
 	return cc
 }
 
-func (cc ClusterConfig) WithACL(aclTTL string) ClusterConfig {
+func (cc ClusterConfig) WithVerbosity(v int) ClusterConfig {
+	cc.verbosity = v
+	return cc
+}
+
+func (cc ClusterConfig) WithACL(aclTTL time.Duration) ClusterConfig {
 	cc.acl = true
 	cc.aclTTL = aclTTL
 	return cc
