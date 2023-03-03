@@ -140,8 +140,7 @@ func main() {
 func getNextWord(index int) string {
 	// check if index is in the range of words
 	if index < 0 || index >= len(words) {
-		x.Log(errors.Errorf("invalid index: %d", index), "get next word")
-		return ""
+		x.Fatalf("invalid index for getting next word: %d", index)
 	}
 	return words[index]
 }
