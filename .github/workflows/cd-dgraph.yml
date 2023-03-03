@@ -36,9 +36,9 @@ jobs:
           GIT_TAG_NAME='${{ github.event.inputs.releasetag }}'
           if [[ "$GIT_TAG_NAME" == "v"* ]]; 
           then
-            echo "this is a release branch"
+            echo "this is a release tag"
           else
-            echo "this is NOT a release branch"
+            echo "this is NOT a release tag"
             exit 1
           fi
           DGRAPH_RELEASE_VERSION='${{ github.event.inputs.releasetag }}'
