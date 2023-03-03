@@ -150,6 +150,8 @@ github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSs
 github.com/dgraph-io/badger v1.6.0/go.mod h1:zwt7syl517jmP8s94KqSxTlM6IMsdhYy6psNgSztDR4=
 github.com/dgraph-io/badger/v4 v4.0.1 h1:zwLYFc4sfxKdaRTvS6wlHsSuYWNUiWnYLU+TS+/nCDI=
 github.com/dgraph-io/badger/v4 v4.0.1/go.mod h1:edFJfgVfwYjg+grodpS7Yj2vohQMK3VL6eCaR6EpRJU=
+github.com/dgraph-io/badger/v4 v4.0.2-0.20230302072706-9ea992a6cfab h1:msjNPqAL8FHggTiW3BdyRqZhZVGSDQ866xFtNQVOnxg=
+github.com/dgraph-io/badger/v4 v4.0.2-0.20230302072706-9ea992a6cfab/go.mod h1:edFJfgVfwYjg+grodpS7Yj2vohQMK3VL6eCaR6EpRJU=
 github.com/dgraph-io/dgo/v210 v210.0.0-20210407152819-261d1c2a6987 h1:5aN6H88a2q3HkO8vSZxDlgjEpJf4Fz8rfy+/Wzx2uAc=
 github.com/dgraph-io/dgo/v210 v210.0.0-20210407152819-261d1c2a6987/go.mod h1:dCzdThGGTPYOAuNtrM6BiXj/86voHn7ZzkPL6noXR3s=
 github.com/dgraph-io/gqlgen v0.13.2 h1:TNhndk+eHKj5qE7BenKKSYdSIdOGhLqxR1rCiMso9KM=
