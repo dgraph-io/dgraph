@@ -3,7 +3,7 @@ on:
   push:
     branches:
       - main
-#      - release/*
+      - 'release/**'
   pull_request:
     types:
       - opened
@@ -12,7 +12,7 @@ on:
       - ready_for_review
     branches:
       - main
-#      - release/*
+      - 'release/**'
   schedule:
     - cron: "0 * * * *"
 jobs:
