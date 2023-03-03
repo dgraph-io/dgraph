@@ -55,10 +55,10 @@ type dnode interface {
 	aname() string
 	cid() string
 	ports() nat.PortSet
-	cmd(*Cluster) []string
+	cmd(LocalCluster) []string
 	workingDir() string
 	mounts(ClusterConfig) ([]mount.Mount, error)
-	healthURL(c *Cluster) (string, error)
+	healthURL(LocalCluster) (string, error)
 }
 
 type zero struct {
@@ -87,7 +87,7 @@ func (z *zero) ports() nat.PortSet {
 	}
 }
 
-func (z *zero) cmd(c *Cluster) []string {
+func (z *zero) cmd(c LocalCluster) []string {
 	zcmd := []string{"/gobin/dgraph", "zero", fmt.Sprintf("--my=%s:%v", z.aname(), zeroGrpcPort), "--bindall",
 		fmt.Sprintf(`--replicas=%v`, c.conf.replicas), fmt.Sprintf(`--raft=idx=%v`, z.id+1), "--logtostderr",
 		fmt.Sprintf("-v=%d", c.conf.verbosity)}
@@ -113,7 +113,7 @@ func (z *zero) mounts(conf ClusterConfig) ([]mount.Mount, error) {
 	}, nil
 }
 
-func (z *zero) healthURL(c *Cluster) (string, error) {
+func (z *zero) healthURL(c LocalCluster) (string, error) {
 	publicPort, err := publicPort(c.dcli, z, zeroHttpPort)
 	if err != nil {
 		return "", err
@@ -147,7 +147,7 @@ func (a *alpha) ports() nat.PortSet {
 	}
 }
 
-func (a *alpha) cmd(c *Cluster) []string {
+func (a *alpha) cmd(c LocalCluster) []string {
 	acmd := []string{"/gobin/dgraph", "alpha", fmt.Sprintf("--my=%s:%v", a.aname(), alphaInterPort),
 		"--bindall", "--logtostderr", fmt.Sprintf("-v=%d", c.conf.verbosity),
 		`--security=whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16`}
@@ -213,7 +213,7 @@ func (a *alpha) mounts(conf ClusterConfig) ([]mount.Mount, error) {
 	return mounts, nil
 }
 
-func (a *alpha) healthURL(c *Cluster) (string, error) {
+func (a *alpha) healthURL(c LocalCluster) (string, error) {
 	publicPort, err := publicPort(c.dcli, a, alphaHttpPort)
 	if err != nil {
 		return "", err

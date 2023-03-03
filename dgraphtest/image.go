@@ -16,6 +16,6 @@
 
 package dgraphtest
 
-func (c *Cluster) dgraphImage() string {
+func (c LocalCluster) dgraphImage() string {
 	return "dgraph/dgraph:local"
 }
