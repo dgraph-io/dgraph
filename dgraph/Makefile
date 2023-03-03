@@ -1,5 +1,5 @@
 #
-# Copyright 2022 Dgraph Labs, Inc. and Contributors
+# Copyright 2023 Dgraph Labs, Inc. and Contributors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,11 +20,12 @@ BUILD          ?= $(shell git rev-parse --short HEAD)
 BUILD_CODENAME ?= dgraph
 BUILD_DATE     ?= $(shell git log -1 --format=%ci)
 BUILD_BRANCH   ?= $(shell git rev-parse --abbrev-ref HEAD)
+BUILD_VERSION  ?= $(shell git describe --always --tags)
 
-ifeq ($(DGRAPH_VERSION),)
-BUILD_VERSION ?= local
-else
-BUILD_VERSION ?= $(DGRAPH_VERSION)
+# check if DGRAPH_VERSION flag is set (used for release pipeline)
+ifneq ($(DGRAPH_VERSION),)
+# remove arch suffix from DGRAPH_VERSION for CD steps only
+BUILD_VERSION := $(DGRAPH_VERSION)
 endif
 
 GOOS          ?= $(shell go env GOOS)

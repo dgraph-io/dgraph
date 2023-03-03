@@ -1,9 +1,13 @@
 
-FROM golang:1.14.2-alpine3.11
+FROM golang:1.19-alpine3.17
 
 COPY . .
 
 RUN apk update && apk add git && apk add nodejs && apk add npm
+
+# As of Go 1.16 modules are always on by default
+# See https://go.dev/blog/go116-module-changes
+RUN go env -w GO111MODULE=auto
 
 RUN go get gopkg.in/yaml.v2
 
