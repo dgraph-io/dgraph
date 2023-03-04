@@ -57,7 +57,7 @@ const (
 	IgnoreBytes = "1-8"
 	// NamespaceOffset is the offset in badger key from which the next 8 bytes contain namespace.
 	NamespaceOffset = 1
-	// NsSeparator is the separator between between the namespace and attribute.
+	// NsSeparator is the separator between the namespace and attribute.
 	NsSeparator = "-"
 )
 
@@ -65,7 +65,7 @@ const (
 // See https://golang.org/pkg/encoding/json/#Marshal
 const replacementRune = rune('\ufffd')
 
-// This function parse namespace that were stored in format used before 21.03 version.
+// AttrFrom2103 parses namespace that were stored in format used before 21.03 version.
 // The first 8 bytes are the namespace, rest is the predicate. This format caused issues
 // while marshalling, hence was removed. This function is there for backwards compatibility of
 // restore. Now we store the predicate as a string of format "hex(namespace)-predicate"

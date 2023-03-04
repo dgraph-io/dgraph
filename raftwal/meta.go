@@ -65,11 +65,11 @@ const (
 	metaName = "wal.meta"
 	// metaFileSize is the size of the wal.meta file.
 	metaFileSize = 1 << 20
-	//hardStateOffset is the offset of the hard sate within the wal.meta file.
+	// hardStateOffset is the offset of the hard state within the wal.meta file.
 	hardStateOffset = 512
 	// snapshotIndex stores the index and term corresponding to the snapshot.
 	snapshotIndex = 1024
-	// snapshotOffest is the offset of the snapshot within the wal.meta file.
+	// snapshotOffset is the offset of the snapshot within the wal.meta file.
 	snapshotOffset = snapshotIndex + 16
 )
 

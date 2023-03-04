@@ -20,7 +20,7 @@ import (
 	"errors"
 	"time"
 
-	geom "github.com/twpayne/go-geom"
+	"github.com/twpayne/go-geom"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 )
@@ -45,7 +45,7 @@ const (
 	IntID = TypeID(pb.Posting_INT)
 	// FloatID represents the floating-point number type.
 	FloatID = TypeID(pb.Posting_FLOAT)
-	// FloatID represents the boolean type.
+	// BoolID represents the boolean type.
 	BoolID = TypeID(pb.Posting_BOOL)
 	// DateTimeID represents the datetime type.
 	DateTimeID = TypeID(pb.Posting_DATETIME)
@@ -195,7 +195,7 @@ func ValueForType(id TypeID) Val {
 }
 
 // GoodTimeZone returns true if timezone (provided in offset
-// format in seconds) is valid accroding to RFC3339.
+// format in seconds) is valid according to RFC3339.
 func GoodTimeZone(offset int) bool {
 	const boundary = 23*60*60 + 59*60
 	return offset <= boundary && offset >= -1*boundary

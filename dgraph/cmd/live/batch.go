@@ -256,7 +256,7 @@ func (l *loader) conflictKeysForNQuad(nq *api.NQuad) ([]uint64, error) {
 	attr := x.NamespaceAttr(nq.Namespace, nq.Predicate)
 	pred, found := l.schema.preds[attr]
 
-	// We dont' need to generate conflict keys for predicate with noconflict directive.
+	// We don't need to generate conflict keys for predicate with noconflict directive.
 	if found && pred.NoConflict {
 		return nil, nil
 	}

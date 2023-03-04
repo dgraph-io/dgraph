@@ -262,7 +262,7 @@ func (l *loader) processSchemaFile(ctx context.Context, file string, key x.Sensi
 	op := &api.Operation{}
 	op.Schema = string(b)
 	if opt.preserveNs {
-		// Verify schema if we are loding into multiple namespaces.
+		// Verify schema if we are loading into multiple namespaces.
 		if err := validateSchema(op.Schema, l.namespaces); err != nil {
 			return err
 		}
@@ -282,8 +282,7 @@ func (l *loader) uid(val string, ns uint64) string {
 		}
 	}
 
-	// TODO(Naman): Do we still need this here? As xidmap which uses btree does not keep hold of
-	// this string.
+	// TODO(Naman): Do we still need this here? As xidmap which uses btree does not keep hold of this string.
 	sb := strings.Builder{}
 	x.Check2(sb.WriteString(x.NamespaceAttr(ns, val)))
 	uid, _ := l.alloc.AssignUid(sb.String())
@@ -495,7 +494,7 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 
 		drain := func() {
 			// We collect opt.bufferSize requests and preprocess them. For the requests
-			// to not confict between themself, we sort them on the basis of their predicates.
+			// to not conflict between themselves, we sort them on the basis of their predicates.
 			// Predicates with count index will conflict among themselves, so we keep them at
 			// end, making room for other predicates to load quickly.
 			sort.Slice(buffer, func(i, j int) bool {
@@ -548,7 +547,7 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 			} else {
 				// TODO(Naman): Handle this. Upserts UIDs send a single upsert block for multiple
 				// nquads. These nquads may belong to different namespaces. Hence, alpha can't
-				// figure out its processsing.
+				// figure out its processing.
 				// Currently, this option works with data loading in the logged-in namespace.
 				// TODO(Naman): Add a test for a case when it works and when it doesn't.
 				l.upsertUids(nqs)

@@ -326,10 +326,10 @@ func (a *AuthMeta) ExtractCustomClaims(ctx context.Context) (*CustomClaims, erro
 	if len(jwtToken) == 0 {
 		if a.ClosedByDefault {
 			return &CustomClaims{}, fmt.Errorf("a valid JWT is required but was not provided")
-		} else {
-			return &CustomClaims{}, nil
 		}
-	} else if len(jwtToken) > 1 {
+		return &CustomClaims{}, nil
+	}
+	if len(jwtToken) > 1 {
 		return nil, fmt.Errorf("invalid jwt auth token")
 	}
 	return a.validateJWTCustomClaims(jwtToken[0])

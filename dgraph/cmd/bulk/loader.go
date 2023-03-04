@@ -406,7 +406,7 @@ func (ld *loader) processGqlSchema(loadType chunker.InputFormat) {
 		}
 	default:
 		if _, ok := schemas[ld.opt.Namespace]; !ok {
-			// We expect only a single GraphQL schema when loading into specfic namespace.
+			// We expect only a single GraphQL schema when loading into specific namespace.
 			fmt.Printf("Didn't find GraphQL schema for namespace %d. Not loading GraphQL schema.",
 				ld.opt.Namespace)
 			return
