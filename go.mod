@@ -54,11 +54,11 @@ require (
 	go.opencensus.io v0.22.5
 	go.uber.org/zap v1.16.0
 	golang.org/x/crypto v0.0.0-20220314234659-1baeb1ce4c0b
-	golang.org/x/net v0.5.0
+	golang.org/x/net v0.7.0
 	golang.org/x/sync v0.0.0-20220722155255-886fb9371eb4
-	golang.org/x/sys v0.4.0
-	golang.org/x/term v0.4.0
-	golang.org/x/text v0.6.0
+	golang.org/x/sys v0.5.0
+	golang.org/x/term v0.5.0
+	golang.org/x/text v0.7.0
 	golang.org/x/tools v0.1.12
 	google.golang.org/grpc v1.52.0
 	gopkg.in/square/go-jose.v2 v2.3.1
