@@ -46,9 +46,7 @@ func TestSchema_Normal(t *testing.T) {
 func TestMain(m *testing.M) {
 	schemaFile := "schema.graphql"
 	schema, err := os.ReadFile(schemaFile)
-	if err != nil {
-		panic(err)
-	}
+	x.Panic(err)
 
 	jsonFile := "test_data.json"
 	data, err := os.ReadFile(jsonFile)

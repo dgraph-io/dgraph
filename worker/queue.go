@@ -180,8 +180,7 @@ func (t *tasks) enqueue(req interface{}) (uint64, error) {
 	case *pb.ExportRequest:
 		kind = TaskKindExport
 	default:
-		err := fmt.Errorf("invalid TaskKind: %d", kind)
-		panic(err)
+		x.Panic(fmt.Errorf("invalid TaskKind: %d", kind))
 	}
 
 	t.logMu.Lock()

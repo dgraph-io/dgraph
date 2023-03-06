@@ -77,9 +77,7 @@ func TestCountIndex(t *testing.T) {
 			edgeCount[uid] = rand.Intn(1000)
 			for j := 0; j < edgeCount[uid]; j++ {
 				_, err := bb.WriteString(fmt.Sprintf("<%v> <value> \"%v\" .\n", uid, j))
-				if err != nil {
-					panic(err)
-				}
+				x.Panic(err)
 			}
 			if err := testutil.RetryMutation(dg, &api.Mutation{
 				CommitNow: true,

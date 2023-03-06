@@ -177,9 +177,7 @@ func PanicHandler(out string) {
 // WrapPanics is a wrapper on panics. We use it to send sentry events about panics
 func WrapPanics() {
 	exitStatus, err := panicwrap.BasicWrap(PanicHandler)
-	if err != nil {
-		panic(err)
-	}
+	Panic(err)
 
 	// Note: panicwrap.Wrap documentation states that exitStatus == -1
 	// should be used to determine whether the process is the child.

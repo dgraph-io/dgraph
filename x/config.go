@@ -35,7 +35,7 @@ type Options struct {
 	//
 	// query-edge uint64 - maximum number of edges that can be returned in a query
 	// normalize-node int - maximum number of nodes that can be returned in a query that uses the
-	//                      normalize directive
+	//                      normalized directive
 	// mutations-nquad int - maximum number of nquads that can be inserted in a mutation request
 	// BlockDropAll bool - if set to true, the drop all operation will be rejected by the server.
 	// query-timeout duration - Maximum time after which a query execution will fail.
@@ -88,7 +88,7 @@ type WorkerOptions struct {
 	//
 	// ratio float64 - the ratio of queries to trace (must be between 0 and 1)
 	// jaeger string - URL of Jaeger to send OpenCensus traces
-	// datadog string - URL of Datadog to to send OpenCensus traces
+	// datadog string - URL of Datadog to send OpenCensus traces
 	Trace *z.SuperFlag
 	// MyAddr stores the address and port for this alpha.
 	MyAddr string
