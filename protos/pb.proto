@@ -319,6 +319,8 @@ message RestoreRequest {
   string vault_format = 15;
 
   uint64 backup_num = 16;
+  uint64 incremental_from = 17;
+  bool is_partial = 18;
 }
 
 message Proposal {

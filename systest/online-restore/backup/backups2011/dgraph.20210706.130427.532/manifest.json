@@ -1,0 +1,1 @@
+{"type":"full","since":55,"groups":{"1":["dgraph.graphql.schema_created_at","dgraph.graphql.schema","dgraph.drop.op","dgraph.cors","dgraph.graphql.xid","dgraph.graphql.p_sha256hash","dgraph.graphql.p_query","dgraph.type","dgraph.graphql.schema_history"],"2":["name"]},"backup_id":"wizardly_blackburn2","backup_num":1,"encrypted":false,"drop_operations":null}

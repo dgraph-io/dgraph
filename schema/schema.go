@@ -499,6 +499,10 @@ func Load(predicate string) error {
 
 // LoadFromDb reads schema information from db and stores it in memory
 func LoadFromDb(ctx context.Context) error {
+	// Reset the state because with the introduction of incremental restore,
+	// it can't be assumed that the state would be empty before loading the
+	// schema from the DB as we don't do drop all in case of incremental restores.
+	State().DeleteAll()
 	if err := loadFromDB(ctx, loadSchema); err != nil {
 		return err
 	}

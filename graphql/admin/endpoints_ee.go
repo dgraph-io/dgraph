@@ -66,10 +66,22 @@ const adminTypes = `
 		backupId: String
 
 		"""
-		Number of the backup within the backup series to be restored. Backups with a greater value
+		Number of backups within the backup series to be restored. Backups outside this range
 		will be ignored. If the value is zero or missing, the entire series will be restored.
 		"""
 		backupNum: Int
+
+		"""
+		All the backups with num >= incrementalFrom will be restored.
+		"""
+		incrementalFrom: Int
+
+		"""
+		If isPartial is set to true then the cluster will be kept in draining mode after
+		restore. This makes sure that the db is not corrupted by any mutations or tablet
+		moves in between two restores.
+		"""
+		isPartial: Boolean
 
 		"""
 		Path to the key file needed to decrypt the backup. This file should be accessible
