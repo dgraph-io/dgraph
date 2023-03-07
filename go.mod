@@ -35,7 +35,7 @@ require (
 	github.com/google/go-cmp v0.5.9
 	github.com/google/uuid v1.3.0
 	github.com/gorilla/websocket v1.4.2
-	github.com/graph-gophers/graphql-go v0.0.0-20200309224638-dae41bde9ef9
+	github.com/graph-gophers/graphql-go v1.3.0
 	github.com/hashicorp/vault/api v1.0.4
 	github.com/minio/minio-go/v6 v6.0.55
 	github.com/mitchellh/panicwrap v1.0.0
