@@ -61,14 +61,14 @@ func NewCluster(conf ClusterConfig) (LocalCluster, error) {
 	return c, nil
 }
 
-func (c LocalCluster) log(format string, args ...any) {
+func (c *LocalCluster) log(format string, args ...any) {
 	if c.conf.logr == nil {
 		return
 	}
 	c.conf.logr.Logf(format, args...)
 }
 
-func (c LocalCluster) init() error {
+func (c *LocalCluster) init() error {
 	var err error
 	c.dcli, err = docker.NewEnvClient()
 	if err != nil {
@@ -111,7 +111,7 @@ func (c LocalCluster) init() error {
 	return nil
 }
 
-func (c LocalCluster) createNetwork() error {
+func (c *LocalCluster) createNetwork() error {
 	c.net.name = c.conf.prefix + "-net"
 	opts := types.NetworkCreate{
 		Driver: "bridge",
@@ -127,7 +127,7 @@ func (c LocalCluster) createNetwork() error {
 	return nil
 }
 
-func (c LocalCluster) Start() error {
+func (c *LocalCluster) Start() error {
 	c.log("starting cluster with prefix [%v]", c.conf.prefix)
 	for i := 0; i < c.conf.numZeros; i++ {
 		if err := c.StartZero(i); err != nil {
@@ -146,21 +146,21 @@ func (c LocalCluster) Start() error {
 	return nil
 }
 
-func (c LocalCluster) StartZero(id int) error {
+func (c *LocalCluster) StartZero(id int) error {
 	if id >= c.conf.numZeros {
 		return fmt.Errorf("invalid id of zero: %v", id)
 	}
 	return c.startContainer(c.zeros[id])
 }
 
-func (c LocalCluster) StartAlpha(id int) error {
+func (c *LocalCluster) StartAlpha(id int) error {
 	if id >= c.conf.numAlphas {
 		return fmt.Errorf("invalid id of alpha: %v", id)
 	}
 	return c.startContainer(c.alphas[id])
 }
 
-func (c LocalCluster) startContainer(dc dnode) error {
+func (c *LocalCluster) startContainer(dc dnode) error {
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 	defer cancel()
 	if err := c.dcli.ContainerStart(ctx, dc.cid(), types.ContainerStartOptions{}); err != nil {
@@ -169,7 +169,7 @@ func (c LocalCluster) startContainer(dc dnode) error {
 	return nil
 }
 
-func (c LocalCluster) Stop() error {
+func (c *LocalCluster) Stop() error {
 	c.log("stopping cluster with prefix [%v]", c.conf.prefix)
 	for i := range c.alphas {
 		if err := c.StopAlpha(i); err != nil {
@@ -184,21 +184,21 @@ func (c LocalCluster) Stop() error {
 	return nil
 }
 
-func (c LocalCluster) StopZero(id int) error {
+func (c *LocalCluster) StopZero(id int) error {
 	if id >= c.conf.numZeros {
 		return fmt.Errorf("invalid id of zero: %v", id)
 	}
 	return c.stopContainer(c.zeros[id])
 }
 
-func (c LocalCluster) StopAlpha(id int) error {
+func (c *LocalCluster) StopAlpha(id int) error {
 	if id >= c.conf.numAlphas {
 		return fmt.Errorf("invalid id of alpha: %v", id)
 	}
 	return c.stopContainer(c.alphas[id])
 }
 
-func (c LocalCluster) stopContainer(dc dnode) error {
+func (c *LocalCluster) stopContainer(dc dnode) error {
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 	defer cancel()
 	if err := c.dcli.ContainerStop(ctx, dc.cid(), &stopTimeout); err != nil {
@@ -207,7 +207,7 @@ func (c LocalCluster) stopContainer(dc dnode) error {
 	return nil
 }
 
-func (c LocalCluster) Cleanup() {
+func (c *LocalCluster) Cleanup() {
 	c.log("cleaning up cluster with prefix [%v]", c.conf.prefix)
 
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
@@ -224,12 +224,14 @@ func (c LocalCluster) Cleanup() {
 			c.log("error removing zero [%v]: %v", zo.cname(), err)
 		}
 	}
-	if err := c.dcli.NetworkRemove(ctx, c.net.id); err != nil {
-		c.log("error removing network [%v]: %v", c.net.name, err)
+	if c.net.id != "" {
+		if err := c.dcli.NetworkRemove(ctx, c.net.id); err != nil {
+			c.log("error removing network [%v]: %v", c.net.name, err)
+		}
 	}
 }
 
-func (c LocalCluster) createContainer(dc dnode) (string, error) {
+func (c *LocalCluster) createContainer(dc dnode) (string, error) {
 	cmd := dc.cmd(c)
 	image := c.dgraphImage()
 	mts, err := dc.mounts(c.conf)
@@ -258,7 +260,7 @@ func (c LocalCluster) createContainer(dc dnode) (string, error) {
 	return resp.ID, nil
 }
 
-func (c LocalCluster) healthCheck() error {
+func (c *LocalCluster) healthCheck() error {
 	c.log("checking health of containers")
 	for i := 0; i < c.conf.numZeros; i++ {
 		url, err := c.zeros[i].healthURL(c)
@@ -281,7 +283,7 @@ func (c LocalCluster) healthCheck() error {
 	return nil
 }
 
-func (c LocalCluster) containerHealthCheck(url string) error {
+func (c *LocalCluster) containerHealthCheck(url string) error {
 	for i := 0; i < 60; i++ {
 		resp, err := http.Get(url)
 		if err == nil && resp != nil && resp.StatusCode == http.StatusOK {
