@@ -397,8 +397,7 @@ func (l *loader) upsertUids(nqs []*api.NQuad) {
 	}
 
 	var result map[string][]dResult
-	err = json.Unmarshal(resp.GetJson(), &result)
-	x.Panic(err)
+	x.Panic(json.Unmarshal(resp.GetJson(), &result))
 
 	for xid, idx := range ids {
 		// xid already exist in dgraph

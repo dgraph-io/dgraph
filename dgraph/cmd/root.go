@@ -289,8 +289,7 @@ http://zsh.sourceforge.net/Doc/Release/Completion-System.html
 func convertJSON(old string) io.Reader {
 	dec := json.NewDecoder(strings.NewReader(old))
 	config := make(map[string]interface{})
-	err := dec.Decode(&config)
-	x.Panic(err)
+	x.Panic(dec.Decode(&config))
 
 	// super holds superflags to later be condensed into 'good'
 	super, good := make(map[string]map[string]interface{}), make(map[string]string)
@@ -313,8 +312,7 @@ func convertJSON(old string) io.Reader {
 	buf := &bytes.Buffer{}
 	enc := json.NewEncoder(buf)
 	enc.SetIndent("", "    ")
-	err = enc.Encode(&good)
-	x.Panic(err)
+	x.Panic(enc.Encode(&good))
 
 	return buf
 }
