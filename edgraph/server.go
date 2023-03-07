@@ -552,10 +552,10 @@ func validateComment(span *otrace.Span, Query string, q bool) {
 	re := regexp.MustCompile(`(?m)#tag:(\w+)`)
 	querytag := re.FindStringSubmatch(Query)
 	if len(querytag) > 1 {
-		switch {
-		case !q:
+		switch q {
+		case false:
 			span.AddAttributes(otrace.StringAttribute("mutation.tag", querytag[1]))
-		case q:
+		case true:
 			span.AddAttributes(otrace.StringAttribute("query.tag", querytag[1]))
 		}
 	}
