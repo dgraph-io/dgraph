@@ -28,6 +28,7 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 const (
@@ -45,9 +46,7 @@ func getJWT(b require.TestingT, metaInfo *testutil.AuthMeta) http.Header {
 
 func getAuthMeta(schema string) *testutil.AuthMeta {
 	authMeta, err := authorization.Parse(schema)
-	if err != nil {
-		panic(err)
-	}
+	x.Panic(err)
 
 	return &testutil.AuthMeta{
 		PublicKey: authMeta.VerificationKey,

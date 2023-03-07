@@ -123,9 +123,7 @@ func (ex *executor) Execute(ctx context.Context, req *dgoapi.Request,
 	}
 
 	res, err := json.Marshal(ex.result)
-	if err != nil {
-		panic(err)
-	}
+	x.Panic(err)
 
 	return &dgoapi.Response{
 		Json: res,
