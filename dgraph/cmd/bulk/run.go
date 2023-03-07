@@ -101,8 +101,7 @@ func init() {
 	flag.StringP("zero", "z", "localhost:5080", "gRPC address for Dgraph zero")
 	flag.String("xidmap", "", "Directory to store xid to uid mapping")
 	// TODO: Potentially move http server to main.
-	flag.String("http", "localhost:8080",
-		"Address to serve http (pprof).")
+	flag.String("http", "localhost:8080", "Address to serve http (pprof).")
 	flag.Bool("ignore_errors", false, "ignore line parsing errors in rdf files")
 	flag.Int("map_shards", 1,
 		"Number of map output shards. Must be greater than or equal to the number of reduce "+

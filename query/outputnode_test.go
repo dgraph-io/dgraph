@@ -203,9 +203,7 @@ func buildTestTree(b *testing.B, enc *encoder, level, maxlevel int, fj fastJsonN
 		var ch fastJsonNode
 		if level == maxlevel-1 {
 			val, err := valToBytes(testVal)
-			if err != nil {
-				panic(err)
-			}
+			x.Panic(err)
 
 			ch, err = enc.makeScalarNode(enc.idForAttr(testAttr), val, false)
 			require.NoError(b, err)

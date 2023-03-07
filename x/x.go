@@ -119,8 +119,8 @@ const (
 	// AppliedUntil - TxnMarks.DoneUntil() before old transactions start getting aborted.
 	ForceAbortDifference = 5000
 
-	// FacetDelimeter is the symbol used to distinguish predicate names from facets.
-	FacetDelimeter = "|"
+	// FacetDelimiter is the symbol used to distinguish predicate names from facets.
+	FacetDelimiter = "|"
 
 	// GrootId is the ID of the admin user for ACLs.
 	GrootId = "groot"
@@ -151,7 +151,7 @@ var (
 	Nilbyte []byte
 	// GuardiansUid is a map from namespace to the Uid of guardians group node.
 	GuardiansUid = &sync.Map{}
-	// GrootUser Uid is a map from namespace to the Uid of groot user node.
+	// GrootUid is a map from namespace to the Uid of groot user node.
 	GrootUid = &sync.Map{}
 )
 
@@ -212,10 +212,8 @@ type queryRes struct {
 
 // IsGqlErrorList tells whether the given err is a list of GraphQL errors.
 func IsGqlErrorList(err error) bool {
-	if _, ok := err.(GqlErrorList); ok {
-		return true
-	}
-	return false
+	_, ok := err.(GqlErrorList)
+	return ok
 }
 
 func (gqlErr *GqlError) Error() string {
@@ -586,7 +584,7 @@ func HasWhitelistedIP(ctx context.Context) (net.Addr, error) {
 	return peerInfo.Addr, nil
 }
 
-// Write response body, transparently compressing if necessary.
+// WriteResponse writes response body, transparently compressing if necessary.
 func WriteResponse(w http.ResponseWriter, r *http.Request, b []byte) (int, error) {
 	var out io.Writer = w
 

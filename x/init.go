@@ -134,7 +134,7 @@ var versionRe *regexp.Regexp = regexp.MustCompile(`-g[[:xdigit:]]{7,}`)
 //  1. v2.0.0-rc1-127-gd20a768b3 => dev version
 //  2. v2.0.0 => prod version
 func DevVersion() (matched bool) {
-	return (versionRe.MatchString(dgraphVersion))
+	return versionRe.MatchString(dgraphVersion)
 }
 
 // ExecutableChecksum returns a byte slice containing the SHA256 checksum of the executable.

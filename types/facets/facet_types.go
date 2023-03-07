@@ -17,10 +17,7 @@
 package facets
 
 import (
-	"errors"
-
 	"github.com/dgraph-io/dgo/v210/protos/api"
-	"github.com/dgraph-io/dgraph/x"
 )
 
 const (
@@ -52,7 +49,7 @@ func ValTypeForTypeID(typId TypeID) api.Facet_ValType {
 		return api.Facet_DATETIME
 	case StringID:
 		return api.Facet_STRING
+	default:
+		panic("unhandled case in ValTypeForTypeID")
 	}
-	x.Panic(errors.New("unhandled case in ValTypeForTypeID"))
-	return api.Facet_ValType(0)
 }

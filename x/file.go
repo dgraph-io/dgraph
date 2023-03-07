@@ -169,11 +169,7 @@ func WriteGroupIdFile(pdir string, group_id uint32) error {
 	if _, err := f.WriteString("\n"); err != nil {
 		return err
 	}
-	if err := f.Close(); err != nil {
-		return err
-	}
-
-	return nil
+	return f.Close()
 }
 
 // ReadGroupIdFile reads the file at the given path and attempts to retrieve the

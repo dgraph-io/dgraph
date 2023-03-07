@@ -1329,7 +1329,7 @@ func facetName(fieldName string, f *api.Facet) string {
 	if f.Alias != "" {
 		return f.Alias
 	}
-	return fieldName + x.FacetDelimeter + f.Key
+	return fieldName + x.FacetDelimiter + f.Key
 }
 
 // This method gets the values and children for a subprotos.

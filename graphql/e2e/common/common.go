@@ -1445,9 +1445,7 @@ func GetJWTForInterfaceAuth(t *testing.T, user, role string, ans bool, metaInfo 
 func BootstrapAuthData() ([]byte, []byte) {
 	schemaFile := "../auth/schema.graphql"
 	schema, err := os.ReadFile(schemaFile)
-	if err != nil {
-		panic(err)
-	}
+	x.Panic(err)
 
 	jsonFile := "../auth/test_data.json"
 	data, err := os.ReadFile(jsonFile)

@@ -390,39 +390,29 @@ func (l *loader) upsertUids(nqs []*api.NQuad) {
 		Query:     query.String(),
 		Mutations: []*api.Mutation{{Set: mutations}},
 	})
-
-	if err != nil {
-		panic(err)
-	}
+	x.Panic(err)
 
 	type dResult struct {
 		Uid string
 	}
 
 	var result map[string][]dResult
-	err = json.Unmarshal(resp.GetJson(), &result)
-	if err != nil {
-		panic(err)
-	}
+	x.Panic(json.Unmarshal(resp.GetJson(), &result))
 
 	for xid, idx := range ids {
 		// xid already exist in dgraph
 		if val, ok := result[idx]; ok && len(val) > 0 {
 			uid, err := strconv.ParseUint(val[0].Uid, 0, 64)
-			if err != nil {
-				panic(err)
-			}
+			x.Panic(err)
 
 			l.alloc.SetUid(xid, uid)
 			continue
 		}
 
-		// new uid created in draph
+		// new uid created in dgraph
 		if val, ok := resp.GetUids()[generateUidFunc(idx)]; ok {
 			uid, err := strconv.ParseUint(val, 0, 64)
-			if err != nil {
-				panic(err)
-			}
+			x.Panic(err)
 
 			l.alloc.SetUid(xid, uid)
 			continue

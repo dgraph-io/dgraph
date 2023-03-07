@@ -404,7 +404,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 	// move all facets from global map to smaller mr.rawFacets map
 	mr.rawFacets = make(map[string]interface{})
 	for k, v := range m {
-		if strings.Contains(k, x.FacetDelimeter) {
+		if strings.Contains(k, x.FacetDelimiter) {
 			mr.rawFacets[k] = v
 			delete(m, k)
 		}
@@ -514,7 +514,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 			Namespace: namespace,
 		}
 
-		prefix := pred + x.FacetDelimeter
+		prefix := pred + x.FacetDelimiter
 		if _, ok := v.([]interface{}); !ok {
 			fts, err := parseScalarFacets(mr.rawFacets, prefix)
 			if err != nil {
@@ -654,7 +654,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 		}
 	}
 
-	fts, err := parseScalarFacets(mr.rawFacets, parentPred+x.FacetDelimeter)
+	fts, err := parseScalarFacets(mr.rawFacets, parentPred+x.FacetDelimiter)
 	mr.fcts = fts
 
 	return mr, err
