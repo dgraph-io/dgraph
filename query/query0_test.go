@@ -21,7 +21,9 @@ package query
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -3510,6 +3512,26 @@ func TestMatchingWithPagination(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			result := processQueryNoErr(t, tc.query)
 			require.JSONEq(t, tc.expected, result)
+		})
+	}
+}
+
+func TestInvalidRegex(t *testing.T) {
+	testCases := []struct {
+		regex  string
+		errStr string
+	}{
+		{"/", "invalid"},
+		{"", "empty"},
+		{"/?", "invalid"},
+		{"=/?", "invalid"},
+		{"aman/", "invalid"},
+	}
+	for i, tc := range testCases {
+		t.Run(fmt.Sprintf("test%d regex=%v", i, tc.regex), func(t *testing.T) {
+			vars := map[string]string{"$name": tc.regex}
+			_, err := processQueryWithVars(t, `query q($name:string){ q(func: regexp(dgraph.type, $name)) {}}`, vars)
+			require.Contains(t, strings.ToLower(err.Error()), tc.errStr)
 		})
 	}
 }
