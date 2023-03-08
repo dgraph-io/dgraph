@@ -102,15 +102,51 @@ func (z *zero) workingDir() string {
 	return zeroWorkingDir
 }
 
+func fileExists(filename string) bool {
+	info, err := os.Stat(filename)
+	if os.IsNotExist(err) {
+		return false
+	}
+	return !info.IsDir()
+}
+
 func (z *zero) mounts(conf ClusterConfig) ([]mount.Mount, error) {
-	return []mount.Mount{
-		{
-			Type:     mount.TypeBind,
-			Source:   os.Getenv("GOPATH") + "/bin",
-			Target:   "/gobin",
-			ReadOnly: true,
-		},
-	}, nil
+
+	if conf.version != "local" {
+		absPath, err := filepath.Abs("binaries/dgraph_" + conf.version)
+		if err != nil {
+			return nil, errors.Wrap(err, "error finding absolute path for base dgraph binary path")
+		}
+		if !fileExists(absPath) {
+			if err := setupBinary(conf.version, conf.logr); err != nil {
+				return nil, err
+			}
+		} else {
+
+			_, err := copy(absPath, tempDir+"/dgraph")
+			if err != nil {
+				return nil, errors.Wrap(err, "error while copying dgraph binary into temp dir ")
+			}
+		}
+		return []mount.Mount{
+			{
+				Type:     mount.TypeBind,
+				Source:   tempDir,
+				Target:   "/gobin",
+				ReadOnly: true,
+			},
+		}, nil
+	} else {
+
+		return []mount.Mount{
+			{
+				Type:     mount.TypeBind,
+				Source:   os.Getenv("GOPATH") + "/bin",
+				Target:   "/gobin",
+				ReadOnly: true,
+			},
+		}, nil
+	}
 }
 
 func (z *zero) healthURL(c *LocalCluster) (string, error) {
@@ -175,13 +211,21 @@ func (a *alpha) workingDir() string {
 }
 
 func (a *alpha) mounts(conf ClusterConfig) ([]mount.Mount, error) {
-	mounts := []mount.Mount{
-		{
+	var mounts []mount.Mount
+	if conf.version != "local" {
+		mounts = append(mounts, mount.Mount{
+			Type:     mount.TypeBind,
+			Source:   tempDir,
+			Target:   "/gobin",
+			ReadOnly: true,
+		})
+	} else {
+		mounts = append(mounts, mount.Mount{
 			Type:     mount.TypeBind,
 			Source:   os.Getenv("GOPATH") + "/bin",
 			Target:   "/gobin",
 			ReadOnly: true,
-		},
+		})
 	}
 
 	if conf.acl {

@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/docker/docker/api/types"
@@ -82,6 +84,10 @@ func (c *LocalCluster) init() error {
 
 	if err := c.createNetwork(); err != nil {
 		return errors.Wrap(err, "error creating network")
+	}
+	tempDir, err = os.MkdirTemp("", "tempDir")
+	if err != nil {
+		return errors.Wrap(err, "error while creating temp dir")
 	}
 
 	for i := 0; i < c.conf.numZeros; i++ {
@@ -296,9 +302,31 @@ func (c *LocalCluster) containerHealthCheck(url string) error {
 			_ = resp.Body.Close()
 		}
 
-		c.log("health for [%v] failed, err: [%v], response: [%v]", url, err, body)
+		c.log("health for [%v] failed, err: [%v], response: [%v]", url, err, string(body))
 		time.Sleep(time.Second)
 	}
 
 	return fmt.Errorf("failed health check on [%v]", url)
+}
+
+func (c *LocalCluster) ChangeVersion(upgradeVersion string) error {
+	c.log("changing version of cluster")
+	//stop all containers
+	c.Stop()
+	//setup function
+	absPath, err := filepath.Abs("binaries/dgraph_" + upgradeVersion)
+	if err != nil {
+		return errors.Wrap(err, "error finding absolute path for base dgraph binary path")
+	}
+	if !fileExists(absPath) {
+		if err := setupBinary(upgradeVersion, c.conf.logr); err != nil {
+			return err
+		}
+	}
+	if err := flipVersion(upgradeVersion); err != nil {
+		return err
+	}
+	//  re-start cluster
+	c.Start()
+	return nil
 }
