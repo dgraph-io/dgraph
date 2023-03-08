@@ -312,7 +312,10 @@ func (c *LocalCluster) containerHealthCheck(url string) error {
 func (c *LocalCluster) ChangeVersion(upgradeVersion string) error {
 	c.log("changing version of cluster")
 	//stop all containers
-	c.Stop()
+	if err := c.Stop(); err != nil {
+		return err
+	}
+
 	//setup function
 	absPath, err := filepath.Abs("binaries/dgraph_" + upgradeVersion)
 	if err != nil {
@@ -327,6 +330,8 @@ func (c *LocalCluster) ChangeVersion(upgradeVersion string) error {
 		return err
 	}
 	//  re-start cluster
-	c.Start()
+	if err := c.Start(); err != nil {
+		return err
+	}
 	return nil
 }

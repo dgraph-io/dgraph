@@ -122,8 +122,7 @@ func (z *zero) mounts(conf ClusterConfig) ([]mount.Mount, error) {
 				return nil, err
 			}
 		} else {
-
-			_, err := copy(absPath, tempDir+"/dgraph")
+			err := copy(absPath, tempDir+"/dgraph")
 			if err != nil {
 				return nil, errors.Wrap(err, "error while copying dgraph binary into temp dir ")
 			}

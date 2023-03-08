@@ -85,7 +85,7 @@ func setupBinary(version string, logger Logger) error {
 	if err := makeDgraphBinary(repoDir, absPath, version); err != nil {
 		return err
 	}
-	_, err = copy(relativeDir+"/dgraph_"+version, tempDir+"/dgraph")
+	err = copy(relativeDir+"/dgraph_"+version, tempDir+"/dgraph")
 	if err != nil {
 		return errors.Wrap(err, "error while copying dgraph binary into temp dir ")
 	}
@@ -118,7 +118,7 @@ func makeDgraphBinary(dir, binaryDir, version string) error {
 	if err := cmd.Run(); err != nil {
 		return errors.Wrap(err, "error getting while building dgraph binary")
 	}
-	_, err := copy(dir+"/dgraph"+"/dgraph", binaryDir+"/dgraph_"+version)
+	err := copy(dir+"/dgraph"+"/dgraph", binaryDir+"/dgraph_"+version)
 	if err != nil {
 		return errors.Wrap(err, "error while while copying binary")
 	}
@@ -131,33 +131,36 @@ func flipVersion(upgradeVersion string) error {
 	if err != nil {
 		return errors.Wrap(err, "error while getting absolute path of upgraded version dir")
 	}
-	_, err = copy(absPathBaseUp+"/dgraph_"+upgradeVersion, tempDir+"/dgraph")
+	err = copy(absPathBaseUp+"/dgraph_"+upgradeVersion, tempDir+"/dgraph")
 	if err != nil {
 		return errors.Wrap(err, "error while copying dgraph binary into temp dir ")
 	}
 	return nil
 }
 
-func copy(src, dst string) (int64, error) {
+func copy(src, dst string) error {
 	sourceFileStat, err := os.Stat(src)
 	if err != nil {
-		return 0, err
+		return err
 	}
 	if !sourceFileStat.Mode().IsRegular() {
-		return 0, errors.Wrap(err, fmt.Sprintf("%s is not a regular file", src))
+		return errors.Wrap(err, fmt.Sprintf("%s is not a regular file", src))
 	}
 	source, err := os.Open(src)
 	if err != nil {
-		return 0, errors.Wrap(err, fmt.Sprintf("error while opening file [%s]", src))
+		return errors.Wrap(err, fmt.Sprintf("error while opening file [%s]", src))
 	}
 	defer source.Close()
 	destination, err := os.Create(dst)
 	if err != nil {
-		return 0, err
+		return err
 	}
 	srcStat, _ := source.Stat()
-	os.Chmod(dst, srcStat.Mode())
+	if err := os.Chmod(dst, srcStat.Mode()); err != nil {
+		return err
+	}
+
 	defer destination.Close()
-	nBytes, err := io.Copy(destination, source)
-	return nBytes, err
+	_, err = io.Copy(destination, source)
+	return err
 }
