@@ -119,7 +119,7 @@ func (n *node) startTask(id op) (*z.Closer, error) {
 
 // startTaskAtTs is used to check whether an op is already running. If a rollup is running,
 // it is canceled and startTask will wait until it completes before returning.
-// If the same task is already running, this method returns an errror.
+// If the same task is already running, this method returns an error.
 // Restore operations have preference and cancel all other operations, not just rollups.
 // You should only call Done() on the returned closer. Calling other functions (such as
 // SignalAndWait) for closer could result in panics. For more details, see GitHub issue #5034.
@@ -179,9 +179,8 @@ func (n *node) startTaskAtTs(id op, ts uint64) (*z.Closer, error) {
 				if otherOp.ts < ts {
 					// If backup is running at higher timestamp, then indexing can't be executed.
 					continue
-				} else {
-					return nil, errors.Errorf("operation %s is already running", otherId)
 				}
+				return nil, errors.Errorf("operation %s is already running", otherId)
 			case opRollup:
 				// Remove from map and signal the closer to cancel the operation.
 				delete(n.ops, otherId)
@@ -192,13 +191,12 @@ func (n *node) startTaskAtTs(id op, ts uint64) (*z.Closer, error) {
 		}
 	case opSnapshot, opPredMove:
 		for otherId, otherOp := range n.ops {
-			if otherId == opRollup {
-				// Remove from map and signal the closer to cancel the operation.
-				delete(n.ops, otherId)
-				otherOp.SignalAndWait()
-			} else {
+			if otherId != opRollup {
 				return nil, errors.Errorf("operation %s is already running", otherId)
 			}
+			// Remove from map and signal the closer to cancel the operation.
+			delete(n.ops, otherId)
+			otherOp.SignalAndWait()
 		}
 	default:
 		glog.Errorf("Got an unhandled operation %s. Ignoring...", id)
@@ -437,7 +435,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	}
 
 	// Scheduler tracks tasks at subject, predicate level, so doing
-	// schema stuff here simplies the design and we needn't worry about
+	// schema stuff here simplifies the design and we needn't worry about
 	// serializing the mutations per predicate or schema mutations
 	// We derive the schema here if it's not present
 	// Since raft committed logs are serialized, we can derive

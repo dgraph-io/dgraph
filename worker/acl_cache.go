@@ -22,7 +22,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-// aclCache is the cache mapping group names to the corresponding group acls
+// AclCache is the cache mapping group names to the corresponding group acls
 type AclCache struct {
 	sync.RWMutex
 	loaded        bool
