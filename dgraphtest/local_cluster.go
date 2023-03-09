@@ -72,7 +72,7 @@ func (c *LocalCluster) log(format string, args ...any) {
 
 func (c *LocalCluster) init() error {
 	var err error
-	GetPaths()
+	SetPaths()
 	c.dcli, err = docker.NewEnvClient()
 	if err != nil {
 		return errors.Wrap(err, "error setting up docker client")

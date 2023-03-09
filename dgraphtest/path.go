@@ -35,9 +35,9 @@ const (
 	cloneTimeout  = 10 * time.Minute
 )
 
-func GetPaths() {
-	_, thisFile, _, _ := runtime.Caller(0)
-	basePath := strings.ReplaceAll(thisFile, "/path.go", "")
+func SetPaths() {
+	_, thisFilePath, _, _ := runtime.Caller(0)
+	basePath := strings.ReplaceAll(thisFilePath, "/path.go", "")
 	repoDir = filepath.Join(basePath, "repo")
 	binDir = filepath.Join(basePath, "binaries")
 	encKeyPath = filepath.Join(basePath, "data", "enc-key")
