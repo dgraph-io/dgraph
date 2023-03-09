@@ -44,8 +44,8 @@ type cnet struct {
 }
 
 type LocalCluster struct {
-	conf    ClusterConfig
-	tempDir string
+	conf       ClusterConfig
+	tempBinDir string
 	// resources
 	dcli   *docker.Client
 	net    cnet
@@ -72,6 +72,7 @@ func (c *LocalCluster) log(format string, args ...any) {
 
 func (c *LocalCluster) init() error {
 	var err error
+	GetPaths()
 	c.dcli, err = docker.NewEnvClient()
 	if err != nil {
 		return errors.Wrap(err, "error setting up docker client")
@@ -85,7 +86,7 @@ func (c *LocalCluster) init() error {
 	if err := c.createNetwork(); err != nil {
 		return errors.Wrap(err, "error creating network")
 	}
-	c.tempDir, err = os.MkdirTemp("", "tempDir")
+	c.tempBinDir, err = os.MkdirTemp("", c.conf.prefix)
 	if err != nil {
 		return errors.Wrap(err, "error while creating temp dir")
 	}
@@ -235,6 +236,10 @@ func (c *LocalCluster) Cleanup() {
 			c.log("error removing network [%v]: %v", c.net.name, err)
 		}
 	}
+	if err := os.RemoveAll(c.tempBinDir); err != nil {
+		c.log("error while removing temp Dir", err)
+	}
+
 }
 
 func (c *LocalCluster) createContainer(dc dnode) (string, error) {
@@ -309,29 +314,23 @@ func (c *LocalCluster) containerHealthCheck(url string) error {
 	return fmt.Errorf("failed health check on [%v]", url)
 }
 
-func (c *LocalCluster) ChangeVersion(upgradeVersion string) error {
-	c.log("changing version of cluster")
-	// stop cluster
+func (c *LocalCluster) ChangeVersion(version string) error {
+	c.log("upgrading the cluster to [%v] using stop-start", version)
 	if err := c.Stop(); err != nil {
 		return err
 	}
-	absPath, err := filepath.Abs("binaries/dgraph_" + upgradeVersion)
-	if err != nil {
-		return errors.Wrap(err, "error finding absolute path for base dgraph binary path")
-	}
-	isFileExist, err := fileExists(absPath)
+	isFileExist, err := fileExists(filepath.Join(binDir, "dgraph_") + version)
 	if err != nil {
 		return err
 	}
 	if !isFileExist {
-		if err := c.setupBinary(upgradeVersion, c.conf.logr); err != nil {
+		if err := c.setupBinary(version, c.conf.logr); err != nil {
 			return err
 		}
 	}
-	if err := flipVersion(upgradeVersion, c.tempDir); err != nil {
+	if err := flipVersion(version, c.tempBinDir); err != nil {
 		return err
 	}
-	// re-start cluster
 	if err := c.Start(); err != nil {
 		return err
 	}

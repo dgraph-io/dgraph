@@ -44,10 +44,9 @@ const (
 	alphaWorkingDir = "/data/alpha"
 	zeroWorkingDir  = "/data/zero"
 
-	aclSecretPath      = "data/hmac-secret"
 	aclSecretMountPath = "/dgraph-acl/hmac-secret"
-	encKeyPath         = "data/enc-key"
-	encKeyMountPath    = "/dgraph-enc/enc-key"
+
+	encKeyMountPath = "/dgraph-enc/enc-key"
 )
 
 type dnode interface {
@@ -115,11 +114,11 @@ func fileExists(filename string) (bool, error) {
 
 func (z *zero) mounts(c *LocalCluster) ([]mount.Mount, error) {
 	var mounts []mount.Mount
-	dBinMnt, err := mountDBinary(c)
+	binMount, err := mountBinary(c)
 	if err != nil {
 		return nil, err
 	}
-	mounts = append(mounts, dBinMnt)
+	mounts = append(mounts, binMount)
 	return mounts, nil
 }
 
@@ -186,32 +185,24 @@ func (a *alpha) workingDir() string {
 
 func (a *alpha) mounts(c *LocalCluster) ([]mount.Mount, error) {
 	var mounts []mount.Mount
-	dBinMnt, err := mountDBinary(c)
+	binMount, err := mountBinary(c)
 	if err != nil {
 		return nil, err
 	}
-	mounts = append(mounts, dBinMnt)
+	mounts = append(mounts, binMount)
 	if c.conf.acl {
-		absPath, err := filepath.Abs(aclSecretPath)
-		if err != nil {
-			return nil, errors.Wrap(err, "error finding absolute path for acl secret path")
-		}
 		mounts = append(mounts, mount.Mount{
 			Type:     mount.TypeBind,
-			Source:   absPath,
+			Source:   aclSecretPath,
 			Target:   aclSecretMountPath,
 			ReadOnly: true,
 		})
 	}
 
 	if c.conf.encryption {
-		absPath, err := filepath.Abs(encKeyPath)
-		if err != nil {
-			return nil, errors.Wrap(err, "error finding absolute path for enc key path")
-		}
 		mounts = append(mounts, mount.Mount{
 			Type:     mount.TypeBind,
-			Source:   absPath,
+			Source:   encKeyPath,
 			Target:   encKeyMountPath,
 			ReadOnly: true,
 		})
@@ -249,25 +240,28 @@ func publicPort(dcli *docker.Client, dc dnode, privatePort string) (string, erro
 	return "", fmt.Errorf("no mapping found for private port [%v] for container [%v]", privatePort, dc.cname())
 }
 
-func mountDBinary(c *LocalCluster) (mount.Mount, error) {
-	if c.conf.version != "local" {
-		isFileExist, err := fileExists(c.tempDir + "/dgraph")
+func mountBinary(c *LocalCluster) (mount.Mount, error) {
+	if c.conf.version == "local" {
+		return mount.Mount{
+			Type:     mount.TypeBind,
+			Source:   filepath.Join(os.Getenv("GOPATH"), "bin"),
+			Target:   "/gobin",
+			ReadOnly: true,
+		}, nil
+	} else {
+		isFileExist, err := fileExists(filepath.Join(c.tempBinDir, "dgraph"))
 		if err != nil {
 			return mount.Mount{}, err
 		}
 		if isFileExist {
 			return mount.Mount{
 				Type:     mount.TypeBind,
-				Source:   c.tempDir,
+				Source:   c.tempBinDir,
 				Target:   "/gobin",
 				ReadOnly: true,
 			}, nil
 		}
-		absPath, err := filepath.Abs("binaries/dgraph_" + c.conf.version)
-		if err != nil {
-			return mount.Mount{}, errors.Wrap(err, "error finding absolute path for base dgraph binary path")
-		}
-		isFileExist, err = fileExists(absPath)
+		isFileExist, err = fileExists(filepath.Join(binDir, "dgraph_") + c.conf.version)
 		if err != nil {
 			return mount.Mount{}, err
 		}
@@ -276,22 +270,16 @@ func mountDBinary(c *LocalCluster) (mount.Mount, error) {
 				return mount.Mount{}, err
 			}
 		} else {
-			if err := copy(absPath, c.tempDir+"/dgraph"); err != nil {
+			if err := copy(filepath.Join(binDir, "dgraph_")+c.conf.version, filepath.Join(c.tempBinDir, "dgraph")); err != nil {
 				return mount.Mount{}, errors.Wrap(err, "error while copying dgraph binary into temp dir")
 			}
 		}
 		return mount.Mount{
 			Type:     mount.TypeBind,
-			Source:   c.tempDir,
+			Source:   c.tempBinDir,
 			Target:   "/gobin",
 			ReadOnly: true,
 		}, nil
-	} else {
-		return mount.Mount{
-			Type:     mount.TypeBind,
-			Source:   os.Getenv("GOPATH") + "/bin",
-			Target:   "/gobin",
-			ReadOnly: true,
-		}, nil
+
 	}
 }
