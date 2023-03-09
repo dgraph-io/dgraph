@@ -86,7 +86,7 @@ func checkoutGitRepo(repo *git.Repository, hash *plumbing.Hash) error {
 	if err != nil {
 		return errors.Wrap(err, "error while getting git repo work tree")
 	}
-	if worktree.Checkout(&git.CheckoutOptions{Hash: plumbing.NewHash(hash.String())}); err != nil {
+	if err = worktree.Checkout(&git.CheckoutOptions{Hash: plumbing.NewHash(hash.String())}); err != nil {
 		return errors.Wrap(err, "error while checking out git repo")
 	}
 	return nil
