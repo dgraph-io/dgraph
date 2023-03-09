@@ -276,10 +276,9 @@ func (h *s3Handler) FileExists(path string) bool {
 		return true
 	}
 	errResponse := minio.ToErrorResponse(err)
-	if errResponse.Code == "NoSuchKey" {
-		return false
+	if errResponse.Code != "NoSuchKey" {
+		glog.Errorf("Failed to verify object existence: %v", err)
 	}
-	glog.Errorf("Failed to verify object existence: %v", err)
 	return false
 }
 

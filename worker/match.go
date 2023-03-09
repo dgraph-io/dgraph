@@ -29,7 +29,7 @@ import (
 // single-character edits (i.e. insertions, deletions or substitutions)
 // required to change one word into the other.
 //
-// This implemention is optimized to use O(min(m,n)) space and is based on the
+// This implementation is optimized to use O(min(m,n)) space and is based on the
 // optimized C version found here:
 // http://en.wikibooks.org/wiki/Algorithm_implementation/Strings/Levenshtein_distance#C
 func levenshteinDistance(s, t string) int {
@@ -62,7 +62,8 @@ func levenshteinDistance(s, t string) int {
 func min(a, b, c int) int {
 	if a < b && a < c {
 		return a
-	} else if b < c {
+	}
+	if b < c {
 		return b
 	}
 	return c

@@ -750,7 +750,7 @@ func (n *node) processApplyCh() {
 				// Don't break here. We still need to call the Done below.
 
 			} else {
-				// if this applyCommited fails, how do we ensure
+				// if this applyCommitted fails, how do we ensure
 				start := time.Now()
 				perr = n.applyCommitted(&proposal, key)
 				if key != 0 {
