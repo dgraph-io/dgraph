@@ -354,7 +354,7 @@ func getGrootAndGuardiansUid(t *testing.T, dg *dgo.Dgraph) (string, string) {
 	return grootUserUid, guardiansGroupUid
 }
 
-const defaultTimeToSleep = 500 * time.Millisecond
+const defaultTimeToSleep = 1 * time.Second
 
 const timeout = 5 * time.Second
 
@@ -1896,7 +1896,7 @@ func TestNewACLPredicates(t *testing.T) {
 			defer cancel()
 
 			resp, err := userClient.NewTxn().Query(ctx, tc.input)
-			require.Nil(t, err)
+			require.NoError(t, err)
 			testutil.CompareJSON(t, tc.output, string(resp.Json))
 		})
 	}
