@@ -29,27 +29,16 @@ import (
 	"github.com/pkg/errors"
 )
 
-// var (
-// 	homePath = os.Getenv("HOME") + "/dgraph"
-// 	repoDir  = homePath + "/binaries"
-// )
-
-// const (
-// 	relativeDir   = "binaries"
-// 	dgraphRepoUrl = "https://github.com/dgraph-io/dgraph.git"
-// 	cloneTimeout  = 10 * time.Minute
-// )
-
 func (c *LocalCluster) dgraphImage() string {
 	return "dgraph/dgraph:local"
 }
 
-func (c *LocalCluster) setupBinary(version string, logger Logger) error {
+func (c *LocalCluster) setupBinary() error {
 	ctx, cancel := context.WithTimeout(context.Background(), cloneTimeout)
 	defer cancel()
 	repo, err := git.PlainOpen(repoDir)
 	if err != nil && err == git.ErrRepositoryNotExists {
-		logger.Logf("cloning repo")
+		c.log("cloning repo")
 		repo, err = git.PlainCloneContext(ctx, repoDir, false, &git.CloneOptions{
 			URL: dgraphRepoUrl,
 		})
@@ -63,7 +52,7 @@ func (c *LocalCluster) setupBinary(version string, logger Logger) error {
 			return errors.Wrap(err, "error while fetching git repo")
 		}
 	}
-	hash, err := repo.ResolveRevision(plumbing.Revision(version))
+	hash, err := repo.ResolveRevision(plumbing.Revision(c.conf.version))
 	if err != nil {
 		return err
 	}
@@ -71,11 +60,11 @@ func (c *LocalCluster) setupBinary(version string, logger Logger) error {
 		return err
 	}
 	// make dgraph of specific version
-	logger.Logf("making binary")
-	if err := makeDgraphBinary(repoDir, binDir, version); err != nil {
+	c.log("building dgraph binary")
+	if err := buildDgraphBinary(repoDir, binDir, c.conf.version); err != nil {
 		return err
 	}
-	if err := copy(filepath.Join(binDir, "dgraph_")+version, filepath.Join(c.tempBinDir, "dgraph")); err != nil {
+	if err := copy(filepath.Join(binDir, fmt.Sprintf(binaryName, c.conf.version)), filepath.Join(c.tempBinDir, "dgraph")); err != nil {
 		return errors.Wrap(err, "error while copying dgraph binary into temp dir")
 	}
 	return nil
@@ -87,26 +76,19 @@ func checkoutGitRepo(repo *git.Repository, hash *plumbing.Hash) error {
 		return errors.Wrap(err, "error while getting git repo work tree")
 	}
 	if err = worktree.Checkout(&git.CheckoutOptions{Hash: plumbing.NewHash(hash.String())}); err != nil {
-		return errors.Wrap(err, "error while checking out git repo")
+		return errors.Wrap(err, fmt.Sprintf("error while checking out git repo with hash [%v]", hash.String()))
 	}
 	return nil
 }
 
-func makeDgraphBinary(dir, binaryDir, version string) error {
+func buildDgraphBinary(dir, binaryDir, version string) error {
 	cmd := exec.Command("make", "dgraph")
 	cmd.Dir = filepath.Join(dir, "dgraph")
 	if err := cmd.Run(); err != nil {
 		return errors.Wrap(err, "error getting while building dgraph binary")
 	}
-	if err := copy(filepath.Join(dir, "dgraph", "dgraph"), filepath.Join(binaryDir, "dgraph_")+version); err != nil {
+	if err := copy(filepath.Join(dir, "dgraph", "dgraph"), filepath.Join(binaryDir, fmt.Sprintf(binaryName, version))); err != nil {
 		return errors.Wrap(err, "error while copying binary")
-	}
-	return nil
-}
-
-func flipVersion(upgradeVersion, tempDir string) error {
-	if err := copy(filepath.Join(binDir, "dgraph_")+upgradeVersion, filepath.Join(tempDir, "dgraph")); err != nil {
-		return errors.Wrap(err, "error while copying dgraph binary into temp dir")
 	}
 	return nil
 }

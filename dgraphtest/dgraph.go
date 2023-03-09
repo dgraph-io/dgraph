@@ -30,6 +30,7 @@ import (
 )
 
 const (
+	binaryName       = "dgraph_%v"
 	zeroNameFmt      = "%v_zero%d"
 	zeroAliasNameFmt = "zero%d"
 	alphaNameFmt     = "%v_alpha%d"
@@ -45,8 +46,7 @@ const (
 	zeroWorkingDir  = "/data/zero"
 
 	aclSecretMountPath = "/dgraph-acl/hmac-secret"
-
-	encKeyMountPath = "/dgraph-enc/enc-key"
+	encKeyMountPath    = "/dgraph-enc/enc-key"
 )
 
 type dnode interface {
@@ -248,38 +248,38 @@ func mountBinary(c *LocalCluster) (mount.Mount, error) {
 			Target:   "/gobin",
 			ReadOnly: true,
 		}, nil
-	} else {
-		isFileExist, err := fileExists(filepath.Join(c.tempBinDir, "dgraph"))
-		if err != nil {
-			return mount.Mount{}, err
-		}
-		if isFileExist {
-			return mount.Mount{
-				Type:     mount.TypeBind,
-				Source:   c.tempBinDir,
-				Target:   "/gobin",
-				ReadOnly: true,
-			}, nil
-		}
-		isFileExist, err = fileExists(filepath.Join(binDir, "dgraph_") + c.conf.version)
-		if err != nil {
-			return mount.Mount{}, err
-		}
-		if !isFileExist {
-			if err := c.setupBinary(c.conf.version, c.conf.logr); err != nil {
-				return mount.Mount{}, err
-			}
-		} else {
-			if err := copy(filepath.Join(binDir, "dgraph_")+c.conf.version, filepath.Join(c.tempBinDir, "dgraph")); err != nil {
-				return mount.Mount{}, errors.Wrap(err, "error while copying dgraph binary into temp dir")
-			}
-		}
+	}
+
+	isFileExist, err := fileExists(filepath.Join(c.tempBinDir, "dgraph"))
+	if err != nil {
+		return mount.Mount{}, err
+	}
+	if isFileExist {
 		return mount.Mount{
 			Type:     mount.TypeBind,
 			Source:   c.tempBinDir,
 			Target:   "/gobin",
 			ReadOnly: true,
 		}, nil
-
 	}
+
+	isFileExist, err = fileExists(filepath.Join(binDir, fmt.Sprintf(binaryName, c.conf.version)))
+	if err != nil {
+		return mount.Mount{}, err
+	}
+	if !isFileExist {
+		if err := c.setupBinary(); err != nil {
+			return mount.Mount{}, err
+		}
+	} else {
+		if err := copy(filepath.Join(binDir, fmt.Sprintf(binaryName, c.conf.version)), filepath.Join(c.tempBinDir, "dgraph")); err != nil {
+			return mount.Mount{}, errors.Wrap(err, "error while copying dgraph binary into bin dir")
+		}
+	}
+	return mount.Mount{
+		Type:     mount.TypeBind,
+		Source:   c.tempBinDir,
+		Target:   "/gobin",
+		ReadOnly: true,
+	}, nil
 }

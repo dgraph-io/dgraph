@@ -24,7 +24,9 @@ import (
 )
 
 var (
-	repoDir       string
+	// repoDir to store cloned repository of dgraph
+	repoDir string
+	// binDir to store multiple binary versions
 	binDir        string
 	encKeyPath    string
 	aclSecretPath string
@@ -35,7 +37,7 @@ const (
 	cloneTimeout  = 10 * time.Minute
 )
 
-func SetPaths() {
+func init() {
 	_, thisFilePath, _, _ := runtime.Caller(0)
 	basePath := strings.ReplaceAll(thisFilePath, "/path.go", "")
 	repoDir = filepath.Join(basePath, "repo")

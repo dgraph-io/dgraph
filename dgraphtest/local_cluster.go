@@ -72,7 +72,6 @@ func (c *LocalCluster) log(format string, args ...any) {
 
 func (c *LocalCluster) init() error {
 	var err error
-	SetPaths()
 	c.dcli, err = docker.NewEnvClient()
 	if err != nil {
 		return errors.Wrap(err, "error setting up docker client")
@@ -314,22 +313,23 @@ func (c *LocalCluster) containerHealthCheck(url string) error {
 	return fmt.Errorf("failed health check on [%v]", url)
 }
 
-func (c *LocalCluster) ChangeVersion(version string) error {
+func (c *LocalCluster) Upgrade(version string) error {
+	if version == c.conf.version {
+		return fmt.Errorf("cannot upgrade to same version")
+	}
 	c.log("upgrading the cluster to [%v] using stop-start", version)
+	c.conf.version = version
 	if err := c.Stop(); err != nil {
 		return err
 	}
-	isFileExist, err := fileExists(filepath.Join(binDir, "dgraph_") + version)
+	isFileExist, err := fileExists(filepath.Join(binDir, fmt.Sprintf(binaryName, version)))
 	if err != nil {
 		return err
 	}
 	if !isFileExist {
-		if err := c.setupBinary(version, c.conf.logr); err != nil {
+		if err := c.setupBinary(); err != nil {
 			return err
 		}
-	}
-	if err := flipVersion(version, c.tempBinDir); err != nil {
-		return err
 	}
 	if err := c.Start(); err != nil {
 		return err
