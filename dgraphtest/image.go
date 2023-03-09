@@ -64,7 +64,8 @@ func (c *LocalCluster) setupBinary() error {
 	if err := buildDgraphBinary(repoDir, binDir, c.conf.version); err != nil {
 		return err
 	}
-	if err := copy(filepath.Join(binDir, fmt.Sprintf(binaryName, c.conf.version)), filepath.Join(c.tempBinDir, "dgraph")); err != nil {
+	if err := copy(filepath.Join(binDir, fmt.Sprintf(binaryName, c.conf.version)),
+		filepath.Join(c.tempBinDir, "dgraph")); err != nil {
 		return errors.Wrap(err, "error while copying dgraph binary into temp dir")
 	}
 	return nil
@@ -87,7 +88,8 @@ func buildDgraphBinary(dir, binaryDir, version string) error {
 	if err := cmd.Run(); err != nil {
 		return errors.Wrap(err, "error getting while building dgraph binary")
 	}
-	if err := copy(filepath.Join(dir, "dgraph", "dgraph"), filepath.Join(binaryDir, fmt.Sprintf(binaryName, version))); err != nil {
+	if err := copy(filepath.Join(dir, "dgraph", "dgraph"),
+		filepath.Join(binaryDir, fmt.Sprintf(binaryName, version))); err != nil {
 		return errors.Wrap(err, "error while copying binary")
 	}
 	return nil
