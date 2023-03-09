@@ -24,6 +24,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
@@ -31,8 +32,7 @@ import (
 )
 
 var (
-	tempDir  string
-	homePath = os.Getenv("HOME") + "/data/dgraph"
+	homePath = os.Getenv("HOME") + "/dgraph"
 	repoDir  = homePath + "/binaries"
 )
 
@@ -45,51 +45,58 @@ func (c *LocalCluster) dgraphImage() string {
 	return "dgraph/dgraph:local"
 }
 
-func setupBinary(version string, logger Logger) error {
-	var err error
+func (c *LocalCluster) setupBinary(version string, logger Logger) error {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(time.Minute*10))
+	defer cancel()
 	absPath, err := filepath.Abs(repoDir)
 	if err != nil {
 		return errors.Wrap(err, "error while getting absolute path")
 	}
 	repo, err := git.PlainOpen(absPath)
-	if err != nil && err.Error() == "repository does not exist" {
+	if err != nil && err == git.ErrRepositoryNotExists {
 		logger.Logf("cloning repo")
-		repo, err = git.PlainCloneContext(context.Background(), absPath, false, &git.CloneOptions{
+		repo, err = git.PlainCloneContext(ctx, absPath, false, &git.CloneOptions{
 			URL: dgraphRepoUrl,
 		})
 		if err != nil {
-			return errors.Wrap(err, "error getting while checking out git repo")
+			return errors.Wrap(err, "error while checking out dgraph git repo")
 
 		}
 	} else if err != nil {
 		return errors.Wrap(err, "error while opening git repo")
 	} else {
-		if err := repo.Fetch(&git.FetchOptions{}); err != nil && err.Error() != "already up-to-date" {
+		if err := repo.Fetch(&git.FetchOptions{}); err != nil && err != git.NoErrAlreadyUpToDate {
 			return errors.Wrap(err, "error while fetching git repo")
 		}
 	}
-	tagRef, err := repo.Tag(version)
-	if err != nil {
-		return errors.Wrap(err, "error while getting tagref of version")
+	var hash plumbing.Hash
+	if strings.Contains(version, "v") {
+		tagRef, err := repo.Tag(version)
+		if err != nil {
+			return errors.Wrap(err, "error while getting tagref of version")
+		}
+		hash = tagRef.Hash()
+	} else {
+		hash = plumbing.NewHash(version)
 	}
-	//checkout repo with specific tag
-	if err := checkoutGitRepo(repo, tagRef.Hash(), "branch"+version); err != nil {
+
+	// checkout repo with specific tag
+	if err := checkoutGitRepo(repo, hash, "branch"+version); err != nil {
 		return err
 	}
 	absPath, err = filepath.Abs(relativeDir)
 	if err != nil {
 		return errors.Wrap(err, "error while getting absolute path")
 	}
-	//make dgraph of specific version
-	fmt.Println("making binary")
+	// make dgraph of specific version
+	logger.Logf("making binary")
 	if err := makeDgraphBinary(repoDir, absPath, version); err != nil {
 		return err
 	}
-	err = copy(relativeDir+"/dgraph_"+version, tempDir+"/dgraph")
+	err = copy(relativeDir+"/dgraph_"+version, c.tempDir+"/dgraph")
 	if err != nil {
-		return errors.Wrap(err, "error while copying dgraph binary into temp dir ")
+		return errors.Wrap(err, "error while copying dgraph binary into temp dir")
 	}
-	fmt.Println("at the end")
 	return nil
 }
 
@@ -100,9 +107,7 @@ func checkoutGitRepo(repo *git.Repository, hash plumbing.Hash, branchName string
 
 	}
 	err = worktree.Checkout(&git.CheckoutOptions{
-		Hash:   hash,
-		Create: true,
-		Branch: plumbing.NewBranchReferenceName(branchName),
+		Hash: hash,
 	})
 	if err != nil && strings.Contains(err.Error(), "already exists") {
 		return nil
@@ -125,8 +130,7 @@ func makeDgraphBinary(dir, binaryDir, version string) error {
 	return nil
 }
 
-func flipVersion(upgradeVersion string) error {
-	fmt.Println("changing version")
+func flipVersion(upgradeVersion, tempDir string) error {
 	absPathBaseUp, err := filepath.Abs(relativeDir)
 	if err != nil {
 		return errors.Wrap(err, "error while getting absolute path of upgraded version dir")

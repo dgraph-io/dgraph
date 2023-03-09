@@ -44,8 +44,8 @@ type cnet struct {
 }
 
 type LocalCluster struct {
-	conf ClusterConfig
-
+	conf    ClusterConfig
+	tempDir string
 	// resources
 	dcli   *docker.Client
 	net    cnet
@@ -85,7 +85,7 @@ func (c *LocalCluster) init() error {
 	if err := c.createNetwork(); err != nil {
 		return errors.Wrap(err, "error creating network")
 	}
-	tempDir, err = os.MkdirTemp("", "tempDir")
+	c.tempDir, err = os.MkdirTemp("", "tempDir")
 	if err != nil {
 		return errors.Wrap(err, "error while creating temp dir")
 	}
@@ -240,7 +240,7 @@ func (c *LocalCluster) Cleanup() {
 func (c *LocalCluster) createContainer(dc dnode) (string, error) {
 	cmd := dc.cmd(c)
 	image := c.dgraphImage()
-	mts, err := dc.mounts(c.conf)
+	mts, err := dc.mounts(c)
 	if err != nil {
 		return "", err
 	}
@@ -311,25 +311,27 @@ func (c *LocalCluster) containerHealthCheck(url string) error {
 
 func (c *LocalCluster) ChangeVersion(upgradeVersion string) error {
 	c.log("changing version of cluster")
-	//stop all containers
+	// stop cluster
 	if err := c.Stop(); err != nil {
 		return err
 	}
-
-	//setup function
 	absPath, err := filepath.Abs("binaries/dgraph_" + upgradeVersion)
 	if err != nil {
 		return errors.Wrap(err, "error finding absolute path for base dgraph binary path")
 	}
-	if !fileExists(absPath) {
-		if err := setupBinary(upgradeVersion, c.conf.logr); err != nil {
+	isFileExist, err := fileExists(absPath)
+	if err != nil {
+		return err
+	}
+	if !isFileExist {
+		if err := c.setupBinary(upgradeVersion, c.conf.logr); err != nil {
 			return err
 		}
 	}
-	if err := flipVersion(upgradeVersion); err != nil {
+	if err := flipVersion(upgradeVersion, c.tempDir); err != nil {
 		return err
 	}
-	//  re-start cluster
+	// re-start cluster
 	if err := c.Start(); err != nil {
 		return err
 	}
