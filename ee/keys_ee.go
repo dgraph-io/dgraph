@@ -1,23 +1,25 @@
+//go:build !oss
 // +build !oss
 
 /*
- * Copyright 2022 Dgraph Labs, Inc. All rights reserved.
+ * Copyright 2023 Dgraph Labs, Inc. All rights reserved.
  *
  * Licensed under the Dgraph Community License (the "License"); you
  * may not use this file except in compliance with the License. You
  * may obtain a copy of the License at
  *
- *     https://github.com/dgraph-io/dgraph/blob/master/licenses/DCL.txt
+ *     https://github.com/dgraph-io/dgraph/blob/main/licenses/DCL.txt
  */
 
 package ee
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
+
+	"github.com/spf13/viper"
 
 	"github.com/dgraph-io/ristretto/z"
-	"github.com/spf13/viper"
 )
 
 // GetKeys returns the ACL and encryption keys as configured by the user
@@ -25,7 +27,6 @@ import (
 // this function always returns an error.
 func GetKeys(config *viper.Viper) (*Keys, error) {
 	keys := &Keys{}
-	var err error
 
 	aclSuperFlag := z.NewSuperFlag(config.GetString("acl")).MergeAndCheckDefault(AclDefaults)
 	encSuperFlag := z.NewSuperFlag(config.GetString("encryption")).MergeAndCheckDefault(EncDefaults)
@@ -37,7 +38,8 @@ func GetKeys(config *viper.Viper) (*Keys, error) {
 		if keys.AclKey != nil {
 			return nil, fmt.Errorf("flags: ACL secret key set in both vault and acl flags")
 		}
-		if keys.AclKey, err = ioutil.ReadFile(aclKeyFile); err != nil {
+		var err error
+		if keys.AclKey, err = os.ReadFile(aclKeyFile); err != nil {
 			return nil, fmt.Errorf("error reading ACL secret key from file: %s: %s", aclKeyFile, err)
 		}
 	}
@@ -50,7 +52,8 @@ func GetKeys(config *viper.Viper) (*Keys, error) {
 		if keys.EncKey != nil {
 			return nil, fmt.Errorf("flags: Encryption key set in both vault and encryption flags")
 		}
-		if keys.EncKey, err = ioutil.ReadFile(encKeyFile); err != nil {
+		var err error
+		if keys.EncKey, err = os.ReadFile(encKeyFile); err != nil {
 			return nil, fmt.Errorf("error reading encryption key from file: %s: %s", encKeyFile, err)
 		}
 	}

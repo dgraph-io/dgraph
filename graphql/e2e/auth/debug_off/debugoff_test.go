@@ -1,20 +1,22 @@
+//go:build integration
+
 package debugoff
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"os"
 	"testing"
 
 	"github.com/dgrijalva/jwt-go/v4"
-
-	"github.com/dgraph-io/dgraph/graphql/authorization"
-	"github.com/dgraph-io/dgraph/graphql/e2e/common"
-	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dgraph-io/dgraph/graphql/authorization"
+	"github.com/dgraph-io/dgraph/graphql/e2e/common"
+	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 var (
@@ -25,7 +27,6 @@ type TestCase struct {
 	user      string
 	role      string
 	result    string
-	name      string
 	variables map[string]interface{}
 }
 
@@ -126,13 +127,11 @@ func TestAddMutationWithXid(t *testing.T) {
 
 func TestMain(m *testing.M) {
 	schemaFile := "../schema.graphql"
-	schema, err := ioutil.ReadFile(schemaFile)
-	if err != nil {
-		panic(err)
-	}
+	schema, err := os.ReadFile(schemaFile)
+	x.Panic(err)
 
 	jsonFile := "../test_data.json"
-	data, err := ioutil.ReadFile(jsonFile)
+	data, err := os.ReadFile(jsonFile)
 	if err != nil {
 		panic(errors.Wrapf(err, "Unable to read file %s.", jsonFile))
 	}
@@ -140,14 +139,10 @@ func TestMain(m *testing.M) {
 	jwtAlgo := []string{jwt.SigningMethodHS256.Name, jwt.SigningMethodRS256.Name}
 	for _, algo := range jwtAlgo {
 		authSchema, err := testutil.AppendAuthInfo(schema, algo, "../sample_public_key.pem", false)
-		if err != nil {
-			panic(err)
-		}
+		x.Panic(err)
 
 		authMeta, err := authorization.Parse(string(authSchema))
-		if err != nil {
-			panic(err)
-		}
+		x.Panic(err)
 
 		metaInfo = &testutil.AuthMeta{
 			PublicKey:      authMeta.VerificationKey,

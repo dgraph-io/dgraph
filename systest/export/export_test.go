@@ -1,5 +1,7 @@
+//go:build integration
+
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors *
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -20,27 +22,27 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
-	"github.com/dgraph-io/dgo/v210"
-	"github.com/dgraph-io/dgo/v210/protos/api"
 	minio "github.com/minio/minio-go/v6"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
+	"github.com/dgraph-io/dgo/v210"
+	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 )
 
 var (
-	mc             *minio.Client
-	bucketName     = "dgraph-backup"
-	minioDest      = "minio://minio:9001/dgraph-backup?secure=false"
-	localBackupDst = "minio://localhost:9001/dgraph-backup?secure=false"
-	copyExportDir  = "./data/export-copy"
+	bucketName    = "dgraph-backup"
+	minioDest     = "minio://minio:9001/dgraph-backup?secure=false"
+	copyExportDir = "./data/export-copy"
 )
 
 // TestExportSchemaToMinio. This test does an export, then verifies that the
@@ -49,22 +51,20 @@ var (
 func TestExportSchemaToMinio(t *testing.T) {
 	mc, err := testutil.NewMinioClient()
 	require.NoError(t, err)
-	mc.MakeBucket(bucketName, "")
+	require.NoError(t, mc.MakeBucket(bucketName, ""))
 
 	setupDgraph(t, moviesData, movieSchema)
-	result := requestExport(t, minioDest, "rdf")
-	require.Equal(t, "Success", testutil.JsonGet(result, "data", "export", "response", "code").(string))
-	require.Equal(
-		t, "Export completed.", testutil.JsonGet(result, "data", "export", "response", "message").(string))
+	requestExport(t, minioDest, "rdf")
 
-	var files []string
-	for _, f := range testutil.JsonGet(result, "data", "export", "exportedFiles").([]interface{}) {
-		files = append(files, f.(string))
+	schemaFile := ""
+	doneCh := make(chan struct{})
+	defer close(doneCh)
+	for obj := range mc.ListObjectsV2(bucketName, "dgraph.", true, doneCh) {
+		if strings.Contains(obj.Key, ".schema.gz") {
+			schemaFile = obj.Key
+		}
 	}
-	require.Equal(t, 3, len(files))
-
-	schemaFile := files[1]
-	require.Contains(t, schemaFile, ".schema.gz")
+	require.NotEmpty(t, schemaFile)
 
 	object, err := mc.GetObject(bucketName, schemaFile, minio.GetObjectOptions{})
 	require.NoError(t, err)
@@ -74,7 +74,7 @@ func TestExportSchemaToMinio(t *testing.T) {
 	require.NoError(t, err)
 	defer reader.Close()
 
-	bytes, err := ioutil.ReadAll(reader)
+	bytes, err := io.ReadAll(reader)
 	require.NoError(t, err)
 	require.Equal(t, expectedSchema, string(bytes))
 }
@@ -112,14 +112,11 @@ func TestExportAndLoadJson(t *testing.T) {
 	setupDgraph(t, moviesData, movieSchema)
 
 	// Run export
-	const destination = "/data/export-data"
-	requestExport(t, destination, "json")
-
+	requestExport(t, "/data/export-data", "json")
 	copyToLocalFs(t)
-	files, err := ioutil.ReadDir(copyExportDir)
+	files, err := os.ReadDir(copyExportDir)
 	require.NoError(t, err)
 	require.Len(t, files, 1)
-	exportDir := filepath.Join(copyExportDir, files[0].Name())
 
 	q := `{ q(func:has(movie)) { count(uid) } }`
 
@@ -136,7 +133,12 @@ func TestExportAndLoadJson(t *testing.T) {
 	require.JSONEq(t, `{"data": {"q": [{"count":0}]}}`, res)
 
 	// Live load the exported data
-	loadData(t, exportDir, "json")
+	files, err = os.ReadDir(copyExportDir)
+	require.NoError(t, err)
+	require.Len(t, files, 1)
+	exportName := files[0].Name()
+	dir := filepath.Join(copyExportDir, exportName)
+	loadData(t, dir, "json")
 
 	res = runQuery(t, q)
 	require.JSONEq(t, `{"data":{"q":[{"count": 5}]}}`, res)
@@ -170,12 +172,10 @@ func TestExportAndLoadJsonFacets(t *testing.T) {
 
 	// Run export
 	requestExport(t, "/data/export-data", "json")
-
 	copyToLocalFs(t)
-	files, err := ioutil.ReadDir(copyExportDir)
+	files, err := os.ReadDir(copyExportDir)
 	require.NoError(t, err)
 	require.Len(t, files, 1)
-	exportDir := filepath.Join(copyExportDir, files[0].Name())
 
 	checkRes := func() {
 		// Check value posting.
@@ -215,7 +215,11 @@ func TestExportAndLoadJsonFacets(t *testing.T) {
 	require.JSONEq(t, `{"data": {"q": []}}`, res)
 
 	// Live load the exported data and verify that exported data is loaded correctly.
-	dir := filepath.Join(exportDir)
+	files, err = os.ReadDir(copyExportDir)
+	require.NoError(t, err)
+	require.Len(t, files, 1)
+	exportName := files[0].Name()
+	dir := filepath.Join(copyExportDir, exportName)
 	loadData(t, dir, "json")
 
 	// verify that the state after loading the exported data as same.
@@ -269,7 +273,7 @@ func dirCleanup(t *testing.T) {
 func setupDgraph(t *testing.T, nquads, schema string) {
 
 	require.NoError(t, os.MkdirAll("./data", os.ModePerm))
-	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
+	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 
@@ -288,11 +292,13 @@ func setupDgraph(t *testing.T, nquads, schema string) {
 	require.NoError(t, err)
 }
 
-func requestExport(t *testing.T, dest string, format string) map[string]interface{} {
+func requestExport(t *testing.T, dest string, format string) {
 	exportRequest := `mutation export($dst: String!, $f: String!) {
 		export(input: {destination: $dst, format: $f}) {
-			response { code message }
-			exportedFiles
+			response {
+				code
+			}
+			taskId
 		}
 	}`
 
@@ -310,11 +316,9 @@ func requestExport(t *testing.T, dest string, format string) map[string]interfac
 	resp, err := http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
 
-	buf, err := ioutil.ReadAll(resp.Body)
-	require.NoError(t, err)
-
-	var result map[string]interface{}
-	require.NoError(t, json.Unmarshal(buf, &result))
-
-	return result
+	var data interface{}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
+	require.Equal(t, "Success", testutil.JsonGet(data, "data", "export", "response", "code").(string))
+	taskId := testutil.JsonGet(data, "data", "export", "taskId").(string)
+	testutil.WaitForTask(t, taskId, false, testutil.SockAddrHttp)
 }

@@ -1,5 +1,7 @@
+//go:build integration
+
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +16,7 @@
  * limitations under the License.
  */
 
+//nolint:lll
 package schema
 
 import (
@@ -21,7 +24,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -29,12 +32,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -163,9 +167,9 @@ func TestSchemaSubscribe(t *testing.T) {
 
 // TestConcurrentSchemaUpdates checks that if there are too many concurrent requests to update the
 // GraphQL schema, then the system works as expected by either:
-// 	1. failing the schema update because there is another one in progress, OR
-// 	2. if the schema update succeeds, then the last successful schema update is reflected by both
-//	Dgraph and GraphQL schema
+//  1. failing the schema update because there is another one in progress, OR
+//  2. if the schema update succeeds, then the last successful schema update is reflected by both
+//     Dgraph and GraphQL schema
 //
 // It also tests that only one node exists for GraphQL schema in Dgraph after all the
 // concurrent requests have executed.
@@ -458,7 +462,7 @@ func testCORS(t *testing.T, schema, reqOrigin, expectedAllowedOrigin,
 
 	gqlRes := &common.GraphQLResponse{}
 	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal(body, gqlRes))
 	common.RequireNoGQLErrors(t, gqlRes)
@@ -504,8 +508,12 @@ func TestGQLSchemaValidate(t *testing.T) {
 					f1: String! @dgraph(pred:"~movie")
 				}
 			`,
-			errors: x.GqlErrorList{{Message: "input:3: Type X; Field id: has the @dgraph directive but fields of type ID can't have the @dgraph directive."}, {Message: "input:7: Type Y; Field f1 is of type String, but reverse predicate in @dgraph directive only applies to fields with object types."}},
-			valid:  false,
+			errors: x.GqlErrorList{
+				{Message: "input:3: Type X; Field id: has the @dgraph directive " +
+					"but fields of type ID can't have the @dgraph directive."},
+				{Message: "input:7: Type Y; Field f1 is of type String, " +
+					"but reverse predicate in @dgraph directive only applies to fields with object types."}},
+			valid: false,
 		},
 	}
 
@@ -544,7 +552,7 @@ func TestUpdateGQLSchemaFields(t *testing.T) {
 		name: String!
 	}`
 
-	generatedSchema, err := ioutil.ReadFile("generatedSchema.graphql")
+	generatedSchema, err := os.ReadFile("generatedSchema.graphql")
 	require.NoError(t, err)
 	require.Equal(t, string(generatedSchema), common.SafelyUpdateGQLSchema(t, groupOneHTTP,
 		schema, nil).GeneratedSchema)
@@ -580,7 +588,7 @@ func TestIntrospection(t *testing.T) {
 		name: String
 	}`
 	common.SafelyUpdateGQLSchema(t, groupOneHTTP, schema, nil)
-	query, err := ioutil.ReadFile("../../schema/testdata/introspection/input/full_query.graphql")
+	query, err := os.ReadFile("../../schema/testdata/introspection/input/full_query.graphql")
 	require.NoError(t, err)
 
 	introspectionParams := &common.GraphQLParams{Query: string(query)}
@@ -644,7 +652,7 @@ func TestApolloServiceResolver(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(resp.Data, &gqlRes))
 
-	sdl, err := ioutil.ReadFile("apollo_service_response.graphql")
+	sdl, err := os.ReadFile("apollo_service_response.graphql")
 	require.NoError(t, err)
 
 	require.Equal(t, string(sdl), gqlRes.Service.S)
@@ -673,6 +681,7 @@ func TestDeleteSchemaAndExport(t *testing.T) {
 		Query: `mutation {
 		  export(input: {format: "rdf"}) {
 			response { code }
+			taskId
 		  }
 		}`,
 	}
@@ -681,7 +690,10 @@ func TestDeleteSchemaAndExport(t *testing.T) {
 
 	var data interface{}
 	require.NoError(t, json.Unmarshal(exportGqlResp.Data, &data))
+
 	require.Equal(t, "Success", testutil.JsonGet(data, "export", "response", "code").(string))
+	taskId := testutil.JsonGet(data, "export", "taskId").(string)
+	testutil.WaitForTask(t, taskId, false, testutil.SockAddrHttp)
 
 	// applying a new schema should still work
 	newSchemaResp := common.AssertUpdateGQLSchemaSuccess(t, groupOneHTTP, schema, nil)

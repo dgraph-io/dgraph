@@ -1,7 +1,8 @@
+//go:build oss
 // +build oss
 
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,8 +20,9 @@
 package acl
 
 import (
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/cobra"
+
+	"github.com/dgraph-io/dgraph/x"
 )
 
 var CmdAcl x.SubCommand
@@ -30,6 +32,6 @@ func init() {
 		Use:         "acl",
 		Short:       "Enterprise feature. Not supported in oss version",
 		Annotations: map[string]string{"group": "security"},
-	},
-		Acl.Cmd.SetHelpTemplate(x.NonRootTemplate)
+	}
+	CmdAcl.Cmd.SetHelpTemplate(x.NonRootTemplate)
 }

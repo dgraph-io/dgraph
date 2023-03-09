@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -82,8 +82,9 @@ func matchFuzzy(query, val string, max int) bool {
 // Returns the list of uids even if empty, or an error otherwise.
 func uidsForMatch(attr string, arg funcArgs) (*pb.List, error) {
 	opts := posting.ListOptions{
-		ReadTs: arg.q.ReadTs,
-		First:  int(arg.q.First),
+		ReadTs:   arg.q.ReadTs,
+		First:    int(arg.q.First),
+		AfterUid: arg.q.AfterUid,
 	}
 	uidsForNgram := func(ngram string) (*pb.List, error) {
 		key := x.IndexKey(attr, ngram)

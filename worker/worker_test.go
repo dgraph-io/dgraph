@@ -1,5 +1,7 @@
+//go:build integration
+
 /*
- * Copyright 2016-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2016-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +21,6 @@ package worker
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"math"
 	"os"
 	"strings"
@@ -28,10 +29,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/badger/v3"
+	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
-
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
@@ -379,7 +379,7 @@ func TestMain(m *testing.M) {
 	addTablets([]string{"friend_not_served"}, 2, x.GalaxyNamespace)
 	addTablets([]string{"name"}, 1, 0x2)
 
-	dir, err := ioutil.TempDir("", "storetest_")
+	dir, err := os.MkdirTemp("", "storetest_")
 	x.Check(err)
 	defer os.RemoveAll(dir)
 

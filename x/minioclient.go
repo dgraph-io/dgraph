@@ -46,6 +46,11 @@ func (creds *MinioCredentials) isAnonymous() bool {
 	return creds.Anonymous
 }
 
+func MinioCredentialsProviderWithoutEnv(requestCreds credentials.Value) credentials.Provider {
+	providers := []credentials.Provider{&credentials.Static{Value: requestCreds}}
+	return &credentials.Chain{Providers: providers}
+}
+
 func MinioCredentialsProvider(scheme string, requestCreds credentials.Value) credentials.Provider {
 	providers := []credentials.Provider{&credentials.Static{Value: requestCreds}}
 
@@ -104,7 +109,12 @@ func NewMinioClient(uri *url.URL, creds *MinioCredentials) (*MinioClient, error)
 		return &MinioClient{mc}, nil
 	}
 
-	credsProvider := credentials.New(MinioCredentialsProvider(uri.Scheme, requestCreds(creds)))
+	var credsProvider *credentials.Credentials
+	if Config.SharedInstance {
+		credsProvider = credentials.New(MinioCredentialsProviderWithoutEnv(requestCreds(creds)))
+	} else {
+		credsProvider = credentials.New(MinioCredentialsProvider(uri.Scheme, requestCreds(creds)))
+	}
 
 	mc, err := minio.NewWithCredentials(uri.Host, credsProvider, secure, "")
 

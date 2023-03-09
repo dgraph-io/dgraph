@@ -1,5 +1,7 @@
+//go:build integration
+
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +16,7 @@
  * limitations under the License.
  */
 
+//nolint:lll
 package query
 
 import (
@@ -24,7 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/v210"
-	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/dql"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -544,6 +547,20 @@ func TestCascadeWithSort(t *testing.T) {
 	`
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t, `{"data":{"me":[{"name": "Daryl Dixon","alive": false},{"name": "Rick Grimes","alive": true}]}}`, js)
+}
+
+// Regression test for issue described in https://github.com/dgraph-io/dgraph/pull/8441
+func TestNegativeOffset(t *testing.T) {
+	query := `
+	{
+		me(func: type(Person2), offset: -1, orderasc: age2) {
+			name2
+			age2
+		}
+	}
+	`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data":{"me":[{"age2":20},{"name2":"Alice"}]}}`, js)
 }
 
 func TestLevelBasedFacetVarAggSum(t *testing.T) {
@@ -2004,7 +2021,7 @@ func TestVarInAggError(t *testing.T) {
 			}
 		}
   `
-	_, err := gql.Parse(gql.Request{Str: query})
+	_, err := dql.Parse(dql.Request{Str: query})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Function name: min is not valid.")
 }
@@ -2496,7 +2513,7 @@ func TestDateTimeQuery(t *testing.T) {
 	// Test 21
 	query = `
 {
-  q(func: between(created_at, "2021-03-28T14:41:57+30:00", "2019-03-28T15:41:57+30:00"), orderdesc: created_at) {
+  q(func: between(created_at, "2021-03-28T07:41:57+23:00", "2019-03-28T08:41:57+23:00"), orderdesc: created_at) {
 	  uid
 	  created_at
   }
@@ -2507,14 +2524,14 @@ func TestDateTimeQuery(t *testing.T) {
 	// Test 20
 	query = `
 {
-  q(func: between(created_at, "2019-03-28T14:41:57+30:00", "2019-03-28T15:41:57+30:00"), orderdesc: created_at) {
+  q(func: between(created_at, "2019-03-28T07:41:57+23:00", "2019-03-28T08:41:57+23:00"), orderdesc: created_at) {
 	  uid
 	  created_at
 	}
 }
 `
 	require.JSONEq(t,
-		`{"data":{"q":[{"uid":"0x130","created_at":"2019-03-28T15:41:57+30:00"},{"uid":"0x12d","created_at":"2019-03-28T14:41:57+30:00"},{"uid":"0x12e","created_at":"2019-03-28T13:41:57+29:00"},{"uid":"0x12f","created_at":"2019-03-27T14:41:57+06:00"}]}}`,
+		`{"data":{"q":[{"uid":"0x130","created_at":"2019-03-28T08:41:57+23:00"},{"uid":"0x12d","created_at":"2019-03-28T07:41:57+23:00"},{"uid":"0x12e","created_at":"2019-03-28T07:41:57+23:00"},{"uid":"0x12f","created_at":"2019-03-27T14:41:57+06:00"}]}}`,
 		processQueryNoErr(t, query))
 
 	// Test 19
@@ -2527,7 +2544,7 @@ func TestDateTimeQuery(t *testing.T) {
 }
 `
 	require.JSONEq(t,
-		`{"data":{"q":[{"uid":"0x133","created_at":"2019-05-28T14:41:57+30:00"},{"uid":"0x130","created_at":"2019-03-28T15:41:57+30:00"},{"uid":"0x12d","created_at":"2019-03-28T14:41:57+30:00"},{"uid":"0x12e","created_at":"2019-03-28T13:41:57+29:00"},{"uid":"0x12f","created_at":"2019-03-27T14:41:57+06:00"},{"uid":"0x131","created_at":"2019-03-28T13:41:57+30:00"},{"uid":"0x132","created_at":"2019-03-24T14:41:57+05:30"}]}}`,
+		`{"data":{"q":[{"uid":"0x133","created_at":"2019-05-28T07:41:57+23:00"},{"uid":"0x130","created_at":"2019-03-28T08:41:57+23:00"},{"uid":"0x12d","created_at":"2019-03-28T07:41:57+23:00"},{"uid":"0x12e","created_at":"2019-03-28T07:41:57+23:00"},{"uid":"0x12f","created_at":"2019-03-27T14:41:57+06:00"},{"uid":"0x131","created_at":"2019-03-28T06:41:57+23:00"},{"uid":"0x132","created_at":"2019-03-24T14:41:57+05:30"}]}}`,
 		processQueryNoErr(t, query))
 
 	// Test 18
@@ -2577,7 +2594,7 @@ func TestDateTimeQuery(t *testing.T) {
 				  "uid": "0x2",
 				  "best_friend": {
 					"uid": "0x40",
-				    "best_friend|since": "2019-03-28T14:41:57+30:00"
+				    "best_friend|since": "2019-03-28T07:41:57+23:00"
 				  }
 				}
 			  ]
@@ -2596,7 +2613,7 @@ func TestDateTimeQuery(t *testing.T) {
 }
 `
 	require.JSONEq(t,
-		`{"data":{"q":[{"uid":"0x133","created_at":"2019-05-28T14:41:57+30:00","updated_at|modified_at":"2019-03-24T14:41:57+05:30","updated_at":"2019-05-28T00:00:00Z"}]}}`,
+		`{"data":{"q":[{"uid":"0x133","created_at":"2019-05-28T07:41:57+23:00","updated_at|modified_at":"2019-03-24T14:41:57+05:30","updated_at":"2019-05-28T00:00:00Z"}]}}`,
 		processQueryNoErr(t, query))
 
 	// Test 15
@@ -2726,7 +2743,7 @@ func TestDateTimeQuery(t *testing.T) {
 }
 `
 	require.JSONEq(t,
-		`{"data":{"q":[{"uid":"0x131","updated_at":"2019-03-28T13:41:57+30:00"},{"uid":"0x132","updated_at":"2019-03-24T14:41:57+05:30"}]}}`,
+		`{"data":{"q":[{"uid":"0x131","updated_at":"2019-03-28T06:41:57+23:00"},{"uid":"0x132","updated_at":"2019-03-24T14:41:57+05:30"}]}}`,
 		processQueryNoErr(t, query))
 
 	// Test 5
@@ -2765,7 +2782,7 @@ func TestDateTimeQuery(t *testing.T) {
 }
 `
 	require.JSONEq(t,
-		`{"data":{"q":[{"uid":"0x131","created_at":"2019-03-28T13:41:57+30:00"},{"uid":"0x132","created_at":"2019-03-24T14:41:57+05:30"}]}}`,
+		`{"data":{"q":[{"uid":"0x131","created_at":"2019-03-28T06:41:57+23:00"},{"uid":"0x132","created_at":"2019-03-24T14:41:57+05:30"}]}}`,
 		processQueryNoErr(t, query))
 
 	// Test 2
@@ -2778,7 +2795,7 @@ func TestDateTimeQuery(t *testing.T) {
 }
 `
 	require.JSONEq(t,
-		`{"data":{"q":[{"uid":"0x133","created_at":"2019-05-28T14:41:57+30:00"}]}}`,
+		`{"data":{"q":[{"uid":"0x133","created_at":"2019-05-28T07:41:57+23:00"}]}}`,
 		processQueryNoErr(t, query))
 
 	// Test 1
@@ -2791,7 +2808,7 @@ func TestDateTimeQuery(t *testing.T) {
 }
 `
 	require.JSONEq(t,
-		`{"data":{"q":[{"uid":"0x133","created_at":"2019-05-28T14:41:57+30:00"}]}}`,
+		`{"data":{"q":[{"uid":"0x133","created_at":"2019-05-28T07:41:57+23:00"}]}}`,
 		processQueryNoErr(t, query))
 }
 

@@ -1,5 +1,5 @@
 /*
- *    Copyright 2022 Dgraph Labs, Inc. and Contributors
+ *    Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,8 +21,9 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"net/http"
+	"os"
 	"runtime/debug"
 	"strconv"
 	"strings"
@@ -30,15 +31,16 @@ import (
 	"time"
 
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
+	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/pkg/errors"
-	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
 )
 
 var (
@@ -142,11 +144,6 @@ type country struct {
 	ID     string   `json:"id,omitempty"`
 	Name   string   `json:"name,omitempty"`
 	States []*state `json:"states,omitempty"`
-}
-
-type mission struct {
-	ID          string `json:"id,omitempty"`
-	Designation string `json:"designation,omitempty"`
 }
 
 type author struct {
@@ -272,7 +269,7 @@ func probeGraphQL(authority string, header http.Header) (*ProbeGraphQLResp, erro
 		probeResp.Healthy = true
 	}
 
-	b, err := ioutil.ReadAll(resp.Body)
+	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -334,7 +331,16 @@ func containsRetryableCreateNamespaceError(resp *GraphQLResponse) bool {
 	return false
 }
 
-func CreateNamespace(t *testing.T, headers http.Header) uint64 {
+func CreateNamespaces(t *testing.T, headers http.Header, whichAlpha string, count int) []uint64 {
+	var ns []uint64
+	for i := 1; i <= count; i++ {
+		ns = append(ns, CreateNamespace(t, headers, whichAlpha))
+	}
+	return ns
+}
+
+func CreateNamespace(t *testing.T, headers http.Header, whichAlpha string) uint64 {
+	adminUrl := "http://" + testutil.ContainerAddr(whichAlpha, 8080) + "/admin"
 	createNamespace := &GraphQLParams{
 		Query: `mutation {
 					addNamespace{
@@ -347,7 +353,7 @@ func CreateNamespace(t *testing.T, headers http.Header) uint64 {
 	// keep retrying as long as we get a retryable error
 	var gqlResponse *GraphQLResponse
 	for {
-		gqlResponse = createNamespace.ExecuteAsPost(t, GraphqlAdminURL)
+		gqlResponse = createNamespace.ExecuteAsPost(t, adminUrl)
 		if containsRetryableCreateNamespaceError(gqlResponse) {
 			continue
 		}
@@ -365,7 +371,32 @@ func CreateNamespace(t *testing.T, headers http.Header) uint64 {
 	return resp.AddNamespace.NamespaceId
 }
 
-func DeleteNamespace(t *testing.T, id uint64, header http.Header) {
+func ListNamespaces(t *testing.T, jwtToken string, headers http.Header, whichAlpha string) []uint64 {
+	adminUrl := "http://" + testutil.ContainerAddr(whichAlpha, 8080) + "/admin"
+
+	listNamespaces := &GraphQLParams{
+		Query: `query{
+			 state {
+			 namespaces
+			 }
+		 }`,
+		Headers: headers,
+	}
+
+	gqlResponse := listNamespaces.ExecuteAsPost(t, adminUrl)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	var resp struct {
+		State struct {
+			Namespaces []uint64 `json:"namespaces"`
+		} `json:"state"`
+	}
+	require.NoError(t, json.Unmarshal(gqlResponse.Data, &resp))
+	return resp.State.Namespaces
+}
+
+func DeleteNamespace(t *testing.T, id uint64, header http.Header, whichAlpha string) {
+	adminUrl := "http://" + testutil.ContainerAddr(whichAlpha, 8080) + "/admin"
 	deleteNamespace := &GraphQLParams{
 		Query: `mutation deleteNamespace($id:Int!){
 					deleteNamespace(input:{namespaceId:$id}){
@@ -376,7 +407,7 @@ func DeleteNamespace(t *testing.T, id uint64, header http.Header) {
 		Headers:   header,
 	}
 
-	gqlResponse := deleteNamespace.ExecuteAsPost(t, GraphqlAdminURL)
+	gqlResponse := deleteNamespace.ExecuteAsPost(t, adminUrl)
 	RequireNoGQLErrors(t, gqlResponse)
 }
 
@@ -562,7 +593,7 @@ func updateGQLSchemaUsingAdminSchemaEndpt(t *testing.T, authority, schema string
 	resp, err := http.Post("http://"+authority+"/admin/schema", "", strings.NewReader(schema))
 	require.NoError(t, err)
 
-	b, err := ioutil.ReadAll(resp.Body)
+	b, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 
 	return string(b)
@@ -599,26 +630,27 @@ func assertUpdateGqlSchemaUsingAdminSchemaEndpt(t *testing.T, authority, schema 
 // To avoid issues, don't use space for indentation in expected input.
 //
 // The comparison requirements for JSON reported by /graphql are following:
-//  * The key order matters in object comparison, i.e.
-//        {"hello": "world", "foo": "bar"}
-//    is not same as:
-//        {"foo": "bar", "hello": "world"}
-//  * A key missing in an object is not same as that key present with value null, i.e.
-//        {"hello": "world"}
-//    is not same as:
-//        {"hello": "world", "foo": null}
-//  * Integers that are out of the [-(2^53)+1, (2^53)-1] precision range supported by JSON RFC,
-//    should still be encoded with full precision. i.e., the number 9007199254740993 ( = 2^53 + 1)
-//    should not get encoded as 9007199254740992 ( = 2^53). This happens in Go's standard JSON
-//    parser due to IEEE754 precision loss for floating point numbers.
+//   - The key order matters in object comparison, i.e.
+//     {"hello": "world", "foo": "bar"}
+//     is not same as:
+//     {"foo": "bar", "hello": "world"}
+//   - A key missing in an object is not same as that key present with value null, i.e.
+//     {"hello": "world"}
+//     is not same as:
+//     {"hello": "world", "foo": null}
+//   - Integers that are out of the [-(2^53)+1, (2^53)-1] precision range supported by JSON RFC,
+//     should still be encoded with full precision. i.e., the number 9007199254740993 ( = 2^53 + 1)
+//     should not get encoded as 9007199254740992 ( = 2^53). This happens in Go's standard JSON
+//     parser due to IEEE754 precision loss for floating point numbers.
 //
 // The above requirements are not satisfied by the standard require.JSONEq or testutil.CompareJSON
 // methods.
 // In order to satisfy all these requirements, this implementation just requires that the input
 // strings be equal after removing `\r`, `\n`, `\t` whitespace characters from the inputs.
 // TODO:
-//  Find a better way to do this such that order isn't mandated in list comparison.
-//  So that it is actually usable at places it is not used at present.
+//
+//	Find a better way to do this such that order isn't mandated in list comparison.
+//	So that it is actually usable at places it is not used at present.
 func JSONEqGraphQL(t *testing.T, expected, actual string) {
 	expected = strings.ReplaceAll(expected, "\r", "")
 	expected = strings.ReplaceAll(expected, "\n", "")
@@ -720,7 +752,7 @@ func BootstrapServer(schema, data []byte) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	d, err := grpc.DialContext(ctx, Alpha1gRPC, grpc.WithInsecure())
+	d, err := grpc.DialContext(ctx, Alpha1gRPC, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		x.Panic(err)
 	}
@@ -938,7 +970,8 @@ func gunzipData(data []byte) ([]byte, error) {
 
 func gzipData(data []byte) ([]byte, error) {
 	var b bytes.Buffer
-	gz := gzip.NewWriter(&b)
+	gz, err := gzip.NewWriterLevel(&b, gzip.BestSpeed)
+	x.Check(err)
 
 	if _, err := gz.Write(data); err != nil {
 		return nil, err
@@ -1164,8 +1197,12 @@ func RunGQLRequest(req *http.Request) ([]byte, error) {
 		return nil, errors.Errorf("cors headers weren't set in response")
 	}
 
-	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			glog.Warningf("error closing body: %v", err)
+		}
+	}()
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, errors.Errorf("unable to read response body: %v", err)
 	}
@@ -1407,13 +1444,11 @@ func GetJWTForInterfaceAuth(t *testing.T, user, role string, ans bool, metaInfo 
 
 func BootstrapAuthData() ([]byte, []byte) {
 	schemaFile := "../auth/schema.graphql"
-	schema, err := ioutil.ReadFile(schemaFile)
-	if err != nil {
-		panic(err)
-	}
+	schema, err := os.ReadFile(schemaFile)
+	x.Panic(err)
 
 	jsonFile := "../auth/test_data.json"
-	data, err := ioutil.ReadFile(jsonFile)
+	data, err := os.ReadFile(jsonFile)
 	if err != nil {
 		panic(errors.Wrapf(err, "Unable to read file %s.", jsonFile))
 	}

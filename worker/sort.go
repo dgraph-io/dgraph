@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2016-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,11 +23,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dgraph-io/badger/v3"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"
 
+	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -329,7 +329,9 @@ BUCKETS:
 
 		// Apply the offset on null nodes, if the nodes with value were not enough.
 		if out[i].offset < len(nullNodes) {
-			nullNodes = nullNodes[out[i].offset:]
+			if out[i].offset >= 0 {
+				nullNodes = nullNodes[out[i].offset:]
+			}
 		} else {
 			nullNodes = nullNodes[:0]
 		}

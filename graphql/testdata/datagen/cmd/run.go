@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"math/rand"
 	"net/http"
@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/golang/glog"
 	"github.com/spf13/viper"
 )
 
@@ -237,7 +238,7 @@ func readRestaurantData() (dataFile, error) {
 		restaurantDataFile = filepath.Join(dir, restaurantDataFile)
 	}
 
-	b, err := ioutil.ReadFile(restaurantDataFile)
+	b, err := os.ReadFile(restaurantDataFile)
 	if err != nil {
 		return nil, err
 	}
@@ -354,8 +355,12 @@ func makeGqlReq(query string, vars interface{}) (*gqlResp, error) {
 		return nil, err
 	}
 
-	defer resp.Body.Close()
-	b, err = ioutil.ReadAll(resp.Body)
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			glog.Warningf("error closing body: %v", err)
+		}
+	}()
+	b, err = io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}

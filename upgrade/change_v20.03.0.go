@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -70,7 +70,7 @@ func upgradeACLRules() error {
 
 		var rs rules
 		if err := json.Unmarshal([]byte(group.ACL), &rs); err != nil {
-			return fmt.Errorf("unable to unmarshal ACL: %v :: %w", string(group.ACL), err)
+			return fmt.Errorf("unable to unmarshal ACL: %v :: %w", group.ACL, err)
 		}
 
 		for _, r := range rs {

@@ -1,29 +1,30 @@
+//go:build !oss
 // +build !oss
 
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Dgraph Community License (the "License"); you
  * may not use this file except in compliance with the License. You
  * may obtain a copy of the License at
  *
- *     https://github.com/dgraph-io/dgraph/blob/master/licenses/DCL.txt
+ *     https://github.com/dgraph-io/dgraph/blob/main/licenses/DCL.txt
  */
 
 package audit
 
 import (
 	"fmt"
-	"io/ioutil"
 	"math"
+	"os"
 	"sync/atomic"
 	"time"
 
-	"github.com/dgraph-io/ristretto/z"
+	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/glog"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 const (
@@ -53,6 +54,7 @@ const (
 	PoorManAuth      = "PoorManAuth"
 	Grpc             = "Grpc"
 	Http             = "Http"
+	WebSocket        = "Websocket"
 )
 
 var auditor = &auditLogger{}
@@ -90,7 +92,7 @@ func readAuditEncKey(conf *z.SuperFlag) ([]byte, error) {
 	if encFile == "" {
 		return nil, nil
 	}
-	encKey, err := ioutil.ReadFile(encFile)
+	encKey, err := os.ReadFile(encFile)
 	if err != nil {
 		return nil, err
 	}

@@ -1,3 +1,5 @@
+//go:build integration
+
 package certrequest
 
 import (
@@ -5,10 +7,11 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/dgraph-io/dgo/v210/protos/api"
-	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/dgraph/testutil"
 )
 
 func TestAccessOverPlaintext(t *testing.T) {

@@ -1,5 +1,7 @@
+//go:build integration
+
 /*
- * Copyright 2017-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +21,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -29,11 +30,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgo/v210"
-	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dgraph-io/dgo/v210"
+	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
@@ -302,11 +303,11 @@ func copyExportToLocalFs(t *testing.T) (string, string) {
 	require.NoError(t, testutil.DockerCp(alphaExportPath, localExportPath),
 		"Error copying files from docker container")
 
-	childDirs, err := ioutil.ReadDir(localExportPath)
+	childDirs, err := os.ReadDir(localExportPath)
 	require.NoError(t, err, "Couldn't read local export copy directory")
 	require.True(t, len(childDirs) > 0, "Local export copy directory is empty!!!")
 
-	exportFiles, err := ioutil.ReadDir(localExportPath + "/" + childDirs[0].Name())
+	exportFiles, err := os.ReadDir(localExportPath + "/" + childDirs[0].Name())
 	require.NoError(t, err, "Couldn't read child of local export copy directory")
 	require.True(t, len(exportFiles) > 0, "no exported files found!!!")
 
@@ -398,9 +399,9 @@ func TestMain(m *testing.M) {
 
 	// Try to create any files in a dedicated temp directory that gets cleaned up
 	// instead of all over /tmp or the working directory.
-	tmpDir, err := ioutil.TempDir("", "test.tmp-")
+	tmpDir, err := os.MkdirTemp("", "test.tmp-")
 	x.Check(err)
-	os.Chdir(tmpDir)
+	x.Check(os.Chdir(tmpDir))
 	defer os.RemoveAll(tmpDir)
 
 	os.Exit(m.Run())

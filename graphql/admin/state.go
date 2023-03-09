@@ -5,13 +5,14 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/gogo/protobuf/jsonpb"
+	"github.com/pkg/errors"
+
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/gogo/protobuf/jsonpb"
-	"github.com/pkg/errors"
 )
 
 type membershipState struct {
@@ -46,13 +47,13 @@ func resolveState(ctx context.Context, q schema.Query) *resolve.Resolved {
 	u := jsonpb.Unmarshaler{}
 	var ms pb.MembershipState
 	err = u.Unmarshal(bytes.NewReader(resp.GetJson()), &ms)
-
 	if err != nil {
 		return resolve.EmptyResult(q, err)
 	}
 
-	// map to graphql response structure
-	state := convertToGraphQLResp(ms)
+	ns, _ := x.ExtractNamespace(ctx)
+	// map to graphql response structure. Only guardian of galaxy can list the namespaces.
+	state := convertToGraphQLResp(ms, ns == x.GalaxyNamespace)
 	b, err := json.Marshal(state)
 	if err != nil {
 		return resolve.EmptyResult(q, err)
@@ -76,7 +77,7 @@ func resolveState(ctx context.Context, q schema.Query) *resolve.Resolved {
 // values and not the keys. For pb.MembershipState.Group, the keys are the group IDs
 // and pb.Group didn't contain this ID, so we are creating a custom clusterGroup type,
 // which is same as pb.Group and also contains the ID for the group.
-func convertToGraphQLResp(ms pb.MembershipState) membershipState {
+func convertToGraphQLResp(ms pb.MembershipState, listNs bool) membershipState {
 	var state membershipState
 
 	// namespaces stores set of namespaces
@@ -91,9 +92,8 @@ func convertToGraphQLResp(ms pb.MembershipState) membershipState {
 		var tablets = make([]*pb.Tablet, 0, len(v.Tablets))
 		for name, v1 := range v.Tablets {
 			tablets = append(tablets, v1)
-			val, err := x.ExtractNamespaceFromPredicate(name)
-			if err == nil {
-				namespaces[val] = struct{}{}
+			if listNs {
+				namespaces[x.ParseNamespace(name)] = struct{}{}
 			}
 		}
 		state.Groups = append(state.Groups, clusterGroup{

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,9 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/dgraph-io/badger/v3"
+	"github.com/golang/glog"
+
+	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -111,7 +113,10 @@ func (c *countIndexer) addCountEntry(ce countEntry) {
 func (c *countIndexer) writeIndex(buf *z.Buffer) {
 	defer func() {
 		c.wg.Done()
-		buf.Release()
+		if err := buf.Release(); err != nil {
+			glog.Warningf("error in releasing buffer: %v", err)
+		}
+
 	}()
 	if buf.IsEmpty() {
 		return
@@ -139,7 +144,11 @@ func (c *countIndexer) writeIndex(buf *z.Buffer) {
 	encoder := codec.Encoder{BlockSize: 256, Alloc: alloc}
 
 	outBuf := z.NewBuffer(5<<20, "CountIndexer.Buffer.WriteIndex")
-	defer outBuf.Release()
+	defer func() {
+		if err := outBuf.Release(); err != nil {
+			glog.Warningf("error in releasing buffer: %v", err)
+		}
+	}()
 	encode := func() {
 		pl.Pack = encoder.Done()
 		if codec.ExactLen(pl.Pack) == 0 {
@@ -163,7 +172,7 @@ func (c *countIndexer) writeIndex(buf *z.Buffer) {
 		}
 	}
 
-	buf.SliceIterate(func(slice []byte) error {
+	if err := buf.SliceIterate(func(slice []byte) error {
 		ce := countEntry(slice)
 		if !bytes.Equal(lastCe.Key(), ce.Key()) {
 			encode()
@@ -171,7 +180,10 @@ func (c *countIndexer) writeIndex(buf *z.Buffer) {
 		encoder.Add(ce.Uid())
 		lastCe = ce
 		return nil
-	})
+	}); err != nil {
+		glog.Errorf("error while counting in buf: %v\n", err)
+		x.Check(err)
+	}
 	encode()
 	x.Check(c.writer.Write(outBuf))
 }
@@ -181,7 +193,9 @@ func (c *countIndexer) wait() {
 		c.wg.Add(1)
 		go c.writeIndex(c.countBuf)
 	} else {
-		c.countBuf.Release()
+		if err := c.countBuf.Release(); err != nil {
+			glog.Warningf("error in releasing buffer: %v", err)
+		}
 	}
 	c.wg.Wait()
 }

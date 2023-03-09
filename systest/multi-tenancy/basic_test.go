@@ -1,5 +1,7 @@
+//go:build integration
+
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,12 +21,13 @@ package main
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
@@ -33,8 +36,12 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/stretchr/testify/require"
 )
+
+type inputTripletsCount struct {
+	lowerLimit int
+	upperLimit int
+}
 
 func prepare(t *testing.T) {
 	dc := testutil.DgClientWithLogin(t, "groot", "password", x.GalaxyNamespace)
@@ -47,9 +54,11 @@ var timeout = 5 * time.Second
 // this file can me made common to the other acl tests as well. Needs some refactoring as well.
 func TestAclBasic(t *testing.T) {
 	prepare(t)
-	galaxyToken := testutil.Login(t,
+	galaxyToken, err := testutil.Login(t,
 		&testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: x.GalaxyNamespace})
 
+	require.NotNil(t, galaxyToken, "galaxy token is nil")
+	require.NoError(t, err, "login failed")
 	// Create a new namespace
 	ns, err := testutil.CreateNamespaceWithRetry(t, galaxyToken)
 	require.NoError(t, err)
@@ -79,7 +88,8 @@ func TestAclBasic(t *testing.T) {
 	testutil.CompareJSON(t, `{"me": []}`, string(resp))
 
 	// Login to namespace 1 via groot and create new user alice.
-	token := testutil.Login(t, &testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: ns})
+	token, err := testutil.Login(t, &testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: ns})
+	require.NoError(t, err, "login failed")
 	testutil.CreateUser(t, token, "alice", "newpassword")
 
 	// Alice should not be able to see data added by groot in namespace 1
@@ -99,8 +109,9 @@ func TestAclBasic(t *testing.T) {
 }
 
 func createGroupAndSetPermissions(t *testing.T, namespace uint64, group, user, predicate string) {
-	token := testutil.Login(t,
+	token, err := testutil.Login(t,
 		&testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: namespace})
+	require.NoError(t, err, "login failed")
 	testutil.CreateGroup(t, token, group)
 	testutil.AddToGroup(t, token, user, group)
 	testutil.AddRulesToGroup(t, token, group,
@@ -109,9 +120,9 @@ func createGroupAndSetPermissions(t *testing.T, namespace uint64, group, user, p
 
 func TestTwoPermissionSetsInNameSpacesWithAcl(t *testing.T) {
 	prepare(t)
-	galaxyToken := testutil.Login(t,
+	galaxyToken, err := testutil.Login(t,
 		&testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: x.GalaxyNamespace})
-
+	require.NoError(t, err, "login failed")
 	query := `
 		{
 			me(func: has(name)) {
@@ -129,8 +140,9 @@ func TestTwoPermissionSetsInNameSpacesWithAcl(t *testing.T) {
 	testutil.AddData(t, dc)
 
 	// Create user alice
-	token1 := testutil.Login(t,
+	token1, err := testutil.Login(t,
 		&testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: ns1})
+	require.NoError(t, err, "login failed")
 	testutil.CreateUser(t, token1, "alice", "newpassword")
 
 	// Create a new group, add alice to that group and give read access of <name> to dev group.
@@ -149,8 +161,9 @@ func TestTwoPermissionSetsInNameSpacesWithAcl(t *testing.T) {
 	testutil.AddData(t, dc)
 
 	// Create user bob
-	token2 := testutil.Login(t,
+	token2, err := testutil.Login(t,
 		&testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: ns2})
+	require.NoError(t, err, "login failed")
 	testutil.CreateUser(t, token2, "bob", "newpassword")
 
 	// Create a new group, add bob to that group and give read access of <nickname> to dev group.
@@ -166,8 +179,9 @@ func TestTwoPermissionSetsInNameSpacesWithAcl(t *testing.T) {
 	testutil.CompareJSON(t, `{"me": [{"name":"guy2"}, {"name":"guy1"}]}`, string(resp))
 
 	// Change permissions in namespace-2
-	token := testutil.Login(t,
+	token, err := testutil.Login(t,
 		&testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: ns2})
+	require.NoError(t, err, "login failed")
 	testutil.AddRulesToGroup(t, token, "dev",
 		[]testutil.Rule{{Predicate: "name", Permission: acl.Read.Code}}, false)
 
@@ -184,27 +198,55 @@ func TestTwoPermissionSetsInNameSpacesWithAcl(t *testing.T) {
 
 func TestCreateNamespace(t *testing.T) {
 	prepare(t)
-	galaxyToken := testutil.Login(t,
+	galaxyToken, err := testutil.Login(t,
 		&testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: x.GalaxyNamespace})
-
+	require.NoError(t, err, "login failed")
 	// Create a new namespace
 	ns, err := testutil.CreateNamespaceWithRetry(t, galaxyToken)
 	require.NoError(t, err)
 
-	token := testutil.Login(t,
+	token, err := testutil.Login(t,
 		&testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: ns})
-
+	require.NoError(t, err, "login failed")
 	// Create a new namespace using guardian of other namespace.
 	_, err = testutil.CreateNamespaceWithRetry(t, token)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Only guardian of galaxy is allowed to do this operation")
 }
 
+func TestResetPassword(t *testing.T) {
+	prepare(t)
+
+	galaxyToken, err := testutil.Login(t,
+		&testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: x.GalaxyNamespace})
+	require.NoError(t, err, "login failed")
+	// Create a new namespace
+	ns, err := testutil.CreateNamespaceWithRetry(t, galaxyToken)
+	require.NoError(t, err)
+
+	// Reset Password
+	_, err = testutil.ResetPassword(t, galaxyToken, "groot", "newpassword", ns)
+	require.NoError(t, err)
+
+	// Try and Fail with old password for groot
+	token, err := testutil.Login(t,
+		&testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: ns})
+
+	require.Error(t, err, "expected error because incorrect login")
+	require.Nil(t, token, "nil token because incorrect login")
+
+	// Try and success with new password for groot
+	token, err = testutil.Login(t,
+		&testutil.LoginParams{UserID: "groot", Passwd: "newpassword", Namespace: ns})
+	require.NoError(t, err, "login failed")
+	require.Equal(t, token.Password, "newpassword", "new password matches the reset password")
+}
+
 func TestDeleteNamespace(t *testing.T) {
 	prepare(t)
-	galaxyToken := testutil.Login(t,
+	galaxyToken, err := testutil.Login(t,
 		&testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: x.GalaxyNamespace})
-
+	require.NoError(t, err, "login failed")
 	dg := make(map[uint64]*dgo.Dgraph)
 	dg[x.GalaxyNamespace] = testutil.DgClientWithLogin(t, "groot", "password", x.GalaxyNamespace)
 	// Create a new namespace
@@ -266,17 +308,17 @@ type liveOpts struct {
 
 func liveLoadData(t *testing.T, opts *liveOpts) error {
 	// Prepare directories.
-	dir, err := ioutil.TempDir("", "multi")
+	dir, err := os.MkdirTemp("", "multi")
 	require.NoError(t, err)
 	defer func() {
 		os.RemoveAll(dir)
 	}()
 	rdfFile := filepath.Join(dir, "rdfs.rdf")
-	require.NoError(t, ioutil.WriteFile(rdfFile, []byte(opts.rdfs), 0644))
+	require.NoError(t, os.WriteFile(rdfFile, []byte(opts.rdfs), 0644))
 	schemaFile := filepath.Join(dir, "schema.txt")
-	require.NoError(t, ioutil.WriteFile(schemaFile, []byte(opts.schema), 0644))
+	require.NoError(t, os.WriteFile(schemaFile, []byte(opts.schema), 0644))
 	gqlSchemaFile := filepath.Join(dir, "gql_schema.txt")
-	require.NoError(t, ioutil.WriteFile(gqlSchemaFile, []byte(opts.gqlSchema), 0644))
+	require.NoError(t, os.WriteFile(gqlSchemaFile, []byte(opts.gqlSchema), 0644))
 	// Load the data.
 	return testutil.LiveLoad(testutil.LiveOpts{
 		Zero:       testutil.ContainerAddr("zero1", 5080),
@@ -292,8 +334,8 @@ func TestLiveLoadMulti(t *testing.T) {
 	prepare(t)
 	dc0 := testutil.DgClientWithLogin(t, "groot", "password", x.GalaxyNamespace)
 	galaxyCreds := &testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: x.GalaxyNamespace}
-	galaxyToken := testutil.Login(t, galaxyCreds)
-
+	galaxyToken, err := testutil.Login(t, galaxyCreds)
+	require.NoError(t, err, "login failed")
 	// Create a new namespace
 	ns, err := testutil.CreateNamespaceWithRetry(t, galaxyToken)
 	require.NoError(t, err)
@@ -393,7 +435,7 @@ func TestLiveLoadMulti(t *testing.T) {
 	require.Contains(t, err.Error(), "Namespace 0x123456 doesn't exist for pred")
 
 	err = liveLoadData(t, &liveOpts{
-		rdfs:    fmt.Sprintf(`_:c <name> "ns eon" <0x123456> .`),
+		rdfs:    `_:c <name> "ns eon" <0x123456> .`,
 		schema:  `name: string @index(term) .`,
 		creds:   galaxyCreds,
 		forceNs: -1,
@@ -465,16 +507,16 @@ func postPersistentQuery(t *testing.T, query, sha, accessJwt string) *common.Gra
 
 func TestPersistentQuery(t *testing.T) {
 	prepare(t)
-	galaxyToken := testutil.Login(t,
+	galaxyToken, err := testutil.Login(t,
 		&testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: x.GalaxyNamespace})
-
+	require.NoError(t, err, "login failed")
 	// Create a new namespace
 	ns, err := testutil.CreateNamespaceWithRetry(t, galaxyToken)
 	require.NoError(t, err)
 
-	token := testutil.Login(t,
+	token, err := testutil.Login(t,
 		&testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: ns})
-
+	require.NoError(t, err, "login failed")
 	sch := `type Product {
 			productID: ID!
 			name: String @search(by: [term])
@@ -508,21 +550,48 @@ func TestPersistentQuery(t *testing.T) {
 
 func TestTokenExpired(t *testing.T) {
 	prepare(t)
-	galaxyToken := testutil.Login(t,
+	galaxyToken, err := testutil.Login(t,
 		&testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: x.GalaxyNamespace})
+	require.NoError(t, err, "login failed")
 
 	// Create a new namespace
 	ns, err := testutil.CreateNamespaceWithRetry(t, galaxyToken)
 	require.NoError(t, err)
-	token := testutil.Login(t,
+	token, err := testutil.Login(t,
 		&testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: ns})
+	require.NoError(t, err, "login failed")
 
 	// Relogin using refresh JWT.
-	token = testutil.Login(t,
+	token, err = testutil.Login(t,
 		&testutil.LoginParams{RefreshJwt: token.RefreshToken})
+	require.NoError(t, err, "login failed")
+
 	_, err = testutil.CreateNamespaceWithRetry(t, token)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Only guardian of galaxy is allowed to do this operation")
+}
+
+func TestNameSpaceLimitFlag(t *testing.T) {
+	testInputs := []inputTripletsCount{{1, 53}, {60, 100}, {141, 153}}
+	galaxyToken, err := testutil.Login(t,
+		&testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: x.GalaxyNamespace})
+	require.NoError(t, err)
+	// Create a new namespace
+	ns, err := testutil.CreateNamespaceWithRetry(t, galaxyToken)
+	require.NoError(t, err)
+	dc := testutil.DgClientWithLogin(t, "groot", "password", ns)
+	require.NoError(t, dc.Alter(context.Background(), &api.Operation{
+		Schema: `name: string .`}))
+	// trying to load more triplets than allowed,It should return error.
+	_, err = testutil.AddNumberOfTriples(t, dc, testInputs[0].lowerLimit, testInputs[0].upperLimit)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Requested UID lease(53) is greater than allowed(50).")
+	_, err = testutil.AddNumberOfTriples(t, dc, testInputs[1].lowerLimit, testInputs[1].upperLimit)
+	require.NoError(t, err)
+	// we have set uid-lease=50 so we are trying lease more uids,it should return error.
+	_, err = testutil.AddNumberOfTriples(t, dc, testInputs[2].lowerLimit, testInputs[2].upperLimit)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Cannot lease UID because UID lease for the namespace")
 }
 
 func TestMain(m *testing.M) {

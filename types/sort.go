@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2016-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,11 +20,12 @@ import (
 	"sort"
 	"time"
 
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
 	"golang.org/x/text/collate"
 	"golang.org/x/text/language"
+
+	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 type sortBase struct {
@@ -36,11 +37,9 @@ type sortBase struct {
 }
 
 // Len returns size of vector.
-// skipcq: CRT-P0003
 func (s sortBase) Len() int { return len(s.values) }
 
 // Swap swaps two elements.
-// skipcq: CRT-P0003
 func (s sortBase) Swap(i, j int) {
 	s.values[i], s.values[j] = s.values[j], s.values[i]
 	(*s.ul)[i], (*s.ul)[j] = (*s.ul)[j], (*s.ul)[i]
@@ -52,7 +51,6 @@ func (s sortBase) Swap(i, j int) {
 type byValue struct{ sortBase }
 
 // Less compares two elements
-// skipcq: CRT-P0003
 func (s byValue) Less(i, j int) bool {
 	first, second := s.values[i], s.values[j]
 	if len(first) == 0 || len(second) == 0 {

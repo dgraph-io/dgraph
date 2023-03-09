@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2016-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,14 +21,14 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/golang/glog"
+	"github.com/pkg/errors"
+
 	"github.com/dgraph-io/dgraph/lex"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
-
-	"github.com/golang/glog"
-	"github.com/pkg/errors"
 )
 
 // ParseBytes parses the byte array which holds the schema. We will reset
@@ -130,7 +130,7 @@ func parseScalarPair(it *lex.ItemIterator, predicate string, ns uint64) (*pb.Sch
 	}
 	if schema.List {
 		if uint32(t) == uint32(types.PasswordID) || uint32(t) == uint32(types.BoolID) {
-			return nil, next.Errorf("Unsupported type for list: [%s].", types.TypeID(t).Name())
+			return nil, next.Errorf("Unsupported type for list: [%s].", t.Name())
 		}
 	}
 	schema.ValueType = t.Enum()
@@ -428,7 +428,7 @@ func parseNamespace(it *lex.ItemIterator) (uint64, error) {
 	if !it.Next() {
 		return 0, errors.Errorf("No schema found after namespace. Got: %v", nextItems[0])
 	}
-	return uint64(ns), nil
+	return ns, nil
 }
 
 // ParsedSchema represents the parsed schema and type updates.
@@ -510,7 +510,7 @@ func parse(s string, namespace uint64) (*ParsedSchema, error) {
 			// namespace, if namespace has to be preserved. Else, use the passed namespace.
 			ns := x.GalaxyNamespace
 			if namespace != math.MaxUint64 {
-				ns = uint64(namespace)
+				ns = namespace
 			}
 			if err := parseTypeOrSchema(item, it, ns); err != nil {
 				return nil, err
@@ -524,7 +524,7 @@ func parse(s string, namespace uint64) (*ParsedSchema, error) {
 			}
 			if namespace != math.MaxUint64 {
 				// Use the passed namespace, if we don't want to preserve the namespace.
-				ns = uint64(namespace)
+				ns = namespace
 			}
 			// We have already called next in parseNamespace.
 			item := it.Item()

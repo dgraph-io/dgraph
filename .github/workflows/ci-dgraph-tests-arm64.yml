@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - main
+      - 'release/**'
   pull_request:
     types:
       - opened
@@ -11,12 +12,12 @@ on:
       - ready_for_review
     branches:
       - main
+      - 'release/**'
   schedule:
-    - cron: "0 * * * *"
+    - cron: "0 */2 * * *" # every 2hrs
 jobs:
   dgraph-tests:
-    # TODO: uncomment this after release work
-    # if: github.event.pull_request.draft == false
+    if: github.event.pull_request.draft == false
     runs-on: [self-hosted, ARM64]
     steps:
       - uses: actions/checkout@v3
@@ -63,7 +64,7 @@ jobs:
           # move the binary
           cp dgraph/dgraph ~/go/bin/dgraph
           # run the tests
-          cd t; ./t --skip="systest/export,systest/backup/minio,systest/backup/minio-large,graphql/e2e/normal,graphql/e2e/directives,graphql/e2e/custom_logic"
+          cd t; ./t
           # clean up docker containers after test execution
           ./t -r
           # sleep

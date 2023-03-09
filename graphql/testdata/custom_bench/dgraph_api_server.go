@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,10 +20,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"strings"
+
+	"github.com/golang/glog"
 )
 
 const (
@@ -87,7 +89,7 @@ func getType(w http.ResponseWriter, r *http.Request) {
 func getBatchType(w http.ResponseWriter, r *http.Request) {
 	field := r.URL.Query().Get("field")
 	typ := r.URL.Query().Get("type")
-	idBytes, err := ioutil.ReadAll(r.Body)
+	idBytes, err := io.ReadAll(r.Body)
 
 	if err != nil || field == "" || typ == "" {
 		log.Println("err: ", err, ", field: ", field, ", type: ", typ)
@@ -198,8 +200,12 @@ func makeGqlRequest(query string) (*Response, error) {
 		return nil, err
 	}
 
-	defer resp.Body.Close()
-	b, err = ioutil.ReadAll(resp.Body)
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			glog.Warningf("error closing body: %v", err)
+		}
+	}()
+	b, err = io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}

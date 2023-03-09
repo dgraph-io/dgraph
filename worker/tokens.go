@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2016-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/dgraph-io/badger/v3"
+	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
@@ -151,7 +151,7 @@ func getInequalityTokens(ctx context.Context, readTs uint64, attr, f, lang strin
 		// Allow eq with term/fulltext tokenizers, even though they give multiple tokens.
 		case f == "eq" &&
 			(tokenizer.Identifier() == tok.IdentTerm || tokenizer.Identifier() == tok.IdentFullText):
-			break
+			// nothing to do
 
 		case len(ineqTokens) > 1:
 			return nil, nil, errors.Errorf("Attribute %s does not have a valid tokenizer.", attr)

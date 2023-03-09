@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,8 +27,8 @@ import (
 	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"
 
-	"github.com/dgraph-io/badger/v3"
-	bpb "github.com/dgraph-io/badger/v3/pb"
+	"github.com/dgraph-io/badger/v4"
+	bpb "github.com/dgraph-io/badger/v4/pb"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -154,22 +154,25 @@ func (w *grpcWorker) ReceivePredicate(stream pb.Worker_ReceivePredicateServer) e
 		if err == io.EOF {
 			payload.Data = []byte(fmt.Sprintf("%d", count))
 			if err := stream.SendAndClose(payload); err != nil {
-				glog.Errorf("Received %d keys. Error in loop: %v\n", count, err)
+				glog.Errorf("Received %d keys. Error in loop: %v", count, err)
 				return err
 			}
 			break
 		}
 		if err != nil {
-			glog.Errorf("Received %d keys. Error in loop: %v\n", count, err)
+			glog.Errorf("Received %d keys. Error in loop: %v", count, err)
 			return err
 		}
-		glog.V(2).Infof("Received batch of size: %s\n", humanize.IBytes(uint64(len(kvBuf.Data))))
+		glog.V(2).Infof("Received batch of size: %s", humanize.IBytes(uint64(len(kvBuf.Data))))
 
 		buf := z.NewBufferSlice(kvBuf.Data)
-		buf.SliceIterate(func(_ []byte) error {
+		if err := buf.SliceIterate(func(_ []byte) error {
 			count++
 			return nil
-		})
+		}); err != nil {
+			glog.Errorf("error while counting in buf: %v\n", err)
+			return err
+		}
 
 		select {
 		case kvs <- kvBuf:
@@ -286,7 +289,11 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error
 			return err
 		}
 		buf := z.NewBuffer(1024, "PredicateMove.MovePredicateHelper")
-		defer buf.Release()
+		defer func() {
+			if err := buf.Release(); err != nil {
+				glog.Warningf("error in releasing buffer: %v", err)
+			}
+		}()
 
 		kv := &bpb.KV{}
 		kv.Key = schemaKey

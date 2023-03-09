@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,16 +21,18 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/golang/glog"
+	"github.com/pkg/errors"
 
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/pkg/errors"
 )
 
 func hasAclCreds() bool {
@@ -162,8 +164,12 @@ func runGQLRequest(req *http.Request) ([]byte, error) {
 		return nil, errors.Errorf("cors headers weren't set in response")
 	}
 
-	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			glog.Warningf("error closing body: %v", err)
+		}
+	}()
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, errors.Errorf("unable to read response body: %v", err)
 	}
@@ -250,24 +256,29 @@ func alterWithClient(dg *dgo.Dgraph, operation *api.Operation) error {
 // will contain the new name for that predicate. Also, if some predicates need to be
 // removed from the type, then they can be supplied in predsToRemove. For example:
 // initialType:
-// 	type Person {
-// 		name
-// 		age
-// 		unnecessaryEdge
-// 	}
+//
+//	type Person {
+//		name
+//		age
+//		unnecessaryEdge
+//	}
+//
 // also,
-// 	newTypeName = "Human"
-// 	newPredNames = {
-// 		"age": "ageOnEarth'
-// 	}
-// 	predsToRemove = {
-// 		"unnecessaryEdge": {}
-// 	}
+//
+//	newTypeName = "Human"
+//	newPredNames = {
+//		"age": "ageOnEarth'
+//	}
+//	predsToRemove = {
+//		"unnecessaryEdge": {}
+//	}
+//
 // then returned type string will be:
-// 	type Human {
-// 		name
-// 		ageOnEarth
-// 	}
+//
+//	type Human {
+//		name
+//		ageOnEarth
+//	}
 func getTypeSchemaString(newTypeName string, typeNode *schemaTypeNode,
 	newPredNames map[string]string, predsToRemove map[string]struct{}) string {
 	var builder strings.Builder

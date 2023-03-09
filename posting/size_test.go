@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,9 +19,10 @@ package posting
 import (
 	"encoding/binary"
 	"flag"
-	"io/ioutil"
+	"io"
 	"log"
 	"math"
+	_ "net/http/pprof"
 	"os"
 	"os/exec"
 	"runtime"
@@ -30,15 +31,13 @@ import (
 	"strings"
 	"testing"
 
-	_ "net/http/pprof"
-
-	"github.com/dgraph-io/badger/v3"
-	"github.com/dgraph-io/dgo/v210/protos/api"
-	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
-
 	"github.com/stretchr/testify/require"
+
+	"github.com/dgraph-io/badger/v4"
+	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/dgraph/protos/pb"
 )
 
 var manual = flag.Bool("manual", false, "Set when manually running some tests.")
@@ -178,7 +177,7 @@ func Test21MillionDataSetSize(t *testing.T) {
 	}
 	fp, err := os.Open("size.data")
 	require.NoError(t, err)
-	buf, err := ioutil.ReadAll(fp)
+	buf, err := io.ReadAll(fp)
 	require.NoError(t, err)
 	calculatedSize := binary.BigEndian.Uint32(buf)
 	var pprofSize uint32

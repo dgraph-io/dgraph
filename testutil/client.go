@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -32,16 +32,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgraph/gql"
-
-	"github.com/dgraph-io/dgo/v210"
-	"github.com/dgraph-io/dgo/v210/protos/api"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
+
+	"github.com/dgraph-io/dgo/v210"
+	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/dgraph/dql"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 // socket addr = IP address and port number
@@ -60,6 +62,31 @@ var (
 	SockAddrZero string
 	// SockAddrZeroHttp is the address to the HTTP endpoint of the zero used during tests.
 	SockAddrZeroHttp string
+
+	// SockAddrAlpha4 is the address to the gRPC endpoint of the alpha4 used during restore tests.
+	SockAddrAlpha4 string
+	// SockAddrAlpha4Http is the address to the HTTP of alpha4 used during restore tests.
+	SockAddrAlpha4Http string
+	// SockAddrZero4 is the address to the gRPC endpoint of the zero4 used during restore tests.
+	SockAddrZero4 string
+	// SockAddrZero4Http is the address to the HTTP endpoint of the zero4 used during restore tests.
+	SockAddrZero4Http string
+	// SockAddrAlpha7 is the address to the gRPC endpoint of the alpha4 used during restore tests.
+	SockAddrAlpha7 string
+	// SockAddrAlpha7Http is the address to the HTTP of alpha7 used during restore tests.
+	SockAddrAlpha7Http string
+	// SockAddrZero7 is the address to the gRPC endpoint of the zero7 used during restore tests.
+	SockAddrZero7 string
+	// SockAddrZero7Http is the address to the HTTP endpoint of the zero7 used during restore tests.
+	SockAddrZero7Http string
+	// SockAddrAlpha8 is the address to the gRPC endpoint of the alpha8 used during restore tests.
+	SockAddrAlpha8 string
+	// SockAddrAlpha8Http is the address to the HTTP of alpha8 used during restore tests.
+	SockAddrAlpha8Http string
+	// SockAddrZero8 is the address to the gRPC endpoint of the zero8 used during restore tests.
+	SockAddrZero8 string
+	// SockAddrZero8Http is the address to the HTTP endpoint of the zero8 used during restore tests.
+	SockAddrZero8Http string
 )
 
 func AdminUrlHttps() string {
@@ -82,6 +109,20 @@ func init() {
 
 	SockAddrZero = ContainerAddr("zero1", 5080)
 	SockAddrZeroHttp = ContainerAddr("zero1", 6080)
+
+	SockAddrAlpha4 = ContainerAddr("alpha4", 9080)
+	SockAddrAlpha4Http = ContainerAddr("alpha4", 8080)
+	SockAddrAlpha7 = ContainerAddr("alpha7", 9080)
+	SockAddrAlpha7Http = ContainerAddr("alpha7", 8080)
+	SockAddrZero7 = ContainerAddr("zero7", 5080)
+	SockAddrZero7Http = ContainerAddr("zero7", 6080)
+	SockAddrAlpha8 = ContainerAddr("alpha8", 9080)
+	SockAddrAlpha8Http = ContainerAddr("alpha8", 8080)
+	SockAddrZero8 = ContainerAddr("zero8", 5080)
+	SockAddrZero8Http = ContainerAddr("zero8", 6080)
+
+	SockAddrZero4 = ContainerAddr("zero2", 5080)
+	SockAddrZero4Http = ContainerAddr("zero2", 6080)
 
 	fmt.Printf("testutil: %q %s %s\n", DockerPrefix, SockAddr, SockAddrZero)
 }
@@ -135,7 +176,7 @@ func DgraphClientWithGroot(serviceAddr string) (*dgo.Dgraph, error) {
 // It is intended to be called from TestMain() to establish a Dgraph connection shared
 // by all tests, so there is no testing.T instance for it to use.
 func DgraphClient(serviceAddr string) (*dgo.Dgraph, error) {
-	conn, err := grpc.Dial(serviceAddr, grpc.WithInsecure())
+	conn, err := grpc.Dial(serviceAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, err
 	}
@@ -158,7 +199,7 @@ func DgraphClientWithCerts(serviceAddr string, conf *viper.Viper) (*dgo.Dgraph, 
 	if tlsCfg != nil {
 		dialOpts = append(dialOpts, grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)))
 	} else {
-		dialOpts = append(dialOpts, grpc.WithInsecure())
+		dialOpts = append(dialOpts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
 	conn, err := grpc.Dial(serviceAddr, dialOpts...)
 	if err != nil {
@@ -300,9 +341,13 @@ func HttpLogin(params *LoginParams) (*HttpToken, error) {
 	if err != nil {
 		return nil, errors.Wrapf(err, "login through curl failed")
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			glog.Warningf("error closing body: %v", err)
+		}
+	}()
 
-	respBody, err := ioutil.ReadAll(resp.Body)
+	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, errors.Wrapf(err, "unable to read from response")
 	}
@@ -310,46 +355,45 @@ func HttpLogin(params *LoginParams) (*HttpToken, error) {
 		return nil, errors.New(fmt.Sprintf("got non 200 response from the server with %s ",
 			string(respBody)))
 	}
-	var outputJson map[string]interface{}
-	if err := json.Unmarshal(respBody, &outputJson); err != nil {
-		var errOutputJson map[string]interface{}
-		if err := json.Unmarshal(respBody, &errOutputJson); err == nil {
-			if _, ok := errOutputJson["errors"]; ok {
-				return nil, errors.Errorf("response error: %v", string(respBody))
+
+	var gqlResp GraphQLResponse
+	if err := json.Unmarshal(respBody, &gqlResp); err != nil {
+		return nil, err
+	}
+
+	if len(gqlResp.Errors) > 0 {
+		return nil, errors.Errorf(gqlResp.Errors.Error())
+	}
+
+	if gqlResp.Data == nil {
+		return nil, errors.Wrapf(err, "data entry found in the output")
+	}
+
+	type Response struct {
+		Login struct {
+			Response struct {
+				AccessJWT  string
+				RefreshJwt string
 			}
 		}
-		return nil, errors.Wrapf(err, "unable to unmarshal the output to get JWTs")
+	}
+	var r Response
+	if err := json.Unmarshal(gqlResp.Data, &r); err != nil {
+		return nil, err
 	}
 
-	data, found := outputJson["data"].(map[string]interface{})
-	if !found {
-		return nil, errors.Wrapf(err, "data entry found in the output")
-	}
-
-	l, found := data["login"].(map[string]interface{})
-	if !found {
-		return nil, errors.Wrapf(err, "data entry found in the output")
-	}
-
-	response, found := l["response"].(map[string]interface{})
-	if !found {
-		return nil, errors.Wrapf(err, "data entry found in the output")
-	}
-
-	newAccessJwt, found := response["accessJWT"].(string)
-	if !found || newAccessJwt == "" {
+	if r.Login.Response.AccessJWT == "" {
 		return nil, errors.Errorf("no access JWT found in the output")
 	}
-	newRefreshJwt, found := response["refreshJWT"].(string)
-	if !found || newRefreshJwt == "" {
+	if r.Login.Response.RefreshJwt == "" {
 		return nil, errors.Errorf("no refresh JWT found in the output")
 	}
 
 	return &HttpToken{
 		UserId:       params.UserID,
 		Password:     params.Passwd,
-		AccessJwt:    newAccessJwt,
-		RefreshToken: newRefreshJwt,
+		AccessJwt:    r.Login.Response.AccessJWT,
+		RefreshToken: r.Login.Response.RefreshJwt,
 	}, nil
 }
 
@@ -456,7 +500,7 @@ func AssignUids(num uint64) error {
 	}
 	var data assignResp
 	if err == nil && resp != nil && resp.Body != nil {
-		body, err := ioutil.ReadAll(resp.Body)
+		body, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return err
 		}
@@ -474,7 +518,7 @@ func AssignUids(num uint64) error {
 }
 
 func RequireUid(t *testing.T, uid string) {
-	_, err := gql.ParseUid(uid)
+	_, err := dql.ParseUid(uid)
 	require.NoErrorf(t, err, "expecting a uid, got: %s", uid)
 }
 

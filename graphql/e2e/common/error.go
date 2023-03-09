@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,26 +21,26 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net/http/httptest"
+	"os"
 	"sort"
 	"strings"
 	"testing"
 
-	admin2 "github.com/dgraph-io/dgraph/graphql/admin"
+	"github.com/google/go-cmp/cmp"
+	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/peer"
+	"gopkg.in/yaml.v2"
 
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
-	dgoapi "github.com/dgraph-io/dgo/v210/protos/api"
+	admin2 "github.com/dgraph-io/dgraph/graphql/admin"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/graphql/test"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/google/go-cmp/cmp"
-	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/peer"
-	"gopkg.in/yaml.v2"
 )
 
 const (
@@ -62,7 +62,7 @@ func graphQLCompletionOn(t *testing.T) {
 	// The schema states type Country `{ ... name: String! ... }`
 	// so a query error will be raised if we ask for the country's name in a
 	// query.  Don't think a GraphQL update can do this ATM, so do through Dgraph.
-	d, err := grpc.Dial(Alpha1gRPC, grpc.WithInsecure())
+	d, err := grpc.Dial(Alpha1gRPC, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
 	client := dgo.NewDgraphClient(api.NewDgraphClient(d))
 	mu := &api.Mutation{
@@ -95,10 +95,10 @@ func graphQLCompletionOn(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, 5, len(result.QueryCountry))
 			expected.QueryCountry = []*country{
-				&country{Name: "Angola"},
-				&country{Name: "Bangladesh"},
-				&country{Name: "India"},
-				&country{Name: "Mozambique"},
+				{Name: "Angola"},
+				{Name: "Bangladesh"},
+				{Name: "India"},
+				{Name: "Mozambique"},
 				nil,
 			}
 
@@ -183,7 +183,7 @@ func deepMutationErrors(t *testing.T) {
 // requestValidationErrors just makes sure we are catching validation failures.
 // Mostly this is provided by an external lib, so just checking we hit common cases.
 func requestValidationErrors(t *testing.T) {
-	b, err := ioutil.ReadFile("../common/error_test.yaml")
+	b, err := os.ReadFile("../common/error_test.yaml")
 	require.NoError(t, err, "Unable to read test file")
 
 	var tests []ErrorCase
@@ -269,8 +269,8 @@ func panicCatcher(t *testing.T) {
 	// the http stack.
 
 	tests := map[string]*GraphQLParams{
-		"query": &GraphQLParams{Query: `query { queryCountry { name } }`},
-		"mutation": &GraphQLParams{
+		"query": {Query: `query { queryCountry { name } }`},
+		"mutation": {
 			Query: `mutation {
 						addCountry(input: [{ name: "A Country" }]) { country { id } }
 					}`,
@@ -313,15 +313,15 @@ func panicCatcher(t *testing.T) {
 
 type panicClient struct{}
 
-func (dg *panicClient) Execute(ctx context.Context, req *dgoapi.Request,
-	field schema.Field) (*dgoapi.Response, error) {
+func (dg *panicClient) Execute(ctx context.Context, req *api.Request,
+	field schema.Field) (*api.Response, error) {
 	x.Panic(errors.New(panicMsg))
 	return nil, nil
 }
 
 func (dg *panicClient) CommitOrAbort(ctx context.Context,
-	tc *dgoapi.TxnContext) (*dgoapi.TxnContext, error) {
-	return &dgoapi.TxnContext{}, nil
+	tc *api.TxnContext) (*api.TxnContext, error) {
+	return &api.TxnContext{}, nil
 }
 
 // clientInfoLogin check whether the client info(IP address) is propagated in the request.

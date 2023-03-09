@@ -1,3 +1,4 @@
+//go:build linux
 // +build linux
 
 package x
@@ -9,10 +10,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
 	"go.opencensus.io/stats"
 	"go.opencensus.io/tag"
+
+	"github.com/dgraph-io/ristretto/z"
 )
 
 func MonitorDiskMetrics(dirTag string, dir string, lc *z.Closer) {
@@ -38,8 +40,8 @@ func MonitorDiskMetrics(dirTag string, dir string, lc *z.Closer) {
 				continue
 			}
 			reservedBlocks := s.Bfree - s.Bavail
-			total := int64(s.Frsize) * int64(s.Blocks-reservedBlocks)
-			free := int64(s.Frsize) * int64(s.Bavail)
+			total := s.Frsize * int64(s.Blocks-reservedBlocks)
+			free := s.Frsize * int64(s.Bavail)
 			stats.Record(ctx, DiskFree.M(free), DiskUsed.M(total-free), DiskTotal.M(total))
 		}
 	}

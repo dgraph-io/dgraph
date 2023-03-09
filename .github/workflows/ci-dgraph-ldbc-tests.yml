@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - main
+      - 'release/**'
   pull_request:
     types:
       - opened
@@ -11,11 +12,13 @@ on:
       - ready_for_review
     branches:
       - main
+      - 'release/**'
   schedule:
-    - cron: "30 * * * *"
+    - cron: "0 0 * * *" # 1-run per day
 jobs:
   dgraph-ldbc-tests:
-    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-20.04
     steps:
       - name: Checkout Dgraph
         uses: actions/checkout@v3

@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,16 +19,17 @@ package telemetry
 import (
 	"bytes"
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"runtime"
 	"time"
 
+	"github.com/golang/glog"
+	"github.com/pkg/errors"
+
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/glog"
-	"github.com/pkg/errors"
 )
 
 // Telemetry holds information about the state of the zero and alpha server.
@@ -96,7 +97,7 @@ func (t *Telemetry) Post() error {
 	}
 
 	var requestURL string
-	if len(t.Version) > 0 {
+	if t.Version != "dev" {
 		requestURL = url + "/pings"
 	} else {
 		requestURL = url + "/dev"
@@ -116,8 +117,12 @@ func (t *Telemetry) Post() error {
 		return err
 	}
 
-	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			glog.Warningf("error closing body: %v", err)
+		}
+	}()
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return err
 	}

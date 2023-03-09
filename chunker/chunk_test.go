@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,9 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -154,7 +157,6 @@ func TestJSONLoadSuccessFirst(t *testing.T) {
 		} else {
 			require.NoError(t, err, test.desc)
 		}
-		//fmt.Fprintf(os.Stderr, "err = %v, json = %v\n", err, json)
 		require.Equal(t, test.expt, json.String(), test.desc)
 	}
 }
@@ -217,11 +219,106 @@ func TestJSONLoadSuccessAll(t *testing.T) {
 	for idx = 0; err == nil; idx++ {
 		desc := fmt.Sprintf("reading chunk #%d", idx+1)
 		json, err = chunker.Chunk(reader)
-		//fmt.Fprintf(os.Stderr, "err = %v, json = %v\n", err, json)
 		if err != io.EOF {
 			require.NoError(t, err, desc)
 			require.Equal(t, testChunks[idx], json.String(), desc)
 		}
 	}
 	require.Equal(t, io.EOF, err, "end reading JSON document")
+}
+
+func TestFileReader(t *testing.T) {
+	//create sample files
+	_, thisFile, _, _ := runtime.Caller(0)
+	dir := "test-files"
+	require.NoError(t, os.MkdirAll(dir, os.ModePerm))
+	defer deleteDirs(t, dir)
+	testFilesDir := filepath.Join(filepath.Dir(thisFile), "test-files")
+	var expectedOutcomes [2]string
+
+	file_data := []struct {
+		filename string
+		content  string
+	}{
+		{"test-1", "This is test file 1."},
+		{"test-2", "This is test file 2."},
+	}
+	for i, data := range file_data {
+		filePath := filepath.Join(testFilesDir, data.filename)
+		f, err := os.Create(filePath)
+		require.NoError(t, err)
+		defer f.Close()
+		_, err = f.WriteString(data.content)
+		require.NoError(t, err)
+		expectedOutcomes[i] = data.content
+	}
+	files, err := os.ReadDir(testFilesDir)
+	require.NoError(t, err)
+
+	for i, file := range files {
+		testfilename := filepath.Join(testFilesDir, file.Name())
+		reader, cleanup := FileReader(testfilename, nil)
+		bytes, err := io.ReadAll(reader)
+		require.NoError(t, err)
+		contents := string(bytes)
+		//compare file content with correct string
+		require.Equal(t, contents, expectedOutcomes[i])
+		cleanup()
+	}
+}
+
+func TestDataFormat(t *testing.T) {
+	_, thisFile, _, _ := runtime.Caller(0)
+	dir := "test-files"
+	require.NoError(t, os.MkdirAll(dir, os.ModePerm))
+	defer deleteDirs(t, dir)
+	testFilesDir := filepath.Join(filepath.Dir(thisFile), "test-files")
+	expectedOutcomes := [5]InputFormat{2, 1, 0, 2, 1}
+	file_data := [5]string{"test-1.json", "test-2.rdf", "test-3.txt", "test-4.json.gz", "test-5.rdf.gz"}
+
+	for i, data := range file_data {
+		filePath := filepath.Join(testFilesDir, data)
+		format := DataFormat(filePath, "")
+		require.Equal(t, format, expectedOutcomes[i])
+	}
+}
+
+func TestRDFChunkerChunk(t *testing.T) {
+	_, thisFile, _, _ := runtime.Caller(0)
+	dir := "test-files"
+	require.NoError(t, os.MkdirAll(dir, os.ModePerm))
+	defer deleteDirs(t, dir)
+	testFilesDir := filepath.Join(filepath.Dir(thisFile), "test-files")
+	dataFile := filepath.Join(filepath.Dir(thisFile), "data.rdf")
+	resultData := filepath.Join(testFilesDir, "result.rdf")
+	f, err := os.Create(resultData)
+	require.NoError(t, err)
+	chunker := NewChunker(RdfFormat, 1000)
+	rd, cleanup := FileReader(dataFile, nil)
+	chunkBuf, err := chunker.Chunk(rd)
+	if err != io.EOF {
+		require.NoError(t, err)
+	}
+
+	for chunkBuf.Len() > 0 {
+		str, err := chunkBuf.ReadString('\n')
+		if err != io.EOF {
+			require.NoError(t, err)
+		}
+		_, err = f.WriteString(str)
+		require.NoError(t, err)
+	}
+
+	f1, err1 := os.ReadFile(dataFile)
+	require.NoError(t, err1)
+	f2, err2 := os.ReadFile(resultData)
+	require.NoError(t, err2)
+	require.Equal(t, true, bytes.Equal(f1, f2))
+	cleanup()
+}
+
+func deleteDirs(t *testing.T, dir string) {
+	if err := os.RemoveAll(dir); err != nil {
+		fmt.Printf("Error removing direcotory: %s", err.Error())
+	}
 }

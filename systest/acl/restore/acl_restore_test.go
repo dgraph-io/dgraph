@@ -1,3 +1,5 @@
+//go:build integration
+
 package main
 
 import (
@@ -5,17 +7,19 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
 )
 
 // disableDraining disables draining mode before each test for increased reliability.
@@ -35,7 +39,8 @@ func disableDraining(t *testing.T) {
 	b, err := json.Marshal(params)
 	require.NoError(t, err)
 
-	token := testutil.Login(t, &testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: 0})
+	token, err := testutil.Login(t, &testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: 0})
+	require.NoError(t, err, "login failed")
 
 	client := &http.Client{}
 	req, err := http.NewRequest("POST", testutil.AdminUrl(), bytes.NewBuffer(b))
@@ -45,7 +50,7 @@ func disableDraining(t *testing.T) {
 
 	resp, err := client.Do(req)
 	require.NoError(t, err)
-	buf, err := ioutil.ReadAll(resp.Body)
+	buf, err := io.ReadAll(resp.Body)
 	fmt.Println(string(buf))
 	require.NoError(t, err)
 	require.Contains(t, string(buf), "draining mode has been set to false")
@@ -69,7 +74,9 @@ func sendRestoreRequest(t *testing.T, location, backupId string, backupNum int) 
 		},
 	}
 
-	token := testutil.Login(t, &testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: 0})
+	token, err := testutil.Login(t, &testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: 0})
+	require.NoError(t, err, "login failed")
+
 	resp := testutil.MakeGQLRequestWithAccessJwt(t, params, token.AccessJwt)
 	resp.RequireNoGraphQLErrors(t)
 
@@ -88,16 +95,17 @@ func TestAclCacheRestore(t *testing.T) {
 	// TODO: need to fix the race condition for license propagation, the sleep helps propagate the EE license correctly
 	time.Sleep(time.Second * 10)
 	disableDraining(t)
-	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
+	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
-	dg.Login(context.Background(), "groot", "password")
+	require.NoError(t, dg.Login(context.Background(), "groot", "password"))
 
 	sendRestoreRequest(t, "/backups", "vibrant_euclid5", 1)
-	testutil.WaitForRestore(t, dg)
+	testutil.WaitForRestore(t, dg, testutil.SockAddrHttp)
 
-	token := testutil.Login(t,
+	token, err := testutil.Login(t,
 		&testutil.LoginParams{UserID: "alice1", Passwd: "password", Namespace: 0})
+	require.NoError(t, err, "login failed")
 	params := &common.GraphQLParams{
 		Query: `query{
 					queryPerson{

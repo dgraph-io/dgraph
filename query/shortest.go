@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,12 +22,13 @@ import (
 	"math"
 	"sync"
 
+	"github.com/pkg/errors"
+
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/pkg/errors"
 )
 
 type pathInfo struct {
@@ -141,7 +142,7 @@ func (sg *SubGraph) getCost(matrix, list int) (cost float64,
 	case tv.Tid == types.IntID:
 		cost = float64(tv.Value.(int64))
 	case tv.Tid == types.FloatID:
-		cost = float64(tv.Value.(float64))
+		cost = tv.Value.(float64)
 	default:
 		rerr = errFacet
 	}
@@ -437,7 +438,6 @@ func runKShortestPaths(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 }
 
 // Djikstras algorithm pseudocode for reference.
-//
 //
 // 1  function Dijkstra(Graph, source):
 // 2      dist[source] ← 0                                    // Initialization

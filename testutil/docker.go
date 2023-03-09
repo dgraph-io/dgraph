@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,20 +17,23 @@
 package testutil
 
 import (
+	"archive/tar"
 	"bytes"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
 	"github.com/golang/glog"
 	"golang.org/x/net/context"
+
+	"github.com/dgraph-io/dgraph/x"
 )
 
 const (
@@ -64,12 +67,12 @@ func (in ContainerInstance) BestEffortWaitForHealthy(privatePort uint16) error {
 		return nil
 	}
 
-	for i := 0; i < 30; i++ {
+	for i := 0; i < 60; i++ {
 		resp, err := http.Get("http://localhost:" + port + "/health")
 		var body []byte
 		if resp != nil && resp.Body != nil {
-			body, _ = ioutil.ReadAll(resp.Body)
-			resp.Body.Close()
+			body, _ = io.ReadAll(resp.Body)
+			_ = resp.Body.Close()
 		}
 		if err == nil && resp.StatusCode == http.StatusOK {
 			return checkACL(body)
@@ -77,7 +80,7 @@ func (in ContainerInstance) BestEffortWaitForHealthy(privatePort uint16) error {
 		fmt.Printf("Health for %s failed: %v. Response: %q. Retrying...\n", in, err, body)
 		time.Sleep(time.Second)
 	}
-	return nil
+	return fmt.Errorf("did not pass health check on %s", "http://localhost:"+port+"/health\n")
 }
 
 func (in ContainerInstance) publicPort(privatePort uint16) string {
@@ -113,7 +116,7 @@ func (in ContainerInstance) login() error {
 }
 
 func (in ContainerInstance) bestEffortTryLogin() error {
-	for i := 0; i < 30; i++ {
+	for i := 0; i < 60; i++ {
 		err := in.login()
 		if err == nil {
 			return nil
@@ -126,11 +129,11 @@ func (in ContainerInstance) bestEffortTryLogin() error {
 			// This is TLS enabled cluster. We won't be able to login.
 			return nil
 		}
-		fmt.Printf("Login failed for %s: %v. Retrying...\n", in, err)
+		fmt.Printf("login failed for %s: %v. Retrying...\n", in, err)
 		time.Sleep(time.Second)
 	}
-	fmt.Printf("Unable to login to %s\n", in)
-	return fmt.Errorf("Unable to login to %s\n", in)
+	fmt.Printf("unable to login to %s\n", in)
+	return fmt.Errorf("unable to login to %s", in)
 }
 
 func (in ContainerInstance) GetContainer() *types.Container {
@@ -224,11 +227,31 @@ func DockerRun(instance string, op int) error {
 	return nil
 }
 
-// DockerCp copies from/to a container. Paths inside a container have the format
+// MARKED FOR DEPRECATION: DockerCp copies from/to a container. Paths inside a container have the format
 // container_name:path.
 func DockerCp(srcPath, dstPath string) error {
 	argv := []string{"docker", "cp", srcPath, dstPath}
 	return Exec(argv...)
+}
+
+// DockerCpFromContainer copies from a container.
+func DockerCpFromContainer(containerID, srcPath, dstPath string) error {
+	cli, err := client.NewEnvClient()
+	x.Check(err)
+
+	tarStream, _, err := cli.CopyFromContainer(context.Background(), containerID, srcPath)
+	if err != nil {
+		fmt.Println(err)
+		return nil
+	}
+	tr := tar.NewReader(tarStream)
+	_, err = tr.Next()
+	x.Check(err)
+
+	data, err := io.ReadAll(tr)
+	x.Check(err)
+
+	return os.WriteFile(dstPath, data, 0644)
 }
 
 // DockerExec executes a command inside the given container.
@@ -241,4 +264,35 @@ func DockerExec(instance string, cmd ...string) error {
 	argv := []string{"docker", "exec", "--user", "root", c.ID}
 	argv = append(argv, cmd...)
 	return Exec(argv...)
+}
+
+func DockerInspect(containerID string) (types.ContainerJSON, error) {
+	cli, err := client.NewEnvClient()
+	x.Check(err)
+	return cli.ContainerInspect(context.Background(), containerID)
+}
+
+// checkHealthContainer checks health of container and determines wheather container is ready to accept request
+func CheckHealthContainer(socketAddrHttp string) error {
+	var err error
+	var resp *http.Response
+	url := "http://" + socketAddrHttp + "/health"
+	for i := 0; i < 30; i++ {
+		resp, err = http.Get(url)
+		if err == nil && resp.StatusCode == http.StatusOK {
+			return nil
+		}
+		var body []byte
+		if resp != nil && resp.Body != nil {
+			body, err = io.ReadAll(resp.Body)
+			if err != nil {
+				return err
+			}
+			_ = resp.Body.Close()
+		}
+		fmt.Printf("health check for container failed: %v. Response: %q. Retrying...\n", err, body)
+		time.Sleep(time.Second)
+
+	}
+	return err
 }

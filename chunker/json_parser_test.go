@@ -1,5 +1,7 @@
+//go:build integration
+
 /*
- * Copyright 2017-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +16,7 @@
  * limitations under the License.
  */
 
+//nolint:lll
 package chunker
 
 import (
@@ -25,13 +28,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/dgraph-io/dgraph/tok"
 	"github.com/golang/glog"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
-	"github.com/stretchr/testify/require"
 )
 
 func makeNquad(sub, pred string, val *api.Value) *api.NQuad {
@@ -396,7 +399,8 @@ func TestJsonNumberParsing(t *testing.T) {
 		out *api.Value
 	}{
 		{`{"uid": "1", "key": 9223372036854775299}`, &api.Value{Val: &api.Value_IntVal{IntVal: 9223372036854775299}}},
-		{`{"uid": "1", "key": 9223372036854775299.0}`, &api.Value{Val: &api.Value_DoubleVal{DoubleVal: 9223372036854775299.0}}},
+		{`{"uid": "1", "key": 9223372036854775299.0}`,
+			&api.Value{Val: &api.Value_DoubleVal{DoubleVal: 9223372036854775299.0}}},
 		{`{"uid": "1", "key": 27670116110564327426}`, nil},
 		{`{"uid": "1", "key": "23452786"}`, &api.Value{Val: &api.Value_StrVal{StrVal: "23452786"}}},
 		{`{"uid": "1", "key": "23452786.2378"}`, &api.Value{Val: &api.Value_StrVal{StrVal: "23452786.2378"}}},
@@ -601,7 +605,7 @@ func TestNquadsFromJsonFacets1(t *testing.T) {
 
 	carPrice := 30000.56
 	var priceBytes [8]byte
-	u := math.Float64bits(float64(carPrice))
+	u := math.Float64bits(carPrice)
 	binary.LittleEndian.PutUint64(priceBytes[:], u)
 
 	carAge := 3
@@ -1228,7 +1232,7 @@ func BenchmarkNoFacets(b *testing.B) {
 	// we're parsing 125 nquads at a time, so the MB/s == MNquads/s
 	b.SetBytes(125)
 	for n := 0; n < b.N; n++ {
-		Parse([]byte(json), SetNquads)
+		_, _ = Parse(json, SetNquads)
 	}
 }
 
@@ -1369,6 +1373,6 @@ func BenchmarkNoFacetsFast(b *testing.B) {
 	// we're parsing 125 nquads at a time, so the MB/s == MNquads/s
 	b.SetBytes(125)
 	for n := 0; n < b.N; n++ {
-		FastParse([]byte(json), SetNquads)
+		_, _ = FastParse(json, SetNquads)
 	}
 }

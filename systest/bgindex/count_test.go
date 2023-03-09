@@ -1,5 +1,7 @@
+//go:build integration
+
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,13 +33,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/badger/v3/y"
+	"github.com/dgraph-io/badger/v4/y"
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 func TestCountIndex(t *testing.T) {
@@ -67,26 +69,25 @@ func TestCountIndex(t *testing.T) {
 	fmt.Println("inserting values")
 	th := y.NewThrottle(10000)
 	for i := 1; i <= int(numUIDs); i++ {
-		th.Do()
+		require.NoError(t, th.Do())
+
 		go func(uid int) {
 			defer th.Done(nil)
 			bb := &bytes.Buffer{}
 			edgeCount[uid] = rand.Intn(1000)
 			for j := 0; j < edgeCount[uid]; j++ {
 				_, err := bb.WriteString(fmt.Sprintf("<%v> <value> \"%v\" .\n", uid, j))
-				if err != nil {
-					panic(err)
-				}
+				x.Panic(err)
 			}
 			if err := testutil.RetryMutation(dg, &api.Mutation{
 				CommitNow: true,
 				SetNquads: bb.Bytes(),
 			}); err != nil {
-				t.Fatalf("error in mutation :: %v", err)
+				panic(fmt.Sprintf("error in mutation :: %v", err))
 			}
 		}(i)
 	}
-	th.Finish()
+	require.NoError(t, th.Finish())
 
 	fmt.Println("building indexes in background")
 	if err := dg.Alter(context.Background(), &api.Operation{
@@ -250,7 +251,7 @@ func TestCountIndex(t *testing.T) {
 	fmt.Println("starting to query")
 	var count uint64
 	th = y.NewThrottle(50000)
-	th.Do()
+	require.NoError(t, th.Do())
 	go func() {
 		defer th.Done(nil)
 		for {
@@ -264,7 +265,7 @@ func TestCountIndex(t *testing.T) {
 	}()
 
 	for value, uids := range countIndex {
-		th.Do()
+		require.NoError(t, th.Do())
 		go func(val int, uidList []int) {
 			defer th.Done(nil)
 			if val <= 0 {
@@ -281,7 +282,7 @@ func TestCountIndex(t *testing.T) {
 			atomic.AddUint64(&count, 1)
 		}(value, uids)
 	}
-	th.Finish()
+	require.NoError(t, th.Finish())
 
 	close(ch)
 	for p := range ch {

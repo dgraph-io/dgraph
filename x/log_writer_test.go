@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"encoding/binary"
-	"io/ioutil"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -95,6 +95,7 @@ func TestLogWriterWithEncryption(t *testing.T) {
 	defer outfile.Close()
 
 	block, err := aes.NewCipher(lw.EncryptionKey)
+	require.Nil(t, err)
 	stat, err := os.Stat(path)
 	require.Nil(t, err)
 	iv := make([]byte, aes.BlockSize)
@@ -136,7 +137,7 @@ func writeToLogWriterAndVerify(t *testing.T, lw *LogWriter, path string) {
 	}
 	time.Sleep(time.Second * 10)
 	require.NoError(t, lw.Close())
-	files, err := ioutil.ReadDir("./log_test")
+	files, err := os.ReadDir("./log_test")
 	require.Nil(t, err)
 
 	lineCount := 0
@@ -147,7 +148,7 @@ func writeToLogWriterAndVerify(t *testing.T, lw *LogWriter, path string) {
 		if strings.HasSuffix(file.Name(), ".gz") {
 			gz, err := gzip.NewReader(file)
 			require.NoError(t, err)
-			all, err := ioutil.ReadAll(gz)
+			all, err := io.ReadAll(gz)
 			require.NoError(t, err)
 			fileScanner = bufio.NewScanner(bytes.NewReader(all))
 			gz.Close()

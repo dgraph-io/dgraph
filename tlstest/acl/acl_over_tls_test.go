@@ -1,3 +1,5 @@
+//go:build integration
+
 package acl
 
 import (
@@ -6,11 +8,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/spf13/viper"
 )
 
 func TestLoginOverTLS(t *testing.T) {

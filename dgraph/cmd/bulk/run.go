@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,12 +19,9 @@ package bulk
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"math"
 	"net/http"
-
-	//nolint:gosec // profiling on bulk-loader tool considered noncritical
 	_ "net/http/pprof" // http profiler
 	"os"
 	"path/filepath"
@@ -32,16 +29,16 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/dgraph-io/badger/v3"
+	"github.com/spf13/cobra"
+
+	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/filestore"
 	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/worker"
-	"github.com/dgraph-io/ristretto/z"
-
 	"github.com/dgraph-io/dgraph/tok"
+	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/spf13/cobra"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 // Bulk is the sub-command invoked when running "dgraph bulk".
@@ -104,8 +101,7 @@ func init() {
 	flag.StringP("zero", "z", "localhost:5080", "gRPC address for Dgraph zero")
 	flag.String("xidmap", "", "Directory to store xid to uid mapping")
 	// TODO: Potentially move http server to main.
-	flag.String("http", "localhost:8080",
-		"Address to serve http (pprof).")
+	flag.String("http", "localhost:8080", "Address to serve http (pprof).")
 	flag.Bool("ignore_errors", false, "ignore line parsing errors in rdf files")
 	flag.Int("map_shards", 1,
 		"Number of map output shards. Must be greater than or equal to the number of reduce "+
@@ -120,7 +116,9 @@ func init() {
 	flag.Bool("new_uids", false,
 		"Ignore UIDs in load files and assign new ones.")
 	flag.Uint64("force-namespace", math.MaxUint64,
-		"Namespace onto which to load the data. If not set, will preserve the namespace.")
+		"Namespace onto which to load the data. If not set, will preserve the namespace."+
+			" When using this flag to load data into specific namespace, make sure that the "+
+			"load data do not have ACL data.")
 
 	flag.String("badger", BulkBadgerDefaults, z.NewSuperFlagHelp(BulkBadgerDefaults).
 		Head("Badger options (Refer to badger documentation for all possible options)").
@@ -316,7 +314,7 @@ func run() {
 	bulkMetaPath := filepath.Join(opt.TmpDir, bulkMetaFilename)
 
 	if opt.SkipMapPhase {
-		bulkMetaData, err := ioutil.ReadFile(bulkMetaPath)
+		bulkMetaData, err := os.ReadFile(bulkMetaPath)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "Error reading from bulk meta file")
 			os.Exit(1)
@@ -346,7 +344,7 @@ func run() {
 			fmt.Fprintln(os.Stderr, "Error serializing bulk meta file")
 			os.Exit(1)
 		}
-		if err = ioutil.WriteFile(bulkMetaPath, bulkMetaData, 0600); err != nil {
+		if err = os.WriteFile(bulkMetaPath, bulkMetaData, 0600); err != nil {
 			fmt.Fprintln(os.Stderr, "Error writing to bulk meta file")
 			os.Exit(1)
 		}

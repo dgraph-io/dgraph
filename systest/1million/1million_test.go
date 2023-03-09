@@ -1,5 +1,7 @@
+//go:build integration
+
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,15 +21,15 @@ package main
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/stretchr/testify/require"
 )
 
 var tc = []struct {
@@ -9311,7 +9313,7 @@ func TestMain(m *testing.M) {
 		cleanupAndExit(1)
 	}
 
-	file, err := ioutil.ReadFile(schemaFile)
+	file, err := os.ReadFile(schemaFile)
 	if err != nil {
 		fmt.Printf("Error while reading schema file. Error: %v\n", err)
 		cleanupAndExit(1)
@@ -9329,7 +9331,7 @@ func TestMain(m *testing.M) {
 }
 
 func cleanupAndExit(exitCode int) {
-	if testutil.StopAlphasAndDetectRace("./alpha.yml") {
+	if testutil.StopAlphasAndDetectRace([]string{"alpha1"}) {
 		// if there is race fail the test
 		exitCode = 1
 	}

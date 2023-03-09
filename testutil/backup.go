@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,24 +19,24 @@ package testutil
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"math"
 	"net/http"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/badger/v3"
+	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
+	"github.com/stretchr/testify/require"
+
+	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
-
-	"github.com/spf13/pflag"
-	"github.com/spf13/viper"
-	"github.com/stretchr/testify/require"
 )
 
 // KeyFile is set to the path of the file containing the key. Used for testing purposes only.
@@ -64,12 +64,12 @@ func openDgraph(pdir string) (*badger.DB, error) {
 	return badger.OpenManaged(opt)
 }
 
-func WaitForRestore(t *testing.T, dg *dgo.Dgraph) {
+func WaitForRestore(t *testing.T, dg *dgo.Dgraph, HttpSocket string) {
 	restoreDone := false
 	for {
-		resp, err := http.Get("http://" + SockAddrHttp + "/health")
+		resp, err := http.Get("http://" + HttpSocket + "/health")
 		require.NoError(t, err)
-		buf, err := ioutil.ReadAll(resp.Body)
+		buf, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 		sbuf := string(buf)
 		if !strings.Contains(sbuf, "opRestore") {

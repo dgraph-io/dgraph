@@ -1,5 +1,7 @@
+//go:build integration
+
 /*
- *    Copyright 2022 Dgraph Labs, Inc. and Contributors
+ *    Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,8 +22,9 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 )
 
 func getAllProjects(t *testing.T, users, roles []string) []string {
@@ -164,7 +167,9 @@ func getAllQuestions(t *testing.T, users []string, answers []bool) ([]*Question,
 	return questions, keys
 }
 
-func getAllPosts(t *testing.T, users []string, roles []string, answers []bool) ([]*Question, []*Answer, []*FbPost, []string) {
+func getAllPosts(t *testing.T, users []string, roles []string, answers []bool) (
+	[]*Question, []*Answer, []*FbPost, []string) {
+
 	Questions, getAllQuestionIds := getAllQuestions(t, users, answers)
 	Answers, getAllAnswerIds := getAllAnswers(t, users)
 	FbPosts, getAllFbPostIds := getAllFbPosts(t, users, roles)
@@ -427,7 +432,8 @@ func getAllLogs(t *testing.T, users, roles []string) ([]*Log, []string) {
 }
 
 func TestAuth_UpdateOnInterfaceWithAuthRules(t *testing.T) {
-	_, _, _, ids := getAllPosts(t, []string{"user1@dgraph.io", "user2@dgraph.io"}, []string{"ADMIN"}, []bool{true, false})
+	_, _, _, ids := getAllPosts(t, []string{"user1@dgraph.io", "user2@dgraph.io"},
+		[]string{"ADMIN"}, []bool{true, false})
 	testCases := []TestCase{{
 		name:   "Only 2 nodes satisfy auth rules with the given values and hence should be updated",
 		user:   "user1@dgraph.io",
@@ -740,7 +746,7 @@ func TestUpdateNestedFilter(t *testing.T) {
 	}, {
 		user:   "user2",
 		role:   "USER",
-		result: `{"updateMovie": {"movie": [{ "content": "Movie1" }, { "content": "Movie2" }, { "content": "Movie3" }, { "content": "Movie4" }]}}`,
+		result: `{"updateMovie": {"movie": [{ "content": "Movie1" }, { "content": "Movie2" }, { "content": "Movie3" }, { "content": "Movie4" }]}}`, //nolint:lll
 	}}
 
 	query := `

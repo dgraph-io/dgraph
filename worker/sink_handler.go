@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,15 +23,13 @@ import (
 	"crypto/x509"
 	"encoding/binary"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/Shopify/sarama"
 	"github.com/pkg/errors"
 	"github.com/xdg/scram"
-
-	"github.com/Shopify/sarama"
 
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
@@ -86,16 +84,24 @@ func newKafkaSink(config *z.SuperFlag) (Sink, error) {
 	saramaConf.Producer.Return.Successes = true
 	saramaConf.Producer.Return.Errors = true
 
-	if config.GetPath("ca-cert") != "" {
-		tlsCfg := &tls.Config{
-			MinVersion: tls.VersionTLS12,
-		}
+	if config.GetBool("tls") && config.GetPath("ca-cert") == "" {
+		tlsCfg := x.TLSBaseConfig()
 		var pool *x509.CertPool
 		var err error
 		if pool, err = x509.SystemCertPool(); err != nil {
 			return nil, err
 		}
-		caFile, err := ioutil.ReadFile(config.GetPath("ca-cert"))
+		tlsCfg.RootCAs = pool
+		saramaConf.Net.TLS.Enable = true
+		saramaConf.Net.TLS.Config = tlsCfg
+	} else if config.GetPath("ca-cert") != "" {
+		tlsCfg := x.TLSBaseConfig()
+		var pool *x509.CertPool
+		var err error
+		if pool, err = x509.SystemCertPool(); err != nil {
+			return nil, err
+		}
+		caFile, err := os.ReadFile(config.GetPath("ca-cert"))
 		if err != nil {
 			return nil, errors.Wrap(err, "unable to read ca cert file")
 		}

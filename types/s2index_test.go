@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2016-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -213,7 +213,7 @@ func BenchmarkKeyGeneratorPoint(b *testing.B) {
 
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		IndexGeoTokens(g)
+		_, _ = IndexGeoTokens(g)
 	}
 }
 
@@ -235,7 +235,7 @@ func BenchmarkKeyGeneratorPolygon(b *testing.B) {
 
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		IndexGeoTokens(g)
+		_, _ = IndexGeoTokens(g)
 	}
 }
 

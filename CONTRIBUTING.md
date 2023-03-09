@@ -55,7 +55,7 @@ This will put the source code in a Git repo under `$GOPATH/src/github.com/dgraph
 
 We use [protocol buffers](https://developers.google.com/protocol-buffers/) to serialize data between our server and the Go client and also for inter-worker communication. If you make any changes to the `.proto` files, you would have to recompile them. 
 
-Install the `protoc` compiler which is required for compiling proto files used for gRPC communication. Get `protoc` version 3.0.0 or above from [GitHub releases page](https://github.com/google/protobuf/releases/latest) (look for the binary releases at the bottom, or compile from sources [following the instructions](https://github.com/google/protobuf/tree/master/src)).
+Install the `protoc` compiler which is required for compiling proto files used for gRPC communication. Get `protoc` version 3.0.0 or above from [GitHub releases page](https://github.com/google/protobuf/releases/latest) (look for the binary releases at the bottom, or compile from sources [following the instructions](https://github.com/google/protobuf/tree/main/src)).
 
 We use [gogo protobuf](https://github.com/gogo/protobuf) in Dgraph. To get the protocol buffer compiler plugin from gogo run
 
@@ -95,7 +95,7 @@ For Dgraph official documentation, visit https://dgraph.io/docs/.
 For discussions about Dgraph     , visit https://discuss.dgraph.io.
 
 Licensed variously under the Apache Public License 2.0 and Dgraph Community License.
-Copyright 2015-2018 Dgraph Labs, Inc.
+Copyright 2015-2023 Dgraph Labs, Inc.
 ```
 
 ### Build Docker Image
@@ -111,25 +111,25 @@ tagged as the current branch name. The image only contains the `dgraph` binary.
 Example:
 ```
 $ git rev-parse --abbrev-ref HEAD # current branch
-master
+main
 $ make image
 Successfully built c74d564d911f
-Successfully tagged dgraph/dgraph:master
-$ $ docker run --rm -it dgraph/dgraph:master dgraph version
+Successfully tagged dgraph/dgraph:main
+$ $ docker run --rm -it dgraph/dgraph:main dgraph version
 [Decoder]: Using assembly version of decoder
 
 Dgraph version   : v1.1.1-1-g5fa139a0e
 Dgraph SHA-256   : 31f8c9324eb90a6f4659066937fcebc67bbca251c20b9da0461c2fd148187689
 Commit SHA-1     : 5fa139a0e
 Commit timestamp : 2019-12-16 20:52:06 -0800
-Branch           : master
+Branch           : main
 Go version       : go1.13.5
 
 For Dgraph official documentation, visit https://dgraph.io/docs/.
 For discussions about Dgraph     , visit https://discuss.dgraph.io.
 
 Licensed variously under the Apache Public License 2.0 and Dgraph Community License.
-Copyright 2015-2018 Dgraph Labs, Inc.
+Copyright 2015-2023 Dgraph Labs, Inc.
 ```
 
 For release images, follow [Doing a release](#doing-a-release). It creates
@@ -175,8 +175,8 @@ Run `go test` in the root folder.
 
 ## Doing a release
 
-* Create a branch called `release/v<x.y.z>` from master. For e.g. `release/v1.0.5`. Look at the
-   diff between the last release and master and make sure that `CHANGELOG.md` has all the changes
+* Create a branch called `release/v<x.y.z>` from main. For e.g. `release/v1.0.5`. Look at the
+   diff between the last release and main and make sure that `CHANGELOG.md` has all the changes
    that went in. Also make sure that any new features/changes are added to the docs under
    `wiki/content` to the relevant section.
 * Test any new features or bugfixes and then tag the final commit on the release branch like:
@@ -197,12 +197,12 @@ Run `go test` in the root folder.
   creating a new draft release. It would also publish a new docker image for the new release as well
   as update the docker image with tag `latest` and upload them to docker hub.
 
-* Checkout the `master` branch and merge the tag to it and push it.
+* Checkout the `main` branch and merge the tag to it and push it.
 
   ```sh
-  git checkout master
+  git checkout main
   git merge v<x.y.z>
-  git push origin master
+  git push origin main
   ```
 
 * Once the draft release is published on Github by Travis, modify it to add the release notes. The release
@@ -212,7 +212,7 @@ Run `go test` in the root folder.
 * To make sure that docs are added for the newly released version, add the version to
    `wiki/scripts/build.sh`. It is also important for a release branch for the version to exist,
    otherwise docs won't be built and published for it. SSH into the server serving the docs and pull
-   the latest version of `wiki/scripts/build.sh` from master branch and rerun it so that it can start
+   the latest version of `wiki/scripts/build.sh` from main branch and rerun it so that it can start
    publishing docs for the latest version.
 
 * If any bugs were fixed with regards to query language or in the server then it is a good idea to
@@ -249,7 +249,7 @@ Every new source file must begin with a license header.
 Most of Dgraph, Badger, and the Dgraph clients (dgo, dgraph-js, pydgraph and dgraph4j) are licensed under the Apache 2.0 license:
 
     /*
-     * Copyright 2016-2022 Dgraph Labs, Inc. and Contributors
+     * Copyright 2016-2023 Dgraph Labs, Inc. and Contributors
      *
      * Licensed under the Apache License, Version 2.0 (the "License");
      * you may not use this file except in compliance with the License.

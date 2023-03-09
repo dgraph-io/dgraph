@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - main
+      - 'release/**'
   pull_request:
     types:
       - opened
@@ -11,12 +12,12 @@ on:
       - ready_for_review
     branches:
       - main
+      - 'release/**'
   schedule:
-    - cron: "0 * * * *"
+    - cron: "0 */2 * * *" # every 2hrs
 jobs:
   dgraph-load-tests:
-    # TODO: uncomment this after release work
-    # if: github.event.pull_request.draft == false
+    if: github.event.pull_request.draft == false
     runs-on: [self-hosted, x64]
     steps:
       - uses: actions/checkout@v3

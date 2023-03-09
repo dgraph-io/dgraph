@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2016-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dgraph-io/badger/v3"
+	"github.com/golang/glog"
+	"github.com/golang/protobuf/proto"
+	cindex "github.com/google/codesearch/index"
+	cregexp "github.com/google/codesearch/regexp"
+	"github.com/pkg/errors"
+	otrace "go.opencensus.io/trace"
+	"golang.org/x/sync/errgroup"
+
+	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/conn"
@@ -36,14 +44,6 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/glog"
-	otrace "go.opencensus.io/trace"
-	"golang.org/x/sync/errgroup"
-
-	"github.com/golang/protobuf/proto"
-	cindex "github.com/google/codesearch/index"
-	cregexp "github.com/google/codesearch/regexp"
-	"github.com/pkg/errors"
 )
 
 func invokeNetworkRequest(ctx context.Context, addr string,
@@ -352,7 +352,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 	}
 	if srcFn.fnType == passwordFn && srcFn.atype != types.PasswordID {
 		return errors.Errorf("checkpwd fn can only be used on attr: [%s] with schema type "+
-			"password. Got type: %s", x.ParseAttr(q.Attr), types.TypeID(srcFn.atype).Name())
+			"password. Got type: %s", x.ParseAttr(q.Attr), srcFn.atype.Name())
 	}
 	if srcFn.n == 0 {
 		return nil
@@ -412,9 +412,9 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 			switch {
 			case err == posting.ErrNoValue || (err == nil && len(vals) == 0):
 				// This branch is taken when the value does not exist in the pl or
-				// the number of values retreived is zero (there could still be facets).
+				// the number of values retrieved is zero (there could still be facets).
 				// We add empty lists to the UidMatrix, FaceMatrix, ValueMatrix and
-				// LangMatrix so that all these data structure have predicatble layouts.
+				// LangMatrix so that all these data structure have predictable layouts.
 				out.UidMatrix = append(out.UidMatrix, &pb.List{})
 				out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{})
 				out.ValueMatrix = append(out.ValueMatrix,
@@ -801,7 +801,7 @@ func (qs *queryState) handleUidPostings(
 					ReadTs:    args.q.ReadTs,
 					AfterUid:  0,
 					Intersect: reqList,
-					First:     int(args.q.First),
+					First:     int(args.q.First + args.q.Offset),
 				}
 				plist, err := pl.Uids(topts)
 				if err != nil {
@@ -983,7 +983,7 @@ func (qs *queryState) helpProcessTask(ctx context.Context, q *pb.Query, gid uint
 	opts := posting.ListOptions{
 		ReadTs:   q.ReadTs,
 		AfterUid: q.AfterUid,
-		First:    int(q.First),
+		First:    int(q.First + q.Offset),
 	}
 	// If we have srcFunc and Uids, it means its a filter. So we intersect.
 	if srcFn.fnType != notAFunction && q.UidList != nil && len(q.UidList.Uids) > 0 {
@@ -1827,7 +1827,7 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 		}
 		fc.n = len(q.UidList.Uids)
 	case standardFn, fullTextSearchFn:
-		// srcfunc 0th val is func name and and [2:] are args.
+		// srcfunc 0th val is func name and [2:] are args.
 		// we tokenize the arguments of the query.
 		if err = ensureArgsCount(q.SrcFunc, 1); err != nil {
 			return nil, err
@@ -1862,7 +1862,7 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 		if max < 0 {
 			return nil, errors.Errorf("Levenshtein distance value must be greater than 0, got %v", s)
 		}
-		fc.threshold = []int64{int64(max)}
+		fc.threshold = []int64{max}
 		fc.tokens = q.SrcFunc.Args
 		fc.n = len(fc.tokens)
 	case customIndexFn:
@@ -2349,6 +2349,7 @@ func (qs *queryState) handleHasFunction(ctx context.Context, q *pb.Query, out *p
 		return err
 	}
 
+	cnt := int32(0)
 loop:
 	// This function could be switched to the stream.Lists framework, but after the change to use
 	// BitCompletePosting, the speed here is already pretty fast. The slowdown for @lang predicates
@@ -2390,6 +2391,11 @@ loop:
 			case err != nil:
 				return err
 			}
+			// skip entries upto Offset and do not store in the result.
+			if cnt < q.Offset {
+				cnt++
+				continue
+			}
 			result.Uids = append(result.Uids, pk.Uid)
 
 			// We'll stop fetching if we fetch the required count.
@@ -2415,6 +2421,11 @@ loop:
 				continue
 			case err != nil:
 				return err
+			}
+			// skip entries upto Offset and do not store in the result.
+			if cnt < q.Offset {
+				cnt++
+				continue
 			}
 			result.Uids = append(result.Uids, pk.Uid)
 

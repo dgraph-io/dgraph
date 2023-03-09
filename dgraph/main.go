@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2016-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,10 +21,11 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/dgraph-io/dgraph/dgraph/cmd"
-	"github.com/dgraph-io/ristretto/z"
 	"github.com/dustin/go-humanize"
 	"github.com/golang/glog"
+
+	"github.com/dgraph-io/dgraph/dgraph/cmd"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 func main() {
@@ -57,15 +58,13 @@ func main() {
 		for range ticker.C {
 			// Read Jemalloc stats first. Print if there's a big difference.
 			z.ReadMemStats(&js)
-			if diff := absDiff(uint64(z.NumAllocBytes()), lastAlloc); diff > 256<<20 {
+			if diff := absDiff(uint64(z.NumAllocBytes()), lastAlloc); diff > 1<<30 {
 				glog.V(2).Infof("NumAllocBytes: %s jemalloc: Active %s Allocated: %s"+
 					" Resident: %s Retained: %s\n",
 					humanize.IBytes(uint64(z.NumAllocBytes())),
 					humanize.IBytes(js.Active), humanize.IBytes(js.Allocated),
 					humanize.IBytes(js.Resident), humanize.IBytes(js.Retained))
 				lastAlloc = uint64(z.NumAllocBytes())
-			} else {
-				// Don't update the lastJs here.
 			}
 
 			runtime.ReadMemStats(&ms)

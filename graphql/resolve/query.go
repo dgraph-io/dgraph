@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@ import (
 	otrace "go.opencensus.io/trace"
 
 	dgoapi "github.com/dgraph-io/dgo/v210/protos/api"
-	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/dql"
 	"github.com/dgraph-io/dgraph/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
@@ -39,9 +39,9 @@ type QueryResolver interface {
 	Resolve(ctx context.Context, query schema.Query) *Resolved
 }
 
-// A QueryRewriter can build a Dgraph gql.GraphQuery from a GraphQL query,
+// A QueryRewriter can build a Dgraph dql.GraphQuery from a GraphQL query,
 type QueryRewriter interface {
-	Rewrite(ctx context.Context, q schema.Query) ([]*gql.GraphQuery, error)
+	Rewrite(ctx context.Context, q schema.Query) ([]*dql.GraphQuery, error)
 }
 
 // QueryResolverFunc is an adapter that allows to build a QueryResolver from

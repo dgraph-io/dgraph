@@ -1,5 +1,5 @@
 /*
- * Copyright 2019-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2019-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ package debuginfo
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -75,8 +74,12 @@ func saveDebug(sourceURL, filePath string, duration time.Duration) error {
 	if err != nil {
 		return err
 	}
+	defer func() {
+		if err := resp.Close(); err != nil {
+			glog.Warningf("error closing resp reader: %v", err)
+		}
+	}()
 
-	defer resp.Close()
 	out, err := os.Create(filePath)
 	if err != nil {
 		return fmt.Errorf("error while creating debug file: %s", err)
@@ -95,7 +98,11 @@ func fetchURL(source string, timeout time.Duration) (io.ReadCloser, error) {
 		return nil, fmt.Errorf("http fetch: %v", err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		defer resp.Body.Close()
+		defer func() {
+			if err := resp.Body.Close(); err != nil {
+				glog.Warningf("error closing body: %v", err)
+			}
+		}()
 		return nil, statusCodeError(resp)
 	}
 
@@ -105,7 +112,7 @@ func fetchURL(source string, timeout time.Duration) (io.ReadCloser, error) {
 func statusCodeError(resp *http.Response) error {
 	if resp.Header.Get("X-Go-Pprof") != "" &&
 		strings.Contains(resp.Header.Get("Content-Type"), "text/plain") {
-		if body, err := ioutil.ReadAll(resp.Body); err == nil {
+		if body, err := io.ReadAll(resp.Body); err == nil {
 			return fmt.Errorf("server response: %s - %s", resp.Status, body)
 		}
 	}

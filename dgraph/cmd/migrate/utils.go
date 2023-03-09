@@ -1,5 +1,5 @@
 /*
-* Copyright 2022 Dgraph Labs, Inc. and Contributors
+* Copyright 2023 Dgraph Labs, Inc. and Contributors
 *
 * Licensed under the Apache License, Version 2.0 (the "License");
 * you may not use this file except in compliance with the License.
@@ -24,9 +24,10 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/go-sql-driver/mysql"
 	"github.com/pkg/errors"
+
+	"github.com/dgraph-io/dgraph/x"
 )
 
 func getPool(host, port, user, password, db string) (*sql.DB,

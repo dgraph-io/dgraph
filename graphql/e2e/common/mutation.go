@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+//nolint:lll
 package common
 
 // Tests that mutate the GraphQL database should return the database state to what it
@@ -28,14 +29,16 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/dgraph-io/dgo/v210"
-	"github.com/dgraph-io/dgo/v210/protos/api"
-	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+
+	"github.com/dgraph-io/dgo/v210"
+	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 // TestAddMutation tests that add mutations work as expected.  There's a few angles
@@ -2145,7 +2148,7 @@ func manyMutationsWithQueryError(t *testing.T) {
 	// The schema states type Country `{ ... name: String! ... }`
 	// so a query error will be raised if we ask for the country's name in a
 	// query.  Don't think a GraphQL update can do this ATM, so do through Dgraph.
-	d, err := grpc.Dial(Alpha1gRPC, grpc.WithInsecure())
+	d, err := grpc.Dial(Alpha1gRPC, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
 	client := dgo.NewDgraphClient(api.NewDgraphClient(d))
 	mu := &api.Mutation{
@@ -4115,7 +4118,15 @@ func intWithList(t *testing.T) {
                 }
             }
         }`,
-		variables: map[string]interface{}{"post1": []interface{}{map[string]interface{}{"title": "Dgraph", "commentsByMonth": []int{2, 33, 11, 6}, "likesByMonth": []int64{4, 33, 1, 66}}}},
+		variables: map[string]interface{}{
+			"post1": []interface{}{
+				map[string]interface{}{
+					"title":           "Dgraph",
+					"commentsByMonth": []int{2, 33, 11, 6},
+					"likesByMonth":    []int64{4, 33, 1, 66},
+				},
+			},
+		},
 
 		expected: `{
         "addpost1": {
@@ -5511,7 +5522,9 @@ func inputCoerciontoList(t *testing.T) {
 
 	author1DeleteFilter := map[string]interface{}{"name": map[string]interface{}{"in": []string{"Jack", "Jackob"}}}
 	DeleteGqlType(t, "author1", author1DeleteFilter, 2, nil)
-	posts1DeleteFilter := map[string]interface{}{"title": map[string]interface{}{"in": []string{"Dgraph", "GraphQL", "RDBMS", "DB"}}}
+	posts1DeleteFilter := map[string]interface{}{
+		"title": map[string]interface{}{"in": []string{"Dgraph", "GraphQL", "RDBMS", "DB"}},
+	}
 	DeleteGqlType(t, "post1", posts1DeleteFilter, 4, nil)
 
 }
@@ -5982,8 +5995,10 @@ func upsertMutationTests(t *testing.T) {
 	}
 	gqlResponse = addStateParams.ExecuteAsPost(t, GraphqlURL)
 	require.NotNil(t, gqlResponse.Errors)
-	require.Equal(t, "couldn't rewrite mutation addState because failed to rewrite mutation payload because id S1 already exists for field xcode inside type State",
-		gqlResponse.Errors[0].Error())
+	require.Equal(t,
+		"couldn't rewrite mutation addState because failed to rewrite mutation payload because id S1 already exists for field xcode inside type State",
+		gqlResponse.Errors[0].Error(),
+	)
 
 	// Add Mutation with upsert true should succeed. It should link the state to
 	// existing country

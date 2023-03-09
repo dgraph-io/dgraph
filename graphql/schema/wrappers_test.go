@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,21 +14,22 @@
  * limitations under the License.
  */
 
+//nolint:lll
 package schema
 
 import (
 	"encoding/json"
-	"io/ioutil"
+	"os"
 	"strings"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/x"
-
-	"github.com/dgraph-io/gqlparser/v2/ast"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v2"
+
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/gqlparser/v2/ast"
 )
 
 func TestDgraphMapping_WithoutDirectives(t *testing.T) {
@@ -847,7 +848,7 @@ func TestSubstituteVarsInURL(t *testing.T) {
 			b, err := SubstituteVarsInURL(test.url, test.variables)
 			if test.expectedErr == nil {
 				require.NoError(t, err)
-				require.Equal(t, test.expected, string(b))
+				require.Equal(t, test.expected, b)
 			} else {
 				require.EqualError(t, err, test.expectedErr.Error())
 			}
@@ -907,7 +908,7 @@ type CustomHTTPConfigCase struct {
 }
 
 func TestGraphQLQueryInCustomHTTPConfig(t *testing.T) {
-	b, err := ioutil.ReadFile("custom_http_config_test.yaml")
+	b, err := os.ReadFile("custom_http_config_test.yaml")
 	require.NoError(t, err, "Unable to read test file")
 
 	var tests []CustomHTTPConfigCase
@@ -1051,7 +1052,9 @@ func TestCustomLogicHeaders(t *testing.T) {
    	 			)
 				}
 			`,
-			errors.New("input:13: Type Query; Field user; introspectionHeaders in @custom directive should use secrets to store the header value. " + "To do that specify `Api-Token` in this format '#Dgraph.Secret name value' at the bottom of your schema file." + "\n"),
+			errors.New("input:13: Type Query; Field user; introspectionHeaders in @custom directive should use " +
+				"secrets to store the header value. " + "To do that specify `Api-Token` in this format " +
+				"'#Dgraph.Secret name value' at the bottom of your schema file." + "\n"),
 		},
 		{
 			"check for secret and forward headers overlapping",
@@ -1073,7 +1076,8 @@ func TestCustomLogicHeaders(t *testing.T) {
    	 			)
 				}
 			`,
-			errors.New("input:14: Type Query; Field user; secretHeaders and forwardHeaders in @custom directive cannot have overlapping headers, found: `Authorization`." + "\n"),
+			errors.New("input:14: Type Query; Field user; secretHeaders and forwardHeaders in @custom directive " +
+				"cannot have overlapping headers, found: `Authorization`." + "\n"),
 		},
 		{
 			"check for header structure",
@@ -1095,7 +1099,8 @@ func TestCustomLogicHeaders(t *testing.T) {
    	 			)
 				}
 			`,
-			errors.New("input:14: Type Query; Field user; secretHeaders in @custom directive should be of the form 'remote_headername:local_headername' or just 'headername', found: `Authorization:Auth:random`." + "\n"),
+			errors.New("input:14: Type Query; Field user; secretHeaders in @custom directive should be of the form " +
+				"'remote_headername:local_headername' or just 'headername', found: `Authorization:Auth:random`.\n"),
 		},
 	}
 	for _, test := range tcases {
@@ -1199,7 +1204,8 @@ func TestParseSecrets(t *testing.T) {
 			nil,
 			"",
 			nil,
-			errors.New("input: Invalid `Dgraph.Authorization` format: # Dgraph.Authorization X-Test-Dgraph https://dgraph.io/jwt/claims \"key\""),
+			errors.New("input: Invalid `Dgraph.Authorization` format: # Dgraph.Authorization X-Test-Dgraph " +
+				"https://dgraph.io/jwt/claims \"key\""),
 		},
 		{
 			"should throw an error if multiple authorization values are specified",
@@ -1231,7 +1237,8 @@ func TestParseSecrets(t *testing.T) {
 			nil,
 			"",
 			nil,
-			errors.New("required field missing in Dgraph.Authorization: `Verification key`/`JWKUrl`/`JWKUrls` `Algo` `Header` `Namespace`"),
+			errors.New("required field missing in Dgraph.Authorization: " +
+				"`Verification key`/`JWKUrl`/`JWKUrls` `Algo` `Header` `Namespace`"),
 		},
 		{
 			"Should be able to parse  Dgraph.Authorization irrespective of spacing between # and Dgraph.Authorization",

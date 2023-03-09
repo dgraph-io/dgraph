@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -249,7 +249,7 @@ func (t *Trace) Merge(other *Trace) {
 	}
 }
 
-//ExecutionTrace records all the resolvers
+// ExecutionTrace records all the resolvers
 type ExecutionTrace struct {
 	Resolvers []*ResolverTrace `json:"resolvers"`
 }

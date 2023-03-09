@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2016-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -50,11 +50,11 @@ func formData(t *testing.T, str string) string {
 	require.NoError(t, err)
 
 	src := ValueForType(GeoID)
-	src.Value = []byte(d)
+	src.Value = d
 	gd, err := Convert(src, StringID)
 	require.NoError(t, err)
 	gb := gd.Value.(string)
-	return string(gb)
+	return gb
 }
 
 func formDataPoint(t *testing.T, p *geom.Point) string {
@@ -62,12 +62,12 @@ func formDataPoint(t *testing.T, p *geom.Point) string {
 	require.NoError(t, err)
 
 	src := ValueForType(GeoID)
-	src.Value = []byte(d)
+	src.Value = d
 	gd, err := Convert(src, StringID)
 	require.NoError(t, err)
 	gb := gd.Value.(string)
 
-	return string(gb)
+	return gb
 }
 
 func formDataPolygon(t *testing.T, g geom.T) string {
@@ -75,12 +75,12 @@ func formDataPolygon(t *testing.T, g geom.T) string {
 	require.NoError(t, err)
 
 	src := ValueForType(GeoID)
-	src.Value = []byte(d)
+	src.Value = d
 	gd, err := Convert(src, StringID)
 	require.NoError(t, err)
 	gb := gd.Value.(string)
 
-	return string(gb)
+	return gb
 }
 
 func TestQueryTokensPolygon(t *testing.T) {
@@ -331,11 +331,30 @@ func TestMatchesFilterIntersectsPolygon(t *testing.T) {
 
 	// These two polygons don't intersect.
 	polyOut := geom.NewPolygon(geom.XY).MustSetCoords([][]geom.Coord{
-		{{-122.4989104270935, 37.736953437345356}, {-122.50504732131958, 37.729096212099975}, {-122.49515533447264, 37.732049133202324}, {-122.4989104270935, 37.736953437345356}},
+		{
+			{-122.4989104270935, 37.736953437345356},
+			{-122.50504732131958, 37.729096212099975},
+			{-122.49515533447264, 37.732049133202324},
+			{-122.4989104270935, 37.736953437345356},
+		},
 	})
 
 	poly2 := geom.NewPolygon(geom.XY).MustSetCoords([][]geom.Coord{
-		{{-122.5033039, 37.7334601}, {-122.503128, 37.7335189}, {-122.5031222, 37.7335205}, {-122.5030813, 37.7335868}, {-122.5031511, 37.73359}, {-122.5031933, 37.7335916}, {-122.5032228, 37.7336022}, {-122.5032697, 37.7335937}, {-122.5033194, 37.7335874}, {-122.5033723, 37.7335518}, {-122.503369, 37.7335068}, {-122.5033462, 37.7334474}, {-122.5033039, 37.7334601}},
+		{
+			{-122.5033039, 37.7334601},
+			{-122.503128, 37.7335189},
+			{-122.5031222, 37.7335205},
+			{-122.5030813, 37.7335868},
+			{-122.5031511, 37.73359},
+			{-122.5031933, 37.7335916},
+			{-122.5032228, 37.7336022},
+			{-122.5032697, 37.7335937},
+			{-122.5033194, 37.7335874},
+			{-122.5033723, 37.7335518},
+			{-122.503369, 37.7335068},
+			{-122.5033462, 37.7334474},
+			{-122.5033039, 37.7334601},
+		},
 	})
 	data = formDataPolygon(t, polyOut)
 	_, qd, err = queryTokens(QueryTypeIntersects, data, 0.0)
@@ -421,7 +440,7 @@ func BenchmarkMatchesFilterContainsPoint(b *testing.B) {
 
 		d, _ := wkb.Marshal(p, binary.LittleEndian)
 		src := ValueForType(GeoID)
-		src.Value = []byte(d)
+		src.Value = d
 		gd, _ := Convert(src, StringID)
 		gb := gd.Value.(string)
 		_, qd, _ := queryTokens(QueryTypeContains, gb, 0.0)

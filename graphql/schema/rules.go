@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -833,7 +833,7 @@ func listValidityCheck(typ *ast.Definition, field *ast.FieldDefinition) gqlerror
 
 func hasInverseValidation(sch *ast.Schema, typ *ast.Definition,
 	field *ast.FieldDefinition, dir *ast.Directive,
-	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
+	secrets map[string]x.Sensitive) gqlerror.List {
 	var errs []*gqlerror.Error
 
 	invTypeName := field.Type.Name()
@@ -1017,7 +1017,7 @@ func searchValidation(
 	typ *ast.Definition,
 	field *ast.FieldDefinition,
 	dir *ast.Directive,
-	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
+	secrets map[string]x.Sensitive) gqlerror.List {
 	var errs []*gqlerror.Error
 
 	arg := dir.Arguments.ForName(searchArgs)
@@ -1096,7 +1096,7 @@ func searchValidation(
 }
 
 func dgraphDirectiveValidation(sch *ast.Schema, typ *ast.Definition, field *ast.FieldDefinition,
-	dir *ast.Directive, secrets map[string]x.SensitiveByteSlice) gqlerror.List {
+	dir *ast.Directive, secrets map[string]x.Sensitive) gqlerror.List {
 	var errs []*gqlerror.Error
 
 	if isID(field) {
@@ -1235,7 +1235,7 @@ func passwordValidation(sch *ast.Schema,
 	typ *ast.Definition,
 	field *ast.FieldDefinition,
 	dir *ast.Directive,
-	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
+	secrets map[string]x.Sensitive) gqlerror.List {
 
 	return passwordDirectiveValidation(sch, typ)
 }
@@ -1244,7 +1244,7 @@ func lambdaDirectiveValidation(sch *ast.Schema,
 	typ *ast.Definition,
 	field *ast.FieldDefinition,
 	dir *ast.Directive,
-	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
+	secrets map[string]x.Sensitive) gqlerror.List {
 	// if the lambda url wasn't specified during alpha startup,
 	// just return that error. Don't confuse the user with errors from @custom yet.
 	if x.LambdaUrl(x.GalaxyNamespace) == "" {
@@ -1404,7 +1404,7 @@ func customDirectiveValidation(sch *ast.Schema,
 	typ *ast.Definition,
 	field *ast.FieldDefinition,
 	dir *ast.Directive,
-	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
+	secrets map[string]x.Sensitive) gqlerror.List {
 	var errs []*gqlerror.Error
 
 	// 1. Validating custom directive itself
@@ -1480,7 +1480,7 @@ func customDirectiveValidation(sch *ast.Schema,
 				typ.Name, field.Name))
 		}
 		// TODO: parse the DQL request here and validate it for errors. Not doing it now because the
-		// gql.Parse() method requires the variables to be present with the query, which can't be
+		// dql.Parse() method requires the variables to be present with the query, which can't be
 		// there at schema input time. Also check for following special conditions:
 		// * same query name as GraphQL
 		// * correct return type mapping
@@ -1990,17 +1990,15 @@ func customDirectiveValidation(sch *ast.Schema,
 						h.Value.Raw,
 					))
 				}
-				if fHeaders != nil {
-					if fHeaders[secretKey[0]] {
-						return append(errs, gqlerror.ErrorPosf(
-							errPos,
-							"Type %s; Field %s; secretHeaders and forwardHeaders in @custom directive cannot have overlapping headers"+
-								", found: `%s`.",
-							typ.Name,
-							field.Name,
-							h.Value.Raw,
-						))
-					}
+				if fHeaders[secretKey[0]] {
+					return append(errs, gqlerror.ErrorPosf(
+						errPos,
+						"Type %s; Field %s; secretHeaders and forwardHeaders in @custom directive cannot have overlapping headers"+
+							", found: `%s`.",
+						typ.Name,
+						field.Name,
+						h.Value.Raw,
+					))
 				}
 			}
 		}
@@ -2072,7 +2070,7 @@ func idValidation(sch *ast.Schema,
 	typ *ast.Definition,
 	field *ast.FieldDefinition,
 	dir *ast.Directive,
-	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
+	secrets map[string]x.Sensitive) gqlerror.List {
 	if field.Type.String() == "String!" ||
 		field.Type.String() == "Int!" ||
 		field.Type.String() == "Int64!" {
@@ -2152,7 +2150,7 @@ func apolloRequiresValidation(sch *ast.Schema,
 	typ *ast.Definition,
 	field *ast.FieldDefinition,
 	dir *ast.Directive,
-	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
+	secrets map[string]x.Sensitive) gqlerror.List {
 
 	extendsDirective := typ.Directives.ForName(apolloExtendsDirective)
 	if extendsDirective == nil {
@@ -2193,7 +2191,7 @@ func apolloProvidesValidation(sch *ast.Schema,
 	typ *ast.Definition,
 	field *ast.FieldDefinition,
 	dir *ast.Directive,
-	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
+	secrets map[string]x.Sensitive) gqlerror.List {
 
 	fldTypeDefn := sch.Types[field.Type.Name()]
 	keyDirective := fldTypeDefn.Directives.ForName(apolloKeyDirective)
@@ -2231,7 +2229,7 @@ func apolloExternalValidation(sch *ast.Schema,
 	typ *ast.Definition,
 	field *ast.FieldDefinition,
 	dir *ast.Directive,
-	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
+	secrets map[string]x.Sensitive) gqlerror.List {
 
 	extendsDirective := typ.Directives.ForName(apolloExtendsDirective)
 	if extendsDirective == nil {
@@ -2275,7 +2273,7 @@ func remoteResponseValidation(sch *ast.Schema,
 	typ *ast.Definition,
 	field *ast.FieldDefinition,
 	dir *ast.Directive,
-	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
+	secrets map[string]x.Sensitive) gqlerror.List {
 
 	remoteDirectiveDefn := typ.Directives.ForName(remoteDirective)
 	if remoteDirectiveDefn == nil {

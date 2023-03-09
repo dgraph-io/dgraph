@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,15 +22,16 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/dgraph-io/badger/v3"
+	"github.com/golang/glog"
+	"github.com/pkg/errors"
+
+	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/glog"
-	"github.com/pkg/errors"
 )
 
 const (
@@ -276,7 +277,7 @@ func getData(db *badger.DB, attr string, fn func(item *badger.Item) error) error
 			Attr: attr,
 		}
 		prefix := initKey.DataPrefix()
-		startKey := append(x.DataKey(attr, math.MaxUint64))
+		startKey := x.DataKey(attr, math.MaxUint64)
 
 		itOpt := badger.DefaultIteratorOptions
 		itOpt.AllVersions = true
@@ -291,7 +292,7 @@ func getData(db *badger.DB, attr string, fn func(item *badger.Item) error) error
 			if err := fn(item); err != nil {
 				return err
 			}
-			break
+			break //nolint:staticcheck
 		}
 		return nil
 	})

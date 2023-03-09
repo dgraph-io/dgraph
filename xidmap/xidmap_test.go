@@ -1,8 +1,9 @@
+//go:build integration
+
 package xidmap
 
 import (
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"runtime"
@@ -12,17 +13,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/badger/v3"
+	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
+
+	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
-	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
 )
 
 // Opens a badger db and runs a a test on it.
 func withDB(t *testing.T, test func(db *badger.DB)) {
-	dir, err := ioutil.TempDir(".", "badger-test")
+	dir, err := os.MkdirTemp(".", "badger-test")
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 

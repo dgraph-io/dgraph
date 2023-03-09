@@ -1,5 +1,7 @@
+//go:build integration
+
 /*
- * Copyright 2017-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +24,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"sort"
@@ -109,8 +110,8 @@ func queryWithGz(queryText, contentType, debug, timeout string, gzReq, gzResp bo
 	if gzReq {
 		var b bytes.Buffer
 		gz := gzip.NewWriter(&b)
-		gz.Write([]byte(queryText))
-		gz.Close()
+		_, _ = gz.Write([]byte(queryText))
+		_ = gz.Close()
 		buf = &b
 	} else {
 		buf = bytes.NewBufferString(queryText)
@@ -138,7 +139,7 @@ func queryWithGz(queryText, contentType, debug, timeout string, gzReq, gzResp bo
 			return "", resp, errors.Errorf("Response not compressed")
 		}
 	}
-	body, err := ioutil.ReadAll(rd)
+	body, err := io.ReadAll(rd)
 	if err != nil {
 		return "", nil, err
 	}
@@ -306,13 +307,13 @@ func runRequest(req *http.Request) (*x.QueryResWithData, []byte, *http.Response,
 	}
 
 	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, nil, resp, errors.Errorf("unable to read from body: %v", err)
 	}
 
 	qr := new(x.QueryResWithData)
-	json.Unmarshal(body, qr) // Don't check error.
+	_ = json.Unmarshal(body, qr) // Don't check error.
 	if len(qr.Errors) > 0 {
 		return nil, nil, resp, errors.New(qr.Errors[0].Message)
 	}
@@ -428,7 +429,7 @@ func TestTransactionBasic(t *testing.T) {
 	require.Equal(t, 2, len(mr.preds))
 	var parsedPreds []string
 	for _, pred := range mr.preds {
-		p := strings.Split(pred, "-")[1]
+		p := strings.SplitN(pred, "-", 2)[1]
 		parsedPreds = append(parsedPreds, x.ParseAttr(p))
 	}
 	sort.Strings(parsedPreds)
@@ -830,7 +831,7 @@ func TestHealth(t *testing.T) {
 	require.NoError(t, err)
 
 	defer resp.Body.Close()
-	data, err := ioutil.ReadAll(resp.Body)
+	data, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 
 	var info []pb.HealthInfo

@@ -1,14 +1,17 @@
+//go:build integration
+
 package no_tls
 
 import (
-	"io/ioutil"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dgraph-io/dgraph/testutil"
 )
 
 type testCase struct {
@@ -53,7 +56,7 @@ func TestZeroWithNoTLS(t *testing.T) {
 
 func readResponseBody(t *testing.T, do *http.Response) []byte {
 	defer func() { _ = do.Body.Close() }()
-	body, err := ioutil.ReadAll(do.Body)
+	body, err := io.ReadAll(do.Body)
 	require.NoError(t, err)
 	return body
 }

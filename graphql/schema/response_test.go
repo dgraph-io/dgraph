@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,10 +20,12 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/gqlparser/v2/gqlerror"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/gqlparser/v2/gqlerror"
 )
 
 func TestDataAndErrors(t *testing.T) {
@@ -114,7 +116,8 @@ func TestDataAndErrors(t *testing.T) {
 			}
 
 			buf := new(bytes.Buffer)
-			resp.WriteTo(buf)
+			_, err := resp.WriteTo(buf)
+			require.NoError(t, err)
 
 			assert.JSONEq(t, tcase.expected, buf.String())
 		})
@@ -126,7 +129,8 @@ func TestWriteTo_BadData(t *testing.T) {
 	resp.AddData([]byte(`not json`))
 
 	buf := new(bytes.Buffer)
-	resp.WriteTo(buf)
+	_, err := resp.WriteTo(buf)
+	require.NoError(t, err)
 
 	assert.JSONEq(t,
 		`{"errors":[{"message":"Internal error - failed to marshal a valid JSON response"}],
@@ -184,7 +188,8 @@ func TestErrorResponse(t *testing.T) {
 			resp := ErrorResponse(tcase.err)
 
 			buf := new(bytes.Buffer)
-			resp.WriteTo(buf)
+			_, err := resp.WriteTo(buf)
+			require.NoError(t, err)
 
 			assert.JSONEq(t, tcase.expected, buf.String())
 		})
@@ -195,7 +200,8 @@ func TestNilResponse(t *testing.T) {
 	var resp *Response
 
 	buf := new(bytes.Buffer)
-	resp.WriteTo(buf)
+	_, err := resp.WriteTo(buf)
+	require.NoError(t, err)
 
 	assert.JSONEq(t,
 		`{"errors":[{"message":"Internal error - no response to write."}],

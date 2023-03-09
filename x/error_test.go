@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2016-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,12 +18,16 @@ package x
 
 import (
 	"flag"
+	"fmt"
 	"os"
 	"testing"
 )
 
 func TestMain(m *testing.M) {
 	flag.Parse()
-	flag.Set("debugmode", "true")
+	if err := flag.Set("debugmode", "true"); err != nil {
+		fmt.Printf("error setting debug mode: %v\n", err)
+	}
+
 	os.Exit(m.Run())
 }

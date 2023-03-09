@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2016-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,16 +23,17 @@ import (
 	"sync"
 	"time"
 
+	"github.com/golang/glog"
+	"github.com/pkg/errors"
+	"go.opencensus.io/plugin/ocgrpc"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
+
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
-	"github.com/golang/glog"
-	"github.com/pkg/errors"
-	"go.opencensus.io/plugin/ocgrpc"
-
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
 )
 
 var (
@@ -180,7 +181,7 @@ func newPool(addr string, tlsClientConf *tls.Config) (*Pool, error) {
 	if tlsClientConf != nil {
 		conOpts = append(conOpts, grpc.WithTransportCredentials(credentials.NewTLS(tlsClientConf)))
 	} else {
-		conOpts = append(conOpts, grpc.WithInsecure())
+		conOpts = append(conOpts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
 
 	conn, err := grpc.Dial(addr, conOpts...)
@@ -303,14 +304,18 @@ func (p *Pool) MonitorHealth() {
 			cancel()
 			if err == nil {
 				p.Lock()
-				p.conn.Close()
+				if err := p.conn.Close(); err != nil {
+					glog.Warningf("error while closing connection: %v", err)
+				}
 				p.conn = conn
 				p.Unlock()
 				return
 			}
 			glog.Errorf("CONN: Unable to connect with %s : %s\n", p.Addr, err)
 			if conn != nil {
-				conn.Close()
+				if err := conn.Close(); err != nil {
+					glog.Warningf("error while closing connection: %v", err)
+				}
 			}
 		}
 	}

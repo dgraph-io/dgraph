@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,16 +21,16 @@ import (
 	"strings"
 	"time"
 
+	"github.com/golang/glog"
+	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"
 
 	"github.com/dgraph-io/dgo/v210/protos/api"
-	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/dql"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/glog"
-	"github.com/pkg/errors"
 )
 
 // ApplyMutations performs the required edge expansions and forwards the results to the
@@ -154,7 +154,7 @@ func verifyUid(ctx context.Context, uid uint64) error {
 // AssignUids tries to assign unique ids to each identity in the subjects and objects in the
 // format of _:xxx. An identity, e.g. _:a, will only be assigned one uid regardless how many times
 // it shows up in the subjects or objects
-func AssignUids(ctx context.Context, gmuList []*gql.Mutation) (map[string]uint64, error) {
+func AssignUids(ctx context.Context, gmuList []*dql.Mutation) (map[string]uint64, error) {
 	newUids := make(map[string]uint64)
 	num := &pb.Num{}
 	var err error
@@ -171,7 +171,7 @@ func AssignUids(ctx context.Context, gmuList []*gql.Mutation) (map[string]uint64
 			var uid uint64
 			if strings.HasPrefix(nq.Subject, "_:") {
 				newUids[nq.Subject] = 0
-			} else if uid, err = gql.ParseUid(nq.Subject); err != nil {
+			} else if uid, err = dql.ParseUid(nq.Subject); err != nil {
 				return newUids, err
 			}
 			if err = verifyUid(ctx, uid); err != nil {
@@ -182,7 +182,7 @@ func AssignUids(ctx context.Context, gmuList []*gql.Mutation) (map[string]uint64
 				var uid uint64
 				if strings.HasPrefix(nq.ObjectId, "_:") {
 					newUids[nq.ObjectId] = 0
-				} else if uid, err = gql.ParseUid(nq.ObjectId); err != nil {
+				} else if uid, err = dql.ParseUid(nq.ObjectId); err != nil {
 					return newUids, err
 				}
 				if err = verifyUid(ctx, uid); err != nil {
@@ -212,15 +212,15 @@ func AssignUids(ctx context.Context, gmuList []*gql.Mutation) (map[string]uint64
 	return newUids, nil
 }
 
-// ToDirectedEdges converts the gql.Mutation input into a set of directed edges.
-func ToDirectedEdges(gmuList []*gql.Mutation, newUids map[string]uint64) (
+// ToDirectedEdges converts the dql.Mutation input into a set of directed edges.
+func ToDirectedEdges(gmuList []*dql.Mutation, newUids map[string]uint64) (
 	edges []*pb.DirectedEdge, err error) {
 
 	// Wrapper for a pointer to protos.Nquad
-	var wnq *gql.NQuad
+	var wnq *dql.NQuad
 
 	parse := func(nq *api.NQuad, op pb.DirectedEdge_Op) error {
-		wnq = &gql.NQuad{NQuad: nq}
+		wnq = &dql.NQuad{NQuad: nq}
 		if len(nq.Subject) == 0 {
 			return nil
 		}

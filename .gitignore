@@ -5,9 +5,9 @@
 /osx-docker-gopath
 
 # fuzzing output
-gql/gql-fuzz.zip
-gql/fuzz-data/crashers
-gql/fuzz-data/suppressions
+dql/dql-fuzz.zip
+dql/fuzz-data/crashers
+dql/fuzz-data/suppressions
 
 # goland project folder
 .idea
@@ -44,3 +44,12 @@ contrib/local-test/query.gql
 contrib/local-test/schema.dql
 contrib/local-test/schema.graphql
 contrib/local-test/variables.json
+
+
+# Dgraph
+systest/bulk_live/bulk/**/*.txt
+systest/bulk_live/bulk/**/*.rdf
+
+systest/bulk_live/live/**/*.rdf
+systest/bulk_live/live/**/*.txt
+x/log_test/*.enc

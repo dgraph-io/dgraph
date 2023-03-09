@@ -1,5 +1,7 @@
+//go:build integration
+
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors *
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -26,15 +28,14 @@ import (
 	"testing"
 	"time"
 
-	"google.golang.org/grpc/credentials"
-
-	"github.com/dgraph-io/badger/v3/options"
-	"github.com/dgraph-io/dgo/v210"
-	"github.com/dgraph-io/dgo/v210/protos/api"
 	minio "github.com/minio/minio-go/v6"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 
+	"github.com/dgraph-io/badger/v4/options"
+	"github.com/dgraph-io/dgo/v210"
+	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -56,7 +57,8 @@ var (
 // Test to add a large database and verify backup and restore work as expected.
 func TestBackupMinioLarge(t *testing.T) {
 	// backupDestination = "minio://" + testutil.DockerPrefix + "_minio_1:9001/dgraph-backup?secure=false"
-	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))))
+	conn, err := grpc.Dial(testutil.SockAddr,
+		grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))))
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 	ctx := context.Background()
@@ -173,7 +175,7 @@ func runBackup(t *testing.T) {
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
 	require.Equal(t, "Success", testutil.JsonGet(data, "data", "backup", "response", "code").(string))
 	taskId := testutil.JsonGet(data, "data", "backup", "taskId").(string)
-	testutil.WaitForTask(t, taskId, true)
+	testutil.WaitForTask(t, taskId, true, testutil.SockAddrHttp)
 
 	// Verify that the right amount of files and directories were created.
 	copyToLocalFs(t)
@@ -186,7 +188,8 @@ func runRestore(t *testing.T, backupLocation, lastDir string, commitTs uint64) m
 	require.NoError(t, os.MkdirAll(restoreDir, os.ModePerm))
 
 	t.Logf("--- Restoring from: %q", backupLocation)
-	result := worker.RunRestore("./data/restore", backupLocation, lastDir, x.SensitiveByteSlice(nil), options.Snappy, 0)
+	result := worker.RunOfflineRestore(restoreDir, backupLocation,
+		lastDir, "", nil, options.Snappy, 0)
 	require.NoError(t, result.Err)
 
 	restored1, err := testutil.GetPredicateValues("./data/restore/p1", x.GalaxyAttr("name1"), commitTs)

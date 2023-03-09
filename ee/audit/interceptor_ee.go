@@ -1,13 +1,14 @@
+//go:build !oss
 // +build !oss
 
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Dgraph Community License (the "License"); you
  * may not use this file except in compliance with the License. You
  * may obtain a copy of the License at
  *
- *     https://github.com/dgraph-io/dgraph/blob/master/licenses/DCL.txt
+ *     https://github.com/dgraph-io/dgraph/blob/main/licenses/DCL.txt
  */
 package audit
 
@@ -18,7 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
+	"net"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -26,17 +27,17 @@ import (
 	"sync/atomic"
 
 	"github.com/dgraph-io/dgraph/graphql/schema"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/gqlparser/v2/ast"
 	"github.com/dgraph-io/gqlparser/v2/parser"
-	"github.com/golang/glog"
 
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
+	"github.com/gorilla/websocket"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
-
-	"google.golang.org/grpc"
 )
 
 const (
@@ -63,8 +64,9 @@ var skipApis = map[string]bool{
 
 var skipEPs = map[string]bool{
 	// list of endpoints that needs to be skipped
-	"/health": true,
-	"/state":  true,
+	"/health":        true,
+	"/state":         true,
+	"/probe/graphql": true,
 }
 
 func AuditRequestGRPC(ctx context.Context, req interface{},
@@ -91,13 +93,65 @@ func AuditRequestHttp(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
+
+		// Websocket connection in graphQl happens differently. We only get access tokens and
+		// metadata in payload later once the connection is upgraded to correct protocol.
+		// Doc: https://github.com/apollographql/subscriptions-transport-ws/blob/v0.9.4/PROTOCOL.md
+		//
+		// Auditing for websocket connections will be handled by graphql/admin/http.go:154#Subscribe
+		for _, subprotocol := range websocket.Subprotocols(r) {
+			if subprotocol == "graphql-ws" {
+				next.ServeHTTP(w, r)
+				return
+			}
+		}
+
 		rw := NewResponseWriter(w)
 		var buf bytes.Buffer
 		tee := io.TeeReader(r.Body, &buf)
-		r.Body = ioutil.NopCloser(tee)
+		r.Body = io.NopCloser(tee)
 		next.ServeHTTP(rw, r)
-		r.Body = ioutil.NopCloser(bytes.NewReader(buf.Bytes()))
+		r.Body = io.NopCloser(bytes.NewReader(buf.Bytes()))
 		auditHttp(rw, r)
+	})
+}
+
+func AuditWebSockets(ctx context.Context, req *schema.Request) {
+	if atomic.LoadUint32(&auditEnabled) == 0 {
+		return
+	}
+
+	namespace := uint64(0)
+	var err error
+	var user string
+	// TODO(anurag): X-Dgraph-AccessToken should be exported as a constant
+	if token := req.Header.Get("X-Dgraph-AccessToken"); token != "" {
+		user = getUser(token, false)
+		namespace, err = x.ExtractNamespaceFromJwt(token)
+		if err != nil {
+			glog.Warningf("Error while auditing websockets: %s", err)
+		}
+	} else if token := req.Header.Get("X-Dgraph-AuthToken"); token != "" {
+		user = getUser(token, true)
+	} else {
+		user = getUser("", false)
+	}
+
+	ip := ""
+	if peerInfo, ok := peer.FromContext(ctx); ok {
+		ip, _, _ = net.SplitHostPort(peerInfo.Addr.String())
+	}
+
+	auditor.Audit(&AuditEvent{
+		User:        user,
+		Namespace:   namespace,
+		ServerHost:  x.WorkerConfig.MyAddr,
+		ClientHost:  ip,
+		Endpoint:    "/graphql",
+		ReqType:     WebSocket,
+		Req:         truncate(req.Query, maxReqLength),
+		Status:      http.StatusText(http.StatusOK),
+		QueryParams: nil,
 	})
 }
 
@@ -297,7 +351,7 @@ func getRequestBody(r *http.Request) []byte {
 		}
 	}
 
-	body, err := ioutil.ReadAll(in)
+	body, err := io.ReadAll(in)
 	if err != nil {
 		return []byte(err.Error())
 	}

@@ -1,5 +1,5 @@
 #
-# Copyright 2018 Dgraph Labs, Inc. and Contributors
+# Copyright 2023 Dgraph Labs, Inc. and Contributors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -26,8 +26,12 @@ test:
 # 	build the t.go binary
 	@go build .
 #	clean go testcache
-	go clean -testcache
-#	run the tests
-	@./t --skip systest/backup,systest/online-restore,systest/loader,tlstest
+	@go clean -testcache
+#	run t.go with specified arguments; otherwise run standard suite
+	@if [ -n "$(args)" ]; then \
+		./t $(args); \
+	else \
+		./t; \
+	fi
 #	clean up docker containers after test execution
-	./t -r
+	@./t -r

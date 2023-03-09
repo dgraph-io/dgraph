@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,8 +20,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/cobra"
+
+	"github.com/dgraph-io/dgraph/x"
 )
 
 // Cert is the sub-command invoked when running "dgraph cert".

@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2016-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,8 +34,8 @@ func TestParse(t *testing.T) {
 		} else {
 			// Marshal it back to text
 			got := ValueForType(StringID)
-			if err := Marshal(g, &got); err != nil || string(got.Value.(string)) != v {
-				t.Errorf("Marshal error expected %s, got %s. error %v", v, string(got.Value.(string)), err)
+			if err := Marshal(g, &got); err != nil || got.Value.(string) != v {
+				t.Errorf("Marshal error expected %s, got %s. error %v", v, got.Value.(string), err)
 			}
 
 			wkb := ValueForType(BinaryID)
@@ -45,7 +45,7 @@ func TestParse(t *testing.T) {
 				t.Errorf("Error marshaling to WKB: %v", err)
 			}
 
-			src := Val{GeoID, []byte(wkb.Value.([]byte))}
+			src := Val{GeoID, wkb.Value.([]byte)}
 
 			if bg, err := Convert(src, GeoID); err != nil {
 				t.Errorf("Error unmarshaling WKB: %v", err)

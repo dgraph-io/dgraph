@@ -1,5 +1,7 @@
+//go:build integration
+
 /*
- * Copyright 2017-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,12 +31,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 type state struct {
@@ -45,7 +48,7 @@ var s state
 
 func TestMain(m *testing.M) {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
-	testutil.AssignUids(200)
+	x.CheckfNoTrace(testutil.AssignUids(200))
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	x.CheckfNoTrace(err)
 	s.dg = dg
@@ -441,7 +444,7 @@ func TestReadIndexKeySameTxn(t *testing.T) {
 	}
 
 	txn = s.dg.NewTxn()
-	defer txn.Discard(context.Background())
+	defer func() { require.NoError(t, txn.Discard(context.Background())) }()
 	q := `{ me(func: le(name, "Manish")) { uid }}`
 	resp, err := txn.Query(context.Background(), q)
 	if err != nil {
@@ -882,7 +885,7 @@ func TestConcurrentQueryMutate(t *testing.T) {
 	alterSchema(s.dg, "name: string .")
 
 	txn := s.dg.NewTxn()
-	defer txn.Discard(context.Background())
+	defer func() { require.NoError(t, txn.Discard(context.Background())) }()
 
 	// Do one query, so a new timestamp is assigned to the txn.
 	q := `{me(func: uid(0x01)) { name }}`

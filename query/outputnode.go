@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,15 +30,14 @@ import (
 	"unicode/utf8"
 	"unsafe"
 
-	gqlSchema "github.com/dgraph-io/dgraph/graphql/schema"
-
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
-	geom "github.com/twpayne/go-geom"
+	"github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
 
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/algo"
+	gqlSchema "github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
@@ -152,13 +151,12 @@ func newEncoder() *encoder {
 
 // Sort the given fastJson list
 func (enc *encoder) MergeSort(headRef *fastJsonNode) {
-	head := *headRef
-	if headRef == nil || head.next == nil {
+	if headRef == nil || (*headRef).next == nil {
 		return
 	}
 
 	var a, b fastJsonNode
-	frontBackSplit(head, &a, &b)
+	frontBackSplit(*headRef, &a, &b)
 	enc.MergeSort(&a)
 	enc.MergeSort(&b)
 	*headRef = enc.mergeSortedLists(a, b)
@@ -280,28 +278,28 @@ const (
 	// Value with all bits set to 1 for bytes 7 and 6.
 	setBytes76 = uint64(0x00FFFF0000000000)
 	// Compliment value of setBytes76.
-	unsetBytes76 = uint64(^setBytes76)
+	unsetBytes76 = ^setBytes76
 	// Value with all bits set to 1 for bytes 4 to 1.
 	setBytes4321 = 0x00000000FFFFFFFF
 )
 
 // fastJsonNode represents node of a tree, which is formed to convert a subgraph into json response
 // for a query. A fastJsonNode has following meta data:
-// 1. Attr => predicate associated with this node.
-// 2. ScalarVal => Any value associated with node, if it is a leaf node.
-// 3. List => Stores boolean value, true if this node is part of list.
-// 4. FacetsParent => Stores boolean value, true if this node is a facetsParent. facetsParent is
-//    node which is parent for facets values for a scalar list predicate. Eg: node "city|country"
-//    will have FacetsParent value as true.
-//    {
-//		"city": ["Bengaluru", "San Francisco"],
-//		"city|country": {
-//			"0": "india",
-//			"1": "US"
-//		}
-//	  }
-// 5. Children(Attrs) => List of all children.
-// 6. Visited => Stores boolen values, true if node has been visited for fixing children's order.
+//  1. Attr => predicate associated with this node.
+//  2. ScalarVal => Any value associated with node, if it is a leaf node.
+//  3. List => Stores boolean value, true if this node is part of list.
+//  4. FacetsParent => Stores boolean value, true if this node is a facetsParent. facetsParent is
+//     node which is parent for facets values for a scalar list predicate. Eg: node "city|country"
+//     will have FacetsParent value as true.
+//     {
+//     "city": ["Bengaluru", "San Francisco"],
+//     "city|country": {
+//     "0": "india",
+//     "1": "US"
+//     }
+//     }
+//  5. Children(Attrs) => List of all children.
+//  6. Visited => Stores boolen values, true if node has been visited for fixing children's order.
 //
 // All of the data for fastJsonNode tree is stored in encoder to optimise memory usage. fastJsonNode
 // struct is pointer to node object. node object stores below information.
@@ -366,6 +364,7 @@ func (enc *encoder) setCustom(fj fastJsonNode) {
 	fj.meta |= customBit
 }
 
+//nolint:unused // appendAttrs is used in outputnode_test.go as a helper function
 func (enc *encoder) appendAttrs(fj, child fastJsonNode) {
 	enc.addChildren(fj, child)
 }
@@ -677,7 +676,7 @@ func valToBytes(v types.Val) ([]byte, error) {
 		return boolFalse, nil
 	case types.DateTimeID:
 		t := v.Value.(time.Time)
-		return t.MarshalJSON()
+		return marshalTimeJson(t)
 	case types.GeoID:
 		return geojson.Marshal(v.Value.(geom.T))
 	case types.UidID:
@@ -687,6 +686,36 @@ func valToBytes(v types.Val) ([]byte, error) {
 	default:
 		return nil, errors.New("Unsupported types.Val.Tid")
 	}
+}
+
+// marshalTimeJson does what time.MarshalJson does along with supporting RFC3339 non compliant
+// time zones in a timestamp. While go 1.20 changes the behaviour of time.MarshalJSON, we do
+// not want to throw error suddenly because we can't marshal the stored data correctly any more.
+func marshalTimeJson(t time.Time) ([]byte, error) {
+	_, offset := t.Zone()
+	// normal case
+	if types.GoodTimeZone(offset) {
+		return t.MarshalJSON()
+	}
+
+	// If zone >23 or <-23, we need to handle this case ourselves.
+	// This is because, in go1.20, MarshalJSON fails for invalid zones.
+	// We, for now, call MarshalJSON for timestamp without the zone (or making it UTC zone).
+	b, err := t.Add(time.Duration(offset) * time.Second).UTC().MarshalJSON()
+	if err != nil {
+		return nil, err
+	}
+
+	// we will get a byte slice that has Z appended at the end along with a quote (")
+	// e.g.: []byte("2018-05-28T14:41:57Z"). We replace Z with -/+.
+	zone := offset / 60
+	if zone < 0 {
+		b[len(b)-2] = '-'
+		zone = -zone
+	} else {
+		b[len(b)-2] = '+'
+	}
+	return append(b[:len(b)-1], []byte(fmt.Sprintf("%02d:%02d\"", zone/60, zone%60))...), nil
 }
 
 func (enc *encoder) writeKey(fj fastJsonNode) error {
@@ -908,7 +937,7 @@ func (enc *encoder) normalize(fj fastJsonNode) ([]fastJsonNode, error) {
 	var shead, curScalar fastJsonNode
 	chead = enc.children(fj)
 	for chead != nil {
-		if enc.children(chead) != nil && enc.getFacetsParent(chead) == false {
+		if enc.children(chead) != nil && !enc.getFacetsParent(chead) {
 			chead = chead.next
 			continue
 		}
@@ -958,7 +987,6 @@ func (enc *encoder) normalize(fj fastJsonNode) ([]fastJsonNode, error) {
 		for cur != nil {
 			if enc.getAttr(cur) == enc.uidAttr {
 				if prev == nil {
-					slice = cur
 					cur = cur.next
 					continue
 				} else {
@@ -967,9 +995,6 @@ func (enc *encoder) normalize(fj fastJsonNode) ([]fastJsonNode, error) {
 			}
 			prev = cur
 			cur = cur.next
-		}
-		if prev == nil {
-			slice = nil
 		}
 	}
 
@@ -1304,7 +1329,7 @@ func facetName(fieldName string, f *api.Facet) string {
 	if f.Alias != "" {
 		return f.Alias
 	}
-	return fieldName + x.FacetDelimeter + f.Key
+	return fieldName + x.FacetDelimiter + f.Key
 }
 
 // This method gets the values and children for a subprotos.

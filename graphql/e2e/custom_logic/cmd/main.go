@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,9 +20,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
+	"os"
 	"os/exec"
 	"reflect"
 	"sort"
@@ -61,7 +62,7 @@ type graphqlResponseObject struct {
 var graphqlResponses map[string]graphqlResponseObject
 
 func init() {
-	b, err := ioutil.ReadFile("graphqlresponse.yaml")
+	b, err := os.ReadFile("graphqlresponse.yaml")
 	if err != nil {
 		panic(err)
 	}
@@ -88,7 +89,7 @@ func generateIntrospectionResult(schema string) string {
 	if err := cmd.Start(); err != nil {
 		log.Fatal(err)
 	}
-	b, err := ioutil.ReadAll(stdout)
+	b, err := io.ReadAll(stdout)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -97,7 +98,7 @@ func generateIntrospectionResult(schema string) string {
 
 func commonGraphqlHandler(handlerName string) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		body, err := ioutil.ReadAll(r.Body)
+		body, err := io.ReadAll(r.Body)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -114,7 +115,9 @@ func commonGraphqlHandler(handlerName string) func(w http.ResponseWriter, r *htt
 		if err != nil {
 			log.Fatal(err)
 		}
-		if req.Query == strings.TrimSpace(graphqlResponses[handlerName].Request) && string(req.Variables) == strings.TrimSpace(graphqlResponses[handlerName].Variables) {
+		if req.Query == strings.TrimSpace(graphqlResponses[handlerName].Request) &&
+			string(req.Variables) == strings.TrimSpace(graphqlResponses[handlerName].Variables) {
+
 			fmt.Fprintf(w, graphqlResponses[handlerName].Response)
 			return
 		}
@@ -191,7 +194,7 @@ func verifyRequest(r *http.Request, expectedRequest expectedRequest) error {
 		return getError("Expected No body", "but got some body to read")
 	}
 
-	b, err := ioutil.ReadAll(r.Body)
+	b, err := io.ReadAll(r.Body)
 	if err != nil {
 		return getError("Unable to read request body", err.Error())
 	}
@@ -216,7 +219,7 @@ func verifyGraphqlRequest(r *http.Request, expectedRequest expectedGraphqlReques
 		return false, getError("Invalid URL", r.URL.String())
 	}
 
-	b, err := ioutil.ReadAll(r.Body)
+	b, err := io.ReadAll(r.Body)
 	if err != nil {
 		return false, getError("Unable to read request body", err.Error())
 	}
@@ -275,7 +278,9 @@ func getFavMoviesErrorHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	getRestError(w, []byte(`{"errors":[{"message": "Rest API returns Error for myFavoriteMovies query","locations": [ { "line": 5, "column": 4 } ],"path": ["Movies","name"]}]}`))
+	getRestError(w, []byte(
+		`{"errors":[{"message": "Rest API returns Error for myFavoriteMovies query",`+
+			`"locations": [ { "line": 5, "column": 4 } ],"path": ["Movies","name"]}]}`))
 }
 
 func getFavMoviesHandler(w http.ResponseWriter, r *http.Request) {
@@ -721,7 +726,7 @@ func (i input) Name() string {
 }
 
 func getInput(r *http.Request, v interface{}) error {
-	b, err := ioutil.ReadAll(r.Body)
+	b, err := io.ReadAll(r.Body)
 	if err != nil {
 		fmt.Println("while reading body: ", err)
 		return err
@@ -824,7 +829,7 @@ func deleteCommonHeaders(headers http.Header) {
 func carsHandlerWithHeaders(w http.ResponseWriter, r *http.Request) {
 	deleteCommonHeaders(r.Header)
 	if err := compareHeaders(map[string][]string{
-		"Stripe-Api-Key": []string{"some-api-key"},
+		"Stripe-Api-Key": {"some-api-key"},
 	}, r.Header); err != nil {
 		check2(w.Write([]byte(err.Error())))
 		return
@@ -835,7 +840,7 @@ func carsHandlerWithHeaders(w http.ResponseWriter, r *http.Request) {
 func userNameHandlerWithHeaders(w http.ResponseWriter, r *http.Request) {
 	deleteCommonHeaders(r.Header)
 	if err := compareHeaders(map[string][]string{
-		"Github-Api-Token": []string{"some-api-token"},
+		"Github-Api-Token": {"some-api-token"},
 	}, r.Header); err != nil {
 		check2(w.Write([]byte(err.Error())))
 		return
@@ -918,7 +923,7 @@ func userNameWithoutAddressHandler(w http.ResponseWriter, r *http.Request) {
 		body: `{"uid":"0x5"}`,
 	}
 
-	b, err := ioutil.ReadAll(r.Body)
+	b, err := io.ReadAll(r.Body)
 	fmt.Println(b, err)
 	if err != nil {
 		err = getError("Unable to read request body", err.Error())
@@ -1025,45 +1030,45 @@ func (r countryResolver) Name() *string {
 	return &(r.c.Name)
 }
 
-func (_ *query) Country(ctx context.Context, args struct {
+func (*query) Country(ctx context.Context, args struct {
 	Code string
 }) countryResolver {
 	return countryResolver{&country{Code: graphql.ID(args.Code), Name: "Burundi"}}
 }
 
-func (_ *query) Countries(ctx context.Context, args struct {
+func (*query) Countries(ctx context.Context, args struct {
 	Filter struct {
 		Code string
 		Name string
 	}
 }) []countryResolver {
-	return []countryResolver{countryResolver{&country{
+	return []countryResolver{{&country{
 		Code: graphql.ID(args.Filter.Code),
 		Name: args.Filter.Name,
 	}}}
 }
 
-func (_ *query) ValidCountries(ctx context.Context, args struct {
+func (*query) ValidCountries(ctx context.Context, args struct {
 	Code string
 }) *[]*countryResolver {
 	return &[]*countryResolver{{&country{Code: graphql.ID(args.Code), Name: "Burundi"}}}
 }
 
-func (_ *query) UserName(ctx context.Context, args struct {
+func (*query) UserName(ctx context.Context, args struct {
 	Id string
 }) *string {
 	s := fmt.Sprintf(`uname-%s`, args.Id)
 	return &s
 }
 
-func (_ *query) TeacherName(ctx context.Context, args struct {
+func (*query) TeacherName(ctx context.Context, args struct {
 	Id string
 }) *string {
 	s := fmt.Sprintf(`tname-%s`, args.Id)
 	return &s
 }
 
-func (_ *query) SchoolName(ctx context.Context, args struct {
+func (*query) SchoolName(ctx context.Context, args struct {
 	Id string
 }) *string {
 	s := fmt.Sprintf(`sname-%s`, args.Id)
@@ -1071,7 +1076,7 @@ func (_ *query) SchoolName(ctx context.Context, args struct {
 }
 
 func gqlUserNameWithErrorHandler(w http.ResponseWriter, r *http.Request) {
-	b, err := ioutil.ReadAll(r.Body)
+	b, err := io.ReadAll(r.Body)
 	if err != nil {
 		return
 	}
@@ -1117,7 +1122,7 @@ func (r *carResolver) Name() string {
 	return "car-" + string(r.c.ID)
 }
 
-func (_ *query) Car(ctx context.Context, args struct {
+func (*query) Car(ctx context.Context, args struct {
 	Id string
 }) *carResolver {
 	return &carResolver{&car{ID: graphql.ID(args.Id)}}
@@ -1139,13 +1144,13 @@ func (r *classResolver) Name() string {
 	return "class-" + string(r.c.ID)
 }
 
-func (_ *query) Class(ctx context.Context, args struct {
+func (*query) Class(ctx context.Context, args struct {
 	Id string
 }) *[]*classResolver {
-	return &[]*classResolver{&classResolver{&class{ID: graphql.ID(args.Id)}}}
+	return &[]*classResolver{{&class{ID: graphql.ID(args.Id)}}}
 }
 
-func (_ *query) UserNames(ctx context.Context, args struct {
+func (*query) UserNames(ctx context.Context, args struct {
 	Users *[]*struct {
 		Id  string
 		Age float64
@@ -1162,7 +1167,7 @@ func (_ *query) UserNames(ctx context.Context, args struct {
 	return &res
 }
 
-func (_ *query) Cars(ctx context.Context, args struct {
+func (*query) Cars(ctx context.Context, args struct {
 	Users *[]*struct {
 		Id  string
 		Age float64
@@ -1178,7 +1183,7 @@ func (_ *query) Cars(ctx context.Context, args struct {
 	return &resolvers
 }
 
-func (_ *query) Classes(ctx context.Context, args struct {
+func (*query) Classes(ctx context.Context, args struct {
 	Schools *[]*struct {
 		Id          string
 		Established float64
@@ -1190,12 +1195,12 @@ func (_ *query) Classes(ctx context.Context, args struct {
 	resolvers := make([]*[]*classResolver, 0, len(*args.Schools))
 	for _, user := range *args.Schools {
 		resolvers = append(resolvers, &[]*classResolver{
-			&classResolver{&class{ID: graphql.ID(user.Id)}}})
+			{&class{ID: graphql.ID(user.Id)}}})
 	}
 	return &resolvers
 }
 
-func (_ *query) TeacherNames(ctx context.Context, args struct {
+func (*query) TeacherNames(ctx context.Context, args struct {
 	Teachers *[]*struct {
 		Tid string
 		Age float64
@@ -1212,7 +1217,7 @@ func (_ *query) TeacherNames(ctx context.Context, args struct {
 	return &res
 }
 
-func (_ *query) SchoolNames(ctx context.Context, args struct {
+func (*query) SchoolNames(ctx context.Context, args struct {
 	Schools *[]*struct {
 		Id          string
 		Established float64
@@ -1243,7 +1248,7 @@ func buildCarBatchOutput(b []byte, req request) []interface{} {
 }
 
 func gqlCarsWithErrorHandler(w http.ResponseWriter, r *http.Request) {
-	b, err := ioutil.ReadAll(r.Body)
+	b, err := io.ReadAll(r.Body)
 	if err != nil {
 		return
 	}
@@ -1264,10 +1269,10 @@ func gqlCarsWithErrorHandler(w http.ResponseWriter, r *http.Request) {
 			"cars": output,
 		},
 		"errors": []map[string]interface{}{
-			map[string]interface{}{
+			{
 				"message": "error-1 from cars",
 			},
-			map[string]interface{}{
+			{
 				"message": "error-2 from cars",
 			},
 		},

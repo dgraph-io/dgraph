@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,20 +18,21 @@ package common
 
 import (
 	"context"
-	"io/ioutil"
 	"math"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/minio/minio-go/v6"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 )
 
 var rootDir = "./data"
+var rootBucket = "data"
 
 type suite struct {
 	t    *testing.T
@@ -63,11 +64,11 @@ func newSuiteInternal(t *testing.T, opts suiteOpts) *suite {
 	}
 	require.NoError(s.t, makeDirEmpty(rootDir))
 	rdfFile := filepath.Join(rootDir, "rdfs.rdf")
-	require.NoError(s.t, ioutil.WriteFile(rdfFile, []byte(opts.rdfs), 0644))
+	require.NoError(s.t, os.WriteFile(rdfFile, []byte(opts.rdfs), 0644))
 	schemaFile := filepath.Join(rootDir, "schema.txt")
-	require.NoError(s.t, ioutil.WriteFile(schemaFile, []byte(opts.schema), 0644))
+	require.NoError(s.t, os.WriteFile(schemaFile, []byte(opts.schema), 0644))
 	gqlSchemaFile := filepath.Join(rootDir, "gql_schema.txt")
-	require.NoError(s.t, ioutil.WriteFile(gqlSchemaFile, []byte(opts.gqlSchema), 0644))
+	require.NoError(s.t, os.WriteFile(gqlSchemaFile, []byte(opts.gqlSchema), 0644))
 
 	var schemaPath, dataPath, gqlSchemaPath string = "schema.txt", "rdfs.rdf", "gql_schema.txt"
 
@@ -75,6 +76,19 @@ func newSuiteInternal(t *testing.T, opts suiteOpts) *suite {
 		schemaPath = minioPath(schemaPath)
 		dataPath = minioPath(dataPath)
 		gqlSchemaPath = minioPath(gqlSchemaPath)
+
+		mc, err := testutil.NewMinioClient()
+		require.NoError(t, err)
+		if ok, err := mc.BucketExists(rootBucket); !ok {
+			require.NoError(t, err)
+			require.NoError(t, mc.MakeBucket(rootBucket, ""))
+		}
+		_, err = mc.FPutObject(rootBucket, "rdfs.rdf", rdfFile, minio.PutObjectOptions{})
+		require.NoError(t, err)
+		_, err = mc.FPutObject(rootBucket, "schema.txt", schemaFile, minio.PutObjectOptions{})
+		require.NoError(t, err)
+		_, err = mc.FPutObject(rootBucket, "gql_schema.txt", gqlSchemaFile, minio.PutObjectOptions{})
+		require.NoError(t, err)
 	}
 
 	s.setup(t, schemaPath, dataPath, gqlSchemaPath)
@@ -82,7 +96,7 @@ func newSuiteInternal(t *testing.T, opts suiteOpts) *suite {
 }
 
 func minioPath(path string) string {
-	return "minio://" + testutil.ContainerAddr("minio1", 9001) + "/data/" + path + "?secure=false"
+	return "minio://" + testutil.ContainerAddr("minio", 9001) + "/data/" + path + "?secure=false"
 }
 
 func newLiveOnlySuite(t *testing.T, schema, rdfs, gqlSchema string) *suite {
@@ -119,7 +133,7 @@ func newSuiteFromFile(t *testing.T, schemaFile, rdfFile, gqlSchemaFile string) *
 func (s *suite) setup(t *testing.T, schemaFile, rdfFile, gqlSchemaFile string) {
 	var env []string
 	if s.opts.remote {
-		env = append(env, "MINIO_ACCESS_KEY=minioadmin", "MINIO_SECRET_KEY=minioadmin")
+		env = append(env, "MINIO_ACCESS_KEY=accesskey", "MINIO_SECRET_KEY=secretkey")
 	}
 
 	require.NoError(s.t, makeDirEmpty(filepath.Join(rootDir, "out", "0")))
@@ -151,7 +165,6 @@ func (s *suite) setup(t *testing.T, schemaFile, rdfFile, gqlSchemaFile string) {
 	})
 
 	require.NoError(t, err)
-	return
 }
 
 func makeDirEmpty(dir string) error {
@@ -165,7 +178,7 @@ func (s *suite) cleanup(t *testing.T) {
 	// NOTE: Shouldn't raise any errors here or fail a test, since this is
 	// called when we detect an error (don't want to mask the original problem).
 	if s.opts.bulkSuite {
-		isRace := testutil.StopAlphasAndDetectRace(s.opts.bulkOpts.alpha)
+		isRace := testutil.StopAlphasAndDetectRace([]string{"alpha1"})
 		_ = os.RemoveAll(rootDir)
 		if isRace {
 			t.Fatalf("Failing because race condition is detected. " +

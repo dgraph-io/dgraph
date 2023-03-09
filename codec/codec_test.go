@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,11 +26,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dustin/go-humanize"
+	"github.com/stretchr/testify/require"
+
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
-	humanize "github.com/dustin/go-humanize"
-	"github.com/stretchr/testify/require"
 )
 
 func getUids(size int) []uint64 {
@@ -77,7 +78,10 @@ func TestBufferUidPack(t *testing.T) {
 	FreePack(pack)
 
 	buf := z.NewBuffer(10<<10, "TestBufferUidPack")
-	defer buf.Release()
+	defer func() {
+		require.NoError(t, buf.Release())
+	}()
+
 	DecodeToBuffer(buf, &pb.UidPack{})
 	require.Equal(t, 0, buf.LenNoPadding())
 	require.NoError(t, buf.Release())
@@ -95,7 +99,9 @@ func TestBufferUidPack(t *testing.T) {
 		require.Equal(t, expected, actual)
 
 		actualbuffer := z.NewBuffer(10<<10, "TestBufferUidPack")
-		defer actualbuffer.Release()
+		defer func() {
+			require.NoError(t, actualbuffer.Release())
+		}()
 
 		DecodeToBuffer(actualbuffer, pack)
 		enc := EncodeFromBuffer(actualbuffer.Bytes(), 256)
@@ -109,7 +115,7 @@ func TestBufferUidPack(t *testing.T) {
 			uid, n := binary.Uvarint(outBuf)
 			outBuf = outBuf[n:]
 
-			next := uint64(prev) + uid
+			next := prev + uid
 			prev = next
 			uids = append(uids, next)
 		}
@@ -188,7 +194,7 @@ func TestLinearSeek(t *testing.T) {
 		}
 	}
 
-	//blockIdx points to last block.
+	// blockIdx points to last block.
 	for i := 0; i < 9990; i += 10 {
 		uids := dec.LinearSeek(uint64(i))
 

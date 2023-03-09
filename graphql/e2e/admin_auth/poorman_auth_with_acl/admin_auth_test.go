@@ -1,5 +1,7 @@
+//go:build integration
+
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,11 +24,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgraph/x"
-
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 const (
@@ -96,7 +97,7 @@ func assertAuthTokenError(t *testing.T, resp *common.GraphQLResponse) {
 
 func assertMissingAclError(t *testing.T, resp *common.GraphQLResponse) {
 	require.Equal(t, x.GqlErrorList{{
-		Message: "resolving updateGQLSchema failed because rpc error: code = PermissionDenied desc = no accessJwt available",
+		Message: "resolving updateGQLSchema failed because rpc error: code = PermissionDenied desc = no accessJwt available", //nolint:lll
 		Locations: []x.Location{{
 			Line:   2,
 			Column: 4,
@@ -106,7 +107,7 @@ func assertMissingAclError(t *testing.T, resp *common.GraphQLResponse) {
 
 func assertBadAclError(t *testing.T, resp *common.GraphQLResponse) {
 	require.Equal(t, x.GqlErrorList{{
-		Message: "resolving updateGQLSchema failed because rpc error: code = Unauthenticated desc = unable to parse jwt token: token contains an invalid number of segments",
+		Message: "resolving updateGQLSchema failed because rpc error: code = Unauthenticated desc = unable to parse jwt token: token contains an invalid number of segments", //nolint:lll
 		Locations: []x.Location{{
 			Line:   2,
 			Column: 4,

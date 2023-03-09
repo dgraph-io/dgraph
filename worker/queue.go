@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,13 +26,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/golang/glog"
+	"github.com/pkg/errors"
+
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
-	"github.com/golang/glog"
-	"github.com/pkg/errors"
 )
 
 // TaskStatusOverNetwork fetches the status of a task over the network. Alphas only know about the
@@ -179,8 +180,7 @@ func (t *tasks) enqueue(req interface{}) (uint64, error) {
 	case *pb.ExportRequest:
 		kind = TaskKindExport
 	default:
-		err := fmt.Errorf("invalid TaskKind: %d", kind)
-		panic(err)
+		panic(fmt.Sprintf("invalid TaskKind: %d", kind))
 	}
 
 	t.logMu.Lock()
@@ -228,7 +228,9 @@ func (t *tasks) worker() {
 		var task taskRequest
 		select {
 		case <-x.ServerCloser.HasBeenClosed():
-			t.log.Close()
+			if err := t.log.Close(); err != nil {
+				glog.Warningf("error closing log file: %v", err)
+			}
 			return
 		case <-shouldCleanup.C:
 			t.cleanup()

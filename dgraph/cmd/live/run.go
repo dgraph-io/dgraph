@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,12 +24,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math"
 	"math/rand"
 	"net/http"
-
-	//nolint:gosec // profiling on live-loader tool considered noncritical
 	_ "net/http/pprof" // http profiler
 	"os"
 	"sort"
@@ -37,16 +34,18 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dgryski/go-farm"
+	"github.com/golang/glog"
+	"github.com/pkg/errors"
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 
-	"github.com/dgraph-io/badger/v3"
-	bopt "github.com/dgraph-io/badger/v3/options"
+	"github.com/dgraph-io/badger/v4"
+	bopt "github.com/dgraph-io/badger/v4/options"
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
-	"github.com/dgraph-io/ristretto/z"
-	"github.com/dgryski/go-farm"
-
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/ee/enc"
@@ -55,11 +54,7 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/xidmap"
-
-	"github.com/golang/glog"
-	"github.com/pkg/errors"
-	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 type options struct {
@@ -76,10 +71,9 @@ type options struct {
 	verbose         bool
 	httpAddr        string
 	bufferSize      int
-	ludicrousMode   bool
 	upsertPredicate string
 	tmpDir          string
-	key             x.SensitiveByteSlice
+	key             x.Sensitive
 	namespaceToLoad uint64
 	preserveNs      bool
 }
@@ -183,8 +177,6 @@ func init() {
 	Sample flag could look like --creds user=username;password=mypass;namespace=2`)
 
 	flag.StringP("bufferSize", "m", "100", "Buffer for each thread")
-	flag.Bool("ludicrous", false, "Run live loader in ludicrous mode (Should "+
-		"only be done when alpha is under ludicrous mode)")
 	flag.StringP("upsertPredicate", "U", "", "run in upsertPredicate mode. the value would "+
 		"be used to store blank nodes as an xid")
 	flag.String("tmp", "t", "Directory to store temporary buffers.")
@@ -195,7 +187,11 @@ func init() {
 
 func getSchema(ctx context.Context, dgraphClient *dgo.Dgraph, galaxyOperation bool) (*schema, error) {
 	txn := dgraphClient.NewTxn()
-	defer txn.Discard(ctx)
+	defer func() {
+		if err := txn.Discard(ctx); err != nil {
+			glog.Warningf("error in discarding txn: %v", err)
+		}
+	}()
 
 	res, err := txn.Query(ctx, "schema {}")
 	if err != nil {
@@ -234,7 +230,7 @@ func validateSchema(sch string, namespaces map[uint64]struct{}) error {
 }
 
 // processSchemaFile process schema for a given gz file.
-func (l *loader) processSchemaFile(ctx context.Context, file string, key x.SensitiveByteSlice,
+func (l *loader) processSchemaFile(ctx context.Context, file string, key x.Sensitive,
 	dgraphClient *dgo.Dgraph) error {
 	fmt.Printf("\nProcessing schema file %q\n", file)
 	if len(opt.authToken) > 0 {
@@ -245,7 +241,11 @@ func (l *loader) processSchemaFile(ctx context.Context, file string, key x.Sensi
 
 	f, err := filestore.Open(file)
 	x.CheckfNoTrace(err)
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			glog.Warningf("error while closing fd: %v", err)
+		}
+	}()
 
 	reader, err := enc.GetReader(key, f)
 	x.Check(err)
@@ -254,7 +254,7 @@ func (l *loader) processSchemaFile(ctx context.Context, file string, key x.Sensi
 		x.Check(err)
 	}
 
-	b, err := ioutil.ReadAll(reader)
+	b, err := io.ReadAll(reader)
 	if err != nil {
 		x.Checkf(err, "Error while reading file")
 	}
@@ -262,7 +262,7 @@ func (l *loader) processSchemaFile(ctx context.Context, file string, key x.Sensi
 	op := &api.Operation{}
 	op.Schema = string(b)
 	if opt.preserveNs {
-		// Verify schema if we are loding into multiple namespaces.
+		// Verify schema if we are loading into multiple namespaces.
 		if err := validateSchema(op.Schema, l.namespaces); err != nil {
 			return err
 		}
@@ -282,13 +282,12 @@ func (l *loader) uid(val string, ns uint64) string {
 		}
 	}
 
-	// TODO(Naman): Do we still need this here? As xidmap which uses btree does not keep hold of
-	// this string.
+	// TODO(Naman): Do we still need this here? As xidmap which uses btree does not keep hold of this string.
 	sb := strings.Builder{}
 	x.Check2(sb.WriteString(x.NamespaceAttr(ns, val)))
 	uid, _ := l.alloc.AssignUid(sb.String())
 
-	return fmt.Sprintf("%#x", uint64(uid))
+	return fmt.Sprintf("%#x", uid)
 }
 
 func generateBlankNode(val string) string {
@@ -391,39 +390,29 @@ func (l *loader) upsertUids(nqs []*api.NQuad) {
 		Query:     query.String(),
 		Mutations: []*api.Mutation{{Set: mutations}},
 	})
-
-	if err != nil {
-		panic(err)
-	}
+	x.Panic(err)
 
 	type dResult struct {
 		Uid string
 	}
 
 	var result map[string][]dResult
-	err = json.Unmarshal(resp.GetJson(), &result)
-	if err != nil {
-		panic(err)
-	}
+	x.Panic(json.Unmarshal(resp.GetJson(), &result))
 
 	for xid, idx := range ids {
 		// xid already exist in dgraph
 		if val, ok := result[idx]; ok && len(val) > 0 {
 			uid, err := strconv.ParseUint(val[0].Uid, 0, 64)
-			if err != nil {
-				panic(err)
-			}
+			x.Panic(err)
 
 			l.alloc.SetUid(xid, uid)
 			continue
 		}
 
-		// new uid created in draph
+		// new uid created in dgraph
 		if val, ok := resp.GetUids()[generateUidFunc(idx)]; ok {
 			uid, err := strconv.ParseUint(val, 0, 64)
-			if err != nil {
-				panic(err)
-			}
+			x.Panic(err)
 
 			l.alloc.SetUid(xid, uid)
 			continue
@@ -461,7 +450,7 @@ func (l *loader) allocateUids(nqs []*api.NQuad) {
 
 // processFile forwards a file to the RDF or JSON processor as appropriate
 func (l *loader) processFile(ctx context.Context, fs filestore.FileStore, filename string,
-	key x.SensitiveByteSlice) error {
+	key x.Sensitive) error {
 
 	fmt.Printf("Processing data file %q\n", filename)
 
@@ -495,7 +484,7 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 
 		drain := func() {
 			// We collect opt.bufferSize requests and preprocess them. For the requests
-			// to not confict between themself, we sort them on the basis of their predicates.
+			// to not conflict between themselves, we sort them on the basis of their predicates.
 			// Predicates with count index will conflict among themselves, so we keep them at
 			// end, making room for other predicates to load quickly.
 			sort.Slice(buffer, func(i, j int) bool {
@@ -548,7 +537,7 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 			} else {
 				// TODO(Naman): Handle this. Upserts UIDs send a single upsert block for multiple
 				// nquads. These nquads may belong to different namespaces. Hence, alpha can't
-				// figure out its processsing.
+				// figure out its processing.
 				// Currently, this option works with data loading in the logged-in namespace.
 				// TODO(Naman): Add a test for a case when it works and when it doesn't.
 				l.upsertUids(nqs)
@@ -618,7 +607,7 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph, conf *viper.Viper) *loader
 		dialOpts = append(dialOpts, x.WithAuthorizationCredentials(conf.GetString("auth_token")))
 	}
 
-	var tlsConfig *tls.Config = nil
+	var tlsConfig *tls.Config
 	if conf.GetString("slash_grpc_endpoint") != "" {
 		var tlsErr error
 		tlsConfig, tlsErr = x.SlashTLSConfig(conf.GetString("slash_grpc_endpoint"))
@@ -671,7 +660,12 @@ func (l *loader) populateNamespaces(ctx context.Context, dc *dgo.Dgraph, singleN
 	}
 
 	txn := dc.NewTxn()
-	defer txn.Discard(ctx)
+	defer func() {
+		if err := txn.Discard(ctx); err != nil {
+			glog.Warningf("error in discarding txn: %v", err)
+		}
+	}()
+
 	res, err := txn.Query(ctx, "schema {}")
 	if err != nil {
 		return err
@@ -719,7 +713,6 @@ func run() error {
 		verbose:         Live.Conf.GetBool("verbose"),
 		httpAddr:        Live.Conf.GetString("http"),
 		bufferSize:      Live.Conf.GetInt("bufferSize"),
-		ludicrousMode:   Live.Conf.GetBool("ludicrous"),
 		upsertPredicate: Live.Conf.GetString("upsertPredicate"),
 		tmpDir:          Live.Conf.GetString("tmp"),
 		key:             keys.EncKey,

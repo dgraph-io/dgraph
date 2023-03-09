@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,6 @@ package x
 
 import (
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -170,11 +169,7 @@ func WriteGroupIdFile(pdir string, group_id uint32) error {
 	if _, err := f.WriteString("\n"); err != nil {
 		return err
 	}
-	if err := f.Close(); err != nil {
-		return err
-	}
-
-	return nil
+	return f.Close()
 }
 
 // ReadGroupIdFile reads the file at the given path and attempts to retrieve the
@@ -189,7 +184,7 @@ func ReadGroupIdFile(pdir string) (uint32, error) {
 		return 0, errors.Errorf("Group ID file at %s is a directory", path)
 	}
 
-	contents, err := ioutil.ReadFile(path)
+	contents, err := os.ReadFile(path)
 	if err != nil {
 		return 0, err
 	}

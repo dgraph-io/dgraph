@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2016-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,18 +26,18 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/dgraph-io/badger/v3"
-	badgerpb "github.com/dgraph-io/badger/v3/pb"
+	"github.com/golang/glog"
+	"github.com/pkg/errors"
+	"go.opencensus.io/plugin/ocgrpc"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
+
+	"github.com/dgraph-io/badger/v4"
+	badgerpb "github.com/dgraph-io/badger/v4/pb"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/pkg/errors"
-	"go.opencensus.io/plugin/ocgrpc"
-
-	"github.com/golang/glog"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
 )
 
 var (

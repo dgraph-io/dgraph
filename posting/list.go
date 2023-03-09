@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2015-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,10 +25,11 @@ import (
 	"sort"
 
 	"github.com/dgryski/go-farm"
+	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 
-	bpb "github.com/dgraph-io/badger/v3/pb"
-	"github.com/dgraph-io/badger/v3/y"
+	bpb "github.com/dgraph-io/badger/v4/pb"
+	"github.com/dgraph-io/badger/v4/y"
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -37,7 +38,6 @@ import (
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
-	"github.com/golang/protobuf/proto"
 )
 
 var (
@@ -524,11 +524,6 @@ func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.Directed
 			hex.EncodeToString(l.key), mpost)
 	}
 
-	if x.WorkerConfig.LudicrousEnabled {
-		// Conflict detection is not required for ludicrous mode.
-		return nil
-	}
-
 	// We ensure that commit marks are applied to posting lists in the right
 	// order. We can do so by proposing them in the same order as received by the Oracle delta
 	// stream from Zero, instead of in goroutines.
@@ -862,7 +857,9 @@ func (l *List) Rollup(alloc *z.Allocator) ([]*bpb.KV, error) {
 
 // ToBackupPostingList uses rollup to generate a single list with no splits.
 // It's used during backup so that each backed up posting list is stored in a single key.
-func (l *List) ToBackupPostingList(bl *pb.BackupPostingList, alloc *z.Allocator, buf *z.Buffer) (*bpb.KV, error) {
+func (l *List) ToBackupPostingList(
+	bl *pb.BackupPostingList, alloc *z.Allocator, buf *z.Buffer) (*bpb.KV, error) {
+
 	bl.Reset()
 	l.RLock()
 	defer l.RUnlock()
@@ -882,7 +879,6 @@ func (l *List) ToBackupPostingList(bl *pb.BackupPostingList, alloc *z.Allocator,
 	buf.Reset()
 	codec.DecodeToBuffer(buf, ol.Pack)
 	bl.UidBytes = buf.Bytes()
-
 	bl.Postings = ol.Postings
 	bl.CommitTs = ol.CommitTs
 	bl.Splits = ol.Splits
@@ -970,7 +966,8 @@ func sanityCheck(prefix string, out *rollupOutput) {
 		paddr := fmt.Sprintf("%p", pack)
 		baddr := fmt.Sprintf("%p", block)
 		if pa, has := seen[baddr]; has {
-			glog.Fatalf("[%s %s] Have already seen this block: %s in pa:%s. Now found in pa: %s (num blocks: %d) as well. Block [base: %d. Len: %d] Full map size: %d. \n",
+			glog.Fatalf("[%s %s] Have already seen this block: %s in pa:%s. "+
+				"Now found in pa: %s (num blocks: %d) as well. Block [base: %d. Len: %d] Full map size: %d",
 				prefix, which, baddr, pa, paddr, len(pack.Blocks), block.Base, len(block.Deltas), len(seen))
 		}
 		seen[baddr] = which + "_" + paddr

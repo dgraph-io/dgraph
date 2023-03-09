@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@ package admin
 import (
 	"context"
 
-	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/dql"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
@@ -39,7 +39,7 @@ func extractName(ctx context.Context) (string, error) {
 }
 
 func (gsr *currentUserResolver) Rewrite(ctx context.Context,
-	gqlQuery schema.Query) ([]*gql.GraphQuery, error) {
+	gqlQuery schema.Query) ([]*dql.GraphQuery, error) {
 
 	name, err := extractName(ctx)
 	if err != nil {

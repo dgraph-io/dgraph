@@ -1,5 +1,7 @@
+//go:build integration
+
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors *
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -20,7 +22,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -28,14 +30,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/graph-gophers/graphql-go/errors"
+	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
-	"github.com/graph-gophers/graphql-go/errors"
-	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
-
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
@@ -92,7 +93,7 @@ func disableDraining(t *testing.T) {
 	client := testutil.GetHttpsClient(t)
 	resp, err := client.Post(testutil.AdminUrlHttps(), "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
-	buf, err := ioutil.ReadAll(resp.Body)
+	buf, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	require.Contains(t, string(buf), "draining mode has been set to false")
 }
@@ -129,7 +130,7 @@ func runQueries(t *testing.T, dg *dgo.Dgraph, shouldFail bool) {
 	_, thisFile, _, _ := runtime.Caller(0)
 	queryDir := filepath.Join(filepath.Dir(thisFile), "queries")
 
-	files, err := ioutil.ReadDir(queryDir)
+	files, err := os.ReadDir(queryDir)
 	require.NoError(t, err)
 
 	for _, file := range files {
@@ -138,7 +139,7 @@ func runQueries(t *testing.T, dg *dgo.Dgraph, shouldFail bool) {
 		}
 		filename := filepath.Join(queryDir, file.Name())
 		reader, cleanup := chunker.FileReader(filename, nil)
-		bytes, err := ioutil.ReadAll(reader)
+		bytes, err := io.ReadAll(reader)
 		require.NoError(t, err)
 		contents := string(bytes)
 		cleanup()
@@ -199,7 +200,8 @@ func runMutations(t *testing.T, dg *dgo.Dgraph) {
 func TestBasicRestore(t *testing.T) {
 	disableDraining(t)
 
-	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))))
+	conn, err := grpc.Dial(testutil.SockAddr,
+		grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))))
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 
@@ -208,9 +210,9 @@ func TestBasicRestore(t *testing.T) {
 
 	snapshotTs := getSnapshotTs(t)
 	sendRestoreRequest(t, "", "youthful_rhodes3", 0)
-	testutil.WaitForRestore(t, dg)
+	testutil.WaitForRestore(t, dg, testutil.SockAddrHttp)
 	// Snapshot must be taken just after the restore and hence the snapshotTs be updated.
-	require.NoError(t, x.RetryUntilSuccess(3, 1*time.Second, func() error {
+	require.NoError(t, x.RetryUntilSuccess(3, 2*time.Second, func() error {
 		if getSnapshotTs(t) <= snapshotTs {
 			return errors.Errorf("snapshot not taken after restore")
 		}
@@ -223,7 +225,10 @@ func TestBasicRestore(t *testing.T) {
 func TestRestoreBackupNum(t *testing.T) {
 	disableDraining(t)
 
-	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))))
+	conn, err := grpc.Dial(
+		testutil.SockAddr,
+		grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))),
+	)
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 
@@ -232,7 +237,7 @@ func TestRestoreBackupNum(t *testing.T) {
 	runQueries(t, dg, true)
 
 	sendRestoreRequest(t, "", "youthful_rhodes3", 1)
-	testutil.WaitForRestore(t, dg)
+	testutil.WaitForRestore(t, dg, testutil.SockAddrHttp)
 	runQueries(t, dg, true)
 	runMutations(t, dg)
 }
@@ -240,7 +245,10 @@ func TestRestoreBackupNum(t *testing.T) {
 func TestRestoreBackupNumInvalid(t *testing.T) {
 	disableDraining(t)
 
-	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))))
+	conn, err := grpc.Dial(
+		testutil.SockAddr,
+		grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))),
+	)
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 
@@ -266,7 +274,7 @@ func TestRestoreBackupNumInvalid(t *testing.T) {
 	client := testutil.GetHttpsClient(t)
 	resp, err := client.Post(testutil.AdminUrlHttps(), "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
-	buf, err := ioutil.ReadAll(resp.Body)
+	buf, err := io.ReadAll(resp.Body)
 	bufString := string(buf)
 	require.NoError(t, err)
 	require.Contains(t, bufString, "not enough backups")
@@ -288,7 +296,7 @@ func TestRestoreBackupNumInvalid(t *testing.T) {
 
 	resp, err = client.Post(testutil.AdminUrlHttps(), "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
-	buf, err = ioutil.ReadAll(resp.Body)
+	buf, err = io.ReadAll(resp.Body)
 	bufString = string(buf)
 	require.NoError(t, err)
 	require.Contains(t, bufString, "backupNum value should be equal or greater than zero")
@@ -297,7 +305,10 @@ func TestRestoreBackupNumInvalid(t *testing.T) {
 func TestMoveTablets(t *testing.T) {
 	disableDraining(t)
 
-	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))))
+	conn, err := grpc.Dial(
+		testutil.SockAddr,
+		grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))),
+	)
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 
@@ -305,13 +316,13 @@ func TestMoveTablets(t *testing.T) {
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
 
 	sendRestoreRequest(t, "", "youthful_rhodes3", 0)
-	testutil.WaitForRestore(t, dg)
+	testutil.WaitForRestore(t, dg, testutil.SockAddrHttp)
 	runQueries(t, dg, false)
 
 	// Send another restore request with a different backup. This backup has some of the
 	// same predicates as the previous one but they are stored in different groups.
 	sendRestoreRequest(t, "", "blissful_hermann1", 0)
-	testutil.WaitForRestore(t, dg)
+	testutil.WaitForRestore(t, dg, testutil.SockAddrHttp)
 
 	resp, err := dg.NewTxn().Query(context.Background(), `{
 	  q(func: has(name), orderasc: name) {
@@ -351,7 +362,7 @@ func TestInvalidBackupId(t *testing.T) {
 	client := testutil.GetHttpsClient(t)
 	resp, err := client.Post(testutil.AdminUrlHttps(), "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
-	buf, err := ioutil.ReadAll(resp.Body)
+	buf, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	require.Contains(t, string(buf), "failed to verify backup")
 }
@@ -381,7 +392,7 @@ func TestListBackups(t *testing.T) {
 	client := testutil.GetHttpsClient(t)
 	resp, err := client.Post(testutil.AdminUrlHttps(), "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
-	buf, err := ioutil.ReadAll(resp.Body)
+	buf, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	sbuf := string(buf)
 	require.Contains(t, sbuf, `"backupId":"youthful_rhodes3"`)
@@ -566,24 +577,6 @@ func TestRestoreWithDropOperations(t *testing.T) {
 		})
 }
 
-func setupDirs(t *testing.T, dirs []string) {
-	// first, clean them up
-	cleanupDirs(t, dirs)
-
-	// then create them
-	for _, dir := range dirs {
-		require.NoError(t, os.MkdirAll(dir, os.ModePerm))
-	}
-}
-
-func cleanupDirs(t *testing.T, dirs []string) {
-	for _, dir := range dirs {
-		if err := os.RemoveAll(dir); err != nil {
-			t.Logf("Got error while removing: %s: %v\n", dir, err)
-		}
-	}
-}
-
 func backup(t *testing.T, backupDir string) {
 	backupParams := &testutil.GraphQLParams{
 		Query: `mutation($backupDir: String!) {
@@ -607,7 +600,7 @@ func backupRestoreAndVerify(t *testing.T, dg *dgo.Dgraph, backupDir, queryToVeri
 	schemaVerificationOpts.ExcludeAclSchema = true
 	backup(t, backupDir)
 	sendRestoreRequest(t, backupDir, "", 0)
-	testutil.WaitForRestore(t, dg)
+	testutil.WaitForRestore(t, dg, testutil.SockAddrHttp)
 	testutil.VerifyQueryResponse(t, dg, queryToVerify, expectedResponse)
 	testutil.VerifySchema(t, dg, schemaVerificationOpts)
 }

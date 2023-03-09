@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,9 +19,8 @@ package schema
 import (
 	"fmt"
 
-	"github.com/dgraph-io/gqlparser/v2/ast"
-
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/gqlparser/v2/ast"
 	"github.com/dgraph-io/gqlparser/v2/gqlerror"
 )
 
