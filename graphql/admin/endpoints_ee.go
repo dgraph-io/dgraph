@@ -66,13 +66,16 @@ const adminTypes = `
 		backupId: String
 
 		"""
-		Number of backups within the backup series to be restored. Backups outside this range
-		will be ignored. If the value is zero or missing, the entire series will be restored.
+		If backupNum is 0 or missing, the entire series will be restored i.e all the incremental
+		backups available in the series as well as the full backup will be restored. If backupNum is
+		non-zero, we restore all the backups in the series that have backupNum smaller or equal to
+		the backupNum provided here. Backups that have backupNum higher than this will be ignored.
+		In simple words, all the backups with backupNum of backup <= backupNum will be restored.
 		"""
 		backupNum: Int
 
 		"""
-		All the backups with num >= incrementalFrom will be restored.
+		All the backups with backupNum >= incrementalFrom will be restored.
 		"""
 		incrementalFrom: Int
 

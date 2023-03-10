@@ -46,9 +46,7 @@ const (
 
 // verifyRequest verifies that the manifest satisfies the requirements to process the given
 // restore request.
-func verifyRequest(h UriHandler, uri *url.URL, req *pb.RestoreRequest,
-	currentGroups []uint32) error {
-
+func verifyRequest(h UriHandler, uri *url.URL, req *pb.RestoreRequest, currentGroups []uint32) error {
 	manifests, err := getManifestsToRestore(h, uri, req)
 	if err != nil {
 		return errors.Wrapf(err, "while retrieving manifests")
@@ -287,20 +285,31 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest, pidx uin
 	if err != nil {
 		return errors.Wrapf(err, "cannot get backup manifests")
 	}
+
+	// filter manifests that needs to be restored
+	mfsToRestore := manifests[:0]
+	for _, m := range manifests {
+		if (req.BackupNum == 0 || m.BackupNum <= req.BackupNum) &&
+			(req.IncrementalFrom == 0 || m.BackupNum >= req.IncrementalFrom) {
+
+			mfsToRestore = append(mfsToRestore, m)
+		}
+	}
+	manifests = mfsToRestore
+
 	if len(manifests) == 0 {
 		return errors.Errorf("no backup manifests found at location %s", req.Location)
 	}
 
 	lastManifest := manifests[0]
 	restorePreds, ok := lastManifest.Groups[req.GroupId]
-
 	if !ok {
-		return errors.Errorf("backup manifest does not contain information for group ID %d",
-			req.GroupId)
+		return errors.Errorf("backup manifest does not contain information for group ID %d", req.GroupId)
 	}
+
 	for _, pred := range restorePreds {
-		// Force the tablet to be moved to this group, even if it's currently being served
-		// by another group.
+		// Force the tablet to be moved to this group, even
+		// if it's currently being served by another group.
 		tablet, err := groups().ForceTablet(pred)
 		if err != nil {
 			return errors.Wrapf(err, "cannot create tablet for restored predicate %s", pred)

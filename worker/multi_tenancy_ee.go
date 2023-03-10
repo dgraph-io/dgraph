@@ -26,8 +26,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-func (w *grpcWorker) DeleteNamespace(ctx context.Context,
-	req *pb.DeleteNsRequest) (*pb.Status, error) {
+func (w *grpcWorker) DeleteNamespace(ctx context.Context, req *pb.DeleteNsRequest) (*pb.Status, error) {
 	var emptyRes pb.Status
 	if !groups().ServesGroup(req.GroupId) {
 		return &emptyRes, errors.Errorf("The server doesn't serve group id: %v", req.GroupId)
