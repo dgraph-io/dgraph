@@ -22,7 +22,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/docker/docker/api/types"
@@ -89,7 +88,7 @@ func (c *LocalCluster) init() error {
 	if err != nil {
 		return errors.Wrap(err, "error while creating temp dir")
 	}
-	if err := os.Mkdir(binDir, os.ModePerm); err != nil {
+	if err := os.Mkdir(binDir, os.ModePerm); err != nil && !os.IsExist(err) {
 		return errors.Wrap(err, "error while making binDir")
 	}
 
@@ -326,14 +325,9 @@ func (c *LocalCluster) Upgrade(version string) error {
 	if err := c.Stop(); err != nil {
 		return err
 	}
-	isFileExist, err := fileExists(filepath.Join(binDir, fmt.Sprintf(binaryName, version)))
-	if err != nil {
+
+	if err := c.setupBinary(); err != nil {
 		return err
-	}
-	if !isFileExist {
-		if err := c.setupBinary(); err != nil {
-			return err
-		}
 	}
 	return c.Start()
 }

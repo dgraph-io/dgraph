@@ -262,20 +262,10 @@ func mountBinary(c *LocalCluster) (mount.Mount, error) {
 			ReadOnly: true,
 		}, nil
 	}
-
-	isFileExist, err = fileExists(filepath.Join(binDir, fmt.Sprintf(binaryName, c.conf.version)))
-	if err != nil {
+	if err := c.setupBinary(); err != nil {
 		return mount.Mount{}, err
 	}
-	if !isFileExist {
-		if err := c.setupBinary(); err != nil {
-			return mount.Mount{}, err
-		}
-	} else {
-		if err := copyBinary(binDir, c.tempBinDir, c.conf.version); err != nil {
-			return mount.Mount{}, err
-		}
-	}
+
 	return mount.Mount{
 		Type:     mount.TypeBind,
 		Source:   c.tempBinDir,

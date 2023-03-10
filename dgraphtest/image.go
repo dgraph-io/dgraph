@@ -34,6 +34,16 @@ func (c *LocalCluster) dgraphImage() string {
 }
 
 func (c *LocalCluster) setupBinary() error {
+	isFileExist, err := fileExists(filepath.Join(binDir, fmt.Sprintf(binaryName, c.conf.version)))
+	if err != nil {
+		return err
+	}
+	if isFileExist {
+		if err := copyBinary(binDir, c.tempBinDir, c.conf.version); err != nil {
+			return err
+		}
+		return nil
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), cloneTimeout)
 	defer cancel()
 	repo, err := git.PlainOpen(repoDir)
