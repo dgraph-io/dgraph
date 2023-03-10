@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/docker/docker/api/types"
@@ -42,8 +43,8 @@ type cnet struct {
 }
 
 type LocalCluster struct {
-	conf ClusterConfig
-
+	conf       ClusterConfig
+	tempBinDir string
 	// resources
 	dcli   *docker.Client
 	net    cnet
@@ -82,6 +83,13 @@ func (c *LocalCluster) init() error {
 
 	if err := c.createNetwork(); err != nil {
 		return errors.Wrap(err, "error creating network")
+	}
+	c.tempBinDir, err = os.MkdirTemp("", c.conf.prefix)
+	if err != nil {
+		return errors.Wrap(err, "error while creating temp dir")
+	}
+	if err := os.Mkdir(binDir, os.ModePerm); err != nil && !os.IsExist(err) {
+		return errors.Wrap(err, "error while making binDir")
 	}
 
 	for i := 0; i < c.conf.numZeros; i++ {
@@ -229,12 +237,16 @@ func (c *LocalCluster) Cleanup() {
 			c.log("error removing network [%v]: %v", c.net.name, err)
 		}
 	}
+	if err := os.RemoveAll(c.tempBinDir); err != nil {
+		c.log("error while removing temp Dir", err)
+	}
+
 }
 
 func (c *LocalCluster) createContainer(dc dnode) (string, error) {
 	cmd := dc.cmd(c)
 	image := c.dgraphImage()
-	mts, err := dc.mounts(c.conf)
+	mts, err := dc.mounts(c)
 	if err != nil {
 		return "", err
 	}
@@ -296,9 +308,26 @@ func (c *LocalCluster) containerHealthCheck(url string) error {
 			_ = resp.Body.Close()
 		}
 
-		c.log("health for [%v] failed, err: [%v], response: [%v]", url, err, body)
+		c.log("health for [%v] failed, err: [%v], response: [%v]", url, err, string(body))
 		time.Sleep(time.Second)
 	}
 
 	return fmt.Errorf("failed health check on [%v]", url)
+}
+
+func (c *LocalCluster) Upgrade(version string) error {
+	if version == c.conf.version {
+		return fmt.Errorf("cannot upgrade to the same version")
+	}
+
+	c.log("upgrading the cluster to [%v] using stop-start", version)
+	c.conf.version = version
+	if err := c.Stop(); err != nil {
+		return err
+	}
+
+	if err := c.setupBinary(); err != nil {
+		return err
+	}
+	return c.Start()
 }

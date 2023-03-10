@@ -36,6 +36,7 @@ type ClusterConfig struct {
 	aclTTL     time.Duration
 	encryption bool
 	logr       Logger
+	version    string
 }
 
 func NewClusterConfig() ClusterConfig {
@@ -45,6 +46,7 @@ func NewClusterConfig() ClusterConfig {
 		numZeros:  1,
 		replicas:  1,
 		verbosity: 2,
+		version:   "local",
 	}
 }
 
@@ -81,5 +83,10 @@ func (cc ClusterConfig) WithEncryption() ClusterConfig {
 
 func (cc ClusterConfig) WithLogger(logr Logger) ClusterConfig {
 	cc.logr = logr
+	return cc
+}
+
+func (cc ClusterConfig) WithVersion(version string) ClusterConfig {
+	cc.version = version
 	return cc
 }

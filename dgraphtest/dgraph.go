@@ -30,6 +30,7 @@ import (
 )
 
 const (
+	binaryName       = "dgraph_%v"
 	zeroNameFmt      = "%v_zero%d"
 	zeroAliasNameFmt = "zero%d"
 	alphaNameFmt     = "%v_alpha%d"
@@ -44,9 +45,7 @@ const (
 	alphaWorkingDir = "/data/alpha"
 	zeroWorkingDir  = "/data/zero"
 
-	aclSecretPath      = "data/hmac-secret"
 	aclSecretMountPath = "/dgraph-acl/hmac-secret"
-	encKeyPath         = "data/enc-key"
 	encKeyMountPath    = "/dgraph-enc/enc-key"
 )
 
@@ -57,7 +56,7 @@ type dnode interface {
 	ports() nat.PortSet
 	cmd(*LocalCluster) []string
 	workingDir() string
-	mounts(ClusterConfig) ([]mount.Mount, error)
+	mounts(*LocalCluster) ([]mount.Mount, error)
 	healthURL(*LocalCluster) (string, error)
 }
 
@@ -102,15 +101,25 @@ func (z *zero) workingDir() string {
 	return zeroWorkingDir
 }
 
-func (z *zero) mounts(conf ClusterConfig) ([]mount.Mount, error) {
-	return []mount.Mount{
-		{
-			Type:     mount.TypeBind,
-			Source:   os.Getenv("GOPATH") + "/bin",
-			Target:   "/gobin",
-			ReadOnly: true,
-		},
-	}, nil
+func fileExists(filename string) (bool, error) {
+	info, err := os.Stat(filename)
+	if err != nil && !os.IsNotExist(err) {
+		return false, errors.Wrap(err, "error while getting file info")
+	}
+	if err != nil && os.IsNotExist(err) {
+		return false, nil
+	}
+	return !info.IsDir(), nil
+}
+
+func (z *zero) mounts(c *LocalCluster) ([]mount.Mount, error) {
+	var mounts []mount.Mount
+	binMount, err := mountBinary(c)
+	if err != nil {
+		return nil, err
+	}
+	mounts = append(mounts, binMount)
+	return mounts, nil
 }
 
 func (z *zero) healthURL(c *LocalCluster) (string, error) {
@@ -174,37 +183,26 @@ func (a *alpha) workingDir() string {
 	return alphaWorkingDir
 }
 
-func (a *alpha) mounts(conf ClusterConfig) ([]mount.Mount, error) {
-	mounts := []mount.Mount{
-		{
-			Type:     mount.TypeBind,
-			Source:   os.Getenv("GOPATH") + "/bin",
-			Target:   "/gobin",
-			ReadOnly: true,
-		},
+func (a *alpha) mounts(c *LocalCluster) ([]mount.Mount, error) {
+	var mounts []mount.Mount
+	binMount, err := mountBinary(c)
+	if err != nil {
+		return nil, err
 	}
-
-	if conf.acl {
-		absPath, err := filepath.Abs(aclSecretPath)
-		if err != nil {
-			return nil, errors.Wrap(err, "error finding absolute path for acl secret path")
-		}
+	mounts = append(mounts, binMount)
+	if c.conf.acl {
 		mounts = append(mounts, mount.Mount{
 			Type:     mount.TypeBind,
-			Source:   absPath,
+			Source:   aclSecretPath,
 			Target:   aclSecretMountPath,
 			ReadOnly: true,
 		})
 	}
 
-	if conf.encryption {
-		absPath, err := filepath.Abs(encKeyPath)
-		if err != nil {
-			return nil, errors.Wrap(err, "error finding absolute path for enc key path")
-		}
+	if c.conf.encryption {
 		mounts = append(mounts, mount.Mount{
 			Type:     mount.TypeBind,
-			Source:   absPath,
+			Source:   encKeyPath,
 			Target:   encKeyMountPath,
 			ReadOnly: true,
 		})
@@ -240,4 +238,38 @@ func publicPort(dcli *docker.Client, dc dnode, privatePort string) (string, erro
 	}
 
 	return "", fmt.Errorf("no mapping found for private port [%v] for container [%v]", privatePort, dc.cname())
+}
+
+func mountBinary(c *LocalCluster) (mount.Mount, error) {
+	if c.conf.version == "local" {
+		return mount.Mount{
+			Type:     mount.TypeBind,
+			Source:   filepath.Join(os.Getenv("GOPATH"), "bin"),
+			Target:   "/gobin",
+			ReadOnly: true,
+		}, nil
+	}
+
+	isFileExist, err := fileExists(filepath.Join(c.tempBinDir, "dgraph"))
+	if err != nil {
+		return mount.Mount{}, err
+	}
+	if isFileExist {
+		return mount.Mount{
+			Type:     mount.TypeBind,
+			Source:   c.tempBinDir,
+			Target:   "/gobin",
+			ReadOnly: true,
+		}, nil
+	}
+	if err := c.setupBinary(); err != nil {
+		return mount.Mount{}, err
+	}
+
+	return mount.Mount{
+		Type:     mount.TypeBind,
+		Source:   c.tempBinDir,
+		Target:   "/gobin",
+		ReadOnly: true,
+	}, nil
 }
