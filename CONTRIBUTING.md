@@ -1,5 +1,5 @@
 # Contributing to Dgraph
-
+# Testing
 * [Getting Started](#getting-started)
 * [Setting Up the Development Environment](#setting-up-the-development-environment)
    * [Prerequisites](#prerequisites)
