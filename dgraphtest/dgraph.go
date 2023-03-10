@@ -272,9 +272,8 @@ func mountBinary(c *LocalCluster) (mount.Mount, error) {
 			return mount.Mount{}, err
 		}
 	} else {
-		if err := copy(filepath.Join(binDir, fmt.Sprintf(binaryName, c.conf.version)),
-			filepath.Join(c.tempBinDir, "dgraph")); err != nil {
-			return mount.Mount{}, errors.Wrap(err, "error while copying dgraph binary into bin dir")
+		if err := copyBinary(binDir, c.tempBinDir, c.conf.version); err != nil {
+			return mount.Mount{}, err
 		}
 	}
 	return mount.Mount{

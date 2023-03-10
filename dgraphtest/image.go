@@ -43,7 +43,7 @@ func (c *LocalCluster) setupBinary() error {
 			URL: dgraphRepoUrl,
 		})
 		if err != nil {
-			return errors.Wrap(err, "error while checking out dgraph git repo")
+			return errors.Wrap(err, "error while cloning dgraph git repo")
 		}
 	} else if err != nil {
 		return errors.Wrap(err, "error while opening git repo")
@@ -64,9 +64,8 @@ func (c *LocalCluster) setupBinary() error {
 	if err := buildDgraphBinary(repoDir, binDir, c.conf.version); err != nil {
 		return err
 	}
-	if err := copy(filepath.Join(binDir, fmt.Sprintf(binaryName, c.conf.version)),
-		filepath.Join(c.tempBinDir, "dgraph")); err != nil {
-		return errors.Wrap(err, "error while copying dgraph binary into temp dir")
+	if err := copyBinary(binDir, c.tempBinDir, c.conf.version); err != nil {
+		return err
 	}
 	return nil
 }
@@ -86,11 +85,19 @@ func buildDgraphBinary(dir, binaryDir, version string) error {
 	cmd := exec.Command("make", "dgraph")
 	cmd.Dir = filepath.Join(dir, "dgraph")
 	if err := cmd.Run(); err != nil {
-		return errors.Wrap(err, "error getting while building dgraph binary")
+		return errors.Wrap(err, "error while building dgraph binary")
 	}
 	if err := copy(filepath.Join(dir, "dgraph", "dgraph"),
 		filepath.Join(binaryDir, fmt.Sprintf(binaryName, version))); err != nil {
 		return errors.Wrap(err, "error while copying binary")
+	}
+	return nil
+}
+
+func copyBinary(fromDir, toDir, version string) error {
+	if err := copy(filepath.Join(fromDir, fmt.Sprintf(binaryName, version)),
+		filepath.Join(toDir, "dgraph")); err != nil {
+		return errors.Wrap(err, "error while copying binary into tempBinDir")
 	}
 	return nil
 }
@@ -104,6 +111,7 @@ func copy(src, dst string) error {
 		return errors.Wrap(err, fmt.Sprintf("%s is not a regular file", src))
 	}
 	source, err := os.Open(src)
+	srcStat, _ := source.Stat()
 	if err != nil {
 		return errors.Wrap(err, fmt.Sprintf("error while opening file [%s]", src))
 	}
@@ -113,7 +121,6 @@ func copy(src, dst string) error {
 		return err
 	}
 	defer destination.Close()
-	srcStat, _ := source.Stat()
 	if err := os.Chmod(dst, srcStat.Mode()); err != nil {
 		return err
 	}

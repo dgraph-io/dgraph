@@ -89,6 +89,9 @@ func (c *LocalCluster) init() error {
 	if err != nil {
 		return errors.Wrap(err, "error while creating temp dir")
 	}
+	if err := os.Mkdir(binDir, os.ModePerm); err != nil {
+		return errors.Wrap(err, "error while making binDir")
+	}
 
 	for i := 0; i < c.conf.numZeros; i++ {
 		zo := &zero{id: i}
@@ -315,8 +318,9 @@ func (c *LocalCluster) containerHealthCheck(url string) error {
 
 func (c *LocalCluster) Upgrade(version string) error {
 	if version == c.conf.version {
-		return fmt.Errorf("cannot upgrade to same version")
+		return fmt.Errorf("cannot upgrade to the same version")
 	}
+
 	c.log("upgrading the cluster to [%v] using stop-start", version)
 	c.conf.version = version
 	if err := c.Stop(); err != nil {
@@ -331,8 +335,5 @@ func (c *LocalCluster) Upgrade(version string) error {
 			return err
 		}
 	}
-	if err := c.Start(); err != nil {
-		return err
-	}
-	return nil
+	return c.Start()
 }
