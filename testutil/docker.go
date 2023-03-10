@@ -31,6 +31,7 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/x"
@@ -60,8 +61,17 @@ func (in ContainerInstance) BestEffortWaitForHealthy(privatePort uint16) error {
 		return nil
 	}
 	checkACL := func(body []byte) error {
-		const acl string = "\"acl\""
-		if bytes.Index(body, []byte(acl)) > 0 {
+		// Zero returns OK as response
+		if string(body) == "OK" {
+			return nil
+		}
+
+		const eef string = `"ee_features"`
+		const acl string = `"acl"`
+		if !bytes.Contains(body, []byte(eef)) {
+			return errors.New("EE features are not enabled yet")
+		}
+		if bytes.Contains(body, []byte(acl)) {
 			return in.bestEffortTryLogin()
 		}
 		return nil
@@ -75,7 +85,13 @@ func (in ContainerInstance) BestEffortWaitForHealthy(privatePort uint16) error {
 			_ = resp.Body.Close()
 		}
 		if err == nil && resp.StatusCode == http.StatusOK {
-			return checkACL(body)
+			if aerr := checkACL(body); aerr == nil {
+				return nil
+			} else {
+				fmt.Printf("waiting for login to work: %v\n", aerr)
+				time.Sleep(time.Second)
+				continue
+			}
 		}
 		fmt.Printf("Health for %s failed: %v. Response: %q. Retrying...\n", in, err, body)
 		time.Sleep(time.Second)
