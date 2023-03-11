@@ -191,12 +191,13 @@ func (n *node) startTaskAtTs(id op, ts uint64) (*z.Closer, error) {
 		}
 	case opSnapshot, opPredMove:
 		for otherId, otherOp := range n.ops {
-			if otherId != opRollup {
+			if otherId == opRollup {
+				// Remove from map and signal the closer to cancel the operation.
+				delete(n.ops, otherId)
+				otherOp.SignalAndWait()
+			} else {
 				return nil, errors.Errorf("operation %s is already running", otherId)
 			}
-			// Remove from map and signal the closer to cancel the operation.
-			delete(n.ops, otherId)
-			otherOp.SignalAndWait()
 		}
 	default:
 		glog.Errorf("Got an unhandled operation %s. Ignoring...", id)
