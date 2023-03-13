@@ -1155,7 +1155,7 @@ func TestMultiPartListIterAfterUid(t *testing.T) {
 	ol, _ := createMultiPartList(t, size, false)
 
 	var visitedUids []uint64
-	require.NoError(t, ol.Iterate(uint64(size+1), 50000, func(p *pb.Posting) error {
+	require.NoError(t, ol.Iterate(math.MaxUint64, 50000, func(p *pb.Posting) error {
 		visitedUids = append(visitedUids, p.Uid)
 		return nil
 	}))
