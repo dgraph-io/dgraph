@@ -123,9 +123,9 @@ input: {destination: \"/Users/sankalanparajuli/work/backup\"}) {\n    response {
 
 func verifyLogs(t *testing.T, path string, cmds []string) {
 	abs, err := filepath.Abs(path)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	f, err := os.Open(abs)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	type log struct {
 		Msg string `json:"endpoint"`

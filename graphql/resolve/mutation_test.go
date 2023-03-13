@@ -383,14 +383,14 @@ func TestMutationQueryRewriting(t *testing.T) {
 
 					_, _, _ = rewriter.RewriteQueries(context.Background(), gqlMutation)
 					_, err = rewriter.Rewrite(context.Background(), gqlMutation, tt.idExistence)
-					require.Nil(t, err)
+					require.NoError(t, err)
 
 					// -- Act --
 					dgQuery, err := rewriter.FromMutationResult(
 						context.Background(), gqlMutation, tt.assigned, tt.result)
 
 					// -- Assert --
-					require.Nil(t, err)
+					require.NoError(t, err)
 					require.Equal(t, tcase.DGQuery, dgraph.AsString(dgQuery))
 				})
 			}

@@ -55,16 +55,16 @@ type CDCEvent struct {
 
 func verifyCDC(t *testing.T, path string) {
 	abs, err := filepath.Abs(path)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	f, err := os.Open(abs)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	fileScanner := bufio.NewScanner(f)
 	iter := 1
 	for fileScanner.Scan() {
 		bytes := fileScanner.Bytes()
 		l := new(CDCEvent)
 		err := json.Unmarshal(bytes, l)
-		require.Nil(t, err)
+		require.NoError(t, err)
 		require.Equal(t, iter, l.Value.Event.Value)
 		iter = iter + 1
 	}

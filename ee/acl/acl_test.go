@@ -354,7 +354,7 @@ func getGrootAndGuardiansUid(t *testing.T, dg *dgo.Dgraph) (string, string) {
 	return grootUserUid, guardiansGroupUid
 }
 
-const defaultTimeToSleep = 1 * time.Second
+const defaultTimeToSleep = 500 * time.Millisecond
 
 const timeout = 5 * time.Second
 
@@ -1892,7 +1892,7 @@ func TestNewACLPredicates(t *testing.T) {
 		tc := tc // capture range variable
 		t.Run(tc.description, func(t *testing.T) {
 			t.Parallel()
-			ctx, cancel = context.WithTimeout(context.Background(), 100*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 			defer cancel()
 
 			resp, err := userClient.NewTxn().Query(ctx, tc.input)
@@ -3212,7 +3212,7 @@ func TestAllowUIDAccess(t *testing.T) {
 	`
 
 	resp, err := userClient.NewReadOnlyTxn().Query(ctx, uidQuery)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	testutil.CompareJSON(t, `{"me":[{"name":"100th User", "uid": "0x64"}]}`, string(resp.GetJson()))
 }
 

@@ -48,7 +48,7 @@ func TestReverseIndex(t *testing.T) {
 		dg, err = testutil.DgraphClientWithGroot(testutil.SockAddr)
 		return err
 	})
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	testutil.DropAll(t, dg)
 	if err := dg.Alter(context.Background(), &api.Operation{

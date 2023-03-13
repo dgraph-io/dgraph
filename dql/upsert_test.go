@@ -181,7 +181,7 @@ upsert {
 }
 `
 	_, err := ParseMutation(query)
-	require.Nil(t, err)
+	require.NoError(t, err)
 }
 
 func TestUpsertEx1(t *testing.T) {
@@ -205,7 +205,7 @@ upsert {
 }
 `
 	_, err := ParseMutation(query)
-	require.Nil(t, err)
+	require.NoError(t, err)
 }
 
 func TestUpsertWithSpaces(t *testing.T) {
@@ -238,7 +238,7 @@ upsert
 }
 `
 	_, err := ParseMutation(query)
-	require.Nil(t, err)
+	require.NoError(t, err)
 }
 
 func TestUpsertWithBlankNode(t *testing.T) {
@@ -262,7 +262,7 @@ upsert {
 }
 `
 	_, err := ParseMutation(query)
-	require.Nil(t, err)
+	require.NoError(t, err)
 }
 
 func TestUpsertMutationThenQuery(t *testing.T) {
@@ -286,7 +286,7 @@ upsert {
 }
 `
 	_, err := ParseMutation(query)
-	require.Nil(t, err)
+	require.NoError(t, err)
 }
 
 func TestUpsertWithFilter(t *testing.T) {
@@ -311,7 +311,7 @@ upsert {
 }
 `
 	_, err := ParseMutation(query)
-	require.Nil(t, err)
+	require.NoError(t, err)
 }
 
 func TestConditionalUpsertWithNewlines(t *testing.T) {
@@ -338,7 +338,7 @@ upsert {
 }
 `
 	_, err := ParseMutation(query)
-	require.Nil(t, err)
+	require.NoError(t, err)
 }
 
 func TestConditionalUpsertFuncTree(t *testing.T) {
@@ -367,7 +367,7 @@ upsert {
 }
 `
 	_, err := ParseMutation(query)
-	require.Nil(t, err)
+	require.NoError(t, err)
 }
 
 func TestConditionalUpsertMultipleFuncArg(t *testing.T) {
@@ -396,7 +396,7 @@ upsert {
 }
 `
 	_, err := ParseMutation(query)
-	require.Nil(t, err)
+	require.NoError(t, err)
 }
 
 func TestConditionalUpsertErrMissingRightRound(t *testing.T) {

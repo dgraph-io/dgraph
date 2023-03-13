@@ -72,7 +72,7 @@ func TestQueryRewriting(t *testing.T) {
 			gqlQuery := test.GetQuery(t, op)
 
 			dgQuery, err := testRewriter.Rewrite(context.Background(), gqlQuery)
-			require.Nil(t, err)
+			require.NoError(t, err)
 			require.Equal(t, tcase.DGQuery, dgraph.AsString(dgQuery))
 		})
 	}

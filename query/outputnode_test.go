@@ -301,7 +301,7 @@ func TestMarshalTimeJson(t *testing.T) {
 
 	for _, tc := range timesToMarshal {
 		out, err := marshalTimeJson(tc.in)
-		require.Nil(t, err)
+		require.NoError(t, err)
 		require.Equal(t, tc.out, string(out))
 	}
 }

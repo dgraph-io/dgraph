@@ -308,7 +308,7 @@ func TestVerificationWithJWKUrl(t *testing.T) {
 	ctx := metadata.NewIncomingContext(context.Background(), md)
 
 	_, err = metainfo.ExtractCustomClaims(ctx)
-	require.Nil(t, err)
+	require.NoError(t, err)
 }
 
 func TestVerificationWithMultipleJWKUrls(t *testing.T) {
@@ -360,7 +360,7 @@ func TestVerificationWithMultipleJWKUrls(t *testing.T) {
 				require.True(t, strings.Contains(err.Error(),
 					"unable to parse jwt token:token is unverifiable: Keyfunc returned an error"))
 			} else {
-				require.Nil(t, err)
+				require.NoError(t, err)
 			}
 		})
 	}
@@ -452,7 +452,7 @@ func queryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMeta, b []b
 				require.Equal(t, err.Error(), tcase.Error.Error())
 				require.Nil(t, dgQuery)
 			} else {
-				require.Nil(t, err)
+				require.NoError(t, err)
 				require.Equal(t, tcase.DGQuery, dgraph.AsString(dgQuery))
 			}
 			// Check for unused variables.
@@ -591,14 +591,14 @@ func mutationQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMet
 
 			_, _, _ = rewriter.RewriteQueries(context.Background(), gqlMutation)
 			_, err = rewriter.Rewrite(ctx, gqlMutation, tt.idExistence)
-			require.Nil(t, err)
+			require.NoError(t, err)
 
 			// -- Act --
 			dgQuery, err := rewriter.FromMutationResult(
 				ctx, gqlMutation, tt.assigned, tt.result)
 
 			// -- Assert --
-			require.Nil(t, err)
+			require.NoError(t, err)
 			require.Equal(t, tt.dgQuery, dgraph.AsString(dgQuery))
 
 			// Check for unused variables.

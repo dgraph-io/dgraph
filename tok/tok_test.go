@@ -67,7 +67,7 @@ func TestFullTextTokenizer(t *testing.T) {
 	require.NotNil(t, tokenizer)
 
 	tokens, err := BuildTokens("Stemming works!", GetTokenizerForLang(tokenizer, "en"))
-	require.Nil(t, err)
+	require.NoError(t, err)
 	require.Equal(t, 2, len(tokens))
 	id := tokenizer.Identifier()
 	require.Equal(t, []string{encodeToken("stem", id), encodeToken("work", id)}, tokens)

@@ -3593,7 +3593,7 @@ func checkUser(t *testing.T, userObj, expectedObj *user) {
 	}
 
 	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	opt := cmpopts.IgnoreFields(user{}, "Password")
 	if diff := cmp.Diff(expectedObj, result.CheckUserPasword, opt); diff != "" {
@@ -3620,7 +3620,7 @@ func checkUserPasswordWithAlias(t *testing.T, userObj, expectedObj *user) {
 	}
 
 	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	opt := cmpopts.IgnoreFields(user{}, "Password")
 	if diff := cmp.Diff(expectedObj, result.CheckUserPasword, opt); diff != "" {

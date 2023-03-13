@@ -222,7 +222,7 @@ func TestParse4_NoError(t *testing.T) {
 	reset()
 	result, err := Parse("name:string @index(fulltext) .")
 	require.NotNil(t, result)
-	require.Nil(t, err)
+	require.NoError(t, err)
 }
 
 func TestParse5_Error(t *testing.T) {
