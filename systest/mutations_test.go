@@ -78,6 +78,7 @@ func TestSystem(t *testing.T) {
 	t.Run("has with dash", wrap(HasWithDash))
 	t.Run("list geo filter", wrap(ListGeoFilterTest))
 	t.Run("list regex filter", wrap(ListRegexFilterTest))
+	t.Run("regex query with vars with slash", wrap(RegexQueryWithVarsWithSlash))
 	t.Run("regex query vars", wrap(RegexQueryWithVars))
 	t.Run("graphql var child", wrap(GraphQLVarChild))
 	t.Run("math ge", wrap(MathGe))
@@ -1220,6 +1221,60 @@ func ListRegexFilterTest(t *testing.T, c *dgo.Dgraph) {
 			},
 			{
 				"name": "admin"
+			}
+		]
+	}
+	`, string(resp.GetJson()))
+}
+
+func RegexQueryWithVarsWithSlash(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+
+	op := &api.Operation{Schema: `data: [string] @index(trigram) .`}
+	require.NoError(t, c.Alter(ctx, op))
+
+	txn := c.NewTxn()
+	defer func() { require.NoError(t, txn.Discard(ctx)) }()
+	_, err := txn.Mutate(ctx, &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`
+			_:a <data> "abc/def"  .
+			_:b <data> "fgh" .
+			_:c <data> "ijk" .
+		`),
+	})
+	require.NoError(t, err)
+
+	// query without variable
+	resp, err := c.NewTxn().Query(context.Background(), `{
+		q(func: regexp(data, /\/def/)) {
+			data
+		}
+	}`)
+	require.NoError(t, err)
+	testutil.CompareJSON(t, `
+	{
+		"q": [
+			{
+				"data": ["abc/def"]
+			}
+		]
+	}
+	`, string(resp.GetJson()))
+
+	// query with variable
+	resp, err = c.NewTxn().QueryWithVars(context.Background(), `
+	query search($rex: string){
+		q(func: regexp(data, $rex)) {
+			data
+		}
+	}`, map[string]string{"$rex": "/\\/def/"})
+	require.NoError(t, err)
+	testutil.CompareJSON(t, `
+	{
+		"q": [
+			{
+				"data": ["abc/def"]
 			}
 		]
 	}

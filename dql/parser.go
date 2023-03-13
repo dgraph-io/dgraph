@@ -1633,10 +1633,16 @@ type regexArgs struct {
 }
 
 func parseRegexArgs(val string) (regexArgs, error) {
-	end := strings.LastIndex(val, "/")
-	if end < 0 {
-		return regexArgs{}, errors.Errorf("Unexpected error while parsing regex arg: %s", val)
+	// it is possible that val comes in a variable and has not been validated yet.
+	// we do the validation here and ensure that it looks like: /<expr>/.
+	if len(val) == 0 {
+		return regexArgs{}, errors.Errorf("Found empty regex: [%s]", val)
 	}
+	end := strings.LastIndex(val, "/")
+	if end < 1 || val[0] != '/' {
+		return regexArgs{}, errors.Errorf("Found invalid regex: [%s]", val)
+	}
+
 	expr := strings.Replace(val[1:end], "\\/", "/", -1)
 	flags := ""
 	if end+1 < len(val) {
