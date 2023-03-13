@@ -30,5 +30,4 @@ func evalCompare(cmp string, lv, rv int64) bool {
 		return lv == rv
 	}
 	panic("EvalCompare: unreachable")
-	return false
 }
