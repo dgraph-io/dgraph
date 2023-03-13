@@ -1,18 +1,16 @@
 # Welcome
 
-### About this Repository
+### About this Directory
 
-Welcome to the Dgraph RFC repository! This is where we track all of our Request for Comments (RFCs) related to the Core
-products of Dgraph. For clarity, all documents related to Dgraph Core will be prefixed with "D" to differentiate them
-from other Dgraph products such as BadgerDB, Ristretto, SROAR, and GUIs.
+This is where we track all of our Request for Comments (RFCs) related to the Core products of Dgraph.
 
-This repository provides a central and structured platform for discussing, documenting, and evaluating proposed changes
+This directory provides a central and structured platform for discussing, documenting, and evaluating proposed changes
 to the Dgraph Core. All stakeholders, including contributors, users, and members of the Dgraph community, are invited to
 participate in the RFC process. Whether you have an idea for a new feature, a suggestion for improvement, or simply want
-to stay informed about upcoming changes, this repository is the place to be.
+to stay informed about upcoming changes, this directory is the place to be.
 
 Please note that while RFCs are primarily used for tracking major, complex, or potentially impactful changes, they are
-not the only way to track changes in the repository. Other forms of tracking, such as issue tracking, are not ignored,
+not the only way to track changes in the directory. Other forms of tracking, such as issue tracking, are not ignored,
 limited, or excluded. They can complement each other. RFCs serve as a way to focus attention and ensure that the
 community has a clear understanding of the proposed changes and their potential impact.
 
@@ -29,7 +27,7 @@ right choice for your needs.
 
 # Scope of RFCs:
 
-The purpose of this repository is to track and manage proposed changes to the core code of the main Dgraph repositories.
+The purpose of this directory is to track and manage proposed changes to the core code of the main Dgraph repositories.
 RFCs will not be used for documentation changes. Instead, they will focus on proposed changes to the application and
 core code of the main repositories.
 
@@ -69,11 +67,10 @@ is deemed ready, it can be merged into the Dgraph Core codebase.
 
 ## Organizing RFCs
 
-When contributing to the Dgraph RFC repository, it's important to follow a clear and organized structure to ensure that
+When contributing to the Dgraph RFC directory, it's important to follow a clear and organized structure to ensure that
 all proposals and discussions are easily accessible and understandable.
 
-Each Dgraph product has its own specific directory, such as "Dgraph_Core", "BadgerDB_Core", and so on. In the top level
-of these directories, there will be the "Proposals", "Deprecated", and "Post-mortem" directories.
+In the top level of the RFC directy, there will be the "Proposals", "Deprecated", and "Post-mortem" directories.
 
 When submitting a new RFC, you should create a new directory within the relevant product directory. For example, if you
 are submitting an RFC for Dgraph Core, you should create a directory named "RFC-D0000" (where the numbers can be
@@ -84,47 +81,31 @@ Additionally, you could include any supporting files, such as images or videos, 
 Here's an overview of the file structure:
 
 ```lua
-Dgraph RFC Repository
+Dgraph RFC directory
 |
 |-- Proposals
 |   |
-|   |-- Dgraph_Core
+|   |-- Dgraph
 |   |   |
 |   |   |-- RFC-D0000
 |   |   |   |
 |   |   |   |-- readme.md
 |   |   |   |
 |   |   |   |-- Supporting files (e.g. images, videos)
-|   |
-|   |-- BadgerDB_Core
-|       |
-|       |-- RFC-B0000
-|           |
-|           |-- readme.md
-|           |
-|           |-- Supporting files
 |
 |-- Deprecated
 |   |
-|   |-- Dgraph_Core
+|   |-- Dgraph
 |   |   |
 |   |   |-- RFC-D0000
 |   |   |   |
 |   |   |   |-- readme.md
 |   |   |   |
 |   |   |   |-- Supporting files
-|   |
-|   |-- BadgerDB_Core
-|       |
-|       |-- RFC-B0000
-|           |
-|           |-- readme.md
-|           |
-|           |-- Supporting files
 |
 |-- Post-mortem
     |
-    |-- Dgraph_Core
+    |-- Dgraph
     |   |
     |   |-- RFC-D0000
     |   |   |
@@ -132,11 +113,5 @@ Dgraph RFC Repository
     |   |   |
     |   |   |-- Supporting files
     |
-    |-- BadgerDB_Core
-        |
-        |-- RFC-B0000
-            |
-            |-- readme.md
-            |
-            |-- Supporting files
+
 ```
