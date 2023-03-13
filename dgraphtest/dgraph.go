@@ -47,6 +47,9 @@ const (
 
 	aclSecretMountPath = "/dgraph-acl/hmac-secret"
 	encKeyMountPath    = "/dgraph-enc/enc-key"
+
+	defaultUser     = "groot"
+	defaultPassowrd = "password"
 )
 
 type dnode interface {
@@ -58,6 +61,7 @@ type dnode interface {
 	workingDir() string
 	mounts(*LocalCluster) ([]mount.Mount, error)
 	healthURL(*LocalCluster) (string, error)
+	assignURL(*LocalCluster) (string, error)
 }
 
 type zero struct {
@@ -128,6 +132,14 @@ func (z *zero) healthURL(c *LocalCluster) (string, error) {
 		return "", err
 	}
 	return "http://localhost:" + publicPort + "/health", nil
+}
+
+func (z *zero) assignURL(c *LocalCluster) (string, error) {
+	publicPort, err := publicPort(c.dcli, z, zeroHttpPort)
+	if err != nil {
+		return "", err
+	}
+	return "http://localhost:" + publicPort + "/assign", nil
 }
 
 type alpha struct {
@@ -217,6 +229,10 @@ func (a *alpha) healthURL(c *LocalCluster) (string, error) {
 		return "", err
 	}
 	return "http://localhost:" + publicPort + "/health", nil
+}
+
+func (a *alpha) assignURL(c *LocalCluster) (string, error) {
+	return "", errors.New("no assign URL for alpha")
 }
 
 func publicPort(dcli *docker.Client, dc dnode, privatePort string) (string, error) {

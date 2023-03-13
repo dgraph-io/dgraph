@@ -26,6 +26,18 @@ type Logger interface {
 	Logf(format string, args ...any)
 }
 
+func log(l Logger, format string, args ...any) {
+	if len(format) == 0 || format[len(format)-1] != '\n' {
+		format = format + "\n"
+	}
+
+	if l == nil {
+		fmt.Printf(format, args...)
+	} else {
+		l.Logf(format, args...)
+	}
+}
+
 type ClusterConfig struct {
 	prefix     string
 	numAlphas  int
