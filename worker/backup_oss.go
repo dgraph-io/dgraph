@@ -39,8 +39,6 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest) error {
 	return x.ErrNotSupported
 }
 
-func ProcessListBackups(ctx context.Context, location string, creds *x.MinioCredentials) (
-	[]*Manifest, error) {
-
+func ProcessListBackups(ctx context.Context, location string, creds *x.MinioCredentials) ([]*Manifest, error) {
 	return nil, x.ErrNotSupported
 }

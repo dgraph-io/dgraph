@@ -154,9 +154,9 @@ type mapper struct {
 	maxNs  uint64
 }
 
-func (mw *mapper) newMapFile() (*os.File, error) {
-	fileNum := atomic.AddUint32(&mw.nextId, 1)
-	filename := filepath.Join(mw.mapDir, fmt.Sprintf("%06d.map", fileNum))
+func (m *mapper) newMapFile() (*os.File, error) {
+	fileNum := atomic.AddUint32(&m.nextId, 1)
+	filename := filepath.Join(m.mapDir, fmt.Sprintf("%06d.map", fileNum))
 	x.Check(os.MkdirAll(filepath.Dir(filename), 0750))
 
 	return os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
@@ -242,40 +242,40 @@ func (m *mapper) writeToDisk(buf *z.Buffer) error {
 	return f.Close()
 }
 
-func (mw *mapper) sendForWriting() error {
-	if mw.buf.IsEmpty() {
+func (m *mapper) sendForWriting() error {
+	if m.buf.IsEmpty() {
 		return nil
 	}
-	mw.buf.SortSlice(func(ls, rs []byte) bool {
+	m.buf.SortSlice(func(ls, rs []byte) bool {
 		lme := mapEntry(ls)
 		rme := mapEntry(rs)
 		return y.CompareKeys(lme.Key(), rme.Key()) < 0
 	})
 
-	if err := mw.thr.Do(); err != nil {
+	if err := m.thr.Do(); err != nil {
 		return err
 	}
 	go func(buf *z.Buffer) {
-		err := mw.writeToDisk(buf)
-		mw.thr.Done(err)
-	}(mw.buf)
-	mw.buf = z.NewBuffer(mapFileSz, "Restore.Buffer")
+		err := m.writeToDisk(buf)
+		m.thr.Done(err)
+	}(m.buf)
+	m.buf = z.NewBuffer(mapFileSz, "Restore.Buffer")
 	return nil
 }
 
-func (mw *mapper) Flush() error {
+func (m *mapper) Flush() error {
 	cl := func() error {
-		if err := mw.sendForWriting(); err != nil {
+		if err := m.sendForWriting(); err != nil {
 			return err
 		}
-		if err := mw.thr.Finish(); err != nil {
+		if err := m.thr.Finish(); err != nil {
 			return err
 		}
-		return mw.buf.Release()
+		return m.buf.Release()
 	}
 
 	var rerr error
-	mw.once.Do(func() {
+	m.once.Do(func() {
 		rerr = cl()
 	})
 	return rerr
@@ -585,7 +585,7 @@ func (m *mapper) Progress() {
 const bufSz = 64 << 20
 const bufSoftLimit = bufSz - 2<<20
 
-// mapToDisk reads the backup, converts the keys and values to the required format,
+// Map reads the backup, converts the keys and values to the required format,
 // and loads them to the given badger DB. The set of predicates is used to avoid restoring
 // values from predicates no longer assigned to this group.
 // If restoreTs is greater than zero, the key-value pairs will be written with that timestamp.
@@ -600,7 +600,8 @@ func (m *mapper) Map(r io.Reader, in *loadBackupInput) error {
 		err := binary.Read(br, binary.LittleEndian, &sz)
 		if err == io.EOF {
 			break
-		} else if err != nil {
+		}
+		if err != nil {
 			return err
 		}
 

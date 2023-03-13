@@ -46,7 +46,7 @@ type sortresult struct {
 	// slice stores the remaining offset for individual uid lists that must be applied after all
 	// multi sort is done.
 	// TODO (pawan) - Offset has type int32 whereas paginate function returns an int. We should
-	// use a common type so that we can avoid casts between the two.
+	//                use a common type so that we can avoid casts between the two.
 	multiSortOffsets []int32
 	vals             [][]types.Val
 	err              error
@@ -231,7 +231,7 @@ func sortWithIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
 
 	var prefix []byte
 	if len(order.Langs) > 0 {
-		// Only one languge is allowed.
+		// Only one language is allowed.
 		lang := order.Langs[0]
 		tokenizer = tok.GetTokenizerForLang(tokenizer, lang)
 		langTokenizer, ok := tokenizer.(tok.ExactTokenizer)

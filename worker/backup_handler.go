@@ -272,16 +272,14 @@ func (h *s3Handler) DirExists(path string) bool  { return true }
 func (h *s3Handler) FileExists(path string) bool {
 	objectPath := h.getObjectPath(path)
 	_, err := h.mc.StatObject(h.bucketName, objectPath, minio.StatObjectOptions{})
-	if err != nil {
-		errResponse := minio.ToErrorResponse(err)
-		if errResponse.Code == "NoSuchKey" {
-			return false
-		} else {
-			glog.Errorf("Failed to verify object existence: %v", err)
-			return false
-		}
+	if err == nil {
+		return true
 	}
-	return true
+	errResponse := minio.ToErrorResponse(err)
+	if errResponse.Code != "NoSuchKey" {
+		glog.Errorf("Failed to verify object existence: %v", err)
+	}
+	return false
 }
 
 func (h *s3Handler) JoinPath(path string) string {

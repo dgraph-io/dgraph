@@ -220,12 +220,12 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest) error {
 
 	var dropOperations []*pb.DropOperation
 	for range groups {
-		if backupRes := <-resCh; backupRes.err != nil {
+		backupRes := <-resCh
+		if backupRes.err != nil {
 			glog.Errorf("Error received during backup: %v", backupRes.err)
 			return backupRes.err
-		} else {
-			dropOperations = append(dropOperations, backupRes.res.GetDropOperations()...)
 		}
+		dropOperations = append(dropOperations, backupRes.res.GetDropOperations()...)
 	}
 
 	dir := fmt.Sprintf(backupPathFmt, req.UnixTs)
@@ -246,7 +246,7 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest) error {
 		m.BackupId = latestManifest.BackupId
 		m.BackupNum = latestManifest.BackupNum + 1
 	}
-	m.Encrypted = (x.WorkerConfig.EncryptionKey != nil)
+	m.Encrypted = x.WorkerConfig.EncryptionKey != nil
 
 	bp := NewBackupProcessor(nil, req)
 	defer bp.Close()
