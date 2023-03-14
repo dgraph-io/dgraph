@@ -26,9 +26,6 @@ dgraph.iml
 # Output of the go coverage tool
 *.out
 
-# Vscode configuration files
-.vscode
-
 #darwin
 .DS_Store
 
@@ -53,3 +50,4 @@ systest/bulk_live/bulk/**/*.rdf
 systest/bulk_live/live/**/*.rdf
 systest/bulk_live/live/**/*.txt
 x/log_test/*.enc
+*.buf
