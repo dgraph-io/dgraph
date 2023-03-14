@@ -138,22 +138,11 @@ Docker images that contains `dgraph` and `badger` commands.
 ### Testing
 
 #### Dgraph
-Run the `test.sh` script in the root folder.
-
-
-    $ ./test.sh
-    
-    INFO: Running tests using the default cluster
-    …
-    INFO: Running test for github.com/dgraph-io/dgraph/algo
-    ok  	github.com/dgraph-io/dgraph/algo	0.004s
-    INFO: Running test for github.com/dgraph-io/dgraph/codec
-    ok  	github.com/dgraph-io/dgraph/codec	9.308s
-    INFO: Running test for github.com/dgraph-io/dgraph/codec/benchmark
-    ?   	github.com/dgraph-io/dgraph/codec/benchmark	[no test files]
-    …
-
-Run `test.sh --help` for more info.
+1. Change directory to t directory. 
+2. If all packages need to be tested, run
+      make test
+   If only a specific package needs to be tested, run
+      make test args="--pkg=desired_package_name"
 
 Tests should be written in Go and use the Dgraph cluster set up in `dgraph/docker-compose.yml`
 whenever possible. If the functionality being tested requires a different cluster setup (e.g.
