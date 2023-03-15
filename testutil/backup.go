@@ -76,7 +76,7 @@ func WaitForRestore(t *testing.T, dg *dgo.Dgraph, HttpSocket string) {
 			restoreDone = true
 			break
 		}
-		time.Sleep(4 * time.Second)
+		time.Sleep(1 * time.Second)
 	}
 	require.True(t, restoreDone)
 

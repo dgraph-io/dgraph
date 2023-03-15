@@ -201,6 +201,11 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 	if !n.AmLeader() {
 		return &emptyPayload, errNotLeader
 	}
+	// Don't do a predicate move if the cluster is in draining mode.
+	if err := x.HealthCheck(); err != nil {
+		return &emptyPayload, errors.Wrap(err, "Move predicate request rejected")
+	}
+
 	if groups().groupId() != in.SourceGid {
 		return &emptyPayload,
 			errors.Errorf("Group id doesn't match, received request for %d, my gid: %d",
