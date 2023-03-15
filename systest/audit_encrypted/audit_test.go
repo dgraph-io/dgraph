@@ -30,15 +30,12 @@ import (
 	"github.com/dgraph-io/dgraph/testutil"
 )
 
-var zeroMsgs []string
-var alphaMsgs []string
-
 func TestZeroAuditEncrypted(t *testing.T) {
 	state, err := testutil.GetState()
 	require.NoError(t, err)
 	nId := state.Zeros["1"].Id
-	//defer os.RemoveAll(fmt.Sprintf("audit_dir/za/zero_audit_0_%s.log", nId))
-	//defer os.RemoveAll(fmt.Sprintf("audit_dir/za/zero_audit_0_%s.log.enc", nId))
+	defer os.RemoveAll(fmt.Sprintf("audit_dir/za/zero_audit_0_%s.log", nId))
+	defer os.RemoveAll(fmt.Sprintf("audit_dir/za/zero_audit_0_%s.log.enc", nId))
 	zeroCmd := map[string][]string{
 		"/removeNode": {`--location`, "--request", "GET",
 			fmt.Sprintf("%s/removeNode?id=3&group=1", testutil.SockAddrZeroHttp)},
@@ -59,7 +56,6 @@ func TestZeroAuditEncrypted(t *testing.T) {
 			}
 		}
 	}
-	zeroMsgs = msgs
 
 	var args []string
 	args = append(args, "audit", "decrypt",
@@ -140,7 +136,6 @@ input: {destination: \"/Users/sankalanparajuli/work/backup\"}) {\n    response {
 			}
 		}
 	}
-	alphaMsgs = msgs
 
 	var args []string
 	args = append(args, "audit", "decrypt",
@@ -164,9 +159,21 @@ input: {destination: \"/Users/sankalanparajuli/work/backup\"}) {\n    response {
 
 // deprecated logs generated with dgraph v22.0.2
 func TestZeroAuditDecryptDeprecated(t *testing.T) {
-	if len(zeroMsgs) == 0 {
-		t.Log("need to run TestZeroAuditEncrypted first")
-		t.Skip()
+
+	zeroCmd := map[string][]string{
+		"/removeNode": {`--location`, "--request", "GET",
+			fmt.Sprintf("%s/removeNode?id=3&group=1", testutil.SockAddrZeroHttp)},
+		"/assign": {"--location", "--request", "GET",
+			fmt.Sprintf("%s/assign?what=uids&num=100", testutil.SockAddrZeroHttp)},
+		"/moveTablet": {"--location", "--request", "GET",
+			fmt.Sprintf("%s/moveTablet?tablet=name&group=2", testutil.SockAddrZeroHttp)}}
+
+	// generate expected audit log contents
+	msgs := make([]string, 0)
+	for i := 0; i < 500; i++ {
+		for req := range zeroCmd {
+			msgs = append(msgs, req)
+		}
 	}
 
 	var args []string
@@ -187,15 +194,56 @@ func TestZeroAuditDecryptDeprecated(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	verifyLogs(t, "audit_dir_deprecated/za/zero_audit_0_1.log", zeroMsgs)
+	verifyLogs(t, "audit_dir_deprecated/za/zero_audit_0_1.log", msgs)
 
 }
 
 // deprecated logs generated with dgraph v22.0.2
 func TestAlphaAuditDecryptDeprecated(t *testing.T) {
-	if len(alphaMsgs) == 0 {
-		t.Log("need to run TestAlphaAuditEncrypted first")
-		t.Skip()
+	testCommand := map[string][]string{
+		"/admin": {"--location", "--request", "POST",
+			fmt.Sprintf("%s/admin", testutil.SockAddrHttp),
+			"--header", "Content-Type: application/json",
+			"--data-raw", `'{"query":"mutation {\n  backup(
+input: {destination: \"/Users/sankalanparajuli/work/backup\"}) {\n    response {\n      message\n      code\n    }\n  }\n}\n","variables":{}}'`}, //nolint:lll
+
+		"/graphql": {"--location", "--request", "POST", fmt.Sprintf("%s/graphql", testutil.SockAddrHttp),
+			"--header", "Content-Type: application/json",
+			"--data-raw", `'{"query":"query {\n  __schema {\n    __typename\n  }\n}","variables":{}}'`},
+
+		"/alter": {"-X", "POST", fmt.Sprintf("%s/alter", testutil.SockAddrHttp), "-d",
+			`name: string @index(term) .
+			type Person {
+			  name
+			}`},
+		"/query": {"-H", "'Content-Type: application/dql'", "-X", "POST", fmt.Sprintf("%s/query", testutil.SockAddrHttp),
+			"-d", `$'
+			{
+			 balances(func: anyofterms(name, "Alice Bob")) {
+			   uid
+			   name
+			   balance
+			 }
+			}'`},
+		"/mutate": {"-H", "'Content-Type: application/rdf'", "-X",
+			"POST", fmt.Sprintf("%s/mutate?startTs=4", testutil.SockAddrHttp), "-d", `$'
+			{
+			 set {
+			   <0x1> <balance> "110" .
+			   <0x1> <dgraph.type> "Balance" .
+			   <0x2> <balance> "60" .
+			   <0x2> <dgraph.type> "Balance" .
+			 }
+			}
+			'`},
+	}
+
+	msgs := make([]string, 0)
+	// generate expected alpha audit log contents
+	for i := 0; i < 200; i++ {
+		for req := range testCommand {
+			msgs = append(msgs, req)
+		}
 	}
 
 	var args []string
@@ -216,7 +264,7 @@ func TestAlphaAuditDecryptDeprecated(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	verifyLogs(t, "audit_dir_deprecated/aa/alpha_audit_1_1.log", alphaMsgs)
+	verifyLogs(t, "audit_dir_deprecated/aa/alpha_audit_1_1.log", msgs)
 
 }
 
