@@ -12,18 +12,20 @@
  - `chore`: all chores/tests will be excluded from the CHANGELOG
  -->
 
-## Problem
+ 
+ ## Jira Ticket
+<!--
+ 1.  What Jira ticket does this PR correspond to?
+ 2.  For internal use only (community contirbutors please disregard)
+-->
+
+## Description
  <!--
  Please add a description with these things:
  1. Explain the problem by providing a good description.
  2. If it fixes any GitHub issues, say "Fixes #GitHubIssue".
  3. If it corresponds to a Jira issue, say "Fixes DGRAPH-###".
  4. If this is a breaking change, please prefix `[Breaking]` in the title. In the description, please put a note with exactly who these changes are breaking for.
- -->
-
-## Solution
- <!--
- Please add a description with these things:
- 1. Explain the solution to make it easier to review the PR.
- 2. Make it easier for the reviewer by describing complex sections with comments.
+ 5. Explain the solution to make it easier to review the PR.
+ 6. Make it easier for the reviewer by describing complex sections with comments.
  -->
