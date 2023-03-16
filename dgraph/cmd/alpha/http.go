@@ -213,6 +213,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	ctx = x.AttachAccessJwt(ctx, r)
 	ctx = x.AttachRemoteIP(ctx, r)
 	queryInspectResult := new(dql.Result)
+	queryInspect = queryInspect || strings.Contains(params.Query, "qi(){}")
 	if queryInspect {
 		ctx = context.WithValue(ctx, query.QueryInspectKey, queryInspectResult)
 	}
