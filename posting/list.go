@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	"fmt"
 	"log"
 	"math"
 	"sort"
@@ -50,6 +51,10 @@ var (
 	ErrStopIteration = errors.New("Stop iteration")
 	emptyPosting     = &pb.Posting{}
 	maxListSize      = mb / 2
+
+	CountKey1 = string(x.CountKey("0-country", 1, false))
+	CountKey2 = string(x.CountKey("0-country", 2, false))
+	CountKey3 = string(x.CountKey("0-country", 3, false))
 )
 
 const (
@@ -789,6 +794,23 @@ func (l *List) Length(readTs, afterUid uint64) int {
 	return l.length(readTs, afterUid)
 }
 
+func printList(pb *pb.PostingList) {
+	a := fmt.Sprintf("HARSHIL HERE Posting: ")
+	for _, i := range pb.Postings {
+		a += fmt.Sprintf("%v, ", i.Uid)
+	}
+	a += "\n"
+
+	a += fmt.Sprintf("HARSHIL HERE UidPack: ")
+	if pb.Pack != nil {
+		k := codec.Decode(pb.Pack, 0)
+		for _, i := range k {
+			a += fmt.Sprintf("%v, ", i)
+		}
+	}
+	fmt.Println(a)
+}
+
 // Rollup performs the rollup process, merging the immutable and mutable layers
 // and outputting the resulting list so it can be written to disk.
 // During this process, the list might be split into multiple lists if the main
@@ -808,10 +830,10 @@ func (l *List) Length(readTs, afterUid uint64) int {
 // The first part of a multi-part list always has start UID 1 and will be the last part
 // to be deleted, at which point the entire list will be marked for deletion.
 // As the list grows, existing parts might be split if they become too big.
-func (l *List) Rollup(alloc *z.Allocator) ([]*bpb.KV, error) {
+func (l *List) Rollup(alloc *z.Allocator, f uint64) ([]*bpb.KV, error) {
 	l.RLock()
 	defer l.RUnlock()
-	out, err := l.rollup(math.MaxUint64, true)
+	out, err := l.rollup(f, true)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed when calling List.rollup")
 	}
@@ -822,13 +844,35 @@ func (l *List) Rollup(alloc *z.Allocator) ([]*bpb.KV, error) {
 
 	var kvs []*bpb.KV
 	kv := MarshalPostingList(out.plist, alloc)
-	kv.Version = out.newMinTs
+
+	get_timestamp := f
+	kv.Version = get_timestamp
+
 	kv.Key = alloc.Copy(l.key)
 	kvs = append(kvs, kv)
+
+	if string(l.key) == CountKey1 {
+		fmt.Printf("HARSHIL HERE Rollup Key: %v, TS: %d\n", "Count Key 1", out.newMinTs+1)
+		fmt.Println("HARSHIL HERE ROLLUP KEY:", get_timestamp)
+		printList(out.plist)
+	}
+
+	if string(l.key) == CountKey2 {
+		fmt.Printf("HARSHIL HERE Rollup Key: %v, TS: %d\n", "Count Key 2", out.newMinTs+1)
+		fmt.Println("HARSHIL HERE ROLLUP KEY:", get_timestamp)
+		printList(out.plist)
+	}
+
+	if string(l.key) == CountKey3 {
+		fmt.Printf("HARSHIL HERE Rollup Key: %v, TS: %d\n", "Count Key 3", out.newMinTs+1)
+		fmt.Println("HARSHIL HERE ROLLUP KEY:", get_timestamp)
+		printList(out.plist)
+	}
 
 	for startUid, plist := range out.parts {
 		// Any empty posting list would still have BitEmpty set. And the main posting list
 		// would NOT have that posting list startUid in the splits list.
+		printList(plist)
 		kv, err := out.marshalPostingListPart(alloc, l.key, startUid, plist)
 		if err != nil {
 			return nil, errors.Wrapf(err, "cannot marshaling posting list parts")
@@ -901,7 +945,7 @@ func (out *rollupOutput) marshalPostingListPart(alloc *z.Allocator,
 			hex.EncodeToString(baseKey), startUid)
 	}
 	kv := MarshalPostingList(plist, alloc)
-	kv.Version = out.newMinTs
+	kv.Version = out.newMinTs + 1
 	kv.Key = alloc.Copy(key)
 	return kv, nil
 }

@@ -148,7 +148,7 @@ func (n *node) startTaskAtTs(id op, ts uint64) (*z.Closer, error) {
 		if len(n.ops) > 0 {
 			return nil, errors.Errorf("another operation is already running")
 		}
-		go posting.IncrRollup.Process(closer)
+		go posting.IncrRollup.Process(closer, State.GetTimestamp)
 	case opRestore:
 		// Restores cancel all other operations, except for other restores since
 		// only one restore operation should be active any given moment.
@@ -637,7 +637,7 @@ func (n *node) applyCommitted(proposal *pb.Proposal, key uint64) error {
 			glog.Warningf("Error while calling CreateSnapshot: %v. Retrying...", err)
 		}
 		// We can now discard all invalid versions of keys below this ts.
-		pstore.SetDiscardTs(snap.ReadTs)
+		//pstore.SetDiscardTs(snap.ReadTs)
 		return nil
 	case proposal.Restore != nil:
 		// Enable draining mode for the duration of the restore processing.
@@ -840,6 +840,7 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 	}
 
 	for _, status := range delta.Txns {
+		fmt.Println("HARSHIL HERE Commit:", status.StartTs, status.CommitTs)
 		toDisk(status.StartTs, status.CommitTs)
 	}
 	if err := writer.Flush(); err != nil {

@@ -19,6 +19,7 @@ package posting
 import (
 	"context"
 	"encoding/hex"
+	"fmt"
 	"math"
 	"sync"
 	"sync/atomic"
@@ -239,6 +240,7 @@ func (o *oracle) ProcessDelta(delta *pb.OracleDelta) {
 		}
 		delete(o.waiters, startTs)
 	}
+	fmt.Println("Updating maxAssigned", o.maxAssigned)
 	x.AssertTrue(atomic.CompareAndSwapUint64(&o.maxAssigned, curMax, delta.MaxAssigned))
 	ostats.Record(context.Background(),
 		x.MaxAssignedTs.M(int64(delta.MaxAssigned))) // Can't access o.MaxAssigned without atomics.

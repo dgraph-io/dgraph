@@ -18,6 +18,7 @@ package posting
 
 import (
 	"bytes"
+	"context"
 	"encoding/hex"
 	"math"
 	"strconv"
@@ -80,13 +81,16 @@ func init() {
 }
 
 // rollUpKey takes the given key's posting lists, rolls it up and writes back to badger
-func (ir *incrRollupi) rollUpKey(writer *TxnWriter, key []byte) error {
+func (ir *incrRollupi) rollUpKey(writer *TxnWriter, key []byte, f func(bool) uint64) error {
+	ts := f(false)
+	ctx := context.Background()
+	Oracle().WaitForTs(ctx, ts)
 	l, err := GetNoStore(key, math.MaxUint64)
 	if err != nil {
 		return err
 	}
 
-	kvs, err := l.Rollup(nil)
+	kvs, err := l.Rollup(nil, ts)
 	if err != nil {
 		return err
 	}
@@ -94,11 +98,10 @@ func (ir *incrRollupi) rollUpKey(writer *TxnWriter, key []byte) error {
 	RemoveCacheFor(key)
 
 	const N = uint64(1000)
-	if glog.V(2) {
-		if count := atomic.AddUint64(&ir.count, 1); count%N == 0 {
-			glog.V(2).Infof("Rolled up %d keys", count)
-		}
+	if count := atomic.AddUint64(&ir.count, 1); count%N == 0 {
+		glog.V(3).Infof("Rolled up %d keys", count)
 	}
+
 	return writer.Write(&bpb.KVList{Kv: kvs})
 }
 
@@ -123,7 +126,7 @@ func (ir *incrRollupi) addKeyToBatch(key []byte, priority int) {
 }
 
 // Process will rollup batches of 64 keys in a go routine.
-func (ir *incrRollupi) Process(closer *z.Closer) {
+func (ir *incrRollupi) Process(closer *z.Closer, f func(bool) uint64) {
 	defer closer.Done()
 
 	writer := NewTxnWriter(pstore)
@@ -141,11 +144,11 @@ func (ir *incrRollupi) Process(closer *z.Closer) {
 		currTs := time.Now().Unix()
 		for _, key := range *batch {
 			hash := z.MemHash(key)
-			if elem := m[hash]; currTs-elem >= 10 {
+			if elem := m[hash]; currTs-elem >= 2 {
 				// Key not present or Key present but last roll up was more than 10 sec ago.
 				// Add/Update map and rollup.
 				m[hash] = currTs
-				if err := ir.rollUpKey(writer, key); err != nil {
+				if err := ir.rollUpKey(writer, key, f); err != nil {
 					glog.Warningf("Error %v rolling up key %v\n", err, key)
 				}
 			}

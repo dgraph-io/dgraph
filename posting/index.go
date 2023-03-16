@@ -444,6 +444,7 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 
 	if hasCountIndex {
 		countAfter = countAfterMutation(countBefore, found, t.Op)
+		fmt.Println("HARSHIL HERE COUNT: ", countBefore, countAfter, txn.StartTs, t.Entity)
 		return val, found, countParams{
 			attr:        t.Attr,
 			countBefore: countBefore,
@@ -682,7 +683,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		// No need to write a loop after ReadPostingList to skip unread entries
 		// for a given key because we only wrote BitDeltaPosting to temp badger.
 
-		kvs, err := l.Rollup(nil)
+		kvs, err := l.Rollup(nil, counter)
 		if err != nil {
 			return nil, err
 		}

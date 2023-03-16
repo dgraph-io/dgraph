@@ -481,7 +481,7 @@ func rollupKey(db *badger.DB) {
 	alloc := z.NewAllocator(32<<20, "Debug.RollupKey")
 	defer alloc.Release()
 
-	kvs, err := pl.Rollup(alloc)
+	kvs, err := pl.Rollup(nil, 0)
 	x.Check(err)
 
 	wb := db.NewManagedWriteBatch()
