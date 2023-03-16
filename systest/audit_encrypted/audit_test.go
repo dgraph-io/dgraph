@@ -160,13 +160,10 @@ input: {destination: \"/Users/sankalanparajuli/work/backup\"}) {\n    response {
 // deprecated logs generated with dgraph v22.0.2
 func TestZeroAuditDecryptDeprecated(t *testing.T) {
 
-	zeroCmd := map[string][]string{
-		"/removeNode": {`--location`, "--request", "GET",
-			fmt.Sprintf("%s/removeNode?id=3&group=1", testutil.SockAddrZeroHttp)},
-		"/assign": {"--location", "--request", "GET",
-			fmt.Sprintf("%s/assign?what=uids&num=100", testutil.SockAddrZeroHttp)},
-		"/moveTablet": {"--location", "--request", "GET",
-			fmt.Sprintf("%s/moveTablet?tablet=name&group=2", testutil.SockAddrZeroHttp)}}
+	zeroCmd := map[string]string{
+		"/removeNode": "",
+		"/assign":     "",
+		"/moveTablet": ""}
 
 	// generate expected audit log contents
 	msgs := make([]string, 0)
@@ -200,42 +197,11 @@ func TestZeroAuditDecryptDeprecated(t *testing.T) {
 
 // deprecated logs generated with dgraph v22.0.2
 func TestAlphaAuditDecryptDeprecated(t *testing.T) {
-	testCommand := map[string][]string{
-		"/admin": {"--location", "--request", "POST",
-			fmt.Sprintf("%s/admin", testutil.SockAddrHttp),
-			"--header", "Content-Type: application/json",
-			"--data-raw", `'{"query":"mutation {\n  backup(
-input: {destination: \"/Users/sankalanparajuli/work/backup\"}) {\n    response {\n      message\n      code\n    }\n  }\n}\n","variables":{}}'`}, //nolint:lll
-
-		"/graphql": {"--location", "--request", "POST", fmt.Sprintf("%s/graphql", testutil.SockAddrHttp),
-			"--header", "Content-Type: application/json",
-			"--data-raw", `'{"query":"query {\n  __schema {\n    __typename\n  }\n}","variables":{}}'`},
-
-		"/alter": {"-X", "POST", fmt.Sprintf("%s/alter", testutil.SockAddrHttp), "-d",
-			`name: string @index(term) .
-			type Person {
-			  name
-			}`},
-		"/query": {"-H", "'Content-Type: application/dql'", "-X", "POST", fmt.Sprintf("%s/query", testutil.SockAddrHttp),
-			"-d", `$'
-			{
-			 balances(func: anyofterms(name, "Alice Bob")) {
-			   uid
-			   name
-			   balance
-			 }
-			}'`},
-		"/mutate": {"-H", "'Content-Type: application/rdf'", "-X",
-			"POST", fmt.Sprintf("%s/mutate?startTs=4", testutil.SockAddrHttp), "-d", `$'
-			{
-			 set {
-			   <0x1> <balance> "110" .
-			   <0x1> <dgraph.type> "Balance" .
-			   <0x2> <balance> "60" .
-			   <0x2> <dgraph.type> "Balance" .
-			 }
-			}
-			'`},
+	testCommand := map[string]string{
+		"/admin":   "",
+		"/graphql": "",
+		"/query":   "",
+		"/mutate":  "",
 	}
 
 	msgs := make([]string, 0)
