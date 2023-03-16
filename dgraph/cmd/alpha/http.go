@@ -167,6 +167,11 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 		return
 	}
+	queryInspect, err := parseBool(r, "qi")
+	if err != nil {
+		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+		return
+	}
 
 	body := readRequest(w, r)
 	if body == nil {
@@ -207,6 +212,10 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := context.WithValue(r.Context(), query.DebugKey, isDebugMode)
 	ctx = x.AttachAccessJwt(ctx, r)
 	ctx = x.AttachRemoteIP(ctx, r)
+	queryInspectResult := new(dql.Result)
+	if queryInspect {
+		ctx = context.WithValue(ctx, query.QueryInspectKey, queryInspectResult)
+	}
 
 	if queryTimeout != 0 {
 		var cancel context.CancelFunc
@@ -257,6 +266,9 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		Txn:     resp.Txn,
 		Latency: resp.Latency,
 		Metrics: resp.Metrics,
+	}
+	if queryInspect {
+		e.Inspect = queryInspectResult
 	}
 	js, err := json.Marshal(e)
 	if err != nil {
