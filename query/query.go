@@ -763,6 +763,7 @@ type ContextKey int
 const (
 	// DebugKey is the key used to toggle debug mode.
 	DebugKey ContextKey = iota
+	QueryInspectKey
 )
 
 func isDebug(ctx context.Context) bool {
@@ -2762,6 +2763,12 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 	req.Vars = make(map[string]varValue)
 	loopStart := time.Now()
 	queries := req.GqlQuery.Query
+
+	queryDebug, ok := ctx.Value(QueryInspectKey).(*dql.Result)
+	if ok {
+		*queryDebug = *req.GqlQuery
+	}
+
 	// first loop converts queries to SubGraph representation and populates ReadTs And Cache.
 	for i := 0; i < len(queries); i++ {
 		gq := queries[i]
