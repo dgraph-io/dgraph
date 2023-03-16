@@ -102,7 +102,7 @@ func parseFlags() (bool, bool) {
 
 func runBenchmarkFromClient(resources ResourceDetails, name string) {
 	// ssh into the client, clone the repo and set env TEST_TO_RUN to name
-	// go test -bench=BenchmarkXYZ -env=name
+	// go test -bench=BenchmarkBulkload -runType=GITHUB_CI
 }
 
 func collectMetricsFromClientAndTarget(resources ResourceDetails, name string) MetricReport {
