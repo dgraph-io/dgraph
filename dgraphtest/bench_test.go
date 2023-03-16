@@ -1,6 +1,7 @@
 package dgraphtest
 
 import (
+	"flag"
 	"fmt"
 	"os"
 	"os/exec"
@@ -10,9 +11,17 @@ import (
 	"github.com/dgraph-io/dgraph/testutil"
 )
 
-var perfTests map[string]DgraphPerf
+var runType string
 
 func BenchmarkBulkoad(b *testing.B) {
+	if runType == "GITHUB_CI" {
+		// No need for local setup; cluster has been setup by perf_framework.go
+		fmt.Println("Executing perf tests on CI")
+	} else {
+		// Setup cluster locally
+		fmt.Println("Executing perf tests locally")
+	}
+
 	var args []string
 	var schemaFile string
 	var rdfFile string
@@ -48,23 +57,30 @@ func BenchmarkBulkoad(b *testing.B) {
 
 }
 
-func BenchmarkXYZ(b *testing.B) {
-	for k, v := range PerfTests {
-		b.Run(k, v.fnc)
-		// dg client="url"
+func BenchmarkSample(b *testing.B) {
+	if runType == "GITHUB_CI" {
+		// No need for local setup; cluster has been setup by perf_framework.go
+		fmt.Println("Executing perf tests on CI")
+	} else {
+		// Setup cluster locally
+		fmt.Println("Executing perf tests locally")
 	}
+
+	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+		b.StartTimer()
+		// functionInTest()
+		b.StopTimer()
+
+	}
+	fmt.Printf("Finished Test\n")
+}
+
+func init() {
+	flag.StringVar(&runType, "runType", "", "Run Type")
 }
 
 func TestMain(m *testing.M) {
-	perfTests["bulkload"] = DgraphPerf{"bulkload", ClusterConfig{}, MetricConfig{}, ResourceConfig{}, BenchmarkBulkoad}
-
-	// check env variable and run only that benchmark
-	if bench := os.Getenv("TEST_TO_RUN"); bench == "" {
-		perfTests = PerfTests
-	} else {
-		// filter perfTests based on bench
-		perfTests[bench] = PerfTests[bench]
-	}
 
 }
 
