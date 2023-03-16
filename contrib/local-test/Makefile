@@ -60,7 +60,7 @@ endif
 
 query-dql: ## Runs the query present in query.dql
 ifneq (,$(wildcard ./query.dql))
-	@curl --data-binary '@./query.dql' -H "Content-Type: application/dql" -X POST localhost:8080/query
+	@curl --data-binary '@./query.dql' -H "Content-Type: application/dql" -X POST localhost:8080/query?qi=true
 else
 	@echo "No query.dql file found"
 endif
