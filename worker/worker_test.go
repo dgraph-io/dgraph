@@ -1,3 +1,5 @@
+//go:build integration
+
 /*
  * Copyright 2016-2023 Dgraph Labs, Inc. and Contributors
  *
@@ -27,7 +29,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/badger/v3"
+	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/posting"

@@ -1,3 +1,5 @@
+//go:build integration
+
 /*
  * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
@@ -603,7 +605,7 @@ func TestNquadsFromJsonFacets1(t *testing.T) {
 
 	carPrice := 30000.56
 	var priceBytes [8]byte
-	u := math.Float64bits(float64(carPrice))
+	u := math.Float64bits(carPrice)
 	binary.LittleEndian.PutUint64(priceBytes[:], u)
 
 	carAge := 3
@@ -1230,7 +1232,7 @@ func BenchmarkNoFacets(b *testing.B) {
 	// we're parsing 125 nquads at a time, so the MB/s == MNquads/s
 	b.SetBytes(125)
 	for n := 0; n < b.N; n++ {
-		_, _ = Parse([]byte(json), SetNquads)
+		_, _ = Parse(json, SetNquads)
 	}
 }
 
@@ -1371,6 +1373,6 @@ func BenchmarkNoFacetsFast(b *testing.B) {
 	// we're parsing 125 nquads at a time, so the MB/s == MNquads/s
 	b.SetBytes(125)
 	for n := 0; n < b.N; n++ {
-		_, _ = FastParse([]byte(json), SetNquads)
+		_, _ = FastParse(json, SetNquads)
 	}
 }

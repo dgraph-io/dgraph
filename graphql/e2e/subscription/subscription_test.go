@@ -1,3 +1,5 @@
+//go:build integration
+
 /*
  * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
@@ -132,7 +134,7 @@ func TestSubscription(t *testing.T) {
 			}
 		  }`,
 	}, `{}`)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	res, err := subscriptionClient.RecvMsg()
 	require.NoError(t, err)
 
@@ -230,7 +232,7 @@ func TestSubscriptionAuth(t *testing.T) {
 			}
 		}`,
 	}, payload)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	res, err := subscriptionClient.RecvMsg()
 	require.NoError(t, err)
@@ -350,7 +352,7 @@ func TestSubscriptionWithAuthShouldExpireWithJWT(t *testing.T) {
 			}
 		}`,
 		}, payload)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	res, err := subscriptionClient.RecvMsg()
 	require.NoError(t, err)
@@ -440,7 +442,7 @@ func TestSubscriptionAuthWithoutExpiry(t *testing.T) {
 			}
 		}`,
 	}, payload)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	res, err := subscriptionClient.RecvMsg()
 	require.NoError(t, err)
@@ -502,7 +504,7 @@ func TestSubscriptionAuth_SameQueryAndClaimsButDifferentExpiry_ShouldExpireIndep
 			}
 		}`,
 	}, payload)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	res, err := subscriptionClient.RecvMsg()
 	require.NoError(t, err)
@@ -526,7 +528,7 @@ func TestSubscriptionAuth_SameQueryAndClaimsButDifferentExpiry_ShouldExpireIndep
 			}
 		}`,
 	}, payload)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	res, err = subscriptionClient1.RecvMsg()
 	require.NoError(t, err)
@@ -653,7 +655,7 @@ func TestSubscriptionAuth_SameQueryDifferentClaimsAndExpiry_ShouldExpireIndepend
 			}
 		}`,
 	}, payload)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	res, err := subscriptionClient.RecvMsg()
 	require.NoError(t, err)
@@ -699,7 +701,7 @@ func TestSubscriptionAuth_SameQueryDifferentClaimsAndExpiry_ShouldExpireIndepend
 			}
 		}`,
 	}, payload)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	res, err = subscriptionClient1.RecvMsg()
 	require.NoError(t, err)
@@ -847,7 +849,7 @@ func TestSubscriptionAuthHeaderCaseInsensitive(t *testing.T) {
 			}
 		}`,
 	}, payload)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	res, err := subscriptionClient.RecvMsg()
 	require.NoError(t, err)
@@ -894,7 +896,7 @@ func TestSubscriptionAuth_MultiSubscriptionResponses(t *testing.T) {
 			}
 		}`,
 	}, payload)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	res, err := subscriptionClient.RecvMsg()
 	require.NoError(t, err)
@@ -923,7 +925,7 @@ func TestSubscriptionAuth_MultiSubscriptionResponses(t *testing.T) {
 			}
 		}`,
 	}, payload)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	res, err = subscriptionClient1.RecvMsg()
 	require.NoError(t, err)
@@ -1002,7 +1004,7 @@ func TestSubscriptionWithCustomDQL(t *testing.T) {
 					}
 				}`,
 	}, `{}`)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	res, err := subscriptionClient.RecvMsg()
 	require.NoError(t, err)
 

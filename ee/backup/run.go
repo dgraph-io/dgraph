@@ -29,7 +29,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 
-	bpb "github.com/dgraph-io/badger/v3/pb"
+	bpb "github.com/dgraph-io/badger/v4/pb"
 	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -445,7 +445,7 @@ func runExportBackup() error {
 			return errors.Wrap(err, "Failed to map the backups")
 		}
 		in := &pb.ExportRequest{
-			GroupId:     uint32(gid),
+			GroupId:     gid,
 			ReadTs:      latestManifest.ValidReadTs(),
 			UnixTs:      time.Now().Unix(),
 			Format:      opt.format,

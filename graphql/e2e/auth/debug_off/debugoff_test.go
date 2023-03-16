@@ -1,3 +1,5 @@
+//go:build integration
+
 package debugoff
 
 import (
@@ -14,6 +16,7 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 var (
@@ -125,9 +128,7 @@ func TestAddMutationWithXid(t *testing.T) {
 func TestMain(m *testing.M) {
 	schemaFile := "../schema.graphql"
 	schema, err := os.ReadFile(schemaFile)
-	if err != nil {
-		panic(err)
-	}
+	x.Panic(err)
 
 	jsonFile := "../test_data.json"
 	data, err := os.ReadFile(jsonFile)
@@ -138,14 +139,10 @@ func TestMain(m *testing.M) {
 	jwtAlgo := []string{jwt.SigningMethodHS256.Name, jwt.SigningMethodRS256.Name}
 	for _, algo := range jwtAlgo {
 		authSchema, err := testutil.AppendAuthInfo(schema, algo, "../sample_public_key.pem", false)
-		if err != nil {
-			panic(err)
-		}
+		x.Panic(err)
 
 		authMeta, err := authorization.Parse(string(authSchema))
-		if err != nil {
-			panic(err)
-		}
+		x.Panic(err)
 
 		metaInfo = &testutil.AuthMeta{
 			PublicKey:      authMeta.VerificationKey,

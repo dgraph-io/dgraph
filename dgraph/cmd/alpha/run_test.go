@@ -1,3 +1,5 @@
+//go:build integration
+
 /*
  * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
@@ -92,12 +94,12 @@ func processToFastJSON(q string) string {
 
 func runGraphqlQuery(q string) (string, error) {
 	output, _, err := queryWithTs(queryInp{body: q, typ: "application/dql"})
-	return string(output), err
+	return output, err
 }
 
 func runJSONQuery(q string) (string, error) {
 	output, _, err := queryWithTs(queryInp{body: q, typ: "application/json"})
-	return string(output), err
+	return output, err
 }
 
 func runMutation(m string) error {
@@ -1078,8 +1080,8 @@ func TestListTypeSchemaChange(t *testing.T) {
 	q = `schema{}`
 	res, err = runGraphqlQuery(q)
 	require.NoError(t, err)
-	testutil.CompareJSON(t, testutil.GetFullSchemaHTTPResponse(testutil.
-		SchemaOptions{UserPreds: `{"predicate":"occupations","type":"string"}`}), res)
+	testutil.CompareJSON(t, testutil.GetFullSchemaHTTPResponse(
+		testutil.SchemaOptions{UserPreds: `{"predicate":"occupations","type":"string"}`}), res)
 }
 
 func TestDeleteAllSP2(t *testing.T) {
@@ -1651,13 +1653,11 @@ func TestGeoValidWkbData(t *testing.T) {
 	require.NoError(t, dg.Alter(ctx, &api.Operation{Schema: `loc: geo .`}))
 	s := `{"type": "Point", "coordinates": [1.0, 2.0]}`
 	var gt geom.T
-	if err := geojson.Unmarshal([]byte(s), &gt); err != nil {
-		panic(err)
-	}
+	x.Panic(geojson.Unmarshal([]byte(s), &gt))
+
 	data, err := wkb.Marshal(gt, binary.LittleEndian)
-	if err != nil {
-		panic(err)
-	}
+	x.Panic(err)
+
 	n := &api.NQuad{
 		Subject:   "_:test",
 		Predicate: "loc",

@@ -25,7 +25,6 @@ package main
 import (
 	"compress/gzip"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -54,16 +53,13 @@ import (
 // TODO: Improve performance here, using SIMD instructions.
 
 const (
-	// chunkByteSize is the number
-	// of bytes per chunk of data.
+	// chunkByteSize is the number of bytes per chunk of data.
 	chunkByteSize = 262144
 )
 
 func read(filename string) []int {
 	f, err := os.Open(filename)
-	if err != nil {
-		x.Panic(err)
-	}
+	x.Panic(err)
 	defer func() {
 		if err := f.Close(); err != nil {
 			glog.Warningf("error while closing fd: %v", err)
@@ -71,9 +67,7 @@ func read(filename string) []int {
 	}()
 
 	fgzip, err := gzip.NewReader(f)
-	if err != nil {
-		x.Panic(err)
-	}
+	x.Panic(err)
 	defer fgzip.Close()
 
 	buf := make([]byte, 4)
@@ -184,14 +178,13 @@ func fmtBenchmark(name string, speed int) {
 func main() {
 	data := read("clustered1M.bin.gz")
 	if !sort.IsSorted(sort.IntSlice(data)) {
-		x.Panic(errors.New("test data must be sorted"))
+		panic("test data must be sorted")
 	}
 
 	chunks64 := chunkify64(data)
-	mis := 0
 	const ntrials = 100
 
-	mis = benchmarkPack(ntrials, chunks64)
+	mis := benchmarkPack(ntrials, chunks64)
 	fmtBenchmark("BenchmarkDeltaPack64", mis)
 
 	mis = benchmarkUnpack(ntrials, chunks64)

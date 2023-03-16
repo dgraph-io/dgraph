@@ -32,9 +32,9 @@ import (
 	"github.com/pkg/errors"
 	"go.etcd.io/etcd/raft/raftpb"
 
-	"github.com/dgraph-io/badger/v3"
-	"github.com/dgraph-io/badger/v3/pb"
-	"github.com/dgraph-io/badger/v3/y"
+	"github.com/dgraph-io/badger/v4"
+	"github.com/dgraph-io/badger/v4/pb"
+	"github.com/dgraph-io/badger/v4/y"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
 )

@@ -37,8 +37,8 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/dgraph-io/badger/v3"
-	"github.com/dgraph-io/badger/v3/y"
+	"github.com/dgraph-io/badger/v4"
+	"github.com/dgraph-io/badger/v4/y"
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/filestore"
@@ -406,7 +406,7 @@ func (ld *loader) processGqlSchema(loadType chunker.InputFormat) {
 		}
 	default:
 		if _, ok := schemas[ld.opt.Namespace]; !ok {
-			// We expect only a single GraphQL schema when loading into specfic namespace.
+			// We expect only a single GraphQL schema when loading into specific namespace.
 			fmt.Printf("Didn't find GraphQL schema for namespace %d. Not loading GraphQL schema.",
 				ld.opt.Namespace)
 			return

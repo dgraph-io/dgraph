@@ -27,7 +27,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/badger/v3/options"
+	"github.com/dgraph-io/badger/v4/options"
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/worker"
@@ -272,8 +272,8 @@ func RunRestore(t *testing.T, jwtToken string, restoreLocation string, whichAlph
 
 func GetJwtTokenAndHeader(t *testing.T, whichAlpha string, namespaceId uint64) (string, http.Header) {
 	var header = http.Header{}
-
-	jwtToken := testutil.GrootHttpLoginNamespace("http://"+testutil.ContainerAddr(whichAlpha, 8080)+"/admin", 0).AccessJwt
+	adminUrl := "http://" + testutil.ContainerAddr(whichAlpha, 8080) + "/admin"
+	jwtToken := testutil.GrootHttpLoginNamespace(adminUrl, namespaceId).AccessJwt
 	header.Set(accessJwtHeader, jwtToken)
 	header.Set("Content-Type", "application/json")
 

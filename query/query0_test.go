@@ -1,3 +1,5 @@
+//go:build integration || cloud
+
 /*
  * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
@@ -19,15 +21,15 @@ package query
 
 import (
 	"context"
-	"os"
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/v210"
+	"github.com/dgraph-io/dgraph/dgraphtest"
 	"github.com/dgraph-io/dgraph/dql"
-	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/dgraph-io/dgraph/x"
 )
 
 func TestGetUID(t *testing.T) {
@@ -3512,13 +3514,25 @@ func TestMatchingWithPagination(t *testing.T) {
 	}
 }
 
-var client *dgo.Dgraph
-
-func TestMain(m *testing.M) {
-	var err error
-	client, err = testutil.DgraphClientWithGroot(testutil.SockAddr)
-	x.CheckfNoTrace(err)
-
-	populateCluster()
-	os.Exit(m.Run())
+func TestInvalidRegex(t *testing.T) {
+	testCases := []struct {
+		regex  string
+		errStr string
+	}{
+		{"/", "invalid"},
+		{"", "empty"},
+		{"/?", "invalid"},
+		{"=/?", "invalid"},
+		{"aman/", "invalid"},
+	}
+	for i, tc := range testCases {
+		t.Run(fmt.Sprintf("test%d regex=%v", i, tc.regex), func(t *testing.T) {
+			vars := map[string]string{"$name": tc.regex}
+			_, err := processQueryWithVars(t, `query q($name:string){ q(func: regexp(dgraph.type, $name)) {}}`, vars)
+			require.Contains(t, strings.ToLower(err.Error()), tc.errStr)
+		})
+	}
 }
+
+var client *dgo.Dgraph
+var dc dgraphtest.Cluster

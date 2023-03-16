@@ -32,7 +32,7 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
-	geom "github.com/twpayne/go-geom"
+	"github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
 
 	"github.com/dgraph-io/dgo/v210/protos/api"
@@ -278,7 +278,7 @@ const (
 	// Value with all bits set to 1 for bytes 7 and 6.
 	setBytes76 = uint64(0x00FFFF0000000000)
 	// Compliment value of setBytes76.
-	unsetBytes76 = uint64(^setBytes76)
+	unsetBytes76 = ^setBytes76
 	// Value with all bits set to 1 for bytes 4 to 1.
 	setBytes4321 = 0x00000000FFFFFFFF
 )
@@ -1329,7 +1329,7 @@ func facetName(fieldName string, f *api.Facet) string {
 	if f.Alias != "" {
 		return f.Alias
 	}
-	return fieldName + x.FacetDelimeter + f.Key
+	return fieldName + x.FacetDelimiter + f.Key
 }
 
 // This method gets the values and children for a subprotos.

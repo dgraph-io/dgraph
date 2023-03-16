@@ -23,7 +23,7 @@ import (
 
 	"github.com/spf13/viper"
 
-	"github.com/dgraph-io/badger/v3"
+	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/ristretto/z"
 )
 
@@ -88,7 +88,7 @@ type WorkerOptions struct {
 	//
 	// ratio float64 - the ratio of queries to trace (must be between 0 and 1)
 	// jaeger string - URL of Jaeger to send OpenCensus traces
-	// datadog string - URL of Datadog to to send OpenCensus traces
+	// datadog string - URL of Datadog to send OpenCensus traces
 	Trace *z.SuperFlag
 	// MyAddr stores the address and port for this alpha.
 	MyAddr string

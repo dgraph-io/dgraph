@@ -31,7 +31,7 @@ import (
 
 	"github.com/golang/glog"
 
-	"github.com/dgraph-io/badger/v3/y"
+	"github.com/dgraph-io/badger/v4/y"
 	"github.com/dgraph-io/ristretto/z"
 )
 
@@ -364,10 +364,7 @@ func compress(src string) error {
 	if err := f.Close(); err != nil {
 		return err
 	}
-	if err := os.Remove(src); err != nil {
-		return err
-	}
-	return nil
+	return os.Remove(src)
 }
 
 // this should be called in a serial order
@@ -435,7 +432,7 @@ func processOldLogFiles(fp string, maxAge int64) ([]string, []string, error) {
 
 	for _, f := range files {
 		if f.IsDir() || // f is directory
-			!strings.HasPrefix(f.Name(), defPrefix) || // f doesnt start with prefix
+			!strings.HasPrefix(f.Name(), defPrefix) || // f doesn't start with prefix
 			!(strings.HasSuffix(f.Name(), defExt) || strings.HasSuffix(f.Name(), defExt+".gz")) {
 			continue
 		}

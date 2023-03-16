@@ -99,7 +99,7 @@ func byteVal(nq NQuad) ([]byte, types.TypeID, error) {
 	if err := types.Marshal(p, &p1); err != nil {
 		return []byte{}, p.Tid, err
 	}
-	return []byte(p1.Value.([]byte)), p.Tid, nil
+	return p1.Value.([]byte), p.Tid, nil
 }
 
 func toUid(subject string, newToUid map[string]uint64) (uid uint64, err error) {

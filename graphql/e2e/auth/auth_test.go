@@ -1,3 +1,5 @@
+//go:build integration
+
 /*
  *    Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
@@ -34,6 +36,7 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 var (
@@ -1056,7 +1059,7 @@ func getColID(t *testing.T, tcase TestCase) string {
 	common.RequireNoGQLErrors(t, gqlResponse)
 
 	err := json.Unmarshal(gqlResponse.Data, &result)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	if len(result.QueryColumn) > 0 {
 		return result.QueryColumn[0].ColID
@@ -1135,7 +1138,7 @@ func getProjectID(t *testing.T, tcase TestCase) string {
 	common.RequireNoGQLErrors(t, gqlResponse)
 
 	err := json.Unmarshal(gqlResponse.Data, &result)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	if len(result.QueryProject) > 0 {
 		return result.QueryProject[0].ProjID
@@ -1940,14 +1943,10 @@ func TestMain(m *testing.M) {
 	jwtAlgo := []string{jwt.SigningMethodHS256.Name, jwt.SigningMethodRS256.Name}
 	for _, algo := range jwtAlgo {
 		authSchema, err := testutil.AppendAuthInfo(schema, algo, "./sample_public_key.pem", false)
-		if err != nil {
-			panic(err)
-		}
+		x.Panic(err)
 
 		authMeta, err := authorization.Parse(string(authSchema))
-		if err != nil {
-			panic(err)
-		}
+		x.Panic(err)
 
 		metaInfo = &testutil.AuthMeta{
 			PublicKey:      authMeta.VerificationKey,
@@ -2205,7 +2204,7 @@ func TestAuthWithSecretDirective(t *testing.T) {
 	}
 
 	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	opt := cmpopts.IgnoreFields(common.User{}, "Password")
 	if diff := cmp.Diff(newUser, result.CheckUserPassword, opt); diff != "" {
@@ -2238,7 +2237,7 @@ func TestAuthWithSecretDirective(t *testing.T) {
 	}
 
 	err = json.Unmarshal([]byte(gqlResponse.Data), &addLogResult)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	// Id of the created log
 	logID := addLogResult.AddLog.Log[0].Id
 
@@ -2249,7 +2248,7 @@ func TestAuthWithSecretDirective(t *testing.T) {
 	}
 
 	err = json.Unmarshal([]byte(gqlResponse.Data), &resultLog)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	require.Equal(t, resultLog.CheckLogPassword.Id, logID)
 

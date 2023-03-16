@@ -33,7 +33,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/dgraph-io/badger/v3"
+	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/dql"
@@ -192,7 +192,7 @@ func (l *loader) request(req *request) {
 
 func getTypeVal(val *api.Value) (types.Val, error) {
 	p := dql.TypeValFrom(val)
-	//Convert value to bytes
+	// Convert value to bytes
 
 	if p.Tid == types.GeoID || p.Tid == types.DateTimeID {
 		// Already in bytes format
@@ -256,7 +256,7 @@ func (l *loader) conflictKeysForNQuad(nq *api.NQuad) ([]uint64, error) {
 	attr := x.NamespaceAttr(nq.Namespace, nq.Predicate)
 	pred, found := l.schema.preds[attr]
 
-	// We dont' need to generate conflict keys for predicate with noconflict directive.
+	// We don't need to generate conflict keys for predicate with noconflict directive.
 	if found && pred.NoConflict {
 		return nil, nil
 	}
@@ -319,7 +319,7 @@ func (l *loader) conflictKeysForNQuad(nq *api.NQuad) ([]uint64, error) {
 			Value: de.GetValue(),
 		}
 
-		schemaVal, err := types.Convert(storageVal, types.TypeID(pred.ValueType))
+		schemaVal, err := types.Convert(storageVal, pred.ValueType)
 		if err != nil {
 			errs = append(errs, err.Error())
 		}

@@ -1,5 +1,5 @@
-//go:build !oss
-// +build !oss
+//go:build !oss && integration
+// +build !oss,integration
 
 /*
  * Copyright 2023 Dgraph Labs, Inc. and Contributors
@@ -1892,11 +1892,11 @@ func TestNewACLPredicates(t *testing.T) {
 		tc := tc // capture range variable
 		t.Run(tc.description, func(t *testing.T) {
 			t.Parallel()
-			ctx, cancel = context.WithTimeout(context.Background(), 100*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 			defer cancel()
 
 			resp, err := userClient.NewTxn().Query(ctx, tc.input)
-			require.Nil(t, err)
+			require.NoError(t, err)
 			testutil.CompareJSON(t, tc.output, string(resp.Json))
 		})
 	}
@@ -3212,7 +3212,7 @@ func TestAllowUIDAccess(t *testing.T) {
 	`
 
 	resp, err := userClient.NewReadOnlyTxn().Query(ctx, uidQuery)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	testutil.CompareJSON(t, `{"me":[{"name":"100th User", "uid": "0x64"}]}`, string(resp.GetJson()))
 }
 

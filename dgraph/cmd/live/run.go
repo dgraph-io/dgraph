@@ -42,8 +42,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 
-	"github.com/dgraph-io/badger/v3"
-	bopt "github.com/dgraph-io/badger/v3/options"
+	"github.com/dgraph-io/badger/v4"
+	bopt "github.com/dgraph-io/badger/v4/options"
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/chunker"
@@ -262,7 +262,7 @@ func (l *loader) processSchemaFile(ctx context.Context, file string, key x.Sensi
 	op := &api.Operation{}
 	op.Schema = string(b)
 	if opt.preserveNs {
-		// Verify schema if we are loding into multiple namespaces.
+		// Verify schema if we are loading into multiple namespaces.
 		if err := validateSchema(op.Schema, l.namespaces); err != nil {
 			return err
 		}
@@ -282,13 +282,12 @@ func (l *loader) uid(val string, ns uint64) string {
 		}
 	}
 
-	// TODO(Naman): Do we still need this here? As xidmap which uses btree does not keep hold of
-	// this string.
+	// TODO(Naman): Do we still need this here? As xidmap which uses btree does not keep hold of this string.
 	sb := strings.Builder{}
 	x.Check2(sb.WriteString(x.NamespaceAttr(ns, val)))
 	uid, _ := l.alloc.AssignUid(sb.String())
 
-	return fmt.Sprintf("%#x", uint64(uid))
+	return fmt.Sprintf("%#x", uid)
 }
 
 func generateBlankNode(val string) string {
@@ -391,39 +390,29 @@ func (l *loader) upsertUids(nqs []*api.NQuad) {
 		Query:     query.String(),
 		Mutations: []*api.Mutation{{Set: mutations}},
 	})
-
-	if err != nil {
-		panic(err)
-	}
+	x.Panic(err)
 
 	type dResult struct {
 		Uid string
 	}
 
 	var result map[string][]dResult
-	err = json.Unmarshal(resp.GetJson(), &result)
-	if err != nil {
-		panic(err)
-	}
+	x.Panic(json.Unmarshal(resp.GetJson(), &result))
 
 	for xid, idx := range ids {
 		// xid already exist in dgraph
 		if val, ok := result[idx]; ok && len(val) > 0 {
 			uid, err := strconv.ParseUint(val[0].Uid, 0, 64)
-			if err != nil {
-				panic(err)
-			}
+			x.Panic(err)
 
 			l.alloc.SetUid(xid, uid)
 			continue
 		}
 
-		// new uid created in draph
+		// new uid created in dgraph
 		if val, ok := resp.GetUids()[generateUidFunc(idx)]; ok {
 			uid, err := strconv.ParseUint(val, 0, 64)
-			if err != nil {
-				panic(err)
-			}
+			x.Panic(err)
 
 			l.alloc.SetUid(xid, uid)
 			continue
@@ -495,7 +484,7 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 
 		drain := func() {
 			// We collect opt.bufferSize requests and preprocess them. For the requests
-			// to not confict between themself, we sort them on the basis of their predicates.
+			// to not conflict between themselves, we sort them on the basis of their predicates.
 			// Predicates with count index will conflict among themselves, so we keep them at
 			// end, making room for other predicates to load quickly.
 			sort.Slice(buffer, func(i, j int) bool {
@@ -548,7 +537,7 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 			} else {
 				// TODO(Naman): Handle this. Upserts UIDs send a single upsert block for multiple
 				// nquads. These nquads may belong to different namespaces. Hence, alpha can't
-				// figure out its processsing.
+				// figure out its processing.
 				// Currently, this option works with data loading in the logged-in namespace.
 				// TODO(Naman): Add a test for a case when it works and when it doesn't.
 				l.upsertUids(nqs)

@@ -137,10 +137,20 @@ func main() {
 
 }
 
+func getNextWord(index int) string {
+	// check if index is in the range of words
+	if index < 0 || index >= len(words) {
+		x.Fatalf("invalid index for getting next word: %d", index)
+	}
+	return words[index]
+}
+
 func createSentences(n int) []string {
+	var wordIndex int
 	sents := make([]string, n)
 	for i := range sents {
-		sents[i] = nextWord()
+		sents[i] = getNextWord(wordIndex)
+		wordIndex++
 	}
 
 	// add trailing words -- some will be common between sentences
@@ -150,7 +160,8 @@ func createSentences(n int) []string {
 		var count int
 		for i := range sents {
 			if i%same == 0 {
-				w = nextWord()
+				w = getNextWord(wordIndex)
+				wordIndex++
 				count++
 			}
 			sents[i] += " " + w

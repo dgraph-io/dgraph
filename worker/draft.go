@@ -39,8 +39,8 @@ import (
 	otrace "go.opencensus.io/trace"
 	"golang.org/x/net/trace"
 
-	"github.com/dgraph-io/badger/v3"
-	bpb "github.com/dgraph-io/badger/v3/pb"
+	"github.com/dgraph-io/badger/v4"
+	bpb "github.com/dgraph-io/badger/v4/pb"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -119,7 +119,7 @@ func (n *node) startTask(id op) (*z.Closer, error) {
 
 // startTaskAtTs is used to check whether an op is already running. If a rollup is running,
 // it is canceled and startTask will wait until it completes before returning.
-// If the same task is already running, this method returns an errror.
+// If the same task is already running, this method returns an error.
 // Restore operations have preference and cancel all other operations, not just rollups.
 // You should only call Done() on the returned closer. Calling other functions (such as
 // SignalAndWait) for closer could result in panics. For more details, see GitHub issue #5034.
@@ -179,9 +179,8 @@ func (n *node) startTaskAtTs(id op, ts uint64) (*z.Closer, error) {
 				if otherOp.ts < ts {
 					// If backup is running at higher timestamp, then indexing can't be executed.
 					continue
-				} else {
-					return nil, errors.Errorf("operation %s is already running", otherId)
 				}
+				return nil, errors.Errorf("operation %s is already running", otherId)
 			case opRollup:
 				// Remove from map and signal the closer to cancel the operation.
 				delete(n.ops, otherId)
@@ -437,7 +436,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	}
 
 	// Scheduler tracks tasks at subject, predicate level, so doing
-	// schema stuff here simplies the design and we needn't worry about
+	// schema stuff here simplifies the design and we needn't worry about
 	// serializing the mutations per predicate or schema mutations
 	// We derive the schema here if it's not present
 	// Since raft committed logs are serialized, we can derive
@@ -643,7 +642,9 @@ func (n *node) applyCommitted(proposal *pb.Proposal, key uint64) error {
 	case proposal.Restore != nil:
 		// Enable draining mode for the duration of the restore processing.
 		x.UpdateDrainingMode(true)
-		defer x.UpdateDrainingMode(false)
+		if !proposal.Restore.IsPartial {
+			defer x.UpdateDrainingMode(false)
+		}
 
 		var err error
 		var closer *z.Closer
@@ -653,7 +654,7 @@ func (n *node) applyCommitted(proposal *pb.Proposal, key uint64) error {
 		}
 		defer closer.Done()
 
-		glog.Infof("Got restore proposal at Index:%d, ReadTs:%d",
+		glog.Infof("Got restore proposal at Index: %d, ReadTs: %d",
 			proposal.Index, proposal.Restore.RestoreTs)
 		if err := handleRestoreProposal(ctx, proposal.Restore, proposal.Index); err != nil {
 			return err
@@ -752,7 +753,7 @@ func (n *node) processApplyCh() {
 				// Don't break here. We still need to call the Done below.
 
 			} else {
-				// if this applyCommited fails, how do we ensure
+				// if this applyCommitted fails, how do we ensure
 				start := time.Now()
 				perr = n.applyCommitted(&proposal, key)
 				if key != 0 {

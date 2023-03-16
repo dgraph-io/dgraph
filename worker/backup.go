@@ -23,7 +23,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 
-	"github.com/dgraph-io/badger/v3"
+	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -36,7 +36,7 @@ type predicateSet map[string]struct{}
 // to the readTs of the current backup).
 // Groups are the IDs of the groups involved.
 type Manifest struct {
-	//Type is the type of backup, either full or incremental.
+	// Type is the type of backup, either full or incremental.
 	Type string `json:"type"`
 	// SinceTsDeprecated is kept for backward compatibility. Use readTs instead of sinceTs.
 	SinceTsDeprecated uint64 `json:"since"`

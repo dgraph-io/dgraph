@@ -1,3 +1,5 @@
+//go:build integration
+
 /*
  * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
@@ -65,7 +67,7 @@ func TestIdBump(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, uint64(10), res.GetEndId()-res.GetStartId()+1)
 
-	// Next assignemnt's startId should be greater than 10.
+	// Next assignment's startId should be greater than 10.
 	res, err = zc.AssignIds(ctx, &pb.Num{Val: 50, Type: pb.Num_UID})
 	require.NoError(t, err)
 	require.Greater(t, res.GetStartId(), uint64(10))
@@ -77,7 +79,7 @@ func TestIdBump(t *testing.T) {
 	_, err = zc.AssignIds(ctx, &pb.Num{Val: bumpTo, Type: pb.Num_UID, Bump: true})
 	require.NoError(t, err)
 
-	// Next assignemnt's startId should be greater than bumpTo.
+	// Next assignment's startId should be greater than bumpTo.
 	res, err = zc.AssignIds(ctx, &pb.Num{Val: 10, Type: pb.Num_UID})
 	require.NoError(t, err)
 	require.Greater(t, res.GetStartId(), bumpTo)

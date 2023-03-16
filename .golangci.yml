@@ -27,12 +27,13 @@ linters:
   disable-all: true
   enable:
     - errcheck
-    - ineffassign
-    - gosec
     - gofmt
+    - goimports
+    - gosec
     - gosimple
     - govet
+    - ineffassign
     - lll
-    - unused
     - staticcheck
-    - goimports
+    - unconvert
+    - unused

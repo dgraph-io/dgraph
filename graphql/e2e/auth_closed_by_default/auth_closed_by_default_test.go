@@ -1,3 +1,5 @@
+//go:build integration
+
 /*
  *    Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
@@ -25,6 +27,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 type TestCase struct {
@@ -199,9 +202,7 @@ func TestMain(m *testing.M) {
 	algo := jwt.SigningMethodHS256.Name
 	schema, data := common.BootstrapAuthData()
 	authSchema, err := testutil.AppendAuthInfo(schema, algo, "../auth/sample_public_key.pem", true)
-	if err != nil {
-		panic(err)
-	}
+	x.Panic(err)
 	common.BootstrapServer(authSchema, data)
 	os.Exit(m.Run())
 }

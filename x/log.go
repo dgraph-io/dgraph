@@ -23,8 +23,7 @@ import (
 )
 
 // ToGlog is a logger that forwards the output to glog.
-type ToGlog struct {
-}
+type ToGlog struct{}
 
 func (rl *ToGlog) Debug(v ...interface{})                   { glog.V(3).Info(v...) }
 func (rl *ToGlog) Debugf(format string, v ...interface{})   { glog.V(3).Infof(format, v...) }

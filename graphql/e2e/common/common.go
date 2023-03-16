@@ -371,6 +371,30 @@ func CreateNamespace(t *testing.T, headers http.Header, whichAlpha string) uint6
 	return resp.AddNamespace.NamespaceId
 }
 
+func ListNamespaces(t *testing.T, jwtToken string, headers http.Header, whichAlpha string) []uint64 {
+	adminUrl := "http://" + testutil.ContainerAddr(whichAlpha, 8080) + "/admin"
+
+	listNamespaces := &GraphQLParams{
+		Query: `query{
+			 state {
+			 namespaces
+			 }
+		 }`,
+		Headers: headers,
+	}
+
+	gqlResponse := listNamespaces.ExecuteAsPost(t, adminUrl)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	var resp struct {
+		State struct {
+			Namespaces []uint64 `json:"namespaces"`
+		} `json:"state"`
+	}
+	require.NoError(t, json.Unmarshal(gqlResponse.Data, &resp))
+	return resp.State.Namespaces
+}
+
 func DeleteNamespace(t *testing.T, id uint64, header http.Header, whichAlpha string) {
 	adminUrl := "http://" + testutil.ContainerAddr(whichAlpha, 8080) + "/admin"
 	deleteNamespace := &GraphQLParams{
@@ -1421,9 +1445,7 @@ func GetJWTForInterfaceAuth(t *testing.T, user, role string, ans bool, metaInfo 
 func BootstrapAuthData() ([]byte, []byte) {
 	schemaFile := "../auth/schema.graphql"
 	schema, err := os.ReadFile(schemaFile)
-	if err != nil {
-		panic(err)
-	}
+	x.Panic(err)
 
 	jsonFile := "../auth/test_data.json"
 	data, err := os.ReadFile(jsonFile)

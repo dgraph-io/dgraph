@@ -1,3 +1,5 @@
+//go:build integration
+
 /*
  * Copyright 2023 Dgraph Labs, Inc. and Contributors *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -31,7 +33,7 @@ import (
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/badger/v3/options"
+	"github.com/dgraph-io/badger/v4/options"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/worker"

@@ -1,3 +1,5 @@
+//go:build integration
+
 package main
 
 import (
@@ -42,7 +44,7 @@ func disableDraining(t *testing.T) {
 
 	client := &http.Client{}
 	req, err := http.NewRequest("POST", testutil.AdminUrl(), bytes.NewBuffer(b))
-	require.Nil(t, err)
+	require.NoError(t, err)
 	req.Header.Add("content-type", "application/json")
 	req.Header.Add("X-Dgraph-AccessToken", token.AccessJwt)
 

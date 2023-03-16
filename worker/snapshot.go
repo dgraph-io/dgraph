@@ -26,7 +26,7 @@ import (
 	"github.com/pkg/errors"
 	"go.etcd.io/etcd/raft"
 
-	"github.com/dgraph-io/badger/v3"
+	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"

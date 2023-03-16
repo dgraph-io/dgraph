@@ -23,7 +23,7 @@ const (
 	floatType
 	doubleType
 	datetimeType
-	uidType // foreign key reference, which would corrspond to uid type in Dgraph
+	uidType // foreign key reference, which would correspond to uid type in Dgraph
 )
 
 // the typeToString map is used to generate the Dgraph schema file
