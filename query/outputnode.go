@@ -37,6 +37,7 @@ import (
 
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/algo"
+	"github.com/dgraph-io/dgraph/dql"
 	gqlSchema "github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/task"
@@ -60,7 +61,6 @@ func ToJson(ctx context.Context, l *Latency, sgl []*SubGraph, field gqlSchema.Fi
 		sgr.Children = append(sgr.Children, sg)
 	}
 	data, err := sgr.toFastJSON(ctx, l, field)
-	fmt.Println("data", string(data))
 
 	// don't log or wrap GraphQL errors
 	if x.IsGqlErrorList(err) {
@@ -1166,6 +1166,7 @@ type Extensions struct {
 	Latency *api.Latency    `json:"server_latency,omitempty"`
 	Txn     *api.TxnContext `json:"txn,omitempty"`
 	Metrics *api.Metrics    `json:"metrics,omitempty"`
+	Inspect *dql.Result     `json:"inspect,omitempty"`
 }
 
 func (sg *SubGraph) toFastJSON(ctx context.Context, l *Latency, field gqlSchema.Field) ([]byte,
