@@ -22,6 +22,10 @@ import (
 	"time"
 )
 
+const (
+	localVersion = "local"
+)
+
 type ClusterConfig struct {
 	prefix     string
 	numAlphas  int
@@ -44,7 +48,7 @@ func NewClusterConfig() ClusterConfig {
 		numZeros:  1,
 		replicas:  1,
 		verbosity: 2,
-		version:   "local",
+		version:   localVersion,
 		volumes:   map[string]string{DefaultBackupDir: defaultBackupVol},
 	}
 }

@@ -1,4 +1,4 @@
-//go:build integration || cloud
+//go:build integration || cloud || upgrade
 
 /*
  * Copyright 2023 Dgraph Labs, Inc. and Contributors
@@ -3515,6 +3515,9 @@ func TestMatchingWithPagination(t *testing.T) {
 }
 
 func TestInvalidRegex(t *testing.T) {
+	// This bug was fixed in commit e0cc0450b88593b7496c0947aea016fc6457cb61
+	dgraphtest.ShouldSkipTest(t, "e0cc0450b88593b7496c0947aea016fc6457cb61", dc.GetVersion())
+
 	testCases := []struct {
 		regex  string
 		errStr string

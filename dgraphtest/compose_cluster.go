@@ -42,3 +42,7 @@ func (c *ComposeCluster) AlphasHealth() ([]string, error) {
 func (c *ComposeCluster) AssignUids(num uint64) error {
 	return testutil.AssignUids(num)
 }
+
+func (c *ComposeCluster) GetVersion() string {
+	return localVersion
+}

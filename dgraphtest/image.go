@@ -63,7 +63,7 @@ func (c *LocalCluster) setupBinary() error {
 
 	hash, err := repo.ResolveRevision(plumbing.Revision(c.conf.version))
 	if err != nil {
-		return err
+		return errors.Wrap(err, "error while getting refrence hash")
 	}
 	if err := checkoutGitRepo(repo, hash); err != nil {
 		return err
@@ -80,7 +80,7 @@ func checkoutGitRepo(repo *git.Repository, hash *plumbing.Hash) error {
 	if err != nil {
 		return errors.Wrap(err, "error while getting git repo work tree")
 	}
-	if err = worktree.Checkout(&git.CheckoutOptions{Hash: plumbing.NewHash(hash.String())}); err != nil {
+	if err := worktree.Checkout(&git.CheckoutOptions{Hash: *hash}); err != nil {
 		return errors.Wrap(err, fmt.Sprintf("error while checking out git repo with hash [%v]", hash.String()))
 	}
 	return nil

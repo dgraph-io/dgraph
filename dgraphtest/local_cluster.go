@@ -42,7 +42,7 @@ import (
 )
 
 var (
-	requestTimeout = 60 * time.Second
+	requestTimeout = 90 * time.Second
 	stopTimeout    = time.Minute
 )
 
@@ -671,4 +671,8 @@ func (c *LocalCluster) AssignUids(num uint64) error {
 		return fmt.Errorf("error received from zero: %v", data.Errors[0].Message)
 	}
 	return nil
+}
+
+func (c *LocalCluster) GetVersion() string {
+	return c.conf.version
 }
