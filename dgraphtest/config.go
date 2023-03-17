@@ -32,16 +32,20 @@ type ClusterConfig struct {
 	aclTTL     time.Duration
 	encryption bool
 	version    string
+	volumes    map[string]string
 }
 
 func NewClusterConfig() ClusterConfig {
+	prefix := fmt.Sprintf("test-%d", rand.NewSource(time.Now().Unix()).Int63()%10000)
+	defaultBackupVol := fmt.Sprintf("%v_backup", prefix)
 	return ClusterConfig{
-		prefix:    fmt.Sprintf("test-%d", rand.NewSource(time.Now().Unix()).Int63()%10000),
+		prefix:    prefix,
 		numAlphas: 1,
 		numZeros:  1,
 		replicas:  1,
 		verbosity: 2,
 		version:   "local",
+		volumes:   map[string]string{DefaultBackupDir: defaultBackupVol},
 	}
 }
 
@@ -78,5 +82,12 @@ func (cc ClusterConfig) WithEncryption() ClusterConfig {
 
 func (cc ClusterConfig) WithVersion(version string) ClusterConfig {
 	cc.version = version
+	return cc
+}
+
+// WithAlphaVolume allows creating a shared volumes across alphas with
+// name volname and mount directory specified as dir inside the container
+func (cc ClusterConfig) WithAlphaVolume(volname, dir string) ClusterConfig {
+	cc.volumes[dir] = volname
 	return cc
 }

@@ -35,12 +35,12 @@ func (c *LocalCluster) dgraphImage() string {
 }
 
 func (c *LocalCluster) setupBinary() error {
-	isFileExist, err := fileExists(filepath.Join(binDir, fmt.Sprintf(binaryName, c.conf.version)))
+	isFileThere, err := fileExists(filepath.Join(binDir, fmt.Sprintf(binaryName, c.conf.version)))
 	if err != nil {
 		return err
 	}
 
-	if isFileExist {
+	if isFileThere {
 		return copyBinary(binDir, c.tempBinDir, c.conf.version)
 	}
 
@@ -107,7 +107,6 @@ func copyBinary(fromDir, toDir, version string) error {
 		filepath.Join(toDir, "dgraph")); err != nil {
 		return errors.Wrap(err, "error while copying binary into tempBinDir")
 	}
-
 	return nil
 }
 

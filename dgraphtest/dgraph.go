@@ -34,6 +34,7 @@ const (
 	zeroAliasNameFmt = "zero%d"
 	alphaNameFmt     = "%v_alpha%d"
 	alphaLNameFmt    = "alpha%d"
+	volNameFmt       = "%v_%v"
 
 	zeroGrpcPort   = "5080"
 	zeroHttpPort   = "6080"
@@ -41,8 +42,9 @@ const (
 	alphaHttpPort  = "8080"
 	alphaGrpcPort  = "9080"
 
-	alphaWorkingDir = "/data/alpha"
-	zeroWorkingDir  = "/data/zero"
+	alphaWorkingDir  = "/data/alpha"
+	zeroWorkingDir   = "/data/zero"
+	DefaultBackupDir = "/data/backups"
 
 	aclSecretMountPath = "/dgraph-acl/hmac-secret"
 	encKeyMountPath    = "/dgraph-enc/enc-key"
@@ -50,6 +52,17 @@ const (
 	defaultUser     = "groot"
 	defaultPassowrd = "password"
 )
+
+func fileExists(filename string) (bool, error) {
+	info, err := os.Stat(filename)
+	if err != nil && !os.IsNotExist(err) {
+		return false, errors.Wrap(err, "error while getting file info")
+	}
+	if err != nil && os.IsNotExist(err) {
+		return false, nil
+	}
+	return !info.IsDir(), nil
+}
 
 type dnode interface {
 	cname() string
@@ -103,17 +116,6 @@ func (z *zero) cmd(c *LocalCluster) []string {
 
 func (z *zero) workingDir() string {
 	return zeroWorkingDir
-}
-
-func fileExists(filename string) (bool, error) {
-	info, err := os.Stat(filename)
-	if err != nil && !os.IsNotExist(err) {
-		return false, errors.Wrap(err, "error while getting file info")
-	}
-	if err != nil && os.IsNotExist(err) {
-		return false, nil
-	}
-	return !info.IsDir(), nil
 }
 
 func (z *zero) mounts(c *LocalCluster) ([]mount.Mount, error) {
@@ -221,6 +223,15 @@ func (a *alpha) mounts(c *LocalCluster) ([]mount.Mount, error) {
 			Source:   encKeyPath,
 			Target:   encKeyMountPath,
 			ReadOnly: true,
+		})
+	}
+
+	for dir, vol := range c.conf.volumes {
+		mounts = append(mounts, mount.Mount{
+			Type:     mount.TypeVolume,
+			Source:   fmt.Sprintf(volNameFmt, c.conf.prefix, vol),
+			Target:   dir,
+			ReadOnly: false,
 		})
 	}
 
