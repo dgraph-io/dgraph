@@ -1,4 +1,4 @@
-DGRAPH_VERSION = local
+DGRAPH_VERSION ?= local
 
 current_dir = $(shell pwd)
 
