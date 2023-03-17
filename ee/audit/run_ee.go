@@ -126,7 +126,6 @@ func run() error {
 		}
 		iterator = iterator + int64(n)
 
-		//	text := make([]byte, len(x.VerificationText))
 		stream := cipher.NewCTR(block, iv)
 		stream.XORKeyStream(ct, ct)
 		if string(ct) != x.VerificationText {
@@ -153,7 +152,6 @@ func run() error {
 		}
 		iterator = iterator + int64(n)
 
-		//	text := make([]byte, len(x.VerificationTextDeprecated))
 		stream := cipher.NewCTR(block, iv)
 		stream.XORKeyStream(ct, ct)
 		if string(ct) != x.VerificationTextDeprecated {
