@@ -17,11 +17,12 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"encoding/binary"
-	"errors"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
@@ -108,10 +109,22 @@ func run() error {
 		return nil
 	}
 
+	if err := decrypt(file, outfile, block, stat.Size()); err != nil {
+		return errors.Wrap(err, "could not decrypt audit log")
+	}
+
+	glog.Infof("Decryption of Audit file %s is Done. Decrypted file is %s",
+		decryptCmd.Conf.GetString("in"),
+		decryptCmd.Conf.GetString("out"))
+	return nil
+}
+
+func decrypt(file io.ReaderAt, outfile io.Writer, block cipher.Block, sz int64) error {
+
 	// decrypt header in audit log to verify encryption key
 	// [16]byte IV + [4]byte len(x.VerificationText) + [11]byte x.VerificationText
 	decryptHeader := func() ([]byte, int64, error) {
-		var iterator int64 = 0
+		var iterator int64
 		iv := make([]byte, aes.BlockSize)
 		n, err := file.ReadAt(iv, iterator) // get first iv
 		if err != nil {
@@ -173,8 +186,6 @@ func run() error {
 		iv, iterator = iv2, iterator2
 	}
 
-	var count int
-
 	// encrypted writes each have the form below
 	// IV generated for each write
 	// #################################################################
@@ -182,9 +193,8 @@ func run() error {
 	// #################################################################
 	decryptBody := func() {
 		for {
-			count++
 			// if its the end of data. finish decrypting
-			if iterator >= stat.Size() {
+			if iterator >= sz {
 				break
 			}
 			n, err := file.ReadAt(iv, iterator)
@@ -231,7 +241,7 @@ func run() error {
 	decryptBodyDeprecated := func() {
 		for {
 			// if its the end of data. finish decrypting
-			if iterator >= stat.Size() {
+			if iterator >= sz {
 				break
 			}
 			n, err := file.ReadAt(iv[12:], iterator)
@@ -267,8 +277,6 @@ func run() error {
 		decryptBody()
 	}
 
-	glog.Infof("Decryption of Audit file %s is Done. Decrypted file is %s",
-		decryptCmd.Conf.GetString("in"),
-		decryptCmd.Conf.GetString("out"))
 	return nil
+
 }
