@@ -1,4 +1,4 @@
-//go:build integration || cloud
+//go:build integration || cloud || upgrade
 
 /*
  * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
@@ -352,7 +352,7 @@ func populateCluster() {
 		panic(err)
 	}
 
-	if err := dc.AssignUids(21000); err != nil {
+	if err := dc.AssignUids(65536); err != nil {
 		panic(err)
 	}
 	setSchema(testSchema)

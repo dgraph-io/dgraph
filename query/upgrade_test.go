@@ -1,4 +1,4 @@
-//go:build integration
+//go:build upgrade
 
 /*
  * Copyright 2023 Dgraph Labs, Inc. and Contributors
@@ -20,19 +20,43 @@ package query
 
 import (
 	"testing"
+	"time"
 
 	"github.com/dgraph-io/dgraph/dgraphtest"
-	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 )
 
 func TestMain(m *testing.M) {
-	dc = dgraphtest.NewComposeCluster()
+	conf := dgraphtest.NewClusterConfig().WithNumAlphas(3).WithNumZeros(3).WithReplicas(3).
+		WithACL(20 * time.Second).WithEncryption().WithVersion("8b3712e")
+	c, err := dgraphtest.NewLocalCluster(conf)
+	x.Panic(err)
+	defer c.Cleanup()
+	c.Start()
 
-	var err error
-	client, err = testutil.DgraphClientWithGroot(testutil.SockAddr)
-	x.Check(err)
+	// setup the global Cluster var
+	dc = c
 
+	// setup client
+	dg, err := c.Client()
+	if err != nil {
+		panic(err)
+	}
+	client = dg
+
+	// do mutations
 	populateCluster()
+
+	// upgrade
+	x.Panic(c.Upgrade("68427a7", dgraphtest.BackupRestore))
+
+	// setup the client again
+	dg, err = c.Client()
+	if err != nil {
+		panic(err)
+	}
+	client = dg
+
+	// Run tests
 	_ = m.Run()
 }

@@ -19,21 +19,21 @@
 package query
 
 import (
-	"os"
 	"testing"
 
 	"github.com/dgraph-io/dgraph/dgraphtest"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 func TestMain(m *testing.M) {
 	c, err := dgraphtest.NewDCloudCluster()
-	if err != nil {
-		panic(err)
-	}
+	x.Panic(err)
 	defer c.Cleanup()
 
-	client = c.Client()
+	client, err = c.Client()
+	x.Panic(err)
+
 	dc = c
 	populateCluster()
-	os.Exit(m.Run())
+	_ = m.Run()
 }
