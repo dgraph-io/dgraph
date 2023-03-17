@@ -113,23 +113,23 @@ func run() error {
 	decryptHeader := func() ([]byte, int64, error) {
 		var iterator int64 = 0
 		iv := make([]byte, aes.BlockSize)
-		_, err := file.ReadAt(iv, iterator) // get first iv
+		n, err := file.ReadAt(iv, iterator) // get first iv
 		if err != nil {
 			return nil, 0, err
 		}
-		iterator = iterator + aes.BlockSize + 4 // length of verification text encoded in uint32
+		iterator = iterator + int64(n) + 4 // length of verification text encoded in uint32
 
 		ct := make([]byte, len(x.VerificationText))
-		_, err = file.ReadAt(ct, iterator)
+		n, err = file.ReadAt(ct, iterator)
 		if err != nil {
 			return nil, 0, err
 		}
-		iterator = iterator + int64(len(x.VerificationText))
+		iterator = iterator + int64(n)
 
-		text := make([]byte, len(x.VerificationText))
+		//	text := make([]byte, len(x.VerificationText))
 		stream := cipher.NewCTR(block, iv)
-		stream.XORKeyStream(text, ct)
-		if string(text) != x.VerificationText {
+		stream.XORKeyStream(ct, ct)
+		if string(ct) != x.VerificationText {
 			return nil, 0, errors.New("invalid encryption key provided. Please check your encryption key")
 		}
 		return iv, iterator, nil
@@ -140,23 +140,23 @@ func run() error {
 		var iterator int64 = 0
 
 		iv := make([]byte, aes.BlockSize)
-		_, err := file.ReadAt(iv, iterator)
+		n, err := file.ReadAt(iv, iterator)
 		if err != nil {
 			return nil, 0, err
 		}
-		iterator = iterator + aes.BlockSize
+		iterator = iterator + int64(n)
 
 		ct := make([]byte, len(x.VerificationTextDeprecated))
-		_, err = file.ReadAt(ct, iterator)
+		n, err = file.ReadAt(ct, iterator)
 		if err != nil {
 			return nil, 0, err
 		}
-		iterator = iterator + int64(len(x.VerificationTextDeprecated))
+		iterator = iterator + int64(n)
 
-		text := make([]byte, len(x.VerificationTextDeprecated))
+		//	text := make([]byte, len(x.VerificationTextDeprecated))
 		stream := cipher.NewCTR(block, iv)
-		stream.XORKeyStream(text, ct)
-		if string(text) != x.VerificationTextDeprecated {
+		stream.XORKeyStream(ct, ct)
+		if string(ct) != x.VerificationTextDeprecated {
 			return nil, 0, errors.New("invalid encryption key provided. Please check your encryption key")
 		}
 		return iv, iterator, nil
@@ -193,6 +193,7 @@ func run() error {
 			if err != nil {
 				glog.Warningf("received %v while decrypting audit log\n", err)
 				glog.Warningf("read %v bytes, expected %v\n", n, len(iv))
+				break
 			}
 			iterator = iterator + 16
 			length := make([]byte, 4)
@@ -200,16 +201,18 @@ func run() error {
 			if err != nil {
 				glog.Warningf("received %v while decrypting audit log\n", err)
 				glog.Warningf("read %v bytes, expected %v\n", n, len(length))
+				break
 			}
-			iterator = iterator + 4
+			iterator = iterator + int64(n)
 
 			content := make([]byte, binary.BigEndian.Uint32(length))
 			n, err = file.ReadAt(content, iterator)
 			if err != nil {
 				glog.Warningf("received %v while decrypting audit log\n", err)
 				glog.Warningf("read %v bytes, expected %v\n", n, len(content))
+				break
 			}
-			iterator = iterator + int64(binary.BigEndian.Uint32(length))
+			iterator = iterator + int64(n)
 
 			stream := cipher.NewCTR(block, iv)
 			stream.XORKeyStream(content, content)
@@ -217,6 +220,7 @@ func run() error {
 			if err != nil {
 				glog.Warningf("received %v while writing decrypted audit log\n", err)
 				glog.Warningf("wrote %v bytes, expected to write %v\n", n, len(content))
+				break
 			}
 		}
 	}
@@ -236,22 +240,25 @@ func run() error {
 			if err != nil {
 				glog.Warningf("received %v while decrypting audit log\n", err)
 				glog.Warningf("read %v bytes, expected %v\n", n, len(iv[12:]))
+				break
 			}
-			iterator = iterator + 4
+			iterator = iterator + int64(n)
 
 			content := make([]byte, binary.BigEndian.Uint32(iv[12:]))
 			n, err = file.ReadAt(content, iterator)
 			if err != nil {
 				glog.Warningf("received %v while decrypting audit log\n", err)
 				glog.Warningf("read %v bytes, expected %v\n", n, len(content))
+				break
 			}
-			iterator = iterator + int64(binary.BigEndian.Uint32(iv[12:]))
+			iterator = iterator + int64(n)
 			stream := cipher.NewCTR(block, iv)
 			stream.XORKeyStream(content, content)
 			n, err = outfile.Write(content)
 			if err != nil {
 				glog.Warningf("received %v while writing decrypted audit log\n", err)
 				glog.Warningf("wrote %v bytes, expected to write %v\n", n, len(content))
+				break
 			}
 		}
 	}
