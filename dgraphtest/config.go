@@ -22,22 +22,6 @@ import (
 	"time"
 )
 
-type Logger interface {
-	Logf(format string, args ...any)
-}
-
-func log(l Logger, format string, args ...any) {
-	if len(format) == 0 || format[len(format)-1] != '\n' {
-		format = format + "\n"
-	}
-
-	if l == nil {
-		fmt.Printf(format, args...)
-	} else {
-		l.Logf(format, args...)
-	}
-}
-
 type ClusterConfig struct {
 	prefix     string
 	numAlphas  int
@@ -47,7 +31,6 @@ type ClusterConfig struct {
 	acl        bool
 	aclTTL     time.Duration
 	encryption bool
-	logr       Logger
 	version    string
 }
 
@@ -90,11 +73,6 @@ func (cc ClusterConfig) WithACL(aclTTL time.Duration) ClusterConfig {
 
 func (cc ClusterConfig) WithEncryption() ClusterConfig {
 	cc.encryption = true
-	return cc
-}
-
-func (cc ClusterConfig) WithLogger(logr Logger) ClusterConfig {
-	cc.logr = logr
 	return cc
 }
 

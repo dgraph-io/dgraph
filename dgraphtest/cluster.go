@@ -16,6 +16,11 @@
 
 package dgraphtest
 
+import (
+	"github.com/dgraph-io/dgo/v210"
+)
+
 type Cluster interface {
 	AssignUids(num uint64) error
+	Client() (*dgo.Dgraph, error)
 }

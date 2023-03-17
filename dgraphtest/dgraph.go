@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/docker/docker/api/types/mount"
 	docker "github.com/docker/docker/client"
@@ -62,6 +61,7 @@ type dnode interface {
 	mounts(*LocalCluster) ([]mount.Mount, error)
 	healthURL(*LocalCluster) (string, error)
 	assignURL(*LocalCluster) (string, error)
+	alphaURL(*LocalCluster) (string, error)
 }
 
 type zero struct {
@@ -142,6 +142,10 @@ func (z *zero) assignURL(c *LocalCluster) (string, error) {
 	return "http://localhost:" + publicPort + "/assign", nil
 }
 
+func (z *zero) alphaURL(c *LocalCluster) (string, error) {
+	return "", errors.New("no alpha URL for zero")
+}
+
 type alpha struct {
 	id            int
 	containerID   string
@@ -174,8 +178,7 @@ func (a *alpha) cmd(c *LocalCluster) []string {
 		`--security=whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16`}
 
 	if c.conf.acl {
-		acmd = append(acmd, fmt.Sprintf(`--acl=secret-file=%s; access-ttl=%vs`,
-			aclSecretMountPath, c.conf.aclTTL/time.Second))
+		acmd = append(acmd, fmt.Sprintf(`--acl=secret-file=%s; access-ttl=%s`, aclSecretMountPath, c.conf.aclTTL))
 	}
 	if c.conf.encryption {
 		acmd = append(acmd, fmt.Sprintf(`--encryption=key-file=%v`, encKeyMountPath))
@@ -202,6 +205,7 @@ func (a *alpha) mounts(c *LocalCluster) ([]mount.Mount, error) {
 		return nil, err
 	}
 	mounts = append(mounts, binMount)
+
 	if c.conf.acl {
 		mounts = append(mounts, mount.Mount{
 			Type:     mount.TypeBind,
@@ -235,7 +239,16 @@ func (a *alpha) assignURL(c *LocalCluster) (string, error) {
 	return "", errors.New("no assign URL for alpha")
 }
 
+func (a *alpha) alphaURL(c *LocalCluster) (string, error) {
+	publicPort, err := publicPort(c.dcli, a, alphaGrpcPort)
+	if err != nil {
+		return "", err
+	}
+	return "localhost:" + publicPort + "", nil
+}
+
 func publicPort(dcli *docker.Client, dc dnode, privatePort string) (string, error) {
+	// TODO(aman): we should cache the port information
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 	defer cancel()
 
@@ -278,10 +291,10 @@ func mountBinary(c *LocalCluster) (mount.Mount, error) {
 			ReadOnly: true,
 		}, nil
 	}
+
 	if err := c.setupBinary(); err != nil {
 		return mount.Mount{}, err
 	}
-
 	return mount.Mount{
 		Type:     mount.TypeBind,
 		Source:   c.tempBinDir,

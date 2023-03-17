@@ -23,17 +23,24 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/network"
 	docker "github.com/docker/docker/client"
+	"github.com/golang/glog"
 	"github.com/pkg/errors"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+
+	"github.com/dgraph-io/dgo/v210"
+	"github.com/dgraph-io/dgo/v210/protos/api"
 )
 
 var (
-	requestTimeout = 30 * time.Second
+	requestTimeout = 60 * time.Second
 	stopTimeout    = time.Minute
 )
 
@@ -47,27 +54,22 @@ type LocalCluster struct {
 	conf       ClusterConfig
 	tempBinDir string
 	// resources
+	conns  []*grpc.ClientConn
+	client *dgo.Dgraph
 	dcli   *docker.Client
 	net    cnet
 	zeros  []dnode
 	alphas []dnode
 }
 
-func NewLocalCluster(conf ClusterConfig) (LocalCluster, error) {
-	c := LocalCluster{conf: conf}
+func NewLocalCluster(conf ClusterConfig) (*LocalCluster, error) {
+	c := &LocalCluster{conf: conf}
 	if err := c.init(); err != nil {
 		c.Cleanup()
-		return LocalCluster{}, err
+		return nil, err
 	}
 
 	return c, nil
-}
-
-func (c *LocalCluster) log(format string, args ...any) {
-	if c.conf.logr == nil {
-		return
-	}
-	c.conf.logr.Logf(format, args...)
 }
 
 func (c *LocalCluster) init() error {
@@ -137,7 +139,7 @@ func (c *LocalCluster) createNetwork() error {
 }
 
 func (c *LocalCluster) Start() error {
-	c.log("starting cluster with prefix [%v]", c.conf.prefix)
+	glog.Infof("starting cluster with prefix [%v]", c.conf.prefix)
 	for i := 0; i < c.conf.numZeros; i++ {
 		if err := c.StartZero(i); err != nil {
 			return err
@@ -148,11 +150,7 @@ func (c *LocalCluster) Start() error {
 			return err
 		}
 	}
-
-	if err := c.healthCheck(); err != nil {
-		return err
-	}
-	return nil
+	return c.healthCheck()
 }
 
 func (c *LocalCluster) StartZero(id int) error {
@@ -179,7 +177,7 @@ func (c *LocalCluster) startContainer(dc dnode) error {
 }
 
 func (c *LocalCluster) Stop() error {
-	c.log("stopping cluster with prefix [%v]", c.conf.prefix)
+	glog.Infof("stopping cluster with prefix [%v]", c.conf.prefix)
 	for i := range c.alphas {
 		if err := c.StopAlpha(i); err != nil {
 			return err
@@ -217,31 +215,36 @@ func (c *LocalCluster) stopContainer(dc dnode) error {
 }
 
 func (c *LocalCluster) Cleanup() {
-	c.log("cleaning up cluster with prefix [%v]", c.conf.prefix)
+	glog.Infof("cleaning up cluster with prefix [%v]", c.conf.prefix)
 
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 	defer cancel()
 
+	for _, conn := range c.conns {
+		if err := conn.Close(); err != nil {
+			glog.Warningf("error closing connection: %v", err)
+		}
+	}
+
 	ro := types.ContainerRemoveOptions{RemoveVolumes: true, Force: true}
 	for _, aa := range c.alphas {
 		if err := c.dcli.ContainerRemove(ctx, aa.cid(), ro); err != nil {
-			log(c.conf.logr, "error removing alpha [%v]: %v", aa.cname(), err)
+			glog.Warningf("error removing alpha [%v]: %v", aa.cname(), err)
 		}
 	}
 	for _, zo := range c.zeros {
 		if err := c.dcli.ContainerRemove(ctx, zo.cid(), ro); err != nil {
-			log(c.conf.logr, "error removing zero [%v]: %v", zo.cname(), err)
+			glog.Warningf("error removing zero [%v]: %v", zo.cname(), err)
 		}
 	}
 	if c.net.id != "" {
 		if err := c.dcli.NetworkRemove(ctx, c.net.id); err != nil {
-			c.log("error removing network [%v]: %v", c.net.name, err)
+			glog.Warningf("error removing network [%v]: %v", c.net.name, err)
 		}
 	}
 	if err := os.RemoveAll(c.tempBinDir); err != nil {
-		c.log("error while removing temp Dir", err)
+		glog.Warningf("error while removing temp bin dir: %v", err)
 	}
-
 }
 
 func (c *LocalCluster) createContainer(dc dnode) (string, error) {
@@ -274,7 +277,7 @@ func (c *LocalCluster) createContainer(dc dnode) (string, error) {
 }
 
 func (c *LocalCluster) healthCheck() error {
-	c.log("checking health of containers")
+	glog.Infof("checking health of containers")
 	for i := 0; i < c.conf.numZeros; i++ {
 		url, err := c.zeros[i].healthURL(c)
 		if err != nil {
@@ -298,30 +301,88 @@ func (c *LocalCluster) healthCheck() error {
 
 func (c *LocalCluster) containerHealthCheck(url string) error {
 	for i := 0; i < 60; i++ {
+		time.Sleep(time.Second)
+
 		resp, err := http.Get(url)
-		if err == nil && resp != nil && resp.StatusCode == http.StatusOK {
+		if err != nil {
+			glog.Warningf("error hitting health endpoint [%v], err: [%v]", url, err)
+			continue
+		}
+		defer func() {
+			if err := resp.Body.Close(); err != nil {
+				glog.Warningf("error closing response body: %v", err)
+			}
+		}()
+
+		body, berr := io.ReadAll(resp.Body)
+		if berr != nil {
+			glog.Warningf("error reading health response body: urL: [%v], err: [%v]", url, err)
+		}
+		sbody := string(body)
+
+		// zero returns OK in the health check
+		if sbody == "OK" {
 			return nil
 		}
 
-		var body []byte
-		if resp != nil && resp.Body != nil {
-			body, _ = io.ReadAll(resp.Body)
-			_ = resp.Body.Close()
+		// For Alpha, we only run alpha with EE features enabled
+		if strings.Contains(sbody, `"ee_features"`) {
+			if !c.conf.acl || strings.Contains(sbody, `"acl"`) {
+				return nil
+			}
 		}
-
-		c.log("health for [%v] failed, err: [%v], response: [%v]", url, err, string(body))
-		time.Sleep(time.Second)
 	}
 
-	return fmt.Errorf("failed health check on [%v]", url)
+	return fmt.Errorf("health failed, cluster took too long to come up [%v]", url)
 }
 
+// Client returns a client that can talk to any Alpha in the cluster
+func (c *LocalCluster) Client() (*dgo.Dgraph, error) {
+	if c.client != nil {
+		return c.client, nil
+	}
+
+	var apiClients []api.DgraphClient
+	for i := 0; i < c.conf.numAlphas; i++ {
+		url, err := c.alphas[i].alphaURL(c)
+		if err != nil {
+			return nil, errors.Wrap(err, "error getting health URL")
+		}
+		conn, err := grpc.Dial(url, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+			return nil, errors.Wrap(err, "error connecting to alpha")
+		}
+		c.conns = append(c.conns, conn)
+		apiClients = append(apiClients, api.NewDgraphClient(conn))
+	}
+
+	client := dgo.NewDgraphClient(apiClients...)
+	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+	defer cancel()
+	if err := client.Login(ctx, defaultUser, defaultPassowrd); err != nil {
+		return nil, errors.Wrap(err, "error during login")
+	}
+	c.client = client
+
+	return client, nil
+}
+
+// Upgrades the cluster to the provided dgraph version
 func (c *LocalCluster) Upgrade(version string) error {
 	if version == c.conf.version {
 		return fmt.Errorf("cannot upgrade to the same version")
 	}
 
-	c.log("upgrading the cluster to [%v] using stop-start", version)
+	// cleanup existing connections
+	for _, conn := range c.conns {
+		if err := conn.Close(); err != nil {
+			glog.Warningf("error closing connection: %v", err)
+		}
+	}
+	c.conns = c.conns[:0]
+	c.client = nil
+
+	glog.Infof("upgrading the cluster to [%v] using stop-start", version)
 	c.conf.version = version
 	if err := c.Stop(); err != nil {
 		return err
@@ -350,7 +411,7 @@ func (c *LocalCluster) AssignUids(num uint64) error {
 	}
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
-			log(c.conf.logr, "error closing response body: %v", err)
+			glog.Warningf("error closing response body: %v", err)
 		}
 	}()
 

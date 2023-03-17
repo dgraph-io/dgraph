@@ -26,6 +26,7 @@ import (
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/golang/glog"
 	"github.com/pkg/errors"
 )
 
@@ -38,20 +39,17 @@ func (c *LocalCluster) setupBinary() error {
 	if err != nil {
 		return err
 	}
+
 	if isFileExist {
-		if err := copyBinary(binDir, c.tempBinDir, c.conf.version); err != nil {
-			return err
-		}
-		return nil
+		return copyBinary(binDir, c.tempBinDir, c.conf.version)
 	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), cloneTimeout)
 	defer cancel()
 	repo, err := git.PlainOpen(repoDir)
 	if err != nil && err == git.ErrRepositoryNotExists {
-		c.log("cloning repo")
-		repo, err = git.PlainCloneContext(ctx, repoDir, false, &git.CloneOptions{
-			URL: dgraphRepoUrl,
-		})
+		glog.Infof("cloning dgraph repo")
+		repo, err = git.PlainCloneContext(ctx, repoDir, false, &git.CloneOptions{URL: dgraphRepoUrl})
 		if err != nil {
 			return errors.Wrap(err, "error while cloning dgraph git repo")
 		}
@@ -62,6 +60,7 @@ func (c *LocalCluster) setupBinary() error {
 			return errors.Wrap(err, "error while fetching git repo")
 		}
 	}
+
 	hash, err := repo.ResolveRevision(plumbing.Revision(c.conf.version))
 	if err != nil {
 		return err
@@ -69,15 +68,11 @@ func (c *LocalCluster) setupBinary() error {
 	if err := checkoutGitRepo(repo, hash); err != nil {
 		return err
 	}
-	// make dgraph of specific version
-	c.log("building dgraph binary")
+
 	if err := buildDgraphBinary(repoDir, binDir, c.conf.version); err != nil {
 		return err
 	}
-	if err := copyBinary(binDir, c.tempBinDir, c.conf.version); err != nil {
-		return err
-	}
-	return nil
+	return copyBinary(binDir, c.tempBinDir, c.conf.version)
 }
 
 func checkoutGitRepo(repo *git.Repository, hash *plumbing.Hash) error {
@@ -92,6 +87,8 @@ func checkoutGitRepo(repo *git.Repository, hash *plumbing.Hash) error {
 }
 
 func buildDgraphBinary(dir, binaryDir, version string) error {
+	glog.Infof("building dgraph binary")
+
 	cmd := exec.Command("make", "dgraph")
 	cmd.Dir = filepath.Join(dir, "dgraph")
 	if err := cmd.Run(); err != nil {
@@ -101,6 +98,7 @@ func buildDgraphBinary(dir, binaryDir, version string) error {
 		filepath.Join(binaryDir, fmt.Sprintf(binaryName, version))); err != nil {
 		return errors.Wrap(err, "error while copying binary")
 	}
+
 	return nil
 }
 
@@ -109,6 +107,7 @@ func copyBinary(fromDir, toDir, version string) error {
 		filepath.Join(toDir, "dgraph")); err != nil {
 		return errors.Wrap(err, "error while copying binary into tempBinDir")
 	}
+
 	return nil
 }
 
@@ -120,17 +119,20 @@ func copy(src, dst string) error {
 	if !sourceFileStat.Mode().IsRegular() {
 		return errors.Wrap(err, fmt.Sprintf("%s is not a regular file", src))
 	}
+
 	source, err := os.Open(src)
 	srcStat, _ := source.Stat()
 	if err != nil {
 		return errors.Wrap(err, fmt.Sprintf("error while opening file [%s]", src))
 	}
 	defer source.Close()
+
 	destination, err := os.Create(dst)
 	if err != nil {
 		return err
 	}
 	defer destination.Close()
+
 	if err := os.Chmod(dst, srcStat.Mode()); err != nil {
 		return err
 	}
