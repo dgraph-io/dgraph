@@ -61,8 +61,26 @@ type LocalCluster struct {
 	client *dgo.Dgraph
 	dcli   *docker.Client
 	net    cnet
-	zeros  []dnode
-	alphas []dnode
+	zeros  []*zero
+	alphas []*alpha
+}
+
+type UpgradeStrategy int
+
+const (
+	BackupRestore UpgradeStrategy = iota
+	StopStart
+)
+
+func (u UpgradeStrategy) String() string {
+	switch u {
+	case BackupRestore:
+		return "backup-restore"
+	case StopStart:
+		return "stop-start"
+	default:
+		panic("unknown upgrade strategy")
+	}
 }
 
 func NewLocalCluster(conf ClusterConfig) (*LocalCluster, error) {
@@ -384,8 +402,38 @@ func doReq(req *http.Request) ([]byte, error) {
 	return respBody, nil
 }
 
+func (c *LocalCluster) recreateContainers() error {
+	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+	defer cancel()
+
+	ro := types.ContainerRemoveOptions{RemoveVolumes: true, Force: true}
+	for _, zo := range c.zeros {
+		if err := c.dcli.ContainerRemove(ctx, zo.cid(), ro); err != nil {
+			return errors.Wrapf(err, "error removing zero [%v]", zo.cname())
+		}
+		cid, err := c.createContainer(zo)
+		if err != nil {
+			return err
+		}
+		zo.containerID = cid
+	}
+
+	for _, aa := range c.alphas {
+		if err := c.dcli.ContainerRemove(ctx, aa.cid(), ro); err != nil {
+			return errors.Wrapf(err, "error removing alpha [%v]", aa.cname())
+		}
+		cid, err := c.createContainer(aa)
+		if err != nil {
+			return err
+		}
+		aa.containerID = cid
+	}
+
+	return nil
+}
+
 // Upgrades the cluster to the provided dgraph version
-func (c *LocalCluster) Upgrade(version string) error {
+func (c *LocalCluster) Upgrade(version string, strategy UpgradeStrategy) error {
 	if version == c.conf.version {
 		return fmt.Errorf("cannot upgrade to the same version")
 	}
@@ -399,16 +447,46 @@ func (c *LocalCluster) Upgrade(version string) error {
 	c.conns = c.conns[:0]
 	c.client = nil
 
-	glog.Infof("upgrading the cluster to [%v] using stop-start", version)
-	c.conf.version = version
-	if err := c.Stop(); err != nil {
-		return err
-	}
+	glog.Infof("upgrading the cluster from [%v] to [%v] using [%v]", c.conf.version, version, strategy)
+	switch strategy {
+	case BackupRestore:
+		if err := Backup(c, true, DefaultBackupDir); err != nil {
+			return errors.Wrap(err, "error taking backup during upgrade")
+		}
+		if err := c.Stop(); err != nil {
+			return err
+		}
+		c.conf.version = version
+		if err := c.setupBinary(); err != nil {
+			return err
+		}
+		if err := c.recreateContainers(); err != nil {
+			return err
+		}
+		if err := c.Start(); err != nil {
+			return err
+		}
+		if err := Restore(c, DefaultBackupDir, "", 0, 1, encKeyMountPath); err != nil {
+			return errors.Wrap(err, "error doing restore during upgrade")
+		}
+		if err := WaitForRestore(c); err != nil {
+			return errors.Wrap(err, "error waiting for restore to complete")
+		}
+		return nil
 
-	if err := c.setupBinary(); err != nil {
-		return err
+	case StopStart:
+		if err := c.Stop(); err != nil {
+			return err
+		}
+		c.conf.version = version
+		if err := c.setupBinary(); err != nil {
+			return err
+		}
+		return c.Start()
+
+	default:
+		return errors.New("unknown upgrade strategy")
 	}
-	return c.Start()
 }
 
 // Client returns a client that can talk to any Alpha in the cluster
