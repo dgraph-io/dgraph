@@ -711,10 +711,6 @@ func updateGQLSchemaConcurrent(t *testing.T, schema, authority string) bool {
 }
 
 func TestMain(m *testing.M) {
-	err := common.CheckGraphQLStarted(common.GraphqlAdminURL)
-	if err != nil {
-		x.Log(err, "Waited for GraphQL test server to become available, but it never did.")
-		os.Exit(1)
-	}
-	os.Exit(m.Run())
+	x.Panic(common.CheckGraphQLStarted(common.GraphqlAdminURL))
+	_ = m.Run()
 }

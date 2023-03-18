@@ -19,7 +19,6 @@ package dql
 
 import (
 	"bytes"
-	"os"
 	"runtime/debug"
 	"testing"
 
@@ -4020,7 +4019,7 @@ func TestParseRegexp6(t *testing.T) {
 }
 
 func TestMain(m *testing.M) {
-	os.Exit(m.Run())
+	_ = m.Run()
 }
 
 func TestCountAtRoot(t *testing.T) {
