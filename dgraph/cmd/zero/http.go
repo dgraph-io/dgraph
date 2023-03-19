@@ -23,12 +23,16 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"encoding/json"
 
+	"github.com/pkg/errors"
 	"github.com/gogo/protobuf/jsonpb"
 	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/worker"
 )
 
 // intFromQueryParam checks for name as a query param, converts it to uint64 and returns it.
@@ -231,8 +235,59 @@ func (st *state) getState(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (s *Server) zeroHealth(ctx context.Context, all bool) (*api.Response, error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+
+	var healthAll []pb.HealthInfo
+
+	// Append self.
+	healthAll = append(healthAll, pb.HealthInfo{
+		Instance:    "zero",
+		Address:     x.WorkerConfig.MyAddr,
+		Status:      "healthy",
+		Group:       strconv.Itoa(int(worker.GroupId())),
+		Version:     x.Version(),
+		Uptime:      int64(time.Since(x.WorkerConfig.StartTime) / time.Second),
+		LastEcho:    time.Now().Unix(),
+	})
+
+	var err error
+	var jsonOut []byte
+	if jsonOut, err = json.Marshal(healthAll); err != nil {
+		return nil, errors.Errorf("Unable to Marshal. Err %v", err)
+	}
+	return &api.Response{Json: jsonOut}, nil
+}
+
 func (st *state) pingResponse(w http.ResponseWriter, r *http.Request) {
+	var err error
 	x.AddCorsHeaders(w)
+
+	var ok = false
+	for _, s := range r.Header["Content-Type"] {
+		if s == "application/json" {
+			ok = true
+			break
+		}
+	}
+	if ok {
+		var resp *api.Response
+		if resp, err = (st.zero).zeroHealth(context.Background(), false); err != nil {
+			x.SetStatus(w, x.Error, err.Error())
+			return
+		}       
+		if resp == nil {
+			x.SetStatus(w, x.ErrorNoData, "No health information available.")
+			return
+		} 
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(resp.Json)
+
+		return
+	}
 
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte("OK"))
