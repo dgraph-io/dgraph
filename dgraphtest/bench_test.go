@@ -1,26 +1,38 @@
 package dgraphtest
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
 	"os/exec"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v2"
 )
 
 var runType string
 
+type TestCases struct {
+	Tag   string `yaml:"tag"`
+	Query string `yaml:"query"`
+	Resp  string `yaml:"resp"`
+}
+
 func BenchmarkBulkoad(b *testing.B) {
-	if runType == "GITHUB_CI" {
-		// No need for local setup; cluster has been setup by perf_framework.go
-		fmt.Println("Executing perf tests on CI")
-	} else {
-		// Setup cluster locally
-		fmt.Println("Executing perf tests locally")
-	}
+	// if runType == "GH_CI" {
+	// 	// No need for local setup; cluster has been setup by perf_framework.go
+	// 	fmt.Println("Executing perf tests on CI")
+	// } else {
+	// 	// Setup cluster locally
+	// 	fmt.Println("Executing perf tests locally")
+	// }
+
+	// resource.json
 
 	var args []string
 	var schemaFile string
@@ -57,23 +69,40 @@ func BenchmarkBulkoad(b *testing.B) {
 
 }
 
-func BenchmarkSample(b *testing.B) {
-	if runType == "GITHUB_CI" {
-		// No need for local setup; cluster has been setup by perf_framework.go
-		fmt.Println("Executing perf tests on CI")
-	} else {
-		// Setup cluster locally
-		fmt.Println("Executing perf tests locally")
+func BenchmarkLDBCAllQueries(b *testing.B) {
+
+	dg, err := testutil.DgraphClient(testutil.ContainerAddr("alpha1", 9080))
+	if err != nil {
+		b.Fatalf("Error while getting a dgraph client: %v", err)
 	}
+
+	yfile, _ := os.ReadFile("../systest/ldbc/test_cases.yaml")
+
+	tc := make(map[string]TestCases)
+
+	err = yaml.Unmarshal(yfile, &tc)
+
+	if err != nil {
+		b.Fatalf("Error while greading test cases yaml: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 
 	for i := 0; i < b.N; i++ {
-		b.StopTimer()
 		b.StartTimer()
-		// functionInTest()
-		b.StopTimer()
+		for _, tt := range tc {
+			_, err := dg.NewTxn().Query(ctx, tt.Query)
+			require.NoError(b, err)
+			b.StopTimer()
+			// testutil.CompareJSON(b, tt.Resp, string(resp.Json))
+			if ctx.Err() == context.DeadlineExceeded {
+				b.Fatal("aborting test due to query timeout")
+			}
+		}
 
 	}
-	fmt.Printf("Finished Test\n")
+	cancel()
+
 }
 
 func init() {
