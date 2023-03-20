@@ -19,7 +19,6 @@
 package auth_closed_by_default
 
 import (
-	"os"
 	"testing"
 
 	"github.com/dgrijalva/jwt-go/v4"
@@ -204,5 +203,5 @@ func TestMain(m *testing.M) {
 	authSchema, err := testutil.AppendAuthInfo(schema, algo, "../auth/sample_public_key.pem", true)
 	x.Panic(err)
 	common.BootstrapServer(authSchema, data)
-	os.Exit(m.Run())
+	_ = m.Run()
 }

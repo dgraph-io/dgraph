@@ -596,5 +596,5 @@ func TestNameSpaceLimitFlag(t *testing.T) {
 
 func TestMain(m *testing.M) {
 	fmt.Printf("Using adminEndpoint : %s for multi-tenancy test.\n", testutil.AdminUrl())
-	os.Exit(m.Run())
+	_ = m.Run()
 }

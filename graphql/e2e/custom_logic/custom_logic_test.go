@@ -3264,5 +3264,5 @@ func TestMain(m *testing.M) {
 		x.Log(err, "Waited for GraphQL test server to become available, but it never did.")
 		os.Exit(1)
 	}
-	os.Exit(m.Run())
+	_ = m.Run()
 }

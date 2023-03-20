@@ -404,5 +404,5 @@ func TestMain(m *testing.M) {
 	x.Check(os.Chdir(tmpDir))
 	defer os.RemoveAll(tmpDir)
 
-	os.Exit(m.Run())
+	_ = m.Run()
 }

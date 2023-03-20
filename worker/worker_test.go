@@ -391,5 +391,5 @@ func TestMain(m *testing.M) {
 	posting.Init(ps, 0)
 	Init(ps)
 
-	os.Exit(m.Run())
+	_ = m.Run()
 }

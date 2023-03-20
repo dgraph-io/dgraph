@@ -18,7 +18,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
 	"testing"
@@ -3624,5 +3623,5 @@ func TestDropAllShouldResetGuardiansAndGroot(t *testing.T) {
 func TestMain(m *testing.M) {
 	adminEndpoint = "http://" + testutil.SockAddrHttp + "/admin"
 	fmt.Printf("Using adminEndpoint for acl package: %s\n", adminEndpoint)
-	os.Exit(m.Run())
+	_ = m.Run()
 }

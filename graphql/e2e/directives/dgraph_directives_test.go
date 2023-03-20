@@ -22,7 +22,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
@@ -48,15 +47,11 @@ func TestSchema_WithDgraphDirectives(t *testing.T) {
 func TestMain(m *testing.M) {
 	schemaFile := "schema.graphql"
 	schema, err := os.ReadFile(schemaFile)
-	if err != nil {
-		panic(err)
-	}
+	x.Panic(err)
 
 	jsonFile := "test_data.json"
 	data, err := os.ReadFile(jsonFile)
-	if err != nil {
-		panic(errors.Wrapf(err, "Unable to read file %s.", jsonFile))
-	}
+	x.Panic(err)
 
 	// set up the lambda url for unit tests
 	x.Config.GraphQL = z.NewSuperFlag("lambda-url=http://localhost:8086/graphql-worker;").
@@ -64,5 +59,5 @@ func TestMain(m *testing.M) {
 
 	common.BootstrapServer(schema, data)
 
-	os.Exit(m.Run())
+	_ = m.Run()
 }

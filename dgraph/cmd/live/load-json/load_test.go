@@ -20,7 +20,6 @@ package live
 
 import (
 	"context"
-	"log"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -184,9 +183,7 @@ func TestMain(m *testing.M) {
 
 	var err error
 	dg, err = testutil.DgraphClientWithGroot(testutil.SockAddr)
-	if err != nil {
-		log.Fatalf("Error while getting a dgraph client: %v", err)
-	}
+	x.Panic(err)
 
 	// Try to create any files in a dedicated temp directory that gets cleaned up
 	// instead of all over /tmp or the working directory.
@@ -195,5 +192,5 @@ func TestMain(m *testing.M) {
 	x.Check(os.Chdir(tmpDir))
 	defer os.RemoveAll(tmpDir)
 
-	os.Exit(m.Run())
+	_ = m.Run()
 }
