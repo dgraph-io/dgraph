@@ -257,26 +257,19 @@ func (st *state) pingResponse(w http.ResponseWriter, r *http.Request) {
 	var err error
 	x.AddCorsHeaders(w)
 
-	var ok = false
-	for _, s := range r.Header["Content-Type"] {
-		if s == "application/json" {
-			ok = true
-			break
-		}
+	switch r.Header.Get("Accept") {
+		case "application/json":
+			var resp *api.Response
+			if resp, err = (st.zero).zeroHealth(r.Context()); err != nil {
+				x.SetStatus(w, x.Error, err.Error())
+				return
+			}       
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(resp.Json)
+		default:
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("OK"))
 	}
-	if ok {
-		var resp *api.Response
-		if resp, err = (st.zero).zeroHealth(r.Context()); err != nil {
-			x.SetStatus(w, x.Error, err.Error())
-			return
-		}       
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write(resp.Json)
-
-		return
-	}
-
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte("OK"))
 }
