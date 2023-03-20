@@ -18,13 +18,9 @@ BUILD          ?= $(shell git rev-parse --short HEAD)
 BUILD_CODENAME  = dgraph
 BUILD_DATE     ?= $(shell git log -1 --format=%ci)
 BUILD_BRANCH   ?= $(shell git rev-parse --abbrev-ref HEAD)
-<<<<<<< HEAD
-#BUILD_VERSION  ?= $(shell git describe --always --tags)
+BUILD_VERSION  ?= $(shell git describe --always --tags)
 #Get version of Badger CLI tool associated with current Dgraph build
 BADGER_VERSION ?= $(shell cat go.mod | grep -i "github.com/dgraph-io/badger" | awk '{print $2}')
-=======
-BUILD_VERSION  ?= $(shell git describe --always --tags)
->>>>>>> main
 
 GOPATH         ?= $(shell go env GOPATH)
 
@@ -41,24 +37,17 @@ endif
 ######################
 DGRAPH_VERSION ?= local
 
-<<<<<<< HEAD
-.PHONY: all
-=======
 .PHONY: all 
->>>>>>> main
 all: dgraph
 
 .PHONY: dgraph
 dgraph:
 	$(MAKE) -w -C $@ all
 
-<<<<<<< HEAD
-=======
 .PHONY: dgraph-coverage
 dgraph-coverage:
 	$(MAKE) -w -C dgraph test-coverage-binary
 
->>>>>>> main
 .PHONY: oss
 oss:
 	$(MAKE) BUILD_TAGS=oss
