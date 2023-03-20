@@ -25,10 +25,10 @@ const (
 
 type ResourceConfig struct {
 	loc         string // local, aws, he, dcloud
-	mem         string // RAM
-	cpu         string // vCPU
-	clusterType string // separate, allInOne, allZallA
-	clientType  string // clientOnZ, clientOnA, clientDiff
+	mem         int    // RAM
+	cpu         int    // vCPU
+	clusterType int    // separate, allInOne, allZallA
+	clientType  int    // clientOnZ, clientOnA, clientDiff
 }
 
 type MetricConfig struct {
@@ -36,6 +36,10 @@ type MetricConfig struct {
 	dgraphProm   bool // Dgraph prometheus metrics
 	promEndpoint string
 	// What else configurations would we need here?
+}
+
+type DatasetConfig struct {
+	name string
 }
 
 type DPerfFunc func(b *testing.B)
@@ -50,7 +54,7 @@ type DgraphPerf struct {
 	cc   ClusterConfig
 	mc   MetricConfig
 	rc   ResourceConfig
-	fnc  DPerfFunc
+	dc   DatasetConfig
 }
 
 type AWSDetails struct {
@@ -66,7 +70,7 @@ type ResourceDetails struct {
 	loc           string
 	awsDetails    AWSDetails
 	heDetails     HEDetails
-	dcloudDetails DcloudDetails
+	dcloudDetails DcloudDetails // Staging
 }
 
 func (dbench *DgraphPerf) isValidBenchConfig() error {
@@ -74,8 +78,12 @@ func (dbench *DgraphPerf) isValidBenchConfig() error {
 	return nil
 }
 
+// Capture exit codes of the RPCs
+
 func (dbench *DgraphPerf) provisionClientAndTarget() ResourceDetails {
 	// Provisions relevant resources and returns details
+
+	// This can be an interface instead of switch/case
 	switch dbench.rc.loc {
 	case "aws":
 		return ResourceDetails{loc: "aws"}
@@ -102,7 +110,8 @@ func parseFlags() (bool, bool) {
 
 func runBenchmarkFromClient(resources ResourceDetails, name string) {
 	// ssh into the client, clone the repo and set env TEST_TO_RUN to name
-	// go test -bench=BenchmarkBulkload -runType=GITHUB_CI
+	// config.json
+	// go test -bench=name -runType=GITHUB_CI
 }
 
 func collectMetricsFromClientAndTarget(resources ResourceDetails, name string) MetricReport {
@@ -159,6 +168,24 @@ func getValidBenchmarks(benchmarksToRun map[string]DgraphPerf) map[string]Dgraph
 }
 
 var PerfTests map[string]DgraphPerf
+
+func init() {
+
+	/*
+		Name: ldbc-all-query
+		Cluster Configuration: numAlphas = 1; numZeros = 1; replicas = 0
+		Resource Configuration: loc = aws (t2.xlarge); mem = 16; cpu = 4; clusterType = allInOne; clientType = clientOnA;
+		Metric configuration: gtc = true
+		fnc: BenchmarkLDBCAllQueries
+	*/
+	PerfTests["ldbc-all-query"] = DgraphPerf{
+		"BenchmarkLDBCAllQueries",
+		ClusterConfig{numAlphas: 1, numZeros: 1, replicas: 0},
+		MetricConfig{gtc: true},
+		ResourceConfig{loc: "aws", mem: 16, cpu: 4, clusterType: allInOne, clientType: clientOnA},
+		DatasetConfig{},
+	}
+}
 
 func main() {
 
