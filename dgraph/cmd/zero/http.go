@@ -25,13 +25,13 @@ import (
 	"time"
 	"encoding/json"
 
+	"github.com/pkg/errors"
 	"github.com/gogo/protobuf/jsonpb"
 	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/dgraph/worker"
 )
 
 // intFromQueryParam checks for name as a query param, converts it to uint64 and returns it.
@@ -243,13 +243,15 @@ func (s *Server) zeroHealth(ctx context.Context) (*api.Response, error) {
 		Instance:    "zero",
 		Address:     x.WorkerConfig.MyAddr,
 		Status:      "healthy",
-		Group:       strconv.Itoa(int(worker.GroupId())),
 		Version:     x.Version(),
 		Uptime:      int64(time.Since(x.WorkerConfig.StartTime) / time.Second),
 		LastEcho:    time.Now().Unix(),
 	}}
 
-	jsonOut, _ := json.Marshal(healthAll)
+	jsonOut, err := json.Marshal(healthAll)
+	if err != nil {
+		return nil, errors.Errorf("Unable to Marshal. Err %v", err)
+	}
 	return &api.Response{Json: jsonOut}, nil
 }
 
