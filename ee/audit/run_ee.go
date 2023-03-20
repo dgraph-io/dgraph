@@ -128,14 +128,14 @@ func decrypt(file io.ReaderAt, outfile io.Writer, block cipher.Block, sz int64) 
 		iv := make([]byte, aes.BlockSize)
 		n, err := file.ReadAt(iv, iterator) // get first iv
 		if err != nil {
-			return nil, 0, err
+			return nil, 0, errors.Wrap(err, "unable to read IV")
 		}
 		iterator = iterator + int64(n) + 4 // length of verification text encoded in uint32
 
 		ct := make([]byte, len(x.VerificationText))
 		n, err = file.ReadAt(ct, iterator)
 		if err != nil {
-			return nil, 0, err
+			return nil, 0, errors.Wrap(err, "unable to read verification text")
 		}
 		iterator = iterator + int64(n)
 
@@ -154,14 +154,14 @@ func decrypt(file io.ReaderAt, outfile io.Writer, block cipher.Block, sz int64) 
 		iv := make([]byte, aes.BlockSize)
 		n, err := file.ReadAt(iv, iterator)
 		if err != nil {
-			return nil, 0, err
+			return nil, 0, errors.Wrap(err, "unable to read IV")
 		}
 		iterator = iterator + int64(n)
 
 		ct := make([]byte, len(x.VerificationTextDeprecated))
 		n, err = file.ReadAt(ct, iterator)
 		if err != nil {
-			return nil, 0, err
+			return nil, 0, errors.Wrap(err, "unable to read verification text")
 		}
 		iterator = iterator + int64(n)
 
