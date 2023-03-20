@@ -28,7 +28,7 @@ import (
 
 func TestMain(m *testing.M) {
 	conf := dgraphtest.NewClusterConfig().WithNumAlphas(3).WithNumZeros(3).WithReplicas(3).
-		WithACL(20 * time.Second).WithEncryption().WithVersion("8b3712e")
+		WithACL(20 * time.Second).WithEncryption().WithVersion("0c9f60156")
 	c, err := dgraphtest.NewLocalCluster(conf)
 	x.Panic(err)
 	defer c.Cleanup()
@@ -48,7 +48,7 @@ func TestMain(m *testing.M) {
 	populateCluster()
 
 	// upgrade
-	x.Panic(c.Upgrade("68427a7", dgraphtest.BackupRestore))
+	x.Panic(c.Upgrade("v23.0.0-beta1"))
 
 	// setup the client again
 	dg, err = c.Client()

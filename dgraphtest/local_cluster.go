@@ -24,12 +24,15 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"testing"
 	"time"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/network"
 	docker "github.com/docker/docker/client"
+	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -65,6 +68,7 @@ type LocalCluster struct {
 func NewLocalCluster(conf ClusterConfig) (*LocalCluster, error) {
 	c := &LocalCluster{conf: conf}
 	if err := c.init(); err != nil {
+		glog.Infof(err.Error())
 		c.Cleanup()
 		return nil, err
 	}
@@ -430,6 +434,47 @@ func (c *LocalCluster) AssignUids(num uint64) error {
 	}
 	if len(data.Errors) > 0 {
 		return fmt.Errorf("error received from zero: %v", data.Errors[0].Message)
+	}
+	return nil
+}
+
+// CompareCommits compare given commit with current cluster's commit and return
+// true if cluster's commit is ancestor of given commit else return false
+func CompareCommits(shaToBeCompare, baseSha string) (bool, error) {
+	repo, err := git.PlainOpen(repoDir)
+	if err != nil {
+		return false, errors.Wrap(err, "error while opening git repo")
+	}
+	hash, err := repo.ResolveRevision(plumbing.Revision(shaToBeCompare))
+	if err != nil {
+		return false, errors.Wrap(err, "error while getting commit hash")
+	}
+	commitToBeCompare, err := repo.CommitObject(*hash)
+	if err != nil {
+		return false, errors.Wrap(err, fmt.Sprintf("error while getting commit object of hash [%v]", hash))
+	}
+	hash, err = repo.ResolveRevision(plumbing.Revision(baseSha))
+	if err != nil {
+		return false, err
+	}
+	baseCommit, err := repo.CommitObject(*hash)
+	if err != nil {
+		return false, errors.Wrap(err, fmt.Sprintf("error while getting commit object of hash [%v]", hash))
+	}
+	isParentCommit, err := baseCommit.IsAncestor(commitToBeCompare)
+	if err != nil {
+		return false, errors.Wrap(err, "error while comparing commits")
+	}
+	return isParentCommit, nil
+}
+
+func (c *LocalCluster) SkipTest(t *testing.T, commit string) error {
+	isParentCommit, err := CompareCommits(commit, c.conf.version)
+	if err != nil {
+		return err
+	}
+	if isParentCommit {
+		t.Skip("skipping this test")
 	}
 	return nil
 }
