@@ -239,14 +239,14 @@ func (s *Server) zeroHealth(ctx context.Context) (*api.Response, error) {
 		return nil, ctx.Err()
 	}
 
-	healthAll := []pb.HealthInfo{pb.HealthInfo{
+	healthAll := pb.HealthInfo{
 		Instance:    "zero",
 		Address:     x.WorkerConfig.MyAddr,
 		Status:      "healthy",
 		Version:     x.Version(),
 		Uptime:      int64(time.Since(x.WorkerConfig.StartTime) / time.Second),
 		LastEcho:    time.Now().Unix(),
-	}}
+	}
 
 	jsonOut, err := json.Marshal(healthAll)
 	if err != nil {
@@ -256,22 +256,29 @@ func (s *Server) zeroHealth(ctx context.Context) (*api.Response, error) {
 }
 
 func (st *state) pingResponse(w http.ResponseWriter, r *http.Request) {
-	var err error
 	x.AddCorsHeaders(w)
 
 	switch r.Header.Get("Accept") {
 		case "application/json":
-			var resp *api.Response
-			if resp, err = (st.zero).zeroHealth(r.Context()); err != nil {
+			resp, err := (st.zero).zeroHealth(r.Context())
+			if err != nil {
 				x.SetStatus(w, x.Error, err.Error())
 				return
 			}       
 			w.Header().Set("Content-Type", "application/json; charset=utf-8")
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write(resp.Json)
+			_, err = w.Write(resp.Json)
+			if err != nil {
+				x.SetStatus(w, x.Error, err.Error())
+				return
+			}       
 		default:
 			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte("OK"))
+			_, err := w.Write([]byte("OK"))
+			if err != nil {
+				x.SetStatus(w, x.Error, err.Error())
+				return
+			}       
 	}
 }
