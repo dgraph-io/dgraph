@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,12 +25,12 @@ import (
 	"time"
 
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/pkg/errors"
-	"github.com/stretchr/testify/require"
 )
 
 type Rule struct {
@@ -56,7 +56,7 @@ func MakeRequest(t *testing.T, token *HttpToken, params GraphQLParams) *GraphQLR
 	return MakeGQLRequestWithAccessJwt(t, &params, token.AccessJwt)
 }
 
-func Login(t *testing.T, loginParams *LoginParams) *HttpToken {
+func Login(t *testing.T, loginParams *LoginParams) (*HttpToken, error) {
 	if loginParams.Endpoint == "" {
 		loginParams.Endpoint = AdminUrl()
 	}
@@ -66,8 +66,42 @@ func Login(t *testing.T, loginParams *LoginParams) *HttpToken {
 		token, err = HttpLogin(loginParams)
 		return err
 	})
-	require.NoError(t, err, "login failed")
-	return token
+	return token, err
+}
+
+func ResetPassword(t *testing.T, token *HttpToken, userID, newPass string, nsID uint64) (string, error) {
+	resetpasswd := `mutation resetPassword($userID: String!, $newpass: String!, $namespaceId: Int!){
+		resetPassword(input: {userId: $userID, password: $newpass, namespace: $namespaceId}) {
+		  userId
+		  message
+		}
+	  }`
+
+	params := GraphQLParams{
+		Query: resetpasswd,
+		Variables: map[string]interface{}{
+			"namespaceId": nsID,
+			"userID":      userID,
+			"newpass":     newPass,
+		},
+	}
+
+	resp := MakeRequest(t, token, params)
+
+	if len(resp.Errors) > 0 {
+		return "", errors.Errorf(resp.Errors.Error())
+	}
+
+	var result struct {
+		ResetPassword struct {
+			UserId  string `json:"userId"`
+			Message string `json:"message"`
+		}
+	}
+	require.NoError(t, json.Unmarshal(resp.Data, &result))
+	require.Equal(t, userID, result.ResetPassword.UserId)
+	require.Contains(t, result.ResetPassword.Message, "Reset password is successful")
+	return result.ResetPassword.UserId, nil
 }
 
 func CreateNamespaceWithRetry(t *testing.T, token *HttpToken) (uint64, error) {
@@ -142,7 +176,7 @@ func DeleteNamespace(t *testing.T, token *HttpToken, nsID uint64) error {
 }
 
 func CreateUser(t *testing.T, token *HttpToken, username,
-	password string) {
+	password string) *GraphQLResponse {
 	addUser := `
 	mutation addUser($name: String!, $pass: String!) {
 		addUser(input: [{name: $name, password: $pass}]) {
@@ -170,6 +204,7 @@ func CreateUser(t *testing.T, token *HttpToken, username,
 	var r Response
 	err := json.Unmarshal(resp.Data, &r)
 	require.NoError(t, err)
+	return resp
 }
 
 func CreateGroup(t *testing.T, token *HttpToken, name string) {
@@ -266,7 +301,7 @@ func AddToGroup(t *testing.T, token *HttpToken, userName, group string) {
 	require.True(t, foundGroup)
 }
 
-func AddRulesToGroup(t *testing.T, token *HttpToken, group string, rules []Rule) {
+func AddRulesToGroup(t *testing.T, token *HttpToken, group string, rules []Rule, newGroup bool) {
 	addRuleToGroup := `mutation updateGroup($name: String!, $rules: [RuleRef!]!) {
 		updateGroup(input: {
 			filter: {
@@ -309,7 +344,9 @@ func AddRulesToGroup(t *testing.T, token *HttpToken, group string, rules []Rule)
 			]
 		  }
 	  }`, group, rulesb)
-	CompareJSON(t, expectedOutput, string(resp.Data))
+	if newGroup {
+		CompareJSON(t, expectedOutput, string(resp.Data))
+	}
 }
 
 func DgClientWithLogin(t *testing.T, id, password string, ns uint64) *dgo.Dgraph {
@@ -340,4 +377,49 @@ func QueryData(t *testing.T, dg *dgo.Dgraph, query string) []byte {
 	resp, err := dg.NewReadOnlyTxn().Query(context.Background(), query)
 	require.NoError(t, err)
 	return resp.GetJson()
+}
+
+func Export(t *testing.T, token *HttpToken, dest, accessKey, secretKey string) *GraphQLResponse {
+	exportRequest := `mutation export($dst: String!, $f: String!, $acc: String!, $sec: String!){
+export(input: {destination: $dst, format: $f, accessKey: $acc, secretKey: $sec}) {
+			response {
+				message
+			}
+		}
+	}`
+
+	params := GraphQLParams{
+		Query: exportRequest,
+		Variables: map[string]interface{}{
+			"dst": dest,
+			"f":   "rdf",
+			"acc": accessKey,
+			"sec": secretKey,
+		},
+	}
+
+	resp := MakeRequest(t, token, params)
+	type Response struct {
+		Export struct {
+			Response struct {
+				Message string
+			}
+		}
+	}
+	var r Response
+	err := json.Unmarshal(resp.Data, &r)
+	require.NoError(t, err)
+	return resp
+}
+
+func AddNumberOfTriples(t *testing.T, dg *dgo.Dgraph, start, end int) (*api.Response, error) {
+	triples := strings.Builder{}
+	for i := start; i <= end; i++ {
+		triples.WriteString(fmt.Sprintf("_:person%[1]v <name> \"person%[1]v\" .\n", i))
+	}
+	resp, err := dg.NewTxn().Mutate(context.Background(), &api.Mutation{
+		SetNquads: []byte(triples.String()),
+		CommitNow: true,
+	})
+	return resp, err
 }

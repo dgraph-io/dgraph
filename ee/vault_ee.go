@@ -1,13 +1,14 @@
+//go:build !oss
 // +build !oss
 
 /*
- * Copyright 2022 Dgraph Labs, Inc. All rights reserved.
+ * Copyright 2023 Dgraph Labs, Inc. All rights reserved.
  *
  * Licensed under the Dgraph Community License (the "License"); you
  * may not use this file except in compliance with the License. You
  * may obtain a copy of the License at
  *
- *     https://github.com/dgraph-io/dgraph/blob/master/licenses/DCL.txt
+ *     https://github.com/dgraph-io/dgraph/blob/main/licenses/DCL.txt
  */
 
 package ee
@@ -15,17 +16,18 @@ package ee
 import (
 	"encoding/base64"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"reflect"
 
-	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
 	"github.com/hashicorp/vault/api"
 	"github.com/spf13/viper"
+
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 )
 
-func vaultGetKeys(config *viper.Viper) (aclKey, encKey x.SensitiveByteSlice) {
+func vaultGetKeys(config *viper.Viper) (aclKey, encKey x.Sensitive) {
 	// Avoid querying Vault unless the flag has been explicitly set.
 	if !config.IsSet(flagVault) {
 		return
@@ -92,7 +94,7 @@ func vaultGetKvStore(client *api.Client, path string) (vaultKvStore, error) {
 }
 
 // getSensitiveBytes retrieves a value from a kvStore, decoding it if necessary.
-func (kv vaultKvStore) getSensitiveBytes(field, format string) (x.SensitiveByteSlice, error) {
+func (kv vaultKvStore) getSensitiveBytes(field, format string) (x.Sensitive, error) {
 	value, ok := kv[field]
 	if !ok {
 		return nil, fmt.Errorf("vault: key '%s' not found", field)
@@ -104,7 +106,7 @@ func (kv vaultKvStore) getSensitiveBytes(field, format string) (x.SensitiveByteS
 	}
 
 	// Decode value if necessary.
-	var valueBytes x.SensitiveByteSlice
+	var valueBytes x.Sensitive
 	var err error
 	if format == "base64" {
 		valueBytes, err = base64.StdEncoding.DecodeString(valueString)
@@ -113,7 +115,7 @@ func (kv vaultKvStore) getSensitiveBytes(field, format string) (x.SensitiveByteS
 				"vault: key '%s' could not be decoded as a base64 string: %s", field, err)
 		}
 	} else {
-		valueBytes = x.SensitiveByteSlice(valueString)
+		valueBytes = x.Sensitive(valueString)
 	}
 
 	return valueBytes, nil
@@ -129,14 +131,14 @@ func vaultNewClient(address, roleIdPath, secretIdPath string) (*api.Client, erro
 
 	// Read Vault credentials from disk.
 	loginData := make(map[string]interface{}, 2)
-	roleId, err := ioutil.ReadFile(roleIdPath)
+	roleId, err := os.ReadFile(roleIdPath)
 	if err != nil {
 		return nil, fmt.Errorf("vault: error reading from role ID file: %s", err)
 	}
 	loginData["role_id"] = string(roleId)
 	// If we configure a bound_cidr_list in Vault, we don't need to use a secret_id.
 	if secretIdPath != "" {
-		secretId, err := ioutil.ReadFile(secretIdPath)
+		secretId, err := os.ReadFile(secretIdPath)
 		if err != nil {
 			return nil, fmt.Errorf("vault: error reading from secret ID file: %s", err)
 		}

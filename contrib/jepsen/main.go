@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,8 +43,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dgraph-io/dgraph/contrib/jepsen/browser"
 	"github.com/spf13/pflag"
+
+	"github.com/dgraph-io/dgraph/contrib/jepsen/browser"
 )
 
 type jepsenTest struct {

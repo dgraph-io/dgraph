@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,7 +37,6 @@ import (
 	"github.com/pkg/errors"
 	ostats "go.opencensus.io/stats"
 	"go.opencensus.io/tag"
-	"go.opencensus.io/trace"
 	otrace "go.opencensus.io/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -48,13 +47,14 @@ import (
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/conn"
-	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/dql"
 	gqlSchema "github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/telemetry"
+	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
@@ -145,15 +145,15 @@ func PeriodicallyPostTelemetry() {
 func GetGQLSchema(namespace uint64) (uid, graphQLSchema string, err error) {
 	ctx := context.WithValue(context.Background(), Authorize, false)
 	ctx = x.AttachNamespace(ctx, namespace)
-	resp, err := (&Server{}).Query(ctx,
+	resp, err := (&Server{}).QueryNoGrpc(ctx,
 		&api.Request{
 			Query: `
 			query {
-			  ExistingGQLSchema(func: has(dgraph.graphql.schema)) {
-				uid
-				dgraph.graphql.schema
-			  }
-			}`})
+				ExistingGQLSchema(func: has(dgraph.graphql.schema)) {
+					uid
+					dgraph.graphql.schema
+				  }
+				}`})
 	if err != nil {
 		return "", "", err
 	}
@@ -175,7 +175,7 @@ func GetGQLSchema(namespace uint64) (uid, graphQLSchema string, err error) {
 	// found multiple GraphQL schema nodes, this should never happen
 	// returning the schema node which is added last
 	for i := range res {
-		iUid, err := gql.ParseUid(res[i].Uid)
+		iUid, err := dql.ParseUid(res[i].Uid)
 		if err != nil {
 			return "", "", err
 		}
@@ -255,8 +255,9 @@ func validateAlterOperation(ctx context.Context, op *api.Operation) error {
 
 // parseSchemaFromAlterOperation parses the string schema given in input operation to a Go
 // struct, and performs some checks to make sure that the schema is valid.
-func parseSchemaFromAlterOperation(ctx context.Context, op *api.Operation) (*schema.ParsedSchema,
-	error) {
+func parseSchemaFromAlterOperation(ctx context.Context, op *api.Operation) (
+	*schema.ParsedSchema, error) {
+
 	// If a background task is already running, we should reject all the new alter requests.
 	if schema.State().IndexingInProgress() {
 		return nil, errIndexingInProgress
@@ -429,14 +430,6 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	}
 
 	if op.DropOp == api.Operation_DATA {
-		if x.Config.BlockClusterWideDrop {
-			glog.V(2).Info("Blocked drop-data because it is not permitted.")
-			return empty, errors.New("Drop data operation is not permitted.")
-		}
-		if err := AuthGuardianOfTheGalaxy(ctx); err != nil {
-			return empty, errors.Wrapf(err, "Drop data can only be called by the guardian of the"+
-				" galaxy")
-		}
 		if len(op.DropValue) > 0 {
 			return empty, errors.Errorf("If DropOp is set to DATA, DropValue must be empty")
 		}
@@ -448,13 +441,14 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		}
 
 		m.DropOp = pb.Mutations_DATA
+		m.DropValue = fmt.Sprintf("%#x", namespace)
 		_, err = query.ApplyMutations(ctx, m)
 		if err != nil {
 			return empty, err
 		}
 
 		// insert a helper record for backup & restore, indicating that drop_data was done
-		err = InsertDropRecord(ctx, "DROP_DATA;")
+		err = InsertDropRecord(ctx, fmt.Sprintf("DROP_DATA;%#x", namespace))
 		if err != nil {
 			return empty, err
 		}
@@ -489,7 +483,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 			Predicate:   x.ParseAttr(attr),
 			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: x.Star}},
 		}
-		wnq := &gql.NQuad{NQuad: nq}
+		wnq := &dql.NQuad{NQuad: nq}
 		edge, err := wnq.ToDeletePredEdge()
 		if err != nil {
 			return empty, err
@@ -615,20 +609,15 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 		},
 	}
 
+	// ensure that we do not insert very large (> 64 KB) value
+	if err := validateMutation(ctx, edges); err != nil {
+		return err
+	}
+
 	qc.span.Annotatef(nil, "Applying mutations: %+v", m)
 	resp.Txn, err = query.ApplyMutations(ctx, m)
 	qc.span.Annotatef(nil, "Txn Context: %+v. Err=%v", resp.Txn, err)
 
-	if x.WorkerConfig.LudicrousEnabled {
-		// Mutations are automatically committed in case of ludicrous mode, so we don't
-		// need to manually commit.
-		if resp.Txn == nil {
-			return errors.Wrapf(err, "Txn Context is nil")
-		}
-		resp.Txn.Keys = resp.Txn.Keys[:0]
-		resp.Txn.CommitTs = qc.req.StartTs
-		return err
-	}
 	// calculateMutationMetrics calculate cost for the mutation.
 	calculateMutationMetrics := func() {
 		cost := uint64(len(newUids) + len(edges))
@@ -682,6 +671,58 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 	resp.Txn.Keys = resp.Txn.Keys[:0]
 	resp.Txn.CommitTs = cts
 	calculateMutationMetrics()
+	return nil
+}
+
+// validateMutation ensures that the value in the edge is not too big.
+// The challange here is that the keys in badger have a limitation on their size (< 2<<16).
+// We need to ensure that no key, either primary or secondary index key is bigger than that.
+// See here for more details: https://github.com/dgraph-io/projects/issues/73
+func validateMutation(ctx context.Context, edges []*pb.DirectedEdge) error {
+	errValueTooBigForIndex := errors.New("value in the mutation is too large for the index")
+
+	// key = meta data + predicate + actual key, this all needs to fit into 64 KB
+	// we are keeping 536 bytes aside for meta information we put into the key and we
+	// use 65000 bytes for the rest, that is predicate and the actual key.
+	const maxKeySize = 65000
+
+	for _, e := range edges {
+		maxSizeForDataKey := maxKeySize - len(e.Attr)
+
+		// seems reasonable to assume, the tokens for indexes won't be bigger than the value itself
+		if len(e.Value) <= maxSizeForDataKey {
+			continue
+		}
+		pred := x.NamespaceAttr(e.Namespace, e.Attr)
+		update, ok := schema.State().Get(ctx, pred)
+		if !ok {
+			continue
+		}
+		// only string type can have large values that could cause us issues later
+		if update.GetValueType() != pb.Posting_STRING {
+			continue
+		}
+
+		storageVal := types.Val{Tid: types.TypeID(e.GetValueType()), Value: e.GetValue()}
+		schemaVal, err := types.Convert(storageVal, types.TypeID(update.GetValueType()))
+		if err != nil {
+			return err
+		}
+
+		for _, tokenizer := range schema.State().Tokenizer(ctx, pred) {
+			toks, err := tok.BuildTokens(schemaVal.Value, tok.GetTokenizerForLang(tokenizer, e.Lang))
+			if err != nil {
+				return fmt.Errorf("error while building index tokens: %w", err)
+			}
+
+			for _, tok := range toks {
+				if len(tok) > maxSizeForDataKey {
+					return errValueTooBigForIndex
+				}
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -876,20 +917,21 @@ func updateValInNQuads(nquads []*api.NQuad, qc *queryContext, isSet bool) []*api
 
 // updateValInMutations does following transformations:
 // 0x123 <amount> val(v) -> 0x123 <amount> 13.0
-func updateValInMutations(gmu *gql.Mutation, qc *queryContext) error {
+func updateValInMutations(gmu *dql.Mutation, qc *queryContext) error {
 	gmu.Del = updateValInNQuads(gmu.Del, qc, false)
 	gmu.Set = updateValInNQuads(gmu.Set, qc, true)
 	if qc.nquadsCount > x.Config.LimitMutationsNquad {
 		return errors.Errorf("NQuad count in the request: %d, is more that threshold: %d",
-			qc.nquadsCount, int(x.Config.LimitMutationsNquad))
+			qc.nquadsCount, x.Config.LimitMutationsNquad)
 	}
 	return nil
 }
 
 // updateUIDInMutations does following transformations:
-//   * uid(v) -> 0x123     -- If v is defined in query block
-//   * uid(v) -> _:uid(v)  -- Otherwise
-func updateUIDInMutations(gmu *gql.Mutation, qc *queryContext) error {
+//   - uid(v) -> 0x123     -- If v is defined in query block
+//   - uid(v) -> _:uid(v)  -- Otherwise
+
+func updateUIDInMutations(gmu *dql.Mutation, qc *queryContext) error {
 	// usedMutationVars keeps track of variables that are used in mutations.
 	getNewVals := func(s string) []string {
 		if strings.HasPrefix(s, "uid(") {
@@ -933,9 +975,9 @@ func updateUIDInMutations(gmu *gql.Mutation, qc *queryContext) error {
 				gmuDel = append(gmuDel, getNewNQuad(nq, s, o))
 				qc.nquadsCount++
 			}
-			if qc.nquadsCount > int(x.Config.LimitMutationsNquad) {
+			if qc.nquadsCount > x.Config.LimitMutationsNquad {
 				return errors.Errorf("NQuad count in the request: %d, is more that threshold: %d",
-					qc.nquadsCount, int(x.Config.LimitMutationsNquad))
+					qc.nquadsCount, x.Config.LimitMutationsNquad)
 			}
 		}
 	}
@@ -971,9 +1013,9 @@ type queryContext struct {
 	// a query or more than one mutations or both (in case of upsert)
 	req *api.Request
 	// gmuList is the list of mutations after parsing req.Mutations
-	gmuList []*gql.Mutation
-	// gqlRes contains result of parsing the req.Query
-	gqlRes gql.Result
+	gmuList []*dql.Mutation
+	// dqlRes contains result of parsing the req.Query
+	dqlRes dql.Result
 	// condVars are conditional variables used in the (modified) query to figure out
 	// whether the condition in Conditional Upsert is true. The string would be empty
 	// if the corresponding mutation is not a conditional upsert.
@@ -989,7 +1031,7 @@ type queryContext struct {
 	// l stores latency numbers
 	latency *query.Latency
 	// span stores a opencensus span used throughout the query processing
-	span *trace.Span
+	span *otrace.Span
 	// graphql indicates whether the given request is from graphql admin or not.
 	graphql bool
 	// gqlField stores the GraphQL field for which the query is being processed.
@@ -1063,21 +1105,12 @@ func filterTablets(ctx context.Context, ms *pb.MembershipState) error {
 	if !x.WorkerConfig.AclEnabled {
 		return nil
 	}
-	namespace, err := x.ExtractJWTNamespace(ctx)
+	namespace, err := x.ExtractNamespaceFrom(ctx)
 	if err != nil {
 		return errors.Errorf("Namespace not found in JWT.")
 	}
 	if namespace == x.GalaxyNamespace {
-		// For galaxy namespace, we don't want to filter out the predicates. We only format the
-		// namespace to human readable form.
-		for _, group := range ms.Groups {
-			tablets := make(map[string]*pb.Tablet)
-			for tabletName, tablet := range group.Tablets {
-				tablet.Predicate = x.FormatNsAttr(tablet.Predicate)
-				tablets[x.FormatNsAttr(tabletName)] = tablet
-			}
-			group.Tablets = tablets
-		}
+		// For galaxy namespace, we don't want to filter out the predicates.
 		return nil
 	}
 	for _, group := range ms.GetGroups() {
@@ -1145,8 +1178,20 @@ func (s *Server) QueryGraphQL(ctx context.Context, req *api.Request,
 	return s.doQuery(ctx, &Request{req: req, gqlField: field, doAuth: getAuthMode(ctx)})
 }
 
-// Query handles queries or mutations
 func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, error) {
+	resp, err := s.QueryNoGrpc(ctx, req)
+	if err != nil {
+		return resp, err
+	}
+	md := metadata.Pairs(x.DgraphCostHeader, fmt.Sprint(resp.Metrics.NumUids["_total"]))
+	if err := grpc.SendHeader(ctx, md); err != nil {
+		glog.Warningf("error in sending grpc headers: %v", err)
+	}
+	return resp, nil
+}
+
+// Query handles queries or mutations
+func (s *Server) QueryNoGrpc(ctx context.Context, req *api.Request) (*api.Response, error) {
 	ctx = x.AttachJWTNamespace(ctx)
 	if x.WorkerConfig.AclEnabled && req.GetStartTs() != 0 {
 		// A fresh StartTs is assigned if it is 0.
@@ -1188,19 +1233,18 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (resp *api.Response,
 		return nil, serverOverloadErr
 	}
 
-	if bool(glog.V(3)) || worker.LogRequestEnabled() {
-		glog.Infof("Got a query: %+v", req.req)
-	}
-
 	isGraphQL, _ := ctx.Value(IsGraphql).(bool)
 	if isGraphQL {
 		atomic.AddUint64(&numGraphQL, 1)
 	} else {
 		atomic.AddUint64(&numGraphQLPM, 1)
 	}
-
 	l := &query.Latency{}
 	l.Start = time.Now()
+
+	if bool(glog.V(3)) || worker.LogDQLRequestEnabled() {
+		glog.Infof("Got a query, DQL form: %+v at %+v", req.req, l.Start.Format(time.RFC3339))
+	}
 
 	isMutation := len(req.req.Mutations) > 0
 	methodRequest := methodQuery
@@ -1238,6 +1282,7 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (resp *api.Response,
 		return nil, errors.Errorf("empty request")
 	}
 
+	span.AddAttributes(otrace.StringAttribute("Query", req.req.Query))
 	span.Annotatef(nil, "Request received: %v", req.req)
 	if isQuery {
 		ostats.Record(ctx, x.PendingQueries.M(1), x.NumQueries.M(1))
@@ -1281,13 +1326,9 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (resp *api.Response,
 	defer annotateStartTs(qc.span, qc.req.StartTs)
 	// For mutations, we update the startTs if necessary.
 	if isMutation && req.req.StartTs == 0 {
-		if x.WorkerConfig.LudicrousEnabled {
-			req.req.StartTs = posting.Oracle().MaxAssigned()
-		} else {
-			start := time.Now()
-			req.req.StartTs = worker.State.GetTimestamp(false)
-			qc.latency.AssignTimestamp = time.Since(start)
-		}
+		start := time.Now()
+		req.req.StartTs = worker.State.GetTimestamp(false)
+		qc.latency.AssignTimestamp = time.Since(start)
 	}
 	if x.WorkerConfig.AclEnabled {
 		ns, err := x.ExtractNamespace(ctx)
@@ -1334,8 +1375,6 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (resp *api.Response,
 		EncodingNs:        uint64(l.Json.Nanoseconds()),
 		TotalNs:           uint64((time.Since(l.Start)).Nanoseconds()),
 	}
-	md := metadata.Pairs(x.DgraphCostHeader, fmt.Sprint(resp.Metrics.NumUids["_total"]))
-	grpc.SendHeader(ctx, md)
 	return resp, gqlErrs
 }
 
@@ -1351,12 +1390,9 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 	if ctx.Err() != nil {
 		return resp, ctx.Err()
 	}
-	if x.WorkerConfig.LudicrousEnabled {
-		qc.req.StartTs = posting.Oracle().MaxAssigned()
-	}
 	qr := query.Request{
 		Latency:  qc.latency,
-		GqlQuery: &qc.gqlRes,
+		GqlQuery: &qc.dqlRes,
 	}
 
 	// Here we try our best effort to not contact Zero for a timestamp. If we succeed,
@@ -1394,7 +1430,15 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 	// Core processing happens here.
 	er, err := qr.Process(ctx)
 
+	if bool(glog.V(3)) || worker.LogDQLRequestEnabled() {
+		glog.Infof("Finished a query that started at: %+v",
+			qr.Latency.Start.Format(time.RFC3339))
+	}
+
 	if err != nil {
+		if bool(glog.V(3)) {
+			glog.Infof("Error processing query: %+v\n", err.Error())
+		}
 		return resp, errors.Wrap(err, "")
 	}
 
@@ -1494,7 +1538,7 @@ func parseRequest(qc *queryContext) error {
 	upsertQuery := qc.req.Query
 	if len(qc.req.Mutations) > 0 {
 		// parsing mutations
-		qc.gmuList = make([]*gql.Mutation, 0, len(qc.req.Mutations))
+		qc.gmuList = make([]*dql.Mutation, 0, len(qc.req.Mutations))
 		for _, mu := range qc.req.Mutations {
 			gmu, err := parseMutationObject(mu, qc)
 			if err != nil {
@@ -1519,18 +1563,18 @@ func parseRequest(qc *queryContext) error {
 
 	// parsing the updated query
 	var err error
-	qc.gqlRes, err = gql.ParseWithNeedVars(gql.Request{
+	qc.dqlRes, err = dql.ParseWithNeedVars(dql.Request{
 		Str:       upsertQuery,
 		Variables: qc.req.Vars,
 	}, needVars)
 	if err != nil {
 		return err
 	}
-	return validateQuery(qc.gqlRes.Query)
+	return validateQuery(qc.dqlRes.Query)
 }
 
 func authorizeRequest(ctx context.Context, qc *queryContext) error {
-	if err := authorizeQuery(ctx, &qc.gqlRes, qc.graphql); err != nil {
+	if err := authorizeQuery(ctx, &qc.dqlRes, qc.graphql); err != nil {
 		return err
 	}
 
@@ -1555,7 +1599,7 @@ func validateNamespace(ctx context.Context, tc *api.TxnContext) error {
 		return nil
 	}
 
-	ns, err := x.ExtractJWTNamespace(ctx)
+	ns, err := x.ExtractNamespaceFrom(ctx)
 	if err != nil {
 		return err
 	}
@@ -1579,7 +1623,7 @@ func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.Tx
 		return &api.TxnContext{}, errors.Errorf(
 			"StartTs cannot be zero while committing a transaction")
 	}
-	if ns, err := x.ExtractJWTNamespace(ctx); err == nil {
+	if ns, err := x.ExtractNamespaceFrom(ctx); err == nil {
 		annotateNamespace(span, ns)
 	}
 	annotateStartTs(span, tc.StartTs)
@@ -1616,9 +1660,9 @@ func (s *Server) CheckVersion(ctx context.Context, c *api.Check) (v *api.Version
 	return v, nil
 }
 
-//-------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------
 // HELPER FUNCTIONS
-//-------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------
 func isMutationAllowed(ctx context.Context) bool {
 	if worker.Config.MutationsMode != worker.DisallowMutations {
 		return true
@@ -1663,12 +1707,12 @@ func hasPoormansAuth(ctx context.Context) error {
 }
 
 // parseMutationObject tries to consolidate fields of the api.Mutation into the
-// corresponding field of the returned gql.Mutation. For example, the 3 fields,
+// corresponding field of the returned dql.Mutation. For example, the 3 fields,
 // api.Mutation#SetJson, api.Mutation#SetNquads and api.Mutation#Set are consolidated into the
-// gql.Mutation.Set field. Similarly the 3 fields api.Mutation#DeleteJson, api.Mutation#DelNquads
-// and api.Mutation#Del are merged into the gql.Mutation#Del field.
-func parseMutationObject(mu *api.Mutation, qc *queryContext) (*gql.Mutation, error) {
-	res := &gql.Mutation{Cond: mu.Cond}
+// dql.Mutation.Set field. Similarly the 3 fields api.Mutation#DeleteJson, api.Mutation#DelNquads
+// and api.Mutation#Del are merged into the dql.Mutation#Del field.
+func parseMutationObject(mu *api.Mutation, qc *queryContext) (*dql.Mutation, error) {
+	res := &dql.Mutation{Cond: mu.Cond}
 
 	if len(mu.SetJson) > 0 {
 		nqs, md, err := chunker.ParseJSON(mu.SetJson, chunker.SetNquads)
@@ -1817,7 +1861,7 @@ func validateKeys(nq *api.NQuad) error {
 
 // validateQuery verifies that the query does not contain any preds that
 // are longer than the limit (2^16).
-func validateQuery(queries []*gql.GraphQuery) error {
+func validateQuery(queries []*dql.GraphQuery) error {
 	for _, q := range queries {
 		if err := validatePredName(q.Attr); err != nil {
 			return err

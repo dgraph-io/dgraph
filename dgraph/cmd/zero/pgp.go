@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ package zero
 import (
 	"encoding/json"
 	"io"
-	"io/ioutil"
 
 	"github.com/pkg/errors"
 	"golang.org/x/crypto/openpgp"
@@ -101,7 +100,7 @@ func verifySignature(signedFile, publicKey io.Reader, l *license) error {
 
 	// We need to read the body for the signature verification check to happen.
 	// md.Signature would be non-nil after reading the body if the verification is successful.
-	buf, err := ioutil.ReadAll(md.UnverifiedBody)
+	buf, err := io.ReadAll(md.UnverifiedBody)
 	if err != nil {
 		return errors.Wrapf(err, "while reading body from signed license file")
 	}

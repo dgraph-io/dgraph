@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2015-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,9 @@ import (
 	"bytes"
 	builtinGzip "compress/gzip"
 	"context"
+	cryptorand "crypto/rand"
 	"crypto/tls"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -39,29 +41,28 @@ import (
 	"syscall"
 	"time"
 
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/peer"
-
-	"github.com/dgraph-io/badger/v3"
-	bo "github.com/dgraph-io/badger/v3/options"
-	"github.com/dgraph-io/badger/v3/pb"
-	badgerpb "github.com/dgraph-io/badger/v3/pb"
-	"github.com/dgraph-io/dgo/v210"
-	"github.com/dgraph-io/dgo/v210/protos/api"
-	"github.com/dgraph-io/ristretto/z"
 	"github.com/dustin/go-humanize"
-
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 	"go.opencensus.io/plugin/ocgrpc"
 	"go.opencensus.io/trace"
-	"golang.org/x/crypto/ssh/terminal"
+	"golang.org/x/term"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/encoding/gzip"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
+
+	"github.com/dgraph-io/badger/v4"
+	bo "github.com/dgraph-io/badger/v4/options"
+	badgerpb "github.com/dgraph-io/badger/v4/pb"
+	"github.com/dgraph-io/dgo/v210"
+	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 // Error constants representing different types of errors.
@@ -118,8 +119,8 @@ const (
 	// AppliedUntil - TxnMarks.DoneUntil() before old transactions start getting aborted.
 	ForceAbortDifference = 5000
 
-	// FacetDelimeter is the symbol used to distinguish predicate names from facets.
-	FacetDelimeter = "|"
+	// FacetDelimiter is the symbol used to distinguish predicate names from facets.
+	FacetDelimiter = "|"
 
 	// GrootId is the ID of the admin user for ACLs.
 	GrootId = "groot"
@@ -140,7 +141,7 @@ const (
 		"X-CSRF-Token, X-Auth-Token, X-Requested-With"
 	DgraphCostHeader = "Dgraph-TouchedUids"
 
-	DgraphVersion = 2103
+	ManifestVersion = 2105
 )
 
 var (
@@ -150,7 +151,7 @@ var (
 	Nilbyte []byte
 	// GuardiansUid is a map from namespace to the Uid of guardians group node.
 	GuardiansUid = &sync.Map{}
-	// GrootUser Uid is a map from namespace to the Uid of groot user node.
+	// GrootUid is a map from namespace to the Uid of groot user node.
 	GrootUid = &sync.Map{}
 )
 
@@ -211,10 +212,8 @@ type queryRes struct {
 
 // IsGqlErrorList tells whether the given err is a list of GraphQL errors.
 func IsGqlErrorList(err error) bool {
-	if _, ok := err.(GqlErrorList); ok {
-		return true
-	}
-	return false
+	_, ok := err.(GqlErrorList)
+	return ok
 }
 
 func (gqlErr *GqlError) Error() string {
@@ -262,7 +261,7 @@ func GqlErrorf(message string, args ...interface{}) *GqlError {
 func ExtractNamespaceHTTP(r *http.Request) uint64 {
 	ctx := AttachAccessJwt(context.Background(), r)
 	// Ignoring error because the default value is zero anyways.
-	namespace, _ := ExtractJWTNamespace(ctx)
+	namespace, _ := ExtractNamespaceFrom(ctx)
 	return namespace
 }
 
@@ -351,7 +350,7 @@ func SetStatus(w http.ResponseWriter, code, msg string) {
 	qr.Errors = append(qr.Errors, &GqlError{Message: msg, Extensions: ext})
 	if js, err := json.Marshal(qr); err == nil {
 		if _, err := w.Write(js); err != nil {
-			glog.Errorf("Error while writing: %+v", err)
+			glog.Errorf("Could not send error msg=%+v code=%+v due to http error %+v", msg, code, err)
 		}
 	} else {
 		Panic(errors.Errorf("Unable to marshal: %+v", qr))
@@ -427,7 +426,12 @@ func Reply(w http.ResponseWriter, rep interface{}) {
 
 // ParseRequest parses the body of the given request.
 func ParseRequest(w http.ResponseWriter, r *http.Request, data interface{}) bool {
-	defer r.Body.Close()
+	defer func() {
+		if err := r.Body.Close(); err != nil {
+			glog.Warningf("error closing body: %v", err)
+		}
+	}()
+
 	decoder := json.NewDecoder(r.Body)
 	if err := decoder.Decode(&data); err != nil {
 		SetStatus(w, Error, fmt.Sprintf("While parsing request: %v", err))
@@ -443,7 +447,7 @@ func AttachJWTNamespace(ctx context.Context) context.Context {
 		return AttachNamespace(ctx, GalaxyNamespace)
 	}
 
-	ns, err := ExtractJWTNamespace(ctx)
+	ns, err := ExtractNamespaceFrom(ctx)
 	if err == nil {
 		// Attach the namespace only if we got one from JWT.
 		// This preserves any namespace directly present in the context which is needed for
@@ -471,7 +475,7 @@ func AttachJWTNamespaceOutgoing(ctx context.Context) (context.Context, error) {
 	if !WorkerConfig.AclEnabled {
 		return AttachNamespaceOutgoing(ctx, GalaxyNamespace), nil
 	}
-	ns, err := ExtractJWTNamespace(ctx)
+	ns, err := ExtractNamespaceFrom(ctx)
 	if err != nil {
 		return ctx, err
 	}
@@ -580,7 +584,7 @@ func HasWhitelistedIP(ctx context.Context) (net.Addr, error) {
 	return peerInfo.Addr, nil
 }
 
-// Write response body, transparently compressing if necessary.
+// WriteResponse writes response body, transparently compressing if necessary.
 func WriteResponse(w http.ResponseWriter, r *http.Request, b []byte) (int, error) {
 	var out io.Writer = w
 
@@ -615,11 +619,27 @@ func Max(a, b uint64) uint64 {
 	return b
 }
 
+// ExponentialRetry runs the given function until it succeeds or can no longer be retried.
+func ExponentialRetry(maxRetries int, waitAfterFailure time.Duration,
+	f func() error) error {
+	var err error
+	for retry := maxRetries; retry > 0; retry-- {
+		if err = f(); err == nil {
+			return nil
+		}
+		if waitAfterFailure > 0 {
+			time.Sleep(waitAfterFailure)
+			waitAfterFailure *= 2
+		}
+	}
+	return err
+}
+
 // RetryUntilSuccess runs the given function until it succeeds or can no longer be retried.
 func RetryUntilSuccess(maxRetries int, waitAfterFailure time.Duration,
 	f func() error) error {
 	var err error
-	for retry := maxRetries; retry != 0; retry-- {
+	for retry := maxRetries; retry > 0; retry-- {
 		if err = f(); err == nil {
 			return nil
 		}
@@ -628,6 +648,21 @@ func RetryUntilSuccess(maxRetries int, waitAfterFailure time.Duration,
 		}
 	}
 	return err
+}
+
+// {2 bytes Node ID} {4 bytes for random} {2 bytes zero}
+func ProposalKey(id uint64) (uint64, error) {
+	random4Bytes := make([]byte, 4)
+	if _, err := cryptorand.Read(random4Bytes); err != nil {
+		return 0, err
+	}
+	proposalKey := id<<48 | uint64(binary.BigEndian.Uint32(random4Bytes))<<16
+	// We want to avoid spillage to node id in case of overflow. For instance, if the
+	// random bytes end up being [xx,xx, 255, 255, 255, 255, 0 , 0] (xx, xx being the node id)
+	// we would spill to node id after 65535 calls to unique key.
+	// So by setting 48th bit to 0 we ensure that we never spill out to node ids.
+	proposalKey &= ^(uint64(1) << 47)
+	return proposalKey, nil
 }
 
 // HasString returns whether the slice contains the given string.
@@ -921,7 +956,7 @@ func SetupConnection(
 	if tlsCfg != nil {
 		dialOpts = append(dialOpts, grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)))
 	} else {
-		dialOpts = append(dialOpts, grpc.WithInsecure())
+		dialOpts = append(dialOpts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -1082,7 +1117,7 @@ func AskUserPassword(userid string, pwdType string, times int) (string, error) {
 	AssertTrue(pwdType == "Current" || pwdType == "New")
 	// ask for the user's password
 	fmt.Printf("%s password for %v:", pwdType, userid)
-	pd, err := terminal.ReadPassword(int(syscall.Stdin))
+	pd, err := term.ReadPassword(syscall.Stdin)
 	if err != nil {
 		return "", errors.Wrapf(err, "while reading password")
 	}
@@ -1091,7 +1126,7 @@ func AskUserPassword(userid string, pwdType string, times int) (string, error) {
 
 	if times == 2 {
 		fmt.Printf("Retype %s password for %v:", strings.ToLower(pwdType), userid)
-		pd2, err := terminal.ReadPassword(int(syscall.Stdin))
+		pd2, err := term.ReadPassword(syscall.Stdin)
 		if err != nil {
 			return "", errors.Wrapf(err, "while reading password")
 		}
@@ -1135,12 +1170,11 @@ func IsGuardian(groups []string) bool {
 	return false
 }
 
-// RunVlogGC runs value log gc on store. It runs GC unconditionally after every 10 minutes.
-// Additionally it also runs GC if vLogSize has grown more than 1 GB in last minute.
+// RunVlogGC runs value log gc on store. It runs GC unconditionally after every 1 minute.
 func RunVlogGC(store *badger.DB, closer *z.Closer) {
 	defer closer.Done()
 
-	// Runs every 1m, checks size of vlog and runs GC conditionally.
+	// Runs every 1m
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
 
@@ -1403,10 +1437,10 @@ func KvWithMaxVersion(kvs *badgerpb.KVList, prefixes [][]byte) *badgerpb.KV {
 }
 
 // PrefixesToMatches converts the prefixes for subscription to a list of match.
-func PrefixesToMatches(prefixes [][]byte, ignore string) []*pb.Match {
-	matches := make([]*pb.Match, 0, len(prefixes))
+func PrefixesToMatches(prefixes [][]byte, ignore string) []*badgerpb.Match {
+	matches := make([]*badgerpb.Match, 0, len(prefixes))
 	for _, prefix := range prefixes {
-		matches = append(matches, &pb.Match{
+		matches = append(matches, &badgerpb.Match{
 			Prefix:      prefix,
 			IgnoreBytes: ignore,
 		})

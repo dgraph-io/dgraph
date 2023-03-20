@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,13 +14,14 @@
  * limitations under the License.
  */
 
+//nolint:lll
 package common
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"math/rand"
 	"net/http"
 	"sort"
@@ -29,20 +30,18 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/spf13/cast"
+	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
-	"google.golang.org/grpc"
-
-	"github.com/spf13/cast"
-
-	"github.com/google/go-cmp/cmp/cmpopts"
-
 	"github.com/dgraph-io/dgraph/graphql/schema"
-
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/google/go-cmp/cmp"
-	"github.com/stretchr/testify/require"
 )
 
 func queryCountryByRegExp(t *testing.T, regexp string, expectedCountries []*country) {
@@ -97,7 +96,7 @@ func touchedUidsHeader(t *testing.T) {
 
 	// confirm that the value in header is same as the value in body
 	var gqlResp GraphQLResponse
-	b, err := ioutil.ReadAll(resp.Body)
+	b, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal(b, &gqlResp))
 	require.Equal(t, touchedUidsInHeader, uint64(gqlResp.Extensions["touched_uids"].(float64)))
@@ -161,10 +160,10 @@ func queryByTypeWithEncoding(t *testing.T, acceptGzip, gzipEncoding bool) {
 		QueryCountry []*country
 	}
 	expected.QueryCountry = []*country{
-		&country{Name: "Angola"},
-		&country{Name: "Bangladesh"},
-		&country{Name: "India"},
-		&country{Name: "Mozambique"},
+		{Name: "Angola"},
+		{Name: "Bangladesh"},
+		{Name: "India"},
+		{Name: "Mozambique"},
 	}
 	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
 	require.NoError(t, err)
@@ -197,10 +196,10 @@ func uidAlias(t *testing.T) {
 		QueryCountry []*countryUID
 	}
 	expected.QueryCountry = []*countryUID{
-		&countryUID{UID: "Angola"},
-		&countryUID{UID: "Bangladesh"},
-		&countryUID{UID: "India"},
-		&countryUID{UID: "Mozambique"},
+		{UID: "Angola"},
+		{UID: "Bangladesh"},
+		{UID: "India"},
+		{UID: "Mozambique"},
 	}
 	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
 	require.NoError(t, err)
@@ -226,10 +225,10 @@ func orderAtRoot(t *testing.T) {
 		QueryCountry []*country
 	}
 	expected.QueryCountry = []*country{
-		&country{Name: "Angola"},
-		&country{Name: "Bangladesh"},
-		&country{Name: "India"},
-		&country{Name: "Mozambique"},
+		{Name: "Angola"},
+		{Name: "Bangladesh"},
+		{Name: "India"},
+		{Name: "Mozambique"},
 	}
 	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
 	require.NoError(t, err)
@@ -255,8 +254,8 @@ func pageAtRoot(t *testing.T) {
 		QueryCountry []*country
 	}
 	expected.QueryCountry = []*country{
-		&country{Name: "India"},
-		&country{Name: "Bangladesh"},
+		{Name: "India"},
+		{Name: "Bangladesh"},
 	}
 	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
 	require.NoError(t, err)
@@ -269,8 +268,8 @@ func pageAtRoot(t *testing.T) {
 func regExp(t *testing.T) {
 	queryCountryByRegExp(t, "/[Aa]ng/",
 		[]*country{
-			&country{Name: "Angola"},
-			&country{Name: "Bangladesh"},
+			{Name: "Angola"},
+			{Name: "Bangladesh"},
 		})
 }
 
@@ -300,7 +299,7 @@ func multipleSearchIndexes(t *testing.T) {
 		}
 
 		expected.QueryPost = []*post{
-			&post{Title: "Introducing GraphQL in Dgraph"},
+			{Title: "Introducing GraphQL in Dgraph"},
 		}
 		err := json.Unmarshal([]byte(gqlResponse.Data), &result)
 		require.NoError(t, err)
@@ -432,10 +431,14 @@ func entitiesQueryWithKeyFieldOfTypeString(t *testing.T) {
 
 	JSONEqGraphQL(t, expectedJSON, string(entitiesResp.Data))
 
-	spaceShipDeleteFilter := map[string]interface{}{"id": map[string]interface{}{"in": []string{"SpaceShip1", "SpaceShip2", "SpaceShip3", "SpaceShip4"}}}
+	spaceShipDeleteFilter := map[string]interface{}{
+		"id": map[string]interface{}{"in": []string{"SpaceShip1", "SpaceShip2", "SpaceShip3", "SpaceShip4"}},
+	}
 	DeleteGqlType(t, "SpaceShip", spaceShipDeleteFilter, 4, nil)
 
-	missionDeleteFilter := map[string]interface{}{"id": map[string]interface{}{"in": []string{"Mission1", "Mission2", "Mission3", "Mission4"}}}
+	missionDeleteFilter := map[string]interface{}{
+		"id": map[string]interface{}{"in": []string{"Mission1", "Mission2", "Mission3", "Mission4"}},
+	}
 	DeleteGqlType(t, "Mission", missionDeleteFilter, 4, nil)
 
 }
@@ -488,7 +491,9 @@ func entitiesQueryWithKeyFieldOfTypeInt(t *testing.T) {
 	planetDeleteFilter := map[string]interface{}{"id": map[string]interface{}{"in": []int{1, 2, 3, 4}}}
 	DeleteGqlType(t, "Planet", planetDeleteFilter, 4, nil)
 
-	missionDeleteFilter := map[string]interface{}{"id": map[string]interface{}{"in": []string{"Mission1", "Mission2", "Mission3", "Mission4"}}}
+	missionDeleteFilter := map[string]interface{}{
+		"id": map[string]interface{}{"in": []string{"Mission1", "Mission2", "Mission3", "Mission4"}},
+	}
 	DeleteGqlType(t, "Mission", missionDeleteFilter, 4, nil)
 
 }
@@ -2098,7 +2103,7 @@ func erroredQueriesHaveTouchedUids(t *testing.T) {
 	// The schema states type Country `{ ... name: String! ... }`
 	// so a query error will be raised if we ask for the country's name in a
 	// query.  Don't think a GraphQL update can do this ATM, so do through Dgraph.
-	d, err := grpc.Dial(Alpha1gRPC, grpc.WithInsecure())
+	d, err := grpc.Dial(Alpha1gRPC, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
 	client := dgo.NewDgraphClient(api.NewDgraphClient(d))
 	mu := &api.Mutation{
@@ -2520,7 +2525,11 @@ func queryWithCascade(t *testing.T) {
 							}
 						}
 					}`,
-			variables: map[string]interface{}{"ids": authorIds, "fieldsRoot": []string{"reputation", "name"}, "fieldsDeep": []string{"text"}},
+			variables: map[string]interface{}{
+				"ids":        authorIds,
+				"fieldsRoot": []string{"reputation", "name"},
+				"fieldsDeep": []string{"text"},
+			},
 			respData: `{
 						  "queryAuthor": [
 							{
@@ -3120,7 +3129,10 @@ func persistedQuery(t *testing.T) {
 
 	// test get method as well
 	queryCountryParams.Extensions = nil
-	gqlResponse = queryCountryParams.ExecuteAsGet(t, GraphqlURL+`?extensions={"persistedQuery":{"sha256Hash":"bbc0af44f82ce5c38e775f7f14c71e5eba1936b12b3e66c452ee262ef147f1ed"}}`)
+	gqlResponse = queryCountryParams.ExecuteAsGet(
+		t,
+		GraphqlURL+`?extensions={"persistedQuery":{"sha256Hash":"bbc0af44f82ce5c38e775f7f14c71e5eba1936b12b3e66c452ee262ef147f1ed"}}`,
+	)
 	RequireNoGQLErrors(t, gqlResponse)
 }
 
@@ -3581,7 +3593,7 @@ func checkUser(t *testing.T, userObj, expectedObj *user) {
 	}
 
 	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	opt := cmpopts.IgnoreFields(user{}, "Password")
 	if diff := cmp.Diff(expectedObj, result.CheckUserPasword, opt); diff != "" {
@@ -3608,7 +3620,7 @@ func checkUserPasswordWithAlias(t *testing.T, userObj, expectedObj *user) {
 	}
 
 	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	opt := cmpopts.IgnoreFields(user{}, "Password")
 	if diff := cmp.Diff(expectedObj, result.CheckUserPasword, opt); diff != "" {
@@ -3765,7 +3777,9 @@ func queryFilterWithIDInputCoercion(t *testing.T) {
                         }
                       }
 				    }`,
-			variables: map[string]interface{}{"filter": map[string]interface{}{"id": []int{cast.ToInt(authors[0].ID), cast.ToInt(authors[1].ID)}}},
+			variables: map[string]interface{}{
+				"filter": map[string]interface{}{"id": []int{cast.ToInt(authors[0].ID), cast.ToInt(authors[1].ID)}},
+			},
 			respData: `{
 						  "queryAuthor": [
 							{

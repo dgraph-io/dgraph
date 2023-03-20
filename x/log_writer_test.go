@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"encoding/binary"
-	"io/ioutil"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -80,43 +80,44 @@ func TestLogWriterWithEncryption(t *testing.T) {
 	msg[1023] = '\n'
 	for i := 0; i < 10000; i++ {
 		n, err := lw.Write(msg)
-		require.Nil(t, err)
+		require.NoError(t, err)
 		require.Equal(t, n, len(msg)+4, "write length is not equal")
 	}
 
 	time.Sleep(time.Second * 10)
 	require.NoError(t, lw.Close())
 	file, err := os.Open(path)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer file.Close()
 	outPath, _ := filepath.Abs("./log_test/audit_out.log")
 	outfile, err := os.OpenFile(outPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer outfile.Close()
 
 	block, err := aes.NewCipher(lw.EncryptionKey)
+	require.NoError(t, err)
 	stat, err := os.Stat(path)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	iv := make([]byte, aes.BlockSize)
 	_, err = file.ReadAt(iv, 0)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	var iterator int64 = 16
 	for {
 		content := make([]byte, binary.BigEndian.Uint32(iv[12:]))
 		_, err = file.ReadAt(content, iterator)
-		require.Nil(t, err)
+		require.NoError(t, err)
 		iterator = iterator + int64(binary.BigEndian.Uint32(iv[12:]))
 		stream := cipher.NewCTR(block, iv)
 		stream.XORKeyStream(content, content)
 		//require.True(t, bytes.Equal(content, msg))
 		_, err = outfile.Write(content)
-		require.Nil(t, err)
+		require.NoError(t, err)
 		if iterator >= stat.Size() {
 			break
 		}
 		_, err = file.ReadAt(iv[12:], iterator)
-		require.Nil(t, err)
+		require.NoError(t, err)
 		iterator = iterator + 4
 	}
 }
@@ -129,15 +130,15 @@ func writeToLogWriterAndVerify(t *testing.T, lw *LogWriter, path string) {
 		go func() {
 			for i := 0; i < 1000; i++ {
 				n, err := lw.Write(msg)
-				require.Nil(t, err)
+				require.NoError(t, err)
 				require.Equal(t, n, len(msg), "write length is not equal")
 			}
 		}()
 	}
 	time.Sleep(time.Second * 10)
 	require.NoError(t, lw.Close())
-	files, err := ioutil.ReadDir("./log_test")
-	require.Nil(t, err)
+	files, err := os.ReadDir("./log_test")
+	require.NoError(t, err)
 
 	lineCount := 0
 	for _, f := range files {
@@ -147,7 +148,7 @@ func writeToLogWriterAndVerify(t *testing.T, lw *LogWriter, path string) {
 		if strings.HasSuffix(file.Name(), ".gz") {
 			gz, err := gzip.NewReader(file)
 			require.NoError(t, err)
-			all, err := ioutil.ReadAll(gz)
+			all, err := io.ReadAll(gz)
 			require.NoError(t, err)
 			fileScanner = bufio.NewScanner(bytes.NewReader(all))
 			gz.Close()

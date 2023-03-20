@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,19 +20,19 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strings"
 	"testing"
 
-	dgoapi "github.com/dgraph-io/dgo/v210/protos/api"
-	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v2"
 
+	dgoapi "github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/graphql/test"
+	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v2"
 )
 
 // Tests showing that GraphQL mutations -> Dgraph mutations
@@ -80,7 +80,7 @@ func TestMutationRewriting(t *testing.T) {
 }
 
 func mutationValidation(t *testing.T, file string, rewriterFactory func() MutationRewriter) {
-	b, err := ioutil.ReadFile(file)
+	b, err := os.ReadFile(file)
 	require.NoError(t, err, "Unable to read test file")
 
 	var tests []testCase
@@ -151,8 +151,8 @@ func benchmark3LevelDeep(num int, b *testing.B) {
 	addRewriter := NewAddRewriter()
 	idExistence := make(map[string]string)
 	for n := 0; n < b.N; n++ {
-		addRewriter.RewriteQueries(context.Background(), mut)
-		addRewriter.Rewrite(context.Background(), mut, idExistence)
+		_, _, _ = addRewriter.RewriteQueries(context.Background(), mut)
+		_, _ = addRewriter.Rewrite(context.Background(), mut, idExistence)
 	}
 }
 
@@ -163,7 +163,7 @@ func Benchmark3LevelDeep1000(b *testing.B)  { benchmark3LevelDeep(1000, b) }
 func Benchmark3LevelDeep10000(b *testing.B) { benchmark3LevelDeep(10000, b) }
 
 func deleteMutationRewriting(t *testing.T, file string, rewriterFactory func() MutationRewriter) {
-	b, err := ioutil.ReadFile(file)
+	b, err := os.ReadFile(file)
 	require.NoError(t, err, "Unable to read test file")
 
 	var tests []testCase
@@ -233,7 +233,7 @@ func deleteMutationRewriting(t *testing.T, file string, rewriterFactory func() M
 }
 
 func mutationRewriting(t *testing.T, file string, rewriterFactory func() MutationRewriter) {
-	b, err := ioutil.ReadFile(file)
+	b, err := os.ReadFile(file)
 	require.NoError(t, err, "Unable to read test file")
 
 	var tests []testCase
@@ -345,11 +345,11 @@ func TestMutationQueryRewriting(t *testing.T) {
 	}
 
 	allowedTestTypes := map[string][]string{
-		"UPDATE_MUTATION":     []string{"Update Post "},
-		"ADD_UPDATE_MUTATION": []string{"Add Post ", "Update Post "},
+		"UPDATE_MUTATION":     {"Update Post "},
+		"ADD_UPDATE_MUTATION": {"Add Post ", "Update Post "},
 	}
 
-	b, err := ioutil.ReadFile("mutation_query_test.yaml")
+	b, err := os.ReadFile("mutation_query_test.yaml")
 	require.NoError(t, err, "Unable to read test file")
 
 	var tests map[string][]QueryRewritingCase
@@ -383,14 +383,14 @@ func TestMutationQueryRewriting(t *testing.T) {
 
 					_, _, _ = rewriter.RewriteQueries(context.Background(), gqlMutation)
 					_, err = rewriter.Rewrite(context.Background(), gqlMutation, tt.idExistence)
-					require.Nil(t, err)
+					require.NoError(t, err)
 
 					// -- Act --
 					dgQuery, err := rewriter.FromMutationResult(
 						context.Background(), gqlMutation, tt.assigned, tt.result)
 
 					// -- Assert --
-					require.Nil(t, err)
+					require.NoError(t, err)
 					require.Equal(t, tcase.DGQuery, dgraph.AsString(dgQuery))
 				})
 			}
@@ -399,7 +399,7 @@ func TestMutationQueryRewriting(t *testing.T) {
 }
 
 func TestCustomHTTPMutation(t *testing.T) {
-	b, err := ioutil.ReadFile("custom_mutation_test.yaml")
+	b, err := os.ReadFile("custom_mutation_test.yaml")
 	require.NoError(t, err, "Unable to read test file")
 
 	var tests []HTTPRewritingCase
@@ -421,9 +421,9 @@ func TestCustomHTTPMutation(t *testing.T) {
 					Query:     tcase.GQLQuery,
 					Variables: vars,
 					Header: map[string][]string{
-						"bogus":       []string{"header"},
-						"X-App-Token": []string{"val"},
-						"Auth0-Token": []string{"tok"},
+						"bogus":       {"header"},
+						"X-App-Token": {"val"},
+						"Auth0-Token": {"tok"},
 					},
 				})
 			require.NoError(t, err)

@@ -1,5 +1,7 @@
+//go:build integration
+
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,21 +16,21 @@
  * limitations under the License.
  */
 
+//nolint:lll
 package subscription_test
 
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/stretchr/testify/require"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 var (
@@ -131,7 +133,7 @@ func TestSubscription(t *testing.T) {
 			}
 		  }`,
 	}, `{}`)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	res, err := subscriptionClient.RecvMsg()
 	require.NoError(t, err)
 
@@ -229,7 +231,7 @@ func TestSubscriptionAuth(t *testing.T) {
 			}
 		}`,
 	}, payload)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	res, err := subscriptionClient.RecvMsg()
 	require.NoError(t, err)
@@ -349,7 +351,7 @@ func TestSubscriptionWithAuthShouldExpireWithJWT(t *testing.T) {
 			}
 		}`,
 		}, payload)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	res, err := subscriptionClient.RecvMsg()
 	require.NoError(t, err)
@@ -439,7 +441,7 @@ func TestSubscriptionAuthWithoutExpiry(t *testing.T) {
 			}
 		}`,
 	}, payload)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	res, err := subscriptionClient.RecvMsg()
 	require.NoError(t, err)
@@ -501,7 +503,7 @@ func TestSubscriptionAuth_SameQueryAndClaimsButDifferentExpiry_ShouldExpireIndep
 			}
 		}`,
 	}, payload)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	res, err := subscriptionClient.RecvMsg()
 	require.NoError(t, err)
@@ -525,7 +527,7 @@ func TestSubscriptionAuth_SameQueryAndClaimsButDifferentExpiry_ShouldExpireIndep
 			}
 		}`,
 	}, payload)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	res, err = subscriptionClient1.RecvMsg()
 	require.NoError(t, err)
@@ -652,7 +654,7 @@ func TestSubscriptionAuth_SameQueryDifferentClaimsAndExpiry_ShouldExpireIndepend
 			}
 		}`,
 	}, payload)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	res, err := subscriptionClient.RecvMsg()
 	require.NoError(t, err)
@@ -698,7 +700,7 @@ func TestSubscriptionAuth_SameQueryDifferentClaimsAndExpiry_ShouldExpireIndepend
 			}
 		}`,
 	}, payload)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	res, err = subscriptionClient1.RecvMsg()
 	require.NoError(t, err)
@@ -846,7 +848,7 @@ func TestSubscriptionAuthHeaderCaseInsensitive(t *testing.T) {
 			}
 		}`,
 	}, payload)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	res, err := subscriptionClient.RecvMsg()
 	require.NoError(t, err)
@@ -893,7 +895,7 @@ func TestSubscriptionAuth_MultiSubscriptionResponses(t *testing.T) {
 			}
 		}`,
 	}, payload)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	res, err := subscriptionClient.RecvMsg()
 	require.NoError(t, err)
@@ -922,7 +924,7 @@ func TestSubscriptionAuth_MultiSubscriptionResponses(t *testing.T) {
 			}
 		}`,
 	}, payload)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	res, err = subscriptionClient1.RecvMsg()
 	require.NoError(t, err)
@@ -1001,7 +1003,7 @@ func TestSubscriptionWithCustomDQL(t *testing.T) {
 					}
 				}`,
 	}, `{}`)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	res, err := subscriptionClient.RecvMsg()
 	require.NoError(t, err)
 
@@ -1043,7 +1045,9 @@ func TestSubscriptionWithCustomDQL(t *testing.T) {
 	common.RequireNoGQLErrors(t, &subscriptionResp)
 
 	// Check the latest update.
-	require.JSONEq(t, `{"queryUserTweetCounts":[{"screen_name":"001","tweetCount": 2},{"screen_name":"002","tweetCount": 1}]}`, string(subscriptionResp.Data))
+	require.JSONEq(t,
+		`{"queryUserTweetCounts":[{"screen_name":"001","tweetCount": 2},{"screen_name":"002","tweetCount": 1}]}`,
+		string(subscriptionResp.Data))
 	require.Contains(t, subscriptionResp.Extensions, touchedUidskey)
 	require.Greater(t, int(subscriptionResp.Extensions[touchedUidskey].(float64)), 0)
 
@@ -1056,10 +1060,6 @@ func TestSubscriptionWithCustomDQL(t *testing.T) {
 }
 
 func TestMain(m *testing.M) {
-	err := common.CheckGraphQLStarted(common.GraphqlAdminURL)
-	if err != nil {
-		x.Log(err, "Waited for GraphQL test server to become available, but it never did.")
-		os.Exit(1)
-	}
-	os.Exit(m.Run())
+	x.Panic(common.CheckGraphQLStarted(common.GraphqlAdminURL))
+	_ = m.Run()
 }

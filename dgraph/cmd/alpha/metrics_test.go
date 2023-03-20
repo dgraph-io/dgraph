@@ -1,5 +1,7 @@
+//go:build integration
+
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -176,13 +178,14 @@ func TestMetrics(t *testing.T) {
 
 	requiredMetrics := []string{
 		// Go Runtime Metrics
-		"go_goroutines", "go_memstats_gc_cpu_fraction", "go_memstats_heap_alloc_bytes",
+		"go_goroutines", "go_memstats_heap_alloc_bytes",
 		"go_memstats_heap_idle_bytes", "go_memstats_heap_inuse_bytes", "dgraph_latency_bucket",
 
 		// Badger Metrics
 		"badger_disk_reads_total", "badger_disk_writes_total", "badger_gets_total",
 		"badger_memtable_gets_total", "badger_puts_total", "badger_read_bytes",
-		"badger_written_bytes",
+		"badger_written_bytes", "badger_blocked_puts_total",
+		"badger_compactions_current", "badger_pending_writes_total",
 		// The following metrics get exposed after 1 minute from Badger, so
 		// they're not available in time for this test
 		// "badger_lsm_size_bytes", "badger_vlog_size_bytes",
@@ -209,7 +212,7 @@ func TestMetrics(t *testing.T) {
 
 func extractMetrics(metrics string) (map[string]interface{}, error) {
 	lines := strings.Split(metrics, "\n")
-	metricRegex, err := regexp.Compile("(^\\w+|\\d+$)")
+	metricRegex, err := regexp.Compile(`(^\w+|\d+$)`)
 
 	if err != nil {
 		return nil, err

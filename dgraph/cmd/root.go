@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,11 +22,14 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
 	"unicode"
+
+	"github.com/pkg/errors"
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/alpha"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/bulk"
@@ -42,10 +45,6 @@ import (
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
 	"github.com/dgraph-io/dgraph/upgrade"
 	"github.com/dgraph-io/dgraph/x"
-
-	"github.com/pkg/errors"
-	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 // RootCmd represents the base command when called without any subcommands
@@ -153,7 +152,7 @@ func initCmds() {
 			if err != nil {
 				x.Fatalf("unable to open config file for reading: %v", err)
 			}
-			cfgData, err := ioutil.ReadAll(cfgFile)
+			cfgData, err := io.ReadAll(cfgFile)
 			if err != nil {
 				x.Fatalf("unable to read config file: %v", err)
 			}
@@ -262,37 +261,36 @@ http://zsh.sourceforge.net/Doc/Release/Completion-System.html
 // respective subcommands. If JSON hierarchical config objects are not used, convertJSON doesn't
 // change anything and returns the config file string as it is. For example:
 //
-//  {
-//    "mutations": "strict",
-//    "badger": {
-//      "compression": "zstd:1",
-//      "goroutines": 5
-//    },
-//    "raft": {
-//      "idx": 2,
-//      "learner": true
-//    },
-//    "security": {
-//      "whitelist": "127.0.0.1,0.0.0.0"
-//    }
-//  }
+//	{
+//	  "mutations": "strict",
+//	  "badger": {
+//	    "compression": "zstd:1",
+//	    "goroutines": 5
+//	  },
+//	  "raft": {
+//	    "idx": 2,
+//	    "learner": true
+//	  },
+//	  "security": {
+//	    "whitelist": "127.0.0.1,0.0.0.0"
+//	  }
+//	}
 //
 // Is converted into:
 //
-//  {
-//    "mutations": "strict",
-//    "badger": "compression=zstd:1; goroutines=5;",
-//    "raft": "idx=2; learner=true;",
-//    "security": "whitelist=127.0.0.1,0.0.0.0;"
-//  }
+//	{
+//	  "mutations": "strict",
+//	  "badger": "compression=zstd:1; goroutines=5;",
+//	  "raft": "idx=2; learner=true;",
+//	  "security": "whitelist=127.0.0.1,0.0.0.0;"
+//	}
 //
 // Viper then uses the "converted" JSON to set the z.SuperFlag strings in subcommand option structs.
 func convertJSON(old string) io.Reader {
 	dec := json.NewDecoder(strings.NewReader(old))
 	config := make(map[string]interface{})
-	if err := dec.Decode(&config); err != nil {
-		panic(err)
-	}
+	x.Panic(dec.Decode(&config))
+
 	// super holds superflags to later be condensed into 'good'
 	super, good := make(map[string]map[string]interface{}), make(map[string]string)
 	for k, v := range config {
@@ -314,9 +312,8 @@ func convertJSON(old string) io.Reader {
 	buf := &bytes.Buffer{}
 	enc := json.NewEncoder(buf)
 	enc.SetIndent("", "    ")
-	if err := enc.Encode(&good); err != nil {
-		panic(err)
-	}
+	x.Panic(enc.Encode(&good))
+
 	return buf
 }
 
@@ -325,22 +322,22 @@ func convertJSON(old string) io.Reader {
 // subcommands. If YAML hierarchical notation is not used, convertYAML doesn't change anything and
 // returns the config file string as it is. For example:
 //
-//  mutations: strict
-//  badger:
-//    compression: zstd:1
-//    goroutines: 5
-//  raft:
-//    idx: 2
-//    learner: true
-//  security:
-//    whitelist: "127.0.0.1,0.0.0.0"
+//	mutations: strict
+//	badger:
+//	  compression: zstd:1
+//	  goroutines: 5
+//	raft:
+//	  idx: 2
+//	  learner: true
+//	security:
+//	  whitelist: "127.0.0.1,0.0.0.0"
 //
 // Is converted into:
 //
-//  mutations: strict
-//  badger: "compression=zstd:1; goroutines=5;"
-//  raft: "idx=2; learner=true;"
-//  security: "whitelist=127.0.0.1,0.0.0.0;"
+//	mutations: strict
+//	badger: "compression=zstd:1; goroutines=5;"
+//	raft: "idx=2; learner=true;"
+//	security: "whitelist=127.0.0.1,0.0.0.0;"
 //
 // Viper then uses the "converted" YAML to set the z.SuperFlag strings in subcommand option structs.
 func convertYAML(old string) io.Reader {

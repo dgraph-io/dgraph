@@ -178,7 +178,7 @@
 
    END OF TERMS AND CONDITIONS
 
-   Copyright 2013-2022 Docker, Inc.
+   Copyright 2013-2023 Docker, Inc.
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.

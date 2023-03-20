@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,14 +28,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dgraph-io/badger/v3"
-	"github.com/dgraph-io/badger/v3/pb"
-	"github.com/dgraph-io/badger/v3/y"
-	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"go.etcd.io/etcd/raft/raftpb"
+
+	"github.com/dgraph-io/badger/v4"
+	"github.com/dgraph-io/badger/v4/pb"
+	"github.com/dgraph-io/badger/v4/y"
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 // WAL is divided up into entryFiles. Each entry file stores maxNumEntries in
@@ -62,7 +63,7 @@ const (
 
 var (
 	emptyEntry    = entry(make([]byte, entrySize))
-	encryptionKey x.SensitiveByteSlice
+	encryptionKey x.Sensitive
 )
 
 type entry []byte
@@ -317,7 +318,7 @@ func (lf *logFile) generateIV(offset uint64) []byte {
 	iv := make([]byte, aes.BlockSize)
 	// IV is of 16 bytes, in which first 8 bytes are obtained from baseIV
 	// and the remaining 8 bytes is obtained from the offset.
-	y.AssertTrue(8 == copy(iv[:8], lf.baseIV))
+	y.AssertTrue(copy(iv[:8], lf.baseIV) == 8)
 	binary.BigEndian.PutUint64(iv[8:], offset)
 	return iv
 }

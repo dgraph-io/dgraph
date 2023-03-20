@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,13 +22,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 	geojson "github.com/paulmach/go.geojson"
+
+	"github.com/dgraph-io/dgraph/x"
 )
 
 // TODO: Reconsider if we need this binary.
@@ -38,7 +39,11 @@ func writeToFile(fpath string, ch chan []byte) error {
 		return err
 	}
 
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			glog.Warningf("error while closing fd: %v", err)
+		}
+	}()
 	x.Check(err)
 	w := bufio.NewWriterSize(f, 1e6)
 	gw, err := gzip.NewWriterLevel(w, gzip.BestCompression)
@@ -66,7 +71,11 @@ func convertGeoFile(input string, output string) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			glog.Warningf("error while closing fd: %v", err)
+		}
+	}()
 
 	var gz io.Reader
 	if filepath.Ext(input) == ".gz" {
@@ -79,7 +88,7 @@ func convertGeoFile(input string, output string) error {
 	}
 
 	// TODO - This might not be a good idea for large files. Use json.Decode to read features.
-	b, err := ioutil.ReadAll(gz)
+	b, err := io.ReadAll(gz)
 	if err != nil {
 		return err
 	}

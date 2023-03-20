@@ -1,5 +1,5 @@
 #
-# Copyright 2018 Dgraph Labs, Inc. and Contributors
+# Copyright 2023 Dgraph Labs, Inc. and Contributors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,9 +18,13 @@ BUILD          ?= $(shell git rev-parse --short HEAD)
 BUILD_CODENAME  = dgraph
 BUILD_DATE     ?= $(shell git log -1 --format=%ci)
 BUILD_BRANCH   ?= $(shell git rev-parse --abbrev-ref HEAD)
+<<<<<<< HEAD
 #BUILD_VERSION  ?= $(shell git describe --always --tags)
 #Get version of Badger CLI tool associated with current Dgraph build
 BADGER_VERSION ?= $(shell cat go.mod | grep -i "github.com/dgraph-io/badger" | awk '{print $2}')
+=======
+BUILD_VERSION  ?= $(shell git describe --always --tags)
+>>>>>>> main
 
 GOPATH         ?= $(shell go env GOPATH)
 
@@ -30,27 +34,38 @@ ifneq ($(strip $(shell go env GOBIN)),)
 endif
 
 ######################
-# Build & Release Paramaters
-# DGRAPH_VERSION flag facilicates setting the dgraph version
+# Build & Release Parameters
+# DGRAPH_VERSION flag facilitates setting the dgraph version
 # DGRAPH_VERSION flag is used for our release pipelines, where it is set to our release version number automatically
 # DGRAPH_VERSION defaults to local, if not specified, for development purposes
 ######################
 DGRAPH_VERSION ?= local
 
+<<<<<<< HEAD
 .PHONY: all
+=======
+.PHONY: all 
+>>>>>>> main
 all: dgraph
 
 .PHONY: dgraph
 dgraph:
 	$(MAKE) -w -C $@ all
 
+<<<<<<< HEAD
+=======
+.PHONY: dgraph-coverage
+dgraph-coverage:
+	$(MAKE) -w -C dgraph test-coverage-binary
+
+>>>>>>> main
 .PHONY: oss
 oss:
 	$(MAKE) BUILD_TAGS=oss
 
 .PHONY: version
 version:
-	@echo Dgraph ${BUILD_VERSION}
+	@echo Dgraph: ${BUILD_VERSION}
 	@echo Build: ${BUILD}
 	@echo Codename: ${BUILD_CODENAME}
 	@echo Build date: ${BUILD_DATE}
@@ -72,8 +87,8 @@ uninstall:
 		$(MAKE) -C dgraph uninstall; \
 
 .PHONY: test
-test: image-local
-	@mv dgraph/dgraph ${GOPATH}/bin
+test: docker-image
+	@mv dgraph/dgraph ${GOPATH}/bin/dgraph
 	@$(MAKE) -C t test
 
 .PHONY: image-local local-image
@@ -96,6 +111,12 @@ docker-image-standalone: dgraph docker-image
 	@cp ./dgraph/dgraph ./linux/dgraph
 	$(MAKE) -w -C contrib/standalone all DOCKER_TAG=$(DGRAPH_VERSION) DGRAPH_VERSION=$(DGRAPH_VERSION)
 
+.PHONY: coverage-docker-image
+coverage-docker-image: dgraph-coverage
+	@mkdir -p linux
+	@cp ./dgraph/dgraph ./linux/dgraph
+	docker build -f contrib/Dockerfile -t dgraph/dgraph:$(DGRAPH_VERSION) .
+
 .PHONY: badger
 badger:
 #	if Badger CLI tool already installed, remove it
@@ -104,7 +125,7 @@ badger:
 	fi
 #	install badger CLI tool at version matching current dependency in Dgraph
 	@go install github.com/dgraph-io/badger/v3/badger@$(BADGER_VERSION)
-	@echo "Installed Badger to $(BADGER_TARGET)"
+	@echo "Installed Badger CLI tool to $(BADGER_TARGET)"
 
 # build and run dependencies for ubuntu linux
 .PHONY: linux-dependency

@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"math"
 	"net/http"
 	"os"
@@ -31,12 +31,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/v210/protos/api"
-	"github.com/stretchr/testify/require"
+	"github.com/dgraph-io/dgraph/testutil"
 )
 
 // TODO: This test was used just to make sure some really basic examples work.
@@ -705,8 +705,7 @@ func testDeleteEdgeWithStar(t *testing.T) {
 
 }
 
-func testGqlSchema(t *testing.T) {
-	t.Skipf("Skipping: This is failing for some reason. Please fix this.")
+func TestGqlSchema(t *testing.T) {
 	s := newBulkOnlySuite(t, "", "", "abc")
 	defer s.cleanup(t)
 
@@ -728,8 +727,7 @@ func testGqlSchema(t *testing.T) {
 
 }
 
-// TODO: Fix this later.
-func DONOTRUNTestGoldenData(t *testing.T) {
+func TestGoldenData(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping test in short mode")
 	}
@@ -801,7 +799,7 @@ func matchExportCount(opts matchExport) error {
 		return err
 	}
 
-	b, err = ioutil.ReadAll(resp.Body)
+	b, err = io.ReadAll(resp.Body)
 	if err != nil {
 		return err
 	}

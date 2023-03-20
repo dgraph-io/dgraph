@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ import (
 // single-character edits (i.e. insertions, deletions or substitutions)
 // required to change one word into the other.
 //
-// This implemention is optimized to use O(min(m,n)) space and is based on the
+// This implementation is optimized to use O(min(m,n)) space and is based on the
 // optimized C version found here:
 // http://en.wikibooks.org/wiki/Algorithm_implementation/Strings/Levenshtein_distance#C
 func levenshteinDistance(s, t string) int {
@@ -62,7 +62,8 @@ func levenshteinDistance(s, t string) int {
 func min(a, b, c int) int {
 	if a < b && a < c {
 		return a
-	} else if b < c {
+	}
+	if b < c {
 		return b
 	}
 	return c
@@ -82,8 +83,9 @@ func matchFuzzy(query, val string, max int) bool {
 // Returns the list of uids even if empty, or an error otherwise.
 func uidsForMatch(attr string, arg funcArgs) (*pb.List, error) {
 	opts := posting.ListOptions{
-		ReadTs: arg.q.ReadTs,
-		First:  int(arg.q.First),
+		ReadTs:   arg.q.ReadTs,
+		First:    int(arg.q.First),
+		AfterUid: arg.q.AfterUid,
 	}
 	uidsForNgram := func(ngram string) (*pb.List, error) {
 		key := x.IndexKey(attr, ngram)

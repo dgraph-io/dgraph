@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -32,9 +31,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dgraph-io/ristretto/z"
+	"github.com/golang/glog"
 
-	"github.com/dgraph-io/badger/v3/y"
+	"github.com/dgraph-io/badger/v4/y"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 const (
@@ -107,7 +107,7 @@ func (l *LogWriter) Write(p []byte) (int, error) {
 		}
 	}
 
-	// if encryption is enabled store the data in encyrpted way
+	// if encryption is enabled store the data in encrypted way
 	if l.EncryptionKey != nil {
 		bytes, err := encrypt(l.EncryptionKey, l.baseIv, p)
 		if err != nil {
@@ -245,7 +245,7 @@ func (l *LogWriter) open() error {
 		l.writer = bufio.NewWriterSize(l.file, bufferSize)
 
 		if l.EncryptionKey != nil {
-			rand.Read(l.baseIv[:]) //nolint:gosec // cryptographic precision not required for randomly selecting from slice
+			_, _ = rand.Read(l.baseIv[:])
 			bytes, err := encrypt(l.EncryptionKey, l.baseIv, []byte(VerificationText))
 			if err != nil {
 				return err
@@ -312,27 +312,39 @@ func compress(src string) error {
 		return err
 	}
 
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			glog.Warningf("error while closing fd: %v", err)
+		}
+	}()
 	gzf, err := os.OpenFile(src+".gz", os.O_CREATE|os.O_TRUNC|os.O_WRONLY, os.ModePerm)
 	if err != nil {
 		return err
 	}
+	defer func() {
+		if err := gzf.Close(); err != nil {
+			glog.Warningf("error closing file: %v", err)
+		}
+	}()
 
-	defer gzf.Close()
 	gz := gzip.NewWriter(gzf)
-	defer gz.Close()
+	defer func() {
+		if err := gz.Close(); err != nil {
+			glog.Warningf("error closing gzip writer: %v", err)
+		}
+	}()
+
 	if _, err := io.Copy(gz, f); err != nil {
-		os.Remove(src + ".gz")
+		if err := os.Remove(src + ".gz"); err != nil {
+			glog.Warningf("error deleting file [%v]: %v", src, err)
+		}
 		return err
 	}
 	// close the descriptors because we need to delete the file
 	if err := f.Close(); err != nil {
 		return err
 	}
-	if err := os.Remove(src); err != nil {
-		return err
-	}
-	return nil
+	return os.Remove(src)
 }
 
 // this should be called in a serial order
@@ -384,7 +396,7 @@ func prefixAndExt(file string) (prefix, ext string) {
 
 func processOldLogFiles(fp string, maxAge int64) ([]string, []string, error) {
 	dir := filepath.Dir(fp)
-	files, err := ioutil.ReadDir(dir)
+	files, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, nil, fmt.Errorf("can't read log file directory: %s", err)
 	}
@@ -400,7 +412,7 @@ func processOldLogFiles(fp string, maxAge int64) ([]string, []string, error) {
 
 	for _, f := range files {
 		if f.IsDir() || // f is directory
-			!strings.HasPrefix(f.Name(), defPrefix) || // f doesnt start with prefix
+			!strings.HasPrefix(f.Name(), defPrefix) || // f doesn't start with prefix
 			!(strings.HasSuffix(f.Name(), defExt) || strings.HasSuffix(f.Name(), defExt+".gz")) {
 			continue
 		}

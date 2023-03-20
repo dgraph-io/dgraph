@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,17 +23,19 @@ import (
 	"crypto/subtle"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"regexp"
 	"strings"
 	"time"
 
-	"github.com/dgraph-io/gqlparser/v2/gqlerror"
 	"github.com/dgrijalva/jwt-go/v4"
+	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/metadata"
 	"gopkg.in/square/go-jose.v2"
+
+	"github.com/dgraph-io/gqlparser/v2/gqlerror"
 )
 
 type ctxKey string
@@ -324,10 +326,10 @@ func (a *AuthMeta) ExtractCustomClaims(ctx context.Context) (*CustomClaims, erro
 	if len(jwtToken) == 0 {
 		if a.ClosedByDefault {
 			return &CustomClaims{}, fmt.Errorf("a valid JWT is required but was not provided")
-		} else {
-			return &CustomClaims{}, nil
 		}
-	} else if len(jwtToken) > 1 {
+		return &CustomClaims{}, nil
+	}
+	if len(jwtToken) > 1 {
 		return nil, fmt.Errorf("invalid jwt auth token")
 	}
 	return a.validateJWTCustomClaims(jwtToken[0])
@@ -460,9 +462,13 @@ func (a *AuthMeta) FetchJWK(i int) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			glog.Warningf("error closing body: %v", err)
+		}
+	}()
 
-	data, err := ioutil.ReadAll(resp.Body)
+	data, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return err
 	}

@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,13 +21,13 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"math/rand"
 	"os"
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -36,14 +36,16 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/ristretto/z"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
+	"github.com/golang/glog"
 	"github.com/spf13/pflag"
 	"golang.org/x/tools/go/packages"
+
+	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 var (
@@ -56,6 +58,7 @@ var (
 	tmpCoverageFile    = "tmp.out"
 	testCovMode        = "atomic"
 	coverageFileHeader = fmt.Sprintf("mode: %s", testCovMode)
+	testsuite          []string
 
 	baseDir = pflag.StringP("base", "", "../",
 		"Base dir for Dgraph")
@@ -84,7 +87,8 @@ var (
 	skipSlow = pflag.BoolP("skip-slow", "s", false,
 		"If true, don't run tests on slow packages.")
 	suite = pflag.String("suite", "unit", "This flag is used to specify which "+
-		"test suites to run. Possible values are all, load, unit")
+		"test suites to run. Possible values are all, ldbc, load, unit. Multiple suites can be "+
+		"selected like --suite=ldbc,load")
 	tmp               = pflag.String("tmp", "", "Temporary directory used to download data.")
 	downloadResources = pflag.BoolP("download", "d", true,
 		"Flag to specify whether to download resources or not")
@@ -100,6 +104,14 @@ func commandWithContext(ctx context.Context, args ...string) *exec.Cmd {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Env = os.Environ()
+	if *runCoverage {
+		cmd.Env = append(cmd.Env, "COVERAGE_OUTPUT=--test.coverprofile=coverage.out")
+	}
+	if runtime.GOARCH == "arm64" {
+		cmd.Env = append(cmd.Env, "MINIO_IMAGE_ARCH=RELEASE.2020-11-13T20-10-18Z-arm64")
+		cmd.Env = append(cmd.Env, "NFS_SERVER_IMAGE_ARCH=11-arm")
+	}
+
 	return cmd
 }
 
@@ -156,8 +168,13 @@ func detectRace(prefix string) bool {
 }
 
 func outputLogs(prefix string) {
-	f, err := ioutil.TempFile(".", prefix+"*.log")
+	f, err := os.CreateTemp(".", prefix+"*.log")
 	x.Check(err)
+	defer func() {
+		if err := f.Close(); err != nil {
+			fmt.Printf("error closing file: %v", err)
+		}
+	}()
 	printLogs := func(container string) {
 		in := testutil.GetContainerInstance(prefix, container)
 		c := in.GetContainer()
@@ -167,7 +184,9 @@ func outputLogs(prefix string) {
 		logCmd := exec.Command("docker", "logs", c.ID)
 		out, err := logCmd.CombinedOutput()
 		x.Check(err)
-		f.Write(out)
+		if _, err := f.Write(out); err != nil {
+			fmt.Printf("error writing container logs to file: %v", err)
+		}
 		fmt.Printf("Docker logs for %s is %s with error %+v ", c.ID, string(out), err)
 	}
 	for i := 0; i <= 3; i++ {
@@ -177,8 +196,6 @@ func outputLogs(prefix string) {
 	for i := 0; i <= 6; i++ {
 		printLogs("alpha" + strconv.Itoa(i))
 	}
-	f.Sync()
-	f.Close()
 	s := fmt.Sprintf("---> LOGS for %s written to %s .\n", prefix, f.Name())
 	_, err = oc.Write([]byte(s))
 	x.Check(err)
@@ -189,20 +206,64 @@ func stopCluster(composeFile, prefix string, wg *sync.WaitGroup, err error) {
 		if err != nil {
 			outputLogs(prefix)
 		}
-		cmd := command("docker-compose", "--compatibility", "-f", composeFile, "-p", prefix, "down", "-v")
+		cmd := command("docker-compose", "--compatibility", "-f", composeFile, "-p", prefix, "stop")
 		cmd.Stderr = nil
 		if err := cmd.Run(); err != nil {
 			fmt.Printf("Error while bringing down cluster. Prefix: %s. Error: %v\n",
 				prefix, err)
 		} else {
-			fmt.Printf("CLUSTER DOWN: %s\n", prefix)
+			fmt.Printf("CLUSTER STOPPED: %s\n", prefix)
 		}
+
+		if *runCoverage {
+			// get all matching containers, copy /usr/local/bin/coverage.out
+			containers := testutil.AllContainers(prefix)
+			for _, c := range containers {
+				tmp := fmt.Sprintf("%s.%s", tmpCoverageFile, c.ID)
+
+				containerInfo, err := testutil.DockerInspect(c.ID)
+				if err != nil {
+					fmt.Printf("error while inspecting container. Prefix: %s. Error: %v\n", prefix, err)
+				}
+
+				workDir := containerInfo.Config.WorkingDir
+
+				err = testutil.DockerCpFromContainer(c.ID, workDir+"/coverage.out", tmp)
+				if err != nil {
+					fmt.Printf("error bringing down cluster. Failed at copying coverage file. Prefix: %s. Error: %v\n",
+						prefix, err)
+				}
+
+				if err = appendTestCoverageFile(tmp, coverageFile); err != nil {
+					fmt.Printf("error bringing down cluster. Failed at appending coverage file. Prefix: %s. Error: %v\n",
+						prefix, err,
+					)
+				}
+
+				_ = os.Remove(tmp)
+
+				coverageBulk := strings.Replace(composeFile, "docker-compose.yml", "coverage_bulk.out", -1)
+				if err = appendTestCoverageFile(coverageBulk, coverageFile); err != nil {
+					fmt.Printf("Error bringing down cluster. Failed at appending coverage file. Prefix: %s. Error: %v\n",
+						prefix, err)
+				}
+			}
+		}
+
+		cmd = command("docker-compose", "--compatibility", "-f", composeFile, "-p", prefix, "down", "-v")
+		if err := cmd.Run(); err != nil {
+			fmt.Printf("Error while bringing down cluster. Prefix: %s. Error: %v\n",
+				prefix, err)
+		} else {
+			fmt.Printf("CLUSTER AND NETWORK REMOVED: %s\n", prefix)
+		}
+
 		wg.Done()
 	}()
 }
 
 func runTestsFor(ctx context.Context, pkg, prefix string) error {
-	var args = []string{"go", "test", "-failfast", "-v"}
+	var args = []string{"go", "test", "-failfast", "-v", "-tags=integration"}
 	if *race {
 		args = append(args, "-timeout", "180m")
 		// Todo: There are few race errors in tests itself. Enable this once that is fixed.
@@ -229,7 +290,7 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 	cmd.Env = append(cmd.Env, "TEST_DOCKER_PREFIX="+prefix)
 	abs, err := filepath.Abs(*tmp)
 	if err != nil {
-		return fmt.Errorf("while getting absolute path of tmp directory: %v Error: %v\n", *tmp, err)
+		return fmt.Errorf("while getting absolute path of tmp directory: %v Error: %v", *tmp, err)
 	}
 	cmd.Env = append(cmd.Env, "TEST_DATA_DIRECTORY="+abs)
 	// Use failureCatcher.
@@ -242,12 +303,12 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 		time.Sleep(time.Second)
 	} else {
 		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("While running command: %v Error: %v", args, err)
+			return fmt.Errorf("while running command: %v, error: %v", args, err)
 		}
 	}
 
 	dur := time.Since(start).Round(time.Second)
-	tid, _ := ctx.Value("threadId").(int32)
+	tid, _ := ctx.Value(_threadIdKey{}).(int32)
 	oc.Took(tid, pkg, dur)
 	fmt.Printf("Ran tests for package: %s in %s\n", pkg, dur)
 	if *runCoverage {
@@ -267,7 +328,7 @@ func hasTestFiles(pkg string) bool {
 	dir = filepath.Join(*baseDir, dir)
 
 	hasTests := false
-	filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if hasTests {
 			return filepath.SkipDir
 		}
@@ -277,8 +338,11 @@ func hasTestFiles(pkg string) bool {
 		}
 		return nil
 	})
+	x.Check(err)
 	return hasTests
 }
+
+type _threadIdKey struct{}
 
 var _threadId int32
 
@@ -325,7 +389,7 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 	defer stop()
 
 	ctx := closer.Ctx()
-	ctx = context.WithValue(ctx, "threadId", threadId)
+	ctx = context.WithValue(ctx, _threadIdKey{}, threadId)
 
 	for task := range taskCh {
 		if ctx.Err() != nil {
@@ -373,6 +437,7 @@ func getClusterPrefix() string {
 	return fmt.Sprintf("%s%03d-%d", getGlobalPrefix(), procId, id)
 }
 
+// for tests that require custom docker-compose file (located in test directory)
 func runCustomClusterTest(ctx context.Context, pkg string, wg *sync.WaitGroup) error {
 	fmt.Printf("Bringing up cluster for package: %s\n", pkg)
 	var err error
@@ -440,8 +505,8 @@ func (o *outputCatcher) Write(p []byte) (n int, err error) {
 	o.Lock()
 	defer o.Unlock()
 
-	if bytes.Index(p, []byte("FAIL")) >= 0 ||
-		bytes.Index(p, []byte("TODO")) >= 0 {
+	if bytes.Contains(p, []byte("FAIL")) ||
+		bytes.Contains(p, []byte("TODO")) {
 		o.failure.Write(p)
 	}
 	return os.Stdout.Write(p)
@@ -478,6 +543,7 @@ type task struct {
 	isCommon bool
 }
 
+// for custom cluster tests (i.e. those not using default docker-compose.yml)
 func composeFileFor(pkg string) string {
 	dir := strings.Replace(pkg, "github.com/dgraph-io/dgraph/", "", 1)
 	return filepath.Join(*baseDir, dir, "docker-compose.yml")
@@ -495,6 +561,7 @@ func getPackages() []task {
 
 	slowPkgs := []string{"systest", "ee/acl", "cmd/alpha", "worker", "e2e"}
 	skipPkgs := strings.Split(*skip, ",")
+	runPkgs := strings.Split(*runPkg, ",")
 
 	moveSlowToFront := func(list []task) []task {
 		// These packages typically take over a minute to run.
@@ -517,8 +584,9 @@ func getPackages() []task {
 		}
 		return out
 	}
+	cfg := &packages.Config{BuildFlags: []string{"-tags=integration"}}
 
-	pkgs, err := packages.Load(nil, *baseDir+"/...")
+	pkgs, err := packages.Load(cfg, *baseDir+"/...")
 	x.Check(err)
 	for _, pkg := range pkgs {
 		if len(pkg.Errors) > 0 {
@@ -530,8 +598,18 @@ func getPackages() []task {
 
 	var valid []task
 	for _, pkg := range pkgs {
-		if len(*runPkg) > 0 && !strings.HasSuffix(pkg.ID, "/"+*runPkg) {
-			continue
+		if len(*runPkg) > 0 {
+			found := false
+			for _, eachPkg := range runPkgs {
+				if strings.HasSuffix(pkg.ID, eachPkg) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				// pkg did not match any element of runPkg
+				continue
+			}
 		}
 
 		if len(*runTest) > 0 {
@@ -542,7 +620,7 @@ func getPackages() []task {
 		}
 
 		if !isValidPackageForSuite(pkg.ID) {
-			fmt.Printf("Skipping package %s as its not valid for the selected suite %s \n", pkg.ID, *suite)
+			fmt.Printf("Skipping package %s as its not valid for the selected suite %+v \n", pkg.ID, testsuite)
 			continue
 		}
 
@@ -616,7 +694,6 @@ func removeAllTestContainers() {
 
 var loadPackages = []string{
 	"/systest/21million/bulk",
-	"/systest/21million/ludicrous",
 	"/systest/21million/live",
 	"/systest/1million",
 	"/systest/bulk_live/bulk",
@@ -626,18 +703,33 @@ var loadPackages = []string{
 	"/dgraph/cmd/bulk/systest",
 }
 
-func isValidPackageForSuite(pkg string) bool {
-	switch *suite {
-	case "all":
-		return true
-	case "load":
-		return isLoadPackage(pkg)
-	case "unit":
-		return !isLoadPackage(pkg)
-	default:
-		fmt.Printf("wrong suite is provide %s. valid values are all/load/unit \n", *suite)
-		return false
+func testSuiteContains(suite string) bool {
+	for _, str := range testsuite {
+		if suite == str {
+			return true
+		}
 	}
+	return false
+}
+
+func isValidPackageForSuite(pkg string) bool {
+	valid := false
+	if testSuiteContains("all") {
+		valid = true
+	}
+	if testSuiteContains("ldbc") {
+		valid = valid || isLDBCPackage(pkg)
+	}
+	if testSuiteContains("load") {
+		valid = valid || isLoadPackage(pkg)
+	}
+	if testSuiteContains("unit") {
+		valid = valid || (!isLoadPackage(pkg) && !isLDBCPackage(pkg))
+	}
+	if valid {
+		return valid
+	}
+	return false
 }
 
 func isLoadPackage(pkg string) bool {
@@ -649,12 +741,49 @@ func isLoadPackage(pkg string) bool {
 	return false
 }
 
+func isLDBCPackage(pkg string) bool {
+	return strings.HasSuffix(pkg, "/systest/ldbc")
+}
+
 var datafiles = map[string]string{
 	"1million-noindex.schema": "https://github.com/dgraph-io/benchmarks/blob/master/data/1million-noindex.schema?raw=true",
 	"1million.schema":         "https://github.com/dgraph-io/benchmarks/blob/master/data/1million.schema?raw=true",
 	"1million.rdf.gz":         "https://github.com/dgraph-io/benchmarks/blob/master/data/1million.rdf.gz?raw=true",
 	"21million.schema":        "https://github.com/dgraph-io/benchmarks/blob/master/data/21million.schema?raw=true",
 	"21million.rdf.gz":        "https://github.com/dgraph-io/benchmarks/blob/master/data/21million.rdf.gz?raw=true",
+}
+
+var baseUrl = "https://github.com/dgraph-io/benchmarks/blob/master/ldbc/sf0.3/ldbc_rdf_0.3/"
+var suffix = "?raw=true"
+
+var rdfFileNames = [...]string{
+	"Deltas.rdf",
+	"comment_0.rdf",
+	"containerOf_0.rdf",
+	"forum_0.rdf",
+	"hasCreator_0.rdf",
+	"hasInterest_0.rdf",
+	"hasMember_0.rdf",
+	"hasModerator_0.rdf",
+	"hasTag_0.rdf",
+	"hasType_0.rdf",
+	"isLocatedIn_0.rdf",
+	"isPartOf_0.rdf",
+	"isSubclassOf_0.rdf",
+	"knows_0.rdf",
+	"likes_0.rdf",
+	"organisation_0.rdf",
+	"person_0.rdf",
+	"place_0.rdf",
+	"post_0.rdf",
+	"replyOf_0.rdf",
+	"studyAt_0.rdf",
+	"tag_0.rdf",
+	"tagclass_0.rdf",
+	"workAt_0.rdf"}
+
+var ldbcDataFiles = map[string]string{
+	"ldbcTypes.schema": "https://github.com/dgraph-io/benchmarks/blob/master/ldbc/sf0.3/ldbcTypes.schema?raw=true",
 }
 
 func downloadDataFiles() {
@@ -677,12 +806,52 @@ func downloadDataFiles() {
 	}
 }
 
+func downloadLDBCFiles() {
+	if !*downloadResources {
+		fmt.Print("Skipping downloading of resources\n")
+		return
+	}
+	if *tmp == "" {
+		*tmp = os.TempDir() + "/ldbcData"
+	}
+
+	x.Check(testutil.MakeDirEmpty([]string{*tmp}))
+
+	for _, name := range rdfFileNames {
+		filepath := baseUrl + name + suffix
+		ldbcDataFiles[name] = filepath
+	}
+
+	start := time.Now()
+	var wg sync.WaitGroup
+	for fname, link := range ldbcDataFiles {
+		wg.Add(1)
+		go func(fname, link string, wg *sync.WaitGroup) {
+			defer wg.Done()
+			start := time.Now()
+			cmd := exec.Command("wget", "-O", fname, link)
+			cmd.Dir = *tmp
+			if out, err := cmd.CombinedOutput(); err != nil {
+				fmt.Printf("Error %v", err)
+				fmt.Printf("Output %v", out)
+			}
+			fmt.Printf("Downloaded %s to %s in %s \n", fname, *tmp, time.Since(start))
+		}(fname, link, &wg)
+	}
+	wg.Wait()
+	fmt.Printf("Downloaded %d files in %s \n", len(ldbcDataFiles), time.Since(start))
+}
+
 func createTestCoverageFile(path string) error {
 	outFile, err := os.Create(path)
 	if err != nil {
 		return err
 	}
-	defer outFile.Close()
+	defer func() {
+		if err := outFile.Close(); err != nil {
+			glog.Warningf("error closing file: %v", err)
+		}
+	}()
 
 	cmd := command("echo", coverageFileHeader)
 	cmd.Stdout = outFile
@@ -708,7 +877,11 @@ func isTestCoverageEmpty(path string) (bool, error) {
 	if err != nil {
 		return true, err
 	}
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			glog.Warningf("error closing file: %v", err)
+		}
+	}()
 
 	var l int
 	scanner := bufio.NewScanner(file)
@@ -724,7 +897,7 @@ func isTestCoverageEmpty(path string) (bool, error) {
 
 func appendTestCoverageFile(src, des string) error {
 	if !fileExists(src) {
-		fmt.Println("src does not exist, skipping file")
+		fmt.Printf("src: %s does not exist, skipping file\n", src)
 		return nil
 	}
 
@@ -733,7 +906,7 @@ func appendTestCoverageFile(src, des string) error {
 		return err
 	}
 	if isEmpty {
-		fmt.Println("no test files or no test coverage statement generated, skipping file")
+		fmt.Printf("no test files or no test coverage statement generated for %s, skipping file\n", src)
 		return nil
 	}
 
@@ -768,6 +941,7 @@ func run() error {
 		log.Fatalf("Both pkg and test can't be set.\n")
 	}
 	fmt.Printf("Proc ID is %d\n", procId)
+	fmt.Printf("Detected architecture: %s", runtime.GOARCH)
 
 	start := time.Now()
 	oc.Took(0, "START", time.Millisecond)
@@ -786,7 +960,7 @@ func run() error {
 		oc.Took(0, "COMPILE", time.Since(start))
 	}
 
-	tmpDir, err := ioutil.TempDir("", "dgraph-test")
+	tmpDir, err := os.MkdirTemp("", "dgraph-test")
 	x.Check(err)
 	defer os.RemoveAll(tmpDir)
 
@@ -829,8 +1003,11 @@ func run() error {
 	go func() {
 		defer close(testCh)
 		valid := getPackages()
-		if *suite == "load" || *suite == "all" {
+		if testSuiteContains("load") || testSuiteContains("all") {
 			downloadDataFiles()
+		}
+		if testSuiteContains("ldbc") || testSuiteContains("all") {
+			downloadLDBCFiles()
 		}
 		for i, task := range valid {
 			select {
@@ -857,8 +1034,27 @@ func run() error {
 	return nil
 }
 
+func validateAllowed(testSuite []string) {
+
+	allowed := []string{"all", "ldbc", "load", "unit"}
+	for _, str := range testSuite {
+		onlyAllowed := false
+		for _, allowedStr := range allowed {
+			if str == allowedStr {
+				onlyAllowed = true
+			}
+		}
+		if !onlyAllowed {
+			log.Fatalf("Allowed options for suite are only all, load, ldbc or unit; passed in %+v", testSuite)
+		}
+	}
+}
+
 func main() {
 	pflag.Parse()
+	testsuite = strings.Split(*suite, ",")
+	validateAllowed(testsuite)
+
 	rand.Seed(time.Now().UnixNano())
 	procId = rand.Intn(1000)
 

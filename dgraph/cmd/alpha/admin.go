@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,13 +19,12 @@ package alpha
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
 
 	"github.com/dgraph-io/dgraph/graphql/admin"
-
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -83,8 +82,6 @@ func getAdminMux() *http.ServeMux {
 		http.MethodPut:  true,
 		http.MethodPost: true,
 	}, adminAuthHandler(http.HandlerFunc(drainingHandler))))
-	adminMux.Handle("/admin/export", allowedMethodsHandler(allowedMethods{http.MethodGet: true},
-		adminAuthHandler(http.HandlerFunc(exportHandler))))
 	adminMux.Handle("/admin/config/cache_mb", allowedMethodsHandler(allowedMethods{
 		http.MethodGet: true,
 		http.MethodPut: true,
@@ -160,46 +157,6 @@ func shutDownHandler(w http.ResponseWriter, r *http.Request) {
 	x.Check2(w.Write([]byte(`{"code": "Success", "message": "Server is shutting down"}`)))
 }
 
-func exportHandler(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseForm(); err != nil {
-		x.SetHttpStatus(w, http.StatusBadRequest, "Parse of export request failed.")
-		return
-	}
-
-	format := worker.DefaultExportFormat
-	if vals, ok := r.Form["format"]; ok {
-		if len(vals) > 1 {
-			x.SetHttpStatus(w, http.StatusBadRequest,
-				"Only one export format may be specified.")
-			return
-		}
-		format = worker.NormalizeExportFormat(vals[0])
-		if format == "" {
-			x.SetHttpStatus(w, http.StatusBadRequest, "Invalid export format.")
-			return
-		}
-	}
-
-	gqlReq := &schema.Request{
-		Query: `
-		mutation export($format: String) {
-		  export(input: {format: $format}) {
-			response {
-			  code
-			}
-		  }
-		}`,
-		Variables: map[string]interface{}{"format": format},
-	}
-
-	if resp := resolveWithAdminServer(gqlReq, r, adminServer); len(resp.Errors) != 0 {
-		x.SetStatus(w, resp.Errors[0].Message, "Export failed.")
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	x.Check2(w.Write([]byte(`{"code": "Success", "message": "Export completed."}`)))
-}
-
 func memoryLimitHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
@@ -210,7 +167,7 @@ func memoryLimitHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func memoryLimitPutHandler(w http.ResponseWriter, r *http.Request) {
-	body, err := ioutil.ReadAll(r.Body)
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

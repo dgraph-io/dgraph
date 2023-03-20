@@ -1,5 +1,7 @@
+//go:build integration
+
 /*
- *    Copyright 2022 Dgraph Labs, Inc. and Contributors
+ *    Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,16 +19,14 @@
 package normal
 
 import (
-	"io/ioutil"
 	"os"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/ristretto/z"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
-	"github.com/pkg/errors"
-	"github.com/stretchr/testify/require"
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 func TestRunAll_Normal(t *testing.T) {
@@ -34,7 +34,7 @@ func TestRunAll_Normal(t *testing.T) {
 }
 
 func TestSchema_Normal(t *testing.T) {
-	b, err := ioutil.ReadFile("schema_response.json")
+	b, err := os.ReadFile("schema_response.json")
 	require.NoError(t, err)
 
 	t.Run("graphql schema", func(t *testing.T) {
@@ -44,16 +44,12 @@ func TestSchema_Normal(t *testing.T) {
 
 func TestMain(m *testing.M) {
 	schemaFile := "schema.graphql"
-	schema, err := ioutil.ReadFile(schemaFile)
-	if err != nil {
-		panic(err)
-	}
+	schema, err := os.ReadFile(schemaFile)
+	x.Panic(err)
 
 	jsonFile := "test_data.json"
-	data, err := ioutil.ReadFile(jsonFile)
-	if err != nil {
-		panic(errors.Wrapf(err, "Unable to read file %s.", jsonFile))
-	}
+	data, err := os.ReadFile(jsonFile)
+	x.Panic(err)
 
 	// set up the lambda url for unit tests
 	x.Config.GraphQL = z.NewSuperFlag("lambda-url=http://localhost:8086/graphql-worker;").
@@ -61,5 +57,5 @@ func TestMain(m *testing.M) {
 
 	common.BootstrapServer(schema, data)
 
-	os.Exit(m.Run())
+	_ = m.Run()
 }

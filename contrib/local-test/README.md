@@ -36,7 +36,7 @@ The process for hot-reloading development basically involves `make up`, modifyin
 Note that this deployment is completely insecure—it's meant for local testing only.
 
 ### `make up-with-lambda`
-Brings up the alpha and zero containers along with the dgraph lambda container. Note this lambda container is based on `dgraph/dgraph-lambda:1.4.0`. If you're trying to debug the lambda container, you'll need reference your local image in the docker compose file.
+Brings up the alpha and zero containers along with the dgraph lambda container. Note this lambda container is based on `dgraph/dgraph-lambda:latest`. If you're trying to debug the lambda container, you'll need reference your local image in the docker compose file.
 
 ### `make down` and `make down-with-lambda`
 Stops the containers.

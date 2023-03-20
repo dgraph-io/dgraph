@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,16 +17,16 @@
 package worker
 
 import (
-	"io/ioutil"
 	"os"
 	"testing"
+
+	"github.com/stretchr/testify/require"
+	"go.etcd.io/etcd/raft/raftpb"
 
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/stretchr/testify/require"
-	"go.etcd.io/etcd/raft/raftpb"
 )
 
 func getEntryForMutation(index, startTs uint64) raftpb.Entry {
@@ -50,7 +50,7 @@ func getEntryForCommit(index, startTs, commitTs uint64) raftpb.Entry {
 }
 
 func TestCalculateSnapshot(t *testing.T) {
-	dir, err := ioutil.TempDir("", "raftwal")
+	dir, err := os.MkdirTemp("", "raftwal")
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 

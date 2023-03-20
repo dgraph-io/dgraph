@@ -37,8 +37,21 @@ var datesWithTz = []struct {
 		out: time.Date(2018, 5, 30, 9, 30, 10, 500000000, time.UTC)},
 	{in: "2018-05-30T09:30:10-06:00",
 		out: time.Date(2018, 5, 30, 9, 30, 10, 0, time.FixedZone("", -6*60*60))},
-	{in: "2018-05-28T14:41:57+30:00",
-		out: time.Date(2018, 5, 28, 14, 41, 57, 0, time.FixedZone("", 30*60*60))},
+	{in: "2018-05-28T14:41:57+23:00",
+		out: time.Date(2018, 5, 28, 14, 41, 57, 0, time.FixedZone("", 23*60*60))},
+	{in: "2018-05-28T14:41:57-23:40",
+		out: time.Date(2018, 5, 28, 14, 41, 57, 0, time.FixedZone("", -23*60*60-40*60))},
+	{in: "2018-05-28T14:41:57+23:59",
+		out: time.Date(2018, 5, 28, 14, 41, 57, 0, time.FixedZone("", 23*60*60+59*60))},
+}
+
+var datesWithInvalidTz = []struct {
+	in string
+}{
+	{in: "2018-05-28T14:41:57+24:00"},
+	{in: "2018-05-28T14:41:57+30:00"},
+	{in: "2018-05-28T14:41:57-24:00"},
+	{in: "2018-05-28T14:41:57-30:00"},
 }
 
 var datesWithoutTz = []struct {
@@ -139,13 +152,21 @@ func TestParseTimeRejection(t *testing.T) {
 	}
 }
 
+func TestParseTimeNonRFC3339(t *testing.T) {
+	for _, tc := range datesWithInvalidTz {
+		out, err := ParseTime(tc.in)
+		require.Equal(t, out, time.Time{})
+		require.EqualError(t, err, "timezone outside of range [-23:59,23:59]")
+	}
+}
+
 func BenchmarkParseTime(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		for _, tc := range datesWithTz {
-			ParseTime(tc.in)
+			_, _ = ParseTime(tc.in)
 		}
 		for _, tc := range datesWithoutTz {
-			ParseTime(tc.in)
+			_, _ = ParseTime(tc.in)
 		}
 	}
 }
@@ -153,7 +174,7 @@ func BenchmarkParseTime(b *testing.B) {
 func BenchmarkParseTimeRejections(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		for _, invalidDate := range invalidDates {
-			ParseTime(invalidDate)
+			_, _ = ParseTime(invalidDate)
 		}
 	}
 }

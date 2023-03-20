@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,19 +21,21 @@ import (
 	"encoding/json"
 	"sync"
 
-	"github.com/dgraph-io/dgraph/edgraph"
+	"github.com/pkg/errors"
 
+	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/worker"
-	"github.com/pkg/errors"
 )
 
 type restoreInput struct {
 	Location          string
 	BackupId          string
 	BackupNum         int
+	IncrementalFrom   int
+	IsPartial         bool
 	EncryptionKeyFile string
 	AccessKey         string
 	SecretKey         string
@@ -57,6 +59,8 @@ func resolveRestore(ctx context.Context, m schema.Mutation) (*resolve.Resolved, 
 		Location:          input.Location,
 		BackupId:          input.BackupId,
 		BackupNum:         uint64(input.BackupNum),
+		IncrementalFrom:   uint64(input.IncrementalFrom),
+		IsPartial:         input.IsPartial,
 		EncryptionKeyFile: input.EncryptionKeyFile,
 		AccessKey:         input.AccessKey,
 		SecretKey:         input.SecretKey,

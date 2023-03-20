@@ -1,13 +1,14 @@
+//go:build !oss
 // +build !oss
 
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Dgraph Community License (the "License"); you
  * may not use this file except in compliance with the License. You
  * may obtain a copy of the License at
  *
- *     https://github.com/dgraph-io/dgraph/blob/master/licenses/DCL.txt
+ *     https://github.com/dgraph-io/dgraph/blob/main/licenses/DCL.txt
  */
 
 package worker
@@ -16,16 +17,16 @@ import (
 	"context"
 	"time"
 
-	"github.com/dgraph-io/dgraph/conn"
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/dgraph-io/dgraph/conn"
+	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/x"
 )
 
-func (w *grpcWorker) DeleteNamespace(ctx context.Context,
-	req *pb.DeleteNsRequest) (*pb.Status, error) {
+func (w *grpcWorker) DeleteNamespace(ctx context.Context, req *pb.DeleteNsRequest) (*pb.Status, error) {
 	var emptyRes pb.Status
 	if !groups().ServesGroup(req.GroupId) {
 		return &emptyRes, errors.Errorf("The server doesn't serve group id: %v", req.GroupId)

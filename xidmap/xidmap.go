@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,16 +27,16 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/dgryski/go-farm"
+	"github.com/golang/glog"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 
-	"github.com/dgraph-io/badger/v3"
+	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
-	"github.com/dgryski/go-farm"
-	"github.com/golang/glog"
 )
 
 var maxLeaseRegex = regexp.MustCompile(`currMax:([0-9]+)`)
@@ -357,7 +357,9 @@ func (m *XidMap) Flush() error {
 	// memory and causing OOM sometimes. Making shards explicitly nil in this method fixes this.
 	// TODO: find why xidmap is not getting GCed without below line.
 	for _, shards := range m.shards {
-		shards.tree.Close()
+		if err := shards.tree.Close(); err != nil {
+			glog.Warningf("error closing shards tree: %v", err)
+		}
 	}
 	m.shards = nil
 	if m.writer == nil {

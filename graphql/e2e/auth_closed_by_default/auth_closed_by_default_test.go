@@ -1,5 +1,7 @@
+//go:build integration
+
 /*
- *    Copyright 2022 Dgraph Labs, Inc. and Contributors
+ *    Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,13 +19,14 @@
 package auth_closed_by_default
 
 import (
-	"os"
 	"testing"
+
+	"github.com/dgrijalva/jwt-go/v4"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/dgrijalva/jwt-go/v4"
-	"github.com/stretchr/testify/require"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 type TestCase struct {
@@ -198,17 +201,7 @@ func TestMain(m *testing.M) {
 	algo := jwt.SigningMethodHS256.Name
 	schema, data := common.BootstrapAuthData()
 	authSchema, err := testutil.AppendAuthInfo(schema, algo, "../auth/sample_public_key.pem", true)
-	if err != nil {
-		panic(err)
-	}
+	x.Panic(err)
 	common.BootstrapServer(authSchema, data)
-	// Data is added only in the first iteration, but the schema is added every iteration.
-	if data != nil {
-		data = nil
-	}
-	exitCode := m.Run()
-	if exitCode != 0 {
-		os.Exit(exitCode)
-	}
-	os.Exit(0)
+	_ = m.Run()
 }

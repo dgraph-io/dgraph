@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,14 +20,14 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/dql"
 	"github.com/dgraph-io/dgraph/x"
 )
 
 // AsString writes query as an indented dql query string.  AsString doesn't
 // validate query, and so doesn't return an error if query is 'malformed' - it might
 // just write something that wouldn't parse as a Dgraph query.
-func AsString(queries []*gql.GraphQuery) string {
+func AsString(queries []*dql.GraphQuery) string {
 	if queries == nil {
 		return ""
 	}
@@ -54,7 +54,7 @@ func AsString(queries []*gql.GraphQuery) string {
 	return b.String()
 }
 
-func writeQuery(b *strings.Builder, query *gql.GraphQuery, prefix string) {
+func writeQuery(b *strings.Builder, query *dql.GraphQuery, prefix string) {
 	if query.Var != "" || query.Alias != "" || query.Attr != "" {
 		x.Check2(b.WriteString(prefix))
 	}
@@ -112,7 +112,7 @@ func writeQuery(b *strings.Builder, query *gql.GraphQuery, prefix string) {
 	}
 }
 
-func writeUIDFunc(b *strings.Builder, uids []uint64, args []gql.Arg) {
+func writeUIDFunc(b *strings.Builder, uids []uint64, args []dql.Arg) {
 	x.Check2(b.WriteString("uid("))
 	if len(uids) > 0 {
 		// uid function with uint64 - uid(0x123, 0x456, ...)
@@ -139,7 +139,7 @@ func writeUIDFunc(b *strings.Builder, uids []uint64, args []gql.Arg) {
 //
 // Only uid(0x123, 0x124), type(...) and eq(Type.Predicate, ...) functions are supported at root.
 // Multiple arguments for `eq` filter will be required in case of resolving `entities` query.
-func writeRoot(b *strings.Builder, q *gql.GraphQuery) {
+func writeRoot(b *strings.Builder, q *dql.GraphQuery) {
 	if q.Func == nil {
 		return
 	}
@@ -159,7 +159,7 @@ func writeRoot(b *strings.Builder, q *gql.GraphQuery) {
 	x.Check2(b.WriteRune(')'))
 }
 
-func writeFilterArguments(b *strings.Builder, args []gql.Arg) {
+func writeFilterArguments(b *strings.Builder, args []dql.Arg) {
 	for i, arg := range args {
 		if i != 0 {
 			x.Check2(b.WriteString(", "))
@@ -168,7 +168,7 @@ func writeFilterArguments(b *strings.Builder, args []gql.Arg) {
 	}
 }
 
-func writeFilterFunction(b *strings.Builder, f *gql.Function) {
+func writeFilterFunction(b *strings.Builder, f *dql.Function) {
 	if f == nil {
 		return
 	}
@@ -183,7 +183,7 @@ func writeFilterFunction(b *strings.Builder, f *gql.Function) {
 	}
 }
 
-func writeFilter(b *strings.Builder, ft *gql.FilterTree) {
+func writeFilter(b *strings.Builder, ft *dql.FilterTree) {
 	if ft == nil {
 		return
 	}
@@ -209,13 +209,13 @@ func writeFilter(b *strings.Builder, ft *gql.FilterTree) {
 	}
 }
 
-func hasOrderOrPage(q *gql.GraphQuery) bool {
+func hasOrderOrPage(q *dql.GraphQuery) bool {
 	_, hasFirst := q.Args["first"]
 	_, hasOffset := q.Args["offset"]
 	return len(q.Order) > 0 || hasFirst || hasOffset
 }
 
-func writeOrderAndPage(b *strings.Builder, query *gql.GraphQuery, root bool) {
+func writeOrderAndPage(b *strings.Builder, query *dql.GraphQuery, root bool) {
 	var wroteOrder, wroteFirst bool
 
 	for _, ord := range query.Order {

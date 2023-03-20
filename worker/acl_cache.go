@@ -1,13 +1,14 @@
+//go:build !oss
 // +build !oss
 
 /*
- * Copyright 2022 Dgraph Labs, Inc. All rights reserved.
+ * Copyright 2023 Dgraph Labs, Inc. All rights reserved.
  *
  * Licensed under the Dgraph Community License (the "License"); you
  * may not use this file except in compliance with the License. You
  * may obtain a copy of the License at
  *
- *     https://github.com/dgraph-io/dgraph/blob/master/licenses/DCL.txt
+ *     https://github.com/dgraph-io/dgraph/blob/main/licenses/DCL.txt
  */
 
 package worker
@@ -15,12 +16,13 @@ package worker
 import (
 	"sync"
 
+	"github.com/pkg/errors"
+
 	"github.com/dgraph-io/dgraph/ee/acl"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/pkg/errors"
 )
 
-// aclCache is the cache mapping group names to the corresponding group acls
+// AclCache is the cache mapping group names to the corresponding group acls
 type AclCache struct {
 	sync.RWMutex
 	loaded        bool
@@ -133,8 +135,30 @@ func (cache *AclCache) Update(ns uint64, groups []acl.Group) {
 
 	AclCachePtr.Lock()
 	defer AclCachePtr.Unlock()
-	AclCachePtr.predPerms = predPerms
-	AclCachePtr.userPredPerms = userPredPerms
+
+	// We have a new set of rules for a ns namespace, hence clear old rules from the cache
+	for k := range AclCachePtr.predPerms {
+		if x.ParseNamespace(k) == ns {
+			delete(AclCachePtr.predPerms, k)
+		}
+	}
+
+	for _, v := range AclCachePtr.userPredPerms {
+		for k := range v {
+			if x.ParseNamespace(k) == ns {
+				delete(v, k)
+			}
+		}
+	}
+
+	// Set new rules in the cache
+	for k, v := range predPerms {
+		AclCachePtr.predPerms[k] = v
+	}
+
+	for k, v := range userPredPerms {
+		AclCachePtr.userPredPerms[k] = v
+	}
 }
 
 func (cache *AclCache) AuthorizePredicate(groups []string, predicate string,

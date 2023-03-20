@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ package x
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strings"
 	"time"
@@ -45,10 +44,10 @@ const (
 
 // SentryOptOutNote - This is an opt out banner.
 func SentryOptOutNote() {
-	glog.Infof("This instance of Dgraph will send anonymous reports of panics back " +
+	glog.Infof("\nThis instance of Dgraph will send anonymous reports of panics back " +
 		"to Dgraph Labs via Sentry. No confidential information is sent. These reports " +
 		`help improve Dgraph. To opt-out, restart your instance with the --telemetry "sentry=false;" ` +
-		"flag. For more info, see https://dgraph.io/docs/howto/#data-handling.")
+		"flag. For more info, see https://dgraph.io/docs/howto/dgraph-sentry-integration/#data-handling.")
 }
 
 // InitSentry initializes the sentry machinery.
@@ -126,7 +125,7 @@ func WriteCidFile(cid string) {
 	if cid == "" {
 		return
 	}
-	if err := ioutil.WriteFile(cidPath, []byte(cid), 0600); err != nil {
+	if err := os.WriteFile(cidPath, []byte(cid), 0600); err != nil {
 		glog.Warningf("unable to write CID to file %v %v", cidPath, err)
 		return
 	}
@@ -135,7 +134,7 @@ func WriteCidFile(cid string) {
 // readAndRemoveCidFile reads the file from a well-known location so
 // it can be read and sent to Sentry on panic.
 func readAndRemoveCidFile() string {
-	cid, err := ioutil.ReadFile(cidPath)
+	cid, err := os.ReadFile(cidPath)
 	if err != nil {
 		glog.Warningf("unable to read CID from file %v %v. Skip", cidPath, err)
 		return ""

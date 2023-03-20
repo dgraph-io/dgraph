@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2016-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,10 +17,12 @@
 package types
 
 import (
+	"errors"
 	"time"
 
+	"github.com/twpayne/go-geom"
+
 	"github.com/dgraph-io/dgraph/protos/pb"
-	geom "github.com/twpayne/go-geom"
 )
 
 const nanoSecondsInSec = 1000000000
@@ -43,7 +45,7 @@ const (
 	IntID = TypeID(pb.Posting_INT)
 	// FloatID represents the floating-point number type.
 	FloatID = TypeID(pb.Posting_FLOAT)
-	// FloatID represents the boolean type.
+	// BoolID represents the boolean type.
 	BoolID = TypeID(pb.Posting_BOOL)
 	// DateTimeID represents the datetime type.
 	DateTimeID = TypeID(pb.Posting_DATETIME)
@@ -192,9 +194,30 @@ func ValueForType(id TypeID) Val {
 	}
 }
 
+// GoodTimeZone returns true if timezone (provided in offset
+// format in seconds) is valid according to RFC3339.
+func GoodTimeZone(offset int) bool {
+	const boundary = 23*60*60 + 59*60
+	return offset <= boundary && offset >= -1*boundary
+}
+
 // ParseTime parses the time from string trying various datetime formats.
 // By default, Go parses time in UTC unless specified in the data itself.
 func ParseTime(val string) (time.Time, error) {
+	t, err := parseTimeNonStrict(val)
+	if err != nil {
+		return t, err
+	}
+
+	_, offset := t.Zone()
+	if !GoodTimeZone(offset) {
+		return time.Time{}, errors.New("timezone outside of range [-23:59,23:59]")
+	}
+
+	return t, nil
+}
+
+func parseTimeNonStrict(val string) (time.Time, error) {
 	if len(val) == len(dateFormatY) {
 		return time.Parse(dateFormatY, val)
 	}

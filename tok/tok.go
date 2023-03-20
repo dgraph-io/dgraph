@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2016-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,13 +23,13 @@ import (
 	"time"
 
 	"github.com/golang/glog"
-	geom "github.com/twpayne/go-geom"
+	"github.com/pkg/errors"
+	"github.com/twpayne/go-geom"
 	"golang.org/x/crypto/blake2b"
 	"golang.org/x/text/collate"
 
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/pkg/errors"
 )
 
 // Tokenizer identifiers are unique and can't be reused.
@@ -54,7 +54,7 @@ const (
 	IdentHash      = 0xB
 	IdentSha       = 0xC
 	IdentCustom    = 0x80
-	IdentDelimiter = 0x1f // ASCII 31 - Unit seperator
+	IdentDelimiter = 0x1f // ASCII 31 - Unit separator
 )
 
 // Tokenizer defines what a tokenizer must provide.
@@ -78,7 +78,7 @@ type Tokenizer interface {
 	// IsSortable returns true if the tokenizer can be used for sorting/ordering.
 	IsSortable() bool
 
-	// IsLossy() returns true if we don't store the values directly as index keys
+	// IsLossy returns true if we don't store the values directly as index keys
 	// during tokenization. If a predicate is tokenized using an IsLossy() tokenizer,
 	// then we need to fetch the actual value and compare.
 	IsLossy() bool
@@ -292,7 +292,8 @@ func (t TermTokenizer) Tokens(v interface{}) ([]string, error) {
 	lang := LangBase(t.lang)
 	switch lang {
 	case "zh", "ja", "th", "lo", "my", "bo", "km", "kxm":
-		// Chinese, Japanese, Thai, Lao, Burmese, Tibetan and Khmer (km, kxm) do not use spaces as delimiters. We simply split by space.
+		// Chinese, Japanese, Thai, Lao, Burmese, Tibetan and Khmer (km, kxm)
+		// do not use spaces as delimiters. We simply split by space.
 		tokens := strings.Split(str, " ")
 		return x.RemoveDuplicates(tokens), nil
 	default:
@@ -379,7 +380,7 @@ func (t FullTextTokenizer) IsSortable() bool { return false }
 func (t FullTextTokenizer) IsLossy() bool    { return true }
 
 // Sha256Tokenizer generates tokens for the sha256 hash part from string data.
-type Sha256Tokenizer struct{ text string }
+type Sha256Tokenizer struct{ _ string }
 
 func (t Sha256Tokenizer) Name() string { return "sha256" }
 func (t Sha256Tokenizer) Type() string { return "string" }

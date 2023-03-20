@@ -1,5 +1,7 @@
+//go:build integration || cloud
+
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,21 +16,23 @@
  * limitations under the License.
  */
 
+//nolint:lll
 package query
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/metadata"
+
+	"github.com/dgraph-io/dgo/v210/protos/api"
 )
 
 func TestSchemaBlock2(t *testing.T) {
@@ -355,7 +359,7 @@ func TestGraphQLVarsInUpsert(t *testing.T) {
 		}`,
 		Vars: map[string]string{"$a": "2"},
 		Mutations: []*api.Mutation{
-			&api.Mutation{
+			{
 				SetNquads: []byte(`_:user <pred> "value" .`),
 				Cond:      `@if(eq(len(v), 0))`,
 			},
@@ -650,6 +654,18 @@ func TestHasFuncAtRoot(t *testing.T) {
 
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t, `{"data": {"me":[{"friend":[{"count":5}],"name":"Michonne"},{"friend":[{"count":1}],"name":"Rick Grimes"},{"friend":[{"count":1}],"name":"Andrea"}]}}`, js)
+}
+
+func TestHasFuncAtRootWithFirstAndOffset(t *testing.T) {
+	query := `
+	{
+		me(func: has(name), first: 5, offset: 5) {
+			name
+		}
+	}
+	`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{ "data": {"me":[{"name": "Bear"},{"name": "Nemo"},{"name": "name"},{"name": "Rick Grimes"},{"name": "Glenn Rhee"}]}}`, js)
 }
 
 func TestHasFuncAtRootWithAfter(t *testing.T) {
@@ -1841,7 +1857,7 @@ func TestMultipleValueGroupByError(t *testing.T) {
 
 func TestMultiPolygonIntersects(t *testing.T) {
 
-	usc, err := ioutil.ReadFile("testdata/us-coordinates.txt")
+	usc, err := os.ReadFile("testdata/us-coordinates.txt")
 	require.NoError(t, err)
 	query := `{
 		me(func: intersects(geometry, "` + strings.TrimSpace(string(usc)) + `" )) {
@@ -1856,7 +1872,7 @@ func TestMultiPolygonIntersects(t *testing.T) {
 
 func TestMultiPolygonWithin(t *testing.T) {
 
-	usc, err := ioutil.ReadFile("testdata/us-coordinates.txt")
+	usc, err := os.ReadFile("testdata/us-coordinates.txt")
 	require.NoError(t, err)
 	query := `{
 		me(func: within(geometry, "` + strings.TrimSpace(string(usc)) + `" )) {
@@ -2377,6 +2393,19 @@ func TestFilterRoot(t *testing.T) {
 	require.JSONEq(t, `{"data": {"me": []}}`, js)
 }
 
+func TestFilterWithNoSrcUid(t *testing.T) {
+
+	query := `{
+		me(func: eq(name, "Does Not Exist")) @filter(eq(name, "Michonne")) {
+			uid
+			name
+		}
+	}
+	`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me": []}}`, js)
+}
+
 func TestMathAlias(t *testing.T) {
 
 	query := `{
@@ -2544,4 +2573,60 @@ func TestExpandAll_empty_panic(t *testing.T) {
 	`
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t, `{"data":{"me":[]}}`, js)
+}
+
+func TestMatchFuncWithAfterWithValidUid(t *testing.T) {
+	query := `
+		{
+			q(func: match(name, Ali, 5), after: 0x2710) {
+				uid
+				name
+			}
+		}
+	`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"q": [{"name": "Alice", "uid": "0x2712"}, {"name": "Alice", "uid": "0x2714"}]}}`, js)
+}
+
+func TestMatchFuncWithAfterWithInvalidUid(t *testing.T) {
+	query := `
+		{
+			q(func: match(name, Ali, 5), after: -1) {
+				uid
+				name
+			}
+		}
+	`
+	_, err := processQuery(context.Background(), t, query)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "parsing \"-1\": invalid syntax")
+}
+
+func TestMatchFuncWithAfterWithLastUid(t *testing.T) {
+	query := `
+		{
+			q(func: match(name, Ali, 5), after: 0x2714) {
+				uid
+				name
+			}
+		}
+	`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"q":[] } }`, js)
+}
+
+func TestCompareFuncWithAfter(t *testing.T) {
+	query := `
+		{
+			q(func: eq(name, Alice), after: 0x2710) {
+				uid
+				name
+			}
+		}
+	`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"q": [{"name": "Alice", "uid": "0x2712"}, {"name": "Alice", "uid": "0x2714"}]}}`, js)
 }

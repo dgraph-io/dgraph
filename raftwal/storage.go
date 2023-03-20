@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,16 +20,14 @@ import (
 	"math"
 	"sync"
 
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"go.etcd.io/etcd/raft"
 	"go.etcd.io/etcd/raft/raftpb"
 	"golang.org/x/net/trace"
-)
 
-// versionKey is hardcoded into the special key used to fetch the maximum version from the DB.
-const versionKey = 1
+	"github.com/dgraph-io/dgraph/x"
+)
 
 // DiskStorage handles disk access and writing for the RAFT write-ahead log.
 // Dir contains wal.meta file and <start idx zero padded>.wal files.
@@ -37,7 +35,8 @@ const versionKey = 1
 // === wal.meta file ===
 // This file is generally around 4KB, so it can fit nicely in one Linux page.
 //
-//   Layout:
+//	Layout:
+//
 // 00-08 Bytes: Raft ID
 // 08-16 Bytes: Group ID
 // 16-24 Bytes: Checkpoint Index
@@ -87,7 +86,7 @@ func Init(dir string) *DiskStorage {
 
 // InitEncrypted initializes returns a properly initialized instance of DiskStorage.
 // To gracefully shutdown DiskStorage, store.Closer.SignalAndWait() should be called.
-func InitEncrypted(dir string, encKey x.SensitiveByteSlice) (*DiskStorage, error) {
+func InitEncrypted(dir string, encKey x.Sensitive) (*DiskStorage, error) {
 	w := &DiskStorage{
 		dir: dir,
 	}

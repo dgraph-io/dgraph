@@ -1,5 +1,7 @@
+//go:build integration
+
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors *
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -20,7 +22,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -28,35 +30,49 @@ import (
 	"testing"
 	"time"
 
+	"github.com/graph-gophers/graphql-go/errors"
+	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
-	"github.com/graph-gophers/graphql-go/errors"
-	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
-
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 )
 
-func sendRestoreRequest(t *testing.T, location, backupId string, backupNum int) {
-	if location == "" {
-		location = "/data/backup2"
-	}
+type restoreReq struct {
+	location        string
+	backupId        string
+	backupNum       int
+	encKeyFile      string
+	incrementalFrom int
+}
+
+const (
+	backupLocation     = "/data/backup2/backups"
+	backup2011Location = "/data/backup2/backups2011"
+	encKeyFile         = "/data/keys/enc_key"
+)
+
+func sendRestoreRequest(t *testing.T, req *restoreReq) {
+	t.Logf("Restoring backup number: %d\n", req.backupNum)
 	params := testutil.GraphQLParams{
-		Query: `mutation restore($location: String!, $backupId: String, $backupNum: Int) {
+		Query: `mutation restore($location: String!, $backupId: String, $backupNum: Int,
+			$encKey: String, $incrFrom: Int) {
 			restore(input: {location: $location, backupId: $backupId, backupNum: $backupNum,
-				encryptionKeyFile: "/data/keys/enc_key"}) {
+				encryptionKeyFile: $encKey, incrementalFrom: $incrFrom}) {
 				code
 				message
 			}
 		}`,
 		Variables: map[string]interface{}{
-			"location":  location,
-			"backupId":  backupId,
-			"backupNum": backupNum,
+			"location":  req.location,
+			"backupId":  req.backupId,
+			"backupNum": req.backupNum,
+			"encKey":    req.encKeyFile,
+			"incrFrom":  req.incrementalFrom,
 		},
 	}
 	resp := testutil.MakeGQLRequestWithTLS(t, &params, testutil.GetAlphaClientConfig(t))
@@ -92,7 +108,7 @@ func disableDraining(t *testing.T) {
 	client := testutil.GetHttpsClient(t)
 	resp, err := client.Post(testutil.AdminUrlHttps(), "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
-	buf, err := ioutil.ReadAll(resp.Body)
+	buf, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	require.Contains(t, string(buf), "draining mode has been set to false")
 }
@@ -129,7 +145,7 @@ func runQueries(t *testing.T, dg *dgo.Dgraph, shouldFail bool) {
 	_, thisFile, _, _ := runtime.Caller(0)
 	queryDir := filepath.Join(filepath.Dir(thisFile), "queries")
 
-	files, err := ioutil.ReadDir(queryDir)
+	files, err := os.ReadDir(queryDir)
 	require.NoError(t, err)
 
 	for _, file := range files {
@@ -138,7 +154,7 @@ func runQueries(t *testing.T, dg *dgo.Dgraph, shouldFail bool) {
 		}
 		filename := filepath.Join(queryDir, file.Name())
 		reader, cleanup := chunker.FileReader(filename, nil)
-		bytes, err := ioutil.ReadAll(reader)
+		bytes, err := io.ReadAll(reader)
 		require.NoError(t, err)
 		contents := string(bytes)
 		cleanup()
@@ -199,7 +215,8 @@ func runMutations(t *testing.T, dg *dgo.Dgraph) {
 func TestBasicRestore(t *testing.T) {
 	disableDraining(t)
 
-	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))))
+	conn, err := grpc.Dial(testutil.SockAddr,
+		grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))))
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 
@@ -207,10 +224,12 @@ func TestBasicRestore(t *testing.T) {
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
 
 	snapshotTs := getSnapshotTs(t)
-	sendRestoreRequest(t, "", "youthful_rhodes3", 0)
-	testutil.WaitForRestore(t, dg)
+	req := &restoreReq{location: backupLocation, backupId: "youthful_rhodes3", encKeyFile: encKeyFile}
+	sendRestoreRequest(t, req)
+	testutil.WaitForRestore(t, dg, testutil.SockAddrHttp)
+
 	// Snapshot must be taken just after the restore and hence the snapshotTs be updated.
-	require.NoError(t, x.RetryUntilSuccess(3, 1*time.Second, func() error {
+	require.NoError(t, x.RetryUntilSuccess(3, 2*time.Second, func() error {
 		if getSnapshotTs(t) <= snapshotTs {
 			return errors.Errorf("snapshot not taken after restore")
 		}
@@ -220,10 +239,114 @@ func TestBasicRestore(t *testing.T) {
 	runMutations(t, dg)
 }
 
+// The 6 backups that are being restored in this test were taken in the following manner
+// Add _:a <name> "alice" .
+// Take backup b1
+// Add _:b <name> "bob" .
+// Add _:b <age> "12" .
+// Take backup b2
+// Drop attribute "name"
+// Take backup b3
+// Add _:a <name> "alice" .
+// Take backup b4
+// drop data
+// Take backup b5
+// drop all
+// Take backup b6
+func TestIncrementalRestore(t *testing.T) {
+	conn, err := grpc.Dial(testutil.SockAddr,
+		grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))))
+	require.NoError(t, err)
+	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
+
+	ctx := context.Background()
+	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
+
+	req := &restoreReq{
+		location:  backup2011Location,
+		backupNum: 1,
+	}
+	sendRestoreRequest(t, req)
+	testutil.WaitForRestore(t, dg, testutil.SockAddrHttp)
+
+	query := `{ q(func: has(name)) { name age } }`
+	runQuery := func(query, expectedResp string) {
+		res, err := dg.NewTxn().Query(context.Background(), query)
+		require.NoError(t, err)
+		require.JSONEq(t, expectedResp, string(res.Json))
+	}
+	runQuery(query, `{"q":[{"name":"alice"}]}`)
+
+	req = &restoreReq{
+		location:        backup2011Location,
+		backupNum:       2,
+		incrementalFrom: 2,
+	}
+	sendRestoreRequest(t, req)
+	testutil.WaitForRestore(t, dg, testutil.SockAddrHttp)
+	runQuery(query, `{"q":[{"name":"alice"}, {"name":"bob", "age": "12"}]}`)
+
+	req = &restoreReq{
+		location:        backup2011Location,
+		backupNum:       3,
+		incrementalFrom: 3,
+	}
+	sendRestoreRequest(t, req)
+	testutil.WaitForRestore(t, dg, testutil.SockAddrHttp)
+	runQuery(query, `{"q":[]}`)
+	runQuery(`{ q(func: has(age)) {age} }`, `{"q":[{"age": "12"}]}`)
+
+	req = &restoreReq{
+		location:        backup2011Location,
+		backupNum:       4,
+		incrementalFrom: 4,
+	}
+	sendRestoreRequest(t, req)
+	testutil.WaitForRestore(t, dg, testutil.SockAddrHttp)
+	runQuery(query, `{"q":[{"name":"alice"}]}`)
+
+	req = &restoreReq{
+		location:        backup2011Location,
+		backupNum:       5,
+		incrementalFrom: 5,
+	}
+
+	sendRestoreRequest(t, req)
+	testutil.WaitForRestore(t, dg, testutil.SockAddrHttp)
+	runQuery(query, `{"q":[]}`)
+	runQuery(`{ q(func: has(age)) {age} }`, `{"q":[]}`)
+
+	// after drop data, there should be no data but schema should still contain the predicates.
+	res, err := dg.NewTxn().Query(context.Background(), `schema{}`)
+	require.NoError(t, err)
+	require.Contains(t, string(res.Json), `{"predicate":"age","type":"default"}`)
+	require.Contains(t, string(res.Json), `{"predicate":"name","type":"default"}`)
+
+	req = &restoreReq{
+		location:        backup2011Location,
+		backupNum:       6,
+		incrementalFrom: 6,
+	}
+
+	// after drop all
+	sendRestoreRequest(t, req)
+	testutil.WaitForRestore(t, dg, testutil.SockAddrHttp)
+	runQuery(query, `{"q":[]}`)
+	runQuery(`{ q(func: has(age)) {age} }`, `{"q":[]}`)
+
+	res, err = dg.NewTxn().Query(context.Background(), `schema{}`)
+	require.NoError(t, err)
+	require.NotContains(t, string(res.Json), `{"predicate":"age","type":"default"}`)
+	require.NotContains(t, string(res.Json), `{"predicate":"name","type":"default"}`)
+}
+
 func TestRestoreBackupNum(t *testing.T) {
 	disableDraining(t)
 
-	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))))
+	conn, err := grpc.Dial(
+		testutil.SockAddr,
+		grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))),
+	)
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 
@@ -231,8 +354,10 @@ func TestRestoreBackupNum(t *testing.T) {
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
 	runQueries(t, dg, true)
 
-	sendRestoreRequest(t, "", "youthful_rhodes3", 1)
-	testutil.WaitForRestore(t, dg)
+	req := &restoreReq{location: backupLocation, backupId: "youthful_rhodes3", backupNum: 1, encKeyFile: encKeyFile}
+	sendRestoreRequest(t, req)
+	testutil.WaitForRestore(t, dg, testutil.SockAddrHttp)
+
 	runQueries(t, dg, true)
 	runMutations(t, dg)
 }
@@ -240,7 +365,10 @@ func TestRestoreBackupNum(t *testing.T) {
 func TestRestoreBackupNumInvalid(t *testing.T) {
 	disableDraining(t)
 
-	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))))
+	conn, err := grpc.Dial(
+		testutil.SockAddr,
+		grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))),
+	)
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 
@@ -250,7 +378,7 @@ func TestRestoreBackupNumInvalid(t *testing.T) {
 
 	// Send a request with a backupNum greater than the number of manifests.
 	restoreRequest := fmt.Sprintf(`mutation restore() {
-		 restore(input: {location: "/data/backup2", backupId: "%s", backupNum: %d,
+		 restore(input: {location: "/data/backup2/backups", backupId: "%s", backupNum: %d,
 		 	encryptionKeyFile: "/data/keys/enc_key"}) {
 			code
 			message
@@ -266,14 +394,14 @@ func TestRestoreBackupNumInvalid(t *testing.T) {
 	client := testutil.GetHttpsClient(t)
 	resp, err := client.Post(testutil.AdminUrlHttps(), "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
-	buf, err := ioutil.ReadAll(resp.Body)
+	buf, err := io.ReadAll(resp.Body)
 	bufString := string(buf)
 	require.NoError(t, err)
 	require.Contains(t, bufString, "not enough backups")
 
 	// Send a request with a negative backupNum value.
 	restoreRequest = fmt.Sprintf(`mutation restore() {
-		 restore(input: {location: "/data/backup2", backupId: "%s", backupNum: %d,
+		 restore(input: {location: "/data/backup2/backups", backupId: "%s", backupNum: %d,
 		 	encryptionKeyFile: "/data/keys/enc_key"}) {
 			code
 			message
@@ -288,7 +416,7 @@ func TestRestoreBackupNumInvalid(t *testing.T) {
 
 	resp, err = client.Post(testutil.AdminUrlHttps(), "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
-	buf, err = ioutil.ReadAll(resp.Body)
+	buf, err = io.ReadAll(resp.Body)
 	bufString = string(buf)
 	require.NoError(t, err)
 	require.Contains(t, bufString, "backupNum value should be equal or greater than zero")
@@ -297,21 +425,26 @@ func TestRestoreBackupNumInvalid(t *testing.T) {
 func TestMoveTablets(t *testing.T) {
 	disableDraining(t)
 
-	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))))
+	conn, err := grpc.Dial(
+		testutil.SockAddr,
+		grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))),
+	)
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 
 	ctx := context.Background()
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
 
-	sendRestoreRequest(t, "", "youthful_rhodes3", 0)
-	testutil.WaitForRestore(t, dg)
+	req := &restoreReq{location: backupLocation, backupId: "youthful_rhodes3", encKeyFile: encKeyFile}
+	sendRestoreRequest(t, req)
+	testutil.WaitForRestore(t, dg, testutil.SockAddrHttp)
 	runQueries(t, dg, false)
 
 	// Send another restore request with a different backup. This backup has some of the
 	// same predicates as the previous one but they are stored in different groups.
-	sendRestoreRequest(t, "", "blissful_hermann1", 0)
-	testutil.WaitForRestore(t, dg)
+	req = &restoreReq{location: backupLocation, backupId: "blissful_hermann1", encKeyFile: encKeyFile}
+	sendRestoreRequest(t, req)
+	testutil.WaitForRestore(t, dg, testutil.SockAddrHttp)
 
 	resp, err := dg.NewTxn().Query(context.Background(), `{
 	  q(func: has(name), orderasc: name) {
@@ -351,14 +484,14 @@ func TestInvalidBackupId(t *testing.T) {
 	client := testutil.GetHttpsClient(t)
 	resp, err := client.Post(testutil.AdminUrlHttps(), "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
-	buf, err := ioutil.ReadAll(resp.Body)
+	buf, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	require.Contains(t, string(buf), "failed to verify backup")
 }
 
 func TestListBackups(t *testing.T) {
 	query := `query backup() {
-		listBackups(input: {location: "/data/backup2"}) {
+		listBackups(input: {location: "/data/backup2/backups"}) {
 			backupId
 			backupNum
 			encrypted
@@ -381,7 +514,7 @@ func TestListBackups(t *testing.T) {
 	client := testutil.GetHttpsClient(t)
 	resp, err := client.Post(testutil.AdminUrlHttps(), "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
-	buf, err := ioutil.ReadAll(resp.Body)
+	buf, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	sbuf := string(buf)
 	require.Contains(t, sbuf, `"backupId":"youthful_rhodes3"`)
@@ -566,24 +699,6 @@ func TestRestoreWithDropOperations(t *testing.T) {
 		})
 }
 
-func setupDirs(t *testing.T, dirs []string) {
-	// first, clean them up
-	cleanupDirs(t, dirs)
-
-	// then create them
-	for _, dir := range dirs {
-		require.NoError(t, os.MkdirAll(dir, os.ModePerm))
-	}
-}
-
-func cleanupDirs(t *testing.T, dirs []string) {
-	for _, dir := range dirs {
-		if err := os.RemoveAll(dir); err != nil {
-			t.Logf("Got error while removing: %s: %v\n", dir, err)
-		}
-	}
-}
-
 func backup(t *testing.T, backupDir string) {
 	backupParams := &testutil.GraphQLParams{
 		Query: `mutation($backupDir: String!) {
@@ -604,10 +719,12 @@ func backup(t *testing.T, backupDir string) {
 
 func backupRestoreAndVerify(t *testing.T, dg *dgo.Dgraph, backupDir, queryToVerify,
 	expectedResponse string, schemaVerificationOpts testutil.SchemaOptions) {
+
 	schemaVerificationOpts.ExcludeAclSchema = true
 	backup(t, backupDir)
-	sendRestoreRequest(t, backupDir, "", 0)
-	testutil.WaitForRestore(t, dg)
+	req := &restoreReq{location: backupDir, encKeyFile: encKeyFile}
+	sendRestoreRequest(t, req)
+	testutil.WaitForRestore(t, dg, testutil.SockAddrHttp)
 	testutil.VerifyQueryResponse(t, dg, queryToVerify, expectedResponse)
 	testutil.VerifySchema(t, dg, schemaVerificationOpts)
 }

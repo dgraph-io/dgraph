@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2016-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -33,14 +34,13 @@ import (
 	"github.com/pkg/errors"
 	"go.etcd.io/etcd/raft"
 	"go.etcd.io/etcd/raft/raftpb"
-	"golang.org/x/net/trace"
-
 	ostats "go.opencensus.io/stats"
 	"go.opencensus.io/tag"
 	otrace "go.opencensus.io/trace"
+	"golang.org/x/net/trace"
 
-	"github.com/dgraph-io/badger/v3"
-	bpb "github.com/dgraph-io/badger/v3/pb"
+	"github.com/dgraph-io/badger/v4"
+	bpb "github.com/dgraph-io/badger/v4/pb"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -78,8 +78,6 @@ type node struct {
 	cdcTracker  *CDC
 	canCampaign bool
 	elog        trace.EventLog
-
-	ex *executor
 }
 
 type op int
@@ -121,7 +119,7 @@ func (n *node) startTask(id op) (*z.Closer, error) {
 
 // startTaskAtTs is used to check whether an op is already running. If a rollup is running,
 // it is canceled and startTask will wait until it completes before returning.
-// If the same task is already running, this method returns an errror.
+// If the same task is already running, this method returns an error.
 // Restore operations have preference and cancel all other operations, not just rollups.
 // You should only call Done() on the returned closer. Calling other functions (such as
 // SignalAndWait) for closer could result in panics. For more details, see GitHub issue #5034.
@@ -181,9 +179,8 @@ func (n *node) startTaskAtTs(id op, ts uint64) (*z.Closer, error) {
 				if otherOp.ts < ts {
 					// If backup is running at higher timestamp, then indexing can't be executed.
 					continue
-				} else {
-					return nil, errors.Errorf("operation %s is already running", otherId)
 				}
+				return nil, errors.Errorf("operation %s is already running", otherId)
 			case opRollup:
 				// Remove from map and signal the closer to cancel the operation.
 				delete(n.ops, otherId)
@@ -292,9 +289,6 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		ops:        make(map[op]operation),
 		cdcTracker: newCDC(),
 	}
-	if x.WorkerConfig.LudicrousEnabled {
-		n.ex = newExecutor(&m.Applied, int(x.WorkerConfig.Ludicrous.GetInt64("concurrency")))
-	}
 	return n
 }
 
@@ -352,14 +346,19 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	span := otrace.FromContext(ctx)
 
 	if proposal.Mutations.DropOp == pb.Mutations_DATA {
+		ns, err := strconv.ParseUint(proposal.Mutations.DropValue, 0, 64)
+		if err != nil {
+			return err
+		}
 		// Ensures nothing get written to disk due to commit proposals.
-		posting.Oracle().ResetTxns()
-		if err := posting.DeleteData(); err != nil {
+		posting.Oracle().ResetTxnsForNs(ns)
+		if err := posting.DeleteData(ns); err != nil {
 			return err
 		}
 
-		// Clear entire cache.
-		posting.ResetCache()
+		// TODO: Revisit this when we work on posting cache. Clear entire cache.
+		// We don't want to drop entire cache, just due to one namespace.
+		// posting.ResetCache()
 		return nil
 	}
 
@@ -418,16 +417,6 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 			}
 		}
 
-		// If Dgraph is running in ludicrous mode and we get some schema we should wait for all
-		// active mutations to finish. Previously we were thinking of only waiting for active
-		// mutations related to predicates present in schema mutation. But this might cause issues
-		// as we call DropPrefix() on Badger while running schema mutations. DropPrefix() blocks
-		// writes on Badger and returns error if writes are tried. To avoid this we should wait for
-		// all active mutations to finish irrespective of predicates present in schema mutation.
-		if x.WorkerConfig.LudicrousEnabled && len(proposal.Mutations.Schema) > 0 {
-			n.ex.waitForActiveMutations()
-		}
-
 		if err := runSchemaMutation(ctx, proposal.Mutations.Schema, startTs); err != nil {
 			return err
 		}
@@ -447,7 +436,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	}
 
 	// Scheduler tracks tasks at subject, predicate level, so doing
-	// schema stuff here simplies the design and we needn't worry about
+	// schema stuff here simplifies the design and we needn't worry about
 	// serializing the mutations per predicate or schema mutations
 	// We derive the schema here if it's not present
 	// Since raft committed logs are serialized, we can derive
@@ -515,11 +504,6 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		}
 		return ei.GetEntity() < ej.GetEntity()
 	})
-
-	if x.WorkerConfig.LudicrousEnabled {
-		n.ex.addEdges(ctx, proposal)
-		return nil
-	}
 
 	txn := posting.Oracle().RegisterStartTs(m.StartTs)
 	if txn.ShouldAbort() {
@@ -658,7 +642,9 @@ func (n *node) applyCommitted(proposal *pb.Proposal, key uint64) error {
 	case proposal.Restore != nil:
 		// Enable draining mode for the duration of the restore processing.
 		x.UpdateDrainingMode(true)
-		defer x.UpdateDrainingMode(false)
+		if !proposal.Restore.IsPartial {
+			defer x.UpdateDrainingMode(false)
+		}
 
 		var err error
 		var closer *z.Closer
@@ -668,7 +654,7 @@ func (n *node) applyCommitted(proposal *pb.Proposal, key uint64) error {
 		}
 		defer closer.Done()
 
-		glog.Infof("Got restore proposal at Index:%d, ReadTs:%d",
+		glog.Infof("Got restore proposal at Index: %d, ReadTs: %d",
 			proposal.Index, proposal.Restore.RestoreTs)
 		if err := handleRestoreProposal(ctx, proposal.Restore, proposal.Index); err != nil {
 			return err
@@ -755,25 +741,19 @@ func (n *node) processApplyCh() {
 			proposal.Index = entry.Index
 			updateStartTs(&proposal)
 
-			// Ignore the start ts in case of ludicrous mode. We get a new ts and use that as the
-			// commit ts.
-			// WARNING: This would cause the leader and the follower to diverge in the timestamp
-			// they use to commit the same thing.
-			// TODO: This is broken. We need to find a way to fix this.
-			if x.WorkerConfig.LudicrousEnabled && proposal.Mutations != nil {
-				proposal.Mutations.StartTs = State.GetTimestamp(false)
-			}
-
 			var perr error
 			p, ok := previous[key]
 			if ok && p.err == nil && p.size == psz {
-				n.elog.Printf("Proposal with key: %s already applied. Skipping index: %d.\n",
-					key, proposal.Index)
+				msg := fmt.Sprintf("Proposal with key: %d already applied. Skipping index: %d."+
+					" Delta: %+v Snapshot: %+v.\n",
+					key, proposal.Index, proposal.Delta, proposal.Snapshot)
+				n.elog.Printf(msg)
+				glog.Infof(msg)
 				previous[key].seen = time.Now() // Update the ts.
 				// Don't break here. We still need to call the Done below.
 
 			} else {
-				// if this applyCommited fails, how do we ensure
+				// if this applyCommitted fails, how do we ensure
 				start := time.Now()
 				perr = n.applyCommitted(&proposal, key)
 				if key != 0 {
@@ -840,8 +820,10 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 			return
 		}
 		txn.Update()
-		err := x.RetryUntilSuccess(int(x.Config.MaxRetries),
-			10*time.Millisecond, func() error {
+		// We start with 20 ms, so that we end up waiting 5 mins by the end.
+		// If there is any transient issue, it should get fixed within that timeframe.
+		err := x.ExponentialRetry(int(x.Config.MaxRetries),
+			20*time.Millisecond, func() error {
 				err := txn.CommitToDisk(writer, commit)
 				if err == badger.ErrBannedKey {
 					glog.Errorf("Error while writing to banned namespace.")
@@ -853,20 +835,15 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 		if err != nil {
 			glog.Errorf("Error while applying txn status to disk (%d -> %d): %v",
 				start, commit, err)
+			panic(err)
 		}
 	}
 
 	for _, status := range delta.Txns {
 		toDisk(status.StartTs, status.CommitTs)
 	}
-	if x.WorkerConfig.LudicrousEnabled {
-		if err := writer.Wait(); err != nil {
-			glog.Errorf("Error while waiting to commit: +%v", err)
-		}
-	} else {
-		if err := writer.Flush(); err != nil {
-			return errors.Wrapf(err, "while flushing to disk")
-		}
+	if err := writer.Flush(); err != nil {
+		return errors.Wrapf(err, "while flushing to disk")
 	}
 	if x.WorkerConfig.HardSync {
 		if err := pstore.Sync(); err != nil {
@@ -965,7 +942,7 @@ func (n *node) retrieveSnapshot(snap pb.Snapshot) error {
 	}
 	// Populate shard stores the streamed data directly into db, so we need to refresh
 	// schema for current group id
-	if err := schema.LoadFromDb(); err != nil {
+	if err := schema.LoadFromDb(closer.Ctx()); err != nil {
 		return errors.Wrapf(err, "while initializing schema")
 	}
 	groups().triggerMembershipSync()
@@ -1142,9 +1119,6 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 				time.Sleep(time.Second) // Let transfer happen.
 			}
 			n.Raft().Stop()
-			if x.WorkerConfig.LudicrousEnabled {
-				n.ex.closer.SignalAndWait()
-			}
 			close(done)
 			return
 		}
@@ -1380,22 +1354,6 @@ func (n *node) Run() {
 						atomic.AddUint32(&pctx.Found, 1)
 						if span := otrace.FromContext(pctx.Ctx); span != nil {
 							span.Annotate(nil, "Proposal found in CommittedEntries")
-						}
-						if x.WorkerConfig.LudicrousEnabled {
-							var p pb.Proposal
-							if err := p.Unmarshal(entry.Data[8:]); err != nil {
-								glog.Errorf("Unable to unmarshal proposal: %v %x\n",
-									err, entry.Data)
-								break
-							}
-							if len(p.Mutations.GetEdges()) > 0 {
-								// Assuming that there will be no error while applying. But this
-								// assumption is only made for data mutations and not schema
-								// mutations.
-								// TODO: This should not be done here. Instead, it should be done
-								// within the ludicrous mode scheduler.
-								n.Proposals.Done(key, nil)
-							}
 						}
 					}
 					entries = append(entries, entry)
@@ -1667,6 +1625,8 @@ func (n *node) calculateSnapshot(startIdx, lastIdx, minPendingStart uint64) (*pb
 	span.Annotatef(nil, "Found Raft entries: %d", lastIdx-first)
 
 	if num := posting.Oracle().NumPendingTxns(); num > 0 {
+		// TODO (Damon): this is associated with stuck alphas. Is there anything else we should log here
+		// such as the transaction IDs so we can see in logs if a specific tx is stuck for a long time and how long?
 		glog.V(2).Infof("Num pending txns: %d", num)
 	}
 
@@ -1711,10 +1671,7 @@ func (n *node) calculateSnapshot(startIdx, lastIdx, minPendingStart uint64) (*pb
 					snapshotIdx = entry.Index - 1
 				}
 			}
-			// In ludicrous mode commitTs for any transaction is same as startTs.
-			if x.WorkerConfig.LudicrousEnabled {
-				maxCommitTs = x.Max(maxCommitTs, start)
-			} else if proposal.Delta != nil {
+			if proposal.Delta != nil {
 				for _, txn := range proposal.Delta.GetTxns() {
 					maxCommitTs = x.Max(maxCommitTs, txn.CommitTs)
 				}
@@ -1800,7 +1757,7 @@ func (n *node) retryUntilSuccess(fn func() error, pause time.Duration) {
 
 // InitAndStartNode gets called after having at least one membership sync with the cluster.
 func (n *node) InitAndStartNode() {
-	initProposalKey(n.Id)
+	x.Check(initProposalKey(n.Id))
 	_, restart, err := n.PastLife()
 	x.Check(err)
 

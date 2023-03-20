@@ -1,5 +1,7 @@
+//go:build integration
+
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,12 +32,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 func TestReverseIndex(t *testing.T) {
@@ -46,7 +48,7 @@ func TestReverseIndex(t *testing.T) {
 		dg, err = testutil.DgraphClientWithGroot(testutil.SockAddr)
 		return err
 	})
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	testutil.DropAll(t, dg)
 	if err := dg.Alter(context.Background(), &api.Operation{

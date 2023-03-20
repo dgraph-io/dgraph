@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,13 +22,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"time"
 
 	"github.com/dgraph-io/dgraph/graphql/authorization"
-
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 )
 
 var (
@@ -91,8 +90,12 @@ func (fconf *FieldHTTPConfig) MakeAndDecodeHTTPRequest(client *http.Client, url 
 		return nil, nil, x.GqlErrorList{externalRequestError(err, field)}
 	}
 
-	defer resp.Body.Close()
-	b, err = ioutil.ReadAll(resp.Body)
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			glog.Warningf("error closing body: %v", err)
+		}
+	}()
+	b, err = io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, nil, x.GqlErrorList{externalRequestError(err, field)}
 	}

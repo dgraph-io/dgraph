@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,11 +22,12 @@ import (
 	"strconv"
 	"unicode"
 
+	"github.com/pkg/errors"
+
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
-	"github.com/pkg/errors"
 )
 
 // SortAndValidate sorts And validates the facets.
@@ -92,7 +93,7 @@ func valAndValType(val string) (interface{}, api.Facet_ValType, error) {
 		return uq, api.Facet_STRING, errors.Wrapf(err, "could not unquote %q:", val)
 	}
 	if intVal, err := strconv.ParseInt(val, 0, 64); err == nil {
-		return int64(intVal), api.Facet_INT, nil
+		return intVal, api.Facet_INT, nil
 	} else if numErr := err.(*strconv.NumError); numErr.Err == strconv.ErrRange {
 		// if we have only digits in val, then val is a big integer : return error
 		// otherwise try to parse as float.

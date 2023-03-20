@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,16 +22,17 @@ import (
 	"os"
 	"strings"
 
+	"github.com/golang/glog"
+	"github.com/spf13/cobra"
+
 	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/glog"
-	"github.com/spf13/cobra"
 )
 
 type options struct {
-	// keyfile comes from the encryption or Vault flags
-	keyfile x.SensitiveByteSlice
+	// keyfile comes from the encryption_key_file or Vault flags
+	keyfile x.Sensitive
 	file    string
 	output  string
 }
@@ -72,7 +73,11 @@ func run() {
 	if err != nil {
 		glog.Fatalf("Error opening file: %v\n", err)
 	}
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			glog.Warningf("error while closing fd: %v", err)
+		}
+	}()
 	reader, err := enc.GetReader(opts.keyfile, f)
 	x.Checkf(err, "could not open key reader")
 	if strings.HasSuffix(strings.ToLower(opts.file), ".gz") {

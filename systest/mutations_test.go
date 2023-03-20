@@ -1,5 +1,7 @@
+//go:build integration
+
 /*
- * Copyright 2017-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +16,7 @@
  * limitations under the License.
  */
 
+//nolint:lll
 package main
 
 import (
@@ -30,10 +33,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/stretchr/testify/require"
 )
 
 // TestSystem uses the externally run Dgraph cluster for testing. Most other
@@ -74,6 +78,7 @@ func TestSystem(t *testing.T) {
 	t.Run("has with dash", wrap(HasWithDash))
 	t.Run("list geo filter", wrap(ListGeoFilterTest))
 	t.Run("list regex filter", wrap(ListRegexFilterTest))
+	t.Run("regex query with vars with slash", wrap(RegexQueryWithVarsWithSlash))
 	t.Run("regex query vars", wrap(RegexQueryWithVars))
 	t.Run("graphql var child", wrap(GraphQLVarChild))
 	t.Run("math ge", wrap(MathGe))
@@ -543,7 +548,7 @@ func LangAndSortBugTest(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, err)
 
 	txn = c.NewTxn()
-	defer txn.Discard(ctx)
+	defer func() { require.NoError(t, txn.Discard(ctx)) }()
 	resp, err := txn.Query(ctx, `
 	{
 	  q(func: eq(name, "Michael")) {
@@ -816,7 +821,8 @@ func ListToScalar(t *testing.T, c *dgo.Dgraph) {
 
 	err := c.Alter(ctx, &api.Operation{Schema: `pred: string @index(exact) .`})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), `Type can't be changed from list to scalar for attr: [pred] without dropping it first.`)
+	require.Contains(t, err.Error(),
+		`Type can't be changed from list to scalar for attr: [pred] without dropping it first.`)
 
 	require.NoError(t, c.Alter(ctx, &api.Operation{DropAttr: `pred`}))
 	op = &api.Operation{Schema: `pred: string @index(exact) .`}
@@ -993,14 +999,14 @@ func DeleteWithExpandAll(t *testing.T, c *dgo.Dgraph) {
 	var r Root
 	resp, err := c.NewTxn().QueryWithVars(ctx, q, map[string]string{"$id": auid})
 	require.NoError(t, err)
-	json.Unmarshal(resp.Json, &r)
+	require.NoError(t, json.Unmarshal(resp.Json, &r))
 	// S P O deletion shouldn't delete "to" .
 	require.Equal(t, 1, len(r.Me[0]))
 
 	// b should not have any predicates.
 	resp, err = c.NewTxn().QueryWithVars(ctx, q, map[string]string{"$id": buid})
 	require.NoError(t, err)
-	json.Unmarshal(resp.Json, &r)
+	require.NoError(t, json.Unmarshal(resp.Json, &r))
 	require.Equal(t, 0, len(r.Me))
 }
 
@@ -1137,7 +1143,7 @@ func ListGeoFilterTest(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, c.Alter(ctx, op))
 
 	txn := c.NewTxn()
-	defer txn.Discard(ctx)
+	defer func() { require.NoError(t, txn.Discard(ctx)) }()
 	_, err := txn.Mutate(ctx, &api.Mutation{
 		CommitNow: true,
 		SetNquads: []byte(`
@@ -1185,7 +1191,7 @@ func ListRegexFilterTest(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, c.Alter(ctx, op))
 
 	txn := c.NewTxn()
-	defer txn.Discard(ctx)
+	defer func() { require.NoError(t, txn.Discard(ctx)) }()
 	_, err := txn.Mutate(ctx, &api.Mutation{
 		CommitNow: true,
 		SetNquads: []byte(`
@@ -1221,6 +1227,60 @@ func ListRegexFilterTest(t *testing.T, c *dgo.Dgraph) {
 	`, string(resp.GetJson()))
 }
 
+func RegexQueryWithVarsWithSlash(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+
+	op := &api.Operation{Schema: `data: [string] @index(trigram) .`}
+	require.NoError(t, c.Alter(ctx, op))
+
+	txn := c.NewTxn()
+	defer func() { require.NoError(t, txn.Discard(ctx)) }()
+	_, err := txn.Mutate(ctx, &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`
+			_:a <data> "abc/def"  .
+			_:b <data> "fgh" .
+			_:c <data> "ijk" .
+		`),
+	})
+	require.NoError(t, err)
+
+	// query without variable
+	resp, err := c.NewTxn().Query(context.Background(), `{
+		q(func: regexp(data, /\/def/)) {
+			data
+		}
+	}`)
+	require.NoError(t, err)
+	testutil.CompareJSON(t, `
+	{
+		"q": [
+			{
+				"data": ["abc/def"]
+			}
+		]
+	}
+	`, string(resp.GetJson()))
+
+	// query with variable
+	resp, err = c.NewTxn().QueryWithVars(context.Background(), `
+	query search($rex: string){
+		q(func: regexp(data, $rex)) {
+			data
+		}
+	}`, map[string]string{"$rex": "/\\/def/"})
+	require.NoError(t, err)
+	testutil.CompareJSON(t, `
+	{
+		"q": [
+			{
+				"data": ["abc/def"]
+			}
+		]
+	}
+	`, string(resp.GetJson()))
+}
+
 func RegexQueryWithVars(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 
@@ -1233,7 +1293,7 @@ func RegexQueryWithVars(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, c.Alter(ctx, op))
 
 	txn := c.NewTxn()
-	defer txn.Discard(ctx)
+	defer func() { require.NoError(t, txn.Discard(ctx)) }()
 	_, err := txn.Mutate(ctx, &api.Mutation{
 		CommitNow: true,
 		SetNquads: []byte(`
@@ -1277,7 +1337,7 @@ func GraphQLVarChild(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, c.Alter(ctx, op))
 
 	txn := c.NewTxn()
-	defer txn.Discard(ctx)
+	defer func() { require.NoError(t, txn.Discard(ctx)) }()
 	au, err := txn.Mutate(ctx, &api.Mutation{
 		CommitNow: true,
 		SetNquads: []byte(`
@@ -1378,7 +1438,7 @@ func MathGe(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, c.Alter(ctx, op))
 
 	txn := c.NewTxn()
-	defer txn.Discard(ctx)
+	defer func() { require.NoError(t, txn.Discard(ctx)) }()
 	_, err := txn.Mutate(ctx, &api.Mutation{
 		CommitNow: true,
 		SetNquads: []byte(`
@@ -1414,7 +1474,7 @@ func HasDeletedEdge(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 
 	txn := c.NewTxn()
-	defer txn.Discard(ctx)
+	defer func() { require.NoError(t, txn.Discard(ctx)) }()
 
 	assigned, err := txn.Mutate(ctx, &api.Mutation{
 		CommitNow: true,
@@ -1459,7 +1519,7 @@ func HasDeletedEdge(t *testing.T, c *dgo.Dgraph) {
 	}
 
 	txn = c.NewTxn()
-	defer txn.Discard(ctx)
+	defer func() { require.NoError(t, txn.Discard(ctx)) }()
 	uids := getUids(txn)
 	require.Equal(t, 3, len(uids))
 	for _, uid := range uids {
@@ -1477,7 +1537,7 @@ func HasDeletedEdge(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, err)
 
 	txn = c.NewTxn()
-	defer txn.Discard(ctx)
+	defer func() { require.NoError(t, txn.Discard(ctx)) }()
 	uids = getUids(txn)
 	require.Equal(t, 2, len(uids))
 	for _, uid := range uids {
@@ -1502,7 +1562,7 @@ func HasDeletedEdge(t *testing.T, c *dgo.Dgraph) {
 	}
 
 	txn = c.NewTxn()
-	defer txn.Discard(ctx)
+	defer func() { require.NoError(t, txn.Discard(ctx)) }()
 	uids = getUids(txn)
 	require.Equal(t, 3, len(uids))
 	for _, uid := range uids {
@@ -1516,7 +1576,7 @@ func HasReverseEdge(t *testing.T, c *dgo.Dgraph) {
 	op := &api.Operation{Schema: `follow: [uid] @reverse .`}
 	require.NoError(t, c.Alter(ctx, op))
 	txn := c.NewTxn()
-	defer txn.Discard(ctx)
+	defer func() { require.NoError(t, txn.Discard(ctx)) }()
 
 	_, err := txn.Mutate(ctx, &api.Mutation{
 		CommitNow: true,
@@ -1535,7 +1595,7 @@ func HasReverseEdge(t *testing.T, c *dgo.Dgraph) {
 	}
 
 	txn = c.NewTxn()
-	defer txn.Discard(ctx)
+	defer func() { require.NoError(t, txn.Discard(ctx)) }()
 	resp, err := txn.Query(ctx, `{
 		fwd(func: has(follow)) { name }
 		rev(func: has(~follow)) { name }
@@ -1587,7 +1647,7 @@ func MaxPredicateSize(t *testing.T, c *dgo.Dgraph) {
 
 	// Do the same thing as above but for the predicates in DelNquads.
 	txn = c.NewTxn()
-	defer txn.Discard(ctx)
+	defer func() { require.NoError(t, txn.Discard(ctx)) }()
 	_, err = txn.Mutate(ctx, &api.Mutation{
 		CommitNow: true,
 		DelNquads: []byte(fmt.Sprintf(`_:test <%s> "value" .`, largePred)),
@@ -1818,7 +1878,7 @@ func CountIndexConcurrentSetDelUIDList(t *testing.T, c *dgo.Dgraph) {
 	// Delete all friends now.
 	mu := &api.Mutation{
 		CommitNow: true,
-		DelNquads: []byte(fmt.Sprintf("<0x1> <friend> * .")),
+		DelNquads: []byte("<0x1> <friend> * ."),
 	}
 	_, err = c.NewTxn().Mutate(context.Background(), mu)
 	require.NoError(t, err, "mutation to delete all friends should have been succeeded")
@@ -1875,7 +1935,7 @@ func CountIndexConcurrentSetDelScalarPredicate(t *testing.T, c *dgo.Dgraph) {
 	var s struct {
 		Q []struct {
 			Name string `json:"name"`
-		} `json:q`
+		} `json:"q"`
 	}
 	require.NoError(t, json.Unmarshal(resp.GetJson(), &s))
 	require.Equal(t, 1, len(s.Q))

@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,16 +18,16 @@ package test
 
 import (
 	"encoding/json"
-	"io/ioutil"
+	"os"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/graphql/schema"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/gqlparser/v2/ast"
 	"github.com/dgraph-io/gqlparser/v2/parser"
 	"github.com/dgraph-io/gqlparser/v2/validator"
-	"github.com/stretchr/testify/require"
 )
 
 // Various helpers used in GQL testing
@@ -51,7 +51,7 @@ func LoadSchema(t *testing.T, gqlSchema string) schema.Schema {
 // definition.  It runs all validation, generates the completed schema and
 // returns that.
 func LoadSchemaFromFile(t *testing.T, gqlFile string) schema.Schema {
-	gql, err := ioutil.ReadFile(gqlFile)
+	gql, err := os.ReadFile(gqlFile)
 	require.NoError(t, err, "Unable to read schema file")
 
 	return LoadSchemaFromString(t, string(gql))

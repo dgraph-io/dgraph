@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,11 +21,11 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/testutil"
-
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dgraph-io/dgraph/testutil"
 )
 
 func fragmentInMutation(t *testing.T) {
@@ -567,6 +567,46 @@ func fragmentInQueryOnObject(t *testing.T) {
 	}`, humanID, newStarship.ID)
 
 	JSONEqGraphQL(t, queryCharacterExpected, string(gqlResponse.Data))
+
+	query2HumanParams := &GraphQLParams{
+		Query: `query  {
+    		queryHuman() {
+        		id
+        		starships {
+            		id
+        		}
+        		...HumanFrag
+    		}
+		}
+
+		fragment HumanFrag on Human {
+    		starships {
+				... {
+					__typename
+					id
+					name
+					length
+					}
+			}
+   	 	}`,
+	}
+	gqlResponse2 := query2HumanParams.ExecuteAsPost(t, GraphqlURL)
+
+	RequireNoGQLErrors(t, gqlResponse2)
+	queryCharacterExpected2 := fmt.Sprintf(`
+	
+		{"queryHuman":[
+			{"id":"%s",
+			"starships":[
+				{"id":"%s",
+				"__typename":"Starship",
+				"name":"Millennium Falcon",
+				"length":2.000000}]
+				}
+			]
+		}
+	`, humanID, newStarship.ID)
+	JSONEqGraphQL(t, queryCharacterExpected2, string(gqlResponse2.Data))
 
 	cleanupStarwars(t, newStarship.ID, humanID, "")
 }

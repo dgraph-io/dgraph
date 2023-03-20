@@ -1,5 +1,7 @@
+//go:build integration
+
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,9 +28,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgraph/testutil"
-
 	"github.com/stretchr/testify/require"
+
+	"github.com/dgraph-io/dgraph/testutil"
 )
 
 func TestCDC(t *testing.T) {
@@ -53,17 +55,16 @@ type CDCEvent struct {
 
 func verifyCDC(t *testing.T, path string) {
 	abs, err := filepath.Abs(path)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	f, err := os.Open(abs)
-	require.Nil(t, err)
-	var fileScanner *bufio.Scanner
-	fileScanner = bufio.NewScanner(f)
+	require.NoError(t, err)
+	fileScanner := bufio.NewScanner(f)
 	iter := 1
 	for fileScanner.Scan() {
 		bytes := fileScanner.Bytes()
 		l := new(CDCEvent)
 		err := json.Unmarshal(bytes, l)
-		require.Nil(t, err)
+		require.NoError(t, err)
 		require.Equal(t, iter, l.Value.Event.Value)
 		iter = iter + 1
 	}

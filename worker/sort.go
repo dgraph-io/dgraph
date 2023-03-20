@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2016-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,11 +23,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dgraph-io/badger/v3"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"
 
+	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -46,7 +46,7 @@ type sortresult struct {
 	// slice stores the remaining offset for individual uid lists that must be applied after all
 	// multi sort is done.
 	// TODO (pawan) - Offset has type int32 whereas paginate function returns an int. We should
-	// use a common type so that we can avoid casts between the two.
+	//                use a common type so that we can avoid casts between the two.
 	multiSortOffsets []int32
 	vals             [][]types.Val
 	err              error
@@ -231,7 +231,7 @@ func sortWithIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
 
 	var prefix []byte
 	if len(order.Langs) > 0 {
-		// Only one languge is allowed.
+		// Only one language is allowed.
 		lang := order.Langs[0]
 		tokenizer = tok.GetTokenizerForLang(tokenizer, lang)
 		langTokenizer, ok := tokenizer.(tok.ExactTokenizer)
@@ -329,7 +329,9 @@ BUCKETS:
 
 		// Apply the offset on null nodes, if the nodes with value were not enough.
 		if out[i].offset < len(nullNodes) {
-			nullNodes = nullNodes[out[i].offset:]
+			if out[i].offset >= 0 {
+				nullNodes = nullNodes[out[i].offset:]
+			}
 		} else {
 			nullNodes = nullNodes[:0]
 		}

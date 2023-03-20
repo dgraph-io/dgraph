@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,17 +20,19 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"net/http"
+	"os"
 	"testing"
+
+	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v2"
 
 	"github.com/dgraph-io/dgraph/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/graphql/test"
 	"github.com/dgraph-io/dgraph/testutil"
 	_ "github.com/dgraph-io/gqlparser/v2/validator/rules" // make gql validator init() all rules
-	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v2"
 )
 
 // Tests showing that the query rewriter produces the expected Dgraph queries
@@ -43,7 +45,7 @@ type QueryRewritingCase struct {
 }
 
 func TestQueryRewriting(t *testing.T) {
-	b, err := ioutil.ReadFile("query_test.yaml")
+	b, err := os.ReadFile("query_test.yaml")
 	require.NoError(t, err, "Unable to read test file")
 
 	var tests []QueryRewritingCase
@@ -70,7 +72,7 @@ func TestQueryRewriting(t *testing.T) {
 			gqlQuery := test.GetQuery(t, op)
 
 			dgQuery, err := testRewriter.Rewrite(context.Background(), gqlQuery)
-			require.Nil(t, err)
+			require.NoError(t, err)
 			require.Equal(t, tcase.DGQuery, dgraph.AsString(dgQuery))
 		})
 	}
@@ -99,7 +101,7 @@ func (f RoundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
 // NewTestClient returns *http.Client with Transport replaced to avoid making real calls
 func NewTestClient(fn RoundTripFunc) *http.Client {
 	return &http.Client{
-		Transport: RoundTripFunc(fn),
+		Transport: fn,
 	}
 }
 
@@ -108,7 +110,7 @@ func newClient(t *testing.T, hrc HTTPRewritingCase) *http.Client {
 		require.Equal(t, hrc.Method, req.Method)
 		require.Equal(t, hrc.URL, req.URL.String())
 		if hrc.Body != "" {
-			body, err := ioutil.ReadAll(req.Body)
+			body, err := io.ReadAll(req.Body)
 			require.NoError(t, err)
 			require.JSONEq(t, hrc.Body, string(body))
 		}
@@ -121,7 +123,7 @@ func newClient(t *testing.T, hrc HTTPRewritingCase) *http.Client {
 		return &http.Response{
 			StatusCode: 200,
 			// Send response to be tested
-			Body: ioutil.NopCloser(bytes.NewBufferString(hrc.HTTPResponse)),
+			Body: io.NopCloser(bytes.NewBufferString(hrc.HTTPResponse)),
 			// Must be set to non-nil value or it panics
 			Header: make(http.Header),
 		}
@@ -129,7 +131,7 @@ func newClient(t *testing.T, hrc HTTPRewritingCase) *http.Client {
 }
 
 func TestCustomHTTPQuery(t *testing.T) {
-	b, err := ioutil.ReadFile("custom_query_test.yaml")
+	b, err := os.ReadFile("custom_query_test.yaml")
 	require.NoError(t, err, "Unable to read test file")
 
 	var tests []HTTPRewritingCase
@@ -151,9 +153,9 @@ func TestCustomHTTPQuery(t *testing.T) {
 					Query:     tcase.GQLQuery,
 					Variables: vars,
 					Header: map[string][]string{
-						"bogus":       []string{"header"},
-						"X-App-Token": []string{"val"},
-						"Auth0-Token": []string{"tok"},
+						"bogus":       {"header"},
+						"X-App-Token": {"val"},
+						"Auth0-Token": {"tok"},
 					},
 				})
 			require.NoError(t, err)

@@ -1,5 +1,7 @@
+//go:build integration
+
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,13 +29,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/badger/v3/y"
+	"github.com/dgraph-io/badger/v4/y"
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 var (
@@ -72,7 +74,7 @@ func TestParallelIndexing(t *testing.T) {
 		dg, err = testutil.DgraphClientWithGroot(testutil.SockAddr)
 		return err
 	})
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	testutil.DropAll(t, dg)
 	if err := dg.Alter(context.Background(), &api.Operation{
@@ -182,7 +184,7 @@ func TestParallelIndexing(t *testing.T) {
 	fmt.Println("starting to query")
 	var count uint64
 	th := y.NewThrottle(50000)
-	th.Do()
+	require.NoError(t, th.Do())
 	go func() {
 		defer th.Done(nil)
 		for {
@@ -202,7 +204,7 @@ func TestParallelIndexing(t *testing.T) {
 	ch := make(chan pair, total*3)
 	for _, predicate := range []string{"balance_str", "balance_int", "balance_float"} {
 		for i := 1; i <= total; i++ {
-			th.Do()
+			require.NoError(t, th.Do())
 			go func(bal int, pred string) {
 				defer th.Done(nil)
 				if err := checkBalance(bal, pred); err != nil {
@@ -212,7 +214,7 @@ func TestParallelIndexing(t *testing.T) {
 			}(i, predicate)
 		}
 	}
-	th.Finish()
+	require.NoError(t, th.Finish())
 
 	close(ch)
 	for p := range ch {

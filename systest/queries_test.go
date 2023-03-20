@@ -1,5 +1,7 @@
+//go:build integration
+
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +16,7 @@
  * limitations under the License.
  */
 
+//nolint:lll
 package main
 
 import (
@@ -21,14 +24,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/stretchr/testify/require"
 )
 
 func TestQuery(t *testing.T) {
@@ -515,7 +519,7 @@ func SchemaQueryTestHTTP(t *testing.T, c *dgo.Dgraph) {
 	loginBb.WriteString(`{"userid":"groot","password":"password"}`)
 	loginRes, err := http.Post(url+"/login", "application/json", &loginBb)
 	require.NoError(t, err)
-	loginBody, err := ioutil.ReadAll(loginRes.Body)
+	loginBody, err := io.ReadAll(loginRes.Body)
 	require.NoError(t, err)
 	loginMap := make(map[string]map[string]string)
 	require.NoError(t, json.Unmarshal(loginBody, &loginMap))

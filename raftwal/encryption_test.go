@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@
 package raftwal
 
 import (
-	"io/ioutil"
 	"log"
 	"math"
 	"math/rand"
@@ -30,14 +29,14 @@ import (
 
 func TestEntryReadWrite(t *testing.T) {
 	key := []byte("badger16byteskey")
-	dir, err := ioutil.TempDir("", "raftwal")
-	require.NoError(t, err)
-	ds, err := InitEncrypted(dir, key)
+	dir, err := os.MkdirTemp("", "raftwal")
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
+	ds, err := InitEncrypted(dir, key)
+	require.NoError(t, err)
 
 	// generate some random data
-	data := make([]byte, rand.Intn(1000))
+	data := make([]byte, 1+rand.Intn(1000))
 	rand.Read(data)
 
 	require.NoError(t, ds.wal.AddEntries([]raftpb.Entry{{Index: 1, Term: 1, Data: data}}))
@@ -68,7 +67,7 @@ func TestEntryReadWrite(t *testing.T) {
 
 // TestLogRotate writes enough log file entries to cause 1 file rotation.
 func TestLogRotate(t *testing.T) {
-	dir, err := ioutil.TempDir("", "raftwal")
+	dir, err := os.MkdirTemp("", "raftwal")
 	require.NoError(t, err)
 	el, err := openWal(dir)
 	require.NoError(t, err)
@@ -124,7 +123,7 @@ func TestLogRotate(t *testing.T) {
 // TestLogGrow writes data of sufficient size to grow the log file.
 func TestLogGrow(t *testing.T) {
 	test := func(t *testing.T, key []byte) {
-		dir, err := ioutil.TempDir("", "raftwal")
+		dir, err := os.MkdirTemp("", "raftwal")
 		require.NoError(t, err)
 		ds, err := InitEncrypted(dir, key)
 		require.NoError(t, err)

@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,8 +23,7 @@ import (
 )
 
 // ToGlog is a logger that forwards the output to glog.
-type ToGlog struct {
-}
+type ToGlog struct{}
 
 func (rl *ToGlog) Debug(v ...interface{})                   { glog.V(3).Info(v...) }
 func (rl *ToGlog) Debugf(format string, v ...interface{})   { glog.V(3).Infof(format, v...) }

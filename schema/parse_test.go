@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2016-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,13 +18,12 @@ package schema
 
 import (
 	"context"
-	"io/ioutil"
 	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/badger/v3"
+	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -109,12 +108,6 @@ test test: int
 func TestSchema3_Error(t *testing.T) {
 	require.Error(t, ParseBytes([]byte(schemaVal3), 1))
 }
-
-var schemaIndexVal1 = `
-age:int @index(int) .
-
-name: string .
-address: string @index(term) .`
 
 var schemaIndexVal2 = `
 name: string @index(exact, exact) .
@@ -229,7 +222,7 @@ func TestParse4_NoError(t *testing.T) {
 	reset()
 	result, err := Parse("name:string @index(fulltext) .")
 	require.NotNil(t, result)
-	require.Nil(t, err)
+	require.NoError(t, err)
 }
 
 func TestParse5_Error(t *testing.T) {
@@ -658,7 +651,7 @@ var ps *badger.DB
 func TestMain(m *testing.M) {
 	x.Init()
 
-	dir, err := ioutil.TempDir("", "storetest_")
+	dir, err := os.MkdirTemp("", "storetest_")
 	x.Check(err)
 	kvOpt := badger.DefaultOptions(dir)
 	ps, err = badger.OpenManaged(kvOpt)

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,12 +24,14 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
-	"github.com/stretchr/testify/require"
 )
 
 func TestEncodeMemory(t *testing.T) {
@@ -43,8 +45,8 @@ func TestEncodeMemory(t *testing.T) {
 		n := enc.newNode(0)
 		require.NotNil(t, n)
 		for i := 0; i < 15000; i++ {
-			enc.AddValue(n, enc.idForAttr(fmt.Sprintf("very long attr name %06d", i)),
-				types.ValueForType(types.StringID))
+			require.NoError(t, enc.AddValue(n, enc.idForAttr(fmt.Sprintf("very long attr name %06d", i)),
+				types.ValueForType(types.StringID)))
 			enc.AddListChild(n,
 				enc.newNode(enc.idForAttr(fmt.Sprintf("another long child %06d", i))))
 		}
@@ -53,7 +55,7 @@ func TestEncodeMemory(t *testing.T) {
 			defer wg.Done()
 			for j := 0; j < 1000; j++ {
 				enc.buf.Reset()
-				enc.encode(n)
+				require.NoError(t, enc.encode(n))
 			}
 		}()
 	}
@@ -73,25 +75,25 @@ func TestNormalizeJSONLimit(t *testing.T) {
 	n := enc.newNode(enc.idForAttr("root"))
 	require.NotNil(t, n)
 	for i := 0; i < 1000; i++ {
-		enc.AddValue(n, enc.idForAttr(fmt.Sprintf("very long attr name %06d", i)),
-			types.ValueForType(types.StringID))
+		require.NoError(t, enc.AddValue(n, enc.idForAttr(fmt.Sprintf("very long attr name %06d", i)),
+			types.ValueForType(types.StringID)))
 		child1 := enc.newNode(enc.idForAttr("child1"))
 		enc.AddListChild(n, child1)
 		for j := 0; j < 100; j++ {
-			enc.AddValue(child1, enc.idForAttr(fmt.Sprintf("long child1 attr %06d", j)),
-				types.ValueForType(types.StringID))
+			require.NoError(t, enc.AddValue(child1, enc.idForAttr(fmt.Sprintf("long child1 attr %06d", j)),
+				types.ValueForType(types.StringID)))
 		}
 		child2 := enc.newNode(enc.idForAttr("child2"))
 		enc.AddListChild(n, child2)
 		for j := 0; j < 100; j++ {
-			enc.AddValue(child2, enc.idForAttr(fmt.Sprintf("long child2 attr %06d", j)),
-				types.ValueForType(types.StringID))
+			require.NoError(t, enc.AddValue(child2, enc.idForAttr(fmt.Sprintf("long child2 attr %06d", j)),
+				types.ValueForType(types.StringID)))
 		}
 		child3 := enc.newNode(enc.idForAttr("child3"))
 		enc.AddListChild(n, child3)
 		for j := 0; j < 100; j++ {
-			enc.AddValue(child3, enc.idForAttr(fmt.Sprintf("long child3 attr %06d", j)),
-				types.ValueForType(types.StringID))
+			require.NoError(t, enc.AddValue(child3, enc.idForAttr(fmt.Sprintf("long child3 attr %06d", j)),
+				types.ValueForType(types.StringID)))
 		}
 	}
 	_, err := enc.normalize(n)
@@ -100,9 +102,9 @@ func TestNormalizeJSONLimit(t *testing.T) {
 
 func BenchmarkJsonMarshal(b *testing.B) {
 	inputStrings := [][]string{
-		[]string{"largestring", strings.Repeat("a", 1024)},
-		[]string{"smallstring", "abcdef"},
-		[]string{"specialchars", "<><>^)(*&(%*&%&^$*&%)(*&)^)"},
+		{"largestring", strings.Repeat("a", 1024)},
+		{"smallstring", "abcdef"},
+		{"specialchars", "<><>^)(*&(%*&%&^$*&%)(*&)^)"},
 	}
 
 	var result []byte
@@ -201,9 +203,7 @@ func buildTestTree(b *testing.B, enc *encoder, level, maxlevel int, fj fastJsonN
 		var ch fastJsonNode
 		if level == maxlevel-1 {
 			val, err := valToBytes(testVal)
-			if err != nil {
-				panic(err)
-			}
+			x.Panic(err)
 
 			ch, err = enc.makeScalarNode(enc.idForAttr(testAttr), val, false)
 			require.NoError(b, err)
@@ -260,4 +260,48 @@ func TestChildrenOrder(t *testing.T) {
 		child = child.next
 	}
 	require.Nil(t, child)
+}
+
+func TestMarshalTimeJson(t *testing.T) {
+	var timesToMarshal = []struct {
+		in  time.Time
+		out string
+	}{
+		{in: time.Date(2018, 5, 30, 9, 30, 10, 0, time.FixedZone("", -6*60*60)),
+			out: "\"2018-05-30T09:30:10-06:00\""},
+		{in: time.Date(2018, 5, 30, 9, 30, 10, 500000000, time.UTC),
+			out: "\"2018-05-30T09:30:10.5Z\""},
+		{in: time.Date(2018, 5, 30, 9, 30, 10, 0, time.FixedZone("", -23*60*60)),
+			out: "\"2018-05-30T09:30:10-23:00\""},
+		{in: time.Date(2018, 5, 30, 9, 30, 10, 0, time.FixedZone("", -24*60*60)),
+			out: "\"2018-05-30T09:30:10-24:00\""},
+		{in: time.Date(2018, 5, 30, 9, 30, 10, 0, time.FixedZone("", 23*60*60)),
+			out: "\"2018-05-30T09:30:10+23:00\""},
+		{in: time.Date(2018, 5, 30, 9, 30, 10, 0, time.FixedZone("", 23*60*60+58*60)),
+			out: "\"2018-05-30T09:30:10+23:58\""},
+		{in: time.Date(2018, 5, 30, 9, 30, 10, 0, time.FixedZone("", 24*60*60)),
+			out: "\"2018-05-30T09:30:10+24:00\""},
+		{in: time.Date(2018, 5, 30, 9, 30, 10, 0, time.FixedZone("", -30*60*60)),
+			out: "\"2018-05-30T09:30:10-30:00\""},
+		{in: time.Date(2018, 5, 30, 9, 30, 10, 0, time.FixedZone("", 30*60*60)),
+			out: "\"2018-05-30T09:30:10+30:00\""},
+		{in: time.Date(2018, 5, 30, 9, 30, 10, 0, time.FixedZone("", 45*60*60)),
+			out: "\"2018-05-30T09:30:10+45:00\""},
+		{in: time.Date(2018, 5, 30, 9, 30, 10, 0, time.FixedZone("", 45*60*60+34*60)),
+			out: "\"2018-05-30T09:30:10+45:34\""},
+		{in: time.Date(2018, 5, 30, 9, 30, 10, 0, time.FixedZone("", 49*60*60+59*60)),
+			out: "\"2018-05-30T09:30:10+49:59\""},
+		{in: time.Date(2018, 5, 30, 9, 30, 10, 0, time.FixedZone("", -99*60*60)),
+			out: "\"2018-05-30T09:30:10-99:00\""},
+		{in: time.Date(2018, 5, 30, 9, 30, 10, 0, time.FixedZone("", 99*60*60)),
+			out: "\"2018-05-30T09:30:10+99:00\""},
+		{in: time.Date(2018, 5, 30, 9, 30, 10, 0, time.FixedZone("", 100*60*60+23*60)),
+			out: "\"2018-05-30T09:30:10+100:23\""},
+	}
+
+	for _, tc := range timesToMarshal {
+		out, err := marshalTimeJson(tc.in)
+		require.NoError(t, err)
+		require.Equal(t, tc.out, string(out))
+	}
 }

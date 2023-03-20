@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,10 +25,10 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
+	"github.com/golang/glog"
 	"github.com/pkg/errors"
 )
 
@@ -60,7 +60,11 @@ func makeKey(keyFile string, c *certConfig) (crypto.PrivateKey, error) {
 		}
 		return nil, err
 	}
-	defer fp.Close()
+	defer func() {
+		if err := fp.Close(); err != nil {
+			glog.Warningf("error closing file: %v", err)
+		}
+	}()
 
 	var key crypto.PrivateKey
 	switch c.curve {
@@ -101,7 +105,7 @@ func makeKey(keyFile string, c *certConfig) (crypto.PrivateKey, error) {
 // readKey tries to read and decode the contents of a private key file.
 // Returns the private key, or error otherwise.
 func readKey(keyFile string) (crypto.PrivateKey, error) {
-	b, err := ioutil.ReadFile(keyFile)
+	b, err := os.ReadFile(keyFile)
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +125,7 @@ func readKey(keyFile string) (crypto.PrivateKey, error) {
 // readCert tries to read and decode the contents of a signed cert file.
 // Returns the x509v3 cert, or error otherwise.
 func readCert(certFile string) (*x509.Certificate, error) {
-	b, err := ioutil.ReadFile(certFile)
+	b, err := os.ReadFile(certFile)
 	if err != nil {
 		return nil, err
 	}

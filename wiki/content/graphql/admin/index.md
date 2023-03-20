@@ -14,7 +14,7 @@ This article presents the Admin API and explains how to run a Dgraph database wi
 The simplest way to start with Dgraph GraphQL is to run the all-in-one Docker image.
 
 ```
-docker run -it -p 8080:8080 dgraph/standalone:master
+docker run -it -p 8080:8080 dgraph/standalone:latest
 ```
 
 That brings up GraphQL at `localhost:8080/graphql` and `localhost:8080/admin`, but is intended for quickstart and doesn't persist data.
@@ -251,10 +251,10 @@ Here are the important types, queries, and mutations from the `admin` schema.
 		cacheMb: Float
 
 		"""
-		True value of logRequest enables logging of all the requests coming to alphas.
-		False value of logRequest disables above.
+		True value of logDQLRequest enables logging of all the requests coming to alphas.
+		False value of logDQLRequest disables above.
 		"""
-		logRequest: Boolean
+		logDQLRequest: Boolean
 	}
 
 	type ConfigPayload {

@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,17 +23,15 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dgraph-io/dgraph/conn"
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/ristretto/z"
-
+	"github.com/pkg/errors"
 	ostats "go.opencensus.io/stats"
 	tag "go.opencensus.io/tag"
 	otrace "go.opencensus.io/trace"
 
-	"github.com/pkg/errors"
+	"github.com/dgraph-io/dgraph/conn"
+	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/schema"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 const baseTimeout time.Duration = 4 * time.Second
@@ -112,9 +110,14 @@ func (rl *rateLimiter) decr(retry int) {
 var proposalKey uint64
 
 // {2 bytes Node ID} {4 bytes for random} {2 bytes zero}
-func initProposalKey(id uint64) {
+func initProposalKey(id uint64) error {
 	x.AssertTrue(id != 0)
-	proposalKey = uint64(groups().Node.Id)<<48 | uint64(z.FastRand())<<16
+	var err error
+	proposalKey, err = x.ProposalKey(groups().Node.Id)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // uniqueKey is meant to be unique across all the replicas.

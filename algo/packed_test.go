@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2016-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,9 +20,10 @@ import (
 	"math"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/stretchr/testify/require"
 )
 
 func newUidPack(data []uint64) *pb.UidPack {
@@ -41,6 +42,7 @@ func TestMergeSorted1Packed(t *testing.T) {
 	require.Equal(t, []uint64{55}, codec.Decode(MergeSortedPacked(input), 0))
 }
 
+//nolint:unused
 func printPack(t *testing.T, pack *pb.UidPack) {
 	for _, block := range pack.Blocks {
 		t.Logf("[%x]Block base: %d. Num uids: %d. Deltas: %x\n",

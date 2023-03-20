@@ -1,13 +1,14 @@
+//go:build !oss
 // +build !oss
 
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Dgraph Community License (the "License"); you
  * may not use this file except in compliance with the License. You
  * may obtain a copy of the License at
  *
- *     https://github.com/dgraph-io/dgraph/blob/master/licenses/DCL.txt
+ *     https://github.com/dgraph-io/dgraph/blob/main/licenses/DCL.txt
  */
 
 package audit
@@ -18,13 +19,13 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+
+	"github.com/dgraph-io/dgraph/x"
 )
 
 var CmdAudit x.SubCommand
@@ -75,7 +76,7 @@ func initSubcommands() []*x.SubCommand {
 }
 
 func run() error {
-	key, err := ioutil.ReadFile(decryptCmd.Conf.GetString("encryption_key_file"))
+	key, err := os.ReadFile(decryptCmd.Conf.GetString("encryption_key_file"))
 	x.Check(err)
 	if key == nil {
 		return errors.New("no encryption key provided")
@@ -83,14 +84,23 @@ func run() error {
 
 	file, err := os.Open(decryptCmd.Conf.GetString("in"))
 	x.Check(err)
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			glog.Warningf("error closing file: %v", err)
+		}
+	}()
 
 	outfile, err := os.OpenFile(decryptCmd.Conf.GetString("out"),
 		os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
 	x.Check(err)
-	defer outfile.Close()
-
+	defer func() {
+		if err := outfile.Close(); err != nil {
+			glog.Warningf("error closing file: %v", err)
+		}
+	}()
 	block, err := aes.NewCipher(key)
+	x.Check(err)
+
 	stat, err := os.Stat(decryptCmd.Conf.GetString("in"))
 	x.Check(err)
 	if stat.Size() == 0 {

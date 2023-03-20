@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2016-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +25,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	badgerpb "github.com/dgraph-io/badger/v3/pb"
+	"github.com/golang/glog"
+	"github.com/golang/protobuf/proto"
+	"github.com/pkg/errors"
+
+	badgerpb "github.com/dgraph-io/badger/v4/pb"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/ee/enc"
@@ -34,9 +38,6 @@ import (
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
-	"github.com/golang/glog"
-	"github.com/golang/protobuf/proto"
-	"github.com/pkg/errors"
 )
 
 type groupi struct {
@@ -150,20 +151,24 @@ func StartRaftNodes(walStore *raftwal.DiskStorage, bindall bool) {
 
 	gr.Node = newNode(walStore, gid, raftIdx, x.WorkerConfig.MyAddr)
 
-	x.Checkf(schema.LoadFromDb(), "Error while initializing schema")
+	x.Checkf(schema.LoadFromDb(context.Background()), "Error while initializing schema")
+	glog.Infof("Load schema from DB: OK")
 	raftServer.UpdateNode(gr.Node.Node)
 	gr.Node.InitAndStartNode()
+	glog.Infof("Init and start Raft node: OK")
 
 	go gr.sendMembershipUpdates()
 	go gr.receiveMembershipUpdates()
 	go gr.processOracleDeltaStream()
 
 	gr.informZeroAboutTablets()
+	glog.Infof("Informed Zero about tablets I have: OK")
 	gr.applyInitialSchema()
 	gr.applyInitialTypes()
+	glog.Infof("Upserted Schema and Types: OK")
 
 	x.UpdateHealthStatus(true)
-	glog.Infof("Server is ready")
+	glog.Infof("Server is ready: OK")
 }
 
 func (g *groupi) Ctx() context.Context {
@@ -363,7 +368,7 @@ func (g *groupi) applyState(myId uint64, state *pb.MembershipState) {
 					// Don't try to remove a member if it's already marked as removed in
 					// the membership state and is not a current peer of the node.
 					_, isPeer := g.Node.Peer(member.GetId())
-					// isPeer should only be true if the rmeoved node is not the same as this node.
+					// isPeer should only be true if the removed node is not the same as this node.
 					isPeer = isPeer && member.GetId() != g.Node.RaftContext.Id
 
 					for _, oldMember := range oldState.GetRemoved() {
@@ -486,7 +491,7 @@ func (g *groupi) sendTablet(tablet *pb.Tablet) (*pb.Tablet, error) {
 	}
 
 	if out.GroupId == groups().groupId() {
-		glog.Infof("Serving tablet for: %v\n", x.FormatNsAttr(tablet.GetPredicate()))
+		glog.Infof("Serving tablet for: %v\n", tablet.GetPredicate())
 	}
 	return out, nil
 }
@@ -533,7 +538,7 @@ func (g *groupi) Inform(preds []string) ([]*pb.Tablet, error) {
 		}
 
 		if t.GroupId == groups().groupId() {
-			glog.Infof("Serving tablet for: %v\n", x.FormatNsAttr(t.GetPredicate()))
+			glog.Infof("Serving tablet for: %v\n", t.GetPredicate())
 		}
 	}
 	g.Unlock()
@@ -836,7 +841,7 @@ func (g *groupi) sendMembershipUpdates() {
 
 // receiveMembershipUpdates receives membership updates from ANY Zero server. This is the main
 // connection which tells Alpha about the state of the cluster, including the latest Zero leader.
-// All the other connections to Zero, are only made only to the leader.
+// All the other connections to Zero, are made only to the leader.
 func (g *groupi) receiveMembershipUpdates() {
 	defer func() {
 		glog.Infoln("Closing receiveMembershipUpdates")
@@ -1198,7 +1203,7 @@ func SubscribeForUpdates(prefixes [][]byte, ignore string, cb func(kvs *badgerpb
 		members := groups().AnyTwoServers(group)
 		// There may be a lag while starting so keep retrying.
 		if len(members) == 0 {
-			return fmt.Errorf("Unable to find any servers for group: %d", group)
+			return fmt.Errorf("unable to find any servers for group: %d", group)
 		}
 		pool := conn.GetPools().Connect(members[0], x.WorkerConfig.TLSClientConfig)
 		client := pb.NewWorkerClient(pool.Get())

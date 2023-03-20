@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,15 +26,16 @@ import (
 	"sync/atomic"
 	"unicode"
 
+	"github.com/pkg/errors"
+	"github.com/twpayne/go-geom"
+	"github.com/twpayne/go-geom/encoding/geojson"
+
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
-	simdjson "github.com/dgraph-io/simdjson-go"
-	"github.com/pkg/errors"
-	geom "github.com/twpayne/go-geom"
-	"github.com/twpayne/go-geom/encoding/geojson"
+	"github.com/dgraph-io/simdjson-go"
 )
 
 func stripSpaces(str string) string {
@@ -397,14 +398,13 @@ func getNextBlank() string {
 }
 
 // TODO - Abstract these parameters to a struct.
-func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred string) (
-	mapResponse, error) {
+func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred string) (mapResponse, error) {
 	var mr mapResponse
 
 	// move all facets from global map to smaller mr.rawFacets map
 	mr.rawFacets = make(map[string]interface{})
 	for k, v := range m {
-		if strings.Contains(k, x.FacetDelimeter) {
+		if strings.Contains(k, x.FacetDelimiter) {
 			mr.rawFacets[k] = v
 			delete(m, k)
 		}
@@ -514,7 +514,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 			Namespace: namespace,
 		}
 
-		prefix := pred + x.FacetDelimeter
+		prefix := pred + x.FacetDelimiter
 		if _, ok := v.([]interface{}); !ok {
 			fts, err := parseScalarFacets(mr.rawFacets, prefix)
 			if err != nil {
@@ -561,7 +561,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 				return mr, err
 			}
 
-			// Add the connecting edge beteween the entities.
+			// Add the connecting edge between the entities.
 			nq.ObjectId = cr.uid
 			nq.Facets = cr.fcts
 			buf.Push(&nq)
@@ -654,7 +654,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 		}
 	}
 
-	fts, err := parseScalarFacets(mr.rawFacets, parentPred+x.FacetDelimeter)
+	fts, err := parseScalarFacets(mr.rawFacets, parentPred+x.FacetDelimiter)
 	mr.fcts = fts
 
 	return mr, err

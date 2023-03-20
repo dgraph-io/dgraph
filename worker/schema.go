@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -90,28 +90,30 @@ func populateSchema(attr string, fields []string) *pb.SchemaNode {
 	}
 	schemaNode.Predicate = attr
 	ctx := context.Background()
+	pred, _ := schema.State().Get(ctx, attr)
+
 	for _, field := range fields {
 		switch field {
 		case "type":
 			schemaNode.Type = typ.Name()
 		case "index":
-			schemaNode.Index = schema.State().IsIndexed(ctx, attr)
+			schemaNode.Index = len(pred.GetTokenizer()) > 0
 		case "tokenizer":
-			if schema.State().IsIndexed(ctx, attr) {
+			if len(pred.GetTokenizer()) > 0 {
 				schemaNode.Tokenizer = schema.State().TokenizerNames(ctx, attr)
 			}
 		case "reverse":
-			schemaNode.Reverse = schema.State().IsReversed(ctx, attr)
+			schemaNode.Reverse = pred.GetDirective() == pb.SchemaUpdate_REVERSE
 		case "count":
-			schemaNode.Count = schema.State().HasCount(ctx, attr)
+			schemaNode.Count = pred.GetCount()
 		case "list":
-			schemaNode.List = schema.State().IsList(attr)
+			schemaNode.List = pred.GetList()
 		case "upsert":
-			schemaNode.Upsert = schema.State().HasUpsert(attr)
+			schemaNode.Upsert = pred.GetUpsert()
 		case "lang":
-			schemaNode.Lang = schema.State().HasLang(attr)
+			schemaNode.Lang = pred.GetLang()
 		case "noconflict":
-			schemaNode.NoConflict = schema.State().HasNoConflict(attr)
+			schemaNode.NoConflict = pred.GetNoConflict()
 		default:
 			//pass
 		}

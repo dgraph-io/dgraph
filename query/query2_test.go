@@ -1,5 +1,7 @@
+//go:build integration || cloud
+
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +16,7 @@
  * limitations under the License.
  */
 
+//nolint:lll
 package query
 
 import (
@@ -3132,4 +3135,17 @@ func TestLangDotInFunction(t *testing.T) {
 	require.JSONEq(t,
 		`{"data": {"me":[{"name@pl":"Borsuk europejski","name@en":"European badger"},{"name@en":"Honey badger"},{"name@en":"Honey bee"}]}}`,
 		js)
+}
+
+func TestGeoFuncWithAfter(t *testing.T) {
+
+	query := `{
+		me(func: near(geometry, [-122.082506, 37.4249518], 1000), after: 0x13ee) {
+			name
+		}
+	}`
+
+	js := processQueryNoErr(t, query)
+	expected := `{"data": {"me":[{"name": "SF Bay area"}, {"name": "Mountain View"}]}}`
+	require.JSONEq(t, expected, js)
 }

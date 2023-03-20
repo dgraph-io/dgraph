@@ -1,13 +1,14 @@
+//go:build !oss
 // +build !oss
 
 /*
- * Copyright 2022 Dgraph Labs, Inc. All rights reserved.
+ * Copyright 2023 Dgraph Labs, Inc. All rights reserved.
  *
  * Licensed under the Dgraph Community License (the "License"); you
  * may not use this file except in compliance with the License. You
  * may obtain a copy of the License at
  *
- *     https://github.com/dgraph-io/dgraph/blob/master/licenses/DCL.txt
+ *     https://github.com/dgraph-io/dgraph/blob/main/licenses/DCL.txt
  */
 
 package edgraph
@@ -20,25 +21,23 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/ristretto/z"
-
-	"github.com/dgraph-io/dgraph/query"
-
-	"github.com/pkg/errors"
-
-	bpb "github.com/dgraph-io/badger/v3/pb"
-	"github.com/dgraph-io/dgo/v210/protos/api"
-	"github.com/dgraph-io/dgraph/ee/acl"
-	"github.com/dgraph-io/dgraph/gql"
-	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/worker"
-	"github.com/dgraph-io/dgraph/x"
 	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	bpb "github.com/dgraph-io/badger/v4/pb"
+	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/dgraph/dql"
+	"github.com/dgraph-io/dgraph/ee/acl"
+	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/query"
+	"github.com/dgraph-io/dgraph/schema"
+	"github.com/dgraph-io/dgraph/worker"
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 type predsAndvars struct {
@@ -49,6 +48,10 @@ type predsAndvars struct {
 // Login handles login requests from clients.
 func (s *Server) Login(ctx context.Context,
 	request *api.LoginRequest) (*api.Response, error) {
+
+	if !shouldAllowAcls(request.GetNamespace()) {
+		return nil, errors.New("operation is not allowed in shared cloud mode")
+	}
 
 	if err := x.HealthCheck(); err != nil {
 		return nil, err
@@ -194,6 +197,18 @@ func validateToken(jwtStr string) (*userData, error) {
 		return nil, errors.Errorf("userid in claims is not a string:%v", userId)
 	}
 
+	/*
+	 * Since, JSON numbers follow JavaScript's double-precision floating-point
+	 * format . . .
+	 * -- references: https://restfulapi.net/json-data-types/
+	 * --             https://www.tutorialspoint.com/json/json_data_types.htm
+	 * . . . and fraction in IEEE 754 double precision binary floating-point
+	 * format has 52 bits, . . .
+	 * -- references: https://en.wikipedia.org/wiki/Double-precision_floating-point_format
+	 * . . . the namespace field of the struct userData below can
+	 * only accomodate a maximum value of (1 << 52) despite it being declared as
+	 * uint64. Numbers bigger than this are likely to fail the test.
+	 */
 	namespace, ok := claims["namespace"].(float64)
 	if !ok {
 		return nil, errors.Errorf("namespace in claims is not valid:%v", namespace)
@@ -423,35 +438,37 @@ func InitializeAcl(closer *z.Closer) {
 		// The acl feature is not turned on.
 		return
 	}
+	upsertGuardianAndGroot(closer, x.GalaxyNamespace)
+}
 
-	upsertGuardianAndGroot := func(ns uint64) {
-		for closer.Ctx().Err() == nil {
-			ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
-			defer cancel()
-			ctx = x.AttachNamespace(ctx, ns)
-			if err := upsertGuardian(ctx); err != nil {
-				glog.Infof("Unable to upsert the guardian group. Error: %v", err)
-				time.Sleep(100 * time.Millisecond)
-				continue
-			}
-			break
+// Note: The handling of closer should be done by caller.
+func upsertGuardianAndGroot(closer *z.Closer, ns uint64) {
+	if len(worker.Config.HmacSecret) == 0 {
+		// The acl feature is not turned on.
+		return
+	}
+	for closer.Ctx().Err() == nil {
+		ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
+		defer cancel()
+		ctx = x.AttachNamespace(ctx, ns)
+		if err := upsertGuardian(ctx); err != nil {
+			glog.Infof("Unable to upsert the guardian group. Error: %v", err)
+			time.Sleep(100 * time.Millisecond)
+			continue
 		}
-
-		for closer.Ctx().Err() == nil {
-			ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
-			defer cancel()
-			ctx = x.AttachNamespace(ctx, ns)
-			if err := upsertGroot(ctx, "password"); err != nil {
-				glog.Infof("Unable to upsert the groot account. Error: %v", err)
-				time.Sleep(100 * time.Millisecond)
-				continue
-			}
-			break
-		}
+		break
 	}
 
-	for ns := range schema.State().Namespaces() {
-		upsertGuardianAndGroot(ns)
+	for closer.Ctx().Err() == nil {
+		ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
+		defer cancel()
+		ctx = x.AttachNamespace(ctx, ns)
+		if err := upsertGroot(ctx, "password"); err != nil {
+			glog.Infof("Unable to upsert the groot account. Error: %v", err)
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+		break
 	}
 }
 
@@ -615,18 +632,15 @@ type authPredResult struct {
 }
 
 func authorizePreds(ctx context.Context, userData *userData, preds []string,
-	aclOp *acl.Operation) (*authPredResult, error) {
+	aclOp *acl.Operation) *authPredResult {
 
-	ns, err := x.ExtractNamespace(ctx)
-	if err != nil {
-		return nil, errors.Wrapf(err, "While authorizing preds")
-	}
 	if !worker.AclCachePtr.Loaded() {
 		RefreshACLs(ctx)
 	}
 
 	userId := userData.userId
 	groupIds := userData.groupIds
+	ns := userData.namespace
 	blockedPreds := make(map[string]struct{})
 	for _, pred := range preds {
 		nsPred := x.NamespaceAttr(ns, pred)
@@ -638,15 +652,13 @@ func authorizePreds(ctx context.Context, userData *userData, preds []string,
 				operation: aclOp,
 				allowed:   false,
 			})
-
 			blockedPreds[pred] = struct{}{}
 		}
 	}
-
 	if worker.HasAccessToAllPreds(ns, groupIds, aclOp) {
 		// Setting allowed to nil allows access to all predicates. Note that the access to ACL
 		// predicates will still be blocked.
-		return &authPredResult{allowed: nil, blocked: blockedPreds}, nil
+		return &authPredResult{allowed: nil, blocked: blockedPreds}
 	}
 	// User can have multiple permission for same predicate, add predicate
 	allowedPreds := make([]string, 0, len(worker.AclCachePtr.GetUserPredPerms(userId)))
@@ -656,7 +668,7 @@ func authorizePreds(ctx context.Context, userData *userData, preds []string,
 			allowedPreds = append(allowedPreds, predicate)
 		}
 	}
-	return &authPredResult{allowed: allowedPreds, blocked: blockedPreds}, nil
+	return &authPredResult{allowed: allowedPreds, blocked: blockedPreds}
 }
 
 // authorizeAlter parses the Schema in the operation and authorizes the operation
@@ -711,10 +723,7 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 				"only guardians are allowed to drop all data, but the current user is %s", userId)
 		}
 
-		result, err := authorizePreds(ctx, userData, preds, acl.Modify)
-		if err != nil {
-			return nil
-		}
+		result := authorizePreds(ctx, userData, preds, acl.Modify)
 		if len(result.blocked) > 0 {
 			var msg strings.Builder
 			for key := range result.blocked {
@@ -789,7 +798,7 @@ func isAclPredMutation(nquads []*api.NQuad) bool {
 // authorizeMutation authorizes the mutation using the worker.AclCachePtr. It will return permission
 // denied error if any one of the predicates in mutation(set or delete) is unauthorized.
 // At this stage, namespace is not attached in the predicates.
-func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
+func authorizeMutation(ctx context.Context, gmu *dql.Mutation) error {
 	if len(worker.Config.HmacSecret) == 0 {
 		// the user has not turned on the acl feature
 		return nil
@@ -823,12 +832,17 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 			case isAclPredMutation(gmu.Del):
 				return errors.Errorf("ACL predicates can't be deleted")
 			}
+			if !shouldAllowAcls(userData.namespace) {
+				for _, pred := range preds {
+					if x.IsAclPredicate(pred) {
+						return status.Errorf(codes.PermissionDenied,
+							"unauthorized to mutate acl predicates: %s\n", pred)
+					}
+				}
+			}
 			return nil
 		}
-		result, err := authorizePreds(ctx, userData, preds, acl.Write)
-		if err != nil {
-			return err
-		}
+		result := authorizePreds(ctx, userData, preds, acl.Write)
 		if len(result.blocked) > 0 {
 			var msg strings.Builder
 			for key := range result.blocked {
@@ -858,10 +872,10 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 	return err
 }
 
-func parsePredsFromQuery(gqls []*gql.GraphQuery) predsAndvars {
+func parsePredsFromQuery(dqls []*dql.GraphQuery) predsAndvars {
 	predsMap := make(map[string]struct{})
 	varsMap := make(map[string]string)
-	for _, gq := range gqls {
+	for _, gq := range dqls {
 		if gq.Func != nil {
 			predsMap[gq.Func.Attr] = struct{}{}
 		}
@@ -902,7 +916,7 @@ func parsePredsFromQuery(gqls []*gql.GraphQuery) predsAndvars {
 	return pv
 }
 
-func parsePredsFromFilter(f *gql.FilterTree) []string {
+func parsePredsFromFilter(f *dql.FilterTree) []string {
 	var preds []string
 	if f == nil {
 		return preds
@@ -936,10 +950,25 @@ func logAccess(log *accessEntry) {
 	}
 }
 
-//authorizeQuery authorizes the query using the aclCachePtr. It will silently drop all
+func blockedPreds(preds []string) map[string]struct{} {
+	blocked := make(map[string]struct{})
+	for _, pred := range preds {
+		if x.IsAclPredicate(pred) {
+			blocked[pred] = struct{}{}
+		}
+	}
+	return blocked
+}
+
+// With shared instance enabled, we don't allow ACL operations from any of the non-galaxy namespace.
+func shouldAllowAcls(ns uint64) bool {
+	return !x.Config.SharedInstance || ns == x.GalaxyNamespace
+}
+
+// authorizeQuery authorizes the query using the aclCachePtr. It will silently drop all
 // unauthorized predicates from query.
 // At this stage, namespace is not attached in the predicates.
-func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) error {
+func authorizeQuery(ctx context.Context, parsedReq *dql.Result, graphql bool) error {
 	if len(worker.Config.HmacSecret) == 0 {
 		// the user has not turned on the acl feature
 		return nil
@@ -947,6 +976,7 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) er
 
 	var userId string
 	var groupIds []string
+	var namespace uint64
 	predsAndvars := parsePredsFromQuery(parsedReq.Query)
 	preds := predsAndvars.preds
 	varsToPredMap := predsAndvars.vars
@@ -966,14 +996,18 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) er
 
 		userId = userData.userId
 		groupIds = userData.groupIds
+		namespace = userData.namespace
 
 		if x.IsGuardian(groupIds) {
-			// Members of guardian groups are allowed to query anything.
-			return nil, nil, nil
+			if shouldAllowAcls(userData.namespace) {
+				// Members of guardian groups are allowed to query anything.
+				return nil, nil, nil
+			}
+			return blockedPreds(preds), nil, nil
 		}
 
-		result, err := authorizePreds(ctx, userData, preds, acl.Read)
-		return result.blocked, result.allowed, err
+		result := authorizePreds(ctx, userData, preds, acl.Read)
+		return result.blocked, result.allowed, nil
 	}
 
 	blockedPreds, allowedPreds, err := doAuthorizeQuery()
@@ -994,7 +1028,7 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) er
 	if len(blockedPreds) != 0 {
 		// For GraphQL requests, we allow filtered access to the ACL predicates.
 		// Filter for user_id and group_id is applied for the currently logged in user.
-		if graphql {
+		if graphql && shouldAllowAcls(namespace) {
 			for _, gq := range parsedReq.Query {
 				addUserFilterToQuery(gq, userId, groupIds)
 			}
@@ -1055,11 +1089,14 @@ func authorizeSchemaQuery(ctx context.Context, er *query.ExecutionResult) error 
 
 		groupIds := userData.groupIds
 		if x.IsGuardian(groupIds) {
-			// Members of guardian groups are allowed to query anything.
-			return nil, nil
+			if shouldAllowAcls(userData.namespace) {
+				// Members of guardian groups are allowed to query anything.
+				return nil, nil
+			}
+			return blockedPreds(preds), nil
 		}
-		result, err := authorizePreds(ctx, userData, preds, acl.Read)
-		return result.blocked, err
+		result := authorizePreds(ctx, userData, preds, acl.Read)
+		return result.blocked, nil
 	}
 
 	// find the predicates which are blocked for the schema query
@@ -1100,10 +1137,9 @@ func AuthGuardianOfTheGalaxy(ctx context.Context) error {
 	if !x.WorkerConfig.AclEnabled {
 		return nil
 	}
-	ns, err := x.ExtractJWTNamespace(ctx)
+	ns, err := x.ExtractNamespaceFrom(ctx)
 	if err != nil {
-		return status.Error(codes.Unauthenticated,
-			"AuthGuardianOfTheGalaxy: extracting jwt token, error: "+err.Error())
+		return errors.Wrap(err, "Authorize guardian of the galaxy, extracting jwt token, error:")
 	}
 	if ns != 0 {
 		return status.Error(
@@ -1149,16 +1185,15 @@ func AuthorizeGuardians(ctx context.Context) error {
 }
 
 /*
-	addUserFilterToQuery applies makes sure that a user can access only its own
-	acl info by applying filter of userid and groupid to acl predicates. A query like
-	Conversion pattern:
-		* me(func: type(dgraph.type.Group)) ->
-				me(func: type(dgraph.type.Group)) @filter(eq("dgraph.xid", groupIds...))
-		* me(func: type(dgraph.type.User)) ->
-				me(func: type(dgraph.type.User)) @filter(eq("dgraph.xid", userId))
-
+addUserFilterToQuery applies makes sure that a user can access only its own
+acl info by applying filter of userid and groupid to acl predicates. A query like
+Conversion pattern:
+  - me(func: type(dgraph.type.Group)) ->
+    me(func: type(dgraph.type.Group)) @filter(eq("dgraph.xid", groupIds...))
+  - me(func: type(dgraph.type.User)) ->
+    me(func: type(dgraph.type.User)) @filter(eq("dgraph.xid", userId))
 */
-func addUserFilterToQuery(gq *gql.GraphQuery, userId string, groupIds []string) {
+func addUserFilterToQuery(gq *dql.GraphQuery, userId string, groupIds []string) {
 	if gq.Func != nil && gq.Func.Name == "type" {
 		// type function only supports one argument
 		if len(gq.Func.Args) != 1 {
@@ -1192,34 +1227,34 @@ func addUserFilterToQuery(gq *gql.GraphQuery, userId string, groupIds []string) 
 	}
 }
 
-func parentFilter(newFilter, filter *gql.FilterTree) *gql.FilterTree {
+func parentFilter(newFilter, filter *dql.FilterTree) *dql.FilterTree {
 	if filter == nil {
 		return newFilter
 	}
-	parentFilter := &gql.FilterTree{
+	parentFilter := &dql.FilterTree{
 		Op:    "AND",
-		Child: []*gql.FilterTree{filter, newFilter},
+		Child: []*dql.FilterTree{filter, newFilter},
 	}
 	return parentFilter
 }
 
-func userFilter(userId string) *gql.FilterTree {
+func userFilter(userId string) *dql.FilterTree {
 	// A logged in user should always have a userId.
-	return &gql.FilterTree{
-		Func: &gql.Function{
+	return &dql.FilterTree{
+		Func: &dql.Function{
 			Attr: "dgraph.xid",
 			Name: "eq",
-			Args: []gql.Arg{{Value: userId}},
+			Args: []dql.Arg{{Value: userId}},
 		},
 	}
 }
 
-func groupFilter(groupIds []string) *gql.FilterTree {
+func groupFilter(groupIds []string) *dql.FilterTree {
 	// The user doesn't have any groups, so add an empty filter @filter(uid([])) so that all
 	// groups are filtered out.
 	if len(groupIds) == 0 {
-		filter := &gql.FilterTree{
-			Func: &gql.Function{
+		filter := &dql.FilterTree{
+			Func: &dql.Function{
 				Name: "uid",
 				UID:  []uint64{},
 			},
@@ -1227,8 +1262,8 @@ func groupFilter(groupIds []string) *gql.FilterTree {
 		return filter
 	}
 
-	filter := &gql.FilterTree{
-		Func: &gql.Function{
+	filter := &dql.FilterTree{
+		Func: &dql.Function{
 			Attr: "dgraph.xid",
 			Name: "eq",
 		},
@@ -1236,27 +1271,27 @@ func groupFilter(groupIds []string) *gql.FilterTree {
 
 	for _, gid := range groupIds {
 		filter.Func.Args = append(filter.Func.Args,
-			gql.Arg{Value: gid})
+			dql.Arg{Value: gid})
 	}
 
 	return filter
 }
 
 /*
- addUserFilterToFilter makes sure that user can't misue filters to access other user's info.
- If the *filter* have type(dgraph.type.Group) or type(dgraph.type.User) functions,
- it generate a *newFilter* with function like eq(dgraph.xid, userId) or eq(dgraph.xid,groupId...)
- and return a filter of the form
+	 addUserFilterToFilter makes sure that user can't misue filters to access other user's info.
+	 If the *filter* have type(dgraph.type.Group) or type(dgraph.type.User) functions,
+	 it generate a *newFilter* with function like eq(dgraph.xid, userId) or eq(dgraph.xid,groupId...)
+	 and return a filter of the form
 
-		&gql.FilterTree{
-			Op: "AND",
-			Child: []gql.FilterTree{
-				{filter, newFilter}
+			&dql.FilterTree{
+				Op: "AND",
+				Child: []dql.FilterTree{
+					{filter, newFilter}
+				}
 			}
-		}
 */
-func addUserFilterToFilter(filter *gql.FilterTree, userId string,
-	groupIds []string) *gql.FilterTree {
+func addUserFilterToFilter(filter *dql.FilterTree, userId string,
+	groupIds []string) *dql.FilterTree {
 
 	if filter == nil {
 		return nil
@@ -1269,7 +1304,7 @@ func addUserFilterToFilter(filter *gql.FilterTree, userId string,
 			return nil
 		}
 		arg := filter.Func.Args[0]
-		var newFilter *gql.FilterTree
+		var newFilter *dql.FilterTree
 		switch arg.Value {
 		case "dgraph.type.User":
 			newFilter = userFilter(userId)
@@ -1290,8 +1325,8 @@ func addUserFilterToFilter(filter *gql.FilterTree, userId string,
 
 // removePredsFromQuery removes all the predicates in blockedPreds
 // from all the queries in gqs.
-func removePredsFromQuery(gqs []*gql.GraphQuery,
-	blockedPreds map[string]struct{}) []*gql.GraphQuery {
+func removePredsFromQuery(gqs []*dql.GraphQuery,
+	blockedPreds map[string]struct{}) []*dql.GraphQuery {
 
 	filteredGQs := gqs[:0]
 L:
@@ -1334,8 +1369,8 @@ L:
 	return filteredGQs
 }
 
-func removeVarsFromQueryVars(gqs []*gql.Vars,
-	blockedVars map[string]struct{}) []*gql.Vars {
+func removeVarsFromQueryVars(gqs []*dql.Vars,
+	blockedVars map[string]struct{}) []*dql.Vars {
 
 	filteredGQs := gqs[:0]
 	for _, gq := range gqs {
@@ -1358,7 +1393,7 @@ func removeVarsFromQueryVars(gqs []*gql.Vars,
 	return filteredGQs
 }
 
-func removeFilters(f *gql.FilterTree, blockedPreds map[string]struct{}) *gql.FilterTree {
+func removeFilters(f *dql.FilterTree, blockedPreds map[string]struct{}) *dql.FilterTree {
 	if f == nil {
 		return nil
 	}
@@ -1382,8 +1417,8 @@ func removeFilters(f *gql.FilterTree, blockedPreds map[string]struct{}) *gql.Fil
 	return f
 }
 
-func removeGroupBy(gbAttrs []gql.GroupByAttr,
-	blockedPreds map[string]struct{}) []gql.GroupByAttr {
+func removeGroupBy(gbAttrs []dql.GroupByAttr,
+	blockedPreds map[string]struct{}) []dql.GroupByAttr {
 
 	filteredGbAttrs := gbAttrs[:0]
 	for _, gbAttr := range gbAttrs {

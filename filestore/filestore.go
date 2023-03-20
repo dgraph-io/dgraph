@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,7 +31,7 @@ type FileStore interface {
 	Open(path string) (io.ReadCloser, error)
 	Exists(path string) bool
 	FindDataFiles(str string, ext []string) []string
-	ChunkReader(file string, key x.SensitiveByteSlice) (*bufio.Reader, func())
+	ChunkReader(file string, key x.Sensitive) (*bufio.Reader, func())
 }
 
 // NewFileStore returns a new file storage. If remote, it's backed by an x.MinioClient

@@ -1,5 +1,7 @@
+//go:build integration
+
 /*
- *    Copyright 2022 Dgraph Labs, Inc. and Contributors
+ *    Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +16,7 @@
  * limitations under the License.
  */
 
+//nolint:lll
 package auth
 
 import (
@@ -25,16 +28,15 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/graphql/authorization"
-
 	"github.com/dgrijalva/jwt-go/v4"
-
+	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/stretchr/testify/require"
 
+	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/google/go-cmp/cmp"
-	"github.com/stretchr/testify/require"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 var (
@@ -511,6 +513,44 @@ func TestAuthOnInterfaces(t *testing.T) {
 			require.JSONEq(t, tcase.result, string(gqlResponse.Data))
 		})
 	}
+}
+
+func TestNestedAndAuthRulesWithMissingJWT(t *testing.T) {
+	addParams := &common.GraphQLParams{
+		Query: `
+		mutation($user1: String!, $user2: String!){
+			addGroup(input: [{users: {username: $user1}, createdBy: {username: $user2}}, {users: {username: $user2}, createdBy: {username: $user1}}]){
+			  numUids
+			}
+		  }
+		`,
+		Variables: map[string]interface{}{"user1": "user1", "user2": "user2"},
+	}
+	gqlResponse := addParams.ExecuteAsPost(t, common.GraphqlURL)
+	common.RequireNoGQLErrors(t, gqlResponse)
+	require.JSONEq(t, `{"addGroup": {"numUids": 2}}`, string(gqlResponse.Data))
+
+	queryParams := &common.GraphQLParams{
+		Query: `
+		query{
+			queryGroup{
+			  users{
+				username
+			  }
+			}
+		  }
+		`,
+		Headers: common.GetJWT(t, "user1", nil, metaInfo),
+	}
+
+	expectedJSON := `{"queryGroup": [{"users": [{"username": "user1"}]}]}`
+
+	gqlResponse = queryParams.ExecuteAsPost(t, common.GraphqlURL)
+	common.RequireNoGQLErrors(t, gqlResponse)
+	require.JSONEq(t, expectedJSON, string(gqlResponse.Data))
+
+	deleteFilter := map[string]interface{}{"has": "users"}
+	common.DeleteGqlType(t, "Group", deleteFilter, 2, nil)
 }
 
 func TestAuthRulesWithNullValuesInJWT(t *testing.T) {
@@ -1019,7 +1059,7 @@ func getColID(t *testing.T, tcase TestCase) string {
 	common.RequireNoGQLErrors(t, gqlResponse)
 
 	err := json.Unmarshal(gqlResponse.Data, &result)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	if len(result.QueryColumn) > 0 {
 		return result.QueryColumn[0].ColID
@@ -1098,7 +1138,7 @@ func getProjectID(t *testing.T, tcase TestCase) string {
 	common.RequireNoGQLErrors(t, gqlResponse)
 
 	err := json.Unmarshal(gqlResponse.Data, &result)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	if len(result.QueryProject) > 0 {
 		return result.QueryProject[0].ProjID
@@ -1903,14 +1943,10 @@ func TestMain(m *testing.M) {
 	jwtAlgo := []string{jwt.SigningMethodHS256.Name, jwt.SigningMethodRS256.Name}
 	for _, algo := range jwtAlgo {
 		authSchema, err := testutil.AppendAuthInfo(schema, algo, "./sample_public_key.pem", false)
-		if err != nil {
-			panic(err)
-		}
+		x.Panic(err)
 
 		authMeta, err := authorization.Parse(string(authSchema))
-		if err != nil {
-			panic(err)
-		}
+		x.Panic(err)
 
 		metaInfo = &testutil.AuthMeta{
 			PublicKey:      authMeta.VerificationKey,
@@ -2168,7 +2204,7 @@ func TestAuthWithSecretDirective(t *testing.T) {
 	}
 
 	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	opt := cmpopts.IgnoreFields(common.User{}, "Password")
 	if diff := cmp.Diff(newUser, result.CheckUserPassword, opt); diff != "" {
@@ -2201,7 +2237,7 @@ func TestAuthWithSecretDirective(t *testing.T) {
 	}
 
 	err = json.Unmarshal([]byte(gqlResponse.Data), &addLogResult)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	// Id of the created log
 	logID := addLogResult.AddLog.Log[0].Id
 
@@ -2212,7 +2248,7 @@ func TestAuthWithSecretDirective(t *testing.T) {
 	}
 
 	err = json.Unmarshal([]byte(gqlResponse.Data), &resultLog)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	require.Equal(t, resultLog.CheckLogPassword.Id, logID)
 

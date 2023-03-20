@@ -1,5 +1,7 @@
+//go:build integration
+
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,11 +26,12 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/stretchr/testify/require"
 )
 
 type QueryResult struct {
@@ -39,7 +42,7 @@ type QueryResult struct {
 
 func splitPreds(ps []string) []string {
 	for i, p := range ps {
-		ps[i] = x.ParseAttr(strings.Split(p, "-")[1])
+		ps[i] = x.ParseAttr(strings.SplitN(p, "-", 2)[1])
 	}
 
 	return ps
@@ -2773,7 +2776,7 @@ func TestUpsertMultiValueJson(t *testing.T) {
 	// delete color for employess of company1 and set color for employees of company2
 	m3 := `
 {
-  "query": "{user1(func: eq(works_for, \"company1\")) {c1 as uid} user2(func: eq(works_for, \"company2\")) {c2 as uid}}",
+  "query": "{u1(func: eq(works_for, \"company1\")) {c1 as uid} u2(func: eq(works_for, \"company2\")) {c2 as uid}}",
   "mutations": [
     {
       "delete": [
@@ -2799,8 +2802,8 @@ func TestUpsertMultiValueJson(t *testing.T) {
 	require.NoError(t, err)
 	result = QueryResult{}
 	require.NoError(t, json.Unmarshal(mr.data, &result))
-	require.Equal(t, 2, len(result.Queries["user1"]))
-	require.Equal(t, 2, len(result.Queries["user2"]))
+	require.Equal(t, 2, len(result.Queries["u1"]))
+	require.Equal(t, 2, len(result.Queries["u2"]))
 }
 
 func TestValVarWithBlankNode(t *testing.T) {
@@ -2865,7 +2868,7 @@ upsert {
 
 // This test may fail sometimes because ACL token
 // can get expired while the mutations is running.
-func upsertTooBigTest(t *testing.T) {
+func upsertTooBigTest(t *testing.T) { //nolint:unused
 	require.NoError(t, dropAll())
 
 	for i := 0; i < 1e6+1; {
@@ -2909,4 +2912,56 @@ upsert {
 }`
 	_, _, err = queryWithTs(queryInp{body: q2, typ: "application/dql"})
 	require.NoError(t, err)
+}
+
+func TestLargeStringIndex(t *testing.T) {
+	require.NoError(t, dropAll())
+
+	// Exact Index
+	require.NoError(t, alterSchemaWithRetry(`name_exact: string @index(exact) .`))
+	bigval := strings.Repeat("biggest value", 7000)
+	mu := fmt.Sprintf(`{ set { <0x01> <name_exact> "%v" . } }`, bigval)
+	require.Contains(t, runMutation(mu).Error(), "value in the mutation is too large for the index")
+
+	// Term Index
+	require.NoError(t, alterSchemaWithRetry(`name_term: string @index(term) .`))
+	bigval = strings.Repeat("biggestvalue", 7000)
+	mu = fmt.Sprintf(`{ set { <0x01> <name_term> "%v" . } }`, bigval)
+	require.Contains(t, runMutation(mu).Error(), "value in the mutation is too large for the index")
+	// while the value is large, term index is fine
+	bigval = strings.Repeat("biggestvalue", 3000)
+	mu = fmt.Sprintf(`{ set { <0x01> <name_term> "%v %v" . } }`, bigval, bigval)
+	require.NoError(t, runMutation(mu))
+
+	// FullText Index
+	require.NoError(t, alterSchemaWithRetry(`name_fulltext: string @index(fulltext) .`))
+	bigval = strings.Repeat("biggestvalue", 7000)
+	mu = fmt.Sprintf(`{ set { <0x01> <name_fulltext> "%v" . } }`, bigval)
+	require.Contains(t, runMutation(mu).Error(), "value in the mutation is too large for the index")
+	// while the value is large, fulltext index is fine
+	bigval = strings.Repeat("biggestvalue", 3000)
+	mu = fmt.Sprintf(`{ set { <0x01> <name_fulltext> "%v %v" . } }`, bigval, bigval)
+	require.NoError(t, runMutation(mu))
+
+	// Trigram Index
+	require.NoError(t, alterSchemaWithRetry(`name_trigram: string @index(trigram) .`))
+	bigval = strings.Repeat("biggestvalue", 7000)
+	mu = fmt.Sprintf(`{ set { <0x01> <name_trigram> "%v" . } }`, bigval)
+	require.NoError(t, runMutation(mu))
+
+	// Large Predicate
+	bigpred := strings.Repeat("large-predicate", 2000)
+	require.NoError(t, alterSchemaWithRetry(fmt.Sprintf(`%v: string @index(exact) .`, bigpred)))
+	bigval = strings.Repeat("biggestvalue", 3000)
+	mu = fmt.Sprintf(`{ set { <0x01> <%v> "%v" . } }`, bigpred, bigval)
+	require.Contains(t, runMutation(mu).Error(), "value in the mutation is too large for the index")
+
+	// name_term has index term. Now, if we create an exact index, that will fail.
+	// This is because one of the value has small terms but the whole value is bigger
+	// than the limit. In such a case, indexing will fail and the schema should not change.
+	require.NoError(t, alterSchemaWithRetry(`name_term: string @index(exact) .`))
+	dqlSchema, err := runGraphqlQuery(`schema{}`)
+	require.NoError(t, err)
+	require.Contains(t, dqlSchema,
+		`{"predicate":"name_term","type":"string","index":true,"tokenizer":["term"]}`)
 }

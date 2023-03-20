@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,10 +23,11 @@ import (
 	"sort"
 	"unsafe"
 
+	"github.com/dgryski/go-groupvarint"
+
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
-	"github.com/dgryski/go-groupvarint"
 )
 
 type seekPos int
@@ -111,7 +112,7 @@ func (e *Encoder) packBlock() {
 	e.pack.Blocks = append(e.pack.Blocks, block)
 }
 
-var tagEncoder string = "enc"
+var tagEncoder = "enc"
 
 // Add takes an uid and adds it to the list of UIDs to be encoded.
 func (e *Encoder) Add(uid uint64) {

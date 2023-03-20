@@ -1,18 +1,18 @@
 package version
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dgraph-io/dgraph/testutil"
 )
 
 // Test `dgraph version` with an empty config file.
 func TestDgraphVersion(t *testing.T) {
-	tmpPath, err := ioutil.TempDir("", "test.tmp-")
+	tmpPath, err := os.MkdirTemp("", "test.tmp-")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpPath)
 

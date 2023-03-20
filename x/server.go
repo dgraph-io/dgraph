@@ -10,9 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
 	"github.com/soheilhy/cmux"
+
+	"github.com/dgraph-io/ristretto/z"
 )
 
 var (
@@ -45,10 +46,7 @@ func startServers(m cmux.CMux, tlsConf *tls.Config) {
 		// health endpoint will always be available over http.
 		// This is necessary for orchestration. It needs to be worked for
 		// monitoring tools which operate without authentication.
-		if strings.HasPrefix(path, "/health") {
-			return true
-		}
-		return false
+		return strings.HasPrefix(path, "/health")
 	})
 	go startListen(httpRule)
 

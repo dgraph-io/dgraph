@@ -1,5 +1,7 @@
+//go:build integration
+
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,11 +21,10 @@ package bulk
 import (
 	"os"
 	"path/filepath"
+	"testing"
 
 	"github.com/dgraph-io/dgraph/systest/21million/common"
 	"github.com/dgraph-io/dgraph/testutil"
-
-	"testing"
 )
 
 func TestQueries(t *testing.T) {
@@ -55,7 +56,7 @@ func TestMain(m *testing.M) {
 }
 
 func cleanupAndExit(exitCode int) {
-	if testutil.StopAlphasAndDetectRace("./alpha.yml") {
+	if testutil.StopAlphasAndDetectRace([]string{"alpha1"}) {
 		// if there is race fail the test
 		exitCode = 1
 	}

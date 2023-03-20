@@ -1,5 +1,7 @@
+//go:build integration
+
 /*
- * Copyright 2017-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +25,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"math"
 	"net/http"
 	"os"
@@ -36,9 +38,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/v210/protos/api"
-
 	"github.com/dgraph-io/dgraph/chunker"
-	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/dql"
 	"github.com/dgraph-io/dgraph/lex"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -111,7 +112,7 @@ func populateGraphExport(t *testing.T) {
 	processEdge := func(edge string, set bool) {
 		nq, err := chunker.ParseRDF(edge, l)
 		require.NoError(t, err)
-		rnq := gql.NQuad{NQuad: &nq}
+		rnq := dql.NQuad{NQuad: &nq}
 		err = facets.SortAndValidate(rnq.Facets)
 		require.NoError(t, err)
 		e, err := rnq.ToEdgeUsing(idMap)
@@ -203,7 +204,8 @@ func checkExportSchema(t *testing.T, schemaFileList []string) {
 	r, err := gzip.NewReader(f)
 	require.NoError(t, err)
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, err = buf.ReadFrom(r)
+	require.NoError(t, err)
 
 	result, err := schema.Parse(buf.String())
 	require.NoError(t, err)
@@ -227,7 +229,8 @@ func checkExportGqlSchema(t *testing.T, gqlSchemaFiles []string) {
 	r, err := gzip.NewReader(f)
 	require.NoError(t, err)
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, err = buf.ReadFrom(r)
+	require.NoError(t, err)
 	expected := []x.ExportedGQLSchema{{Namespace: x.GalaxyNamespace, Schema: gqlSchema}}
 	b, err := json.Marshal(expected)
 	require.NoError(t, err)
@@ -242,7 +245,7 @@ func TestExportRdf(t *testing.T) {
 		[0x2] name: string @index(exact) .
 		`)
 
-	bdir, err := ioutil.TempDir("", "export")
+	bdir, err := os.MkdirTemp("", "export")
 	require.NoError(t, err)
 	defer os.RemoveAll(bdir)
 
@@ -344,7 +347,7 @@ func TestExportJson(t *testing.T) {
 	initTestExport(t, `name: string @index(exact) .
 				 [0x2] name: string @index(exact) .`)
 
-	bdir, err := ioutil.TempDir("", "export")
+	bdir, err := os.MkdirTemp("", "export")
 	require.NoError(t, err)
 	defer os.RemoveAll(bdir)
 
@@ -385,7 +388,7 @@ func TestExportJson(t *testing.T) {
 		{"uid":"0x9","namespace":"0x2","name":"ns2"}
 	]
 	`
-	gotJson, err := ioutil.ReadAll(r)
+	gotJson, err := io.ReadAll(r)
 	require.NoError(t, err)
 	var expected interface{}
 	err = json.Unmarshal([]byte(wantJson), &expected)
@@ -403,11 +406,12 @@ func TestExportJson(t *testing.T) {
 const exportRequest = `mutation export($format: String!) {
 	export(input: {format: $format}) {
 		response { code }
+		taskId
 	}
 }`
 
 func TestExportFormat(t *testing.T) {
-	tmpdir, err := ioutil.TempDir("", "export")
+	tmpdir, err := os.MkdirTemp("", "export")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpdir)
 
@@ -428,6 +432,8 @@ func TestExportFormat(t *testing.T) {
 	var data interface{}
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
 	require.Equal(t, "Success", testutil.JsonGet(data, "data", "export", "response", "code").(string))
+	taskId := testutil.JsonGet(data, "data", "export", "taskId").(string)
+	testutil.WaitForTask(t, taskId, false, testutil.SockAddrHttp)
 
 	params.Variables["format"] = "rdf"
 	b, err = json.Marshal(params)
@@ -444,7 +450,7 @@ func TestExportFormat(t *testing.T) {
 	require.NoError(t, err)
 
 	defer resp.Body.Close()
-	b, err = ioutil.ReadAll(resp.Body)
+	b, err = io.ReadAll(resp.Body)
 	require.NoError(t, err)
 
 	var result *testutil.GraphQLResponse

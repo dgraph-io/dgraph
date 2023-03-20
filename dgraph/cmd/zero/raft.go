@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,13 +25,9 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
-	"github.com/dgraph-io/dgraph/conn"
-	"github.com/dgraph-io/dgraph/ee/audit"
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/ristretto/z"
 	farm "github.com/dgryski/go-farm"
 	"github.com/golang/glog"
 	"github.com/google/uuid"
@@ -41,11 +37,19 @@ import (
 	ostats "go.opencensus.io/stats"
 	"go.opencensus.io/tag"
 	otrace "go.opencensus.io/trace"
+
+	"github.com/dgraph-io/dgraph/conn"
+	"github.com/dgraph-io/dgraph/ee/audit"
+	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 const (
 	raftDefaults = "idx=1; learner=false;"
 )
+
+var proposalKey uint64
 
 type node struct {
 	*conn.Node
@@ -80,8 +84,19 @@ func (n *node) AmLeader() bool {
 	return time.Since(n.lastQuorum) <= 5*time.Second
 }
 
+// {2 bytes Node ID} {4 bytes for random} {2 bytes zero}
+func (n *node) initProposalKey(id uint64) error {
+	x.AssertTrue(id != 0)
+	var err error
+	proposalKey, err = x.ProposalKey(n.Id)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (n *node) uniqueKey() uint64 {
-	return uint64(n.Id)<<32 | uint64(n.Rand.Uint32())
+	return atomic.AddUint64(&proposalKey, 1)
 }
 
 var errInternalRetry = errors.New("Retry Raft proposal internally")
@@ -625,6 +640,7 @@ func (n *node) checkForCIDInEntries() (bool, error) {
 }
 
 func (n *node) initAndStartNode() error {
+	x.Check(n.initProposalKey(n.Id))
 	_, restart, err := n.PastLife()
 	x.Check(err)
 

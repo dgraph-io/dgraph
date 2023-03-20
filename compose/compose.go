@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,6 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"math"
 	"os"
 	"os/user"
@@ -106,7 +105,6 @@ type options struct {
 	MemLimit       string
 	ExposePorts    bool
 	Encryption     bool
-	LudicrousMode  bool
 	SnapshotAfter  string
 	ContainerNames bool
 	AlphaVolumes   []string
@@ -246,7 +244,7 @@ func getZero(idx int, raft string) service {
 		svc.Command += fmt.Sprintf(" --vmodule=%s", opts.Vmodule)
 	}
 	if idx == 1 {
-		svc.Command += fmt.Sprintf(" --bindall")
+		svc.Command += " --bindall"
 	} else {
 		svc.Command += fmt.Sprintf(" --peer=%s:%d", name(basename, 1), basePort)
 	}
@@ -308,9 +306,6 @@ func getAlpha(idx int, raft string) service {
 	svc.Command += fmt.Sprintf(" --my=%s:%d", svc.name, internalPort)
 	svc.Command += fmt.Sprintf(" --zero=%s", zerosOpt)
 	svc.Command += fmt.Sprintf(" --logtostderr -v=%d", opts.Verbosity)
-	if opts.LudicrousMode {
-		svc.Command += ` --ludicrous "enabled=true;"`
-	}
 
 	if opts.SnapshotAfter != "" {
 		raft = fmt.Sprintf("%s; %s", raft, opts.SnapshotAfter)
@@ -586,8 +581,6 @@ func main() {
 		"comma-separated list of pattern=N settings for file-filtered logging")
 	cmd.PersistentFlags().BoolVar(&opts.Encryption, "encryption", false,
 		"enable encryption-at-rest feature.")
-	cmd.PersistentFlags().BoolVar(&opts.LudicrousMode, "ludicrous", false,
-		"enable zeros and alphas in ludicrous mode.")
 	cmd.PersistentFlags().StringVar(&opts.SnapshotAfter, "snapshot_after", "",
 		"create a new Raft snapshot after this many number of Raft entries.")
 	cmd.PersistentFlags().StringVar(&opts.AlphaFlags, "extra_alpha_flags", "",
@@ -721,14 +714,14 @@ func main() {
 	}
 
 	if opts.Acl {
-		err = ioutil.WriteFile("acl-secret", []byte("12345678901234567890123456789012"), 0644)
+		err = os.WriteFile("acl-secret", []byte("12345678901234567890123456789012"), 0644)
 		x.Check2(fmt.Fprintf(os.Stdout, "Writing file: %s\n", "acl-secret"))
 		if err != nil {
 			fatal(errors.Errorf("unable to write file: %v", err))
 		}
 	}
 	if opts.Encryption {
-		err = ioutil.WriteFile("enc-secret", []byte("12345678901234567890123456789012"), 0644)
+		err = os.WriteFile("enc-secret", []byte("12345678901234567890123456789012"), 0644)
 		x.Check2(fmt.Fprintf(os.Stdout, "Writing file: %s\n", "enc-secret"))
 		if err != nil {
 			fatal(errors.Errorf("unable to write file: %v", err))
@@ -740,15 +733,15 @@ func main() {
 
 	doc := fmt.Sprintf("# Auto-generated with: %v\n#\n", os.Args)
 	if opts.UserOwnership {
-		doc += fmt.Sprint("# NOTE: Env var UID must be exported by the shell\n#\n")
+		doc += "# NOTE: Env var UID must be exported by the shell\n#\n"
 	}
-	doc += fmt.Sprintf("%s", yml)
+	doc += string(yml)
 	if opts.OutFile == "-" {
 		x.Check2(fmt.Printf("%s", doc))
 	} else {
 		fmt.Printf("Options: %+v\n", opts)
 		fmt.Printf("Writing file: %s\n", opts.OutFile)
-		err = ioutil.WriteFile(opts.OutFile, []byte(doc), 0644)
+		err = os.WriteFile(opts.OutFile, []byte(doc), 0644)
 		if err != nil {
 			fatal(errors.Errorf("unable to write file: %v", err))
 		}

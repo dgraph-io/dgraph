@@ -1,5 +1,7 @@
+//go:build integration
+
 /*
- *    Copyright 2022 Dgraph Labs, Inc. and Contributors
+ *    Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,16 +16,18 @@
  * limitations under the License.
  */
 
+//nolint:lll
 package auth
 
 import (
 	"encoding/json"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 )
 
 func (p *Project) delete(t *testing.T, user, role string) {

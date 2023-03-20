@@ -1,13 +1,14 @@
+//go:build !oss
 // +build !oss
 
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Dgraph Community License (the "License"); you
  * may not use this file except in compliance with the License. You
  * may obtain a copy of the License at
  *
- *     https://github.com/dgraph-io/dgraph/blob/master/licenses/DCL.txt
+ *     https://github.com/dgraph-io/dgraph/blob/main/licenses/DCL.txt
  */
 
 package enc
@@ -17,16 +18,17 @@ import (
 	"crypto/cipher"
 	"io"
 
-	"github.com/dgraph-io/badger/v3/y"
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
+
+	"github.com/dgraph-io/badger/v4/y"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 // EeBuild indicates if this is a Enterprise build.
 var EeBuild = true
 
 // GetWriter wraps a crypto StreamWriter using the input key on the input Writer.
-func GetWriter(key x.SensitiveByteSlice, w io.Writer) (io.Writer, error) {
+func GetWriter(key x.Sensitive, w io.Writer) (io.Writer, error) {
 	// No encryption, return the input writer as is.
 	if key == nil {
 		return w, nil
@@ -49,7 +51,7 @@ func GetWriter(key x.SensitiveByteSlice, w io.Writer) (io.Writer, error) {
 }
 
 // GetReader wraps a crypto StreamReader using the input key on the input Reader.
-func GetReader(key x.SensitiveByteSlice, r io.Reader) (io.Reader, error) {
+func GetReader(key x.Sensitive, r io.Reader) (io.Reader, error) {
 	// No encryption, return input reader as is.
 	if key == nil {
 		return r, nil

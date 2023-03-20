@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"hash/crc64"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -41,7 +40,7 @@ func CompareJSONMaps(t *testing.T, wantMap, gotMap map[string]interface{}) bool 
 	return DiffJSONMaps(t, wantMap, gotMap, "", false)
 }
 
-//EqualJSON compares two JSON objects for equality.
+// EqualJSON compares two JSON objects for equality.
 func EqualJSON(t *testing.T, want, got string, savepath string, quiet bool) bool {
 	wantMap := UnmarshalJSON(t, want)
 	gotMap := UnmarshalJSON(t, got)
@@ -111,14 +110,14 @@ func sdiffJSON(wantBuf, gotBuf []byte, savepath string, quiet bool) string {
 		wantFile, _ = os.Create(savepath + ".expected.json")
 		gotFile, _ = os.Create(savepath + ".received.json")
 	} else {
-		wantFile, _ = ioutil.TempFile("", "testutil.expected.json.*")
+		wantFile, _ = os.CreateTemp("", "testutil.expected.json.*")
 		defer os.RemoveAll(wantFile.Name())
-		gotFile, _ = ioutil.TempFile("", "testutil.expected.json.*")
+		gotFile, _ = os.CreateTemp("", "testutil.expected.json.*")
 		defer os.RemoveAll(gotFile.Name())
 	}
 
-	_ = ioutil.WriteFile(wantFile.Name(), wantBuf, 0600)
-	_ = ioutil.WriteFile(gotFile.Name(), gotBuf, 0600)
+	_ = os.WriteFile(wantFile.Name(), wantBuf, 0600)
+	_ = os.WriteFile(gotFile.Name(), gotBuf, 0600)
 
 	// don't do diff when one side is missing
 	if len(gotBuf) == 0 {
