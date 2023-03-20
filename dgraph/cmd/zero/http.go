@@ -25,7 +25,6 @@ import (
 	"time"
 	"encoding/json"
 
-	"github.com/pkg/errors"
 	"github.com/gogo/protobuf/jsonpb"
 	"github.com/golang/glog"
 
@@ -235,15 +234,12 @@ func (st *state) getState(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) zeroHealth(ctx context.Context, all bool) (*api.Response, error) {
+func (s *Server) zeroHealth(ctx context.Context) (*api.Response, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
 
-	var healthAll []pb.HealthInfo
-
-	// Append self.
-	healthAll = append(healthAll, pb.HealthInfo{
+	healthAll := []pb.HealthInfo{pb.HealthInfo{
 		Instance:    "zero",
 		Address:     x.WorkerConfig.MyAddr,
 		Status:      "healthy",
@@ -251,13 +247,9 @@ func (s *Server) zeroHealth(ctx context.Context, all bool) (*api.Response, error
 		Version:     x.Version(),
 		Uptime:      int64(time.Since(x.WorkerConfig.StartTime) / time.Second),
 		LastEcho:    time.Now().Unix(),
-	})
+	}}
 
-	var err error
-	var jsonOut []byte
-	if jsonOut, err = json.Marshal(healthAll); err != nil {
-		return nil, errors.Errorf("Unable to Marshal. Err %v", err)
-	}
+	jsonOut, _ := json.Marshal(healthAll)
 	return &api.Response{Json: jsonOut}, nil
 }
 
@@ -274,14 +266,10 @@ func (st *state) pingResponse(w http.ResponseWriter, r *http.Request) {
 	}
 	if ok {
 		var resp *api.Response
-		if resp, err = (st.zero).zeroHealth(context.Background(), false); err != nil {
+		if resp, err = (st.zero).zeroHealth(r.Context()); err != nil {
 			x.SetStatus(w, x.Error, err.Error())
 			return
 		}       
-		if resp == nil {
-			x.SetStatus(w, x.ErrorNoData, "No health information available.")
-			return
-		} 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(resp.Json)
