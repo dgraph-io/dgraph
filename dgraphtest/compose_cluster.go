@@ -17,15 +17,22 @@
 package dgraphtest
 
 import (
+	"github.com/pkg/errors"
+
+	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgraph/testutil"
 )
 
 type ComposeCluster struct{}
 
-func NewComposeCluster() ComposeCluster {
-	return ComposeCluster{}
+func NewComposeCluster() *ComposeCluster {
+	return &ComposeCluster{}
 }
 
-func (c ComposeCluster) AssignUids(num uint64) error {
+func (c *ComposeCluster) AssignUids(num uint64) error {
 	return testutil.AssignUids(num)
+}
+
+func (c *ComposeCluster) Client() (*dgo.Dgraph, error) {
+	return nil, errors.New("not implemented")
 }

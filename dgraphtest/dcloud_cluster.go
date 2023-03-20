@@ -23,6 +23,7 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 
@@ -38,22 +39,22 @@ type DCloudCluster struct {
 	client *dgo.Dgraph
 }
 
-func NewDCloudCluster() (DCloudCluster, error) {
+func NewDCloudCluster() (*DCloudCluster, error) {
 	url := os.Getenv("TEST_DGRAPH_CLOUD_CLUSTER_URL")
 	token := os.Getenv("TEST_DGRAPH_CLOUD_CLUSTER_TOKEN")
 	if url == "" || token == "" {
-		return DCloudCluster{}, errors.New("cloud cluster params needed in env")
+		return nil, errors.New("cloud cluster params needed in env")
 	}
 
 	done := false
 	conn, err := dgo.DialCloud(url, token)
 	if err != nil {
-		return DCloudCluster{}, errors.Wrap(err, "error creating dgraph client")
+		return nil, errors.Wrap(err, "error creating dgraph client")
 	}
 	defer func() {
 		if !done {
 			if err := conn.Close(); err != nil {
-				log(nil, "error closing connection: %v", err)
+				glog.Warningf("error closing connection: %v", err)
 			}
 		}
 	}()
@@ -62,11 +63,11 @@ func NewDCloudCluster() (DCloudCluster, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 	defer cancel()
 	if err := client.Login(ctx, defaultUser, defaultPassowrd); err != nil {
-		return DCloudCluster{}, errors.Wrap(err, "error during login")
+		return nil, errors.Wrap(err, "error during login")
 	}
 
 	done = true
-	return DCloudCluster{
+	return &DCloudCluster{
 		url:    url,
 		token:  token,
 		conn:   conn,
@@ -74,19 +75,19 @@ func NewDCloudCluster() (DCloudCluster, error) {
 	}, nil
 }
 
-func (c DCloudCluster) Cleanup() {
+func (c *DCloudCluster) Cleanup() {
 	if err := c.conn.Close(); err != nil {
-		log(nil, "error closing connection: %v", err)
+		glog.Warningf("error closing connection: %v", err)
 	}
 }
 
-func (c DCloudCluster) Client() *dgo.Dgraph {
-	return c.client
+func (c *DCloudCluster) Client() (*dgo.Dgraph, error) {
+	return c.client, nil
 }
 
 // AssignUids moves the max assigned UIDs by the given number.
 // Note that we this performs dropall after moving the max assigned.
-func (c DCloudCluster) AssignUids(num uint64) error {
+func (c *DCloudCluster) AssignUids(num uint64) error {
 	// in Dgraph cloud, we can't talk to zero. Therefore, what we instead do
 	// is keep doing mutations until the cluster has assigned those many new UIDs
 
@@ -101,7 +102,7 @@ func (c DCloudCluster) AssignUids(num uint64) error {
 
 	var prev uint64
 	for i := uint64(0); i < num; {
-		log(nil, "performing mutation for AssignUID: assigned %v UIDs", i)
+		glog.Infof("performing mutation for AssignUID: assigned %v UIDs", i)
 		mu := &api.Mutation{SetNquads: genData(), CommitNow: true}
 
 		ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
