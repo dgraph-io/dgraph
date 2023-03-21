@@ -105,7 +105,7 @@ func TestDecrypt(t *testing.T) {
 			check(t, err)
 		case 540 <= i:
 			// at this point the output file will be empty
-			file.Truncate(sz - int64(i))
+			check(t, file.Truncate(sz-int64(i)))
 			// verify that decrypt does not panic
 			check(t, decrypt(file, outfile, block, sz))
 			check(t, outfile.Truncate(0))
