@@ -470,7 +470,7 @@ func isParent(ancestor, descendant string) (bool, error) {
 func ShouldSkipTest(t *testing.T, testCommit, clusterVersion string) error {
 	isParentCommit, err := isParent(testCommit, clusterVersion)
 	if err != nil {
-		t.Fatalf(err.Error())
+		t.Fatal(err)
 	}
 	if isParentCommit {
 		t.Skipf("test is valid for commits greater than [%v]", testCommit)
