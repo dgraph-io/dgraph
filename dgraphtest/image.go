@@ -80,7 +80,7 @@ func checkoutGitRepo(repo *git.Repository, hash *plumbing.Hash) error {
 	if err != nil {
 		return errors.Wrap(err, "error while getting git repo work tree")
 	}
-	if err = worktree.Checkout(&git.CheckoutOptions{Hash: *hash}); err != nil {
+	if err := worktree.Checkout(&git.CheckoutOptions{Hash: *hash}); err != nil {
 		return errors.Wrap(err, fmt.Sprintf("error while checking out git repo with hash [%v]", hash.String()))
 	}
 	return nil

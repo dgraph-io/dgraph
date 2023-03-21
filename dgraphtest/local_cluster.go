@@ -43,7 +43,7 @@ import (
 )
 
 var (
-	requestTimeout = 60 * time.Second
+	requestTimeout = 90 * time.Second
 	stopTimeout    = time.Minute
 )
 
@@ -68,7 +68,6 @@ type LocalCluster struct {
 func NewLocalCluster(conf ClusterConfig) (*LocalCluster, error) {
 	c := &LocalCluster{conf: conf}
 	if err := c.init(); err != nil {
-		glog.Infof(err.Error())
 		c.Cleanup()
 		return nil, err
 	}
@@ -438,43 +437,43 @@ func (c *LocalCluster) AssignUids(num uint64) error {
 	return nil
 }
 
-// CompareCommits compare given commit with current cluster's commit and return
-// true if cluster's commit is ancestor of given commit else return false
-func CompareCommits(shaToBeCompare, baseSha string) (bool, error) {
+// isParent checks whether ancestor is the ancestor commit of the given descendant commit.
+func isParent(ancestor, descendant string) (bool, error) {
 	repo, err := git.PlainOpen(repoDir)
 	if err != nil {
-		return false, errors.Wrap(err, "error while opening git repo")
+		return false, errors.Wrap(err, "error opening git repo")
 	}
-	hash, err := repo.ResolveRevision(plumbing.Revision(shaToBeCompare))
+	ancestorHash, err := repo.ResolveRevision(plumbing.Revision(ancestor))
 	if err != nil {
-		return false, errors.Wrap(err, "error while getting commit hash")
+		return false, errors.Wrapf(err, "error while getting reference of [%v]", ancestor)
 	}
-	commitToBeCompare, err := repo.CommitObject(*hash)
+	ancestorCommit, err := repo.CommitObject(*ancestorHash)
 	if err != nil {
-		return false, errors.Wrap(err, fmt.Sprintf("error while getting commit object of hash [%v]", hash))
+		return false, errors.Wrapf(err, "error finding commit object [%v]", ancestor)
 	}
-	hash, err = repo.ResolveRevision(plumbing.Revision(baseSha))
+	descendantHash, err := repo.ResolveRevision(plumbing.Revision(descendant))
 	if err != nil {
 		return false, err
 	}
-	baseCommit, err := repo.CommitObject(*hash)
+	descendantCommit, err := repo.CommitObject(*descendantHash)
 	if err != nil {
-		return false, errors.Wrap(err, fmt.Sprintf("error while getting commit object of hash [%v]", hash))
+		return false, errors.Wrapf(err, "error finding commit object [%v]", descendant)
 	}
-	isParentCommit, err := baseCommit.IsAncestor(commitToBeCompare)
+	isParentCommit, err := descendantCommit.IsAncestor(ancestorCommit)
 	if err != nil {
-		return false, errors.Wrap(err, "error while comparing commits")
+		return false, errors.Wrapf(err, "unable to compare commit [%v] to commit [%v]",
+			descendantCommit.Hash, ancestorCommit.Hash)
 	}
 	return isParentCommit, nil
 }
 
 func (c *LocalCluster) SkipTest(t *testing.T, commit string) error {
-	isParentCommit, err := CompareCommits(commit, c.conf.version)
+	isParentCommit, err := isParent(commit, c.conf.version)
 	if err != nil {
-		return err
+		t.Fatalf(err.Error())
 	}
 	if isParentCommit {
-		t.Skip("skipping this test")
+		t.Skipf("test is valid for %v > %v", commit, c.conf.version)
 	}
 	return nil
 }

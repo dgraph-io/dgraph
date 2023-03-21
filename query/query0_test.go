@@ -3515,9 +3515,7 @@ func TestMatchingWithPagination(t *testing.T) {
 }
 
 func TestInvalidRegex(t *testing.T) {
-	if err := dc.SkipTest(t, "e0cc0450b88593b7496c0947aea016fc6457cb61"); err != nil {
-		panic(err)
-	}
+	dc.SkipTest(t, "e0cc0450b88593b7496c0947aea016fc6457cb61")
 	testCases := []struct {
 		regex  string
 		errStr string
