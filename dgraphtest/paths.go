@@ -24,10 +24,8 @@ import (
 )
 
 var (
-	// repoDir to store cloned repository of dgraph
-	repoDir string
-	// binDir to store multiple binary versions
-	binDir        string
+	repoDir       string // repoDir to store cloned repository of dgraph
+	binDir        string // binDir to store multiple binary versions
 	encKeyPath    string
 	aclSecretPath string
 )

@@ -34,6 +34,7 @@ import (
 type DCloudCluster struct {
 	url   string
 	token string
+	acl   bool
 
 	conn   *grpc.ClientConn
 	client *dgo.Dgraph
@@ -46,43 +47,62 @@ func NewDCloudCluster() (*DCloudCluster, error) {
 		return nil, errors.New("cloud cluster params needed in env")
 	}
 
-	done := false
-	conn, err := dgo.DialCloud(url, token)
-	if err != nil {
-		return nil, errors.Wrap(err, "error creating dgraph client")
-	}
-	defer func() {
-		if !done {
-			if err := conn.Close(); err != nil {
-				glog.Warningf("error closing connection: %v", err)
-			}
+	// We assume ACLs are enabled by default
+	aclStr := os.Getenv("TEST_DGRAPH_CLOUD_ACL")
+	acl := true
+	if aclStr != "" {
+		var err error
+		acl, err = strconv.ParseBool(aclStr)
+		if err != nil {
+			return nil, errors.Wrap(err, "error parsing env var TEST_DGRAPH_CLOUD_ACL")
 		}
-	}()
-
-	client := dgo.NewDgraphClient(api.NewDgraphClient(conn))
-	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
-	defer cancel()
-	if err := client.Login(ctx, defaultUser, defaultPassowrd); err != nil {
-		return nil, errors.Wrap(err, "error during login")
 	}
 
-	done = true
-	return &DCloudCluster{
-		url:    url,
-		token:  token,
-		conn:   conn,
-		client: client,
-	}, nil
+	c := &DCloudCluster{url: url, token: token, acl: acl}
+	if err := c.init(); err != nil {
+		c.Cleanup()
+		return nil, err
+	}
+	return c, nil
+}
+
+func (c *DCloudCluster) init() error {
+	conn, err := dgo.DialCloud(c.url, c.token)
+	if err != nil {
+		return errors.Wrap(err, "error creating dgraph client")
+	}
+	c.conn = conn
+	c.client = dgo.NewDgraphClient(api.NewDgraphClient(conn))
+
+	if c.acl {
+		ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+		defer cancel()
+		if err := c.client.Login(ctx, defaultUser, defaultPassowrd); err != nil {
+			return errors.Wrap(err, "error during login")
+		}
+	}
+
+	return nil
 }
 
 func (c *DCloudCluster) Cleanup() {
-	if err := c.conn.Close(); err != nil {
-		glog.Warningf("error closing connection: %v", err)
+	if c.conn != nil {
+		if err := c.conn.Close(); err != nil {
+			glog.Warningf("error closing connection: %v", err)
+		}
 	}
 }
 
 func (c *DCloudCluster) Client() (*dgo.Dgraph, error) {
 	return c.client, nil
+}
+
+func (c *DCloudCluster) AdminPost(body []byte) ([]byte, error) {
+	return nil, errNotImplemented
+}
+
+func (c *DCloudCluster) AlphasHealth() ([]string, error) {
+	return nil, errNotImplemented
 }
 
 // AssignUids moves the max assigned UIDs by the given number.

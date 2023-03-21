@@ -17,8 +17,6 @@
 package dgraphtest
 
 import (
-	"github.com/pkg/errors"
-
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgraph/testutil"
 )
@@ -29,10 +27,18 @@ func NewComposeCluster() *ComposeCluster {
 	return &ComposeCluster{}
 }
 
-func (c *ComposeCluster) AssignUids(num uint64) error {
-	return testutil.AssignUids(num)
+func (c *ComposeCluster) Client() (*dgo.Dgraph, error) {
+	return nil, errNotImplemented
 }
 
-func (c *ComposeCluster) Client() (*dgo.Dgraph, error) {
-	return nil, errors.New("not implemented")
+func (c *ComposeCluster) AdminPost(body []byte) ([]byte, error) {
+	return nil, errNotImplemented
+}
+
+func (c *ComposeCluster) AlphasHealth() ([]string, error) {
+	return nil, errNotImplemented
+}
+
+func (c *ComposeCluster) AssignUids(num uint64) error {
+	return testutil.AssignUids(num)
 }
