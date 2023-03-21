@@ -58,7 +58,7 @@ func TestZeroAudit(t *testing.T) {
 		}
 	}
 
-	verifyLogs(t, fmt.Sprintf("audit_dir/za/zero_audit_0_%s.log", nId), msgs)
+	testutil.VerifyLogs(t, fmt.Sprintf("audit_dir/za/zero_audit_0_%s.log", nId), msgs)
 }
 func TestAlphaAudit(t *testing.T) {
 	state, err := testutil.GetState()
@@ -118,30 +118,5 @@ input: {destination: \"/Users/sankalanparajuli/work/backup\"}) {\n    response {
 			}
 		}
 	}
-	verifyLogs(t, fmt.Sprintf("audit_dir/aa/alpha_audit_1_%s.log", nId), msgs)
-}
-
-func verifyLogs(t *testing.T, path string, cmds []string) {
-	abs, err := filepath.Abs(path)
-	require.NoError(t, err)
-	f, err := os.Open(abs)
-	require.NoError(t, err)
-
-	type log struct {
-		Msg string `json:"endpoint"`
-	}
-	logMap := make(map[string]bool)
-
-	fileScanner := bufio.NewScanner(f)
-	for fileScanner.Scan() {
-		bytes := fileScanner.Bytes()
-		l := new(log)
-		_ = json.Unmarshal(bytes, l)
-		logMap[l.Msg] = true
-	}
-	for _, m := range cmds {
-		if !logMap[m] {
-			t.Fatalf("audit logs not present for command %s", m)
-		}
-	}
+	testutil.VerifyLogs(t, fmt.Sprintf("audit_dir/aa/alpha_audit_1_%s.log", nId), msgs)
 }

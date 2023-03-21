@@ -17,12 +17,9 @@
 package audit_encrypted
 
 import (
-	"bufio"
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -74,7 +71,7 @@ func TestZeroAuditEncrypted(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	verifyLogs(t, fmt.Sprintf("audit_dir/za/zero_audit_0_%s.log", nId), msgs)
+	testutil.VerifyLogs(t, fmt.Sprintf("audit_dir/za/zero_audit_0_%s.log", nId), msgs)
 }
 
 func TestAlphaAuditEncrypted(t *testing.T) {
@@ -154,7 +151,7 @@ input: {destination: \"/Users/sankalanparajuli/work/backup\"}) {\n    response {
 		t.Fatal(err)
 	}
 
-	verifyLogs(t, fmt.Sprintf("audit_dir/aa/alpha_audit_1_%s.log", nId), msgs)
+	testutil.VerifyLogs(t, fmt.Sprintf("audit_dir/aa/alpha_audit_1_%s.log", nId), msgs)
 }
 
 // deprecated logs generated with dgraph v22.0.2
@@ -191,7 +188,7 @@ func TestZeroAuditDecryptDeprecated(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	verifyLogs(t, "audit_dir_deprecated/za/zero_audit_0_1.log", msgs)
+	testutil.VerifyLogs(t, "audit_dir_deprecated/za/zero_audit_0_1.log", msgs)
 
 }
 
@@ -230,31 +227,6 @@ func TestAlphaAuditDecryptDeprecated(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	verifyLogs(t, "audit_dir_deprecated/aa/alpha_audit_1_1.log", msgs)
+	testutil.VerifyLogs(t, "audit_dir_deprecated/aa/alpha_audit_1_1.log", msgs)
 
-}
-
-func verifyLogs(t *testing.T, path string, cmds []string) {
-	abs, err := filepath.Abs(path)
-	require.Nil(t, err)
-	f, err := os.Open(abs)
-	require.Nil(t, err)
-
-	type log struct {
-		Msg string `json:"endpoint"`
-	}
-	logMap := make(map[string]bool)
-
-	fileScanner := bufio.NewScanner(f)
-	for fileScanner.Scan() {
-		bytes := fileScanner.Bytes()
-		l := new(log)
-		_ = json.Unmarshal(bytes, l)
-		logMap[l.Msg] = true
-	}
-	for _, m := range cmds {
-		if !logMap[m] {
-			t.Fatalf("audit logs not present for command %s", m)
-		}
-	}
 }
