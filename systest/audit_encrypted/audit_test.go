@@ -25,7 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/dgraph-io/dgraph/testutil/audit"
+	"github.com/dgraph-io/dgraph/testutil/testaudit"
 )
 
 func TestZeroAuditEncrypted(t *testing.T) {
@@ -72,7 +72,7 @@ func TestZeroAuditEncrypted(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	audit.VerifyLogs(t, fmt.Sprintf("audit_dir/za/zero_audit_0_%s.log", nId), msgs)
+	testaudit.VerifyLogs(t, fmt.Sprintf("audit_dir/za/zero_audit_0_%s.log", nId), msgs)
 }
 
 func TestAlphaAuditEncrypted(t *testing.T) {
@@ -152,7 +152,7 @@ input: {destination: \"/Users/sankalanparajuli/work/backup\"}) {\n    response {
 		t.Fatal(err)
 	}
 
-	audit.VerifyLogs(t, fmt.Sprintf("audit_dir/aa/alpha_audit_1_%s.log", nId), msgs)
+	testaudit.VerifyLogs(t, fmt.Sprintf("audit_dir/aa/alpha_audit_1_%s.log", nId), msgs)
 }
 
 // deprecated logs generated with dgraph v22.0.2
@@ -189,7 +189,7 @@ func TestZeroAuditDecryptDeprecated(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	audit.VerifyLogs(t, "audit_dir_deprecated/za/zero_audit_0_1.log", msgs)
+	testaudit.VerifyLogs(t, "audit_dir_deprecated/za/zero_audit_0_1.log", msgs)
 
 }
 
@@ -228,6 +228,6 @@ func TestAlphaAuditDecryptDeprecated(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	audit.VerifyLogs(t, "audit_dir_deprecated/aa/alpha_audit_1_1.log", msgs)
+	testaudit.VerifyLogs(t, "audit_dir_deprecated/aa/alpha_audit_1_1.log", msgs)
 
 }

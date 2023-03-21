@@ -1,4 +1,4 @@
-package audit
+package testaudit
 
 import (
 	"bufio"

@@ -30,6 +30,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgraph/testutil/testaudit"
 )
 
 func TestZeroAudit(t *testing.T) {
@@ -58,7 +59,7 @@ func TestZeroAudit(t *testing.T) {
 		}
 	}
 
-	testutil.VerifyLogs(t, fmt.Sprintf("audit_dir/za/zero_audit_0_%s.log", nId), msgs)
+	testaudit.VerifyLogs(t, fmt.Sprintf("audit_dir/za/zero_audit_0_%s.log", nId), msgs)
 }
 func TestAlphaAudit(t *testing.T) {
 	state, err := testutil.GetState()
@@ -118,5 +119,5 @@ input: {destination: \"/Users/sankalanparajuli/work/backup\"}) {\n    response {
 			}
 		}
 	}
-	testutil.VerifyLogs(t, fmt.Sprintf("audit_dir/aa/alpha_audit_1_%s.log", nId), msgs)
+	testaudit.VerifyLogs(t, fmt.Sprintf("audit_dir/aa/alpha_audit_1_%s.log", nId), msgs)
 }

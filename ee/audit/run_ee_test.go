@@ -21,7 +21,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/testutil/audit"
+	"github.com/dgraph-io/dgraph/testutil/testaudit"
 )
 
 func check(t *testing.T, err error) {
@@ -84,20 +84,20 @@ func TestDecrypt(t *testing.T) {
 		switch {
 		case i == 0:
 			decrypt(file, outfile, block, sz)
-			audit.VerifyLogs(t, decryptedPath, zeroCmd)
+			testaudit.VerifyLogs(t, decryptedPath, zeroCmd)
 			// clear output file
 			outfile.Truncate(0)
 			outfile.Seek(0, 0)
 		case 5 <= i && i <= 275:
 			file.Truncate(sz - int64(i))
 			decrypt(file, outfile, block, sz)
-			audit.VerifyLogs(t, decryptedPath, zeroCmd[0:1])
+			testaudit.VerifyLogs(t, decryptedPath, zeroCmd[0:1])
 			outfile.Truncate(0)
 			outfile.Seek(0, 0)
 		case 280 <= i && i <= 535:
 			file.Truncate(sz - int64(i))
 			decrypt(file, outfile, block, sz)
-			audit.VerifyLogs(t, decryptedPath, zeroCmd[0:0])
+			testaudit.VerifyLogs(t, decryptedPath, zeroCmd[0:0])
 			outfile.Truncate(0)
 			outfile.Seek(0, 0)
 		case 540 <= i:
