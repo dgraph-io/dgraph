@@ -83,29 +83,29 @@ func TestDecrypt(t *testing.T) {
 	for i := 0; i <= int(sz); i = i + 5 {
 		switch {
 		case i == 0:
-			decrypt(file, outfile, block, sz)
+			check(t, decrypt(file, outfile, block, sz))
 			testaudit.VerifyLogs(t, decryptedPath, zeroCmd)
 			// clear output file
-			outfile.Truncate(0)
+			check(t, outfile.Truncate(0))
 			outfile.Seek(0, 0)
 		case 5 <= i && i <= 275:
 			file.Truncate(sz - int64(i))
-			decrypt(file, outfile, block, sz)
+			check(t, decrypt(file, outfile, block, sz))
 			testaudit.VerifyLogs(t, decryptedPath, zeroCmd[0:1])
-			outfile.Truncate(0)
+			check(t, outfile.Truncate(0))
 			outfile.Seek(0, 0)
 		case 280 <= i && i <= 535:
 			file.Truncate(sz - int64(i))
-			decrypt(file, outfile, block, sz)
+			check(t, decrypt(file, outfile, block, sz))
 			testaudit.VerifyLogs(t, decryptedPath, zeroCmd[0:0])
-			outfile.Truncate(0)
+			check(t, outfile.Truncate(0))
 			outfile.Seek(0, 0)
 		case 540 <= i:
 			// at this point the output file will be empty
 			file.Truncate(sz - int64(i))
 			// verify that decrypt does not panic
-			decrypt(file, outfile, block, sz)
-			outfile.Truncate(0)
+			check(t, decrypt(file, outfile, block, sz))
+			check(t, outfile.Truncate(0))
 			outfile.Seek(0, 0)
 		}
 
