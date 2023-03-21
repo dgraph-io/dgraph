@@ -17,15 +17,11 @@
 package audit
 
 import (
-	"bufio"
 	"crypto/aes"
-	"encoding/json"
-	"fmt"
 	"os"
-	"path/filepath"
 	"testing"
 
-	"github.com/stretchr/testify/require"
+	"github.com/dgraph-io/dgraph/testutil/audit"
 )
 
 func check(t *testing.T, err error) {
@@ -88,20 +84,20 @@ func TestDecrypt(t *testing.T) {
 		switch {
 		case i == 0:
 			decrypt(file, outfile, block, sz)
-			verifyLogs(t, decryptedPath, zeroCmd)
+			audit.VerifyLogs(t, decryptedPath, zeroCmd)
 			// clear output file
 			outfile.Truncate(0)
 			outfile.Seek(0, 0)
 		case 5 <= i && i <= 275:
 			file.Truncate(sz - int64(i))
 			decrypt(file, outfile, block, sz)
-			verifyLogs(t, decryptedPath, zeroCmd[0:1])
+			audit.VerifyLogs(t, decryptedPath, zeroCmd[0:1])
 			outfile.Truncate(0)
 			outfile.Seek(0, 0)
 		case 280 <= i && i <= 535:
 			file.Truncate(sz - int64(i))
 			decrypt(file, outfile, block, sz)
-			verifyLogs(t, decryptedPath, zeroCmd[0:0])
+			audit.VerifyLogs(t, decryptedPath, zeroCmd[0:0])
 			outfile.Truncate(0)
 			outfile.Seek(0, 0)
 		case 540 <= i:
@@ -113,31 +109,5 @@ func TestDecrypt(t *testing.T) {
 			outfile.Seek(0, 0)
 		}
 
-	}
-}
-
-func verifyLogs(t *testing.T, path string, cmds []string) {
-	abs, err := filepath.Abs(path)
-	require.Nil(t, err)
-	f, err := os.Open(abs)
-	require.Nil(t, err)
-
-	type log struct {
-		Msg string `json:"endpoint"`
-	}
-	logMap := make(map[string]bool)
-
-	fileScanner := bufio.NewScanner(f)
-	for fileScanner.Scan() {
-		bytes := fileScanner.Bytes()
-		l := new(log)
-		_ = json.Unmarshal(bytes, l)
-		logMap[l.Msg] = true
-	}
-	for _, m := range cmds {
-		if !logMap[m] {
-			fmt.Println("failed here")
-			t.Fatalf("audit logs not present for command %s", m)
-		}
 	}
 }
