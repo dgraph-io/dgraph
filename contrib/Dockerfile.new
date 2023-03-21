@@ -1,0 +1,11 @@
+FROM ubuntu:20.04
+
+RUN mkdir /dgraph
+WORKDIR /dgraph
+
+COPY . ./
+
+RUN make dgraph
+
+# docker build -f contrib/Dockerfile.new -t dgraph/dgraph:test .
+# docker run -d dgraph/dgraph:test sleep infinity
