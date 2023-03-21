@@ -17,13 +17,11 @@
 package dgraphtest
 
 import (
-	"testing"
-
 	"github.com/dgraph-io/dgo/v210"
 )
 
 type Cluster interface {
 	AssignUids(num uint64) error
 	Client() (*dgo.Dgraph, error)
-	SkipTest(t *testing.T, commit string) error
+	GetVersion() string
 }

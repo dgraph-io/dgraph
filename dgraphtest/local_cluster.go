@@ -462,18 +462,22 @@ func isParent(ancestor, descendant string) (bool, error) {
 	isParentCommit, err := descendantCommit.IsAncestor(ancestorCommit)
 	if err != nil {
 		return false, errors.Wrapf(err, "unable to compare commit [%v] to commit [%v]",
-			descendantCommit.Hash, ancestorCommit.Hash)
+			descendant, ancestor)
 	}
 	return isParentCommit, nil
 }
 
-func (c *LocalCluster) SkipTest(t *testing.T, commit string) error {
-	isParentCommit, err := isParent(commit, c.conf.version)
+func ShouldSkipTest(t *testing.T, testCommit, clusterVersion string) error {
+	isParentCommit, err := isParent(testCommit, clusterVersion)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
 	if isParentCommit {
-		t.Skipf("test is valid for %v > %v", commit, c.conf.version)
+		t.Skipf("test is valid for commits greater than [%v]", testCommit)
 	}
 	return nil
+}
+
+func (c *LocalCluster) GetVersion() string {
+	return c.conf.version
 }

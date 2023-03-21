@@ -3515,7 +3515,7 @@ func TestMatchingWithPagination(t *testing.T) {
 }
 
 func TestInvalidRegex(t *testing.T) {
-	dc.SkipTest(t, "e0cc0450b88593b7496c0947aea016fc6457cb61")
+	dgraphtest.ShouldSkipTest(t, "e0cc0450b88593b7496c0947aea016fc6457cb61", dc.GetVersion())
 	testCases := []struct {
 		regex  string
 		errStr string
