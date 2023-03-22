@@ -113,14 +113,13 @@ func run() error {
 		return errors.Wrap(err, "could not decrypt audit log")
 	}
 
-	glog.Infof("Decryption of Audit file %s is Done. Decrypted file is %s",
+	glog.Infof("decryption of audit file %s is done: decrypted file is %s",
 		decryptCmd.Conf.GetString("in"),
 		decryptCmd.Conf.GetString("out"))
 	return nil
 }
 
 func decrypt(file io.ReaderAt, outfile io.Writer, block cipher.Block, sz int64) error {
-
 	// decrypt header in audit log to verify encryption key
 	// [16]byte IV + [4]byte len(x.VerificationText) + [11]byte x.VerificationText
 	decryptHeader := func() ([]byte, int64, error) {
@@ -199,16 +198,16 @@ func decrypt(file io.ReaderAt, outfile io.Writer, block cipher.Block, sz int64) 
 			}
 			n, err := file.ReadAt(iv, iterator)
 			if err != nil {
-				glog.Warningf("received %v while decrypting audit log\n", err)
-				glog.Warningf("read %v bytes, expected %v\n", n, len(iv))
+				glog.Warningf("received %v while decrypting audit log", err)
+				glog.Warningf("read %v bytes, expected %v", n, len(iv))
 				break
 			}
 			iterator = iterator + 16
 			length := make([]byte, 4)
 			n, err = file.ReadAt(length, iterator)
 			if err != nil {
-				glog.Warningf("received %v while decrypting audit log\n", err)
-				glog.Warningf("read %v bytes, expected %v\n", n, len(length))
+				glog.Warningf("received %v while decrypting audit log", err)
+				glog.Warningf("read %v bytes, expected %v", n, len(length))
 				break
 			}
 			iterator = iterator + int64(n)
@@ -216,8 +215,8 @@ func decrypt(file io.ReaderAt, outfile io.Writer, block cipher.Block, sz int64) 
 			content := make([]byte, binary.BigEndian.Uint32(length))
 			n, err = file.ReadAt(content, iterator)
 			if err != nil {
-				glog.Warningf("received %v while decrypting audit log\n", err)
-				glog.Warningf("read %v bytes, expected %v\n", n, len(content))
+				glog.Warningf("received %v while decrypting audit log", err)
+				glog.Warningf("read %v bytes, expected %v", n, len(content))
 				break
 			}
 			iterator = iterator + int64(n)
@@ -226,8 +225,8 @@ func decrypt(file io.ReaderAt, outfile io.Writer, block cipher.Block, sz int64) 
 			stream.XORKeyStream(content, content)
 			n, err = outfile.Write(content)
 			if err != nil {
-				glog.Warningf("received %v while writing decrypted audit log\n", err)
-				glog.Warningf("wrote %v bytes, expected to write %v\n", n, len(content))
+				glog.Warningf("received %v while writing decrypted audit log", err)
+				glog.Warningf("wrote %v bytes, expected to write %v", n, len(content))
 				break
 			}
 		}
@@ -246,8 +245,8 @@ func decrypt(file io.ReaderAt, outfile io.Writer, block cipher.Block, sz int64) 
 			}
 			n, err := file.ReadAt(iv[12:], iterator)
 			if err != nil {
-				glog.Warningf("received %v while decrypting audit log\n", err)
-				glog.Warningf("read %v bytes, expected %v\n", n, len(iv[12:]))
+				glog.Warningf("received %v while decrypting audit log", err)
+				glog.Warningf("read %v bytes, expected %v", n, len(iv[12:]))
 				break
 			}
 			iterator = iterator + int64(n)
@@ -255,8 +254,8 @@ func decrypt(file io.ReaderAt, outfile io.Writer, block cipher.Block, sz int64) 
 			content := make([]byte, binary.BigEndian.Uint32(iv[12:]))
 			n, err = file.ReadAt(content, iterator)
 			if err != nil {
-				glog.Warningf("received %v while decrypting audit log\n", err)
-				glog.Warningf("read %v bytes, expected %v\n", n, len(content))
+				glog.Warningf("received %v while decrypting audit log", err)
+				glog.Warningf("read %v bytes, expected %v", n, len(content))
 				break
 			}
 			iterator = iterator + int64(n)
@@ -264,8 +263,8 @@ func decrypt(file io.ReaderAt, outfile io.Writer, block cipher.Block, sz int64) 
 			stream.XORKeyStream(content, content)
 			n, err = outfile.Write(content)
 			if err != nil {
-				glog.Warningf("received %v while writing decrypted audit log\n", err)
-				glog.Warningf("wrote %v bytes, expected to write %v\n", n, len(content))
+				glog.Warningf("received %v while writing decrypted audit log", err)
+				glog.Warningf("wrote %v bytes, expected to write %v", n, len(content))
 				break
 			}
 		}

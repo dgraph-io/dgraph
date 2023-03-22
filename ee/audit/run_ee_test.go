@@ -112,6 +112,5 @@ func TestDecrypt(t *testing.T) {
 			_, err := outfile.Seek(0, 0)
 			check(t, err)
 		}
-
 	}
 }
