@@ -267,17 +267,15 @@ func (st *state) pingResponse(w http.ResponseWriter, r *http.Request) {
 			}       
 			w.Header().Set("Content-Type", "application/json; charset=utf-8")
 			w.WriteHeader(http.StatusOK)
-			_, err = w.Write(resp.Json)
-			if err != nil {
-				x.SetStatus(w, x.Error, err.Error())
+			if _, err := w.Write(resp.Json); err != nil {
+				glog.Warningf("Could not send error msg=%+v code=%+v due to http error %+v", err.Error(), x.Error, err)
 				return
 			}       
 		default:
 			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 			w.WriteHeader(http.StatusOK)
-			_, err := w.Write([]byte("OK"))
-			if err != nil {
-				x.SetStatus(w, x.Error, err.Error())
+			if _, err := w.Write([]byte("OK")); err != nil {
+				glog.Warningf("Could not send error msg=%+v code=%+v due to http error %+v", err.Error(), x.Error, err)
 				return
 			}       
 	}
