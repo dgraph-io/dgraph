@@ -1,4 +1,4 @@
-# This file is used to add the Dgraph binaries to Dgraph base image.
+# This file builds the dgraph binary and dgraph docker image.
 
 # This gets built as part of our CD pipeline. Must be run through Makefile.
 
@@ -9,23 +9,36 @@ WORKDIR /dgraph
 
 COPY . ./
 
-RUN make dgraph
-RUN mkdir bin
-RUN mv dgraph/dgraph bin
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    curl \
+    ca-certificates
 
-# ------------------------------------------------------------------------------
-#FROM ubuntu:20.04
-#EXPOSE 8071
+RUN GO_VERSION=$({ [ -f .go-version ] && cat .go-version; }) \
+    && curl -O -L "https://golang.org/dl/go${GO_VERSION}.linux-amd64.tar.gz" \
+    && tar -C /usr/local/ -xzf go${GO_VERSION}.linux-amd64.tar.gz \
+    && rm -f go${GO_VERSION}.linux-amd64.tar.gz
 
-#ARG PROXY_VERSION=924d15f
-#ENV PROXY_TAG=$PROXY_VERSION
+ENV PATH=$PATH:/usr/local/go/bin:/root/go/bin \
+    GOPATH=/root/go
 
-#COPY --from=build /go/src/app/config ./config
-#COPY --from=build /go/src/app/region/config ./region/config
-#COPY --from=build /go/src/app/schema.graphql schema.graphql
+# save time by caching this layer
+RUN cd dgraph && make jemalloc
 
-#COPY --from=build /go/src/app/cerebro /usr/local/bin/cerebro
-#CMD ["cerebro"]
+ARG BUILD
+ARG BUILD_CODENAME
+ARG BUILD_DATE
+ARG BUILD_BRANCH
+ARG BUILD_VERSION
+
+RUN BUILD=$BUILD \
+    BUILD_CODENAME=$BUILD_CODENAME \
+    BUILD_DATE=$BUILD_DATE \
+    BUILD_BRANCH=$BUILD_BRANCH \
+    BUILD_VERSION=$BUILD_VERSION \
+    make dgraph
+
+RUN mkdir bin && mv dgraph/dgraph bin
 
 # -------------------------------------------------------------------------------
 
@@ -52,8 +65,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     sysstat \
     && rm -rf /var/lib/apt/lists/*
 
-ADD linux /usr/local/bin
-COPY --from=build /dgraph/bin ./config
+COPY --from=build /dgraph/bin /usr/local/bin
 
 RUN mkdir /dgraph
 WORKDIR /dgraph
