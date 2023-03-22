@@ -23,14 +23,52 @@ type TestCases struct {
 	Resp  string `yaml:"resp"`
 }
 
+func BenchmarkLDBCAllQueries(b *testing.B) {
+	RunPerfTest(b, "name", func(cluster Cluster, b *testing.B) {
+
+		// Write benchmark here.
+		dg, err := cluster.Client()
+		if err != nil {
+			b.Fatalf("Error while getting a dgraph client: %v", err)
+		}
+
+		yfile, _ := os.ReadFile("../systest/ldbc/test_cases.yaml")
+
+		tc := make(map[string]TestCases)
+
+		err = yaml.Unmarshal(yfile, &tc)
+
+		if err != nil {
+			b.Fatalf("Error while greading test cases yaml: %v", err)
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+
+		for i := 0; i < b.N; i++ {
+			b.StartTimer()
+			for _, tt := range tc {
+				_, err := dg.NewTxn().Query(ctx, tt.Query)
+				require.NoError(b, err)
+				b.StopTimer()
+				// testutil.CompareJSON(b, tt.Resp, string(resp.Json))
+				if ctx.Err() == context.DeadlineExceeded {
+					b.Fatal("aborting test due to query timeout")
+				}
+			}
+		}
+		cancel()
+	})
+}
+
 func BenchmarkBulkoad(b *testing.B) {
-	// if runType == "GH_CI" {
-	// 	// No need for local setup; cluster has been setup by perf_framework.go
-	// 	fmt.Println("Executing perf tests on CI")
-	// } else {
-	// 	// Setup cluster locally
-	// 	fmt.Println("Executing perf tests locally")
-	// }
+	if runType == "GH_CI" {
+		// No need for local setup; cluster has been setup by perf_framework.go
+		fmt.Println("Executing perf tests on CI")
+	} else {
+		// Setup cluster locally
+		//
+		fmt.Println("Executing perf tests locally")
+	}
 
 	// resource.json
 
@@ -69,41 +107,9 @@ func BenchmarkBulkoad(b *testing.B) {
 
 }
 
-func BenchmarkLDBCAllQueries(b *testing.B) {
+// func BenchmarkLDBCAllQueries(b *testing.B) {
 
-	dg, err := testutil.DgraphClient(testutil.ContainerAddr("alpha1", 9080))
-	if err != nil {
-		b.Fatalf("Error while getting a dgraph client: %v", err)
-	}
-
-	yfile, _ := os.ReadFile("../systest/ldbc/test_cases.yaml")
-
-	tc := make(map[string]TestCases)
-
-	err = yaml.Unmarshal(yfile, &tc)
-
-	if err != nil {
-		b.Fatalf("Error while greading test cases yaml: %v", err)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-
-	for i := 0; i < b.N; i++ {
-		b.StartTimer()
-		for _, tt := range tc {
-			_, err := dg.NewTxn().Query(ctx, tt.Query)
-			require.NoError(b, err)
-			b.StopTimer()
-			// testutil.CompareJSON(b, tt.Resp, string(resp.Json))
-			if ctx.Err() == context.DeadlineExceeded {
-				b.Fatal("aborting test due to query timeout")
-			}
-		}
-
-	}
-	cancel()
-
-}
+// }
 
 func init() {
 	flag.StringVar(&runType, "runType", "", "Run Type")
