@@ -1427,7 +1427,7 @@ func TestQueryVarValOrderError(t *testing.T) {
 func TestQueryVarEmptyRootOrderError(t *testing.T) {
 	query := `
 		{
-			q(func: eq(name, "Alicey")) {
+			q(func: eq(name, "DNEinDB")) {
 				friend(orderdesc: id) {
 					name
 				}
