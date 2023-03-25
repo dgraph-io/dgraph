@@ -2843,10 +2843,6 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 				continue
 			}
 
-			fmt.Println("##################################################")
-			fmt.Printf("Executing: %d\n", idx)
-			fmt.Println("##################################################")
-
 			switch {
 			case sg.Params.Alias == "shortest":
 				// We allow only one shortest path block per query.
