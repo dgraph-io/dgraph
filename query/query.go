@@ -2363,7 +2363,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 	}
 
-	if sg.DestUIDs == nil || len(sg.DestUIDs.Uids) == 0 {
+	if (sg.DestUIDs == nil || len(sg.DestUIDs.Uids) == 0) && childErr == nil {
 		// Looks like we're done here. Be careful with nil srcUIDs!
 		if span != nil {
 			span.Annotatef(nil, "Zero uids for %q", sg.Attr)
@@ -2842,6 +2842,10 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 				errChan <- nil
 				continue
 			}
+
+			fmt.Println("##################################################")
+			fmt.Printf("Executing: %d\n", idx)
+			fmt.Println("##################################################")
 
 			switch {
 			case sg.Params.Alias == "shortest":
