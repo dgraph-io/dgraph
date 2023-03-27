@@ -37,7 +37,7 @@ jobs:
           #!/bin/bash
           # clean cache
           go clean -testcache
-      - name: Run Unit Tests
+      - name: Run Upgrade Tests
         run: |
           #!/bin/bash
           # go env settings
@@ -50,4 +50,3 @@ jobs:
           go clean -testcache
           # sleep
           sleep 5
-          
