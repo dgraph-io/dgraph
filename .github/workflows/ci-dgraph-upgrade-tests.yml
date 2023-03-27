@@ -1,4 +1,4 @@
-name: ci-dgraph-tests
+name: ci-dgraph-upgrade-tests
 on:
   push:
     branches:
@@ -16,7 +16,7 @@ on:
   schedule:
     - cron: "0 */2 * * *" # every 2hrs
 jobs:
-  dgraph-tests:
+  dgraph-upgrade-tests:
     if: github.event.pull_request.draft == false
     runs-on: [self-hosted, x64]
     steps:
@@ -30,32 +30,13 @@ jobs:
         uses: actions/setup-go@v3
         with:
           go-version: ${{ env.GOVERSION }}
-      - name: Set up Node
-        uses: actions/setup-node@v3
-        with:
-          node-version: 16
-      - name: Install protobuf-compiler
-        run: sudo apt-get install -y protobuf-compiler
-      - name: Check protobuf
-        run: |
-          cd ./protos
-          go mod tidy
-          make regenerate
-          git diff --exit-code -- .
       - name: Make Linux Build and Docker Image
         run: make docker-image
-      - name: Build Test Binary
-        run: |
-          #!/bin/bash
-          # build the test binary
-          cd t; go build .
       - name: Clean Up Environment
         run: |
           #!/bin/bash
           # clean cache
           go clean -testcache
-          # clean up docker containers before test execution
-          cd t; ./t -r
       - name: Run Unit Tests
         run: |
           #!/bin/bash
