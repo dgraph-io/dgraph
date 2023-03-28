@@ -1424,6 +1424,39 @@ func TestQueryVarValOrderError(t *testing.T) {
 	require.Contains(t, err.Error(), "Cannot sort by unknown attribute n")
 }
 
+func TestQueryVarEmptyRootOrderError(t *testing.T) {
+	query := `
+		{
+			q(func: eq(name, "DNEinDB")) {
+				friend(orderdesc: id) {
+					name
+				}
+			}
+		}
+	`
+	_, err := processQuery(context.Background(), t, query)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Cannot sort by unknown attribute id")
+}
+
+func TestQueryVarEmptyRootOrderChildQueryError(t *testing.T) {
+	query := `
+		{
+			var(func: eq(name, "DNEinDB")) {
+				friend(orderdesc: id) {
+					f as count(uid)
+				}
+			}
+			q(func: uid(f)){
+				name
+			}
+		}
+	`
+	_, err := processQuery(context.Background(), t, query)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Cannot sort by unknown attribute id")
+}
+
 func TestQueryVarValOrderDesc(t *testing.T) {
 	query := `
 		{
