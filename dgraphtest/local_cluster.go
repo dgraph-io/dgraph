@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -32,7 +33,6 @@ import (
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/volume"
 	docker "github.com/docker/docker/client"
-	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -208,46 +208,46 @@ func (c *LocalCluster) createContainer(dc dnode) (string, error) {
 }
 
 func (c *LocalCluster) Cleanup() {
-	glog.Infof("cleaning up cluster with prefix [%v]", c.conf.prefix)
+	log.Printf("[INFO] cleaning up cluster with prefix [%v]", c.conf.prefix)
 
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 	defer cancel()
 
 	for _, conn := range c.conns {
 		if err := conn.Close(); err != nil {
-			glog.Warningf("error closing connection: %v", err)
+			log.Printf("[WARNING] error closing connection: %v", err)
 		}
 	}
 
 	ro := types.ContainerRemoveOptions{RemoveVolumes: true, Force: true}
 	for _, aa := range c.alphas {
 		if err := c.dcli.ContainerRemove(ctx, aa.cid(), ro); err != nil {
-			glog.Warningf("error removing alpha [%v]: %v", aa.cname(), err)
+			log.Printf("[WARNING] error removing alpha [%v]: %v", aa.cname(), err)
 		}
 	}
 	for _, zo := range c.zeros {
 		if err := c.dcli.ContainerRemove(ctx, zo.cid(), ro); err != nil {
-			glog.Warningf("error removing zero [%v]: %v", zo.cname(), err)
+			log.Printf("[WARNING] error removing zero [%v]: %v", zo.cname(), err)
 		}
 	}
 	for _, vol := range c.conf.volumes {
 		volname := fmt.Sprintf(volNameFmt, c.conf.prefix, vol)
 		if err := c.dcli.VolumeRemove(ctx, volname, true); err != nil {
-			glog.Warningf("error removing volume [%v]: %v", vol, err)
+			log.Printf("[WARNING] error removing volume [%v]: %v", vol, err)
 		}
 	}
 	if c.net.id != "" {
 		if err := c.dcli.NetworkRemove(ctx, c.net.id); err != nil {
-			glog.Warningf("error removing network [%v]: %v", c.net.name, err)
+			log.Printf("[WARNING] error removing network [%v]: %v", c.net.name, err)
 		}
 	}
 	if err := os.RemoveAll(c.tempBinDir); err != nil {
-		glog.Warningf("error while removing temp bin dir: %v", err)
+		log.Printf("[WARNING] error while removing temp bin dir: %v", err)
 	}
 }
 
 func (c *LocalCluster) Start() error {
-	glog.Infof("starting cluster with prefix [%v]", c.conf.prefix)
+	log.Printf("[INFO] starting cluster with prefix [%v]", c.conf.prefix)
 	for i := 0; i < c.conf.numZeros; i++ {
 		if err := c.StartZero(i); err != nil {
 			return err
@@ -285,7 +285,7 @@ func (c *LocalCluster) startContainer(dc dnode) error {
 }
 
 func (c *LocalCluster) Stop() error {
-	glog.Infof("stopping cluster with prefix [%v]", c.conf.prefix)
+	log.Printf("[INFO] stopping cluster with prefix [%v]", c.conf.prefix)
 	for i := range c.alphas {
 		if err := c.StopAlpha(i); err != nil {
 			return err
@@ -323,7 +323,7 @@ func (c *LocalCluster) stopContainer(dc dnode) error {
 }
 
 func (c *LocalCluster) healthCheck() error {
-	glog.Infof("checking health of containers")
+	log.Printf("[INFO] checking health of containers")
 	for i := 0; i < c.conf.numZeros; i++ {
 		url, err := c.zeros[i].healthURL(c)
 		if err != nil {
@@ -351,12 +351,12 @@ func (c *LocalCluster) containerHealthCheck(url string) error {
 
 		req, err := http.NewRequest(http.MethodGet, url, nil)
 		if err != nil {
-			glog.Warningf("error building req for endpoint [%v], err: [%v]", url, err)
+			log.Printf("[WARNING] error building req for endpoint [%v], err: [%v]", url, err)
 			continue
 		}
 		body, err := doReq(req)
 		if err != nil {
-			glog.Warningf("error hitting health endpoint [%v], err: [%v]", url, err)
+			log.Printf("[WARNING] error hitting health endpoint [%v], err: [%v]", url, err)
 			continue
 		}
 		resp := string(body)
@@ -368,7 +368,12 @@ func (c *LocalCluster) containerHealthCheck(url string) error {
 
 		// For Alpha, we always run alpha with EE features enabled
 		if strings.Contains(resp, `"ee_features"`) {
-			if !c.conf.acl || strings.Contains(resp, `"acl"`) {
+			if c.conf.acl && strings.Contains(resp, `"acl"`) {
+				if _, err := c.Client(); err != nil {
+					return errors.Wrap(err, "error setting up a client")
+				}
+				return nil
+			} else if !c.conf.acl {
 				return nil
 			}
 		}
@@ -388,7 +393,7 @@ func doReq(req *http.Request) ([]byte, error) {
 	}
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
-			glog.Warningf("error closing response body: %v", err)
+			log.Printf("[WARNING] error closing response body: %v", err)
 		}
 	}()
 
@@ -441,13 +446,13 @@ func (c *LocalCluster) Upgrade(version string, strategy UpgradeStrategy) error {
 	// cleanup existing connections
 	for _, conn := range c.conns {
 		if err := conn.Close(); err != nil {
-			glog.Warningf("error closing connection: %v", err)
+			log.Printf("[WARNING] error closing connection: %v", err)
 		}
 	}
 	c.conns = c.conns[:0]
 	c.client = nil
 
-	glog.Infof("upgrading the cluster from [%v] to [%v] using [%v]", c.conf.version, version, strategy)
+	log.Printf("[INFO] upgrading the cluster from [%v] to [%v] using [%v]", c.conf.version, version, strategy)
 	switch strategy {
 	case BackupRestore:
 		if err := Backup(c, true, DefaultBackupDir); err != nil {
@@ -466,7 +471,11 @@ func (c *LocalCluster) Upgrade(version string, strategy UpgradeStrategy) error {
 		if err := c.Start(); err != nil {
 			return err
 		}
-		if err := Restore(c, DefaultBackupDir, "", 0, 1, encKeyMountPath); err != nil {
+		var encPath string
+		if c.conf.encryption {
+			encPath = encKeyMountPath
+		}
+		if err := Restore(c, DefaultBackupDir, "", 0, 1, encPath); err != nil {
 			return errors.Wrap(err, "error doing restore during upgrade")
 		}
 		if err := WaitForRestore(c); err != nil {
@@ -519,7 +528,7 @@ func (c *LocalCluster) Client() (*dgo.Dgraph, error) {
 			if err = client.Login(ctx, defaultUser, defaultPassowrd); err == nil {
 				break
 			}
-			glog.Warningf("error trying to login: %v", err)
+			log.Printf("[WARNING] error trying to login: %v", err)
 			time.Sleep(waitDurBeforeRetry)
 		}
 		if err != nil {

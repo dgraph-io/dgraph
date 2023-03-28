@@ -20,13 +20,13 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
-	"github.com/golang/glog"
 	"github.com/pkg/errors"
 )
 
@@ -48,7 +48,7 @@ func (c *LocalCluster) setupBinary() error {
 	defer cancel()
 	repo, err := git.PlainOpen(repoDir)
 	if err != nil && err == git.ErrRepositoryNotExists {
-		glog.Infof("cloning dgraph repo")
+		log.Printf("[INFO] cloning dgraph repo")
 		repo, err = git.PlainCloneContext(ctx, repoDir, false, &git.CloneOptions{URL: dgraphRepoUrl})
 		if err != nil {
 			return errors.Wrap(err, "error while cloning dgraph git repo")
@@ -87,7 +87,7 @@ func checkoutGitRepo(repo *git.Repository, hash *plumbing.Hash) error {
 }
 
 func buildDgraphBinary(dir, binaryDir, version string) error {
-	glog.Infof("building dgraph binary")
+	log.Printf("[INFO] building dgraph binary")
 
 	cmd := exec.Command("make", "dgraph")
 	cmd.Dir = filepath.Join(dir, "dgraph")

@@ -193,18 +193,37 @@ func WaitForTask(c Cluster, taskId string) error {
 }
 
 func Restore(c Cluster, backupPath string, backupId string, incrFrom, backupNum int, encKey string) error {
-	query := `mutation restore($location: String!, $backupId: String,
-			$incrFrom: Int, $backupNum: Int, $encKey: String) {
-		restore(input: {location: $location, backupId: $backupId, incrementalFrom: $incrFrom,
+	// incremental restore was introduced in commit 8b3712e93ed2435bea52d957f7b69976c6cfc55b
+	beforeIncrRestore, err := isParent("8b3712e93ed2435bea52d957f7b69976c6cfc55b", c.GetVersion())
+	if err != nil {
+		return errors.Wrapf(err, "error checking incremental restore support")
+	}
+	if !beforeIncrRestore && incrFrom != 0 {
+		return errors.New("incremental restore is not supported by the cluster")
+	}
+
+	var varPart, queryPart string
+	if !beforeIncrRestore {
+		varPart = "$incrFrom: Int, "
+		queryPart = " incrementalFrom: $incrFrom,"
+	}
+	query := fmt.Sprintf(`mutation restore($location: String!, $backupId: String,
+			%v$backupNum: Int, $encKey: String) {
+		restore(input: {location: $location, backupId: $backupId,%v
 				backupNum: $backupNum, encryptionKeyFile: $encKey}) {
 			code
 			message
 		}
-	}`
+	}`, varPart, queryPart)
+	vars := map[string]interface{}{"location": backupPath, "backupId": backupId,
+		"backupNum": backupNum, "encKey": encKey}
+	if !beforeIncrRestore {
+		vars["incrFrom"] = incrFrom
+	}
+
 	params := graphQLParams{
-		Query: query,
-		Variables: map[string]interface{}{"location": backupPath, "backupId": backupId,
-			"incrFrom": incrFrom, "backupNum": backupNum, "encKey": encKey},
+		Query:     query,
+		Variables: vars,
 	}
 	resp, err := RunAdminQuery(c, params)
 	if err != nil {

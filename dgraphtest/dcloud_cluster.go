@@ -20,10 +20,10 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"strconv"
 
-	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 
@@ -88,7 +88,7 @@ func (c *DCloudCluster) init() error {
 func (c *DCloudCluster) Cleanup() {
 	if c.conn != nil {
 		if err := c.conn.Close(); err != nil {
-			glog.Warningf("error closing connection: %v", err)
+			log.Printf("[WARNING] error closing connection: %v", err)
 		}
 	}
 }
@@ -122,7 +122,7 @@ func (c *DCloudCluster) AssignUids(num uint64) error {
 
 	var prev uint64
 	for i := uint64(0); i < num; {
-		glog.Infof("performing mutation for AssignUID: assigned %v UIDs", i)
+		log.Printf("[INFO] performing mutation for AssignUID: assigned %v UIDs", i)
 		mu := &api.Mutation{SetNquads: genData(), CommitNow: true}
 
 		ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
