@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"os"
 	"sync"
 	"testing"
 	"time"
@@ -62,10 +61,7 @@ func (n *Node) run(wg *sync.WaitGroup) {
 }
 
 func TestProposal(t *testing.T) {
-	dir, err := os.MkdirTemp("", "badger")
-	require.NoError(t, err)
-	defer os.RemoveAll(dir)
-
+	dir := t.TempDir()
 	store := raftwal.Init(dir)
 
 	rc := &pb.RaftContext{Id: 1}

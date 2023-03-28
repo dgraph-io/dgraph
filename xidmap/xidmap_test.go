@@ -5,7 +5,6 @@ package xidmap
 import (
 	"fmt"
 	"math/rand"
-	"os"
 	"runtime"
 	"strconv"
 	"sync"
@@ -24,10 +23,7 @@ import (
 
 // Opens a badger db and runs a a test on it.
 func withDB(t *testing.T, test func(db *badger.DB)) {
-	dir, err := os.MkdirTemp(".", "badger-test")
-	require.NoError(t, err)
-	defer os.RemoveAll(dir)
-
+	dir := t.TempDir()
 	opt := badger.LSMOnlyOptions(dir)
 	db, err := badger.Open(opt)
 	require.NoError(t, err)

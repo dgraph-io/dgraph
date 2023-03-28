@@ -652,15 +652,14 @@ func TestMain(m *testing.M) {
 	x.Init()
 
 	dir, err := os.MkdirTemp("", "storetest_")
-	x.Check(err)
+	x.Panic(err)
+	defer os.RemoveAll(dir)
+
 	kvOpt := badger.DefaultOptions(dir)
 	ps, err = badger.OpenManaged(kvOpt)
-	x.Check(err)
+	x.Panic(err)
+	defer ps.Close()
+
 	Init(ps)
-
-	r := m.Run()
-
-	ps.Close()
-	os.RemoveAll(dir)
-	os.Exit(r)
+	m.Run()
 }

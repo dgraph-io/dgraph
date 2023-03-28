@@ -17,7 +17,6 @@
 package worker
 
 import (
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -50,10 +49,7 @@ func getEntryForCommit(index, startTs, commitTs uint64) raftpb.Entry {
 }
 
 func TestCalculateSnapshot(t *testing.T) {
-	dir, err := os.MkdirTemp("", "raftwal")
-	require.NoError(t, err)
-	defer os.RemoveAll(dir)
-
+	dir := t.TempDir()
 	ds := raftwal.Init(dir)
 	defer ds.Close()
 

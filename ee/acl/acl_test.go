@@ -3623,5 +3623,5 @@ func TestDropAllShouldResetGuardiansAndGroot(t *testing.T) {
 func TestMain(m *testing.M) {
 	adminEndpoint = "http://" + testutil.SockAddrHttp + "/admin"
 	fmt.Printf("Using adminEndpoint for acl package: %s\n", adminEndpoint)
-	_ = m.Run()
+	m.Run()
 }

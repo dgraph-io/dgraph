@@ -1457,18 +1457,16 @@ func TestMain(m *testing.M) {
 	Config.CommitFraction = 0.10
 
 	dir, err := os.MkdirTemp("", "storetest_")
-	x.Check(err)
+	x.Panic(err)
+	defer os.RemoveAll(dir)
 
 	ps, err = badger.OpenManaged(badger.DefaultOptions(dir))
-	x.Check(err)
+	x.Panic(err)
 	// Not using posting list cache
 	Init(ps, 0)
 	schema.Init(ps)
 
-	r := m.Run()
-
-	os.RemoveAll(dir)
-	os.Exit(r)
+	m.Run()
 }
 
 func BenchmarkAddMutations(b *testing.B) {

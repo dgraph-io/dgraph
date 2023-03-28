@@ -21,7 +21,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"testing"
 
@@ -48,9 +47,7 @@ func TestLoaderXidmap(t *testing.T) {
 	require.NoError(t, err)
 	ctx := context.Background()
 	testutil.DropAll(t, dg)
-	tmpDir, err := os.MkdirTemp("", "loader_test")
-	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	data, err := filepath.Abs("testdata/first.rdf.gz")
 	require.NoError(t, err)

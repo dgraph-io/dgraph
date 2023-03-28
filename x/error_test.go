@@ -28,5 +28,5 @@ func TestMain(m *testing.M) {
 		fmt.Printf("error setting debug mode: %v\n", err)
 	}
 
-	_ = m.Run()
+	m.Run()
 }

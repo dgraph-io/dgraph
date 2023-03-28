@@ -27,13 +27,11 @@ import (
 
 func TestMain(m *testing.M) {
 	c, err := dgraphtest.NewDCloudCluster()
-	if err != nil {
-		panic(err)
-	}
+	x.Panic(err)
 	defer c.Cleanup()
 
 	client = c.Client()
 	dc = c
 	populateCluster()
-	os.Exit(m.Run())
+	m.Run()
 }
