@@ -19,7 +19,6 @@
 package query
 
 import (
-	"os"
 	"testing"
 
 	"github.com/dgraph-io/dgraph/dgraphtest"
@@ -32,8 +31,8 @@ func TestMain(m *testing.M) {
 
 	var err error
 	client, err = testutil.DgraphClientWithGroot(testutil.SockAddr)
-	x.CheckfNoTrace(err)
+	x.Panic(err)
 
 	populateCluster()
-	os.Exit(m.Run())
+	m.Run()
 }

@@ -245,10 +245,7 @@ func TestExportRdf(t *testing.T) {
 		[0x2] name: string @index(exact) .
 		`)
 
-	bdir, err := os.MkdirTemp("", "export")
-	require.NoError(t, err)
-	defer os.RemoveAll(bdir)
-
+	bdir := t.TempDir()
 	time.Sleep(1 * time.Second)
 
 	// We have 4 friend type edges. FP("friends")%10 = 2.
@@ -347,10 +344,7 @@ func TestExportJson(t *testing.T) {
 	initTestExport(t, `name: string @index(exact) .
 				 [0x2] name: string @index(exact) .`)
 
-	bdir, err := os.MkdirTemp("", "export")
-	require.NoError(t, err)
-	defer os.RemoveAll(bdir)
-
+	bdir := t.TempDir()
 	time.Sleep(1 * time.Second)
 
 	// We have 4 friend type edges. FP("friends")%10 = 2.
@@ -411,13 +405,8 @@ const exportRequest = `mutation export($format: String!) {
 }`
 
 func TestExportFormat(t *testing.T) {
-	tmpdir, err := os.MkdirTemp("", "export")
-	require.NoError(t, err)
-	defer os.RemoveAll(tmpdir)
-
 	adminUrl := "http://" + testutil.SockAddrHttp + "/admin"
-	err = testutil.CheckForGraphQLEndpointToReady(t)
-	require.NoError(t, err)
+	require.NoError(t, testutil.CheckForGraphQLEndpointToReady(t))
 
 	params := testutil.GraphQLParams{
 		Query:     exportRequest,

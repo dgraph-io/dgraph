@@ -712,5 +712,5 @@ func updateGQLSchemaConcurrent(t *testing.T, schema, authority string) bool {
 
 func TestMain(m *testing.M) {
 	x.Panic(common.CheckGraphQLStarted(common.GraphqlAdminURL))
-	_ = m.Run()
+	m.Run()
 }

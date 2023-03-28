@@ -1061,5 +1061,5 @@ func TestSubscriptionWithCustomDQL(t *testing.T) {
 
 func TestMain(m *testing.M) {
 	x.Panic(common.CheckGraphQLStarted(common.GraphqlAdminURL))
-	_ = m.Run()
+	m.Run()
 }

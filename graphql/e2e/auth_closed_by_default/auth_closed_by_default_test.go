@@ -203,5 +203,5 @@ func TestMain(m *testing.M) {
 	authSchema, err := testutil.AppendAuthInfo(schema, algo, "../auth/sample_public_key.pem", true)
 	x.Panic(err)
 	common.BootstrapServer(authSchema, data)
-	_ = m.Run()
+	m.Run()
 }

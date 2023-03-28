@@ -18,7 +18,6 @@ package edgraph
 
 import (
 	"context"
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -135,9 +134,7 @@ func TestValidateKeys(t *testing.T) {
 func TestParseSchemaFromAlterOperation(t *testing.T) {
 	md := metadata.New(map[string]string{"namespace": "123"})
 	ctx := metadata.NewIncomingContext(context.Background(), md)
-	dir, err := os.MkdirTemp("", "storetest_")
-	defer os.RemoveAll(dir)
-	x.Check(err)
+	dir := t.TempDir()
 	ps, err := badger.OpenManaged(badger.DefaultOptions(dir))
 	x.Check(err)
 	defer ps.Close()

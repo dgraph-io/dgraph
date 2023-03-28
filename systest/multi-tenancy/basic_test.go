@@ -307,12 +307,7 @@ type liveOpts struct {
 }
 
 func liveLoadData(t *testing.T, opts *liveOpts) error {
-	// Prepare directories.
-	dir, err := os.MkdirTemp("", "multi")
-	require.NoError(t, err)
-	defer func() {
-		os.RemoveAll(dir)
-	}()
+	dir := t.TempDir()
 	rdfFile := filepath.Join(dir, "rdfs.rdf")
 	require.NoError(t, os.WriteFile(rdfFile, []byte(opts.rdfs), 0644))
 	schemaFile := filepath.Join(dir, "schema.txt")
@@ -596,5 +591,5 @@ func TestNameSpaceLimitFlag(t *testing.T) {
 
 func TestMain(m *testing.M) {
 	fmt.Printf("Using adminEndpoint : %s for multi-tenancy test.\n", testutil.AdminUrl())
-	_ = m.Run()
+	m.Run()
 }

@@ -4019,7 +4019,7 @@ func TestParseRegexp6(t *testing.T) {
 }
 
 func TestMain(m *testing.M) {
-	_ = m.Run()
+	m.Run()
 }
 
 func TestCountAtRoot(t *testing.T) {

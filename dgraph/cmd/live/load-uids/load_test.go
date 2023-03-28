@@ -394,15 +394,15 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		log.Fatalf("Error while getting a dgraph client: %v", err)
 	}
-	x.Check(dg.Alter(
+	x.Panic(dg.Alter(
 		context.Background(), &api.Operation{DropAll: true}))
 
 	// Try to create any files in a dedicated temp directory that gets cleaned up
 	// instead of all over /tmp or the working directory.
 	tmpDir, err := os.MkdirTemp("", "test.tmp-")
-	x.Check(err)
-	x.Check(os.Chdir(tmpDir))
+	x.Panic(err)
+	x.Panic(os.Chdir(tmpDir))
 	defer os.RemoveAll(tmpDir)
 
-	_ = m.Run()
+	m.Run()
 }

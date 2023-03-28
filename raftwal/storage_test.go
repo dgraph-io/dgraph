@@ -48,10 +48,7 @@ import (
 )
 
 func TestStorageTerm(t *testing.T) {
-	dir, err := os.MkdirTemp("", "badger")
-	require.NoError(t, err)
-	defer os.RemoveAll(dir)
-
+	dir := t.TempDir()
 	ds := Init(dir)
 
 	ents := []raftpb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
@@ -96,10 +93,7 @@ func TestStorageTerm(t *testing.T) {
 }
 
 func TestStorageEntries(t *testing.T) {
-	dir, err := os.MkdirTemp("", "badger")
-	require.NoError(t, err)
-	defer os.RemoveAll(dir)
-
+	dir := t.TempDir()
 	ds := Init(dir)
 
 	ents := []raftpb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}, {Index: 6, Term: 6}}
@@ -144,10 +138,7 @@ func TestStorageEntries(t *testing.T) {
 }
 
 func TestStorageLastIndex(t *testing.T) {
-	dir, err := os.MkdirTemp("", "badger")
-	require.NoError(t, err)
-	defer os.RemoveAll(dir)
-
+	dir := t.TempDir()
 	ds := Init(dir)
 
 	ents := []raftpb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
@@ -172,10 +163,7 @@ func TestStorageLastIndex(t *testing.T) {
 }
 
 func TestStorageFirstIndex(t *testing.T) {
-	dir, err := os.MkdirTemp("", "badger")
-	require.NoError(t, err)
-	defer os.RemoveAll(dir)
-
+	dir := t.TempDir()
 	ds := Init(dir)
 
 	ents := []raftpb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
@@ -187,11 +175,9 @@ func TestStorageFirstIndex(t *testing.T) {
 }
 
 func TestStorageCreateSnapshot(t *testing.T) {
-	dir, err := os.MkdirTemp("", "badger")
-	require.NoError(t, err)
-	defer os.RemoveAll(dir)
-
+	dir := t.TempDir()
 	ds := Init(dir)
+
 	ents := []raftpb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
 	cs := &raftpb.ConfState{Nodes: []uint64{1, 2, 3}}
 	data := []byte("data")
@@ -222,10 +208,7 @@ func TestStorageCreateSnapshot(t *testing.T) {
 }
 
 func TestStorageAppend(t *testing.T) {
-	dir, err := os.MkdirTemp("", "badger")
-	require.NoError(t, err)
-	defer os.RemoveAll(dir)
-
+	dir := t.TempDir()
 	ds := Init(dir)
 
 	ents := []raftpb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
@@ -284,8 +267,7 @@ func TestStorageAppend(t *testing.T) {
 }
 
 func TestMetaFile(t *testing.T) {
-	dir, err := os.MkdirTemp("", "badger-test")
-	require.NoError(t, err)
+	dir := t.TempDir()
 
 	mf, err := newMetaFile(dir)
 	require.NoError(t, err)
@@ -331,8 +313,7 @@ func TestMetaFile(t *testing.T) {
 }
 
 func TestEntryFile(t *testing.T) {
-	dir, err := os.MkdirTemp("", "raftwal")
-	require.NoError(t, err)
+	dir := t.TempDir()
 	el, err := openWal(dir)
 	require.NoError(t, err)
 	require.Equal(t, uint64(1), el.firstIndex())
@@ -351,8 +332,7 @@ func TestEntryFile(t *testing.T) {
 }
 
 func TestTruncateStorage(t *testing.T) {
-	dir, err := os.MkdirTemp("", "raftwal")
-	require.NoError(t, err)
+	dir := t.TempDir()
 	ds, err := InitEncrypted(dir, nil)
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
@@ -431,8 +411,8 @@ func TestTruncateStorage(t *testing.T) {
 func TestStorageOnlySnap(t *testing.T) {
 	test := func(t *testing.T, key []byte) {
 		x.WorkerConfig.EncryptionKey = key
-		dir, err := os.MkdirTemp("", "raftwal")
-		require.NoError(t, err)
+		dir := t.TempDir()
+
 		ds, err := InitEncrypted(dir, key)
 		require.NoError(t, err)
 		t.Logf("Creating dir: %s\n", dir)
@@ -466,8 +446,8 @@ func TestStorageOnlySnap(t *testing.T) {
 
 func TestStorageBig(t *testing.T) {
 	test := func(t *testing.T, key []byte) {
-		dir, err := os.MkdirTemp("", "raftwal")
-		require.NoError(t, err)
+		dir := t.TempDir()
+
 		ds, err := InitEncrypted(dir, key)
 		require.NoError(t, err)
 		defer os.RemoveAll(dir)

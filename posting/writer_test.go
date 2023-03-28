@@ -19,7 +19,6 @@ package posting
 import (
 	"fmt"
 	"math"
-	"os"
 	"sync"
 	"testing"
 
@@ -89,9 +88,7 @@ func BenchmarkWriter(b *testing.B) {
 
 	// Vanilla TxnWriter
 	b.Run("TxnWriter", func(b *testing.B) {
-		tmpIndexDir, err := os.MkdirTemp("", "dgraph")
-		require.NoError(b, err)
-		defer os.RemoveAll(tmpIndexDir)
+		tmpIndexDir := b.TempDir()
 
 		dbOpts.Dir = tmpIndexDir
 		dbOpts.ValueDir = tmpIndexDir
@@ -114,9 +111,7 @@ func BenchmarkWriter(b *testing.B) {
 	})
 	// Single threaded BatchWriter
 	b.Run("WriteBatch1", func(b *testing.B) {
-		tmpIndexDir, err := os.MkdirTemp("", "dgraph")
-		require.NoError(b, err)
-		defer os.RemoveAll(tmpIndexDir)
+		tmpIndexDir := b.TempDir()
 
 		dbOpts.Dir = tmpIndexDir
 		dbOpts.ValueDir = tmpIndexDir
@@ -137,9 +132,7 @@ func BenchmarkWriter(b *testing.B) {
 	})
 	// Multi threaded Batchwriter with thread contention in WriteBatch
 	b.Run("WriteBatchMultThreadDiffWB", func(b *testing.B) {
-		tmpIndexDir, err := os.MkdirTemp("", "dgraph")
-		require.NoError(b, err)
-		defer os.RemoveAll(tmpIndexDir)
+		tmpIndexDir := b.TempDir()
 
 		dbOpts.Dir = tmpIndexDir
 		dbOpts.ValueDir = tmpIndexDir
@@ -165,9 +158,7 @@ func BenchmarkWriter(b *testing.B) {
 	})
 	// Multi threaded Batchwriter with thread contention in SetEntry
 	b.Run("WriteBatchMultThreadSameWB", func(b *testing.B) {
-		tmpIndexDir, err := os.MkdirTemp("", "dgraph")
-		require.NoError(b, err)
-		defer os.RemoveAll(tmpIndexDir)
+		tmpIndexDir := b.TempDir()
 
 		dbOpts.Dir = tmpIndexDir
 		dbOpts.ValueDir = tmpIndexDir
@@ -193,9 +184,7 @@ func BenchmarkWriter(b *testing.B) {
 		}
 	})
 	b.Run("WriteBatchSingleThreadDiffWB", func(b *testing.B) {
-		tmpIndexDir, err := os.MkdirTemp("", "dgraph")
-		require.NoError(b, err)
-		defer os.RemoveAll(tmpIndexDir)
+		tmpIndexDir := b.TempDir()
 
 		dbOpts.Dir = tmpIndexDir
 		dbOpts.ValueDir = tmpIndexDir
@@ -215,9 +204,7 @@ func BenchmarkWriter(b *testing.B) {
 		}
 	})
 	b.Run("WriteBatchSingleThreadSameWB", func(b *testing.B) {
-		tmpIndexDir, err := os.MkdirTemp("", "dgraph")
-		require.NoError(b, err)
-		defer os.RemoveAll(tmpIndexDir)
+		tmpIndexDir := b.TempDir()
 
 		dbOpts.Dir = tmpIndexDir
 		dbOpts.ValueDir = tmpIndexDir

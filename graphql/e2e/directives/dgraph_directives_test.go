@@ -59,5 +59,5 @@ func TestMain(m *testing.M) {
 
 	common.BootstrapServer(schema, data)
 
-	_ = m.Run()
+	m.Run()
 }
