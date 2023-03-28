@@ -924,8 +924,7 @@ func TestGraphQLQueryInCustomHTTPConfig(t *testing.T) {
 
 			var vars map[string]interface{}
 			if tcase.GQLVariables != "" {
-				err = json.Unmarshal([]byte(tcase.GQLVariables), &vars)
-				require.NoError(t, err)
+				require.NoError(t, json.Unmarshal([]byte(tcase.GQLVariables), &vars))
 			}
 
 			op, err := sch.Operation(

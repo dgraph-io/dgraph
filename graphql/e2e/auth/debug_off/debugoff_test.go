@@ -75,11 +75,8 @@ func TestAddGQL(t *testing.T) {
 		}
 
 		common.RequireNoGQLErrors(t, gqlResponse)
-
-		err := json.Unmarshal([]byte(tcase.result), &expected)
-		require.NoError(t, err)
-		err = json.Unmarshal([]byte(gqlResponse.Data), &result)
-		require.NoError(t, err)
+		require.NoError(t, json.Unmarshal([]byte(tcase.result), &expected))
+		require.NoError(t, json.Unmarshal([]byte(gqlResponse.Data), &result))
 
 		opt := cmpopts.IgnoreFields(common.UserSecret{}, "Id")
 		if diff := cmp.Diff(expected, result, opt); diff != "" {

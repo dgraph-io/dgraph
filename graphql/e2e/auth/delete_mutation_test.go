@@ -179,8 +179,7 @@ func getComplexLog(t *testing.T, role string) ([]*ComplexLog, []string) {
 		QueryComplexLog []*ComplexLog
 	}
 	var complexLogs []*ComplexLog
-	err := json.Unmarshal(gqlResponse.Data, &result)
-	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(gqlResponse.Data, &result))
 
 	var keys []string
 	for _, i := range result.QueryComplexLog {

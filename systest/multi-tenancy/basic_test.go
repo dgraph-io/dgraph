@@ -276,17 +276,13 @@ func TestDeleteNamespace(t *testing.T) {
 		testutil.CompareJSON(t, expected, string(resp))
 	}
 
-	err = addData(x.GalaxyNamespace)
-	require.NoError(t, err)
+	require.NoError(t, addData(x.GalaxyNamespace))
 	check(x.GalaxyNamespace, `{"me": [{"name":"0"}]}`)
-	err = addData(ns)
-	require.NoError(t, err)
+	require.NoError(t, addData(ns))
 	check(ns, fmt.Sprintf(`{"me": [{"name":"%d"}]}`, ns))
 
 	require.NoError(t, testutil.DeleteNamespace(t, galaxyToken, ns))
-
-	err = addData(x.GalaxyNamespace)
-	require.NoError(t, err)
+	require.NoError(t, addData(x.GalaxyNamespace))
 	check(x.GalaxyNamespace, `{"me": [{"name":"0"}, {"name":"0"}]}`)
 	err = addData(ns)
 	require.Contains(t, err.Error(), "Key is using the banned prefix")

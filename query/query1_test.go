@@ -178,8 +178,7 @@ func TestXidInvalidJSON(t *testing.T) {
 		`{"data": {"me":[{"_xid_":"mich","alive":true,"friend":[{"name":"Rick Grimes"},{"_xid_":"g\"lenn","name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}}`,
 		js)
 	m := make(map[string]interface{})
-	err := json.Unmarshal([]byte(js), &m)
-	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal([]byte(js), &m))
 }
 
 func TestToJSONReverseNegativeFirst(t *testing.T) {

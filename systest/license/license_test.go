@@ -136,8 +136,7 @@ func TestEnterpriseLicense(t *testing.T) {
 		var enterpriseResponse responseStruct
 		responseBody, err := io.ReadAll(response.Body)
 		require.NoError(t, err)
-		err = json.Unmarshal(responseBody, &enterpriseResponse)
-		require.NoError(t, err)
+		require.NoError(t, json.Unmarshal(responseBody, &enterpriseResponse))
 
 		// Check if the license is applied
 		require.Equal(t, enterpriseResponse.Code, tt.code)
@@ -181,8 +180,7 @@ func assertLicenseNotEnabled(t *testing.T, user string) {
 	var stateResponse responseStruct
 	responseBody, err := io.ReadAll(response.Body)
 	require.NoError(t, err)
-	err = json.Unmarshal(responseBody, &stateResponse)
-	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(responseBody, &stateResponse))
 
 	require.Equal(t, stateResponse.License["user"], user)
 	require.Equal(t, stateResponse.License["enabled"], false)

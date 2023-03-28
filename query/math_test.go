@@ -224,9 +224,8 @@ func TestProcessBinary(t *testing.T) {
 		},
 	}
 	for _, tc := range tests {
-		t.Logf("Test %s", tc.in.Fn)
-		err := processBinary(tc.in)
-		require.NoError(t, err)
+		t.Logf("Test: %s", tc.in.Fn)
+		require.NoError(t, processBinary(tc.in))
 		require.EqualValues(t, tc.out, tc.in.Const)
 	}
 
@@ -429,8 +428,7 @@ func TestProcessUnary(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Logf("Test %s", tc.in.Fn)
-		err := processUnary(tc.in)
-		require.NoError(t, err)
+		require.NoError(t, processUnary(tc.in))
 		require.EqualValues(t, tc.out, tc.in.Const)
 	}
 
@@ -550,8 +548,7 @@ func TestProcessBinaryBoolean(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Logf("Test %s", tc.in.Fn)
-		err := processBinaryBoolean(tc.in)
-		require.NoError(t, err)
+		require.NoError(t, processBinaryBoolean(tc.in))
 		require.EqualValues(t, tc.out, tc.in.Val[0])
 	}
 }
@@ -581,11 +578,9 @@ func TestProcessTernary(t *testing.T) {
 		},
 	}
 	for _, tc := range tests {
-		t.Logf("Test %s", tc.in.Fn)
+		t.Logf("Test: %s", tc.in.Fn)
 		err := processTernary(tc.in)
 		require.NoError(t, err)
 		require.EqualValues(t, tc.out, tc.in.Val[0])
 	}
 }
-
-func TestEvalMathTree(t *testing.T) {}

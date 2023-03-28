@@ -17,14 +17,11 @@
 package upgrade
 
 import (
-	"fmt"
 	"reflect"
 	"testing"
-
-	"github.com/dgraph-io/dgo/v210/protos/api"
 )
 
-func Test_version_String(t *testing.T) {
+func TestVersion_String(t *testing.T) {
 	tests := []struct {
 		name    string
 		version *version
@@ -57,7 +54,7 @@ func Test_version_String(t *testing.T) {
 	}
 }
 
-func Test_version_Compare(t *testing.T) {
+func TestVersion_Compare(t *testing.T) {
 	v1 := &version{major: 20, minor: 3, patch: 1}
 	v2 := &version{major: 20, minor: 3, patch: 2}
 	v3 := &version{major: 20, minor: 7, patch: 0}
@@ -125,7 +122,7 @@ func Test_version_Compare(t *testing.T) {
 	}
 }
 
-func Test_parseVersionFromString(t *testing.T) {
+func TestParseVersionFromString(t *testing.T) {
 	tests := []struct {
 		name       string
 		versionStr string
@@ -166,20 +163,4 @@ func Test_parseVersionFromString(t *testing.T) {
 			}
 		})
 	}
-}
-
-func Test(t *testing.T) {
-	nq := &api.NQuad{
-		Subject:   "0x1",
-		Predicate: "dgraph.type",
-		ObjectValue: &api.Value{
-			Val: &api.Value_StrVal{StrVal: "Post"},
-		},
-	}
-	fmt.Println(nq)
-	fmt.Println(nq.String())
-	b, err := nq.Marshal()
-	fmt.Println(string(b))
-	fmt.Println(err)
-
 }

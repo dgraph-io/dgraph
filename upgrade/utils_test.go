@@ -24,7 +24,7 @@ import (
 	"github.com/dgraph-io/dgo/v210/protos/api"
 )
 
-func Test_getTypeSchemaString(t *testing.T) {
+func TestGetTypeSchemaString(t *testing.T) {
 	type args struct {
 		newTypeName   string
 		typeNode      *schemaTypeNode
@@ -78,7 +78,7 @@ func Test_getTypeSchemaString(t *testing.T) {
 	}
 }
 
-func Test_getTypeNquad(t *testing.T) {
+func TestGetTypeNquad(t *testing.T) {
 	uid := "0x1"
 	typeName := "Post"
 

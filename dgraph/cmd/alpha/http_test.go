@@ -330,8 +330,7 @@ func runWithRetriesForResp(method, contentType, url string, body string) (
 
 	qr, respBody, resp, err := runRequest(req)
 	if err != nil && strings.Contains(err.Error(), "Token is expired") {
-		err = token.refreshToken()
-		if err != nil {
+		if err := token.refreshToken(); err != nil {
 			return nil, nil, nil, err
 		}
 
@@ -670,8 +669,7 @@ func TestHttpCompressionSupport(t *testing.T) {
 	r1 := `{"data":{"names":[{"name":"Alice"},{"name":"Bob"},{"name":"Charlie"},{"name":"David"},` +
 		`{"name":"Emily"},{"name":"Frank"},{"name":"Gloria"},{"name":"Hannah"},{"name":"Ian"},` +
 		`{"name":"Judy"},{"name":"Kevin"},{"name":"Linda"},{"name":"Michael"}]}}`
-	err := runMutation(m1)
-	require.NoError(t, err)
+	require.NoError(t, runMutation(m1))
 
 	data, resp, err := queryWithGz(q1, "application/dql", "false", "", false, false)
 	require.NoError(t, err)
@@ -747,8 +745,7 @@ func TestDebugSupport(t *testing.T) {
 	  }
 	}
 	`
-	err := runMutation(m1)
-	require.NoError(t, err)
+	require.NoError(t, runMutation(m1))
 
 	q1 := `
 	{

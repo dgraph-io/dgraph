@@ -84,8 +84,7 @@ func TestLogRotate(t *testing.T) {
 	totalBytes := 0
 	for i := 0; i < totalEntries; i++ {
 		entry := makeEntry(i)
-		err = el.AddEntries([]raftpb.Entry{entry})
-		require.NoError(t, err)
+		require.NoError(t, el.AddEntries([]raftpb.Entry{entry}))
 		totalBytes += len(entry.Data)
 	}
 	log.Printf("Wrote %d bytes", totalBytes)
@@ -132,8 +131,7 @@ func TestLogGrow(t *testing.T) {
 			entry := raftpb.Entry{Index: uint64(i + 1), Term: 1, Data: data}
 			entries = append(entries, entry)
 		}
-		err = ds.wal.AddEntries(entries)
-		require.NoError(t, err)
+		require.NoError(t, ds.wal.AddEntries(entries))
 
 		// Reopen the file and retrieve all entries.
 		ds, err = InitEncrypted(dir, key)

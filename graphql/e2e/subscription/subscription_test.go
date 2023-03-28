@@ -138,8 +138,7 @@ func TestSubscription(t *testing.T) {
 	require.NoError(t, err)
 
 	touchedUidskey := "touched_uids"
-	err = json.Unmarshal(res, &subscriptionResp)
-	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(res, &subscriptionResp))
 	common.RequireNoGQLErrors(t, &subscriptionResp)
 
 	require.JSONEq(t, `{"queryProduct":[{"name":"sanitizer"}]}`, string(subscriptionResp.Data))
@@ -167,8 +166,7 @@ func TestSubscription(t *testing.T) {
 	// makes sure that the we have a fresh instance to unmarshal to, otherwise there may be things
 	// from the previous unmarshal
 	subscriptionResp = common.GraphQLResponse{}
-	err = json.Unmarshal(res, &subscriptionResp)
-	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(res, &subscriptionResp))
 	common.RequireNoGQLErrors(t, &subscriptionResp)
 
 	// Check the latest update.
@@ -237,8 +235,7 @@ func TestSubscriptionAuth(t *testing.T) {
 	require.NoError(t, err)
 
 	var resp common.GraphQLResponse
-	err = json.Unmarshal(res, &resp)
-	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(res, &resp))
 
 	common.RequireNoGQLErrors(t, &resp)
 	require.JSONEq(t, `{"queryTodo":[{"owner":"jatin","text":"GraphQL is exciting!!"}]}`,
@@ -286,8 +283,7 @@ func TestSubscriptionAuth(t *testing.T) {
 	res, err = subscriptionClient.RecvMsg()
 	require.NoError(t, err)
 
-	err = json.Unmarshal(res, &resp)
-	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(res, &resp))
 	common.RequireNoGQLErrors(t, &resp)
 	require.JSONEq(t, `{"queryTodo": [
 	 {
@@ -357,8 +353,7 @@ func TestSubscriptionWithAuthShouldExpireWithJWT(t *testing.T) {
 	require.NoError(t, err)
 
 	var resp common.GraphQLResponse
-	err = json.Unmarshal(res, &resp)
-	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(res, &resp))
 
 	common.RequireNoGQLErrors(t, &resp)
 	require.JSONEq(t, `{"queryTodo":[{"owner":"bob","text":"GraphQL is exciting!!"}]}`,
@@ -447,8 +442,7 @@ func TestSubscriptionAuthWithoutExpiry(t *testing.T) {
 	require.NoError(t, err)
 
 	var resp common.GraphQLResponse
-	err = json.Unmarshal(res, &resp)
-	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(res, &resp))
 
 	common.RequireNoGQLErrors(t, &resp)
 	require.JSONEq(t, `{"queryTodo":[{"owner":"jatin","text":"GraphQL is exciting!!"}]}`,
@@ -509,8 +503,7 @@ func TestSubscriptionAuth_SameQueryAndClaimsButDifferentExpiry_ShouldExpireIndep
 	require.NoError(t, err)
 
 	var resp common.GraphQLResponse
-	err = json.Unmarshal(res, &resp)
-	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(res, &resp))
 	common.RequireNoGQLErrors(t, &resp)
 	require.JSONEq(t, `{"queryTodo":[{"owner":"jatin","text":"GraphQL is exciting!!"}]}`,
 		string(resp.Data))
@@ -531,8 +524,7 @@ func TestSubscriptionAuth_SameQueryAndClaimsButDifferentExpiry_ShouldExpireIndep
 
 	res, err = subscriptionClient1.RecvMsg()
 	require.NoError(t, err)
-	err = json.Unmarshal(res, &resp)
-	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(res, &resp))
 	common.RequireNoGQLErrors(t, &resp)
 	require.JSONEq(t, `{"queryTodo":[{"owner":"jatin","text":"GraphQL is exciting!!"}]}`,
 		string(resp.Data))
@@ -565,8 +557,7 @@ func TestSubscriptionAuth_SameQueryAndClaimsButDifferentExpiry_ShouldExpireIndep
 
 	res, err = subscriptionClient1.RecvMsg()
 	require.NoError(t, err)
-	err = json.Unmarshal(res, &resp)
-	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(res, &resp))
 	common.RequireNoGQLErrors(t, &resp)
 	// 2nd one still running and should get the  update
 	require.JSONEq(t, `{"queryTodo": [
@@ -660,8 +651,7 @@ func TestSubscriptionAuth_SameQueryDifferentClaimsAndExpiry_ShouldExpireIndepend
 	require.NoError(t, err)
 
 	var resp common.GraphQLResponse
-	err = json.Unmarshal(res, &resp)
-	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(res, &resp))
 
 	common.RequireNoGQLErrors(t, &resp)
 	require.JSONEq(t, `{"queryTodo":[{"owner":"jatin","text":"GraphQL is exciting!!"}]}`,
@@ -704,9 +694,7 @@ func TestSubscriptionAuth_SameQueryDifferentClaimsAndExpiry_ShouldExpireIndepend
 
 	res, err = subscriptionClient1.RecvMsg()
 	require.NoError(t, err)
-
-	err = json.Unmarshal(res, &resp)
-	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(res, &resp))
 
 	common.RequireNoGQLErrors(t, &resp)
 	require.JSONEq(t, `{"queryTodo":[{"owner":"pawan","text":"GraphQL is exciting!!"}]}`,
@@ -759,8 +747,7 @@ func TestSubscriptionAuth_SameQueryDifferentClaimsAndExpiry_ShouldExpireIndepend
 
 	res, err = subscriptionClient1.RecvMsg()
 	require.NoError(t, err)
-	err = json.Unmarshal(res, &resp)
-	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(res, &resp))
 	common.RequireNoGQLErrors(t, &resp)
 	// 2nd one still running and should get the  update
 	require.JSONEq(t, `{"queryTodo": [
@@ -854,8 +841,7 @@ func TestSubscriptionAuthHeaderCaseInsensitive(t *testing.T) {
 	require.NoError(t, err)
 
 	var resp common.GraphQLResponse
-	err = json.Unmarshal(res, &resp)
-	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(res, &resp))
 
 	common.RequireNoGQLErrors(t, &resp)
 	require.JSONEq(t, `{"queryTodo":[{"owner":"jatin","text":"GraphQL is exciting!!"}]}`,
@@ -901,8 +887,7 @@ func TestSubscriptionAuth_MultiSubscriptionResponses(t *testing.T) {
 	require.NoError(t, err)
 
 	var resp common.GraphQLResponse
-	err = json.Unmarshal(res, &resp)
-	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(res, &resp))
 
 	common.RequireNoGQLErrors(t, &resp)
 	require.JSONEq(t, `{"queryTodo":[]}`,
@@ -928,9 +913,7 @@ func TestSubscriptionAuth_MultiSubscriptionResponses(t *testing.T) {
 
 	res, err = subscriptionClient1.RecvMsg()
 	require.NoError(t, err)
-
-	err = json.Unmarshal(res, &resp)
-	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(res, &resp))
 
 	common.RequireNoGQLErrors(t, &resp)
 	require.JSONEq(t, `{"queryTodo":[]}`,
@@ -958,8 +941,7 @@ func TestSubscriptionAuth_MultiSubscriptionResponses(t *testing.T) {
 	// 1st response
 	res, err = subscriptionClient1.RecvMsg()
 	require.NoError(t, err)
-	err = json.Unmarshal(res, &resp)
-	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(res, &resp))
 
 	common.RequireNoGQLErrors(t, &resp)
 	require.JSONEq(t, `{"queryTodo":[{"owner":"jatin","text":"GraphQL is exciting!!"}]}`,
@@ -1008,8 +990,7 @@ func TestSubscriptionWithCustomDQL(t *testing.T) {
 	require.NoError(t, err)
 
 	touchedUidskey := "touched_uids"
-	err = json.Unmarshal(res, &subscriptionResp)
-	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(res, &subscriptionResp))
 	common.RequireNoGQLErrors(t, &subscriptionResp)
 
 	require.JSONEq(t, `{"queryUserTweetCounts":[{"screen_name":"001","tweetCount": 1}]}`, string(subscriptionResp.Data))
@@ -1040,8 +1021,7 @@ func TestSubscriptionWithCustomDQL(t *testing.T) {
 	// makes sure that the we have a fresh instance to unmarshal to, otherwise there may be things
 	// from the previous unmarshal
 	subscriptionResp = common.GraphQLResponse{}
-	err = json.Unmarshal(res, &subscriptionResp)
-	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(res, &subscriptionResp))
 	common.RequireNoGQLErrors(t, &subscriptionResp)
 
 	// Check the latest update.

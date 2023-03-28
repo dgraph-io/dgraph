@@ -113,8 +113,7 @@ func populateGraphExport(t *testing.T) {
 		nq, err := chunker.ParseRDF(edge, l)
 		require.NoError(t, err)
 		rnq := dql.NQuad{NQuad: &nq}
-		err = facets.SortAndValidate(rnq.Facets)
-		require.NoError(t, err)
+		require.NoError(t, facets.SortAndValidate(rnq.Facets))
 		e, err := rnq.ToEdgeUsing(idMap)
 		e.Attr = x.NamespaceAttr(nq.Namespace, e.Attr)
 		require.NoError(t, err)
@@ -149,8 +148,7 @@ func initTestExport(t *testing.T, schemaStr string) {
 	require.NoError(t, err)
 
 	txn = pstore.NewTransactionAt(math.MaxUint64, true)
-	err = txn.Set(testutil.GalaxySchemaKey("http://www.w3.org/2000/01/rdf-schema#range"), val)
-	require.NoError(t, err)
+	require.NoError(t, txn.Set(testutil.GalaxySchemaKey("http://www.w3.org/2000/01/rdf-schema#range"), val))
 	require.NoError(t, txn.Set(testutil.GalaxySchemaKey("friend_not_served"), val))
 	require.NoError(t, txn.Set(testutil.GalaxySchemaKey("age"), val))
 	require.NoError(t, txn.CommitAt(1, nil))
@@ -385,12 +383,10 @@ func TestExportJson(t *testing.T) {
 	gotJson, err := io.ReadAll(r)
 	require.NoError(t, err)
 	var expected interface{}
-	err = json.Unmarshal([]byte(wantJson), &expected)
-	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal([]byte(wantJson), &expected))
 
 	var actual interface{}
-	err = json.Unmarshal(gotJson, &actual)
-	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(gotJson, &actual))
 	require.ElementsMatch(t, expected, actual)
 
 	checkExportSchema(t, schemaFileList)
@@ -443,8 +439,7 @@ func TestExportFormat(t *testing.T) {
 	require.NoError(t, err)
 
 	var result *testutil.GraphQLResponse
-	err = json.Unmarshal(b, &result)
-	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(b, &result))
 	require.NotNil(t, result.Errors)
 }
 

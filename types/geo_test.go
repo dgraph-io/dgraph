@@ -40,13 +40,11 @@ func TestParse(t *testing.T) {
 
 			wkb := ValueForType(BinaryID)
 			// Marshal and unmarshal to WKB
-			err = Marshal(g, &wkb)
-			if err != nil {
+			if err := Marshal(g, &wkb); err != nil {
 				t.Errorf("Error marshaling to WKB: %v", err)
 			}
 
 			src := Val{GeoID, wkb.Value.([]byte)}
-
 			if bg, err := Convert(src, GeoID); err != nil {
 				t.Errorf("Error unmarshaling WKB: %v", err)
 			} else if !reflect.DeepEqual(g, bg) {

@@ -138,38 +138,32 @@ func TestCheckSchema(t *testing.T) {
 	require.NoError(t, checkSchema(s1))
 
 	// uid to non uid
-	err := schema.ParseBytes([]byte("name:uid ."), 1)
-	require.NoError(t, err)
+	require.NoError(t, schema.ParseBytes([]byte("name:uid ."), 1))
 	s1 = &pb.SchemaUpdate{Predicate: x.GalaxyAttr("name"), ValueType: pb.Posting_STRING}
 	require.NoError(t, checkSchema(s1))
 
 	// string to password
-	err = schema.ParseBytes([]byte("name:string ."), 1)
-	require.NoError(t, err)
+	require.NoError(t, schema.ParseBytes([]byte("name:string ."), 1))
 	s1 = &pb.SchemaUpdate{Predicate: x.GalaxyAttr("name"), ValueType: pb.Posting_PASSWORD}
 	require.Error(t, checkSchema(s1))
 
 	// password to string
-	err = schema.ParseBytes([]byte("name:password ."), 1)
-	require.NoError(t, err)
+	require.NoError(t, schema.ParseBytes([]byte("name:password ."), 1))
 	s1 = &pb.SchemaUpdate{Predicate: x.GalaxyAttr("name"), ValueType: pb.Posting_STRING}
 	require.Error(t, checkSchema(s1))
 
 	// int to password
-	err = schema.ParseBytes([]byte("name:int ."), 1)
-	require.NoError(t, err)
+	require.NoError(t, schema.ParseBytes([]byte("name:int ."), 1))
 	s1 = &pb.SchemaUpdate{Predicate: x.GalaxyAttr("name"), ValueType: pb.Posting_PASSWORD}
 	require.Error(t, checkSchema(s1))
 
 	// password to password
-	err = schema.ParseBytes([]byte("name:password ."), 1)
-	require.NoError(t, err)
+	require.NoError(t, schema.ParseBytes([]byte("name:password ."), 1))
 	s1 = &pb.SchemaUpdate{Predicate: x.GalaxyAttr("name"), ValueType: pb.Posting_PASSWORD}
 	require.NoError(t, checkSchema(s1))
 
 	// string to int
-	err = schema.ParseBytes([]byte("name:string ."), 1)
-	require.NoError(t, err)
+	require.NoError(t, schema.ParseBytes([]byte("name:string ."), 1))
 	s1 = &pb.SchemaUpdate{Predicate: x.GalaxyAttr("name"), ValueType: pb.Posting_FLOAT}
 	require.NoError(t, checkSchema(s1))
 
@@ -209,8 +203,7 @@ func TestCheckSchema(t *testing.T) {
 	require.NoError(t, err)
 	err = checkSchema(result.Preds[0])
 	require.Error(t, err)
-	require.Equal(t, "Index tokenizer is mandatory for: [jobs] when specifying @upsert directive",
-		err.Error())
+	require.Equal(t, "Index tokenizer is mandatory for: [jobs] when specifying @upsert directive", err.Error())
 
 	s = `
 		jobs : string @index(exact) @upsert .
@@ -218,10 +211,8 @@ func TestCheckSchema(t *testing.T) {
 	`
 	result, err = schema.Parse(s)
 	require.NoError(t, err)
-	err = checkSchema(result.Preds[0])
-	require.NoError(t, err)
-	err = checkSchema(result.Preds[1])
-	require.NoError(t, err)
+	require.NoError(t, checkSchema(result.Preds[0]))
+	require.NoError(t, checkSchema(result.Preds[1]))
 }
 
 func TestTypeSanityCheck(t *testing.T) {

@@ -118,8 +118,7 @@ func (ex *authExecutor) Execute(ctx context.Context, req *dgoapi.Request,
 		// mutation to create new nodes
 		var assigned map[string]string
 		if ex.uids != "" {
-			err := json.Unmarshal([]byte(ex.uids), &assigned)
-			require.NoError(ex.t, err)
+			require.NoError(ex.t, json.Unmarshal([]byte(ex.uids), &assigned))
 		}
 
 		// Check query generated along with mutation.
@@ -638,8 +637,7 @@ func deleteQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMeta,
 			// -- Arrange --
 			var vars map[string]interface{}
 			if tcase.Variables != "" {
-				err := json.Unmarshal([]byte(tcase.Variables), &vars)
-				require.NoError(t, err)
+				require.NoError(t, json.Unmarshal([]byte(tcase.Variables), &vars))
 			}
 
 			op, err := gqlSchema.Operation(
@@ -749,8 +747,7 @@ func checkAddUpdateCase(
 	// -- Arrange --
 	var vars map[string]interface{}
 	if tcase.Variables != "" {
-		err := json.Unmarshal([]byte(tcase.Variables), &vars)
-		require.NoError(t, err)
+		require.NoError(t, json.Unmarshal([]byte(tcase.Variables), &vars))
 	}
 
 	op, err := gqlSchema.Operation(

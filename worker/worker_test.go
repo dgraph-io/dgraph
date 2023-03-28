@@ -55,8 +55,7 @@ func commitTransaction(t *testing.T, edge *pb.DirectedEdge, l *posting.List) {
 	startTs := timestamp()
 	txn := posting.Oracle().RegisterStartTs(startTs)
 	l = txn.Store(l)
-	err := l.AddMutationWithIndex(context.Background(), edge, txn)
-	require.NoError(t, err)
+	require.NoError(t, l.AddMutationWithIndex(context.Background(), edge, txn))
 
 	commit := commitTs(startTs)
 
@@ -88,8 +87,7 @@ func setClusterEdge(t *testing.T, dg *dgo.Dgraph, rdf string) {
 
 func delClusterEdge(t *testing.T, dg *dgo.Dgraph, rdf string) {
 	mu := &api.Mutation{DelNquads: []byte(rdf), CommitNow: true}
-	err := testutil.RetryMutation(dg, mu)
-	require.NoError(t, err)
+	require.NoError(t, testutil.RetryMutation(dg, mu))
 }
 func getOrCreate(key []byte) *posting.List {
 	l, err := posting.GetNoStore(key, math.MaxUint64)
@@ -165,8 +163,7 @@ func initClusterTest(t *testing.T, schemaStr string) *dgo.Dgraph {
 	}
 	testutil.DropAll(t, dg)
 
-	err = dg.Alter(context.Background(), &api.Operation{Schema: schemaStr})
-	require.NoError(t, err)
+	require.NoError(t, dg.Alter(context.Background(), &api.Operation{Schema: schemaStr}))
 	populateClusterGraph(t, dg)
 
 	return dg
