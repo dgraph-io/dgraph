@@ -46,10 +46,17 @@ type pooledKeys struct {
 
 // incrRollupi is used to batch keys for rollup incrementally.
 type incrRollupi struct {
-	// We are using 2 priorities with now, idx 0 represents the high priority keys to be rolled up
-	// while idx 1 represents low priority keys to be rolled up.
+	// We are using 2 priorities with now, idx 0 represents the high priority keys to be rolled
+	// up while idx 1 represents low priority keys to be rolled up.
 	priorityKeys []*pooledKeys
 	count        uint64
+
+	// Get Timestamp function gets a new timestamp to store the rollup at. This makes sure that
+	// we are not overwriting any transaction. If there are transactions that are ongoing,
+	// which modify the item, rollup wouldn't affect the data, as a delta would be written
+	// later on
+	getNewTs func(bool) uint64
+	closer   *z.Closer
 }
 
 var (
@@ -81,12 +88,31 @@ func init() {
 
 // rollUpKey takes the given key's posting lists, rolls it up and writes back to badger
 func (ir *incrRollupi) rollUpKey(writer *TxnWriter, key []byte) error {
+	// Get a new non read only ts. This makes sure that no other txn would write at this
+	// ts, overwriting some data. Wait to read the Posting list until ts-1 have been applied
+	// to badger
+	ts := ir.getNewTs(false)
+
+	// Get a wait channel from oracle. Can't use WaitFromTs as we also need to check if other
+	// operations need to start. If ok is not true, that means we have already passed the ts,
+	// and we don't need to wait.
+	waitCh, ok := o.addToWaiters(ts)
+	if ok {
+		select {
+		case <-ir.closer.HasBeenClosed():
+			return errors.New("Cancelled rollup to make way for other high priority" +
+				" operation")
+
+		case <-waitCh:
+		}
+	}
+
 	l, err := GetNoStore(key, math.MaxUint64)
 	if err != nil {
 		return err
 	}
 
-	kvs, err := l.Rollup(nil)
+	kvs, err := l.Rollup(nil, ts)
 	if err != nil {
 		return err
 	}
@@ -123,7 +149,10 @@ func (ir *incrRollupi) addKeyToBatch(key []byte, priority int) {
 }
 
 // Process will rollup batches of 64 keys in a go routine.
-func (ir *incrRollupi) Process(closer *z.Closer) {
+func (ir *incrRollupi) Process(closer *z.Closer, getNewTs func(bool) uint64) {
+	ir.getNewTs = getNewTs
+	ir.closer = closer
+
 	defer closer.Done()
 
 	writer := NewTxnWriter(pstore)

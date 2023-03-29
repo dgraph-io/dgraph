@@ -17,14 +17,49 @@
 package posting
 
 import (
+	"context"
 	"math"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 )
+
+func TestIncrRollupGetsCancelledQuickly(t *testing.T) {
+	attr := x.GalaxyAttr("rollup")
+	key := x.DataKey(attr, 1)
+	closer = z.NewCloser(1)
+
+	writer := NewTxnWriter(pstore)
+
+	incrRollup := &incrRollupi{
+		getNewTs: func(b bool) uint64 {
+			return 100
+		},
+		closer: closer,
+	}
+
+	finished := make(chan struct{})
+
+	go func() {
+		require.Error(t, incrRollup.rollUpKey(writer, key))
+		finished <- struct{}{}
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	closer.Signal()
+
+	select {
+	case <-ctx.Done():
+		t.Fatalf("Cancelling rollup took more than 1 second")
+	case <-finished:
+	}
+}
 
 func TestRollupTimestamp(t *testing.T) {
 	attr := x.GalaxyAttr("rollup")
@@ -58,7 +93,7 @@ func TestRollupTimestamp(t *testing.T) {
 
 	// Now check that we don't lost the highest version during a rollup operation, despite the STAR
 	// delete marker being the most recent update.
-	kvs, err := nl.Rollup(nil)
+	kvs, err := nl.Rollup(nil, 0)
 	require.NoError(t, err)
 	require.Equal(t, uint64(10), kvs[0].Version)
 }

@@ -682,7 +682,9 @@ func (r *reducer) toList(req *encodeRequest) {
 		if shouldSplit {
 			// Give ownership of pl.Pack away to list. Rollup would deallocate the Pack.
 			l := posting.NewList(y.Copy(currentKey), pl, writeVersionTs)
-			kvs, err := l.Rollup(nil)
+			// Posting list is just made with right timestamps, no need to change them
+			// during rollup.
+			kvs, err := l.Rollup(nil, 0)
 			x.Check(err)
 
 			// Assign a new allocator, so we don't reset the one we were using during Rollup.

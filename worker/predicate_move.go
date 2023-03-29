@@ -328,11 +328,8 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error
 		if err != nil {
 			return nil, err
 		}
-		kvs, err := l.Rollup(itr.Alloc)
-		for _, kv := range kvs {
-			// Let's set all of them at this move timestamp.
-			kv.Version = in.TxnTs
-		}
+		// Setting all the data at in.TxnTs
+		kvs, err := l.Rollup(itr.Alloc, in.TxnTs)
 		return &bpb.KVList{Kv: kvs}, err
 	}
 	stream.Send = func(buf *z.Buffer) error {

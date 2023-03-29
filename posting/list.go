@@ -808,10 +808,20 @@ func (l *List) Length(readTs, afterUid uint64) int {
 // The first part of a multi-part list always has start UID 1 and will be the last part
 // to be deleted, at which point the entire list will be marked for deletion.
 // As the list grows, existing parts might be split if they become too big.
-func (l *List) Rollup(alloc *z.Allocator) ([]*bpb.KV, error) {
+//
+// We store the rollup on either
+//  1. A timestamp allocated for rollup. This would make sure that no txn would be overwriten by the
+//     rollup. This can cause isseus during WAL rollup. This value comes from ts argument.
+//  2. If we can't generate a timestamp on the fly, for example, in bulk loader, we store the rollup
+//     on the highest ts that the rollup saw. This is used if ts == 0.
+func (l *List) Rollup(alloc *z.Allocator, ts uint64) ([]*bpb.KV, error) {
 	l.RLock()
 	defer l.RUnlock()
-	out, err := l.rollup(math.MaxUint64, true)
+	var readTs uint64 = math.MaxUint64
+	if ts != 0 {
+		readTs = ts
+	}
+	out, err := l.rollup(readTs, true)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed when calling List.rollup")
 	}
@@ -822,7 +832,12 @@ func (l *List) Rollup(alloc *z.Allocator) ([]*bpb.KV, error) {
 
 	var kvs []*bpb.KV
 	kv := MarshalPostingList(out.plist, alloc)
-	kv.Version = out.newMinTs
+	if ts == 0 {
+		kv.Version = out.newMinTs
+	} else {
+		kv.Version = ts
+	}
+
 	kv.Key = alloc.Copy(l.key)
 	kvs = append(kvs, kv)
 
@@ -880,6 +895,8 @@ func (l *List) ToBackupPostingList(
 		return nil, err
 	}
 
+	// Normally in rollup, we store on a new timestamp to avoid wal replay issues. However,
+	// in backup, we send the final result at once, this shouldn't cause wal replay issues.
 	kv := y.NewKV(alloc)
 	kv.Key = alloc.Copy(l.key)
 	kv.Version = out.newMinTs

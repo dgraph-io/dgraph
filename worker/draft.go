@@ -148,7 +148,7 @@ func (n *node) startTaskAtTs(id op, ts uint64) (*z.Closer, error) {
 		if len(n.ops) > 0 {
 			return nil, errors.Errorf("another operation is already running")
 		}
-		go posting.IncrRollup.Process(closer)
+		go posting.IncrRollup.Process(closer, State.GetTimestamp)
 	case opRestore:
 		// Restores cancel all other operations, except for other restores since
 		// only one restore operation should be active any given moment.
