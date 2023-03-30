@@ -17,6 +17,7 @@
 package dgraphtest
 
 import (
+	"log"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -36,6 +37,10 @@ const (
 )
 
 func init() {
+	// init log
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
+
+	// setup paths
 	_, thisFilePath, _, _ := runtime.Caller(0)
 	basePath := strings.ReplaceAll(thisFilePath, "/paths.go", "")
 	repoDir = filepath.Join(basePath, "repo")
