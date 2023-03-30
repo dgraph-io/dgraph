@@ -25,9 +25,8 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-var adminEndpoint string
-
-func TestCurlAuthorization(t *testing.T) {
+func (suite *AclTestSuite) TestCurlAuthorization() {
+	t := suite.T()
 	if testing.Short() {
 		t.Skip("skipping because -short=true")
 	}

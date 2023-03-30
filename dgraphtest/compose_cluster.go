@@ -17,6 +17,9 @@
 package dgraphtest
 
 import (
+	"crypto/tls"
+	"testing"
+
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgraph/testutil"
 )
@@ -45,4 +48,9 @@ func (c *ComposeCluster) AssignUids(num uint64) error {
 
 func (c *ComposeCluster) GetVersion() string {
 	return localVersion
+}
+
+func (c *ComposeCluster) MakeGQLRequestWithAccessJwtAndTLS(t *testing.T, params *testutil.GraphQLParams,
+	tls *tls.Config, accessToken, adminUrl string) *testutil.GraphQLResponse {
+	return testutil.MakeGQLRequestWithAccessJwtAndTLS(t, params, tls, accessToken)
 }

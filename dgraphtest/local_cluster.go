@@ -19,6 +19,7 @@ package dgraphtest
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -26,6 +27,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"testing"
 	"time"
 
 	"github.com/docker/docker/api/types"
@@ -33,12 +35,15 @@ import (
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/volume"
 	docker "github.com/docker/docker/client"
+	"github.com/golang/glog"
 	"github.com/pkg/errors"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/dgraph/testutil"
 )
 
 var (
@@ -684,4 +689,45 @@ func (c *LocalCluster) AssignUids(num uint64) error {
 
 func (c *LocalCluster) GetVersion() string {
 	return c.conf.version
+}
+
+func (c *LocalCluster) MakeGQLRequestWithAccessJwtAndTLS(t *testing.T, params *testutil.GraphQLParams,
+	tls *tls.Config, accessToken, adminUrl string) *testutil.GraphQLResponse {
+
+	b, err := json.Marshal(params)
+	require.NoError(t, err)
+
+	req, err := http.NewRequest(http.MethodPost, adminUrl, bytes.NewBuffer(b))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+	if accessToken != "" {
+		req.Header.Set("X-Dgraph-AccessToken", accessToken)
+	}
+	client := &http.Client{}
+	if tls != nil {
+		client.Transport = &http.Transport{
+			TLSClientConfig: tls,
+		}
+	}
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			glog.Warningf("error closing body: %v", err)
+		}
+	}()
+
+	b, err = io.ReadAll(resp.Body)
+	require.NoError(t, err)
+
+	var gqlResp testutil.GraphQLResponse
+	err = json.Unmarshal(b, &gqlResp)
+	require.NoError(t, err)
+
+	return &gqlResp
+}
+
+func (c *LocalCluster) GetAlphaPublicPort(port string) (string, error) {
+	return publicPort(c.dcli, c.alphas[0], port)
 }

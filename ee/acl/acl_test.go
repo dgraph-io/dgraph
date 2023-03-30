@@ -1,5 +1,5 @@
-//go:build !oss && integration
-// +build !oss,integration
+//go:build (!oss && integration) || upgrade
+// +build !oss,integration upgrade
 
 /*
  * Copyright 2023 Dgraph Labs, Inc. and Contributors
@@ -28,19 +28,22 @@ import (
 
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/dgraph/dgraphtest"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 )
 
 var (
-	userid       = "alice"
-	userpassword = "simplepassword"
+	userid        = "alice"
+	userpassword  = "simplepassword"
+	adminEndpoint string
+	dc            dgraphtest.Cluster
+	sockAddr      string
 )
 
 func makeRequestAndRefreshTokenIfNecessary(t *testing.T, token *testutil.HttpToken,
 	params testutil.GraphQLParams) *testutil.GraphQLResponse {
-
-	resp := testutil.MakeGQLRequestWithAccessJwt(t, &params, token.AccessJwt)
+	resp := dc.MakeGQLRequestWithAccessJwtAndTLS(t, &params, nil, token.AccessJwt, adminEndpoint)
 	if len(resp.Errors) == 0 || !strings.Contains(resp.Errors.Error(), "Token is expired") {
 		return resp
 	}
@@ -54,7 +57,7 @@ func makeRequestAndRefreshTokenIfNecessary(t *testing.T, token *testutil.HttpTok
 	require.NoError(t, err)
 	token.AccessJwt = newtoken.AccessJwt
 	token.RefreshToken = newtoken.RefreshToken
-	return testutil.MakeGQLRequestWithAccessJwt(t, &params, token.AccessJwt)
+	return dc.MakeGQLRequestWithAccessJwtAndTLS(t, &params, nil, token.AccessJwt, adminEndpoint)
 }
 
 func createUser(t *testing.T, token *testutil.HttpToken, username, password string) *testutil.GraphQLResponse {
@@ -165,43 +168,8 @@ func deleteUsingNQuad(userClient *dgo.Dgraph, sub, pred, val string) (*api.Respo
 	return txn.Mutate(ctx, mutation)
 }
 
-func TestInvalidGetUser(t *testing.T) {
-	currentUser := getCurrentUser(t, &testutil.HttpToken{AccessJwt: "invalid Token"})
-	require.Equal(t, `{"getCurrentUser":null}`, string(currentUser.Data))
-	require.Equal(t, x.GqlErrorList{{
-		Message: "couldn't rewrite query getCurrentUser because unable to parse jwt token: token" +
-			" contains an invalid number of segments",
-		Path: []interface{}{"getCurrentUser"},
-	}}, currentUser.Errors)
-}
-
-func TestPasswordReturn(t *testing.T) {
-	token, err := testutil.HttpLogin(&testutil.LoginParams{
-		Endpoint:  adminEndpoint,
-		UserID:    "groot",
-		Passwd:    "password",
-		Namespace: x.GalaxyNamespace,
-	})
-	require.NoError(t, err, "login failed")
-	query := `
-	query {
-		getCurrentUser {
-			name
-			password
-		}
-	}`
-
-	resp := makeRequestAndRefreshTokenIfNecessary(t, token, testutil.GraphQLParams{Query: query})
-	require.Equal(t, resp.Errors, x.GqlErrorList{{
-		Message: `Cannot query field "password" on type "User".`,
-		Locations: []x.Location{{
-			Line:   5,
-			Column: 4,
-		}},
-	}})
-}
-
-func TestGetCurrentUser(t *testing.T) {
+func (suite *AclTestSuite) TestGetCurrentUser() {
+	t := suite.T()
 	token := testutil.GrootHttpLogin(adminEndpoint)
 
 	currentUser := getCurrentUser(t, token)
@@ -217,7 +185,8 @@ func TestGetCurrentUser(t *testing.T) {
 	resp := createUser(t, token, userid, userpassword)
 	resp.RequireNoGraphQLErrors(t)
 	checkUserCount(t, resp.Data, 1)
-
+	// upgrade cluster
+	suite.Upgrade()
 	newToken, err := testutil.HttpLogin(&testutil.LoginParams{
 		Endpoint:  adminEndpoint,
 		UserID:    userid,
@@ -230,9 +199,11 @@ func TestGetCurrentUser(t *testing.T) {
 	require.Equal(t, string(currentUser.Data), `{"getCurrentUser":{"name":"hamilton"}}`)
 }
 
-func TestCreateAndDeleteUsers(t *testing.T) {
+func (suite *AclTestSuite) TestCreateAndDeleteUsers() {
+	t := suite.T()
 	resetUser(t)
-
+	// upgrade cluster
+	suite.Upgrade()
 	// adding the user again should fail
 	token := testutil.GrootHttpLogin(adminEndpoint)
 	resp := createUser(t, token, userid, userpassword)
@@ -263,35 +234,18 @@ func resetUser(t *testing.T) {
 	glog.Infof("created user")
 }
 
-func TestPreDefinedPredicates(t *testing.T) {
-	// This test uses the groot account to ensure that pre-defined predicates
-	// cannot be altered even if the permissions allow it.
-	dg1, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
-	require.NoError(t, err, "Error while getting a dgraph client")
-
-	alterPreDefinedPredicates(t, dg1)
-}
-
-func TestPreDefinedTypes(t *testing.T) {
-	// This test uses the groot account to ensure that pre-defined types
-	// cannot be altered even if the permissions allow it.
-	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
-	require.NoError(t, err, "Error while getting a dgraph client")
-
-	alterPreDefinedTypes(t, dg)
-}
-
-func TestAuthorization(t *testing.T) {
+func (suite *AclTestSuite) TestAuthorization() {
+	t := suite.T()
 	if testing.Short() {
 		t.Skip("skipping because -short=true")
 	}
 
-	glog.Infof("testing with port 9180")
-	dg1, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	glog.Infof("testing with port 9080")
+	dg1, err := testutil.DgraphClientWithGroot(sockAddr)
 	if err != nil {
 		t.Fatalf("Error while getting a dgraph client: %v", err)
 	}
-	testAuthorization(t, dg1)
+	testAuthorization(t, dg1, suite)
 	glog.Infof("done")
 }
 
@@ -358,8 +312,14 @@ const timeout = 5 * time.Second
 
 const expireJwtSleep = 21 * time.Second
 
-func testAuthorization(t *testing.T, dg *dgo.Dgraph) {
+func testAuthorization(t *testing.T, dg *dgo.Dgraph, suite *AclTestSuite) {
 	createAccountAndData(t, dg)
+	// upgrade
+	suite.Upgrade()
+	dg, err := testutil.DgraphClientWithGroot(sockAddr)
+	if err != nil {
+		t.Fatalf("Error while getting a dgraph client: %v", err)
+	}
 	ctx := context.Background()
 	if err := dg.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace); err != nil {
 		t.Fatalf("unable to login using the account %v", userid)
@@ -847,17 +807,25 @@ func createGroupAndAcls(t *testing.T, group string, addUserToGroup bool) {
 	addRulesToGroup(t, token, group, rules)
 }
 
-func TestPredicatePermission(t *testing.T) {
+func (suite *AclTestSuite) TestPredicatePermission() {
+	t := suite.T()
 	if testing.Short() {
 		t.Skip("skipping because -short=true")
 	}
 
 	glog.Infof("testing with port 9180")
-	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	dg, err := testutil.DgraphClientWithGroot(sockAddr)
 	if err != nil {
 		t.Fatalf("Error while getting a dgraph client: %v", err)
 	}
 	createAccountAndData(t, dg)
+	// upgradeversion
+	suite.Upgrade()
+
+	dg, err = testutil.DgraphClientWithGroot(sockAddr)
+	if err != nil {
+		t.Fatalf("Error while getting a dgraph client: %v", err)
+	}
 	ctx := context.Background()
 	err = dg.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace)
 	require.NoError(t, err, "Logging in with the current password should have succeeded")
@@ -865,7 +833,7 @@ func TestPredicatePermission(t *testing.T) {
 	// Schema query is allowed to all logged in users.
 	querySchemaWithUserAccount(t, dg, false)
 
-	// The query should return emptry response, alter and mutation
+	// The query should return empty response, alter and mutation
 	// should be blocked when no rule is defined.
 	queryPredicateWithUserAccount(t, dg, false)
 	mutatePredicateWithUserAccount(t, dg, true)
@@ -885,12 +853,16 @@ func TestPredicatePermission(t *testing.T) {
 	querySchemaWithUserAccount(t, dg, false)
 }
 
-func TestAccessWithoutLoggingIn(t *testing.T) {
-	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+func (suite *AclTestSuite) TestAccessWithoutLoggingIn() {
+	t := suite.T()
+	dg, err := testutil.DgraphClientWithGroot(sockAddr)
 	require.NoError(t, err)
 
 	createAccountAndData(t, dg)
-	dg, err = testutil.DgraphClient(testutil.SockAddr)
+	// upgradeversion
+	suite.Upgrade()
+
+	dg, err = testutil.DgraphClient(sockAddr)
 	require.NoError(t, err)
 
 	// Without logging in, the anonymous user should be evaluated as if the user does not
@@ -904,13 +876,14 @@ func TestAccessWithoutLoggingIn(t *testing.T) {
 	querySchemaWithUserAccount(t, dg, true)
 }
 
-func TestUnauthorizedDeletion(t *testing.T) {
+func (suite *AclTestSuite) TestUnauthorizedDeletion() {
+	t := suite.T()
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 	defer cancel()
 
 	unAuthPred := "unauthorizedPredicate"
 
-	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	dg, err := testutil.DgraphClientWithGroot(sockAddr)
 	require.NoError(t, err)
 
 	op := api.Operation{
@@ -948,8 +921,9 @@ func TestUnauthorizedDeletion(t *testing.T) {
 	require.True(t, ok)
 
 	addRulesToGroup(t, token, devGroup, []rule{{unAuthPred, 0}})
-
-	userClient, err := testutil.DgraphClient(testutil.SockAddr)
+	// upgrade cluster
+	suite.Upgrade()
+	userClient, err := testutil.DgraphClient(sockAddr)
 	require.NoError(t, err)
 	time.Sleep(defaultTimeToSleep)
 
@@ -961,11 +935,12 @@ func TestUnauthorizedDeletion(t *testing.T) {
 	require.Contains(t, err.Error(), "PermissionDenied")
 }
 
-func TestGuardianAccess(t *testing.T) {
+func (suite *AclTestSuite) TestGuardianAccess() {
+	t := suite.T()
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 	defer cancel()
 
-	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	dg, err := testutil.DgraphClientWithGroot(sockAddr)
 	require.NoError(t, err)
 
 	testutil.DropAll(t, dg)
@@ -985,7 +960,9 @@ func TestGuardianAccess(t *testing.T) {
 	require.True(t, ok)
 
 	time.Sleep(defaultTimeToSleep)
-	gClient, err := testutil.DgraphClient(testutil.SockAddr)
+	// upgrade
+	suite.Upgrade()
+	gClient, err := testutil.DgraphClient(sockAddr)
 	require.NoError(t, err, "Error while creating client")
 	require.NoError(t, gClient.LoginIntoNamespace(ctx, "guardian", "guardianpass", x.GalaxyNamespace))
 
@@ -1073,11 +1050,12 @@ func removeUserFromGroup(t *testing.T, userName, groupName string) *testutil.Gra
 	return resp
 }
 
-func TestQueryRemoveUnauthorizedPred(t *testing.T) {
+func (suite *AclTestSuite) TestQueryRemoveUnauthorizedPred() {
+	t := suite.T()
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 	defer cancel()
 
-	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	dg, err := testutil.DgraphClientWithGroot(sockAddr)
 	require.NoError(t, err)
 
 	testutil.DropAll(t, dg)
@@ -1122,8 +1100,9 @@ func TestQueryRemoveUnauthorizedPred(t *testing.T) {
 
 	// give read access of <name> to alice
 	addRulesToGroup(t, token, devGroup, []rule{{"name", Read.Code}})
-
-	userClient, err := testutil.DgraphClient(testutil.SockAddr)
+	// upgrade
+	suite.Upgrade()
+	userClient, err := testutil.DgraphClient(sockAddr)
 	require.NoError(t, err)
 	time.Sleep(defaultTimeToSleep)
 
@@ -1217,10 +1196,11 @@ func TestQueryRemoveUnauthorizedPred(t *testing.T) {
 	}
 }
 
-func TestExpandQueryWithACLPermissions(t *testing.T) {
+func (suite *AclTestSuite) TestExpandQueryWithACLPermissions() {
+	t := suite.T()
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 	defer cancel()
-	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	dg, err := testutil.DgraphClientWithGroot(sockAddr)
 	require.NoError(t, err)
 
 	testutil.DropAll(t, dg)
@@ -1279,7 +1259,9 @@ func TestExpandQueryWithACLPermissions(t *testing.T) {
 		`{"me":[{"name":"RandomGuy","age":23, "nickname":"RG"},{"name":"RandomGuy2","age":25, "nickname":"RG2"}]}`,
 		string(resp.GetJson()))
 
-	userClient, err := testutil.DgraphClient(testutil.SockAddr)
+	// upgrade
+	suite.Upgrade()
+	userClient, err := testutil.DgraphClient(sockAddr)
 	require.NoError(t, err)
 	time.Sleep(defaultTimeToSleep)
 
@@ -1334,10 +1316,11 @@ func TestExpandQueryWithACLPermissions(t *testing.T) {
 		timeout)
 
 }
-func TestDeleteQueryWithACLPermissions(t *testing.T) {
+func (suite *AclTestSuite) TestDeleteQueryWithACLPermissions() {
+	t := suite.T()
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 	defer cancel()
-	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	dg, err := testutil.DgraphClientWithGroot(sockAddr)
 	require.NoError(t, err)
 
 	testutil.DropAll(t, dg)
@@ -1401,8 +1384,11 @@ func TestDeleteQueryWithACLPermissions(t *testing.T) {
 
 	// Give Write Access to alice for name and age predicate
 	addRulesToGroup(t, token, devGroup, []rule{{"name", Write.Code}, {"age", Write.Code}})
-
-	userClient, err := testutil.DgraphClient(testutil.SockAddr)
+	// upgrade
+	suite.Upgrade()
+	dg, err = testutil.DgraphClientWithGroot(sockAddr)
+	require.NoError(t, err)
+	userClient, err := testutil.DgraphClient(sockAddr)
 	require.NoError(t, err)
 	time.Sleep(defaultTimeToSleep)
 
@@ -1442,10 +1428,11 @@ func TestDeleteQueryWithACLPermissions(t *testing.T) {
 
 }
 
-func TestValQueryWithACLPermissions(t *testing.T) {
+func (suite *AclTestSuite) TestValQueryWithACLPermissions() {
+	t := suite.T()
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 	defer cancel()
-	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	dg, err := testutil.DgraphClientWithGroot(sockAddr)
 	require.NoError(t, err)
 
 	testutil.DropAll(t, dg)
@@ -1607,8 +1594,9 @@ func TestValQueryWithACLPermissions(t *testing.T) {
 			"q2":[{"name":"RandomGuy2","age":25},{"name":"RandomGuy","age":23}]}`,
 		},
 	}
-
-	userClient, err := testutil.DgraphClient(testutil.SockAddr)
+	// upgrade
+	suite.Upgrade()
+	userClient, err := testutil.DgraphClient(sockAddr)
 	require.NoError(t, err)
 	time.Sleep(defaultTimeToSleep)
 
@@ -1670,10 +1658,11 @@ func TestValQueryWithACLPermissions(t *testing.T) {
 
 }
 
-func TestAllPredsPermission(t *testing.T) {
+func (suite *AclTestSuite) TestAllPredsPermission() {
+	t := suite.T()
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 	defer cancel()
-	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	dg, err := testutil.DgraphClientWithGroot(sockAddr)
 	require.NoError(t, err)
 
 	testutil.DropAll(t, dg)
@@ -1769,8 +1758,9 @@ func TestAllPredsPermission(t *testing.T) {
 			`{"q1":[{"name":"RandomGuy","age":23},{"name":"RandomGuy2","age":25}],"q2":[{"val(n)":"RandomGuy","val(a)":23}]}`,
 		},
 	}
-
-	userClient, err := testutil.DgraphClient(testutil.SockAddr)
+	// upgrade
+	suite.Upgrade()
+	userClient, err := testutil.DgraphClient(sockAddr)
 	require.NoError(t, err)
 	time.Sleep(defaultTimeToSleep)
 
@@ -1830,15 +1820,17 @@ func TestAllPredsPermission(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestNewACLPredicates(t *testing.T) {
+func (suite *AclTestSuite) TestNewACLPredicates() {
+	t := suite.T()
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 	defer cancel()
 
-	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	dg, err := testutil.DgraphClientWithGroot(sockAddr)
 	require.NoError(t, err)
 	addDataAndRules(ctx, t, dg)
 
-	userClient, err := testutil.DgraphClient(testutil.SockAddr)
+	suite.Upgrade()
+	userClient, err := testutil.DgraphClient(sockAddr)
 	require.NoError(t, err)
 	time.Sleep(defaultTimeToSleep)
 
@@ -1955,15 +1947,18 @@ func removeRuleFromGroup(t *testing.T, token *testutil.HttpToken, group string,
 	return resp
 }
 
-func TestDeleteRule(t *testing.T) {
+func (suite *AclTestSuite) TestDeleteRule() {
+	t := suite.T()
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 	defer cancel()
 
-	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	dg, err := testutil.DgraphClientWithGroot(sockAddr)
 	require.NoError(t, err)
 	_ = addDataAndRules(ctx, t, dg)
 
-	userClient, err := testutil.DgraphClient(testutil.SockAddr)
+	// upgrade
+	suite.Upgrade()
+	userClient, err := testutil.DgraphClient(sockAddr)
 	require.NoError(t, err)
 	time.Sleep(defaultTimeToSleep)
 
@@ -2062,30 +2057,12 @@ func addDataAndRules(ctx context.Context, t *testing.T, dg *dgo.Dgraph) map[stri
 	return resp.GetUids()
 }
 
-func TestNonExistentGroup(t *testing.T) {
-	t.Skip()
-	// This test won't return an error anymore as if an update in a GraphQL mutation doesn't find
-	// anything to update then it just returns an empty result.
-	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
-	require.NoError(t, err)
-
-	testutil.DropAll(t, dg)
-
-	token, err := testutil.HttpLogin(&testutil.LoginParams{
-		Endpoint:  adminEndpoint,
-		UserID:    "groot",
-		Passwd:    "password",
-		Namespace: x.GalaxyNamespace,
-	})
-	require.NoError(t, err, "login failed")
-	addRulesToGroup(t, token, devGroup, []rule{{"name", Read.Code}})
-}
-
-func TestQueryUserInfo(t *testing.T) {
+func (suite *AclTestSuite) TestQueryUserInfo() {
+	t := suite.T()
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 	defer cancel()
 
-	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	dg, err := testutil.DgraphClientWithGroot(sockAddr)
 	require.NoError(t, err)
 	addDataAndRules(ctx, t, dg)
 
@@ -2174,7 +2151,9 @@ func TestQueryUserInfo(t *testing.T) {
 	}
 	`
 
-	userClient, err := testutil.DgraphClient(testutil.SockAddr)
+	// upgrade
+	suite.Upgrade()
+	userClient, err := testutil.DgraphClient(sockAddr)
 	require.NoError(t, err)
 	require.NoError(t, userClient.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace))
 
@@ -2260,11 +2239,12 @@ func TestQueryUserInfo(t *testing.T) {
 	testutil.CompareJSON(t, `{"getGroup": null}`, string(gqlResp.Data))
 }
 
-func TestQueriesWithUserAndGroupOfSameName(t *testing.T) {
+func (suite *AclTestSuite) TestQueriesWithUserAndGroupOfSameName() {
+	t := suite.T()
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 	defer cancel()
 
-	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	dg, err := testutil.DgraphClientWithGroot(sockAddr)
 	require.NoError(t, err)
 
 	testutil.DropAll(t, dg)
@@ -2311,11 +2291,14 @@ func TestQueriesWithUserAndGroupOfSameName(t *testing.T) {
 	}
 	`
 
-	dc := testutil.DgClientWithLogin(t, userid, userpassword, x.GalaxyNamespace)
+	dc, err := testutil.DgraphClient(sockAddr)
+	require.NoError(t, err)
+	require.NoError(t, dc.LoginIntoNamespace(context.Background(), userid, userpassword, x.GalaxyNamespace))
 	testutil.PollTillPassOrTimeout(t, dc, query, `{"q":[{"name":"RandomGuy"},{"name":"RandomGuy2"}]}`, timeout)
 }
 
-func TestQueriesForNonGuardianUserWithoutGroup(t *testing.T) {
+func (suite *AclTestSuite) TestQueriesForNonGuardianUserWithoutGroup() {
+	t := suite.T()
 	// Create a new user without any groups, queryGroup should return an empty result.
 	resetUser(t)
 
@@ -2344,7 +2327,8 @@ func TestQueriesForNonGuardianUserWithoutGroup(t *testing.T) {
 	resp := makeRequestAndRefreshTokenIfNecessary(t, token, params)
 	resp.RequireNoGraphQLErrors(t)
 	testutil.CompareJSON(t, `{"queryGroup": []}`, string(resp.Data))
-
+	// upgrade
+	suite.Upgrade()
 	gqlQuery = `
 	query {
 		queryUser {
@@ -2364,7 +2348,8 @@ func TestQueriesForNonGuardianUserWithoutGroup(t *testing.T) {
 	testutil.CompareJSON(t, `{"queryUser": [{ "groups": [], "name": "alice"}]}`, string(resp.Data))
 }
 
-func TestSchemaQueryWithACL(t *testing.T) {
+func (suite *AclTestSuite) TestSchemaQueryWithACL() {
+	t := suite.T()
 	schemaQuery := "schema{}"
 	grootSchema := `{
   "schema": [
@@ -2530,9 +2515,8 @@ func TestSchemaQueryWithACL(t *testing.T) {
     }
   ]
 }`
-
 	// guardian user should be able to view full schema
-	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	dg, err := testutil.DgraphClientWithGroot(sockAddr)
 	require.NoError(t, err)
 	testutil.DropAll(t, dg)
 	resp, err := dg.NewReadOnlyTxn().Query(context.Background(), schemaQuery)
@@ -2545,9 +2529,10 @@ func TestSchemaQueryWithACL(t *testing.T) {
 	defer cancel()
 	addDataAndRules(ctx, t, dg)
 	time.Sleep(defaultTimeToSleep) // wait for ACL cache to refresh, otherwise it will be flaky test
-
+	// upgrade
+	suite.Upgrade()
 	// the other user should be able to view only the part of schema for which it has read access
-	dg, err = testutil.DgraphClient(testutil.SockAddr)
+	dg, err = testutil.DgraphClient(sockAddr)
 	require.NoError(t, err)
 	require.NoError(t, dg.LoginIntoNamespace(context.Background(), userid, userpassword, x.GalaxyNamespace))
 	resp, err = dg.NewReadOnlyTxn().Query(context.Background(), schemaQuery)
@@ -2555,15 +2540,17 @@ func TestSchemaQueryWithACL(t *testing.T) {
 	require.JSONEq(t, aliceSchema, string(resp.GetJson()))
 }
 
-func TestDeleteUserShouldDeleteUserFromGroup(t *testing.T) {
+func (suite *AclTestSuite) TestDeleteUserShouldDeleteUserFromGroup() {
+	t := suite.T()
 	resetUser(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 	defer cancel()
-	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	dg, err := testutil.DgraphClientWithGroot(sockAddr)
 	require.NoError(t, err)
 	addDataAndRules(ctx, t, dg)
-
+	// upgrade
+	suite.Upgrade()
 	token, err := testutil.HttpLogin(&testutil.LoginParams{
 		Endpoint:  adminEndpoint,
 		UserID:    x.GrootId,
@@ -2632,15 +2619,17 @@ func TestDeleteUserShouldDeleteUserFromGroup(t *testing.T) {
 	  }`, string(resp.Data))
 }
 
-func TestGroupDeleteShouldDeleteGroupFromUser(t *testing.T) {
+func (suite *AclTestSuite) TestGroupDeleteShouldDeleteGroupFromUser() {
+	t := suite.T()
 	resetUser(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 	defer cancel()
-	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	dg, err := testutil.DgraphClientWithGroot(sockAddr)
 	require.NoError(t, err)
 	addDataAndRules(ctx, t, dg)
-
+	// upgrade
+	suite.Upgrade()
 	token, err := testutil.HttpLogin(&testutil.LoginParams{
 		Endpoint:  adminEndpoint,
 		UserID:    x.GrootId,
@@ -2706,98 +2695,6 @@ func TestGroupDeleteShouldDeleteGroupFromUser(t *testing.T) {
 	}`, string(resp.Data))
 }
 
-func TestWrongPermission(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
-	defer cancel()
-
-	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
-	require.NoError(t, err)
-
-	ruleMutation := `
-		_:dev <dgraph.type> "dgraph.type.Group" .
-		_:dev <dgraph.xid> "dev" .
-		_:dev <dgraph.acl.rule> _:rule1 .
-		_:rule1 <dgraph.rule.predicate> "name" .
-		_:rule1 <dgraph.rule.permission> "9" .
-	`
-
-	_, err = dg.NewTxn().Mutate(ctx, &api.Mutation{
-		SetNquads: []byte(ruleMutation),
-		CommitNow: true,
-	})
-
-	require.Error(t, err, "Setting permission to 9 should have returned error")
-	require.Contains(t, err.Error(), "Value for this predicate should be between 0 and 7")
-
-	ruleMutation = `
-		_:dev <dgraph.type> "dgraph.type.Group" .
-		_:dev <dgraph.xid> "dev" .
-		_:dev <dgraph.acl.rule> _:rule1 .
-		_:rule1 <dgraph.rule.predicate> "name" .
-		_:rule1 <dgraph.rule.permission> "-1" .
-	`
-
-	_, err = dg.NewTxn().Mutate(ctx, &api.Mutation{
-		SetNquads: []byte(ruleMutation),
-		CommitNow: true,
-	})
-
-	require.Error(t, err, "Setting permission to -1 should have returned error")
-	require.Contains(t, err.Error(), "Value for this predicate should be between 0 and 7")
-}
-
-func TestHealthForAcl(t *testing.T) {
-	params := testutil.GraphQLParams{
-		Query: `
-		query {
-			health {
-				instance
-				address
-				lastEcho
-				status
-				version
-				uptime
-				group
-			}
-		}`,
-	}
-
-	// assert errors for non-guardians
-	assertNonGuardianFailure(t, "health", false, params)
-
-	// assert data for guardians
-	token := testutil.GrootHttpLogin(adminEndpoint)
-
-	resp := makeRequestAndRefreshTokenIfNecessary(t, token, params)
-	resp.RequireNoGraphQLErrors(t)
-	var guardianResp struct {
-		Health []struct {
-			Instance string
-			Address  string
-			LastEcho int64
-			Status   string
-			Version  string
-			UpTime   int64
-			Group    string
-		}
-	}
-	err := json.Unmarshal(resp.Data, &guardianResp)
-	require.NoError(t, err, "health request failed")
-
-	// we have 9 instances of alphas/zeros in teamcity environment
-	require.Len(t, guardianResp.Health, 9)
-	for _, v := range guardianResp.Health {
-		t.Logf("Got health: %+v\n", v)
-		require.Contains(t, []string{"alpha", "zero"}, v.Instance)
-		require.NotEmpty(t, v.Address)
-		require.NotEmpty(t, v.LastEcho)
-		require.Equal(t, "healthy", v.Status)
-		require.NotEmpty(t, v.Version)
-		require.NotEmpty(t, v.UpTime)
-		require.NotEmpty(t, v.Group)
-	}
-}
-
 func assertNonGuardianFailure(t *testing.T, queryName string, respIsNull bool,
 	params testutil.GraphQLParams) {
 	resetUser(t)
@@ -2836,257 +2733,8 @@ type graphQLAdminEndpointTestCase struct {
 	guardianData string
 }
 
-func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
-	tcases := []graphQLAdminEndpointTestCase{
-		{
-			name: "backup has guardian auth",
-			query: `
-					mutation {
-					  backup(input: {destination: ""}) {
-						response {
-						  code
-						  message
-						}
-					  }
-					}`,
-			queryName:          "backup",
-			testGuardianAccess: true,
-			guardianErr:        "you must specify a 'destination' value",
-			guardianData:       `{"backup": null}`,
-		},
-		{
-			name: "listBackups has guardian auth",
-			query: `
-					query {
-					  listBackups(input: {location: ""}) {
-					  	backupId
-					  }
-					}`,
-			queryName:          "listBackups",
-			respIsArray:        true,
-			testGuardianAccess: true,
-			guardianErr:        `The uri path: "" doesn't exist`,
-			guardianData:       `{"listBackups": []}`,
-		},
-		{
-			name: "config update has guardian auth",
-			query: `
-					mutation {
-					  config(input: {cacheMb: -1}) {
-						response {
-						  code
-						  message
-						}
-					  }
-					}`,
-			queryName:          "config",
-			testGuardianAccess: true,
-			guardianErr:        "cache_mb must be non-negative",
-			guardianData:       `{"config": null}`,
-		},
-		{
-			name: "config get has guardian auth",
-			query: `
-					query {
-					  config {
-						cacheMb
-					  }
-					}`,
-			queryName:          "config",
-			testGuardianAccess: true,
-			guardianErr:        "",
-			guardianData:       "",
-		},
-		{
-			name: "draining has guardian auth",
-			query: `
-					mutation {
-					  draining(enable: false) {
-						response {
-						  code
-						  message
-						}
-					  }
-					}`,
-			queryName:          "draining",
-			testGuardianAccess: true,
-			guardianErr:        "",
-			guardianData: `{
-								"draining": {
-									"response": {
-										"code": "Success",
-										"message": "draining mode has been set to false"
-									}
-								}
-							}`,
-		},
-		{
-			name: "export has guardian auth",
-			query: `
-					mutation {
-					  export(input: {format: "invalid"}) {
-						response {
-						  code
-						  message
-						}
-					  }
-					}`,
-			queryName:          "export",
-			testGuardianAccess: true,
-			guardianErr:        "invalid export format: invalid",
-			guardianData:       `{"export": null}`,
-		},
-		{
-			name: "restore has guardian auth",
-			query: `
-					mutation {
-					  restore(input: {location: "", backupId: "", encryptionKeyFile: ""}) {
-						code
-					  }
-					}`,
-			queryName:          "restore",
-			testGuardianAccess: true,
-			guardianErr:        `The uri path: "" doesn't exist`,
-			guardianData:       `{"restore": {"code": "Failure"}}`,
-		},
-		{
-			name: "removeNode has guardian auth",
-			query: `
-					mutation {
-					  removeNode(input: {nodeId: 1, groupId: 2147483640}) {
-						response {
-							code
-						}
-					  }
-					}`,
-			queryName:          "removeNode",
-			testGuardianAccess: true,
-			guardianErr:        "No group with groupId 2147483640 found",
-			guardianData:       `{"removeNode": null}`,
-		},
-		{
-			name: "moveTablet has guardian auth",
-			query: `
-					mutation {
-					  moveTablet(input: {tablet: "non_existent_pred", groupId: 2147483640}) {
-						response {
-							code
-							message
-						}
-					  }
-					}`,
-			queryName:          "moveTablet",
-			testGuardianAccess: true,
-			guardianErr:        "group: [2147483640] is not a known group",
-			guardianData:       `{"moveTablet": null}`,
-		},
-		{
-			name: "assign has guardian auth",
-			query: `
-					mutation {
-					  assign(input: {what: UID, num: 0}) {
-						response {
-							startId
-							endId
-							readOnly
-						}
-					  }
-					}`,
-			queryName:          "assign",
-			testGuardianAccess: true,
-			guardianErr:        "Nothing to be leased",
-			guardianData:       `{"assign": null}`,
-		},
-		{
-			name: "enterpriseLicense has guardian auth",
-			query: `
-					mutation {
-					  enterpriseLicense(input: {license: ""}) {
-						response {
-							code
-						}
-					  }
-					}`,
-			queryName:          "enterpriseLicense",
-			testGuardianAccess: true,
-			guardianErr: "while extracting enterprise details from the license: while decoding" +
-				" license file: EOF",
-			guardianData: `{"enterpriseLicense": null}`,
-		},
-		{
-			name: "getGQLSchema has guardian auth",
-			query: `
-					query {
-					  getGQLSchema {
-						id
-					  }
-					}`,
-			queryName:          "getGQLSchema",
-			testGuardianAccess: true,
-			guardianErr:        "",
-			guardianData:       "",
-		},
-		{
-			name: "updateGQLSchema has guardian auth",
-			query: `
-					mutation {
-					  updateGQLSchema(input: {set: {schema: ""}}) {
-						gqlSchema {
-						  id
-						}
-					  }
-					}`,
-			queryName:          "updateGQLSchema",
-			testGuardianAccess: false,
-			guardianErr:        "",
-			guardianData:       "",
-		},
-		{
-			name: "shutdown has guardian auth",
-			query: `
-					mutation {
-					  shutdown {
-						response {
-						  code
-						  message
-						}
-					  }
-					}`,
-			queryName:          "shutdown",
-			testGuardianAccess: false,
-			guardianErr:        "",
-			guardianData:       "",
-		},
-	}
-
-	for _, tcase := range tcases {
-		t.Run(tcase.name, func(t *testing.T) {
-			params := testutil.GraphQLParams{Query: tcase.query}
-
-			// assert ACL error for non-guardians
-			assertNonGuardianFailure(t, tcase.queryName, !tcase.respIsArray, params)
-
-			// for guardians, assert non-ACL error or success
-			if tcase.testGuardianAccess {
-				token := testutil.GrootHttpLogin(adminEndpoint)
-				resp := makeRequestAndRefreshTokenIfNecessary(t, token, params)
-
-				if tcase.guardianErr == "" {
-					resp.RequireNoGraphQLErrors(t)
-				} else {
-					require.Len(t, resp.Errors, 1)
-					require.Contains(t, resp.Errors[0].Message, tcase.guardianErr)
-				}
-
-				if tcase.guardianData != "" {
-					require.JSONEq(t, tcase.guardianData, string(resp.Data))
-				}
-			}
-		})
-	}
-}
-
-func TestAddUpdateGroupWithDuplicateRules(t *testing.T) {
+func (suite *AclTestSuite) TestAddUpdateGroupWithDuplicateRules() {
+	t := suite.T()
 	groupName := "testGroup"
 	addedRules := []rule{
 		{
@@ -3110,6 +2758,8 @@ func TestAddUpdateGroupWithDuplicateRules(t *testing.T) {
 	require.Len(t, addedGroup.Rules, 2)
 	require.ElementsMatch(t, addedRules[1:], addedGroup.Rules)
 
+	// upgrade
+	suite.Upgrade()
 	updatedRules := []rule{
 		{
 			Predicate:  "test",
@@ -3142,11 +2792,12 @@ func TestAddUpdateGroupWithDuplicateRules(t *testing.T) {
 	_ = deleteGroup(t, token, groupName, true)
 }
 
-func TestAllowUIDAccess(t *testing.T) {
+func (suite *AclTestSuite) TestAllowUIDAccess() {
+	t := suite.T()
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 	defer cancel()
 
-	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	dg, err := testutil.DgraphClientWithGroot(sockAddr)
 	require.NoError(t, err)
 
 	testutil.DropAll(t, dg)
@@ -3166,7 +2817,7 @@ func TestAllowUIDAccess(t *testing.T) {
 	createGroup(t, token, devGroup)
 	addToGroup(t, token, userid, devGroup)
 
-	require.NoError(t, testutil.AssignUids(101))
+	require.NoError(t, dc.AssignUids(101))
 	mutation := &api.Mutation{
 		SetNquads: []byte(`
 			<100> <name> "100th User" .
@@ -3178,8 +2829,9 @@ func TestAllowUIDAccess(t *testing.T) {
 
 	// give read access of <name> to alice
 	addRulesToGroup(t, token, devGroup, []rule{{"name", Read.Code}})
-
-	userClient, err := testutil.DgraphClient(testutil.SockAddr)
+	// upgrade
+	suite.Upgrade()
+	userClient, err := testutil.DgraphClient(sockAddr)
 	require.NoError(t, err)
 	time.Sleep(defaultTimeToSleep)
 
@@ -3199,17 +2851,19 @@ func TestAllowUIDAccess(t *testing.T) {
 	testutil.CompareJSON(t, `{"me":[{"name":"100th User", "uid": "0x64"}]}`, string(resp.GetJson()))
 }
 
-func TestAddNewPredicate(t *testing.T) {
+func (suite *AclTestSuite) TestAddNewPredicate() {
+	t := suite.T()
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 	defer cancel()
 
-	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	dg, err := testutil.DgraphClientWithGroot(sockAddr)
 	require.NoError(t, err)
 
 	testutil.DropAll(t, dg)
 	resetUser(t)
-
-	userClient, err := testutil.DgraphClient(testutil.SockAddr)
+	// upgrade
+	suite.Upgrade()
+	userClient, err := testutil.DgraphClient(sockAddr)
 	require.NoError(t, err)
 	require.NoError(t, userClient.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace))
 
@@ -3236,11 +2890,12 @@ func TestAddNewPredicate(t *testing.T) {
 	require.NoError(t, err, "User is a guardian. Alter should have succeeded.")
 }
 
-func TestCrossGroupPermission(t *testing.T) {
+func (suite *AclTestSuite) TestCrossGroupPermission() {
+	t := suite.T()
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 	defer cancel()
 
-	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	dg, err := testutil.DgraphClientWithGroot(sockAddr)
 	require.NoError(t, err)
 
 	testutil.DropAll(t, dg)
@@ -3333,11 +2988,12 @@ func TestCrossGroupPermission(t *testing.T) {
 		require.True(t, (err != nil) == shouldFail,
 			"Alter test failed for: "+user+", shouldFail: "+strconv.FormatBool(shouldFail))
 	}
-
+	// upgrade
+	suite.Upgrade()
 	// test user access.
 	for i := 0; i < 8; i++ {
 		userIdx := strconv.Itoa(i)
-		userClient, err := testutil.DgraphClient(testutil.SockAddr)
+		userClient, err := testutil.DgraphClient(sockAddr)
 		require.NoError(t, err, "Client creation error")
 
 		err = userClient.LoginIntoNamespace(ctx, "user"+userIdx, "password"+userIdx, x.GalaxyNamespace)
@@ -3349,11 +3005,12 @@ func TestCrossGroupPermission(t *testing.T) {
 	}
 }
 
-func TestMutationWithValueVar(t *testing.T) {
+func (suite *AclTestSuite) TestMutationWithValueVar() {
+	t := suite.T()
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 	defer cancel()
 
-	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	dg, err := testutil.DgraphClientWithGroot(sockAddr)
 	require.NoError(t, err)
 
 	testutil.DropAll(t, dg)
@@ -3419,8 +3076,9 @@ func TestMutationWithValueVar(t *testing.T) {
 		`),
 		CommitNow: true,
 	}
-
-	userClient, err := testutil.DgraphClient(testutil.SockAddr)
+	// upgrade
+	suite.Upgrade()
+	userClient, err := testutil.DgraphClient(sockAddr)
 	require.NoError(t, err)
 	require.NoError(t, userClient.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace))
 
@@ -3447,40 +3105,15 @@ func TestMutationWithValueVar(t *testing.T) {
 	testutil.CompareJSON(t, `{"me": [{"name":"r1","nickname":"r1"}]}`, string(resp.GetJson()))
 }
 
-func TestFailedLogin(t *testing.T) {
+func (suite *AclTestSuite) TestDeleteGuardiansGroupShouldFail() {
+	t := suite.T()
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 	defer cancel()
-
-	grootClient, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
-	require.NoError(t, err)
-	op := api.Operation{DropAll: true}
-	if err := grootClient.Alter(ctx, &op); err != nil {
-		t.Fatalf("Unable to cleanup db:%v", err)
-	}
-	require.NoError(t, err)
-
-	client, err := testutil.DgraphClient(testutil.SockAddr)
-	require.NoError(t, err)
-
-	// User is not present
-	err = client.LoginIntoNamespace(ctx, userid, "simplepassword", x.GalaxyNamespace)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), x.ErrorInvalidLogin.Error())
-
-	resetUser(t)
-	// User is present
-	err = client.LoginIntoNamespace(ctx, userid, "randomstring", x.GalaxyNamespace)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), x.ErrorInvalidLogin.Error())
-}
-
-func TestDeleteGuardiansGroupShouldFail(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
-	defer cancel()
-	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	dg, err := testutil.DgraphClientWithGroot(sockAddr)
 	require.NoError(t, err)
 	addDataAndRules(ctx, t, dg)
-
+	// upgrade
+	suite.Upgrade()
 	token, err := testutil.HttpLogin(&testutil.LoginParams{
 		Endpoint:  adminEndpoint,
 		UserID:    x.GrootId,
@@ -3494,13 +3127,15 @@ func TestDeleteGuardiansGroupShouldFail(t *testing.T) {
 		"guardians group and groot user cannot be deleted.")
 }
 
-func TestDeleteGrootUserShouldFail(t *testing.T) {
+func (suite *AclTestSuite) TestDeleteGrootUserShouldFail() {
+	t := suite.T()
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 	defer cancel()
-	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	dg, err := testutil.DgraphClientWithGroot(sockAddr)
 	require.NoError(t, err)
 	addDataAndRules(ctx, t, dg)
-
+	// upgrade
+	suite.Upgrade()
 	token, err := testutil.HttpLogin(&testutil.LoginParams{
 		Endpoint:  adminEndpoint,
 		UserID:    x.GrootId,
@@ -3514,28 +3149,34 @@ func TestDeleteGrootUserShouldFail(t *testing.T) {
 		"guardians group and groot user cannot be deleted.")
 }
 
-func TestDeleteGrootUserFromGuardiansGroupShouldFail(t *testing.T) {
+func (suite *AclTestSuite) TestDeleteGrootUserFromGuardiansGroupShouldFail() {
+	t := suite.T()
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 	defer cancel()
-	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	dg, err := testutil.DgraphClientWithGroot(sockAddr)
 	require.NoError(t, err)
 	addDataAndRules(ctx, t, dg)
-
 	require.NoError(t, err, "login failed")
 
+	// upgrade
+	suite.Upgrade()
 	gqlresp := removeUserFromGroup(t, "groot", "guardians")
 
 	require.Contains(t, gqlresp.Errors.Error(),
 		"guardians group and groot user cannot be deleted.")
 }
 
-func TestDeleteGrootAndGuardiansUsingDelNQuadShouldFail(t *testing.T) {
+func (suite *AclTestSuite) TestDeleteGrootAndGuardiansUsingDelNQuadShouldFail() {
+	t := suite.T()
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 	defer cancel()
-	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	dg, err := testutil.DgraphClientWithGroot(sockAddr)
 	require.NoError(t, err)
 	addDataAndRules(ctx, t, dg)
-
+	// upgrade
+	suite.Upgrade()
+	dg, err = testutil.DgraphClientWithGroot(sockAddr)
+	require.NoError(t, err)
 	require.NoError(t, err, "login failed")
 
 	grootUid, guardiansUid := getGrootAndGuardiansUid(t, dg)
@@ -3569,13 +3210,17 @@ func deleteGuardiansGroupAndGrootUserShouldFail(t *testing.T) {
 		"guardians group and groot user cannot be deleted.")
 }
 
-func TestDropAllShouldResetGuardiansAndGroot(t *testing.T) {
+func (suite *AclTestSuite) TestDropAllShouldResetGuardiansAndGroot() {
+	t := suite.T()
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 	defer cancel()
-	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	dg, err := testutil.DgraphClientWithGroot(sockAddr)
 	require.NoError(t, err)
 	addDataAndRules(ctx, t, dg)
-
+	// upgrade
+	suite.Upgrade()
+	dg, err = testutil.DgraphClientWithGroot(sockAddr)
+	require.NoError(t, err)
 	require.NoError(t, err, "login failed")
 
 	// Try Drop All
@@ -3600,10 +3245,4 @@ func TestDropAllShouldResetGuardiansAndGroot(t *testing.T) {
 
 	time.Sleep(defaultTimeToSleep)
 	deleteGuardiansGroupAndGrootUserShouldFail(t)
-}
-
-func TestMain(m *testing.M) {
-	adminEndpoint = "http://" + testutil.SockAddrHttp + "/admin"
-	fmt.Printf("Using adminEndpoint for acl package: %s\n", adminEndpoint)
-	m.Run()
 }

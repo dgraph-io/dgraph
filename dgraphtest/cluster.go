@@ -18,6 +18,7 @@ package dgraphtest
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -30,6 +31,7 @@ import (
 
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -47,6 +49,8 @@ type Cluster interface {
 	AlphasHealth() ([]string, error)
 	AssignUids(num uint64) error
 	GetVersion() string
+	MakeGQLRequestWithAccessJwtAndTLS(t *testing.T, params *testutil.GraphQLParams,
+		tls *tls.Config, accessToken, adminUrl string) *testutil.GraphQLResponse
 }
 
 func SetupSchema(c Cluster, dbSchema string) error {
