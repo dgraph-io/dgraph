@@ -524,8 +524,7 @@ func TestGQLSchemaValidate(t *testing.T) {
 		require.NoError(t, err)
 
 		decoder := json.NewDecoder(resp.Body)
-		err = decoder.Decode(&response)
-		require.NoError(t, err)
+		require.NoError(t, decoder.Decode(&response))
 
 		// Verify that we only validate the schema and not set it.
 		require.Empty(t, common.AssertGetGQLSchema(t, groupOneHTTP, nil).Schema)

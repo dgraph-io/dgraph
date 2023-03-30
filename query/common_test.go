@@ -34,9 +34,7 @@ import (
 func setSchema(schema string) {
 	var err error
 	for retry := 0; retry < 60; retry++ {
-		err = client.Alter(context.Background(), &api.Operation{
-			Schema: schema,
-		})
+		err = client.Alter(context.Background(), &api.Operation{Schema: schema})
 		if err == nil {
 			return
 		}

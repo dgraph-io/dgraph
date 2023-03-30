@@ -31,8 +31,7 @@ func TestAccessWithoutClientCert(t *testing.T) {
 
 	dg, err := testutil.DgraphClientWithCerts(testutil.SockAddr, conf)
 	require.NoError(t, err, "Unable to get dgraph client: %v", err)
-	err = dg.Alter(context.Background(), &api.Operation{DropAll: true})
-	require.Error(t, err, "The authentication handshake should have failed")
+	require.Error(t, dg.Alter(context.Background(), &api.Operation{DropAll: true}))
 }
 
 func TestAccessWithClientCert(t *testing.T) {
@@ -49,8 +48,7 @@ func TestAccessWithClientCert(t *testing.T) {
 
 	dg, err := testutil.DgraphClientWithCerts(testutil.SockAddr, conf)
 	require.NoError(t, err, "Unable to get dgraph client: %v", err)
-	err = dg.Alter(context.Background(), &api.Operation{DropAll: true})
-	require.NoError(t, err, "Unable to perform dropall: %v", err)
+	require.NoError(t, dg.Alter(context.Background(), &api.Operation{DropAll: true}))
 }
 
 func TestCurlAccessWithoutClientCert(t *testing.T) {

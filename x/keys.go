@@ -206,8 +206,7 @@ func TypeKey(attr string) []byte {
 // next byte: data type prefix (set to ByteData)
 // next eight bytes: value of uid
 // next eight bytes (optional): if the key corresponds to a split list, the startUid of
-//
-//	the split stored in this key and the first byte will be sets to ByteSplit.
+// the split stored in this key and the first byte will be sets to ByteSplit.
 func DataKey(attr string, uid uint64) []byte {
 	extra := 1 + 8 // ByteData + UID
 	buf, prefixLen := generateKey(DefaultPrefix, attr, extra)
@@ -228,9 +227,8 @@ func DataKey(attr string, uid uint64) []byte {
 // next len(attr) bytes: value of attr
 // next byte: data type prefix (set to ByteReverse)
 // next eight bytes: value of uid
-// next eight bytes (optional): if the key corresponds to a split list, the startUid of
-//
-//	the split stored in this key.
+// next eight bytes (optional): if the key corresponds to a split list,
+// the startUid of the split stored in this key.
 func ReverseKey(attr string, uid uint64) []byte {
 	extra := 1 + 8 // ByteReverse + UID
 	buf, prefixLen := generateKey(DefaultPrefix, attr, extra)
@@ -252,8 +250,7 @@ func ReverseKey(attr string, uid uint64) []byte {
 // next byte: data type prefix (set to ByteIndex)
 // next len(term) bytes: value of term
 // next eight bytes (optional): if the key corresponds to a split list, the startUid of
-//
-//	the split stored in this key.
+// the split stored in this key.
 func IndexKey(attr, term string) []byte {
 	extra := 1 + len(term) // ByteIndex + term
 	buf, prefixLen := generateKey(DefaultPrefix, attr, extra)

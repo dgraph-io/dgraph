@@ -252,8 +252,7 @@ func TestAddMutation_DelSet(t *testing.T) {
 		Op:    pb.DirectedEdge_DEL,
 	}
 	txn := &Txn{StartTs: 1}
-	err = ol.addMutation(context.Background(), txn, edge)
-	require.NoError(t, err)
+	require.NoError(t, ol.addMutation(context.Background(), txn, edge))
 
 	// Set value to newcars, commit it
 	edge = &pb.DirectedEdge{
@@ -288,8 +287,7 @@ func TestAddMutation_DelRead(t *testing.T) {
 		Op:    pb.DirectedEdge_DEL,
 	}
 	txn = &Txn{StartTs: 3}
-	err = ol.addMutation(context.Background(), txn, edge)
-	require.NoError(t, err)
+	require.NoError(t, ol.addMutation(context.Background(), txn, edge))
 
 	// Part of same transaction as sp*, so should see zero length even
 	// if not committed yet.
@@ -513,16 +511,14 @@ func TestAddMutation_mrjn2(t *testing.T) {
 			Op:    pb.DirectedEdge_DEL,
 		}
 		txn := &Txn{StartTs: 7}
-		err := ol.addMutation(ctx, txn, edge)
-		require.NoError(t, err)
+		require.NoError(t, ol.addMutation(ctx, txn, edge))
 
 		// Add edge just to test that the deletion still happens.
 		edge = &pb.DirectedEdge{
 			ValueId:   7,
 			ValueType: pb.Posting_INT,
 		}
-		err = ol.addMutation(ctx, txn, edge)
-		require.NoError(t, err)
+		require.NoError(t, ol.addMutation(ctx, txn, edge))
 
 		require.EqualValues(t, 3, ol.Length(15, 0)) // The three commits should still be found.
 		require.NoError(t, ol.commitMutation(7, 11))
@@ -537,8 +533,7 @@ func TestAddMutation_mrjn2(t *testing.T) {
 			Op:    pb.DirectedEdge_DEL,
 		}
 		txn := &Txn{StartTs: 5}
-		err := ol.addMutation(ctx, txn, edge)
-		require.NoError(t, err)
+		require.NoError(t, ol.addMutation(ctx, txn, edge))
 		require.NoError(t, ol.commitMutation(5, 7))
 
 		// Commits are:
@@ -1046,11 +1041,9 @@ func TestDeleteStarMultiPartList(t *testing.T) {
 		Value:   []byte(x.Star),
 		Op:      pb.DirectedEdge_DEL,
 	}
-	err = list.addMutation(context.Background(), txn, edge)
-	require.NoError(t, err)
+	require.NoError(t, list.addMutation(context.Background(), txn, edge))
 
-	err = list.commitMutation(readTs, commitTs)
-	require.NoError(t, err)
+	require.NoError(t, list.commitMutation(readTs, commitTs))
 	validateCount(0)
 }
 

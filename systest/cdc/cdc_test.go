@@ -63,8 +63,7 @@ func verifyCDC(t *testing.T, path string) {
 	for fileScanner.Scan() {
 		bytes := fileScanner.Bytes()
 		l := new(CDCEvent)
-		err := json.Unmarshal(bytes, l)
-		require.NoError(t, err)
+		require.NoError(t, json.Unmarshal(bytes, l))
 		require.Equal(t, iter, l.Value.Event.Value)
 		iter = iter + 1
 	}

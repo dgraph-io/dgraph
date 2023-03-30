@@ -102,8 +102,7 @@ func BenchmarkWriter(b *testing.B) {
 			for _, typ := range KVList.Kv {
 				k := typ.Key
 				v := typ.Value
-				err := w.SetAt(k, v, BitSchemaPosting, 1)
-				require.NoError(b, err)
+				require.NoError(b, w.SetAt(k, v, BitSchemaPosting, 1))
 			}
 			require.NoError(b, w.Flush())
 

@@ -100,8 +100,7 @@ func checkUserCount(t *testing.T, resp []byte, expected int) {
 	}
 
 	var r Response
-	err := json.Unmarshal(resp, &r)
-	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(resp, &r))
 	require.Equal(t, expected, len(r.AddUser.User))
 }
 
@@ -616,8 +615,7 @@ func createGroupWithRules(t *testing.T, token *testutil.HttpToken, name string, 
 			Group []group
 		}
 	}
-	err := json.Unmarshal(resp.Data, &addGroupResp)
-	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(resp.Data, &addGroupResp))
 	require.Len(t, addGroupResp.AddGroup.Group, 1)
 
 	return &addGroupResp.AddGroup.Group[0]
@@ -670,8 +668,7 @@ func updateGroup(t *testing.T, token *testutil.HttpToken, name string, setRules 
 			Group []group
 		}
 	}
-	err := json.Unmarshal(resp.Data, &result)
-	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(resp.Data, &result))
 	require.Len(t, result.UpdateGroup.Group, 1)
 
 	return &result.UpdateGroup.Group[0]
@@ -687,8 +684,7 @@ func checkGroupCount(t *testing.T, resp []byte, expected int) {
 	}
 
 	var r Response
-	err := json.Unmarshal(resp, &r)
-	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(resp, &r))
 	require.Equal(t, expected, len(r.AddGroup.Group))
 }
 
@@ -736,8 +732,7 @@ func addToGroup(t *testing.T, token *testutil.HttpToken, userName, group string)
 			Name string
 		}
 	}
-	err := json.Unmarshal(resp.Data, &result)
-	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(resp.Data, &result))
 
 	// There should be a user in response.
 	require.Len(t, result.UpdateUser.User, 1)
@@ -958,8 +953,7 @@ func TestUnauthorizedDeletion(t *testing.T) {
 	require.NoError(t, err)
 	time.Sleep(defaultTimeToSleep)
 
-	err = userClient.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace)
-	require.NoError(t, err)
+	require.NoError(t, userClient.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace))
 
 	_, err = deleteUsingNQuad(userClient, "<"+nodeUID+">", "<"+unAuthPred+">", "*")
 
@@ -1133,8 +1127,7 @@ func TestQueryRemoveUnauthorizedPred(t *testing.T) {
 	require.NoError(t, err)
 	time.Sleep(defaultTimeToSleep)
 
-	err = userClient.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace)
-	require.NoError(t, err)
+	require.NoError(t, userClient.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace))
 
 	tests := []struct {
 		input       string
@@ -1290,8 +1283,7 @@ func TestExpandQueryWithACLPermissions(t *testing.T) {
 	require.NoError(t, err)
 	time.Sleep(defaultTimeToSleep)
 
-	err = userClient.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace)
-	require.NoError(t, err)
+	require.NoError(t, userClient.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace))
 
 	// Query via user when user has no permissions
 	testutil.PollTillPassOrTimeout(t, userClient, query, `{}`, timeout)
@@ -1414,8 +1406,7 @@ func TestDeleteQueryWithACLPermissions(t *testing.T) {
 	require.NoError(t, err)
 	time.Sleep(defaultTimeToSleep)
 
-	err = userClient.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace)
-	require.NoError(t, err)
+	require.NoError(t, userClient.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace))
 
 	// delete S * * (user now has permission to name and age)
 	_, err = deleteUsingNQuad(userClient, "<"+nodeUID+">", "*", "*")
@@ -1621,8 +1612,7 @@ func TestValQueryWithACLPermissions(t *testing.T) {
 	require.NoError(t, err)
 	time.Sleep(defaultTimeToSleep)
 
-	err = userClient.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace)
-	require.NoError(t, err)
+	require.NoError(t, userClient.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace))
 
 	// Query via user when user has no permissions
 	for _, tc := range tests {
@@ -1784,8 +1774,7 @@ func TestAllPredsPermission(t *testing.T) {
 	require.NoError(t, err)
 	time.Sleep(defaultTimeToSleep)
 
-	err = userClient.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace)
-	require.NoError(t, err)
+	require.NoError(t, userClient.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace))
 
 	// Query via user when user has no permissions
 	for _, tc := range tests {
@@ -1853,8 +1842,7 @@ func TestNewACLPredicates(t *testing.T) {
 	require.NoError(t, err)
 	time.Sleep(defaultTimeToSleep)
 
-	err = userClient.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace)
-	require.NoError(t, err)
+	require.NoError(t, userClient.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace))
 
 	queryTests := []struct {
 		input       string
@@ -1979,8 +1967,7 @@ func TestDeleteRule(t *testing.T) {
 	require.NoError(t, err)
 	time.Sleep(defaultTimeToSleep)
 
-	err = userClient.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace)
-	require.NoError(t, err)
+	require.NoError(t, userClient.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace))
 
 	queryName := "{me(func: has(name)) {name}}"
 	resp, err := userClient.NewReadOnlyTxn().Query(ctx, queryName)
@@ -2189,9 +2176,7 @@ func TestQueryUserInfo(t *testing.T) {
 
 	userClient, err := testutil.DgraphClient(testutil.SockAddr)
 	require.NoError(t, err)
-
-	err = userClient.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace)
-	require.NoError(t, err)
+	require.NoError(t, userClient.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace))
 
 	resp, err := userClient.NewReadOnlyTxn().Query(ctx, query)
 	require.NoError(t, err, "Error while querying ACL")
@@ -2797,8 +2782,8 @@ func TestHealthForAcl(t *testing.T) {
 		}
 	}
 	err := json.Unmarshal(resp.Data, &guardianResp)
-
 	require.NoError(t, err, "health request failed")
+
 	// we have 9 instances of alphas/zeros in teamcity environment
 	require.Len(t, guardianResp.Health, 9)
 	for _, v := range guardianResp.Health {
@@ -3198,8 +3183,7 @@ func TestAllowUIDAccess(t *testing.T) {
 	require.NoError(t, err)
 	time.Sleep(defaultTimeToSleep)
 
-	err = userClient.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace)
-	require.NoError(t, err)
+	require.NoError(t, userClient.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace))
 
 	uidQuery := `
 	{
@@ -3227,8 +3211,7 @@ func TestAddNewPredicate(t *testing.T) {
 
 	userClient, err := testutil.DgraphClient(testutil.SockAddr)
 	require.NoError(t, err)
-	err = userClient.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace)
-	require.NoError(t, err)
+	require.NoError(t, userClient.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace))
 
 	// Alice doesn't have access to create new predicate.
 	err = userClient.Alter(ctx, &api.Operation{
@@ -3439,8 +3422,7 @@ func TestMutationWithValueVar(t *testing.T) {
 
 	userClient, err := testutil.DgraphClient(testutil.SockAddr)
 	require.NoError(t, err)
-	err = userClient.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace)
-	require.NoError(t, err)
+	require.NoError(t, userClient.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace))
 
 	_, err = userClient.NewTxn().Do(ctx, &api.Request{
 		Query:     query,

@@ -126,8 +126,7 @@ func TestExportAndLoadJson(t *testing.T) {
 	// Drop all data
 	dg, err := testutil.DgraphClient(testutil.SockAddr)
 	require.NoError(t, err)
-	err = dg.Alter(context.Background(), &api.Operation{DropAll: true})
-	require.NoError(t, err)
+	require.NoError(t, dg.Alter(context.Background(), &api.Operation{DropAll: true}))
 
 	res = runQuery(t, q)
 	require.JSONEq(t, `{"data": {"q": [{"count":0}]}}`, res)
@@ -208,8 +207,7 @@ func TestExportAndLoadJsonFacets(t *testing.T) {
 	// Drop all data
 	dg, err := testutil.DgraphClient(testutil.SockAddr)
 	require.NoError(t, err)
-	err = dg.Alter(context.Background(), &api.Operation{DropAll: true})
-	require.NoError(t, err)
+	require.NoError(t, dg.Alter(context.Background(), &api.Operation{DropAll: true}))
 
 	res := runQuery(t, `{ q(func:has(name)) { name } }`)
 	require.JSONEq(t, `{"data": {"q": []}}`, res)

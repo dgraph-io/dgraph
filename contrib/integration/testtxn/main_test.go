@@ -23,7 +23,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -48,13 +47,11 @@ var s state
 
 func TestMain(m *testing.M) {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
-	x.CheckfNoTrace(testutil.AssignUids(200))
+	x.Panic(testutil.AssignUids(200))
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
-	x.CheckfNoTrace(err)
+	x.Panic(err)
 	s.dg = dg
-
-	r := m.Run()
-	os.Exit(r)
+	_ = m.Run()
 }
 
 // readTs == startTs
@@ -73,13 +70,13 @@ func TestTxnRead1(t *testing.T) {
 	if len(assigned.Uids) != 1 {
 		log.Fatalf("Error. Nothing assigned. %+v\n", assigned)
 	}
-	uid := retrieveUids(assigned.Uids)[0]
+	uid := retrieveUids(t, assigned.Uids)[0]
 	q := fmt.Sprintf(`{ me(func: uid(%s)) { name }}`, uid)
 	resp, err := txn.Query(context.Background(), q)
 	if err != nil {
 		log.Fatalf("Error while running query: %v\n", err)
 	}
-	x.AssertTrue(bytes.Equal(resp.Json, []byte("{\"me\":[{\"name\":\"Manish\"}]}")))
+	require.True(t, bytes.Equal(resp.Json, []byte("{\"me\":[{\"name\":\"Manish\"}]}")))
 	require.NoError(t, txn.Commit(context.Background()))
 }
 
@@ -108,7 +105,7 @@ func TestTxnRead2(t *testing.T) {
 	if err != nil {
 		log.Fatalf("Error while running query: %v\n", err)
 	}
-	x.AssertTruef(bytes.Equal(resp.Json, []byte("{\"me\":[]}")), "%s", resp.Json)
+	require.Truef(t, bytes.Equal(resp.Json, []byte("{\"me\":[]}")), "%s", resp.Json)
 	require.NoError(t, txn.Commit(context.Background()))
 }
 
@@ -147,7 +144,7 @@ func TestTxnRead3(t *testing.T) {
 	if err != nil {
 		log.Fatalf("Error while running query: %v\n", err)
 	}
-	x.AssertTrue(bytes.Equal(resp.Json, []byte("{\"me\":[{\"name\":\"Manish\"}]}")))
+	require.True(t, bytes.Equal(resp.Json, []byte("{\"me\":[{\"name\":\"Manish\"}]}")))
 }
 
 // readTs > commitTs
@@ -183,7 +180,7 @@ func TestTxnRead4(t *testing.T) {
 	if err != nil {
 		log.Fatalf("Error while running query: %v\n", err)
 	}
-	x.AssertTrue(bytes.Equal(resp.Json, []byte("{\"me\":[{\"name\":\"Manish\"}]}")))
+	require.True(t, bytes.Equal(resp.Json, []byte("{\"me\":[{\"name\":\"Manish\"}]}")))
 
 	require.NoError(t, txn3.Commit(context.Background()))
 
@@ -193,7 +190,7 @@ func TestTxnRead4(t *testing.T) {
 	if err != nil {
 		log.Fatalf("Error while running query: %v\n", err)
 	}
-	x.AssertTrue(bytes.Equal(resp.Json, []byte("{\"me\":[{\"name\":\"Manish2\"}]}")))
+	require.True(t, bytes.Equal(resp.Json, []byte("{\"me\":[{\"name\":\"Manish2\"}]}")))
 }
 
 func TestTxnRead5(t *testing.T) {
@@ -221,8 +218,8 @@ func TestTxnRead5(t *testing.T) {
 	if err != nil {
 		log.Fatalf("Error while running query: %v\n", err)
 	}
-	x.AssertTrue(bytes.Equal(resp.Json, []byte("{\"me\":[{\"name\":\"Manish\"}]}")))
-	x.AssertTrue(resp.Txn.StartTs > 0)
+	require.True(t, bytes.Equal(resp.Json, []byte("{\"me\":[{\"name\":\"Manish\"}]}")))
+	require.True(t, resp.Txn.StartTs > 0)
 
 	mu = &api.Mutation{CommitNow: true}
 	mu.SetJson = []byte(fmt.Sprintf("{\"uid\": \"%s\", \"name\": \"Manish2\"}", uid))
@@ -232,13 +229,13 @@ func TestTxnRead5(t *testing.T) {
 	if err != nil {
 		log.Fatalf("Error while running mutation: %v\n", err)
 	}
-	x.AssertTrue(res.Txn.StartTs > 0)
+	require.True(t, res.Txn.StartTs > 0)
 	txn = s.dg.NewReadOnlyTxn()
 	resp, err = txn.Query(context.Background(), q)
 	if err != nil {
 		log.Fatalf("Error while running query: %v\n", err)
 	}
-	x.AssertTrue(bytes.Equal(resp.Json, []byte(`{"me":[{"name":"Manish2"}]}`)))
+	require.True(t, bytes.Equal(resp.Json, []byte(`{"me":[{"name":"Manish2"}]}`)))
 }
 
 func TestConflict(t *testing.T) {
@@ -265,11 +262,11 @@ func TestConflict(t *testing.T) {
 	txn2 := s.dg.NewTxn()
 	mu = &api.Mutation{}
 	mu.SetJson = []byte(fmt.Sprintf(`{"uid": "%s", "name": "Manish"}`, uid))
-	x.Check2(txn2.Mutate(context.Background(), mu))
+	_, err = txn2.Mutate(context.Background(), mu)
+	require.NoError(t, err)
 
 	require.NoError(t, txn.Commit(context.Background()))
-	err = txn2.Commit(context.Background())
-	x.AssertTrue(err != nil)
+	require.Error(t, txn2.Commit(context.Background()))
 
 	txn = s.dg.NewTxn()
 	q := fmt.Sprintf(`{ me(func: uid(%s)) { name }}`, uid)
@@ -277,7 +274,7 @@ func TestConflict(t *testing.T) {
 	if err != nil {
 		log.Fatalf("Error while running query: %v\n", err)
 	}
-	x.AssertTrue(bytes.Equal(resp.Json, []byte("{\"me\":[{\"name\":\"Manish\"}]}")))
+	require.True(t, bytes.Equal(resp.Json, []byte("{\"me\":[{\"name\":\"Manish\"}]}")))
 }
 
 func TestConflictTimeout(t *testing.T) {
@@ -310,8 +307,7 @@ func TestConflictTimeout(t *testing.T) {
 		require.NoError(t, txn2.Commit(context.Background()))
 	}
 
-	err = txn.Commit(context.Background())
-	x.AssertTrue(err != nil)
+	require.Error(t, txn.Commit(context.Background()))
 
 	txn3 := s.dg.NewTxn()
 	q = fmt.Sprintf(`{ me(func: uid(%s)) { name }}`, uid)
@@ -341,11 +337,11 @@ func TestConflictTimeout2(t *testing.T) {
 	txn2 := s.dg.NewTxn()
 	mu := &api.Mutation{}
 	mu.SetJson = []byte(fmt.Sprintf(`{"uid": "%s", "name": "Jan the man"}`, uid))
-	x.Check2(txn2.Mutate(context.Background(), mu))
+	_, err := txn2.Mutate(context.Background(), mu)
+	require.NoError(t, err)
 
 	require.NoError(t, txn.Commit(context.Background()))
-	err := txn2.Commit(context.Background())
-	x.AssertTrue(err != nil)
+	require.Error(t, txn2.Commit(context.Background()))
 
 	txn3 := s.dg.NewTxn()
 	mu = &api.Mutation{}
@@ -451,7 +447,7 @@ func TestReadIndexKeySameTxn(t *testing.T) {
 		log.Fatalf("Error while running query: %v\n", err)
 	}
 	expectedResp := []byte(fmt.Sprintf(`{"me":[{"uid":"%s"}]}`, uid))
-	x.AssertTrue(bytes.Equal(resp.Json, expectedResp))
+	require.True(t, bytes.Equal(resp.Json, expectedResp))
 }
 
 func TestEmailUpsert(t *testing.T) {
@@ -555,7 +551,7 @@ func TestNameSet(t *testing.T) {
 }
 
 // retrieve the uids in the uidMap in the order of ascending keys
-func retrieveUids(uidMap map[string]string) []string {
+func retrieveUids(t *testing.T, uidMap map[string]string) []string {
 	keys := make([]string, 0, len(uidMap))
 	for key := range uidMap {
 		keys = append(keys, key)
@@ -566,9 +562,9 @@ func retrieveUids(uidMap map[string]string) []string {
 
 		num2 := strings.Split(keys[j], ".")[2]
 		n1, err := strconv.Atoi(num1)
-		x.Check(err)
+		require.NoError(t, err)
 		n2, err := strconv.Atoi(num2)
-		x.Check(err)
+		require.NoError(t, err)
 		return n1 < n2
 	})
 
@@ -593,7 +589,7 @@ func TestSPStar(t *testing.T) {
 	mu.SetJson = []byte(`{"name": "Manish", "friend": [{"name": "Jan"}]}`)
 	assigned, err := txn.Mutate(context.Background(), mu)
 	require.Equal(t, 2, len(assigned.Uids))
-	uid1 := retrieveUids(assigned.Uids)[0]
+	uid1 := retrieveUids(t, assigned.Uids)[0]
 	require.NoError(t, err)
 	require.Equal(t, 2, len(assigned.Uids))
 	require.NoError(t, txn.Commit(context.Background()))
@@ -610,7 +606,7 @@ func TestSPStar(t *testing.T) {
 	assigned, err = txn.Mutate(context.Background(), mu)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(assigned.Uids))
-	uid2 := retrieveUids(assigned.Uids)[0]
+	uid2 := retrieveUids(t, assigned.Uids)[0]
 
 	q := fmt.Sprintf(`{
 		me(func: uid(%s)) {
@@ -646,7 +642,7 @@ func TestSPStar2(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 2, len(assigned.Uids))
 
-	uids := retrieveUids(assigned.Uids)
+	uids := retrieveUids(t, assigned.Uids)
 	uid1 := uids[0]
 	uid2 := uids[1]
 	q := fmt.Sprintf(`{
@@ -682,7 +678,7 @@ func TestSPStar2(t *testing.T) {
 	assigned, err = txn.Mutate(context.Background(), mu)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(assigned.Uids))
-	uid3 := retrieveUids(assigned.Uids)[0]
+	uid3 := retrieveUids(t, assigned.Uids)[0]
 	resp, err = txn.Query(context.Background(), q)
 	require.NoError(t, err)
 	expectedResp = fmt.Sprintf(`{"me":[{"uid":"%s", "friend": [{"name": "Jan2", "uid":"%s"}]}]}`,
@@ -708,7 +704,7 @@ func TestSPStar2(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, len(assigned.Uids))
 
-	uid4 := retrieveUids(assigned.Uids)[0]
+	uid4 := retrieveUids(t, assigned.Uids)[0]
 	resp, err = txn.Query(context.Background(), q)
 	require.NoError(t, err)
 	expectedResp = fmt.Sprintf(`{"me":[{"uid":"%s", "friend": [{"name": "Jan3", "uid":"%s"}]}]}`, uid1, uid4)
@@ -729,47 +725,43 @@ query countAnswers($num: int) {
 
 func TestCountIndexConcurrentTxns(t *testing.T) {
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
-	x.Check(err)
+	require.NoError(t, err)
 	testutil.DropAll(t, dg)
-	alterSchema(dg, "answer: [uid] @count .")
+	alterSchema(t, dg, "answer: [uid] @count .")
 
 	// Expected edge count of 0x100: 1
 	txn0 := dg.NewTxn()
 	mu := api.Mutation{SetNquads: []byte("<0x100> <answer> <0x200> .")}
 	_, err = txn0.Mutate(ctxb, &mu)
-	x.Check(err)
-	err = txn0.Commit(ctxb)
-	x.Check(err)
+	require.NoError(t, err)
+	require.NoError(t, txn0.Commit(ctxb))
 
 	// The following two mutations are in separate interleaved txns.
 	txn1 := dg.NewTxn()
 	mu = api.Mutation{SetNquads: []byte("<0x1> <answer> <0x2> .")}
 	_, err = txn1.Mutate(ctxb, &mu)
-	x.Check(err)
+	require.NoError(t, err)
 
 	txn2 := dg.NewTxn()
 	mu = api.Mutation{SetNquads: []byte("<0x1> <answer> <0x3> .")}
 	_, err = txn2.Mutate(ctxb, &mu)
-	x.Check(err)
+	require.NoError(t, err)
 
-	err = txn1.Commit(ctxb)
-	x.Check(err)
-	err = txn2.Commit(ctxb)
-	require.Error(t, err,
+	require.NoError(t, txn1.Commit(ctxb))
+	require.Error(t, txn2.Commit(ctxb),
 		"the txn2 should be aborted due to concurrent update on the count index of	<0x01>")
 
 	// retry the mutation
 	txn3 := dg.NewTxn()
 	_, err = txn3.Mutate(ctxb, &mu)
-	x.Check(err)
-	err = txn3.Commit(ctxb)
-	x.Check(err)
+	require.NoError(t, err)
+	require.NoError(t, txn3.Commit(ctxb))
 
 	// Verify count queries
 	txn := dg.NewReadOnlyTxn()
 	vars := map[string]string{"$num": "1"}
 	resp, err := txn.QueryWithVars(ctxb, countQuery, vars)
-	x.Check(err)
+	require.NoError(t, err)
 	js := string(resp.GetJson())
 	require.JSONEq(t,
 		`{"me": [{"count(answer)": 1, "uid": "0x100"}]}`,
@@ -777,7 +769,7 @@ func TestCountIndexConcurrentTxns(t *testing.T) {
 	txn = dg.NewReadOnlyTxn()
 	vars = map[string]string{"$num": "2"}
 	resp, err = txn.QueryWithVars(ctxb, countQuery, vars)
-	x.Check(err)
+	require.NoError(t, err)
 	js = string(resp.GetJson())
 	require.JSONEq(t,
 		`{"me": [{"count(answer)": 2, "uid": "0x1"}]}`,
@@ -786,17 +778,16 @@ func TestCountIndexConcurrentTxns(t *testing.T) {
 
 func TestCountIndexSerialTxns(t *testing.T) {
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
-	x.Check(err)
+	require.NoError(t, err)
 	testutil.DropAll(t, dg)
-	alterSchema(dg, "answer: [uid] @count .")
+	alterSchema(t, dg, "answer: [uid] @count .")
 
 	// Expected Edge count of 0x100: 1
 	txn0 := dg.NewTxn()
 	mu := api.Mutation{SetNquads: []byte("<0x100> <answer> <0x200> .")}
 	_, err = txn0.Mutate(ctxb, &mu)
 	require.NoError(t, err)
-	err = txn0.Commit(ctxb)
-	require.NoError(t, err)
+	require.NoError(t, txn0.Commit(ctxb))
 
 	// Expected edge count of 0x1: 2
 	// This should NOT appear in the query result
@@ -805,15 +796,13 @@ func TestCountIndexSerialTxns(t *testing.T) {
 	mu = api.Mutation{SetNquads: []byte("<0x1> <answer> <0x2> .")}
 	_, err = txn1.Mutate(ctxb, &mu)
 	require.NoError(t, err)
-	err = txn1.Commit(ctxb)
-	require.NoError(t, err)
+	require.NoError(t, txn1.Commit(ctxb))
 
 	txn2 := dg.NewTxn()
 	mu = api.Mutation{SetNquads: []byte("<0x1> <answer> <0x3> .")}
 	_, err = txn2.Mutate(ctxb, &mu)
 	require.NoError(t, err)
-	err = txn2.Commit(ctxb)
-	require.NoError(t, err)
+	require.NoError(t, txn2.Commit(ctxb))
 
 	// Verify query
 	txn := dg.NewReadOnlyTxn()
@@ -836,17 +825,16 @@ func TestCountIndexSerialTxns(t *testing.T) {
 
 func TestCountIndexSameTxn(t *testing.T) {
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
-	x.Check(err)
+	require.NoError(t, err)
 	testutil.DropAll(t, dg)
-	alterSchema(dg, "answer: [uid] @count .")
+	alterSchema(t, dg, "answer: [uid] @count .")
 
 	// Expected Edge count of 0x100: 1
 	txn0 := dg.NewTxn()
 	mu := api.Mutation{SetNquads: []byte("<0x100> <answer> <0x200> .")}
 	_, err = txn0.Mutate(ctxb, &mu)
-	x.Check(err)
-	err = txn0.Commit(ctxb)
-	x.Check(err)
+	require.NoError(t, err)
+	require.NoError(t, txn0.Commit(ctxb))
 
 	// Expected edge count of 0x1: 2
 	// This should NOT appear in the query result
@@ -854,18 +842,17 @@ func TestCountIndexSameTxn(t *testing.T) {
 	txn1 := dg.NewTxn()
 	mu = api.Mutation{SetNquads: []byte("<0x1> <answer> <0x2> .")}
 	_, err = txn1.Mutate(ctxb, &mu)
-	x.Check(err)
+	require.NoError(t, err)
 	mu = api.Mutation{SetNquads: []byte("<0x1> <answer> <0x3> .")}
 	_, err = txn1.Mutate(ctxb, &mu)
-	x.Check(err)
-	err = txn1.Commit(ctxb)
-	x.Check(err)
+	require.NoError(t, err)
+	require.NoError(t, txn1.Commit(ctxb))
 
 	// Verify query
 	txn := dg.NewReadOnlyTxn()
 	vars := map[string]string{"$num": "1"}
 	resp, err := txn.QueryWithVars(ctxb, countQuery, vars)
-	x.Check(err)
+	require.NoError(t, err)
 	js := string(resp.GetJson())
 	require.JSONEq(t,
 		`{"me": [{"count(answer)": 1, "uid": "0x100"}]}`,
@@ -873,7 +860,7 @@ func TestCountIndexSameTxn(t *testing.T) {
 	txn = dg.NewReadOnlyTxn()
 	vars = map[string]string{"$num": "2"}
 	resp, err = txn.QueryWithVars(ctxb, countQuery, vars)
-	x.Check(err)
+	require.NoError(t, err)
 	js = string(resp.GetJson())
 	require.JSONEq(t,
 		`{"me": [{"count(answer)": 2, "uid": "0x1"}]}`,
@@ -882,7 +869,7 @@ func TestCountIndexSameTxn(t *testing.T) {
 
 func TestConcurrentQueryMutate(t *testing.T) {
 	testutil.DropAll(t, s.dg)
-	alterSchema(s.dg, "name: string .")
+	alterSchema(t, s.dg, "name: string .")
 
 	txn := s.dg.NewTxn()
 	defer func() { require.NoError(t, txn.Discard(context.Background())) }()
@@ -918,7 +905,7 @@ func TestConcurrentQueryMutate(t *testing.T) {
 
 func TestTxnDiscardBeforeCommit(t *testing.T) {
 	testutil.DropAll(t, s.dg)
-	alterSchema(s.dg, "name: string .")
+	alterSchema(t, s.dg, "name: string .")
 
 	txn := s.dg.NewTxn()
 	mu := &api.Mutation{
@@ -932,7 +919,7 @@ func TestTxnDiscardBeforeCommit(t *testing.T) {
 	require.NotEqual(t, err, dgo.ErrAborted)
 }
 
-func alterSchema(dg *dgo.Dgraph, schema string) {
+func alterSchema(t *testing.T, dg *dgo.Dgraph, schema string) {
 	op := api.Operation{Schema: schema}
-	x.Check(dg.Alter(ctxb, &op))
+	require.NoError(t, dg.Alter(ctxb, &op))
 }

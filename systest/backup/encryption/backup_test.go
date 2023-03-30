@@ -307,8 +307,7 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	require.NoError(t, err)
 
 	var manifest worker.MasterManifest
-	err = json.Unmarshal(b, &manifest)
-	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(b, &manifest))
 	require.Equal(t, numExpectedDirs, len(manifest.Manifests))
 	return dirs
 }

@@ -18,10 +18,8 @@ func encodePublicKey(t *testing.T, e *openpgp.Entity) *bytes.Buffer {
 	b := new(bytes.Buffer)
 	encodedKeyBuf, err := armor.Encode(b, openpgp.PublicKeyType, nil)
 	require.NoError(t, err)
-	err = e.Serialize(encodedKeyBuf)
-	require.NoError(t, err)
-	err = encodedKeyBuf.Close()
-	require.NoError(t, err)
+	require.NoError(t, e.Serialize(encodedKeyBuf))
+	require.NoError(t, encodedKeyBuf.Close())
 	return b
 }
 
@@ -36,8 +34,7 @@ func signAndWriteMessage(t *testing.T, entity *openpgp.Entity, json string) *byt
 	_, err = w.Write([]byte(json))
 	require.NoError(t, err)
 
-	err = w.Close()
-	require.NoError(t, err)
+	require.NoError(t, w.Close())
 
 	// armor encode the message
 	abuf := new(bytes.Buffer)
@@ -46,8 +43,7 @@ func signAndWriteMessage(t *testing.T, entity *openpgp.Entity, json string) *byt
 	_, err = w.Write(b.Bytes())
 	require.NoError(t, err)
 
-	err = w.Close()
-	require.NoError(t, err)
+	require.NoError(t, w.Close())
 
 	return abuf
 }
