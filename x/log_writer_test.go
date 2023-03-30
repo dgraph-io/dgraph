@@ -71,7 +71,7 @@ func TestLogWriterWithEncryption(t *testing.T) {
 		MaxSize:       1,
 		MaxAge:        1,
 		Compress:      false,
-		EncryptionKey: []byte("1234567890123456"),
+		EncryptionKey: []byte("1234567890123456"), // 16 bytes
 	}
 
 	lw, _ = lw.Init()
@@ -81,7 +81,7 @@ func TestLogWriterWithEncryption(t *testing.T) {
 	for i := 0; i < 10000; i++ {
 		n, err := lw.Write(msg)
 		require.NoError(t, err)
-		require.Equal(t, n, len(msg)+4, "write length is not equal")
+		require.Equal(t, n, len(msg)+20, "write length is not equal")
 	}
 
 	time.Sleep(time.Second * 10)
@@ -104,10 +104,14 @@ func TestLogWriterWithEncryption(t *testing.T) {
 
 	var iterator int64 = 16
 	for {
-		content := make([]byte, binary.BigEndian.Uint32(iv[12:]))
+		length := make([]byte, 4)
+		_, err = file.ReadAt(length, iterator)
+		require.Nil(t, err)
+		iterator = iterator + 4
+		content := make([]byte, binary.BigEndian.Uint32(length))
 		_, err = file.ReadAt(content, iterator)
 		require.NoError(t, err)
-		iterator = iterator + int64(binary.BigEndian.Uint32(iv[12:]))
+		iterator = iterator + int64(binary.BigEndian.Uint32(length))
 		stream := cipher.NewCTR(block, iv)
 		stream.XORKeyStream(content, content)
 		//require.True(t, bytes.Equal(content, msg))
@@ -116,9 +120,10 @@ func TestLogWriterWithEncryption(t *testing.T) {
 		if iterator >= stat.Size() {
 			break
 		}
-		_, err = file.ReadAt(iv[12:], iterator)
+		iv := make([]byte, 16)
+		_, err = file.ReadAt(iv, iterator)
 		require.NoError(t, err)
-		iterator = iterator + 4
+		iterator = iterator + 16
 	}
 }
 
