@@ -164,3 +164,7 @@ func (c *DCloudCluster) AssignUids(num uint64) error {
 
 	return nil
 }
+
+func (c *DCloudCluster) GetVersion() string {
+	return localVersion
+}

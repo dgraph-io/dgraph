@@ -281,7 +281,7 @@ func publicPort(dcli *docker.Client, dc dnode, privatePort string) (string, erro
 }
 
 func mountBinary(c *LocalCluster) (mount.Mount, error) {
-	if c.conf.version == "local" {
+	if c.conf.version == localVersion {
 		return mount.Mount{
 			Type:     mount.TypeBind,
 			Source:   filepath.Join(os.Getenv("GOPATH"), "bin"),

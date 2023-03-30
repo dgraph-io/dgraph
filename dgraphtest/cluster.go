@@ -21,8 +21,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"testing"
 	"time"
 
+	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/pkg/errors"
 
 	"github.com/dgraph-io/dgo/v210"
@@ -43,6 +46,7 @@ type Cluster interface {
 	AdminPost(body []byte) ([]byte, error)
 	AlphasHealth() ([]string, error)
 	AssignUids(num uint64) error
+	GetVersion() string
 }
 
 func SetupSchema(c Cluster, dbSchema string) error {
@@ -238,4 +242,53 @@ loop:
 		}
 		return nil
 	}
+}
+
+func ShouldSkipTest(t *testing.T, minVersion, clusterVersion string) error {
+	if clusterVersion == localVersion {
+		return nil
+	}
+
+	isParentCommit, err := isParent(minVersion, clusterVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if isParentCommit {
+		t.Skipf("test is valid for commits greater than [%v]", minVersion)
+	}
+
+	return nil
+}
+
+// isParent checks whether ancestor is the ancestor commit of the given descendant commit.
+func isParent(ancestor, descendant string) (bool, error) {
+	repo, err := git.PlainOpen(repoDir)
+	if err != nil {
+		return false, errors.Wrap(err, "error opening git repo")
+	}
+
+	ancestorHash, err := repo.ResolveRevision(plumbing.Revision(ancestor))
+	if err != nil {
+		return false, errors.Wrapf(err, "error while getting reference of [%v]", ancestor)
+	}
+	ancestorCommit, err := repo.CommitObject(*ancestorHash)
+	if err != nil {
+		return false, errors.Wrapf(err, "error finding commit object [%v]", ancestor)
+	}
+
+	descendantHash, err := repo.ResolveRevision(plumbing.Revision(descendant))
+	if err != nil {
+		return false, err
+	}
+	descendantCommit, err := repo.CommitObject(*descendantHash)
+	if err != nil {
+		return false, errors.Wrapf(err, "error finding commit object [%v]", descendant)
+	}
+
+	isParentCommit, err := descendantCommit.IsAncestor(ancestorCommit)
+	if err != nil {
+		return false, errors.Wrapf(err, "unable to compare commit [%v] to commit [%v]",
+			descendant, ancestor)
+	}
+	return isParentCommit, nil
 }
