@@ -1,4 +1,4 @@
-//go:build integration
+//go:build integration || upgrade
 
 /*
  * Copyright 2023 Dgraph Labs, Inc. and Contributors
@@ -21,30 +21,79 @@ package main
 import (
 	"context"
 	"fmt"
-	"net/http"
+	//"net/http"
 	"os"
-	"path/filepath"
+	//"path/filepath"
 	"testing"
 	"time"
+	"strings"
+	"encoding/json"
 
+	"github.com/stretchr/testify/suite"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dgraph-io/dgraph/dgraphtest"
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/ee/acl"
-	"github.com/dgraph-io/dgraph/graphql/e2e/common"
-	"github.com/dgraph-io/dgraph/graphql/schema"
+	//"github.com/dgraph-io/dgraph/graphql/e2e/common"
+	//"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/pkg/errors"
 )
+
+type Rule struct {
+	Predicate  string `json:"predicate"`
+	Permission int32  `json:"permission"`
+}
+
+type MultitenancyTestSuite struct {
+	suite.Suite
+	lc *dgraphtest.LocalCluster
+	client *dgo.Dgraph
+}
+
+func (suite *MultitenancyTestSuite) SetupSuite() {
+	fmt.Println("*** SetupSuite Start ***")
+
+	os.Setenv("GOOS", "linux")
+	conf := dgraphtest.NewClusterConfig().WithNumAlphas(3).WithNumZeros(3).WithReplicas(3).
+		WithACL(20 * time.Second).WithEncryption().WithVersion("0c9f60156")
+
+	var err error
+	suite.lc, err = dgraphtest.NewLocalCluster(conf)
+	x.Panic(err)
+	suite.lc.Start()
+
+	suite.client, err = suite.lc.Client()
+	x.Panic(err)
+}
+
+func (suite *MultitenancyTestSuite) TearDownSuite() {
+	suite.lc.Cleanup()
+
+	fmt.Println("*** TearDownSuite End ***")
+}
+
+func (suite *MultitenancyTestSuite) SetupTest() {
+	fmt.Println("### SetupTest Start ###")
+}
+
+func (suite *MultitenancyTestSuite) TearDownTest() {
+	fmt.Println("### TearDownTest End ###")
+}
 
 type inputTripletsCount struct {
 	lowerLimit int
 	upperLimit int
 }
 
-func prepare(t *testing.T) {
-	dc := testutil.DgClientWithLogin(t, "groot", "password", x.GalaxyNamespace)
+//func (suite *MultitenancyTestSuite) prepare(t *testing.T) {
+func (suite *MultitenancyTestSuite) prepare() {
+	suite.client = suite.DgClientWithLogin("groot", "password", x.GalaxyNamespace)
+	dc := suite.client
+	t := suite.T()
 	require.NoError(t, dc.Alter(context.Background(), &api.Operation{DropAll: true}))
 }
 
@@ -52,21 +101,26 @@ var timeout = 5 * time.Second
 
 // TODO(Ahsan): This is just a basic test, for the purpose of development. The functions used in
 // this file can me made common to the other acl tests as well. Needs some refactoring as well.
-func TestAclBasic(t *testing.T) {
-	prepare(t)
+//func (suite *MultitenancyTestSuite) TestAclBasic(t *testing.T) {
+func (suite *MultitenancyTestSuite) TestAclBasic() {
+	suite.prepare()
+/*
 	galaxyToken, err := testutil.Login(t,
 		&testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: x.GalaxyNamespace})
 
 	require.NotNil(t, galaxyToken, "galaxy token is nil")
 	require.NoError(t, err, "login failed")
+*/
+	suite.client = suite.DgClientWithLogin("groot", "password", x.GalaxyNamespace)
 	// Create a new namespace
-	ns, err := testutil.CreateNamespaceWithRetry(t, galaxyToken)
+	ns, err := suite.CreateNamespaceWithRetry()
+	t := suite.T()
 	require.NoError(t, err)
 	require.Greater(t, int(ns), 0)
 
 	// Add some data to namespace 1
-	dc := testutil.DgClientWithLogin(t, "groot", "password", ns)
-	testutil.AddData(t, dc)
+	suite.client = suite.DgClientWithLogin("groot", "password", ns)
+	suite.AddData()
 
 	query := `
 		{
@@ -76,38 +130,41 @@ func TestAclBasic(t *testing.T) {
 			}
 		}
 	`
-	resp := testutil.QueryData(t, dc, query)
+	resp := suite.QueryData(query)
 	testutil.CompareJSON(t,
 		`{"me": [{"name":"guy1","nickname":"RG"},
 		{"name": "guy2", "nickname":"RG2"}]}`,
 		string(resp))
 
 	// groot of namespace 0 should not see the data of namespace-1
-	dc = testutil.DgClientWithLogin(t, "groot", "password", 0)
-	resp = testutil.QueryData(t, dc, query)
+	suite.client = suite.DgClientWithLogin("groot", "password", 0)
+	resp = suite.QueryData(query)
 	testutil.CompareJSON(t, `{"me": []}`, string(resp))
 
 	// Login to namespace 1 via groot and create new user alice.
-	token, err := testutil.Login(t, &testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: ns})
+	// token, err := testutil.Login(t, &testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: ns})
+	suite.client = suite.DgClientWithLogin("groot", "password", ns)
 	require.NoError(t, err, "login failed")
-	testutil.CreateUser(t, token, "alice", "newpassword")
+	suite.CreateUser("alice", "newpassword")
 
 	// Alice should not be able to see data added by groot in namespace 1
-	dc = testutil.DgClientWithLogin(t, "alice", "newpassword", ns)
-	resp = testutil.QueryData(t, dc, query)
+	suite.client = suite.DgClientWithLogin("alice", "newpassword", ns)
+	t.Logf("After ALICE AND NEWPASSWORD")
+	resp = suite.QueryData(query)
 	testutil.CompareJSON(t, `{}`, string(resp))
 
 	// Create a new group, add alice to that group and give read access of <name> to dev group.
-	testutil.CreateGroup(t, token, "dev")
-	testutil.AddToGroup(t, token, "alice", "dev")
-	testutil.AddRulesToGroup(t, token, "dev",
-		[]testutil.Rule{{Predicate: "name", Permission: acl.Read.Code}}, true)
+	suite.CreateGroup("dev")
+	suite.AddToGroup("alice", "dev")
+	suite.AddRulesToGroup("dev",
+		[]Rule{{Predicate: "name", Permission: acl.Read.Code}}, true)
 
 	// Now alice should see the name predicate but not nickname.
-	dc = testutil.DgClientWithLogin(t, "alice", "newpassword", ns)
-	testutil.PollTillPassOrTimeout(t, dc, query, `{"me": [{"name":"guy1"},{"name": "guy2"}]}`, timeout)
+	suite.client = suite.DgClientWithLogin("alice", "newpassword", ns)
+	testutil.PollTillPassOrTimeout(t, suite.client, query, `{"me": [{"name":"guy1"},{"name": "guy2"}]}`, timeout)
 }
 
+/*
 func createGroupAndSetPermissions(t *testing.T, namespace uint64, group, user, predicate string) {
 	token, err := testutil.Login(t,
 		&testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: namespace})
@@ -593,8 +650,271 @@ func TestNameSpaceLimitFlag(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Cannot lease UID because UID lease for the namespace")
 }
+*/
 
+func (suite *MultitenancyTestSuite) DgClientWithLogin(id, password string, ns uint64) *dgo.Dgraph {
+	t := suite.T()
+	//userClient, err := c.Client()
+	userClient := suite.client
+	t.Logf("1. userClient = %+v", userClient)
+
+	t.Logf("2. userClient = %+v", userClient)
+	require.NoError(t, x.RetryUntilSuccess(10, 100*time.Millisecond, func() error {
+	t.Logf("3. id = %+v\tpassword = %+v\tns = %+v\tuserClient = %+v", id, password, ns, userClient)
+		return userClient.LoginIntoNamespace(context.Background(), id, password, ns) 
+	})) 
+	t.Logf("4. userClient = %+v", userClient)
+	return userClient
+}
+
+func (suite *MultitenancyTestSuite) CreateNamespaceWithRetry() (uint64, error) {
+	createNs := `mutation {
+					 addNamespace
+					  {   
+					    namespaceId
+					    message
+					  }   
+					}`  
+
+	//params := GraphQLParams{
+	params := dgraphtest.GraphQLParams{
+		Query: createNs,
+	}
+	resp, err := dgraphtest.RunAdminQuery(suite.lc, params)
+	if err != nil {
+		return 0, err 
+	}   
+
+	var result struct {
+		AddNamespace struct {
+			NamespaceId int    `json:"namespaceId"`
+			Message     string `json:"message"`
+		}   
+	}   
+	if err := json.Unmarshal(resp, &result); err != nil {
+		return 0, errors.Wrap(err, "error unmarshalling CreateNamespaceWithRetry() response")
+	}   
+	if strings.Contains(result.AddNamespace.Message, "Created namespace successfully") {
+		return uint64(result.AddNamespace.NamespaceId), nil
+	}
+	return 0, errors.New(result.AddNamespace.Message)
+}
+
+func (suite *MultitenancyTestSuite) AddData() {
+		mutation := &api.Mutation{
+		SetNquads: []byte(`
+			_:a <name> "guy1" .
+			_:a <nickname> "RG" .
+			_:b <name> "guy2" .
+			_:b <nickname> "RG2" .
+		`),  
+		CommitNow: true,
+	}
+	_, err := suite.client.NewTxn().Mutate(context.Background(), mutation)
+	t := suite.T()
+	require.NoError(t, err)
+}
+
+func (suite *MultitenancyTestSuite) QueryData(query string) []byte {
+	resp, err := suite.client.NewReadOnlyTxn().Query(context.Background(), query)
+	t := suite.T()
+	require.NoError(t, err)
+	return resp.GetJson()
+}
+
+func (suite *MultitenancyTestSuite) CreateUser(username, password string) []byte {
+	t := suite.T()
+	addUser := `
+	mutation addUser($name: String!, $pass: String!) {
+		addUser(input: [{name: $name, password: $pass}]) {
+			user {
+				name
+			}
+		}
+	}`
+
+	params := dgraphtest.GraphQLParams{
+		Query: addUser,
+		Variables: map[string]interface{}{
+			"name": username,
+			"pass": password,
+		},
+	}
+	resp, err := dgraphtest.RunAdminQuery(suite.lc, params)
+	if err != nil {
+		t.Log("Error not NIL")
+		return nil
+	}
+
+	type Response struct {
+		AddUser struct {
+			User []struct {
+				Name string
+			}
+		}
+	}
+	var r Response
+	err = json.Unmarshal(resp, &r)
+	require.NoError(t, err)
+	t.Logf("RESPONSE = %+v", r)
+	return resp
+}
+
+func (suite *MultitenancyTestSuite) CreateGroup(name string) {
+	addGroup := `
+	mutation addGroup($name: String!) {
+		addGroup(input: [{name: $name}]) {
+			group {
+				name
+			}
+		}
+	}`
+
+	params := dgraphtest.GraphQLParams{
+		Query: addGroup,
+		Variables: map[string]interface{}{
+			"name": name,
+		},
+	}
+	resp, err := dgraphtest.RunAdminQuery(suite.lc, params)
+	t := suite.T()
+	require.NoError(t, err)
+
+	//resp.RequireNoGraphQLErrors(t)
+	type Response struct {
+		AddGroup struct {
+			Group []struct {
+				Name string
+			}
+		}
+	}
+	var r Response
+	err = json.Unmarshal(resp, &r)
+	require.NoError(t, err)
+}
+
+func (suite *MultitenancyTestSuite) AddToGroup(userName, group string) {
+	addUserToGroup := `mutation updateUser($name: String!, $group: String!) {
+		updateUser(input: {
+			filter: {
+				name: {
+					eq: $name
+				}
+			},
+			set: {
+				groups: [
+					{ name: $group }
+				]
+			}
+		}) {
+			user {
+				name
+				groups {
+					name
+				}
+			}
+		}
+	}`
+
+	params := dgraphtest.GraphQLParams{
+		Query: addUserToGroup,
+		Variables: map[string]interface{}{
+			"name":  userName,
+			"group": group,
+		},
+	}
+	resp, err := dgraphtest.RunAdminQuery(suite.lc, params)
+	t := suite.T()
+	require.NoError(t, err)
+
+	var result struct {
+		UpdateUser struct {
+			User []struct {
+				Name   string
+				Groups []struct {
+					Name string
+				}
+			}
+			Name string
+		}
+	}
+	err = json.Unmarshal(resp, &result)
+	require.NoError(t, err)
+
+	// There should be a user in response.
+	require.Len(t, result.UpdateUser.User, 1)
+	// User's name must be <userName>
+	require.Equal(t, userName, result.UpdateUser.User[0].Name)
+
+	var foundGroup bool
+	for _, usr := range result.UpdateUser.User {
+		for _, grp := range usr.Groups {
+			if grp.Name == group {
+				foundGroup = true
+				break
+			}
+		}
+	}
+	require.True(t, foundGroup)
+}
+
+func (suite *MultitenancyTestSuite) AddRulesToGroup(group string, rules []Rule, newGroup bool) {
+	addRuleToGroup := `mutation updateGroup($name: String!, $rules: [RuleRef!]!) {
+		updateGroup(input: {
+			filter: {
+				name: {
+					eq: $name
+				}
+			},
+			set: {
+				rules: $rules
+			}
+		}) {
+			group {
+				name
+				rules {
+					predicate
+					permission
+				}
+			}
+		}
+	}`
+
+	params := dgraphtest.GraphQLParams{
+		Query: addRuleToGroup,
+		Variables: map[string]interface{}{
+			"name":  group,
+			"rules": rules,
+		},
+	}
+	resp, err := dgraphtest.RunAdminQuery(suite.lc, params)
+	t := suite.T()
+	require.NoError(t, err)
+
+	rulesb, err := json.Marshal(rules)
+	require.NoError(t, err)
+	expectedOutput := fmt.Sprintf(`{
+		  "updateGroup": {
+			"group": [
+			  {
+				"name": "%s",
+				"rules": %s
+			  }
+			]
+		  }
+	  }`, group, rulesb)
+	if newGroup {
+		testutil.CompareJSON(t, expectedOutput, string(resp))
+	}
+}
+
+func TestMultitenancyTestSuite(t *testing.T) {
+	suite.Run(t, new(MultitenancyTestSuite))
+}
+
+/*
 func TestMain(m *testing.M) {
 	fmt.Printf("Using adminEndpoint : %s for multi-tenancy test.\n", testutil.AdminUrl())
 	_ = m.Run()
 }
+*/

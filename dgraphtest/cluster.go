@@ -85,18 +85,18 @@ func Query(c Cluster, query string) (*api.Response, error) {
 	return txn.Query(ctx, query)
 }
 
-type graphQLParams struct {
+type GraphQLParams struct {
 	Query     string                 `json:"query"`
 	Variables map[string]interface{} `json:"variables"`
 }
 
-type graphQLResponse struct {
+type GraphQLResponse struct {
 	Data       json.RawMessage        `json:"data,omitempty"`
 	Errors     x.GqlErrorList         `json:"errors,omitempty"`
 	Extensions map[string]interface{} `json:"extensions,omitempty"`
 }
 
-func RunAdminQuery(c Cluster, params graphQLParams) ([]byte, error) {
+func RunAdminQuery(c Cluster, params GraphQLParams) ([]byte, error) {
 	reqBody, err := json.Marshal(params)
 	if err != nil {
 		return nil, errors.Wrap(err, "error while marshalling params")
@@ -107,7 +107,7 @@ func RunAdminQuery(c Cluster, params graphQLParams) ([]byte, error) {
 		return nil, errors.Wrap(err, "error while running admin query")
 	}
 
-	var gqlResp graphQLResponse
+	var gqlResp GraphQLResponse
 	if err := json.Unmarshal(respBody, &gqlResp); err != nil {
 		return nil, errors.Wrap(err, "error unmarshalling GQL response")
 	}
@@ -126,7 +126,7 @@ func Backup(c Cluster, forceFull bool, backupPath string) error {
 			taskId
 		}
 	}`
-	params := graphQLParams{
+	params := GraphQLParams{
 		Query:     query,
 		Variables: map[string]interface{}{"dst": backupPath, "ff": forceFull},
 	}
@@ -158,7 +158,7 @@ func WaitForTask(c Cluster, taskId string) error {
 			status
 		}
 	}`
-	params := graphQLParams{
+	params := GraphQLParams{
 		Query:     query,
 		Variables: map[string]interface{}{"id": taskId},
 	}
@@ -197,7 +197,7 @@ func Restore(c Cluster, backupPath string, backupId string, incrFrom, backupNum 
 			message
 		}
 	}`
-	params := graphQLParams{
+	params := GraphQLParams{
 		Query: query,
 		Variables: map[string]interface{}{"location": backupPath, "backupId": backupId,
 			"incrFrom": incrFrom, "backupNum": backupNum, "encKey": encKey},

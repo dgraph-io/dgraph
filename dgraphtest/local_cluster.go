@@ -566,7 +566,7 @@ func httpLogin(endpoint string) (string, error) {
 		}
 	}`
 
-	gqlParams := graphQLParams{
+	gqlParams := GraphQLParams{
 		Query: q,
 		Variables: map[string]interface{}{
 			"userId":   defaultUser,
@@ -589,7 +589,7 @@ func httpLogin(endpoint string) (string, error) {
 		return "", errors.Wrapf(err, "error performing login request")
 	}
 
-	var gqlResp graphQLResponse
+	var gqlResp GraphQLResponse
 	if err := json.Unmarshal(respBody, &gqlResp); err != nil {
 		return "", errors.Wrap(err, "error unmarshalling GQL response")
 	}
