@@ -7,6 +7,14 @@ import (
 	"testing"
 )
 
+type DgraphPerf struct {
+	Name string
+	cc   ClusterConfig
+	mc   MetricConfig
+	rc   ResourceConfig
+	dc   DatasetConfig
+}
+
 func NewRemoteCluster(conf ClusterConfig) (*LocalCluster, error) {
 	c := &LocalCluster{conf: conf}
 	if err := c.init(); err != nil {
