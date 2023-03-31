@@ -1,14 +1,14 @@
-// benchmark_framework.go
 package dgraphtest
 
 import (
-	"context"
+	"bytes"
 	"fmt"
-	"sync"
-	"sync/atomic"
+	"io/ioutil"
+	"log"
+	"strings"
 	"testing"
 
-	"github.com/dgraph-io/ristretto/z"
+	"golang.org/x/crypto/ssh"
 )
 
 // aws, he, local, dgraphcloud
@@ -49,28 +49,52 @@ type DPerfFunc func(b *testing.B)
 type MetricReport struct {
 }
 
-type DgraphPerf struct {
-	name string
-	cc   ClusterConfig
-	mc   MetricConfig
-	rc   ResourceConfig
-	dc   DatasetConfig
+type AWSDetails struct {
+	user string
+	keys string
+	ip   string
 }
 
-type AWSDetails struct {
+func (a AWSDetails) User() string {
+	return a.user
+}
+
+func (a AWSDetails) Keys() string {
+	return a.keys
+}
+
+func (a AWSDetails) IP() string {
+	return a.ip
 }
 
 type HEDetails struct {
+	user string
+	keys string
+	ip   string
+}
+
+func (a HEDetails) User() string {
+	return a.user
+}
+
+func (a HEDetails) Keys() string {
+	return a.keys
+}
+
+func (a HEDetails) IP() string {
+	return a.ip
 }
 
 type DcloudDetails struct {
 }
 
-type ResourceDetails struct {
-	loc           string
-	awsDetails    AWSDetails
-	heDetails     HEDetails
-	dcloudDetails DcloudDetails // Staging
+type ResourceDetails interface {
+	User() string
+	Keys() string
+	IP() string
+	// awsDetails    AWSDetails
+	// heDetails     HEDetails
+	// dcloudDetails DcloudDetails // Staging
 }
 
 func (dbench *DgraphPerf) isValidBenchConfig() error {
@@ -83,26 +107,9 @@ func (dbench *DgraphPerf) isValidBenchConfig() error {
 func (dbench *DgraphPerf) provisionClientAndTarget() ResourceDetails {
 	// Provisions relevant resources and returns details
 
-	// This can be an interface instead of switch/case
-	switch dbench.rc.loc {
-	case "aws":
-		return ResourceDetails{loc: "aws"}
-	case "he":
-		return ResourceDetails{loc: "he"}
-	case "loc":
-		return ResourceDetails{loc: "loc"}
-	}
-
-	return ResourceDetails{}
+	// TODO: Keep this an interface and return the relevant details based on the loc
+	return AWSDetails{user: "ubuntu", keys: "/home/alvis/.ssh/gh-actions-runner.pem", ip: "ec2-3-233-226-21.compute-1.amazonaws.com"}
 }
-
-// func(b *testing.B) {
-// 	// setup
-// 	for i := 0; i < b.N; i++ {
-// 	//reset/setup
-//
-// 	}
-// }
 
 func parseFlags() (bool, bool) {
 	return false, true
@@ -119,37 +126,56 @@ func collectMetricsFromClientAndTarget(resources ResourceDetails, name string) M
 	return MetricReport{}
 }
 
+func setupClient(resources ResourceDetails) {
+	// ssh into the client and set up the client
+	pemBytes, err := ioutil.ReadFile(resources.Keys())
+	if err != nil {
+		log.Panic(err)
+	}
+	signer, err := ssh.ParsePrivateKey(pemBytes)
+	if err != nil {
+		log.Panicf("parse key failed:%v", err)
+	}
+	config := &ssh.ClientConfig{
+		User:            "ubuntu",
+		Auth:            []ssh.AuthMethod{ssh.PublicKeys(signer)},
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+	}
+
+	conn, err := ssh.Dial("tcp", resources.IP()+":22", config)
+	if err != nil {
+		log.Panicf("Failed to dial: %s\n", err)
+	}
+	defer conn.Close()
+	log.Printf("Successfully connected to %s\n", conn.RemoteAddr())
+
+	session, err := conn.NewSession()
+	if err != nil {
+		log.Panicf("session failed:%v", err)
+	}
+	defer session.Close()
+	log.Println("Running command")
+	var stdoutBuf bytes.Buffer
+	session.Stdout = &stdoutBuf
+	err = session.Run("git clone https://github.com/dgraph-io/dgraph.git")
+	if err != nil {
+		log.Panicf("Run failed:%v", err)
+	}
+	log.Printf(">%s", strings.TrimSpace(stdoutBuf.String()))
+}
+
 var _threadId int32
 
 type _threadIdKey struct{}
 
-func runBenchmark(benchmarkCh chan DgraphPerf, metricReportCh chan MetricReport, closer *z.Closer) error {
-	var err error
-	threadId := atomic.AddInt32(&_threadId, 1)
+func runBenchmark(task DgraphPerf) error {
 
-	wg := new(sync.WaitGroup)
-	defer func() {
-		wg.Wait()
-		closer.Done()
-	}()
+	fmt.Println("Running: ", task.Name)
 
-	ctx := closer.Ctx()
-	ctx = context.WithValue(ctx, _threadIdKey{}, threadId)
+	// provision resources for the benchmark
+	resources := task.provisionClientAndTarget()
 
-	for task := range benchmarkCh {
-		if ctx.Err() != nil {
-			err = ctx.Err()
-			return err
-		}
-
-		fmt.Println("Running: ", task)
-
-		// provision resources for the benchmark
-		resources := task.provisionClientAndTarget()
-
-		runBenchmarkFromClient(resources, task.name)
-		metricReportCh <- collectMetricsFromClientAndTarget(resources, task.name)
-	}
+	setupClient(resources)
 
 	return nil
 }
@@ -178,6 +204,8 @@ func init() {
 		Metric configuration: gtc = true
 		fnc: BenchmarkLDBCAllQueries
 	*/
+	PerfTests := make(map[string]DgraphPerf)
+
 	PerfTests["ldbc-all-query"] = DgraphPerf{
 		"BenchmarkLDBCAllQueries",
 		ClusterConfig{numAlphas: 1, numZeros: 1, replicas: 0},
@@ -187,38 +215,46 @@ func init() {
 	}
 }
 
+func RunBenchmarkHelper(name string) {
+	runBenchmark(PerfTests[name])
+}
+
 func main() {
 
 	// This piece orchestrates the different benchmarks
 
-	N := len(PerfTests)
-	closer := z.NewCloser(N)
-	benchmarkCh := make(chan DgraphPerf)
-	errCh := make(chan error, 1000)
-	metricCh := make(chan MetricReport)
+	// closer := z.NewCloser(N)
+	// benchmarkCh := make(chan DgraphPerf)
+	// errCh := make(chan error, 1000)
+	// metricCh := make(chan MetricReport)
 
-	for i := 0; i < N; i++ {
-		go func() {
-			if err := runBenchmark(benchmarkCh, metricCh, closer); err != nil {
-				errCh <- err
-				closer.Signal()
-			}
-		}()
+	for key, val := range PerfTests {
+		fmt.Println(key, val)
+		err := runBenchmark(val)
+		fmt.Println(err)
 	}
+	// for i := 0; i < N; i++ {
+	// 	go func() {
+	// 		if err := runBenchmark(benchmarkCh, metricCh, closer); err != nil {
+	// 			errCh <- err
+	// 			closer.Signal()
+	// 		}
+	// 	}()
+	// }
 
-	go func() {
-		defer close(benchmarkCh)
-		valid := getValidBenchmarks(PerfTests)
+	// go func() {
+	// 	defer close(benchmarkCh)
+	// 	valid := getValidBenchmarks(PerfTests)
 
-		for k, task := range valid {
-			select {
-			case benchmarkCh <- task:
-				fmt.Printf("Sent %s benchmark for processing.\n", k)
-			case <-closer.HasBeenClosed():
-				return
-			}
-		}
-	}()
+	// 	for k, task := range valid {
+	// 		select {
+	// 		case benchmarkCh <- task:
+	// 			fmt.Printf("Sent %s benchmark for processing.\n", k)
+	// 		case <-closer.HasBeenClosed():
+	// 			return
+	// 		}
+	// 	}
+	// }()
 
 }
 
