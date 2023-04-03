@@ -1313,7 +1313,7 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (resp *api.Response,
 		if !isQuery {
 			m = req.req.String()
 		}
-		if strings.Contains(m, "#") {
+		if strings.Contains(m, "#tag") {
 			q := isQuery
 			validateComment(span, m, q)
 		}
@@ -1328,6 +1328,9 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (resp *api.Response,
 				"Non guardian of galaxy user cannot bypass namespaces. "+s.Message())
 		}
 	}
+
+	// extras tags for tracing
+	span.AddAttributes(otrace.BoolAttribute("isGraphQL", isGraphQL))
 
 	qc := &queryContext{
 		req:      req.req,
