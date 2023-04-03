@@ -18,7 +18,6 @@ package dgraphtest
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -28,10 +27,10 @@ import (
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/pkg/errors"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
-	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -45,12 +44,23 @@ var (
 
 type Cluster interface {
 	Client() (*dgo.Dgraph, error)
-	AdminPost(body []byte) ([]byte, error)
+	AdminPost(body []byte, cred *Credential) ([]byte, error)
 	AlphasHealth() ([]string, error)
 	AssignUids(num uint64) error
 	GetVersion() string
-	MakeGQLRequestWithAccessJwtAndTLS(t *testing.T, params *testutil.GraphQLParams,
-		tls *tls.Config, accessToken, adminUrl string) *testutil.GraphQLResponse
+	GraphQLClient(cred Credential) (*GraphQLClient, error)
+}
+
+type Credential struct {
+	UserId       string
+	Password     string
+	AccessJwt    string
+	RefreshToken string
+	Namespace    uint64
+}
+
+type GraphQLClient struct {
+	cred Credential
 }
 
 func SetupSchema(c Cluster, dbSchema string) error {
@@ -98,24 +108,24 @@ type graphQLParams struct {
 	Variables map[string]interface{} `json:"variables"`
 }
 
-type graphQLResponse struct {
+type GraphQLResponse struct {
 	Data       json.RawMessage        `json:"data,omitempty"`
 	Errors     x.GqlErrorList         `json:"errors,omitempty"`
 	Extensions map[string]interface{} `json:"extensions,omitempty"`
 }
 
-func RunAdminQuery(c Cluster, params graphQLParams) ([]byte, error) {
+func (cred *Credential) RunAdminQuery(c Cluster, params graphQLParams) ([]byte, error) {
 	reqBody, err := json.Marshal(params)
 	if err != nil {
 		return nil, errors.Wrap(err, "error while marshalling params")
 	}
 
-	respBody, err := c.AdminPost(reqBody)
+	respBody, err := c.AdminPost(reqBody, cred)
 	if err != nil {
 		return nil, errors.Wrap(err, "error while running admin query")
 	}
 
-	var gqlResp graphQLResponse
+	var gqlResp GraphQLResponse
 	if err := json.Unmarshal(respBody, &gqlResp); err != nil {
 		return nil, errors.Wrap(err, "error unmarshalling GQL response")
 	}
@@ -125,7 +135,7 @@ func RunAdminQuery(c Cluster, params graphQLParams) ([]byte, error) {
 	return gqlResp.Data, nil
 }
 
-func Backup(c Cluster, forceFull bool, backupPath string) error {
+func (cred *Credential) Backup(c Cluster, forceFull bool, backupPath string) error {
 	const query = `mutation backup($dst: String!, $ff: Boolean!) {
 		backup(input: {destination: $dst, forceFull: $ff}) {
 			response {
@@ -138,7 +148,7 @@ func Backup(c Cluster, forceFull bool, backupPath string) error {
 		Query:     query,
 		Variables: map[string]interface{}{"dst": backupPath, "ff": forceFull},
 	}
-	resp, err := RunAdminQuery(c, params)
+	resp, err := cred.RunAdminQuery(c, params)
 	if err != nil {
 		return err
 	}
@@ -157,10 +167,10 @@ func Backup(c Cluster, forceFull bool, backupPath string) error {
 	if backupResp.Backup.Response.Code != "Success" {
 		return fmt.Errorf("backup failed")
 	}
-	return WaitForTask(c, backupResp.Backup.TaskID)
+	return cred.WaitForTask(c, backupResp.Backup.TaskID)
 }
 
-func WaitForTask(c Cluster, taskId string) error {
+func (cred *Credential) WaitForTask(c Cluster, taskId string) error {
 	const query = `query task($id: String!) {
 		task(input: {id: $id}) {
 			status
@@ -174,7 +184,7 @@ func WaitForTask(c Cluster, taskId string) error {
 	for {
 		time.Sleep(waitDurBeforeRetry)
 
-		resp, err := RunAdminQuery(c, params)
+		resp, err := cred.RunAdminQuery(c, params)
 		if err != nil {
 			return err
 		}
@@ -196,7 +206,7 @@ func WaitForTask(c Cluster, taskId string) error {
 	}
 }
 
-func Restore(c Cluster, backupPath string, backupId string, incrFrom, backupNum int, encKey string) error {
+func (cred *Credential) Restore(c Cluster, backupPath string, backupId string, incrFrom, backupNum int, encKey string) error {
 	// incremental restore was introduced in commit 8b3712e93ed2435bea52d957f7b69976c6cfc55b
 	beforeIncrRestore, err := isParent("8b3712e93ed2435bea52d957f7b69976c6cfc55b", c.GetVersion())
 	if err != nil {
@@ -229,7 +239,7 @@ func Restore(c Cluster, backupPath string, backupId string, incrFrom, backupNum 
 		Query:     query,
 		Variables: vars,
 	}
-	resp, err := RunAdminQuery(c, params)
+	resp, err := cred.RunAdminQuery(c, params)
 	if err != nil {
 		return err
 	}
@@ -314,4 +324,13 @@ func isParent(ancestor, descendant string) (bool, error) {
 			descendant, ancestor)
 	}
 	return isParentCommit, nil
+}
+
+func (resp *GraphQLResponse) RequireNoGraphQLErrors(t *testing.T) {
+	if resp == nil {
+		require.Fail(t, "got nil response")
+	} else {
+		require.Nil(t, resp.Errors, "required no GraphQL errors, but received :\n%s",
+			resp.Errors.Error())
+	}
 }

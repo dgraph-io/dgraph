@@ -19,7 +19,6 @@ package dgraphtest
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -27,7 +26,6 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"testing"
 	"time"
 
 	"github.com/docker/docker/api/types"
@@ -35,15 +33,12 @@ import (
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/volume"
 	docker "github.com/docker/docker/client"
-	"github.com/golang/glog"
 	"github.com/pkg/errors"
-	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
-	"github.com/dgraph-io/dgraph/testutil"
 )
 
 var (
@@ -456,11 +451,11 @@ func (c *LocalCluster) Upgrade(version string, strategy UpgradeStrategy) error {
 	}
 	c.conns = c.conns[:0]
 	c.client = nil
-
+	user := &Credential{defaultUser, defaultPassowrd, "", "", 0}
 	log.Printf("[INFO] upgrading the cluster from [%v] to [%v] using [%v]", c.conf.version, version, strategy)
 	switch strategy {
 	case BackupRestore:
-		if err := Backup(c, true, DefaultBackupDir); err != nil {
+		if err := user.Backup(c, true, DefaultBackupDir); err != nil {
 			return errors.Wrap(err, "error taking backup during upgrade")
 		}
 		if err := c.Stop(); err != nil {
@@ -480,7 +475,7 @@ func (c *LocalCluster) Upgrade(version string, strategy UpgradeStrategy) error {
 		if c.conf.encryption {
 			encPath = encKeyMountPath
 		}
-		if err := Restore(c, DefaultBackupDir, "", 0, 1, encPath); err != nil {
+		if err := user.Restore(c, DefaultBackupDir, "", 0, 1, encPath); err != nil {
 			return errors.Wrap(err, "error doing restore during upgrade")
 		}
 		if err := WaitForRestore(c); err != nil {
@@ -570,7 +565,7 @@ func (c *LocalCluster) AlphasHealth() ([]string, error) {
 	return healths, nil
 }
 
-func httpLogin(endpoint string) (string, error) {
+func httpLogin(endpoint string, cred *Credential) (string, error) {
 	q := `mutation login($userId: String, $password: String, $namespace: Int) {
 		login(userId: $userId, password: $password, namespace: $namespace) {
 			response {
@@ -583,8 +578,9 @@ func httpLogin(endpoint string) (string, error) {
 	gqlParams := graphQLParams{
 		Query: q,
 		Variables: map[string]interface{}{
-			"userId":   defaultUser,
-			"password": defaultPassowrd,
+			"userId":    cred.UserId,
+			"password":  cred.Password,
+			"namesoace": cred.Namespace,
 		},
 	}
 	body, err := json.Marshal(gqlParams)
@@ -603,7 +599,7 @@ func httpLogin(endpoint string) (string, error) {
 		return "", errors.Wrapf(err, "error performing login request")
 	}
 
-	var gqlResp graphQLResponse
+	var gqlResp GraphQLResponse
 	if err := json.Unmarshal(respBody, &gqlResp); err != nil {
 		return "", errors.Wrap(err, "error unmarshalling GQL response")
 	}
@@ -628,7 +624,7 @@ func httpLogin(endpoint string) (string, error) {
 	return r.Login.Response.AccessJWT, nil
 }
 
-func (c *LocalCluster) AdminPost(body []byte) ([]byte, error) {
+func (c *LocalCluster) AdminPost(body []byte, cred *Credential) ([]byte, error) {
 	publicPort, err := publicPort(c.dcli, c.alphas[0], alphaHttpPort)
 	if err != nil {
 		return nil, err
@@ -642,7 +638,7 @@ func (c *LocalCluster) AdminPost(body []byte) ([]byte, error) {
 	req.Header.Add("Content-Type", "application/json")
 
 	if c.conf.acl {
-		token, err := httpLogin(url)
+		token, err := httpLogin(url, cred)
 		if err != nil {
 			return nil, err
 		}
@@ -691,43 +687,6 @@ func (c *LocalCluster) GetVersion() string {
 	return c.conf.version
 }
 
-func (c *LocalCluster) MakeGQLRequestWithAccessJwtAndTLS(t *testing.T, params *testutil.GraphQLParams,
-	tls *tls.Config, accessToken, adminUrl string) *testutil.GraphQLResponse {
+func (c *LocalCluster) GraphQLClient(cred Credential) (*GraphQLClient, error) {
 
-	b, err := json.Marshal(params)
-	require.NoError(t, err)
-
-	req, err := http.NewRequest(http.MethodPost, adminUrl, bytes.NewBuffer(b))
-	require.NoError(t, err)
-	req.Header.Set("Content-Type", "application/json")
-	if accessToken != "" {
-		req.Header.Set("X-Dgraph-AccessToken", accessToken)
-	}
-	client := &http.Client{}
-	if tls != nil {
-		client.Transport = &http.Transport{
-			TLSClientConfig: tls,
-		}
-	}
-	resp, err := client.Do(req)
-	require.NoError(t, err)
-
-	defer func() {
-		if err := resp.Body.Close(); err != nil {
-			glog.Warningf("error closing body: %v", err)
-		}
-	}()
-
-	b, err = io.ReadAll(resp.Body)
-	require.NoError(t, err)
-
-	var gqlResp testutil.GraphQLResponse
-	err = json.Unmarshal(b, &gqlResp)
-	require.NoError(t, err)
-
-	return &gqlResp
-}
-
-func (c *LocalCluster) GetAlphaPublicPort(port string) (string, error) {
-	return publicPort(c.dcli, c.alphas[0], port)
 }

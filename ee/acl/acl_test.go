@@ -16,14 +16,13 @@ package acl
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/v210"
@@ -41,26 +40,26 @@ var (
 	sockAddr      string
 )
 
-func makeRequestAndRefreshTokenIfNecessary(t *testing.T, token *testutil.HttpToken,
-	params testutil.GraphQLParams) *testutil.GraphQLResponse {
-	resp := dc.MakeGQLRequestWithAccessJwtAndTLS(t, &params, nil, token.AccessJwt, adminEndpoint)
-	if len(resp.Errors) == 0 || !strings.Contains(resp.Errors.Error(), "Token is expired") {
-		return resp
-	}
-	var err error
-	newtoken, err := testutil.HttpLogin(&testutil.LoginParams{
-		Endpoint:   adminEndpoint,
-		UserID:     token.UserId,
-		Passwd:     token.Password,
-		RefreshJwt: token.RefreshToken,
-	})
+var (
+	defaultUser = &dgraphtest.Credential{x.GrootId, "password", "", "", x.GalaxyNamespace}
+)
+
+func makeRequestAndRefreshTokenIfNecessary(t *testing.T, user *dgraphtest.Credential,
+	params testutil.GraphQLParams) *dgraphtest.GraphQLResponse {
+	reqBody, err := json.Marshal(params)
 	require.NoError(t, err)
-	token.AccessJwt = newtoken.AccessJwt
-	token.RefreshToken = newtoken.RefreshToken
-	return dc.MakeGQLRequestWithAccessJwtAndTLS(t, &params, nil, token.AccessJwt, adminEndpoint)
+
+	resp, err := dc.AdminPost(reqBody, user)
+	require.NoError(t, err)
+	var gqlResp dgraphtest.GraphQLResponse
+
+	err = json.Unmarshal(resp, &gqlResp)
+	require.NoError(t, err)
+
+	return &gqlResp
 }
 
-func createUser(t *testing.T, token *testutil.HttpToken, username, password string) *testutil.GraphQLResponse {
+func createUser(t *testing.T, user *dgraphtest.Credential, username, password string) *dgraphtest.GraphQLResponse {
 	addUser := `
 	mutation addUser($name: String!, $pass: String!) {
 		addUser(input: [{name: $name, password: $pass}]) {
@@ -77,11 +76,11 @@ func createUser(t *testing.T, token *testutil.HttpToken, username, password stri
 			"pass": password,
 		},
 	}
-	resp := makeRequestAndRefreshTokenIfNecessary(t, token, params)
-	return resp
+
+	return makeRequestAndRefreshTokenIfNecessary(t, user, params)
 }
 
-func getCurrentUser(t *testing.T, token *testutil.HttpToken) *testutil.GraphQLResponse {
+func getCurrentUser(t *testing.T, user *dgraphtest.Credential) *dgraphtest.GraphQLResponse {
 	query := `
 	query {
 		getCurrentUser {
@@ -89,8 +88,7 @@ func getCurrentUser(t *testing.T, token *testutil.HttpToken) *testutil.GraphQLRe
 		}
 	}`
 
-	resp := makeRequestAndRefreshTokenIfNecessary(t, token, testutil.GraphQLParams{Query: query})
-	return resp
+	return makeRequestAndRefreshTokenIfNecessary(t, user, testutil.GraphQLParams{Query: query})
 }
 
 func checkUserCount(t *testing.T, resp []byte, expected int) {
@@ -107,8 +105,8 @@ func checkUserCount(t *testing.T, resp []byte, expected int) {
 	require.Equal(t, expected, len(r.AddUser.User))
 }
 
-func deleteUser(t *testing.T, token *testutil.HttpToken, username string,
-	confirmDeletion bool) *testutil.GraphQLResponse {
+func deleteUser(t *testing.T, user *dgraphtest.Credential, username string,
+	confirmDeletion bool) *dgraphtest.GraphQLResponse {
 
 	delUser := `
 	mutation deleteUser($name: String!) {
@@ -124,7 +122,7 @@ func deleteUser(t *testing.T, token *testutil.HttpToken, username string,
 			"name": username,
 		},
 	}
-	resp := makeRequestAndRefreshTokenIfNecessary(t, token, params)
+	resp := makeRequestAndRefreshTokenIfNecessary(t, user, params)
 
 	if confirmDeletion {
 		resp.RequireNoGraphQLErrors(t)
@@ -133,7 +131,7 @@ func deleteUser(t *testing.T, token *testutil.HttpToken, username string,
 	return resp
 }
 
-func deleteGroup(t *testing.T, token *testutil.HttpToken, name string, confirmDeletion bool) *testutil.GraphQLResponse {
+func deleteGroup(t *testing.T, user *dgraphtest.Credential, name string, confirmDeletion bool) *dgraphtest.GraphQLResponse {
 	delGroup := `
 	mutation deleteGroup($name: String!) {
 		deleteGroup(filter: {name: {eq: $name}}) {
@@ -148,7 +146,7 @@ func deleteGroup(t *testing.T, token *testutil.HttpToken, name string, confirmDe
 			"name": name,
 		},
 	}
-	resp := makeRequestAndRefreshTokenIfNecessary(t, token, params)
+	resp := makeRequestAndRefreshTokenIfNecessary(t, user, params)
 
 	if confirmDeletion {
 		resp.RequireNoGraphQLErrors(t)
@@ -170,31 +168,24 @@ func deleteUsingNQuad(userClient *dgo.Dgraph, sub, pred, val string) (*api.Respo
 
 func (suite *AclTestSuite) TestGetCurrentUser() {
 	t := suite.T()
-	token := testutil.GrootHttpLogin(adminEndpoint)
-
-	currentUser := getCurrentUser(t, token)
+	userCred := &dgraphtest.Credential{"groot", "password", "", "", 0}
+	currentUser := getCurrentUser(t, userCred)
 	currentUser.RequireNoGraphQLErrors(t)
 	require.Equal(t, string(currentUser.Data), `{"getCurrentUser":{"name":"groot"}}`)
 
 	// clean up the user to allow repeated running of this test
 	userid := "hamilton"
-	deleteUserResp := deleteUser(t, token, userid, false)
+	deleteUserResp := deleteUser(t, userCred, userid, false)
 	deleteUserResp.RequireNoGraphQLErrors(t)
 	glog.Infof("cleaned up db user state")
 
-	resp := createUser(t, token, userid, userpassword)
+	resp := createUser(t, userCred, userid, userpassword)
 	resp.RequireNoGraphQLErrors(t)
 	checkUserCount(t, resp.Data, 1)
 	// upgrade cluster
 	suite.Upgrade()
-	newToken, err := testutil.HttpLogin(&testutil.LoginParams{
-		Endpoint:  adminEndpoint,
-		UserID:    userid,
-		Passwd:    userpassword,
-		Namespace: x.GalaxyNamespace,
-	})
-	require.NoError(t, err, "login failed")
-	currentUser = getCurrentUser(t, newToken)
+	newUser := &dgraphtest.Credential{userid, userpassword, "", "", 0}
+	currentUser = getCurrentUser(t, newUser)
 	currentUser.RequireNoGraphQLErrors(t)
 	require.Equal(t, string(currentUser.Data), `{"getCurrentUser":{"name":"hamilton"}}`)
 }
@@ -205,30 +196,29 @@ func (suite *AclTestSuite) TestCreateAndDeleteUsers() {
 	// upgrade cluster
 	suite.Upgrade()
 	// adding the user again should fail
-	token := testutil.GrootHttpLogin(adminEndpoint)
-	resp := createUser(t, token, userid, userpassword)
+	// token := testutil.GrootHttpLogin(adminEndpoint)
+	resp := createUser(t, defaultUser, userid, userpassword)
 	require.Equal(t, 1, len(resp.Errors))
 	require.Equal(t, "couldn't rewrite mutation addUser because failed to rewrite mutation payload because id"+
 		" alice already exists for field name inside type User", resp.Errors[0].Message)
 	checkUserCount(t, resp.Data, 0)
 
 	// delete the user
-	_ = deleteUser(t, token, userid, true)
+	_ = deleteUser(t, defaultUser, userid, true)
 
-	resp = createUser(t, token, userid, userpassword)
+	resp = createUser(t, defaultUser, userid, userpassword)
 	resp.RequireNoGraphQLErrors(t)
 	// now we should be able to create the user again
 	checkUserCount(t, resp.Data, 1)
 }
 
 func resetUser(t *testing.T) {
-	token := testutil.GrootHttpLogin(adminEndpoint)
 	// clean up the user to allow repeated running of this test
-	deleteUserResp := deleteUser(t, token, userid, false)
+	deleteUserResp := deleteUser(t, defaultUser, userid, false)
 	deleteUserResp.RequireNoGraphQLErrors(t)
 	glog.Infof("deleted user")
 
-	resp := createUser(t, token, userid, userpassword)
+	resp := createUser(t, defaultUser, userid, userpassword)
 	resp.RequireNoGraphQLErrors(t)
 	checkUserCount(t, resp.Data, 1)
 	glog.Infof("created user")
@@ -522,7 +512,7 @@ func createAccountAndData(t *testing.T, dg *dgo.Dgraph) {
 	require.NoError(t, txn.Commit(ctx))
 }
 
-func createGroup(t *testing.T, token *testutil.HttpToken, name string) []byte {
+func createGroup(t *testing.T, user *dgraphtest.Credential, name string) []byte {
 	addGroup := `
 	mutation addGroup($name: String!) {
 		addGroup(input: [{name: $name}]) {
@@ -538,12 +528,12 @@ func createGroup(t *testing.T, token *testutil.HttpToken, name string) []byte {
 			"name": name,
 		},
 	}
-	resp := makeRequestAndRefreshTokenIfNecessary(t, token, params)
+	resp := makeRequestAndRefreshTokenIfNecessary(t, user, params)
 	resp.RequireNoGraphQLErrors(t)
 	return resp.Data
 }
 
-func createGroupWithRules(t *testing.T, token *testutil.HttpToken, name string, rules []rule) *group {
+func createGroupWithRules(t *testing.T, user *dgraphtest.Credential, name string, rules []rule) *group {
 	queryParams := testutil.GraphQLParams{
 		Query: `
 		mutation addGroup($name: String!, $rules: [RuleRef]){
@@ -567,7 +557,7 @@ func createGroupWithRules(t *testing.T, token *testutil.HttpToken, name string, 
 			"rules": rules,
 		},
 	}
-	resp := makeRequestAndRefreshTokenIfNecessary(t, token, queryParams)
+	resp := makeRequestAndRefreshTokenIfNecessary(t, user, queryParams)
 	resp.RequireNoGraphQLErrors(t)
 
 	var addGroupResp struct {
@@ -581,7 +571,7 @@ func createGroupWithRules(t *testing.T, token *testutil.HttpToken, name string, 
 	return &addGroupResp.AddGroup.Group[0]
 }
 
-func updateGroup(t *testing.T, token *testutil.HttpToken, name string, setRules []rule,
+func updateGroup(t *testing.T, user *dgraphtest.Credential, name string, setRules []rule,
 	removeRules []string) *group {
 	queryParams := testutil.GraphQLParams{
 		Query: `
@@ -620,7 +610,7 @@ func updateGroup(t *testing.T, token *testutil.HttpToken, name string, setRules 
 			"rules": removeRules,
 		}
 	}
-	resp := makeRequestAndRefreshTokenIfNecessary(t, token, queryParams)
+	resp := makeRequestAndRefreshTokenIfNecessary(t, user, queryParams)
 	resp.RequireNoGraphQLErrors(t)
 
 	var result struct {
@@ -721,7 +711,7 @@ type group struct {
 	Rules []rule `json:"rules"`
 }
 
-func addRulesToGroup(t *testing.T, token *testutil.HttpToken, group string, rules []rule) {
+func addRulesToGroup(t *testing.T, user *dgraphtest.Credential, group string, rules []rule) {
 	addRuleToGroup := `mutation updateGroup($name: String!, $rules: [RuleRef!]!) {
 		updateGroup(input: {
 			filter: {
@@ -750,7 +740,7 @@ func addRulesToGroup(t *testing.T, token *testutil.HttpToken, group string, rule
 			"rules": rules,
 		},
 	}
-	resp := makeRequestAndRefreshTokenIfNecessary(t, token, params)
+	resp := makeRequestAndRefreshTokenIfNecessary(t, user, params)
 	resp.RequireNoGraphQLErrors(t)
 	rulesb, err := json.Marshal(rules)
 	require.NoError(t, err)
@@ -774,10 +764,11 @@ func createGroupAndAcls(t *testing.T, group string, addUserToGroup bool) {
 		Passwd:    "password",
 		Namespace: x.GalaxyNamespace,
 	})
+	user := &dgraphtest.Credential{"groot", "password", "", "", 0}
 	require.NoError(t, err, "login failed")
 
 	// create a new group
-	resp := createGroup(t, token, group)
+	resp := createGroup(t, user, group)
 	checkGroupCount(t, resp, 1)
 
 	// add the user to the group
@@ -804,7 +795,7 @@ func createGroupAndAcls(t *testing.T, group string, addUserToGroup bool) {
 	// also add read permission to the attribute queryAttr, which is used inside the query block
 	// add WRITE permission on the predicateToWrite
 	// add MODIFY permission on the predicateToAlter
-	addRulesToGroup(t, token, group, rules)
+	addRulesToGroup(t, user, group, rules)
 }
 
 func (suite *AclTestSuite) TestPredicatePermission() {

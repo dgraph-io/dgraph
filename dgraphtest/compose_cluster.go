@@ -17,11 +17,14 @@
 package dgraphtest
 
 import (
+	"bytes"
 	"crypto/tls"
+	"net/http"
 	"testing"
 
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/pkg/errors"
 )
 
 type ComposeCluster struct{}
@@ -34,8 +37,22 @@ func (c *ComposeCluster) Client() (*dgo.Dgraph, error) {
 	return nil, errNotImplemented
 }
 
-func (c *ComposeCluster) AdminPost(body []byte) ([]byte, error) {
-	return nil, errNotImplemented
+func (c *ComposeCluster) AdminPost(body []byte, cred *Credential) ([]byte, error) {
+	url := "http://" + testutil.SockAddrHttp + "/admin"
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(body))
+	if err != nil {
+		return nil, errors.Wrapf(err, "error building req for endpoint [%v]", url)
+	}
+	req.Header.Add("Content-Type", "application/json")
+
+	// assuming ACL is enabled
+	token, err := httpLogin(url, cred)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("X-Dgraph-AccessToken", token)
+
+	return doReq(req)
 }
 
 func (c *ComposeCluster) AlphasHealth() ([]string, error) {
