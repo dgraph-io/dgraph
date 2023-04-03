@@ -273,6 +273,11 @@ type Speaker {
 	language
 }
 
+type JaegerTest {
+	name
+	<#tag:test>
+}
+
 name                           : string @index(term, exact, trigram) @count @lang .
 name_lang                      : string @lang .
 lang_type                      : string @index(exact) .
@@ -346,6 +351,7 @@ tweet-c                        : string @index(fulltext) .
 tweet-d                        : string @index(trigram) .
 name2                          : string @index(term)  .
 age2                           : int @index(int) .
+<#tag:test>                    : string .
 `
 
 func populateCluster() {
@@ -872,6 +878,27 @@ func populateCluster() {
 
 		<40> <name2> "Alice" .
 		<41> <age2> "20" .
+
+		# Data for testing Tags in comments.
+
+		<300> <#tag:test> "Bob" .
+		<301> <name> "#tag:test" .
+		<302> <name> "#tag" .
+		<303> <name> "#tag:" .
+		<304> <name> "#test" .
+		<305> <name> "#" .
+		<306> <name> "something#" .
+		<307> <name> "something#tag:MyTest" .
+
+		<300> <dgraph.type> "JaegerTest" .
+		<301> <dgraph.type> "JaegerTest" .
+		<302> <dgraph.type> "JaegerTest" .
+		<303> <dgraph.type> "JaegerTest" .
+		<304> <dgraph.type> "JaegerTest" .
+		<305> <dgraph.type> "JaegerTest" .
+		<306> <dgraph.type> "JaegerTest" .
+		<307> <dgraph.type> "JaegerTest" .
+
 	`)
 	if err != nil {
 		panic(fmt.Sprintf("Could not able add triple to the cluster. Got error %v", err.Error()))

@@ -1564,3 +1564,51 @@ func TestNumUids(t *testing.T) {
 	require.Equal(t, metrics.NumUids["name"], uint64(16))
 	require.Equal(t, metrics.NumUids["_total"], uint64(26))
 }
+
+func TestJaegerTag(t *testing.T) {
+	query := `
+		 {
+			 #tag:test
+			 me(func: uid(0x01)) {
+				 uid
+			 }
+		 }
+	 `
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t,
+		`{"data": {"me":[ {"uid": "0x1"}]}}`,
+		js)
+}
+
+func TestJaegerTag1(t *testing.T) {
+	query := `
+		 {
+			 me(func: uid(0x01)) {
+				 uid
+				 #tag:test
+			 }
+		 }
+	 `
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t,
+		`{"data": {"me":[ {"uid": "0x1"}]}}`,
+		js)
+}
+
+func TestJaegerTag2(t *testing.T) {
+	query := `
+		 {
+			 me(func: has(<#tag:test>)) {
+				 uid
+				 <#tag:test>
+			 }
+		 }
+	 `
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t,
+		`{"data": {"me":[ {
+			"uid": "0x12c",
+			"#tag:test": "Bob"
+		  }]}}`,
+		js)
+}
