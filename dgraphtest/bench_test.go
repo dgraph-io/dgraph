@@ -60,6 +60,65 @@ func BenchmarkLDBCAllQueries(b *testing.B) {
 	})
 }
 
+func FibonacciRecursive(n int) int {
+	if n <= 1 {
+		return n
+	}
+	return FibonacciRecursive(n-1) + FibonacciRecursive(n-2)
+}
+
+func FibonacciNonRecursive(n int) int {
+	if n <= 1 {
+		return n
+	}
+	a, b := 0, 1
+	for i := 2; i <= n; i++ {
+		a, b = b, a+b
+	}
+	return b
+}
+
+func BenchmarkFibonacciRecursive(b *testing.B) {
+	RunPerfTest(b, "recursive", func(cluster Cluster, b *testing.B) {
+		var res int
+		time.Sleep(5 * time.Second)
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			res = FibonacciRecursive(20)
+		}
+		fmt.Println(res)
+	})
+}
+
+func BenchmarkFibonacciNonRecursive(b *testing.B) {
+	RunPerfTest(b, "nonrecursive", func(cluster Cluster, b *testing.B) {
+		var res int
+		time.Sleep(5 * time.Second)
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			res = FibonacciNonRecursive(20)
+		}
+		fmt.Println(res)
+	})
+
+}
+
+func BenchmarkFibWPerf(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		FibonacciNonRecursive(20)
+	}
+}
+
+func BenchmarkFibRWPerf(b *testing.B) {
+	time.Sleep(5 * time.Second)
+	var res int
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		res = FibonacciRecursive(20)
+	}
+	fmt.Println(res)
+}
+
 func BenchmarkBulkoad(b *testing.B) {
 	if runType == "GH_CI" {
 		// No need for local setup; cluster has been setup by perf_framework.go
@@ -116,6 +175,7 @@ func init() {
 }
 
 func TestMain(m *testing.M) {
+	m.Run()
 
 }
 
