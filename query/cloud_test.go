@@ -19,7 +19,9 @@
 package query
 
 import (
+	"context"
 	"testing"
+	"time"
 
 	"github.com/dgraph-io/dgraph/dgraphtest"
 	"github.com/dgraph-io/dgraph/x"
@@ -28,12 +30,17 @@ import (
 func TestMain(m *testing.M) {
 	c, err := dgraphtest.NewDCloudCluster()
 	x.Panic(err)
-	defer c.Cleanup()
 
-	client, err = c.Client()
+	dg, cleanup, err := c.Client()
 	x.Panic(err)
+	defer cleanup()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	x.Panic(dg.LoginIntoNamespace(ctx, dgraphtest.DefaultUser, dgraphtest.DefaultPassword, 0))
 
 	dc = c
+	client = dg.Dgraph
 	populateCluster()
 	m.Run()
 }

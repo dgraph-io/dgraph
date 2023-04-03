@@ -27,11 +27,11 @@ func NewComposeCluster() *ComposeCluster {
 	return &ComposeCluster{}
 }
 
-func (c *ComposeCluster) Client() (*dgo.Dgraph, error) {
-	return nil, errNotImplemented
+func (c *ComposeCluster) Client() (*GrpcClient, func(), error) {
+	return nil, nil, errNotImplemented
 }
 
-func (c *ComposeCluster) AdminPost(body []byte) ([]byte, error) {
+func (c *ComposeCluster) HTTPClient() (*HTTPClient, error) {
 	return nil, errNotImplemented
 }
 
@@ -39,7 +39,7 @@ func (c *ComposeCluster) AlphasHealth() ([]string, error) {
 	return nil, errNotImplemented
 }
 
-func (c *ComposeCluster) AssignUids(num uint64) error {
+func (c *ComposeCluster) AssignUids(client *dgo.Dgraph, num uint64) error {
 	return testutil.AssignUids(num)
 }
 

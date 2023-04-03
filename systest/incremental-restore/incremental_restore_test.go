@@ -18,6 +18,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -36,18 +37,28 @@ func TestIncrementalRestore(t *testing.T) {
 	defer c.Cleanup()
 	c.Start()
 
+	gc, cleanup, err := c.Client()
+	require.NoError(t, err)
+	defer cleanup()
+	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
+		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, 0))
+
+	hc, err := c.HTTPClient()
+	require.NoError(t, err)
+	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, 0))
+
 	uids := []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20}
-	c.AssignUids(uint64(len(uids)))
-	require.NoError(t, dgraphtest.SetupSchema(c, `money: [int] @index(int) @count .`))
+	c.AssignUids(gc, uint64(len(uids)))
+	require.NoError(t, gc.SetupSchema(`money: [int] @index(int) @count .`))
 
 	for i := 1; i <= len(uids); i++ {
 		for j := 1; j <= i; j++ {
 			rdfs := fmt.Sprintf(`<%v> <money> "%v" .`, j, i)
-			_, err := dgraphtest.Mutate(c, rdfs)
+			_, err := gc.Mutate(rdfs)
 			require.NoError(t, err)
 		}
 		t.Logf("taking backup #%v\n", i)
-		require.NoError(t, dgraphtest.Backup(c, i == 1, dgraphtest.DefaultBackupDir))
+		require.NoError(t, hc.Backup(i == 1, dgraphtest.DefaultBackupDir))
 	}
 
 	for i := 2; i <= len(uids); i += 2 {
@@ -57,11 +68,11 @@ func TestIncrementalRestore(t *testing.T) {
 		if i == 2 {
 			incrFrom = 0
 		}
-		require.NoError(t, dgraphtest.Restore(c, dgraphtest.DefaultBackupDir, "", incrFrom, i, ""))
+		require.NoError(t, hc.Restore(c, dgraphtest.DefaultBackupDir, "", incrFrom, i, ""))
 		require.NoError(t, dgraphtest.WaitForRestore(c))
 
 		for j := 1; j <= i; j++ {
-			resp, err := dgraphtest.Query(c, fmt.Sprintf(`{q(func: uid(%v)) {money}}`, j))
+			resp, err := gc.Query(fmt.Sprintf(`{q(func: uid(%v)) {money}}`, j))
 			require.NoError(t, err)
 
 			var data struct {
