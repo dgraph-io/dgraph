@@ -274,7 +274,7 @@ type Speaker {
 }
 
 type JaegerTest {
-	name
+	_name
 	<#tag:test>
 }
 
@@ -352,6 +352,7 @@ tweet-d                        : string @index(trigram) .
 name2                          : string @index(term)  .
 age2                           : int @index(int) .
 <#tag:test>                    : string .
+_name                          : string @index(term)  .
 `
 
 func populateCluster() {
@@ -882,13 +883,13 @@ func populateCluster() {
 		# Data for testing Tags in comments.
 
 		<300> <#tag:test> "Bob" .
-		<301> <name> "#tag:test" .
-		<302> <name> "#tag" .
-		<303> <name> "#tag:" .
-		<304> <name> "#test" .
-		<305> <name> "#" .
-		<306> <name> "something#" .
-		<307> <name> "something#tag:MyTest" .
+		<301> <_name> "#tag:test" .
+		<302> <_name> "#tag" .
+		<303> <_name> "#tag:" .
+		<304> <_name> "#test" .
+		<305> <_name> "#" .
+		<306> <_name> "something#" .
+		<307> <_name> "something#tag:MyTest" .
 
 		<300> <dgraph.type> "JaegerTest" .
 		<301> <dgraph.type> "JaegerTest" .
