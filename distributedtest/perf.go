@@ -11,7 +11,7 @@ import (
 )
 
 func setupClient(resources dgraphtest.ResourceDetails) {
-	cmd := exec.Command("git", "clone", dgraphtest.DgraphRepoUrl)
+	cmd := exec.Command("git", "clone", "-b", "anurag/perf-set-client", dgraphtest.DgraphRepoUrl)
 	dgraphtest.RunCmdInResource(cmd.String(), resources)
 }
 
