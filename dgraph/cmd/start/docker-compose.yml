@@ -4,8 +4,8 @@ services:
     image: dgraph/dgraph:local
     working_dir: /data/zero1
     ports:
-      - 5080
-      - 6080
+      - 5080:5080
+      - 6080:6080
     labels:
       cluster: test
       service: zero
@@ -61,16 +61,16 @@ services:
         target: /gobin
         read_only: true
       - type: bind
-        source: ../ee/acl/hmac-secret
+        source: ../../../ee/acl/hmac-secret
         target: /dgraph-acl/hmac-secret
         read_only: true
       - type: bind
-        source: ../ee/enc/test-fixtures/enc-key
+        source: ../../../ee/enc/test-fixtures/enc-key
         target: /dgraph-enc/enc-key
         read_only: true
     ports:
-      - 8080
-      - 9080
+      - 8080:8080
+      - 9080:9080
     labels:
       cluster: test
       service: alpha
