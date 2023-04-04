@@ -17,7 +17,6 @@
 package dgraphtest
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -52,19 +51,19 @@ type cnet struct {
 	name string
 }
 
+// LocalCluster is a local dgraph cluster
 type LocalCluster struct {
 	conf       ClusterConfig
 	tempBinDir string
 
 	// resources
-	conns  []*grpc.ClientConn
-	client *dgo.Dgraph
 	dcli   *docker.Client
 	net    cnet
 	zeros  []*zero
 	alphas []*alpha
 }
 
+// UpgradeStrategy is an Enum that defines various upgrade strategies
 type UpgradeStrategy int
 
 const (
@@ -83,6 +82,7 @@ func (u UpgradeStrategy) String() string {
 	}
 }
 
+// NewLocalCluster creates a new local dgraph cluster with given configuration
 func NewLocalCluster(conf ClusterConfig) (*LocalCluster, error) {
 	c := &LocalCluster{conf: conf}
 	if err := c.init(); err != nil {
@@ -212,12 +212,6 @@ func (c *LocalCluster) Cleanup() {
 
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 	defer cancel()
-
-	for _, conn := range c.conns {
-		if err := conn.Close(); err != nil {
-			log.Printf("[WARNING] error closing connection: %v", err)
-		}
-	}
 
 	ro := types.ContainerRemoveOptions{RemoveVolumes: true, Force: true}
 	for _, aa := range c.alphas {
@@ -367,16 +361,35 @@ func (c *LocalCluster) containerHealthCheck(url string) error {
 		}
 
 		// For Alpha, we always run alpha with EE features enabled
-		if strings.Contains(resp, `"ee_features"`) {
-			if c.conf.acl && strings.Contains(resp, `"acl"`) {
-				if _, err := c.Client(); err != nil {
-					return errors.Wrap(err, "error setting up a client")
-				}
-				return nil
-			} else if !c.conf.acl {
-				return nil
-			}
+		if !strings.Contains(resp, `"ee_features"`) {
+			continue
 		}
+		if !c.conf.acl {
+			return nil
+		}
+		if !c.conf.acl || !strings.Contains(resp, `"acl"`) {
+			continue
+		}
+
+		client, cleanup, err := c.Client()
+		if err != nil {
+			return errors.Wrap(err, "error setting up a client")
+		}
+		defer cleanup()
+
+		ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+		defer cancel()
+		for i := 0; i < 3; i++ {
+			if err = client.Login(ctx, DefaultUser, DefaultPassword); err == nil {
+				break
+			}
+			log.Printf("[WARNING] error trying to login: %v", err)
+			time.Sleep(waitDurBeforeRetry)
+		}
+		if err != nil {
+			return errors.Wrap(err, "error during login")
+		}
+		return nil
 	}
 
 	return fmt.Errorf("health failed, cluster took too long to come up [%v]", url)
@@ -407,6 +420,7 @@ func doReq(req *http.Request) ([]byte, error) {
 	return respBody, nil
 }
 
+// needed during upgrade
 func (c *LocalCluster) recreateContainers() error {
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 	defer cancel()
@@ -438,24 +452,15 @@ func (c *LocalCluster) recreateContainers() error {
 }
 
 // Upgrades the cluster to the provided dgraph version
-func (c *LocalCluster) Upgrade(version string, strategy UpgradeStrategy) error {
+func (c *LocalCluster) Upgrade(hc *HTTPClient, version string, strategy UpgradeStrategy) error {
 	if version == c.conf.version {
 		return fmt.Errorf("cannot upgrade to the same version")
 	}
 
-	// cleanup existing connections
-	for _, conn := range c.conns {
-		if err := conn.Close(); err != nil {
-			log.Printf("[WARNING] error closing connection: %v", err)
-		}
-	}
-	c.conns = c.conns[:0]
-	c.client = nil
-
 	log.Printf("[INFO] upgrading the cluster from [%v] to [%v] using [%v]", c.conf.version, version, strategy)
 	switch strategy {
 	case BackupRestore:
-		if err := Backup(c, true, DefaultBackupDir); err != nil {
+		if err := hc.Backup(true, DefaultBackupDir); err != nil {
 			return errors.Wrap(err, "error taking backup during upgrade")
 		}
 		if err := c.Stop(); err != nil {
@@ -475,7 +480,7 @@ func (c *LocalCluster) Upgrade(version string, strategy UpgradeStrategy) error {
 		if c.conf.encryption {
 			encPath = encKeyMountPath
 		}
-		if err := Restore(c, DefaultBackupDir, "", 0, 1, encPath); err != nil {
+		if err := hc.Restore(c, DefaultBackupDir, "", 0, 1, encPath); err != nil {
 			return errors.Wrap(err, "error doing restore during upgrade")
 		}
 		if err := WaitForRestore(c); err != nil {
@@ -498,48 +503,55 @@ func (c *LocalCluster) Upgrade(version string, strategy UpgradeStrategy) error {
 	}
 }
 
-// Client returns a client that can talk to any Alpha in the cluster
-func (c *LocalCluster) Client() (*dgo.Dgraph, error) {
-	if c.client != nil {
-		return c.client, nil
-	}
-
+// Client returns a grpc client that can talk to any Alpha in the cluster
+func (c *LocalCluster) Client() (*GrpcClient, func(), error) {
+	// TODO(aman): can we cache the connections?
 	var apiClients []api.DgraphClient
+	var conns []*grpc.ClientConn
 	for i := 0; i < c.conf.numAlphas; i++ {
 		url, err := c.alphas[i].alphaURL(c)
 		if err != nil {
-			return nil, errors.Wrap(err, "error getting health URL")
+			return nil, nil, errors.Wrap(err, "error getting health URL")
 		}
 		conn, err := grpc.Dial(url, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		if err != nil {
-			return nil, errors.Wrap(err, "error connecting to alpha")
+			return nil, nil, errors.Wrap(err, "error connecting to alpha")
 		}
-		c.conns = append(c.conns, conn)
+		conns = append(conns, conn)
 		apiClients = append(apiClients, api.NewDgraphClient(conn))
 	}
 
 	client := dgo.NewDgraphClient(apiClients...)
-	if c.conf.acl {
-		ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
-		defer cancel()
-
-		var err error
-		for i := 0; i < 3; i++ {
-			if err = client.Login(ctx, defaultUser, defaultPassowrd); err == nil {
-				break
+	cleanup := func() {
+		for _, conn := range conns {
+			if err := conn.Close(); err != nil {
+				log.Printf("[WARNING] error closing connection: %v", err)
 			}
-			log.Printf("[WARNING] error trying to login: %v", err)
-			time.Sleep(waitDurBeforeRetry)
-		}
-		if err != nil {
-			return nil, errors.Wrap(err, "error during login")
 		}
 	}
-	c.client = client
-
-	return client, nil
+	return &GrpcClient{Dgraph: client}, cleanup, nil
 }
 
+// HTTPClient creates an HTTP client
+func (c *LocalCluster) HTTPClient() (*HTTPClient, error) {
+	endpoint, err := c.adminURL()
+	if err != nil {
+		return nil, err
+	}
+	return &HTTPClient{adminURL: endpoint}, nil
+}
+
+// adminURL returns url to the graphql admin endpoint
+func (c *LocalCluster) adminURL() (string, error) {
+	publicPort, err := publicPort(c.dcli, c.alphas[0], alphaHttpPort)
+	if err != nil {
+		return "", err
+	}
+	url := "http://localhost:" + publicPort + "/admin"
+	return url, nil
+}
+
+// AlphasHealth returns response of health endpoint for all alphas
 func (c *LocalCluster) AlphasHealth() ([]string, error) {
 	if len(c.alphas) == 0 {
 		return nil, fmt.Errorf("alpha not running")
@@ -565,90 +577,8 @@ func (c *LocalCluster) AlphasHealth() ([]string, error) {
 	return healths, nil
 }
 
-func httpLogin(endpoint string) (string, error) {
-	q := `mutation login($userId: String, $password: String, $namespace: Int) {
-		login(userId: $userId, password: $password, namespace: $namespace) {
-			response {
-				accessJWT
-				refreshJWT
-			}
-		}
-	}`
-
-	gqlParams := graphQLParams{
-		Query: q,
-		Variables: map[string]interface{}{
-			"userId":   defaultUser,
-			"password": defaultPassowrd,
-		},
-	}
-	body, err := json.Marshal(gqlParams)
-	if err != nil {
-		return "", errors.Wrapf(err, "unable to marshal body")
-	}
-
-	req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewBuffer(body))
-	if err != nil {
-		return "", errors.Wrapf(err, "unable to create request")
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	respBody, err := doReq(req)
-	if err != nil {
-		return "", errors.Wrapf(err, "error performing login request")
-	}
-
-	var gqlResp graphQLResponse
-	if err := json.Unmarshal(respBody, &gqlResp); err != nil {
-		return "", errors.Wrap(err, "error unmarshalling GQL response")
-	}
-	if len(gqlResp.Errors) > 0 {
-		return "", errors.Wrapf(gqlResp.Errors, "error while running admin query")
-	}
-
-	var r struct {
-		Login struct {
-			Response struct {
-				AccessJWT  string
-				RefreshJwt string
-			}
-		}
-	}
-	if err := json.Unmarshal(gqlResp.Data, &r); err != nil {
-		return "", errors.Wrap(err, "error unmarshalling response into object")
-	}
-	if r.Login.Response.AccessJWT == "" {
-		return "", errors.Errorf("no access JWT found in the response")
-	}
-	return r.Login.Response.AccessJWT, nil
-}
-
-func (c *LocalCluster) AdminPost(body []byte) ([]byte, error) {
-	publicPort, err := publicPort(c.dcli, c.alphas[0], alphaHttpPort)
-	if err != nil {
-		return nil, err
-	}
-	url := "http://localhost:" + publicPort + "/admin"
-
-	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(body))
-	if err != nil {
-		return nil, errors.Wrapf(err, "error building req for endpoint [%v]", url)
-	}
-	req.Header.Add("Content-Type", "application/json")
-
-	if c.conf.acl {
-		token, err := httpLogin(url)
-		if err != nil {
-			return nil, err
-		}
-		req.Header.Add("X-Dgraph-AccessToken", token)
-	}
-
-	return doReq(req)
-}
-
 // AssignUids talks to zero to assign the given number of uids
-func (c *LocalCluster) AssignUids(num uint64) error {
+func (c *LocalCluster) AssignUids(_ *dgo.Dgraph, num uint64) error {
 	if len(c.zeros) == 0 {
 		return errors.New("no zero running")
 	}
@@ -682,6 +612,7 @@ func (c *LocalCluster) AssignUids(num uint64) error {
 	return nil
 }
 
+// GetVersion returns the version of dgraph the cluster is running
 func (c *LocalCluster) GetVersion() string {
 	return c.conf.version
 }

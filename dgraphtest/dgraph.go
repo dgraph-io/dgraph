@@ -49,8 +49,8 @@ const (
 	aclSecretMountPath = "/dgraph-acl/hmac-secret"
 	encKeyMountPath    = "/dgraph-enc/enc-key"
 
-	defaultUser     = "groot"
-	defaultPassowrd = "password"
+	DefaultUser     = "groot"
+	DefaultPassword = "password"
 )
 
 func fileExists(filename string) (bool, error) {
