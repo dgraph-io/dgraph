@@ -31,6 +31,7 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	"go.opencensus.io/plugin/ocgrpc"
 	otrace "go.opencensus.io/trace"
 	"go.opencensus.io/zpages"
@@ -79,7 +80,7 @@ instances to achieve high-availability.
 `,
 		Run: func(cmd *cobra.Command, args []string) {
 			defer x.StartProfile(Zero.Conf).Stop()
-			run()
+			Run(Zero.Conf)
 		},
 		Annotations: map[string]string{"group": "core"},
 	}
@@ -91,51 +92,7 @@ instances to achieve high-availability.
 	// --tls SuperFlag
 	x.RegisterServerTLSFlags(flag)
 
-	flag.IntP("port_offset", "o", 0,
-		"Value added to all listening port numbers. [Grpc=5080, HTTP=6080]")
-	flag.Int("replicas", 1, "How many Dgraph Alpha replicas to run per data shard group."+
-		" The count includes the original shard.")
-	flag.String("peer", "", "Address of another dgraphzero server.")
-	flag.StringP("wal", "w", "zw", "Directory storing WAL.")
-	flag.Duration("rebalance_interval", 8*time.Minute, "Interval for trying a predicate move.")
-	flag.String("enterprise_license", "", "Path to the enterprise license file.")
-	flag.String("cid", "", "Cluster ID")
-
-	flag.String("limit", worker.ZeroLimitsDefaults, z.NewSuperFlagHelp(worker.ZeroLimitsDefaults).
-		Head("Limit options").
-		Flag("uid-lease",
-			`The maximum number of UIDs that can be leased by namespace (except default namespace)
-			in an interval specified by refill-interval. Set it to 0 to remove limiting.`).
-		Flag("refill-interval",
-			"The interval after which the tokens for UID lease are replenished.").
-		Flag("disable-admin-http",
-			"Turn on/off the administrative endpoints exposed over Zero's HTTP port.").
-		String())
-
-	flag.String("raft", raftDefaults, z.NewSuperFlagHelp(raftDefaults).
-		Head("Raft options").
-		Flag("idx",
-			"Provides an optional Raft ID that this Alpha would use to join Raft groups.").
-		Flag("learner",
-			`Make this Zero a "learner" node. In learner mode, this Zero will not participate `+
-				"in Raft elections. This can be used to achieve a read-only replica.").
-		String())
-
-	flag.String("audit", worker.AuditDefaults, z.NewSuperFlagHelp(worker.AuditDefaults).
-		Head("Audit options").
-		Flag("output",
-			`[stdout, /path/to/dir] This specifies where audit logs should be output to.
-			"stdout" is for standard output. You can also specify the directory where audit logs
-			will be saved. When stdout is specified as output other fields will be ignored.`).
-		Flag("compress",
-			"Enables the compression of old audit logs.").
-		Flag("encrypt-file",
-			"The path to the key file to be used for audit log encryption.").
-		Flag("days",
-			"The number of days audit logs will be preserved.").
-		Flag("size",
-			"The audit log max size in MB after which it will be rolled over.").
-		String())
+	FillFlags(flag)
 }
 
 func setupListener(addr string, port int, kind string) (listener net.Listener, err error) {
@@ -150,8 +107,8 @@ type state struct {
 	zero *Server
 }
 
-func (st *state) serveGRPC(l net.Listener, store *raftwal.DiskStorage) {
-	x.RegisterExporters(Zero.Conf, "dgraph.zero")
+func (st *state) serveGRPC(conf *viper.Viper, l net.Listener, store *raftwal.DiskStorage) {
+	x.RegisterExporters(conf, "dgraph.zero")
 	grpcOpts := []grpc.ServerOption{
 		grpc.MaxRecvMsgSize(x.GrpcMaxSize),
 		grpc.MaxSendMsgSize(x.GrpcMaxSize),
@@ -160,7 +117,7 @@ func (st *state) serveGRPC(l net.Listener, store *raftwal.DiskStorage) {
 		grpc.UnaryInterceptor(audit.AuditRequestGRPC),
 	}
 
-	tlsConf, err := x.LoadServerTLSConfigForInternalPort(Zero.Conf)
+	tlsConf, err := x.LoadServerTLSConfigForInternalPort(conf)
 	x.Check(err)
 	if tlsConf != nil {
 		grpcOpts = append(grpcOpts, grpc.Creds(credentials.NewTLS(tlsConf)))
@@ -212,8 +169,8 @@ func (st *state) serveGRPC(l net.Listener, store *raftwal.DiskStorage) {
 	}()
 }
 
-func run() {
-	telemetry := z.NewSuperFlag(Zero.Conf.GetString("telemetry")).MergeAndCheckDefault(
+func Run(conf *viper.Viper) {
+	telemetry := z.NewSuperFlag(conf.GetString("telemetry")).MergeAndCheckDefault(
 		x.TelemetryDefaults)
 	if telemetry.GetBool("sentry") {
 		x.InitSentry(enc.EeBuild)
@@ -224,13 +181,13 @@ func run() {
 	}
 
 	x.PrintVersion()
-	tlsConf, err := x.LoadClientTLSConfigForInternalPort(Zero.Conf)
+	tlsConf, err := x.LoadClientTLSConfigForInternalPort(conf)
 	x.Check(err)
 
-	raft := z.NewSuperFlag(Zero.Conf.GetString("raft")).MergeAndCheckDefault(
+	raft := z.NewSuperFlag(conf.GetString("raft")).MergeAndCheckDefault(
 		raftDefaults)
-	auditConf := audit.GetAuditConf(Zero.Conf.GetString("audit"))
-	limit := z.NewSuperFlag(Zero.Conf.GetString("limit")).MergeAndCheckDefault(
+	auditConf := audit.GetAuditConf(conf.GetString("audit"))
+	limit := z.NewSuperFlag(conf.GetString("limit")).MergeAndCheckDefault(
 		worker.ZeroLimitsDefaults)
 	limitConf := &x.LimiterConf{
 		UidLeaseLimit: limit.GetUint64("uid-lease"),
@@ -240,20 +197,21 @@ func run() {
 		telemetry:         telemetry,
 		raft:              raft,
 		limit:             limit,
-		bindall:           Zero.Conf.GetBool("bindall"),
-		portOffset:        Zero.Conf.GetInt("port_offset"),
-		numReplicas:       Zero.Conf.GetInt("replicas"),
-		peer:              Zero.Conf.GetString("peer"),
-		w:                 Zero.Conf.GetString("wal"),
-		rebalanceInterval: Zero.Conf.GetDuration("rebalance_interval"),
+		bindall:           conf.GetBool("bindall"),
+		portOffset:        conf.GetInt("port_offset"),
+		numReplicas:       conf.GetInt("replicas"),
+		peer:              conf.GetString("peer"),
+		w:                 conf.GetString("wal"),
+		rebalanceInterval: conf.GetDuration("rebalance_interval"),
 		tlsClientConfig:   tlsConf,
 		audit:             auditConf,
 		limiterConfig:     limitConf,
 	}
+	glog.Infof("RAFT: %d", raft.GetUint64("idx"))
 	glog.Infof("Setting Config to: %+v", opts)
-	x.WorkerConfig.Parse(Zero.Conf)
+	x.WorkerConfig.Parse(conf)
 
-	if !enc.EeBuild && Zero.Conf.GetString("enterprise_license") != "" {
+	if !enc.EeBuild && conf.GetString("enterprise_license") != "" {
 		log.Fatalf("ERROR: enterprise_license option cannot be applied to OSS builds. ")
 	}
 
@@ -262,7 +220,7 @@ func run() {
 			opts.numReplicas)
 	}
 
-	if Zero.Conf.GetBool("expose_trace") {
+	if conf.GetBool("expose_trace") {
 		// TODO: Remove this once we get rid of event logs.
 		trace.AuthRequest = func(req *http.Request) (any, sensitive bool) {
 			return true, true
@@ -285,7 +243,7 @@ func run() {
 
 	grpc.EnableTracing = false
 	otrace.ApplyConfig(otrace.Config{
-		DefaultSampler: otrace.ProbabilitySampler(Zero.Conf.GetFloat64("trace"))})
+		DefaultSampler: otrace.ProbabilitySampler(conf.GetFloat64("trace"))})
 
 	addr := "localhost"
 	if opts.bindall {
@@ -312,9 +270,9 @@ func run() {
 
 	// Initialize the servers.
 	var st state
-	st.serveGRPC(grpcListener, store)
+	st.serveGRPC(conf, grpcListener, store)
 
-	tlsCfg, err := x.LoadServerTLSConfig(Zero.Conf)
+	tlsCfg, err := x.LoadServerTLSConfig(conf)
 	x.Check(err)
 	go x.StartListenHttpAndHttps(httpListener, tlsCfg, st.zero.closer)
 
