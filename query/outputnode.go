@@ -35,7 +35,7 @@ import (
 	"github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
 
-	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/algo"
 	gqlSchema "github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/protos/pb"

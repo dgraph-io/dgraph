@@ -33,7 +33,7 @@ import (
 	"google.golang.org/grpc/metadata"
 
 	"github.com/dgraph-io/badger/v4"
-	"github.com/dgraph-io/dgo/v210"
+	"github.com/dgraph-io/dgo/v230"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"

@@ -22,7 +22,7 @@ import (
 
 	"github.com/golang/glog"
 
-	dgoapi "github.com/dgraph-io/dgo/v210/protos/api"
+	dgoapi "github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"

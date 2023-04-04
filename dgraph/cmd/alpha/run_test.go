@@ -44,8 +44,8 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/encoding/gzip"
 
-	"github.com/dgraph-io/dgo/v210"
-	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/dgo/v230"
+	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/dql"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/query"
