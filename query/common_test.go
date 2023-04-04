@@ -29,6 +29,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 func setSchema(schema string) {
@@ -346,15 +347,14 @@ age2                           : int @index(int) .
 `
 
 func populateCluster() {
-	if err := client.Alter(context.Background(), &api.Operation{DropAll: true}); err != nil {
-		panic(err)
-	}
+	x.Panic(client.Alter(context.Background(), &api.Operation{DropAll: true}))
 
-	if err := dc.AssignUids(65536); err != nil {
-		panic(err)
-	}
+	// In the query package, we test using hard coded UIDs so that we know what results
+	// to expect. We need to move the max assigned UID in zero to higher value than
+	// all the UIDs we are using during the tests.
+	x.Panic(dc.AssignUids(65536))
+
 	setSchema(testSchema)
-
 	err := addTriplesToCluster(`
 		<1> <name> "Michonne" .
 		<2> <name> "King Lear" .
@@ -870,79 +870,39 @@ func populateCluster() {
 		<40> <name2> "Alice" .
 		<41> <age2> "20" .
 	`)
-	if err != nil {
-		panic(fmt.Sprintf("Could not able add triple to the cluster. Got error %v", err.Error()))
-	}
+	x.Panic(err)
 
-	err = addGeoPointToCluster(1, "loc", []float64{1.1, 2.0})
-	if err != nil {
-		panic(fmt.Sprintf("Could not able add geo point to the cluster. Got error %v", err.Error()))
-	}
-	err = addGeoPointToCluster(24, "loc", []float64{1.10001, 2.000001})
-	if err != nil {
-		panic(fmt.Sprintf("Could not able add geo point to the cluster. Got error %v", err.Error()))
-	}
-	err = addGeoPointToCluster(25, "loc", []float64{1.1, 2.0})
-	if err != nil {
-		panic(fmt.Sprintf("Could not able add geo point to the cluster. Got error %v", err.Error()))
-	}
-	err = addGeoPointToCluster(5101, "geometry", []float64{-122.082506, 37.4249518})
-	if err != nil {
-		panic(fmt.Sprintf("Could not able add geo point to the cluster. Got error %v", err.Error()))
-	}
-	err = addGeoPointToCluster(5102, "geometry", []float64{-122.080668, 37.426753})
-	if err != nil {
-		panic(fmt.Sprintf("Could not able add geo point to the cluster. Got error %v", err.Error()))
-	}
-	err = addGeoPointToCluster(5103, "geometry", []float64{-122.2527428, 37.513653})
-	if err != nil {
-		panic(fmt.Sprintf("Could not able add geo point to the cluster. Got error %v", err.Error()))
-	}
+	x.Panic(addGeoPointToCluster(1, "loc", []float64{1.1, 2.0}))
+	x.Panic(addGeoPointToCluster(24, "loc", []float64{1.10001, 2.000001}))
+	x.Panic(addGeoPointToCluster(25, "loc", []float64{1.1, 2.0}))
+	x.Panic(addGeoPointToCluster(5101, "geometry", []float64{-122.082506, 37.4249518}))
+	x.Panic(addGeoPointToCluster(5102, "geometry", []float64{-122.080668, 37.426753}))
+	x.Panic(addGeoPointToCluster(5103, "geometry", []float64{-122.2527428, 37.513653}))
 
-	err = addGeoPolygonToCluster(23, "loc", [][][]float64{
+	x.Panic(addGeoPolygonToCluster(23, "loc", [][][]float64{
 		{{0.0, 0.0}, {2.0, 0.0}, {2.0, 2.0}, {0.0, 2.0}, {0.0, 0.0}},
-	})
-	if err != nil {
-		panic(fmt.Sprintf("Could not able to add geo polygon to the cluster. Got error %v",
-			err.Error()))
-	}
-	err = addGeoPolygonToCluster(5104, "geometry", [][][]float64{
+	}))
+	x.Panic(addGeoPolygonToCluster(5104, "geometry", [][][]float64{
 		{{-121.6, 37.1}, {-122.4, 37.3}, {-122.6, 37.8}, {-122.5, 38.3}, {-121.9, 38},
 			{-121.6, 37.1}},
-	})
-	if err != nil {
-		panic(fmt.Sprintf("Could not able to add geo polygon to the cluster. Got error %v",
-			err.Error()))
-	}
-	err = addGeoPolygonToCluster(5105, "geometry", [][][]float64{
+	}))
+	x.Panic(addGeoPolygonToCluster(5105, "geometry", [][][]float64{
 		{{-122.06, 37.37}, {-122.1, 37.36}, {-122.12, 37.4}, {-122.11, 37.43},
 			{-122.04, 37.43}, {-122.06, 37.37}},
-	})
-	if err != nil {
-		panic(fmt.Sprintf("Could not able to add geo polygon to the cluster. Got error %v",
-			err.Error()))
-	}
-	err = addGeoPolygonToCluster(5106, "geometry", [][][]float64{
+	}))
+	x.Panic(addGeoPolygonToCluster(5106, "geometry", [][][]float64{
 		{{-122.25, 37.49}, {-122.28, 37.49}, {-122.27, 37.51}, {-122.25, 37.52},
 			{-122.25, 37.49}},
-	})
-	if err != nil {
-		panic(fmt.Sprintf("Could not able to add geo polygon to the cluster. Got error %v",
-			err.Error()))
-	}
+	}))
 
-	err = addGeoMultiPolygonToCluster(5107, [][][][]float64{
+	x.Panic(addGeoMultiPolygonToCluster(5107, [][][][]float64{
 		{{{-74.29504394531249, 40.19146303804063}, {-74.59716796875, 40.39258071969131},
 			{-74.6466064453125, 40.20824570152502}, {-74.454345703125, 40.06125658140474},
 			{-74.28955078125, 40.17467622056341}, {-74.29504394531249, 40.19146303804063}}},
 		{{{-74.102783203125, 40.8595252289932}, {-74.2730712890625, 40.718119379753446},
 			{-74.0478515625, 40.66813955408042}, {-73.98193359375, 40.772221877329024},
 			{-74.102783203125, 40.8595252289932}}},
-	})
-	if err != nil {
-		panic(fmt.Sprintf("Could not able to add multi polygon to the cluster. Got error %v",
-			err.Error()))
-	}
+	}))
 
 	// Add data for regex tests.
 	nextId := uint64(0x2000)
@@ -957,11 +917,7 @@ func populateCluster() {
 			<%d> <value> "%s" .
 			<0x1234> <pattern> <%d> .
 		`, nextId, p, nextId)
-		err = addTriplesToCluster(triples)
-		if err != nil {
-			panic(fmt.Sprintf("Could not able add triple to the cluster. Got error %v", err.Error()))
-		}
-
+		x.Panic(addTriplesToCluster(triples))
 		nextId++
 	}
 
@@ -983,8 +939,5 @@ func populateCluster() {
 		<306> <updated_at> "2019-03-24T14:41:57+05:30" (modified_at=2019-03-28T06:41:57+23:00) .
 		<307> <updated_at> "2019-05-28" (modified_at=2019-03-24T14:41:57+05:30) .
 	`)
-	if err != nil {
-		panic(fmt.Sprintf("Could not able add triple to the cluster. Got error %v", err.Error()))
-	}
-
+	x.Panic(err)
 }
