@@ -10,7 +10,7 @@ require (
 	github.com/Masterminds/semver/v3 v3.1.0
 	github.com/Shopify/sarama v1.27.2
 	github.com/blevesearch/bleve v1.0.13
-	github.com/dgraph-io/badger/v4 v4.0.2-0.20230307194143-24ef3aab9eda
+	github.com/dgraph-io/badger/v4 v4.1.0
 	github.com/dgraph-io/dgo/v210 v210.0.0-20220113041351-ba0e5dfc4c3e
 	github.com/dgraph-io/gqlgen v0.13.2
 	github.com/dgraph-io/gqlparser/v2 v2.2.1
@@ -70,7 +70,6 @@ require (
 require (
 	github.com/DataDog/datadog-go v0.0.0-20190425163447-40bafcb5f6c1 // indirect
 	github.com/Microsoft/go-winio v0.5.2 // indirect
-	github.com/OneOfOne/xxhash v1.2.5 // indirect
 	github.com/ProtonMail/go-crypto v0.0.0-20221026131551-cf6655e29de4 // indirect
 	github.com/acomagu/bufpipe v1.0.3 // indirect
 	github.com/agnivade/levenshtein v1.0.3 // indirect
@@ -79,7 +78,6 @@ require (
 	github.com/blevesearch/go-porterstemmer v1.0.3 // indirect
 	github.com/blevesearch/segment v0.9.0 // indirect
 	github.com/blevesearch/snowballstem v0.9.0 // indirect
-	github.com/cespare/xxhash v1.1.0 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/cloudflare/circl v1.1.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
