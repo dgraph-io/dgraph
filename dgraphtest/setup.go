@@ -50,7 +50,7 @@ func (a AWSDetails) IP() string {
 // If cluster has been setup already than read the details from the config file
 // and return the details
 func ProvisionClientAndTarget(task DgraphPerf) ResourceDetails {
-	if err := godotenv.Load(); err != nil {
+	if err := godotenv.Load(".env"); err != nil {
 		log.Fatalf("Error loading .env file")
 	}
 	switch task.rc.loc {
