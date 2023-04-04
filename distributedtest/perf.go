@@ -11,12 +11,11 @@ import (
 )
 
 func setupClient(resources dgraphtest.ResourceDetails) {
-	cmd := fmt.Sprintf("git clone %s", dgraphtest.DgraphRepoUrl)
-	dgraphtest.RunCmdInResource(cmd, resources)
+	cmd := exec.Command("git", "clone", dgraphtest.DgraphRepoUrl)
+	dgraphtest.RunCmdInResource(cmd.String(), resources)
 }
 
 func runTest(resources dgraphtest.ResourceDetails, task dgraphtest.DgraphPerf) {
-	// cmd := fmt.Sprintf("cd dgraph/edgraph && go test -run ^%s -count=1", "TestValidateToken")
 	cmd := exec.Command("go", "test", "-benchmem", "-run=^$", "-bench", "^"+task.Name()+"$", "-count=1", "-v")
 	wd, err := os.Getwd()
 	if err != nil {
@@ -24,7 +23,7 @@ func runTest(resources dgraphtest.ResourceDetails, task dgraphtest.DgraphPerf) {
 	}
 	cmd.Dir = filepath.Join(filepath.Dir(wd), "dgraphtest")
 
-	dgraphtest.RunCmdInResource(cmd, resources)
+	dgraphtest.RunCmdInResource(cmd.String(), resources)
 }
 
 func runTestLocally(task dgraphtest.DgraphPerf) {
@@ -37,7 +36,7 @@ func runTestLocally(task dgraphtest.DgraphPerf) {
 	cmd.Stderr = os.Stderr
 	out, err := cmd.Output()
 	if err != nil {
-		log.Fatalf("Could not run go list to guess install dir: %v, %v", err, out)
+		log.Panicf("Could not run cmd (%s): %v, %v", cmd, err, out)
 	}
 	fmt.Println(string(out))
 }
@@ -73,8 +72,7 @@ func main() {
 
 	// TODO (anurag): Make this concurrent
 	PerfTests := make(map[string]dgraphtest.DgraphPerf)
-	// PerfTests["ldbc-all-query"] = dgraphtest.NewDgraphPerf("BenchmarkLDBCAllQueries")
-	PerfTests["fib"] = dgraphtest.NewDgraphPerf("BenchmarkFibonacciNonRecursive")
+	PerfTests["bench-simple"] = dgraphtest.NewDgraphPerf("BenchmarkSimpleMutationQuery")
 	for key, val := range PerfTests {
 		fmt.Println(key, val)
 		err := runPerfTest(val)

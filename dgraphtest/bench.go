@@ -2,12 +2,12 @@ package dgraphtest
 
 import (
 	"bytes"
-	"fmt"
 	"io/ioutil"
 	"log"
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -66,9 +66,10 @@ func RunCmdInResource(cmd string, resources ResourceDetails) error {
 	return nil
 }
 
-func RunPerfTest(b *testing.B, name string, perfTest func(cluster Cluster, b *testing.B)) {
-	fmt.Println("Running: ", name)
-	var cluster Cluster
+func RunPerfTest(b *testing.B, conf ClusterConfig, perfTest func(cluster Cluster, b *testing.B)) {
+	cluster, err := NewLocalCluster(conf)
+	require.NoError(b, err)
+	defer cluster.Cleanup()
+	cluster.Start()
 	perfTest(cluster, b)
-
 }
