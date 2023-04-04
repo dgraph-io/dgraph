@@ -53,13 +53,14 @@ func RunCmdInResource(cmd string, resources ResourceDetails) error {
 		log.Panicf("session failed:%v", err)
 	}
 	defer session.Close()
-	log.Println("Running command ", cmd)
-	var stdoutBuf bytes.Buffer
-	session.Stdout = &stdoutBuf
-	err = session.Run(cmd)
 
-	if err != nil {
-		log.Panicf("Run failed:%v", err)
+	var stdoutBuf, stderrBuf bytes.Buffer
+	session.Stdout = &stdoutBuf
+	session.Stderr = &stderrBuf
+
+	log.Println("Running command ", cmd)
+	if err := session.Run(cmd); err != nil {
+		log.Panicf("command execution failed: %v, stderr: %v", err, stderrBuf.String())
 	}
 
 	log.Printf(">%s", strings.TrimSpace(stdoutBuf.String()))
