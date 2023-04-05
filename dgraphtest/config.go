@@ -22,10 +22,6 @@ import (
 	"time"
 )
 
-const (
-	localVersion = "local"
-)
-
 type ClusterConfig struct {
 	prefix     string
 	numAlphas  int
@@ -42,6 +38,7 @@ type ClusterConfig struct {
 func NewClusterConfig() ClusterConfig {
 	prefix := fmt.Sprintf("test-%d", rand.NewSource(time.Now().Unix()).Int63()%10000)
 	defaultBackupVol := fmt.Sprintf("%v_backup", prefix)
+	defaultExportVol := fmt.Sprintf("%v_export", prefix)
 	return ClusterConfig{
 		prefix:    prefix,
 		numAlphas: 1,
@@ -49,7 +46,7 @@ func NewClusterConfig() ClusterConfig {
 		replicas:  1,
 		verbosity: 2,
 		version:   localVersion,
-		volumes:   map[string]string{DefaultBackupDir: defaultBackupVol},
+		volumes:   map[string]string{DefaultBackupDir: defaultBackupVol, DefaultExportDir: defaultExportVol},
 	}
 }
 

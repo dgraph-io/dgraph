@@ -35,7 +35,7 @@ func TestIncrementalRestore(t *testing.T) {
 	c, err := dgraphtest.NewLocalCluster(conf)
 	require.NoError(t, err)
 	defer c.Cleanup()
-	c.Start()
+	require.NoError(t, c.Start())
 
 	gc, cleanup, err := c.Client()
 	require.NoError(t, err)
@@ -48,7 +48,7 @@ func TestIncrementalRestore(t *testing.T) {
 	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, 0))
 
 	uids := []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20}
-	c.AssignUids(gc, uint64(len(uids)))
+	c.AssignUids(gc.Dgraph, uint64(len(uids)))
 	require.NoError(t, gc.SetupSchema(`money: [int] @index(int) @count .`))
 
 	for i := 1; i <= len(uids); i++ {
