@@ -37,9 +37,8 @@ jobs:
             | xargs curl -Ls \
             | tar xz
             sudo mv ./vale /usr/bin/vale
-            mv ./.github/.vale.ini ~/.vale.ini
-            mkdir ~/styles
-            vale sync
+            mkdir ./.github/styles
+            vale --config=./.github/.vale.ini sync
       - name: Run Vale
         if: steps.changed-files-specific.outputs.any_changed == 'true'
-        run: vale --config=../../../.vale.ini ${{ steps.changed-files-specific.outputs.all_changed_files }}
+        run: vale --config=./.github/.vale.ini ${{ steps.changed-files-specific.outputs.all_changed_files }}
