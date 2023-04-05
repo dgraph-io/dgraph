@@ -1,0 +1,45 @@
+name: ci-spell-checking
+
+on:
+  push:
+    branches: 
+    - main
+  pull_request:
+    types:
+    - opened
+    - reopened
+    - synchronize
+    - ready_for_review
+    branches: 
+    - main
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v3
+      - name: Get changed files in the content folder
+        id: changed-files-specific
+        uses: tj-actions/changed-files@v35
+        with:
+          files: ./content/
+      - name: Install Vale
+        if: steps.changed-files-specific.outputs.any_changed == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install curl
+          curl -Ls https://api.github.com/repos/errata-ai/vale/releases/latest \
+            | grep "browser_download_url.*vale_[0-9.]*_Linux_64-bit.tar.gz" \
+            | cut -d : -f 2,3 \
+            | tr -d \" \
+            | xargs curl -Ls \
+            | tar xz
+            sudo mv ./vale /usr/bin/vale
+            mv ./.github/.vale.ini ~/.vale.ini
+            mkdir ~/styles
+            vale sync
+      - name: Run Vale
+        if: steps.changed-files-specific.outputs.any_changed == 'true'
+        run: vale --config=../../../.vale.ini ${{ steps.changed-files-specific.outputs.all_changed_files }}
