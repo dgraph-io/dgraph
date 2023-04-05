@@ -113,7 +113,7 @@ badger:
 		rm -r $(BADGER_TARGET); \
 	fi
 #	install badger CLI tool at version matching current dependency in Dgraph
-	@go install github.com/dgraph-io/badger/v3/badger@$(BADGER_VERSION)
+	@go install github.com/dgraph-io/badger/v4/badger@$(BADGER_VERSION)
 	@echo "Installed Badger CLI tool to $(BADGER_TARGET)"
 
 # build and run dependencies for ubuntu linux
