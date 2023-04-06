@@ -2,6 +2,8 @@ name: ci-spell-checking
 
 on:
   push:
+    paths-ignore:
+      - '.vscode/styles/**'
     branches: 
     - main
   pull_request:
