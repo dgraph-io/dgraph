@@ -1,6 +1,26 @@
 name: ci-dgraph-tests-arm64
 on:
   push:
+    paths-ignore:
+      - '.vscode/CODEOWNERS'
+      - '.vscode/*.json'
+      - 'compose/**'
+      - 'contrib/**'
+      - 'dgraphtest/**'
+      - 'licenses/**'
+      - 'paper/**'
+      - 'RFC/**'
+      - 'static/**'
+      - 't/**'
+      - 'telemetry/**'
+      - 'wiki/**'
+      - '**.dockerignore'
+      - '**.gitignore'
+      - '**/**.md'
+      - '**/**.png'
+      - '**/**.sh'
+      - '**/**.gif'
+      - '**/**.ini'
     branches:
       - main
       - 'release/**'
