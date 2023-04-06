@@ -391,6 +391,8 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.BackupResponse,
 	stream.SinceTs = pr.Request.SinceTs
 	stream.Prefix = []byte{x.ByteData}
 
+	p := 0
+
 	var response pb.BackupResponse
 	stream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
 		tl := pr.threads[itr.ThreadId]
@@ -405,6 +407,7 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.BackupResponse,
 		}
 
 		kvList, dropOp, err := tl.toBackupList(key, bitr)
+		p += len(kvList.Kv)
 		if err != nil {
 			return nil, err
 		}
@@ -460,6 +463,8 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.BackupResponse,
 		glog.Errorf("While taking backup: %v", err)
 		return &response, err
 	}
+
+	fmt.Println("BACKUP NUM KEYS:=", p)
 
 	// This is used to backup the schema and types.
 	writePrefix := func(prefix byte) error {
