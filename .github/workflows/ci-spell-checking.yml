@@ -25,7 +25,7 @@ jobs:
         uses: tj-actions/changed-files@v35
         with:
           files: ./
-          files_ignore: '.vscode/styles'
+          files_ignore: './.vscode/'
       - name: Install Vale
         if: steps.changed-files-specific.outputs.any_changed == 'true'
         run: |
