@@ -51,4 +51,3 @@ systest/bulk_live/live/**/*.rdf
 systest/bulk_live/live/**/*.txt
 x/log_test/*.enc
 *.buf
-.github/styles/**
