@@ -14,10 +14,8 @@ on:
     - main
 
 jobs:
-  lint:
+  spell-check:
     runs-on: ubuntu-latest
-    env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v3
       - name: Get changed files in the content folder
@@ -37,7 +35,6 @@ jobs:
             | xargs curl -Ls \
             | tar xz
             sudo mv ./vale /usr/bin/vale
-            mkdir ./.github/styles
             vale --config=./.github/.vale.ini sync
       - name: Run Vale
         if: steps.changed-files-specific.outputs.any_changed == 'true'
