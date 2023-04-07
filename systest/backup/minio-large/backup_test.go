@@ -69,7 +69,7 @@ func TestBackupMinioLarge(t *testing.T) {
 
 	mc, err = testutil.NewMinioClient()
 	require.NoError(t, err)
-	//require.NoError(t, mc.MakeBucket(bucketName, ""))
+	require.NoError(t, mc.MakeBucket(bucketName, ""))
 
 	// Setup the schema and make sure each group is assigned one predicate.
 	setupTablets(t, dg)
