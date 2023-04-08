@@ -77,10 +77,10 @@ jobs:
             dgraph/dgraph-linux-amd64.tar.gz
       - name: Move Badger Binary into Linux Directory
         run: |
-          tar -xzf badger/badger-linux-amd64.tar.gz
-          [ -d "./linux" ] && mkdir linux
+          tar -xzf badger/badger-linux-amd64.tar.gz --directory badger
+          [ -d "linux" ] || mkdir linux
           # linux directory will be added to docker image in build step
-          cp badger/badger-linux-amd64 ./linux/badger
+          cp badger/badger-linux-amd64 linux/badger
       - name: Make Dgraph Docker Image
         run: |
           make docker-image DGRAPH_VERSION=${{ env.DGRAPH_RELEASE_VERSION }}-amd64
@@ -165,10 +165,10 @@ jobs:
             dgraph/dgraph-linux-arm64.tar.gz
       - name: Move Badger Binary into Linux Directory
         run: |
-          tar -xzf badger/badger-linux-amd64.tar.gz
-          [ -d "./linux" ] && mkdir linux
+          tar -xzf badger/badger-linux-amd64.tar.gz --directory badger
+          [ -d "linux" ] || mkdir linux
           # linux directory will be added to docker image in build step
-          cp badger/badger-linux-amd64 ./linux/badger
+          cp badger/badger-linux-amd64 linux/badger
       - name: Make Dgraph Docker Image
         run: |
           make docker-image DGRAPH_VERSION=${{ env.DGRAPH_RELEASE_VERSION }}-arm64
