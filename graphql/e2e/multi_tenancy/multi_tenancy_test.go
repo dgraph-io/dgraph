@@ -30,6 +30,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/dgraph-io/dgraph/dgraphtest"
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
@@ -62,7 +63,7 @@ func TestSchemaSubscribe(t *testing.T) {
 		id: ID!
 		name: String!
 	}`
-	grp1NS0PreUpdateCounter := common.RetryProbeGraphQL(t, groupOneHTTP, header).SchemaUpdateCounter
+	grp1NS0PreUpdateCounter := dgraphtest.ProbeGraphQLWithRetry(t).SchemaUpdateCounter
 	common.SafelyUpdateGQLSchema(t, groupOneHTTP, schema, header)
 	// since the schema has been updated on group one, the schemaUpdateCounter on all the servers
 	// should have got incremented and must be the same, indicating that the schema update has

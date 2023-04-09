@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -60,6 +61,7 @@ type HTTPClient struct {
 	*HttpToken
 	adminURL   string
 	graphqlURL string
+	probeURL   string
 }
 
 // GraphQLParams are used for making graphql requests to dgraph
@@ -159,6 +161,58 @@ func (hc *HTTPClient) RunGraphqlQuery(params GraphQLParams, admin bool) ([]byte,
 		return nil, errors.Wrapf(gqlResp.Errors, "error while running admin query")
 	}
 	return gqlResp.Data, nil
+}
+
+type ProbeGraphQLResp struct {
+	Healthy             bool
+	Status              string
+	SchemaUpdateCounter uint64
+}
+
+func probeGraphQL(url string) (*ProbeGraphQLResp, error) {
+	request, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	client := &http.Client{}
+	// request.Header = header
+	resp, err := client.Do(request)
+	if err != nil {
+		return nil, err
+	}
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	probeResp := ProbeGraphQLResp{}
+	if err = json.Unmarshal(b, &probeResp); err != nil {
+		return nil, err
+	}
+	if resp.StatusCode == http.StatusOK {
+		probeResp.Healthy = true
+	}
+	return &probeResp, nil
+}
+
+func (hc *HTTPClient) ProbeGraphQLWithRetry(t *testing.T) *ProbeGraphQLResp {
+	const retryCount = 10
+
+	hc.RunGraphqlQuery(nil)
+
+	url := "http://localhost:32771/probe/graphql"
+	for i := 0; i < retryCount; i++ {
+		resp, err := probeGraphQL(url)
+		if err == nil && resp.Healthy {
+			return resp
+		}
+
+		time.Sleep(time.Second)
+	}
+
+	t.Fatalf("no healthy response from %v after 10 retries", url)
+	return nil
 }
 
 // Backup creates a backup of dgraph at a given path

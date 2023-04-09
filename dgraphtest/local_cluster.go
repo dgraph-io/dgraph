@@ -536,7 +536,15 @@ func (c *LocalCluster) HTTPClient() (*HTTPClient, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &HTTPClient{adminURL: adminURL, graphqlURL: graphqlURL}, nil
+	probeURL, err := c.probeURL()
+	if err != nil {
+		return nil, err
+	}
+	return &HTTPClient{
+		adminURL:   adminURL,
+		graphqlURL: graphqlURL,
+		probeURL:   probeURL,
+	}, nil
 }
 
 // adminURL returns url to the graphql admin endpoint
@@ -556,6 +564,16 @@ func (c *LocalCluster) graphqlURL() (string, error) {
 		return "", err
 	}
 	url := "http://localhost:" + publicPort + "/graphql"
+	return url, nil
+}
+
+// graphqlURL returns url to the graphql endpoint
+func (c *LocalCluster) probeURL() (string, error) {
+	publicPort, err := publicPort(c.dcli, c.alphas[0], alphaHttpPort)
+	if err != nil {
+		return "", err
+	}
+	url := "http://localhost:" + publicPort + "/probe/graphql"
 	return url, nil
 }
 

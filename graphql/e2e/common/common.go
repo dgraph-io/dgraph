@@ -38,6 +38,7 @@ import (
 
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/dgraph/dgraphtest"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
@@ -239,64 +240,10 @@ type Todo struct {
 	Owner string `json:"owner,omitempty"`
 }
 
-type ProbeGraphQLResp struct {
-	Healthy             bool `json:"-"`
-	Status              string
-	SchemaUpdateCounter uint64
-}
-
 type GqlSchema struct {
 	Id              string
 	Schema          string
 	GeneratedSchema string
-}
-
-func probeGraphQL(authority string, header http.Header) (*ProbeGraphQLResp, error) {
-
-	request, err := http.NewRequest("GET", "http://"+authority+"/probe/graphql", nil)
-	if err != nil {
-		return nil, err
-	}
-	client := &http.Client{}
-	request.Header = header
-	resp, err := client.Do(request)
-	if err != nil {
-		return nil, err
-	}
-
-	probeResp := ProbeGraphQLResp{}
-	if resp.StatusCode == http.StatusOK {
-		probeResp.Healthy = true
-	}
-
-	b, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-	if err = json.Unmarshal(b, &probeResp); err != nil {
-		return nil, err
-	}
-	return &probeResp, nil
-}
-
-func retryProbeGraphQL(authority string, header http.Header) *ProbeGraphQLResp {
-	for i := 0; i < 10; i++ {
-		resp, err := probeGraphQL(authority, header)
-		if err == nil && resp.Healthy {
-			return resp
-		}
-		time.Sleep(time.Second)
-	}
-	return nil
-}
-
-func RetryProbeGraphQL(t *testing.T, authority string, header http.Header) *ProbeGraphQLResp {
-	if resp := retryProbeGraphQL(authority, header); resp != nil {
-		return resp
-	}
-	debug.PrintStack()
-	t.Fatal("Unable to get healthy response from /probe/graphql after 10 retries")
-	return nil
 }
 
 // AssertSchemaUpdateCounterIncrement asserts that the schemaUpdateCounter is greater than the
@@ -305,8 +252,7 @@ func RetryProbeGraphQL(t *testing.T, authority string, header http.Header) *Prob
 func AssertSchemaUpdateCounterIncrement(t *testing.T, authority string, oldCounter uint64, header http.Header) {
 	var newCounter uint64
 	for i := 0; i < 20; i++ {
-		if newCounter = RetryProbeGraphQL(t, authority,
-			header).SchemaUpdateCounter; newCounter == oldCounter+1 {
+		if newCounter = dgraphtest.ProbeGraphQLWithRetry(t).SchemaUpdateCounter; newCounter == oldCounter+1 {
 			return
 		}
 		time.Sleep(time.Second)
@@ -537,7 +483,7 @@ func AssertUpdateGQLSchemaFailure(t *testing.T, authority, schema string, header
 // fail the test with a fatal error.
 func SafelyUpdateGQLSchema(t *testing.T, authority, schema string, headers http.Header) *GqlSchema {
 	// first, make an initial probe to get the schema update counter
-	oldCounter := RetryProbeGraphQL(t, authority, headers).SchemaUpdateCounter
+	oldCounter := dgraphtest.ProbeGraphQLWithRetry(t).SchemaUpdateCounter
 
 	// update the GraphQL schema
 	gqlSchema := AssertUpdateGQLSchemaSuccess(t, authority, schema, headers)
@@ -571,7 +517,7 @@ func SafelyDropAll(t *testing.T) {
 
 func safelyDropAll(t *testing.T, withGroot bool) {
 	// first, make an initial probe to get the schema update counter
-	oldCounter := RetryProbeGraphQL(t, Alpha1HTTP, nil).SchemaUpdateCounter
+	oldCounter := dgraphtest.ProbeGraphQLWithRetry(t).SchemaUpdateCounter
 
 	// do DROP_ALL
 	var dg *dgo.Dgraph
@@ -615,7 +561,7 @@ func retryUpdateGQLSchemaUsingAdminSchemaEndpt(t *testing.T, authority, schema s
 
 func assertUpdateGqlSchemaUsingAdminSchemaEndpt(t *testing.T, authority, schema string, headers http.Header) {
 	// first, make an initial probe to get the schema update counter
-	oldCounter := RetryProbeGraphQL(t, authority, headers).SchemaUpdateCounter
+	oldCounter := dgraphtest.ProbeGraphQLWithRetry(t).SchemaUpdateCounter
 
 	// update the GraphQL schema and assert success
 	require.JSONEq(t, `{"data":{"code":"Success","message":"Done"}}`,
@@ -699,7 +645,7 @@ func (us *UserSecret) Delete(t *testing.T, user, role string, metaInfo *testutil
 
 func addSchemaAndData(schema, data []byte, client *dgo.Dgraph, headers http.Header) {
 	// first, make an initial probe to get the schema update counter
-	oldProbe := retryProbeGraphQL(Alpha1HTTP, headers)
+	oldProbe := dgraphtest.ProbeGraphQLWithRetry(nil).SchemaUpdateCounter
 
 	// then, add the GraphQL schema
 	for {

@@ -120,7 +120,7 @@ func makeAllDirs() error {
 	if err := os.MkdirAll(dockerDgraphDir, os.ModePerm); err != nil {
 		return err
 	}
-	log.Println("Created all required dirs\n")
+	log.Println("Created all required dirs")
 	return nil
 }
 
@@ -169,7 +169,7 @@ func bootstrapApiServer() error {
 
 	// TODO : start the custom API service now
 
-	log.Println("BootStrapping API server finished.\n")
+	log.Println("BootStrapping API server finished")
 	return nil
 }
 
@@ -184,7 +184,7 @@ func tearDownApiServer() error {
 		return err
 	}
 
-	log.Println("API server is down now.\n")
+	log.Println("API server is down now.")
 	return nil
 }
 
@@ -194,7 +194,7 @@ func cleanup() error {
 	if err := exec.Command("rm", "-rf", tempDir).Run(); err != nil {
 		return err
 	}
-	log.Println("Finished cleanup.\n")
+	log.Println("Finished cleanup.")
 	return nil
 }
 
@@ -249,7 +249,7 @@ func startHostDgraphForProfiling(benchmarkDirName string) (*os.Process, *os.Proc
 		return zeroCmd.Process, alphaCmd.Process, err
 	}
 	log.Println("applied GraphQL schema: ", schemaFilePath)
-	log.Println("Starting Dgraph on host finished.\n")
+	log.Println("Starting Dgraph on host finished.")
 	return zeroCmd.Process, alphaCmd.Process, nil
 }
 
@@ -295,7 +295,7 @@ func stopHostDgraph(zeroProc, alphaProc *os.Process) {
 	removeDir(hostDgraphDir + "/w")
 	removeDir(hostDgraphDir + "/zw")
 	removeDir(hostDgraphDir)
-	log.Println("Stopping Dgraph on host finished.\n")
+	log.Println("Stopping Dgraph on host finished.")
 }
 
 func removeDir(dir string) {
@@ -311,7 +311,7 @@ func removeDir(dir string) {
 }
 
 func collectProfilingData() error {
-	log.Println("Starting to collect profiling data ...\n")
+	log.Println("Starting to collect profiling data ...")
 	benchmarkDirs, err := os.ReadDir(benchmarksDir)
 	if err != nil {
 		return err
@@ -466,7 +466,7 @@ func collectProfilingData() error {
 		log.Println("Completed profiling benchmark: ", benchmarkDir.Name())
 	}
 
-	log.Println("Collected all profiling data.\n")
+	log.Println("Collected all profiling data")
 	return nil
 }
 
@@ -634,6 +634,7 @@ func saveQueryDurations(rttDurations, totalActualDurations, totalExtDurations, d
 
 	var strBuilder strings.Builder
 	strBuilder.WriteString(fmt.Sprintf("len(data) = %d bytes", dataSize))
+	//nolint:lll
 	strBuilder.WriteString(`
 
 |==========================================================================================================================================================================================================|
@@ -679,6 +680,7 @@ func saveQueryDurations(rttDurations, totalActualDurations, totalExtDurations, d
 	}
 	avg.GraphQLPercent = avg.GraphQL / avg.Total * 100
 
+	//nolint:lll
 	strBuilder.WriteString(fmt.Sprintf(`
 |===========|=======================|=================|==================|==================|=========================|============================|========================|==============================|
 |    Avg    | %21.2f | %15.2f | %16.2f | %16.2f | %23.2f | %26.2f | %22.2f | %28.2f |
@@ -708,6 +710,7 @@ func saveBenchmarkStats(queryFiles []os.DirEntry, respDataSizes []int, avgStats 
 	}
 
 	var strBuilder strings.Builder
+	//nolint:lll
 	strBuilder.WriteString(`
 |===================================================================================================================================================================================================================================================================|
 | QueryFile Name | len(data) (bytes) | Avg Round Trip Time (RTT) | Avg Total Time (TT) | Avg Trace Time (TrT) | Avg Dgraph Time (DT) | Avg GraphQL Time (GT=TT-DT) | Avg % GraphQL Time (GT/TT*100) | Avg Tracing Error (TT-TrT) | Avg Round Trip Overhead (RTT-TT) |
@@ -721,6 +724,7 @@ func saveBenchmarkStats(queryFiles []os.DirEntry, respDataSizes []int, avgStats 
 			stat.RoundTripOverhead))
 	}
 
+	//nolint:lll
 	strBuilder.WriteString(`
 |===================================================================================================================================================================================================================================================================|
 

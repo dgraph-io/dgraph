@@ -26,6 +26,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/dgraph-io/dgraph/dgraphtest"
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -62,9 +63,8 @@ func TestPoorManAuthOnAdminSchemaHttpEndpoint(t *testing.T) {
 	require.Contains(t, makeAdminSchemaRequest(t, wrongAuthToken), "Invalid X-Dgraph-AuthToken")
 
 	// setting correct value for the token should successfully update the schema
-	oldCounter := common.RetryProbeGraphQL(t, common.Alpha1HTTP, nil).SchemaUpdateCounter
-	require.JSONEq(t, `{"data":{"code":"Success","message":"Done"}}`, makeAdminSchemaRequest(t,
-		authToken))
+	oldCounter := dgraphtest.ProbeGraphQLWithRetry(t).SchemaUpdateCounter
+	require.JSONEq(t, `{"data":{"code":"Success","message":"Done"}}`, makeAdminSchemaRequest(t, authToken))
 	common.AssertSchemaUpdateCounterIncrement(t, common.Alpha1HTTP, oldCounter, nil)
 }
 

@@ -99,6 +99,7 @@ type authExecutor struct {
 
 func (ex *authExecutor) Execute(ctx context.Context, req *dgoapi.Request,
 	field schema.Field) (*dgoapi.Response, error) {
+
 	ex.state++
 	// Existence Query is not executed if it is empty. Increment the state value.
 	if ex.dgQuery == "" && ex.state == 1 {

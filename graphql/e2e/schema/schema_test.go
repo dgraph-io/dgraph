@@ -35,6 +35,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/dgraph/dgraphtest"
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/worker"
@@ -63,7 +64,7 @@ func TestSchemaSubscribe(t *testing.T) {
 		id: ID!
 		name: String!
 	}`
-	groupOnePreUpdateCounter := common.RetryProbeGraphQL(t, groupOneHTTP, nil).SchemaUpdateCounter
+	groupOnePreUpdateCounter := dgraphtest.ProbeGraphQLWithRetry(t).SchemaUpdateCounter
 	common.SafelyUpdateGQLSchema(t, groupOneHTTP, schema, nil)
 	// since the schema has been updated on group one, the schemaUpdateCounter on all the servers
 	// should have got incremented and must be the same, indicating that the schema update has
@@ -333,7 +334,7 @@ func TestUpdateGQLSchemaAfterDropAll(t *testing.T) {
 	type A {
 		b: String!
 	}`, nil)
-	oldCounter := common.RetryProbeGraphQL(t, groupOneHTTP, nil).SchemaUpdateCounter
+	oldCounter := dgraphtest.ProbeGraphQLWithRetry(t).SchemaUpdateCounter
 
 	// now do drop_all
 	dg, err := testutil.DgraphClient(groupOnegRPC)
@@ -362,7 +363,7 @@ func TestGQLSchemaAfterDropData(t *testing.T) {
 				b: String!
 			}`
 	common.SafelyUpdateGQLSchema(t, groupOneHTTP, schema, nil)
-	oldCounter := common.RetryProbeGraphQL(t, groupOneHTTP, nil).SchemaUpdateCounter
+	oldCounter := dgraphtest.ProbeGraphQLWithRetry(t).SchemaUpdateCounter
 
 	// now do drop_data
 	dg, err := testutil.DgraphClient(groupOnegRPC)
@@ -373,7 +374,7 @@ func TestGQLSchemaAfterDropData(t *testing.T) {
 	// otherwise we are anyways gonna get the previous schema from the in-memory schema
 	time.Sleep(5 * time.Second)
 	// drop_data should not increment the schema update counter
-	newCounter := common.RetryProbeGraphQL(t, groupOneHTTP, nil).SchemaUpdateCounter
+	newCounter := dgraphtest.ProbeGraphQLWithRetry(t).SchemaUpdateCounter
 	require.Equal(t, oldCounter, newCounter)
 	// we should still get the schema we inserted earlier
 	require.Equal(t, schema, common.AssertGetGQLSchemaRequireId(t, groupOneHTTP, nil).Schema)

@@ -36,6 +36,7 @@ import (
 
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/dgraph/dgraphtest"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
@@ -167,7 +168,7 @@ func admin(t *testing.T) {
 	d, err := grpc.Dial(Alpha1gRPC, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
 
-	oldCounter := RetryProbeGraphQL(t, Alpha1HTTP, nil).SchemaUpdateCounter
+	oldCounter := dgraphtest.ProbeGraphQLWithRetry(t).SchemaUpdateCounter
 	client := dgo.NewDgraphClient(api.NewDgraphClient(d))
 	testutil.DropAll(t, client)
 	AssertSchemaUpdateCounterIncrement(t, Alpha1HTTP, oldCounter, nil)
