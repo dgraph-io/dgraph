@@ -301,13 +301,13 @@ func (m *mapper) processReqCh(ctx context.Context) error {
 	maxUid := uint64(0)
 
 	toBuffer := func(kv *bpb.KV, version uint64) error {
-		key_ts := y.KeyWithTs(kv.Key, version)
+		key := y.KeyWithTs(kv.Key, version)
 		sz := kv.Size()
-		buf := buf.SliceAllocate(2 + len(key_ts) + sz)
+		buf := buf.SliceAllocate(2 + len(key) + sz)
 
-		binary.BigEndian.PutUint16(buf[0:2], uint16(len(key_ts)))
-		x.AssertTrue(copy(buf[2:], key_ts) == len(key_ts))
-		_, err := kv.MarshalToSizedBuffer(buf[2+len(key_ts):])
+		binary.BigEndian.PutUint16(buf[0:2], uint16(len(key)))
+		x.AssertTrue(copy(buf[2:], key) == len(key))
+		_, err := kv.MarshalToSizedBuffer(buf[2+len(key):])
 		return err
 	}
 
