@@ -808,12 +808,13 @@ func (l *List) Length(readTs, afterUid uint64) int {
 // The first part of a multi-part list always has start UID 1 and will be the last part
 // to be deleted, at which point the entire list will be marked for deletion.
 // As the list grows, existing parts might be split if they become too big.
+
+// Result of rollup is stored in the maximum timestamp that the key was updated in + 1.
+// To make sure we don't overwrite any transaction that might have ended up at t + 1, we reserve
+// a timestamp first. (ts)
 //
-// We store the rollup on either
-//  1. A timestamp allocated for rollup. This would make sure that no txn would be overwriten by the
-//     rollup. This can cause isseus during WAL rollup. This value comes from ts argument.
-//  2. If we can't generate a timestamp on the fly, for example, in bulk loader, we store the rollup
-//     on the highest ts that the rollup saw. This is used if ts == 0.
+// If the timestamp is provided, we would read the data based on the ts, otherwise we would
+// read math.MaxUint64
 func (l *List) Rollup(alloc *z.Allocator, ts uint64) ([]*bpb.KV, error) {
 	l.RLock()
 	defer l.RUnlock()
@@ -835,7 +836,7 @@ func (l *List) Rollup(alloc *z.Allocator, ts uint64) ([]*bpb.KV, error) {
 	if ts == 0 {
 		kv.Version = out.newMinTs
 	} else {
-		kv.Version = ts
+		kv.Version = out.newMinTs + 1
 	}
 
 	kv.Key = alloc.Copy(l.key)
