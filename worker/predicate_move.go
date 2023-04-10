@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math"
 	"strconv"
 
 	"github.com/dustin/go-humanize"
@@ -328,7 +329,8 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error
 		if err != nil {
 			return nil, err
 		}
-		kvs, err := l.Rollup(itr.Alloc)
+		// Setting all the data at in.TxnTs
+		kvs, err := l.Rollup(itr.Alloc, math.MaxUint64)
 		for _, kv := range kvs {
 			// Let's set all of them at this move timestamp.
 			kv.Version = in.TxnTs

@@ -22,6 +22,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"math"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -377,8 +378,9 @@ func (m *mapper) processReqCh(ctx context.Context) error {
 				// This is a complete list. It should be rolled up to avoid writing
 				// a list that is too big to be read back from disk.
 				// Rollup will take ownership of the Pack and will free the memory.
+				// We do rollup at math.MaxUint64 so that we don't change the timestamps.
 				l := posting.NewList(restoreKey, pl, kv.Version)
-				kvs, err := l.Rollup(nil)
+				kvs, err := l.Rollup(nil, math.MaxUint64)
 				if err != nil {
 					// TODO: wrap errors in this file for easier debugging.
 					return err

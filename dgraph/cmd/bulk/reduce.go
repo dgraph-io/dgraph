@@ -681,8 +681,11 @@ func (r *reducer) toList(req *encodeRequest) {
 		shouldSplit := pl.Size() > (1<<20)/2 && len(pl.Pack.Blocks) > 1
 		if shouldSplit {
 			// Give ownership of pl.Pack away to list. Rollup would deallocate the Pack.
+			// We do rollup at math.MaxUint64 so that we don't change the allocated
+			// timestamp of the posting list. The posting list originally is written
+			// at writeVersionTs, we don't want to change that in rollup.
 			l := posting.NewList(y.Copy(currentKey), pl, writeVersionTs)
-			kvs, err := l.Rollup(nil)
+			kvs, err := l.Rollup(nil, math.MaxUint64)
 			x.Check(err)
 
 			// Assign a new allocator, so we don't reset the one we were using during Rollup.
