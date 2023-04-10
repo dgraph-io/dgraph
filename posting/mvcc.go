@@ -90,7 +90,8 @@ func init() {
 func (ir *incrRollupi) rollUpKey(writer *TxnWriter, key []byte) error {
 	// Get a new non read only ts. This makes sure that no other txn would write at this
 	// ts, overwriting some data. Wait to read the Posting list until ts-1 have been applied
-	// to badger
+	// to badger. This helps us prevent issues with wal replay, as we now have a timestamp
+	// where nothing was writen to dgraph.
 	ts := ir.getNewTs(false)
 
 	// Get a wait channel from oracle. Can't use WaitFromTs as we also need to check if other

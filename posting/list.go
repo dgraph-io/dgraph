@@ -808,11 +808,26 @@ func (l *List) Length(readTs, afterUid uint64) int {
 // The first part of a multi-part list always has start UID 1 and will be the last part
 // to be deleted, at which point the entire list will be marked for deletion.
 // As the list grows, existing parts might be split if they become too big.
-
-// You can provide a timestamp reservered for rollup -> readTs. We would read on this specific
-// timestamp and store the data in rollup's maxTimeStamp + 1. If there are frequent updates, then
-// maxTimeStamp + 1 would be equal to readTs. If no timestamp is provided, then  we would
-// read on maximum ts possible, and store the data on the results maxTimeStamp.
+//
+// You can provide a readTs for Rollup. This would ensure that we read only till that time.
+// If read ts is provided, Once the rollup is done, we check the maximum timestamp. We store the
+// results at that max timestamp + 1. This mechanism allows us to make sure that
+//
+//   - Since we write at max timestamp + 1, we can side step any issues that arise by wal replay.
+//
+//   - No other transcation happens at readTs. This way we can be sure that we won't overwrite
+//     any transaction that happened.
+//
+//   - Latest data. We wait until readTs - 1, so that we know that we are reading the latest data.
+//     If we read stale data, it can cause to delete some old transactions.
+//
+//   - Even though we have reserved readTs for rollup, we don't store the data there. This is done
+//     so that the rollup is written as close as possible to actual data. This can cause issues
+//     if someone is reading data between two timestamps.
+//
+//   - Drop operation can issues if they are rolled up. Since we are storing results at ts + 1,
+//     if some operations were done then, they would be overwriten. There is a very low chance
+//     of this happening.
 func (l *List) Rollup(alloc *z.Allocator, readTs uint64) ([]*bpb.KV, error) {
 	l.RLock()
 	defer l.RUnlock()
