@@ -100,8 +100,7 @@ func (ir *incrRollupi) rollUpKey(writer *TxnWriter, key []byte) error {
 	if ok {
 		select {
 		case <-ir.closer.HasBeenClosed():
-			return errors.New("Cancelled rollup to make way for other high priority" +
-				" operation")
+			return errors.New("Cancelled rollup to make way for other high priority operation")
 
 		case <-waitCh:
 		}

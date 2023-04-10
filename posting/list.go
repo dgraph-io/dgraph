@@ -809,18 +809,17 @@ func (l *List) Length(readTs, afterUid uint64) int {
 // to be deleted, at which point the entire list will be marked for deletion.
 // As the list grows, existing parts might be split if they become too big.
 
-// Result of rollup is stored in the maximum timestamp that the key was updated in + 1.
-// To make sure we don't overwrite any transaction that might have ended up at t + 1, we reserve
-// a timestamp first. (ts)
-//
-// If the timestamp is provided, we would read the data based on the ts, otherwise we would
-// read math.MaxUint64
-func (l *List) Rollup(alloc *z.Allocator, ts uint64) ([]*bpb.KV, error) {
+// You can provide a timestamp reservered for rollup -> readTs. We would read on this specific
+// timestamp and store the data in rollup's maxTimeStamp + 1. If there are frequent updates, then
+// maxTimeStamp + 1 would be equal to readTs. If no timestamp is provided, then  we would
+// read on maximum ts possible, and store the data on the results maxTimeStamp.
+func (l *List) Rollup(alloc *z.Allocator, readTs uint64) ([]*bpb.KV, error) {
 	l.RLock()
 	defer l.RUnlock()
-	var readTs uint64 = math.MaxUint64
-	if ts != 0 {
-		readTs = ts
+	offset := uint64(1)
+	if readTs == 0 {
+		offset = 0
+		readTs = math.MaxUint64
 	}
 	out, err := l.rollup(readTs, true)
 	if err != nil {
@@ -833,11 +832,7 @@ func (l *List) Rollup(alloc *z.Allocator, ts uint64) ([]*bpb.KV, error) {
 
 	var kvs []*bpb.KV
 	kv := MarshalPostingList(out.plist, alloc)
-	if ts == 0 {
-		kv.Version = out.newMinTs
-	} else {
-		kv.Version = out.newMinTs + 1
-	}
+	kv.Version = out.newMinTs + offset
 
 	kv.Key = alloc.Copy(l.key)
 	kvs = append(kvs, kv)
@@ -896,8 +891,6 @@ func (l *List) ToBackupPostingList(
 		return nil, err
 	}
 
-	// Normally in rollup, we store on a new timestamp to avoid wal replay issues. However,
-	// in backup, we send the final result at once, this shouldn't cause wal replay issues.
 	kv := y.NewKV(alloc)
 	kv.Key = alloc.Copy(l.key)
 	kv.Version = out.newMinTs

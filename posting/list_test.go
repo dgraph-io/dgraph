@@ -439,7 +439,7 @@ func TestRollupMaxTsIsSet(t *testing.T) {
 	defer setMaxListSize(maxListSize)
 	maxListSize = math.MaxInt32
 
-	key := x.DataKey(x.GalaxyAttr("bal"), 1331)
+	key := x.DataKey(x.GalaxyAttr("bal"), 1333)
 	ol, err := getNew(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 	var commits int
@@ -473,7 +473,7 @@ func TestMillion(t *testing.T) {
 	defer setMaxListSize(maxListSize)
 	maxListSize = math.MaxInt32
 
-	key := x.DataKey(x.GalaxyAttr("bal"), 1333)
+	key := x.DataKey(x.GalaxyAttr("bal"), 1331)
 	ol, err := getNew(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 	var commits int
