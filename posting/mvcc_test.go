@@ -93,7 +93,7 @@ func TestRollupTimestamp(t *testing.T) {
 
 	// Now check that we don't lost the highest version during a rollup operation, despite the STAR
 	// delete marker being the most recent update.
-	kvs, err := nl.Rollup(nil, 0)
+	kvs, err := nl.Rollup(nil, math.MaxUint64)
 	require.NoError(t, err)
 	require.Equal(t, uint64(10), kvs[0].Version)
 }

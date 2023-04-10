@@ -816,11 +816,6 @@ func (l *List) Length(readTs, afterUid uint64) int {
 func (l *List) Rollup(alloc *z.Allocator, readTs uint64) ([]*bpb.KV, error) {
 	l.RLock()
 	defer l.RUnlock()
-	offset := uint64(1)
-	if readTs == 0 {
-		offset = 0
-		readTs = math.MaxUint64
-	}
 	out, err := l.rollup(readTs, true)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed when calling List.rollup")
@@ -832,7 +827,10 @@ func (l *List) Rollup(alloc *z.Allocator, readTs uint64) ([]*bpb.KV, error) {
 
 	var kvs []*bpb.KV
 	kv := MarshalPostingList(out.plist, alloc)
-	kv.Version = out.newMinTs + offset
+	kv.Version = out.newMinTs
+	if readTs != math.MaxUint64 {
+		kv.Version += 1
+	}
 
 	kv.Key = alloc.Copy(l.key)
 	kvs = append(kvs, kv)

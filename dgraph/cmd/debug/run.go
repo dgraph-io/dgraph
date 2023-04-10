@@ -482,7 +482,7 @@ func rollupKey(db *badger.DB) {
 	defer alloc.Release()
 
 	// Setting kvs at their original value as we can't give a new timestamp in debug mode.
-	kvs, err := pl.Rollup(alloc, 0)
+	kvs, err := pl.Rollup(alloc, math.MaxUint64)
 	x.Check(err)
 
 	wb := db.NewManagedWriteBatch()
