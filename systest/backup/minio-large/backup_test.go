@@ -24,14 +24,11 @@ import (
 	"fmt"
 	"math"
 	"os"
-	"regexp"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	minio "github.com/minio/minio-go/v6"
-	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -86,13 +83,9 @@ func TestBackupMinioLarge(t *testing.T) {
 
 	// Add the other half to create an incremental backup.
 	addTriples(t, dg, totalTriples/2)
-	k := getPredsLive(t, math.MaxUint64)
-	require.Equal(t, k, int64(totalTriples))
 
 	// Perform incremental backup.
 	runBackup(t)
-	k = getPredsLive(t, math.MaxUint64)
-	require.Equal(t, k, int64(totalTriples))
 	restored = runRestore(t, backupDir, "", math.MaxUint64)
 	require.Equal(t, totalTriples, len(restored))
 
@@ -137,7 +130,7 @@ func addTriples(t *testing.T, dg *dgo.Dgraph, numTriples int) {
 	// For simplicity, assume numTriples is divisible by batchSize.
 	for i := 0; i < numTriples/batchSize; i++ {
 		triples := strings.Builder{}
-		for j := 0; j < batchSize; j++ {
+		for j := 0; j < 100; j++ {
 			// Send triplets to different predicates so that they are stored uniformly
 			// across the different groups.
 			predNum := (uidCounter % 3) + 1
@@ -188,32 +181,17 @@ func runBackup(t *testing.T) {
 	copyToLocalFs(t)
 }
 
-func getPredsLive(t *testing.T, commitTs uint64) int64 {
-	conf := viper.GetViper()
-	conf.Set("tls", fmt.Sprintf("ca-cert=%s; server-name=%s; internal-port=%v;",
-		// ca-cert
-		"../../../tlstest/mtls_internal/tls/live/ca.crt",
-		// server-name
-		"alpha1",
-		// internal-port
-		true))
-	re := regexp.MustCompile("[0-9]+")
-	dg, _ := testutil.DgraphClientWithCerts(testutil.SockAddr, conf)
+func runRestore(t *testing.T, backupLocation, lastDir string, commitTs uint64) map[string]string {
+	// Recreate the restore directory to make sure there's no previous data when
+	// calling restore.
+	require.NoError(t, os.RemoveAll(restoreDir))
+	require.NoError(t, os.MkdirAll(restoreDir, os.ModePerm))
 
-	k := func(pred string) int64 {
-		query := fmt.Sprintf(`{ q(func: has(%s)) { count(uid) } }`, pred)
-		resp, err := dg.NewReadOnlyTxn().Query(context.Background(), query)
-		require.NoError(t, err)
+	t.Logf("--- Restoring from: %q", backupLocation)
+	result := worker.RunOfflineRestore(restoreDir, backupLocation,
+		lastDir, "", nil, options.Snappy, 0)
+	require.NoError(t, result.Err)
 
-		p := re.FindAllString(string(resp.GetJson()), -1)[0]
-		m, _ := strconv.ParseInt(p, 0, 64)
-		return m
-	}
-	fmt.Println("HARSHIL HERE", k("name1")+k("name2")+k("name3"))
-	return k("name1") + k("name2") + k("name3")
-}
-
-func getPreds(t *testing.T, commitTs uint64) map[string]string {
 	restored1, err := testutil.GetPredicateValues("./data/restore/p1", x.GalaxyAttr("name1"), commitTs)
 	require.NoError(t, err)
 	restored2, err := testutil.GetPredicateValues("./data/restore/p2", x.GalaxyAttr("name2"), commitTs)
@@ -226,20 +204,6 @@ func getPreds(t *testing.T, commitTs uint64) map[string]string {
 	mergeMap(&restored2, &restored)
 	mergeMap(&restored3, &restored)
 	return restored
-}
-
-func runRestore(t *testing.T, backupLocation, lastDir string, commitTs uint64) map[string]string {
-	// Recreate the restore directory to make sure there's no previous data when
-	// calling restore.
-	require.NoError(t, os.RemoveAll(restoreDir))
-	require.NoError(t, os.MkdirAll(restoreDir, os.ModePerm))
-
-	t.Logf("--- Restoring from: %q", backupLocation)
-	result := worker.RunOfflineRestore(restoreDir, backupLocation,
-		lastDir, "", nil, options.Snappy, 0)
-	require.NoError(t, result.Err)
-
-	return getPreds(t, commitTs)
 }
 
 func mergeMap(in, out *map[string]string) {
@@ -260,10 +224,7 @@ func dirSetup(t *testing.T) {
 }
 
 func dirCleanup(t *testing.T) {
-	if err := os.RemoveAll("./data/restore"); err != nil {
-		t.Fatalf("Error removing direcotory: %s", err.Error())
-	}
-	if err := os.RemoveAll("./data/backup"); err != nil {
+	if err := os.RemoveAll("./data"); err != nil {
 		t.Fatalf("Error removing direcotory: %s", err.Error())
 	}
 }

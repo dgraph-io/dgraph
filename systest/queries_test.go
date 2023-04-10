@@ -47,7 +47,20 @@ func TestQuery(t *testing.T) {
 		}
 	}
 
+	t.Run("schema response", wrap(SchemaQueryTest))
+	t.Run("schema response http", wrap(SchemaQueryTestHTTP))
+	t.Run("schema predicate names", wrap(SchemaQueryTestPredicate1))
+	t.Run("schema specific predicate fields", wrap(SchemaQueryTestPredicate2))
+	t.Run("schema specific predicate field", wrap(SchemaQueryTestPredicate3))
+	t.Run("multiple block eval", wrap(MultipleBlockEval))
+	t.Run("unmatched var assignment eval", wrap(UnmatchedVarEval))
+	t.Run("hash index queries", wrap(QueryHashIndex))
+	t.Run("fuzzy matching", wrap(FuzzyMatch))
 	t.Run("regexp with toggled trigram index", wrap(RegexpToggleTrigramIndex))
+	t.Run("eq with altering order of trigram and term index", wrap(EqWithAlteredIndexOrder))
+	t.Run("groupby uid that works", wrap(GroupByUidWorks))
+	t.Run("parameterized cascade", wrap(CascadeParams))
+	t.Run("cleanup", wrap(SchemaQueryCleanup))
 }
 
 func SchemaQueryCleanup(t *testing.T, c *dgo.Dgraph) {
