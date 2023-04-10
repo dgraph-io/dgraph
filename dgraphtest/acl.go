@@ -124,7 +124,6 @@ func (hc *HTTPClient) CreateGroup(name string) (string, error) {
 	if err != nil {
 		return "", nil
 	}
-
 	type Response struct {
 		AddGroup struct {
 			Group []struct {

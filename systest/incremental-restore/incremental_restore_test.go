@@ -27,7 +27,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/dgraphtest"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 func TestIncrementalRestore(t *testing.T) {
@@ -45,7 +47,8 @@ func TestIncrementalRestore(t *testing.T) {
 
 	hc, err := c.HTTPClient()
 	require.NoError(t, err)
-	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, 0))
+	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
+		dgraphtest.DefaultPassword, x.GalaxyNamespace))
 
 	uids := []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20}
 	c.AssignUids(gc.Dgraph, uint64(len(uids)))
@@ -53,8 +56,8 @@ func TestIncrementalRestore(t *testing.T) {
 
 	for i := 1; i <= len(uids); i++ {
 		for j := 1; j <= i; j++ {
-			rdfs := fmt.Sprintf(`<%v> <money> "%v" .`, j, i)
-			_, err := gc.Mutate(rdfs)
+			mu := &api.Mutation{SetNquads: []byte(fmt.Sprintf(`<%v> <money> "%v" .`, j, i)), CommitNow: true}
+			_, err := gc.Mutate(mu)
 			require.NoError(t, err)
 		}
 		t.Logf("taking backup #%v\n", i)

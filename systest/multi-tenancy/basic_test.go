@@ -561,7 +561,8 @@ func (msuite *MultitenancyTestSuite) AddData(gcli *dgraphtest.GrpcClient) {
 		_:b <name> "guy2" .
 		_:b <nickname> "RG2" .
 	`
-	_, err := gcli.Mutate(rdfs)
+	mu := &api.Mutation{SetNquads: []byte(rdfs), CommitNow: true}
+	_, err := gcli.Mutate(mu)
 	require.NoError(msuite.T(), err)
 }
 
@@ -570,7 +571,8 @@ func AddNumberOfTriples(gcli *dgraphtest.GrpcClient, start, end int) (*api.Respo
 	for i := start; i <= end; i++ {
 		triples.WriteString(fmt.Sprintf("_:person%[1]v <name> \"person%[1]v\" .\n", i))
 	}
-	return gcli.Mutate(triples.String())
+	mu := &api.Mutation{SetNquads: []byte(triples.String()), CommitNow: true}
+	return gcli.Mutate(mu)
 }
 
 func (msuite *MultitenancyTestSuite) createGroupAndSetPermissions(namespace uint64, group, user, predicate string) {

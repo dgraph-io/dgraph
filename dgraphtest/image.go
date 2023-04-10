@@ -130,7 +130,7 @@ func runGitCheckout(gitRef string) error {
 }
 
 func buildDgraphBinary(dir, binaryDir, version string) error {
-	log.Printf("[INFO] building dgraph binary")
+	log.Printf("[INFO] building dgraph binary for version [%v]", version)
 
 	cmd := exec.Command("make", "dgraph")
 	cmd.Dir = filepath.Join(dir, "dgraph")
