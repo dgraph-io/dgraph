@@ -35,14 +35,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-const (
-	waitDurBeforeRetry = time.Second
-)
-
-var (
-	errNotImplemented = errors.New("NOT IMPLEMENTED")
-)
-
 type Cluster interface {
 	Client() (*GrpcClient, func(), error)
 	HTTPClient() (*HTTPClient, error)
@@ -66,11 +58,12 @@ type HttpToken struct {
 // HTTPClient allows doing operations on Dgraph over http
 type HTTPClient struct {
 	*HttpToken
-	adminURL string
+	adminURL   string
+	graphqlURL string
 }
 
-// graphQLParams are used for making graphql requests to dgraph
-type graphQLParams struct {
+// GraphQLParams are used for making graphql requests to dgraph
+type GraphQLParams struct {
 	Query     string                 `json:"query"`
 	Variables map[string]interface{} `json:"variables"`
 }
@@ -90,7 +83,7 @@ func (hc *HTTPClient) LoginIntoNamespace(user, password string, ns uint64) error
 			}
 		}
 	}`
-	gqlParams := graphQLParams{
+	params := GraphQLParams{
 		Query: q,
 		Variables: map[string]interface{}{
 			"userId":    DefaultUser,
@@ -98,29 +91,11 @@ func (hc *HTTPClient) LoginIntoNamespace(user, password string, ns uint64) error
 			"namespace": ns,
 		},
 	}
-	body, err := json.Marshal(gqlParams)
-	if err != nil {
-		return errors.Wrapf(err, "unable to marshal body")
-	}
 
-	req, err := http.NewRequest(http.MethodPost, hc.adminURL, bytes.NewBuffer(body))
+	resp, err := hc.RunGraphqlQuery(params, true)
 	if err != nil {
-		return errors.Wrapf(err, "unable to create request")
+		return err
 	}
-	req.Header.Set("Content-Type", "application/json")
-	respBody, err := doReq(req)
-	if err != nil {
-		return errors.Wrapf(err, "error performing login request")
-	}
-
-	var gqlResp graphQLResponse
-	if err := json.Unmarshal(respBody, &gqlResp); err != nil {
-		return errors.Wrap(err, "error unmarshalling GQL response")
-	}
-	if len(gqlResp.Errors) > 0 {
-		return errors.Wrapf(gqlResp.Errors, "error while running admin query")
-	}
-
 	var r struct {
 		Login struct {
 			Response struct {
@@ -129,7 +104,7 @@ func (hc *HTTPClient) LoginIntoNamespace(user, password string, ns uint64) error
 			}
 		}
 	}
-	if err := json.Unmarshal(gqlResp.Data, &r); err != nil {
+	if err := json.Unmarshal(resp, &r); err != nil {
 		return errors.Wrap(err, "error unmarshalling response into object")
 	}
 	if r.Login.Response.AccessJWT == "" {
@@ -145,11 +120,15 @@ func (hc *HTTPClient) LoginIntoNamespace(user, password string, ns uint64) error
 	return nil
 }
 
-// AdminPost makes a post request to the graphql admin endpoint
-func (hc *HTTPClient) AdminPost(body []byte) ([]byte, error) {
-	req, err := http.NewRequest(http.MethodPost, hc.adminURL, bytes.NewBuffer(body))
+// Post makes a post request to the graphql admin endpoint
+func (hc *HTTPClient) Post(body []byte, admin bool) ([]byte, error) {
+	url := hc.graphqlURL
+	if admin {
+		url = hc.adminURL
+	}
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(body))
 	if err != nil {
-		return nil, errors.Wrapf(err, "error building req for endpoint [%v]", hc.adminURL)
+		return nil, errors.Wrapf(err, "error building req for endpoint [%v]", url)
 	}
 	req.Header.Add("Content-Type", "application/json")
 
@@ -160,14 +139,14 @@ func (hc *HTTPClient) AdminPost(body []byte) ([]byte, error) {
 	return doReq(req)
 }
 
-// RunAdminQuery makes a query to graphql admin endpoint
-func (hc *HTTPClient) RunAdminQuery(params graphQLParams) ([]byte, error) {
+// RunGraphqlQuery makes a query to graphql (or admin) endpoint
+func (hc *HTTPClient) RunGraphqlQuery(params GraphQLParams, admin bool) ([]byte, error) {
 	reqBody, err := json.Marshal(params)
 	if err != nil {
 		return nil, errors.Wrap(err, "error while marshalling params")
 	}
 
-	respBody, err := hc.AdminPost(reqBody)
+	respBody, err := hc.Post(reqBody, admin)
 	if err != nil {
 		return nil, errors.Wrap(err, "error while running admin query")
 	}
@@ -184,19 +163,19 @@ func (hc *HTTPClient) RunAdminQuery(params graphQLParams) ([]byte, error) {
 
 // Backup creates a backup of dgraph at a given path
 func (hc *HTTPClient) Backup(forceFull bool, backupPath string) error {
-	const query = `mutation backup($dst: String!, $ff: Boolean!) {
-		backup(input: {destination: $dst, forceFull: $ff}) {
+	const query = `mutation backup($dest: String!, $ff: Boolean!) {
+		backup(input: {destination: $dest, forceFull: $ff}) {
 			response {
 				code
 			}
 			taskId
 		}
 	}`
-	params := graphQLParams{
+	params := GraphQLParams{
 		Query:     query,
-		Variables: map[string]interface{}{"dst": backupPath, "ff": forceFull},
+		Variables: map[string]interface{}{"dest": backupPath, "ff": forceFull},
 	}
-	resp, err := hc.RunAdminQuery(params)
+	resp, err := hc.RunGraphqlQuery(params, true)
 	if err != nil {
 		return err
 	}
@@ -225,7 +204,7 @@ func (hc *HTTPClient) WaitForTask(taskId string) error {
 			status
 		}
 	}`
-	params := graphQLParams{
+	params := GraphQLParams{
 		Query:     query,
 		Variables: map[string]interface{}{"id": taskId},
 	}
@@ -233,7 +212,7 @@ func (hc *HTTPClient) WaitForTask(taskId string) error {
 	for {
 		time.Sleep(waitDurBeforeRetry)
 
-		resp, err := hc.RunAdminQuery(params)
+		resp, err := hc.RunGraphqlQuery(params, true)
 		if err != nil {
 			return err
 		}
@@ -287,11 +266,11 @@ func (hc *HTTPClient) Restore(c Cluster, backupPath string,
 		vars["incrFrom"] = incrFrom
 	}
 
-	params := graphQLParams{
+	params := GraphQLParams{
 		Query:     query,
 		Variables: vars,
 	}
-	resp, err := hc.RunAdminQuery(params)
+	resp, err := hc.RunGraphqlQuery(params, true)
 	if err != nil {
 		return err
 	}
@@ -330,15 +309,48 @@ loop:
 	}
 }
 
+func (hc *HTTPClient) Export(dest string) error {
+	const exportRequest = `mutation export($dest: String!, $f: String!) {
+		export(input: {destination: $dest, format: $f}) {
+			response {
+				message
+			}
+		}
+	}`
+	params := GraphQLParams{
+		Query: exportRequest,
+		Variables: map[string]interface{}{
+			"dest": dest,
+			"f":    "rdf",
+		},
+	}
+
+	resp, err := hc.RunGraphqlQuery(params, true)
+	if err != nil {
+		return err
+	}
+	var r struct {
+		Export struct {
+			Response struct {
+				Message string
+			}
+		}
+	}
+	if err := json.Unmarshal(resp, &r); err != nil {
+		return errors.Wrap(err, "error unmarshalling export response")
+	}
+	return nil
+}
+
 // AddNamespace creates a new namespace and returns its ID
 func (hc *HTTPClient) AddNamespace() (uint64, error) {
-	addNSQuery := `mutation {
+	const addNSQuery = `mutation {
 		addNamespace {
 		   namespaceId
 		   message
 		}
 	}`
-	resp, err := hc.RunAdminQuery(graphQLParams{Query: addNSQuery})
+	resp, err := hc.RunGraphqlQuery(GraphQLParams{Query: addNSQuery}, true)
 	if err != nil {
 		return 0, err
 	}
@@ -360,17 +372,20 @@ func (hc *HTTPClient) AddNamespace() (uint64, error) {
 
 // UpdateGQLSchema updates graphql schema for a given HTTP client
 func (hc *HTTPClient) UpdateGQLSchema(sch string) error {
-	query := `mutation updateGQLSchema($sch: String!) {
+	const query = `mutation updateGQLSchema($sch: String!) {
 		updateGQLSchema(input: { set: { schema: $sch }}) {
+			gqlSchema {
+				id
+			}
 		}
 	}`
-	params := graphQLParams{
+	params := GraphQLParams{
 		Query: query,
 		Variables: map[string]interface{}{
 			"sch": sch,
 		},
 	}
-	if _, err := hc.RunAdminQuery(params); err != nil {
+	if _, err := hc.RunGraphqlQuery(params, true); err != nil {
 		return err
 	}
 	return nil
@@ -381,6 +396,13 @@ func (gc *GrpcClient) SetupSchema(dbSchema string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 	defer cancel()
 	return gc.Alter(ctx, &api.Operation{Schema: dbSchema})
+}
+
+// DropAll drops all the data in the db
+func (gc *GrpcClient) DropAll() error {
+	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+	defer cancel()
+	return gc.Alter(ctx, &api.Operation{DropAll: true})
 }
 
 // Mutate performs a given mutation in a txn

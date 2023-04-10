@@ -32,7 +32,7 @@ func TestMain(m *testing.M) {
 	c, err := dgraphtest.NewLocalCluster(conf)
 	x.Panic(err)
 	defer c.Cleanup()
-	c.Start()
+	require.NoError(t, c.Start())
 
 	// setup the global Cluster var
 	dc = c

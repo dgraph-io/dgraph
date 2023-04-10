@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/docker/docker/api/types/mount"
 	docker "github.com/docker/docker/client"
@@ -45,12 +46,21 @@ const (
 	alphaWorkingDir  = "/data/alpha"
 	zeroWorkingDir   = "/data/zero"
 	DefaultBackupDir = "/data/backups"
+	DefaultExportDir = "/data/exports"
 
 	aclSecretMountPath = "/dgraph-acl/hmac-secret"
 	encKeyMountPath    = "/dgraph-enc/enc-key"
 
 	DefaultUser     = "groot"
 	DefaultPassword = "password"
+
+	localVersion       = "local"
+	waitDurBeforeRetry = time.Second
+	requestTimeout     = 90 * time.Second
+)
+
+var (
+	errNotImplemented = errors.New("NOT IMPLEMENTED")
 )
 
 func fileExists(filename string) (bool, error) {
@@ -229,7 +239,7 @@ func (a *alpha) mounts(c *LocalCluster) ([]mount.Mount, error) {
 	for dir, vol := range c.conf.volumes {
 		mounts = append(mounts, mount.Mount{
 			Type:     mount.TypeVolume,
-			Source:   fmt.Sprintf(volNameFmt, c.conf.prefix, vol),
+			Source:   vol,
 			Target:   dir,
 			ReadOnly: false,
 		})

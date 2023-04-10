@@ -40,11 +40,6 @@ import (
 	"github.com/dgraph-io/dgo/v210/protos/api"
 )
 
-var (
-	requestTimeout = 90 * time.Second
-	stopTimeout    = time.Minute
-)
-
 // cluster's network struct
 type cnet struct {
 	id   string
@@ -116,8 +111,7 @@ func (c *LocalCluster) init() error {
 	}
 
 	for _, vol := range c.conf.volumes {
-		volname := fmt.Sprintf(volNameFmt, c.conf.prefix, vol)
-		if err := c.createVolume(volname); err != nil {
+		if err := c.createVolume(vol); err != nil {
 			return err
 		}
 	}
@@ -225,8 +219,7 @@ func (c *LocalCluster) Cleanup() {
 		}
 	}
 	for _, vol := range c.conf.volumes {
-		volname := fmt.Sprintf(volNameFmt, c.conf.prefix, vol)
-		if err := c.dcli.VolumeRemove(ctx, volname, true); err != nil {
+		if err := c.dcli.VolumeRemove(ctx, vol, true); err != nil {
 			log.Printf("[WARNING] error removing volume [%v]: %v", vol, err)
 		}
 	}
@@ -310,6 +303,7 @@ func (c *LocalCluster) StopAlpha(id int) error {
 func (c *LocalCluster) stopContainer(dc dnode) error {
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 	defer cancel()
+	stopTimeout := requestTimeout
 	if err := c.dcli.ContainerStop(ctx, dc.cid(), &stopTimeout); err != nil {
 		return errors.Wrapf(err, "error stopping container [%v]", dc.cname())
 	}
@@ -534,11 +528,15 @@ func (c *LocalCluster) Client() (*GrpcClient, func(), error) {
 
 // HTTPClient creates an HTTP client
 func (c *LocalCluster) HTTPClient() (*HTTPClient, error) {
-	endpoint, err := c.adminURL()
+	adminURL, err := c.adminURL()
 	if err != nil {
 		return nil, err
 	}
-	return &HTTPClient{adminURL: endpoint}, nil
+	graphqlURL, err := c.graphqlURL()
+	if err != nil {
+		return nil, err
+	}
+	return &HTTPClient{adminURL: adminURL, graphqlURL: graphqlURL}, nil
 }
 
 // adminURL returns url to the graphql admin endpoint
@@ -548,6 +546,16 @@ func (c *LocalCluster) adminURL() (string, error) {
 		return "", err
 	}
 	url := "http://localhost:" + publicPort + "/admin"
+	return url, nil
+}
+
+// graphqlURL returns url to the graphql endpoint
+func (c *LocalCluster) graphqlURL() (string, error) {
+	publicPort, err := publicPort(c.dcli, c.alphas[0], alphaHttpPort)
+	if err != nil {
+		return "", err
+	}
+	url := "http://localhost:" + publicPort + "/graphql"
 	return url, nil
 }
 
