@@ -816,9 +816,12 @@ func (l *List) Length(readTs, afterUid uint64) int {
 //
 //   - Since we write at max timestamp + 1, we can side step any issues that arise by wal replay.
 //
+//   - Earlier one of the solution was to write at ts + 1. It didn't work as index transactions
+//     don't conflict so they can get commited at consecutive timestamps.
+//     This leads to some data being overwriten by rollup.
+//
 //   - No other transcation happens at readTs. This way we can be sure that we won't overwrite
-//     any transaction that happened. For example, index transactions don't conflict so they can
-//     get commited at consecutive timestamps. This leads to some data being overwriten by rollup.
+//     any transaction that happened.
 //
 //   - Latest data. We wait until readTs - 1, so that we know that we are reading the latest data.
 //     If we read stale data, it can cause to delete some old transactions.
@@ -829,7 +832,7 @@ func (l *List) Length(readTs, afterUid uint64) int {
 //
 //   - Drop operation can cause issues if they are rolled up. Since we are storing results at ts + 1,
 //     in dgraph.drop.op. If some operations were done then, they would be overwriten.
-//     There won't happen as the transactions should conflict out.
+//     This won't happen as the transactions should conflict out.
 func (l *List) Rollup(alloc *z.Allocator, readTs uint64) ([]*bpb.KV, error) {
 	l.RLock()
 	defer l.RUnlock()
