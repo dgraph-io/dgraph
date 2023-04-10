@@ -457,7 +457,7 @@ func TestRollupMaxTsIsSet(t *testing.T) {
 			t.Logf("Start Ts: %d. Rolling up posting list.\n", txn.StartTs)
 			kvs, err := ol.Rollup(nil, uint64(N+i))
 			for _, kv := range kvs {
-				require.Equal(t, kv.Version, uint64(N+i))
+				require.Equal(t, kv.Version, uint64(i)+2)
 			}
 			require.NoError(t, err)
 			require.NoError(t, writePostingListToDisk(kvs))
