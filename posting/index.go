@@ -682,8 +682,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		// No need to write a loop after ReadPostingList to skip unread entries
 		// for a given key because we only wrote BitDeltaPosting to temp badger.
 		// We can write the data at their original timestamp in pstore badger.
-		// We do the rollup at MaxUint64 so that we don't change the timestamp of resulting
-		// list.
+		// We do the rollup at MaxUint64 so that we don't change the timestamp of resulting list.
 		kvs, err := l.Rollup(nil, math.MaxUint64)
 		if err != nil {
 			return nil, err

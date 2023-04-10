@@ -809,14 +809,16 @@ func (l *List) Length(readTs, afterUid uint64) int {
 // to be deleted, at which point the entire list will be marked for deletion.
 // As the list grows, existing parts might be split if they become too big.
 //
-// You can provide a readTs for Rollup. This would ensure that we read only till that time.
+// You can provide a readTs for Rollup. This should either be math.MaxUint64, or it should be a
+// timestamp that was resevered for rollup. This would ensure that we read only till that time.
 // If read ts is provided, Once the rollup is done, we check the maximum timestamp. We store the
 // results at that max timestamp + 1. This mechanism allows us to make sure that
 //
 //   - Since we write at max timestamp + 1, we can side step any issues that arise by wal replay.
 //
 //   - No other transcation happens at readTs. This way we can be sure that we won't overwrite
-//     any transaction that happened.
+//     any transaction that happened. For example, index transactions don't conflict so they can
+//     get commited at consecutive timestamps. This leads to some data being overwriten by rollup.
 //
 //   - Latest data. We wait until readTs - 1, so that we know that we are reading the latest data.
 //     If we read stale data, it can cause to delete some old transactions.
@@ -825,9 +827,9 @@ func (l *List) Length(readTs, afterUid uint64) int {
 //     so that the rollup is written as close as possible to actual data. This can cause issues
 //     if someone is reading data between two timestamps.
 //
-//   - Drop operation can issues if they are rolled up. Since we are storing results at ts + 1,
-//     if some operations were done then, they would be overwriten. There is a very low chance
-//     of this happening.
+//   - Drop operation can cause issues if they are rolled up. Since we are storing results at ts + 1,
+//     in dgraph.drop.op. If some operations were done then, they would be overwriten.
+//     There won't happen as the transactions should conflict out.
 func (l *List) Rollup(alloc *z.Allocator, readTs uint64) ([]*bpb.KV, error) {
 	l.RLock()
 	defer l.RUnlock()

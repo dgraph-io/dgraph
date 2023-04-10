@@ -1,6 +1,4 @@
-/*
- * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
- *
+/* Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -65,6 +63,8 @@ var (
 	// ErrInvalidKey is returned when trying to read a posting list using
 	// an invalid key (e.g the key to a single part of a larger multi-part list).
 	ErrInvalidKey = errors.Errorf("cannot read posting list using multi-part list key")
+	// ErrHighPriorityOp is returned when rollup is cancelled so that operations could start.
+	ErrHighPriorityOp = errors.New("Cancelled rollup to make way for high priority operation")
 
 	// IncrRollup is used to batch keys for rollup incrementally.
 	IncrRollup = &incrRollupi{
@@ -101,7 +101,7 @@ func (ir *incrRollupi) rollUpKey(writer *TxnWriter, key []byte) error {
 	if ok {
 		select {
 		case <-ir.closer.HasBeenClosed():
-			return errors.New("Cancelled rollup to make way for other high priority operation")
+			return ErrHighPriorityOp
 
 		case <-waitCh:
 		}
