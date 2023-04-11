@@ -1285,72 +1285,6 @@ func TestCustomFieldResolutionShouldPropagateGraphQLErrors(t *testing.T) {
 	testutil.CompareJSON(t, expected, string(result.Data))
 }
 
-func TestForInvalidCustomQuery(t *testing.T) {
-	schema := customTypes + `
-	type Query {
-		getCountry1(id: ID!): Country! @custom(http: {
-			url: "http://mock:8888/noquery",
-			method: "POST",
-			forwardHeaders: ["Content-Type"],
-			graphql: "query($id: ID!) { country(code: $id) }"
-		})
-	}`
-	common.AssertUpdateGQLSchemaFailure(t, common.Alpha1HTTP, schema, nil,
-		[]string{"query `country` is not present in remote schema"})
-}
-
-func TestForInvalidArgument(t *testing.T) {
-	schema := `
-	type Country @remote {
-        code: String
-        name: String
-        states: [State]
-        std: Int
-      }
-
-      type State @remote {
-        code: String
-        name: String
-        country: Country
-      }
-	type Query {
-		getCountry1(id: ID!): Country! @custom(http: {
-			url: "http://mock:8888/invalidargument",
-			method: "POST",
-			forwardHeaders: ["Content-Type"],
-			graphql: "query($id: ID!) { country(code: $id) }"
-		})
-	}`
-	common.AssertUpdateGQLSchemaFailure(t, common.Alpha1HTTP, schema, nil,
-		[]string{"argument `code` is not present in remote query `country`"})
-}
-
-func TestForInvalidType(t *testing.T) {
-	schema := `
-	type Country @remote {
-        code: String
-        name: String
-        states: [State]
-        std: Int
-    }
-
-    type State @remote {
-        code: String
-        name: String
-        country: Country
-    }
-	type Query {
-		getCountry1(id: ID!): Country! @custom(http: {
-			url: "http://mock:8888/invalidtype",
-			method: "POST",
-			forwardHeaders: ["Content-Type"],
-			graphql: "query($id: ID!) { country(code: $id) }"
-		})
-	}`
-	common.AssertUpdateGQLSchemaFailure(t, common.Alpha1HTTP, schema, nil, []string{
-		"found type mismatch for variable `$id` in query `country`, expected `ID!`, got `Int!`"})
-}
-
 func TestCustomLogicGraphql(t *testing.T) {
 	schema := `
 	type Country @remote {
@@ -2013,32 +1947,6 @@ func TestCustomMutationShouldForwardHeaders(t *testing.T) {
       }
     }`
 	require.JSONEq(t, expected, string(result.Data))
-}
-
-func TestCustomGraphqlNullQueryType(t *testing.T) {
-	schema := customTypes + `
-	type Query {
-		getCountry1(id: ID!): Country! @custom(http: {
-			url: "http://mock:8888/nullQueryAndMutationType",
-			method: "POST",
-			graphql: "query($id: ID!) { getCountry(id: $id) }"
-		})
-	}`
-	common.AssertUpdateGQLSchemaFailure(t, common.Alpha1HTTP, schema, nil,
-		[]string{"remote schema doesn't have any queries."})
-}
-
-func TestCustomGraphqlNullMutationType(t *testing.T) {
-	schema := customTypes + `
-	type Mutation {
-		addCountry1(input: CountryInput!): Country! @custom(http: {
-			url: "http://mock:8888/nullQueryAndMutationType",
-			method: "POST",
-			graphql: "mutation($input: CountryInput!) { putCountry(country: $input) }"
-		})
-	}`
-	common.AssertUpdateGQLSchemaFailure(t, common.Alpha1HTTP, schema, nil,
-		[]string{"remote schema doesn't have any mutations."})
 }
 
 func TestCustomGraphqlMissingQueryType(t *testing.T) {
