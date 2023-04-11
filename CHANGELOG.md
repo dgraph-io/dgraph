@@ -17,7 +17,6 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
     - feat(cloud): add `shared-instance` flag in limit superflag in alpha (https://github.com/dgraph-io/dgraph/pull/8625)
     - chore(deps): update prometheus dependency, adds new metrics (https://github.com/dgraph-io/dgraph/pull/8655)
     - feat(cdc): add superflag `tls` to enable TLS without CA or certs (https://github.com/dgraph-io/dgraph/pull/8564)
-    - chore(deps): bump badger up to v4 (https://github.com/dgraph-io/dgraph/pull/8709)
     - feat(multitenancy): namespace aware drop data (https://github.com/dgraph-io/dgraph/pull/8511)
 
 ### Fixed
@@ -94,7 +93,7 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
 ### Changed
 
 - **Core Dgraph**
-    - upgrade badger to v4.1.0 (https://github.com/dgraph-io/dgraph/pull/8783)
+    - upgrade badger to v4.1.0 (https://github.com/dgraph-io/dgraph/pull/8783) (https://github.com/dgraph-io/dgraph/pull/8709)
     - feat(restore): introduce incremental restore (#7942) (https://github.com/dgraph-io/dgraph/pull/8624)
     - fix(multitenancy) store namespace in predicate as a hex separated by a hyphen to prevent json marshal issues (https://github.com/dgraph-io/dgraph/pull/8601)
     - fix(query): handle bad timezone correctly (https://github.com/dgraph-io/dgraph/pull/8657)
