@@ -13,6 +13,8 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
     - fix(GraphQL): pass on HTTP request headers for subscriptions (https://github.com/dgraph-io/dgraph/pull/8574)
 
 - **Core Dgraph**
+    - feat(metrics): add badger metrics (#8034) (https://github.com/dgraph-io/dgraph/pull/8737)
+    - feat(restore): introduce incremental restore (#7942) (https://github.com/dgraph-io/dgraph/pull/8624)
     - chore(debug): add `only-summary` flag in `dgraph debug` to show LSM tree and namespace size (https://github.com/dgraph-io/dgraph/pull/8516)
     - feat(cloud): add `shared-instance` flag in limit superflag in alpha (https://github.com/dgraph-io/dgraph/pull/8625)
     - chore(deps): update prometheus dependency, adds new metrics (https://github.com/dgraph-io/dgraph/pull/8655)
@@ -30,7 +32,6 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
     - chore(worker): unify mapper receiver names (https://github.com/dgraph-io/dgraph/pull/8740)
     - fix(dql): fix panic in parsing of regexp (https://github.com/dgraph-io/dgraph/pull/8739)
     - fix(Query): Do an error check before bubbling up nil error (https://github.com/dgraph-io/dgraph/pull/8769)
-    - feat(metrics): add badger metrics (#8034) (https://github.com/dgraph-io/dgraph/pull/8737)
     - chore: replace global index with local one & fix typos (https://github.com/dgraph-io/dgraph/pull/8719)
     - chore(logs): add logs to track dropped proposals (https://github.com/dgraph-io/dgraph/pull/8568)
     - fix(debug): check length of wal entry before parsing (https://github.com/dgraph-io/dgraph/pull/8560)
@@ -94,7 +95,6 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
 
 - **Core Dgraph**
     - upgrade badger to v4.1.0 (https://github.com/dgraph-io/dgraph/pull/8783) (https://github.com/dgraph-io/dgraph/pull/8709)
-    - feat(restore): introduce incremental restore (#7942) (https://github.com/dgraph-io/dgraph/pull/8624)
     - fix(multitenancy) store namespace in predicate as a hex separated by a hyphen to prevent json marshal issues (https://github.com/dgraph-io/dgraph/pull/8601)
     - fix(query): handle bad timezone correctly (https://github.com/dgraph-io/dgraph/pull/8657)
     - chore(ludicroud): remove ludicrous mode from the code (https://github.com/dgraph-io/dgraph/pull/8612)
