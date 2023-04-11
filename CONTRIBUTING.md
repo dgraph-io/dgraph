@@ -144,13 +144,14 @@ Docker images that contains `dgraph` and `badger` commands.
    If only a specific package needs to be tested, run
       make test args="--pkg=desired_package_name"
 
-
       example 1: make test args="--pkg=tok" 
       example 2: make test args="--pkg=tlstest/acl"
       
       The first example will run all the tests in the 'tok' directory (if there are any)
       The second one will run all the test in the acl subfolder of the tlstest directory.
-      Note: running make test args="--pkg=tlstest" will return an error saying no packages found because all the tests in the tlstest package are in subdirectories of the package. So the subdirectories must be specified as shown in example 2.
+      Note: running make test args="--pkg=tlstest" will return an error saying no packages 
+      found because all the tests in the tlstest package are in subdirectories of the package. 
+      So the subdirectories must be specified as shown in example 2.
 
 Tests should be written in Go and use the Dgraph cluster set up in `dgraph/docker-compose.yml`
 whenever possible. If the functionality being tested requires a different cluster setup (e.g.
