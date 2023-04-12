@@ -4,8 +4,8 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project will adhere to [Semantic Versioning](https://semver.org) starting `v22.0.0`.
 
-## [v23.0.0-RC1] - 2023-04-11
-[v23.0.0-RC1]: https://github.com/dgraph-io/dgraph/compare/v22.0.2...v23.0.0-RC1
+## [v23.0.0-rc1] - 2023-04-11
+[v23.0.0-rc1]: https://github.com/dgraph-io/dgraph/compare/v22.0.2...v23.0.0-rc1
 
 ### Added
 
