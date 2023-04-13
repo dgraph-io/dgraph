@@ -806,7 +806,9 @@ func downloadDataFiles() {
 	}
 }
 
-func downloadLDBCFiles() {
+func downloadLDBCFiles() (out [][]byte, err []error) {
+	var outInfo [][]byte
+	var errInfo []error
 	if !*downloadResources {
 		fmt.Print("Skipping downloading of resources\n")
 		return
@@ -834,12 +836,15 @@ func downloadLDBCFiles() {
 			if out, err := cmd.CombinedOutput(); err != nil {
 				fmt.Printf("Error %v", err)
 				fmt.Printf("Output %v", out)
+				outInfo = append(outInfo, out)
+				errInfo = append(errInfo, err)
 			}
 			fmt.Printf("Downloaded %s to %s in %s \n", fname, *tmp, time.Since(start))
 		}(fname, link, &wg)
 	}
 	wg.Wait()
 	fmt.Printf("Downloaded %d files in %s \n", len(ldbcDataFiles), time.Since(start))
+	return outInfo, errInfo
 }
 
 func createTestCoverageFile(path string) error {
@@ -1006,9 +1011,6 @@ func run() error {
 		if testSuiteContains("load") || testSuiteContains("all") {
 			downloadDataFiles()
 		}
-		if testSuiteContains("ldbc") || testSuiteContains("all") {
-			downloadLDBCFiles()
-		}
 		for i, task := range valid {
 			select {
 			case testCh <- task:
@@ -1050,10 +1052,31 @@ func validateAllowed(testSuite []string) {
 	}
 }
 
+func validateDownload() {
+	// 	if len(*download) == 0 {
+	// 		return
+	// 	}
+	// 	if *download != "ldbc" {
+	// 		log.Fatalf("Only ldbc is supported for download")
+	// 	}
+	if testSuiteContains("ldbc") || testSuiteContains("all") {
+		out, err := downloadLDBCFiles()
+		length := len(out)
+		for i := 0; i < length; i++ {
+			str := string(out[i])
+			log.Println("Error Downloading a file: ", str)
+		}
+		if (len(out) != 0) || (len(err) != 0) {
+			log.Panic("Error downloading LDBC data files")
+		}
+	}
+}
+
 func main() {
 	pflag.Parse()
 	testsuite = strings.Split(*suite, ",")
 	validateAllowed(testsuite)
+	validateDownload()
 
 	rand.Seed(time.Now().UnixNano())
 	procId = rand.Intn(1000)
