@@ -1,4 +1,4 @@
-name: ci-dgraph-upgrade-tests
+name: ci-dgraph-upgrade-and-integration-tests
 on:
   push:
     branches:
@@ -16,7 +16,7 @@ on:
   schedule:
     - cron: "0 */2 * * *" # every 2hrs
 jobs:
-  dgraph-upgrade-tests:
+  dgraph-upgrade-and-integration-tests:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-20.04
     steps:
@@ -37,7 +37,7 @@ jobs:
           #!/bin/bash
           # clean cache
           go clean -testcache
-      - name: Run Upgrade Tests
+      - name: Run Upgrade and Integration Tests
         run: |
           #!/bin/bash
           # go env settings
