@@ -786,7 +786,12 @@ var ldbcDataFiles = map[string]string{
 	"ldbcTypes.schema": "https://github.com/dgraph-io/benchmarks/blob/master/ldbc/sf0.3/ldbcTypes.schema?raw=true",
 }
 
-func downloadDataFiles() {
+var outInfo [][]byte
+var errInfo []error
+
+func downloadDataFiles() (out [][]byte, err []error) {
+	outInfo = nil
+	errInfo = nil
 	if !*downloadResources {
 		fmt.Print("Skipping downloading of resources\n")
 		return
@@ -802,13 +807,16 @@ func downloadDataFiles() {
 		if out, err := cmd.CombinedOutput(); err != nil {
 			fmt.Printf("Error %v", err)
 			fmt.Printf("Output %v", out)
+			outInfo = append(outInfo, out)
+			errInfo = append(errInfo, err)
 		}
 	}
+	return outInfo, errInfo
 }
 
 func downloadLDBCFiles() (out [][]byte, err []error) {
-	var outInfo [][]byte
-	var errInfo []error
+	outInfo = nil
+	errInfo = nil
 	if !*downloadResources {
 		fmt.Print("Skipping downloading of resources\n")
 		return
@@ -1053,22 +1061,24 @@ func validateAllowed(testSuite []string) {
 }
 
 func validateDownload() {
-	// 	if len(*download) == 0 {
-	// 		return
-	// 	}
-	// 	if *download != "ldbc" {
-	// 		log.Fatalf("Only ldbc is supported for download")
-	// 	}
+	if testSuiteContains("load") || testSuiteContains("all") {
+		out, err := downloadDataFiles()
+		downloadError(out, err, "load")
+	}
+
 	if testSuiteContains("ldbc") || testSuiteContains("all") {
 		out, err := downloadLDBCFiles()
-		length := len(out)
-		for i := 0; i < length; i++ {
-			str := string(out[i])
-			log.Println("Error Downloading a file: ", str)
-		}
-		if (len(out) != 0) || (len(err) != 0) {
-			log.Panic("Error downloading LDBC data files")
-		}
+		downloadError(out, err, "ldbc")
+	}
+}
+
+func downloadError(out [][]byte, err []error, suiteName string) {
+	for i := 0; i < len(out); i++ {
+		str := string(out[i])
+		log.Println("error downloading a file: ", str)
+	}
+	if (len(out) != 0) || (len(err) != 0) {
+		log.Panicf("error downloading required %s test files", suiteName)
 	}
 }
 
