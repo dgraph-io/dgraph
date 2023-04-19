@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
 
 ## [v23.0.0-beta1] - 2021-10-30
+[v23.0.0-beta1]: https://github.com/dgraph-io/dgraph/compare/v21.03.0-96-g65fff46c4-slash...v23.0.0-beta1
 
 ### Added
 
