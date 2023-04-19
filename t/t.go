@@ -789,7 +789,7 @@ var ldbcDataFiles = map[string]string{
 var outInfo [][]byte
 var errInfo []error
 
-func downloadDataFiles() (out [][]byte, err []error) {
+func downloadDataFiles() {
 	outInfo = nil
 	errInfo = nil
 	if !*downloadResources {
@@ -809,12 +809,12 @@ func downloadDataFiles() (out [][]byte, err []error) {
 			fmt.Printf("Output %v", out)
 			outInfo = append(outInfo, out)
 			errInfo = append(errInfo, err)
+			downloadError(outInfo, errInfo, "load")
 		}
 	}
-	return outInfo, errInfo
 }
 
-func downloadLDBCFiles() (out [][]byte, err []error) {
+func downloadLDBCFiles() {
 	outInfo = nil
 	errInfo = nil
 	if !*downloadResources {
@@ -846,13 +846,13 @@ func downloadLDBCFiles() (out [][]byte, err []error) {
 				fmt.Printf("Output %v", out)
 				outInfo = append(outInfo, out)
 				errInfo = append(errInfo, err)
+				downloadError(outInfo, errInfo, "ldbc")
 			}
 			fmt.Printf("Downloaded %s to %s in %s \n", fname, *tmp, time.Since(start))
 		}(fname, link, &wg)
 	}
 	wg.Wait()
 	fmt.Printf("Downloaded %d files in %s \n", len(ldbcDataFiles), time.Since(start))
-	return outInfo, errInfo
 }
 
 func createTestCoverageFile(path string) error {
@@ -1019,6 +1019,9 @@ func run() error {
 		if testSuiteContains("load") || testSuiteContains("all") {
 			downloadDataFiles()
 		}
+		if testSuiteContains("ldbc") || testSuiteContains("all") {
+			downloadLDBCFiles()
+		}
 		for i, task := range valid {
 			select {
 			case testCh <- task:
@@ -1060,18 +1063,6 @@ func validateAllowed(testSuite []string) {
 	}
 }
 
-func validateDownload() {
-	if testSuiteContains("load") || testSuiteContains("all") {
-		out, err := downloadDataFiles()
-		downloadError(out, err, "load")
-	}
-
-	if testSuiteContains("ldbc") || testSuiteContains("all") {
-		out, err := downloadLDBCFiles()
-		downloadError(out, err, "ldbc")
-	}
-}
-
 func downloadError(out [][]byte, err []error, suiteName string) {
 	for i := 0; i < len(out); i++ {
 		str := string(out[i])
@@ -1086,7 +1077,6 @@ func main() {
 	pflag.Parse()
 	testsuite = strings.Split(*suite, ",")
 	validateAllowed(testsuite)
-	validateDownload()
 
 	rand.Seed(time.Now().UnixNano())
 	procId = rand.Intn(1000)
