@@ -239,16 +239,16 @@ func (hc *HTTPClient) Restore(c Cluster, backupPath string,
 	backupId string, incrFrom, backupNum int, encKey string) error {
 
 	// incremental restore was introduced in commit 8b3712e93ed2435bea52d957f7b69976c6cfc55b
-	afterIncrRestore, err := isParent("8b3712e93ed2435bea52d957f7b69976c6cfc55b", c.GetVersion())
+	beforeIncrRestore, err := isParent("8b3712e93ed2435bea52d957f7b69976c6cfc55b", c.GetVersion())
 	if err != nil {
 		return errors.Wrapf(err, "error checking incremental restore support")
 	}
-	if afterIncrRestore && incrFrom != 0 {
+	if !beforeIncrRestore && incrFrom != 0 {
 		return errors.New("incremental restore is not supported by the cluster")
 	}
 
 	var varPart, queryPart string
-	if afterIncrRestore {
+	if !beforeIncrRestore {
 		varPart = "$incrFrom: Int, "
 		queryPart = " incrementalFrom: $incrFrom,"
 	}
@@ -262,7 +262,7 @@ func (hc *HTTPClient) Restore(c Cluster, backupPath string,
 	}`, varPart, queryPart)
 	vars := map[string]interface{}{"location": backupPath, "backupId": backupId,
 		"backupNum": backupNum, "encKey": encKey}
-	if afterIncrRestore {
+	if !beforeIncrRestore {
 		vars["incrFrom"] = incrFrom
 	}
 
