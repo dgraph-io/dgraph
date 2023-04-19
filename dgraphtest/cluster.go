@@ -243,7 +243,7 @@ func (hc *HTTPClient) Restore(c Cluster, backupPath string,
 	if err != nil {
 		return errors.Wrapf(err, "error checking incremental restore support")
 	}
-	if !beforeIncrRestore && incrFrom != 0 {
+	if beforeIncrRestore && incrFrom != 0 {
 		return errors.New("incremental restore is not supported by the cluster")
 	}
 
