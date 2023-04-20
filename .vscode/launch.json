@@ -28,7 +28,7 @@
             "mode": "debug",
             "program": "${workspaceRoot}/dgraph/", 
             "env": {},
-            "args": ["alpha", "--trace",  "jaeger=http://localhost:14268/api/traces;", "ratio=0.99;", "--telemetry", "sentry=false;", "--security", "whitelist=0.0.0.0/0;", "--acl", "secret-file=../ee/acl/hmac-secret; access-ttl=300000s;"],
+            "args": ["alpha", "--trace", "jaeger=http://localhost:14268; ratio=0.99;", "--telemetry", "sentry=false;", "--security", "whitelist=0.0.0.0/0;", "--acl", "secret-file=../ee/acl/hmac-secret; access-ttl=300000s;"],
             "showLog": true
         }
     ],
