@@ -31,6 +31,7 @@ import (
 
 	"github.com/dgraph-io/dgo/v230"
 	"github.com/dgraph-io/dgo/v230/protos/api"
+	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -64,14 +65,61 @@ type HTTPClient struct {
 
 // GraphQLParams are used for making graphql requests to dgraph
 type GraphQLParams struct {
-	Query     string                 `json:"query"`
-	Variables map[string]interface{} `json:"variables"`
+	Query      string                    `json:"query"`
+	Variables  map[string]interface{}    `json:"variables"`
+	Extensions *schema.RequestExtensions `json:"extensions,omitempty"`
 }
 
-type graphQLResponse struct {
+type GraphQLResponse struct {
 	Data       json.RawMessage        `json:"data,omitempty"`
 	Errors     x.GqlErrorList         `json:"errors,omitempty"`
 	Extensions map[string]interface{} `json:"extensions,omitempty"`
+}
+
+func (hc *HTTPClient) Login(user, password string, ns uint64) error {
+	login := `mutation login($userId: String, $password: String, $namespace: Int, $refreshToken: String) {
+		login(userId: $userId, password: $password, namespace: $namespace, refreshToken: $refreshToken) {
+			response {
+				accessJWT
+				refreshJWT
+			}
+		}
+	}`
+	params := GraphQLParams{
+		Query: login,
+		Variables: map[string]interface{}{
+			"userId":       user,
+			"password":     password,
+			"namespace":    ns,
+			"refreshToken": hc.RefreshToken,
+		},
+	}
+
+	hc.HttpToken = &HttpToken{
+		UserId:   user,
+		Password: password,
+	}
+	return hc.doLogin(params, true)
+}
+
+func (hc *HTTPClient) LoginUsingToken(ns uint64) error {
+	q := `mutation login( $namespace: Int, $refreshToken:String) {
+ 		login(namespace: $namespace, refreshToken: $refreshToken) {
+ 			response {
+ 				accessJWT
+ 				refreshJWT
+ 			}
+ 		}
+ 	}`
+	params := GraphQLParams{
+		Query: q,
+		Variables: map[string]interface{}{
+			"namespace":    ns,
+			"refreshToken": hc.RefreshToken,
+		},
+	}
+
+	return hc.doLogin(params, true)
 }
 
 func (hc *HTTPClient) LoginIntoNamespace(user, password string, ns uint64) error {
@@ -86,13 +134,21 @@ func (hc *HTTPClient) LoginIntoNamespace(user, password string, ns uint64) error
 	params := GraphQLParams{
 		Query: q,
 		Variables: map[string]interface{}{
-			"userId":    DefaultUser,
-			"password":  DefaultPassword,
+			"userId":    user,
+			"password":  password,
 			"namespace": ns,
 		},
 	}
 
-	resp, err := hc.RunGraphqlQuery(params, true)
+	hc.HttpToken = &HttpToken{
+		UserId:   user,
+		Password: password,
+	}
+	return hc.doLogin(params, true)
+}
+
+func (hc *HTTPClient) doLogin(params GraphQLParams, isAdmin bool) error {
+	resp, err := hc.RunGraphqlQuery(params, isAdmin)
 	if err != nil {
 		return err
 	}
@@ -111,17 +167,51 @@ func (hc *HTTPClient) LoginIntoNamespace(user, password string, ns uint64) error
 		return errors.Errorf("no access JWT found in the response")
 	}
 
-	hc.HttpToken = &HttpToken{
-		UserId:       user,
-		Password:     password,
-		AccessJwt:    r.Login.Response.AccessJWT,
-		RefreshToken: r.Login.Response.RefreshJwt,
-	}
+	hc.HttpToken.AccessJwt = r.Login.Response.AccessJWT
+	hc.HttpToken.RefreshToken = r.Login.Response.RefreshJwt
 	return nil
 }
 
-// Post makes a post request to the graphql admin endpoint
-func (hc *HTTPClient) Post(body []byte, admin bool) ([]byte, error) {
+func (hc *HTTPClient) ResetPassword(userID, newPass string, nsID uint64) (string, error) {
+	const query = `mutation resetPassword($userID: String!, $newpass: String!, $namespaceId: Int!){
+		resetPassword(input: {userId: $userID, password: $newpass, namespace: $namespaceId}) {
+			userId
+			message
+		}
+	}`
+	params := GraphQLParams{
+		Query: query,
+		Variables: map[string]interface{}{
+			"namespaceId": nsID,
+			"userID":      userID,
+			"newpass":     newPass,
+		},
+	}
+	resp, err := hc.RunGraphqlQuery(params, true)
+	if err != nil {
+		return "", err
+	}
+
+	var result struct {
+		ResetPassword struct {
+			UserId  string `json:"userId"`
+			Message string `json:"message"`
+		}
+	}
+	if err = json.Unmarshal(resp, &result); err != nil {
+		return "", errors.Wrap(err, "error unmarshalling response")
+	}
+	if userID != result.ResetPassword.UserId {
+		return "", fmt.Errorf("unexpected error while resetting password for user [%s]", userID)
+	}
+	if result.ResetPassword.Message == "Reset password is successful" {
+		return result.ResetPassword.UserId, nil
+	}
+	return "", errors.New(result.ResetPassword.Message)
+}
+
+// doPost makes a post request to the graphql admin endpoint
+func (hc *HTTPClient) doPost(body []byte, admin bool) ([]byte, error) {
 	url := hc.graphqlURL
 	if admin {
 		url = hc.adminURL
@@ -146,12 +236,12 @@ func (hc *HTTPClient) RunGraphqlQuery(params GraphQLParams, admin bool) ([]byte,
 		return nil, errors.Wrap(err, "error while marshalling params")
 	}
 
-	respBody, err := hc.Post(reqBody, admin)
+	respBody, err := hc.doPost(reqBody, admin)
 	if err != nil {
 		return nil, errors.Wrap(err, "error while running admin query")
 	}
 
-	var gqlResp graphQLResponse
+	var gqlResp GraphQLResponse
 	if err := json.Unmarshal(respBody, &gqlResp); err != nil {
 		return nil, errors.Wrap(err, "error unmarshalling GQL response")
 	}
@@ -367,34 +457,6 @@ func (hc *HTTPClient) Export(dest string) error {
 	return nil
 }
 
-// AddNamespace creates a new namespace and returns its ID
-func (hc *HTTPClient) AddNamespace() (uint64, error) {
-	const addNSQuery = `mutation {
-		addNamespace {
-		   namespaceId
-		   message
-		}
-	}`
-	resp, err := hc.RunGraphqlQuery(GraphQLParams{Query: addNSQuery}, true)
-	if err != nil {
-		return 0, err
-	}
-
-	var result struct {
-		AddNamespace struct {
-			NamespaceId int    `json:"namespaceId"`
-			Message     string `json:"message"`
-		}
-	}
-	if err := json.Unmarshal(resp, &result); err != nil {
-		return 0, errors.Wrap(err, "error unmarshalling addNamespace response")
-	}
-	if strings.Contains(result.AddNamespace.Message, "Created namespace successfully") {
-		return uint64(result.AddNamespace.NamespaceId), nil
-	}
-	return 0, errors.New(result.AddNamespace.Message)
-}
-
 // UpdateGQLSchema updates graphql schema for a given HTTP client
 func (hc *HTTPClient) UpdateGQLSchema(sch string) error {
 	const query = `mutation updateGQLSchema($sch: String!) {
@@ -414,6 +476,17 @@ func (hc *HTTPClient) UpdateGQLSchema(sch string) error {
 		return err
 	}
 	return nil
+}
+
+// PostPersistentQuery stores a persisted query
+func (hc *HTTPClient) PostPersistentQuery(query, sha string) ([]byte, error) {
+	params := GraphQLParams{
+		Query: query,
+		Extensions: &schema.RequestExtensions{PersistedQuery: schema.PersistedQuery{
+			Sha256Hash: sha,
+		}},
+	}
+	return hc.RunGraphqlQuery(params, false)
 }
 
 // SetupSchema sets up DQL schema
