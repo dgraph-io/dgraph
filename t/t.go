@@ -786,12 +786,7 @@ var ldbcDataFiles = map[string]string{
 	"ldbcTypes.schema": "https://github.com/dgraph-io/benchmarks/blob/master/ldbc/sf0.3/ldbcTypes.schema?raw=true",
 }
 
-var outInfo [][]byte
-var errInfo []error
-
 func downloadDataFiles() {
-	outInfo = nil
-	errInfo = nil
 	if !*downloadResources {
 		fmt.Print("Skipping downloading of resources\n")
 		return
@@ -805,18 +800,15 @@ func downloadDataFiles() {
 		cmd.Dir = *tmp
 
 		if out, err := cmd.CombinedOutput(); err != nil {
-			fmt.Printf("Error %v", err)
-			fmt.Printf("Output %v", out)
-			outInfo = append(outInfo, out)
-			errInfo = append(errInfo, err)
-			downloadError(outInfo, errInfo, "load")
+			fmt.Printf("Error %v /n", err)
+			str := string(out)
+			log.Println("error downloading a file: ", str)
+			log.Panic("error downloading required load test files")
 		}
 	}
 }
 
 func downloadLDBCFiles() {
-	outInfo = nil
-	errInfo = nil
 	if !*downloadResources {
 		fmt.Print("Skipping downloading of resources\n")
 		return
@@ -843,10 +835,9 @@ func downloadLDBCFiles() {
 			cmd.Dir = *tmp
 			if out, err := cmd.CombinedOutput(); err != nil {
 				fmt.Printf("Error %v", err)
-				fmt.Printf("Output %v", out)
-				outInfo = append(outInfo, out)
-				errInfo = append(errInfo, err)
-				downloadError(outInfo, errInfo, "ldbc")
+				str := string(out)
+				log.Println("error downloading a file: ", str)
+				log.Panic("error downloading required ldbc test files")
 			}
 			fmt.Printf("Downloaded %s to %s in %s \n", fname, *tmp, time.Since(start))
 		}(fname, link, &wg)
@@ -1060,16 +1051,6 @@ func validateAllowed(testSuite []string) {
 		if !onlyAllowed {
 			log.Fatalf("Allowed options for suite are only all, load, ldbc or unit; passed in %+v", testSuite)
 		}
-	}
-}
-
-func downloadError(out [][]byte, err []error, suiteName string) {
-	for i := 0; i < len(out); i++ {
-		str := string(out[i])
-		log.Println("error downloading a file: ", str)
-	}
-	if (len(out) != 0) || (len(err) != 0) {
-		log.Panicf("error downloading required %s test files", suiteName)
 	}
 }
 
