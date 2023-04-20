@@ -25,7 +25,10 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"io"
 
+	"github.com/golang/glog"
+	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/pkg/errors"
 
@@ -160,6 +163,141 @@ func (hc *HTTPClient) RunGraphqlQuery(params GraphQLParams, admin bool) ([]byte,
 	return gqlResp.Data, nil
 }
 
+// LoginParams stores the information needed to perform a login request.
+type LoginParams struct {
+	Endpoint   string
+	UserID     string
+	Passwd     string
+	Namespace  uint64
+	RefreshJwt string
+}
+
+type GraphQLResponse struct {
+	Data       json.RawMessage        `json:"data,omitempty"`
+	Errors     x.GqlErrorList         `json:"errors,omitempty"`
+	Extensions map[string]interface{} `json:"extensions,omitempty"`
+}
+
+// HttpLogin sends a HTTP request to the server
+// and returns the access JWT and refresh JWT extracted from
+// the HTTP response
+func HttpLogin(params *LoginParams) (*HttpToken, error) {
+	loginPayload := api.LoginRequest{}
+	if len(params.RefreshJwt) > 0 {
+		loginPayload.RefreshToken = params.RefreshJwt
+	} else {
+		loginPayload.Userid = params.UserID
+		loginPayload.Password = params.Passwd
+	}
+
+	login := `mutation login($userId: String, $password: String, $namespace: Int, $refreshToken: String) {
+		login(userId: $userId, password: $password, namespace: $namespace, refreshToken: $refreshToken) {
+			response {
+				accessJWT
+				refreshJWT
+			}
+		}
+	}`
+
+	gqlParams := GraphQLParams{
+		Query: login,
+		Variables: map[string]interface{}{
+			"userId":       params.UserID,
+			"password":     params.Passwd,
+			"namespace":    params.Namespace,
+			"refreshToken": params.RefreshJwt,
+		},
+	}
+	body, err := json.Marshal(gqlParams)
+	if err != nil {
+		return nil, errors.Wrapf(err, "unable to marshal body")
+	}
+
+	req, err := http.NewRequest("POST", params.Endpoint, bytes.NewBuffer(body))
+	if err != nil {
+		return nil, errors.Wrapf(err, "unable to create request")
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, errors.Wrapf(err, "login through curl failed")
+	}
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			glog.Warningf("error closing body: %v", err)
+		}
+	}()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, errors.Wrapf(err, "unable to read from response")
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, errors.New(fmt.Sprintf("got non 200 response from the server with %s ",
+			string(respBody)))
+	}
+
+	var gqlResp GraphQLResponse
+	if err := json.Unmarshal(respBody, &gqlResp); err != nil {
+		return nil, err
+	}
+
+	if len(gqlResp.Errors) > 0 {
+		return nil, errors.Errorf(gqlResp.Errors.Error())
+	}
+
+	if gqlResp.Data == nil {
+		return nil, errors.Wrapf(err, "data entry found in the output")
+	}
+
+	type Response struct {
+		Login struct {
+			Response struct {
+				AccessJWT  string
+				RefreshJwt string
+			}
+		}
+	}
+	var r Response
+	if err := json.Unmarshal(gqlResp.Data, &r); err != nil {
+		return nil, err
+	}
+
+	if r.Login.Response.AccessJWT == "" {
+		return nil, errors.Errorf("no access JWT found in the output")
+	}
+	if r.Login.Response.RefreshJwt == "" {
+		return nil, errors.Errorf("no refresh JWT found in the output")
+	}
+
+	return &HttpToken{
+		UserId:       params.UserID,
+		Password:     params.Passwd,
+		AccessJwt:    r.Login.Response.AccessJWT,
+		RefreshToken: r.Login.Response.RefreshJwt,
+	}, nil
+}
+
+func (hc *HTTPClient) MakeGraphqlRequest(params GraphQLParams, admin bool) ([]byte, error)  {
+	_, err := hc.RunGraphqlQuery(params, admin)
+	if err != nil {
+		return nil, err
+	}
+
+	newtoken, err := HttpLogin(&LoginParams{
+		Endpoint:   hc.adminURL,
+		UserID:     hc.UserId,
+		Passwd:     hc.Password,
+		RefreshJwt: hc.RefreshToken,
+	})
+	hc.AccessJwt = newtoken.AccessJwt
+	hc.RefreshToken = newtoken.RefreshToken
+
+	return hc.RunGraphqlQuery(params, admin)
+}
+
 // Backup creates a backup of dgraph at a given path
 func (hc *HTTPClient) Backup(forceFull bool, backupPath string) error {
 	const query = `mutation backup($dest: String!, $ff: Boolean!) {
@@ -170,6 +308,7 @@ func (hc *HTTPClient) Backup(forceFull bool, backupPath string) error {
 			taskId
 		}
 	}`
+	//params := GraphQLParams{
 	params := GraphQLParams{
 		Query:     query,
 		Variables: map[string]interface{}{"dest": backupPath, "ff": forceFull},
@@ -203,6 +342,7 @@ func (hc *HTTPClient) WaitForTask(taskId string) error {
 			status
 		}
 	}`
+	//params := GraphQLParams{
 	params := GraphQLParams{
 		Query:     query,
 		Variables: map[string]interface{}{"id": taskId},
