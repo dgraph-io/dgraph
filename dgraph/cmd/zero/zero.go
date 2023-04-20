@@ -79,6 +79,14 @@ type Server struct {
 	checkpointPerGroup map[uint32]uint64
 }
 
+func (s *Server) Closer() *z.Closer {
+	return s.closer
+}
+
+func (s *Server) Orc() *Oracle {
+	return s.orc
+}
+
 // Init initializes the zero server.
 func (s *Server) Init() {
 	s.Lock()
@@ -101,10 +109,10 @@ func (s *Server) Init() {
 	s.blockCommitsOn = new(sync.Map)
 	s.moveOngoing = make(chan struct{}, 1)
 	s.checkpointPerGroup = make(map[uint32]uint64)
-	if opts.limiterConfig.UidLeaseLimit > 0 {
+	if Opts.LimiterConfig.UidLeaseLimit > 0 {
 		// rate limiting is not enabled when lease limit is set to zero.
-		s.rateLimiter = x.NewRateLimiter(int64(opts.limiterConfig.UidLeaseLimit),
-			opts.limiterConfig.RefillAfter, s.closer)
+		s.rateLimiter = x.NewRateLimiter(int64(Opts.LimiterConfig.UidLeaseLimit),
+			Opts.LimiterConfig.RefillAfter, s.closer)
 	}
 
 	go s.rebalanceTablets()

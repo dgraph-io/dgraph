@@ -61,7 +61,7 @@ This would trigger G1 to get latest state. Wait for it.
 
 // TODO: Have a event log for everything.
 func (s *Server) rebalanceTablets() {
-	ticker := time.NewTicker(opts.rebalanceInterval)
+	ticker := time.NewTicker(Opts.RebalanceInterval)
 	for range ticker.C {
 		predicate, srcGroup, dstGroup := s.chooseTablet()
 		if len(predicate) == 0 {

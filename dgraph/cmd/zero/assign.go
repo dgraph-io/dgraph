@@ -199,15 +199,15 @@ func (s *Server) AssignIds(ctx context.Context, num *pb.Num) (*pb.AssignedIds, e
 			// not contain namespace into context.
 			return nil
 		}
-		if num.Val > opts.limiterConfig.UidLeaseLimit {
+		if num.Val > Opts.LimiterConfig.UidLeaseLimit {
 			return errors.Errorf("Requested UID lease(%d) is greater than allowed(%d).",
-				num.Val, opts.limiterConfig.UidLeaseLimit)
+				num.Val, Opts.LimiterConfig.UidLeaseLimit)
 		}
 
 		if !s.rateLimiter.Allow(ns, int64(num.Val)) {
 			// Return error after random delay.
 			//nolint:gosec // random generator in closed set does not require cryptographic precision
-			delay := rand.Intn(int(opts.limiterConfig.RefillAfter))
+			delay := rand.Intn(int(Opts.LimiterConfig.RefillAfter))
 			time.Sleep(time.Duration(delay))
 			return errors.Errorf("Cannot lease UID because UID lease for the namespace %#x is "+
 				"exhausted. Please retry after some time.", ns)

@@ -46,7 +46,7 @@ import (
 )
 
 const (
-	raftDefaults = "idx=1; learner=false;"
+	RaftDefaults = "idx=1; learner=false;"
 )
 
 var proposalKey uint64
@@ -473,8 +473,8 @@ func (n *node) applyProposal(e raftpb.Entry) (uint64, error) {
 		// Check expiry and set enabled accordingly.
 		expiry := time.Unix(state.License.ExpiryTs, 0).UTC()
 		state.License.Enabled = time.Now().UTC().Before(expiry)
-		if state.License.Enabled && opts.audit != nil {
-			if err := audit.InitAuditor(opts.audit, 0, n.Id); err != nil {
+		if state.License.Enabled && Opts.Audit != nil {
+			if err := audit.InitAuditor(Opts.Audit, 0, n.Id); err != nil {
 				glog.Errorf("error while initializing audit logs %+v", err)
 			}
 		}
@@ -670,10 +670,10 @@ func (n *node) initAndStartNode() error {
 			go n.proposeNewCID()
 		}
 
-	case len(opts.peer) > 0:
-		p := conn.GetPools().Connect(opts.peer, opts.tlsClientConfig)
+	case len(Opts.Peer) > 0:
+		p := conn.GetPools().Connect(Opts.Peer, Opts.TlsClientConfig)
 		if p == nil {
-			return errors.Errorf("Unhealthy connection to %v", opts.peer)
+			return errors.Errorf("Unhealthy connection to %v", Opts.Peer)
 		}
 
 		timeout := 8 * time.Second

@@ -50,7 +50,7 @@ func intFromQueryParam(w http.ResponseWriter, r *http.Request, name string) (uin
 	return val, true
 }
 
-func (st *state) assign(w http.ResponseWriter, r *http.Request) {
+func (st *State) assign(w http.ResponseWriter, r *http.Request) {
 	x.AddCorsHeaders(w)
 	w.Header().Set("Content-Type", "application/json")
 	if r.Method == "OPTIONS" {
@@ -105,7 +105,7 @@ func (st *state) assign(w http.ResponseWriter, r *http.Request) {
 
 // removeNode can be used to remove a node from the cluster. It takes in the RAFT id of the node
 // and the group it belongs to. It can be used to remove Dgraph alpha and Zero nodes(group=0).
-func (st *state) removeNode(w http.ResponseWriter, r *http.Request) {
+func (st *State) removeNode(w http.ResponseWriter, r *http.Request) {
 	x.AddCorsHeaders(w)
 	if r.Method == "OPTIONS" {
 		return
@@ -140,7 +140,7 @@ func (st *state) removeNode(w http.ResponseWriter, r *http.Request) {
 
 // moveTablet can be used to move a tablet to a specific group. It takes in tablet and group as
 // argument.
-func (st *state) moveTablet(w http.ResponseWriter, r *http.Request) {
+func (st *State) moveTablet(w http.ResponseWriter, r *http.Request) {
 	x.AddCorsHeaders(w)
 	if r.Method == "OPTIONS" {
 		return
@@ -207,7 +207,7 @@ func (st *state) moveTablet(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (st *state) getState(w http.ResponseWriter, r *http.Request) {
+func (st *State) getState(w http.ResponseWriter, r *http.Request) {
 	x.AddCorsHeaders(w)
 	w.Header().Set("Content-Type", "application/json")
 
@@ -231,7 +231,7 @@ func (st *state) getState(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (st *state) pingResponse(w http.ResponseWriter, r *http.Request) {
+func (st *State) pingResponse(w http.ResponseWriter, r *http.Request) {
 	x.AddCorsHeaders(w)
 
 	w.WriteHeader(http.StatusOK)

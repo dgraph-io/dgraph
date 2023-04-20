@@ -31,9 +31,9 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	"go.opencensus.io/plugin/ocgrpc"
 	otrace "go.opencensus.io/trace"
-	"go.opencensus.io/zpages"
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -48,22 +48,22 @@ import (
 	"github.com/dgraph-io/ristretto/z"
 )
 
-type options struct {
-	raft              *z.SuperFlag
-	telemetry         *z.SuperFlag
-	limit             *z.SuperFlag
-	bindall           bool
-	portOffset        int
-	numReplicas       int
-	peer              string
-	w                 string
-	rebalanceInterval time.Duration
-	tlsClientConfig   *tls.Config
-	audit             *x.LoggerConf
-	limiterConfig     *x.LimiterConf
+type Options struct {
+	Raft              *z.SuperFlag
+	Telemetry         *z.SuperFlag
+	Limit             *z.SuperFlag
+	Bindall           bool
+	PortOffset        int
+	NumReplicas       int
+	Peer              string
+	W                 string
+	RebalanceInterval time.Duration
+	TlsClientConfig   *tls.Config
+	Audit             *x.LoggerConf
+	LimiterConfig     *x.LimiterConf
 }
 
-var opts options
+var Opts Options
 
 // Zero is the sub-command used to start Zero servers.
 var Zero x.SubCommand
@@ -112,7 +112,7 @@ instances to achieve high-availability.
 			"Turn on/off the administrative endpoints exposed over Zero's HTTP port.").
 		String())
 
-	flag.String("raft", raftDefaults, z.NewSuperFlagHelp(raftDefaults).
+	flag.String("raft", RaftDefaults, z.NewSuperFlagHelp(RaftDefaults).
 		Head("Raft options").
 		Flag("idx",
 			"Provides an optional Raft ID that this Alpha would use to join Raft groups.").
@@ -144,14 +144,18 @@ func setupListener(addr string, port int, kind string) (listener net.Listener, e
 	return net.Listen("tcp", laddr)
 }
 
-type state struct {
+func SetOptions(opts Options) {
+	Opts = opts
+}
+
+type State struct {
 	node *node
 	rs   *conn.RaftServer
 	zero *Server
 }
 
-func (st *state) serveGRPC(l net.Listener, store *raftwal.DiskStorage) {
-	x.RegisterExporters(Zero.Conf, "dgraph.zero")
+func (st *State) serveGRPC(conf *viper.Viper, l net.Listener, store *raftwal.DiskStorage) {
+	x.RegisterExporters(conf, "dgraph.zero")
 	grpcOpts := []grpc.ServerOption{
 		grpc.MaxRecvMsgSize(x.GrpcMaxSize),
 		grpc.MaxSendMsgSize(x.GrpcMaxSize),
@@ -160,21 +164,21 @@ func (st *state) serveGRPC(l net.Listener, store *raftwal.DiskStorage) {
 		grpc.UnaryInterceptor(audit.AuditRequestGRPC),
 	}
 
-	tlsConf, err := x.LoadServerTLSConfigForInternalPort(Zero.Conf)
+	tlsConf, err := x.LoadServerTLSConfigForInternalPort(conf)
 	x.Check(err)
 	if tlsConf != nil {
 		grpcOpts = append(grpcOpts, grpc.Creds(credentials.NewTLS(tlsConf)))
 	}
 	s := grpc.NewServer(grpcOpts...)
 
-	nodeId := opts.raft.GetUint64("idx")
+	nodeId := Opts.Raft.GetUint64("idx")
 	rc := pb.RaftContext{
 		Id:        nodeId,
 		Addr:      x.WorkerConfig.MyAddr,
 		Group:     0,
-		IsLearner: opts.raft.GetBool("learner"),
+		IsLearner: Opts.Raft.GetBool("learner"),
 	}
-	m := conn.NewNode(&rc, store, opts.tlsClientConfig)
+	m := conn.NewNode(&rc, store, Opts.TlsClientConfig)
 
 	// Zero followers should not be forwarding proposals to the leader, to avoid txn commits which
 	// were calculated in a previous Zero leader.
@@ -182,7 +186,7 @@ func (st *state) serveGRPC(l net.Listener, store *raftwal.DiskStorage) {
 	st.rs = conn.NewRaftServer(m)
 
 	st.node = &node{Node: m, ctx: context.Background(), closer: z.NewCloser(1)}
-	st.zero = &Server{NumReplicas: opts.numReplicas, Node: st.node, tlsClientConfig: opts.tlsClientConfig}
+	st.zero = &Server{NumReplicas: Opts.NumReplicas, Node: st.node, tlsClientConfig: Opts.TlsClientConfig}
 	st.zero.Init()
 	st.node.server = st.zero
 
@@ -228,7 +232,7 @@ func run() {
 	x.Check(err)
 
 	raft := z.NewSuperFlag(Zero.Conf.GetString("raft")).MergeAndCheckDefault(
-		raftDefaults)
+		RaftDefaults)
 	auditConf := audit.GetAuditConf(Zero.Conf.GetString("audit"))
 	limit := z.NewSuperFlag(Zero.Conf.GetString("limit")).MergeAndCheckDefault(
 		worker.ZeroLimitsDefaults)
@@ -236,30 +240,30 @@ func run() {
 		UidLeaseLimit: limit.GetUint64("uid-lease"),
 		RefillAfter:   limit.GetDuration("refill-interval"),
 	}
-	opts = options{
-		telemetry:         telemetry,
-		raft:              raft,
-		limit:             limit,
-		bindall:           Zero.Conf.GetBool("bindall"),
-		portOffset:        Zero.Conf.GetInt("port_offset"),
-		numReplicas:       Zero.Conf.GetInt("replicas"),
-		peer:              Zero.Conf.GetString("peer"),
-		w:                 Zero.Conf.GetString("wal"),
-		rebalanceInterval: Zero.Conf.GetDuration("rebalance_interval"),
-		tlsClientConfig:   tlsConf,
-		audit:             auditConf,
-		limiterConfig:     limitConf,
-	}
-	glog.Infof("Setting Config to: %+v", opts)
+	SetOptions(Options{
+		Telemetry:         telemetry,
+		Raft:              raft,
+		Limit:             limit,
+		Bindall:           Zero.Conf.GetBool("bindall"),
+		PortOffset:        Zero.Conf.GetInt("port_offset"),
+		NumReplicas:       Zero.Conf.GetInt("replicas"),
+		Peer:              Zero.Conf.GetString("peer"),
+		W:                 Zero.Conf.GetString("wal"),
+		RebalanceInterval: Zero.Conf.GetDuration("rebalance_interval"),
+		TlsClientConfig:   tlsConf,
+		Audit:             auditConf,
+		LimiterConfig:     limitConf,
+	})
+	glog.Infof("Setting Config to: %+v", Opts)
 	x.WorkerConfig.Parse(Zero.Conf)
 
 	if !enc.EeBuild && Zero.Conf.GetString("enterprise_license") != "" {
 		log.Fatalf("ERROR: enterprise_license option cannot be applied to OSS builds. ")
 	}
 
-	if opts.numReplicas < 0 || opts.numReplicas%2 == 0 {
+	if Opts.NumReplicas < 0 || Opts.NumReplicas%2 == 0 {
 		log.Fatalf("ERROR: Number of replicas must be odd for consensus. Found: %d",
-			opts.numReplicas)
+			Opts.NumReplicas)
 	}
 
 	if Zero.Conf.GetBool("expose_trace") {
@@ -269,18 +273,18 @@ func run() {
 		}
 	}
 
-	if opts.audit != nil {
-		wd, err := filepath.Abs(opts.w)
+	if Opts.Audit != nil {
+		wd, err := filepath.Abs(Opts.W)
 		x.Check(err)
-		ad, err := filepath.Abs(opts.audit.Output)
+		ad, err := filepath.Abs(Opts.Audit.Output)
 		x.Check(err)
 		x.AssertTruef(ad != wd,
-			"WAL directory and Audit output cannot be the same ('%s').", opts.audit.Output)
+			"WAL directory and Audit output cannot be the same ('%s').", Opts.Audit.Output)
 	}
 
-	if opts.rebalanceInterval <= 0 {
+	if Opts.RebalanceInterval <= 0 {
 		log.Fatalf("ERROR: Rebalance interval must be greater than zero. Found: %d",
-			opts.rebalanceInterval)
+			Opts.RebalanceInterval)
 	}
 
 	grpc.EnableTracing = false
@@ -288,111 +292,52 @@ func run() {
 		DefaultSampler: otrace.ProbabilitySampler(Zero.Conf.GetFloat64("trace"))})
 
 	addr := "localhost"
-	if opts.bindall {
+	if Opts.Bindall {
 		addr = "0.0.0.0"
 	}
 	if x.WorkerConfig.MyAddr == "" {
-		x.WorkerConfig.MyAddr = fmt.Sprintf("localhost:%d", x.PortZeroGrpc+opts.portOffset)
+		x.WorkerConfig.MyAddr = fmt.Sprintf("localhost:%d", x.PortZeroGrpc+Opts.PortOffset)
 	}
 
-	nodeId := opts.raft.GetUint64("idx")
+	nodeId := Opts.Raft.GetUint64("idx")
 	if nodeId == 0 {
 		log.Fatalf("ERROR: raft.idx flag cannot be 0. Please set idx to a unique positive integer.")
 	}
-	grpcListener, err := setupListener(addr, x.PortZeroGrpc+opts.portOffset, "grpc")
+	grpcListener, err := setupListener(addr, x.PortZeroGrpc+Opts.PortOffset, "grpc")
 	x.Check(err)
-	httpListener, err := setupListener(addr, x.PortZeroHTTP+opts.portOffset, "http")
+	httpListener, err := setupListener(addr, x.PortZeroHTTP+Opts.PortOffset, "http")
 	x.Check(err)
 
 	// Create and initialize write-ahead log.
-	x.Checkf(os.MkdirAll(opts.w, 0700), "Error while creating WAL dir.")
-	store := raftwal.Init(opts.w)
+	x.Checkf(os.MkdirAll(Opts.W, 0700), "Error while creating WAL dir.")
+	store := raftwal.Init(Opts.W)
 	store.SetUint(raftwal.RaftId, nodeId)
 	store.SetUint(raftwal.GroupId, 0) // All zeros have group zero.
 
 	// Initialize the servers.
-	var st state
-	st.serveGRPC(grpcListener, store)
+	var st State
+	st.InitServers(Zero.Conf, grpcListener, httpListener, store)
 
-	tlsCfg, err := x.LoadServerTLSConfig(Zero.Conf)
-	x.Check(err)
-	go x.StartListenHttpAndHttps(httpListener, tlsCfg, st.zero.closer)
-
-	baseMux := http.NewServeMux()
-	http.Handle("/", audit.AuditRequestHttp(baseMux))
-
-	baseMux.HandleFunc("/health", st.pingResponse)
-	// the following endpoints are disabled only if the flag is explicitly set to true
-	if !limit.GetBool("disable-admin-http") {
-		baseMux.HandleFunc("/state", st.getState)
-		baseMux.HandleFunc("/removeNode", st.removeNode)
-		baseMux.HandleFunc("/moveTablet", st.moveTablet)
-		baseMux.HandleFunc("/assign", st.assign)
-		baseMux.HandleFunc("/enterpriseLicense", st.applyEnterpriseLicense)
-	}
-	baseMux.HandleFunc("/debug/jemalloc", x.JemallocHandler)
-	zpages.Handle(baseMux, "/debug/z")
+	st.RegisterHttpHandlers(limit)
 
 	// This must be here. It does not work if placed before Grpc init.
-	x.Check(st.node.initAndStartNode())
+	st.InitAndStartNode()
 
-	if opts.telemetry.GetBool("reports") {
-		go st.zero.periodicallyPostTelemetry()
+	if Opts.Telemetry.GetBool("reports") {
+		go st.PeriodicallyPostTelemetry()
 	}
 
 	sdCh := make(chan os.Signal, 1)
 	signal.Notify(sdCh, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
 	// handle signals
-	go func() {
-		var sigCnt int
-		for sig := range sdCh {
-			glog.Infof("--- Received %s signal", sig)
-			sigCnt++
-			if sigCnt == 1 {
-				signal.Stop(sdCh)
-				st.zero.closer.Signal()
-			} else if sigCnt == 3 {
-				glog.Infof("--- Got interrupt signal 3rd time. Aborting now.")
-				os.Exit(1)
-			} else {
-				glog.Infof("--- Ignoring interrupt signal.")
-			}
-		}
-	}()
+	go st.HandleSignals(sdCh)
 
-	st.zero.closer.AddRunning(1)
+	st.HandleShutDown(sdCh, grpcListener, httpListener)
 
-	go func() {
-		defer st.zero.closer.Done()
-		<-st.zero.closer.HasBeenClosed()
-		glog.Infoln("Shutting down...")
-		close(sdCh)
-		// Close doesn't close already opened connections.
+	st.MonitorMetrics()
 
-		// Stop all HTTP requests.
-		_ = httpListener.Close()
-		// Stop Raft.
-		st.node.closer.SignalAndWait()
-		// Stop all internal requests.
-		_ = grpcListener.Close()
+	st.Wait()
 
-		x.RemoveCidFile()
-	}()
-
-	st.zero.closer.AddRunning(2)
-	go x.MonitorMemoryMetrics(st.zero.closer)
-	go x.MonitorDiskMetrics("wal_fs", opts.w, st.zero.closer)
-
-	glog.Infoln("Running Dgraph Zero...")
-	st.zero.closer.Wait()
-	glog.Infoln("Closer closed.")
-
-	err = store.Close()
-	glog.Infof("Raft WAL closed with err: %v\n", err)
-
-	audit.Close()
-
-	st.zero.orc.close()
-	glog.Infoln("All done. Goodbye!")
+	st.Close(store)
 }
