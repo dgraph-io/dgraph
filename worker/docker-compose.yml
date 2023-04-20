@@ -12,7 +12,7 @@ services:
     - "9080"
     volumes:
     - type: bind
-      source: $GOPATH/bin
+      source: ${DGRAPH_BIN_PATH:-$GOPATH/bin}
       target: /gobin
       read_only: true
     command: /gobin/dgraph  ${COVERAGE_OUTPUT} alpha --trace "jaeger=http://jaeger:14268;" --my=alpha1:7080
@@ -28,7 +28,7 @@ services:
     - "9080"
     volumes:
     - type: bind
-      source: $GOPATH/bin
+      source: ${DGRAPH_BIN_PATH:-$GOPATH/bin}
       target: /gobin
       read_only: true
     command: /gobin/dgraph  ${COVERAGE_OUTPUT} alpha --trace "jaeger=http://jaeger:14268;" --my=alpha2:7080
@@ -44,7 +44,7 @@ services:
     - "9080"
     volumes:
     - type: bind
-      source: $GOPATH/bin
+      source: ${DGRAPH_BIN_PATH:-$GOPATH/bin}
       target: /gobin
       read_only: true
     command: /gobin/dgraph  ${COVERAGE_OUTPUT} alpha --trace "jaeger=http://jaeger:14268;" --my=alpha3:7080
@@ -60,7 +60,7 @@ services:
     - "9080"
     volumes:
     - type: bind
-      source: $GOPATH/bin
+      source: ${DGRAPH_BIN_PATH:-$GOPATH/bin}
       target: /gobin
       read_only: true
     command: /gobin/dgraph  ${COVERAGE_OUTPUT} alpha --trace "jaeger=http://jaeger:14268;" --my=alpha4:7080
@@ -76,7 +76,7 @@ services:
     - "9080"
     volumes:
     - type: bind
-      source: $GOPATH/bin
+      source: ${DGRAPH_BIN_PATH:-$GOPATH/bin}
       target: /gobin
       read_only: true
     command: /gobin/dgraph  ${COVERAGE_OUTPUT} alpha --trace "jaeger=http://jaeger:14268;" --my=alpha5:7080
@@ -92,7 +92,7 @@ services:
     - "9080"
     volumes:
     - type: bind
-      source: $GOPATH/bin
+      source: ${DGRAPH_BIN_PATH:-$GOPATH/bin}
       target: /gobin
       read_only: true
     command: /gobin/dgraph  ${COVERAGE_OUTPUT} alpha --trace "jaeger=http://jaeger:14268;" --my=alpha6:7080
@@ -118,7 +118,7 @@ services:
     - "6080"
     volumes:
     - type: bind
-      source: $GOPATH/bin
+      source: ${DGRAPH_BIN_PATH:-$GOPATH/bin}
       target: /gobin
       read_only: true
     command: /gobin/dgraph  ${COVERAGE_OUTPUT} zero --trace "jaeger=http://jaeger:14268;" --raft='idx=1'
@@ -135,7 +135,7 @@ services:
     - "6080"
     volumes:
     - type: bind
-      source: $GOPATH/bin
+      source: ${DGRAPH_BIN_PATH:-$GOPATH/bin}
       target: /gobin
       read_only: true
     command: /gobin/dgraph  ${COVERAGE_OUTPUT} zero --trace "jaeger=http://jaeger:14268;" --raft='idx=2'
@@ -152,7 +152,7 @@ services:
     - "6080"
     volumes:
     - type: bind
-      source: $GOPATH/bin
+      source: ${DGRAPH_BIN_PATH:-$GOPATH/bin}
       target: /gobin
       read_only: true
     command: /gobin/dgraph  ${COVERAGE_OUTPUT} zero --trace "jaeger=http://jaeger:14268;" --raft='idx=3'

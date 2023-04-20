@@ -12,7 +12,7 @@ services:
     - 9080
     volumes:
     - type: bind
-      source: $GOPATH/bin
+      source: ${DGRAPH_BIN_PATH:-$GOPATH/bin}
       target: /gobin
       read_only: true
     command: /gobin/dgraph  ${COVERAGE_OUTPUT} alpha --my=alpha1:7080 --zero=zero1:5080
@@ -30,7 +30,7 @@ services:
     - 9080
     volumes:
     - type: bind
-      source: $GOPATH/bin
+      source: ${DGRAPH_BIN_PATH:-$GOPATH/bin}
       target: /gobin
       read_only: true
     command: /gobin/dgraph  ${COVERAGE_OUTPUT} alpha --my=alpha2:7080 --zero=zero1:5080
@@ -48,7 +48,7 @@ services:
     - 9080
     volumes:
     - type: bind
-      source: $GOPATH/bin
+      source: ${DGRAPH_BIN_PATH:-$GOPATH/bin}
       target: /gobin
       read_only: true
     command: /gobin/dgraph  ${COVERAGE_OUTPUT} alpha --my=alpha3:7080 --zero=zero1:5080
@@ -64,7 +64,7 @@ services:
     - 6080
     volumes:
     - type: bind
-      source: $GOPATH/bin
+      source: ${DGRAPH_BIN_PATH:-$GOPATH/bin}
       target: /gobin
       read_only: true
     command: /gobin/dgraph  ${COVERAGE_OUTPUT} zero --raft="idx=1;" --my=zero1:5080 --replicas=1 --logtostderr

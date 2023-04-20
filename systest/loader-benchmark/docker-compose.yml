@@ -13,7 +13,7 @@ services:
       cluster: test
     volumes:
       - type: bind
-        source: $GOPATH/bin
+        source: ${DGRAPH_BIN_PATH:-$GOPATH/bin}
         target: /gobin
         read_only: true
     command: /gobin/dgraph ${COVERAGE_OUTPUT} zero -o 100 --my=zero1:5180 --logtostderr --bindall
@@ -24,7 +24,7 @@ services:
     working_dir: /data/dg1
     volumes:
       - type: bind
-        source: $GOPATH/bin
+        source: ${DGRAPH_BIN_PATH:-$GOPATH/bin}
         target: /gobin
         read_only: true
       - type: volume

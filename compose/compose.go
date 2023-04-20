@@ -176,7 +176,7 @@ func initService(basename string, idx, grpcPort int) service {
 	if opts.LocalBin {
 		svc.Volumes = append(svc.Volumes, volume{
 			Type:     "bind",
-			Source:   "$GOPATH/bin",
+			Source:   "${DGRAPH_BIN_PATH:-$GOPATH/bin}",
 			Target:   "/gobin",
 			ReadOnly: true,
 		})

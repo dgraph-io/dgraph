@@ -17,7 +17,7 @@ services:
     - 9180:9180
     volumes:
     - type: bind
-      source: $GOPATH/bin
+      source: ${DGRAPH_BIN_PATH:-$GOPATH/bin}
       target: /gobin
       read_only: true
     - type: bind
@@ -42,7 +42,7 @@ services:
     - 6180:6180
     volumes:
     - type: bind
-      source: $GOPATH/bin
+      source: ${DGRAPH_BIN_PATH:-$GOPATH/bin}
       target: /gobin
       read_only: true
     command: /gobin/dgraph  ${COVERAGE_OUTPUT} zero -o 100 --raft="idx=1;" --my=zero1:5180 --logtostderr -v=2

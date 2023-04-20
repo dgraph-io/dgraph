@@ -18,7 +18,7 @@ services:
     - "9080"
     volumes:
     - type: bind
-      source: $GOPATH/bin
+      source: ${DGRAPH_BIN_PATH:-$GOPATH/bin}
       target: /gobin
       read_only: true
     command:
@@ -42,7 +42,7 @@ services:
     - "9080"
     volumes:
     - type: bind
-      source: $GOPATH/bin
+      source: ${DGRAPH_BIN_PATH:-$GOPATH/bin}
       target: /gobin
       read_only: true
     command: /gobin/dgraph  ${COVERAGE_OUTPUT}  alpha   --my=alpha2_backup_clust_ha:7080  --zero=zero1_backup_clust_ha:5080,zero2_backup_clust_ha:5080,zero3_backup_clust_ha:5080 --logtostderr -v=2  --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
@@ -61,7 +61,7 @@ services:
     - "9080"
     volumes:
     - type: bind
-      source: $GOPATH/bin
+      source: ${DGRAPH_BIN_PATH:-$GOPATH/bin}
       target: /gobin
       read_only: true
     command: /gobin/dgraph  ${COVERAGE_OUTPUT}  alpha   --my=alpha3_backup_clust_ha:7080  --zero=zero1_backup_clust_ha:5080,zero2_backup_clust_ha:5080,zero3_backup_clust_ha:5080 --logtostderr -v=2  --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
@@ -80,7 +80,7 @@ services:
     - "6080"
     volumes:
     - type: bind
-      source: $GOPATH/bin
+      source: ${DGRAPH_BIN_PATH:-$GOPATH/bin}
       target: /gobin
       read_only: true
     command: /gobin/dgraph  ${COVERAGE_OUTPUT} zero --raft "idx=1;" --my=zero1_backup_clust_ha:5080 --replicas=3 --logtostderr -v=2 --bindall
@@ -98,7 +98,7 @@ services:
       service: zero
     volumes:
     - type: bind
-      source: $GOPATH/bin
+      source: ${DGRAPH_BIN_PATH:-$GOPATH/bin}
       target: /gobin
       read_only: true
     command: /gobin/dgraph  ${COVERAGE_OUTPUT} zero --raft "idx=2;" --my=zero2_backup_clust_ha:5080 --replicas=3 --logtostderr -v=2 --bindall  --peer=zero1_backup_clust_ha:5080
@@ -116,7 +116,7 @@ services:
       service: zero
     volumes:
     - type: bind
-      source: $GOPATH/bin
+      source: ${DGRAPH_BIN_PATH:-$GOPATH/bin}
       target: /gobin
       read_only: true
     command: /gobin/dgraph  ${COVERAGE_OUTPUT} zero --raft "idx=3;" --my=zero3_backup_clust_ha:5080 --replicas=3 --logtostderr -v=2 --bindall  --peer=zero1_backup_clust_ha:5080
@@ -138,7 +138,7 @@ services:
     - "9080"
     volumes:
     - type: bind
-      source: $GOPATH/bin
+      source: ${DGRAPH_BIN_PATH:-$GOPATH/bin}
       target: /gobin
       read_only: true
     command:
@@ -162,7 +162,7 @@ services:
     - "9080"
     volumes:
     - type: bind
-      source: $GOPATH/bin
+      source: ${DGRAPH_BIN_PATH:-$GOPATH/bin}
       target: /gobin
       read_only: true
     command: /gobin/dgraph  ${COVERAGE_OUTPUT}  alpha   --my=alpha5_restore_clust_ha:7080  --zero=zero4_restore_clust_ha:5080,zero5_restore_clust_ha:5080,zero6_restore_clust_ha:5080 --logtostderr -v=2  --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
@@ -181,7 +181,7 @@ services:
     - "9080"
     volumes:
     - type: bind
-      source: $GOPATH/bin
+      source: ${DGRAPH_BIN_PATH:-$GOPATH/bin}
       target: /gobin
       read_only: true
     command: /gobin/dgraph  ${COVERAGE_OUTPUT}  alpha   --my=alpha6_restore_clust_ha:7080  --zero=zero4_restore_clust_ha:5080,zero5_restore_clust_ha:5080,zero6_restore_clust_ha:5080 --logtostderr -v=2  --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
@@ -200,7 +200,7 @@ services:
     - "6080"
     volumes:
     - type: bind
-      source: $GOPATH/bin
+      source: ${DGRAPH_BIN_PATH:-$GOPATH/bin}
       target: /gobin
       read_only: true
     command: /gobin/dgraph  ${COVERAGE_OUTPUT} zero --raft "idx=1;" --my=zero4_restore_clust_ha:5080 --replicas=3 --logtostderr -v=2 --bindall
@@ -218,7 +218,7 @@ services:
       service: zero
     volumes:
       - type: bind
-        source: $GOPATH/bin
+        source: ${DGRAPH_BIN_PATH:-$GOPATH/bin}
         target: /gobin
         read_only: true
     command: /gobin/dgraph  ${COVERAGE_OUTPUT} zero --raft "idx=2;" --my=zero5_restore_clust_ha:5080 --replicas=3 --logtostderr -v=2 --bindall  --peer=zero4_restore_clust_ha:5080
@@ -236,7 +236,7 @@ services:
       service: zero
     volumes:
       - type: bind
-        source: $GOPATH/bin
+        source: ${DGRAPH_BIN_PATH:-$GOPATH/bin}
         target: /gobin
         read_only: true
     command: /gobin/dgraph  ${COVERAGE_OUTPUT} zero --raft "idx=3;" --my=zero6_restore_clust_ha:5080 --replicas=3 --logtostderr -v=2 --bindall  --peer=zero4_restore_clust_ha:5080
@@ -257,7 +257,7 @@ services:
     - "6080"
     volumes:
     - type: bind
-      source: $GOPATH/bin
+      source: ${DGRAPH_BIN_PATH:-$GOPATH/bin}
       target: /gobin
       read_only: true
     command: /gobin/dgraph  ${COVERAGE_OUTPUT} zero --raft "idx=1;" --my=zero7_backup_clust_non_ha:5080 --replicas=1 --logtostderr -v=2 --bindall
@@ -277,7 +277,7 @@ services:
     - "9080"
     volumes:
     - type: bind
-      source: $GOPATH/bin
+      source: ${DGRAPH_BIN_PATH:-$GOPATH/bin}
       target: /gobin
       read_only: true
     command:
@@ -303,7 +303,7 @@ services:
     - "6080"
     volumes:
     - type: bind
-      source: $GOPATH/bin
+      source: ${DGRAPH_BIN_PATH:-$GOPATH/bin}
       target: /gobin
       read_only: true
     command: /gobin/dgraph  ${COVERAGE_OUTPUT} zero --raft "idx=1;" --my=zero8_restore_clust_non_ha:5080 --replicas=1 --logtostderr -v=2 --bindall
@@ -323,7 +323,7 @@ services:
     - "9080"
     volumes:
     - type: bind
-      source: $GOPATH/bin
+      source: ${DGRAPH_BIN_PATH:-$GOPATH/bin}
       target: /gobin
       read_only: true
     command:

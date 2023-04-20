@@ -19,7 +19,7 @@ services:
     - "6080"
     volumes:
     - type: bind
-      source: $GOPATH/bin
+      source: ${DGRAPH_BIN_PATH:-$GOPATH/bin}
       target: /gobin
       read_only: true
     command: /gobin/dgraph zero --raft='idx=1' --my=zero1:5080 --logtostderr -v=2
