@@ -28,7 +28,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
@@ -51,11 +50,8 @@ var (
 
 func TestBackupHAClust(t *testing.T) {
 	//TODO: Polling for health-checks with a 1sec wait for 100 times
-	for i := 1; i <= 100; i++ {
-		if err := testutil.CheckHealthContainer(testutil.ContainerAddr("alpha1", 8080)); err == nil {
-			break
-		}
-		time.Sleep(1 * time.Second)
+	if err := testutil.CheckHealthContainer(testutil.ContainerAddr("alpha1", 8080)); err != nil {
+		require.NoError(t, err, "alpha1 did not pass health check")
 	}
 
 	backupRestoreTest(t, testutil.SockAddr, testutil.SockAddrAlpha4Http,

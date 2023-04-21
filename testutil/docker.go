@@ -293,7 +293,7 @@ func CheckHealthContainer(socketAddrHttp string) error {
 	var err error
 	var resp *http.Response
 	url := "http://" + socketAddrHttp + "/health"
-	for i := 0; i < 30; i++ {
+	for i := 0; i < 100; i++ {
 		resp, err = http.Get(url)
 		if err == nil && resp.StatusCode == http.StatusOK {
 			return nil
