@@ -50,12 +50,12 @@ var (
 )
 
 func TestBackupHAClust(t *testing.T) {
-	// check health of alpha1
-	for i := 1; i <= 50; i++ {
+	//TODO: Polling for health-checks with a 1sec wait for 100 times
+	for i := 1; i <= 100; i++ {
 		if err := testutil.CheckHealthContainer(testutil.ContainerAddr("alpha1", 8080)); err == nil {
 			break
 		}
-		time.Sleep(2 * time.Second)
+		time.Sleep(1 * time.Second)
 	}
 
 	backupRestoreTest(t, testutil.SockAddr, testutil.SockAddrAlpha4Http,
