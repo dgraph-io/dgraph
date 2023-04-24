@@ -76,6 +76,53 @@ type graphQLResponse struct {
 	Extensions map[string]interface{} `json:"extensions,omitempty"`
 }
 
+func (hc *HTTPClient) LoginNSWithToken(user, password string, ns uint64, token string) error {
+	q := `mutation login($userId: String, $password: String, $namespace: Int, $refreshToken: String) {
+		login(userId: $userId, password: $password, namespace: $namespace, refreshToken: $refreshToken) {
+			response {
+				accessJWT
+				refreshJWT
+			}
+		}
+	}`
+	params := GraphQLParams{
+		Query: q,
+		Variables: map[string]interface{}{
+			"userId":    DefaultUser,
+			"password":  DefaultPassword,
+			"namespace": ns,
+			"refreshToken": token,
+		},
+	}
+
+	resp, err := hc.RunGraphqlQuery(params, true)
+	if err != nil {
+		return err
+	}
+	var r struct {
+		Login struct {
+			Response struct {
+				AccessJWT  string
+				RefreshJwt string
+			}
+		}
+	}
+	if err := json.Unmarshal(resp, &r); err != nil {
+		return errors.Wrap(err, "error unmarshalling response into object")
+	}
+	if r.Login.Response.AccessJWT == "" {
+		return errors.Errorf("no access JWT found in the response")
+	}
+
+	hc.HttpToken = &HttpToken{
+		UserId:       user,
+		Password:     password,
+		AccessJwt:    r.Login.Response.AccessJWT,
+		RefreshToken: r.Login.Response.RefreshJwt,
+	}
+	return nil
+}
+
 func (hc *HTTPClient) LoginIntoNamespace(user, password string, ns uint64) error {
 	q := `mutation login($userId: String, $password: String, $namespace: Int) {
 		login(userId: $userId, password: $password, namespace: $namespace) {
@@ -280,8 +327,8 @@ func HttpLogin(params *LoginParams) (*HttpToken, error) {
 	}, nil
 }
 
-func (hc *HTTPClient) MakeGraphqlRequest(params GraphQLParams, admin bool) ([]byte, error)  {
-	_, err := hc.RunGraphqlQuery(params, admin)
+func (hc *HTTPClient) MakeGraphqlRequest(params GraphQLParams, admin bool) (*GraphQLResponse, error) {
+	_, err := hc.MakeGQLRequestWithAccessJwt(&params, hc.AccessJwt)
 	if err != nil {
 		return nil, err
 	}
@@ -295,7 +342,47 @@ func (hc *HTTPClient) MakeGraphqlRequest(params GraphQLParams, admin bool) ([]by
 	hc.AccessJwt = newtoken.AccessJwt
 	hc.RefreshToken = newtoken.RefreshToken
 
-	return hc.RunGraphqlQuery(params, admin)
+	return hc.MakeGQLRequestWithAccessJwt(&params, hc.AccessJwt)
+}
+
+func (hc *HTTPClient) MakeGQLRequestWithAccessJwt(params *GraphQLParams, accessToken string) (*GraphQLResponse, error) {
+	b, err := json.Marshal(params)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, hc.adminURL, bytes.NewBuffer(b))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if accessToken != "" {
+		req.Header.Set("X-Dgraph-AccessToken", accessToken)
+	}
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			glog.Warningf("error closing body: %v", err)
+		}
+	}()
+
+	b, err = io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var gqlResp GraphQLResponse
+	err = json.Unmarshal(b, &gqlResp)
+	if err != nil {
+		return nil, err
+	}
+
+	return &gqlResp, nil
 }
 
 // Backup creates a backup of dgraph at a given path
