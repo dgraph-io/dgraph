@@ -791,19 +791,13 @@ func downloadDataFiles() {
 		fmt.Print("Skipping downloading of resources\n")
 		return
 	}
-	if *tmp == "" {
-		*tmp = os.TempDir()
-	}
-	x.Check(testutil.MakeDirEmpty([]string{*tmp}))
 	for fname, link := range datafiles {
 		cmd := exec.Command("wget", "-O", fname, link)
 		cmd.Dir = *tmp
 
 		if out, err := cmd.CombinedOutput(); err != nil {
 			fmt.Printf("Error %v /n", err)
-			str := string(out)
-			log.Println("error downloading a file: ", str)
-			log.Panic("error downloading required load test files")
+			log.Panicf("error downloading a file: %s", string(out))
 		}
 	}
 }
@@ -813,11 +807,6 @@ func downloadLDBCFiles() {
 		fmt.Print("Skipping downloading of resources\n")
 		return
 	}
-	if *tmp == "" {
-		*tmp = os.TempDir() + "/ldbcData"
-	}
-
-	x.Check(testutil.MakeDirEmpty([]string{*tmp}))
 
 	for _, name := range rdfFileNames {
 		filepath := baseUrl + name + suffix
@@ -835,9 +824,7 @@ func downloadLDBCFiles() {
 			cmd.Dir = *tmp
 			if out, err := cmd.CombinedOutput(); err != nil {
 				fmt.Printf("Error %v", err)
-				str := string(out)
-				log.Println("error downloading a file: ", str)
-				log.Panic("error downloading required ldbc test files")
+				log.Panicf("error downloading a file: %s", string(out))
 			}
 			fmt.Printf("Downloaded %s to %s in %s \n", fname, *tmp, time.Since(start))
 		}(fname, link, &wg)
@@ -1007,10 +994,26 @@ func run() error {
 	go func() {
 		defer close(testCh)
 		valid := getPackages()
-		if testSuiteContains("load") || testSuiteContains("all") {
+		if testSuiteContains("load") {
+			if *tmp == "" {
+				*tmp = os.TempDir()
+			}
+			x.Check(testutil.MakeDirEmpty([]string{*tmp}))
 			downloadDataFiles()
 		}
-		if testSuiteContains("ldbc") || testSuiteContains("all") {
+		if testSuiteContains("ldbc") {
+			if *tmp == "" {
+				*tmp = os.TempDir() + "/ldbcData"
+			}
+			x.Check(testutil.MakeDirEmpty([]string{*tmp}))
+			downloadLDBCFiles()
+		}
+		if testSuiteContains("all") {
+			if *tmp == "" {
+				*tmp = os.TempDir() + "/ldbcData"
+			}
+			x.Check(testutil.MakeDirEmpty([]string{*tmp}))
+			downloadDataFiles()
 			downloadLDBCFiles()
 		}
 		for i, task := range valid {
