@@ -334,7 +334,7 @@ services:
         /gobin/dgraph  ${COVERAGE_OUTPUT}  alpha   --my=alpha8_restore_clust_non_ha:7080  --zero=zero8_restore_clust_non_ha:5080 --logtostderr -v=2  --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
 
   nfs:
-    image: itsthenetwork/nfs-server-alpine:${NFS_SERVER_IMAGE_ARCH:-latest}
+    image: itsthenetwork/nfs-server-alpine:${NFS_SERVER_IMAGE_ARCH:-12}
     restart: unless-stopped
     privileged: true
 
