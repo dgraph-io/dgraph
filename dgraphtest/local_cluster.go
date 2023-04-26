@@ -103,6 +103,7 @@ func (c *LocalCluster) init() error {
 		return err
 	}
 	c.tempBinDir, err = os.MkdirTemp("", c.conf.prefix)
+	log.Printf("[INFO] tempBinDir is [%v]", c.tempBinDir)
 	if err != nil {
 		return errors.Wrap(err, "error while creating temp dir")
 	}
@@ -111,6 +112,7 @@ func (c *LocalCluster) init() error {
 	}
 
 	for _, vol := range c.conf.volumes {
+		log.Printf("[INFO] volume created is [%v]", vol)
 		if err := c.createVolume(vol); err != nil {
 			return err
 		}

@@ -1,76 +1,19 @@
 package dgraphtest
 
 import (
-	"bytes"
-	"io/ioutil"
-	"log"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"golang.org/x/crypto/ssh"
 )
 
-func NewRemoteCluster(conf ClusterConfig) (*LocalCluster, error) {
-	c := &LocalCluster{conf: conf}
-	if err := c.init(); err != nil {
-		c.Cleanup()
-		return nil, err
+func RunPerfTest(b *testing.B, conf interface{}, perfTest func(cluster interface{}, b *testing.B)) {
+	if conf == nil {
+		perfTest(nil, b)
+		return
 	}
-
-	return c, nil
-}
-
-var defaultClusterConfig ClusterConfig
-
-func RunCmdInResource(cmd string, resources ResourceDetails) error {
-	// ssh into the client and set up the client
-	pemBytes, err := ioutil.ReadFile(resources.Keys())
-	if err != nil {
-		log.Panic(err)
-	}
-	signer, err := ssh.ParsePrivateKey(pemBytes)
-	if err != nil {
-		log.Panicf("parse key failed:%v", err)
-	}
-	config := &ssh.ClientConfig{
-		User:            "ubuntu",
-		Auth:            []ssh.AuthMethod{ssh.PublicKeys(signer)},
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-	}
-
-	log.Printf("Dialing %s\n", resources.IP())
-
-	conn, err := ssh.Dial("tcp", resources.IP()+":22", config)
-	if err != nil {
-		log.Panicf("Failed to dial: %s\n", err)
-	}
-	defer conn.Close()
-	log.Printf("Successfully connected to %s\n", conn.RemoteAddr())
-
-	session, err := conn.NewSession()
-	if err != nil {
-		log.Panicf("session failed:%v", err)
-	}
-	defer session.Close()
-
-	var stdoutBuf, stderrBuf bytes.Buffer
-	session.Stdout = &stdoutBuf
-	session.Stderr = &stderrBuf
-
-	log.Println("Running command ", cmd)
-	if err := session.Run(cmd); err != nil {
-		log.Panicf("command execution failed: %v, stderr: %v", err, stderrBuf.String())
-	}
-
-	log.Printf(">%s", strings.TrimSpace(stdoutBuf.String()))
-	return nil
-}
-
-func RunPerfTest(b *testing.B, conf ClusterConfig, perfTest func(cluster Cluster, b *testing.B)) {
-	cluster, err := NewLocalCluster(conf)
+	cluster, err := NewLocalCluster(conf.(ClusterConfig))
 	require.NoError(b, err)
 	defer cluster.Cleanup()
-	cluster.Start()
+	require.NoError(b, cluster.Start())
 	perfTest(cluster, b)
 }

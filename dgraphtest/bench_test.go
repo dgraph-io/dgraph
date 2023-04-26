@@ -3,20 +3,13 @@ package dgraphtest
 import (
 	"context"
 	"fmt"
-	"os"
-	"os/exec"
-	"strconv"
 	"testing"
 	"time"
 
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
-	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v2"
 )
-
-var runType string
 
 type TestCases struct {
 	Tag   string `yaml:"tag"`
@@ -25,44 +18,6 @@ type TestCases struct {
 }
 
 var TestClusterMap map[string]ClusterConfig
-
-func BenchmarkLDBCAllQueries(b *testing.B) {
-	clusterConf := NewClusterConfig().WithNumAlphas(1).WithNumZeros(1)
-	RunPerfTest(b, clusterConf, func(cluster Cluster, b *testing.B) {
-
-		// Write benchmark here.
-		dg, err := cluster.Client()
-		if err != nil {
-			b.Fatalf("Error while getting a dgraph client: %v", err)
-		}
-
-		yfile, _ := os.ReadFile("../systest/ldbc/test_cases.yaml")
-
-		tc := make(map[string]TestCases)
-
-		err = yaml.Unmarshal(yfile, &tc)
-
-		if err != nil {
-			b.Fatalf("Error while greading test cases yaml: %v", err)
-		}
-
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-
-		for i := 0; i < b.N; i++ {
-			b.StartTimer()
-			for _, tt := range tc {
-				_, err := dg.NewTxn().Query(ctx, tt.Query)
-				require.NoError(b, err)
-				b.StopTimer()
-				// testutil.CompareJSON(b, tt.Resp, string(resp.Json))
-				if ctx.Err() == context.DeadlineExceeded {
-					b.Fatal("aborting test due to query timeout")
-				}
-			}
-		}
-		cancel()
-	})
-}
 
 func setSchema(schema string, client *dgo.Dgraph) {
 	var err error
@@ -77,11 +32,14 @@ func setSchema(schema string, client *dgo.Dgraph) {
 }
 
 func BenchmarkSimpleMutationQuery(b *testing.B) {
-	clusterConf := NewClusterConfig().WithNumAlphas(1).WithNumZeros(1)
-	RunPerfTest(b, clusterConf, func(cluster Cluster, b *testing.B) {
 
+	clusterConf := PerfTest["BenchmarkSimpleMutationQuery"]
+	RunPerfTest(b, clusterConf, func(c interface{}, b *testing.B) {
+
+		cluster := c.(Cluster)
 		// Write benchmark here.
-		dg, err := cluster.Client()
+		dg, cleanup, err := cluster.Client()
+		defer cleanup()
 		if err != nil {
 			b.Fatalf("Error while getting a dgraph client: %v", err)
 		}
@@ -92,7 +50,7 @@ func BenchmarkSimpleMutationQuery(b *testing.B) {
 
 		schema := `name: string @index(exact).`
 
-		setSchema(schema, dg)
+		setSchema(schema, dg.Dgraph)
 
 		m1 := `
 		_:u1 <name> "Ab Bc" .
@@ -109,13 +67,14 @@ func BenchmarkSimpleMutationQuery(b *testing.B) {
 
 		var resp *api.Response
 
+		_, err = dg.NewTxn().Mutate(ctx, &api.Mutation{
+			CommitNow: true,
+			SetNquads: []byte(m1),
+		})
+		require.NoError(b, err)
+
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			_, err = dg.NewTxn().Mutate(ctx, &api.Mutation{
-				CommitNow: true,
-				SetNquads: []byte(m1),
-			})
-			require.NoError(b, err)
 			resp, err = dg.NewTxn().Query(ctx, q1)
 			require.NoError(b, err)
 		}
@@ -144,73 +103,39 @@ func FibonacciNonRecursive(n int) int {
 	return b
 }
 
+// TODO(anurag): Remove this test once we have are sure that the testing framework is working.
+// These are toy tests to test framework and have light weight reproducible performance tests.
 func BenchmarkFibonacciRecursive(b *testing.B) {
-	clusterConf := NewClusterConfig().WithNumAlphas(1).WithNumZeros(1)
-	RunPerfTest(b, clusterConf, func(cluster Cluster, b *testing.B) {
+	var ans int
+	RunPerfTest(b, nil, func(c interface{}, b *testing.B) {
 		var res int
 		time.Sleep(5 * time.Second)
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			res = FibonacciRecursive(20)
 		}
-		fmt.Println(res)
+		ans = res
 	})
+	fmt.Println("Res: ", ans)
 }
 
+// TODO(anurag): Remove this test once we have are sure that the testing framework is working.
+// These are toy tests to test framework and have light weight reproducible performance tests.
 func BenchmarkFibonacciNonRecursive(b *testing.B) {
-	clusterConf := NewClusterConfig()
-	RunPerfTest(b, clusterConf, func(cluster Cluster, b *testing.B) {
+	var ans int
+	RunPerfTest(b, nil, func(cluster interface{}, b *testing.B) {
 		var res int
 		time.Sleep(5 * time.Second)
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			res = FibonacciNonRecursive(20)
 		}
-		fmt.Println(res)
+		ans = res
 	})
-
-}
-
-func BenchmarkBulkoad(b *testing.B) {
-	var args []string
-	var schemaFile string
-	var rdfFile string
-	var res []byte
-	args = append(args, "bulk",
-		"-f", rdfFile,
-		"-s", schemaFile,
-		"--http", "localhost:8000",
-		"--reduce_shards=1",
-		"--map_shards=1",
-		"--store_xids=true",
-		"--zero", testutil.SockAddrZero,
-		"--force-namespace", strconv.FormatUint(0, 10))
-
-	bulkCmd := exec.Command(testutil.DgraphBinaryPath(), args...)
-	fmt.Printf("Running %s\n", bulkCmd)
-
-	for i := 0; i < b.N; i++ {
-		b.StopTimer()
-		if err := testutil.MakeDirEmpty([]string{"out/0"}); err != nil {
-			os.Exit(1)
-		}
-		bulkCmd = exec.Command(testutil.DgraphBinaryPath(), args...)
-		b.StartTimer()
-		out, err := bulkCmd.CombinedOutput()
-		b.StopTimer()
-		if err != nil {
-			b.Fatal(err)
-		}
-		res = out
-	}
-	fmt.Printf("Finished bulk load. Output \n%s\n", res)
+	fmt.Println("Res: ", ans)
 
 }
 
 func TestMain(m *testing.M) {
-
-	TestClusterMap = make(map[string]ClusterConfig)
-	TestClusterMap["BenchmarkLDBCAllQueries"] = NewClusterConfig().WithNumAlphas(1).WithNumZeros(1)
 	m.Run()
-
 }

@@ -92,3 +92,15 @@ func (cc ClusterConfig) WithAlphaVolume(volname, dir string) ClusterConfig {
 	cc.volumes[dir] = volname
 	return cc
 }
+
+type DgraphPerf struct {
+	name        string
+	clusterConf ClusterConfig
+}
+
+func NewDgraphPerf(name string, clusterConf ClusterConfig) DgraphPerf {
+	return DgraphPerf{
+		name:        name,
+		clusterConf: clusterConf,
+	}
+}
