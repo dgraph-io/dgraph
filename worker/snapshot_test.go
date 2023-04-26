@@ -36,6 +36,33 @@ import (
 	"github.com/dgraph-io/dgraph/testutil"
 )
 
+func TestDropOpTransactionEnd(t *testing.T) {
+	dg1, err := testutil.DgraphClient(testutil.SockAddr)
+	if err != nil {
+		t.Fatalf("Error while getting a dgraph client: %v", err)
+	}
+
+	txn := dg1.NewTxn()
+	mu := &api.Mutation{
+		SetNquads: []byte(fmt.Sprintf(`_:node <value> "%d" .`, 10)),
+	}
+	ctx := context.Background()
+
+	res, err := txn.Mutate(ctx, mu)
+	fmt.Println(res)
+	fmt.Println("ERR1: ", err)
+
+	time.Sleep(time.Second * 10)
+
+	require.NoError(t, dg1.Alter(context.Background(), &api.Operation{
+		DropOp: api.Operation_ALL,
+	}))
+	time.Sleep(time.Second * 10)
+
+	err = txn.Commit(ctx)
+	fmt.Println("ERR2: ", err)
+}
+
 func TestSnapshot(t *testing.T) {
 	snapshotTs := uint64(0)
 

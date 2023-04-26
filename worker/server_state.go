@@ -167,8 +167,15 @@ func (s *ServerState) Dispose() {
 	}
 }
 
+// Will return the first timestamp. Can't be read only if multiple ts.
+func (s *ServerState) GetMultipleTs(numTs uint64) uint64 {
+	tr := tsReq{readOnly: false, ch: make(chan uint64), numTs: numTs}
+	s.needTs <- tr
+	return <-tr.ch
+}
+
 func (s *ServerState) GetTimestamp(readOnly bool) uint64 {
-	tr := tsReq{readOnly: readOnly, ch: make(chan uint64)}
+	tr := tsReq{readOnly: readOnly, ch: make(chan uint64), numTs: 1}
 	s.needTs <- tr
 	return <-tr.ch
 }
@@ -210,7 +217,7 @@ func (s *ServerState) fillTimestampRequests() {
 			if r.readOnly {
 				num.ReadOnly = true
 			} else {
-				num.Val++
+				num.Val += r.numTs
 			}
 		}
 
@@ -238,7 +245,7 @@ func (s *ServerState) fillTimestampRequests() {
 				req.ch <- ts.ReadOnly
 			} else {
 				req.ch <- ts.StartId + offset
-				offset++
+				offset += req.numTs
 			}
 		}
 		x.AssertTrue(ts.StartId == 0 || ts.StartId+offset-1 == ts.EndId)
@@ -247,6 +254,7 @@ func (s *ServerState) fillTimestampRequests() {
 
 type tsReq struct {
 	readOnly bool
+	numTs    uint64
 	// A one-shot chan which we can send a txn timestamp upon.
 	ch chan uint64
 }
