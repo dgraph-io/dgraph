@@ -1425,6 +1425,9 @@ func TestQueryVarValOrderError(t *testing.T) {
 }
 
 func TestQueryVarEmptyRootOrderError(t *testing.T) {
+	// This bug was fixed in commit b256f9c6e6c68ae163eee3242518f77a6ab35fa0
+	dgraphtest.ShouldSkipTest(t, "b256f9c6e6c68ae163eee3242518f77a6ab35fa0", dc.GetVersion())
+
 	query := `
 		{
 			q(func: eq(name, "DNEinDB")) {
@@ -1440,6 +1443,9 @@ func TestQueryVarEmptyRootOrderError(t *testing.T) {
 }
 
 func TestQueryVarEmptyRootOrderChildQueryError(t *testing.T) {
+	// This bug was fixed in commit b256f9c6e6c68ae163eee3242518f77a6ab35fa0
+	dgraphtest.ShouldSkipTest(t, "b256f9c6e6c68ae163eee3242518f77a6ab35fa0", dc.GetVersion())
+
 	query := `
 		{
 			var(func: eq(name, "DNEinDB")) {

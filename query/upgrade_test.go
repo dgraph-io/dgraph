@@ -19,6 +19,7 @@
 package query
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -27,36 +28,29 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	conf := dgraphtest.NewClusterConfig().WithNumAlphas(3).WithNumZeros(3).WithReplicas(3).
-		WithACL(20 * time.Second).WithEncryption().WithVersion("0c9f60156")
+	conf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).
+		WithReplicas(1).WithACL(time.Hour).WithVersion("0c9f60156")
 	c, err := dgraphtest.NewLocalCluster(conf)
 	x.Panic(err)
 	defer c.Cleanup()
-	require.NoError(t, c.Start())
+	x.Panic(c.Start())
 
-	// setup the global Cluster var
+	dg, cleanup, err := c.Client()
+	x.Panic(err)
+	defer cleanup()
+	x.Panic(dg.LoginIntoNamespace(context.Background(), dgraphtest.DefaultUser, dgraphtest.DefaultPassword, 0))
+
+	client = dg.Dgraph
 	dc = c
-
-	// setup client
-	dg, err := c.Client()
-	if err != nil {
-		panic(err)
-	}
-	client = dg
-
-	// do mutations
 	populateCluster()
+	x.Panic(c.Upgrade("v23.0.0-beta1", dgraphtest.BackupRestore))
 
-	// upgrade
-	x.Panic(c.Upgrade("v23.0.0-beta1"))
+	dg, cleanup, err = c.Client()
+	x.Panic(err)
+	defer cleanup()
+	x.Panic(dg.LoginIntoNamespace(context.Background(), dgraphtest.DefaultUser, dgraphtest.DefaultPassword, 0))
 
-	// setup the client again
-	dg, err = c.Client()
-	if err != nil {
-		panic(err)
-	}
-	client = dg
-
-	// Run tests
+	client = dg.Dgraph
+	dc = c
 	_ = m.Run()
 }

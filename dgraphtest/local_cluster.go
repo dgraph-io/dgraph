@@ -446,7 +446,7 @@ func (c *LocalCluster) recreateContainers() error {
 }
 
 // Upgrades the cluster to the provided dgraph version
-func (c *LocalCluster) Upgrade(hc *HTTPClient, version string, strategy UpgradeStrategy) error {
+func (c *LocalCluster) Upgrade(version string, strategy UpgradeStrategy) error {
 	if version == c.conf.version {
 		return fmt.Errorf("cannot upgrade to the same version")
 	}
@@ -454,9 +454,17 @@ func (c *LocalCluster) Upgrade(hc *HTTPClient, version string, strategy UpgradeS
 	log.Printf("[INFO] upgrading the cluster from [%v] to [%v] using [%v]", c.conf.version, version, strategy)
 	switch strategy {
 	case BackupRestore:
+		hc, err := c.HTTPClient()
+		if err != nil {
+			return err
+		}
+		if err := hc.LoginIntoNamespace(DefaultUser, DefaultPassword, 0); err != nil {
+			return err
+		}
 		if err := hc.Backup(true, DefaultBackupDir); err != nil {
 			return errors.Wrap(err, "error taking backup during upgrade")
 		}
+
 		if err := c.Stop(); err != nil {
 			return err
 		}
@@ -473,6 +481,14 @@ func (c *LocalCluster) Upgrade(hc *HTTPClient, version string, strategy UpgradeS
 		var encPath string
 		if c.conf.encryption {
 			encPath = encKeyMountPath
+		}
+
+		hc, err = c.HTTPClient()
+		if err != nil {
+			return errors.Wrapf(err, "error creating HTTP client after upgrade")
+		}
+		if err := hc.LoginIntoNamespace(DefaultUser, DefaultPassword, 0); err != nil {
+			return errors.Wrapf(err, "error during login after upgrade")
 		}
 		if err := hc.Restore(c, DefaultBackupDir, "", 0, 1, encPath); err != nil {
 			return errors.Wrap(err, "error doing restore during upgrade")
