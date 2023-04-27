@@ -797,7 +797,7 @@ func downloadDataFiles() {
 
 		if out, err := cmd.CombinedOutput(); err != nil {
 			fmt.Printf("Error %v /n", err)
-			log.Panicf("error downloading a file: %s", string(out))
+			panic(fmt.Sprintf("error downloading a file: %s", string(out)))
 		}
 	}
 }
@@ -824,7 +824,7 @@ func downloadLDBCFiles() {
 			cmd.Dir = *tmp
 			if out, err := cmd.CombinedOutput(); err != nil {
 				fmt.Printf("Error %v", err)
-				log.Panicf("error downloading a file: %s", string(out))
+				panic(fmt.Sprintf("error downloading a file: %s", string(out)))
 			}
 			fmt.Printf("Downloaded %s to %s in %s \n", fname, *tmp, time.Since(start))
 		}(fname, link, &wg)
@@ -994,27 +994,21 @@ func run() error {
 	go func() {
 		defer close(testCh)
 		valid := getPackages()
-		if testSuiteContains("load") {
+		if testSuiteContains("ldbc") || testSuiteContains("all") {
+			if *tmp == "" {
+				*tmp = filepath.Join(os.TempDir(), "/ldbcData")
+			}
+			x.Check(testutil.MakeDirEmpty([]string{*tmp}))
+			if testSuiteContains("all") {
+				downloadDataFiles()
+			}
+			downloadLDBCFiles()
+		} else if testSuiteContains("load") {
 			if *tmp == "" {
 				*tmp = os.TempDir()
 			}
 			x.Check(testutil.MakeDirEmpty([]string{*tmp}))
 			downloadDataFiles()
-		}
-		if testSuiteContains("ldbc") {
-			if *tmp == "" {
-				*tmp = os.TempDir() + "/ldbcData"
-			}
-			x.Check(testutil.MakeDirEmpty([]string{*tmp}))
-			downloadLDBCFiles()
-		}
-		if testSuiteContains("all") {
-			if *tmp == "" {
-				*tmp = os.TempDir() + "/ldbcData"
-			}
-			x.Check(testutil.MakeDirEmpty([]string{*tmp}))
-			downloadDataFiles()
-			downloadLDBCFiles()
 		}
 		for i, task := range valid {
 			select {
