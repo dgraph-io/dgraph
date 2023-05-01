@@ -2,7 +2,7 @@
 
 # This gets built as part of our CD pipeline. Must be run through Makefile.
 
-FROM ubuntu:20.04 AS build
+FROM --platform=linux/amd64 ubuntu:20.04 AS build
 
 RUN mkdir /dgraph
 WORKDIR /dgraph
@@ -42,7 +42,7 @@ RUN mkdir bin && mv dgraph/dgraph bin
 
 # -------------------------------------------------------------------------------
 
-FROM ubuntu:20.04
+FROM --platform=linux/amd64 ubuntu:20.04
 LABEL maintainer="Dgraph Labs <contact@dgraph.io>"
 
 # need to remove the cache of sources lists
