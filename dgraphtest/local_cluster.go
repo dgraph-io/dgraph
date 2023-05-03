@@ -700,3 +700,8 @@ func (c *LocalCluster) containerLogs(containerID string) (io.ReadCloser, error) 
 	}
 	return rc, nil
 }
+
+// GetClusterPrefix returns the prefix of dgraph cluster
+func (c *LocalCluster) GetClusterPrefix() string {
+	return c.conf.prefix
+}

@@ -33,7 +33,8 @@ const (
 	binaryName       = "dgraph_%v"
 	zeroNameFmt      = "%v_zero%d"
 	zeroAliasNameFmt = "zero%d"
-	alphaNameFmt     = "%v_alpha%d"
+	alphaNameFmt     = "%v_alpha%d_"
+	//alphaNameFmt     = "%v_alpha%d"
 	alphaLNameFmt    = "alpha%d"
 	volNameFmt       = "%v_%v"
 
