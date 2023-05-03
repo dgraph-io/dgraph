@@ -3,6 +3,8 @@
 /coverage.out
 /dgraph-bulk-loader
 /osx-docker-gopath
+/t/bin
+/linux
 
 # fuzzing output
 dql/dql-fuzz.zip
