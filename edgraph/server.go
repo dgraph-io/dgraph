@@ -394,7 +394,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 
 	// StartTs is not needed if the predicate to be dropped lies on this server but is required
 	// if it lies on some other machine. Let's get it for safety.
-	m := &pb.Mutations{StartTs: worker.State.GetMultipleTs(2)}
+	m := &pb.Mutations{StartTs: worker.State.GetTimestamp(false)}
 	if isDropAll(op) {
 		if x.Config.BlockClusterWideDrop {
 			glog.V(2).Info("Blocked drop-all because it is not permitted.")

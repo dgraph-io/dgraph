@@ -847,12 +847,19 @@ func (l *List) Rollup(alloc *z.Allocator, readTs uint64) ([]*bpb.KV, error) {
 
 	var kvs []*bpb.KV
 	kv := MarshalPostingList(out.plist, alloc)
+	kv.Key = alloc.Copy(l.key)
+
+	isDropOp, err := x.IsDropOpKey(kv.Key)
+	if err != nil {
+		return nil, errors.Wrapf(err, "cannot read the key for in List.rollup")
+	}
+
 	kv.Version = out.newMinTs
-	if readTs != math.MaxUint64 {
+	// We can't modify the timestamp of Drop Operation as it used to calculate
+	if !isDropOp && readTs != math.MaxUint64 {
 		kv.Version += 1
 	}
 
-	kv.Key = alloc.Copy(l.key)
 	kvs = append(kvs, kv)
 
 	for startUid, plist := range out.parts {
