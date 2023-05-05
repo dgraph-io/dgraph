@@ -297,7 +297,9 @@ loop:
 		time.Sleep(waitDurBeforeRetry)
 
 		resp, err := c.AlphasHealth()
-		if err != nil {
+		if err != nil && strings.Contains(err.Error(), "the server is in draining mode") {
+			continue loop
+		} else if err != nil {
 			return err
 		}
 		for _, hr := range resp {

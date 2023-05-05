@@ -373,7 +373,7 @@ func (c *LocalCluster) containerHealthCheck(url string) error {
 
 		ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 		defer cancel()
-		for i := 0; i < 3; i++ {
+		for i := 0; i < 10; i++ {
 			if err = client.Login(ctx, DefaultUser, DefaultPassword); err == nil {
 				break
 			}
