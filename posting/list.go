@@ -831,8 +831,30 @@ func (l *List) Length(readTs, afterUid uint64) int {
 //     if someone is reading data between two timestamps.
 //
 //   - Drop operation can cause issues if they are rolled up. Since we are storing results at ts + 1,
-//     in dgraph.drop.op. If some operations were done then, they would be overwriten.
-//     This won't happen as the transactions should conflict out.
+//     in dgraph.drop.op. When we do drop op, we delete the relevant data first using a mutation.
+//     Then we write a record into the dgraph.drop.op. We use this record to figure out if a
+//     drop was performed. This helps us during backup, when we want to know if we need to
+//     read a given backup or not. A backup, which has a drop record, would render older backups
+//     unnecessary.
+//
+//     If we rollup the dgraph.drop.op, and store result on ts + 1, we would move the record. We
+//     want to see if there can be any issues in backup/restore due to this. Analysis is done for
+//     drop op, but it would be the same for drop predicate and namespace. Assume that there were
+//     two backups, at b1 and b2. We move rollup ts around to see if it can cause any issues. There
+//     can be 3 cases:
+//
+//     1. b1 < ts < b2. In this case, we would have two drop records in b2. This is okay as we don't
+//     need to read b1 anyways.
+//
+//     2. b1 = ts < b2. In this case, we would have a drop record in b1, and in b2. In this case
+//     originally we would have read both b2 and b1. However, last item in b1 is drop, so
+//     it wouldn't have any data anyways. So we don't need to read b1.
+//
+//     3. b1 < ts < ts + 1 = b2. In this case, we would have both drop drop records in b2. No issues
+//     in this case.
+//
+//     The only issue would come if a backup happened in between ts, and ts + 1. As our timestamps
+//     are integers, it's not possible. However, a bug could happen if we store the rollup at ts + k
 func (l *List) Rollup(alloc *z.Allocator, readTs uint64) ([]*bpb.KV, error) {
 	l.RLock()
 	defer l.RUnlock()
@@ -847,19 +869,12 @@ func (l *List) Rollup(alloc *z.Allocator, readTs uint64) ([]*bpb.KV, error) {
 
 	var kvs []*bpb.KV
 	kv := MarshalPostingList(out.plist, alloc)
-	kv.Key = alloc.Copy(l.key)
-
-	isDropOp, err := x.IsDropOpKey(kv.Key)
-	if err != nil {
-		return nil, errors.Wrapf(err, "cannot read the key for in List.rollup")
-	}
-
 	kv.Version = out.newMinTs
-	// We can't modify the timestamp of Drop Operation as it used to calculate
-	if !isDropOp && readTs != math.MaxUint64 {
+	if readTs != math.MaxUint64 {
 		kv.Version += 1
 	}
 
+	kv.Key = alloc.Copy(l.key)
 	kvs = append(kvs, kv)
 
 	for startUid, plist := range out.parts {
