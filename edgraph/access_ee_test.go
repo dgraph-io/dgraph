@@ -71,7 +71,6 @@ func TestValidateToken(t *testing.T) {
 }
 
 func TestGetAccessJwt(t *testing.T) {
-
 	grpLst := []acl.Group{
 		{
 			Uid:     "100",
@@ -100,8 +99,10 @@ func TestGetAccessJwt(t *testing.T) {
 		{3456789012, "user3", []string{"702", "703"}},
 	}
 
+	worker.Config.AccessJwtTtl = 20 * time.Second
 	for _, userdata := range userDataList {
-		jwtstr, _ := getAccessJwt(userdata.userId, grpLst, userdata.namespace)
+		jwtstr, err := getAccessJwt(userdata.userId, grpLst, userdata.namespace)
+		require.NoError(t, err)
 		ud, err := validateToken(jwtstr)
 		require.NoError(t, err)
 		if ud.namespace != userdata.namespace || ud.userId != userdata.userId || !sliceCompare(ud.groupIds, g) {
