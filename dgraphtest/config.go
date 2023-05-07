@@ -22,6 +22,20 @@ import (
 	"time"
 )
 
+var UpgradeCombos = [][]string{
+	// {"v20.11.3", "v23.0.0-rc1"},
+	// {"v21.03.0", "v23.0.0-rc1"},
+	{"v21.03.0-92-g0c9f60156", "v23.0.0-rc1"},
+	{"v21.03.0-98-g19f71a78a-slash", "v23.0.0-rc1"},
+	{"v21.03.0-99-g4a03c144a-slash", "v23.0.0-rc1"},
+	{"v21.03.1", "v23.0.0-rc1"},
+	{"v21.03.2", "v23.0.0-rc1"},
+	{"v21.12.0", "v23.0.0-rc1"},
+	{"v22.0.0", "v23.0.0-rc1"},
+	{"v22.0.1", "v23.0.0-rc1"},
+	{"v22.0.2", "v23.0.0-rc1"},
+}
+
 type ClusterConfig struct {
 	prefix     string
 	numAlphas  int

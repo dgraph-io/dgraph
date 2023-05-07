@@ -20,6 +20,7 @@ package query
 
 import (
 	"context"
+	"log"
 	"testing"
 	"time"
 
@@ -28,29 +29,49 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	conf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).
-		WithReplicas(1).WithACL(time.Hour).WithVersion("0c9f60156")
-	c, err := dgraphtest.NewLocalCluster(conf)
-	x.Panic(err)
-	defer c.Cleanup()
-	x.Panic(c.Start())
+	mutate := func(c dgraphtest.Cluster) {
+		dg, cleanup, err := c.Client()
+		x.Panic(err)
+		defer cleanup()
+		x.Panic(dg.LoginIntoNamespace(context.Background(), dgraphtest.DefaultUser, dgraphtest.DefaultPassword, 0))
 
-	dg, cleanup, err := c.Client()
-	x.Panic(err)
-	defer cleanup()
-	x.Panic(dg.LoginIntoNamespace(context.Background(), dgraphtest.DefaultUser, dgraphtest.DefaultPassword, 0))
+		client = dg.Dgraph
+		dc = c
+		populateCluster()
+	}
 
-	client = dg.Dgraph
-	dc = c
-	populateCluster()
-	x.Panic(c.Upgrade("v23.0.0-beta1", dgraphtest.BackupRestore))
+	query := func(c dgraphtest.Cluster) {
+		dg, cleanup, err := c.Client()
+		x.Panic(err)
+		defer cleanup()
+		x.Panic(dg.LoginIntoNamespace(context.Background(), dgraphtest.DefaultUser, dgraphtest.DefaultPassword, 0))
 
-	dg, cleanup, err = c.Client()
-	x.Panic(err)
-	defer cleanup()
-	x.Panic(dg.LoginIntoNamespace(context.Background(), dgraphtest.DefaultUser, dgraphtest.DefaultPassword, 0))
+		client = dg.Dgraph
+		dc = c
+		if m.Run() != 0 {
+			panic("tests failed")
+		}
+	}
 
-	client = dg.Dgraph
-	dc = c
-	_ = m.Run()
+	runTest := func(before, after string) {
+		conf := dgraphtest.NewClusterConfig().WithNumAlphas(3).WithNumZeros(3).
+			WithReplicas(3).WithACL(time.Hour).WithVersion(before)
+		c, err := dgraphtest.NewLocalCluster(conf)
+		x.Panic(err)
+		defer c.Cleanup()
+		x.Panic(c.Start())
+
+		hc, err := c.HTTPClient()
+		x.Panic(err)
+		x.Panic(hc.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, 0))
+
+		mutate(c)
+		x.Panic(c.Upgrade(after, dgraphtest.BackupRestore))
+		query(c)
+	}
+
+	for _, cv := range dgraphtest.UpgradeCombos {
+		log.Printf("running: backup in [%v], restore in [%v]", cv[0], cv[1])
+		runTest(cv[0], cv[1])
+	}
 }
