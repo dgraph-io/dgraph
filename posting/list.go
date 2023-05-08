@@ -837,18 +837,19 @@ func (l *List) Length(readTs, afterUid uint64) int {
 //     read a given backup or not. A backup, which has a drop record, would render older backups
 //     unnecessary.
 //
-//     If we rollup the dgraph.drop.op, and store result on ts + 1, we would move the record. We
-//     want to see if there can be any issues in backup/restore due to this. Analysis is done for
+//     If we rollup the dgraph.drop.op, and store result on ts + 1, which moves the original record.
+//     We want to see if there can be any issues in backup/restore due to this. To ensure that there
+//     is no issue in writing on ts + 1, we do the following analysis. Analysis is done for
 //     drop op, but it would be the same for drop predicate and namespace. Assume that there were
 //     two backups, at b1 and b2. We move rollup ts around to see if it can cause any issues. There
 //     can be 3 cases:
 //
-//     1. b1 < ts < b2. In this case, we would have two drop records in b2. This is okay as we don't
-//     need to read b1 anyways.
+//     1. b1 < ts < b2. In this case, we would have a drop record in b2. This is the same behaviour
+//     as we would have writen on ts.
 //
-//     2. b1 = ts < b2. In this case, we would have a drop record in b1, and in b2. In this case
-//     originally we would have read both b2 and b1. However, last item in b1 is drop, so
-//     it wouldn't have any data anyways. So we don't need to read b1.
+//     2. b1 = ts < b2. In this case, we would have a drop record in b1, and in b2. Originally, only
+//     b1 would have a drop record. With this new approach, b2 would also have a drop record. This
+//     is okay because last entry in b1 is drop, so it wouldn't have any data to be applied.
 //
 //     3. b1 < ts < ts + 1 = b2. In this case, we would have both drop drop records in b2. No issues
 //     in this case.
