@@ -4,6 +4,114 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project will adhere to [Semantic Versioning](https://semver.org) starting `v22.0.0`.
 
+## [v23.0.0] - 2023-05-08
+[v23.0.0]: https://github.com/dgraph-io/dgraph/compare/v22.0.2...v23.0.0
+
+### Added
+
+- **GraphQL**
+    - fix(GraphQL): pass on HTTP request headers for subscriptions (https://github.com/dgraph-io/dgraph/pull/8574)
+
+- **Core Dgraph**
+    - feat(metrics): add badger metrics (#8034) (https://github.com/dgraph-io/dgraph/pull/8737)
+    - feat(restore): introduce incremental restore (#7942) (https://github.com/dgraph-io/dgraph/pull/8624)
+    - chore(debug): add `only-summary` flag in `dgraph debug` to show LSM tree and namespace size (https://github.com/dgraph-io/dgraph/pull/8516)
+    - feat(cloud): add `shared-instance` flag in limit superflag in alpha (https://github.com/dgraph-io/dgraph/pull/8625)
+    - chore(deps): update prometheus dependency, adds new metrics (https://github.com/dgraph-io/dgraph/pull/8655)
+    - feat(cdc): add superflag `tls` to enable TLS without CA or certs (https://github.com/dgraph-io/dgraph/pull/8564)
+    - feat(multitenancy): namespace aware drop data (https://github.com/dgraph-io/dgraph/pull/8511)
+
+### Fixed
+
+- **GragphQL**
+    - fix(GraphQL): nested Auth Rules not working properly (https://github.com/dgraph-io/dgraph/pull/8571)
+
+- **Core Dgraph**
+    - Fix wal replay issue during rollup (https://github.com/dgraph-io/dgraph/pull/8774)
+    - security(logging): fix aes implementation in audit logging (https://github.com/dgraph-io/dgraph/pull/8323)
+    - chore(worker): unify mapper receiver names (https://github.com/dgraph-io/dgraph/pull/8740)
+    - fix(dql): fix panic in parsing of regexp (https://github.com/dgraph-io/dgraph/pull/8739)
+    - fix(Query): Do an error check before bubbling up nil error (https://github.com/dgraph-io/dgraph/pull/8769)
+    - chore: replace global index with local one & fix typos (https://github.com/dgraph-io/dgraph/pull/8719)
+    - chore(logs): add logs to track dropped proposals (https://github.com/dgraph-io/dgraph/pull/8568)
+    - fix(debug): check length of wal entry before parsing (https://github.com/dgraph-io/dgraph/pull/8560)
+    - opt(schema): optimize populateSchema() (https://github.com/dgraph-io/dgraph/pull/8565)
+    - fix(zero): fix update membership to make bulk tablet proposal instead of multiple small (https://github.com/dgraph-io/dgraph/pull/8573)
+    - fix(groot): do not upsert groot for all namespaces on restart (https://github.com/dgraph-io/dgraph/pull/8561)
+    - fix(restore): set kv version to restoreTs for all keys (https://github.com/dgraph-io/dgraph/pull/8563)
+    - fix(probe): do not contend for lock in lazy load (https://github.com/dgraph-io/dgraph/pull/8566)
+    - fix(core): fixed infinite loop in CommitToDisk (https://github.com/dgraph-io/dgraph/pull/8614)
+    - fix(proposals): incremental proposal key for zero proposals (https://github.com/dgraph-io/dgraph/pull/8567)
+    - fix(zero): fix waiting for random time while rate limiting (https://github.com/dgraph-io/dgraph/pull/8656)
+    - chore(deps): upgrade badger (https://github.com/dgraph-io/dgraph/pull/8654, https://github.com/dgraph-io/dgraph/pull/8658)
+    - opt(schema): load schema and types using Stream framework  (https://github.com/dgraph-io/dgraph/pull/8562)
+    - fix(backup): use StreamWriter instead of KVLoader during backup restore (https://github.com/dgraph-io/dgraph/pull/8510)
+    - fix(audit): fixing audit logs for websocket connections (https://github.com/dgraph-io/dgraph/pull/8627)
+    - fix(restore): consider the banned namespaces while bumping (https://github.com/dgraph-io/dgraph/pull/8559)
+    - fix(backup): create directory before writing backup (https://github.com/dgraph-io/dgraph/pull/8638)
+
+- **Test**
+    - chore(tests): add upgrade tests in query package (https://github.com/dgraph-io/dgraph/pull/8750)
+    - simplify test setup in query package (https://github.com/dgraph-io/dgraph/pull/8782)
+    - add a test for incremental restore (https://github.com/dgraph-io/dgraph/pull/8754)
+    - chore(tests): run tests in query package against dgraph cloud (https://github.com/dgraph-io/dgraph/pull/8726)
+    - fix the backup test cluster compose file (https://github.com/dgraph-io/dgraph/pull/8775)
+    - cleanup tests to reduce the scope of err var (https://github.com/dgraph-io/dgraph/pull/8771)
+    - use t.TempDir() for using a temp dir in tests (https://github.com/dgraph-io/dgraph/pull/8772)
+    - fix(test): clan cruft from test run (https://github.com/dgraph-io/dgraph/pull/8348)
+    - chore(tests): avoid calling os.Exit in TestMain (https://github.com/dgraph-io/dgraph/pull/8765)
+    - chore: fix linter issue on main (https://github.com/dgraph-io/dgraph/pull/8749)
+    - recreate the context variable for parallel test (https://github.com/dgraph-io/dgraph/pull/8748)
+    - fix(tests): wait for license to be applied before trying to login (https://github.com/dgraph-io/dgraph/pull/8744)
+    - fix(tests): sleep longer so that ACLs are updated (https://github.com/dgraph-io/dgraph/pull/8745)
+    - chore(test): use pointer receiver for LocalCluster methods (https://github.com/dgraph-io/dgraph/pull/8734)
+    - chore(linter): fix unconvert linter issues on linux (https://github.com/dgraph-io/dgraph/pull/8718)
+    - chore(linter): add unconvert linter and address related issues (https://github.com/dgraph-io/dgraph/pull/8685)
+    - chore(ci): resolve community PR goveralls failure (https://github.com/dgraph-io/dgraph/pull/8716)
+    - chore(test): increased iterations of the health check (https://github.com/dgraph-io/dgraph/pull/8711)
+    - fix(test): avoid host volume mount in minio container (https://github.com/dgraph-io/dgraph/pull/8569)
+    - chore(test): add tests for lex/iri.go,chunker/chunk.go (https://github.com/dgraph-io/dgraph/pull/8515)
+    - chore(test): add Backup/Restore test for NFS (https://github.com/dgraph-io/dgraph/pull/8551)
+    - chore(test): add test that after snapshot is applied, GraphQL schema is refreshed (https://github.com/dgraph-io/dgraph/pull/8619)
+    - chore(test): upgrade graphql tests to use go 1.19 (https://github.com/dgraph-io/dgraph/pull/8662)
+    - chore(test): add automated test to test multitenant --limit flag (https://github.com/dgraph-io/dgraph/pull/8646)
+    - chore(test): add restore test for more than 127 namespaces (https://github.com/dgraph-io/dgraph/pull/8643)
+    - fix(test): fix the corner case for raft entries test (https://github.com/dgraph-io/dgraph/pull/8617)
+
+- **CD**
+    - fix(build): update dockerfile to use cache busting and reduce image size (https://github.com/dgraph-io/dgraph/pull/8652)
+    - chore(deps): update min go build version (https://github.com/dgraph-io/dgraph/pull/8423)
+    - chore(cd): add badger binary to dgraph docker image (https://github.com/dgraph-io/dgraph/pull/8790)
+
+- **Security**
+    - chore(deps): bump certifi from 2020.4.5.1 to 2022.12.7 in /contrib/config/marketplace/aws/tests (https://github.com/dgraph-io/dgraph/pull/8496)
+    - chore(deps): bump github.com/docker/distribution from 2.7.1+incompatible to 2.8.0+incompatible (https://github.com/dgraph-io/dgraph/pull/8575)
+    - chore(deps): bump werkzeug from 0.16.1 to 2.2.3 in /contrib/embargo (https://github.com/dgraph-io/dgraph/pull/8676)
+    - fix(sec): upgrade networkx to  (https://github.com/dgraph-io/dgraph/pull/8613)
+    - fix(sec): CVE-2022-41721 (https://github.com/dgraph-io/dgraph/pull/8633)
+    - fix(sec): CVE & OS Patching (https://github.com/dgraph-io/dgraph/pull/8634)
+
+### Changed
+
+- **Core Dgraph**
+    - upgrade badger to v4.1.0 (https://github.com/dgraph-io/dgraph/pull/8783) (https://github.com/dgraph-io/dgraph/pull/8709)
+    - fix(multitenancy) store namespace in predicate as a hex separated by a hyphen to prevent json marshal issues (https://github.com/dgraph-io/dgraph/pull/8601)
+    - fix(query): handle bad timezone correctly (https://github.com/dgraph-io/dgraph/pull/8657)
+    - chore(ludicroud): remove ludicrous mode from the code (https://github.com/dgraph-io/dgraph/pull/8612)
+    - fix(backup): make the /admin/backup and /admin/export API asynchronous (https://github.com/dgraph-io/dgraph/pull/8554)
+    - fix(mutation): validate mutation before applying it (https://github.com/dgraph-io/dgraph/pull/8623)
+
+- **CI Enhancements**
+    - fix(ci): unpin curl (https://github.com/dgraph-io/dgraph/pull/8577)
+    - fix(ci): adjust cron schedules (https://github.com/dgraph-io/dgraph/pull/8592)
+    - chore(ci): Capture coverage from bulk load and LDBC tests (https://github.com/dgraph-io/dgraph/pull/8478)
+    - chore(linter): enable gosec linter (https://github.com/dgraph-io/dgraph/pull/8678)
+    - chore: apply go vet improvements (https://github.com/dgraph-io/dgraph/pull/8620)
+    - chore(linter): fix some of the warnings from gas linter (https://github.com/dgraph-io/dgraph/pull/8664)
+    - chore(linter): fix golangci config and some issues in tests (https://github.com/dgraph-io/dgraph/pull/8669)
+    - fix(linter): address gosimple linter reports & errors (https://github.com/dgraph-io/dgraph/pull/8628)
+
+
 ## [v23.0.0-rc1] - 2023-04-11
 [v23.0.0-rc1]: https://github.com/dgraph-io/dgraph/compare/v22.0.2...v23.0.0-rc1
 
