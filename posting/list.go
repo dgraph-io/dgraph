@@ -854,8 +854,9 @@ func (l *List) Length(readTs, afterUid uint64) int {
 //     3. b1 < ts < ts + 1 = b2. In this case, we would have both drop drop records in b2. No issues
 //     in this case.
 //
-//     The only issue would come if a backup happened in between ts, and ts + 1. As our timestamps
-//     are integers, it's not possible. However, a bug could happen if we store the rollup at ts + k
+//     This proves that writing rollups at ts + 1 would not cause any issues with dgraph.drop.op.
+//     The only issue would come if a rollup happens at ts + k. If a backup happens in between
+//     ts and ts + k, it would lead to some data being dropped during restore.
 func (l *List) Rollup(alloc *z.Allocator, readTs uint64) ([]*bpb.KV, error) {
 	l.RLock()
 	defer l.RUnlock()
