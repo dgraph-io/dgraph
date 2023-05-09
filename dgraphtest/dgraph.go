@@ -34,7 +34,6 @@ const (
 	zeroNameFmt      = "%v_zero%d"
 	zeroAliasNameFmt = "zero%d"
 	alphaNameFmt     = "%v_alpha%d_"
-	//alphaNameFmt     = "%v_alpha%d"
 	alphaLNameFmt    = "alpha%d"
 	volNameFmt       = "%v_%v"
 
@@ -58,6 +57,8 @@ const (
 	localVersion       = "local"
 	waitDurBeforeRetry = time.Second
 	requestTimeout     = 90 * time.Second
+	refillInterval    = "20s"
+	uidLease          = 50
 )
 
 var (
@@ -117,7 +118,9 @@ func (z *zero) ports() nat.PortSet {
 func (z *zero) cmd(c *LocalCluster) []string {
 	zcmd := []string{"/gobin/dgraph", "zero", fmt.Sprintf("--my=%s:%v", z.aname(), zeroGrpcPort), "--bindall",
 		fmt.Sprintf(`--replicas=%v`, c.conf.replicas), fmt.Sprintf(`--raft=idx=%v`, z.id+1), "--logtostderr",
-		fmt.Sprintf("-v=%d", c.conf.verbosity)}
+		fmt.Sprintf("-v=%d", c.conf.verbosity),
+		fmt.Sprintf("--limit refill-interval=%v", refillInterval),
+		fmt.Sprintf("--limit uid-lease=%v", uidLease)}
 	if z.id > 0 {
 		zcmd = append(zcmd, "--peer="+c.zeros[0].aname()+":"+zeroGrpcPort)
 	}

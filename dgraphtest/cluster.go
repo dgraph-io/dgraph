@@ -135,8 +135,8 @@ func (hc *HTTPClient) LoginIntoNamespace(user, password string, ns uint64) error
 	params := GraphQLParams{
 		Query: q,
 		Variables: map[string]interface{}{
-			"userId":    DefaultUser,
-			"password":  DefaultPassword,
+			"userId":    user,
+			"password":  password,
 			"namespace": ns,
 		},
 	}

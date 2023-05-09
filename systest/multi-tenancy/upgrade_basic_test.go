@@ -99,9 +99,8 @@ var timeout = 5 * time.Second
 
 func (suite *MultitenancyTestSuite) setupSourceDB(srcDB string) {
 	os.Setenv("GOOS", "linux")
-	conf := dgraphtest.NewClusterConfig().WithNumAlphas(3).WithNumZeros(3).WithReplicas(3).
-		//WithACL(20 * time.Second).WithEncryption().WithVersion(srcDB)
-		WithACL(300 * time.Second).WithEncryption().WithVersion(srcDB)
+	conf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).WithReplicas(1).
+		WithACL(20 * time.Second).WithEncryption().WithVersion(srcDB)
 
 	var err error
 	suite.lc, err = dgraphtest.NewLocalCluster(conf)
@@ -123,7 +122,7 @@ func (suite *MultitenancyTestSuite) UpgradeAndSetupClient(dstDB string) {
 	var err error
 	t := suite.T()
 
-	if err := suite.lc.Upgrade(suite.httpclient, dstDB, dgraphtest.StopStart); err != nil {
+	if err := suite.lc.Upgrade(dstDB, dgraphtest.StopStart); err != nil {
 		t.Fatal(err)
 	}
 
