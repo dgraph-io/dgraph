@@ -837,12 +837,14 @@ func (l *List) Length(readTs, afterUid uint64) int {
 //     read a given backup or not. A backup, which has a drop record, would render older backups
 //     unnecessary.
 //
-//     If we rollup the dgraph.drop.op, and store result on ts + 1, which moves the original record.
-//     We want to see if there can be any issues in backup/restore due to this. To ensure that there
-//     is no issue in writing on ts + 1, we do the following analysis. Analysis is done for
-//     drop op, but it would be the same for drop predicate and namespace. Assume that there were
-//     two backups, at b1 and b2. We move rollup ts around to see if it can cause any issues. There
-//     can be 3 cases:
+//     If we rollup the dgraph.drop.op, and store result on ts + 1, it effectively copies the
+//     original record into a new location. We want to see if there can be any issues in
+//     backup/restore due to this. To ensure that there is no issue in writing on ts + 1,
+//     we do the following analysis.
+//
+//     Analysis is done for drop op, but it would be the same for drop predicate and namespace.
+//     Assume that there were two backups, at b1 and b2. We move rollup ts around to see if it
+//     can cause any issues. There can be 3 cases:
 //
 //     1. b1 < ts < b2. In this case, we would have a drop record in b2. This is the same behaviour
 //     as we would have writen on ts.
@@ -856,7 +858,7 @@ func (l *List) Length(readTs, afterUid uint64) int {
 //
 //     This proves that writing rollups at ts + 1 would not cause any issues with dgraph.drop.op.
 //     The only issue would come if a rollup happens at ts + k. If a backup happens in between
-//     ts and ts + k, it would lead to some data being dropped during restore.
+//     ts and ts + k, it could lead to some data being dropped during restore.
 func (l *List) Rollup(alloc *z.Allocator, readTs uint64) ([]*bpb.KV, error) {
 	l.RLock()
 	defer l.RUnlock()
