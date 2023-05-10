@@ -994,14 +994,19 @@ func run() error {
 	go func() {
 		defer close(testCh)
 		valid := getPackages()
-		if *tmp == "" {
-			*tmp = os.TempDir()
-		}
-		x.Check(testutil.MakeDirEmpty([]string{*tmp}))
+
 		if testSuiteContains("load") || testSuiteContains("all") {
+			if *tmp == "" {
+				*tmp = os.TempDir()
+			}
+			x.Check(testutil.MakeDirEmpty([]string{*tmp}))
 			downloadDataFiles()
 		}
 		if testSuiteContains("ldbc") || testSuiteContains("all") {
+			if *tmp == "" {
+				*tmp = filepath.Join(os.TempDir(), "/ldbcdata")
+			}
+			x.Check(testutil.MakeDirEmpty([]string{*tmp}))
 			downloadLDBCFiles()
 		}
 		for i, task := range valid {
