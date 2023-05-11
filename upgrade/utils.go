@@ -29,8 +29,8 @@ import (
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 
-	"github.com/dgraph-io/dgo/v210"
-	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/dgo/v230"
+	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
 )

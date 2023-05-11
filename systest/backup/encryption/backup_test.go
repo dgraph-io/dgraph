@@ -34,7 +34,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/badger/v4/options"
-	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"

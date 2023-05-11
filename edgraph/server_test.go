@@ -24,7 +24,7 @@ import (
 	"google.golang.org/grpc/metadata"
 
 	"github.com/dgraph-io/badger/v4"
-	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"

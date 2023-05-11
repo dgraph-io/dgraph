@@ -28,7 +28,7 @@ import (
 	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"
 
-	dgoapi "github.com/dgraph-io/dgo/v210/protos/api"
+	dgoapi "github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/dql"
 	"github.com/dgraph-io/dgraph/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/graphql/schema"
