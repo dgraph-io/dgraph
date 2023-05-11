@@ -49,7 +49,7 @@ func (c *LocalCluster) setupBinary() error {
 	repo, err := git.PlainOpen(repoDir)
 	if err != nil && err == git.ErrRepositoryNotExists {
 		log.Printf("[INFO] cloning dgraph repo")
-		repo, err = git.PlainCloneContext(ctx, repoDir, false, &git.CloneOptions{URL: dgraphRepoUrl})
+		repo, err = git.PlainCloneContext(ctx, repoDir, false, &git.CloneOptions{URL: DgraphRepoUrl})
 		if err != nil {
 			return errors.Wrap(err, "error while cloning dgraph git repo")
 		}

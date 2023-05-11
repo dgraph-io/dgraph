@@ -1,0 +1,5 @@
+package dgraphtest
+
+func init() {
+
+}
