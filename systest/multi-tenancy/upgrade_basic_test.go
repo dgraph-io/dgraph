@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	//"path/filepath"
 	"testing"
 	"time"
 	"strings"
@@ -42,11 +41,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
 )
-
-type Rule struct {
-	Predicate  string `json:"predicate"`
-	Permission int32  `json:"permission"`
-}
 
 // Upgrade table
 var uTable = []struct{
@@ -76,10 +70,22 @@ func (suite *MultitenancyTestSuite) TearDownSuite() {
 
 func (suite *MultitenancyTestSuite) SetupTest() {
 	fmt.Println("### SetupTest Start ###")
+	/*
+	 * Since, for now each test functions below contains a logic that iterate
+	 * over the entries of the uTable defined above in this file, this function
+	 * and SetupSuite() is logically a NOOP. This logic will be revisited and
+	 * changed in the upcoming sprint.
+	 */
 }
 
 func (suite *MultitenancyTestSuite) TearDownTest() {
 	fmt.Println("### TearDownTest End ###")
+	/*
+	 * Since, for now each test functions below contains a logic that iterate
+	 * over the entries of the uTable defined above in this file, this function
+	 * and TearDownSuite() is logically a NOOP. This logic will be revisited and
+	 * changed in the upcoming sprint.
+	 */
 }
 
 type inputTripletsCount struct {
@@ -90,9 +96,9 @@ type inputTripletsCount struct {
 func (suite *MultitenancyTestSuite) prepare() {
 	t := suite.T()
 
-	err := suite.client.Dgraph.LoginIntoNamespace(context.Background(), "groot", "password", x.GalaxyNamespace) 
+	err := suite.client.LoginIntoNamespace(context.Background(), "groot", "password", x.GalaxyNamespace) 
 	require.NoError(t, err, "login with galaxy failed")
-	require.NoError(t, suite.client.Dgraph.Alter(context.Background(), &api.Operation{DropAll: true}))
+	require.NoError(t, suite.client.Alter(context.Background(), &api.Operation{DropAll: true}))
 }
 
 var timeout = 5 * time.Second
@@ -118,11 +124,11 @@ func (suite *MultitenancyTestSuite) setupSourceDB(srcDB string) {
 	x.Panic(err)
 }
 
-func (suite *MultitenancyTestSuite) UpgradeAndSetupClient(dstDB string) {
+func (suite *MultitenancyTestSuite) UpgradeAndSetupClient(dstDB string, uStrategy dgraphtest.UpgradeStrategy) {
 	var err error
 	t := suite.T()
 
-	if err := suite.lc.Upgrade(dstDB, dgraphtest.StopStart); err != nil {
+	if err := suite.lc.Upgrade(dstDB, uStrategy); err != nil {
 		t.Fatal(err)
 	}
 
@@ -147,22 +153,22 @@ func (suite *MultitenancyTestSuite) TestAclBasic() {
 		var err error
 		t := suite.T()
 
-	// Cleanup, should be registered in this order
+		// Cleanup, should be registered in this order
 		t.Cleanup(suite.lc.Cleanup)
 		t.Cleanup(suite.cleanup_client_conns)
 
-	// Galaxy Login
+		// Galaxy Login
 		err, suite.httpclient = suite.HTTPClientWithLogin("groot", "password", x.GalaxyNamespace)
 		require.NotNil(t, suite.httpclient, "galaxy token is nil")
 		require.NoError(t, err, "login with namespace failed")
 
-	// Create a new namespace
+		// Create a new namespace
 		var ns uint64
 		ns, err = suite.CreateNamespaceWithRetry()
 		require.NoError(t, err)
 		require.Greater(t, int(ns), 0)
 
-	// Add some data to namespace 1
+		// Add some data to namespace 1
 		suite.client = suite.DgClientWithLogin("groot", "password", ns)
 		suite.AddData()
 
@@ -180,49 +186,49 @@ func (suite *MultitenancyTestSuite) TestAclBasic() {
 			{"name": "guy2", "nickname":"RG2"}]}`,
 			string(resp))
 
-	// groot of namespace 0 should not see the data of namespace-1
+		// groot of namespace 0 should not see the data of namespace-1
 		suite.client = suite.DgClientWithLogin("groot", "password", 0)
 		resp = suite.QueryData(query)
 		testutil.CompareJSON(t, `{"me": []}`, string(resp))
 
-	// Login to namespace 1 via groot and create new user alice.
+		// Login to namespace 1 via groot and create new user alice.
 		err, suite.httpclient = suite.HTTPClientWithLogin("groot", "password", ns)
 		require.NotNil(t, suite.httpclient, "token for the namespace is nil")
 		require.NoErrorf(t, err, "login with namespace %d failed", ns)
 		suite.CreateUser("alice", "newpassword")
 
-	// Alice should not be able to see data added by groot in namespace 1
+		// Alice should not be able to see data added by groot in namespace 1
 		suite.client = suite.DgClientWithLogin("alice", "newpassword", ns)
 		resp = suite.QueryData(query)
 		testutil.CompareJSON(t, `{}`, string(resp))
 
-	// Create a new group, add alice to that group and give read access of <name> to dev group.
+		// Create a new group, add alice to that group and give read access of <name> to dev group.
 		suite.CreateGroup("dev")
 		suite.AddToGroup("alice", "dev")
 		suite.AddRulesToGroup("dev",
-			[]Rule{{Predicate: "name", Permission: acl.Read.Code}}, true)
+			[]testutil.Rule{{Predicate: "name", Permission: acl.Read.Code}}, true)
 
-	// Now alice should see the name predicate but not nickname.
+		// Now alice should see the name predicate but not nickname.
 		suite.client = suite.DgClientWithLogin("alice", "newpassword", ns)
 		testutil.PollTillPassOrTimeout(t, suite.client.Dgraph, query, `{"me": [{"name":"guy1"},{"name": "guy2"}]}`, timeout)
 
-	// Upgrade
-		suite.UpgradeAndTestAclBasic(ns, uE.dstVer)
+		// Upgrade
+		suite.UpgradeAndTestAclBasic(ns, uE.dstVer, dgraphtest.StopStart)
 	}
 }
 
-func (suite *MultitenancyTestSuite) UpgradeAndTestAclBasic(ns uint64, dstDB string) {
-	suite.UpgradeAndSetupClient(dstDB)
+func (suite *MultitenancyTestSuite) UpgradeAndTestAclBasic(ns uint64, dstDB string, uStrategy dgraphtest.UpgradeStrategy) {
+	suite.UpgradeAndSetupClient(dstDB, uStrategy)
 
 	var err error
 	t := suite.T()
 
-// Login into Galaxy as groot
+	// Login into Galaxy as groot
 	err, suite.httpclient = suite.HTTPClientWithLogin("groot", "password", x.GalaxyNamespace)
 	require.NotNil(t, suite.httpclient, "galaxy token is nil")
 	require.NoError(t, err, "login with namespace failed")
 
-// Login to namespace 1
+	// Login to namespace 1
 	suite.client = suite.DgClientWithLogin("groot", "password", ns)
 
 	query := `
@@ -233,20 +239,20 @@ func (suite *MultitenancyTestSuite) UpgradeAndTestAclBasic(ns uint64, dstDB stri
 			}
 		}
 	`
-// Data must be present after the upgrade
+	// Data must be present after the upgrade
 	resp := suite.QueryData(query)
 	testutil.CompareJSON(t,
 		`{"me": [{"name":"guy1","nickname":"RG"},
 		{"name": "guy2", "nickname":"RG2"}]}`,
 		string(resp))
 
-// groot of namespace 0 should not see the data of namespace-1
+	// groot of namespace 0 should not see the data of namespace-1
 	suite.client = suite.DgClientWithLogin("groot", "password", 0)
 	resp = suite.QueryData(query)
 	testutil.CompareJSON(t, `{"me": []}`, string(resp))
 
-// alice already a member of 'dev' should see the name predicate but not nickname,
-// same as before the upgrade.
+	// alice already a member of 'dev' should see the name predicate but not nickname,
+	// same as before the upgrade.
 	suite.client = suite.DgClientWithLogin("alice", "newpassword", ns)
 	testutil.PollTillPassOrTimeout(t, suite.client.Dgraph, query, `{"me": [{"name":"guy1"},{"name": "guy2"}]}`, timeout)
 }
@@ -259,27 +265,28 @@ func (suite *MultitenancyTestSuite) TestNameSpaceLimitFlag() {
   		suite.prepare()
   		t := suite.T()
 
-	// Cleanup, should be registered in this order
+		// Cleanup, should be registered in this order
 		t.Cleanup(suite.lc.Cleanup)
 		t.Cleanup(suite.cleanup_client_conns)
 
 		testInputs := []inputTripletsCount{{1, 53}, {60, 100}, {141, 153}}
   
-  	// Galaxy login
+		// Galaxy login
   		var err error
   		err, suite.httpclient = suite.HTTPClientWithLogin("groot", "password", x.GalaxyNamespace)
   		require.NotNil(t, suite.httpclient, "galaxy token is nil")
   		require.NoErrorf(t, err, "login as groot into namespace %d failed", x.GalaxyNamespace)
 
-	// Create a new namespace
+		// Create a new namespace
   		ns, err := suite.CreateNamespaceWithRetry()
   		require.NoError(t, err)
 
+		// Log into namespace
   		suite.client = suite.DgClientWithLogin("groot", "password", ns)
-		require.NoError(t, suite.client.Dgraph.Alter(context.Background(),
+		require.NoError(t, suite.client.Alter(context.Background(),
 			&api.Operation{Schema: `name: string .`}))
 
-	// trying to load more triplets than allowed,It should return error.
+		// trying to load more triplets than allowed,It should return error.
 		_, err = suite.AddNumberOfTriples(suite.client.Dgraph, testInputs[0].lowerLimit, testInputs[0].upperLimit)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "Requested UID lease(53) is greater than allowed(50).")
@@ -287,33 +294,33 @@ func (suite *MultitenancyTestSuite) TestNameSpaceLimitFlag() {
 		_, err = suite.AddNumberOfTriples(suite.client.Dgraph, testInputs[1].lowerLimit, testInputs[1].upperLimit)
 		require.NoError(t, err)
 
-	// we have set uid-lease=50 so we are trying lease more uids,it should return error.
+		// we have set uid-lease=50 so we are trying lease more uids,it should return error.
 		_, err = suite.AddNumberOfTriples(suite.client.Dgraph, testInputs[2].lowerLimit, testInputs[2].upperLimit)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "Cannot lease UID because UID lease for the namespace")
 
-	// Upgrade and test name space limit flag
-		suite.UpgradeAndTestNameSpaceLimitFlag(ns, uE.dstVer)
+		// Upgrade and test name space limit flag
+		suite.UpgradeAndTestNameSpaceLimitFlag(ns, uE.dstVer, dgraphtest.StopStart)
 	}
 }
 
-func (suite *MultitenancyTestSuite) UpgradeAndTestNameSpaceLimitFlag(ns uint64, dstDB string) {
-	suite.UpgradeAndSetupClient(dstDB)
+func (suite *MultitenancyTestSuite) UpgradeAndTestNameSpaceLimitFlag(ns uint64, dstDB string, uStrategy dgraphtest.UpgradeStrategy) {
+	suite.UpgradeAndSetupClient(dstDB, uStrategy)
 
 	var err error
 	t := suite.T()
 
 	testInputs := []inputTripletsCount{{1, 53}, {60, 100}, {141, 153}}
   
-// Galaxy login
+	// Galaxy login
 	err, suite.httpclient = suite.HTTPClientWithLogin("groot", "password", x.GalaxyNamespace)
 	require.NotNil(t, suite.httpclient, "galaxy token is nil")
 	require.NoErrorf(t, err, "login as groot into namespace %d failed", x.GalaxyNamespace)
 
-// Log into namespace
+	// Log into namespace
 	suite.client = suite.DgClientWithLogin("groot", "password", ns)
 
-// trying to load more triplets than allowed,It should return error.
+	// trying to load more triplets than allowed,It should return error.
 	_, err = suite.AddNumberOfTriples(suite.client.Dgraph, testInputs[0].lowerLimit, testInputs[0].upperLimit)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Requested UID lease(53) is greater than allowed(50).")
@@ -321,7 +328,7 @@ func (suite *MultitenancyTestSuite) UpgradeAndTestNameSpaceLimitFlag(ns uint64, 
 	_, err = suite.AddNumberOfTriples(suite.client.Dgraph, testInputs[1].lowerLimit, testInputs[1].upperLimit)
 	require.NoError(t, err)
 
-// we have set uid-lease=50 so we are trying lease more uids,it should return error.
+	// we have set uid-lease=50 so we are trying to lease more uids, it should return error.
 	_, err = suite.AddNumberOfTriples(suite.client.Dgraph, testInputs[2].lowerLimit, testInputs[2].upperLimit)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Cannot lease UID because UID lease for the namespace")
@@ -342,60 +349,53 @@ func (suite *MultitenancyTestSuite) AddNumberOfTriples(dg *dgo.Dgraph, start, en
 func (suite *MultitenancyTestSuite) postGqlSchema(schema string, accessJwt string) {
 	t := suite.T()
 	testutil.DockerPrefix = suite.lc.GetClusterPrefix()
-	groupOneHTTP := testutil.ContainerAddr("alpha1", 8080)
+	groupOneHTTP := testutil.ContainerAddr("alpha0", 8080)
 	header := http.Header{}
 	header.Set("X-Dgraph-AccessToken", accessJwt)
 	common.SafelyUpdateGQLSchema(t, groupOneHTTP, schema, header)
 }
 
-func (suite *MultitenancyTestSuite) postPersistentQuery(query, sha, accessJwt string) *common.GraphQLResponse {
-	t := suite.T()
-	header := http.Header{}
-	header.Set("X-Dgraph-AccessToken", accessJwt)
-	queryCountryParams := &common.GraphQLParams{
+func (suite *MultitenancyTestSuite) postPersistentQuery(query, sha string) ([]byte, error) {
+	params := dgraphtest.GraphQLParams{
 		Query: query,
 		Extensions: &schema.RequestExtensions{PersistedQuery: schema.PersistedQuery{
 			Sha256Hash: sha,
 		}},
-		Headers: header,
 	}
-	testutil.DockerPrefix = suite.lc.GetClusterPrefix()
-	url := "http://" + testutil.ContainerAddr("alpha1", 8080) + "/graphql"
-	return queryCountryParams.ExecuteAsPost(t, url)
+	return suite.httpclient.RunGraphqlQuery(params, false)
 }
 
 func (suite *MultitenancyTestSuite) TestPersistentQuery() {
   	for _, uE := range uTable {
-		fmt.Printf("\n*** Starting upgrade test from source version %s to destination version %s ***\n", uE.srcVer, uE.dstVer)
   		suite.setupSourceDB(uE.srcVer)
   
   		suite.prepare()
   		t := suite.T()
 
-	// Cleanup, should be registered in this order
+		// Cleanup, should be registered in this order
 		t.Cleanup(suite.lc.Cleanup)
 		t.Cleanup(suite.cleanup_client_conns)
 
-	// Galaxy Login
+		// Galaxy Login
 		var err error
   		err, suite.httpclient = suite.HTTPClientWithLogin("groot", "password", x.GalaxyNamespace)
 		require.NotNil(t, suite.httpclient, "galaxy token is nil")
 		require.NoErrorf(t, err, "login as groot into namespace %d failed", x.GalaxyNamespace)
 
-	// Make a copy of the galaxy token
+		// Make a copy of the galaxy token
 		gt := *suite.httpclient.HttpToken
 		galaxyToken := &gt
   		require.NotNil(t, galaxyToken, "galaxy token is nil")
   		require.NoErrorf(t, err, "login as groot into namespace %d failed", x.GalaxyNamespace)
 
-	// Create a new namespace
+		// Create a new namespace
   		ns, err := suite.CreateNamespaceWithRetry()
   		require.NoError(t, err)
 
-	// Log into ns
+		// Log into ns
   		err, suite.httpclient = suite.HTTPClientWithLogin("groot", "password", ns)
 
-	// Make a token copy
+		// Make a token copy
 		tt := *suite.httpclient.HttpToken
 		token := &tt
   		require.NotNil(t, token, "Token is nil")
@@ -410,69 +410,89 @@ func (suite *MultitenancyTestSuite) TestPersistentQuery() {
 
 		p1 := "query {queryProduct{productID}}"
 		sha1 := "7a8ff7a69169371c1eb52a8921387079ca281bb2d55feb4b535cbf0ab3896be5"
-		resp := suite.postPersistentQuery(p1, sha1, galaxyToken.AccessJwt)
-		common.RequireNoGQLErrors(t, resp)
+		suite.httpclient.AccessJwt = galaxyToken.AccessJwt
+		_, err = suite.postPersistentQuery(p1, sha1)
+		require.NoError(t, err)
 
 		p2 := "query {queryProduct{name}}"
 		sha2 := "0efcdde144167b1046360b73c7f6bec325d9f555099a2ae9b820a13328d270e4"
-		resp = suite.postPersistentQuery(p2, sha2, token.AccessJwt)
-		common.RequireNoGQLErrors(t, resp)
+		suite.httpclient.AccessJwt = token.AccessJwt
+		_, err = suite.postPersistentQuery(p2, sha2)
+		require.NoError(t, err)
 
-	// User cannnot see persistent query from other namespace.
-		resp = suite.postPersistentQuery("", sha2, galaxyToken.AccessJwt)
-		require.Equal(t, 1, len(resp.Errors))
-		require.Contains(t, resp.Errors[0].Message, "PersistedQueryNotFound")
+		// User cannnot see persistent query from other namespace.
+		suite.httpclient.AccessJwt = galaxyToken.AccessJwt
+		_, err = suite.postPersistentQuery("", sha2)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "PersistedQueryNotFound")
 
-		resp = suite.postPersistentQuery("", sha1, token.AccessJwt)
-		require.Equal(t, 1, len(resp.Errors))
-		require.Contains(t, resp.Errors[0].Message, "PersistedQueryNotFound")
+		suite.httpclient.AccessJwt = token.AccessJwt
+		_, err = suite.postPersistentQuery("", sha1)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "PersistedQueryNotFound")
 
-		resp = suite.postPersistentQuery("", sha1, "")
-		require.Equal(t, 1, len(resp.Errors))
-		require.Contains(t, resp.Errors[0].Message, "no accessJwt available")
+		suite.httpclient.AccessJwt = ""
+		_, err = suite.postPersistentQuery("", sha1)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "no accessJwt available")
 
-	// Upgrade and test persistent query
-		suite.UpgradeAndTestPersistentQuery(ns, sha1, sha2, uE.dstVer)
+		// Upgrade and test persistent query
+		suite.UpgradeAndTestPersistentQuery(ns, sha1, sha2, uE.dstVer, dgraphtest.StopStart)
 	}
 }
 
-func (suite *MultitenancyTestSuite) UpgradeAndTestPersistentQuery(ns uint64, sha1 string, sha2 string, dstDB string) {
-	suite.UpgradeAndSetupClient(dstDB)
+func (suite *MultitenancyTestSuite) UpgradeAndTestPersistentQuery(ns uint64, sha1 string, sha2 string, dstDB string, uStrategy dgraphtest.UpgradeStrategy) {
+	suite.UpgradeAndSetupClient(dstDB, uStrategy)
 
 	var err error
 	t := suite.T()
 
-// Galaxy Login
+	// Galaxy Login
 	err, suite.httpclient = suite.HTTPClientWithLogin("groot", "password", x.GalaxyNamespace)
 
-// Make a copy of the galaxy token
+	// Make a copy of the galaxy token
 	gt := *suite.httpclient.HttpToken
 	galaxyToken := &gt
 	require.NotNil(t, galaxyToken, "galaxy token is nil")
 	require.NoErrorf(t, err, "login as groot into namespace %d failed", x.GalaxyNamespace)
 
-// Log into ns
+	// Log into ns
 	err, suite.httpclient = suite.HTTPClientWithLogin("groot", "password", ns)
 
-// Make a token copy
+	// Make a token copy
 	tt := *suite.httpclient.HttpToken
 	token := &tt
 	require.NotNil(t, token, "token is nil")
 	require.NoErrorf(t, err, "login as groot into namespace %d failed", ns)
 
-// User cannnot see persistent query from other namespace.
-	resp := suite.postPersistentQuery("", sha2, galaxyToken.AccessJwt)
-	require.Equal(t, 1, len(resp.Errors))
-	require.Contains(t, resp.Errors[0].Message, "PersistedQueryNotFound")
 
-	resp = suite.postPersistentQuery("", sha1, token.AccessJwt)
-	require.Equal(t, 1, len(resp.Errors))
-	require.Contains(t, resp.Errors[0].Message, "PersistedQueryNotFound")
+	p1 := "query {queryProduct{productID}}"
+	suite.httpclient.AccessJwt = galaxyToken.AccessJwt
+	_, err = suite.postPersistentQuery(p1, sha1)
+	require.NoError(t, err)
 
-	resp = suite.postPersistentQuery("", sha1, "")
-	require.Equal(t, 1, len(resp.Errors))
-	require.Contains(t, resp.Errors[0].Message, "no accessJwt available")
+	p2 := "query {queryProduct{name}}"
+	suite.httpclient.AccessJwt = token.AccessJwt
+	_, err = suite.postPersistentQuery(p2, sha2)
+	require.NoError(t, err)
+
+	// User cannnot see persistent query from other namespace.
+	suite.httpclient.AccessJwt = galaxyToken.AccessJwt
+	_, err = suite.postPersistentQuery("", sha2)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "PersistedQueryNotFound")
+
+	suite.httpclient.AccessJwt = token.AccessJwt
+	_, err = suite.postPersistentQuery("", sha1)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "PersistedQueryNotFound")
+
+	suite.httpclient.AccessJwt = ""
+	_, err = suite.postPersistentQuery("", sha1)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "no accessJwt available")
 }
+
 func (suite *MultitenancyTestSuite) TestTokenExpired() {
   	for _, uE := range uTable {
 		fmt.Printf("\n*** Starting upgrade test from source version %s to destination version %s ***\n", uE.srcVer, uE.dstVer)
@@ -481,64 +501,64 @@ func (suite *MultitenancyTestSuite) TestTokenExpired() {
   		suite.prepare()
   		t := suite.T()
 
-	// Cleanup, should be registered in this order
+		// Cleanup, should be registered in this order
 		t.Cleanup(suite.lc.Cleanup)
 		t.Cleanup(suite.cleanup_client_conns)
 
-	// Galaxy Login
+		// Galaxy Login
 		var err error
   		err, suite.httpclient = suite.HTTPClientWithLogin("groot", "password", x.GalaxyNamespace)
   		require.NotNil(t, suite.httpclient.HttpToken, "galaxy token is nil")
   		require.NoErrorf(t, err, "login as groot into namespace %d failed", x.GalaxyNamespace)
 
-	// Create a new namespace
+		// Create a new namespace
   		ns, err := suite.CreateNamespaceWithRetry()
   		require.NoError(t, err)
 
-	// ns Login
+		// ns Login
   		err, suite.httpclient = suite.HTTPClientWithLogin("groot", "password", ns)
   		require.NotNil(t, suite.httpclient.HttpToken, "token is nil")
 		require.NoErrorf(t, err, "login as groot into namespace %d failed", ns)
 
-	// Relogin using refresh JWT.
+		// Relogin using refresh JWT.
 		token := suite.httpclient.HttpToken
-  		err, suite.httpclient = suite.HTTPClientLoginWithToken("groot", "password", ns, token.RefreshToken)
+		err, suite.httpclient = suite.HTTPClientLoginWithToken(ns)
   		require.NotNil(t, token, "token is nil")
 		require.NoErrorf(t, err, "login as groot into namespace %d failed", ns)
 
-	// Create another namespace
+		// Create another namespace
   		_, err = suite.CreateNamespaceWithRetry()
   		require.Error(t, err)
 		require.Contains(t, err.Error(), "Only guardian of galaxy is allowed to do this operation")
 
-	// Upgrade and stest token expired
-		suite.UpgradeAndTestTokenExpired(ns, uE.dstVer)
+		// Upgrade and stest token expired
+		suite.UpgradeAndTestTokenExpired(ns, uE.dstVer, dgraphtest.StopStart)
 	}
 }
 
-func (suite *MultitenancyTestSuite) UpgradeAndTestTokenExpired(ns uint64, dstDB string) {
-	suite.UpgradeAndSetupClient(dstDB)
+func (suite *MultitenancyTestSuite) UpgradeAndTestTokenExpired(ns uint64, dstDB string, uStrategy dgraphtest.UpgradeStrategy) {
+	suite.UpgradeAndSetupClient(dstDB, uStrategy)
 
 	var err error
 	t := suite.T()
 
-// Galaxy Login
+	// Galaxy Login
 	err, suite.httpclient = suite.HTTPClientWithLogin("groot", "password", x.GalaxyNamespace)
 	require.NotNil(t, suite.httpclient.HttpToken, "galaxy token is nil")
 	require.NoErrorf(t, err, "login as groot into namespace %d failed", x.GalaxyNamespace)
 
-// ns Login
+	// ns Login
 	err, suite.httpclient = suite.HTTPClientWithLogin("groot", "password", ns)
 	require.NotNil(t, suite.httpclient.HttpToken, "token is nil")
 	require.NoErrorf(t, err, "login as groot into namespace %d failed", ns)
 
-// Relogin using refresh JWT.
+	// Relogin using refresh JWT.
 	token := suite.httpclient.HttpToken
-	err, suite.httpclient = suite.HTTPClientLoginWithToken("groot", "password", ns, token.RefreshToken)
+	err, suite.httpclient = suite.HTTPClientLoginWithToken(ns)
 	require.NotNil(t, token, "token is nil")
 	require.NoErrorf(t, err, "login as groot into namespace %d failed", ns)
 
-// Create another namespace
+	// Create another namespace
 	ns, err = suite.CreateNamespaceWithRetry()
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Only guardian of galaxy is allowed to do this operation")
@@ -553,7 +573,7 @@ func (suite *MultitenancyTestSuite) createGroupAndSetPermissions(namespace uint6
 	suite.CreateGroup(group)
 	suite.AddToGroup(user, group)
 	suite.AddRulesToGroup(group,
-		[]Rule{{Predicate: predicate, Permission: acl.Read.Code}}, true)
+		[]testutil.Rule{{Predicate: predicate, Permission: acl.Read.Code}}, true)
 }
 
 func (suite *MultitenancyTestSuite) TestTwoPermissionSetsInNameSpacesWithAcl() {
@@ -564,11 +584,11 @@ func (suite *MultitenancyTestSuite) TestTwoPermissionSetsInNameSpacesWithAcl() {
 		suite.prepare()
 		t := suite.T()
 
-	// Cleanup, should be registered in this order
+		// Cleanup, should be registered in this order
 		t.Cleanup(suite.lc.Cleanup)
 		t.Cleanup(suite.cleanup_client_conns)
 
-	// Galaxy Login
+		// Galaxy Login
 		var err error
 		err, suite.httpclient = suite.HTTPClientWithLogin("groot", "password", x.GalaxyNamespace)
 		require.NotNil(t, suite.httpclient, "galaxy token is nil")
@@ -584,87 +604,87 @@ func (suite *MultitenancyTestSuite) TestTwoPermissionSetsInNameSpacesWithAcl() {
 				}
 			}
 		`
-	// Create first namespace
+		// Create first namespace
 		ns1, err := suite.CreateNamespaceWithRetry()
 		require.NoError(t, err)
 
-	// Add data to namespace 1
+		// Add data to namespace 1
 		suite.client = suite.DgClientWithLogin("groot", "password", ns1)
 		suite.AddData()
 
-	user1, user2 := "alice", "bob"
-	user1passwd, user2passwd := "newpassword", "newpassword"
+		user1, user2 := "alice", "bob"
+		user1passwd, user2passwd := "newpassword", "newpassword"
 
-	// Create user alice
+		// Create user alice
 		err, suite.httpclient = suite.HTTPClientWithLogin("groot", "password", ns1)
 		require.NoErrorf(t, err, "login as groot into namespace %d failed", ns1)
 		suite.CreateUser(user1, user1passwd)
 
-	// Create a new group, add alice to that group and give read access to <name> in the dev group.
+		// Create a new group, add alice to that group and give read access to <name> in the dev group.
 		suite.createGroupAndSetPermissions(ns1, "dev", user1, "name")
 
-	// Alice should not be able to see <nickname> in namespace 1
+		// Alice should not be able to see <nickname> in namespace 1
 		suite.client = suite.DgClientWithLogin(user1, user1passwd, ns1)
 		testutil.PollTillPassOrTimeout(t, suite.client.Dgraph, query, `{"me": [{"name":"guy2"}, {"name":"guy1"}]}`, timeout)
 
-	// Create second namespace
+		// Create second namespace
 		suite.httpclient.HttpToken = galaxyToken
 		ns2, err := suite.CreateNamespaceWithRetry()
 		require.NoError(t, err)
 
-	// Add data to namespace 2
+		// Add data to namespace 2
 		suite.client = suite.DgClientWithLogin("groot", "password", ns2)
 		suite.AddData()
 
-	// Create user bob
+		// Create user bob
 		err, suite.httpclient = suite.HTTPClientWithLogin("groot", "password", ns2)
 		require.NoErrorf(t, err, "login with namespace %d failed", ns2)
 		suite.CreateUser(user2, user2passwd)
 
-	// Create a new group, add bob to that group and give read access of <nickname> to dev group.
+		// Create a new group, add bob to that group and give read access of <nickname> to dev group.
 		suite.createGroupAndSetPermissions(ns2, "dev", user2, "nickname")
 
-	// Query via bob and check result
+		// Query via bob and check result
 		suite.client = suite.DgClientWithLogin(user2, user2passwd, ns2)
 		testutil.PollTillPassOrTimeout(t, suite.client.Dgraph, query, `{}`, timeout)
 
-	// Query namespace-1 via alice and check result to ensure it still works
+		// Query namespace-1 via alice and check result to ensure it still works
 		suite.client = suite.DgClientWithLogin(user1, user1passwd, ns1)
 		resp := suite.QueryData(query)
 		testutil.CompareJSON(t, `{"me": [{"name":"guy2"}, {"name":"guy1"}]}`, string(resp))
 
-	// Change permissions in namespace-2
+		// Change permissions in namespace-2
 		err, suite.httpclient = suite.HTTPClientWithLogin("groot", "password", ns2)
 		require.NoErrorf(t, err, "login as groot into namespace %d failed", ns2)
 		suite.AddRulesToGroup("dev",
-			[]Rule{{Predicate: "name", Permission: acl.Read.Code}}, false)
+			[]testutil.Rule{{Predicate: "name", Permission: acl.Read.Code}}, false)
 
-	// Query namespace-2
+		// Query namespace-2
 		suite.client = suite.DgClientWithLogin(user2, user2passwd, ns2)
 		testutil.PollTillPassOrTimeout(t, suite.client.Dgraph, query,
 			`{"me": [{"name":"guy2", "nickname": "RG2"}, {"name":"guy1", "nickname": "RG"}]}`, timeout)
 
-	// Query namespace-1
+		// Query namespace-1
 		suite.client = suite.DgClientWithLogin(user1, user1passwd, ns1)
 		resp = suite.QueryData(query)
 		testutil.CompareJSON(t, `{"me": [{"name":"guy2"}, {"name":"guy1"}]}`, string(resp))
 
-	// Upgrade and test
-		suite.UpgradeAndTestTwoPermissionSetsInNameSpacesWithAcl(ns1, ns2, query, user1, user1passwd, user2, user2passwd, uE.dstVer)
+		// Upgrade and test
+		suite.UpgradeAndTestTwoPermissionSetsInNameSpacesWithAcl(ns1, ns2, query, user1, user1passwd, user2, user2passwd, uE.dstVer, dgraphtest.StopStart)
 	}
 }
 
-func (suite *MultitenancyTestSuite) UpgradeAndTestTwoPermissionSetsInNameSpacesWithAcl(ns1, ns2 uint64, query, user1, user1passwd, user2, user2passwd, dstDB string) {
-	suite.UpgradeAndSetupClient(dstDB)
+func (suite *MultitenancyTestSuite) UpgradeAndTestTwoPermissionSetsInNameSpacesWithAcl(ns1, ns2 uint64, query, user1, user1passwd, user2, user2passwd, dstDB string, uStrategy dgraphtest.UpgradeStrategy) {
+	suite.UpgradeAndSetupClient(dstDB, uStrategy)
 
 	t := suite.T()
 
-// Query namespace-2
+	// Query namespace-2
 	suite.client = suite.DgClientWithLogin(user2, user2passwd, ns2)
 	testutil.PollTillPassOrTimeout(t, suite.client.Dgraph, query,
 		`{"me": [{"name":"guy2", "nickname": "RG2"}, {"name":"guy1", "nickname": "RG"}]}`, timeout)
 
-// Query namespace-1
+	// Query namespace-1
 	suite.client = suite.DgClientWithLogin(user1, user1passwd, ns1)
 	resp := suite.QueryData(query)
 	testutil.CompareJSON(t, `{"me": [{"name":"guy2"}, {"name":"guy1"}]}`, string(resp))
@@ -678,47 +698,47 @@ func (suite *MultitenancyTestSuite) TestCreateNamespace() {
 		suite.prepare()
 		t := suite.T()
 
-	// Cleanup, should be registered in this order
+		// Cleanup, should be registered in this order
 		t.Cleanup(suite.lc.Cleanup)
 		t.Cleanup(suite.cleanup_client_conns)
 
-	// Galaxy Login
+		// Galaxy Login
 		var err error
 		err, suite.httpclient = suite.HTTPClientWithLogin("groot", "password", x.GalaxyNamespace)
 		require.NotNil(t, suite.httpclient, "Galaxy token is nil")
 		require.NoErrorf(t, err, "login failed")
 
-	// Create a new namespace
+		// Create a new namespace
 		ns, err := suite.CreateNamespaceWithRetry()
 		require.NoError(t, err)
 
-	// Log into the namespace as groot
+		// Log into the namespace as groot
 		err, suite.httpclient = suite.HTTPClientWithLogin("groot", "password", ns)
 		require.NotNil(t, suite.httpclient, "namespace token is nil")
 		require.NoErrorf(t, err, "login with namespace %d failed", ns)
 
-	// Create a new namespace using guardian of other namespace.
+		// Create a new namespace using guardian of other namespace.
 		_, err = suite.CreateNamespaceWithRetry()
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "Only guardian of galaxy is allowed to do this operation")
 
-	// Upgrade
-		suite.UpgradeAndTestCreateNamespace(ns, uE.dstVer)
+		// Upgrade
+		suite.UpgradeAndTestCreateNamespace(ns, uE.dstVer, dgraphtest.StopStart)
 	}
 }
 
-func (suite *MultitenancyTestSuite) UpgradeAndTestCreateNamespace(ns uint64, dstDB string) {
-	suite.UpgradeAndSetupClient(dstDB)
+func (suite *MultitenancyTestSuite) UpgradeAndTestCreateNamespace(ns uint64, dstDB string, uStrategy dgraphtest.UpgradeStrategy) {
+	suite.UpgradeAndSetupClient(dstDB, uStrategy)
 
 	var err error
 	t := suite.T()
 
-// As groot log into the namespace created in the source version.
+	// As groot log into the namespace created in the source version.
 	err, suite.httpclient = suite.HTTPClientWithLogin("groot", "password", ns)
 	require.NotNil(t, suite.httpclient, "namespace token is nil")
 	require.NoErrorf(t, err, "login with namespace %d failed", ns)
 
-// Create a new namespace using guardian of other namespace.
+	// Create a new namespace using guardian of other namespace.
 	_, err = suite.CreateNamespaceWithRetry()
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Only guardian of galaxy is allowed to do this operation")
@@ -732,56 +752,54 @@ func (suite *MultitenancyTestSuite) TestResetPassword() {
 		suite.prepare()
 		t := suite.T()
 
-	// Cleanup, should be registered in this order
+		// Cleanup, should be registered in this order
 		t.Cleanup(suite.lc.Cleanup)
 		t.Cleanup(suite.cleanup_client_conns)
 
-	// Galaxy Login
+		// Galaxy Login
 		var err error
 		err, suite.httpclient = suite.HTTPClientWithLogin("groot", "password", x.GalaxyNamespace)
 		require.NotNil(t, suite.httpclient.HttpToken, "Galaxy token is nil")
 		require.NoErrorf(t, err, "login failed")
 
-	// Create a new namespace
+		// Create a new namespace
 		ns, err := suite.CreateNamespaceWithRetry()
 		require.NoError(t, err)
 
-	// Reset Password
+		// Reset Password
 		_, err = suite.ResetPassword("groot", "newpassword", ns)
 		require.NoError(t, err)
 		c := *suite.httpclient
 		tokenAfterReset := &c
 
-	// Try and Fail with old password for groot
+		// Try and Fail with old password for groot
 		err, suite.httpclient = suite.HTTPClientWithLogin("groot", "password", ns)
 		require.Error(t, err, "expected error because incorrect login")
 		require.Nil(t, suite.httpclient, "nil token because incorrect login")
 
-	// Try and succeed with new password for groot
+		// Try and succeed with new password for groot
 		suite.httpclient = tokenAfterReset
 		err, suite.httpclient = suite.HTTPClientWithLogin("groot", "newpassword", ns)
 		require.NoError(t, err, "login failed")
 		require.Equal(t, suite.httpclient.HttpToken.Password, "newpassword", "new password matches the reset password")
 
-	// Upgrade and test reset password
-		suite.UpgradeAndTestResetPassword(ns, tokenAfterReset, uE.dstVer)
+		// Upgrade and test reset password
+		suite.UpgradeAndTestResetPassword(ns, tokenAfterReset, uE.dstVer, dgraphtest.StopStart)
 	}
 }
 
-func (suite *MultitenancyTestSuite) UpgradeAndTestResetPassword(ns uint64, tokenAfterReset *dgraphtest.HTTPClient, dstDB string) {
-	suite.UpgradeAndSetupClient(dstDB)
+func (suite *MultitenancyTestSuite) UpgradeAndTestResetPassword(ns uint64, tokenAfterReset *dgraphtest.HTTPClient, dstDB string, uStrategy dgraphtest.UpgradeStrategy) {
+	suite.UpgradeAndSetupClient(dstDB, uStrategy)
 
 	var err error
 	t := suite.T()
 
-// Try and Fail with old password for groot
-	suite.httpclient = tokenAfterReset
+	// Try and Fail with old password for groot
 	err, suite.httpclient = suite.HTTPClientWithLogin("groot", "password", ns)
 	require.Error(t, err, "expected error because incorrect login")
 	require.Nil(t, suite.httpclient, "nil token because incorrect login")
 
-// Try and succeed with new password for groot
-	suite.httpclient = tokenAfterReset
+	// Try and succeed with new password for groot
 	err, suite.httpclient = suite.HTTPClientWithLogin("groot", "newpassword", ns)
 	require.NoError(t, err, "login failed")
 	require.Equal(t, suite.httpclient.HttpToken.Password, "newpassword", "new password matches the reset password")
@@ -795,11 +813,11 @@ func (suite *MultitenancyTestSuite) TestDeleteNamespace() {
 		suite.prepare()
 		t := suite.T()
 
-	// Cleanup, should be registered in this order
+		// Cleanup, should be registered in this order
 		t.Cleanup(suite.lc.Cleanup)
 		t.Cleanup(suite.cleanup_client_conns)
 
-	// Galaxy Login
+		// Galaxy Login
 		var err error
 		err, suite.httpclient = suite.HTTPClientWithLogin("groot", "password", x.GalaxyNamespace)
 		require.NoErrorf(t, err, "login failed")
@@ -808,11 +826,11 @@ func (suite *MultitenancyTestSuite) TestDeleteNamespace() {
 		dc := suite.DgClientWithLogin("groot", "password", x.GalaxyNamespace)
 		dg[x.GalaxyNamespace] = *dc.Dgraph
 
-	// Create a new namespace
+		// Create a new namespace
 		ns, err := suite.CreateNamespaceWithRetry()
 		require.NoError(t, err)
 
-	// Log into namespace as groot.
+		// Log into namespace as groot.
 		dc = suite.DgClientWithLogin("groot", "password", ns)
 		dg[ns] = *dc.Dgraph
 
@@ -836,17 +854,19 @@ func (suite *MultitenancyTestSuite) TestDeleteNamespace() {
 				}
 			}
 		`
-			ccc := dg[ns]
-			suite.client.Dgraph = &ccc
+			c := dg[ns]
+			suite.client.Dgraph = &c
 			resp := suite.QueryData(query)
 			testutil.CompareJSON(t, expected, string(resp))
 		}
 
 		require.NoError(t, addData(x.GalaxyNamespace))
 		check(x.GalaxyNamespace, `{"me": [{"name":"0"}]}`)
+
 		require.NoError(t, addData(ns))
 		check(ns, fmt.Sprintf(`{"me": [{"name":"%d"}]}`, ns))
 
+		// Delete namespace
 		require.NoError(t, suite.DeleteNamespace(ns))
 		require.NoError(t, addData(x.GalaxyNamespace))
 		check(x.GalaxyNamespace, `{"me": [{"name":"0"}, {"name":"0"}]}`)
@@ -854,36 +874,35 @@ func (suite *MultitenancyTestSuite) TestDeleteNamespace() {
 		require.Contains(t, err.Error(), "Key is using the banned prefix")
 		check(ns, `{"me": []}`)
 
-	// No one should be able to delete the default namespace. Not even guardian of galaxy.
+		// No one should be able to delete the default namespace. Not even guardian of galaxy.
 		err = suite.DeleteNamespace(x.GalaxyNamespace)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "Cannot delete default namespace")
 
-	// Upgrade
-		suite.UpgradeAndTestDeleteNamespace(uE.dstVer)
+		// Upgrade
+		suite.UpgradeAndTestDeleteNamespace(uE.dstVer, dgraphtest.BackupRestore)
 	}
 }
 
-func (suite *MultitenancyTestSuite) UpgradeAndTestDeleteNamespace(dstDB string) {
-	suite.UpgradeAndSetupClient(dstDB)
+func (suite *MultitenancyTestSuite) UpgradeAndTestDeleteNamespace(dstDB string, uStrategy dgraphtest.UpgradeStrategy) {
+	suite.UpgradeAndSetupClient(dstDB, uStrategy)
 
-	var err error
 	t := suite.T()
 
-// Galaxy Login
+	// Galaxy Login
+	var err error
 	err, suite.httpclient = suite.HTTPClientWithLogin("groot", "password", x.GalaxyNamespace)
 	require.NoErrorf(t, err, "login failed")
 
-// Check the Delete Namespace in the upgraded version is identical to as in the source version.
 	dg := make(map[uint64]dgo.Dgraph)
 	dc := suite.DgClientWithLogin("groot", "password", x.GalaxyNamespace)
 	dg[x.GalaxyNamespace] = *dc.Dgraph
 
-// Create a new namespace
+	// Create a new namespace
 	ns, err := suite.CreateNamespaceWithRetry()
 	require.NoError(t, err)
 
-// Log into namespace as groot.
+	// Log into namespace as groot.
 	dc = suite.DgClientWithLogin("groot", "password", ns)
 	dg[ns] = *dc.Dgraph
 
@@ -907,25 +926,23 @@ func (suite *MultitenancyTestSuite) UpgradeAndTestDeleteNamespace(dstDB string) 
 			}
 		}
 	`
-		ccc := dg[ns]
-		suite.client.Dgraph = &ccc
+		c := dg[ns]
+		suite.client.Dgraph = &c
 		resp := suite.QueryData(query)
 		testutil.CompareJSON(t, expected, string(resp))
 	}
 
-	require.NoError(t, addData(x.GalaxyNamespace))
-	check(x.GalaxyNamespace, `{"me": [{"name":"0"}]}`)
 	require.NoError(t, addData(ns))
 	check(ns, fmt.Sprintf(`{"me": [{"name":"%d"}]}`, ns))
 
+	// Delete namespace
 	require.NoError(t, suite.DeleteNamespace(ns))
-	require.NoError(t, addData(x.GalaxyNamespace))
 	check(x.GalaxyNamespace, `{"me": [{"name":"0"}, {"name":"0"}]}`)
 	err = addData(ns)
 	require.Contains(t, err.Error(), "Key is using the banned prefix")
 	check(ns, `{"me": []}`)
 
-// No one should be able to delete the default namespace. Not even guardian of galaxy.
+	// No one should be able to delete the default namespace. Not even guardian of galaxy.
 	err = suite.DeleteNamespace(x.GalaxyNamespace)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Cannot delete default namespace")
@@ -936,15 +953,13 @@ func (suite *MultitenancyTestSuite) DgClientWithLogin(id, password string, ns ui
 	userClient := suite.client
 
 	require.NoError(t, x.RetryUntilSuccess(50, 100*time.Millisecond, func() error {
-		return userClient.Dgraph.LoginIntoNamespace(context.Background(), id, password, ns) 
+		return userClient.LoginIntoNamespace(context.Background(), id, password, ns) 
 	})) 
 
 	return userClient
 }
 
 func (suite *MultitenancyTestSuite) HTTPClientWithLogin(id, password string, ns uint64) (error, *dgraphtest.HTTPClient) {
-	//t := suite.T()
-
 	var err error
 	if suite.httpclient == nil {
 		suite.httpclient, err = suite.lc.HTTPClient()
@@ -962,9 +977,7 @@ func (suite *MultitenancyTestSuite) HTTPClientWithLogin(id, password string, ns 
 	return err, userClient
 }
 
-func (suite *MultitenancyTestSuite) HTTPClientLoginWithToken(id, password string, ns uint64, token string) (error, *dgraphtest.HTTPClient) {
-	//t := suite.T()
-
+func (suite *MultitenancyTestSuite) HTTPClientLoginWithToken(ns uint64) (error, *dgraphtest.HTTPClient) {
 	var err error
 	if suite.httpclient == nil {
 		suite.httpclient, err = suite.lc.HTTPClient()
@@ -972,7 +985,7 @@ func (suite *MultitenancyTestSuite) HTTPClientLoginWithToken(id, password string
 	userClient := suite.httpclient
 
 	err = x.RetryUntilSuccess(20, 100*time.Millisecond, func() error {
-		return userClient.LoginNSWithToken(id, password, ns, token)
+		return userClient.LoginUsingToken(ns)
 	})
 
 	if err != nil {
@@ -991,12 +1004,9 @@ func (suite *MultitenancyTestSuite) CreateNamespaceWithRetry() (uint64, error) {
 					  }   
 					}`  
 
-	//params := GraphQLParams{
-	//params := dgraphtest.GraphQLParams{
 	params := dgraphtest.GraphQLParams{
 		Query: createNs,
 	}
-	//resp, err := dgraphtest.RunAdminQuery(suite.lc, params)
 	resp, err := suite.httpclient.RunGraphqlQuery(params, true)
 	if err != nil {
 		return 0, err 
@@ -1090,7 +1100,6 @@ func (suite *MultitenancyTestSuite) CreateUser(username, password string) []byte
 			"pass": password,
 		},
 	}
-	//resp, err := dgraphtest.RunAdminQuery(suite.lc, params)
 	resp, err := suite.httpclient.RunGraphqlQuery(params, true)
 	if err != nil {
 		t.Log("Error not NIL")
@@ -1208,7 +1217,7 @@ func (suite *MultitenancyTestSuite) AddToGroup(userName, group string) {
 	require.True(t, foundGroup)
 }
 
-func (suite *MultitenancyTestSuite) AddRulesToGroup(group string, rules []Rule, newGroup bool) {
+func (suite *MultitenancyTestSuite) AddRulesToGroup(group string, rules []testutil.Rule, newGroup bool) {
 	addRuleToGroup := `mutation updateGroup($name: String!, $rules: [RuleRef!]!) {
 		updateGroup(input: {
 			filter: {
@@ -1275,7 +1284,7 @@ func (suite *MultitenancyTestSuite) ResetPassword(userID, newPass string, nsID u
 		},
 	}
 
-	resp, err := suite.httpclient.MakeGraphqlRequest(params, true)
+	resp, err := suite.httpclient.RunGraphqlQuery(params, true)
 	if err != nil {
 		return "", err
 	}
@@ -1287,7 +1296,7 @@ func (suite *MultitenancyTestSuite) ResetPassword(userID, newPass string, nsID u
 		}
 	}
 	t := suite.T()
-	require.NoError(t, json.Unmarshal(resp.Data, &result))
+	require.NoError(t, json.Unmarshal(resp, &result))
 	require.Equal(t, userID, result.ResetPassword.UserId)
 	require.Contains(t, result.ResetPassword.Message, "Reset password is successful")
 	return result.ResetPassword.UserId, nil

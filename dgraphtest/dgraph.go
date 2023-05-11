@@ -118,9 +118,10 @@ func (z *zero) ports() nat.PortSet {
 func (z *zero) cmd(c *LocalCluster) []string {
 	zcmd := []string{"/gobin/dgraph", "zero", fmt.Sprintf("--my=%s:%v", z.aname(), zeroGrpcPort), "--bindall",
 		fmt.Sprintf(`--replicas=%v`, c.conf.replicas), fmt.Sprintf(`--raft=idx=%v`, z.id+1), "--logtostderr",
-		fmt.Sprintf("-v=%d", c.conf.verbosity),
-		fmt.Sprintf("--limit refill-interval=%v", refillInterval),
-		fmt.Sprintf("--limit uid-lease=%v", uidLease)}
+		"--limit",
+		fmt.Sprintf("refill-interval=%v", refillInterval),
+		"--limit",
+		fmt.Sprintf("uid-lease=%v", uidLease)}
 	if z.id > 0 {
 		zcmd = append(zcmd, "--peer="+c.zeros[0].aname()+":"+zeroGrpcPort)
 	}

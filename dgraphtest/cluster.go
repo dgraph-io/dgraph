@@ -32,8 +32,9 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/pkg/errors"
 
-	"github.com/dgraph-io/dgo/v230"
-	"github.com/dgraph-io/dgo/v230/protos/api"
+	"github.com/dgraph-io/dgo/v210"
+	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -66,8 +67,9 @@ type HTTPClient struct {
 
 // GraphQLParams are used for making graphql requests to dgraph
 type GraphQLParams struct {
-	Query     string                 `json:"query"`
-	Variables map[string]interface{} `json:"variables"`
+	Query     string                        `json:"query"`
+	Variables map[string]interface{}        `json:"variables"`
+	Extensions    *schema.RequestExtensions `json:"extensions,omitempty"`
 }
 
 type graphQLResponse struct {
@@ -76,29 +78,31 @@ type graphQLResponse struct {
 	Extensions map[string]interface{} `json:"extensions,omitempty"`
 }
 
-func (hc *HTTPClient) LoginNSWithToken(user, password string, ns uint64, token string) error {
-	q := `mutation login($userId: String, $password: String, $namespace: Int, $refreshToken: String) {
-		login(userId: $userId, password: $password, namespace: $namespace, refreshToken: $refreshToken) {
-			response {
-				accessJWT
-				refreshJWT
-			}
-		}
-	}`
-	params := GraphQLParams{
-		Query: q,
-		Variables: map[string]interface{}{
-			"userId":    DefaultUser,
-			"password":  DefaultPassword,
-			"namespace": ns,
-			"refreshToken": token,
-		},
-	}
+func (hc *HTTPClient) LoginUsingToken(ns uint64) error {
+ 	q := `mutation login( $namespace: Int, $refreshToken:String) {
+ 		login(namespace: $namespace ,refreshToken: $refreshToken) {
+ 			response {
+ 				accessJWT
+ 				refreshJWT
+ 			}
+ 		}
+ 	}`
+ 	params := GraphQLParams{
+ 		Query: q,
+ 		Variables: map[string]interface{}{
+ 			"namespace":    ns,
+ 			"refreshToken": hc.RefreshToken,
+ 		},
+ 	}
 
-	resp, err := hc.RunGraphqlQuery(params, true)
-	if err != nil {
-		return err
-	}
+ 	return hc.doLogin(params, true)
+ }
+
+ func (hc *HTTPClient) doLogin(params GraphQLParams, isAdmin bool) error {
+ 	resp, err := hc.RunGraphqlQuery(params, isAdmin)
+ 	if err != nil {
+ 		return err
+ 	}
 	var r struct {
 		Login struct {
 			Response struct {
@@ -110,16 +114,13 @@ func (hc *HTTPClient) LoginNSWithToken(user, password string, ns uint64, token s
 	if err := json.Unmarshal(resp, &r); err != nil {
 		return errors.Wrap(err, "error unmarshalling response into object")
 	}
-	if r.Login.Response.AccessJWT == "" {
+ 	if r.Login.Response.AccessJWT == "" {
 		return errors.Errorf("no access JWT found in the response")
-	}
-
-	hc.HttpToken = &HttpToken{
-		UserId:       user,
-		Password:     password,
-		AccessJwt:    r.Login.Response.AccessJWT,
-		RefreshToken: r.Login.Response.RefreshJwt,
-	}
+ 	}
+ 	hc.HttpToken = &HttpToken{
+ 		AccessJwt:    r.Login.Response.AccessJWT,
+ 		RefreshToken: r.Login.Response.RefreshJwt,
+ 	}
 	return nil
 }
 
