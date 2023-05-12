@@ -44,21 +44,9 @@ func (c *LocalCluster) setupBinary() error {
 		return copyBinary(binDir, c.tempBinDir, c.conf.version)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), cloneTimeout)
-	defer cancel()
-	repo, err := git.PlainOpen(repoDir)
-	if err != nil && err == git.ErrRepositoryNotExists {
-		log.Printf("[INFO] cloning dgraph repo")
-		repo, err = git.PlainCloneContext(ctx, repoDir, false, &git.CloneOptions{URL: dgraphRepoUrl})
-		if err != nil {
-			return errors.Wrap(err, "error while cloning dgraph git repo")
-		}
-	} else if err != nil {
-		return errors.Wrap(err, "error while opening git repo")
-	} else {
-		if err := repo.Fetch(&git.FetchOptions{}); err != nil && err != git.NoErrAlreadyUpToDate {
-			return errors.Wrap(err, "error while fetching git repo")
-		}
+	repo, err := openDgraphRepo()
+	if err != nil {
+		return err
 	}
 
 	hash, err := repo.ResolveRevision(plumbing.Revision(c.conf.version))
@@ -75,12 +63,34 @@ func (c *LocalCluster) setupBinary() error {
 	return copyBinary(binDir, c.tempBinDir, c.conf.version)
 }
 
+func openDgraphRepo() (*git.Repository, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), cloneTimeout)
+	defer cancel()
+
+	repo, err := git.PlainOpen(repoDir)
+	if err != nil && err == git.ErrRepositoryNotExists {
+		log.Printf("[INFO] cloning dgraph repo")
+		repo, err = git.PlainCloneContext(ctx, repoDir, false, &git.CloneOptions{URL: dgraphRepoUrl})
+		if err != nil {
+			return nil, errors.Wrap(err, "error while cloning dgraph git repo")
+		}
+	} else if err != nil {
+		return nil, errors.Wrap(err, "error while opening git repo")
+	} else {
+		if err := repo.Fetch(&git.FetchOptions{}); err != nil && err != git.NoErrAlreadyUpToDate {
+			return nil, errors.Wrap(err, "error while fetching git repo")
+		}
+	}
+
+	return repo, nil
+}
+
 func checkoutGitRepo(repo *git.Repository, hash *plumbing.Hash) error {
 	worktree, err := repo.Worktree()
 	if err != nil {
 		return errors.Wrap(err, "error while getting git repo work tree")
 	}
-	if err := worktree.Checkout(&git.CheckoutOptions{Hash: *hash}); err != nil {
+	if err := worktree.Checkout(&git.CheckoutOptions{Hash: *hash, Force: true}); err != nil {
 		return errors.Wrap(err, fmt.Sprintf("error while checking out git repo with hash [%v]", hash.String()))
 	}
 	return nil

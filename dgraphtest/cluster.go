@@ -26,7 +26,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/pkg/errors"
 
@@ -407,6 +406,13 @@ func (gc *GrpcClient) DropAll() error {
 	return gc.Alter(ctx, &api.Operation{DropAll: true})
 }
 
+// DropPredicate drops the predicate from the data in the db
+func (gc *GrpcClient) DropPredicate(pred string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+	defer cancel()
+	return gc.Alter(ctx, &api.Operation{DropAttr: pred})
+}
+
 // Mutate performs a given mutation in a txn
 func (gc *GrpcClient) Mutate(rdfs string) (*api.Response, error) {
 	txn := gc.NewTxn()
@@ -450,9 +456,9 @@ func isParent(ancestor, descendant string) (bool, error) {
 		return false, nil
 	}
 
-	repo, err := git.PlainOpen(repoDir)
+	repo, err := openDgraphRepo()
 	if err != nil {
-		return false, errors.Wrap(err, "error opening git repo")
+		return false, err
 	}
 
 	ancestorHash, err := repo.ResolveRevision(plumbing.Revision(ancestor))

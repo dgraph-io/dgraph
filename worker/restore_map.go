@@ -240,7 +240,7 @@ func (m *mapper) writeToDisk(buf *z.Buffer) error {
 		glog.Infof("Created new backup map file: %s of size: %s\n",
 			fi.Name(), humanize.IBytes(uint64(fi.Size())))
 	}
-	return f.Close()
+	return nil
 }
 
 func (m *mapper) sendForWriting() error {

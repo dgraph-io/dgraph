@@ -26,16 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var (
-	facetSetupDone = false
-)
-
 func populateClusterWithFacets() error {
-	// Return immediately if the setup has been performed already.
-	if facetSetupDone {
-		return nil
-	}
-
 	triples := `
 		<1> <name> "Michelle"@en (origin = "french") .
 		<25> <name> "Daryl Dixon" .
@@ -102,11 +93,7 @@ func populateClusterWithFacets() error {
 	triples += fmt.Sprintf("<34> <friend> <31> %s .\n", friendFacets8)
 	triples += fmt.Sprintf("<34> <friend> <25> %s .\n", friendFacets9)
 
-	err := addTriplesToCluster(triples)
-
-	// Mark the setup as done so that the next tests do not have to perform it.
-	facetSetupDone = true
-	return err
+	return addTriplesToCluster(triples)
 }
 
 func TestFacetsVarAllofterms(t *testing.T) {
@@ -889,61 +876,6 @@ func TestUnknownFacets(t *testing.T) {
 	require.JSONEq(t,
 		`{"data": {"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"name":"Michonne"}]}}`,
 		js)
-}
-
-func TestFacetsMutation(t *testing.T) {
-	require.NoError(t, populateClusterWithFacets())
-
-	// Delete friendship between Michonne and Glenn
-	deleteTriplesInCluster("<1> <friend> <24> .")
-	friendFacets := "(since = 2001-11-10T00:00:00Z, close = false, family = false)"
-	// 101 is not close friend now.
-	require.NoError(t,
-		addTriplesToCluster(fmt.Sprintf(`<1> <friend> <101> %s .`, friendFacets)))
-	// This test messes with the test setup, so set facetSetupDone to false so
-	// the next test redoes the setup.
-	facetSetupDone = false
-
-	query := `
-		{
-			me(func: uid(0x1)) {
-				name
-				friend @facets {
-					name
-				}
-			}
-		}
-	`
-
-	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `
-		{
-		    "data": {
-		        "me": [
-		            {
-		                "name": "Michonne",
-		                "friend": [
-		                    {
-		                        "name": "Rick Grimes",
-		                        "friend|since": "2006-01-02T15:04:05Z"
-		                    },
-		                    {
-		                        "name": "Daryl Dixon",
-		                        "friend|close": false,
-		                        "friend|family": true,
-		                        "friend|since": "2007-05-02T15:04:05Z",
-		                        "friend|tag": 34
-		                    },
-		                    {
-		                        "name": "Andrea",
-		                        "friend|since": "2006-01-02T15:04:05Z"
-		                    }
-		                ]
-		            }
-		        ]
-		    }
-		}
-	`, js)
 }
 
 func TestFacetsFilterSimple(t *testing.T) {

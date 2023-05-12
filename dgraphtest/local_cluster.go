@@ -459,7 +459,7 @@ func (c *LocalCluster) Upgrade(version string, strategy UpgradeStrategy) error {
 			return err
 		}
 		if err := hc.LoginIntoNamespace(DefaultUser, DefaultPassword, 0); err != nil {
-			return err
+			return errors.Wrapf(err, "error during login before upgrade")
 		}
 		if err := hc.Backup(true, DefaultBackupDir); err != nil {
 			return errors.Wrap(err, "error taking backup during upgrade")
