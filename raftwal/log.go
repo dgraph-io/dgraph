@@ -114,7 +114,7 @@ func openLogFile(dir string, fid int64) (*logFile, error) {
 			Dir:                           dir,
 			EncryptionKey:                 encryptionKey,
 			EncryptionKeyRotationDuration: 10 * 24 * time.Hour,
-			InMemory:                      false,
+			InMemory:                      true,
 		}
 		// This won't open Badger. It would only use its key registry.
 		if lf.registry, err = badger.OpenKeyRegistry(krOpt); err != nil {

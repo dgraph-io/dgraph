@@ -84,8 +84,6 @@ func (opt *Options) validate() {
 	x.Check(err)
 	td, err := filepath.Abs(x.WorkerConfig.TmpDir)
 	x.Check(err)
-	x.AssertTruef(pd != wd,
-		"Posting and WAL directory cannot be the same ('%s').", opt.PostingDir)
 	x.AssertTruef(pd != td,
 		"Posting and Tmp directory cannot be the same ('%s').", opt.PostingDir)
 	x.AssertTruef(wd != td,
