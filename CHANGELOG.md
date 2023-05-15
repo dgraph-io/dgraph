@@ -91,6 +91,42 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
     - fix(sec): CVE-2022-41721 (https://github.com/dgraph-io/dgraph/pull/8633)
     - fix(sec): CVE & OS Patching (https://github.com/dgraph-io/dgraph/pull/8634)
 
+   - <details>
+      <summary>CVE Fixes (31 total)</summary>
+
+        - CVE-2013-4235
+        - CVE-2016-20013
+        - CVE-2016-2781
+        - CVE-2017-11164
+        - CVE-2021-36222
+        - CVE-2021-37750
+        - CVE-2021-39537
+        - CVE-2021-44758
+        - CVE-2022-28321
+        - CVE-2022-29458
+        - CVE-2022-3219
+        - CVE-2022-3437
+        - CVE-2022-3821
+        - CVE-2022-41717
+        - CVE-2022-41721
+        - CVE-2022-41723
+        - CVE-2022-42898
+        - CVE-2022-4304
+        - CVE-2022-43552
+        - CVE-2022-4415
+        - CVE-2022-4450
+        - CVE-2022-44640
+        - CVE-2022-48303
+        - CVE-2023-0215
+        - CVE-2023-0286
+        - CVE-2023-0361
+        - CVE-2023-0464
+        - CVE-2023-0465
+        - CVE-2023-0466
+        - CVE-2023-23916
+        - CVE-2023-26604
+        </details>
+
 ### Changed
 
 - **Core Dgraph**
@@ -110,7 +146,6 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
     - chore(linter): fix some of the warnings from gas linter (https://github.com/dgraph-io/dgraph/pull/8664)
     - chore(linter): fix golangci config and some issues in tests (https://github.com/dgraph-io/dgraph/pull/8669)
     - fix(linter): address gosimple linter reports & errors (https://github.com/dgraph-io/dgraph/pull/8628)
-
 
 ## [v23.0.0-rc1] - 2023-04-11
 [v23.0.0-rc1]: https://github.com/dgraph-io/dgraph/compare/v22.0.2...v23.0.0-rc1
