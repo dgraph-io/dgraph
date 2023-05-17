@@ -57,8 +57,6 @@ const (
 	localVersion       = "local"
 	waitDurBeforeRetry = time.Second
 	requestTimeout     = 90 * time.Second
-	refillInterval    = "20s"
-	uidLease          = 50
 )
 
 var (
@@ -119,9 +117,19 @@ func (z *zero) cmd(c *LocalCluster) []string {
 	zcmd := []string{"/gobin/dgraph", "zero", fmt.Sprintf("--my=%s:%v", z.aname(), zeroGrpcPort), "--bindall",
 		fmt.Sprintf(`--replicas=%v`, c.conf.replicas), fmt.Sprintf(`--raft=idx=%v`, z.id+1), "--logtostderr",
 		"--limit",
+		fmt.Sprintf("refill-interval=%v", c.conf.refillInterval),
+		"--limit",
+		fmt.Sprintf("uid-lease=%v", c.conf.uidLease)}
+
+/*
+		fmt.Sprintf(`--limit refill-interval=%v; uid-lease=%v`, refillInterval, uidLease)}
+		acmd = append(acmd, fmt.Sprintf(`--acl=secret-file=%s; access-ttl=%s`, aclSecretMountPath, c.conf.aclTTL))
+		"--limit",
 		fmt.Sprintf("refill-interval=%v", refillInterval),
 		"--limit",
 		fmt.Sprintf("uid-lease=%v", uidLease)}
+*/
+
 	if z.id > 0 {
 		zcmd = append(zcmd, "--peer="+c.zeros[0].aname()+":"+zeroGrpcPort)
 	}

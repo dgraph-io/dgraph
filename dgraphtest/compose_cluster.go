@@ -28,11 +28,18 @@ func NewComposeCluster() *ComposeCluster {
 }
 
 func (c *ComposeCluster) Client() (*GrpcClient, func(), error) {
-	return nil, nil, errNotImplemented
+ 	client, err := testutil.DgraphClient(testutil.SockAddr)
+ 	if err != nil {
+ 		return nil, nil, err
+ 	}
+
+ 	return &GrpcClient{Dgraph: client}, func() {}, nil
 }
 
 func (c *ComposeCluster) HTTPClient() (*HTTPClient, error) {
-	return nil, errNotImplemented
+ 	adminUrl := "http://" + testutil.SockAddrHttp + "/admin"
+ 	graphQLUrl := "http://" + testutil.SockAddrHttp + "/graphql"
+ 	return &HTTPClient{adminURL: adminUrl, graphqlURL: graphQLUrl, HttpToken: &HttpToken{}}, nil
 }
 
 func (c *ComposeCluster) AlphasHealth() ([]string, error) {

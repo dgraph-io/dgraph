@@ -37,16 +37,18 @@ var UpgradeCombos = [][]string{
 }
 
 type ClusterConfig struct {
-	prefix     string
-	numAlphas  int
-	numZeros   int
-	replicas   int
-	verbosity  int
-	acl        bool
-	aclTTL     time.Duration
-	encryption bool
-	version    string
-	volumes    map[string]string
+	prefix         string
+	numAlphas      int
+	numZeros       int
+	replicas       int
+	verbosity      int
+	acl            bool
+	aclTTL         time.Duration
+	encryption     bool
+	version        string
+	volumes        map[string]string
+	refillInterval string
+	uidLease       int
 }
 
 func NewClusterConfig() ClusterConfig {
@@ -54,13 +56,15 @@ func NewClusterConfig() ClusterConfig {
 	defaultBackupVol := fmt.Sprintf("%v_backup", prefix)
 	defaultExportVol := fmt.Sprintf("%v_export", prefix)
 	return ClusterConfig{
-		prefix:    prefix,
-		numAlphas: 1,
-		numZeros:  1,
-		replicas:  1,
-		verbosity: 2,
-		version:   localVersion,
-		volumes:   map[string]string{DefaultBackupDir: defaultBackupVol, DefaultExportDir: defaultExportVol},
+		prefix:         prefix,
+		numAlphas:      1,
+		numZeros:       1,
+		replicas:       1,
+		verbosity:      2,
+		version:        localVersion,
+		volumes:        map[string]string{DefaultBackupDir: defaultBackupVol, DefaultExportDir: defaultExportVol},
+		refillInterval: "20s",
+		uidLease:       50,
 	}
 }
 
@@ -104,5 +108,15 @@ func (cc ClusterConfig) WithVersion(version string) ClusterConfig {
 // name volname and mount directory specified as dir inside the container
 func (cc ClusterConfig) WithAlphaVolume(volname, dir string) ClusterConfig {
 	cc.volumes[dir] = volname
+	return cc
+}
+
+func (cc ClusterConfig) WithRefillInterval(interval string) ClusterConfig {
+	cc.refillInterval = interval
+	return cc
+}
+
+func (cc ClusterConfig) WithUidLease(uidLease int) ClusterConfig {
+	cc.uidLease = uidLease
 	return cc
 }

@@ -1,4 +1,4 @@
-//go:build upgrade
+//go:build integration
 
 /*
  * Copyright 2023 Dgraph Labs, Inc. and Contributors
@@ -21,7 +21,6 @@ package main
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -36,48 +35,33 @@ var srcDB, dstDB string = "v22.0.2", "v23.0.0-rc1"
 type MultitenancyTestSuite struct {
 	suite.Suite
 	dc dgraphtest.Cluster
-	lc *dgraphtest.LocalCluster
 	cleanup func()
 }
 
 func (suite *MultitenancyTestSuite) SetupTest() {
-	conf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).WithReplicas(1).
-		WithACL(20 * time.Second).WithEncryption().WithVersion(srcDB)
-
-	c, err := dgraphtest.NewLocalCluster(conf)
-	x.Panic(err)
-
-	x.Panic(c.Start())
-
-	suite.dc = c
-	suite.lc = c
+	suite.dc = dgraphtest.NewComposeCluster()
 }
 
 func (suite *MultitenancyTestSuite) TearDownTest() {
 	t := suite.T()
 
-	t.Cleanup(suite.lc.Cleanup)
 	t.Cleanup(suite.cleanup)
+}
+
+func (suite *MultitenancyTestSuite) Upgrade(dstDB string, uStrategy dgraphtest.UpgradeStrategy) {
+	// Not implemented for integration tests
 }
 
 func (suite *MultitenancyTestSuite) prepare() {
 	t := suite.T()
 
-	gc, cleanup, err := suite.dc.Client()
-	suite.cleanup = cleanup
+	gc, cu, err := suite.dc.Client()
+	suite.cleanup = cu
 	require.NoError(t, err)
 	require.NoError(t, gc.LoginIntoNamespace(context.Background(), "groot", "password", x.GalaxyNamespace), "login with galaxy failed")
 	require.NoError(t, gc.Alter(context.Background(), &api.Operation{DropAll: true}))
 }
 
-func (suite *MultitenancyTestSuite) Upgrade(dstDB string, uStrategy dgraphtest.UpgradeStrategy) {
-//	t := suite.T()
-
-//	if err := suite.lc.Upgrade(dstDB, uStrategy); err != nil {
-//		t.Fatal(err)
-//	}
-}
-
-func TestMultitenancyTestSuite(t *testing.T) {
+func TestACLSuite(t *testing.T) {
 	suite.Run(t, new(MultitenancyTestSuite))
 }

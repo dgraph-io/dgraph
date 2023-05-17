@@ -25,9 +25,7 @@ import (
 	"strings"
 	"testing"
 	"time"
-	"io"
 
-	"github.com/golang/glog"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/pkg/errors"
@@ -78,6 +76,18 @@ type graphQLResponse struct {
 	Extensions map[string]interface{} `json:"extensions,omitempty"`
 }
 
+type Rule struct {
+	Predicate  string `json:"predicate"`
+	Permission int32  `json:"permission"`
+}
+
+type Result struct {
+	DeleteNamespace struct {
+		NamespaceId int    `json:"namespaceId"`
+		Message     string `json:"message"`
+	}
+}
+
 func (hc *HTTPClient) LoginUsingToken(ns uint64) error {
  	q := `mutation login( $namespace: Int, $refreshToken:String) {
  		login(namespace: $namespace ,refreshToken: $refreshToken) {
@@ -96,9 +106,9 @@ func (hc *HTTPClient) LoginUsingToken(ns uint64) error {
  	}
 
  	return hc.doLogin(params, true)
- }
+}
 
- func (hc *HTTPClient) doLogin(params GraphQLParams, isAdmin bool) error {
+func (hc *HTTPClient) doLogin(params GraphQLParams, isAdmin bool) error {
  	resp, err := hc.RunGraphqlQuery(params, isAdmin)
  	if err != nil {
  		return err
@@ -117,6 +127,7 @@ func (hc *HTTPClient) LoginUsingToken(ns uint64) error {
  	if r.Login.Response.AccessJWT == "" {
 		return errors.Errorf("no access JWT found in the response")
  	}
+
  	hc.HttpToken = &HttpToken{
  		AccessJwt:    r.Login.Response.AccessJWT,
  		RefreshToken: r.Login.Response.RefreshJwt,
@@ -142,31 +153,40 @@ func (hc *HTTPClient) LoginIntoNamespace(user, password string, ns uint64) error
 		},
 	}
 
-	resp, err := hc.RunGraphqlQuery(params, true)
-	if err != nil {
-		return err
+	hc.HttpToken = &HttpToken{
+		UserId:   user,
+		Password: password,
 	}
-	var r struct {
-		Login struct {
-			Response struct {
-				AccessJWT  string
-				RefreshJwt string
+	hc.doLogin(params, true)
+
+	return nil
+}
+
+func (hc *HTTPClient) Login(user, password string, ns uint64) error {
+	login := `mutation login($userId: String, $password: String, $namespace: Int, $refreshToken: String) {
+		login(userId: $userId, password: $password, namespace: $namespace, refreshToken: $refreshToken) {
+			response {
+				accessJWT
+				refreshJWT
 			}
 		}
-	}
-	if err := json.Unmarshal(resp, &r); err != nil {
-		return errors.Wrap(err, "error unmarshalling response into object")
-	}
-	if r.Login.Response.AccessJWT == "" {
-		return errors.Errorf("no access JWT found in the response")
+	}`
+	params := GraphQLParams{
+		Query: login,
+		Variables: map[string]interface{}{
+			"userId":       user,
+			"password":     password,
+			"namespace":    ns,
+			"refreshToken": hc.RefreshToken,
+		},
 	}
 
 	hc.HttpToken = &HttpToken{
-		UserId:       user,
-		Password:     password,
-		AccessJwt:    r.Login.Response.AccessJWT,
-		RefreshToken: r.Login.Response.RefreshJwt,
+		UserId:   user,
+		Password: password,
 	}
+	hc.doLogin(params, true)
+
 	return nil
 }
 
@@ -211,181 +231,6 @@ func (hc *HTTPClient) RunGraphqlQuery(params GraphQLParams, admin bool) ([]byte,
 	return gqlResp.Data, nil
 }
 
-// LoginParams stores the information needed to perform a login request.
-type LoginParams struct {
-	Endpoint   string
-	UserID     string
-	Passwd     string
-	Namespace  uint64
-	RefreshJwt string
-}
-
-type GraphQLResponse struct {
-	Data       json.RawMessage        `json:"data,omitempty"`
-	Errors     x.GqlErrorList         `json:"errors,omitempty"`
-	Extensions map[string]interface{} `json:"extensions,omitempty"`
-}
-
-// HttpLogin sends a HTTP request to the server
-// and returns the access JWT and refresh JWT extracted from
-// the HTTP response
-func HttpLogin(params *LoginParams) (*HttpToken, error) {
-	loginPayload := api.LoginRequest{}
-	if len(params.RefreshJwt) > 0 {
-		loginPayload.RefreshToken = params.RefreshJwt
-	} else {
-		loginPayload.Userid = params.UserID
-		loginPayload.Password = params.Passwd
-	}
-
-	login := `mutation login($userId: String, $password: String, $namespace: Int, $refreshToken: String) {
-		login(userId: $userId, password: $password, namespace: $namespace, refreshToken: $refreshToken) {
-			response {
-				accessJWT
-				refreshJWT
-			}
-		}
-	}`
-
-	gqlParams := GraphQLParams{
-		Query: login,
-		Variables: map[string]interface{}{
-			"userId":       params.UserID,
-			"password":     params.Passwd,
-			"namespace":    params.Namespace,
-			"refreshToken": params.RefreshJwt,
-		},
-	}
-	body, err := json.Marshal(gqlParams)
-	if err != nil {
-		return nil, errors.Wrapf(err, "unable to marshal body")
-	}
-
-	req, err := http.NewRequest("POST", params.Endpoint, bytes.NewBuffer(body))
-	if err != nil {
-		return nil, errors.Wrapf(err, "unable to create request")
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, errors.Wrapf(err, "login through curl failed")
-	}
-	defer func() {
-		if err := resp.Body.Close(); err != nil {
-			glog.Warningf("error closing body: %v", err)
-		}
-	}()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, errors.Wrapf(err, "unable to read from response")
-	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, errors.New(fmt.Sprintf("got non 200 response from the server with %s ",
-			string(respBody)))
-	}
-
-	var gqlResp GraphQLResponse
-	if err := json.Unmarshal(respBody, &gqlResp); err != nil {
-		return nil, err
-	}
-
-	if len(gqlResp.Errors) > 0 {
-		return nil, errors.Errorf(gqlResp.Errors.Error())
-	}
-
-	if gqlResp.Data == nil {
-		return nil, errors.Wrapf(err, "data entry found in the output")
-	}
-
-	type Response struct {
-		Login struct {
-			Response struct {
-				AccessJWT  string
-				RefreshJwt string
-			}
-		}
-	}
-	var r Response
-	if err := json.Unmarshal(gqlResp.Data, &r); err != nil {
-		return nil, err
-	}
-
-	if r.Login.Response.AccessJWT == "" {
-		return nil, errors.Errorf("no access JWT found in the output")
-	}
-	if r.Login.Response.RefreshJwt == "" {
-		return nil, errors.Errorf("no refresh JWT found in the output")
-	}
-
-	return &HttpToken{
-		UserId:       params.UserID,
-		Password:     params.Passwd,
-		AccessJwt:    r.Login.Response.AccessJWT,
-		RefreshToken: r.Login.Response.RefreshJwt,
-	}, nil
-}
-
-func (hc *HTTPClient) MakeGraphqlRequest(params GraphQLParams, admin bool) (*GraphQLResponse, error) {
-	_, err := hc.MakeGQLRequestWithAccessJwt(&params, hc.AccessJwt)
-	if err != nil {
-		return nil, err
-	}
-
-	newtoken, err := HttpLogin(&LoginParams{
-		Endpoint:   hc.adminURL,
-		UserID:     hc.UserId,
-		Passwd:     hc.Password,
-		RefreshJwt: hc.RefreshToken,
-	})
-	hc.AccessJwt = newtoken.AccessJwt
-	hc.RefreshToken = newtoken.RefreshToken
-
-	return hc.MakeGQLRequestWithAccessJwt(&params, hc.AccessJwt)
-}
-
-func (hc *HTTPClient) MakeGQLRequestWithAccessJwt(params *GraphQLParams, accessToken string) (*GraphQLResponse, error) {
-	b, err := json.Marshal(params)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodPost, hc.adminURL, bytes.NewBuffer(b))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	if accessToken != "" {
-		req.Header.Set("X-Dgraph-AccessToken", accessToken)
-	}
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-
-	defer func() {
-		if err := resp.Body.Close(); err != nil {
-			glog.Warningf("error closing body: %v", err)
-		}
-	}()
-
-	b, err = io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	var gqlResp GraphQLResponse
-	err = json.Unmarshal(b, &gqlResp)
-	if err != nil {
-		return nil, err
-	}
-
-	return &gqlResp, nil
-}
-
 // Backup creates a backup of dgraph at a given path
 func (hc *HTTPClient) Backup(forceFull bool, backupPath string) error {
 	const query = `mutation backup($dest: String!, $ff: Boolean!) {
@@ -396,7 +241,6 @@ func (hc *HTTPClient) Backup(forceFull bool, backupPath string) error {
 			taskId
 		}
 	}`
-	//params := GraphQLParams{
 	params := GraphQLParams{
 		Query:     query,
 		Variables: map[string]interface{}{"dest": backupPath, "ff": forceFull},
@@ -430,7 +274,6 @@ func (hc *HTTPClient) WaitForTask(taskId string) error {
 			status
 		}
 	}`
-	//params := GraphQLParams{
 	params := GraphQLParams{
 		Query:     query,
 		Variables: map[string]interface{}{"id": taskId},
@@ -618,6 +461,311 @@ func (hc *HTTPClient) UpdateGQLSchema(sch string) error {
 		return err
 	}
 	return nil
+}
+
+func (hc *HTTPClient) CreateNamespaceWithRetry() (uint64, error) {
+	createNs := `mutation {
+					 addNamespace
+					  {   
+					    namespaceId
+					    message
+					  }   
+					}`  
+
+	params := GraphQLParams{
+		Query: createNs,
+	}
+	resp, err := hc.RunGraphqlQuery(params, true)
+	if err != nil {
+		return 0, err 
+	}   
+
+	var result struct {
+		AddNamespace struct {
+			NamespaceId int    `json:"namespaceId"`
+			Message     string `json:"message"`
+		}   
+	}   
+	if err := json.Unmarshal(resp, &result); err != nil {
+		return 0, errors.Wrap(err, "error unmarshalling CreateNamespaceWithRetry() response")
+	}   
+	if strings.Contains(result.AddNamespace.Message, "Created namespace successfully") {
+		return uint64(result.AddNamespace.NamespaceId), nil
+	}
+	return 0, errors.New(result.AddNamespace.Message)
+}
+
+func (hc *HTTPClient) DeleteNamespace(nsID uint64) (Result, error) {
+	deleteReq := `mutation deleteNamespace($namespaceId: Int!) {
+			deleteNamespace(input: {namespaceId: $namespaceId}){
+    		namespaceId
+    		message
+  		}
+	}`
+
+	params := GraphQLParams{
+		Query: deleteReq,
+		Variables: map[string]interface{}{
+			"namespaceId": nsID,
+		},
+	}
+
+	resp, err := hc.RunGraphqlQuery(params, true)
+	if err != nil {
+		return Result{}, err 
+	}   
+
+	var result Result
+	if err = json.Unmarshal(resp, &result); err != nil {
+		return Result{}, err
+	}
+
+	return result, nil
+}
+
+func (hc *HTTPClient) CreateUser(username, password string) ([]byte, error) {
+	addUser := `
+	mutation addUser($name: String!, $pass: String!) {
+		addUser(input: [{name: $name, password: $pass}]) {
+			user {
+				name
+			}
+		}
+	}`
+
+	params := GraphQLParams{
+		Query: addUser,
+		Variables: map[string]interface{}{
+			"name": username,
+			"pass": password,
+		},
+	}
+	resp, err := hc.RunGraphqlQuery(params, true)
+	if err != nil {
+		return nil, err
+	}
+
+	type Response struct {
+		AddUser struct {
+			User []struct {
+				Name string
+			}
+		}
+	}
+	var r Response
+	if err = json.Unmarshal(resp, &r); err != nil {
+		return nil, err
+	}
+
+	return resp, nil
+}
+
+func (hc *HTTPClient) CreateGroup(name string) error {
+	addGroup := `
+	mutation addGroup($name: String!) {
+		addGroup(input: [{name: $name}]) {
+			group {
+				name
+			}
+		}
+	}`
+
+	params := GraphQLParams{
+		Query: addGroup,
+		Variables: map[string]interface{}{
+			"name": name,
+		},
+	}
+	resp, err := hc.RunGraphqlQuery(params, true)
+	if err != nil {
+		return err
+	}
+
+	type Response struct {
+		AddGroup struct {
+			Group []struct {
+				Name string
+			}
+		}
+	}
+	var r Response
+	if err = json.Unmarshal(resp, &r); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (hc *HTTPClient) AddToGroup(userName, group string) error {
+	addUserToGroup := `mutation updateUser($name: String!, $group: String!) {
+		updateUser(input: {
+			filter: {
+				name: {
+					eq: $name
+				}
+			},
+			set: {
+				groups: [
+					{ name: $group }
+				]
+			}
+		}) {
+			user {
+				name
+				groups {
+					name
+				}
+			}
+		}
+	}`
+
+	params := GraphQLParams{
+		Query: addUserToGroup,
+		Variables: map[string]interface{}{
+			"name":  userName,
+			"group": group,
+		},
+	}
+	resp, err := hc.RunGraphqlQuery(params, true)
+	if err != nil {
+		return err
+	}
+
+	var result struct {
+		UpdateUser struct {
+			User []struct {
+				Name   string
+				Groups []struct {
+					Name string
+				}
+			}
+			Name string
+		}
+	}
+	if err = json.Unmarshal(resp, &result); err != nil {
+		return err
+	}
+
+	// There should be a user in response.
+	if len(result.UpdateUser.User) < 1 {
+		return errors.New("Response has no user")
+	}
+	// User's name must be <userName>
+	if userName != result.UpdateUser.User[0].Name {
+		return fmt.Errorf("User's name is not %s", userName)
+	}
+
+	var foundGroup bool
+	for _, usr := range result.UpdateUser.User {
+		for _, grp := range usr.Groups {
+			if grp.Name == group {
+				foundGroup = true
+				break
+			}
+		}
+	}
+
+	if foundGroup {
+		return nil
+	}
+
+	return errors.New("Response contains no added group")
+}
+
+func (hc *HTTPClient) AddRulesToGroup(group string, rules []Rule, newGroup bool) (string, string, error) {
+	addRuleToGroup := `mutation updateGroup($name: String!, $rules: [RuleRef!]!) {
+		updateGroup(input: {
+			filter: {
+				name: {
+					eq: $name
+				}
+			},
+			set: {
+				rules: $rules
+			}
+		}) {
+			group {
+				name
+				rules {
+					predicate
+					permission
+				}
+			}
+		}
+	}`
+
+	params := GraphQLParams{
+		Query: addRuleToGroup,
+		Variables: map[string]interface{}{
+			"name":  group,
+			"rules": rules,
+		},
+	}
+	resp, err := hc.RunGraphqlQuery(params, true)
+	if err != nil {
+		return "", "", err
+	}
+
+	rulesb, err := json.Marshal(rules)
+	if err != nil {
+		return "", "", err
+	}
+	expectedOutput := fmt.Sprintf(`{
+		  "updateGroup": {
+			"group": [
+			  {
+				"name": "%s",
+				"rules": %s
+			  }
+			]
+		  }
+	  }`, group, rulesb)
+	if newGroup {
+		return expectedOutput, string(resp), nil
+	}
+
+	return "", "", nil
+}
+
+func (hc *HTTPClient) ResetPassword(userID, newPass string, nsID uint64) (string, error) {
+	resetpasswd := `mutation resetPassword($userID: String!, $newpass: String!, $namespaceId: Int!){
+		resetPassword(input: {userId: $userID, password: $newpass, namespace: $namespaceId}) {
+		  userId
+		  message
+		}
+	  }`
+
+	params := GraphQLParams{
+		Query: resetpasswd,
+		Variables: map[string]interface{}{
+			"namespaceId": nsID,
+			"userID":      userID,
+			"newpass":     newPass,
+		},
+	}
+
+	resp, err := hc.RunGraphqlQuery(params, true)
+	if err != nil {
+		return "", err
+	}
+
+	var result struct {
+		ResetPassword struct {
+			UserId  string `json:"userId"`
+			Message string `json:"message"`
+		}
+	}
+	if err = json.Unmarshal(resp, &result); err != nil {
+		return "", err
+	}
+	if userID != result.ResetPassword.UserId {
+		return "", fmt.Errorf("Password not reset for user %s", userID)
+	}
+	if result.ResetPassword.Message == "Reset password is successful" {
+		return result.ResetPassword.UserId, nil
+	}
+
+	return "", errors.New(result.ResetPassword.Message)
 }
 
 // SetupSchema sets up DQL schema
