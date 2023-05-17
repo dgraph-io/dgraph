@@ -167,6 +167,31 @@ func freePort(port int) int {
 	}
 }
 
+func StartZeros(compose string) error {
+	cmd := exec.Command("docker-compose", "--compatibility", "-f", compose,
+		"-p", DockerPrefix, "up", "-d", "--force-recreate")
+
+	fmt.Println("Starting zeros with: ", cmd.String())
+
+	if out, err := cmd.CombinedOutput(); err != nil {
+		fmt.Printf("Error while bringing up zero node. Prefix: %s. Error: %v\n", DockerPrefix, err)
+		fmt.Printf("Output %v\n", string(out))
+		return err
+	}
+
+	for i := 1; i <= 6; i++ {
+		in := GetContainerInstance(DockerPrefix, "zero"+strconv.Itoa(i))
+		err := in.BestEffortWaitForHealthy(6080)
+		if err != nil {
+			fmt.Printf("Error while checking zero health %s. Error %v", in.Name, err)
+			return err
+		}
+	}
+
+	return nil
+
+}
+
 func StartAlphas(compose string) error {
 	cmd := exec.Command("docker-compose", "--compatibility", "-f", compose,
 		"-p", DockerPrefix, "up", "-d", "--force-recreate")
@@ -210,4 +235,16 @@ func StopAlphasAndDetectRace(alphas []string) (raceDetected bool) {
 		fmt.Printf("Error while bringing down cluster. Prefix: %s. Error: %v\n", DockerPrefix, err)
 	}
 	return raceDetected
+}
+
+func StopZeros(zeros []string) error {
+	args := []string{"-p", DockerPrefix, "rm", "-f", "-s", "-v"}
+	args = append(args, zeros...)
+	cmd := exec.CommandContext(context.Background(), "docker-compose", args...)
+	fmt.Printf("Running: %s with %s\n", cmd, DockerPrefix)
+	if err := cmd.Run(); err != nil {
+		fmt.Printf("Error while bringing down cluster. Prefix: %s. Error: %v\n", DockerPrefix, err)
+		return err
+	}
+	return nil
 }
