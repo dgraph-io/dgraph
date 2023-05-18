@@ -81,7 +81,7 @@ func (u UpgradeStrategy) String() string {
 func NewLocalCluster(conf ClusterConfig) (*LocalCluster, error) {
 	c := &LocalCluster{conf: conf}
 	if err := c.init(); err != nil {
-		c.Cleanup()
+		c.Cleanup(false)
 		return nil, err
 	}
 	return c, nil
@@ -201,9 +201,14 @@ func (c *LocalCluster) createContainer(dc dnode) (string, error) {
 	return resp.ID, nil
 }
 
-func (c *LocalCluster) Cleanup() {
-	log.Printf("[INFO] cleaning up cluster with prefix [%v]", c.conf.prefix)
+func (c *LocalCluster) Cleanup(verbose bool) {
+	if verbose {
+		if err := c.printAllLogs(); err != nil {
+			log.Printf("[WARN] error printing container logs: %v", err)
+		}
+	}
 
+	log.Printf("[INFO] cleaning up cluster with prefix [%v]", c.conf.prefix)
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 	defer cancel()
 
@@ -639,4 +644,59 @@ func (c *LocalCluster) AssignUids(_ *dgo.Dgraph, num uint64) error {
 // GetVersion returns the version of dgraph the cluster is running
 func (c *LocalCluster) GetVersion() string {
 	return c.conf.version
+}
+
+func (c *LocalCluster) printAllLogs() error {
+	log.Printf("[INFO] all logs for cluster with prefix [%v] are below!", c.conf.prefix)
+	var finalErr error
+	for i := 0; i < c.conf.numZeros; i++ {
+		if err := c.printLogs(c.zeros[i].containerID); err != nil {
+			finalErr = fmt.Errorf("%w; %w", finalErr, err)
+		}
+	}
+	for i := 0; i < c.conf.numAlphas; i++ {
+		if err := c.printLogs(c.alphas[i].containerID); err != nil {
+			finalErr = fmt.Errorf("%w; %w", finalErr, err)
+		}
+	}
+	return finalErr
+}
+
+func (c *LocalCluster) printLogs(containerID string) error {
+	ro, err := c.containerLogs(containerID)
+	if err != nil {
+		return err
+	}
+
+	defer func() {
+		if err := ro.Close(); err != nil {
+			log.Printf("[WARN] error in closing reader for [%v]: %v", containerID, err)
+		}
+	}()
+
+	data, err := io.ReadAll(ro)
+	if err != nil {
+		log.Printf("[WARN] error in reading logs for [%v]: %v", containerID, err)
+	}
+
+	log.Printf("[INFO] ==== Logs for %v ====", containerID)
+	log.Println(string(data))
+	return nil
+}
+
+// containerLogs returns the logs of a container
+func (c *LocalCluster) containerLogs(containerID string) (io.ReadCloser, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+	defer cancel()
+
+	opts := types.ContainerLogsOptions{
+		ShowStdout: true,
+		ShowStderr: true,
+		Details:    true,
+	}
+	rc, err := c.dcli.ContainerLogs(ctx, containerID, opts)
+	if err != nil {
+		return nil, errors.Wrapf(err, "error collecting logs for %v", containerID)
+	}
+	return rc, nil
 }
