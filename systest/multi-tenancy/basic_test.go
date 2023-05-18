@@ -38,13 +38,6 @@ import (
 
 const timeout = 5 * time.Second
 
-var Result struct {
-	DeleteNamespace struct {
-		NamespaceId int    `json:"namespaceId"`
-		Message     string `json:"message"`
-	}
-}
-
 type inputTripletsCount struct {
 	lowerLimit int
 	upperLimit int
@@ -76,7 +69,7 @@ func (suite *MultitenancyTestSuite) TestAclBasic() {
 	suite.AddData(gcli)
 
 	// Upgrade
-	suite.Upgrade(dstDB, dgraphtest.StopStart)
+	suite.Upgrade(dstDB, dgraphtest.BackupRestore)
 
 	query := `
 		{
@@ -119,10 +112,8 @@ func (suite *MultitenancyTestSuite) TestAclBasic() {
 	testutil.CompareJSON(t, `{}`, string(resp))
 
 	// Create a new group, add alice to that group and give read access of <name> to dev group.
-	err = hcli.CreateGroup("dev")
-	require.NoError(t, err)
-	err = hcli.AddToGroup("alice", "dev")
-	require.NoError(t, err)
+	require.NoError(t, hcli.CreateGroup("dev"))
+	require.NoError(t, hcli.AddToGroup("alice", "dev"))
 	var expectedOutput, actual string
 	expectedOutput, actual, err = hcli.AddRulesToGroup("dev",
 		[]dgraphtest.Rule{{Predicate: "name", Permission: acl.Read.Code}}, true)
@@ -153,7 +144,7 @@ func (suite *MultitenancyTestSuite) TestNameSpaceLimitFlag() {
 	require.NoError(t, err)
 
 	// Upgrade
-	suite.Upgrade(dstDB, dgraphtest.StopStart)
+	suite.Upgrade(dstDB, dgraphtest.BackupRestore)
 
 	// Log into namespace
 	gcli, cu, e := suite.dc.Client()
@@ -219,13 +210,12 @@ func (suite *MultitenancyTestSuite) TestPersistentQuery() {
 	require.NoError(t, err)
 
 	// Upgrade
-	suite.Upgrade(dstDB, dgraphtest.StopStart)
+	suite.Upgrade(dstDB, dgraphtest.BackupRestore)
 
 	// Log into ns
 	hcli2, err := suite.dc.HTTPClient()
 	require.NoError(t, err)
 	err = hcli2.LoginIntoNamespace("groot", "password", ns)
-
 	// Make a token copy
 	nsToken := hcli2.HttpToken
 	require.NotNil(t, nsToken, "Token is nil")
@@ -280,7 +270,7 @@ func (suite *MultitenancyTestSuite) TestTokenExpired() {
 	require.NoError(t, err)
 
 	// Upgrade
-	suite.Upgrade(dstDB, dgraphtest.StopStart)
+	suite.Upgrade(dstDB, dgraphtest.BackupRestore)
 
 	// ns Login
 	hcli, err = suite.dc.HTTPClient()
@@ -308,10 +298,8 @@ func (suite *MultitenancyTestSuite) createGroupAndSetPermissions(namespace uint6
 	err = hcli.LoginIntoNamespace("groot", "password", namespace)
 	require.NotNil(t, hcli, "namespace token is nil")
 	require.NoErrorf(t, err, "login as groot into namespace %d failed", namespace)
-	err = hcli.CreateGroup(group)
-	require.NoError(t, err)
-	err = hcli.AddToGroup(user, group)
-	require.NoError(t, err)
+	require.NoError(t, hcli.CreateGroup(group))
+	require.NoError(t, hcli.AddToGroup(user, group))
 	var expectedOutput, actual string
 	expectedOutput, actual, err = hcli.AddRulesToGroup(group,
 		[]dgraphtest.Rule{{Predicate: predicate, Permission: acl.Read.Code}}, true)
@@ -384,7 +372,7 @@ func (suite *MultitenancyTestSuite) TestTwoPermissionSetsInNameSpacesWithAcl() {
 	suite.createGroupAndSetPermissions(ns2, "dev", user2, "nickname")
 
 	// Upgrade
-	suite.Upgrade(dstDB, dgraphtest.StopStart)
+	suite.Upgrade(dstDB, dgraphtest.BackupRestore)
 
 	// Alice should not be able to see <nickname> in namespace 1
 	gcli, suite.cleanup, err = suite.dc.Client()
@@ -444,7 +432,7 @@ func (suite *MultitenancyTestSuite) TestCreateNamespace() {
 	require.NoError(t, err)
 
 	// Upgrade
-	suite.Upgrade(dstDB, dgraphtest.StopStart)
+	suite.Upgrade(dstDB, dgraphtest.BackupRestore)
 
 	// Log into the namespace as groot
 	hcli, err = suite.dc.HTTPClient()
@@ -478,7 +466,7 @@ func (suite *MultitenancyTestSuite) TestResetPassword() {
 	require.NoError(t, err)
 
 	// Upgrade
-	suite.Upgrade(dstDB, dgraphtest.StopStart)
+	suite.Upgrade(dstDB, dgraphtest.BackupRestore)
 
 	// Try and Fail with old password for groot
 	hcli2, err := suite.dc.HTTPClient()
@@ -550,19 +538,19 @@ func (suite *MultitenancyTestSuite) TestDeleteNamespace() {
 	check(ns, fmt.Sprintf(`{"me": [{"name":"%d"}]}`, ns))
 
 	// Upgrade
-	suite.Upgrade(dstDB, dgraphtest.StopStart)
+	suite.Upgrade(dstDB, dgraphtest.BackupRestore)
 
 	// Galaxy Login
 	hcli, err = suite.dc.HTTPClient()
 	require.NoError(t, err)
 	err = hcli.LoginIntoNamespace("groot", "password", x.GalaxyNamespace)
-	require.NoErrorf(t, err, "login failed")
+	require.NoError(t, err, "login failed")
 
 	// Delete namespace
-	Result, err = hcli.DeleteNamespace(ns)
+	r, err := hcli.DeleteNamespace(ns)
 	require.NoError(t, err)
-	require.Equal(t, int(ns), Result.DeleteNamespace.NamespaceId)
-	require.Contains(t, Result.DeleteNamespace.Message, "Deleted namespace successfully")
+	require.Equal(t, int(ns), r.DeleteNamespace.NamespaceId)
+	require.Contains(t, r.DeleteNamespace.Message, "Deleted namespace successfully")
 	require.NoError(t, addData(x.GalaxyNamespace))
 	check(x.GalaxyNamespace, `{"me": [{"name":"0"}, {"name":"0"}]}`)
 	err = addData(ns)

@@ -38,6 +38,8 @@ import (
 
 	"github.com/dgraph-io/dgo/v230"
 	"github.com/dgraph-io/dgo/v230/protos/api"
+	//"github.com/dgraph-io/dgo/v230"
+	//"github.com/dgraph-io/dgo/v230/protos/api"
 )
 
 // cluster's network struct
@@ -663,10 +665,18 @@ func (c *LocalCluster) printAllLogs() error {
 }
 
 func (c *LocalCluster) printLogs(containerID string) error {
-	ro, err := c.containerLogs(containerID)
-	if err != nil {
-		return err
-	}
+        ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+        defer cancel()
+
+        opts := types.ContainerLogsOptions{
+                ShowStdout: true,
+                ShowStderr: true,
+                Details:    true,
+        }   
+        ro, err := c.dcli.ContainerLogs(ctx, containerID, opts)
+        if err != nil {
+                return errors.Wrapf(err, "error collecting logs for %v", containerID)
+        }
 
 	defer func() {
 		if err := ro.Close(); err != nil {

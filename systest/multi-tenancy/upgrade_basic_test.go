@@ -27,7 +27,7 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	"github.com/dgraph-io/dgraph/dgraphtest"
-	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -56,7 +56,8 @@ func (suite *MultitenancyTestSuite) SetupTest() {
 func (suite *MultitenancyTestSuite) TearDownTest() {
 	t := suite.T()
 
-	t.Cleanup(suite.lc.Cleanup)
+	
+	t.Cleanup(func() {suite.lc.Cleanup(t.Failed())})
 	t.Cleanup(suite.cleanup)
 }
 
@@ -66,16 +67,17 @@ func (suite *MultitenancyTestSuite) prepare() {
 	gc, cleanup, err := suite.dc.Client()
 	suite.cleanup = cleanup
 	require.NoError(t, err)
-	require.NoError(t, gc.LoginIntoNamespace(context.Background(), "groot", "password", x.GalaxyNamespace), "login with galaxy failed")
+	err = gc.LoginIntoNamespace(context.Background(), "groot", "password", x.GalaxyNamespace)
+	require.NoError(t, err, "login with galaxy failed")
 	require.NoError(t, gc.Alter(context.Background(), &api.Operation{DropAll: true}))
 }
 
 func (suite *MultitenancyTestSuite) Upgrade(dstDB string, uStrategy dgraphtest.UpgradeStrategy) {
-//	t := suite.T()
+	t := suite.T()
 
-//	if err := suite.lc.Upgrade(dstDB, uStrategy); err != nil {
-//		t.Fatal(err)
-//	}
+	if err := suite.lc.Upgrade(dstDB, uStrategy); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestMultitenancyTestSuite(t *testing.T) {

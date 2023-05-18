@@ -47,7 +47,7 @@ type ClusterConfig struct {
 	encryption     bool
 	version        string
 	volumes        map[string]string
-	refillInterval string
+	refillInterval time.Duration
 	uidLease       int
 }
 
@@ -63,7 +63,7 @@ func NewClusterConfig() ClusterConfig {
 		verbosity:      2,
 		version:        localVersion,
 		volumes:        map[string]string{DefaultBackupDir: defaultBackupVol, DefaultExportDir: defaultExportVol},
-		refillInterval: "20s",
+		refillInterval: 20 * time.Second,
 		uidLease:       50,
 	}
 }
@@ -111,8 +111,8 @@ func (cc ClusterConfig) WithAlphaVolume(volname, dir string) ClusterConfig {
 	return cc
 }
 
-func (cc ClusterConfig) WithRefillInterval(interval string) ClusterConfig {
-	cc.refillInterval = interval
+func (cc ClusterConfig) WithRefillInterval(interval time.Duration) ClusterConfig {
+	cc.refillInterval = interval * time.Second
 	return cc
 }
 
