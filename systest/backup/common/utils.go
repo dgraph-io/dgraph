@@ -1,3 +1,6 @@
+//go:build !oss
+// +build !oss
+
 /*
  * Copyright 2023 Dgraph Labs, Inc. and Contributors *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -124,7 +127,6 @@ func AddItemSchema(t *testing.T, header http.Header, whichAlpha string) {
 }
 
 func AddItem(t *testing.T, minSuffixVal int, maxSuffixVal int, jwtToken string, whichAlpha string) {
-
 	query := `mutation addItem($name: String!, $price: String!){
 		addItem(input: [{ name: $name, price: $price}]) {
 		  item {

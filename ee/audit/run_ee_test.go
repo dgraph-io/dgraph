@@ -1,3 +1,6 @@
+//go:build !oss
+// +build !oss
+
 /*
  * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
