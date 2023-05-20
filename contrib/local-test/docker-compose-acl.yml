@@ -1,0 +1,12 @@
+version: "3.8"
+
+#
+# A simple compose file for running single zero and alpha
+#
+services:
+
+  alpha:
+    # override the root command 
+    environment:
+      DGRAPH_ALPHA_ACL: secret-file=/dgraph/acl/hmac_secret_file
+  
