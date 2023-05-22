@@ -20,6 +20,7 @@ package query
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"testing"
 	"time"
@@ -40,7 +41,7 @@ func TestMain(m *testing.M) {
 		populateCluster()
 	}
 
-	query := func(c dgraphtest.Cluster) {
+	query := func(c dgraphtest.Cluster) int {
 		dg, cleanup, err := c.Client()
 		x.Panic(err)
 		defer cleanup()
@@ -48,17 +49,16 @@ func TestMain(m *testing.M) {
 
 		client = dg.Dgraph
 		dc = c
-		if m.Run() != 0 {
-			panic("tests failed")
-		}
+		return m.Run()
 	}
 
 	runTest := func(before, after string) {
+		var code int = 2 // it will be set to 0 when tests complete successfully
 		conf := dgraphtest.NewClusterConfig().WithNumAlphas(3).WithNumZeros(3).
 			WithReplicas(3).WithACL(time.Hour).WithVersion(before)
 		c, err := dgraphtest.NewLocalCluster(conf)
 		x.Panic(err)
-		defer c.Cleanup()
+		defer func() { c.Cleanup(code != 0) }()
 		x.Panic(c.Start())
 
 		hc, err := c.HTTPClient()
@@ -67,7 +67,10 @@ func TestMain(m *testing.M) {
 
 		mutate(c)
 		x.Panic(c.Upgrade(after, dgraphtest.BackupRestore))
-		query(c)
+		code = query(c)
+		if code != 0 {
+			panic(fmt.Sprintf("query upgrade tests failed for [%v -> %v]", before, after))
+		}
 	}
 
 	for _, cv := range dgraphtest.UpgradeCombos {

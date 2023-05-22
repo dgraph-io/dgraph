@@ -81,7 +81,7 @@ jobs:
           # go env settings
           export GOPATH=~/go
           # move the binary
-          cp dgraph/dgraph ~/go/bin/dgraph 
+          cp dgraph/dgraph ~/go/bin/dgraph
           # run the ldbc tests
           cd t; ./t --suite=ldbc
           # clean up docker containers after test execution

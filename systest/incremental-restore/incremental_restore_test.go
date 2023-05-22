@@ -34,7 +34,7 @@ func TestIncrementalRestore(t *testing.T) {
 	conf := dgraphtest.NewClusterConfig().WithNumAlphas(6).WithNumZeros(3).WithReplicas(3).WithACL(time.Hour)
 	c, err := dgraphtest.NewLocalCluster(conf)
 	require.NoError(t, err)
-	defer c.Cleanup()
+	defer c.Cleanup(t.Failed())
 	require.NoError(t, c.Start())
 
 	gc, cleanup, err := c.Client()
