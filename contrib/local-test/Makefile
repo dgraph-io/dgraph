@@ -10,7 +10,7 @@ up-with-lambda: local-dgraph-data## Start the zero and alpha containers and a la
 	DGRAPH_VERSION=$(DGRAPH_VERSION) docker-compose -f docker-compose.yml -f docker-compose-lambda.yml up -d && docker-compose logs --follow alpha zero lambda keepalive
 up-with-lambda-acl: local-dgraph-data ## Start the zero and alpha containers and a lambda container
 	mkdir -p ~/local-dgraph-data/acl
-	openssl rand -hex 16 > ~/local-dgraph-data/acl/hmac_secret_file
+	test -f ~/local-dgraph-data/acl/hmac_secret_file || openssl rand -hex 16 > ~/local-dgraph-data/acl/hmac_secret_file
 	DGRAPH_VERSION=$(DGRAPH_VERSION) docker-compose -f docker-compose.yml -f docker-compose-acl.yml -f docker-compose-lambda.yml up -d && docker-compose logs --follow alpha zero lambda keepalive
 
 down: ## Stop the containers
