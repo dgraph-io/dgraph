@@ -100,6 +100,7 @@ func buildDgraphBinary(dir, binaryDir, version string) error {
 	log.Printf("[INFO] building dgraph binary")
 
 	cmd := exec.Command("make", "dgraph")
+	cmd.Env = append(cmd.Environ(), "GOOS=linux")
 	cmd.Dir = filepath.Join(dir, "dgraph")
 	if err := cmd.Run(); err != nil {
 		return errors.Wrap(err, "error while building dgraph binary")

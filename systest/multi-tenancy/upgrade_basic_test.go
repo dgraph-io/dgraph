@@ -31,18 +31,18 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-var srcDB, dstDB string = "v22.0.2", "v23.0.0-rc1"
-
 type MultitenancyTestSuite struct {
 	suite.Suite
 	dc dgraphtest.Cluster
 	lc *dgraphtest.LocalCluster
 	cleanup func()
+	backupIn string
+	restoreIn string
 }
 
 func (suite *MultitenancyTestSuite) SetupTest() {
 	conf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).WithReplicas(1).
-		WithACL(20 * time.Second).WithEncryption().WithVersion(srcDB)
+		WithACL(20 * time.Second).WithEncryption().WithVersion(suite.backupIn)
 
 	c, err := dgraphtest.NewLocalCluster(conf)
 	x.Panic(err)
@@ -72,14 +72,19 @@ func (suite *MultitenancyTestSuite) prepare() {
 	require.NoError(t, gc.Alter(context.Background(), &api.Operation{DropAll: true}))
 }
 
-func (suite *MultitenancyTestSuite) Upgrade(dstDB string, uStrategy dgraphtest.UpgradeStrategy) {
+func (suite *MultitenancyTestSuite) Upgrade(uStrategy dgraphtest.UpgradeStrategy) {
 	t := suite.T()
 
-	if err := suite.lc.Upgrade(dstDB, uStrategy); err != nil {
+	if err := suite.lc.Upgrade(suite.restoreIn, uStrategy); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func TestMultitenancyTestSuite(t *testing.T) {
-	suite.Run(t, new(MultitenancyTestSuite))
+	for _, br := range dgraphtest.UpgradeCombos {
+		m := new(MultitenancyTestSuite)
+		m.backupIn = br[0]
+		m.restoreIn = br[1]
+		suite.Run(t, m)
+	}
 }
