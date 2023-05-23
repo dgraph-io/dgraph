@@ -69,7 +69,7 @@ func (suite *MultitenancyTestSuite) TestAclBasic() {
 	suite.AddData(gcli)
 
 	// Upgrade
-	suite.Upgrade(dgraphtest.BackupRestore)
+	suite.Upgrade()
 
 	query := `
 		{
@@ -144,7 +144,7 @@ func (suite *MultitenancyTestSuite) TestNameSpaceLimitFlag() {
 	require.NoError(t, err)
 
 	// Upgrade
-	suite.Upgrade(dgraphtest.BackupRestore)
+	suite.Upgrade()
 
 	// Log into namespace
 	gcli, cu, e := suite.dc.Client()
@@ -210,7 +210,7 @@ func (suite *MultitenancyTestSuite) TestPersistentQuery() {
 	require.NoError(t, err)
 
 	// Upgrade
-	suite.Upgrade(dgraphtest.BackupRestore)
+	suite.Upgrade()
 
 	// Log into ns
 	hcli2, err := suite.dc.HTTPClient()
@@ -270,7 +270,7 @@ func (suite *MultitenancyTestSuite) TestTokenExpired() {
 	require.NoError(t, err)
 
 	// Upgrade
-	suite.Upgrade(dgraphtest.BackupRestore)
+	suite.Upgrade()
 
 	// ns Login
 	hcli, err = suite.dc.HTTPClient()
@@ -372,7 +372,7 @@ func (suite *MultitenancyTestSuite) TestTwoPermissionSetsInNameSpacesWithAcl() {
 	suite.createGroupAndSetPermissions(ns2, "dev", user2, "nickname")
 
 	// Upgrade
-	suite.Upgrade(dgraphtest.BackupRestore)
+	suite.Upgrade()
 
 	// Alice should not be able to see <nickname> in namespace 1
 	gcli, suite.cleanup, err = suite.dc.Client()
@@ -432,7 +432,7 @@ func (suite *MultitenancyTestSuite) TestCreateNamespace() {
 	require.NoError(t, err)
 
 	// Upgrade
-	suite.Upgrade(dgraphtest.BackupRestore)
+	suite.Upgrade()
 
 	// Log into the namespace as groot
 	hcli, err = suite.dc.HTTPClient()
@@ -466,7 +466,7 @@ func (suite *MultitenancyTestSuite) TestResetPassword() {
 	require.NoError(t, err)
 
 	// Upgrade
-	suite.Upgrade(dgraphtest.BackupRestore)
+	suite.Upgrade()
 
 	// Try and Fail with old password for groot
 	hcli2, err := suite.dc.HTTPClient()
@@ -538,7 +538,7 @@ func (suite *MultitenancyTestSuite) TestDeleteNamespace() {
 	check(ns, fmt.Sprintf(`{"me": [{"name":"%d"}]}`, ns))
 
 	// Upgrade
-	suite.Upgrade(dgraphtest.BackupRestore)
+	suite.Upgrade()
 
 	// Galaxy Login
 	hcli, err = suite.dc.HTTPClient()

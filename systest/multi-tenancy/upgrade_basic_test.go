@@ -33,11 +33,12 @@ import (
 
 type MultitenancyTestSuite struct {
 	suite.Suite
-	dc dgraphtest.Cluster
-	lc *dgraphtest.LocalCluster
-	cleanup func()
-	backupIn string
+	dc        dgraphtest.Cluster
+	lc        *dgraphtest.LocalCluster
+	cleanup   func()
+	backupIn  string
 	restoreIn string
+	uS        dgraphtest.UpgradeStrategy
 }
 
 func (suite *MultitenancyTestSuite) SetupTest() {
@@ -51,6 +52,8 @@ func (suite *MultitenancyTestSuite) SetupTest() {
 
 	suite.dc = c
 	suite.lc = c
+
+	suite.uS = dgraphtest.BackupRestore
 }
 
 func (suite *MultitenancyTestSuite) TearDownTest() {
@@ -72,10 +75,10 @@ func (suite *MultitenancyTestSuite) prepare() {
 	require.NoError(t, gc.Alter(context.Background(), &api.Operation{DropAll: true}))
 }
 
-func (suite *MultitenancyTestSuite) Upgrade(uStrategy dgraphtest.UpgradeStrategy) {
+func (suite *MultitenancyTestSuite) Upgrade() {
 	t := suite.T()
 
-	if err := suite.lc.Upgrade(suite.restoreIn, uStrategy); err != nil {
+	if err := suite.lc.Upgrade(suite.restoreIn, suite.uS); err != nil {
 		t.Fatal(err)
 	}
 }
