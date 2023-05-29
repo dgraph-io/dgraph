@@ -202,6 +202,10 @@ func (c *LocalCluster) createContainer(dc dnode) (string, error) {
 }
 
 func (c *LocalCluster) Cleanup(verbose bool) {
+	if c == nil {
+		return
+	}
+
 	if verbose {
 		if err := c.printAllLogs(); err != nil {
 			log.Printf("[WARN] error printing container logs: %v", err)

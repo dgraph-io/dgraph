@@ -49,7 +49,7 @@ type ClusterConfig struct {
 }
 
 func NewClusterConfig() ClusterConfig {
-	prefix := fmt.Sprintf("test-%d", rand.NewSource(time.Now().Unix()).Int63()%10000)
+	prefix := fmt.Sprintf("test-%d", rand.NewSource(time.Now().Unix()).Int63()%1000000)
 	defaultBackupVol := fmt.Sprintf("%v_backup", prefix)
 	defaultExportVol := fmt.Sprintf("%v_export", prefix)
 	return ClusterConfig{
