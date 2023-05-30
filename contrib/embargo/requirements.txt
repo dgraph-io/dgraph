@@ -15,7 +15,7 @@ Jinja2==2.11.3
 MarkupSafe==1.1.1
 Pygments==2.7.4
 PyYAML==5.4
-requests==2.23.0
+requests==2.31.0
 six==1.15.0
 urllib3==1.26.5
 websocket-client==0.57.0
