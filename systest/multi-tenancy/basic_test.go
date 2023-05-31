@@ -292,6 +292,15 @@ func TestDeleteNamespace(t *testing.T) {
 	err = testutil.DeleteNamespace(t, galaxyToken, x.GalaxyNamespace)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Cannot delete default namespace")
+
+	// Deleting a non-existent namespace should error out
+	err = testutil.DeleteNamespace(t, galaxyToken, 20)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "error deleting non-existing namespace")
+	for i := 0; i < 20; i++ {
+		ns, err = testutil.CreateNamespaceWithRetry(t, galaxyToken)
+		require.NoError(t, err)
+	}
 }
 
 type liveOpts struct {

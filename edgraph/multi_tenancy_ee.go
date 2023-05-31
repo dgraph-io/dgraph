@@ -138,5 +138,8 @@ func createGuardianAndGroot(ctx context.Context, namespace uint64, passwd string
 // Authorization is handled by middlewares.
 func (s *Server) DeleteNamespace(ctx context.Context, namespace uint64) error {
 	glog.Info("Deleting namespace", namespace)
+	if _, ok := schema.State().Namespaces()[namespace]; !ok {
+		return errors.Errorf("error deleting non-existing namespace %#x", namespace)
+	}
 	return worker.ProcessDeleteNsRequest(ctx, namespace)
 }
