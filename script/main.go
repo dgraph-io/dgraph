@@ -58,6 +58,7 @@ type flagOptions struct {
 	discard                  bool
 	getOldData               bool
 	partsTs                  uint64
+	repair                   bool
 }
 
 const (
@@ -124,6 +125,8 @@ func init() {
 		"Parse and print DISCARD file from value logs.")
 	infoCmd.Flags().BoolVar(&opt.getOldData, "getOldData", false,
 		"Get old data of key present.")
+	infoCmd.Flags().BoolVar(&opt.repair, "repair", false,
+		"Repair some key, should be used with get old data.")
 	infoCmd.Flags().Uint64Var(&opt.partsTs, "partTs", 0, "Timestamp of the split parts to read from.")
 }
 
@@ -252,6 +255,9 @@ func getOldData(db *badger.DB) error {
 
 	splits := make([]uint64, len(parts))
 
+	fmt.Println("SPLITS: ", splits)
+	fmt.Println("TS: ", opt.partsTs)
+
 	i := 0
 	for k := range parts {
 		splits[i] = k
@@ -276,11 +282,13 @@ func getOldData(db *badger.DB) error {
 	var kvs []*bpb.KV
 	kvs = append(kvs, kv)
 
-	err = wr.Write(&bpb.KVList{Kv: kvs})
-	if err != nil {
-		return err
+	if opt.repair {
+		err = wr.Write(&bpb.KVList{Kv: kvs})
+		if err != nil {
+			return err
+		}
+		wr.Flush()
 	}
-	wr.Flush()
 
 	return nil
 }
