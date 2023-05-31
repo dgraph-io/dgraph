@@ -32,6 +32,7 @@ import (
 
 	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/badger/v3/options"
+	bpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/badger/v3/table"
 	"github.com/dgraph-io/badger/v3/y"
 	"github.com/dgraph-io/dgraph/posting"
@@ -265,7 +266,21 @@ func getOldData(db *badger.DB) error {
 	if err != nil {
 		return nil
 	}
-	wr.SetAt(key, val, BitCompletePosting, opt.partsTs)
+
+	kv := y.NewKV(nil)
+	kv.Key = key
+	kv.Value = val
+	kv.UserMeta = []byte{BitCompletePosting}
+	kv.Version = opt.partsTs
+
+	var kvs []*bpb.KV
+	kvs = append(kvs, kv)
+
+	err = wr.Write(&bpb.KVList{Kv: kvs})
+	if err != nil {
+		return err
+	}
+	wr.Flush()
 
 	return nil
 }
