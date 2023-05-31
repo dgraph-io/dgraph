@@ -101,8 +101,8 @@ func buildDgraphBinary(dir, binaryDir, version string) error {
 
 	cmd := exec.Command("make", "dgraph")
 	cmd.Dir = filepath.Join(dir, "dgraph")
-	if err := cmd.Run(); err != nil {
-		return errors.Wrap(err, "error while building dgraph binary")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return errors.Wrapf(err, "error while building dgraph binary\noutput:%v", string(out))
 	}
 	if err := copy(filepath.Join(dir, "dgraph", "dgraph"),
 		filepath.Join(binaryDir, fmt.Sprintf(binaryName, version))); err != nil {

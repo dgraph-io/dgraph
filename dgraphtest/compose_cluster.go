@@ -39,6 +39,10 @@ func (c *ComposeCluster) AlphasHealth() ([]string, error) {
 	return nil, errNotImplemented
 }
 
+func (c *ComposeCluster) AlphasLogs() ([]string, error) {
+	return nil, errNotImplemented
+}
+
 func (c *ComposeCluster) AssignUids(client *dgo.Dgraph, num uint64) error {
 	return testutil.AssignUids(num)
 }

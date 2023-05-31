@@ -46,20 +46,23 @@ type ClusterConfig struct {
 	encryption bool
 	version    string
 	volumes    map[string]string
+	// exposed port offset for grpc/http port for both alpha/zero
+	portOffset int
 }
 
 func NewClusterConfig() ClusterConfig {
-	prefix := fmt.Sprintf("test-%d", rand.NewSource(time.Now().Unix()).Int63()%1000000)
+	prefix := fmt.Sprintf("test-%d", rand.NewSource(time.Now().UnixNano()).Int63()%1000000)
 	defaultBackupVol := fmt.Sprintf("%v_backup", prefix)
 	defaultExportVol := fmt.Sprintf("%v_export", prefix)
 	return ClusterConfig{
-		prefix:    prefix,
-		numAlphas: 1,
-		numZeros:  1,
-		replicas:  1,
-		verbosity: 2,
-		version:   localVersion,
-		volumes:   map[string]string{DefaultBackupDir: defaultBackupVol, DefaultExportDir: defaultExportVol},
+		prefix:     prefix,
+		numAlphas:  1,
+		numZeros:   1,
+		replicas:   1,
+		verbosity:  2,
+		version:    localVersion,
+		volumes:    map[string]string{DefaultBackupDir: defaultBackupVol, DefaultExportDir: defaultExportVol},
+		portOffset: -1,
 	}
 }
 
@@ -103,5 +106,12 @@ func (cc ClusterConfig) WithVersion(version string) ClusterConfig {
 // name volname and mount directory specified as dir inside the container
 func (cc ClusterConfig) WithAlphaVolume(volname, dir string) ClusterConfig {
 	cc.volumes[dir] = volname
+	return cc
+}
+
+// WithExposedPortOffset allows exposing the alpha/zero ports (5080, 6080, 8080 and 9080)
+// to fixed ports (port (5080, 6080, 8080 and 9080) + offset + id (0, 1, 2 ...)) on the host.
+func (cc ClusterConfig) WithExposedPortOffset(offset uint64) ClusterConfig {
+	cc.portOffset = int(offset)
 	return cc
 }
