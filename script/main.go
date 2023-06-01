@@ -22,6 +22,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -99,6 +100,11 @@ var (
 )
 
 func init() {
+	RootCmd.PersistentFlags().StringVar(&sstDir, "dir", "",
+		"Directory where the LSM tree files are located. (required)")
+
+	RootCmd.PersistentFlags().StringVar(&vlogDir, "vlog-dir", "",
+		"Directory where the value log files are located, if different from --dir")
 	RootCmd.AddCommand(infoCmd)
 	infoCmd.Flags().BoolVarP(&opt.showTables, "show-tables", "s", false,
 		"If set to true, show tables as well.")
@@ -143,11 +149,6 @@ to the Dgraph team.
 }
 
 func main() {
-	RootCmd.PersistentFlags().StringVar(&sstDir, "dir", "",
-		"Directory where the LSM tree files are located. (required)")
-
-	RootCmd.PersistentFlags().StringVar(&vlogDir, "vlog-dir", "",
-		"Directory where the value log files are located, if different from --dir")
 	if err := RootCmd.Execute(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
@@ -158,7 +159,7 @@ func handleInfo(cmd *cobra.Command, args []string) error {
 	cvMode := checksumVerificationMode(opt.checksumVerificationMode)
 	bopt := badger.DefaultOptions(sstDir).
 		WithValueDir(vlogDir).
-		WithReadOnly(opt.readOnly).
+		WithReadOnly(opt.readOnly && !opt.repair).
 		WithBlockCacheSize(100 << 20).
 		WithIndexCacheSize(200 << 20).
 		WithEncryptionKey([]byte(opt.encryptionKey)).
@@ -180,7 +181,7 @@ func handleInfo(cmd *cobra.Command, args []string) error {
 	}
 
 	// Open DB
-	db, err := badger.Open(bopt)
+	db, err := badger.OpenManaged(bopt)
 	if err != nil {
 		return y.Wrap(err, "failed to open database")
 	}
@@ -188,6 +189,10 @@ func handleInfo(cmd *cobra.Command, args []string) error {
 
 	if opt.showTables {
 		tableInfo(sstDir, vlogDir, db)
+	}
+
+	if opt.getOldData {
+		return getOldData(db)
 	}
 
 	prefix, err := hex.DecodeString(opt.withPrefix)
@@ -208,10 +213,6 @@ func handleInfo(cmd *cobra.Command, args []string) error {
 		if err := lookup(db); err != nil {
 			return y.Wrapf(err, "failed to perform lookup for the key: %x", opt.keyLookup)
 		}
-	}
-
-	if opt.getOldData {
-		return getOldData(db)
 	}
 
 	return nil
@@ -246,17 +247,25 @@ func getOldData(db *badger.DB) error {
 	fmt.Println(hex.Dump(partPrefix))
 
 	// Add print here
-	parts, err := readPartsAt(db, partPrefix)
+	partsT, err := readPartsAt(db, partPrefix)
 	if err != nil {
 		return err
 	}
 
-	fmt.Println("PARTS: ", parts)
+	fmt.Println("ALL PARTS:", len(partsT))
+	if len(partsT) != 1 {
+		return errors.Errorf("Multiple spilts founds: %v", len(partsT))
+	}
+	ts := uint64(0)
+	for k := range partsT {
+		ts = k
+	}
+
+	parts := partsT[ts]
+
+	//fmt.Println("PARTS: ", parts)
 
 	splits := make([]uint64, len(parts))
-
-	fmt.Println("SPLITS: ", splits)
-	fmt.Println("TS: ", opt.partsTs)
 
 	i := 0
 	for k := range parts {
@@ -264,20 +273,33 @@ func getOldData(db *badger.DB) error {
 		i++
 	}
 
+	sort.Slice(splits, func(i, j int) bool { return splits[i] < splits[j] })
+
+	fmt.Println("SPLITS: ", splits)
+	fmt.Println("TS: ", ts)
+
 	newPList := &pb.PostingList{}
 	newPList.Splits = splits
-
-	wr := posting.NewTxnWriter(db)
 	val, err := newPList.Marshal()
 	if err != nil {
 		return nil
 	}
 
+	wr := posting.NewTxnWriter(db)
+
 	kv := y.NewKV(nil)
 	kv.Key = key
 	kv.Value = val
 	kv.UserMeta = []byte{BitCompletePosting}
-	kv.Version = opt.partsTs
+	kv.Version = ts
+
+	fmt.Println("============START===============")
+	fmt.Println("KEY", hex.Dump(kv.Key))
+	fmt.Println("VALUE", hex.Dump(kv.Value))
+	fmt.Println("USER META", hex.Dump(kv.UserMeta))
+
+	fmt.Printf("KV UPDATED: %+v\n", kv)
+	fmt.Println("============END===============")
 
 	var kvs []*bpb.KV
 	kvs = append(kvs, kv)
@@ -332,9 +354,9 @@ type List struct {
 }
 
 // Return all data for certain prefix
-func readPartsAt(db *badger.DB, partPrefix []byte) (map[uint64]*pb.PostingList, error) {
+func readPartsAt(db *badger.DB, partPrefix []byte) (map[uint64]map[uint64]*pb.PostingList, error) {
 
-	txn := db.NewTransaction(false)
+	txn := db.NewTransactionAt(math.MaxUint64, false)
 	defer txn.Discard()
 
 	iopt := badger.DefaultIteratorOptions
@@ -345,20 +367,27 @@ func readPartsAt(db *badger.DB, partPrefix []byte) (map[uint64]*pb.PostingList, 
 	it := txn.NewIterator(iopt)
 	defer it.Close()
 
-	var parts map[uint64]*pb.PostingList
+	parts := make(map[uint64]map[uint64]*pb.PostingList)
 
 	totalKeys := 0
 	for it.Rewind(); it.Valid(); it.Next() {
 		item := it.Item()
+		version := item.Version()
+		if _, ok := parts[version]; !ok {
+			parts[version] = make(map[uint64]*pb.PostingList)
+		}
+		internalmap := parts[version]
 		part := &pb.PostingList{}
 		if err := unmarshalOrCopy(part, item); err != nil {
 			return nil, errors.Wrapf(err, "cannot unmarshal list part with key %s",
 				hex.EncodeToString(item.Key()))
 		}
 		key := it.Item().Key()
+		fmt.Println("SPLIT KEY: ", hex.Dump(key))
 		startUidBinary := key[len(key)-8:]
 		startUid := binary.BigEndian.Uint64(startUidBinary)
-		parts[startUid] = part
+		fmt.Println("SPLIT KEY UID:", startUidBinary, startUid, version)
+		internalmap[startUid] = part
 		totalKeys++
 	}
 
