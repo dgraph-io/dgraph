@@ -32,7 +32,6 @@ import (
 	"github.com/dgraph-io/dgo/v230"
 	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/graphql/schema"
-	"github.com/dgraph-io/dgraph/x"
 )
 
 type Cluster interface {
@@ -68,12 +67,6 @@ type GraphQLParams struct {
 	Query      string                    `json:"query"`
 	Variables  map[string]interface{}    `json:"variables"`
 	Extensions *schema.RequestExtensions `json:"extensions,omitempty"`
-}
-
-type GraphQLResponse struct {
-	Data       json.RawMessage        `json:"data,omitempty"`
-	Errors     x.GqlErrorList         `json:"errors,omitempty"`
-	Extensions map[string]interface{} `json:"extensions,omitempty"`
 }
 
 func (hc *HTTPClient) Login(user, password string, ns uint64) error {

@@ -332,6 +332,11 @@ func publicPort(dcli *docker.Client, dc dnode, privatePort string) (string, erro
 	return "", fmt.Errorf("no mapping found for private port [%v] for container [%v]", privatePort, dc.cname())
 }
 
+// Wrapper function to export publicport() in other files
+func (c *LocalCluster) PublicPort() (string, error) {
+	return publicPort(c.dcli, c.alphas[0], alphaHttpPort)
+}
+
 func mountBinary(c *LocalCluster) (mount.Mount, error) {
 	if c.conf.version == localVersion {
 		return mount.Mount{
