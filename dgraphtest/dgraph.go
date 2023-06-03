@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/docker/docker/api/types/mount"
@@ -79,6 +80,7 @@ type dnode interface {
 	aname() string
 	cid() string
 	ports() nat.PortSet
+	bindings(int) nat.PortMap
 	cmd(*LocalCluster) []string
 	workingDir() string
 	mounts(*LocalCluster) ([]mount.Mount, error)
@@ -111,6 +113,19 @@ func (z *zero) ports() nat.PortSet {
 		zeroGrpcPort: {},
 		zeroHttpPort: {},
 	}
+}
+
+func (z *zero) bindings(offset int) nat.PortMap {
+	if offset < 0 {
+		return nil
+	}
+
+	grpcPort, _ := strconv.Atoi(zeroGrpcPort)
+	httpPort, _ := strconv.Atoi(zeroHttpPort)
+	return nat.PortMap(map[nat.Port][]nat.PortBinding{
+		zeroGrpcPort: {{HostPort: strconv.Itoa(grpcPort + offset + z.id)}},
+		zeroHttpPort: {{HostPort: strconv.Itoa(httpPort + offset + z.id)}},
+	})
 }
 
 func (z *zero) cmd(c *LocalCluster) []string {
@@ -182,6 +197,19 @@ func (a *alpha) ports() nat.PortSet {
 		alphaGrpcPort: {},
 		alphaHttpPort: {},
 	}
+}
+
+func (a *alpha) bindings(offset int) nat.PortMap {
+	if offset < 0 {
+		return nil
+	}
+
+	grpcPort, _ := strconv.Atoi(alphaGrpcPort)
+	httpPort, _ := strconv.Atoi(alphaHttpPort)
+	return nat.PortMap(map[nat.Port][]nat.PortBinding{
+		alphaGrpcPort: {{HostPort: strconv.Itoa(grpcPort + offset + a.id)}},
+		alphaHttpPort: {{HostPort: strconv.Itoa(httpPort + offset + a.id)}},
+	})
 }
 
 func (a *alpha) cmd(c *LocalCluster) []string {

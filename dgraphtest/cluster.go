@@ -38,6 +38,7 @@ type Cluster interface {
 	Client() (*GrpcClient, func(), error)
 	HTTPClient() (*HTTPClient, error)
 	AlphasHealth() ([]string, error)
+	AlphasLogs() ([]string, error)
 	AssignUids(gc *dgo.Dgraph, num uint64) error
 	GetVersion() string
 }
@@ -306,8 +307,31 @@ loop:
 				continue loop
 			}
 		}
+		break
+	}
+
+	// sometimes it is possible that one alpha hasn't even started the restore process.
+	// In this case, the alpha will not show "opRestore" in the response to health endpoint
+	// and the "loop" will not be able to detect this case. The "loop2" below ensures
+	// by looking into the logs that the restore process has in fact been started and completed.
+loop2:
+	for i := 0; i < 60; i++ {
+		time.Sleep(waitDurBeforeRetry)
+
+		alphasLogs, err := c.AlphasLogs()
+		if err != nil {
+			return err
+		}
+
+		for _, alphaLogs := range alphasLogs {
+			if !strings.Contains(alphaLogs, "Operation completed with id: opRestore") {
+				continue loop2
+			}
+		}
 		return nil
 	}
+
+	return errors.Errorf("restore wasn't started on at least 1 alpha")
 }
 
 func (hc *HTTPClient) Export(dest string) error {

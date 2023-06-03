@@ -181,7 +181,7 @@ func (c *LocalCluster) createContainer(dc dnode) (string, error) {
 	}
 
 	cconf := &container.Config{Cmd: cmd, Image: image, WorkingDir: dc.workingDir(), ExposedPorts: dc.ports()}
-	hconf := &container.HostConfig{Mounts: mts, PublishAllPorts: true}
+	hconf := &container.HostConfig{Mounts: mts, PublishAllPorts: true, PortBindings: dc.bindings(c.conf.portOffset)}
 	networkConfig := &network.NetworkingConfig{
 		EndpointsConfig: map[string]*network.EndpointSettings{
 			c.net.name: {
@@ -208,7 +208,7 @@ func (c *LocalCluster) Cleanup(verbose bool) {
 
 	if verbose {
 		if err := c.printAllLogs(); err != nil {
-			log.Printf("[WARN] error printing container logs: %v", err)
+			log.Printf("[WARNING] error printing container logs: %v", err)
 		}
 	}
 
@@ -254,7 +254,7 @@ func (c *LocalCluster) Start() error {
 			return err
 		}
 	}
-	return c.healthCheck()
+	return c.HealthCheck()
 }
 
 func (c *LocalCluster) StartZero(id int) error {
@@ -319,7 +319,23 @@ func (c *LocalCluster) stopContainer(dc dnode) error {
 	return nil
 }
 
-func (c *LocalCluster) healthCheck() error {
+func (c *LocalCluster) KillAlpha(id int) error {
+	if id >= c.conf.numAlphas {
+		return fmt.Errorf("invalid id of alpha: %v", id)
+	}
+	return c.killContainer(c.alphas[id])
+}
+
+func (c *LocalCluster) killContainer(dc dnode) error {
+	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+	defer cancel()
+	if err := c.dcli.ContainerKill(ctx, dc.cid(), "SIGKILL"); err != nil {
+		return errors.Wrapf(err, "error killing container [%v]", dc.cname())
+	}
+	return nil
+}
+
+func (c *LocalCluster) HealthCheck() error {
 	log.Printf("[INFO] checking health of containers")
 	for i := 0; i < c.conf.numZeros; i++ {
 		url, err := c.zeros[i].healthURL(c)
@@ -612,6 +628,19 @@ func (c *LocalCluster) AlphasHealth() ([]string, error) {
 	return healths, nil
 }
 
+// AlphasLogs returns logs of all the alpha containers
+func (c *LocalCluster) AlphasLogs() ([]string, error) {
+	alphasLogs := make([]string, 0, len(c.alphas))
+	for _, aa := range c.alphas {
+		alphaLogs, err := c.getLogs(aa.containerID)
+		if err != nil {
+			return nil, err
+		}
+		alphasLogs = append(alphasLogs, alphaLogs)
+	}
+	return alphasLogs, nil
+}
+
 // AssignUids talks to zero to assign the given number of uids
 func (c *LocalCluster) AssignUids(_ *dgo.Dgraph, num uint64) error {
 	if len(c.zeros) == 0 {
@@ -669,6 +698,17 @@ func (c *LocalCluster) printAllLogs() error {
 }
 
 func (c *LocalCluster) printLogs(containerID string) error {
+	logsData, err := c.getLogs(containerID)
+	if err != nil {
+		return err
+	}
+
+	log.Printf("[INFO] ======== LOGS for CONTAINER [%v] ========", containerID)
+	log.Println(logsData)
+	return nil
+}
+
+func (c *LocalCluster) getLogs(containerID string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 	defer cancel()
 
@@ -679,12 +719,11 @@ func (c *LocalCluster) printLogs(containerID string) error {
 	}
 	ro, err := c.dcli.ContainerLogs(ctx, containerID, opts)
 	if err != nil {
-		return errors.Wrapf(err, "error collecting logs for %v", containerID)
+		return "", errors.Wrapf(err, "error collecting logs for %v", containerID)
 	}
-
 	defer func() {
 		if err := ro.Close(); err != nil {
-			log.Printf("[WARN] error in closing reader for [%v]: %v", containerID, err)
+			log.Printf("[WARNING] error in closing reader for [%v]: %v", containerID, err)
 		}
 	}()
 
@@ -692,8 +731,5 @@ func (c *LocalCluster) printLogs(containerID string) error {
 	if err != nil {
 		log.Printf("[WARN] error in reading logs for [%v]: %v", containerID, err)
 	}
-
-	log.Printf("[INFO] ==== Logs for %v ====", containerID)
-	log.Println(string(data))
-	return nil
+	return string(data), nil
 }
