@@ -19,6 +19,7 @@ package dgraphtest
 import (
 	"context"
 	"fmt"
+	"go/build"
 	"io"
 	"log"
 	"os"
@@ -110,6 +111,21 @@ func buildDgraphBinary(dir, binaryDir, version string) error {
 	}
 
 	return nil
+}
+
+func DgraphBinaryPath() string {
+	// Useful for OSX, as $GOPATH/bin/dgraph is set to the linux binary for docker
+	if dgraphBinary := os.Getenv("DGRAPH_BINARY"); dgraphBinary != "" {
+		return dgraphBinary
+	}
+
+	gopath := os.Getenv("GOPATH")
+
+	if gopath == "" {
+		gopath = build.Default.GOPATH
+	}
+
+	return os.ExpandEnv(gopath + "/bin/dgraph")
 }
 
 func copyBinary(fromDir, toDir, version string) error {

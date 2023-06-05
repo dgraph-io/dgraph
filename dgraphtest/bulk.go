@@ -121,3 +121,13 @@ func CheckIfRace(output []byte) bool {
 	}
 	return false
 }
+func MakeDirEmpty(dir []string) error {
+	for _, d := range dir {
+		_ = os.RemoveAll(d)
+		err := os.MkdirAll(d, 0755)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}

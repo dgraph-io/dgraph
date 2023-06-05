@@ -18,6 +18,7 @@ package dgraphtest
 
 import (
 	"log"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -25,10 +26,11 @@ import (
 )
 
 var (
-	repoDir       string // repoDir to store cloned repository of dgraph
-	binDir        string // binDir to store multiple binary versions
-	encKeyPath    string
-	aclSecretPath string
+	repoDir           string // repoDir to store cloned repository of dgraph
+	binDir            string // binDir to store multiple binary versions
+	encKeyPath        string
+	aclSecretPath     string
+	TestDataDirectory string
 )
 
 const (
@@ -47,4 +49,5 @@ func init() {
 	binDir = filepath.Join(basePath, "binaries")
 	encKeyPath = filepath.Join(basePath, "data", "enc-key")
 	aclSecretPath = filepath.Join(basePath, "data", "hmac-secret")
+	TestDataDirectory = os.Getenv("TEST_DATA_DIRECTORY")
 }
