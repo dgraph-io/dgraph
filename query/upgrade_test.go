@@ -52,10 +52,10 @@ func TestMain(m *testing.M) {
 		return m.Run()
 	}
 
-	runTest := func(before, after string) {
+	runTest := func(uc dgraphtest.UpgradeCombo) {
 		var code int = 2 // it will be set to 0 when tests complete successfully
 		conf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).
-			WithReplicas(1).WithACL(time.Hour).WithVersion(before)
+			WithReplicas(1).WithACL(time.Hour).WithVersion(uc.Before)
 		c, err := dgraphtest.NewLocalCluster(conf)
 		x.Panic(err)
 		defer func() { c.Cleanup(code != 0) }()
@@ -66,15 +66,15 @@ func TestMain(m *testing.M) {
 		x.Panic(hc.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, 0))
 
 		mutate(c)
-		x.Panic(c.Upgrade(after, dgraphtest.BackupRestore))
+		x.Panic(c.Upgrade(uc.After, uc.Strategy))
 		code = query(c)
 		if code != 0 {
-			panic(fmt.Sprintf("query upgrade tests failed for [%v -> %v]", before, after))
+			panic(fmt.Sprintf("query upgrade tests failed for [%v -> %v]", uc.Before, uc.After))
 		}
 	}
 
-	for _, cv := range dgraphtest.UpgradeCombos {
-		log.Printf("running: backup in [%v], restore in [%v]", cv[0], cv[1])
-		runTest(cv[0], cv[1])
+	for _, uc := range dgraphtest.AllUpgradeCombos {
+		log.Printf("running upgrade tests for confg: %+v", uc)
+		runTest(uc)
 	}
 }

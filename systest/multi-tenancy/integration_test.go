@@ -35,13 +35,13 @@ type MultitenancyTestSuite struct {
 	dc dgraphtest.Cluster
 }
 
-func (suite *MultitenancyTestSuite) SetupTest() {
-	suite.dc = dgraphtest.NewComposeCluster()
+func (msuite *MultitenancyTestSuite) SetupTest() {
+	msuite.dc = dgraphtest.NewComposeCluster()
 }
 
-func (suite *MultitenancyTestSuite) TearDownTest() {
-	t := suite.T()
-	gcli, cleanup, err := suite.dc.Client()
+func (msuite *MultitenancyTestSuite) TearDownTest() {
+	t := msuite.T()
+	gcli, cleanup, err := msuite.dc.Client()
 	defer cleanup()
 	require.NoError(t, err)
 	require.NoError(t, gcli.LoginIntoNamespace(context.Background(),
@@ -49,7 +49,7 @@ func (suite *MultitenancyTestSuite) TearDownTest() {
 	require.NoError(t, gcli.Alter(context.Background(), &api.Operation{DropAll: true}))
 }
 
-func (suite *MultitenancyTestSuite) Upgrade() {
+func (msuite *MultitenancyTestSuite) Upgrade() {
 	// Not implemented for integration tests
 }
 

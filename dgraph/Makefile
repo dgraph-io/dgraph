@@ -77,6 +77,7 @@ endif
 all: $(BIN)
 
 $(BIN): clean jemalloc
+	@go mod tidy
 	@go build $(BUILD_FLAGS) -o $(BIN)
 
 test-coverage-binary: clean jemalloc
@@ -93,6 +94,7 @@ install: jemalloc
 	@if [ "$(HAS_SHA256SUM)" ] ; then \
 		echo "Old SHA256:" `sha256sum $(INSTALL_TARGET) 2>/dev/null | cut -c-64` ; \
 	fi
+	@go mod tidy
 	@go install $(BUILD_FLAGS)
 	@echo "Installed $(BIN) to $(INSTALL_TARGET)"
 	@if [ "$(HAS_SHA256SUM)" ] ; then \

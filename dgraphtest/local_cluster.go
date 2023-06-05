@@ -488,7 +488,7 @@ func (c *LocalCluster) Upgrade(version string, strategy UpgradeStrategy) error {
 		if err := hc.LoginIntoNamespace(DefaultUser, DefaultPassword, 0); err != nil {
 			return errors.Wrapf(err, "error during login before upgrade")
 		}
-		if err := hc.Backup(true, DefaultBackupDir); err != nil {
+		if err := hc.Backup(c, true, DefaultBackupDir); err != nil {
 			return errors.Wrap(err, "error taking backup during upgrade")
 		}
 
@@ -685,12 +685,12 @@ func (c *LocalCluster) printAllLogs() error {
 	log.Printf("[INFO] all logs for cluster with prefix [%v] are below!", c.conf.prefix)
 	var finalErr error
 	for i := 0; i < c.conf.numZeros; i++ {
-		if err := c.printLogs(c.zeros[i].containerID); err != nil {
+		if err := c.printLogs(c.zeros[i].containerName); err != nil {
 			finalErr = fmt.Errorf("%v; %v", finalErr, err)
 		}
 	}
 	for i := 0; i < c.conf.numAlphas; i++ {
-		if err := c.printLogs(c.alphas[i].containerID); err != nil {
+		if err := c.printLogs(c.alphas[i].containerName); err != nil {
 			finalErr = fmt.Errorf("%v; %v", finalErr, err)
 		}
 	}
