@@ -324,7 +324,10 @@ loop2:
 		}
 
 		for _, alphaLogs := range alphasLogs {
-			if !strings.Contains(alphaLogs, "Operation completed with id: opRestore") {
+			// It is possible that the alpha didn't do a restore but streamed snapshot from any other alpha
+			if !strings.Contains(alphaLogs, "Operation completed with id: opRestore") &&
+				!strings.Contains(alphaLogs, "Operation completed with id: opSnapshot") {
+
 				continue loop2
 			}
 		}
