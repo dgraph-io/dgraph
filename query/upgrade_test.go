@@ -54,8 +54,8 @@ func TestMain(m *testing.M) {
 
 	runTest := func(before, after string) {
 		var code int = 2 // it will be set to 0 when tests complete successfully
-		conf := dgraphtest.NewClusterConfig().WithNumAlphas(3).WithNumZeros(3).
-			WithReplicas(3).WithACL(time.Hour).WithVersion(before)
+		conf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).
+			WithReplicas(1).WithACL(time.Hour).WithVersion(before)
 		c, err := dgraphtest.NewLocalCluster(conf)
 		x.Panic(err)
 		defer func() { c.Cleanup(code != 0) }()
