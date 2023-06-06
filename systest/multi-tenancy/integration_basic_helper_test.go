@@ -40,8 +40,8 @@ type liveOpts struct {
 	forceNs   int64
 }
 
-func (suite *MultitenancyTestSuite) liveLoadData(opts *liveOpts) error {
-	t := suite.T()
+func (msuite *MultitenancyTestSuite) liveLoadData(opts *liveOpts) error {
+	t := msuite.T()
 	dir := t.TempDir()
 
 	rdfFile := filepath.Join(dir, "rdfs.rdf")
@@ -61,15 +61,15 @@ func (suite *MultitenancyTestSuite) liveLoadData(opts *liveOpts) error {
 	})
 }
 
-func (suite *MultitenancyTestSuite) TestLiveLoadMulti() {
-	t := suite.T()
-	gcli0, cleanup, err := suite.dc.Client()
+func (msuite *MultitenancyTestSuite) TestLiveLoadMulti() {
+	t := msuite.T()
+	gcli0, cleanup, err := msuite.dc.Client()
 	defer cleanup()
 	require.NoError(t, err)
 	require.NoError(t, gcli0.LoginIntoNamespace(context.Background(),
 		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 
-	hcli, err := suite.dc.HTTPClient()
+	hcli, err := msuite.dc.HTTPClient()
 	require.NoError(t, err)
 	err = hcli.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace)
 	require.NoError(t, err, "login failed")
@@ -77,7 +77,7 @@ func (suite *MultitenancyTestSuite) TestLiveLoadMulti() {
 	// Create a new namespace
 	ns, err := hcli.AddNamespace()
 	require.NoError(t, err)
-	gcli1, cleanup, err := suite.dc.Client()
+	gcli1, cleanup, err := msuite.dc.Client()
 	defer cleanup()
 	require.NoError(t, err)
 	require.NoError(t, gcli1.LoginIntoNamespace(context.Background(),
@@ -86,7 +86,7 @@ func (suite *MultitenancyTestSuite) TestLiveLoadMulti() {
 	// Load data.
 	galaxyCreds := &testutil.LoginParams{UserID: dgraphtest.DefaultUser,
 		Passwd: dgraphtest.DefaultPassword, Namespace: x.GalaxyNamespace}
-	require.NoError(t, suite.liveLoadData(&liveOpts{
+	require.NoError(t, msuite.liveLoadData(&liveOpts{
 		rdfs: fmt.Sprintf(`
 		_:a <name> "galaxy alice" .
 		_:b <name> "galaxy bob" .
@@ -133,7 +133,7 @@ func (suite *MultitenancyTestSuite) TestLiveLoadMulti() {
 	require.Contains(t, err.Error(), "Attribute name is not indexed")
 
 	// live load data into namespace ns using the guardian of galaxy.
-	require.NoError(t, suite.liveLoadData(&liveOpts{
+	require.NoError(t, msuite.liveLoadData(&liveOpts{
 		rdfs: fmt.Sprintf(`
 		_:a <name> "ns chew" .
 		_:b <name> "ns dan" <%#x> .
@@ -152,7 +152,7 @@ func (suite *MultitenancyTestSuite) TestLiveLoadMulti() {
 		{"name": "ns dan"},{"name":"ns eon"}]}`, string(resp.Json))
 
 	// Try loading data into a namespace that does not exist. Expect a failure.
-	err = suite.liveLoadData(&liveOpts{
+	err = msuite.liveLoadData(&liveOpts{
 		rdfs:    fmt.Sprintf(`_:c <name> "ns eon" <%#x> .`, ns),
 		schema:  `name: string @index(term) .`,
 		creds:   galaxyCreds,
@@ -162,7 +162,7 @@ func (suite *MultitenancyTestSuite) TestLiveLoadMulti() {
 	require.Contains(t, err.Error(), "Cannot load into namespace 0x123456")
 
 	// Try loading into a multiple namespaces.
-	err = suite.liveLoadData(&liveOpts{
+	err = msuite.liveLoadData(&liveOpts{
 		rdfs:    fmt.Sprintf(`_:c <name> "ns eon" <%#x> .`, ns),
 		schema:  `[0x123456] name: string @index(term) .`,
 		creds:   galaxyCreds,
@@ -171,7 +171,7 @@ func (suite *MultitenancyTestSuite) TestLiveLoadMulti() {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Namespace 0x123456 doesn't exist for pred")
 
-	err = suite.liveLoadData(&liveOpts{
+	err = msuite.liveLoadData(&liveOpts{
 		rdfs:    `_:c <name> "ns eon" <0x123456> .`,
 		schema:  `name: string @index(term) .`,
 		creds:   galaxyCreds,
@@ -181,7 +181,7 @@ func (suite *MultitenancyTestSuite) TestLiveLoadMulti() {
 	require.Contains(t, err.Error(), "Cannot load nquad")
 
 	// Load data by non-galaxy user.
-	err = suite.liveLoadData(&liveOpts{
+	err = msuite.liveLoadData(&liveOpts{
 		rdfs:    `_:c <name> "ns hola" .`,
 		schema:  `name: string @index(term) .`,
 		creds:   &testutil.LoginParams{UserID: dgraphtest.DefaultUser, Passwd: dgraphtest.DefaultPassword, Namespace: ns},
@@ -190,7 +190,7 @@ func (suite *MultitenancyTestSuite) TestLiveLoadMulti() {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "cannot force namespace")
 
-	err = suite.liveLoadData(&liveOpts{
+	err = msuite.liveLoadData(&liveOpts{
 		rdfs:    `_:c <name> "ns hola" .`,
 		schema:  `name: string @index(term) .`,
 		creds:   &testutil.LoginParams{UserID: dgraphtest.DefaultUser, Passwd: dgraphtest.DefaultPassword, Namespace: ns},
@@ -199,7 +199,7 @@ func (suite *MultitenancyTestSuite) TestLiveLoadMulti() {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "cannot force namespace")
 
-	require.NoError(t, suite.liveLoadData(&liveOpts{
+	require.NoError(t, msuite.liveLoadData(&liveOpts{
 		rdfs: fmt.Sprintf(`
 			_:a <name> "ns free" .
 			_:b <name> "ns gary" <%#x> .

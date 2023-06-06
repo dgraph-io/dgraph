@@ -36,25 +36,25 @@ type MultitenancyTestSuite struct {
 	uc dgraphtest.UpgradeCombo
 }
 
-func (suite *MultitenancyTestSuite) SetupTest() {
+func (msuite *MultitenancyTestSuite) SetupTest() {
 	conf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).WithReplicas(1).
-		WithACL(20 * time.Second).WithEncryption().WithVersion(suite.uc.Before)
+		WithACL(20 * time.Second).WithEncryption().WithVersion(msuite.uc.Before)
 	c, err := dgraphtest.NewLocalCluster(conf)
 	x.Panic(err)
 	x.Panic(c.Start())
 
-	suite.dc = c
-	suite.lc = c
+	msuite.dc = c
+	msuite.lc = c
 }
 
-func (suite *MultitenancyTestSuite) TearDownTest() {
-	suite.lc.Cleanup(suite.T().Failed())
+func (msuite *MultitenancyTestSuite) TearDownTest() {
+	msuite.lc.Cleanup(msuite.T().Failed())
 }
 
-func (suite *MultitenancyTestSuite) Upgrade() {
-	t := suite.T()
+func (msuite *MultitenancyTestSuite) Upgrade() {
+	t := msuite.T()
 
-	if err := suite.lc.Upgrade(suite.uc.After, suite.uc.Strategy); err != nil {
+	if err := msuite.lc.Upgrade(msuite.uc.After, msuite.uc.Strategy); err != nil {
 		t.Fatal(err)
 	}
 }
