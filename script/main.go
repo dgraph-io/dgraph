@@ -18,8 +18,10 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"math"
@@ -30,12 +32,15 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/badger/v3/options"
 	bpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/badger/v3/table"
 	"github.com/dgraph-io/badger/v3/y"
+	"github.com/dgraph-io/dgo/v210"
+	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
@@ -60,6 +65,11 @@ type flagOptions struct {
 	getOldData               bool
 	partsTs                  uint64
 	repair                   bool
+	alphaPaths               string
+	checkKeyNotFound         bool
+	login                    bool
+	username                 string
+	password                 string
 }
 
 const (
@@ -77,7 +87,7 @@ const (
 var sstDir, vlogDir string
 
 func validateRootCmdArgs(cmd *cobra.Command, args []string) error {
-	if strings.HasPrefix(cmd.Use, "help ") { // No need to validate if it is help
+	if strings.HasPrefix(cmd.Use, "help ") || strings.HasPrefix(cmd.Use, "checkNotFound") { // No need to validate if it is help
 		return nil
 	}
 	if sstDir == "" {
@@ -106,6 +116,7 @@ func init() {
 	RootCmd.PersistentFlags().StringVar(&vlogDir, "vlog-dir", "",
 		"Directory where the value log files are located, if different from --dir")
 	RootCmd.AddCommand(infoCmd)
+	RootCmd.AddCommand(checkNotFoundCmd)
 	infoCmd.Flags().BoolVarP(&opt.showTables, "show-tables", "s", false,
 		"If set to true, show tables as well.")
 	infoCmd.Flags().BoolVar(&opt.showHistogram, "histogram", false,
@@ -134,6 +145,12 @@ func init() {
 	infoCmd.Flags().BoolVar(&opt.repair, "repair", false,
 		"Repair some key, should be used with get old data.")
 	infoCmd.Flags().Uint64Var(&opt.partsTs, "partTs", 0, "Timestamp of the split parts to read from.")
+
+	checkNotFoundCmd.Flags().StringVar(&opt.alphaPaths, "alphas", "localhost:9080", "Comma separated ip addresses of the alpha, For example localhost:9080,localhost:9081")
+	checkNotFoundCmd.Flags().BoolVar(&opt.checkKeyNotFound, "checkKeyNotFound", false, "Check the key not found error in all alphas. Please give alpha paths")
+	checkNotFoundCmd.Flags().BoolVar(&opt.login, "login", false, "Login into dgraph to check for predicates")
+	checkNotFoundCmd.Flags().StringVar(&opt.username, "username", "admin", "username to login with")
+	checkNotFoundCmd.Flags().StringVar(&opt.password, "password", "password", "password to login with")
 }
 
 var infoCmd = &cobra.Command{
@@ -146,6 +163,18 @@ files (which are not referenced by the manifest).  Use this tool to report any i
 to the Dgraph team.
 `,
 	RunE: handleInfo,
+}
+
+var checkNotFoundCmd = &cobra.Command{
+	Use:   "checkNotFound",
+	Short: "Check dgraph for key not found error",
+	Long: `
+This command prints information about the badger key-value store.  It reads MANIFEST and prints its
+info. It also prints info about missing/extra files, and general information about the value log
+files (which are not referenced by the manifest).  Use this tool to report any issues about Badger
+to the Dgraph team.
+`,
+	RunE: checkNotFound,
 }
 
 func main() {
@@ -212,6 +241,83 @@ func handleInfo(cmd *cobra.Command, args []string) error {
 	if len(opt.keyLookup) > 0 {
 		if err := lookup(db); err != nil {
 			return y.Wrapf(err, "failed to perform lookup for the key: %x", opt.keyLookup)
+		}
+	}
+
+	return nil
+}
+
+func checkAlphaForKeyNotFound(alpha string) error {
+	ctx := context.Background()
+	type Schema struct {
+		Predicate string `json:"predicate"`
+		Type      string `json:"type"`
+	}
+
+	conn, err := grpc.Dial(alpha, grpc.WithInsecure())
+	if err != nil {
+		fmt.Println("Script failed to establish connection with alpha", alpha, "due to", err)
+		return err
+	}
+	// Check error
+	defer conn.Close()
+	dgraphClient := dgo.NewDgraphClient(api.NewDgraphClient(conn))
+	if opt.login {
+		err = dgraphClient.Login(ctx, opt.username, opt.password)
+		if err != nil {
+			fmt.Println("Couldn't login to alpha", alpha, "due to", err)
+			return err
+		}
+	}
+
+	txn := dgraphClient.NewTxn()
+	defer txn.Discard(ctx)
+
+	res, err := txn.Query(ctx, "schema {}")
+	if err != nil {
+		fmt.Println("Script failed to get schema from alpha", alpha, "due to", err)
+		return err
+	}
+
+	type wrapper struct {
+		Schema []Schema `json:"schema"`
+	}
+
+	schema := wrapper{}
+	err = json.Unmarshal(res.Json, &schema)
+	if err != nil {
+		fmt.Println("Can't unmarshal schema recieved from alpha", alpha, "due to", err)
+	}
+
+	for _, i := range schema.Schema {
+		if !strings.HasPrefix(i.Predicate, "dgraph.") {
+			txn1 := dgraphClient.NewTxn()
+			defer txn1.Discard(ctx)
+
+			query := fmt.Sprintf(`{
+      nodeCount(func: has(<%s>)) {
+        nodeCount: count(uid)
+      }
+    }`, i.Predicate)
+			resp, err := txn.Query(ctx, query)
+			fmt.Printf("Checking Predicate: %s, on alpha: %s \n", i.Predicate, alpha)
+			fmt.Println(string(resp.Json))
+			if err != nil {
+				fmt.Println("Potential error in Predicate", i.Predicate, err)
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func checkNotFound(cmd *cobra.Command, args []string) error {
+	alphas := strings.Split(opt.alphaPaths, ",")
+	for _, alpha := range alphas {
+		err := checkAlphaForKeyNotFound(alpha)
+		if err != nil {
+			return err
 		}
 	}
 
