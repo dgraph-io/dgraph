@@ -131,7 +131,9 @@ func (z *zero) bindings(offset int) nat.PortMap {
 func (z *zero) cmd(c *LocalCluster) []string {
 	zcmd := []string{"/gobin/dgraph", "zero", fmt.Sprintf("--my=%s:%v", z.aname(), zeroGrpcPort), "--bindall",
 		fmt.Sprintf(`--replicas=%v`, c.conf.replicas), fmt.Sprintf(`--raft=idx=%v`, z.id+1), "--logtostderr",
-		fmt.Sprintf("-v=%d", c.conf.verbosity)}
+		fmt.Sprintf("-v=%d", c.conf.verbosity),
+		fmt.Sprintf(`--limit=refill-interval=%v;uid-lease=%v`, c.conf.refillInterval, c.conf.uidLease)}
+
 	if z.id > 0 {
 		zcmd = append(zcmd, "--peer="+c.zeros[0].aname()+":"+zeroGrpcPort)
 	}
@@ -218,7 +220,7 @@ func (a *alpha) cmd(c *LocalCluster) []string {
 		`--security=whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16`}
 
 	if c.conf.acl {
-		acmd = append(acmd, fmt.Sprintf(`--acl=secret-file=%s; access-ttl=%s`, aclSecretMountPath, c.conf.aclTTL))
+		acmd = append(acmd, fmt.Sprintf(`--acl=secret-file=%s;access-ttl=%s`, aclSecretMountPath, c.conf.aclTTL))
 	}
 	if c.conf.encryption {
 		acmd = append(acmd, fmt.Sprintf(`--encryption=key-file=%v`, encKeyMountPath))

@@ -11,7 +11,7 @@ require (
 	github.com/Shopify/sarama v1.27.2
 	github.com/blevesearch/bleve v1.0.13
 	github.com/dgraph-io/badger/v4 v4.1.0
-	github.com/dgraph-io/dgo/v230 v230.0.1-rc1
+	github.com/dgraph-io/dgo/v230 v230.0.1
 	github.com/dgraph-io/gqlgen v0.13.2
 	github.com/dgraph-io/gqlparser/v2 v2.2.1
 	github.com/dgraph-io/graphql-transport-ws v0.0.0-20210511143556-2cef522f1f15
