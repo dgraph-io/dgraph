@@ -238,7 +238,7 @@ func (s *Server) zeroHealth(ctx context.Context) (*api.Response, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
-	healthAll := pb.HealthInfo{
+	health := pb.HealthInfo{
 		Instance:    "zero",
 		Address:     x.WorkerConfig.MyAddr,
 		Status:      "healthy",
@@ -246,7 +246,7 @@ func (s *Server) zeroHealth(ctx context.Context) (*api.Response, error) {
 		Uptime:      int64(time.Since(x.WorkerConfig.StartTime) / time.Second),
 		LastEcho:    time.Now().Unix(),
 	}
-	jsonOut, err := json.Marshal(healthAll)
+	jsonOut, err := json.Marshal(health)
 	if err != nil {
 		return nil, errors.Errorf("Unable to Marshal. Err %v", err)
 	}
