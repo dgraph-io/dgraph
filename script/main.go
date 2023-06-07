@@ -63,10 +63,8 @@ type flagOptions struct {
 	checksumVerificationMode string
 	discard                  bool
 	getOldData               bool
-	partsTs                  uint64
 	repair                   bool
 	alphaPaths               string
-	checkKeyNotFound         bool
 	login                    bool
 	username                 string
 	password                 string
@@ -87,7 +85,7 @@ const (
 var sstDir, vlogDir string
 
 func validateRootCmdArgs(cmd *cobra.Command, args []string) error {
-	if strings.HasPrefix(cmd.Use, "help ") || strings.HasPrefix(cmd.Use, "checkNotFound") { // No need to validate if it is help
+	if strings.HasPrefix(cmd.Use, "help ") || strings.HasPrefix(cmd.Use, scanCmd.Use) { // No need to validate if it is help
 		return nil
 	}
 	if sstDir == "" {
@@ -100,8 +98,8 @@ func validateRootCmdArgs(cmd *cobra.Command, args []string) error {
 }
 
 var RootCmd = &cobra.Command{
-	Use:               "badger",
-	Short:             "Tools to manage Badger database.",
+	Use:               "dgraph",
+	Short:             "Tools to scan and fix key not found issue in dgraph",
 	PersistentPreRunE: validateRootCmdArgs,
 }
 
@@ -115,64 +113,57 @@ func init() {
 
 	RootCmd.PersistentFlags().StringVar(&vlogDir, "vlog-dir", "",
 		"Directory where the value log files are located, if different from --dir")
-	RootCmd.AddCommand(infoCmd)
-	RootCmd.AddCommand(checkNotFoundCmd)
-	infoCmd.Flags().BoolVarP(&opt.showTables, "show-tables", "s", false,
+	RootCmd.AddCommand(repairCmd)
+	RootCmd.AddCommand(scanCmd)
+	repairCmd.Flags().BoolVarP(&opt.showTables, "show-tables", "s", false,
 		"If set to true, show tables as well.")
-	infoCmd.Flags().BoolVar(&opt.showHistogram, "histogram", false,
+	repairCmd.Flags().BoolVar(&opt.showHistogram, "histogram", false,
 		"Show a histogram of the key and value sizes.")
-	infoCmd.Flags().BoolVar(&opt.showKeys, "show-keys", false, "Show keys stored in Badger")
-	infoCmd.Flags().StringVar(&opt.withPrefix, "with-prefix", "",
+	repairCmd.Flags().BoolVar(&opt.showKeys, "show-keys", false, "Show keys stored in Badger")
+	repairCmd.Flags().StringVar(&opt.withPrefix, "with-prefix", "",
 		"Consider only the keys with specified prefix")
-	infoCmd.Flags().StringVarP(&opt.keyLookup, "lookup", "l", "", "Hex of the key to lookup")
-	infoCmd.Flags().BoolVar(&opt.itemMeta, "show-meta", true, "Output item meta data as well")
-	infoCmd.Flags().BoolVar(&opt.keyHistory, "history", false, "Show all versions of a key")
-	infoCmd.Flags().BoolVar(
+	repairCmd.Flags().StringVarP(&opt.keyLookup, "lookup", "l", "", "Hex of the key to lookup")
+	repairCmd.Flags().BoolVar(&opt.itemMeta, "show-meta", true, "Output item meta data as well")
+	repairCmd.Flags().BoolVar(&opt.keyHistory, "history", false, "Show all versions of a key")
+	repairCmd.Flags().BoolVar(
 		&opt.showInternal, "show-internal", false, "Show internal keys along with other keys."+
 			" This option should be used along with --show-key option")
-	infoCmd.Flags().BoolVar(&opt.readOnly, "read-only", true, "If set to true, DB will be opened "+
+	repairCmd.Flags().BoolVar(&opt.readOnly, "read-only", true, "If set to true, DB will be opened "+
 		"in read only mode. If DB has not been closed properly, this option can be set to false "+
 		"to open DB.")
-	infoCmd.Flags().BoolVar(&opt.truncate, "truncate", false, "If set to true, it allows "+
+	repairCmd.Flags().BoolVar(&opt.truncate, "truncate", false, "If set to true, it allows "+
 		"truncation of value log files if they have corrupt data.")
-	infoCmd.Flags().StringVar(&opt.encryptionKey, "enc-key", "", "Use the provided encryption key")
-	infoCmd.Flags().StringVar(&opt.checksumVerificationMode, "cv-mode", "none",
+	repairCmd.Flags().StringVar(&opt.encryptionKey, "enc-key", "", "Use the provided encryption key")
+	repairCmd.Flags().StringVar(&opt.checksumVerificationMode, "cv-mode", "none",
 		"[none, table, block, tableAndBlock] Specifies when the db should verify checksum for SST.")
-	infoCmd.Flags().BoolVar(&opt.discard, "discard", false,
+	repairCmd.Flags().BoolVar(&opt.discard, "discard", false,
 		"Parse and print DISCARD file from value logs.")
-	infoCmd.Flags().BoolVar(&opt.getOldData, "getOldData", false,
+	repairCmd.Flags().BoolVar(&opt.getOldData, "getOldData", false,
 		"Get old data of key present.")
-	infoCmd.Flags().BoolVar(&opt.repair, "repair", false,
+	repairCmd.Flags().BoolVar(&opt.repair, "repair", false,
 		"Repair some key, should be used with get old data.")
-	infoCmd.Flags().Uint64Var(&opt.partsTs, "partTs", 0, "Timestamp of the split parts to read from.")
 
-	checkNotFoundCmd.Flags().StringVar(&opt.alphaPaths, "alphas", "localhost:9080", "Comma separated ip addresses of the alpha, For example localhost:9080,localhost:9081")
-	checkNotFoundCmd.Flags().BoolVar(&opt.checkKeyNotFound, "checkKeyNotFound", false, "Check the key not found error in all alphas. Please give alpha paths")
-	checkNotFoundCmd.Flags().BoolVar(&opt.login, "login", false, "Login into dgraph to check for predicates")
-	checkNotFoundCmd.Flags().StringVar(&opt.username, "username", "admin", "username to login with")
-	checkNotFoundCmd.Flags().StringVar(&opt.password, "password", "password", "password to login with")
+	scanCmd.Flags().StringVar(&opt.alphaPaths, "alphas", "localhost:9080", "Comma separated ip addresses of the alpha, For example localhost:9080,localhost:9081")
+	scanCmd.Flags().BoolVar(&opt.login, "login", false, "Login into dgraph to check for predicates")
+	scanCmd.Flags().StringVar(&opt.username, "username", "admin", "username to login with")
+	scanCmd.Flags().StringVar(&opt.password, "password", "password", "password to login with")
 }
 
-var infoCmd = &cobra.Command{
-	Use:   "info",
-	Short: "Health info about Badger database.",
+var repairCmd = &cobra.Command{
+	Use:   "repair",
+	Short: "Repair key not found error",
 	Long: `
-This command prints information about the badger key-value store.  It reads MANIFEST and prints its
-info. It also prints info about missing/extra files, and general information about the value log
-files (which are not referenced by the manifest).  Use this tool to report any issues about Badger
-to the Dgraph team.
+This command fixes the key not found issue. Pass the key to fix, and it will print what needs to be changed.
+Give --repair=true to actually run it.
 `,
 	RunE: handleInfo,
 }
 
-var checkNotFoundCmd = &cobra.Command{
-	Use:   "checkNotFound",
-	Short: "Check dgraph for key not found error",
+var scanCmd = &cobra.Command{
+	Use:   "scan",
+	Short: "Scan running dgraph cluster for key not found issue",
 	Long: `
-This command prints information about the badger key-value store.  It reads MANIFEST and prints its
-info. It also prints info about missing/extra files, and general information about the value log
-files (which are not referenced by the manifest).  Use this tool to report any issues about Badger
-to the Dgraph team.
+This command talks to all the alphas and tries to find out if any of the predicate has key not found issue.
 `,
 	RunE: checkNotFound,
 }
@@ -325,19 +316,9 @@ func checkNotFound(cmd *cobra.Command, args []string) error {
 }
 
 func getOldData(db *badger.DB) error {
-	if opt.partsTs == 0 {
-		return errors.Errorf("Parts ts not provided")
-	}
 	if opt.keyLookup == "" {
 		return errors.Errorf("Key lookup not provided")
 	}
-
-	// Add print here
-	//baseList, err := readBaseKeyData(db)
-	//if err != nil {
-	//	return err
-	//}
-	//fmt.Println(baseList)
 
 	key, err := hex.DecodeString(opt.keyLookup)
 	if err != nil {
@@ -360,6 +341,7 @@ func getOldData(db *badger.DB) error {
 
 	fmt.Println("ALL PARTS:", len(partsT))
 	if len(partsT) != 1 {
+		// If this error comes, we can just change the code to use the maximum value
 		return errors.Errorf("Multiple spilts founds: %v", len(partsT))
 	}
 	ts := uint64(0)
