@@ -239,12 +239,12 @@ func (s *Server) zeroHealth(ctx context.Context) (*api.Response, error) {
 		return nil, ctx.Err()
 	}
 	health := pb.HealthInfo{
-		Instance:    "zero",
-		Address:     x.WorkerConfig.MyAddr,
-		Status:      "healthy",
-		Version:     x.Version(),
-		Uptime:      int64(time.Since(x.WorkerConfig.StartTime) / time.Second),
-		LastEcho:    time.Now().Unix(),
+		Instance: "zero",
+		Address:  x.WorkerConfig.MyAddr,
+		Status:   "healthy",
+		Version:  x.Version(),
+		Uptime:   int64(time.Since(x.WorkerConfig.StartTime) / time.Second),
+		LastEcho: time.Now().Unix(),
 	}
 	jsonOut, err := json.Marshal(health)
 	if err != nil {
@@ -256,24 +256,24 @@ func (s *Server) zeroHealth(ctx context.Context) (*api.Response, error) {
 func (st *state) pingResponse(w http.ResponseWriter, r *http.Request) {
 	x.AddCorsHeaders(w)
 	switch r.Header.Get("Accept") {
-		case "application/json":
-			resp, err := (st.zero).zeroHealth(r.Context())
-			if err != nil {
-				x.SetStatus(w, x.Error, err.Error())
-				return
-			}
-			w.Header().Set("Content-Type", "application/json; charset=utf-8")
-			w.WriteHeader(http.StatusOK)
-			if _, err := w.Write(resp.Json); err != nil {
-				glog.Warningf("could not send error msg=[%v] code=[%+v] due to http error %+v", err.Error(), x.Error, err)
-				return
-			}
-		default:
-			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-			w.WriteHeader(http.StatusOK)
-			if _, err := w.Write([]byte("OK")); err != nil {
-				glog.Warningf("Could not send error msg=[%v] code=[%+v] due to http error %+v", err.Error(), x.Error, err)
-				return
-			}
+	case "application/json":
+		resp, err := (st.zero).zeroHealth(r.Context())
+		if err != nil {
+			x.SetStatus(w, x.Error, err.Error())
+			return
+		}
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		if _, err := w.Write(resp.Json); err != nil {
+			glog.Warningf("could not send error msg=[%v] code=[%+v] due to http error %+v", err.Error(), x.Error, err)
+			return
+		}
+	default:
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		if _, err := w.Write([]byte("OK")); err != nil {
+			glog.Warningf("Could not send error msg=[%v] code=[%+v] due to http error %+v", err.Error(), x.Error, err)
+			return
+		}
 	}
 }
