@@ -252,17 +252,28 @@ func (hc *HTTPClient) RunGraphqlQuery(params GraphQLParams, admin bool) ([]byte,
 }
 
 // Backup creates a backup of dgraph at a given path
-func (hc *HTTPClient) Backup(forceFull bool, backupPath string) error {
-	const query = `mutation backup($dest: String!, $ff: Boolean!) {
+func (hc *HTTPClient) Backup(c Cluster, forceFull bool, backupPath string) error {
+	// backup API was made async in the commit after this commit d3bf7b7b2786bcb99f02e1641f3b656d0a98f7f4
+	syncAPI, err := IsParent("caed2cb8c68b0ea8c69a3d71410a5fa6b0b94985", c.GetVersion())
+	if err != nil {
+		return errors.Wrapf(err, "error checking incremental restore support")
+	}
+
+	var taskPart string
+	if !syncAPI {
+		taskPart = "taskId"
+	}
+
+	const queryFmt = `mutation backup($dest: String!, $ff: Boolean!) {
 		backup(input: {destination: $dest, forceFull: $ff}) {
 			response {
 				code
 			}
-			taskId
+			%v
 		}
 	}`
 	params := GraphQLParams{
-		Query:     query,
+		Query:     fmt.Sprintf(queryFmt, taskPart),
 		Variables: map[string]interface{}{"dest": backupPath, "ff": forceFull},
 	}
 	resp, err := hc.RunGraphqlQuery(params, true)
@@ -284,11 +295,17 @@ func (hc *HTTPClient) Backup(forceFull bool, backupPath string) error {
 	if backupResp.Backup.Response.Code != "Success" {
 		return fmt.Errorf("backup failed")
 	}
+
 	return hc.WaitForTask(backupResp.Backup.TaskID)
 }
 
 // WaitForTask waits for the task to finish
 func (hc *HTTPClient) WaitForTask(taskId string) error {
+	// This can happen if the backup API is a sync API
+	if taskId == "" {
+		return nil
+	}
+
 	const query = `query task($id: String!) {
 		task(input: {id: $id}) {
 			status

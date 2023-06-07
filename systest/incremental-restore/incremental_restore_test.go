@@ -58,7 +58,7 @@ func TestIncrementalRestore(t *testing.T) {
 			require.NoError(t, err)
 		}
 		t.Logf("taking backup #%v\n", i)
-		require.NoError(t, hc.Backup(i == 1, dgraphtest.DefaultBackupDir))
+		require.NoError(t, hc.Backup(c, i == 1, dgraphtest.DefaultBackupDir))
 	}
 
 	for i := 2; i <= len(uids); i += 2 {
