@@ -25,9 +25,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pkg/errors"
 	"github.com/gogo/protobuf/jsonpb"
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 
 	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
