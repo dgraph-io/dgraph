@@ -147,19 +147,23 @@ func TestNquadsFromJson1(t *testing.T) {
 		t:      t,
 		nqs:    nq,
 		schema: "name: string @index(exact) .",
-		query: `{alice(func: eq(name, "Alice")) {
-name
-age
-married
-address
-}}`,
-		expected: `{"alice": [
-{"name": "Alice",
-"age": 26,
-"married": true,
-"address": {"coordinates": [2,1.1], "type": "Point"}}
-]}
-`}
+		query: `{
+			alice(func: eq(name, "Alice")) {
+				name
+				age
+				married
+				address
+			}
+		}`,
+		expected: `{
+			"alice": [{
+				"name": "Alice",
+				"age": 26,
+				"married": true,
+				"address": {"coordinates": [2,1.1], "type": "Point"}}
+			]}
+		`,
+	}
 	exp.verify()
 
 	exp.nqs = fastNQ
