@@ -39,7 +39,9 @@ jobs:
     runs-on: [self-hosted, x64]
     # runs-on: ubuntu-20.04
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v3 # checkout merge commit
+        with:
+          ref: "refs/pull/${{ github.event.number }}/merge"
       - name: Get Go Version
         run: |
           #!/bin/bash
