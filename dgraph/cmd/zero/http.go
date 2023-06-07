@@ -18,15 +18,18 @@ package zero
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/pkg/errors"
 	"github.com/gogo/protobuf/jsonpb"
 	"github.com/golang/glog"
 
+	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -231,9 +234,46 @@ func (st *state) getState(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (s *Server) zeroHealth(ctx context.Context) (*api.Response, error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	healthAll := pb.HealthInfo{
+		Instance:    "zero",
+		Address:     x.WorkerConfig.MyAddr,
+		Status:      "healthy",
+		Version:     x.Version(),
+		Uptime:      int64(time.Since(x.WorkerConfig.StartTime) / time.Second),
+		LastEcho:    time.Now().Unix(),
+	}
+	jsonOut, err := json.Marshal(healthAll)
+	if err != nil {
+		return nil, errors.Errorf("Unable to Marshal. Err %v", err)
+	}
+	return &api.Response{Json: jsonOut}, nil
+}
+
 func (st *state) pingResponse(w http.ResponseWriter, r *http.Request) {
 	x.AddCorsHeaders(w)
-
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte("OK"))
+	switch r.Header.Get("Accept") {
+		case "application/json":
+			resp, err := (st.zero).zeroHealth(r.Context())
+			if err != nil {
+				x.SetStatus(w, x.Error, err.Error())
+				return
+			}
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			w.WriteHeader(http.StatusOK)
+			if _, err := w.Write(resp.Json); err != nil {
+				glog.Warningf("Could not send error msg=%+v code=%+v due to http error %+v", err.Error(), x.Error, err)
+				return
+			}
+		default:
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			w.WriteHeader(http.StatusOK)
+			if _, err := w.Write([]byte("OK")); err != nil {
+				glog.Warningf("Could not send error msg=%+v code=%+v due to http error %+v", err.Error(), x.Error, err)
+				return
+			}
+	}
 }
