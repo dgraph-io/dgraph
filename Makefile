@@ -95,9 +95,11 @@ docker-image-standalone: dgraph docker-image
 
 .PHONY: coverage-docker-image
 coverage-docker-image: dgraph-coverage
-	@mkdir -p linux
-	@cp ./dgraph/dgraph ./linux/dgraph
-	docker build -f contrib/Dockerfile -t dgraph/dgraph:$(DGRAPH_VERSION) .
+	docker ps -a
+	docker context ls
+	pwd
+	uname -a
+	whoami
 
 # build and run dependencies for ubuntu linux
 .PHONY: linux-dependency
