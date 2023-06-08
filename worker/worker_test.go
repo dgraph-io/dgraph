@@ -359,7 +359,6 @@ func TestProcessTaskIndex(t *testing.T) {
 }
 
 func TestMain(m *testing.M) {
-	x.Init()
 	posting.Config.CommitFraction = 0.10
 	gr = new(groupi)
 	gr.gid = 1

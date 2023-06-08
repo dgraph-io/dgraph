@@ -711,7 +711,6 @@ func run() {
 	x.WorkerConfig.EncryptionKey = keys.EncKey
 
 	setupCustomTokenizers()
-	x.Init()
 	x.Config.PortOffset = Alpha.Conf.GetInt("port_offset")
 	x.Config.LimitMutationsNquad = int(x.Config.Limit.GetInt64("mutations-nquad"))
 	x.Config.LimitQueryEdge = x.Config.Limit.GetUint64("query-edge")
