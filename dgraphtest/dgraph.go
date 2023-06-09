@@ -233,6 +233,10 @@ func (a *alpha) cmd(c *LocalCluster) []string {
 	}
 	acmd = append(acmd, zeroAddrsArg)
 
+	if c.conf.featureFlags != "" {
+		acmd = append(acmd, fmt.Sprintf("--feature-flags=%v", c.conf.featureFlags))
+	}
+
 	return acmd
 }
 

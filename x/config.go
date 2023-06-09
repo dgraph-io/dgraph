@@ -67,6 +67,9 @@ type Options struct {
 	// poll-interval duration - The polling interval for graphql subscription.
 	GraphQL      *z.SuperFlag
 	GraphQLDebug bool
+
+	// feature flags
+	ListInNormalize bool
 }
 
 // Config stores the global instance of this package's options.
