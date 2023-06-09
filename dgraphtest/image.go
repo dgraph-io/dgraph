@@ -86,13 +86,22 @@ func openDgraphRepo() (*git.Repository, error) {
 }
 
 func checkoutGitRepo(repo *git.Repository, hash *plumbing.Hash) error {
-	worktree, err := repo.Worktree()
-	if err != nil {
-		return errors.Wrap(err, "error while getting git repo work tree")
+	// For some reason, when we use the worktree.Checkout, it seems to fail a lot in CI with errors
+	//   test panicked: error while checking out git repo with hash [a77bbe8ae0d42697a38069a9749cfe71c2dafbe6]:
+	//   open /home/ubuntu/actions-runner/_work/dgraph/repo/ee/updatemanifest: no such file or directory
+	// Until we know why that is happening, I [Aman] have moved to use the git command line tool.
+	cmd := exec.Command("git", "checkout", "-f", hash.String())
+	cmd.Dir = repoDir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return errors.Wrapf(err, "error while checking out hash [%v]\noutput:%v", hash.String(), string(out))
 	}
-	if err := worktree.Checkout(&git.CheckoutOptions{Hash: *hash, Force: true}); err != nil {
-		return errors.Wrap(err, fmt.Sprintf("error while checking out git repo with hash [%v]", hash.String()))
-	}
+	// worktree, err := repo.Worktree()
+	// if err != nil {
+	// 	return errors.Wrap(err, "error while getting git repo work tree")
+	// }
+	// if err := worktree.Checkout(&git.CheckoutOptions{Hash: *hash, Force: true}); err != nil {
+	// 	return errors.Wrap(err, fmt.Sprintf("error while checking out git repo with hash [%v]", hash.String()))
+	// }
 	return nil
 }
 

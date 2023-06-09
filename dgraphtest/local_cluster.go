@@ -38,6 +38,7 @@ import (
 
 	"github.com/dgraph-io/dgo/v230"
 	"github.com/dgraph-io/dgo/v230/protos/api"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 // cluster's network struct
@@ -485,7 +486,7 @@ func (c *LocalCluster) Upgrade(version string, strategy UpgradeStrategy) error {
 		if err != nil {
 			return err
 		}
-		if err := hc.LoginIntoNamespace(DefaultUser, DefaultPassword, 0); err != nil {
+		if err := hc.LoginIntoNamespace(DefaultUser, DefaultPassword, x.GalaxyNamespace); err != nil {
 			return errors.Wrapf(err, "error during login before upgrade")
 		}
 		if err := hc.Backup(c, true, DefaultBackupDir); err != nil {
@@ -514,7 +515,7 @@ func (c *LocalCluster) Upgrade(version string, strategy UpgradeStrategy) error {
 		if err != nil {
 			return errors.Wrapf(err, "error creating HTTP client after upgrade")
 		}
-		if err := hc.LoginIntoNamespace(DefaultUser, DefaultPassword, 0); err != nil {
+		if err := hc.LoginIntoNamespace(DefaultUser, DefaultPassword, x.GalaxyNamespace); err != nil {
 			return errors.Wrapf(err, "error during login after upgrade")
 		}
 		if err := hc.Restore(c, DefaultBackupDir, "", 0, 1, encPath); err != nil {

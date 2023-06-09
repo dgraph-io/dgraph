@@ -63,7 +63,7 @@ func TestMain(m *testing.M) {
 
 		hc, err := c.HTTPClient()
 		x.Panic(err)
-		x.Panic(hc.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, 0))
+		x.Panic(hc.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 
 		mutate(c)
 		x.Panic(c.Upgrade(uc.After, uc.Strategy))
