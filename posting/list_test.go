@@ -1479,7 +1479,6 @@ func TestRecursiveSplits(t *testing.T) {
 var ps *badger.DB
 
 func TestMain(m *testing.M) {
-	x.Init()
 	Config.CommitFraction = 0.10
 
 	dir, err := os.MkdirTemp("", "storetest_")

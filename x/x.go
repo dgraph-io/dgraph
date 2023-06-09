@@ -158,7 +158,6 @@ var (
 func init() {
 	GuardiansUid.Store(GalaxyNamespace, 0)
 	GrootUid.Store(GalaxyNamespace, 0)
-
 }
 
 // ShouldCrash returns true if the error should cause the process to crash.

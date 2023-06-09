@@ -649,8 +649,6 @@ func TestParseWithNamespace(t *testing.T) {
 var ps *badger.DB
 
 func TestMain(m *testing.M) {
-	x.Init()
-
 	dir, err := os.MkdirTemp("", "storetest_")
 	x.Panic(err)
 	defer os.RemoveAll(dir)
