@@ -101,9 +101,7 @@ jobs:
     runs-on: [self-hosted, x64]
     # runs-on: ubuntu-20.04
     steps:
-      - uses: actions/checkout@v3
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/checkout@v3 # defaults to SHA of event that triggered workflow
       - name: Get Go Version
         run: |
           #!/bin/bash
