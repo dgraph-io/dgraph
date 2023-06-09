@@ -27,6 +27,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -292,11 +293,14 @@ func checkAlphaForKeyNotFound(alpha string) error {
     }`, i.Predicate)
 			resp, err := txn.Query(ctx, query)
 			fmt.Printf("Checking Predicate: %s, on alpha: %s \n", i.Predicate, alpha)
-			fmt.Println(string(resp.Json))
 			if err != nil {
 				fmt.Println("Potential error in Predicate", i.Predicate, err)
+				str := err.Error()
+				re := regexp.MustCompile("[0-9]+")
+				fmt.Println(re.FindAllString(str, -1))
 				return err
 			}
+			fmt.Println(string(resp.Json))
 		}
 	}
 
