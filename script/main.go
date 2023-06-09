@@ -296,9 +296,10 @@ func checkAlphaForKeyNotFound(alpha string) error {
 			if err != nil {
 				fmt.Println("Potential error in Predicate", i.Predicate, err)
 				str := err.Error()
-				re := regexp.MustCompile("[0-9]+")
-				fmt.Println(re.FindAllString(str, -1))
-				return err
+				re := regexp.MustCompile("00[0-9a-fA-F]+")
+				badKey := re.FindAllString(str, -1)[0]
+				fmt.Println("Potential error in Predicate", i.Predicate, "badKey=", badKey)
+				fmt.Printf("Run the repair command to fix it: <script_path> reapir --dir=<path of the p directory> --enc-key=<paste the encryption key here, or `cat encryptionfile`> --lookup=%s --getOldData --repair=true\n", badKey)
 			}
 			fmt.Println(string(resp.Json))
 		}
