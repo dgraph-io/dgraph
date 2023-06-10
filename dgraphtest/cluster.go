@@ -22,11 +22,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/pkg/errors"
 
 	"github.com/dgraph-io/dgo/v230"
@@ -253,14 +253,14 @@ func (hc *HTTPClient) RunGraphqlQuery(params GraphQLParams, admin bool) ([]byte,
 
 // Backup creates a backup of dgraph at a given path
 func (hc *HTTPClient) Backup(c Cluster, forceFull bool, backupPath string) error {
-	// backup API was made async in the commit after this commit d3bf7b7b2786bcb99f02e1641f3b656d0a98f7f4
-	syncAPI, err := IsParent("caed2cb8c68b0ea8c69a3d71410a5fa6b0b94985", c.GetVersion())
+	// backup API was made async in the commit d3bf7b7b2786bcb99f02e1641f3b656d0a98f7f4
+	asyncAPI, err := IsParent("d3bf7b7b2786bcb99f02e1641f3b656d0a98f7f4", c.GetVersion())
 	if err != nil {
 		return errors.Wrapf(err, "error checking incremental restore support")
 	}
 
 	var taskPart string
-	if !syncAPI {
+	if asyncAPI {
 		taskPart = "taskId"
 	}
 
@@ -346,16 +346,16 @@ func (hc *HTTPClient) Restore(c Cluster, backupPath string,
 	backupId string, incrFrom, backupNum int, encKey string) error {
 
 	// incremental restore was introduced in commit 8b3712e93ed2435bea52d957f7b69976c6cfc55b
-	beforeIncrRestore, err := IsParent("8b3712e93ed2435bea52d957f7b69976c6cfc55b", c.GetVersion())
+	incrRestoreSupported, err := IsParent("8b3712e93ed2435bea52d957f7b69976c6cfc55b", c.GetVersion())
 	if err != nil {
 		return errors.Wrapf(err, "error checking incremental restore support")
 	}
-	if beforeIncrRestore && incrFrom != 0 {
+	if incrRestoreSupported && incrFrom != 0 {
 		return errors.New("incremental restore is not supported by the cluster")
 	}
 
 	var varPart, queryPart string
-	if !beforeIncrRestore {
+	if incrRestoreSupported {
 		varPart = "$incrFrom: Int, "
 		queryPart = " incrementalFrom: $incrFrom,"
 	}
@@ -369,7 +369,7 @@ func (hc *HTTPClient) Restore(c Cluster, backupPath string,
 	}`, varPart, queryPart)
 	vars := map[string]interface{}{"location": backupPath, "backupId": backupId,
 		"backupNum": backupNum, "encKey": encKey}
-	if !beforeIncrRestore {
+	if incrRestoreSupported {
 		vars["incrFrom"] = incrFrom
 	}
 
@@ -551,20 +551,20 @@ func (gc *GrpcClient) Query(query string) (*api.Response, error) {
 	return txn.Query(ctx, query)
 }
 
-// ShouldSkipTest skips a given test if minVersion > clusterVersion
+// ShouldSkipTest skips a given test if clusterVersion < minVersion
 func ShouldSkipTest(t *testing.T, minVersion, clusterVersion string) error {
 	isParentCommit, err := IsParent(minVersion, clusterVersion)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if isParentCommit {
+	if !isParentCommit {
 		t.Skipf("test is valid for commits greater than [%v]", minVersion)
 	}
-
 	return nil
 }
 
 // IsParent checks whether ancestor is the ancestor commit of the given descendant commit
+// Note that, an older commit is usually the ancestor of a newer commit which is a descendant commit
 func IsParent(ancestor, descendant string) (bool, error) {
 	// the order of if conditions matters here
 	if descendant == localVersion {
@@ -573,33 +573,20 @@ func IsParent(ancestor, descendant string) (bool, error) {
 		return false, nil
 	}
 
-	repo, err := openDgraphRepo()
-	if err != nil {
+	if err := ensureDgraphClone(); err != nil {
 		return false, err
 	}
 
-	ancestorHash, err := repo.ResolveRevision(plumbing.Revision(ancestor))
-	if err != nil {
-		return false, errors.Wrapf(err, "error while getting reference of [%v]", ancestor)
-	}
-	ancestorCommit, err := repo.CommitObject(*ancestorHash)
-	if err != nil {
-		return false, errors.Wrapf(err, "error finding commit object [%v]", ancestor)
+	cmd := exec.Command("git", "merge-base", "--is-ancestor", ancestor, descendant)
+	cmd.Dir = repoDir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		if exitError, ok := err.(*exec.ExitError); ok {
+			return exitError.ExitCode() == 0, nil
+		}
+
+		return false, errors.Wrapf(err, "error checking if [%v] is ancestor of [%v]\noutput:%v",
+			ancestor, descendant, string(out))
 	}
 
-	descendantHash, err := repo.ResolveRevision(plumbing.Revision(descendant))
-	if err != nil {
-		return false, err
-	}
-	descendantCommit, err := repo.CommitObject(*descendantHash)
-	if err != nil {
-		return false, errors.Wrapf(err, "error finding commit object [%v]", descendant)
-	}
-
-	isParentCommit, err := descendantCommit.IsAncestor(ancestorCommit)
-	if err != nil {
-		return false, errors.Wrapf(err, "unable to compare commit [%v] to commit [%v]",
-			descendant, ancestor)
-	}
-	return isParentCommit, nil
+	return true, nil
 }

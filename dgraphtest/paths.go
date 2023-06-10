@@ -18,6 +18,7 @@ package dgraphtest
 
 import (
 	"log"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -43,8 +44,13 @@ func init() {
 	// setup paths
 	_, thisFilePath, _, _ := runtime.Caller(0)
 	basePath := strings.ReplaceAll(thisFilePath, "/paths.go", "")
-	repoDir = filepath.Join(basePath, "../../", "repo")
 	binDir = filepath.Join(basePath, "binaries")
 	encKeyPath = filepath.Join(basePath, "data", "enc-key")
 	aclSecretPath = filepath.Join(basePath, "data", "hmac-secret")
+
+	var err error
+	repoDir, err = os.MkdirTemp("", "dgraph-repo")
+	if err != nil {
+		panic(err)
+	}
 }
