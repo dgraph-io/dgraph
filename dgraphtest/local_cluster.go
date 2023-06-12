@@ -82,7 +82,7 @@ func (u UpgradeStrategy) String() string {
 func NewLocalCluster(conf ClusterConfig) (*LocalCluster, error) {
 	c := &LocalCluster{conf: conf}
 	if err := c.init(); err != nil {
-		c.Cleanup(false)
+		c.Cleanup(true)
 		return nil, err
 	}
 	return c, nil
@@ -685,13 +685,13 @@ func (c *LocalCluster) GetVersion() string {
 func (c *LocalCluster) printAllLogs() error {
 	log.Printf("[INFO] all logs for cluster with prefix [%v] are below!", c.conf.prefix)
 	var finalErr error
-	for i := 0; i < c.conf.numZeros; i++ {
-		if err := c.printLogs(c.zeros[i].containerName); err != nil {
+	for _, zo := range c.zeros {
+		if err := c.printLogs(zo.containerName); err != nil {
 			finalErr = fmt.Errorf("%v; %v", finalErr, err)
 		}
 	}
-	for i := 0; i < c.conf.numAlphas; i++ {
-		if err := c.printLogs(c.alphas[i].containerName); err != nil {
+	for _, aa := range c.alphas {
+		if err := c.printLogs(aa.containerName); err != nil {
 			finalErr = fmt.Errorf("%v; %v", finalErr, err)
 		}
 	}

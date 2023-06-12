@@ -28,7 +28,7 @@ import (
 
 func TestNormalizeDirectiveWithNoListResponse(t *testing.T) {
 	conf := dgraphtest.NewClusterConfig().WithNumAlphas(3).WithNumZeros(3).
-		WithReplicas(3).WithFeatureFlags("list-in-normalize=false")
+		WithReplicas(3).WithListInNormalize(false)
 	c, err := dgraphtest.NewLocalCluster(conf)
 	require.NoError(t, err)
 	defer c.Cleanup(t.Failed())

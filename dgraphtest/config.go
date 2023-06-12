@@ -84,7 +84,7 @@ type ClusterConfig struct {
 	uidLease       int
 	// exposed port offset for grpc/http port for both alpha/zero
 	portOffset   int
-	featureFlags string
+	featureFlags []string
 }
 
 func NewClusterConfig() ClusterConfig {
@@ -165,7 +165,7 @@ func (cc ClusterConfig) WithExposedPortOffset(offset uint64) ClusterConfig {
 	return cc
 }
 
-func (cc ClusterConfig) WithFeatureFlags(val string) ClusterConfig {
-	cc.featureFlags = val
+func (cc ClusterConfig) WithListInNormalize(toggle bool) ClusterConfig {
+	cc.featureFlags = append(cc.featureFlags, fmt.Sprintf("list-in-normalize=%v", toggle))
 	return cc
 }

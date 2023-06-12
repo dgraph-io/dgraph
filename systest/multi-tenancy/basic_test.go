@@ -541,9 +541,9 @@ func (msuite *MultitenancyTestSuite) TestDeleteNamespace() {
 
 	// Deleting a non-existent namespace should error out
 	// This test is valid after a bug was fixed in the commit 90139243fef645d36f4e571657c4ecbf4548aed5
-	parent, err := dgraphtest.IsParent("90139243fef645d36f4e571657c4ecbf4548aed5", msuite.dc.GetVersion())
+	supported, err := dgraphtest.IsHigherVersion(msuite.dc.GetVersion(), "90139243fef645d36f4e571657c4ecbf4548aed5")
 	require.NoError(t, err)
-	if parent {
+	if supported {
 		_, err = hcli.DeleteNamespace(ns + 5)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "error deleting non-existing namespace")

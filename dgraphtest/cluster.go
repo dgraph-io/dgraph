@@ -254,7 +254,7 @@ func (hc *HTTPClient) RunGraphqlQuery(params GraphQLParams, admin bool) ([]byte,
 // Backup creates a backup of dgraph at a given path
 func (hc *HTTPClient) Backup(c Cluster, forceFull bool, backupPath string) error {
 	// backup API was made async in the commit d3bf7b7b2786bcb99f02e1641f3b656d0a98f7f4
-	asyncAPI, err := IsParent("d3bf7b7b2786bcb99f02e1641f3b656d0a98f7f4", c.GetVersion())
+	asyncAPI, err := IsHigherVersion(c.GetVersion(), "d3bf7b7b2786bcb99f02e1641f3b656d0a98f7f4")
 	if err != nil {
 		return errors.Wrapf(err, "error checking incremental restore support")
 	}
@@ -346,11 +346,11 @@ func (hc *HTTPClient) Restore(c Cluster, backupPath string,
 	backupId string, incrFrom, backupNum int, encKey string) error {
 
 	// incremental restore was introduced in commit 8b3712e93ed2435bea52d957f7b69976c6cfc55b
-	incrRestoreSupported, err := IsParent("8b3712e93ed2435bea52d957f7b69976c6cfc55b", c.GetVersion())
+	incrRestoreSupported, err := IsHigherVersion(c.GetVersion(), "8b3712e93ed2435bea52d957f7b69976c6cfc55b")
 	if err != nil {
 		return errors.Wrapf(err, "error checking incremental restore support")
 	}
-	if incrRestoreSupported && incrFrom != 0 {
+	if !incrRestoreSupported && incrFrom != 0 {
 		return errors.New("incremental restore is not supported by the cluster")
 	}
 
@@ -553,31 +553,32 @@ func (gc *GrpcClient) Query(query string) (*api.Response, error) {
 
 // ShouldSkipTest skips a given test if clusterVersion < minVersion
 func ShouldSkipTest(t *testing.T, minVersion, clusterVersion string) error {
-	isParentCommit, err := IsParent(minVersion, clusterVersion)
+	supported, err := IsHigherVersion(clusterVersion, minVersion)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !isParentCommit {
+	if !supported {
 		t.Skipf("test is valid for commits greater than [%v]", minVersion)
 	}
 	return nil
 }
 
-// IsParent checks whether ancestor is the ancestor commit of the given descendant commit
-// Note that, an older commit is usually the ancestor of a newer commit which is a descendant commit
-func IsParent(ancestor, descendant string) (bool, error) {
+// IsHigherVersion checks whether "higher" is the higher version compared to "lower"
+func IsHigherVersion(higher, lower string) (bool, error) {
 	// the order of if conditions matters here
-	if descendant == localVersion {
+	if lower == localVersion {
 		return false, nil
-	} else if ancestor == localVersion {
-		return false, nil
+	}
+	if higher == localVersion {
+		return true, nil
 	}
 
 	if err := ensureDgraphClone(); err != nil {
 		return false, err
 	}
 
-	cmd := exec.Command("git", "merge-base", "--is-ancestor", ancestor, descendant)
+	// An older commit is usually the ancestor of a newer commit which is a descendant commit
+	cmd := exec.Command("git", "merge-base", "--is-ancestor", lower, higher)
 	cmd.Dir = repoDir
 	if out, err := cmd.CombinedOutput(); err != nil {
 		if exitError, ok := err.(*exec.ExitError); ok {
@@ -585,7 +586,7 @@ func IsParent(ancestor, descendant string) (bool, error) {
 		}
 
 		return false, errors.Wrapf(err, "error checking if [%v] is ancestor of [%v]\noutput:%v",
-			ancestor, descendant, string(out))
+			higher, lower, string(out))
 	}
 
 	return true, nil
