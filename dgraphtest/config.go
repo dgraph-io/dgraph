@@ -165,7 +165,7 @@ func (cc ClusterConfig) WithExposedPortOffset(offset uint64) ClusterConfig {
 	return cc
 }
 
-func (cc ClusterConfig) WithListInNormalize(toggle bool) ClusterConfig {
-	cc.featureFlags = append(cc.featureFlags, fmt.Sprintf("list-in-normalize=%v", toggle))
+func (cc ClusterConfig) WithNormalizeResponse(nresp string) ClusterConfig {
+	cc.featureFlags = append(cc.featureFlags, fmt.Sprintf("normalize-response=%v", nresp))
 	return cc
 }

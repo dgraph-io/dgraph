@@ -18,7 +18,6 @@
 package query
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -28,7 +27,7 @@ import (
 
 func TestNormalizeDirectiveWithNoListResponse(t *testing.T) {
 	conf := dgraphtest.NewClusterConfig().WithNumAlphas(3).WithNumZeros(3).
-		WithReplicas(3).WithListInNormalize(false)
+		WithReplicas(3).WithNormalizeResponse("flat")
 	c, err := dgraphtest.NewLocalCluster(conf)
 	require.NoError(t, err)
 	defer c.Cleanup(t.Failed())
@@ -75,7 +74,6 @@ func TestNormalizeDirectiveWithNoListResponse(t *testing.T) {
 		}`
 	js, err := gc.Query(query)
 	require.NoError(t, err)
-	fmt.Println(string(js.Json))
 	require.JSONEq(t, `
         {
             "me": [

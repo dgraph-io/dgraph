@@ -263,8 +263,10 @@ they form a Raft group and provide synchronous replication.
 
 	flag.String("feature-flags", worker.FeatureFlagsDefaults, z.NewSuperFlagHelp(worker.FeatureFlagsDefaults).
 		Head("Feature flags to enable various experimental features").
-		Flag("list-in-normalize", "enables returning a list when there are multiple fields with same alias, "+
-			"see here for more details https://github.com/dgraph-io/dgraph/pull/7639").
+		Flag("normalize-response", "configure @normalize formatting."+
+			" 'list': (default) fields with the same alias are returned as a list;"+
+			" 'flat': returns values with repeated key for fields with same alias."+
+			" For more details, see https://github.com/dgraph-io/dgraph/pull/7639").
 		String())
 }
 
@@ -746,7 +748,7 @@ func run() {
 	// feature flags
 	featureFlagsConf := z.NewSuperFlag(Alpha.Conf.GetString("feature-flags")).MergeAndCheckDefault(
 		worker.FeatureFlagsDefaults)
-	x.Config.ListInNormalize = featureFlagsConf.GetBool("list-in-normalize")
+	x.Config.NormalizeResponse = featureFlagsConf.GetString("normalize-response")
 
 	x.PrintVersion()
 	glog.Infof("x.Config: %+v", x.Config)

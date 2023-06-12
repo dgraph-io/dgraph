@@ -69,7 +69,7 @@ type Options struct {
 	GraphQLDebug bool
 
 	// feature flags
-	ListInNormalize bool
+	NormalizeResponse string
 }
 
 // Config stores the global instance of this package's options.
