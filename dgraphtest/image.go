@@ -17,7 +17,6 @@
 package dgraphtest
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"log"
@@ -25,8 +24,6 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"github.com/go-git/go-git/v5"
-	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/pkg/errors"
 )
 
@@ -39,69 +36,73 @@ func (c *LocalCluster) setupBinary() error {
 	if err != nil {
 		return err
 	}
-
 	if isFileThere {
 		return copyBinary(binDir, c.tempBinDir, c.conf.version)
 	}
 
-	repo, err := openDgraphRepo()
-	if err != nil {
+	if err := ensureDgraphClone(); err != nil {
 		return err
 	}
-
-	hash, err := repo.ResolveRevision(plumbing.Revision(c.conf.version))
-	if err != nil {
-		return errors.Wrap(err, "error while getting refrence hash")
-	}
-	if err := checkoutGitRepo(repo, hash); err != nil {
+	if err := runGitCheckout(c.conf.version); err != nil {
 		return err
 	}
-
 	if err := buildDgraphBinary(repoDir, binDir, c.conf.version); err != nil {
 		return err
 	}
 	return copyBinary(binDir, c.tempBinDir, c.conf.version)
 }
 
-func openDgraphRepo() (*git.Repository, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), cloneTimeout)
-	defer cancel()
-
-	repo, err := git.PlainOpen(repoDir)
-	if err != nil && err == git.ErrRepositoryNotExists {
-		log.Printf("[INFO] cloning dgraph repo")
-		repo, err = git.PlainCloneContext(ctx, repoDir, false, &git.CloneOptions{URL: dgraphRepoUrl})
-		if err != nil {
-			return nil, errors.Wrap(err, "error while cloning dgraph git repo")
-		}
-	} else if err != nil {
-		return nil, errors.Wrap(err, "error while opening git repo")
-	} else {
-		if err := repo.Fetch(&git.FetchOptions{}); err != nil && err != git.NoErrAlreadyUpToDate {
-			return nil, errors.Wrap(err, "error while fetching git repo")
-		}
+func ensureDgraphClone() error {
+	if _, err := os.Stat(repoDir); err != nil {
+		return runGitClone()
 	}
 
-	return repo, nil
+	if err := runGitStatus(); err != nil {
+		if ierr := cleanupRepo(); ierr != nil {
+			return ierr
+		}
+		return runGitClone()
+	}
+
+	return runGitFetch()
 }
 
-func checkoutGitRepo(repo *git.Repository, hash *plumbing.Hash) error {
-	// For some reason, when we use the worktree.Checkout, it seems to fail a lot in CI with errors
-	//   test panicked: error while checking out git repo with hash [a77bbe8ae0d42697a38069a9749cfe71c2dafbe6]:
-	//   open /home/ubuntu/actions-runner/_work/dgraph/repo/ee/updatemanifest: no such file or directory
-	// Until we know why that is happening, I [Aman] have moved to use the git command line tool.
-	cmd := exec.Command("git", "checkout", "-f", hash.String())
+func cleanupRepo() error {
+	return os.RemoveAll(repoDir)
+}
+
+func runGitClone() error {
+	cmd := exec.Command("git", "clone", dgraphRepoUrl, repoDir)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return errors.Wrapf(err, "error cloning dgraph repo\noutput:%v", string(out))
+	}
+	return nil
+}
+
+func runGitStatus() error {
+	cmd := exec.Command("git", "status")
 	cmd.Dir = repoDir
 	if out, err := cmd.CombinedOutput(); err != nil {
-		return errors.Wrapf(err, "error while checking out hash [%v]\noutput:%v", hash.String(), string(out))
+		return errors.Wrapf(err, "error running git status\noutput:%v", string(out))
 	}
-	// worktree, err := repo.Worktree()
-	// if err != nil {
-	// 	return errors.Wrap(err, "error while getting git repo work tree")
-	// }
-	// if err := worktree.Checkout(&git.CheckoutOptions{Hash: *hash, Force: true}); err != nil {
-	// 	return errors.Wrap(err, fmt.Sprintf("error while checking out git repo with hash [%v]", hash.String()))
-	// }
+	return nil
+}
+
+func runGitFetch() error {
+	cmd := exec.Command("git", "fetch", "-p")
+	cmd.Dir = repoDir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return errors.Wrapf(err, "error fetching latest changes\noutput:%v", string(out))
+	}
+	return nil
+}
+
+func runGitCheckout(gitRef string) error {
+	cmd := exec.Command("git", "checkout", "-f", gitRef)
+	cmd.Dir = repoDir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return errors.Wrapf(err, "error checking out gitRef [%v]\noutput:%v", gitRef, string(out))
+	}
 	return nil
 }
 
@@ -117,7 +118,6 @@ func buildDgraphBinary(dir, binaryDir, version string) error {
 		filepath.Join(binaryDir, fmt.Sprintf(binaryName, version))); err != nil {
 		return errors.Wrap(err, "error while copying binary")
 	}
-
 	return nil
 }
 
