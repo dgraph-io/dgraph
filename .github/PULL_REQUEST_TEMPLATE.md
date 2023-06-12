@@ -14,7 +14,7 @@
 Description: <add description>
 Fixes: <GitHub Issue>
 Closes: <JIRA Issue>
-Docs: <relevant doc PR>
+Docs: <doc PR>
 
 * Add [BREAKING] if it is a breaking change
 -->
