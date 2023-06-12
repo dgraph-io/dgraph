@@ -978,9 +978,12 @@ func (enc *encoder) normalize(fj fastJsonNode) ([]fastJsonNode, error) {
 	}
 
 	for i, slice := range parentSlice {
-		// sort the fastJson list
-		// This will ensure that nodes with same attribute name comes together in response
-		enc.MergeSort(&parentSlice[i])
+		if x.Config.ListInNormalize {
+			// sort the fastJson list. This will ensure that nodes
+			// with same attribute name comes together in response
+			enc.MergeSort(&parentSlice[i])
+		}
+
 		// From every list we need to remove node with attribute "uid".
 		var prev, cur fastJsonNode
 		cur = slice
