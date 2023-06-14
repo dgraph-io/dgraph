@@ -1,6 +1,0 @@
-
-	{
-		me(func: eq(age, [1, 20])) @filter(eq(name, ["And\"rea", "Bob"])) {
-		 name
-		}
-	}

@@ -1,6 +1,0 @@
-
-	{
-	  me(func:regexp(name@en, /pattern/123)) {
-	    name
-	  }
-    }
