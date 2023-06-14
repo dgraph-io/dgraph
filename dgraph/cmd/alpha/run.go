@@ -260,12 +260,6 @@ they form a Raft group and provide synchronous replication.
 		Flag("size",
 			"The audit log max size in MB after which it will be rolled over.").
 		String())
-
-	flag.String("feature-flags", worker.FeatureFlagsDefaults, z.NewSuperFlagHelp(worker.FeatureFlagsDefaults).
-		Head("Feature flags to enable various experimental features").
-		Flag("list-in-normalize", "enables returning a list when there are multiple fields with same alias, "+
-			"see here for more details https://github.com/dgraph-io/dgraph/pull/7639").
-		String())
 }
 
 func setupCustomTokenizers() {
@@ -742,11 +736,6 @@ func run() {
 		}
 	}
 	edgraph.Init()
-
-	// feature flags
-	featureFlagsConf := z.NewSuperFlag(Alpha.Conf.GetString("feature-flags")).MergeAndCheckDefault(
-		worker.FeatureFlagsDefaults)
-	x.Config.ListInNormalize = featureFlagsConf.GetBool("list-in-normalize")
 
 	x.PrintVersion()
 	glog.Infof("x.Config: %+v", x.Config)

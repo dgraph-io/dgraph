@@ -52,8 +52,7 @@ const (
 	ZeroLimitsDefaults = `uid-lease=0; refill-interval=30s; disable-admin-http=false;`
 	GraphQLDefaults    = `introspection=true; debug=false; extensions=true; poll-interval=1s; ` +
 		`lambda-url=;`
-	CacheDefaults        = `size-mb=1024; percentage=0,65,35;`
-	FeatureFlagsDefaults = `list-in-normalize=true`
+	CacheDefaults = `size-mb=1024; percentage=0,65,35;`
 )
 
 // ServerState holds the state of the Dgraph server.
