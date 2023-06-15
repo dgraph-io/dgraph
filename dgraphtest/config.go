@@ -83,8 +83,7 @@ type ClusterConfig struct {
 	refillInterval time.Duration
 	uidLease       int
 	// exposed port offset for grpc/http port for both alpha/zero
-	portOffset   int
-	featureFlags []string
+	portOffset int
 }
 
 func NewClusterConfig() ClusterConfig {
@@ -162,10 +161,5 @@ func (cc ClusterConfig) WithUidLease(uidLease int) ClusterConfig {
 // to fixed ports (port (5080, 6080, 8080 and 9080) + offset + id (0, 1, 2 ...)) on the host.
 func (cc ClusterConfig) WithExposedPortOffset(offset uint64) ClusterConfig {
 	cc.portOffset = int(offset)
-	return cc
-}
-
-func (cc ClusterConfig) WithListInNormalize(toggle bool) ClusterConfig {
-	cc.featureFlags = append(cc.featureFlags, fmt.Sprintf("list-in-normalize=%v", toggle))
 	return cc
 }

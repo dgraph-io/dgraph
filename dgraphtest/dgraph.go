@@ -22,7 +22,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/docker/docker/api/types/mount"
@@ -233,10 +232,6 @@ func (a *alpha) cmd(c *LocalCluster) []string {
 		delimiter = ","
 	}
 	acmd = append(acmd, zeroAddrsArg)
-
-	if len(c.conf.featureFlags) > 0 {
-		acmd = append(acmd, fmt.Sprintf("--feature-flags=%v", strings.Join(c.conf.featureFlags, ";")))
-	}
 
 	return acmd
 }
