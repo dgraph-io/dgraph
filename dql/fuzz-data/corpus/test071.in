@@ -1,7 +1,0 @@
-
-		schema (pred : name) {
-			#hi
-			pred #bye
-			type
-		}
-	

@@ -1,6 +1,0 @@
-
-	query {
-		user(func: uid( 0x11)) {
-			type.object.name
-		}
-	}

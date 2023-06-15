@@ -4,11 +4,6 @@
 /dgraph-bulk-loader
 /osx-docker-gopath
 
-# fuzzing output
-dql/dql-fuzz.zip
-dql/fuzz-data/crashers
-dql/fuzz-data/suppressions
-
 # goland project folder
 .idea
 dgraph.iml

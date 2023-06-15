@@ -1,0 +1,37 @@
+name: ci-dgraph-fuzz
+on:
+  push:
+    branches:
+      - main
+      - 'release/**'
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
+    branches:
+      - main
+      - 'release/**'
+  schedule:
+    - cron: "0 */8 * * *" # every 8hrs
+jobs:
+  fuzz-test:
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v3
+      - name: Get Go Version
+        run: |
+          #!/bin/bash
+          GOVERSION=$({ [ -f .go-version ] && cat .go-version; })
+          echo "GOVERSION=$GOVERSION" >> $GITHUB_ENV
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: ${{ env.GOVERSION }}
+      - name: Run fuzz tests
+        run: |
+          #!/bin/bash
+          # go env settings
+          export GOPATH=~/go
+          go test ./dql -fuzz="Fuzz" -fuzztime="300s" -fuzzminimizetime="120s"

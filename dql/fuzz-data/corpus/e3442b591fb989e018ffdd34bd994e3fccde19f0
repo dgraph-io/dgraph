@@ -1,7 +1,0 @@
-
-		mutation{set{
-				<e><s><g>.
-				<n><s><o>.
-			}delete{
-				<e><s><e>.
-			}}{e(func:uid(0))}

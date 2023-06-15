@@ -1,8 +1,0 @@
-{
-		me(func: uid(1)) {
-			count(friends), count(relatives)
-			count(classmates)
-			gender,age
-			hometown
-		}
-	}

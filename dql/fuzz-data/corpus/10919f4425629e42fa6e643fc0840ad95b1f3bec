@@ -1,1 +1,0 @@
-{K AS r(func:uid()){fr as s}e(func:uid(fr))@filter(uid(K)){e@filter(uid(fr))}}
