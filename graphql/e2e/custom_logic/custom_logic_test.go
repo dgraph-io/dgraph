@@ -80,38 +80,6 @@ const (
 	}`
 )
 
-// func TestCustomGetQuery(t *testing.T) {
-// 	schema := customTypes + `
-// 	 type Query {
-// 		 myFavoriteMovies(id: ID!, name: String!, num: Int): [Movie] @custom(http: {
-// 				 url: "http://mock:8888/favMovies/$id?name=$name&num=$num",
-// 				 method: "GET"
-// 		 })
-// 	 }`
-// 	common.SafelyUpdateGQLSchemaOnAlpha1(t, schema)
-
-// 	query := `
-// 	 query {
-// 		 myFavoriteMovies(id: "0x123", name: "Author", num: 10) {
-// 			 id
-// 			 name
-// 			 director {
-// 				 id
-// 				 name
-// 			 }
-// 		 }
-// 	 }`
-// 	params := &common.GraphQLParams{
-// 		Query: query,
-// 	}
-
-// 	result := params.ExecuteAsPost(t, common.GraphqlURL)
-// 	common.RequireNoGQLErrors(t, result)
-
-// 	expected := `{"myFavoriteMovies":[{"id":"0x3","name":"Star Wars","director":[{"id":"0x4","name":"George Lucas"}]},{"id":"0x5","name":"Star Trek","director":[{"id":"0x6","name":"J.J. Abrams"}]}]}`
-// 	require.JSONEq(t, expected, string(result.Data))
-// }
-
 func TestCustomPostQuery(t *testing.T) {
 	schema := customTypes + `
 	 type Query {
@@ -3253,38 +3221,12 @@ func TestApolloFederationWithCustom(t *testing.T) {
 	common.DeleteGqlType(t, "Product", map[string]interface{}{}, 2, nil)
 }
 
+//Commented TestMain as it is not required for now. In future It will be covered
 // func TestMain(m *testing.M) {
 // 	err := common.CheckGraphQLStarted(common.GraphqlAdminURL)
 // 	fmt.Println("Error??????????????????????????????????? ", err)
 // 	if err != nil {
 // 		x.Log(err, "Waited for GraphQL test server to become available, but it never did.")
-// 		os.Exit(1)
-// 	}
-// 	m.Run()
-// }
-
-// func (suite *CustomLogicTestSuite) TestMain(m *testing.M) {
-// 	t := suite.T()
-
-// 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
-// 	defer cancel()
-// 	gc, cleanup, err := suite.dc.Client()
-// 	require.NoError(t, err)
-// 	defer cleanup()
-// 	require.NoError(t, gc.LoginIntoNamespace(ctx, dgraphtest.DefaultUser,
-// 		dgraphtest.DefaultPassword, 0))
-
-// 	hc, err := suite.dc.HTTPClient()
-// 	require.NoError(t, err)
-// 	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
-// 		dgraphtest.DefaultPassword, 0))
-
-// 	GraphqlAdminURL := "http://" + suite.alpha1Port + "/admin"
-// 	errCheckGraphQLStarted := common.CheckGraphQLStarted(GraphqlAdminURL)
-
-// 	fmt.Println("Error??????????????????????????????????? ", errCheckGraphQLStarted)
-// 	if errCheckGraphQLStarted != nil {
-// 		x.Log(errCheckGraphQLStarted, "Waited for GraphQL test server to become available, but it never did.")
 // 		os.Exit(1)
 // 	}
 // 	m.Run()
@@ -3315,25 +3257,30 @@ func (suite *CustomLogicTestSuite) TestCustomGetQuery() {
 		 })
 	 }`
 	hc.SafelyUpdateGQLSchema(schema, suite.alpha1Port)
-	//common.SafelyUpdateGQLSchemaOnAlpha1(t, schema)
 
-	// query := `
-	//  query {
-	// 	 myFavoriteMovies(id: "0x123", name: "Author", num: 10) {
-	// 		 id
-	// 		 name
-	// 		 director {
-	// 			 id
-	// 			 name
-	// 		 }
-	// 	 }
-	//  }`
-	// params := &common.GraphQLParams{
-	// 	Query: query,
-	// }
+	query := `
+	 query {
+		 myFavoriteMovies(id: "0x123", name: "Author", num: 10) {
+			 id
+			 name
+			 director {
+				 id
+				 name
+			 }
+		 }
+	 }`
+	params := dgraphtest.GraphQLParams{
+		Query: query,
+	}
 
-	// result := params.ExecuteAsPost(t, common.GraphqlURL)
-	// common.RequireNoGQLErrors(t, result)
+	result, err := hc.RunGraphqlQuery(params, false)
+
+	if err != nil {
+		fmt.Printf("Expected value not to be nil. ")
+		x.Panic(err)
+	}
+	fmt.Println("result>>>>>>>>>>>>>>>>>>>>>>", result)
+	fmt.Println("err>>>>>>>>>>>>>>>>>>>>>>", err)
 
 	// expected := `{"myFavoriteMovies":[{"id":"0x3","name":"Star Wars","director":[{"id":"0x4","name":"George Lucas"}]},{"id":"0x5","name":"Star Trek","director":[{"id":"0x6","name":"J.J. Abrams"}]}]}`
 	// require.JSONEq(t, expected, string(result.Data))
