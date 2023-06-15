@@ -1,0 +1,52 @@
+This tool is used to fix Key not found error. 
+The tool has two subcommands to it, ./script scan and ./script repair
+
+# Scan
+
+This subcommand scans a running dgraph cluster to finds out if there is any key not found error.
+If the script errors out, in that case there is probably a key that went bad. This script could
+error out in other cases also, so please check the error once it prints it. The error should look like:
+
+```
+cannot retrieve UIDs from list with key 000000000000000000000962656c6f6e6773546f0000000000009f1e2b: cannot initialize iterator when calling List.iterate: cannot read initial list part for list with base key 000000000000000000000962656c6f6e6773546f0000000000009f1e2b: could not read list part with key 040000000000000000000962656c6f6e6773546f0000000000009f1e2b0000000000000001: Key not found
+```
+
+To use the command
+
+./script scan --alphas="Comma separated list of all the alphas running right now" 
+For example:
+
+./script scan --alphas="localhost:9080,localhost:9081,localhost:9082"
+
+In case ACL is enabled, please provide the following credentials along side
+
+./script scan --alphas="Comma separated list of all the alphas running right now" --username="username" --password="password in plain text" --login=true
+
+Password in plain text could be provided using `cat ./password_in_file` if you don't want to put password in bash history
+
+If there is an issue, and once you have manually confirmed the error, the script would print out a command for repair. The next section covers detail about this command
+
+
+
+# Repair
+
+Repair can be used to repair the cluster. Use this ONLY AFTER shutting down the alpha.
+
+The command asks for
+1. --dir: Path of the P directory
+2. --enc-key: Encryption key in plaintext 
+3. --lookup: This is the key that has to be repaired. If you run ./script scan, it would parse out the key and give the command to you
+4. --getOldData: Used to specify that you want to repair key not found issue
+5. --reapir: This flag would enable the final write in badger. Run with --repair=false to validate if things are working, then give --repair=true
+6. --truncate: This flag is used to allow badger to truncate files that were left open
+7. --read-only: This flag is used to disallow badger to be able write anything. This should only be used in conjuction with --truncate
+
+
+Command would look something like this:
+
+```
+script repair --dir=<path of the p directory> --enc-key=<paste the encryption key here, or `cat encryptionfile`> --lookup=000000000000000000000962656c6f6e6773546f0000000000009f1e2b --getOldData --repair=true
+```
+
+There might be times when alpha was not killed cleanly. This could allow VLOG to be left open. To fix this issue you can use --truncate=true --read-only=true
+Only use this in case that VLOG was left open, don't use it if memtable was left open as it could cause data loss.
