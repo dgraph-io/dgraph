@@ -1,0 +1,51 @@
+# Key Not Found Error Fix Tool
+
+This tool is used to fix the "Key not found" error in a dgraph cluster. The tool has two subcommands: ./script scan and ./script repair.
+
+## Scan
+
+The scan subcommand scans a running dgraph cluster to check for any "Key not found" errors. If the script encounters an error, it indicates that there might be a key that went bad. However, please note that the script can also error out in other cases, so make sure to check the error message it prints. The error message should look like this:
+
+```
+cannot retrieve UIDs from list with key 000000000000000000000962656c6f6e6773546f0000000000009f1e2b: cannot initialize iterator when calling List.iterate: cannot read initial list part for list with base key 000000000000000000000962656c6f6e6773546f0000000000009f1e2b: could not read list part with key 040000000000000000000962656c6f6e6773546f0000000000009f1e2b0000000000000001: Key not found
+```
+
+To use the command, run:
+```
+./script scan --alphas="Comma separated list of all the alphas running right now"
+```
+
+For example:
+```
+./script scan --alphas="localhost:9080,localhost:9081,localhost:9082"
+```
+
+If ACL (Access Control List) is enabled, please provide the following credentials:
+```
+./script scan --alphas="Comma separated list of all the alphas running right now" --username="username" --password="password in plain text" --login=true
+```
+
+To provide the password in plain text, you can use cat ./password_in_file if you don't want to store the password in bash history.
+If an issue is detected and you have manually confirmed the error, the script will print out a repair command. The next section provides details about this command.
+
+## Repair
+The repair subcommand is used to repair the cluster. It should ONLY be used after shutting down the alpha.
+
+The command requires the following parameters:
+
+--dir: Path of the P directory.
+--enc-key: Encryption key in plaintext.
+--lookup: The key that needs to be repaired. If you run ./script scan, it will parse out the key and provide it in the command.
+--getOldData: Used to specify that you want to repair the "Key not found" issue.
+--repair: This flag enables the final write in badger. Run with --repair=false to validate if things are working, and then use --repair=true.
+--truncate: This flag allows badger to truncate files that were left open.
+--read-only: This flag disallows badger from writing anything. It should only be used in conjunction with --truncate.
+
+The command will look something like this:
+```
+./script repair --dir=<path of the p directory> --enc-key=<paste the encryption key here, or `cat encryptionfile`> --lookup=000000000000000000000962656c6f6e6773546f0000000000009f1e2b --getOldData --repair=true
+```
+
+Sometimes, if the alpha was not killed cleanly, the VLOG (value log) might be left open. To fix this issue, you can use --truncate=true --read-only=true. Only use this if the VLOG was left open and avoid using it if the memtable was left open as it may cause data loss.
+
+
