@@ -58,8 +58,9 @@ type HttpToken struct {
 // HTTPClient allows doing operations on Dgraph over http
 type HTTPClient struct {
 	*HttpToken
-	adminURL   string
-	graphqlURL string
+	adminURL        string
+	graphqlURL      string
+	probeGraphqlURL string
 }
 
 // GraphQLParams are used for making graphql requests to dgraph
@@ -471,11 +472,13 @@ func (hc *HTTPClient) Export(dest string) error {
 }
 
 // UpdateGQLSchema updates graphql schema for a given HTTP client
-func (hc *HTTPClient) UpdateGQLSchema(sch string) error {
+func (hc *HTTPClient) UpdateGQLSchema(sch string) ([]byte, error) {
 	const query = `mutation updateGQLSchema($sch: String!) {
 		updateGQLSchema(input: { set: { schema: $sch }}) {
 			gqlSchema {
 				id
+				schema
+				generatedSchema
 			}
 		}
 	}`
@@ -485,10 +488,7 @@ func (hc *HTTPClient) UpdateGQLSchema(sch string) error {
 			"sch": sch,
 		},
 	}
-	if _, err := hc.RunGraphqlQuery(params, true); err != nil {
-		return err
-	}
-	return nil
+	return hc.RunGraphqlQuery(params, true)
 }
 
 // PostPersistentQuery stores a persisted query
