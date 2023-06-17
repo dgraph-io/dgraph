@@ -41,7 +41,10 @@ func (msuite *MultitenancyTestSuite) SetupTest() {
 		WithACL(20 * time.Second).WithEncryption().WithVersion(msuite.uc.Before)
 	c, err := dgraphtest.NewLocalCluster(conf)
 	x.Panic(err)
-	x.Panic(c.Start())
+	if err := c.Start(); err != nil {
+		c.Cleanup(true)
+		panic(err)
+	}
 
 	msuite.dc = c
 	msuite.lc = c

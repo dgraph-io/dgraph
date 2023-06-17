@@ -211,6 +211,9 @@ func (c *LocalCluster) Cleanup(verbose bool) {
 		if err := c.printAllLogs(); err != nil {
 			log.Printf("[WARNING] error printing container logs: %v", err)
 		}
+		if err := c.printInspectContainers(); err != nil {
+			log.Printf("[WARNING] error printing inspect container output: %v", err)
+		}
 	}
 
 	log.Printf("[INFO] cleaning up cluster with prefix [%v]", c.conf.prefix)
@@ -733,4 +736,42 @@ func (c *LocalCluster) getLogs(containerID string) (string, error) {
 		log.Printf("[WARN] error in reading logs for [%v]: %v", containerID, err)
 	}
 	return string(data), nil
+}
+
+func (c *LocalCluster) printInspectContainers() error {
+	log.Printf("[INFO] inspecting all container for cluster with prefix [%v]", c.conf.prefix)
+	var finalErr error
+	for _, zo := range c.zeros {
+		if err := c.printInspectFor(zo.containerName); err != nil {
+			finalErr = fmt.Errorf("%v; %v", finalErr, err)
+		}
+	}
+	for _, aa := range c.alphas {
+		if err := c.printInspectFor(aa.containerName); err != nil {
+			finalErr = fmt.Errorf("%v; %v", finalErr, err)
+		}
+	}
+	return finalErr
+}
+
+func (c *LocalCluster) printInspectFor(containerID string) error {
+	inspectData, err := c.inspectContainer(containerID)
+	if err != nil {
+		return err
+	}
+
+	log.Printf("[INFO] ======== INSPECTING CONTAINER [%v] ========", containerID)
+	log.Println(inspectData)
+	return nil
+}
+
+func (c *LocalCluster) inspectContainer(containerID string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+	defer cancel()
+
+	_, raw, err := c.dcli.ContainerInspectWithRaw(ctx, containerID, true)
+	if err != nil {
+		return "", errors.Wrapf(err, "error inspecting container %v", containerID)
+	}
+	return string(raw), nil
 }
