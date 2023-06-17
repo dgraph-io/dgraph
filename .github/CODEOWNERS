@@ -1,9 +1,4 @@
 # CODEOWNERS info: https://help.github.com/en/articles/about-code-owners
 # Owners are automatically requested for review for PRs that changes code
 # that they own.
-* @akon-dey @nosql22 @skrdgraph @darkn3rd @meghalims @matthewmcneely @billprovince
-/posting/ @akon-dey @skrdgraph @darkn3rd
-/ee/ @akon-dey @skrdgraph @darkn3rd
-/contrib/ @skrdgraph @darkn3rd
-/query/ @akon-dey @skrdgraph @darkn3rd
-/graphql/ @akon-dey @MichelDiz @matthewmcneely
+* @mangalaman93 @meghalims @sanjayk-github-dev @harshil-goel @all-seeing-code @billprovince @joshua-goldstein
