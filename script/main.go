@@ -345,13 +345,11 @@ func getOldData(db *badger.DB) error {
 	}
 
 	fmt.Println("ALL PARTS:", len(partsT))
-	if len(partsT) != 1 {
-		// If this error comes, we can just change the code to use the maximum value
-		return errors.Errorf("Multiple spilts founds: %v", len(partsT))
-	}
 	ts := uint64(0)
 	for k := range partsT {
-		ts = k
+		if ts < k {
+			ts = k
+		}
 	}
 
 	parts := partsT[ts]
