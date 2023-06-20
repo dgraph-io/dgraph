@@ -64,7 +64,13 @@ func ensureDgraphClone() error {
 		return runGitClone()
 	}
 
-	return runGitFetch()
+	// we do not return error if git fetch fails because maybe there are no changes
+	// to pull and it doesn't make sense to fail right now. We can fail later when we
+	// do not find the reference that we are looking for.
+	if err := runGitFetch(); err != nil {
+		log.Printf("[WARNING] error in fetching latest git changes: %v", err)
+	}
+	return nil
 }
 
 func cleanupRepo() error {
@@ -72,9 +78,26 @@ func cleanupRepo() error {
 }
 
 func runGitClone() error {
-	cmd := exec.Command("git", "clone", dgraphRepoUrl, repoDir)
+	// The dgraph repo is already cloned for running the test. We can just create
+	// a copy of this folder by running git clone using this already cloned dgraph
+	// repo. After the quick clone, we update the original URL to point to the
+	// GitHub dgraph repo and perform a "git fetch".
+	cmd := exec.Command("git", "clone", baseRepoDir, repoDir)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return errors.Wrapf(err, "error cloning dgraph repo\noutput:%v", string(out))
+	}
+
+	cmd = exec.Command("git", "remote", "set-url", "origin", dgraphRepoUrl)
+	cmd.Dir = repoDir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return errors.Wrapf(err, "error setting remote URL\noutput:%v", string(out))
+	}
+
+	// we do not return error if git fetch fails because maybe there are no changes
+	// to pull and it doesn't make sense to fail right now. We can fail later when we
+	// do not find the reference that we are looking for.
+	if err := runGitFetch(); err != nil {
+		log.Printf("[WARNING] error in fetching latest git changes in runGitClone: %v", err)
 	}
 	return nil
 }
