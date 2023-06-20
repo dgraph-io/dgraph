@@ -300,8 +300,9 @@ func checkAlphaForKeyNotFound(alpha string) error {
 				badKey := re.FindAllString(str, -1)[0]
 				fmt.Println("Potential error in Predicate", i.Predicate, "badKey=", badKey)
 				fmt.Printf("Run the repair command to fix it: <script_path> repair --dir=<path of the p directory> --enc-key=<paste the encryption key here, or `cat encryptionfile`> --lookup=%s --getOldData --repair=true\n", badKey)
+			} else {
+				fmt.Println(string(resp.Json))
 			}
-			fmt.Println(string(resp.Json))
 		}
 	}
 
