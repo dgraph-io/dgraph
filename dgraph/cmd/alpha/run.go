@@ -681,7 +681,7 @@ func run() {
 
 	raft := z.NewSuperFlag(Alpha.Conf.GetString("raft")).MergeAndCheckDefault(worker.RaftDefaults)
 	x.WorkerConfig = x.WorkerOptions{
-		TmpDir:              "./t",
+		TmpDir:              Alpha.Conf.GetString("tmp"),
 		ExportPath:          Alpha.Conf.GetString("export"),
 		ZeroAddr:            strings.Split(Alpha.Conf.GetString("zero"), ","),
 		Raft:                raft,
@@ -698,9 +698,11 @@ func run() {
 		Badger:              bopts,
 	}
 	x.WorkerConfig.Parse(Alpha.Conf)
-	fmt.Println("WORKER CONFIG ============", x.WorkerConfig)
 
+	// We need to set configurations now that we have updated TmpDir and other folders
+	// so that we validate the correct folders.
 	worker.SetConfiguration(&opts)
+
 	if telemetry.GetBool("reports") {
 		go edgraph.PeriodicallyPostTelemetry()
 	}

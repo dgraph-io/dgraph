@@ -18,7 +18,6 @@ package worker
 
 import (
 	"context"
-	"fmt"
 	"math"
 	"os"
 	"time"
@@ -129,17 +128,13 @@ func (s *ServerState) initStorage() {
 		// Postings directory
 		// All the writes to posting store should be synchronous. We use batched writers
 		// for posting lists, so the cost of sync writes is amortized.
-		fmt.Println("Here", Config.PostingDir)
 		opt := x.WorkerConfig.Badger.
 			WithNumVersionsToKeep(math.MaxInt32).
 			WithNamespaceOffset(x.NamespaceOffset)
 
 		if Config.PostingDir != "" {
-			fmt.Println("SETTING POSTING DIR", Config.PostingDir, Config.PostingDir == "", []byte(Config.PostingDir), "<- Config")
-			x.Check(os.MkdirAll(Config.PostingDir, 0700))
+			x.Checkf(os.MkdirAll(Config.PostingDir, 0700), "Error while creating P dir.")
 			opt = opt.WithDir(Config.PostingDir).WithValueDir(Config.PostingDir)
-		} else {
-			fmt.Println("HERE@@@@@", opt.Dir, opt.ValueDir)
 		}
 
 		opt = setBadgerOptions(opt)
