@@ -248,7 +248,7 @@ func (s *Server) zeroHealth(ctx context.Context) (*api.Response, error) {
 	}
 	jsonOut, err := json.Marshal(health)
 	if err != nil {
-		return nil, errors.Errorf("unable to marshal zero health. error %v", err)
+		return nil, errors.Wrapf(err, "unable to marshal zero health, error")
 	}
 	return &api.Response{Json: jsonOut}, nil
 }
@@ -275,14 +275,14 @@ func (st *state) pingResponse(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
 		if _, err := w.Write(resp.Json); err != nil {
-			glog.Warningf("could not send error msg=[%v] code=[%v] due to http error %v", err.Error(), x.Error, err)
+			glog.Warningf("http error send failed, error msg=[%v]", err)
 			return
 		}
 	default:
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
 		if _, err := w.Write([]byte("OK")); err != nil {
-			glog.Warningf("Could not send error msg=[%v] code=[%v] due to http error %v", err.Error(), x.Error, err)
+			glog.Warningf("http error send failed, error msg=[%v]", err)
 			return
 		}
 	}
