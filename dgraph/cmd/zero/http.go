@@ -236,7 +236,7 @@ func (st *state) getState(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) zeroHealth(ctx context.Context) (*api.Response, error) {
 	if ctx.Err() != nil {
-		return nil, ctx.Err()
+		return nil, errors.Wrap(ctx.Err(), "http request context error")
 	}
 	health := pb.HealthInfo{
 		Instance: "zero",
@@ -248,13 +248,23 @@ func (s *Server) zeroHealth(ctx context.Context) (*api.Response, error) {
 	}
 	jsonOut, err := json.Marshal(health)
 	if err != nil {
-		return nil, errors.Errorf("unable to marshal. error %+v", err)
+		return nil, errors.Errorf("unable to marshal zero health. error %v", err)
 	}
 	return &api.Response{Json: jsonOut}, nil
 }
 
 func (st *state) pingResponse(w http.ResponseWriter, r *http.Request) {
 	x.AddCorsHeaders(w)
+
+	/*
+	 * zero is changed to also output the health in JSON format for client
+	 * request header "Accept: application/json".
+	 *
+	 * Backward compatibility- Before this change the '/health' endpoint
+	 * used to output the string OK. After the fix it returns OK when the
+	 * client sends the request without "Accept: application/json" in its
+	 * http header.
+	 */
 	switch r.Header.Get("Accept") {
 	case "application/json":
 		resp, err := (st.zero).zeroHealth(r.Context())
@@ -265,14 +275,14 @@ func (st *state) pingResponse(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
 		if _, err := w.Write(resp.Json); err != nil {
-			glog.Warningf("could not send error msg=[%v] code=[%+v] due to http error %+v", err.Error(), x.Error, err)
+			glog.Warningf("could not send error msg=[%v] code=[%v] due to http error %v", err.Error(), x.Error, err)
 			return
 		}
 	default:
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
 		if _, err := w.Write([]byte("OK")); err != nil {
-			glog.Warningf("Could not send error msg=[%v] code=[%+v] due to http error %+v", err.Error(), x.Error, err)
+			glog.Warningf("Could not send error msg=[%v] code=[%v] due to http error %v", err.Error(), x.Error, err)
 			return
 		}
 	}

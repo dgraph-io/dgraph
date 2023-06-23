@@ -137,7 +137,8 @@ func TestZeroHealth(t *testing.T) {
 
 	body, err := ioutil.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.Equal(t, json.Valid(body), true)
+	require.NotEmpty(t, body)
+	require.True(t, json.Valid(body))
 
 	// String format
 	req, err = http.NewRequest("GET", u.String(), nil)
