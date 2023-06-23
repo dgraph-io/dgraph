@@ -87,6 +87,7 @@ type dnode interface {
 	healthURL(*LocalCluster) (string, error)
 	assignURL(*LocalCluster) (string, error)
 	alphaURL(*LocalCluster) (string, error)
+	zeroURL(*LocalCluster) (string, error)
 }
 
 type zero struct {
@@ -172,7 +173,15 @@ func (z *zero) assignURL(c *LocalCluster) (string, error) {
 }
 
 func (z *zero) alphaURL(c *LocalCluster) (string, error) {
-	return "", errors.New("no alpha URL for zero")
+	return "", errNotImplemented
+}
+
+func (z *zero) zeroURL(c *LocalCluster) (string, error) {
+	publicPort, err := publicPort(c.dcli, z, zeroGrpcPort)
+	if err != nil {
+		return "", err
+	}
+	return "localhost:" + publicPort + "", nil
 }
 
 type alpha struct {
@@ -274,7 +283,6 @@ func (a *alpha) mounts(c *LocalCluster) ([]mount.Mount, error) {
 			ReadOnly: false,
 		})
 	}
-
 	return mounts, nil
 }
 
@@ -296,6 +304,10 @@ func (a *alpha) alphaURL(c *LocalCluster) (string, error) {
 		return "", err
 	}
 	return "localhost:" + publicPort + "", nil
+}
+
+func (a *alpha) zeroURL(c *LocalCluster) (string, error) {
+	return "", errNotImplemented
 }
 
 func publicPort(dcli *docker.Client, dc dnode, privatePort string) (string, error) {

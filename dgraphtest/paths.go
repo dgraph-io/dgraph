@@ -39,7 +39,7 @@ const (
 )
 
 func init() {
-	// init log
+	// init logging
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
 	// setup paths

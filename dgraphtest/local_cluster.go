@@ -64,6 +64,7 @@ type UpgradeStrategy int
 
 const (
 	BackupRestore UpgradeStrategy = iota
+	ExportImport
 	StopStart
 )
 
@@ -73,6 +74,8 @@ func (u UpgradeStrategy) String() string {
 		return "backup-restore"
 	case StopStart:
 		return "stop-start"
+	case ExportImport:
+		return "export-import"
 	default:
 		panic("unknown upgrade strategy")
 	}
@@ -107,6 +110,7 @@ func (c *LocalCluster) init() error {
 	if err != nil {
 		return errors.Wrap(err, "error while creating temp dir")
 	}
+	log.Printf("[INFO] tempBinDir: %v", c.tempBinDir)
 	if err := os.Mkdir(binDir, os.ModePerm); err != nil && !os.IsExist(err) {
 		return errors.Wrap(err, "error while making binDir")
 	}
@@ -489,16 +493,18 @@ func (c *LocalCluster) Upgrade(version string, strategy UpgradeStrategy) error {
 		if err != nil {
 			return err
 		}
-		if err := hc.LoginIntoNamespace(DefaultUser, DefaultPassword, x.GalaxyNamespace); err != nil {
-			return errors.Wrapf(err, "error during login before upgrade")
+		if c.conf.acl {
+			if err := hc.LoginIntoNamespace(DefaultUser, DefaultPassword, x.GalaxyNamespace); err != nil {
+				return errors.Wrapf(err, "error during login before upgrade")
+			}
 		}
 		if err := hc.Backup(c, true, DefaultBackupDir); err != nil {
 			return errors.Wrap(err, "error taking backup during upgrade")
 		}
-
 		if err := c.Stop(); err != nil {
 			return err
 		}
+
 		c.conf.version = version
 		if err := c.setupBinary(); err != nil {
 			return err
@@ -509,23 +515,57 @@ func (c *LocalCluster) Upgrade(version string, strategy UpgradeStrategy) error {
 		if err := c.Start(); err != nil {
 			return err
 		}
+
 		var encPath string
 		if c.conf.encryption {
 			encPath = encKeyMountPath
 		}
-
 		hc, err = c.HTTPClient()
 		if err != nil {
 			return errors.Wrapf(err, "error creating HTTP client after upgrade")
 		}
-		if err := hc.LoginIntoNamespace(DefaultUser, DefaultPassword, x.GalaxyNamespace); err != nil {
-			return errors.Wrapf(err, "error during login after upgrade")
+		if c.conf.acl {
+			if err := hc.LoginIntoNamespace(DefaultUser, DefaultPassword, x.GalaxyNamespace); err != nil {
+				return errors.Wrapf(err, "error during login after upgrade")
+			}
 		}
 		if err := hc.Restore(c, DefaultBackupDir, "", 0, 1, encPath); err != nil {
 			return errors.Wrap(err, "error doing restore during upgrade")
 		}
 		if err := WaitForRestore(c); err != nil {
 			return errors.Wrap(err, "error waiting for restore to complete")
+		}
+		return nil
+
+	case ExportImport:
+		hc, err := c.HTTPClient()
+		if err != nil {
+			return err
+		}
+		if c.conf.acl {
+			if err := hc.LoginIntoNamespace(DefaultUser, DefaultPassword, x.GalaxyNamespace); err != nil {
+				return errors.Wrapf(err, "error during login before upgrade")
+			}
+		}
+		if err := hc.Export(DefaultExportDir); err != nil {
+			return errors.Wrap(err, "error taking export during upgrade")
+		}
+		if err := c.Stop(); err != nil {
+			return err
+		}
+
+		c.conf.version = version
+		if err := c.setupBinary(); err != nil {
+			return err
+		}
+		if err := c.recreateContainers(); err != nil {
+			return err
+		}
+		if err := c.Start(); err != nil {
+			return err
+		}
+		if err := c.LiveLoadFromExport(DefaultExportDir); err != nil {
+			return errors.Wrap(err, "error doing import using live loader")
 		}
 		return nil
 
@@ -733,7 +773,7 @@ func (c *LocalCluster) getLogs(containerID string) (string, error) {
 
 	data, err := io.ReadAll(ro)
 	if err != nil {
-		log.Printf("[WARN] error in reading logs for [%v]: %v", containerID, err)
+		log.Printf("[WARNING] error in reading logs for [%v]: %v", containerID, err)
 	}
 	return string(data), nil
 }
