@@ -629,7 +629,7 @@ func (n *node) checkForCIDInEntries() (bool, error) {
 			}
 			var proposal pb.ZeroProposal
 			if err = proposal.Unmarshal(entry.Data[8:]); err != nil {
-				return false, err
+				return false, errors.Wrapf(err, "error unmarshlling wal entry: [%x]", entry.Data[8:])
 			}
 			if len(proposal.Cid) > 0 {
 				return true, err
