@@ -37,7 +37,7 @@ func TestMain(m *testing.M) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	x.Panic(dg.LoginIntoNamespace(ctx, dgraphtest.DefaultUser, dgraphtest.DefaultPassword, 0))
+	x.Panic(dg.LoginIntoNamespace(ctx, dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 
 	dc = c
 	client = dg.Dgraph

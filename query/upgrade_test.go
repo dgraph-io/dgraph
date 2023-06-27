@@ -34,7 +34,8 @@ func TestMain(m *testing.M) {
 		dg, cleanup, err := c.Client()
 		x.Panic(err)
 		defer cleanup()
-		x.Panic(dg.LoginIntoNamespace(context.Background(), dgraphtest.DefaultUser, dgraphtest.DefaultPassword, 0))
+		x.Panic(dg.LoginIntoNamespace(context.Background(), dgraphtest.DefaultUser,
+			dgraphtest.DefaultPassword, x.GalaxyNamespace))
 
 		client = dg.Dgraph
 		dc = c
@@ -45,7 +46,8 @@ func TestMain(m *testing.M) {
 		dg, cleanup, err := c.Client()
 		x.Panic(err)
 		defer cleanup()
-		x.Panic(dg.LoginIntoNamespace(context.Background(), dgraphtest.DefaultUser, dgraphtest.DefaultPassword, 0))
+		x.Panic(dg.LoginIntoNamespace(context.Background(), dgraphtest.DefaultUser,
+			dgraphtest.DefaultPassword, x.GalaxyNamespace))
 
 		client = dg.Dgraph
 		dc = c
