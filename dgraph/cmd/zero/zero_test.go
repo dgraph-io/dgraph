@@ -28,7 +28,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/miladibra10/vjson"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -119,24 +118,6 @@ func TestProposalKey(t *testing.T) {
 	require.Equal(t, len(uniqueKeys), 10, "each iteration should create unique key")
 }
 
-func validateJsonHealthContent(body []byte) error {
-	hSchema := vjson.NewSchema(
-			vjson.String("instance").Required().Choices("zero"),
-			vjson.String("address").Required(),
-			vjson.String("status").Required(),
-			vjson.String("group"),
-			vjson.String("version").Required(),
-			vjson.Integer("uptime").Required().Positive(),
-			vjson.Integer("lastEcho").Required().Positive(),
-			vjson.Array("ongoing", vjson.Integer("item")),
-			vjson.Array("indexing", vjson.Integer("item")),
-			vjson.Array("ee_features", vjson.Integer("item")),
-			vjson.Integer("max_assigned").Positive(),
-	)
-
-	return hSchema.ValidateBytes(body)
-}
-
 func TestZeroHealth(t *testing.T) {
 	client := http.Client{Timeout: 3 * time.Second}
 	u := &url.URL{
@@ -150,16 +131,24 @@ func TestZeroHealth(t *testing.T) {
 	require.NoError(t, err)
 
 	req.Header.Add("Accept", `application/json`)
+	start := time.Now().Unix()
 	resp, err := client.Do(req)
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
 	body, err := ioutil.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.NotEmpty(t, body)
-	require.True(t, json.Valid(body))
-	err = validateJsonHealthContent(body)
+
+	var r map[string]interface{}
+	err = json.Unmarshal(body, &r)
 	require.NoError(t, err)
+
+	require.Equal(t, "zero", r["instance"].(string))
+	require.Equal(t, "zero1:5080", r["address"].(string))
+	require.Equal(t, "healthy", r["status"].(string))
+	require.NotEqual(t, 0, len(r["version"].(string)))
+	require.Greater(t, r["uptime"].(float64), 0.0)
+	require.GreaterOrEqual(t, int64(r["lastEcho"].(float64)), start)
 
 	// String format
 	req, err = http.NewRequest("GET", u.String(), nil)
