@@ -897,6 +897,7 @@ func (l *List) Rollup(alloc *z.Allocator, readTs uint64) ([]*bpb.KV, error) {
 		return bytes.Compare(kvs[i].Key, kvs[j].Key) <= 0
 	})
 
+	x.PrintRollup(out.plist, out.parts, l.key, kv.Version)
 	x.VerifyPostingSplits(kvs, out.plist, out.parts, l.key)
 	return kvs, nil
 }

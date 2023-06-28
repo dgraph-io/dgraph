@@ -30,8 +30,23 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 )
 
-func PrintDebugLog(log string) {
-	fmt.Println("DEBUG LOG:", log)
+func PrintRollup(plist *pb.PostingList, parts map[uint64]*pb.PostingList, baseKey []byte, ts uint64) {
+	k, _ := Parse(baseKey)
+	fmt.Printf("Doing rollup for key: %v at timestamp: %v\n", k, ts)
+}
+
+func PrintMutationProposal(mutations *pb.Mutations) {
+	startTs := mutations.StartTs
+	fmt.Printf("MUTATION PROPOSAL AT: %v \n", startTs)
+	for _, edge := range mutations.Edges {
+		fmt.Printf("Mutation Edge, StartTs: %v, Edge: %v\n", startTs, edge)
+	}
+}
+
+func PrintOracleDelta(delta *pb.OracleDelta) {
+	for _, status := range delta.Txns {
+		fmt.Println("COMMITING: ", status.StartTs, status.CommitTs)
+	}
 }
 
 // VerifyPack checks that the Pack should not be nil if the postings exist.

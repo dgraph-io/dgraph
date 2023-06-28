@@ -25,8 +25,17 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 )
 
-// Print log that should  only happen in debug mode
-func PrintLog(log string) {
+// Print rollup that happen
+func PrintRollup(plist *pb.PostingList, parts map[uint64]*pb.PostingList, baseKey []byte, ts uint64) {
+
+}
+
+// Print mutation proposal that shows that a proposal came in
+func PrintMutationProposal(pb *pb.Mutations) {
+}
+
+// Print Oracle delta recieved when commting a transaction
+func PrintOracleDelta(delta *pb.OracleDelta) {
 }
 
 // VerifyPack works in debug mode. Check out the comment in debug_on.go
