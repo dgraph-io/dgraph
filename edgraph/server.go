@@ -68,6 +68,12 @@ const (
 
 type GraphqlContextKey int
 
+// uniquePredMeta stores the query variable name from 'uniqueQuery'
+type uniquePredMeta struct {
+	queryVar string
+	valVar   string
+}
+
 const (
 	// IsGraphql is used to validate requests which are allowed to mutate GraphQL reserved
 	// predicates, like dgraph.graphql.schema and dgraph.graphql.xid.
@@ -570,6 +576,10 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 		return err
 	}
 
+	if err := verifyUniqueWithinMutation(qc); err != nil {
+		return err
+	}
+
 	newUids, err := query.AssignUids(ctx, qc.gmuList)
 	if err != nil {
 		return err
@@ -738,7 +748,7 @@ func buildUpsertQuery(qc *queryContext) string {
 	for i, gmu := range qc.gmuList {
 		isCondUpsert := strings.TrimSpace(gmu.Cond) != ""
 		if isCondUpsert {
-			qc.condVars[i] = "__dgraph__" + strconv.Itoa(i)
+			qc.condVars[i] = fmt.Sprintf("__dgraph_upsertcheck_%v__", strconv.Itoa(i))
 			qc.uidRes[qc.condVars[i]] = nil
 			// @if in upsert is same as @filter in the query
 			cond := strings.Replace(gmu.Cond, "@if", "@filter", 1)
@@ -826,6 +836,17 @@ func findMutationVars(qc *queryContext) []string {
 	}
 	for v := range qc.valRes {
 		varsList = append(varsList, v)
+	}
+
+	// We use certain variables to check uniqueness. To prevent errors related to unused
+	// variables, we explicitly add them to the 'varsList' since they are not used in the mutation.
+	for _, uniqueQueryVar := range qc.uniqueVars {
+		varsList = append(varsList, uniqueQueryVar.queryVar)
+		// If the triple contains a "val()" in objectId, we need to add
+		// one more variable to the unique query. So, we explicitly add it to the varList.
+		if uniqueQueryVar.valVar != "" {
+			varsList = append(varsList, uniqueQueryVar.valVar)
+		}
 	}
 
 	return varsList
@@ -1046,6 +1067,9 @@ type queryContext struct {
 	// 1B) and resulting in OOM. We are limiting number of nquads which can be inserted in
 	// a single request.
 	nquadsCount int
+	// uniqueVar stores the mapping between the indexes of gmuList and gmu.Set,
+	// along with their respective uniqueQueryVariables.
+	uniqueVars map[uint64]uniquePredMeta
 }
 
 // Request represents a query request sent to the doQuery() method on the Server.
@@ -1517,6 +1541,10 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 		qc.valRes[name] = v.Vals
 	}
 
+	if err := verifyUnique(qc, qr); err != nil {
+		return resp, err
+	}
+
 	resp.Metrics = &api.Metrics{
 		NumUids: er.Metrics,
 	}
@@ -1550,6 +1578,10 @@ func parseRequest(qc *queryContext) error {
 			qc.gmuList = append(qc.gmuList, gmu)
 		}
 
+		if err := addQueryIfUnique(qc); err != nil {
+			return err
+		}
+
 		qc.uidRes = make(map[string][]string)
 		qc.valRes = make(map[string]map[uint64]types.Val)
 		upsertQuery = buildUpsertQuery(qc)
@@ -1573,6 +1605,167 @@ func parseRequest(qc *queryContext) error {
 		return err
 	}
 	return validateQuery(qc.dqlRes.Query)
+}
+
+// verifyUnique verifies uniqueness of mutation
+func verifyUnique(qc *queryContext, qr query.Request) error {
+	if len(qc.uniqueVars) == 0 {
+		return nil
+	}
+
+	for i, queryVar := range qc.uniqueVars {
+		gmuIndex, rdfIndex := decodeIndex(i)
+		pred := qc.gmuList[gmuIndex].Set[rdfIndex]
+		queryResult := qr.Vars[queryVar.queryVar]
+		if !isUpsertCondTrue(qc, int(gmuIndex)) {
+			continue
+		}
+		isEmpty := func(l *pb.List) bool {
+			return l == nil || len(l.Uids) == 0
+
+		}
+
+		var subjectUid uint64
+		var predValue interface{}
+		if strings.HasPrefix(pred.Subject, "uid(") {
+			varName := qr.Vars[pred.Subject[4:len(pred.Subject)-1]]
+			if isEmpty(varName.Uids) {
+				subjectUid = 0 // blank node
+			} else if len(varName.Uids.Uids) == 1 {
+				subjectUid = varName.Uids.Uids[0]
+			} else {
+				return errors.Errorf("unique constraint violated for predicate [%v]", pred.Predicate)
+			}
+		} else {
+			var err error
+			subjectUid, err = parseSubject(pred.Subject)
+			if err != nil {
+				return errors.Wrapf(err, "error while parsing [%v]", pred.Subject)
+			}
+		}
+
+		if strings.HasPrefix(pred.ObjectId, "val(") {
+			varName := qr.Vars[pred.ObjectId[4:len(pred.ObjectId)-1]]
+			val, ok := varName.Vals[0]
+			if !ok {
+				_, isValueGoingtoSet := varName.Vals[subjectUid]
+				if !isValueGoingtoSet {
+					continue
+				}
+
+				results := qr.Vars[queryVar.valVar]
+				for uidOfv, v := range results.Vals {
+					if v.Value == varName.Vals[subjectUid].Value && uidOfv != subjectUid {
+						return errors.Errorf("could not insert duplicate value [%v] for predicate [%v]",
+							v.Value, pred.Predicate)
+					}
+				}
+				continue
+			} else {
+				predValue = val.Value
+			}
+		} else {
+			predValue = dql.TypeValFrom(pred.ObjectValue).Value
+		}
+
+		// Here, we check the uniqueness of the triple by comparing the result of the uniqueQuery with the triple.
+		if !isEmpty(queryResult.Uids) {
+			if len(queryResult.Uids.Uids) > 1 {
+				glog.Errorf("unique constraint violated for predicate [%v].uids: [%v].namespace: [%v]",
+					pred.Predicate, queryResult.Uids.Uids, pred.Namespace)
+				return errors.Errorf("there are duplicates in existing data for predicate [%v]."+
+					"Please drop the unique constraint and re-add it after fixing the predicate data", pred.Predicate)
+			} else if queryResult.Uids.Uids[0] != subjectUid {
+				// Determine whether the mutation is a swap mutation
+				isSwap, err := isSwap(qc, queryResult.Uids.Uids[0], pred.Predicate)
+				if err != nil {
+					return err
+				}
+				if !isSwap {
+					return errors.Errorf("could not insert duplicate value [%v] for predicate [%v]",
+						predValue, pred.Predicate)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// addQueryIfUnique adds dummy queries in the request for checking whether predicate is unique in the db
+func addQueryIfUnique(qc *queryContext) error {
+	if len(qc.gmuList) == 0 {
+		return nil
+	}
+
+	ctx := context.WithValue(context.Background(), schema.IsWrite, false)
+	qc.uniqueVars = map[uint64]uniquePredMeta{}
+	var buildQuery strings.Builder
+	for gmuIndex, gmu := range qc.gmuList {
+		for rdfIndex, pred := range gmu.Set {
+			predSchema, _ := schema.State().Get(ctx, x.NamespaceAttr(pred.Namespace, pred.Predicate))
+			if !predSchema.Unique {
+				continue
+			}
+			var predicateName string
+			if pred.Lang != "" {
+				predicateName = fmt.Sprintf(pred.Predicate+"@%v", pred.Lang)
+			} else {
+				predicateName = pred.Predicate
+			}
+			uniqueVarMapKey := encodeIndex(gmuIndex, rdfIndex)
+			queryVar := fmt.Sprintf("__dgraph_uniquecheck_%v__", uniqueVarMapKey)
+			// Now, we add a query for a predicate to check if the value of the
+			// predicate sent in the mutation already exists in the DB.
+			// For example, schema => email: string @unique @index(exact) .
+			// To ensure uniqueness of values of email predicate, we will query for the value
+			// to ensure that we are not adding a duplicate value.
+			// There are following use-cases of mutations which we need to handle:
+			// 1. _:a <email> "example@email.com"  .
+			// 2. _:a <email> val(queryVariable)  .
+			// In the code below, we construct respective query for the above use-cases viz.
+			//           __dgraph_uniquecheck_1__ as var(func: eq(email,"example@email.com"))
+			//           __dgraph_uniquecheck_1__ as var(func: eq(email,val(queryVariable))){
+			//                   uid
+			//	                 unQueryVariable as email
+			//                  }
+			// Each of the above query will check if there is already an existing value.
+			// We can be sure that we may get at most one UID in return.
+			// If the returned UID is different than the UID we have
+			// in the mutation, then we reject the mutation.
+
+			if !strings.HasPrefix(pred.ObjectId, "val(") {
+				query := fmt.Sprintf(`%v as var(func: eq(%v,"%v"))`, queryVar, predicateName,
+					dql.TypeValFrom(pred.ObjectValue).Value)
+				if _, err := buildQuery.WriteString(query); err != nil {
+					return errors.Wrapf(err, "error while writing string")
+				}
+				qc.uniqueVars[uniqueVarMapKey] = uniquePredMeta{queryVar: queryVar}
+			} else {
+				valQueryVar := fmt.Sprintf("un%v", queryVar)
+				query := fmt.Sprintf(`%v as var(func: eq(%v,%v)){
+					                             uid
+					                             %v as %v
+				                 }`, queryVar, predicateName, pred.ObjectId, valQueryVar, predicateName)
+				if _, err := buildQuery.WriteString(query); err != nil {
+					return errors.Wrapf(err, "error while building unique query")
+				}
+				qc.uniqueVars[uniqueVarMapKey] = uniquePredMeta{valVar: valQueryVar, queryVar: queryVar}
+			}
+		}
+
+		if buildQuery.Len() > 0 {
+			if _, err := buildQuery.WriteString("}"); err != nil {
+				return errors.Wrapf(err, "error while writing string")
+			}
+			if qc.req.Query == "" {
+				qc.req.Query = "{" + buildQuery.String()
+			} else {
+				qc.req.Query = strings.TrimRight(qc.req.Query, "}")
+				qc.req.Query = qc.req.Query + buildQuery.String()
+			}
+		}
+	}
+	return nil
 }
 
 func authorizeRequest(ctx context.Context, qc *queryContext) error {
@@ -1911,4 +2104,89 @@ func isDropAll(op *api.Operation) bool {
 		return true
 	}
 	return false
+}
+
+func verifyUniqueWithinMutation(qc *queryContext) error {
+	if len(qc.uniqueVars) == 0 {
+		return nil
+	}
+
+	for i := range qc.uniqueVars {
+		gmuIndex, rdfIndex := decodeIndex(i)
+		if len(qc.gmuList[gmuIndex].Set) == 0 {
+			return nil
+		}
+		pred1 := qc.gmuList[gmuIndex].Set[rdfIndex]
+		pred1Value := dql.TypeValFrom(pred1.ObjectValue).Value
+		for j := range qc.uniqueVars {
+			gmuIndex2, rdfIndex2 := decodeIndex(j)
+			pred2 := qc.gmuList[gmuIndex2].Set[rdfIndex2]
+			if pred2.Predicate == pred1.Predicate && dql.TypeValFrom(pred2.ObjectValue).Value == pred1Value &&
+				pred2.Subject != pred1.Subject {
+				return errors.Errorf("could not insert duplicate value [%v] for predicate [%v]",
+					dql.TypeValFrom(pred1.ObjectValue).Value, pred1.Predicate)
+			}
+		}
+	}
+	return nil
+}
+
+func isUpsertCondTrue(qc *queryContext, gmuIndex int) bool {
+	condVar := qc.condVars[gmuIndex]
+	if condVar == "" {
+		return true
+	}
+
+	uids, ok := qc.uidRes[condVar]
+	return ok && len(uids) == 1
+}
+
+func isSwap(qc *queryContext, pred1SubjectUid uint64, pred1Predicate string) (bool, error) {
+	for i := range qc.uniqueVars {
+		gmuIndex, rdfIndex := decodeIndex(i)
+		pred2 := qc.gmuList[gmuIndex].Set[rdfIndex]
+		var pred2SubjectUid uint64
+		if !strings.HasPrefix(pred2.Subject, "uid(") {
+			var err error
+			pred2SubjectUid, err = parseSubject(pred2.Subject)
+			if err != nil {
+				return false, errors.Wrapf(err, "error while parsing [%v]", pred2.Subject)
+			}
+		} else {
+			pred2SubjectUid = 0
+		}
+
+		if pred2SubjectUid == pred1SubjectUid && pred1Predicate == pred2.Predicate {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// encodeBit two uint32 numbers by bit.
+// First 32 bits store k1 and last 32 bits store k2.
+func encodeIndex(k1, k2 int) uint64 {
+	safeToConvert := func(num int) {
+		if num > math.MaxUint32 {
+			panic("unsafe conversion: integer value is too large for uint32")
+		}
+	}
+	safeToConvert(k1)
+	safeToConvert(k2)
+	pair := uint64(uint32(k1))<<32 | uint64(uint32(k2))
+	return pair
+}
+
+func decodeIndex(pair uint64) (uint32, uint32) {
+	k1 := uint32(pair >> 32)
+	k2 := uint32(pair) & 0xFFFFFFFF
+	return k1, k2
+}
+
+func parseSubject(predSubject string) (uint64, error) {
+	if strings.HasPrefix(predSubject, "_:") {
+		return 0, nil // blank node
+	} else {
+		return dql.ParseUid(predSubject)
+	}
 }

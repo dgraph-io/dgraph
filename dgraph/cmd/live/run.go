@@ -78,7 +78,7 @@ type options struct {
 	preserveNs      bool
 }
 
-type predicate struct {
+type Predicate struct {
 	Predicate  string   `json:"predicate,omitempty"`
 	Type       string   `json:"type,omitempty"`
 	Tokenizer  []string `json:"tokenizer,omitempty"`
@@ -89,12 +89,13 @@ type predicate struct {
 	Upsert     bool     `json:"upsert,omitempty"`
 	Reverse    bool     `json:"reverse,omitempty"`
 	NoConflict bool     `json:"no_conflict,omitempty"`
+	Unique     bool     `json:"unique,omitempty"`
 	ValueType  types.TypeID
 }
 
-type schema struct {
-	Predicates []*predicate `json:"schema,omitempty"`
-	preds      map[string]*predicate
+type Schema struct {
+	Predicates []*Predicate `json:"schema,omitempty"`
+	preds      map[string]*Predicate
 }
 
 type request struct {
@@ -102,8 +103,8 @@ type request struct {
 	conflicts []uint64
 }
 
-func (l *schema) init(ns uint64, galaxyOperation bool) {
-	l.preds = make(map[string]*predicate)
+func (l *Schema) init(ns uint64, galaxyOperation bool) {
+	l.preds = make(map[string]*Predicate)
 	for _, i := range l.Predicates {
 		i.ValueType, _ = types.TypeForName(i.Type)
 		if !galaxyOperation {
@@ -115,7 +116,7 @@ func (l *schema) init(ns uint64, galaxyOperation bool) {
 
 var (
 	opt options
-	sch schema
+	sch Schema
 
 	// Live is the sub-command invoked when running "dgraph live".
 	Live x.SubCommand
@@ -185,7 +186,7 @@ func init() {
 		"specific namespace. Setting it to negative value will preserve the namespace.")
 }
 
-func getSchema(ctx context.Context, dgraphClient *dgo.Dgraph, galaxyOperation bool) (*schema, error) {
+func getSchema(ctx context.Context, dgraphClient *dgo.Dgraph, galaxyOperation bool) (*Schema, error) {
 	txn := dgraphClient.NewTxn()
 	defer func() {
 		if err := txn.Discard(ctx); err != nil {
@@ -500,7 +501,7 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 			sort.Slice(buffer, func(i, j int) bool {
 				iPred := sch.preds[x.NamespaceAttr(buffer[i].Namespace, buffer[i].Predicate)]
 				jPred := sch.preds[x.NamespaceAttr(buffer[j].Namespace, buffer[j].Predicate)]
-				t := func(a *predicate) int {
+				t := func(a *Predicate) int {
 					if a != nil && a.Count {
 						return 1
 					}
@@ -683,7 +684,7 @@ func (l *loader) populateNamespaces(ctx context.Context, dc *dgo.Dgraph, singleN
 		return err
 	}
 
-	var sch schema
+	var sch Schema
 	err = json.Unmarshal(res.GetJson(), &sch)
 	if err != nil {
 		return err

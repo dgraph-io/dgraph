@@ -475,6 +475,7 @@ message SchemaNode {
   bool upsert = 8;
   bool lang = 9;
   bool no_conflict = 10;
+  bool unique = 11;
 }
 
 message SchemaResult {
@@ -496,6 +497,7 @@ message SchemaUpdate {
   bool list = 6;
   bool upsert = 8;
   bool lang = 9;
+  bool unique = 14;
 
   // Fields required for type system.
   bool non_nullable = 10;

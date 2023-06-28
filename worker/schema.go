@@ -56,7 +56,7 @@ func getSchema(ctx context.Context, s *pb.SchemaRequest) (*pb.SchemaResult, erro
 	if len(s.Fields) > 0 {
 		fields = s.Fields
 	} else {
-		fields = []string{"type", "index", "tokenizer", "reverse", "count", "list", "upsert",
+		fields = []string{"type", "index", "tokenizer", "reverse", "count", "list", "upsert", "unique",
 			"lang", "noconflict"}
 	}
 
@@ -110,6 +110,8 @@ func populateSchema(attr string, fields []string) *pb.SchemaNode {
 			schemaNode.List = pred.GetList()
 		case "upsert":
 			schemaNode.Upsert = pred.GetUpsert()
+		case "unique":
+			schemaNode.Unique = pred.GetUnique()
 		case "lang":
 			schemaNode.Lang = pred.GetLang()
 		case "noconflict":

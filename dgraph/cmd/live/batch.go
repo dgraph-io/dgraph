@@ -87,7 +87,7 @@ type loader struct {
 	reqNum     uint64
 	reqs       chan *request
 	zeroconn   *grpc.ClientConn
-	schema     *schema
+	schema     *Schema
 	namespaces map[uint64]struct{}
 
 	upsertLock sync.RWMutex
@@ -240,7 +240,7 @@ func createValueEdge(nq *api.NQuad, sid uint64) (*pb.DirectedEdge, error) {
 	return p, nil
 }
 
-func fingerprintEdge(t *pb.DirectedEdge, pred *predicate) uint64 {
+func fingerprintEdge(t *pb.DirectedEdge, pred *Predicate) uint64 {
 	var id uint64 = math.MaxUint64
 
 	// Value with a lang type.

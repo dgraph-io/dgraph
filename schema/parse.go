@@ -73,6 +73,8 @@ func parseDirective(it *lex.ItemIterator, schema *pb.SchemaUpdate, t types.TypeI
 		schema.Count = true
 	case "upsert":
 		schema.Upsert = true
+	case "unique":
+		schema.Unique = true
 	case "noconflict":
 		schema.NoConflict = true
 	case "lang":
