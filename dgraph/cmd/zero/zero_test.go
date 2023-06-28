@@ -20,8 +20,13 @@ package zero
 
 import (
 	"context"
+	"encoding/json"
+	"io/ioutil"
 	"math"
+	"net/http"
+	"net/url"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
@@ -111,4 +116,49 @@ func TestProposalKey(t *testing.T) {
 		uniqueKeys[proposalKey] = struct{}{}
 	}
 	require.Equal(t, len(uniqueKeys), 10, "each iteration should create unique key")
+}
+
+func TestZeroHealth(t *testing.T) {
+	client := http.Client{Timeout: 3 * time.Second}
+	u := &url.URL{
+		Scheme: "http",
+		Host:   testutil.ContainerAddr("zero1", 6080),
+		Path:   "health",
+	}
+
+	// JSON format
+	req, err := http.NewRequest("GET", u.String(), nil)
+	require.NoError(t, err)
+
+	req.Header.Add("Accept", `application/json`)
+	start := time.Now().Unix()
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	require.NoError(t, err)
+
+	var r map[string]interface{}
+	err = json.Unmarshal(body, &r)
+	require.NoError(t, err)
+
+	require.Equal(t, "zero", r["instance"].(string))
+	require.Equal(t, "zero1:5080", r["address"].(string))
+	require.Equal(t, "healthy", r["status"].(string))
+	require.NotEqual(t, 0, len(r["version"].(string)))
+	require.Greater(t, r["uptime"].(float64), 0.0)
+	require.GreaterOrEqual(t, int64(r["lastEcho"].(float64)), start)
+
+	// String format
+	req, err = http.NewRequest("GET", u.String(), nil)
+	require.NoError(t, err)
+
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	body, err = ioutil.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.Equal(t, string(body), "OK")
 }
