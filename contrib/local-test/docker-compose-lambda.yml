@@ -13,8 +13,8 @@ services:
         --logtostderr -v=2
         --graphql lambda-url=http://host.docker.internal:8686/graphql-worker
         --telemetry sentry=false
-  lambda: 
-    image: dgraph/dgraph-lambda:latest
+  lambda:
+    image: local-lambda
     volumes:
       - ./scripts/script.js:/app/script/script.js:ro
     environment:
@@ -22,4 +22,3 @@ services:
       - MAX_MEMORY_LIMIT=256M
     ports:
       - 8686:8686
-  
