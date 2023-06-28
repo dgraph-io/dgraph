@@ -21,6 +21,7 @@ package x
 
 import (
 	"bytes"
+	"fmt"
 	"log"
 	"sort"
 
@@ -28,6 +29,10 @@ import (
 	bpb "github.com/dgraph-io/badger/v4/pb"
 	"github.com/dgraph-io/dgraph/protos/pb"
 )
+
+func PrintDebugLog(log string) {
+	fmt.Println("DEBUG LOG:", log)
+}
 
 // VerifyPack checks that the Pack should not be nil if the postings exist.
 func VerifyPack(plist *pb.PostingList) {

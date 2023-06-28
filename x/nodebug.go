@@ -25,6 +25,10 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 )
 
+// Print log that should  only happen in debug mode
+func PrintLog(log string) {
+}
+
 // VerifyPack works in debug mode. Check out the comment in debug_on.go
 func VerifyPack(plist *pb.PostingList) {
 }
