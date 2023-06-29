@@ -31,7 +31,7 @@ func PrintRollup(plist *pb.PostingList, parts map[uint64]*pb.PostingList, baseKe
 }
 
 // Print mutation proposal that shows that a proposal came in
-func PrintMutationProposal(pb *pb.Mutations) {
+func PrintMutationEdge(pb *pb.DirectedEdge, key ParsedKey, startTs uint64) {
 }
 
 // Print Oracle delta recieved when commting a transaction

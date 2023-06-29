@@ -19,6 +19,7 @@ package x
 import (
 	"encoding/binary"
 	"encoding/hex"
+	"fmt"
 	"math"
 	"strconv"
 	"strings"
@@ -298,6 +299,16 @@ type ParsedKey struct {
 	Term        string
 	Count       uint32
 	bytePrefix  byte
+}
+
+func (p ParsedKey) String() string {
+	if p.IsIndex() {
+		return fmt.Sprintf("UID: %v, Attr: %v, IsIndex: true, Term: %v", p.Uid, p.Attr, p.Count)
+	} else if p.IsCountOrCountRev() {
+		return fmt.Sprintf("UID: %v, Attr: %v, IsCount/Ref: true, Count: %v", p.Uid, p.Attr, p.Count)
+	} else {
+		return fmt.Sprintf("UID: %v, Attr: %v, Data key", p.Uid, p.Attr)
+	}
 }
 
 // IsData returns whether the key is a data key.
