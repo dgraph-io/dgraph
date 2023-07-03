@@ -21,27 +21,27 @@ package x
 
 import (
 	"bytes"
-	"fmt"
 	"log"
 	"sort"
 
 	"github.com/dgraph-io/badger/v4"
 	bpb "github.com/dgraph-io/badger/v4/pb"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/golang/glog"
 )
 
 func PrintRollup(plist *pb.PostingList, parts map[uint64]*pb.PostingList, baseKey []byte, ts uint64) {
 	k, _ := Parse(baseKey)
-	fmt.Printf("[DEBUG] DOING ROLLUP for key: %v at timestamp: %v\n", k, ts)
+	glog.V(1).Infof("[TXNLOG] DOING ROLLUP for key: %+v at timestamp: %v\n", k, ts)
 }
 
-func PrintMutationEdge(pb *pb.DirectedEdge, key ParsedKey, startTs uint64) {
-	fmt.Printf("[DEBUG] ADDING MUTATION at TS: %v, key: %v, value: %v \n", startTs, key.String(), pb)
+func PrintMutationEdge(plist *pb.DirectedEdge, key ParsedKey, startTs uint64) {
+	glog.V(1).Infof("[TXNLOG] ADDING MUTATION at TS: %v, key: %v, value: %v \n", startTs, key.String(), plist)
 }
 
 func PrintOracleDelta(delta *pb.OracleDelta) {
 	for _, status := range delta.Txns {
-		fmt.Println("[DEBUG] COMMITING: ", status.StartTs, status.CommitTs)
+		glog.V(1).Infof("[TXNLOG] COMMITING: startTs: %v, commitTs: %v\n", status.StartTs, status.CommitTs)
 	}
 }
 
