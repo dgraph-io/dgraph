@@ -156,6 +156,10 @@ func (w *DiskStorage) Checkpoint() (uint64, error) {
 // Implement the Raft.Storage interface.
 // -------------------------------------
 
+// In Raft consensus algorithm, the term "hard state" refers to the portion of
+// the Raft state that must be persisted to stable storage. The hard state consists
+// of a small amount of metadata that is critical to the correct operation of the Raft algorithm.
+
 // InitialState returns the saved HardState and ConfState information.
 func (w *DiskStorage) InitialState() (hs raftpb.HardState, cs raftpb.ConfState, err error) {
 	w.lock.Lock()
