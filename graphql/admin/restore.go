@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"sync"
 
+	"github.com/golang/glog"
 	"github.com/pkg/errors"
 
 	"github.com/dgraph-io/dgraph/edgraph"
@@ -77,6 +78,7 @@ func resolveRestore(ctx context.Context, m schema.Mutation) (*resolve.Resolved, 
 	wg := &sync.WaitGroup{}
 	err = worker.ProcessRestoreRequest(context.Background(), &req, wg)
 	if err != nil {
+		glog.Warningf("error processing restore request: %+v, err: %v", req, err)
 		return resolve.DataResult(
 			m,
 			map[string]interface{}{m.Name(): map[string]interface{}{
