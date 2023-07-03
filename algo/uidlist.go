@@ -26,6 +26,10 @@ import (
 
 const jump = 32 // Jump size in InsersectWithJump.
 
+var (
+	D = 100.0
+)
+
 // ApplyFilter applies a filter to our UIDList.
 func ApplyFilter(u *pb.List, f func(uint64, int) bool) {
 	out := u.Uids[:0]
@@ -60,7 +64,7 @@ func IntersectCompressedWith(pack *pb.UidPack, afterUID uint64, v, o *pb.List) {
 
 	// Select appropriate function based on heuristics.
 	ratio := float64(m) / float64(n)
-	if ratio < 100 {
+	if ratio < D {
 		IntersectCompressedWithLinJump(&dec, v.Uids, &dst)
 	} else {
 		IntersectCompressedWithBin(&dec, v.Uids, &dst)

@@ -369,7 +369,7 @@ func BenchmarkListIntersectRandom(b *testing.B) {
 
 func BenchmarkListIntersectRatio(b *testing.B) {
 	randomTests := func(sz int, overlap float64) {
-		rs := []int{1, 10, 50, 100, 200, 400, 500, 1000, 10000}
+		rs := []int{1, 10, 50, 100, 200, 400, 500, 1000, 10000, 100000, 1000000}
 		for _, r := range rs {
 			sz1 := sz
 			sz2 := sz * r
@@ -396,24 +396,24 @@ func BenchmarkListIntersectRatio(b *testing.B) {
 
 			fmt.Printf("len: %d, compressed: %d, bytes/int: %f\n",
 				len(v1), compressedUids.Size(), float64(compressedUids.Size())/float64(len(v1)))
-			b.Run(fmt.Sprintf("compressed:IntersectWithLinJump:ratio=%d:size=%d:overlap=%.2f:", r, sz, overlap),
+			b.Run(fmt.Sprintf(":IntersectWith:ratio=%d:size=%d:overlap=%.2f:", r, sz, overlap),
 				func(b *testing.B) {
 					for k := 0; k < b.N; k++ {
-						dec := codec.Decoder{Pack: compressedUids}
-						dec.Seek(0, codec.SeekStart)
-						dst := v.Uids[:0]
-
-						IntersectCompressedWithLinJump(&dec, u.Uids, &dst)
+						IntersectWith(u, v, dst1)
 					}
 				})
-			b.Run(fmt.Sprintf("compressed:IntersectWithBin:ratio=%d:size=%d:overlap=%.2f:", r, sz, overlap),
+			b.Run(fmt.Sprintf("compressed:IntersectWith:ratio=%d:size=%d:overlap=%.2f:dr=%d", r, sz, overlap, 100),
 				func(b *testing.B) {
 					for k := 0; k < b.N; k++ {
-						dec := codec.Decoder{Pack: compressedUids}
-						dec.Seek(0, codec.SeekStart)
-						dst := v.Uids[:0]
-
-						IntersectCompressedWithBin(&dec, u.Uids, &dst)
+						D = 100.0
+						IntersectCompressedWith(compressedUids, 0, u, dst2)
+					}
+				})
+			b.Run(fmt.Sprintf("compressed:IntersectWith:ratio=%d:size=%d:overlap=%.2f:dr=%d", r, sz, overlap, 500),
+				func(b *testing.B) {
+					for k := 0; k < b.N; k++ {
+						D = 500.0
+						IntersectCompressedWith(compressedUids, 0, u, dst2)
 					}
 				})
 			fmt.Println()
@@ -435,12 +435,13 @@ func BenchmarkListIntersectRatio(b *testing.B) {
 		}
 	}
 
-	randomTests(10, 0.1)
-	randomTests(100, 0.1)
-	randomTests(1000, 0.1)
-	randomTests(10000, 0.1)
-	randomTests(100000, 0.1)
-	randomTests(1000000, 0.1)
+	randomTests(1, 0.01)
+	randomTests(10, 0.01)
+	randomTests(100, 0.01)
+	randomTests(1000, 0.01)
+	randomTests(10000, 0.01)
+	randomTests(100000, 0.01)
+	randomTests(1000000, 0.01)
 }
 
 func skipDuplicate(in []uint64, idx int) int {
