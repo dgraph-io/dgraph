@@ -18,6 +18,7 @@ import (
 	"encoding/binary"
 	"io"
 	"log"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -36,7 +37,7 @@ import (
 )
 
 const (
-	mapFileSz      int = 2 << 30
+	mapFileSz      int = math.MaxInt32
 	partitionBufSz int = 4 << 20
 )
 
