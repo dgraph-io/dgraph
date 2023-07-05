@@ -349,10 +349,6 @@ func (psuite *PluginTestSuite) TestPlugins() {
 		}
 	}
 
-	initialSchema string
-	setJSON       string
-	cases         []testCase
-
 	arg := psuite.pfiEntry
 	pluginFn(arg.initialSchema, arg.setJSON, arg.cases)
 }

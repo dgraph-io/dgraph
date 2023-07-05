@@ -76,7 +76,7 @@ func TestPluginTestSuite(t *testing.T) {
 		var psuite PluginTestSuite
 		psuite.uc = uc
 		for _, e := range pfiArray {
-			psuite.pfiEntry := e
+			psuite.pfiEntry = e
 			suite.Run(t, &psuite)
 		}
 	}

@@ -33,6 +33,7 @@ import (
 type PluginTestSuite struct {
 	suite.Suite
 	dc dgraphtest.Cluster
+	pfiEntry PluginFuncInp
 }
 
 func (psuite *PluginTestSuite) SetupTest() {
@@ -54,8 +55,9 @@ func (psuite *PluginTestSuite) Upgrade() {
 }
 
 func TestPluginTestSuite(t *testing.T) {
+	var psuite PluginTestSuite
 	for _, e := range pfiArray {
-		psuite.pfiEntry := e
+		psuite.pfiEntry = e
 		suite.Run(t, new(PluginTestSuite))
 	}
 }
