@@ -42,11 +42,13 @@ func (c *ComposeCluster) HTTPClient() (*HTTPClient, error) {
 	graphQLUrl := "http://" + testutil.SockAddrHttp + "/graphql"
 	licenseUrl := "http://" + testutil.SockAddrZeroHttp + "/enterpriseLicense"
 	stateUrl := "http://" + testutil.SockAddrZeroHttp + "/state"
+	dqlUrl := "http://" + testutil.SockAddrHttp + "/query"
 	return &HTTPClient{
 		adminURL:   adminUrl,
 		graphqlURL: graphQLUrl,
 		licenseURL: licenseUrl,
 		stateURL:   stateUrl,
+		dqlURL:     dqlUrl,
 		HttpToken:  &HttpToken{},
 	}, nil
 }
