@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/dgraph-io/dgraph/dgraphtest"
@@ -55,12 +56,7 @@ func (msuite *MultitenancyTestSuite) TearDownTest() {
 }
 
 func (msuite *MultitenancyTestSuite) Upgrade() {
-	t := msuite.T()
-
-	if err := msuite.lc.Upgrade(msuite.uc.After, msuite.uc.Strategy); err != nil {
-		msuite.lc.Cleanup(true)
-		t.Fatal(err)
-	}
+	require.NoError(msuite.T(), msuite.lc.Upgrade(msuite.uc.After, msuite.uc.Strategy))
 }
 
 func TestMultitenancySuite(t *testing.T) {

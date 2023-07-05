@@ -289,11 +289,9 @@ func parseSchemaFromAlterOperation(ctx context.Context, op *api.Operation) (
 	}
 
 	preds := make(map[string]struct{})
-
 	for _, update := range result.Preds {
 		if _, ok := preds[update.Predicate]; ok {
-			return nil, errors.Errorf("predicate %s defined multiple times",
-				x.ParseAttr(update.Predicate))
+			return nil, errors.Errorf("predicate %s defined multiple times", x.ParseAttr(update.Predicate))
 		}
 		preds[update.Predicate] = struct{}{}
 
@@ -320,7 +318,6 @@ func parseSchemaFromAlterOperation(ctx context.Context, op *api.Operation) (
 	}
 
 	types := make(map[string]struct{})
-
 	for _, typ := range result.Types {
 		if _, ok := types[typ.TypeName]; ok {
 			return nil, errors.Errorf("type %s defined multiple times", x.ParseAttr(typ.TypeName))
