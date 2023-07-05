@@ -1,4 +1,4 @@
-//go:build integration
+//go:build (!oss && integration) || upgrade
 
 /*
  * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
@@ -26,46 +26,24 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/v230/protos/api"
-	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgraph/dgraphtest"
+	"github.com/dgraph-io/dgraph/x"
 )
 
-func TestPlugins(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping test in short mode")
-	}
 
-	type testCase struct {
-		query      string
-		wantResult string
-	}
+type testCase struct {
+	query      string
+	wantResult string
+}
 
-	client, err := testutil.DgraphClient(testutil.SockAddr)
-	require.NoError(t, err)
-	suite := func(initialSchema string, setJSON string, cases []testCase) {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-		defer cancel()
+type PluginFuncInp struct {
+	initialSchema string
+	setJSON       string
+	cases         []testCase
+}
 
-		require.NoError(t, client.Alter(ctx, &api.Operation{
-			DropAll: true,
-		}))
-		require.NoError(t, client.Alter(ctx, &api.Operation{
-			Schema: initialSchema,
-		}))
-
-		txn := client.NewTxn()
-		_, err = txn.Mutate(ctx, &api.Mutation{SetJson: []byte(setJSON)})
-		require.NoError(t, err)
-		require.NoError(t, txn.Commit(ctx))
-
-		for _, test := range cases {
-			txn := client.NewTxn()
-			reply, err := txn.Query(ctx, test.query)
-			require.NoError(t, err)
-			testutil.CompareJSON(t, test.wantResult, string(reply.GetJson()))
-		}
-	}
-
-	suite(
+var pfiArray = []PluginFuncInp{
+	{
 		"word: string @index(anagram) .",
 		`[
 			{ "word": "airmen" },
@@ -104,9 +82,8 @@ func TestPlugins(t *testing.T) {
 				]}`,
 			},
 		},
-	)
-
-	suite(
+	},
+	{
 		"word: string @index(anagram) @lang .",
 		`[
 			{ "word@en": "airmen", "word@fr": "no match" },
@@ -122,9 +99,8 @@ func TestPlugins(t *testing.T) {
 				]}`,
 			},
 		},
-	)
-
-	suite(
+	},
+	{
 		"ip: string @index(cidr) .",
 		`[
 			{ "ip": "100.55.22.11/32" },
@@ -173,9 +149,8 @@ func TestPlugins(t *testing.T) {
 				]}`,
 			},
 		},
-	)
-
-	suite(
+	},
+	{
 		"name: string @index(rune) .",
 		`[
 			{ "name": "Adam" },
@@ -247,8 +222,8 @@ func TestPlugins(t *testing.T) {
 				]}`,
 			},
 		},
-	)
-	suite(
+	},
+	{
 		"num: int @index(factor) .",
 		`[
 			{ "num": 2 },
@@ -332,5 +307,52 @@ func TestPlugins(t *testing.T) {
 				]}`,
 			},
 		},
-	)
+	},
+}
+
+func (psuite *PluginTestSuite) TestPlugins() {
+	t := psuite.T()
+
+	if testing.Short() {
+		t.Skip("skipping test in short mode")
+	}
+
+	pluginFn := func(initialSchema string, setJSON string, cases []testCase) {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+
+		gcli, cleanup, err := psuite.dc.Client()
+		defer cleanup()
+		require.NoError(t, err)
+		require.NoError(t, gcli.LoginIntoNamespace(context.Background(),
+			dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+		require.NoError(t, gcli.Alter(ctx, &api.Operation{
+			DropAll: true,
+		}))
+		require.NoError(t, gcli.Alter(ctx, &api.Operation{
+			Schema: initialSchema,
+		}))
+
+		txn := gcli.NewTxn()
+		_, err = txn.Mutate(ctx, &api.Mutation{SetJson: []byte(setJSON)})
+		require.NoError(t, err)
+		require.NoError(t, txn.Commit(ctx))
+
+		// Upgrade
+		psuite.Upgrade()
+
+		for _, test := range cases {
+			txn := gcli.NewTxn()
+			reply, err := txn.Query(ctx, test.query)
+			require.NoError(t, err)
+			dgraphtest.CompareJSON(test.wantResult, string(reply.GetJson()))
+		}
+	}
+
+	initialSchema string
+	setJSON       string
+	cases         []testCase
+
+	arg := psuite.pfiEntry
+	pluginFn(arg.initialSchema, arg.setJSON, arg.cases)
 }

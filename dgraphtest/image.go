@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/pkg/errors"
 )
 
@@ -52,6 +53,11 @@ func (c *LocalCluster) setupBinary() error {
 	if err := buildDgraphBinary(repoDir, binariesPath, c.conf.version); err != nil {
 		return err
 	}
+
+	// explicit var declaration to avoid confusion on the next line
+	race := false
+	testutil.GeneratePlugins(race)
+
 	return copyBinary(binariesPath, c.tempBinDir, c.conf.version)
 }
 
