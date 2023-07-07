@@ -63,15 +63,8 @@ func (psuite *PluginTestSuite) Upgrade() {
 	}
 }
 
-// For testing purpose
-var comboEntry = []dgraphtest.UpgradeCombo{
-			{"v21.03.0", "v23.0.0", dgraphtest.BackupRestore},
-}
-
 func TestPluginTestSuite(t *testing.T) {
-	//for _, uc := range dgraphtest.AllUpgradeCombos {
-	//}
-	for _, uc := range comboEntry {
+	for _, uc := range dgraphtest.AllUpgradeCombos {
 		log.Printf("running: backup in [%v], restore in [%v]", uc.Before, uc.After)
 		var psuite PluginTestSuite
 		psuite.uc = uc

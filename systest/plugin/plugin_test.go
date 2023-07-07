@@ -1,4 +1,4 @@
-//go:build (!oss && integration) || upgrade
+//go:build integration || upgrade
 
 /*
  * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
@@ -30,11 +30,12 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-
+/*
 type testCase struct {
 	query      string
 	wantResult string
 }
+*/
 
 type PluginFuncInp struct {
 	initialSchema string
@@ -322,13 +323,11 @@ func (psuite *PluginTestSuite) TestPlugins() {
 		defer cancel()
 
 		gcli, cleanup, err := psuite.dc.Client()
-		defer cleanup()
 		require.NoError(t, err)
+		defer cleanup()
 		require.NoError(t, gcli.LoginIntoNamespace(context.Background(),
 			dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
-		require.NoError(t, gcli.Alter(ctx, &api.Operation{
-			DropAll: true,
-		}))
+		require.NoError(t, gcli.DropAll())
 		require.NoError(t, gcli.Alter(ctx, &api.Operation{
 			Schema: initialSchema,
 		}))

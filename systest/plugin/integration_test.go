@@ -25,7 +25,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
-	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/dgraphtest"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -43,11 +42,11 @@ func (psuite *PluginTestSuite) SetupTest() {
 func (psuite *PluginTestSuite) TearDownTest() {
 	t := psuite.T()
 	gcli, cleanup, err := psuite.dc.Client()
-	defer cleanup()
 	require.NoError(t, err)
+	defer cleanup()
 	require.NoError(t, gcli.LoginIntoNamespace(context.Background(),
 		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
-	require.NoError(t, gcli.Alter(context.Background(), &api.Operation{DropAll: true}))
+	require.NoError(t, gcli.DropAll())
 }
 
 func (psuite *PluginTestSuite) Upgrade() {
@@ -58,6 +57,6 @@ func TestPluginTestSuite(t *testing.T) {
 	var psuite PluginTestSuite
 	for _, e := range pfiArray {
 		psuite.pfiEntry = e
-		suite.Run(t, new(PluginTestSuite))
+		suite.Run(t, &psuite)
 	}
 }
