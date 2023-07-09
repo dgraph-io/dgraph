@@ -4,6 +4,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project will adhere to [Semantic Versioning](https://semver.org) starting `v22.0.0`.
 
+## [v23.0.1] - 2023-07-09
+[v23.0.1]: https://github.com/dgraph-io/dgraph/compare/v23.0.0...v23.0.1
+
+### Fixed
+
+- **Core Dgraph**
+  - chore(restore): add log message when restore fails (#8893)
+  - fix(zero): fix zero's health endpoint to return json response (#8858)
+  - chore(zero): improve error message while unmarshalling WAL (#8882)
+  - fix(multi-tenancy): check existence before banning namespace (#7887)
+  - fix(bulk): removed buffer max size (#8841)
+  - chore: fix failing oss build (#8832) Fixes #8831
+  - upgrade dgo to v230.0.1 (#8785)
+
+- **CI**
+  - ci(dql): add workflow for fuzz testing (#8874)
+  - chore(ci): add workflow for OSS build + unit tests (#8834)
+
+- **Security**
+  - chore(deps): bump requests from 2.23.0 to 2.31.0 in /contrib/config/marketplace/aws/tests (#8836)
+  - chore(deps): bump requests from 2.23.0 to 2.31.0 in /contrib/embargo (#8835)
+  - chore(deps): bump github.com/docker/distribution from 2.8.0+incompatible to 2.8.2+incompatible (#8821)
+  - chore(deps): bump github.com/cloudflare/circl from 1.1.0 to 1.3.3 (#8822)
+
+
 ## [v23.0.0] - 2023-05-08
 [v23.0.0]: https://github.com/dgraph-io/dgraph/compare/v22.0.2...v23.0.0
 
@@ -23,7 +48,7 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
 
 ### Fixed
 
-- **GragphQL**
+- **GraphQL**
     - fix(GraphQL): nested Auth Rules not working properly (https://github.com/dgraph-io/dgraph/pull/8571)
 
 - **Core Dgraph**
