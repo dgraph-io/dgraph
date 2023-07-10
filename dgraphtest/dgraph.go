@@ -37,17 +37,20 @@ const (
 	alphaNameFmt     = "%v_alpha%d"
 	alphaLNameFmt    = "alpha%d"
 	volNameFmt       = "%v_%v"
+	genNameFmt       = "%v_mock%d"
 
 	zeroGrpcPort   = "5080"
 	zeroHttpPort   = "6080"
 	alphaInterPort = "7080"
 	alphaHttpPort  = "8080"
 	alphaGrpcPort  = "9080"
+	genericPort    = "8888"
 
-	alphaWorkingDir  = "/data/alpha"
-	zeroWorkingDir   = "/data/zero"
-	DefaultBackupDir = "/data/backups"
-	DefaultExportDir = "/data/exports"
+	alphaWorkingDir   = "/data/alpha"
+	zeroWorkingDir    = "/data/zero"
+	genericWorkingDir = "/go/src/cmd"
+	DefaultBackupDir  = "/data/backups"
+	DefaultExportDir  = "/data/exports"
 
 	aclSecretMountPath = "/dgraph-acl/hmac-secret"
 	encKeyMountPath    = "/dgraph-enc/enc-key"
@@ -88,6 +91,82 @@ type dnode interface {
 	assignURL(*LocalCluster) (string, error)
 	alphaURL(*LocalCluster) (string, error)
 	zeroURL(*LocalCluster) (string, error)
+}
+
+type genericContainer struct {
+	id            int
+	containerID   string
+	containerName string
+	aliasName     string
+}
+
+func (gen *genericContainer) cname() string {
+	return gen.containerName
+}
+
+func (gen *genericContainer) aname() string {
+	return gen.aliasName
+}
+
+func (gen *genericContainer) cid() string {
+	return gen.containerID
+}
+
+func (gen *genericContainer) ports() nat.PortSet {
+	return nat.PortSet{
+		genericPort: {},
+	}
+}
+
+func (gen *genericContainer) bindings(offset int) nat.PortMap {
+	if offset < 0 {
+		return nil
+	}
+
+	genPort, _ := strconv.Atoi(genericPort)
+	return nat.PortMap(map[nat.Port][]nat.PortBinding{
+		genericPort: {{HostPort: strconv.Itoa(genPort + offset + gen.id)}},
+	})
+}
+
+func (gen *genericContainer) cmd(c *LocalCluster) []string {
+	zcmd := []string{}
+
+	return zcmd
+}
+
+func (gen *genericContainer) workingDir() string {
+	return genericWorkingDir
+}
+
+func (gen *genericContainer) mounts(c *LocalCluster) ([]mount.Mount, error) {
+	var mounts []mount.Mount
+	binMount, err := mountBinary(c)
+	if err != nil {
+		return nil, err
+	}
+	mounts = append(mounts, binMount)
+	return mounts, nil
+}
+
+func (gen *genericContainer) healthURL(c *LocalCluster) (string, error) {
+	publicPort, err := publicPort(c.dcli, gen, genericPort)
+	if err != nil {
+		return "", err
+	}
+	return "http://localhost:" + publicPort + "/health", nil
+}
+
+func (gen *genericContainer) assignURL(c *LocalCluster) (string, error) {
+	publicPort, err := publicPort(c.dcli, gen, genericPort)
+	if err != nil {
+		return "", err
+	}
+	return "http://localhost:" + publicPort + "/assign", nil
+}
+
+func (gen *genericContainer) alphaURL(c *LocalCluster) (string, error) {
+	return "", errNotImplemented
 }
 
 type zero struct {
@@ -330,11 +409,6 @@ func publicPort(dcli *docker.Client, dc dnode, privatePort string) (string, erro
 	}
 
 	return "", fmt.Errorf("no mapping found for private port [%v] for container [%v]", privatePort, dc.cname())
-}
-
-// Wrapper function to export publicport() in other files
-func (c *LocalCluster) PublicPort() (string, error) {
-	return publicPort(c.dcli, c.alphas[0], alphaHttpPort)
 }
 
 func mountBinary(c *LocalCluster) (mount.Mount, error) {

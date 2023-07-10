@@ -3272,16 +3272,11 @@ func (suite *CustomLogicTestSuite) TestCustomGetQuery() {
 	params := dgraphtest.GraphQLParams{
 		Query: query,
 	}
-
 	result, err := hc.RunGraphqlQuery(params, false)
-
 	if err != nil {
 		fmt.Printf("Expected value not to be nil. ")
 		x.Panic(err)
 	}
-	fmt.Println("result>>>>>>>>>>>>>>>>>>>>>>", result)
-	fmt.Println("err>>>>>>>>>>>>>>>>>>>>>>", err)
-
-	// expected := `{"myFavoriteMovies":[{"id":"0x3","name":"Star Wars","director":[{"id":"0x4","name":"George Lucas"}]},{"id":"0x5","name":"Star Trek","director":[{"id":"0x6","name":"J.J. Abrams"}]}]}`
-	// require.JSONEq(t, expected, string(result.Data))
+	expected := `{"myFavoriteMovies":[{"id":"0x3","name":"Star Wars","director":[{"id":"0x4","name":"George Lucas"}]},{"id":"0x5","name":"Star Trek","director":[{"id":"0x6","name":"J.J. Abrams"}]}]}`
+	require.JSONEq(t, expected, string(result))
 }

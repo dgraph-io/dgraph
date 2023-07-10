@@ -17,6 +17,8 @@
 package dgraphtest
 
 import (
+	"archive/tar"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -24,6 +26,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -53,10 +56,11 @@ type LocalCluster struct {
 	tempBinDir string
 
 	// resources
-	dcli   *docker.Client
-	net    cnet
-	zeros  []*zero
-	alphas []*alpha
+	dcli     *docker.Client
+	net      cnet
+	zeros    []*zero
+	alphas   []*alpha
+	generics []*genericContainer
 }
 
 // UpgradeStrategy is an Enum that defines various upgrade strategies
@@ -145,6 +149,18 @@ func (c *LocalCluster) init() error {
 		c.alphas = append(c.alphas, aa)
 	}
 
+	for i := 0; i < c.conf.genContainers; i++ {
+		gg := &genericContainer{id: i}
+		gg.containerName = "mock" //fmt.Sprintf(genNameFmt, c.conf.prefix, gg.id)
+		gg.aliasName = fmt.Sprintf(genNameFmt, gg.id)
+		cid, err := c.createGenericContainer(gg)
+		if err != nil {
+			return err
+		}
+		gg.containerID = cid
+		c.generics = append(c.generics, gg)
+	}
+
 	return nil
 }
 
@@ -206,6 +222,95 @@ func (c *LocalCluster) createContainer(dc dnode) (string, error) {
 	return resp.ID, nil
 }
 
+func dirToTar() io.Reader {
+	buf := new(bytes.Buffer)
+	tw := tar.NewWriter(buf)
+	defer tw.Close()
+
+	dir := "/home/siddesh/workspace/Graphql_upgrade_test_suite/dgraph/graphql/e2e/custom_logic/cmd"
+	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			log.Fatal(err, " :unable to walk through directory")
+		}
+		relPath, err := filepath.Rel(dir, path)
+		if err != nil {
+			log.Fatal(err, " :unable to get relative path")
+		}
+		if relPath == "." {
+			return nil
+		}
+		tarHeader, err := tar.FileInfoHeader(info, relPath)
+		if err != nil {
+			log.Fatal(err, " :unable to create tar header")
+		}
+		tarHeader.Name = relPath
+		err = tw.WriteHeader(tarHeader)
+		if err != nil {
+			log.Fatal(err, " :unable to write tar header")
+		}
+		if !info.Mode().IsRegular() {
+			return nil
+		}
+		file, err := os.Open(path)
+		if err != nil {
+			log.Fatal(err, " :unable to open file")
+		}
+		_, err = io.Copy(tw, file)
+		if err != nil {
+			log.Fatal(err, " :unable to copy file to tar writer")
+		}
+		return nil
+	})
+	if err != nil {
+		log.Fatal(err, " :unable to walk through the directory")
+	}
+	return bytes.NewReader(buf.Bytes())
+}
+
+func (c *LocalCluster) createGenericContainer(dc dnode) (string, error) {
+	imgName := "mock-image:latest"
+	dockerClient, err := docker.NewEnvClient()
+	if err != nil {
+		panic(err)
+	}
+
+	imageBuildResponse, err := dockerClient.ImageBuild(
+		context.Background(),
+		dirToTar(),
+		types.ImageBuildOptions{
+			Context:    dirToTar(),
+			Dockerfile: "Dockerfile",
+			Tags:       []string{imgName}})
+	if err != nil {
+		log.Fatal(err, " :unable to build docker image")
+	}
+	defer imageBuildResponse.Body.Close()
+	_, err = io.Copy(os.Stdout, imageBuildResponse.Body)
+	if err != nil {
+		log.Fatal(err, " :unable to read image build response")
+	}
+
+	cconf := &container.Config{Image: imgName, WorkingDir: dc.workingDir(), ExposedPorts: dc.ports()}
+	hconf := &container.HostConfig{PublishAllPorts: true, PortBindings: dc.bindings(c.conf.portOffset)}
+	networkConfig := &network.NetworkingConfig{
+		EndpointsConfig: map[string]*network.EndpointSettings{
+			c.net.name: {
+				Aliases:   []string{dc.cname(), dc.aname()},
+				NetworkID: c.net.id,
+			},
+		},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+	defer cancel()
+	resp, err := c.dcli.ContainerCreate(ctx, cconf, hconf, networkConfig, dc.cname())
+	if err != nil {
+		return "", errors.Wrapf(err, "error creating container %v", dc.cname())
+	}
+
+	return resp.ID, nil
+}
+
 func (c *LocalCluster) Cleanup(verbose bool) {
 	if c == nil {
 		return
@@ -235,6 +340,11 @@ func (c *LocalCluster) Cleanup(verbose bool) {
 			log.Printf("[WARNING] error removing zero [%v]: %v", zo.cname(), err)
 		}
 	}
+	for _, gg := range c.generics {
+		if err := c.dcli.ContainerRemove(ctx, gg.cid(), ro); err != nil {
+			log.Printf("[WARNING] error removing generic [%v]: %v", gg.cname(), err)
+		}
+	}
 	for _, vol := range c.conf.volumes {
 		if err := c.dcli.VolumeRemove(ctx, vol, true); err != nil {
 			log.Printf("[WARNING] error removing volume [%v]: %v", vol, err)
@@ -262,6 +372,11 @@ func (c *LocalCluster) Start() error {
 			return err
 		}
 	}
+	for i := 0; i < c.conf.genContainers; i++ {
+		if err := c.StartGeneric(i); err != nil {
+			return err
+		}
+	}
 	return c.HealthCheck()
 }
 
@@ -277,6 +392,13 @@ func (c *LocalCluster) StartAlpha(id int) error {
 		return fmt.Errorf("invalid id of alpha: %v", id)
 	}
 	return c.startContainer(c.alphas[id])
+}
+
+func (c *LocalCluster) StartGeneric(id int) error {
+	if id >= c.conf.genContainers {
+		return fmt.Errorf("invalid id of generic container: %v", id)
+	}
+	return c.startContainer(c.generics[id])
 }
 
 func (c *LocalCluster) startContainer(dc dnode) error {
@@ -300,6 +422,11 @@ func (c *LocalCluster) Stop() error {
 			return err
 		}
 	}
+	for i := range c.generics {
+		if err := c.StopGeneric(i); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -315,6 +442,13 @@ func (c *LocalCluster) StopAlpha(id int) error {
 		return fmt.Errorf("invalid id of alpha: %v", id)
 	}
 	return c.stopContainer(c.alphas[id])
+}
+
+func (c *LocalCluster) StopGeneric(id int) error {
+	if id >= c.conf.genContainers {
+		return fmt.Errorf("invalid id of generic container: %v", id)
+	}
+	return c.stopContainer(c.generics[id])
 }
 
 func (c *LocalCluster) stopContainer(dc dnode) error {
@@ -364,6 +498,16 @@ func (c *LocalCluster) HealthCheck() error {
 			return err
 		}
 		log.Printf("[INFO] container [alpha-%v] passed health check", i)
+	}
+	for i := 0; i < c.conf.genContainers; i++ {
+		url, err := c.alphas[i].healthURL(c)
+		if err != nil {
+			return errors.Wrap(err, "error getting health URL")
+		}
+		if err := c.containerHealthCheck(url); err != nil {
+			return err
+		}
+		log.Printf("[INFO] container [generic-%v] passed health check", i)
 	}
 	return nil
 }
@@ -475,6 +619,17 @@ func (c *LocalCluster) recreateContainers() error {
 			return err
 		}
 		aa.containerID = cid
+	}
+
+	for _, gg := range c.generics {
+		if err := c.dcli.ContainerRemove(ctx, gg.cid(), ro); err != nil {
+			return errors.Wrapf(err, "error removing generic [%v]", gg.cname())
+		}
+		cid, err := c.createContainer(gg)
+		if err != nil {
+			return err
+		}
+		gg.containerID = cid
 	}
 
 	return nil

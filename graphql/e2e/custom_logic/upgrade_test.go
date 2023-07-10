@@ -19,7 +19,6 @@
 package custom_logic
 
 import (
-	"fmt"
 	"testing"
 	"time"
 
@@ -37,15 +36,13 @@ type CustomLogicTestSuite struct {
 }
 
 func (suite *CustomLogicTestSuite) SetupTest() {
-	conf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).
+	conf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).WithGeneric(1).
 		WithACL(20 * time.Second).WithEncryption().WithVersion("0c9f60156").WithReplicas(1)
 	c, err := dgraphtest.NewLocalCluster(conf)
 	x.Panic(err)
 	if err := c.Start(); err != nil {
 		suite.T().Fatal(err)
 	}
-	suite.alpha1Port, err = c.PublicPort()
-	fmt.Println("alpha1Port>>>>>>>>>>>>>>>>>>>>>", suite.alpha1Port)
 	suite.c = c
 	suite.dc = c
 }
