@@ -109,7 +109,7 @@ func setGraphQLSchema(c *LocalCluster, files []string) error {
 		if len(data) < 10 {
 			continue
 		}
-		if err := hc.UpdateGQLSchema(string(data)); err != nil {
+		if _, err := hc.UpdateGQLSchema(string(data)); err != nil {
 			return errors.WithStack(err)
 		}
 	}

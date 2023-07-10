@@ -169,6 +169,10 @@ func (gen *genericContainer) alphaURL(c *LocalCluster) (string, error) {
 	return "", errNotImplemented
 }
 
+func (gen *genericContainer) zeroURL(c *LocalCluster) (string, error) {
+	return "", errNotImplemented
+}
+
 type zero struct {
 	id            int    // 0, 1, 2
 	containerID   string // container ID in docker world
