@@ -627,7 +627,15 @@ func (c *LocalCluster) HTTPClient() (*HTTPClient, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &HTTPClient{adminURL: adminURL, graphqlURL: graphqlURL}, nil
+	licenseURL, err := c.licenseURL()
+	if err != nil {
+		return nil, err
+	}
+	stateURL, err := c.stateURL()
+	if err != nil {
+		return nil, err
+	}
+	return &HTTPClient{adminURL: adminURL, graphqlURL: graphqlURL, licenseURL: licenseURL, stateURL: stateURL}, nil
 }
 
 // adminURL returns url to the graphql admin endpoint
@@ -647,6 +655,26 @@ func (c *LocalCluster) graphqlURL() (string, error) {
 		return "", err
 	}
 	url := "http://localhost:" + publicPort + "/graphql"
+	return url, nil
+}
+
+// licenseURL returns url to the enterprise license endpoint
+func (c *LocalCluster) licenseURL() (string, error) {
+	publicPort, err := publicPort(c.dcli, c.zeros[0], zeroHttpPort)
+	if err != nil {
+		return "", err
+	}
+	url := "http://localhost:" + publicPort + "/enterpriseLicense"
+	return url, nil
+}
+
+// stateURL returns url to the zero state endpoint
+func (c *LocalCluster) stateURL() (string, error) {
+	publicPort, err := publicPort(c.dcli, c.zeros[0], zeroHttpPort)
+	if err != nil {
+		return "", err
+	}
+	url := "http://localhost:" + publicPort + "/state"
 	return url, nil
 }
 

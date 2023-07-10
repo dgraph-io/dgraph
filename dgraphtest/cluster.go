@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os/exec"
 	"strings"
@@ -61,6 +62,8 @@ type HTTPClient struct {
 	*HttpToken
 	adminURL   string
 	graphqlURL string
+	licenseURL string
+	stateURL   string
 }
 
 // GraphQLParams are used for making graphql requests to dgraph
@@ -74,6 +77,27 @@ type GraphQLResponse struct {
 	Data       json.RawMessage        `json:"data,omitempty"`
 	Errors     x.GqlErrorList         `json:"errors,omitempty"`
 	Extensions map[string]interface{} `json:"extensions,omitempty"`
+}
+
+type Location struct {
+	Line   int `json:"line,omitempty"`
+	Column int `json:"column,omitempty"`
+}
+
+type gqlError struct {
+	Message    string                 `json:"message"`
+	Locations  []Location             `json:"locations,omitempty"`
+	Path       []interface{}          `json:"path,omitempty"`
+	Extensions map[string]interface{} `json:"extensions,omitempty"`
+}
+
+type gqlErrorList []*gqlError
+
+type LicenseResponse struct {
+	Errors  gqlErrorList           `json:"errors"`
+	Code    string                 `json:"code"`
+	Message string                 `json:"message"`
+	License map[string]interface{} `json:"license"`
 }
 
 func (hc *HTTPClient) Login(user, password string, ns uint64) error {
@@ -210,17 +234,13 @@ func (hc *HTTPClient) ResetPassword(userID, newPass string, nsID uint64) (string
 	return "", errors.New(result.ResetPassword.Message)
 }
 
-// doPost makes a post request to the graphql admin endpoint
-func (hc *HTTPClient) doPost(body []byte, admin bool) ([]byte, error) {
-	url := hc.graphqlURL
-	if admin {
-		url = hc.adminURL
-	}
+// doPost makes a post request to the 'url' endpoint
+func (hc *HTTPClient) doPost(body []byte, url string, contentType string) ([]byte, error) {
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(body))
 	if err != nil {
 		return nil, errors.Wrapf(err, "error building req for endpoint [%v]", url)
 	}
-	req.Header.Add("Content-Type", "application/json")
+	req.Header.Add("Content-Type", contentType)
 
 	if hc.HttpToken != nil {
 		req.Header.Add("X-Dgraph-AccessToken", hc.AccessJwt)
@@ -236,7 +256,12 @@ func (hc *HTTPClient) RunGraphqlQuery(params GraphQLParams, admin bool) ([]byte,
 		return nil, errors.Wrap(err, "error while marshalling params")
 	}
 
-	respBody, err := hc.doPost(reqBody, admin)
+	url := hc.graphqlURL
+	if admin {
+		url = hc.adminURL
+	}
+
+	respBody, err := hc.doPost(reqBody, url, "application/json")
 	if err != nil {
 		return nil, errors.Wrap(err, "error while running graphql query")
 	}
@@ -523,6 +548,52 @@ func (hc *HTTPClient) PostPersistentQuery(query, sha string) ([]byte, error) {
 		}},
 	}
 	return hc.RunGraphqlQuery(params, false)
+}
+
+// Apply license using http endpoint
+func (hc *HTTPClient) ApplyLicenseWithHttpEP(licenseKey []byte) ([]byte, error) {
+	url := hc.licenseURL
+	respBody, err := hc.doPost(licenseKey, url, "application/json")
+	if err != nil {
+		return nil, errors.Wrap(err, "error applying license")
+	}
+
+	return respBody, nil
+}
+
+// Apply license using graphql endpoint
+func (hc *HTTPClient) ApplyLicenseWithGraphqlEP(license []byte) ([]byte, error) {
+	params := GraphQLParams {
+		Query: `mutation ($license: String!) {
+			enterpriseLicense(input: {license: $license}) {
+				response {
+					code
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{
+			"license": string(license),
+		},
+	}
+	return hc.RunGraphqlQuery(params, true)
+}
+
+func (hc *HTTPClient) GetZeroState() (*LicenseResponse, error) {
+	response, err := http.Get(hc.stateURL)
+	if err != nil {
+		return nil, errors.New("error getting zero state http response")
+	}
+	var stateResponse LicenseResponse
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		return nil, errors.New("error reading zero state response body")
+	}
+	err = json.Unmarshal(body, &stateResponse)
+	if err != nil {
+		return nil, errors.New("error unmarshaling zero state response")
+	}
+
+	return &stateResponse, nil
 }
 
 // SetupSchema sets up DQL schema
