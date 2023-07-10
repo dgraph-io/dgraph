@@ -89,6 +89,8 @@ func StartRaftNodes(walStore *raftwal.DiskStorage, bindall bool) {
 	}
 
 	raftIdx := x.WorkerConfig.Raft.GetUint64("idx")
+	t := x.WorkerConfig.Raft
+	fmt.Printf("Raft Config %+v\n", t)
 	if raftIdx == 0 {
 		raftIdx = walStore.Uint(raftwal.RaftId)
 

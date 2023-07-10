@@ -1082,7 +1082,7 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 							// Save some cycles by only calculating snapshot if the checkpoint
 							// has gone quite a bit further than the first index.
 							calculate = calculate || chk >= first+snapshotAfterEntries
-							glog.V(3).Infof("Evaluating snapshot first:%d chk:%d (chk-first:%d) "+
+							glog.Infof("Evaluating snapshot first:%d chk:%d (chk-first:%d) "+
 								"snapshotAfterEntries:%d snap:%v", first, chk, chk-first,
 								snapshotAfterEntries, calculate)
 						}
@@ -1783,6 +1783,8 @@ func (n *node) InitAndStartNode() {
 	if restart {
 		glog.Infof("Restarting node for group: %d\n", n.gid)
 		sp, err := n.Store.Snapshot()
+		t := n.Store
+		fmt.Println(t)
 		x.Checkf(err, "Unable to get existing snapshot")
 		if !raft.IsEmptySnap(sp) {
 			// It is important that we pick up the conf state here.

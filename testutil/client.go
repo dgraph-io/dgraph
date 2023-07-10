@@ -100,7 +100,8 @@ func AdminUrl() string {
 // This allows running (most) tests against dgraph running on the default ports, for example.
 // Only the GRPC ports are needed and the others are deduced.
 func init() {
-	DockerPrefix = os.Getenv("TEST_DOCKER_PREFIX")
+	// DockerPrefix = os.Getenv("TEST_DOCKER_PREFIX")
+	DockerPrefix = "snap"
 	TestDataDirectory = os.Getenv("TEST_DATA_DIRECTORY")
 	MinioInstance = ContainerAddr("minio", 9001)
 	Instance = fmt.Sprintf("%s_%s_1", DockerPrefix, "alpha1")
