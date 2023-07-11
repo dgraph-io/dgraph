@@ -8,7 +8,18 @@
             "mode": "debug",
             "program": "${workspaceRoot}/dgraph/",
             "env": {},
-            "args": ["alpha", "--trace",  "jaeger=http://localhost:14268; ratio=0.99;", "--telemetry", "sentry=false;", "--security", "whitelist=0.0.0.0/0;"],
+            "args": ["alpha", "--telemetry", "sentry=false;", "--security", "whitelist=0.0.0.0/0;"],
+            "showLog": true
+        },
+        {
+            "name": "Alpha-0",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceRoot}/dgraph/",
+            "env": {},
+            "args": ["alpha", "--telemetry", "sentry=false;", "-o", "104", "--my", "localhost:7184", "--zero", "localhost:5080",
+        "--raft", "snapshot-after-duration=0;snapshot-after-entries=11;", "-v", "2"],
             "showLog": true
         },
         {
@@ -18,7 +29,7 @@
             "mode": "debug",
             "program": "${workspaceRoot}/dgraph/",
             "env": {},
-            "args": ["zero"],
+            "args": ["zero", "--telemetry", "sentry=false;"],
             "showLog": true
         },
         {
@@ -30,6 +41,18 @@
             "env": {},
             "args": ["alpha", "--trace", "jaeger=http://localhost:14268; ratio=0.99;", "--telemetry", "sentry=false;", "--security", "whitelist=0.0.0.0/0;", "--acl", "secret-file=../ee/acl/hmac-secret; access-ttl=300000s;"],
             "showLog": true
+        },
+        {
+            "name": "Launch test function",
+            "type": "go",
+            "request": "launch",
+            "mode": "test",
+            "program": "${fileDirname}",
+            "args": ["-test.run", "MyTestFunction"],
+            "env": {
+                "TEST_DOCKER_PREFIX": "snap"
+            },
+            "buildFlags": ["-v", "tags=integration iunit_test"]
         }
     ],
     "compounds": [

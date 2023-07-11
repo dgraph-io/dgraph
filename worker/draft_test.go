@@ -17,6 +17,7 @@
 package worker
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -30,6 +31,7 @@ import (
 
 func getEntryForMutation(index, startTs uint64) raftpb.Entry {
 	proposal := pb.Proposal{Mutations: &pb.Mutations{StartTs: startTs}}
+	fmt.Println("Size of proposal: ", proposal.Size())
 	data := make([]byte, 8+proposal.Size())
 	sz, err := proposal.MarshalToSizedBuffer(data)
 	x.Check(err)
@@ -53,16 +55,26 @@ func TestCalculateSnapshot(t *testing.T) {
 	ds := raftwal.Init(dir)
 	defer ds.Close()
 
+	fmt.Println("here")
+
 	n := newNode(ds, 1, 1, "")
 	var entries []raftpb.Entry
 	// Txn: 1 -> 5 // 5 should be the ReadTs.
 	// Txn: 2 // Should correspond to the index. Subtract 1 from the index.
 	// Txn: 3 -> 4
-	entries = append(entries, getEntryForMutation(1, 1), getEntryForMutation(2, 3),
-		getEntryForMutation(3, 2), getEntryForCommit(4, 3, 4), getEntryForCommit(5, 1, 5))
+	// entries = append(entries, getEntryForMutation(1, 1), getEntryForMutation(2, 3),
+	// 	getEntryForMutation(3, 2), getEntryForCommit(4, 3, 4), getEntryForCommit(5, 1, 5))
+
+	entries = append(entries, getEntryForMutation(1, 2), getEntryForMutation(2, 3), getEntryForMutation(3, 4), getEntryForMutation(4, 5),
+		getEntryForCommit(5, 2, 5), getEntryForCommit(6, 3, 7), getEntryForCommit(7, 4, 6))
 	require.NoError(t, n.Store.Save(&raftpb.HardState{}, entries, &raftpb.Snapshot{}))
-	n.Applied.SetDoneUntil(5)
-	posting.Oracle().RegisterStartTs(2)
+	n.Applied.SetDoneUntil(6)
+	// posting.Oracle().RegisterStartTs(2)
+	posting.Oracle().RegisterStartTs(3)
+
+	fmt.Println("Applied DomUntil: ", n.Applied.DoneUntil())
+	fmt.Println("MinPendingStartTs: ", posting.Oracle().MinPendingStartTs())
+
 	snap, err := n.calculateSnapshot(0, n.Applied.DoneUntil(), posting.Oracle().MinPendingStartTs())
 	require.NoError(t, err)
 	require.Equal(t, uint64(5), snap.ReadTs)
