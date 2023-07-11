@@ -1203,7 +1203,7 @@ func (n *node) Run() {
 		case rd := <-n.Raft().Ready():
 			timer.Start()
 			_, span := otrace.StartSpan(n.ctx, "Alpha.RunLoop",
-				otrace.WithSampler(otrace.ProbabilitySampler(0.001)))
+				otrace.WithSampler(otrace.ProbabilitySampler(x.WorkerConfig.Trace.GetFloat64("ratio"))))
 
 			if rd.SoftState != nil {
 				groups().triggerMembershipSync()
