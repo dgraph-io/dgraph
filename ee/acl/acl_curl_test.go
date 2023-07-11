@@ -14,6 +14,7 @@
 package acl
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -21,33 +22,32 @@ import (
 	"github.com/golang/glog"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dgraph-io/dgraph/dgraphtest"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 )
 
-var adminEndpoint string
-
-func TestCurlAuthorization(t *testing.T) {
+func (asuite *AclTestSuite) TestCurlAuthorization() {
+	t := asuite.T()
 	if testing.Short() {
 		t.Skip("skipping because -short=true")
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	defer cancel()
+	gc, cleanup, err := asuite.dc.Client()
+	require.NoError(t, err)
+	defer cleanup()
+	require.NoError(t, gc.LoginIntoNamespace(ctx, dgraphtest.DefaultUser,
+		dgraphtest.DefaultPassword, x.GalaxyNamespace))
 
-	glog.Infof("testing with port %s", testutil.SockAddr)
-	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
-	if err != nil {
-		t.Fatalf("Error while getting a dgraph client: %v", err)
-	}
-	createAccountAndData(t, dg)
+	hc, err := asuite.dc.HTTPClient()
+	require.NoError(t, err)
+	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
+		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	createAccountAndData(t, gc, hc)
 
 	// test query through curl
-	token, err := testutil.HttpLogin(&testutil.LoginParams{
-		Endpoint:  adminEndpoint,
-		UserID:    userid,
-		Passwd:    userpassword,
-		Namespace: x.GalaxyNamespace,
-	})
-	require.NoError(t, err, "login failed")
-
+	require.NoError(t, hc.LoginIntoNamespace(userid, userpassword, x.GalaxyNamespace))
 	// No ACL rules are specified, so query should return empty response,
 	// alter and mutate should fail.
 	queryArgs := func(jwt string) []string {
@@ -55,7 +55,7 @@ func TestCurlAuthorization(t *testing.T) {
 			"-H", "Content-Type: application/dql",
 			"-d", query, testutil.SockAddrHttp + "/query"}
 	}
-	testutil.VerifyCurlCmd(t, queryArgs(token.AccessJwt), &testutil.CurlFailureConfig{
+	testutil.VerifyCurlCmd(t, queryArgs(hc.AccessJwt), &testutil.CurlFailureConfig{
 		ShouldFail: false,
 	})
 
@@ -68,7 +68,7 @@ func TestCurlAuthorization(t *testing.T) {
 
 	}
 
-	testutil.VerifyCurlCmd(t, mutateArgs(token.AccessJwt), &testutil.CurlFailureConfig{
+	testutil.VerifyCurlCmd(t, mutateArgs(hc.AccessJwt), &testutil.CurlFailureConfig{
 		ShouldFail:   true,
 		DgraphErrMsg: "PermissionDenied",
 	})
@@ -77,7 +77,7 @@ func TestCurlAuthorization(t *testing.T) {
 		return []string{"-H", fmt.Sprintf("X-Dgraph-AccessToken:%s", jwt),
 			"-d", fmt.Sprintf(`%s: int .`, predicateToAlter), testutil.SockAddrHttp + "/alter"}
 	}
-	testutil.VerifyCurlCmd(t, alterArgs(token.AccessJwt), &testutil.CurlFailureConfig{
+	testutil.VerifyCurlCmd(t, alterArgs(hc.AccessJwt), &testutil.CurlFailureConfig{
 		ShouldFail:   true,
 		DgraphErrMsg: "PermissionDenied",
 	})
@@ -87,68 +87,64 @@ func TestCurlAuthorization(t *testing.T) {
 	// JWT
 	glog.Infof("Sleeping for accessJwt to expire")
 	time.Sleep(expireJwtSleep)
-	testutil.VerifyCurlCmd(t, queryArgs(token.AccessJwt), &testutil.CurlFailureConfig{
+	testutil.VerifyCurlCmd(t, queryArgs(hc.AccessJwt), &testutil.CurlFailureConfig{
 		ShouldFail:   true,
 		DgraphErrMsg: "Token is expired",
 	})
-	testutil.VerifyCurlCmd(t, mutateArgs(token.AccessJwt), &testutil.CurlFailureConfig{
+	testutil.VerifyCurlCmd(t, mutateArgs(hc.AccessJwt), &testutil.CurlFailureConfig{
 		ShouldFail:   true,
 		DgraphErrMsg: "Token is expired",
 	})
-	testutil.VerifyCurlCmd(t, alterArgs(token.AccessJwt), &testutil.CurlFailureConfig{
+	testutil.VerifyCurlCmd(t, alterArgs(hc.AccessJwt), &testutil.CurlFailureConfig{
 		ShouldFail:   true,
 		DgraphErrMsg: "Token is expired",
 	})
 	// login again using the refreshJwt
-	token, err = testutil.HttpLogin(&testutil.LoginParams{
-		Endpoint:   adminEndpoint,
-		RefreshJwt: token.RefreshToken,
-		Namespace:  x.GalaxyNamespace,
-	})
+	require.NoError(t, hc.LoginUsingToken(x.GalaxyNamespace))
 	require.NoError(t, err, fmt.Sprintf("login through refresh httpToken failed: %v", err))
-
-	createGroupAndAcls(t, unusedGroup, false)
+	hcWithGroot, err := asuite.dc.HTTPClient()
+	require.NoError(t, err)
+	require.NoError(t, hcWithGroot.LoginIntoNamespace(dgraphtest.DefaultUser,
+		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	createGroupAndAcls(t, unusedGroup, false, hcWithGroot)
 	time.Sleep(expireJwtSleep)
-	testutil.VerifyCurlCmd(t, queryArgs(token.AccessJwt), &testutil.CurlFailureConfig{
+	testutil.VerifyCurlCmd(t, queryArgs(hc.AccessJwt), &testutil.CurlFailureConfig{
 		ShouldFail:   true,
 		DgraphErrMsg: "Token is expired",
 	})
 	// refresh the jwts again
-	token, err = testutil.HttpLogin(&testutil.LoginParams{
-		Endpoint:   adminEndpoint,
-		RefreshJwt: token.RefreshToken,
-	})
+	require.NoError(t, hc.LoginUsingToken(x.GalaxyNamespace))
+
 	require.NoError(t, err, fmt.Sprintf("login through refresh httpToken failed: %v", err))
 	// verify that with an ACL rule defined, all the operations except query should
 	// does not have the required permissions be denied when the acsess JWT
-	testutil.VerifyCurlCmd(t, queryArgs(token.AccessJwt), &testutil.CurlFailureConfig{
+	testutil.VerifyCurlCmd(t, queryArgs(hc.AccessJwt), &testutil.CurlFailureConfig{
 		ShouldFail: false,
 	})
-	testutil.VerifyCurlCmd(t, mutateArgs(token.AccessJwt), &testutil.CurlFailureConfig{
+	testutil.VerifyCurlCmd(t, mutateArgs(hc.AccessJwt), &testutil.CurlFailureConfig{
 		ShouldFail:   true,
 		DgraphErrMsg: "PermissionDenied",
 	})
-	testutil.VerifyCurlCmd(t, alterArgs(token.AccessJwt), &testutil.CurlFailureConfig{
+	testutil.VerifyCurlCmd(t, alterArgs(hc.AccessJwt), &testutil.CurlFailureConfig{
 		ShouldFail:   true,
 		DgraphErrMsg: "PermissionDenied",
 	})
-
-	createGroupAndAcls(t, devGroup, true)
+	require.NoError(t, hcWithGroot.LoginIntoNamespace(dgraphtest.DefaultUser,
+		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	createGroupAndAcls(t, devGroup, true, hcWithGroot)
 	time.Sleep(defaultTimeToSleep)
 	// refresh the jwts again
-	token, err = testutil.HttpLogin(&testutil.LoginParams{
-		Endpoint:   adminEndpoint,
-		RefreshJwt: token.RefreshToken,
-	})
+	require.NoError(t, hc.LoginUsingToken(x.GalaxyNamespace))
+
 	require.NoError(t, err, fmt.Sprintf("login through refresh httpToken failed: %v", err))
 	// verify that the operations should be allowed again through the dev group
-	testutil.VerifyCurlCmd(t, queryArgs(token.AccessJwt), &testutil.CurlFailureConfig{
+	testutil.VerifyCurlCmd(t, queryArgs(hc.AccessJwt), &testutil.CurlFailureConfig{
 		ShouldFail: false,
 	})
-	testutil.VerifyCurlCmd(t, mutateArgs(token.AccessJwt), &testutil.CurlFailureConfig{
+	testutil.VerifyCurlCmd(t, mutateArgs(hc.AccessJwt), &testutil.CurlFailureConfig{
 		ShouldFail: false,
 	})
-	testutil.VerifyCurlCmd(t, alterArgs(token.AccessJwt), &testutil.CurlFailureConfig{
+	testutil.VerifyCurlCmd(t, alterArgs(hc.AccessJwt), &testutil.CurlFailureConfig{
 		ShouldFail: false,
 	})
 }

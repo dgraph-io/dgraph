@@ -246,9 +246,25 @@ func (hc *HTTPClient) RunGraphqlQuery(params GraphQLParams, admin bool) ([]byte,
 		return nil, errors.Wrap(err, "error unmarshalling GQL response")
 	}
 	if len(gqlResp.Errors) > 0 {
-		return nil, errors.Wrapf(gqlResp.Errors, "error while running admin query")
+		return nil, errors.Wrapf(gqlResp.Errors, "error while running admin query, resp: %v", string(gqlResp.Data))
 	}
 	return gqlResp.Data, nil
+}
+
+func (hc *HTTPClient) HealthForInstance() ([]byte, error) {
+	const query = `query {
+		health {
+			instance
+			address
+			lastEcho
+			status
+			version
+			uptime
+			group
+		}
+	}`
+	params := GraphQLParams{Query: query}
+	return hc.RunGraphqlQuery(params, true)
 }
 
 // Backup creates a backup of dgraph at a given path
@@ -531,13 +547,12 @@ func (gc *GrpcClient) DropPredicate(pred string) error {
 }
 
 // Mutate performs a given mutation in a txn
-func (gc *GrpcClient) Mutate(rdfs string) (*api.Response, error) {
+func (gc *GrpcClient) Mutate(mu *api.Mutation) (*api.Response, error) {
 	txn := gc.NewTxn()
 	defer func() { _ = txn.Discard(context.Background()) }()
 
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 	defer cancel()
-	mu := &api.Mutation{SetNquads: []byte(rdfs), CommitNow: true}
 	return txn.Mutate(ctx, mu)
 }
 

@@ -58,15 +58,19 @@ func (msuite *MultitenancyTestSuite) Upgrade() {
 	t := msuite.T()
 
 	if err := msuite.lc.Upgrade(msuite.uc.After, msuite.uc.Strategy); err != nil {
+		msuite.lc.Cleanup(true)
 		t.Fatal(err)
 	}
 }
 
-func TestMultitenancyTestSuite(t *testing.T) {
+func TestMultitenancySuite(t *testing.T) {
 	for _, uc := range dgraphtest.AllUpgradeCombos {
-		log.Printf("running: backup in [%v], restore in [%v]", uc.Before, uc.After)
+		log.Printf("running upgrade tests for confg: %+v", uc)
 		var msuite MultitenancyTestSuite
 		msuite.uc = uc
 		suite.Run(t, &msuite)
+		if t.Failed() {
+			panic("TestMultitenancySuite tests failed")
+		}
 	}
 }

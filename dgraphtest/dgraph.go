@@ -57,7 +57,7 @@ const (
 
 	localVersion       = "local"
 	waitDurBeforeRetry = time.Second
-	requestTimeout     = 90 * time.Second
+	requestTimeout     = 120 * time.Second
 )
 
 var (

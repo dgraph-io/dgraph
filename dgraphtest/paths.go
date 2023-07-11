@@ -56,4 +56,10 @@ func init() {
 	binDir = filepath.Join(basePath, "binaries")
 	encKeyPath = filepath.Join(basePath, "data", "enc-key")
 	aclSecretPath = filepath.Join(basePath, "data", "hmac-secret")
+
+	log.Printf("[INFO] baseRepoDir: %v", baseRepoDir)
+	log.Printf("[INFO] repoDir: %v", repoDir)
+	log.Printf("[INFO] binDir: %v", binDir)
+	log.Printf("[INFO] encKeyPath: %v", encKeyPath)
+	log.Printf("[INFO] aclSecretPath: %v", aclSecretPath)
 }

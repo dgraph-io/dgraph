@@ -36,6 +36,7 @@ func (c *ComposeCluster) Client() (*GrpcClient, func(), error) {
 	return &GrpcClient{Dgraph: client}, func() {}, nil
 }
 
+// HTTPClient creates an HTTP client
 func (c *ComposeCluster) HTTPClient() (*HTTPClient, error) {
 	adminUrl := "http://" + testutil.SockAddrHttp + "/admin"
 	graphQLUrl := "http://" + testutil.SockAddrHttp + "/graphql"
