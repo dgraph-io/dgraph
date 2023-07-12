@@ -19,6 +19,7 @@ package dgraphtest
 import (
 	"fmt"
 	"math/rand"
+	"os"
 	"time"
 )
 
@@ -28,45 +29,53 @@ type UpgradeCombo struct {
 	Strategy UpgradeStrategy
 }
 
-var AllUpgradeCombos = []UpgradeCombo{
-	// OPEN SOURCE RELEASES
-	// a77bbe8ae0d42697a38069a9749cfe71c2dafbe6
-	{"v21.03.0", "v23.0.0", BackupRestore},
-	// 0c9f60156b34a675d76695a912e07b45590644ff
-	{"v21.03.0-92-g0c9f60156", "v23.0.0", BackupRestore},
-	// 19f71a78a93112f57fea3e5e33f070b60b39b652
-	{"v21.03.0-98-g19f71a78a-slash", "v23.0.0", BackupRestore},
-	// 4a03c144afc10438016f9a73d90b6d0f78ef2e16
-	{"v21.03.0-99-g4a03c144a-slash", "v23.0.0", BackupRestore},
-	// ea1cb5f35650c54419483d6129460b4b25cbb418
-	{"v21.03.1", "v23.0.0", BackupRestore},
-	// b17395d33801bf36235de378d8560f61f4457d2b
-	{"v21.03.2", "v23.0.0", BackupRestore},
-	// c36206a5c7062efef797f62bd797625a2d0d2a27
-	{"v22.0.0", "v23.0.0", BackupRestore},
-	// 7fb5291a984af45d4639d370c290939152c79612
-	{"v22.0.1", "v23.0.0", BackupRestore},
-	// 7b18a6bec95731201d94142ec86a4fde035fb7e0
-	{"v22.0.2", "v23.0.0", BackupRestore},
-	//  CLOUD VERSIONS
-	// v21.03.0-48-ge3d3e6290
-	{"e3d3e6290", "v23.0.0", BackupRestore},
-	// v21.03.0-63-g8b9e92314
-	{"8b9e92314", "v23.0.0", BackupRestore},
-	// v21.03.0-66-gdfa5daec1
-	{"dfa5daec1", "v23.0.0", BackupRestore},
-	// v21.03.0-69-g88e4aa07c
-	{"88e4aa07c", "v23.0.0", BackupRestore},
-	// v21.03.0-73-gd9df244fb
-	{"d9df244fb", "v23.0.0", BackupRestore},
-	// v21.03.0-76-ged09b8cc1
-	{"ed09b8cc1", "v23.0.0", BackupRestore},
-	// v21.03.0-78-ge4ad0b113
-	{"e4ad0b113", "v23.0.0", BackupRestore},
-	// v21.03.0-82-g83c9cbedc
-	{"83c9cbedc", "v23.0.0", BackupRestore},
-	// v21.03.0-84-gc5862ae2a
-	{"c5862ae2a", "v23.0.0", BackupRestore},
+func AllUpgradeCombos() []UpgradeCombo {
+	fixedVersionCombos := []UpgradeCombo{
+		// OPEN SOURCE RELEASES
+		{"v21.03.0", "v23.0.0", BackupRestore},
+		{"v21.03.0-92-g0c9f60156", "v23.0.0", BackupRestore},
+		{"v21.03.0-98-g19f71a78a-slash", "v23.0.0", BackupRestore},
+		{"v21.03.0-99-g4a03c144a-slash", "v23.0.0", BackupRestore},
+		{"v21.03.1", "v23.0.0", BackupRestore},
+		{"v21.03.2", "v23.0.0", BackupRestore},
+		{"v22.0.0", "v23.0.0", BackupRestore},
+		{"v22.0.1", "v23.0.0", BackupRestore},
+		{"v22.0.2", "v23.0.0", BackupRestore},
+
+		//  CLOUD VERSIONS
+		{"e3d3e6290", "v23.0.0", BackupRestore}, // v21.03.0-48-ge3d3e6290
+		{"8b9e92314", "v23.0.0", BackupRestore}, // v21.03.0-63-g8b9e92314
+		{"dfa5daec1", "v23.0.0", BackupRestore}, // v21.03.0-66-gdfa5daec1
+		{"88e4aa07c", "v23.0.0", BackupRestore}, // v21.03.0-69-g88e4aa07c
+		{"d9df244fb", "v23.0.0", BackupRestore}, // v21.03.0-73-gd9df244fb
+		{"ed09b8cc1", "v23.0.0", BackupRestore}, // v21.03.0-76-ged09b8cc1
+		{"e4ad0b113", "v23.0.0", BackupRestore}, // v21.03.0-78-ge4ad0b113
+		{"83c9cbedc", "v23.0.0", BackupRestore}, // v21.03.0-82-g83c9cbedc
+		{"c5862ae2a", "v23.0.0", BackupRestore}, // v21.03.0-84-gc5862ae2a
+
+		// In place upgrade for cloud versions
+		{"e3d3e6290", "v23.0.0", InPlace}, // v21.03.0-48-ge3d3e6290
+		{"8b9e92314", "v23.0.0", InPlace}, // v21.03.0-63-g8b9e92314
+		{"dfa5daec1", "v23.0.0", InPlace}, // v21.03.0-66-gdfa5daec1
+		{"88e4aa07c", "v23.0.0", InPlace}, // v21.03.0-69-g88e4aa07c
+		{"d9df244fb", "v23.0.0", InPlace}, // v21.03.0-73-gd9df244fb
+		{"ed09b8cc1", "v23.0.0", InPlace}, // v21.03.0-76-ged09b8cc1
+		{"e4ad0b113", "v23.0.0", InPlace}, // v21.03.0-78-ge4ad0b113
+		{"83c9cbedc", "v23.0.0", InPlace}, // v21.03.0-82-g83c9cbedc
+		{"c5862ae2a", "v23.0.0", InPlace}, // v21.03.0-84-gc5862ae2a
+		{"0c9f60156", "v23.0.0", InPlace}, // v21.03.0-92-g0c9f60156
+	}
+
+	mainCombos := []UpgradeCombo{
+		{"v23.0.0", "local", BackupRestore},
+		{"v23.0.0", "local", InPlace},
+	}
+
+	if os.Getenv("DGRAPH_UPGRADE_MAIN_ONLY") == "true" {
+		return mainCombos
+	} else {
+		return fixedVersionCombos
+	}
 }
 
 type ClusterConfig struct {

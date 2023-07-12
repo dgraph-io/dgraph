@@ -65,14 +65,14 @@ type UpgradeStrategy int
 const (
 	BackupRestore UpgradeStrategy = iota
 	ExportImport
-	StopStart
+	InPlace
 )
 
 func (u UpgradeStrategy) String() string {
 	switch u {
 	case BackupRestore:
 		return "backup-restore"
-	case StopStart:
+	case InPlace:
 		return "stop-start"
 	case ExportImport:
 		return "export-import"
@@ -573,7 +573,7 @@ func (c *LocalCluster) Upgrade(version string, strategy UpgradeStrategy) error {
 		}
 		return nil
 
-	case StopStart:
+	case InPlace:
 		if err := c.Stop(); err != nil {
 			return err
 		}
