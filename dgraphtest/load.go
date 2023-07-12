@@ -26,6 +26,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -34,7 +35,7 @@ import (
 )
 
 type LiveOpts struct {
-	RdfFiles       []string
+	DataFiles      []string
 	SchemaFiles    []string
 	GqlSchemaFiles []string
 }
@@ -140,7 +141,7 @@ func (c *LocalCluster) LiveLoad(opts LiveOpts) error {
 
 	args := []string{
 		"live",
-		"--files", strings.Join(opts.RdfFiles, ","),
+		"--files", strings.Join(opts.DataFiles, ","),
 		"--alpha", strings.Join(alphaURLs, ","),
 		"--zero", zeroURL,
 	}
@@ -227,7 +228,7 @@ func (c *LocalCluster) LiveLoadFromExport(exportDir string) error {
 	}
 
 	opts := LiveOpts{
-		RdfFiles:       rdfFiles,
+		DataFiles:      rdfFiles,
 		SchemaFiles:    schemaFiles,
 		GqlSchemaFiles: gqlSchemaFiles,
 	}
@@ -235,4 +236,48 @@ func (c *LocalCluster) LiveLoadFromExport(exportDir string) error {
 		return errors.Wrapf(err, "error running live loader: %v", err)
 	}
 	return nil
+}
+
+type BulkOpts struct {
+	DataFiles      []string
+	SchemaFiles    []string
+	GQLSchemaFiles []string
+}
+
+func (c *LocalCluster) BulkLoad(opts BulkOpts) error {
+	zeroURL, err := c.zeros[0].zeroURL(c)
+	if err != nil {
+		return errors.Wrap(err, "error finding URL of first zero")
+	}
+
+	shards := c.conf.numAlphas / c.conf.replicas
+	args := []string{"bulk",
+		"--store_xids=true",
+		"--zero", zeroURL,
+		"--reduce_shards", strconv.Itoa(shards),
+		"--map_shards", strconv.Itoa(shards),
+		"--out", c.conf.bulkOutDir,
+		// we had to create the dir for setting up docker, hence, replacing it here.
+		"--replace_out",
+	}
+
+	if len(opts.DataFiles) > 0 {
+		args = append(args, "-f", strings.Join(opts.DataFiles, ","))
+	}
+	if len(opts.SchemaFiles) > 0 {
+		args = append(args, "-s", strings.Join(opts.SchemaFiles, ","))
+	}
+	if len(opts.GQLSchemaFiles) > 0 {
+		args = append(args, "-g", strings.Join(opts.GQLSchemaFiles, ","))
+	}
+
+	log.Printf("[INFO] running bulk loader with args: [%v]", strings.Join(args, " "))
+	cmd := exec.Command(filepath.Join(c.tempBinDir, "dgraph"), args...)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return errors.Wrapf(err, "error running bulk loader: %v", string(out))
+	} else {
+		log.Printf("[INFO] ==== output for bulk loader ====")
+		log.Println(string(out))
+		return nil
+	}
 }

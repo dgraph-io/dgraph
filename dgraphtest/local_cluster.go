@@ -262,7 +262,7 @@ func (c *LocalCluster) Start() error {
 			return err
 		}
 	}
-	return c.HealthCheck()
+	return c.HealthCheck(false)
 }
 
 func (c *LocalCluster) StartZero(id int) error {
@@ -343,7 +343,7 @@ func (c *LocalCluster) killContainer(dc dnode) error {
 	return nil
 }
 
-func (c *LocalCluster) HealthCheck() error {
+func (c *LocalCluster) HealthCheck(zeroOnly bool) error {
 	log.Printf("[INFO] checking health of containers")
 	for i := 0; i < c.conf.numZeros; i++ {
 		url, err := c.zeros[i].healthURL(c)
@@ -355,6 +355,10 @@ func (c *LocalCluster) HealthCheck() error {
 		}
 		log.Printf("[INFO] container [zero-%v] passed health check", i)
 	}
+	if zeroOnly {
+		return nil
+	}
+
 	for i := 0; i < c.conf.numAlphas; i++ {
 		url, err := c.alphas[i].healthURL(c)
 		if err != nil {

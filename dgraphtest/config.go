@@ -84,6 +84,7 @@ type ClusterConfig struct {
 	uidLease       int
 	// exposed port offset for grpc/http port for both alpha/zero
 	portOffset int
+	bulkOutDir string
 }
 
 func NewClusterConfig() ClusterConfig {
@@ -161,5 +162,12 @@ func (cc ClusterConfig) WithUidLease(uidLease int) ClusterConfig {
 // to fixed ports (port (5080, 6080, 8080 and 9080) + offset + id (0, 1, 2 ...)) on the host.
 func (cc ClusterConfig) WithExposedPortOffset(offset uint64) ClusterConfig {
 	cc.portOffset = int(offset)
+	return cc
+}
+
+// WithBulkLoadOutDir sets the out dir for the bulk loader. This ensures
+// that the same p directory is used while setting up alphas.
+func (cc ClusterConfig) WithBulkLoadOutDir(dir string) ClusterConfig {
+	cc.bulkOutDir = dir
 	return cc
 }

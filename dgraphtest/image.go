@@ -32,7 +32,12 @@ func (c *LocalCluster) dgraphImage() string {
 }
 
 func (c *LocalCluster) setupBinary() error {
-	isFileThere, err := fileExists(filepath.Join(binDir, fmt.Sprintf(binaryName, c.conf.version)))
+	if c.conf.version == localVersion {
+		fromDir := filepath.Join(os.Getenv("GOPATH"), "bin")
+		return copyBinary(fromDir, c.tempBinDir, c.conf.version)
+	}
+
+	isFileThere, err := fileExists(filepath.Join(binDir, fmt.Sprintf(binaryNameFmt, c.conf.version)))
 	if err != nil {
 		return err
 	}
@@ -138,15 +143,20 @@ func buildDgraphBinary(dir, binaryDir, version string) error {
 		return errors.Wrapf(err, "error while building dgraph binary\noutput:%v", string(out))
 	}
 	if err := copy(filepath.Join(dir, "dgraph", "dgraph"),
-		filepath.Join(binaryDir, fmt.Sprintf(binaryName, version))); err != nil {
+		filepath.Join(binaryDir, fmt.Sprintf(binaryNameFmt, version))); err != nil {
 		return errors.Wrap(err, "error while copying binary")
 	}
 	return nil
 }
 
 func copyBinary(fromDir, toDir, version string) error {
-	if err := copy(filepath.Join(fromDir, fmt.Sprintf(binaryName, version)),
-		filepath.Join(toDir, "dgraph")); err != nil {
+	binaryName := "dgraph"
+	if version != localVersion {
+		binaryName = fmt.Sprintf(binaryNameFmt, version)
+	}
+	fromPath := filepath.Join(fromDir, binaryName)
+	toPath := filepath.Join(toDir, "dgraph")
+	if err := copy(fromPath, toPath); err != nil {
 		return errors.Wrap(err, "error while copying binary into tempBinDir")
 	}
 	return nil
