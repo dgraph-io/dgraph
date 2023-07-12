@@ -186,6 +186,6 @@ func assertLicenseNotEnabled(t *testing.T, hcli *dgraphtest.HTTPClient, user str
 	response, err := hcli.GetZeroState()
 	require.NoError(t, err)
 
-	require.Equal(t, response.License["user"], user)
-	require.Equal(t, response.License["enabled"], false)
+	require.Equal(t, response.Extensions["user"], user)
+	require.Equal(t, response.Extensions["enabled"], false)
 }

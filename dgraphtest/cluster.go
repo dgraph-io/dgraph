@@ -76,6 +76,7 @@ type GraphQLParams struct {
 type GraphQLResponse struct {
 	Data       json.RawMessage        `json:"data,omitempty"`
 	Errors     x.GqlErrorList         `json:"errors,omitempty"`
+	Code       string                 `json:"code"`
 	Extensions map[string]interface{} `json:"extensions,omitempty"`
 }
 
@@ -84,6 +85,7 @@ type Location struct {
 	Column int `json:"column,omitempty"`
 }
 
+/*
 type gqlError struct {
 	Message    string                 `json:"message"`
 	Locations  []Location             `json:"locations,omitempty"`
@@ -99,6 +101,7 @@ type ZeroResponse struct {
 	Message string                 `json:"message"`
 	License map[string]interface{} `json:"license"`
 }
+*/
 
 func (hc *HTTPClient) Login(user, password string, ns uint64) error {
 	login := `mutation login($userId: String, $password: String, $namespace: Int, $refreshToken: String) {
@@ -551,12 +554,12 @@ func (hc *HTTPClient) PostPersistentQuery(query, sha string) ([]byte, error) {
 }
 
 // Apply license using http endpoint
-func (hc *HTTPClient) ApplyLicenseHTTP(licenseKey []byte) (*ZeroResponse, error) {
+func (hc *HTTPClient) ApplyLicenseHTTP(licenseKey []byte) (*GraphQLResponse, error) {
 	respBody, err := hc.doPost(licenseKey, hc.licenseURL, "application/json")
 	if err != nil {
 		return nil, errors.Wrap(err, "error applying license")
 	}
-	var enterpriseResponse ZeroResponse
+	var enterpriseResponse GraphQLResponse
 	if err = json.Unmarshal(respBody, &enterpriseResponse); err != nil {
 		return nil, errors.Wrap(err, "error unmarshaling the license response")
 	}
@@ -581,7 +584,7 @@ func (hc *HTTPClient) ApplyLicenseGraphQL(license []byte) ([]byte, error) {
 	return hc.RunGraphqlQuery(params, true)
 }
 
-func (hc *HTTPClient) GetZeroState() (*ZeroResponse, error) {
+func (hc *HTTPClient) GetZeroState() (*GraphQLResponse, error) {
 	response, err := http.Get(hc.stateURL)
 	if err != nil {
 		return nil, errors.Wrap(err, "error getting zero state http response")
@@ -590,7 +593,7 @@ func (hc *HTTPClient) GetZeroState() (*ZeroResponse, error) {
 	if err != nil {
 		return nil, errors.New("error reading zero state response body")
 	}
-	var stateResponse ZeroResponse
+	var stateResponse GraphQLResponse
 	if err := json.Unmarshal(body, &stateResponse); err != nil {
 		return nil, errors.New("error unmarshaling zero state response")
 	}
