@@ -93,7 +93,7 @@ type gqlError struct {
 
 type gqlErrorList []*gqlError
 
-type LicenseResponse struct {
+type ZeroResponse struct {
 	Errors  gqlErrorList           `json:"errors"`
 	Code    string                 `json:"code"`
 	Message string                 `json:"message"`
@@ -551,18 +551,21 @@ func (hc *HTTPClient) PostPersistentQuery(query, sha string) ([]byte, error) {
 }
 
 // Apply license using http endpoint
-func (hc *HTTPClient) ApplyLicenseWithHttpEP(licenseKey []byte) ([]byte, error) {
-	url := hc.licenseURL
-	respBody, err := hc.doPost(licenseKey, url, "application/json")
+func (hc *HTTPClient) ApplyLicenseHTTP(licenseKey []byte) (*ZeroResponse, error) {
+	respBody, err := hc.doPost(licenseKey, hc.licenseURL, "application/json")
 	if err != nil {
 		return nil, errors.Wrap(err, "error applying license")
 	}
-
-	return respBody, nil
+	var enterpriseResponse ZeroResponse
+	if err = json.Unmarshal(respBody, &enterpriseResponse); err != nil {
+		return nil, errors.Wrap(err, "error unmarshaling the license response")
+	}
+	
+	return &enterpriseResponse, nil
 }
 
 // Apply license using graphql endpoint
-func (hc *HTTPClient) ApplyLicenseWithGraphqlEP(license []byte) ([]byte, error) {
+func (hc *HTTPClient) ApplyLicenseGraphQL(license []byte) ([]byte, error) {
 	params := GraphQLParams {
 		Query: `mutation ($license: String!) {
 			enterpriseLicense(input: {license: $license}) {
@@ -578,18 +581,17 @@ func (hc *HTTPClient) ApplyLicenseWithGraphqlEP(license []byte) ([]byte, error) 
 	return hc.RunGraphqlQuery(params, true)
 }
 
-func (hc *HTTPClient) GetZeroState() (*LicenseResponse, error) {
+func (hc *HTTPClient) GetZeroState() (*ZeroResponse, error) {
 	response, err := http.Get(hc.stateURL)
 	if err != nil {
-		return nil, errors.New("error getting zero state http response")
+		return nil, errors.Wrap(err, "error getting zero state http response")
 	}
-	var stateResponse LicenseResponse
 	body, err := io.ReadAll(response.Body)
 	if err != nil {
 		return nil, errors.New("error reading zero state response body")
 	}
-	err = json.Unmarshal(body, &stateResponse)
-	if err != nil {
+	var stateResponse ZeroResponse
+	if err := json.Unmarshal(body, &stateResponse); err != nil {
 		return nil, errors.New("error unmarshaling zero state response")
 	}
 

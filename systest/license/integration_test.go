@@ -48,5 +48,8 @@ func TestLicenseTestSuite(t *testing.T) {
 	for _, tt := range tests {
 		tsuite.testData = tt
 		suite.Run(t, &tsuite)
+		if t.Failed() {
+			t.Fatal("TestLicenseTestSuite tests failed")
+		}
 	}
 }

@@ -19,7 +19,6 @@
 package main
 
 import (
-	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -127,14 +126,11 @@ func (lsuite *LicenseTestSuite) TestEnterpriseLicenseWithHttpEndPoint() {
 
 	t := lsuite.T()
 
-	// Apply the license
 	hcli, err := lsuite.dc.HTTPClient()
 	require.NoError(t, err)
 	tt := lsuite.testData
-	responseBody, err := hcli.ApplyLicenseWithHttpEP(tt.licenseKey)
+	enterpriseResponse, err := hcli.ApplyLicenseHTTP(tt.licenseKey)
 	require.NoError(t, err)
-	var enterpriseResponse dgraphtest.LicenseResponse
-	require.NoError(t, json.Unmarshal(responseBody, &enterpriseResponse))
 
 	// Check if the license is applied
 	require.Equal(t, enterpriseResponse.Code, tt.code)
@@ -159,18 +155,16 @@ func (lsuite *LicenseTestSuite) TestEnterpriseLicenseWithGraphqlEndPoint() {
 	// this time, run them using the GraphQL admin endpoint
 
 	t := lsuite.T()
-	// Apply the license
 	hcli, err := lsuite.dc.HTTPClient()
 	require.NoError(t, err)
 
 	tt := lsuite.testData
-	resp, err := hcli.ApplyLicenseWithGraphqlEP(tt.licenseKey)
+	resp, err := hcli.ApplyLicenseGraphQL(tt.licenseKey)
 	require.NoError(t, err)
 
 	if tt.code == `Success` {
 		// Check if the license is applied
-		dgraphtest.CompareJSON(`{"enterpriseLicense":{"response":{"code":"Success"}}}`,
-			string(resp))
+		dgraphtest.CompareJSON(`{"enterpriseLicense":{"response":{"code":"Success"}}}`, string(resp))
 
 		// Upgrade
 		lsuite.Upgrade()
