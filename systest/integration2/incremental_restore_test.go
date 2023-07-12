@@ -36,14 +36,14 @@ func TestIncrementalRestore(t *testing.T) {
 	conf := dgraphtest.NewClusterConfig().WithNumAlphas(6).WithNumZeros(3).WithReplicas(3).WithACL(time.Hour)
 	c, err := dgraphtest.NewLocalCluster(conf)
 	require.NoError(t, err)
-	defer c.Cleanup(t.Failed())
+	defer func() { c.Cleanup(t.Failed()) }()
 	require.NoError(t, c.Start())
 
 	gc, cleanup, err := c.Client()
 	require.NoError(t, err)
 	defer cleanup()
 	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, 0))
+		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 
 	hc, err := c.HTTPClient()
 	require.NoError(t, err)

@@ -215,12 +215,16 @@ func run() {
 	fmt.Printf("Encrypted input: %v; Encrypted output: %v\n", opt.Encrypted, opt.EncryptedOut)
 
 	if opt.SchemaFile == "" {
-		fmt.Fprint(os.Stderr, "Schema file must be specified.\n")
-		os.Exit(1)
-	}
-	if !filestore.Exists(opt.SchemaFile) {
-		fmt.Fprintf(os.Stderr, "Schema path(%v) does not exist.\n", opt.SchemaFile)
-		os.Exit(1)
+		// if only graphql schema is provided, we can generate DQL schema from it.
+		if opt.GqlSchemaFile == "" {
+			fmt.Fprint(os.Stderr, "Schema file must be specified.\n")
+			os.Exit(1)
+		}
+	} else {
+		if !filestore.Exists(opt.SchemaFile) {
+			fmt.Fprintf(os.Stderr, "Schema path(%v) does not exist.\n", opt.SchemaFile)
+			os.Exit(1)
+		}
 	}
 	if opt.DataFiles == "" {
 		fmt.Fprint(os.Stderr, "RDF or JSON file(s) location must be specified.\n")

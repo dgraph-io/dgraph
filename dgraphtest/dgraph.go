@@ -31,7 +31,7 @@ import (
 )
 
 const (
-	binaryName       = "dgraph_%v"
+	binaryNameFmt    = "dgraph_%v"
 	zeroNameFmt      = "%v_zero%d"
 	zeroAliasNameFmt = "zero%d"
 	alphaNameFmt     = "%v_alpha%d"
@@ -46,6 +46,7 @@ const (
 
 	alphaWorkingDir  = "/data/alpha"
 	zeroWorkingDir   = "/data/zero"
+	DefaultAlphaPDir = "/data/alpha/p"
 	DefaultBackupDir = "/data/backups"
 	DefaultExportDir = "/data/exports"
 
@@ -275,6 +276,19 @@ func (a *alpha) mounts(c *LocalCluster) ([]mount.Mount, error) {
 		})
 	}
 
+	if c.conf.bulkOutDir != "" {
+		pDir := filepath.Join(c.conf.bulkOutDir, strconv.Itoa(a.id/c.conf.replicas), "p")
+		if err := os.MkdirAll(pDir, os.ModePerm); err != nil {
+			return nil, errors.Wrap(err, "erorr creating bulk dir")
+		}
+		mounts = append(mounts, mount.Mount{
+			Type:     mount.TypeBind,
+			Source:   pDir,
+			Target:   DefaultAlphaPDir,
+			ReadOnly: false,
+		})
+	}
+
 	for dir, vol := range c.conf.volumes {
 		mounts = append(mounts, mount.Mount{
 			Type:     mount.TypeVolume,
@@ -333,28 +347,6 @@ func publicPort(dcli *docker.Client, dc dnode, privatePort string) (string, erro
 }
 
 func mountBinary(c *LocalCluster) (mount.Mount, error) {
-	if c.conf.version == localVersion {
-		return mount.Mount{
-			Type:     mount.TypeBind,
-			Source:   filepath.Join(os.Getenv("GOPATH"), "bin"),
-			Target:   "/gobin",
-			ReadOnly: true,
-		}, nil
-	}
-
-	isFileExist, err := fileExists(filepath.Join(c.tempBinDir, "dgraph"))
-	if err != nil {
-		return mount.Mount{}, err
-	}
-	if isFileExist {
-		return mount.Mount{
-			Type:     mount.TypeBind,
-			Source:   c.tempBinDir,
-			Target:   "/gobin",
-			ReadOnly: true,
-		}, nil
-	}
-
 	if err := c.setupBinary(); err != nil {
 		return mount.Mount{}, err
 	}

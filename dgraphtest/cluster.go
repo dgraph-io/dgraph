@@ -238,7 +238,7 @@ func (hc *HTTPClient) RunGraphqlQuery(params GraphQLParams, admin bool) ([]byte,
 
 	respBody, err := hc.doPost(reqBody, admin)
 	if err != nil {
-		return nil, errors.Wrap(err, "error while running admin query")
+		return nil, errors.Wrap(err, "error while running graphql query")
 	}
 
 	var gqlResp GraphQLResponse
@@ -246,7 +246,7 @@ func (hc *HTTPClient) RunGraphqlQuery(params GraphQLParams, admin bool) ([]byte,
 		return nil, errors.Wrap(err, "error unmarshalling GQL response")
 	}
 	if len(gqlResp.Errors) > 0 {
-		return nil, errors.Wrapf(gqlResp.Errors, "error while running admin query, resp: %v", string(gqlResp.Data))
+		return nil, errors.Wrapf(gqlResp.Errors, "error while running graphql query, resp: %v", string(gqlResp.Data))
 	}
 	return gqlResp.Data, nil
 }
