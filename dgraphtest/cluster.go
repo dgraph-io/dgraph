@@ -32,7 +32,6 @@ import (
 	"github.com/dgraph-io/dgo/v230"
 	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/graphql/schema"
-	"github.com/dgraph-io/dgraph/x"
 )
 
 type Cluster interface {
@@ -59,8 +58,9 @@ type HttpToken struct {
 // HTTPClient allows doing operations on Dgraph over http
 type HTTPClient struct {
 	*HttpToken
-	adminURL   string
-	graphqlURL string
+	adminURL        string
+	graphqlURL      string
+	probeGraphqlURL string
 }
 
 // GraphQLParams are used for making graphql requests to dgraph
@@ -68,12 +68,6 @@ type GraphQLParams struct {
 	Query      string                    `json:"query"`
 	Variables  map[string]interface{}    `json:"variables"`
 	Extensions *schema.RequestExtensions `json:"extensions,omitempty"`
-}
-
-type GraphQLResponse struct {
-	Data       json.RawMessage        `json:"data,omitempty"`
-	Errors     x.GqlErrorList         `json:"errors,omitempty"`
-	Extensions map[string]interface{} `json:"extensions,omitempty"`
 }
 
 func (hc *HTTPClient) Login(user, password string, ns uint64) error {
@@ -494,11 +488,13 @@ func (hc *HTTPClient) Export(dest string) error {
 }
 
 // UpdateGQLSchema updates graphql schema for a given HTTP client
-func (hc *HTTPClient) UpdateGQLSchema(sch string) error {
+func (hc *HTTPClient) UpdateGQLSchema(sch string) ([]byte, error) {
 	const query = `mutation updateGQLSchema($sch: String!) {
 		updateGQLSchema(input: { set: { schema: $sch }}) {
 			gqlSchema {
 				id
+				schema
+				generatedSchema
 			}
 		}
 	}`
@@ -508,10 +504,7 @@ func (hc *HTTPClient) UpdateGQLSchema(sch string) error {
 			"sch": sch,
 		},
 	}
-	if _, err := hc.RunGraphqlQuery(params, true); err != nil {
-		return err
-	}
-	return nil
+	return hc.RunGraphqlQuery(params, true)
 }
 
 // PostPersistentQuery stores a persisted query

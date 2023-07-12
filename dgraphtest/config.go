@@ -69,10 +69,15 @@ var AllUpgradeCombos = []UpgradeCombo{
 	{"c5862ae2a", "v23.0.0", BackupRestore},
 }
 
+type genContainerConfig struct {
+	buildContext string
+}
+
 type ClusterConfig struct {
 	prefix         string
 	numAlphas      int
 	numZeros       int
+	genContainers  int
 	replicas       int
 	verbosity      int
 	acl            bool
@@ -111,6 +116,11 @@ func (cc ClusterConfig) WithNumAlphas(n int) ClusterConfig {
 
 func (cc ClusterConfig) WithNumZeros(n int) ClusterConfig {
 	cc.numZeros = n
+	return cc
+}
+
+func (cc ClusterConfig) WithGeneric(n int) ClusterConfig {
+	cc.genContainers = n
 	return cc
 }
 
