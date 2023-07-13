@@ -36,7 +36,7 @@ func PrintRollup(plist *pb.PostingList, parts map[uint64]*pb.PostingList, baseKe
 }
 
 func PrintMutationEdge(plist *pb.DirectedEdge, key ParsedKey, startTs uint64) {
-	glog.V(2).Infof("[TXNLOG] ADDING MUTATION at TS: %v, key: %v, value: %v \n", startTs, key.String(), plist)
+	glog.V(2).Infof("[TXNLOG] ADDING MUTATION at TS: %v, key: %v, value: %v\n", startTs, key.String(), plist)
 }
 
 func PrintOracleDelta(delta *pb.OracleDelta) {
