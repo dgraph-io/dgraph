@@ -1762,6 +1762,7 @@ func rewriteObject(
 
 func xidErrorForInterfaceType(typ schema.Type, xidString string, xid schema.FieldDefinition,
 	interfaceName string) error {
+
 	// TODO(GRAPHQL): currently we are checking typ of the mutated field for auth rules,
 	//  But we need to check auth rule on implementing type for which we found existing node
 	//  with same @id.
@@ -2458,6 +2459,7 @@ func extractVal(xidVal interface{}, xidName, typeName string) (string, error) {
 // if given xid is inherited from interface, otherwise it will return nil and empty string
 func interfaceVariable(typ schema.Type, varGen *VariableGenerator, xidName string,
 	xidString string) (schema.Type, string) {
+
 	interfaceType, isInherited := typ.FieldOriginatedFrom(xidName)
 	fieldDef := typ.Field(xidName)
 	if isInherited && fieldDef.HasInterfaceArg() {

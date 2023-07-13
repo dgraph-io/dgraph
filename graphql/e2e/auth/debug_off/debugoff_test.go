@@ -177,6 +177,7 @@ func TestAddMutationWithAuthOnIDFieldHavingInterfaceArg(t *testing.T) {
 	}
 	err = json.Unmarshal(gqlResponse.Data, &resultSportsMember)
 	require.NoError(t, err)
+	// We show no error here as it could be a security violation
 	require.Equal(t, 0, resultSportsMember.AddSportsMember.NumUids)
 
 	// cleanup
