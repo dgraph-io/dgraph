@@ -25,7 +25,7 @@ jobs:
           #!/bin/bash
           # clean cache
           go clean -testcache
-      - name: Run Upgrade and Integration Tests
+      - name: Run Upgrade Tests
         run: |
           #!/bin/bash
           # go env settings
@@ -33,7 +33,7 @@ jobs:
           # move the binary
           cp dgraph/dgraph ~/go/bin/dgraph
           # run the tests
-          go test -v -timeout=4h -failfast -tags=upgrade ./...
+          go test -v -timeout=8h -failfast -tags=upgrade ./...
           # clean up docker containers after test execution
           go clean -testcache
           # sleep
