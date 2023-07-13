@@ -1,4 +1,4 @@
-name: ci-dgraph-upgrade-tests
+name: ci-dgraph-integration2-tests
 on:
   push:
     branches:
@@ -16,9 +16,9 @@ on:
   schedule:
     - cron: "0 */4 * * *" # every 4hrs
 jobs:
-  dgraph-upgrade-tests:
+  dgraph-integration2-tests:
     if: github.event.pull_request.draft == false
-    runs-on: [self-hosted, x64]
+    runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v3
         with:
@@ -39,16 +39,15 @@ jobs:
           #!/bin/bash
           # clean cache
           go clean -testcache
-      - name: Run Upgrade and Integration Tests
+      - name: Run Integration2 Tests
         run: |
           #!/bin/bash
           # go env settings
           export GOPATH=~/go
-          export DGRAPH_UPGRADE_MAIN_ONLY=true
           # move the binary
           cp dgraph/dgraph ~/go/bin/dgraph
           # run the tests
-          go test -v -timeout=120m -failfast -tags=upgrade ./...
+          go test -v -timeout=30m -failfast -tags=integration2 ./...
           # clean up docker containers after test execution
           go clean -testcache
           # sleep

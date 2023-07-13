@@ -1,23 +1,9 @@
-name: ci-dgraph-upgrade-tests
+name: ci-dgraph-upgrade-fixed-versions-tests
 on:
-  push:
-    branches:
-      - main
-      - 'release/**'
-  pull_request:
-    types:
-      - opened
-      - reopened
-      - synchronize
-      - ready_for_review
-    branches:
-      - main
-      - 'release/**'
   schedule:
-    - cron: "0 */4 * * *" # every 4hrs
+    - cron: "0 */12 * * *" # every 12hrs
 jobs:
-  dgraph-upgrade-tests:
-    if: github.event.pull_request.draft == false
+  dgraph-upgrade-fixed-versions-tests:
     runs-on: [self-hosted, x64]
     steps:
       - uses: actions/checkout@v3
@@ -44,11 +30,10 @@ jobs:
           #!/bin/bash
           # go env settings
           export GOPATH=~/go
-          export DGRAPH_UPGRADE_MAIN_ONLY=true
           # move the binary
           cp dgraph/dgraph ~/go/bin/dgraph
           # run the tests
-          go test -v -timeout=120m -failfast -tags=upgrade ./...
+          go test -v -timeout=4h -failfast -tags=upgrade ./...
           # clean up docker containers after test execution
           go clean -testcache
           # sleep
