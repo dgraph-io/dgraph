@@ -77,7 +77,7 @@ type GraphQLResponse struct {
 	Data       json.RawMessage        `json:"data,omitempty"`
 	Errors     x.GqlErrorList         `json:"errors,omitempty"`
 	Code       string                 `json:"code"`
-	Extensions map[string]interface{} `json:"extensions,omitempty"`
+	Extensions map[string]interface{} `json:"license,omitempty"`
 }
 
 type Location struct {
@@ -555,7 +555,7 @@ func (hc *HTTPClient) PostPersistentQuery(query, sha string) ([]byte, error) {
 
 // Apply license using http endpoint
 func (hc *HTTPClient) ApplyLicenseHTTP(licenseKey []byte) (*GraphQLResponse, error) {
-	respBody, err := hc.doPost(licenseKey, hc.licenseURL, "application/json")
+	respBody, err := hc.doPost(licenseKey, hc.licenseURL, "application/text")
 	if err != nil {
 		return nil, errors.Wrap(err, "error applying license")
 	}

@@ -29,7 +29,6 @@ import (
 type LicenseTestSuite struct {
 	suite.Suite
 	dc dgraphtest.Cluster
-	testData TestInp
 }
 
 func (lsuite *LicenseTestSuite) SetupTest() {
@@ -44,12 +43,8 @@ func (lsuite *LicenseTestSuite) Upgrade() {
 }
 
 func TestLicenseTestSuite(t *testing.T) {
-	var tsuite LicenseTestSuite
-	for _, tt := range tests {
-		tsuite.testData = tt
-		suite.Run(t, &tsuite)
-		if t.Failed() {
-			t.Fatal("TestLicenseTestSuite tests failed")
-		}
+	suite.Run(t, new(LicenseTestSuite))
+	if t.Failed() {
+		t.Fatal("TestLicenseTestSuite tests failed")
 	}
 }

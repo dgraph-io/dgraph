@@ -34,7 +34,6 @@ type LicenseTestSuite struct {
 	dc dgraphtest.Cluster
 	lc *dgraphtest.LocalCluster
 	uc dgraphtest.UpgradeCombo
-	testData TestInp
 }
 
 func (lsuite *LicenseTestSuite) SetupTest() {
@@ -64,16 +63,13 @@ func (lsuite *LicenseTestSuite) Upgrade() {
 }
 
 func TestLicenseTestSuite(t *testing.T) {
-	for _, uc := range dgraphtest.AllUpgradeCombos {
+	for _, uc := range dgraphtest.AllUpgradeCombos() {
 		log.Printf("running: backup in [%v], restore in [%v]", uc.Before, uc.After)
 		var tsuite LicenseTestSuite
 		tsuite.uc = uc
-		for _, tt := range tests {
-			tsuite.testData = tt
-			suite.Run(t, &tsuite)
-			if t.Failed() {
-				t.Fatal("TestLicenseTestSuite tests failed")
-			}
+		suite.Run(t, &tsuite)
+		if t.Failed() {
+			t.Fatal("TestLicenseTestSuite tests failed")
 		}
 	}
 }

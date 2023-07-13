@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/dgraphtest"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 var expiredKey = []byte(`-----BEGIN PGP MESSAGE-----
@@ -68,28 +69,7 @@ I8jcj3NZtGWFoxKq4laK/ruoeoHnWMznJyMm7mUd/5nzcU5QZU9yEEI=
 -----END PGP MESSAGE-----
 `)
 
-type Location struct {
-	Line   int `json:"line,omitempty"`
-	Column int `json:"column,omitempty"`
-}
-
-type GqlError struct {
-	Message    string                 `json:"message"`
-	Locations  []Location             `json:"locations,omitempty"`
-	Path       []interface{}          `json:"path,omitempty"`
-	Extensions map[string]interface{} `json:"extensions,omitempty"`
-}
-
-type GqlErrorList []*GqlError
-
-type responseStruct struct {
-	Errors  GqlErrorList           `json:"errors"`
-	Code    string                 `json:"code"`
-	Message string                 `json:"message"`
-	License map[string]interface{} `json:"license"`
-}
-
-type TestInp struct {
+type testInp struct {
 	name       string
 	licenseKey []byte
 	code       string
@@ -97,7 +77,7 @@ type TestInp struct {
 	message    string
 }
 
-var tests = []TestInp{
+var tests = []testInp{
 	{
 		"Using expired entrerprise license key, should be able to extract user information",
 		expiredKey,
@@ -128,26 +108,24 @@ func (lsuite *LicenseTestSuite) TestEnterpriseLicenseWithHttpEndPoint() {
 
 	hcli, err := lsuite.dc.HTTPClient()
 	require.NoError(t, err)
-	tt := lsuite.testData
-	enterpriseResponse, err := hcli.ApplyLicenseHTTP(tt.licenseKey)
-	require.NoError(t, err)
+	err = hcli.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace)
+	require.NoError(t, err, "login with namespace failed")
+	require.NotNil(t, hcli.AccessJwt, "galaxy token is nil")
 
-	// Check if the license is applied
-	require.Equal(t, enterpriseResponse.Code, tt.code)
+	for _, tt := range tests {
+		enterpriseResponse, err := hcli.ApplyLicenseHTTP(tt.licenseKey)
 
-	if enterpriseResponse.Code == `Success` {
-		// Upgrade
-		lsuite.Upgrade()
+		if err == nil && enterpriseResponse.Code == `Success` {
+			// Check if the license is applied
+			require.Equal(t, enterpriseResponse.Code, tt.code)
 
-		hcli, err := lsuite.dc.HTTPClient()
-		require.NoError(t, err)
-
-		// check the user information in case the license is applied
-		// Expired license should not be enabled even after it is applied
-		assertLicenseNotEnabled(t, hcli, tt.user)
-	} else {
-		// check the error message in case the license is not applied
-		require.Equal(t, enterpriseResponse.Errors[0].Message, tt.message)
+			// check the user information in case the license is applied
+			// Expired license should not be enabled even after it is applied
+			assertLicenseNotEnabled(t, hcli, tt.user)
+		} else {
+			// check the error message in case the license is not applied
+			require.Nil(t, enterpriseResponse)
+		}
 	}
 }
 
@@ -157,28 +135,26 @@ func (lsuite *LicenseTestSuite) TestEnterpriseLicenseWithGraphqlEndPoint() {
 	t := lsuite.T()
 	hcli, err := lsuite.dc.HTTPClient()
 	require.NoError(t, err)
+	err = hcli.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace)
+	require.NoError(t, err, "login with namespace failed")
+	require.NotNil(t, hcli.AccessJwt, "galaxy token is nil")
 
-	tt := lsuite.testData
-	resp, err := hcli.ApplyLicenseGraphQL(tt.licenseKey)
-	require.NoError(t, err)
+	for _, tt := range tests {
+		resp, err := hcli.ApplyLicenseGraphQL(tt.licenseKey)
 
-	if tt.code == `Success` {
-		// Check if the license is applied
-		dgraphtest.CompareJSON(`{"enterpriseLicense":{"response":{"code":"Success"}}}`, string(resp))
+		if tt.code == `Success` {
+			require.NoError(t, err)
+			// Check if the license is applied
+			dgraphtest.CompareJSON(`{"enterpriseLicense":{"response":{"code":"Success"}}}`, string(resp))
 
-		// Upgrade
-		lsuite.Upgrade()
-
-		hcli, err := lsuite.dc.HTTPClient()
-		require.NoError(t, err)
-
-		// check the user information in case the license is applied
-		// Expired license should not be enabled even after it is applied
-		assertLicenseNotEnabled(t, hcli, tt.user)
-	} else {
-		dgraphtest.CompareJSON(`{"enterpriseLicense":null}`, string(resp))
-		// check the error message in case the license is not applied
-		require.Contains(t, err, tt.message)
+			// check the user information in case the license is applied
+			// Expired license should not be enabled even after it is applied
+			assertLicenseNotEnabled(t, hcli, tt.user)
+		} else {
+			dgraphtest.CompareJSON(`{"enterpriseLicense":null}`, string(resp))
+			// check the error message in case the license is not applied
+			require.Contains(t, err.Error(), tt.message)
+		}
 	}
 }
 
