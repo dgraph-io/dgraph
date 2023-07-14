@@ -5,6 +5,7 @@ on:
 jobs:
   dgraph-upgrade-fixed-versions-tests:
     runs-on: [self-hosted, x64]
+    timeout-minutes: 720
     steps:
       - uses: actions/checkout@v3
         with:
@@ -33,7 +34,7 @@ jobs:
           # move the binary
           cp dgraph/dgraph ~/go/bin/dgraph
           # run the tests
-          go test -v -timeout=8h -failfast -tags=upgrade ./...
+          go test -v -timeout=10h -failfast -tags=upgrade ./...
           # clean up docker containers after test execution
           go clean -testcache
           # sleep
