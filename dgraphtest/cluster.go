@@ -77,31 +77,15 @@ type GraphQLResponse struct {
 	Data       json.RawMessage        `json:"data,omitempty"`
 	Errors     x.GqlErrorList         `json:"errors,omitempty"`
 	Code       string                 `json:"code"`
-	Extensions map[string]interface{} `json:"license,omitempty"`
-}
-
-type Location struct {
-	Line   int `json:"line,omitempty"`
-	Column int `json:"column,omitempty"`
-}
-
-/*
-type gqlError struct {
-	Message    string                 `json:"message"`
-	Locations  []Location             `json:"locations,omitempty"`
-	Path       []interface{}          `json:"path,omitempty"`
 	Extensions map[string]interface{} `json:"extensions,omitempty"`
 }
 
-type gqlErrorList []*gqlError
-
-type ZeroResponse struct {
-	Errors  gqlErrorList           `json:"errors"`
-	Code    string                 `json:"code"`
-	Message string                 `json:"message"`
-	License map[string]interface{} `json:"license"`
+type LicenseResponse struct {
+	Data       json.RawMessage        `json:"data,omitempty"`
+	Errors     x.GqlErrorList         `json:"errors,omitempty"`
+	Code       string                 `json:"code"`
+	Extensions map[string]interface{} `json:"license,omitempty"`
 }
-*/
 
 func (hc *HTTPClient) Login(user, password string, ns uint64) error {
 	login := `mutation login($userId: String, $password: String, $namespace: Int, $refreshToken: String) {
@@ -554,12 +538,12 @@ func (hc *HTTPClient) PostPersistentQuery(query, sha string) ([]byte, error) {
 }
 
 // Apply license using http endpoint
-func (hc *HTTPClient) ApplyLicenseHTTP(licenseKey []byte) (*GraphQLResponse, error) {
+func (hc *HTTPClient) ApplyLicenseHTTP(licenseKey []byte) (*LicenseResponse, error) {
 	respBody, err := hc.doPost(licenseKey, hc.licenseURL, "application/text")
 	if err != nil {
 		return nil, errors.Wrap(err, "error applying license")
 	}
-	var enterpriseResponse GraphQLResponse
+	var enterpriseResponse LicenseResponse
 	if err = json.Unmarshal(respBody, &enterpriseResponse); err != nil {
 		return nil, errors.Wrap(err, "error unmarshaling the license response")
 	}
@@ -584,7 +568,7 @@ func (hc *HTTPClient) ApplyLicenseGraphQL(license []byte) ([]byte, error) {
 	return hc.RunGraphqlQuery(params, true)
 }
 
-func (hc *HTTPClient) GetZeroState() (*GraphQLResponse, error) {
+func (hc *HTTPClient) GetZeroState() (*LicenseResponse, error) {
 	response, err := http.Get(hc.stateURL)
 	if err != nil {
 		return nil, errors.Wrap(err, "error getting zero state http response")
@@ -593,7 +577,7 @@ func (hc *HTTPClient) GetZeroState() (*GraphQLResponse, error) {
 	if err != nil {
 		return nil, errors.New("error reading zero state response body")
 	}
-	var stateResponse GraphQLResponse
+	var stateResponse LicenseResponse
 	if err := json.Unmarshal(body, &stateResponse); err != nil {
 		return nil, errors.New("error unmarshaling zero state response")
 	}
