@@ -25,6 +25,18 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 )
 
+// PrintRollup prints information about any rollup that happen
+func PrintRollup(plist *pb.PostingList, parts map[uint64]*pb.PostingList, baseKey []byte, ts uint64) {
+}
+
+// PrintMutationEdge prints all edges that are being inserted into badger
+func PrintMutationEdge(plist *pb.DirectedEdge, key ParsedKey, startTs uint64) {
+}
+
+// PrintOracleDelta prints all delta proposals that are commited
+func PrintOracleDelta(delta *pb.OracleDelta) {
+}
+
 // VerifyPack works in debug mode. Check out the comment in debug_on.go
 func VerifyPack(plist *pb.PostingList) {
 }
