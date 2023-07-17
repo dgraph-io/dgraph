@@ -553,7 +553,7 @@ func (hc *HTTPClient) ApplyLicenseHTTP(licenseKey []byte) (*LicenseResponse, err
 
 // Apply license using graphql endpoint
 func (hc *HTTPClient) ApplyLicenseGraphQL(license []byte) ([]byte, error) {
-	params := GraphQLParams {
+	params := GraphQLParams{
 		Query: `mutation ($license: String!) {
 			enterpriseLicense(input: {license: $license}) {
 				response {

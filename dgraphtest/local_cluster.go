@@ -637,10 +637,10 @@ func (c *LocalCluster) HTTPClient() (*HTTPClient, error) {
 	}
 
 	return &HTTPClient{
-		adminURL: adminURL,
+		adminURL:   adminURL,
 		graphqlURL: graphqlURL,
 		licenseURL: licenseURL,
-		stateURL: stateURL,
+		stateURL:   stateURL,
 	}, nil
 }
 
