@@ -24,7 +24,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/dgraphtest"
-	"github.com/dgraph-io/dgraph/x"
 )
 
 var expiredKey = []byte(`-----BEGIN PGP MESSAGE-----
@@ -108,9 +107,6 @@ func (lsuite *LicenseTestSuite) TestEnterpriseLicenseWithHttpEndPoint() {
 
 	hcli, err := lsuite.dc.HTTPClient()
 	require.NoError(t, err)
-	err = hcli.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace)
-	require.NoError(t, err, "login with namespace failed")
-	require.NotNil(t, hcli.AccessJwt, "galaxy token is nil")
 
 	for _, tt := range tests {
 		enterpriseResponse, err := hcli.ApplyLicenseHTTP(tt.licenseKey)
@@ -135,9 +131,6 @@ func (lsuite *LicenseTestSuite) TestEnterpriseLicenseWithGraphqlEndPoint() {
 	t := lsuite.T()
 	hcli, err := lsuite.dc.HTTPClient()
 	require.NoError(t, err)
-	err = hcli.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace)
-	require.NoError(t, err, "login with namespace failed")
-	require.NotNil(t, hcli.AccessJwt, "galaxy token is nil")
 
 	for _, tt := range tests {
 		resp, err := hcli.ApplyLicenseGraphQL(tt.licenseKey)

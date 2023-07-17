@@ -21,7 +21,6 @@ package main
 import (
 	"log"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/suite"
 
@@ -38,7 +37,7 @@ type LicenseTestSuite struct {
 
 func (lsuite *LicenseTestSuite) SetupTest() {
 	conf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).WithReplicas(1).
-		WithACL(20 * time.Second).WithEncryption().WithVersion(lsuite.uc.Before)
+		WithEncryption().WithVersion(lsuite.uc.Before)
 	c, err := dgraphtest.NewLocalCluster(conf)
 	x.Panic(err)
 	if err := c.Start(); err != nil {
