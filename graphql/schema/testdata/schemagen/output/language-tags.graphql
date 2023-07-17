@@ -2,24 +2,24 @@
 # Input Schema
 #######################
 
-interface Character @secret(field: "password") @generate(query: {get:false,password:false}, subscription: false) {
-	id: ID!
-	name: String! @search(by: [exact])
-	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
-	friendsAggregate(filter: CharacterFilter): CharacterAggregateResult
+interface Node {
+	f1: String
 }
 
-type Human implements Character @generate(query: {aggregate:true}, subscription: true) @secret(field: "password") {
-	id: ID!
-	name: String! @search(by: [exact])
-	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
-	totalCredits: Int
-	friendsAggregate(filter: CharacterFilter): CharacterAggregateResult
-}
-
-type Person @withSubscription @generate(query: {get:false,query:true,password:true,aggregate:false}, mutation: {add:false,delete:false}, subscription: false) {
-	id: ID!
-	name: String!
+type Person implements Node {
+	f1: String
+	f1Hi: String @dgraph(pred: "Node.f1@hi")
+	f2: String @dgraph(pred: "T.f@no")
+	f3: String @dgraph(pred: "f3@en")
+	name: String! @id
+	nameHi: String @dgraph(pred: "Person.name@hi") @search(by: [term,exact])
+	nameEn: String @dgraph(pred: "Person.name@en") @search(by: [regexp])
+	nameHiEn: String @dgraph(pred: "Person.name@hi:en")
+	nameHi_En_Untag: String @dgraph(pred: "Person.name@hi:en:.")
+	name_Untag_AnyLang: String @dgraph(pred: "Person.name@.")
+	address: String @search(by: [fulltext])
+	addressHi: String @dgraph(pred: "Person.address@hi")
+	professionEn: String @dgraph(pred: "Person.profession@en")
 }
 
 #######################
@@ -34,7 +34,7 @@ scalar Int64
 
 """
 The DateTime scalar type represents date and time as a string in RFC3339 format.
-For example: "1985-04-12T23:20:50.52Z" represents 20 mins 50.52 secs after the 23rd hour of Apr 12th 1985 in UTC.
+For example: "1985-04-12T23:20:50.52Z" represents 20 minutes and 50.52 seconds after the 23rd hour of April 12th, 1985 in UTC.
 """
 scalar DateTime
 
@@ -288,52 +288,61 @@ input StringHashFilter {
 # Generated Types
 #######################
 
-type AddHumanPayload {
-	human(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
+type AddPersonPayload {
+	person(filter: PersonFilter, order: PersonOrder, first: Int, offset: Int): [Person]
 	numUids: Int
 }
 
-type CharacterAggregateResult {
-	count: Int
-	nameMin: String
-	nameMax: String
-}
-
-type DeleteCharacterPayload {
-	character(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
+type DeleteNodePayload {
+	node(filter: NodeFilter, order: NodeOrder, first: Int, offset: Int): [Node]
 	msg: String
 	numUids: Int
 }
 
-type DeleteHumanPayload {
-	human(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
+type DeletePersonPayload {
+	person(filter: PersonFilter, order: PersonOrder, first: Int, offset: Int): [Person]
 	msg: String
 	numUids: Int
 }
 
-type HumanAggregateResult {
+type NodeAggregateResult {
 	count: Int
-	nameMin: String
-	nameMax: String
-	totalCreditsMin: Int
-	totalCreditsMax: Int
-	totalCreditsSum: Int
-	totalCreditsAvg: Float
+	f1Min: String
+	f1Max: String
 }
 
 type PersonAggregateResult {
 	count: Int
+	f1Min: String
+	f1Max: String
+	f1HiMin: String
+	f1HiMax: String
+	f2Min: String
+	f2Max: String
+	f3Min: String
+	f3Max: String
 	nameMin: String
 	nameMax: String
+	nameHiMin: String
+	nameHiMax: String
+	nameEnMin: String
+	nameEnMax: String
+	nameHiEnMin: String
+	nameHiEnMax: String
+	nameHi_En_UntagMin: String
+	nameHi_En_UntagMax: String
+	name_Untag_AnyLangMin: String
+	name_Untag_AnyLangMax: String
+	addressMin: String
+	addressMax: String
+	addressHiMin: String
+	addressHiMax: String
+	professionEnMin: String
+	professionEnMax: String
 }
 
-type UpdateCharacterPayload {
-	character(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
-	numUids: Int
-}
-
-type UpdateHumanPayload {
-	human(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
+type UpdateNodePayload {
+	node(filter: NodeFilter, order: NodeOrder, first: Int, offset: Int): [Node]
 	numUids: Int
 }
 
@@ -346,102 +355,81 @@ type UpdatePersonPayload {
 # Generated Enums
 #######################
 
-enum CharacterHasFilter {
-	name
-	friends
+enum NodeHasFilter {
+	f1
 }
 
-enum CharacterOrderable {
-	name
-}
-
-enum HumanHasFilter {
-	name
-	friends
-	totalCredits
-}
-
-enum HumanOrderable {
-	name
-	totalCredits
+enum NodeOrderable {
+	f1
 }
 
 enum PersonHasFilter {
+	f1
+	f1Hi
+	f2
+	f3
 	name
+	nameHi
+	nameEn
+	name_Untag_AnyLang
+	address
+	addressHi
+	professionEn
 }
 
 enum PersonOrderable {
+	f1
+	f1Hi
+	f2
+	f3
 	name
+	nameHi
+	nameEn
+	name_Untag_AnyLang
+	address
+	addressHi
+	professionEn
 }
 
 #######################
 # Generated Inputs
 #######################
 
-input AddHumanInput {
+input AddPersonInput {
+	f1: String
+	f1Hi: String
+	f2: String
+	f3: String
 	name: String!
-	friends: [CharacterRef]
-	totalCredits: Int
-	password: String!
+	nameHi: String
+	nameEn: String
+	address: String
+	addressHi: String
+	professionEn: String
 }
 
-input CharacterFilter {
-	id: [ID!]
-	name: StringExactFilter
-	has: [CharacterHasFilter]
-	and: [CharacterFilter]
-	or: [CharacterFilter]
-	not: CharacterFilter
+input NodeFilter {
+	has: [NodeHasFilter]
+	and: [NodeFilter]
+	or: [NodeFilter]
+	not: NodeFilter
 }
 
-input CharacterOrder {
-	asc: CharacterOrderable
-	desc: CharacterOrderable
-	then: CharacterOrder
+input NodeOrder {
+	asc: NodeOrderable
+	desc: NodeOrderable
+	then: NodeOrder
 }
 
-input CharacterPatch {
-	name: String
-	friends: [CharacterRef]
-	password: String
-}
-
-input CharacterRef {
-	id: ID!
-}
-
-input HumanFilter {
-	id: [ID!]
-	name: StringExactFilter
-	has: [HumanHasFilter]
-	and: [HumanFilter]
-	or: [HumanFilter]
-	not: HumanFilter
-}
-
-input HumanOrder {
-	asc: HumanOrderable
-	desc: HumanOrderable
-	then: HumanOrder
-}
-
-input HumanPatch {
-	name: String
-	friends: [CharacterRef]
-	totalCredits: Int
-	password: String
-}
-
-input HumanRef {
-	id: ID
-	name: String
-	friends: [CharacterRef]
-	totalCredits: Int
-	password: String
+input NodePatch {
+	f1: String
 }
 
 input PersonFilter {
-	id: [ID!]
+	name: StringHashFilter
+	nameHi: StringExactFilter_StringTermFilter
+	nameEn: StringRegExpFilter
+	address: StringFullTextFilter
 	has: [PersonHasFilter]
 	and: [PersonFilter]
 	or: [PersonFilter]
@@ -455,24 +443,46 @@ input PersonOrder {
 }
 
 input PersonPatch {
-	name: String
+	f1: String
+	f1Hi: String
+	f2: String
+	f3: String
+	nameHi: String
+	nameEn: String
+	address: String
+	addressHi: String
+	professionEn: String
 }
 
 input PersonRef {
-	id: ID
+	f1: String
+	f1Hi: String
+	f2: String
+	f3: String
 	name: String
+	nameHi: String
+	nameEn: String
+	address: String
+	addressHi: String
+	professionEn: String
 }
 
-input UpdateCharacterInput {
-	filter: CharacterFilter!
-	set: CharacterPatch
-	remove: CharacterPatch
+input StringExactFilter_StringTermFilter {
+	eq: String
+	in: [String]
+	le: String
+	lt: String
+	ge: String
+	gt: String
+	between: StringRange
+	allofterms: String
+	anyofterms: String
 }
 
-input UpdateHumanInput {
-	filter: HumanFilter!
-	set: HumanPatch
-	remove: HumanPatch
+input UpdateNodeInput {
+	filter: NodeFilter!
+	set: NodePatch
+	remove: NodePatch
 }
 
 input UpdatePersonInput {
@@ -486,13 +496,11 @@ input UpdatePersonInput {
 #######################
 
 type Query {
-	queryCharacter(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
-	aggregateCharacter(filter: CharacterFilter): CharacterAggregateResult
-	getHuman(id: ID!): Human
-	checkHumanPassword(id: ID!, password: String!): Human
-	queryHuman(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
-	aggregateHuman(filter: HumanFilter): HumanAggregateResult
+	queryNode(filter: NodeFilter, order: NodeOrder, first: Int, offset: Int): [Node]
+	aggregateNode(filter: NodeFilter): NodeAggregateResult
+	getPerson(name: String!): Person
 	queryPerson(filter: PersonFilter, order: PersonOrder, first: Int, offset: Int): [Person]
+	aggregatePerson(filter: PersonFilter): PersonAggregateResult
 }
 
 #######################
@@ -500,21 +508,10 @@ type Query {
 #######################
 
 type Mutation {
-	updateCharacter(input: UpdateCharacterInput!): UpdateCharacterPayload
-	deleteCharacter(filter: CharacterFilter!): DeleteCharacterPayload
-	addHuman(input: [AddHumanInput!]!): AddHumanPayload
-	updateHuman(input: UpdateHumanInput!): UpdateHumanPayload
-	deleteHuman(filter: HumanFilter!): DeleteHumanPayload
+	updateNode(input: UpdateNodeInput!): UpdateNodePayload
+	deleteNode(filter: NodeFilter!): DeleteNodePayload
+	addPerson(input: [AddPersonInput!]!, upsert: Boolean): AddPersonPayload
 	updatePerson(input: UpdatePersonInput!): UpdatePersonPayload
+	deletePerson(filter: PersonFilter!): DeletePersonPayload
 }
 
-#######################
-# Generated Subscriptions
-#######################
-
-type Subscription {
-	getHuman(id: ID!): Human
-	queryHuman(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
-	aggregateHuman(filter: HumanFilter): HumanAggregateResult
-	queryPerson(filter: PersonFilter, order: PersonOrder, first: Int, offset: Int): [Person]
-}

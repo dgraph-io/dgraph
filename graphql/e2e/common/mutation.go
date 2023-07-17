@@ -4820,7 +4820,7 @@ func filterInMutationsWithArrayForAndOr(t *testing.T) {
 			query: `mutation {
                         addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
                             post1(filter:{and:[{title:{eq: "Dgraph"}},{or:{numLikes:{eq: 100}}}]}) {
-                                title 
+                                title
                                 numLikes
                             }
                         }
@@ -5228,7 +5228,7 @@ func threeLevelDoubleXID(t *testing.T) {
                                 name
                                 region {
                                       id
-                                      name 
+                                      name
                                       district {
                                         id
                                         name
@@ -5692,7 +5692,7 @@ func multipleXidsTests(t *testing.T) {
 			query: `mutation {
 	                  addEmployer(input: [{ company: "Slash", worker: { reg_No: 3, emp_Id: "E04" } }]) {
 	                  	employer {
-							company	
+							company
 	                  		worker {
 	                  			name
 	                  			reg_No
@@ -6036,4 +6036,206 @@ func upsertMutationTests(t *testing.T) {
 	deleteCountry(t, filter, 1, nil)
 	filter = GetXidFilter("xcode", []interface{}{"S1", "S10"})
 	deleteState(t, filter, 2, nil)
+}
+
+func addMutationWithIDFieldHavingInterfaceArg(t *testing.T) {
+	// add data successfully for different implementing types
+	tcases := []struct {
+		name      string
+		query     string
+		variables string
+		error     string
+	}{
+		{
+			name: "adding new Library member shouldn't return any error",
+			query: `mutation addLibraryMember($input: [AddLibraryMemberInput!]!) {
+                      addLibraryMember(input: $input, upsert: false) {
+                        libraryMember {
+                          refID
+                        }
+                      }
+                    }`,
+			variables: `{
+                          "input": {
+                              "refID": "101",
+                              "name": "Alice",
+                              "itemsIssued": [
+                                  "Intro to Go",
+                                  "Parallel Programming"
+                              ],
+                              "readHours": "4d2hr"
+                          }
+                       }`,
+		}, {
+			name: "update existing library member using upsert shouldn't return any error",
+			query: `mutation addLibraryMember($input: [AddLibraryMemberInput!]!) {
+                      addLibraryMember(input: $input, upsert: true) {
+                        libraryMember {
+                          refID
+                        }
+                      }
+                    }`,
+			variables: `{
+                          "input": {
+                              "refID": "101",
+                              "name": "Alice",
+                              "itemsIssued": [
+                                  "Intro to Go",
+                                  "Parallel Programming",
+                                  "Computer Architecture"
+                              ],
+                              "readHours": "5d3hr"
+                          }
+						}`,
+		}, {
+			name: "adding new Sports Member shouldn't return any error",
+			query: `mutation addSportsMember($input: [AddSportsMemberInput!]!) {
+                      addSportsMember(input: $input, upsert: false) {
+                        sportsMember {
+                          refID
+                        }
+                      }
+                    }`,
+			variables: `{
+                          "input": {
+                              "refID": "102",
+                              "name": "Bob",
+                              "teamID": "T01",
+                              "teamName": "GraphQL",
+                              "itemsIssued": [
+                                  "2-Bats",
+                                  "1-football"
+                              ],
+                              "plays": "football and cricket"
+                          }
+						}`,
+		}, {
+			name: "adding new Cricket Team shouldn't return any error",
+			query: `mutation addCricketTeam($input: [AddCricketTeamInput!]!) {
+                      addCricketTeam(input: $input, upsert: false) {
+                        cricketTeam {
+                          teamID
+                        }
+                      }
+					}`,
+			variables: `{
+                          "input": {
+                              "teamID": "T02",
+                              "teamName": "Dgraph",
+                              "numOfBatsmen": 5,
+                              "numOfBowlers": 3
+                          }
+						}`,
+		}, {
+			name: "add new LibraryManager,linking to existing library Member",
+			query: `mutation addLibraryManager($input: [AddLibraryManagerInput!]!) {
+                      addLibraryManager(input: $input, upsert: false) {
+                        libraryManager {
+                          name
+                        }
+                      }
+                   }`,
+			variables: `{
+                           "input": {
+                               "name": "Juliet",
+                               "manages": {
+                                   "refID": "101"
+                               }
+                           }
+                       }`,
+		}, {
+			name: "adding new Library member returns error as given id already exist in other node of type" +
+				" SportsMember which implements same interface",
+			query: `mutation addLibraryMember($input: [AddLibraryMemberInput!]!) {
+                       addLibraryMember(input: $input, upsert: false) {
+                         libraryMember {
+                           refID
+                         }
+                       }
+                     }`,
+			variables: `{
+                         "input": {
+                             "refID": "102",
+                             "name": "James",
+                             "itemsIssued": [
+                                 "Intro to C"
+                             ],
+                             "readHours": "1d2hr"
+                         }
+                     }`,
+			error: "couldn't rewrite mutation addLibraryMember because failed to rewrite mutation" +
+				" payload because id 102 already exists for field refID in some other implementing" +
+				" type of interface Member",
+		}, {
+			name: "adding new Cricket Team with upsert returns error as given id already exist" +
+				" in other node of type SportsMember which implements same interface",
+			query: `mutation addCricketTeam($input: [AddCricketTeamInput!]!) {
+                      addCricketTeam(input: $input, upsert: true) {
+                        cricketTeam {
+                          teamID
+                        }
+                      }
+                    }`,
+			variables: `{
+                         "input": {
+                             "teamID": "T01",
+                             "teamName": "Slash",
+                             "numOfBatsmen": 5,
+                             "numOfBowlers": 4
+                         }
+                     }`,
+			error: "couldn't rewrite mutation addCricketTeam because failed to rewrite mutation" +
+				" payload because id T01 already exists for field teamID in some other" +
+				" implementing type of interface Team",
+		}, {
+			name: "adding new Library manager returns error when it try to links to LibraryMember" +
+				" but got id of some other implementing type which implements " +
+				"same interface as LibraryMember",
+			query: `mutation addLibraryManager($input: [AddLibraryManagerInput!]!) {
+                      addLibraryManager(input: $input, upsert: false) {
+                        libraryManager {
+                          name
+                        }
+                      }
+                    }`,
+			variables: `{
+                          "input": {
+                              "name": "John",
+                              "manages": {
+                                  "refID": "102"
+                              }
+                          }
+                       }`,
+			error: "couldn't rewrite mutation addLibraryManager because failed to rewrite mutation" +
+				" payload because id 102 already exists for field refID in some other implementing" +
+				" type of interface Member",
+		},
+	}
+
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			var vars map[string]interface{}
+			if tcase.variables != "" {
+				err := json.Unmarshal([]byte(tcase.variables), &vars)
+				require.NoError(t, err)
+			}
+			params := &GraphQLParams{
+				Query:     tcase.query,
+				Variables: vars,
+			}
+			resp := params.ExecuteAsPost(t, GraphqlURL)
+			if tcase.error != "" {
+				require.Equal(t, tcase.error, resp.Errors[0].Error())
+			} else {
+				RequireNoGQLErrors(t, resp)
+			}
+
+		})
+	}
+
+	// Cleanup
+	DeleteGqlType(t, "LibraryMember", map[string]interface{}{}, 1, nil)
+	DeleteGqlType(t, "SportsMember", map[string]interface{}{}, 1, nil)
+	DeleteGqlType(t, "CricketTeam", map[string]interface{}{}, 1, nil)
+	DeleteGqlType(t, "LibraryManager", map[string]interface{}{}, 1, nil)
 }
