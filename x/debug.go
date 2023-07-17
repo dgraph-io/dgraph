@@ -24,10 +24,11 @@ import (
 	"log"
 	"sort"
 
+	"github.com/golang/glog"
+
 	"github.com/dgraph-io/badger/v4"
 	bpb "github.com/dgraph-io/badger/v4/pb"
 	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/golang/glog"
 )
 
 func PrintRollup(plist *pb.PostingList, parts map[uint64]*pb.PostingList, baseKey []byte, ts uint64) {
