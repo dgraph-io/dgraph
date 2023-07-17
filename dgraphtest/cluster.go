@@ -547,7 +547,7 @@ func (hc *HTTPClient) ApplyLicenseHTTP(licenseKey []byte) (*LicenseResponse, err
 	if err = json.Unmarshal(respBody, &enterpriseResponse); err != nil {
 		return nil, errors.Wrap(err, "error unmarshaling the license response")
 	}
-	
+
 	return &enterpriseResponse, nil
 }
 
