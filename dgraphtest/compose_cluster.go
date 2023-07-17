@@ -40,7 +40,15 @@ func (c *ComposeCluster) Client() (*GrpcClient, func(), error) {
 func (c *ComposeCluster) HTTPClient() (*HTTPClient, error) {
 	adminUrl := "http://" + testutil.SockAddrHttp + "/admin"
 	graphQLUrl := "http://" + testutil.SockAddrHttp + "/graphql"
-	return &HTTPClient{adminURL: adminUrl, graphqlURL: graphQLUrl, HttpToken: &HttpToken{}}, nil
+	licenseUrl := "http://" + testutil.SockAddrZeroHttp + "/enterpriseLicense"
+	stateUrl := "http://" + testutil.SockAddrZeroHttp + "/state"
+	return &HTTPClient{
+		adminURL:   adminUrl,
+		graphqlURL: graphQLUrl,
+		licenseURL: licenseUrl,
+		stateURL:   stateUrl,
+		HttpToken:  &HttpToken{},
+	}, nil
 }
 
 func (c *ComposeCluster) AlphasHealth() ([]string, error) {

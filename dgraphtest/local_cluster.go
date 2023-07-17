@@ -619,34 +619,41 @@ func (c *LocalCluster) Client() (*GrpcClient, func(), error) {
 
 // HTTPClient creates an HTTP client
 func (c *LocalCluster) HTTPClient() (*HTTPClient, error) {
-	adminURL, err := c.adminURL()
+	adminURL, err := c.serverURL("alpha", "/admin")
 	if err != nil {
 		return nil, err
 	}
-	graphqlURL, err := c.graphqlURL()
+	graphqlURL, err := c.serverURL("alpha", "/graphql")
 	if err != nil {
 		return nil, err
 	}
-	return &HTTPClient{adminURL: adminURL, graphqlURL: graphqlURL}, nil
+	licenseURL, err := c.serverURL("zero", "/enterpriseLicense")
+	if err != nil {
+		return nil, err
+	}
+	stateURL, err := c.serverURL("zero", "/state")
+	if err != nil {
+		return nil, err
+	}
+
+	return &HTTPClient{
+		adminURL:   adminURL,
+		graphqlURL: graphqlURL,
+		licenseURL: licenseURL,
+		stateURL:   stateURL,
+	}, nil
 }
 
-// adminURL returns url to the graphql admin endpoint
-func (c *LocalCluster) adminURL() (string, error) {
-	publicPort, err := publicPort(c.dcli, c.alphas[0], alphaHttpPort)
+// serverURL returns url to the 'server' 'endpoint'
+func (c *LocalCluster) serverURL(server, endpoint string) (string, error) {
+	pubPort, err := publicPort(c.dcli, c.alphas[0], alphaHttpPort)
+	if server == "zero" {
+		pubPort, err = publicPort(c.dcli, c.zeros[0], zeroHttpPort)
+	}
 	if err != nil {
 		return "", err
 	}
-	url := "http://localhost:" + publicPort + "/admin"
-	return url, nil
-}
-
-// graphqlURL returns url to the graphql endpoint
-func (c *LocalCluster) graphqlURL() (string, error) {
-	publicPort, err := publicPort(c.dcli, c.alphas[0], alphaHttpPort)
-	if err != nil {
-		return "", err
-	}
-	url := "http://localhost:" + publicPort + "/graphql"
+	url := "http://localhost:" + pubPort + endpoint
 	return url, nil
 }
 
