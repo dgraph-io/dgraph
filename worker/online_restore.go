@@ -371,6 +371,10 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest, pidx uin
 		if err := pstore.DropPrefix(dropAttrs...); err != nil {
 			return errors.Wrap(err, "failed to reduce incremental restore map")
 		}
+		// If there are any writes done after last incremental restore on badger DB,
+		// the restore or incremental restore will lose that data. This happens because
+		// the timestamp of the in between mutations etc will be lower than the timestamp
+		// of this incremental restore that we may be doing now (if it is one).
 		if err := sw.PrepareIncremental(); err != nil {
 			return errors.Wrapf(err, "while preparing DB")
 		}

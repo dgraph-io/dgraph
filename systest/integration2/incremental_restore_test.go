@@ -87,5 +87,12 @@ func TestIncrementalRestore(t *testing.T) {
 			sort.Ints(data.Q[0].Money)
 			require.Equal(t, uids[j-1:i], data.Q[0].Money)
 		}
+
+		// Even when we do an in between mutations, it makes no difference.
+		// Incremental restore overwrites any data written in between.
+		if i == 10 {
+			_, err := gc.Mutate(&api.Mutation{SetNquads: []byte(`<10> <money> "4" .`), CommitNow: true})
+			require.NoError(t, err)
+		}
 	}
 }
