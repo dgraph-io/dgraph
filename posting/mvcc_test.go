@@ -72,7 +72,7 @@ func TestRollupTimestamp(t *testing.T) {
 	l, err := GetNoStore(key, math.MaxUint64)
 	require.NoError(t, err)
 
-	uidList, err := l.Uids(ListOptions{ReadTs: 7})
+	uidList, err := l.Uids(context.Background(), ListOptions{ReadTs: 7})
 	require.NoError(t, err)
 	require.Equal(t, 3, len(uidList.Uids))
 
@@ -87,7 +87,7 @@ func TestRollupTimestamp(t *testing.T) {
 	nl, err := getNew(key, pstore, math.MaxUint64)
 	require.NoError(t, err)
 
-	uidList, err = nl.Uids(ListOptions{ReadTs: 11})
+	uidList, err = nl.Uids(context.Background(), ListOptions{ReadTs: 11})
 	require.NoError(t, err)
 	require.Equal(t, 0, len(uidList.Uids))
 
@@ -105,7 +105,7 @@ func TestPostingListRead(t *testing.T) {
 	assertLength := func(readTs, sz int) {
 		nl, err := getNew(key, pstore, math.MaxUint64)
 		require.NoError(t, err)
-		uidList, err := nl.Uids(ListOptions{ReadTs: uint64(readTs)})
+		uidList, err := nl.Uids(context.Background(), ListOptions{ReadTs: uint64(readTs)})
 		require.NoError(t, err)
 		require.Equal(t, sz, len(uidList.Uids))
 	}

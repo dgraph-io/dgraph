@@ -500,7 +500,7 @@ func TestMillion(t *testing.T) {
 
 	t.Logf("Completed a million writes.\n")
 	opt := ListOptions{ReadTs: uint64(N) + 1}
-	l, err := ol.Uids(opt)
+	l, err := ol.Uids(context.Background(), opt)
 	require.NoError(t, err)
 	require.Equal(t, commits, len(l.Uids), "List of Uids received: %+v", l.Uids)
 	for i, uid := range l.Uids {
@@ -526,7 +526,7 @@ func TestAddMutation_mrjn2(t *testing.T) {
 	for i := 1; i < 10; i++ {
 		// Each of these txns see their own write.
 		opt := ListOptions{ReadTs: uint64(i)}
-		list, err := ol.Uids(opt)
+		list, err := ol.Uids(context.Background(), opt)
 		require.NoError(t, err)
 		require.EqualValues(t, 1, len(list.Uids))
 		require.EqualValues(t, uint64(i), list.Uids[0])
@@ -578,7 +578,7 @@ func TestAddMutation_mrjn2(t *testing.T) {
 		require.EqualValues(t, 1, ol.Length(12, 0)) // Find committed 11.
 		require.EqualValues(t, 2, ol.Length(15, 0)) // Find committed 14.
 		opts := ListOptions{ReadTs: 15}
-		list, err := ol.Uids(opts)
+		list, err := ol.Uids(context.Background(), opts)
 		require.NoError(t, err)
 		require.EqualValues(t, 7, list.Uids[0])
 		require.EqualValues(t, 9, list.Uids[1])
@@ -1095,7 +1095,7 @@ func TestMultiPartListBasic(t *testing.T) {
 	size := int(1e5)
 	ol, commits := createMultiPartList(t, size, false)
 	opt := ListOptions{ReadTs: uint64(size) + 1}
-	l, err := ol.Uids(opt)
+	l, err := ol.Uids(context.Background(), opt)
 	require.NoError(t, err)
 	require.Equal(t, commits, len(l.Uids), "List of Uids received: %+v", l.Uids)
 	for i, uid := range l.Uids {
@@ -1249,9 +1249,9 @@ func TestMultiPartListWriteToDisk(t *testing.T) {
 	require.NoError(t, err)
 
 	opt := ListOptions{ReadTs: uint64(size) + 1}
-	originalUids, err := originalList.Uids(opt)
+	originalUids, err := originalList.Uids(context.Background(), opt)
 	require.NoError(t, err)
-	newUids, err := newList.Uids(opt)
+	newUids, err := newList.Uids(context.Background(), opt)
 	require.NoError(t, err)
 	require.Equal(t, commits, len(originalUids.Uids))
 	require.Equal(t, len(originalUids.Uids), len(newUids.Uids))
@@ -1315,7 +1315,7 @@ func TestMultiPartListDeleteAndAdd(t *testing.T) {
 
 	// Verify all entries are in the list.
 	opt := ListOptions{ReadTs: math.MaxUint64}
-	l, err := ol.Uids(opt)
+	l, err := ol.Uids(context.Background(), opt)
 	require.NoError(t, err)
 	require.Equal(t, size, len(l.Uids), "List of Uids received: %+v", l.Uids)
 	for i, uid := range l.Uids {
@@ -1351,7 +1351,7 @@ func TestMultiPartListDeleteAndAdd(t *testing.T) {
 	}
 	// Verify that the entries were actually deleted.
 	opt = ListOptions{ReadTs: math.MaxUint64}
-	l, err = ol.Uids(opt)
+	l, err = ol.Uids(context.Background(), opt)
 	require.NoError(t, err)
 	require.Equal(t, 50000, len(l.Uids), "List of Uids received: %+v", l.Uids)
 	for i, uid := range l.Uids {
@@ -1386,7 +1386,7 @@ func TestMultiPartListDeleteAndAdd(t *testing.T) {
 
 	// Verify all entries are once again in the list.
 	opt = ListOptions{ReadTs: math.MaxUint64}
-	l, err = ol.Uids(opt)
+	l, err = ol.Uids(context.Background(), opt)
 	require.NoError(t, err)
 	require.Equal(t, size, len(l.Uids), "List of Uids received: %+v", l.Uids)
 	for i, uid := range l.Uids {

@@ -19,6 +19,7 @@ package worker
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -691,9 +692,8 @@ func (qs *queryState) handleUidPostings(
 		return err
 	}
 
-	span := otrace.FromContext(ctx)
-	stop := x.SpanTimer(span, "handleUidPostings")
-	defer stop()
+	ctx, span := otrace.StartSpan(ctx, "handleUidPostings")
+	defer span.End()
 	if span != nil {
 		span.Annotatef(nil, "Number of uids: %d. args.srcFn: %+v", srcFn.n, args.srcFn)
 	}
@@ -721,7 +721,12 @@ func (qs *queryState) handleUidPostings(
 	errCh := make(chan error, numGo)
 	outputs := make([]*pb.Result, numGo)
 
-	calculate := func(start, end int) error {
+	calculate := func(ctx context.Context, start, end int) error {
+		span := otrace.FromContext(ctx)
+		defer span.End()
+		fmt.Println("Starting", start, time.Now())
+		stopCal := x.SpanTimer(span, fmt.Sprintf("Start calculate %f", time.Now()))
+		defer stopCal()
 		x.AssertTrue(start%width == 0)
 		out := &pb.Result{}
 		outputs[start/width] = out
@@ -750,16 +755,16 @@ func (qs *queryState) handleUidPostings(
 			}
 
 			// Get or create the posting list for an entity, attribute combination.
+			stopCacheTimer := x.SpanTimer(span, "Get From Badger / cache")
 			pl, err := qs.cache.Get(key)
+			stopCacheTimer()
 			if err != nil {
 				return err
 			}
 
 			switch {
 			case q.DoCount:
-				if i == 0 {
-					span.Annotate(nil, "DoCount")
-				}
+				span.Annotate(nil, "DoCount")
 				count, err := countForUidPostings(args, pl, facetsTree, opts)
 				if err != nil {
 					return err
@@ -768,9 +773,7 @@ func (qs *queryState) handleUidPostings(
 				// Add an empty UID list to make later processing consistent.
 				out.UidMatrix = append(out.UidMatrix, &pb.List{})
 			case srcFn.fnType == compareScalarFn:
-				if i == 0 {
-					span.Annotate(nil, "CompareScalarFn")
-				}
+				span.Annotate(nil, "CompareScalarFn")
 				len := pl.Length(args.q.ReadTs, 0)
 				if len == -1 {
 					return posting.ErrTsTooOld
@@ -781,9 +784,7 @@ func (qs *queryState) handleUidPostings(
 					out.UidMatrix = append(out.UidMatrix, tlist)
 				}
 			case srcFn.fnType == hasFn:
-				if i == 0 {
-					span.Annotate(nil, "HasFn")
-				}
+				span.Annotate(nil, "HasFn")
 				empty, err := pl.IsEmpty(args.q.ReadTs, 0)
 				if err != nil {
 					return err
@@ -793,9 +794,7 @@ func (qs *queryState) handleUidPostings(
 					out.UidMatrix = append(out.UidMatrix, tlist)
 				}
 			case srcFn.fnType == uidInFn:
-				if i == 0 {
-					span.Annotate(nil, "UidInFn")
-				}
+				span.Annotate(nil, "UidInFn")
 				reqList := &pb.List{Uids: srcFn.uidsPresent}
 				topts := posting.ListOptions{
 					ReadTs:    args.q.ReadTs,
@@ -803,7 +802,7 @@ func (qs *queryState) handleUidPostings(
 					Intersect: reqList,
 					First:     int(args.q.First + args.q.Offset),
 				}
-				plist, err := pl.Uids(topts)
+				plist, err := pl.Uids(ctx, topts)
 				if err != nil {
 					return err
 				}
@@ -812,9 +811,7 @@ func (qs *queryState) handleUidPostings(
 					out.UidMatrix = append(out.UidMatrix, tlist)
 				}
 			case q.FacetParam != nil || facetsTree != nil:
-				if i == 0 {
-					span.Annotate(nil, "default with facets")
-				}
+				span.Annotate(nil, "default with facets")
 				uidList, fcsList, err := retrieveUidsAndFacets(args, pl, facetsTree, opts)
 				if err != nil {
 					return err
@@ -824,10 +821,8 @@ func (qs *queryState) handleUidPostings(
 					out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{FacetsList: fcsList})
 				}
 			default:
-				if i == 0 {
-					span.Annotate(nil, "default no facets")
-				}
-				uidList, err := pl.Uids(opts)
+				span.Annotate(nil, "default no facets")
+				uidList, err := pl.Uids(ctx, opts)
 				if err != nil {
 					return err
 				}
@@ -843,8 +838,12 @@ func (qs *queryState) handleUidPostings(
 		if end > srcFn.n {
 			end = srcFn.n
 		}
+
+		xctx, _ := otrace.StartSpan(ctx, "Calculate "+string(start))
+		defer span.End()
 		go func(start, end int) {
-			errCh <- calculate(start, end)
+			fmt.Println("Scheduling", start, time.Now())
+			errCh <- calculate(xctx, start, end)
 		}(start, end)
 	}
 	for i := 0; i < numGo; i++ {
@@ -937,6 +936,7 @@ func (qs *queryState) helpProcessTask(ctx context.Context, q *pb.Query, gid uint
 	*pb.Result, error) {
 
 	span := otrace.FromContext(ctx)
+	defer span.Annotate(nil, "Done helpProcessTask")
 	out := new(pb.Result)
 	attr := q.Attr
 
@@ -1097,7 +1097,7 @@ func (qs *queryState) handleCompareScalarFunction(ctx context.Context, arg funcA
 		readTs:  arg.q.ReadTs,
 		reverse: arg.q.Reverse,
 	}
-	return qs.evaluate(cp, arg.out)
+	return qs.evaluate(ctx, cp, arg.out)
 }
 
 func (qs *queryState) handleRegexFunction(ctx context.Context, arg funcArgs) error {
@@ -2212,7 +2212,7 @@ type countParams struct {
 	fn      string // function name
 }
 
-func (qs *queryState) evaluate(cp countParams, out *pb.Result) error {
+func (qs *queryState) evaluate(ctx context.Context, cp countParams, out *pb.Result) error {
 	countl := cp.counts[0]
 	var counth int64
 	if cp.fn == between {
@@ -2246,7 +2246,7 @@ func (qs *queryState) evaluate(cp countParams, out *pb.Result) error {
 		if err != nil {
 			return err
 		}
-		uids, err := pl.Uids(posting.ListOptions{ReadTs: cp.readTs})
+		uids, err := pl.Uids(ctx, posting.ListOptions{ReadTs: cp.readTs})
 		if err != nil {
 			return err
 		}
@@ -2292,7 +2292,7 @@ func (qs *queryState) evaluate(cp countParams, out *pb.Result) error {
 		if err != nil {
 			return err
 		}
-		uids, err := pl.Uids(posting.ListOptions{ReadTs: cp.readTs})
+		uids, err := pl.Uids(ctx, posting.ListOptions{ReadTs: cp.readTs})
 		if err != nil {
 			return err
 		}

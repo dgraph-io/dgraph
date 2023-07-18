@@ -17,6 +17,7 @@
 package worker
 
 import (
+	"context"
 	"errors"
 
 	cindex "github.com/google/codesearch/index"
@@ -49,7 +50,7 @@ func uidsForRegex(attr string, arg funcArgs,
 		if err != nil {
 			return nil, err
 		}
-		return pl.Uids(opts)
+		return pl.Uids(context.Background(), opts)
 	}
 
 	switch query.Op {

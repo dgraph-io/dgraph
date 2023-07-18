@@ -1404,6 +1404,7 @@ func (n *node) Run() {
 			}
 			if span != nil {
 				span.Annotate(nil, "Advanced Raft. Done.")
+				fmt.Println("Done span")
 				span.End()
 				if err := ostats.RecordWithTags(context.Background(),
 					[]tag.Mutator{tag.Upsert(x.KeyMethod, "alpha.RunLoop")},

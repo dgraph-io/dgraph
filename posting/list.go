@@ -38,6 +38,8 @@ import (
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
+
+	otrace "go.opencensus.io/trace"
 )
 
 var (
@@ -71,6 +73,7 @@ const (
 // List stores the in-memory representation of a posting list.
 type List struct {
 	x.SafeMutex
+	immutable   *pb.List
 	key         []byte
 	plist       *pb.PostingList
 	mutationMap map[uint64]*pb.PostingList
@@ -875,6 +878,21 @@ func (l *List) Rollup(alloc *z.Allocator, readTs uint64) ([]*bpb.KV, error) {
 	return kvs, nil
 }
 
+func (l *List) CreateUnpacked() {
+	if l.plist.Pack == nil {
+		return
+	}
+	l.immutable = &pb.List{
+		Uids: make([]uint64, 0),
+	}
+	decoder := codec.NewDecoder(l.plist.Pack)
+	for ; decoder.Valid(); decoder.Next() {
+		for _, uid := range decoder.Uids() {
+			l.immutable.Uids = append(l.immutable.Uids, uid)
+		}
+	}
+}
+
 // ToBackupPostingList uses rollup to generate a single list with no splits.
 // It's used during backup so that each backed up posting list is stored in a single key.
 func (l *List) ToBackupPostingList(
@@ -1058,6 +1076,7 @@ func (l *List) encode(out *rollupOutput, readTs uint64, split bool) error {
 		return errors.Wrapf(err, "cannot iterate through the list")
 	}
 	plist.Pack = enc.Done()
+	l.CreateUnpacked()
 	if plist.Pack != nil {
 		if plist.Pack.BlockSize != uint32(blockSize) {
 			return errors.Errorf("actual block size %d is different from expected value %d",
@@ -1137,7 +1156,9 @@ func (l *List) ApproxLen() int {
 // Uids returns the UIDs given some query params.
 // We have to apply the filtering before applying (offset, count).
 // WARNING: Calling this function just to get UIDs is expensive
-func (l *List) Uids(opt ListOptions) (*pb.List, error) {
+func (l *List) Uids(ctx context.Context, opt ListOptions) (*pb.List, error) {
+	ctx, span := otrace.StartSpan(ctx, "Posting.Uids")
+	defer span.End()
 	if opt.First == 0 {
 		opt.First = math.MaxInt32
 	}
@@ -1151,11 +1172,15 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 			l.RUnlock()
 			return out, ErrTsTooOld
 		}
-		algo.IntersectCompressedWith(l.plist.Pack, opt.AfterUid, opt.Intersect, out)
+		stop := x.SpanTimer(span, "IntersectCompressedWith")
+		//algo.IntersectCompressedWith(l.plist.Pack, opt.AfterUid, opt.Intersect, out)
+		algo.IntersectWithAfter(l.immutable, opt.Intersect, out, opt.AfterUid)
+		stop()
 		l.RUnlock()
 		return out, nil
 	}
 
+	span.Annotate(nil, "Starting to read latest data from badger")
 	err := l.iterate(opt.ReadTs, opt.AfterUid, func(p *pb.Posting) error {
 		if p.PostingType == pb.Posting_REF {
 			res = append(res, p.Uid)
@@ -1178,6 +1203,7 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 	}
 
 	// Do The intersection here as it's optimized.
+	span.Annotate(nil, "Starting normal Intersect")
 	out.Uids = res
 	if opt.Intersect != nil {
 		algo.IntersectWith(out, opt.Intersect, out)

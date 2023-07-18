@@ -17,6 +17,8 @@
 package worker
 
 import (
+	"context"
+
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -93,7 +95,7 @@ func uidsForMatch(attr string, arg funcArgs) (*pb.List, error) {
 		if err != nil {
 			return nil, err
 		}
-		return pl.Uids(opts)
+		return pl.Uids(context.Background(), opts)
 	}
 
 	tokens, err := tok.GetTokens(tok.IdentTrigram, arg.srcFn.tokens...)

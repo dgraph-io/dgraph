@@ -395,6 +395,10 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 		}
 	}()
 
+	defer func() {
+		l.CreateUnpacked()
+	}()
+
 	// Iterates from highest Ts to lowest Ts
 	for it.Valid() {
 		item := it.Item()
@@ -454,6 +458,7 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 		}
 		it.Next()
 	}
+
 	return l, nil
 }
 

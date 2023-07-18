@@ -33,7 +33,7 @@ import (
 )
 
 func uids(l *List, readTs uint64) []uint64 {
-	r, err := l.Uids(ListOptions{ReadTs: readTs})
+	r, err := l.Uids(context.Background(), ListOptions{ReadTs: readTs})
 	x.Check(err)
 	return r.Uids
 }

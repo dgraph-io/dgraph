@@ -136,6 +136,44 @@ func IntersectCompressedWithBin(dec *codec.Decoder, q []uint64, o *[]uint64) {
 	}
 }
 
+func IntersectMap(u map[uint64]bool, afterUid uint64, v, o *pb.List) {
+	n := len(u)
+	m := len(v.Uids)
+
+	min := n
+	if m < n {
+		min = m
+	}
+	if o.Uids == nil {
+		o.Uids = make([]uint64, 0, min)
+	}
+
+	for i := 0; i < m; i++ {
+		k := v.Uids[i]
+		if k < afterUid {
+			continue
+		}
+		if _, ok := u[k]; ok {
+			o.Uids = append(o.Uids, k)
+		}
+	}
+
+}
+
+func IntersectWithAfter(u, v, o *pb.List, afterUid uint64) {
+	IntersectWith(u, v, o)
+	index := 0
+	for i, uid := range o.Uids {
+		if uid >= afterUid {
+			if i > 0 {
+				index = i - 1
+			}
+			break
+		}
+	}
+	o.Uids = o.Uids[index:]
+}
+
 // IntersectWith intersects u with v. The update is made to o.
 // u, v should be sorted.
 func IntersectWith(u, v, o *pb.List) {

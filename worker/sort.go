@@ -618,7 +618,7 @@ func intersectBucket(ctx context.Context, ts *pb.SortMessage, token string,
 			ReadTs:    ts.ReadTs,
 			First:     0, // TODO: Should we set the first N here?
 		}
-		result, err := pl.Uids(listOpt) // The actual intersection work is done here.
+		result, err := pl.Uids(ctx, listOpt) // The actual intersection work is done here.
 		if err != nil {
 			return err
 		}
