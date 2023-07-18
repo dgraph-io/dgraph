@@ -32,12 +32,13 @@ import (
 )
 
 const (
-	uidFunc   = "uid"
-	valueFunc = "val"
-	typFunc   = "type"
-	lenFunc   = "len"
-	countFunc = "count"
-	uidInFunc = "uid_in"
+	uidFunc     = "uid"
+	valueFunc   = "val"
+	typFunc     = "type"
+	lenFunc     = "len"
+	countFunc   = "count"
+	uidInFunc   = "uid_in"
+	similarToFn = "similar_to"
 )
 
 var (
@@ -1621,7 +1622,7 @@ func validFuncName(name string) bool {
 
 	switch name {
 	case "regexp", "anyofterms", "allofterms", "alloftext", "anyoftext",
-		"has", "uid", "uid_in", "anyof", "allof", "type", "match":
+		"has", "uid", "uid_in", "anyof", "allof", "type", "match", "similar_to":
 		return true
 	}
 	return false
@@ -1794,7 +1795,7 @@ L:
 				case IsInequalityFn(function.Name):
 					err = parseFuncArgs(it, function)
 
-				case function.Name == "uid_in":
+				case function.Name == "uid_in" || function.Name == "similar_to":
 					err = parseFuncArgs(it, function)
 
 				default:

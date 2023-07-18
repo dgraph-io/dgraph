@@ -220,6 +220,7 @@ const (
 	uidInFn
 	customIndexFn
 	matchFn
+	similarToFn
 	standardFn = 100
 )
 
@@ -258,6 +259,8 @@ func parseFuncTypeHelper(name string) (FuncType, string) {
 		return hasFn, f
 	case "uid_in":
 		return uidInFn, f
+	case "similar_to":
+		return similarToFn, f
 	case "anyof", "allof":
 		return customIndexFn, f
 	case "match":
@@ -317,7 +320,7 @@ func (srcFn *functionContext) needsValuePostings(typ types.TypeID) (bool, error)
 	case uidInFn, compareScalarFn:
 		// Operate on uid postings
 		return false, nil
-	case notAFunction:
+	case notAFunction, similarToFn:
 		return typ.IsScalar(), nil
 	}
 	return false, errors.Errorf("Unhandled case in fetchValuePostings for fn: %s", srcFn.fname)
@@ -341,9 +344,15 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 	}
 
 	switch srcFn.fnType {
-	case notAFunction, aggregatorFn, passwordFn, compareAttrFn:
+	case notAFunction, aggregatorFn, passwordFn, compareAttrFn, similarToFn:
 	default:
 		return errors.Errorf("Unhandled function in handleValuePostings: %s", srcFn.fname)
+	}
+
+	if srcFn.fnType == similarToFn {
+		// Implement function here.
+		args.out.UidMatrix = append(args.out.UidMatrix, &pb.List{Uids: srcFn.vectorInfo})
+		return nil
 	}
 
 	if srcFn.atype == types.PasswordID && srcFn.fnType != passwordFn {
@@ -1655,6 +1664,7 @@ type functionContext struct {
 	isFuncAtRoot   bool
 	isStringFn     bool
 	atype          types.TypeID
+	vectorInfo     []uint64
 }
 
 const (
@@ -1912,6 +1922,18 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 			return nil, err
 		}
 		checkRoot(q, fc)
+	case similarToFn:
+		for _, arg := range q.SrcFunc.Args {
+			uidParsed, err := strconv.ParseUint(arg, 0, 64)
+			if err != nil {
+				if e, ok := err.(*strconv.NumError); ok && e.Err == strconv.ErrSyntax {
+					return nil, errors.Errorf("Value %q in %s is not a number",
+						arg, q.SrcFunc.Name)
+				}
+				return nil, err
+			}
+			fc.vectorInfo = append(fc.vectorInfo, uidParsed)
+		}
 	case uidInFn:
 		for _, arg := range q.SrcFunc.Args {
 			uidParsed, err := strconv.ParseUint(arg, 0, 64)
