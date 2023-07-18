@@ -725,7 +725,7 @@ func (qs *queryState) handleUidPostings(
 		span := otrace.FromContext(ctx)
 		defer span.End()
 		fmt.Println("Starting", start, time.Now())
-		stopCal := x.SpanTimer(span, fmt.Sprintf("Start calculate %f", time.Now()))
+		stopCal := x.SpanTimer(span, fmt.Sprintf("Start calculate %d", time.Now()))
 		defer stopCal()
 		x.AssertTrue(start%width == 0)
 		out := &pb.Result{}
@@ -839,7 +839,7 @@ func (qs *queryState) handleUidPostings(
 			end = srcFn.n
 		}
 
-		xctx, _ := otrace.StartSpan(ctx, "Calculate "+string(start))
+		xctx, _ := otrace.StartSpan(ctx, fmt.Sprintf("Caclulate %d", start))
 		defer span.End()
 		go func(start, end int) {
 			fmt.Println("Scheduling", start, time.Now())

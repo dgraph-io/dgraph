@@ -2055,7 +2055,8 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	if len(sg.Attr) > 0 {
 		suffix += "." + sg.Attr
 	}
-	span := otrace.FromContext(ctx)
+	ctx, span := otrace.StartSpan(ctx, "query.ProcessGraph"+suffix)
+	defer span.End()
 	stop := x.SpanTimer(span, "query.ProcessGraph"+suffix)
 	defer stop()
 
@@ -2871,12 +2872,14 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 			return ferr
 		}
 
+		_, span := otrace.StartSpan(ctx, "Post Aggregation")
 		// If the executed subgraph had some variable defined in it, Populate it in the map.
 		for _, idx := range idxList {
 			sg := req.Subgraphs[idx]
 
 			var sgPath []*SubGraph
 			if err := sg.populateVarMap(req.Vars, sgPath); err != nil {
+				span.End()
 				return err
 			}
 			// first time at the root here.
@@ -2892,9 +2895,11 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 			}
 
 			if err := sg.populatePostAggregation(req.Vars, []*SubGraph{}, nil); err != nil {
+				span.End()
 				return err
 			}
 		}
+		span.End()
 	}
 
 	// Ensure all the queries are executed.
