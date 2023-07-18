@@ -73,7 +73,7 @@ func (u UpgradeStrategy) String() string {
 	case BackupRestore:
 		return "backup-restore"
 	case InPlace:
-		return "stop-start"
+		return "in-place"
 	case ExportImport:
 		return "export-import"
 	default:
