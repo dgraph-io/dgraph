@@ -551,7 +551,7 @@ func (c *LocalCluster) Upgrade(version string, strategy UpgradeStrategy) error {
 				return errors.Wrapf(err, "error during login before upgrade")
 			}
 		}
-		if err := hc.Export(DefaultExportDir); err != nil {
+		if err := hc.Export(DefaultExportDir, -1); err != nil {
 			return errors.Wrap(err, "error taking export during upgrade")
 		}
 		if err := c.Stop(); err != nil {

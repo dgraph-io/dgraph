@@ -472,9 +472,9 @@ loop2:
 	return errors.Errorf("restore wasn't started on at least 1 alpha")
 }
 
-func (hc *HTTPClient) Export(dest string) error {
-	const exportRequest = `mutation export($dest: String!, $f: String!) {
-		export(input: {destination: $dest, format: $f}) {
+func (hc *HTTPClient) Export(dest string, namespace int) error {
+	const exportRequest = `mutation export($dest: String!, $f: String!, $ns: Int) {
+		export(input: {destination: $dest, format: $f, namespace: $ns}) {
 			response {
 				message
 			}
@@ -485,6 +485,7 @@ func (hc *HTTPClient) Export(dest string) error {
 		Variables: map[string]interface{}{
 			"dest": dest,
 			"f":    "rdf",
+			"ns":   namespace,
 		},
 	}
 

@@ -29,6 +29,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/metadata"
 
+	"github.com/dgraph-io/dgraph/dgraphtest"
 	"github.com/dgraph-io/dgraph/testutil"
 )
 
@@ -2322,7 +2323,6 @@ func TestSum(t *testing.T) {
 }
 
 func TestQueryPassword(t *testing.T) {
-
 	// Password is not fetchable
 	query := `
                 {
@@ -2345,7 +2345,14 @@ func TestPasswordExpandAll1(t *testing.T) {
     }
 	`
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data":{"me":[{"alive":true, "gender":"female","name":"Michonne"}]}}`, js)
+	// During upgrade tests, UIDs of groot and guardians nodes might change.
+	a := dgraphtest.CompareJSON(`{"data":{"me":[{"alive":true,
+	"gender":"female", "name":"Michonne"}]}}`, js)
+	b := dgraphtest.CompareJSON(`{"data":{"me":[{"alive":true, "dgraph.xid":"guardians",
+	"gender":"female","name":"Michonne"}]}}`, js)
+	if a != nil && b != nil {
+		t.Error(a)
+	}
 }
 
 func TestPasswordExpandAll2(t *testing.T) {
@@ -2358,8 +2365,14 @@ func TestPasswordExpandAll2(t *testing.T) {
     }
 	`
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data":{"me":[{"alive":true, "checkpwd(password)":false,
+	// During upgrade tests, UIDs of groot and guardians nodes might change.
+	a := dgraphtest.CompareJSON(`{"data":{"me":[{"alive":true, "checkpwd(password)":false,
 	"gender":"female", "name":"Michonne"}]}}`, js)
+	b := dgraphtest.CompareJSON(`{"data":{"me":[{"alive":true, "dgraph.xid":"guardians",
+	"checkpwd(password)":false, "gender":"female", "name":"Michonne"}]}}`, js)
+	if a != nil && b != nil {
+		t.Error(a)
+	}
 }
 
 func TestPasswordExpandError(t *testing.T) {
@@ -3199,8 +3212,13 @@ func TestMultiRegexInFilter(t *testing.T) {
 		}
 	`
 	res := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"q": [{"alive":true, "gender":"female",
-	"name":"Michonne"}]}}`, res)
+	// During upgrade tests, UIDs of groot and guardians nodes might change.
+	a := dgraphtest.CompareJSON(`{"data": {"q": [{"alive":true, "gender":"female","name":"Michonne"}]}}`, res)
+	b := dgraphtest.CompareJSON(`{"data": {"q": [{"alive":true, "dgraph.xid":"guardians",
+		"gender":"female","name":"Michonne"}]}}`, res)
+	if a != nil && b != nil {
+		t.Error(a)
+	}
 }
 
 func TestMultiRegexInFilter2(t *testing.T) {

@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/dgraph-io/dgraph/dgraphtest"
@@ -48,10 +49,7 @@ func (asuite *AclTestSuite) TearDownTest() {
 }
 
 func (asuite *AclTestSuite) Upgrade() {
-	if err := asuite.lc.Upgrade(asuite.uc.After, asuite.uc.Strategy); err != nil {
-		asuite.lc.Cleanup(true)
-		asuite.T().Fatal(err)
-	}
+	require.NoError(asuite.T(), asuite.lc.Upgrade(asuite.uc.After, asuite.uc.Strategy))
 }
 
 func TestACLSuite(t *testing.T) {
