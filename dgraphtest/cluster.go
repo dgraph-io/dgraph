@@ -74,9 +74,9 @@ type GraphQLParams struct {
 	Extensions *schema.RequestExtensions `json:"extensions,omitempty"`
 }
 
-type DQLParams struct {
-	body  string
-	typ  string
+type DqlParams struct {
+	body        string
+	contentType string
 }
 
 type GraphQLResponse struct {
@@ -298,6 +298,21 @@ func (hc *HTTPClient) RunGraphqlQuery(params GraphQLParams, admin bool) ([]byte,
 	return gqlResp.Data, nil
 }
 
+// RunDqlQuery makes a dql query to query endpoint
+func (hc *HTTPClient) RunDqlQuery(params DqlParams) ([]byte, error) {
+	req, err := http.NewRequest(http.MethodPost, hc.dqlURL, bytes.NewBufferString(params.body))
+	if err != nil {
+		return nil, errors.Wrapf(err, "error building req for endpoint [%v]", hc.dqlURL)
+	}
+	req.Header.Add("Content-Type", params.contentType)
+
+	if hc.HttpToken != nil {
+		req.Header.Add("X-Dgraph-AccessToken", hc.AccessJwt)
+	}
+
+	return doReq(req)
+}
+
 func (hc *HTTPClient) HealthForInstance() ([]byte, error) {
 	const query = `query {
 		health {
@@ -312,37 +327,6 @@ func (hc *HTTPClient) HealthForInstance() ([]byte, error) {
 	}`
 	params := GraphQLParams{Query: query}
 	return hc.RunGraphqlQuery(params, true)
-}
-
-func (hc *HTTPClient) doDqlPost(params DQLParams) (*http.Response, error) {
-	url := hc.dqlURL
-	var bb bytes.Buffer
-	bb.WriteString(params.body)
-	req, err := http.NewRequest(http.MethodPost, url, &bb)
-	if err != nil {
-		return nil, errors.Wrapf(err, "error building req for endpoint [%v]", url)
-	}
-	req.Header.Add("Content-Type", params.typ)
-
-	if hc.HttpToken != nil {
-		req.Header.Add("X-Dgraph-AccessToken", hc.AccessJwt)
-	}
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, errors.Wrap(err, "error performing HTTP request")
-	}
-
-	return resp, nil
-}
-
-// RunDqlQuery makes a dql query to query endpoint
-func (hc *HTTPClient) RunDqlQuery(params DQLParams) (*http.Response, error) {
-	respBody, err := hc.doDqlPost(params)
-	if err != nil {
-		return nil, errors.Wrap(err, "error while running dql query")
-	}
-	return respBody, nil
 }
 
 // Backup creates a backup of dgraph at a given path
@@ -652,12 +636,11 @@ func (hc *HTTPClient) GetZeroState() (*LicenseResponse, error) {
 	return &stateResponse, nil
 }
 
-func (hc *HTTPClient) PostDqlQuery(b *bytes.Buffer) (*http.Response, error) {
-	query := b.String()
-	params := DQLParams{
-			body: query,
-			typ: "application/dql",
-		}
+func (hc *HTTPClient) PostDqlQuery(query string) ([]byte, error) {
+	params := DqlParams{
+		body:        query,
+		contentType: "application/dql",
+	}
 	return hc.RunDqlQuery(params)
 }
 

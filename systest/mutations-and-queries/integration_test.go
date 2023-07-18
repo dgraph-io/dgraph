@@ -1,4 +1,4 @@
-//go:build upgrade
+//go:build integration
 
 /*
  * Copyright 2023 Dgraph Labs, Inc. and Contributors
@@ -19,10 +19,10 @@
 package main
 
 import (
-	"log"
+	"context"
 	"testing"
-	"time"
 
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/dgraph-io/dgraph/dgraphtest"
@@ -32,41 +32,39 @@ import (
 type SystestTestSuite struct {
 	suite.Suite
 	dc dgraphtest.Cluster
-	lc *dgraphtest.LocalCluster
-	uc dgraphtest.UpgradeCombo
 }
 
 func (ssuite *SystestTestSuite) SetupTest() {
-	conf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).WithReplicas(1).
-		WithACL(20 * time.Second).WithEncryption().WithVersion(ssuite.uc.Before)
-	c, err := dgraphtest.NewLocalCluster(conf)
-	x.Panic(err)
-	if err := c.Start(); err != nil {
-		c.Cleanup(true)
-		panic(err)
-	}
+	ssuite.dc = dgraphtest.NewComposeCluster()
+}
 
-	ssuite.dc = c
-	ssuite.lc = c
+func (ssuite *SystestTestSuite) SetupSubTest() {
+	t := ssuite.T()
+	gcli, cleanup, err := ssuite.dc.Client()
+	defer cleanup()
+	require.NoError(t, err)
+	require.NoError(t, gcli.LoginIntoNamespace(context.Background(),
+		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	require.NoError(t, gcli.DropAll())
 }
 
 func (ssuite *SystestTestSuite) TearDownTest() {
-	ssuite.lc.Cleanup(ssuite.T().Failed())
+	t := ssuite.T()
+	gcli, cleanup, err := ssuite.dc.Client()
+	defer cleanup()
+	require.NoError(t, err)
+	require.NoError(t, gcli.LoginIntoNamespace(context.Background(),
+		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	require.NoError(t, gcli.DropAll())
 }
 
 func (ssuite *SystestTestSuite) Upgrade() {
-	t := ssuite.T()
-
-	if err := ssuite.lc.Upgrade(ssuite.uc.After, ssuite.uc.Strategy); err != nil {
-		t.Fatal(err)
-	}
+	// Not implemented for integration tests
 }
 
 func TestSystestTestSuite(t *testing.T) {
-	for _, uc := range dgraphtest.AllUpgradeCombos {
-		log.Printf("running: backup in [%v], restore in [%v]", uc.Before, uc.After)
-		var ssuite SystestTestSuite
-		ssuite.uc = uc
-		suite.Run(t, &ssuite)
+	suite.Run(t, new(SystestTestSuite))
+	if t.Failed() {
+		t.Fatal("TestSystestTestSuite tests failed")
 	}
 }

@@ -1,4 +1,4 @@
-//go:build integration
+//go:build upgrade
 
 /*
  * Copyright 2023 Dgraph Labs, Inc. and Contributors
@@ -19,13 +19,12 @@
 package main
 
 import (
-	"context"
+	"log"
 	"testing"
+	"time"
 
-	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
-	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/dgraphtest"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -33,26 +32,46 @@ import (
 type SystestTestSuite struct {
 	suite.Suite
 	dc dgraphtest.Cluster
+	lc *dgraphtest.LocalCluster
+	uc dgraphtest.UpgradeCombo
 }
 
-func (ssuite *SystestTestSuite) SetupTest() {
-	ssuite.dc = dgraphtest.NewComposeCluster()
+func (ssuite *SystestTestSuite) SetupSubTest() {
+	ssuite.lc.Cleanup(ssuite.T().Failed())
+
+	conf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).WithReplicas(1).
+		WithACL(20 * time.Second).WithEncryption().WithVersion(ssuite.uc.Before)
+	c, err := dgraphtest.NewLocalCluster(conf)
+	x.Panic(err)
+	if err := c.Start(); err != nil {
+		c.Cleanup(true)
+		panic(err)
+	}
+
+	ssuite.dc = c
+	ssuite.lc = c
 }
 
 func (ssuite *SystestTestSuite) TearDownTest() {
-	t := ssuite.T()
-	gcli, cleanup, err := ssuite.dc.Client()
-	defer cleanup()
-	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(context.Background(),
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
-	require.NoError(t, gcli.Alter(context.Background(), &api.Operation{DropAll: true}))
+	ssuite.lc.Cleanup(ssuite.T().Failed())
 }
 
 func (ssuite *SystestTestSuite) Upgrade() {
-	// Not implemented for integration tests
+	t := ssuite.T()
+
+	if err := ssuite.lc.Upgrade(ssuite.uc.After, ssuite.uc.Strategy); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestSystestTestSuite(t *testing.T) {
-	suite.Run(t, new(SystestTestSuite))
+	for _, uc := range dgraphtest.AllUpgradeCombos() {
+		log.Printf("running: backup in [%v], restore in [%v]", uc.Before, uc.After)
+		var ssuite SystestTestSuite
+		ssuite.uc = uc
+		suite.Run(t, &ssuite)
+		if t.Failed() {
+			t.Fatal("TestSystestTestSuite tests failed")
+		}
+	}
 }

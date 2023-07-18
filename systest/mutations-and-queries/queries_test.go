@@ -1,4 +1,4 @@
-//go:build (!oss && integration) || upgrade
+//go:build integration || upgrade
 
 /*
  * Copyright 2023 Dgraph Labs, Inc. and Contributors
@@ -20,24 +20,36 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	//"io"
-	//"net/http"
-	//"testing"
 
 	"github.com/stretchr/testify/require"
 
-	//"github.com/dgraph-io/dgo/v230"
 	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/dgraphtest"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 )
 
-func (ssuite *SystestTestSuite) Test_Q14SchemaQueryCleanup() {
+func (ssuite *SystestTestSuite) TestQuery() {
+	ssuite.Run("schema response", ssuite.SchemaQueryTest)
+	ssuite.Run("schema response http", ssuite.SchemaQueryTestHTTP)
+	ssuite.Run("schema predicate names", ssuite.SchemaQueryTestPredicate1)
+	ssuite.Run("schema specific predicate fields", ssuite.SchemaQueryTestPredicate2)
+	ssuite.Run("schema specific predicate field", ssuite.SchemaQueryTestPredicate3)
+	ssuite.Run("multiple block eval", ssuite.MultipleBlockEval)
+	ssuite.Run("unmatched var assignment eval", ssuite.UnmatchedVarEval)
+	ssuite.Run("hash index queries", ssuite.QueryHashIndex)
+	ssuite.Run("fuzzy matching", ssuite.FuzzyMatch)
+	ssuite.Run("regexp with toggled trigram index", ssuite.RegexpToggleTrigramIndex)
+	ssuite.Run("eq with altering order of trigram and term index", ssuite.EqWithAlteredIndexOrder)
+	ssuite.Run("groupby uid that works", ssuite.GroupByUidWorks)
+	ssuite.Run("parameterized cascade", ssuite.CascadeParams)
+	ssuite.Run("cleanup", ssuite.SchemaQueryCleanup)
+}
+
+func (ssuite *SystestTestSuite) SchemaQueryCleanup() {
 	t := ssuite.T()
 	ctx := context.Background()
 	gcli, cleanup, err := ssuite.dc.Client()
@@ -48,7 +60,7 @@ func (ssuite *SystestTestSuite) Test_Q14SchemaQueryCleanup() {
 	require.NoError(t, gcli.Alter(ctx, &api.Operation{DropAll: true}))
 }
 
-func (ssuite *SystestTestSuite) Test_Q06MultipleBlockEval() {
+func (ssuite *SystestTestSuite) MultipleBlockEval() {
 	t := ssuite.T()
 
 	op := &api.Operation{
@@ -225,7 +237,7 @@ func (ssuite *SystestTestSuite) Test_Q06MultipleBlockEval() {
 	}
 }
 
-func (ssuite *SystestTestSuite) Test_Q07UnmatchedVarEval() {
+func (ssuite *SystestTestSuite) UnmatchedVarEval() {
 	t := ssuite.T()
 
 	op := &api.Operation{
@@ -328,7 +340,7 @@ func (ssuite *SystestTestSuite) Test_Q07UnmatchedVarEval() {
 	}
 }
 
-func (ssuite *SystestTestSuite) Test_Q01SchemaQueryTest() {
+func (ssuite *SystestTestSuite) SchemaQueryTest() {
 	t := ssuite.T()
 
 	op := &api.Operation{Schema: `name: string @index(exact) .`}
@@ -367,7 +379,7 @@ func (ssuite *SystestTestSuite) Test_Q01SchemaQueryTest() {
       }`})
 }
 
-func (ssuite *SystestTestSuite) Test_Q03SchemaQueryTestPredicate1() {
+func (ssuite *SystestTestSuite) SchemaQueryTestPredicate1() {
 	t := ssuite.T()
 
 	op := &api.Operation{
@@ -461,7 +473,7 @@ func (ssuite *SystestTestSuite) Test_Q03SchemaQueryTestPredicate1() {
 	dgraphtest.CompareJSON(js, string(resp.Json))
 }
 
-func (ssuite *SystestTestSuite) Test_Q04SchemaQueryTestPredicate2() {
+func (ssuite *SystestTestSuite) SchemaQueryTestPredicate2() {
 	t := ssuite.T()
 
 	op := &api.Operation{Schema: `name: string @index(exact) .`}
@@ -508,7 +520,7 @@ func (ssuite *SystestTestSuite) Test_Q04SchemaQueryTestPredicate2() {
 	dgraphtest.CompareJSON(js, string(resp.Json))
 }
 
-func (ssuite *SystestTestSuite) Test_Q05SchemaQueryTestPredicate3() {
+func (ssuite *SystestTestSuite) SchemaQueryTestPredicate3() {
 	t := ssuite.T()
 
 	op := &api.Operation{
@@ -564,7 +576,7 @@ func (ssuite *SystestTestSuite) Test_Q05SchemaQueryTestPredicate3() {
 	dgraphtest.CompareJSON(js, string(resp.Json))
 }
 
-func (ssuite *SystestTestSuite) Test_Q02SchemaQueryTestHTTP() {
+func (ssuite *SystestTestSuite) SchemaQueryTestHTTP() {
 	t := ssuite.T()
 
 	ctx := context.Background()
@@ -589,22 +601,13 @@ func (ssuite *SystestTestSuite) Test_Q02SchemaQueryTestHTTP() {
 	require.NotNil(t, hcli.AccessJwt, "token is nil")
 	require.NoError(t, err)
 
-	// Need an implementation that provides this functionality in dgraphtest ?
-	var bb bytes.Buffer
-	bb.WriteString(`schema{}`)
-	res, err := hcli.PostDqlQuery(&bb)
+	res, err := hcli.PostDqlQuery(`schema{}`)
 	require.NoError(t, err)
 	require.NotNil(t, res)
-	defer res.Body.Close()
-
-	bb.Reset()
-	_, err = bb.ReadFrom(res.Body)
-	require.NoError(t, err)
 
 	var m map[string]json.RawMessage
-	require.NoError(t, json.Unmarshal(bb.Bytes(), &m))
+	require.NoError(t, json.Unmarshal(res, &m))
 	require.NotNil(t, m["extensions"])
-
 	dgraphtest.CompareJSON(testutil.GetFullSchemaJSON(testutil.SchemaOptions{UserPreds: `
 	  {
         "predicate": "name",
@@ -616,7 +619,7 @@ func (ssuite *SystestTestSuite) Test_Q02SchemaQueryTestHTTP() {
       }`}), string(m["data"]))
 }
 
-func (ssuite *SystestTestSuite) Test_Q09FuzzyMatch() {
+func (ssuite *SystestTestSuite) FuzzyMatch() {
 	t := ssuite.T()
 
 	op := &api.Operation{
@@ -776,7 +779,7 @@ func (ssuite *SystestTestSuite) Test_Q09FuzzyMatch() {
 	}
 }
 
-func (ssuite *SystestTestSuite) Test_Q13CascadeParams() {
+func (ssuite *SystestTestSuite) CascadeParams() {
 	t := ssuite.T()
 
 	op := &api.Operation{Schema: `name: string @index(fulltext) .`}
@@ -1251,7 +1254,7 @@ func (ssuite *SystestTestSuite) Test_Q13CascadeParams() {
 	}
 }
 
-func (ssuite *SystestTestSuite) Test_Q08QueryHashIndex() {
+func (ssuite *SystestTestSuite) QueryHashIndex() {
 	t := ssuite.T()
 
 	op := &api.Operation{Schema: `name: string @index(hash) @lang .`}
@@ -1376,7 +1379,7 @@ func (ssuite *SystestTestSuite) Test_Q08QueryHashIndex() {
 	}
 }
 
-func (ssuite *SystestTestSuite) Test_Q10RegexpToggleTrigramIndex() {
+func (ssuite *SystestTestSuite) RegexpToggleTrigramIndex() {
 	t := ssuite.T()
 
 	op := &api.Operation{Schema: `name: string @index(term) @lang .`}
@@ -1458,7 +1461,7 @@ func (ssuite *SystestTestSuite) Test_Q10RegexpToggleTrigramIndex() {
 	require.Contains(t, err.Error(), "Attribute name does not have trigram index for regex matching.")
 }
 
-func (ssuite *SystestTestSuite) Test_Q11EqWithAlteredIndexOrder() {
+func (ssuite *SystestTestSuite) EqWithAlteredIndexOrder() {
 	t := ssuite.T()
 
 	// first, let's set the schema with term before trigram
@@ -1508,7 +1511,7 @@ func (ssuite *SystestTestSuite) Test_Q11EqWithAlteredIndexOrder() {
 	dgraphtest.CompareJSON(expectedResult, string(resp.Json))
 }
 
-func (ssuite *SystestTestSuite) Test_Q12GroupByUidWorks() {
+func (ssuite *SystestTestSuite) GroupByUidWorks() {
 	t := ssuite.T()
 
 	ctx := context.Background()
