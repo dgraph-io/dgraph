@@ -345,29 +345,37 @@ func (c *LocalCluster) killContainer(dc dnode) error {
 
 func (c *LocalCluster) HealthCheck(zeroOnly bool) error {
 	log.Printf("[INFO] checking health of containers")
-	for i := 0; i < c.conf.numZeros; i++ {
-		url, err := c.zeros[i].healthURL(c)
+	for _, zo := range c.zeros {
+		url, err := zo.healthURL(c)
 		if err != nil {
 			return errors.Wrap(err, "error getting health URL")
 		}
 		if err := c.containerHealthCheck(url); err != nil {
 			return err
 		}
-		log.Printf("[INFO] container [zero-%v] passed health check", i)
+		log.Printf("[INFO] container [%v] passed health check", zo.containerName)
+
+		if err := c.checkDgraphVersion(zo.containerName); err != nil {
+			return err
+		}
 	}
 	if zeroOnly {
 		return nil
 	}
 
-	for i := 0; i < c.conf.numAlphas; i++ {
-		url, err := c.alphas[i].healthURL(c)
+	for _, aa := range c.alphas {
+		url, err := aa.healthURL(c)
 		if err != nil {
 			return errors.Wrap(err, "error getting health URL")
 		}
 		if err := c.containerHealthCheck(url); err != nil {
 			return err
 		}
-		log.Printf("[INFO] container [alpha-%v] passed health check", i)
+		log.Printf("[INFO] container [%v] passed health check", aa.containerName)
+
+		if err := c.checkDgraphVersion(aa.containerName); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -551,6 +559,7 @@ func (c *LocalCluster) Upgrade(version string, strategy UpgradeStrategy) error {
 				return errors.Wrapf(err, "error during login before upgrade")
 			}
 		}
+		// using -1 as namespace exports all the namespaces
 		if err := hc.Export(DefaultExportDir, -1); err != nil {
 			return errors.Wrap(err, "error taking export during upgrade")
 		}
@@ -760,6 +769,21 @@ func (c *LocalCluster) printLogs(containerID string) error {
 
 	log.Printf("[INFO] ======== LOGS for CONTAINER [%v] ========", containerID)
 	log.Println(logsData)
+	return nil
+}
+
+func (c *LocalCluster) checkDgraphVersion(containerID string) error {
+	if c.GetVersion() == localVersion {
+		return nil
+	}
+
+	contLogs, err := c.getLogs(containerID)
+	if err != nil {
+		return errors.Wrapf(err, "error during checkDgraphVersion for container [%v]", containerID)
+	}
+	if !strings.Contains(contLogs, fmt.Sprintf("Dgraph version   : %v", c.GetVersion())) {
+		return errors.Errorf("found different dgraph version than expected [%v]", c.GetVersion())
+	}
 	return nil
 }
 

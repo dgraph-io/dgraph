@@ -50,7 +50,7 @@ type LiveOpts struct {
 }
 
 // readGzFile reads the given file from disk completely and returns the content.
-func readGzFile(c *LocalCluster, sf string) ([]byte, error) {
+func readGzFile(sf string, encryption bool) ([]byte, error) {
 	fd, err := os.Open(sf)
 	if err != nil {
 		return nil, errors.Wrapf(err, "error opening file [%v]", sf)
@@ -61,15 +61,15 @@ func readGzFile(c *LocalCluster, sf string) ([]byte, error) {
 		}
 	}()
 
-	data, err := readGzData(c, fd)
+	data, err := readGzData(fd, encryption)
 	if err != nil {
 		return nil, errors.Wrapf(err, "error reading data from file [%v]", sf)
 	}
 	return data, nil
 }
 
-func readGzData(c *LocalCluster, r io.Reader) ([]byte, error) {
-	if c.conf.encryption {
+func readGzData(r io.Reader, encryption bool) ([]byte, error) {
+	if encryption {
 		encKey, err := os.ReadFile(encKeyPath)
 		if err != nil {
 			return nil, errors.Wrap(err, "error reading the encryption key from disk")
@@ -97,11 +97,11 @@ func readGzData(c *LocalCluster, r io.Reader) ([]byte, error) {
 	return data, nil
 }
 
-func writeGzData(c *LocalCluster, data []byte) (io.Reader, error) {
+func writeGzData(data []byte, encryption bool) (io.Reader, error) {
 	buf := bytes.NewBuffer(nil)
 
 	var w io.Writer = buf
-	if c.conf.encryption {
+	if encryption {
 		encKey, err := os.ReadFile(encKeyPath)
 		if err != nil {
 			return nil, errors.Wrap(err, "error reading the encryption key from disk")
@@ -144,7 +144,7 @@ func setDQLSchema(c *LocalCluster, files []string) error {
 	}
 
 	for _, sf := range files {
-		data, err := readGzFile(c, sf)
+		data, err := readGzFile(sf, c.conf.encryption)
 		if err != nil {
 			return err
 		}
@@ -164,7 +164,7 @@ func setGraphQLSchema(c *LocalCluster, files []string) error {
 	}
 
 	for _, sf := range files {
-		data, err := readGzFile(c, sf)
+		data, err := readGzFile(sf, c.conf.encryption)
 		if err != nil {
 			return err
 		}
@@ -306,7 +306,7 @@ func modifyACLEntries(c *LocalCluster, r io.Reader) (io.Reader, error) {
 	grootUIDNew = fmt.Sprintf("<%v>", grootUIDNew)
 	guardiansUIDNew = fmt.Sprintf("<%v>", guardiansUIDNew)
 
-	data, err := readGzData(c, r)
+	data, err := readGzData(r, c.conf.encryption)
 	if err != nil {
 		return nil, err
 	}
@@ -354,7 +354,7 @@ func modifyACLEntries(c *LocalCluster, r io.Reader) (io.Reader, error) {
 	}
 	data = bytes.Join(lines, []byte{'\n'})
 
-	return writeGzData(c, data)
+	return writeGzData(data, c.conf.encryption)
 }
 
 // LiveLoadFromExport runs the live loader from the output of dgraph export
