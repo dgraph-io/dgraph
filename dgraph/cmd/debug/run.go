@@ -948,6 +948,7 @@ func run() {
 	opt.key = keys.EncKey
 
 	if isWal {
+		fmt.Printf("Opening WAL: %s\n", opt.wdir)
 		store, err := raftwal.InitEncrypted(dir, opt.key)
 		x.Check(err)
 		if err := handleWal(store); err != nil {
