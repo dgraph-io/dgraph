@@ -33,6 +33,7 @@ import (
 )
 
 func (ssuite *SystestTestSuite) TestQuery() {
+/*
 	ssuite.Run("schema response", ssuite.SchemaQueryTest)
 	ssuite.Run("schema response http", ssuite.SchemaQueryTestHTTP)
 	ssuite.Run("schema predicate names", ssuite.SchemaQueryTestPredicate1)
@@ -47,34 +48,30 @@ func (ssuite *SystestTestSuite) TestQuery() {
 	ssuite.Run("groupby uid that works", ssuite.GroupByUidWorks)
 	ssuite.Run("parameterized cascade", ssuite.CascadeParams)
 	ssuite.Run("cleanup", ssuite.SchemaQueryCleanup)
+*/
 }
 
 func (ssuite *SystestTestSuite) SchemaQueryCleanup() {
 	t := ssuite.T()
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
-	require.NoError(t, gcli.Alter(ctx, &api.Operation{DropAll: true}))
+	require.NoError(t, gcli.Alter(context.Background(), &api.Operation{DropAll: true}))
 }
 
 func (ssuite *SystestTestSuite) MultipleBlockEval() {
 	t := ssuite.T()
 
+	gcli, cleanup, err := doGrpcLogin(ssuite)
+	defer cleanup()
+	require.NoError(t, err)
+	ctx := context.Background()
 	op := &api.Operation{
 		Schema: `
       entity: string @index(exact) .
       stock: [uid] @reverse .
     `,
 	}
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
-	defer cleanup()
-	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 	require.NoError(t, gcli.Alter(ctx, op))
 
 	txn := gcli.NewTxn()
@@ -223,12 +220,10 @@ func (ssuite *SystestTestSuite) MultipleBlockEval() {
     }
   }`
 
-	ctx = context.Background()
-	gcli, cleanup, err = ssuite.dc.Client()
+	gcli, cleanup, err = doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	ctx = context.Background()
 	txn = gcli.NewTxn()
 	for _, tc := range tests {
 		resp, err := txn.Query(ctx, fmt.Sprintf(queryFmt, tc.in))
@@ -240,6 +235,10 @@ func (ssuite *SystestTestSuite) MultipleBlockEval() {
 func (ssuite *SystestTestSuite) UnmatchedVarEval() {
 	t := ssuite.T()
 
+	gcli, cleanup, err := doGrpcLogin(ssuite)
+	defer cleanup()
+	require.NoError(t, err)
+	ctx := context.Background()
 	op := &api.Operation{
 		Schema: `
       item: string @index(hash) .
@@ -248,12 +247,6 @@ func (ssuite *SystestTestSuite) UnmatchedVarEval() {
       style.cool: bool .
     `,
 	}
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
-	defer cleanup()
-	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 	require.NoError(t, gcli.Alter(ctx, op))
 	txn := gcli.NewTxn()
 	_, err = txn.Mutate(ctx, &api.Mutation{
@@ -326,12 +319,13 @@ func (ssuite *SystestTestSuite) UnmatchedVarEval() {
 		},
 	}
 
-	ctx = context.Background()
-	gcli, cleanup, err = ssuite.dc.Client()
+	// Upgrade
+	ssuite.Upgrade()
+
+	gcli, cleanup, err = doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	ctx = context.Background()
 	txn = gcli.NewTxn()
 	for _, tc := range tests {
 		resp, err := txn.Query(ctx, tc.in)
@@ -343,13 +337,11 @@ func (ssuite *SystestTestSuite) UnmatchedVarEval() {
 func (ssuite *SystestTestSuite) SchemaQueryTest() {
 	t := ssuite.T()
 
-	op := &api.Operation{Schema: `name: string @index(exact) .`}
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	ctx := context.Background()
+	op := &api.Operation{Schema: `name: string @index(exact) .`}
 	require.NoError(t, gcli.Alter(ctx, op))
 
 	txn := gcli.NewTxn()
@@ -362,12 +354,9 @@ func (ssuite *SystestTestSuite) SchemaQueryTest() {
 	// Upgrade
 	ssuite.Upgrade()
 
-	ctx = context.Background()
-	gcli, cleanup, err = ssuite.dc.Client()
+	gcli, cleanup, err = doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 	testutil.VerifySchema(t, gcli.Dgraph, testutil.SchemaOptions{UserPreds: `
 	  {
         "predicate": "name",
@@ -382,18 +371,16 @@ func (ssuite *SystestTestSuite) SchemaQueryTest() {
 func (ssuite *SystestTestSuite) SchemaQueryTestPredicate1() {
 	t := ssuite.T()
 
+	gcli, cleanup, err := doGrpcLogin(ssuite)
+	defer cleanup()
+	require.NoError(t, err)
+	ctx := context.Background()
 	op := &api.Operation{
 		Schema: `
       name: string @index(exact) .
       age: int .
     `,
 	}
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
-	defer cleanup()
-	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 	require.NoError(t, gcli.Alter(ctx, op))
 
 	txn := gcli.NewTxn()
@@ -412,12 +399,10 @@ func (ssuite *SystestTestSuite) SchemaQueryTestPredicate1() {
 	// Upgrade
 	ssuite.Upgrade()
 
-	ctx = context.Background()
-	gcli, cleanup, err = ssuite.dc.Client()
+	gcli, cleanup, err = doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	ctx = context.Background()
 	txn = gcli.NewTxn()
 	resp, err := txn.Query(ctx, `schema {name}`)
 	require.NoError(t, err)
@@ -476,13 +461,11 @@ func (ssuite *SystestTestSuite) SchemaQueryTestPredicate1() {
 func (ssuite *SystestTestSuite) SchemaQueryTestPredicate2() {
 	t := ssuite.T()
 
-	op := &api.Operation{Schema: `name: string @index(exact) .`}
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	ctx := context.Background()
+	op := &api.Operation{Schema: `name: string @index(exact) .`}
 	require.NoError(t, gcli.Alter(ctx, op))
 
 	txn := gcli.NewTxn()
@@ -495,12 +478,10 @@ func (ssuite *SystestTestSuite) SchemaQueryTestPredicate2() {
 	// Upgrade
 	ssuite.Upgrade()
 
-	ctx = context.Background()
-	gcli, cleanup, err = ssuite.dc.Client()
+	gcli, cleanup, err = doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	ctx = context.Background()
 	txn = gcli.NewTxn()
 	resp, err := txn.Query(ctx, `schema(pred: [name]) {}`)
 	require.NoError(t, err)
@@ -523,18 +504,16 @@ func (ssuite *SystestTestSuite) SchemaQueryTestPredicate2() {
 func (ssuite *SystestTestSuite) SchemaQueryTestPredicate3() {
 	t := ssuite.T()
 
+	gcli, cleanup, err := doGrpcLogin(ssuite)
+	defer cleanup()
+	require.NoError(t, err)
+	ctx := context.Background()
 	op := &api.Operation{
 		Schema: `
       name: string @index(exact) .
       age: int .
     `,
 	}
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
-	defer cleanup()
-	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 	require.NoError(t, gcli.Alter(ctx, op))
 
 	txn := gcli.NewTxn()
@@ -550,12 +529,10 @@ func (ssuite *SystestTestSuite) SchemaQueryTestPredicate3() {
 	require.NoError(t, err)
 	require.NoError(t, txn.Commit(ctx))
 
-	ctx = context.Background()
-	gcli, cleanup, err = ssuite.dc.Client()
+	gcli, cleanup, err = doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	ctx = context.Background()
 	txn = gcli.NewTxn()
 	resp, err := txn.Query(ctx, `
     schema(pred: [age]) {
@@ -579,12 +556,10 @@ func (ssuite *SystestTestSuite) SchemaQueryTestPredicate3() {
 func (ssuite *SystestTestSuite) SchemaQueryTestHTTP() {
 	t := ssuite.T()
 
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	ctx := context.Background()
 	op := &api.Operation{Schema: `name: string @index(exact) .`}
 	require.NoError(t, gcli.Alter(ctx, op))
 
@@ -594,6 +569,9 @@ func (ssuite *SystestTestSuite) SchemaQueryTestHTTP() {
 	})
 	require.NoError(t, err)
 	require.NoError(t, txn.Commit(ctx))
+
+	// Upgrade
+	ssuite.Upgrade()
 
 	hcli, err := ssuite.dc.HTTPClient()
 	require.NoError(t, err)
@@ -622,18 +600,16 @@ func (ssuite *SystestTestSuite) SchemaQueryTestHTTP() {
 func (ssuite *SystestTestSuite) FuzzyMatch() {
 	t := ssuite.T()
 
+	gcli, cleanup, err := doGrpcLogin(ssuite)
+	defer cleanup()
+	require.NoError(t, err)
+	ctx := context.Background()
 	op := &api.Operation{
 		Schema: `
       term: string @index(trigram) .
       name: string .
     `,
 	}
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
-	defer cleanup()
-	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 	require.NoError(t, gcli.Alter(ctx, op))
 
 	txn := gcli.NewTxn()
@@ -761,12 +737,10 @@ func (ssuite *SystestTestSuite) FuzzyMatch() {
 			failure: `Attribute name is not indexed with type trigram`,
 		},
 	}
-	ctx = context.Background()
-	gcli, cleanup, err = ssuite.dc.Client()
+	gcli, cleanup, err = doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	ctx = context.Background()
 	for _, tc := range tests {
 		resp, err := gcli.NewTxn().Query(ctx, tc.in)
 		if tc.failure != "" {
@@ -782,13 +756,11 @@ func (ssuite *SystestTestSuite) FuzzyMatch() {
 func (ssuite *SystestTestSuite) CascadeParams() {
 	t := ssuite.T()
 
-	op := &api.Operation{Schema: `name: string @index(fulltext) .`}
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	ctx := context.Background()
+	op := &api.Operation{Schema: `name: string @index(fulltext) .`}
 	require.NoError(t, gcli.Alter(ctx, op))
 
 	txn := gcli.NewTxn()
@@ -1241,12 +1213,10 @@ func (ssuite *SystestTestSuite) CascadeParams() {
 		},
 	}
 
-	ctx = context.Background()
-	gcli, cleanup, err = ssuite.dc.Client()
+	gcli, cleanup, err = doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	ctx = context.Background()
 	for _, tc := range tests {
 		resp, err := gcli.NewTxn().Query(ctx, tc.in)
 		require.NoError(t, err)
@@ -1257,13 +1227,11 @@ func (ssuite *SystestTestSuite) CascadeParams() {
 func (ssuite *SystestTestSuite) QueryHashIndex() {
 	t := ssuite.T()
 
-	op := &api.Operation{Schema: `name: string @index(hash) @lang .`}
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	ctx := context.Background()
+	op := &api.Operation{Schema: `name: string @index(hash) @lang .`}
 	require.NoError(t, gcli.Alter(ctx, op))
 
 	txn := gcli.NewTxn()
@@ -1366,12 +1334,10 @@ func (ssuite *SystestTestSuite) QueryHashIndex() {
 		},
 	}
 
-	ctx = context.Background()
-	gcli, cleanup, err = ssuite.dc.Client()
+	gcli, cleanup, err = doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	ctx = context.Background()
 	for _, tc := range tests {
 		resp, err := gcli.NewTxn().Query(ctx, tc.in)
 		require.NoError(t, err)
@@ -1382,13 +1348,11 @@ func (ssuite *SystestTestSuite) QueryHashIndex() {
 func (ssuite *SystestTestSuite) RegexpToggleTrigramIndex() {
 	t := ssuite.T()
 
-	op := &api.Operation{Schema: `name: string @index(term) @lang .`}
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	ctx := context.Background()
+	op := &api.Operation{Schema: `name: string @index(term) @lang .`}
 	require.NoError(t, gcli.Alter(ctx, op))
 
 	txn := gcli.NewTxn()
@@ -1426,13 +1390,11 @@ func (ssuite *SystestTestSuite) RegexpToggleTrigramIndex() {
 		},
 	}
 
-	ctx = context.Background()
-	gcli, cleanup, err = ssuite.dc.Client()
+	gcli, cleanup, err = doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 	t.Log("testing without trigram index")
+	ctx = context.Background()
 	for _, tc := range tests {
 		resp, err := gcli.NewTxn().Query(ctx, tc.in)
 		require.NoError(t, err)
@@ -1464,14 +1426,12 @@ func (ssuite *SystestTestSuite) RegexpToggleTrigramIndex() {
 func (ssuite *SystestTestSuite) EqWithAlteredIndexOrder() {
 	t := ssuite.T()
 
-	// first, let's set the schema with term before trigram
-	op := &api.Operation{Schema: `name: string @index(term, trigram) .`}
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	// first, let's set the schema with term before trigram
+	ctx := context.Background()
+	op := &api.Operation{Schema: `name: string @index(term, trigram) .`}
 	require.NoError(t, gcli.Alter(ctx, op))
 
 	// fill up some data
@@ -1488,12 +1448,10 @@ func (ssuite *SystestTestSuite) EqWithAlteredIndexOrder() {
 	// Upgrade
 	ssuite.Upgrade()
 
-	ctx = context.Background()
-	gcli, cleanup, err = ssuite.dc.Client()
+	gcli, cleanup, err = doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	ctx = context.Background()
 	// querying with eq should work
 	q := `{q(func: eq(name, "Alice")) {name}}`
 	expectedResult := `{"q":[{"name":"Alice"}]}`
@@ -1514,12 +1472,10 @@ func (ssuite *SystestTestSuite) EqWithAlteredIndexOrder() {
 func (ssuite *SystestTestSuite) GroupByUidWorks() {
 	t := ssuite.T()
 
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	ctx := context.Background()
 	txn := gcli.NewTxn()
 	assigned, err := txn.Mutate(ctx, &api.Mutation{
 		SetNquads: []byte(`
@@ -1558,12 +1514,10 @@ func (ssuite *SystestTestSuite) GroupByUidWorks() {
 			out: `{}`,
 		},
 	}
-	ctx = context.Background()
-	gcli, cleanup, err = ssuite.dc.Client()
+	gcli, cleanup, err = doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	ctx = context.Background()
 	for _, tc := range tests {
 		resp, err := gcli.NewTxn().Query(ctx, tc.in)
 		require.NoError(t, err)

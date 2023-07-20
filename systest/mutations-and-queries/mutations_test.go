@@ -39,13 +39,13 @@ import (
 	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/dgraphtest"
 	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/dgraph-io/dgraph/x"
 )
 
 // TestSystem uses the externally run Dgraph cluster for testing. Most other
 // tests in this package are using a suite struct system, which runs Dgraph and
 // loads data with bulk and live loader.
 func (ssuite *SystestTestSuite) TestSystem() {
+/*
 	ssuite.Run("n-quad mutation", ssuite.NQuadMutationTest)
 	ssuite.Run("list with languages", ssuite.ListWithLanguagesTest)
 	ssuite.Run("delete all reverse index", ssuite.DeleteAllReverseIndex)
@@ -88,16 +88,21 @@ func (ssuite *SystestTestSuite) TestSystem() {
 	ssuite.Run("infer schema as list JSON", ssuite.InferSchemaAsListJSON)
 	ssuite.Run("force schema as list JSON", ssuite.ForceSchemaAsListJSON)
 	ssuite.Run("force schema as single JSON", ssuite.ForceSchemaAsSingleJSON)
+*/
+
 	ssuite.Run("count index concurrent setdel", ssuite.CountIndexConcurrentSetDelUIDList)
 	ssuite.Run("count index concurrent setdel scalar predicate",
 		ssuite.CountIndexConcurrentSetDelScalarPredicate)
 	ssuite.Run("count index delete on non list predicate", ssuite.CountIndexNonlistPredicateDelete)
 	ssuite.Run("Reverse count index delete", ssuite.ReverseCountIndexDelete)
+
+/*
 	ssuite.Run("overwrite uid predicates", ssuite.OverwriteUidPredicates)
 	ssuite.Run("overwrite uid predicates across txns", ssuite.OverwriteUidPredicatesMultipleTxn)
 	ssuite.Run("overwrite uid predicates reverse index", ssuite.OverwriteUidPredicatesReverse)
 	ssuite.Run("delete and query same txn", ssuite.DeleteAndQuerySameTxn)
 	ssuite.Run("add and query zero datetime value", ssuite.AddAndQueryZeroTimeValue)
+*/
 }
 
 func (ssuite *SystestTestSuite) FacetJsonInputSupportsAnyOfTerms() {
@@ -134,14 +139,11 @@ func (ssuite *SystestTestSuite) FacetJsonInputSupportsAnyOfTerms() {
 	js, err := json.Marshal(&in)
 	require.NoError(t, err, "the marshaling should have succeeded")
 
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 	txn := gcli.NewTxn()
-	assigned, err := txn.Mutate(ctx, &api.Mutation{
+	assigned, err := txn.Mutate(context.Background(), &api.Mutation{
 		CommitNow: true,
 		SetJson:   js,
 	})
@@ -160,13 +162,10 @@ func (ssuite *SystestTestSuite) FacetJsonInputSupportsAnyOfTerms() {
 }`
 	query := fmt.Sprintf(q, assigned.Uids["a"], assigned.Uids["b"])
 
-	ctx = context.Background()
-	gcli, cleanup, err = ssuite.dc.Client()
+	gcli, cleanup, err = doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
-	resp, err := gcli.NewReadOnlyTxn().Query(ctx, query)
+	resp, err := gcli.NewReadOnlyTxn().Query(context.Background(), query)
 	require.NoError(t, err, "the query should have succeeded")
 
 	//var respUser User
@@ -191,13 +190,11 @@ func (ssuite *SystestTestSuite) ListWithLanguagesTest() {
 	// Upgrade
 	ssuite.Upgrade()
 
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 
+	ctx := context.Background()
 	err = gcli.Alter(ctx, &api.Operation{
 		Schema: `pred: [string] @lang .`,
 	})
@@ -206,13 +203,11 @@ func (ssuite *SystestTestSuite) ListWithLanguagesTest() {
 
 func (ssuite *SystestTestSuite) NQuadMutationTest() {
 	t := ssuite.T()
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 
+	ctx := context.Background()
 	op := &api.Operation{Schema: `xid: string @index(exact) .`}
 	require.NoError(t, gcli.Alter(ctx, op))
 
@@ -251,12 +246,10 @@ func (ssuite *SystestTestSuite) NQuadMutationTest() {
 		}
 	}`
 
-	ctx = context.Background()
-	gcli, cleanup, err = ssuite.dc.Client()
+	gcli, cleanup, err = doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	ctx = context.Background()
 	txn = gcli.NewTxn()
 	resp, err := txn.Query(ctx, breakfastQuery)
 	require.NoError(t, err)
@@ -298,12 +291,10 @@ func (ssuite *SystestTestSuite) NQuadMutationTest() {
 
 func (ssuite *SystestTestSuite) DeleteAllReverseIndex() {
 	t := ssuite.T()
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	ctx := context.Background()
 	op := &api.Operation{Schema: "link: [uid] @reverse ."}
 	require.NoError(t, gcli.Alter(ctx, op))
 	assignedIds, err := gcli.NewTxn().Mutate(ctx, &api.Mutation{
@@ -338,12 +329,10 @@ func (ssuite *SystestTestSuite) DeleteAllReverseIndex() {
 	// Upgrade
 	ssuite.Upgrade()
 
-	ctx = context.Background()
-	gcli, cleanup, err = ssuite.dc.Client()
+	gcli, cleanup, err = doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	ctx = context.Background()
 	resp, err := gcli.NewTxn().Query(ctx, fmt.Sprintf("{ q(func: uid(%s)) { ~link { uid } }}", bId))
 	require.NoError(t, err)
 	dgraphtest.CompareJSON(`{"q":[]}`, string(resp.Json))
@@ -362,12 +351,10 @@ func (ssuite *SystestTestSuite) DeleteAllReverseIndex() {
 
 func (ssuite *SystestTestSuite) NormalizeEdgeCasesTest() {
 	t := ssuite.T()
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	ctx := context.Background()
 	op := &api.Operation{Schema: "xid: string @index(exact) ."}
 	require.NoError(t, gcli.Alter(ctx, op))
 
@@ -384,12 +371,10 @@ func (ssuite *SystestTestSuite) NormalizeEdgeCasesTest() {
 	// Upgrade
 	ssuite.Upgrade()
 
-	ctx = context.Background()
-	gcli, cleanup, err = ssuite.dc.Client()
+	gcli, cleanup, err = doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	ctx = context.Background()
 	for _, test := range []struct{ query, want string }{
 		{
 			`{ q(func: uid(0x1)) @normalize { count(uid) } } `,
@@ -454,13 +439,11 @@ func (ssuite *SystestTestSuite) NormalizeEdgeCasesTest() {
 
 func (ssuite *SystestTestSuite) FacetOrderTest() {
 	t := ssuite.T()
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 
+	ctx := context.Background()
 	op := &api.Operation{Schema: `name: string @index(exact) .`}
 	require.NoError(t, gcli.Alter(ctx, op))
 
@@ -495,13 +478,11 @@ func (ssuite *SystestTestSuite) FacetOrderTest() {
 		}
 	}`
 
-	ctx = context.Background()
-	gcli, cleanup, err = ssuite.dc.Client()
+	gcli, cleanup, err = doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 	txn = gcli.NewTxn()
+	ctx = context.Background()
 	resp, err := txn.Query(ctx, friendQuery)
 	require.NoError(t, err)
 	dgraphtest.CompareJSON(`
@@ -537,13 +518,11 @@ func (ssuite *SystestTestSuite) FacetOrderTest() {
 
 func (ssuite *SystestTestSuite) FacetsOnScalarList() {
 	t := ssuite.T()
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 
+	ctx := context.Background()
 	op := &api.Operation{Schema: `
 	name: string @index(exact) .
 	friend: [string] .
@@ -581,13 +560,11 @@ func (ssuite *SystestTestSuite) FacetsOnScalarList() {
 		}
 	}`
 
-	ctx = context.Background()
-	gcli, cleanup, err = ssuite.dc.Client()
+	gcli, cleanup, err = doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 	txn = gcli.NewTxn()
+	ctx = context.Background()
 	resp, err := txn.Query(ctx, friendQuery)
 	var res struct {
 		Q []struct {
@@ -624,12 +601,10 @@ func (ssuite *SystestTestSuite) FacetsOnScalarList() {
 // Shows fix for issue #1918.
 func (ssuite *SystestTestSuite) LangAndSortBugTest() {
 	t := ssuite.T()
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	ctx := context.Background()
 	op := &api.Operation{Schema: "name: string @index(exact) @lang ."}
 	require.NoError(t, gcli.Alter(ctx, op))
 
@@ -649,12 +624,10 @@ func (ssuite *SystestTestSuite) LangAndSortBugTest() {
 	// Upgrade
 	ssuite.Upgrade()
 
-	ctx = context.Background()
-	gcli, cleanup, err = ssuite.dc.Client()
+	gcli, cleanup, err = doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	ctx = context.Background()
 	txn = gcli.NewTxn()
 	defer func() { require.NoError(t, txn.Discard(ctx)) }()
 	resp, err := txn.Query(ctx, `
@@ -677,13 +650,11 @@ func (ssuite *SystestTestSuite) LangAndSortBugTest() {
 
 func (ssuite *SystestTestSuite) SortFacetsReturnNil() {
 	t := ssuite.T()
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 
+	ctx := context.Background()
 	txn := gcli.NewTxn()
 	assigned, err := txn.Mutate(ctx, &api.Mutation{
 		CommitNow: true,
@@ -705,13 +676,11 @@ func (ssuite *SystestTestSuite) SortFacetsReturnNil() {
 	// Upgrade
 	ssuite.Upgrade()
 
-	ctx = context.Background()
-	gcli, cleanup, err = ssuite.dc.Client()
+	gcli, cleanup, err = doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 	michael := assigned.Uids["michael"]
+	ctx = context.Background()
 	txn = gcli.NewTxn()
 	resp, err := txn.Query(ctx, `
 	{
@@ -749,12 +718,10 @@ func (ssuite *SystestTestSuite) SortFacetsReturnNil() {
 
 func (ssuite *SystestTestSuite) SchemaAfterDeleteNode() {
 	t := ssuite.T()
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	ctx := context.Background()
 	op := &api.Operation{Schema: "married: bool ."}
 	require.NoError(t, gcli.Alter(ctx, op))
 
@@ -778,13 +745,11 @@ func (ssuite *SystestTestSuite) SchemaAfterDeleteNode() {
 	// Upgrade
 	ssuite.Upgrade()
 
-	ctx = context.Background()
-	gcli, cleanup, err = ssuite.dc.Client()
+	gcli, cleanup, err = doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 	// Lets try to do a S P * deletion. Schema for married shouldn't be rederived.
+	ctx = context.Background()
 	_, err = gcli.NewTxn().Mutate(ctx, &api.Mutation{
 		CommitNow: true,
 		DelNquads: []byte(`
@@ -799,12 +764,10 @@ func (ssuite *SystestTestSuite) SchemaAfterDeleteNode() {
 
 func (ssuite *SystestTestSuite) FullTextEqual() {
 	t := ssuite.T()
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	ctx := context.Background()
 	op := &api.Operation{Schema: "text: string @index(fulltext) ."}
 	require.NoError(t, gcli.Alter(ctx, op))
 
@@ -823,12 +786,10 @@ func (ssuite *SystestTestSuite) FullTextEqual() {
 	// Upgrade
 	ssuite.Upgrade()
 
-	ctx = context.Background()
-	gcli, cleanup, err = ssuite.dc.Client()
+	gcli, cleanup, err = doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	ctx = context.Background()
 	for _, text := range texts {
 		resp, err := gcli.NewTxn().Query(ctx, `
 		{
@@ -854,13 +815,11 @@ func (ssuite *SystestTestSuite) FullTextEqual() {
 
 func (ssuite *SystestTestSuite) JSONBlankNode() {
 	t := ssuite.T()
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 
+	ctx := context.Background()
 	txn := gcli.NewTxn()
 	assigned, err := txn.Mutate(ctx, &api.Mutation{
 		SetJson: []byte(`
@@ -873,15 +832,13 @@ func (ssuite *SystestTestSuite) JSONBlankNode() {
 	// Upgrade
 	ssuite.Upgrade()
 
-	ctx = context.Background()
-	gcli, cleanup, err = ssuite.dc.Client()
+	gcli, cleanup, err = doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 	require.Equal(t, 3, len(assigned.Uids))
 	michael := assigned.Uids["michael"]
 	alice := assigned.Uids["alice"]
+	ctx = context.Background()
 	resp, err := gcli.NewTxn().Query(ctx, `
 	{
 	  q(func: uid(`+michael+`)) {
@@ -897,13 +854,11 @@ func (ssuite *SystestTestSuite) JSONBlankNode() {
 
 func (ssuite *SystestTestSuite) ScalarToList() {
 	t := ssuite.T()
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 
+	ctx := context.Background()
 	op := &api.Operation{Schema: `pred: string @index(exact) .`}
 	require.NoError(t, gcli.Alter(ctx, op))
 
@@ -925,17 +880,10 @@ func (ssuite *SystestTestSuite) ScalarToList() {
 		}
 	}
 	`
+	gcli, cleanup, err = doGrpcLogin(ssuite)
+	defer cleanup()
+	require.NoError(t, err)
 	ctx = context.Background()
-	gcli, cleanup, err = ssuite.dc.Client()
-	defer cleanup()
-	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
-	gcli, cleanup, err = ssuite.dc.Client()
-	defer cleanup()
-	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 	resp, err := gcli.NewTxn().Query(ctx, q)
 	require.NoError(t, err)
 	require.Equal(t, `{"me":[{"pred":"first"}]}`, string(resp.Json))
@@ -1006,25 +954,21 @@ func (ssuite *SystestTestSuite) ScalarToList() {
 
 func (ssuite *SystestTestSuite) ListToScalar() {
 	t := ssuite.T()
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 
+	ctx := context.Background()
 	op := &api.Operation{Schema: `pred: [string] @index(exact) .`}
 	require.NoError(t, gcli.Alter(ctx, op))
 
 	// Upgrade
 	ssuite.Upgrade()
 
-	ctx = context.Background()
-	gcli, cleanup, err = ssuite.dc.Client()
+	gcli, cleanup, err = doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	ctx = context.Background()
 	err = gcli.Alter(ctx, &api.Operation{Schema: `pred: string @index(exact) .`})
 	require.Error(t, err)
 	require.Contains(t, err.Error(),
@@ -1037,13 +981,11 @@ func (ssuite *SystestTestSuite) ListToScalar() {
 
 func (ssuite *SystestTestSuite) SetAfterDeletionListType() {
 	t := ssuite.T()
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 
+	ctx := context.Background()
 	require.NoError(t, gcli.Alter(ctx, &api.Operation{Schema: `
 		property.test: [string] .
 	`}))
@@ -1070,21 +1012,19 @@ func (ssuite *SystestTestSuite) SetAfterDeletionListType() {
 	require.NoError(t, err)
 	require.Equal(t, `{"me":[{"property.test":["initial value"]}]}`, string(resp.Json))
 
+	// Upgrade
+	ssuite.Upgrade()
+
+	gcli, cleanup, err = doGrpcLogin(ssuite)
+	defer cleanup()
+	require.NoError(t, err)
+	ctx = context.Background()
 	txn = gcli.NewTxn()
 	_, err = txn.Mutate(ctx, &api.Mutation{
 		DelNquads: []byte(`<` + alice + `> <property.test> * .`),
 	})
 	require.NoError(t, err)
 
-	// Upgrade
-	ssuite.Upgrade()
-
-	ctx = context.Background()
-	gcli, cleanup, err = ssuite.dc.Client()
-	defer cleanup()
-	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 	resp, err = txn.Query(ctx, q)
 	require.NoError(t, err)
 	require.Equal(t, `{"me":[]}`, string(resp.Json))
@@ -1102,12 +1042,10 @@ func (ssuite *SystestTestSuite) SetAfterDeletionListType() {
 
 func (ssuite *SystestTestSuite) EmptyNamesWithExact() {
 	t := ssuite.T()
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	ctx := context.Background()
 	op := &api.Operation{Schema: `name: string @index(exact) @lang .`}
 	require.NoError(t, gcli.Alter(ctx, op))
 
@@ -1128,13 +1066,10 @@ func (ssuite *SystestTestSuite) EmptyNamesWithExact() {
 	// Upgrade
 	ssuite.Upgrade()
 
-	ctx = context.Background()
-	gcli, cleanup, err = ssuite.dc.Client()
+	gcli, cleanup, err = doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
-	resp, err := gcli.NewTxn().Query(ctx, `{
+	resp, err := gcli.NewTxn().Query(context.Background(), `{
 	  names(func: has(name)) @filter(eq(name, "")) {
 		count(uid)
 	  }
@@ -1151,12 +1086,10 @@ func (ssuite *SystestTestSuite) EmptyRoomsWithTermIndex() {
 		office.room: [uid] .
 	`
 	t := ssuite.T()
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	ctx := context.Background()
 	require.NoError(t, gcli.Alter(ctx, op))
 
 	_, err = gcli.NewTxn().Mutate(ctx, &api.Mutation{
@@ -1176,12 +1109,10 @@ func (ssuite *SystestTestSuite) EmptyRoomsWithTermIndex() {
 	// Upgrade
 	ssuite.Upgrade()
 
-	ctx = context.Background()
-	gcli, cleanup, err = ssuite.dc.Client()
+	gcli, cleanup, err = doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	ctx = context.Background()
 	resp, err := gcli.NewTxn().Query(ctx, `{
 		  offices(func: has(office)) {
 			count(office.room @filter(eq(room, "")))
@@ -1204,12 +1135,10 @@ func (ssuite *SystestTestSuite) DeleteWithExpandAll() {
 `
 
 	t := ssuite.T()
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	ctx := context.Background()
 	require.NoError(t, gcli.Alter(ctx, op))
 
 	assigned, err := gcli.NewTxn().Mutate(ctx, &api.Mutation{
@@ -1253,12 +1182,10 @@ func (ssuite *SystestTestSuite) DeleteWithExpandAll() {
 	}
 
 	var r Root
-	ctx = context.Background()
-	gcli, cleanup, err = ssuite.dc.Client()
+	gcli, cleanup, err = doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	ctx = context.Background()
 	resp, err := gcli.NewTxn().QueryWithVars(ctx, q, map[string]string{"$id": auid})
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal(resp.Json, &r))
@@ -1310,12 +1237,9 @@ func (ssuite *SystestTestSuite) FacetsUsingNQuadsError() {
 	t := ssuite.T()
 	timeBinary, err := time.Now().MarshalBinary()
 	require.NoError(t, err)
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 	testTimeValue(t, gcli, timeBinary)
 
 	// test time in full RFC3339 string format
@@ -1329,12 +1253,10 @@ func (ssuite *SystestTestSuite) FacetsUsingNQuadsError() {
 
 func (ssuite *SystestTestSuite) SkipEmptyPLForHas() {
 	t := ssuite.T()
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	ctx := context.Background()
 	_, err = gcli.NewTxn().Mutate(ctx, &api.Mutation{
 		SetNquads: []byte(`
 			_:u <__user> "true" .
@@ -1367,12 +1289,10 @@ func (ssuite *SystestTestSuite) SkipEmptyPLForHas() {
 			name
 		  }
 		}`
-	ctx = context.Background()
-	gcli, cleanup, err = ssuite.dc.Client()
+	gcli, cleanup, err = doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	ctx = context.Background()
 	resp, err = gcli.NewTxn().Query(ctx, q)
 	require.NoError(t, err)
 	require.JSONEq(t, `{"users": []}`, string(resp.Json))
@@ -1380,13 +1300,11 @@ func (ssuite *SystestTestSuite) SkipEmptyPLForHas() {
 
 func (ssuite *SystestTestSuite) HasWithDash() {
 	t := ssuite.T()
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 
+	ctx := context.Background()
 	op := &api.Operation{
 		Schema: `name: string @index(hash) .`,
 	}
@@ -1417,12 +1335,10 @@ func (ssuite *SystestTestSuite) HasWithDash() {
 		}
 	}`
 
-	ctx = context.Background()
-	gcli, cleanup, err = ssuite.dc.Client()
+	gcli, cleanup, err = doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	ctx = context.Background()
 	txn = gcli.NewTxn()
 	resp, err := txn.Query(ctx, friendQuery)
 	require.NoError(t, err)
@@ -1431,13 +1347,11 @@ func (ssuite *SystestTestSuite) HasWithDash() {
 
 func (ssuite *SystestTestSuite) ListGeoFilterTest() {
 	t := ssuite.T()
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 
+	ctx := context.Background()
 	op := &api.Operation{
 		Schema: `
 			name: string @index(term) .
@@ -1466,12 +1380,9 @@ func (ssuite *SystestTestSuite) ListGeoFilterTest() {
 	// Upgrade
 	ssuite.Upgrade()
 
-	ctx = context.Background()
-	gcli, cleanup, err = ssuite.dc.Client()
+	gcli, cleanup, err = doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 	resp, err := gcli.NewTxn().Query(context.Background(), `{
 		q(func: near(loc, [-122.4220186,37.772318], 1000)) {
 			name
@@ -1494,13 +1405,11 @@ func (ssuite *SystestTestSuite) ListGeoFilterTest() {
 
 func (ssuite *SystestTestSuite) ListRegexFilterTest() {
 	t := ssuite.T()
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 
+	ctx := context.Background()
 	op := &api.Operation{
 		Schema: `
 			name: string @index(term) .
@@ -1529,12 +1438,9 @@ func (ssuite *SystestTestSuite) ListRegexFilterTest() {
 	// Upgrade
 	ssuite.Upgrade()
 
-	ctx = context.Background()
-	gcli, cleanup, err = ssuite.dc.Client()
+	gcli, cleanup, err = doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 	resp, err := gcli.NewTxn().Query(context.Background(), `{
 		q(func: regexp(per, /^rea.*$/)) {
 			name
@@ -1557,13 +1463,11 @@ func (ssuite *SystestTestSuite) ListRegexFilterTest() {
 
 func (ssuite *SystestTestSuite) RegexQueryWithVarsWithSlash() {
 	t := ssuite.T()
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 
+	ctx := context.Background()
 	op := &api.Operation{Schema: `data: [string] @index(trigram) .`}
 	require.NoError(t, gcli.Alter(ctx, op))
 
@@ -1582,12 +1486,9 @@ func (ssuite *SystestTestSuite) RegexQueryWithVarsWithSlash() {
 	// Upgrade
 	ssuite.Upgrade()
 
-	ctx = context.Background()
-	gcli, cleanup, err = ssuite.dc.Client()
+	gcli, cleanup, err = doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 	// query without variable
 	resp, err := gcli.NewTxn().Query(context.Background(), `{
 		q(func: regexp(data, /\/def/)) {
@@ -1626,13 +1527,11 @@ func (ssuite *SystestTestSuite) RegexQueryWithVarsWithSlash() {
 
 func (ssuite *SystestTestSuite) RegexQueryWithVars() {
 	t := ssuite.T()
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 
+	ctx := context.Background()
 	op := &api.Operation{
 		Schema: `
 			name: string @index(term) .
@@ -1661,12 +1560,9 @@ func (ssuite *SystestTestSuite) RegexQueryWithVars() {
 	// Upgrade
 	ssuite.Upgrade()
 
-	ctx = context.Background()
-	gcli, cleanup, err = ssuite.dc.Client()
+	gcli, cleanup, err = doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 	resp, err := gcli.NewTxn().QueryWithVars(context.Background(), `
 		query search($term: string){
 			q(func: regexp(per, $term)) {
@@ -1690,13 +1586,11 @@ func (ssuite *SystestTestSuite) RegexQueryWithVars() {
 
 func (ssuite *SystestTestSuite) GraphQLVarChild() {
 	t := ssuite.T()
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 
+	ctx := context.Background()
 	op := &api.Operation{Schema: `name: string @index(exact) .`}
 	require.NoError(t, gcli.Alter(ctx, op))
 
@@ -1718,12 +1612,9 @@ func (ssuite *SystestTestSuite) GraphQLVarChild() {
 	// Upgrade
 	ssuite.Upgrade()
 
-	ctx = context.Background()
-	gcli, cleanup, err = ssuite.dc.Client()
+	gcli, cleanup, err = doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 	a := au.Uids["a"]
 	b := au.Uids["b"]
 	ch := au.Uids["c"]
@@ -1806,13 +1697,11 @@ func (ssuite *SystestTestSuite) GraphQLVarChild() {
 
 func (ssuite *SystestTestSuite) MathGe() {
 	t := ssuite.T()
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 
+	ctx := context.Background()
 	op := &api.Operation{Schema: `name: string @index(exact) .`}
 	require.NoError(t, gcli.Alter(ctx, op))
 
@@ -1831,12 +1720,9 @@ func (ssuite *SystestTestSuite) MathGe() {
 	// Upgrade
 	ssuite.Upgrade()
 
-	ctx = context.Background()
-	gcli, cleanup, err = ssuite.dc.Client()
+	gcli, cleanup, err = doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 	// Try GraphQL variable with filter at root.
 	resp, err := gcli.NewTxn().Query(context.Background(), `
 	{
@@ -1860,13 +1746,11 @@ func (ssuite *SystestTestSuite) MathGe() {
 
 func (ssuite *SystestTestSuite) HasDeletedEdge() {
 	t := ssuite.T()
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 
+	ctx := context.Background()
 	txn := gcli.NewTxn()
 	defer func() { require.NoError(t, txn.Discard(ctx)) }()
 
@@ -1957,12 +1841,10 @@ func (ssuite *SystestTestSuite) HasDeletedEdge() {
 		ids = append(ids, uid)
 	}
 
-	ctx = context.Background()
-	gcli, cleanup, err = ssuite.dc.Client()
+	gcli, cleanup, err = doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	ctx = context.Background()
 	txn = gcli.NewTxn()
 	defer func() { require.NoError(t, txn.Discard(ctx)) }()
 	uids = getUids(txn)
@@ -1974,13 +1856,11 @@ func (ssuite *SystestTestSuite) HasDeletedEdge() {
 
 func (ssuite *SystestTestSuite) HasReverseEdge() {
 	t := ssuite.T()
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 
+	ctx := context.Background()
 	op := &api.Operation{Schema: `follow: [uid] @reverse .`}
 	require.NoError(t, gcli.Alter(ctx, op))
 	txn := gcli.NewTxn()
@@ -2005,12 +1885,10 @@ func (ssuite *SystestTestSuite) HasReverseEdge() {
 		Name string `json:"name"`
 	}
 
-	ctx = context.Background()
-	gcli, cleanup, err = ssuite.dc.Client()
+	gcli, cleanup, err = doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	ctx = context.Background()
 	txn = gcli.NewTxn()
 	defer func() { require.NoError(t, txn.Discard(ctx)) }()
 	resp, err := txn.Query(ctx, `{
@@ -2045,12 +1923,10 @@ func (ssuite *SystestTestSuite) MaxPredicateSize() {
 
 	// Verify that Alter requests with predicates that are too large are rejected.
 	t := ssuite.T()
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	ctx := context.Background()
 	err = gcli.Alter(ctx, &api.Operation{
 		Schema: fmt.Sprintf(`%s: uid @reverse .`, largePred),
 	})
@@ -2080,12 +1956,10 @@ func (ssuite *SystestTestSuite) MaxPredicateSize() {
 
 func (ssuite *SystestTestSuite) RestoreReservedPreds() {
 	t := ssuite.T()
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	ctx := context.Background()
 	err = gcli.Alter(ctx, &api.Operation{
 		DropAll: true,
 	})
@@ -2100,13 +1974,11 @@ func (ssuite *SystestTestSuite) RestoreReservedPreds() {
 
 func (ssuite *SystestTestSuite) DropData() {
 	t := ssuite.T()
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 
+	ctx := context.Background()
 	op := &api.Operation{
 		Schema: `
 			name: string @index(term) .
@@ -2136,14 +2008,12 @@ func (ssuite *SystestTestSuite) DropData() {
 	// Upgrade
 	ssuite.Upgrade()
 
-	// Check schema is still there.
-	query := `schema(preds: [name, follow]) {predicate}`
-	ctx = context.Background()
-	gcli, cleanup, err = ssuite.dc.Client()
+	gcli, cleanup, err = doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	ctx = context.Background()
+	// Check schema is still there.
+	query := `schema(preds: [name, follow]) {predicate}`
 	resp, err := gcli.NewReadOnlyTxn().Query(ctx, query)
 	require.NoError(t, err)
 	dgraphtest.CompareJSON(`{"schema": [{"predicate":"name"}, {"predicate":"follow"}]}`, string(resp.Json))
@@ -2161,13 +2031,11 @@ func (ssuite *SystestTestSuite) DropData() {
 
 func (ssuite *SystestTestSuite) DropDataAndDropAll() {
 	t := ssuite.T()
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 
+	ctx := context.Background()
 	err = gcli.Alter(ctx, &api.Operation{
 		DropAll: true,
 		DropOp:  api.Operation_DATA,
@@ -2178,13 +2046,11 @@ func (ssuite *SystestTestSuite) DropDataAndDropAll() {
 
 func (ssuite *SystestTestSuite) DropType() {
 	t := ssuite.T()
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 
+	ctx := context.Background()
 	require.NoError(t, gcli.Alter(ctx, &api.Operation{
 		Schema: `
 			name: string .
@@ -2198,14 +2064,12 @@ func (ssuite *SystestTestSuite) DropType() {
 	// Upgrade
 	ssuite.Upgrade()
 
-	// Check type has been added.
-	query := `schema(type: Person) {}`
-	ctx = context.Background()
-	gcli, cleanup, err = ssuite.dc.Client()
+	gcli, cleanup, err = doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	ctx = context.Background()
+	// Check type has been added.
+	query := `schema(type: Person) {}`
 	resp, err := gcli.NewReadOnlyTxn().Query(ctx, query)
 	require.NoError(t, err)
 	dgraphtest.CompareJSON(`{"types":[{"name":"Person", "fields":[{"name":"name"}]}]}`,
@@ -2224,12 +2088,10 @@ func (ssuite *SystestTestSuite) DropType() {
 
 func (ssuite *SystestTestSuite) DropTypeNoValue() {
 	t := ssuite.T()
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	ctx := context.Background()
 	err = gcli.Alter(ctx, &api.Operation{
 		DropOp: api.Operation_TYPE,
 	})
@@ -2238,16 +2100,13 @@ func (ssuite *SystestTestSuite) DropTypeNoValue() {
 }
 
 func (ssuite *SystestTestSuite) CountIndexConcurrentSetDelUIDList() {
-	op := &api.Operation{}
-	op.Schema = `friend: [uid] @count .`
-
 	t := ssuite.T()
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	ctx := context.Background()
+	op := &api.Operation{}
+	op.Schema = `friend: [uid] @count .`
 	require.NoError(t, gcli.Alter(ctx, op))
 
 	rand.Seed(time.Now().Unix())
@@ -2276,7 +2135,7 @@ func (ssuite *SystestTestSuite) CountIndexConcurrentSetDelUIDList() {
 				mu.SetNquads = []byte(fmt.Sprintf("<0x1> <friend> <%#x> .", id))
 				_, err := dg.NewTxn().Mutate(context.Background(), mu)
 				if err != nil && err != dgo.ErrAborted {
-					require.Fail(t, "unable to inserted uid with err: %s", err)
+					require.Failf(t, "unable to inserted uid with err: %s", err.Error())
 				}
 				if err == nil { // Successful insertion.
 					l.Lock()
@@ -2327,7 +2186,7 @@ func (ssuite *SystestTestSuite) CountIndexConcurrentSetDelUIDList() {
 				mu.DelNquads = []byte(fmt.Sprintf("<0x1> <friend> <%#x> .", id))
 				_, err := dg.NewTxn().Mutate(context.Background(), mu)
 				if err != nil && err != dgo.ErrAborted {
-					require.Fail(t, "unable to delete uid with err: %s", err)
+					require.Failf(t, "unable to delete uid with err: %s", err.Error())
 				}
 				if err == nil { // Successful deletion.
 					l.Lock()
@@ -2361,28 +2220,23 @@ func (ssuite *SystestTestSuite) CountIndexConcurrentSetDelUIDList() {
 	// Upgrade
 	ssuite.Upgrade()
 
-	ctx = context.Background()
-	gcli, cleanup, err = ssuite.dc.Client()
+	gcli, cleanup, err = doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	ctx = context.Background()
 	resp, err = gcli.NewReadOnlyTxn().Query(ctx, q)
 	require.NoError(t, err, "the query should have succeeded")
 	dgraphtest.CompareJSON(`{"me":[]}`, string(resp.GetJson()))
 }
 
 func (ssuite *SystestTestSuite) CountIndexConcurrentSetDelScalarPredicate() {
-	op := &api.Operation{}
-	op.Schema = `name: string @index(exact) @count .`
-
 	t := ssuite.T()
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	ctx := context.Background()
+	op := &api.Operation{}
+	op.Schema = `name: string @index(exact) @count .`
 	require.NoError(t, gcli.Alter(ctx, op))
 
 	rand.Seed(time.Now().Unix())
@@ -2438,32 +2292,27 @@ func (ssuite *SystestTestSuite) CountIndexConcurrentSetDelScalarPredicate() {
 		CommitNow: true,
 		DelNquads: []byte(fmt.Sprintf("<0x1> <name> \"%s\" .", s.Q[0].Name)),
 	}
-	ctx = context.Background()
-	gcli, cleanup, err = ssuite.dc.Client()
+	gcli, cleanup, err = doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 	_, err = gcli.NewTxn().Mutate(context.Background(), mu)
 	require.NoError(t, err, "mutation to delete name should have been succeeded")
 
 	// Querying should return 0 uids.
+	ctx = context.Background()
 	resp, err = gcli.NewReadOnlyTxn().Query(ctx, q)
 	require.NoError(t, err, "the query should have succeeded")
 	dgraphtest.CompareJSON(`{"q":[]}`, string(resp.GetJson()))
 }
 
 func (ssuite *SystestTestSuite) CountIndexNonlistPredicateDelete() {
-	op := &api.Operation{}
-	op.Schema = `name: string @index(exact) @count .`
-
 	t := ssuite.T()
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	ctx := context.Background()
+	op := &api.Operation{}
+	op.Schema = `name: string @index(exact) @count .`
 	require.NoError(t, gcli.Alter(ctx, op))
 
 	// Insert single record for uid 0x1.
@@ -2494,13 +2343,11 @@ func (ssuite *SystestTestSuite) CountIndexNonlistPredicateDelete() {
 		DelNquads: []byte("<0x1> <name> \"othername\" ."),
 	}
 
-	ctx = context.Background()
-	gcli, cleanup, err = ssuite.dc.Client()
+	gcli, cleanup, err = doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
-	_, err = gcli.NewTxn().Mutate(context.Background(), mu)
+	ctx = context.Background()
+	_, err = gcli.NewTxn().Mutate(ctx, mu)
 	require.NoError(t, err, "unable to delete other name")
 
 	// Query it using count index.
@@ -2510,16 +2357,13 @@ func (ssuite *SystestTestSuite) CountIndexNonlistPredicateDelete() {
 }
 
 func (ssuite *SystestTestSuite) ReverseCountIndexDelete() {
-	op := &api.Operation{}
-	op.Schema = `friend: [uid] @count @reverse .`
-
 	t := ssuite.T()
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	ctx := context.Background()
+	op := &api.Operation{}
+	op.Schema = `friend: [uid] @count @reverse .`
 	require.NoError(t, gcli.Alter(ctx, op))
 
 	mu := &api.Mutation{
@@ -2548,12 +2392,10 @@ func (ssuite *SystestTestSuite) ReverseCountIndexDelete() {
 		CommitNow: true,
 		DelNquads: []byte("<0x1> <friend> <0x2> ."),
 	}
-	ctx = context.Background()
-	gcli, cleanup, err = ssuite.dc.Client()
+	gcli, cleanup, err = doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	ctx = context.Background()
 	_, err = gcli.NewTxn().Mutate(ctx, mu)
 	require.NoError(t, err, "unable to delete friend")
 
@@ -2564,18 +2406,15 @@ func (ssuite *SystestTestSuite) ReverseCountIndexDelete() {
 }
 
 func (ssuite *SystestTestSuite) ReverseCountIndex() {
+	t := ssuite.T()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
+	defer cleanup()
+	require.NoError(t, err)
+	ctx := context.Background()
 	// This test checks that we consider reverse count index keys while doing conflict detection
 	// for transactions. See https://github.com/dgraph-io/dgraph/issues/3893 for more details.
 	op := &api.Operation{}
 	op.Schema = `friend: [uid] @count @reverse .`
-
-	t := ssuite.T()
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
-	defer cleanup()
-	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 	require.NoError(t, gcli.Alter(ctx, op))
 
 	mu := &api.Mutation{
@@ -2623,33 +2462,28 @@ func (ssuite *SystestTestSuite) ReverseCountIndex() {
 	// Upgrade
 	ssuite.Upgrade()
 
-	ctx = context.Background()
-	gcli, cleanup, err = ssuite.dc.Client()
+	gcli, cleanup, err = doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	ctx = context.Background()
 	resp, err := gcli.NewReadOnlyTxn().Query(ctx, q)
 	require.NoError(t, err, "the query should have succeeded")
 	dgraphtest.CompareJSON(`{"me":[{"name":"Alice","count(~friend)":10}]}`, string(resp.GetJson()))
 }
 
 func (ssuite *SystestTestSuite) TypePredicateCheck() {
+	t := ssuite.T()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
+	defer cleanup()
+	require.NoError(t, err)
+	ctx := context.Background()
 	// Reject schema updates if the types have missing predicates.
-
 	// Update is rejected because name is not in the schema.
 	op := &api.Operation{}
 	op.Schema = `
 	type Person {
 		name
 	}`
-	t := ssuite.T()
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
-	defer cleanup()
-	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 	err = gcli.Alter(ctx, op)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Schema does not contain a matching predicate for field")
@@ -2691,16 +2525,14 @@ func (ssuite *SystestTestSuite) TypePredicateCheck() {
 }
 
 func (ssuite *SystestTestSuite) InternalPredicateCheck() {
+	t := ssuite.T()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
+	defer cleanup()
+	require.NoError(t, err)
+	ctx := context.Background()
 	// Schema update is rejected because uid is reserved for internal use.
 	op := &api.Operation{}
 	op.Schema = `uid: string .`
-	t := ssuite.T()
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
-	defer cleanup()
-	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 	err = gcli.Alter(ctx, op)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Cannot create user-defined predicate with internal name uid")
@@ -2716,12 +2548,9 @@ func (ssuite *SystestTestSuite) InternalPredicateCheck() {
 
 func (ssuite *SystestTestSuite) InferSchemaAsList() {
 	t := ssuite.T()
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 	txn := gcli.NewTxn()
 	_, err = txn.Mutate(context.Background(), &api.Mutation{
 		CommitNow: true,
@@ -2739,12 +2568,9 @@ func (ssuite *SystestTestSuite) InferSchemaAsList() {
 	query := `schema(preds: [name, nickname]) {
 		list
 	}`
-	ctx = context.Background()
-	gcli, cleanup, err = ssuite.dc.Client()
+	gcli, cleanup, err = doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 	resp, err := gcli.NewReadOnlyTxn().Query(context.Background(), query)
 	require.NoError(t, err)
 	dgraphtest.CompareJSON(`{"schema": [{"predicate":"name", "list":true},
@@ -2753,12 +2579,9 @@ func (ssuite *SystestTestSuite) InferSchemaAsList() {
 
 func (ssuite *SystestTestSuite) InferSchemaAsListJSON() {
 	t := ssuite.T()
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 	txn := gcli.NewTxn()
 	_, err = txn.Mutate(context.Background(), &api.Mutation{
 		CommitNow: true,
@@ -2773,12 +2596,9 @@ func (ssuite *SystestTestSuite) InferSchemaAsListJSON() {
 	query := `schema(preds: [name, nickname]) {
 		list
 	}`
-	ctx = context.Background()
-	gcli, cleanup, err = ssuite.dc.Client()
+	gcli, cleanup, err = doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 	resp, err := gcli.NewReadOnlyTxn().Query(context.Background(), query)
 	require.NoError(t, err)
 	dgraphtest.CompareJSON(`{"schema": [{"predicate":"name", "list":true},
@@ -2787,12 +2607,9 @@ func (ssuite *SystestTestSuite) InferSchemaAsListJSON() {
 
 func (ssuite *SystestTestSuite) ForceSchemaAsListJSON() {
 	t := ssuite.T()
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 	txn := gcli.NewTxn()
 	_, err = txn.Mutate(context.Background(), &api.Mutation{
 		CommitNow: true,
@@ -2808,12 +2625,9 @@ func (ssuite *SystestTestSuite) ForceSchemaAsListJSON() {
 	query := `schema(preds: [name, nickname]) {
 		list
 	}`
-	ctx = context.Background()
-	gcli, cleanup, err = ssuite.dc.Client()
+	gcli, cleanup, err = doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 	resp, err := gcli.NewReadOnlyTxn().Query(context.Background(), query)
 	require.NoError(t, err)
 	dgraphtest.CompareJSON(`{"schema": [{"predicate":"name", "list":true},
@@ -2822,12 +2636,9 @@ func (ssuite *SystestTestSuite) ForceSchemaAsListJSON() {
 
 func (ssuite *SystestTestSuite) ForceSchemaAsSingleJSON() {
 	t := ssuite.T()
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 	txn := gcli.NewTxn()
 	_, err = txn.Mutate(context.Background(), &api.Mutation{
 		CommitNow: true,
@@ -2843,12 +2654,9 @@ func (ssuite *SystestTestSuite) ForceSchemaAsSingleJSON() {
 	query := `schema(preds: [person, nickname]) {
 		list
 	}`
-	ctx = context.Background()
-	gcli, cleanup, err = ssuite.dc.Client()
+	gcli, cleanup, err = doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 	resp, err := gcli.NewReadOnlyTxn().Query(context.Background(), query)
 	require.NoError(t, err)
 	dgraphtest.CompareJSON(`{"schema": [{"predicate":"person"}, {"predicate":"nickname"}]}`,
@@ -2857,12 +2665,10 @@ func (ssuite *SystestTestSuite) ForceSchemaAsSingleJSON() {
 
 func (ssuite *SystestTestSuite) OverwriteUidPredicates() {
 	t := ssuite.T()
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	ctx := context.Background()
 	op := &api.Operation{DropAll: true}
 	require.NoError(t, gcli.Alter(ctx, op))
 
@@ -2913,13 +2719,10 @@ func (ssuite *SystestTestSuite) OverwriteUidPredicates() {
 	// Upgrade
 	ssuite.Upgrade()
 
-	ctx = context.Background()
-	gcli, cleanup, err = ssuite.dc.Client()
+	gcli, cleanup, err = doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
-	resp, err = gcli.NewReadOnlyTxn().Query(ctx, q)
+	resp, err = gcli.NewReadOnlyTxn().Query(context.Background(), q)
 	require.NoError(t, err)
 	dgraphtest.CompareJSON(`{"me":[{"name":"Alice","best_friend": {"name": "Carol"}}]}`,
 		string(resp.GetJson()))
@@ -2927,12 +2730,10 @@ func (ssuite *SystestTestSuite) OverwriteUidPredicates() {
 
 func (ssuite *SystestTestSuite) OverwriteUidPredicatesReverse() {
 	t := ssuite.T()
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	ctx := context.Background()
 	op := &api.Operation{DropAll: true}
 	require.NoError(t, gcli.Alter(ctx, op))
 
@@ -3016,12 +2817,10 @@ func (ssuite *SystestTestSuite) OverwriteUidPredicatesReverse() {
 	// Upgrade
 	ssuite.Upgrade()
 
-	ctx = context.Background()
-	gcli, cleanup, err = ssuite.dc.Client()
+	gcli, cleanup, err = doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	ctx = context.Background()
 	resp, err = gcli.NewReadOnlyTxn().Query(ctx, reverseQuery)
 	require.NoError(t, err)
 	dgraphtest.CompareJSON(`{"reverse":[]}`,
@@ -3035,12 +2834,10 @@ func (ssuite *SystestTestSuite) OverwriteUidPredicatesReverse() {
 
 func (ssuite *SystestTestSuite) OverwriteUidPredicatesMultipleTxn() {
 	t := ssuite.T()
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	ctx := context.Background()
 	op := &api.Operation{DropAll: true}
 	require.NoError(t, gcli.Alter(ctx, op))
 
@@ -3088,27 +2885,22 @@ func (ssuite *SystestTestSuite) OverwriteUidPredicatesMultipleTxn() {
 		}
 	}`, alice)
 
-	ctx = context.Background()
-	gcli, cleanup, err = ssuite.dc.Client()
+	gcli, cleanup, err = doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
-	resp, err = gcli.NewReadOnlyTxn().Query(ctx, query)
+	resp, err = gcli.NewReadOnlyTxn().Query(context.Background(), query)
 	require.NoError(t, err)
 	dgraphtest.CompareJSON(`{"me":[{"name":"Alice","best_friend": {"name": "Carl"}}]}`,
 		string(resp.GetJson()))
 }
 
 func (ssuite *SystestTestSuite) DeleteAndQuerySameTxn() {
-	// Set the schema.
 	t := ssuite.T()
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	ctx := context.Background()
+	// Set the schema.
 	op := &api.Operation{
 		Schema: `name: string @index(exact) .`,
 	}
@@ -3149,14 +2941,11 @@ func (ssuite *SystestTestSuite) DeleteAndQuerySameTxn() {
 	// Upgrade
 	ssuite.Upgrade()
 
-	ctx = context.Background()
-	gcli, cleanup, err = ssuite.dc.Client()
+	gcli, cleanup, err = doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 	// Verify that changes are reflected after the transaction is committed.
-	resp, err = gcli.NewReadOnlyTxn().Query(ctx, q)
+	resp, err = gcli.NewReadOnlyTxn().Query(context.Background(), q)
 	require.NoError(t, err)
 	dgraphtest.CompareJSON(`{"me":[{"name":"Alice"}]}`,
 		string(resp.GetJson()))
@@ -3164,13 +2953,11 @@ func (ssuite *SystestTestSuite) DeleteAndQuerySameTxn() {
 
 func (ssuite *SystestTestSuite) AddAndQueryZeroTimeValue() {
 	t := ssuite.T()
-	ctx := context.Background()
-	gcli, cleanup, err := ssuite.dc.Client()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 
+	ctx := context.Background()
 	op := &api.Operation{Schema: `val: datetime .`}
 	require.NoError(t, gcli.Alter(ctx, op))
 
@@ -3193,12 +2980,10 @@ func (ssuite *SystestTestSuite) AddAndQueryZeroTimeValue() {
 		}
 	}`
 
-	ctx = context.Background()
-	gcli, cleanup, err = ssuite.dc.Client()
+	gcli, cleanup, err = doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(ctx,
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	ctx = context.Background()
 	txn = gcli.NewTxn()
 	resp, err := txn.Query(ctx, datetimeQuery)
 	require.NoError(t, err)

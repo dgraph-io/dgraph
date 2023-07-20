@@ -48,23 +48,10 @@ func (ssuite *SystestTestSuite) SetupSubTest() {
 	require.NoError(t, gcli.DropAll())
 }
 
-func (ssuite *SystestTestSuite) TearDownTest() {
-	t := ssuite.T()
-	gcli, cleanup, err := ssuite.dc.Client()
-	defer cleanup()
-	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(context.Background(),
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
-	require.NoError(t, gcli.DropAll())
-}
-
 func (ssuite *SystestTestSuite) Upgrade() {
 	// Not implemented for integration tests
 }
 
 func TestSystestTestSuite(t *testing.T) {
 	suite.Run(t, new(SystestTestSuite))
-	if t.Failed() {
-		t.Fatal("TestSystestTestSuite tests failed")
-	}
 }

@@ -298,21 +298,6 @@ func (hc *HTTPClient) RunGraphqlQuery(params GraphQLParams, admin bool) ([]byte,
 	return gqlResp.Data, nil
 }
 
-// RunDqlQuery makes a dql query to query endpoint
-func (hc *HTTPClient) RunDqlQuery(params DqlParams) ([]byte, error) {
-	req, err := http.NewRequest(http.MethodPost, hc.dqlURL, bytes.NewBufferString(params.body))
-	if err != nil {
-		return nil, errors.Wrapf(err, "error building req for endpoint [%v]", hc.dqlURL)
-	}
-	req.Header.Add("Content-Type", params.contentType)
-
-	if hc.HttpToken != nil {
-		req.Header.Add("X-Dgraph-AccessToken", hc.AccessJwt)
-	}
-
-	return doReq(req)
-}
-
 func (hc *HTTPClient) HealthForInstance() ([]byte, error) {
 	const query = `query {
 		health {
@@ -641,7 +626,15 @@ func (hc *HTTPClient) PostDqlQuery(query string) ([]byte, error) {
 		body:        query,
 		contentType: "application/dql",
 	}
-	return hc.RunDqlQuery(params)
+	req, err := http.NewRequest(http.MethodPost, hc.dqlURL, bytes.NewBufferString(params.body))
+	if err != nil {
+		return nil, errors.Wrapf(err, "error building req for endpoint [%v]", hc.dqlURL)
+	}
+	req.Header.Add("Content-Type", params.contentType)
+	if hc.HttpToken != nil {
+		req.Header.Add("X-Dgraph-AccessToken", hc.AccessJwt)
+	}
+	return doReq(req)
 }
 
 // SetupSchema sets up DQL schema
