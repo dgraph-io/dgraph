@@ -323,16 +323,15 @@ func BenchmarkListIntersectRandom(b *testing.B) {
 		sort.Slice(u1, func(i, j int) bool { return u1[i] < u1[j] })
 		sort.Slice(v1, func(i, j int) bool { return v1[i] < v1[j] })
 
-		u := newList(u1)
 		v := newList(v1)
 		dst1 := &pb.List{}
 		dst2 := &pb.List{}
 		compressedUids := codec.Encode(u1, 256)
 
-		b.Run(fmt.Sprintf(":size=%d:overlap=%.2f:", arrSz, overlap),
+		b.Run(fmt.Sprintf(":compressed2:size=%d:overlap=%.2f:", arrSz, overlap),
 			func(b *testing.B) {
 				for k := 0; k < b.N; k++ {
-					IntersectWith(u, v, dst1)
+					IntersectCompressedWith2(compressedUids, 0, v, dst1)
 				}
 			})
 
@@ -388,7 +387,6 @@ func BenchmarkListIntersectRatio(b *testing.B) {
 			sort.Slice(u1, func(i, j int) bool { return u1[i] < u1[j] })
 			sort.Slice(v1, func(i, j int) bool { return v1[i] < v1[j] })
 
-			u := &pb.List{Uids: u1}
 			v := &pb.List{Uids: v1}
 			dst1 := &pb.List{}
 			dst2 := &pb.List{}
@@ -399,13 +397,13 @@ func BenchmarkListIntersectRatio(b *testing.B) {
 			b.Run(fmt.Sprintf(":IntersectWith:ratio=%d:size=%d:overlap=%.2f:", r, sz, overlap),
 				func(b *testing.B) {
 					for k := 0; k < b.N; k++ {
-						IntersectWith(u, v, dst1)
+						IntersectCompressedWith2(compressedUids, 0, v, dst1)
 					}
 				})
 			b.Run(fmt.Sprintf("compressed:IntersectWith:ratio=%d:size=%d:overlap=%.2f:", r, sz, overlap),
 				func(b *testing.B) {
 					for k := 0; k < b.N; k++ {
-						IntersectCompressedWith(compressedUids, 0, u, dst2)
+						IntersectCompressedWith(compressedUids, 0, v, dst2)
 					}
 				})
 			fmt.Println()
