@@ -19,14 +19,17 @@ package posting
 import (
 	"encoding/binary"
 	"flag"
+	"fmt"
 	"io"
 	"log"
 	"math"
+	"math/rand"
 	_ "net/http/pprof"
 	"os"
 	"os/exec"
 	"runtime"
 	"runtime/pprof"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
@@ -37,6 +40,8 @@ import (
 
 	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/dgraph/algo"
+	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/protos/pb"
 )
 
@@ -109,6 +114,153 @@ func TestFacetCalculation(t *testing.T) {
 	facet = &api.Facet{}
 	// 96 is obtained from BenchmarkFacet
 	require.Equal(t, uint64(96), calculateFacet(facet))
+}
+
+func BenchmarkPostingList1(b *testing.B) {
+	kvOpt := badger.DefaultOptions("p")
+	ps, err := badger.OpenManaged(kvOpt)
+	fmt.Println(err)
+
+	uid := make([]uint64, 0)
+	ui1 := make([]uint64, 0)
+
+	n := 10000
+	n1 := 10000
+	for i := 0; i < n; i++ {
+		uid = append(uid, uint64(rand.Int63n(int64(n))))
+	}
+
+	for i := 0; i < n1; i++ {
+		ui1 = append(ui1, uint64(rand.Int63()))
+	}
+
+	sort.Slice(uid, func(i, j int) bool { return uid[i] < uid[j] })
+	sort.Slice(ui1, func(i, j int) bool { return ui1[i] < ui1[j] })
+
+	pack := codec.Encode(uid, blockSize)
+	ePack, err := pack.Marshal()
+
+	marshalList := func(uid []uint64) []byte {
+		eUids := make([]byte, 8*len(uid))
+		for pos, i := range uid {
+			b := make([]byte, 8)
+			binary.LittleEndian.PutUint64(b, i)
+			for k := 0; k < 8; k++ {
+				eUids[8*pos+k] = b[k]
+			}
+		}
+
+		return eUids
+	}
+
+	eUids := marshalList(uid)
+	fmt.Println(len(ePack)/len(eUids), len(eUids)/len(ePack))
+
+	txn := ps.NewWriteBatchAt(1)
+	err = txn.Set([]byte("key1"), ePack)
+	fmt.Println(err)
+	err = txn.Set([]byte("key2"), eUids)
+	fmt.Println(err)
+	txn.Flush()
+
+	b.Run("ACompressed", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			txn := ps.NewTransactionAt(1, false)
+			k, _ := txn.Get([]byte("key1"))
+			txn.Commit()
+			txn.Discard()
+
+			ch := make(chan bool, 1)
+			k.Value(func(val []byte) error {
+				pack1 := &pb.UidPack{}
+				pack1.Unmarshal(val)
+				algo.IntersectCompressedWith(pack1, 0, &pb.List{Uids: ui1}, &pb.List{Uids: make([]uint64, 0)})
+
+				ch <- true
+				return nil
+			})
+
+			<-ch
+		}
+	})
+
+	b.Run("UnCompressed", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			txn := ps.NewTransactionAt(2, false)
+			k, _ := txn.Get([]byte("key2"))
+			txn.Commit()
+			txn.Discard()
+
+			ch := make(chan bool, 1)
+			k.Value(func(val []byte) error {
+				uid1 := make([]uint64, 0)
+				for i := 0; i < len(val); i += 8 {
+					b := val[i : i+8]
+					v := binary.LittleEndian.Uint64(b)
+					uid1 = append(uid1, v)
+				}
+				algo.IntersectWith(&pb.List{Uids: uid1}, &pb.List{Uids: ui1}, &pb.List{Uids: make([]uint64, 0)})
+
+				ch <- true
+				return nil
+			})
+
+			<-ch
+		}
+	})
+
+	b.Run("WriteCompressedUn", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			b.StopTimer()
+
+			for i := 0; i < n; i++ {
+				uid[i] = uint64(rand.Int63n(int64(n)))
+			}
+			sort.Slice(uid, func(i, j int) bool { return uid[i] < uid[j] })
+			key := "key" + fmt.Sprintf("%d", i)
+
+			b.StartTimer()
+			eBytes := marshalList(uid)
+			txn := ps.NewWriteBatchAt(uint64(i))
+			err = txn.Set([]byte(key), eBytes)
+			txn.Flush()
+		}
+
+	})
+
+	b.Run("WriteCompressedA", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			b.StopTimer()
+
+			for i := 0; i < n; i++ {
+				uid[i] = uint64(rand.Int63n(int64(n)))
+			}
+			sort.Slice(uid, func(i, j int) bool { return uid[i] < uid[j] })
+			pack := codec.Encode(uid, blockSize)
+			key := "key" + fmt.Sprintf("%d", i)
+
+			b.StartTimer()
+			eBytes, _ := pack.Marshal()
+			txn := ps.NewWriteBatchAt(uint64(i))
+			err = txn.Set([]byte(key), eBytes)
+			txn.Flush()
+		}
+
+	})
+
+	b.Run("JustIntersectionPack", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			algo.IntersectCompressedWith(pack, 0, &pb.List{Uids: ui1}, &pb.List{Uids: make([]uint64, 0)})
+		}
+	})
+
+	b.Run("JustIntersection", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			algo.IntersectWith(&pb.List{Uids: uid}, &pb.List{Uids: ui1}, &pb.List{Uids: make([]uint64, 0)})
+		}
+	})
+
+	fmt.Println(err)
 }
 
 // run this test manually for the verfication.

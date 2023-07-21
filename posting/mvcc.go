@@ -396,7 +396,7 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 	}()
 
 	defer func() {
-		l.CreateUnpacked()
+		//l.CreateUnpacked()
 	}()
 
 	// Iterates from highest Ts to lowest Ts

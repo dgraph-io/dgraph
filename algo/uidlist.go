@@ -41,9 +41,7 @@ func IntersectCompressedWith2(pack *pb.UidPack, afterUID uint64, v, o *pb.List) 
 	if pack == nil {
 		return
 	}
-	dec := codec.Decoder{Pack: pack}
-	dec.Seek(afterUID, codec.SeekStart)
-
+	dec := codec.NewDecoder(pack)
 	k := &pb.List{Uids: make([]uint64, 0)}
 
 	for ; dec.Valid(); dec.Next() {
@@ -52,7 +50,7 @@ func IntersectCompressedWith2(pack *pb.UidPack, afterUID uint64, v, o *pb.List) 
 		}
 	}
 
-	IntersectWith(k, v, o)
+	IntersectWithAfter(k, v, o, afterUID)
 }
 
 // IntersectCompressedWith intersects a packed list of UIDs with another list

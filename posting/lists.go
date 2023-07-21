@@ -168,7 +168,7 @@ func (lc *LocalCache) getInternal(key []byte, readFromDisk bool) (*List, error) 
 
 	skey := string(key)
 	if pl := lc.getNoStore(skey); pl != nil {
-		pl.CreateUnpacked()
+		//pl.CreateUnpacked()
 		return pl, nil
 	}
 
