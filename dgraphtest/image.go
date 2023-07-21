@@ -53,11 +53,10 @@ func (c *LocalCluster) setupBinary() error {
 	if err := buildDgraphBinary(repoDir, binariesPath, c.conf.version); err != nil {
 		return err
 	}
-
-	// explicit var declaration to avoid confusion on the next line
-	race := false
-	testutil.GeneratePlugins(race)
-
+	if c.conf.customPlugins {
+		race := false // Explicit var declaration to avoid confusion on the next line
+		testutil.GeneratePlugins(race)
+	}
 	return copyBinary(binariesPath, c.tempBinDir, c.conf.version)
 }
 

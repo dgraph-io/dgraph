@@ -31,15 +31,21 @@ import (
 
 type PluginTestSuite struct {
 	suite.Suite
-	dc dgraphtest.Cluster
-	lc *dgraphtest.LocalCluster
-	uc dgraphtest.UpgradeCombo
-	pfiEntry PluginFuncInp
+	dc         dgraphtest.Cluster
+	lc         *dgraphtest.LocalCluster
+	uc         dgraphtest.UpgradeCombo
+	dataSetNdx int
 }
 
 func (psuite *PluginTestSuite) SetupTest() {
+}
+
+func (psuite *PluginTestSuite) SetupSubTest() {
+	psuite.lc.Cleanup(psuite.T().Failed())
+
 	conf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).WithReplicas(1).
-		WithACL(20 * time.Second).WithEncryption().WithVersion(psuite.uc.Before)
+		WithACL(20 * time.Second).WithEncryption().WithVersion(psuite.uc.Before).
+		WithCustomPlugins()
 	c, err := dgraphtest.NewLocalCluster(conf)
 	x.Panic(err)
 	if err := c.Start(); err != nil {
@@ -64,13 +70,13 @@ func (psuite *PluginTestSuite) Upgrade() {
 }
 
 func TestPluginTestSuite(t *testing.T) {
-	for _, uc := range dgraphtest.AllUpgradeCombos {
+	for _, uc := range dgraphtest.AllUpgradeCombos() {
 		log.Printf("running: backup in [%v], restore in [%v]", uc.Before, uc.After)
 		var psuite PluginTestSuite
 		psuite.uc = uc
-		for _, e := range pfiArray {
-			psuite.pfiEntry = e
-			suite.Run(t, &psuite)
+		suite.Run(t, &psuite)
+		if t.Failed() {
+			t.Fatal("TestPluginTestSuite tests failed")
 		}
 	}
 }

@@ -20,6 +20,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -30,20 +31,16 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-/*
 type testCase struct {
 	query      string
 	wantResult string
 }
-*/
 
-type PluginFuncInp struct {
+var testInp = []struct {
 	initialSchema string
 	setJSON       string
 	cases         []testCase
-}
-
-var pfiArray = []PluginFuncInp{
+}{
 	{
 		"word: string @index(anagram) .",
 		`[
@@ -318,36 +315,37 @@ func (psuite *PluginTestSuite) TestPlugins() {
 		t.Skip("skipping test in short mode")
 	}
 
-	pluginFn := func(initialSchema string, setJSON string, cases []testCase) {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-		defer cancel()
-
-		gcli, cleanup, err := psuite.dc.Client()
-		require.NoError(t, err)
-		defer cleanup()
-		require.NoError(t, gcli.LoginIntoNamespace(context.Background(),
-			dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
-		require.NoError(t, gcli.DropAll())
-		require.NoError(t, gcli.Alter(ctx, &api.Operation{
-			Schema: initialSchema,
-		}))
-
-		txn := gcli.NewTxn()
-		_, err = txn.Mutate(ctx, &api.Mutation{SetJson: []byte(setJSON)})
-		require.NoError(t, err)
-		require.NoError(t, txn.Commit(ctx))
-
-		// Upgrade
-		psuite.Upgrade()
-
-		for _, test := range cases {
-			txn := gcli.NewTxn()
-			reply, err := txn.Query(ctx, test.query)
-			require.NoError(t, err)
-			dgraphtest.CompareJSON(test.wantResult, string(reply.GetJson()))
-		}
+	for i := 0; i < len(testInp); i++ {
+		psuite.dataSetNdx = i
+		psuite.Run(fmt.Sprintf("test case %d", i+1), psuite.pluginFn)
 	}
+}
 
-	arg := psuite.pfiEntry
-	pluginFn(arg.initialSchema, arg.setJSON, arg.cases)
+func (psuite *PluginTestSuite) pluginFn() {
+	t := psuite.T()
+	gcli, cleanup, err := psuite.dc.Client()
+	require.NoError(t, err)
+	defer cleanup()
+	require.NoError(t, gcli.LoginIntoNamespace(context.Background(),
+		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	require.NoError(t, gcli.DropAll())
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	fmt.Printf("\ndataSetNdx = %d\n", psuite.dataSetNdx)
+	fmt.Printf("\ntestInp[psuite.dataSetNdx].initialSchema = [%s]\n", testInp[psuite.dataSetNdx].initialSchema)
+	require.NoError(t, gcli.Alter(ctx, &api.Operation{
+		Schema: testInp[psuite.dataSetNdx].initialSchema,
+	}))
+
+	txn := gcli.NewTxn()
+	_, err = txn.Mutate(ctx, &api.Mutation{SetJson: []byte(testInp[psuite.dataSetNdx].setJSON)})
+	require.NoError(t, err)
+	require.NoError(t, txn.Commit(ctx))
+
+	for _, test := range testInp[psuite.dataSetNdx].cases {
+		txn := gcli.NewTxn()
+		reply, err := txn.Query(ctx, test.query)
+		require.NoError(t, err)
+		dgraphtest.CompareJSON(test.wantResult, string(reply.GetJson()))
+	}
 }
