@@ -73,6 +73,13 @@ func (e entry) Index() uint64      { return binary.BigEndian.Uint64(e[8:]) }
 func (e entry) DataOffset() uint64 { return binary.BigEndian.Uint64(e[16:]) }
 func (e entry) Type() uint64       { return binary.BigEndian.Uint64(e[24:]) }
 
+/*
+entrySize is 32 bytes, uint64 is 8 bytes long, so each entry is divided into 4
+  - term is written to the start of b, occupying indices 0-7.
+  - index starts at position 8, occupying indices 8-15.
+  - do starts at position 16, occupying indices 16-23.
+  - typ starts at position 24, occupying indices 24-31.
+*/
 func marshalEntry(b []byte, term, index, do, typ uint64) {
 	x.AssertTrue(len(b) == entrySize)
 

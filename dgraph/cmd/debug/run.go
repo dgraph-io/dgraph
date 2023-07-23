@@ -926,6 +926,10 @@ func printSummary(db *badger.DB) {
 	fmt.Println()
 }
 
+func PrintWal(store *raftwal.DiskStorage) {
+	printRaft(store, false)
+}
+
 func run() {
 	go func() {
 		for i := 8080; i < 9080; i++ {

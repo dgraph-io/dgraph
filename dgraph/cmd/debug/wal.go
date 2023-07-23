@@ -42,7 +42,7 @@ func printEntry(es raftpb.Entry, pending map[uint64]bool, isZero bool) {
 	if len(es.Data) >= 8 {
 		key = binary.BigEndian.Uint64(es.Data[:8])
 	}
-	fmt.Fprintf(&buf, "%d . %d . %v . %-6s . %8d .", es.Term, es.Index, es.Type,
+	fmt.Fprintf(&buf, "Term=%d . Index=%d . Type=%v . Size=%-6s . Key=%8d .", es.Term, es.Index, es.Type,
 		humanize.Bytes(uint64(es.Size())), key)
 	if es.Type == raftpb.EntryConfChange {
 		return
@@ -122,17 +122,19 @@ func printBasic(store RaftStore) (uint64, uint64) {
 		fmt.Printf("Got error while retrieving last index: %v\n", err)
 	}
 	startIdx := snap.Metadata.Index + 1
-	fmt.Printf("Last Index: %d . Num Entries: %d .\n\n", lastIdx, lastIdx-startIdx)
+	if startIdx > lastIdx {
+		fmt.Printf("Start Index: %d . Last Index: %d . Num Entries: %s .\n\n", startIdx, lastIdx, "NA")
+	} else {
+		fmt.Printf("Start Index: %d . Last Index: %d . Num Entries: %d .\n\n", startIdx, lastIdx, lastIdx-startIdx)
+	}
 	return startIdx, lastIdx
 }
 
-func printRaft(store *raftwal.DiskStorage) {
-	isZero := store.Uint(raftwal.GroupId) == 0
+func printRaft(store *raftwal.DiskStorage, isZero bool) {
 
 	pending := make(map[uint64]bool)
 	startIdx, lastIdx := printBasic(store)
-
-	for startIdx < lastIdx-1 {
+	for lastIdx > 0 && startIdx < lastIdx-1 {
 		entries, err := store.Entries(startIdx, lastIdx+1, 64<<20)
 		x.Check(err)
 		for _, ent := range entries {
@@ -208,7 +210,7 @@ func handleWal(store *raftwal.DiskStorage) error {
 	case opt.wtruncateUntil != 0:
 		store.TruncateEntriesUntil(opt.wtruncateUntil)
 	default:
-		printRaft(store)
+		printRaft(store, store.Uint(raftwal.GroupId) == 0)
 	}
 	return nil
 }
