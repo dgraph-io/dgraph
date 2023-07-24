@@ -24,6 +24,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dgraph-io/vector_indexer/hnsw"
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	cindex "github.com/google/codesearch/index"
@@ -350,8 +351,17 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 	}
 
 	if srcFn.fnType == similarToFn {
-		// Implement function here.
-		args.out.UidMatrix = append(args.out.UidMatrix, &pb.List{Uids: srcFn.vectorInfo})
+		vecs := [][]float64{{0.1, 0.1, 0.1}, {0.2, 0.2, 0.2}, {0.3, 0.3, 0.3}, {0.4, 0.4, 0.4}}
+		uuids := []uint64{0, 1, 2, 3}
+		hnswVecSource := hnsw.CreateInMemVectorSource(vecs, uuids)
+		hnswIndexFactory := hnsw.CreateInMemIndexFactory(0.62, 5, 10, 3, 7)
+		hnswVecIndex, err := hnswIndexFactory.Create("name", hnswVecSource)
+		if err != nil {
+			panic(err)
+		}
+		query := []float64{0.2, 0.3, 0.2}
+		nn_uids := hnswVecIndex.Search(query, 3, index.AcceptAll)
+		args.out.UidMatrix = append(args.out.UidMatrix, &pb.List{Uids: nn_uids})
 		return nil
 	}
 
@@ -1664,7 +1674,7 @@ type functionContext struct {
 	isFuncAtRoot   bool
 	isStringFn     bool
 	atype          types.TypeID
-	vectorInfo     []uint64
+	vectorInfo     []float64
 }
 
 const (
@@ -1924,7 +1934,7 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 		checkRoot(q, fc)
 	case similarToFn:
 		for _, arg := range q.SrcFunc.Args {
-			uidParsed, err := strconv.ParseUint(arg, 0, 64)
+			vec_val, err := strconv.ParseFloat(arg, 64)
 			if err != nil {
 				if e, ok := err.(*strconv.NumError); ok && e.Err == strconv.ErrSyntax {
 					return nil, errors.Errorf("Value %q in %s is not a number",
@@ -1932,7 +1942,7 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 				}
 				return nil, err
 			}
-			fc.vectorInfo = append(fc.vectorInfo, uidParsed)
+			fc.vectorInfo = append(fc.vectorInfo, vec_val)
 		}
 	case uidInFn:
 		for _, arg := range q.SrcFunc.Args {
