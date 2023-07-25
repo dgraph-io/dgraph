@@ -45,9 +45,6 @@ func (c *LocalCluster) setupBinary() error {
 		return copyBinary(binDir, c.tempBinDir, c.conf.version)
 	}
 
-	if err := ensureDgraphClone(); err != nil {
-		return err
-	}
 	if err := runGitCheckout(c.conf.version); err != nil {
 		return err
 	}
@@ -132,6 +129,16 @@ func runGitCheckout(gitRef string) error {
 		return errors.Wrapf(err, "error checking out gitRef [%v]\noutput:%v", gitRef, string(out))
 	}
 	return nil
+}
+
+func getHash(ref string) (string, error) {
+	cmd := exec.Command("git", "rev-parse", ref)
+	cmd.Dir = repoDir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return "", errors.Wrapf(err, "error while running rev-parse on [%v]\noutput:%v", ref, string(out))
+	} else {
+		return string(out), nil
+	}
 }
 
 func buildDgraphBinary(dir, binaryDir, version string) error {
