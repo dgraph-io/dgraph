@@ -243,6 +243,10 @@ func (a *alpha) cmd(c *LocalCluster) []string {
 	}
 	acmd = append(acmd, zeroAddrsArg)
 
+	if c.conf.lambdaURL != "" {
+		acmd = append(acmd, fmt.Sprintf(`--graphql=lambda-url=%s`, c.conf.lambdaURL))
+	}
+
 	return acmd
 }
 
