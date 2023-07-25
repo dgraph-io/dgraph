@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
-	"fmt"
 	"log"
 	"math"
 	"sort"
@@ -1174,14 +1173,10 @@ func (l *List) Uids(ctx context.Context, opt ListOptions) (*pb.List, error) {
 			return out, ErrTsTooOld
 		}
 		stop := x.SpanTimer(span, "IntersectCompressedWith")
-		if (len(opt.Intersect.Uids) / codec.ApproxLen(l.plist.Pack)) < 1000 {
-			l.CreateUnpacked()
-			algo.IntersectWithAfter(l.immutable, opt.Intersect, out, opt.AfterUid)
-			fmt.Println("Ratio:", len(l.immutable.Uids)/len(opt.Intersect.Uids), len(opt.Intersect.Uids)/len(l.immutable.Uids))
+		if len(opt.Intersect.Uids) > 10*codec.ApproxLen(l.plist.Pack) {
+			algo.IntersectCompressedWithAlternate(l.plist.Pack, opt.AfterUid, opt.Intersect, out)
 		} else {
-			fmt.Println("Compressed Intersect")
 			algo.IntersectCompressedWith(l.plist.Pack, opt.AfterUid, opt.Intersect, out)
-
 		}
 		stop()
 		l.RUnlock()

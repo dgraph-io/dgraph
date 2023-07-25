@@ -37,11 +37,12 @@ func ApplyFilter(u *pb.List, f func(uint64, int) bool) {
 	u.Uids = out
 }
 
-func IntersectCompressedWith2(pack *pb.UidPack, afterUID uint64, v, o *pb.List) {
+func IntersectCompressedWithAlternate(pack *pb.UidPack, afterUID uint64, v, o *pb.List) {
 	if pack == nil {
 		return
 	}
-	dec := codec.NewDecoder(pack)
+	dec := &codec.Decoder{Pack: pack}
+	dec.Seek(afterUID, codec.SeekStart)
 	k := &pb.List{Uids: make([]uint64, 0)}
 
 	for ; dec.Valid(); dec.Next() {
@@ -50,7 +51,7 @@ func IntersectCompressedWith2(pack *pb.UidPack, afterUID uint64, v, o *pb.List) 
 		}
 	}
 
-	IntersectWithAfter(k, v, o, afterUID)
+	IntersectWith(k, v, o)
 }
 
 // IntersectCompressedWith intersects a packed list of UIDs with another list

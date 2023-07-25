@@ -398,7 +398,7 @@ func BenchmarkListIntersectRatio(b *testing.B) {
 			b.Run(fmt.Sprintf(":IntersectWith:ratio=%f:size=%d:overlap=%.2f:", r, sz, overlap),
 				func(b *testing.B) {
 					for k := 0; k < b.N; k++ {
-						IntersectCompressedWith2(compressedUids, 0, v, dst1)
+						IntersectCompressedWithAlternate(compressedUids, 0, v, dst1)
 					}
 				})
 			b.Run(fmt.Sprintf("compressed:IntersectWith:ratio=%f:size=%d:overlap=%.2f:", r, sz, overlap),
