@@ -228,7 +228,7 @@ func (cc ClusterConfig) WithNormalizeCompatibilityMode(mode string) ClusterConfi
 	return cc
 }
 
-// WithCustomPlugins enables generation of custom plugins in testutil/custom_plugins
+// Enables generation of the custom_plugins in testutil/custom_plugins
 func (cc ClusterConfig) WithCustomPlugins() ClusterConfig {
 	cc.customPlugins = true
 	return cc

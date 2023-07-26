@@ -60,6 +60,7 @@ const (
 	DefaultUser     = "groot"
 	DefaultPassword = "password"
 
+	goBinMountPath     = "/gobin"
 	localVersion       = "local"
 	waitDurBeforeRetry = time.Second
 	requestTimeout     = 120 * time.Second
@@ -278,6 +279,10 @@ func (a *alpha) cmd(c *LocalCluster) []string {
 		acmd = append(acmd, fmt.Sprintf("--feature-flags=%v", strings.Join(c.conf.featureFlags, ";")))
 	}
 
+	if c.conf.customPlugins {
+		acmd = append(acmd, fmt.Sprintf("--custom_tokenizers=%s", c.customTokenizers))
+	}
+
 	return acmd
 }
 
@@ -385,7 +390,7 @@ func mountBinary(c *LocalCluster) (mount.Mount, error) {
 	return mount.Mount{
 		Type:     mount.TypeBind,
 		Source:   c.tempBinDir,
-		Target:   "/gobin",
+		Target:   goBinMountPath,
 		ReadOnly: true,
 	}, nil
 }

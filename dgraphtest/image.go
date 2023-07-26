@@ -25,7 +25,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/pkg/errors"
 )
 
@@ -34,6 +33,12 @@ func (c *LocalCluster) dgraphImage() string {
 }
 
 func (c *LocalCluster) setupBinary() error {
+	if c.conf.customPlugins {
+		race := false // Explicit var declaration to avoid confusion on the next line
+		if err := c.GeneratePlugins(race); err != nil {
+			return err
+		}
+	}
 	if c.conf.version == localVersion {
 		fromDir := filepath.Join(os.Getenv("GOPATH"), "bin")
 		return copyBinary(fromDir, c.tempBinDir, c.conf.version)
@@ -52,10 +57,6 @@ func (c *LocalCluster) setupBinary() error {
 	}
 	if err := buildDgraphBinary(repoDir, binariesPath, c.conf.version); err != nil {
 		return err
-	}
-	if c.conf.customPlugins {
-		race := false // Explicit var declaration to avoid confusion on the next line
-		testutil.GeneratePlugins(race)
 	}
 	return copyBinary(binariesPath, c.tempBinDir, c.conf.version)
 }

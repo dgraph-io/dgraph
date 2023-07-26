@@ -26,6 +26,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -57,7 +58,9 @@ type LocalCluster struct {
 	tempBinDir     string
 	tempSecretsDir string
 	encKeyPath     string
-	lowerThanV21   bool
+
+	lowerThanV21     bool
+	customTokenizers string
 
 	// resources
 	dcli   *docker.Client
@@ -974,5 +977,48 @@ func runOpennssl(args ...string) error {
 	if err != nil {
 		return errors.Wrapf(err, "### failed to run openssl cmd [%v] ###\n%v", cmd, string(out))
 	}
+	return nil
+}
+
+func (c *LocalCluster) GeneratePlugins(raceEnabled bool) error {
+	_, curr, _, ok := runtime.Caller(0)
+	if !ok {
+		return errors.New("error while getting current file")
+	}
+	var soFiles []string
+	for i, src := range []string{
+		"../testutil/custom_plugins/anagram/main.go",
+		"../testutil/custom_plugins/cidr/main.go",
+		"../testutil/custom_plugins/factor/main.go",
+		"../testutil/custom_plugins/rune/main.go",
+	} {
+		so := c.tempBinDir + "/plugins/" + strconv.Itoa(i) + ".so"
+		log.Printf("compiling plugin: src=%q so=%q\n", src, so)
+		opts := []string{"build"}
+		if raceEnabled {
+			opts = append(opts, "-race")
+		}
+		opts = append(opts, "-buildmode=plugin", "-o", so, src)
+		os.Setenv("GOOS", "linux")
+		os.Setenv("GOARCH", "amd64")
+		cmd := exec.Command("go", opts...)
+		cmd.Dir = filepath.Dir(curr)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			log.Printf("Error: %v\n", err)
+			log.Printf("Output: %v\n", string(out))
+			return err
+		}
+		absSO, err := filepath.Abs(so)
+		if err != nil {
+			log.Printf("Error: %v\n", err)
+			return err
+		}
+		soFiles = append(soFiles, absSO)
+	}
+
+	sofiles := strings.Join(soFiles, ",")
+	c.customTokenizers = strings.ReplaceAll(sofiles, c.tempBinDir, goBinMountPath)
+	log.Printf("plugin build completed. Files are: %s\n", sofiles)
+
 	return nil
 }

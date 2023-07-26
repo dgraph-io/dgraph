@@ -19,20 +19,17 @@
 package main
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/dgraph-io/dgraph/dgraphtest"
-	"github.com/dgraph-io/dgraph/x"
 )
 
 type PluginTestSuite struct {
 	suite.Suite
-	dc         dgraphtest.Cluster
-	dataSetNdx int
+	dc  dgraphtest.Cluster
 }
 
 func (psuite *PluginTestSuite) SetupTest() {
@@ -44,8 +41,6 @@ func (psuite *PluginTestSuite) TearDownTest() {
 	gcli, cleanup, err := psuite.dc.Client()
 	require.NoError(t, err)
 	defer cleanup()
-	require.NoError(t, gcli.LoginIntoNamespace(context.Background(),
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 	require.NoError(t, gcli.DropAll())
 }
 

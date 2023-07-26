@@ -21,8 +21,8 @@ package main
 import (
 	"log"
 	"testing"
-	"time"
 
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/dgraph-io/dgraph/dgraphtest"
@@ -31,21 +31,18 @@ import (
 
 type PluginTestSuite struct {
 	suite.Suite
-	dc         dgraphtest.Cluster
-	lc         *dgraphtest.LocalCluster
-	uc         dgraphtest.UpgradeCombo
-	dataSetNdx int
-}
-
-func (psuite *PluginTestSuite) SetupTest() {
+	dc  dgraphtest.Cluster
+	lc  *dgraphtest.LocalCluster
+	uc  dgraphtest.UpgradeCombo
 }
 
 func (psuite *PluginTestSuite) SetupSubTest() {
+	// The TestPlugins() invokes subtest function, hence using
+	// SetupSubTest() instead of SetupTest().
 	psuite.lc.Cleanup(psuite.T().Failed())
 
 	conf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).WithReplicas(1).
-		WithACL(20 * time.Second).WithEncryption().WithVersion(psuite.uc.Before).
-		WithCustomPlugins()
+		WithVersion(psuite.uc.Before).WithCustomPlugins()
 	c, err := dgraphtest.NewLocalCluster(conf)
 	x.Panic(err)
 	if err := c.Start(); err != nil {
@@ -62,11 +59,7 @@ func (psuite *PluginTestSuite) TearDownTest() {
 }
 
 func (psuite *PluginTestSuite) Upgrade() {
-	t := psuite.T()
-
-	if err := psuite.lc.Upgrade(psuite.uc.After, psuite.uc.Strategy); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(psuite.T(), psuite.lc.Upgrade(psuite.uc.After, psuite.uc.Strategy))
 }
 
 func TestPluginTestSuite(t *testing.T) {
