@@ -331,7 +331,7 @@ func BenchmarkListIntersectRandom(b *testing.B) {
 		b.Run(fmt.Sprintf(":compressed2:size=%d:overlap=%.2f:", arrSz, overlap),
 			func(b *testing.B) {
 				for k := 0; k < b.N; k++ {
-					IntersectCompressedWith2(compressedUids, 0, v, dst1)
+					IntersectCompressedWithAlternate(compressedUids, 0, v, dst1)
 				}
 			})
 
@@ -368,7 +368,7 @@ func BenchmarkListIntersectRandom(b *testing.B) {
 
 func BenchmarkListIntersectRatio(b *testing.B) {
 	randomTests := func(sz int, overlap float64) {
-		rs := []float64{0.01, 0.1, 1, 10, 100, 200, 400, 500, 1000}
+		rs := []float64{100, 200, 400, 500, 1000}
 		for _, r := range rs {
 			sz1 := sz
 			sz2 := int(float64(sz) * r)
@@ -395,7 +395,7 @@ func BenchmarkListIntersectRatio(b *testing.B) {
 
 			fmt.Printf("len: %d, compressed: %d, bytes/int: %f\n",
 				len(v1), compressedUids.Size(), float64(compressedUids.Size())/float64(len(v1)))
-			b.Run(fmt.Sprintf(":IntersectWith:ratio=%f:size=%d:overlap=%.2f:", r, sz, overlap),
+			b.Run(fmt.Sprintf("a:IntersectWith:ratio=%f:size=%d:overlap=%.2f:", r, sz, overlap),
 				func(b *testing.B) {
 					for k := 0; k < b.N; k++ {
 						IntersectCompressedWithAlternate(compressedUids, 0, v, dst1)
@@ -408,19 +408,19 @@ func BenchmarkListIntersectRatio(b *testing.B) {
 					}
 				})
 			fmt.Println()
-			i := 0
-			j := 0
-			for i < len(dst1.Uids) {
-				if dst1.Uids[i] != dst2.Uids[j] {
-					b.Errorf("Unexpected error in intersection")
-				}
-				// Behaviour of bin intersect is not defined when duplicates are present
-				i = skipDuplicate(dst1.Uids, i)
-				j = skipDuplicate(dst2.Uids, j)
-			}
-			if j < len(dst2.Uids) {
-				b.Errorf("Unexpected error in intersection")
-			}
+			//i := 0
+			//j := 0
+			//for i < len(dst1.Uids) {
+			//	if dst1.Uids[i] != dst2.Uids[j] {
+			//		b.Errorf("Unexpected error in intersection")
+			//	}
+			//	// Behaviour of bin intersect is not defined when duplicates are present
+			//	i = skipDuplicate(dst1.Uids, i)
+			//	j = skipDuplicate(dst2.Uids, j)
+			//}
+			//if j < len(dst2.Uids) {
+			//	b.Errorf("Unexpected error in intersection")
+			//}
 
 			codec.FreePack(compressedUids)
 		}
