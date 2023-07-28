@@ -52,6 +52,9 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
+	if err := ensureDgraphClone(); err != nil {
+		panic(err)
+	}
 
 	binDir = filepath.Join(basePath, "binaries")
 	encKeyPath = filepath.Join(basePath, "data", "enc-key")

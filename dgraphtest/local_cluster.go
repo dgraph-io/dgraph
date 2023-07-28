@@ -781,7 +781,17 @@ func (c *LocalCluster) checkDgraphVersion(containerID string) error {
 	if err != nil {
 		return errors.Wrapf(err, "error during checkDgraphVersion for container [%v]", containerID)
 	}
-	if !strings.Contains(contLogs, fmt.Sprintf("Dgraph version   : %v", c.GetVersion())) {
+	index := strings.Index(contLogs, "Dgraph version   : ")
+	running := strings.Fields(contLogs[index : index+70])[3] // 70 is arbitrary
+	chash, err := getHash(c.GetVersion())
+	if err != nil {
+		return errors.Wrapf(err, "error while getting hash for %v", c.GetVersion())
+	}
+	rhash, err := getHash(running)
+	if err != nil {
+		return errors.Wrapf(err, "error while getting hash for %v", c.GetVersion())
+	}
+	if chash != rhash {
 		return errors.Errorf("found different dgraph version than expected [%v]", c.GetVersion())
 	}
 	return nil

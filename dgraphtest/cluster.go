@@ -649,10 +649,6 @@ func IsHigherVersion(higher, lower string) (bool, error) {
 		return true, nil
 	}
 
-	if err := ensureDgraphClone(); err != nil {
-		return false, err
-	}
-
 	// An older commit is usually the ancestor of a newer commit which is a descendant commit
 	cmd := exec.Command("git", "merge-base", "--is-ancestor", lower, higher)
 	cmd.Dir = repoDir
