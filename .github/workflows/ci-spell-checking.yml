@@ -29,8 +29,6 @@ jobs:
       - name: Install Vale
         if: steps.changed-files-specific.outputs.any_changed == 'true'
         run: |
-          sudo apt-get update
-          sudo apt-get install curl
           curl -Ls https://api.github.com/repos/errata-ai/vale/releases/latest \
             | grep "browser_download_url.*vale_[0-9.]*_Linux_64-bit.tar.gz" \
             | cut -d : -f 2,3 \
