@@ -90,8 +90,13 @@ func NewList(key []byte, plist *pb.PostingList, minTs uint64) *List {
 }
 
 func (l *List) maxVersion() uint64 {
+	//fmt.Println("Acquiring l lock15", string(l.key))
 	l.RLock()
-	defer l.RUnlock()
+	//fmt.Println("Acquired l lock15", string(l.key))
+	defer func() {
+		l.RUnlock()
+		//fmt.Println("Released l lock15", string(l.key))
+	}()
 	return l.maxTs
 }
 
@@ -538,8 +543,13 @@ func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.Directed
 
 // getMutation returns a marshaled version of posting list mutation stored internally.
 func (l *List) getMutation(startTs uint64) []byte {
+	//fmt.Println("Acquiring l lock1", string(l.key))
 	l.RLock()
-	defer l.RUnlock()
+	//fmt.Println("Acquired l lock1", string(l.key))
+	defer func() {
+		l.RUnlock()
+		//fmt.Println("Released l lock1", string(l.key))
+	}()
 	if pl, ok := l.mutationMap[startTs]; ok {
 		data, err := pl.Marshal()
 		x.Check(err)
@@ -552,12 +562,15 @@ func (l *List) setMutation(startTs uint64, data []byte) {
 	pl := new(pb.PostingList)
 	x.Check(pl.Unmarshal(data))
 
+	//fmt.Println("Acquiring l lock2", string(l.key))
 	l.Lock()
+	//fmt.Println("Acquired l lock2", string(l.key))
 	if l.mutationMap == nil {
 		l.mutationMap = make(map[uint64]*pb.PostingList)
 	}
 	l.mutationMap[startTs] = pl
 	l.Unlock()
+	//fmt.Println("Released l lock2", string(l.key))
 }
 
 // Iterate will allow you to iterate over the mutable and immutable layers of
@@ -567,14 +580,19 @@ func (l *List) setMutation(startTs uint64, data []byte) {
 // The function will loop until either the posting List is fully iterated, or you return a false
 // in the provided function, which will indicate to the function to break out of the iteration.
 //
-// 	pl.Iterate(..., func(p *pb.posting) error {
-//    // Use posting p
-//    return nil // to continue iteration.
-//    return errStopIteration // to break iteration.
-//  })
+//		pl.Iterate(..., func(p *pb.posting) error {
+//	   // Use posting p
+//	   return nil // to continue iteration.
+//	   return errStopIteration // to break iteration.
+//	 })
 func (l *List) Iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) error) error {
+	//fmt.Println("Acquiring l lock3", string(l.key))
 	l.RLock()
-	defer l.RUnlock()
+	//fmt.Println("Acquired l lock3", string(l.key))
+	defer func() {
+		l.RUnlock()
+		//fmt.Println("Released l lock3", string(l.key))
+	}()
 	return l.iterate(readTs, afterUid, f)
 }
 
@@ -642,6 +660,11 @@ func (l *List) pickPostings(readTs uint64) (uint64, []*pb.Posting) {
 }
 
 func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) error) error {
+	//fmt.Println("STARTING ITERATE", goid())
+	defer func() {
+		//fmt.Println("FINISHING ITERATE", goid())
+
+	}()
 	l.AssertRLock()
 
 	// mposts is the list of mutable postings
@@ -741,8 +764,13 @@ loop:
 
 // IsEmpty returns true if there are no uids at the given timestamp after the given UID.
 func (l *List) IsEmpty(readTs, afterUid uint64) (bool, error) {
+	//fmt.Println("Acquiring l lock14", string(l.key))
 	l.RLock()
-	defer l.RUnlock()
+	//fmt.Println("Acquired l lock14", string(l.key))
+	defer func() {
+		l.RUnlock()
+		//fmt.Println("Released l lock14", string(l.key))
+	}()
 	var count int
 	err := l.iterate(readTs, afterUid, func(p *pb.Posting) error {
 		count++
@@ -789,8 +817,13 @@ func (l *List) length(readTs, afterUid uint64) int {
 
 // Length iterates over the mutation layer and counts number of elements.
 func (l *List) Length(readTs, afterUid uint64) int {
+	//fmt.Println("Acquiring l lock4", string(l.key))
 	l.RLock()
-	defer l.RUnlock()
+	//fmt.Println("Acquired l lock4", string(l.key))
+	defer func() {
+		l.RUnlock()
+		//fmt.Println("Released l lock4", string(l.key))
+	}()
 	return l.length(readTs, afterUid)
 }
 
@@ -814,8 +847,13 @@ func (l *List) Length(readTs, afterUid uint64) int {
 // to be deleted, at which point the entire list will be marked for deletion.
 // As the list grows, existing parts might be split if they become too big.
 func (l *List) Rollup(alloc *z.Allocator) ([]*bpb.KV, error) {
+	//fmt.Println("Acquiring l lock5", string(l.key))
 	l.RLock()
-	defer l.RUnlock()
+	//fmt.Println("Acquired l lock5", string(l.key))
+	defer func() {
+		l.RUnlock()
+		//fmt.Println("Released l lock5", string(l.key))
+	}()
 	out, err := l.rollup(math.MaxUint64, true)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed when calling List.rollup")
@@ -866,8 +904,13 @@ func (l *List) ToBackupPostingList(
 	bl *pb.BackupPostingList, alloc *z.Allocator, buf *z.Buffer) (*bpb.KV, error) {
 
 	bl.Reset()
+	//fmt.Println("Acquiring l lock6", string(l.key))
 	l.RLock()
-	defer l.RUnlock()
+	//fmt.Println("Acquired l lock6", string(l.key))
+	defer func() {
+		l.RUnlock()
+		//fmt.Println("Released l lock6", string(l.key))
+	}()
 
 	out, err := l.rollup(math.MaxUint64, false)
 	if err != nil {
@@ -1113,8 +1156,13 @@ func (l *List) rollup(readTs uint64, split bool) (*rollupOutput, error) {
 
 // ApproxLen returns an approximate count of the UIDs in the posting list.
 func (l *List) ApproxLen() int {
+	//fmt.Println("Acquiring l lock9", string(l.key))
 	l.RLock()
-	defer l.RUnlock()
+	//fmt.Println("Acquired l lock9", string(l.key))
+	defer func() {
+		l.RUnlock()
+		//fmt.Println("Released l lock9", string(l.key))
+	}()
 	return len(l.mutationMap) + codec.ApproxLen(l.plist.Pack)
 }
 
@@ -1126,7 +1174,9 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 		opt.First = math.MaxInt32
 	}
 	// Pre-assign length to make it faster.
+	//fmt.Println("Acquiring l lock7", string(l.key))
 	l.RLock()
+	//fmt.Println("Acquired l lock7", string(l.key))
 	// Use approximate length for initial capacity.
 	res := make([]uint64, 0, len(l.mutationMap)+codec.ApproxLen(l.plist.Pack))
 	out := &pb.List{}
@@ -1155,6 +1205,7 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 		}
 		return nil
 	})
+	//fmt.Println("Released l lock7", string(l.key))
 	l.RUnlock()
 	if err != nil {
 		return out, errors.Wrapf(err, "cannot retrieve UIDs from list with key %s",
@@ -1172,8 +1223,13 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 // Postings calls postFn with the postings that are common with
 // UIDs in the opt ListOptions.
 func (l *List) Postings(opt ListOptions, postFn func(*pb.Posting) error) error {
+	//fmt.Println("Acquiring l lock10", string(l.key))
 	l.RLock()
-	defer l.RUnlock()
+	//fmt.Println("Acquired l lock10", string(l.key))
+	defer func() {
+		l.RUnlock()
+		//fmt.Println("Released l lock10", string(l.key))
+	}()
 
 	err := l.iterate(opt.ReadTs, opt.AfterUid, func(p *pb.Posting) error {
 		if p.PostingType != pb.Posting_REF {
@@ -1187,8 +1243,13 @@ func (l *List) Postings(opt ListOptions, postFn func(*pb.Posting) error) error {
 
 // AllUntaggedValues returns all the values in the posting list with no language tag.
 func (l *List) AllUntaggedValues(readTs uint64) ([]types.Val, error) {
+	//fmt.Println("Acquiring l lock11", string(l.key))
 	l.RLock()
-	defer l.RUnlock()
+	//fmt.Println("Acquired l lock11", string(l.key))
+	defer func() {
+		l.RUnlock()
+		//fmt.Println("Released l lock11", string(l.key))
+	}()
 
 	var vals []types.Val
 	err := l.iterate(readTs, 0, func(p *pb.Posting) error {
@@ -1222,8 +1283,13 @@ func (l *List) allUntaggedFacets(readTs uint64) ([]*pb.Facets, error) {
 
 // AllValues returns all the values in the posting list.
 func (l *List) AllValues(readTs uint64) ([]types.Val, error) {
+	//fmt.Println("Acquiring l lock12", string(l.key))
 	l.RLock()
-	defer l.RUnlock()
+	//fmt.Println("Acquired l lock12", string(l.key))
+	defer func() {
+		l.RUnlock()
+		//fmt.Println("Released l lock12", string(l.key))
+	}()
 
 	var vals []types.Val
 	err := l.iterate(readTs, 0, func(p *pb.Posting) error {
@@ -1239,8 +1305,13 @@ func (l *List) AllValues(readTs uint64) ([]types.Val, error) {
 
 // GetLangTags finds the language tags of each posting in the list.
 func (l *List) GetLangTags(readTs uint64) ([]string, error) {
+	//fmt.Println("Acquiring l lock13", string(l.key))
 	l.RLock()
-	defer l.RUnlock()
+	//fmt.Println("Acquired l lock13", string(l.key))
+	defer func() {
+		l.RUnlock()
+		//fmt.Println("Released l lock13", string(l.key))
+	}()
 
 	var tags []string
 	err := l.iterate(readTs, 0, func(p *pb.Posting) error {
@@ -1254,8 +1325,14 @@ func (l *List) GetLangTags(readTs uint64) ([]string, error) {
 // Value returns the default value from the posting list. The default value is
 // defined as the value without a language tag.
 func (l *List) Value(readTs uint64) (rval types.Val, rerr error) {
+	//fmt.Println("Acquiring l lock14", string(l.key))
 	l.RLock()
-	defer l.RUnlock()
+	//fmt.Println("Acquired l lock14", string(l.key))
+	defer func() {
+		l.RUnlock()
+		//fmt.Println("Released l lock14", string(l.key))
+	}()
+
 	val, found, err := l.findValue(readTs, math.MaxUint64)
 	if err != nil {
 		return val, errors.Wrapf(err,
@@ -1273,8 +1350,14 @@ func (l *List) Value(readTs uint64) (rval types.Val, rerr error) {
 // If list consists of one or more languages, first available value is returned.
 // If no language from the list matches the values, processing is the same as for empty list.
 func (l *List) ValueFor(readTs uint64, langs []string) (rval types.Val, rerr error) {
-	l.RLock() // All public methods should acquire locks, while private ones should assert them.
-	defer l.RUnlock()
+	//fmt.Println("Acquiring l lock15", string(l.key))
+	l.RLock()
+	//fmt.Println("Acquired l lock15", string(l.key))
+	defer func() {
+		l.RUnlock()
+		//fmt.Println("Released l lock15", string(l.key))
+	}()
+
 	p, err := l.postingFor(readTs, langs)
 	switch {
 	case err == ErrNoValue:
@@ -1288,8 +1371,13 @@ func (l *List) ValueFor(readTs uint64, langs []string) (rval types.Val, rerr err
 
 // PostingFor returns the posting according to the preferred language list.
 func (l *List) PostingFor(readTs uint64, langs []string) (p *pb.Posting, rerr error) {
+	//fmt.Println("Acquiring l lock15", string(l.key))
 	l.RLock()
-	defer l.RUnlock()
+	//fmt.Println("Acquired l lock15", string(l.key))
+	defer func() {
+		l.RUnlock()
+		//fmt.Println("Released l lock15", string(l.key))
+	}()
 	return l.postingFor(readTs, langs)
 }
 
@@ -1300,7 +1388,13 @@ func (l *List) postingFor(readTs uint64, langs []string) (p *pb.Posting, rerr er
 
 // ValueForTag returns the value in the posting list with the given language tag.
 func (l *List) ValueForTag(readTs uint64, tag string) (rval types.Val, rerr error) {
+	//fmt.Println("Acquiring l lock15", string(l.key))
 	l.RLock()
+	//fmt.Println("Acquired l lock15", string(l.key))
+	defer func() {
+		l.RUnlock()
+		//fmt.Println("Released l lock15", string(l.key))
+	}()
 	defer l.RUnlock()
 	p, err := l.postingForTag(readTs, tag)
 	if err != nil {
@@ -1413,8 +1507,13 @@ func (l *List) findPosting(readTs uint64, uid uint64) (found bool, pos *pb.Posti
 // Facets gives facets for the posting representing value.
 func (l *List) Facets(readTs uint64, param *pb.FacetParams, langs []string,
 	listType bool) ([]*pb.Facets, error) {
+	//fmt.Println("Acquiring l lock15", string(l.key))
 	l.RLock()
-	defer l.RUnlock()
+	//fmt.Println("Acquired l lock15", string(l.key))
+	defer func() {
+		l.RUnlock()
+		//fmt.Println("Released l lock15", string(l.key))
+	}()
 
 	var fcs []*pb.Facets
 	if listType {

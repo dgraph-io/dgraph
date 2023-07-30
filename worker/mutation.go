@@ -19,6 +19,7 @@ package worker
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"math"
 	"sync"
 	"sync/atomic"
@@ -72,11 +73,13 @@ func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *posting.Txn) e
 	su, ok := schema.State().Get(ctx, edge.Attr)
 	if edge.Op == pb.DirectedEdge_SET {
 		if !ok {
+			//fmt.Println("ERRPR HERE2")
 			return errors.Errorf("runMutation: Unable to find schema for %s", edge.Attr)
 		}
 	}
 
 	if isDeletePredicateEdge(edge) {
+		//fmt.Println("ERROR HERE3:")
 		return errors.New("We should never reach here")
 	}
 
@@ -84,6 +87,7 @@ func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *posting.Txn) e
 	// Type check is done before proposing mutation, in case schema is not
 	// present, some invalid entries might be written initially
 	if err := ValidateAndConvert(edge, &su); err != nil {
+		//fmt.Println("ERROR HERE2:", err)
 		return err
 	}
 
@@ -114,6 +118,7 @@ func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *posting.Txn) e
 	}
 
 	t := time.Now()
+	//fmt.Println("RUNNING MUTATION0")
 	plist, err := getFn(key)
 	if dur := time.Since(t); dur > time.Millisecond {
 		if span := otrace.FromContext(ctx); span != nil {
@@ -122,8 +127,10 @@ func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *posting.Txn) e
 		}
 	}
 	if err != nil {
+		//fmt.Println("ERROR HERE1:", err)
 		return err
 	}
+	//fmt.Println("RUNNING MUTATION1")
 	return plist.AddMutationWithIndex(ctx, edge, txn)
 }
 
@@ -881,6 +888,7 @@ func (w *grpcWorker) proposeAndWait(ctx context.Context, txnCtx *api.TxnContext,
 
 	node := groups().Node
 	err := node.proposeAndWait(ctx, &pb.Proposal{Mutations: m})
+	fmt.Println("Propose and wait error:", err)
 	fillTxnContext(txnCtx, m.StartTs)
 	return err
 }

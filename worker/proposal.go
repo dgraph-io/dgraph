@@ -20,6 +20,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/binary"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -225,7 +226,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 	defer stop()
 
 	propose := func(timeout time.Duration) error {
-		cctx, cancel := context.WithCancel(ctx)
+		cctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
 		errCh := make(chan error, 1)
@@ -238,9 +239,11 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 
 		span.Annotatef(nil, "Proposing with key: %d. Timeout: %v", key, timeout)
 
+		fmt.Printf("Proposing with key: %d. Timeout: %v\n", key, timeout)
 		if err = n.Raft().Propose(cctx, data); err != nil {
 			return errors.Wrapf(err, "While proposing")
 		}
+		fmt.Println("Done Proposing")
 
 		timer := time.NewTimer(timeout)
 		defer timer.Stop()
@@ -248,18 +251,21 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 		for {
 			select {
 			case err = <-errCh:
+				fmt.Println("Here1")
 				// We arrived here by a call to n.Proposals.Done().
 				return err
-			case <-ctx.Done():
-				return ctx.Err()
 			case <-timer.C:
+				fmt.Println("Here3")
 				if atomic.LoadUint32(&pctx.Found) > 0 {
+					fmt.Println("Found done")
 					// We found the proposal in CommittedEntries. No need to retry.
 				} else {
 					span.Annotatef(nil, "Timeout %s reached. Cancelling...", timeout)
+					fmt.Println("Cancelling proposal")
 					cancel()
 				}
 			case <-cctx.Done():
+				fmt.Println("Here4")
 				return errInternalRetry
 			}
 		}
@@ -305,7 +311,9 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 	}
 
 	for i := 0; i < 3; i++ {
+		fmt.Println("Proposal attempt", i)
 		if err := proposeWithLimit(i); err != errInternalRetry {
+			fmt.Println("Returning error", err)
 			return err
 		}
 	}

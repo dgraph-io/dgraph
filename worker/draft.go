@@ -535,14 +535,18 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	// Discard the posting lists from cache to release memory at the end.
 	defer txn.Update()
 
+	//fmt.Println("APPLY MUTATIONS HERE6")
+
 	process := func(edges []*pb.DirectedEdge) error {
 		var retries int
 		for _, edge := range edges {
 			for {
+				//fmt.Println("RUNNING MUTATION", len(edges), i)
 				err := runMutation(ctx, edge, txn)
 				if err == nil {
 					break
 				}
+				//fmt.Println("ERROR HERE:", err)
 				if err != posting.ErrRetry {
 					return err
 				}
@@ -556,6 +560,8 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	}
 	numGo, width := x.DivideAndRule(len(m.Edges))
 	span.Annotatef(nil, "To apply: %d edges. NumGo: %d. Width: %d", len(m.Edges), numGo, width)
+
+	//fmt.Println("APPLY MUTATIONS HERE7")
 
 	if numGo == 1 {
 		return process(m.Edges)
@@ -576,10 +582,15 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 			return err
 		}
 	}
+	//fmt.Println("APPLY MUTATIONS HERE8")
 	return nil
 }
 
 func (n *node) applyCommitted(proposal *pb.Proposal, key uint64) error {
+	//fmt.Println("START APPLY COMMITED")
+	defer func() {
+		//fmt.Println("FINISH APPLY COMMITED")
+	}()
 	ctx := n.Ctx(key)
 	span := otrace.FromContext(ctx)
 	span.Annotatef(nil, "node.applyCommitted Node id: %d. Group id: %d. Got proposal key: %d",
@@ -748,8 +759,13 @@ func (n *node) processApplyCh() {
 
 	// This function must be run serially.
 	handle := func(entries []raftpb.Entry) {
+		//fmt.Println("STARTING HANDLE")
+		defer func() {
+			//fmt.Println("FINISHING HANDLE")
+		}()
 		var totalSize int64
 		for _, entry := range entries {
+			//fmt.Println("Got some entry")
 			x.AssertTrue(len(entry.Data) > 0)
 
 			// We use the size as a double check to ensure that we're
@@ -771,6 +787,8 @@ func (n *node) processApplyCh() {
 			if x.WorkerConfig.LudicrousEnabled && proposal.Mutations != nil {
 				proposal.Mutations.StartTs = State.GetTimestamp(false)
 			}
+
+			//fmt.Println("HANDLE HERE1")
 
 			var perr error
 			p, ok := previous[key]
@@ -808,6 +826,8 @@ func (n *node) processApplyCh() {
 				_ = ostats.RecordWithTags(context.Background(), tags, x.LatencyMs.M(ms))
 			}
 
+			//fmt.Println("HANDLE HERE2")
+
 			n.Proposals.Done(key, perr)
 			n.Applied.Done(proposal.Index)
 			ostats.Record(context.Background(), x.RaftAppliedIndex.M(int64(n.Applied.DoneUntil())))
@@ -822,12 +842,15 @@ func (n *node) processApplyCh() {
 	defer tick.Stop()
 
 	for {
+		//fmt.Println("WAITING FOR APPLY CH")
 		select {
 		case entries, ok := <-n.applyCh:
+			//fmt.Println("Got entires in process ch", ok)
 			if !ok {
 				return
 			}
 			handle(entries)
+			//fmt.Println("Done handling procss ch")
 		case <-tick.C:
 			// We use this ticker to clear out previous map.
 			now := time.Now()
@@ -1240,7 +1263,8 @@ func (n *node) Run() {
 		case rd := <-n.Raft().Ready():
 			timer.Start()
 			_, span := otrace.StartSpan(n.ctx, "Alpha.RunLoop",
-				otrace.WithSampler(otrace.ProbabilitySampler(0.001)))
+				otrace.WithSampler(otrace.ProbabilitySampler(1)))
+			//fmt.Println("Got here in node.run")
 
 			if rd.SoftState != nil {
 				groups().triggerMembershipSync()
@@ -1414,6 +1438,7 @@ func (n *node) Run() {
 			}
 			// Send the whole lot to applyCh in one go, instead of sending proposals one by one.
 			if len(entries) > 0 {
+				//fmt.Println("Got entries")
 				// Apply the meter this before adding size to pending size so some crazy big
 				// proposal can be pushed to applyCh. If we do this after adding its size to
 				// pending size, we could block forever in rampMeter.
@@ -1425,7 +1450,9 @@ func (n *node) Run() {
 				if sz := atomic.AddInt64(&n.pendingSize, pendingSize); sz > 2*maxPendingSize {
 					glog.Warningf("Inflight proposal size: %d. There would be some throttling.", sz)
 				}
+				//fmt.Println("Sending etries through ch")
 				n.applyCh <- entries
+				//fmt.Println("Done Sending etries through ch")
 			}
 
 			if span != nil {
@@ -1602,7 +1629,9 @@ func (n *node) abortOldTransactions() {
 	}
 	glog.Infof("Found %d old transactions. Acting to abort them.\n", len(starts))
 	req := &pb.TxnTimestamps{Ts: starts}
+	fmt.Println("Started blocking abort")
 	err := n.blockingAbort(req)
+	fmt.Println("Finished blocking abort")
 	glog.Infof("Done abortOldTransactions for %d txns. Error: %v\n", len(req.Ts), err)
 }
 

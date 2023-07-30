@@ -19,6 +19,9 @@ package posting
 import (
 	"context"
 	"fmt"
+	"runtime"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -131,8 +134,13 @@ func NoCache(startTs uint64) *LocalCache {
 }
 
 func (lc *LocalCache) getNoStore(key string) *List {
+	//fmt.Println("Acquiring lc lock2", goid())
 	lc.RLock()
-	defer lc.RUnlock()
+	//fmt.Println("Acquired lc lock2", goid())
+	defer func() {
+		lc.RUnlock()
+		//fmt.Println("Released lc lock2", goid())
+	}()
 	if l, ok := lc.plists[key]; ok {
 		return l
 	}
@@ -144,8 +152,13 @@ func (lc *LocalCache) getNoStore(key string) *List {
 // will be returned instead. This behavior is meant to prevent the goroutines
 // using the cache from ending up with an orphaned version of a list.
 func (lc *LocalCache) SetIfAbsent(key string, updated *List) *List {
+	//fmt.Println("Acquiring lc lock1", goid())
 	lc.Lock()
-	defer lc.Unlock()
+	//fmt.Println("Acquired lc lock1", goid())
+	defer func() {
+		lc.Unlock()
+		//fmt.Println("Released lc lock1", goid())
+	}()
 	if pl, ok := lc.plists[key]; ok {
 		return pl
 	}
@@ -155,31 +168,40 @@ func (lc *LocalCache) SetIfAbsent(key string, updated *List) *List {
 
 func (lc *LocalCache) getInternal(key []byte, readFromDisk bool) (*List, error) {
 	getNewPlistNil := func() (*List, error) {
+		//fmt.Println("Acquiring lc lock", goid())
 		lc.RLock()
-		defer lc.RUnlock()
+		//fmt.Println("Acquired lc lock", goid())
+		defer func() {
+			lc.RUnlock()
+			//fmt.Println("Released lc lock", goid())
+		}()
 		if lc.plists == nil {
 			return getNew(key, pstore, lc.startTs)
 		}
 		return nil, nil
 	}
 
+	//fmt.Println("GET INTERNAL 1")
 	if l, err := getNewPlistNil(); l != nil || err != nil {
 		return l, err
 	}
 
 	skey := string(key)
+	//fmt.Println("GET INTERNAL 2")
 	if pl := lc.getNoStore(skey); pl != nil {
 		return pl, nil
 	}
 
 	var pl *List
 	if readFromDisk {
+		//fmt.Println("GET INTERNAL 3")
 		var err error
 		pl, err = getNew(key, pstore, lc.startTs)
 		if err != nil {
 			return nil, err
 		}
 	} else {
+		//fmt.Println("GET INTERNAL 4")
 		pl = &List{
 			key:   key,
 			plist: new(pb.PostingList),
@@ -188,11 +210,14 @@ func (lc *LocalCache) getInternal(key []byte, readFromDisk bool) (*List, error) 
 
 	// If we just brought this posting list into memory and we already have a delta for it, let's
 	// apply it before returning the list.
+	//fmt.Println("GET INTERNAL 5")
 	lc.RLock()
+	//fmt.Println("GET INTERNAL 6")
 	if delta, ok := lc.deltas[skey]; ok && len(delta) > 0 {
 		pl.setMutation(lc.startTs, delta)
 	}
 	lc.RUnlock()
+	//fmt.Println("GET INTERNAL 7")
 	return lc.SetIfAbsent(skey, pl), nil
 }
 
@@ -208,10 +233,26 @@ func (lc *LocalCache) GetFromDelta(key []byte) (*List, error) {
 	return lc.getInternal(key, false)
 }
 
+func goid() int {
+	var buf [64]byte
+	n := runtime.Stack(buf[:], false)
+	idField := strings.Fields(strings.TrimPrefix(string(buf[:n]), "goroutine "))[0]
+	id, err := strconv.Atoi(idField)
+	if err != nil {
+		panic(fmt.Sprintf("cannot get goroutine id: %v", err))
+	}
+	return id
+}
+
 // UpdateDeltasAndDiscardLists updates the delta cache before removing the stored posting lists.
 func (lc *LocalCache) UpdateDeltasAndDiscardLists() {
+	//fmt.Println("Acquiring lc lock4", goid())
 	lc.Lock()
-	defer lc.Unlock()
+	//fmt.Println("Acquired lc lock4", goid())
+	defer func() {
+		lc.Unlock()
+		//fmt.Println("Released lc lock4", goid())
+	}()
 	if len(lc.plists) == 0 {
 		return
 	}
@@ -230,8 +271,13 @@ func (lc *LocalCache) UpdateDeltasAndDiscardLists() {
 }
 
 func (lc *LocalCache) fillPreds(ctx *api.TxnContext, gid uint32) {
+	//fmt.Println("Acquiring lc lock5", goid())
 	lc.RLock()
-	defer lc.RUnlock()
+	//fmt.Println("Acquired lc lock5", goid())
+	defer func() {
+		lc.RUnlock()
+		//fmt.Println("Released lc lock5", goid())
+	}()
 	for key := range lc.deltas {
 		pk, err := x.Parse([]byte(key))
 		x.Check(err)

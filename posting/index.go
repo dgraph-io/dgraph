@@ -87,6 +87,7 @@ func indexTokens(ctx context.Context, info *indexMutationInfo) ([]string, error)
 // but only for the given tokenizers.
 // TODO - See if we need to pass op as argument as t should already have Op.
 func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) error {
+	//fmt.Println("ITERATE HERE2")
 	if info.tokenizers == nil {
 		info.tokenizers = schema.State().Tokenizer(ctx, info.edge.Attr)
 	}
@@ -197,6 +198,7 @@ func (txn *Txn) addReverseMutation(ctx context.Context, t *pb.DirectedEdge) erro
 }
 
 func (txn *Txn) addReverseAndCountMutation(ctx context.Context, t *pb.DirectedEdge) error {
+	//fmt.Println("ITERATE addreverse")
 	key := x.ReverseKey(t.Attr, t.ValueId)
 	hasCountIndex := schema.State().HasCount(ctx, t.Attr)
 
@@ -210,6 +212,7 @@ func (txn *Txn) addReverseAndCountMutation(ctx context.Context, t *pb.DirectedEd
 		getFn = txn.GetFromDelta
 	}
 	plist, err := getFn(key)
+	//fmt.Println("ITERATE passed getfn")
 	if err != nil {
 		return err
 	}
@@ -230,6 +233,7 @@ func (txn *Txn) addReverseAndCountMutation(ctx context.Context, t *pb.DirectedEd
 				hex.Dump(dataKey))
 		}
 		err = dataList.Iterate(txn.StartTs, 0, func(p *pb.Posting) error {
+			//fmt.Println("ITERATE HERE1")
 			delEdge := &pb.DirectedEdge{
 				Entity:  t.Entity,
 				ValueId: p.Uid,
@@ -280,6 +284,7 @@ func (l *List) handleDeleteAll(ctx context.Context, edge *pb.DirectedEdge, txn *
 	// To calculate length of posting list. Used for deletion of count index.
 	var plen int
 	err := l.Iterate(txn.StartTs, 0, func(p *pb.Posting) error {
+		//fmt.Println("ITERATE HER4")
 		plen++
 		switch {
 		case isReversed:
@@ -377,8 +382,12 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 	hasCountIndex bool, t *pb.DirectedEdge) (types.Val, bool, countParams, error) {
 
 	t1 := time.Now()
+	//fmt.Println("list lock", string(l.key))
 	l.Lock()
-	defer l.Unlock()
+	defer func() {
+		l.Unlock()
+		//fmt.Println("list unlock", string(l.key))
+	}()
 
 	if dur := time.Since(t1); dur > time.Millisecond {
 		span := otrace.FromContext(ctx)
@@ -478,6 +487,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, edge *pb.DirectedEdge, 
 		}
 	}
 
+	//fmt.Println("ADD MUTATION WITH INDEX 1")
 	val, found, cp, err := txn.addMutationHelper(ctx, l, doUpdateIndex, hasCountIndex, edge)
 	if err != nil {
 		return err
@@ -488,6 +498,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, edge *pb.DirectedEdge, 
 			return err
 		}
 	}
+	//fmt.Println("ADD MUTATION WITH INDEX 2")
 	if doUpdateIndex {
 		// Exact matches.
 		if found && val.Value != nil {
@@ -966,6 +977,7 @@ func rebuildTokIndex(ctx context.Context, rb *IndexRebuild) error {
 					val:        val,
 					op:         pb.DirectedEdge_SET,
 				})
+				//fmt.Println("Errorr1", err)
 				switch err {
 				case ErrRetry:
 					time.Sleep(10 * time.Millisecond)
@@ -1145,6 +1157,7 @@ func rebuildReverseEdges(ctx context.Context, rb *IndexRebuild) error {
 				// we only need to build reverse index here.
 				// We will update the reverse count index separately.
 				err := txn.addReverseMutation(ctx, &edge)
+				//fmt.Println("Error", err)
 				switch err {
 				case ErrRetry:
 					time.Sleep(10 * time.Millisecond)
