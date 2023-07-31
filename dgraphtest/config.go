@@ -67,8 +67,8 @@ func AllUpgradeCombos() []UpgradeCombo {
 	}
 
 	mainCombos := []UpgradeCombo{
-		{"v23.0.1", "local", BackupRestore},
-		{"v23.0.1", "local", InPlace},
+		{"v23.0.1", localVersion, BackupRestore},
+		{"v23.0.1", localVersion, InPlace},
 	}
 
 	if os.Getenv("DGRAPH_UPGRADE_MAIN_ONLY") == "true" {
