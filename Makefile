@@ -30,7 +30,7 @@ GOPATH         ?= $(shell go env GOPATH)
 ######################
 DGRAPH_VERSION ?= local
 
-.PHONY: all 
+.PHONY: all
 all: dgraph
 
 .PHONY: dgraph
