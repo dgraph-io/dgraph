@@ -21,6 +21,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math"
+	"strings"
 	"sync"
 
 	"github.com/golang/glog"
@@ -34,6 +35,8 @@ import (
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/vector_indexer/hnsw"
+	"github.com/dgraph-io/vector_indexer/manager"
 )
 
 var (
@@ -300,6 +303,26 @@ func (s *state) IsIndexed(ctx context.Context, pred string) bool {
 	}
 
 	if schema, ok := s.predicate[pred]; ok {
+
+		// if (schema.ValueType == schema.ValueType.Posting_VECTOR) {
+		if strings.EqualFold(pred, "0-profile_vector") {
+			hnswVecIndex, err := manager.IndexMgr.Find(pred)
+			if err != nil {
+				panic(err)
+			}
+			if hnswVecIndex == nil {
+				hnswVecSource, err := hnsw.CreateInMemDemoVectorSource()
+				if err != nil {
+					panic(err)
+				}
+				hnswVecIndex, err := manager.IndexMgr.Create(pred, manager.HNSW, 2, hnswVecSource)
+				if err != nil {
+					panic(err)
+				}
+				return hnswVecIndex != nil
+			}
+			return hnswVecIndex != nil
+		}
 		return len(schema.Tokenizer) > 0
 	}
 

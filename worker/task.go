@@ -19,12 +19,14 @@ package worker
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/dgraph-io/vector_indexer/hnsw"
+	"github.com/dgraph-io/vector_indexer/index"
+	"github.com/dgraph-io/vector_indexer/manager"
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	cindex "github.com/google/codesearch/index"
@@ -286,6 +288,8 @@ func needsIndex(fnType FuncType, uidList *pb.List) bool {
 		return true
 	case geoFn, fullTextSearchFn, standardFn, matchFn:
 		return true
+	case similarToFn:
+		return true
 	}
 	return false
 }
@@ -351,16 +355,24 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 	}
 
 	if srcFn.fnType == similarToFn {
-		vecs := [][]float64{{0.1, 0.1, 0.1}, {0.2, 0.2, 0.2}, {0.3, 0.3, 0.3}, {0.4, 0.4, 0.4}}
-		uuids := []uint64{0, 1, 2, 3}
-		hnswVecSource := hnsw.CreateInMemVectorSource(vecs, uuids)
-		hnswIndexFactory := hnsw.CreateInMemIndexFactory(0.62, 5, 10, 3, 7)
-		hnswVecIndex, err := hnswIndexFactory.Create("name", hnswVecSource)
+
+		numNeighbors, err := strconv.ParseInt(q.SrcFunc.Args[0], 10, 32)
+		if err != nil {
+			return fmt.Errorf("Invalid value for number of neighbors: %s", q.SrcFunc.Args[0])
+		}
+		//TODO: Need to confirm if Find needs to case-sensitive or not
+		hnswVecIndex, err := manager.IndexMgr.Find(args.q.Attr)
 		if err != nil {
 			panic(err)
 		}
-		query := []float64{0.2, 0.3, 0.2}
-		nn_uids := hnswVecIndex.Search(query, 3, index.AcceptAll)
+		if hnswVecIndex == nil {
+			return fmt.Errorf("Failed to find the vector index for %s", args.q.Attr)
+		}
+		nn_uids, err := hnswVecIndex.Search(srcFn.vectorInfo, int(numNeighbors), index.AcceptAll)
+		fmt.Println(len(nn_uids))
+		if err != nil {
+			panic(err)
+		}
 		args.out.UidMatrix = append(args.out.UidMatrix, &pb.List{Uids: nn_uids})
 		return nil
 	}
@@ -1933,8 +1945,9 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 		}
 		checkRoot(q, fc)
 	case similarToFn:
-		for _, arg := range q.SrcFunc.Args {
-			vec_val, err := strconv.ParseFloat(arg, 64)
+		str_vec := strings.Split(q.SrcFunc.Args[1], ",")
+		for _, arg := range str_vec {
+			vec_val, err := strconv.ParseFloat(strings.TrimSpace(arg), 64)
 			if err != nil {
 				if e, ok := err.(*strconv.NumError); ok && e.Err == strconv.ErrSyntax {
 					return nil, errors.Errorf("Value %q in %s is not a number",

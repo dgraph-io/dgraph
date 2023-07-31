@@ -17,6 +17,7 @@ require (
 	github.com/dgraph-io/graphql-transport-ws v0.0.0-20210511143556-2cef522f1f15
 	github.com/dgraph-io/ristretto v0.1.1
 	github.com/dgraph-io/simdjson-go v0.3.0
+	github.com/dgraph-io/vector_indexer v0.0.7-beta
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/dgrijalva/jwt-go/v4 v4.0.0-preview1
 	github.com/dgryski/go-farm v0.0.0-20200201041132-a6ae2369ad13
@@ -37,7 +38,6 @@ require (
 	github.com/gorilla/websocket v1.4.2
 	github.com/graph-gophers/graphql-go v1.3.0
 	github.com/hashicorp/vault/api v1.0.4
-	github.com/dgraph-io/vector_indexer v0.0.7-beta
 	github.com/minio/minio-go/v6 v6.0.55
 	github.com/mitchellh/panicwrap v1.0.0
 	github.com/paulmach/go.geojson v0.0.0-20170327170536-40612a87147b
@@ -67,12 +67,13 @@ require (
 	gopkg.in/yaml.v2 v2.4.0
 )
 
+replace github.com/dgraph-io/vector_indexer => ../vector_indexer
+
 require (
 	github.com/DataDog/datadog-go v0.0.0-20190425163447-40bafcb5f6c1 // indirect
 	github.com/Microsoft/go-winio v0.5.2 // indirect
 	github.com/agnivade/levenshtein v1.0.3 // indirect
 	github.com/apache/thrift v0.13.0 // indirect
-	github.com/barweiss/go-tuple v1.1.1 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/blevesearch/go-porterstemmer v1.0.3 // indirect
 	github.com/blevesearch/segment v0.9.0 // indirect
