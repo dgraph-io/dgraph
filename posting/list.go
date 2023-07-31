@@ -1173,7 +1173,7 @@ func (l *List) Uids(ctx context.Context, opt ListOptions) (*pb.List, error) {
 			return out, ErrTsTooOld
 		}
 		stop := x.SpanTimer(span, "IntersectCompressedWith")
-		if len(opt.Intersect.Uids) > 5*codec.ApproxLen(l.plist.Pack) {
+		if len(opt.Intersect.Uids) > 10*codec.ApproxLen(l.plist.Pack) {
 			algo.IntersectCompressedWithAlternate(l.plist.Pack, opt.AfterUid, opt.Intersect, out)
 		} else {
 			algo.IntersectCompressedWith(l.plist.Pack, opt.AfterUid, opt.Intersect, out)
