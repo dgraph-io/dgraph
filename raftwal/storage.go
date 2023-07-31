@@ -292,6 +292,7 @@ func (w *DiskStorage) CreateSnapshot(i uint64, cs *raftpb.ConfState, data []byte
 	defer w.lock.Unlock()
 
 	first := w.firstIndex()
+	glog.V(2).Infof("CreateSnapshot firstIndex=%d", first)
 	if i < first {
 		glog.Errorf("i=%d<first=%d, ErrSnapOutOfDate", i, first)
 		return raft.ErrSnapOutOfDate

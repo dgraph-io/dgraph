@@ -628,6 +628,9 @@ func (n *node) applyCommitted(proposal *pb.Proposal, key uint64) error {
 
 		data, err := snap.Marshal()
 		x.Check(err)
+
+		// TODO(aman): When writing in meta file, we are not going atomic write.
+		// The state of disk will be inconsistent if we failed between writes.
 		for {
 			// We should never let CreateSnapshot have an error.
 			err := n.Store.CreateSnapshot(snap.Index, n.ConfState(), data)
@@ -938,6 +941,9 @@ func (n *node) retrieveSnapshot(snap pb.Snapshot) error {
 	// commits up until then have already been written to pstore. And the way we take snapshots, we
 	// keep all the pre-writes for a pending transaction, so they will come back to memory, as Raft
 	// logs are replayed.
+	//
+	// Update: Above comments are invalid because this PR (https://github.com/dgraph-io/dgraph/pull/2837)
+	// removed LRU cache.
 	if err := n.populateSnapshot(snap, pool); err != nil {
 		return errors.Wrapf(err, "cannot retrieve snapshot from peer")
 	}
@@ -979,6 +985,9 @@ func (n *node) proposeSnapshot() error {
 	// a maxCommitTs, which would become the readTs for the snapshot.
 	minPendingStart := x.Min(posting.Oracle().MinPendingStartTs(), n.cdcTracker.getTs())
 	snap, err := n.calculateSnapshot(0, lastIdx, minPendingStart)
+	fmt.Printf("We will get all the data here- lastIdx: %d  .  MinpendingStart:  %d\n", lastIdx, minPendingStart)
+	fmt.Printf("### Give me the snap %+v #####", snap)
+
 	if err != nil {
 		return err
 	}
@@ -988,7 +997,6 @@ func (n *node) proposeSnapshot() error {
 	proposal := &pb.Proposal{
 		Snapshot: snap,
 	}
-	glog.V(2).Infof("Proposing snapshot: %+v\n", snap)
 	data := make([]byte, 8+proposal.Size())
 	sz, err := proposal.MarshalToSizedBuffer(data[8:])
 	data = data[:8+sz]
@@ -1038,7 +1046,8 @@ func (n *node) updateRaftProgress() error {
 }
 
 func (n *node) checkpointAndClose(done chan struct{}) {
-	slowTicker := time.NewTicker(time.Minute)
+	// Modifying the ticker to make it easy to repro
+	slowTicker := time.NewTicker(10 * time.Second)
 	lastSnapshotTime := time.Now()
 	defer slowTicker.Stop()
 
@@ -1073,6 +1082,8 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 				// calculate a new snapshot.
 				calculate := raft.IsEmptySnap(snap) || n.Store.NumLogFiles() > 4
 
+				fmt.Printf("################# Should I take a snapshot %v\n", calculate)
+
 				// Only take snapshot if both snapshotFrequency and
 				// snapshotAfterEntries requirements are met. If set to 0,
 				// we consider duration condition to be disabled.
@@ -1089,6 +1100,8 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 					}
 				}
 
+				fmt.Printf("################# Should I still take a snapshot %v\n", calculate)
+
 				// We keep track of the applied index in the p directory. Even if we don't take
 				// snapshot for a while and let the Raft logs grow and restart, we would not have to
 				// run all the log entries, because we can tell Raft.Config to set Applied to that
@@ -1104,6 +1117,9 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 					// We can set discardN argument to zero, because we already know that calculate
 					// would be true if either we absolutely needed to calculate the snapshot,
 					// or our checkpoint already crossed the SnapshotAfter threshold.
+
+					fmt.Println("############ Proposing the snapshot now! ###############")
+
 					if err := n.proposeSnapshot(); err != nil {
 						glog.Errorf("While calculating and proposing snapshot: %v", err)
 					} else {
@@ -1255,6 +1271,8 @@ func (n *node) Run() {
 				rc := snap.GetContext()
 				x.AssertTrue(rc.GetGroup() == n.gid)
 				if rc.Id != n.Id {
+					fmt.Println("################## Leader is trying to bring me upto speed #############")
+					fmt.Printf("Snap: %+v\n", snap)
 					// Set node to unhealthy state here while it applies the snapshot.
 					x.UpdateHealthStatus(false)
 
@@ -1281,6 +1299,8 @@ func (n *node) Run() {
 						snap.SinceTs = currSnap.ReadTs
 					}
 
+					fmt.Println("####### Would be good to see snap.Ts: ", snap.SinceTs)
+
 					// It's ok to block ticks while retrieving snapshot, since it's a follower.
 					glog.Infof("---> SNAPSHOT: %+v. Group %d from node id %#x\n",
 						snap, n.gid, rc.Id)
@@ -1305,10 +1325,15 @@ func (n *node) Run() {
 				if span != nil {
 					span.Annotate(nil, "Applied or retrieved snapshot.")
 				}
+				fmt.Println(" #################### Applied or retrieved snapshot ############")
 			}
 
 			// Store the hardstate and entries. Note that these are not CommittedEntries.
 			n.SaveToStorage(&rd.HardState, rd.Entries, &rd.Snapshot)
+			// fmt.Printf("################# Saved %d entries. Snapshot, HardState empty? (%v, %v)\n",
+			// len(rd.Entries),
+			// raft.IsEmptySnap(rd.Snapshot),
+			// raft.IsEmptyHardState(rd.HardState))
 			timer.Record("disk")
 			if span != nil {
 				span.Annotatef(nil, "Saved %d entries. Snapshot, HardState empty? (%v, %v)",
@@ -1419,6 +1444,83 @@ func (n *node) Run() {
 					timer.String(), len(rd.Entries), rd.MustSync)
 			}
 		}
+	}
+}
+
+func printEntryFromAlpha(entry raftpb.Entry) {
+	var buf bytes.Buffer
+	defer func() {
+		fmt.Println("%s\n", buf.String())
+	}()
+	var key uint64
+
+	if len(entry.Data) >= 8 {
+		key = binary.BigEndian.Uint64(entry.Data[:8])
+	}
+	fmt.Fprintf(&buf, "Term=%d . Index=%d . Type=%v . Size=%-6s . Key=%8d .", entry.Term, entry.Index, entry.Type,
+		humanize.Bytes(uint64(entry.Size())), key)
+
+	if entry.Type == raftpb.EntryConfChange {
+		return
+	}
+	if len(entry.Data) == 0 {
+		return
+	}
+	var err error
+
+	var pr pb.Proposal
+	pending := make(map[uint64]bool)
+	if err = pr.Unmarshal(entry.Data[8:]); err == nil {
+		printAlphaProposal(&buf, &pr, pending)
+		return
+	}
+	fmt.Fprintf(&buf, " Unable to parse Proposal: %v", err)
+
+}
+
+func printAlphaProposal(buf *bytes.Buffer, pr *pb.Proposal, pending map[uint64]bool) {
+	if pr == nil {
+		return
+	}
+
+	switch {
+	case pr.Mutations != nil:
+		fmt.Fprintf(buf, " Mutation . StartTs: %d . Edges: %d .",
+			pr.Mutations.StartTs, len(pr.Mutations.Edges))
+		if len(pr.Mutations.Edges) > 0 {
+			pending[pr.Mutations.StartTs] = true
+		} else {
+			fmt.Fprintf(buf, " Mutation: %+v .", pr.Mutations)
+		}
+		fmt.Fprintf(buf, " Pending txns: %d .", len(pending))
+	case len(pr.Kv) > 0:
+		fmt.Fprintf(buf, " KV . Size: %d ", len(pr.Kv))
+	case pr.State != nil:
+		fmt.Fprintf(buf, " State . %+v ", pr.State)
+	case pr.Delta != nil:
+		fmt.Fprintf(buf, " Delta .")
+		sort.Slice(pr.Delta.Txns, func(i, j int) bool {
+			ti := pr.Delta.Txns[i]
+			tj := pr.Delta.Txns[j]
+			return ti.StartTs < tj.StartTs
+		})
+		fmt.Fprintf(buf, " Max: %d .", pr.Delta.GetMaxAssigned())
+		for _, txn := range pr.Delta.Txns {
+			delete(pending, txn.StartTs)
+		}
+		// There could be many thousands of txns within a single delta. We
+		// don't need to print out every single entry, so just show the
+		// first 10.
+		if len(pr.Delta.Txns) >= 10 {
+			fmt.Fprintf(buf, " Num txns: %d .", len(pr.Delta.Txns))
+			pr.Delta.Txns = pr.Delta.Txns[:10]
+		}
+		for _, txn := range pr.Delta.Txns {
+			fmt.Fprintf(buf, " %d → %d .", txn.StartTs, txn.CommitTs)
+		}
+		fmt.Fprintf(buf, " Pending txns: %d .", len(pending))
+	case pr.Snapshot != nil:
+		fmt.Fprintf(buf, " Snapshot . %+v ", pr.Snapshot)
 	}
 }
 
@@ -1655,6 +1757,19 @@ func (n *node) calculateSnapshot(startIdx, lastIdx, minPendingStart uint64) (*pb
 		lastEntry = entries[len(entries)-1]
 		batchFirst = lastEntry.Index + 1
 
+		// TODO(Anurag): The way this loop is written, the snapshotIdx is dependent on the
+		// order of entries returned by the Store. Consider the following case:
+		//
+		// Txn0  | S0 |    |    | C0 |    |    |
+		// Txn1  |    | S1 |    |    |    | C1 |
+		// Txn2  |    |    | S2 | C2 |    |    |
+		// Txn3  |    |    |    |    | S3 |    |
+		// Txn4  |    |    |    |    |    |    | S4
+		// Index | i1 | i2 | i3 | i4 | i5 | i6 | i7
+		//
+		// At i7, min pending start ts = S3, therefore snapshotIdx should be = i5 - 1 = i4.
+		// But if S2 >= S3, then snapshotIdx will be calculated as i3 - 1 = i2.
+		// Why doesn't this cause any issues?
 		for _, entry := range entries {
 			if entry.Type != raftpb.EntryNormal || len(entry.Data) == 0 {
 				continue
@@ -1674,11 +1789,14 @@ func (n *node) calculateSnapshot(startIdx, lastIdx, minPendingStart uint64) (*pb
 			}
 			if proposal.Delta != nil {
 				for _, txn := range proposal.Delta.GetTxns() {
+					fmt.Println("Logging Delta txns: ", txn.CommitTs)
 					maxCommitTs = x.Max(maxCommitTs, txn.CommitTs)
 				}
 			}
 		}
 	}
+
+	fmt.Println("########## MaxCommitTs: ", maxCommitTs)
 
 	if maxCommitTs == 0 {
 		span.Annotate(nil, "maxCommitTs is zero")
@@ -1690,11 +1808,15 @@ func (n *node) calculateSnapshot(startIdx, lastIdx, minPendingStart uint64) (*pb
 		snapshotIdx = lastEntry.Index
 		span.Annotatef(nil, "snapshotIdx is zero. Using last entry's index: %d", snapshotIdx)
 	}
+	fmt.Println("############ Snapshot Index: ", snapshotIdx)
 
 	numDiscarding := snapshotIdx - first + 1
 	span.Annotatef(nil,
 		"Got snapshotIdx: %d. MaxCommitTs: %d. Discarding: %d. MinPendingStartTs: %d",
 		snapshotIdx, maxCommitTs, numDiscarding, minPendingStart)
+
+	fmt.Println("############ numDiscarding: ", numDiscarding)
+	fmt.Println("############ disCardn: ", discardN)
 
 	if int(numDiscarding) < discardN {
 		span.Annotate(nil, "Skipping snapshot because insufficient discard entries")
@@ -1815,12 +1937,11 @@ func (n *node) InitAndStartNode() {
 	} else {
 		glog.Infof("New Node for group: %d\n", n.gid)
 		if _, hasPeer := groups().MyPeer(); hasPeer {
-			// Get snapshot before joining peers as it can take time to retrieve it and we dont
-			// want the quorum to be inactive when it happens.
+			// [No longer true; See update] Get snapshot before joining peers as it can take time to
+			// retrieve it and we dont want the quorum to be inactive when it happens.
 			// Update: This is an optimization, which adds complexity because it requires us to
 			// understand the Raft state of the node. Let's instead have the node retrieve the
 			// snapshot as needed after joining the group, instead of us forcing one upfront.
-			glog.Infoln("Trying to join peers.")
 			n.retryUntilSuccess(n.joinPeers, time.Second)
 			n.SetRaft(raft.StartNode(n.Cfg, nil))
 		} else {

@@ -33,6 +33,11 @@ import (
 )
 
 func (n *Node) run(wg *sync.WaitGroup) {
+	// The ticker indirectly determines the test's runtime.
+	// A new node initiates in the follower state, and the loop in
+	// TestProposal cannot progress until the node assumes a leader role.
+	// Given that the ElectionTick is configured to 20 in raft.Config,
+	// there's an inherent 20 * 20 millisecond delay before the test can move forward.
 	ticker := time.NewTicker(20 * time.Millisecond)
 	defer ticker.Stop()
 

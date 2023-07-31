@@ -411,12 +411,17 @@ const queryAcls = `
 		dgraph.rule.predicate
 		dgraph.rule.permission
 	}
-	~dgraph.user.group{
-		dgraph.xid
-	}
   }
 }
 `
+
+/*
+
+
+	~dgraph.user.group{
+		dgraph.xid
+	}
+*/
 
 var aclPrefixes = [][]byte{
 	x.PredicatePrefix(x.GalaxyAttr("dgraph.rule.permission")),

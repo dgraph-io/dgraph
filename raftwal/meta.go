@@ -142,6 +142,11 @@ func (m *metaFile) HardState() (raftpb.HardState, error) {
 	return hs, nil
 }
 
+/*
+Test: There's a specific part in meta where we store snapshot.
+If we panic at 156. It would leave it in the inconsistent state.
+*/
+
 func (m *metaFile) StoreSnapshot(snap *raftpb.Snapshot) error {
 	if snap == nil || raft.IsEmptySnap(*snap) {
 		return nil
