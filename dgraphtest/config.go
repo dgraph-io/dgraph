@@ -94,6 +94,7 @@ type ClusterConfig struct {
 	// exposed port offset for grpc/http port for both alpha/zero
 	portOffset int
 	bulkOutDir string
+	lambdaURL  string
 }
 
 func NewClusterConfig() ClusterConfig {
@@ -178,5 +179,10 @@ func (cc ClusterConfig) WithExposedPortOffset(offset uint64) ClusterConfig {
 // that the same p directory is used while setting up alphas.
 func (cc ClusterConfig) WithBulkLoadOutDir(dir string) ClusterConfig {
 	cc.bulkOutDir = dir
+	return cc
+}
+
+func (cc ClusterConfig) WithGraphqlLambdaURL(url string) ClusterConfig {
+	cc.lambdaURL = url
 	return cc
 }
