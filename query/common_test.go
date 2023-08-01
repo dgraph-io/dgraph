@@ -271,6 +271,11 @@ type Speaker {
 	language
 }
 
+type JaegerTest {
+	_name
+	<#tag:test>
+}
+
 name                           : string @index(term, exact, trigram) @count @lang .
 name_lang                      : string @lang .
 lang_type                      : string @index(exact) .
@@ -344,6 +349,8 @@ tweet-c                        : string @index(fulltext) .
 tweet-d                        : string @index(trigram) .
 name2                          : string @index(term)  .
 age2                           : int @index(int) .
+<#tag:test>                    : string .
+_name                          : string @index(term)  .
 `
 
 func populateCluster() {
@@ -869,6 +876,27 @@ func populateCluster() {
 
 		<40> <name2> "Alice" .
 		<41> <age2> "20" .
+
+		# Data for testing Tags in comments.
+
+		<300> <#tag:test> "Bob" .
+		<301> <_name> "#tag:test" .
+		<302> <_name> "#tag" .
+		<303> <_name> "#tag:" .
+		<304> <_name> "#test" .
+		<305> <_name> "#" .
+		<306> <_name> "something#" .
+		<307> <_name> "something#tag:MyTest" .
+
+		<300> <dgraph.type> "JaegerTest" .
+		<301> <dgraph.type> "JaegerTest" .
+		<302> <dgraph.type> "JaegerTest" .
+		<303> <dgraph.type> "JaegerTest" .
+		<304> <dgraph.type> "JaegerTest" .
+		<305> <dgraph.type> "JaegerTest" .
+		<306> <dgraph.type> "JaegerTest" .
+		<307> <dgraph.type> "JaegerTest" .
+
 	`)
 	x.Panic(err)
 
