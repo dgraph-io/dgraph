@@ -97,7 +97,8 @@ func assertAuthTokenError(t *testing.T, resp *common.GraphQLResponse) {
 
 func assertMissingAclError(t *testing.T, resp *common.GraphQLResponse) {
 	require.Equal(t, x.GqlErrorList{{
-		Message: "resolving updateGQLSchema failed because rpc error: code = PermissionDenied desc = no accessJwt available", //nolint:lll
+		Message: "resolving updateGQLSchema failed because rpc error: code = PermissionDenied desc = " +
+			"no accessJwt available",
 		Locations: []x.Location{{
 			Line:   2,
 			Column: 4,
@@ -107,7 +108,8 @@ func assertMissingAclError(t *testing.T, resp *common.GraphQLResponse) {
 
 func assertBadAclError(t *testing.T, resp *common.GraphQLResponse) {
 	require.Equal(t, x.GqlErrorList{{
-		Message: "resolving updateGQLSchema failed because rpc error: code = Unauthenticated desc = unable to parse jwt token: token contains an invalid number of segments", //nolint:lll
+		Message: "resolving updateGQLSchema failed because rpc error: code = Unauthenticated desc = " +
+			"unable to parse jwt token: token is malformed: token contains an invalid number of segments",
 		Locations: []x.Location{{
 			Line:   2,
 			Column: 4,

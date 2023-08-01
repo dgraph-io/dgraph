@@ -38,7 +38,7 @@ func (asuite *AclTestSuite) TestInvalidGetUser() {
 	hc.HttpToken.AccessJwt = "invalid Token"
 	currentUser, err := hc.GetCurrentUser()
 	require.Contains(t, err.Error(), "couldn't rewrite query getCurrentUser because "+
-		"unable to parse jwt token: token contains an invalid number of segments")
+		"unable to parse jwt token: token is malformed: token contains an invalid number of segments")
 	require.Equal(t, "", currentUser)
 }
 

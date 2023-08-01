@@ -2048,7 +2048,6 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 // ProcessGraph processes the SubGraph instance accumulating result for the query
 // from different instances. Note: taskQuery is nil for root node.
 func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
-	fmt.Println(`****** ProcessGraph ******`)
 	var suffix string
 	if len(sg.Params.Alias) > 0 {
 		suffix += "." + sg.Params.Alias

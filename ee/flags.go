@@ -21,6 +21,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/spf13/pflag"
 
 	"github.com/dgraph-io/dgraph/x"
@@ -29,19 +30,21 @@ import (
 
 // Keys holds the configuration for ACL and encryption.
 type Keys struct {
-	AclKey        x.Sensitive
-	UsePublicKey  bool
-	AclAccessTtl  time.Duration
-	AclRefreshTtl time.Duration
-	EncKey        x.Sensitive
+	AclJwtAlg         jwt.SigningMethod
+	AclSecretKey      interface{}
+	AclPublicKey      interface{}
+	AclSecretKeyBytes x.Sensitive // we need this to compute hash for auth
+	AclAccessTtl      time.Duration
+	AclRefreshTtl     time.Duration
+	EncKey            x.Sensitive
 }
 
 const (
 	flagAcl           = "acl"
 	flagAclAccessTtl  = "access-ttl"
 	flagAclRefreshTtl = "refresh-ttl"
-	flagAclSecretFile = "secret-file"
-	flagAclKeyFile    = "key-file"
+	flagAclJwtAlg     = "jwt-alg"
+	flagAclKeyFile    = "secret-file"
 
 	flagEnc        = "encryption"
 	flagEncKeyFile = "key-file"
@@ -72,7 +75,7 @@ var (
 	AclDefaults = fmt.Sprintf("%s=%s; %s=%s; %s=%s; %s=%s",
 		flagAclAccessTtl, "6h",
 		flagAclRefreshTtl, "30d",
-		flagAclSecretFile, "",
+		flagAclJwtAlg, "HS256",
 		flagAclKeyFile, "")
 	EncDefaults = fmt.Sprintf("%s=%s", flagEncKeyFile, "")
 )
@@ -128,15 +131,13 @@ func registerVaultFlag(flag *pflag.FlagSet, aclEnabled, encEnabled bool) {
 func registerAclFlag(flag *pflag.FlagSet) {
 	helpText := z.NewSuperFlagHelp(AclDefaults).
 		Head("[Enterprise Feature] ACL options").
+		Flag("jwt-alg", "JWT signing algorithm, default HS256").
 		Flag("secret-file",
-			"The file that stores the HMAC secret, which is used for signing the JWT and "+
-				"should have at least 32 ASCII characters. Required to enable ACLs.").
+			"The file that stores secret key or private key, which is used to sign the ACL JWT.").
 		Flag("access-ttl",
 			"The TTL for the access JWT.").
 		Flag("refresh-ttl",
 			"The TTL for the refresh JWT.").
-		Flag("key-file",
-			"The file that stores the RS256 public key, which is used for verifyinh ACL JWT.").
 		String()
 	flag.String(flagAcl, AclDefaults, helpText)
 }

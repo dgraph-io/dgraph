@@ -21,7 +21,7 @@ import (
 	"strings"
 	"time"
 
-	jwt "github.com/dgrijalva/jwt-go"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"
@@ -187,8 +187,7 @@ func validateToken(jwtStr string) (*userData, error) {
 	}
 	// by default, the MapClaims.Valid will return true if the exp field is not set
 	// here we enforce the checking to make sure that the refresh token has not expired
-	now := time.Now().Unix()
-	if !claims.VerifyExpiresAt(now, true) {
+	if exp, err := claims.GetExpirationTime(); err != nil || exp == nil {
 		return nil, errors.Errorf("Token is expired") // the same error msg that's used inside jwt-go
 	}
 
@@ -255,7 +254,7 @@ func validateLoginRequest(request *api.LoginRequest) error {
 // getAccessJwt constructs an access jwt with the given user id, groupIds, namespace
 // and expiration TTL specified by worker.Config.AccessJwtTtl
 func getAccessJwt(userId string, groups []acl.Group, namespace uint64) (string, error) {
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+	token := jwt.NewWithClaims(worker.Config.AclJwtAlg, jwt.MapClaims{
 		"userid":    userId,
 		"groups":    acl.GetGroupIDs(groups),
 		"namespace": namespace,
@@ -263,7 +262,7 @@ func getAccessJwt(userId string, groups []acl.Group, namespace uint64) (string, 
 		"exp": time.Now().Add(worker.Config.AccessJwtTtl).Unix(),
 	})
 
-	jwtString, err := token.SignedString([]byte(worker.Config.HmacSecret))
+	jwtString, err := token.SignedString(x.MaybeKeyToBytes(worker.Config.AclSecretKey))
 	if err != nil {
 		return "", errors.Errorf("unable to encode jwt to string: %v", err)
 	}
@@ -273,13 +272,13 @@ func getAccessJwt(userId string, groups []acl.Group, namespace uint64) (string, 
 // getRefreshJwt constructs a refresh jwt with the given user id, namespace and expiration ttl
 // specified by worker.Config.RefreshJwtTtl
 func getRefreshJwt(userId string, namespace uint64) (string, error) {
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+	token := jwt.NewWithClaims(worker.Config.AclJwtAlg, jwt.MapClaims{
 		"userid":    userId,
 		"namespace": namespace,
 		"exp":       time.Now().Add(worker.Config.RefreshJwtTtl).Unix(),
 	})
 
-	jwtString, err := token.SignedString([]byte(worker.Config.HmacSecret))
+	jwtString, err := token.SignedString(x.MaybeKeyToBytes(worker.Config.AclSecretKey))
 	if err != nil {
 		return "", errors.Errorf("unable to encode jwt to string: %v", err)
 	}
@@ -368,7 +367,7 @@ func SubscribeForAclUpdates(closer *z.Closer) {
 		glog.Infoln("RefreshAcls closed")
 		closer.Done()
 	}()
-	if len(worker.Config.HmacSecret) == 0 {
+	if worker.Config.AclSecretKey == nil {
 		// the acl feature is not turned on
 		return
 	}
@@ -434,7 +433,7 @@ func InitializeAcl(closer *z.Closer) {
 		closer.Done()
 	}()
 
-	if len(worker.Config.HmacSecret) == 0 {
+	if worker.Config.AclSecretKey == nil {
 		// The acl feature is not turned on.
 		return
 	}
@@ -443,7 +442,7 @@ func InitializeAcl(closer *z.Closer) {
 
 // Note: The handling of closer should be done by caller.
 func upsertGuardianAndGroot(closer *z.Closer, ns uint64) {
-	if len(worker.Config.HmacSecret) == 0 {
+	if worker.Config.AclSecretKey == nil {
 		// The acl feature is not turned on.
 		return
 	}
@@ -675,7 +674,7 @@ func authorizePreds(ctx context.Context, userData *userData, preds []string,
 // using the worker.AclCachePtr. It will return error if any one of the predicates
 // specified in alter are not authorized.
 func authorizeAlter(ctx context.Context, op *api.Operation) error {
-	if len(worker.Config.HmacSecret) == 0 {
+	if worker.Config.AclSecretKey == nil {
 		// the user has not turned on the acl feature
 		return nil
 	}
@@ -799,7 +798,7 @@ func isAclPredMutation(nquads []*api.NQuad) bool {
 // denied error if any one of the predicates in mutation(set or delete) is unauthorized.
 // At this stage, namespace is not attached in the predicates.
 func authorizeMutation(ctx context.Context, gmu *dql.Mutation) error {
-	if len(worker.Config.HmacSecret) == 0 {
+	if worker.Config.AclSecretKey == nil {
 		// the user has not turned on the acl feature
 		return nil
 	}
@@ -969,7 +968,7 @@ func shouldAllowAcls(ns uint64) bool {
 // unauthorized predicates from query.
 // At this stage, namespace is not attached in the predicates.
 func authorizeQuery(ctx context.Context, parsedReq *dql.Result, graphql bool) error {
-	if len(worker.Config.HmacSecret) == 0 {
+	if worker.Config.AclSecretKey == nil {
 		// the user has not turned on the acl feature
 		return nil
 	}
@@ -1061,7 +1060,7 @@ func authorizeQuery(ctx context.Context, parsedReq *dql.Result, graphql bool) er
 }
 
 func authorizeSchemaQuery(ctx context.Context, er *query.ExecutionResult) error {
-	if len(worker.Config.HmacSecret) == 0 {
+	if worker.Config.AclSecretKey == nil {
 		// the user has not turned on the acl feature
 		return nil
 	}
@@ -1159,7 +1158,7 @@ func AuthGuardianOfTheGalaxy(ctx context.Context) error {
 // AuthorizeGuardians authorizes the operation for users which belong to Guardians group.
 // NOTE: The caller should not wrap the error returned. If needed, propagate the GRPC error code.
 func AuthorizeGuardians(ctx context.Context) error {
-	if len(worker.Config.HmacSecret) == 0 {
+	if worker.Config.AclSecretKey == nil {
 		// the user has not turned on the acl feature
 		return nil
 	}

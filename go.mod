@@ -17,8 +17,6 @@ require (
 	github.com/dgraph-io/graphql-transport-ws v0.0.0-20210511143556-2cef522f1f15
 	github.com/dgraph-io/ristretto v0.1.1
 	github.com/dgraph-io/simdjson-go v0.3.0
-	github.com/dgrijalva/jwt-go v3.2.0+incompatible
-	github.com/dgrijalva/jwt-go/v4 v4.0.0-preview1
 	github.com/dgryski/go-farm v0.0.0-20200201041132-a6ae2369ad13
 	github.com/dgryski/go-groupvarint v0.0.0-20190318181831-5ce5df8ca4e1
 	github.com/docker/docker v1.13.1
@@ -27,7 +25,7 @@ require (
 	github.com/getsentry/sentry-go v0.6.0
 	github.com/go-sql-driver/mysql v0.0.0-20190330032241-c0f6b444ad8f
 	github.com/gogo/protobuf v1.3.2
-	github.com/golang-jwt/jwt v3.2.2+incompatible
+	github.com/golang-jwt/jwt/v5 v5.0.0
 	github.com/golang/geo v0.0.0-20210211234256-740aa86cb551
 	github.com/golang/glog v1.0.0
 	github.com/golang/protobuf v1.5.2

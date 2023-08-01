@@ -21,6 +21,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/spf13/viper"
 
 	"github.com/dgraph-io/badger/v4"
@@ -113,9 +114,13 @@ type WorkerOptions struct {
 	StrictMutations bool
 	// AclEnabled indicates whether the enterprise ACL feature is turned on.
 	AclEnabled bool
-	// HmacSecret stores the secret used to sign JSON Web Tokens (JWT).
-	HmacSecret   Sensitive
-	UsePublicKey bool
+	// AclJwtAlg stores the JWT signing algorithm.
+	AclJwtAlg jwt.SigningMethod
+	// AclPublicKey stores the public key used to verify JSON Web Tokens (JWT).
+	// It could be a either a RSA or ECDSA PublicKey or HMAC symmetric key.
+	// depending upon the JWT signing algorithm. Note that for symmetric algorithms,
+	// this will contain the same key as the private key, needs to be used carefully.
+	AclPublicKey interface{}
 	// AbortOlderThan tells Dgraph to discard transactions that are older than this duration.
 	AbortOlderThan time.Duration
 	// ProposedGroupId will be used if there's a file in the p directory called group_id with the

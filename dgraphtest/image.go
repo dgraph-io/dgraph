@@ -38,21 +38,21 @@ func (c *LocalCluster) setupBinary() error {
 		return copyBinary(fromDir, c.tempBinDir, c.conf.version)
 	}
 
-	isFileThere, err := fileExists(filepath.Join(binDir, fmt.Sprintf(binaryNameFmt, c.conf.version)))
+	isFileThere, err := fileExists(filepath.Join(binariesPath, fmt.Sprintf(binaryNameFmt, c.conf.version)))
 	if err != nil {
 		return err
 	}
 	if isFileThere {
-		return copyBinary(binDir, c.tempBinDir, c.conf.version)
+		return copyBinary(binariesPath, c.tempBinDir, c.conf.version)
 	}
 
 	if err := runGitCheckout(c.conf.version); err != nil {
 		return err
 	}
-	if err := buildDgraphBinary(repoDir, binDir, c.conf.version); err != nil {
+	if err := buildDgraphBinary(repoDir, binariesPath, c.conf.version); err != nil {
 		return err
 	}
-	return copyBinary(binDir, c.tempBinDir, c.conf.version)
+	return copyBinary(binariesPath, c.tempBinDir, c.conf.version)
 }
 
 func ensureDgraphClone() error {

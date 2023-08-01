@@ -656,9 +656,10 @@ func run() {
 	keys, err := ee.GetKeys(Alpha.Conf)
 	x.Check(err)
 
-	if keys.AclKey != nil {
-		opts.HmacSecret = keys.AclKey
-		opts.UsePublicKey = keys.UsePublicKey
+	if keys.AclSecretKey != nil {
+		opts.AclJwtAlg = keys.AclJwtAlg
+		opts.AclSecretKey = keys.AclSecretKey
+		opts.AclSecretKeyBytes = keys.AclSecretKeyBytes
 		opts.AccessJwtTtl = keys.AclAccessTtl
 		opts.RefreshJwtTtl = keys.AclRefreshTtl
 		glog.Info("ACL secret key loaded successfully.")
@@ -697,14 +698,14 @@ func run() {
 		Raft:                raft,
 		WhiteListedIPRanges: ips,
 		StrictMutations:     opts.MutationsMode == worker.StrictMutations,
-		AclEnabled:          keys.AclKey != nil,
+		AclEnabled:          keys.AclSecretKey != nil,
 		AbortOlderThan:      abortDur,
 		StartTime:           startTime,
 		Security:            security,
 		TLSClientConfig:     tlsClientConf,
 		TLSServerConfig:     tlsServerConf,
-		HmacSecret:          opts.HmacSecret,
-		UsePublicKey:        opts.UsePublicKey,
+		AclJwtAlg:           keys.AclJwtAlg,
+		AclPublicKey:        keys.AclPublicKey,
 		Audit:               opts.Audit != nil,
 		Badger:              bopts,
 	}

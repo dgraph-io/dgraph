@@ -26,11 +26,9 @@ import (
 )
 
 var (
-	baseRepoDir   string // baseRepoDir points to the dgraph repo from where tests are running
-	repoDir       string // repoDir to store cloned repository of dgraph
-	binDir        string // binDir to store multiple binary versions
-	encKeyPath    string
-	aclSecretPath string
+	baseRepoDir  string // baseRepoDir points to the dgraph repo from where tests are running
+	repoDir      string // repoDir to store cloned repository of dgraph
+	binariesPath string // binariesPath to store multiple binary versions
 )
 
 const (
@@ -46,6 +44,7 @@ func init() {
 	_, thisFilePath, _, _ := runtime.Caller(0)
 	basePath := strings.ReplaceAll(thisFilePath, "/paths.go", "")
 	baseRepoDir = strings.ReplaceAll(basePath, "/dgraphtest", "")
+	binariesPath = filepath.Join(basePath, "binaries")
 
 	var err error
 	repoDir, err = os.MkdirTemp("", "dgraph-repo")
@@ -56,13 +55,7 @@ func init() {
 		panic(err)
 	}
 
-	binDir = filepath.Join(basePath, "binaries")
-	encKeyPath = filepath.Join(basePath, "data", "enc-key")
-	aclSecretPath = filepath.Join(basePath, "data", "hmac-secret")
-
 	log.Printf("[INFO] baseRepoDir: %v", baseRepoDir)
 	log.Printf("[INFO] repoDir: %v", repoDir)
-	log.Printf("[INFO] binDir: %v", binDir)
-	log.Printf("[INFO] encKeyPath: %v", encKeyPath)
-	log.Printf("[INFO] aclSecretPath: %v", aclSecretPath)
+	log.Printf("[INFO] binariesPath: %v", binariesPath)
 }

@@ -29,7 +29,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dgrijalva/jwt-go/v4"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/metadata"
@@ -247,7 +247,7 @@ func (a *AuthMeta) AttachAuthorizationJwt(ctx context.Context,
 type CustomClaims struct {
 	authMeta      *AuthMeta
 	AuthVariables map[string]interface{}
-	jwt.StandardClaims
+	jwt.RegisteredClaims
 }
 
 // UnmarshalJSON unmarshalls the claims present in the JWT.
@@ -256,7 +256,7 @@ type CustomClaims struct {
 // variable then the auth variable supersedes the standard claim.
 func (c *CustomClaims) UnmarshalJSON(data []byte) error {
 	// Unmarshal the standard claims first.
-	if err := json.Unmarshal(data, &c.StandardClaims); err != nil {
+	if err := json.Unmarshal(data, &c.RegisteredClaims); err != nil {
 		return err
 	}
 
@@ -361,8 +361,10 @@ func (a *AuthMeta) validateThroughJWKUrl(jwtStr string) (*jwt.Token, error) {
 			}
 		}
 
-		token, err =
-			jwt.ParseWithClaims(jwtStr, &CustomClaims{authMeta: a}, func(token *jwt.Token) (interface{}, error) {
+		token, err = jwt.ParseWithClaims(
+			jwtStr,
+			&CustomClaims{authMeta: a},
+			func(token *jwt.Token) (interface{}, error) {
 				kid := token.Header["kid"]
 				if kid == nil {
 					return nil, errors.Errorf("kid not present in JWT")
@@ -373,7 +375,8 @@ func (a *AuthMeta) validateThroughJWKUrl(jwtStr string) (*jwt.Token, error) {
 					return nil, errors.Errorf("Invalid kid")
 				}
 				return signingKeys[0].Key, nil
-			}, jwt.WithoutAudienceValidation())
+			},
+		)
 
 		if err == nil {
 			return token, nil
@@ -413,7 +416,7 @@ func (a *AuthMeta) validateJWTCustomClaims(jwtStr string) (*CustomClaims, error)
 				}
 
 				return nil, errors.Errorf("couldn't parse signing method from token header: %s", algo)
-			}, jwt.WithoutAudienceValidation())
+			})
 	}
 
 	if err != nil {

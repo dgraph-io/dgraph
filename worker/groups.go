@@ -1119,7 +1119,7 @@ func GetEEFeaturesList() []string {
 		return nil
 	}
 	var ee []string
-	if len(Config.HmacSecret) > 0 {
+	if Config.AclSecretKey != nil {
 		ee = append(ee, "acl")
 		ee = append(ee, "multi_tenancy")
 	}

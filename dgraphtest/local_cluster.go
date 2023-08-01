@@ -24,6 +24,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -32,6 +35,7 @@ import (
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/volume"
 	docker "github.com/docker/docker/client"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -49,9 +53,11 @@ type cnet struct {
 
 // LocalCluster is a local dgraph cluster
 type LocalCluster struct {
-	conf         ClusterConfig
-	tempBinDir   string
-	lowerThanV21 bool
+	conf           ClusterConfig
+	tempBinDir     string
+	tempSecretsDir string
+	encKeyPath     string
+	lowerThanV21   bool
 
 	// resources
 	dcli   *docker.Client
@@ -92,6 +98,7 @@ func NewLocalCluster(conf ClusterConfig) (*LocalCluster, error) {
 	return c, nil
 }
 
+// init performs the one time setup and sets up the cluster.
 func (c *LocalCluster) init() error {
 	var err error
 	c.dcli, err = docker.NewEnvClient()
@@ -109,18 +116,18 @@ func (c *LocalCluster) init() error {
 	}
 	c.tempBinDir, err = os.MkdirTemp("", c.conf.prefix)
 	if err != nil {
-		return errors.Wrap(err, "error while creating temp dir")
+		return errors.Wrap(err, "error while creating tempBinDir")
 	}
 	log.Printf("[INFO] tempBinDir: %v", c.tempBinDir)
-	if err := os.Mkdir(binDir, os.ModePerm); err != nil && !os.IsExist(err) {
-		return errors.Wrap(err, "error while making binDir")
-	}
-
-	higher, err := IsHigherVersion(c.GetVersion(), "v21.03.0")
+	c.tempSecretsDir, err = os.MkdirTemp("", c.conf.prefix)
 	if err != nil {
-		return errors.Wrapf(err, "error checking if version %s is older than v21.03.0", c.GetVersion())
+		return errors.Wrap(err, "error while creating tempSecretsDir")
 	}
-	c.lowerThanV21 = !higher
+	log.Printf("[INFO] tempSecretsDir: %v", c.tempSecretsDir)
+
+	if err := os.Mkdir(binariesPath, os.ModePerm); err != nil && !os.IsExist(err) {
+		return errors.Wrap(err, "error while making binariesPath")
+	}
 
 	for _, vol := range c.conf.volumes {
 		if err := c.createVolume(vol); err != nil {
@@ -132,11 +139,6 @@ func (c *LocalCluster) init() error {
 		zo := &zero{id: i}
 		zo.containerName = fmt.Sprintf(zeroNameFmt, c.conf.prefix, zo.id)
 		zo.aliasName = fmt.Sprintf(zeroAliasNameFmt, zo.id)
-		cid, err := c.createContainer(zo)
-		if err != nil {
-			return err
-		}
-		zo.containerID = cid
 		c.zeros = append(c.zeros, zo)
 	}
 
@@ -144,12 +146,18 @@ func (c *LocalCluster) init() error {
 		aa := &alpha{id: i}
 		aa.containerName = fmt.Sprintf(alphaNameFmt, c.conf.prefix, aa.id)
 		aa.aliasName = fmt.Sprintf(alphaLNameFmt, aa.id)
-		cid, err := c.createContainer(aa)
-		if err != nil {
-			return err
-		}
-		aa.containerID = cid
 		c.alphas = append(c.alphas, aa)
+	}
+
+	if err := c.setupSecrets(); err != nil {
+		return errors.Wrap(err, "error setting up secrets")
+	}
+
+	if err := c.setupBeforeCluster(); err != nil {
+		return err
+	}
+	if err := c.createContainers(); err != nil {
+		return err
 	}
 
 	return nil
@@ -184,6 +192,40 @@ func (c *LocalCluster) createVolume(name string) error {
 	return nil
 }
 
+func (c *LocalCluster) setupBeforeCluster() error {
+	if err := c.setupBinary(); err != nil {
+		return errors.Wrapf(err, "error setting up binary")
+	}
+
+	higher, err := IsHigherVersion(c.GetVersion(), "v21.03.0")
+	if err != nil {
+		return errors.Wrapf(err, "error checking if version %s is older than v21.03.0", c.GetVersion())
+	}
+	c.lowerThanV21 = !higher
+
+	return nil
+}
+
+func (c *LocalCluster) createContainers() error {
+	for _, zo := range c.zeros {
+		cid, err := c.createContainer(zo)
+		if err != nil {
+			return err
+		}
+		zo.containerID = cid
+	}
+
+	for _, aa := range c.alphas {
+		cid, err := c.createContainer(aa)
+		if err != nil {
+			return err
+		}
+		aa.containerID = cid
+	}
+
+	return nil
+}
+
 func (c *LocalCluster) createContainer(dc dnode) (string, error) {
 	cmd := dc.cmd(c)
 	image := c.dgraphImage()
@@ -213,6 +255,26 @@ func (c *LocalCluster) createContainer(dc dnode) (string, error) {
 	return resp.ID, nil
 }
 
+func (c *LocalCluster) destroyContainers() error {
+	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+	defer cancel()
+
+	ro := types.ContainerRemoveOptions{RemoveVolumes: true, Force: true}
+	for _, zo := range c.zeros {
+		if err := c.dcli.ContainerRemove(ctx, zo.cid(), ro); err != nil {
+			return errors.Wrapf(err, "error removing zero [%v]", zo.cname())
+		}
+	}
+
+	for _, aa := range c.alphas {
+		if err := c.dcli.ContainerRemove(ctx, aa.cid(), ro); err != nil {
+			return errors.Wrapf(err, "error removing alpha [%v]", aa.cname())
+		}
+	}
+
+	return nil
+}
+
 func (c *LocalCluster) Cleanup(verbose bool) {
 	if c == nil {
 		return
@@ -228,20 +290,12 @@ func (c *LocalCluster) Cleanup(verbose bool) {
 	}
 
 	log.Printf("[INFO] cleaning up cluster with prefix [%v]", c.conf.prefix)
+	if err := c.destroyContainers(); err != nil {
+		log.Printf("[WARNING] error removing container: %v", err)
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 	defer cancel()
-
-	ro := types.ContainerRemoveOptions{RemoveVolumes: true, Force: true}
-	for _, aa := range c.alphas {
-		if err := c.dcli.ContainerRemove(ctx, aa.cid(), ro); err != nil {
-			log.Printf("[WARNING] error removing alpha [%v]: %v", aa.cname(), err)
-		}
-	}
-	for _, zo := range c.zeros {
-		if err := c.dcli.ContainerRemove(ctx, zo.cid(), ro); err != nil {
-			log.Printf("[WARNING] error removing zero [%v]: %v", zo.cname(), err)
-		}
-	}
 	for _, vol := range c.conf.volumes {
 		if err := c.dcli.VolumeRemove(ctx, vol, true); err != nil {
 			log.Printf("[WARNING] error removing volume [%v]: %v", vol, err)
@@ -254,6 +308,9 @@ func (c *LocalCluster) Cleanup(verbose bool) {
 	}
 	if err := os.RemoveAll(c.tempBinDir); err != nil {
 		log.Printf("[WARNING] error while removing temp bin dir: %v", err)
+	}
+	if err := os.RemoveAll(c.tempSecretsDir); err != nil {
+		log.Printf("[WARNING] error while removing temp secrets dir: %v", err)
 	}
 }
 
@@ -468,49 +525,6 @@ func doReq(req *http.Request) ([]byte, error) {
 	return respBody, nil
 }
 
-// needed during upgrade
-func (c *LocalCluster) recreateContainers() error {
-	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
-	defer cancel()
-
-	ro := types.ContainerRemoveOptions{RemoveVolumes: true, Force: true}
-	for _, zo := range c.zeros {
-		if err := c.dcli.ContainerRemove(ctx, zo.cid(), ro); err != nil {
-			return errors.Wrapf(err, "error removing zero [%v]", zo.cname())
-		}
-		cid, err := c.createContainer(zo)
-		if err != nil {
-			return err
-		}
-		zo.containerID = cid
-	}
-
-	for _, aa := range c.alphas {
-		if err := c.dcli.ContainerRemove(ctx, aa.cid(), ro); err != nil {
-			return errors.Wrapf(err, "error removing alpha [%v]", aa.cname())
-		}
-		cid, err := c.createContainer(aa)
-		if err != nil {
-			return err
-		}
-		aa.containerID = cid
-	}
-
-	return nil
-}
-
-func (c *LocalCluster) changeVersion(version string) error {
-	c.conf.version = version
-
-	higher, err := IsHigherVersion(c.GetVersion(), "v21.03.0")
-	if err != nil {
-		return errors.Wrapf(err, "error checking if version %s is older than v21.03.0", c.GetVersion())
-	}
-	c.lowerThanV21 = !higher
-
-	return nil
-}
-
 // Upgrades the cluster to the provided dgraph version
 func (c *LocalCluster) Upgrade(version string, strategy UpgradeStrategy) error {
 	if version == c.conf.version {
@@ -535,13 +549,7 @@ func (c *LocalCluster) Upgrade(version string, strategy UpgradeStrategy) error {
 		if err := c.Stop(); err != nil {
 			return err
 		}
-
-		if err := c.changeVersion(version); err != nil {
-			return err
-		}
-		if err := c.setupBinary(); err != nil {
-			return err
-		}
+		c.conf.version = version
 		if err := c.recreateContainers(); err != nil {
 			return err
 		}
@@ -587,13 +595,7 @@ func (c *LocalCluster) Upgrade(version string, strategy UpgradeStrategy) error {
 		if err := c.Stop(); err != nil {
 			return err
 		}
-
-		if err := c.changeVersion(version); err != nil {
-			return err
-		}
-		if err := c.setupBinary(); err != nil {
-			return err
-		}
+		c.conf.version = version
 		if err := c.recreateContainers(); err != nil {
 			return err
 		}
@@ -609,10 +611,8 @@ func (c *LocalCluster) Upgrade(version string, strategy UpgradeStrategy) error {
 		if err := c.Stop(); err != nil {
 			return err
 		}
-		if err := c.changeVersion(version); err != nil {
-			return err
-		}
-		if err := c.setupBinary(); err != nil {
+		c.conf.version = version
+		if err := c.setupBeforeCluster(); err != nil {
 			return err
 		}
 		return c.Start()
@@ -620,6 +620,22 @@ func (c *LocalCluster) Upgrade(version string, strategy UpgradeStrategy) error {
 	default:
 		return errors.New("unknown upgrade strategy")
 	}
+}
+
+func (c *LocalCluster) recreateContainers() error {
+	if err := c.destroyContainers(); err != nil {
+		return errors.Wrapf(err, "error while recreaing containers")
+	}
+
+	if err := c.setupBeforeCluster(); err != nil {
+		return errors.Wrap(err, "error while setupBeforeCluster")
+	}
+
+	if err := c.createContainers(); err != nil {
+		return errors.Wrapf(err, "error while creating containers")
+	}
+
+	return nil
 }
 
 // Client returns a grpc client that can talk to any Alpha in the cluster
@@ -888,4 +904,74 @@ func (c *LocalCluster) inspectContainer(containerID string) (string, error) {
 		return "", errors.Wrapf(err, "error inspecting container %v", containerID)
 	}
 	return string(raw), nil
+}
+
+func (c *LocalCluster) setupSecrets() error {
+	if c.conf.encryption {
+		// use this key because some of the data is already encrypted using this key.
+		encKey := []byte("1234567890123456")
+		c.encKeyPath = filepath.Join(c.tempSecretsDir, encKeyFile)
+		if err := os.WriteFile(c.encKeyPath, encKey, 0600); err != nil {
+			return err
+		}
+	}
+
+	if c.conf.acl {
+		aclSecretPath := filepath.Join(c.tempSecretsDir, aclKeyFile)
+		if err := generateACLSecret(c.conf.aclAlg, aclSecretPath); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func generateACLSecret(alg jwt.SigningMethod, pathToFile string) error {
+	if alg == nil {
+		return randomData(32*8, pathToFile)
+	}
+
+	switch alg.Alg() {
+	case "HS256", "HS384", "HS512":
+		return randomData(64*8, pathToFile)
+	case "RS256", "RS384", "RS512", "PS256", "PS384", "PS512":
+		return rsaPem(2048, pathToFile)
+	case "ES256":
+		return ecdsaPem("prime256v1", pathToFile)
+	case "ES384":
+		return ecdsaPem("secp384r1", pathToFile)
+	case "ES512":
+		return ecdsaPem("secp521r1", pathToFile)
+	case "ES256K":
+		return ecdsaPem("secp256k1", pathToFile)
+	case "EdDSA":
+		return ed25519Pem(pathToFile)
+	default:
+		return errors.Errorf("unsupported ACL algorithm: %v", alg.Alg())
+	}
+}
+
+func randomData(bits int, pathToFile string) error {
+	return runOpennssl("openssl", "rand", "-out", pathToFile, strconv.Itoa(bits/8))
+}
+
+func rsaPem(bits int, pathToFile string) error {
+	return runOpennssl("openssl", "genrsa", "-out", pathToFile, strconv.Itoa(bits))
+}
+
+func ecdsaPem(alg string, pathToFile string) error {
+	return runOpennssl("openssl", "ecparam", "-name", alg, "-genkey", "-noout", "-out", pathToFile)
+}
+
+func ed25519Pem(pathToFile string) error {
+	return runOpennssl("openssl", "genpkey", "-algorithm", "Ed25519", "-out", pathToFile)
+}
+
+func runOpennssl(args ...string) error {
+	cmd := exec.Command(args[0], args[1:]...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return errors.Wrapf(err, "### failed to run openssl cmd [%v] ###\n%v", cmd, string(out))
+	}
+	return nil
 }

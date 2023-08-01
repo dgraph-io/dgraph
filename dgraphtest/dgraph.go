@@ -51,8 +51,11 @@ const (
 	DefaultBackupDir = "/data/backups"
 	DefaultExportDir = "/data/exports"
 
-	aclSecretMountPath = "/dgraph-acl/hmac-secret"
-	encKeyMountPath    = "/dgraph-enc/enc-key"
+	secretsMountPath   = "/secrets"
+	aclKeyFile         = "secret-key"
+	aclSecretMountPath = "/secrets/secret-key"
+	encKeyFile         = "enc-key"
+	encKeyMountPath    = "/secrets/enc-key"
 
 	DefaultUser     = "groot"
 	DefaultPassword = "password"
@@ -247,7 +250,14 @@ func (a *alpha) cmd(c *LocalCluster) []string {
 			acmd = append(acmd, fmt.Sprintf(`--acl_secret_file=%s`, aclSecretMountPath),
 				fmt.Sprintf(`--acl_access_ttl=%s`, c.conf.aclTTL))
 		} else {
-			acmd = append(acmd, fmt.Sprintf(`--acl=secret-file=%s;access-ttl=%s`, aclSecretMountPath, c.conf.aclTTL))
+			aclPart := "--acl="
+			if c.conf.aclTTL > 0 {
+				aclPart += fmt.Sprintf(`secret-file=%s;access-ttl=%s;`, aclSecretMountPath, c.conf.aclTTL)
+			}
+			if c.conf.aclAlg != nil {
+				aclPart += fmt.Sprintf(`jwt-alg=%s`, c.conf.aclAlg.Alg())
+			}
+			acmd = append(acmd, aclPart)
 		}
 	}
 	if c.conf.encryption {
@@ -284,20 +294,11 @@ func (a *alpha) mounts(c *LocalCluster) ([]mount.Mount, error) {
 	}
 	mounts = append(mounts, binMount)
 
-	if c.conf.acl {
+	if c.conf.acl || c.conf.encryption {
 		mounts = append(mounts, mount.Mount{
 			Type:     mount.TypeBind,
-			Source:   aclSecretPath,
-			Target:   aclSecretMountPath,
-			ReadOnly: true,
-		})
-	}
-
-	if c.conf.encryption {
-		mounts = append(mounts, mount.Mount{
-			Type:     mount.TypeBind,
-			Source:   encKeyPath,
-			Target:   encKeyMountPath,
+			Source:   c.tempSecretsDir,
+			Target:   secretsMountPath,
 			ReadOnly: true,
 		})
 	}
@@ -373,9 +374,15 @@ func publicPort(dcli *docker.Client, dc dnode, privatePort string) (string, erro
 }
 
 func mountBinary(c *LocalCluster) (mount.Mount, error) {
+	// We shouldn't need to call setupBinary here, we already call it in LocalCluster.setupBeforeCluster
+	// function which is called whenever the dgraph's cluster version is initialized or upgraded. Though,
+	// we have observed "exec format error" when we don't do this. Our suspicion is that this is related
+	// to the fact that we mount same binary inside multiple docker containers. We noticed a similar
+	// issue with this PR when we mount same ACL secret file inside multiple containers.
 	if err := c.setupBinary(); err != nil {
 		return mount.Mount{}, err
 	}
+
 	return mount.Mount{
 		Type:     mount.TypeBind,
 		Source:   c.tempBinDir,
