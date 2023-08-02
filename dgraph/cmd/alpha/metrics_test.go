@@ -207,16 +207,10 @@ func TestMetrics(t *testing.T) {
 		// Raft metrics
 		"dgraph_raft_has_leader", "dgraph_raft_is_leader", "dgraph_raft_leader_changes_total",
 	}
-	for j, i := range metricsMap {
-		if strings.HasPrefix(j, "badger") {
-			fmt.Println(j, i)
-		}
-	}
 	for _, requiredM := range requiredMetrics {
 		_, ok := metricsMap[requiredM]
 		require.True(t, ok, "the required metric %s is not found", requiredM)
 	}
-
 }
 
 func extractMetrics(metrics string) (map[string]interface{}, error) {
