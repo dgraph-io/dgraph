@@ -456,73 +456,98 @@ func init() {
 // NewBadgerCollector returns a prometheus Collector for Badger metrics from expvar.
 func NewBadgerCollector() prometheus.Collector {
 	return collectors.NewExpvarCollector(map[string]*prometheus.Desc{
-		"badger_v3_disk_reads_total": prometheus.NewDesc(
-			"badger_disk_reads_total",
-			"Number of cumulative reads by Badger",
+		"badger_read_num_vlog": prometheus.NewDesc(
+			"badger_read_num_vlog",
+			"Number of cumulative reads by badger in vlog",
 			nil, nil,
 		),
-		"badger_v3_disk_writes_total": prometheus.NewDesc(
-			"badger_disk_writes_total",
-			"Number of cumulative writes by Badger",
+		"badger_write_num_vlog": prometheus.NewDesc(
+			"badger_write_num_vlog",
+			"Number of cumulative writes by Badger in vlog",
 			nil, nil,
 		),
-		"badger_v3_read_bytes": prometheus.NewDesc(
-			"badger_read_bytes",
+		"badger_read_bytes_vlog": prometheus.NewDesc(
+			"badger_read_bytes_vlog",
 			"Number of cumulative bytes read by Badger",
 			nil, nil,
 		),
-		"badger_v3_written_bytes": prometheus.NewDesc(
-			"badger_written_bytes",
+		"badger_write_bytes_vlog": prometheus.NewDesc(
+			"badger_write_bytes_vlog",
 			"Number of cumulative bytes written by Badger",
 			nil, nil,
 		),
-		"badger_v3_lsm_level_gets_total": prometheus.NewDesc(
-			"badger_lsm_level_gets_total",
+		"badger_read_bytes_lsm": prometheus.NewDesc(
+			"badger_read_bytes_lsm",
+			"Number of cumulative bytes read by Badger",
+			nil, nil,
+		),
+		"badger_write_bytes_l0": prometheus.NewDesc(
+			"badger_write_bytes_l0",
+			"Number of cumulative bytes written by Badger",
+			nil, nil,
+		),
+		"badger_write_bytes_compaction": prometheus.NewDesc(
+			"badger_write_bytes_compaction",
+			"Number of cumulative bytes written by Badger",
+			nil, nil,
+		),
+		"badger_get_num_lsm": prometheus.NewDesc(
+			"badger_get_num_lsm",
 			"Total number of LSM gets",
 			[]string{"level"}, nil,
 		),
-		"badger_v3_lsm_bloom_hits_total": prometheus.NewDesc(
-			"badger_lsm_bloom_hits_total",
+		"badger_get_num_memtable": prometheus.NewDesc(
+			"badger_get_num_memtable",
+			"Total number of LSM gets from memtable",
+			[]string{"level"}, nil,
+		),
+		"badger_hit_num_lsm_bloom_filter": prometheus.NewDesc(
+			"badger_hit_num_lsm_bloom_filter",
 			"Total number of LSM bloom hits",
 			[]string{"level"}, nil,
 		),
-		"badger_v3_gets_total": prometheus.NewDesc(
-			"badger_gets_total",
+		"badger_get_num_user": prometheus.NewDesc(
+			"badger_get_num_user",
 			"Total number of gets",
 			nil, nil,
 		),
-		"badger_v3_puts_total": prometheus.NewDesc(
-			"badger_puts_total",
+		"badger_put_num_user": prometheus.NewDesc(
+			"badger_put_num_user",
 			"Total number of puts",
 			nil, nil,
 		),
-		"badger_v3_blocked_puts_total": prometheus.NewDesc(
-			"badger_blocked_puts_total",
-			"Total number of blocked puts",
+		"badger_write_bytes_user": prometheus.NewDesc(
+			"badger_write_bytes_user",
+			"Total number of bytes written by user",
 			nil, nil,
 		),
-		"badger_v3_memtable_gets_total": prometheus.NewDesc(
-			"badger_memtable_gets_total",
-			"Total number of memtable gets",
+		"badger_get_with_result_num_user": prometheus.NewDesc(
+			"badger_get_with_result_num_user",
+			"Total number of gets made which had data",
 			nil, nil,
 		),
-		"badger_v3_lsm_size_bytes": prometheus.NewDesc(
-			"badger_lsm_size_bytes",
+		"badger_iterator_num_user": prometheus.NewDesc(
+			"badger_iterator_num_user",
+			"Total number of iterators made in badger",
+			nil, nil,
+		),
+		"badger_size_bytes_lsm": prometheus.NewDesc(
+			"badger_size_bytes_lsm",
 			"Size of the LSM in bytes",
 			[]string{"dir"}, nil,
 		),
-		"badger_v3_vlog_size_bytes": prometheus.NewDesc(
-			"badger_vlog_size_bytes",
+		"badger_size_bytes_vlog": prometheus.NewDesc(
+			"badger_size_bytes_vlog",
 			"Size of the value log in bytes",
 			[]string{"dir"}, nil,
 		),
-		"badger_v3_pending_writes_total": prometheus.NewDesc(
-			"badger_pending_writes_total",
+		"badger_write_pending_num_memtable": prometheus.NewDesc(
+			"badger_write_pending_num_memtable",
 			"Total number of pending writes",
 			[]string{"dir"}, nil,
 		),
-		"badger_v3_compactions_current": prometheus.NewDesc(
-			"badger_compactions_current",
+		"badger_compaction_current_num_lsm": prometheus.NewDesc(
+			"badger_compaction_current_num_lsm",
 			"Number of tables being actively compacted",
 			nil, nil,
 		),
