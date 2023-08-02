@@ -781,7 +781,11 @@ func (c *LocalCluster) checkDgraphVersion(containerID string) error {
 	if err != nil {
 		return errors.Wrapf(err, "error during checkDgraphVersion for container [%v]", containerID)
 	}
-	index := strings.Index(contLogs, "Commit SHA-1     : ")
+
+	// During in-place upgrade, container remains same but logs have version string twice
+	// once for old version, once for new. Want new version string. Look bottom-up using
+	// LastIndex to get latest version's string.
+	index := strings.LastIndex(contLogs, "Commit SHA-1     : ")
 	running := strings.Fields(contLogs[index : index+70])[3] // 70 is arbitrary
 	chash, err := getHash(c.GetVersion())
 	if err != nil {
@@ -792,7 +796,7 @@ func (c *LocalCluster) checkDgraphVersion(containerID string) error {
 		return errors.Wrapf(err, "error while getting hash for %v", running)
 	}
 	if chash != rhash {
-		return errors.Errorf("found different dgraph version than expected [%v]", c.GetVersion())
+		return errors.Errorf("found different dgraph version [%v] than expected [%v]", rhash, chash)
 	}
 	return nil
 }

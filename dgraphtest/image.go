@@ -23,6 +23,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/pkg/errors"
 )
@@ -137,7 +138,7 @@ func getHash(ref string) (string, error) {
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return "", errors.Wrapf(err, "error while running rev-parse on [%v]\noutput:%v", ref, string(out))
 	} else {
-		return string(out), nil
+		return strings.TrimSpace(string(out)), nil
 	}
 }
 
