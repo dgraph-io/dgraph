@@ -19,9 +19,9 @@ package worker
 import (
 	"context"
 	"encoding/hex"
+	"fmt"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
@@ -127,7 +127,8 @@ func resultWithError(err error) *sortresult {
 }
 
 func sortWithoutIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
-	span := otrace.FromContext(ctx)
+	ctx, span := otrace.StartSpan(ctx, "Sort without index")
+	defer span.End()
 	span.Annotate(nil, "sortWithoutIndex")
 
 	n := len(ts.UidMatrix)
@@ -145,6 +146,7 @@ func sortWithoutIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
 	for i := 0; i < n; i++ {
 		select {
 		case <-ctx.Done():
+			span.Annotate(nil, "Cancelled")
 			return resultWithError(ctx.Err())
 		default:
 			// Copy, otherwise it'd affect the destUids and hence the srcUids of Next level.
@@ -177,11 +179,12 @@ func sortWithoutIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
 }
 
 func sortWithIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
+	ctx, span := otrace.StartSpan(ctx, "Sort with index")
+	defer span.End()
 	if ctx.Err() != nil {
 		return resultWithError(ctx.Err())
 	}
 
-	span := otrace.FromContext(ctx)
 	span.Annotate(nil, "sortWithIndex")
 
 	n := len(ts.UidMatrix)
@@ -271,6 +274,7 @@ BUCKETS:
 		key := item.Key() // No need to copy.
 		select {
 		case <-ctx.Done():
+			span.Annotate(nil, "Cancelled")
 			return resultWithError(ctx.Err())
 		default:
 			k, err := x.Parse(key)
@@ -348,6 +352,7 @@ BUCKETS:
 
 	select {
 	case <-ctx.Done():
+		span.Annotate(nil, "Cancelled")
 		return resultWithError(ctx.Err())
 	default:
 		return &sortresult{r, multiSortOffsets, values, nil}
@@ -404,6 +409,9 @@ func multiSort(ctx context.Context, r *sortresult, ts *pb.SortMessage) error {
 		go fetchValues(ctx, in, i, och)
 	}
 
+	ctx, span1 := otrace.StartSpan(ctx, "Post fetch multi span")
+	defer span1.End()
+
 	var oerr error
 	// TODO - Verify behavior with multiple langs.
 	for i := 1; i < len(ts.Order); i++ {
@@ -417,6 +425,7 @@ func multiSort(ctx context.Context, r *sortresult, ts *pb.SortMessage) error {
 
 		result := or.r
 		x.AssertTrue(len(result.ValueMatrix) == len(dest.Uids))
+		span1.Annotate(nil, fmt.Sprintf("Num Uids: %d", len(dest.Uids)))
 		for i := range dest.Uids {
 			var sv types.Val
 			if len(result.ValueMatrix[i].Values) == 0 {
@@ -434,6 +443,7 @@ func multiSort(ctx context.Context, r *sortresult, ts *pb.SortMessage) error {
 			}
 			sortVals[i][or.idx] = sv
 		}
+		span1.Annotate(nil, "Done converting")
 	}
 
 	if oerr != nil {
@@ -446,7 +456,10 @@ func multiSort(ctx context.Context, r *sortresult, ts *pb.SortMessage) error {
 	}
 
 	// Values have been accumulated, now we do the multisort for each list.
+	span1.Annotate(nil, fmt.Sprintf("Len UidMatrix: %d", len(r.reply.UidMatrix)))
+	totalUids := 0
 	for i, ul := range r.reply.UidMatrix {
+		totalUids += len(ul.Uids)
 		vals := make([][]types.Val, len(ul.Uids))
 		for j, uid := range ul.Uids {
 			idx := algo.IndexOf(dest, uid)
@@ -461,6 +474,7 @@ func multiSort(ctx context.Context, r *sortresult, ts *pb.SortMessage) error {
 		ul.Uids = ul.Uids[start:end]
 		r.reply.UidMatrix[i] = ul
 	}
+	span1.Annotate(nil, fmt.Sprintf("Len row: %d", totalUids))
 
 	return nil
 }
@@ -473,7 +487,8 @@ func multiSort(ctx context.Context, r *sortresult, ts *pb.SortMessage) error {
 // enough for our pagination params. When all the UID lists are done, we stop
 // iterating over the index.
 func processSort(ctx context.Context, ts *pb.SortMessage) (*pb.SortResult, error) {
-	span := otrace.FromContext(ctx)
+	ctx, span := otrace.StartSpan(ctx, "ProcessSort")
+	defer span.End()
 	stop := x.SpanTimer(span, "processSort")
 	defer stop()
 
@@ -503,34 +518,7 @@ func processSort(ctx context.Context, ts *pb.SortMessage) (*pb.SortResult, error
 	cctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	resCh := make(chan *sortresult, 2)
-	go func() {
-		select {
-		case <-time.After(3 * time.Millisecond):
-			// Wait between ctx chan and time chan.
-		case <-ctx.Done():
-			resCh <- &sortresult{err: ctx.Err()}
-			return
-		}
-		r := sortWithoutIndex(cctx, ts)
-		resCh <- r
-	}()
-
-	go func() {
-		sr := sortWithIndex(cctx, ts)
-		resCh <- sr
-	}()
-
-	r := <-resCh
-	if r.err == nil {
-		cancel()
-		// wait for other goroutine to get cancelled
-		<-resCh
-	} else {
-		span.Annotatef(nil, "processSort error: %v", r.err)
-		r = <-resCh
-	}
-
+	r := sortWithIndex(cctx, ts)
 	if r.err != nil {
 		return nil, r.err
 	}
@@ -539,6 +527,9 @@ func processSort(ctx context.Context, ts *pb.SortMessage) (*pb.SortResult, error
 		return r.reply, nil
 	}
 
+	ctx, span1 := otrace.StartSpan(ctx, "Multi Sort")
+	defer span1.End()
+	defer stop()
 	err := multiSort(ctx, r, ts)
 	return r.reply, err
 }

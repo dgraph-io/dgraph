@@ -47,6 +47,13 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+var (
+	NumUids    = 0
+	NumBytes   = 0
+	CacheTime  = time.Duration(0)
+	BadgerTime = time.Duration(0)
+)
+
 func invokeNetworkRequest(ctx context.Context, addr string,
 	f func(context.Context, pb.WorkerClient) (interface{}, error)) (interface{}, error) {
 	pl, err := conn.GetPools().Get(addr)
@@ -397,8 +404,14 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 			var vals []types.Val
 			fcs := &pb.FacetsList{FacetsList: make([]*pb.Facets, 0)} // TODO Figure out how it is stored
 
+			NumUids += 1
+
 			if !pickMultiplePostings {
-				pl, err := posting.GetKey(key, q.ReadTs)
+				t1 := time.Now()
+				pl, err, b := posting.GetKey(key, q.ReadTs)
+				t2 := time.Since(t1)
+				NumBytes += b
+				BadgerTime += t2
 				if err != nil {
 					fmt.Println("Getting key error", err)
 					return err
@@ -416,7 +429,6 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 				}
 
 			} else {
-
 				pl, err := qs.cache.Get(key)
 				if err != nil {
 					return err
@@ -751,7 +763,6 @@ func (qs *queryState) handleUidPostings(
 	calculate := func(ctx context.Context, start, end int) error {
 		span := otrace.FromContext(ctx)
 		defer span.End()
-		fmt.Println("Starting", start, time.Now())
 		stopCal := x.SpanTimer(span, fmt.Sprintf("Start calculate %d", time.Now()))
 		defer stopCal()
 		x.AssertTrue(start%width == 0)
@@ -869,7 +880,6 @@ func (qs *queryState) handleUidPostings(
 		xctx, _ := otrace.StartSpan(ctx, fmt.Sprintf("Caclulate %d", start))
 		defer span.End()
 		go func(start, end int) {
-			fmt.Println("Scheduling", start, time.Now())
 			errCh <- calculate(xctx, start, end)
 		}(start, end)
 	}
@@ -902,6 +912,8 @@ const (
 
 // processTask processes the query, accumulates and returns the result.
 func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, error) {
+	t1 := time.Now()
+	fmt.Println("Starting processTask", q.Attr, t1)
 	ctx, span := otrace.StartSpan(ctx, "processTask."+q.Attr)
 	defer span.End()
 
@@ -952,6 +964,7 @@ func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, erro
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println("Done with processTask", q.Attr, NumUids, CacheTime, BadgerTime, NumBytes, time.Now(), time.Since(t1))
 	return out, nil
 }
 

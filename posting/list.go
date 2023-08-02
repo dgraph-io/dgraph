@@ -38,8 +38,6 @@ import (
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
-
-	otrace "go.opencensus.io/trace"
 )
 
 var (
@@ -1157,8 +1155,8 @@ func (l *List) ApproxLen() int {
 // We have to apply the filtering before applying (offset, count).
 // WARNING: Calling this function just to get UIDs is expensive
 func (l *List) Uids(ctx context.Context, opt ListOptions) (*pb.List, error) {
-	ctx, span := otrace.StartSpan(ctx, "Posting.Uids")
-	defer span.End()
+	//ctx, span := otrace.StartSpan(ctx, "Posting.Uids")
+	//defer span.End()
 	if opt.First == 0 {
 		opt.First = math.MaxInt32
 	}
@@ -1172,18 +1170,18 @@ func (l *List) Uids(ctx context.Context, opt ListOptions) (*pb.List, error) {
 			l.RUnlock()
 			return out, ErrTsTooOld
 		}
-		stop := x.SpanTimer(span, "IntersectCompressedWith")
+		//stop := x.SpanTimer(span, "IntersectCompressedWith")
 		if len(opt.Intersect.Uids) > 10*codec.ApproxLen(l.plist.Pack) {
 			algo.IntersectCompressedWithAlternate(l.plist.Pack, opt.AfterUid, opt.Intersect, out)
 		} else {
 			algo.IntersectCompressedWith(l.plist.Pack, opt.AfterUid, opt.Intersect, out)
 		}
-		stop()
+		//stop()
 		l.RUnlock()
 		return out, nil
 	}
 
-	span.Annotate(nil, "Starting to read latest data from badger")
+	//span.Annotate(nil, "Starting to read latest data from badger")
 	err := l.iterate(opt.ReadTs, opt.AfterUid, func(p *pb.Posting) error {
 		if p.PostingType == pb.Posting_REF {
 			res = append(res, p.Uid)
@@ -1206,7 +1204,7 @@ func (l *List) Uids(ctx context.Context, opt ListOptions) (*pb.List, error) {
 	}
 
 	// Do The intersection here as it's optimized.
-	span.Annotate(nil, "Starting normal Intersect")
+	//span.Annotate(nil, "Starting normal Intersect")
 	out.Uids = res
 	if opt.Intersect != nil {
 		algo.IntersectWith(out, opt.Intersect, out)

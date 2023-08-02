@@ -2068,7 +2068,10 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		rch <- nil
 		return
 	}
+
+	t1 := time.Now()
 	var err error
+	pctx, span1 := otrace.StartSpan(ctx, "Start Processign")
 	switch {
 	case parent == nil && sg.SrcFunc != nil && sg.SrcFunc.Name == "uid":
 		// I'm root and I'm using some variable that has been populated.
@@ -2099,16 +2102,19 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			// and return.
 			if err := sg.fillVars(sg.Params.ParentVars); err != nil {
 				rch <- err
+				span1.End()
 				return
 			}
 			algo.IntersectWith(sg.DestUIDs, sg.SrcUIDs, sg.DestUIDs)
 			rch <- nil
+			span1.End()
 			return
 		}
 
 		if sg.SrcUIDs == nil {
 			glog.Errorf("SrcUIDs is unexpectedly nil. Subgraph: %+v", sg)
 			rch <- errors.Errorf("SrcUIDs shouldn't be nil.")
+			span1.End()
 			return
 		}
 		// If we have a filter SubGraph which only contains an operator,
@@ -2125,6 +2131,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			err = sg.applyIneqFunc()
 			if parent != nil {
 				rch <- err
+				span1.End()
 				return
 			}
 		case isInequalityFn && sg.SrcFunc.IsLenVar:
@@ -2136,6 +2143,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			if err != nil {
 				// TODO(Aman): needs to do parent check?
 				rch <- errors.Wrapf(err, "invalid argument %v. Comparing with different type", val)
+				span1.End()
 				return
 			}
 
@@ -2146,12 +2154,15 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 				sg.DestUIDs.Uids = nil
 			}
 		default:
-			taskQuery, err := createTaskQuery(ctx, sg)
+			taskQuery, err := createTaskQuery(pctx, sg)
 			if err != nil {
 				rch <- err
+				span1.End()
 				return
 			}
-			result, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
+
+			fmt.Println("Updating time", time.Since(t1))
+			result, err := worker.ProcessTaskOverNetwork(pctx, taskQuery)
 			switch {
 			case err != nil && strings.Contains(err.Error(), worker.ErrNonExistentTabletMessage):
 				sg.UnknownAttr = true
@@ -2159,8 +2170,12 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 				result = &pb.Result{}
 			case err != nil:
 				rch <- err
+				span1.End()
 				return
 			}
+
+			fmt.Println("Updating time1", time.Since(t1))
+			t1 = time.Now()
 
 			sg.uidMatrix = result.UidMatrix
 			sg.valueMatrix = result.ValueMatrix
@@ -2173,6 +2188,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 				if len(sg.Filters) == 0 {
 					// If there is a filter, we need to do more work to get the actual count.
 					rch <- nil
+					span1.End()
 					return
 				}
 				sg.counts = make([]uint32, len(sg.uidMatrix))
@@ -2198,14 +2214,20 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 					sg.uidMatrix = []*pb.List{sg.DestUIDs}
 				}
 			}
+
+			fmt.Println("Post processing time 0", time.Since(t1))
 		}
 	}
+	span1.End()
 
+	rctx, span2 := otrace.StartSpan(ctx, "Part 2")
 	// Run filters if any.
 	if len(sg.Filters) > 0 {
 		// Run all filters in parallel.
+		kctx, span3 := otrace.StartSpan(rctx, "Filtering and process graph")
 		filterChan := make(chan error, len(sg.Filters))
 		for _, filter := range sg.Filters {
+			t3 := time.Now()
 			isUidFuncWithoutVar := filter.SrcFunc != nil && filter.SrcFunc.Name == "uid" &&
 				len(filter.Params.NeedsVar) == 0
 			// For uid function filter, no need for processing. User already gave us the
@@ -2223,9 +2245,12 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			}
 			// Passing the pointer is okay since the filter only reads.
 			filter.Params.ParentVars = sg.Params.ParentVars // Pass to the child.
-			go ProcessGraph(ctx, filter, sg, filterChan)
+			t2 := time.Since(t1)
+			fmt.Println("Post Processing time 1:", t2, time.Since(t3))
+			go ProcessGraph(kctx, filter, sg, filterChan)
 		}
 
+		t5 := time.Now()
 		var filterErr error
 		for range sg.Filters {
 			if err = <-filterChan; err != nil {
@@ -2237,6 +2262,8 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 
 		if filterErr != nil {
 			rch <- filterErr
+			span2.End()
+			span3.End()
 			return
 		}
 
@@ -2264,27 +2291,41 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			lists = append(lists, sg.DestUIDs)
 			sg.DestUIDs = algo.IntersectSorted(lists)
 		}
+
+		span3.End()
+		fmt.Println("Filter Time:", time.Since(t5))
 	}
 
+	t6 := time.Now()
+	kctx, span21 := otrace.StartSpan(rctx, "Pagination")
 	if len(sg.Params.Order) == 0 && len(sg.Params.FacetsOrder) == 0 {
 		// for `has` function when there is no filtering and ordering, we fetch
 		// correct paginated results so no need to apply pagination here.
+		actx, span201 := otrace.StartSpan(kctx, "Pagination1")
 		if !(len(sg.Filters) == 0 && sg.SrcFunc != nil && sg.SrcFunc.Name == "has") {
 			// There is no ordering. Just apply pagination and return.
-			if err = sg.applyPagination(ctx); err != nil {
+			if err = sg.applyPagination(actx); err != nil {
 				rch <- err
+				span21.End()
+				span2.End()
+				span201.End()
 				return
 			}
 		}
+		span201.End()
 	} else {
 		// If we are asked for count, we don't need to change the order of results.
+		actx, span201 := otrace.StartSpan(kctx, "Pagination2")
 		if !sg.Params.DoCount {
 			// We need to sort first before pagination.
-			if err = sg.applyOrderAndPagination(ctx); err != nil {
+			if err = sg.applyOrderAndPagination(actx); err != nil {
 				rch <- err
+				span21.End()
+				span2.End()
 				return
 			}
 		}
+		span201.End()
 	}
 
 	// Here we consider handling count with filtering. We do this after
@@ -2293,6 +2334,8 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	// user wants to skip 100 entries and return 10 entries. In this case, you
 	// should return a count of 0, not 10.
 	// take care of the order
+	span21.End()
+	kctx, span211 := otrace.StartSpan(rctx, "Do Count")
 	if sg.Params.DoCount {
 		x.AssertTrue(len(sg.Filters) > 0)
 		sg.counts = make([]uint32, len(sg.uidMatrix))
@@ -2303,13 +2346,22 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			sg.counts[i] = uint32(len(ul.Uids))
 		}
 		rch <- nil
+		span211.End()
+		span2.End()
 		return
 	}
+	fmt.Println("Pagination time:", time.Since(t6))
+	span211.End()
+	kctx, span22 := otrace.StartSpan(rctx, "Expand Subgraph")
 
-	if sg.Children, err = expandSubgraph(ctx, sg); err != nil {
+	t7 := time.Now()
+	if sg.Children, err = expandSubgraph(kctx, sg); err != nil {
 		rch <- err
+		span21.End()
+		span2.End()
 		return
 	}
+	fmt.Println("Expand Time:", time.Since(t7))
 
 	if sg.IsGroupBy() {
 		// Add the attrs required by groupby nodes
@@ -2327,6 +2379,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 	}
 
+	t8 := time.Now()
 	if len(sg.Children) > 0 {
 		// We store any variable defined by this node in the map and pass it on
 		// to the children which might depend on it. We only need to do this if the SubGraph
@@ -2336,6 +2389,8 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			return
 		}
 	}
+	span22.End()
+	fmt.Println("Updating vars", time.Since(t8))
 
 	childChan := make(chan error, len(sg.Children))
 	for i := 0; i < len(sg.Children); i++ {
@@ -2350,8 +2405,13 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			// We dont have to execute these nodes.
 			continue
 		}
-		go ProcessGraph(ctx, child, sg, childChan)
+		t2 := time.Since(t1)
+		fmt.Println("Post Processing time 2:", t2)
+		go ProcessGraph(rctx, child, sg, childChan)
 	}
+	span2.End()
+
+	_, span3 := otrace.StartSpan(ctx, "Post")
 
 	var childErr error
 	// Now get all the results back.
@@ -2378,10 +2438,12 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 		sg.Children = out // Remove any expand nodes we might have added.
 		rch <- nil
+		span3.End()
 		return
 	}
 
 	rch <- childErr
+	span3.End()
 }
 
 // applyPagination applies count and offset to lists inside uidMatrix.
