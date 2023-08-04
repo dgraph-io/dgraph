@@ -1587,7 +1587,7 @@ func authorizeRequest(ctx context.Context, qc *queryContext) error {
 
 func getHash(ns, startTs uint64) string {
 	h := sha256.New()
-	h.Write([]byte(fmt.Sprintf("%#x%#x%s", ns, startTs, x.WorkerConfig.HmacSecret)))
+	h.Write([]byte(fmt.Sprintf("%#x%#x%s", ns, startTs, string(x.WorkerConfig.HmacSecret))))
 	return hex.EncodeToString(h.Sum(nil))
 }
 
