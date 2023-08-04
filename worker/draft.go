@@ -558,6 +558,14 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 }
 
 func (n *node) applyCommitted(proposal *pb.Proposal, key uint64) error {
+	start := time.Now()
+	defer func() {
+		since := time.Since(start)
+		if since > 30*time.Second {
+			glog.Warningf("applyCh entry took [%v] to handle: %#v", since, proposal)
+		}
+	}()
+
 	ctx := n.Ctx(key)
 	span := otrace.FromContext(ctx)
 	span.Annotatef(nil, "node.applyCommitted Node id: %d. Group id: %d. Got proposal key: %d",
@@ -726,6 +734,9 @@ func (n *node) processApplyCh() {
 
 	// This function must be run serially.
 	handle := func(entries []raftpb.Entry) {
+		glog.V(3).Infof("handling element in applyCh with #entries %v", len(entries))
+		defer glog.V(3).Infof("done handling element in applyCh")
+
 		var totalSize int64
 		for _, entry := range entries {
 			x.AssertTrue(len(entry.Data) > 0)
