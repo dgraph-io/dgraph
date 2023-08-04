@@ -18,6 +18,7 @@ package tok
 
 import (
 	"encoding/binary"
+	"fmt"
 	"plugin"
 	"strings"
 	"time"
@@ -53,6 +54,8 @@ const (
 	IdentTrigram   = 0xA
 	IdentHash      = 0xB
 	IdentSha       = 0xC
+	// Reserving 0xD for IdentBigFloat
+	IdentVFloat    = 0xE
 	IdentCustom    = 0x80
 	IdentDelimiter = 0x1f // ASCII 31 - Unit separator
 )
@@ -87,6 +90,7 @@ type Tokenizer interface {
 var tokenizers = make(map[string]Tokenizer)
 
 func init() {
+	registerTokenizer(VFloatTokenizer{})
 	registerTokenizer(GeoTokenizer{})
 	registerTokenizer(IntTokenizer{})
 	registerTokenizer(FloatTokenizer{})
@@ -210,6 +214,20 @@ func (t FloatTokenizer) Tokens(v interface{}) ([]string, error) {
 func (t FloatTokenizer) Identifier() byte { return IdentFloat }
 func (t FloatTokenizer) IsSortable() bool { return true }
 func (t FloatTokenizer) IsLossy() bool    { return true }
+
+// VFloatTokenizer generates tokens from vectors of float64 values.
+type VFloatTokenizer struct{}
+
+func (t VFloatTokenizer) Name() string { return "vfloat" }
+func (t VFloatTokenizer) Type() string { return "vfloat" }
+func (t VFloatTokenizer) Tokens(v interface{}) ([]string, error) {
+	value := v.([]float64)
+	// Generates space-separated list of float64 values inside of "[]".
+	return []string{fmt.Sprintf("%+v", value)}, nil
+}
+func (t VFloatTokenizer) Identifier() byte { return IdentVFloat }
+func (t VFloatTokenizer) IsSortable() bool { return false }
+func (t VFloatTokenizer) IsLossy() bool    { return true }
 
 // YearTokenizer generates year tokens from datetime data.
 type YearTokenizer struct{}

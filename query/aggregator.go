@@ -50,7 +50,8 @@ func isTernary(f string) bool {
 
 func isBinary(f string) bool {
 	return f == "+" || f == "*" || f == "-" || f == "/" || f == "%" ||
-		f == "max" || f == "min" || f == "logbase" || f == "pow"
+		f == "max" || f == "min" || f == "logbase" || f == "pow" ||
+		f == "dot"
 }
 
 func convertTo(from *pb.TaskValue) (types.Val, error) {
@@ -128,6 +129,32 @@ func applyAdd(a, b, c *types.Val) error {
 
 	case FLOAT:
 		c.Value = a.Value.(float64) + b.Value.(float64)
+	case VFLOAT:
+		// When adding vectors of floats, we add then item-wise
+		// so that c.Value[i] = a.Value[i] + b.Value[i] for all i
+		// in range. If lengths of a and b are different, we treat
+		// this as an error.
+		aVal := a.Value.([]float64)
+		bVal, ok := b.Value.([]float64)
+		if !ok {
+			return ErrorArgsDisagree
+		}
+		if len(aVal) != len(bVal) {
+			return ErrorVectorsNotMatch
+		}
+		// Sadly, we don't already pre-allocate the result from
+		// ApplyVal, so we will waste some allocation time here.
+		// TODO: Consider the possibility of saving some allocations
+		//       by reusing an existing Value. This is theoretically
+		//       possible in applyAdd, but not currently in ApplyVal,
+		//       which invokes this.
+		//       If we really end up doing this operation repeatedly,
+		//       the memory allocation savings could be significant.
+		cVal := make([]float64, len(aVal))
+		for i := 0; i < len(aVal); i++ {
+			cVal[i] = aVal[i] + bVal[i]
+		}
+		c.Value = cVal
 
 	case DEFAULT:
 		return errors.Errorf("Wrong type %v encountered for func +", a.Tid)
@@ -150,6 +177,27 @@ func applySub(a, b, c *types.Val) error {
 
 	case FLOAT:
 		c.Value = a.Value.(float64) - b.Value.(float64)
+	case VFLOAT:
+		// When adding vectors of floats, we add then item-wise
+		// so that c.Value[i] = a.Value[i] - b.Value[i] for all i
+		// in range. If lengths of a and b are different, we treat
+		// this as an error.
+		aVal := a.Value.([]float64)
+		bVal, ok := b.Value.([]float64)
+		if !ok {
+			return ErrorArgsDisagree
+		}
+		if len(aVal) != len(bVal) {
+			return ErrorVectorsNotMatch
+		}
+		// TODO: Same as applyAdd comment: we should theoretically
+		//       try to save allocation by having this preallocated
+		//       when we reach here.
+		cVal := make([]float64, len(aVal))
+		for i := 0; i < len(aVal); i++ {
+			cVal[i] = aVal[i] - bVal[i]
+		}
+		c.Value = cVal
 
 	case DEFAULT:
 		return errors.Errorf("Wrong type %v encountered for func -", a.Tid)
@@ -158,10 +206,21 @@ func applySub(a, b, c *types.Val) error {
 }
 
 func applyMul(a, b, c *types.Val) error {
-	vBase := getValType(a)
-	switch vBase {
+	// Possible input combinations:
+	//   INT * INT
+	//   FLOAT * FLOAT
+	//   FLOAT * VFLOAT
+	//   VFLOAT * FLOAT
+	// Other combinations should have been eliminated via matchType.
+	// Some operations, such as INT * FLOAT might be allowed conceptually,
+	// but we would have already cast the INT value to a FLOAT in the
+	// matchType invocation.
+	lValType := getValType(a)
+	rValType := getValType(b)
+	switch lValType {
 	case INT:
 		aVal, bVal := a.Value.(int64), b.Value.(int64)
+		c.Tid = types.IntID
 		c.Value = aVal * bVal
 
 		if aVal == 0 || bVal == 0 {
@@ -171,31 +230,90 @@ func applyMul(a, b, c *types.Val) error {
 		}
 
 	case FLOAT:
-		c.Value = a.Value.(float64) * b.Value.(float64)
+		aVal, ok := a.Value.(float64)
+		if !ok {
+			return errors.Errorf("Expected float64 type, but found %t", a.Value)
+		}
+		switch rValType {
+		case FLOAT:
+			c.Tid = types.FloatID
+			c.Value = aVal * b.Value.(float64)
+		case VFLOAT:
+			bVal := b.Value.([]float64)
+			cVal := make([]float64, len(bVal))
+			for i := 0; i < len(bVal); i++ {
+				cVal[i] = aVal * bVal[i]
+			}
+			c.Value = cVal
+			c.Tid = types.VFloatID
+		default:
+			return invalidTypeError(lValType, rValType, "*")
+
+		}
+	case VFLOAT:
+		aVal, ok := a.Value.([]float64)
+		if !ok {
+			return ErrorShouldBeVector
+		}
+		if rValType != FLOAT {
+			return invalidTypeError(lValType, rValType, "*")
+		}
+		bVal, ok := b.Value.(float64)
+		if !ok {
+			return errors.Errorf("Expected float64 type, but found %t", b.Value)
+		}
+		cVal, ok := c.Value.([]float64)
+		if !ok || len(aVal) != len(cVal) {
+			cVal = make([]float64, len(aVal))
+			c.Value = cVal
+		}
+		for i := 0; i < len(aVal); i++ {
+			cVal[i] = aVal[i] * bVal
+		}
+		c.Tid = types.VFloatID
 
 	case DEFAULT:
-		return errors.Errorf("Wrong type %v encountered for func *", a.Tid)
+		return invalidTypeError(lValType, rValType, "*")
 	}
 	return nil
 }
 
 func applyDiv(a, b, c *types.Val) error {
-	vBase := getValType(a)
-	switch vBase {
+	// Possible types (after having been filtered by matchType):
+	// INT / INT
+	// FLOAT / FLOAT
+	// VFLOAT / FLOAT
+	// We assume that this filtering has already occurred.
+	numeratorType := getValType(a)
+	switch numeratorType {
 	case INT:
-		if b.Value.(int64) == 0 {
+		denom := b.Value.(int64)
+		if denom == 0 {
 			return ErrorDivisionByZero
 		}
-		c.Value = a.Value.(int64) / b.Value.(int64)
-
+		c.Value = a.Value.(int64) / denom
+		c.Tid = types.IntID
 	case FLOAT:
-		if b.Value.(float64) == 0 {
+		denom := b.Value.(float64)
+		if denom == float64(0) {
 			return ErrorDivisionByZero
 		}
-		c.Value = a.Value.(float64) / b.Value.(float64)
-
+		c.Value = a.Value.(float64) / denom
+		c.Tid = types.FloatID
+	case VFLOAT:
+		denom := b.Value.(float64)
+		if denom == float64(0) {
+			return ErrorDivisionByZero
+		}
+		aVal := a.Value.([]float64)
+		cVal := make([]float64, len(aVal))
+		for i := 0; i < len(aVal); i++ {
+			cVal[i] = aVal[i] / denom
+		}
+		c.Value = cVal
+		c.Tid = types.VFloatID
 	case DEFAULT:
-		return errors.Errorf("Wrong type %v encountered for func /", a.Tid)
+		return invalidTypeError(numeratorType, getValType(b), "/")
 	}
 	return nil
 }
@@ -294,6 +412,24 @@ func applyMax(a, b, c *types.Val) error {
 	return nil
 }
 
+func applyDot(a, b, c *types.Val) error {
+	if getValType(a) != VFLOAT || getValType(b) != VFLOAT {
+		return invalidTypeError(getValType(a), getValType(b), "dot")
+	}
+	aVal := a.Value.([]float64)
+	bVal := b.Value.([]float64)
+	if len(aVal) != len(bVal) {
+		return ErrorVectorsNotMatch
+	}
+	c.Tid = types.FloatID
+	var cVal float64
+	for i := 0; i < len(aVal); i++ {
+		cVal += aVal[i] * bVal[i]
+	}
+	c.Value = cVal
+	return nil
+}
+
 func applyLn(a, res *types.Val) error {
 	vBase := getValType(a)
 	switch vBase {
@@ -341,9 +477,19 @@ func applyNeg(a, res *types.Val) error {
 			return ErrorIntOverflow
 		}
 		res.Value = -a.Value.(int64)
+		res.Tid = types.IntID
 
 	case FLOAT:
 		res.Value = -a.Value.(float64)
+		res.Tid = types.FloatID
+	case VFLOAT:
+		aVal := a.Value.([]float64)
+		resVal := make([]float64, len(aVal))
+		for i, v := range aVal {
+			resVal[i] = -v
+		}
+		res.Value = resVal
+		res.Tid = types.VFloatID
 
 	case DEFAULT:
 		return errors.Errorf("Wrong type %v encountered for func u-", a.Tid)
@@ -436,6 +582,24 @@ var binaryFunctions = map[string]binaryFunc{
 	"logbase": applyLog,
 	"min":     applyMin,
 	"max":     applyMax,
+	"dot":     applyDot,
+}
+
+// mixedScalarVectOps enumerates the binary functions that allow for
+// one argument to be a vector and the other a scalar.
+// In fact, if one of the arguments is a vector then the other *must* be
+// a scalar!
+var mixedScalarVectOps = map[string]struct{}{
+	"*": struct{}{},
+	"/": struct{}{},
+}
+
+var opsAllowingVectorsOnRight = map[string]struct{}{
+	"u-":  struct{}{},
+	"+":   struct{}{},
+	"-":   struct{}{},
+	"*":   struct{}{},
+	"dot": struct{}{},
 }
 
 type valType int
@@ -443,6 +607,7 @@ type valType int
 const (
 	INT valType = iota
 	FLOAT
+	VFLOAT
 	DEFAULT
 )
 
@@ -453,38 +618,101 @@ func getValType(v *types.Val) valType {
 		vBase = INT
 	case types.FloatID:
 		vBase = FLOAT
+	case types.VFloatID:
+		vBase = VFLOAT
 	default:
 		vBase = DEFAULT
 	}
 	return vBase
 }
 
-func (ag *aggregator) matchType(v, va *types.Val) error {
-	vBase := getValType(v)
-	vaBase := getValType(va)
-	if vBase == vaBase {
+func invalidTypeError(left, right valType, funcName string) error {
+	return errors.Errorf("invalid types %v, %v for func %s", left, right, funcName)
+}
+
+// matchType(left, right) will make sure that the left and right type
+// arguments agree, and otherwise convert left/right to an appropriate
+// type in some cases where it can.
+// matchType is invoked right before evaluating either a unary or binary
+// function indicated by ag.name. If evaluating a unary function, then
+// right is actually the single argument type, and left is actually the
+// resulting type. For invoking a binary function then left and right
+// of course play the role of being the left/right types (as expected).
+func (ag *aggregator) matchType(left, right *types.Val) error {
+	leftType := getValType(left)
+	rightType := getValType(right)
+
+	if rightType == VFLOAT {
+		if _, ok := opsAllowingVectorsOnRight[ag.name]; !ok {
+			return invalidTypeError(leftType, rightType, ag.name)
+		}
+	}
+
+	if leftType == rightType {
+		if leftType == VFLOAT {
+			if _, found := mixedScalarVectOps[ag.name]; found {
+				return invalidTypeError(leftType, rightType, ag.name)
+			}
+		}
 		return nil
 	}
 
-	if vBase == DEFAULT || vaBase == DEFAULT {
-		return errors.Errorf("Wrong types %v, %v encontered for func %s", v.Tid,
-			va.Tid, ag.name)
+	if leftType == DEFAULT || rightType == DEFAULT {
+		return invalidTypeError(leftType, rightType, ag.name)
 	}
 
-	// One of them is int and one is float
-	if vBase == INT {
-		v.Tid = types.FloatID
-		v.Value = float64(v.Value.(int64))
-	}
-
-	if vaBase == INT {
-		va.Tid = types.FloatID
-		va.Value = float64(va.Value.(int64))
+	// We can assume at this point that left and right do not match and
+	// are either INT, FLOAT, or VFLOAT.
+	switch leftType {
+	case INT:
+		if rightType == VFLOAT {
+			if _, found := mixedScalarVectOps[ag.name]; !found {
+				return invalidTypeError(leftType, rightType, ag.name)
+			}
+		}
+		// rightType must be either FLOAT or VFLOAT. In either case, we
+		// must cast the left type to a FLOAT.
+		left.Tid = types.FloatID
+		left.Value = float64(left.Value.(int64))
+	case FLOAT:
+		if rightType == VFLOAT {
+			if _, found := mixedScalarVectOps[ag.name]; !found {
+				return invalidTypeError(leftType, rightType, ag.name)
+			}
+		} else {
+			// We can assume here: rightType == INT
+			right.Tid = types.FloatID
+			right.Value = float64(right.Value.(int64))
+		}
+	case VFLOAT:
+		if rightType == INT {
+			right.Tid = types.FloatID
+			right.Value = float64(right.Value.(int64))
+		}
+		// We can assume that if rightType is not INT then it must
+		// be FLOAT, in which case, there is no further step needed.
+	default:
+		// This should be unreachable.
+		return invalidTypeError(leftType, rightType, ag.name)
 	}
 
 	return nil
 }
 
+// ag.ApplyVal(v) evaluates the function indicated by
+// ag.name and places result of evaluation into ag.result.
+// If ag.name indicates a single argument function then
+// this evaluation is tantamount to:
+//
+//	ag.result = unaryFunc(v)
+//
+// If however, ag.name indicates a binary function, then this
+// evaluates to:
+//
+//	ag.result = binaryFunc(ag.result, v)
+//
+// In other words, for the binary result will replace the prior
+// value of ag.result.
 func (ag *aggregator) ApplyVal(v types.Val) error {
 	if v.Value == nil {
 		// If the value is missing, treat it as 0.
@@ -508,14 +736,14 @@ func (ag *aggregator) ApplyVal(v types.Val) error {
 		return nil
 	}
 
-	va := ag.result
-	if err := ag.matchType(&v, &va); err != nil {
+	left := ag.result
+	if err := ag.matchType(&left, &v); err != nil {
 		return err
 	}
 
 	if function, ok := binaryFunctions[ag.name]; ok {
-		res.Tid = va.Tid
-		err := function(&va, &v, &res)
+		res.Tid = left.Tid
+		err := function(&left, &v, &res)
 		if err != nil {
 			return err
 		}
@@ -558,6 +786,28 @@ func (ag *aggregator) Apply(val types.Val) {
 			va.Value = va.Value.(int64) + vb.Value.(int64)
 		case va.Tid == types.FloatID && vb.Tid == types.FloatID:
 			va.Value = va.Value.(float64) + vb.Value.(float64)
+		case va.Tid == types.VFloatID && vb.Tid == types.VFloatID:
+			accumVal := va.Value.([]float64)
+			bVal := vb.Value.([]float64)
+			// We're going to cheat here, and extend the results
+			// of va.Value if bVal is longer. This function, for
+			// whatever reason, does not supply a means of
+			// returning an error, and generates fatal instead.
+			// So, we do this hack instead ...
+			if len(bVal) > len(accumVal) {
+				newAccum := make([]float64, len(bVal))
+				for i := 0; i < len(accumVal); i++ {
+					newAccum[i] = accumVal[i] + bVal[i]
+				}
+				for i := len(accumVal); i < len(bVal); i++ {
+					newAccum[i] = bVal[i]
+				}
+				va.Value = newAccum
+			} else {
+				for i := 0; i < len(bVal); i++ {
+					accumVal[i] += bVal[i]
+				}
+			}
 		}
 		// Skipping the else case since that means the pair cannot be summed.
 		res = va

@@ -49,6 +49,7 @@ age:int .
 name: string .
  address: string .
 <http://scalar.com/helloworld/> : string .
+coordinates: vfloat .
 `
 
 func TestSchema(t *testing.T) {
@@ -70,11 +71,19 @@ func TestSchema(t *testing.T) {
 			Predicate: x.GalaxyAttr("age"),
 			ValueType: pb.Posting_INT,
 		}},
+		{x.GalaxyAttr("coordinates"), &pb.SchemaUpdate{
+			Predicate: x.GalaxyAttr("coordinates"),
+			ValueType: pb.Posting_VFLOAT,
+		}},
 	})
 
 	typ, err := State().TypeOf(x.GalaxyAttr("age"))
 	require.NoError(t, err)
 	require.Equal(t, types.IntID, typ)
+
+	typ, err = State().TypeOf(x.GalaxyAttr("coordinates"))
+	require.NoError(t, err)
+	require.Equal(t, types.VFloatID, typ)
 
 	_, err = State().TypeOf(x.GalaxyAttr("agea"))
 	require.Error(t, err)
