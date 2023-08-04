@@ -66,6 +66,12 @@ require (
 	gopkg.in/yaml.v2 v2.4.0
 )
 
+// WARNING: DO NOT MERGE THIS CHANGE!!
+// Obviously, we need to update dgo protos first, create a release tag,
+// then update to point to new released tag. This is here just for
+// development.
+replace github.com/dgraph-io/dgo/v230 => ../dgo
+
 require (
 	github.com/DataDog/datadog-go v0.0.0-20190425163447-40bafcb5f6c1 // indirect
 	github.com/Microsoft/go-winio v0.5.2 // indirect

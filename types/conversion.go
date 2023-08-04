@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"math"
 	"strconv"
+	"strings"
 	"time"
 	"unsafe"
 
@@ -32,6 +33,73 @@ import (
 
 	"github.com/dgraph-io/dgo/v230/protos/api"
 )
+
+// parseVFloat(s) will generate a slice of float64 values,
+// as long as s is either an empty string, or if it is formatted
+// according to the following ebnf:
+//
+//	floatArray ::= "[" [floatList] [whitespace] "]"
+//	floatList := float64Val |
+//	             float64Val floatSpaceList |
+//	             float64Val floatCommaList
+//	floatSpaceList := (whitespace float64Val)+
+//	floatCommaList := ([whitespace] "," [whitespace] float64Val)+
+//	float64Val := < a string rep of a float64 value >
+func parseVFloat(s string) ([]float64, error) {
+	s = strings.TrimSpace(s)
+	if len(s) == 0 {
+		return []float64{}, nil
+	}
+	s = strings.ReplaceAll(s, "\n", " ")
+	s = strings.ReplaceAll(s, "\t", " ")
+	trimmedPre := strings.TrimPrefix(s, "[ ")
+	if len(trimmedPre) == len(s) {
+		return nil, cannotConvertToVFloat(s)
+	}
+	trimmed := strings.TrimRight(trimmedPre, "] ")
+	if len(trimmed) == len(trimmedPre) {
+		return nil, cannotConvertToVFloat(s)
+	}
+	if len(trimmed) == 0 {
+		return []float64{}, nil
+	}
+	if strings.Index(trimmed, ",") != -1 {
+		// Splitting based on comma-separation.
+		values := strings.Split(s, ",")
+		result := make([]float64, len(values))
+		for i := 0; i < len(values); i++ {
+			trimmedVal := strings.TrimSpace(values[i])
+			val, err := strconv.ParseFloat(trimmedVal, 64)
+			if err != nil {
+				return nil, cannotConvertToVFloat(s)
+			}
+			result[i] = val
+		}
+		return result, nil
+	}
+	values := strings.Split(trimmed, " ")
+	result := make([]float64, 0, len(values))
+	for i := 0; i < len(values); i++ {
+		if len(values[i]) == 0 {
+			// skip if we have an empty string. This can naturally
+			// occur if input s was "[1.0     2.0]"
+			// notice the extra whitespace in separation!
+			continue
+		}
+		if len(values[i]) > 0 {
+			val, err := strconv.ParseFloat(values[i], 64)
+			if err != nil {
+				return nil, cannotConvertToVFloat(s)
+			}
+			result = append(result, val)
+		}
+	}
+	return result, nil
+}
+
+func cannotConvertToVFloat(s string) error {
+	return errors.Errorf("Cannot convert %s to vfloat", s)
+}
 
 // Convert converts the value to given scalar type.
 func Convert(from Val, toID TypeID) (Val, error) {
@@ -91,6 +159,11 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				*res = w
 			case PasswordID:
 				*res = string(data)
+			case VFloatID:
+				if len(data)%8 != 0 {
+					return to, errors.Errorf("Invalid data for vector of floats: %v", data)
+				}
+				*res = BytesAsFloatArray(data)
 			default:
 				return to, cantConvert(fromID, toID)
 			}
@@ -144,6 +217,12 @@ func Convert(from Val, toID TypeID) (Val, error) {
 					return to, err
 				}
 				*res = p
+			case VFloatID:
+				vf, err := parseVFloat(vc)
+				if err != nil {
+					return to, err
+				}
+				*res = vf
 			default:
 				return to, cantConvert(fromID, toID)
 			}
@@ -169,6 +248,8 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				*res = strconv.FormatInt(vc, 10)
 			case DateTimeID:
 				*res = time.Unix(vc, 0).UTC()
+			case VFloatID:
+				*res = []float64{float64(vc)}
 			default:
 				return to, cantConvert(fromID, toID)
 			}
@@ -202,6 +283,8 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				fracSecs := vc - float64(secs)
 				nsecs := int64(fracSecs * nanoSecondsInSec)
 				*res = time.Unix(secs, nsecs).UTC()
+			case VFloatID:
+				*res = []float64{vc}
 			default:
 				return to, cantConvert(fromID, toID)
 			}
@@ -232,6 +315,12 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				if vc {
 					*res = float64(1)
 				}
+			case VFloatID:
+				asFloat := float64(0)
+				if vc {
+					asFloat = float64(1)
+				}
+				*res = []float64{asFloat}
 			case StringID, DefaultID:
 				*res = strconv.FormatBool(vc)
 			default:
