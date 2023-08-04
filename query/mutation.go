@@ -286,6 +286,9 @@ func checkIfDeletingAclOperation(ctx context.Context, edges []*pb.DirectedEdge) 
 
 	isDeleteAclOperation := false
 	for _, edge := range edges {
+		if !x.IsReservedPredicate(schema.Predicate) {
+			continue
+		}
 		// Disallow deleting of guardians group
 		if edge.Entity == guardianUid && edge.Op == pb.DirectedEdge_DEL {
 			isDeleteAclOperation = true
@@ -298,7 +301,7 @@ func checkIfDeletingAclOperation(ctx context.Context, edges []*pb.DirectedEdge) 
 		}
 	}
 	if isDeleteAclOperation {
-		return errors.Errorf("Properties of guardians group and groot user cannot be deleted.")
+		return errors.Errorf("Reserved properties of guardians group and groot user cannot be deleted.")
 	}
 	return nil
 }
