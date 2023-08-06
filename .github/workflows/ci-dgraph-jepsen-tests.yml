@@ -1,0 +1,67 @@
+name: ci-dgraph-jepsen-tests
+on:
+  push:
+    branches:
+      - main
+      - 'release/**'
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
+    branches:
+      - main
+      - 'release/**'
+  schedule:
+    - cron: "0 3 * * *" # every 8hrs
+env:
+    GOPATH: /home/ubuntu/go
+jobs:
+  dgraph-jepsen-tests:
+    if: github.event.pull_request.draft == false
+    runs-on: [self-hosted, x64]
+    steps:
+      - name: Checkout dgraph repo
+        uses: actions/checkout@v3
+      - name: Checkout jepsen repo
+        uses: actions/checkout@v3
+        with:
+          repository: joshua-goldstein/jepsen
+          path: jepsen
+          ref: master
+      - name: Get go version
+        run: |
+          #!/bin/bash
+          GOVERSION=$({ [ -f .go-version ] && cat .go-version; })
+          echo "GOVERSION=$GOVERSION" >> $GITHUB_ENV
+      - name: Set jepsen root
+        run: |
+          #!/bin/bash
+          cd jepsen
+          JEPSEN_ROOT=$(pwd)
+          echo "JEPSEN_ROOT=$JEPSEN_ROOT" >> $GITHUB_ENV
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: ${{ env.GOVERSION }}
+      - name: Make dgraph linux build
+        run: make install
+      - name: Start jepsen cluster
+        run: |
+          #!/bin/bash
+          cd contrib/jepsen
+          go build -v .
+          ./jepsen --jepsen-root ${{ env.JEPSEN_ROOT }} --up-only
+      - name: Run jepsen test 1
+        run: |
+          #!/bin/bash
+          cd contrib/jepsen
+          ./jepsen --jepsen-root ${{ env.JEPSEN_ROOT }} --jaeger="" --web=false --test-all -l 300
+      - name: Stop jepsen cluster
+        run: |
+          #!/bin/bash
+          cd contrib/jepsen
+          ./jepsen --jepsen-root ${{ env.JEPSEN_ROOT }} --down-only
+
+          
