@@ -46,7 +46,7 @@ var Bulk x.SubCommand
 
 var defaultOutDir = "./out"
 
-const BulkBadgerDefaults = "compression=snappy; numgoroutines=8;"
+const BulkBadgerDefaults = "compression=none; numgoroutines=8;"
 
 func init() {
 	Bulk.Cmd = &cobra.Command{

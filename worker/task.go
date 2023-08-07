@@ -390,6 +390,8 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 		out := &pb.Result{}
 		outputs[start/width] = out
 
+		cache := make([]*pb.PostingList, 0)
+
 		for i := start; i < end; i++ {
 			select {
 			case <-ctx.Done():
@@ -405,13 +407,25 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 			fcs := &pb.FacetsList{FacetsList: make([]*pb.Facets, 0)} // TODO Figure out how it is stored
 
 			NumUids += 1
+			b := 0
 
 			if !pickMultiplePostings {
-				t1 := time.Now()
-				pl, err, b := posting.GetKey(key, q.ReadTs)
-				t2 := time.Since(t1)
+				if len(cache) == 0 {
+					keys := make([][]byte, 10)
+					keys[0] = key
+					for j := i + 1; j < i+10 && j < end; j++ {
+						keys[j-i] = x.DataKey(q.Attr, q.UidList.Uids[j])
+					}
+					cache, err, b = posting.GetMultipleKeys(keys, q.ReadTs)
+					if err != nil {
+						return err
+					}
+				}
+				pl := cache[0]
+				if len(cache) > 1 {
+					cache = cache[1:]
+				}
 				NumBytes += b
-				BadgerTime += t2
 				if err != nil {
 					fmt.Println("Getting key error", err)
 					return err

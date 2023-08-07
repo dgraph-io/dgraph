@@ -465,7 +465,35 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 	return l, nil
 }
 
+func GetMultipleKeys(keys [][]byte, readTs uint64) ([]*pb.PostingList, error, int) {
+	txn := pstore.NewTransactionAt(readTs, false)
+	items, err := txn.GetBatch(keys)
+	if err != nil {
+		return nil, err, 0
+	}
+	pl := make([]*pb.PostingList, len(keys))
+	k := 0
+
+	for i, item := range items {
+		err = item.Value(func(val []byte) error {
+			k = len(keys[i]) + len(val)
+			pl[i] = &pb.PostingList{}
+			if err := pl[i].Unmarshal(val); err != nil {
+				return err
+			}
+			return nil
+		})
+
+		if err != nil {
+			return nil, err, 0
+		}
+	}
+
+	return pl, nil, k
+}
+
 func GetKey(key []byte, readTs uint64) (*pb.PostingList, error, int) {
+	//fmt.Println("KEY:", key)
 	txn := pstore.NewTransactionAt(readTs, false)
 	item, err := txn.Get(key)
 	if err != nil {
