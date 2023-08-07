@@ -1,25 +1,11 @@
 name: ci-dgraph-jepsen-tests
 on:
-  push:
-    branches:
-      - main
-      - 'release/**'
-  pull_request:
-    types:
-      - opened
-      - reopened
-      - synchronize
-      - ready_for_review
-    branches:
-      - main
-      - 'release/**'
   schedule:
-    - cron: "0 3 * * *" # every 8hrs
+    - cron: "0 4 * * 3,6" # run twice weekly
 env:
     GOPATH: /home/ubuntu/go
 jobs:
   dgraph-jepsen-tests:
-    if: github.event.pull_request.draft == false
     runs-on: [self-hosted, x64]
     steps:
       - name: Checkout dgraph repo
@@ -53,7 +39,7 @@ jobs:
           cd contrib/jepsen
           go build -v .
           ./jepsen --jepsen-root ${{ env.JEPSEN_ROOT }} --up-only
-      - name: Run jepsen test 1
+      - name: Run jepsen tests
         run: |
           #!/bin/bash
           cd contrib/jepsen
