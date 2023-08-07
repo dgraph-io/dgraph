@@ -11,7 +11,7 @@ require (
 	github.com/Shopify/sarama v1.27.2
 	github.com/blevesearch/bleve v1.0.13
 	github.com/dgraph-io/badger/v4 v4.2.0
-	github.com/dgraph-io/dgo/v230 v230.0.1
+	github.com/dgraph-io/dgo/v230 v230.0.2-0.20230804225607-99a3c9d7a061
 	github.com/dgraph-io/gqlgen v0.13.2
 	github.com/dgraph-io/gqlparser/v2 v2.2.2
 	github.com/dgraph-io/graphql-transport-ws v0.0.0-20210511143556-2cef522f1f15
@@ -70,7 +70,9 @@ require (
 // Obviously, we need to update dgo protos first, create a release tag,
 // then update to point to new released tag. This is here just for
 // development.
-replace github.com/dgraph-io/dgo/v230 => ../dgo
+// Currently using un-released version in require section above rather than
+// the replace operator below. In any case, DO NOT MERGE THIS YET!
+// replace github.com/dgraph-io/dgo/v230 => ../dgo
 
 require (
 	github.com/DataDog/datadog-go v0.0.0-20190425163447-40bafcb5f6c1 // indirect
