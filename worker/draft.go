@@ -1645,6 +1645,12 @@ func (n *node) calculateSnapshot(startIdx, lastIdx, minPendingStart uint64) (*pb
 	maxCommitTs := snap.ReadTs
 	var snapshotIdx uint64
 
+	// For bulk loaded p dir, maxCommitTs is zero. We move this to the
+	// ts of the pstore so that snapshot can proceed.
+	if maxCommitTs == 0 {
+		maxCommitTs = pstore.MaxVersion()
+	}
+
 	// Trying to retrieve all entries at once might cause out-of-memory issues in
 	// cases where the raft log is too big to fit into memory. Instead of retrieving
 	// all entries at once, retrieve it in batches of 64MB.
