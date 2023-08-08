@@ -25,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/dgraphtest"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
@@ -68,9 +69,18 @@ const (
 	requestTimeout = 120 * time.Second
 )
 
+func queryAlphaWith(t *testing.T, query string, client *dgraphtest.GrpcClient) *api.Response {
+	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+	defer cancel()
+	require.NoError(t, client.LoginIntoNamespace(ctx, dgraphtest.DefaultUser,
+		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	resp, err := client.Query(query)
+	require.NoError(t, err, "Error while querying data")
+	return resp
+}
+
 func TestBulkLoaderSnapshot(t *testing.T) {
-	conf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).
-		WithACL(time.Hour).WithReplicas(1).WithBulkLoadOutDir(t.TempDir())
+	conf := dgraphtest.NewClusterConfig().WithNumAlphas(3).WithNumZeros(1).WithReplicas(3).WithBulkLoadOutDir(t.TempDir()).WithACL(time.Hour)
 	c, err := dgraphtest.NewLocalCluster(conf)
 	require.NoError(t, err)
 	defer func() { c.Cleanup(t.Failed()) }()
@@ -91,18 +101,16 @@ func TestBulkLoaderSnapshot(t *testing.T) {
 	}
 	require.NoError(t, c.BulkLoad(opts))
 
-	// start Alphas
-	require.NoError(t, c.Start())
+	// start Alpha 0
+	require.NoError(t, c.StartAlpha(0))
+	// require.NoError(t, c.Start())
+	require.NoError(t, c.HealthCheckAlpha(0))
+	// require.NoError(t, c.HealthCheck(false))
 
 	// get gRPC client
-	gc, cleanup, err := c.Client()
+	gc, cleanup, err := c.ClientForAlpha(0)
 	require.NoError(t, err)
 	defer cleanup()
-
-	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
-	defer cancel()
-	require.NoError(t, gc.LoginIntoNamespace(ctx, dgraphtest.DefaultUser,
-		dgraphtest.DefaultPassword, x.GalaxyNamespace))
 
 	// run some queries and ensure everything looks good
 	query := `{
@@ -110,8 +118,27 @@ func TestBulkLoaderSnapshot(t *testing.T) {
 			name
 		}
 	}`
-	resp, err := gc.Query(query)
-	require.NoError(t, err, "Error while querying data")
+	resp := queryAlphaWith(t, query, gc)
+	testutil.CompareJSON(
+		t,
+		`{"q1": [{"name": "Dave"},{"name": "Alice"},{"name": "Charlie"},{"name": "Bob"}]}`,
+		string(resp.GetJson()),
+	)
+
+	// Wait for snapshot to be taken by Alpha 0
+	time.Sleep(5 * time.Second)
+
+	// start Alpha 1
+	require.NoError(t, c.StartAlpha(1))
+	require.NoError(t, c.HealthCheckAlpha(1))
+
+	// get gRPC client
+	gc, cleanup, err = c.ClientForAlpha(1)
+	require.NoError(t, err)
+	defer cleanup()
+
+	resp = queryAlphaWith(t, query, gc)
+
 	testutil.CompareJSON(
 		t,
 		`{"q1": [{"name": "Dave"},{"name": "Alice"},{"name": "Charlie"},{"name": "Bob"}]}`,

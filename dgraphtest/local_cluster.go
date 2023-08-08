@@ -343,6 +343,28 @@ func (c *LocalCluster) killContainer(dc dnode) error {
 	return nil
 }
 
+func (c *LocalCluster) HealthCheckAlpha(id int) error {
+	if id >= c.conf.numAlphas {
+		return fmt.Errorf("invalid id of alpha: %v", id)
+	}
+	log.Printf("[INFO] checking health of alpha-[%v]", id)
+	aa := c.alphas[id]
+	url, err := aa.healthURL(c)
+	log.Printf("[INFO] checking health of alpha-[%v] at: [%s]", id, url)
+	if err != nil {
+		return errors.Wrap(err, "error getting health URL")
+	}
+	if err := c.containerHealthCheckFor(id, url); err != nil {
+		return err
+	}
+	log.Printf("[INFO] container [%v] passed health check", aa.containerName)
+
+	if err := c.checkDgraphVersion(aa.containerName); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (c *LocalCluster) HealthCheck(zeroOnly bool) error {
 	log.Printf("[INFO] checking health of containers")
 	for _, zo := range c.zeros {
@@ -378,6 +400,56 @@ func (c *LocalCluster) HealthCheck(zeroOnly bool) error {
 		}
 	}
 	return nil
+}
+
+func (c *LocalCluster) containerHealthCheckFor(alphaId int, url string) error {
+	for i := 0; i < 60; i++ {
+		time.Sleep(waitDurBeforeRetry)
+
+		req, err := http.NewRequest(http.MethodGet, url, nil)
+		if err != nil {
+			log.Printf("[WARNING] error building req for endpoint [%v], err: [%v]", url, err)
+			continue
+		}
+		body, err := doReq(req)
+		if err != nil {
+			log.Printf("[WARNING] error hitting health endpoint [%v], err: [%v]", url, err)
+			continue
+		}
+		resp := string(body)
+
+		// For Alpha, we always run alpha with EE features enabled
+		if !strings.Contains(resp, `"ee_features"`) {
+			continue
+		}
+		if !c.conf.acl {
+			return nil
+		}
+		if !c.conf.acl || !strings.Contains(resp, `"acl"`) {
+			continue
+		}
+
+		client, cleanup, err := c.ClientForAlpha(alphaId)
+		if err != nil {
+			return errors.Wrap(err, "error setting up a client")
+		}
+		defer cleanup()
+
+		ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+		defer cancel()
+		for i := 0; i < 10; i++ {
+			if err = client.Login(ctx, DefaultUser, DefaultPassword); err == nil {
+				break
+			}
+			log.Printf("[WARNING] error trying to login: %v", err)
+			time.Sleep(waitDurBeforeRetry)
+		}
+		if err != nil {
+			return errors.Wrap(err, "error during login")
+		}
+		return nil
+	}
+	return fmt.Errorf("health failed, cluster took too long to come up [%v]", url)
 }
 
 func (c *LocalCluster) containerHealthCheck(url string) error {
@@ -621,6 +693,32 @@ func (c *LocalCluster) Client() (*GrpcClient, func(), error) {
 			if err := conn.Close(); err != nil {
 				log.Printf("[WARNING] error closing connection: %v", err)
 			}
+		}
+	}
+	return &GrpcClient{Dgraph: client}, cleanup, nil
+}
+
+// Client returns a grpc client that can talk to any Alpha in the cluster
+func (c *LocalCluster) ClientForAlpha(id int) (*GrpcClient, func(), error) {
+
+	if id >= c.conf.numAlphas {
+		return nil, nil, fmt.Errorf("invalid id of alpha: %v", id)
+	}
+
+	url, err := c.alphas[id].alphaURL(c)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "error getting health URL")
+	}
+
+	conn, err := grpc.Dial(url, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "error connecting to alpha")
+	}
+
+	client := dgo.NewDgraphClient(api.NewDgraphClient(conn))
+	cleanup := func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("[WARNING] error closing connection: %v", err)
 		}
 	}
 	return &GrpcClient{Dgraph: client}, cleanup, nil

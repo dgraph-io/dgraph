@@ -1058,70 +1058,79 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 
 	snapshotFrequency := x.WorkerConfig.Raft.GetDuration("snapshot-after-duration")
 
+	takeSnapshot := func() error {
+		glog.V(2).Info("Trying to take a snapshot")
+		n.elog.Printf("Size of applyCh: %d", len(n.applyCh))
+		if err := n.updateRaftProgress(); err != nil {
+			glog.Errorf("While updating Raft progress: %v", err)
+		}
+
+		if n.AmLeader() {
+			// If leader doesn't have a snapshot, we should create one immediately. This is very
+			// useful when you bring up the cluster from bulk loader. If you remove an alpha and
+			// add a new alpha, the new follower won't get a snapshot if the leader doesn't have
+			// one.
+			snap, err := n.Store.Snapshot()
+			if err != nil {
+				glog.Errorf("While retrieving snapshot from Store: %v\n", err)
+				return err
+			}
+
+			// If we don't have a snapshot, or if there are too many log files in Raft,
+			// calculate a new snapshot.
+			calculate := raft.IsEmptySnap(snap) || n.Store.NumLogFiles() > 4
+
+			// Only take snapshot if both snapshotFrequency and
+			// snapshotAfterEntries requirements are met. If set to 0,
+			// we consider duration condition to be disabled.
+			if snapshotFrequency == 0 || time.Since(lastSnapshotTime) > snapshotFrequency {
+				if chk, err := n.Store.Checkpoint(); err == nil {
+					if first, err := n.Store.FirstIndex(); err == nil {
+						// Save some cycles by only calculating snapshot if the checkpoint
+						// has gone quite a bit further than the first index.
+						calculate = calculate || chk >= first+snapshotAfterEntries
+						glog.V(3).Infof("Evaluating snapshot first:%d chk:%d (chk-first:%d) "+
+							"snapshotAfterEntries:%d snap:%v", first, chk, chk-first,
+							snapshotAfterEntries, calculate)
+					}
+				}
+			}
+
+			// We keep track of the applied index in the p directory. Even if we don't take
+			// snapshot for a while and let the Raft logs grow and restart, we would not have to
+			// run all the log entries, because we can tell Raft.Config to set Applied to that
+			// index.
+			// This applied index tracking also covers the case when we have a big index
+			// rebuild. The rebuild would be tracked just like others and would not need to be
+			// replayed after a restart, because the Applied config would let us skip right
+			// through it.
+			// We use disk based storage for Raft. So, we're not too concerned about
+			// snapshotting.  We just need to do enough, so that we don't have a huge backlog of
+			// entries to process on a restart.
+			if calculate {
+				// We can set discardN argument to zero, because we already know that calculate
+				// would be true if either we absolutely needed to calculate the snapshot,
+				// or our checkpoint already crossed the SnapshotAfter threshold.
+				if err := n.proposeSnapshot(); err != nil {
+					glog.Errorf("While calculating and proposing snapshot: %v", err)
+				} else {
+					lastSnapshotTime = time.Now()
+				}
+			}
+			go n.abortOldTransactions()
+		}
+		return nil
+	}
+
+	_ = takeSnapshot()
+
 	for {
 		select {
 		case <-slowTicker.C:
 			// Do these operations asynchronously away from the main Run loop to allow heartbeats to
 			// be sent on time. Otherwise, followers would just keep running elections.
-
-			n.elog.Printf("Size of applyCh: %d", len(n.applyCh))
-			if err := n.updateRaftProgress(); err != nil {
-				glog.Errorf("While updating Raft progress: %v", err)
-			}
-
-			if n.AmLeader() {
-				// If leader doesn't have a snapshot, we should create one immediately. This is very
-				// useful when you bring up the cluster from bulk loader. If you remove an alpha and
-				// add a new alpha, the new follower won't get a snapshot if the leader doesn't have
-				// one.
-				snap, err := n.Store.Snapshot()
-				if err != nil {
-					glog.Errorf("While retrieving snapshot from Store: %v\n", err)
-					continue
-				}
-
-				// If we don't have a snapshot, or if there are too many log files in Raft,
-				// calculate a new snapshot.
-				calculate := raft.IsEmptySnap(snap) || n.Store.NumLogFiles() > 4
-
-				// Only take snapshot if both snapshotFrequency and
-				// snapshotAfterEntries requirements are met. If set to 0,
-				// we consider duration condition to be disabled.
-				if snapshotFrequency == 0 || time.Since(lastSnapshotTime) > snapshotFrequency {
-					if chk, err := n.Store.Checkpoint(); err == nil {
-						if first, err := n.Store.FirstIndex(); err == nil {
-							// Save some cycles by only calculating snapshot if the checkpoint
-							// has gone quite a bit further than the first index.
-							calculate = calculate || chk >= first+snapshotAfterEntries
-							glog.V(3).Infof("Evaluating snapshot first:%d chk:%d (chk-first:%d) "+
-								"snapshotAfterEntries:%d snap:%v", first, chk, chk-first,
-								snapshotAfterEntries, calculate)
-						}
-					}
-				}
-
-				// We keep track of the applied index in the p directory. Even if we don't take
-				// snapshot for a while and let the Raft logs grow and restart, we would not have to
-				// run all the log entries, because we can tell Raft.Config to set Applied to that
-				// index.
-				// This applied index tracking also covers the case when we have a big index
-				// rebuild. The rebuild would be tracked just like others and would not need to be
-				// replayed after a restart, because the Applied config would let us skip right
-				// through it.
-				// We use disk based storage for Raft. So, we're not too concerned about
-				// snapshotting.  We just need to do enough, so that we don't have a huge backlog of
-				// entries to process on a restart.
-				if calculate {
-					// We can set discardN argument to zero, because we already know that calculate
-					// would be true if either we absolutely needed to calculate the snapshot,
-					// or our checkpoint already crossed the SnapshotAfter threshold.
-					if err := n.proposeSnapshot(); err != nil {
-						glog.Errorf("While calculating and proposing snapshot: %v", err)
-					} else {
-						lastSnapshotTime = time.Now()
-					}
-				}
-				go n.abortOldTransactions()
+			if takeSnapshot() != nil {
+				continue
 			}
 
 		case <-n.closer.HasBeenClosed():
@@ -1267,6 +1276,7 @@ func (n *node) Run() {
 				x.AssertTrue(rc.GetGroup() == n.gid)
 				if rc.Id != n.Id {
 					// Set node to unhealthy state here while it applies the snapshot.
+					glog.V(2).Infof("Leader is sending snapshot: %+v\n", snap)
 					x.UpdateHealthStatus(false)
 
 					// We are getting a new snapshot from leader. We need to wait for the applyCh to
