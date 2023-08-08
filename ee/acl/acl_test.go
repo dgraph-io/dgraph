@@ -2793,13 +2793,13 @@ func (asuite *AclTestSuite) TestDeleteGrootAndGuardiansUsingDelNQuadShouldFail()
 	// Try deleting groot user
 	_, err = gc.Mutate(mu)
 	require.Error(t, err, "Deleting groot user should have returned an error")
-	require.Contains(t, err.Error(), "Properties of guardians group and groot user cannot be deleted")
+	require.Contains(t, err.Error(), "properties of guardians group and groot user cannot be deleted")
 
 	mu = &api.Mutation{DelNquads: []byte(fmt.Sprintf("%s %s %s .", "<"+guardiansUid+">", "*", "*")), CommitNow: true}
 	// Try deleting guardians group
 	_, err = gc.Mutate(mu)
 	require.Error(t, err, "Deleting guardians group should have returned an error")
-	require.Contains(t, err.Error(), "Properties of guardians group and groot user cannot be deleted")
+	require.Contains(t, err.Error(), "properties of guardians group and groot user cannot be deleted")
 }
 
 func deleteGuardiansGroupAndGrootUserShouldFail(t *testing.T, hc *dgraphtest.HTTPClient) {

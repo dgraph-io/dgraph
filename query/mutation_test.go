@@ -20,6 +20,9 @@ package query
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"strconv"
 	"testing"
 	"time"
 
@@ -28,7 +31,7 @@ import (
 	"github.com/dgraph-io/dgo/v230/protos/api"
 )
 
-func TestReserverPredicateForMutation(t *testing.T) {
+func TestReservedPredicateForMutation(t *testing.T) {
 	err := addTriplesToCluster(`_:x <dgraph.graphql.schema> "df"`)
 	require.Error(t, err, "Cannot mutate graphql reserved predicate dgraph.graphql.schema")
 }
@@ -69,4 +72,46 @@ func TestAlteringReservedTypesAndPredicatesShouldFail(t *testing.T) {
 	require.Error(t, err, "storing predicate in dgraph namespace shouldn't have succeeded")
 	require.Contains(t, err.Error(), "Can't store predicate `dgraph.name` as it is prefixed with "+
 		"`dgraph.` which is reserved as the namespace for dgraph's internal types/predicates.")
+}
+
+func TestUnreservedPredicateForDeletion(t *testing.T) {
+	grootUserQuery := `
+	{
+		grootUser(func:eq(dgraph.xid, "groot")){
+			uid
+		}
+	}`
+
+	// Structs to parse groot user query response
+	type userNode struct {
+		Uid string `json:"uid"`
+	}
+
+	type userQryResp struct {
+		GrootUser []userNode `json:"grootUser"`
+	}
+
+	resp, err := client.Query(grootUserQuery)
+	require.NoError(t, err, "groot user query failed")
+
+	var userResp userQryResp
+	if err := json.Unmarshal(resp.GetJson(), &userResp); err != nil {
+		t.Fatal("Couldn't unmarshal response from groot user query")
+	}
+	grootsUidStr := userResp.GrootUser[0].Uid
+	grootsUidInt, err := strconv.ParseUint(grootsUidStr, 0, 64)
+	require.NoError(t, err)
+	require.Greater(t, uint64(grootsUidInt), uint64(0))
+
+	const testSchema = `
+type Star {
+	name
+}
+
+name : string @index(term, exact, trigram) @count @lang .
+`
+	triple := fmt.Sprintf(`<%s> <dgraphcore_355> "Betelgeuse" .`, grootsUidStr)
+	setSchema(testSchema)
+	require.NoError(t, addTriplesToCluster(triple))
+	deleteTriplesInCluster(triple)
 }

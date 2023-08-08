@@ -352,7 +352,7 @@ func populateCluster() {
 	// In the query package, we test using hard coded UIDs so that we know what results
 	// to expect. We need to move the max assigned UID in zero to higher value than
 	// all the UIDs we are using during the tests.
-	x.Panic(dc.AssignUids(client, 65536))
+	x.Panic(dc.AssignUids(client.Dgraph, 65536))
 
 	setSchema(testSchema)
 	err := addTriplesToCluster(`

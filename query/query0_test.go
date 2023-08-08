@@ -27,7 +27,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgo/v230"
 	"github.com/dgraph-io/dgraph/dgraphtest"
 	"github.com/dgraph-io/dgraph/dql"
 )
@@ -3576,5 +3575,5 @@ func TestInvalidRegex(t *testing.T) {
 	}
 }
 
-var client *dgo.Dgraph
+var client *dgraphtest.GrpcClient
 var dc dgraphtest.Cluster
