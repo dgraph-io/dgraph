@@ -80,7 +80,8 @@ func queryAlphaWith(t *testing.T, query string, client *dgraphtest.GrpcClient) *
 }
 
 func TestBulkLoaderSnapshot(t *testing.T) {
-	conf := dgraphtest.NewClusterConfig().WithNumAlphas(3).WithNumZeros(1).WithReplicas(3).WithBulkLoadOutDir(t.TempDir()).WithACL(time.Hour)
+	conf := dgraphtest.NewClusterConfig().WithNumAlphas(3).WithNumZeros(1).WithReplicas(3).
+		WithBulkLoadOutDir(t.TempDir()).WithACL(time.Hour).WithVerbosity(2)
 	c, err := dgraphtest.NewLocalCluster(conf)
 	require.NoError(t, err)
 	defer func() { c.Cleanup(t.Failed()) }()
@@ -122,9 +123,6 @@ func TestBulkLoaderSnapshot(t *testing.T) {
 		`{"q1": [{"name": "Dave"},{"name": "Alice"},{"name": "Charlie"},{"name": "Bob"}]}`,
 		string(resp.GetJson()),
 	)
-
-	// Wait for snapshot to be taken by Alpha 0
-	time.Sleep(5 * time.Second)
 
 	// start Alpha 1
 	require.NoError(t, c.StartAlpha(1))
