@@ -46,13 +46,13 @@ func TestGraphqlSchema(t *testing.T) {
 		query: { or: [
 			{ rule: "{$Role: { eq: \"ADMIN\" }}"},
 			{ rule: """
-			query($CITYID: String!) {
-			queryCity (filter: {
-				id: { eq: $CITYID }
-			}){
-				name
-			}
-			}"""
+				query($CITYID: String!) {
+					queryCity (filter: {
+						id: { eq: $CITYID }
+					}){
+						name
+					}
+				}"""
 			}]
 		},
 
@@ -73,6 +73,26 @@ func TestGraphqlSchema(t *testing.T) {
 
 	# Dgraph.Authorization {"VerificationKey":"secretkey","Header":"X-Test-Auth","Namespace":"https://xyz.io/jwt/claims","Algo":"HS256","Audience":["aud"]}`
 	require.NoError(t, hc.UpdateGQLSchema(sch1))
+
+	params := dgraphtest.GraphQLParams{
+		Query: `query {
+			queryCity(filter: { id: { eq: 0 } }) {
+				name
+			}
+		}`,
+	}
+	_, err = hc.RunGraphqlQuery(params, false)
+	require.NoError(t, err)
+
+	params = dgraphtest.GraphQLParams{
+		Query: `query {
+			queryCity(filter: { id: "0" }) {
+				name
+			}
+		}`,
+	}
+	_, err = hc.RunGraphqlQuery(params, false)
+	require.NoError(t, err)
 
 	// DGRAPHCORE-341
 	//nolint:lll
