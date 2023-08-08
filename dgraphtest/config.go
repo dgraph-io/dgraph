@@ -92,9 +92,10 @@ type ClusterConfig struct {
 	refillInterval time.Duration
 	uidLease       int
 	// exposed port offset for grpc/http port for both alpha/zero
-	portOffset int
-	bulkOutDir string
-	lambdaURL  string
+	portOffset   int
+	bulkOutDir   string
+	lambdaURL    string
+	featureFlags []string
 }
 
 func NewClusterConfig() ClusterConfig {
@@ -182,7 +183,14 @@ func (cc ClusterConfig) WithBulkLoadOutDir(dir string) ClusterConfig {
 	return cc
 }
 
+// WithGraphqlLambdaURL sets the URL to lambda server for alpha
 func (cc ClusterConfig) WithGraphqlLambdaURL(url string) ClusterConfig {
 	cc.lambdaURL = url
+	return cc
+}
+
+// WithNormalizeCompatibilityMode sets the normalize-compatibility-mode feature flag for alpha
+func (cc ClusterConfig) WithNormalizeCompatibilityMode(mode string) ClusterConfig {
+	cc.featureFlags = append(cc.featureFlags, fmt.Sprintf("normalize-compatibility-mode=%v", mode))
 	return cc
 }
