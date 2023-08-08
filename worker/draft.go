@@ -1853,7 +1853,7 @@ func (n *node) InitAndStartNode() {
 			// Also trigger a snapshot so that this node can take a snapshot if required
 			// Need a delay otherwise it interfers with starting of Raft loop
 			time.AfterFunc(1*time.Second, func() {
-				n.takeSnapshot()
+				_ = n.takeSnapshot()
 			})
 		}
 	}
