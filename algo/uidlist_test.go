@@ -367,6 +367,54 @@ func BenchmarkListIntersectRandom(b *testing.B) {
 	randomTests(1024000, 0.01)
 }
 
+func BenchmarkListIntersectCompressBin(b *testing.B) {
+	randomTests := func(sz int, overlap float64) {
+		rs := []float64{0.01, 0.1, 1, 10, 100}
+		for _, r := range rs {
+			sz1 := sz
+			sz2 := int(float64(sz) * r)
+			if sz2 > 1000000 || sz2 == 0 {
+				break
+			}
+
+			u1, v1 := make([]uint64, sz1), make([]uint64, sz2)
+			limit := int64(float64(sz) / overlap)
+			for i := 0; i < sz1; i++ {
+				u1[i] = uint64(rand.Int63n(limit))
+			}
+			for i := 0; i < sz2; i++ {
+				v1[i] = uint64(rand.Int63n(limit))
+			}
+			sort.Slice(u1, func(i, j int) bool { return u1[i] < u1[j] })
+			sort.Slice(v1, func(i, j int) bool { return v1[i] < v1[j] })
+
+			dst2 := &pb.List{}
+			compressedUids := codec.Encode(v1, 256)
+
+			fmt.Printf("len: %d, compressed: %d, bytes/int: %f\n",
+				len(v1), compressedUids.Size(), float64(compressedUids.Size())/float64(len(v1)))
+			b.Run(fmt.Sprintf("compressed:IntersectWith:ratio=%v:size=%d:overlap=%.2f:", r, sz, overlap),
+				func(b *testing.B) {
+					for k := 0; k < b.N; k++ {
+						dec := codec.Decoder{Pack: compressedUids}
+						dec.Seek(0, codec.SeekStart)
+						IntersectCompressedWithBin(&dec, u1, &dst2.Uids)
+					}
+				})
+			fmt.Println()
+
+			codec.FreePack(compressedUids)
+		}
+	}
+
+	randomTests(10, 0.01)
+	randomTests(100, 0.01)
+	randomTests(1000, 0.01)
+	randomTests(10000, 0.01)
+	randomTests(100000, 0.01)
+	randomTests(1000000, 0.01)
+}
+
 func BenchmarkListIntersectRatio(b *testing.B) {
 	randomTests := func(sz int, overlap float64) {
 		rs := []int{1, 10, 50, 100, 500, 1000, 10000, 100000, 1000000}
