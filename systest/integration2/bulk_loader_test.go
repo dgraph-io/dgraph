@@ -72,7 +72,7 @@ const (
 )
 
 func TestBulkLoaderNoDqlSchema(t *testing.T) {
-	conf := dgraphtest.NewClusterConfig().WithNumAlphas(2).WithNumZeros(1).
+	conf := dgraphtest.NewClusterConfig().WithNumAlphas(3).WithNumZeros(1).
 		WithACL(time.Hour).WithReplicas(1).WithBulkLoadOutDir(t.TempDir())
 	c, err := dgraphtest.NewLocalCluster(conf)
 	require.NoError(t, err)
