@@ -19,7 +19,6 @@ package main
 
 import (
 	"context"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -92,9 +91,9 @@ func TestBulkLoaderSnapshot(t *testing.T) {
 
 	baseDir := t.TempDir()
 	dqlSchemaFile := filepath.Join(baseDir, "person.schema")
-	require.NoError(t, ioutil.WriteFile(dqlSchemaFile, []byte(personSchema), os.ModePerm))
+	require.NoError(t, os.WriteFile(dqlSchemaFile, []byte(personSchema), os.ModePerm))
 	dataFile := filepath.Join(baseDir, "person.rdf")
-	require.NoError(t, ioutil.WriteFile(dataFile, []byte(rdfData), os.ModePerm))
+	require.NoError(t, os.WriteFile(dataFile, []byte(rdfData), os.ModePerm))
 
 	opts := dgraphtest.BulkOpts{
 		DataFiles:   []string{dataFile},
