@@ -112,9 +112,9 @@ func IntersectCompressedWithBin(dec *codec.Decoder, q []uint64, o *[]uint64) {
 				break
 			}
 			IntersectWithBin(blockUids, q, o)
-			last_uid := blockUids[len(blockUids)-1]
+			lastUid := blockUids[len(blockUids)-1]
 			qidx := sort.Search(len(q), func(idx int) bool {
-				return q[idx] >= last_uid
+				return q[idx] >= lastUid
 			})
 			if qidx >= len(q) {
 				return
