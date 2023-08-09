@@ -1048,8 +1048,7 @@ func (n *node) updateRaftProgress() error {
 	return nil
 }
 
-func (n *node) takeSnapshot() error {
-	lastSnapshotTime := time.Now()
+func (n *node) takeSnapshot(lastSnapshotTs time.Time) (time.Time, error) {
 	glog.V(2).Info("Will attempt to do a snapshot now.")
 	snapshotAfterEntries := x.WorkerConfig.Raft.GetUint64("snapshot-after-entries")
 	x.AssertTruef(snapshotAfterEntries > 10, "raft.snapshot-after must be a number greater than 10")
@@ -1068,7 +1067,7 @@ func (n *node) takeSnapshot() error {
 		snap, err := n.Store.Snapshot()
 		if err != nil {
 			glog.Errorf("While retrieving snapshot from Store: %v\n", err)
-			return err
+			return lastSnapshotTs, err
 		}
 
 		// If we don't have a snapshot, or if there are too many log files in Raft,
@@ -1078,7 +1077,7 @@ func (n *node) takeSnapshot() error {
 		// Only take snapshot if both snapshotFrequency and
 		// snapshotAfterEntries requirements are met. If set to 0,
 		// we consider duration condition to be disabled.
-		if snapshotFrequency == 0 || time.Since(lastSnapshotTime) > snapshotFrequency {
+		if snapshotFrequency == 0 || time.Since(lastSnapshotTs) > snapshotFrequency {
 			if chk, err := n.Store.Checkpoint(); err == nil {
 				if first, err := n.Store.FirstIndex(); err == nil {
 					// Save some cycles by only calculating snapshot if the checkpoint
@@ -1108,17 +1107,20 @@ func (n *node) takeSnapshot() error {
 			// or our checkpoint already crossed the SnapshotAfter threshold.
 			if err := n.proposeSnapshot(); err != nil {
 				glog.Errorf("While calculating and proposing snapshot: %v", err)
+			} else {
+				lastSnapshotTs = time.Now()
 			}
 		}
 		go n.abortOldTransactions()
 	}
-	return nil
+	return lastSnapshotTs, nil
 
 }
 
 func (n *node) checkpointAndClose(done chan struct{}) {
 	slowTicker := time.NewTicker(time.Minute)
-
+	lastSnapshotTs := time.Now()
+	var err error
 	defer slowTicker.Stop()
 
 	for {
@@ -1126,7 +1128,8 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 		case <-slowTicker.C:
 			// Do these operations asynchronously away from the main Run loop to allow heartbeats to
 			// be sent on time. Otherwise, followers would just keep running elections.
-			if n.takeSnapshot() != nil {
+			lastSnapshotTs, err = n.takeSnapshot(lastSnapshotTs)
+			if err != nil {
 				continue
 			}
 
@@ -1853,7 +1856,7 @@ func (n *node) InitAndStartNode() {
 			// Also trigger a snapshot so that this node can take a snapshot if required
 			// Need a delay otherwise it interfers with starting of Raft loop
 			time.AfterFunc(1*time.Second, func() {
-				_ = n.takeSnapshot()
+				_, _ = n.takeSnapshot(time.Now())
 			})
 		}
 	}
