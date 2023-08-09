@@ -1657,7 +1657,7 @@ func (n *node) calculateSnapshot(startIdx, lastIdx, minPendingStart uint64) (*pb
 
 	// For bulk loaded p dir, maxCommitTs is zero. We move this to the
 	// ts of the pstore so that snapshot can proceed.
-	if maxCommitTs == 0 && pstore != nil {
+	if maxCommitTs == 0 {
 		maxCommitTs = pstore.MaxVersion()
 	}
 
