@@ -24,7 +24,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/dgraphtest"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
@@ -68,14 +67,18 @@ const (
 	requestTimeout = 120 * time.Second
 )
 
-func queryAlphaWith(t *testing.T, query string, client *dgraphtest.GrpcClient) *api.Response {
+func queryAlphaWith(t *testing.T, query, expectedResp string, client *dgraphtest.GrpcClient) {
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 	defer cancel()
 	require.NoError(t, client.LoginIntoNamespace(ctx, dgraphtest.DefaultUser,
 		dgraphtest.DefaultPassword, x.GalaxyNamespace))
 	resp, err := client.Query(query)
 	require.NoError(t, err, "Error while querying data")
-	return resp
+	testutil.CompareJSON(
+		t,
+		expectedResp,
+		string(resp.GetJson()),
+	)
 }
 
 func TestBulkLoaderSnapshot(t *testing.T) {
@@ -105,37 +108,31 @@ func TestBulkLoaderSnapshot(t *testing.T) {
 	require.NoError(t, c.StartAlpha(0))
 
 	// get gRPC client
-	gc, cleanup, err := c.ClientForAlpha(0)
+	gc1, cleanup1, err := c.ClientForAlpha(0)
 	require.NoError(t, err)
-	defer cleanup()
+	defer cleanup1()
 
-	// run some queries and ensure everything looks good
 	query := `{
 		q1(func: type(Person)){
 			name
 		}
 	}`
-	resp := queryAlphaWith(t, query, gc)
-	testutil.CompareJSON(
-		t,
-		`{"q1": [{"name": "Dave"},{"name": "Alice"},{"name": "Charlie"},{"name": "Bob"}]}`,
-		string(resp.GetJson()),
-	)
+	expectedResp := `{
+		"q1": [{"name": "Dave"},{"name": "Alice"},{"name": "Charlie"},{"name": "Bob"}]
+		}`
+
+	// run some queries and ensure everything looks good
+	queryAlphaWith(t, query, expectedResp, gc1)
 
 	// start Alpha 1
 	require.NoError(t, c.StartAlpha(1))
 
 	// get gRPC client
-	gc, cleanup, err = c.ClientForAlpha(1)
+	gc2, cleanup2, err := c.ClientForAlpha(1)
 	require.NoError(t, err)
-	defer cleanup()
+	defer cleanup2()
 
-	resp = queryAlphaWith(t, query, gc)
-
-	testutil.CompareJSON(
-		t,
-		`{"q1": [{"name": "Dave"},{"name": "Alice"},{"name": "Charlie"},{"name": "Bob"}]}`,
-		string(resp.GetJson()),
-	)
+	// run some queries and ensure everything looks good
+	queryAlphaWith(t, query, expectedResp, gc2)
 
 }
