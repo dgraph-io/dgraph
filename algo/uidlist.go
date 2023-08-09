@@ -105,20 +105,22 @@ func IntersectCompressedWithBin(dec *codec.Decoder, q []uint64, o *[]uint64) {
 
 	// Pick the shorter list and do binary search
 	if ld < lq {
-		last_q := q[len(q)-1]
-		uids := make([]uint64, 0)
 		for {
 			block_uids := dec.Uids()
 			if len(block_uids) == 0 {
 				break
 			}
-			uids = append(uids, block_uids...)
-			if uids[len(uids)-1] > last_q {
-				break
+			IntersectWithBin(block_uids, q, o)
+			last_uid := block_uids[len(block_uids)-1]
+			qidx := sort.Search(len(q), func(idx int) bool {
+				return q[idx] >= last_uid
+			})
+			if qidx >= len(q) {
+				return
 			}
+			q = q[qidx:]
 			dec.Next()
 		}
-		IntersectWithBin(uids, q, o)
 		return
 	}
 

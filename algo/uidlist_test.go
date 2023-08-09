@@ -391,8 +391,6 @@ func BenchmarkListIntersectCompressBin(b *testing.B) {
 			dst2 := &pb.List{}
 			compressedUids := codec.Encode(v1, 256)
 
-			fmt.Printf("len: %d, compressed: %d, bytes/int: %f\n",
-				len(v1), compressedUids.Size(), float64(compressedUids.Size())/float64(len(v1)))
 			b.Run(fmt.Sprintf("compressed:IntersectWith:ratio=%v:size=%d:overlap=%.2f:", r, sz, overlap),
 				func(b *testing.B) {
 					for k := 0; k < b.N; k++ {
