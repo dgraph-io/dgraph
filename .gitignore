@@ -47,6 +47,7 @@ systest/bulk_live/live/**/*.txt
 x/log_test/*.enc
 *.buf
 
+# Dgraph Files
 # p/w/zw
 *.sst
 *.vlog
