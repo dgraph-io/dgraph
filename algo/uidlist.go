@@ -105,34 +105,43 @@ func IntersectCompressedWithBin(dec *codec.Decoder, q []uint64, o *[]uint64) {
 
 	// Pick the shorter list and do binary search
 	if ld < lq {
-		uids := dec.Uids()
-		for len(uids) > 0 {
-			for _, u := range uids {
-				qidx := sort.Search(len(q), func(idx int) bool {
-					return q[idx] >= u
-				})
-				if qidx >= len(q) {
-					return
-				}
-				if q[qidx] == u {
-					*o = append(*o, u)
-					qidx++
-				}
-				q = q[qidx:]
+		last_q := q[len(q)-1]
+		uids := make([]uint64, 0)
+		for {
+			n := dec.Uids()
+			if len(n) == 0 {
+				break
+			}
+			uids = append(uids, n...)
+			if uids[len(uids)-1] > last_q {
+				break
 			}
 			uids = dec.Next()
 		}
+		IntersectWithBin(uids, q, o)
 		return
 	}
 
+	uids := dec.Seek(q[0], codec.SeekStart)
 	for _, u := range q {
-		uids := dec.Seek(u, codec.SeekStart)
-		if len(uids) == 0 {
-			return
+		if len(uids) == 0 || u > uids[len(uids)-1] {
+			uids = dec.Seek(u, codec.SeekStart)
+			if len(uids) == 0 {
+				return
+			}
 		}
-		if uids[0] == u {
+		uidIdx := sort.Search(len(uids), func(idx int) bool {
+			return uids[idx] >= u
+		})
+		if uidIdx >= len(uids) {
+			// We know that u < max(uids). If we didn't find it here, it's not here.
+			continue
+		}
+		if uids[uidIdx] == u {
 			*o = append(*o, u)
+			uidIdx++
 		}
+		uids = uids[uidIdx:]
 	}
 }
 
