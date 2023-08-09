@@ -103,7 +103,6 @@ func TestBulkLoaderSnapshot(t *testing.T) {
 
 	// start Alpha 0
 	require.NoError(t, c.StartAlpha(0))
-	require.NoError(t, c.HealthCheckAlpha(0))
 
 	// get gRPC client
 	gc, cleanup, err := c.ClientForAlpha(0)
@@ -125,7 +124,6 @@ func TestBulkLoaderSnapshot(t *testing.T) {
 
 	// start Alpha 1
 	require.NoError(t, c.StartAlpha(1))
-	require.NoError(t, c.HealthCheckAlpha(1))
 
 	// get gRPC client
 	gc, cleanup, err = c.ClientForAlpha(1)
