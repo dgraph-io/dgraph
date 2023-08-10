@@ -1271,10 +1271,12 @@ func (asuite *AclTestSuite) TestAllPredsPermission() {
 		name	 : string @index(exact) .
 		nickname : string @index(exact) .
 		age 	 : int .
+		connects : [uid] @reverse .
 		type TypeName {
 			name: string
 			nickname: string
 			age: int
+            connects: [uid]
 		}
 	`}
 	require.NoError(t, gc.Alter(ctx, &op))
@@ -1302,10 +1304,18 @@ func (asuite *AclTestSuite) TestAllPredsPermission() {
 	query := `{q1(func: has(name)){
 		v as name
 		a as age
-    }
-    q2(func: eq(val(v), "RandomGuy")) {
+	}
+	q2(func: eq(val(v), "RandomGuy")) {
 		val(v)
 		val(a)
+		connects {
+			name
+			age
+			~connects {
+				name
+				age
+			}
+		}
 	}}`
 
 	// Test that groot has access to all the predicates
@@ -1317,13 +1327,13 @@ func (asuite *AclTestSuite) TestAllPredsPermission() {
 
 	// All test cases
 	tests := []struct {
-		input                  string
-		descriptionNoPerm      string
-		outputNoPerm           string
-		descriptionNamePerm    string
-		outputNamePerm         string
-		descriptionNameAgePerm string
-		outputNameAgePerm      string
+		input               string
+		descriptionNoPerm   string
+		outputNoPerm        string
+		descriptionNamePerm string
+		outputNamePerm      string
+		descriptionAllPerm  string
+		outputAllPerm       string
 	}{
 		{
 			`
@@ -1335,6 +1345,14 @@ func (asuite *AclTestSuite) TestAllPredsPermission() {
 				q2(func: eq(val(n), "RandomGuy")) {
 					val(n)
 					val(a)
+					connects {
+						name
+						age
+						~connects {
+							name
+							age
+						}
+					}
 				}
 			}
 			`,
@@ -1344,8 +1362,8 @@ func (asuite *AclTestSuite) TestAllPredsPermission() {
 			`alice has access to name`,
 			`{"q1":[{"name":"RandomGuy"},{"name":"RandomGuy2"}],"q2":[{"val(n)":"RandomGuy"}]}`,
 
-			"alice has access to name and age",
-			`{"q1":[{"name":"RandomGuy","age":23},{"name":"RandomGuy2","age":25}],"q2":[{"val(n)":"RandomGuy","val(a)":23}]}`,
+			"alice has access to all predicates",
+			`{"q1":[{"name":"RandomGuy","age":23},{"name":"RandomGuy2","age":25}],"q2":[{"val(n)":"RandomGuy","val(a)":23,"connects":[{"name":"RandomGuy2","age":25,"~connects":[{"name":"RandomGuy","age":23}]}]}]}`, //nolint:lll
 		},
 	}
 
@@ -1378,11 +1396,11 @@ func (asuite *AclTestSuite) TestAllPredsPermission() {
 	time.Sleep(defaultTimeToSleep)
 
 	for _, tc := range tests {
-		desc := tc.descriptionNameAgePerm
+		desc := tc.descriptionAllPerm
 		t.Run(desc, func(t *testing.T) {
 			resp, err := userClient.Query(tc.input)
 			require.NoError(t, err)
-			testutil.CompareJSON(t, tc.outputNameAgePerm, string(resp.Json))
+			testutil.CompareJSON(t, tc.outputAllPerm, string(resp.Json))
 		})
 	}
 
