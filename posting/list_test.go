@@ -435,6 +435,41 @@ func TestAddMutation_mrjn1(t *testing.T) {
 	require.Equal(t, 0, ol.Length(txn.StartTs, 0))
 }
 
+func TestReadSingleValue(t *testing.T) {
+	defer setMaxListSize(maxListSize)
+	maxListSize = math.MaxInt32
+
+	// We call pl.Iterate and then stop iterating in the first loop when we are reading
+	// single values. This test confirms that the two functions, getFirst from this file
+	// and GetSingeValueForKey works without an issue.
+
+	key := x.DataKey(x.GalaxyAttr("value"), 1240)
+	ol, err := getNew(key, ps, math.MaxUint64)
+	require.NoError(t, err)
+	N := int(1e2)
+	for i := 2; i <= N; i += 2 {
+		edge := &pb.DirectedEdge{
+			Value: []byte("ho hey there" + strconv.Itoa(i)),
+		}
+		txn := Txn{StartTs: uint64(i)}
+		addMutationHelper(t, ol, edge, Set, &txn)
+		require.NoError(t, ol.commitMutation(uint64(i), uint64(i)+1))
+		kData := ol.getMutation(uint64(i))
+		writer := NewTxnWriter(pstore)
+		if err := writer.SetAt(key, kData, BitDeltaPosting, uint64(i)); err != nil {
+			require.NoError(t, err)
+		}
+		writer.Flush()
+
+		for j := 3; j < i+6; j++ {
+			k, err, _ := GetSingleValueForKey(key, uint64(j))
+			require.NoError(t, err)
+			checkValue(t, ol, string(k.Postings[0].Value), uint64(j))
+		}
+
+	}
+}
+
 func TestRollupMaxTsIsSet(t *testing.T) {
 	defer setMaxListSize(maxListSize)
 	maxListSize = math.MaxInt32

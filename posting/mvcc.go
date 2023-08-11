@@ -457,6 +457,31 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 	return l, nil
 }
 
+func GetSingleValueForKey(key []byte, readTs uint64) (*pb.PostingList, error, int) {
+	//fmt.Println("KEY:", key)
+	txn := pstore.NewTransactionAt(readTs, false)
+	item, err := txn.Get(key)
+	if err != nil {
+		return nil, err, 0
+	}
+	pl := &pb.PostingList{}
+	k := 0
+
+	err = item.Value(func(val []byte) error {
+		k = len(key) + len(val)
+		if err := pl.Unmarshal(val); err != nil {
+			return err
+		}
+		return nil
+	})
+
+	if err != nil {
+		return nil, err, 0
+	}
+
+	return pl, nil, k
+}
+
 func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 	cachedVal, ok := lCache.Get(key)
 	if ok {

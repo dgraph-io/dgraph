@@ -195,6 +195,25 @@ func (lc *LocalCache) getInternal(key []byte, readFromDisk bool) (*List, error) 
 	return lc.SetIfAbsent(skey, pl), nil
 }
 
+func (lc *LocalCache) GetSingleItem(key []byte) (*List, error) {
+	pl, err, _ := GetSingleValueForKey(key, lc.startTs)
+	if err != nil {
+		return nil, err
+	}
+
+	l := new(List)
+	l.key = key
+	l.plist = pl
+
+	lc.RLock()
+	if delta, ok := lc.deltas[string(key)]; ok && len(delta) > 0 {
+		l.setMutation(lc.startTs, delta)
+	}
+	lc.RUnlock()
+
+	return l, nil
+}
+
 // Get retrieves the cached version of the list associated with the given key.
 func (lc *LocalCache) Get(key []byte) (*List, error) {
 	return lc.getInternal(key, true)
