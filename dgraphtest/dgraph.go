@@ -281,8 +281,17 @@ func (a *alpha) mounts(c *LocalCluster) ([]mount.Mount, error) {
 	}
 
 	if c.conf.bulkOutDir != "" {
-		if c.conf.numAlphas == 1 || (c.conf.numAlphas > 1 && a.id == 0) {
-			pDir := filepath.Join(c.conf.bulkOutDir, strconv.Itoa(a.id/c.conf.replicas), "p")
+		var pDir string
+		switch c.conf.pDirReplication {
+		case "0":
+			if a.id == 0 {
+				pDir = filepath.Join(c.conf.bulkOutDir, strconv.Itoa(a.id), "p")
+			}
+		default:
+			pDir = filepath.Join(c.conf.bulkOutDir, strconv.Itoa(a.id/c.conf.replicas), "p")
+		}
+
+		if pDir != "" {
 			if err := os.MkdirAll(pDir, os.ModePerm); err != nil {
 				return nil, errors.Wrap(err, "erorr creating bulk dir")
 			}
@@ -293,7 +302,6 @@ func (a *alpha) mounts(c *LocalCluster) ([]mount.Mount, error) {
 				ReadOnly: false,
 			})
 		}
-
 	}
 
 	for dir, vol := range c.conf.volumes {

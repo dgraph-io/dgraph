@@ -1048,8 +1048,37 @@ func (n *node) updateRaftProgress() error {
 	return nil
 }
 
-func (n *node) takeSnapshot(lastSnapshotTs time.Time) (time.Time, error) {
-	glog.V(2).Info("Will attempt to do a snapshot now.")
+func (n *node) checkpointAndClose(done chan struct{}) {
+	slowTicker := time.NewTicker(time.Minute)
+	lastSnapshotTs := time.Now()
+	var err error
+	defer slowTicker.Stop()
+
+	for {
+		select {
+		case <-slowTicker.C:
+			// Do these operations asynchronously away from the main Run loop to allow heartbeats to
+			// be sent on time. Otherwise, followers would just keep running elections.
+			lastSnapshotTs, err = n.takeSnapshot(lastSnapshotTs)
+			if err != nil {
+				continue
+			}
+
+		case <-n.closer.HasBeenClosed():
+			glog.Infof("Stopping node.Run")
+			if peerId, has := groups().MyPeer(); has && n.AmLeader() {
+				n.Raft().TransferLeadership(n.ctx, n.Id, peerId)
+				time.Sleep(time.Second) // Let transfer happen.
+			}
+			n.Raft().Stop()
+			close(done)
+			return
+		}
+	}
+}
+
+func (n *node) takeSnapshot(lastSnapshotTime time.Time) (time.Time, error) {
+	glog.V(2).Info("Will attempt to take a snapshot now.")
 	snapshotAfterEntries := x.WorkerConfig.Raft.GetUint64("snapshot-after-entries")
 	x.AssertTruef(snapshotAfterEntries > 10, "raft.snapshot-after must be a number greater than 10")
 
@@ -1067,7 +1096,7 @@ func (n *node) takeSnapshot(lastSnapshotTs time.Time) (time.Time, error) {
 		snap, err := n.Store.Snapshot()
 		if err != nil {
 			glog.Errorf("While retrieving snapshot from Store: %v\n", err)
-			return lastSnapshotTs, err
+			return lastSnapshotTime, err
 		}
 
 		// If we don't have a snapshot, or if there are too many log files in Raft,
@@ -1077,7 +1106,7 @@ func (n *node) takeSnapshot(lastSnapshotTs time.Time) (time.Time, error) {
 		// Only take snapshot if both snapshotFrequency and
 		// snapshotAfterEntries requirements are met. If set to 0,
 		// we consider duration condition to be disabled.
-		if snapshotFrequency == 0 || time.Since(lastSnapshotTs) > snapshotFrequency {
+		if snapshotFrequency == 0 || time.Since(lastSnapshotTime) > snapshotFrequency {
 			if chk, err := n.Store.Checkpoint(); err == nil {
 				if first, err := n.Store.FirstIndex(); err == nil {
 					// Save some cycles by only calculating snapshot if the checkpoint
@@ -1108,42 +1137,12 @@ func (n *node) takeSnapshot(lastSnapshotTs time.Time) (time.Time, error) {
 			if err := n.proposeSnapshot(); err != nil {
 				glog.Errorf("While calculating and proposing snapshot: %v", err)
 			} else {
-				lastSnapshotTs = time.Now()
+				lastSnapshotTime = time.Now()
 			}
 		}
 		go n.abortOldTransactions()
 	}
-	return lastSnapshotTs, nil
-
-}
-
-func (n *node) checkpointAndClose(done chan struct{}) {
-	slowTicker := time.NewTicker(time.Minute)
-	lastSnapshotTs := time.Now()
-	var err error
-	defer slowTicker.Stop()
-
-	for {
-		select {
-		case <-slowTicker.C:
-			// Do these operations asynchronously away from the main Run loop to allow heartbeats to
-			// be sent on time. Otherwise, followers would just keep running elections.
-			lastSnapshotTs, err = n.takeSnapshot(lastSnapshotTs)
-			if err != nil {
-				continue
-			}
-
-		case <-n.closer.HasBeenClosed():
-			glog.Infof("Stopping node.Run")
-			if peerId, has := groups().MyPeer(); has && n.AmLeader() {
-				n.Raft().TransferLeadership(n.ctx, n.Id, peerId)
-				time.Sleep(time.Second) // Let transfer happen.
-			}
-			n.Raft().Stop()
-			close(done)
-			return
-		}
-	}
+	return lastSnapshotTime, nil
 }
 
 func (n *node) drainApplyChan() {
@@ -1854,7 +1853,7 @@ func (n *node) InitAndStartNode() {
 			// Trigger election, so this node can become the leader of this single-node cluster.
 			n.canCampaign = true
 			// Also trigger a snapshot so that this node can take a snapshot if required
-			// Need a delay otherwise it interfers with starting of Raft loop
+			// Need a delay for leader election to complete before attempting a snapshot
 			time.AfterFunc(1*time.Second, func() {
 				_, _ = n.takeSnapshot(time.Now())
 			})

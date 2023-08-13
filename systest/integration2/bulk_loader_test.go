@@ -18,7 +18,6 @@
 package main
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -72,7 +71,7 @@ const (
 )
 
 func TestBulkLoaderNoDqlSchema(t *testing.T) {
-	conf := dgraphtest.NewClusterConfig().WithNumAlphas(3).WithNumZeros(1).
+	conf := dgraphtest.NewClusterConfig().WithNumAlphas(2).WithNumZeros(1).
 		WithACL(time.Hour).WithReplicas(1).WithBulkLoadOutDir(t.TempDir())
 	c, err := dgraphtest.NewLocalCluster(conf)
 	require.NoError(t, err)
@@ -84,9 +83,9 @@ func TestBulkLoaderNoDqlSchema(t *testing.T) {
 
 	baseDir := t.TempDir()
 	gqlSchemaFile := filepath.Join(baseDir, "gql.schema")
-	require.NoError(t, ioutil.WriteFile(gqlSchemaFile, []byte(gqlSchema), os.ModePerm))
+	require.NoError(t, os.WriteFile(gqlSchemaFile, []byte(gqlSchema), os.ModePerm))
 	dataFile := filepath.Join(baseDir, "data.json")
-	require.NoError(t, ioutil.WriteFile(dataFile, []byte(jsonData), os.ModePerm))
+	require.NoError(t, os.WriteFile(dataFile, []byte(jsonData), os.ModePerm))
 
 	opts := dgraphtest.BulkOpts{
 		DataFiles:      []string{dataFile},

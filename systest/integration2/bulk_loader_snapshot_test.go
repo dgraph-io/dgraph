@@ -83,7 +83,7 @@ func queryAlphaWith(t *testing.T, query, expectedResp string, client *dgraphtest
 
 func TestBulkLoaderSnapshot(t *testing.T) {
 	conf := dgraphtest.NewClusterConfig().WithNumAlphas(3).WithNumZeros(1).WithReplicas(3).
-		WithBulkLoadOutDir(t.TempDir()).WithACL(time.Hour).WithVerbosity(2)
+		WithBulkLoadpDirIn("0").WithBulkLoadOutDir(t.TempDir()).WithACL(time.Hour).WithVerbosity(2)
 	c, err := dgraphtest.NewLocalCluster(conf)
 	require.NoError(t, err)
 	defer func() { c.Cleanup(t.Failed()) }()
