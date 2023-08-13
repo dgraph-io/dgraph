@@ -82,6 +82,7 @@ func queryAlphaWith(t *testing.T, query, expectedResp string, client *dgraphtest
 }
 
 func TestBulkLoaderSnapshot(t *testing.T) {
+	// Only Alpha-0 has the bulkloaded p-directory
 	conf := dgraphtest.NewClusterConfig().WithNumAlphas(3).WithNumZeros(1).WithReplicas(3).
 		WithBulkLoadpDirIn("0").WithBulkLoadOutDir(t.TempDir()).WithACL(time.Hour).WithVerbosity(2)
 	c, err := dgraphtest.NewLocalCluster(conf)
@@ -104,35 +105,25 @@ func TestBulkLoaderSnapshot(t *testing.T) {
 	}
 	require.NoError(t, c.BulkLoad(opts))
 
-	// start Alpha 0
-	require.NoError(t, c.StartAlpha(0))
-
-	// get gRPC client
-	gc1, cleanup1, err := c.ClientForAlpha(0)
-	require.NoError(t, err)
-	defer cleanup1()
-
 	query := `{
 		q1(func: type(Person)){
 			name
 		}
 	}`
+
 	expectedResp := `{
 		"q1": [{"name": "Dave"},{"name": "Alice"},{"name": "Charlie"},{"name": "Bob"}]
-		}`
+	}`
 
-	// run some queries and ensure everything looks good
-	queryAlphaWith(t, query, expectedResp, gc1)
+	// Start and query each alpha
+	for i := 0; i < 3; i++ {
 
-	// start Alpha 1
-	require.NoError(t, c.StartAlpha(1))
+		require.NoError(t, c.StartAlpha(i))
+		gc, cleanup, err := c.ClientForAlpha(i)
+		require.NoError(t, err)
+		defer cleanup()
 
-	// get gRPC client
-	gc2, cleanup2, err := c.ClientForAlpha(1)
-	require.NoError(t, err)
-	defer cleanup2()
+		queryAlphaWith(t, query, expectedResp, gc)
 
-	// run some queries and ensure everything looks good
-	queryAlphaWith(t, query, expectedResp, gc2)
-
+	}
 }
