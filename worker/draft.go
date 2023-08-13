@@ -1050,7 +1050,7 @@ func (n *node) updateRaftProgress() error {
 
 func (n *node) checkpointAndClose(done chan struct{}) {
 	slowTicker := time.NewTicker(time.Minute)
-	lastSnapshotTs := time.Now()
+	lastSnapshotTime := time.Now()
 	var err error
 	defer slowTicker.Stop()
 
@@ -1059,7 +1059,7 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 		case <-slowTicker.C:
 			// Do these operations asynchronously away from the main Run loop to allow heartbeats to
 			// be sent on time. Otherwise, followers would just keep running elections.
-			lastSnapshotTs, err = n.takeSnapshot(lastSnapshotTs)
+			lastSnapshotTime, err = n.takeSnapshot(lastSnapshotTime)
 			if err != nil {
 				continue
 			}
