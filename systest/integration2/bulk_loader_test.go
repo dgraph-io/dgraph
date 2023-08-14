@@ -18,6 +18,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -134,4 +135,79 @@ func TestBulkLoaderNoDqlSchema(t *testing.T) {
 		  "content": "t2"
 		}
 	  }`, string(data))
+}
+
+func TestBulkLoaderDataLoss(t *testing.T) {
+	dir := t.TempDir()
+	conf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).WithReplicas(1).
+		WithBulkLoadOutDir(dir).WithACL(time.Hour).WithVerbosity(2)
+	c, err := dgraphtest.NewLocalCluster(conf)
+	require.NoError(t, err)
+	defer func() { c.Cleanup(t.Failed()) }()
+
+	// start zero
+	require.NoError(t, c.StartZero(0))
+	require.NoError(t, c.HealthCheck(true))
+	require.NoError(t, c.LeaderCheck(true))
+
+	hc, error := c.HTTPZeroClient()
+
+	require.NoError(t, error)
+	_, err = hc.AssignState("timestamps", 2500)
+	require.NoError(t, err)
+
+	baseDir := t.TempDir()
+	dqlSchemaFile := filepath.Join(baseDir, "person.schema")
+	require.NoError(t, os.WriteFile(dqlSchemaFile, []byte(personSchema), os.ModePerm))
+	dataFile := filepath.Join(baseDir, "person.rdf")
+	require.NoError(t, os.WriteFile(dataFile, []byte(rdfData), os.ModePerm))
+
+	opts := dgraphtest.BulkOpts{
+		DataFiles:   []string{dataFile},
+		SchemaFiles: []string{dqlSchemaFile},
+	}
+	require.NoError(t, c.BulkLoad(opts))
+
+	query := `{
+		q1(func: type(Person)){
+			name
+		}
+	}`
+
+	// Stop and start zero
+	t.Log("Stopping zero")
+	require.NoError(t, c.StopZero(0))
+
+	// New cluster with same directory
+	conf2 := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).WithReplicas(1).
+		WithBulkLoadOutDir(dir).WithACL(time.Hour).WithVerbosity(2)
+	c2, err := dgraphtest.NewLocalCluster(conf2)
+	defer func() { c2.Cleanup(t.Failed()) }()
+
+	t.Log("Starting new zero container")
+	require.NoError(t, c2.StartZero(0))
+
+	require.NoError(t, c2.StartAlpha(0))
+	gc, cleanup, err := c2.ClientForAlpha(0)
+	defer cleanup()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	defer cancel()
+	require.NoError(t, gc.LoginIntoNamespace(ctx, dgraphtest.DefaultUser,
+		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	require.NoError(t, err)
+
+	queryAlphaWith(t, query, `{"q1":[]}`, gc)
+
+	hc, error = c2.HTTPZeroClient()
+
+	require.NoError(t, error)
+	_, err = hc.AssignState("timestamps", 2500)
+	require.NoError(t, err)
+
+	expectedResp := `{
+		"q1": [{"name": "Dave"},{"name": "Alice"},{"name": "Charlie"},{"name": "Bob"}]
+	}`
+
+	queryAlphaWith(t, query, expectedResp, gc)
 }

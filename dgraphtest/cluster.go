@@ -24,6 +24,7 @@ import (
 	"io"
 	"net/http"
 	"os/exec"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -64,6 +65,7 @@ type HTTPClient struct {
 	graphqlURL string
 	licenseURL string
 	stateURL   string
+	assignURL  string
 }
 
 // GraphQLParams are used for making graphql requests to dgraph
@@ -584,6 +586,12 @@ func (hc *HTTPClient) GetZeroState() (*LicenseResponse, error) {
 	}
 
 	return &stateResponse, nil
+}
+
+func (hc *HTTPClient) AssignState(what string, nums int) (*http.Response, error) {
+	url := hc.assignURL + "?what=" + what + "&num=" + strconv.Itoa(nums)
+	response, err := http.Get(url)
+	return response, err
 }
 
 // SetupSchema sets up DQL schema

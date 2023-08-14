@@ -369,6 +369,52 @@ func (c *LocalCluster) HealthCheckAlpha(id int) error {
 	return nil
 }
 
+func (c *LocalCluster) LeaderCheck(zeroOnly bool) error {
+	log.Printf("[INFO] checking leader election")
+
+	if !zeroOnly {
+		return fmt.Errorf("leader election check on alpha not implemented yet")
+	}
+
+	client, err := c.HTTPZeroClient()
+	if err != nil {
+		return err
+	}
+
+	for i := 0; i < 10; i++ {
+		req, err := http.NewRequest(http.MethodGet, client.stateURL, nil)
+		if err != nil {
+			return errors.Wrap(err, "error building req for state endpoint")
+		}
+
+		body, err := doReq(req)
+		if err != nil {
+			log.Printf("[WARNING] error hitting state endpoint [%v], err: [%v]", client.stateURL, err)
+			continue
+		}
+
+		var result map[string]interface{}
+		json.Unmarshal(body, &result)
+		zeros := result["zeros"].(map[string]interface{})
+
+		var leaderCount int
+		for _, zero := range zeros {
+			if zero.(map[string]interface{})["leader"] == true {
+				leaderCount++
+			}
+		}
+
+		if leaderCount == 1 {
+			log.Printf("[INFO] leader election on zero passed")
+			return nil
+		}
+		log.Printf("[WARNING] leader election failed, retrying")
+		time.Sleep(waitDurBeforeRetry)
+	}
+
+	return fmt.Errorf("leader election failed, cluster took too long to elect leader")
+}
+
 func (c *LocalCluster) HealthCheck(zeroOnly bool) error {
 	log.Printf("[INFO] checking health of containers")
 	for _, zo := range c.zeros {
@@ -747,11 +793,39 @@ func (c *LocalCluster) HTTPClient() (*HTTPClient, error) {
 		return nil, err
 	}
 
+	assignURL, err := c.serverURL("zero", "/assign")
+	if err != nil {
+		return nil, err
+	}
+
 	return &HTTPClient{
 		adminURL:   adminURL,
 		graphqlURL: graphqlURL,
 		licenseURL: licenseURL,
 		stateURL:   stateURL,
+		assignURL:  assignURL,
+	}, nil
+}
+
+func (c *LocalCluster) HTTPZeroClient() (*HTTPClient, error) {
+	licenseURL, err := c.serverURL("zero", "/enterpriseLicense")
+	if err != nil {
+		return nil, err
+	}
+	stateURL, err := c.serverURL("zero", "/state")
+	if err != nil {
+		return nil, err
+	}
+
+	assignURL, err := c.serverURL("zero", "/assign")
+	if err != nil {
+		return nil, err
+	}
+
+	return &HTTPClient{
+		licenseURL: licenseURL,
+		stateURL:   stateURL,
+		assignURL:  assignURL,
 	}, nil
 }
 
