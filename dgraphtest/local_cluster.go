@@ -252,17 +252,21 @@ func (c *LocalCluster) Cleanup(verbose bool) {
 
 func (c *LocalCluster) Start() error {
 	log.Printf("[INFO] starting cluster with prefix [%v]", c.conf.prefix)
+	zeroes := []int{}
 	for i := 0; i < c.conf.numZeros; i++ {
 		if err := c.StartZero(i); err != nil {
 			return err
 		}
+		zeroes = append(zeroes, i)
 	}
+	alphas := []int{}
 	for i := 0; i < c.conf.numAlphas; i++ {
 		if err := c.StartAlpha(i); err != nil {
 			return err
 		}
+		alphas = append(alphas, i)
 	}
-	return c.HealthCheck(false)
+	return c.HealthCheck(alphas, zeroes)
 }
 
 func (c *LocalCluster) StartZero(id int) error {
@@ -280,7 +284,7 @@ func (c *LocalCluster) StartAlpha(id int) error {
 	if err != nil {
 		return err
 	}
-	return c.HealthCheckAlpha(id)
+	return c.HealthCheck([]int{id}, nil)
 }
 
 func (c *LocalCluster) startContainer(dc dnode) error {
@@ -347,28 +351,6 @@ func (c *LocalCluster) killContainer(dc dnode) error {
 	return nil
 }
 
-func (c *LocalCluster) HealthCheckAlpha(id int) error {
-	if id >= c.conf.numAlphas {
-		return fmt.Errorf("invalid id of alpha: %v", id)
-	}
-	log.Printf("[INFO] checking health of alpha-[%v]", id)
-	aa := c.alphas[id]
-	url, err := aa.healthURL(c)
-	log.Printf("[INFO] checking health of alpha-[%v] at: [%s]", id, url)
-	if err != nil {
-		return errors.Wrap(err, "error getting health URL")
-	}
-	if err := c.containerHealthCheckFor(id, url); err != nil {
-		return err
-	}
-	log.Printf("[INFO] container [%v] passed health check", aa.containerName)
-
-	if err := c.checkDgraphVersion(aa.containerName); err != nil {
-		return err
-	}
-	return nil
-}
-
 func (c *LocalCluster) LeaderCheck(zeroOnly bool) error {
 	log.Printf("[INFO] checking leader election")
 
@@ -415,91 +397,48 @@ func (c *LocalCluster) LeaderCheck(zeroOnly bool) error {
 	return fmt.Errorf("leader election failed, cluster took too long to elect leader")
 }
 
-func (c *LocalCluster) HealthCheck(zeroOnly bool) error {
+func (c *LocalCluster) HealthCheck(alphas, zeroes []int) error {
 	log.Printf("[INFO] checking health of containers")
-	for _, zo := range c.zeros {
-		url, err := zo.healthURL(c)
+	for _, zo := range zeroes {
+		if zo >= c.conf.numZeros {
+			return fmt.Errorf("invalid id of zero: %v", zo)
+		}
+		log.Printf("[INFO] checking health of zero-[%v]", zo)
+		zz := c.zeros[zo]
+		url, err := zz.healthURL(c)
 		if err != nil {
 			return errors.Wrap(err, "error getting health URL")
 		}
 		if err := c.containerHealthCheck(url); err != nil {
 			return err
 		}
-		log.Printf("[INFO] container [%v] passed health check", zo.containerName)
+		log.Printf("[INFO] container [%v] passed health check", zz.containerName)
 
-		if err := c.checkDgraphVersion(zo.containerName); err != nil {
+		if err := c.checkDgraphVersion(zz.containerName); err != nil {
 			return err
 		}
 	}
-	if zeroOnly {
-		return nil
-	}
 
-	for _, aa := range c.alphas {
-		url, err := aa.healthURL(c)
+	for _, aa := range alphas {
+		if aa >= c.conf.numAlphas {
+			return fmt.Errorf("invalid id of alpha: %v", aa)
+		}
+		log.Printf("[INFO] checking health of alpha-[%v]", aa)
+		al := c.alphas[aa]
+		url, err := al.healthURL(c)
 		if err != nil {
 			return errors.Wrap(err, "error getting health URL")
 		}
 		if err := c.containerHealthCheck(url); err != nil {
 			return err
 		}
-		log.Printf("[INFO] container [%v] passed health check", aa.containerName)
+		log.Printf("[INFO] container [%v] passed health check", al.containerName)
 
-		if err := c.checkDgraphVersion(aa.containerName); err != nil {
+		if err := c.checkDgraphVersion(al.containerName); err != nil {
 			return err
 		}
 	}
 	return nil
-}
-
-func (c *LocalCluster) containerHealthCheckFor(alphaId int, url string) error {
-	for i := 0; i < 60; i++ {
-		time.Sleep(waitDurBeforeRetry)
-
-		req, err := http.NewRequest(http.MethodGet, url, nil)
-		if err != nil {
-			log.Printf("[WARNING] error building req for endpoint [%v], err: [%v]", url, err)
-			continue
-		}
-		body, err := doReq(req)
-		if err != nil {
-			log.Printf("[WARNING] error hitting health endpoint [%v], err: [%v]", url, err)
-			continue
-		}
-		resp := string(body)
-
-		// For Alpha, we always run alpha with EE features enabled
-		if !strings.Contains(resp, `"ee_features"`) {
-			continue
-		}
-		if !c.conf.acl {
-			return nil
-		}
-		if !c.conf.acl || !strings.Contains(resp, `"acl"`) {
-			continue
-		}
-
-		client, cleanup, err := c.ClientForAlpha(alphaId)
-		if err != nil {
-			return errors.Wrap(err, "error setting up a client")
-		}
-		defer cleanup()
-
-		ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
-		defer cancel()
-		for i := 0; i < 10; i++ {
-			if err = client.Login(ctx, DefaultUser, DefaultPassword); err == nil {
-				break
-			}
-			log.Printf("[WARNING] error trying to login: %v", err)
-			time.Sleep(waitDurBeforeRetry)
-		}
-		if err != nil {
-			return errors.Wrap(err, "error during login")
-		}
-		return nil
-	}
-	return fmt.Errorf("health failed, cluster took too long to come up [%v]", url)
 }
 
 func (c *LocalCluster) containerHealthCheck(url string) error {
@@ -719,17 +658,30 @@ func (c *LocalCluster) Upgrade(version string, strategy UpgradeStrategy) error {
 	}
 }
 
+func (c *LocalCluster) ConnForAlpha(id int) (*grpc.ClientConn, error) {
+	if id >= c.conf.numAlphas {
+		return nil, fmt.Errorf("invalid id of alpha: %v", id)
+	}
+
+	url, err := c.alphas[id].alphaURL(c)
+	if err != nil {
+		return nil, errors.Wrap(err, "error getting health URL")
+	}
+
+	conn, err := grpc.Dial(url, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		return nil, errors.Wrap(err, "error connecting to alpha")
+	}
+	return conn, nil
+}
+
 // Client returns a grpc client that can talk to any Alpha in the cluster
 func (c *LocalCluster) Client() (*GrpcClient, func(), error) {
 	// TODO(aman): can we cache the connections?
 	var apiClients []api.DgraphClient
 	var conns []*grpc.ClientConn
 	for i := 0; i < c.conf.numAlphas; i++ {
-		url, err := c.alphas[i].alphaURL(c)
-		if err != nil {
-			return nil, nil, errors.Wrap(err, "error getting health URL")
-		}
-		conn, err := grpc.Dial(url, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		conn, err := c.ConnForAlpha(i)
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "error connecting to alpha")
 		}
@@ -750,21 +702,10 @@ func (c *LocalCluster) Client() (*GrpcClient, func(), error) {
 
 // Client returns a grpc client that can talk to any Alpha in the cluster
 func (c *LocalCluster) ClientForAlpha(id int) (*GrpcClient, func(), error) {
-
-	if id >= c.conf.numAlphas {
-		return nil, nil, fmt.Errorf("invalid id of alpha: %v", id)
-	}
-
-	url, err := c.alphas[id].alphaURL(c)
+	conn, err := c.ConnForAlpha(id)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "error getting health URL")
+		return nil, nil, err
 	}
-
-	conn, err := grpc.Dial(url, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "error connecting to alpha")
-	}
-
 	client := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 	cleanup := func() {
 		if err := conn.Close(); err != nil {
