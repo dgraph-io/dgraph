@@ -24,9 +24,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/dgraph-io/dgraph/dgraphtest"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -80,7 +81,7 @@ func TestBulkLoaderNoDqlSchema(t *testing.T) {
 
 	// start zero
 	require.NoError(t, c.StartZero(0))
-	require.NoError(t, c.HealthCheck(true))
+	require.NoError(t, c.HealthCheck(nil, []int{0}))
 
 	baseDir := t.TempDir()
 	gqlSchemaFile := filepath.Join(baseDir, "gql.schema")
@@ -147,7 +148,7 @@ func TestBulkLoaderDataLoss(t *testing.T) {
 
 	// start zero
 	require.NoError(t, c.StartZero(0))
-	require.NoError(t, c.HealthCheck(true))
+	require.NoError(t, c.HealthCheck(nil, []int{0}))
 	require.NoError(t, c.LeaderCheck(true))
 
 	hc, error := c.HTTPZeroClient()
