@@ -1,4 +1,4 @@
-//go:build integration
+//go:build integration || upgrade
 
 /*
  * Copyright 2023 Dgraph Labs, Inc. and Contributors
@@ -19,35 +19,93 @@
 package bulk
 
 import (
+	"context"
+	"io"
 	"os"
 	"path/filepath"
-	"testing"
+	"runtime"
+	"strings"
+	"time"
 
-	"github.com/dgraph-io/dgraph/systest/21million/common"
-	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/stretchr/testify/require"
+
+	"github.com/dgraph-io/dgraph/chunker"
+	"github.com/dgraph-io/dgraph/dgraphtest"
 )
 
-func TestQueries(t *testing.T) {
-	t.Run("Run queries", common.TestQueriesFor21Million)
-}
+// JSON output can be hundreds of lines and diffs can scroll off the terminal before you
+// can look at them. This option allows saving the JSON to a specified directory instead
+// for easier reviewing after the test completes.
+//var savedir = flag.String("savedir", "",
+//	"directory to save json from test failures in")
+//var quiet = flag.Bool("quiet", false,
+//	"just output whether json differs, not a diff")
 
-func TestMain(m *testing.M) {
-	schemaFile := filepath.Join(testutil.TestDataDirectory, "21million.schema")
-	rdfFile := filepath.Join(testutil.TestDataDirectory, "21million.rdf.gz")
-	if err := testutil.LiveLoad(testutil.LiveOpts{
-		Alpha:      testutil.ContainerAddr("alpha1", 9080),
-		Zero:       testutil.SockAddrZero,
-		RdfFile:    rdfFile,
-		SchemaFile: schemaFile,
-	}); err != nil {
-		cleanupAndExit(1)
+func (lsuite *LiveTestSuite) TestQueriesFor21Million() {
+	t := lsuite.T()
+	_, thisFile, _, _ := runtime.Caller(0)
+	queryDir := filepath.Join(filepath.Dir(thisFile), "../queries")
+
+	// For this test we DON'T want to start with an empty database.
+	files, err := os.ReadDir(queryDir)
+	if err != nil {
+		t.Fatalf("Error reading directory: %s", err.Error())
 	}
 
-	exitCode := m.Run()
-	cleanupAndExit(exitCode)
-}
+	//savepath := ""
+	//diffs := 0
+	for _, file := range files {
+		if !strings.HasPrefix(file.Name(), "query-") {
+			continue
+		}
+		lsuite.Run(file.Name(), func() {
+			require.NoError(t, lsuite.liveLoader())
 
-func cleanupAndExit(exitCode int) {
-	_ = os.RemoveAll("./t")
-	os.Exit(exitCode)
+			// Upgrade
+			lsuite.Upgrade()
+
+			dg, cleanup, err := lsuite.dc.Client()
+			defer cleanup()
+			require.NoError(t, err)
+
+			filename := filepath.Join(queryDir, file.Name())
+			reader, cleanup := chunker.FileReader(filename, nil)
+			bytes, err := io.ReadAll(reader)
+			if err != nil {
+				t.Fatalf("Error reading file: %s", err.Error())
+			}
+			contents := string(bytes[:])
+			cleanup()
+
+			// The test query and expected result are separated by a delimiter.
+			bodies := strings.SplitN(contents, "\n---\n", 2)
+			// Dgraph can get into unhealthy state sometime. So, add retry for every query.
+			for retry := 0; retry < 3; retry++ {
+				// If a query takes too long to run, it probably means dgraph is stuck and there's
+				// no point in waiting longer or trying more tests.
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+				resp, err := dg.NewTxn().Query(ctx, bodies[0])
+				cancel()
+
+				if retry < 2 && (err != nil || ctx.Err() == context.DeadlineExceeded) {
+					continue
+				}
+
+				if ctx.Err() == context.DeadlineExceeded {
+					t.Fatal("aborting test due to query timeout")
+				}
+
+				t.Logf("running %s", file.Name())
+				//if *savedir != "" {
+				//	savepath = filepath.Join(*savedir, file.Name())
+				//}
+
+				dgraphtest.CompareJSON(bodies[1], string(resp.GetJson()))
+			}
+		})
+	}
+	//
+	//if *savedir != "" && diffs > 0 {
+	//	t.Logf("test json saved in directory: %s", *savedir)
+	//}
 }

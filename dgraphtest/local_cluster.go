@@ -17,6 +17,7 @@
 package dgraphtest
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -296,6 +297,22 @@ func (c *LocalCluster) Cleanup(verbose bool) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 	defer cancel()
+
+	if c.conf.detectRace {
+		c.DetectRaceInAlphas()
+	}
+
+	ro := types.ContainerRemoveOptions{RemoveVolumes: true, Force: true}
+	for _, aa := range c.alphas {
+		if err := c.dcli.ContainerRemove(ctx, aa.cid(), ro); err != nil {
+			log.Printf("[WARNING] error removing alpha [%v]: %v", aa.cname(), err)
+		}
+	}
+	for _, zo := range c.zeros {
+		if err := c.dcli.ContainerRemove(ctx, zo.cid(), ro); err != nil {
+			log.Printf("[WARNING] error removing zero [%v]: %v", zo.cname(), err)
+		}
+	}
 	for _, vol := range c.conf.volumes {
 		if err := c.dcli.VolumeRemove(ctx, vol, true); err != nil {
 			log.Printf("[WARNING] error removing volume [%v]: %v", vol, err)
@@ -974,4 +991,33 @@ func runOpennssl(args ...string) error {
 		return errors.Wrapf(err, "### failed to run openssl cmd [%v] ###\n%v", cmd, string(out))
 	}
 	return nil
+}
+
+func (c *LocalCluster) DetectRaceInAlphas() bool {
+	for _, a := range c.alphas {
+		contLogs, err := c.getLogs(a.containerID)
+		if err != nil {
+			continue
+		}
+		if CheckIfRace([]byte(contLogs)) {
+			return true
+		}
+	}
+	return false
+}
+
+func CheckIfRace(output []byte) bool {
+	awkCmd := exec.Command("awk", "/WARNING: DATA RACE/{flag=1}flag;/==================/{flag=0}")
+	awkCmd.Stdin = bytes.NewReader(output)
+	out, err := awkCmd.CombinedOutput()
+	if err != nil {
+		log.Printf("[ERROR] while getting race content %v", err)
+		return false
+	}
+
+	if len(out) > 0 {
+		log.Printf("[WARNING] DATA RACE DETECTED %s\n", string(out))
+		return true
+	}
+	return false
 }
