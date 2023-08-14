@@ -405,11 +405,7 @@ func (c *LocalCluster) HealthCheck(alphas, zeroes []int) error {
 		}
 		log.Printf("[INFO] checking health of zero-[%v]", zo)
 		zz := c.zeros[zo]
-		url, err := zz.healthURL(c)
-		if err != nil {
-			return errors.Wrap(err, "error getting health URL")
-		}
-		if err := c.containerHealthCheck(url); err != nil {
+		if err := c.containerHealthCheck(zz); err != nil {
 			return err
 		}
 		log.Printf("[INFO] container [%v] passed health check", zz.containerName)
@@ -425,11 +421,7 @@ func (c *LocalCluster) HealthCheck(alphas, zeroes []int) error {
 		}
 		log.Printf("[INFO] checking health of alpha-[%v]", aa)
 		al := c.alphas[aa]
-		url, err := al.healthURL(c)
-		if err != nil {
-			return errors.Wrap(err, "error getting health URL")
-		}
-		if err := c.containerHealthCheck(url); err != nil {
+		if err := c.containerHealthCheck(al); err != nil {
 			return err
 		}
 		log.Printf("[INFO] container [%v] passed health check", al.containerName)
@@ -441,9 +433,14 @@ func (c *LocalCluster) HealthCheck(alphas, zeroes []int) error {
 	return nil
 }
 
-func (c *LocalCluster) containerHealthCheck(url string) error {
+func (c *LocalCluster) containerHealthCheck(node nodeType) error {
 	for i := 0; i < 60; i++ {
 		time.Sleep(waitDurBeforeRetry)
+
+		url, err := node.healthURL(c)
+		if err != nil {
+			return errors.Wrap(err, "error getting health URL")
+		}
 
 		req, err := http.NewRequest(http.MethodGet, url, nil)
 		if err != nil {
@@ -473,7 +470,7 @@ func (c *LocalCluster) containerHealthCheck(url string) error {
 			continue
 		}
 
-		client, cleanup, err := c.Client()
+		client, cleanup, err := c.ClientForAlpha(node.getId())
 		if err != nil {
 			return errors.Wrap(err, "error setting up a client")
 		}
@@ -494,7 +491,8 @@ func (c *LocalCluster) containerHealthCheck(url string) error {
 		return nil
 	}
 
-	return fmt.Errorf("health failed, cluster took too long to come up [%v]", url)
+	return fmt.Errorf("health failed, container took too long to come up."+
+		" cname: [%v], aname: [%v]", node.cname(), node.aname())
 }
 
 var client *http.Client = &http.Client{

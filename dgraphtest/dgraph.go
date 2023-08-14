@@ -92,11 +92,27 @@ type dnode interface {
 	zeroURL(*LocalCluster) (string, error)
 }
 
+type nodeType interface {
+	getId() int
+	cname() string
+	aname() string
+	cid() string
+	workingDir() string
+	healthURL(*LocalCluster) (string, error)
+	assignURL(*LocalCluster) (string, error)
+	alphaURL(*LocalCluster) (string, error)
+	zeroURL(*LocalCluster) (string, error)
+}
+
 type zero struct {
 	id            int    // 0, 1, 2
 	containerID   string // container ID in docker world
 	containerName string // something like test-1234_zero2
 	aliasName     string // something like alpha0, zero1
+}
+
+func (z *zero) getId() int {
+	return z.id
 }
 
 func (z *zero) cname() string {
@@ -191,6 +207,10 @@ type alpha struct {
 	containerID   string
 	containerName string
 	aliasName     string
+}
+
+func (a *alpha) getId() int {
+	return a.id
 }
 
 func (a *alpha) cname() string {
