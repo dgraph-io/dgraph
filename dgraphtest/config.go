@@ -96,6 +96,7 @@ type ClusterConfig struct {
 	bulkOutDir      string
 	lambdaURL       string
 	pDirReplication string // 0, 1, all
+	featureFlags    []string
 }
 
 func NewClusterConfig() ClusterConfig {
@@ -190,7 +191,14 @@ func (cc ClusterConfig) WithBulkLoadpDirIn(pDir string) ClusterConfig {
 	return cc
 }
 
+// WithGraphqlLambdaURL sets the URL to lambda server for alpha
 func (cc ClusterConfig) WithGraphqlLambdaURL(url string) ClusterConfig {
 	cc.lambdaURL = url
+	return cc
+}
+
+// WithNormalizeCompatibilityMode sets the normalize-compatibility-mode feature flag for alpha
+func (cc ClusterConfig) WithNormalizeCompatibilityMode(mode string) ClusterConfig {
+	cc.featureFlags = append(cc.featureFlags, fmt.Sprintf("normalize-compatibility-mode=%v", mode))
 	return cc
 }

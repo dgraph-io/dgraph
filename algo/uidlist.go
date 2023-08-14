@@ -92,6 +92,7 @@ func IntersectCompressedWithLinJump(dec *codec.Decoder, v []uint64, o *[]uint64)
 // IntersectCompressedWithBin is based on the paper
 // "Fast Intersection Algorithms for Sorted Sequences"
 // https://link.springer.com/chapter/10.1007/978-3-642-12476-1_3
+// Call seek on dec before calling this function
 func IntersectCompressedWithBin(dec *codec.Decoder, q []uint64, o *[]uint64) {
 	ld := dec.ApproxLen()
 	lq := len(q)
@@ -105,34 +106,45 @@ func IntersectCompressedWithBin(dec *codec.Decoder, q []uint64, o *[]uint64) {
 
 	// Pick the shorter list and do binary search
 	if ld < lq {
-		uids := dec.Uids()
-		for len(uids) > 0 {
-			for _, u := range uids {
-				qidx := sort.Search(len(q), func(idx int) bool {
-					return q[idx] >= u
-				})
-				if qidx >= len(q) {
-					return
-				}
-				if q[qidx] == u {
-					*o = append(*o, u)
-					qidx++
-				}
-				q = q[qidx:]
+		for {
+			blockUids := dec.Uids()
+			if len(blockUids) == 0 {
+				break
 			}
-			uids = dec.Next()
+			IntersectWithBin(blockUids, q, o)
+			lastUid := blockUids[len(blockUids)-1]
+			qidx := sort.Search(len(q), func(idx int) bool {
+				return q[idx] >= lastUid
+			})
+			if qidx >= len(q) {
+				return
+			}
+			q = q[qidx:]
+			dec.Next()
 		}
 		return
 	}
 
+	var uids []uint64
 	for _, u := range q {
-		uids := dec.Seek(u, codec.SeekStart)
-		if len(uids) == 0 {
-			return
+		if len(uids) == 0 || u > uids[len(uids)-1] {
+			uids = dec.Seek(u, codec.SeekStart)
+			if len(uids) == 0 {
+				return
+			}
 		}
-		if uids[0] == u {
+		uidIdx := sort.Search(len(uids), func(idx int) bool {
+			return uids[idx] >= u
+		})
+		if uidIdx >= len(uids) {
+			// We know that u < max(uids). If we didn't find it here, it's not here.
+			continue
+		}
+		if uids[uidIdx] == u {
 			*o = append(*o, u)
+			uidIdx++
 		}
+		uids = uids[uidIdx:]
 	}
 }
 
