@@ -72,7 +72,7 @@ func (bsuite *BulkTestSuite) Upgrade() {
 }
 
 func TestBulkTestSuite(t *testing.T) {
-	for _, uc := range dgraphtest.AllUpgradeCombos() {
+	for _, uc := range dgraphtest.AllUpgradeCombos(false) {
 		log.Printf("running upgrade tests for confg: %+v", uc)
 		var bsuite BulkTestSuite
 		bsuite.uc = uc
