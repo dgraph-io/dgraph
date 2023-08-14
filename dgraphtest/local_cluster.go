@@ -1007,15 +1007,7 @@ func (c *LocalCluster) DetectRaceInAlphas() bool {
 }
 
 func CheckIfRace(output []byte) bool {
-	awkCmd := exec.Command("awk", "/WARNING: DATA RACE/{flag=1}flag;/==================/{flag=0}")
-	awkCmd.Stdin = bytes.NewReader(output)
-	out, err := awkCmd.CombinedOutput()
-	if err != nil {
-		log.Printf("[ERROR] while getting race content %v", err)
-		return false
-	}
-
-	if len(out) > 0 {
+	if strings.Contains(string(output), "WARNING: DATA RACE") {
 		log.Printf("[WARNING] DATA RACE DETECTED %s\n", string(out))
 		return true
 	}
