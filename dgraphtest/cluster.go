@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os/exec"
 	"strconv"
@@ -589,6 +590,7 @@ func (hc *HTTPClient) GetZeroState() (*LicenseResponse, error) {
 }
 
 func (hc *HTTPClient) AssignState(what string, nums int) (*http.Response, error) {
+	log.Printf("[INFO] moving state: %s to %d", what, nums)
 	url := hc.assignURL + "?what=" + what + "&num=" + strconv.Itoa(nums)
 	response, err := http.Get(url)
 	return response, err
