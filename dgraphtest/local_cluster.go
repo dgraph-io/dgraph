@@ -363,7 +363,7 @@ func (c *LocalCluster) LeaderCheck(zeroOnly bool) error {
 		return err
 	}
 
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 20; i++ {
 		req, err := http.NewRequest(http.MethodGet, client.stateURL, nil)
 		if err != nil {
 			return errors.Wrap(err, "error building req for state endpoint")
@@ -376,7 +376,11 @@ func (c *LocalCluster) LeaderCheck(zeroOnly bool) error {
 		}
 
 		var result map[string]interface{}
-		json.Unmarshal(body, &result)
+		err = json.Unmarshal(body, &result)
+		if err != nil {
+			log.Printf("[WARNING] error unmarshalling state endpoint [%v], err: [%v]", client.stateURL, err)
+			continue
+		}
 		zeros := result["zeros"].(map[string]interface{})
 
 		var leaderCount int
