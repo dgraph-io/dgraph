@@ -105,7 +105,6 @@ type AssignIdResponse struct {
 	ReadOnly string `json:"readOnly"`
 }
 
-
 func (hc *HTTPClient) Login(user, password string, ns uint64) error {
 	login := `mutation login($userId: String, $password: String, $namespace: Int, $refreshToken: String) {
 		login(userId: $userId, password: $password, namespace: $namespace, refreshToken: $refreshToken) {
