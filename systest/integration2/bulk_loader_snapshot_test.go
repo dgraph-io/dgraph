@@ -82,7 +82,7 @@ func queryAlphaWith(t *testing.T, query, expectedResp string, client *dgraphtest
 	)
 }
 
-func TestBulkLoaderSnapshot(t *testing.T) {
+func TestBulkLoaderSnapshotPDirinAlpha0(t *testing.T) {
 	// Only Alpha-0 has the bulkloaded p-directory
 	conf := dgraphtest.NewClusterConfig().WithNumAlphas(3).WithNumZeros(1).WithReplicas(3).
 		WithBulkLoadpDirIn("0").WithBulkLoadOutDir(t.TempDir()).WithACL(time.Hour).WithVerbosity(2)
@@ -126,5 +126,53 @@ func TestBulkLoaderSnapshot(t *testing.T) {
 
 		queryAlphaWith(t, query, expectedResp, gc)
 
+	}
+}
+
+func TestBulkLoaderSnapshotPDirinAll(t *testing.T) {
+	// All Alphas have the bulkloaded p-directory
+	dir := t.TempDir()
+	conf := dgraphtest.NewClusterConfig().WithNumAlphas(3).WithNumZeros(1).WithReplicas(3).
+		WithBulkLoadpDirIn("all").WithBulkLoadOutDir(dir).WithACL(time.Hour).WithVerbosity(2)
+	c, err := dgraphtest.NewLocalCluster(conf)
+	require.NoError(t, err)
+	defer func() { c.Cleanup(t.Failed()) }()
+
+	// start zero
+	require.NoError(t, c.StartZero(0))
+	require.NoError(t, c.HealthCheck(nil, []int{0}))
+
+	baseDir := t.TempDir()
+	dqlSchemaFile := filepath.Join(baseDir, "person.schema")
+	require.NoError(t, os.WriteFile(dqlSchemaFile, []byte(personSchema), os.ModePerm))
+	dataFile := filepath.Join(baseDir, "person.rdf")
+	require.NoError(t, os.WriteFile(dataFile, []byte(rdfData), os.ModePerm))
+
+	opts := dgraphtest.BulkOpts{
+		DataFiles:   []string{dataFile},
+		SchemaFiles: []string{dqlSchemaFile},
+	}
+	require.NoError(t, c.BulkLoad(opts))
+
+	require.NoError(t, c.CopyBulkLoadDirsToAlphaMounts())
+
+	query := `{
+		q1(func: type(Person)){
+			name
+		}
+	}`
+
+	expectedResp := `{
+		"q1": [{"name": "Dave"},{"name": "Alice"},{"name": "Charlie"},{"name": "Bob"}]
+	}`
+
+	// Start alpha in reverse order (so that the original alpha
+	// with bulkloaded p-dir is not started first)
+	for i := 2; i >= 0; i-- {
+		require.NoError(t, c.StartAlpha(i))
+		gc, cleanup, err := c.ClientForAlpha(i)
+		require.NoError(t, err)
+		defer cleanup()
+		queryAlphaWith(t, query, expectedResp, gc)
 	}
 }

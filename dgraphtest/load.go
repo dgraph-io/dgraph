@@ -493,3 +493,28 @@ func (c *LocalCluster) BulkLoad(opts BulkOpts) error {
 		return nil
 	}
 }
+
+func (c *LocalCluster) CopyBulkLoadDirsToAlphaMounts() error {
+	var src, target string
+	for _, alpha := range c.alphas {
+		if alpha.id == 0 {
+			// No need to copy
+			src = filepath.Join(c.conf.bulkOutDir, strconv.Itoa(alpha.id), "p")
+			continue
+		}
+		target = filepath.Join(filepath.Dir(c.conf.bulkOutDir), "copy", strconv.Itoa(alpha.id))
+		if err := copyFolder(src, target); err != nil {
+			return err
+		}
+		log.Printf("[INFO] copied bulk load dir from [%v] to [%v]", src, target)
+	}
+	return nil
+}
+
+func copyFolder(src, target string) error {
+	cmd := exec.Command("cp", "-r", src, target)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return errors.Wrapf(err, "error copying folder: %v", string(out))
+	}
+	return nil
+}

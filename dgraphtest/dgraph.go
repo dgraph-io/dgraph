@@ -19,6 +19,7 @@ package dgraphtest
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -309,7 +310,15 @@ func (a *alpha) mounts(c *LocalCluster) ([]mount.Mount, error) {
 		switch c.conf.pDirReplication {
 		case "0":
 			if a.id == 0 {
+				pDir = filepath.Join(c.conf.bulkOutDir, strconv.Itoa(a.id/c.conf.replicas), "p")
+			}
+		case "all":
+			if a.id == 0 {
+				// This will be used for bulkload output
 				pDir = filepath.Join(c.conf.bulkOutDir, strconv.Itoa(a.id), "p")
+			} else {
+				// This will be used to copy bulkload output from alpha 0
+				pDir = filepath.Join(filepath.Dir(c.conf.bulkOutDir), "copy", strconv.Itoa(a.id), "p")
 			}
 		default:
 			pDir = filepath.Join(c.conf.bulkOutDir, strconv.Itoa(a.id/c.conf.replicas), "p")
@@ -319,6 +328,10 @@ func (a *alpha) mounts(c *LocalCluster) ([]mount.Mount, error) {
 			if err := os.MkdirAll(pDir, os.ModePerm); err != nil {
 				return nil, errors.Wrap(err, "erorr creating bulk dir")
 			}
+			if err != nil {
+				return nil, errors.Wrap(err, "error listing subdirectories")
+			}
+			log.Printf("[INFO] Mounting p directory: [%v] to alpha-[%v]", pDir, a.id)
 			mounts = append(mounts, mount.Mount{
 				Type:     mount.TypeBind,
 				Source:   pDir,
