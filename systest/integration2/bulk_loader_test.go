@@ -19,11 +19,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
-	"io"
-	"log"
-	"net/http"
 	"os"
 	"path/filepath"
 	"testing"
@@ -143,50 +138,7 @@ func TestBulkLoaderNoDqlSchema(t *testing.T) {
 	  }`, string(data))
 }
 
-type AssignError struct {
-	Errors []Entry `json:"errors"`
-}
 
-type Entry struct {
-	Message    string                 `json:"message"`
-	Extensions map[string]interface{} `json:"extensions"`
-}
-
-type AssignIdResponse struct {
-	StartId  string `json:"startId"`
-	EndId    string `json:"endId"`
-	ReadOnly string `json:"readOnly"`
-}
-
-func parseAssignError(body []byte) (AssignError, error) {
-	var resp AssignError
-	err := json.Unmarshal(body, &resp)
-	return resp, err
-}
-
-func parseAssignIdResponse(body []byte) (AssignIdResponse, error) {
-	var resp AssignIdResponse
-	err := json.Unmarshal(body, &resp)
-	return resp, err
-}
-
-func readResponseBody(t *testing.T, do *http.Response) error {
-	defer func() { _ = do.Body.Close() }()
-	body, err := io.ReadAll(do.Body)
-	if err != nil {
-		return err
-	}
-
-	if resp, err := parseAssignError(body); err == nil && len(resp.Errors) > 0 {
-		return fmt.Errorf("failed to assign state. error: %s", resp.Errors[0].Message)
-	}
-
-	if resp, err := parseAssignIdResponse(body); err == nil && resp.StartId != "" {
-		log.Printf("[INFO] success in assign state. StartId: %s EndId: %s", resp.StartId, resp.EndId)
-	}
-
-	return nil
-}
 
 func TestBulkLoaderDataLoss(t *testing.T) {
 	dir := t.TempDir()
@@ -204,10 +156,9 @@ func TestBulkLoaderDataLoss(t *testing.T) {
 	hc, error := c.HTTPZeroClient()
 
 	require.NoError(t, error)
-	resp, err := hc.AssignState("timestamps", 2500)
-	require.NoError(t, err)
-	require.NoError(t, readResponseBody(t, resp))
-
+	require.NoError(t, hc.AssignState("timestamps", 2500))
+		
+	
 	baseDir := t.TempDir()
 	dqlSchemaFile := filepath.Join(baseDir, "person.schema")
 	require.NoError(t, os.WriteFile(dqlSchemaFile, []byte(personSchema), os.ModePerm))
@@ -254,8 +205,7 @@ func TestBulkLoaderDataLoss(t *testing.T) {
 	hc, error = c2.HTTPZeroClient()
 
 	require.NoError(t, error)
-	_, err = hc.AssignState("timestamps", 2500)
-	require.NoError(t, err)
+	require.NoError(t,  hc.AssignState("timestamps", 2500))
 
 	expectedResp := `{
 		"q1": [{"name": "Dave"},{"name": "Alice"},{"name": "Charlie"},{"name": "Bob"}]
