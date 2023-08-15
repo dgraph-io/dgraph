@@ -604,7 +604,6 @@ func (hc *HTTPClient) GetZeroState() (*LicenseResponse, error) {
 	return &stateResponse, nil
 }
 
-
 func parseAssignError(body []byte) (AssignError, error) {
 	var resp AssignError
 	err := json.Unmarshal(body, &resp)
@@ -639,7 +638,7 @@ func (hc *HTTPClient) AssignState(what string, nums int) error {
 	log.Printf("[INFO] moving state: %s to %d", what, nums)
 	url := hc.assignURL + "?what=" + what + "&num=" + strconv.Itoa(nums)
 	var err error
-	for i:=0; i<5; i++ {
+	for i := 0; i < 5; i++ {
 		response, err := http.Get(url)
 		if err != nil {
 			log.Printf("[WARN] unable to assing state. err: %s", err)

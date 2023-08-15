@@ -138,8 +138,6 @@ func TestBulkLoaderNoDqlSchema(t *testing.T) {
 	  }`, string(data))
 }
 
-
-
 func TestBulkLoaderDataLoss(t *testing.T) {
 	dir := t.TempDir()
 	conf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).WithReplicas(1).
@@ -157,8 +155,7 @@ func TestBulkLoaderDataLoss(t *testing.T) {
 
 	require.NoError(t, error)
 	require.NoError(t, hc.AssignState("timestamps", 2500))
-		
-	
+
 	baseDir := t.TempDir()
 	dqlSchemaFile := filepath.Join(baseDir, "person.schema")
 	require.NoError(t, os.WriteFile(dqlSchemaFile, []byte(personSchema), os.ModePerm))
@@ -205,7 +202,7 @@ func TestBulkLoaderDataLoss(t *testing.T) {
 	hc, error = c2.HTTPZeroClient()
 
 	require.NoError(t, error)
-	require.NoError(t,  hc.AssignState("timestamps", 2500))
+	require.NoError(t, hc.AssignState("timestamps", 2500))
 
 	expectedResp := `{
 		"q1": [{"name": "Dave"},{"name": "Alice"},{"name": "Charlie"},{"name": "Bob"}]
