@@ -280,8 +280,7 @@ func (c *LocalCluster) StartAlpha(id int) error {
 	if id >= c.conf.numAlphas {
 		return fmt.Errorf("invalid id of alpha: %v", id)
 	}
-	err := c.startContainer(c.alphas[id])
-	if err != nil {
+	if err := c.startContainer(c.alphas[id]); err != nil {
 		return err
 	}
 	return c.HealthCheck([]int{id}, nil)
