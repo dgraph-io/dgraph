@@ -443,16 +443,31 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 				}
 
 			} else {
-				pl, err = qs.cache.GetSingleItem(key)
+				pl, err, _ := posting.GetSingleValueForKey(key, q.ReadTs)
 				if err != nil {
 					return err
 				}
 
-				val, err := pl.AllValues(q.ReadTs)
-				if err != nil {
-					return err
+				for _, p := range pl.Postings {
+					vals = append(vals, types.Val{
+						Tid:   types.TypeID(p.ValType),
+						Value: p.Value,
+					})
+
+					if q.FacetParam != nil {
+						fcs.FacetsList = append(fcs.FacetsList, &pb.Facets{Facets: facets.CopyFacets(p.Facets, q.FacetParam)})
+					}
 				}
-				vals = append(vals, val...)
+				//pl, err = qs.cache.GetSingleItem(key)
+				//if err != nil {
+				//	return err
+				//}
+
+				//val, err := pl.AllValues(q.ReadTs)
+				//if err != nil {
+				//	return err
+				//}
+				//vals = append(vals, val...)
 			}
 
 			uidList := new(pb.List)
