@@ -641,14 +641,14 @@ func (hc *HTTPClient) AssignState(what string, nums int) error {
 	for i := 0; i < 5; i++ {
 		response, err := http.Get(url)
 		if err != nil {
-			log.Printf("[WARN] unable to assing state. err: %s", err)
+			log.Printf("[WARN] unable to assign state. err: %s", err)
 			time.Sleep(waitDurBeforeRetry)
 			continue
 		}
 		if err = readResponseBody(response); err == nil {
 			return nil
 		}
-		log.Printf("[WARN] unable to assing state. err: %s", err)
+		log.Printf("[WARN] unable to assign state. err: %s", err)
 		time.Sleep(waitDurBeforeRetry)
 	}
 	return err
