@@ -37,7 +37,7 @@ func TestMain(m *testing.M) {
 		x.Panic(dg.LoginIntoNamespace(context.Background(), dgraphtest.DefaultUser,
 			dgraphtest.DefaultPassword, x.GalaxyNamespace))
 
-		client = dg.Dgraph
+		client = dg
 		dc = c
 		populateCluster()
 	}
@@ -49,7 +49,7 @@ func TestMain(m *testing.M) {
 		x.Panic(dg.LoginIntoNamespace(context.Background(), dgraphtest.DefaultUser,
 			dgraphtest.DefaultPassword, x.GalaxyNamespace))
 
-		client = dg.Dgraph
+		client = dg
 		dc = c
 		return m.Run()
 	}
