@@ -59,7 +59,9 @@ type Server struct {
 	state       *pb.MembershipState
 	nextRaftId  uint64
 
-	nextLease   map[pb.NumLeaseType]uint64
+	// nextUint is the uint64 which we can hand out next. See maxLease for the
+	// max ID leased via Zero quorum.
+	nextUint    map[pb.NumLeaseType]uint64
 	readOnlyTs  uint64
 	leaseLock   sync.Mutex // protects nextUID, nextTxnTs, nextNsID and corresponding proposals.
 	rateLimiter *x.RateLimiter
@@ -90,11 +92,11 @@ func (s *Server) Init() {
 		Groups: make(map[uint32]*pb.Group),
 		Zeros:  make(map[uint64]*pb.Member),
 	}
-	s.nextLease = make(map[pb.NumLeaseType]uint64)
+	s.nextUint = make(map[pb.NumLeaseType]uint64)
 	s.nextRaftId = 1
-	s.nextLease[pb.Num_UID] = 1
-	s.nextLease[pb.Num_TXN_TS] = 1
-	s.nextLease[pb.Num_NS_ID] = 1
+	s.nextUint[pb.Num_UID] = 1
+	s.nextUint[pb.Num_TXN_TS] = 1
+	s.nextUint[pb.Num_NS_ID] = 1
 	s.nextGroup = 1
 	s.leaderChangeCh = make(chan struct{}, 1)
 	s.closer = z.NewCloser(2) // grpc and http
