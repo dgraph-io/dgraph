@@ -75,7 +75,7 @@ func TestMain(m *testing.M) {
 		}
 	}
 
-	for _, uc := range dgraphtest.AllUpgradeCombos() {
+	for _, uc := range dgraphtest.AllUpgradeCombos(true) {
 		log.Printf("running upgrade tests for confg: %+v", uc)
 		runTest(uc)
 	}

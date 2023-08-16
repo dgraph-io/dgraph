@@ -62,7 +62,7 @@ func (lsuite *LicenseTestSuite) Upgrade() {
 }
 
 func TestLicenseTestSuite(t *testing.T) {
-	for _, uc := range dgraphtest.AllUpgradeCombos() {
+	for _, uc := range dgraphtest.AllUpgradeCombos(false) {
 		log.Printf("running: backup in [%v], restore in [%v]", uc.Before, uc.After)
 		var tsuite LicenseTestSuite
 		tsuite.uc = uc

@@ -29,7 +29,7 @@ type UpgradeCombo struct {
 	Strategy UpgradeStrategy
 }
 
-func AllUpgradeCombos() []UpgradeCombo {
+func AllUpgradeCombos(v20 bool) []UpgradeCombo {
 	fixedVersionCombos := []UpgradeCombo{
 		// OPEN SOURCE RELEASES
 		{"v21.03.0", "v23.0.1", BackupRestore},
@@ -64,6 +64,12 @@ func AllUpgradeCombos() []UpgradeCombo {
 		{"83c9cbedc", "v23.0.1", InPlace}, // v21.03.0-82-g83c9cbedc
 		{"c5862ae2a", "v23.0.1", InPlace}, // v21.03.0-84-gc5862ae2a
 		{"0c9f60156", "v23.0.1", InPlace}, // v21.03.0-92-g0c9f60156
+	}
+
+	if v20 {
+		fixedVersionCombos = append(fixedVersionCombos, []UpgradeCombo{
+			{"v20.11.3", localVersion, BackupRestore},
+		}...)
 	}
 
 	mainCombos := []UpgradeCombo{

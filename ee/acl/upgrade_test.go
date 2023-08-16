@@ -53,7 +53,7 @@ func (asuite *AclTestSuite) Upgrade() {
 }
 
 func TestACLSuite(t *testing.T) {
-	for _, uc := range dgraphtest.AllUpgradeCombos() {
+	for _, uc := range dgraphtest.AllUpgradeCombos(false) {
 		log.Printf("running upgrade tests for confg: %+v", uc)
 		aclSuite := AclTestSuite{uc: uc}
 		suite.Run(t, &aclSuite)
