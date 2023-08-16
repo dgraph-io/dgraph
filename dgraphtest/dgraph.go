@@ -19,6 +19,7 @@ package dgraphtest
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -92,11 +93,27 @@ type dnode interface {
 	zeroURL(*LocalCluster) (string, error)
 }
 
+type nodeType interface {
+	getId() int
+	cname() string
+	aname() string
+	cid() string
+	workingDir() string
+	healthURL(*LocalCluster) (string, error)
+	assignURL(*LocalCluster) (string, error)
+	alphaURL(*LocalCluster) (string, error)
+	zeroURL(*LocalCluster) (string, error)
+}
+
 type zero struct {
 	id            int    // 0, 1, 2
 	containerID   string // container ID in docker world
 	containerName string // something like test-1234_zero2
 	aliasName     string // something like alpha0, zero1
+}
+
+func (z *zero) getId() int {
+	return z.id
 }
 
 func (z *zero) cname() string {
@@ -193,6 +210,10 @@ type alpha struct {
 	aliasName     string
 }
 
+func (a *alpha) getId() int {
+	return a.id
+}
+
 func (a *alpha) cname() string {
 	return a.containerName
 }
@@ -285,16 +306,39 @@ func (a *alpha) mounts(c *LocalCluster) ([]mount.Mount, error) {
 	}
 
 	if c.conf.bulkOutDir != "" {
-		pDir := filepath.Join(c.conf.bulkOutDir, strconv.Itoa(a.id/c.conf.replicas), "p")
-		if err := os.MkdirAll(pDir, os.ModePerm); err != nil {
-			return nil, errors.Wrap(err, "erorr creating bulk dir")
+		var pDir string
+		switch c.conf.pDirReplication {
+		case "0":
+			if a.id == 0 {
+				pDir = filepath.Join(c.conf.bulkOutDir, strconv.Itoa(a.id/c.conf.replicas), "p")
+			}
+		case "all":
+			if a.id == 0 {
+				// This will be used for bulkload output
+				pDir = filepath.Join(c.conf.bulkOutDir, strconv.Itoa(a.id), "p")
+			} else {
+				// This will be used to copy bulkload output from alpha 0
+				pDir = filepath.Join(filepath.Dir(c.conf.bulkOutDir), "copy", strconv.Itoa(a.id), "p")
+			}
+		default:
+			pDir = filepath.Join(c.conf.bulkOutDir, strconv.Itoa(a.id/c.conf.replicas), "p")
 		}
-		mounts = append(mounts, mount.Mount{
-			Type:     mount.TypeBind,
-			Source:   pDir,
-			Target:   DefaultAlphaPDir,
-			ReadOnly: false,
-		})
+
+		if pDir != "" {
+			if err := os.MkdirAll(pDir, os.ModePerm); err != nil {
+				return nil, errors.Wrap(err, "erorr creating bulk dir")
+			}
+			if err != nil {
+				return nil, errors.Wrap(err, "error listing subdirectories")
+			}
+			log.Printf("[INFO] Mounting p directory: [%v] to alpha-[%v]", pDir, a.id)
+			mounts = append(mounts, mount.Mount{
+				Type:     mount.TypeBind,
+				Source:   pDir,
+				Target:   DefaultAlphaPDir,
+				ReadOnly: false,
+			})
+		}
 	}
 
 	for dir, vol := range c.conf.volumes {

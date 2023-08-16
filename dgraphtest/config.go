@@ -92,10 +92,11 @@ type ClusterConfig struct {
 	refillInterval time.Duration
 	uidLease       int
 	// exposed port offset for grpc/http port for both alpha/zero
-	portOffset   int
-	bulkOutDir   string
-	lambdaURL    string
-	featureFlags []string
+	portOffset      int
+	bulkOutDir      string
+	lambdaURL       string
+	pDirReplication string // 0, 1, all
+	featureFlags    []string
 }
 
 func NewClusterConfig() ClusterConfig {
@@ -180,6 +181,13 @@ func (cc ClusterConfig) WithExposedPortOffset(offset uint64) ClusterConfig {
 // that the same p directory is used while setting up alphas.
 func (cc ClusterConfig) WithBulkLoadOutDir(dir string) ClusterConfig {
 	cc.bulkOutDir = dir
+	return cc
+}
+
+// WithBulkLoadpDirIn sets the p dir for the alphas. This controls
+// if we want to use same p directory while setting up alphas.
+func (cc ClusterConfig) WithBulkLoadpDirIn(pDir string) ClusterConfig {
+	cc.pDirReplication = pDir
 	return cc
 }
 

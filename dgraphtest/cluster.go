@@ -22,8 +22,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os/exec"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -64,6 +66,7 @@ type HTTPClient struct {
 	graphqlURL string
 	licenseURL string
 	stateURL   string
+	assignURL  string
 }
 
 // GraphQLParams are used for making graphql requests to dgraph
@@ -85,6 +88,21 @@ type LicenseResponse struct {
 	Errors     x.GqlErrorList         `json:"errors,omitempty"`
 	Code       string                 `json:"code"`
 	Extensions map[string]interface{} `json:"license,omitempty"`
+}
+
+type AssignError struct {
+	Errors []Entry `json:"errors"`
+}
+
+type Entry struct {
+	Message    string                 `json:"message"`
+	Extensions map[string]interface{} `json:"extensions"`
+}
+
+type AssignIdResponse struct {
+	StartId  string `json:"startId"`
+	EndId    string `json:"endId"`
+	ReadOnly string `json:"readOnly"`
 }
 
 func (hc *HTTPClient) Login(user, password string, ns uint64) error {
@@ -584,6 +602,56 @@ func (hc *HTTPClient) GetZeroState() (*LicenseResponse, error) {
 	}
 
 	return &stateResponse, nil
+}
+
+func parseAssignError(body []byte) (AssignError, error) {
+	var resp AssignError
+	err := json.Unmarshal(body, &resp)
+	return resp, err
+}
+
+func parseAssignIdResponse(body []byte) (AssignIdResponse, error) {
+	var resp AssignIdResponse
+	err := json.Unmarshal(body, &resp)
+	return resp, err
+}
+
+func readResponseBody(do *http.Response) error {
+	defer func() { _ = do.Body.Close() }()
+	body, err := io.ReadAll(do.Body)
+	if err != nil {
+		return err
+	}
+
+	if resp, err := parseAssignError(body); err == nil && len(resp.Errors) > 0 {
+		return fmt.Errorf("failed to assign state. error: %s", resp.Errors[0].Message)
+	}
+
+	if resp, err := parseAssignIdResponse(body); err == nil && resp.StartId != "" {
+		log.Printf("[INFO] success in assign state. StartId: %s EndId: %s", resp.StartId, resp.EndId)
+	}
+
+	return nil
+}
+
+func (hc *HTTPClient) AssignState(what string, nums int) error {
+	log.Printf("[INFO] moving state: %s to %d", what, nums)
+	url := hc.assignURL + "?what=" + what + "&num=" + strconv.Itoa(nums)
+	var err error
+	for i := 0; i < 5; i++ {
+		response, err := http.Get(url)
+		if err != nil {
+			log.Printf("[WARN] unable to assign state. err: %s", err)
+			time.Sleep(waitDurBeforeRetry)
+			continue
+		}
+		if err = readResponseBody(response); err == nil {
+			return nil
+		}
+		log.Printf("[WARN] unable to assign state. err: %s", err)
+		time.Sleep(waitDurBeforeRetry)
+	}
+	return err
 }
 
 // SetupSchema sets up DQL schema

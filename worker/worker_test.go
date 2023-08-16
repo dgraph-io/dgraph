@@ -22,14 +22,12 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"os"
 	"strings"
 	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/dgo/v230"
 	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/posting"
@@ -356,36 +354,4 @@ func TestProcessTaskIndex(t *testing.T) {
 		}`,
 		string(resp.Json),
 	)
-}
-
-func TestMain(m *testing.M) {
-	posting.Config.CommitFraction = 0.10
-	gr = new(groupi)
-	gr.gid = 1
-	gr.tablets = make(map[string]*pb.Tablet)
-	addTablets := func(attrs []string, gid uint32, namespace uint64) {
-		for _, attr := range attrs {
-			gr.tablets[x.NamespaceAttr(namespace, attr)] = &pb.Tablet{GroupId: gid}
-		}
-	}
-
-	addTablets([]string{"name", "name2", "age", "http://www.w3.org/2000/01/rdf-schema#range", "",
-		"friend", "dgraph.type", "dgraph.graphql.xid", "dgraph.graphql.schema"},
-		1, x.GalaxyNamespace)
-	addTablets([]string{"friend_not_served"}, 2, x.GalaxyNamespace)
-	addTablets([]string{"name"}, 1, 0x2)
-
-	dir, err := os.MkdirTemp("", "storetest_")
-	x.Check(err)
-	defer os.RemoveAll(dir)
-
-	opt := badger.DefaultOptions(dir)
-	ps, err := badger.OpenManaged(opt)
-	x.Check(err)
-	pstore = ps
-	// Not using posting list cache
-	posting.Init(ps, 0)
-	Init(ps)
-
-	m.Run()
 }

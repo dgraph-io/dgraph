@@ -104,6 +104,7 @@ func TestSnapshot(t *testing.T) {
 	// uploading new schema while alpha2 is not running so we can
 	// test whether the stopped alpha gets new schema in snapshot
 	testutil.UpdateGQLSchema(t, testutil.SockAddrHttp, testSchema)
+	t.Logf("Waiting for snapshot.\n")
 	_ = waitForSnapshot(t, snapshotTs)
 
 	t.Logf("Starting alpha2.\n")
