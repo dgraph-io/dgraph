@@ -134,6 +134,11 @@ func (hc *HTTPClient) LoginUsingToken(ns uint64) error {
 }
 
 func (hc *HTTPClient) LoginIntoNamespace(user, password string, ns uint64) error {
+	// This is useful for v20.11 which does not support multi-tenancy
+	if ns == 0 {
+		return hc.LoginIntoNamespaceV20(user, password)
+	}
+
 	q := `mutation login($userId: String, $password: String, $namespace: Int) {
 		login(userId: $userId, password: $password, namespace: $namespace) {
 			response {
@@ -148,6 +153,30 @@ func (hc *HTTPClient) LoginIntoNamespace(user, password string, ns uint64) error
 			"userId":    user,
 			"password":  password,
 			"namespace": ns,
+		},
+	}
+
+	hc.HttpToken = &HttpToken{
+		UserId:   user,
+		Password: password,
+	}
+	return hc.doLogin(params, true)
+}
+
+func (hc *HTTPClient) LoginIntoNamespaceV20(user, password string) error {
+	q := `mutation login($userId: String, $password: String) {
+		login(userId: $userId, password: $password) {
+			response {
+				accessJWT
+				refreshJWT
+			}
+		}
+	}`
+	params := GraphQLParams{
+		Query: q,
+		Variables: map[string]interface{}{
+			"userId":   user,
+			"password": password,
 		},
 	}
 

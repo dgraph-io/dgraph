@@ -133,9 +133,14 @@ func (z *zero) bindings(offset int) nat.PortMap {
 
 func (z *zero) cmd(c *LocalCluster) []string {
 	zcmd := []string{"/gobin/dgraph", "zero", fmt.Sprintf("--my=%s:%v", z.aname(), zeroGrpcPort), "--bindall",
-		fmt.Sprintf(`--replicas=%v`, c.conf.replicas), fmt.Sprintf(`--raft=idx=%v`, z.id+1), "--logtostderr",
-		fmt.Sprintf("-v=%d", c.conf.verbosity),
-		fmt.Sprintf(`--limit=refill-interval=%v;uid-lease=%v`, c.conf.refillInterval, c.conf.uidLease)}
+		fmt.Sprintf(`--replicas=%v`, c.conf.replicas), "--logtostderr", fmt.Sprintf("-v=%d", c.conf.verbosity)}
+
+	if c.lowerThanV21 {
+		zcmd = append(zcmd, fmt.Sprintf(`--idx=%v`, z.id+1))
+	} else {
+		zcmd = append(zcmd, fmt.Sprintf(`--raft=idx=%v`, z.id+1),
+			fmt.Sprintf(`--limit=refill-interval=%v;uid-lease=%v`, c.conf.refillInterval, c.conf.uidLease))
+	}
 
 	if z.id > 0 {
 		zcmd = append(zcmd, "--peer="+c.zeros[0].aname()+":"+zeroGrpcPort)
@@ -227,14 +232,28 @@ func (a *alpha) bindings(offset int) nat.PortMap {
 
 func (a *alpha) cmd(c *LocalCluster) []string {
 	acmd := []string{"/gobin/dgraph", "alpha", fmt.Sprintf("--my=%s:%v", a.aname(), alphaInterPort),
-		"--bindall", "--logtostderr", fmt.Sprintf("-v=%d", c.conf.verbosity),
-		`--security=whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16`}
+		"--bindall", "--logtostderr", fmt.Sprintf("-v=%d", c.conf.verbosity)}
+
+	if c.lowerThanV21 {
+		acmd = append(acmd, `--whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16`)
+	} else {
+		acmd = append(acmd, `--security=whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16`)
+	}
 
 	if c.conf.acl {
-		acmd = append(acmd, fmt.Sprintf(`--acl=secret-file=%s;access-ttl=%s`, aclSecretMountPath, c.conf.aclTTL))
+		if c.lowerThanV21 {
+			acmd = append(acmd, fmt.Sprintf(`--acl_secret_file=%s`, aclSecretMountPath),
+				fmt.Sprintf(`--acl_access_ttl=%s`, c.conf.aclTTL))
+		} else {
+			acmd = append(acmd, fmt.Sprintf(`--acl=secret-file=%s;access-ttl=%s`, aclSecretMountPath, c.conf.aclTTL))
+		}
 	}
 	if c.conf.encryption {
-		acmd = append(acmd, fmt.Sprintf(`--encryption=key-file=%v`, encKeyMountPath))
+		if c.lowerThanV21 {
+			acmd = append(acmd, fmt.Sprintf(`--encryption_key_file=%v`, encKeyMountPath))
+		} else {
+			acmd = append(acmd, fmt.Sprintf(`--encryption=key-file=%v`, encKeyMountPath))
+		}
 	}
 
 	zeroAddrsArg, delimiter := "--zero=", ""

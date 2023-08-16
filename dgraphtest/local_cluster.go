@@ -49,8 +49,9 @@ type cnet struct {
 
 // LocalCluster is a local dgraph cluster
 type LocalCluster struct {
-	conf       ClusterConfig
-	tempBinDir string
+	conf         ClusterConfig
+	tempBinDir   string
+	lowerThanV21 bool
 
 	// resources
 	dcli   *docker.Client
@@ -114,6 +115,12 @@ func (c *LocalCluster) init() error {
 	if err := os.Mkdir(binDir, os.ModePerm); err != nil && !os.IsExist(err) {
 		return errors.Wrap(err, "error while making binDir")
 	}
+
+	higher, err := IsHigherVersion(c.GetVersion(), "v21.03.0")
+	if err != nil {
+		return errors.Wrapf(err, "error checking if version %s is older than v21.03.0", c.GetVersion())
+	}
+	c.lowerThanV21 = !higher
 
 	for _, vol := range c.conf.volumes {
 		if err := c.createVolume(vol); err != nil {
@@ -492,6 +499,18 @@ func (c *LocalCluster) recreateContainers() error {
 	return nil
 }
 
+func (c *LocalCluster) changeVersion(version string) error {
+	c.conf.version = version
+
+	higher, err := IsHigherVersion(c.GetVersion(), "v21.03.0")
+	if err != nil {
+		return errors.Wrapf(err, "error checking if version %s is older than v21.03.0", c.GetVersion())
+	}
+	c.lowerThanV21 = !higher
+
+	return nil
+}
+
 // Upgrades the cluster to the provided dgraph version
 func (c *LocalCluster) Upgrade(version string, strategy UpgradeStrategy) error {
 	if version == c.conf.version {
@@ -517,7 +536,9 @@ func (c *LocalCluster) Upgrade(version string, strategy UpgradeStrategy) error {
 			return err
 		}
 
-		c.conf.version = version
+		if err := c.changeVersion(version); err != nil {
+			return err
+		}
 		if err := c.setupBinary(); err != nil {
 			return err
 		}
@@ -567,7 +588,9 @@ func (c *LocalCluster) Upgrade(version string, strategy UpgradeStrategy) error {
 			return err
 		}
 
-		c.conf.version = version
+		if err := c.changeVersion(version); err != nil {
+			return err
+		}
 		if err := c.setupBinary(); err != nil {
 			return err
 		}
@@ -586,7 +609,9 @@ func (c *LocalCluster) Upgrade(version string, strategy UpgradeStrategy) error {
 		if err := c.Stop(); err != nil {
 			return err
 		}
-		c.conf.version = version
+		if err := c.changeVersion(version); err != nil {
+			return err
+		}
 		if err := c.setupBinary(); err != nil {
 			return err
 		}
