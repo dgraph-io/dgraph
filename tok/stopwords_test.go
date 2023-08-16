@@ -19,7 +19,7 @@ package tok
 import (
 	"testing"
 
-	"github.com/blevesearch/bleve/analysis"
+	"github.com/blevesearch/bleve/v2/analysis"
 	"github.com/stretchr/testify/require"
 )
 
