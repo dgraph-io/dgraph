@@ -2095,6 +2095,7 @@ func (ssuite *SystestTestSuite) DropTypeNoValue() {
 
 func (ssuite *SystestTestSuite) CountIndexConcurrentSetDelUIDList() {
 	t := ssuite.T()
+	require.Nil(t, ssuite.ShouldSkipTest())
 	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
@@ -2225,6 +2226,7 @@ func (ssuite *SystestTestSuite) CountIndexConcurrentSetDelUIDList() {
 
 func (ssuite *SystestTestSuite) CountIndexConcurrentSetDelScalarPredicate() {
 	t := ssuite.T()
+	require.Nil(t, ssuite.ShouldSkipTest())
 	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
@@ -2301,6 +2303,7 @@ func (ssuite *SystestTestSuite) CountIndexConcurrentSetDelScalarPredicate() {
 
 func (ssuite *SystestTestSuite) CountIndexNonlistPredicateDelete() {
 	t := ssuite.T()
+	require.Nil(t, ssuite.ShouldSkipTest())
 	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
@@ -2352,6 +2355,7 @@ func (ssuite *SystestTestSuite) CountIndexNonlistPredicateDelete() {
 
 func (ssuite *SystestTestSuite) ReverseCountIndexDelete() {
 	t := ssuite.T()
+	require.Nil(t, ssuite.ShouldSkipTest())
 	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)

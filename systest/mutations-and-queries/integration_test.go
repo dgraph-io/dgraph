@@ -55,3 +55,7 @@ func (ssuite *SystestTestSuite) Upgrade() {
 func TestSystestTestSuite(t *testing.T) {
 	suite.Run(t, new(SystestTestSuite))
 }
+
+func (ssuite *SystestTestSuite) ShouldSkipTest() error {
+	return nil
+}
