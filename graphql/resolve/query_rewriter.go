@@ -781,7 +781,7 @@ func (authRw *authRewriter) addAuthQueries(
 				objfilter = &dql.FilterTree{
 					Func: &dql.Function{
 						Name: "uid",
-						Args: []dql.Arg{{Value: queryVar, IsValueVar: false, IsGraphQLVar: false}},
+						Args: []dql.Arg{{Value: queryVar, IsValueVar: false, IsDQLVar: false}},
 					},
 				}
 				filts = append(filts, objfilter)
