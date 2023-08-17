@@ -19,8 +19,12 @@
 package main
 
 import (
+	"log"
+	"path/filepath"
 	"testing"
+	"time"
 
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/dgraph-io/dgraph/dgraphtest"
@@ -46,4 +50,27 @@ func (lsuite *LdbcTestSuite) Upgrade() {
 
 func TestLdbcTestSuite(t *testing.T) {
 	suite.Run(t, new(LdbcTestSuite))
+}
+
+func (lsuite *LdbcTestSuite) bulkLoader() error {
+	noschemaFile := filepath.Join(testutil.TestDataDirectory, "ldbcTypes.schema")
+	rdfFile := testutil.TestDataDirectory
+	require.NoError(lsuite.T(), testutil.MakeDirEmpty([]string{"out/0"}))
+	start := time.Now()
+	err := testutil.BulkLoad(testutil.BulkOpts{
+		Zero:       testutil.SockAddrZero,
+		Shards:     1,
+		RdfFile:    rdfFile,
+		SchemaFile: noschemaFile,
+	})
+	log.Printf("took %s to bulkupload LDBC dataset", time.Since(start))
+	return err
+}
+
+func (lsuite *LdbcTestSuite) StartAlpha() error {
+	return testutil.StartAlphas("./alpha.yml")
+}
+
+func (lsuite *LdbcTestSuite) StopAlphasForCoverage() {
+	testutil.StopAlphasForCoverage("./alpha.yml")
 }

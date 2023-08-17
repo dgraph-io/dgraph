@@ -20,6 +20,8 @@ package main
 
 import (
 	"log"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -69,7 +71,7 @@ func (lsuite *LdbcTestSuite) Upgrade() {
 }
 
 func TestLdbcTestSuite(t *testing.T) {
-	for _, uc := range dgraphtest.AllUpgradeCombos() {
+	for _, uc := range dgraphtest.AllUpgradeCombos(false) {
 		log.Printf("running upgrade tests for confg: %+v", uc)
 		var lsuite LdbcTestSuite
 		lsuite.uc = uc
@@ -78,4 +80,26 @@ func TestLdbcTestSuite(t *testing.T) {
 			panic("TestLdbcTestSuite tests failed")
 		}
 	}
+}
+
+func (lsuite *LdbcTestSuite) bulkLoader() error {
+	dataDir := os.Getenv("TEST_DATA_DIRECTORY")
+	rdfFile := dataDir
+	schemaFile := filepath.Join(dataDir, "ldbcTypes.schema")
+	return lsuite.lc.BulkLoad(dgraphtest.BulkOpts{
+		DataFiles:   []string{rdfFile},
+		SchemaFiles: []string{schemaFile},
+	})
+}
+
+func (lsuite *LdbcTestSuite) StartAlpha() error {
+	c := lsuite.lc
+	if err := c.Start(); err != nil {
+		return err
+	}
+	return c.HealthCheck(false)
+}
+
+func (lsuite *LdbcTestSuite) StopAlphasForCoverage() {
+	lsuite.lc.StopAlpha(0)
 }
