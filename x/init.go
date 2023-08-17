@@ -95,7 +95,6 @@ func Codename() string {
 	return dgraphCodename
 }
 
-
 // pattern for  dev version = min. 7 hex digits of commit-hash.
 var versionRe *regexp.Regexp = regexp.MustCompile(`-g[[:xdigit:]]{7,}`)
 
