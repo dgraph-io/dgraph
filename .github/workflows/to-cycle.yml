@@ -1,0 +1,18 @@
+on:
+  issues:
+    types:
+      - opened
+
+jobs:
+  run-updater:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Create Doc in Cycle
+      run: |
+        curl \
+  -X POST \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer ${{ secrets.CYCLE_TOKEN }}" \
+  --data '{ "mutation": "{ addNewDoc(productId: <id>, doctypeId: <id>, title: \"${{ github.event.issue.html_url }}\") { id title } }" }' \
+  https://api.product.cycle.app/graphql
+  
