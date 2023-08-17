@@ -18,8 +18,6 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
 
 - **GraphQL**
     - feat(graphql): This PR allows @id field in interface to be unique across all implementing types (#8876)
-    - Revert "chore(graphql): upgrade gqlparser to v2.2.2 (#8917)" (#8953)
-    - fix(graphql): upgrade gqlparser to v2.2.2 (#8917)
 
 ### Fixed
 
