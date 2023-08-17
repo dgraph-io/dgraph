@@ -45,7 +45,6 @@ import (
 // tests in this package are using a suite struct system, which runs Dgraph and
 // loads data with bulk and live loader.
 func (ssuite *SystestTestSuite) TestSystem() {
-/*
 	ssuite.Run("n-quad mutation", ssuite.NQuadMutationTest)
 	ssuite.Run("list with languages", ssuite.ListWithLanguagesTest)
 	ssuite.Run("delete all reverse index", ssuite.DeleteAllReverseIndex)
@@ -88,21 +87,16 @@ func (ssuite *SystestTestSuite) TestSystem() {
 	ssuite.Run("infer schema as list JSON", ssuite.InferSchemaAsListJSON)
 	ssuite.Run("force schema as list JSON", ssuite.ForceSchemaAsListJSON)
 	ssuite.Run("force schema as single JSON", ssuite.ForceSchemaAsSingleJSON)
-*/
-
 	ssuite.Run("count index concurrent setdel", ssuite.CountIndexConcurrentSetDelUIDList)
 	ssuite.Run("count index concurrent setdel scalar predicate",
 		ssuite.CountIndexConcurrentSetDelScalarPredicate)
 	ssuite.Run("count index delete on non list predicate", ssuite.CountIndexNonlistPredicateDelete)
 	ssuite.Run("Reverse count index delete", ssuite.ReverseCountIndexDelete)
-
-/*
 	ssuite.Run("overwrite uid predicates", ssuite.OverwriteUidPredicates)
 	ssuite.Run("overwrite uid predicates across txns", ssuite.OverwriteUidPredicatesMultipleTxn)
 	ssuite.Run("overwrite uid predicates reverse index", ssuite.OverwriteUidPredicatesReverse)
 	ssuite.Run("delete and query same txn", ssuite.DeleteAndQuerySameTxn)
 	ssuite.Run("add and query zero datetime value", ssuite.AddAndQueryZeroTimeValue)
-*/
 }
 
 func (ssuite *SystestTestSuite) FacetJsonInputSupportsAnyOfTerms() {

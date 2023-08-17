@@ -33,7 +33,6 @@ import (
 )
 
 func (ssuite *SystestTestSuite) TestQuery() {
-/*
 	ssuite.Run("schema response", ssuite.SchemaQueryTest)
 	ssuite.Run("schema response http", ssuite.SchemaQueryTestHTTP)
 	ssuite.Run("schema predicate names", ssuite.SchemaQueryTestPredicate1)
@@ -48,7 +47,6 @@ func (ssuite *SystestTestSuite) TestQuery() {
 	ssuite.Run("groupby uid that works", ssuite.GroupByUidWorks)
 	ssuite.Run("parameterized cascade", ssuite.CascadeParams)
 	ssuite.Run("cleanup", ssuite.SchemaQueryCleanup)
-*/
 }
 
 func (ssuite *SystestTestSuite) SchemaQueryCleanup() {
