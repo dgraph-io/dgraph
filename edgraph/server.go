@@ -87,8 +87,8 @@ const (
 )
 
 var (
-	numDQL       uint64
-	numGraphQL   uint64
+	numDQL     uint64
+	numGraphQL uint64
 )
 
 var (
@@ -124,7 +124,7 @@ func PeriodicallyPostTelemetry() {
 		}
 		ms := worker.GetMembershipState()
 		t := telemetry.NewAlpha(ms)
-		t.numDQL = atomic.SwapUint64(&numDQL, 0)
+		t.NumDQL = atomic.SwapUint64(&numDQL, 0)
 		t.NumGraphQL = atomic.SwapUint64(&numGraphQL, 0)
 		t.SinceHours = int(time.Since(start).Hours())
 		glog.V(2).Infof("Posting Telemetry data: %+v", t)
@@ -133,7 +133,7 @@ func PeriodicallyPostTelemetry() {
 		if err == nil {
 			lastPostedAt = time.Now()
 		} else {
-			atomic.AddUint64(&numDQL, t.numDQL)
+			atomic.AddUint64(&numDQL, t.NumDQL)
 			atomic.AddUint64(&numGraphQL, t.NumGraphQL)
 			glog.V(2).Infof("Telemetry couldn't be posted. Error: %v", err)
 		}
