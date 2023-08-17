@@ -388,7 +388,7 @@ func (c *LocalCluster) stopContainer(dc dnode) error {
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 	defer cancel()
 
-	stopTimeout := 30
+	stopTimeout := 30 // in seconds
 	o := container.StopOptions{Timeout: &stopTimeout}
 	if err := c.dcli.ContainerStop(ctx, dc.cid(), o); err != nil {
 		// Force kill the container if timeout exceeded

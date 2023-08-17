@@ -19,10 +19,12 @@
 package main
 
 import (
+	"errors"
 	"log"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/dgraph-io/dgraph/dgraphtest"
@@ -37,8 +39,6 @@ type SystestTestSuite struct {
 }
 
 func (ssuite *SystestTestSuite) SetupSubTest() {
-	ssuite.lc.Cleanup(ssuite.T().Failed())
-
 	conf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).WithReplicas(1).
 		WithACL(20 * time.Second).WithEncryption().WithVersion(ssuite.uc.Before)
 	c, err := dgraphtest.NewLocalCluster(conf)
@@ -52,16 +52,12 @@ func (ssuite *SystestTestSuite) SetupSubTest() {
 	ssuite.lc = c
 }
 
-func (ssuite *SystestTestSuite) TearDownTest() {
+func (ssuite *SystestTestSuite) TearDownSubTest() {
 	ssuite.lc.Cleanup(ssuite.T().Failed())
 }
 
 func (ssuite *SystestTestSuite) Upgrade() {
-	t := ssuite.T()
-
-	if err := ssuite.lc.Upgrade(ssuite.uc.After, ssuite.uc.Strategy); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(ssuite.T(), ssuite.lc.Upgrade(ssuite.uc.After, ssuite.uc.Strategy))
 }
 
 func TestSystestTestSuite(t *testing.T) {
@@ -71,7 +67,7 @@ func TestSystestTestSuite(t *testing.T) {
 		ssuite.uc = uc
 		suite.Run(t, &ssuite)
 		if t.Failed() {
-			t.Fatal("TestSystestTestSuite tests failed")
+			x.Panic(errors.New("TestSystestTestSuite tests failed"))
 		}
 	}
 }

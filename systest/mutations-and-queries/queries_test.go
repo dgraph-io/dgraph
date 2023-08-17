@@ -16,7 +16,6 @@
  * limitations under the License.
  */
 
-//nolint:lll
 package main
 
 import (
@@ -24,6 +23,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/v230/protos/api"
@@ -1521,4 +1521,17 @@ func (ssuite *SystestTestSuite) GroupByUidWorks() {
 		require.NoError(t, err)
 		dgraphtest.CompareJSON(tc.out, string(resp.Json))
 	}
+}
+
+func doGrpcLogin(ssuite *SystestTestSuite) (*dgraphtest.GrpcClient, func(), error) {
+	gcli, cleanup, err := ssuite.dc.Client()
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "error creating grpc client")
+	}
+	err = gcli.LoginIntoNamespace(context.Background(),
+		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "groot login into galaxy namespace failed")
+	}
+	return gcli, cleanup, nil
 }

@@ -16,7 +16,6 @@
  * limitations under the License.
  */
 
-//nolint:lll
 package main
 
 import (
@@ -711,6 +710,9 @@ func (ssuite *SystestTestSuite) SortFacetsReturnNil() {
 }
 
 func (ssuite *SystestTestSuite) SchemaAfterDeleteNode() {
+	// Upgrade
+	ssuite.Upgrade()
+
 	t := ssuite.T()
 	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
@@ -736,14 +738,7 @@ func (ssuite *SystestTestSuite) SchemaAfterDeleteNode() {
 
 	require.NoError(t, gcli.Alter(ctx, &api.Operation{DropAttr: "married"}))
 
-	// Upgrade
-	ssuite.Upgrade()
-
-	gcli, cleanup, err = doGrpcLogin(ssuite)
-	defer cleanup()
-	require.NoError(t, err)
 	// Lets try to do a S P * deletion. Schema for married shouldn't be rederived.
-	ctx = context.Background()
 	_, err = gcli.NewTxn().Mutate(ctx, &api.Mutation{
 		CommitNow: true,
 		DelNquads: []byte(`

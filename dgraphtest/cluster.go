@@ -74,11 +74,6 @@ type GraphQLParams struct {
 	Extensions *schema.RequestExtensions `json:"extensions,omitempty"`
 }
 
-type DqlParams struct {
-	body        string
-	contentType string
-}
-
 type GraphQLResponse struct {
 	Data       json.RawMessage        `json:"data,omitempty"`
 	Errors     x.GqlErrorList         `json:"errors,omitempty"`
@@ -622,7 +617,10 @@ func (hc *HTTPClient) GetZeroState() (*LicenseResponse, error) {
 }
 
 func (hc *HTTPClient) PostDqlQuery(query string) ([]byte, error) {
-	params := DqlParams{
+	params := struct {
+		body        string
+		contentType string
+	}{
 		body:        query,
 		contentType: "application/dql",
 	}
