@@ -1394,7 +1394,7 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 	}
 	qr := query.Request{
 		Latency:  qc.latency,
-		GqlQuery: &qc.dqlRes,
+		DqlQuery: &qc.dqlRes,
 	}
 
 	// Here we try our best effort to not contact Zero for a timestamp. If we succeed,

@@ -78,7 +78,7 @@ func processToFastJSON(q string) string {
 
 	var l query.Latency
 	ctx := defaultContext()
-	qr := query.Request{Latency: &l, GqlQuery: &res, ReadTs: timestamp()}
+	qr := query.Request{Latency: &l, DqlQuery: &res, ReadTs: timestamp()}
 	err = qr.ProcessQuery(ctx)
 
 	if err != nil {
