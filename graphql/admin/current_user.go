@@ -39,15 +39,15 @@ func extractName(ctx context.Context) (string, error) {
 }
 
 func (gsr *currentUserResolver) Rewrite(ctx context.Context,
-	DQLQuery schema.Query) ([]*dql.GraphQuery, error) {
+	gqlQuery schema.Query) ([]*dql.GraphQuery, error) {
 
 	name, err := extractName(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	DQLQuery.Rename("getUser")
-	DQLQuery.SetArgTo("name", name)
+	gqlQuery.Rename("getUser")
+	gqlQuery.SetArgTo("name", name)
 
-	return gsr.baseRewriter.Rewrite(ctx, DQLQuery)
+	return gsr.baseRewriter.Rewrite(ctx, gqlQuery)
 }
