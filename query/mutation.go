@@ -301,7 +301,7 @@ func checkIfDeletingAclOperation(ctx context.Context, edges []*pb.DirectedEdge) 
 		}
 	}
 	if isDeleteAclOperation {
-		return errors.Errorf("Reserved properties of guardians group and groot user cannot be deleted.")
+		return errors.Errorf("Reserved Properties of guardians group and groot user cannot be deleted.")
 	}
 	return nil
 }
