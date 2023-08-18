@@ -19,6 +19,7 @@ package worker
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -44,6 +45,7 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/vector_indexer/index"
 )
 
 func invokeNetworkRequest(ctx context.Context, addr string,
@@ -220,6 +222,7 @@ const (
 	uidInFn
 	customIndexFn
 	matchFn
+	similarToFn
 	standardFn = 100
 )
 
@@ -258,6 +261,8 @@ func parseFuncTypeHelper(name string) (FuncType, string) {
 		return hasFn, f
 	case "uid_in":
 		return uidInFn, f
+	case "similar_to":
+		return similarToFn, f
 	case "anyof", "allof":
 		return customIndexFn, f
 	case "match":
@@ -281,6 +286,8 @@ func needsIndex(fnType FuncType, uidList *pb.List) bool {
 		}
 		return true
 	case geoFn, fullTextSearchFn, standardFn, matchFn:
+		return true
+	case similarToFn:
 		return true
 	}
 	return false
@@ -317,7 +324,7 @@ func (srcFn *functionContext) needsValuePostings(typ types.TypeID) (bool, error)
 	case uidInFn, compareScalarFn:
 		// Operate on uid postings
 		return false, nil
-	case notAFunction:
+	case notAFunction, similarToFn:
 		return typ.IsScalar(), nil
 	}
 	return false, errors.Errorf("Unhandled case in fetchValuePostings for fn: %s", srcFn.fname)
@@ -341,9 +348,37 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 	}
 
 	switch srcFn.fnType {
-	case notAFunction, aggregatorFn, passwordFn, compareAttrFn:
+	case notAFunction, aggregatorFn, passwordFn, compareAttrFn, similarToFn:
 	default:
 		return errors.Errorf("Unhandled function in handleValuePostings: %s", srcFn.fname)
+	}
+
+	if srcFn.fnType == similarToFn {
+
+		numNeighbors, err := strconv.ParseInt(q.SrcFunc.Args[0], 10, 32)
+		if err != nil {
+			return fmt.Errorf("invalid value for number of neighbors: %s", q.SrcFunc.Args[0])
+		}
+		// TODO: get entry from badger by accessing key predicate_entry_uuid, converting to uint64
+		//TODO: get maxLevels from schema, filter, etc.
+		nn_uids, err := posting.Search(qs.cache, srcFn.vectorInfo, 5, args.q.Attr, 1, int(numNeighbors), 12, index.AcceptAll)
+		if err != nil {
+			return err
+		}
+		// hnswVecIndex, err := manager.IndexMgr.Find(args.q.Attr)
+		// if err != nil {
+		// 	panic(err)
+		// }
+		// if hnswVecIndex == nil {
+		// 	return fmt.Errorf("Failed to find the vector index for %s", args.q.Attr)
+		// }
+		// nn_uids, err := hnswVecIndex.Search(srcFn.vectorInfo, int(numNeighbors), index.AcceptAll)
+		// fmt.Println(len(nn_uids))
+		// if err != nil {
+		// 	panic(err)
+		// }
+		args.out.UidMatrix = append(args.out.UidMatrix, &pb.List{Uids: nn_uids})
+		return nil
 	}
 
 	if srcFn.atype == types.PasswordID && srcFn.fnType != passwordFn {
@@ -1655,6 +1690,7 @@ type functionContext struct {
 	isFuncAtRoot   bool
 	isStringFn     bool
 	atype          types.TypeID
+	vectorInfo     []float64
 }
 
 const (
@@ -1912,6 +1948,19 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 			return nil, err
 		}
 		checkRoot(q, fc)
+	case similarToFn:
+		str_vec := strings.Split(q.SrcFunc.Args[1], ",")
+		for _, arg := range str_vec {
+			vec_val, err := strconv.ParseFloat(strings.TrimSpace(arg), 64)
+			if err != nil {
+				if e, ok := err.(*strconv.NumError); ok && e.Err == strconv.ErrSyntax {
+					return nil, errors.Errorf("Value %q in %s is not a number",
+						arg, q.SrcFunc.Name)
+				}
+				return nil, err
+			}
+			fc.vectorInfo = append(fc.vectorInfo, vec_val)
+		}
 	case uidInFn:
 		for _, arg := range q.SrcFunc.Args {
 			uidParsed, err := strconv.ParseUint(arg, 0, 64)
