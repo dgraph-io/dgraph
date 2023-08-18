@@ -2743,7 +2743,7 @@ type Request struct {
 	ReadTs   uint64 // ReadTs for the transaction.
 	Cache    int    // 0 represents use txn cache, 1 represents not to use cache.
 	Latency  *Latency
-	DQLQuery *dql.Result
+	GqlQuery *dql.Result
 
 	Subgraphs []*SubGraph
 
@@ -2761,7 +2761,7 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 	// Vars stores the processed variables.
 	req.Vars = make(map[string]varValue)
 	loopStart := time.Now()
-	queries := req.DQLQuery.Query
+	queries := req.GqlQuery.Query
 	// first loop converts queries to SubGraph representation and populates ReadTs And Cache.
 	for i := 0; i < len(queries); i++ {
 		gq := queries[i]
@@ -2791,7 +2791,7 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 	// canExecute returns true if a query block is ready to execute with all the variables
 	// that it depends on are already populated or are defined in the same block.
 	canExecute := func(idx int) bool {
-		queryVars := req.DQLQuery.QueryVars[idx]
+		queryVars := req.GqlQuery.QueryVars[idx]
 		for _, v := range queryVars.Needs {
 			// here we check if this block defines the variable v.
 			var selfDep bool
@@ -2938,15 +2938,15 @@ func (req *Request) Process(ctx context.Context) (er ExecutionResult, err error)
 		return er, errors.Wrapf(err, "While processing query")
 	}
 	schemaProcessingStart := time.Now()
-	if req.DQLQuery.Schema != nil {
-		preds := x.NamespaceAttrList(namespace, req.DQLQuery.Schema.Predicates)
-		req.DQLQuery.Schema.Predicates = preds
-		if er.SchemaNode, err = worker.GetSchemaOverNetwork(ctx, req.DQLQuery.Schema); err != nil {
+	if req.GqlQuery.Schema != nil {
+		preds := x.NamespaceAttrList(namespace, req.GqlQuery.Schema.Predicates)
+		req.GqlQuery.Schema.Predicates = preds
+		if er.SchemaNode, err = worker.GetSchemaOverNetwork(ctx, req.GqlQuery.Schema); err != nil {
 			return er, errors.Wrapf(err, "while fetching schema")
 		}
-		typeNames := x.NamespaceAttrList(namespace, req.DQLQuery.Schema.Types)
-		req.DQLQuery.Schema.Types = typeNames
-		if er.Types, err = worker.GetTypes(ctx, req.DQLQuery.Schema); err != nil {
+		typeNames := x.NamespaceAttrList(namespace, req.GqlQuery.Schema.Types)
+		req.GqlQuery.Schema.Types = typeNames
+		if er.Types, err = worker.GetTypes(ctx, req.GqlQuery.Schema); err != nil {
 			return er, errors.Wrapf(err, "while fetching types")
 		}
 	}
