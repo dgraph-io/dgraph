@@ -14,7 +14,7 @@ on:
       - main
       - 'release/**'
   schedule:
-    - cron: "0 */4 * * *" # every 4hrs
+    - cron: "1 */4 * * *" # every 4hrs
 jobs:
   dgraph-upgrade-tests:
     if: github.event.pull_request.draft == false

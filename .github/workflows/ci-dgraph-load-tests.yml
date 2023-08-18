@@ -32,7 +32,7 @@ on:
       - main
       - 'release/**'
   schedule:
-    - cron: "0 0,6,12,18 * * *"
+    - cron: "1 0,6,12,18 * * *"
 jobs:
   dgraph-load-tests:
     if: github.event.pull_request.draft == false
