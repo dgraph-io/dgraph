@@ -27,7 +27,7 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
-	"go.etcd.io/etcd/raft/raftpb"
+	"go.etcd.io/etcd/raft/v3/raftpb"
 	otrace "go.opencensus.io/trace"
 
 	"github.com/dgraph-io/dgo/v230/protos/api"
@@ -163,7 +163,7 @@ func (w *RaftServer) IsPeer(ctx context.Context, rc *pb.RaftContext) (
 		return &pb.PeerResponse{}, nil
 	}
 
-	for _, raftIdx := range confState.Nodes {
+	for _, raftIdx := range confState.Voters {
 		if rc.Id == raftIdx {
 			return &pb.PeerResponse{Status: true}, nil
 		}

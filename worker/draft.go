@@ -32,8 +32,8 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
-	"go.etcd.io/etcd/raft"
-	"go.etcd.io/etcd/raft/raftpb"
+	"go.etcd.io/etcd/raft/v3"
+	"go.etcd.io/etcd/raft/v3/raftpb"
 	ostats "go.opencensus.io/stats"
 	"go.opencensus.io/tag"
 	otrace "go.opencensus.io/trace"
@@ -1221,6 +1221,9 @@ func (n *node) Run() {
 			n.Raft().Tick()
 
 		case rd := <-n.Raft().Ready():
+			// TODO(Aman): Based on the code here https://github.com/etcd-io/etcd/tree/raft/v3.5.9/raft,
+			// n.SaveToStorage should be called first before doing anything else.
+
 			timer.Start()
 			_, span := otrace.StartSpan(n.ctx, "Alpha.RunLoop",
 				otrace.WithSampler(otrace.ProbabilitySampler(0.001)))
@@ -1813,7 +1816,7 @@ func (n *node) InitAndStartNode() {
 
 			// TODO: Making connections here seems unnecessary, evaluate.
 			members := groups().members(n.gid)
-			for _, id := range sp.Metadata.ConfState.Nodes {
+			for _, id := range sp.Metadata.ConfState.Voters {
 				m, ok := members[id]
 				if ok {
 					n.Connect(id, m.Addr)
@@ -1839,7 +1842,10 @@ func (n *node) InitAndStartNode() {
 			// snapshot as needed after joining the group, instead of us forcing one upfront.
 			glog.Infoln("Trying to join peers.")
 			n.retryUntilSuccess(n.joinPeers, time.Second)
-			n.SetRaft(raft.StartNode(n.Cfg, nil))
+			// We call RestartNode here because nodes already exists in the cluster and
+			// we setup the state by calling c.JoinCluster above. We can't call StartNode
+			// here because we only have peer's IP addresses.
+			n.SetRaft(raft.RestartNode(n.Cfg))
 		} else {
 			peers := []raft.Peer{{ID: n.Id}}
 			n.SetRaft(raft.StartNode(n.Cfg, peers))

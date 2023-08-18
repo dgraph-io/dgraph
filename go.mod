@@ -51,7 +51,7 @@ require (
 	github.com/stretchr/testify v1.8.4
 	github.com/twpayne/go-geom v1.0.5
 	github.com/xdg/scram v0.0.0-20180814205039-7eeb5667e42c
-	go.etcd.io/etcd v0.5.0-alpha.5.0.20190108173120-83c051b701d3
+	go.etcd.io/etcd/raft/v3 v3.5.9
 	go.opencensus.io v0.22.5
 	go.uber.org/zap v1.16.0
 	golang.org/x/crypto v0.9.0
