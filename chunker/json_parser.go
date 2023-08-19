@@ -572,7 +572,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 			buf.Push(&nq)
 			buf.PushPredHint(pred, pb.Metadata_SINGLE)
 		case []interface{}:
-			buf.PushPredHint(pred, pb.Metadata_LIST) //profile v[0].(type) == float64
+			buf.PushPredHint(pred, pb.Metadata_LIST)
 
 			// NOTE: facetsMapSlice should be empty unless this is a scalar list
 			var facetsMapSlice []map[int]*api.Facet

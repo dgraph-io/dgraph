@@ -18,8 +18,6 @@ package types
 
 import (
 	"errors"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/twpayne/go-geom"
@@ -250,67 +248,4 @@ func parseTimeNonStrict(val string) (time.Time, error) {
 	}
 	// Try without timezone.
 	return time.Parse(dateTimeFormat, val)
-}
-
-// parseVFloat(s) will generate a slice of float64 values,
-// as long as s is either an empty string, or if it is formatted
-// according to the following ebnf:
-//
-//	floatArray ::= "[" [floatList] [whitespace] "]"
-//	floatList := float64Val |
-//	             float64Val floatSpaceList |
-//	             float64Val floatCommaList
-//	floatSpaceList := (whitespace float64Val)+
-//	floatCommaList := ([whitespace] "," [whitespace] float64Val)+
-//	float64Val := < a string rep of a float64 value >
-func ParseVFloat(s string) ([]float64, error) {
-	s = strings.TrimSpace(s)
-	if len(s) == 0 {
-		return []float64{}, nil
-	}
-	s = strings.ReplaceAll(s, "\n", " ")
-	s = strings.ReplaceAll(s, "\t", " ")
-	trimmedPre := strings.TrimPrefix(s, "[")
-	if len(trimmedPre) == len(s) {
-		return nil, cannotConvertToVFloat(s)
-	}
-	trimmed := strings.TrimRight(trimmedPre, "]")
-	if len(trimmed) == len(trimmedPre) {
-		return nil, cannotConvertToVFloat(s)
-	}
-	if len(trimmed) == 0 {
-		return []float64{}, nil
-	}
-	if strings.Index(trimmed, ",") != -1 {
-		// Splitting based on comma-separation.
-		values := strings.Split(trimmed, ",")
-		result := make([]float64, len(values))
-		for i := 0; i < len(values); i++ {
-			trimmedVal := strings.TrimSpace(values[i])
-			val, err := strconv.ParseFloat(trimmedVal, 64)
-			if err != nil {
-				return nil, cannotConvertToVFloat(s)
-			}
-			result[i] = val
-		}
-		return result, nil
-	}
-	values := strings.Split(trimmed, " ")
-	result := make([]float64, 0, len(values))
-	for i := 0; i < len(values); i++ {
-		if len(values[i]) == 0 {
-			// skip if we have an empty string. This can naturally
-			// occur if input s was "[1.0     2.0]"
-			// notice the extra whitespace in separation!
-			continue
-		}
-		if len(values[i]) > 0 {
-			val, err := strconv.ParseFloat(values[i], 64)
-			if err != nil {
-				return nil, cannotConvertToVFloat(s)
-			}
-			result = append(result, val)
-		}
-	}
-	return result, nil
 }

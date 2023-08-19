@@ -90,7 +90,6 @@ func TypeValFrom(val *api.Value) types.Val {
 	return types.Val{Tid: types.StringID, Value: ""}
 }
 
-// HERE HERE HERE HERE TODO REMOVE THIS
 func byteVal(nq NQuad) ([]byte, types.TypeID, error) {
 	// We infer object type from type of value. We set appropriate type in parse
 	// function or the Go client has already set.
