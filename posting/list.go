@@ -1298,6 +1298,7 @@ func (l *List) GetLangTags(readTs uint64) ([]string, error) {
 
 // Value returns the default value from the posting list. The default value is
 // defined as the value without a language tag.
+// Value cannot be used to read from cache
 func (l *List) Value(readTs uint64) (rval types.Val, rerr error) {
 	l.RLock()
 	defer l.RUnlock()

@@ -558,6 +558,15 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 	if len(qc.gmuList) == 0 {
 		return nil
 	}
+	if len(qc.gmuList[0].Set) > 1 && qc.gmuList[0].Set[0].ObjectValue.GetDoubleVal() != 0 {
+		//
+		tempList := qc.gmuList
+		qc.gmuList = tempList
+		// qc.gmuList = []*dql.Mutation{}
+		// for _, gmu := range(tempList) {
+		// 	qc.gmu
+		// }
+	}
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}

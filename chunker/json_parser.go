@@ -230,6 +230,11 @@ func handleBasicType(k string, v interface{}, op int, nq *api.NQuad) error {
 			return nil
 		}
 
+		if vf, err := types.ParseVFloat(v); err == nil {
+			nq.ObjectValue = &api.Value{Val: &api.Value_VdoubleVal{VdoubleVal: types.FloatArrayAsBytes(vf)}}
+			return nil
+		}
+
 		// Handle the uid function in upsert block
 		s := stripSpaces(v)
 		if strings.HasPrefix(s, "uid(") || strings.HasPrefix(s, "val(") {
@@ -567,7 +572,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 			buf.Push(&nq)
 			buf.PushPredHint(pred, pb.Metadata_SINGLE)
 		case []interface{}:
-			buf.PushPredHint(pred, pb.Metadata_LIST)
+			buf.PushPredHint(pred, pb.Metadata_LIST) //profile v[0].(type) == float64
 
 			// NOTE: facetsMapSlice should be empty unless this is a scalar list
 			var facetsMapSlice []map[int]*api.Facet

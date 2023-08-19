@@ -215,11 +215,11 @@ func InsertToBadger(ctx context.Context, txn *Txn, inUuid uint64, pred string, m
 		if level < inLevel {
 			key := x.DataKey(pred, inUuid)
 			pl, err := txn.Get(key)
-			data, err := pl.Value(txn.StartTs) // Reading this pl doesnt work...?
+			data, err := pl.AllValues(txn.StartTs) // Reading this pl doesnt work...?
 			if err != nil {
 				return map[minBadgerHeapElement]bool{}, err
 			}
-			unmarshalErr := json.Unmarshal(data.Value.([]byte), inVec) // retrieve vector from inUuid save as inVec
+			unmarshalErr := json.Unmarshal(data[0].Value.([]byte), inVec) // retrieve vector from inUuid save as inVec
 			if unmarshalErr != nil {
 				return map[minBadgerHeapElement]bool{}, unmarshalErr
 			}
