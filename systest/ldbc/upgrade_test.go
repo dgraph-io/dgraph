@@ -33,9 +33,18 @@ import (
 
 type LdbcTestSuite struct {
 	suite.Suite
-	dc dgraphtest.Cluster
-	lc *dgraphtest.LocalCluster
-	uc dgraphtest.UpgradeCombo
+	dc          dgraphtest.Cluster
+	lc          *dgraphtest.LocalCluster
+	uc          dgraphtest.UpgradeCombo
+	ldbcDataDir string
+}
+
+func (lsuite *LdbcTestSuite) SetupTest() {
+	t := lsuite.T()
+	var err error
+	lsuite.ldbcDataDir, err = os.MkdirTemp(os.TempDir(), "Ldbc")
+	require.NoError(t, err)
+	downloadLDBCFiles(lsuite.ldbcDataDir)
 }
 
 func (lsuite *LdbcTestSuite) SetupSubTest() {
@@ -62,8 +71,12 @@ func (lsuite *LdbcTestSuite) SetupSubTest() {
 	lsuite.lc = c
 }
 
-func (lsuite *LdbcTestSuite) TearDownTest() {
+func (lsuite *LdbcTestSuite) TearDownSubTest() {
 	lsuite.lc.Cleanup(lsuite.T().Failed())
+}
+
+func (lsuite *LdbcTestSuite) TearDownTest() {
+	require.NoError(lsuite.T(), os.RemoveAll(lsuite.ldbcDataDir))
 }
 
 func (lsuite *LdbcTestSuite) Upgrade() {
@@ -83,11 +96,9 @@ func TestLdbcTestSuite(t *testing.T) {
 }
 
 func (lsuite *LdbcTestSuite) bulkLoader() error {
-	dataDir := os.Getenv("TEST_DATA_DIRECTORY")
-	rdfFile := dataDir
-	schemaFile := filepath.Join(dataDir, "ldbcTypes.schema")
+	schemaFile := filepath.Join(lsuite.ldbcDataDir, "ldbcTypes.schema")
 	return lsuite.lc.BulkLoad(dgraphtest.BulkOpts{
-		DataFiles:   []string{rdfFile},
+		DataFiles:   []string{lsuite.ldbcDataDir},
 		SchemaFiles: []string{schemaFile},
 	})
 }
