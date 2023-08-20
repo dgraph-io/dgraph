@@ -128,7 +128,11 @@ func (txn *Txn) addIndexMutation(ctx context.Context, edge *pb.DirectedEdge, tok
 		return err
 	}
 	if edge.Attr == "0-profile" { // change to checking for vector type do get on attr
-		InsertToBadger(ctx, txn, edge.ValueId, edge.Attr, 5, 3, 12) // use ctx.Value to access current vector GENIUS
+		visited, err := InsertToBadger(ctx, txn, edge.ValueId, edge.Attr, 5, 3, 12)
+		if err != nil {
+			fmt.Print(visited)
+			return err
+		}
 	}
 	// if edge.ValueType == pb.Posting_VFLOAT {
 	// 	InsertToBadger(ctx, plist, txn, edge.ValueId, edge.Attr, 5, 3, 12)
