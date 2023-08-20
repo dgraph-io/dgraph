@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/dgraphtest"
 	"github.com/dgraph-io/dgraph/testutil"
@@ -31,15 +32,21 @@ import (
 
 type LiveTestSuite struct {
 	suite.Suite
-	dc dgraphtest.Cluster
+	dc          dgraphtest.Cluster
+	liveDataDir string
 }
 
 func (lsuite *LiveTestSuite) SetupTest() {
 	lsuite.dc = dgraphtest.NewComposeCluster()
+	t := lsuite.T()
+	var err error
+	lsuite.liveDataDir, err = os.MkdirTemp(os.TempDir(), "21millionLive")
+	require.NoError(t, err)
+	require.NoError(t, downloadDataFiles(lsuite.liveDataDir))
 }
 
 func (lsuite *LiveTestSuite) TearDownTest() {
-	_ = os.RemoveAll("./t")
+	require.NoError(lsuite.T(), os.RemoveAll(lsuite.liveDataDir))
 }
 
 func (lsuite *LiveTestSuite) Upgrade() {
@@ -51,8 +58,9 @@ func TestLiveTestSuite(t *testing.T) {
 }
 
 func (lsuite *LiveTestSuite) liveLoader() error {
-	rdfFile := filepath.Join(testutil.TestDataDirectory, "21million.rdf.gz")
-	schemaFile := filepath.Join(testutil.TestDataDirectory, "21million.schema")
+	liveDataDir := lsuite.liveDataDir
+	rdfFile := filepath.Join(liveDataDir, "21million.rdf.gz")
+	schemaFile := filepath.Join(liveDataDir, "21million.schema")
 	return testutil.LiveLoad(testutil.LiveOpts{
 		Alpha:      testutil.ContainerAddr("alpha1", 9080),
 		Zero:       testutil.SockAddrZero,

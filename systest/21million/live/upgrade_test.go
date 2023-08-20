@@ -33,14 +33,21 @@ import (
 
 type LiveTestSuite struct {
 	suite.Suite
-	dc dgraphtest.Cluster
-	lc *dgraphtest.LocalCluster
-	uc dgraphtest.UpgradeCombo
+	dc          dgraphtest.Cluster
+	lc          *dgraphtest.LocalCluster
+	uc          dgraphtest.UpgradeCombo
+	liveDataDir string
 }
 
 func (lsuite *LiveTestSuite) SetupTest() {
-	lsuite.lc.Cleanup(lsuite.T().Failed())
+	t := lsuite.T()
+	var err error
+	lsuite.liveDataDir, err = os.MkdirTemp(os.TempDir(), "21millionLive")
+	require.NoError(t, err)
+	require.NoError(t, downloadDataFiles(lsuite.liveDataDir))
+}
 
+func (lsuite *LiveTestSuite) SetupSubTest() {
 	conf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).WithReplicas(1).
 		WithVersion(lsuite.uc.Before)
 	c, err := dgraphtest.NewLocalCluster(conf)
@@ -54,8 +61,12 @@ func (lsuite *LiveTestSuite) SetupTest() {
 	lsuite.lc = c
 }
 
-func (lsuite *LiveTestSuite) TearDownTest() {
+func (lsuite *LiveTestSuite) TearDownSubTest() {
 	lsuite.lc.Cleanup(lsuite.T().Failed())
+}
+
+func (lsuite *LiveTestSuite) TearDownTest() {
+	require.NoError(lsuite.T(), os.RemoveAll(lsuite.liveDataDir))
 }
 
 func (lsuite *LiveTestSuite) Upgrade() {
@@ -63,7 +74,7 @@ func (lsuite *LiveTestSuite) Upgrade() {
 }
 
 func TestLiveTestSuite(t *testing.T) {
-	for _, uc := range dgraphtest.AllUpgradeCombos() {
+	for _, uc := range dgraphtest.AllUpgradeCombos(false) {
 		log.Printf("running upgrade tests for confg: %+v", uc)
 		var lsuite LiveTestSuite
 		lsuite.uc = uc
@@ -75,7 +86,7 @@ func TestLiveTestSuite(t *testing.T) {
 }
 
 func (lsuite *LiveTestSuite) liveLoader() error {
-	dataDir := os.Getenv("TEST_DATA_DIRECTORY")
+	dataDir := lsuite.liveDataDir
 	rdfFile := filepath.Join(dataDir, "21million.rdf.gz")
 	schemaFile := filepath.Join(dataDir, "21million.schema")
 	return lsuite.lc.LiveLoad(dgraphtest.LiveOpts{

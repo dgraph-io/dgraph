@@ -33,9 +33,18 @@ import (
 
 type BulkTestSuite struct {
 	suite.Suite
-	dc        dgraphtest.Cluster
-	lc        *dgraphtest.LocalCluster
-	uc        dgraphtest.UpgradeCombo
+	dc          dgraphtest.Cluster
+	lc          *dgraphtest.LocalCluster
+	uc          dgraphtest.UpgradeCombo
+	bulkDataDir string
+}
+
+func (bsuite *BulkTestSuite) SetupTest() {
+	t := bsuite.T()
+	var err error
+	bsuite.bulkDataDir, err = os.MkdirTemp(os.TempDir(), "21millionBulk")
+	require.NoError(t, err)
+	require.NoError(t, downloadDataFiles(bsuite.bulkDataDir))
 }
 
 func (bsuite *BulkTestSuite) SetupSubTest() {
@@ -63,8 +72,12 @@ func (bsuite *BulkTestSuite) SetupSubTest() {
 	bsuite.lc = c
 }
 
-func (bsuite *BulkTestSuite) TearDownTest() {
+func (bsuite *BulkTestSuite) TearDownSubTest() {
 	bsuite.lc.Cleanup(bsuite.T().Failed())
+}
+
+func (bsuite *BulkTestSuite) TearDownTest() {
+	require.NoError(bsuite.T(), os.RemoveAll(bsuite.bulkDataDir))
 }
 
 func (bsuite *BulkTestSuite) Upgrade() {
@@ -84,7 +97,7 @@ func TestBulkTestSuite(t *testing.T) {
 }
 
 func (bsuite *BulkTestSuite) bulkLoader() error {
-	dataDir := os.Getenv("TEST_DATA_DIRECTORY")
+	dataDir := bsuite.bulkDataDir
 	rdfFile := filepath.Join(dataDir, "21million.rdf.gz")
 	schemaFile := filepath.Join(dataDir, "21million.schema")
 	return bsuite.lc.BulkLoad(dgraphtest.BulkOpts{

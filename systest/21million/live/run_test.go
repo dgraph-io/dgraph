@@ -20,18 +20,29 @@ package bulk
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
 
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/dgraphtest"
 )
+
+var datafiles = map[string]string{
+	"1million-noindex.schema": "https://github.com/dgraph-io/benchmarks/blob/master/data/1million-noindex.schema?raw=true",
+	"1million.schema":         "https://github.com/dgraph-io/benchmarks/blob/master/data/1million.schema?raw=true",
+	"1million.rdf.gz":         "https://github.com/dgraph-io/benchmarks/blob/master/data/1million.rdf.gz?raw=true",
+	"21million.schema":        "https://github.com/dgraph-io/benchmarks/blob/master/data/21million.schema?raw=true",
+	"21million.rdf.gz":        "https://github.com/dgraph-io/benchmarks/blob/master/data/21million.rdf.gz?raw=true",
+}
 
 // JSON output can be hundreds of lines and diffs can scroll off the terminal before you
 // can look at them. This option allows saving the JSON to a specified directory instead
@@ -108,4 +119,16 @@ func (lsuite *LiveTestSuite) TestQueriesFor21Million() {
 	//if *savedir != "" && diffs > 0 {
 	//	t.Logf("test json saved in directory: %s", *savedir)
 	//}
+}
+
+func downloadDataFiles(testDir string) error {
+	for fname, link := range datafiles {
+		cmd := exec.Command("wget", "-O", fname, link)
+		cmd.Dir = testDir
+
+		if out, err := cmd.CombinedOutput(); err != nil {
+			return errors.Wrapf(err, fmt.Sprintf("error downloading a file: %s", string(out)))
+		}
+	}
+	return nil
 }

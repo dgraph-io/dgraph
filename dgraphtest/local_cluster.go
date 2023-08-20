@@ -17,7 +17,6 @@
 package dgraphtest
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -1008,7 +1007,7 @@ func (c *LocalCluster) DetectRaceInAlphas() bool {
 
 func CheckIfRace(output []byte) bool {
 	if strings.Contains(string(output), "WARNING: DATA RACE") {
-		log.Printf("[WARNING] DATA RACE DETECTED %s\n", string(out))
+		log.Printf("[WARNING] DATA RACE DETECTED %s\n", string(output))
 		return true
 	}
 	return false
