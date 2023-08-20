@@ -26,7 +26,7 @@ services:
       - -c
       - |
         mount -v -o vers=4,loud nfs:/ /mnt 2>&1 &
-        /gobin/dgraph  ${COVERAGE_OUTPUT}  alpha   --my=alpha1_backup_clust_ha:7080  --zero=zero1_backup_clust_ha:5080,zero2_backup_clust_ha:5080,zero3_backup_clust_ha:5080 --logtostderr -v=2  --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
+        /gobin/dgraph  ${COVERAGE_OUTPUT} alpha --telemetry "reports=false; sentry=false;" --my=alpha1_backup_clust_ha:7080  --zero=zero1_backup_clust_ha:5080,zero2_backup_clust_ha:5080,zero3_backup_clust_ha:5080 --logtostderr -v=2  --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
 
   alpha2_backup_clust_ha:
     image: dgraph-nfs-client:local
@@ -45,7 +45,7 @@ services:
       source: $GOPATH/bin
       target: /gobin
       read_only: true
-    command: /gobin/dgraph  ${COVERAGE_OUTPUT}  alpha   --my=alpha2_backup_clust_ha:7080  --zero=zero1_backup_clust_ha:5080,zero2_backup_clust_ha:5080,zero3_backup_clust_ha:5080 --logtostderr -v=2  --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
+    command: /gobin/dgraph  ${COVERAGE_OUTPUT} alpha --telemetry "reports=false; sentry=false;" --my=alpha2_backup_clust_ha:7080  --zero=zero1_backup_clust_ha:5080,zero2_backup_clust_ha:5080,zero3_backup_clust_ha:5080 --logtostderr -v=2  --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
 
   alpha3_backup_clust_ha:
     image: dgraph-nfs-client:local
@@ -64,7 +64,7 @@ services:
       source: $GOPATH/bin
       target: /gobin
       read_only: true
-    command: /gobin/dgraph  ${COVERAGE_OUTPUT}  alpha   --my=alpha3_backup_clust_ha:7080  --zero=zero1_backup_clust_ha:5080,zero2_backup_clust_ha:5080,zero3_backup_clust_ha:5080 --logtostderr -v=2  --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
+    command: /gobin/dgraph  ${COVERAGE_OUTPUT} alpha --telemetry "reports=false; sentry=false;" --my=alpha3_backup_clust_ha:7080  --zero=zero1_backup_clust_ha:5080,zero2_backup_clust_ha:5080,zero3_backup_clust_ha:5080 --logtostderr -v=2  --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
 
   zero1_backup_clust_ha:
     image: dgraph-nfs-client:local
@@ -83,7 +83,7 @@ services:
       source: $GOPATH/bin
       target: /gobin
       read_only: true
-    command: /gobin/dgraph  ${COVERAGE_OUTPUT} zero --raft "idx=1;" --my=zero1_backup_clust_ha:5080 --replicas=3 --logtostderr -v=2 --bindall
+    command: /gobin/dgraph  ${COVERAGE_OUTPUT} zero --telemetry "reports=false; sentry=false;" --raft "idx=1;" --my=zero1_backup_clust_ha:5080 --replicas=3 --logtostderr -v=2 --bindall
 
   zero2_backup_clust_ha:
     image: dgraph-nfs-client:local
@@ -101,7 +101,7 @@ services:
       source: $GOPATH/bin
       target: /gobin
       read_only: true
-    command: /gobin/dgraph  ${COVERAGE_OUTPUT} zero --raft "idx=2;" --my=zero2_backup_clust_ha:5080 --replicas=3 --logtostderr -v=2 --bindall  --peer=zero1_backup_clust_ha:5080
+    command: /gobin/dgraph  ${COVERAGE_OUTPUT} zero --telemetry "reports=false; sentry=false;" --raft "idx=2;" --my=zero2_backup_clust_ha:5080 --replicas=3 --logtostderr -v=2 --bindall  --peer=zero1_backup_clust_ha:5080
 
   zero3_backup_clust_ha:
     image: dgraph-nfs-client:local
@@ -119,7 +119,7 @@ services:
       source: $GOPATH/bin
       target: /gobin
       read_only: true
-    command: /gobin/dgraph  ${COVERAGE_OUTPUT} zero --raft "idx=3;" --my=zero3_backup_clust_ha:5080 --replicas=3 --logtostderr -v=2 --bindall  --peer=zero1_backup_clust_ha:5080
+    command: /gobin/dgraph  ${COVERAGE_OUTPUT} zero --telemetry "reports=false; sentry=false;" --raft "idx=3;" --my=zero3_backup_clust_ha:5080 --replicas=3 --logtostderr -v=2 --bindall  --peer=zero1_backup_clust_ha:5080
 
 
 #HA restore cluster
@@ -146,7 +146,7 @@ services:
       - -c
       - |
         mount -v -o vers=4,loud nfs:/ /mnt 2>&1 &
-        /gobin/dgraph  ${COVERAGE_OUTPUT}  alpha   --my=alpha4_restore_clust_ha:7080  --zero=zero4_restore_clust_ha:5080,zero5_restore_clust_ha:5080,zero6_restore_clust_ha:5080 --logtostderr -v=2  --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
+        /gobin/dgraph  ${COVERAGE_OUTPUT} alpha --telemetry "reports=false; sentry=false;" --my=alpha4_restore_clust_ha:7080  --zero=zero4_restore_clust_ha:5080,zero5_restore_clust_ha:5080,zero6_restore_clust_ha:5080 --logtostderr -v=2  --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
 
   alpha5_restore_clust_ha:
     image: dgraph-nfs-client:local
@@ -165,7 +165,7 @@ services:
       source: $GOPATH/bin
       target: /gobin
       read_only: true
-    command: /gobin/dgraph  ${COVERAGE_OUTPUT}  alpha   --my=alpha5_restore_clust_ha:7080  --zero=zero4_restore_clust_ha:5080,zero5_restore_clust_ha:5080,zero6_restore_clust_ha:5080 --logtostderr -v=2  --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
+    command: /gobin/dgraph  ${COVERAGE_OUTPUT} alpha --telemetry "reports=false; sentry=false;" --my=alpha5_restore_clust_ha:7080  --zero=zero4_restore_clust_ha:5080,zero5_restore_clust_ha:5080,zero6_restore_clust_ha:5080 --logtostderr -v=2  --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
 
   alpha6_restore_clust_ha:
     image: dgraph-nfs-client:local
@@ -184,7 +184,7 @@ services:
       source: $GOPATH/bin
       target: /gobin
       read_only: true
-    command: /gobin/dgraph  ${COVERAGE_OUTPUT}  alpha   --my=alpha6_restore_clust_ha:7080  --zero=zero4_restore_clust_ha:5080,zero5_restore_clust_ha:5080,zero6_restore_clust_ha:5080 --logtostderr -v=2  --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
+    command: /gobin/dgraph  ${COVERAGE_OUTPUT} alpha --telemetry "reports=false; sentry=false;" --my=alpha6_restore_clust_ha:7080  --zero=zero4_restore_clust_ha:5080,zero5_restore_clust_ha:5080,zero6_restore_clust_ha:5080 --logtostderr -v=2  --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
 
   zero4_restore_clust_ha:
     image: dgraph-nfs-client:local
@@ -203,7 +203,7 @@ services:
       source: $GOPATH/bin
       target: /gobin
       read_only: true
-    command: /gobin/dgraph  ${COVERAGE_OUTPUT} zero --raft "idx=1;" --my=zero4_restore_clust_ha:5080 --replicas=3 --logtostderr -v=2 --bindall
+    command: /gobin/dgraph  ${COVERAGE_OUTPUT} zero --telemetry "reports=false; sentry=false;" --raft "idx=1;" --my=zero4_restore_clust_ha:5080 --replicas=3 --logtostderr -v=2 --bindall
 
   zero5_restore_clust_ha:
     image: dgraph-nfs-client:local
@@ -221,7 +221,7 @@ services:
         source: $GOPATH/bin
         target: /gobin
         read_only: true
-    command: /gobin/dgraph  ${COVERAGE_OUTPUT} zero --raft "idx=2;" --my=zero5_restore_clust_ha:5080 --replicas=3 --logtostderr -v=2 --bindall  --peer=zero4_restore_clust_ha:5080
+    command: /gobin/dgraph  ${COVERAGE_OUTPUT} zero --telemetry "reports=false; sentry=false;" --raft "idx=2;" --my=zero5_restore_clust_ha:5080 --replicas=3 --logtostderr -v=2 --bindall  --peer=zero4_restore_clust_ha:5080
 
   zero6_restore_clust_ha:
     image: dgraph-nfs-client:local
@@ -239,7 +239,7 @@ services:
         source: $GOPATH/bin
         target: /gobin
         read_only: true
-    command: /gobin/dgraph  ${COVERAGE_OUTPUT} zero --raft "idx=3;" --my=zero6_restore_clust_ha:5080 --replicas=3 --logtostderr -v=2 --bindall  --peer=zero4_restore_clust_ha:5080
+    command: /gobin/dgraph  ${COVERAGE_OUTPUT} zero --telemetry "reports=false; sentry=false;" --raft "idx=3;" --my=zero6_restore_clust_ha:5080 --replicas=3 --logtostderr -v=2 --bindall  --peer=zero4_restore_clust_ha:5080
 
 
 #non HA cluster backup cluster
@@ -260,7 +260,7 @@ services:
       source: $GOPATH/bin
       target: /gobin
       read_only: true
-    command: /gobin/dgraph  ${COVERAGE_OUTPUT} zero --raft "idx=1;" --my=zero7_backup_clust_non_ha:5080 --replicas=1 --logtostderr -v=2 --bindall
+    command: /gobin/dgraph  ${COVERAGE_OUTPUT} zero --telemetry "reports=false; sentry=false;" --raft "idx=1;" --my=zero7_backup_clust_non_ha:5080 --replicas=1 --logtostderr -v=2 --bindall
 
   alpha7_backup_clust_non_ha:
     image: dgraph-nfs-client:local
@@ -285,7 +285,7 @@ services:
       - -c
       - |
         mount -v -o vers=4,loud nfs:/ /mnt 2>&1 &
-        /gobin/dgraph  ${COVERAGE_OUTPUT}  alpha   --my=alpha7_backup_clust_non_ha:7080  --zero=zero7_backup_clust_non_ha:5080 --logtostderr -v=2  --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
+        /gobin/dgraph  ${COVERAGE_OUTPUT} alpha --telemetry "reports=false; sentry=false;" --my=alpha7_backup_clust_non_ha:7080  --zero=zero7_backup_clust_non_ha:5080 --logtostderr -v=2  --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
 
 
 #non HA restore cluster
@@ -306,7 +306,7 @@ services:
       source: $GOPATH/bin
       target: /gobin
       read_only: true
-    command: /gobin/dgraph  ${COVERAGE_OUTPUT} zero --raft "idx=1;" --my=zero8_restore_clust_non_ha:5080 --replicas=1 --logtostderr -v=2 --bindall
+    command: /gobin/dgraph  ${COVERAGE_OUTPUT} zero --telemetry "reports=false; sentry=false;" --raft "idx=1;" --my=zero8_restore_clust_non_ha:5080 --replicas=1 --logtostderr -v=2 --bindall
 
   alpha8_restore_clust_non_ha:
     image: dgraph-nfs-client:local
@@ -331,7 +331,7 @@ services:
       - -c
       - |
         mount -v -o vers=4,loud nfs:/ /mnt 2>&1 &
-        /gobin/dgraph  ${COVERAGE_OUTPUT}  alpha   --my=alpha8_restore_clust_non_ha:7080  --zero=zero8_restore_clust_non_ha:5080 --logtostderr -v=2  --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
+        /gobin/dgraph  ${COVERAGE_OUTPUT} alpha --telemetry "reports=false; sentry=false;" --my=alpha8_restore_clust_non_ha:7080  --zero=zero8_restore_clust_non_ha:5080 --logtostderr -v=2  --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
 
   nfs:
     image: itsthenetwork/nfs-server-alpine:${NFS_SERVER_IMAGE_ARCH:-12}
