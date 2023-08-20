@@ -19,6 +19,7 @@
 package main
 
 import (
+	"errors"
 	"log"
 	"testing"
 
@@ -39,8 +40,6 @@ type PluginTestSuite struct {
 func (psuite *PluginTestSuite) SetupSubTest() {
 	// The TestPlugins() invokes subtest function, hence using
 	// SetupSubTest() instead of SetupTest().
-	psuite.lc.Cleanup(psuite.T().Failed())
-
 	conf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).WithReplicas(1).
 		WithVersion(psuite.uc.Before).WithCustomPlugins()
 	c, err := dgraphtest.NewLocalCluster(conf)
@@ -69,7 +68,7 @@ func TestPluginTestSuite(t *testing.T) {
 		psuite.uc = uc
 		suite.Run(t, &psuite)
 		if t.Failed() {
-			t.Fatal("TestPluginTestSuite tests failed")
+			x.Panic(errors.New("TestPluginTestSuite tests failed"))
 		}
 	}
 }

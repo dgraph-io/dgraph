@@ -19,10 +19,7 @@
 package main
 
 import (
-	"context"
 	"fmt"
-	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -308,12 +305,6 @@ var testInp = []struct {
 }
 
 func (psuite *PluginTestSuite) TestPlugins() {
-	t := psuite.T()
-
-	if testing.Short() {
-		t.Skip("skipping test in short mode")
-	}
-
 	for i := 0; i < len(testInp); i++ {
 		psuite.Run(fmt.Sprintf("test case %d", i+1), func() {
 			t := psuite.T()
@@ -321,16 +312,12 @@ func (psuite *PluginTestSuite) TestPlugins() {
 			require.NoError(t, err)
 			defer cleanup()
 			require.NoError(t, gcli.DropAll())
-			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-			defer cancel()
-			require.NoError(t, gcli.Alter(ctx, &api.Operation{
-				Schema: testInp[i].initialSchema,
-			}))
-
-			txn := gcli.NewTxn()
-			_, err = txn.Mutate(ctx, &api.Mutation{SetJson: []byte(testInp[i].setJSON)})
+			require.NoError(t, gcli.SetupSchema(testInp[i].initialSchema))
+			_, err = gcli.Mutate(&api.Mutation{
+				SetJson:   []byte(testInp[i].setJSON),
+				CommitNow: true,
+			})
 			require.NoError(t, err)
-			require.NoError(t, txn.Commit(ctx))
 
 			// Upgrade
 			psuite.Upgrade()
@@ -340,8 +327,7 @@ func (psuite *PluginTestSuite) TestPlugins() {
 			defer cleanup()
 
 			for _, test := range testInp[i].cases {
-				txn := gcli.NewTxn()
-				reply, err := txn.Query(ctx, test.query)
+				reply, err := gcli.Query(test.query)
 				require.NoError(t, err)
 				dgraphtest.CompareJSON(test.wantResult, string(reply.GetJson()))
 			}

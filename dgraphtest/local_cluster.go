@@ -387,9 +387,15 @@ func (c *LocalCluster) StopAlpha(id int) error {
 func (c *LocalCluster) stopContainer(dc dnode) error {
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 	defer cancel()
-	stopTimeout := 30 // in seconds
+
+	stopTimeout := 30
 	o := container.StopOptions{Timeout: &stopTimeout}
 	if err := c.dcli.ContainerStop(ctx, dc.cid(), o); err != nil {
+		// Force kill the container if timeout exceeded
+		if strings.Contains(err.Error(), "context deadline exceeded") {
+			_ = c.dcli.ContainerKill(ctx, dc.cid(), "KILL")
+			return nil
+		}
 		return errors.Wrapf(err, "error stopping container [%v]", dc.cname())
 	}
 	return nil
