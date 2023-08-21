@@ -298,7 +298,7 @@ func (c *LocalCluster) Cleanup(verbose bool) {
 	defer cancel()
 
 	if c.conf.detectRace {
-		c.DetectRaceInAlphas()
+		c.detectRaceInAlphas()
 	}
 
 	ro := types.ContainerRemoveOptions{RemoveVolumes: true, Force: true}
@@ -992,20 +992,21 @@ func runOpennssl(args ...string) error {
 	return nil
 }
 
-func (c *LocalCluster) DetectRaceInAlphas() bool {
+func (c *LocalCluster) detectRaceInAlphas() bool {
 	for _, a := range c.alphas {
 		contLogs, err := c.getLogs(a.containerID)
 		if err != nil {
+			log.Printf("[WARNING] error getting logs for %v", a.containerID)
 			continue
 		}
-		if CheckIfRace([]byte(contLogs)) {
+		if checkIfRace([]byte(contLogs)) {
 			return true
 		}
 	}
 	return false
 }
 
-func CheckIfRace(output []byte) bool {
+func checkIfRace(output []byte) bool {
 	if strings.Contains(string(output), "WARNING: DATA RACE") {
 		log.Printf("[WARNING] DATA RACE DETECTED %s\n", string(output))
 		return true

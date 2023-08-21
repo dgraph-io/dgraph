@@ -20,7 +20,6 @@ package bulk
 
 import (
 	"log"
-	"os"
 	"path/filepath"
 	"testing"
 
@@ -41,15 +40,8 @@ type BulkTestSuite struct {
 
 func (bsuite *BulkTestSuite) SetupTest() {
 	t := bsuite.T()
-	var err error
-	bsuite.bulkDataDir, err = os.MkdirTemp(os.TempDir(), "21millionBulk")
-	require.NoError(t, err)
+	bsuite.bulkDataDir = t.TempDir()
 	require.NoError(t, downloadDataFiles(bsuite.bulkDataDir))
-}
-
-func (bsuite *BulkTestSuite) SetupSubTest() {
-	t := bsuite.T()
-	bsuite.lc.Cleanup(t.Failed())
 
 	conf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).WithReplicas(1).
 		WithVersion(bsuite.uc.Before).WithBulkLoadOutDir(t.TempDir()).
@@ -72,12 +64,8 @@ func (bsuite *BulkTestSuite) SetupSubTest() {
 	bsuite.lc = c
 }
 
-func (bsuite *BulkTestSuite) TearDownSubTest() {
-	bsuite.lc.Cleanup(bsuite.T().Failed())
-}
-
 func (bsuite *BulkTestSuite) TearDownTest() {
-	require.NoError(bsuite.T(), os.RemoveAll(bsuite.bulkDataDir))
+	bsuite.lc.Cleanup(bsuite.T().Failed())
 }
 
 func (bsuite *BulkTestSuite) Upgrade() {

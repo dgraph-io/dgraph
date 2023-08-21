@@ -44,16 +44,17 @@ var datafiles = map[string]string{
 	"21million.rdf.gz":        "https://github.com/dgraph-io/benchmarks/blob/master/data/21million.rdf.gz?raw=true",
 }
 
-// JSON output can be hundreds of lines and diffs can scroll off the terminal before you
-// can look at them. This option allows saving the JSON to a specified directory instead
-// for easier reviewing after the test completes.
-//var savedir = flag.String("savedir", "",
-//	"directory to save json from test failures in")
-//var quiet = flag.Bool("quiet", false,
-//	"just output whether json differs, not a diff")
-
 func (lsuite *LiveTestSuite) TestQueriesFor21Million() {
 	t := lsuite.T()
+	require.NoError(t, lsuite.liveLoader())
+
+	// Upgrade
+	lsuite.Upgrade()
+
+	dg, cleanup, err := lsuite.dc.Client()
+	defer cleanup()
+	require.NoError(t, err)
+
 	_, thisFile, _, _ := runtime.Caller(0)
 	queryDir := filepath.Join(filepath.Dir(thisFile), "../queries")
 
@@ -63,22 +64,11 @@ func (lsuite *LiveTestSuite) TestQueriesFor21Million() {
 		t.Fatalf("Error reading directory: %s", err.Error())
 	}
 
-	//savepath := ""
-	//diffs := 0
 	for _, file := range files {
 		if !strings.HasPrefix(file.Name(), "query-") {
 			continue
 		}
 		lsuite.Run(file.Name(), func() {
-			require.NoError(t, lsuite.liveLoader())
-
-			// Upgrade
-			lsuite.Upgrade()
-
-			dg, cleanup, err := lsuite.dc.Client()
-			defer cleanup()
-			require.NoError(t, err)
-
 			filename := filepath.Join(queryDir, file.Name())
 			reader, cleanup := chunker.FileReader(filename, nil)
 			bytes, err := io.ReadAll(reader)
@@ -107,18 +97,11 @@ func (lsuite *LiveTestSuite) TestQueriesFor21Million() {
 				}
 
 				t.Logf("running %s", file.Name())
-				//if *savedir != "" {
-				//	savepath = filepath.Join(*savedir, file.Name())
-				//}
 
 				dgraphtest.CompareJSON(bodies[1], string(resp.GetJson()))
 			}
 		})
 	}
-	//
-	//if *savedir != "" && diffs > 0 {
-	//	t.Logf("test json saved in directory: %s", *savedir)
-	//}
 }
 
 func downloadDataFiles(testDir string) error {

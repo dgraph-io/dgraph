@@ -20,7 +20,6 @@ package bulk
 
 import (
 	"log"
-	"os"
 	"path/filepath"
 	"testing"
 
@@ -41,13 +40,9 @@ type LiveTestSuite struct {
 
 func (lsuite *LiveTestSuite) SetupTest() {
 	t := lsuite.T()
-	var err error
-	lsuite.liveDataDir, err = os.MkdirTemp(os.TempDir(), "21millionLive")
-	require.NoError(t, err)
+	lsuite.liveDataDir = t.TempDir()
 	require.NoError(t, downloadDataFiles(lsuite.liveDataDir))
-}
 
-func (lsuite *LiveTestSuite) SetupSubTest() {
 	conf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).WithReplicas(1).
 		WithVersion(lsuite.uc.Before)
 	c, err := dgraphtest.NewLocalCluster(conf)
@@ -61,12 +56,8 @@ func (lsuite *LiveTestSuite) SetupSubTest() {
 	lsuite.lc = c
 }
 
-func (lsuite *LiveTestSuite) TearDownSubTest() {
-	lsuite.lc.Cleanup(lsuite.T().Failed())
-}
-
 func (lsuite *LiveTestSuite) TearDownTest() {
-	require.NoError(lsuite.T(), os.RemoveAll(lsuite.liveDataDir))
+	lsuite.lc.Cleanup(lsuite.T().Failed())
 }
 
 func (lsuite *LiveTestSuite) Upgrade() {

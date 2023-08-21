@@ -19,7 +19,6 @@
 package bulk
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
 
@@ -33,21 +32,14 @@ import (
 type BulkTestSuite struct {
 	suite.Suite
 	dc          dgraphtest.Cluster
-	bulkDataDir string
 }
 
 func (bsuite *BulkTestSuite) SetupTest() {
 	bsuite.dc = dgraphtest.NewComposeCluster()
-	t := bsuite.T()
-	var err error
-	bsuite.bulkDataDir, err = os.MkdirTemp(os.TempDir(), "21millionBulk")
-	require.NoError(t, err)
-	require.NoError(t, downloadDataFiles(bsuite.bulkDataDir))
 }
 
 func (bsuite *BulkTestSuite) TearDownTest() {
 	testutil.DetectRaceInAlphas(testutil.DockerPrefix)
-	require.NoError(bsuite.T(), os.RemoveAll(bsuite.bulkDataDir))
 }
 
 func (bsuite *BulkTestSuite) Upgrade() {
@@ -59,7 +51,7 @@ func TestBulkTestSuite(t *testing.T) {
 }
 
 func (bsuite *BulkTestSuite) bulkLoader() error {
-	bulkDataDir := bsuite.bulkDataDir
+	bulkDataDir := testutil.TestDataDirectory
 	rdfFile := filepath.Join(bulkDataDir, "21million.rdf.gz")
 	schemaFile := filepath.Join(bulkDataDir, "21million.schema")
 	require.NoError(bsuite.T(), testutil.MakeDirEmpty([]string{"out/0", "out/1", "out/2"}))
