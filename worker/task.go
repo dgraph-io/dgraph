@@ -45,7 +45,6 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/vector_indexer/index"
 )
 
 func invokeNetworkRequest(ctx context.Context, addr string,
@@ -359,24 +358,11 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 		if err != nil {
 			return fmt.Errorf("invalid value for number of neighbors: %s", q.SrcFunc.Args[0])
 		}
-		// TODO: get entry from badger by accessing key predicate_entry_uuid, converting to uint64
-		//TODO: get maxLevels from schema, filter, etc.
-		nn_uids, err := posting.Search(qs.cache, srcFn.vectorInfo, 5, args.q.Attr, args.q.ReadTs, int(numNeighbors), 12, index.AcceptAll)
+		//TODO: generate maxLevels from schema, filter, etc.
+		nn_uids, err := posting.Search(qs.cache, srcFn.vectorInfo, 5, args.q.Attr, args.q.ReadTs, int(numNeighbors), 12, posting.AcceptAll)
 		if err != nil {
 			return err
 		}
-		// hnswVecIndex, err := manager.IndexMgr.Find(args.q.Attr)
-		// if err != nil {
-		// 	panic(err)
-		// }
-		// if hnswVecIndex == nil {
-		// 	return fmt.Errorf("Failed to find the vector index for %s", args.q.Attr)
-		// }
-		// nn_uids, err := hnswVecIndex.Search(srcFn.vectorInfo, int(numNeighbors), index.AcceptAll)
-		// fmt.Println(len(nn_uids))
-		// if err != nil {
-		// 	panic(err)
-		// }
 		args.out.UidMatrix = append(args.out.UidMatrix, &pb.List{Uids: nn_uids})
 		return nil
 	}
@@ -1953,18 +1939,6 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 		if err != nil {
 			return nil, err
 		}
-		// str_vec := strings.Split(q.SrcFunc.Args[1], ",")
-		// for _, arg := range str_vec {
-		// 	vec_val, err := strconv.ParseFloat(strings.TrimSpace(arg), 64)
-		// 	if err != nil {
-		// 		if e, ok := err.(*strconv.NumError); ok && e.Err == strconv.ErrSyntax {
-		// 			return nil, errors.Errorf("Value %q in %s is not a number",
-		// 				arg, q.SrcFunc.Name)
-		// 		}
-		// 		return nil, err
-		// 	}
-		// 	fc.vectorInfo = append(fc.vectorInfo, vec_val)
-		// }
 	case uidInFn:
 		for _, arg := range q.SrcFunc.Args {
 			uidParsed, err := strconv.ParseUint(arg, 0, 64)

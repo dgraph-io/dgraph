@@ -11,11 +11,19 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/vector_indexer/index"
 )
 
-type FloatVector []float64
-type UintSlice []uint64
+// SearchFilter defines a predicate function that we will use to determine
+// whether or not a given vector is "interesting". When used in the context
+// of Search, a true result means that we want to keep the result
+// in the returned list, and a false result implies we should skip.
+type SearchFilter func(query, resultVal []float64, resultUID uint64) bool
+
+// AcceptAll implements SearchFilter by way of accepting all results.
+func AcceptAll(_, _ []float64, _ uint64) bool { return true }
+
+// AcceptNone implements SearchFilter by way of rejecting all results.
+func AcceptNone(_, _ []float64, _ uint64) bool { return false }
 
 func getInsertLayer(maxNeighbors, maxLevels int) int {
 	// multFactor is a multiplicative factor used to normalize the distribution
@@ -31,7 +39,7 @@ func getInsertLayer(maxNeighbors, maxLevels int) int {
 	return level
 }
 
-func searchBadgerLayer(cache *LocalCache, txn *Txn, readTs uint64, isInsert bool, pred string, level int, entry uint64, query []float64, expectedNeighbors int, filter index.SearchFilter) ([]minBadgerHeapElement, map[minBadgerHeapElement]bool, error) {
+func searchBadgerLayer(cache *LocalCache, txn *Txn, readTs uint64, isInsert bool, pred string, level int, entry uint64, query []float64, expectedNeighbors int, filter SearchFilter) ([]minBadgerHeapElement, map[minBadgerHeapElement]bool, error) {
 	var nns []minBadgerHeapElement            // track nearest neighbors to return
 	var visited map[minBadgerHeapElement]bool // track all visited elements to lock on insert mutation
 	entryKey := x.DataKey(pred, entry)
@@ -257,13 +265,13 @@ func InsertToBadger(ctx context.Context, txn *Txn, inUuid uint64, pred string, m
 			}
 			inVec = types.BytesAsFloatArray(data[0].Value.([]byte)) // retrieve vector from inUuid save as inVec
 
-			startVecs, visited, err = searchBadgerLayer(nil, txn, 0, true, pred, level, entry, inVec, 1, index.AcceptAll)
+			startVecs, visited, err = searchBadgerLayer(nil, txn, 0, true, pred, level, entry, inVec, 1, AcceptAll)
 			if err != nil {
 				return map[minBadgerHeapElement]bool{}, err
 			}
 			entry = startVecs[0].index // update entry to best uuid from current level
 		} else {
-			nns, visited, layerErr = searchBadgerLayer(nil, txn, 0, true, pred, level, entry, inVec, efConstruction, index.AcceptAll)
+			nns, visited, layerErr = searchBadgerLayer(nil, txn, 0, true, pred, level, entry, inVec, efConstruction, AcceptAll)
 			if layerErr != nil {
 				return map[minBadgerHeapElement]bool{}, layerErr
 			}
@@ -316,7 +324,7 @@ func InsertToBadger(ctx context.Context, txn *Txn, inUuid uint64, pred string, m
 	return visited, nil
 }
 
-func Search(cache *LocalCache, query []float64, maxLevels int, pred string, readTs uint64, maxResults int, efSearch int, filter index.SearchFilter) ([]uint64, error) {
+func Search(cache *LocalCache, query []float64, maxLevels int, pred string, readTs uint64, maxResults int, efSearch int, filter SearchFilter) ([]uint64, error) {
 	entryKey := x.DataKey(pred+"_vector_entry", 1) // 0-profile_vector_entry
 	pl, err := cache.Get(entryKey)
 	if err != nil {
@@ -328,7 +336,7 @@ func Search(cache *LocalCache, query []float64, maxLevels int, pred string, read
 	}
 	entry := binary.BigEndian.Uint64(data.Value.([]byte))
 	for level := 0; level < maxLevels; level++ {
-		currBestNns, _, err := searchBadgerLayer(cache, nil, readTs, false, pred, level, entry, query, efSearch, index.AcceptAll)
+		currBestNns, _, err := searchBadgerLayer(cache, nil, readTs, false, pred, level, entry, query, efSearch, AcceptAll)
 		if err != nil {
 			return []uint64{}, err
 		}
@@ -344,10 +352,3 @@ func Search(cache *LocalCache, query []float64, maxLevels int, pred string, read
 	}
 	return nn_uids, nil
 }
-
-//need Plist for each mutation maxLevel # of posting list
-// uid: 0x1 attr: 0-profile_vector_1 plist1
-// uid: 0x2 attr: 0-profile_vector_1 plist2
-
-// uid: 0x1 attr: 0-profile_vector_2 plist3
-// uid: 0x2 attr: 0-profile_vector_2 plist4
