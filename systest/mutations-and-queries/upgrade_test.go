@@ -71,7 +71,3 @@ func TestSystestTestSuite(t *testing.T) {
 		}
 	}
 }
-
-func (ssuite *SystestTestSuite) ShouldSkipTest()  error {
-	return dgraphtest.ShouldSkipTest(ssuite.T(), ssuite.uc.Before, "23.0.1")
-}

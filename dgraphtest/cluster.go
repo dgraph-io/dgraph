@@ -617,18 +617,11 @@ func (hc *HTTPClient) GetZeroState() (*LicenseResponse, error) {
 }
 
 func (hc *HTTPClient) PostDqlQuery(query string) ([]byte, error) {
-	params := struct {
-		body        string
-		contentType string
-	}{
-		body:        query,
-		contentType: "application/dql",
-	}
-	req, err := http.NewRequest(http.MethodPost, hc.dqlURL, bytes.NewBufferString(params.body))
+	req, err := http.NewRequest(http.MethodPost, hc.dqlURL, bytes.NewBufferString(query))
 	if err != nil {
 		return nil, errors.Wrapf(err, "error building req for endpoint [%v]", hc.dqlURL)
 	}
-	req.Header.Add("Content-Type", params.contentType)
+	req.Header.Add("Content-Type", "application/dql")
 	if hc.HttpToken != nil {
 		req.Header.Add("X-Dgraph-AccessToken", hc.AccessJwt)
 	}
