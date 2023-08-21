@@ -376,8 +376,8 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 				return errors.Wrapf(err, "unable to parse group id from %s", pkey)
 			}
 			pred := splits[1]
-			if strings.HasPrefix(pred, "0-profile") {
-				pred = pred[:9]
+			if strings.Contains(pred, "_vector_") {
+				pred = pred[0:strings.Index(pred, "_vector_")]
 			}
 			tablet := s.ServingTablet(pred)
 			if tablet == nil {

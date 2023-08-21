@@ -127,7 +127,16 @@ func (txn *Txn) addIndexMutation(ctx context.Context, edge *pb.DirectedEdge, tok
 	if err = plist.addMutation(ctx, txn, edge); err != nil {
 		return err
 	}
-	if edge.Attr == "0-profile" { // change to checking for vector type do get on attr
+	testKey := x.DataKey(edge.Attr, edge.ValueId)
+	pl, err := txn.Get(testKey)
+	if err != nil {
+		return err
+	}
+	data, err := pl.AllValues(txn.StartTs)
+	if err != nil {
+		return err
+	}
+	if data[0].Tid == types.VFloatID {
 		visited, err := InsertToBadger(ctx, txn, edge.ValueId, edge.Attr, 5, 3, 12)
 		if err != nil {
 			fmt.Print(visited)
