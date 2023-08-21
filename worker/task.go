@@ -1949,18 +1949,22 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 		}
 		checkRoot(q, fc)
 	case similarToFn:
-		str_vec := strings.Split(q.SrcFunc.Args[1], ",")
-		for _, arg := range str_vec {
-			vec_val, err := strconv.ParseFloat(strings.TrimSpace(arg), 64)
-			if err != nil {
-				if e, ok := err.(*strconv.NumError); ok && e.Err == strconv.ErrSyntax {
-					return nil, errors.Errorf("Value %q in %s is not a number",
-						arg, q.SrcFunc.Name)
-				}
-				return nil, err
-			}
-			fc.vectorInfo = append(fc.vectorInfo, vec_val)
+		fc.vectorInfo, err = types.ParseVFloat(q.SrcFunc.Args[1])
+		if err != nil {
+			return nil, err
 		}
+		// str_vec := strings.Split(q.SrcFunc.Args[1], ",")
+		// for _, arg := range str_vec {
+		// 	vec_val, err := strconv.ParseFloat(strings.TrimSpace(arg), 64)
+		// 	if err != nil {
+		// 		if e, ok := err.(*strconv.NumError); ok && e.Err == strconv.ErrSyntax {
+		// 			return nil, errors.Errorf("Value %q in %s is not a number",
+		// 				arg, q.SrcFunc.Name)
+		// 		}
+		// 		return nil, err
+		// 	}
+		// 	fc.vectorInfo = append(fc.vectorInfo, vec_val)
+		// }
 	case uidInFn:
 		for _, arg := range q.SrcFunc.Args {
 			uidParsed, err := strconv.ParseUint(arg, 0, 64)
