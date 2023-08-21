@@ -1,9 +1,12 @@
 package posting
 
 import (
-	"errors"
 	"math"
 	"sort"
+	"strconv"
+	"strings"
+
+	"github.com/pkg/errors"
 )
 
 func norm(v []float64) float64 {
@@ -97,4 +100,60 @@ func insortBadgerHeapDescending(slice []minBadgerHeapElement, val minBadgerHeapE
 	copy(slice[i+1:], slice[i:])
 	slice[i] = val
 	return slice
+}
+
+func ParseEdges(s string) ([]uint64, error) {
+	s = strings.TrimSpace(s)
+	if len(s) == 0 {
+		return []uint64{}, nil
+	}
+	s = strings.ReplaceAll(s, "\n", " ")
+	s = strings.ReplaceAll(s, "\t", " ")
+	trimmedPre := strings.TrimPrefix(s, "[")
+	if len(trimmedPre) == len(s) {
+		return nil, cannotConvertToUintSlice(s)
+	}
+	trimmed := strings.TrimRight(trimmedPre, "]")
+	if len(trimmed) == len(trimmedPre) {
+		return nil, cannotConvertToUintSlice(s)
+	}
+	if len(trimmed) == 0 {
+		return []uint64{}, nil
+	}
+	if strings.Index(trimmed, ",") != -1 {
+		// Splitting based on comma-separation.
+		values := strings.Split(trimmed, ",")
+		result := make([]uint64, len(values))
+		for i := 0; i < len(values); i++ {
+			trimmedVal := strings.TrimSpace(values[i])
+			val, err := strconv.ParseUint(trimmedVal, 10, 64)
+			if err != nil {
+				return nil, cannotConvertToUintSlice(s)
+			}
+			result[i] = val
+		}
+		return result, nil
+	}
+	values := strings.Split(trimmed, " ")
+	result := make([]uint64, 0, len(values))
+	for i := 0; i < len(values); i++ {
+		if len(values[i]) == 0 {
+			// skip if we have an empty string. This can naturally
+			// occur if input s was "[1.0     2.0]"
+			// notice the extra whitespace in separation!
+			continue
+		}
+		if len(values[i]) > 0 {
+			val, err := strconv.ParseUint(values[i], 10, 64)
+			if err != nil {
+				return nil, cannotConvertToUintSlice(s)
+			}
+			result = append(result, val)
+		}
+	}
+	return result, nil
+}
+
+func cannotConvertToUintSlice(s string) error {
+	return errors.Errorf("Cannot convert %s to uint slice", s)
 }

@@ -361,7 +361,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 		}
 		// TODO: get entry from badger by accessing key predicate_entry_uuid, converting to uint64
 		//TODO: get maxLevels from schema, filter, etc.
-		nn_uids, err := posting.Search(qs.cache, srcFn.vectorInfo, 5, args.q.Attr, 1, int(numNeighbors), 12, index.AcceptAll)
+		nn_uids, err := posting.Search(qs.cache, srcFn.vectorInfo, 5, args.q.Attr, args.q.ReadTs, int(numNeighbors), 12, index.AcceptAll)
 		if err != nil {
 			return err
 		}
