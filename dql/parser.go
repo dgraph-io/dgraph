@@ -170,9 +170,9 @@ type FilterTree struct {
 
 // Arg stores an argument to a function.
 type Arg struct {
-	Value        string
-	IsValueVar   bool // If argument is val(a), e.g. eq(name, val(a))
-	IsDQLVar bool
+	Value      string
+	IsValueVar bool // If argument is val(a), e.g. eq(name, val(a))
+	IsDQLVar   bool
 }
 
 // Function holds the information about dql functions.
