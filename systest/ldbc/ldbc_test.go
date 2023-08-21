@@ -63,6 +63,16 @@ var (
 
 func (lsuite *LdbcTestSuite) TestQueries() {
 	t := lsuite.T()
+	require.NoError(t, lsuite.bulkLoader())
+
+	require.NoError(t, lsuite.StartAlpha())
+
+	// Upgrade
+	lsuite.Upgrade()
+
+	dg, cleanup, err := lsuite.dc.Client()
+	defer cleanup()
+	require.NoError(t, err)
 
 	yfile, _ := os.ReadFile("test_cases.yaml")
 
@@ -86,18 +96,6 @@ func (lsuite *LdbcTestSuite) TestQueries() {
 			continue
 		}
 		lsuite.Run(desc, func() {
-			t := lsuite.T()
-			require.NoError(t, lsuite.bulkLoader())
-
-			require.NoError(t, lsuite.StartAlpha())
-
-			// Upgrade
-			lsuite.Upgrade()
-
-			dg, cleanup, err := lsuite.dc.Client()
-			defer cleanup()
-			require.NoError(t, err)
-
 			resp, err := dg.Query(tt.Query)
 			require.NoError(t, err)
 			dgraphtest.CompareJSON(tt.Resp, string(resp.Json))

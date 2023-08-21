@@ -20,7 +20,6 @@ package main
 
 import (
 	"log"
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -34,22 +33,15 @@ import (
 
 type LdbcTestSuite struct {
 	suite.Suite
-	dc          dgraphtest.Cluster
-	ldbcDataDir string
+	dc dgraphtest.Cluster
 }
 
 func (lsuite *LdbcTestSuite) SetupTest() {
 	lsuite.dc = dgraphtest.NewComposeCluster()
-	t := lsuite.T()
-	var err error
-	lsuite.ldbcDataDir, err = os.MkdirTemp(os.TempDir(), "Ldbc")
-	require.NoError(t, err)
-	downloadLDBCFiles(lsuite.ldbcDataDir)
 }
 
 func (lsuite *LdbcTestSuite) TearDownTest() {
 	testutil.DetectRaceInAlphas(testutil.DockerPrefix)
-	require.NoError(lsuite.T(), os.RemoveAll(lsuite.ldbcDataDir))
 }
 
 func (lsuite *LdbcTestSuite) Upgrade() {
@@ -61,13 +53,14 @@ func TestLdbcTestSuite(t *testing.T) {
 }
 
 func (lsuite *LdbcTestSuite) bulkLoader() error {
-	noschemaFile := filepath.Join(lsuite.ldbcDataDir, "ldbcTypes.schema")
+	dataDir := testutil.TestDataDirectory
+	noschemaFile := filepath.Join(dataDir, "ldbcTypes.schema")
 	require.NoError(lsuite.T(), testutil.MakeDirEmpty([]string{"./out/0/p"}))
 	start := time.Now()
 	err := testutil.BulkLoad(testutil.BulkOpts{
 		Zero:       testutil.SockAddrZero,
 		Shards:     1,
-		RdfFile:    lsuite.ldbcDataDir,
+		RdfFile:    dataDir,
 		SchemaFile: noschemaFile,
 	})
 	log.Printf("took %s to bulkupload LDBC dataset", time.Since(start))

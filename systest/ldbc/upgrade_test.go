@@ -20,7 +20,6 @@ package main
 
 import (
 	"log"
-	"os"
 	"path/filepath"
 	"testing"
 
@@ -41,16 +40,8 @@ type LdbcTestSuite struct {
 
 func (lsuite *LdbcTestSuite) SetupTest() {
 	t := lsuite.T()
-	var err error
-	lsuite.ldbcDataDir, err = os.MkdirTemp(os.TempDir(), "Ldbc")
-	require.NoError(t, err)
+	lsuite.ldbcDataDir = t.TempDir()
 	downloadLDBCFiles(lsuite.ldbcDataDir)
-}
-
-func (lsuite *LdbcTestSuite) SetupSubTest() {
-	t := lsuite.T()
-	lsuite.lc.Cleanup(t.Failed())
-
 	conf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).WithReplicas(1).
 		WithVersion(lsuite.uc.Before).WithBulkLoadOutDir(t.TempDir())
 	c, err := dgraphtest.NewLocalCluster(conf)
@@ -71,12 +62,8 @@ func (lsuite *LdbcTestSuite) SetupSubTest() {
 	lsuite.lc = c
 }
 
-func (lsuite *LdbcTestSuite) TearDownSubTest() {
-	lsuite.lc.Cleanup(lsuite.T().Failed())
-}
-
 func (lsuite *LdbcTestSuite) TearDownTest() {
-	require.NoError(lsuite.T(), os.RemoveAll(lsuite.ldbcDataDir))
+	lsuite.lc.Cleanup(lsuite.T().Failed())
 }
 
 func (lsuite *LdbcTestSuite) Upgrade() {
