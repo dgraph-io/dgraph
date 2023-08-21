@@ -87,8 +87,8 @@ const (
 )
 
 var (
-	numGraphQLPM uint64
-	numGraphQL   uint64
+	numDQL     uint64
+	numGraphQL uint64
 )
 
 var (
@@ -124,7 +124,7 @@ func PeriodicallyPostTelemetry() {
 		}
 		ms := worker.GetMembershipState()
 		t := telemetry.NewAlpha(ms)
-		t.NumGraphQLPM = atomic.SwapUint64(&numGraphQLPM, 0)
+		t.NumDQL = atomic.SwapUint64(&numDQL, 0)
 		t.NumGraphQL = atomic.SwapUint64(&numGraphQL, 0)
 		t.SinceHours = int(time.Since(start).Hours())
 		glog.V(2).Infof("Posting Telemetry data: %+v", t)
@@ -133,7 +133,7 @@ func PeriodicallyPostTelemetry() {
 		if err == nil {
 			lastPostedAt = time.Now()
 		} else {
-			atomic.AddUint64(&numGraphQLPM, t.NumGraphQLPM)
+			atomic.AddUint64(&numDQL, t.NumDQL)
 			atomic.AddUint64(&numGraphQL, t.NumGraphQL)
 			glog.V(2).Infof("Telemetry couldn't be posted. Error: %v", err)
 		}
@@ -1239,7 +1239,7 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (resp *api.Response,
 	if isGraphQL {
 		atomic.AddUint64(&numGraphQL, 1)
 	} else {
-		atomic.AddUint64(&numGraphQLPM, 1)
+		atomic.AddUint64(&numDQL, 1)
 	}
 	l := &query.Latency{}
 	l.Start = time.Now()
@@ -1394,7 +1394,7 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 	}
 	qr := query.Request{
 		Latency:  qc.latency,
-		GqlQuery: &qc.dqlRes,
+		DqlQuery: &qc.dqlRes,
 	}
 
 	// Here we try our best effort to not contact Zero for a timestamp. If we succeed,

@@ -45,7 +45,7 @@ type Telemetry struct {
 	OS             string   `json:",omitempty"`
 	SinceHours     int      `json:",omitempty"`
 	Version        string   `json:",omitempty"`
-	NumGraphQLPM   uint64   `json:",omitempty"`
+	NumDQL         uint64   `json:",omitempty"`
 	NumGraphQL     uint64   `json:",omitempty"`
 	EEFeaturesList []string `json:",omitempty"`
 	Codename       string   `json:",omitempty"`
