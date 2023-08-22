@@ -453,6 +453,7 @@ func multiSort(ctx context.Context, r *sortresult, ts *pb.SortMessage) error {
 			x.AssertTrue(idx >= 0)
 			vals[j] = sortVals[idx]
 		}
+		//nolint:gosec
 		if err := types.Sort(vals, &ul.Uids, desc, ""); err != nil {
 			return err
 		}

@@ -555,18 +555,16 @@ func passwordDirectiveValidation(schema *ast.Schema, typ *ast.Definition) gqlerr
 		dirs = append(dirs, val)
 	}
 
-	if len(dirs) > 1 {
+	if len(dirs) == 0 {
+		return nil
+	} else if len(dirs) > 1 {
 		val := strings.Join(dirs, ",")
 		errs = append(errs, gqlerror.ErrorPosf(typ.Position,
 			"Type %s; has more than one secret fields %s", typ.Name, val))
 		return errs
 	}
 
-	if len(dirs) == 0 {
-		return nil
-	}
-
-	val := dirs[0]
+	val := dirs[0] //nolint:gosec
 	for _, f := range typ.Fields {
 		if f.Name == val {
 			errs = append(errs, gqlerror.ErrorPosf(typ.Position,
