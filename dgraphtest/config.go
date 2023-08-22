@@ -31,39 +31,40 @@ type UpgradeCombo struct {
 
 func AllUpgradeCombos(v20 bool) []UpgradeCombo {
 	fixedVersionCombos := []UpgradeCombo{
-		// OPEN SOURCE RELEASES
-		{"v21.03.0", "v23.0.1", BackupRestore},
-		{"v21.03.0-92-g0c9f60156", "v23.0.1", BackupRestore},
-		{"v21.03.0-98-g19f71a78a-slash", "v23.0.1", BackupRestore},
-		{"v21.03.0-99-g4a03c144a-slash", "v23.0.1", BackupRestore},
-		{"v21.03.1", "v23.0.1", BackupRestore},
-		{"v21.03.2", "v23.0.1", BackupRestore},
-		{"v22.0.0", "v23.0.1", BackupRestore},
-		{"v22.0.1", "v23.0.1", BackupRestore},
-		{"v22.0.2", "v23.0.1", BackupRestore},
+		// OPEN SOURCE RELEASES, 4fc9cfd => v23.1.0
+		// v23.1.0 has one error modified which was fixed in commit 4fc9cfd after v23.1.0
+		{"v21.03.0", "4fc9cfd", BackupRestore},
+		{"v21.03.0-92-g0c9f60156", "4fc9cfd", BackupRestore},
+		{"v21.03.0-98-g19f71a78a-slash", "4fc9cfd", BackupRestore},
+		{"v21.03.0-99-g4a03c144a-slash", "4fc9cfd", BackupRestore},
+		{"v21.03.1", "4fc9cfd", BackupRestore},
+		{"v21.03.2", "4fc9cfd", BackupRestore},
+		{"v22.0.0", "4fc9cfd", BackupRestore},
+		{"v22.0.1", "4fc9cfd", BackupRestore},
+		{"v22.0.2", "4fc9cfd", BackupRestore},
 
 		//  CLOUD VERSIONS
-		{"e3d3e6290", "v23.0.1", BackupRestore}, // v21.03.0-48-ge3d3e6290
-		{"8b9e92314", "v23.0.1", BackupRestore}, // v21.03.0-63-g8b9e92314
-		{"dfa5daec1", "v23.0.1", BackupRestore}, // v21.03.0-66-gdfa5daec1
-		{"88e4aa07c", "v23.0.1", BackupRestore}, // v21.03.0-69-g88e4aa07c
-		{"d9df244fb", "v23.0.1", BackupRestore}, // v21.03.0-73-gd9df244fb
-		{"ed09b8cc1", "v23.0.1", BackupRestore}, // v21.03.0-76-ged09b8cc1
-		{"e4ad0b113", "v23.0.1", BackupRestore}, // v21.03.0-78-ge4ad0b113
-		{"83c9cbedc", "v23.0.1", BackupRestore}, // v21.03.0-82-g83c9cbedc
-		{"c5862ae2a", "v23.0.1", BackupRestore}, // v21.03.0-84-gc5862ae2a
+		{"e3d3e6290", "4fc9cfd", BackupRestore}, // v21.03.0-48-ge3d3e6290
+		{"8b9e92314", "4fc9cfd", BackupRestore}, // v21.03.0-63-g8b9e92314
+		{"dfa5daec1", "4fc9cfd", BackupRestore}, // v21.03.0-66-gdfa5daec1
+		{"88e4aa07c", "4fc9cfd", BackupRestore}, // v21.03.0-69-g88e4aa07c
+		{"d9df244fb", "4fc9cfd", BackupRestore}, // v21.03.0-73-gd9df244fb
+		{"ed09b8cc1", "4fc9cfd", BackupRestore}, // v21.03.0-76-ged09b8cc1
+		{"e4ad0b113", "4fc9cfd", BackupRestore}, // v21.03.0-78-ge4ad0b113
+		{"83c9cbedc", "4fc9cfd", BackupRestore}, // v21.03.0-82-g83c9cbedc
+		{"c5862ae2a", "4fc9cfd", BackupRestore}, // v21.03.0-84-gc5862ae2a
 
 		// In place upgrade for cloud versions
-		{"e3d3e6290", "v23.0.1", InPlace}, // v21.03.0-48-ge3d3e6290
-		{"8b9e92314", "v23.0.1", InPlace}, // v21.03.0-63-g8b9e92314
-		{"dfa5daec1", "v23.0.1", InPlace}, // v21.03.0-66-gdfa5daec1
-		{"88e4aa07c", "v23.0.1", InPlace}, // v21.03.0-69-g88e4aa07c
-		{"d9df244fb", "v23.0.1", InPlace}, // v21.03.0-73-gd9df244fb
-		{"ed09b8cc1", "v23.0.1", InPlace}, // v21.03.0-76-ged09b8cc1
-		{"e4ad0b113", "v23.0.1", InPlace}, // v21.03.0-78-ge4ad0b113
-		{"83c9cbedc", "v23.0.1", InPlace}, // v21.03.0-82-g83c9cbedc
-		{"c5862ae2a", "v23.0.1", InPlace}, // v21.03.0-84-gc5862ae2a
-		{"0c9f60156", "v23.0.1", InPlace}, // v21.03.0-92-g0c9f60156
+		{"e3d3e6290", "4fc9cfd", InPlace}, // v21.03.0-48-ge3d3e6290
+		{"8b9e92314", "4fc9cfd", InPlace}, // v21.03.0-63-g8b9e92314
+		{"dfa5daec1", "4fc9cfd", InPlace}, // v21.03.0-66-gdfa5daec1
+		{"88e4aa07c", "4fc9cfd", InPlace}, // v21.03.0-69-g88e4aa07c
+		{"d9df244fb", "4fc9cfd", InPlace}, // v21.03.0-73-gd9df244fb
+		{"ed09b8cc1", "4fc9cfd", InPlace}, // v21.03.0-76-ged09b8cc1
+		{"e4ad0b113", "4fc9cfd", InPlace}, // v21.03.0-78-ge4ad0b113
+		{"83c9cbedc", "4fc9cfd", InPlace}, // v21.03.0-82-g83c9cbedc
+		{"c5862ae2a", "4fc9cfd", InPlace}, // v21.03.0-84-gc5862ae2a
+		{"0c9f60156", "4fc9cfd", InPlace}, // v21.03.0-92-g0c9f60156
 	}
 
 	if v20 {

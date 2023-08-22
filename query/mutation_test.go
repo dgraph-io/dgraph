@@ -1,4 +1,4 @@
-//go:build integration || cloud || upgrade
+//go:build integration || upgrade
 
 /*
  * Copyright 2016-2023 Dgraph Labs, Inc. and Contributors
@@ -29,6 +29,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/v230/protos/api"
+	"github.com/dgraph-io/dgraph/dgraphtest"
 )
 
 func TestReservedPredicateForMutation(t *testing.T) {
@@ -75,43 +76,39 @@ func TestAlteringReservedTypesAndPredicatesShouldFail(t *testing.T) {
 }
 
 func TestUnreservedPredicateForDeletion(t *testing.T) {
+	// This bug was fixed in commit 8631dab37c951b288f839789bbabac5e7088b58f
+	dgraphtest.ShouldSkipTest(t, "8631dab37c951b288f839789bbabac5e7088b58f", dc.GetVersion())
+
 	grootUserQuery := `
 	{
 		grootUser(func:eq(dgraph.xid, "groot")){
 			uid
 		}
 	}`
-
-	// Structs to parse groot user query response
-	type userNode struct {
-		Uid string `json:"uid"`
-	}
-
 	type userQryResp struct {
-		GrootUser []userNode `json:"grootUser"`
+		GrootUser []struct {
+			Uid string `json:"uid"`
+		} `json:"grootUser"`
 	}
-
 	resp, err := client.Query(grootUserQuery)
 	require.NoError(t, err, "groot user query failed")
 
 	var userResp userQryResp
-	if err := json.Unmarshal(resp.GetJson(), &userResp); err != nil {
-		t.Fatal("Couldn't unmarshal response from groot user query")
-	}
+	require.NoError(t, json.Unmarshal(resp.GetJson(), &userResp))
 	grootsUidStr := userResp.GrootUser[0].Uid
 	grootsUidInt, err := strconv.ParseUint(grootsUidStr, 0, 64)
 	require.NoError(t, err)
 	require.Greater(t, uint64(grootsUidInt), uint64(0))
 
 	const testSchema = `
-type Star {
-	name
-}
+		type Star {
+			name
+		}
 
-name : string @index(term, exact, trigram) @count @lang .
-`
-	triple := fmt.Sprintf(`<%s> <dgraphcore_355> "Betelgeuse" .`, grootsUidStr)
+		name : string @index(term, exact, trigram) @count @lang .`
 	setSchema(testSchema)
+
+	triple := fmt.Sprintf(`<%s> <dgraphcore_355> "Betelgeuse" .`, grootsUidStr)
 	require.NoError(t, addTriplesToCluster(triple))
 	deleteTriplesInCluster(triple)
 }
