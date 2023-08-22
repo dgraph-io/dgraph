@@ -363,6 +363,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 		if err != nil {
 			return err
 		}
+		sort.Slice(nn_uids, func(i, j int) bool { return nn_uids[i] < nn_uids[j] })
 		args.out.UidMatrix = append(args.out.UidMatrix, &pb.List{Uids: nn_uids})
 		return nil
 	}
