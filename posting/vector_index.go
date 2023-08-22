@@ -203,7 +203,7 @@ func entryUuidInsert(ctx context.Context, plist *List, txn *Txn, pred string, en
 	return nil
 }
 
-func InsertToBadger(ctx context.Context, txn *Txn, inUuid uint64, pred string, maxLevels int, maxNeighbors int, efConstruction int) (map[minBadgerHeapElement]bool, error) {
+func InsertToBadger(ctx context.Context, txn *Txn, inUuid uint64, inVec []float64, pred string, maxLevels int, maxNeighbors int, efConstruction int) (map[minBadgerHeapElement]bool, error) {
 	// str := pred + "_vector_" + fmt.Sprint(maxLevels-1)
 	// duplicateCheckKey := x.DataKey(str, inUuid)
 	// dup, dupErr := txn.Get(duplicateCheckKey)
@@ -249,22 +249,10 @@ func InsertToBadger(ctx context.Context, txn *Txn, inUuid uint64, pred string, m
 	var startVecs []minBadgerHeapElement               // vectors used to calc where to start up until inLevel
 	var nns []minBadgerHeapElement                     // nearest neighbors to return after
 	var visited map[minBadgerHeapElement]bool          // visited nodes to use later to lock them? TODO
-	var inVec []float64
 	var layerErr error
 	for level := 0; level < maxLevels; level++ {
 		// perform insertion for layers [level, max_level) only, when level < inLevel just find better start
 		if level < inLevel {
-			key := x.DataKey(pred, inUuid)
-			pl, err := txn.Get(key)
-			if err != nil {
-				return map[minBadgerHeapElement]bool{}, err
-			}
-			data, err := pl.AllValues(txn.StartTs)
-			if err != nil {
-				return map[minBadgerHeapElement]bool{}, err
-			}
-			inVec = types.BytesAsFloatArray(data[0].Value.([]byte)) // retrieve vector from inUuid save as inVec
-
 			startVecs, visited, err = searchBadgerLayer(nil, txn, 0, true, pred, level, entry, inVec, 1, AcceptAll)
 			if err != nil {
 				return map[minBadgerHeapElement]bool{}, err
