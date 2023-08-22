@@ -22,8 +22,8 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
-	"go.etcd.io/etcd/raft"
-	"go.etcd.io/etcd/raft/raftpb"
+	"go.etcd.io/etcd/raft/v3"
+	"go.etcd.io/etcd/raft/v3/raftpb"
 
 	"github.com/dgraph-io/badger/v4/y"
 	"github.com/dgraph-io/dgraph/x"

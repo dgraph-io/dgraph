@@ -41,8 +41,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"go.etcd.io/etcd/raft"
-	"go.etcd.io/etcd/raft/raftpb"
+	"go.etcd.io/etcd/raft/v3"
+	"go.etcd.io/etcd/raft/v3/raftpb"
 
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -179,7 +179,7 @@ func TestStorageCreateSnapshot(t *testing.T) {
 	ds := Init(dir)
 
 	ents := []raftpb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
-	cs := &raftpb.ConfState{Nodes: []uint64{1, 2, 3}}
+	cs := &raftpb.ConfState{Voters: []uint64{1, 2, 3}}
 	data := []byte("data")
 
 	tests := []struct {
