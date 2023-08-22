@@ -50,7 +50,7 @@ func TestIntEncoding(t *testing.T) {
 	arr := []int64{a, b, c, d, 1, 2, 3, 4, -1, -2, -3, 0, 234, 10000, 123, -1543}
 	enc.ints = arr
 	for _, it := range arr {
-		encoded := encodeInt(int64(it))
+		encoded := encodeInt(it)
 		enc.tokens = append(enc.tokens, encoded)
 	}
 	sort.Sort(byEnc{enc})
@@ -67,7 +67,7 @@ func TestFullTextTokenizer(t *testing.T) {
 	require.NotNil(t, tokenizer)
 
 	tokens, err := BuildTokens("Stemming works!", GetTokenizerForLang(tokenizer, "en"))
-	require.Nil(t, err)
+	require.NoError(t, err)
 	require.Equal(t, 2, len(tokens))
 	id := tokenizer.Identifier()
 	require.Equal(t, []string{encodeToken("stem", id), encodeToken("work", id)}, tokens)

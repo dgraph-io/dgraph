@@ -34,8 +34,8 @@ import (
 	"google.golang.org/grpc/peer"
 	"gopkg.in/yaml.v2"
 
-	"github.com/dgraph-io/dgo/v210"
-	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/dgo/v230"
+	"github.com/dgraph-io/dgo/v230/protos/api"
 	admin2 "github.com/dgraph-io/dgraph/graphql/admin"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"

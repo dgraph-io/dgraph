@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"sync"
 
+	"github.com/golang/glog"
 	"github.com/pkg/errors"
 
 	"github.com/dgraph-io/dgraph/edgraph"
@@ -34,6 +35,8 @@ type restoreInput struct {
 	Location          string
 	BackupId          string
 	BackupNum         int
+	IncrementalFrom   int
+	IsPartial         bool
 	EncryptionKeyFile string
 	AccessKey         string
 	SecretKey         string
@@ -57,6 +60,8 @@ func resolveRestore(ctx context.Context, m schema.Mutation) (*resolve.Resolved, 
 		Location:          input.Location,
 		BackupId:          input.BackupId,
 		BackupNum:         uint64(input.BackupNum),
+		IncrementalFrom:   uint64(input.IncrementalFrom),
+		IsPartial:         input.IsPartial,
 		EncryptionKeyFile: input.EncryptionKeyFile,
 		AccessKey:         input.AccessKey,
 		SecretKey:         input.SecretKey,
@@ -73,6 +78,7 @@ func resolveRestore(ctx context.Context, m schema.Mutation) (*resolve.Resolved, 
 	wg := &sync.WaitGroup{}
 	err = worker.ProcessRestoreRequest(context.Background(), &req, wg)
 	if err != nil {
+		glog.Warningf("error processing restore request: %+v, err: %v", req, err)
 		return resolve.DataResult(
 			m,
 			map[string]interface{}{m.Name(): map[string]interface{}{

@@ -17,11 +17,12 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"encoding/binary"
-	"errors"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
@@ -107,39 +108,174 @@ func run() error {
 		glog.Info("audit file is empty")
 		return nil
 	}
-	var iterator int64 = 0
 
-	iv := make([]byte, aes.BlockSize)
-	x.Check2(file.ReadAt(iv, iterator))
-	iterator = iterator + aes.BlockSize
-
-	t := make([]byte, len(x.VerificationText))
-	x.Check2(file.ReadAt(t, iterator))
-	iterator = iterator + int64(len(x.VerificationText))
-
-	stream := cipher.NewCTR(block, iv)
-	stream.XORKeyStream(t, t)
-	if string(t) != x.VerificationText {
-		return errors.New("invalid encryption key provided. Please check your encryption key")
+	if err := decrypt(file, outfile, block, stat.Size()); err != nil {
+		return errors.Wrap(err, "could not decrypt audit log")
 	}
 
-	for {
-		// if its the end of data. finish decrypting
-		if iterator >= stat.Size() {
-			break
-		}
-		x.Check2(file.ReadAt(iv[12:], iterator))
-		iterator = iterator + 4
-
-		content := make([]byte, binary.BigEndian.Uint32(iv[12:]))
-		x.Check2(file.ReadAt(content, iterator))
-		iterator = iterator + int64(binary.BigEndian.Uint32(iv[12:]))
-		stream := cipher.NewCTR(block, iv)
-		stream.XORKeyStream(content, content)
-		x.Check2(outfile.Write(content))
-	}
-	glog.Infof("Decryption of Audit file %s is Done. Decrypted file is %s",
+	glog.Infof("decryption of audit file %s is done: decrypted file is %s",
 		decryptCmd.Conf.GetString("in"),
 		decryptCmd.Conf.GetString("out"))
 	return nil
+}
+
+func decrypt(file io.ReaderAt, outfile io.Writer, block cipher.Block, sz int64) error {
+	// decrypt header in audit log to verify encryption key
+	// [16]byte IV + [4]byte len(x.VerificationText) + [11]byte x.VerificationText
+	decryptHeader := func() ([]byte, int64, error) {
+		var iterator int64
+		iv := make([]byte, aes.BlockSize)
+		n, err := file.ReadAt(iv, iterator) // get first iv
+		if err != nil {
+			return nil, 0, errors.Wrap(err, "unable to read IV")
+		}
+		iterator = iterator + int64(n) + 4 // length of verification text encoded in uint32
+
+		ct := make([]byte, len(x.VerificationText))
+		n, err = file.ReadAt(ct, iterator)
+		if err != nil {
+			return nil, 0, errors.Wrap(err, "unable to read verification text")
+		}
+		iterator = iterator + int64(n)
+
+		stream := cipher.NewCTR(block, iv)
+		stream.XORKeyStream(ct, ct)
+		if string(ct) != x.VerificationText {
+			return nil, 0, errors.New("invalid encryption key provided. Please check your encryption key")
+		}
+		return iv, iterator, nil
+	}
+
+	// [12]byte baseIV + [4]byte len(x.VerificationTextDeprecated) + [11]byte x.VerificationTextDeprecated
+	decryptHeaderDeprecated := func() ([]byte, int64, error) {
+		var iterator int64 = 0
+
+		iv := make([]byte, aes.BlockSize)
+		n, err := file.ReadAt(iv, iterator)
+		if err != nil {
+			return nil, 0, errors.Wrap(err, "unable to read IV")
+		}
+		iterator = iterator + int64(n)
+
+		ct := make([]byte, len(x.VerificationTextDeprecated))
+		n, err = file.ReadAt(ct, iterator)
+		if err != nil {
+			return nil, 0, errors.Wrap(err, "unable to read verification text")
+		}
+		iterator = iterator + int64(n)
+
+		stream := cipher.NewCTR(block, iv)
+		stream.XORKeyStream(ct, ct)
+		if string(ct) != x.VerificationTextDeprecated {
+			return nil, 0, errors.New("invalid encryption key provided. Please check your encryption key")
+		}
+		return iv, iterator, nil
+	}
+
+	useDeprecated := false
+	iv, iterator, err := decryptHeader()
+	if err != nil {
+		// might have an old audit log
+		iv2, iterator2, err := decryptHeaderDeprecated()
+		if err != nil {
+			return errors.New("invalid encryption key provided. Please check your encryption key")
+		}
+		// found old audit log
+		useDeprecated = true
+		iv, iterator = iv2, iterator2
+	}
+
+	// encrypted writes each have the form below
+	// IV generated for each write
+	// #################################################################
+	// #####   [16]byte IV + [4]byte uint32(len(p)) + [:]byte p    #####
+	// #################################################################
+	decryptBody := func() {
+		for {
+			// if its the end of data. finish decrypting
+			if iterator >= sz {
+				break
+			}
+			n, err := file.ReadAt(iv, iterator)
+			if err != nil {
+				glog.Warningf("received %v while decrypting audit log", err)
+				glog.Warningf("read %v bytes, expected %v", n, len(iv))
+				break
+			}
+			iterator = iterator + 16
+			length := make([]byte, 4)
+			n, err = file.ReadAt(length, iterator)
+			if err != nil {
+				glog.Warningf("received %v while decrypting audit log", err)
+				glog.Warningf("read %v bytes, expected %v", n, len(length))
+				break
+			}
+			iterator = iterator + int64(n)
+
+			content := make([]byte, binary.BigEndian.Uint32(length))
+			n, err = file.ReadAt(content, iterator)
+			if err != nil {
+				glog.Warningf("received %v while decrypting audit log", err)
+				glog.Warningf("read %v bytes, expected %v", n, len(content))
+				break
+			}
+			iterator = iterator + int64(n)
+
+			stream := cipher.NewCTR(block, iv)
+			stream.XORKeyStream(content, content)
+			n, err = outfile.Write(content)
+			if err != nil {
+				glog.Warningf("received %v while writing decrypted audit log", err)
+				glog.Warningf("wrote %v bytes, expected to write %v", n, len(content))
+				break
+			}
+		}
+	}
+
+	// encrypted writes in body have the form
+	// baseIV is constant, last 4 bytes vary
+	// ########################################################
+	// #####   [4]byte uint32(len(p)) + [:]byte p         #####
+	// ########################################################
+	decryptBodyDeprecated := func() {
+		for {
+			// if its the end of data. finish decrypting
+			if iterator >= sz {
+				break
+			}
+			n, err := file.ReadAt(iv[12:], iterator)
+			if err != nil {
+				glog.Warningf("received %v while decrypting audit log", err)
+				glog.Warningf("read %v bytes, expected %v", n, len(iv[12:]))
+				break
+			}
+			iterator = iterator + int64(n)
+
+			content := make([]byte, binary.BigEndian.Uint32(iv[12:]))
+			n, err = file.ReadAt(content, iterator)
+			if err != nil {
+				glog.Warningf("received %v while decrypting audit log", err)
+				glog.Warningf("read %v bytes, expected %v", n, len(content))
+				break
+			}
+			iterator = iterator + int64(n)
+			stream := cipher.NewCTR(block, iv)
+			stream.XORKeyStream(content, content)
+			n, err = outfile.Write(content)
+			if err != nil {
+				glog.Warningf("received %v while writing decrypted audit log", err)
+				glog.Warningf("wrote %v bytes, expected to write %v", n, len(content))
+				break
+			}
+		}
+	}
+
+	if useDeprecated {
+		decryptBodyDeprecated()
+	} else {
+		decryptBody()
+	}
+
+	return nil
+
 }

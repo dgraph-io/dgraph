@@ -22,6 +22,7 @@ package acl
 import (
 	"github.com/spf13/cobra"
 
+	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -34,4 +35,15 @@ func init() {
 		Annotations: map[string]string{"group": "security"},
 	}
 	CmdAcl.Cmd.SetHelpTemplate(x.NonRootTemplate)
+}
+
+// CreateGroupNQuads cretes NQuads needed to store a group with the give ID.
+func CreateGroupNQuads(groupId string) []*api.NQuad {
+	return nil
+}
+
+// CreateUserNQuads creates the NQuads needed to store a user with the given ID and
+// password in the ACL system.
+func CreateUserNQuads(userId, password string) []*api.NQuad {
+	return nil
 }

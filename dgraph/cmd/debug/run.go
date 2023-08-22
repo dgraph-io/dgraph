@@ -36,8 +36,8 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/spf13/cobra"
 
-	"github.com/dgraph-io/badger/v3"
-	bpb "github.com/dgraph-io/badger/v3/pb"
+	"github.com/dgraph-io/badger/v4"
+	bpb "github.com/dgraph-io/badger/v4/pb"
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/posting"
@@ -481,7 +481,8 @@ func rollupKey(db *badger.DB) {
 	alloc := z.NewAllocator(32<<20, "Debug.RollupKey")
 	defer alloc.Release()
 
-	kvs, err := pl.Rollup(alloc)
+	// Setting kvs at their original value as we can't give a new timestamp in debug mode.
+	kvs, err := pl.Rollup(alloc, math.MaxUint64)
 	x.Check(err)
 
 	wb := db.NewManagedWriteBatch()
@@ -513,28 +514,39 @@ func lookup(db *badger.DB) {
 		return
 	}
 
-	item := itr.Item()
-	pl, err := posting.ReadPostingList(item.KeyCopy(nil), itr)
-	if err != nil {
-		log.Fatal(err)
-	}
 	var buf bytes.Buffer
-	fmt.Fprintf(&buf, " Key: %x", item.Key())
-	fmt.Fprintf(&buf, " Length: %d", pl.Length(math.MaxUint64, 0))
+	item := itr.Item()
+	if item.UserMeta()&posting.BitSchemaPosting > 0 {
+		// Schema is stored as pb.SchemaUpdate, we should not try to read it as a posting list
+		fmt.Fprintf(&buf, "Key: %x\n", item.Key())
+		schemaBytes, err := item.ValueCopy(nil)
+		x.Check(err)
 
-	splits := pl.PartSplits()
-	isMultiPart := len(splits) > 0
-	fmt.Fprintf(&buf, " Is multi-part list? %v", isMultiPart)
-	if isMultiPart {
-		fmt.Fprintf(&buf, " Start UID of parts: %v\n", splits)
-	}
+		var s pb.SchemaUpdate
+		x.Check(s.Unmarshal(schemaBytes))
+		fmt.Fprintf(&buf, "Value: %+v\n", s)
+	} else {
+		fmt.Fprintf(&buf, "Key: %x", item.Key())
+		pl, err := posting.ReadPostingList(item.KeyCopy(nil), itr)
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Fprintf(&buf, " Length: %d", pl.Length(math.MaxUint64, 0))
 
-	err = pl.Iterate(math.MaxUint64, 0, func(o *pb.Posting) error {
-		appendPosting(&buf, o)
-		return nil
-	})
-	if err != nil {
-		log.Fatal(err)
+		splits := pl.PartSplits()
+		isMultiPart := len(splits) > 0
+		fmt.Fprintf(&buf, " Is multi-part list? %v", isMultiPart)
+		if isMultiPart {
+			fmt.Fprintf(&buf, " Start UID of parts: %v\n", splits)
+		}
+
+		err = pl.Iterate(math.MaxUint64, 0, func(o *pb.Posting) error {
+			appendPosting(&buf, o)
+			return nil
+		})
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 	fmt.Println(buf.String())
 }
@@ -559,6 +571,7 @@ func printKeys(db *badger.DB) {
 		item := itr.Item()
 		pk, err := x.Parse(key)
 		x.Check(err)
+
 		var buf bytes.Buffer
 		// Don't use a switch case here. Because multiple of these can be true. In particular,
 		// IsSchema can be true alongside IsData.
@@ -581,7 +594,7 @@ func printKeys(db *badger.DB) {
 		x.Check2(buf.WriteString(fmt.Sprintf(" ns: %#x ", ns)))
 		x.Check2(buf.WriteString(" attr: " + attr))
 		if len(pk.Term) > 0 {
-			fmt.Fprintf(&buf, " term: [%d] %s ", pk.Term[0], pk.Term[1:])
+			fmt.Fprintf(&buf, " term: [%d] [%v] ", pk.Term[0], pk.Term[1:])
 		}
 		if pk.Uid > 0 {
 			fmt.Fprintf(&buf, " uid: %d ", pk.Uid)

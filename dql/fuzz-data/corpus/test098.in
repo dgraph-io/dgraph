@@ -1,4 +1,0 @@
-{
-	"query": "query test($a: int){user(func: uid(0x0a)) {...fragmentd,friends(first: $a, offset: $a) {name}}} fragment fragmentd {id(first: $a)}",
-	"variables": {"$a": "5"}
-}

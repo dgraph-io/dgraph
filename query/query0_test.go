@@ -1,3 +1,5 @@
+//go:build integration || cloud || upgrade
+
 /*
  * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
@@ -19,15 +21,14 @@ package query
 
 import (
 	"context"
-	"os"
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgo/v210"
+	"github.com/dgraph-io/dgraph/dgraphtest"
 	"github.com/dgraph-io/dgraph/dql"
-	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/dgraph-io/dgraph/x"
 )
 
 func TestGetUID(t *testing.T) {
@@ -1420,6 +1421,45 @@ func TestQueryVarValOrderError(t *testing.T) {
 	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Cannot sort by unknown attribute n")
+}
+
+func TestQueryVarEmptyRootOrderError(t *testing.T) {
+	// This bug was fixed in commit b256f9c6e6c68ae163eee3242518f77a6ab35fa0
+	dgraphtest.ShouldSkipTest(t, "b256f9c6e6c68ae163eee3242518f77a6ab35fa0", dc.GetVersion())
+
+	query := `
+		{
+			q(func: eq(name, "DNEinDB")) {
+				friend(orderdesc: id) {
+					name
+				}
+			}
+		}
+	`
+	_, err := processQuery(context.Background(), t, query)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Cannot sort by unknown attribute id")
+}
+
+func TestQueryVarEmptyRootOrderChildQueryError(t *testing.T) {
+	// This bug was fixed in commit b256f9c6e6c68ae163eee3242518f77a6ab35fa0
+	dgraphtest.ShouldSkipTest(t, "b256f9c6e6c68ae163eee3242518f77a6ab35fa0", dc.GetVersion())
+
+	query := `
+		{
+			var(func: eq(name, "DNEinDB")) {
+				friend(orderdesc: id) {
+					f as count(uid)
+				}
+			}
+			q(func: uid(f)){
+				name
+			}
+		}
+	`
+	_, err := processQuery(context.Background(), t, query)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Cannot sort by unknown attribute id")
 }
 
 func TestQueryVarValOrderDesc(t *testing.T) {
@@ -3512,13 +3552,28 @@ func TestMatchingWithPagination(t *testing.T) {
 	}
 }
 
-var client *dgo.Dgraph
+func TestInvalidRegex(t *testing.T) {
+	// This bug was fixed in commit e0cc0450b88593b7496c0947aea016fc6457cb61
+	dgraphtest.ShouldSkipTest(t, "e0cc0450b88593b7496c0947aea016fc6457cb61", dc.GetVersion())
 
-func TestMain(m *testing.M) {
-	var err error
-	client, err = testutil.DgraphClientWithGroot(testutil.SockAddr)
-	x.CheckfNoTrace(err)
-
-	populateCluster()
-	os.Exit(m.Run())
+	testCases := []struct {
+		regex  string
+		errStr string
+	}{
+		{"/", "invalid"},
+		{"", "empty"},
+		{"/?", "invalid"},
+		{"=/?", "invalid"},
+		{"aman/", "invalid"},
+	}
+	for i, tc := range testCases {
+		t.Run(fmt.Sprintf("test%d regex=%v", i, tc.regex), func(t *testing.T) {
+			vars := map[string]string{"$name": tc.regex}
+			_, err := processQueryWithVars(t, `query q($name:string){ q(func: regexp(dgraph.type, $name)) {}}`, vars)
+			require.Contains(t, strings.ToLower(err.Error()), tc.errStr)
+		})
+	}
 }
+
+var client *dgraphtest.GrpcClient
+var dc dgraphtest.Cluster

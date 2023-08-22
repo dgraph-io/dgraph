@@ -18,6 +18,7 @@ import (
 	"encoding/binary"
 	"io"
 	"log"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -29,14 +30,14 @@ import (
 	"github.com/golang/glog"
 	"github.com/golang/snappy"
 
-	"github.com/dgraph-io/badger/v3/y"
+	"github.com/dgraph-io/badger/v4/y"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
 )
 
 const (
-	mapFileSz      int = 2 << 30
+	mapFileSz      int = math.MaxInt32
 	partitionBufSz int = 4 << 20
 )
 

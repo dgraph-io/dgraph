@@ -32,10 +32,10 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
-	geom "github.com/twpayne/go-geom"
+	"github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
 
-	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/algo"
 	gqlSchema "github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -278,7 +278,7 @@ const (
 	// Value with all bits set to 1 for bytes 7 and 6.
 	setBytes76 = uint64(0x00FFFF0000000000)
 	// Compliment value of setBytes76.
-	unsetBytes76 = uint64(^setBytes76)
+	unsetBytes76 = ^setBytes76
 	// Value with all bits set to 1 for bytes 4 to 1.
 	setBytes4321 = 0x00000000FFFFFFFF
 )
@@ -978,9 +978,12 @@ func (enc *encoder) normalize(fj fastJsonNode) ([]fastJsonNode, error) {
 	}
 
 	for i, slice := range parentSlice {
-		// sort the fastJson list
-		// This will ensure that nodes with same attribute name comes together in response
-		enc.MergeSort(&parentSlice[i])
+		if x.Config.NormalizeCompatibilityMode == "" {
+			// sort the fastJson list. This will ensure that nodes
+			// with same attribute name comes together in response
+			enc.MergeSort(&parentSlice[i])
+		}
+
 		// From every list we need to remove node with attribute "uid".
 		var prev, cur fastJsonNode
 		cur = slice
@@ -1329,7 +1332,7 @@ func facetName(fieldName string, f *api.Facet) string {
 	if f.Alias != "" {
 		return f.Alias
 	}
-	return fieldName + x.FacetDelimeter + f.Key
+	return fieldName + x.FacetDelimiter + f.Key
 }
 
 // This method gets the values and children for a subprotos.

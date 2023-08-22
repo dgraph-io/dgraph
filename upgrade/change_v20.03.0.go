@@ -20,7 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -70,7 +70,7 @@ func upgradeACLRules() error {
 
 		var rs rules
 		if err := json.Unmarshal([]byte(group.ACL), &rs); err != nil {
-			return fmt.Errorf("unable to unmarshal ACL: %v :: %w", string(group.ACL), err)
+			return fmt.Errorf("unable to unmarshal ACL: %v :: %w", group.ACL, err)
 		}
 
 		for _, r := range rs {

@@ -31,9 +31,6 @@ import (
 )
 
 var (
-	initFunc []func()
-	isTest   bool
-
 	// These variables are set using -ldflags
 	dgraphVersion  string
 	dgraphCodename string
@@ -42,42 +39,10 @@ var (
 	lastCommitTime string
 )
 
-// SetTestRun sets a variable to indicate that the current execution is a test.
-func SetTestRun() {
-	isTest = true
-}
-
-// check if any version is set by ldflags. If not so, it should be set as "dev"
-func checkDev() {
+func init() {
+	// check if any version is set by ldflags. If not so, it should be set as "dev"
 	if dgraphVersion == "" {
 		dgraphVersion = "dev"
-	}
-}
-
-// IsTestRun indicates whether a test is being executed. Useful to handle special
-// conditions during tests that differ from normal execution.
-func IsTestRun() bool {
-	return isTest
-}
-
-// AddInit adds a function to be run in x.Init, which should be called at the
-// beginning of all mains.
-func AddInit(f func()) {
-	initFunc = append(initFunc, f)
-}
-
-// Init initializes flags and run all functions in initFunc.
-func Init() {
-	// Default value, would be overwritten by flag.
-	//
-	// TODO: why is this here?
-	// Config.QueryEdgeLimit = 1e6
-
-	checkDev()
-
-	// Next, run all the init functions that have been added.
-	for _, f := range initFunc {
-		f()
 	}
 }
 
@@ -122,8 +87,12 @@ func PrintVersion() {
 
 // Version returns a string containing the dgraphVersion.
 func Version() string {
-	checkDev()
 	return dgraphVersion
+}
+
+// Codename returns a string containing the dgraphCodename.
+func Codename() string {
+	return dgraphCodename
 }
 
 // pattern for  dev version = min. 7 hex digits of commit-hash.
@@ -134,7 +103,7 @@ var versionRe *regexp.Regexp = regexp.MustCompile(`-g[[:xdigit:]]{7,}`)
 //  1. v2.0.0-rc1-127-gd20a768b3 => dev version
 //  2. v2.0.0 => prod version
 func DevVersion() (matched bool) {
-	return (versionRe.MatchString(dgraphVersion))
+	return versionRe.MatchString(dgraphVersion)
 }
 
 // ExecutableChecksum returns a byte slice containing the SHA256 checksum of the executable.

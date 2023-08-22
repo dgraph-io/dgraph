@@ -29,9 +29,9 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 
-	"github.com/dgraph-io/badger/v3"
-	bpb "github.com/dgraph-io/badger/v3/pb"
-	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/badger/v4"
+	bpb "github.com/dgraph-io/badger/v4/pb"
+	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
@@ -46,10 +46,17 @@ type pooledKeys struct {
 
 // incrRollupi is used to batch keys for rollup incrementally.
 type incrRollupi struct {
-	// We are using 2 priorities with now, idx 0 represents the high priority keys to be rolled up
-	// while idx 1 represents low priority keys to be rolled up.
+	// We are using 2 priorities with now, idx 0 represents the high priority keys to be rolled
+	// up while idx 1 represents low priority keys to be rolled up.
 	priorityKeys []*pooledKeys
 	count        uint64
+
+	// Get Timestamp function gets a new timestamp to store the rollup at. This makes sure that
+	// we are not overwriting any transaction. If there are transactions that are ongoing,
+	// which modify the item, rollup wouldn't affect the data, as a delta would be written
+	// later on
+	getNewTs func(bool) uint64
+	closer   *z.Closer
 }
 
 var (
@@ -58,6 +65,8 @@ var (
 	// ErrInvalidKey is returned when trying to read a posting list using
 	// an invalid key (e.g the key to a single part of a larger multi-part list).
 	ErrInvalidKey = errors.Errorf("cannot read posting list using multi-part list key")
+	// ErrHighPriorityOp is returned when rollup is cancelled so that operations could start.
+	ErrHighPriorityOp = errors.New("Cancelled rollup to make way for high priority operation")
 
 	// IncrRollup is used to batch keys for rollup incrementally.
 	IncrRollup = &incrRollupi{
@@ -81,12 +90,31 @@ func init() {
 
 // rollUpKey takes the given key's posting lists, rolls it up and writes back to badger
 func (ir *incrRollupi) rollUpKey(writer *TxnWriter, key []byte) error {
+	// Get a new non read only ts. This makes sure that no other txn would write at this
+	// ts, overwriting some data. Wait to read the Posting list until ts-1 have been applied
+	// to badger. This helps us prevent issues with wal replay, as we now have a timestamp
+	// where nothing was writen to dgraph.
+	ts := ir.getNewTs(false)
+
+	// Get a wait channel from oracle. Can't use WaitFromTs as we also need to check if other
+	// operations need to start. If ok is not true, that means we have already passed the ts,
+	// and we don't need to wait.
+	waitCh, ok := o.addToWaiters(ts)
+	if ok {
+		select {
+		case <-ir.closer.HasBeenClosed():
+			return ErrHighPriorityOp
+
+		case <-waitCh:
+		}
+	}
+
 	l, err := GetNoStore(key, math.MaxUint64)
 	if err != nil {
 		return err
 	}
 
-	kvs, err := l.Rollup(nil)
+	kvs, err := l.Rollup(nil, ts)
 	if err != nil {
 		return err
 	}
@@ -123,7 +151,10 @@ func (ir *incrRollupi) addKeyToBatch(key []byte, priority int) {
 }
 
 // Process will rollup batches of 64 keys in a go routine.
-func (ir *incrRollupi) Process(closer *z.Closer) {
+func (ir *incrRollupi) Process(closer *z.Closer, getNewTs func(bool) uint64) {
+	ir.getNewTs = getNewTs
+	ir.closer = closer
+
 	defer closer.Done()
 
 	writer := NewTxnWriter(pstore)

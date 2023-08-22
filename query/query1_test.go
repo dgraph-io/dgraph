@@ -1,3 +1,5 @@
+//go:build integration || cloud || upgrade
+
 /*
  * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
@@ -30,7 +32,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/metadata"
 
-	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/dgo/v230/protos/api"
 )
 
 func TestSchemaBlock2(t *testing.T) {
@@ -176,8 +178,7 @@ func TestXidInvalidJSON(t *testing.T) {
 		`{"data": {"me":[{"_xid_":"mich","alive":true,"friend":[{"name":"Rick Grimes"},{"_xid_":"g\"lenn","name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}}`,
 		js)
 	m := make(map[string]interface{})
-	err := json.Unmarshal([]byte(js), &m)
-	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal([]byte(js), &m))
 }
 
 func TestToJSONReverseNegativeFirst(t *testing.T) {

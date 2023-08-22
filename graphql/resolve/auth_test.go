@@ -30,7 +30,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"gopkg.in/yaml.v2"
 
-	dgoapi "github.com/dgraph-io/dgo/v210/protos/api"
+	dgoapi "github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/dql"
 	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/graphql/dgraph"
@@ -118,8 +118,7 @@ func (ex *authExecutor) Execute(ctx context.Context, req *dgoapi.Request,
 		// mutation to create new nodes
 		var assigned map[string]string
 		if ex.uids != "" {
-			err := json.Unmarshal([]byte(ex.uids), &assigned)
-			require.NoError(ex.t, err)
+			require.NoError(ex.t, json.Unmarshal([]byte(ex.uids), &assigned))
 		}
 
 		// Check query generated along with mutation.
@@ -308,7 +307,7 @@ func TestVerificationWithJWKUrl(t *testing.T) {
 	ctx := metadata.NewIncomingContext(context.Background(), md)
 
 	_, err = metainfo.ExtractCustomClaims(ctx)
-	require.Nil(t, err)
+	require.NoError(t, err)
 }
 
 func TestVerificationWithMultipleJWKUrls(t *testing.T) {
@@ -360,7 +359,7 @@ func TestVerificationWithMultipleJWKUrls(t *testing.T) {
 				require.True(t, strings.Contains(err.Error(),
 					"unable to parse jwt token:token is unverifiable: Keyfunc returned an error"))
 			} else {
-				require.Nil(t, err)
+				require.NoError(t, err)
 			}
 		})
 	}
@@ -452,7 +451,7 @@ func queryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMeta, b []b
 				require.Equal(t, err.Error(), tcase.Error.Error())
 				require.Nil(t, dgQuery)
 			} else {
-				require.Nil(t, err)
+				require.NoError(t, err)
 				require.Equal(t, tcase.DGQuery, dgraph.AsString(dgQuery))
 			}
 			// Check for unused variables.
@@ -591,14 +590,14 @@ func mutationQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMet
 
 			_, _, _ = rewriter.RewriteQueries(context.Background(), gqlMutation)
 			_, err = rewriter.Rewrite(ctx, gqlMutation, tt.idExistence)
-			require.Nil(t, err)
+			require.NoError(t, err)
 
 			// -- Act --
 			dgQuery, err := rewriter.FromMutationResult(
 				ctx, gqlMutation, tt.assigned, tt.result)
 
 			// -- Assert --
-			require.Nil(t, err)
+			require.NoError(t, err)
 			require.Equal(t, tt.dgQuery, dgraph.AsString(dgQuery))
 
 			// Check for unused variables.
@@ -638,8 +637,7 @@ func deleteQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMeta,
 			// -- Arrange --
 			var vars map[string]interface{}
 			if tcase.Variables != "" {
-				err := json.Unmarshal([]byte(tcase.Variables), &vars)
-				require.NoError(t, err)
+				require.NoError(t, json.Unmarshal([]byte(tcase.Variables), &vars))
 			}
 
 			op, err := gqlSchema.Operation(
@@ -749,8 +747,7 @@ func checkAddUpdateCase(
 	// -- Arrange --
 	var vars map[string]interface{}
 	if tcase.Variables != "" {
-		err := json.Unmarshal([]byte(tcase.Variables), &vars)
-		require.NoError(t, err)
+		require.NoError(t, json.Unmarshal([]byte(tcase.Variables), &vars))
 	}
 
 	op, err := gqlSchema.Operation(

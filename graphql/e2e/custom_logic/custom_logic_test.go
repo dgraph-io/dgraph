@@ -1,3 +1,5 @@
+//go:build integration
+
 /*
  * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
@@ -410,8 +412,7 @@ func addPerson(t *testing.T) *user {
 			Person []*user
 		}
 	}
-	err := json.Unmarshal([]byte(result.Data), &res)
-	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal([]byte(result.Data), &res))
 
 	require.Equal(t, len(res.AddPerson.Person), 1)
 	return res.AddPerson.Person[0]
@@ -568,8 +569,7 @@ func addTeachers(t *testing.T) []*teacher {
 			Teacher []*teacher
 		}
 	}
-	err := json.Unmarshal([]byte(result.Data), &res)
-	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal([]byte(result.Data), &res))
 
 	require.Equal(t, len(res.AddTeacher.Teacher), 3)
 
@@ -613,8 +613,7 @@ func addSchools(t *testing.T, teachers []*teacher) []*school {
 			School []*school
 		}
 	}
-	err := json.Unmarshal([]byte(result.Data), &res)
-	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal([]byte(result.Data), &res))
 
 	require.Equal(t, len(res.AddSchool.School), 3)
 	// The order of mutation result is not the same as the input order, so we sort and return here.
@@ -656,8 +655,7 @@ func addUsersWithSchools(t *testing.T, schools []*school) []*user {
 			User []*user
 		}
 	}
-	err := json.Unmarshal([]byte(result.Data), &res)
-	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal([]byte(result.Data), &res))
 
 	require.Equal(t, len(res.AddUser.User), 3)
 	// The order of mutation result is not the same as the input order, so we sort and return users here.
@@ -687,8 +685,7 @@ func addUsers(t *testing.T) []*user {
 			User []*user
 		}
 	}
-	err := json.Unmarshal([]byte(result.Data), &res)
-	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal([]byte(result.Data), &res))
 
 	require.Equal(t, len(res.AddUser.User), 3)
 	// The order of mutation result is not the same as the input order, so we sort and return users here.
@@ -1587,8 +1584,7 @@ func addEpisode(t *testing.T, name string) {
 			Episode []*episode
 		}
 	}
-	err := json.Unmarshal([]byte(result.Data), &res)
-	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal([]byte(result.Data), &res))
 
 	require.Equal(t, len(res.AddEpisode.Episode), 1)
 }
@@ -1623,8 +1619,7 @@ func addCharacter(t *testing.T, name string, episodes interface{}) {
 			Character []*character
 		}
 	}
-	err := json.Unmarshal([]byte(result.Data), &res)
-	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal([]byte(result.Data), &res))
 
 	require.Equal(t, len(res.AddCharacter.Character), 1)
 }
@@ -3262,5 +3257,5 @@ func TestMain(m *testing.M) {
 		x.Log(err, "Waited for GraphQL test server to become available, but it never did.")
 		os.Exit(1)
 	}
-	os.Exit(m.Run())
+	m.Run()
 }

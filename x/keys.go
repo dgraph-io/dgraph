@@ -19,6 +19,7 @@ package x
 import (
 	"encoding/binary"
 	"encoding/hex"
+	"fmt"
 	"math"
 	"strconv"
 	"strings"
@@ -57,7 +58,7 @@ const (
 	IgnoreBytes = "1-8"
 	// NamespaceOffset is the offset in badger key from which the next 8 bytes contain namespace.
 	NamespaceOffset = 1
-	// NsSeparator is the separator between between the namespace and attribute.
+	// NsSeparator is the separator between the namespace and attribute.
 	NsSeparator = "-"
 )
 
@@ -65,7 +66,7 @@ const (
 // See https://golang.org/pkg/encoding/json/#Marshal
 const replacementRune = rune('\ufffd')
 
-// This function parse namespace that were stored in format used before 21.03 version.
+// AttrFrom2103 parses namespace that were stored in format used before 21.03 version.
 // The first 8 bytes are the namespace, rest is the predicate. This format caused issues
 // while marshalling, hence was removed. This function is there for backwards compatibility of
 // restore. Now we store the predicate as a string of format "hex(namespace)-predicate"
@@ -206,8 +207,7 @@ func TypeKey(attr string) []byte {
 // next byte: data type prefix (set to ByteData)
 // next eight bytes: value of uid
 // next eight bytes (optional): if the key corresponds to a split list, the startUid of
-//
-//	the split stored in this key and the first byte will be sets to ByteSplit.
+// the split stored in this key and the first byte will be sets to ByteSplit.
 func DataKey(attr string, uid uint64) []byte {
 	extra := 1 + 8 // ByteData + UID
 	buf, prefixLen := generateKey(DefaultPrefix, attr, extra)
@@ -228,9 +228,8 @@ func DataKey(attr string, uid uint64) []byte {
 // next len(attr) bytes: value of attr
 // next byte: data type prefix (set to ByteReverse)
 // next eight bytes: value of uid
-// next eight bytes (optional): if the key corresponds to a split list, the startUid of
-//
-//	the split stored in this key.
+// next eight bytes (optional): if the key corresponds to a split list,
+// the startUid of the split stored in this key.
 func ReverseKey(attr string, uid uint64) []byte {
 	extra := 1 + 8 // ByteReverse + UID
 	buf, prefixLen := generateKey(DefaultPrefix, attr, extra)
@@ -252,8 +251,7 @@ func ReverseKey(attr string, uid uint64) []byte {
 // next byte: data type prefix (set to ByteIndex)
 // next len(term) bytes: value of term
 // next eight bytes (optional): if the key corresponds to a split list, the startUid of
-//
-//	the split stored in this key.
+// the split stored in this key.
 func IndexKey(attr, term string) []byte {
 	extra := 1 + len(term) // ByteIndex + term
 	buf, prefixLen := generateKey(DefaultPrefix, attr, extra)
@@ -301,6 +299,16 @@ type ParsedKey struct {
 	Term        string
 	Count       uint32
 	bytePrefix  byte
+}
+
+func (p ParsedKey) String() string {
+	if p.IsIndex() {
+		return fmt.Sprintf("UID: %v, Attr: %v, IsIndex: true, Term: %v", p.Uid, p.Attr, p.Count)
+	} else if p.IsCountOrCountRev() {
+		return fmt.Sprintf("UID: %v, Attr: %v, IsCount/Ref: true, Count: %v", p.Uid, p.Attr, p.Count)
+	} else {
+		return fmt.Sprintf("UID: %v, Attr: %v, Data key", p.Uid, p.Attr)
+	}
 }
 
 // IsData returns whether the key is a data key.
@@ -369,19 +377,6 @@ func (p ParsedKey) SkipPredicate() []byte {
 }
 
 // TODO(Naman): Remove these functions as they are unused.
-// SkipSchema returns the first key after all the schema keys.
-func (p ParsedKey) SkipSchema() []byte {
-	var buf [1]byte
-	buf[0] = ByteSchema + 1
-	return buf[:]
-}
-
-// SkipType returns the first key after all the type keys.
-func (p ParsedKey) SkipType() []byte {
-	var buf [1]byte
-	buf[0] = ByteType + 1
-	return buf[:]
-}
 
 // DataPrefix returns the prefix for data keys.
 func (p ParsedKey) DataPrefix() []byte {

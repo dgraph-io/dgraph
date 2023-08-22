@@ -1,3 +1,5 @@
+//go:build integration
+
 /*
  * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
@@ -29,8 +31,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgo/v210"
-	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/dgo/v230"
+	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 )
 
@@ -52,8 +54,7 @@ func TestSnapshot(t *testing.T) {
 	}))
 
 	t.Logf("Stopping alpha2.\n")
-	err = testutil.DockerRun("alpha2", testutil.Stop)
-	require.NoError(t, err)
+	require.NoError(t, testutil.DockerRun("alpha2", testutil.Stop))
 
 	// Update the name predicate to include an index.
 	require.NoError(t, dg1.Alter(context.Background(), &api.Operation{
@@ -77,12 +78,10 @@ func TestSnapshot(t *testing.T) {
 	snapshotTs = waitForSnapshot(t, snapshotTs)
 
 	t.Logf("Starting alpha2.\n")
-	err = testutil.DockerRun("alpha2", testutil.Start)
-	require.NoError(t, err)
+	require.NoError(t, testutil.DockerRun("alpha2", testutil.Start))
 
 	// Wait for the container to start.
-	err = testutil.CheckHealthContainer(testutil.ContainerAddr("alpha2", 8080))
-	if err != nil {
+	if err := testutil.CheckHealthContainer(testutil.ContainerAddr("alpha2", 8080)); err != nil {
 		t.Fatalf("error while getting alpha container health: %v", err)
 	}
 	dg2, err := testutil.DgraphClient(testutil.ContainerAddr("alpha2", 9080))
@@ -92,8 +91,7 @@ func TestSnapshot(t *testing.T) {
 	verifySnapshot(t, dg2, 200)
 
 	t.Logf("Stopping alpha2.\n")
-	err = testutil.DockerRun("alpha2", testutil.Stop)
-	require.NoError(t, err)
+	require.NoError(t, testutil.DockerRun("alpha2", testutil.Stop))
 
 	for i := 201; i <= 400; i++ {
 		err := testutil.RetryMutation(dg1, &api.Mutation{
@@ -109,10 +107,8 @@ func TestSnapshot(t *testing.T) {
 	_ = waitForSnapshot(t, snapshotTs)
 
 	t.Logf("Starting alpha2.\n")
-	err = testutil.DockerRun("alpha2", testutil.Start)
-	require.NoError(t, err)
-	err = testutil.CheckHealthContainer(testutil.ContainerAddr("alpha2", 8080))
-	if err != nil {
+	require.NoError(t, testutil.DockerRun("alpha2", testutil.Start))
+	if err := testutil.CheckHealthContainer(testutil.ContainerAddr("alpha2", 8080)); err != nil {
 		t.Fatalf("error while getting alpha container health: %v", err)
 	}
 
@@ -139,8 +135,7 @@ func verifySnapshot(t *testing.T, dg *dgo.Dgraph, num int) {
 	resMap := make(map[string][]map[string]int)
 	resp, err := testutil.RetryQuery(dg, q1)
 	require.NoError(t, err)
-	err = json.Unmarshal(resp.Json, &resMap)
-	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(resp.Json, &resMap))
 
 	sum := 0
 	require.Equal(t, num, len(resMap["values"]))

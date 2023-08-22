@@ -1,6 +1,24 @@
 name: ci-golang-lint
 on:
   push:
+    paths-ignore:
+      - '.github/CODEOWNERS'
+      - '.vscode/**'
+      - 'compose/**'
+      - 'contrib/systemd/**'
+      - 'licenses/**'
+      - 'paper/**'
+      - 'present/**'
+      - 'RFC/**'
+      - 'static/**'
+      - 'wiki/**'
+      - '**/**.dockerignore'
+      - '**/**.gitignore'
+      - '**/**.md'
+      - '**/**.png'
+      - '**/**.jpg'
+      - '**/**.gif'
+      - '**/**.ini'
     branches:
       - main
       - 'release/**'
@@ -14,7 +32,7 @@ on:
       - main
       - 'release/**'
   schedule:
-    - cron: "0 * * * *"
+    - cron: "1 */2 * * *" # every 2hrs
 jobs:
   golang-lint:
     if: github.event.pull_request.draft == false

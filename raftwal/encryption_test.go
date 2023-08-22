@@ -20,18 +20,15 @@ import (
 	"log"
 	"math"
 	"math/rand"
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"go.etcd.io/etcd/raft/raftpb"
+	"go.etcd.io/etcd/raft/v3/raftpb"
 )
 
 func TestEntryReadWrite(t *testing.T) {
 	key := []byte("badger16byteskey")
-	dir, err := os.MkdirTemp("", "raftwal")
-	require.NoError(t, err)
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 	ds, err := InitEncrypted(dir, key)
 	require.NoError(t, err)
 
@@ -67,11 +64,9 @@ func TestEntryReadWrite(t *testing.T) {
 
 // TestLogRotate writes enough log file entries to cause 1 file rotation.
 func TestLogRotate(t *testing.T) {
-	dir, err := os.MkdirTemp("", "raftwal")
-	require.NoError(t, err)
+	dir := t.TempDir()
 	el, err := openWal(dir)
 	require.NoError(t, err)
-	defer os.RemoveAll(dir)
 
 	// Generate deterministic entries using a seed.
 	const SEED = 1
@@ -89,8 +84,7 @@ func TestLogRotate(t *testing.T) {
 	totalBytes := 0
 	for i := 0; i < totalEntries; i++ {
 		entry := makeEntry(i)
-		err = el.AddEntries([]raftpb.Entry{entry})
-		require.NoError(t, err)
+		require.NoError(t, el.AddEntries([]raftpb.Entry{entry}))
 		totalBytes += len(entry.Data)
 	}
 	log.Printf("Wrote %d bytes", totalBytes)
@@ -123,25 +117,21 @@ func TestLogRotate(t *testing.T) {
 // TestLogGrow writes data of sufficient size to grow the log file.
 func TestLogGrow(t *testing.T) {
 	test := func(t *testing.T, key []byte) {
-		dir, err := os.MkdirTemp("", "raftwal")
-		require.NoError(t, err)
+		dir := t.TempDir()
 		ds, err := InitEncrypted(dir, key)
 		require.NoError(t, err)
-		defer os.RemoveAll(dir)
-
-		var entries []raftpb.Entry
 
 		const numEntries = (maxNumEntries * 3) / 2
 
 		// 5KB * 30000 is ~ 150MB, this will cause the log file to grow.
+		var entries []raftpb.Entry
 		for i := 0; i < numEntries; i++ {
 			data := make([]byte, 5<<10)
 			rand.Read(data)
 			entry := raftpb.Entry{Index: uint64(i + 1), Term: 1, Data: data}
 			entries = append(entries, entry)
 		}
-		err = ds.wal.AddEntries(entries)
-		require.NoError(t, err)
+		require.NoError(t, ds.wal.AddEntries(entries))
 
 		// Reopen the file and retrieve all entries.
 		ds, err = InitEncrypted(dir, key)

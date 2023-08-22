@@ -22,6 +22,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"math"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -36,8 +37,8 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 
-	bpb "github.com/dgraph-io/badger/v3/pb"
-	"github.com/dgraph-io/badger/v3/y"
+	bpb "github.com/dgraph-io/badger/v4/pb"
+	"github.com/dgraph-io/badger/v4/y"
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/ee/enc"
@@ -154,9 +155,9 @@ type mapper struct {
 	maxNs  uint64
 }
 
-func (mw *mapper) newMapFile() (*os.File, error) {
-	fileNum := atomic.AddUint32(&mw.nextId, 1)
-	filename := filepath.Join(mw.mapDir, fmt.Sprintf("%06d.map", fileNum))
+func (m *mapper) newMapFile() (*os.File, error) {
+	fileNum := atomic.AddUint32(&m.nextId, 1)
+	filename := filepath.Join(m.mapDir, fmt.Sprintf("%06d.map", fileNum))
 	x.Check(os.MkdirAll(filepath.Dir(filename), 0750))
 
 	return os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
@@ -239,43 +240,43 @@ func (m *mapper) writeToDisk(buf *z.Buffer) error {
 		glog.Infof("Created new backup map file: %s of size: %s\n",
 			fi.Name(), humanize.IBytes(uint64(fi.Size())))
 	}
-	return f.Close()
+	return nil
 }
 
-func (mw *mapper) sendForWriting() error {
-	if mw.buf.IsEmpty() {
+func (m *mapper) sendForWriting() error {
+	if m.buf.IsEmpty() {
 		return nil
 	}
-	mw.buf.SortSlice(func(ls, rs []byte) bool {
+	m.buf.SortSlice(func(ls, rs []byte) bool {
 		lme := mapEntry(ls)
 		rme := mapEntry(rs)
 		return y.CompareKeys(lme.Key(), rme.Key()) < 0
 	})
 
-	if err := mw.thr.Do(); err != nil {
+	if err := m.thr.Do(); err != nil {
 		return err
 	}
 	go func(buf *z.Buffer) {
-		err := mw.writeToDisk(buf)
-		mw.thr.Done(err)
-	}(mw.buf)
-	mw.buf = z.NewBuffer(mapFileSz, "Restore.Buffer")
+		err := m.writeToDisk(buf)
+		m.thr.Done(err)
+	}(m.buf)
+	m.buf = z.NewBuffer(mapFileSz, "Restore.Buffer")
 	return nil
 }
 
-func (mw *mapper) Flush() error {
+func (m *mapper) Flush() error {
 	cl := func() error {
-		if err := mw.sendForWriting(); err != nil {
+		if err := m.sendForWriting(); err != nil {
 			return err
 		}
-		if err := mw.thr.Finish(); err != nil {
+		if err := m.thr.Finish(); err != nil {
 			return err
 		}
-		return mw.buf.Release()
+		return m.buf.Release()
 	}
 
 	var rerr error
-	mw.once.Do(func() {
+	m.once.Do(func() {
 		rerr = cl()
 	})
 	return rerr
@@ -377,8 +378,9 @@ func (m *mapper) processReqCh(ctx context.Context) error {
 				// This is a complete list. It should be rolled up to avoid writing
 				// a list that is too big to be read back from disk.
 				// Rollup will take ownership of the Pack and will free the memory.
+				// We do rollup at math.MaxUint64 so that we don't change the timestamps.
 				l := posting.NewList(restoreKey, pl, kv.Version)
-				kvs, err := l.Rollup(nil)
+				kvs, err := l.Rollup(nil, math.MaxUint64)
 				if err != nil {
 					// TODO: wrap errors in this file for easier debugging.
 					return err
@@ -585,7 +587,7 @@ func (m *mapper) Progress() {
 const bufSz = 64 << 20
 const bufSoftLimit = bufSz - 2<<20
 
-// mapToDisk reads the backup, converts the keys and values to the required format,
+// Map reads the backup, converts the keys and values to the required format,
 // and loads them to the given badger DB. The set of predicates is used to avoid restoring
 // values from predicates no longer assigned to this group.
 // If restoreTs is greater than zero, the key-value pairs will be written with that timestamp.
@@ -600,7 +602,8 @@ func (m *mapper) Map(r io.Reader, in *loadBackupInput) error {
 		err := binary.Read(br, binary.LittleEndian, &sz)
 		if err == io.EOF {
 			break
-		} else if err != nil {
+		}
+		if err != nil {
 			return err
 		}
 
@@ -624,6 +627,15 @@ func (m *mapper) Map(r io.Reader, in *loadBackupInput) error {
 type mapResult struct {
 	maxUid uint64
 	maxNs  uint64
+
+	// shouldDropAll is used for incremental restores. In case of normal restore, we just don't
+	// process the backups after encountering a drop operation (while iterating from latest
+	// to the oldest baskup). But for incremental restore if a drop operation is encountered, we
+	// need to call a dropAll, so that the data written in the DB because of a normal restore is
+	// cleaned up before an incremental restore.
+	shouldDropAll bool
+	dropAttr      map[string]struct{}
+	dropNs        map[uint64]struct{}
 }
 
 // we create MAP files each of a limited size and write sorted data into it. We may end up
@@ -697,6 +709,11 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) (*mapResult, error) {
 
 	// manifests are ordered as: latest..full
 	for i, manifest := range manifests {
+		// We only need to consider the incremental backups.
+		if manifest.BackupNum < req.IncrementalFrom {
+			break
+		}
+
 		// A dropAll or DropData operation is encountered. No need to restore previous backups.
 		if dropAll {
 			break
@@ -782,6 +799,7 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) (*mapResult, error) {
 				}
 				maxBannedNs = x.Max(maxBannedNs, ns)
 			}
+			glog.Infof("[MAP] Processed manifest %d\n", manifest.BackupNum)
 		}
 	} // done with all the manifests.
 
@@ -794,8 +812,11 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) (*mapResult, error) {
 		return nil, errors.Wrap(err, "failed to flush the mapper")
 	}
 	mapRes := &mapResult{
-		maxUid: mapper.maxUid,
-		maxNs:  mapper.maxNs,
+		maxUid:        mapper.maxUid,
+		maxNs:         mapper.maxNs,
+		shouldDropAll: dropAll,
+		dropAttr:      dropAttr,
+		dropNs:        dropNs,
 	}
 	// update the maxNsId considering banned namespaces.
 	mapRes.maxNs = x.Max(mapRes.maxNs, maxBannedNs)

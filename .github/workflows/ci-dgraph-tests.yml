@@ -1,6 +1,24 @@
 name: ci-dgraph-tests
 on:
   push:
+    paths-ignore:
+      - '.github/CODEOWNERS'
+      - '.vscode/**'
+      - 'compose/**'
+      - 'contrib/systemd/**'
+      - 'licenses/**'
+      - 'paper/**'
+      - 'present/**'
+      - 'RFC/**'
+      - 'static/**'
+      - 'wiki/**'
+      - '**/**.dockerignore'
+      - '**/**.gitignore'
+      - '**/**.md'
+      - '**/**.png'
+      - '**/**.jpg'
+      - '**/**.gif'
+      - '**/**.ini'
     branches:
       - main
       - 'release/**'
@@ -14,7 +32,7 @@ on:
       - main
       - 'release/**'
   schedule:
-    - cron: "0 0,12 * * *" # 2-runs per day
+    - cron: "1 0,6,12,18 * * *"
 jobs:
   dgraph-tests:
     if: github.event.pull_request.draft == false
@@ -63,10 +81,9 @@ jobs:
           export GOPATH=~/go
           # move the binary
           cp dgraph/dgraph ~/go/bin/dgraph
-          # run the tests
+          # run the unit and integration tests
           cd t; ./t
           # clean up docker containers after test execution
           ./t -r
           # sleep
           sleep 5
-          

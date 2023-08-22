@@ -18,14 +18,15 @@ package edgraph
 
 import (
 	"context"
-	"os"
+	"crypto/sha256"
+	"encoding/hex"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/metadata"
 
-	"github.com/dgraph-io/badger/v3"
-	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/badger/v4"
+	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
@@ -135,10 +136,10 @@ func TestValidateKeys(t *testing.T) {
 func TestParseSchemaFromAlterOperation(t *testing.T) {
 	md := metadata.New(map[string]string{"namespace": "123"})
 	ctx := metadata.NewIncomingContext(context.Background(), md)
-	dir, err := os.MkdirTemp("", "storetest_")
-	x.Check(err)
+	dir := t.TempDir()
 	ps, err := badger.OpenManaged(badger.DefaultOptions(dir))
 	x.Check(err)
+	defer ps.Close()
 	schema.Init(ps)
 
 	tests := []struct {
@@ -205,4 +206,13 @@ func TestParseSchemaFromAlterOperation(t *testing.T) {
 		})
 	}
 
+}
+
+func TestGetHash(t *testing.T) {
+	h := sha256.New()
+	_, err := h.Write([]byte("0xa0x14123456789"))
+	require.NoError(t, err)
+
+	x.WorkerConfig.HmacSecret = []byte("123456789")
+	require.Equal(t, hex.EncodeToString(h.Sum(nil)), getHash(10, 20))
 }

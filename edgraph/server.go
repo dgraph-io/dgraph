@@ -43,8 +43,8 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
-	"github.com/dgraph-io/dgo/v210"
-	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/dgo/v230"
+	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/dql"
@@ -87,8 +87,8 @@ const (
 )
 
 var (
-	numGraphQLPM uint64
-	numGraphQL   uint64
+	numDQL     uint64
+	numGraphQL uint64
 )
 
 var (
@@ -124,7 +124,7 @@ func PeriodicallyPostTelemetry() {
 		}
 		ms := worker.GetMembershipState()
 		t := telemetry.NewAlpha(ms)
-		t.NumGraphQLPM = atomic.SwapUint64(&numGraphQLPM, 0)
+		t.NumDQL = atomic.SwapUint64(&numDQL, 0)
 		t.NumGraphQL = atomic.SwapUint64(&numGraphQL, 0)
 		t.SinceHours = int(time.Since(start).Hours())
 		glog.V(2).Infof("Posting Telemetry data: %+v", t)
@@ -133,7 +133,7 @@ func PeriodicallyPostTelemetry() {
 		if err == nil {
 			lastPostedAt = time.Now()
 		} else {
-			atomic.AddUint64(&numGraphQLPM, t.NumGraphQLPM)
+			atomic.AddUint64(&numDQL, t.NumDQL)
 			atomic.AddUint64(&numGraphQL, t.NumGraphQL)
 			glog.V(2).Infof("Telemetry couldn't be posted. Error: %v", err)
 		}
@@ -289,11 +289,9 @@ func parseSchemaFromAlterOperation(ctx context.Context, op *api.Operation) (
 	}
 
 	preds := make(map[string]struct{})
-
 	for _, update := range result.Preds {
 		if _, ok := preds[update.Predicate]; ok {
-			return nil, errors.Errorf("predicate %s defined multiple times",
-				x.ParseAttr(update.Predicate))
+			return nil, errors.Errorf("predicate %s defined multiple times", x.ParseAttr(update.Predicate))
 		}
 		preds[update.Predicate] = struct{}{}
 
@@ -320,7 +318,6 @@ func parseSchemaFromAlterOperation(ctx context.Context, op *api.Operation) (
 	}
 
 	types := make(map[string]struct{})
-
 	for _, typ := range result.Types {
 		if _, ok := types[typ.TypeName]; ok {
 			return nil, errors.Errorf("type %s defined multiple times", x.ParseAttr(typ.TypeName))
@@ -734,7 +731,10 @@ func buildUpsertQuery(qc *queryContext) string {
 	}
 
 	qc.condVars = make([]string, len(qc.req.Mutations))
-	upsertQuery := strings.TrimSuffix(qc.req.Query, "}")
+
+	var upsertQB strings.Builder
+	x.Check2(upsertQB.WriteString(strings.TrimSuffix(qc.req.Query, "}")))
+
 	for i, gmu := range qc.gmuList {
 		isCondUpsert := strings.TrimSpace(gmu.Cond) != ""
 		if isCondUpsert {
@@ -759,13 +759,15 @@ func buildUpsertQuery(qc *queryContext) string {
 			// The variable __dgraph_0__ will -
 			//      * be empty if the condition is true
 			//      * have 1 UID (the 0 UID) if the condition is false
-			upsertQuery += qc.condVars[i] + ` as var(func: uid(0)) ` + cond + `
-			 `
+			x.Check2(upsertQB.WriteString(qc.condVars[i]))
+			x.Check2(upsertQB.WriteString(` as var(func: uid(0)) `))
+			x.Check2(upsertQB.WriteString(cond))
+			x.Check2(upsertQB.WriteString("\n"))
 		}
 	}
-	upsertQuery += `}`
 
-	return upsertQuery
+	x.Check2(upsertQB.WriteString(`}`))
+	return upsertQB.String()
 }
 
 // updateMutations updates the mutation and replaces uid(var) and val(var) with
@@ -922,7 +924,7 @@ func updateValInMutations(gmu *dql.Mutation, qc *queryContext) error {
 	gmu.Set = updateValInNQuads(gmu.Set, qc, true)
 	if qc.nquadsCount > x.Config.LimitMutationsNquad {
 		return errors.Errorf("NQuad count in the request: %d, is more that threshold: %d",
-			qc.nquadsCount, int(x.Config.LimitMutationsNquad))
+			qc.nquadsCount, x.Config.LimitMutationsNquad)
 	}
 	return nil
 }
@@ -975,9 +977,9 @@ func updateUIDInMutations(gmu *dql.Mutation, qc *queryContext) error {
 				gmuDel = append(gmuDel, getNewNQuad(nq, s, o))
 				qc.nquadsCount++
 			}
-			if qc.nquadsCount > int(x.Config.LimitMutationsNquad) {
+			if qc.nquadsCount > x.Config.LimitMutationsNquad {
 				return errors.Errorf("NQuad count in the request: %d, is more that threshold: %d",
-					qc.nquadsCount, int(x.Config.LimitMutationsNquad))
+					qc.nquadsCount, x.Config.LimitMutationsNquad)
 			}
 		}
 	}
@@ -1237,7 +1239,7 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (resp *api.Response,
 	if isGraphQL {
 		atomic.AddUint64(&numGraphQL, 1)
 	} else {
-		atomic.AddUint64(&numGraphQLPM, 1)
+		atomic.AddUint64(&numDQL, 1)
 	}
 	l := &query.Latency{}
 	l.Start = time.Now()
@@ -1392,7 +1394,7 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 	}
 	qr := query.Request{
 		Latency:  qc.latency,
-		GqlQuery: &qc.dqlRes,
+		DqlQuery: &qc.dqlRes,
 	}
 
 	// Here we try our best effort to not contact Zero for a timestamp. If we succeed,
@@ -1590,7 +1592,7 @@ func authorizeRequest(ctx context.Context, qc *queryContext) error {
 
 func getHash(ns, startTs uint64) string {
 	h := sha256.New()
-	h.Write([]byte(fmt.Sprintf("%#x%#x%s", ns, startTs, x.WorkerConfig.HmacSecret)))
+	h.Write([]byte(fmt.Sprintf("%#x%#x%s", ns, startTs, string(x.WorkerConfig.HmacSecret))))
 	return hex.EncodeToString(h.Sum(nil))
 }
 

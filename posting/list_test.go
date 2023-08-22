@@ -28,9 +28,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/badger/v3"
-	bpb "github.com/dgraph-io/badger/v3/pb"
-	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/badger/v4"
+	bpb "github.com/dgraph-io/badger/v4/pb"
+	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
@@ -252,8 +252,7 @@ func TestAddMutation_DelSet(t *testing.T) {
 		Op:    pb.DirectedEdge_DEL,
 	}
 	txn := &Txn{StartTs: 1}
-	err = ol.addMutation(context.Background(), txn, edge)
-	require.NoError(t, err)
+	require.NoError(t, ol.addMutation(context.Background(), txn, edge))
 
 	// Set value to newcars, commit it
 	edge = &pb.DirectedEdge{
@@ -288,8 +287,7 @@ func TestAddMutation_DelRead(t *testing.T) {
 		Op:    pb.DirectedEdge_DEL,
 	}
 	txn = &Txn{StartTs: 3}
-	err = ol.addMutation(context.Background(), txn, edge)
-	require.NoError(t, err)
+	require.NoError(t, ol.addMutation(context.Background(), txn, edge))
 
 	// Part of same transaction as sp*, so should see zero length even
 	// if not committed yet.
@@ -437,6 +435,39 @@ func TestAddMutation_mrjn1(t *testing.T) {
 	require.Equal(t, 0, ol.Length(txn.StartTs, 0))
 }
 
+func TestRollupMaxTsIsSet(t *testing.T) {
+	defer setMaxListSize(maxListSize)
+	maxListSize = math.MaxInt32
+
+	key := x.DataKey(x.GalaxyAttr("bal"), 1333)
+	ol, err := getNew(key, ps, math.MaxUint64)
+	require.NoError(t, err)
+	var commits int
+	N := int(1e6)
+	for i := 2; i <= N; i += 2 {
+		edge := &pb.DirectedEdge{
+			ValueId: uint64(i),
+		}
+		txn := Txn{StartTs: uint64(i)}
+		addMutationHelper(t, ol, edge, Set, &txn)
+		require.NoError(t, ol.commitMutation(uint64(i), uint64(i)+1))
+		if i%10000 == 0 {
+			// Do a rollup, otherwise, it gets too slow to add a million mutations to one posting
+			// list.
+			t.Logf("Start Ts: %d. Rolling up posting list.\n", txn.StartTs)
+			kvs, err := ol.Rollup(nil, uint64(N+i))
+			for _, kv := range kvs {
+				require.Equal(t, kv.Version, uint64(i)+2)
+			}
+			require.NoError(t, err)
+			require.NoError(t, writePostingListToDisk(kvs))
+			ol, err = getNew(key, ps, math.MaxUint64)
+			require.NoError(t, err)
+		}
+		commits++
+	}
+}
+
 func TestMillion(t *testing.T) {
 	// Ensure list is stored in a single part.
 	defer setMaxListSize(maxListSize)
@@ -458,7 +489,7 @@ func TestMillion(t *testing.T) {
 			// Do a rollup, otherwise, it gets too slow to add a million mutations to one posting
 			// list.
 			t.Logf("Start Ts: %d. Rolling up posting list.\n", txn.StartTs)
-			kvs, err := ol.Rollup(nil)
+			kvs, err := ol.Rollup(nil, math.MaxUint64)
 			require.NoError(t, err)
 			require.NoError(t, writePostingListToDisk(kvs))
 			ol, err = getNew(key, ps, math.MaxUint64)
@@ -513,16 +544,14 @@ func TestAddMutation_mrjn2(t *testing.T) {
 			Op:    pb.DirectedEdge_DEL,
 		}
 		txn := &Txn{StartTs: 7}
-		err := ol.addMutation(ctx, txn, edge)
-		require.NoError(t, err)
+		require.NoError(t, ol.addMutation(ctx, txn, edge))
 
 		// Add edge just to test that the deletion still happens.
 		edge = &pb.DirectedEdge{
 			ValueId:   7,
 			ValueType: pb.Posting_INT,
 		}
-		err = ol.addMutation(ctx, txn, edge)
-		require.NoError(t, err)
+		require.NoError(t, ol.addMutation(ctx, txn, edge))
 
 		require.EqualValues(t, 3, ol.Length(15, 0)) // The three commits should still be found.
 		require.NoError(t, ol.commitMutation(7, 11))
@@ -537,8 +566,7 @@ func TestAddMutation_mrjn2(t *testing.T) {
 			Op:    pb.DirectedEdge_DEL,
 		}
 		txn := &Txn{StartTs: 5}
-		err := ol.addMutation(ctx, txn, edge)
-		require.NoError(t, err)
+		require.NoError(t, ol.addMutation(ctx, txn, edge))
 		require.NoError(t, ol.commitMutation(5, 7))
 
 		// Commits are:
@@ -895,7 +923,7 @@ func createMultiPartList(t *testing.T, size int, addFacet bool) (*List, int) {
 		addMutationHelper(t, ol, edge, Set, &txn)
 		require.NoError(t, ol.commitMutation(uint64(i), uint64(i)+1))
 		if i%2000 == 0 {
-			kvs, err := ol.Rollup(nil)
+			kvs, err := ol.Rollup(nil, math.MaxUint64)
 			require.NoError(t, err)
 			require.NoError(t, writePostingListToDisk(kvs))
 			ol, err = getNew(key, ps, math.MaxUint64)
@@ -904,7 +932,7 @@ func createMultiPartList(t *testing.T, size int, addFacet bool) (*List, int) {
 		commits++
 	}
 
-	kvs, err := ol.Rollup(nil)
+	kvs, err := ol.Rollup(nil, math.MaxUint64)
 	require.NoError(t, err)
 	for _, kv := range kvs {
 		require.Equal(t, uint64(size+1), kv.Version)
@@ -938,7 +966,7 @@ func createAndDeleteMultiPartList(t *testing.T, size int) (*List, int) {
 		addMutationHelper(t, ol, edge, Set, &txn)
 		require.NoError(t, ol.commitMutation(uint64(i), uint64(i)+1))
 		if i%2000 == 0 {
-			kvs, err := ol.Rollup(nil)
+			kvs, err := ol.Rollup(nil, math.MaxUint64)
 			require.NoError(t, err)
 			require.NoError(t, writePostingListToDisk(kvs))
 			ol, err = getNew(key, ps, math.MaxUint64)
@@ -959,7 +987,7 @@ func createAndDeleteMultiPartList(t *testing.T, size int) (*List, int) {
 		addMutationHelper(t, ol, edge, Del, &txn)
 		require.NoError(t, ol.commitMutation(baseStartTs+uint64(i), baseStartTs+uint64(i)+1))
 		if i%2000 == 0 {
-			kvs, err := ol.Rollup(nil)
+			kvs, err := ol.Rollup(nil, math.MaxUint64)
 			require.NoError(t, err)
 			require.NoError(t, writePostingListToDisk(kvs))
 			ol, err = getNew(key, ps, math.MaxUint64)
@@ -988,7 +1016,7 @@ func TestLargePlistSplit(t *testing.T) {
 		addMutationHelper(t, ol, edge, Set, &txn)
 		require.NoError(t, ol.commitMutation(uint64(i), uint64(i)+1))
 	}
-	_, err = ol.Rollup(nil)
+	_, err = ol.Rollup(nil, math.MaxUint64)
 	require.NoError(t, err)
 
 	ol, err = getNew(key, ps, math.MaxUint64)
@@ -1007,12 +1035,12 @@ func TestLargePlistSplit(t *testing.T) {
 		require.NoError(t, ol.commitMutation(uint64(i), uint64(i)+1))
 	}
 
-	kvs, err := ol.Rollup(nil)
+	kvs, err := ol.Rollup(nil, math.MaxUint64)
 	require.NoError(t, err)
 	require.NoError(t, writePostingListToDisk(kvs))
 	ol, err = getNew(key, ps, math.MaxUint64)
 	require.NoError(t, err)
-	//require.Nil(t, ol.plist.Bitmap)
+	// require.Nil(t, ol.plist.Bitmap)
 	require.Equal(t, 0, len(ol.plist.Postings))
 	t.Logf("Num splits: %d\n", len(ol.plist.Splits))
 	require.True(t, len(ol.plist.Splits) > 0)
@@ -1046,11 +1074,9 @@ func TestDeleteStarMultiPartList(t *testing.T) {
 		Value:   []byte(x.Star),
 		Op:      pb.DirectedEdge_DEL,
 	}
-	err = list.addMutation(context.Background(), txn, edge)
-	require.NoError(t, err)
+	require.NoError(t, list.addMutation(context.Background(), txn, edge))
 
-	err = list.commitMutation(readTs, commitTs)
-	require.NoError(t, err)
+	require.NoError(t, list.commitMutation(readTs, commitTs))
 	validateCount(0)
 }
 
@@ -1099,7 +1125,7 @@ func TestBinSplit(t *testing.T) {
 			require.NoError(t, ol.commitMutation(uint64(i), uint64(i)+1))
 		}
 
-		kvs, err := ol.Rollup(nil)
+		kvs, err := ol.Rollup(nil, math.MaxUint64)
 		require.NoError(t, err)
 		for _, kv := range kvs {
 			require.Equal(t, uint64(size+1), kv.Version)
@@ -1177,7 +1203,7 @@ func TestMultiPartListWithPostings(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, commits, len(facets))
 	for i, facet := range facets {
-		require.Equal(t, facet, strconv.Itoa(int(i+1)))
+		require.Equal(t, facet, strconv.Itoa(i+1))
 	}
 }
 
@@ -1186,7 +1212,7 @@ func TestMultiPartListMarshal(t *testing.T) {
 	size := int(1e5)
 	ol, _ := createMultiPartList(t, size, false)
 
-	kvs, err := ol.Rollup(nil)
+	kvs, err := ol.Rollup(nil, math.MaxUint64)
 	require.NoError(t, err)
 	require.Equal(t, len(kvs), len(ol.plist.Splits)+1)
 	require.NoError(t, writePostingListToDisk(kvs))
@@ -1214,7 +1240,7 @@ func TestMultiPartListWriteToDisk(t *testing.T) {
 	size := int(1e5)
 	originalList, commits := createMultiPartList(t, size, false)
 
-	kvs, err := originalList.Rollup(nil)
+	kvs, err := originalList.Rollup(nil, math.MaxUint64)
 	require.NoError(t, err)
 	require.Equal(t, len(kvs), len(originalList.plist.Splits)+1)
 
@@ -1247,7 +1273,7 @@ func TestMultiPartListDelete(t *testing.T) {
 	}))
 	require.Equal(t, 0, counter)
 
-	kvs, err := ol.Rollup(nil)
+	kvs, err := ol.Rollup(nil, math.MaxUint64)
 	require.NoError(t, err)
 	require.Equal(t, len(kvs), 1)
 
@@ -1279,7 +1305,7 @@ func TestMultiPartListDeleteAndAdd(t *testing.T) {
 		addMutationHelper(t, ol, edge, Set, &txn)
 		require.NoError(t, ol.commitMutation(uint64(i), uint64(i)+1))
 		if i%2000 == 0 {
-			kvs, err := ol.Rollup(nil)
+			kvs, err := ol.Rollup(nil, math.MaxUint64)
 			require.NoError(t, err)
 			require.NoError(t, writePostingListToDisk(kvs))
 			ol, err = getNew(key, ps, math.MaxUint64)
@@ -1306,7 +1332,7 @@ func TestMultiPartListDeleteAndAdd(t *testing.T) {
 		addMutationHelper(t, ol, edge, Del, &txn)
 		require.NoError(t, ol.commitMutation(baseStartTs+uint64(i), baseStartTs+uint64(i)+1))
 		if i%2000 == 0 {
-			kvs, err := ol.Rollup(nil)
+			kvs, err := ol.Rollup(nil, math.MaxUint64)
 			require.NoError(t, err)
 			require.NoError(t, writePostingListToDisk(kvs))
 			ol, err = getNew(key, ps, math.MaxUint64)
@@ -1315,7 +1341,7 @@ func TestMultiPartListDeleteAndAdd(t *testing.T) {
 	}
 
 	// Rollup list at the end of all the deletions.
-	kvs, err := ol.Rollup(nil)
+	kvs, err := ol.Rollup(nil, math.MaxUint64)
 	require.NoError(t, err)
 	require.NoError(t, writePostingListToDisk(kvs))
 	ol, err = getNew(key, ps, math.MaxUint64)
@@ -1343,7 +1369,7 @@ func TestMultiPartListDeleteAndAdd(t *testing.T) {
 		require.NoError(t, ol.commitMutation(baseStartTs+uint64(i), baseStartTs+uint64(i)+1))
 
 		if i%2000 == 0 {
-			kvs, err := ol.Rollup(nil)
+			kvs, err := ol.Rollup(nil, math.MaxUint64)
 			require.NoError(t, err)
 			require.NoError(t, writePostingListToDisk(kvs))
 			ol, err = getNew(key, ps, math.MaxUint64)
@@ -1352,7 +1378,7 @@ func TestMultiPartListDeleteAndAdd(t *testing.T) {
 	}
 
 	// Rollup list at the end of all the additions
-	kvs, err = ol.Rollup(nil)
+	kvs, err = ol.Rollup(nil, math.MaxUint64)
 	require.NoError(t, err)
 	require.NoError(t, writePostingListToDisk(kvs))
 	ol, err = getNew(key, ps, math.MaxUint64)
@@ -1383,7 +1409,7 @@ func TestSingleListRollup(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, commits, len(facets))
 	for i, facet := range facets {
-		require.Equal(t, facet, strconv.Itoa(int(i+1)))
+		require.Equal(t, facet, strconv.Itoa(i+1))
 	}
 
 	var bl pb.BackupPostingList
@@ -1428,7 +1454,7 @@ func TestRecursiveSplits(t *testing.T) {
 	}
 
 	// Rollup the list. The final output should have more than two parts.
-	kvs, err := ol.Rollup(nil)
+	kvs, err := ol.Rollup(nil, math.MaxUint64)
 	require.NoError(t, err)
 	require.NoError(t, writePostingListToDisk(kvs))
 	ol, err = getNew(key, ps, math.MaxUint64)
@@ -1446,29 +1472,26 @@ func TestRecursiveSplits(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, commits, len(facets))
 	for i, facet := range facets {
-		require.Equal(t, facet, strconv.Itoa(int(i+1)))
+		require.Equal(t, facet, strconv.Itoa(i+1))
 	}
 }
 
 var ps *badger.DB
 
 func TestMain(m *testing.M) {
-	x.Init()
 	Config.CommitFraction = 0.10
 
 	dir, err := os.MkdirTemp("", "storetest_")
-	x.Check(err)
+	x.Panic(err)
+	defer os.RemoveAll(dir)
 
 	ps, err = badger.OpenManaged(badger.DefaultOptions(dir))
-	x.Check(err)
+	x.Panic(err)
 	// Not using posting list cache
 	Init(ps, 0)
 	schema.Init(ps)
 
-	r := m.Run()
-
-	os.RemoveAll(dir)
-	os.Exit(r)
+	m.Run()
 }
 
 func BenchmarkAddMutations(b *testing.B) {

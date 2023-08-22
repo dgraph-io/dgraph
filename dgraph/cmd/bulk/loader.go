@@ -37,11 +37,12 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/dgraph-io/badger/v3"
-	"github.com/dgraph-io/badger/v3/y"
+	"github.com/dgraph-io/badger/v4"
+	"github.com/dgraph-io/badger/v4/y"
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/filestore"
+	gqlSchema "github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
@@ -186,7 +187,7 @@ func (ld *loader) leaseNamespaces() {
 		ns, err := client.AssignIds(ctx, &pb.Num{Val: maxNs, Type: pb.Num_NS_ID})
 		cancel()
 		if err == nil {
-			fmt.Printf("Assigned namespaces till %d", ns.GetEndId())
+			fmt.Printf("Assigned namespaces till %d\n", ns.GetEndId())
 			return
 		}
 		fmt.Printf("Error communicating with dgraph zero, retrying: %v", err)
@@ -195,6 +196,10 @@ func (ld *loader) leaseNamespaces() {
 }
 
 func readSchema(opt *options) *schema.ParsedSchema {
+	if opt.SchemaFile == "" {
+		return genDQLSchema(opt)
+	}
+
 	f, err := filestore.Open(opt.SchemaFile)
 	x.Check(err)
 	defer func() {
@@ -220,6 +225,32 @@ func readSchema(opt *options) *schema.ParsedSchema {
 	result, err := schema.ParseWithNamespace(string(buf), opt.Namespace)
 	x.Check(err)
 	return result
+}
+
+func genDQLSchema(opt *options) *schema.ParsedSchema {
+	gqlSchBytes := readGqlSchema(opt)
+	nsToSchemas := parseGqlSchema(string(gqlSchBytes))
+
+	var finalSch schema.ParsedSchema
+	for ns, gqlSch := range nsToSchemas {
+		if opt.Namespace != math.MaxUint64 {
+			ns = opt.Namespace
+		}
+
+		h, err := gqlSchema.NewHandler(gqlSch, false)
+		x.Check(err)
+
+		_, err = gqlSchema.FromString(h.GQLSchema(), ns)
+		x.Check(err)
+
+		ps, err := schema.ParseWithNamespace(h.DGSchema(), ns)
+		x.Check(err)
+
+		finalSch.Preds = append(finalSch.Preds, ps.Preds...)
+		finalSch.Types = append(finalSch.Types, ps.Types...)
+	}
+
+	return &finalSch
 }
 
 func (ld *loader) mapStage() {
@@ -332,12 +363,8 @@ func parseGqlSchema(s string) map[uint64]string {
 	return schemaMap
 }
 
-func (ld *loader) processGqlSchema(loadType chunker.InputFormat) {
-	if ld.opt.GqlSchemaFile == "" {
-		return
-	}
-
-	f, err := filestore.Open(ld.opt.GqlSchemaFile)
+func readGqlSchema(opt *options) []byte {
+	f, err := filestore.Open(opt.GqlSchemaFile)
 	x.Check(err)
 	defer func() {
 		if err := f.Close(); err != nil {
@@ -345,19 +372,26 @@ func (ld *loader) processGqlSchema(loadType chunker.InputFormat) {
 		}
 	}()
 
-	key := ld.opt.EncryptionKey
-	if !ld.opt.Encrypted {
+	key := opt.EncryptionKey
+	if !opt.Encrypted {
 		key = nil
 	}
 	r, err := enc.GetReader(key, f)
 	x.Check(err)
-	if filepath.Ext(ld.opt.GqlSchemaFile) == ".gz" {
+	if filepath.Ext(opt.GqlSchemaFile) == ".gz" {
 		r, err = gzip.NewReader(r)
 		x.Check(err)
 	}
 
 	buf, err := io.ReadAll(r)
 	x.Check(err)
+	return buf
+}
+
+func (ld *loader) processGqlSchema(loadType chunker.InputFormat) {
+	if ld.opt.GqlSchemaFile == "" {
+		return
+	}
 
 	rdfSchema := `_:gqlschema <dgraph.type> "dgraph.graphql" <%#x> .
 	_:gqlschema <dgraph.graphql.xid> "dgraph.graphql.schema" <%#x> .
@@ -388,6 +422,7 @@ func (ld *loader) processGqlSchema(loadType chunker.InputFormat) {
 		ld.readerChunkCh <- gqlBuf
 	}
 
+	buf := readGqlSchema(ld.opt)
 	schemas := parseGqlSchema(string(buf))
 	if ld.opt.Namespace == math.MaxUint64 {
 		// Preserve the namespace.
@@ -406,7 +441,7 @@ func (ld *loader) processGqlSchema(loadType chunker.InputFormat) {
 		}
 	default:
 		if _, ok := schemas[ld.opt.Namespace]; !ok {
-			// We expect only a single GraphQL schema when loading into specfic namespace.
+			// We expect only a single GraphQL schema when loading into specific namespace.
 			fmt.Printf("Didn't find GraphQL schema for namespace %d. Not loading GraphQL schema.",
 				ld.opt.Namespace)
 			return

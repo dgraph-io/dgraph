@@ -20,14 +20,13 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"os"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"go.etcd.io/etcd/raft"
-	"go.etcd.io/etcd/raft/raftpb"
+	"go.etcd.io/etcd/raft/v3"
+	"go.etcd.io/etcd/raft/v3/raftpb"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
@@ -62,10 +61,7 @@ func (n *Node) run(wg *sync.WaitGroup) {
 }
 
 func TestProposal(t *testing.T) {
-	dir, err := os.MkdirTemp("", "badger")
-	require.NoError(t, err)
-	defer os.RemoveAll(dir)
-
+	dir := t.TempDir()
 	store := raftwal.Init(dir)
 
 	rc := &pb.RaftContext{Id: 1}

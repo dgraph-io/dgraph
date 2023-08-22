@@ -48,8 +48,8 @@ import (
 	"google.golang.org/grpc/health"
 	hapi "google.golang.org/grpc/health/grpc_health_v1"
 
-	"github.com/dgraph-io/badger/v3"
-	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/badger/v4"
+	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/ee/audit"
@@ -259,6 +259,13 @@ they form a Raft group and provide synchronous replication.
 			"The number of days audit logs will be preserved.").
 		Flag("size",
 			"The audit log max size in MB after which it will be rolled over.").
+		String())
+
+	flag.String("feature-flags", worker.FeatureFlagsDefaults, z.NewSuperFlagHelp(worker.FeatureFlagsDefaults).
+		Head("Feature flags to enable various experimental features").
+		Flag("normalize-compatibility-mode", "configure @normalize response formatting."+
+			" 'v20': returns values with repeated key for fields with same alias (same as v20.11)."+
+			" For more details, see https://github.com/dgraph-io/dgraph/pull/7639").
 		String())
 }
 
@@ -711,7 +718,6 @@ func run() {
 	x.WorkerConfig.EncryptionKey = keys.EncKey
 
 	setupCustomTokenizers()
-	x.Init()
 	x.Config.PortOffset = Alpha.Conf.GetInt("port_offset")
 	x.Config.LimitMutationsNquad = int(x.Config.Limit.GetInt64("mutations-nquad"))
 	x.Config.LimitQueryEdge = x.Config.Limit.GetUint64("query-edge")
@@ -737,6 +743,11 @@ func run() {
 		}
 	}
 	edgraph.Init()
+
+	// feature flags
+	featureFlagsConf := z.NewSuperFlag(Alpha.Conf.GetString("feature-flags")).MergeAndCheckDefault(
+		worker.FeatureFlagsDefaults)
+	x.Config.NormalizeCompatibilityMode = featureFlagsConf.GetString("normalize-compatibility-mode")
 
 	x.PrintVersion()
 	glog.Infof("x.Config: %+v", x.Config)

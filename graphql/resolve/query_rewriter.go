@@ -109,7 +109,7 @@ func getAuthSelector(queryType schema.QueryType) func(t schema.Type) *schema.Rul
 	return queryAuthSelector
 }
 
-// Rewrite rewrites a GraphQL query into a Dgraph GraphQuery.
+// Rewrite rewrites a GraphQL query into DQL.
 func (qr *queryRewriter) Rewrite(
 	ctx context.Context,
 	gqlQuery schema.Query) ([]*dql.GraphQuery, error) {
@@ -781,7 +781,7 @@ func (authRw *authRewriter) addAuthQueries(
 				objfilter = &dql.FilterTree{
 					Func: &dql.Function{
 						Name: "uid",
-						Args: []dql.Arg{{Value: queryVar, IsValueVar: false, IsGraphQLVar: false}},
+						Args: []dql.Arg{{Value: queryVar, IsValueVar: false, IsDQLVar: false}},
 					},
 				}
 				filts = append(filts, objfilter)

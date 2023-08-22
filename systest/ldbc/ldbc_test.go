@@ -1,3 +1,5 @@
+//go:build integration
+
 package main
 
 import (
@@ -30,14 +32,10 @@ func TestQueries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error while getting a dgraph client: %v", err)
 	}
-
 	yfile, _ := os.ReadFile("test_cases.yaml")
 
 	tc := make(map[string]TestCases)
-
-	err = yaml.Unmarshal(yfile, &tc)
-
-	if err != nil {
+	if err := yaml.Unmarshal(yfile, &tc); err != nil {
 		t.Fatalf("Error while greading test cases yaml: %v", err)
 	}
 

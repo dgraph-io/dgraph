@@ -32,9 +32,9 @@ import (
 	ostats "go.opencensus.io/stats"
 	otrace "go.opencensus.io/trace"
 
-	"github.com/dgraph-io/badger/v3"
-	"github.com/dgraph-io/badger/v3/options"
-	bpb "github.com/dgraph-io/badger/v3/pb"
+	"github.com/dgraph-io/badger/v4"
+	"github.com/dgraph-io/badger/v4/options"
+	bpb "github.com/dgraph-io/badger/v4/pb"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/tok"
@@ -681,8 +681,9 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		}
 		// No need to write a loop after ReadPostingList to skip unread entries
 		// for a given key because we only wrote BitDeltaPosting to temp badger.
-
-		kvs, err := l.Rollup(nil)
+		// We can write the data at their original timestamp in pstore badger.
+		// We do the rollup at MaxUint64 so that we don't change the timestamp of resulting list.
+		kvs, err := l.Rollup(nil, math.MaxUint64)
 		if err != nil {
 			return nil, err
 		}

@@ -1,11 +1,11 @@
 args==0.1.0
-certifi==2020.4.5.1
+certifi==2023.7.22
 chardet==3.0.4
 click==7.1.2
 clint==0.5.1
 docker==4.2.0
 embargo==0.1.1
-Flask==1.0
+Flask==2.3.2
 gevent==1.4.0
 greenlet==0.4.15
 httpie==3.1.0
@@ -13,9 +13,9 @@ idna==2.9
 itsdangerous==1.1.0
 Jinja2==2.11.3
 MarkupSafe==1.1.1
-Pygments==2.7.4
+Pygments==2.15.0
 PyYAML==5.4
-requests==2.23.0
+requests==2.31.0
 six==1.15.0
 urllib3==1.26.5
 websocket-client==0.57.0

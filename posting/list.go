@@ -28,8 +28,8 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 
-	bpb "github.com/dgraph-io/badger/v3/pb"
-	"github.com/dgraph-io/badger/v3/y"
+	bpb "github.com/dgraph-io/badger/v4/pb"
+	"github.com/dgraph-io/badger/v4/y"
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -524,6 +524,8 @@ func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.Directed
 			hex.EncodeToString(l.key), mpost)
 	}
 
+	x.PrintMutationEdge(t, pk, txn.StartTs)
+
 	// We ensure that commit marks are applied to posting lists in the right
 	// order. We can do so by proposing them in the same order as received by the Oracle delta
 	// stream from Zero, instead of in goroutines.
@@ -808,10 +810,61 @@ func (l *List) Length(readTs, afterUid uint64) int {
 // The first part of a multi-part list always has start UID 1 and will be the last part
 // to be deleted, at which point the entire list will be marked for deletion.
 // As the list grows, existing parts might be split if they become too big.
-func (l *List) Rollup(alloc *z.Allocator) ([]*bpb.KV, error) {
+//
+// You can provide a readTs for Rollup. This should either be math.MaxUint64, or it should be a
+// timestamp that was resevered for rollup. This would ensure that we read only till that time.
+// If read ts is provided, Once the rollup is done, we check the maximum timestamp. We store the
+// results at that max timestamp + 1. This mechanism allows us to make sure that
+//
+//   - Since we write at max timestamp + 1, we can side step any issues that arise by wal replay.
+//
+//   - Earlier one of the solution was to write at ts + 1. It didn't work as index transactions
+//     don't conflict so they can get commited at consecutive timestamps.
+//     This leads to some data being overwriten by rollup.
+//
+//   - No other transcation happens at readTs. This way we can be sure that we won't overwrite
+//     any transaction that happened.
+//
+//   - Latest data. We wait until readTs - 1, so that we know that we are reading the latest data.
+//     If we read stale data, it can cause to delete some old transactions.
+//
+//   - Even though we have reserved readTs for rollup, we don't store the data there. This is done
+//     so that the rollup is written as close as possible to actual data. This can cause issues
+//     if someone is reading data between two timestamps.
+//
+//   - Drop operation can cause issues if they are rolled up. Since we are storing results at ts + 1,
+//     in dgraph.drop.op. When we do drop op, we delete the relevant data first using a mutation.
+//     Then we write a record into the dgraph.drop.op. We use this record to figure out if a
+//     drop was performed. This helps us during backup, when we want to know if we need to
+//     read a given backup or not. A backup, which has a drop record, would render older backups
+//     unnecessary.
+//
+//     If we rollup the dgraph.drop.op, and store result on ts + 1, it effectively copies the
+//     original record into a new location. We want to see if there can be any issues in
+//     backup/restore due to this. To ensure that there is no issue in writing on ts + 1,
+//     we do the following analysis.
+//
+//     Analysis is done for drop op, but it would be the same for drop predicate and namespace.
+//     Assume that there were two backups, at b1 and b2. We move rollup ts around to see if it
+//     can cause any issues. There can be 3 cases:
+//
+//     1. b1 < ts < b2. In this case, we would have a drop record in b2. This is the same behaviour
+//     as we would have writen on ts.
+//
+//     2. b1 = ts < b2. In this case, we would have a drop record in b1, and in b2. Originally, only
+//     b1 would have a drop record. With this new approach, b2 would also have a drop record. This
+//     is okay because last entry in b1 is drop, so it wouldn't have any data to be applied.
+//
+//     3. b1 < ts < ts + 1 = b2. In this case, we would have both drop drop records in b2. No issues
+//     in this case.
+//
+//     This proves that writing rollups at ts + 1 would not cause any issues with dgraph.drop.op.
+//     The only issue would come if a rollup happens at ts + k. If a backup happens in between
+//     ts and ts + k, it could lead to some data being dropped during restore.
+func (l *List) Rollup(alloc *z.Allocator, readTs uint64) ([]*bpb.KV, error) {
 	l.RLock()
 	defer l.RUnlock()
-	out, err := l.rollup(math.MaxUint64, true)
+	out, err := l.rollup(readTs, true)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed when calling List.rollup")
 	}
@@ -823,6 +876,10 @@ func (l *List) Rollup(alloc *z.Allocator) ([]*bpb.KV, error) {
 	var kvs []*bpb.KV
 	kv := MarshalPostingList(out.plist, alloc)
 	kv.Version = out.newMinTs
+	if readTs != math.MaxUint64 {
+		kv.Version += 1
+	}
+
 	kv.Key = alloc.Copy(l.key)
 	kvs = append(kvs, kv)
 
@@ -842,6 +899,7 @@ func (l *List) Rollup(alloc *z.Allocator) ([]*bpb.KV, error) {
 		return bytes.Compare(kvs[i].Key, kvs[j].Key) <= 0
 	})
 
+	x.PrintRollup(out.plist, out.parts, l.key, kv.Version)
 	x.VerifyPostingSplits(kvs, out.plist, out.parts, l.key)
 	return kvs, nil
 }

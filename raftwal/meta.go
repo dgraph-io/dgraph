@@ -24,8 +24,8 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
-	"go.etcd.io/etcd/raft"
-	"go.etcd.io/etcd/raft/raftpb"
+	"go.etcd.io/etcd/raft/v3"
+	"go.etcd.io/etcd/raft/v3/raftpb"
 
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
@@ -65,11 +65,11 @@ const (
 	metaName = "wal.meta"
 	// metaFileSize is the size of the wal.meta file.
 	metaFileSize = 1 << 20
-	//hardStateOffset is the offset of the hard sate within the wal.meta file.
+	// hardStateOffset is the offset of the hard state within the wal.meta file.
 	hardStateOffset = 512
 	// snapshotIndex stores the index and term corresponding to the snapshot.
 	snapshotIndex = 1024
-	// snapshotOffest is the offset of the snapshot within the wal.meta file.
+	// snapshotOffset is the offset of the snapshot within the wal.meta file.
 	snapshotOffset = snapshotIndex + 16
 )
 

@@ -16,15 +16,6 @@
 
 package main
 
-var wordIdx = 0
-
-func nextWord() string {
-	// TODO: Nicer to not use global. Also check for index out of range.
-	w := words[wordIdx]
-	wordIdx++
-	return w
-}
-
 var words = []string{
 	"information",
 	"available",

@@ -20,12 +20,12 @@ BUILD          ?= $(shell git rev-parse --short HEAD)
 BUILD_CODENAME ?= dgraph
 BUILD_DATE     ?= $(shell git log -1 --format=%ci)
 BUILD_BRANCH   ?= $(shell git rev-parse --abbrev-ref HEAD)
+BUILD_VERSION  ?= $(shell git describe --always --tags)
 
-ifeq ($(DGRAPH_VERSION),)
-BUILD_VERSION ?= local
-else
+# check if DGRAPH_VERSION flag is set (used for release pipeline)
+ifneq ($(DGRAPH_VERSION),)
 # remove arch suffix from DGRAPH_VERSION for CD steps only
-BUILD_VERSION := $(shell echo ${DGRAPH_VERSION} | cut -d "-" -f 1)
+BUILD_VERSION := $(shell echo ${DGRAPH_VERSION} | sed -e 's/-amd64//' -e 's/-arm64//')
 endif
 
 GOOS          ?= $(shell go env GOOS)
@@ -77,6 +77,7 @@ endif
 all: $(BIN)
 
 $(BIN): clean jemalloc
+	@go mod tidy
 	@go build $(BUILD_FLAGS) -o $(BIN)
 
 test-coverage-binary: clean jemalloc
@@ -93,6 +94,7 @@ install: jemalloc
 	@if [ "$(HAS_SHA256SUM)" ] ; then \
 		echo "Old SHA256:" `sha256sum $(INSTALL_TARGET) 2>/dev/null | cut -c-64` ; \
 	fi
+	@go mod tidy
 	@go install $(BUILD_FLAGS)
 	@echo "Installed $(BIN) to $(INSTALL_TARGET)"
 	@if [ "$(HAS_SHA256SUM)" ] ; then \
@@ -103,7 +105,7 @@ jemalloc:
 	@if [ -z "$(HAS_JEMALLOC)" ] ; then \
 		mkdir -p /tmp/jemalloc-temp && cd /tmp/jemalloc-temp ; \
 		echo "Downloading jemalloc" ; \
-		curl -s -L ${JEMALLOC_URL} -o jemalloc.tar.bz2 ; \
+		curl -f -s -L ${JEMALLOC_URL} -o jemalloc.tar.bz2 ; \
 		tar xjf ./jemalloc.tar.bz2 ; \
 		cd jemalloc-5.2.1 ; \
 		./configure --with-jemalloc-prefix='je_' --with-malloc-conf='background_thread:true,metadata_thp:auto'; \

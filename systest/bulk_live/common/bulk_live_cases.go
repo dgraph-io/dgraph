@@ -35,7 +35,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 )
 
@@ -44,38 +44,38 @@ import (
 
 // run this in sequential order. cleanup is necessary for bulk loader to work
 func RunBulkCases(t *testing.T) {
-	suite := helloWorldSetup(t, true)
+	hsuite := helloWorldSetup(t, true)
 	testHelloWorld(t)
-	suite.cleanup(t)
+	hsuite.cleanup(t)
 
 	// remote hello world only differs from hello world in setup
-	suite = remoteHelloWorldSetup(t, true)
+	hsuite = remoteHelloWorldSetup(t, true)
 	testHelloWorld(t)
-	suite.cleanup(t)
+	hsuite.cleanup(t)
 
-	suite = facetsSetup(t, true)
+	hsuite = facetsSetup(t, true)
 	testFacets(t)
-	suite.cleanup(t)
+	hsuite.cleanup(t)
 
-	suite = countIndexSetup(t, true)
+	hsuite = countIndexSetup(t, true)
 	testCountIndex(t)
-	suite.cleanup(t)
+	hsuite.cleanup(t)
 
-	suite = indexedPredicateSetup(t, true)
+	hsuite = indexedPredicateSetup(t, true)
 	testIndexedPredicate(t)
-	suite.cleanup(t)
+	hsuite.cleanup(t)
 
-	suite = loadTypesSetup(t, true)
+	hsuite = loadTypesSetup(t, true)
 	testLoadTypes(t)
-	suite.cleanup(t)
+	hsuite.cleanup(t)
 
-	suite = bulkSingleUidSetup(t, true)
+	hsuite = bulkSingleUidSetup(t, true)
 	testBulkSingleUid(t)
-	suite.cleanup(t)
+	hsuite.cleanup(t)
 
-	suite = deleteEdgeWithStarSetup(t, true)
+	hsuite = deleteEdgeWithStarSetup(t, true)
 	testDeleteEdgeWithStar(t)
-	suite.cleanup(t)
+	hsuite.cleanup(t)
 }
 
 func RunBulkCasesAcl(t *testing.T) {
@@ -103,30 +103,30 @@ func RunBulkCasesAcl(t *testing.T) {
 
 // run this in sequential order. cleanup is necessary for live loader to work
 func RunLiveCases(t *testing.T) {
-	suite := helloWorldSetup(t, false)
+	hsuite := helloWorldSetup(t, false)
 	testHelloWorld(t)
-	suite.cleanup(t)
+	hsuite.cleanup(t)
 
 	// remote hello world only differs from hello world in setup
-	suite = remoteHelloWorldSetup(t, false)
+	hsuite = remoteHelloWorldSetup(t, false)
 	testHelloWorld(t)
-	suite.cleanup(t)
+	hsuite.cleanup(t)
 
-	suite = facetsSetup(t, false)
+	hsuite = facetsSetup(t, false)
 	testFacets(t)
-	suite.cleanup(t)
+	hsuite.cleanup(t)
 
-	suite = indexedPredicateSetup(t, false)
+	hsuite = indexedPredicateSetup(t, false)
 	testIndexedPredicate(t)
-	suite.cleanup(t)
+	hsuite.cleanup(t)
 
-	suite = countIndexSetup(t, false)
+	hsuite = countIndexSetup(t, false)
 	testCountIndex(t)
-	suite.cleanup(t)
+	hsuite.cleanup(t)
 
-	suite = loadTypesSetup(t, false)
+	hsuite = loadTypesSetup(t, false)
 	testLoadTypes(t)
-	suite.cleanup(t)
+	hsuite.cleanup(t)
 }
 
 const helloWorldSchema string = `
@@ -137,7 +137,7 @@ const helloWorldData string = `
 	_:pp <name> "Peter Pan" .
 `
 
-func helloWorldSetup(t *testing.T, isBulkLoader bool) *suite {
+func helloWorldSetup(t *testing.T, isBulkLoader bool) *bsuite {
 	if isBulkLoader {
 		s := newBulkOnlySuite(t, helloWorldSchema, helloWorldData, "")
 		return s
@@ -147,7 +147,7 @@ func helloWorldSetup(t *testing.T, isBulkLoader bool) *suite {
 	return s
 }
 
-func remoteHelloWorldSetup(t *testing.T, isBulkLoader bool) *suite {
+func remoteHelloWorldSetup(t *testing.T, isBulkLoader bool) *bsuite {
 	return newSuiteInternal(t, suiteOpts{
 		schema:    helloWorldSchema,
 		gqlSchema: "",
@@ -191,7 +191,7 @@ func testHelloWorld(t *testing.T) {
 	`))
 }
 
-func facetsSetup(t *testing.T, isBulkLoader bool) *suite {
+func facetsSetup(t *testing.T, isBulkLoader bool) *bsuite {
 	if isBulkLoader {
 		s := newBulkOnlySuite(t, `
 		name: string @index(exact) .
@@ -268,7 +268,7 @@ func testFacets(t *testing.T) {
 	`))
 }
 
-func indexedPredicateSetup(t *testing.T, isBulkLoader bool) *suite {
+func indexedPredicateSetup(t *testing.T, isBulkLoader bool) *bsuite {
 	if isBulkLoader {
 		s := newBulkOnlySuite(t, `
 		name: string @index(exact) .
@@ -304,7 +304,7 @@ func testIndexedPredicate(t *testing.T) {
 	`))
 }
 
-func countIndexSetup(t *testing.T, isBulkLoader bool) *suite {
+func countIndexSetup(t *testing.T, isBulkLoader bool) *bsuite {
 	schema := `
 		name: string @index(exact) .
 		friend: [uid] @count @reverse .
@@ -468,7 +468,7 @@ func testCountIndex(t *testing.T) {
 	`))
 }
 
-func loadTypesSetup(t *testing.T, isBulkLoader bool) *suite {
+func loadTypesSetup(t *testing.T, isBulkLoader bool) *bsuite {
 	schema := `
 		name: string .
 
@@ -494,7 +494,7 @@ func testLoadTypes(t *testing.T) {
 		`{"types":[{"name":"Person", "fields":[{"name":"name"}]}]}`))
 }
 
-func bulkSingleUidSetup(t *testing.T, isBulkLoader bool) *suite {
+func bulkSingleUidSetup(t *testing.T, isBulkLoader bool) *bsuite {
 	schema := `
 		name: string @index(exact) .
 		friend: uid @count @reverse .
@@ -661,7 +661,7 @@ func testBulkSingleUid(t *testing.T) {
 	`))
 }
 
-func deleteEdgeWithStarSetup(t *testing.T, isBulkLoader bool) *suite {
+func deleteEdgeWithStarSetup(t *testing.T, isBulkLoader bool) *bsuite {
 	schema := `
 		friend: [uid] .
 	`

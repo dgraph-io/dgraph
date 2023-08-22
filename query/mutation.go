@@ -25,7 +25,7 @@ import (
 	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"
 
-	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/dql"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types/facets"
@@ -286,6 +286,9 @@ func checkIfDeletingAclOperation(ctx context.Context, edges []*pb.DirectedEdge) 
 
 	isDeleteAclOperation := false
 	for _, edge := range edges {
+		if !x.IsReservedPredicate(edge.Attr) {
+			continue
+		}
 		// Disallow deleting of guardians group
 		if edge.Entity == guardianUid && edge.Op == pb.DirectedEdge_DEL {
 			isDeleteAclOperation = true
@@ -298,7 +301,7 @@ func checkIfDeletingAclOperation(ctx context.Context, edges []*pb.DirectedEdge) 
 		}
 	}
 	if isDeleteAclOperation {
-		return errors.Errorf("Properties of guardians group and groot user cannot be deleted.")
+		return errors.Errorf("Reserved Properties of guardians group and groot user cannot be deleted.")
 	}
 	return nil
 }

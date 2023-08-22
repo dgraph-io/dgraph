@@ -350,5 +350,5 @@ func TestMain(m *testing.M) {
 	x.Config.GraphQL = z.NewSuperFlag("lambda-url=http://localhost:8086/graphql-worker;").
 		MergeAndCheckDefault("lambda-url=;")
 	// now run the tests
-	os.Exit(m.Run())
+	m.Run()
 }

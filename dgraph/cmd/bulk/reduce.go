@@ -37,10 +37,10 @@ import (
 	"github.com/golang/glog"
 	"github.com/golang/snappy"
 
-	"github.com/dgraph-io/badger/v3"
-	bo "github.com/dgraph-io/badger/v3/options"
-	bpb "github.com/dgraph-io/badger/v3/pb"
-	"github.com/dgraph-io/badger/v3/y"
+	"github.com/dgraph-io/badger/v4"
+	bo "github.com/dgraph-io/badger/v4/options"
+	bpb "github.com/dgraph-io/badger/v4/pb"
+	"github.com/dgraph-io/badger/v4/y"
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -456,7 +456,7 @@ func bufferStats(cbuf *z.Buffer) {
 func getBuf(dir string) *z.Buffer {
 	return z.NewBuffer(64<<20, "Reducer.GetBuf").
 		WithAutoMmap(1<<30, filepath.Join(dir, bufferDir)).
-		WithMaxSize(64 << 30)
+		WithMaxSize(0)
 }
 
 func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *countIndexer) {
@@ -681,8 +681,11 @@ func (r *reducer) toList(req *encodeRequest) {
 		shouldSplit := pl.Size() > (1<<20)/2 && len(pl.Pack.Blocks) > 1
 		if shouldSplit {
 			// Give ownership of pl.Pack away to list. Rollup would deallocate the Pack.
+			// We do rollup at math.MaxUint64 so that we don't change the allocated
+			// timestamp of the posting list. The posting list originally is written
+			// at writeVersionTs, we don't want to change that in rollup.
 			l := posting.NewList(y.Copy(currentKey), pl, writeVersionTs)
-			kvs, err := l.Rollup(nil)
+			kvs, err := l.Rollup(nil, math.MaxUint64)
 			x.Check(err)
 
 			// Assign a new allocator, so we don't reset the one we were using during Rollup.

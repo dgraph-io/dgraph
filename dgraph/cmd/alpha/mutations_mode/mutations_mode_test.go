@@ -1,3 +1,5 @@
+//go:build integration
+
 /*
  * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
@@ -25,8 +27,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/dgraph-io/dgo/v210"
-	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/dgo/v230"
+	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 )
 
@@ -41,15 +43,12 @@ func runOn(conn *grpc.ClientConn, fn func(*testing.T, *dgo.Dgraph)) func(*testin
 
 func dropAllDisallowed(t *testing.T, dg *dgo.Dgraph) {
 	err := dg.Alter(context.Background(), &api.Operation{DropAll: true})
-
 	require.Error(t, err)
 	require.Contains(t, strings.ToLower(err.Error()), "no mutations allowed")
 }
 
 func dropAllAllowed(t *testing.T, dg *dgo.Dgraph) {
-	err := dg.Alter(context.Background(), &api.Operation{DropAll: true})
-
-	require.NoError(t, err)
+	require.NoError(t, dg.Alter(context.Background(), &api.Operation{DropAll: true}))
 }
 
 func mutateNewDisallowed(t *testing.T, dg *dgo.Dgraph) {
@@ -93,21 +92,17 @@ func addPredicateDisallowed(t *testing.T, dg *dgo.Dgraph) {
 
 func addPredicateAllowed1(t *testing.T, dg *dgo.Dgraph) {
 	ctx := context.Background()
-
 	err := dg.Alter(ctx, &api.Operation{
 		Schema: `name: string @index(exact) .`,
 	})
-
 	require.NoError(t, err)
 }
 
 func addPredicateAllowed2(t *testing.T, dg *dgo.Dgraph) {
 	ctx := context.Background()
-
 	err := dg.Alter(ctx, &api.Operation{
 		Schema: `size: string @index(exact) .`,
 	})
-
 	require.NoError(t, err)
 }
 

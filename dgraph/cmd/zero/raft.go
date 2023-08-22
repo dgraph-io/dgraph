@@ -32,8 +32,8 @@ import (
 	"github.com/golang/glog"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
-	"go.etcd.io/etcd/raft"
-	"go.etcd.io/etcd/raft/raftpb"
+	"go.etcd.io/etcd/raft/v3"
+	"go.etcd.io/etcd/raft/v3/raftpb"
 	ostats "go.opencensus.io/stats"
 	"go.opencensus.io/tag"
 	otrace "go.opencensus.io/trace"
@@ -629,7 +629,7 @@ func (n *node) checkForCIDInEntries() (bool, error) {
 			}
 			var proposal pb.ZeroProposal
 			if err = proposal.Unmarshal(entry.Data[8:]); err != nil {
-				return false, err
+				return false, errors.Wrapf(err, "error unmarshlling wal entry: [%x]", entry.Data[8:])
 			}
 			if len(proposal.Cid) > 0 {
 				return true, err
@@ -656,7 +656,7 @@ func (n *node) initAndStartNode() error {
 			var zs pb.ZeroSnapshot
 			x.Check(zs.Unmarshal(sp.Data))
 			n.server.SetMembershipState(zs.State)
-			for _, id := range sp.Metadata.ConfState.Nodes {
+			for _, id := range sp.Metadata.ConfState.Voters {
 				n.Connect(id, zs.State.Zeros[id].Addr)
 			}
 		}
@@ -700,7 +700,10 @@ func (n *node) initAndStartNode() error {
 			cancel()
 		}
 		glog.Infof("[%#x] Starting node\n", n.Id)
-		n.SetRaft(raft.StartNode(n.Cfg, nil))
+		// We call RestartNode here because nodes already exists in the cluster and
+		// we setup the state by calling c.JoinCluster above. We can't call StartNode
+		// here because we only have peer's IP addresses.
+		n.SetRaft(raft.RestartNode(n.Cfg))
 
 	default:
 		glog.Infof("Starting a brand new node")

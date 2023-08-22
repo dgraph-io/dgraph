@@ -40,8 +40,8 @@ func MonitorDiskMetrics(dirTag string, dir string, lc *z.Closer) {
 				continue
 			}
 			reservedBlocks := s.Bfree - s.Bavail
-			total := int64(s.Frsize) * int64(s.Blocks-reservedBlocks)
-			free := int64(s.Frsize) * int64(s.Bavail)
+			total := s.Frsize * int64(s.Blocks-reservedBlocks)
+			free := s.Frsize * int64(s.Bavail)
 			stats.Record(ctx, DiskFree.M(free), DiskUsed.M(total-free), DiskTotal.M(total))
 		}
 	}

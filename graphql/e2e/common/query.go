@@ -37,8 +37,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/dgraph-io/dgo/v210"
-	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/dgo/v230"
+	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
@@ -522,10 +522,10 @@ func inFilterOnString(t *testing.T) {
 
 	updateStateParams := &GraphQLParams{
 		Query: `mutation{
-			updateState(input: { 
+			updateState(input: {
 				filter: {
 					xcode: { in: ["abc", "def"]}},
-				set: { 
+				set: {
 					capital: "Common Capital"} }){
 				state{
 					xcode
@@ -2597,10 +2597,10 @@ func queryWithCascade(t *testing.T) {
 		{
 			name: "parameterized cascade on interface ",
 			query: `query {
-						queryCharacter (filter: { appearsIn: { in: [EMPIRE] } }) @cascade(fields:["appearsIn"]){	
+						queryCharacter (filter: { appearsIn: { in: [EMPIRE] } }) @cascade(fields:["appearsIn"]){
 							name
 							appearsIn
-						} 
+						}
 					}`,
 			respData: `{
 						  "queryCharacter": [
@@ -3238,7 +3238,7 @@ func queryAggregateOnEmptyData3(t *testing.T) {
 		{
 			"queryCountry": [{
 				"name": "India",
-				"ag": { 
+				"ag": {
 					"count" : 3,
 					"nameMin": "Gujarat",
 					"capitalMax": null,
@@ -3289,7 +3289,7 @@ func queryAggregateWithAlias(t *testing.T) {
 				cnt: count
 				tmin : titleMin
 				tmax: titleMax
-				navg : numLikesAvg 
+				navg : numLikesAvg
 			}
 		}`,
 	}
@@ -3365,7 +3365,7 @@ func queryAggregateAtChildLevel(t *testing.T) {
 		{
 			"queryCountry": [{
 				"name": "India",
-				"ag": { 
+				"ag": {
 					"count" : 3,
 					"__typename": "StateAggregateResult",
 					"nameMin": "Gujarat"
@@ -3377,7 +3377,7 @@ func queryAggregateAtChildLevel(t *testing.T) {
 
 func queryAggregateAtChildLevelWithFilter(t *testing.T) {
 	queryNumberOfIndianStates := &GraphQLParams{
-		Query: `query 
+		Query: `query
 		{
 			queryCountry(filter: { name: { eq: "India" } }) {
 				name
@@ -3395,7 +3395,7 @@ func queryAggregateAtChildLevelWithFilter(t *testing.T) {
 		{
 			"queryCountry": [{
 				"name": "India",
-				"ag": { 
+				"ag": {
 					"count" : 2,
 					"nameMin" : "Karnataka"
 				}
@@ -3406,7 +3406,7 @@ func queryAggregateAtChildLevelWithFilter(t *testing.T) {
 
 func queryAggregateAtChildLevelWithEmptyData(t *testing.T) {
 	queryNumberOfIndianStates := &GraphQLParams{
-		Query: `query 
+		Query: `query
 		{
 			queryCountry(filter: { name: { eq: "India" } }) {
 				name
@@ -3461,7 +3461,7 @@ func queryAggregateAtChildLevelWithMultipleAlias(t *testing.T) {
 		{
 			"queryCountry": [{
 				"name": "India",
-				"ag1": { 
+				"ag1": {
 					"count" : 2,
 					"nameMax" : "Maharashtra"
 				},
@@ -3509,7 +3509,7 @@ func queryAggregateAtChildLevelWithRepeatedFields(t *testing.T) {
 
 func queryAggregateAndOtherFieldsAtChildLevel(t *testing.T) {
 	queryNumberOfIndianStates := &GraphQLParams{
-		Query: `query 
+		Query: `query
 		{
 			queryCountry(filter: { name: { eq: "India" } }) {
 				name
@@ -3530,14 +3530,14 @@ func queryAggregateAndOtherFieldsAtChildLevel(t *testing.T) {
 		{
 			"queryCountry": [{
 				"name": "India",
-				"ag": { 
+				"ag": {
 					"count" : 3,
 					"nameMin" : "Gujarat"
 				},
 				"states": [
 				{
 					"name": "Maharashtra"
-				}, 
+				},
 				{
 					"name": "Gujarat"
 				},
@@ -3593,7 +3593,7 @@ func checkUser(t *testing.T, userObj, expectedObj *user) {
 	}
 
 	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	opt := cmpopts.IgnoreFields(user{}, "Password")
 	if diff := cmp.Diff(expectedObj, result.CheckUserPasword, opt); diff != "" {
@@ -3620,7 +3620,7 @@ func checkUserPasswordWithAlias(t *testing.T, userObj, expectedObj *user) {
 	}
 
 	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	opt := cmpopts.IgnoreFields(user{}, "Password")
 	if diff := cmp.Diff(expectedObj, result.CheckUserPasword, opt); diff != "" {
@@ -3926,4 +3926,61 @@ func idDirectiveWithInt(t *testing.T) {
 		  }
 	}`
 	require.JSONEq(t, expected, string(response.Data))
+}
+
+func queryWithIDFieldAndInterfaceArg(t *testing.T) {
+	// add library member
+	addLibraryMemberParams := &GraphQLParams{
+		Query: `mutation addLibraryMember($input: [AddLibraryMemberInput!]!) {
+                         addLibraryMember(input: $input, upsert: false) {
+                          libraryMember {
+                           refID
+                          }
+                         }
+                        }`,
+		Variables: map[string]interface{}{"input": []interface{}{
+			map[string]interface{}{
+				"refID":       "101",
+				"name":        "Alice",
+				"itemsIssued": []string{"Intro to Go", "Parallel Programming"},
+				"readHours":   "4d2hr",
+			}},
+		},
+	}
+
+	gqlResponse := addLibraryMemberParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	queryMember := &GraphQLParams{
+		Query: `
+			query {
+				getMember(refID: "101") {
+					refID
+					name
+					itemsIssued
+					... on LibraryMember {
+						readHours
+					}
+				}
+			}`,
+	}
+
+	gqlResponse = queryMember.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	queryPersonExpected := `
+		  {
+              "getMember": {
+                  "refID": "101",
+                  "name": "Alice",
+                  "itemsIssued": [
+                      "Parallel Programming",
+                      "Intro to Go"
+                  ],
+                  "readHours": "4d2hr"
+              }
+          }`
+
+	require.JSONEq(t, queryPersonExpected, string(gqlResponse.Data))
+	// Cleanup
+	DeleteGqlType(t, "LibraryMember", map[string]interface{}{}, 1, nil)
 }

@@ -1,3 +1,5 @@
+//go:build integration
+
 /*
  * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
@@ -29,9 +31,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/badger/v3/y"
-	"github.com/dgraph-io/dgo/v210"
-	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/badger/v4/y"
+	"github.com/dgraph-io/dgo/v230"
+	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -72,7 +74,7 @@ func TestParallelIndexing(t *testing.T) {
 		dg, err = testutil.DgraphClientWithGroot(testutil.SockAddr)
 		return err
 	})
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	testutil.DropAll(t, dg)
 	if err := dg.Alter(context.Background(), &api.Operation{

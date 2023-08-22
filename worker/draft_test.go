@@ -17,11 +17,10 @@
 package worker
 
 import (
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"go.etcd.io/etcd/raft/raftpb"
+	"go.etcd.io/etcd/raft/v3/raftpb"
 
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -50,10 +49,7 @@ func getEntryForCommit(index, startTs, commitTs uint64) raftpb.Entry {
 }
 
 func TestCalculateSnapshot(t *testing.T) {
-	dir, err := os.MkdirTemp("", "raftwal")
-	require.NoError(t, err)
-	defer os.RemoveAll(dir)
-
+	dir := t.TempDir()
 	ds := raftwal.Init(dir)
 	defer ds.Close()
 
@@ -74,8 +70,7 @@ func TestCalculateSnapshot(t *testing.T) {
 
 	// Check state of Raft store.
 	var cs raftpb.ConfState
-	err = n.Store.CreateSnapshot(snap.Index, &cs, nil)
-	require.NoError(t, err)
+	require.NoError(t, n.Store.CreateSnapshot(snap.Index, &cs, nil))
 
 	first, err := n.Store.FirstIndex()
 	require.NoError(t, err)
@@ -100,8 +95,7 @@ func TestCalculateSnapshot(t *testing.T) {
 	require.Equal(t, uint64(8), snap.Index)
 
 	// Check state of Raft store.
-	err = n.Store.CreateSnapshot(snap.Index, &cs, nil)
-	require.NoError(t, err)
+	require.NoError(t, n.Store.CreateSnapshot(snap.Index, &cs, nil))
 	first, err = n.Store.FirstIndex()
 	require.NoError(t, err)
 	require.Equal(t, uint64(9), first)

@@ -1,0 +1,61 @@
+name: ci-dgraph-oss-build
+on:
+  push:
+    paths-ignore:
+      - '.github/CODEOWNERS'
+      - '.vscode/**'
+      - 'compose/**'
+      - 'contrib/systemd/**'
+      - 'licenses/**'
+      - 'paper/**'
+      - 'present/**'
+      - 'RFC/**'
+      - 'static/**'
+      - 'wiki/**'
+      - '**/**.dockerignore'
+      - '**/**.gitignore'
+      - '**/**.md'
+      - '**/**.png'
+      - '**/**.jpg'
+      - '**/**.gif'
+      - '**/**.ini'
+    branches:
+      - main
+      - 'release/**'
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
+    branches:
+      - main
+      - 'release/**'
+  schedule:
+    - cron: "1 0,6,12,18 * * *"
+jobs:
+  dgraph-oss-build:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v3
+      - name: Get Go Version
+        run: |
+          #!/bin/bash
+          GOVERSION=$({ [ -f .go-version ] && cat .go-version; })
+          echo "GOVERSION=$GOVERSION" >> $GITHUB_ENV
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: ${{ env.GOVERSION }}
+      - name: Make OSS Linux Build
+        run: make oss # verify that we can make OSS build
+      - name: Run OSS Unit Tests
+        run: |
+          #!/bin/bash
+          # go env settings
+          export GOPATH=~/go
+          # move the binary
+          cp dgraph/dgraph ~/go/bin/dgraph
+          # run OSS unit tests
+          go test -timeout=60m -failfast -tags=oss -count=1 ./...

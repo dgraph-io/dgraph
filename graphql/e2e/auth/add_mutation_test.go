@@ -1,3 +1,5 @@
+//go:build integration
+
 /*
  *    Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
@@ -238,14 +240,9 @@ func TestAuth_AddOnTypeWithRBACRuleOnInterface(t *testing.T) {
 			require.Contains(t, gqlResponse.Errors[0].Message, "authorization failed")
 			continue
 		}
-
 		common.RequireNoGQLErrors(t, gqlResponse)
-
-		err := json.Unmarshal([]byte(tcase.result), &expected)
-		require.NoError(t, err)
-
-		err = json.Unmarshal(gqlResponse.Data, &result)
-		require.NoError(t, err)
+		require.NoError(t, json.Unmarshal([]byte(tcase.result), &expected))
+		require.NoError(t, json.Unmarshal(gqlResponse.Data, &result))
 
 		opt := cmpopts.IgnoreFields(FbPost{}, "Id")
 		opt1 := cmpopts.IgnoreFields(Author{}, "Id")
@@ -338,12 +335,8 @@ func TestAuth_AddOnTypeWithGraphTraversalRuleOnInterface(t *testing.T) {
 		}
 
 		common.RequireNoGQLErrors(t, gqlResponse)
-
-		err := json.Unmarshal([]byte(tcase.result), &expected)
-		require.NoError(t, err)
-
-		err = json.Unmarshal(gqlResponse.Data, &result)
-		require.NoError(t, err)
+		require.NoError(t, json.Unmarshal([]byte(tcase.result), &expected))
+		require.NoError(t, json.Unmarshal(gqlResponse.Data, &result))
 		opt := cmpopts.IgnoreFields(Question{}, "Id")
 		opt1 := cmpopts.IgnoreFields(Author{}, "Id")
 		if diff := cmp.Diff(expected, result, opt, opt1); diff != "" {
@@ -449,13 +442,9 @@ func TestAddDeepFilter(t *testing.T) {
 			require.Contains(t, gqlResponse.Errors[0].Message, "authorization failed")
 			continue
 		}
-
 		common.RequireNoGQLErrors(t, gqlResponse)
-
-		err := json.Unmarshal([]byte(tcase.result), &expected)
-		require.NoError(t, err)
-		err = json.Unmarshal(gqlResponse.Data, &result)
-		require.NoError(t, err)
+		require.NoError(t, json.Unmarshal([]byte(tcase.result), &expected))
+		require.NoError(t, json.Unmarshal(gqlResponse.Data, &result))
 
 		opt := cmpopts.IgnoreFields(Column{}, "ColID")
 		opt1 := cmpopts.IgnoreFields(Project{}, "ProjID")
@@ -552,13 +541,9 @@ func TestAddOrRBACFilter(t *testing.T) {
 			require.Contains(t, gqlResponse.Errors[0].Message, "authorization failed")
 			continue
 		}
-
 		common.RequireNoGQLErrors(t, gqlResponse)
-
-		err := json.Unmarshal([]byte(tcase.result), &expected)
-		require.NoError(t, err)
-		err = json.Unmarshal(gqlResponse.Data, &result)
-		require.NoError(t, err)
+		require.NoError(t, json.Unmarshal([]byte(tcase.result), &expected))
+		require.NoError(t, json.Unmarshal(gqlResponse.Data, &result))
 
 		opt := cmpopts.IgnoreFields(Project{}, "ProjID")
 		if diff := cmp.Diff(expected, result, opt); diff != "" {
@@ -631,13 +616,9 @@ func TestAddAndRBACFilterMultiple(t *testing.T) {
 			require.Contains(t, gqlResponse.Errors[0].Message, "authorization failed")
 			continue
 		}
-
 		common.RequireNoGQLErrors(t, gqlResponse)
-
-		err := json.Unmarshal([]byte(tcase.result), &expected)
-		require.NoError(t, err)
-		err = json.Unmarshal(gqlResponse.Data, &result)
-		require.NoError(t, err)
+		require.NoError(t, json.Unmarshal([]byte(tcase.result), &expected))
+		require.NoError(t, json.Unmarshal(gqlResponse.Data, &result))
 
 		opt := cmpopts.IgnoreFields(Issue{}, "Id")
 		if diff := cmp.Diff(expected, result, opt); diff != "" {
@@ -706,13 +687,9 @@ func TestAddAndRBACFilter(t *testing.T) {
 			require.Contains(t, gqlResponse.Errors[0].Message, "authorization failed")
 			continue
 		}
-
 		common.RequireNoGQLErrors(t, gqlResponse)
-
-		err := json.Unmarshal([]byte(tcase.result), &expected)
-		require.NoError(t, err)
-		err = json.Unmarshal(gqlResponse.Data, &result)
-		require.NoError(t, err)
+		require.NoError(t, json.Unmarshal([]byte(tcase.result), &expected))
+		require.NoError(t, json.Unmarshal(gqlResponse.Data, &result))
 
 		opt := cmpopts.IgnoreFields(Issue{}, "Id")
 		if diff := cmp.Diff(expected, result, opt); diff != "" {
@@ -810,13 +787,9 @@ func TestAddComplexFilter(t *testing.T) {
 			require.Contains(t, gqlResponse.Errors[0].Message, "authorization failed")
 			continue
 		}
-
 		common.RequireNoGQLErrors(t, gqlResponse)
-
-		err := json.Unmarshal([]byte(tcase.result), &expected)
-		require.NoError(t, err)
-		err = json.Unmarshal(gqlResponse.Data, &result)
-		require.NoError(t, err)
+		require.NoError(t, json.Unmarshal([]byte(tcase.result), &expected))
+		require.NoError(t, json.Unmarshal(gqlResponse.Data, &result))
 
 		opt := cmpopts.IgnoreFields(Movie{}, "Id")
 		if diff := cmp.Diff(expected, result, opt); diff != "" {
@@ -878,13 +851,9 @@ func TestAddRBACFilter(t *testing.T) {
 			require.Contains(t, gqlResponse.Errors[0].Message, "authorization failed")
 			continue
 		}
-
 		common.RequireNoGQLErrors(t, gqlResponse)
-
-		err := json.Unmarshal([]byte(tcase.result), &expected)
-		require.NoError(t, err)
-		err = json.Unmarshal(gqlResponse.Data, &result)
-		require.NoError(t, err)
+		require.NoError(t, json.Unmarshal([]byte(tcase.result), &expected))
+		require.NoError(t, json.Unmarshal(gqlResponse.Data, &result))
 
 		opt := cmpopts.IgnoreFields(Log{}, "Id")
 		if diff := cmp.Diff(expected, result, opt); diff != "" {
@@ -942,13 +911,9 @@ func TestAddGQLOnly(t *testing.T) {
 			require.Contains(t, gqlResponse.Errors[0].Message, "authorization failed")
 			continue
 		}
-
 		common.RequireNoGQLErrors(t, gqlResponse)
-
-		err := json.Unmarshal([]byte(tcase.result), &expected)
-		require.NoError(t, err)
-		err = json.Unmarshal(gqlResponse.Data, &result)
-		require.NoError(t, err)
+		require.NoError(t, json.Unmarshal([]byte(tcase.result), &expected))
+		require.NoError(t, json.Unmarshal(gqlResponse.Data, &result))
 
 		opt := cmpopts.IgnoreFields(common.UserSecret{}, "Id")
 		if diff := cmp.Diff(expected, result, opt); diff != "" {
@@ -1037,7 +1002,7 @@ func TestUpsertMutationsWithRBAC(t *testing.T) {
 				require.Error(t, gqlResponse.Errors)
 				require.Equal(t, len(gqlResponse.Errors), 1)
 				require.Contains(t, gqlResponse.Errors[0].Error(),
-					"GraphQL debug: id tweet1 already exists for field id inside type Tweets")
+					" GraphQL debug: id Tweets already exists for field id inside type tweet1")
 			} else {
 				common.RequireNoGQLErrors(t, gqlResponse)
 				require.JSONEq(t, tcase.result, string(gqlResponse.Data))
@@ -1153,4 +1118,49 @@ func TestUpsertWithDeepAuth(t *testing.T) {
 	common.DeleteGqlType(t, "Country", filter, 1, nil)
 	filter = map[string]interface{}{"code": map[string]interface{}{"eq": "UK"}}
 	common.DeleteGqlType(t, "State", filter, 1, nil)
+}
+
+func TestAddMutationWithAuthOnIDFieldHavingInterfaceArg(t *testing.T) {
+	// add Library Member
+	addLibraryMemberParams := &common.GraphQLParams{
+		Query: `mutation addLibraryMember($input: [AddLibraryMemberInput!]!) {
+                         addLibraryMember(input: $input, upsert: false) {
+                          numUids
+                         }
+                        }`,
+		Variables: map[string]interface{}{"input": []interface{}{
+			map[string]interface{}{
+				"refID":     "101",
+				"name":      "Alice",
+				"readHours": "4d2hr",
+			}},
+		},
+	}
+
+	gqlResponse := addLibraryMemberParams.ExecuteAsPost(t, common.GraphqlURL)
+	common.RequireNoGQLErrors(t, gqlResponse)
+	// add sports member should return error but in debug mode
+	// because interface type have auth rules defined on it
+	addSportsMemberParams := &common.GraphQLParams{
+		Query: `mutation addSportsMember($input: [AddSportsMemberInput!]!) {
+                         addSportsMember(input: $input, upsert: false) {
+                          numUids
+                         }
+                        }`,
+		Variables: map[string]interface{}{"input": []interface{}{
+			map[string]interface{}{
+				"refID": "101",
+				"name":  "Bob",
+				"plays": "football and cricket",
+			}},
+		},
+	}
+
+	gqlResponse = addSportsMemberParams.ExecuteAsPost(t, common.GraphqlURL)
+	require.Contains(t, gqlResponse.Errors[0].Error(),
+		" GraphQL debug: id 101 already exists for field refID in some other"+
+			" implementing type of interface Member")
+
+	// cleanup
+	common.DeleteGqlType(t, "LibraryMember", map[string]interface{}{}, 1, nil)
 }

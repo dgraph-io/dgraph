@@ -1,3 +1,5 @@
+//go:build integration
+
 /*
  * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
@@ -162,11 +164,12 @@ func queryWithGz(queryText, contentType, debug, timeout string, gzReq, gzResp bo
 }
 
 type queryInp struct {
-	body  string
-	typ   string
-	debug string
-	ts    uint64
-	hash  string
+	body    string
+	typ     string
+	debug   string
+	ts      uint64
+	hash    string
+	respFmt string
 }
 
 type tsInfo struct {
@@ -189,6 +192,9 @@ func queryWithTsForResp(inp queryInp) (string, *tsInfo, *http.Response, error) {
 		params = append(params, fmt.Sprintf("startTs=%v", strconv.FormatUint(inp.ts, 10)))
 		params = append(params, fmt.Sprintf("hash=%s", inp.hash))
 	}
+	if inp.respFmt != "" {
+		params = append(params, fmt.Sprintf("respFormat=%s", inp.respFmt))
+	}
 	url := addr + "/query?" + strings.Join(params, "&")
 
 	_, body, resp, err := runWithRetriesForResp("POST", inp.typ, url, inp.body)
@@ -203,12 +209,9 @@ func queryWithTsForResp(inp queryInp) (string, *tsInfo, *http.Response, error) {
 	startTs := r.Extensions.Txn.StartTs
 	hash := r.Extensions.Txn.Hash
 
-	// Remove the extensions.
-	r2 := res{
-		Data: r.Data,
-	}
+	// Remove the extensions
+	r2 := res{Data: r.Data}
 	output, err := json.Marshal(r2)
-
 	return string(output), &tsInfo{ts: startTs, hash: hash}, resp, err
 }
 
@@ -328,8 +331,7 @@ func runWithRetriesForResp(method, contentType, url string, body string) (
 
 	qr, respBody, resp, err := runRequest(req)
 	if err != nil && strings.Contains(err.Error(), "Token is expired") {
-		err = token.refreshToken()
-		if err != nil {
+		if err := token.refreshToken(); err != nil {
 			return nil, nil, nil, err
 		}
 
@@ -668,8 +670,7 @@ func TestHttpCompressionSupport(t *testing.T) {
 	r1 := `{"data":{"names":[{"name":"Alice"},{"name":"Bob"},{"name":"Charlie"},{"name":"David"},` +
 		`{"name":"Emily"},{"name":"Frank"},{"name":"Gloria"},{"name":"Hannah"},{"name":"Ian"},` +
 		`{"name":"Judy"},{"name":"Kevin"},{"name":"Linda"},{"name":"Michael"}]}}`
-	err := runMutation(m1)
-	require.NoError(t, err)
+	require.NoError(t, runMutation(m1))
 
 	data, resp, err := queryWithGz(q1, "application/dql", "false", "", false, false)
 	require.NoError(t, err)
@@ -745,8 +746,7 @@ func TestDebugSupport(t *testing.T) {
 	  }
 	}
 	`
-	err := runMutation(m1)
-	require.NoError(t, err)
+	require.NoError(t, runMutation(m1))
 
 	q1 := `
 	{
@@ -985,4 +985,55 @@ func TestQueryBackwardCompatibleWithGraphqlPlusMinusHeader(t *testing.T) {
 	_, _, resp, err := queryWithTsForResp(queryInp{body: q1, typ: "application/graphql+-"})
 	require.NoError(t, err)
 	require.Equal(t, "2", resp.Header.Get(x.DgraphCostHeader))
+}
+
+func TestQueryRdfData(t *testing.T) {
+	require.NoError(t, dropAll())
+	require.NoError(t, alterSchema(`name: string @index(term) .`))
+
+	// empty RDF response
+	q1 := `
+	{
+	  balances(func: anyofterms(name, "Alice Bob")) {
+	    name
+	    balance
+	  }
+	}`
+	resp, _, err := queryWithTs(queryInp{body: q1, typ: "application/dql", respFmt: "rdf"})
+	require.NoError(t, err)
+	require.Equal(t, `{"data":""}`, resp)
+
+	m1 := `
+    {
+	  set {
+		_:bob <name> "Bob \"<the builder>\"" .
+		_:bob <balance> "110" .
+		_:alice <balance> "60" .
+	  }
+	}`
+	_, err = mutationWithTs(mutationInp{body: m1, typ: "application/rdf", commitNow: true})
+	require.NoError(t, err)
+
+	// json query
+	resp, _, err = queryWithTs(queryInp{body: q1, typ: "application/dql"})
+	require.NoError(t, err)
+	require.Equal(t, `{"data":{"balances":[{"name":"Bob \"\u003cthe builder\u003e\"","balance":"110"}]}}`, resp)
+
+	// rdf query
+	resp, _, err = queryWithTs(queryInp{body: q1, typ: "application/dql", respFmt: "rdf"})
+	require.NoError(t, err)
+	var r2 struct {
+		Data string `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(resp), &r2))
+
+	// we apply the same RDF mutation and it should work
+	require.NoError(t, dropAll())
+	require.NoError(t, alterSchema(`name: string @index(term) .`))
+	_, err = mutationWithTs(mutationInp{body: `{set {` + r2.Data + `}}`, typ: "application/rdf", commitNow: true})
+	require.NoError(t, err)
+
+	resp, _, err = queryWithTs(queryInp{body: q1, typ: "application/dql"})
+	require.NoError(t, err)
+	require.Equal(t, `{"data":{"balances":[{"name":"Bob \"\u003cthe builder\u003e\"","balance":"110"}]}}`, resp)
 }

@@ -36,7 +36,7 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/metadata"
 
-	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/dql"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/admin"
@@ -244,6 +244,18 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// If rdf is set true, then response will be in rdf format.
+	respFormat := r.URL.Query().Get("respFormat")
+	switch respFormat {
+	case "", "json":
+		req.RespFormat = api.Request_JSON
+	case "rdf":
+		req.RespFormat = api.Request_RDF
+	default:
+		x.SetStatus(w, x.ErrorInvalidRequest, fmt.Sprintf("invalid value [%v] for parameter respFormat", respFormat))
+		return
+	}
+
 	// Core processing happens here.
 	resp, err := (&edgraph.Server{}).QueryNoGrpc(ctx, &req)
 	if err != nil {
@@ -273,7 +285,17 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		x.Check2(out.Write(js))
 	}
 	x.Check2(out.WriteRune('{'))
-	writeEntry("data", resp.Json)
+	if respFormat == "rdf" {
+		// In Json, []byte marshals into a base64 data. We instead Marshal it as a string.
+		// json.Marshal is therefore necessary here. We also do not want to escape <,>.
+		var buf bytes.Buffer
+		encoder := json.NewEncoder(&buf)
+		encoder.SetEscapeHTML(false)
+		x.Check(encoder.Encode(string(resp.Rdf)))
+		writeEntry("data", buf.Bytes())
+	} else {
+		writeEntry("data", resp.Json)
+	}
 	x.Check2(out.WriteRune(','))
 	writeEntry("extensions", js)
 	x.Check2(out.WriteRune('}'))

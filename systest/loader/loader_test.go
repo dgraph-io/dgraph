@@ -1,3 +1,5 @@
+//go:build integration
+
 /*
  * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
@@ -19,14 +21,13 @@ package main
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -46,9 +47,7 @@ func TestLoaderXidmap(t *testing.T) {
 	require.NoError(t, err)
 	ctx := context.Background()
 	testutil.DropAll(t, dg)
-	tmpDir, err := os.MkdirTemp("", "loader_test")
-	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	data, err := filepath.Abs("testdata/first.rdf.gz")
 	require.NoError(t, err)

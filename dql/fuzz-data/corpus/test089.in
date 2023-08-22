@@ -1,4 +1,0 @@
-{
-		"query" : "query versions($version: int!){versions(func:eq(type, $version)){versions{ version_number}}}",
-		"variables" : {"$version": "3"}
-	}

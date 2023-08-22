@@ -120,7 +120,7 @@ type FacetOrder struct {
 	Desc bool // true if ordering should be decending by this facet.
 }
 
-// pair denotes the key value pair that is part of the GraphQL query root in parenthesis.
+// pair denotes the key value pair that is part of the DQL query root in parenthesis.
 type pair struct {
 	Key string
 	Val string
@@ -150,13 +150,13 @@ type VarContext struct {
 	Typ  int //  1 for UID vars, 2 for value vars
 }
 
-// varInfo holds information on GQL variables.
+// varInfo holds information on DQL variables.
 type varInfo struct {
 	Value string
 	Type  string
 }
 
-// varMap is a map with key as GQL variable name.
+// varMap is a map with key as DQL variable name.
 type varMap map[string]varInfo
 
 // FilterTree is the result of parsing the filter directive.
@@ -170,9 +170,9 @@ type FilterTree struct {
 
 // Arg stores an argument to a function.
 type Arg struct {
-	Value        string
-	IsValueVar   bool // If argument is val(a), e.g. eq(name, val(a))
-	IsGraphQLVar bool
+	Value      string
+	IsValueVar bool // If argument is val(a), e.g. eq(name, val(a))
+	IsDQLVar   bool
 }
 
 // Function holds the information about dql functions.
@@ -388,7 +388,7 @@ func substituteVariables(gq *GraphQuery, vmap varMap) error {
 		}
 
 		for idx, v := range gq.Func.Args {
-			if !v.IsGraphQLVar {
+			if !v.IsDQLVar {
 				continue
 			}
 			if err := substituteVar(v.Value, &gq.Func.Args[idx].Value, vmap); err != nil {
@@ -452,7 +452,7 @@ func substituteVariables(gq *GraphQuery, vmap varMap) error {
 
 func regExpVariableFilter(f *Function, idx int) error {
 	// Value should have been populated from the map that the user gave us in the
-	// GraphQL variable map. Let's parse the expression and flags from the variable
+	// DQL variable map. Let's parse the expression and flags from the variable
 	// string.
 	ra, err := parseRegexArgs(f.Args[idx].Value)
 	if err != nil {
@@ -476,14 +476,14 @@ func substituteVariablesFilter(f *FilterTree, vmap varMap) error {
 		}
 
 		for idx, v := range f.Func.Args {
-			if !v.IsGraphQLVar {
+			if !v.IsDQLVar {
 				continue
 			}
 			if f.Func.Name == uidFunc {
-				// This is to support GraphQL variables in uid functions.
+				// This is to support DQL variables in uid functions.
 				idVal, ok := vmap[v.Value]
 				if !ok {
-					return errors.Errorf("Couldn't find value for GraphQL variable: [%s]", v.Value)
+					return errors.Errorf("Couldn't find value for DQL variable: [%s]", v.Value)
 				}
 				uids, err := parseID(idVal.Value)
 				if err != nil {
@@ -497,7 +497,7 @@ func substituteVariablesFilter(f *FilterTree, vmap varMap) error {
 				return err
 			}
 
-			// We need to parse the regexp after substituting it from a GraphQL Variable.
+			// We need to parse the regexp after substituting it from a DQL Variable.
 			_, ok := vmap[v.Value]
 			if f.Func.Name == "regexp" && ok {
 				if err := regExpVariableFilter(f.Func, idx); err != nil {
@@ -628,7 +628,7 @@ func ParseWithNeedVars(r Request, needVars []string) (res Result, rerr error) {
 				return res, err
 			}
 
-			// Substitute all graphql variables with corresponding values
+			// Substitute all DQL variables with corresponding values
 			if err := substituteVariables(qu, vmap); err != nil {
 				return res, err
 			}
@@ -1152,7 +1152,7 @@ func getSchema(it *lex.ItemIterator) (*pb.SchemaRequest, error) {
 	return nil, it.Errorf("Invalid schema block.")
 }
 
-// parseDqlVariables parses the the graphQL variable declaration.
+// parseDqlVariables parses the the DQL variable declaration.
 func parseDqlVariables(it *lex.ItemIterator, vmap varMap) error {
 	expectArg := true
 	if item, ok := it.PeekOne(); ok && item.Typ == itemRightRound {
@@ -1276,7 +1276,7 @@ func unquoteIfQuoted(str string) (string, error) {
 	return uq, errors.Wrapf(err, "could not unquote %q:", str)
 }
 
-// parseArguments parses the arguments part of the GraphQL query root.
+// parseArguments parses the arguments part of the DQL query root.
 func parseArguments(it *lex.ItemIterator, gq *GraphQuery) (result []pair, rerr error) {
 	expectArg := true
 	orderCount := 0
@@ -1592,7 +1592,7 @@ func parseFuncArgs(it *lex.ItemIterator, g *Function) error {
 			}
 			// This is a $variable that must be expanded later.
 			val := "$" + item.Val
-			g.Args = append(g.Args, Arg{Value: val, IsGraphQLVar: true})
+			g.Args = append(g.Args, Arg{Value: val, IsDQLVar: true})
 		case itemComma:
 			if expectArg {
 				return item.Errorf("Invalid comma in argument list")
@@ -1633,10 +1633,16 @@ type regexArgs struct {
 }
 
 func parseRegexArgs(val string) (regexArgs, error) {
-	end := strings.LastIndex(val, "/")
-	if end < 0 {
-		return regexArgs{}, errors.Errorf("Unexpected error while parsing regex arg: %s", val)
+	// it is possible that val comes in a variable and has not been validated yet.
+	// we do the validation here and ensure that it looks like: /<expr>/.
+	if len(val) == 0 {
+		return regexArgs{}, errors.Errorf("Found empty regex: [%s]", val)
 	}
+	end := strings.LastIndex(val, "/")
+	if end < 1 || val[0] != '/' {
+		return regexArgs{}, errors.Errorf("Found invalid regex: [%s]", val)
+	}
+
 	expr := strings.Replace(val[1:end], "\\/", "/", -1)
 	flags := ""
 	if end+1 < len(val) {
@@ -1721,8 +1727,14 @@ L:
 							itemInFunc.Errorf("len function only allowed inside inequality" +
 								" function")
 					}
-					function.Attr = nestedFunc.NeedsVar[0].Name
-					function.IsLenVar = true
+					if len(function.Attr) == 0 {
+						// eq(len(a), 1)
+						function.Attr = nestedFunc.NeedsVar[0].Name
+						function.IsLenVar = true
+					} else {
+						// eq(1, len(a))
+						return nil, itemInFunc.Errorf("incorrect order, the first argument should be len function")
+					}
 					function.NeedsVar = append(function.NeedsVar, nestedFunc.NeedsVar...)
 				case countFunc:
 					function.Attr = nestedFunc.Attr
@@ -1836,12 +1848,12 @@ L:
 				isDollar = false
 				if function.Name == uidFunc && gq != nil {
 					if len(gq.Args["id"]) > 0 {
-						return nil, itemInFunc.Errorf("Only one GraphQL variable " +
+						return nil, itemInFunc.Errorf("Only one DQL variable " +
 							"allowed inside uid function.")
 					}
 					gq.Args["id"] = val
 				} else {
-					function.Args = append(function.Args, Arg{Value: val, IsGraphQLVar: true})
+					function.Args = append(function.Args, Arg{Value: val, IsDQLVar: true})
 				}
 				expectArg = false
 				continue
@@ -2343,7 +2355,7 @@ loop:
 	return valueStack.pop()
 }
 
-// Parses ID list. Only used for GraphQL variables.
+// Parses ID list. Only used for DQL variables.
 // TODO - Maybe get rid of this by lexing individual IDs.
 func parseID(val string) ([]uint64, error) {
 	val = x.WhiteSpace.Replace(val)

@@ -27,7 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v2"
 
-	dgoapi "github.com/dgraph-io/dgo/v210/protos/api"
+	dgoapi "github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/graphql/test"
@@ -94,8 +94,7 @@ func mutationValidation(t *testing.T, file string, rewriterFactory func() Mutati
 			// -- Arrange --
 			var vars map[string]interface{}
 			if tcase.GQLVariables != "" {
-				err := json.Unmarshal([]byte(tcase.GQLVariables), &vars)
-				require.NoError(t, err)
+				require.NoError(t, json.Unmarshal([]byte(tcase.GQLVariables), &vars))
 			}
 
 			_, err := gqlSchema.Operation(
@@ -190,8 +189,7 @@ func deleteMutationRewriting(t *testing.T, file string, rewriterFactory func() M
 			// -- Arrange --
 			var vars map[string]interface{}
 			if tcase.GQLVariables != "" {
-				err := json.Unmarshal([]byte(tcase.GQLVariables), &vars)
-				require.NoError(t, err)
+				require.NoError(t, json.Unmarshal([]byte(tcase.GQLVariables), &vars))
 			}
 
 			op, err := gqlSchema.Operation(
@@ -261,8 +259,7 @@ func mutationRewriting(t *testing.T, file string, rewriterFactory func() Mutatio
 			// -- Arrange --
 			var vars map[string]interface{}
 			if tcase.GQLVariables != "" {
-				err := json.Unmarshal([]byte(tcase.GQLVariables), &vars)
-				require.NoError(t, err)
+				require.NoError(t, json.Unmarshal([]byte(tcase.GQLVariables), &vars))
 			}
 
 			op, err := gqlSchema.Operation(
@@ -370,8 +367,7 @@ func TestMutationQueryRewriting(t *testing.T) {
 						tt.payloadType, 1)
 					var vars map[string]interface{}
 					if tcase.GQLVariables != "" {
-						err := json.Unmarshal([]byte(tcase.GQLVariables), &vars)
-						require.NoError(t, err)
+						require.NoError(t, json.Unmarshal([]byte(tcase.GQLVariables), &vars))
 					}
 					op, err := gqlSchema.Operation(
 						&schema.Request{
@@ -383,14 +379,14 @@ func TestMutationQueryRewriting(t *testing.T) {
 
 					_, _, _ = rewriter.RewriteQueries(context.Background(), gqlMutation)
 					_, err = rewriter.Rewrite(context.Background(), gqlMutation, tt.idExistence)
-					require.Nil(t, err)
+					require.NoError(t, err)
 
 					// -- Act --
 					dgQuery, err := rewriter.FromMutationResult(
 						context.Background(), gqlMutation, tt.assigned, tt.result)
 
 					// -- Assert --
-					require.Nil(t, err)
+					require.NoError(t, err)
 					require.Equal(t, tcase.DGQuery, dgraph.AsString(dgQuery))
 				})
 			}
@@ -412,8 +408,7 @@ func TestCustomHTTPMutation(t *testing.T) {
 		t.Run(tcase.Name, func(t *testing.T) {
 			var vars map[string]interface{}
 			if tcase.Variables != "" {
-				err := json.Unmarshal([]byte(tcase.Variables), &vars)
-				require.NoError(t, err)
+				require.NoError(t, json.Unmarshal([]byte(tcase.Variables), &vars))
 			}
 
 			op, err := gqlSchema.Operation(

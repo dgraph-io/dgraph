@@ -19,7 +19,6 @@ package x
 import (
 	"flag"
 	"fmt"
-	"os"
 	"testing"
 )
 
@@ -29,5 +28,5 @@ func TestMain(m *testing.M) {
 		fmt.Printf("error setting debug mode: %v\n", err)
 	}
 
-	os.Exit(m.Run())
+	m.Run()
 }

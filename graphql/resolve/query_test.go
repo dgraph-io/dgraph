@@ -60,8 +60,7 @@ func TestQueryRewriting(t *testing.T) {
 		t.Run(tcase.Name, func(t *testing.T) {
 			var vars map[string]interface{}
 			if tcase.GQLVariables != "" {
-				err := json.Unmarshal([]byte(tcase.GQLVariables), &vars)
-				require.NoError(t, err)
+				require.NoError(t, json.Unmarshal([]byte(tcase.GQLVariables), &vars))
 			}
 			op, err := gqlSchema.Operation(
 				&schema.Request{
@@ -72,7 +71,7 @@ func TestQueryRewriting(t *testing.T) {
 			gqlQuery := test.GetQuery(t, op)
 
 			dgQuery, err := testRewriter.Rewrite(context.Background(), gqlQuery)
-			require.Nil(t, err)
+			require.NoError(t, err)
 			require.Equal(t, tcase.DGQuery, dgraph.AsString(dgQuery))
 		})
 	}
@@ -101,7 +100,7 @@ func (f RoundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
 // NewTestClient returns *http.Client with Transport replaced to avoid making real calls
 func NewTestClient(fn RoundTripFunc) *http.Client {
 	return &http.Client{
-		Transport: RoundTripFunc(fn),
+		Transport: fn,
 	}
 }
 
@@ -144,8 +143,7 @@ func TestCustomHTTPQuery(t *testing.T) {
 		t.Run(tcase.Name, func(t *testing.T) {
 			var vars map[string]interface{}
 			if tcase.Variables != "" {
-				err := json.Unmarshal([]byte(tcase.Variables), &vars)
-				require.NoError(t, err)
+				require.NoError(t, json.Unmarshal([]byte(tcase.Variables), &vars))
 			}
 
 			op, err := gqlSchema.Operation(

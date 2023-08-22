@@ -29,8 +29,8 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 
-	badgerpb "github.com/dgraph-io/badger/v3/pb"
-	"github.com/dgraph-io/dgo/v210/protos/api"
+	badgerpb "github.com/dgraph-io/badger/v4/pb"
+	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -368,7 +368,7 @@ func (g *groupi) applyState(myId uint64, state *pb.MembershipState) {
 					// Don't try to remove a member if it's already marked as removed in
 					// the membership state and is not a current peer of the node.
 					_, isPeer := g.Node.Peer(member.GetId())
-					// isPeer should only be true if the rmeoved node is not the same as this node.
+					// isPeer should only be true if the removed node is not the same as this node.
 					isPeer = isPeer && member.GetId() != g.Node.RaftContext.Id
 
 					for _, oldMember := range oldState.GetRemoved() {
@@ -841,7 +841,7 @@ func (g *groupi) sendMembershipUpdates() {
 
 // receiveMembershipUpdates receives membership updates from ANY Zero server. This is the main
 // connection which tells Alpha about the state of the cluster, including the latest Zero leader.
-// All the other connections to Zero, are only made only to the leader.
+// All the other connections to Zero, are made only to the leader.
 func (g *groupi) receiveMembershipUpdates() {
 	defer func() {
 		glog.Infoln("Closing receiveMembershipUpdates")

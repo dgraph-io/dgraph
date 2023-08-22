@@ -32,15 +32,15 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
-	"go.etcd.io/etcd/raft"
-	"go.etcd.io/etcd/raft/raftpb"
+	"go.etcd.io/etcd/raft/v3"
+	"go.etcd.io/etcd/raft/v3/raftpb"
 	ostats "go.opencensus.io/stats"
 	"go.opencensus.io/tag"
 	otrace "go.opencensus.io/trace"
 	"golang.org/x/net/trace"
 
-	"github.com/dgraph-io/badger/v3"
-	bpb "github.com/dgraph-io/badger/v3/pb"
+	"github.com/dgraph-io/badger/v4"
+	bpb "github.com/dgraph-io/badger/v4/pb"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -119,7 +119,7 @@ func (n *node) startTask(id op) (*z.Closer, error) {
 
 // startTaskAtTs is used to check whether an op is already running. If a rollup is running,
 // it is canceled and startTask will wait until it completes before returning.
-// If the same task is already running, this method returns an errror.
+// If the same task is already running, this method returns an error.
 // Restore operations have preference and cancel all other operations, not just rollups.
 // You should only call Done() on the returned closer. Calling other functions (such as
 // SignalAndWait) for closer could result in panics. For more details, see GitHub issue #5034.
@@ -148,7 +148,7 @@ func (n *node) startTaskAtTs(id op, ts uint64) (*z.Closer, error) {
 		if len(n.ops) > 0 {
 			return nil, errors.Errorf("another operation is already running")
 		}
-		go posting.IncrRollup.Process(closer)
+		go posting.IncrRollup.Process(closer, State.GetTimestamp)
 	case opRestore:
 		// Restores cancel all other operations, except for other restores since
 		// only one restore operation should be active any given moment.
@@ -179,9 +179,8 @@ func (n *node) startTaskAtTs(id op, ts uint64) (*z.Closer, error) {
 				if otherOp.ts < ts {
 					// If backup is running at higher timestamp, then indexing can't be executed.
 					continue
-				} else {
-					return nil, errors.Errorf("operation %s is already running", otherId)
 				}
+				return nil, errors.Errorf("operation %s is already running", otherId)
 			case opRollup:
 				// Remove from map and signal the closer to cancel the operation.
 				delete(n.ops, otherId)
@@ -437,7 +436,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	}
 
 	// Scheduler tracks tasks at subject, predicate level, so doing
-	// schema stuff here simplies the design and we needn't worry about
+	// schema stuff here simplifies the design and we needn't worry about
 	// serializing the mutations per predicate or schema mutations
 	// We derive the schema here if it's not present
 	// Since raft committed logs are serialized, we can derive
@@ -559,6 +558,14 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 }
 
 func (n *node) applyCommitted(proposal *pb.Proposal, key uint64) error {
+	start := time.Now()
+	defer func() {
+		since := time.Since(start)
+		if since > 30*time.Second {
+			glog.Warningf("applyCh entry took [%v] to handle: %#v", since, proposal)
+		}
+	}()
+
 	ctx := n.Ctx(key)
 	span := otrace.FromContext(ctx)
 	span.Annotatef(nil, "node.applyCommitted Node id: %d. Group id: %d. Got proposal key: %d",
@@ -605,7 +612,15 @@ func (n *node) applyCommitted(proposal *pb.Proposal, key uint64) error {
 				proposal.CleanPredicate, proposal.ExpectedChecksum)
 			return nil
 		}
-		return posting.DeletePredicate(ctx, proposal.CleanPredicate, proposal.StartTs)
+		err := posting.DeletePredicate(ctx, proposal.CleanPredicate, proposal.StartTs)
+		if err == badger.ErrBannedKey {
+			// Zero might send the delete predicate instruction to alpha when updating the
+			// membership state. This can happen for predicates from banned namespaces too.
+			glog.Warningf("Couldn't clean the predicate %s as it is already banned.",
+				proposal.CleanPredicate)
+			return nil
+		}
+		return err
 
 	case proposal.Delta != nil:
 		n.elog.Printf("Applying Oracle Delta for key: %d", key)
@@ -643,7 +658,9 @@ func (n *node) applyCommitted(proposal *pb.Proposal, key uint64) error {
 	case proposal.Restore != nil:
 		// Enable draining mode for the duration of the restore processing.
 		x.UpdateDrainingMode(true)
-		defer x.UpdateDrainingMode(false)
+		if !proposal.Restore.IsPartial {
+			defer x.UpdateDrainingMode(false)
+		}
 
 		var err error
 		var closer *z.Closer
@@ -653,7 +670,7 @@ func (n *node) applyCommitted(proposal *pb.Proposal, key uint64) error {
 		}
 		defer closer.Done()
 
-		glog.Infof("Got restore proposal at Index:%d, ReadTs:%d",
+		glog.Infof("Got restore proposal at Index: %d, ReadTs: %d",
 			proposal.Index, proposal.Restore.RestoreTs)
 		if err := handleRestoreProposal(ctx, proposal.Restore, proposal.Index); err != nil {
 			return err
@@ -725,6 +742,9 @@ func (n *node) processApplyCh() {
 
 	// This function must be run serially.
 	handle := func(entries []raftpb.Entry) {
+		glog.V(3).Infof("handling element in applyCh with #entries %v", len(entries))
+		defer glog.V(3).Infof("done handling element in applyCh")
+
 		var totalSize int64
 		for _, entry := range entries {
 			x.AssertTrue(len(entry.Data) > 0)
@@ -752,7 +772,7 @@ func (n *node) processApplyCh() {
 				// Don't break here. We still need to call the Done below.
 
 			} else {
-				// if this applyCommited fails, how do we ensure
+				// if this applyCommitted fails, how do we ensure
 				start := time.Now()
 				perr = n.applyCommitted(&proposal, key)
 				if key != 0 {
@@ -811,6 +831,7 @@ func (n *node) processApplyCh() {
 
 // TODO(Anurag - 4 May 2020): Are we using pkey? Remove if unused.
 func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
+	x.PrintOracleDelta(delta)
 	// First let's commit all mutations to disk.
 	writer := posting.NewTxnWriter(pstore)
 	toDisk := func(start, commit uint64) {
@@ -1200,6 +1221,9 @@ func (n *node) Run() {
 			n.Raft().Tick()
 
 		case rd := <-n.Raft().Ready():
+			// TODO(Aman): Based on the code here https://github.com/etcd-io/etcd/tree/raft/v3.5.9/raft,
+			// n.SaveToStorage should be called first before doing anything else.
+
 			timer.Start()
 			_, span := otrace.StartSpan(n.ctx, "Alpha.RunLoop",
 				otrace.WithSampler(otrace.ProbabilitySampler(0.001)))
@@ -1792,7 +1816,7 @@ func (n *node) InitAndStartNode() {
 
 			// TODO: Making connections here seems unnecessary, evaluate.
 			members := groups().members(n.gid)
-			for _, id := range sp.Metadata.ConfState.Nodes {
+			for _, id := range sp.Metadata.ConfState.Voters {
 				m, ok := members[id]
 				if ok {
 					n.Connect(id, m.Addr)
@@ -1818,7 +1842,10 @@ func (n *node) InitAndStartNode() {
 			// snapshot as needed after joining the group, instead of us forcing one upfront.
 			glog.Infoln("Trying to join peers.")
 			n.retryUntilSuccess(n.joinPeers, time.Second)
-			n.SetRaft(raft.StartNode(n.Cfg, nil))
+			// We call RestartNode here because nodes already exists in the cluster and
+			// we setup the state by calling c.JoinCluster above. We can't call StartNode
+			// here because we only have peer's IP addresses.
+			n.SetRaft(raft.RestartNode(n.Cfg))
 		} else {
 			peers := []raft.Peer{{ID: n.Id}}
 			n.SetRaft(raft.StartNode(n.Cfg, peers))

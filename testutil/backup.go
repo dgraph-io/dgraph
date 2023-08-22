@@ -30,8 +30,8 @@ import (
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/badger/v3"
-	"github.com/dgraph-io/dgo/v210"
+	"github.com/dgraph-io/badger/v4"
+	"github.com/dgraph-io/dgo/v230"
 	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -76,7 +76,7 @@ func WaitForRestore(t *testing.T, dg *dgo.Dgraph, HttpSocket string) {
 			restoreDone = true
 			break
 		}
-		time.Sleep(4 * time.Second)
+		time.Sleep(1 * time.Second)
 	}
 	require.True(t, restoreDone)
 

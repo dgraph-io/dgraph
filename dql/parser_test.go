@@ -19,14 +19,13 @@ package dql
 
 import (
 	"bytes"
-	"os"
 	"runtime/debug"
 	"testing"
 
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/lex"
 )
@@ -4020,7 +4019,7 @@ func TestParseRegexp6(t *testing.T) {
 }
 
 func TestMain(m *testing.M) {
-	os.Exit(m.Run())
+	m.Run()
 }
 
 func TestCountAtRoot(t *testing.T) {
@@ -5341,6 +5340,24 @@ func TestFilterWithDollarError(t *testing.T) {
 		Str: query,
 	})
 	require.Error(t, err)
+}
+
+func TestFilterWithEqAndLenInWrongOrderArgs(t *testing.T) {
+	query := `
+	{
+		var(func: has(school), first: 3) {
+			f as uid
+		}
+
+		me(func: uid(f)) @filter(eq(3, len(f))) {
+			count(uid)
+		}
+	}`
+	_, err := Parse(Request{
+		Str: query,
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "incorrect order, the first argument should be len function")
 }
 
 func TestFilterWithVar(t *testing.T) {

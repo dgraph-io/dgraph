@@ -1,3 +1,5 @@
+//go:build integration || cloud || upgrade
+
 /*
  * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
@@ -25,7 +27,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/dgo/v230/protos/api"
+	"github.com/dgraph-io/dgraph/dgraphtest"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -634,8 +637,14 @@ func TestFilterAtSameLevelOnUIDWithExpand(t *testing.T) {
 		}
 	}`
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data":{"q":[{"name":"Michonne","gender":"female","alive":true,
+	// Because the UID for guardians and groot can change while upgrade tests are running
+	a := dgraphtest.CompareJSON(`{"data":{"q":[{"name":"Michonne","gender":"female","alive":true,
 	"friend":[{"gender":"male","alive":true,"name":"Rick Grimes"}]}]}}`, js)
+	b := dgraphtest.CompareJSON(`{"data":{"q":[{"name":"Michonne","gender":"female","alive":true,
+	"dgraph.xid":"guardians","friend":[{"gender":"male","alive":true,"name":"Rick Grimes"}]}]}}`, js)
+	if a != nil && b != nil {
+		t.Error(a)
+	}
 }
 
 // Test Related to worker based pagination.

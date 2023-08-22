@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math"
 	"strconv"
 
 	"github.com/dustin/go-humanize"
@@ -27,9 +28,9 @@ import (
 	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"
 
-	"github.com/dgraph-io/badger/v3"
-	bpb "github.com/dgraph-io/badger/v3/pb"
-	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/badger/v4"
+	bpb "github.com/dgraph-io/badger/v4/pb"
+	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
@@ -201,6 +202,11 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 	if !n.AmLeader() {
 		return &emptyPayload, errNotLeader
 	}
+	// Don't do a predicate move if the cluster is in draining mode.
+	if err := x.HealthCheck(); err != nil {
+		return &emptyPayload, errors.Wrap(err, "Move predicate request rejected")
+	}
+
 	if groups().groupId() != in.SourceGid {
 		return &emptyPayload,
 			errors.Errorf("Group id doesn't match, received request for %d, my gid: %d",
@@ -323,7 +329,8 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error
 		if err != nil {
 			return nil, err
 		}
-		kvs, err := l.Rollup(itr.Alloc)
+		// Setting all the data at in.TxnTs
+		kvs, err := l.Rollup(itr.Alloc, math.MaxUint64)
 		for _, kv := range kvs {
 			// Let's set all of them at this move timestamp.
 			kv.Version = in.TxnTs

@@ -45,9 +45,10 @@ type Telemetry struct {
 	OS             string   `json:",omitempty"`
 	SinceHours     int      `json:",omitempty"`
 	Version        string   `json:",omitempty"`
-	NumGraphQLPM   uint64   `json:",omitempty"`
+	NumDQL         uint64   `json:",omitempty"`
 	NumGraphQL     uint64   `json:",omitempty"`
 	EEFeaturesList []string `json:",omitempty"`
+	Codename       string   `json:",omitempty"`
 }
 
 const url = "https://ping.dgraph.io/3.0/projects/5b809dfac9e77c0001783ad0/events"
@@ -65,6 +66,7 @@ func NewZero(ms *pb.MembershipState) *Telemetry {
 		Version:   x.Version(),
 		OS:        runtime.GOOS,
 		Arch:      runtime.GOARCH,
+		Codename:  x.Codename(),
 	}
 	for _, g := range ms.GetGroups() {
 		t.NumAlphas += len(g.GetMembers())
@@ -86,6 +88,7 @@ func NewAlpha(ms *pb.MembershipState) *Telemetry {
 		OS:             runtime.GOOS,
 		Arch:           runtime.GOARCH,
 		EEFeaturesList: worker.GetEEFeaturesList(),
+		Codename:       x.Codename(),
 	}
 }
 

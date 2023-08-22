@@ -1,3 +1,5 @@
+//go:build integration
+
 /*
  * Copyright 2023 Dgraph Labs, Inc. and Contributors *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -31,9 +33,9 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
-	"github.com/dgraph-io/badger/v3/options"
-	"github.com/dgraph-io/dgo/v210"
-	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/badger/v4/options"
+	"github.com/dgraph-io/dgo/v230"
+	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/systest/backup/common"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/worker"
@@ -452,8 +454,7 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	b, err = os.ReadFile(filepath.Join(copyBackupDir, "manifest.json"))
 	require.NoError(t, err)
 	var manifest worker.MasterManifest
-	err = json.Unmarshal(b, &manifest)
-	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(b, &manifest))
 	require.Equal(t, numExpectedDirs, len(manifest.Manifests))
 
 	return dirs

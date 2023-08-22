@@ -1,3 +1,5 @@
+//go:build integration || upgrade
+
 /*
  * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
@@ -17,15 +19,11 @@
 package main
 
 import (
-	"bytes"
-	"encoding/json"
-	"io"
-	"net/http"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgraph/dgraphtest"
 )
 
 var expiredKey = []byte(`-----BEGIN PGP MESSAGE-----
@@ -70,118 +68,93 @@ I8jcj3NZtGWFoxKq4laK/ruoeoHnWMznJyMm7mUd/5nzcU5QZU9yEEI=
 -----END PGP MESSAGE-----
 `)
 
-type Location struct {
-	Line   int `json:"line,omitempty"`
-	Column int `json:"column,omitempty"`
+type testInp struct {
+	name       string
+	licenseKey []byte
+	code       string
+	user       string
+	message    string
 }
 
-type GqlError struct {
-	Message    string                 `json:"message"`
-	Locations  []Location             `json:"locations,omitempty"`
-	Path       []interface{}          `json:"path,omitempty"`
-	Extensions map[string]interface{} `json:"extensions,omitempty"`
+var tests = []testInp{
+	{
+		"Using expired entrerprise license key, should be able to extract user information",
+		expiredKey,
+		`Success`,
+		`Dgraph Test Key`,
+		``,
+	},
+	{
+		"Using invalid entrerprise license key should return an error",
+		invalidKey,
+		``,
+		``,
+		`while extracting enterprise details from the license: while reading PGP message from license file: openpgp: unsupported feature: public key version`, //nolint:lll
+	},
+	{
+		"Using empty entrerprise license key should return an error",
+		[]byte(``),
+		``,
+		``,
+		`while extracting enterprise details from the license: while decoding license file: EOF`,
+	},
 }
 
-type GqlErrorList []*GqlError
+func (lsuite *LicenseTestSuite) TestEnterpriseLicenseWithHttpEndPoint() {
+	// run this test using the http endpoint
 
-type responseStruct struct {
-	Errors  GqlErrorList           `json:"errors"`
-	Code    string                 `json:"code"`
-	Message string                 `json:"message"`
-	License map[string]interface{} `json:"license"`
-}
+	t := lsuite.T()
 
-func TestEnterpriseLicense(t *testing.T) {
-	enterpriseLicenseURL := "http://" + testutil.SockAddrZeroHttp + "/enterpriseLicense"
+	hcli, err := lsuite.dc.HTTPClient()
+	require.NoError(t, err)
 
-	var tests = []struct {
-		name       string
-		licenseKey []byte
-		code       string
-		user       string
-		message    string
-	}{
-		{
-			"Using expired entrerprise license key, should be able to extract user information",
-			expiredKey,
-			`Success`,
-			`Dgraph Test Key`,
-			``,
-		},
-		{
-			"Using invalid entrerprise license key should return an error",
-			invalidKey,
-			``,
-			``,
-			`while extracting enterprise details from the license: while reading PGP message from license file: openpgp: unsupported feature: public key version`, //nolint:lll
-		},
-		{
-			"Using empty entrerprise license key should return an error",
-			[]byte(``),
-			``,
-			``,
-			`while extracting enterprise details from the license: while decoding license file: EOF`,
-		},
-	}
-
-	// run these tests using the http endpoint
 	for _, tt := range tests {
+		enterpriseResponse, err := hcli.ApplyLicenseHTTP(tt.licenseKey)
 
-		// Apply the license
-		response, err := http.Post(enterpriseLicenseURL, "application/text", bytes.NewBuffer(tt.licenseKey))
-		require.NoError(t, err)
+		if err == nil && enterpriseResponse.Code == `Success` {
+			// Check if the license is applied
+			require.Equal(t, enterpriseResponse.Code, tt.code)
 
-		var enterpriseResponse responseStruct
-		responseBody, err := io.ReadAll(response.Body)
-		require.NoError(t, err)
-		err = json.Unmarshal(responseBody, &enterpriseResponse)
-		require.NoError(t, err)
-
-		// Check if the license is applied
-		require.Equal(t, enterpriseResponse.Code, tt.code)
-
-		if enterpriseResponse.Code == `Success` {
 			// check the user information in case the license is applied
 			// Expired license should not be enabled even after it is applied
-			assertLicenseNotEnabled(t, tt.user)
+			assertLicenseNotEnabled(t, hcli, tt.user)
 		} else {
 			// check the error message in case the license is not applied
-			require.Equal(t, enterpriseResponse.Errors[0].Message, tt.message)
+			require.Nil(t, enterpriseResponse)
 		}
 	}
+}
 
+func (lsuite *LicenseTestSuite) TestEnterpriseLicenseWithGraphqlEndPoint() {
 	// this time, run them using the GraphQL admin endpoint
-	for _, tt := range tests {
 
-		// Apply the license
-		resp := testutil.EnterpriseLicense(t, string(tt.licenseKey))
+	t := lsuite.T()
+	hcli, err := lsuite.dc.HTTPClient()
+	require.NoError(t, err)
+
+	for _, tt := range tests {
+		resp, err := hcli.ApplyLicenseGraphQL(tt.licenseKey)
 
 		if tt.code == `Success` {
+			require.NoError(t, err)
 			// Check if the license is applied
-			testutil.CompareJSON(t, `{"enterpriseLicense":{"response":{"code":"Success"}}}`,
-				string(resp.Data))
+			dgraphtest.CompareJSON(`{"enterpriseLicense":{"response":{"code":"Success"}}}`, string(resp))
 
 			// check the user information in case the license is applied
 			// Expired license should not be enabled even after it is applied
-			assertLicenseNotEnabled(t, tt.user)
+			assertLicenseNotEnabled(t, hcli, tt.user)
 		} else {
-			testutil.CompareJSON(t, `{"enterpriseLicense":null}`, string(resp.Data))
+			dgraphtest.CompareJSON(`{"enterpriseLicense":null}`, string(resp))
 			// check the error message in case the license is not applied
-			require.Contains(t, resp.Errors[0].Message, tt.message)
+			require.Contains(t, err.Error(), tt.message)
 		}
 	}
 }
 
-func assertLicenseNotEnabled(t *testing.T, user string) {
-	response, err := http.Get("http://" + testutil.SockAddrZeroHttp + "/state")
+func assertLicenseNotEnabled(t *testing.T, hcli *dgraphtest.HTTPClient, user string) {
+	response, err := hcli.GetZeroState()
 	require.NoError(t, err)
 
-	var stateResponse responseStruct
-	responseBody, err := io.ReadAll(response.Body)
-	require.NoError(t, err)
-	err = json.Unmarshal(responseBody, &stateResponse)
-	require.NoError(t, err)
-
-	require.Equal(t, stateResponse.License["user"], user)
-	require.Equal(t, stateResponse.License["enabled"], false)
+	require.Equal(t, response.Extensions["user"], user)
+	require.Equal(t, response.Extensions["enabled"], false)
 }

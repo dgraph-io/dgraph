@@ -40,6 +40,6 @@ func (w *grpcWorker) Restore(ctx context.Context, req *pb.RestoreRequest) (*pb.S
 	return &pb.Status{}, x.ErrNotSupported
 }
 
-func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
+func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest, pidx uint64) error {
 	return nil
 }

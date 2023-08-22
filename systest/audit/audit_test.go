@@ -1,3 +1,5 @@
+//go:build integration
+
 /*
  * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
@@ -17,17 +19,15 @@
 package audit
 
 import (
-	"bufio"
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgraph/testutil/testaudit"
 )
 
 func TestZeroAudit(t *testing.T) {
@@ -56,7 +56,7 @@ func TestZeroAudit(t *testing.T) {
 		}
 	}
 
-	verifyLogs(t, fmt.Sprintf("audit_dir/za/zero_audit_0_%s.log", nId), msgs)
+	testaudit.VerifyLogs(t, fmt.Sprintf("audit_dir/za/zero_audit_0_%s.log", nId), msgs)
 }
 func TestAlphaAudit(t *testing.T) {
 	state, err := testutil.GetState()
@@ -116,30 +116,5 @@ input: {destination: \"/Users/sankalanparajuli/work/backup\"}) {\n    response {
 			}
 		}
 	}
-	verifyLogs(t, fmt.Sprintf("audit_dir/aa/alpha_audit_1_%s.log", nId), msgs)
-}
-
-func verifyLogs(t *testing.T, path string, cmds []string) {
-	abs, err := filepath.Abs(path)
-	require.Nil(t, err)
-	f, err := os.Open(abs)
-	require.Nil(t, err)
-
-	type log struct {
-		Msg string `json:"endpoint"`
-	}
-	logMap := make(map[string]bool)
-
-	fileScanner := bufio.NewScanner(f)
-	for fileScanner.Scan() {
-		bytes := fileScanner.Bytes()
-		l := new(log)
-		_ = json.Unmarshal(bytes, l)
-		logMap[l.Msg] = true
-	}
-	for _, m := range cmds {
-		if !logMap[m] {
-			t.Fatalf("audit logs not present for command %s", m)
-		}
-	}
+	testaudit.VerifyLogs(t, fmt.Sprintf("audit_dir/aa/alpha_audit_1_%s.log", nId), msgs)
 }

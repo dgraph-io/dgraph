@@ -57,11 +57,11 @@ import (
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 
-	"github.com/dgraph-io/badger/v3"
-	bo "github.com/dgraph-io/badger/v3/options"
-	badgerpb "github.com/dgraph-io/badger/v3/pb"
-	"github.com/dgraph-io/dgo/v210"
-	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/badger/v4"
+	bo "github.com/dgraph-io/badger/v4/options"
+	badgerpb "github.com/dgraph-io/badger/v4/pb"
+	"github.com/dgraph-io/dgo/v230"
+	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/ristretto/z"
 )
 
@@ -119,8 +119,8 @@ const (
 	// AppliedUntil - TxnMarks.DoneUntil() before old transactions start getting aborted.
 	ForceAbortDifference = 5000
 
-	// FacetDelimeter is the symbol used to distinguish predicate names from facets.
-	FacetDelimeter = "|"
+	// FacetDelimiter is the symbol used to distinguish predicate names from facets.
+	FacetDelimiter = "|"
 
 	// GrootId is the ID of the admin user for ACLs.
 	GrootId = "groot"
@@ -151,14 +151,13 @@ var (
 	Nilbyte []byte
 	// GuardiansUid is a map from namespace to the Uid of guardians group node.
 	GuardiansUid = &sync.Map{}
-	// GrootUser Uid is a map from namespace to the Uid of groot user node.
+	// GrootUid is a map from namespace to the Uid of groot user node.
 	GrootUid = &sync.Map{}
 )
 
 func init() {
 	GuardiansUid.Store(GalaxyNamespace, 0)
 	GrootUid.Store(GalaxyNamespace, 0)
-
 }
 
 // ShouldCrash returns true if the error should cause the process to crash.
@@ -212,10 +211,8 @@ type queryRes struct {
 
 // IsGqlErrorList tells whether the given err is a list of GraphQL errors.
 func IsGqlErrorList(err error) bool {
-	if _, ok := err.(GqlErrorList); ok {
-		return true
-	}
-	return false
+	_, ok := err.(GqlErrorList)
+	return ok
 }
 
 func (gqlErr *GqlError) Error() string {
@@ -586,7 +583,7 @@ func HasWhitelistedIP(ctx context.Context) (net.Addr, error) {
 	return peerInfo.Addr, nil
 }
 
-// Write response body, transparently compressing if necessary.
+// WriteResponse writes response body, transparently compressing if necessary.
 func WriteResponse(w http.ResponseWriter, r *http.Request, b []byte) (int, error) {
 	var out io.Writer = w
 
@@ -1119,7 +1116,7 @@ func AskUserPassword(userid string, pwdType string, times int) (string, error) {
 	AssertTrue(pwdType == "Current" || pwdType == "New")
 	// ask for the user's password
 	fmt.Printf("%s password for %v:", pwdType, userid)
-	pd, err := term.ReadPassword(int(syscall.Stdin))
+	pd, err := term.ReadPassword(syscall.Stdin)
 	if err != nil {
 		return "", errors.Wrapf(err, "while reading password")
 	}
@@ -1128,7 +1125,7 @@ func AskUserPassword(userid string, pwdType string, times int) (string, error) {
 
 	if times == 2 {
 		fmt.Printf("Retype %s password for %v:", strings.ToLower(pwdType), userid)
-		pd2, err := term.ReadPassword(int(syscall.Stdin))
+		pd2, err := term.ReadPassword(syscall.Stdin)
 		if err != nil {
 			return "", errors.Wrapf(err, "while reading password")
 		}

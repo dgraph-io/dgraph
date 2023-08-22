@@ -1,6 +1,24 @@
 name: ci-aqua-security-trivy-tests
 on:
   push:
+    paths-ignore:
+      - '.github/CODEOWNERS'
+      - '.vscode/**'
+      - 'compose/**'
+      - 'contrib/systemd/**'
+      - 'licenses/**'
+      - 'paper/**'
+      - 'present/**'
+      - 'RFC/**'
+      - 'static/**'
+      - 'wiki/**'
+      - '**/**.dockerignore'
+      - '**/**.gitignore'
+      - '**/**.md'
+      - '**/**.png'
+      - '**/**.jpg'
+      - '**/**.gif'
+      - '**/**.ini'
     branches:
       - main
       - 'release/**'
@@ -14,7 +32,7 @@ on:
       - main
       - 'release/**'
   schedule:
-    - cron: "0 * * * *"
+    - cron: "1 * * * *"
 jobs:
   build:
     name: trivy-tests
@@ -23,6 +41,15 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+      - name: Get Go Version
+        run: |
+          #!/bin/bash
+          GOVERSION=$({ [ -f .go-version ] && cat .go-version; })
+          echo "GOVERSION=$GOVERSION" >> $GITHUB_ENV
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: ${{ env.GOVERSION }}
       - name: Build Docker image
         run: |
           make docker-image

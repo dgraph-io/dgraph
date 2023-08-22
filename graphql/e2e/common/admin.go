@@ -34,10 +34,11 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/dgraph-io/dgo/v210"
-	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/dgo/v230"
+	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 const (
@@ -186,9 +187,7 @@ func admin(t *testing.T) {
 
 	schemaFile := "schema.graphql"
 	schema, err := os.ReadFile(schemaFile)
-	if err != nil {
-		panic(err)
-	}
+	x.Panic(err)
 
 	jsonFile := "test_data.json"
 	data, err := os.ReadFile(jsonFile)

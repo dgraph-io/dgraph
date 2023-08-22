@@ -138,22 +138,20 @@ Docker images that contains `dgraph` and `badger` commands.
 ### Testing
 
 #### Dgraph
-Run the `test.sh` script in the root folder.
+1. Change directory to t directory. 
+2. If all packages need to be tested, run
+      make test
+   If only a specific package needs to be tested, run
+      make test args="--pkg=desired_package_name"
 
-
-    $ ./test.sh
-    
-    INFO: Running tests using the default cluster
-    …
-    INFO: Running test for github.com/dgraph-io/dgraph/algo
-    ok  	github.com/dgraph-io/dgraph/algo	0.004s
-    INFO: Running test for github.com/dgraph-io/dgraph/codec
-    ok  	github.com/dgraph-io/dgraph/codec	9.308s
-    INFO: Running test for github.com/dgraph-io/dgraph/codec/benchmark
-    ?   	github.com/dgraph-io/dgraph/codec/benchmark	[no test files]
-    …
-
-Run `test.sh --help` for more info.
+      example 1: make test args="--pkg=tok" 
+      example 2: make test args="--pkg=tlstest/acl"
+      
+      The first example will run all the tests in the 'tok' directory (if there are any)
+      The second one will run all the test in the acl subfolder of the tlstest directory.
+      Note: running make test args="--pkg=tlstest" will return an error saying no packages 
+      found because all the tests in the tlstest package are in subdirectories of the package. 
+      So the subdirectories must be specified as shown in example 2.
 
 Tests should be written in Go and use the Dgraph cluster set up in `dgraph/docker-compose.yml`
 whenever possible. If the functionality being tested requires a different cluster setup (e.g.
@@ -172,51 +170,6 @@ Run `go test` in the root folder.
     ok      github.com/dgraph-io/badger/skl 0.027s
     ok      github.com/dgraph-io/badger/table       0.478s
     ok      github.com/dgraph-io/badger/y   0.004s
-
-## Doing a release
-
-* Create a branch called `release/v<x.y.z>` from main. For e.g. `release/v1.0.5`. Look at the
-   diff between the last release and main and make sure that `CHANGELOG.md` has all the changes
-   that went in. Also make sure that any new features/changes are added to the docs under
-   `wiki/content` to the relevant section.
-* Test any new features or bugfixes and then tag the final commit on the release branch like:
-
-  ```sh
-  git tag -s -a v1.0.5
-  ```
-
-* Push the release branch and the tagged commit.
-
-  ```sh
-  git push origin release/v<x.y.z>
-  git push origin v<x.y.z>
-  ```
-
-* Travis CI would run the `contrib/nightly/upload.sh` script when a new tag is pushed. This script
-  would create the binaries for `linux`, `darwin` and `windows` and also upload them to Github after
-  creating a new draft release. It would also publish a new docker image for the new release as well
-  as update the docker image with tag `latest` and upload them to docker hub.
-
-* Checkout the `main` branch and merge the tag to it and push it.
-
-  ```sh
-  git checkout main
-  git merge v<x.y.z>
-  git push origin main
-  ```
-
-* Once the draft release is published on Github by Travis, modify it to add the release notes. The release
-  notes would mostly be the same as changes for the current version in `CHANGELOG.md`. Finally publish the 
-  release and announce to users on [Discourse](https://discuss.dgraph.io).
-
-* To make sure that docs are added for the newly released version, add the version to
-   `wiki/scripts/build.sh`. It is also important for a release branch for the version to exist,
-   otherwise docs won't be built and published for it. SSH into the server serving the docs and pull
-   the latest version of `wiki/scripts/build.sh` from main branch and rerun it so that it can start
-   publishing docs for the latest version.
-
-* If any bugs were fixed with regards to query language or in the server then it is a good idea to
-  deploy the latest version on `play.dgraph.io`.
 
 ## Contributing
 

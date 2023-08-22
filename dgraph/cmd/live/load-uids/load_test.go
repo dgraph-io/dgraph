@@ -1,3 +1,5 @@
+//go:build integration
+
 /*
  * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
@@ -31,8 +33,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgo/v210"
-	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/dgo/v230"
+	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
@@ -392,15 +394,15 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		log.Fatalf("Error while getting a dgraph client: %v", err)
 	}
-	x.Check(dg.Alter(
+	x.Panic(dg.Alter(
 		context.Background(), &api.Operation{DropAll: true}))
 
 	// Try to create any files in a dedicated temp directory that gets cleaned up
 	// instead of all over /tmp or the working directory.
 	tmpDir, err := os.MkdirTemp("", "test.tmp-")
-	x.Check(err)
-	x.Check(os.Chdir(tmpDir))
+	x.Panic(err)
+	x.Panic(os.Chdir(tmpDir))
 	defer os.RemoveAll(tmpDir)
 
-	os.Exit(m.Run())
+	m.Run()
 }

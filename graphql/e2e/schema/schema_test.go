@@ -1,3 +1,5 @@
+//go:build integration
+
 /*
  * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
@@ -32,7 +34,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/worker"
@@ -522,8 +524,7 @@ func TestGQLSchemaValidate(t *testing.T) {
 		require.NoError(t, err)
 
 		decoder := json.NewDecoder(resp.Body)
-		err = decoder.Decode(&response)
-		require.NoError(t, err)
+		require.NoError(t, decoder.Decode(&response))
 
 		// Verify that we only validate the schema and not set it.
 		require.Empty(t, common.AssertGetGQLSchema(t, groupOneHTTP, nil).Schema)
@@ -709,10 +710,6 @@ func updateGQLSchemaConcurrent(t *testing.T, schema, authority string) bool {
 }
 
 func TestMain(m *testing.M) {
-	err := common.CheckGraphQLStarted(common.GraphqlAdminURL)
-	if err != nil {
-		x.Log(err, "Waited for GraphQL test server to become available, but it never did.")
-		os.Exit(1)
-	}
-	os.Exit(m.Run())
+	x.Panic(common.CheckGraphQLStarted(common.GraphqlAdminURL))
+	m.Run()
 }

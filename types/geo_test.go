@@ -34,19 +34,17 @@ func TestParse(t *testing.T) {
 		} else {
 			// Marshal it back to text
 			got := ValueForType(StringID)
-			if err := Marshal(g, &got); err != nil || string(got.Value.(string)) != v {
-				t.Errorf("Marshal error expected %s, got %s. error %v", v, string(got.Value.(string)), err)
+			if err := Marshal(g, &got); err != nil || got.Value.(string) != v {
+				t.Errorf("Marshal error expected %s, got %s. error %v", v, got.Value.(string), err)
 			}
 
 			wkb := ValueForType(BinaryID)
 			// Marshal and unmarshal to WKB
-			err = Marshal(g, &wkb)
-			if err != nil {
+			if err := Marshal(g, &wkb); err != nil {
 				t.Errorf("Error marshaling to WKB: %v", err)
 			}
 
-			src := Val{GeoID, []byte(wkb.Value.([]byte))}
-
+			src := Val{GeoID, wkb.Value.([]byte)}
 			if bg, err := Convert(src, GeoID); err != nil {
 				t.Errorf("Error unmarshaling WKB: %v", err)
 			} else if !reflect.DeepEqual(g, bg) {

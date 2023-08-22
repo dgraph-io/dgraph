@@ -1,3 +1,5 @@
+//go:build integration
+
 package main
 
 import (
@@ -14,8 +16,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/dgraph-io/dgo/v210"
-	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/dgo/v230"
+	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/dgraph-io/dgraph/testutil"
 )
@@ -42,7 +44,7 @@ func disableDraining(t *testing.T) {
 
 	client := &http.Client{}
 	req, err := http.NewRequest("POST", testutil.AdminUrl(), bytes.NewBuffer(b))
-	require.Nil(t, err)
+	require.NoError(t, err)
 	req.Header.Add("content-type", "application/json")
 	req.Header.Add("X-Dgraph-AccessToken", token.AccessJwt)
 

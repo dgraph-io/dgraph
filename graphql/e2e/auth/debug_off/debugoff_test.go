@@ -1,3 +1,5 @@
+//go:build integration
+
 package debugoff
 
 import (
@@ -14,6 +16,7 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 var (
@@ -72,11 +75,8 @@ func TestAddGQL(t *testing.T) {
 		}
 
 		common.RequireNoGQLErrors(t, gqlResponse)
-
-		err := json.Unmarshal([]byte(tcase.result), &expected)
-		require.NoError(t, err)
-		err = json.Unmarshal([]byte(gqlResponse.Data), &result)
-		require.NoError(t, err)
+		require.NoError(t, json.Unmarshal([]byte(tcase.result), &expected))
+		require.NoError(t, json.Unmarshal([]byte(gqlResponse.Data), &result))
 
 		opt := cmpopts.IgnoreFields(common.UserSecret{}, "Id")
 		if diff := cmp.Diff(expected, result, opt); diff != "" {
@@ -122,12 +122,72 @@ func TestAddMutationWithXid(t *testing.T) {
 	tweet.DeleteByID(t, user, metaInfo)
 }
 
+func TestAddMutationWithAuthOnIDFieldHavingInterfaceArg(t *testing.T) {
+	// add Library Member
+	addLibraryMemberParams := &common.GraphQLParams{
+		Query: `mutation addLibraryMember($input: [AddLibraryMemberInput!]!) {
+                         addLibraryMember(input: $input, upsert: false) {
+                          numUids
+                         }
+                        }`,
+		Variables: map[string]interface{}{"input": []interface{}{
+			map[string]interface{}{
+				"refID":     "101",
+				"name":      "Alice",
+				"readHours": "4d2hr",
+			}},
+		},
+	}
+
+	gqlResponse := addLibraryMemberParams.ExecuteAsPost(t, common.GraphqlURL)
+	common.RequireNoGQLErrors(t, gqlResponse)
+
+	// add SportsMember should return error but in debug mode
+	// because interface type have auth rules defined on it
+	var resultLibraryMember struct {
+		AddLibraryMember struct {
+			NumUids int
+		}
+	}
+	err := json.Unmarshal(gqlResponse.Data, &resultLibraryMember)
+	require.NoError(t, err)
+	require.Equal(t, 1, resultLibraryMember.AddLibraryMember.NumUids)
+
+	addSportsMemberParams := &common.GraphQLParams{
+		Query: `mutation addSportsMember($input: [AddSportsMemberInput!]!) {
+                         addSportsMember(input: $input, upsert: false) {
+                          numUids
+                         }
+                        }`,
+		Variables: map[string]interface{}{"input": []interface{}{
+			map[string]interface{}{
+				"refID": "101",
+				"name":  "Bob",
+				"plays": "football and cricket",
+			}},
+		},
+	}
+
+	gqlResponse = addSportsMemberParams.ExecuteAsPost(t, common.GraphqlURL)
+	common.RequireNoGQLErrors(t, gqlResponse)
+	var resultSportsMember struct {
+		AddSportsMember struct {
+			NumUids int
+		}
+	}
+	err = json.Unmarshal(gqlResponse.Data, &resultSportsMember)
+	require.NoError(t, err)
+	// We show no error here as it could be a security violation
+	require.Equal(t, 0, resultSportsMember.AddSportsMember.NumUids)
+
+	// cleanup
+	common.DeleteGqlType(t, "LibraryMember", map[string]interface{}{}, 1, nil)
+}
+
 func TestMain(m *testing.M) {
 	schemaFile := "../schema.graphql"
 	schema, err := os.ReadFile(schemaFile)
-	if err != nil {
-		panic(err)
-	}
+	x.Panic(err)
 
 	jsonFile := "../test_data.json"
 	data, err := os.ReadFile(jsonFile)
@@ -138,14 +198,10 @@ func TestMain(m *testing.M) {
 	jwtAlgo := []string{jwt.SigningMethodHS256.Name, jwt.SigningMethodRS256.Name}
 	for _, algo := range jwtAlgo {
 		authSchema, err := testutil.AppendAuthInfo(schema, algo, "../sample_public_key.pem", false)
-		if err != nil {
-			panic(err)
-		}
+		x.Panic(err)
 
 		authMeta, err := authorization.Parse(string(authSchema))
-		if err != nil {
-			panic(err)
-		}
+		x.Panic(err)
 
 		metaInfo = &testutil.AuthMeta{
 			PublicKey:      authMeta.VerificationKey,

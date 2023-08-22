@@ -1,3 +1,5 @@
+//go:build integration
+
 /*
  * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
@@ -29,7 +31,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
@@ -145,19 +147,23 @@ func TestNquadsFromJson1(t *testing.T) {
 		t:      t,
 		nqs:    nq,
 		schema: "name: string @index(exact) .",
-		query: `{alice(func: eq(name, "Alice")) {
-name
-age
-married
-address
-}}`,
-		expected: `{"alice": [
-{"name": "Alice",
-"age": 26,
-"married": true,
-"address": {"coordinates": [2,1.1], "type": "Point"}}
-]}
-`}
+		query: `{
+			alice(func: eq(name, "Alice")) {
+				name
+				age
+				married
+				address
+			}
+		}`,
+		expected: `{
+			"alice": [{
+				"name": "Alice",
+				"age": 26,
+				"married": true,
+				"address": {"coordinates": [2,1.1], "type": "Point"}}
+			]}
+		`,
+	}
 	exp.verify()
 
 	exp.nqs = fastNQ
@@ -603,7 +609,7 @@ func TestNquadsFromJsonFacets1(t *testing.T) {
 
 	carPrice := 30000.56
 	var priceBytes [8]byte
-	u := math.Float64bits(float64(carPrice))
+	u := math.Float64bits(carPrice)
 	binary.LittleEndian.PutUint64(priceBytes[:], u)
 
 	carAge := 3
@@ -1230,7 +1236,7 @@ func BenchmarkNoFacets(b *testing.B) {
 	// we're parsing 125 nquads at a time, so the MB/s == MNquads/s
 	b.SetBytes(125)
 	for n := 0; n < b.N; n++ {
-		_, _ = Parse([]byte(json), SetNquads)
+		_, _ = Parse(json, SetNquads)
 	}
 }
 
@@ -1371,6 +1377,6 @@ func BenchmarkNoFacetsFast(b *testing.B) {
 	// we're parsing 125 nquads at a time, so the MB/s == MNquads/s
 	b.SetBytes(125)
 	for n := 0; n < b.N; n++ {
-		_, _ = FastParse([]byte(json), SetNquads)
+		_, _ = FastParse(json, SetNquads)
 	}
 }

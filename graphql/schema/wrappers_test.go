@@ -848,7 +848,7 @@ func TestSubstituteVarsInURL(t *testing.T) {
 			b, err := SubstituteVarsInURL(test.url, test.variables)
 			if test.expectedErr == nil {
 				require.NoError(t, err)
-				require.Equal(t, test.expected, string(b))
+				require.Equal(t, test.expected, b)
 			} else {
 				require.EqualError(t, err, test.expectedErr.Error())
 			}
@@ -924,8 +924,7 @@ func TestGraphQLQueryInCustomHTTPConfig(t *testing.T) {
 
 			var vars map[string]interface{}
 			if tcase.GQLVariables != "" {
-				err = json.Unmarshal([]byte(tcase.GQLVariables), &vars)
-				require.NoError(t, err)
+				require.NoError(t, json.Unmarshal([]byte(tcase.GQLVariables), &vars))
 			}
 
 			op, err := sch.Operation(

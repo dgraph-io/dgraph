@@ -1,3 +1,5 @@
+//go:build integration
+
 /*
  * Copyright 2016-2023 Dgraph Labs, Inc. and Contributors
  *
@@ -27,9 +29,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/badger/v3"
-	"github.com/dgraph-io/dgo/v210"
-	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/badger/v4"
+	"github.com/dgraph-io/dgo/v230"
+	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
@@ -53,8 +55,7 @@ func commitTransaction(t *testing.T, edge *pb.DirectedEdge, l *posting.List) {
 	startTs := timestamp()
 	txn := posting.Oracle().RegisterStartTs(startTs)
 	l = txn.Store(l)
-	err := l.AddMutationWithIndex(context.Background(), edge, txn)
-	require.NoError(t, err)
+	require.NoError(t, l.AddMutationWithIndex(context.Background(), edge, txn))
 
 	commit := commitTs(startTs)
 
@@ -86,8 +87,7 @@ func setClusterEdge(t *testing.T, dg *dgo.Dgraph, rdf string) {
 
 func delClusterEdge(t *testing.T, dg *dgo.Dgraph, rdf string) {
 	mu := &api.Mutation{DelNquads: []byte(rdf), CommitNow: true}
-	err := testutil.RetryMutation(dg, mu)
-	require.NoError(t, err)
+	require.NoError(t, testutil.RetryMutation(dg, mu))
 }
 func getOrCreate(key []byte) *posting.List {
 	l, err := posting.GetNoStore(key, math.MaxUint64)
@@ -163,8 +163,7 @@ func initClusterTest(t *testing.T, schemaStr string) *dgo.Dgraph {
 	}
 	testutil.DropAll(t, dg)
 
-	err = dg.Alter(context.Background(), &api.Operation{Schema: schemaStr})
-	require.NoError(t, err)
+	require.NoError(t, dg.Alter(context.Background(), &api.Operation{Schema: schemaStr}))
 	populateClusterGraph(t, dg)
 
 	return dg
@@ -360,7 +359,6 @@ func TestProcessTaskIndex(t *testing.T) {
 }
 
 func TestMain(m *testing.M) {
-	x.Init()
 	posting.Config.CommitFraction = 0.10
 	gr = new(groupi)
 	gr.gid = 1
@@ -389,5 +387,5 @@ func TestMain(m *testing.M) {
 	posting.Init(ps, 0)
 	Init(ps)
 
-	os.Exit(m.Run())
+	m.Run()
 }

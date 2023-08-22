@@ -36,8 +36,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/dgraph-io/dgo/v210"
-	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/dgo/v230"
+	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
@@ -369,6 +369,30 @@ func CreateNamespace(t *testing.T, headers http.Header, whichAlpha string) uint6
 	require.NoError(t, json.Unmarshal(gqlResponse.Data, &resp))
 	require.Greater(t, resp.AddNamespace.NamespaceId, x.GalaxyNamespace)
 	return resp.AddNamespace.NamespaceId
+}
+
+func ListNamespaces(t *testing.T, jwtToken string, headers http.Header, whichAlpha string) []uint64 {
+	adminUrl := "http://" + testutil.ContainerAddr(whichAlpha, 8080) + "/admin"
+
+	listNamespaces := &GraphQLParams{
+		Query: `query{
+			 state {
+			 namespaces
+			 }
+		 }`,
+		Headers: headers,
+	}
+
+	gqlResponse := listNamespaces.ExecuteAsPost(t, adminUrl)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	var resp struct {
+		State struct {
+			Namespaces []uint64 `json:"namespaces"`
+		} `json:"state"`
+	}
+	require.NoError(t, json.Unmarshal(gqlResponse.Data, &resp))
+	return resp.State.Namespaces
 }
 
 func DeleteNamespace(t *testing.T, id uint64, header http.Header, whichAlpha string) {
@@ -844,6 +868,7 @@ func RunAll(t *testing.T) {
 	t.Run("query id directive with int", idDirectiveWithInt)
 	t.Run("query id directive with int64", idDirectiveWithInt64)
 	t.Run("query filter ID values coercion to List", queryFilterWithIDInputCoercion)
+	t.Run("query @id field with interface arg on interface", queryWithIDFieldAndInterfaceArg)
 
 	// mutation tests
 	t.Run("add mutation", addMutation)
@@ -903,6 +928,7 @@ func RunAll(t *testing.T) {
 	t.Run("input coercion to list", inputCoerciontoList)
 	t.Run("multiple external Id's tests", multipleXidsTests)
 	t.Run("Upsert Mutation Tests", upsertMutationTests)
+	t.Run("add mutation with @id field and interface arg", addMutationWithIDFieldHavingInterfaceArg)
 
 	// error tests
 	t.Run("graphql completion on", graphQLCompletionOn)
@@ -1421,9 +1447,7 @@ func GetJWTForInterfaceAuth(t *testing.T, user, role string, ans bool, metaInfo 
 func BootstrapAuthData() ([]byte, []byte) {
 	schemaFile := "../auth/schema.graphql"
 	schema, err := os.ReadFile(schemaFile)
-	if err != nil {
-		panic(err)
-	}
+	x.Panic(err)
 
 	jsonFile := "../auth/test_data.json"
 	data, err := os.ReadFile(jsonFile)

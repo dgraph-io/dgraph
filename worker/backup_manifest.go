@@ -21,6 +21,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/golang/glog"
 	"github.com/pkg/errors"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -56,33 +57,28 @@ func verifyManifests(manifests []*Manifest) error {
 	return nil
 }
 
-func getManifestsToRestore(
-	h UriHandler, uri *url.URL, req *pb.RestoreRequest) ([]*Manifest, error) {
+func getManifestsToRestore(h UriHandler, uri *url.URL, req *pb.RestoreRequest) ([]*Manifest, error) {
 	manifest, err := GetManifest(h, uri)
 	if err != nil {
-		return manifest.Manifests, err
+		return nil, err
 	}
-	return getFilteredManifests(h, manifest.Manifests, req)
-}
-
-func getFilteredManifests(h UriHandler, manifests []*Manifest,
-	req *pb.RestoreRequest) ([]*Manifest, error) {
+	manifests := manifest.Manifests
 
 	// filter takes a list of manifests and returns the list of manifests
 	// that should be considered during a restore.
-	filter := func(manifests []*Manifest, backupId string) ([]*Manifest, error) {
+	filter := func(mfs []*Manifest, backupId string) ([]*Manifest, error) {
 		// Go through the files in reverse order and stop when the latest full backup is found.
 		var out []*Manifest
-		for i := len(manifests) - 1; i >= 0; i-- {
+		for i := len(mfs) - 1; i >= 0; i-- {
 			// If backupId is not empty, skip all the manifests that do not match the given
-			// backupId. If it's empty, do not skip any manifests as the default behavior is
+			// backupId. If it's empty, do not skip any mfs manifests the default behavior is
 			// to restore the latest series of backups.
-			if len(backupId) > 0 && manifests[i].BackupId != backupId {
+			if len(backupId) > 0 && mfs[i].BackupId != backupId {
 				continue
 			}
 
-			out = append(out, manifests[i])
-			if manifests[i].Type == "full" {
+			out = append(out, mfs[i])
+			if mfs[i].Type == "full" {
 				break
 			}
 		}
@@ -100,6 +96,8 @@ func getFilteredManifests(h UriHandler, manifests []*Manifest,
 		for g := range m.Groups {
 			path := filepath.Join(m.Path, backupName(m.ValidReadTs(), g))
 			if !h.FileExists(path) {
+				glog.Warningf("backup file [%v] missing for backupId [%v] and backupNum [%v]",
+					path, m.BackupId, m.BackupNum)
 				missingFiles = true
 				break
 			}
@@ -108,7 +106,8 @@ func getFilteredManifests(h UriHandler, manifests []*Manifest,
 			validManifests = append(validManifests, m)
 		}
 	}
-	manifests, err := filter(validManifests, req.BackupId)
+
+	manifests, err = filter(validManifests, req.BackupId)
 	if err != nil {
 		return nil, err
 	}
@@ -283,8 +282,6 @@ func GetManifest(h UriHandler, uri *url.URL) (*MasterManifest, error) {
 }
 
 func CreateManifest(h UriHandler, uri *url.URL, manifest *MasterManifest) error {
-	var err error
-
 	w, err := h.CreateFile(tmpManifest)
 	if err != nil {
 		return errors.Wrap(err, "createManifest failed to create tmp path: ")

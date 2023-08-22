@@ -263,7 +263,7 @@ func stopCluster(composeFile, prefix string, wg *sync.WaitGroup, err error) {
 }
 
 func runTestsFor(ctx context.Context, pkg, prefix string) error {
-	var args = []string{"go", "test", "-failfast", "-v"}
+	var args = []string{"go", "test", "-failfast", "-v", "-tags=integration"}
 	if *race {
 		args = append(args, "-timeout", "180m")
 		// Todo: There are few race errors in tests itself. Enable this once that is fixed.
@@ -584,8 +584,9 @@ func getPackages() []task {
 		}
 		return out
 	}
+	cfg := &packages.Config{BuildFlags: []string{"-tags=integration"}}
 
-	pkgs, err := packages.Load(nil, *baseDir+"/...")
+	pkgs, err := packages.Load(cfg, *baseDir+"/...")
 	x.Check(err)
 	for _, pkg := range pkgs {
 		if len(pkg.Errors) > 0 {
@@ -790,17 +791,13 @@ func downloadDataFiles() {
 		fmt.Print("Skipping downloading of resources\n")
 		return
 	}
-	if *tmp == "" {
-		*tmp = os.TempDir()
-	}
-	x.Check(testutil.MakeDirEmpty([]string{*tmp}))
 	for fname, link := range datafiles {
 		cmd := exec.Command("wget", "-O", fname, link)
 		cmd.Dir = *tmp
 
 		if out, err := cmd.CombinedOutput(); err != nil {
-			fmt.Printf("Error %v", err)
-			fmt.Printf("Output %v", out)
+			fmt.Printf("Error %v\n", err)
+			panic(fmt.Sprintf("error downloading a file: %s", string(out)))
 		}
 	}
 }
@@ -810,11 +807,6 @@ func downloadLDBCFiles() {
 		fmt.Print("Skipping downloading of resources\n")
 		return
 	}
-	if *tmp == "" {
-		*tmp = os.TempDir() + "/ldbcData"
-	}
-
-	x.Check(testutil.MakeDirEmpty([]string{*tmp}))
 
 	for _, name := range rdfFileNames {
 		filepath := baseUrl + name + suffix
@@ -831,8 +823,8 @@ func downloadLDBCFiles() {
 			cmd := exec.Command("wget", "-O", fname, link)
 			cmd.Dir = *tmp
 			if out, err := cmd.CombinedOutput(); err != nil {
-				fmt.Printf("Error %v", err)
-				fmt.Printf("Output %v", out)
+				fmt.Printf("Error %v\n", err)
+				panic(fmt.Sprintf("error downloading a file: %s", string(out)))
 			}
 			fmt.Printf("Downloaded %s to %s in %s \n", fname, *tmp, time.Since(start))
 		}(fname, link, &wg)
@@ -1002,10 +994,19 @@ func run() error {
 	go func() {
 		defer close(testCh)
 		valid := getPackages()
+
 		if testSuiteContains("load") || testSuiteContains("all") {
+			if *tmp == "" {
+				*tmp = os.TempDir()
+			}
+			x.Check(testutil.MakeDirEmpty([]string{*tmp}))
 			downloadDataFiles()
 		}
 		if testSuiteContains("ldbc") || testSuiteContains("all") {
+			if *tmp == "" {
+				*tmp = filepath.Join(os.TempDir(), "/ldbcdata")
+			}
+			x.Check(testutil.MakeDirEmpty([]string{*tmp}))
 			downloadLDBCFiles()
 		}
 		for i, task := range valid {

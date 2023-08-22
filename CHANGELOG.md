@@ -4,6 +4,416 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project will adhere to [Semantic Versioning](https://semver.org) starting `v22.0.0`.
 
+## [v23.1.0] - 2023-08-17
+[v23.1.0]: https://github.com/dgraph-io/dgraph/compare/v23.0.1...v23.1.0
+
+### Added
+
+- **Core Dgraph**
+    - perf(query): Improve IntersectCompressedWithBin for UID Pack (#8941)
+    - feat(query): add feature flag normalize-compatibility-mode (#8845) (#8929)
+    - feat(alpha): support RDF response via http query request (#8004)  (#8639)
+    - perf(query): speed up parsing of a huge query (#8942)
+    - fix(live): replace panic in live loader with errors (#7798) (#8944)
+
+- **GraphQL**
+    - feat(graphql): This PR allows @id field in interface to be unique across all implementing types (#8876)
+
+### Fixed
+
+- **Core Dgraph**
+    - docs(zero): add comments in zero and clarify naming (#8945)
+    - fix(cdc): skip bad events in CDC (#8076)
+    - fix(bulk): enable running bulk loader with only gql schema (#8903)
+    - chore(badger): upgrade badger to v4.2.0 (#8932) (#8925)
+    - doc(restore): add docs for mutations in between incremental restores (#8908)
+    - chore: fix compilation on 32bit (#8895)
+    - chore(raft): add debug logs to print all transactions (#8890)
+    - chore(alpha): add logs for processing entries in applyCh (#8930)
+    - fix(acl): allow data deletion for non-reserved predicates (#8937)
+    - fix(alpha): convert numbers correctly in superflags (#7712) (#8943)
+    - chore(raft): better logging message for cleaning banned ns pred (#7886)
+
+- **Security**
+    - sec(acl): convert x.Sensitive to string type for auth hash (#8931)
+    - chore(deps): bump google.golang.org/grpc from 1.52.0 to 1.53.0 (#8900)
+    - chore(deps): bump certifi from 2022.12.7 to 2023.7.22 in /contrib/config/marketplace/aws/tests (#8920)
+    - chore(deps): bump certifi from 2022.12.7 to 2023.7.22 in /contrib/embargo (#8921)
+    - chore(deps): bump pygments from 2.7.4 to 2.15.0 in /contrib/embargo (#8913)
+    - chore: upgrade bleve to v2.3.9 (#8948)
+
+- **CI & Testing**
+    - chore: update cron job frequency to reset github notifications (#8956)
+    - test(upgrade): add v20.11 upgrade tests in query package (#8954)
+    - chore(contrib) - fixes for Vault  (#7739)
+    - chore(build): make build codename configurable (#8951)
+    - fix(upgrade): look for version string in logs bottom up (#8926)
+    - fix(upgrade): check commit SHA to find running dgraph version (#8923)
+    - chore(upgrade): run upgrade tests for v23.0.1 (#8918)
+    - chore(upgrade): ensure we run right version of Dgraph (#8910)
+    - chore(upgrade): add workaround for multiple groot issue in export-import (#8897)
+    - test(upgrade): add upgrade tests for systest/license package (#8902)
+    - chore(upgrade): increase the upgrade job duration limit to 12h (#8907)
+    - chore(upgrade): increase the duration of the CI workflow (#8906)
+    - ci(upgrade): break down upgrade tests CI workflow (#8904)
+    - test(acl): add upgrade tests for ee/acl package (#8792)
+    - chore: update pull request template (#8899)
+
+## [v23.0.1] - 2023-07-09
+[v23.0.1]: https://github.com/dgraph-io/dgraph/compare/v23.0.0...v23.0.1
+
+### Fixed
+
+- **Core Dgraph**
+  - chore(restore): add log message when restore fails (#8893)
+  - fix(zero): fix zero's health endpoint to return json response (#8858)
+  - chore(zero): improve error message while unmarshalling WAL (#8882)
+  - fix(multi-tenancy): check existence before banning namespace (#7887)
+  - fix(bulk): removed buffer max size (#8841)
+  - chore: fix failing oss build (#8832) Fixes #8831
+  - upgrade dgo to v230.0.1 (#8785)
+
+- **CI**
+  - ci(dql): add workflow for fuzz testing (#8874)
+  - chore(ci): add workflow for OSS build + unit tests (#8834)
+
+- **Security**
+  - chore(deps): bump requests from 2.23.0 to 2.31.0 in /contrib/config/marketplace/aws/tests (#8836)
+  - chore(deps): bump requests from 2.23.0 to 2.31.0 in /contrib/embargo (#8835)
+  - chore(deps): bump github.com/docker/distribution from 2.8.0+incompatible to 2.8.2+incompatible (#8821)
+  - chore(deps): bump github.com/cloudflare/circl from 1.1.0 to 1.3.3 (#8822)
+
+## [v23.0.0] - 2023-05-08
+[v23.0.0]: https://github.com/dgraph-io/dgraph/compare/v22.0.2...v23.0.0
+
+### Added
+
+- **GraphQL**
+    - fix(GraphQL): pass on HTTP request headers for subscriptions (https://github.com/dgraph-io/dgraph/pull/8574)
+
+- **Core Dgraph**
+    - feat(metrics): add badger metrics (#8034) (https://github.com/dgraph-io/dgraph/pull/8737)
+    - feat(restore): introduce incremental restore (#7942) (https://github.com/dgraph-io/dgraph/pull/8624)
+    - chore(debug): add `only-summary` flag in `dgraph debug` to show LSM tree and namespace size (https://github.com/dgraph-io/dgraph/pull/8516)
+    - feat(cloud): add `shared-instance` flag in limit superflag in alpha (https://github.com/dgraph-io/dgraph/pull/8625)
+    - chore(deps): update prometheus dependency, adds new metrics (https://github.com/dgraph-io/dgraph/pull/8655)
+    - feat(cdc): add superflag `tls` to enable TLS without CA or certs (https://github.com/dgraph-io/dgraph/pull/8564)
+    - feat(multitenancy): namespace aware drop data (https://github.com/dgraph-io/dgraph/pull/8511)
+
+### Fixed
+
+- **GraphQL**
+    - fix(GraphQL): nested Auth Rules not working properly (https://github.com/dgraph-io/dgraph/pull/8571)
+
+- **Core Dgraph**
+    - Fix wal replay issue during rollup (https://github.com/dgraph-io/dgraph/pull/8774)
+    - security(logging): fix aes implementation in audit logging (https://github.com/dgraph-io/dgraph/pull/8323)
+    - chore(worker): unify mapper receiver names (https://github.com/dgraph-io/dgraph/pull/8740)
+    - fix(dql): fix panic in parsing of regexp (https://github.com/dgraph-io/dgraph/pull/8739)
+    - fix(Query): Do an error check before bubbling up nil error (https://github.com/dgraph-io/dgraph/pull/8769)
+    - chore: replace global index with local one & fix typos (https://github.com/dgraph-io/dgraph/pull/8719)
+    - chore(logs): add logs to track dropped proposals (https://github.com/dgraph-io/dgraph/pull/8568)
+    - fix(debug): check length of wal entry before parsing (https://github.com/dgraph-io/dgraph/pull/8560)
+    - opt(schema): optimize populateSchema() (https://github.com/dgraph-io/dgraph/pull/8565)
+    - fix(zero): fix update membership to make bulk tablet proposal instead of multiple small (https://github.com/dgraph-io/dgraph/pull/8573)
+    - fix(groot): do not upsert groot for all namespaces on restart (https://github.com/dgraph-io/dgraph/pull/8561)
+    - fix(restore): set kv version to restoreTs for all keys (https://github.com/dgraph-io/dgraph/pull/8563)
+    - fix(probe): do not contend for lock in lazy load (https://github.com/dgraph-io/dgraph/pull/8566)
+    - fix(core): fixed infinite loop in CommitToDisk (https://github.com/dgraph-io/dgraph/pull/8614)
+    - fix(proposals): incremental proposal key for zero proposals (https://github.com/dgraph-io/dgraph/pull/8567)
+    - fix(zero): fix waiting for random time while rate limiting (https://github.com/dgraph-io/dgraph/pull/8656)
+    - chore(deps): upgrade badger (https://github.com/dgraph-io/dgraph/pull/8654, https://github.com/dgraph-io/dgraph/pull/8658)
+    - opt(schema): load schema and types using Stream framework  (https://github.com/dgraph-io/dgraph/pull/8562)
+    - fix(backup): use StreamWriter instead of KVLoader during backup restore (https://github.com/dgraph-io/dgraph/pull/8510)
+    - fix(audit): fixing audit logs for websocket connections (https://github.com/dgraph-io/dgraph/pull/8627)
+    - fix(restore): consider the banned namespaces while bumping (https://github.com/dgraph-io/dgraph/pull/8559)
+    - fix(backup): create directory before writing backup (https://github.com/dgraph-io/dgraph/pull/8638)
+
+- **Test**
+    - chore(tests): add upgrade tests in query package (https://github.com/dgraph-io/dgraph/pull/8750)
+    - simplify test setup in query package (https://github.com/dgraph-io/dgraph/pull/8782)
+    - add a test for incremental restore (https://github.com/dgraph-io/dgraph/pull/8754)
+    - chore(tests): run tests in query package against dgraph cloud (https://github.com/dgraph-io/dgraph/pull/8726)
+    - fix the backup test cluster compose file (https://github.com/dgraph-io/dgraph/pull/8775)
+    - cleanup tests to reduce the scope of err var (https://github.com/dgraph-io/dgraph/pull/8771)
+    - use t.TempDir() for using a temp dir in tests (https://github.com/dgraph-io/dgraph/pull/8772)
+    - fix(test): clan cruft from test run (https://github.com/dgraph-io/dgraph/pull/8348)
+    - chore(tests): avoid calling os.Exit in TestMain (https://github.com/dgraph-io/dgraph/pull/8765)
+    - chore: fix linter issue on main (https://github.com/dgraph-io/dgraph/pull/8749)
+    - recreate the context variable for parallel test (https://github.com/dgraph-io/dgraph/pull/8748)
+    - fix(tests): wait for license to be applied before trying to login (https://github.com/dgraph-io/dgraph/pull/8744)
+    - fix(tests): sleep longer so that ACLs are updated (https://github.com/dgraph-io/dgraph/pull/8745)
+    - chore(test): use pointer receiver for LocalCluster methods (https://github.com/dgraph-io/dgraph/pull/8734)
+    - chore(linter): fix unconvert linter issues on linux (https://github.com/dgraph-io/dgraph/pull/8718)
+    - chore(linter): add unconvert linter and address related issues (https://github.com/dgraph-io/dgraph/pull/8685)
+    - chore(ci): resolve community PR goveralls failure (https://github.com/dgraph-io/dgraph/pull/8716)
+    - chore(test): increased iterations of the health check (https://github.com/dgraph-io/dgraph/pull/8711)
+    - fix(test): avoid host volume mount in minio container (https://github.com/dgraph-io/dgraph/pull/8569)
+    - chore(test): add tests for lex/iri.go,chunker/chunk.go (https://github.com/dgraph-io/dgraph/pull/8515)
+    - chore(test): add Backup/Restore test for NFS (https://github.com/dgraph-io/dgraph/pull/8551)
+    - chore(test): add test that after snapshot is applied, GraphQL schema is refreshed (https://github.com/dgraph-io/dgraph/pull/8619)
+    - chore(test): upgrade graphql tests to use go 1.19 (https://github.com/dgraph-io/dgraph/pull/8662)
+    - chore(test): add automated test to test multitenant --limit flag (https://github.com/dgraph-io/dgraph/pull/8646)
+    - chore(test): add restore test for more than 127 namespaces (https://github.com/dgraph-io/dgraph/pull/8643)
+    - fix(test): fix the corner case for raft entries test (https://github.com/dgraph-io/dgraph/pull/8617)
+
+- **CD**
+    - fix(build): update dockerfile to use cache busting and reduce image size (https://github.com/dgraph-io/dgraph/pull/8652)
+    - chore(deps): update min go build version (https://github.com/dgraph-io/dgraph/pull/8423)
+    - chore(cd): add badger binary to dgraph docker image (https://github.com/dgraph-io/dgraph/pull/8790)
+
+- **Security**
+    - chore(deps): bump certifi from 2020.4.5.1 to 2022.12.7 in /contrib/config/marketplace/aws/tests (https://github.com/dgraph-io/dgraph/pull/8496)
+    - chore(deps): bump github.com/docker/distribution from 2.7.1+incompatible to 2.8.0+incompatible (https://github.com/dgraph-io/dgraph/pull/8575)
+    - chore(deps): bump werkzeug from 0.16.1 to 2.2.3 in /contrib/embargo (https://github.com/dgraph-io/dgraph/pull/8676)
+    - fix(sec): upgrade networkx to  (https://github.com/dgraph-io/dgraph/pull/8613)
+    - fix(sec): CVE-2022-41721 (https://github.com/dgraph-io/dgraph/pull/8633)
+    - fix(sec): CVE & OS Patching (https://github.com/dgraph-io/dgraph/pull/8634)
+
+   - <details>
+      <summary>CVE Fixes (31 total)</summary>
+
+        - CVE-2013-4235
+        - CVE-2016-20013
+        - CVE-2016-2781
+        - CVE-2017-11164
+        - CVE-2021-36222
+        - CVE-2021-37750
+        - CVE-2021-39537
+        - CVE-2021-44758
+        - CVE-2022-28321
+        - CVE-2022-29458
+        - CVE-2022-3219
+        - CVE-2022-3437
+        - CVE-2022-3821
+        - CVE-2022-41717
+        - CVE-2022-41721
+        - CVE-2022-41723
+        - CVE-2022-42898
+        - CVE-2022-4304
+        - CVE-2022-43552
+        - CVE-2022-4415
+        - CVE-2022-4450
+        - CVE-2022-44640
+        - CVE-2022-48303
+        - CVE-2023-0215
+        - CVE-2023-0286
+        - CVE-2023-0361
+        - CVE-2023-0464
+        - CVE-2023-0465
+        - CVE-2023-0466
+        - CVE-2023-23916
+        - CVE-2023-26604
+        </details>
+
+### Changed
+
+- **Core Dgraph**
+    - upgrade badger to v4.1.0 (https://github.com/dgraph-io/dgraph/pull/8783) (https://github.com/dgraph-io/dgraph/pull/8709)
+    - fix(multitenancy) store namespace in predicate as a hex separated by a hyphen to prevent json marshal issues (https://github.com/dgraph-io/dgraph/pull/8601)
+    - fix(query): handle bad timezone correctly (https://github.com/dgraph-io/dgraph/pull/8657)
+    - chore(ludicroud): remove ludicrous mode from the code (https://github.com/dgraph-io/dgraph/pull/8612)
+    - fix(backup): make the /admin/backup and /admin/export API asynchronous (https://github.com/dgraph-io/dgraph/pull/8554)
+    - fix(mutation): validate mutation before applying it (https://github.com/dgraph-io/dgraph/pull/8623)
+
+- **CI Enhancements**
+    - fix(ci): unpin curl (https://github.com/dgraph-io/dgraph/pull/8577)
+    - fix(ci): adjust cron schedules (https://github.com/dgraph-io/dgraph/pull/8592)
+    - chore(ci): Capture coverage from bulk load and LDBC tests (https://github.com/dgraph-io/dgraph/pull/8478)
+    - chore(linter): enable gosec linter (https://github.com/dgraph-io/dgraph/pull/8678)
+    - chore: apply go vet improvements (https://github.com/dgraph-io/dgraph/pull/8620)
+    - chore(linter): fix some of the warnings from gas linter (https://github.com/dgraph-io/dgraph/pull/8664)
+    - chore(linter): fix golangci config and some issues in tests (https://github.com/dgraph-io/dgraph/pull/8669)
+    - fix(linter): address gosimple linter reports & errors (https://github.com/dgraph-io/dgraph/pull/8628)
+
+## [v23.0.0-rc1] - 2023-04-11
+[v23.0.0-rc1]: https://github.com/dgraph-io/dgraph/compare/v22.0.2...v23.0.0-rc1
+
+### Added
+
+- **GraphQL**
+    - fix(GraphQL): pass on HTTP request headers for subscriptions (https://github.com/dgraph-io/dgraph/pull/8574)
+
+- **Core Dgraph**
+    - feat(metrics): add badger metrics (#8034) (https://github.com/dgraph-io/dgraph/pull/8737)
+    - feat(restore): introduce incremental restore (#7942) (https://github.com/dgraph-io/dgraph/pull/8624)
+    - chore(debug): add `only-summary` flag in `dgraph debug` to show LSM tree and namespace size (https://github.com/dgraph-io/dgraph/pull/8516)
+    - feat(cloud): add `shared-instance` flag in limit superflag in alpha (https://github.com/dgraph-io/dgraph/pull/8625)
+    - chore(deps): update prometheus dependency, adds new metrics (https://github.com/dgraph-io/dgraph/pull/8655)
+    - feat(cdc): add superflag `tls` to enable TLS without CA or certs (https://github.com/dgraph-io/dgraph/pull/8564)
+    - feat(multitenancy): namespace aware drop data (https://github.com/dgraph-io/dgraph/pull/8511)
+
+### Fixed
+
+- **GragphQL**
+    - fix(GraphQL): nested Auth Rules not working properly (https://github.com/dgraph-io/dgraph/pull/8571)
+
+- **Core Dgraph**
+    - Fix wal replay issue during rollup (https://github.com/dgraph-io/dgraph/pull/8774)
+    - security(logging): fix aes implementation in audit logging (https://github.com/dgraph-io/dgraph/pull/8323)
+    - chore(worker): unify mapper receiver names (https://github.com/dgraph-io/dgraph/pull/8740)
+    - fix(dql): fix panic in parsing of regexp (https://github.com/dgraph-io/dgraph/pull/8739)
+    - fix(Query): Do an error check before bubbling up nil error (https://github.com/dgraph-io/dgraph/pull/8769)
+    - chore: replace global index with local one & fix typos (https://github.com/dgraph-io/dgraph/pull/8719)
+    - chore(logs): add logs to track dropped proposals (https://github.com/dgraph-io/dgraph/pull/8568)
+    - fix(debug): check length of wal entry before parsing (https://github.com/dgraph-io/dgraph/pull/8560)
+    - opt(schema): optimize populateSchema() (https://github.com/dgraph-io/dgraph/pull/8565)
+    - fix(zero): fix update membership to make bulk tablet proposal instead of multiple small (https://github.com/dgraph-io/dgraph/pull/8573)
+    - fix(groot): do not upsert groot for all namespaces on restart (https://github.com/dgraph-io/dgraph/pull/8561)
+    - fix(restore): set kv version to restoreTs for all keys (https://github.com/dgraph-io/dgraph/pull/8563)
+    - fix(probe): do not contend for lock in lazy load (https://github.com/dgraph-io/dgraph/pull/8566)
+    - fix(core): fixed infinite loop in CommitToDisk (https://github.com/dgraph-io/dgraph/pull/8614)
+    - fix(proposals): incremental proposal key for zero proposals (https://github.com/dgraph-io/dgraph/pull/8567)
+    - fix(zero): fix waiting for random time while rate limiting (https://github.com/dgraph-io/dgraph/pull/8656)
+    - chore(deps): upgrade badger (https://github.com/dgraph-io/dgraph/pull/8654, https://github.com/dgraph-io/dgraph/pull/8658)
+    - opt(schema): load schema and types using Stream framework  (https://github.com/dgraph-io/dgraph/pull/8562)
+    - fix(backup): use StreamWriter instead of KVLoader during backup restore (https://github.com/dgraph-io/dgraph/pull/8510)
+    - fix(audit): fixing audit logs for websocket connections (https://github.com/dgraph-io/dgraph/pull/8627)
+    - fix(restore): consider the banned namespaces while bumping (https://github.com/dgraph-io/dgraph/pull/8559)
+    - fix(backup): create directory before writing backup (https://github.com/dgraph-io/dgraph/pull/8638)
+
+- **Test**
+    - chore(tests): add upgrade tests in query package (https://github.com/dgraph-io/dgraph/pull/8750)
+    - simplify test setup in query package (https://github.com/dgraph-io/dgraph/pull/8782)
+    - add a test for incremental restore (https://github.com/dgraph-io/dgraph/pull/8754)
+    - chore(tests): run tests in query package against dgraph cloud (https://github.com/dgraph-io/dgraph/pull/8726)
+    - fix the backup test cluster compose file (https://github.com/dgraph-io/dgraph/pull/8775)
+    - cleanup tests to reduce the scope of err var (https://github.com/dgraph-io/dgraph/pull/8771)
+    - use t.TempDir() for using a temp dir in tests (https://github.com/dgraph-io/dgraph/pull/8772)
+    - fix(test): clan cruft from test run (https://github.com/dgraph-io/dgraph/pull/8348)
+    - chore(tests): avoid calling os.Exit in TestMain (https://github.com/dgraph-io/dgraph/pull/8765)
+    - chore: fix linter issue on main (https://github.com/dgraph-io/dgraph/pull/8749)
+    - recreate the context variable for parallel test (https://github.com/dgraph-io/dgraph/pull/8748)
+    - fix(tests): wait for license to be applied before trying to login (https://github.com/dgraph-io/dgraph/pull/8744)
+    - fix(tests): sleep longer so that ACLs are updated (https://github.com/dgraph-io/dgraph/pull/8745)
+    - chore(test): use pointer receiver for LocalCluster methods (https://github.com/dgraph-io/dgraph/pull/8734)
+    - chore(linter): fix unconvert linter issues on linux (https://github.com/dgraph-io/dgraph/pull/8718)
+    - chore(linter): add unconvert linter and address related issues (https://github.com/dgraph-io/dgraph/pull/8685)
+    - chore(ci): resolve community PR goveralls failure (https://github.com/dgraph-io/dgraph/pull/8716)
+    - chore(test): increased iterations of the health check (https://github.com/dgraph-io/dgraph/pull/8711)
+    - fix(test): avoid host volume mount in minio container (https://github.com/dgraph-io/dgraph/pull/8569)
+    - chore(test): add tests for lex/iri.go,chunker/chunk.go (https://github.com/dgraph-io/dgraph/pull/8515)
+    - chore(test): add Backup/Restore test for NFS (https://github.com/dgraph-io/dgraph/pull/8551)
+    - chore(test): add test that after snapshot is applied, GraphQL schema is refreshed (https://github.com/dgraph-io/dgraph/pull/8619)
+    - chore(test): upgrade graphql tests to use go 1.19 (https://github.com/dgraph-io/dgraph/pull/8662)
+    - chore(test): add automated test to test multitenant --limit flag (https://github.com/dgraph-io/dgraph/pull/8646)
+    - chore(test): add restore test for more than 127 namespaces (https://github.com/dgraph-io/dgraph/pull/8643)
+    - fix(test): fix the corner case for raft entries test (https://github.com/dgraph-io/dgraph/pull/8617)
+
+- **CD**
+    - fix(build): update dockerfile to use cache busting and reduce image size (https://github.com/dgraph-io/dgraph/pull/8652)
+    - chore(deps): update min go build version (https://github.com/dgraph-io/dgraph/pull/8423)
+    - chore(cd): add badger binary to dgraph docker image (https://github.com/dgraph-io/dgraph/pull/8790)
+
+- **Security**
+    - chore(deps): bump certifi from 2020.4.5.1 to 2022.12.7 in /contrib/config/marketplace/aws/tests (https://github.com/dgraph-io/dgraph/pull/8496)
+    - chore(deps): bump github.com/docker/distribution from 2.7.1+incompatible to 2.8.0+incompatible (https://github.com/dgraph-io/dgraph/pull/8575)
+    - chore(deps): bump werkzeug from 0.16.1 to 2.2.3 in /contrib/embargo (https://github.com/dgraph-io/dgraph/pull/8676)
+    - fix(sec): upgrade networkx to  (https://github.com/dgraph-io/dgraph/pull/8613)
+    - fix(sec): CVE-2022-41721 (https://github.com/dgraph-io/dgraph/pull/8633)
+    - fix(sec): CVE & OS Patching (https://github.com/dgraph-io/dgraph/pull/8634)
+
+### Changed
+
+- **Core Dgraph**
+    - upgrade badger to v4.1.0 (https://github.com/dgraph-io/dgraph/pull/8783) (https://github.com/dgraph-io/dgraph/pull/8709)
+    - fix(multitenancy) store namespace in predicate as a hex separated by a hyphen to prevent json marshal issues (https://github.com/dgraph-io/dgraph/pull/8601)
+    - fix(query): handle bad timezone correctly (https://github.com/dgraph-io/dgraph/pull/8657)
+    - chore(ludicroud): remove ludicrous mode from the code (https://github.com/dgraph-io/dgraph/pull/8612)
+    - fix(backup): make the /admin/backup and /admin/export API asynchronous (https://github.com/dgraph-io/dgraph/pull/8554)
+    - fix(mutation): validate mutation before applying it (https://github.com/dgraph-io/dgraph/pull/8623)
+
+- **CI Enhancements**
+    - fix(ci): unpin curl (https://github.com/dgraph-io/dgraph/pull/8577)
+    - fix(ci): adjust cron schedules (https://github.com/dgraph-io/dgraph/pull/8592)
+    - chore(ci): Capture coverage from bulk load and LDBC tests (https://github.com/dgraph-io/dgraph/pull/8478)
+    - chore(linter): enable gosec linter (https://github.com/dgraph-io/dgraph/pull/8678)
+    - chore: apply go vet improvements (https://github.com/dgraph-io/dgraph/pull/8620)
+    - chore(linter): fix some of the warnings from gas linter (https://github.com/dgraph-io/dgraph/pull/8664)
+    - chore(linter): fix golangci config and some issues in tests (https://github.com/dgraph-io/dgraph/pull/8669)
+    - fix(linter): address gosimple linter reports & errors (https://github.com/dgraph-io/dgraph/pull/8628)
+
+
+## [v23.0.0-beta1] - 2023-03-01
+[v23.0.0-beta1]: https://github.com/dgraph-io/dgraph/compare/v22.0.2...v23.0.0-beta1
+
+### Added
+
+- **GraphQL**
+  - fix(GraphQL): pass on HTTP request headers for subscriptions (https://github.com/dgraph-io/dgraph/pull/8574)
+
+- **Core Dgraph**
+  - chore(debug): add `only-summary` flag in `dgraph debug` to show LSM tree and namespace size (https://github.com/dgraph-io/dgraph/pull/8516)
+  - feat(cloud): add `shared-instance` flag in limit superflag in alpha (https://github.com/dgraph-io/dgraph/pull/8625)
+  - chore(deps): update prometheus dependency, adds new metrics (https://github.com/dgraph-io/dgraph/pull/8655)
+  - feat(cdc): add superflag `tls` to enable TLS without CA or certs (https://github.com/dgraph-io/dgraph/pull/8564)
+  - chore(deps): bump badger up to v4 (https://github.com/dgraph-io/dgraph/pull/8709)
+  - feat(multitenancy): namespace aware drop data (https://github.com/dgraph-io/dgraph/pull/8511)
+
+### Fixed
+
+- **GragphQL**
+  - fix(GraphQL): nested Auth Rules not working properly (https://github.com/dgraph-io/dgraph/pull/8571)
+
+- **Core Dgraph**
+  - chore(logs): add logs to track dropped proposals (https://github.com/dgraph-io/dgraph/pull/8568)
+  - fix(debug): check length of wal entry before parsing (https://github.com/dgraph-io/dgraph/pull/8560)
+  - opt(schema): optimize populateSchema() (https://github.com/dgraph-io/dgraph/pull/8565)
+  - fix(zero): fix update membership to make bulk tablet proposal instead of multiple small (https://github.com/dgraph-io/dgraph/pull/8573)
+  - fix(groot): do not upsert groot for all namespaces on restart (https://github.com/dgraph-io/dgraph/pull/8561)
+  - fix(restore): set kv version to restoreTs for all keys (https://github.com/dgraph-io/dgraph/pull/8563)
+  - fix(probe): do not contend for lock in lazy load (https://github.com/dgraph-io/dgraph/pull/8566)
+  - fix(core): fixed infinite loop in CommitToDisk (https://github.com/dgraph-io/dgraph/pull/8614)
+  - fix(proposals): incremental proposal key for zero proposals (https://github.com/dgraph-io/dgraph/pull/8567)
+  - fix(zero): fix waiting for random time while rate limiting (https://github.com/dgraph-io/dgraph/pull/8656)
+  - chore(deps): upgrade badger (https://github.com/dgraph-io/dgraph/pull/8654, https://github.com/dgraph-io/dgraph/pull/8658)
+  - opt(schema): load schema and types using Stream framework  (https://github.com/dgraph-io/dgraph/pull/8562)
+  - fix(backup): use StreamWriter instead of KVLoader during backup restore (https://github.com/dgraph-io/dgraph/pull/8510)
+  - fix(audit): fixing audit logs for websocket connections (https://github.com/dgraph-io/dgraph/pull/8627)
+  - fix(restore): consider the banned namespaces while bumping (https://github.com/dgraph-io/dgraph/pull/8559)
+  - fix(backup): create directory before writing backup (https://github.com/dgraph-io/dgraph/pull/8638)
+
+- **Test**
+  - fix(test): avoid host volume mount in minio container (https://github.com/dgraph-io/dgraph/pull/8569)
+  - chore(test): add tests for lex/iri.go,chunker/chunk.go (https://github.com/dgraph-io/dgraph/pull/8515)
+  - chore(test): add Backup/Restore test for NFS (https://github.com/dgraph-io/dgraph/pull/8551)
+  - chore(test): add test that after snapshot is applied, GraphQL schema is refreshed (https://github.com/dgraph-io/dgraph/pull/8619)
+  - chore(test): upgrade graphql tests to use go 1.19 (https://github.com/dgraph-io/dgraph/pull/8662)
+  - chore(test): add automated test to test multitenant --limit flag (https://github.com/dgraph-io/dgraph/pull/8646)
+  - chore(test): add restore test for more than 127 namespaces (https://github.com/dgraph-io/dgraph/pull/8643)
+  - fix(test): fix the corner case for raft entries test (https://github.com/dgraph-io/dgraph/pull/8617)
+
+- **CD**
+  - fix(build): update dockerfile to use cache busting and reduce image size (https://github.com/dgraph-io/dgraph/pull/8652)
+  - chore(deps): update min go build version (https://github.com/dgraph-io/dgraph/pull/8423)
+
+- **Security**
+  - chore(deps): bump certifi from 2020.4.5.1 to 2022.12.7 in /contrib/config/marketplace/aws/tests (https://github.com/dgraph-io/dgraph/pull/8496)
+  - chore(deps): bump github.com/docker/distribution from 2.7.1+incompatible to 2.8.0+incompatible (https://github.com/dgraph-io/dgraph/pull/8575)
+  - chore(deps): bump werkzeug from 0.16.1 to 2.2.3 in /contrib/embargo (https://github.com/dgraph-io/dgraph/pull/8676)
+  - fix(sec): upgrade networkx to  (https://github.com/dgraph-io/dgraph/pull/8613)
+  - fix(sec): CVE-2022-41721 (https://github.com/dgraph-io/dgraph/pull/8633)
+  - fix(sec): CVE & OS Patching (https://github.com/dgraph-io/dgraph/pull/8634)
+
+### Changed
+
+- **Core Dgraph**
+  - fix(multitenancy) store namespace in predicate as a hex separated by a hyphen to prevent json marshal issues (https://github.com/dgraph-io/dgraph/pull/8601)
+  - fix(query): handle bad timezone correctly (https://github.com/dgraph-io/dgraph/pull/8657)
+  - chore(ludicroud): remove ludicrous mode from the code (https://github.com/dgraph-io/dgraph/pull/8612)
+  - fix(backup): make the /admin/backup and /admin/export API asynchronous (https://github.com/dgraph-io/dgraph/pull/8554)
+  - fix(mutation): validate mutation before applying it (https://github.com/dgraph-io/dgraph/pull/8623)
+
+- **CI Enhancements**
+    - fix(ci): unpin curl (https://github.com/dgraph-io/dgraph/pull/8577)
+    - fix(ci): adjust cron schedules (https://github.com/dgraph-io/dgraph/pull/8592)
+    - chore(ci): Capture coverage from bulk load and LDBC tests (https://github.com/dgraph-io/dgraph/pull/8478)
+    - chore(linter): enable gosec linter (https://github.com/dgraph-io/dgraph/pull/8678)
+    - chore: apply go vet improvements (https://github.com/dgraph-io/dgraph/pull/8620)
+    - chore(linter): fix some of the warnings from gas linter (https://github.com/dgraph-io/dgraph/pull/8664)
+    - chore(linter): fix golangci config and some issues in tests (https://github.com/dgraph-io/dgraph/pull/8669)
+    - fix(linter): address gosimple linter reports & errors (https://github.com/dgraph-io/dgraph/pull/8628)
+
 ## [v22.0.2] - 2022-12-16
 [v22.0.2]: https://github.com/dgraph-io/dgraph/compare/v22.0.1...v22.0.2
 
@@ -33,7 +443,7 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
 - **Security**
    - <details>
       <summary>CVE Fixes (35 total)</summary>
-      
+
       #### CVE Fixes (35 total)
       - CVE-2013-4235
       - CVE-2016-20013
@@ -72,7 +482,7 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
       - CVE-2022-44640
    - <details>
       <summary>GHSA Fixes (2 total)</summary>
-      
+
       #### GHSE Fixes (2 total)
       - GHSA-69ch-w2m2-3vjp
       - GHSA-m332-53r6-2w93
@@ -83,7 +493,7 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
     - Added more unit tests (https://github.com/dgraph-io/dgraph/pull/8470 https://github.com/dgraph-io/dgraph/pull/8489 https://github.com/dgraph-io/dgraph/pull/8479 https://github.com/dgraph-io/dgraph/pull/8488 https://github.com/dgraph-io/dgraph/pull/8433)
     - [Coveralls](https://coveralls.io/github/dgraph-io/dgraph?branch=main) on CI is enhanced to measure code coverage for integration tests (https://github.com/dgraph-io/dgraph/pull/8494)
     - [**LDBC Benchmarking**](https://ldbcouncil.org) in enabled on [CI](https://github.com/dgraph-io/dgraph/actions/workflows/ci-dgraph-ldbc-tests.yml)
-  
+
 - **CD Enhancements**
     - Enhanced our [CD Pipeline](https://github.com/dgraph-io/dgraph/actions/workflows/cd-dgraph.yml) to support ARM64 binaries and docker-images (https://github.com/dgraph-io/dgraph/pull/8520)
     - Enhanced [dgraph-lambda](https://github.com/dgraph-io/dgraph-lambda) to support arm64 (https://github.com/dgraph-io/dgraph-lambda/pull/39 https://github.com/dgraph-io/dgraph-lambda/pull/38 https://github.com/dgraph-io/dgraph-lambda/pull/37)
@@ -121,7 +531,7 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
 - **Security**
     - <details>
       <summary>CVE Fixes (417 total)</summary>
-      
+
       #### CVE Fixes (417 total)
       - CVE-2019-0210
       - CVE-2019-0205
@@ -752,7 +1162,7 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
   - Feat(GraphQL): Extend Support For Apollo Federation ([#7275][])
   - Feat(GraphQL): Support using custom DQL with `@groupby` ([#7476][])
   - Feat(GraphQL): Add support for passing OAuth Bearer token as authorization JWT ([#7490][])
-  
+
 - Core Dgraph
   - Feat(query): Add mechanism to have a limit on number of pending queries ([#7603][])
   - Perf(bulk): Reuse allocator ([#7360][])
@@ -778,7 +1188,7 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
   - Feat(enterpise): Change data capture (CDC) integration with kafka ([#7395][])
   - Perf(dgraph) - Use badger sinceTs in backups ([#7392][])
   - Perf(backup): Reorganize the output of lsbackup command ([#7354][])
-  
+
 ### Fixed
 - GraphQL
   - Fix(GraphQL): Fix Execution Trace for Add and Update Mutations ([#7656][])
@@ -865,7 +1275,7 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
   - Fix(ACL): use acl for export, add GoG admin resolvers ([#7420][])
   - Fix(restore): reset acl accounts once restore is done if necessary ([#7202][])
   - Fix(restore): multiple restore requests should be rejected and proposals should not be submitted ([#7118][])
-  
+
 [#7677]: https://github.com/dgraph-io/dgraph/issues/7677
 [#7272]: https://github.com/dgraph-io/dgraph/issues/7272
 [#7436]: https://github.com/dgraph-io/dgraph/issues/7436
@@ -1024,17 +1434,17 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
 - GraphQL
   - Remove github issues link from the error messages. ([#6183][])
   - Allow case insensitive auth header for graphql subscriptions. ([#6179][])
-- Add retry for schema update ([#6098][]) 
-- Queue keys for rollup during mutation. ([#6151][]) 
+- Add retry for schema update ([#6098][])
+- Queue keys for rollup during mutation. ([#6151][])
 
 ### Added
 
 - GraphQL
-  - Adds auth for subscriptions. ([#6165][]) 
+  - Adds auth for subscriptions. ([#6165][])
 - Add --cache_mb and --cache_percentage flags. ([#6286][])
 - Add flags to set table and vlog loading mode for zero. ([#6342][])
 - Add flag to set up compression in zero. ([#6355][])
-  
+
 ### Fixed
 
 - GraphQL
@@ -1042,36 +1452,36 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
   - Fixes panic in update mutation without set & remove. ([#6160][])
   - Fixes wrong query parameter value for custom field URL. ([#6161][])
   - Fix auth rewriting for nested queries when RBAC rule is true. ([#6167][])
-  - Disallow Subscription typename. ([#6173][]) 
+  - Disallow Subscription typename. ([#6173][])
   - Panic fix when subscription expiry is not present in jwt. ([#6175][])
   - Fix getType queries when id was used as a name for types other than ID. ([#6180][])
   - Don't reserve certain queries/mutations/inputs when a type is remote. ([#6201][])
   - Linking of xids for deep mutations. ([#6203][])
-  - Prevent empty values in fields having `id` directive. ([#6196][]) 
-  - Fixes unexpected fragment behaviour. ([#6274][]) 
+  - Prevent empty values in fields having `id` directive. ([#6196][])
+  - Fixes unexpected fragment behaviour. ([#6274][])
   - Incorrect generatedSchema in update GQLSchema. ([#6354][])
 - Fix out of order issues with split keys in bulk loader. ([#6124][])
 - Rollup a batch if more than 2 seconds elapsed since last batch. ([#6137][])
 - Refactor: Simplify how list splits are tracked. ([#6070][])
-- Fix: Don't allow idx flag to be set to 0 on dgraph zero. ([#6192][]) 
+- Fix: Don't allow idx flag to be set to 0 on dgraph zero. ([#6192][])
 - Fix error message for idx = 0 for dgraph zero. ([#6199][])
 - Stop forcing RAM mode for the write-ahead log. ([#6259][])
-- Fix panicwrap parent check. ([#6299][]) 
+- Fix panicwrap parent check. ([#6299][])
 - Sort manifests by BackupNum in file handler. ([#6279][])
 - Fixes queries which use variable at the top level. ([#6290][])
 - Return error on closed DB. ([#6320][])
-- Optimize splits by doing binary search.  Clear the pack from the main list. ([#6332][]) 
-- Proto fix needed for PR [#6331][]. ([#6346][]) 
-- Sentry nil pointer check. ([#6374][]) 
-- Don't store start_ts in postings. ([#6213][]) 
-- Use z.Closer instead of y.Closer. ([#6399][]) 
+- Optimize splits by doing binary search.  Clear the pack from the main list. ([#6332][])
+- Proto fix needed for PR [#6331][]. ([#6346][])
+- Sentry nil pointer check. ([#6374][])
+- Don't store start_ts in postings. ([#6213][])
+- Use z.Closer instead of y.Closer. ([#6399][])
 - Make Alpha Shutdown Again. ([#6402][])
 - Force exit if CTRL-C is caught before initialization. ([#6407][])
 - Update advanced-queries.md.
 - Batch list in bulk loader to avoid panic. ([#6446][])
 - Enterprise features
-  - Make backups cancel other tasks. ([#6243][]) 
-  - Online Restore honors credentials passed in. ([#6302][]) 
+  - Make backups cancel other tasks. ([#6243][])
+  - Online Restore honors credentials passed in. ([#6302][])
   - Add a lock to backups to process one request at a time. ([#6339][])
   - Fix Star_All delete query when used with ACL enabled. ([#6336][])
 
@@ -1126,8 +1536,8 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
 
 ### Changed
 
-- Add retry for schema update. ([#6097][]) 
-- Queue keys for rollup during mutation. ([#6150][]) 
+- Add retry for schema update. ([#6097][])
+- Queue keys for rollup during mutation. ([#6150][])
 
 ### Added
 
@@ -1138,19 +1548,19 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
 ### Fixed
 
 - GraphQL
-  - Prevent empty values in fields having `id` directive. ([#6197][]) 
+  - Prevent empty values in fields having `id` directive. ([#6197][])
 - Fix out of order issues with split keys in bulk loader. ([#6125][])
 - Rollup a batch if more than 2 seconds elapsed since last batch. ([#6138][])
 - Simplify how list splits are tracked. ([#6071][])
-- Perform rollups more aggresively. ([#6147][]) 
-- Don't allow idx flag to be set to 0 on dgraph zero. ([#6156][]) 
+- Perform rollups more aggresively. ([#6147][])
+- Don't allow idx flag to be set to 0 on dgraph zero. ([#6156][])
 - Stop forcing RAM mode for the write-ahead log. ([#6260][])
-- Fix panicwrap parent check.  ([#6300][]) 
-- Sort manifests by backup number. ([#6280][]) 
+- Fix panicwrap parent check.  ([#6300][])
+- Sort manifests by backup number. ([#6280][])
 - Don't store start_ts in postings. ([#6214][])
 - Update reverse index when updating single UID predicates. ([#6006][])
-- Return error on closed DB.  ([#6321][]) 
-- Optimize splits by doing binary search.  Clear the pack from the main list. ([#6333][]) 
+- Return error on closed DB.  ([#6321][])
+- Optimize splits by doing binary search.  Clear the pack from the main list. ([#6333][])
 - Sentry nil pointer check. ([#6375][])
 - Use z.Closer instead of y.Closer. ([#6398][])
 - Make Alpha Shutdown Again. ([#6403][])
@@ -1201,16 +1611,16 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
 
 - Don't allow idx flag to be set to 0 on dgraph zero. ([#6193][])
 - Stop forcing RAM mode for the write-ahead log. ([#6261][])
-- Return error on closed DB. ([#6319][]) 
-- Don't store start_ts in postings. ([#6212][]) 
-- Optimize splits by doing binary search.  Clear the pack from the main list. ([#6334][]) 
+- Return error on closed DB. ([#6319][])
+- Don't store start_ts in postings. ([#6212][])
+- Optimize splits by doing binary search.  Clear the pack from the main list. ([#6334][])
 - Add a lock to backups to process one request at a time. ([#6341][])
 - Use z.Closer instead of y.Closer' ([#6396][])
 - Force exit if CTRL-C is caught before initialization. ([#6408][])
 - Fix(Alpha): MASA: Make Alpha Shutdown Again. ([#6406][])
 - Enterprise features
-  - Sort manifests by backup number. ([#6281][]) 
-  - Skip backing up nil lists. ([#6314][]) 
+  - Sort manifests by backup number. ([#6281][])
+  - Skip backing up nil lists. ([#6314][])
 
 [#6408]: https://github.com/dgraph-io/dgraph/issues/6408
 [#6406]: https://github.com/dgraph-io/dgraph/issues/6406
@@ -1235,14 +1645,14 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
 
 - GraphQL
   - Make updateGQLSchema always return the new schema. ([#5540][])
-  - Allow user to define and pass arguments to fields. ([#5562][])	
-  - Move alias to end of graphql pipeline. ([#5369][])	
+  - Allow user to define and pass arguments to fields. ([#5562][])
+  - Move alias to end of graphql pipeline. ([#5369][])
 - Return error list while validating GraphQL schema. ([#5576][])
 - Send CID for sentry events. ([#5625][])
 - Alpha: Enable bloom filter caching ([#5552][])
 - Add support for multiple uids in uid_in function ([#5292][])
 - Tag sentry events with additional version details. ([#5726][])
-- Sentry opt out banner. ([#5727][]) 
+- Sentry opt out banner. ([#5727][])
 - Replace shutdownCh and wait groups to a y.Closer for shutting down Alpha. ([#5560][])
 - Update badger to commit [e7b6e76f96e8][]. ([#5537][])
 - Update Badger ([#5661][], [#6034][])
@@ -1270,8 +1680,8 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
 
 - GraphQL
   - Add Graphql-TouchedUids header in HTTP response. ([#5572][])
-  - Introduce `@cascade` in GraphQL. Fixes [#4789][]. ([#5511][])	
-  - Add authentication feature and http admin endpoints. Fixes [#4758][]. ([#5162][])	
+  - Introduce `@cascade` in GraphQL. Fixes [#4789][]. ([#5511][])
+  - Add authentication feature and http admin endpoints. Fixes [#4758][]. ([#5162][])
   - Support existing gqlschema nodes without xid. ([#5457][])
   - Add custom logic feature. ([#5004][])
   - Add extensions to query response. ([#5157][])
@@ -1279,46 +1689,46 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
   - Allow more control over custom logic header names. ([#5809][])
   - Adds Apollo tracing to GraphQL extensions. ([#5855][])
   - Turn on subscriptions and adds directive to control subscription generation. ([#5856][])
-  - Add introspection headers to custom logic. ([#5858][]) 
+  - Add introspection headers to custom logic. ([#5858][])
   - GraphQL health now reported by /probe/graphql. ([#5875][])
   - Validate audience in authorization JWT and change `Dgraph.Authorization` format. ([#5980][])
-- Upgrade tool for 20.07. ([#5830][]) 
+- Upgrade tool for 20.07. ([#5830][])
 - Async restore operations. ([#5704][])
 - Add LogRequest variable to GraphQL config input. ([#5197][])
 - Allow backup ID to be passed to restore endpoint. ([#5208][])
 - Added support for application/graphQL to graphQL endpoints. ([#5125][])
 - Add support for xidmap in bulkloader. Fixes [#4917][]. ([#5090][])
-- Add GraphQL admin endpoint to list backups. ([#5307][]) 
+- Add GraphQL admin endpoint to list backups. ([#5307][])
 - Enterprise features
   - GraphQL schema get/update, Dgraph schema query/alter and /login are now admin operations. ([#5833][])
   - Backup can take S3 credentials from IAM. ([#5387][])
-  - Online restore. ([#5095][]) 
+  - Online restore. ([#5095][])
   - Retry restore proposals. ([#5765][])
   - Add support for encrypted backups in online restores. ([#5226][])
   - **Breaking changes**
     - [BREAKING] Vault Integration. ([#5402][])
- 
+
 ### Fixed
 
 - GraphQL
   - Validate JWT Claims and test JWT expiry. ([#6050][])
-  - Validate subscriptions in Operation function. ([#5983][]) 	
-  - Nested auth queries no longer search through all possible records. ([#5950][])	
-  - Apply auth rules on type having @dgraph directive. ([#5863][])	
-  - Custom Claim will be parsed as JSON if it is encoded as a string. ([#5862][])	
+  - Validate subscriptions in Operation function. ([#5983][])
+  - Nested auth queries no longer search through all possible records. ([#5950][])
+  - Apply auth rules on type having @dgraph directive. ([#5863][])
+  - Custom Claim will be parsed as JSON if it is encoded as a string. ([#5862][])
   - Dgraph directive with reverse edge should work smoothly with interfaces. Fixed [#5744][]. ([#5982][])
   - Fix case where Dgraph type was not generated for GraphQL interface. Fixes [#5311][]. ([#5828][])
-  - Fix panic error when there is no @withSubscription directive on any type. ([#5921][])	
-  - Fix OOM issue in graphql mutation rewriting. ([#5854][])	
-  - Preserve GraphQL schema after drop_data. ([#5840][])	
-  - Maintain Master's backward compatibility for `Dgraph.Authorization` in schema. ([#6014][])	
-  - Remote schema introspection for single remote endpoint. ([#5824][])	
-  - Requesting only \_\-typename now returns results. ([#5823][])	
+  - Fix panic error when there is no @withSubscription directive on any type. ([#5921][])
+  - Fix OOM issue in graphql mutation rewriting. ([#5854][])
+  - Preserve GraphQL schema after drop_data. ([#5840][])
+  - Maintain Master's backward compatibility for `Dgraph.Authorization` in schema. ([#6014][])
+  - Remote schema introspection for single remote endpoint. ([#5824][])
+  - Requesting only \_\-typename now returns results. ([#5823][])
   - Typename for types should be filled in query for schema introspection queries. Fixes [#5792][]. ([#5891][])
-  - Update GraphQL schema only on Group-1 leader. ([#5829][])	
+  - Update GraphQL schema only on Group-1 leader. ([#5829][])
   - Add more validations for coercion of object/scalar and vice versa. ([#5534][])
   - Apply type filter for get query at root level. ([#5497][])
-  - Fix mutation on predicate with special characters having dgraph directive. Fixes [#5296][]. ([#5526][])	
+  - Fix mutation on predicate with special characters having dgraph directive. Fixes [#5296][]. ([#5526][])
   - Return better error message if a type only contains ID field. ([#5531][])
   - Coerce value for scalar types correctly. ([#5487][])
   - Minor delete mutation msg fix. ([#5316][])
@@ -1327,9 +1737,9 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
   - Remove custom directive from internal schema. ([#5354][])
   - Recover from panic within goroutines used for resolving custom fields. ([#5329][])
   - Start collecting and returning errors from remote remote GraphQL endpoints. ([#5328][])
-  - Fix response for partial admin queries. ([#5317][])	
+  - Fix response for partial admin queries. ([#5317][])
 - Avoid assigning duplicate RAFT IDs to new nodes. Fixes [#5436][]. ([#5571][])
-- Alpha: Gracefully shutdown ludicrous mode. ([#5561][])	
+- Alpha: Gracefully shutdown ludicrous mode. ([#5561][])
 - Use rampMeter for Executor. ([#5503][])
 - Dont set n.ops map entries to nil. Instead just delete them. ([#5551][])
 - Add check on rebalance interval. ([#5544][])
@@ -1339,9 +1749,9 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
 - Fix warnings about unkeyed literals. ([#5492][])
 - Remove redundant conversions between string and []byte. ([#5478][])
 - Propogate request context while handling queries. ([#5418][])
-- K-Shortest path query fix. Fixes [#5426][]. ([#5410][])			
+- K-Shortest path query fix. Fixes [#5426][]. ([#5410][])
 - Worker: Return nil on error. ([#5414][])
-- Fix warning about issues with the cancel function. ([#5397][]). 
+- Fix warning about issues with the cancel function. ([#5397][]).
 - Replace TxnWriter with WriteBatch. ([#5007][])
 - Add a check to throw an error is a nil pointer is passed to unmarshalOrCopy. ([#5334][])
 - Remove noisy logs in tablet move. ([#5333][])
@@ -1349,17 +1759,17 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
 - Handle Dgraph shutdown gracefully. Fixes [#3873][]. ([#5137][], [#5138][])
 - If we don't have any schema updates, avoid running the indexing sequence. ([#5126][])
 - Pass read timestamp to getNew. ([#5085][])
-- Indicate dev environment in Sentry events. ([#5051][])	
+- Indicate dev environment in Sentry events. ([#5051][])
 - Replaced s2 contains point methods with go-geom. ([#5023][]
-- Change tablet size calculation to not depend on the right key. Fixes [#5408][]. ([#5684][])	
+- Change tablet size calculation to not depend on the right key. Fixes [#5408][]. ([#5684][])
 - Fix alpha start in ludicrous mode. Fixes [#5601][]. ([#5912][])
-- Handle schema updates correctly in ludicrous mode. ([#5970][])	
-- Fix Panic because of nil map in groups.go. ([#6008][]) 	
-- update reverse index when updating single UID predicates. Fixes [#5732][]. ([#6005][]), ([#6015][])	
-- Fix expand(\_all\_) queries in ACL. Fixes [#5687][]. ([#5993][]) 	
+- Handle schema updates correctly in ludicrous mode. ([#5970][])
+- Fix Panic because of nil map in groups.go. ([#6008][])
+- update reverse index when updating single UID predicates. Fixes [#5732][]. ([#6005][]), ([#6015][])
+- Fix expand(\_all\_) queries in ACL. Fixes [#5687][]. ([#5993][])
 - Fix val queries when ACL is enabled. Fixes [#5687][]. ([#5995][])
-- Return error if server is not ready. ([#6020][]) 	
-- Reduce memory consumption of the map. ([#5957][]) 	
+- Return error if server is not ready. ([#6020][])
+- Reduce memory consumption of the map. ([#5957][])
 - Cancel the context when opening connection to leader for streaming snapshot. ([#6045][])
 - **Breaking changes**
   - [BREAKING] Namespace dgraph internal types/predicates with `dgraph.` Fixes [#4878][]. ([#5185][])
@@ -1372,7 +1782,7 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
   - Restore: Make backupId optional in restore GraphQL interface. ([#5685][])
   - Restore: Move tablets to right group when restoring a backup. ([#5682][])
   - Restore: Only processes backups for the alpha's group. ([#5588][])
-  - vault_format support for online restore and gql ([#5758][])	
+  - vault_format support for online restore and gql ([#5758][])
 
 [#5661]: https://github.com/dgraph-io/dgraph/issues/5661
 [dgraph-io/badger#1366]: https://github.com/dgraph-io/badger/issues/1366
@@ -1536,7 +1946,7 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
 - Update Badger 07/13/2020. ([#5941][], [#5616][])
 
 ### Added
-- Sentry opt out banner. ([#5729][]) 
+- Sentry opt out banner. ([#5729][])
 - Tag sentry events with additional version details. ([#5728][])
 
 ### Fixed
@@ -1562,7 +1972,7 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
 - Avoid panic in handleValuePostings. ([#5678][])
 - Fix facets response with normalize. Fixes [#5241][]. ([#5691][])
 - Badger iterator key copy in count index query. ([#5916][])
-- Ludicrous mode mutation error. ([#5914][]) 
+- Ludicrous mode mutation error. ([#5914][])
 - Return error instead of panic. ([#5907][])
 - Fix segmentation fault in draft.go. ([#5860][])
 - Optimize count index. ([#5971][])
@@ -1642,18 +2052,18 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
 
 ### Fixed
 
-- Alpha: Enable bloom filter caching. ([#5554][]) 	
-- K shortest paths queries fix. ([#5596][])	
-- Add check on rebalance interval. ([#5595][]) 	
-- Change error message in case of successful license application. ([#5593][])	
-- Remove noisy logs in tablet move. ([#5592][]) 	
-- Avoid assigning duplicate RAFT IDs to new nodes. Fixes [#5436][]. ([#5603][]) 	
+- Alpha: Enable bloom filter caching. ([#5554][])
+- K shortest paths queries fix. ([#5596][])
+- Add check on rebalance interval. ([#5595][])
+- Change error message in case of successful license application. ([#5593][])
+- Remove noisy logs in tablet move. ([#5592][])
+- Avoid assigning duplicate RAFT IDs to new nodes. Fixes [#5436][]. ([#5603][])
 - Update badger: Set KeepL0InMemory to false (badger default), and Set DetectConflicts to false. ([#5615][])
 - Use /tmp dir to store temporary index. Fixes [#4600][]. ([#5730][])
-- Split posting lists recursively. ([#4867][]) 
-- Set version when rollup is called with no splits. ([#4945][])	
-- Return error instead of panic (readPostingList). Fixes [#5749][]. ([#5908][]) 	
-- ServeTask: Return error if server is not ready. ([#6022][])	
+- Split posting lists recursively. ([#4867][])
+- Set version when rollup is called with no splits. ([#4945][])
+- Return error instead of panic (readPostingList). Fixes [#5749][]. ([#5908][])
+- ServeTask: Return error if server is not ready. ([#6022][])
 - Enterprise features
   - Backup: Change groupId from int to uint32. ([#5613][])
   - Backup: During backup, collapse split posting lists into a single list. ([#4682][])
@@ -1686,12 +2096,12 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
 ### Changed
 
 - Sentry Improvements: Segregate dev and prod events into their own Sentry projects. Remove Panic back-traces, Set the type of exception to the panic message. ([#5305][])
-- /health endpoint now shows EE Features available and GraphQL changes. ([#5304][]) 
-- Return error response if encoded response is > 4GB in size. Replace idMap with idSlice in encoder. ([#5359][]) 
-- Initialize sentry at the beginning of alpha.Run(). ([#5429][])  
+- /health endpoint now shows EE Features available and GraphQL changes. ([#5304][])
+- Return error response if encoded response is > 4GB in size. Replace idMap with idSlice in encoder. ([#5359][])
+- Initialize sentry at the beginning of alpha.Run(). ([#5429][])
 
 ### Added
-- Adds ludicrous mode to live loader. ([#5419][]) 
+- Adds ludicrous mode to live loader. ([#5419][])
 - GraphQL: adds transactions to graphql mutations ([#5485][])
 
 ### Fixed
@@ -1699,23 +2109,23 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
 - Export: Ignore deleted predicates from schema. Fixes [#5053][]. ([#5326][])
 - GraphQL: ensure upserts don't have accidental edge removal. Fixes [#5355][]. ([#5356][])
 - Fix segmentation fault in query.go. ([#5377][])
-- Fix empty string checks. ([#5390][]) 
-- Update group checksums when combining multiple deltas. Fixes [#5368][]. ([#5394][]) 
-- Change the default ratio of traces from 1 to 0.01. ([#5405][]) 
+- Fix empty string checks. ([#5390][])
+- Update group checksums when combining multiple deltas. Fixes [#5368][]. ([#5394][])
+- Change the default ratio of traces from 1 to 0.01. ([#5405][])
 - Fix protobuf headers check. ([#5381][])
 - Stream the full set of predicates and types during a snapshot. ([#5444][])
-- Support passing GraphQL schema to bulk loader. Fixes [#5235][]. ([#5521][]) 
-- Export GraphQL schema to separate file. Fixes [#5235][]. ([#5528][]) 
-- Fix memory leak in live loader. ([#5473][]) 
-- Replace strings.Trim with strings.TrimFunc in ParseRDF. ([#5494][]) 
-- Return nil instead of emptyTablet in groupi.Tablet(). ([#5469][]) 
-- Use pre-allocated protobufs during backups. ([#5404][]) 
+- Support passing GraphQL schema to bulk loader. Fixes [#5235][]. ([#5521][])
+- Export GraphQL schema to separate file. Fixes [#5235][]. ([#5528][])
+- Fix memory leak in live loader. ([#5473][])
+- Replace strings.Trim with strings.TrimFunc in ParseRDF. ([#5494][])
+- Return nil instead of emptyTablet in groupi.Tablet(). ([#5469][])
+- Use pre-allocated protobufs during backups. ([#5404][])
 - During shutdown, generate snapshot before closing raft node. ([#5476][])
-- Get lists of predicates and types before sending the snapshot. ([#5488][]) 
+- Get lists of predicates and types before sending the snapshot. ([#5488][])
 - Fix panic for sending on a closed channel. ([#5479][])
 - Fix inconsistent bulk loader failures. Fixes [#5361][]. ([#5537][])
-- GraphQL: fix password rewriting. ([#5483][]) 
-- GraphQL: Fix non-unique schema issue. ([#5481][]) 
+- GraphQL: fix password rewriting. ([#5483][])
+- GraphQL: Fix non-unique schema issue. ([#5481][])
 - Enterprise features
   - Print error when applying enterprise license fails. ([#5342][])
   - Apply the option enterprise_license only after the node's Raft is initialized and it is the leader. Don't apply the     trial license if a license already exists. Disallow the enterprise_license option for OSS build and bail out. Apply the option even if there is a license from a previous life of the Zero. ([#5384][])
@@ -1766,22 +2176,22 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
 ### Changed
 
 - Return error response if encoded response is > 4GB in size. Replace idMap with idSlice in encoder. ([#5359][])
-- Change the default ratio of traces from 1 to 0.01. ([#5405][]) 
+- Change the default ratio of traces from 1 to 0.01. ([#5405][])
 
 ### Fixed
 
 - Export: Ignore deleted predicates from schema. Fixes [#5053][]. ([#5327][])
-- Fix segmentation fault in query.go. ([#5377][]) 
-- Update group checksums when combining multiple deltas. Fixes [#5368][]. ([#5394][]) 
+- Fix segmentation fault in query.go. ([#5377][])
+- Update group checksums when combining multiple deltas. Fixes [#5368][]. ([#5394][])
 - Fix empty string checks. ([#5396][])
 - Fix protobuf headers check. ([#5381][])
 - Stream the full set of predicates and types during a snapshot. ([#5444][])
 - Use pre-allocated protobufs during backups. ([#5508][])
-- Replace strings.Trim with strings.TrimFunc in ParseRDF. ([#5494][]) 
-- Return nil instead of emptyTablet in groupi.Tablet(). ([#5469][]) 
-- During shutdown, generate snapshot before closing raft node. ([#5476][]) 
-- Get lists of predicates and types before sending the snapshot. ([#5488][]) 
-- Move runVlogGC to x and use it in zero as well. ([#5468][]) 
+- Replace strings.Trim with strings.TrimFunc in ParseRDF. ([#5494][])
+- Return nil instead of emptyTablet in groupi.Tablet(). ([#5469][])
+- During shutdown, generate snapshot before closing raft node. ([#5476][])
+- Get lists of predicates and types before sending the snapshot. ([#5488][])
+- Move runVlogGC to x and use it in zero as well. ([#5468][])
 - Fix inconsistent bulk loader failures. Fixes [#5361][]. ([#5537][])
 
 ### Security
@@ -1835,33 +2245,33 @@ This release was removed
 
 ### Fixed
 
-- Implement json.Marshal just for strings. ([#4979][]) 
-- Change error message in case of successful license application. Fixes [#4965][]. ([#5230][]) 
-- Add OPTIONS support for /ui/keywords. Fixes [#4946][]. ([#4992][]) 
+- Implement json.Marshal just for strings. ([#4979][])
+- Change error message in case of successful license application. Fixes [#4965][]. ([#5230][])
+- Add OPTIONS support for /ui/keywords. Fixes [#4946][]. ([#4992][])
 - Check uid list is empty when filling shortest path vars. ([#5152][])
-- Return error for invalid UID 0x0. Fixes [#5238][]. ([#5252][]) 
+- Return error for invalid UID 0x0. Fixes [#5238][]. ([#5252][])
 - Skipping floats that cannot be marshalled (+Inf, -Inf, NaN). ([#5199][], [#5163][])
-- Fix panic in Task FrameWork. Fixes [#5034][]. ([#5081][]) 
-- graphql: @dgraph(pred: "...") with @search. ([#5019][]) 
-- graphql: ensure @id uniqueness within a mutation. ([#4959][]) 
+- Fix panic in Task FrameWork. Fixes [#5034][]. ([#5081][])
+- graphql: @dgraph(pred: "...") with @search. ([#5019][])
+- graphql: ensure @id uniqueness within a mutation. ([#4959][])
 - Set correct posting list type while creating it in live loader. ([#5012][])
 - Add support for tinyint in migrate tool. Fixes [#4674][]. ([#4842][])
 - Fix bug, aggregate value var works with blank node in upsert. Fixes [#4712][]. ([#4767][])
 - Always set BlockSize in encoder. Fixes [#5102][]. ([#5255][])
-- Optimize uid allocation in live loader. ([#5132][]) 
+- Optimize uid allocation in live loader. ([#5132][])
 - Shutdown executor goroutines. ([#5150][])
 - Update RAFT checkpoint when doing a clean shutdown. ([#5097][])
 - Enterprise features
   - Backup schema keys in incremental backups. Before, the schema was only stored in the full backup. ([#5158][])
-  
+
 ### Added
 
 - Return list of ongoing tasks in /health endpoint. ([#4961][])
 - Propose snapshot once indexing is complete. ([#5005][])
-- Add query/mutation logging in glog V=3. ([#5024][]) 
-- Include the total number of touched nodes in the query metrics. ([#5073][]) 
+- Add query/mutation logging in glog V=3. ([#5024][])
+- Include the total number of touched nodes in the query metrics. ([#5073][])
 - Flag to turn on/off sending Sentry events, default is on. ([#5169][])
-- Concurrent Mutations. ([#4892][]) 
+- Concurrent Mutations. ([#4892][])
 - Enterprise features
   - Support bulk loader use-case to import unencrypted export and encrypt. ([#5213][])
   - Create encrypted restore directory from encrypted backups. ([#5144][])
@@ -1924,7 +2334,7 @@ This release was removed
 ### Fixed
 
 - Check uid list is empty when filling shortest path vars. ([#5152][])
-- Return error for invalid UID 0x0. Fixes [#5238][]. ([#5252][]) 
+- Return error for invalid UID 0x0. Fixes [#5238][]. ([#5252][])
 - Skipping floats that cannot be marshalled (+Inf, -Inf, NaN). ([#5199][], [#5163][])
 - Set correct posting list type while creating it in live loader. ([#5012][])
 - Add support for tinyint in migrate tool. Fixes [#4674][]. ([#4842][])
@@ -1979,7 +2389,7 @@ This release was removed
 ### Changed
 
 - Report GraphQL stats from alpha. ([#4607][])
-- During backup, collapse split posting lists into a single list. ([#4682][]) 
+- During backup, collapse split posting lists into a single list. ([#4682][])
 - Optimize computing reverse reindexing. ([#4755][])
 - Add partition key based iterator to the bulk loader. ([#4841][])
 - Invert s2 loop instead of rebuilding. ([#4782][])
@@ -2002,21 +2412,21 @@ This release was removed
 - GraphQL Admin API: Support Backup operation. ([#4706][])
 - GraphQL Admin API: Support export, draining, shutdown and setting lrumb operations. ([#4739][])
 - GraphQL Admin API: duplicate `/health` in GraphQL `/admin` ([#4768][])
-- GraphQL Admin API: Add `/admin/schema` endpoint ([#4777][]) 
+- GraphQL Admin API: Add `/admin/schema` endpoint ([#4777][])
 - Perform indexing in background. ([#4819][])
 - Basic Sentry Integration - Capture manual panics with Sentry exception and runtime panics with a wrapper on panic. ([#4756][])
 - Ludicrous Mode. ([#4872][])
 - Enterprise features
   - ACL: Allow users to query data for their groups, username, and permissions. ([#4774][])
-  - ACL: Support ACL operations using the admin GraphQL API. ([#4760][]) 
+  - ACL: Support ACL operations using the admin GraphQL API. ([#4760][])
   - ACL: Add tool to upgrade ACLs. ([#5016][])
 
 ### Fixed
- 
+
 - Avoid running GC frequently. Only run for every 2GB of increase. Small optimizations in Bulk.reduce.
 - Check response status when posting telemetry data. ([#4726][])
 - Add support for $ in quoted string. Fixes [#4695][]. ([#4702][])
-- Do not include empty nodes in the export output. Fixes [#3610][]. ([#4773][]) 
+- Do not include empty nodes in the export output. Fixes [#3610][]. ([#4773][])
 - Fix Nquad value conversion in live loader. Fixes [#4468][]. ([#4793][])
 - Use `/tmp` dir to store temporary index. Fixes [#4600][]. ([#4766][])
 - Properly initialize posting package in debug tool. ([#4893][])
@@ -2028,7 +2438,7 @@ This release was removed
 - Add "runInBackground" option to Alter to run indexing in background. When set to `true`, then the Alter call returns immediately. When set to `false`, the call blocks until indexing is complete. This is set to `false` by default. ([#4981][])
 - Set correct posting list type while creating it in the live loader. Fixes [#4889][]. ([#5012][])
 - **Breaking changes**
-  - [BREAKING] Language sorting on Indexed data. Fixes [#4005][]. ([#4316][]) 
+  - [BREAKING] Language sorting on Indexed data. Fixes [#4005][]. ([#4316][])
 
 [#5016]: https://github.com/dgraph-io/dgraph/issues/5016
 [#5012]: https://github.com/dgraph-io/dgraph/issues/5012
@@ -2120,10 +2530,10 @@ This release was removed
 [#4857]: https://github.com/dgraph-io/dgraph/issues/4857
 [#4881]: https://github.com/dgraph-io/dgraph/issues/4881
 [#4912]: https://github.com/dgraph-io/dgraph/issues/4912
-[#4855]: https://github.com/dgraph-io/dgraph/issues/4855 
-[#4858]: https://github.com/dgraph-io/dgraph/issues/4858 
-[#4879]: https://github.com/dgraph-io/dgraph/issues/4879 
-[#4883]: https://github.com/dgraph-io/dgraph/issues/4883 
+[#4855]: https://github.com/dgraph-io/dgraph/issues/4855
+[#4858]: https://github.com/dgraph-io/dgraph/issues/4858
+[#4879]: https://github.com/dgraph-io/dgraph/issues/4879
+[#4883]: https://github.com/dgraph-io/dgraph/issues/4883
 [#4933]: https://github.com/dgraph-io/dgraph/issues/4933
 [#4937]: https://github.com/dgraph-io/dgraph/issues/4937
 [#4891]: https://github.com/dgraph-io/dgraph/issues/4891
@@ -2177,7 +2587,7 @@ This release was removed
   - Add guardians group with full authorization. ([#4447][])
 
  ### Fixed
- 
+
 - Infer type of schema from JSON and RDF mutations.	Fixes [#3788][]. ([#4328][])
 - Fix retrieval of facets with cascade. Fixes	[#4310][]. ([#4530][])
 - Do not use type keys during tablet size calculation.	Fixes [#4473][]. ([#4517][])

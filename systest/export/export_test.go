@@ -1,3 +1,5 @@
+//go:build integration
+
 /*
  * Copyright 2023 Dgraph Labs, Inc. and Contributors *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -32,8 +34,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/dgraph-io/dgo/v210"
-	"github.com/dgraph-io/dgo/v210/protos/api"
+	"github.com/dgraph-io/dgo/v230"
+	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 )
 
@@ -124,8 +126,7 @@ func TestExportAndLoadJson(t *testing.T) {
 	// Drop all data
 	dg, err := testutil.DgraphClient(testutil.SockAddr)
 	require.NoError(t, err)
-	err = dg.Alter(context.Background(), &api.Operation{DropAll: true})
-	require.NoError(t, err)
+	require.NoError(t, dg.Alter(context.Background(), &api.Operation{DropAll: true}))
 
 	res = runQuery(t, q)
 	require.JSONEq(t, `{"data": {"q": [{"count":0}]}}`, res)
@@ -206,8 +207,7 @@ func TestExportAndLoadJsonFacets(t *testing.T) {
 	// Drop all data
 	dg, err := testutil.DgraphClient(testutil.SockAddr)
 	require.NoError(t, err)
-	err = dg.Alter(context.Background(), &api.Operation{DropAll: true})
-	require.NoError(t, err)
+	require.NoError(t, dg.Alter(context.Background(), &api.Operation{DropAll: true}))
 
 	res := runQuery(t, `{ q(func:has(name)) { name } }`)
 	require.JSONEq(t, `{"data": {"q": []}}`, res)

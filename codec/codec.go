@@ -112,7 +112,7 @@ func (e *Encoder) packBlock() {
 	e.pack.Blocks = append(e.pack.Blocks, block)
 }
 
-var tagEncoder string = "enc"
+var tagEncoder = "enc"
 
 // Add takes an uid and adds it to the list of UIDs to be encoded.
 func (e *Encoder) Add(uid uint64) {

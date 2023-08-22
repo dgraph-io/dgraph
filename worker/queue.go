@@ -180,8 +180,7 @@ func (t *tasks) enqueue(req interface{}) (uint64, error) {
 	case *pb.ExportRequest:
 		kind = TaskKindExport
 	default:
-		err := fmt.Errorf("invalid TaskKind: %d", kind)
-		panic(err)
+		panic(fmt.Sprintf("invalid TaskKind: %d", kind))
 	}
 
 	t.logMu.Lock()
@@ -303,7 +302,7 @@ func (t *tasks) cleanup() {
 func (t *tasks) newId() uint64 {
 	myRaftId := State.WALstore.Uint(raftwal.RaftId)
 	for {
-		id := myRaftId<<32 | uint64(t.rng.Intn(math.MaxUint32))
+		id := myRaftId<<32 | uint64(t.rng.Uint32())
 		// z.Tree cannot store 0 or math.MaxUint64. Check that id is unique.
 		if id != 0 && id != math.MaxUint64 && t.log.Get(id) == 0 {
 			return id
