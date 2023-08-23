@@ -111,6 +111,15 @@ func vectorSubtract(a, b, result []float64) error {
 	return nil
 }
 
+func contains(slice []minBadgerHeapElement, uuid uint64) bool {
+	for _, e := range slice {
+		if e.index == uuid {
+			return true
+		}
+	}
+	return false
+}
+
 // Used for distance, since shorter distance is better
 func insortBadgerHeapAscending(slice []minBadgerHeapElement, val minBadgerHeapElement) []minBadgerHeapElement {
 	i := sort.Search(len(slice), func(i int) bool { return slice[i].value > val.value })

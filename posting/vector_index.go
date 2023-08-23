@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"math/rand"
@@ -71,21 +72,69 @@ func getInsertLayer(maxLevels int) int {
 }
 
 func searchBadgerLayer(ctx context.Context, c CacheType, isInsert bool, pred string, level int, entry uint64, query []float64, expectedNeighbors int, filter SearchFilter) ([]minBadgerHeapElement, map[minBadgerHeapElement]bool, error) {
+
+	deadKey := x.DataKey(pred+"_vector_dead", 1)
+	deadPl, deadErr := c.Get(deadKey)
+	if deadErr != nil {
+		return []minBadgerHeapElement{}, map[minBadgerHeapElement]bool{}, deadErr
+	}
+	var deadNodes []uint64
+	deadData, err := deadPl.Value(c.Ts())
+	if err == nil { // doesnt exist
+		deadNodes, err = ParseEdges(string(deadData.Value.([]byte)))
+		if err != nil {
+			return []minBadgerHeapElement{}, map[minBadgerHeapElement]bool{}, err
+		}
+	}
+
 	var nns []minBadgerHeapElement            // track nearest neighbors to return
 	var visited map[minBadgerHeapElement]bool // track all visited elements to lock on insert mutation
 	entryKey := x.DataKey(pred, entry)
-	var pl *List
-	var err error
-	var data types.Val
-	pl, err = c.Get(entryKey)
+	pl, err := c.Get(entryKey)
 	if err != nil {
 		return []minBadgerHeapElement{}, map[minBadgerHeapElement]bool{}, err
 	}
-	data, err = pl.Value(c.Ts())
+	data, err := pl.Value(c.Ts())
 	if err != nil {
 		return []minBadgerHeapElement{}, map[minBadgerHeapElement]bool{}, err
 	}
-
+	for data.Value == nil {
+		// entry node is deleted, use it's closest neighbor at this level as new entry
+		// if a nearest neighbor doesn't exist throw an error that the index structure must be rebuilt
+		key := x.DataKey(pred+"_vector_"+fmt.Sprint(level), entry)
+		pl, err := c.Get(key)
+		if err != nil {
+			return []minBadgerHeapElement{}, map[minBadgerHeapElement]bool{}, err
+		}
+		data, _ := pl.Value(c.Ts())
+		if data.Value == nil {
+			return []minBadgerHeapElement{}, map[minBadgerHeapElement]bool{}, errors.New("removed an entry node with no neighbors, index must be rebuilt")
+		}
+		entryEdges, err := ParseEdges(string(data.Value.([]byte)))
+		cleanedEntryEdges := diff(entryEdges, deadNodes) // remove deadNodes
+		if len(cleanedEntryEdges) != len(entryEdges) {   // something was removed, so push this to badger now
+			cleanedEntryEdgesBytes, marshalErr := json.Marshal(cleanedEntryEdges)
+			if marshalErr != nil {
+				return []minBadgerHeapElement{}, map[minBadgerHeapElement]bool{}, marshalErr
+			}
+			newBadgerEdgeKeyValueEntry(ctx, pl, NewTxn(c.Ts()), pred, level, entry, cleanedEntryEdgesBytes)
+		}
+		if err != nil {
+			return []minBadgerHeapElement{}, map[minBadgerHeapElement]bool{}, err
+		}
+		entry = cleanedEntryEdges[0] // set entry to nearest neighbor of old entry
+		newEntryKey := x.DataKey(pred, entry)
+		pl, err = c.Get(newEntryKey)
+		if err != nil {
+			return []minBadgerHeapElement{}, map[minBadgerHeapElement]bool{}, err
+		}
+		data, err = pl.Value(c.Ts()) // get the vector for this new entry
+		if err != nil {
+			return []minBadgerHeapElement{}, map[minBadgerHeapElement]bool{}, err
+		}
+		//if this one is ALSO deleted, then keep doing this at this layer until you find a node thats not deleted or there are no more neighbors
+		// in which case it will give the "removed entry node with no neighbors" error
+	}
 	startVec := types.BytesAsFloatArray(data.Value.([]byte))
 	// startVec := BytesAsFloatArray(data) //from vfloat type code not pushed yet
 	bestDist, err := approxEuclidianDistance(startVec, query)
@@ -109,34 +158,27 @@ func searchBadgerLayer(ctx context.Context, c CacheType, isInsert bool, pred str
 
 		candidateKey := x.DataKey(pred+"_vector_"+fmt.Sprint(level), currCandidate.index)
 
-		var pl *List
-		var err error
-		var data types.Val
-		pl, err = c.Get(candidateKey)
+		pl, err := c.Get(candidateKey)
 		if err != nil {
 			return []minBadgerHeapElement{}, map[minBadgerHeapElement]bool{}, err
 		}
-		data, err = pl.Value(c.Ts())
+		data, err := pl.Value(c.Ts())
 		if err != nil {
 			return []minBadgerHeapElement{}, map[minBadgerHeapElement]bool{}, err
 		}
 		eVecs := [][]float64{}
 		if data.Value != nil {
-			var edges []uint64
 			edges, err := ParseEdges(string(data.Value.([]byte)))
 			if err != nil {
 				return []minBadgerHeapElement{}, map[minBadgerHeapElement]bool{}, err
 			}
 			for _, edge := range edges {
 				key := x.DataKey(pred, edge)
-				var pl *List
-				var err error
-				var data types.Val
-				pl, err = c.Get(key)
+				pl, err := c.Get(key)
 				if err != nil {
 					return []minBadgerHeapElement{}, map[minBadgerHeapElement]bool{}, err
 				}
-				data, err = pl.Value(c.Ts())
+				data, err := pl.Value(c.Ts())
 				if isInsert && err != nil { // if trying to insert and can't access node, its probably a prallelization issue not a dead node error
 					// TODO should remove this part once we get parallelization with hnsw working
 					if err != nil {
@@ -147,20 +189,9 @@ func searchBadgerLayer(ctx context.Context, c CacheType, isInsert bool, pred str
 					eVec := types.BytesAsFloatArray(data.Value.([]byte))
 					eVecs = append(eVecs, eVec)
 				} else { // add to badger entry to keep track of dead nodes. if you see an edge that is connected to a dead node, delete that edge
-					deadKey := x.DataKey(pred+"_vector_dead", 1)
-					pl, err := c.Get(deadKey)
-					if err != nil {
-						return []minBadgerHeapElement{}, map[minBadgerHeapElement]bool{}, err
-					}
-					var deadNodes []uint64
-					data, err := pl.Value(c.Ts())
-					if err != nil { // doesnt exist
+					if deadNodes == nil { // doesnt exist
 						deadNodes = []uint64{edge}
 					} else {
-						deadNodes, err = ParseEdges(string(data.Value.([]byte)))
-						if err != nil {
-							return []minBadgerHeapElement{}, map[minBadgerHeapElement]bool{}, err
-						}
 						deadNodes = append(deadNodes, edge)
 					}
 					deadNodesBytes, marshalErr := json.Marshal(deadNodes)
@@ -171,7 +202,7 @@ func searchBadgerLayer(ctx context.Context, c CacheType, isInsert bool, pred str
 				}
 			}
 
-			for i := range edges {
+			for i := range eVecs {
 				currDist, err := approxEuclidianDistance(eVecs[i], query) // iterate over candidate's neighbors distances to get best ones
 				if err != nil {
 					return []minBadgerHeapElement{}, map[minBadgerHeapElement]bool{}, err
@@ -183,14 +214,14 @@ func searchBadgerLayer(ctx context.Context, c CacheType, isInsert bool, pred str
 					visited[*currElement] = true
 
 					// push only better vectors that pass filter into candidate heap and add to nearest neighbors
-					if filter(query, eVecs[i], edgesDeref[i]) && (currDist < nns[len(nns)-1].value || len(nns) < expectedNeighbors) {
+					if !contains(nns, currElement.index) && filter(query, eVecs[i], edgesDeref[i]) && (currDist < nns[len(nns)-1].value || len(nns) < expectedNeighbors) {
 						candidateHeap.Push(*currElement)
 						nns = insortBadgerHeapAscending(nns, *currElement)
 						if len(nns) > expectedNeighbors {
 							nns = nns[:len(nns)-1]
 						}
-					}
 
+					}
 				}
 			}
 		}
