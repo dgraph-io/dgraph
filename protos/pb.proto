@@ -321,6 +321,8 @@ message RestoreRequest {
   uint64 backup_num = 16;
   uint64 incremental_from = 17;
   bool is_partial = 18;
+  uint64 fromNamespace = 19;
+  bool isNamespaceAwareRestore = 20;
 }
 
 message Proposal {

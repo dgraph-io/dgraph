@@ -113,6 +113,9 @@ type loadBackupInput struct {
 	version     int
 	keepSchema  bool
 	compression string
+
+	fromNamespace           uint64
+	isNamespaceAwareRestore bool
 }
 
 type listReq struct {
@@ -323,6 +326,12 @@ func (m *mapper) processReqCh(ctx context.Context) error {
 			return errors.Wrap(err, "fromBackupKey")
 		}
 
+		// we will not process further if restore is namespace aware restore and namespace
+		// of current key is other than fromNamespace.
+		if in.isNamespaceAwareRestore && ns != in.fromNamespace {
+			return nil
+		}
+
 		// Filter keys using the preds set. Do not do this filtering for type keys
 		// as they are meant to be in every group and their Attr value does not
 		// match a predicate name.
@@ -333,7 +342,11 @@ func (m *mapper) processReqCh(ctx context.Context) error {
 
 		// Update the local max uid and max namespace values.
 		maxUid = x.Max(maxUid, parsedKey.Uid)
-		maxNs = x.Max(maxNs, ns)
+		if in.isNamespaceAwareRestore {
+			maxNs = x.Max(maxNs, 0)
+		} else {
+			maxNs = x.Max(maxNs, ns)
+		}
 
 		if !in.keepSchema && (parsedKey.IsSchema() || parsedKey.IsType()) {
 			return nil
@@ -342,11 +355,25 @@ func (m *mapper) processReqCh(ctx context.Context) error {
 			return nil
 		}
 
+		if in.isNamespaceAwareRestore {
+			// update a key to default namespace if user has requested namespace aware restore
+			// i.e 1-key => 0-key
+			_, attr := x.ParseNamespaceAttr(parsedKey.Attr)
+			parsedKey.Attr = x.NamespaceAttr(0, attr)
+			l := parsedKey.ToBackupKey()
+			restoreKey = x.FromBackupKey(l)
+		}
+
 		switch kv.GetUserMeta()[0] {
 		case posting.BitEmptyPosting, posting.BitCompletePosting, posting.BitDeltaPosting:
-			if _, ok := in.dropNs[ns]; ok {
+			if in.isNamespaceAwareRestore {
+				if _, ok := in.dropNs[0]; ok {
+					return nil
+				}
+			} else if _, ok := in.dropNs[ns]; ok {
 				return nil
 			}
+
 			backupPl := &pb.BackupPostingList{}
 			if err := backupPl.Unmarshal(kv.Value); err != nil {
 				return errors.Wrapf(err, "while reading backup posting list")
@@ -468,6 +495,49 @@ func (m *mapper) processReqCh(ctx context.Context) error {
 			version := kv.Version
 			kv.Version = m.restoreTs
 			kv.Key = restoreKey
+
+			transformNamespaceToZero := func(parsedKey x.ParsedKey) error {
+				if parsedKey.IsSchema() {
+					var update pb.SchemaUpdate
+					if err := update.Unmarshal(kv.Value); err != nil {
+						return err
+					}
+					_, attr := x.ParseNamespaceAttr(update.Predicate)
+					update.Predicate = x.NamespaceAttr(0, attr)
+					kv.Value, err = update.Marshal()
+					if err != nil {
+						return err
+					}
+				}
+				if parsedKey.IsType() {
+					var update pb.TypeUpdate
+					if err := update.Unmarshal(kv.Value); err != nil {
+						return err
+					}
+					_, attr := x.ParseNamespaceAttr(update.TypeName)
+					update.TypeName = x.NamespaceAttr(0, attr)
+					for _, sch := range update.Fields {
+						_, attr := x.ParseNamespaceAttr(sch.Predicate)
+						sch.Predicate = x.NamespaceAttr(0, attr)
+					}
+
+					kv.Value, err = update.Marshal()
+					if err != nil {
+						return err
+					}
+				}
+				return nil
+			}
+
+			if in.isNamespaceAwareRestore {
+				// If the user has requested a namespace-aware restore,
+				// then update all values to the zeroth(default) namespace.
+				// i.e 2-email => 0-email
+				if err := transformNamespaceToZero(parsedKey); err != nil {
+					return err
+				}
+			}
+
 			if err := toBuffer(kv, version); err != nil {
 				return err
 			}
@@ -754,8 +824,10 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) (*mapResult, error) {
 				version:   manifest.Version,
 				restoreTs: req.RestoreTs,
 				// Only map the schema keys corresponding to the latest backup.
-				keepSchema:  i == 0,
-				compression: manifest.Compression,
+				keepSchema:              i == 0,
+				compression:             manifest.Compression,
+				fromNamespace:           req.FromNamespace,
+				isNamespaceAwareRestore: req.IsNamespaceAwareRestore,
 			}
 
 			// This would stream the backups from the source, and map them in

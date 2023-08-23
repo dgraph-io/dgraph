@@ -309,6 +309,39 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest, pidx uin
 		return errors.Errorf("backup manifest does not contain information for group ID %d", req.GroupId)
 	}
 
+	// When we change predicate names from {fromNamespace}-predicate to 0-predicate,
+	// this is not straight forward. This is because, Zero has a knowledge of what
+	// predicate belongs to what group. We need to ensure that while transforming predicate names,
+	// we let the Zero know. The algorithm that we follow here is that,
+	// the group that had the data at the time of backup, has the data after restore.
+	// For example, if we restore namespace 1 and 1-email belongs to group 1, after restore,
+	// 0-email would belong to group 1 as well.
+
+	// There are two types of predicates in a namespace:
+
+	// 1.reserved predicates are always in group 0, we don't need to worry about those.
+	// 2.let's understand user predicates with an example below.
+	// Before
+	// 0-email => group 1
+	// 1-email => group 2
+
+	// While trying to restoreTenant (fromNamespace = 1)
+	// Need to transform 1-email => 0-email
+
+	// Hence, need to move 0-email to group 2 from group 1 because the backup data of 1-email
+	// predicate is in group 2 (because it belonged to group 2 before at the time of backup).
+	// Only the Alphas that belong to group 2 has access to the backup data of 1-email.
+	// The 1-emaill would become 0-email after restoreTenant and still has to belong to same alphas.
+	// Hence, we need to move 0-email in the new cluster to group 2.
+
+	// Alphas in Group 1
+	// We remove 0-email from the processing here because only namespace 1 needs to be restored.
+
+	// Alphas in Group 2
+	// We transform 1-email to 0-email and add it in the list of predicates that needs to be restored.
+	if req.IsNamespaceAwareRestore {
+		restorePreds = buildPredsForDefaultNamespace(restorePreds, req.FromNamespace)
+	}
 	for _, pred := range restorePreds {
 		// Force the tablet to be moved to this group, even
 		// if it's currently being served by another group.
@@ -593,4 +626,17 @@ func RunOfflineRestore(dir, location, backupId, keyFile string, key x.Sensitive,
 	}
 	// TODO: Fix this return value.
 	return LoadResult{Version: manifest.ValidReadTs()}
+}
+
+func buildPredsForDefaultNamespace(restorePreds []string, fromNamespace uint64) []string {
+	filtered := restorePreds[:0]
+	for _, pred := range restorePreds {
+		ns, attr := x.ParseNamespaceAttr(pred)
+		if fromNamespace == ns {
+			// update namespace value to 0
+			pred = x.NamespaceAttr(0, attr)
+			filtered = append(filtered, pred)
+		}
+	}
+	return filtered
 }

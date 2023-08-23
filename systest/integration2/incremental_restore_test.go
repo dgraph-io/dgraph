@@ -71,7 +71,7 @@ func TestIncrementalRestore(t *testing.T) {
 		if i == 2 {
 			incrFrom = 0
 		}
-		require.NoError(t, hc.Restore(c, dgraphtest.DefaultBackupDir, "", incrFrom, i, ""))
+		require.NoError(t, hc.Restore(c, dgraphtest.DefaultBackupDir, "", incrFrom, i))
 		require.NoError(t, dgraphtest.WaitForRestore(c))
 
 		for j := 1; j <= i; j++ {

@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os/exec"
 	"strings"
@@ -43,6 +44,7 @@ type Cluster interface {
 	AlphasLogs() ([]string, error)
 	AssignUids(gc *dgo.Dgraph, num uint64) error
 	GetVersion() string
+	GetEncKeyPath() (string, error)
 }
 
 type GrpcClient struct {
@@ -375,7 +377,7 @@ func (hc *HTTPClient) WaitForTask(taskId string) error {
 
 // Restore performs restore on Dgraph cluster from the given path to backup
 func (hc *HTTPClient) Restore(c Cluster, backupPath string,
-	backupId string, incrFrom, backupNum int, encKey string) error {
+	backupId string, incrFrom, backupNum int) error {
 
 	// incremental restore was introduced in commit 8b3712e93ed2435bea52d957f7b69976c6cfc55b
 	incrRestoreSupported, err := IsHigherVersion(c.GetVersion(), "8b3712e93ed2435bea52d957f7b69976c6cfc55b")
@@ -384,6 +386,11 @@ func (hc *HTTPClient) Restore(c Cluster, backupPath string,
 	}
 	if !incrRestoreSupported && incrFrom != 0 {
 		return errors.New("incremental restore is not supported by the cluster")
+	}
+
+	encKey, err := c.GetEncKeyPath()
+	if err != nil {
+		return errors.Wrapf(err, "error getting encryption key path")
 	}
 
 	var varPart, queryPart string
@@ -425,6 +432,51 @@ func (hc *HTTPClient) Restore(c Cluster, backupPath string,
 	}
 	if restoreResp.Restore.Code != "Success" {
 		return fmt.Errorf("restore failed, response: %+v", restoreResp.Restore)
+	}
+	return nil
+}
+
+// RestoreTenant restore specific namespace
+func (hc *HTTPClient) RestoreTenant(c Cluster, backupPath string, backupId string,
+	incrFrom, backupNum int, fromNamespace uint64) error {
+
+	encKey, err := c.GetEncKeyPath()
+	if err != nil {
+		return errors.Wrapf(err, "error getting encryption key path")
+	}
+
+	query := `mutation restoreTenant( $location: String!, $backupId: String,
+		$incrFrom: Int, $backupNum: Int, $encKey: String,$fromNamespace: Int! ) {
+				restoreTenant(input: {restoreInput: { location: $location, backupId: $backupId, 
+				incrementalFrom: $incrFrom, backupNum: $backupNum,
+			encryptionKeyFile: $encKey },fromNamespace:$fromNamespace}) {
+			code
+			message
+		}
+	}`
+	vars := map[string]interface{}{"location": backupPath, "backupId": backupId, "backupNum": backupNum,
+		"encKey": encKey, "fromNamespace": fromNamespace, "incrFrom": incrFrom}
+
+	params := GraphQLParams{
+		Query:     query,
+		Variables: vars,
+	}
+	resp, err := hc.RunGraphqlQuery(params, true)
+	if err != nil {
+		return err
+	}
+
+	var restoreResp struct {
+		RestoreTenant struct {
+			Code    string
+			Message string
+		}
+	}
+	if err := json.Unmarshal(resp, &restoreResp); err != nil {
+		return errors.Wrap(err, "error unmarshalling restore response")
+	}
+	if restoreResp.RestoreTenant.Code != "Success" {
+		return fmt.Errorf("restoreTenant failed, response: %+v", restoreResp.RestoreTenant)
 	}
 	return nil
 }
@@ -578,13 +630,19 @@ func (hc *HTTPClient) GetZeroState() (*LicenseResponse, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "error getting zero state http response")
 	}
+	defer func() {
+		if err := response.Body.Close(); err != nil {
+			log.Printf("[WARNING] error closing body: %v", err)
+		}
+	}()
+
 	body, err := io.ReadAll(response.Body)
 	if err != nil {
-		return nil, errors.New("error reading zero state response body")
+		return nil, errors.Wrapf(err, "error reading zero state response body")
 	}
 	var stateResponse LicenseResponse
 	if err := json.Unmarshal(body, &stateResponse); err != nil {
-		return nil, errors.New("error unmarshaling zero state response")
+		return nil, errors.Wrapf(err, "error unmarshaling zero state response")
 	}
 
 	return &stateResponse, nil

@@ -233,3 +233,7 @@ func (cc ClusterConfig) WithCustomPlugins() ClusterConfig {
 	cc.customPlugins = true
 	return cc
 }
+
+func (cc ClusterConfig) GetClusterVolume(volume string) string {
+	return cc.volumes[volume]
+}

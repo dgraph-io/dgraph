@@ -52,6 +52,19 @@ const adminTypes = `
 		taskId: String
 	}
 
+	input RestoreTenantInput {
+		"""
+		restoreInput contains fields that are required for the restore operation,
+		i.e., location, backupId, and backupNum
+		"""
+       restoreInput: RestoreInput
+
+	   """
+	   fromNamespace is the namespace of the tenant that needs to be restored into namespace 0 of the new cluster.
+	   """
+	   fromNamespace: Int!
+	}
+
 	input RestoreInput {
 
 		"""
@@ -477,6 +490,11 @@ const adminMutations = `
 		https://dgraph.io/docs/enterprise-features/#binary-backups
 	"""
 	restore(input: RestoreInput!) : RestorePayload
+
+	"""
+	Restore given tenant into namespace 0 of the cluster
+	"""
+	restoreTenant(input: RestoreTenantInput!) : RestorePayload
 
 	"""
 	Login to Dgraph.  Successful login results in a JWT that can be used in future requests.
