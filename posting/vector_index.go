@@ -265,13 +265,6 @@ func addStartNodeToAllLevels(ctx context.Context, pl *List, txn *Txn, pred strin
 }
 
 func InsertToBadger(ctx context.Context, txn *Txn, inUuid uint64, inVec []float64, pred string, maxLevels int, efConstruction int) (map[minBadgerHeapElement]bool, error) {
-	// str := pred + "_vector_" + fmt.Sprint(maxLevels-1)
-	// duplicateCheckKey := x.DataKey(str, inUuid)
-	// dup, dupErr := txn.Get(duplicateCheckKey)
-	// if dupErr == nil && dup == nil {
-	// 	return map[minBadgerHeapElement]bool{}, nil
-	// }
-
 	tc := &TxnCache{
 		txn:     txn,
 		startTs: txn.StartTs,
@@ -282,12 +275,8 @@ func InsertToBadger(ctx context.Context, txn *Txn, inUuid uint64, inVec []float6
 	if err != nil {
 		return map[minBadgerHeapElement]bool{}, err
 	}
-	data, valErr := pl.Value(txn.StartTs)
-	// if valErr != nil {
-	// 	return map[minBadgerHeapElement]bool{}, valErr
-	// }
-	if valErr != nil {
-		// if valErr.Error() == "No value found" {
+	data, _ := pl.Value(txn.StartTs)
+	if data.Value == nil {
 		// no entries in vector index yet b/c no entry exists, so put in all levels
 		err := addStartNodeToAllLevels(ctx, pl, txn, pred, maxLevels, inUuid)
 		if err != nil {

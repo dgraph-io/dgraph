@@ -144,9 +144,6 @@ func (txn *Txn) addIndexMutation(ctx context.Context, edge *pb.DirectedEdge, tok
 			return err
 		}
 	}
-	// if edge.ValueType == pb.Posting_VFLOAT {
-	// 	InsertToBadger(ctx, plist, txn, edge.ValueId, edge.Attr, 5, 3, 12)
-	// }
 	ostats.Record(ctx, x.NumEdges.M(1))
 	return nil
 }
