@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
@@ -167,7 +168,7 @@ func (in ContainerInstance) GetContainer() *types.Container {
 }
 
 func getContainer(name string) types.Container {
-	cli, err := client.NewEnvClient()
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	x.Check(err)
 
 	containers, err := cli.ContainerList(context.Background(), types.ContainerListOptions{All: true})
@@ -188,7 +189,7 @@ func getContainer(name string) types.Container {
 }
 
 func AllContainers(prefix string) []types.Container {
-	cli, err := client.NewEnvClient()
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	x.Check(err)
 
 	containers, err := cli.ContainerList(context.Background(), types.ContainerListOptions{All: true})
@@ -225,7 +226,7 @@ func DockerRun(instance string, op int) error {
 		return nil
 	}
 
-	cli, err := client.NewEnvClient()
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	x.Check(err)
 
 	switch op {
@@ -235,8 +236,9 @@ func DockerRun(instance string, op int) error {
 			return err
 		}
 	case Stop:
-		dur := 30 * time.Second
-		return cli.ContainerStop(context.Background(), c.ID, &dur)
+		dur := 30
+		o := container.StopOptions{Timeout: &dur}
+		return cli.ContainerStop(context.Background(), c.ID, o)
 	default:
 		x.Fatalf("Wrong Docker op: %v\n", op)
 	}
@@ -252,7 +254,7 @@ func DockerCp(srcPath, dstPath string) error {
 
 // DockerCpFromContainer copies from a container.
 func DockerCpFromContainer(containerID, srcPath, dstPath string) error {
-	cli, err := client.NewEnvClient()
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	x.Check(err)
 
 	tarStream, _, err := cli.CopyFromContainer(context.Background(), containerID, srcPath)
@@ -283,7 +285,7 @@ func DockerExec(instance string, cmd ...string) error {
 }
 
 func DockerInspect(containerID string) (types.ContainerJSON, error) {
-	cli, err := client.NewEnvClient()
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	x.Check(err)
 	return cli.ContainerInspect(context.Background(), containerID)
 }

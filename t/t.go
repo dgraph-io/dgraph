@@ -37,7 +37,9 @@ import (
 	"time"
 
 	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
+	"github.com/docker/docker/api/types/volume"
 	"github.com/docker/docker/client"
 	"github.com/golang/glog"
 	"github.com/spf13/pflag"
@@ -649,16 +651,17 @@ func getPackages() []task {
 func removeAllTestContainers() {
 	containers := testutil.AllContainers(getGlobalPrefix())
 
-	cli, err := client.NewEnvClient()
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	x.Check(err)
-	dur := 10 * time.Second
+	dur := 10
 
 	var wg sync.WaitGroup
 	for _, c := range containers {
 		wg.Add(1)
 		go func(c types.Container) {
 			defer wg.Done()
-			err := cli.ContainerStop(ctxb, c.ID, &dur)
+			o := container.StopOptions{Timeout: &dur}
+			err := cli.ContainerStop(ctxb, c.ID, o)
 			fmt.Printf("Stopped container %s with error: %v\n", c.Names[0], err)
 
 			err = cli.ContainerRemove(ctxb, c.ID, types.ContainerRemoveOptions{})
@@ -679,7 +682,8 @@ func removeAllTestContainers() {
 		}
 	}
 
-	volumes, err := cli.VolumeList(ctxb, filters.Args{})
+	o := volume.ListOptions{Filters: filters.Args{}}
+	volumes, err := cli.VolumeList(ctxb, o)
 	x.Check(err)
 	for _, v := range volumes.Volumes {
 		if strings.HasPrefix(v.Name, getGlobalPrefix()) {

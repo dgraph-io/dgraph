@@ -94,7 +94,7 @@ func NewLocalCluster(conf ClusterConfig) (*LocalCluster, error) {
 
 func (c *LocalCluster) init() error {
 	var err error
-	c.dcli, err = docker.NewEnvClient()
+	c.dcli, err = docker.NewClientWithOpts(docker.FromEnv, docker.WithAPIVersionNegotiation())
 	if err != nil {
 		return errors.Wrap(err, "error setting up docker client")
 	}
@@ -177,7 +177,7 @@ func (c *LocalCluster) createVolume(name string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 	defer cancel()
 
-	req := volume.VolumesCreateBody{Driver: "local", Name: name}
+	req := volume.CreateOptions{Driver: "local", Name: name}
 	if _, err := c.dcli.VolumeCreate(ctx, req); err != nil {
 		return errors.Wrapf(err, "error creating volume [%v]", name)
 	}
@@ -205,7 +205,7 @@ func (c *LocalCluster) createContainer(dc dnode) (string, error) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 	defer cancel()
-	resp, err := c.dcli.ContainerCreate(ctx, cconf, hconf, networkConfig, dc.cname())
+	resp, err := c.dcli.ContainerCreate(ctx, cconf, hconf, networkConfig, nil, dc.cname())
 	if err != nil {
 		return "", errors.Wrapf(err, "error creating container %v", dc.cname())
 	}
@@ -327,8 +327,9 @@ func (c *LocalCluster) StopAlpha(id int) error {
 func (c *LocalCluster) stopContainer(dc dnode) error {
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 	defer cancel()
-	stopTimeout := requestTimeout
-	if err := c.dcli.ContainerStop(ctx, dc.cid(), &stopTimeout); err != nil {
+	stopTimeout := 30 // in seconds
+	o := container.StopOptions{Timeout: &stopTimeout}
+	if err := c.dcli.ContainerStop(ctx, dc.cid(), o); err != nil {
 		return errors.Wrapf(err, "error stopping container [%v]", dc.cname())
 	}
 	return nil

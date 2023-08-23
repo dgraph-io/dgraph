@@ -21,7 +21,7 @@ package zero
 import (
 	"context"
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"math"
 	"net/http"
 	"net/url"
@@ -136,7 +136,7 @@ func TestZeroHealth(t *testing.T) {
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 
 	var r map[string]interface{}
@@ -158,7 +158,7 @@ func TestZeroHealth(t *testing.T) {
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
-	body, err = ioutil.ReadAll(resp.Body)
+	body, err = io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	require.Equal(t, string(body), "OK")
 }
