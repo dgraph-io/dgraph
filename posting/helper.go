@@ -157,3 +157,21 @@ func ParseEdges(s string) ([]uint64, error) {
 func cannotConvertToUintSlice(s string) error {
 	return errors.Errorf("Cannot convert %s to uint slice", s)
 }
+
+func diff(a []uint64, b []uint64) []uint64 {
+	// Turn b into a map
+	m := make(map[uint64]bool, len(b))
+	for _, s := range b {
+		m[s] = false
+	}
+	// Append values from the longest slice that don't exist in the map
+	var diff []uint64
+	for _, s := range a {
+		if _, ok := m[s]; !ok {
+			diff = append(diff, s)
+			continue
+		}
+		m[s] = true
+	}
+	return diff
+}
