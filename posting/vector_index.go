@@ -15,22 +15,33 @@ import (
 
 type CacheType interface {
 	Get(key []byte) (*List, error)
+	Ts() uint64
 }
 
 type TxnCache struct {
-	txn *Txn
+	txn     *Txn
+	startTs uint64
 }
 
 func (tc *TxnCache) Get(key []byte) (*List, error) {
 	return tc.txn.Get(key)
 }
 
+func (tc *TxnCache) Ts() uint64 {
+	return tc.startTs
+}
+
 type queryCache struct {
-	cache *LocalCache
+	cache  *LocalCache
+	readTs uint64
 }
 
 func (qc *queryCache) Get(key []byte) (*List, error) {
 	return qc.cache.Get(key)
+}
+
+func (qc *queryCache) Ts() uint64 {
+	return qc.readTs
 }
 
 // SearchFilter defines a predicate function that we will use to determine
@@ -59,32 +70,20 @@ func getInsertLayer(maxLevels int) int {
 	return level
 }
 
-func searchBadgerLayer(ctx context.Context, cache *LocalCache, txn *Txn, readTs uint64, isInsert bool, pred string, level int, entry uint64, query []float64, expectedNeighbors int, filter SearchFilter) ([]minBadgerHeapElement, map[minBadgerHeapElement]bool, error) {
+func searchBadgerLayer(ctx context.Context, c CacheType, isInsert bool, pred string, level int, entry uint64, query []float64, expectedNeighbors int, filter SearchFilter) ([]minBadgerHeapElement, map[minBadgerHeapElement]bool, error) {
 	var nns []minBadgerHeapElement            // track nearest neighbors to return
 	var visited map[minBadgerHeapElement]bool // track all visited elements to lock on insert mutation
 	entryKey := x.DataKey(pred, entry)
 	var pl *List
 	var err error
 	var data types.Val
-	// insert and query have two diff methods of accessing cache so use isInsert flag to keep track
-	if isInsert {
-		pl, err = txn.Get(entryKey)
-		if err != nil {
-			return []minBadgerHeapElement{}, map[minBadgerHeapElement]bool{}, err
-		}
-		data, err = pl.Value(txn.StartTs)
-		if err != nil {
-			return []minBadgerHeapElement{}, map[minBadgerHeapElement]bool{}, err
-		}
-	} else {
-		pl, err = cache.Get(entryKey)
-		if err != nil {
-			return []minBadgerHeapElement{}, map[minBadgerHeapElement]bool{}, err
-		}
-		data, err = pl.Value(readTs)
-		if err != nil {
-			return []minBadgerHeapElement{}, map[minBadgerHeapElement]bool{}, err
-		}
+	pl, err = c.Get(entryKey)
+	if err != nil {
+		return []minBadgerHeapElement{}, map[minBadgerHeapElement]bool{}, err
+	}
+	data, err = pl.Value(c.Ts())
+	if err != nil {
+		return []minBadgerHeapElement{}, map[minBadgerHeapElement]bool{}, err
 	}
 
 	startVec := types.BytesAsFloatArray(data.Value.([]byte))
@@ -113,24 +112,13 @@ func searchBadgerLayer(ctx context.Context, cache *LocalCache, txn *Txn, readTs 
 		var pl *List
 		var err error
 		var data types.Val
-		if isInsert {
-			pl, err = txn.Get(candidateKey)
-			if err != nil {
-				return []minBadgerHeapElement{}, map[minBadgerHeapElement]bool{}, err
-			}
-			data, err = pl.Value(txn.StartTs)
-			if err != nil {
-				return []minBadgerHeapElement{}, map[minBadgerHeapElement]bool{}, err
-			}
-		} else {
-			pl, err = cache.Get(candidateKey)
-			if err != nil {
-				return []minBadgerHeapElement{}, map[minBadgerHeapElement]bool{}, err
-			}
-			data, err = pl.Value(readTs)
-			if err != nil {
-				return []minBadgerHeapElement{}, map[minBadgerHeapElement]bool{}, err
-			}
+		pl, err = c.Get(candidateKey)
+		if err != nil {
+			return []minBadgerHeapElement{}, map[minBadgerHeapElement]bool{}, err
+		}
+		data, err = pl.Value(c.Ts())
+		if err != nil {
+			return []minBadgerHeapElement{}, map[minBadgerHeapElement]bool{}, err
 		}
 		eVecs := [][]float64{}
 		if data.Value != nil {
@@ -144,33 +132,28 @@ func searchBadgerLayer(ctx context.Context, cache *LocalCache, txn *Txn, readTs 
 				var pl *List
 				var err error
 				var data types.Val
-				if isInsert {
-					pl, err = txn.Get(key)
+				pl, err = c.Get(key)
+				if err != nil {
+					return []minBadgerHeapElement{}, map[minBadgerHeapElement]bool{}, err
+				}
+				data, err = pl.Value(c.Ts())
+				if isInsert && err != nil { // if trying to insert and can't access node, its probably a prallelization issue not a dead node error
+					// TODO should remove this part once we get parallelization with hnsw working
 					if err != nil {
 						return []minBadgerHeapElement{}, map[minBadgerHeapElement]bool{}, err
 					}
-					data, err = pl.Value(txn.StartTs)
-					if err != nil {
-						return []minBadgerHeapElement{}, map[minBadgerHeapElement]bool{}, err
-					}
-				} else {
-					pl, err = cache.Get(key)
-					if err != nil {
-						return []minBadgerHeapElement{}, map[minBadgerHeapElement]bool{}, err
-					}
-					data, _ = pl.Value(readTs)
 				}
 				if data.Value != nil { // if vector hasn't been deleted, append to eVecs
 					eVec := types.BytesAsFloatArray(data.Value.([]byte))
 					eVecs = append(eVecs, eVec)
 				} else { // add to badger entry to keep track of dead nodes. if you see an edge that is connected to a dead node, delete that edge
 					deadKey := x.DataKey(pred+"_vector_dead", 1)
-					pl, err := txn.Get(deadKey)
+					pl, err := c.Get(deadKey)
 					if err != nil {
 						return []minBadgerHeapElement{}, map[minBadgerHeapElement]bool{}, err
 					}
 					var deadNodes []uint64
-					data, err := pl.Value(txn.StartTs)
+					data, err := pl.Value(c.Ts())
 					if err != nil { // doesnt exist
 						deadNodes = []uint64{edge}
 					} else {
@@ -184,7 +167,7 @@ func searchBadgerLayer(ctx context.Context, cache *LocalCache, txn *Txn, readTs 
 					if marshalErr != nil {
 						return []minBadgerHeapElement{}, map[minBadgerHeapElement]bool{}, marshalErr
 					}
-					deadUUidInsert(ctx, pl, txn, pred, deadNodesBytes)
+					deadUUidInsert(ctx, c, pl, pred, deadNodesBytes)
 				}
 			}
 
@@ -231,7 +214,8 @@ func newBadgerEdgeKeyValueEntry(ctx context.Context, plist *List, txn *Txn, pred
 	return nil
 }
 
-func deadUUidInsert(ctx context.Context, plist *List, txn *Txn, pred string, deadNodes []byte) error {
+func deadUUidInsert(ctx context.Context, c CacheType, plist *List, pred string, deadNodes []byte) error {
+	txn := NewTxn(c.Ts())
 	edge := &pb.DirectedEdge{
 		Entity:    1,
 		Attr:      pred + "_vector_dead",
@@ -288,6 +272,11 @@ func InsertToBadger(ctx context.Context, txn *Txn, inUuid uint64, inVec []float6
 	// 	return map[minBadgerHeapElement]bool{}, nil
 	// }
 
+	tc := &TxnCache{
+		txn:     txn,
+		startTs: txn.StartTs,
+	}
+
 	entryKey := x.DataKey(pred+"_vector_entry", 1) // 0-profile_vector_entry
 	pl, err := txn.Get(entryKey)
 	if err != nil {
@@ -319,14 +308,14 @@ func InsertToBadger(ctx context.Context, txn *Txn, inUuid uint64, inVec []float6
 	var layerErr error
 	for level := 0; level < inLevel; level++ {
 		// perform insertion for layers [level, max_level) only, when level < inLevel just find better start
-		startVecs, visited, err = searchBadgerLayer(ctx, nil, txn, 0, true, pred, level, entry, inVec, 1, AcceptAll)
+		startVecs, visited, err = searchBadgerLayer(ctx, tc, true, pred, level, entry, inVec, 1, AcceptAll)
 		if err != nil {
 			return map[minBadgerHeapElement]bool{}, err
 		}
 		entry = startVecs[0].index // update entry to best uuid from current level
 	}
 	for level := inLevel; level < maxLevels; level++ {
-		nns, visited, layerErr = searchBadgerLayer(ctx, nil, txn, 0, true, pred, level, entry, inVec, efConstruction, AcceptAll)
+		nns, visited, layerErr = searchBadgerLayer(ctx, tc, true, pred, level, entry, inVec, efConstruction, AcceptAll)
 		if layerErr != nil {
 			return map[minBadgerHeapElement]bool{}, layerErr
 		}
@@ -397,6 +386,10 @@ func InsertToBadger(ctx context.Context, txn *Txn, inUuid uint64, inVec []float6
 }
 
 func Search(ctx context.Context, cache *LocalCache, query []float64, maxLevels int, pred string, readTs uint64, maxResults int, efSearch int, filter SearchFilter) ([]uint64, error) {
+	qc := &queryCache{
+		cache:  cache,
+		readTs: readTs,
+	}
 	entryKey := x.DataKey(pred+"_vector_entry", 1) // 0-profile_vector_entry
 	pl, err := cache.Get(entryKey)
 	if err != nil {
@@ -408,13 +401,13 @@ func Search(ctx context.Context, cache *LocalCache, query []float64, maxLevels i
 	}
 	entry := binary.BigEndian.Uint64(data.Value.([]byte))
 	for level := 0; level < maxLevels-1; level++ { // calculates best entry for last level (maxLevels-1) by searching each layer and using new best entry
-		currBestNns, _, err := searchBadgerLayer(ctx, cache, nil, readTs, false, pred, level, entry, query, efSearch, AcceptAll)
+		currBestNns, _, err := searchBadgerLayer(ctx, qc, false, pred, level, entry, query, efSearch, AcceptAll)
 		if err != nil {
 			return []uint64{}, err
 		}
 		entry = currBestNns[0].index
 	}
-	nn_vals, _, err := searchBadgerLayer(ctx, cache, nil, readTs, false, pred, maxLevels-1, entry, query, maxResults, filter)
+	nn_vals, _, err := searchBadgerLayer(ctx, qc, false, pred, maxLevels-1, entry, query, maxResults, filter)
 	if err != nil {
 		return []uint64{}, err
 	}
