@@ -113,7 +113,7 @@ func searchBadgerLayer(ctx context.Context, cache *LocalCache, txn *Txn, readTs 
 			}
 		}
 		eVecs := [][]float64{}
-		if data.Value.([]byte) != nil {
+		if data.Value != nil {
 			var edges []uint64
 			edges, err := ParseEdges(string(data.Value.([]byte)))
 			if err != nil {
@@ -140,7 +140,7 @@ func searchBadgerLayer(ctx context.Context, cache *LocalCache, txn *Txn, readTs 
 					}
 					data, _ = pl.Value(readTs)
 				}
-				if data.Value.([]byte) != nil { // if vector hasn't been deleted, append to eVecs
+				if data.Value != nil { // if vector hasn't been deleted, append to eVecs
 					eVec := types.BytesAsFloatArray(data.Value.([]byte))
 					eVecs = append(eVecs, eVec)
 				} else { // add to badger entry to keep track of dead nodes. if you see an edge that is connected to a dead node, delete that edge
@@ -313,7 +313,7 @@ func InsertToBadger(ctx context.Context, txn *Txn, inUuid uint64, inVec []float6
 				}
 				var nnEdges []uint64
 				var unmarshalErr error
-				if data.Value.([]byte) == nil {
+				if data.Value == nil {
 					nnEdges = []uint64{inUuid}
 				} else {
 					nnEdges, unmarshalErr = ParseEdges(string(data.Value.([]byte))) // edges of nearest neighbor
@@ -324,8 +324,8 @@ func InsertToBadger(ctx context.Context, txn *Txn, inUuid uint64, inVec []float6
 						return map[minBadgerHeapElement]bool{}, err
 					}
 					var deadNodes []uint64
-					data, err := deadPl.Value(txn.StartTs)
-					if err == nil { // if dead nodes exist, convert to []uint64
+					data, _ := deadPl.Value(txn.StartTs)
+					if data.Value != nil { // if dead nodes exist, convert to []uint64
 						deadNodes, err = ParseEdges(string(data.Value.([]byte)))
 						if err != nil {
 							return map[minBadgerHeapElement]bool{}, err
