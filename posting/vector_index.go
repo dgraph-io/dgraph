@@ -13,6 +13,26 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+type CacheType interface {
+	Get(key []byte) (*List, error)
+}
+
+type TxnCache struct {
+	txn *Txn
+}
+
+func (tc *TxnCache) Get(key []byte) (*List, error) {
+	return tc.txn.Get(key)
+}
+
+type queryCache struct {
+	cache *LocalCache
+}
+
+func (qc *queryCache) Get(key []byte) (*List, error) {
+	return qc.cache.Get(key)
+}
+
 // SearchFilter defines a predicate function that we will use to determine
 // whether or not a given vector is "interesting". When used in the context
 // of Search, a true result means that we want to keep the result
@@ -25,13 +45,13 @@ func AcceptAll(_, _ []float64, _ uint64) bool { return true }
 // AcceptNone implements SearchFilter by way of rejecting all results.
 func AcceptNone(_, _ []float64, _ uint64) bool { return false }
 
-func getInsertLayer(maxNeighbors, maxLevels int) int {
+func getInsertLayer(maxLevels int) int {
 	// multFactor is a multiplicative factor used to normalize the distribution
 	var level int
 	randFloat := rand.Float64()
 	for i := 0; i < maxLevels; i++ {
 		// calculate level based on section 3.1 here
-		if randFloat < math.Pow(1.0/float64(maxNeighbors), float64(maxLevels-1-i)) {
+		if randFloat < math.Pow(1.0/float64(5), float64(maxLevels-1-i)) {
 			level = i
 			break
 		}
@@ -69,7 +89,7 @@ func searchBadgerLayer(ctx context.Context, cache *LocalCache, txn *Txn, readTs 
 
 	startVec := types.BytesAsFloatArray(data.Value.([]byte))
 	// startVec := BytesAsFloatArray(data) //from vfloat type code not pushed yet
-	bestDist, err := euclidianDistance(startVec, query)
+	bestDist, err := approxEuclidianDistance(startVec, query)
 	if err != nil {
 		return []minBadgerHeapElement{}, map[minBadgerHeapElement]bool{}, err
 	}
@@ -169,7 +189,7 @@ func searchBadgerLayer(ctx context.Context, cache *LocalCache, txn *Txn, readTs 
 			}
 
 			for i := range edges {
-				currDist, err := euclidianDistance(eVecs[i], query) // iterate over candidate's neighbors distances to get best ones
+				currDist, err := approxEuclidianDistance(eVecs[i], query) // iterate over candidate's neighbors distances to get best ones
 				if err != nil {
 					return []minBadgerHeapElement{}, map[minBadgerHeapElement]bool{}, err
 				}
@@ -239,7 +259,28 @@ func entryUuidInsert(ctx context.Context, plist *List, txn *Txn, pred string, en
 	return nil
 }
 
-func InsertToBadger(ctx context.Context, txn *Txn, inUuid uint64, inVec []float64, pred string, maxLevels int, maxNeighbors int, efConstruction int) (map[minBadgerHeapElement]bool, error) {
+func addStartNodeToAllLevels(ctx context.Context, pl *List, txn *Txn, pred string, maxLevels int, inUuid uint64) error {
+	for i := 0; i < maxLevels; i++ {
+		key := x.DataKey(pred+"_vector_"+fmt.Sprint(i), inUuid)
+		plL, err := txn.Get(key)
+		if err != nil {
+			return err
+		}
+		err = newBadgerEdgeKeyValueEntry(ctx, plL, txn, pred, i, inUuid, []byte{}) // creates empty at all levels only for entry node
+		if err != nil {
+			return err
+		}
+	}
+	inUuidByte := make([]byte, 8)
+	binary.BigEndian.PutUint64(inUuidByte, inUuid)         // convert inUuid to bytes
+	err := entryUuidInsert(ctx, pl, txn, pred, inUuidByte) // add inUuid as entry for this structure from now on
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func InsertToBadger(ctx context.Context, txn *Txn, inUuid uint64, inVec []float64, pred string, maxLevels int, efConstruction int) (map[minBadgerHeapElement]bool, error) {
 	// str := pred + "_vector_" + fmt.Sprint(maxLevels-1)
 	// duplicateCheckKey := x.DataKey(str, inUuid)
 	// dup, dupErr := txn.Get(duplicateCheckKey)
@@ -259,17 +300,7 @@ func InsertToBadger(ctx context.Context, txn *Txn, inUuid uint64, inVec []float6
 	if valErr != nil {
 		// if valErr.Error() == "No value found" {
 		// no entries in vector index yet b/c no entry exists, so put in all levels
-		for i := 0; i < maxLevels; i++ {
-			key := x.DataKey(pred+"_vector_"+fmt.Sprint(i), inUuid)
-			plL, err := txn.Get(key)
-			if err != nil {
-				return map[minBadgerHeapElement]bool{}, err
-			}
-			newBadgerEdgeKeyValueEntry(ctx, plL, txn, pred, i, inUuid, []byte{}) // creates empty at all levels only for entry node
-		}
-		inUuidByte := make([]byte, 8)
-		binary.BigEndian.PutUint64(inUuidByte, inUuid)         // convert inUuid to bytes
-		err := entryUuidInsert(ctx, pl, txn, pred, inUuidByte) // add inUuid as entry for this structure from now on
+		err := addStartNodeToAllLevels(ctx, pl, txn, pred, maxLevels, inUuid)
 		if err != nil {
 			return map[minBadgerHeapElement]bool{}, err
 		}
@@ -281,87 +312,87 @@ func InsertToBadger(ctx context.Context, txn *Txn, inUuid uint64, inVec []float6
 		return map[minBadgerHeapElement]bool{}, nil
 	}
 
-	inLevel := getInsertLayer(maxNeighbors, maxLevels) // calculate layer to insert node at (randomized every time)
-	var startVecs []minBadgerHeapElement               // vectors used to calc where to start up until inLevel
-	var nns []minBadgerHeapElement                     // nearest neighbors to return after
-	var visited map[minBadgerHeapElement]bool          // visited nodes to use later to lock them? TODO
+	inLevel := getInsertLayer(maxLevels)      // calculate layer to insert node at (randomized every time)
+	var startVecs []minBadgerHeapElement      // vectors used to calc where to start up until inLevel
+	var nns []minBadgerHeapElement            // nearest neighbors to return after
+	var visited map[minBadgerHeapElement]bool // visited nodes to use later to lock them? TODO
 	var layerErr error
-	for level := 0; level < maxLevels; level++ {
+	for level := 0; level < inLevel; level++ {
 		// perform insertion for layers [level, max_level) only, when level < inLevel just find better start
-		if level < inLevel {
-			startVecs, visited, err = searchBadgerLayer(ctx, nil, txn, 0, true, pred, level, entry, inVec, 1, AcceptAll)
-			if err != nil {
-				return map[minBadgerHeapElement]bool{}, err
-			}
-			entry = startVecs[0].index // update entry to best uuid from current level
-		} else {
-			nns, visited, layerErr = searchBadgerLayer(ctx, nil, txn, 0, true, pred, level, entry, inVec, efConstruction, AcceptAll)
-			if layerErr != nil {
-				return map[minBadgerHeapElement]bool{}, layerErr
-			}
-			outboundEdges := []uint64{}
-			for i := 0; i < min(len(nns), maxNeighbors); i++ { // iterate over nns at this layer to approx find what to add as edges
-				// key := pred + "_vector_" + fmt.Sprint(level) + "_" + fmt.Sprint(nns[i].index)
-				key := x.DataKey(pred+"_vector_"+fmt.Sprint(level), nns[i].index)
-				pl, err := txn.Get(key)
-				if err != nil {
-					return map[minBadgerHeapElement]bool{}, err
-				}
-				data, err := pl.Value(txn.StartTs)
-				if err != nil {
-					return map[minBadgerHeapElement]bool{}, err
-				}
-				var nnEdges []uint64
-				var unmarshalErr error
-				if data.Value == nil {
-					nnEdges = []uint64{inUuid}
-				} else {
-					nnEdges, unmarshalErr = ParseEdges(string(data.Value.([]byte))) // edges of nearest neighbor
-
-					deadKey := x.DataKey(pred+"_vector_dead", 1)
-					deadPl, err := txn.Get(deadKey)
-					if err != nil {
-						return map[minBadgerHeapElement]bool{}, err
-					}
-					var deadNodes []uint64
-					data, _ := deadPl.Value(txn.StartTs)
-					if data.Value != nil { // if dead nodes exist, convert to []uint64
-						deadNodes, err = ParseEdges(string(data.Value.([]byte)))
-						if err != nil {
-							return map[minBadgerHeapElement]bool{}, err
-						}
-						nnEdges = diff(nnEdges, deadNodes) // set nnEdges to be all elements not contained in deadNodes
-					}
-
-					if unmarshalErr != nil {
-						return map[minBadgerHeapElement]bool{}, unmarshalErr
-					}
-					nnEdges = append(nnEdges, inUuid)
-					// if len(nnEdges) < maxNeighbors { // check if # of nn edges are up to maximum. If < max, append, otherwise replace last edge w in Uuid
-					// 	nnEdges = append(nnEdges, inUuid)
-					// } else {
-					// 	nnEdges[len(nnEdges)-1] = inUuid
-					// }
-				}
-				inboundEdgesBytes, marshalErr := json.Marshal(nnEdges)
-				if marshalErr != nil {
-					return map[minBadgerHeapElement]bool{}, marshalErr
-				}
-				newBadgerEdgeKeyValueEntry(ctx, pl, txn, pred, level, nns[i].index, inboundEdgesBytes) // This is only supposed to update existing key value pair, is this okay?
-				outboundEdges = append(outboundEdges, nns[i].index)                                    // add nn to outboundEdges
-			}
-			outboundEdgesBytes, marshalErr := json.Marshal(outboundEdges)
-			if marshalErr != nil {
-				return map[minBadgerHeapElement]bool{}, marshalErr
-			}
-			key := x.DataKey(pred+"_vector_"+fmt.Sprint(level), inUuid)
+		startVecs, visited, err = searchBadgerLayer(ctx, nil, txn, 0, true, pred, level, entry, inVec, 1, AcceptAll)
+		if err != nil {
+			return map[minBadgerHeapElement]bool{}, err
+		}
+		entry = startVecs[0].index // update entry to best uuid from current level
+	}
+	for level := inLevel; level < maxLevels; level++ {
+		nns, visited, layerErr = searchBadgerLayer(ctx, nil, txn, 0, true, pred, level, entry, inVec, efConstruction, AcceptAll)
+		if layerErr != nil {
+			return map[minBadgerHeapElement]bool{}, layerErr
+		}
+		outboundEdges := []uint64{}
+		for i := 0; i < len(nns); i++ { // iterate over nns at this layer to approx find what to add as edges
+			// key := pred + "_vector_" + fmt.Sprint(level) + "_" + fmt.Sprint(nns[i].index)
+			key := x.DataKey(pred+"_vector_"+fmt.Sprint(level), nns[i].index)
 			pl, err := txn.Get(key)
 			if err != nil {
 				return map[minBadgerHeapElement]bool{}, err
 			}
-			newBadgerEdgeKeyValueEntry(ctx, pl, txn, pred, level, inUuid, outboundEdgesBytes) // add outboundEdges as value to inUuid key
+			data, err := pl.Value(txn.StartTs)
+			if err != nil {
+				return map[minBadgerHeapElement]bool{}, err
+			}
+			var nnEdges []uint64
+			var unmarshalErr error
+			if data.Value == nil {
+				nnEdges = []uint64{inUuid}
+			} else {
+				nnEdges, unmarshalErr = ParseEdges(string(data.Value.([]byte))) // edges of nearest neighbor
+
+				deadKey := x.DataKey(pred+"_vector_dead", 1)
+				deadPl, err := txn.Get(deadKey)
+				if err != nil {
+					return map[minBadgerHeapElement]bool{}, err
+				}
+				var deadNodes []uint64
+				data, _ := deadPl.Value(txn.StartTs)
+				if data.Value != nil { // if dead nodes exist, convert to []uint64
+					deadNodes, err = ParseEdges(string(data.Value.([]byte)))
+					if err != nil {
+						return map[minBadgerHeapElement]bool{}, err
+					}
+					nnEdges = diff(nnEdges, deadNodes) // set nnEdges to be all elements not contained in deadNodes
+				}
+
+				if unmarshalErr != nil {
+					return map[minBadgerHeapElement]bool{}, unmarshalErr
+				}
+				nnEdges = append(nnEdges, inUuid)
+				// if len(nnEdges) < maxNeighbors { // check if # of nn edges are up to maximum. If < max, append, otherwise replace last edge w in Uuid
+				// 	nnEdges = append(nnEdges, inUuid)
+				// } else {
+				// 	nnEdges[len(nnEdges)-1] = inUuid
+				// }
+			}
+			inboundEdgesBytes, marshalErr := json.Marshal(nnEdges)
+			if marshalErr != nil {
+				return map[minBadgerHeapElement]bool{}, marshalErr
+			}
+			newBadgerEdgeKeyValueEntry(ctx, pl, txn, pred, level, nns[i].index, inboundEdgesBytes) // This is only supposed to update existing key value pair, is this okay?
+			outboundEdges = append(outboundEdges, nns[i].index)                                    // add nn to outboundEdges
 		}
+		outboundEdgesBytes, marshalErr := json.Marshal(outboundEdges)
+		if marshalErr != nil {
+			return map[minBadgerHeapElement]bool{}, marshalErr
+		}
+		key := x.DataKey(pred+"_vector_"+fmt.Sprint(level), inUuid)
+		pl, err := txn.Get(key)
+		if err != nil {
+			return map[minBadgerHeapElement]bool{}, err
+		}
+		newBadgerEdgeKeyValueEntry(ctx, pl, txn, pred, level, inUuid, outboundEdgesBytes) // add outboundEdges as value to inUuid key
 	}
+
 	return visited, nil
 }
 
@@ -376,7 +407,7 @@ func Search(ctx context.Context, cache *LocalCache, query []float64, maxLevels i
 		return []uint64{}, valErr
 	}
 	entry := binary.BigEndian.Uint64(data.Value.([]byte))
-	for level := 0; level < maxLevels; level++ {
+	for level := 0; level < maxLevels-1; level++ { // calculates best entry for last level (maxLevels-1) by searching each layer and using new best entry
 		currBestNns, _, err := searchBadgerLayer(ctx, cache, nil, readTs, false, pred, level, entry, query, efSearch, AcceptAll)
 		if err != nil {
 			return []uint64{}, err

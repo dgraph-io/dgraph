@@ -138,7 +138,7 @@ func (txn *Txn) addIndexMutation(ctx context.Context, edge *pb.DirectedEdge, tok
 	}
 	inVec := types.BytesAsFloatArray(data[0].Value.([]byte)) // retrieve vector from inUuid save as inVec
 	if data[0].Tid == types.VFloatID {
-		visited, err := InsertToBadger(ctx, txn, edge.ValueId, inVec, edge.Attr, 5, 3, 12)
+		visited, err := InsertToBadger(ctx, txn, edge.ValueId, inVec, edge.Attr, 5, 12)
 		if err != nil {
 			fmt.Print(visited)
 			return err

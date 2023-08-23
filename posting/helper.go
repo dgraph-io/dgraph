@@ -14,6 +14,11 @@ func norm(v []float64) float64 {
 	return math.Sqrt(vectorNorm)
 }
 
+func normSq(v []float64) float64 {
+	normSq, _ := dotProduct(v, v)
+	return normSq
+}
+
 func dotProduct(a, b []float64) (float64, error) {
 	var dotProduct float64
 	if len(a) != len(b) {
@@ -37,11 +42,33 @@ func cosineSimilarity(a, b []float64) (float64, error) {
 	if err != nil {
 		return 0, err
 	}
-	if norm(a) == 0 || norm(b) == 0 {
+	normA := norm(a)
+	normB := norm(b)
+	if normA == 0 || normB == 0 {
 		err := errors.New("can not compute cosine similarity on zero vector")
 		return 0, err
 	}
-	return dotProd / (norm(a) * norm(b)), nil
+	return dotProd / (normA * normB), nil
+}
+
+func approxEuclidianDistance(a, b []float64) (float64, error) {
+	subtractResult := make([]float64, len(a))
+	err := vectorSubtract(a, b, subtractResult)
+	return normSq(subtractResult), err
+}
+
+func approxCosineSimilarity(a, b []float64) (float64, error) {
+	dotProd, err := dotProduct(a, b)
+	if err != nil {
+		return 0, err
+	}
+	normA := normSq(a)
+	normB := normSq(b)
+	if normA == 0 || normB == 0 {
+		err := errors.New("can not compute cosine similarity on zero vector")
+		return 0, err
+	}
+	return dotProd / (normA * normB), nil
 }
 
 func max(a, b int) int {
