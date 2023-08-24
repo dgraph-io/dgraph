@@ -132,14 +132,13 @@ func (z *zero) bindings(offset int) nat.PortMap {
 }
 
 func (z *zero) cmd(c *LocalCluster) []string {
-	zcmd := []string{"/gobin/dgraph", "zero", "--telemetry=reports=false;sentry=false;",
-		fmt.Sprintf("--my=%s:%v", z.aname(), zeroGrpcPort), "--bindall",
+	zcmd := []string{"/gobin/dgraph", "zero", fmt.Sprintf("--my=%s:%v", z.aname(), zeroGrpcPort), "--bindall",
 		fmt.Sprintf(`--replicas=%v`, c.conf.replicas), "--logtostderr", fmt.Sprintf("-v=%d", c.conf.verbosity)}
 
 	if c.lowerThanV21 {
-		zcmd = append(zcmd, fmt.Sprintf(`--idx=%v`, z.id+1))
+		zcmd = append(zcmd, fmt.Sprintf(`--idx=%v`, z.id+1), "--telemetry=false")
 	} else {
-		zcmd = append(zcmd, fmt.Sprintf(`--raft=idx=%v`, z.id+1),
+		zcmd = append(zcmd, fmt.Sprintf(`--raft=idx=%v`, z.id+1), "--telemetry=reports=false;sentry=false;",
 			fmt.Sprintf(`--limit=refill-interval=%v;uid-lease=%v`, c.conf.refillInterval, c.conf.uidLease))
 	}
 
@@ -232,14 +231,14 @@ func (a *alpha) bindings(offset int) nat.PortMap {
 }
 
 func (a *alpha) cmd(c *LocalCluster) []string {
-	acmd := []string{"/gobin/dgraph", "alpha", "--telemetry=reports=false;sentry=false;",
-		fmt.Sprintf("--my=%s:%v", a.aname(), alphaInterPort),
+	acmd := []string{"/gobin/dgraph", "alpha", fmt.Sprintf("--my=%s:%v", a.aname(), alphaInterPort),
 		"--bindall", "--logtostderr", fmt.Sprintf("-v=%d", c.conf.verbosity)}
 
 	if c.lowerThanV21 {
-		acmd = append(acmd, `--whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16`)
+		acmd = append(acmd, `--whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16`, "--telemetry=false")
 	} else {
-		acmd = append(acmd, `--security=whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16`)
+		acmd = append(acmd, `--security=whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16`,
+			"--telemetry=reports=false;sentry=false;")
 	}
 
 	if c.conf.acl {
