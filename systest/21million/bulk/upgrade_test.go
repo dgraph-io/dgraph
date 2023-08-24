@@ -95,9 +95,5 @@ func (bsuite *BulkTestSuite) bulkLoader() error {
 }
 
 func (lsuite *BulkTestSuite) StartAlpha() error {
-	c := lsuite.lc
-	if err := c.Start(); err != nil {
-		return err
-	}
-	return c.HealthCheck(false)
+	return lsuite.lc.Start()
 }
