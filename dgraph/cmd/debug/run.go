@@ -70,6 +70,7 @@ type flagOptions struct {
 	noKeys        bool
 	key           x.Sensitive
 	onlySummary   bool
+	parseKey      string
 
 	// Options related to the WAL.
 	wdir           string
@@ -114,6 +115,7 @@ func init() {
 	flag.StringVarP(&opt.wsetSnapshot, "snap", "s", "",
 		"Set snapshot term,index,readts to this. Value must be comma-separated list containing"+
 			" the value for these vars in that order.")
+	flag.StringVar(&opt.parseKey, "parse_key", "", "Parse hex key.")
 	ee.RegisterEncFlag(flag)
 }
 
@@ -949,6 +951,35 @@ func run() {
 		}
 	}()
 
+	if opt.parseKey != "" {
+		k, err := hex.DecodeString(opt.parseKey)
+		if err != nil {
+			log.Fatalf("error while decoding hex key: %v\n", err)
+		}
+		pk, err := x.Parse(k)
+		if err != nil {
+			log.Fatalf("error while parsing key: %v\n", err)
+		}
+		if pk.IsData() {
+			fmt.Printf("{d}")
+		}
+		if pk.IsIndex() {
+			fmt.Printf("{i}")
+		}
+		if pk.IsCountOrCountRev() {
+			fmt.Printf("{c}")
+		}
+		if pk.IsSchema() {
+			fmt.Printf("{s}")
+		}
+		if pk.IsReverse() {
+			fmt.Printf("{r}")
+		}
+		fmt.Printf(" Key: %+v\n", pk)
+		return
+	}
+
+	var err error
 	dir := opt.pdir
 	isWal := false
 	if len(dir) == 0 {
