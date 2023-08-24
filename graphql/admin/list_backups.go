@@ -24,6 +24,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -31,8 +32,8 @@ import (
 type lsBackupInput struct {
 	Location     string
 	AccessKey    string
-	SecretKey    string
-	SessionToken string
+	SecretKey    pb.Sensitive
+	SessionToken pb.Sensitive
 	Anonymous    bool
 	ForceFull    bool
 }

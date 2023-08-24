@@ -226,16 +226,16 @@ func FillRestoreCredentials(location string, req *pb.RestoreRequest) error {
 
 	defaultCreds := credentials.Value{
 		AccessKeyID:     req.AccessKey,
-		SecretAccessKey: req.SecretKey,
-		SessionToken:    req.SessionToken,
+		SecretAccessKey: string(req.SecretKey),
+		SessionToken:    string(req.SessionToken),
 	}
 	provider := x.MinioCredentialsProvider(uri.Scheme, defaultCreds)
 
 	creds, _ := provider.Retrieve() // Error is always nil.
 
 	req.AccessKey = creds.AccessKeyID
-	req.SecretKey = creds.SecretAccessKey
-	req.SessionToken = creds.SessionToken
+	req.SecretKey = pb.Sensitive(creds.SecretAccessKey)
+	req.SessionToken = pb.Sensitive(creds.SessionToken)
 
 	return nil
 }
