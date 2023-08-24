@@ -268,7 +268,7 @@ func entryUuidInsert(ctx context.Context, plist *List, txn *Txn, pred string, en
 		ValueType: pb.Posting_ValType(7),
 		Op:        pb.DirectedEdge_SET,
 	}
-	if err := plist.addMutation(ctx, txn, edge); err != nil {
+	if err := plist.addMutationInternal(ctx, txn, edge); err != nil {
 		return err
 	}
 	return nil
@@ -303,10 +303,12 @@ func InsertToBadger(ctx context.Context, txn *Txn, inUuid uint64, inVec []float6
 
 	entryKey := x.DataKey(pred+"_vector_entry", 1) // 0-profile_vector_entry
 	pl, err := txn.Get(entryKey)
+	pl.Lock()
+	defer pl.Unlock()
 	if err != nil {
 		return map[minBadgerHeapElement]bool{}, err
 	}
-	data, _ := pl.Value(txn.StartTs)
+	data, _ := pl.ValueWithLockHeld(txn.StartTs)
 	if data.Value == nil {
 		// no entries in vector index yet b/c no entry exists, so put in all levels
 		err := addStartNodeToAllLevels(ctx, pl, txn, pred, maxLevels, inUuid)

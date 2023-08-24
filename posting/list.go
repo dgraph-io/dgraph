@@ -1302,6 +1302,10 @@ func (l *List) GetLangTags(readTs uint64) ([]string, error) {
 func (l *List) Value(readTs uint64) (rval types.Val, rerr error) {
 	l.RLock()
 	defer l.RUnlock()
+	return l.ValueWithLockHeld(readTs)
+}
+
+func (l *List) ValueWithLockHeld(readTs uint64) (rval types.Val, rerr error) {
 	val, found, err := l.findValue(readTs, math.MaxUint64)
 	if err != nil {
 		return val, errors.Wrapf(err,
