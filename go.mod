@@ -10,7 +10,7 @@ require (
 	github.com/Masterminds/semver/v3 v3.1.0
 	github.com/Shopify/sarama v1.27.2
 	github.com/blevesearch/bleve/v2 v2.3.9
-	github.com/dgraph-io/badger/v4 v4.2.0
+	github.com/dgraph-io/badger/v4 v4.2.1-0.20230825180722-827db13883ff
 	github.com/dgraph-io/dgo/v230 v230.0.1
 	github.com/dgraph-io/gqlgen v0.13.2
 	github.com/dgraph-io/gqlparser/v2 v2.2.1
@@ -132,7 +132,7 @@ require (
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/genproto v0.0.0-20230110181048-76db0878b65f // indirect
 	google.golang.org/grpc/examples v0.0.0-20230208210314-e9d9bd0436ee // indirect
-	google.golang.org/protobuf v1.28.1 // indirect
+	google.golang.org/protobuf v1.31.0 // indirect
 	gopkg.in/DataDog/dd-trace-go.v1 v1.13.1 // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 	gopkg.in/ini.v1 v1.51.0 // indirect
