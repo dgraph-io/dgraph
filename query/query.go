@@ -2407,15 +2407,20 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 func (sg *SubGraph) applyEvery(ctx context.Context) error {
 	sg.updateUidMatrix()
 
+	offset := 0
 	every := sg.Params.Every
 	for i := 0; i < len(sg.uidMatrix); i++ {
 		uidList := codec.GetUids(sg.uidMatrix[i])
 
 		r := sroar.NewBitmap()
-		for j := 0; j < len(uidList); j += every {
+		for j := offset; j < len(uidList); j += every {
 			r.Set(uidList[j])
 		}
 		sg.uidMatrix[i].Bitmap = r.ToBuffer()
+
+		// there might be some uids after the last uid picked from uidList
+		// consider these as skipped, so skip that number of uids fewer from next list
+		offset = (offset - len(uidList) % every) % every
 	}
 
 	sg.DestMap = codec.Merge(sg.uidMatrix)
