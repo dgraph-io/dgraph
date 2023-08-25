@@ -2407,20 +2407,22 @@ func (sg *SubGraph) applyEvery(ctx context.Context) error {
 	offset := 0
 	every := sg.Params.Every
 	for i := 0; i < len(sg.uidMatrix); i++ {
-		uidList := codec.GetUids(sg.uidMatrix[i])
+		uidList := sg.uidMatrix[i].Uids
 
-		r := sroar.NewBitmap()
-		for j := offset; j < len(uidList); j += every {
-			r.Set(uidList[j])
+		// take every 'every'-th uid starting at offset
+		uidsLen := (len(uidList) - offset) / every
+		uids := make([]uint64, uidsLen)
+		for j := 0; j < uidsLen; j++ {
+			uids[j] = uidList[j*every+offset]
 		}
-		sg.uidMatrix[i].Bitmap = r.ToBuffer()
+		sg.uidMatrix[i].Uids = uids
 
 		// there might be some uids after the last uid picked from uidList
 		// consider these as skipped, so skip that number of uids fewer from next list
 		offset = (offset - len(uidList)%every) % every
 	}
-
-	sg.DestMap = codec.Merge(sg.uidMatrix)
+	// Re-merge the UID matrix.
+	sg.DestUIDs = algo.MergeSorted(sg.uidMatrix)
 	return nil
 }
 
