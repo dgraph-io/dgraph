@@ -1082,6 +1082,36 @@ func TestHasFirstOffsetEvery(t *testing.T) {
 	}`, js)
 }
 
+func TestHasAfterEvery(t *testing.T) {
+	query := `{
+		q(func:has(name), after: 0x18, every:10) {
+			 name
+		 }
+	 }`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{
+		"data": {
+			"q": [
+			  {
+				"name": "Daryl Dixon"
+			  },
+			  {
+				"name": "E"
+			  },
+			  {
+				"name": "Bob"
+			  },
+			  {
+				"name": "School A"
+			  },
+			  {
+				"name": "Alice"
+			  }
+			]
+		  }
+	}`, js)
+}
+
 func TestCascadeSubQuery2(t *testing.T) {
 	query := `
 	{
