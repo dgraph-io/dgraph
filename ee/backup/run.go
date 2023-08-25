@@ -429,7 +429,11 @@ func runExportBackup() error {
 
 	mapDir, err := os.MkdirTemp(x.WorkerConfig.TmpDir, "restore-export")
 	x.Check(err)
-	defer os.RemoveAll(mapDir)
+	defer func() {
+		if err := os.RemoveAll(mapDir); err != nil {
+			glog.Warningf("Error removing temp restore-export dir: %v", err)
+		}
+	}()
 	glog.Infof("Created temporary map directory: %s\n", mapDir)
 
 	// TODO: Can probably make this procesing concurrent.

@@ -321,7 +321,11 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest, pidx uin
 
 	mapDir, err := os.MkdirTemp(x.WorkerConfig.TmpDir, "restore-map")
 	x.Check(err)
-	defer os.RemoveAll(mapDir)
+	defer func() {
+		if err := os.RemoveAll(mapDir); err != nil {
+			glog.Warningf("Error removing temp restore-map dir: %v", err)
+		}
+	}()
 	glog.Infof("Created temporary map directory: %s\n", mapDir)
 
 	// Map the backup.
@@ -533,10 +537,6 @@ func RunOfflineRestore(dir, location, backupId, keyFile string, key x.Sensitive,
 		}
 	}
 
-	mapDir, err := os.MkdirTemp(x.WorkerConfig.TmpDir, "restore-map")
-	x.Check(err)
-	defer os.RemoveAll(mapDir)
-
 	for gid := range manifest.Groups {
 		req := &pb.RestoreRequest{
 			Location:          location,
@@ -545,6 +545,16 @@ func RunOfflineRestore(dir, location, backupId, keyFile string, key x.Sensitive,
 			EncryptionKeyFile: keyFile,
 			RestoreTs:         1,
 		}
+		mapDir, err := os.MkdirTemp(x.WorkerConfig.TmpDir, "restore-map")
+		if err != nil {
+			return LoadResult{Err: errors.Wrapf(err, "Failed to create temp map directory")}
+		}
+		defer func() {
+			if err := os.RemoveAll(mapDir); err != nil {
+				glog.Warningf("Error removing temp restore-map dir: %v", err)
+			}
+		}()
+
 		if _, err := RunMapper(req, mapDir); err != nil {
 			return LoadResult{Err: errors.Wrap(err, "RunRestore failed to map")}
 		}
