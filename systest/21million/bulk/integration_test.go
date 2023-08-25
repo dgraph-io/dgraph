@@ -31,7 +31,7 @@ import (
 
 type BulkTestSuite struct {
 	suite.Suite
-	dc          dgraphtest.Cluster
+	dc dgraphtest.Cluster
 }
 
 func (bsuite *BulkTestSuite) SetupTest() {

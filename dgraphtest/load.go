@@ -80,16 +80,16 @@ func readGzData(r io.Reader, encryption bool, encKeyPath string) ([]byte, error)
 		}
 	}
 
+	var buf []byte
+	var err error
+	if buf, err = io.ReadAll(r); err != nil {
+		return nil, errors.Wrapf(err, "error reading data from io.Reader")
+	}
+
 	var rr io.Reader
-	if gr, err := gzip.NewReader(r); err != nil &&
+	if gr, err := gzip.NewReader(bytes.NewReader(buf)); err != nil &&
 		strings.Contains(err.Error(), "gzip: invalid header") {
-		if len(sf) > 0 {
-			if rr, err = os.Open(sf); err != nil {
-				return nil, errors.Wrapf(err, "error opening file")
-			}
-		} else if len(sf) == 0 {
-			return nil, errors.Wrapf(err, "error creating gzip reader")
-		}
+			rr = bytes.NewReader(buf)
 	} else if err != nil {
 		return nil, errors.Wrapf(err, "error creating gzip reader")
 	} else {

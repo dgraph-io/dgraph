@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	"github.com/dgraph-io/dgraph/dgraphtest"
+	"github.com/dgraph-io/dgraph/systest/21million/common"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -35,13 +36,14 @@ type BulkTestSuite struct {
 	dc          dgraphtest.Cluster
 	lc          *dgraphtest.LocalCluster
 	uc          dgraphtest.UpgradeCombo
+
 	bulkDataDir string
 }
 
 func (bsuite *BulkTestSuite) SetupTest() {
 	t := bsuite.T()
 	bsuite.bulkDataDir = t.TempDir()
-	require.NoError(t, downloadDataFiles(bsuite.bulkDataDir))
+	require.NoError(t, common.DownloadDataFiles(bsuite.bulkDataDir))
 
 	conf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).WithReplicas(1).
 		WithVersion(bsuite.uc.Before).WithBulkLoadOutDir(t.TempDir()).

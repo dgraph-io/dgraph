@@ -30,7 +30,7 @@ import (
 
 type LiveTestSuite struct {
 	suite.Suite
-	dc          dgraphtest.Cluster
+	dc dgraphtest.Cluster
 }
 
 func (lsuite *LiveTestSuite) SetupTest() {

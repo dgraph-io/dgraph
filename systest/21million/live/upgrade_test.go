@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	"github.com/dgraph-io/dgraph/dgraphtest"
+	"github.com/dgraph-io/dgraph/systest/21million/common"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -35,13 +36,14 @@ type LiveTestSuite struct {
 	dc          dgraphtest.Cluster
 	lc          *dgraphtest.LocalCluster
 	uc          dgraphtest.UpgradeCombo
+
 	liveDataDir string
 }
 
 func (lsuite *LiveTestSuite) SetupTest() {
 	t := lsuite.T()
 	lsuite.liveDataDir = t.TempDir()
-	require.NoError(t, downloadDataFiles(lsuite.liveDataDir))
+	require.NoError(t, common.DownloadDataFiles(lsuite.liveDataDir))
 
 	conf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).WithReplicas(1).
 		WithVersion(lsuite.uc.Before)
