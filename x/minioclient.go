@@ -90,9 +90,6 @@ func NewMinioClient(uri *url.URL, creds *MinioCredentials) (*MinioClient, error)
 		if !strings.Contains(uri.Host, ".") {
 			uri.Host = defaultEndpointS3
 		}
-		if !s3utils.IsAmazonEndpoint(*uri) {
-			return nil, errors.Errorf("Invalid S3 endpoint %q", uri.Host)
-		}
 	default: // minio
 		if uri.Host == "" {
 			return nil, errors.Errorf("Minio handler requires a host")
