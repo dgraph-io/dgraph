@@ -2272,6 +2272,14 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 	}
 
+	// We apply Every _before_ pagination, so we can paginate the result of Every
+	if sg.Params.Every > 1 {
+		if err := sg.applyEvery(ctx); err != nil {
+			rch <- err
+			return
+		}
+	}
+
 	if len(sg.Params.Order) == 0 && len(sg.Params.FacetsOrder) == 0 {
 		// for `has` function when there is no filtering and ordering, we fetch
 		// correct paginated results so no need to apply pagination here.
@@ -2290,14 +2298,6 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 				rch <- err
 				return
 			}
-		}
-	}
-
-	// We apply Every _after_ pagination, so it refers to the respective page
-	if sg.Params.Every > 1 {
-		if err := sg.applyEvery(ctx); err != nil {
-			rch <- err
-			return
 		}
 	}
 

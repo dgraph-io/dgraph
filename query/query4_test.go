@@ -1024,7 +1024,7 @@ func TestHasEvery(t *testing.T) {
 
 func TestHasFirstEvery(t *testing.T) {
 	query := `{
-		q(func:has(name), first: 10, every:2) {
+		q(func:has(name), every:10, first: 2) {
 			 name
 		 }
 	 }`
@@ -1036,16 +1036,7 @@ func TestHasFirstEvery(t *testing.T) {
 				"name": "Michonne"
 			  },
 			  {
-				"name": "Margaret"
-			  },
-			  {
-				"name": "Garfield"
-			  },
-			  {
-				"name": "Nemo"
-			  },
-			  {
-				"name": "Rick Grimes"
+				"name": "Daryl Dixon"
 			  }
 			]
 		  }
@@ -1054,7 +1045,7 @@ func TestHasFirstEvery(t *testing.T) {
 
 func TestHasFirstOffsetEvery(t *testing.T) {
 	query := `{
-		q(func:has(name), first: 10, offset:1, every:2) {
+		q(func:has(name), every:10, first: 2, offset:2) {
 			 name
 		 }
 	 }`
@@ -1063,19 +1054,10 @@ func TestHasFirstOffsetEvery(t *testing.T) {
 		"data": {
 			"q": [
 			  {
-				"name": "King Lear"
+				"name": "E"
 			  },
 			  {
-				"name": "Leonard"
-			  },
-			  {
-				"name": "Bear"
-			  },
-			  {
-				"name": "name"
-			  },
-			  {
-				"name": "Glenn Rhee"
+				"name": "Bob"
 			  }
 			]
 		  }
