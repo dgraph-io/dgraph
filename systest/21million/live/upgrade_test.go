@@ -33,9 +33,9 @@ import (
 
 type LiveTestSuite struct {
 	suite.Suite
-	dc          dgraphtest.Cluster
-	lc          *dgraphtest.LocalCluster
-	uc          dgraphtest.UpgradeCombo
+	dc dgraphtest.Cluster
+	lc *dgraphtest.LocalCluster
+	uc dgraphtest.UpgradeCombo
 
 	liveDataDir string
 }

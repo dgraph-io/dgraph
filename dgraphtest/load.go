@@ -89,7 +89,7 @@ func readGzData(r io.Reader, encryption bool, encKeyPath string) ([]byte, error)
 	var rr io.Reader
 	if gr, err := gzip.NewReader(bytes.NewReader(buf)); err != nil &&
 		strings.Contains(err.Error(), "gzip: invalid header") {
-			rr = bytes.NewReader(buf)
+		rr = bytes.NewReader(buf)
 	} else if err != nil {
 		return nil, errors.Wrapf(err, "error creating gzip reader")
 	} else {

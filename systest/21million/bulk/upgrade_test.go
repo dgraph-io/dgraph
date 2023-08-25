@@ -33,9 +33,9 @@ import (
 
 type BulkTestSuite struct {
 	suite.Suite
-	dc          dgraphtest.Cluster
-	lc          *dgraphtest.LocalCluster
-	uc          dgraphtest.UpgradeCombo
+	dc dgraphtest.Cluster
+	lc *dgraphtest.LocalCluster
+	uc dgraphtest.UpgradeCombo
 
 	bulkDataDir string
 }
