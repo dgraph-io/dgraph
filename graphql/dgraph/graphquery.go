@@ -65,10 +65,24 @@ func writeQuery(b *strings.Builder, query *dql.GraphQuery, prefix string) {
 		x.Check2(b.WriteString(query.Alias))
 		x.Check2(b.WriteString(" : "))
 	}
-	x.Check2(b.WriteString(query.Attr))
+
+	if query.IsCount {
+		x.Check2(b.WriteString(fmt.Sprintf("count(%s)", query.Attr)))
+	} else if query.Attr != "val" {
+		x.Check2(b.WriteString(query.Attr))
+	} else if isAggregateFn(query.Func) {
+		x.Check2(b.WriteString("sum(val("))
+		writeNeedVar(b, query)
+		x.Check2(b.WriteRune(')'))
+	} else {
+		x.Check2(b.WriteString("val("))
+		writeNeedVar(b, query)
+		x.Check2(b.WriteRune(')'))
+	}
 
 	if query.Func != nil {
 		writeRoot(b, query)
+		x.Check2(b.WriteRune(')'))
 	}
 
 	if query.Filter != nil {
@@ -93,6 +107,12 @@ func writeQuery(b *strings.Builder, query *dql.GraphQuery, prefix string) {
 		}
 	}
 
+	if query.IsGroupby {
+		x.Check2(b.WriteString(" @groupby("))
+		writeGroupByAttributes(b, query.GroupbyAttrs)
+		x.Check2(b.WriteRune(')'))
+	}
+
 	switch {
 	case len(query.Children) > 0:
 		prefixAdd := ""
@@ -112,7 +132,43 @@ func writeQuery(b *strings.Builder, query *dql.GraphQuery, prefix string) {
 	}
 }
 
-func writeUIDFunc(b *strings.Builder, uids []uint64, args []dql.Arg) {
+// writeNeedVar writes the NeedsVar of the query. For eg :-
+// `userFollowerCount as sum(val(followers))` has `followers`
+// as NeedsVar.
+func writeNeedVar(b *strings.Builder, query *dql.GraphQuery) {
+	for i, v := range query.NeedsVar {
+		if i != 0 {
+			x.Check2(b.WriteString(", "))
+		}
+		x.Check2(b.WriteString(v.Name))
+	}
+}
+
+func isAggregateFn(f *dql.Function) bool {
+	if f == nil {
+		return false
+	}
+	switch f.Name {
+	case "min", "max", "avg", "sum":
+		return true
+	}
+	return false
+}
+
+func writeGroupByAttributes(b *strings.Builder, attrList []dql.GroupByAttr) {
+	for i, attr := range attrList {
+		if i != 0 {
+			x.Check2(b.WriteString(", "))
+		}
+		if attr.Alias != "" {
+			x.Check2(b.WriteString(attr.Alias))
+			x.Check2(b.WriteString(" : "))
+		}
+		x.Check2(b.WriteString(attr.Attr))
+	}
+}
+
+func writeUIDFunc(b *strings.Builder, uids []uint64, args []dql.Arg, needVar []dql.VarContext) {
 	x.Check2(b.WriteString("uid("))
 	if len(uids) > 0 {
 		// uid function with uint64 - uid(0x123, 0x456, ...)
@@ -122,13 +178,20 @@ func writeUIDFunc(b *strings.Builder, uids []uint64, args []dql.Arg) {
 			}
 			x.Check2(b.WriteString(fmt.Sprintf("%#x", uid)))
 		}
-	} else {
+	} else if len(args) > 0 {
 		// uid function with a Dgraph query variable - uid(Post1)
 		for i, arg := range args {
 			if i != 0 {
 				x.Check2(b.WriteString(", "))
 			}
 			x.Check2(b.WriteString(arg.Value))
+		}
+	} else {
+		for i, v := range needVar {
+			if i != 0 {
+				x.Check2(b.WriteString(", "))
+			}
+			x.Check2(b.WriteString(v.Name))
 		}
 	}
 	x.Check2(b.WriteString(")"))
@@ -145,26 +208,54 @@ func writeRoot(b *strings.Builder, q *dql.GraphQuery) {
 	}
 
 	switch {
+	case q.Func.Name == "has":
+		x.Check2(b.WriteString(fmt.Sprintf("(func: has(%s)", q.Func.Attr)))
 	case q.Func.Name == "uid":
 		x.Check2(b.WriteString("(func: "))
-		writeUIDFunc(b, q.Func.UID, q.Func.Args)
+		writeUIDFunc(b, q.Func.UID, q.Func.Args, q.Func.NeedsVar)
 	case q.Func.Name == "type" && len(q.Func.Args) == 1:
 		x.Check2(b.WriteString(fmt.Sprintf("(func: type(%s)", q.Func.Args[0].Value)))
 	case q.Func.Name == "eq":
 		x.Check2(b.WriteString("(func: eq("))
-		writeFilterArguments(b, q.Func.Args)
+		writeFilterArguments(b, q.Func)
 		x.Check2(b.WriteRune(')'))
 	}
 	writeOrderAndPage(b, q, true)
-	x.Check2(b.WriteRune(')'))
 }
 
-func writeFilterArguments(b *strings.Builder, args []dql.Arg) {
-	for i, arg := range args {
-		if i != 0 {
+// writeFilterArguments writes the filter arguments. If the filter
+// is constructed in graphql query rewriting then `Attr` is an empty
+// string since we add Attr in the argument itself.
+func writeFilterArguments(b *strings.Builder, q *dql.Function) {
+	if q.Attr != "" {
+		x.Check2(b.WriteString(q.Attr))
+	}
+
+	for i, arg := range q.Args {
+		if i != 0 || q.Attr != "" {
 			x.Check2(b.WriteString(", "))
 		}
+		if q.Attr != "" {
+			// quote the arguments since this is the case of
+			// @custom DQL string.
+			arg.Value = maybeQuoteArg(q.Name, arg.Value)
+		}
 		x.Check2(b.WriteString(arg.Value))
+	}
+}
+
+// maybeQuoteArg puts a quote on the function arguments.
+func maybeQuoteArg(fn string, arg interface{}) string {
+	switch arg := arg.(type) {
+	case string: // dateTime also parsed as string
+		if fn == "regexp" {
+			return arg
+		}
+		return fmt.Sprintf("%q", arg)
+	case float64, float32:
+		return fmt.Sprintf("\"%v\"", arg)
+	default:
+		return fmt.Sprintf("%v", arg)
 	}
 }
 
@@ -175,10 +266,10 @@ func writeFilterFunction(b *strings.Builder, f *dql.Function) {
 
 	switch {
 	case f.Name == "uid":
-		writeUIDFunc(b, f.UID, f.Args)
+		writeUIDFunc(b, f.UID, f.Args, f.NeedsVar)
 	default:
 		x.Check2(b.WriteString(fmt.Sprintf("%s(", f.Name)))
-		writeFilterArguments(b, f.Args)
+		writeFilterArguments(b, f)
 		x.Check2(b.WriteRune(')'))
 	}
 }
@@ -215,6 +306,15 @@ func hasOrderOrPage(q *dql.GraphQuery) bool {
 	return len(q.Order) > 0 || hasFirst || hasOffset
 }
 
+func IsValueVar(attr string, q *dql.GraphQuery) bool {
+	for _, vars := range q.NeedsVar {
+		if attr == vars.Name && vars.Typ == 2 {
+			return true
+		}
+	}
+	return false
+}
+
 func writeOrderAndPage(b *strings.Builder, query *dql.GraphQuery, root bool) {
 	var wroteOrder, wroteFirst bool
 
@@ -227,7 +327,13 @@ func writeOrderAndPage(b *strings.Builder, query *dql.GraphQuery, root bool) {
 		} else {
 			x.Check2(b.WriteString("orderasc: "))
 		}
-		x.Check2(b.WriteString(ord.Attr))
+		if IsValueVar(ord.Attr, query) {
+			x.Check2(b.WriteString("val("))
+			x.Check2(b.WriteString(ord.Attr))
+			x.Check2(b.WriteRune(')'))
+		} else {
+			x.Check2(b.WriteString(ord.Attr))
+		}
 		wroteOrder = true
 	}
 
