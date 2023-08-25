@@ -799,8 +799,8 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) (*mapResult, error) {
 				}
 				maxBannedNs = x.Max(maxBannedNs, ns)
 			}
-			glog.Infof("[MAP] Processed manifest %d\n", manifest.BackupNum)
 		}
+		glog.Infof("[MAP] Processed manifest num: %v", manifest.BackupNum)
 	} // done with all the manifests.
 
 	glog.Infof("Histogram of map input sizes:\n%s\n", mapper.szHist)
