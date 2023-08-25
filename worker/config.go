@@ -20,6 +20,8 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
+
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -43,8 +45,14 @@ type Options struct {
 	// AuthToken is the token to be passed for Alter HTTP requests.
 	AuthToken string
 
-	// HmacSecret stores the secret used to sign JSON Web Tokens (JWT).
-	HmacSecret x.Sensitive
+	// AclJwtAlg stores the JWT signing algorithm.
+	AclJwtAlg jwt.SigningMethod
+	// AclSecretKey stores the secret used to sign JSON Web Tokens (JWT).
+	// It could be a either a RSA or ECDSA PrivateKey or HMAC symmetric key.
+	// depending upon the JWT signing algorithm. Public key can be derived
+	// from the private key to verify the signatures when needed.
+	AclSecretKey      interface{}
+	AclSecretKeyBytes x.Sensitive
 	// AccessJwtTtl is the TTL for the access JWT.
 	AccessJwtTtl time.Duration
 	// RefreshJwtTtl is the TTL of the refresh JWT.

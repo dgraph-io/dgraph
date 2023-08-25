@@ -29,6 +29,7 @@ import (
 	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/schema"
+	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -210,9 +211,9 @@ func TestParseSchemaFromAlterOperation(t *testing.T) {
 
 func TestGetHash(t *testing.T) {
 	h := sha256.New()
-	_, err := h.Write([]byte("0xa0x14123456789"))
+	_, err := h.Write([]byte("0xa0x140x313233343536373839"))
 	require.NoError(t, err)
 
-	x.WorkerConfig.HmacSecret = []byte("123456789")
+	worker.Config.AclSecretKeyBytes = x.Sensitive("123456789")
 	require.Equal(t, hex.EncodeToString(h.Sum(nil)), getHash(10, 20))
 }

@@ -21,14 +21,19 @@ import (
 	"math/rand"
 	"os"
 	"time"
+
+	"github.com/golang-jwt/jwt/v5"
 )
 
+// UpgradeCombo represents a version combination before and
+// after the upgrade, and the strategy for upgrading
 type UpgradeCombo struct {
 	Before   string
 	After    string
 	Strategy UpgradeStrategy
 }
 
+// AllUpgradeCombos returns all possible upgrade combinations for which tests need to run
 func AllUpgradeCombos(v20 bool) []UpgradeCombo {
 	fixedVersionCombos := []UpgradeCombo{
 		// OPEN SOURCE RELEASES, 4fc9cfd => v23.1.0
@@ -93,6 +98,7 @@ func AllUpgradeCombos(v20 bool) []UpgradeCombo {
 	}
 }
 
+// ClusterConfig stores all config for setting up a dgraph cluster
 type ClusterConfig struct {
 	prefix         string
 	numAlphas      int
@@ -101,6 +107,7 @@ type ClusterConfig struct {
 	verbosity      int
 	acl            bool
 	aclTTL         time.Duration
+	aclAlg         jwt.SigningMethod
 	encryption     bool
 	version        string
 	volumes        map[string]string
@@ -111,6 +118,7 @@ type ClusterConfig struct {
 	featureFlags   []string
 }
 
+// NewClusterConfig generates a default ClusterConfig
 func NewClusterConfig() ClusterConfig {
 	prefix := fmt.Sprintf("dgraphtest-%d", rand.NewSource(time.Now().UnixNano()).Int63()%1000000)
 	defaultBackupVol := fmt.Sprintf("%v_backup", prefix)
@@ -129,37 +137,51 @@ func NewClusterConfig() ClusterConfig {
 	}
 }
 
+// WithNAlphas sets the number of alphas in the cluster
 func (cc ClusterConfig) WithNumAlphas(n int) ClusterConfig {
 	cc.numAlphas = n
 	return cc
 }
 
+// WithNumZeros sets the number of zero nodes in the Dgraph cluster
 func (cc ClusterConfig) WithNumZeros(n int) ClusterConfig {
 	cc.numZeros = n
 	return cc
 }
 
+// WithReplicas sets the number of replicas in each alpha group
 func (cc ClusterConfig) WithReplicas(n int) ClusterConfig {
 	cc.replicas = n
 	return cc
 }
 
+// WithVerbsity sets the verbosity level for the logs
 func (cc ClusterConfig) WithVerbosity(v int) ClusterConfig {
 	cc.verbosity = v
 	return cc
 }
 
+// WithAcl enables ACL feature for Dgraph cluster
 func (cc ClusterConfig) WithACL(aclTTL time.Duration) ClusterConfig {
 	cc.acl = true
 	cc.aclTTL = aclTTL
 	return cc
 }
 
+// WithAclAlg sets the JWT signing algorithm for dgraph ACLs
+func (cc ClusterConfig) WithAclAlg(alg jwt.SigningMethod) ClusterConfig {
+	cc.acl = true
+	cc.aclAlg = alg
+	return cc
+}
+
+// WithEncryption enables encryption for the cluster
 func (cc ClusterConfig) WithEncryption() ClusterConfig {
 	cc.encryption = true
 	return cc
 }
 
+// WithVersion sets the Dgraph version for the cluster
 func (cc ClusterConfig) WithVersion(version string) ClusterConfig {
 	cc.version = version
 	return cc
@@ -172,11 +194,13 @@ func (cc ClusterConfig) WithAlphaVolume(volname, dir string) ClusterConfig {
 	return cc
 }
 
+// WithRefillInterval sets the refill interval for replenishing UIDs
 func (cc ClusterConfig) WithRefillInterval(interval time.Duration) ClusterConfig {
 	cc.refillInterval = interval * time.Second
 	return cc
 }
 
+// WithUidLease sets the number of UIDs to replenish after refill interval
 func (cc ClusterConfig) WithUidLease(uidLease int) ClusterConfig {
 	cc.uidLease = uidLease
 	return cc

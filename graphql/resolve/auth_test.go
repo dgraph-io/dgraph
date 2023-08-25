@@ -25,7 +25,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dgrijalva/jwt-go/v4"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/metadata"
 	"gopkg.in/yaml.v2"
@@ -357,7 +357,7 @@ func TestVerificationWithMultipleJWKUrls(t *testing.T) {
 			_, err := metainfo.ExtractCustomClaims(ctx)
 			if tcase.invalid {
 				require.True(t, strings.Contains(err.Error(),
-					"unable to parse jwt token:token is unverifiable: Keyfunc returned an error"))
+					"unable to parse jwt token:token is unverifiable: error while executing keyfunc: Invalid kid"))
 			} else {
 				require.NoError(t, err)
 			}

@@ -17,11 +17,12 @@ import (
 	"testing"
 	"time"
 
-	jwt "github.com/dgrijalva/jwt-go"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/ee/acl"
 	"github.com/dgraph-io/dgraph/worker"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 func generateJWT(namespace uint64, userId string, groupIds []string, expiry int64) string {
@@ -29,25 +30,14 @@ func generateJWT(namespace uint64, userId string, groupIds []string, expiry int6
 	if groupIds != nil {
 		claims["groups"] = groupIds
 	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, &claims)
 
-	tokenString, _ := token.SignedString([]byte(worker.Config.HmacSecret))
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, &claims)
+	tokenString, err := token.SignedString(x.MaybeKeyToBytes(worker.Config.AclSecretKey))
+	if err != nil {
+		panic(err)
+	}
 
 	return tokenString
-}
-
-func sliceCompare(x, y []string) bool {
-	if len(x) != len(y) {
-		return false
-	}
-
-	for i := range x {
-		if x[i] != y[i] {
-			return false
-		}
-	}
-
-	return true
 }
 
 func TestValidateToken(t *testing.T) {
@@ -62,11 +52,9 @@ func TestValidateToken(t *testing.T) {
 		tokenString := generateJWT(userdata.namespace, userdata.userId, userdata.groupIds, expiry)
 		ud, err := validateToken(tokenString)
 		require.NoError(t, err)
-		if ud.namespace != userdata.namespace || ud.userId != userdata.userId ||
-			!sliceCompare(ud.groupIds, userdata.groupIds) {
-
-			t.Errorf("Actual output %+v is not equal to the expected output %+v", userdata, ud)
-		}
+		require.Equal(t, userdata.namespace, ud.namespace)
+		require.Equal(t, userdata.userId, ud.userId)
+		require.Equal(t, userdata.groupIds, ud.groupIds)
 	}
 }
 
@@ -99,16 +87,14 @@ func TestGetAccessJwt(t *testing.T) {
 		{3456789012, "user3", []string{"702", "703"}},
 	}
 
-	worker.Config.AccessJwtTtl = 20 * time.Second
 	for _, userdata := range userDataList {
 		jwtstr, err := getAccessJwt(userdata.userId, grpLst, userdata.namespace)
 		require.NoError(t, err)
 		ud, err := validateToken(jwtstr)
 		require.NoError(t, err)
-		if ud.namespace != userdata.namespace || ud.userId != userdata.userId || !sliceCompare(ud.groupIds, g) {
-			t.Errorf("Actual output {%v %v %v} is not equal to the output %v generated from"+
-				" getAccessJwt() token", userdata.namespace, userdata.userId, grpLst, ud)
-		}
+		require.Equal(t, userdata.namespace, ud.namespace)
+		require.Equal(t, userdata.userId, ud.userId)
+		require.Equal(t, g, ud.groupIds)
 	}
 }
 
@@ -123,9 +109,16 @@ func TestGetRefreshJwt(t *testing.T) {
 		jwtstr, _ := getRefreshJwt(userdata.userId, userdata.namespace)
 		ud, err := validateToken(jwtstr)
 		require.NoError(t, err)
-		if ud.namespace != userdata.namespace || ud.userId != userdata.userId {
-			t.Errorf("Actual output {%v %v} is not equal to the output {%v %v} generated from"+
-				"getRefreshJwt() token", userdata.namespace, userdata.userId, ud.namespace, ud.userId)
-		}
+		require.Equal(t, userdata.namespace, ud.namespace)
+		require.Equal(t, userdata.userId, ud.userId)
 	}
+}
+
+func TestMain(m *testing.M) {
+	x.WorkerConfig.AclJwtAlg = jwt.SigningMethodHS256
+	x.WorkerConfig.AclPublicKey = x.Sensitive("6ABBAA2014CFF00289D20D20DA296F67")
+
+	worker.Config.AccessJwtTtl = 20 * time.Second
+	worker.Config.RefreshJwtTtl = 20 * time.Second
+	worker.Config.AclSecretKey = x.Sensitive("6ABBAA2014CFF00289D20D20DA296F67")
 }

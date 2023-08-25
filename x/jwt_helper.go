@@ -20,20 +20,39 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/dgrijalva/jwt-go"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/pkg/errors"
 )
 
+var (
+	errTokenExpired = errors.New("Token is expired")
+)
+
+// MaybeKeyToBytes converts the x.Sensitive type into []byte if the type of interface really
+// is x.Sensitive. We keep the type x.Sensitive for private and public keys so that it
+// doesn't get printed into the logs but the type the JWT library needs is []byte.
+func MaybeKeyToBytes(k interface{}) interface{} {
+	if kb, ok := k.(Sensitive); ok {
+		return []byte(kb)
+	}
+	return k
+}
+
 func ParseJWT(jwtStr string) (jwt.MapClaims, error) {
 	token, err := jwt.Parse(jwtStr, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, errors.Errorf("unexpected signing method: %v",
-				token.Header["alg"])
+		if WorkerConfig.AclJwtAlg == nil {
+			return nil, errors.Errorf("ACL is disabled")
 		}
-		return []byte(WorkerConfig.HmacSecret), nil
+		if token.Method.Alg() != WorkerConfig.AclJwtAlg.Alg() {
+			return nil, errors.Errorf("unexpected signing method in token: %v", token.Header["alg"])
+		}
+		return MaybeKeyToBytes(WorkerConfig.AclPublicKey), nil
 	})
-
 	if err != nil {
+		// This is for backward compatibility in clients
+		if errors.Is(err, jwt.ErrTokenExpired) {
+			err = errors.Wrap(errTokenExpired, jwt.ErrTokenInvalidClaims.Error())
+		}
 		return nil, errors.Wrapf(err, "unable to parse jwt token")
 	}
 

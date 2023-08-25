@@ -25,8 +25,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dgrijalva/jwt-go/v4"
 	"github.com/dgryski/go-farm"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgraph/graphql/resolve"
@@ -89,8 +89,8 @@ func (p *Poller) AddSubscriber(req *schema.Request) (*SubscriberResponse, error)
 	}
 	// for the cases when no expiry is given in jwt or subscription doesn't have any authorization,
 	// we set their expiry to zero time
-	if customClaims.StandardClaims.ExpiresAt == nil {
-		customClaims.StandardClaims.ExpiresAt = jwt.At(time.Time{})
+	if customClaims.RegisteredClaims.ExpiresAt == nil {
+		customClaims.RegisteredClaims.ExpiresAt = jwt.NewNumericDate(time.Time{})
 	}
 
 	buf, err := json.Marshal(req)
@@ -131,7 +131,9 @@ func (p *Poller) AddSubscriber(req *schema.Request) (*SubscriberResponse, error)
 	glog.Infof("Subscription polling is started for the ID %d", subscriptionID)
 
 	subscriptions[subscriptionID] = subscriber{
-		expiry: customClaims.StandardClaims.ExpiresAt.Time, updateCh: updateCh}
+		expiry:   customClaims.RegisteredClaims.ExpiresAt.Time,
+		updateCh: updateCh,
+	}
 	p.pollRegistry[bucketID] = subscriptions
 
 	if ok {

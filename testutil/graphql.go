@@ -29,7 +29,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgrijalva/jwt-go/v4"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
@@ -200,12 +200,12 @@ func EnterpriseLicense(t *testing.T, license string) *GraphQLResponse {
 type clientCustomClaims struct {
 	Namespace     string
 	AuthVariables map[string]interface{}
-	jwt.StandardClaims
+	jwt.RegisteredClaims
 }
 
 func (c clientCustomClaims) MarshalJSON() ([]byte, error) {
 	// Encode the original
-	m, err := json.Marshal(c.StandardClaims)
+	m, err := json.Marshal(c.RegisteredClaims)
 	if err != nil {
 		return nil, err
 	}
@@ -246,12 +246,12 @@ func (a *AuthMeta) GetSignedToken(privateKeyFile string,
 	claims := clientCustomClaims{
 		a.Namespace,
 		a.AuthVars,
-		jwt.StandardClaims{
+		jwt.RegisteredClaims{
 			Issuer: "test",
 		},
 	}
 	if expireAfter != -1 {
-		claims.ExpiresAt = jwt.At(time.Now().Add(expireAfter))
+		claims.ExpiresAt = jwt.NewNumericDate(time.Now().Add(expireAfter))
 	}
 
 	var signedString string
