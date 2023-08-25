@@ -770,7 +770,7 @@ func TestHasOrderAscOffset(t *testing.T) {
 
 func TestHasFirst(t *testing.T) {
 	query := `{
-		q(func:has(name), first:5) {
+		q(func:has(name),first:5) {
 			 name
 		 }
 	 }`
@@ -887,7 +887,7 @@ func TestRegExpVariableReplacement(t *testing.T) {
 
 func TestHasFirstOffset(t *testing.T) {
 	query := `{
-		q(func:has(name), first:5, offset: 5) {
+		q(func:has(name),first:5, offset: 5) {
 			 name
 		 }
 	 }`
@@ -992,6 +992,7 @@ func TestCascadeSubQuery1(t *testing.T) {
 func TestHasEvery(t *testing.T) {
 	query := `{
 		q(func:has(name), every:10) {
+			 uid
 			 name
 		 }
 	 }`
@@ -1000,31 +1001,42 @@ func TestHasEvery(t *testing.T) {
 		"data": {
 			"q": [
 			  {
-				"name": "Michonne"
+				"uid": "0x18",
+				"name": "Glenn Rhee"
 			  },
 			  {
-				"name": "Daryl Dixon"
+				"uid": "0x36",
+				"name": "D"
 			  },
 			  {
-				"name": "E"
-			  },
-			  {
-				"name": "Bob"
-			  },
-			  {
-				"name": "School A"
-			  },
-			  {
+				"uid": "0x3e8",
 				"name": "Alice"
+			  },
+			  {
+				"uid": "0xdaf",
+				"name": "Andrew"
+			  },
+			  {
+				"uid": "0xdaf",
+				"name": ""
+			  },
+			  {
+				"uid": "0x2715",
+				"name": "SF Bay Area"
+			  },
+			  {
+				"uid": "0x2715",
+				"name": "Bob"
 			  }
 			]
 		  }
 	}`, js)
 }
 
-func TestHasFirstEvery(t *testing.T) {
+func TestHasEveryWithFirst(t *testing.T) {
 	query := `{
 		q(func:has(name), every:10, first: 2) {
+			 uid
 			 name
 		 }
 	 }`
@@ -1033,19 +1045,22 @@ func TestHasFirstEvery(t *testing.T) {
 		"data": {
 			"q": [
 			  {
-				"name": "Michonne"
+				"uid": "0x18",
+				"name": "Glenn Rhee"
 			  },
 			  {
-				"name": "Daryl Dixon"
+				"uid": "0x36",
+				"name": "D"
 			  }
 			]
 		  }
 	}`, js)
 }
 
-func TestHasFirstOffsetEvery(t *testing.T) {
+func TestHasEveryWithFirstOffset(t *testing.T) {
 	query := `{
-		q(func:has(name), every:10, first: 2, offset:2) {
+		q(func:has(name), every:10, first:2, offset:2) {
+			 uid
 			 name
 		 }
 	 }`
@@ -1054,40 +1069,76 @@ func TestHasFirstOffsetEvery(t *testing.T) {
 		"data": {
 			"q": [
 			  {
-				"name": "E"
-			  },
-			  {
-				"name": "Bob"
-			  }
-			]
-		  }
-	}`, js)
-}
-
-func TestHasAfterEvery(t *testing.T) {
-	query := `{
-		q(func:has(name), after: 0x18, every:10) {
-			 name
-		 }
-	 }`
-	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{
-		"data": {
-			"q": [
-			  {
-				"name": "Daryl Dixon"
-			  },
-			  {
-				"name": "E"
-			  },
-			  {
-				"name": "Bob"
-			  },
-			  {
-				"name": "School A"
-			  },
-			  {
+				"uid": "0x3e8",
 				"name": "Alice"
+			  },
+			  {
+				"uid": "0xdaf",
+				"name": "Andrew"
+			  },
+			  {
+				"uid": "0xdaf",
+				"name": ""
+			  }
+			]
+		  }
+	}`, js)
+}
+
+func TestHasEveryWithAfter(t *testing.T) {
+	query := `{
+		q(func:has(name), every:10, after:0x36) {
+			 uid
+			 name
+		 }
+	 }`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{
+		"data": {
+			"q": [
+			  {
+				"uid": "0x3e8",
+				"name": "Alice"
+			  },
+			  {
+				"uid": "0xdaf",
+				"name": "Andrew"
+			  },
+			  {
+				"uid": "0xdaf",
+				"name": ""
+			  },
+			  {
+				"uid": "0x2715",
+				"name": "SF Bay Area"
+			  },
+			  {
+				"uid": "0x2715",
+				"name": "Bob"
+			  }
+			]
+		  }
+	}`, js)
+}
+
+func TestHasEveryWithFirstAfter(t *testing.T) {
+	query := `{
+		q(func:has(name), every: 10, first:2, after: 0x36) {
+			 uid
+			 name
+		 }
+	 }`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{
+		"data": {
+			"q": [
+			  {
+				"uid": "0x3e8",
+				"name": "Alice"
+			  },
+			  {
+				"uid": "0xdaf",
+				"name": "Andrew"
 			  }
 			]
 		  }

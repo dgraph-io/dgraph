@@ -2399,8 +2399,8 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 }
 
 // applies "every" to lists inside uidMatrix
-// the first node is selected from each of the uid lists, then every sg.Params.Every node
-// nodes are selected after applying first, offset and after
+// every 'every-th' uid is selected from the uid lists,
+// padding uids are considered when skipping uids from next list
 func (sg *SubGraph) applyEvery(ctx context.Context) error {
 	sg.updateUidMatrix()
 
@@ -2413,7 +2413,8 @@ func (sg *SubGraph) applyEvery(ctx context.Context) error {
 		uidsLen := (len(uidList) - offset) / every
 		uids := make([]uint64, uidsLen)
 		for j := 0; j < uidsLen; j++ {
-			uids[j] = uidList[j*every+offset]
+			// take the last uid of every-sized batches starting at offset
+			uids[j] = uidList[(j+1)*every-1+offset]
 		}
 		sg.uidMatrix[i].Uids = uids
 
