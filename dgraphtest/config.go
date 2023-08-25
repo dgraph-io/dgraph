@@ -33,7 +33,6 @@ func AllUpgradeCombos(v20 bool) []UpgradeCombo {
 	fixedVersionCombos := []UpgradeCombo{
 		// OPEN SOURCE RELEASES, 4fc9cfd => v23.1.0
 		// v23.1.0 has one error modified which was fixed in commit 4fc9cfd after v23.1.0
-		{"v21.03.0", "4fc9cfd", BackupRestore},
 		{"v21.03.0-92-g0c9f60156", "4fc9cfd", BackupRestore},
 		{"v21.03.0-98-g19f71a78a-slash", "4fc9cfd", BackupRestore},
 		{"v21.03.0-99-g4a03c144a-slash", "4fc9cfd", BackupRestore},
@@ -67,15 +66,24 @@ func AllUpgradeCombos(v20 bool) []UpgradeCombo {
 		{"0c9f60156", "4fc9cfd", InPlace}, // v21.03.0-92-g0c9f60156
 	}
 
-	if v20 {
-		fixedVersionCombos = append(fixedVersionCombos, []UpgradeCombo{
-			{"v20.11.3", localVersion, BackupRestore},
-		}...)
-	}
-
+	// In mainCombos list, we keep latest version to current HEAD as well as
+	// older versions of dgraph to ensure that a change does not cause failures.
 	mainCombos := []UpgradeCombo{
 		{"v23.0.1", localVersion, BackupRestore},
 		{"v23.0.1", localVersion, InPlace},
+		{"v21.03.0", "4fc9cfd", BackupRestore},
+	}
+
+	if v20 {
+		fixedVersionCombos = append(fixedVersionCombos, []UpgradeCombo{
+			{"v20.11.2-rc1-25-g4400610b2", "4fc9cfd", BackupRestore},
+			{"v20.11.2-rc1-23-gaf5030a5", "4fc9cfd", BackupRestore},
+			{"v20.11.0-11-gb36b4862", "4fc9cfd", BackupRestore},
+		}...)
+
+		mainCombos = append(mainCombos, []UpgradeCombo{
+			{"v20.11.2-rc1-16-g4d041a3a", localVersion, BackupRestore},
+		}...)
 	}
 
 	if os.Getenv("DGRAPH_UPGRADE_MAIN_ONLY") == "true" {
