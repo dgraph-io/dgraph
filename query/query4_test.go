@@ -1139,6 +1139,10 @@ func TestHasEveryWithFirstAfter(t *testing.T) {
 			  {
 				"uid": "0xdaf",
 				"name": "Andrew"
+			  },
+			  {
+				"uid": "0xdaf",
+				"name": ""
 			  }
 			]
 		  }
