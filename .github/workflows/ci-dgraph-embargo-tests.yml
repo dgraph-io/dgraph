@@ -3,14 +3,6 @@ on:
   push:
     branches:
       - main
-  pull_request:
-    types:
-      - opened
-      - reopened
-      - synchronize
-      - ready_for_review
-    branches:
-      - main
   schedule:
     - cron: "0 0 * * *" # run workflow daily
 jobs:
@@ -18,7 +10,7 @@ jobs:
     name: dgraph-embargo-tests
     runs-on: ubuntu-20.04
     steps:
-      - name: Checkout Dgraph repo # needed for acl tests
+      - name: Checkout Dgraph repo
         uses: actions/checkout@v3
       - name: Get Go Version
         run: |
