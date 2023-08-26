@@ -39,8 +39,8 @@ type restoreInput struct {
 	IsPartial         bool
 	EncryptionKeyFile string
 	AccessKey         string
-	SecretKey         string
-	SessionToken      string
+	SecretKey         pb.Sensitive
+	SessionToken      pb.Sensitive
 	Anonymous         bool
 	VaultAddr         string
 	VaultRoleIDFile   string

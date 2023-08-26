@@ -99,8 +99,8 @@ func (m *Manifest) getPredsInGroup(gid uint32) predicateSet {
 func GetCredentialsFromRequest(req *pb.BackupRequest) *x.MinioCredentials {
 	return &x.MinioCredentials{
 		AccessKey:    req.GetAccessKey(),
-		SecretKey:    req.GetSecretKey(),
-		SessionToken: req.GetSessionToken(),
+		SecretKey:    req.SecretKey,
+		SessionToken: req.SessionToken,
 		Anonymous:    req.GetAnonymous(),
 	}
 }
