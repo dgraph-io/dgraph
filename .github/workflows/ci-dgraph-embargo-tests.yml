@@ -1,0 +1,51 @@
+name: ci-dgraph-embargo-tests
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
+    branches:
+      - master
+  schedule:
+    - cron: "0 0 * * *" # run workflow daily
+jobs:
+  build:
+    name: dgraph-embargo-tests
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout Dgraph repo # needed for acl tests
+        uses: actions/checkout@v3
+      - name: Get Go Version
+        run: |
+          #!/bin/bash
+          GOVERSION=$({ [ -f .go-version ] && cat .go-version; })
+          echo "GOVERSION=$GOVERSION" >> $GITHUB_ENV
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: ${{ env.GOVERSION }}
+      - name: Build dgraph binary
+        run: make docker-image # also builds dgraph binary
+      - name: Move dgraph binary to gopath
+        run: mv dgraph/dgraph ~/go/bin/dgraph
+      - name: Get Python Version
+        run: |
+          #!/bin/bash
+          cd contrib/embargo
+          PYTHON_VERSION=$({ [ -f .python-version ] && cat .python-version; })
+          echo "PYTHON_VERSION=$PYTHON_VERSION" >> $GITHUB_ENV
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install dependencies
+        run: |
+          cd contrib/embargo
+          python -m pip install -r requirements.txt
+      - name: Run tests
+        run: cd contrib/embargo && bash run.sh 1 # run 1 round for now, approx 15 min
