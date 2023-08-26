@@ -353,7 +353,6 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 	}
 
 	if srcFn.fnType == similarToFn {
-
 		numNeighbors, err := strconv.ParseInt(q.SrcFunc.Args[0], 10, 32)
 		if err != nil {
 			return fmt.Errorf("invalid value for number of neighbors: %s", q.SrcFunc.Args[0])

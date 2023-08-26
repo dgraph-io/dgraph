@@ -209,8 +209,20 @@ var mathOpPrecedence = map[string]int{
 	"max":     85,
 	"min":     84,
 
+	// NOTE: Previously, we had "/" at precedence 50 and "*" at precedence 49.
+	//       This is problematic because it would evaluate:
+	//              5 * 10 / 50 as: 5 * (10/50). This is fine for floating point, but breaks
+	//       for integer arithmetic! The result in integer arithmetic is 0, but the precedence
+	//       should actually be evaluated as (5*10)/50 = 1.
 	"/": 50,
-	"*": 49,
+	"*": 50,
+	// We add dot as lower priority than "/" and "*" so that the expression:
+	//   c1 * v1 dot c2 * v2 gets evaluated as (c1 *  v1) dot (c2 * v2).
+	// Note that v dot c where v is a vector and c is a float (or int) is not legal,
+	// so we must evaluate this with this precedence! This also implies that we need
+	// support for v / c where v is a vector and c is a float, and that this should
+	// be interpreted the same as v * (1/c).
+	"dot": 49,
 	"%": 48,
 	"-": 47,
 	"+": 46,

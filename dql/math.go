@@ -158,13 +158,15 @@ func evalMathStack(opStack, valueStack *mathTreeStack) error {
 
 func isMathFunc(f string) bool {
 	// While adding an op, also add it to the corresponding function type.
+	// TODO: This is painful! Create a single map var and check for membership
+	//       in the map. Likely, we can reuse the opPrecedence map.
 	return f == "*" || f == "%" || f == "+" || f == "-" || f == "/" ||
 		f == "exp" || f == "ln" || f == "cond" ||
 		f == "<" || f == ">" || f == ">=" || f == "<=" ||
 		f == "==" || f == "!=" ||
 		f == "min" || f == "max" || f == "sqrt" ||
 		f == "pow" || f == "logbase" || f == "floor" || f == "ceil" ||
-		f == "since"
+		f == "since" || f == "dot"
 }
 
 func parseMathFunc(it *lex.ItemIterator, again bool) (*MathTree, bool, error) {
@@ -383,7 +385,7 @@ func (t *MathTree) stringHelper(buf *bytes.Buffer) {
 	switch t.Fn {
 	case "+", "-", "/", "*", "%", "exp", "ln", "cond", "min",
 		"sqrt", "max", "<", ">", "<=", ">=", "==", "!=", "u-",
-		"logbase", "pow":
+		"logbase", "pow", "dot":
 		x.Check2(buf.WriteString(t.Fn))
 	default:
 		x.Fatalf("Unknown operator: %q", t.Fn)

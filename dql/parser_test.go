@@ -533,6 +533,29 @@ func TestParseQueryWithVarValAggNested4(t *testing.T) {
 		res.Query[1].Children[0].Children[3].MathExp.debugString())
 }
 
+func TestParseQueryWithVarValAggNested5(t *testing.T) {
+	query := `
+	{
+		me(func: uid(L), orderasc: val(d) ) {
+			name
+		}
+
+		var(func: uid(0x0a)) {
+			L as friends {
+				a as age
+				b as count(friends)
+				c as count(relatives)
+				d as math(a * b / c)
+			}
+		}
+	}
+`
+	res, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+	require.EqualValues(t, "(/ (* a b) c)",
+		res.Query[1].Children[0].Children[3].MathExp.debugString())
+}
+
 func TestParseQueryWithVarValAggLogSqrt(t *testing.T) {
 	query := `
 	{
@@ -556,6 +579,52 @@ func TestParseQueryWithVarValAggLogSqrt(t *testing.T) {
 		res.Query[1].Children[0].Children[1].MathExp.debugString())
 	require.EqualValues(t, "(sqrt (ln a))",
 		res.Query[1].Children[0].Children[2].MathExp.debugString())
+}
+
+func TestParseQueryWithVarValDotProduct(t *testing.T) {
+	query := `
+	{
+		me(func: uid(L), orderasc: val(d) ) {
+			name
+		}
+
+		var(func: uid(0x0a)) {
+			L as friends {
+				a as vfloat
+				b as vfloat
+				c as count(relatives)
+				d as math(a dot b * c)
+			}
+		}
+	}
+`
+	res, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+	require.EqualValues(t, "(dot a (* b c))",
+		res.Query[1].Children[0].Children[3].MathExp.debugString())
+}
+
+func TestParseQueryWithVarValDotProduct2(t *testing.T) {
+	query := `
+	{
+		me(func: uid(L), orderasc: val(d) ) {
+			name
+		}
+
+		var(func: uid(0x0a)) {
+			L as friends {
+				a as vfloat
+				b as vfloat
+				c as count(relatives)
+				d as math(a dot b / c)
+			}
+		}
+	}
+`
+	res, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+	require.EqualValues(t, "(dot a (/ b c))",
+		res.Query[1].Children[0].Children[3].MathExp.debugString())
 }
 
 func TestParseQueryWithVarValAggNestedConditional(t *testing.T) {
