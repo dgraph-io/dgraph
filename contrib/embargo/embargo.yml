@@ -5,8 +5,7 @@
 # To partition zero1 and dg1 from the rest of the cluster:
 #   embargo partition zero1,dg1
 
-version: "1"
-services:
+containers:
   zero1:
     image: dgraph/dgraph:latest
     hostname: "zero1"
@@ -18,14 +17,11 @@ services:
     expose:
       - 5080
       - 6080
-    command: /gobin/dgraph  ${COVERAGE_OUTPUT} zero --my=zero1:5080 --replicas 3 --raft="idx=1;" --bindall --expose_trace --logtostderr -v=3
+    command: /gobin/dgraph zero --my=zero1:5080 --replicas 3 --raft="idx=1;" --bindall --expose_trace --logtostderr -v=3
     volumes:
       # Note: Any environment variables must use the ${} syntax.
       # ${GOPATH} works, $GOPATH does not.
-      - type: bind
-        source: $GOPATH/bin
-        target: /gobin
-        read_only: true
+      "${GOPATH}/bin": "/gobin"
 
   zero2:
     image: dgraph/dgraph:latest
@@ -37,12 +33,10 @@ services:
     expose:
       - 5082
       - 6082
-    command: /gobin/dgraph  ${COVERAGE_OUTPUT} zero -o 2 --my=zero2:5082 --replicas 3 --peer=zero1:5080 --raft="idx=2;" --bindall --expose_trace --logtostderr -v=3
+    command: /gobin/dgraph zero -o 2 --my=zero2:5082 --replicas 3 --peer=zero1:5080 --raft="idx=2;" --bindall --expose_trace --logtostderr -v=3
     volumes:
-      - type: bind
-        source: $GOPATH/bin
-        target: /gobin
-        read_only: true
+      "${GOPATH}/bin": "/gobin"
+
   zero3:
     image: dgraph/dgraph:latest
     hostname: "zero3"
@@ -53,13 +47,10 @@ services:
     expose:
       - 5083
       - 6083
-    command: /gobin/dgraph  ${COVERAGE_OUTPUT} zero -o 3 --my=zero3:5083 --replicas 3 --peer=zero1:5080 --raft="idx=3;" --bindall --expose_trace --logtostderr -v=3
+    command: /gobin/dgraph zero -o 3 --my=zero3:5083 --replicas 3 --peer=zero1:5080 --raft="idx=3;" --bindall --expose_trace --logtostderr -v=3
     volumes:
-      - type: bind
-        source: $GOPATH/bin
-        target: /gobin
-        read_only: true
- 
+      "${GOPATH}/bin": "/gobin"
+
   dg1:
     image: dgraph/dgraph:latest
     hostname: "dg1"
@@ -70,13 +61,10 @@ services:
     expose:
       - 8180
       - 9180
-    command: /gobin/dgraph  ${COVERAGE_OUTPUT} alpha --my=dg1:7180 --zero=zero1:5080,zero2:5082,zero3:5083 -o 100 --expose_trace --logtostderr -v=3
+    command: /gobin/dgraph alpha --my=dg1:7180 --zero=zero1:5080,zero2:5082,zero3:5083 -o 100 --expose_trace --logtostderr -v=3
       --trace "ratio=1.0;"
     volumes:
-      - type: bind
-        source: $GOPATH/bin
-        target: /gobin
-        read_only: true
+      "${GOPATH}/bin": "/gobin"
 
   dg2:
     image: dgraph/dgraph:latest
@@ -88,14 +76,11 @@ services:
     expose:
       - 8182
       - 9182
-    command: /gobin/dgraph  ${COVERAGE_OUTPUT} alpha --my=dg2:7182 --zero=zero1:5080,zero2:5082,zero3:5083 -o 102 --expose_trace --logtostderr -v=3
+    start_delay: 8
+    command: /gobin/dgraph alpha --my=dg2:7182 --zero=zero1:5080,zero2:5082,zero3:5083 -o 102 --expose_trace --logtostderr -v=3
       --trace "ratio=1.0;"
     volumes:
-      - type: bind
-        source: $GOPATH/bin
-        target: /gobin
-        read_only: true
- 
+      "${GOPATH}/bin": "/gobin"
 
   dg3:
     image: dgraph/dgraph:latest
@@ -107,16 +92,11 @@ services:
     expose:
       - 8183
       - 9183
-    command: /gobin/dgraph  ${COVERAGE_OUTPUT} alpha --my=dg3:7183 --zero=zero1:5080,zero2:5082,zero3:5083 -o 103 --expose_trace --logtostderr -v=3
+    start_delay: 16
+    command: /gobin/dgraph alpha --my=dg3:7183 --zero=zero1:5080,zero2:5082,zero3:5083 -o 103 --expose_trace --logtostderr -v=3
       --trace "ratio=1.0;"
     volumes:
-      - type: bind
-        source: $GOPATH/bin
-        target: /gobin
-        read_only: true
+      "${GOPATH}/bin": "/gobin"
 
-
-networks:
-  blah:
-    driver: "udn"
-
+network:
+  driver: "udn"
