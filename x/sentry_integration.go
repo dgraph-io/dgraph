@@ -80,8 +80,6 @@ func initSentry() {
 				return event
 			}
 			ex := &event.Exception[0]
-			// Filter out the stacktrace since it is of no use.
-			ex.RawStacktrace = nil
 			ex.Stacktrace = nil
 
 			// Set exception type to the panic message.
@@ -122,7 +120,7 @@ func ConfigureSentryScope(subcmd string) {
 // WriteCidFile writes the CID to a well-known location so it can be read and
 // sent to Sentry on panic.
 func WriteCidFile(cid string) {
-	if cid == "" {
+	if cid == "" || cidPath == "" {
 		return
 	}
 	if err := os.WriteFile(cidPath, []byte(cid), 0600); err != nil {
