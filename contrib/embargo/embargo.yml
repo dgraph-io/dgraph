@@ -24,7 +24,7 @@ containers:
       "${GOPATH}/bin": "/gobin"
 
   zero2:
-    image: dgraph/dgraph:latest
+    image: dgraph/dgraph:local
     hostname: "zero2"
     container_name: "zero2"
     ports:
@@ -38,7 +38,7 @@ containers:
       "${GOPATH}/bin": "/gobin"
 
   zero3:
-    image: dgraph/dgraph:latest
+    image: dgraph/dgraph:local
     hostname: "zero3"
     container_name: "zero3"
     ports:
@@ -52,7 +52,7 @@ containers:
       "${GOPATH}/bin": "/gobin"
 
   dg1:
-    image: dgraph/dgraph:latest
+    image: dgraph/dgraph:local
     hostname: "dg1"
     container_name: "dg1"
     ports:
@@ -67,7 +67,7 @@ containers:
       "${GOPATH}/bin": "/gobin"
 
   dg2:
-    image: dgraph/dgraph:latest
+    image: dgraph/dgraph:local
     hostname: "dg2"
     container_name: "dg2"
     ports:
@@ -83,7 +83,7 @@ containers:
       "${GOPATH}/bin": "/gobin"
 
   dg3:
-    image: dgraph/dgraph:latest
+    image: dgraph/dgraph:local
     hostname: "dg3"
     container_name: "dg3"
     ports:
