@@ -10,7 +10,6 @@ import (
 	"github.com/golang/glog"
 	minio "github.com/minio/minio-go/v6"
 	"github.com/minio/minio-go/v6/pkg/credentials"
-	"github.com/minio/minio-go/v6/pkg/s3utils"
 	"github.com/pkg/errors"
 )
 
@@ -89,9 +88,6 @@ func NewMinioClient(uri *url.URL, creds *MinioCredentials) (*MinioClient, error)
 		// s3:///bucket/folder
 		if !strings.Contains(uri.Host, ".") {
 			uri.Host = defaultEndpointS3
-		}
-		if !s3utils.IsAmazonEndpoint(*uri) {
-			return nil, errors.Errorf("Invalid S3 endpoint %q", uri.Host)
 		}
 	default: // minio
 		if uri.Host == "" {
