@@ -7,7 +7,7 @@
 
 containers:
   zero1:
-    image: dgraph/dgraph:latest
+    image: dgraph/dgraph:local
     hostname: "zero1"
     # Needed for DNS with network set to udn
     container_name: "zero1"
