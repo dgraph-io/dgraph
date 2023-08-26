@@ -48,4 +48,4 @@ jobs:
           cd contrib/embargo
           python -m pip install -r requirements.txt
       - name: Run tests
-        run: cd contrib/embargo && bash run.sh 1 # run 1 round for now, approx 15 min
+        run: cd contrib/embargo && GOPATH=~/go bash run.sh 1 # run 1 round for now, approx 15 min
