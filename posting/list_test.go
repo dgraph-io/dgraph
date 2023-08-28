@@ -18,6 +18,7 @@ package posting
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"math/rand"
 	"os"
@@ -461,10 +462,12 @@ func TestReadSingleValue(t *testing.T) {
 		}
 		writer.Flush()
 
-		for j := 3; j < i+6; j++ {
+		for j := 2; j < i+6; j++ {
 			k, err, _ := GetSingleValueForKey(key, uint64(j))
 			require.NoError(t, err)
-			checkValue(t, ol, string(k.Postings[0].Value), uint64(j))
+			p := getFirst(t, k, uint64(j))
+			fmt.Println("Here", p)
+			checkValue(t, ol, string(p.Value), uint64(j))
 		}
 
 	}

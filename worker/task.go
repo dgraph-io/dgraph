@@ -392,15 +392,26 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 
 			// Get or create the posting list for an entity, attribute combination.
 			var pl *posting.List
-			pickMultiplePostings := q.ExpandAll || (listType && len(q.Langs) == 0)
+			pickMultiplePostings := q.DoCount || q.ExpandAll || listType || len(q.Langs) > 0
 
 			var vals []types.Val
 			fcs := &pb.FacetsList{FacetsList: make([]*pb.Facets, 0)} // TODO Figure out how it is stored
 
-			if pickMultiplePostings {
-				pl, err = qs.cache.Get(key)
+			if !pickMultiplePostings {
+				//fmt.Println("HERE GETTING SINGLE KEY", key)
+				//vals, fcs, err = retrieveValuesAndFacets(args, pl, facetsTree, listType)
+				pl, _ = qs.cache.GetSingle(key)
+
+				//vals1, _, _ := retrieveValuesAndFacets(args, pl1, facetsTree, listType)
+				//fmt.Println("Here getting key", len(vals), vals, len(vals1), vals1, len(vals) != len(vals1))
+				//if len(vals) != len(vals1) {
+				//	fmt.Println("HERE")
+				//}
+				//vals, fcs, err = retrieveValuesAndFacets(args, pl, facetsTree, listType)
+				//fmt.Println("Here getting full key", len(vals), len(fcs.FacetsList), vals[0])
 			} else {
-				pl, err = qs.cache.GetSingle(key)
+
+				pl, err = qs.cache.Get(key)
 			}
 			if err != nil {
 				return err

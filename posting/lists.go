@@ -178,7 +178,7 @@ func (lc *LocalCache) getSingleInternal(key []byte, readFromDisk bool) (*List, e
 		var err error
 		pl, err, k = GetSingleValueForKey(key, lc.startTs)
 		if err != nil {
-			return nil, err
+			return pl, err
 		}
 	} else {
 		pl = &List{
@@ -196,6 +196,7 @@ func (lc *LocalCache) getSingleInternal(key []byte, readFromDisk bool) (*List, e
 		pl.setMutation(lc.startTs, delta)
 	}
 	lc.RUnlock()
+	fmt.Println("Here6")
 	return pl, nil
 }
 

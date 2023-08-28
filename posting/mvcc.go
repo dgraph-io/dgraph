@@ -493,20 +493,42 @@ func GetSingleValueForKey(key []byte, readTs uint64) (*List, error, int) {
 	txn := pstore.NewTransactionAt(readTs, false)
 	item, err := txn.Get(key)
 	if err != nil {
-		return nil, err, 0
+		return l, err, 0
 	}
 	k := 0
 
-	err = item.Value(func(val []byte) error {
-		k = len(key) + len(val)
-		if err := l.plist.Unmarshal(val); err != nil {
-			return err
-		}
-		return nil
-	})
+	l.maxTs = x.Max(l.maxTs, item.Version())
 
-	if err != nil {
-		return nil, err, 0
+	switch item.UserMeta() {
+	case BitEmptyPosting:
+		l.minTs = item.Version()
+	case BitCompletePosting:
+		if err := unmarshalOrCopy(l.plist, item); err != nil {
+			return l, nil, k
+		}
+		l.minTs = item.Version()
+
+	case BitDeltaPosting:
+		err := item.Value(func(val []byte) error {
+			pl := &pb.PostingList{}
+			if err := pl.Unmarshal(val); err != nil {
+				return err
+			}
+			pl.CommitTs = item.Version()
+			for _, mpost := range pl.Postings {
+				// commitTs, startTs are meant to be only in memory, not
+				// stored on disk.
+				mpost.CommitTs = item.Version()
+			}
+			if l.mutationMap == nil {
+				l.mutationMap = make(map[uint64]*pb.PostingList)
+			}
+			l.mutationMap[pl.CommitTs] = pl
+			return nil
+		})
+		if err != nil {
+			return l, nil, k
+		}
 	}
 
 	return l, nil, k
