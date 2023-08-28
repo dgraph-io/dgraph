@@ -419,9 +419,17 @@ func checkSchema(s *pb.SchemaUpdate) error {
 	}
 
 	// If schema update has upsert directive, it should have index directive.
-	if s.Upsert && len(s.Tokenizer) == 0 {
+	if s.Upsert && len(s.Tokenizer) == 0 && !s.Unique {
 		return errors.Errorf("Index tokenizer is mandatory for: [%s] when specifying @upsert directive",
 			x.ParseAttr(s.Predicate))
+	}
+
+	if s.Unique {
+		ctx := context.WithValue(context.Background(), schema.IsWrite, false)
+		prevSchema, _ := schema.State().Get(ctx, s.Predicate)
+		if err := validateSchemaForUnique(prevSchema, s); err != nil {
+			return err
+		}
 	}
 
 	t, err := schema.State().TypeOf(s.Predicate)
@@ -455,6 +463,52 @@ func checkSchema(s *pb.SchemaUpdate) error {
 		}
 	}
 	return nil
+}
+
+func validateSchemaForUnique(prevSchema pb.SchemaUpdate, currentSchema *pb.SchemaUpdate) error {
+	validTokenizer := func(tokenizers []string) bool {
+		for _, value := range tokenizers {
+			if value == "hash" || value == "exact" || value == "int" {
+				return true
+			}
+		}
+		return false
+	}
+	if prevSchema.Predicate != "" {
+		if prevSchema.Upsert && !currentSchema.Upsert {
+			return errors.Errorf("could not drop @upsert from [%v] predicate when @unique directive specified",
+				x.ParseAttr(currentSchema.Predicate))
+		}
+
+		if prevSchema.Unique && !validTokenizer(currentSchema.Tokenizer) {
+			return errors.Errorf("could not drop index %v from [%v] predicate when @unique directive specified",
+				prevSchema.Tokenizer, x.ParseAttr(currentSchema.Predicate))
+		}
+	}
+	if !currentSchema.Upsert {
+		currentSchema.Upsert = true
+	}
+	switch currentSchema.ValueType {
+	case pb.Posting_STRING:
+		if len(currentSchema.Tokenizer) == 0 ||
+			(len(currentSchema.Tokenizer) > 0 && !validTokenizer(currentSchema.Tokenizer)) {
+
+			return errors.Errorf("index for predicate [%v] is missing, add either hash or exact index with @unique",
+				x.ParseAttr(currentSchema.Predicate))
+		} else {
+			return nil
+		}
+
+	case pb.Posting_INT:
+		if len(currentSchema.Tokenizer) == 0 {
+			return errors.Errorf("index for predicate [%v] is missing, add int index with @unique",
+				x.ParseAttr(currentSchema.Predicate))
+		} else {
+			return nil
+		}
+	}
+
+	return errors.Errorf("@unique directive not supported on [%v] type predicate", currentSchema.ValueType.String())
 }
 
 // ValidateAndConvert checks compatibility or converts to the schema type if the storage type is

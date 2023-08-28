@@ -49,12 +49,12 @@ var (
 type contextKey int
 
 const (
-	isWrite contextKey = iota
+	IsWrite contextKey = iota
 )
 
 // GetWriteContext returns a context that sets the schema context for writing.
 func GetWriteContext(ctx context.Context) context.Context {
-	return context.WithValue(ctx, isWrite, true)
+	return context.WithValue(ctx, IsWrite, true)
 }
 
 func (s *state) init() {
@@ -248,7 +248,7 @@ func (s *state) SetType(typeName string, typ *pb.TypeUpdate) {
 
 // Get gets the schema for the given predicate.
 func (s *state) Get(ctx context.Context, pred string) (pb.SchemaUpdate, bool) {
-	isWrite, _ := ctx.Value(isWrite).(bool)
+	isWrite, _ := ctx.Value(IsWrite).(bool)
 	s.RLock()
 	defer s.RUnlock()
 	// If this is write context, mutSchema will have the updated schema.
@@ -289,7 +289,7 @@ func (s *state) TypeOf(pred string) (types.TypeID, error) {
 
 // IsIndexed returns whether the predicate is indexed or not
 func (s *state) IsIndexed(ctx context.Context, pred string) bool {
-	isWrite, _ := ctx.Value(isWrite).(bool)
+	isWrite, _ := ctx.Value(IsWrite).(bool)
 	s.RLock()
 	defer s.RUnlock()
 	if isWrite {
@@ -338,7 +338,7 @@ func (s *state) Types() []string {
 
 // Tokenizer returns the tokenizer for given predicate
 func (s *state) Tokenizer(ctx context.Context, pred string) []tok.Tokenizer {
-	isWrite, _ := ctx.Value(isWrite).(bool)
+	isWrite, _ := ctx.Value(IsWrite).(bool)
 	s.RLock()
 	defer s.RUnlock()
 	var su *pb.SchemaUpdate
@@ -390,7 +390,7 @@ func (s *state) HasTokenizer(ctx context.Context, id byte, pred string) bool {
 
 // IsReversed returns whether the predicate has reverse edge or not
 func (s *state) IsReversed(ctx context.Context, pred string) bool {
-	isWrite, _ := ctx.Value(isWrite).(bool)
+	isWrite, _ := ctx.Value(IsWrite).(bool)
 	s.RLock()
 	defer s.RUnlock()
 	if isWrite {
@@ -406,7 +406,7 @@ func (s *state) IsReversed(ctx context.Context, pred string) bool {
 
 // HasCount returns whether we want to mantain a count index for the given predicate or not.
 func (s *state) HasCount(ctx context.Context, pred string) bool {
-	isWrite, _ := ctx.Value(isWrite).(bool)
+	isWrite, _ := ctx.Value(IsWrite).(bool)
 	s.RLock()
 	defer s.RUnlock()
 	if isWrite {

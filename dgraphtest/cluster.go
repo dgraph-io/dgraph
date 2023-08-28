@@ -646,6 +646,20 @@ func (gc *GrpcClient) Mutate(mu *api.Mutation) (*api.Response, error) {
 	return txn.Mutate(ctx, mu)
 }
 
+func (gc *GrpcClient) Upsert(query string, mu *api.Mutation) (*api.Response, error) {
+	txn := gc.NewTxn()
+	defer func() { _ = txn.Discard(context.Background()) }()
+
+	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+	defer cancel()
+	req := &api.Request{
+		Query:     query,
+		Mutations: []*api.Mutation{mu},
+		CommitNow: true,
+	}
+	return txn.Do(ctx, req)
+}
+
 // Query performa a given query in a new txn
 func (gc *GrpcClient) Query(query string) (*api.Response, error) {
 	txn := gc.NewTxn()
