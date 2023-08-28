@@ -1924,6 +1924,7 @@ func (asuite *AclTestSuite) TestQueriesForNonGuardianUserWithoutGroup() {
 
 func (asuite *AclTestSuite) TestSchemaQueryWithACL() {
 	t := asuite.T()
+	dgraphtest.ShouldSkipTest(t, "9a964dd9c794a9731fa6ec35aded6693acc7a1fd", asuite.dc.GetVersion())
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 	defer cancel()
 	schemaQuery := "schema{}"
