@@ -296,6 +296,22 @@ func (c *LocalCluster) Cleanup(verbose bool) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 	defer cancel()
+
+	if c.conf.detectRace {
+		c.detectRaceInAlphas()
+	}
+
+	ro := types.ContainerRemoveOptions{RemoveVolumes: true, Force: true}
+	for _, aa := range c.alphas {
+		if err := c.dcli.ContainerRemove(ctx, aa.cid(), ro); err != nil {
+			log.Printf("[WARNING] error removing alpha [%v]: %v", aa.cname(), err)
+		}
+	}
+	for _, zo := range c.zeros {
+		if err := c.dcli.ContainerRemove(ctx, zo.cid(), ro); err != nil {
+			log.Printf("[WARNING] error removing zero [%v]: %v", zo.cname(), err)
+		}
+	}
 	for _, vol := range c.conf.volumes {
 		if err := c.dcli.VolumeRemove(ctx, vol, true); err != nil {
 			log.Printf("[WARNING] error removing volume [%v]: %v", vol, err)
@@ -975,4 +991,26 @@ func runOpennssl(args ...string) error {
 		return errors.Wrapf(err, "### failed to run openssl cmd [%v] ###\n%v", cmd, string(out))
 	}
 	return nil
+}
+
+func (c *LocalCluster) detectRaceInAlphas() bool {
+	for _, a := range c.alphas {
+		contLogs, err := c.getLogs(a.containerID)
+		if err != nil {
+			log.Printf("[WARNING] error getting logs for %v", a.containerID)
+			continue
+		}
+		if checkIfRace([]byte(contLogs)) {
+			return true
+		}
+	}
+	return false
+}
+
+func checkIfRace(output []byte) bool {
+	if strings.Contains(string(output), "WARNING: DATA RACE") {
+		log.Printf("[WARNING] DATA RACE DETECTED %s\n", string(output))
+		return true
+	}
+	return false
 }

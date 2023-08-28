@@ -18,47 +18,52 @@ package common
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/pkg/errors"
+	"github.com/stretchr/testify/require"
+
 	"github.com/dgraph-io/dgraph/chunker"
-	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgraph/dgraphtest"
 )
 
-// JSON output can be hundreds of lines and diffs can scroll off the terminal before you
-// can look at them. This option allows saving the JSON to a specified directory instead
-// for easier reviewing after the test completes.
-//var savedir = flag.String("savedir", "",
-//	"directory to save json from test failures in")
-//var quiet = flag.Bool("quiet", false,
-//	"just output whether json differs, not a diff")
+var datafiles = map[string]string{
+	"1million-noindex.schema": "https://github.com/dgraph-io/benchmarks/blob/master/data/1million-noindex.schema?raw=true",
+	"1million.schema":         "https://github.com/dgraph-io/benchmarks/blob/master/data/1million.schema?raw=true",
+	"1million.rdf.gz":         "https://github.com/dgraph-io/benchmarks/blob/master/data/1million.rdf.gz?raw=true",
+	"21million.schema":        "https://github.com/dgraph-io/benchmarks/blob/master/data/21million.schema?raw=true",
+	"21million.rdf.gz":        "https://github.com/dgraph-io/benchmarks/blob/master/data/21million.rdf.gz?raw=true",
+}
 
-func TestQueriesFor21Million(t *testing.T) {
+func QueriesFor21Million(t *testing.T, dc dgraphtest.Cluster) error {
+	// For this test we DON'T want to start with an empty database.
+	dg, cleanup, err := dc.Client()
+	defer cleanup()
+	if err != nil {
+		return errors.Wrapf(err, "error creating grpc client")
+	}
+
 	_, thisFile, _, _ := runtime.Caller(0)
 	queryDir := filepath.Join(filepath.Dir(thisFile), "../queries")
 
-	// For this test we DON'T want to start with an empty database.
-	dg, err := testutil.DgraphClient(testutil.ContainerAddr("alpha1", 9080))
-	if err != nil {
-		t.Fatalf("Error while getting a dgraph client: %v", err)
-	}
-
 	files, err := os.ReadDir(queryDir)
 	if err != nil {
-		t.Fatalf("Error reading directory: %s", err.Error())
+		return errors.Wrapf(err, "error reading directory")
 	}
 
-	//savepath := ""
-	//diffs := 0
 	for _, file := range files {
 		if !strings.HasPrefix(file.Name(), "query-") {
 			continue
 		}
+
 		t.Run(file.Name(), func(t *testing.T) {
 			filename := filepath.Join(queryDir, file.Name())
 			reader, cleanup := chunker.FileReader(filename, nil)
@@ -88,16 +93,22 @@ func TestQueriesFor21Million(t *testing.T) {
 				}
 
 				t.Logf("running %s", file.Name())
-				//if *savedir != "" {
-				//	savepath = filepath.Join(*savedir, file.Name())
-				//}
 
-				testutil.CompareJSON(t, bodies[1], string(resp.GetJson()))
+				require.NoError(t, dgraphtest.CompareJSON(bodies[1], string(resp.GetJson())))
 			}
 		})
 	}
-	//
-	//if *savedir != "" && diffs > 0 {
-	//	t.Logf("test json saved in directory: %s", *savedir)
-	//}
+	return nil
+}
+
+func DownloadDataFiles(testDir string) error {
+	for fname, link := range datafiles {
+		cmd := exec.Command("wget", "-O", fname, link)
+		cmd.Dir = testDir
+
+		if out, err := cmd.CombinedOutput(); err != nil {
+			return errors.Wrapf(err, fmt.Sprintf("error downloading a file: %s", string(out)))
+		}
+	}
+	return nil
 }

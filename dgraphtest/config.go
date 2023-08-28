@@ -116,6 +116,7 @@ type ClusterConfig struct {
 	portOffset     int // exposed port offset for grpc/http port for both alpha/zero
 	bulkOutDir     string
 	featureFlags   []string
+	detectRace     bool
 }
 
 // NewClusterConfig generates a default ClusterConfig
@@ -134,6 +135,7 @@ func NewClusterConfig() ClusterConfig {
 		refillInterval: 20 * time.Second,
 		uidLease:       50,
 		portOffset:     -1,
+		detectRace:     true,
 	}
 }
 
@@ -223,5 +225,11 @@ func (cc ClusterConfig) WithBulkLoadOutDir(dir string) ClusterConfig {
 // WithNormalizeCompatibilityMode sets the normalize-compatibility-mode feature flag for alpha
 func (cc ClusterConfig) WithNormalizeCompatibilityMode(mode string) ClusterConfig {
 	cc.featureFlags = append(cc.featureFlags, fmt.Sprintf("normalize-compatibility-mode=%v", mode))
+	return cc
+}
+
+// Detect race in alphas
+func (cc ClusterConfig) WithDetectRace() ClusterConfig {
+	cc.detectRace = true
 	return cc
 }

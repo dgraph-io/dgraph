@@ -1,4 +1,4 @@
-//go:build integration
+//go:build integration || upgrade
 
 /*
  * Copyright 2023 Dgraph Labs, Inc. and Contributors
@@ -19,35 +19,17 @@
 package bulk
 
 import (
-	"os"
-	"path/filepath"
-	"testing"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/systest/21million/common"
-	"github.com/dgraph-io/dgraph/testutil"
 )
 
-func TestQueries(t *testing.T) {
-	t.Run("Run queries", common.TestQueriesFor21Million)
-}
+func (lsuite *LiveTestSuite) TestQueriesFor21Million() {
+	t := lsuite.T()
+	require.NoError(t, lsuite.liveLoader())
 
-func TestMain(m *testing.M) {
-	schemaFile := filepath.Join(testutil.TestDataDirectory, "21million.schema")
-	rdfFile := filepath.Join(testutil.TestDataDirectory, "21million.rdf.gz")
-	if err := testutil.LiveLoad(testutil.LiveOpts{
-		Alpha:      testutil.ContainerAddr("alpha1", 9080),
-		Zero:       testutil.SockAddrZero,
-		RdfFile:    rdfFile,
-		SchemaFile: schemaFile,
-	}); err != nil {
-		cleanupAndExit(1)
-	}
+	// Upgrade
+	lsuite.Upgrade()
 
-	exitCode := m.Run()
-	cleanupAndExit(exitCode)
-}
-
-func cleanupAndExit(exitCode int) {
-	_ = os.RemoveAll("./t")
-	os.Exit(exitCode)
+	require.NoError(t, common.QueriesFor21Million(lsuite.T(), lsuite.dc))
 }

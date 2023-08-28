@@ -1,4 +1,4 @@
-//go:build integration
+//go:build integration || upgrade
 
 /*
  * Copyright 2023 Dgraph Labs, Inc. and Contributors
@@ -19,47 +19,20 @@
 package bulk
 
 import (
-	"os"
-	"path/filepath"
-	"testing"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/systest/21million/common"
-	"github.com/dgraph-io/dgraph/testutil"
 )
 
-func TestQueries(t *testing.T) {
-	t.Run("Run queries", common.TestQueriesFor21Million)
-}
+func (bsuite *BulkTestSuite) TestQueriesFor21Million() {
+	t := bsuite.T()
+	require.NoError(t, bsuite.bulkLoader())
 
-func TestMain(m *testing.M) {
-	schemaFile := filepath.Join(testutil.TestDataDirectory, "21million.schema")
-	rdfFile := filepath.Join(testutil.TestDataDirectory, "21million.rdf.gz")
-	if err := testutil.MakeDirEmpty([]string{"out/0", "out/1", "out/2"}); err != nil {
-		os.Exit(1)
-	}
+	// start alphas
+	require.NoError(t, bsuite.StartAlpha())
 
-	if err := testutil.BulkLoad(testutil.BulkOpts{
-		Zero:       testutil.SockAddrZero,
-		Shards:     1,
-		RdfFile:    rdfFile,
-		SchemaFile: schemaFile,
-	}); err != nil {
-		cleanupAndExit(1)
-	}
+	// Upgrade
+	bsuite.Upgrade()
 
-	if err := testutil.StartAlphas("./alpha.yml"); err != nil {
-		cleanupAndExit(1)
-	}
-
-	exitCode := m.Run()
-	cleanupAndExit(exitCode)
-}
-
-func cleanupAndExit(exitCode int) {
-	if testutil.StopAlphasAndDetectRace([]string{"alpha1"}) {
-		// if there is race fail the test
-		exitCode = 1
-	}
-	_ = os.RemoveAll("out")
-	os.Exit(exitCode)
+	require.NoError(t, common.QueriesFor21Million(bsuite.T(), bsuite.dc))
 }
