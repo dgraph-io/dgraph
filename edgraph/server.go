@@ -1622,11 +1622,9 @@ func verifyUnique(qc *queryContext, qr query.Request) error {
 		}
 		isEmpty := func(l *pb.List) bool {
 			return l == nil || len(l.Uids) == 0
-
 		}
 
 		var subjectUid uint64
-		var predValue interface{}
 		if strings.HasPrefix(pred.Subject, "uid(") {
 			varName := qr.Vars[pred.Subject[4:len(pred.Subject)-1]]
 			if isEmpty(varName.Uids) {
@@ -1644,6 +1642,7 @@ func verifyUnique(qc *queryContext, qr query.Request) error {
 			}
 		}
 
+		var predValue interface{}
 		if strings.HasPrefix(pred.ObjectId, "val(") {
 			varName := qr.Vars[pred.ObjectId[4:len(pred.ObjectId)-1]]
 			val, ok := varName.Vals[0]
@@ -1716,18 +1715,20 @@ func addQueryIfUnique(qc *queryContext) error {
 			queryVar := fmt.Sprintf("__dgraph_uniquecheck_%v__", uniqueVarMapKey)
 			// Now, we add a query for a predicate to check if the value of the
 			// predicate sent in the mutation already exists in the DB.
-			// For example, schema => email: string @unique @index(exact) .
+			// For example, schema => email: string @unique @index(exact) .\
+			//
 			// To ensure uniqueness of values of email predicate, we will query for the value
 			// to ensure that we are not adding a duplicate value.
+			//
 			// There are following use-cases of mutations which we need to handle:
-			// 1. _:a <email> "example@email.com"  .
-			// 2. _:a <email> val(queryVariable)  .
+			//   1. _:a <email> "example@email.com"  .
+			//   2. _:a <email> val(queryVariable)  .
 			// In the code below, we construct respective query for the above use-cases viz.
-			//           __dgraph_uniquecheck_1__ as var(func: eq(email,"example@email.com"))
-			//           __dgraph_uniquecheck_1__ as var(func: eq(email,val(queryVariable))){
-			//                   uid
-			//	                 unQueryVariable as email
-			//                  }
+			//   __dgraph_uniquecheck_1__ as var(func: eq(email,"example@email.com"))
+			//   __dgraph_uniquecheck_2__ as var(func: eq(email, val(queryVariable))){
+			//       uid
+			//       __dgraph_uniquecheck_val_2__ as email
+			//   }
 			// Each of the above query will check if there is already an existing value.
 			// We can be sure that we may get at most one UID in return.
 			// If the returned UID is different than the UID we have
@@ -1741,7 +1742,7 @@ func addQueryIfUnique(qc *queryContext) error {
 				}
 				qc.uniqueVars[uniqueVarMapKey] = uniquePredMeta{queryVar: queryVar}
 			} else {
-				valQueryVar := fmt.Sprintf("un%v", queryVar)
+				valQueryVar := fmt.Sprintf("__dgraph_uniquecheck_val_%v__", uniqueVarMapKey)
 				query := fmt.Sprintf(`%v as var(func: eq(%v,%v)){
 					                             uid
 					                             %v as %v
@@ -2173,8 +2174,7 @@ func encodeIndex(k1, k2 int) uint64 {
 	}
 	safeToConvert(k1)
 	safeToConvert(k2)
-	pair := uint64(uint32(k1))<<32 | uint64(uint32(k2))
-	return pair
+	return uint64(uint32(k1))<<32 | uint64(uint32(k2))
 }
 
 func decodeIndex(pair uint64) (uint32, uint32) {

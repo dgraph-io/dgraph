@@ -424,7 +424,6 @@ func checkSchema(s *pb.SchemaUpdate) error {
 			x.ParseAttr(s.Predicate))
 	}
 
-	// TODO(shivaji): Add support for other types.
 	if s.Unique {
 		ctx := context.WithValue(context.Background(), schema.IsWrite, false)
 		prevSchema, _ := schema.State().Get(ctx, s.Predicate)
@@ -491,7 +490,6 @@ func validateSchemaForUnique(prevSchema pb.SchemaUpdate, currentSchema *pb.Schem
 	}
 	switch currentSchema.ValueType {
 	case pb.Posting_STRING:
-
 		if len(currentSchema.Tokenizer) == 0 ||
 			(len(currentSchema.Tokenizer) > 0 && !validTokenizer(currentSchema.Tokenizer)) {
 
@@ -500,6 +498,7 @@ func validateSchemaForUnique(prevSchema pb.SchemaUpdate, currentSchema *pb.Schem
 		} else {
 			return nil
 		}
+
 	case pb.Posting_INT:
 		if len(currentSchema.Tokenizer) == 0 {
 			return errors.Errorf("index for predicate [%v] is missing, add int index with @unique",
