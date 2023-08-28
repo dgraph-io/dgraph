@@ -399,75 +399,50 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 
 			if pickMultiplePostings {
 				pl, err = qs.cache.Get(key)
-				if err != nil {
-					return err
-				}
-				// If count is being requested, there is no need to populate value and facets matrix.
-				if q.DoCount {
-					count, err := countForValuePostings(args, pl, facetsTree, listType)
-					if err != nil && err != posting.ErrNoValue {
-						return err
-					}
-					out.Counts = append(out.Counts, uint32(count))
-					// Add an empty UID list to make later processing consistent.
-					out.UidMatrix = append(out.UidMatrix, &pb.List{})
-					continue
-				}
-
-				if q.ExpandAll {
-					langTags, err := pl.GetLangTags(args.q.ReadTs)
-					if err != nil {
-						return err
-					}
-					out.LangMatrix = append(out.LangMatrix, &pb.LangList{Lang: langTags})
-				}
-
-				vals, fcs, err = retrieveValuesAndFacets(args, pl, facetsTree, listType)
-				switch {
-				case err == posting.ErrNoValue || (err == nil && len(vals) == 0):
-					// This branch is taken when the value does not exist in the pl or
-					// the number of values retrieved is zero (there could still be facets).
-					// We add empty lists to the UidMatrix, FaceMatrix, ValueMatrix and
-					// LangMatrix so that all these data structure have predictable layouts.
-					out.UidMatrix = append(out.UidMatrix, &pb.List{})
-					out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{})
-					out.ValueMatrix = append(out.ValueMatrix,
-						&pb.ValueList{Values: []*pb.TaskValue{}})
-					if q.ExpandAll {
-						// To keep the cardinality same as that of ValueMatrix.
-						out.LangMatrix = append(out.LangMatrix, &pb.LangList{})
-					}
-					continue
-				case err != nil:
-					return err
-				}
-
 			} else {
-				pl, err, _ := posting.GetSingleValueForKey(key, q.ReadTs)
+				pl, err = qs.cache.GetSingle(key)
+			}
+			if err != nil {
+				return err
+			}
+			// If count is being requested, there is no need to populate value and facets matrix.
+			if q.DoCount {
+				count, err := countForValuePostings(args, pl, facetsTree, listType)
+				if err != nil && err != posting.ErrNoValue {
+					return err
+				}
+				out.Counts = append(out.Counts, uint32(count))
+				// Add an empty UID list to make later processing consistent.
+				out.UidMatrix = append(out.UidMatrix, &pb.List{})
+				continue
+			}
+
+			if q.ExpandAll {
+				langTags, err := pl.GetLangTags(args.q.ReadTs)
 				if err != nil {
 					return err
 				}
+				out.LangMatrix = append(out.LangMatrix, &pb.LangList{Lang: langTags})
+			}
 
-				for _, p := range pl.Postings {
-					vals = append(vals, types.Val{
-						Tid:   types.TypeID(p.ValType),
-						Value: p.Value,
-					})
-
-					if q.FacetParam != nil {
-						fcs.FacetsList = append(fcs.FacetsList, &pb.Facets{Facets: facets.CopyFacets(p.Facets, q.FacetParam)})
-					}
+			vals, fcs, err = retrieveValuesAndFacets(args, pl, facetsTree, listType)
+			switch {
+			case err == posting.ErrNoValue || (err == nil && len(vals) == 0):
+				// This branch is taken when the value does not exist in the pl or
+				// the number of values retrieved is zero (there could still be facets).
+				// We add empty lists to the UidMatrix, FaceMatrix, ValueMatrix and
+				// LangMatrix so that all these data structure have predictable layouts.
+				out.UidMatrix = append(out.UidMatrix, &pb.List{})
+				out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{})
+				out.ValueMatrix = append(out.ValueMatrix,
+					&pb.ValueList{Values: []*pb.TaskValue{}})
+				if q.ExpandAll {
+					// To keep the cardinality same as that of ValueMatrix.
+					out.LangMatrix = append(out.LangMatrix, &pb.LangList{})
 				}
-				//pl, err = qs.cache.GetSingleItem(key)
-				//if err != nil {
-				//	return err
-				//}
-
-				//val, err := pl.AllValues(q.ReadTs)
-				//if err != nil {
-				//	return err
-				//}
-				//vals = append(vals, val...)
+				continue
+			case err != nil:
+				return err
 			}
 
 			uidList := new(pb.List)

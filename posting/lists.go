@@ -152,6 +152,53 @@ func (lc *LocalCache) SetIfAbsent(key string, updated *List) *List {
 	return updated
 }
 
+func (lc *LocalCache) getSingleInternal(key []byte, readFromDisk bool) (*List, error) {
+	getNewPlistNil := func() (*List, error) {
+		lc.RLock()
+		defer lc.RUnlock()
+		if lc.plists == nil {
+			pl, err, _ := GetSingleValueForKey(key, lc.startTs)
+			return pl, err
+		}
+		return nil, nil
+	}
+
+	if l, err := getNewPlistNil(); l != nil || err != nil {
+		return l, err
+	}
+
+	skey := string(key)
+	if pl := lc.getNoStore(skey); pl != nil {
+		return pl, nil
+	}
+
+	var pl *List
+	var k int
+	if readFromDisk {
+		var err error
+		pl, err, k = GetSingleValueForKey(key, lc.startTs)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		pl = &List{
+			key:   key,
+			plist: new(pb.PostingList),
+		}
+	}
+
+	fmt.Println(k)
+
+	// If we just brought this posting list into memory and we already have a delta for it, let's
+	// apply it before returning the list.
+	lc.RLock()
+	if delta, ok := lc.deltas[skey]; ok && len(delta) > 0 {
+		pl.setMutation(lc.startTs, delta)
+	}
+	lc.RUnlock()
+	return pl, nil
+}
+
 func (lc *LocalCache) getInternal(key []byte, readFromDisk bool) (*List, error) {
 	getNewPlistNil := func() (*List, error) {
 		lc.RLock()
@@ -195,23 +242,8 @@ func (lc *LocalCache) getInternal(key []byte, readFromDisk bool) (*List, error) 
 	return lc.SetIfAbsent(skey, pl), nil
 }
 
-func (lc *LocalCache) GetSingleItem(key []byte) (*List, error) {
-	pl, err, _ := GetSingleValueForKey(key, lc.startTs)
-	if err != nil {
-		return nil, err
-	}
-
-	l := new(List)
-	l.key = key
-	l.plist = pl
-
-	lc.RLock()
-	if delta, ok := lc.deltas[string(key)]; ok && len(delta) > 0 {
-		l.setMutation(lc.startTs, delta)
-	}
-	lc.RUnlock()
-
-	return l, nil
+func (lc *LocalCache) GetSingle(key []byte) (*List, error) {
+	return lc.getSingleInternal(key, true)
 }
 
 // Get retrieves the cached version of the list associated with the given key.

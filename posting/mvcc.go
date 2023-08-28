@@ -457,19 +457,49 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 	return l, nil
 }
 
-func GetSingleValueForKey(key []byte, readTs uint64) (*pb.PostingList, error, int) {
+func GetSingleValueForKey(key []byte, readTs uint64) (*List, error, int) {
+	cachedVal, ok := lCache.Get(key)
+	if ok {
+		l, ok := cachedVal.(*List)
+		if ok && l != nil {
+			// No need to clone the immutable layer or the key since mutations will not modify it.
+			lCopy := &List{
+				minTs: l.minTs,
+				maxTs: l.maxTs,
+				key:   key,
+				plist: l.plist,
+			}
+			l.RLock()
+			if l.mutationMap != nil {
+				lCopy.mutationMap = make(map[uint64]*pb.PostingList, len(l.mutationMap))
+				for ts, pl := range l.mutationMap {
+					lCopy.mutationMap[ts] = proto.Clone(pl).(*pb.PostingList)
+				}
+			}
+			l.RUnlock()
+			return lCopy, nil, 0
+		}
+	}
+
+	if pstore.IsClosed() {
+		return nil, badger.ErrDBClosed, 0
+	}
+
+	l := new(List)
+	l.key = key
+	l.plist = new(pb.PostingList)
+
 	//fmt.Println("KEY:", key)
 	txn := pstore.NewTransactionAt(readTs, false)
 	item, err := txn.Get(key)
 	if err != nil {
 		return nil, err, 0
 	}
-	pl := &pb.PostingList{}
 	k := 0
 
 	err = item.Value(func(val []byte) error {
 		k = len(key) + len(val)
-		if err := pl.Unmarshal(val); err != nil {
+		if err := l.plist.Unmarshal(val); err != nil {
 			return err
 		}
 		return nil
@@ -479,7 +509,7 @@ func GetSingleValueForKey(key []byte, readTs uint64) (*pb.PostingList, error, in
 		return nil, err, 0
 	}
 
-	return pl, nil, k
+	return l, nil, k
 }
 
 func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
