@@ -676,7 +676,7 @@ func TestParseQueryWithVarValAggNested3(t *testing.T) {
 `
 	res, err := Parse(Request{Str: query})
 	require.NoError(t, err)
-	require.EqualValues(t, "(+ (+ a (* b (/ c a))) (- (exp (+ (+ a b) 1E+00)) (ln c)))",
+	require.EqualValues(t, "(+ (+ a (/ (* b c) a)) (- (exp (+ (+ a b) 1E+00)) (ln c)))",
 		res.Query[1].Children[0].Children[3].MathExp.debugString())
 }
 
