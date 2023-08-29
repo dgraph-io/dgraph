@@ -1,4 +1,4 @@
-//go:build integration
+//go:build integration || upgrade
 
 /*
  * Copyright 2023 Dgraph Labs, Inc. and Contributors
@@ -16,70 +16,64 @@
  * limitations under the License.
  */
 
-//nolint:lll
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
-	"testing"
 
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgo/v230"
 	"github.com/dgraph-io/dgo/v230/protos/api"
+	"github.com/dgraph-io/dgraph/dgraphtest"
 	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgraph/x"
 )
 
-func TestQuery(t *testing.T) {
-	wrap := func(fn func(*testing.T, *dgo.Dgraph)) func(*testing.T) {
-		return func(t *testing.T) {
-			dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
-			if err != nil {
-				t.Fatalf("Error while getting a dgraph client: %v", err)
-			}
-			require.NoError(t, dg.Alter(context.Background(), &api.Operation{DropAll: true}))
-			fn(t, dg)
-		}
-	}
-
-	t.Run("schema response", wrap(SchemaQueryTest))
-	t.Run("schema response http", wrap(SchemaQueryTestHTTP))
-	t.Run("schema predicate names", wrap(SchemaQueryTestPredicate1))
-	t.Run("schema specific predicate fields", wrap(SchemaQueryTestPredicate2))
-	t.Run("schema specific predicate field", wrap(SchemaQueryTestPredicate3))
-	t.Run("multiple block eval", wrap(MultipleBlockEval))
-	t.Run("unmatched var assignment eval", wrap(UnmatchedVarEval))
-	t.Run("hash index queries", wrap(QueryHashIndex))
-	t.Run("fuzzy matching", wrap(FuzzyMatch))
-	t.Run("regexp with toggled trigram index", wrap(RegexpToggleTrigramIndex))
-	t.Run("eq with altering order of trigram and term index", wrap(EqWithAlteredIndexOrder))
-	t.Run("groupby uid that works", wrap(GroupByUidWorks))
-	t.Run("parameterized cascade", wrap(CascadeParams))
-	t.Run("cleanup", wrap(SchemaQueryCleanup))
+func (ssuite *SystestTestSuite) TestQuery() {
+	ssuite.Run("schema response", ssuite.SchemaQueryTest)
+	ssuite.Run("schema response http", ssuite.SchemaQueryTestHTTP)
+	ssuite.Run("schema predicate names", ssuite.SchemaQueryTestPredicate1)
+	ssuite.Run("schema specific predicate fields", ssuite.SchemaQueryTestPredicate2)
+	ssuite.Run("schema specific predicate field", ssuite.SchemaQueryTestPredicate3)
+	ssuite.Run("multiple block eval", ssuite.MultipleBlockEval)
+	ssuite.Run("unmatched var assignment eval", ssuite.UnmatchedVarEval)
+	ssuite.Run("hash index queries", ssuite.QueryHashIndex)
+	ssuite.Run("fuzzy matching", ssuite.FuzzyMatch)
+	ssuite.Run("regexp with toggled trigram index", ssuite.RegexpToggleTrigramIndex)
+	ssuite.Run("eq with altering order of trigram and term index", ssuite.EqWithAlteredIndexOrder)
+	ssuite.Run("groupby uid that works", ssuite.GroupByUidWorks)
+	ssuite.Run("parameterized cascade", ssuite.CascadeParams)
+	ssuite.Run("cleanup", ssuite.SchemaQueryCleanup)
 }
 
-func SchemaQueryCleanup(t *testing.T, c *dgo.Dgraph) {
-	require.NoError(t, c.Alter(context.Background(), &api.Operation{DropAll: true}))
+func (ssuite *SystestTestSuite) SchemaQueryCleanup() {
+	t := ssuite.T()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
+	defer cleanup()
+	require.NoError(t, err)
+	require.NoError(t, gcli.Alter(context.Background(), &api.Operation{DropAll: true}))
 }
 
-func MultipleBlockEval(t *testing.T, c *dgo.Dgraph) {
+func (ssuite *SystestTestSuite) MultipleBlockEval() {
+	t := ssuite.T()
+
+	gcli, cleanup, err := doGrpcLogin(ssuite)
+	defer cleanup()
+	require.NoError(t, err)
 	ctx := context.Background()
-
 	op := &api.Operation{
 		Schema: `
       entity: string @index(exact) .
       stock: [uid] @reverse .
     `,
 	}
-	require.NoError(t, c.Alter(ctx, op))
+	require.NoError(t, gcli.Alter(ctx, op))
 
-	txn := c.NewTxn()
-	_, err := txn.Mutate(ctx, &api.Mutation{
+	txn := gcli.NewTxn()
+	_, err = txn.Mutate(ctx, &api.Mutation{
 		SetNquads: []byte(`
       _:e1 <entity> "672E1D63-4921-420C-90A8-5B39DD77B89F" .
       _:e1 <entity.type> "chair" .
@@ -137,6 +131,9 @@ func MultipleBlockEval(t *testing.T, c *dgo.Dgraph) {
 	})
 	require.NoError(t, err)
 	require.NoError(t, txn.Commit(ctx))
+
+	// Upgrade
+	ssuite.Upgrade()
 
 	tests := []struct {
 		in  string
@@ -221,17 +218,25 @@ func MultipleBlockEval(t *testing.T, c *dgo.Dgraph) {
     }
   }`
 
-	txn = c.NewTxn()
+	gcli, cleanup, err = doGrpcLogin(ssuite)
+	defer cleanup()
+	require.NoError(t, err)
+	ctx = context.Background()
+	txn = gcli.NewTxn()
 	for _, tc := range tests {
 		resp, err := txn.Query(ctx, fmt.Sprintf(queryFmt, tc.in))
 		require.NoError(t, err)
-		testutil.CompareJSON(t, tc.out, string(resp.Json))
+		dgraphtest.CompareJSON(tc.out, string(resp.Json))
 	}
 }
 
-func UnmatchedVarEval(t *testing.T, c *dgo.Dgraph) {
-	ctx := context.Background()
+func (ssuite *SystestTestSuite) UnmatchedVarEval() {
+	t := ssuite.T()
 
+	gcli, cleanup, err := doGrpcLogin(ssuite)
+	defer cleanup()
+	require.NoError(t, err)
+	ctx := context.Background()
 	op := &api.Operation{
 		Schema: `
       item: string @index(hash) .
@@ -240,10 +245,9 @@ func UnmatchedVarEval(t *testing.T, c *dgo.Dgraph) {
       style.cool: bool .
     `,
 	}
-	require.NoError(t, c.Alter(ctx, op))
-
-	txn := c.NewTxn()
-	_, err := txn.Mutate(ctx, &api.Mutation{
+	require.NoError(t, gcli.Alter(ctx, op))
+	txn := gcli.NewTxn()
+	_, err = txn.Mutate(ctx, &api.Mutation{
 		SetNquads: []byte(`
       _:a <item> "chair" .
       _:a <style.name> "Modern leather chair" .
@@ -313,29 +317,45 @@ func UnmatchedVarEval(t *testing.T, c *dgo.Dgraph) {
 		},
 	}
 
-	txn = c.NewTxn()
+	// Upgrade
+	ssuite.Upgrade()
+
+	gcli, cleanup, err = doGrpcLogin(ssuite)
+	defer cleanup()
+	require.NoError(t, err)
+	ctx = context.Background()
+	txn = gcli.NewTxn()
 	for _, tc := range tests {
 		resp, err := txn.Query(ctx, tc.in)
 		require.NoError(t, err)
-		testutil.CompareJSON(t, tc.out, string(resp.Json))
+		dgraphtest.CompareJSON(tc.out, string(resp.Json))
 	}
-
 }
 
-func SchemaQueryTest(t *testing.T, c *dgo.Dgraph) {
+func (ssuite *SystestTestSuite) SchemaQueryTest() {
+	t := ssuite.T()
+
+	gcli, cleanup, err := doGrpcLogin(ssuite)
+	defer cleanup()
+	require.NoError(t, err)
 	ctx := context.Background()
-
 	op := &api.Operation{Schema: `name: string @index(exact) .`}
-	require.NoError(t, c.Alter(ctx, op))
+	require.NoError(t, gcli.Alter(ctx, op))
 
-	txn := c.NewTxn()
-	_, err := txn.Mutate(ctx, &api.Mutation{
+	txn := gcli.NewTxn()
+	_, err = txn.Mutate(ctx, &api.Mutation{
 		SetNquads: []byte(`_:n1 <name> "srfrog" .`),
 	})
 	require.NoError(t, err)
 	require.NoError(t, txn.Commit(ctx))
 
-	testutil.VerifySchema(t, c, testutil.SchemaOptions{UserPreds: `
+	// Upgrade
+	ssuite.Upgrade()
+
+	gcli, cleanup, err = doGrpcLogin(ssuite)
+	defer cleanup()
+	require.NoError(t, err)
+	testutil.VerifySchema(t, gcli.Dgraph, testutil.SchemaOptions{UserPreds: `
 	  {
         "predicate": "name",
         "type": "string",
@@ -346,19 +366,23 @@ func SchemaQueryTest(t *testing.T, c *dgo.Dgraph) {
       }`})
 }
 
-func SchemaQueryTestPredicate1(t *testing.T, c *dgo.Dgraph) {
-	ctx := context.Background()
+func (ssuite *SystestTestSuite) SchemaQueryTestPredicate1() {
+	t := ssuite.T()
 
+	gcli, cleanup, err := doGrpcLogin(ssuite)
+	defer cleanup()
+	require.NoError(t, err)
+	ctx := context.Background()
 	op := &api.Operation{
 		Schema: `
       name: string @index(exact) .
       age: int .
     `,
 	}
-	require.NoError(t, c.Alter(ctx, op))
+	require.NoError(t, gcli.Alter(ctx, op))
 
-	txn := c.NewTxn()
-	_, err := txn.Mutate(ctx, &api.Mutation{
+	txn := gcli.NewTxn()
+	_, err = txn.Mutate(ctx, &api.Mutation{
 		SetNquads: []byte(`
       _:p1 <name> "srfrog" .
       _:p1 <age> "25"^^<xs:int> .
@@ -370,7 +394,14 @@ func SchemaQueryTestPredicate1(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, err)
 	require.NoError(t, txn.Commit(ctx))
 
-	txn = c.NewTxn()
+	// Upgrade
+	ssuite.Upgrade()
+
+	gcli, cleanup, err = doGrpcLogin(ssuite)
+	defer cleanup()
+	require.NoError(t, err)
+	ctx = context.Background()
+	txn = gcli.NewTxn()
 	resp, err := txn.Query(ctx, `schema {name}`)
 	require.NoError(t, err)
 	js := `
@@ -422,23 +453,34 @@ func SchemaQueryTestPredicate1(t *testing.T, c *dgo.Dgraph) {
 	"types": [` + testutil.GetInternalTypes(false) + `
 	]
   }`
-	testutil.CompareJSON(t, js, string(resp.Json))
+	dgraphtest.CompareJSON(js, string(resp.Json))
 }
 
-func SchemaQueryTestPredicate2(t *testing.T, c *dgo.Dgraph) {
+func (ssuite *SystestTestSuite) SchemaQueryTestPredicate2() {
+	t := ssuite.T()
+
+	gcli, cleanup, err := doGrpcLogin(ssuite)
+	defer cleanup()
+	require.NoError(t, err)
 	ctx := context.Background()
-
 	op := &api.Operation{Schema: `name: string @index(exact) .`}
-	require.NoError(t, c.Alter(ctx, op))
+	require.NoError(t, gcli.Alter(ctx, op))
 
-	txn := c.NewTxn()
-	_, err := txn.Mutate(ctx, &api.Mutation{
+	txn := gcli.NewTxn()
+	_, err = txn.Mutate(ctx, &api.Mutation{
 		SetNquads: []byte(`_:n1 <name> "srfrog" .`),
 	})
 	require.NoError(t, err)
 	require.NoError(t, txn.Commit(ctx))
 
-	txn = c.NewTxn()
+	// Upgrade
+	ssuite.Upgrade()
+
+	gcli, cleanup, err = doGrpcLogin(ssuite)
+	defer cleanup()
+	require.NoError(t, err)
+	ctx = context.Background()
+	txn = gcli.NewTxn()
 	resp, err := txn.Query(ctx, `schema(pred: [name]) {}`)
 	require.NoError(t, err)
 	js := `
@@ -454,22 +496,26 @@ func SchemaQueryTestPredicate2(t *testing.T, c *dgo.Dgraph) {
       }
     ]
   }`
-	testutil.CompareJSON(t, js, string(resp.Json))
+	dgraphtest.CompareJSON(js, string(resp.Json))
 }
 
-func SchemaQueryTestPredicate3(t *testing.T, c *dgo.Dgraph) {
-	ctx := context.Background()
+func (ssuite *SystestTestSuite) SchemaQueryTestPredicate3() {
+	t := ssuite.T()
 
+	gcli, cleanup, err := doGrpcLogin(ssuite)
+	defer cleanup()
+	require.NoError(t, err)
+	ctx := context.Background()
 	op := &api.Operation{
 		Schema: `
       name: string @index(exact) .
       age: int .
     `,
 	}
-	require.NoError(t, c.Alter(ctx, op))
+	require.NoError(t, gcli.Alter(ctx, op))
 
-	txn := c.NewTxn()
-	_, err := txn.Mutate(ctx, &api.Mutation{
+	txn := gcli.NewTxn()
+	_, err = txn.Mutate(ctx, &api.Mutation{
 		SetNquads: []byte(`
       _:p1 <name> "srfrog" .
       _:p1 <age> "25"^^<xs:int> .
@@ -481,7 +527,11 @@ func SchemaQueryTestPredicate3(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, err)
 	require.NoError(t, txn.Commit(ctx))
 
-	txn = c.NewTxn()
+	gcli, cleanup, err = doGrpcLogin(ssuite)
+	defer cleanup()
+	require.NoError(t, err)
+	ctx = context.Background()
+	txn = gcli.NewTxn()
 	resp, err := txn.Query(ctx, `
     schema(pred: [age]) {
       name
@@ -498,54 +548,43 @@ func SchemaQueryTestPredicate3(t *testing.T, c *dgo.Dgraph) {
       }
     ]
   }`
-	testutil.CompareJSON(t, js, string(resp.Json))
+	dgraphtest.CompareJSON(js, string(resp.Json))
 }
 
-func SchemaQueryTestHTTP(t *testing.T, c *dgo.Dgraph) {
+func (ssuite *SystestTestSuite) SchemaQueryTestHTTP() {
+	t := ssuite.T()
+
+	gcli, cleanup, err := doGrpcLogin(ssuite)
+	defer cleanup()
+	require.NoError(t, err)
 	ctx := context.Background()
-
 	op := &api.Operation{Schema: `name: string @index(exact) .`}
-	require.NoError(t, c.Alter(ctx, op))
+	require.NoError(t, gcli.Alter(ctx, op))
 
-	txn := c.NewTxn()
-	_, err := txn.Mutate(ctx, &api.Mutation{
+	txn := gcli.NewTxn()
+	_, err = txn.Mutate(ctx, &api.Mutation{
 		SetNquads: []byte(`_:n1 <name> "srfrog" .`),
 	})
 	require.NoError(t, err)
 	require.NoError(t, txn.Commit(ctx))
 
-	url := fmt.Sprintf("http://%s", testutil.SockAddrHttp)
-	var loginBb bytes.Buffer
-	loginBb.WriteString(`{"userid":"groot","password":"password"}`)
-	loginRes, err := http.Post(url+"/login", "application/json", &loginBb)
-	require.NoError(t, err)
-	loginBody, err := io.ReadAll(loginRes.Body)
-	require.NoError(t, err)
-	loginMap := make(map[string]map[string]string)
-	require.NoError(t, json.Unmarshal(loginBody, &loginMap))
-	accessJwt := loginMap["data"]["accessJWT"]
+	// Upgrade
+	ssuite.Upgrade()
 
-	var bb bytes.Buffer
-	bb.WriteString(`schema{}`)
-	client := http.Client{}
-	req, err := http.NewRequest("POST", url+"/query", &bb)
+	hcli, err := ssuite.dc.HTTPClient()
 	require.NoError(t, err)
-	req.Header.Add("Content-Type", "application/dql")
-	req.Header.Add("X-Dgraph-AccessToken", accessJwt)
-	res, err := client.Do(req)
+	err = hcli.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace)
+	require.NotNil(t, hcli.AccessJwt, "token is nil")
+	require.NoError(t, err)
+
+	res, err := hcli.PostDqlQuery(`schema{}`)
 	require.NoError(t, err)
 	require.NotNil(t, res)
-	defer res.Body.Close()
-
-	bb.Reset()
-	_, err = bb.ReadFrom(res.Body)
-	require.NoError(t, err)
 
 	var m map[string]json.RawMessage
-	require.NoError(t, json.Unmarshal(bb.Bytes(), &m))
+	require.NoError(t, json.Unmarshal(res, &m))
 	require.NotNil(t, m["extensions"])
-
-	testutil.CompareJSON(t, testutil.GetFullSchemaJSON(testutil.SchemaOptions{UserPreds: `
+	dgraphtest.CompareJSON(testutil.GetFullSchemaJSON(testutil.SchemaOptions{UserPreds: `
 	  {
         "predicate": "name",
         "type": "string",
@@ -556,19 +595,23 @@ func SchemaQueryTestHTTP(t *testing.T, c *dgo.Dgraph) {
       }`}), string(m["data"]))
 }
 
-func FuzzyMatch(t *testing.T, c *dgo.Dgraph) {
-	ctx := context.Background()
+func (ssuite *SystestTestSuite) FuzzyMatch() {
+	t := ssuite.T()
 
+	gcli, cleanup, err := doGrpcLogin(ssuite)
+	defer cleanup()
+	require.NoError(t, err)
+	ctx := context.Background()
 	op := &api.Operation{
 		Schema: `
       term: string @index(trigram) .
       name: string .
     `,
 	}
-	require.NoError(t, c.Alter(ctx, op))
+	require.NoError(t, gcli.Alter(ctx, op))
 
-	txn := c.NewTxn()
-	_, err := txn.Mutate(ctx, &api.Mutation{
+	txn := gcli.NewTxn()
+	_, err = txn.Mutate(ctx, &api.Mutation{
 		SetNquads: []byte(`
       _:t0 <term> "" .
       _:t1 <term> "road" .
@@ -591,6 +634,9 @@ func FuzzyMatch(t *testing.T, c *dgo.Dgraph) {
 	})
 	require.NoError(t, err)
 	require.NoError(t, txn.Commit(ctx))
+
+	// Upgrade
+	ssuite.Upgrade()
 
 	tests := []struct {
 		in, out, failure string
@@ -689,27 +735,34 @@ func FuzzyMatch(t *testing.T, c *dgo.Dgraph) {
 			failure: `Attribute name is not indexed with type trigram`,
 		},
 	}
+	gcli, cleanup, err = doGrpcLogin(ssuite)
+	defer cleanup()
+	require.NoError(t, err)
+	ctx = context.Background()
 	for _, tc := range tests {
-		resp, err := c.NewTxn().Query(ctx, tc.in)
+		resp, err := gcli.NewTxn().Query(ctx, tc.in)
 		if tc.failure != "" {
 			require.Error(t, err)
 			require.Contains(t, err.Error(), tc.failure)
 			continue
 		}
 		require.NoError(t, err)
-		testutil.CompareJSON(t, tc.out, string(resp.Json))
+		dgraphtest.CompareJSON(tc.out, string(resp.Json))
 	}
 }
 
-func CascadeParams(t *testing.T, c *dgo.Dgraph) {
+func (ssuite *SystestTestSuite) CascadeParams() {
+	t := ssuite.T()
 
+	gcli, cleanup, err := doGrpcLogin(ssuite)
+	defer cleanup()
+	require.NoError(t, err)
 	ctx := context.Background()
-
 	op := &api.Operation{Schema: `name: string @index(fulltext) .`}
-	require.NoError(t, c.Alter(ctx, op))
+	require.NoError(t, gcli.Alter(ctx, op))
 
-	txn := c.NewTxn()
-	_, err := txn.Mutate(ctx, &api.Mutation{
+	txn := gcli.NewTxn()
+	_, err = txn.Mutate(ctx, &api.Mutation{
 		SetNquads: []byte(`
 		_:alice1 <name> "Alice 1" .
 		_:alice1 <age> "23" .
@@ -727,6 +780,9 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 	})
 	require.NoError(t, err)
 	require.NoError(t, txn.Commit(ctx))
+
+	// Upgrade
+	ssuite.Upgrade()
 
 	tests := []struct {
 		in, out string
@@ -1155,21 +1211,29 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 		},
 	}
 
+	gcli, cleanup, err = doGrpcLogin(ssuite)
+	defer cleanup()
+	require.NoError(t, err)
+	ctx = context.Background()
 	for _, tc := range tests {
-		resp, err := c.NewTxn().Query(ctx, tc.in)
+		resp, err := gcli.NewTxn().Query(ctx, tc.in)
 		require.NoError(t, err)
-		testutil.CompareJSON(t, tc.out, string(resp.Json))
+		dgraphtest.CompareJSON(tc.out, string(resp.Json))
 	}
 }
 
-func QueryHashIndex(t *testing.T, c *dgo.Dgraph) {
+func (ssuite *SystestTestSuite) QueryHashIndex() {
+	t := ssuite.T()
+
+	gcli, cleanup, err := doGrpcLogin(ssuite)
+	defer cleanup()
+	require.NoError(t, err)
 	ctx := context.Background()
-
 	op := &api.Operation{Schema: `name: string @index(hash) @lang .`}
-	require.NoError(t, c.Alter(ctx, op))
+	require.NoError(t, gcli.Alter(ctx, op))
 
-	txn := c.NewTxn()
-	_, err := txn.Mutate(ctx, &api.Mutation{
+	txn := gcli.NewTxn()
+	_, err = txn.Mutate(ctx, &api.Mutation{
 		SetNquads: []byte(`
       _:p0 <name> "" .
       _:p1 <name> "0" .
@@ -1186,6 +1250,9 @@ func QueryHashIndex(t *testing.T, c *dgo.Dgraph) {
 	})
 	require.NoError(t, err)
 	require.NoError(t, txn.Commit(ctx))
+
+	// Upgrade
+	ssuite.Upgrade()
 
 	tests := []struct {
 		in, out string
@@ -1265,21 +1332,29 @@ func QueryHashIndex(t *testing.T, c *dgo.Dgraph) {
 		},
 	}
 
+	gcli, cleanup, err = doGrpcLogin(ssuite)
+	defer cleanup()
+	require.NoError(t, err)
+	ctx = context.Background()
 	for _, tc := range tests {
-		resp, err := c.NewTxn().Query(ctx, tc.in)
+		resp, err := gcli.NewTxn().Query(ctx, tc.in)
 		require.NoError(t, err)
-		testutil.CompareJSON(t, tc.out, string(resp.Json))
+		dgraphtest.CompareJSON(tc.out, string(resp.Json))
 	}
 }
 
-func RegexpToggleTrigramIndex(t *testing.T, c *dgo.Dgraph) {
+func (ssuite *SystestTestSuite) RegexpToggleTrigramIndex() {
+	t := ssuite.T()
+
+	gcli, cleanup, err := doGrpcLogin(ssuite)
+	defer cleanup()
+	require.NoError(t, err)
 	ctx := context.Background()
-
 	op := &api.Operation{Schema: `name: string @index(term) @lang .`}
-	require.NoError(t, c.Alter(ctx, op))
+	require.NoError(t, gcli.Alter(ctx, op))
 
-	txn := c.NewTxn()
-	_, err := txn.Mutate(ctx, &api.Mutation{
+	txn := gcli.NewTxn()
+	_, err = txn.Mutate(ctx, &api.Mutation{
 		SetNquads: []byte(`
       _:x1 <name> "The luck is in the details" .
       _:x1 <name> "The art is in the details"@en .
@@ -1292,6 +1367,9 @@ func RegexpToggleTrigramIndex(t *testing.T, c *dgo.Dgraph) {
 	})
 	require.NoError(t, err)
 	require.NoError(t, txn.Commit(ctx))
+
+	// Upgrade
+	ssuite.Upgrade()
 
 	tests := []struct {
 		in, out string
@@ -1310,45 +1388,53 @@ func RegexpToggleTrigramIndex(t *testing.T, c *dgo.Dgraph) {
 		},
 	}
 
+	gcli, cleanup, err = doGrpcLogin(ssuite)
+	defer cleanup()
+	require.NoError(t, err)
 	t.Log("testing without trigram index")
+	ctx = context.Background()
 	for _, tc := range tests {
-		resp, err := c.NewTxn().Query(ctx, tc.in)
+		resp, err := gcli.NewTxn().Query(ctx, tc.in)
 		require.NoError(t, err)
-		testutil.CompareJSON(t, tc.out, string(resp.Json))
+		dgraphtest.CompareJSON(tc.out, string(resp.Json))
 	}
 
 	op = &api.Operation{Schema: `name: string @index(trigram) @lang .`}
-	require.NoError(t, c.Alter(ctx, op))
+	require.NoError(t, gcli.Alter(ctx, op))
 
 	t.Log("testing with trigram index")
 	for _, tc := range tests {
-		resp, err := c.NewTxn().Query(ctx, tc.in)
+		resp, err := gcli.NewTxn().Query(ctx, tc.in)
 		require.NoError(t, err)
-		testutil.CompareJSON(t, tc.out, string(resp.Json))
+		dgraphtest.CompareJSON(tc.out, string(resp.Json))
 	}
 
-	require.NoError(t, c.Alter(ctx, &api.Operation{
+	require.NoError(t, gcli.Alter(ctx, &api.Operation{
 		Schema: `
       name: string @index(term) @lang .
     `,
 	}))
 
 	t.Log("testing without trigram index at root")
-	_, err = c.NewTxn().Query(ctx, `{q(func:regexp(name, /art/)) {name}}`)
+	_, err = gcli.NewTxn().Query(ctx, `{q(func:regexp(name, /art/)) {name}}`)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Attribute name does not have trigram index for regex matching.")
 }
 
-func EqWithAlteredIndexOrder(t *testing.T, c *dgo.Dgraph) {
-	ctx := context.Background()
+func (ssuite *SystestTestSuite) EqWithAlteredIndexOrder() {
+	t := ssuite.T()
 
+	gcli, cleanup, err := doGrpcLogin(ssuite)
+	defer cleanup()
+	require.NoError(t, err)
 	// first, let's set the schema with term before trigram
+	ctx := context.Background()
 	op := &api.Operation{Schema: `name: string @index(term, trigram) .`}
-	require.NoError(t, c.Alter(ctx, op))
+	require.NoError(t, gcli.Alter(ctx, op))
 
 	// fill up some data
-	txn := c.NewTxn()
-	_, err := txn.Mutate(ctx, &api.Mutation{
+	txn := gcli.NewTxn()
+	_, err = txn.Mutate(ctx, &api.Mutation{
 		SetNquads: []byte(`
       _:x1 <name> "Alice" .
       _:x2 <name> "Bob" .
@@ -1357,27 +1443,38 @@ func EqWithAlteredIndexOrder(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, err)
 	require.NoError(t, txn.Commit(ctx))
 
+	// Upgrade
+	ssuite.Upgrade()
+
+	gcli, cleanup, err = doGrpcLogin(ssuite)
+	defer cleanup()
+	require.NoError(t, err)
+	ctx = context.Background()
 	// querying with eq should work
 	q := `{q(func: eq(name, "Alice")) {name}}`
 	expectedResult := `{"q":[{"name":"Alice"}]}`
-	resp, err := c.NewReadOnlyTxn().Query(ctx, q)
+	resp, err := gcli.NewReadOnlyTxn().Query(ctx, q)
 	require.NoError(t, err)
-	testutil.CompareJSON(t, expectedResult, string(resp.Json))
+	dgraphtest.CompareJSON(expectedResult, string(resp.Json))
 
 	// now, let's set the schema with trigram before term
 	op = &api.Operation{Schema: `name: string @index(trigram, term) .`}
-	require.NoError(t, c.Alter(ctx, op))
+	require.NoError(t, gcli.Alter(ctx, op))
 
 	// querying with eq should still work
-	resp, err = c.NewReadOnlyTxn().Query(ctx, q)
+	resp, err = gcli.NewReadOnlyTxn().Query(ctx, q)
 	require.NoError(t, err)
-	testutil.CompareJSON(t, expectedResult, string(resp.Json))
+	dgraphtest.CompareJSON(expectedResult, string(resp.Json))
 }
 
-func GroupByUidWorks(t *testing.T, c *dgo.Dgraph) {
-	ctx := context.Background()
+func (ssuite *SystestTestSuite) GroupByUidWorks() {
+	t := ssuite.T()
 
-	txn := c.NewTxn()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
+	defer cleanup()
+	require.NoError(t, err)
+	ctx := context.Background()
+	txn := gcli.NewTxn()
 	assigned, err := txn.Mutate(ctx, &api.Mutation{
 		SetNquads: []byte(`
       _:x1 <name> "horsejr" .
@@ -1387,6 +1484,9 @@ func GroupByUidWorks(t *testing.T, c *dgo.Dgraph) {
 	})
 	require.NoError(t, err)
 	require.NoError(t, txn.Commit(ctx))
+
+	// Upgrade
+	ssuite.Upgrade()
 
 	tests := []struct {
 		in, out string
@@ -1412,9 +1512,26 @@ func GroupByUidWorks(t *testing.T, c *dgo.Dgraph) {
 			out: `{}`,
 		},
 	}
+	gcli, cleanup, err = doGrpcLogin(ssuite)
+	defer cleanup()
+	require.NoError(t, err)
+	ctx = context.Background()
 	for _, tc := range tests {
-		resp, err := c.NewTxn().Query(ctx, tc.in)
+		resp, err := gcli.NewTxn().Query(ctx, tc.in)
 		require.NoError(t, err)
-		testutil.CompareJSON(t, tc.out, string(resp.Json))
+		dgraphtest.CompareJSON(tc.out, string(resp.Json))
 	}
+}
+
+func doGrpcLogin(ssuite *SystestTestSuite) (*dgraphtest.GrpcClient, func(), error) {
+	gcli, cleanup, err := ssuite.dc.Client()
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "error creating grpc client")
+	}
+	err = gcli.LoginIntoNamespace(context.Background(),
+		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "groot login into galaxy namespace failed")
+	}
+	return gcli, cleanup, nil
 }

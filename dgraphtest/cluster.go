@@ -64,6 +64,7 @@ type HTTPClient struct {
 	graphqlURL string
 	licenseURL string
 	stateURL   string
+	dqlURL     string
 }
 
 // GraphQLParams are used for making graphql requests to dgraph
@@ -613,6 +614,18 @@ func (hc *HTTPClient) GetZeroState() (*LicenseResponse, error) {
 	}
 
 	return &stateResponse, nil
+}
+
+func (hc *HTTPClient) PostDqlQuery(query string) ([]byte, error) {
+	req, err := http.NewRequest(http.MethodPost, hc.dqlURL, bytes.NewBufferString(query))
+	if err != nil {
+		return nil, errors.Wrapf(err, "error building req for endpoint [%v]", hc.dqlURL)
+	}
+	req.Header.Add("Content-Type", "application/dql")
+	if hc.HttpToken != nil {
+		req.Header.Add("X-Dgraph-AccessToken", hc.AccessJwt)
+	}
+	return doReq(req)
 }
 
 // SetupSchema sets up DQL schema

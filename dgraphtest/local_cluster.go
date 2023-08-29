@@ -388,7 +388,7 @@ func (c *LocalCluster) stopContainer(dc dnode) error {
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 	defer cancel()
 
-	stopTimeout := 30
+	stopTimeout := 30 // in seconds
 	o := container.StopOptions{Timeout: &stopTimeout}
 	if err := c.dcli.ContainerStop(ctx, dc.cid(), o); err != nil {
 		// Force kill the container if timeout exceeded
@@ -695,12 +695,17 @@ func (c *LocalCluster) HTTPClient() (*HTTPClient, error) {
 	if err != nil {
 		return nil, err
 	}
+	dqlURL, err := c.dqlURL()
+	if err != nil {
+		return nil, err
+	}
 
 	return &HTTPClient{
 		adminURL:   adminURL,
 		graphqlURL: graphqlURL,
 		licenseURL: licenseURL,
 		stateURL:   stateURL,
+		dqlURL:     dqlURL,
 	}, nil
 }
 
@@ -714,6 +719,16 @@ func (c *LocalCluster) serverURL(server, endpoint string) (string, error) {
 		return "", err
 	}
 	url := "http://localhost:" + pubPort + endpoint
+	return url, nil
+}
+
+// dqlURL returns url to the dql query endpoint
+func (c *LocalCluster) dqlURL() (string, error) {
+	publicPort, err := publicPort(c.dcli, c.alphas[0], alphaHttpPort)
+	if err != nil {
+		return "", err
+	}
+	url := "http://localhost:" + publicPort + "/query"
 	return url, nil
 }
 
