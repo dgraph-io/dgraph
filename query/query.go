@@ -2272,14 +2272,6 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 	}
 
-	// We apply Every _before_ pagination, so we can paginate the result of Every
-	if sg.Params.Every > 1 {
-		if err := sg.applyEvery(ctx); err != nil {
-			rch <- err
-			return
-		}
-	}
-
 	if len(sg.Params.Order) == 0 && len(sg.Params.FacetsOrder) == 0 {
 		// for `has` function when there is no filtering and ordering, we fetch
 		// correct paginated results so no need to apply pagination here.
@@ -2298,6 +2290,14 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 				rch <- err
 				return
 			}
+		}
+	}
+
+	// We apply Every _after_ pagination
+	if sg.Params.Every > 1 {
+		if err := sg.applyEvery(ctx); err != nil {
+			rch <- err
+			return
 		}
 	}
 
@@ -2398,30 +2398,26 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	rch <- childErr
 }
 
-// applies "every" to lists inside uidMatrix
+// applies "every" to sg.uidMatrix[*].Uids
 // every 'every-th' uid is selected from the uid lists,
-// padding uids are considered when skipping uids from next list
 func (sg *SubGraph) applyEvery(ctx context.Context) error {
 	sg.updateUidMatrix()
 
-	offset := 0
 	every := sg.Params.Every
 	for i := 0; i < len(sg.uidMatrix); i++ {
 		uidList := sg.uidMatrix[i].Uids
 
-		// take every 'every'-th uid starting at offset
-		uidsLen := (len(uidList) - offset) / every
+		// take every 'every'-th uid
+		uidsLen := len(uidList) / every
 		uids := make([]uint64, uidsLen)
 		for j := 0; j < uidsLen; j++ {
-			// take the last uid of every-sized batches starting at offset
-			uids[j] = uidList[(j+1)*every-1+offset]
+			// take the last uid of every-sized batches
+			// taking the last rather than the first allows us to paginate via after
+			uids[j] = uidList[(j+1)*every-1]
 		}
 		sg.uidMatrix[i].Uids = uids
-
-		// there might be some uids after the last uid picked from uidList
-		// consider these as skipped, so skip that number of uids fewer from next list
-		offset = (offset - len(uidList)%every) % every
 	}
+
 	// Re-merge the UID matrix.
 	sg.DestUIDs = algo.MergeSorted(sg.uidMatrix)
 	return nil

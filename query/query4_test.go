@@ -1013,20 +1013,12 @@ func TestHasEvery(t *testing.T) {
 				"name": "Alice"
 			  },
 			  {
-				"uid": "0xdaf",
-				"name": "Andrew"
+				"uid": "0x1001",
+				"name": "Badger"
 			  },
 			  {
-				"uid": "0xdaf",
-				"name": ""
-			  },
-			  {
-				"uid": "0x2715",
-				"name": "SF Bay Area"
-			  },
-			  {
-				"uid": "0x2715",
-				"name": "Bob"
+				"uid": "0x2000",
+				"name": "Regex Master"
 			  }
 			]
 		  }
@@ -1035,7 +1027,7 @@ func TestHasEvery(t *testing.T) {
 
 func TestHasEveryWithFirst(t *testing.T) {
 	query := `{
-		q(func:has(name), every:10, first: 2) {
+		q(func:has(name), first: 20, every:10) {
 			 uid
 			 name
 		 }
@@ -1059,7 +1051,7 @@ func TestHasEveryWithFirst(t *testing.T) {
 
 func TestHasEveryWithFirstOffset(t *testing.T) {
 	query := `{
-		q(func:has(name), every:10, first:2, offset:2) {
+		q(func:has(name), first:20, offset:20, every:10) {
 			 uid
 			 name
 		 }
@@ -1073,12 +1065,8 @@ func TestHasEveryWithFirstOffset(t *testing.T) {
 				"name": "Alice"
 			  },
 			  {
-				"uid": "0xdaf",
-				"name": "Andrew"
-			  },
-			  {
-				"uid": "0xdaf",
-				"name": ""
+				"uid": "0x1001",
+				"name": "Badger"
 			  }
 			]
 		  }
@@ -1087,7 +1075,7 @@ func TestHasEveryWithFirstOffset(t *testing.T) {
 
 func TestHasEveryWithAfter(t *testing.T) {
 	query := `{
-		q(func:has(name), every:10, after:0x36) {
+		q(func:has(name), after:0x36, every:10) {
 			 uid
 			 name
 		 }
@@ -1101,20 +1089,12 @@ func TestHasEveryWithAfter(t *testing.T) {
 				"name": "Alice"
 			  },
 			  {
-				"uid": "0xdaf",
-				"name": "Andrew"
+				"uid": "0x1001",
+				"name": "Badger"
 			  },
 			  {
-				"uid": "0xdaf",
-				"name": ""
-			  },
-			  {
-				"uid": "0x2715",
-				"name": "SF Bay Area"
-			  },
-			  {
-				"uid": "0x2715",
-				"name": "Bob"
+				"uid": "0x2000",
+				"name": "Regex Master"
 			  }
 			]
 		  }
@@ -1123,7 +1103,7 @@ func TestHasEveryWithAfter(t *testing.T) {
 
 func TestHasEveryWithFirstAfter(t *testing.T) {
 	query := `{
-		q(func:has(name), every: 10, first:2, after: 0x36) {
+		q(func:has(name), first:20, after: 0x36, every: 10) {
 			 uid
 			 name
 		 }
@@ -1137,12 +1117,8 @@ func TestHasEveryWithFirstAfter(t *testing.T) {
 				"name": "Alice"
 			  },
 			  {
-				"uid": "0xdaf",
-				"name": "Andrew"
-			  },
-			  {
-				"uid": "0xdaf",
-				"name": ""
+				"uid": "0x1001",
+				"name": "Badger"
 			  }
 			]
 		  }
