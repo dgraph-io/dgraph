@@ -1,4 +1,4 @@
-//go:build integration
+//go:build integration || upgrade
 
 /*
  * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
@@ -19,53 +19,25 @@
 package main
 
 import (
-	"context"
-	"testing"
-	"time"
+	"fmt"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/v230/protos/api"
-	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgraph/dgraphtest"
 )
 
-func TestPlugins(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping test in short mode")
-	}
+type testCase struct {
+	query      string
+	wantResult string
+}
 
-	type testCase struct {
-		query      string
-		wantResult string
-	}
-
-	client, err := testutil.DgraphClient(testutil.SockAddr)
-	require.NoError(t, err)
-	suite := func(initialSchema string, setJSON string, cases []testCase) {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-		defer cancel()
-
-		require.NoError(t, client.Alter(ctx, &api.Operation{
-			DropAll: true,
-		}))
-		require.NoError(t, client.Alter(ctx, &api.Operation{
-			Schema: initialSchema,
-		}))
-
-		txn := client.NewTxn()
-		_, err = txn.Mutate(ctx, &api.Mutation{SetJson: []byte(setJSON)})
-		require.NoError(t, err)
-		require.NoError(t, txn.Commit(ctx))
-
-		for _, test := range cases {
-			txn := client.NewTxn()
-			reply, err := txn.Query(ctx, test.query)
-			require.NoError(t, err)
-			testutil.CompareJSON(t, test.wantResult, string(reply.GetJson()))
-		}
-	}
-
-	suite(
+var testInp = []struct {
+	initialSchema string
+	setJSON       string
+	cases         []testCase
+}{
+	{
 		"word: string @index(anagram) .",
 		`[
 			{ "word": "airmen" },
@@ -104,9 +76,8 @@ func TestPlugins(t *testing.T) {
 				]}`,
 			},
 		},
-	)
-
-	suite(
+	},
+	{
 		"word: string @index(anagram) @lang .",
 		`[
 			{ "word@en": "airmen", "word@fr": "no match" },
@@ -122,9 +93,8 @@ func TestPlugins(t *testing.T) {
 				]}`,
 			},
 		},
-	)
-
-	suite(
+	},
+	{
 		"ip: string @index(cidr) .",
 		`[
 			{ "ip": "100.55.22.11/32" },
@@ -173,9 +143,8 @@ func TestPlugins(t *testing.T) {
 				]}`,
 			},
 		},
-	)
-
-	suite(
+	},
+	{
 		"name: string @index(rune) .",
 		`[
 			{ "name": "Adam" },
@@ -247,8 +216,8 @@ func TestPlugins(t *testing.T) {
 				]}`,
 			},
 		},
-	)
-	suite(
+	},
+	{
 		"num: int @index(factor) .",
 		`[
 			{ "num": 2 },
@@ -332,5 +301,36 @@ func TestPlugins(t *testing.T) {
 				]}`,
 			},
 		},
-	)
+	},
+}
+
+func (psuite *PluginTestSuite) TestPlugins() {
+	for i := 0; i < len(testInp); i++ {
+		psuite.Run(fmt.Sprintf("test case %d", i+1), func() {
+			t := psuite.T()
+			gcli, cleanup, err := psuite.dc.Client()
+			require.NoError(t, err)
+			defer cleanup()
+			require.NoError(t, gcli.DropAll())
+			require.NoError(t, gcli.SetupSchema(testInp[i].initialSchema))
+			_, err = gcli.Mutate(&api.Mutation{
+				SetJson:   []byte(testInp[i].setJSON),
+				CommitNow: true,
+			})
+			require.NoError(t, err)
+
+			// Upgrade
+			psuite.Upgrade()
+
+			gcli, cleanup, err = psuite.dc.Client()
+			require.NoError(t, err)
+			defer cleanup()
+
+			for _, test := range testInp[i].cases {
+				reply, err := gcli.Query(test.query)
+				require.NoError(t, err)
+				dgraphtest.CompareJSON(test.wantResult, string(reply.GetJson()))
+			}
+		})
+	}
 }

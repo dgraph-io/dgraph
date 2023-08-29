@@ -33,6 +33,12 @@ func (c *LocalCluster) dgraphImage() string {
 }
 
 func (c *LocalCluster) setupBinary() error {
+	if c.conf.customPlugins {
+		race := false // Explicit var declaration to avoid confusion on the next line
+		if err := c.GeneratePlugins(race); err != nil {
+			return err
+		}
+	}
 	if c.conf.version == localVersion {
 		fromDir := filepath.Join(os.Getenv("GOPATH"), "bin")
 		return copyBinary(fromDir, c.tempBinDir, c.conf.version)
