@@ -1,11 +1,17 @@
 package posting
 
 import (
+	"context"
+	"encoding/binary"
+	"fmt"
 	"math"
 	"sort"
 	"strconv"
 	"strings"
 
+	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
 )
 
@@ -31,7 +37,7 @@ func dotProduct(a, b []float64) (float64, error) {
 	return dotProduct, nil
 }
 
-func euclidianDistance(a, b []float64) (float64, error) {
+func EuclidianDistance(a, b []float64) (float64, error) {
 	subtractResult := make([]float64, len(a))
 	err := vectorSubtract(a, b, subtractResult)
 	return norm(subtractResult), err
@@ -51,24 +57,10 @@ func cosineSimilarity(a, b []float64) (float64, error) {
 	return dotProd / (normA * normB), nil
 }
 
-func approxEuclidianDistance(a, b []float64) (float64, error) {
+func euclidianDistanceSq(a, b []float64) (float64, error) {
 	subtractResult := make([]float64, len(a))
 	err := vectorSubtract(a, b, subtractResult)
 	return normSq(subtractResult), err
-}
-
-func approxCosineSimilarity(a, b []float64) (float64, error) {
-	dotProd, err := dotProduct(a, b)
-	if err != nil {
-		return 0, err
-	}
-	normA := normSq(a)
-	normB := normSq(b)
-	if normA == 0 || normB == 0 {
-		err := errors.New("can not compute cosine similarity on zero vector")
-		return 0, err
-	}
-	return dotProd / (normA * normB), nil
 }
 
 func max(a, b int) int {
@@ -139,12 +131,12 @@ func insortBadgerHeapDescending(slice []minBadgerHeapElement, val minBadgerHeapE
 }
 
 func ParseEdges(s string) ([]uint64, error) {
+	s = strings.ReplaceAll(s, "\n", " ")
+	s = strings.ReplaceAll(s, "\t", " ")
 	s = strings.TrimSpace(s)
 	if len(s) == 0 {
 		return []uint64{}, nil
 	}
-	s = strings.ReplaceAll(s, "\n", " ")
-	s = strings.ReplaceAll(s, "\t", " ")
 	trimmedPre := strings.TrimPrefix(s, "[")
 	if len(trimmedPre) == len(s) {
 		return nil, cannotConvertToUintSlice(s)
@@ -210,4 +202,170 @@ func diff(a []uint64, b []uint64) []uint64 {
 		m[s] = true
 	}
 	return diff
+}
+
+const (
+	HnswEuclidian = "HNSW-Euclidian"
+	HnswCosine    = "HNSW-Cosine"
+	HnswDotProd   = "HNSW-DotProduct"
+	plError       = "\nerror fetching posting list for data key: "
+	dataError     = "\nerror fetching data for data key: "
+	VecKeyword    = "__vector_"
+	VecEntry      = "__vector_entry"
+	VecDead       = "__vector_dead"
+)
+
+type SimilarityType struct {
+	distanceScore func(v, w []float64) (float64, error)
+	insortHeap    func(slice []minBadgerHeapElement, val minBadgerHeapElement) []minBadgerHeapElement
+}
+
+var euclidianSimilarityType = SimilarityType{distanceScore: euclidianDistanceSq, insortHeap: insortBadgerHeapAscending}
+var cosineSimilarityType = SimilarityType{distanceScore: cosineSimilarity, insortHeap: insortBadgerHeapDescending}
+var dotProductSimilarityType = SimilarityType{distanceScore: dotProduct, insortHeap: insortBadgerHeapDescending}
+
+var simTypeMap = map[string]SimilarityType{
+	HnswEuclidian: euclidianSimilarityType,
+	HnswCosine:    cosineSimilarityType,
+	HnswDotProd:   dotProductSimilarityType,
+}
+
+type CacheType interface {
+	Get(key []byte) (*List, error)
+	Ts() uint64
+}
+
+// implements CacheType interface
+type TxnCache struct {
+	txn     *Txn
+	startTs uint64
+}
+
+func (tc *TxnCache) Get(key []byte) (*List, error) {
+	return tc.txn.Get(key)
+}
+
+func (tc *TxnCache) Ts() uint64 {
+	return tc.startTs
+}
+
+// implements cacheType interface
+type queryCache struct {
+	cache  *LocalCache
+	readTs uint64
+}
+
+func (qc *queryCache) Get(key []byte) (*List, error) {
+	return qc.cache.Get(key)
+}
+
+func (qc *queryCache) Ts() uint64 {
+	return qc.readTs
+}
+
+func getDataFromKeyWithCacheType(keyString string, uid uint64, c CacheType) (types.Val, *List, error) {
+	key := x.DataKey(keyString, uid)
+	pl, err := c.Get(key)
+	if err != nil {
+		return types.Val{}, nil, errors.New(err.Error() + plError + keyString + " with uid" + strconv.FormatUint(uid, 10))
+	}
+	data, err := pl.Value(c.Ts())
+	if err != nil {
+		return types.Val{}, pl, errors.New(err.Error() + dataError + keyString + " with uid" + strconv.FormatUint(uid, 10))
+	}
+	return data, pl, nil
+}
+
+func getDataFromKeyWithTxn(keyString string, uid uint64, txn *Txn) (types.Val, *List, error) {
+	key := x.DataKey(keyString, uid)
+	pl, err := txn.Get(key)
+	if err != nil {
+		return types.Val{}, &List{}, errors.New(plError + keyString + " with uid" + strconv.FormatUint(uid, 10))
+	}
+	data, err := pl.Value(txn.StartTs)
+	if err != nil {
+		return types.Val{}, pl, errors.New(dataError + keyString + " with uid" + strconv.FormatUint(uid, 10))
+	}
+	return data, pl, nil
+}
+
+func getDataFromKeyWithCache(keyString string, uid uint64, cache *LocalCache, readTs uint64) (types.Val, *List, error) {
+	key := x.DataKey(keyString, uid)
+	pl, err := cache.Get(key)
+	if err != nil {
+		return types.Val{}, &List{}, errors.New(plError + keyString + " with uid" + strconv.FormatUint(uid, 10))
+	}
+	data, err := pl.Value(readTs)
+	if err != nil {
+		return types.Val{}, pl, errors.New(dataError + keyString + " with uid" + strconv.FormatUint(uid, 10))
+	}
+	return data, pl, nil
+}
+
+func newBadgerEdgeKeyValueEntry(ctx context.Context, plist *List, txn *Txn, pred string,
+	level int, uuid uint64, edges []byte) error {
+	edge := &pb.DirectedEdge{
+		Entity:    uuid,
+		Attr:      buildDataKeyPred(pred, VecKeyword, fmt.Sprint(level)),
+		Value:     edges,
+		ValueType: pb.Posting_ValType(0),
+		Op:        pb.DirectedEdge_SET,
+	}
+	if err := plist.addMutation(ctx, txn, edge); err != nil {
+		return err
+	}
+	return nil
+}
+
+func deadUUidInsert(ctx context.Context, c CacheType, plist *List, pred string, deadNodes []byte) error {
+	txn := NewTxn(c.Ts())
+	edge := &pb.DirectedEdge{
+		Entity:    1,
+		Attr:      buildDataKeyPred(pred, VecDead),
+		Value:     deadNodes,
+		ValueType: pb.Posting_ValType(0),
+		Op:        pb.DirectedEdge_SET,
+	}
+	return plist.addMutation(ctx, txn, edge)
+}
+
+func entryUuidInsert(ctx context.Context, plist *List, txn *Txn, pred string, entryUuid []byte) error {
+	edge := &pb.DirectedEdge{
+		Entity:    1,
+		Attr:      buildDataKeyPred(pred, VecEntry),
+		Value:     entryUuid,
+		ValueType: pb.Posting_ValType(7),
+		Op:        pb.DirectedEdge_SET,
+	}
+	return plist.addMutationInternal(ctx, txn, edge)
+}
+
+func addStartNodeToAllLevels(ctx context.Context, pl *List, txn *Txn, pred string, maxLevels int, inUuid uint64) error {
+	for i := 0; i < maxLevels; i++ {
+		key := x.DataKey(buildDataKeyPred(pred, VecKeyword, fmt.Sprint(i)), inUuid)
+		plL, err := txn.Get(key)
+		if err != nil {
+			return err
+		}
+		// creates empty at all levels only for entry node
+		err = newBadgerEdgeKeyValueEntry(ctx, plL, txn, pred, i, inUuid, []byte{})
+		if err != nil {
+			return err
+		}
+	}
+	inUuidByte := make([]byte, 8)
+	binary.BigEndian.PutUint64(inUuidByte, inUuid)         // convert inUuid to bytes
+	err := entryUuidInsert(ctx, pl, txn, pred, inUuidByte) // add inUuid as entry for this structure from now on
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func buildDataKeyPred(strs ...string) string {
+	total := ""
+	for _, s := range strs {
+		total += s
+	}
+	return total
 }

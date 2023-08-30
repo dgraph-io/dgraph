@@ -46,12 +46,12 @@ import (
 //	floatCommaList := ([whitespace] "," [whitespace] float64Val)+
 //	float64Val := < a string rep of a float64 value >
 func ParseVFloat(s string) ([]float64, error) {
+	s = strings.ReplaceAll(s, "\n", " ")
+	s = strings.ReplaceAll(s, "\t", " ")
 	s = strings.TrimSpace(s)
 	if len(s) == 0 {
 		return []float64{}, nil
 	}
-	s = strings.ReplaceAll(s, "\n", " ")
-	s = strings.ReplaceAll(s, "\t", " ")
 	trimmedPre := strings.TrimPrefix(s, "[")
 	if len(trimmedPre) == len(s) {
 		return nil, cannotConvertToVFloat(s)
@@ -537,6 +537,8 @@ func Marshal(from Val, to *Val) error {
 		switch toID {
 		case BinaryID:
 			*res = FloatArrayAsBytes(vc)
+		case StringID:
+			*res = FloatArrayAsString(vc)
 		default:
 			return cantConvert(fromID, toID)
 		}

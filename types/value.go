@@ -85,6 +85,18 @@ func FloatArrayAsBytes(v []float64) []byte {
 	return retVal
 }
 
+func FloatArrayAsString(v []float64) string {
+	retVal := "["
+	for i := range v {
+		retVal += strconv.FormatFloat(v[i], 'f', -1, 64)
+		if i != len(v)-1 {
+			retVal += ", "
+		}
+	}
+	retVal += "]"
+	return retVal
+}
+
 // TypeForValue tries to determine the most likely type based on a value. We only want to use this
 // function when there's no schema type and no suggested storage type.
 // Returns the guessed type or DefaultID if it couldn't be determined.

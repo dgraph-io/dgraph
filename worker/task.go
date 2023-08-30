@@ -358,7 +358,8 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 			return fmt.Errorf("invalid value for number of neighbors: %s", q.SrcFunc.Args[0])
 		}
 		//TODO: generate maxLevels from schema, filter, etc.
-		nn_uids, err := posting.Search(ctx, qs.cache, srcFn.vectorInfo, 5, args.q.Attr, args.q.ReadTs, int(numNeighbors), 12, posting.AcceptAll)
+		nn_uids, err := posting.Search(ctx, qs.cache, srcFn.vectorInfo, 5, args.q.Attr, args.q.ReadTs,
+			int(numNeighbors), 12, posting.HnswEuclidian, posting.AcceptAll)
 		if err != nil {
 			return err
 		}
