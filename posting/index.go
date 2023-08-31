@@ -139,7 +139,7 @@ func (txn *Txn) addIndexMutation(ctx context.Context, edge *pb.DirectedEdge, tok
 
 	if len(data) > 0 && data[0].Tid == types.VFloatID {
 		inVec := types.BytesAsFloatArray(data[0].Value.([]byte)) // retrieve vector from inUuid save as inVec
-		visited, err := InsertToBadger(ctx, txn, edge.ValueId, inVec, edge.Attr, 5, HnswEuclidian, 12)
+		visited, err := InsertToBadger(ctx, txn, edge.ValueId, inVec, edge.Attr, vectorIndexMaxLevels, HnswEuclidian, efConstruction)
 		if err != nil {
 			fmt.Print(visited)
 			return err
@@ -795,6 +795,7 @@ func (rb *IndexRebuild) DropIndexes(ctx context.Context) error {
 	}
 	prefixes = append(prefixes, prefixesToDropReverseEdges(ctx, rb)...)
 	prefixes = append(prefixes, prefixesToDropCountIndex(ctx, rb)...)
+	prefixes = append(prefixes, prefixesToDropVectorIndexEdges(ctx, rb)...)
 	glog.Infof("Deleting indexes for %s", rb.Attr)
 	return pstore.DropPrefix(prefixes...)
 }
@@ -1093,6 +1094,52 @@ func rebuildCountIndex(ctx context.Context, rb *IndexRebuild) error {
 	builder = rebuilder{attr: rb.Attr, prefix: pk.ReversePrefix(), startTs: rb.StartTs}
 	builder.fn = fn
 	return builder.Run(ctx)
+}
+
+func (rb *IndexRebuild) needsVectorIndexEdgesRebuild() indexOp {
+	x.AssertTruef(rb.CurrentSchema != nil, "Current schema cannot be nil.")
+
+	// If old schema is nil, treat it as an empty schema. Copy it to avoid
+	// overwriting it in rb.
+	old := rb.OldSchema
+	if old == nil {
+		old = &pb.SchemaUpdate{}
+	}
+
+	currIndex := rb.CurrentSchema.Directive == pb.SchemaUpdate_INDEX &&
+		rb.CurrentSchema.ValueType == pb.Posting_VFLOAT
+	prevIndex := old.Directive == pb.SchemaUpdate_INDEX &&
+		old.ValueType == pb.Posting_VFLOAT
+
+	// If the schema directive did not change, return indexNoop.
+	if currIndex == prevIndex {
+		return indexNoop
+	}
+
+	// If the current schema requires an index, index should be rebuilt.
+	if currIndex {
+		return indexRebuild
+	}
+	// Otherwise, index should only be deleted.
+	return indexDelete
+}
+
+// This needs to be moved to the implementation of vector_indexer API
+func prefixesToDropVectorIndexEdges(ctx context.Context, rb *IndexRebuild) [][]byte {
+	// Exit early if indices do not need to be rebuilt.
+	op := rb.needsVectorIndexEdgesRebuild()
+	if op == indexNoop {
+		return nil
+	}
+
+	prefixes := append([][]byte{}, x.PredicatePrefix(buildDataKeyPred(rb.Attr, VecEntry)))
+	prefixes = append(prefixes, x.PredicatePrefix(buildDataKeyPred(rb.Attr, VecDead)))
+
+	for i := 0; i < vectorIndexMaxLevels; i++ {
+		prefixes = append(prefixes, x.PredicatePrefix(buildDataKeyPred(rb.Attr, VecKeyword, fmt.Sprint(i))))
+	}
+
+	return prefixes
 }
 
 func (rb *IndexRebuild) needsReverseEdgesRebuild() indexOp {

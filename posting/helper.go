@@ -213,6 +213,8 @@ const (
 	VecKeyword    = "__vector_"
 	VecEntry      = "__vector_entry"
 	VecDead       = "__vector_dead"
+        vectorIndexMaxLevels = 5
+        efConstruction = 12
 )
 
 type SimilarityType struct {
