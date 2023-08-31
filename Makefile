@@ -34,7 +34,7 @@ version:
 
 .PHONY: dgraph
 dgraph:
-	$(MAKE) -w -C $@ all
+	$(MAKE) -w -C src/$@ all
 
 .PHONY: docker-image
 docker-image:

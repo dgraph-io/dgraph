@@ -8,7 +8,6 @@ require (
 	github.com/DataDog/opencensus-go-exporter-datadog v0.0.0-20190503082300-0f32ad59ab08
 	github.com/HdrHistogram/hdrhistogram-go v1.1.2
 	github.com/IBM/sarama v1.41.0
-	github.com/Masterminds/semver/v3 v3.1.0
 	github.com/blevesearch/bleve/v2 v2.3.9
 	github.com/dgraph-io/badger/v4 v4.2.0
 	github.com/dgraph-io/dgo/v230 v230.0.1
@@ -59,9 +58,7 @@ require (
 	golang.org/x/sys v0.11.0
 	golang.org/x/term v0.11.0
 	golang.org/x/text v0.12.0
-	golang.org/x/tools v0.9.3
 	google.golang.org/grpc v1.56.2
-	google.golang.org/protobuf v1.31.0
 	gopkg.in/square/go-jose.v2 v2.3.1
 	gopkg.in/yaml.v2 v2.4.0
 )
@@ -139,10 +136,12 @@ require (
 	go.uber.org/multierr v1.10.0 // indirect
 	golang.org/x/mod v0.12.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
+	golang.org/x/tools v0.9.3 // indirect
 	google.golang.org/api v0.122.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20230711160842-782d3b101e98 // indirect
 	google.golang.org/grpc/examples v0.0.0-20230821201920-d51b3f41716d // indirect
+	google.golang.org/protobuf v1.31.0 // indirect
 	gopkg.in/DataDog/dd-trace-go.v1 v1.22.0 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect

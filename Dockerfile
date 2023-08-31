@@ -9,7 +9,7 @@ RUN mkdir /dgraph
 WORKDIR /dgraph
 
 COPY Makefile ./Makefile
-COPY dgraph ./dgraph
+COPY src/dgraph/Makefile ./dgraph/Makefile
 
 ARG DEBIAN_FRONTEND=noninteractive
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
@@ -31,7 +31,7 @@ RUN GO_VERSION=$({ [ -f .go-version ] && cat .go-version; }) \
 ENV PATH=$PATH:/usr/local/go/bin:/root/go/bin \
     GOPATH=/root/go
 
-COPY . ./
+COPY src ./src
 
 ARG BUILD
 ARG BUILD_CODENAME
@@ -46,7 +46,7 @@ RUN BUILD=$BUILD \
     BUILD_VERSION=$BUILD_VERSION \
     make dgraph
 
-RUN mkdir bin && mv dgraph/dgraph bin
+RUN mkdir bin && mv src/dgraph/dgraph bin
 
 # -------------------------------------------------------------------------------
 
