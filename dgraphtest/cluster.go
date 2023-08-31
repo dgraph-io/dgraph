@@ -88,32 +88,6 @@ type LicenseResponse struct {
 	Extensions map[string]interface{} `json:"license,omitempty"`
 }
 
-func (hc *HTTPClient) Login(user, password string, ns uint64) error {
-	login := `mutation login($userId: String, $password: String, $namespace: Int, $refreshToken: String) {
-		login(userId: $userId, password: $password, namespace: $namespace, refreshToken: $refreshToken) {
-			response {
-				accessJWT
-				refreshJWT
-			}
-		}
-	}`
-	params := GraphQLParams{
-		Query: login,
-		Variables: map[string]interface{}{
-			"userId":       user,
-			"password":     password,
-			"namespace":    ns,
-			"refreshToken": hc.RefreshToken,
-		},
-	}
-
-	hc.HttpToken = &HttpToken{
-		UserId:   user,
-		Password: password,
-	}
-	return hc.doLogin(params, true)
-}
-
 func (hc *HTTPClient) LoginUsingToken(ns uint64) error {
 	q := `mutation login( $namespace: Int, $refreshToken:String) {
  		login(namespace: $namespace, refreshToken: $refreshToken) {
