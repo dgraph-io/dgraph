@@ -2,17 +2,26 @@
 
 # This gets built as part of our CD pipeline. Must be run through Makefile.
 
+# platform flag required on darwin/arm64
 FROM --platform=linux/amd64 ubuntu:20.04 AS build
 
 RUN mkdir /dgraph
 WORKDIR /dgraph
 
-COPY . ./
+COPY Makefile ./Makefile
+COPY dgraph ./dgraph
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+ARG DEBIAN_FRONTEND=noninteractive
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -qq \
     build-essential \
     curl \
     ca-certificates
+
+RUN cd dgraph && make jemalloc
+
+COPY .go-version ./.go-version
 
 RUN GO_VERSION=$({ [ -f .go-version ] && cat .go-version; }) \
     && curl -O -L "https://golang.org/dl/go${GO_VERSION}.linux-amd64.tar.gz" \
@@ -22,8 +31,7 @@ RUN GO_VERSION=$({ [ -f .go-version ] && cat .go-version; }) \
 ENV PATH=$PATH:/usr/local/go/bin:/root/go/bin \
     GOPATH=/root/go
 
-# save time by caching this layer
-RUN cd dgraph && make jemalloc
+COPY . ./
 
 ARG BUILD
 ARG BUILD_CODENAME
@@ -42,6 +50,7 @@ RUN mkdir bin && mv dgraph/dgraph bin
 
 # -------------------------------------------------------------------------------
 
+# platform flag required on darwin/arm64
 FROM --platform=linux/amd64 ubuntu:20.04
 LABEL maintainer="Dgraph Labs <contact@dgraph.io>"
 
