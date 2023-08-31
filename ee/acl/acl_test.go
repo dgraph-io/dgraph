@@ -21,14 +21,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/v230"
 	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/dgraphtest"
-	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -67,6 +65,7 @@ func checkGroupCount(t *testing.T, resp []byte, expected int) {
 
 func (asuite *AclTestSuite) TestGetCurrentUser() {
 	t := asuite.T()
+
 	hc, err := asuite.dc.HTTPClient()
 	require.NoError(t, err)
 	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
@@ -74,43 +73,47 @@ func (asuite *AclTestSuite) TestGetCurrentUser() {
 	currentUser, err := hc.GetCurrentUser()
 	require.NoError(t, err)
 	require.Equal(t, currentUser, "groot")
+
 	// clean up the user to allow repeated running of this test
 	userid := "hamilton"
 	require.NoError(t, hc.DeleteUser(userid), "error while deleteing user")
-	glog.Infof("cleaned up db user state")
 
 	user, err := hc.CreateUser(userid, userpassword)
 	require.NoError(t, err)
 	require.Equal(t, userid, user)
 
 	asuite.Upgrade()
+
 	hc, err = asuite.dc.HTTPClient()
 	require.NoError(t, err)
-	require.NoError(t, hc.LoginIntoNamespace(userid, userpassword,
-		x.GalaxyNamespace), "login failed")
+	require.NoError(t, hc.LoginIntoNamespace(userid, userpassword, x.GalaxyNamespace), "login failed")
 	currentUser, err = hc.GetCurrentUser()
 	require.NoError(t, err)
-	require.Equal(t, currentUser, "hamilton")
+	require.Equal(t, currentUser, userid)
 }
 
 func (asuite *AclTestSuite) TestCreateAndDeleteUsers() {
 	t := asuite.T()
+
 	hc, err := asuite.dc.HTTPClient()
 	require.NoError(t, err)
 	resetUser(t, hc)
-	asuite.Upgrade()
-	hc, err = asuite.dc.HTTPClient()
-	require.NoError(t, err)
+
 	// adding the user again should fail
 	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
 		dgraphtest.DefaultPassword, x.GalaxyNamespace))
 	user, err := hc.CreateUser(userid, userpassword)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "couldn't rewrite mutation addUser because failed to rewrite "+
-		"mutation payload because id alice already exists for field name inside type User")
+	require.Contains(t, err.Error(), "because id alice already exists")
 	require.Equal(t, "", user)
 
+	asuite.Upgrade()
+
 	// delete the user
+	hc, err = asuite.dc.HTTPClient()
+	require.NoError(t, err)
+	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
+		dgraphtest.DefaultPassword, x.GalaxyNamespace))
 	require.NoError(t, hc.DeleteUser(userid), "error while deleteing user")
 	user, err = hc.CreateUser(userid, userpassword)
 	require.NoError(t, err)
@@ -118,20 +121,19 @@ func (asuite *AclTestSuite) TestCreateAndDeleteUsers() {
 }
 
 func resetUser(t *testing.T, hc *dgraphtest.HTTPClient) {
-	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
-		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+
 	// clean up the user to allow repeated running of this test
 	require.NoError(t, hc.DeleteUser(userid), "error while deleteing user")
-	glog.Infof("deleted user")
 
 	user, err := hc.CreateUser(userid, userpassword)
 	require.NoError(t, err)
 	require.Equal(t, userid, user)
-	glog.Infof("created user")
 }
 
 func (asuite *AclTestSuite) TestPreDefinedPredicates() {
 	t := asuite.T()
+
 	// This test uses the groot account to ensure that pre-defined predicates
 	// cannot be altered even if the permissions allow it.
 	gc, cleanup, err := asuite.dc.Client()
@@ -145,6 +147,7 @@ func (asuite *AclTestSuite) TestPreDefinedPredicates() {
 
 func (asuite *AclTestSuite) TestPreDefinedTypes() {
 	t := asuite.T()
+
 	// This test uses the groot account to ensure that pre-defined types
 	// cannot be altered even if the permissions allow it.
 	gc, cleanup, err := asuite.dc.Client()
@@ -159,18 +162,14 @@ func (asuite *AclTestSuite) TestPreDefinedTypes() {
 
 func (asuite *AclTestSuite) TestAuthorization() {
 	t := asuite.T()
-	if testing.Short() {
-		t.Skip("skipping because -short=true")
-	}
 
-	glog.Infof("testing with port 9080")
 	gc, cleanup, err := asuite.dc.Client()
 	require.NoError(t, err)
 	defer cleanup()
 	hc, err := asuite.dc.HTTPClient()
 	require.NoError(t, err)
+
 	testAuthorization(t, gc, hc, asuite)
-	glog.Infof("done")
 }
 
 func getGrootAndGuardiansUid(t *testing.T, gc *dgraphtest.GrpcClient) (string, string) {
@@ -182,12 +181,10 @@ func getGrootAndGuardiansUid(t *testing.T, gc *dgraphtest.GrpcClient) (string, s
 	}`
 
 	// Structs to parse groot user query response
-	type userNode struct {
-		Uid string `json:"uid"`
-	}
-
 	type userQryResp struct {
-		GrootUser []userNode `json:"grootUser"`
+		GrootUser []struct {
+			Uid string `json:"uid"`
+		} `json:"grootUser"`
 	}
 
 	resp, err := gc.Query(grootUserQuery)
@@ -207,12 +204,10 @@ func getGrootAndGuardiansUid(t *testing.T, gc *dgraphtest.GrpcClient) (string, s
 	}`
 
 	// Structs to parse guardians group query response
-	type groupNode struct {
-		Uid string `json:"uid"`
-	}
-
 	type groupQryResp struct {
-		GuardiansGroup []groupNode `json:"guardiansGroup"`
+		GuardiansGroup []struct {
+			Uid string `json:"uid"`
+		} `json:"guardiansGroup"`
 	}
 
 	resp, err = gc.Query(guardiansGroupQuery)
@@ -227,33 +222,33 @@ func getGrootAndGuardiansUid(t *testing.T, gc *dgraphtest.GrpcClient) (string, s
 	return grootUserUid, guardiansGroupUid
 }
 
-const defaultTimeToSleep = 500 * time.Millisecond
+const (
+	defaultTimeToSleep = 500 * time.Millisecond
+	timeout            = 5 * time.Second
+	expireJwtSleep     = 21 * time.Second
+)
 
-const timeout = 5 * time.Second
-
-const expireJwtSleep = 21 * time.Second
-
-func testAuthorization(t *testing.T, gc *dgraphtest.GrpcClient, hc *dgraphtest.HTTPClient, suite *AclTestSuite) {
+func testAuthorization(t *testing.T, gc *dgraphtest.GrpcClient, hc *dgraphtest.HTTPClient, asuite *AclTestSuite) {
 	createAccountAndData(t, gc, hc)
-	suite.Upgrade()
-	gc, cleanup, err := suite.dc.Client()
-	defer cleanup()
+	asuite.Upgrade()
 
+	gc, cleanup, err := asuite.dc.Client()
+	defer cleanup()
 	require.NoError(t, err)
-	hc, err = suite.dc.HTTPClient()
+	require.NoError(t, gc.LoginIntoNamespace(context.Background(), userid, userpassword, x.GalaxyNamespace))
+
+	hc, err = asuite.dc.HTTPClient()
 	require.NoError(t, err)
-	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
-		dgraphtest.DefaultPassword, x.GalaxyNamespace))
-	ctx := context.Background()
-	require.NoError(t, gc.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace))
+	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+
 	// initially the query should return empty result, mutate and alter
 	// operations should all fail when there are no rules defined on the predicates
 	queryWithShouldFail(t, gc, false, query)
 	mutatePredicateWithUserAccount(t, gc, true)
 	alterPredicateWithUserAccount(t, gc, true)
 	createGroupAndAcls(t, unusedGroup, false, hc)
+
 	// wait for 5 seconds to ensure the new acl have reached all acl caches
-	glog.Infof("Sleeping for acl caches to be refreshed")
 	time.Sleep(defaultTimeToSleep)
 
 	// now all these operations except query should fail since
@@ -261,71 +256,66 @@ func testAuthorization(t *testing.T, gc *dgraphtest.GrpcClient, hc *dgraphtest.H
 	queryWithShouldFail(t, gc, false, query)
 	mutatePredicateWithUserAccount(t, gc, true)
 	alterPredicateWithUserAccount(t, gc, true)
+
 	// create the dev group and add the user to it
 	createGroupAndAcls(t, devGroup, true, hc)
 
 	// wait for 5 seconds to ensure the new acl have reached all acl caches
-	glog.Infof("Sleeping for acl caches to be refreshed")
 	time.Sleep(defaultTimeToSleep)
 
 	// now the operations should succeed again through the devGroup
 	queryWithShouldFail(t, gc, false, query)
+
 	// sleep long enough (10s per the docker-compose.yml)
 	// for the accessJwt to expire in order to test auto login through refresh jwt
-	glog.Infof("Sleeping for accessJwt to expire")
 	time.Sleep(expireJwtSleep)
 	mutatePredicateWithUserAccount(t, gc, false)
-	glog.Infof("Sleeping for accessJwt to expire")
+
 	time.Sleep(expireJwtSleep)
 	alterPredicateWithUserAccount(t, gc, false)
 }
 
-var predicateToRead = "predicate_to_read"
-var queryAttr = "name"
-var predicateToWrite = "predicate_to_write"
-var predicateToAlter = "predicate_to_alter"
-var devGroup = "dev"
-var sreGroup = "sre"
-var unusedGroup = "unusedGroup"
-var query = fmt.Sprintf(`
+const (
+	predicateToRead  = "predicate_to_read"
+	queryAttr        = "name"
+	predicateToWrite = "predicate_to_write"
+	predicateToAlter = "predicate_to_alter"
+	devGroup         = "dev"
+	sreGroup         = "sre"
+	unusedGroup      = "unusedGroup"
+	schemaQuery      = "schema {}"
+)
+
+var (
+	query = fmt.Sprintf(`
 	{
 		q(func: eq(%s, "SF")) {
 			%s
 		}
 	}`, predicateToRead, queryAttr)
-var schemaQuery = "schema {}"
+)
 
 func alterPreDefinedPredicates(t *testing.T, dg *dgo.Dgraph) {
 	ctx := context.Background()
 
 	// Test that alter requests are allowed if the new update is the same as
 	// the initial update for a pre-defined predicate.
-	err := dg.Alter(ctx, &api.Operation{
+	require.NoError(t, dg.Alter(ctx, &api.Operation{
 		Schema: "dgraph.xid: string @index(exact) @upsert .",
-	})
-	require.NoError(t, err)
+	}))
 
-	err = dg.Alter(ctx, &api.Operation{
-		Schema: "dgraph.xid: int .",
-	})
+	err := dg.Alter(ctx, &api.Operation{Schema: "dgraph.xid: int ."})
 	require.Error(t, err)
-	require.Contains(t, err.Error(),
-		"predicate dgraph.xid is pre-defined and is not allowed to be modified")
+	require.Contains(t, err.Error(), "predicate dgraph.xid is pre-defined and is not allowed to be modified")
 
-	err = dg.Alter(ctx, &api.Operation{
-		DropAttr: "dgraph.xid",
-	})
+	err = dg.Alter(ctx, &api.Operation{DropAttr: "dgraph.xid"})
 	require.Error(t, err)
-	require.Contains(t, err.Error(),
-		"predicate dgraph.xid is pre-defined and is not allowed to be dropped")
+	require.Contains(t, err.Error(), "predicate dgraph.xid is pre-defined and is not allowed to be dropped")
 
 	// Test that pre-defined predicates act as case-insensitive.
-	err = dg.Alter(ctx, &api.Operation{
-		Schema: "dgraph.XID: int .",
-	})
+	err = dg.Alter(ctx, &api.Operation{Schema: "dgraph.XID: int ."})
 	require.Error(t, err)
-	require.Contains(t, err.Error(),
-		"predicate dgraph.XID is pre-defined and is not allowed to be modified")
+	require.Contains(t, err.Error(), "predicate dgraph.XID is pre-defined and is not allowed to be modified")
 }
 
 func alterPreDefinedTypes(t *testing.T, dg *dgo.Dgraph) {
@@ -351,16 +341,14 @@ func alterPreDefinedTypes(t *testing.T, dg *dgo.Dgraph) {
 		`,
 	})
 	require.Error(t, err)
-	require.Contains(t, err.Error(),
-		"type dgraph.type.Group is pre-defined and is not allowed to be modified")
+	require.Contains(t, err.Error(), "type dgraph.type.Group is pre-defined and is not allowed to be modified")
 
 	err = dg.Alter(ctx, &api.Operation{
 		DropOp:    api.Operation_TYPE,
 		DropValue: "dgraph.type.Group",
 	})
 	require.Error(t, err)
-	require.Contains(t, err.Error(),
-		"type dgraph.type.Group is pre-defined and is not allowed to be dropped")
+	require.Contains(t, err.Error(), "type dgraph.type.Group is pre-defined and is not allowed to be dropped")
 }
 
 func queryWithShouldFail(t *testing.T, gc *dgraphtest.GrpcClient, shouldFail bool, query string) {
@@ -383,10 +371,7 @@ func mutatePredicateWithUserAccount(t *testing.T, gc *dgraphtest.GrpcClient, sho
 }
 
 func alterPredicateWithUserAccount(t *testing.T, gc *dgraphtest.GrpcClient, shouldFail bool) {
-	ctx := context.Background()
-	err := gc.Alter(ctx, &api.Operation{
-		Schema: fmt.Sprintf(`%s: int .`, predicateToAlter),
-	})
+	err := gc.Alter(context.Background(), &api.Operation{Schema: fmt.Sprintf(`%s: int .`, predicateToAlter)})
 	if shouldFail {
 		require.Error(t, err, "the alter should have failed")
 	} else {
@@ -396,16 +381,14 @@ func alterPredicateWithUserAccount(t *testing.T, gc *dgraphtest.GrpcClient, shou
 
 func createAccountAndData(t *testing.T, gc *dgraphtest.GrpcClient, hc *dgraphtest.HTTPClient) {
 	// use the groot account to clean the database
-	ctx := context.Background()
-	require.NoError(t, gc.LoginIntoNamespace(ctx, dgraphtest.DefaultUser,
+	require.NoError(t, gc.LoginIntoNamespace(context.Background(), dgraphtest.DefaultUser,
 		dgraphtest.DefaultPassword, x.GalaxyNamespace))
 
 	require.NoError(t, gc.DropAll(), "Unable to cleanup db")
-	require.NoError(t, gc.Alter(ctx, &api.Operation{
+	require.NoError(t, gc.Alter(context.Background(), &api.Operation{
 		Schema: fmt.Sprintf(`%s: string @index(exact) .`, predicateToRead),
 	}))
 	// wait for 5 seconds to ensure the new acl have reached all acl caches
-	t.Logf("Sleeping for acl caches to be refreshed\n")
 	time.Sleep(defaultTimeToSleep)
 
 	// create some data, e.g. user with name alice
@@ -461,27 +444,28 @@ func createGroupAndAcls(t *testing.T, group string, addUserToGroup bool, hc *dgr
 
 func (asuite *AclTestSuite) TestPredicatePermission() {
 	t := asuite.T()
-	if testing.Short() {
-		t.Skip("skipping because -short=true")
-	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 	defer cancel()
-	glog.Infof("testing with port 9080")
+
 	gc, cleanup, err := asuite.dc.Client()
 	require.NoError(t, err)
 	defer cleanup()
+
 	hc, err := asuite.dc.HTTPClient()
 	require.NoError(t, err)
-	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
-		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 	require.NoError(t, gc.LoginIntoNamespace(ctx, dgraphtest.DefaultUser,
 		dgraphtest.DefaultPassword, x.GalaxyNamespace))
 
 	createAccountAndData(t, gc, hc)
+
 	asuite.Upgrade()
+
 	gc, cleanup, err = asuite.dc.Client()
 	require.NoError(t, err)
 	defer cleanup()
+
 	require.NoError(t, gc.LoginIntoNamespace(ctx, dgraphtest.DefaultUser,
 		dgraphtest.DefaultPassword, x.GalaxyNamespace))
 	hc, err = asuite.dc.HTTPClient()
@@ -502,7 +486,6 @@ func (asuite *AclTestSuite) TestPredicatePermission() {
 	createGroupAndAcls(t, unusedGroup, false, hc)
 
 	// Wait for 5 seconds to ensure the new acl have reached all acl caches.
-	t.Logf("Sleeping for acl caches to be refreshed")
 	time.Sleep(defaultTimeToSleep)
 
 	// The operations except query should fail when there is a rule defined, but the
@@ -516,20 +499,24 @@ func (asuite *AclTestSuite) TestPredicatePermission() {
 
 func (asuite *AclTestSuite) TestAccessWithoutLoggingIn() {
 	t := asuite.T()
+
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 	defer cancel()
+
 	gc, cleanup, err := asuite.dc.Client()
 	require.NoError(t, err)
 	defer cleanup()
+
 	hc, err := asuite.dc.HTTPClient()
 	require.NoError(t, err)
-	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
-		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 	require.NoError(t, gc.LoginIntoNamespace(ctx, dgraphtest.DefaultUser,
 		dgraphtest.DefaultPassword, x.GalaxyNamespace))
 
 	createAccountAndData(t, gc, hc)
+
 	asuite.Upgrade()
+
 	gc, cleanup, err = asuite.dc.Client()
 	require.NoError(t, err)
 	defer cleanup()
@@ -550,8 +537,6 @@ func (asuite *AclTestSuite) TestUnauthorizedDeletion() {
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 	defer cancel()
 
-	unAuthPred := "unauthorizedPredicate"
-
 	gc, cleanup, err := asuite.dc.Client()
 	require.NoError(t, err)
 	defer cleanup()
@@ -560,10 +545,10 @@ func (asuite *AclTestSuite) TestUnauthorizedDeletion() {
 
 	require.NoError(t, gc.DropAll())
 
-	op := api.Operation{
-		Schema: fmt.Sprintf("%s: string @index(exact) .", unAuthPred),
-	}
+	unAuthPred := "unauthorizedPredicate"
+	op := api.Operation{Schema: fmt.Sprintf("%s: string @index(exact) .", unAuthPred)}
 	require.NoError(t, gc.Alter(ctx, &op))
+
 	hc, err := asuite.dc.HTTPClient()
 	require.NoError(t, err)
 	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
@@ -583,18 +568,21 @@ func (asuite *AclTestSuite) TestUnauthorizedDeletion() {
 	require.True(t, ok)
 
 	require.NoError(t, hc.AddRulesToGroup(devGroup, []dgraphtest.AclRule{{Predicate: unAuthPred, Permission: 0}}, true))
+
 	asuite.Upgrade()
+
 	userClient, cleanup, err := asuite.dc.Client()
 	require.NoError(t, err)
 	defer cleanup()
+
 	time.Sleep(defaultTimeToSleep)
+
 	require.NoError(t, userClient.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace))
 	mu = &api.Mutation{
 		DelNquads: []byte(fmt.Sprintf("%s %s %s .", "<"+nodeUID+">", "<"+unAuthPred+">", "*")),
 		CommitNow: true,
 	}
 	_, err = userClient.Mutate(mu)
-
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "PermissionDenied")
 }
@@ -607,10 +595,10 @@ func (asuite *AclTestSuite) TestGuardianAccess() {
 	gc, cleanup, err := asuite.dc.Client()
 	require.NoError(t, err)
 	defer cleanup()
+
 	hc, err := asuite.dc.HTTPClient()
 	require.NoError(t, err)
-	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
-		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 	require.NoError(t, gc.LoginIntoNamespace(ctx, dgraphtest.DefaultUser,
 		dgraphtest.DefaultPassword, x.GalaxyNamespace))
 
@@ -633,10 +621,13 @@ func (asuite *AclTestSuite) TestGuardianAccess() {
 	nodeUID, ok := resp.Uids["a"]
 	require.True(t, ok)
 
-	time.Sleep(defaultTimeToSleep)
 	asuite.Upgrade()
+
+	time.Sleep(defaultTimeToSleep)
 	gClient, cleanup, err := asuite.dc.Client()
 	require.NoError(t, err, "Error while creating client")
+	defer cleanup()
+
 	require.NoError(t, gClient.LoginIntoNamespace(ctx, "guardian", "guardianpass", x.GalaxyNamespace))
 	mu = &api.Mutation{
 		SetNquads: []byte(fmt.Sprintf("<%s> <unauthpred> \"testdata\" .", nodeUID)),
@@ -651,17 +642,16 @@ func (asuite *AclTestSuite) TestGuardianAccess() {
 			uid
 		}
 	}`
-
 	resp, err = gClient.Query(query)
 	require.NoError(t, err, "Error while querying unauthorized predicate")
 	require.Contains(t, string(resp.GetJson()), "uid")
 
 	op = api.Operation{Schema: "unauthpred: int ."}
 	require.NoError(t, gClient.Alter(ctx, &op), "Error while altering unauthorized predicate")
+
 	hc, err = asuite.dc.HTTPClient()
 	require.NoError(t, err)
-	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
-		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 
 	require.NoError(t, hc.RemoveUserFromGroup("guardian", "guardians"))
 
@@ -679,6 +669,7 @@ func (asuite *AclTestSuite) TestQueryRemoveUnauthorizedPred() {
 	defer cleanup()
 	require.NoError(t, gc.LoginIntoNamespace(ctx, dgraphtest.DefaultUser,
 		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+
 	hc, err := asuite.dc.HTTPClient()
 	require.NoError(t, err)
 	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
@@ -703,17 +694,18 @@ func (asuite *AclTestSuite) TestQueryRemoveUnauthorizedPred() {
 	require.Equal(t, devGroup, createdGroup)
 	require.NoError(t, hc.AddUserToGroup(userid, devGroup))
 
-	mu := &api.Mutation{SetNquads: []byte(`
-	_:a <name> "RandomGuy" .
-	_:a <age> "23" .
-	_:a <nickname> "RG" .
-	_:a <dgraph.type> "TypeName" .
-	_:b <name> "RandomGuy2" .
-	_:b <age> "25" .
-	_:b <nickname> "RG2" .
-	_:b <dgraph.type> "TypeName" .
-	`), CommitNow: true}
-
+	mu := &api.Mutation{
+		SetNquads: []byte(`
+			_:a <name> "RandomGuy" .
+			_:a <age> "23" .
+			_:a <nickname> "RG" .
+			_:a <dgraph.type> "TypeName" .
+			_:b <name> "RandomGuy2" .
+			_:b <age> "25" .
+			_:b <nickname> "RG2" .
+			_:b <dgraph.type> "TypeName" .`),
+		CommitNow: true,
+	}
 	_, err = gc.Mutate(mu)
 	require.NoError(t, err)
 
@@ -722,10 +714,10 @@ func (asuite *AclTestSuite) TestQueryRemoveUnauthorizedPred() {
 		[]dgraphtest.AclRule{{Predicate: "name", Permission: Read.Code}}, true))
 	asuite.Upgrade()
 	userClient, cleanup, err := asuite.dc.Client()
-	// defer cleanup()
 	require.NoError(t, err)
-	time.Sleep(defaultTimeToSleep)
+	defer cleanup()
 
+	time.Sleep(defaultTimeToSleep)
 	require.NoError(t, userClient.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace))
 
 	tests := []struct {
@@ -812,7 +804,7 @@ func (asuite *AclTestSuite) TestQueryRemoveUnauthorizedPred() {
 		t.Run(tc.description, func(t *testing.T) {
 			// testify does not support subtests running in parallel with suite package
 			// t.Parallel()
-			testutil.PollTillPassOrTimeout(t, userClient.Dgraph, tc.input, tc.output, timeout)
+			require.NoError(t, dgraphtest.PollTillPassOrTimeout(userClient, tc.input, tc.output, timeout))
 		})
 	}
 }
@@ -821,15 +813,16 @@ func (asuite *AclTestSuite) TestExpandQueryWithACLPermissions() {
 	t := asuite.T()
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 	defer cancel()
+
 	gc, cleanup, err := asuite.dc.Client()
 	require.NoError(t, err)
 	defer cleanup()
 	require.NoError(t, gc.LoginIntoNamespace(ctx, dgraphtest.DefaultUser,
 		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+
 	hc, err := asuite.dc.HTTPClient()
 	require.NoError(t, err)
-	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
-		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 
 	require.NoError(t, gc.DropAll())
 
@@ -858,48 +851,52 @@ func (asuite *AclTestSuite) TestExpandQueryWithACLPermissions() {
 
 	require.NoError(t, hc.AddUserToGroup(userid, devGroup))
 
-	mu := &api.Mutation{SetNquads: []byte(`
-	_:a <name> "RandomGuy" .
-	_:a <age> "23" .
-	_:a <nickname> "RG" .
-	_:a <dgraph.type> "TypeName" .
-	_:b <name> "RandomGuy2" .
-	_:b <age> "25" .
-	_:b <nickname> "RG2" .
-	_:b <dgraph.type> "TypeName" .
-	`), CommitNow: true}
+	mu := &api.Mutation{
+		SetNquads: []byte(`
+			_:a <name> "RandomGuy" .
+			_:a <age> "23" .
+			_:a <nickname> "RG" .
+			_:a <dgraph.type> "TypeName" .
+			_:b <name> "RandomGuy2" .
+			_:b <age> "25" .
+			_:b <nickname> "RG2" .
+			_:b <dgraph.type> "TypeName" .`),
+		CommitNow: true,
+	}
 	_, err = gc.Mutate(mu)
 	require.NoError(t, err)
 
-	query := "{me(func: has(name)){expand(_all_)}}"
-
 	// Test that groot has access to all the predicates
+	query := "{me(func: has(name)){expand(_all_)}}"
 	resp, err := gc.Query(query)
 	require.NoError(t, err, "Error while querying data")
-	testutil.CompareJSON(t,
+	require.NoError(t, dgraphtest.CompareJSON(
 		`{"me":[{"name":"RandomGuy","age":23, "nickname":"RG"},{"name":"RandomGuy2","age":25, "nickname":"RG2"}]}`,
-		string(resp.GetJson()))
+		string(resp.GetJson())))
 
 	asuite.Upgrade()
-	userClient, _, err := asuite.dc.Client()
+
+	userClient, cleanup, err := asuite.dc.Client()
 	require.NoError(t, err)
+	defer cleanup()
 	hc, err = asuite.dc.HTTPClient()
 	require.NoError(t, err)
 	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
 		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+
 	time.Sleep(defaultTimeToSleep)
 
 	require.NoError(t, userClient.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace))
 
 	// Query via user when user has no permissions
-	testutil.PollTillPassOrTimeout(t, userClient.Dgraph, query, `{}`, timeout)
+	require.NoError(t, dgraphtest.PollTillPassOrTimeout(userClient, query, `{}`, timeout))
 
 	// Give read access of <name>, write access of <age> to dev
 	require.NoError(t, hc.AddRulesToGroup(devGroup, []dgraphtest.AclRule{{Predicate: "age", Permission: Write.Code},
 		{Predicate: "name", Permission: Read.Code}}, true))
 
-	testutil.PollTillPassOrTimeout(t, userClient.Dgraph, query,
-		`{"me":[{"name":"RandomGuy"},{"name":"RandomGuy2"}]}`, timeout)
+	require.NoError(t, dgraphtest.PollTillPassOrTimeout(userClient, query,
+		`{"me":[{"name":"RandomGuy"},{"name":"RandomGuy2"}]}`, timeout))
 
 	// Login to groot to modify accesses (2)
 	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
@@ -907,8 +904,8 @@ func (asuite *AclTestSuite) TestExpandQueryWithACLPermissions() {
 	// Add alice to sre group which has read access to <age> and write access to <name>
 	require.NoError(t, hc.AddUserToGroup(userid, sreGroup))
 
-	testutil.PollTillPassOrTimeout(t, userClient.Dgraph, query,
-		`{"me":[{"name":"RandomGuy","age":23},{"name":"RandomGuy2","age":25}]}`, timeout)
+	require.NoError(t, dgraphtest.PollTillPassOrTimeout(userClient, query,
+		`{"me":[{"name":"RandomGuy","age":23},{"name":"RandomGuy2","age":25}]}`, timeout))
 
 	// Login to groot to modify accesses (3)
 	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
@@ -918,24 +915,25 @@ func (asuite *AclTestSuite) TestExpandQueryWithACLPermissions() {
 	require.NoError(t, hc.AddRulesToGroup(devGroup, []dgraphtest.AclRule{{Predicate: "age", Permission: Write.Code},
 		{Predicate: "name", Permission: Read.Code}, {Predicate: "nickname", Permission: Read.Code}}, true))
 
-	testutil.PollTillPassOrTimeout(t, userClient.Dgraph, query,
+	require.NoError(t, dgraphtest.PollTillPassOrTimeout(userClient, query,
 		`{"me":[{"name":"RandomGuy","age":23, "nickname":"RG"},{"name":"RandomGuy2","age":25, "nickname":"RG2"}]}`,
-		timeout)
+		timeout))
 }
 
 func (asuite *AclTestSuite) TestDeleteQueryWithACLPermissions() {
 	t := asuite.T()
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 	defer cancel()
+
 	gc, cleanup, err := asuite.dc.Client()
 	require.NoError(t, err)
 	defer cleanup()
 	require.NoError(t, gc.LoginIntoNamespace(ctx, dgraphtest.DefaultUser,
 		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+
 	hc, err := asuite.dc.HTTPClient()
 	require.NoError(t, err)
-	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
-		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 
 	require.NoError(t, gc.DropAll())
 
@@ -957,17 +955,18 @@ func (asuite *AclTestSuite) TestDeleteQueryWithACLPermissions() {
 	require.Equal(t, devGroup, createdGroup)
 	require.NoError(t, hc.AddUserToGroup(userid, devGroup))
 
-	mu := &api.Mutation{SetNquads: []byte(`
-	_:a <name> "RandomGuy" .
-	_:a <age> "23" .
-	_:a <nickname> "RG" .
-	_:a <dgraph.type> "Person" .
-	_:b <name> "RandomGuy2" .
-	_:b <age> "25" .
-	_:b <nickname> "RG2" .
-	_:b <dgraph.type> "Person" .
-	`), CommitNow: true}
-
+	mu := &api.Mutation{
+		SetNquads: []byte(`
+			_:a <name> "RandomGuy" .
+			_:a <age> "23" .
+			_:a <nickname> "RG" .
+			_:a <dgraph.type> "Person" .
+			_:b <name> "RandomGuy2" .
+			_:b <age> "25" .
+			_:b <nickname> "RG2" .
+			_:b <dgraph.type> "Person" .`),
+		CommitNow: true,
+	}
 	resp, err := gc.Mutate(mu)
 	require.NoError(t, err)
 
@@ -979,25 +978,25 @@ func (asuite *AclTestSuite) TestDeleteQueryWithACLPermissions() {
 	// Test that groot has access to all the predicates
 	resp, err = gc.Query(query)
 	require.NoError(t, err, "Error while querying data")
-	testutil.CompareJSON(
-		t,
+	require.NoError(t, dgraphtest.CompareJSON(
 		`{"q1":[{"name":"RandomGuy","age":23, "nickname": "RG"},{"name":"RandomGuy2","age":25,  "nickname": "RG2"}]}`,
-		string(resp.GetJson()),
-	)
+		string(resp.GetJson())))
 
 	// Give Write Access to alice for name and age predicate
 	require.NoError(t, hc.AddRulesToGroup(devGroup, []dgraphtest.AclRule{{Predicate: "name", Permission: Write.Code},
 		{Predicate: "age", Permission: Write.Code}}, true))
+
 	asuite.Upgrade()
+
 	gc, _, err = asuite.dc.Client()
 	require.NoError(t, err)
 	require.NoError(t, gc.LoginIntoNamespace(ctx, dgraphtest.DefaultUser,
 		dgraphtest.DefaultPassword, x.GalaxyNamespace))
 
-	userClient, _, err := asuite.dc.Client()
+	userClient, cleanup, err := asuite.dc.Client()
 	require.NoError(t, err)
+	defer cleanup()
 	time.Sleep(defaultTimeToSleep)
-
 	require.NoError(t, userClient.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace))
 
 	mu = &api.Mutation{DelNquads: []byte(fmt.Sprintf("%s %s %s .", "<"+nodeUID+">", "*", "*")), CommitNow: true}
@@ -1013,8 +1012,9 @@ func (asuite *AclTestSuite) TestDeleteQueryWithACLPermissions() {
 	resp, err = gc.Query(query)
 	require.NoError(t, err, "Error while querying data")
 	// Only name and age predicates got deleted via user - alice
-	testutil.CompareJSON(t, `{"q1":[{"nickname": "RG"},{"name":"RandomGuy2","age":25,  "nickname": "RG2"}]}`,
-		string(resp.GetJson()))
+	require.NoError(t, dgraphtest.CompareJSON(
+		`{"q1":[{"nickname": "RG"},{"name":"RandomGuy2","age":25,  "nickname": "RG2"}]}`,
+		string(resp.GetJson())))
 
 	// Give write access of <name> <dgraph.type> to dev
 	require.NoError(t, hc.AddRulesToGroup(devGroup, []dgraphtest.AclRule{{Predicate: "name", Permission: Write.Code},
@@ -1029,23 +1029,24 @@ func (asuite *AclTestSuite) TestDeleteQueryWithACLPermissions() {
 	resp, err = gc.Query(query)
 	require.NoError(t, err, "Error while querying data")
 	// Because alise had permission to dgraph.type the node reference has been deleted
-	testutil.CompareJSON(t, `{"q1":[{"name":"RandomGuy2","age":25,  "nickname": "RG2"}]}`,
-		string(resp.GetJson()))
+	require.NoError(t, dgraphtest.CompareJSON(`{"q1":[{"name":"RandomGuy2","age":25,  "nickname": "RG2"}]}`,
+		string(resp.GetJson())))
 }
 
 func (asuite *AclTestSuite) TestValQueryWithACLPermissions() {
 	t := asuite.T()
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 	defer cancel()
+
 	gc, cleanup, err := asuite.dc.Client()
 	require.NoError(t, err)
 	defer cleanup()
 	require.NoError(t, gc.LoginIntoNamespace(ctx, dgraphtest.DefaultUser,
 		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+
 	hc, err := asuite.dc.HTTPClient()
 	require.NoError(t, err)
-	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
-		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 
 	require.NoError(t, gc.DropAll())
 
@@ -1065,9 +1066,6 @@ func (asuite *AclTestSuite) TestValQueryWithACLPermissions() {
 	createdGroup, err := hc.CreateGroup(devGroup)
 	require.NoError(t, err)
 	require.Equal(t, devGroup, createdGroup)
-	// createGroup(t, accessJwt, sreGroup)
-
-	// addRulesToGroup( accessJwt, sreGroup, []rule{{"age", Read.Code}, {"name", Write.Code}, true})
 	require.NoError(t, hc.AddUserToGroup(userid, devGroup))
 
 	mu := &api.Mutation{SetNquads: []byte(`
@@ -1095,9 +1093,9 @@ func (asuite *AclTestSuite) TestValQueryWithACLPermissions() {
 	// Test that groot has access to all the predicates
 	resp, err := gc.Query(query)
 	require.NoError(t, err, "Error while querying data")
-	testutil.CompareJSON(t,
+	require.NoError(t, dgraphtest.CompareJSON(
 		`{"q1":[{"name":"RandomGuy","age":23},{"name":"RandomGuy2","age":25}],`+
-			`"q2":[{"val(v)":"RandomGuy","val(a)":23}]}`, string(resp.GetJson()))
+			`"q2":[{"val(v)":"RandomGuy","val(a)":23}]}`, string(resp.GetJson())))
 
 	// All test cases
 	tests := []struct {
@@ -1197,15 +1195,18 @@ func (asuite *AclTestSuite) TestValQueryWithACLPermissions() {
 	}
 
 	asuite.Upgrade()
-	userClient, _, err := asuite.dc.Client()
+
+	userClient, cleanup, err := asuite.dc.Client()
 	require.NoError(t, err)
+	defer cleanup()
+	require.NoError(t, userClient.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace))
+
 	hc, err = asuite.dc.HTTPClient()
 	require.NoError(t, err)
 	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
 		dgraphtest.DefaultPassword, x.GalaxyNamespace))
-	time.Sleep(defaultTimeToSleep)
 
-	require.NoError(t, userClient.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace))
+	time.Sleep(defaultTimeToSleep)
 
 	// Query via user when user has no permissions
 	for _, tc := range tests {
@@ -1213,7 +1214,7 @@ func (asuite *AclTestSuite) TestValQueryWithACLPermissions() {
 		t.Run(desc, func(t *testing.T) {
 			resp, err := userClient.Query(tc.input)
 			require.NoError(t, err)
-			testutil.CompareJSON(t, tc.outputNoPerm, string(resp.Json))
+			require.NoError(t, dgraphtest.CompareJSON(tc.outputNoPerm, string(resp.Json)))
 		})
 	}
 
@@ -1227,7 +1228,7 @@ func (asuite *AclTestSuite) TestValQueryWithACLPermissions() {
 		t.Run(desc, func(t *testing.T) {
 			resp, err := userClient.Query(tc.input)
 			require.NoError(t, err)
-			testutil.CompareJSON(t, tc.outputNamePerm, string(resp.Json))
+			require.NoError(t, dgraphtest.CompareJSON(tc.outputNamePerm, string(resp.Json)))
 		})
 	}
 
@@ -1238,6 +1239,7 @@ func (asuite *AclTestSuite) TestValQueryWithACLPermissions() {
 	// Give read access of <name> and <age> to dev
 	require.NoError(t, hc.AddRulesToGroup(devGroup, []dgraphtest.AclRule{{Predicate: "name", Permission: Read.Code},
 		{Predicate: "age", Permission: Read.Code}}, true))
+
 	time.Sleep(defaultTimeToSleep)
 
 	for _, tc := range tests {
@@ -1245,7 +1247,7 @@ func (asuite *AclTestSuite) TestValQueryWithACLPermissions() {
 		t.Run(desc, func(t *testing.T) {
 			resp, err := userClient.Query(tc.input)
 			require.NoError(t, err)
-			testutil.CompareJSON(t, tc.outputNameAgePerm, string(resp.Json))
+			require.NoError(t, dgraphtest.CompareJSON(tc.outputNameAgePerm, string(resp.Json)))
 		})
 	}
 
@@ -1255,11 +1257,13 @@ func (asuite *AclTestSuite) TestAllPredsPermission() {
 	t := asuite.T()
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 	defer cancel()
+
 	gc, cleanup, err := asuite.dc.Client()
 	require.NoError(t, err)
 	defer cleanup()
 	require.NoError(t, gc.LoginIntoNamespace(ctx, dgraphtest.DefaultUser,
 		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+
 	hc, err := asuite.dc.HTTPClient()
 	require.NoError(t, err)
 	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
@@ -1299,21 +1303,23 @@ func (asuite *AclTestSuite) TestAllPredsPermission() {
 	_, err = gc.Mutate(mu)
 	require.NoError(t, err)
 
-	query := `{q1(func: has(name)){
-		v as name
-		a as age
-    }
-    q2(func: eq(val(v), "RandomGuy")) {
-		val(v)
-		val(a)
-	}}`
+	query := `{
+		q1(func: has(name)){
+			v as name
+			a as age
+		}
+		q2(func: eq(val(v), "RandomGuy")) {
+			val(v)
+			val(a)
+		}
+	}`
 
 	// Test that groot has access to all the predicates
 	resp, err := gc.Query(query)
 	require.NoError(t, err, "Error while querying data")
-	testutil.CompareJSON(t,
+	require.NoError(t, dgraphtest.CompareJSON(
 		`{"q1":[{"name":"RandomGuy","age":23},{"name":"RandomGuy2","age":25}],`+
-			`"q2":[{"val(v)":"RandomGuy","val(a)":23}]}`, string(resp.GetJson()))
+			`"q2":[{"val(v)":"RandomGuy","val(a)":23}]}`, string(resp.GetJson())))
 
 	// All test cases
 	tests := []struct {
@@ -1345,13 +1351,15 @@ func (asuite *AclTestSuite) TestAllPredsPermission() {
 			`{"q1":[{"name":"RandomGuy"},{"name":"RandomGuy2"}],"q2":[{"val(n)":"RandomGuy"}]}`,
 
 			"alice has access to name and age",
-			`{"q1":[{"name":"RandomGuy","age":23},{"name":"RandomGuy2","age":25}],"q2":[{"val(n)":"RandomGuy","val(a)":23}]}`,
+			`{"q1":[{"name":"RandomGuy","age":23},{"name":"RandomGuy2","age":25}],"q2":[{"val(n)":"RandomGuy","val(a)":23}]}`, //nolint:lll
 		},
 	}
 
 	asuite.Upgrade()
-	userClient, _, err := asuite.dc.Client()
+
+	userClient, cleanup, err := asuite.dc.Client()
 	require.NoError(t, err)
+	defer cleanup()
 	time.Sleep(defaultTimeToSleep)
 
 	require.NoError(t, userClient.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace))
@@ -1362,7 +1370,7 @@ func (asuite *AclTestSuite) TestAllPredsPermission() {
 		t.Run(desc, func(t *testing.T) {
 			resp, err := userClient.Query(tc.input)
 			require.NoError(t, err)
-			testutil.CompareJSON(t, tc.outputNoPerm, string(resp.Json))
+			require.NoError(t, dgraphtest.CompareJSON(tc.outputNoPerm, string(resp.Json)))
 		})
 	}
 
@@ -1382,7 +1390,7 @@ func (asuite *AclTestSuite) TestAllPredsPermission() {
 		t.Run(desc, func(t *testing.T) {
 			resp, err := userClient.Query(tc.input)
 			require.NoError(t, err)
-			testutil.CompareJSON(t, tc.outputNameAgePerm, string(resp.Json))
+			require.NoError(t, dgraphtest.CompareJSON(tc.outputNameAgePerm, string(resp.Json)))
 		})
 	}
 
@@ -1411,22 +1419,27 @@ func (asuite *AclTestSuite) TestNewACLPredicates() {
 	t := asuite.T()
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 	defer cancel()
+
 	gc, cleanup, err := asuite.dc.Client()
 	require.NoError(t, err)
 	defer cleanup()
 	require.NoError(t, gc.LoginIntoNamespace(ctx, dgraphtest.DefaultUser,
 		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+
 	hc, err := asuite.dc.HTTPClient()
 	require.NoError(t, err)
-	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
-		dgraphtest.DefaultPassword, x.GalaxyNamespace))
-	addDataAndRules(ctx, t, gc, hc)
-	asuite.Upgrade()
-	userClient, _, err := asuite.dc.Client()
-	require.NoError(t, err)
-	time.Sleep(defaultTimeToSleep)
+	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 
+	addDataAndRules(ctx, t, gc, hc)
+
+	asuite.Upgrade()
+
+	userClient, cleanup, err := asuite.dc.Client()
+	require.NoError(t, err)
+	defer cleanup()
 	require.NoError(t, userClient.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace))
+
+	time.Sleep(defaultTimeToSleep)
 
 	queryTests := []struct {
 		input       string
@@ -1469,7 +1482,7 @@ func (asuite *AclTestSuite) TestNewACLPredicates() {
 
 			resp, err := userClient.NewTxn().Query(ctx, tc.input)
 			require.NoError(t, err)
-			testutil.CompareJSON(t, tc.output, string(resp.Json))
+			require.NoError(t, dgraphtest.CompareJSON(tc.output, string(resp.Json)))
 		})
 	}
 
@@ -1513,18 +1526,23 @@ func (asuite *AclTestSuite) TestDeleteRule() {
 	defer cleanup()
 	require.NoError(t, gc.LoginIntoNamespace(ctx, dgraphtest.DefaultUser,
 		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+
 	hc, err := asuite.dc.HTTPClient()
 	require.NoError(t, err)
-	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
-		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+
 	addDataAndRules(ctx, t, gc, hc)
+
 	asuite.Upgrade()
+
 	hc, err = asuite.dc.HTTPClient()
 	require.NoError(t, err)
 	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
 		dgraphtest.DefaultPassword, x.GalaxyNamespace))
-	userClient, _, err := asuite.dc.Client()
+
+	userClient, cleanup, err := asuite.dc.Client()
 	require.NoError(t, err)
+	defer cleanup()
 	time.Sleep(defaultTimeToSleep)
 
 	require.NoError(t, userClient.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace))
@@ -1533,15 +1551,15 @@ func (asuite *AclTestSuite) TestDeleteRule() {
 	resp, err := userClient.Query(queryName)
 	require.NoError(t, err, "Error while querying data")
 
-	testutil.CompareJSON(t, `{"me":[{"name":"RandomGuy"},{"name":"RandomGuy2"}]}`,
-		string(resp.GetJson()))
+	require.NoError(t, dgraphtest.CompareJSON(`{"me":[{"name":"RandomGuy"},{"name":"RandomGuy2"}]}`,
+		string(resp.GetJson())))
 
 	require.NoError(t, hc.RemovePredicateFromGroup(devGroup, "name"))
 	time.Sleep(defaultTimeToSleep)
 
 	resp, err = userClient.Query(queryName)
 	require.NoError(t, err, "Error while querying data")
-	testutil.CompareJSON(t, string(resp.GetJson()), `{}`)
+	require.NoError(t, dgraphtest.CompareJSON(string(resp.GetJson()), `{}`))
 }
 
 func addDataAndRules(ctx context.Context, t *testing.T, gc *dgraphtest.GrpcClient, hc *dgraphtest.HTTPClient) {
@@ -1610,28 +1628,6 @@ func addDataAndRules(ctx context.Context, t *testing.T, gc *dgraphtest.GrpcClien
 	require.NoError(t, err)
 }
 
-func (asuite *AclTestSuite) TestNonExistentGroup() {
-	t := asuite.T()
-	t.Skip()
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
-	defer cancel()
-	// This test won't return an error anymore as if an update in a GraphQL mutation doesn't find
-	// anything to update then it just returns an empty result.
-
-	gc, cleanup, err := asuite.dc.Client()
-	require.NoError(t, err)
-	defer cleanup()
-	require.NoError(t, gc.LoginIntoNamespace(ctx, dgraphtest.DefaultUser,
-		dgraphtest.DefaultPassword, x.GalaxyNamespace))
-	require.NoError(t, gc.DropAll())
-	hc, err := asuite.dc.HTTPClient()
-	require.NoError(t, err)
-	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
-		dgraphtest.DefaultPassword, x.GalaxyNamespace))
-	require.NoError(t, hc.AddRulesToGroup(devGroup,
-		[]dgraphtest.AclRule{{Predicate: "name", Permission: Read.Code}}, true))
-}
-
 func (asuite *AclTestSuite) TestQueryUserInfo() {
 	t := asuite.T()
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
@@ -1642,10 +1638,11 @@ func (asuite *AclTestSuite) TestQueryUserInfo() {
 	defer cleanup()
 	require.NoError(t, gc.LoginIntoNamespace(ctx, dgraphtest.DefaultUser,
 		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+
 	hc, err := asuite.dc.HTTPClient()
 	require.NoError(t, err)
-	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
-		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+
 	addDataAndRules(ctx, t, gc, hc)
 	require.NoError(t, hc.LoginIntoNamespace(userid, userpassword, x.GalaxyNamespace))
 
@@ -1671,7 +1668,7 @@ func (asuite *AclTestSuite) TestQueryUserInfo() {
 	}
 	gqlResp, err := hc.RunGraphqlQuery(params, true)
 	require.NoError(t, err)
-	testutil.CompareJSON(t, `
+	require.NoError(t, dgraphtest.CompareJSON(`
 	{
 	  "queryUser": [
 		{
@@ -1707,7 +1704,7 @@ func (asuite *AclTestSuite) TestQueryUserInfo() {
 		  ]
 		}
 	  ]
-	}`, string(gqlResp))
+	}`, string(gqlResp)))
 
 	query := `
 	{
@@ -1725,16 +1722,19 @@ func (asuite *AclTestSuite) TestQueryUserInfo() {
 	`
 
 	asuite.Upgrade()
-	userClient, _, err := asuite.dc.Client()
+
+	userClient, cleanup, err := asuite.dc.Client()
 	require.NoError(t, err)
+	defer cleanup()
 	require.NoError(t, userClient.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace))
+
 	hc, err = asuite.dc.HTTPClient()
 	require.NoError(t, err)
 	require.NoError(t, hc.LoginIntoNamespace(userid, userpassword, x.GalaxyNamespace))
+
 	resp, err := userClient.Query(query)
 	require.NoError(t, err, "Error while querying ACL")
-
-	testutil.CompareJSON(t, `{"me":[]}`, string(resp.GetJson()))
+	require.NoError(t, dgraphtest.CompareJSON(`{"me":[]}`, string(resp.GetJson())))
 
 	gqlQuery = `
 	query {
@@ -1748,16 +1748,13 @@ func (asuite *AclTestSuite) TestQueryUserInfo() {
 				permission
 			}
 		}
-	}
-	`
-
-	params = dgraphtest.GraphQLParams{
-		Query: gqlQuery,
-	}
+	}`
+	params = dgraphtest.GraphQLParams{Query: gqlQuery}
 	gqlResp, err = hc.RunGraphqlQuery(params, true)
 	require.NoError(t, err)
+
 	// The user should only be able to see their group dev and themselves as the user.
-	testutil.CompareJSON(t, `{
+	require.NoError(t, dgraphtest.CompareJSON(`{
 		  "queryGroup": [
 			{
 			  "name": "dev",
@@ -1788,29 +1785,24 @@ func (asuite *AclTestSuite) TestQueryUserInfo() {
 			  }
 
 		  ]
-	  }`, string(gqlResp))
-
+	  }`, string(gqlResp)))
 	gqlQuery = `
-	query {
-		getGroup(name: "guardians") {
-			name
-			rules {
-				predicate
-				permission
-			}
-			users {
+		query {
+			getGroup(name: "guardians") {
 				name
+				rules {
+					predicate
+					permission
+				}
+				users {
+					name
+				}
 			}
-		}
-	}
-	`
-
-	params = dgraphtest.GraphQLParams{
-		Query: gqlQuery,
-	}
+		}`
+	params = dgraphtest.GraphQLParams{Query: gqlQuery}
 	gqlResp, err = hc.RunGraphqlQuery(params, true)
 	require.NoError(t, err)
-	testutil.CompareJSON(t, `{"getGroup": null}`, string(gqlResp))
+	require.NoError(t, dgraphtest.CompareJSON(`{"getGroup": null}`, string(gqlResp)))
 }
 
 func (asuite *AclTestSuite) TestQueriesWithUserAndGroupOfSameName() {
@@ -1823,6 +1815,7 @@ func (asuite *AclTestSuite) TestQueriesWithUserAndGroupOfSameName() {
 	defer cleanup()
 	require.NoError(t, gc.LoginIntoNamespace(ctx, dgraphtest.DefaultUser,
 		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+
 	hc, err := asuite.dc.HTTPClient()
 	require.NoError(t, err)
 	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
@@ -1832,17 +1825,18 @@ func (asuite *AclTestSuite) TestQueriesWithUserAndGroupOfSameName() {
 	// Creates a user -- alice
 	resetUser(t, hc)
 
-	mu := &api.Mutation{SetNquads: []byte(`
-		_:a <name> "RandomGuy" .
-		_:a <age> "23" .
-		_:a <nickname> "RG" .
-		_:a <dgraph.type> "TypeName" .
-		_:b <name> "RandomGuy2" .
-		_:b <age> "25" .
-		_:b <nickname> "RG2" .
-		_:b <dgraph.type> "TypeName" .
-	`), CommitNow: true}
-
+	mu := &api.Mutation{
+		SetNquads: []byte(`
+			_:a <name> "RandomGuy" .
+			_:a <age> "23" .
+			_:a <nickname> "RG" .
+			_:a <dgraph.type> "TypeName" .
+			_:b <name> "RandomGuy2" .
+			_:b <age> "25" .
+			_:b <nickname> "RG2" .
+			_:b <dgraph.type> "TypeName" .`),
+		CommitNow: true,
+	}
 	_, err = gc.Mutate(mu)
 	require.NoError(t, err)
 
@@ -1855,32 +1849,37 @@ func (asuite *AclTestSuite) TestQueriesWithUserAndGroupOfSameName() {
 	require.NoError(t, hc.AddRulesToGroup("alice",
 		[]dgraphtest.AclRule{{Predicate: "name", Permission: Read.Code}}, true))
 
+	asuite.Upgrade()
+
+	dc, cleanup, err := asuite.dc.Client()
+	require.NoError(t, err)
+	defer cleanup()
+	require.NoError(t, dc.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace))
+
 	query := `
 	{
 		q(func: has(name)) {
 			name
 			age
 		}
-	}
-	`
-	asuite.Upgrade()
-	dc, cleanup, err := asuite.dc.Client()
-	defer cleanup()
-	require.NoError(t, dc.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace))
-
-	testutil.PollTillPassOrTimeout(t, dc.Dgraph, query, `{"q":[{"name":"RandomGuy"},{"name":"RandomGuy2"}]}`, timeout)
+	}`
+	require.NoError(t, dgraphtest.PollTillPassOrTimeout(dc, query,
+		`{"q":[{"name":"RandomGuy"},{"name":"RandomGuy2"}]}`, timeout))
 }
 
 func (asuite *AclTestSuite) TestQueriesForNonGuardianUserWithoutGroup() {
 	t := asuite.T()
+
 	hc, err := asuite.dc.HTTPClient()
 	require.NoError(t, err)
 	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
 		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+
 	// Create a new user without any groups, queryGroup should return an empty result.
 	resetUser(t, hc)
 
 	asuite.Upgrade()
+
 	hc, err = asuite.dc.HTTPClient()
 	require.NoError(t, err)
 	require.NoError(t, hc.LoginIntoNamespace(userid, userpassword, x.GalaxyNamespace))
@@ -1896,12 +1895,10 @@ func (asuite *AclTestSuite) TestQueriesForNonGuardianUserWithoutGroup() {
 	}
 	`
 
-	params := dgraphtest.GraphQLParams{
-		Query: gqlQuery,
-	}
+	params := dgraphtest.GraphQLParams{Query: gqlQuery}
 	gqlResp, err := hc.RunGraphqlQuery(params, true)
 	require.NoError(t, err)
-	testutil.CompareJSON(t, `{"queryGroup": []}`, string(gqlResp))
+	require.NoError(t, dgraphtest.CompareJSON(`{"queryGroup": []}`, string(gqlResp)))
 
 	gqlQuery = `
 	query {
@@ -1911,22 +1908,20 @@ func (asuite *AclTestSuite) TestQueriesForNonGuardianUserWithoutGroup() {
 				name
 			}
 		}
-	}
-	`
-
-	params = dgraphtest.GraphQLParams{
-		Query: gqlQuery,
-	}
+	}`
+	params = dgraphtest.GraphQLParams{Query: gqlQuery}
 	gqlResp, err = hc.RunGraphqlQuery(params, true)
 	require.NoError(t, err)
-	testutil.CompareJSON(t, `{"queryUser": [{ "groups": [], "name": "alice"}]}`, string(gqlResp))
+	require.NoError(t, dgraphtest.CompareJSON(`{"queryUser": [{ "groups": [], "name": "alice"}]}`, string(gqlResp)))
 }
 
 func (asuite *AclTestSuite) TestSchemaQueryWithACL() {
 	t := asuite.T()
 	dgraphtest.ShouldSkipTest(t, "9a964dd9c794a9731fa6ec35aded6693acc7a1fd", asuite.dc.GetVersion())
+
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 	defer cancel()
+
 	schemaQuery := "schema{}"
 	grootSchema := `{
   "schema": [
@@ -2099,10 +2094,11 @@ func (asuite *AclTestSuite) TestSchemaQueryWithACL() {
 	defer cleanup()
 	require.NoError(t, gc.LoginIntoNamespace(ctx, dgraphtest.DefaultUser,
 		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+
 	hc, err := asuite.dc.HTTPClient()
 	require.NoError(t, err)
-	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
-		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+
 	require.NoError(t, gc.DropAll())
 	resp, err := gc.Query(schemaQuery)
 	require.NoError(t, err)
@@ -2115,36 +2111,40 @@ func (asuite *AclTestSuite) TestSchemaQueryWithACL() {
 	time.Sleep(defaultTimeToSleep) // wait for ACL cache to refresh, otherwise it will be flaky test
 	asuite.Upgrade()
 	// the other user should be able to view only the part of schema for which it has read access
-	gc, _, err = asuite.dc.Client()
+	gc, cleanup, err = asuite.dc.Client()
 	require.NoError(t, err)
+	defer cleanup()
 	require.NoError(t, gc.LoginIntoNamespace(context.Background(), userid, userpassword, x.GalaxyNamespace))
+
 	resp, err = gc.Query(schemaQuery)
 	require.NoError(t, err)
 	require.JSONEq(t, aliceSchema, string(resp.GetJson()))
 }
 
 func (asuite *AclTestSuite) TestDeleteUserShouldDeleteUserFromGroup() {
+	t := asuite.T()
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 	defer cancel()
-	t := asuite.T()
+
 	gc, cleanup, err := asuite.dc.Client()
 	require.NoError(t, err)
 	defer cleanup()
 	require.NoError(t, gc.LoginIntoNamespace(ctx, dgraphtest.DefaultUser,
 		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+
 	hc, err := asuite.dc.HTTPClient()
 	require.NoError(t, err)
-	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
-		dgraphtest.DefaultPassword, x.GalaxyNamespace))
-	resetUser(t, hc)
+	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 
+	resetUser(t, hc)
 	addDataAndRules(ctx, t, gc, hc)
+
 	asuite.Upgrade()
+
 	hc, err = asuite.dc.HTTPClient()
 	require.NoError(t, err)
 	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
 		dgraphtest.DefaultPassword, x.GalaxyNamespace))
-
 	require.NoError(t, hc.DeleteUser(userid))
 
 	gqlQuery := `
@@ -2152,12 +2152,8 @@ func (asuite *AclTestSuite) TestDeleteUserShouldDeleteUserFromGroup() {
 		queryUser {
 			name
 		}
-	}
-	`
-
-	params := dgraphtest.GraphQLParams{
-		Query: gqlQuery,
-	}
+	}`
+	params := dgraphtest.GraphQLParams{Query: gqlQuery}
 	gqlResp, err := hc.RunGraphqlQuery(params, true)
 	require.NoError(t, err)
 	require.JSONEq(t, `{"queryUser":[{"name":"groot"}]}`, string(gqlResp))
@@ -2171,15 +2167,11 @@ func (asuite *AclTestSuite) TestDeleteUserShouldDeleteUserFromGroup() {
 				name
 			}
 		}
-	}
-	`
-
-	params = dgraphtest.GraphQLParams{
-		Query: gqlQuery,
-	}
+	}`
+	params = dgraphtest.GraphQLParams{Query: gqlQuery}
 	gqlResp, err = hc.RunGraphqlQuery(params, true)
 	require.NoError(t, err)
-	testutil.CompareJSON(t, `{
+	require.NoError(t, dgraphtest.CompareJSON(`{
 		  "queryGroup": [
 			{
 			  "name": "guardians",
@@ -2202,32 +2194,33 @@ func (asuite *AclTestSuite) TestDeleteUserShouldDeleteUserFromGroup() {
 				"users": []
 			}
 		  ]
-	  }`, string(gqlResp))
+	  }`, string(gqlResp)))
 }
 
 func (asuite *AclTestSuite) TestGroupDeleteShouldDeleteGroupFromUser() {
 	t := asuite.T()
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 	defer cancel()
+
 	gc, cleanup, err := asuite.dc.Client()
 	require.NoError(t, err)
 	defer cleanup()
 	require.NoError(t, gc.LoginIntoNamespace(ctx, dgraphtest.DefaultUser,
 		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+
 	hc, err := asuite.dc.HTTPClient()
 	require.NoError(t, err)
-	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
-		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 	resetUser(t, hc)
 
 	addDataAndRules(ctx, t, gc, hc)
+
 	asuite.Upgrade()
 
 	hc, err = asuite.dc.HTTPClient()
 	require.NoError(t, err)
 	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
 		dgraphtest.DefaultPassword, x.GalaxyNamespace))
-
 	require.NoError(t, hc.DeleteGroup("dev-a"))
 
 	gqlQuery := `
@@ -2235,15 +2228,11 @@ func (asuite *AclTestSuite) TestGroupDeleteShouldDeleteGroupFromUser() {
 		queryGroup {
 			name
 		}
-	}
-	`
-
-	params := dgraphtest.GraphQLParams{
-		Query: gqlQuery,
-	}
+	}`
+	params := dgraphtest.GraphQLParams{Query: gqlQuery}
 	gqlResp, err := hc.RunGraphqlQuery(params, true)
 	require.NoError(t, err)
-	testutil.CompareJSON(t, `{
+	require.NoError(t, dgraphtest.CompareJSON(`{
 		  "queryGroup": [
 			{
 			  "name": "guardians"
@@ -2255,7 +2244,7 @@ func (asuite *AclTestSuite) TestGroupDeleteShouldDeleteGroupFromUser() {
 			  "name": "dev-b"
 			}
 		  ]
-	  }`, string(gqlResp))
+	  }`, string(gqlResp)))
 
 	gqlQuery = `
 	query {
@@ -2265,15 +2254,11 @@ func (asuite *AclTestSuite) TestGroupDeleteShouldDeleteGroupFromUser() {
 				name
 			}
 		}
-	}
-	`
-
-	params = dgraphtest.GraphQLParams{
-		Query: gqlQuery,
-	}
+	}`
+	params = dgraphtest.GraphQLParams{Query: gqlQuery}
 	gqlResp, err = hc.RunGraphqlQuery(params, true)
 	require.NoError(t, err)
-	testutil.CompareJSON(t, `{
+	require.NoError(t, dgraphtest.CompareJSON(`{
 		"getUser": {
 			"name": "alice",
 			"groups": [
@@ -2282,7 +2267,7 @@ func (asuite *AclTestSuite) TestGroupDeleteShouldDeleteGroupFromUser() {
 				}
 			]
 		}
-	}`, string(gqlResp))
+	}`, string(gqlResp)))
 }
 
 func assertNonGuardianFailure(t *testing.T, queryName string, respIsNull bool, gqlResp []byte, err error) {
@@ -2312,10 +2297,12 @@ type graphQLAdminEndpointTestCase struct {
 
 func (asuite *AclTestSuite) TestAddUpdateGroupWithDuplicateRules() {
 	t := asuite.T()
+
 	hc, err := asuite.dc.HTTPClient()
 	require.NoError(t, err)
 	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
 		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+
 	groupName := "testGroup"
 	addedRules := []dgraphtest.AclRule{
 		{
@@ -2338,7 +2325,9 @@ func (asuite *AclTestSuite) TestAddUpdateGroupWithDuplicateRules() {
 	require.Equal(t, groupName, addedGroup.Name)
 	require.Len(t, addedGroup.Rules, 2)
 	require.ElementsMatch(t, addedRules[1:], addedGroup.Rules)
+
 	asuite.Upgrade()
+
 	hc, err = asuite.dc.HTTPClient()
 	require.NoError(t, err)
 	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
@@ -2386,10 +2375,11 @@ func (asuite *AclTestSuite) TestAllowUIDAccess() {
 	defer cleanup()
 	require.NoError(t, gc.LoginIntoNamespace(ctx, dgraphtest.DefaultUser,
 		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+
 	hc, err := asuite.dc.HTTPClient()
 	require.NoError(t, err)
-	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
-		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+
 	require.NoError(t, gc.DropAll())
 	op := api.Operation{Schema: `
 		name	 : string @index(exact) .
@@ -2411,10 +2401,12 @@ func (asuite *AclTestSuite) TestAllowUIDAccess() {
 	// give read access of <name> to alice
 	require.NoError(t, hc.AddRulesToGroup(devGroup,
 		[]dgraphtest.AclRule{{Predicate: "name", Permission: Read.Code}}, true))
+
 	asuite.Upgrade()
-	userClient, cancel, err := asuite.dc.Client()
+
+	userClient, cleanup, err := asuite.dc.Client()
 	require.NoError(t, err)
-	defer cancel()
+	defer cleanup()
 	time.Sleep(defaultTimeToSleep)
 
 	require.NoError(t, userClient.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace))
@@ -2425,12 +2417,10 @@ func (asuite *AclTestSuite) TestAllowUIDAccess() {
 			uid
 			name
 		}
-	}
-	`
-
+	}`
 	resp, err := userClient.Query(uidQuery)
 	require.NoError(t, err)
-	testutil.CompareJSON(t, `{"me":[{"name":"100th User", "uid": "0x64"}]}`, string(resp.GetJson()))
+	require.NoError(t, dgraphtest.CompareJSON(`{"me":[{"name":"100th User", "uid": "0x64"}]}`, string(resp.GetJson())))
 }
 
 func (asuite *AclTestSuite) TestAddNewPredicate() {
@@ -2443,14 +2433,16 @@ func (asuite *AclTestSuite) TestAddNewPredicate() {
 	defer cleanup()
 	require.NoError(t, gc.LoginIntoNamespace(ctx, dgraphtest.DefaultUser,
 		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+
 	hc, err := asuite.dc.HTTPClient()
 	require.NoError(t, err)
-	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
-		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 
 	require.NoError(t, gc.DropAll())
 	resetUser(t, hc)
+
 	asuite.Upgrade()
+
 	hc, err = asuite.dc.HTTPClient()
 	require.NoError(t, err)
 	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
@@ -2461,9 +2453,7 @@ func (asuite *AclTestSuite) TestAddNewPredicate() {
 	require.NoError(t, userClient.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace))
 
 	// Alice doesn't have access to create new predicate.
-	err = userClient.Alter(ctx, &api.Operation{
-		Schema: `newpred: string .`,
-	})
+	err = userClient.Alter(ctx, &api.Operation{Schema: `newpred: string .`})
 	require.Error(t, err, "User can't create new predicate. Alter should have returned error.")
 
 	require.NoError(t, hc.AddUserToGroup(userid, "guardians"))
@@ -2486,6 +2476,7 @@ func (asuite *AclTestSuite) TestCrossGroupPermission() {
 	defer cleanup()
 	require.NoError(t, gc.LoginIntoNamespace(ctx, dgraphtest.DefaultUser,
 		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+
 	hc, err := asuite.dc.HTTPClient()
 	require.NoError(t, err)
 	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
@@ -2493,9 +2484,7 @@ func (asuite *AclTestSuite) TestCrossGroupPermission() {
 
 	require.NoError(t, gc.DropAll())
 
-	err = gc.Alter(ctx, &api.Operation{
-		Schema: `newpred: string .`,
-	})
+	err = gc.Alter(ctx, &api.Operation{Schema: `newpred: string .`})
 	require.NoError(t, err)
 
 	// create groups
@@ -2576,12 +2565,15 @@ func (asuite *AclTestSuite) TestCrossGroupPermission() {
 		require.True(t, (err != nil) == shouldFail,
 			"Alter test failed for: "+user+", shouldFail: "+strconv.FormatBool(shouldFail))
 	}
+
 	asuite.Upgrade()
+
 	// test user access.
 	for i := 0; i < 8; i++ {
 		userIdx := strconv.Itoa(i)
-		userClient, _, err := asuite.dc.Client()
+		userClient, cleanup, err := asuite.dc.Client()
 		require.NoError(t, err, "Client creation error")
+		defer cleanup()
 
 		require.NoError(t, userClient.LoginIntoNamespace(ctx, "user"+userIdx,
 			"password"+userIdx, x.GalaxyNamespace), "Login error")
@@ -2602,10 +2594,11 @@ func (asuite *AclTestSuite) TestMutationWithValueVar() {
 	defer cleanup()
 	require.NoError(t, gc.LoginIntoNamespace(ctx, dgraphtest.DefaultUser,
 		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+
 	hc, err := asuite.dc.HTTPClient()
 	require.NoError(t, err)
-	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
-		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+
 	require.NoError(t, gc.DropAll())
 	err = gc.Alter(ctx, &api.Operation{
 		Schema: `
@@ -2663,9 +2656,12 @@ func (asuite *AclTestSuite) TestMutationWithValueVar() {
 		`),
 		CommitNow: true,
 	}
+
 	asuite.Upgrade()
-	userClient, _, err := asuite.dc.Client()
+
+	userClient, cleanup, err := asuite.dc.Client()
 	require.NoError(t, err)
+	defer cleanup()
 	require.NoError(t, userClient.LoginIntoNamespace(ctx, userid, userpassword, x.GalaxyNamespace))
 
 	_, err = userClient.NewTxn().Do(ctx, &api.Request{
@@ -2687,57 +2683,61 @@ func (asuite *AclTestSuite) TestMutationWithValueVar() {
 
 	resp, err := userClient.Query(query)
 	require.NoError(t, err)
-
-	testutil.CompareJSON(t, `{"me": [{"name":"r1","nickname":"r1"}]}`, string(resp.GetJson()))
+	require.NoError(t, dgraphtest.CompareJSON(`{"me": [{"name":"r1","nickname":"r1"}]}`, string(resp.GetJson())))
 }
 
 func (asuite *AclTestSuite) TestDeleteGuardiansGroupShouldFail() {
 	t := asuite.T()
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 	defer cancel()
+
 	gc, cleanup, err := asuite.dc.Client()
 	require.NoError(t, err)
 	defer cleanup()
 	require.NoError(t, gc.LoginIntoNamespace(ctx, dgraphtest.DefaultUser,
 		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+
 	hc, err := asuite.dc.HTTPClient()
 	require.NoError(t, err)
-	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
-		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 
 	addDataAndRules(ctx, t, gc, hc)
 
 	asuite.Upgrade()
+
 	hc, err = asuite.dc.HTTPClient()
 	require.NoError(t, err)
-	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
-		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 
 	err = hc.DeleteGroup("guardians")
 	require.Error(t, err)
-	require.Contains(t, err.Error(),
-		"guardians group and groot user cannot be deleted.")
+	require.Contains(t, err.Error(), "guardians group and groot user cannot be deleted.")
 }
 
 func (asuite *AclTestSuite) TestDeleteGrootUserShouldFail() {
 	t := asuite.T()
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 	defer cancel()
+
 	gc, cleanup, err := asuite.dc.Client()
 	require.NoError(t, err)
 	defer cleanup()
 	require.NoError(t, gc.LoginIntoNamespace(ctx, dgraphtest.DefaultUser,
 		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+
 	hc, err := asuite.dc.HTTPClient()
 	require.NoError(t, err)
 	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
 		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+
 	addDataAndRules(ctx, t, gc, hc)
+
 	asuite.Upgrade()
+
 	hc, err = asuite.dc.HTTPClient()
 	require.NoError(t, err)
-	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
-		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+
 	err = hc.DeleteUser("groot")
 	require.Error(t, err)
 	require.Contains(t, err.Error(),
@@ -2748,21 +2748,24 @@ func (asuite *AclTestSuite) TestDeleteGrootUserFromGuardiansGroupShouldFail() {
 	t := asuite.T()
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 	defer cancel()
+
 	gc, cleanup, err := asuite.dc.Client()
 	require.NoError(t, err)
 	defer cleanup()
 	require.NoError(t, gc.LoginIntoNamespace(ctx, dgraphtest.DefaultUser,
 		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+
 	hc, err := asuite.dc.HTTPClient()
 	require.NoError(t, err)
-	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
-		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+
 	addDataAndRules(ctx, t, gc, hc)
+
 	asuite.Upgrade()
+
 	hc, err = asuite.dc.HTTPClient()
 	require.NoError(t, err)
-	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
-		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 
 	err = hc.RemoveUserFromGroup("groot", "guardians")
 	require.Error(t, err)
@@ -2773,21 +2776,27 @@ func (asuite *AclTestSuite) TestDeleteGrootAndGuardiansUsingDelNQuadShouldFail()
 	t := asuite.T()
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 	defer cancel()
+
 	gc, cleanup, err := asuite.dc.Client()
 	require.NoError(t, err)
 	defer cleanup()
 	require.NoError(t, gc.LoginIntoNamespace(ctx, dgraphtest.DefaultUser,
 		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+
 	hc, err := asuite.dc.HTTPClient()
 	require.NoError(t, err)
-	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
-		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+
 	addDataAndRules(ctx, t, gc, hc)
+
 	asuite.Upgrade()
+
 	gc, cleanup, err = asuite.dc.Client()
+	require.NoError(t, err)
+	defer cleanup()
 	require.NoError(t, gc.LoginIntoNamespace(ctx, dgraphtest.DefaultUser,
 		dgraphtest.DefaultPassword, x.GalaxyNamespace))
-	defer cleanup()
+
 	grootUid, guardiansUid := getGrootAndGuardiansUid(t, gc)
 
 	mu := &api.Mutation{DelNquads: []byte(fmt.Sprintf("%s %s %s .", "<"+grootUid+">", "*", "*")), CommitNow: true}
@@ -2807,30 +2816,32 @@ func deleteGuardiansGroupAndGrootUserShouldFail(t *testing.T, hc *dgraphtest.HTT
 	// Try deleting guardians group should fail
 	err := hc.DeleteGroup("guardians")
 	require.Error(t, err)
-	require.Contains(t, err.Error(),
-		"guardians group and groot user cannot be deleted.")
+	require.Contains(t, err.Error(), "guardians group and groot user cannot be deleted.")
 	// Try deleting groot user should fail
 	err = hc.DeleteUser("groot")
 	require.Error(t, err)
-	require.Contains(t, err.Error(),
-		"guardians group and groot user cannot be deleted.")
+	require.Contains(t, err.Error(), "guardians group and groot user cannot be deleted.")
 }
 
 func (asuite *AclTestSuite) TestDropAllShouldResetGuardiansAndGroot() {
 	t := asuite.T()
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 	defer cancel()
+
 	gc, cleanup, err := asuite.dc.Client()
 	require.NoError(t, err)
 	defer cleanup()
 	require.NoError(t, gc.LoginIntoNamespace(ctx, dgraphtest.DefaultUser,
 		dgraphtest.DefaultPassword, x.GalaxyNamespace))
 	hc, err := asuite.dc.HTTPClient()
+
 	require.NoError(t, err)
-	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
-		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+
 	addDataAndRules(ctx, t, gc, hc)
+
 	asuite.Upgrade()
+
 	gc, cleanup, err = asuite.dc.Client()
 	defer cleanup()
 	require.NoError(t, err)
@@ -2847,10 +2858,10 @@ func (asuite *AclTestSuite) TestDropAllShouldResetGuardiansAndGroot() {
 	}
 
 	time.Sleep(defaultTimeToSleep)
+
 	hc, err = asuite.dc.HTTPClient()
 	require.NoError(t, err)
-	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
-		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 	deleteGuardiansGroupAndGrootUserShouldFail(t, hc)
 
 	// Try Drop Data
@@ -2864,7 +2875,6 @@ func (asuite *AclTestSuite) TestDropAllShouldResetGuardiansAndGroot() {
 
 	hc, err = asuite.dc.HTTPClient()
 	require.NoError(t, err)
-	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
-		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 	deleteGuardiansGroupAndGrootUserShouldFail(t, hc)
 }

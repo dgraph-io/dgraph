@@ -479,35 +479,74 @@ func (c *LocalCluster) containerHealthCheck(url string) error {
 		if !strings.Contains(resp, `"ee_features"`) {
 			continue
 		}
-		if !c.conf.acl {
-			return nil
-		}
-		if !c.conf.acl || !strings.Contains(resp, `"acl"`) {
+		if c.conf.acl && !strings.Contains(resp, `"acl"`) {
 			continue
 		}
-
-		client, cleanup, err := c.Client()
-		if err != nil {
-			return errors.Wrap(err, "error setting up a client")
+		if err := c.waitUntilLogin(); err != nil {
+			return err
 		}
-		defer cleanup()
-
-		ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
-		defer cancel()
-		for i := 0; i < 10; i++ {
-			if err = client.Login(ctx, DefaultUser, DefaultPassword); err == nil {
-				break
-			}
-			log.Printf("[WARNING] error trying to login: %v", err)
-			time.Sleep(waitDurBeforeRetry)
-		}
-		if err != nil {
-			return errors.Wrap(err, "error during login")
+		if err := c.waitUntilGraphqlHealthCheck(); err != nil {
+			return err
 		}
 		return nil
 	}
 
 	return fmt.Errorf("health failed, cluster took too long to come up [%v]", url)
+}
+
+func (c *LocalCluster) waitUntilLogin() error {
+	if !c.conf.acl {
+		return nil
+	}
+
+	client, cleanup, err := c.Client()
+	if err != nil {
+		return errors.Wrap(err, "error setting up a client")
+	}
+	defer cleanup()
+
+	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+	defer cancel()
+	for i := 0; i < 10; i++ {
+		err := client.Login(ctx, DefaultUser, DefaultPassword)
+		if err == nil {
+			log.Printf("[INFO] login succeeded")
+			return nil
+		}
+		log.Printf("[WARNING] error trying to login: %v", err)
+		time.Sleep(waitDurBeforeRetry)
+	}
+	return errors.New("error during login")
+}
+
+func (c *LocalCluster) waitUntilGraphqlHealthCheck() error {
+	hc, err := c.HTTPClient()
+	if err != nil {
+		return errors.Wrap(err, "error creating http client while graphql health check")
+	}
+	if c.conf.acl {
+		if err := hc.LoginIntoNamespace(DefaultUser, DefaultPassword, x.GalaxyNamespace); err != nil {
+			return errors.Wrap(err, "error during login while graphql health check")
+		}
+	}
+
+	for i := 0; i < 10; i++ {
+		// we do this because before v21, we used to propose the initial schema to the cluster.
+		// This results in schema being applied and indexes being built which could delay alpha
+		// starting to serve graphql schema.
+		err := hc.DeleteUser("nonexistent")
+		if err == nil {
+			log.Printf("[INFO] graphql health check succeeded")
+			return nil
+		} else if strings.Contains(err.Error(), "this indicates a resolver or validation bug") {
+			time.Sleep(waitDurBeforeRetry)
+			continue
+		} else {
+			return errors.Wrapf(err, "error during graphql health check")
+		}
+	}
+
+	return errors.New("error during graphql health check")
 }
 
 var client *http.Client = &http.Client{
