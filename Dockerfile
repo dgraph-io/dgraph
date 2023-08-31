@@ -7,7 +7,7 @@ FROM --platform=linux/amd64 ubuntu:20.04 AS build
 RUN mkdir /dgraph
 WORKDIR /dgraph
 
-COPY tmp ./
+COPY . ./
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
