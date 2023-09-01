@@ -240,6 +240,39 @@ func (lc *LocalCache) getInternal(key []byte, readFromDisk bool) (*List, error) 
 	return lc.SetIfAbsent(skey, pl), nil
 }
 
+func (lc *LocalCache) GetSinglePosting(key []byte) (*pb.PostingList, error) {
+	pl := &pb.PostingList{}
+	lc.RLock()
+	if delta, ok := lc.deltas[string(key)]; ok && len(delta) > 0 {
+		err := pl.Unmarshal(delta)
+		lc.RUnlock()
+		if err != nil {
+			return pl, nil
+		}
+	} else {
+		lc.RUnlock()
+	}
+
+	txn := pstore.NewTransactionAt(lc.startTs, false)
+	item, err := txn.Get(key)
+	if err != nil {
+		return pl, err
+	}
+
+	err = item.Value(func(val []byte) error {
+		if err := pl.Unmarshal(val); err != nil {
+			return err
+		}
+		return nil
+	})
+
+	if err != nil {
+		return pl, err
+	}
+
+	return pl, nil
+}
+
 func (lc *LocalCache) GetSingle(key []byte) (*List, error) {
 	return lc.getSingleInternal(key, true)
 }
