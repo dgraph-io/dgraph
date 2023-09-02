@@ -42,7 +42,10 @@ func TestACLJwtAlgo(t *testing.T) {
 			c, err := dgraphtest.NewLocalCluster(conf)
 			require.NoError(t, err)
 			defer func() { c.Cleanup(t.Failed()) }()
-			require.NoError(t, c.Start())
+			if err := c.Start(); err != nil {
+				c.Cleanup(true)
+				require.NoError(t, err)
+			}
 
 			gc, cleanup, err := c.Client()
 			require.NoError(t, err)

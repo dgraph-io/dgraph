@@ -61,7 +61,10 @@ func TestMain(m *testing.M) {
 		c, err := dgraphtest.NewLocalCluster(conf)
 		x.Panic(err)
 		defer func() { c.Cleanup(code != 0) }()
-		x.Panic(c.Start())
+		if err := c.Start(); err != nil {
+			c.Cleanup(true)
+			panic(err)
+		}
 
 		hc, err := c.HTTPClient()
 		x.Panic(err)

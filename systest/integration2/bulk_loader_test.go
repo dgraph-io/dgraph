@@ -94,7 +94,10 @@ func TestBulkLoaderNoDqlSchema(t *testing.T) {
 	require.NoError(t, c.BulkLoad(opts))
 
 	// start Alphas
-	require.NoError(t, c.Start())
+	if err := c.Start(); err != nil {
+		c.Cleanup(true)
+		require.NoError(t, err)
+	}
 
 	// run some queries and ensure everything looks good
 	hc, err := c.HTTPClient()
