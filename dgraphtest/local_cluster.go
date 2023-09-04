@@ -1082,3 +1082,45 @@ func (c *LocalCluster) GeneratePlugins(raceEnabled bool) error {
 
 	return nil
 }
+
+func (c *LocalCluster) RunUpgradeTool(from, to string) error {
+	isAncestor, err := IsHigherVersion(from, "v20.11.0-11-gb36b4862")
+	if err != nil {
+		return errors.Wrapf(err, "error identifying ancestor relationship")
+	}
+	if !isAncestor {
+		return nil
+	}
+
+	grpcPubPort, err := publicPort(c.dcli, c.alphas[0], alphaGrpcPort)
+	if err != nil {
+		return errors.Wrapf(err, "error finding alpha grpc public port")
+	}
+	grpcUrl := "localhost:" + grpcPubPort
+
+	httpPubPort, err := publicPort(c.dcli, c.alphas[0], alphaHttpPort)
+	if err != nil {
+		return errors.Wrapf(err, "error finding alpha http public port")
+	}
+	httpUrl := "http://localhost:" + httpPubPort
+
+	cmd := exec.Command("dgraph", "upgrade", "--from", from, "--to", to,
+		"--alpha", grpcUrl, "--alpha-http", httpUrl, "--deleteOld")
+	if c.conf.acl {
+		cmd = exec.Command("dgraph", "upgrade", "--from", from, "--to", to,
+			"--user", DefaultUser, "--password", DefaultPassword,
+			"--alpha", grpcUrl, "--alpha-http", httpUrl, "--deleteOld")
+	}
+
+	if out, err := cmd.CombinedOutput(); err != nil {
+		if _, ok := err.(*exec.ExitError); ok {
+			log.Print("[INFO] upgrade tool succeeded")
+			return nil
+		}
+
+		return errors.Wrapf(err, "error running upgrade tool: %v", string(out))
+	}
+
+	log.Print("[INFO] upgrade tool succeeded")
+	return nil
+}

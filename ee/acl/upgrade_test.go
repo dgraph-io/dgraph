@@ -52,6 +52,10 @@ func (asuite *AclTestSuite) Upgrade() {
 	require.NoError(asuite.T(), asuite.lc.Upgrade(asuite.uc.After, asuite.uc.Strategy))
 }
 
+func (asuite *AclTestSuite) RunUpgradeTool() {
+	require.NoError(asuite.T(), asuite.lc.RunUpgradeTool(asuite.uc.Before, asuite.uc.After))
+}
+
 func TestACLSuite(t *testing.T) {
 	for _, uc := range dgraphtest.AllUpgradeCombos(true) {
 		log.Printf("running upgrade tests for confg: %+v", uc)

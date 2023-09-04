@@ -33,6 +33,10 @@ func (suite *AclTestSuite) Upgrade() {
 	// not implemented for integration tests
 }
 
+func (suite *AclTestSuite) RunUpgradeTool() {
+	// not implemented for integration tests
+}
+
 func TestACLSuite(t *testing.T) {
 	suite.Run(t, new(AclTestSuite))
 }

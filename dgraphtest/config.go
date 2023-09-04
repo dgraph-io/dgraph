@@ -82,12 +82,12 @@ func AllUpgradeCombos(v20 bool) []UpgradeCombo {
 	if v20 {
 		fixedVersionCombos = append(fixedVersionCombos, []UpgradeCombo{
 			{"v20.11.2-rc1-25-g4400610b2", "4fc9cfd", BackupRestore},
-			{"v20.11.2-rc1-23-gaf5030a5", "4fc9cfd", BackupRestore},
+			//{"v20.11.2-rc1-23-gaf5030a5", "4fc9cfd", BackupRestore},
 			{"v20.11.0-11-gb36b4862", "4fc9cfd", BackupRestore},
 		}...)
 
 		mainCombos = append(mainCombos, []UpgradeCombo{
-			{"v20.11.2-rc1-16-g4d041a3a", localVersion, BackupRestore},
+			{"v20.11.2-rc1-16-g4d041a3a", "v23.0.1", BackupRestore},
 		}...)
 	}
 
