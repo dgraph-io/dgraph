@@ -376,6 +376,8 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 
 	outputs := make([]*pb.Result, numGo)
 	listType := schema.State().IsList(q.Attr)
+	pickMultiplePostings := q.DoCount || q.ExpandAll || listType || len(q.Langs) > 0
+	//pickMultiplePostings := true
 
 	calculate := func(start, end int) error {
 		x.AssertTrue(start%width == 0)
@@ -391,24 +393,23 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 			key := x.DataKey(q.Attr, q.UidList.Uids[i])
 
 			// Get or create the posting list for an entity, attribute combination.
-			pickMultiplePostings := q.DoCount || q.ExpandAll || listType || len(q.Langs) > 0
 
 			var vals []types.Val
 			fcs := &pb.FacetsList{FacetsList: make([]*pb.Facets, 0)} // TODO Figure out how it is stored
 
 			if !pickMultiplePostings {
 				pl, _ := qs.cache.GetSinglePosting(key)
-				for _, p := range pl.Postings {
-					vals = append(vals, types.Val{
+				vals = make([]types.Val, len(pl.Postings))
+				for i, p := range pl.Postings {
+					vals[i] = types.Val{
 						Tid:   types.TypeID(p.ValType),
 						Value: p.Value,
-					})
+					}
 
 					if q.FacetParam != nil {
 						fcs.FacetsList = append(fcs.FacetsList, &pb.Facets{Facets: facets.CopyFacets(p.Facets, q.FacetParam)})
 					}
 				}
-
 			} else {
 				pl, err := qs.cache.Get(key)
 				if err != nil {

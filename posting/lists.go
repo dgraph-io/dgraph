@@ -202,7 +202,18 @@ func (lc *LocalCache) getInternal(key []byte, readFromDisk bool) (*List, error) 
 		lc.RLock()
 		defer lc.RUnlock()
 		if lc.plists == nil {
-			return getNew(key, pstore, lc.startTs)
+			if readFromDisk {
+				return getNew(key, pstore, lc.startTs)
+			} else {
+				pl := &List{
+					key:   key,
+					plist: new(pb.PostingList),
+				}
+				if delta, ok := lc.deltas[string(key)]; ok && len(delta) > 0 {
+					pl.setMutation(lc.startTs, delta)
+				}
+				return pl, nil
+			}
 		}
 		return nil, nil
 	}
