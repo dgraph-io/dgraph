@@ -399,7 +399,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 
 			if !pickMultiplePostings {
 				pl, err := qs.cache.GetSinglePosting(key)
-				if pl == nil || err == posting.ErrNoValue {
+				if pl == nil || err == posting.ErrNoValue || err == badger.ErrKeyNotFound {
 					out.UidMatrix = append(out.UidMatrix, &pb.List{})
 					out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{})
 					out.ValueMatrix = append(out.ValueMatrix,
