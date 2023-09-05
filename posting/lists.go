@@ -253,11 +253,20 @@ func (lc *LocalCache) getInternal(key []byte, readFromDisk bool) (*List, error) 
 
 func (lc *LocalCache) GetSinglePosting(key []byte) (*pb.PostingList, error) {
 	pl := &pb.PostingList{}
+	validatePl := func() {
+		for _, postings := range pl.Postings {
+			if hasDeleteAll(postings) {
+				pl = nil
+				return
+			}
+		}
+	}
 	lc.RLock()
 	if delta, ok := lc.deltas[string(key)]; ok && len(delta) > 0 {
 		err := pl.Unmarshal(delta)
 		lc.RUnlock()
 		if err != nil {
+			validatePl()
 			return pl, nil
 		}
 	} else {
@@ -267,6 +276,7 @@ func (lc *LocalCache) GetSinglePosting(key []byte) (*pb.PostingList, error) {
 	txn := pstore.NewTransactionAt(lc.startTs, false)
 	item, err := txn.Get(key)
 	if err != nil {
+		validatePl()
 		return pl, err
 	}
 
@@ -278,9 +288,11 @@ func (lc *LocalCache) GetSinglePosting(key []byte) (*pb.PostingList, error) {
 	})
 
 	if err != nil {
+		validatePl()
 		return pl, err
 	}
 
+	validatePl()
 	return pl, nil
 }
 
