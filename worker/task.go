@@ -398,8 +398,8 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 			fcs := &pb.FacetsList{FacetsList: make([]*pb.Facets, 0)} // TODO Figure out how it is stored
 
 			if !pickMultiplePostings {
-				pl, err := qs.cache.GetSinglePosting(key)
-				if pl == nil || err == posting.ErrNoValue || err == badger.ErrKeyNotFound {
+				pl, _ := qs.cache.GetSinglePosting(key)
+				if pl == nil {
 					out.UidMatrix = append(out.UidMatrix, &pb.List{})
 					out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{})
 					out.ValueMatrix = append(out.ValueMatrix,
@@ -409,9 +409,6 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 						out.LangMatrix = append(out.LangMatrix, &pb.LangList{})
 					}
 					continue
-				}
-				if err != nil {
-					return err
 				}
 				vals = make([]types.Val, len(pl.Postings))
 				for i, p := range pl.Postings {
