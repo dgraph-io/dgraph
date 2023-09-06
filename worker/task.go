@@ -400,26 +400,24 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 
 			if !getMultiplePosting {
 				pl, _ := qs.cache.GetSinglePosting(key)
-				if pl != nil {
-					vals = make([]types.Val, len(pl.Postings))
-					for i, p := range pl.Postings {
-						vals[i] = types.Val{
-							Tid:   types.TypeID(p.ValType),
-							Value: p.Value,
-						}
-
-						// TODO Apply facet tree before
-						if q.FacetParam != nil {
-							fcs.FacetsList = append(fcs.FacetsList, &pb.Facets{Facets: facets.CopyFacets(p.Facets, q.FacetParam)})
-						}
-					}
-				}
-				if pl == nil || len(vals) == 0 {
+				if pl == nil || len(pl.Postings) == 0 {
 					out.UidMatrix = append(out.UidMatrix, &pb.List{})
 					out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{})
 					out.ValueMatrix = append(out.ValueMatrix,
 						&pb.ValueList{Values: []*pb.TaskValue{}})
 					continue
+				}
+				vals = make([]types.Val, len(pl.Postings))
+				for i, p := range pl.Postings {
+					vals[i] = types.Val{
+						Tid:   types.TypeID(p.ValType),
+						Value: p.Value,
+					}
+
+					// TODO Apply facet tree before
+					if q.FacetParam != nil {
+						fcs.FacetsList = append(fcs.FacetsList, &pb.Facets{Facets: facets.CopyFacets(p.Facets, q.FacetParam)})
+					}
 				}
 			} else {
 				pl, err := qs.cache.Get(key)

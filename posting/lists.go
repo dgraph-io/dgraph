@@ -157,7 +157,7 @@ func (lc *LocalCache) getSingleInternal(key []byte, readFromDisk bool) (*List, e
 		lc.RLock()
 		defer lc.RUnlock()
 		if lc.plists == nil {
-			pl, err, _ := GetSingleValueForKey(key, lc.startTs)
+			pl, err := GetSingleValueForKey(key, lc.startTs)
 			return pl, err
 		}
 		return nil, nil
@@ -173,18 +173,15 @@ func (lc *LocalCache) getSingleInternal(key []byte, readFromDisk bool) (*List, e
 	}
 
 	var pl *List
-	var k int
 	var err error
 	if readFromDisk {
-		pl, err, k = GetSingleValueForKey(key, lc.startTs)
+		pl, err = GetSingleValueForKey(key, lc.startTs)
 	} else {
 		pl = &List{
 			key:   key,
 			plist: new(pb.PostingList),
 		}
 	}
-
-	fmt.Println(k)
 
 	// If we just brought this posting list into memory and we already have a delta for it, let's
 	// apply it before returning the list.
@@ -193,7 +190,6 @@ func (lc *LocalCache) getSingleInternal(key []byte, readFromDisk bool) (*List, e
 		pl.setMutation(lc.startTs, delta)
 	}
 	lc.RUnlock()
-	fmt.Println("Here6")
 	return pl, err
 }
 

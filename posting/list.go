@@ -321,10 +321,6 @@ func NewPosting(t *pb.DirectedEdge) *pb.Posting {
 	return p
 }
 
-func HasDeleteAll(mpost *pb.Posting) bool {
-	return hasDeleteAll(mpost)
-}
-
 func hasDeleteAll(mpost *pb.Posting) bool {
 	return mpost.Op == Del && bytes.Equal(mpost.Value, []byte(x.Star)) && len(mpost.LangTag) == 0
 }

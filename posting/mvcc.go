@@ -457,7 +457,7 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 	return l, nil
 }
 
-func GetSingleValueForKey(key []byte, readTs uint64) (*List, error, int) {
+func GetSingleValueForKey(key []byte, readTs uint64) (*List, error) {
 	cachedVal, ok := lCache.Get(key)
 	if ok {
 		l, ok := cachedVal.(*List)
@@ -477,25 +477,23 @@ func GetSingleValueForKey(key []byte, readTs uint64) (*List, error, int) {
 				}
 			}
 			l.RUnlock()
-			return lCopy, nil, 0
+			return lCopy, nil
 		}
 	}
 
 	if pstore.IsClosed() {
-		return nil, badger.ErrDBClosed, 0
+		return nil, badger.ErrDBClosed
 	}
 
 	l := new(List)
 	l.key = key
 	l.plist = new(pb.PostingList)
 
-	//fmt.Println("KEY:", key)
 	txn := pstore.NewTransactionAt(readTs, false)
 	item, err := txn.Get(key)
 	if err != nil {
-		return l, err, 0
+		return l, err
 	}
-	k := 0
 
 	l.maxTs = x.Max(l.maxTs, item.Version())
 
@@ -504,7 +502,7 @@ func GetSingleValueForKey(key []byte, readTs uint64) (*List, error, int) {
 		l.minTs = item.Version()
 	case BitCompletePosting:
 		if err := unmarshalOrCopy(l.plist, item); err != nil {
-			return l, nil, k
+			return l, nil
 		}
 		l.minTs = item.Version()
 
@@ -527,11 +525,11 @@ func GetSingleValueForKey(key []byte, readTs uint64) (*List, error, int) {
 			return nil
 		})
 		if err != nil {
-			return l, nil, k
+			return l, nil
 		}
 	}
 
-	return l, nil, k
+	return l, nil
 }
 
 func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
