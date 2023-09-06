@@ -376,7 +376,8 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 
 	outputs := make([]*pb.Result, numGo)
 	listType := schema.State().IsList(q.Attr)
-	pickMultiplePostings := q.DoCount || q.ExpandAll || listType || len(q.Langs) > 0
+	hasLang := schema.State().HasLang(q.Attr)
+	getMultiplePosting := q.DoCount || q.ExpandAll || listType || hasLang
 	//pickMultiplePostings := true
 
 	calculate := func(start, end int) error {
@@ -397,7 +398,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 			var vals []types.Val
 			fcs := &pb.FacetsList{FacetsList: make([]*pb.Facets, 0)} // TODO Figure out how it is stored
 
-			if !pickMultiplePostings {
+			if !getMultiplePosting {
 				pl, _ := qs.cache.GetSinglePosting(key)
 				if pl == nil {
 					out.UidMatrix = append(out.UidMatrix, &pb.List{})
