@@ -18,7 +18,6 @@ package posting
 
 import (
 	"context"
-	"fmt"
 	"math"
 	"math/rand"
 	"os"
@@ -447,7 +446,7 @@ func TestReadSingleValue(t *testing.T) {
 	key := x.DataKey(x.GalaxyAttr("value"), 1240)
 	ol, err := getNew(key, ps, math.MaxUint64)
 	require.NoError(t, err)
-	N := int(1e2)
+	N := int(10000)
 	for i := 2; i <= N; i += 2 {
 		edge := &pb.DirectedEdge{
 			Value: []byte("ho hey there" + strconv.Itoa(i)),
@@ -462,11 +461,23 @@ func TestReadSingleValue(t *testing.T) {
 		}
 		writer.Flush()
 
-		for j := 2; j < i+6; j++ {
-			k, err, _ := GetSingleValueForKey(key, uint64(j))
+		if i%10 == 0 {
+			// Do frequent rollups, and store data in old timestamp
+			kvs, err := ol.Rollup(nil, txn.StartTs-3)
+			require.NoError(t, err)
+			require.NoError(t, writePostingListToDisk(kvs))
+			ol, err = getNew(key, ps, math.MaxUint64)
+			require.NoError(t, err)
+		}
+
+		j := 2
+		if j < int(ol.minTs) {
+			j = int(ol.minTs)
+		}
+		for ; j < i+6; j++ {
+			k, err := GetSingleValueForKey(key, uint64(j))
 			require.NoError(t, err)
 			p := getFirst(t, k, uint64(j))
-			fmt.Println("Here", p)
 			checkValue(t, ol, string(p.Value), uint64(j))
 		}
 
