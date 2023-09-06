@@ -254,12 +254,18 @@ func (lc *LocalCache) getInternal(key []byte, readFromDisk bool) (*List, error) 
 func (lc *LocalCache) GetSinglePosting(key []byte) (*pb.PostingList, error) {
 	pl := &pb.PostingList{}
 	validatePl := func() {
+		i := 0
 		for _, postings := range pl.Postings {
 			if hasDeleteAll(postings) {
 				pl = nil
 				return
 			}
+			if postings.Op != Del {
+				pl.Postings[i] = postings
+				i++
+			}
 		}
+		pl.Postings = pl.Postings[:i]
 	}
 	lc.RLock()
 	if delta, ok := lc.deltas[string(key)]; ok && len(delta) > 0 {
