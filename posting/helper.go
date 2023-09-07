@@ -205,16 +205,16 @@ func diff(a []uint64, b []uint64) []uint64 {
 }
 
 const (
-	HnswEuclidian = "HNSW-Euclidian"
-	HnswCosine    = "HNSW-Cosine"
-	HnswDotProd   = "HNSW-DotProduct"
-	plError       = "\nerror fetching posting list for data key: "
-	dataError     = "\nerror fetching data for data key: "
-	VecKeyword    = "__vector_"
-	VecEntry      = "__vector_entry"
-	VecDead       = "__vector_dead"
-        vectorIndexMaxLevels = 5
-        efConstruction = 12
+	HnswEuclidian        = "HNSW-Euclidian"
+	HnswCosine           = "HNSW-Cosine"
+	HnswDotProd          = "HNSW-DotProduct"
+	plError              = "\nerror fetching posting list for data key: "
+	dataError            = "\nerror fetching data for data key: "
+	VecKeyword           = "__vector_"
+	VecEntry             = "__vector_entry"
+	VecDead              = "__vector_dead"
+	vectorIndexMaxLevels = 5
+	efConstruction       = 12
 )
 
 type SimilarityType struct {

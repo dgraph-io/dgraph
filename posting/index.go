@@ -95,6 +95,27 @@ func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) 
 	if uid == 0 {
 		return errors.New("invalid UID with value 0")
 	}
+
+	testKey := x.DataKey(info.edge.Attr, uid)
+	pl, err := txn.Get(testKey)
+	if err != nil {
+		return err
+	}
+	data, err := pl.AllValues(txn.StartTs)
+	if err != nil {
+		return err
+	}
+	if len(data) > 0 && data[0].Tid == types.VFloatID {
+		// retrieve vector from inUuid save as inVec
+		inVec := types.BytesAsFloatArray(data[0].Value.([]byte))
+		visited, err := InsertToBadger(ctx, txn, uid, inVec, info.edge.Attr,
+			vectorIndexMaxLevels, HnswEuclidian, efConstruction)
+		if err != nil {
+			fmt.Print(visited)
+			return err
+		}
+		return nil
+	}
 	tokens, err := indexTokens(ctx, info)
 	if err != nil {
 		// This data is not indexable
@@ -127,24 +148,7 @@ func (txn *Txn) addIndexMutation(ctx context.Context, edge *pb.DirectedEdge, tok
 	if err = plist.addMutation(ctx, txn, edge); err != nil {
 		return err
 	}
-	testKey := x.DataKey(edge.Attr, edge.ValueId)
-	pl, err := txn.Get(testKey)
-	if err != nil {
-		return err
-	}
-	data, err := pl.AllValues(txn.StartTs)
-	if err != nil {
-		return err
-	}
 
-	if len(data) > 0 && data[0].Tid == types.VFloatID {
-		inVec := types.BytesAsFloatArray(data[0].Value.([]byte)) // retrieve vector from inUuid save as inVec
-		visited, err := InsertToBadger(ctx, txn, edge.ValueId, inVec, edge.Attr, vectorIndexMaxLevels, HnswEuclidian, efConstruction)
-		if err != nil {
-			fmt.Print(visited)
-			return err
-		}
-	}
 	ostats.Record(ctx, x.NumEdges.M(1))
 	return nil
 }
@@ -578,6 +582,11 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		return nil
 	}
 
+	pred, ok := schema.State().Get(ctx, r.attr)
+	if !ok {
+		return errors.Errorf("Rebuilder.run: Unable to find schema for %s", r.attr)
+	}
+
 	// We write the index in a temporary badger first and then,
 	// merge entries before writing them to p directory.
 	tmpIndexDir, err := os.MkdirTemp(x.WorkerConfig.TmpDir, "dgraph_index_")
@@ -615,10 +624,18 @@ func (r *rebuilder) Run(ctx context.Context) error {
 	// We set it to 1 in case there are no keys found and NewStreamAt is called with ts=0.
 	var counter uint64 = 1
 
+	var txn *Txn
+
 	tmpWriter := tmpDB.NewManagedWriteBatch()
 	stream := pstore.NewStreamAt(r.startTs)
 	stream.LogPrefix = fmt.Sprintf("Rebuilding index for predicate %s (1/2):", r.attr)
 	stream.Prefix = r.prefix
+	//TODO We need to create a single transaction irrespective of the type of the prdicate
+	//TODO For vector index rebuild, parallelism is disabled. Needs to be re-enabled
+	if pred.ValueType == pb.Posting_VFLOAT {
+		txn = NewTxn(r.startTs)
+		stream.NumGo = 1
+	}
 	stream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
 		// We should return quickly if the context is no longer valid.
 		select {
@@ -640,17 +657,21 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		// We are using different transactions in each call to KeyToList function. This could
 		// be a problem for computing reverse count indexes if deltas for same key are added
 		// in different transactions. Such a case doesn't occur for now.
-		txn := NewTxn(r.startTs)
-		if err := r.fn(pk.Uid, l, txn); err != nil {
+		// TODO: Maybe we can always use txn initialized in rebuilder.Run().
+		streamTxn := txn
+		if streamTxn == nil {
+			streamTxn = NewTxn(r.startTs)
+		}
+		if err := r.fn(pk.Uid, l, streamTxn); err != nil {
 			return nil, err
 		}
 
 		// Convert data into deltas.
-		txn.Update()
+		streamTxn.Update()
 
 		// txn.cache.Lock() is not required because we are the only one making changes to txn.
-		kvs := make([]*bpb.KV, 0, len(txn.cache.deltas))
-		for key, data := range txn.cache.deltas {
+		kvs := make([]*bpb.KV, 0, len(streamTxn.cache.deltas))
+		for key, data := range streamTxn.cache.deltas {
 			version := atomic.AddUint64(&counter, 1)
 			kv := bpb.KV{
 				Key:      []byte(key),
