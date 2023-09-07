@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"github.com/wangjohn/quickselect"
 	"golang.org/x/text/collate"
 	"golang.org/x/text/language"
 
@@ -94,6 +95,40 @@ func IsSortable(tid TypeID) bool {
 	default:
 		return false
 	}
+}
+
+// SortWithFacet sorts the given array in-place and considers the given facets to calculate
+// the proper ordering.
+func SortTopN(v [][]Val, ul *[]uint64, desc []bool, lang string, n int) error {
+	if len(v) == 0 || len(v[0]) == 0 {
+		return nil
+	}
+
+	for _, val := range v[0] {
+		if !IsSortable(val.Tid) {
+			return errors.Errorf("Value of type: %s isn't sortable", val.Tid.Name())
+		}
+	}
+
+	var cl *collate.Collator
+	if lang != "" {
+		// Collator is nil if we are unable to parse the language.
+		// We default to bytewise comparison in that case.
+		if langTag, err := language.Parse(lang); err == nil {
+			cl = collate.New(langTag)
+		}
+	}
+
+	b := sortBase{v, desc, ul, nil, cl}
+	toBeSorted := byValue{b}
+	quickselect.QuickSelect(toBeSorted, n)
+
+	v = v[:n]
+	b1 := sortBase{v, desc, ul, nil, cl}
+	tbs := byValue{b1}
+	sort.Sort(tbs)
+
+	return nil
 }
 
 // SortWithFacet sorts the given array in-place and considers the given facets to calculate
