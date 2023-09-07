@@ -152,64 +152,12 @@ func (lc *LocalCache) SetIfAbsent(key string, updated *List) *List {
 	return updated
 }
 
-func (lc *LocalCache) getSingleInternal(key []byte, readFromDisk bool) (*List, error) {
-	getNewPlistNil := func() (*List, error) {
-		lc.RLock()
-		defer lc.RUnlock()
-		if lc.plists == nil {
-			pl, err := GetSingleValueForKey(key, lc.startTs)
-			return pl, err
-		}
-		return nil, nil
-	}
-
-	if l, err := getNewPlistNil(); l != nil || err != nil {
-		return l, err
-	}
-
-	skey := string(key)
-	if pl := lc.getNoStore(skey); pl != nil {
-		return pl, nil
-	}
-
-	var pl *List
-	var err error
-	if readFromDisk {
-		pl, err = GetSingleValueForKey(key, lc.startTs)
-	} else {
-		pl = &List{
-			key:   key,
-			plist: new(pb.PostingList),
-		}
-	}
-
-	// If we just brought this posting list into memory and we already have a delta for it, let's
-	// apply it before returning the list.
-	lc.RLock()
-	if delta, ok := lc.deltas[skey]; ok && len(delta) > 0 {
-		pl.setMutation(lc.startTs, delta)
-	}
-	lc.RUnlock()
-	return pl, err
-}
-
 func (lc *LocalCache) getInternal(key []byte, readFromDisk bool) (*List, error) {
 	getNewPlistNil := func() (*List, error) {
 		lc.RLock()
 		defer lc.RUnlock()
 		if lc.plists == nil {
-			if readFromDisk {
-				return getNew(key, pstore, lc.startTs)
-			} else {
-				pl := &List{
-					key:   key,
-					plist: new(pb.PostingList),
-				}
-				if delta, ok := lc.deltas[string(key)]; ok && len(delta) > 0 {
-					pl.setMutation(lc.startTs, delta)
-				}
-				return pl, nil
-			}
+			return getNew(key, pstore, lc.startTs)
 		}
 		return nil, nil
 	}
@@ -248,58 +196,56 @@ func (lc *LocalCache) getInternal(key []byte, readFromDisk bool) (*List, error) 
 }
 
 func (lc *LocalCache) GetSinglePosting(key []byte) (*pb.PostingList, error) {
-	pl := &pb.PostingList{}
-	validatePl := func() {
-		i := 0
-		for _, postings := range pl.Postings {
-			if hasDeleteAll(postings) {
-				pl = nil
-				return
-			}
-			if postings.Op != Del {
-				pl.Postings[i] = postings
-				i++
+
+	getPostings := func() (*pb.PostingList, error) {
+		pl := &pb.PostingList{}
+		lc.RLock()
+		if delta, ok := lc.deltas[string(key)]; ok && len(delta) > 0 {
+			err := pl.Unmarshal(delta)
+			if err != nil {
+				lc.RUnlock()
+				return pl, nil
 			}
 		}
-		pl.Postings = pl.Postings[:i]
-	}
-	lc.RLock()
-	if delta, ok := lc.deltas[string(key)]; ok && len(delta) > 0 {
-		err := pl.Unmarshal(delta)
 		lc.RUnlock()
+
+		txn := pstore.NewTransactionAt(lc.startTs, false)
+		item, err := txn.Get(key)
 		if err != nil {
-			validatePl()
-			return pl, nil
+			return pl, err
 		}
-	} else {
-		lc.RUnlock()
-	}
 
-	txn := pstore.NewTransactionAt(lc.startTs, false)
-	item, err := txn.Get(key)
-	if err != nil {
-		validatePl()
+		err = item.Value(func(val []byte) error {
+			if err := pl.Unmarshal(val); err != nil {
+				return err
+			}
+			return nil
+		})
+
 		return pl, err
 	}
 
-	err = item.Value(func(val []byte) error {
-		if err := pl.Unmarshal(val); err != nil {
-			return err
-		}
-		return nil
-	})
-
+	pl, err := getPostings()
+	if err == badger.ErrKeyNotFound {
+		err = nil
+	}
 	if err != nil {
-		validatePl()
 		return pl, err
 	}
 
-	validatePl()
+	// Filter and remove STAR_ALL and OP_DELETE Postings
+	idx := 0
+	for _, postings := range pl.Postings {
+		if hasDeleteAll(postings) {
+			return nil, nil
+		}
+		if postings.Op != Del {
+			pl.Postings[idx] = postings
+			idx++
+		}
+	}
+	pl.Postings = pl.Postings[:idx]
 	return pl, nil
-}
-
-func (lc *LocalCache) GetSingle(key []byte) (*List, error) {
-	return lc.getSingleInternal(key, true)
 }
 
 // Get retrieves the cached version of the list associated with the given key.

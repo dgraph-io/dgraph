@@ -475,10 +475,10 @@ func TestReadSingleValue(t *testing.T) {
 			j = int(ol.minTs)
 		}
 		for ; j < i+6; j++ {
-			k, err := GetSingleValueForKey(key, uint64(j))
+			tx := NewTxn(uint64(j))
+			k, err := tx.cache.GetSinglePosting(key)
 			require.NoError(t, err)
-			p := getFirst(t, k, uint64(j))
-			checkValue(t, ol, string(p.Value), uint64(j))
+			checkValue(t, ol, string(k.Postings[0].Value), uint64(j))
 		}
 
 	}
