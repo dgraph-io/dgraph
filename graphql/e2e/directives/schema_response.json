@@ -179,6 +179,20 @@
       "type": "uid"
     },
     {
+      "lang": true,
+      "predicate": "Person.profession",
+      "type": "string"
+    },
+    {
+      "index": true,
+      "lang": true,
+      "predicate": "Person.name",
+      "tokenizer": [
+        "hash"
+      ],
+      "type": "string"
+    },
+    {
       "predicate": "Book.chapters",
       "type": "uid",
       "list": true
@@ -1002,6 +1016,17 @@
         }
       ],
       "name": "Home"
+    },
+    {
+      "fields": [
+        {
+          "name": "Person.name"
+        },
+        {
+          "name": "Person.profession"
+        }
+      ],
+      "name": "Person"
     },
     {
       "fields": [
