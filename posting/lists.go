@@ -30,6 +30,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto"
 	"github.com/dgraph-io/ristretto/z"
+	"github.com/dgraph-io/vector-indexer/index"
 )
 
 const (
@@ -111,6 +112,22 @@ type LocalCache struct {
 
 	// plists are posting lists in memory. They can be discarded to reclaim space.
 	plists map[string]*List
+}
+
+// struct to implement LocalCache interface from vector-indexer
+// acts as wrapper for dgraph *LocalCache
+type viLocalCache struct {
+	delegate *LocalCache
+}
+
+func (vc *viLocalCache) Get(key []byte) (index.List, error) {
+	pl, err := vc.delegate.Get(key)
+	vl := NewViList(pl)
+	return vl, err
+}
+
+func NewViLocalCache(delegate *LocalCache) *viLocalCache {
+	return &viLocalCache{delegate: delegate}
 }
 
 // NewLocalCache returns a new LocalCache instance.

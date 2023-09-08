@@ -29,6 +29,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/vector-indexer/index"
 )
 
 var o *oracle
@@ -63,6 +64,26 @@ type Txn struct {
 	lastUpdate time.Time
 
 	cache *LocalCache // This pointer does not get modified.
+}
+
+// struct to implement Txn interface from vector-indexer
+// acts as wrapper for dgraph *Txn
+type viTxn struct {
+	delegate *Txn
+}
+
+func NewViTxn(delegate *Txn) *viTxn {
+	return &viTxn{delegate: delegate}
+}
+
+func (vt *viTxn) StartTs() uint64 {
+	return vt.delegate.StartTs
+}
+
+func (vt *viTxn) Get(key []byte) (index.List, error) {
+	pl, err := vt.delegate.cache.Get(key)
+	vl := NewViList(pl)
+	return vl, err
 }
 
 // NewTxn returns a new Txn instance.

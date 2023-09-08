@@ -38,6 +38,7 @@ import (
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
+	"github.com/dgraph-io/vector-indexer/index"
 )
 
 var (
@@ -76,6 +77,63 @@ type List struct {
 	mutationMap map[uint64]*pb.PostingList
 	minTs       uint64 // commit timestamp of immutable layer, reject reads before this ts.
 	maxTs       uint64 // max commit timestamp seen for this list.
+}
+
+// struct to implement List interface from vector-indexer
+// acts as wrapper for dgraph *List
+type viList struct {
+	delegate *List
+}
+
+func NewViList(delegate *List) *viList {
+	return &viList{delegate: delegate}
+}
+
+func (vl *viList) Value(readTs uint64) (rval index.Val, rerr error) {
+	val, err := vl.delegate.Value(readTs)
+	rval = index.Val{
+		Tid:   index.TypeID(val.Tid),
+		Value: val.Value,
+	}
+	return rval, err
+}
+
+func (vl *viList) ValueWithLockHeld(readTs uint64) (rval index.Val, rerr error) {
+	val, err := vl.delegate.ValueWithLockHeld(readTs)
+	rval = index.Val{
+		Tid:   index.TypeID(val.Tid),
+		Value: val.Value,
+	}
+	return rval, err
+}
+
+func (vl *viList) AddMutation(ctx context.Context, txn index.Txn, t *index.DirectedEdge) error {
+	vt := txn.(*viTxn)
+	return vl.delegate.addMutation(ctx, vt.delegate, indexEdgeToPbEdge(t))
+}
+
+func (vl *viList) AddMutationWithLockHeld(ctx context.Context, txn index.Txn, t *index.DirectedEdge) error {
+	vt := txn.(*viTxn)
+	return vl.delegate.addMutationInternal(ctx, vt.delegate, indexEdgeToPbEdge(t))
+}
+
+func (vl *viList) Lock() {
+	vl.delegate.Lock()
+}
+
+func (vl *viList) Unlock() {
+	vl.delegate.Unlock()
+}
+
+func indexEdgeToPbEdge(t *index.DirectedEdge) *pb.DirectedEdge {
+	return &pb.DirectedEdge{
+		Entity:    t.Entity,
+		Attr:      t.Attr,
+		Value:     t.Value,
+		ValueType: pb.Posting_ValType(t.ValueType),
+		ValueId:   t.ValueId,
+		Op:        pb.DirectedEdge_SET,
+	}
 }
 
 // NewList returns a new list with an immutable layer set to plist and the

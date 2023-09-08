@@ -45,6 +45,8 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/vector-indexer/hnsw"
+	"github.com/dgraph-io/vector-indexer/index"
 )
 
 func invokeNetworkRequest(ctx context.Context, addr string,
@@ -358,8 +360,20 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 			return fmt.Errorf("invalid value for number of neighbors: %s", q.SrcFunc.Args[0])
 		}
 		//TODO: generate maxLevels from schema, filter, etc.
-		nn_uids, err := posting.Search(ctx, qs.cache, srcFn.vectorInfo, 5, args.q.Attr, args.q.ReadTs,
-			int(numNeighbors), 12, posting.HnswEuclidian, posting.AcceptAll)
+		qc := hnsw.NewQueryCache(
+			posting.NewViLocalCache(qs.cache),
+			posting.NewViTxn(posting.NewTxn(args.q.ReadTs)),
+			args.q.ReadTs,
+		)
+		ph := &hnsw.PersistentHNSW{
+			MaxLevels:      hnsw.VectorIndexMaxLevels,
+			EfConstruction: hnsw.EfConstruction,
+			EfSearch:       hnsw.EfSearch,
+			Pred:           args.q.Attr,
+			IndexType:      hnsw.HnswEuclidian,
+		}
+		nn_uids, err := ph.SearchPersistentStorage(ctx, qc, srcFn.vectorInfo,
+			int(numNeighbors), index.AcceptAll)
 		if err != nil {
 			return err
 		}

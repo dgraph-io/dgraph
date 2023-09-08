@@ -41,6 +41,7 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
+	"github.com/dgraph-io/vector-indexer/hnsw"
 )
 
 var emptyCountParams countParams
@@ -108,8 +109,15 @@ func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) 
 	if len(data) > 0 && data[0].Tid == types.VFloatID {
 		// retrieve vector from inUuid save as inVec
 		inVec := types.BytesAsFloatArray(data[0].Value.([]byte))
-		visited, err := InsertToBadger(ctx, txn, uid, inVec, info.edge.Attr,
-			vectorIndexMaxLevels, HnswEuclidian, efConstruction)
+		tc := hnsw.NewTxnCache(NewViTxn(txn), txn.StartTs)
+		ph := &hnsw.PersistentHNSW{
+			MaxLevels:      hnsw.VectorIndexMaxLevels,
+			EfConstruction: hnsw.EfConstruction,
+			EfSearch:       hnsw.EfSearch,
+			Pred:           attr,
+			IndexType:      hnsw.HnswEuclidian,
+		}
+		visited, err := ph.InsertToPersistentStorage(ctx, tc, uid, inVec)
 		if err != nil {
 			fmt.Print(visited)
 			return err
@@ -148,7 +156,6 @@ func (txn *Txn) addIndexMutation(ctx context.Context, edge *pb.DirectedEdge, tok
 	if err = plist.addMutation(ctx, txn, edge); err != nil {
 		return err
 	}
-
 	ostats.Record(ctx, x.NumEdges.M(1))
 	return nil
 }
@@ -1145,7 +1152,7 @@ func (rb *IndexRebuild) needsVectorIndexEdgesRebuild() indexOp {
 	return indexDelete
 }
 
-// This needs to be moved to the implementation of vector_indexer API
+// This needs to be moved to the implementation of vector-indexer API
 func prefixesToDropVectorIndexEdges(ctx context.Context, rb *IndexRebuild) [][]byte {
 	// Exit early if indices do not need to be rebuilt.
 	op := rb.needsVectorIndexEdgesRebuild()
@@ -1153,11 +1160,11 @@ func prefixesToDropVectorIndexEdges(ctx context.Context, rb *IndexRebuild) [][]b
 		return nil
 	}
 
-	prefixes := append([][]byte{}, x.PredicatePrefix(buildDataKeyPred(rb.Attr, VecEntry)))
-	prefixes = append(prefixes, x.PredicatePrefix(buildDataKeyPred(rb.Attr, VecDead)))
+	prefixes := append([][]byte{}, x.PredicatePrefix(hnsw.BuildDataKeyPred(rb.Attr, hnsw.VecEntry)))
+	prefixes = append(prefixes, x.PredicatePrefix(hnsw.BuildDataKeyPred(rb.Attr, hnsw.VecDead)))
 
-	for i := 0; i < vectorIndexMaxLevels; i++ {
-		prefixes = append(prefixes, x.PredicatePrefix(buildDataKeyPred(rb.Attr, VecKeyword, fmt.Sprint(i))))
+	for i := 0; i < hnsw.VectorIndexMaxLevels; i++ {
+		prefixes = append(prefixes, x.PredicatePrefix(hnsw.BuildDataKeyPred(rb.Attr, hnsw.VecKeyword, fmt.Sprint(i))))
 	}
 
 	return prefixes
