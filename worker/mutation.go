@@ -579,7 +579,19 @@ func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate) error {
 	}
 
 	edge.ValueType = schemaType.Enum()
-	edge.Value = b.Value.([]byte)
+
+	// Not clear why, but b.Value sometimes evaluates to []byte and
+	// other times evaluates to *[]byte.
+	// See: https://go.dev/play/p/3C-LfLUxRPT?v=goprev
+	// Based on the go playground, it should eval to *[]byte, but
+	// our CICD fails at times with this result! Other CICD results
+	// prefer b.Value.([]byte).
+	if _, ok := b.Value.([]byte); ok {
+		edge.Value = b.Value.([]byte)
+	} else if _, ok := b.Value.(*[]byte); ok {
+		edge.Value = *(b.Value.(*[]byte))
+	}
+
 	return nil
 }
 
