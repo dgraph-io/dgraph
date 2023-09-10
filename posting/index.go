@@ -87,9 +87,6 @@ func indexTokens(ctx context.Context, info *indexMutationInfo) ([]string, error)
 // but only for the given tokenizers.
 // TODO - See if we need to pass op as argument as t should already have Op.
 func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) error {
-	if info.tokenizers == nil {
-		info.tokenizers = schema.State().Tokenizer(ctx, info.edge.Attr)
-	}
 
 	attr := info.edge.Attr
 	uid := info.edge.Entity
@@ -106,6 +103,15 @@ func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) 
 	if err != nil {
 		return err
 	}
+
+	if info.tokenizers == nil {
+		if len(data) > 0 && data[0].Tid == types.VFloatID {
+			info.tokenizers = schema.State().Tokenizer(ctx, hnsw.HnswEuclidian)
+		} else {
+			info.tokenizers = schema.State().Tokenizer(ctx, info.edge.Attr)
+		}
+	}
+
 	if len(data) > 0 && data[0].Tid == types.VFloatID {
 		// retrieve vector from inUuid save as inVec
 		inVec := types.BytesAsFloatArray(data[0].Value.([]byte))
@@ -115,7 +121,7 @@ func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) 
 			EfConstruction: hnsw.EfConstruction,
 			EfSearch:       hnsw.EfSearch,
 			Pred:           attr,
-			IndexType:      hnsw.HnswEuclidian,
+			IndexType:      info.tokenizers[0].Name(),
 		}
 		visited, err := ph.InsertToPersistentStorage(ctx, tc, uid, inVec)
 		if err != nil {

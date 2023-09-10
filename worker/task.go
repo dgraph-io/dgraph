@@ -359,6 +359,10 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 		if err != nil {
 			return fmt.Errorf("invalid value for number of neighbors: %s", q.SrcFunc.Args[0])
 		}
+		tokenizer, err := pickVFloatTokenizer(ctx, args.q.Attr, srcFn.fname)
+		if err != nil {
+			return err
+		}
 		//TODO: generate maxLevels from schema, filter, etc.
 		qc := hnsw.NewQueryCache(
 			posting.NewViLocalCache(qs.cache),
@@ -370,7 +374,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 			EfConstruction: hnsw.EfConstruction,
 			EfSearch:       hnsw.EfSearch,
 			Pred:           args.q.Attr,
-			IndexType:      hnsw.HnswEuclidian,
+			IndexType:      tokenizer.Name(),
 		}
 		nn_uids, err := ph.SearchPersistentStorage(ctx, qc, srcFn.vectorInfo,
 			int(numNeighbors), index.AcceptAll)

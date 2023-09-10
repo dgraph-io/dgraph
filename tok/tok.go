@@ -31,6 +31,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/vector-indexer/hnsw"
 )
 
 // Tokenizer identifiers are unique and can't be reused.
@@ -90,6 +91,9 @@ type Tokenizer interface {
 var tokenizers = make(map[string]Tokenizer)
 
 func init() {
+	registerTokenizer(HNSWEuclidianTokenizer{})
+	registerTokenizer(HNSWCosineTokenizer{})
+	registerTokenizer(HNSWDotProdTokenizer{})
 	registerTokenizer(VFloatTokenizer{})
 	registerTokenizer(GeoTokenizer{})
 	registerTokenizer(IntTokenizer{})
@@ -221,13 +225,50 @@ type VFloatTokenizer struct{}
 func (t VFloatTokenizer) Name() string { return "vfloat" }
 func (t VFloatTokenizer) Type() string { return "vfloat" }
 func (t VFloatTokenizer) Tokens(v interface{}) ([]string, error) {
-	value := v.([]float64)
-	// Generates space-separated list of float64 values inside of "[]".
-	return []string{fmt.Sprintf("%+v", value)}, nil
+	return tokensForExpectedVFloat(v)
 }
 func (t VFloatTokenizer) Identifier() byte { return IdentVFloat }
 func (t VFloatTokenizer) IsSortable() bool { return false }
 func (t VFloatTokenizer) IsLossy() bool    { return true }
+
+// HNSWEuclidianTokenizer generates tokens from vectors of float64 values and uses
+// euclidian distance to index.
+type HNSWEuclidianTokenizer struct{}
+
+func (t HNSWEuclidianTokenizer) Name() string { return hnsw.HnswEuclidian }
+func (t HNSWEuclidianTokenizer) Type() string { return "vfloat" }
+func (t HNSWEuclidianTokenizer) Tokens(v interface{}) ([]string, error) {
+	return tokensForExpectedVFloat(v)
+}
+func (t HNSWEuclidianTokenizer) Identifier() byte { return IdentVFloat }
+func (t HNSWEuclidianTokenizer) IsSortable() bool { return false }
+func (t HNSWEuclidianTokenizer) IsLossy() bool    { return true }
+
+// HNSWCosineTokenizer generates tokens from vectors of float64 values and uses
+// cosine similarity to index.
+type HNSWCosineTokenizer struct{}
+
+func (t HNSWCosineTokenizer) Name() string { return hnsw.HnswCosine }
+func (t HNSWCosineTokenizer) Type() string { return "vfloat" }
+func (t HNSWCosineTokenizer) Tokens(v interface{}) ([]string, error) {
+	return tokensForExpectedVFloat(v)
+}
+func (t HNSWCosineTokenizer) Identifier() byte { return IdentVFloat }
+func (t HNSWCosineTokenizer) IsSortable() bool { return false }
+func (t HNSWCosineTokenizer) IsLossy() bool    { return true }
+
+// HNSWDotProdTokenizer generates tokens from vectors of float64 values and uses
+// dotproduct to index.
+type HNSWDotProdTokenizer struct{}
+
+func (t HNSWDotProdTokenizer) Name() string { return hnsw.HnswDotProd }
+func (t HNSWDotProdTokenizer) Type() string { return "vfloat" }
+func (t HNSWDotProdTokenizer) Tokens(v interface{}) ([]string, error) {
+	return tokensForExpectedVFloat(v)
+}
+func (t HNSWDotProdTokenizer) Identifier() byte { return IdentVFloat }
+func (t HNSWDotProdTokenizer) IsSortable() bool { return false }
+func (t HNSWDotProdTokenizer) IsLossy() bool    { return true }
 
 // YearTokenizer generates year tokens from datetime data.
 type YearTokenizer struct{}
@@ -530,4 +571,13 @@ func EncodeRegexTokens(tokens []string) {
 	for i := 0; i < len(tokens); i++ {
 		tokens[i] = encodeToken(tokens[i], TrigramTokenizer{}.Identifier())
 	}
+}
+
+func tokensForExpectedVFloat(v interface{}) ([]string, error) {
+	value, ok := v.([]float64)
+	if !ok {
+		return []string{}, errors.Errorf("could not convert %s to vfloat", v.(string))
+	}
+	// Generates space-separated list of float64 values inside of "[]".
+	return []string{fmt.Sprintf("%+v", value)}, nil
 }

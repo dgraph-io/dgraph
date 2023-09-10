@@ -27,6 +27,7 @@ import (
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/vector-indexer/hnsw"
 )
 
 func verifyStringIndex(ctx context.Context, attr string, funcType FuncType) (string, bool) {
@@ -119,6 +120,25 @@ func pickTokenizer(ctx context.Context, attr string, f string) (tok.Tokenizer, e
 	}
 
 	// otherwise, lets return the first one.
+	return tokenizers[0], nil
+}
+
+func pickVFloatTokenizer(ctx context.Context, attr string, f string) (tok.Tokenizer, error) {
+	// Get the tokenizers and choose the corresponding one.
+	if !schema.State().IsIndexed(ctx, attr) {
+		return nil, errors.Errorf("Attribute %s is not indexed.", attr)
+	}
+
+	tokenizers := schema.State().Tokenizer(ctx, attr)
+	if tokenizers == nil {
+		return nil, errors.Errorf("Schema state not found for %s.", attr)
+	}
+
+	// otherwise, lets return the first one.
+	if len(tokenizers) == 0 {
+		token, _ := tok.GetTokenizer(hnsw.HnswEuclidian)
+		return token, nil
+	}
 	return tokenizers[0], nil
 }
 
