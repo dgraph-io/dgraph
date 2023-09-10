@@ -29,6 +29,7 @@ import (
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/vector-indexer/hnsw"
 )
 
 // ParseBytes parses the byte array which holds the schema. We will reset
@@ -222,6 +223,10 @@ func parseIndexDirective(it *lex.ItemIterator, predicate string,
 		tokenizer, has := tok.GetTokenizer(strings.ToLower(next.Val))
 		if !has {
 			return tokenizers, next.Errorf("Invalid tokenizer %s", next.Val)
+		}
+		//TODO move all hard-coded strings to predefined constants
+		if typ == types.VFloatID && tokenizer.Name() == "vfloat" {
+			tokenizer, _ = tok.GetTokenizer(hnsw.HnswEuclidian)
 		}
 		tokenizerType, ok := types.TypeForName(tokenizer.Type())
 		x.AssertTrue(ok) // Type is validated during tokenizer loading.
