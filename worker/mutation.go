@@ -514,6 +514,7 @@ func validateSchemaForUnique(prevSchema pb.SchemaUpdate, currentSchema *pb.Schem
 // ValidateAndConvert checks compatibility or converts to the schema type if the storage type is
 // specified. If no storage type is specified then it converts to the schema type.
 func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate) error {
+
 	if isDeletePredicateEdge(edge) {
 		return nil
 	}
@@ -541,7 +542,7 @@ func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate) error {
 		return errors.Errorf("Input for predicate %q of type scalar is uid. Edge: %v",
 			x.ParseAttr(edge.Attr), edge)
 
-	// The suggested storage type matches the schema, OK!
+	// The suggested storage type matches the schema, OK! (Nothing to do ...)
 	case storageType == schemaType && schemaType != types.DefaultID:
 		return nil
 
@@ -557,6 +558,7 @@ func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate) error {
 
 	src := types.Val{Tid: types.TypeID(edge.ValueType), Value: edge.Value}
 	// check compatibility of schema type and storage type
+	// The goal is to convert value on edge to value type defined by schema.
 	if dst, err = types.Convert(src, schemaType); err != nil {
 		return err
 	}
@@ -578,18 +580,14 @@ func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate) error {
 		}
 	}
 
+	// TODO: Figure out why this is Enum. It really seems like an odd choice -- rather than
+	//       specifying it as the same type as presented in su.
 	edge.ValueType = schemaType.Enum()
-
-	// Not clear why, but b.Value sometimes evaluates to []byte and
-	// other times evaluates to *[]byte.
-	// See: https://go.dev/play/p/3C-LfLUxRPT?v=goprev
-	// Based on the go playground, it should eval to *[]byte, but
-	// our CICD fails at times with this result! Other CICD results
-	// prefer b.Value.([]byte).
-	if _, ok := b.Value.([]byte); ok {
-		edge.Value = b.Value.([]byte)
-	} else if _, ok := b.Value.(*[]byte); ok {
-		edge.Value = *(b.Value.(*[]byte))
+	var ok bool
+	edge.Value, ok  = b.Value.([]byte)
+	if !ok {
+		return errors.Errorf("failure to convert edge type: '%+v' to schema type: '%+v'",
+			storageType, schemaType)
 	}
 
 	return nil

@@ -395,10 +395,23 @@ func Convert(from Val, toID TypeID) (Val, error) {
 		}
 	case VFloatID:
 		{
-			vc := BytesAsFloatArray(data)
+			// Note that we avoid invoking BytesAsFloatArray up front
+			// because we don't want to pay the performance cost for it
+			// if we are ultimately converting to BinaryID.
+			// This kind of breaks the pattern that we established in other
+			// branches, but we avoid wasting time.
 			switch toID {
+			case BinaryID:
+				*res = data
 			case VFloatID:
+				vc := BytesAsFloatArray(data)
 				*res = vc
+			case StringID:
+				vc := BytesAsFloatArray(data)
+				sa := FloatArrayAsString(vc)
+				*res = sa
+			default:
+				return to, cantConvert(fromID, toID)
 			}
 		}
 	default:
