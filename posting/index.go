@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"math"
 	"os"
@@ -94,8 +95,8 @@ func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) 
 		return errors.New("invalid UID with value 0")
 	}
 
-	testKey := x.DataKey(info.edge.Attr, uid)
-	pl, err := txn.Get(testKey)
+	inKey := x.DataKey(info.edge.Attr, uid)
+	pl, err := txn.Get(inKey)
 	if err != nil {
 		return err
 	}
@@ -112,7 +113,42 @@ func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) 
 		}
 	}
 
-	if len(data) > 0 && data[0].Tid == types.VFloatID {
+	if info.op == pb.DirectedEdge_DEL &&
+		len(data) > 0 && data[0].Tid == types.VFloatID {
+		// TODO look into better alternatives
+		// if a delete & dealing with vfloats, add this to dead node in persistent store
+		deadAttr := hnsw.BuildDataKeyPred(info.edge.Attr, hnsw.VecDead)
+		deadKey := x.DataKey(deadAttr, 1)
+		pl, err := txn.Get(deadKey)
+		if err != nil {
+			return err
+		}
+		var deadNodes []uint64
+		deadData, _ := pl.Value(txn.StartTs)
+		if deadData.Value == nil {
+			deadNodes = append(deadNodes, uid)
+		} else {
+			deadNodes, err = hnsw.ParseEdges(string(deadData.Value.([]byte)))
+			if err != nil {
+				return err
+			}
+			deadNodes = append(deadNodes, uid)
+		}
+		deadNodesBytes, marshalErr := json.Marshal(deadNodes)
+		if marshalErr != nil {
+			return marshalErr
+		}
+		edge := &pb.DirectedEdge{
+			Entity:    1,
+			Attr:      deadAttr,
+			Value:     deadNodesBytes,
+			ValueType: pb.Posting_ValType(0),
+		}
+		pl.addMutation(ctx, txn, edge)
+	}
+
+	if info.op == pb.DirectedEdge_SET &&
+		len(data) > 0 && data[0].Tid == types.VFloatID {
 		// retrieve vector from inUuid save as inVec
 		inVec := types.BytesAsFloatArray(data[0].Value.([]byte))
 		tc := hnsw.NewTxnCache(NewViTxn(txn), txn.StartTs)

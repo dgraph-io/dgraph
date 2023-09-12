@@ -366,7 +366,6 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 		//TODO: generate maxLevels from schema, filter, etc.
 		qc := hnsw.NewQueryCache(
 			posting.NewViLocalCache(qs.cache),
-			posting.NewViTxn(posting.NewTxn(args.q.ReadTs)),
 			args.q.ReadTs,
 		)
 		ph := &hnsw.PersistentHNSW{
