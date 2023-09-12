@@ -226,10 +226,11 @@ func (hc *HTTPClient) ResetPassword(userID, newPass string, nsID uint64) (string
 }
 
 // doPost makes a post request to the 'url' endpoint
-func (hc *HTTPClient) doPost(body []byte, url string, contentType string) ([]byte, error) {
+func (hc *HTTPClient) doPost(body []byte, url string, contentType string,
+	reqOrigin string) (*http.Response, []byte, error) {
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(body))
 	if err != nil {
-		return nil, errors.Wrapf(err, "error building req for endpoint [%v]", url)
+		return nil, nil, errors.Wrapf(err, "error building req for endpoint [%v]", url)
 	}
 	req.Header.Add("Content-Type", contentType)
 
@@ -237,7 +238,18 @@ func (hc *HTTPClient) doPost(body []byte, url string, contentType string) ([]byt
 		req.Header.Add("X-Dgraph-AccessToken", hc.AccessJwt)
 	}
 
-	return doReq(req)
+	if len(reqOrigin) > 0 {
+		req.Header.Add("Origin", reqOrigin)
+		client := &http.Client{Timeout: 5 * time.Second}
+		resp, err := client.Do(req)
+		if err != nil {
+			return nil, nil, errors.Wrap(err, "error performing HTTP request")
+		}
+		return resp, nil, nil
+	}
+	b, err := doReq(req)
+
+	return nil, b, err
 }
 
 // RunGraphqlQuery makes a query to graphql (or admin) endpoint
@@ -252,7 +264,7 @@ func (hc *HTTPClient) RunGraphqlQuery(params GraphQLParams, admin bool) ([]byte,
 		url = hc.adminURL
 	}
 
-	respBody, err := hc.doPost(reqBody, url, "application/json")
+	_, respBody, err := hc.doPost(reqBody, url, "application/json", "")
 	if err != nil {
 		return nil, errors.Wrap(err, "error while running graphql query")
 	}
@@ -265,6 +277,33 @@ func (hc *HTTPClient) RunGraphqlQuery(params GraphQLParams, admin bool) ([]byte,
 		return nil, errors.Wrapf(gqlResp.Errors, "error while running graphql query, resp: %v", string(gqlResp.Data))
 	}
 	return gqlResp.Data, nil
+}
+
+// RunGqlQueryWithCors makes a query to graphql (or admin) endpoint with CORS
+func (hc *HTTPClient) RunGqlQueryWithCors(cors string, params GraphQLParams, admin bool) (*http.Response, error) {
+	reqBody, err := json.Marshal(params)
+	if err != nil {
+		return nil, errors.Wrap(err, "error while marshalling params")
+	}
+
+	url := hc.graphqlURL
+	if admin {
+		url = hc.adminURL
+	}
+
+	resp, _, err := hc.doPost(reqBody, url, "application/graphql", cors)
+	if err != nil {
+		return nil, errors.Wrap(err, "error while running graphql query")
+	}
+	return resp, nil
+}
+
+// QueryWithCors runs the 'query' with 'cors'
+func (hc *HTTPClient) QueryWithCors(query string, cors string) (*http.Response, error) {
+	params := GraphQLParams{
+		Query: query,
+	}
+	return hc.RunGqlQueryWithCors(cors, params, false)
 }
 
 func (hc *HTTPClient) HealthForInstance() ([]byte, error) {
@@ -544,7 +583,7 @@ func (hc *HTTPClient) PostPersistentQuery(query, sha string) ([]byte, error) {
 
 // Apply license using http endpoint
 func (hc *HTTPClient) ApplyLicenseHTTP(licenseKey []byte) (*LicenseResponse, error) {
-	respBody, err := hc.doPost(licenseKey, hc.licenseURL, "application/text")
+	_, respBody, err := hc.doPost(licenseKey, hc.licenseURL, "application/text", "")
 	if err != nil {
 		return nil, errors.Wrap(err, "error applying license")
 	}

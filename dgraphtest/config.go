@@ -87,7 +87,7 @@ func AllUpgradeCombos(v20 bool) []UpgradeCombo {
 		}...)
 
 		mainCombos = append(mainCombos, []UpgradeCombo{
-			{"v20.11.2-rc1-16-g4d041a3a", localVersion, BackupRestore},
+			{"v20.11.2-rc1-16-g4d041a3a", "v23.0.1", BackupRestore},
 		}...)
 	}
 
