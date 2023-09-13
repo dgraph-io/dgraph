@@ -457,7 +457,7 @@ func multiSort(ctx context.Context, r *sortresult, ts *pb.SortMessage) error {
 
 		start, end := x.PageRange(int(ts.Count), int(r.multiSortOffsets[i]), len(ul.Uids))
 		t1 := time.Now()
-		if end < 0 {
+		if end < len(ul.Uids) {
 			fmt.Println("New sorting", len(ul.Uids))
 			if err := types.SortTopN(vals, &ul.Uids, desc, "", end); err != nil {
 				return err
