@@ -87,22 +87,26 @@ func indexTokens(ctx context.Context, info *indexMutationInfo) ([]string, error)
 // addIndexMutations adds mutation(s) for a single term, to maintain the index,
 // but only for the given tokenizers.
 // TODO - See if we need to pass op as argument as t should already have Op.
-func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) error {
+
+func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) ([]*pb.DirectedEdge, error) {
+	if info.tokenizers == nil {
+		info.tokenizers = schema.State().Tokenizer(ctx, info.edge.Attr)
+	}
 
 	attr := info.edge.Attr
 	uid := info.edge.Entity
 	if uid == 0 {
-		return errors.New("invalid UID with value 0")
+		return []*pb.DirectedEdge{}, errors.New("invalid UID with value 0")
 	}
 
 	inKey := x.DataKey(info.edge.Attr, uid)
 	pl, err := txn.Get(inKey)
 	if err != nil {
-		return err
+		return []*pb.DirectedEdge{}, err
 	}
 	data, err := pl.AllValues(txn.StartTs)
 	if err != nil {
-		return err
+		return []*pb.DirectedEdge{}, err
 	}
 
 	if info.tokenizers == nil {
@@ -121,7 +125,7 @@ func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) 
 		deadKey := x.DataKey(deadAttr, 1)
 		pl, err := txn.Get(deadKey)
 		if err != nil {
-			return err
+			return []*pb.DirectedEdge{}, err
 		}
 		var deadNodes []uint64
 		deadData, _ := pl.Value(txn.StartTs)
@@ -130,13 +134,13 @@ func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) 
 		} else {
 			deadNodes, err = hnsw.ParseEdges(string(deadData.Value.([]byte)))
 			if err != nil {
-				return err
+				return []*pb.DirectedEdge{}, err
 			}
 			deadNodes = append(deadNodes, uid)
 		}
 		deadNodesBytes, marshalErr := json.Marshal(deadNodes)
 		if marshalErr != nil {
-			return marshalErr
+			return []*pb.DirectedEdge{}, marshalErr
 		}
 		edge := &pb.DirectedEdge{
 			Entity:    1,
@@ -159,17 +163,22 @@ func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) 
 			Pred:           attr,
 			IndexType:      info.tokenizers[0].Name(),
 		}
-		visited, err := ph.InsertToPersistentStorage(ctx, tc, uid, inVec)
+		visited, edges, err := ph.InsertToPersistentStorage(ctx, tc, uid, inVec)
 		if err != nil {
 			fmt.Print(visited)
-			return err
+			return []*pb.DirectedEdge{}, err
 		}
-		return nil
+		pbEdges := []*pb.DirectedEdge{}
+		for _, e := range edges {
+			pbe := indexEdgeToPbEdge(e)
+			pbEdges = append(pbEdges, pbe)
+		}
+		return pbEdges, nil
 	}
 	tokens, err := indexTokens(ctx, info)
 	if err != nil {
 		// This data is not indexable
-		return err
+		return []*pb.DirectedEdge{}, err
 	}
 
 	// Create a value token -> uid edge.
@@ -181,10 +190,10 @@ func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) 
 
 	for _, token := range tokens {
 		if err := txn.addIndexMutation(ctx, edge, token); err != nil {
-			return err
+			return []*pb.DirectedEdge{}, err
 		}
 	}
-	return nil
+	return []*pb.DirectedEdge{}, nil
 }
 
 func (txn *Txn) addIndexMutation(ctx context.Context, edge *pb.DirectedEdge, token string) error {
@@ -362,12 +371,13 @@ func (l *List) handleDeleteAll(ctx context.Context, edge *pb.DirectedEdge, txn *
 				Tid:   types.TypeID(p.ValType),
 				Value: p.Value,
 			}
-			return txn.addIndexMutations(ctx, &indexMutationInfo{
+			_, err := txn.addIndexMutations(ctx, &indexMutationInfo{
 				tokenizers: schema.State().Tokenizer(ctx, edge.Attr),
 				edge:       edge,
 				val:        val,
 				op:         pb.DirectedEdge_DEL,
 			})
+			return err
 		default:
 			return nil
 		}
@@ -561,7 +571,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, edge *pb.DirectedEdge, 
 	if doUpdateIndex {
 		// Exact matches.
 		if found && val.Value != nil {
-			if err := txn.addIndexMutations(ctx, &indexMutationInfo{
+			if _, err := txn.addIndexMutations(ctx, &indexMutationInfo{
 				tokenizers: schema.State().Tokenizer(ctx, edge.Attr),
 				edge:       edge,
 				val:        val,
@@ -575,7 +585,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, edge *pb.DirectedEdge, 
 				Tid:   types.TypeID(edge.ValueType),
 				Value: edge.Value,
 			}
-			if err := txn.addIndexMutations(ctx, &indexMutationInfo{
+			if _, err := txn.addIndexMutations(ctx, &indexMutationInfo{
 				tokenizers: schema.State().Tokenizer(ctx, edge.Attr),
 				edge:       edge,
 				val:        val,
@@ -622,7 +632,7 @@ type rebuilder struct {
 
 	// The posting list passed here is the on disk version. It is not coming
 	// from the LRU cache.
-	fn func(uid uint64, pl *List, txn *Txn) error
+	fn func(uid uint64, pl *List, txn *Txn) ([]*pb.DirectedEdge, error)
 }
 
 func (r *rebuilder) Run(ctx context.Context) error {
@@ -711,12 +721,30 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		if streamTxn == nil {
 			streamTxn = NewTxn(r.startTs)
 		}
-		if err := r.fn(pk.Uid, l, streamTxn); err != nil {
+		edges, err := r.fn(pk.Uid, l, streamTxn)
+		if err != nil {
 			return nil, err
 		}
 
 		// Convert data into deltas.
 		streamTxn.Update()
+
+		if txn != nil {
+			kvs := make([]*bpb.KV, 0, len(edges))
+			for _, edge := range edges {
+				version := atomic.AddUint64(&counter, 1)
+				key := string(x.DataKey(edge.Attr, edge.Entity))
+				data := txn.cache.deltas[key]
+				kv := bpb.KV{
+					Key:      x.DataKey(edge.Attr, edge.Entity),
+					Value:    data,
+					UserMeta: []byte{BitDeltaPosting},
+					Version:  version,
+				}
+				kvs = append(kvs, &kv)
+			}
+			return &bpb.KVList{Kv: kvs}, nil
+		}
 
 		// txn.cache.Lock() is not required because we are the only one making changes to txn.
 		kvs := make([]*bpb.KV, 0, len(streamTxn.cache.deltas))
@@ -1038,9 +1066,10 @@ func rebuildTokIndex(ctx context.Context, rb *IndexRebuild) error {
 
 	pk := x.ParsedKey{Attr: rb.Attr}
 	builder := rebuilder{attr: rb.Attr, prefix: pk.DataPrefix(), startTs: rb.StartTs}
-	builder.fn = func(uid uint64, pl *List, txn *Txn) error {
+	builder.fn = func(uid uint64, pl *List, txn *Txn) ([]*pb.DirectedEdge, error) {
 		edge := pb.DirectedEdge{Attr: rb.Attr, Entity: uid}
-		return pl.Iterate(txn.StartTs, 0, func(p *pb.Posting) error {
+		edges := []*pb.DirectedEdge{}
+		err := pl.Iterate(txn.StartTs, 0, func(p *pb.Posting) error {
 			// Add index entries based on p.
 			val := types.Val{
 				Value: p.Value,
@@ -1049,7 +1078,7 @@ func rebuildTokIndex(ctx context.Context, rb *IndexRebuild) error {
 			edge.Lang = string(p.LangTag)
 
 			for {
-				err := txn.addIndexMutations(ctx, &indexMutationInfo{
+				newEdges, err := txn.addIndexMutations(ctx, &indexMutationInfo{
 					tokenizers: tokenizers,
 					edge:       &edge,
 					val:        val,
@@ -1059,10 +1088,15 @@ func rebuildTokIndex(ctx context.Context, rb *IndexRebuild) error {
 				case ErrRetry:
 					time.Sleep(10 * time.Millisecond)
 				default:
+					edges = append(edges, newEdges...)
 					return err
 				}
 			}
 		})
+		if err != nil {
+			return []*pb.DirectedEdge{}, err
+		}
+		return edges, err
 	}
 	return builder.Run(ctx)
 }
@@ -1127,7 +1161,7 @@ func rebuildCountIndex(ctx context.Context, rb *IndexRebuild) error {
 
 	glog.Infof("Rebuilding count index for %s", rb.Attr)
 	var reverse bool
-	fn := func(uid uint64, pl *List, txn *Txn) error {
+	fn := func(uid uint64, pl *List, txn *Txn) ([]*pb.DirectedEdge, error) {
 		t := &pb.DirectedEdge{
 			ValueId: uid,
 			Attr:    rb.Attr,
@@ -1135,7 +1169,7 @@ func rebuildCountIndex(ctx context.Context, rb *IndexRebuild) error {
 		}
 		sz := pl.Length(rb.StartTs, 0)
 		if sz == -1 {
-			return nil
+			return []*pb.DirectedEdge{}, nil
 		}
 		for {
 			err := txn.addCountMutation(ctx, t, uint32(sz), reverse)
@@ -1143,7 +1177,7 @@ func rebuildCountIndex(ctx context.Context, rb *IndexRebuild) error {
 			case ErrRetry:
 				time.Sleep(10 * time.Millisecond)
 			default:
-				return err
+				return []*pb.DirectedEdge{}, err
 			}
 		}
 	}
@@ -1267,9 +1301,9 @@ func rebuildReverseEdges(ctx context.Context, rb *IndexRebuild) error {
 	glog.Infof("Rebuilding reverse index for %s", rb.Attr)
 	pk := x.ParsedKey{Attr: rb.Attr}
 	builder := rebuilder{attr: rb.Attr, prefix: pk.DataPrefix(), startTs: rb.StartTs}
-	builder.fn = func(uid uint64, pl *List, txn *Txn) error {
+	builder.fn = func(uid uint64, pl *List, txn *Txn) ([]*pb.DirectedEdge, error) {
 		edge := pb.DirectedEdge{Attr: rb.Attr, Entity: uid}
-		return pl.Iterate(txn.StartTs, 0, func(pp *pb.Posting) error {
+		return []*pb.DirectedEdge{}, pl.Iterate(txn.StartTs, 0, func(pp *pb.Posting) error {
 			puid := pp.Uid
 			// Add reverse entries based on p.
 			edge.ValueId = puid
@@ -1320,7 +1354,7 @@ func rebuildListType(ctx context.Context, rb *IndexRebuild) error {
 
 	pk := x.ParsedKey{Attr: rb.Attr}
 	builder := rebuilder{attr: rb.Attr, prefix: pk.DataPrefix(), startTs: rb.StartTs}
-	builder.fn = func(uid uint64, pl *List, txn *Txn) error {
+	builder.fn = func(uid uint64, pl *List, txn *Txn) ([]*pb.DirectedEdge, error) {
 		var mpost *pb.Posting
 		err := pl.Iterate(txn.StartTs, 0, func(p *pb.Posting) error {
 			// We only want to modify the untagged value. There could be other values with a
@@ -1331,10 +1365,10 @@ func rebuildListType(ctx context.Context, rb *IndexRebuild) error {
 			return nil
 		})
 		if err != nil {
-			return err
+			return []*pb.DirectedEdge{}, err
 		}
 		if mpost == nil {
-			return nil
+			return []*pb.DirectedEdge{}, nil
 		}
 		// Delete the old edge corresponding to ValueId math.MaxUint64
 		t := &pb.DirectedEdge{
@@ -1347,7 +1381,7 @@ func rebuildListType(ctx context.Context, rb *IndexRebuild) error {
 		// get updated.
 		pl = txn.cache.SetIfAbsent(string(pl.key), pl)
 		if err := pl.addMutation(ctx, txn, t); err != nil {
-			return err
+			return []*pb.DirectedEdge{}, err
 		}
 		// Add the new edge with the fingerprinted value id.
 		newEdge := &pb.DirectedEdge{
@@ -1357,7 +1391,7 @@ func rebuildListType(ctx context.Context, rb *IndexRebuild) error {
 			Op:        pb.DirectedEdge_SET,
 			Facets:    mpost.Facets,
 		}
-		return pl.addMutation(ctx, txn, newEdge)
+		return []*pb.DirectedEdge{}, pl.addMutation(ctx, txn, newEdge)
 	}
 	return builder.Run(ctx)
 }
