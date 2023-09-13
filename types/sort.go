@@ -17,11 +17,11 @@
 package types
 
 import (
+	"container/heap"
 	"sort"
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/wangjohn/quickselect"
 	"golang.org/x/text/collate"
 	"golang.org/x/text/language"
 
@@ -97,6 +97,67 @@ func IsSortable(tid TypeID) bool {
 	}
 }
 
+type dataHeap struct {
+	heapIndices []int
+	data        byValue
+}
+
+func (h dataHeap) Len() int           { return len(h.heapIndices) }
+func (h dataHeap) Less(i, j int) bool { return h.data.Less(h.heapIndices[j], h.heapIndices[i]) }
+func (h dataHeap) Swap(i, j int) {
+	h.heapIndices[i], h.heapIndices[j] = h.heapIndices[j], h.heapIndices[i]
+}
+
+func (h *dataHeap) Push(x interface{}) {
+	h.heapIndices = append(h.heapIndices, x.(int))
+}
+
+func (h *dataHeap) Pop() interface{} {
+	old := h.heapIndices
+	n := len(old)
+	x := old[n-1]
+	h.heapIndices = old[0 : n-1]
+	return x
+}
+
+type IntSlice []int
+
+func (t IntSlice) Len() int {
+	return len(t)
+}
+
+func (t IntSlice) Less(i, j int) bool {
+	return t[i] < t[j]
+}
+
+func (t IntSlice) Swap(i, j int) {
+	t[i], t[j] = t[j], t[i]
+}
+
+func heapSelectionFinding(data byValue, k int) {
+	heapIndices := make([]int, k)
+	for i := 0; i < k; i++ {
+		heapIndices[i] = i
+	}
+
+	h := &dataHeap{heapIndices, data}
+	heap.Init(h)
+	var currentHeapMax int
+	for i := k; i < data.Len(); i++ {
+		currentHeapMax = h.heapIndices[0]
+
+		if data.Less(i, currentHeapMax) {
+			heap.Push(h, i)
+			heap.Pop(h)
+		}
+	}
+
+	sort.Sort(IntSlice(h.heapIndices))
+	for i := 0; i < len(h.heapIndices); i++ {
+		data.Swap(i, h.heapIndices[i])
+	}
+}
+
 // SortWithFacet sorts the given array in-place and considers the given facets to calculate
 // the proper ordering.
 func SortTopN(v [][]Val, ul *[]uint64, desc []bool, lang string, n int) error {
@@ -121,10 +182,7 @@ func SortTopN(v [][]Val, ul *[]uint64, desc []bool, lang string, n int) error {
 
 	b := sortBase{v, desc, ul, nil, cl}
 	toBeSorted := byValue{b}
-	err := quickselect.QuickSelect(toBeSorted, n)
-	if err != nil {
-		return err
-	}
+	heapSelectionFinding(toBeSorted, n)
 
 	toBeSorted.values = toBeSorted.values[:n]
 	sort.Sort(toBeSorted)

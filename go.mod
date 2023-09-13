@@ -49,7 +49,6 @@ require (
 	github.com/spf13/viper v1.7.1
 	github.com/stretchr/testify v1.8.4
 	github.com/twpayne/go-geom v1.0.5
-	github.com/wangjohn/quickselect v0.0.0-20161129230411-ed8402a42d5f
 	github.com/xdg/scram v0.0.0-20180814205039-7eeb5667e42c
 	go.etcd.io/etcd/raft/v3 v3.5.9
 	go.opencensus.io v0.24.0
