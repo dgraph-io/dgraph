@@ -106,7 +106,7 @@ func SortTopN(v [][]Val, ul *[]uint64, desc []bool, lang string, n int) error {
 
 	for _, val := range v[0] {
 		if !IsSortable(val.Tid) {
-			return errors.Errorf("Value of type: %s isn't sortable", val.Tid.Name())
+			return errors.Errorf("Value of type: %v isn't sortable", val.Tid.Name())
 		}
 	}
 
@@ -121,12 +121,13 @@ func SortTopN(v [][]Val, ul *[]uint64, desc []bool, lang string, n int) error {
 
 	b := sortBase{v, desc, ul, nil, cl}
 	toBeSorted := byValue{b}
-	quickselect.QuickSelect(toBeSorted, n)
+	err := quickselect.QuickSelect(toBeSorted, n)
+	if err != nil {
+		return err
+	}
 
-	v = v[:n]
-	b1 := sortBase{v, desc, ul, nil, cl}
-	tbs := byValue{b1}
-	sort.Sort(tbs)
+	toBeSorted.values = toBeSorted.values[:n]
+	sort.Sort(toBeSorted)
 
 	return nil
 }

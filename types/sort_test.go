@@ -17,7 +17,10 @@
 package types
 
 import (
+	"fmt"
+	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -51,6 +54,60 @@ func getUIDList(n int) *pb.List {
 		data = append(data, uint64(i*100))
 	}
 	return &pb.List{Uids: data}
+}
+
+const charset = "abcdefghijklmnopqrstuvwxyz" +
+	"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+func StringWithCharset(length int) string {
+	var seededRand *rand.Rand = rand.New(
+		rand.NewSource(time.Now().UnixNano()))
+	b := make([]byte, length)
+	for i := range b {
+		b[i] = charset[seededRand.Intn(len(charset))]
+	}
+	return string(b)
+}
+
+func BenchmarkSortQuickSort(b *testing.B) {
+	n := 1000000
+	getList := func() [][]Val {
+		strs := make([]string, n)
+		for i := 0; i < n; i++ {
+			strs[i] = StringWithCharset(10)
+		}
+
+		list := make([][]Val, len(strs))
+		for i, s := range strs {
+			va := Val{StringID, []byte(s)}
+			v, _ := Convert(va, StringID)
+			list[i] = []Val{v}
+		}
+
+		return list
+	}
+
+	b.Run(fmt.Sprintf("Normal Sort Ratio %d ", n), func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			ul := getUIDList(n)
+			list := getList()
+			b.StartTimer()
+			Sort(list, &ul.Uids, []bool{false}, "")
+			b.StopTimer()
+		}
+	})
+
+	for j := 1; j < n; j += n / 6 {
+		b.Run(fmt.Sprintf("QuickSort Sort Ratio %d %d", n, j), func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				ul := getUIDList(n)
+				list := getList()
+				b.StartTimer()
+				SortTopN(list, &ul.Uids, []bool{false}, "", j)
+				b.StopTimer()
+			}
+		})
+	}
 }
 
 func TestSortStrings(t *testing.T) {
