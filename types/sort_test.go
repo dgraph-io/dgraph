@@ -69,6 +69,34 @@ func StringWithCharset(length int) string {
 	return string(b)
 }
 
+func TestBench(t *testing.T) {
+	n := 100
+	getList := func() [][]Val {
+		strs := make([]string, n)
+		for i := 0; i < n; i++ {
+			strs[i] = fmt.Sprintf("%d", rand.Intn(1000))
+		}
+
+		list := make([][]Val, len(strs))
+		for i, s := range strs {
+			va := Val{StringID, []byte(s)}
+			v, _ := Convert(va, IntID)
+			list[i] = []Val{v}
+		}
+
+		return list
+	}
+
+	ul := getUIDList(n)
+	list := getList()
+	SortTopN(list, &ul.Uids, []bool{false}, "", 2)
+
+	for i, val := range list {
+		fmt.Println(i, val[0].Value)
+	}
+
+}
+
 func BenchmarkSortQuickSort(b *testing.B) {
 	n := 1000000
 	getList := func() [][]Val {
@@ -92,8 +120,11 @@ func BenchmarkSortQuickSort(b *testing.B) {
 			ul := getUIDList(n)
 			list := getList()
 			b.StartTimer()
+			k1 := time.Now()
 			Sort(list, &ul.Uids, []bool{false}, "")
+			k2 := time.Since(k1)
 			b.StopTimer()
+			b.ReportMetric(k2.Seconds(), "Time")
 		}
 	})
 
@@ -103,8 +134,11 @@ func BenchmarkSortQuickSort(b *testing.B) {
 				ul := getUIDList(n)
 				list := getList()
 				b.StartTimer()
+				k1 := time.Now()
 				SortTopN(list, &ul.Uids, []bool{false}, "", j)
+				k2 := time.Since(k1)
 				b.StopTimer()
+				b.ReportMetric(k2.Seconds(), "Time")
 			}
 		})
 	}

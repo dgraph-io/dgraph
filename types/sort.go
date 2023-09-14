@@ -17,7 +17,6 @@
 package types
 
 import (
-	"container/heap"
 	"sort"
 	"time"
 
@@ -49,7 +48,20 @@ func (s sortBase) Swap(i, j int) {
 	}
 }
 
-type byValue struct{ sortBase }
+type byValue struct {
+	sortBase
+}
+
+func (s byValue) IsNil(i int) bool {
+	first := s.values[i]
+	if len(first) == 0 {
+		return true
+	}
+	if first[0].Value == nil {
+		return true
+	}
+	return false
+}
 
 // Less compares two elements
 func (s byValue) Less(i, j int) bool {
@@ -69,6 +81,7 @@ func (s byValue) Less(i, j int) bool {
 		}
 
 		if second[vidx].Value == nil {
+			//fmt.Println("second val true", vidx, i, j, first[vidx].Value)
 			return true
 		}
 
@@ -120,41 +133,120 @@ func (h *dataHeap) Pop() interface{} {
 	return x
 }
 
-type IntSlice []int
-
-func (t IntSlice) Len() int {
-	return len(t)
-}
-
-func (t IntSlice) Less(i, j int) bool {
-	return t[i] < t[j]
-}
-
-func (t IntSlice) Swap(i, j int) {
-	t[i], t[j] = t[j], t[i]
-}
-
-func heapSelectionFinding(data byValue, k int) {
-	heapIndices := make([]int, k)
-	for i := 0; i < k; i++ {
-		heapIndices[i] = i
-	}
-
-	h := &dataHeap{heapIndices, data}
-	heap.Init(h)
-	var currentHeapMax int
-	for i := k; i < data.Len(); i++ {
-		currentHeapMax = h.heapIndices[0]
-
-		if data.Less(i, currentHeapMax) {
-			heap.Push(h, i)
-			heap.Pop(h)
+func insertionSort(data byValue, a, b int) {
+	for i := a + 1; i < b; i++ {
+		for j := i; j > a && data.Less(j, j-1); j-- {
+			data.Swap(j, j-1)
 		}
 	}
+}
 
-	sort.Sort(IntSlice(h.heapIndices))
-	for i := 0; i < len(h.heapIndices); i++ {
-		data.Swap(i, h.heapIndices[i])
+func order2(data byValue, a, b int) (int, int) {
+	if data.Less(b, a) {
+		return b, a
+	}
+	return a, b
+}
+
+func median(data byValue, a, b, c int) int {
+	a, b = order2(data, a, b)
+	b, c = order2(data, b, c)
+	a, b = order2(data, a, b)
+	return b
+}
+
+func medianAdjacent(data byValue, a int) int {
+	return median(data, a-1, a, a+1)
+}
+
+// [shortestNinther,∞): uses the Tukey ninther method.
+func choosePivot(data byValue, a, b int) (pivot int) {
+	const (
+		shortestNinther = 50
+		maxSwaps        = 4 * 3
+	)
+
+	l := b - a
+
+	var (
+		i = a + l/4*1
+		j = a + l/4*2
+		k = a + l/4*3
+	)
+
+	if l >= 8 {
+		if l >= shortestNinther {
+			// Tukey ninther method, the idea came from Rust's implementation.
+			i = medianAdjacent(data, i)
+			j = medianAdjacent(data, j)
+			k = medianAdjacent(data, k)
+		}
+		// Find the median among i, j, k and stores it into j.
+		j = median(data, i, j, k)
+	}
+
+	return j
+}
+
+func partition(data byValue, a, b, pivot int) int {
+	data.Swap(a, pivot)
+	i, j := a+1, b-1 // i and j are inclusive of the elements remaining to be partitioned
+
+	for i <= j && data.Less(i, a) {
+		i++
+	}
+	for i <= j && !data.Less(j, a) {
+		j--
+	}
+	if i > j {
+		data.Swap(j, a)
+		return j
+	}
+	data.Swap(i, j)
+	i++
+	j--
+
+	for {
+		for i <= j && data.Less(i, a) {
+			i++
+		}
+		for i <= j && !data.Less(j, a) {
+			j--
+		}
+		if i > j {
+			break
+		}
+		data.Swap(i, j)
+		i++
+		j--
+	}
+	data.Swap(j, a)
+	return j
+}
+
+func randomizedSelectionFinding(data byValue, low, high, k int) {
+	var pivotIndex int
+
+	for {
+		if low >= high {
+			return
+		} else if high-low <= 8 {
+			insertionSort(data, low, high+1)
+			return
+		}
+
+		pivotIndexPre := choosePivot(data, low, high)
+
+		pivotIndex = partition(data, low, high, pivotIndexPre)
+		//fmt.Println(low, pivotIndexPre, pivotIndex, high)
+
+		if k < pivotIndex {
+			high = pivotIndex - 1
+		} else if k > pivotIndex {
+			low = pivotIndex + 1
+		} else {
+			return
+		}
 	}
 }
 
@@ -182,8 +274,23 @@ func SortTopN(v [][]Val, ul *[]uint64, desc []bool, lang string, n int) error {
 
 	b := sortBase{v, desc, ul, nil, cl}
 	toBeSorted := byValue{b}
-	heapSelectionFinding(toBeSorted, n)
 
+	nul := 0
+	for i := 0; i < len(*ul); i++ {
+		if toBeSorted.IsNil(i) {
+			continue
+		}
+		if i != nul {
+			toBeSorted.Swap(i, nul)
+		}
+		nul += 1
+	}
+
+	if nul > n {
+		b1 := sortBase{v[:nul], desc, ul, nil, cl}
+		toBeSorted1 := byValue{b1}
+		randomizedSelectionFinding(toBeSorted1, 0, nul-1, n)
+	}
 	toBeSorted.values = toBeSorted.values[:n]
 	sort.Sort(toBeSorted)
 
