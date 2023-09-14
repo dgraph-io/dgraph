@@ -456,10 +456,12 @@ func multiSort(ctx context.Context, r *sortresult, ts *pb.SortMessage) error {
 
 		start, end := x.PageRange(int(ts.Count), int(r.multiSortOffsets[i]), len(ul.Uids))
 		if end < len(ul.Uids)/2 {
+			//nolint:gosec
 			if err := types.SortTopN(vals, &ul.Uids, desc, "", end); err != nil {
 				return err
 			}
 		} else {
+			//nolint:gosec
 			if err := types.Sort(vals, &ul.Uids, desc, ""); err != nil {
 				return err
 			}
