@@ -17,7 +17,10 @@
 package types
 
 import (
+	"fmt"
+	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -51,6 +54,91 @@ func getUIDList(n int) *pb.List {
 		data = append(data, uint64(i*100))
 	}
 	return &pb.List{Uids: data}
+}
+
+const charset = "abcdefghijklmnopqrstuvwxyz"
+
+func StringWithCharset(length int) string {
+	var seededRand *rand.Rand = rand.New(rand.NewSource(time.Now().UnixNano()))
+	b := make([]byte, length)
+	for i := range b {
+		b[i] = charset[seededRand.Intn(len(charset))]
+	}
+	return string(b)
+}
+
+func TestQuickSelect(t *testing.T) {
+	n := 10000
+	k := 10
+	getList := func() [][]Val {
+		strs := make([]string, n)
+		for i := 0; i < n; i++ {
+			strs[i] = fmt.Sprintf("%d", rand.Intn(100000))
+		}
+
+		list := make([][]Val, len(strs))
+		for i, s := range strs {
+			va := Val{StringID, []byte(s)}
+			v, _ := Convert(va, IntID)
+			list[i] = []Val{v}
+		}
+
+		return list
+	}
+
+	ul := getUIDList(n)
+	list := getList()
+	require.NoError(t, SortTopN(list, &ul.Uids, []bool{false}, "", k))
+
+	for i := 0; i < k; i++ {
+		for j := k; j < n; j++ {
+			require.Equal(t, list[i][0].Value.(int64) <= list[j][0].Value.(int64), true)
+		}
+	}
+
+}
+
+func BenchmarkSortQuickSort(b *testing.B) {
+	n := 1000000
+	getList := func() [][]Val {
+		strs := make([]string, n)
+		for i := 0; i < n; i++ {
+			strs[i] = StringWithCharset(10)
+		}
+
+		list := make([][]Val, len(strs))
+		for i, s := range strs {
+			va := Val{StringID, []byte(s)}
+			v, _ := Convert(va, StringID)
+			list[i] = []Val{v}
+		}
+
+		return list
+	}
+
+	b.Run(fmt.Sprintf("Normal Sort Ratio %d ", n), func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			ul := getUIDList(n)
+			list := getList()
+			b.ResetTimer()
+			err := Sort(list, &ul.Uids, []bool{false}, "")
+			b.StopTimer()
+			require.NoError(b, err)
+		}
+	})
+
+	for j := 1; j < n; j += n / 6 {
+		b.Run(fmt.Sprintf("QuickSort Sort Ratio %d %d", n, j), func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				ul := getUIDList(n)
+				list := getList()
+				b.ResetTimer()
+				err := SortTopN(list, &ul.Uids, []bool{false}, "", j)
+				b.StopTimer()
+				require.NoError(b, err)
+			}
+		})
+	}
 }
 
 func TestSortStrings(t *testing.T) {

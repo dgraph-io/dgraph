@@ -50,6 +50,11 @@ func (s sortBase) Swap(i, j int) {
 
 type byValue struct{ sortBase }
 
+func (s byValue) isNil(i int) bool {
+	first := s.values[i]
+	return len(first) == 0 || first[0].Value == nil
+}
+
 // Less compares two elements
 func (s byValue) Less(i, j int) bool {
 	first, second := s.values[i], s.values[j]
@@ -94,6 +99,52 @@ func IsSortable(tid TypeID) bool {
 	default:
 		return false
 	}
+}
+
+// SortTopN finds and places the first n elements in 0-N
+func SortTopN(v [][]Val, ul *[]uint64, desc []bool, lang string, n int) error {
+	if len(v) == 0 || len(v[0]) == 0 {
+		return nil
+	}
+
+	for _, val := range v[0] {
+		if !IsSortable(val.Tid) {
+			return errors.Errorf("Value of type: %v isn't sortable", val.Tid.Name())
+		}
+	}
+
+	var cl *collate.Collator
+	if lang != "" {
+		// Collator is nil if we are unable to parse the language.
+		// We default to bytewise comparison in that case.
+		if langTag, err := language.Parse(lang); err == nil {
+			cl = collate.New(langTag)
+		}
+	}
+
+	b := sortBase{v, desc, ul, nil, cl}
+	toBeSorted := byValue{b}
+
+	nul := 0
+	for i := 0; i < len(*ul); i++ {
+		if toBeSorted.isNil(i) {
+			continue
+		}
+		if i != nul {
+			toBeSorted.Swap(i, nul)
+		}
+		nul += 1
+	}
+
+	if nul > n {
+		b1 := sortBase{v[:nul], desc, ul, nil, cl}
+		toBeSorted1 := byValue{b1}
+		quickSelect(toBeSorted1, 0, nul-1, n)
+	}
+	toBeSorted.values = toBeSorted.values[:n]
+	sort.Sort(toBeSorted)
+
+	return nil
 }
 
 // SortWithFacet sorts the given array in-place and considers the given facets to calculate

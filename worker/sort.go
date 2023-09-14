@@ -453,12 +453,20 @@ func multiSort(ctx context.Context, r *sortresult, ts *pb.SortMessage) error {
 			x.AssertTrue(idx >= 0)
 			vals[j] = sortVals[idx]
 		}
-		//nolint:gosec
-		if err := types.Sort(vals, &ul.Uids, desc, ""); err != nil {
-			return err
-		}
-		// Paginate
+
 		start, end := x.PageRange(int(ts.Count), int(r.multiSortOffsets[i]), len(ul.Uids))
+		if end < len(ul.Uids)/2 {
+			//nolint:gosec
+			if err := types.SortTopN(vals, &ul.Uids, desc, "", end); err != nil {
+				return err
+			}
+		} else {
+			//nolint:gosec
+			if err := types.Sort(vals, &ul.Uids, desc, ""); err != nil {
+				return err
+			}
+		}
+
 		ul.Uids = ul.Uids[start:end]
 		r.reply.UidMatrix[i] = ul
 	}
