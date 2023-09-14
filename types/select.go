@@ -34,8 +34,8 @@ func order2(data byValue, a, b int) (int, int) {
 
 func median(data byValue, a, b, c int) int {
 	a, b = order2(data, a, b)
-	b, c = order2(data, b, c)
-	a, b = order2(data, a, b)
+	b, _ = order2(data, b, c)
+	_, b = order2(data, a, b)
 	return b
 }
 
