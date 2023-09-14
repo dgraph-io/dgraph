@@ -110,29 +110,6 @@ func IsSortable(tid TypeID) bool {
 	}
 }
 
-type dataHeap struct {
-	heapIndices []int
-	data        byValue
-}
-
-func (h dataHeap) Len() int           { return len(h.heapIndices) }
-func (h dataHeap) Less(i, j int) bool { return h.data.Less(h.heapIndices[j], h.heapIndices[i]) }
-func (h dataHeap) Swap(i, j int) {
-	h.heapIndices[i], h.heapIndices[j] = h.heapIndices[j], h.heapIndices[i]
-}
-
-func (h *dataHeap) Push(x interface{}) {
-	h.heapIndices = append(h.heapIndices, x.(int))
-}
-
-func (h *dataHeap) Pop() interface{} {
-	old := h.heapIndices
-	n := len(old)
-	x := old[n-1]
-	h.heapIndices = old[0 : n-1]
-	return x
-}
-
 func insertionSort(data byValue, a, b int) {
 	for i := a + 1; i < b; i++ {
 		for j := i; j > a && data.Less(j, j-1); j-- {
@@ -235,10 +212,8 @@ func randomizedSelectionFinding(data byValue, low, high, k int) {
 			return
 		}
 
-		pivotIndexPre := choosePivot(data, low, high)
-
-		pivotIndex = partition(data, low, high, pivotIndexPre)
-		//fmt.Println(low, pivotIndexPre, pivotIndex, high)
+		pivotIndex = choosePivot(data, low, high)
+		pivotIndex = partition(data, low, high, pivotIndex)
 
 		if k < pivotIndex {
 			high = pivotIndex - 1

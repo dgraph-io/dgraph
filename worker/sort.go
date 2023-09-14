@@ -19,7 +19,6 @@ package worker
 import (
 	"context"
 	"encoding/hex"
-	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -456,20 +455,15 @@ func multiSort(ctx context.Context, r *sortresult, ts *pb.SortMessage) error {
 		}
 
 		start, end := x.PageRange(int(ts.Count), int(r.multiSortOffsets[i]), len(ul.Uids))
-		t1 := time.Now()
-		if end < len(ul.Uids) {
-			fmt.Println("New sorting", len(ul.Uids))
+		if end < len(ul.Uids)/2 {
 			if err := types.SortTopN(vals, &ul.Uids, desc, "", end); err != nil {
 				return err
 			}
 		} else {
-			fmt.Println("Regular sorting")
 			if err := types.Sort(vals, &ul.Uids, desc, ""); err != nil {
 				return err
 			}
 		}
-		t2 := time.Since(t1)
-		fmt.Println("Sorting time", t2)
 
 		ul.Uids = ul.Uids[start:end]
 		r.reply.UidMatrix[i] = ul
