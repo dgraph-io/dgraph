@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2023 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 package types
 
 // Below functions are taken from go's sort library zsortinterface.go
+// https://go.dev/src/sort/zsortinterface.go
 func insertionSort(data byValue, a, b int) {
 	for i := a + 1; i < b; i++ {
 		for j := i; j > a && data.Less(j, j-1); j-- {
@@ -85,7 +86,7 @@ func partition(data byValue, a, b, pivot int) int {
 	return partitionIndex
 }
 
-func QuickSelect(data byValue, low, high, k int) {
+func quickSelect(data byValue, low, high, k int) {
 	var pivotIndex int
 
 	for {

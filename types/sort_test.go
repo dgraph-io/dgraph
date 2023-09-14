@@ -56,12 +56,10 @@ func getUIDList(n int) *pb.List {
 	return &pb.List{Uids: data}
 }
 
-const charset = "abcdefghijklmnopqrstuvwxyz" +
-	"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+const charset = "abcdefghijklmnopqrstuvwxyz"
 
 func StringWithCharset(length int) string {
-	var seededRand *rand.Rand = rand.New(
-		rand.NewSource(time.Now().UnixNano()))
+	var seededRand *rand.Rand = rand.New(rand.NewSource(time.Now().UnixNano()))
 	b := make([]byte, length)
 	for i := range b {
 		b[i] = charset[seededRand.Intn(len(charset))]
@@ -90,8 +88,7 @@ func TestQuickSelect(t *testing.T) {
 
 	ul := getUIDList(n)
 	list := getList()
-	err := SortTopN(list, &ul.Uids, []bool{false}, "", k)
-	require.NoError(t, err)
+	require.NoError(t, SortTopN(list, &ul.Uids, []bool{false}, "", k))
 
 	for i := 0; i < k; i++ {
 		for j := k; j < n; j++ {
@@ -123,12 +120,9 @@ func BenchmarkSortQuickSort(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			ul := getUIDList(n)
 			list := getList()
-			b.StartTimer()
-			k1 := time.Now()
+			b.ResetTimer()
 			err := Sort(list, &ul.Uids, []bool{false}, "")
 			b.StopTimer()
-			k2 := time.Since(k1)
-			b.ReportMetric(k2.Seconds(), "Time")
 			require.NoError(b, err)
 		}
 	})
@@ -138,12 +132,9 @@ func BenchmarkSortQuickSort(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				ul := getUIDList(n)
 				list := getList()
-				b.StartTimer()
-				k1 := time.Now()
+				b.ResetTimer()
 				err := SortTopN(list, &ul.Uids, []bool{false}, "", j)
-				k2 := time.Since(k1)
 				b.StopTimer()
-				b.ReportMetric(k2.Seconds(), "Time")
 				require.NoError(b, err)
 			}
 		})

@@ -48,19 +48,11 @@ func (s sortBase) Swap(i, j int) {
 	}
 }
 
-type byValue struct {
-	sortBase
-}
+type byValue struct{ sortBase }
 
-func (s byValue) IsNil(i int) bool {
+func (s byValue) isNil(i int) bool {
 	first := s.values[i]
-	if len(first) == 0 {
-		return true
-	}
-	if first[0].Value == nil {
-		return true
-	}
-	return false
+	return len(first) == 0 || first[0].Value == nil
 }
 
 // Less compares two elements
@@ -81,7 +73,6 @@ func (s byValue) Less(i, j int) bool {
 		}
 
 		if second[vidx].Value == nil {
-			//fmt.Println("second val true", vidx, i, j, first[vidx].Value)
 			return true
 		}
 
@@ -110,8 +101,7 @@ func IsSortable(tid TypeID) bool {
 	}
 }
 
-// SortWithFacet sorts the given array in-place and considers the given facets to calculate
-// the proper ordering.
+// SortTopN finds and places the first n elements in 0-N
 func SortTopN(v [][]Val, ul *[]uint64, desc []bool, lang string, n int) error {
 	if len(v) == 0 || len(v[0]) == 0 {
 		return nil
@@ -137,7 +127,7 @@ func SortTopN(v [][]Val, ul *[]uint64, desc []bool, lang string, n int) error {
 
 	nul := 0
 	for i := 0; i < len(*ul); i++ {
-		if toBeSorted.IsNil(i) {
+		if toBeSorted.isNil(i) {
 			continue
 		}
 		if i != nul {
@@ -149,7 +139,7 @@ func SortTopN(v [][]Val, ul *[]uint64, desc []bool, lang string, n int) error {
 	if nul > n {
 		b1 := sortBase{v[:nul], desc, ul, nil, cl}
 		toBeSorted1 := byValue{b1}
-		QuickSelect(toBeSorted1, 0, nul-1, n)
+		quickSelect(toBeSorted1, 0, nul-1, n)
 	}
 	toBeSorted.values = toBeSorted.values[:n]
 	sort.Sort(toBeSorted)
