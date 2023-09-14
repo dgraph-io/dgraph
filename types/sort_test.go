@@ -69,12 +69,13 @@ func StringWithCharset(length int) string {
 	return string(b)
 }
 
-func TestBench(t *testing.T) {
-	n := 100
+func TestQuickSelect(t *testing.T) {
+	n := 10000
+	k := 10
 	getList := func() [][]Val {
 		strs := make([]string, n)
 		for i := 0; i < n; i++ {
-			strs[i] = fmt.Sprintf("%d", rand.Intn(1000))
+			strs[i] = fmt.Sprintf("%d", rand.Intn(100000))
 		}
 
 		list := make([][]Val, len(strs))
@@ -89,10 +90,13 @@ func TestBench(t *testing.T) {
 
 	ul := getUIDList(n)
 	list := getList()
-	SortTopN(list, &ul.Uids, []bool{false}, "", 2)
+	err := SortTopN(list, &ul.Uids, []bool{false}, "", k)
+	require.NoError(t, err)
 
-	for i, val := range list {
-		fmt.Println(i, val[0].Value)
+	for i := 0; i < k; i++ {
+		for j := k; j < n; j++ {
+			require.Equal(t, list[i][0].Value.(int64) <= list[j][0].Value.(int64), true)
+		}
 	}
 
 }
@@ -121,10 +125,11 @@ func BenchmarkSortQuickSort(b *testing.B) {
 			list := getList()
 			b.StartTimer()
 			k1 := time.Now()
-			Sort(list, &ul.Uids, []bool{false}, "")
-			k2 := time.Since(k1)
+			err := Sort(list, &ul.Uids, []bool{false}, "")
 			b.StopTimer()
+			k2 := time.Since(k1)
 			b.ReportMetric(k2.Seconds(), "Time")
+			require.NoError(b, err)
 		}
 	})
 
@@ -135,10 +140,11 @@ func BenchmarkSortQuickSort(b *testing.B) {
 				list := getList()
 				b.StartTimer()
 				k1 := time.Now()
-				SortTopN(list, &ul.Uids, []bool{false}, "", j)
+				err := SortTopN(list, &ul.Uids, []bool{false}, "", j)
 				k2 := time.Since(k1)
 				b.StopTimer()
 				b.ReportMetric(k2.Seconds(), "Time")
+				require.NoError(b, err)
 			}
 		})
 	}

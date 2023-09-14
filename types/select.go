@@ -73,39 +73,16 @@ func choosePivot(data byValue, a, b int) (pivot int) {
 }
 
 func partition(data byValue, a, b, pivot int) int {
-	data.Swap(a, pivot)
-	i, j := a+1, b-1 // i and j are inclusive of the elements remaining to be partitioned
-
-	for i <= j && data.Less(i, a) {
-		i++
-	}
-	for i <= j && !data.Less(j, a) {
-		j--
-	}
-	if i > j {
-		data.Swap(j, a)
-		return j
-	}
-	data.Swap(i, j)
-	i++
-	j--
-
-	for {
-		for i <= j && data.Less(i, a) {
-			i++
+	partitionIndex := a
+	data.Swap(pivot, b)
+	for i := a; i < b; i++ {
+		if data.Less(i, b) {
+			data.Swap(i, partitionIndex)
+			partitionIndex++
 		}
-		for i <= j && !data.Less(j, a) {
-			j--
-		}
-		if i > j {
-			break
-		}
-		data.Swap(i, j)
-		i++
-		j--
 	}
-	data.Swap(j, a)
-	return j
+	data.Swap(partitionIndex, b)
+	return partitionIndex
 }
 
 func QuickSelect(data byValue, low, high, k int) {
