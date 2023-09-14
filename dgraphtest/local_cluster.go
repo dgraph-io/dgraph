@@ -606,10 +606,6 @@ func (c *LocalCluster) Upgrade(version string, strategy UpgradeStrategy) error {
 			return err
 		}
 
-		var encPath string
-		if c.conf.encryption {
-			encPath = encKeyMountPath
-		}
 		hc, err = c.HTTPClient()
 		if err != nil {
 			return errors.Wrapf(err, "error creating HTTP client after upgrade")
@@ -619,7 +615,7 @@ func (c *LocalCluster) Upgrade(version string, strategy UpgradeStrategy) error {
 				return errors.Wrapf(err, "error during login after upgrade")
 			}
 		}
-		if err := hc.Restore(c, DefaultBackupDir, "", 0, 1, encPath); err != nil {
+		if err := hc.Restore(c, DefaultBackupDir, "", 0, 1); err != nil {
 			return errors.Wrap(err, "error doing restore during upgrade")
 		}
 		if err := WaitForRestore(c); err != nil {
@@ -848,6 +844,17 @@ func (c *LocalCluster) AssignUids(_ *dgo.Dgraph, num uint64) error {
 // GetVersion returns the version of dgraph the cluster is running
 func (c *LocalCluster) GetVersion() string {
 	return c.conf.version
+}
+
+// GetEncKeyPath returns the path to the encryption key file when encryption is enabled.
+// It returns an empty string otherwise. The path to the encryption file is valid only
+// inside the alpha container.
+func (c *LocalCluster) GetEncKeyPath() (string, error) {
+	if c.conf.encryption {
+		return encKeyMountPath, nil
+	}
+
+	return "", nil
 }
 
 func (c *LocalCluster) printAllLogs() error {

@@ -68,3 +68,7 @@ func (c *ComposeCluster) AssignUids(client *dgo.Dgraph, num uint64) error {
 func (c *ComposeCluster) GetVersion() string {
 	return localVersion
 }
+
+func (c *ComposeCluster) GetEncKeyPath() (string, error) {
+	return "", errNotImplemented
+}

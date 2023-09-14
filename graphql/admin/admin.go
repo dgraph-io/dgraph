@@ -761,6 +761,7 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 		"moveTablet":        resolveMoveTablet,
 		"assign":            resolveAssign,
 		"enterpriseLicense": resolveEnterpriseLicense,
+		"restoreTenant":     resolveTenantRestore,
 	}
 
 	rf := resolverFactoryWithErrorMsg(errResolverNotFound).
