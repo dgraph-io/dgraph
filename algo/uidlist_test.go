@@ -389,7 +389,17 @@ func BenchmarkListIntersectCompressBin(b *testing.B) {
 			sort.Slice(v1, func(i, j int) bool { return v1[i] < v1[j] })
 
 			dst2 := &pb.List{}
+			dst1 := &pb.List{}
 			compressedUids := codec.Encode(v1, 256)
+
+			b.Run(fmt.Sprintf("linJump:IntersectWith:ratio=%v:size=%d:overlap=%.2f:", r, sz, overlap),
+				func(b *testing.B) {
+					for k := 0; k < b.N; k++ {
+						dec := codec.Decoder{Pack: compressedUids}
+						dec.Seek(0, codec.SeekStart)
+						IntersectCompressedWithLinJump(&dec, u1, &dst1.Uids)
+					}
+				})
 
 			b.Run(fmt.Sprintf("compressed:IntersectWith:ratio=%v:size=%d:overlap=%.2f:", r, sz, overlap),
 				func(b *testing.B) {
@@ -399,7 +409,6 @@ func BenchmarkListIntersectCompressBin(b *testing.B) {
 						IntersectCompressedWithBin(&dec, u1, &dst2.Uids)
 					}
 				})
-			fmt.Println()
 
 			codec.FreePack(compressedUids)
 		}
