@@ -68,9 +68,6 @@ func TestIncrementalRestore(t *testing.T) {
 		t.Logf("restoring backup #%v\n", i)
 
 		incrFrom := i - 1
-		if i == 2 {
-			incrFrom = 0
-		}
 		require.NoError(t, hc.Restore(c, dgraphtest.DefaultBackupDir, "", incrFrom, i))
 		require.NoError(t, dgraphtest.WaitForRestore(c))
 

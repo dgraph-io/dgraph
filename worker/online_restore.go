@@ -245,8 +245,14 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest, pidx uin
 		return errors.Errorf("nil restore request")
 	}
 
+	// This is a minor inconvenience while using the incremental restore API that
+	// when incrementalFrom is set to 1, we throw an error back. The restore API
+	// takes two backup numbers incrementalFrom & backupNum and restores all the
+	// backups including both the ends, i.e. following set notation all the backups
+	// in the set [incrementalFrom, backupNum] are restored. This should work fine
+	// when incrementalFrom is set to 1 which is a full backup.
 	if req.IncrementalFrom == 1 {
-		return errors.Errorf("Incremental restore must not include full backup")
+		req.IncrementalFrom = 0
 	}
 
 	// Clean up the cluster if it is a full backup restore.
