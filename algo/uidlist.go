@@ -60,7 +60,7 @@ func IntersectCompressedWith(pack *pb.UidPack, afterUID uint64, v, o *pb.List) {
 
 	// Select appropriate function based on heuristics.
 	ratio := float64(m) / float64(n)
-	if ratio < 500 {
+	if ratio < 100 {
 		IntersectCompressedWithLinJump(&dec, v.Uids, &dst)
 	} else {
 		IntersectCompressedWithBin(&dec, v.Uids, &dst)
@@ -94,7 +94,7 @@ func IntersectCompressedWithLinJump(dec *codec.Decoder, v []uint64, o *[]uint64)
 // https://link.springer.com/chapter/10.1007/978-3-642-12476-1_3
 // Call seek on dec before calling this function
 func IntersectCompressedWithBin(dec *codec.Decoder, q []uint64, o *[]uint64) {
-	ld := dec.ApproxLen()
+	ld := codec.ExactLen(dec.Pack)
 	lq := len(q)
 
 	if lq == 0 {
@@ -105,13 +105,19 @@ func IntersectCompressedWithBin(dec *codec.Decoder, q []uint64, o *[]uint64) {
 	}
 
 	// Pick the shorter list and do binary search
-	if ld < lq {
+	if ld <= lq {
 		for {
 			blockUids := dec.Uids()
 			if len(blockUids) == 0 {
 				break
 			}
-			IntersectWithBin(blockUids, q, o)
+			if ld*10 < lq {
+				IntersectWithBin(blockUids, q, o)
+			} else {
+				// For small enough difference between two arrays, we should just
+				// do lin intersect
+				IntersectWithLin(blockUids, q, o)
+			}
 			lastUid := blockUids[len(blockUids)-1]
 			qidx := sort.Search(len(q), func(idx int) bool {
 				return q[idx] >= lastUid
@@ -125,26 +131,29 @@ func IntersectCompressedWithBin(dec *codec.Decoder, q []uint64, o *[]uint64) {
 		return
 	}
 
-	var uids []uint64
-	for _, u := range q {
+	uids := dec.Uids()
+	qidx := -1
+	for {
+		qidx += 1
+		if qidx >= len(q) {
+			return
+		}
+		u := q[qidx]
 		if len(uids) == 0 || u > uids[len(uids)-1] {
-			uids = dec.Seek(u, codec.SeekStart)
+			if lq*10 < ld {
+				uids = dec.LinearSeek(u)
+			} else {
+				uids = dec.SeekToBlock(u, codec.SeekStart)
+			}
 			if len(uids) == 0 {
 				return
 			}
 		}
-		uidIdx := sort.Search(len(uids), func(idx int) bool {
-			return uids[idx] >= u
-		})
-		if uidIdx >= len(uids) {
-			// We know that u < max(uids). If we didn't find it here, it's not here.
-			continue
+		_, off := IntersectWithJump(uids, q[qidx:], o)
+		if off == 0 {
+			off = 1 // if v[k] isn't in u, move forward
 		}
-		if uids[uidIdx] == u {
-			*o = append(*o, u)
-			uidIdx++
-		}
-		uids = uids[uidIdx:]
+		qidx += off
 	}
 }
 

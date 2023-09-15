@@ -373,7 +373,7 @@ func BenchmarkListIntersectCompressBin(b *testing.B) {
 		for _, r := range rs {
 			sz1 := sz
 			sz2 := int(float64(sz) * r)
-			if sz2 > 1000000 || sz2 == 0 {
+			if sz2 > 10000000 || sz2 == 0 {
 				break
 			}
 

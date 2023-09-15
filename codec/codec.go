@@ -223,16 +223,14 @@ func (d *Decoder) ApproxLen() int {
 
 type searchFunc func(int) bool
 
-// Seek will search for uid in a packed block using the specified whence position.
-// The value of whence must be one of the predefined values SeekStart or SeekCurrent.
-// SeekStart searches uid and includes it as part of the results.
-// SeekCurrent searches uid but only as offset, it won't be included with results.
-//
-// Returns a slice of all uids whence the position, or an empty slice if none found.
-func (d *Decoder) Seek(uid uint64, whence seekPos) []uint64 {
+// SeekToBlock will find the nearest block, and unpack it. Unlike Seek, it doesn't
+// apply search in the resulting uid list and then move the pointer forward. When we are going
+// to intersect the list later, this function is useful.
+func (d *Decoder) SeekToBlock(uid uint64, whence seekPos) []uint64 {
 	if d.Pack == nil {
 		return []uint64{}
 	}
+	prevBlockIdx := d.blockIdx
 	d.blockIdx = 0
 	if uid == 0 {
 		return d.UnpackBlock()
@@ -243,14 +241,14 @@ func (d *Decoder) Seek(uid uint64, whence seekPos) []uint64 {
 		var f searchFunc
 		switch whence {
 		case SeekStart:
-			f = func(i int) bool { return pack.Blocks[i].Base >= uid }
+			f = func(i int) bool { return pack.Blocks[i+prevBlockIdx].Base >= uid }
 		case SeekCurrent:
-			f = func(i int) bool { return pack.Blocks[i].Base > uid }
+			f = func(i int) bool { return pack.Blocks[i+prevBlockIdx].Base > uid }
 		}
 		return f
 	}
 
-	idx := sort.Search(len(pack.Blocks), blocksFunc())
+	idx := sort.Search(len(pack.Blocks[prevBlockIdx:]), blocksFunc()) + prevBlockIdx
 	// The first block.Base >= uid.
 	if idx == 0 {
 		return d.UnpackBlock()
@@ -265,7 +263,65 @@ func (d *Decoder) Seek(uid uint64, whence seekPos) []uint64 {
 	// we found the first block index whose base is greater than uid. In these cases, go to the
 	// previous block and search there.
 	d.blockIdx = idx - 1 // Move to the previous block. If blockIdx<0, unpack will deal with it.
-	d.UnpackBlock()      // And get all their uids.
+	if d.blockIdx != prevBlockIdx {
+		d.UnpackBlock() // And get all their uids.
+	}
+
+	if uid < d.uids[len(d.uids)-1] {
+		return d.uids
+	}
+
+	// Could not find any uid in the block, which is >= uid. The next block might still have valid
+	// entries > uid.
+	return d.Next()
+}
+
+// Seek will search for uid in a packed block using the specified whence position.
+// The value of whence must be one of the predefined values SeekStart or SeekCurrent.
+// SeekStart searches uid and includes it as part of the results.
+// SeekCurrent searches uid but only as offset, it won't be included with results.
+//
+// Returns a slice of all uids whence the position, or an empty slice if none found.
+func (d *Decoder) Seek(uid uint64, whence seekPos) []uint64 {
+	if d.Pack == nil {
+		return []uint64{}
+	}
+	prevBlockIdx := d.blockIdx
+	d.blockIdx = 0
+	if uid == 0 {
+		return d.UnpackBlock()
+	}
+
+	pack := d.Pack
+	blocksFunc := func() searchFunc {
+		var f searchFunc
+		switch whence {
+		case SeekStart:
+			f = func(i int) bool { return pack.Blocks[i+prevBlockIdx].Base >= uid }
+		case SeekCurrent:
+			f = func(i int) bool { return pack.Blocks[i+prevBlockIdx].Base > uid }
+		}
+		return f
+	}
+
+	idx := sort.Search(len(pack.Blocks[prevBlockIdx:]), blocksFunc()) + prevBlockIdx
+	// The first block.Base >= uid.
+	if idx == 0 {
+		return d.UnpackBlock()
+	}
+	// The uid is the first entry in the block.
+	if idx < len(pack.Blocks) && pack.Blocks[idx].Base == uid {
+		d.blockIdx = idx
+		return d.UnpackBlock()
+	}
+
+	// Either the idx = len(pack.Blocks) that means it wasn't found in any of the block's base. Or,
+	// we found the first block index whose base is greater than uid. In these cases, go to the
+	// previous block and search there.
+	d.blockIdx = idx - 1 // Move to the previous block. If blockIdx<0, unpack will deal with it.
+	if d.blockIdx != prevBlockIdx {
+		d.UnpackBlock() // And get all their uids.
+	}
 
 	uidsFunc := func() searchFunc {
 		var f searchFunc
