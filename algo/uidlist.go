@@ -113,23 +113,16 @@ func IntersectCompressedWithBin(dec *codec.Decoder, q []uint64, o *[]uint64) {
 			}
 			if ld*10 < len(q) {
 				q = q[IntersectWithBin(blockUids, q, o):]
-				dec.Next()
 			} else {
 				// For small enough difference between two arrays, we should just
 				// do lin intersect
 				_, off := IntersectWithLin(blockUids, q, o)
-				if off == 0 {
-					off = 1
-				}
-				if off == len(q) {
-					return
-				}
 				q = q[off:]
-				if len(q) == 0 {
-					return
-				}
-				dec.Seek(q[0], codec.SeekStart)
 			}
+			if len(q) == 0 {
+				return
+			}
+			dec.Next()
 		}
 		return
 	}

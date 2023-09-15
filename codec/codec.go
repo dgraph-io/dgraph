@@ -286,41 +286,58 @@ func (d *Decoder) Seek(uid uint64, whence seekPos) []uint64 {
 	if d.Pack == nil {
 		return []uint64{}
 	}
+
 	prevBlockIdx := d.blockIdx
-	d.blockIdx = 0
+	pack := d.Pack
+	blocksToSearch := pack.Blocks
+	offset := 0
+	if len(d.uids) > 0 {
+		first := d.uids[0]
+		second := d.uids[len(d.uids)-1]
+
+		if uid >= first && uid <= second {
+			blocksToSearch = nil
+		} else if uid > second {
+			blocksToSearch = blocksToSearch[prevBlockIdx:]
+			offset = prevBlockIdx
+		} else {
+			blocksToSearch = blocksToSearch[:prevBlockIdx]
+		}
+	}
+
 	if uid == 0 {
 		return d.UnpackBlock()
 	}
 
-	pack := d.Pack
 	blocksFunc := func() searchFunc {
 		var f searchFunc
 		switch whence {
 		case SeekStart:
-			f = func(i int) bool { return pack.Blocks[i+prevBlockIdx].Base >= uid }
+			f = func(i int) bool { return blocksToSearch[i].Base >= uid }
 		case SeekCurrent:
-			f = func(i int) bool { return pack.Blocks[i+prevBlockIdx].Base > uid }
+			f = func(i int) bool { return blocksToSearch[i].Base > uid }
 		}
 		return f
-	}
-
-	idx := sort.Search(len(pack.Blocks[prevBlockIdx:]), blocksFunc()) + prevBlockIdx
-	// The first block.Base >= uid.
-	if idx == 0 {
-		return d.UnpackBlock()
-	}
-	// The uid is the first entry in the block.
-	if idx < len(pack.Blocks) && pack.Blocks[idx].Base == uid {
-		d.blockIdx = idx
-		return d.UnpackBlock()
 	}
 
 	// Either the idx = len(pack.Blocks) that means it wasn't found in any of the block's base. Or,
 	// we found the first block index whose base is greater than uid. In these cases, go to the
 	// previous block and search there.
-	d.blockIdx = idx - 1 // Move to the previous block. If blockIdx<0, unpack will deal with it.
-	if d.blockIdx != prevBlockIdx {
-		d.UnpackBlock() // And get all their uids.
+	if blocksToSearch != nil {
+		idx := sort.Search(len(blocksToSearch), blocksFunc()) + offset
+		// The first block.Base >= uid.
+		if idx == 0 {
+			return d.UnpackBlock()
+		}
+
+		// The uid is the first entry in the block.
+		if idx < len(pack.Blocks) && pack.Blocks[idx].Base == uid {
+			d.blockIdx = idx
+			return d.UnpackBlock()
+		}
+
+		d.blockIdx = idx - 1 // Move to the previous block. If blockIdx<0, unpack will deal with it.
+		d.UnpackBlock()      // And get all their uids.
 	}
 
 	uidsFunc := func() searchFunc {
