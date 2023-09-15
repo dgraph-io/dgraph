@@ -111,22 +111,25 @@ func IntersectCompressedWithBin(dec *codec.Decoder, q []uint64, o *[]uint64) {
 			if len(blockUids) == 0 {
 				break
 			}
-			if ld*10 < lq {
-				IntersectWithBin(blockUids, q, o)
+			if ld*10 < len(q) {
+				q = q[IntersectWithBin(blockUids, q, o):]
+				dec.Next()
 			} else {
 				// For small enough difference between two arrays, we should just
 				// do lin intersect
-				IntersectWithLin(blockUids, q, o)
+				_, off := IntersectWithLin(blockUids, q, o)
+				if off == 0 {
+					off = 1
+				}
+				if off == len(q) {
+					return
+				}
+				q = q[off:]
+				if len(q) == 0 {
+					return
+				}
+				dec.Seek(q[0], codec.SeekStart)
 			}
-			lastUid := blockUids[len(blockUids)-1]
-			qidx := sort.Search(len(q), func(idx int) bool {
-				return q[idx] >= lastUid
-			})
-			if qidx >= len(q) {
-				return
-			}
-			q = q[qidx:]
-			dec.Next()
 		}
 		return
 	}
@@ -242,7 +245,8 @@ func IntersectWithJump(u, v []uint64, o *[]uint64) (int, int) {
 // IntersectWithBin is based on the paper
 // "Fast Intersection Algorithms for Sorted Sequences"
 // https://link.springer.com/chapter/10.1007/978-3-642-12476-1_3
-func IntersectWithBin(d, q []uint64, o *[]uint64) {
+// Returns where to move the second array(q) to. O means not found
+func IntersectWithBin(d, q []uint64, o *[]uint64) int {
 	ld := len(d)
 	lq := len(q)
 
@@ -251,7 +255,7 @@ func IntersectWithBin(d, q []uint64, o *[]uint64) {
 		d, q = q, d
 	}
 	if ld == 0 || lq == 0 || d[ld-1] < q[0] || q[lq-1] < d[0] {
-		return
+		return 0
 	}
 
 	val := d[0]
@@ -265,6 +269,7 @@ func IntersectWithBin(d, q []uint64, o *[]uint64) {
 	})
 
 	binIntersect(d, q[minq:maxq], o)
+	return maxq
 }
 
 // binIntersect is the recursive function used.
