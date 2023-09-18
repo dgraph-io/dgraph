@@ -15,17 +15,18 @@ This template demonstrates how to make a simple HTTP API with Python running on 
 Following https://www.philschmid.de/serverless-bert-with-huggingface-aws-lambda-docker
 
 Create ECR repository
-> aws ecr create-repository --repository-name embedding-lambda --region us-east-1 --profile dgraph
-use repositoryUri
-> docker tag python-lambda <account_id>.dkr.ecr.us-east-1.amazonaws.com/embedding-lambda
 aws_region=us-east-1
 aws_account_id=<account_id>
 
-> aws ecr get-login-password \                                                     
-    --region $aws_region --profile dgraph\
+> aws ecr create-repository --repository-name embedding-lambda --region $aws_region --profile dgraph
+use repositoryUri
+> docker tag python-lambda $aws_account_id.dkr.ecr.us-east-1.amazonaws.com/embedding-lambda
+
+
+> aws ecr get-login-password --region $aws_region --profile dgraph\
 | docker login \
     --username AWS \
-    --password-stdin <account_id>.dkr.ecr.us-east-1.amazonaws.com/embedding-lambda
+    --password-stdin $aws_account_id.dkr.ecr.us-east-1.amazonaws.com/embedding-lambda
 Login Succeeded
 
 > docker push $aws_account_id.dkr.ecr.us-east-1.amazonaws.com/embedding-lambda

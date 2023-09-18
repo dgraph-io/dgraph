@@ -1,1 +1,1 @@
-transformers[torch]==4.1.1
+sentence-transformers==2.2.2
