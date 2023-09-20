@@ -1910,7 +1910,7 @@ func addAggregationResultType(schema *ast.Schema, defn *ast.Definition, provides
 		}
 
 		// Adds titleMax, titleMin fields for a field of name title.
-		if isOrderable(fld, defn, providesTypeMap) {
+		if isOrderable(fld, defn, providesTypeMap) || isMultiLangField(fld, false) {
 			minField := &ast.FieldDefinition{
 				Name: fld.Name + "Min",
 				Type: aggregateFieldType,
