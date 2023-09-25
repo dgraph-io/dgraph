@@ -156,13 +156,8 @@ func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) 
 		// retrieve vector from inUuid save as inVec
 		inVec := types.BytesAsFloatArray(data[0].Value.([]byte))
 		tc := hnsw.NewTxnCache(NewViTxn(txn), txn.StartTs)
-		ph := &hnsw.PersistentHNSW{
-			MaxLevels:      hnsw.VectorIndexMaxLevels,
-			EfConstruction: hnsw.EfConstruction,
-			EfSearch:       hnsw.EfSearch,
-			Pred:           attr,
-			IndexType:      info.tokenizers[0].Name(),
-		}
+		ph := hnsw.CreatePersistentFlatHNSW(hnsw.VectorIndexMaxLevels, hnsw.EfConstruction, hnsw.EfSearch, attr,
+			hnsw.GetSimType(info.tokenizers[0].Name()))
 		visited, edges, err := ph.InsertToPersistentStorage(ctx, tc, uid, inVec)
 		if err != nil {
 			fmt.Print(visited)
@@ -689,11 +684,9 @@ func (r *rebuilder) Run(ctx context.Context) error {
 	stream := pstore.NewStreamAt(r.startTs)
 	stream.LogPrefix = fmt.Sprintf("Rebuilding index for predicate %s (1/2):", r.attr)
 	stream.Prefix = r.prefix
-	//TODO We need to create a single transaction irrespective of the type of the prdicate
-	//TODO For vector index rebuild, parallelism is disabled. Needs to be re-enabled
+	//TODO We need to create a single transaction irrespective of the type of the predicate
 	if pred.ValueType == pb.Posting_VFLOAT {
 		txn = NewTxn(r.startTs)
-		stream.NumGo = 1
 	}
 	stream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
 		// We should return quickly if the context is no longer valid.
@@ -726,15 +719,16 @@ func (r *rebuilder) Run(ctx context.Context) error {
 			return nil, err
 		}
 
-		// Convert data into deltas.
-		streamTxn.Update()
-
 		if txn != nil {
 			kvs := make([]*bpb.KV, 0, len(edges))
 			for _, edge := range edges {
 				version := atomic.AddUint64(&counter, 1)
-				key := string(x.DataKey(edge.Attr, edge.Entity))
-				data := txn.cache.deltas[key]
+				key := x.DataKey(edge.Attr, edge.Entity)
+				pl, err := txn.GetFromDelta(key)
+				if err != nil {
+					return &bpb.KVList{}, nil
+				}
+				data := pl.getMutation(r.startTs)
 				kv := bpb.KV{
 					Key:      x.DataKey(edge.Attr, edge.Entity),
 					Value:    data,
@@ -746,6 +740,8 @@ func (r *rebuilder) Run(ctx context.Context) error {
 			return &bpb.KVList{Kv: kvs}, nil
 		}
 
+		// Convert data into deltas.
+		streamTxn.Update()
 		// txn.cache.Lock() is not required because we are the only one making changes to txn.
 		kvs := make([]*bpb.KV, 0, len(streamTxn.cache.deltas))
 		for key, data := range streamTxn.cache.deltas {

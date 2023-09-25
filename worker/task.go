@@ -224,6 +224,7 @@ const (
 	customIndexFn
 	matchFn
 	similarToFn
+	indexPathFn
 	standardFn = 100
 )
 
@@ -264,6 +265,8 @@ func parseFuncTypeHelper(name string) (FuncType, string) {
 		return uidInFn, f
 	case "similar_to":
 		return similarToFn, f
+	case "index_path":
+		return indexPathFn, f
 	case "anyof", "allof":
 		return customIndexFn, f
 	case "match":
@@ -288,7 +291,7 @@ func needsIndex(fnType FuncType, uidList *pb.List) bool {
 		return true
 	case geoFn, fullTextSearchFn, standardFn, matchFn:
 		return true
-	case similarToFn:
+	case similarToFn, indexPathFn:
 		return true
 	}
 	return false
@@ -325,7 +328,7 @@ func (srcFn *functionContext) needsValuePostings(typ types.TypeID) (bool, error)
 	case uidInFn, compareScalarFn:
 		// Operate on uid postings
 		return false, nil
-	case notAFunction, similarToFn:
+	case notAFunction, similarToFn, indexPathFn:
 		return typ.IsScalar(), nil
 	}
 	return false, errors.Errorf("Unhandled case in fetchValuePostings for fn: %s", srcFn.fname)
@@ -349,7 +352,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 	}
 
 	switch srcFn.fnType {
-	case notAFunction, aggregatorFn, passwordFn, compareAttrFn, similarToFn:
+	case notAFunction, aggregatorFn, passwordFn, compareAttrFn, similarToFn, indexPathFn:
 	default:
 		return errors.Errorf("Unhandled function in handleValuePostings: %s", srcFn.fname)
 	}
@@ -368,20 +371,51 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 			posting.NewViLocalCache(qs.cache),
 			args.q.ReadTs,
 		)
-		ph := &hnsw.PersistentHNSW{
-			MaxLevels:      hnsw.VectorIndexMaxLevels,
-			EfConstruction: hnsw.EfConstruction,
-			EfSearch:       hnsw.EfSearch,
-			Pred:           args.q.Attr,
-			IndexType:      tokenizer.Name(),
-		}
-		nn_uids, err := ph.SearchPersistentStorage(ctx, qc, srcFn.vectorInfo,
+		ph := hnsw.CreatePersistentFlatHNSW(
+			hnsw.VectorIndexMaxLevels,
+			hnsw.EfConstruction,
+			hnsw.EfSearch,
+			args.q.Attr,
+			hnsw.GetSimType(tokenizer.Name()),
+		)
+		nn_uids, _, err := ph.SearchPersistentStorage(ctx, qc, srcFn.vectorInfo,
 			int(numNeighbors), index.AcceptAll)
 		if err != nil {
 			return err
 		}
 		sort.Slice(nn_uids, func(i, j int) bool { return nn_uids[i] < nn_uids[j] })
 		args.out.UidMatrix = append(args.out.UidMatrix, &pb.List{Uids: nn_uids})
+		return nil
+	}
+
+	if srcFn.fnType == indexPathFn {
+		numNeighbors, err := strconv.ParseInt(q.SrcFunc.Args[0], 10, 32)
+		if err != nil {
+			return fmt.Errorf("invalid value for number of neighbors: %s", q.SrcFunc.Args[0])
+		}
+		tokenizer, err := pickVFloatTokenizer(ctx, args.q.Attr, srcFn.fname)
+		if err != nil {
+			return err
+		}
+		//TODO: generate maxLevels from schema, filter, etc.
+		qc := hnsw.NewQueryCache(
+			posting.NewViLocalCache(qs.cache),
+			args.q.ReadTs,
+		)
+		ph := hnsw.CreatePersistentFlatHNSW(
+			hnsw.VectorIndexMaxLevels,
+			hnsw.EfConstruction,
+			hnsw.EfSearch,
+			args.q.Attr,
+			hnsw.GetSimType(tokenizer.Name()),
+		)
+		_, traversalPath, err := ph.SearchPersistentStorage(ctx, qc, srcFn.vectorInfo,
+			int(numNeighbors), index.AcceptAll)
+		if err != nil {
+			return err
+		}
+		sort.Slice(traversalPath, func(i, j int) bool { return traversalPath[i] < traversalPath[j] })
+		args.out.UidMatrix = append(args.out.UidMatrix, &pb.List{Uids: traversalPath})
 		return nil
 	}
 
@@ -1953,6 +1987,11 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 		}
 		checkRoot(q, fc)
 	case similarToFn:
+		fc.vectorInfo, err = types.ParseVFloat(q.SrcFunc.Args[1])
+		if err != nil {
+			return nil, err
+		}
+	case indexPathFn:
 		fc.vectorInfo, err = types.ParseVFloat(q.SrcFunc.Args[1])
 		if err != nil {
 			return nil, err

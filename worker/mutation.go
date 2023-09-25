@@ -41,6 +41,7 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
+	"github.com/dgraph-io/vector-indexer/hnsw"
 )
 
 var (
@@ -290,6 +291,11 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 // only during schema mutations or we see a new predicate.
 func updateSchema(s *pb.SchemaUpdate, ts uint64) error {
 	schema.State().Set(s.Predicate, s)
+	// if schema update has @index for vfloat, then schema.State().Set(s.Predicate + hnsw.VecKeyword, s)
+	// if that works, add in index_path, same idea..
+	if s.Directive == pb.SchemaUpdate_INDEX && s.ValueType == pb.Posting_ValType(types.VFloatID) {
+		schema.State().Set(s.Predicate+hnsw.VecKeyword, s)
+	}
 	schema.State().DeleteMutSchema(s.Predicate)
 	txn := pstore.NewTransactionAt(ts, true)
 	defer txn.Discard()
@@ -584,7 +590,7 @@ func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate) error {
 	//       specifying it as the same type as presented in su.
 	edge.ValueType = schemaType.Enum()
 	var ok bool
-	edge.Value, ok  = b.Value.([]byte)
+	edge.Value, ok = b.Value.([]byte)
 	if !ok {
 		return errors.Errorf("failure to convert edge type: '%+v' to schema type: '%+v'",
 			storageType, schemaType)
