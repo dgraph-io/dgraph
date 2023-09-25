@@ -6,7 +6,7 @@ clint==0.5.1
 docker==4.2.0
 embargo==0.1.1
 Flask==2.3.2
-gevent==1.4.0
+gevent==23.9.1
 greenlet==0.4.15
 httpie==3.1.0
 idna==2.9
