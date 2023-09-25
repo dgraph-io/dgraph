@@ -94,7 +94,6 @@ func init() {
 	registerTokenizer(HNSWEuclidianTokenizer{})
 	registerTokenizer(HNSWCosineTokenizer{})
 	registerTokenizer(HNSWDotProdTokenizer{})
-	registerTokenizer(VFloatTokenizer{})
 	registerTokenizer(GeoTokenizer{})
 	registerTokenizer(IntTokenizer{})
 	registerTokenizer(FloatTokenizer{})
@@ -218,18 +217,6 @@ func (t FloatTokenizer) Tokens(v interface{}) ([]string, error) {
 func (t FloatTokenizer) Identifier() byte { return IdentFloat }
 func (t FloatTokenizer) IsSortable() bool { return true }
 func (t FloatTokenizer) IsLossy() bool    { return true }
-
-// VFloatTokenizer generates tokens from vectors of float64 values.
-type VFloatTokenizer struct{}
-
-func (t VFloatTokenizer) Name() string { return "vfloat" }
-func (t VFloatTokenizer) Type() string { return "vfloat" }
-func (t VFloatTokenizer) Tokens(v interface{}) ([]string, error) {
-	return tokensForExpectedVFloat(v)
-}
-func (t VFloatTokenizer) Identifier() byte { return IdentVFloat }
-func (t VFloatTokenizer) IsSortable() bool { return false }
-func (t VFloatTokenizer) IsLossy() bool    { return true }
 
 // HNSWEuclidianTokenizer generates tokens from vectors of float64 values and uses
 // euclidian distance to index.
