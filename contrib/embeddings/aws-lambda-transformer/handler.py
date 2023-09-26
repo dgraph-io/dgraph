@@ -8,15 +8,10 @@ os.environ['TRANSFORMERS_CACHE'] = '/var/task'
 
 def handler(event, context):
     body = json.loads(event['body'])
-    sentences = body['text']
+    sentences = [body[key] for key in body]
     model = SentenceTransformer('/var/task/model')
     embeddings = model.encode(sentences)
+    keylist = list(body.keys())
+    resp = {keylist[i]:json.dumps(embeddings[i].tolist()) for i in range(len(embeddings))}
 
-    resp = []
-  
-    for v in embeddings:
-        resp.append(json.dumps(v.tolist()))
-        
-    response = {"statusCode": 200, "body": json.dumps(resp)}
-
-    return response
+    return {"statusCode": 200, "body": json.dumps(resp)}

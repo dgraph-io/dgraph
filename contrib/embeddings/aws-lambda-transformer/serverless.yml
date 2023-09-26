@@ -13,7 +13,7 @@ provider:
     TRANSFORMERS_CACHE: /var/task
   apiGateway:
     apiKeys:
-      - embedding-apikey
+      - transformer-apikey
 
 functions:
   sentence-encoding:
