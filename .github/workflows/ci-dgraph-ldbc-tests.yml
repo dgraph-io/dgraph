@@ -32,7 +32,7 @@ on:
       - main
       - 'release/**'
   schedule:
-    - cron: "1 0 * * *" # 1-run per day
+    - cron: "0 0 * * *" # 1-run per day
 jobs:
   dgraph-ldbc-tests:
     if: github.event.pull_request.draft == false

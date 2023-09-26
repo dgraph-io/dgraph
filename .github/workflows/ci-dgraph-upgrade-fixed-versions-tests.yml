@@ -1,10 +1,10 @@
 name: ci-dgraph-upgrade-fixed-versions-tests
 on:
   schedule:
-    - cron: "1 */12 * * *" # every 12hrs
+    - cron: "0 3 * *" # 1 run per day
 jobs:
   dgraph-upgrade-fixed-versions-tests:
-    runs-on: [self-hosted, x64]
+    runs-on: ubuntu-20.04-32gb 
     timeout-minutes: 720
     steps:
       - uses: actions/checkout@v3

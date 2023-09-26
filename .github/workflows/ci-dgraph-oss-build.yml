@@ -32,7 +32,7 @@ on:
       - main
       - 'release/**'
   schedule:
-    - cron: "1 0,6,12,18 * * *"
+    - cron: "0 0 * * *" # 1 run per day
 jobs:
   dgraph-oss-build:
     if: github.event.pull_request.draft == false

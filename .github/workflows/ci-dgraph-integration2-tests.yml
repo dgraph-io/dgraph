@@ -14,7 +14,7 @@ on:
       - main
       - 'release/**'
   schedule:
-    - cron: "1 */4 * * *" # every 4hrs
+    - cron: "0 0 * * *" # 1 run per day
 jobs:
   dgraph-integration2-tests:
     if: github.event.pull_request.draft == false
