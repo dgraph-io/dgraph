@@ -241,7 +241,7 @@ func (sg *SubGraph) expandOut(ctx context.Context,
 		if numEdges > x.Config.LimitQueryEdge {
 			// If we've seen too many edges, stop the query.
 			rch <- errors.Errorf("Exceeded query edge limit = %v. Found %v edges.",
-				x.Config.LimitMutationsNquad, numEdges)
+				x.Config.LimitQueryEdge, numEdges)
 			return
 		}
 
@@ -437,7 +437,6 @@ func runKShortestPaths(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 }
 
 // Djikstras algorithm pseudocode for reference.
-//
 //
 // 1  function Dijkstra(Graph, source):
 // 2      dist[source] ← 0                                    // Initialization
