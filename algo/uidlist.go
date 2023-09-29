@@ -24,7 +24,8 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 )
 
-const jump = 32 // Jump size in InsersectWithJump.
+const jump = 32          // Jump size in InsersectWithJump.
+const linVsBinRatio = 10 // When is linear search better than binary
 
 // ApplyFilter applies a filter to our UIDList.
 func ApplyFilter(u *pb.List, f func(uint64, int) bool) {
@@ -60,7 +61,7 @@ func IntersectCompressedWith(pack *pb.UidPack, afterUID uint64, v, o *pb.List) {
 
 	// Select appropriate function based on heuristics.
 	ratio := float64(m) / float64(n)
-	if ratio < 10 {
+	if ratio < linVsBinRatio {
 		IntersectCompressedWithLinJump(&dec, v.Uids, &dst)
 	} else {
 		IntersectCompressedWithBin(&dec, v.Uids, &dst)
@@ -111,7 +112,7 @@ func IntersectCompressedWithBin(dec *codec.Decoder, q []uint64, o *[]uint64) {
 			if len(blockUids) == 0 {
 				break
 			}
-			if ld*10 < len(q) {
+			if ld*linVsBinRatio < len(q) {
 				q = q[IntersectWithBin(blockUids, q, o):]
 			} else {
 				// For small enough difference between two arrays, we should just
@@ -135,7 +136,7 @@ func IntersectCompressedWithBin(dec *codec.Decoder, q []uint64, o *[]uint64) {
 		}
 		u := q[qidx]
 		if len(uids) == 0 || u > uids[len(uids)-1] {
-			if lq*10 < ld {
+			if lq*linVsBinRatio < ld {
 				uids = dec.LinearSeek(u)
 			} else {
 				uids = dec.SeekToBlock(u, codec.SeekCurrent)
