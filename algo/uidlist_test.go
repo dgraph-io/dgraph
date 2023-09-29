@@ -554,7 +554,7 @@ func TestIntersectCompressedWithLinJump(t *testing.T) {
 }
 
 func TestIntersectCompressedWithBin(t *testing.T) {
-	lengths := []int{0, 1, 3, 11, 100}
+	lengths := []int{0, 1, 3, 11, 100, 500, 1000}
 
 	for _, N1 := range lengths {
 		for _, N2 := range lengths {
@@ -579,7 +579,7 @@ func TestIntersectCompressedWithBin(t *testing.T) {
 }
 
 func TestIntersectCompressedWithBinMissingSize(t *testing.T) {
-	lengths := []int{0, 1, 3, 11, 100}
+	lengths := []int{0, 1, 3, 11, 100, 500, 1000}
 
 	for _, N1 := range lengths {
 		for _, N2 := range lengths {
