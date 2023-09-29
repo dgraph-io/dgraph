@@ -14,7 +14,7 @@ on:
       - main
       - 'release/**'
   schedule:
-    - cron: "1 */8 * * *" # every 8hrs
+    - cron: "0 0 * * *" # 1 run per day
 jobs:
   fuzz-test:
     runs-on: ubuntu-20.04

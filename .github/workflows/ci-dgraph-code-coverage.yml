@@ -24,8 +24,7 @@ on:
       - 'release/**'
 jobs:
   dgraph-code-coverage:
-    runs-on: [self-hosted, x64]
-    # runs-on: ubuntu-20.04
+    runs-on: ubuntu-20.04-32gb
     steps:
       - uses: actions/checkout@v3 # defaults to SHA of event that triggered workflow
       - name: Get Go Version

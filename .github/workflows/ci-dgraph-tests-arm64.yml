@@ -22,17 +22,8 @@ on:
     branches:
       - main
       - 'release/**'
-  pull_request:
-    types:
-      - opened
-      - reopened
-      - synchronize
-      - ready_for_review
-    branches:
-      - main
-      - 'release/**'
   schedule:
-    - cron: "1 0,6,12,18 * * *"
+    - cron: "0 0 * * *" # 1 run per day
 jobs:
   dgraph-tests:
     if: github.event.pull_request.draft == false
