@@ -128,9 +128,8 @@ func IntersectCompressedWithBin(dec *codec.Decoder, q []uint64, o *[]uint64) {
 	}
 
 	uids := dec.Uids()
-	qidx := -1
+	qidx := 0
 	for {
-		qidx += 1
 		if qidx >= len(q) {
 			return
 		}
@@ -139,7 +138,7 @@ func IntersectCompressedWithBin(dec *codec.Decoder, q []uint64, o *[]uint64) {
 			if lq*10 < ld {
 				uids = dec.LinearSeek(u)
 			} else {
-				uids = dec.SeekToBlock(u, codec.SeekStart)
+				uids = dec.SeekToBlock(u, codec.SeekCurrent)
 			}
 			if len(uids) == 0 {
 				return

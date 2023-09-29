@@ -236,6 +236,11 @@ func (d *Decoder) SeekToBlock(uid uint64, whence seekPos) []uint64 {
 		return d.UnpackBlock()
 	}
 
+	// If for some reason we are searching an older uid, we need to search the entire pack
+	if prevBlockIdx > 0 && uid < d.Pack.Blocks[prevBlockIdx].Base {
+		prevBlockIdx = 0
+	}
+
 	pack := d.Pack
 	blocksFunc := func() searchFunc {
 		var f searchFunc
@@ -267,7 +272,7 @@ func (d *Decoder) SeekToBlock(uid uint64, whence seekPos) []uint64 {
 		d.UnpackBlock() // And get all their uids.
 	}
 
-	if uid < d.uids[len(d.uids)-1] {
+	if uid <= d.uids[len(d.uids)-1] {
 		return d.uids
 	}
 
