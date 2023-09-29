@@ -93,6 +93,7 @@ message Result {
   repeated FacetsList facet_matrix = 5;
   repeated LangList lang_matrix = 6;
   bool list = 7;
+  map<string, uint64> extra_metrics = 8;
 }
 
 message Order {

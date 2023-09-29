@@ -1549,8 +1549,11 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 		NumUids: er.Metrics,
 	}
 	var total uint64
-	for _, num := range resp.Metrics.NumUids {
-		total += num
+	for metricName, num := range resp.Metrics.NumUids {
+		if !strings.Contains(metricName, "vector") {
+			total += num
+		}
+
 	}
 	resp.Metrics.NumUids["_total"] = total
 

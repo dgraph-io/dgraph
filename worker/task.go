@@ -47,6 +47,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/vector-indexer/hnsw"
 	"github.com/dgraph-io/vector-indexer/index"
+	"github.com/dgraph-io/vector-indexer/manager"
 )
 
 func invokeNetworkRequest(ctx context.Context, addr string,
@@ -335,13 +336,13 @@ func (srcFn *functionContext) needsValuePostings(typ types.TypeID) (bool, error)
 }
 
 // Handles fetching of value posting lists and filtering of uids based on that.
-func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) error {
+func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) (map[string]uint64, error) {
 	srcFn := args.srcFn
 	q := args.q
 
 	facetsTree, err := preprocessFilter(q.FacetsFilter)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	span := otrace.FromContext(ctx)
@@ -354,81 +355,81 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 	switch srcFn.fnType {
 	case notAFunction, aggregatorFn, passwordFn, compareAttrFn, similarToFn, indexPathFn:
 	default:
-		return errors.Errorf("Unhandled function in handleValuePostings: %s", srcFn.fname)
+		return nil, errors.Errorf("Unhandled function in handleValuePostings: %s", srcFn.fname)
 	}
 
 	if srcFn.fnType == similarToFn {
 		numNeighbors, err := strconv.ParseInt(q.SrcFunc.Args[0], 10, 32)
 		if err != nil {
-			return fmt.Errorf("invalid value for number of neighbors: %s", q.SrcFunc.Args[0])
+			return nil, fmt.Errorf("invalid value for number of neighbors: %s", q.SrcFunc.Args[0])
 		}
 		tokenizer, err := pickVFloatTokenizer(ctx, args.q.Attr, srcFn.fname)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		//TODO: generate maxLevels from schema, filter, etc.
 		qc := hnsw.NewQueryCache(
 			posting.NewViLocalCache(qs.cache),
 			args.q.ReadTs,
 		)
-		ph := hnsw.CreatePersistentFlatHNSW(
-			hnsw.VectorIndexMaxLevels,
-			hnsw.EfConstruction,
-			hnsw.EfSearch,
-			args.q.Attr,
-			hnsw.GetSimType(tokenizer.Name()),
-		)
-		nn_uids, _, err := ph.SearchPersistentStorage(ctx, qc, srcFn.vectorInfo,
+		indexer, err := manager.NewIndexManager().Create(args.q.Attr, manager.KnownFlavors[tokenizer.Name()], 3, nil)
+		if err != nil {
+			return nil, err
+		}
+		nn_uids, err := indexer.Search(ctx, qc, srcFn.vectorInfo,
 			int(numNeighbors), index.AcceptAll)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		sort.Slice(nn_uids, func(i, j int) bool { return nn_uids[i] < nn_uids[j] })
 		args.out.UidMatrix = append(args.out.UidMatrix, &pb.List{Uids: nn_uids})
-		return nil
+		return nil, nil
 	}
 
 	if srcFn.fnType == indexPathFn {
 		numNeighbors, err := strconv.ParseInt(q.SrcFunc.Args[0], 10, 32)
 		if err != nil {
-			return fmt.Errorf("invalid value for number of neighbors: %s", q.SrcFunc.Args[0])
+			return nil, fmt.Errorf("invalid value for number of neighbors: %s", q.SrcFunc.Args[0])
 		}
 		tokenizer, err := pickVFloatTokenizer(ctx, args.q.Attr, srcFn.fname)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		//TODO: generate maxLevels from schema, filter, etc.
 		qc := hnsw.NewQueryCache(
 			posting.NewViLocalCache(qs.cache),
 			args.q.ReadTs,
 		)
-		ph := hnsw.CreatePersistentFlatHNSW(
-			hnsw.VectorIndexMaxLevels,
-			hnsw.EfConstruction,
-			hnsw.EfSearch,
-			args.q.Attr,
-			hnsw.GetSimType(tokenizer.Name()),
-		)
-		_, traversalPath, err := ph.SearchPersistentStorage(ctx, qc, srcFn.vectorInfo,
-			int(numNeighbors), index.AcceptAll)
+		indexer, err := manager.NewIndexManager().Create(args.q.Attr, manager.KnownFlavors[tokenizer.Name()], 3, nil)
 		if err != nil {
-			return err
+			return nil, err
+		}
+		hnswIndexer, ok := indexer.(*hnsw.PersistentHNSW)
+		if !ok {
+			return nil, errors.Errorf("indexer is not hnsw")
+		}
+		r, err := hnswIndexer.SearchWithPath(ctx, qc, srcFn.vectorInfo,
+			int(numNeighbors), index.AcceptAll)
+		traversalPath := r.GetTraversalPath()
+		extraMetrics := r.GetExtraMetrics()
+		if err != nil {
+			return nil, err
 		}
 		sort.Slice(traversalPath, func(i, j int) bool { return traversalPath[i] < traversalPath[j] })
 		args.out.UidMatrix = append(args.out.UidMatrix, &pb.List{Uids: traversalPath})
-		return nil
+		return extraMetrics, nil
 	}
 
 	if srcFn.atype == types.PasswordID && srcFn.fnType != passwordFn {
 		// Silently skip if the user is trying to fetch an attribute of type password.
-		return nil
+		return nil, nil
 	}
 	if srcFn.fnType == passwordFn && srcFn.atype != types.PasswordID {
-		return errors.Errorf("checkpwd fn can only be used on attr: [%s] with schema type "+
+		return nil, errors.Errorf("checkpwd fn can only be used on attr: [%s] with schema type "+
 			"password. Got type: %s", x.ParseAttr(q.Attr), srcFn.atype.Name())
 	}
 	if srcFn.n == 0 {
-		return nil
+		return nil, nil
 	}
 
 	// srcFn.n should be equal to len(q.UidList.Uids) for below implementation(DivideAndRule and
@@ -436,7 +437,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 	// calculate(). panic is of the form "index out of range [4] with length 1". Hence return error
 	// from here when srcFn.n != len(q.UidList.Uids).
 	if srcFn.n != len(q.UidList.Uids) {
-		return errors.Errorf("srcFn.n: %d is not equal to len(q.UidList.Uids): %d, srcFn: %+v in "+
+		return nil, errors.Errorf("srcFn.n: %d is not equal to len(q.UidList.Uids): %d, srcFn: %+v in "+
 			"handleValuePostings", srcFn.n, len(q.UidList.GetUids()), srcFn)
 	}
 
@@ -592,7 +593,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 		})
 	}
 	if err := g.Wait(); err != nil {
-		return err
+		return nil, err
 	}
 
 	// All goroutines are done. Now attach their results.
@@ -604,7 +605,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 		out.FacetMatrix = append(out.FacetMatrix, chunk.FacetMatrix...)
 		out.LangMatrix = append(out.LangMatrix, chunk.LangMatrix...)
 	}
-	return nil
+	return nil, nil
 }
 
 func facetsFilterValuePostingList(args funcArgs, pl *posting.List, facetsTree *facetsTree,
@@ -1070,9 +1071,11 @@ func (qs *queryState) helpProcessTask(ctx context.Context, q *pb.Query, gid uint
 	}
 	if needsValPostings {
 		span.Annotate(nil, "handleValuePostings")
-		if err = qs.handleValuePostings(ctx, args); err != nil {
+		var extraMetrics map[string]uint64
+		if extraMetrics, err = qs.handleValuePostings(ctx, args); err != nil {
 			return nil, err
 		}
+		out.ExtraMetrics = extraMetrics
 	} else {
 		span.Annotate(nil, "handleUidPostings")
 		if err = qs.handleUidPostings(ctx, args, opts); err != nil {

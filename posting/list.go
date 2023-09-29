@@ -107,12 +107,12 @@ func (vl *viList) ValueWithLockHeld(readTs uint64) (rval index.Val, rerr error) 
 	return rval, err
 }
 
-func (vl *viList) AddMutation(ctx context.Context, txn index.Txn, t *index.DirectedEdge) error {
+func (vl *viList) AddMutation(ctx context.Context, txn index.Txn, t *index.KeyValue) error {
 	vt := txn.(*viTxn)
 	return vl.delegate.addMutation(ctx, vt.delegate, indexEdgeToPbEdge(t))
 }
 
-func (vl *viList) AddMutationWithLockHeld(ctx context.Context, txn index.Txn, t *index.DirectedEdge) error {
+func (vl *viList) AddMutationWithLockHeld(ctx context.Context, txn index.Txn, t *index.KeyValue) error {
 	vt := txn.(*viTxn)
 	return vl.delegate.addMutationInternal(ctx, vt.delegate, indexEdgeToPbEdge(t))
 }
@@ -125,13 +125,12 @@ func (vl *viList) Unlock() {
 	vl.delegate.Unlock()
 }
 
-func indexEdgeToPbEdge(t *index.DirectedEdge) *pb.DirectedEdge {
+func indexEdgeToPbEdge(t *index.KeyValue) *pb.DirectedEdge {
 	return &pb.DirectedEdge{
 		Entity:    t.Entity,
 		Attr:      t.Attr,
 		Value:     t.Value,
 		ValueType: pb.Posting_ValType(t.ValueType),
-		ValueId:   t.ValueId,
 		Op:        pb.DirectedEdge_SET,
 	}
 }

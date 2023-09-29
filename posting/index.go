@@ -43,6 +43,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/dgraph-io/vector-indexer/hnsw"
+	"github.com/dgraph-io/vector-indexer/manager"
 )
 
 var emptyCountParams countParams
@@ -121,7 +122,7 @@ func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) 
 		len(data) > 0 && data[0].Tid == types.VFloatID {
 		// TODO look into better alternatives
 		// if a delete & dealing with vfloats, add this to dead node in persistent store
-		deadAttr := hnsw.BuildDataKeyPred(info.edge.Attr, hnsw.VecDead)
+		deadAttr := hnsw.ConcatStrings(info.edge.Attr, hnsw.VecDead)
 		deadKey := x.DataKey(deadAttr, 1)
 		pl, err := txn.Get(deadKey)
 		if err != nil {
@@ -156,11 +157,12 @@ func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) 
 		// retrieve vector from inUuid save as inVec
 		inVec := types.BytesAsFloatArray(data[0].Value.([]byte))
 		tc := hnsw.NewTxnCache(NewViTxn(txn), txn.StartTs)
-		ph := hnsw.CreatePersistentFlatHNSW(hnsw.VectorIndexMaxLevels, hnsw.EfConstruction, hnsw.EfSearch, attr,
-			hnsw.GetSimType(info.tokenizers[0].Name()))
-		visited, edges, err := ph.InsertToPersistentStorage(ctx, tc, uid, inVec)
+		indexer, err := manager.NewIndexManager().Create(attr, manager.KnownFlavors[info.tokenizers[0].Name()], 3, nil)
 		if err != nil {
-			fmt.Print(visited)
+			return []*pb.DirectedEdge{}, err
+		}
+		edges, err := indexer.Insert(ctx, tc, uid, inVec)
+		if err != nil {
 			return []*pb.DirectedEdge{}, err
 		}
 		pbEdges := []*pb.DirectedEdge{}
@@ -1232,11 +1234,11 @@ func prefixesToDropVectorIndexEdges(ctx context.Context, rb *IndexRebuild) [][]b
 		return nil
 	}
 
-	prefixes := append([][]byte{}, x.PredicatePrefix(hnsw.BuildDataKeyPred(rb.Attr, hnsw.VecEntry)))
-	prefixes = append(prefixes, x.PredicatePrefix(hnsw.BuildDataKeyPred(rb.Attr, hnsw.VecDead)))
+	prefixes := append([][]byte{}, x.PredicatePrefix(hnsw.ConcatStrings(rb.Attr, hnsw.VecEntry)))
+	prefixes = append(prefixes, x.PredicatePrefix(hnsw.ConcatStrings(rb.Attr, hnsw.VecDead)))
 
 	for i := 0; i < hnsw.VectorIndexMaxLevels; i++ {
-		prefixes = append(prefixes, x.PredicatePrefix(hnsw.BuildDataKeyPred(rb.Attr, hnsw.VecKeyword, fmt.Sprint(i))))
+		prefixes = append(prefixes, x.PredicatePrefix(hnsw.ConcatStrings(rb.Attr, hnsw.VecKeyword, fmt.Sprint(i))))
 	}
 
 	return prefixes

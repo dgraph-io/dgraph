@@ -294,7 +294,15 @@ func updateSchema(s *pb.SchemaUpdate, ts uint64) error {
 	// if schema update has @index for vfloat, then schema.State().Set(s.Predicate + hnsw.VecKeyword, s)
 	// if that works, add in index_path, same idea..
 	if s.Directive == pb.SchemaUpdate_INDEX && s.ValueType == pb.Posting_ValType(types.VFloatID) {
-		schema.State().Set(s.Predicate+hnsw.VecKeyword, s)
+		hnswPred := hnsw.ConcatStrings(s.Predicate, hnsw.VecKeyword)
+		err := updateSchema(&pb.SchemaUpdate{
+			Predicate: hnswPred,
+			ValueType: pb.Posting_STRING,
+			Directive: pb.SchemaUpdate_NONE,
+		}, ts)
+		if err != nil {
+			return err
+		}
 	}
 	schema.State().DeleteMutSchema(s.Predicate)
 	txn := pstore.NewTransactionAt(ts, true)

@@ -298,6 +298,8 @@ type SubGraph struct {
 	List     bool // whether predicate is of list type
 
 	pathMeta *pathMetadata
+
+	extraMetrics map[string]uint64
 }
 
 func (sg *SubGraph) recurse(set func(sg *SubGraph)) {
@@ -2167,6 +2169,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			sg.counts = result.Counts
 			sg.LangTags = result.LangMatrix
 			sg.List = result.List
+			sg.extraMetrics = result.ExtraMetrics
 
 			if sg.Params.DoCount {
 				if len(sg.Filters) == 0 {
@@ -3026,5 +3029,10 @@ func calculateMetrics(sg *SubGraph, metrics map[string]uint64) {
 	// Calculate metrics for the children as well.
 	for _, child := range sg.Children {
 		calculateMetrics(child, metrics)
+	}
+	if sg.extraMetrics != nil {
+		for key, value := range sg.extraMetrics {
+			metrics[key] += value
+		}
 	}
 }
