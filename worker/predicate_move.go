@@ -22,6 +22,7 @@ import (
 	"io"
 	"math"
 	"strconv"
+	"strings"
 
 	"github.com/dustin/go-humanize"
 	"github.com/golang/glog"
@@ -36,6 +37,7 @@ import (
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
+	"github.com/dgraph-io/vector-indexer/hnsw"
 )
 
 var (
@@ -216,7 +218,8 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 		return &emptyPayload, errEmptyPredicate
 	}
 
-	if in.DestGid == 0 {
+	//TODO: need to find possibly a better way to not move __vector_ predicates
+	if in.DestGid == 0 && !strings.Contains(in.Predicate, hnsw.VecKeyword) {
 		glog.Infof("Was instructed to delete tablet: %v", in.Predicate)
 		// Expected Checksum ensures that all the members of this group would block until they get
 		// the latest membership status where this predicate now belongs to another group. So they
@@ -230,6 +233,7 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 		}
 		return &emptyPayload, groups().Node.proposeAndWait(ctx, p)
 	}
+
 	if err := posting.Oracle().WaitForTs(ctx, in.TxnTs); err != nil {
 		return &emptyPayload, errors.Errorf("While waiting for txn ts: %d. Error: %v", in.TxnTs, err)
 	}
