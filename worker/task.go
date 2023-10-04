@@ -1990,11 +1990,17 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 		}
 		checkRoot(q, fc)
 	case similarToFn:
+		if err = ensureArgsCount(q.SrcFunc, 2); err != nil {
+			return nil, err
+		}
 		fc.vectorInfo, err = types.ParseVFloat(q.SrcFunc.Args[1])
 		if err != nil {
 			return nil, err
 		}
 	case indexPathFn:
+		if err = ensureArgsCount(q.SrcFunc, 2); err != nil {
+			return nil, err
+		}
 		fc.vectorInfo, err = types.ParseVFloat(q.SrcFunc.Args[1])
 		if err != nil {
 			return nil, err
