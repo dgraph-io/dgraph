@@ -376,13 +376,20 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) (m
 		if err != nil {
 			return nil, err
 		}
-		nn_uids, err := indexer.Search(ctx, qc, srcFn.vectorInfo,
-			int(numNeighbors), index.AcceptAll)
+		var nnUids []uint64
+		if srcFn.vectorInfo != nil {
+			nnUids, err = indexer.Search(ctx, qc, srcFn.vectorInfo,
+				int(numNeighbors), index.AcceptAll)
+		} else {
+			nnUids, err = indexer.SearchWithUid(ctx, qc, srcFn.vectorUid,
+				int(numNeighbors), index.AcceptAll)
+		}
+
 		if err != nil {
 			return nil, err
 		}
-		sort.Slice(nn_uids, func(i, j int) bool { return nn_uids[i] < nn_uids[j] })
-		args.out.UidMatrix = append(args.out.UidMatrix, &pb.List{Uids: nn_uids})
+		sort.Slice(nnUids, func(i, j int) bool { return nnUids[i] < nnUids[j] })
+		args.out.UidMatrix = append(args.out.UidMatrix, &pb.List{Uids: nnUids})
 		return nil, nil
 	}
 
@@ -1732,6 +1739,7 @@ type functionContext struct {
 	isStringFn     bool
 	atype          types.TypeID
 	vectorInfo     []float64
+	vectorUid      uint64
 }
 
 const (
@@ -1993,7 +2001,7 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 		if err = ensureArgsCount(q.SrcFunc, 2); err != nil {
 			return nil, err
 		}
-		fc.vectorInfo, err = types.ParseVFloat(q.SrcFunc.Args[1])
+		fc.vectorInfo, fc.vectorUid, err = interpretVFloatOrUid(q.SrcFunc.Args[1])
 		if err != nil {
 			return nil, err
 		}
@@ -2028,6 +2036,18 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 		return nil, errors.Errorf("FnType %d not handled in numFnAttrs.", fnType)
 	}
 	return fc, nil
+}
+
+func interpretVFloatOrUid(val string) ([]float64, uint64, error) {
+	vf, err := types.ParseVFloat(val)
+	if err == nil {
+		return vf, 0, nil
+	}
+	uid, err := strconv.ParseUint(val, 0, 64)
+	if err == nil {
+		return nil, uid, nil
+	}
+	return nil, uid, errors.Errorf("Value %q is not a uid or vector", val)
 }
 
 // ServeTask is used to respond to a query.
