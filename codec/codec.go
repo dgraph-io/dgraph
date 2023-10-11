@@ -223,9 +223,10 @@ func (d *Decoder) ApproxLen() int {
 
 type searchFunc func(int) bool
 
-// SeekToBlock will find the nearest block, and unpack it. Unlike Seek, it doesn't
-// apply search in the resulting uid list and then move the pointer forward. When we are going
-// to intersect the list later, this function is useful.
+// SeekToBlock will find the block containing the uid, and unpack it. When we are going to
+// intersect the list later, this function is useful. As this function skips the search function
+// and returns the entire block, it is faster than Seek. Unlike seek, we don't truncate the uids
+// returned, which would be done by the intersect function anyways.
 func (d *Decoder) SeekToBlock(uid uint64, whence seekPos) []uint64 {
 	if d.Pack == nil {
 		return []uint64{}
@@ -241,25 +242,24 @@ func (d *Decoder) SeekToBlock(uid uint64, whence seekPos) []uint64 {
 		prevBlockIdx = 0
 	}
 
-	pack := d.Pack
 	blocksFunc := func() searchFunc {
 		var f searchFunc
 		switch whence {
 		case SeekStart:
-			f = func(i int) bool { return pack.Blocks[i+prevBlockIdx].Base >= uid }
+			f = func(i int) bool { return d.Pack.Blocks[i+prevBlockIdx].Base >= uid }
 		case SeekCurrent:
-			f = func(i int) bool { return pack.Blocks[i+prevBlockIdx].Base > uid }
+			f = func(i int) bool { return d.Pack.Blocks[i+prevBlockIdx].Base > uid }
 		}
 		return f
 	}
 
-	idx := sort.Search(len(pack.Blocks[prevBlockIdx:]), blocksFunc()) + prevBlockIdx
+	idx := sort.Search(len(d.Pack.Blocks[prevBlockIdx:]), blocksFunc()) + prevBlockIdx
 	// The first block.Base >= uid.
 	if idx == 0 {
 		return d.UnpackBlock()
 	}
 	// The uid is the first entry in the block.
-	if idx < len(pack.Blocks) && pack.Blocks[idx].Base == uid {
+	if idx < len(d.Pack.Blocks) && d.Pack.Blocks[idx].Base == uid {
 		d.blockIdx = idx
 		return d.UnpackBlock()
 	}

@@ -112,14 +112,11 @@ func IntersectCompressedWithBin(dec *codec.Decoder, q []uint64, o *[]uint64) {
 			if len(blockUids) == 0 {
 				break
 			}
-			if ld*linVsBinRatio < len(q) {
-				q = q[IntersectWithBin(blockUids, q, o):]
-			} else {
-				// For small enough difference between two arrays, we should just
-				// do lin intersect
-				_, off := IntersectWithLin(blockUids, q, o)
-				q = q[off:]
+			_, off := IntersectWithJump(blockUids, q, o)
+			if off == 0 {
+				off = 1 // if v[k] isn't in u, move forward
 			}
+			q = q[off:]
 			if len(q) == 0 {
 				return
 			}
