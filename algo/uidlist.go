@@ -113,9 +113,6 @@ func IntersectCompressedWithBin(dec *codec.Decoder, q []uint64, o *[]uint64) {
 				break
 			}
 			_, off := IntersectWithJump(blockUids, q, o)
-			if off == 0 {
-				off = 1 // if v[k] isn't in u, move forward
-			}
 			q = q[off:]
 			if len(q) == 0 {
 				return
