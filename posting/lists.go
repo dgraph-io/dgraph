@@ -120,10 +120,28 @@ type viLocalCache struct {
 	delegate *LocalCache
 }
 
-func (vc *viLocalCache) Get(key []byte) (index.List, error) {
+func (vc *viLocalCache) Get(key []byte) (rval index.Value, rerr error) {
 	pl, err := vc.delegate.Get(key)
-	vl := NewViList(pl)
-	return vl, err
+	if err != nil {
+		return nil, err
+	}
+	pl.Lock()
+	defer pl.Unlock()
+	return vc.GetValueFromPostingList(pl)
+}
+
+func (vc *viLocalCache) GetWithLockHeld(key []byte) (rval index.Value, rerr error) {
+	pl, err := vc.delegate.Get(key)
+	if err != nil {
+		return nil, err
+	}
+	return vc.GetValueFromPostingList(pl)
+}
+
+func (vc *viLocalCache) GetValueFromPostingList(pl *List) (rval index.Value, rerr error) {
+	val, err := pl.ValueWithLockHeld(vc.delegate.startTs)
+	rval = val.Value
+	return rval, err
 }
 
 func NewViLocalCache(delegate *LocalCache) *viLocalCache {

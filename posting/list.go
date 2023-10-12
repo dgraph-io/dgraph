@@ -79,58 +79,12 @@ type List struct {
 	maxTs       uint64 // max commit timestamp seen for this list.
 }
 
-// struct to implement List interface from vector-indexer
-// acts as wrapper for dgraph *List
-type viList struct {
-	delegate *List
-}
-
-func NewViList(delegate *List) *viList {
-	return &viList{delegate: delegate}
-}
-
-func (vl *viList) Value(readTs uint64) (rval index.Val, rerr error) {
-	val, err := vl.delegate.Value(readTs)
-	rval = index.Val{
-		Tid:   index.TypeID(val.Tid),
-		Value: val.Value,
-	}
-	return rval, err
-}
-
-func (vl *viList) ValueWithLockHeld(readTs uint64) (rval index.Val, rerr error) {
-	val, err := vl.delegate.ValueWithLockHeld(readTs)
-	rval = index.Val{
-		Tid:   index.TypeID(val.Tid),
-		Value: val.Value,
-	}
-	return rval, err
-}
-
-func (vl *viList) AddMutation(ctx context.Context, txn index.Txn, t *index.KeyValue) error {
-	vt := txn.(*viTxn)
-	return vl.delegate.addMutation(ctx, vt.delegate, indexEdgeToPbEdge(t))
-}
-
-func (vl *viList) AddMutationWithLockHeld(ctx context.Context, txn index.Txn, t *index.KeyValue) error {
-	vt := txn.(*viTxn)
-	return vl.delegate.addMutationInternal(ctx, vt.delegate, indexEdgeToPbEdge(t))
-}
-
-func (vl *viList) Lock() {
-	vl.delegate.Lock()
-}
-
-func (vl *viList) Unlock() {
-	vl.delegate.Unlock()
-}
-
 func indexEdgeToPbEdge(t *index.KeyValue) *pb.DirectedEdge {
 	return &pb.DirectedEdge{
 		Entity:    t.Entity,
 		Attr:      t.Attr,
 		Value:     t.Value,
-		ValueType: pb.Posting_ValType(t.ValueType),
+		ValueType: pb.Posting_ValType(0),
 		Op:        pb.DirectedEdge_SET,
 	}
 }
