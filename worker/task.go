@@ -376,9 +376,14 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 
 	outputs := make([]*pb.Result, numGo)
 	listType := schema.State().IsList(q.Attr)
+
+	// These are certain special cases where we can get away with reading only the latest value
+	// Lang doesn't work because we would be storing various different languages at various
+	// time. So when we go to read the latest value, we might get a different language.
+	// Similarly with DoCount and ExpandAll and Facets. List types are also not supported
+	// because list is stored by time, and we combine all the list items at various timestamps.
 	hasLang := schema.State().HasLang(q.Attr)
-	getMultiplePosting := q.DoCount || q.ExpandAll || listType || hasLang
-	//getMultiplePosting := true
+	getMultiplePosting := q.DoCount || q.ExpandAll || listType || hasLang || q.FacetParam != nil
 
 	calculate := func(start, end int) error {
 		x.AssertTrue(start%width == 0)
@@ -399,7 +404,10 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 			fcs := &pb.FacetsList{FacetsList: make([]*pb.Facets, 0)} // TODO Figure out how it is stored
 
 			if !getMultiplePosting {
-				pl, _ := qs.cache.GetSinglePosting(key)
+				pl, err := qs.cache.GetSinglePosting(key)
+				if err != nil {
+					return err
+				}
 				if pl == nil || len(pl.Postings) == 0 {
 					out.UidMatrix = append(out.UidMatrix, &pb.List{})
 					out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{})
@@ -412,11 +420,6 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 					vals[i] = types.Val{
 						Tid:   types.TypeID(p.ValType),
 						Value: p.Value,
-					}
-
-					// TODO Apply facet tree before
-					if q.FacetParam != nil {
-						fcs.FacetsList = append(fcs.FacetsList, &pb.Facets{Facets: facets.CopyFacets(p.Facets, q.FacetParam)})
 					}
 				}
 			} else {

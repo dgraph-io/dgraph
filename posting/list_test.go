@@ -480,7 +480,6 @@ func TestReadSingleValue(t *testing.T) {
 			require.NoError(t, err)
 			checkValue(t, ol, string(k.Postings[0].Value), uint64(j))
 		}
-
 	}
 }
 
