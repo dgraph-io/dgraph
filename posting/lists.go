@@ -111,6 +111,8 @@ type LocalCache struct {
 
 	// plists are posting lists in memory. They can be discarded to reclaim space.
 	plists map[string]*List
+
+	postings map[string]*pb.PostingList
 }
 
 // NewLocalCache returns a new LocalCache instance.
@@ -120,13 +122,17 @@ func NewLocalCache(startTs uint64) *LocalCache {
 		deltas:      make(map[string][]byte),
 		plists:      make(map[string]*List),
 		maxVersions: make(map[string]uint64),
+		postings:    make(map[string]*pb.PostingList),
 	}
 }
 
 // NoCache returns a new LocalCache instance, which won't cache anything. Useful to pass startTs
 // around.
 func NoCache(startTs uint64) *LocalCache {
-	return &LocalCache{startTs: startTs}
+	return &LocalCache{
+		startTs:  startTs,
+		postings: make(map[string]*pb.PostingList),
+	}
 }
 
 func (lc *LocalCache) getNoStore(key string) *List {
@@ -136,6 +142,20 @@ func (lc *LocalCache) getNoStore(key string) *List {
 		return l
 	}
 	return nil
+}
+
+// SetIfAbsent adds the list for the specified key to the cache. If a list for the same
+// key already exists, the cache will not be modified and the existing list
+// will be returned instead. This behavior is meant to prevent the goroutines
+// using the cache from ending up with an orphaned version of a list.
+func (lc *LocalCache) SetPostingIfAbsent(key string, updated *pb.PostingList) *pb.PostingList {
+	lc.Lock()
+	defer lc.Unlock()
+	if pl, ok := lc.postings[key]; ok {
+		return pl
+	}
+	lc.postings[key] = updated
+	return updated
 }
 
 // SetIfAbsent adds the list for the specified key to the cache. If a list for the same
@@ -193,6 +213,68 @@ func (lc *LocalCache) getInternal(key []byte, readFromDisk bool) (*List, error) 
 	}
 	lc.RUnlock()
 	return lc.SetIfAbsent(skey, pl), nil
+}
+
+func (lc *LocalCache) GetBatchSinglePosting(keys [][]byte) ([]*pb.PostingList, error) {
+	results := make([]*pb.PostingList, len(keys))
+	remaining_keys := make([][]byte, 0)
+	lc.RLock()
+	for i, key := range keys {
+		if pl, ok := lc.postings[string(key)]; ok && pl != nil {
+			results[i] = pl
+		} else if delta, ok := lc.deltas[string(key)]; ok && len(delta) > 0 {
+			pl := &pb.PostingList{}
+			err := pl.Unmarshal(delta)
+			if err != nil {
+				results[i] = pl
+			}
+		} else {
+			remaining_keys = append(remaining_keys, key)
+		}
+	}
+	lc.RUnlock()
+
+	txn := pstore.NewTransactionAt(lc.startTs, false)
+	items, err := txn.GetBatch(remaining_keys)
+	if err != nil {
+		fmt.Println(err, keys)
+		return nil, err
+	}
+	idx := 0
+
+	for i := 0; i < len(results); i++ {
+		if results[i] != nil {
+			continue
+		}
+		pl := &pb.PostingList{}
+		err = items[idx].Value(func(val []byte) error {
+			if err := pl.Unmarshal(val); err != nil {
+				return err
+			}
+			return nil
+		})
+		idx += 1
+		results[i] = pl
+	}
+
+	for i := 0; i < len(results); i++ {
+		pl := results[i]
+		idx := 0
+		for _, postings := range pl.Postings {
+			if hasDeleteAll(postings) {
+				return nil, nil
+			}
+			if postings.Op != Del {
+				pl.Postings[idx] = postings
+				idx++
+			}
+		}
+		pl.Postings = pl.Postings[:idx]
+		results[i] = pl
+		lc.SetPostingIfAbsent(string(keys[i]), pl)
+	}
+
+	return results, err
 }
 
 // GetSinglePosting retrieves the cached version of the first item in the list associated with the
@@ -256,6 +338,7 @@ func (lc *LocalCache) GetSinglePosting(key []byte) (*pb.PostingList, error) {
 		}
 	}
 	pl.Postings = pl.Postings[:idx]
+	lc.SetPostingIfAbsent(string(key), pl)
 	return pl, nil
 }
 

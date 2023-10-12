@@ -173,6 +173,7 @@ func (d *Decoder) UnpackBlock() []uint64 {
 	if d.blockIdx >= len(d.Pack.Blocks) {
 		return d.uids
 	}
+
 	block := d.Pack.Blocks[d.blockIdx]
 
 	last := block.Base

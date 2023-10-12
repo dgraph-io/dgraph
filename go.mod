@@ -2,6 +2,8 @@ module github.com/dgraph-io/dgraph
 
 go 1.19
 
+replace github.com/dgraph-io/badger/v4 => ../badger
+
 require (
 	contrib.go.opencensus.io/exporter/jaeger v0.1.0
 	contrib.go.opencensus.io/exporter/prometheus v0.1.0
@@ -40,7 +42,7 @@ require (
 	github.com/mitchellh/panicwrap v1.0.0
 	github.com/paulmach/go.geojson v0.0.0-20170327170536-40612a87147b
 	github.com/pkg/errors v0.9.1
-	github.com/pkg/profile v1.2.1
+	github.com/pkg/profile v1.7.0
 	github.com/prometheus/client_golang v1.14.0
 	github.com/soheilhy/cmux v0.1.4
 	github.com/spf13/cast v1.3.0
@@ -85,10 +87,12 @@ require (
 	github.com/eapache/go-resiliency v1.4.0 // indirect
 	github.com/eapache/go-xerial-snappy v0.0.0-20230731223053-c322873962e3 // indirect
 	github.com/eapache/queue v1.1.0 // indirect
+	github.com/felixge/fgprof v0.9.3 // indirect
 	github.com/frankban/quicktest v1.10.2 // indirect
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/google/flatbuffers v1.12.1 // indirect
+	github.com/google/pprof v0.0.0-20211214055906-6f57359322fd // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect

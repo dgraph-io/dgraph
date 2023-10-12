@@ -370,6 +370,7 @@ func BenchmarkListIntersectRandom(b *testing.B) {
 func BenchmarkListIntersectCompressBin(b *testing.B) {
 	randomTests := func(sz int, overlap float64) {
 		rs := []float64{0.01, 0.1, 1, 10, 100}
+		//rs := []float64{0.002, 0.01, 0.1}
 		for _, r := range rs {
 			sz1 := sz
 			sz2 := int(float64(sz) * r)
