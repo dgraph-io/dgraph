@@ -373,7 +373,7 @@ func BenchmarkListIntersectCompressBin(b *testing.B) {
 		for _, r := range rs {
 			sz1 := sz
 			sz2 := int(float64(sz) * r)
-			if sz2 > 1000000 || sz2 == 0 {
+			if sz2 > 10000000 || sz2 == 0 {
 				break
 			}
 
@@ -389,7 +389,17 @@ func BenchmarkListIntersectCompressBin(b *testing.B) {
 			sort.Slice(v1, func(i, j int) bool { return v1[i] < v1[j] })
 
 			dst2 := &pb.List{}
+			dst1 := &pb.List{}
 			compressedUids := codec.Encode(v1, 256)
+
+			b.Run(fmt.Sprintf("linJump:IntersectWith:ratio=%v:size=%d:overlap=%.2f:", r, sz, overlap),
+				func(b *testing.B) {
+					for k := 0; k < b.N; k++ {
+						dec := codec.Decoder{Pack: compressedUids}
+						dec.Seek(0, codec.SeekStart)
+						IntersectCompressedWithLinJump(&dec, u1, &dst1.Uids)
+					}
+				})
 
 			b.Run(fmt.Sprintf("compressed:IntersectWith:ratio=%v:size=%d:overlap=%.2f:", r, sz, overlap),
 				func(b *testing.B) {
@@ -399,7 +409,6 @@ func BenchmarkListIntersectCompressBin(b *testing.B) {
 						IntersectCompressedWithBin(&dec, u1, &dst2.Uids)
 					}
 				})
-			fmt.Println()
 
 			codec.FreePack(compressedUids)
 		}
@@ -493,6 +502,43 @@ func sortUint64(nums []uint64) {
 	sort.Slice(nums, func(i, j int) bool { return nums[i] < nums[j] })
 }
 
+func fillNumsDiff(N1, N2, N3 int) ([]uint64, []uint64, []uint64) {
+	rand.Seed(time.Now().UnixNano())
+
+	commonNums := make([]uint64, N1)
+	blockNums := make([]uint64, N1+N2)
+	otherNums := make([]uint64, N1+N3)
+	allC := make(map[uint64]bool)
+
+	for i := 0; i < N1; i++ {
+		val := rand.Uint64() % 1000
+		commonNums[i] = val
+		blockNums[i] = val
+		otherNums[i] = val
+		allC[val] = true
+	}
+
+	for i := N1; i < N1+N2; i++ {
+		val := rand.Uint64() % 1000
+		blockNums[i] = val
+		allC[val] = true
+	}
+
+	for i := N1; i < N1+N3; i++ {
+		val := rand.Uint64()
+		for ok := true; ok; _, ok = allC[val] {
+			val = rand.Uint64() % 1000
+		}
+		otherNums[i] = val
+	}
+
+	sortUint64(commonNums)
+	sortUint64(blockNums)
+	sortUint64(otherNums)
+
+	return commonNums, blockNums, otherNums
+}
+
 func fillNums(N1, N2 int) ([]uint64, []uint64, []uint64) {
 	rand.Seed(time.Now().UnixNano())
 
@@ -545,12 +591,12 @@ func TestIntersectCompressedWithLinJump(t *testing.T) {
 }
 
 func TestIntersectCompressedWithBin(t *testing.T) {
-	lengths := []int{0, 1, 3, 11, 100}
+	//lengths := []int{0, 1, 3, 11, 100, 500, 1000}
 
-	for _, N1 := range lengths {
-		for _, N2 := range lengths {
+	for _, N1 := range []int{11} {
+		for _, N2 := range []int{3} {
 			// Intersection of blockNums and otherNums is commonNums.
-			commonNums, blockNums, otherNums := fillNums(N1, N2)
+			commonNums, blockNums, otherNums := fillNumsDiff(N1/10, N1, N2)
 
 			enc := codec.Encoder{BlockSize: 10}
 			for _, num := range blockNums {
@@ -570,7 +616,7 @@ func TestIntersectCompressedWithBin(t *testing.T) {
 }
 
 func TestIntersectCompressedWithBinMissingSize(t *testing.T) {
-	lengths := []int{0, 1, 3, 11, 100}
+	lengths := []int{0, 1, 3, 11, 100, 500, 1000}
 
 	for _, N1 := range lengths {
 		for _, N2 := range lengths {

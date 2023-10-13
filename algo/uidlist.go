@@ -24,7 +24,8 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 )
 
-const jump = 32 // Jump size in InsersectWithJump.
+const jump = 32          // Jump size in InsersectWithJump.
+const linVsBinRatio = 10 // When is linear search better than binary
 
 // ApplyFilter applies a filter to our UIDList.
 func ApplyFilter(u *pb.List, f func(uint64, int) bool) {
@@ -60,7 +61,7 @@ func IntersectCompressedWith(pack *pb.UidPack, afterUID uint64, v, o *pb.List) {
 
 	// Select appropriate function based on heuristics.
 	ratio := float64(m) / float64(n)
-	if ratio < 500 {
+	if ratio < linVsBinRatio {
 		IntersectCompressedWithLinJump(&dec, v.Uids, &dst)
 	} else {
 		IntersectCompressedWithBin(&dec, v.Uids, &dst)
@@ -94,7 +95,7 @@ func IntersectCompressedWithLinJump(dec *codec.Decoder, v []uint64, o *[]uint64)
 // https://link.springer.com/chapter/10.1007/978-3-642-12476-1_3
 // Call seek on dec before calling this function
 func IntersectCompressedWithBin(dec *codec.Decoder, q []uint64, o *[]uint64) {
-	ld := dec.ApproxLen()
+	ld := codec.ExactLen(dec.Pack)
 	lq := len(q)
 
 	if lq == 0 {
@@ -105,46 +106,44 @@ func IntersectCompressedWithBin(dec *codec.Decoder, q []uint64, o *[]uint64) {
 	}
 
 	// Pick the shorter list and do binary search
-	if ld < lq {
+	if ld <= lq {
 		for {
 			blockUids := dec.Uids()
 			if len(blockUids) == 0 {
 				break
 			}
-			IntersectWithBin(blockUids, q, o)
-			lastUid := blockUids[len(blockUids)-1]
-			qidx := sort.Search(len(q), func(idx int) bool {
-				return q[idx] >= lastUid
-			})
-			if qidx >= len(q) {
+			_, off := IntersectWithJump(blockUids, q, o)
+			q = q[off:]
+			if len(q) == 0 {
 				return
 			}
-			q = q[qidx:]
 			dec.Next()
 		}
 		return
 	}
 
-	var uids []uint64
-	for _, u := range q {
+	uids := dec.Uids()
+	qidx := 0
+	for {
+		if qidx >= len(q) {
+			return
+		}
+		u := q[qidx]
 		if len(uids) == 0 || u > uids[len(uids)-1] {
-			uids = dec.Seek(u, codec.SeekStart)
+			if lq*linVsBinRatio < ld {
+				uids = dec.LinearSeek(u)
+			} else {
+				uids = dec.SeekToBlock(u, codec.SeekCurrent)
+			}
 			if len(uids) == 0 {
 				return
 			}
 		}
-		uidIdx := sort.Search(len(uids), func(idx int) bool {
-			return uids[idx] >= u
-		})
-		if uidIdx >= len(uids) {
-			// We know that u < max(uids). If we didn't find it here, it's not here.
-			continue
+		_, off := IntersectWithJump(uids, q[qidx:], o)
+		if off == 0 {
+			off = 1 // if v[k] isn't in u, move forward
 		}
-		if uids[uidIdx] == u {
-			*o = append(*o, u)
-			uidIdx++
-		}
-		uids = uids[uidIdx:]
+		qidx += off
 	}
 }
 
@@ -233,7 +232,8 @@ func IntersectWithJump(u, v []uint64, o *[]uint64) (int, int) {
 // IntersectWithBin is based on the paper
 // "Fast Intersection Algorithms for Sorted Sequences"
 // https://link.springer.com/chapter/10.1007/978-3-642-12476-1_3
-func IntersectWithBin(d, q []uint64, o *[]uint64) {
+// Returns where to move the second array(q) to. O means not found
+func IntersectWithBin(d, q []uint64, o *[]uint64) int {
 	ld := len(d)
 	lq := len(q)
 
@@ -242,7 +242,7 @@ func IntersectWithBin(d, q []uint64, o *[]uint64) {
 		d, q = q, d
 	}
 	if ld == 0 || lq == 0 || d[ld-1] < q[0] || q[lq-1] < d[0] {
-		return
+		return 0
 	}
 
 	val := d[0]
@@ -256,6 +256,7 @@ func IntersectWithBin(d, q []uint64, o *[]uint64) {
 	})
 
 	binIntersect(d, q[minq:maxq], o)
+	return maxq
 }
 
 // binIntersect is the recursive function used.

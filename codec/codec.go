@@ -223,6 +223,64 @@ func (d *Decoder) ApproxLen() int {
 
 type searchFunc func(int) bool
 
+// SeekToBlock will find the block containing the uid, and unpack it. When we are going to
+// intersect the list later, this function is useful. As this function skips the search function
+// and returns the entire block, it is faster than Seek. Unlike seek, we don't truncate the uids
+// returned, which would be done by the intersect function anyways.
+func (d *Decoder) SeekToBlock(uid uint64, whence seekPos) []uint64 {
+	if d.Pack == nil {
+		return []uint64{}
+	}
+	prevBlockIdx := d.blockIdx
+	d.blockIdx = 0
+	if uid == 0 {
+		return d.UnpackBlock()
+	}
+
+	// If for some reason we are searching an older uid, we need to search the entire pack
+	if prevBlockIdx > 0 && uid < d.Pack.Blocks[prevBlockIdx].Base {
+		prevBlockIdx = 0
+	}
+
+	blocksFunc := func() searchFunc {
+		var f searchFunc
+		switch whence {
+		case SeekStart:
+			f = func(i int) bool { return d.Pack.Blocks[i+prevBlockIdx].Base >= uid }
+		case SeekCurrent:
+			f = func(i int) bool { return d.Pack.Blocks[i+prevBlockIdx].Base > uid }
+		}
+		return f
+	}
+
+	idx := sort.Search(len(d.Pack.Blocks[prevBlockIdx:]), blocksFunc()) + prevBlockIdx
+	// The first block.Base >= uid.
+	if idx == 0 {
+		return d.UnpackBlock()
+	}
+	// The uid is the first entry in the block.
+	if idx < len(d.Pack.Blocks) && d.Pack.Blocks[idx].Base == uid {
+		d.blockIdx = idx
+		return d.UnpackBlock()
+	}
+
+	// Either the idx = len(pack.Blocks) that means it wasn't found in any of the block's base. Or,
+	// we found the first block index whose base is greater than uid. In these cases, go to the
+	// previous block and search there.
+	d.blockIdx = idx - 1 // Move to the previous block. If blockIdx<0, unpack will deal with it.
+	if d.blockIdx != prevBlockIdx {
+		d.UnpackBlock() // And get all their uids.
+	}
+
+	if uid <= d.uids[len(d.uids)-1] {
+		return d.uids
+	}
+
+	// Could not find any uid in the block, which is >= uid. The next block might still have valid
+	// entries > uid.
+	return d.Next()
+}
+
 // Seek will search for uid in a packed block using the specified whence position.
 // The value of whence must be one of the predefined values SeekStart or SeekCurrent.
 // SeekStart searches uid and includes it as part of the results.
