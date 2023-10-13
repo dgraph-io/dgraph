@@ -498,7 +498,17 @@
       "upsert": true
     },
     {
+      "lang": true,
+      "predicate": "Person.profession",
+      "type": "string"
+    },
+    {
+      "index": true,
+      "lang": true,
       "predicate": "Person.name",
+      "tokenizer": [
+        "hash"
+      ],
       "type": "string"
     },
     {
@@ -1194,14 +1204,6 @@
     {
       "fields": [
         {
-          "name": "Person.name"
-        }
-      ],
-      "name": "Person"
-    },
-    {
-      "fields": [
-        {
           "name": "Person1.name"
         },
         {
@@ -1619,6 +1621,17 @@
         }
       ],
       "name": "LibraryMember"
+    },
+    {
+      "fields": [
+        {
+          "name": "Person.name"
+        },
+        {
+          "name": "Person.profession"
+        }
+      ],
+      "name": "Person"
     }
   ]
 }

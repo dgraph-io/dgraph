@@ -1,0 +1,27 @@
+interface Node {
+  f1: String
+}
+
+type Person implements Node {
+  # untagged field for the below is defined in other type
+  f1Hi: String @dgraph(pred: "Node.f1@hi")
+  # type T doesn't exist for untagged field corresponding to below field
+  # it could have been an already existing type in user's DQL internally
+  f2: String @dgraph(pred: "T.f@no")
+  # no typename.pred syntax, directly pred is given
+  f3: String @dgraph(pred: "f3@en")
+  name: String! @id
+  # We can have exact index on language tagged field while having hash index on language untagged field
+  nameHi: String @dgraph(pred: "Person.name@hi") @search(by: [term, exact])
+  nameEn: String @dgraph(pred: "Person.name@en") @search(by: [regexp])
+  # Below Fields nameHiEn,nameHi_En_Untag won't be added to update/add mutation/ref type
+  # and also to filters, order as they corresponds to multiple language tags
+  nameHiEn: String @dgraph(pred: "Person.name@hi:en")
+  nameHi_En_Untag: String @dgraph(pred: "Person.name@hi:en:.")
+  name_Untag_AnyLang: String @dgraph(pred: "Person.name@.")
+  address: String @search(by: [fulltext])
+  addressHi: String @dgraph(pred: "Person.address@hi")
+  # We can have language tag field without corresponding language untagged field
+  # We will generate the correct DQL schema
+  professionEn: String @dgraph(pred: "Person.profession@en")
+}

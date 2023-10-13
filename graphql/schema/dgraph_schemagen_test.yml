@@ -1,6 +1,5 @@
 schemas:
-  -
-    name: "Object data type"
+  - name: "Object data type"
     input: |
       type A {
         id: ID!
@@ -20,8 +19,7 @@ schemas:
       }
       P.q: uid .
 
-  -
-    name: "Scalar list"
+  - name: "Scalar list"
     input: |
       type X {
         id: ID!
@@ -33,8 +31,7 @@ schemas:
       }
       X.names: [string] .
 
-  -
-    name: "Password type"
+  - name: "Password type"
     input: |
       type X @secret(field: "pwd"){
         id: ID!
@@ -49,8 +46,7 @@ schemas:
       X.pwd: password .
 
 
-  -
-    name: "Object list"
+  - name: "Object list"
     input: |
       type X {
         p: [P!]!
@@ -69,8 +65,7 @@ schemas:
       }
       P.name: string .
 
-  -
-    name: "Scalar types"
+  - name: "Scalar types"
     input: |
       type X {
         p: Int
@@ -112,8 +107,7 @@ schemas:
       X.v: int .
       X.vList: [int] .
 
-  -
-    name: "enum - always gets an index"
+  - name: "enum - always gets an index"
     input: |
       type X {
         e: E
@@ -129,8 +123,7 @@ schemas:
       X.f: [string] @index(hash) .
 
 
-  -
-    name: "Search indexes are correct"
+  - name: "Search indexes are correct"
     input: |
       type X {
         i1: Int @search
@@ -226,8 +219,7 @@ schemas:
       X.e6: string @index(hash, trigram) .
       X.e7: string @index(exact, trigram) .
 
-  -
-    name: "interface and types interact properly"
+  - name: "interface and types interact properly"
     input: |
       interface A {
         id: ID!
@@ -255,8 +247,7 @@ schemas:
       }
       C.dob: dateTime .
 
-  -
-    name: "interface using other interface generate type in dgraph"
+  - name: "interface using other interface generate type in dgraph"
     input: |
       interface A {
         id: ID!
@@ -346,8 +337,7 @@ schemas:
       data: [uid] .
       V.f6: uid .
 
-  -
-    name: "Schema with @dgraph directive."
+  - name: "Schema with @dgraph directive."
     input: |
       type A @dgraph(type: "dgraph.type.A") {
         id: ID!
@@ -434,8 +424,45 @@ schemas:
       dgraph.pList: [int] .
       f: float .
 
-  -
-    name: "Field with @id directive but no search directive gets hash index."
+  - name: "Schema with multiple language tags, indexes on language tag fields got merged on language untagged field"
+    input: |
+      interface Node {
+        f1: String
+      }
+      type Person implements Node {
+        f1Hi: String @dgraph(pred: "Node.f1@hi")
+        f2: String @dgraph(pred: "T.f@no")
+        f3: String @dgraph(pred: "f3@en")
+        name: String! @id
+        nameHi: String @dgraph(pred: "Person.name@hi") @search(by: [term, exact])
+        nameEn: String @dgraph(pred: "Person.name@en") @search(by: [regexp])
+        nameHiEn: String @dgraph(pred: "Person.name@hi:en")
+        nameHi_En_Untag: String @dgraph(pred: "Person.name@hi:en:.")
+        name_Untag_AnyLang: String @dgraph(pred: "Person.name@.")
+        address: String @search(by: [fulltext])
+        addressHi: String @dgraph(pred: "Person.address@hi")
+        professionEn: String @dgraph(pred: "Person.profession@en")
+      }
+    output: |
+      type Node {
+        Node.f1
+      }
+      Node.f1: string @lang .
+      type Person {
+        Node.f1
+        T.f
+        f3
+        Person.name
+        Person.address
+        Person.profession
+      }
+      T.f: string @lang .
+      f3: string @lang .
+      Person.name: string @index(exact, hash, term, trigram) @lang @upsert .
+      Person.address: string @index(fulltext) @lang .
+      Person.profession: string @lang .
+
+  - name: "Field with @id directive but no search directive gets hash index."
     input: |
       interface A {
         id: String! @id
@@ -454,8 +481,7 @@ schemas:
       }
       B.correct: bool @index(bool) .
 
-  -
-    name: "Field with @id directive gets hash index."
+  - name: "Field with @id directive gets hash index."
     input: |
       interface A {
         id: String! @id @search(by: [trigram])
@@ -474,8 +500,7 @@ schemas:
       }
       B.correct: bool @index(bool) .
 
-  -
-    name: "Field with @id directive and a hash arg in search directive generates correct schema."
+  - name: "Field with @id directive and a hash arg in search directive generates correct schema."
     input: |
       interface A {
         id: String! @id @search(by: [hash, term])
@@ -513,8 +538,7 @@ schemas:
       }
       B.correct: bool @index(bool) .
 
-  -
-    name: "Field with reverse predicate in dgraph directive adds @reverse to predicate."
+  - name: "Field with reverse predicate in dgraph directive adds @reverse to predicate."
     input: |
       type Movie {
         director: [Person] @dgraph(pred: "~directed.movies")
@@ -530,8 +554,7 @@ schemas:
       }
       directed.movies: [uid] @reverse .
 
-  -
-    name: "Field with reverse predicate in dgraph directive where actual predicate comes first."
+  - name: "Field with reverse predicate in dgraph directive where actual predicate comes first."
     input: |
       type Person {
         directed: [Movie] @dgraph(pred: "directed.movies")
@@ -547,8 +570,7 @@ schemas:
       type Movie {
       }
 
-  -
-    name: "deprecated fields get included in Dgraph schema"
+  - name: "deprecated fields get included in Dgraph schema"
     input: |
       type A {
         id: ID!
@@ -653,8 +675,7 @@ schemas:
       post: string @index(exact, term) .
       <公司>: string @index(exact, term) .
 
-  -
-    name: "custom query and mutation shouldn't be part of Dgraph schema"
+  - name: "custom query and mutation shouldn't be part of Dgraph schema"
     input: |
       type User @remote {
         id: ID!
@@ -675,8 +696,7 @@ schemas:
         })
       }
 
-  -
-    name: "custom field shouldn't be part of dgraph schema"
+  - name: "custom field shouldn't be part of dgraph schema"
     input: |
       type User {
         id: ID!
