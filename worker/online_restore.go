@@ -22,7 +22,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
@@ -149,7 +148,7 @@ func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest, wg *sync
 		reqCopy.GroupId = gid
 		wg.Add(1)
 		go func() {
-			errCh <- tryRestoreProposal(ctx, reqCopy)
+			errCh <- proposeRestoreOrSend(ctx, reqCopy)
 		}()
 	}
 
@@ -179,41 +178,6 @@ func proposeRestoreOrSend(ctx context.Context, req *pb.RestoreRequest) error {
 	c := pb.NewWorkerClient(con)
 
 	_, err := c.Restore(ctx, req)
-	return err
-}
-
-func retriableRestoreError(err error) bool {
-	switch {
-	case err == conn.ErrNoConnection:
-		// Try to recover from temporary connection issues.
-		return true
-	case strings.Contains(err.Error(), "Raft isn't initialized yet"):
-		// Try to recover if raft has not been initialized.
-		return true
-	case strings.Contains(err.Error(), errRestoreProposal):
-		// Do not try to recover from other errors when sending the proposal.
-		return false
-	default:
-		// Try to recover from other errors (e.g wrong group, waiting for timestamp, etc).
-		return true
-	}
-}
-
-func tryRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
-	var err error
-	for i := 0; i < 10; i++ {
-		err = proposeRestoreOrSend(ctx, req)
-		if err == nil {
-			glog.Info("proposeRestoreOrSend done.")
-			return nil
-		}
-		glog.Errorf("Got error while proposeRestoreOrSend: %v, retrying!", err)
-		if retriableRestoreError(err) {
-			time.Sleep(time.Second)
-			continue
-		}
-		return err
-	}
 	return err
 }
 
