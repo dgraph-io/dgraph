@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	"fmt"
 	"log"
 	"math"
 	"sort"
@@ -68,6 +69,35 @@ const (
 	BitEmptyPosting byte = 0x10
 )
 
+type Data interface {
+	Lock()
+	Unlock()
+	Key() []byte
+	AddMutationWithIndex(ctx context.Context, edge *pb.DirectedEdge, txn *Txn) error
+	ApproxLen() int
+	findPosting(readTs uint64, uid uint64) (found bool, pos *pb.Posting, err error)
+	addMutationInternal(ctx context.Context, txn *Txn, t *pb.DirectedEdge) error
+	getPostingAndLength(readTs, afterUid, uid uint64) (int, bool, *pb.Posting)
+	addMutation(ctx context.Context, txn *Txn, t *pb.DirectedEdge) error
+	Iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) error) error
+	IsEmpty(readTs, afterUid uint64) (bool, error)
+	Length(readTs, afterUid uint64) int
+	Uids(opt ListOptions) (*pb.List, error)
+	Postings(opt ListOptions, postFn func(*pb.Posting) error) error
+	AllUntaggedValues(readTs uint64) ([]types.Val, error)
+	AllValues(readTs uint64) ([]types.Val, error)
+	GetLangTags(readTs uint64) ([]string, error)
+	Value(readTs uint64) (rval types.Val, rerr error)
+	ValueFor(readTs uint64, langs []string) (rval types.Val, rerr error)
+	PostingFor(readTs uint64, langs []string) (p *pb.Posting, rerr error)
+	ValueForTag(readTs uint64, tag string) (rval types.Val, rerr error)
+	getMutation(startTs uint64) []byte
+	setMutation(startTs uint64, data []byte)
+	Rollup(alloc *z.Allocator, readTs uint64) ([]*bpb.KV, error)
+	DeepSize() uint64
+	maxVersion() uint64
+}
+
 // List stores the in-memory representation of a posting list.
 type List struct {
 	x.SafeMutex
@@ -76,6 +106,12 @@ type List struct {
 	mutationMap map[uint64]*pb.PostingList
 	minTs       uint64 // commit timestamp of immutable layer, reject reads before this ts.
 	maxTs       uint64 // max commit timestamp seen for this list.
+}
+
+type Value struct {
+	x.SafeMutex
+	key     []byte
+	posting *pb.PostingList
 }
 
 // NewList returns a new list with an immutable layer set to plist and the
@@ -87,6 +123,20 @@ func NewList(key []byte, plist *pb.PostingList, minTs uint64) *List {
 		mutationMap: make(map[uint64]*pb.PostingList),
 		minTs:       minTs,
 	}
+}
+
+func (v *Value) Key() []byte {
+	return v.key
+}
+
+func (l *List) Key() []byte {
+	return l.key
+}
+
+func (v *Value) maxVersion() uint64 {
+	v.RLock()
+	defer v.RUnlock()
+	return v.posting.CommitTs
 }
 
 func (l *List) maxVersion() uint64 {
@@ -325,6 +375,21 @@ func hasDeleteAll(mpost *pb.Posting) bool {
 	return mpost.Op == Del && bytes.Equal(mpost.Value, []byte(x.Star)) && len(mpost.LangTag) == 0
 }
 
+func (v *Value) updateMutationLayer(mpost *pb.Posting) error {
+	v.AssertLock()
+
+	if hasDeleteAll(mpost) {
+		plist := &pb.PostingList{}
+		v.posting = plist
+		return nil
+	}
+
+	newPlist := &pb.PostingList{}
+	newPlist.Postings = append(newPlist.Postings, mpost)
+	v.posting = newPlist
+	return nil
+}
+
 // Ensure that you either abort the uncommitted postings or commit them before calling me.
 func (l *List) updateMutationLayer(mpost *pb.Posting, singleUidUpdate bool) error {
 	l.AssertLock()
@@ -435,6 +500,12 @@ func fingerprintEdge(t *pb.DirectedEdge) uint64 {
 	return id
 }
 
+func (v *Value) addMutation(ctx context.Context, txn *Txn, t *pb.DirectedEdge) error {
+	v.Lock()
+	defer v.Unlock()
+	return v.addMutationInternal(ctx, txn, t)
+}
+
 func (l *List) addMutation(ctx context.Context, txn *Txn, t *pb.DirectedEdge) error {
 	l.Lock()
 	defer l.Unlock()
@@ -495,6 +566,48 @@ func GetConflictKey(pk x.ParsedKey, key []byte, t *pb.DirectedEdge) uint64 {
 	return conflictKey
 }
 
+func (v *Value) addMutationInternal(ctx context.Context, txn *Txn, t *pb.DirectedEdge) error {
+	v.AssertLock()
+
+	if txn.ShouldAbort() {
+		return x.ErrConflict
+	}
+
+	mpost := NewPosting(t)
+	mpost.StartTs = txn.StartTs
+	if mpost.PostingType != pb.Posting_REF {
+		t.ValueId = fingerprintEdge(t)
+		mpost.Uid = t.ValueId
+	}
+
+	// Check whether this mutation is an update for a predicate of type uid.
+	pk, err := x.Parse(v.key)
+	if err != nil {
+		return errors.Wrapf(err, "cannot parse key when adding mutation to list with key %s",
+			hex.EncodeToString(v.key))
+	}
+
+	pred, ok := schema.State().Get(ctx, t.Attr)
+	isSingle := ok && !pred.GetList() && pk.IsData() && !pred.GetLang()
+	if !isSingle {
+		return errors.New(fmt.Sprintf("Cannot update mutation layer of type %s using Value", t.Attr))
+
+	}
+
+	if err != v.updateMutationLayer(mpost) {
+		return errors.Wrapf(err, "cannot update mutation layer of key %s with value %+v",
+			hex.EncodeToString(v.key), mpost)
+	}
+
+	x.PrintMutationEdge(t, pk, txn.StartTs)
+
+	// We ensure that commit marks are applied to posting lists in the right
+	// order. We can do so by proposing them in the same order as received by the Oracle delta
+	// stream from Zero, instead of in goroutines.
+	txn.addConflictKey(GetConflictKey(pk, v.key, t))
+	return nil
+}
+
 func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.DirectedEdge) error {
 	l.AssertLock()
 
@@ -534,6 +647,27 @@ func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.Directed
 }
 
 // getMutation returns a marshaled version of posting list mutation stored internally.
+func (v *Value) getMutation(startTs uint64) []byte {
+	v.RLock()
+	defer v.RUnlock()
+	if v.posting != nil {
+		data, err := v.posting.Marshal()
+		x.Check(err)
+		return data
+	}
+	return nil
+}
+
+func (v *Value) setMutation(startTs uint64, data []byte) {
+	pl := new(pb.PostingList)
+	x.Check(pl.Unmarshal(data))
+
+	v.Lock()
+	v.posting = pl
+	v.Unlock()
+}
+
+// getMutation returns a marshaled version of posting list mutation stored internally.
 func (l *List) getMutation(startTs uint64) []byte {
 	l.RLock()
 	defer l.RUnlock()
@@ -569,6 +703,39 @@ func (l *List) setMutation(startTs uint64, data []byte) {
 //	   return nil // to continue iteration.
 //	   return errStopIteration // to break iteration.
 //	 })
+
+func (v *Value) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) error) error {
+	if v.posting != nil {
+		for _, posting := range v.posting.Postings {
+			err := f(posting)
+			if err == ErrStopIteration {
+				return nil
+			}
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (v *Value) Iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) error) error {
+	v.RLock()
+	defer v.RUnlock()
+	if v.posting != nil {
+		for _, posting := range v.posting.Postings {
+			err := f(posting)
+			if err == ErrStopIteration {
+				return nil
+			}
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func (l *List) Iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) error) error {
 	l.RLock()
 	defer l.RUnlock()
@@ -736,6 +903,26 @@ loop:
 	return err
 }
 
+func (v *Value) IsEmpty(readTs, afterUid uint64) (bool, error) {
+	v.RLock()
+	defer v.RUnlock()
+	if v.posting == nil || len(v.posting.Postings) == 0 {
+		return true, nil
+	}
+
+	return false, nil
+}
+
+func (v *Value) Length(readTs, afterUid uint64) int {
+	v.RLock()
+	defer v.RUnlock()
+	if v.posting == nil || len(v.posting.Postings) == 0 {
+		return 0
+	}
+
+	return len(v.posting.Postings)
+}
+
 // IsEmpty returns true if there are no uids at the given timestamp after the given UID.
 func (l *List) IsEmpty(readTs, afterUid uint64) (bool, error) {
 	l.RLock()
@@ -749,6 +936,26 @@ func (l *List) IsEmpty(readTs, afterUid uint64) (bool, error) {
 		return false, errors.Wrapf(err, "cannot iterate over list when calling List.IsEmpty")
 	}
 	return count == 0, nil
+}
+
+func (v *Value) getPostingAndLength(readTs, afterUid, uid uint64) (int, bool, *pb.Posting) {
+	v.AssertRLock()
+	var count int
+	var found bool
+	var post *pb.Posting
+	err := v.iterate(readTs, afterUid, func(p *pb.Posting) error {
+		if p.Uid == uid {
+			post = p
+			found = true
+		}
+		count++
+		return nil
+	})
+	if err != nil {
+		return -1, false, nil
+	}
+
+	return count, found, post
 }
 
 func (l *List) getPostingAndLength(readTs, afterUid, uid uint64) (int, bool, *pb.Posting) {
@@ -861,6 +1068,21 @@ func (l *List) Length(readTs, afterUid uint64) int {
 //     This proves that writing rollups at ts + 1 would not cause any issues with dgraph.drop.op.
 //     The only issue would come if a rollup happens at ts + k. If a backup happens in between
 //     ts and ts + k, it could lead to some data being dropped during restore.
+func (v *Value) Rollup(alloc *z.Allocator, readTs uint64) ([]*bpb.KV, error) {
+	v.RLock()
+	defer v.RUnlock()
+	kv := MarshalPostingList(v.posting, alloc)
+	var kvs []*bpb.KV
+	kv.Version = v.posting.CommitTs
+	if readTs != math.MaxUint64 {
+		kv.Version += 1
+	}
+
+	kv.Key = alloc.Copy(v.key)
+	kvs = append(kvs, kv)
+	return kvs, nil
+}
+
 func (l *List) Rollup(alloc *z.Allocator, readTs uint64) ([]*bpb.KV, error) {
 	l.RLock()
 	defer l.RUnlock()
@@ -1156,11 +1378,58 @@ func (l *List) rollup(readTs uint64, split bool) (*rollupOutput, error) {
 	return out, nil
 }
 
+func (v *Value) ApproxLen() int {
+	v.RLock()
+	defer v.RUnlock()
+	if v.posting == nil || len(v.posting.Postings) == 0 {
+		return 0
+	}
+
+	return len(v.posting.Postings)
+}
+
 // ApproxLen returns an approximate count of the UIDs in the posting list.
 func (l *List) ApproxLen() int {
 	l.RLock()
 	defer l.RUnlock()
 	return len(l.mutationMap) + codec.ApproxLen(l.plist.Pack)
+}
+
+func (v *Value) Uids(opt ListOptions) (*pb.List, error) {
+	if opt.First == 0 {
+		opt.First = math.MaxInt32
+	}
+	// Pre-assign length to make it faster.
+	// Use approximate length for initial capacity.
+	res := make([]uint64, 0, v.Length(opt.ReadTs, opt.AfterUid))
+	out := &pb.List{}
+
+	err := v.Iterate(opt.ReadTs, opt.AfterUid, func(p *pb.Posting) error {
+		if p.PostingType == pb.Posting_REF {
+			res = append(res, p.Uid)
+			if opt.First < 0 {
+				// We need the last N.
+				// TODO: This could be optimized by only considering some of the last UidBlocks.
+				if len(res) > -opt.First {
+					res = res[1:]
+				}
+			} else if len(res) > opt.First {
+				return ErrStopIteration
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return out, errors.Wrapf(err, "cannot retrieve UIDs from list with key %s",
+			hex.EncodeToString(v.key))
+	}
+
+	// Do The intersection here as it's optimized.
+	out.Uids = res
+	if opt.Intersect != nil {
+		algo.IntersectWith(out, opt.Intersect, out)
+	}
+	return out, nil
 }
 
 // Uids returns the UIDs given some query params.
@@ -1212,6 +1481,96 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 		algo.IntersectWith(out, opt.Intersect, out)
 	}
 	return out, nil
+}
+
+func (v *Value) Postings(opt ListOptions, postFn func(*pb.Posting) error) error {
+	v.RLock()
+	defer v.RUnlock()
+
+	err := v.iterate(opt.ReadTs, opt.AfterUid, func(p *pb.Posting) error {
+		if p.PostingType != pb.Posting_REF {
+			return nil
+		}
+		return postFn(p)
+	})
+	return errors.Wrapf(err, "cannot retrieve postings from list with key %s",
+		hex.EncodeToString(v.key))
+}
+
+// AllUntaggedValues returns all the values in the posting list with no language tag.
+func (v *Value) AllUntaggedValues(readTs uint64) ([]types.Val, error) {
+	v.RLock()
+	defer v.RUnlock()
+
+	var vals []types.Val
+	err := v.iterate(readTs, 0, func(p *pb.Posting) error {
+		if len(p.LangTag) == 0 {
+			vals = append(vals, types.Val{
+				Tid:   types.TypeID(p.ValType),
+				Value: p.Value,
+			})
+		}
+		return nil
+	})
+	return vals, errors.Wrapf(err, "cannot retrieve untagged values from list with key %s",
+		hex.EncodeToString(v.key))
+}
+
+// AllValues returns all the values in the posting list.
+func (v *Value) AllValues(readTs uint64) ([]types.Val, error) {
+	v.RLock()
+	defer v.RUnlock()
+
+	var vals []types.Val
+	err := v.iterate(readTs, 0, func(p *pb.Posting) error {
+		vals = append(vals, types.Val{
+			Tid:   types.TypeID(p.ValType),
+			Value: p.Value,
+		})
+		return nil
+	})
+	return vals, errors.Wrapf(err, "cannot retrieve all values from list with key %s",
+		hex.EncodeToString(v.key))
+}
+
+// GetLangTags finds the language tags of each posting in the list.
+func (v *Value) GetLangTags(readTs uint64) ([]string, error) {
+	return []string{}, errors.New("Can't give lang for value")
+}
+
+// Value returns the default value from the posting list. The default value is
+// defined as the value without a language tag.
+func (v *Value) Value(readTs uint64) (rval types.Val, rerr error) {
+	v.RLock()
+	defer v.RUnlock()
+	val, found, err := v.findValue(readTs, math.MaxUint64)
+	if err != nil {
+		return val, errors.Wrapf(err,
+			"cannot retrieve default value from list with key %s", hex.EncodeToString(v.key))
+	}
+	if !found {
+		return val, ErrNoValue
+	}
+	return val, nil
+}
+
+// ValueFor returns a value from posting list, according to preferred language list.
+// If list is empty, value without language is returned; if such value is not
+// available, value with smallest UID is returned.
+// If list consists of one or more languages, first available value is returned.
+// If no language from the list matches the values, processing is the same as for empty list.
+func (v *Value) ValueFor(readTs uint64, langs []string) (rval types.Val, rerr error) {
+	return rval, errors.New("Can't give lang for value")
+}
+
+// PostingFor returns the posting according to the preferred language list.
+func (v *Value) PostingFor(readTs uint64, langs []string) (p *pb.Posting, rerr error) {
+	return nil, errors.New("Can't give lang for value")
+}
+
+// ValueForTag returns the value in the posting list with the given language tag.
+func (v *Value) ValueForTag(readTs uint64, tag string) (rval types.Val, rerr error) {
+	return rval, errors.New("Can't give tag for value")
 }
 
 // Postings calls postFn with the postings that are common with
@@ -1429,6 +1788,30 @@ func (l *List) postingForTag(readTs uint64, tag string) (p *pb.Posting, rerr err
 	}
 
 	return p, nil
+}
+
+func (v *Value) findValue(readTs, uid uint64) (rval types.Val, found bool, err error) {
+	v.AssertRLock()
+	found, p, err := v.findPosting(readTs, uid)
+	if !found {
+		return rval, found, err
+	}
+
+	return valueToTypesVal(p), true, nil
+}
+
+func (v *Value) findPosting(readTs uint64, uid uint64) (found bool, pos *pb.Posting, err error) {
+	// Iterate starts iterating after the given argument, so we pass UID - 1
+	err = v.iterate(readTs, uid-1, func(p *pb.Posting) error {
+		if p.Uid == uid {
+			pos = p
+			found = true
+		}
+		return ErrStopIteration
+	})
+
+	return found, pos, errors.Wrapf(err,
+		"cannot retrieve posting for UID %d from list with key %s", uid, hex.EncodeToString(v.key))
 }
 
 func (l *List) findValue(readTs, uid uint64) (rval types.Val, found bool, err error) {

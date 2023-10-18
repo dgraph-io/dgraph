@@ -421,6 +421,16 @@ func (s *state) HasCount(ctx context.Context, pred string) bool {
 }
 
 // IsList returns whether the predicate is of list type.
+func (s *state) IsScalar(pred string) bool {
+	s.RLock()
+	defer s.RUnlock()
+	if schema, ok := s.predicate[pred]; ok {
+		return !schema.List && !schema.Lang
+	}
+	return false
+}
+
+// IsList returns whether the predicate is of list type.
 func (s *state) IsList(pred string) bool {
 	s.RLock()
 	defer s.RUnlock()

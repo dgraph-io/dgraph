@@ -92,7 +92,7 @@ func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *posting.Txn) e
 	// if we're doing indexing or count index or enforcing single UID, etc. In other cases, we can
 	// just create a posting list facade in memory and use it to store the delta in Badger. Later,
 	// the rollup operation would consolidate all these deltas into a posting list.
-	var getFn func(key []byte) (*posting.List, error)
+	var getFn func(key []byte) (posting.Data, error)
 	switch {
 	case len(su.GetTokenizer()) > 0 || su.GetCount():
 		// Any index or count index.

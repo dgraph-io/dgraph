@@ -75,12 +75,12 @@ func NewTxn(startTs uint64) *Txn {
 }
 
 // Get retrieves the posting list for the given list from the local cache.
-func (txn *Txn) Get(key []byte) (*List, error) {
+func (txn *Txn) Get(key []byte) (Data, error) {
 	return txn.cache.Get(key)
 }
 
 // GetFromDelta retrieves the posting list from delta cache, not from Badger.
-func (txn *Txn) GetFromDelta(key []byte) (*List, error) {
+func (txn *Txn) GetFromDelta(key []byte) (Data, error) {
 	return txn.cache.GetFromDelta(key)
 }
 
@@ -90,8 +90,8 @@ func (txn *Txn) Update() {
 }
 
 // Store is used by tests.
-func (txn *Txn) Store(pl *List) *List {
-	return txn.cache.SetIfAbsent(string(pl.key), pl)
+func (txn *Txn) Store(pl Data) Data {
+	return txn.cache.SetIfAbsent(string(pl.Key()), pl)
 }
 
 type oracle struct {

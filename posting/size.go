@@ -27,6 +27,30 @@ import (
 
 const sizeOfBucket = 144
 
+func (v *Value) DeepSize() uint64 {
+	if v == nil {
+		return 0
+	}
+
+	v.RLock()
+	defer v.RUnlock()
+
+	var size uint64 = 4*8 + // safe mutex consists of 4 words.
+		1*8 + // plist pointer consists of 1 word.
+		1*8 + // mutation map pointer  consists of 1 word.
+		2*8 + // minTs and maxTs take 1 word each.
+		3*8 + // array take 3 words. so key array is 3 words.
+		1*8 // So far 11 words, in order to round the slab we're adding one more word.
+	// so far basic struct layout has been calculated.
+
+	// Add each entry size of key array.
+	size += uint64(cap(v.key))
+
+	// add the posting list size.
+	size += calculatePostingListSize(v.posting)
+	return size
+}
+
 // DeepSize computes the memory taken by a Posting List
 func (l *List) DeepSize() uint64 {
 	if l == nil {

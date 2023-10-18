@@ -27,6 +27,7 @@ import (
 	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto"
 	"github.com/dgraph-io/ristretto/z"
@@ -59,7 +60,7 @@ func Init(ps *badger.DB, cacheSize int64) {
 		BufferItems: 64,
 		Metrics:     true,
 		Cost: func(val interface{}) int64 {
-			l, ok := val.(*List)
+			l, ok := val.(Data)
 			if !ok {
 				return int64(0)
 			}
@@ -89,7 +90,7 @@ func Cleanup() {
 
 // GetNoStore returns the list stored in the key or creates a new one if it doesn't exist.
 // It does not store the list in any cache.
-func GetNoStore(key []byte, readTs uint64) (rlist *List, err error) {
+func GetNoStore(key []byte, readTs uint64) (rlist Data, err error) {
 	return getNew(key, pstore, readTs)
 }
 
@@ -110,7 +111,7 @@ type LocalCache struct {
 	maxVersions map[string]uint64
 
 	// plists are posting lists in memory. They can be discarded to reclaim space.
-	plists map[string]*List
+	plists map[string]Data
 }
 
 // NewLocalCache returns a new LocalCache instance.
@@ -118,7 +119,7 @@ func NewLocalCache(startTs uint64) *LocalCache {
 	return &LocalCache{
 		startTs:     startTs,
 		deltas:      make(map[string][]byte),
-		plists:      make(map[string]*List),
+		plists:      make(map[string]Data),
 		maxVersions: make(map[string]uint64),
 	}
 }
@@ -129,7 +130,7 @@ func NoCache(startTs uint64) *LocalCache {
 	return &LocalCache{startTs: startTs}
 }
 
-func (lc *LocalCache) getNoStore(key string) *List {
+func (lc *LocalCache) getNoStore(key string) Data {
 	lc.RLock()
 	defer lc.RUnlock()
 	if l, ok := lc.plists[key]; ok {
@@ -142,7 +143,7 @@ func (lc *LocalCache) getNoStore(key string) *List {
 // key already exists, the cache will not be modified and the existing list
 // will be returned instead. This behavior is meant to prevent the goroutines
 // using the cache from ending up with an orphaned version of a list.
-func (lc *LocalCache) SetIfAbsent(key string, updated *List) *List {
+func (lc *LocalCache) SetIfAbsent(key string, updated Data) Data {
 	lc.Lock()
 	defer lc.Unlock()
 	if pl, ok := lc.plists[key]; ok {
@@ -152,12 +153,25 @@ func (lc *LocalCache) SetIfAbsent(key string, updated *List) *List {
 	return updated
 }
 
-func (lc *LocalCache) getInternal(key []byte, readFromDisk bool) (*List, error) {
-	getNewPlistNil := func() (*List, error) {
+func (lc *LocalCache) getInternal(key []byte, readFromDisk bool) (Data, error) {
+	pk, err := x.Parse(key)
+	if err != nil {
+		return nil, err
+	}
+	schemaType := schema.State().IsScalar(pk.Attr) && pk.IsData()
+	getFromDisk := func() (Data, error) {
+		if schemaType {
+			return getScalar(key, pstore, lc.startTs)
+		} else {
+			return getNew(key, pstore, lc.startTs)
+		}
+	}
+
+	getNewPlistNil := func() (Data, error) {
 		lc.RLock()
 		defer lc.RUnlock()
 		if lc.plists == nil {
-			return getNew(key, pstore, lc.startTs)
+			return getFromDisk()
 		}
 		return nil, nil
 	}
@@ -171,18 +185,27 @@ func (lc *LocalCache) getInternal(key []byte, readFromDisk bool) (*List, error) 
 		return pl, nil
 	}
 
-	var pl *List
-	if readFromDisk {
-		var err error
-		pl, err = getNew(key, pstore, lc.startTs)
-		if err != nil {
-			return nil, err
+	getData := func() (Data, error) {
+		if readFromDisk {
+			return getFromDisk()
+		} else {
+			if schemaType {
+				return &Value{
+					key:     key,
+					posting: new(pb.PostingList),
+				}, nil
+			} else {
+				return &List{
+					key:   key,
+					plist: new(pb.PostingList),
+				}, nil
+			}
 		}
-	} else {
-		pl = &List{
-			key:   key,
-			plist: new(pb.PostingList),
-		}
+	}
+
+	pl, err := getData()
+	if err != nil {
+		return pl, err
 	}
 
 	// If we just brought this posting list into memory and we already have a delta for it, let's
@@ -260,18 +283,18 @@ func (lc *LocalCache) GetSinglePosting(key []byte) (*pb.PostingList, error) {
 }
 
 // Get retrieves the cached version of the list associated with the given key.
-func (lc *LocalCache) Get(key []byte) (*List, error) {
+func (lc *LocalCache) Get(key []byte) (Data, error) {
 	return lc.getInternal(key, true)
 }
 
 // GetFromDelta gets the cached version of the list without reading from disk
 // and only applies the existing deltas. This is used in situations where the
 // posting list will only be modified and not read (e.g adding index mutations).
-func (lc *LocalCache) GetFromDelta(key []byte) (*List, error) {
+func (lc *LocalCache) GetFromDelta(key []byte) (Data, error) {
 	return lc.getInternal(key, false)
 }
 
-// UpdateDeltasAndDiscardLists updates the delta cache before removing the stored posting lists.
+// UpdateDeltasAndDiscardDatas updates the delta cache before removing the stored posting lists.
 func (lc *LocalCache) UpdateDeltasAndDiscardLists() {
 	lc.Lock()
 	defer lc.Unlock()
@@ -289,7 +312,7 @@ func (lc *LocalCache) UpdateDeltasAndDiscardLists() {
 		// for the same transaction, who might be holding references to posting lists.
 		// TODO: Find another way to reuse postings via postingPool.
 	}
-	lc.plists = make(map[string]*List)
+	lc.plists = make(map[string]Data)
 }
 
 func (lc *LocalCache) fillPreds(ctx *api.TxnContext, gid uint32) {

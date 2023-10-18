@@ -457,7 +457,33 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 	return l, nil
 }
 
-func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
+func getScalar(key []byte, pstore *badger.DB, readTs uint64) (Data, error) {
+	pl := &pb.PostingList{}
+	v := &Value{
+		key:     key,
+		posting: pl,
+	}
+	txn := pstore.NewTransactionAt(readTs, false)
+	item, err := txn.Get(key)
+
+	if err == badger.ErrKeyNotFound {
+		return v, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	err = item.Value(func(val []byte) error {
+		if err := pl.Unmarshal(val); err != nil {
+			return err
+		}
+		return nil
+	})
+
+	return v, err
+}
+
+func getNew(key []byte, pstore *badger.DB, readTs uint64) (Data, error) {
 	cachedVal, ok := lCache.Get(key)
 	if ok {
 		l, ok := cachedVal.(*List)

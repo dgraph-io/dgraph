@@ -568,7 +568,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 	return nil
 }
 
-func facetsFilterValuePostingList(args funcArgs, pl *posting.List, facetsTree *facetsTree,
+func facetsFilterValuePostingList(args funcArgs, pl posting.Data, facetsTree *facetsTree,
 	listType bool, fn func(p *pb.Posting)) error {
 	q := args.q
 
@@ -624,7 +624,7 @@ func facetsFilterValuePostingList(args funcArgs, pl *posting.List, facetsTree *f
 	})
 }
 
-func countForValuePostings(args funcArgs, pl *posting.List, facetsTree *facetsTree,
+func countForValuePostings(args funcArgs, pl posting.Data, facetsTree *facetsTree,
 	listType bool) (int, error) {
 	var filteredCount int
 	err := facetsFilterValuePostingList(args, pl, facetsTree, listType, func(p *pb.Posting) {
@@ -637,7 +637,7 @@ func countForValuePostings(args funcArgs, pl *posting.List, facetsTree *facetsTr
 	return filteredCount, nil
 }
 
-func retrieveValuesAndFacets(args funcArgs, pl *posting.List, facetsTree *facetsTree,
+func retrieveValuesAndFacets(args funcArgs, pl posting.Data, facetsTree *facetsTree,
 	listType bool) ([]types.Val, *pb.FacetsList, error) {
 	q := args.q
 	var vals []types.Val
@@ -659,7 +659,7 @@ func retrieveValuesAndFacets(args funcArgs, pl *posting.List, facetsTree *facets
 	return vals, &pb.FacetsList{FacetsList: fcs}, nil
 }
 
-func facetsFilterUidPostingList(pl *posting.List, facetsTree *facetsTree, opts posting.ListOptions,
+func facetsFilterUidPostingList(pl posting.Data, facetsTree *facetsTree, opts posting.ListOptions,
 	fn func(*pb.Posting)) error {
 
 	return pl.Postings(opts, func(p *pb.Posting) error {
@@ -675,7 +675,7 @@ func facetsFilterUidPostingList(pl *posting.List, facetsTree *facetsTree, opts p
 	})
 }
 
-func countForUidPostings(args funcArgs, pl *posting.List, facetsTree *facetsTree,
+func countForUidPostings(args funcArgs, pl posting.Data, facetsTree *facetsTree,
 	opts posting.ListOptions) (int, error) {
 
 	var filteredCount int
@@ -689,7 +689,7 @@ func countForUidPostings(args funcArgs, pl *posting.List, facetsTree *facetsTree
 	return filteredCount, nil
 }
 
-func retrieveUidsAndFacets(args funcArgs, pl *posting.List, facetsTree *facetsTree,
+func retrieveUidsAndFacets(args funcArgs, pl posting.Data, facetsTree *facetsTree,
 	opts posting.ListOptions) (*pb.List, []*pb.Facets, error) {
 	q := args.q
 
