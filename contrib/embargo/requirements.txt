@@ -17,7 +17,7 @@ Pygments==2.15.0
 PyYAML==5.4
 requests==2.31.0
 six==1.15.0
-urllib3==1.26.5
+urllib3==1.26.18
 websocket-client==0.57.0
 Werkzeug==2.2.3
 
