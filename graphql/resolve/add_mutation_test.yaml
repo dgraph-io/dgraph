@@ -5204,3 +5204,516 @@
           "dgraph.type": ["Person"],
           "uid": "_:Person_1"
         }
+
+-
+  name: "2-level add mutation with nullable @id fields "
+  explaination: "bookId in Book and PenName in author are @id and nullable field,
+   we can skip them while doing add mutation. Nested object author doesn't exist, so we
+   add it and link it to book"
+  gqlmutation: |
+    mutation addBook($input: [AddBookInput!]!) {
+      addBook(input: $input, upsert: false) {
+        book {
+          title
+        }
+      }
+    }
+  gqlvariables: |
+    { "input":
+      [
+        {
+          "title": "Sapiens",
+          "ISBN": "B02",
+          "publisher": "penguin",
+          "author": {
+             "name": "Alice",
+             "authorId": "A02"
+          }
+        }
+      ]
+    }
+  dgquery: |-
+    query {
+      Book_1(func: eq(Book.ISBN, "B02")) {
+        uid
+        dgraph.type
+      }
+      Book_2(func: eq(Book.title, "Sapiens")) {
+        uid
+        dgraph.type
+      }
+      author_3(func: eq(author.authorId, "A02")) {
+        uid
+        dgraph.type
+      }
+    }
+  dgmutations:
+    - setjson: |
+        {
+            "Book.title": "Sapiens",
+            "Book.ISBN": "B02",
+            "Book.publisher": "penguin",
+            "dgraph.type": [
+                "Book"
+            ],
+            "Book.author": {
+                "author.authorId":"A02",
+                "author.book": [
+                    {
+                        "uid": "_:Book_2"
+                    }
+                ],
+                "author.name": "Alice",
+                "dgraph.type": [
+                    "author"
+                ],
+                "uid": "_:author_3"
+            },
+            "uid": "_:Book_2"
+        }
+
+-
+  name: "2- level add mutation with upsert and nullable @id fields "
+  explaination: "bookId in @id,penName in author are nullable @id fields and we can skip them.
+  title,ISBN in Book are @id fields,so also added in set Json, because @id fields will also be updated by upserts.
+  Both book and author already exist so we just link new author to book and delete old reference from book to author,
+  if there is any"
+  gqlmutation: |
+    mutation addBook($input: [AddBookInput!]!) {
+      addBook(input: $input, upsert: true) {
+        book {
+          title
+        }
+      }
+    }
+  gqlvariables: |
+    { "input":
+      [
+        {
+          "title": "Sapiens",
+          "ISBN": "B01",
+          "publisher": "penguin",
+          "author": {
+             "name": "Alice",
+             "authorId": "A01"
+          }
+        }
+      ]
+    }
+  dgquery: |-
+    query {
+      Book_1(func: eq(Book.ISBN, "B01")) {
+        uid
+        dgraph.type
+      }
+      Book_2(func: eq(Book.title, "Sapiens")) {
+        uid
+        dgraph.type
+      }
+      author_3(func: eq(author.authorId, "A01")) {
+        uid
+        dgraph.type
+      }
+    }
+  qnametouid: |
+    {
+       "Book_2":"0x11",
+       "author_3": "0x12"
+    }
+  dgquerysec: |-
+    query {
+      Book_2 as Book_2(func: uid(0x11)) @filter(type(Book)) {
+        uid
+      }
+      var(func: uid(Book_2)) {
+        author_4 as Book.author @filter(NOT (uid(0x12)))
+      }
+    }
+  dgmutations:
+    - setjson: |
+        {
+            "Book.ISBN": "B01",
+            "Book.author": {
+                "author.book": [
+                    {
+                        "uid": "uid(Book_2)"
+                    }
+                ],
+                "uid": "0x12"
+            },
+            "Book.publisher": "penguin",
+            "Book.title": "Sapiens",
+            "uid": "uid(Book_2)"
+        }
+      deletejson: |
+        [{
+           "author.book": [
+              {
+                  "uid": "uid(Book_2)"
+              }
+          ],
+          "uid": "uid(author_4)"
+        }]
+      cond: "@if(gt(len(Book_2), 0))"
+
+-
+  name: "add mutation with upsert gives error when multiple nodes are found for existence queries"
+  explaination: "Two different books exist for title and Sapiens @id fields, We can't do upsert mutation "
+  gqlmutation: |
+    mutation addBook($input: [AddBookInput!]!) {
+      addBook(input: $input, upsert: true) {
+        book {
+          title
+        }
+      }
+    }
+  gqlvariables: |
+    { "input":
+      [
+        {
+          "title": "Sapiens",
+          "ISBN": "B01",
+          "publisher": "penguin"
+        }
+      ]
+    }
+  dgquery: |-
+    query {
+      Book_1(func: eq(Book.ISBN, "B01")) {
+        uid
+        dgraph.type
+      }
+      Book_2(func: eq(Book.title, "Sapiens")) {
+        uid
+        dgraph.type
+      }
+    }
+  qnametouid: |
+    {
+       "Book_1":"0x11",
+       "Book_2": "0x12"
+    }
+  error2:
+    {
+      "message": "failed to rewrite mutation payload because multiple nodes found
+       for given xid values, updation not possible"
+    }
+
+-
+  name: "add mutation with upsert at nested level gives error when multiple nodes are found
+   for existence queries"
+  explaination: "Two different author exist for penName and authorId @id fields inside author,
+   We can't link author to both books "
+  gqlmutation: |
+    mutation addBook($input: [AddBookInput!]!) {
+      addBook(input: $input, upsert: true) {
+        book {
+          title
+        }
+      }
+    }
+  gqlvariables: |
+    { "input":
+      [
+        {
+          "title": "Sapiens",
+          "ISBN": "B01",
+          "publisher": "penguin",
+          "author": {
+             "penName": "Alice",
+             "authorId": "A01"
+          }
+        }
+      ]
+    }
+  dgquery: |-
+    query {
+      Book_1(func: eq(Book.ISBN, "B01")) {
+        uid
+        dgraph.type
+      }
+      Book_2(func: eq(Book.title, "Sapiens")) {
+        uid
+        dgraph.type
+      }
+      author_3(func: eq(author.authorId, "A01")) {
+        uid
+        dgraph.type
+      }
+      author_4(func: eq(author.penName, "Alice")) {
+        uid
+        dgraph.type
+      }
+    }
+  qnametouid: |
+    {
+       "author_3":"0x11",
+       "author_4": "0x12"
+    }
+  error2:
+    {
+      "message": "failed to rewrite mutation payload because multiple nodes
+       found for given xid values, updation not possible"
+    }
+
+-
+  name: "No xid present for add mutation with upsert"
+  explaination: "If none of the xid field is given in upsert mutation then there will be no existence queries,
+   and it will behave as simple add mutation,i.e. create new node with all the given fields"
+  gqlmutation: |
+    mutation addBook($input: [AddBookInput!]!) {
+      addBook(input: $input, upsert: true) {
+        book {
+          title
+        }
+      }
+    }
+  gqlvariables: |
+    { "input":
+      [
+        {
+          "publisher": "penguin"
+        }
+      ]
+    }
+  dgmutations:
+    - setjson: |
+        {
+            "Book.publisher": "penguin",
+            "dgraph.type": [
+                    "Book"
+                ],
+             "uid":"_:Book_1"
+        }
+
+-
+  name: "Non-nullable xid should be present in add Mutation for nested field"
+  explaination: "non-nullable @id field id in comment1 type not provided. As no reference is
+   provided for comment, we treat it as new node, and return error for missing xid."
+  gqlmutation: |
+    mutation addPost1($input: [AddPost1Input!]!) {
+      addPost1(input: $input, upsert: false) {
+        post1 {
+          content
+        }
+      }
+    }
+  gqlvariables: |
+    { "input":
+      [
+        {
+          "id": "P01",
+          "content":"Intro to GraphQL",
+          "comments":[{
+             "message":"Nice Intro! Love GraphQl"
+          }]
+        }
+      ]
+    }
+  dgquery: |-
+    query {
+      Post1_1(func: eq(Post1.id, "P01")) {
+        uid
+        dgraph.type
+      }
+    }
+  error2:
+    {
+      "message": "failed to rewrite mutation payload because field id cannot be empty"
+    }
+
+-
+  name: "Add Mutation referencing same XID in different types"
+  gqlmutation: |
+    mutation($input: [AddT1Input!]!) {
+      addT1(input: $input) {
+        t1 {
+          name
+          name1
+          name2
+          link {
+            name
+            name1
+            name3
+          }
+        }
+      }
+    }
+  gqlvariables: |
+    {
+      "input": [
+        {
+          "name": "Bob",
+          "name1": "Bob11",
+          "name2": "Bob2",
+          "link": {
+            "name": "Bob"
+          }
+        }
+      ]
+    }
+  explanation: "As the link and top level object contain the same XID, Bob, this should throw an error"
+  error:
+    {
+      "message":
+        "failed to rewrite mutation payload because using duplicate XID value: Bob for XID: name for two different
+         implementing types of same interfaces: T1 and T2"
+    }
+
+-
+  name: "Add mutation with @default directive"
+  gqlmutation: |
+    mutation($input: [AddBookingInput!]!) {
+      addBooking(input: $input) {
+        booking {
+          name
+          created
+          updated
+        }
+      }
+    }
+  gqlvariables: |
+    {
+      "input": [
+        {
+          "name": "Holiday to Bermuda"
+        }
+      ]
+    }
+  explanation: "As booking has @default fields and is being added, these should be set to the default add value"
+  dgmutations:
+    - setjson: |
+        {
+            "Booking.created": "2000-01-01T00:00:00.00Z",
+            "Booking.active": "false",
+            "Booking.count": "1",
+            "Booking.hotel": "add",
+            "Booking.length": "1.1",
+            "Booking.status": "ACTIVE",
+            "Booking.name": "Holiday to Bermuda",
+            "Booking.updated": "2000-01-01T00:00:00.00Z",
+            "dgraph.type": [
+                    "Booking"
+                ],
+            "uid":"_:Booking_1"
+        }
+
+-
+  name: "Add mutation with @default directive uses provided values"
+  gqlmutation: |
+    mutation($input: [AddBookingInput!]!) {
+      addBooking(input: $input) {
+        booking {
+          name
+          created
+          updated
+        }
+      }
+    }
+  gqlvariables: |
+    {
+      "input": [
+        {
+          "name": "Holiday to Bermuda",
+          "created": "2022-10-12T07:20:50.52Z",
+          "updated": "2023-10-12T07:20:50.52Z",
+          "active": false,
+          "length": 12.3,
+          "status": "INACTIVE",
+          "hotel": "provided"
+        }
+      ]
+    }
+  explanation: "Fields with @default(add) should use input values if provided (note that count is still using default)"
+  dgmutations:
+    - setjson: |
+        {
+            "Booking.name": "Holiday to Bermuda",
+            "Booking.created": "2022-10-12T07:20:50.52Z",
+            "Booking.updated": "2023-10-12T07:20:50.52Z",
+            "Booking.active": false,
+            "Booking.count": "1",
+            "Booking.hotel": "provided",
+            "Booking.length": 12.3,
+            "Booking.status": "INACTIVE",
+            "dgraph.type": [
+                    "Booking"
+                ],
+            "uid":"_:Booking_1"
+        }
+
+-
+  name: "Upsert mutation with @default directives where only one of the nodes exists"
+  explanation: "Booking1 should only have updated timestamp as it exists, Booking2 should have created and updated timestamps"
+  gqlmutation: |
+    mutation addBookingXID($input: [AddBookingXIDInput!]!) {
+      addBookingXID(input: $input, upsert: true) {
+        bookingXID {
+          name
+        }
+      }
+    }
+  gqlvariables: |
+    { "input":
+      [
+        {
+          "id": "Booking1",
+          "name": "Trip to Bermuda"
+        },
+        {
+          "id": "Booking2",
+          "name": "Trip to Antigua"
+        }
+      ]
+    }
+  dgquery: |-
+    query {
+      BookingXID_1(func: eq(BookingXID.id, "Booking1")) {
+        uid
+        dgraph.type
+      }
+      BookingXID_2(func: eq(BookingXID.id, "Booking2")) {
+        uid
+        dgraph.type
+      }
+    }
+  qnametouid: |-
+    {
+      "BookingXID_1": "0x11"
+    }
+  dgquerysec: |-
+    query {
+      BookingXID_1 as BookingXID_1(func: uid(0x11)) @filter(type(BookingXID)) {
+        uid
+      }
+    }
+  dgmutations:
+    - setjson: |
+        {
+          "uid" : "uid(BookingXID_1)",
+          "BookingXID.id": "Booking1",
+          "BookingXID.name": "Trip to Bermuda",
+          "BookingXID.updated": "2000-01-01T00:00:00.00Z",
+          "BookingXID.active": "true",
+          "BookingXID.count": "2",
+          "BookingXID.length": "1.2",
+          "BookingXID.status": "INACTIVE",
+          "BookingXID.hotel": "update"
+        }
+      cond: "@if(gt(len(BookingXID_1), 0))"
+    - setjson: |
+        {
+          "uid": "_:BookingXID_2",
+          "BookingXID.id": "Booking2",
+          "BookingXID.name": "Trip to Antigua",
+          "BookingXID.created": "2000-01-01T00:00:00.00Z",
+          "BookingXID.updated": "2000-01-01T00:00:00.00Z",
+          "BookingXID.active": "false",
+          "BookingXID.count": "1",
+          "BookingXID.length": "1.1",
+          "BookingXID.status": "ACTIVE",
+          "BookingXID.hotel": "add",
+          "dgraph.type": [
+            "BookingXID"
+          ]
+        }

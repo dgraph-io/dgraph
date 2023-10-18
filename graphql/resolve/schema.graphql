@@ -175,6 +175,32 @@ type Student implements People {
     taughtBy: [Teacher] @hasInverse(field: "teaches")
 }
 
+# For testing default values
+type Booking {
+    id: ID!
+    name: String!
+    created: DateTime! @default(add: {value: "$now"})
+    updated: DateTime! @default(add: {value: "$now"}, update: {value: "$now"})
+    count: Int! @default(add: {value: "1"}, update: {value: "2"})
+    length: Float! @default(add: {value: "1.1"}, update: {value: "1.2"})
+    hotel: String! @default(add: {value: "add"}, update: {value: "update"})
+    active: Boolean! @default(add: {value: "false"}, update: {value: "true"})
+    status: Status! @default(add: {value: "ACTIVE"}, update: {value: "INACTIVE"})
+}
+
+# For testing default values with upserts
+type BookingXID {
+    id: String! @id
+    name: String!
+    created: DateTime! @default(add: {value: "$now"})
+    updated: DateTime! @default(add: {value: "$now"}, update: {value: "$now"})
+    count: Int! @default(add: {value: "1"}, update: {value: "2"})
+    length: Float! @default(add: {value: "1.1"}, update: {value: "1.2"})
+    hotel: String! @default(add: {value: "add"}, update: {value: "update"})
+    active: Boolean! @default(add: {value: "false"}, update: {value: "true"})
+    status: Status! @default(add: {value: "ACTIVE"}, update: {value: "INACTIVE"})
+}
+
 type Comment {
     id: ID!
     author: String!

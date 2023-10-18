@@ -2,24 +2,18 @@
 # Input Schema
 #######################
 
-interface Character @secret(field: "password") {
-	id: ID!
-	name: String! @search(by: [exact])
-	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
-	friendsAggregate(filter: CharacterFilter): CharacterAggregateResult
-}
-
-type Human @secret(field: "password") {
-	id: ID!
-	name: String! @search(by: [exact])
-	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
-	totalCredits: Int
-	friendsAggregate(filter: CharacterFilter): CharacterAggregateResult
-}
-
-type Person @withSubscription {
+type Booking {
 	id: ID!
 	name: String!
+	created: DateTime! @default(add: {value:"$now"})
+	updated: DateTime! @default(add: {value:"$now"}, update: {value:"$now"})
+}
+
+type BookingXID {
+	id: String! @id
+	name: String!
+	created: DateTime! @default(add: {value:"$now"})
+	updated: DateTime! @default(add: {value:"$now"}, update: {value:"$now"})
 }
 
 #######################
@@ -34,7 +28,7 @@ scalar Int64
 
 """
 The DateTime scalar type represents date and time as a string in RFC3339 format.
-For example: "1985-04-12T23:20:50.52Z" represents 20 mins 50.52 secs after the 23rd hour of Apr 12th 1985 in UTC.
+For example: "1985-04-12T23:20:50.52Z" represents 20 minutes and 50.52 seconds after the 23rd hour of April 12th, 1985 in UTC.
 """
 scalar DateTime
 
@@ -198,14 +192,27 @@ input GenerateMutationParams {
 directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
-directive @id(interface: Boolean) on FIELD_DEFINITION
+directive @id on FIELD_DEFINITION
 directive @default(add: DgraphDefault, update: DgraphDefault) on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
+directive @auth(
+	password: AuthRule
+	query: AuthRule,
+	add: AuthRule,
+	update: AuthRule,
+	delete: AuthRule) on OBJECT | INTERFACE
+directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
 directive @remoteResponse(name: String) on FIELD_DEFINITION
+directive @cascade(fields: [String]) on FIELD
 directive @lambda on FIELD_DEFINITION
 directive @lambdaOnMutate(add: Boolean, update: Boolean, delete: Boolean) on OBJECT | INTERFACE
+directive @cacheControl(maxAge: Int!) on QUERY
+directive @generate(
+	query: GenerateQueryParams,
+	mutation: GenerateMutationParams,
+	subscription: Boolean) on OBJECT | INTERFACE
 
 input IntFilter {
 	eq: Int
@@ -280,57 +287,57 @@ input StringHashFilter {
 # Generated Types
 #######################
 
-type AddHumanPayload {
-	human(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
+type AddBookingPayload {
+	booking(filter: BookingFilter, order: BookingOrder, first: Int, offset: Int): [Booking]
 	numUids: Int
 }
 
-type CharacterAggregateResult {
+type AddBookingXIDPayload {
+	bookingXID(filter: BookingXIDFilter, order: BookingXIDOrder, first: Int, offset: Int): [BookingXID]
+	numUids: Int
+}
+
+type BookingAggregateResult {
 	count: Int
 	nameMin: String
 	nameMax: String
+	createdMin: DateTime
+	createdMax: DateTime
+	updatedMin: DateTime
+	updatedMax: DateTime
 }
 
-type DeleteCharacterPayload {
-	character(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
+type BookingXIDAggregateResult {
+	count: Int
+	idMin: String
+	idMax: String
+	nameMin: String
+	nameMax: String
+	createdMin: DateTime
+	createdMax: DateTime
+	updatedMin: DateTime
+	updatedMax: DateTime
+}
+
+type DeleteBookingPayload {
+	booking(filter: BookingFilter, order: BookingOrder, first: Int, offset: Int): [Booking]
 	msg: String
 	numUids: Int
 }
 
-type DeleteHumanPayload {
-	human(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
+type DeleteBookingXIDPayload {
+	bookingXID(filter: BookingXIDFilter, order: BookingXIDOrder, first: Int, offset: Int): [BookingXID]
 	msg: String
 	numUids: Int
 }
 
-type HumanAggregateResult {
-	count: Int
-	nameMin: String
-	nameMax: String
-	totalCreditsMin: Int
-	totalCreditsMax: Int
-	totalCreditsSum: Int
-	totalCreditsAvg: Float
-}
-
-type PersonAggregateResult {
-	count: Int
-	nameMin: String
-	nameMax: String
-}
-
-type UpdateCharacterPayload {
-	character(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
+type UpdateBookingPayload {
+	booking(filter: BookingFilter, order: BookingOrder, first: Int, offset: Int): [Booking]
 	numUids: Int
 }
 
-type UpdateHumanPayload {
-	human(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
-	numUids: Int
-}
-
-type UpdatePersonPayload {
-	person(filter: PersonFilter, order: PersonOrder, first: Int, offset: Int): [Person]
+type UpdateBookingXIDPayload {
+	bookingXID(filter: BookingXIDFilter, order: BookingXIDOrder, first: Int, offset: Int): [BookingXID]
 	numUids: Int
 }
 
@@ -338,139 +345,114 @@ type UpdatePersonPayload {
 # Generated Enums
 #######################
 
-enum CharacterHasFilter {
+enum BookingHasFilter {
 	name
-	friends
+	created
+	updated
 }
 
-enum CharacterOrderable {
+enum BookingOrderable {
 	name
+	created
+	updated
 }
 
-enum HumanHasFilter {
+enum BookingXIDHasFilter {
+	id
 	name
-	friends
-	totalCredits
+	created
+	updated
 }
 
-enum HumanOrderable {
+enum BookingXIDOrderable {
+	id
 	name
-	totalCredits
-}
-
-enum PersonHasFilter {
-	name
-}
-
-enum PersonOrderable {
-	name
+	created
+	updated
 }
 
 #######################
 # Generated Inputs
 #######################
 
-input AddHumanInput {
+input AddBookingInput {
 	name: String!
-	friends: [CharacterRef]
-	totalCredits: Int
-	password: String!
+	created: DateTime
+	updated: DateTime
 }
 
-input CharacterFilter {
+input AddBookingXIDInput {
+	id: String!
+	name: String!
+	created: DateTime
+	updated: DateTime
+}
+
+input BookingFilter {
 	id: [ID!]
-	name: StringExactFilter
-	has: [CharacterHasFilter]
-	and: [CharacterFilter]
-	or: [CharacterFilter]
-	not: CharacterFilter
+	has: [BookingHasFilter]
+	and: [BookingFilter]
+	or: [BookingFilter]
+	not: BookingFilter
 }
 
-input CharacterOrder {
-	asc: CharacterOrderable
-	desc: CharacterOrderable
-	then: CharacterOrder
+input BookingOrder {
+	asc: BookingOrderable
+	desc: BookingOrderable
+	then: BookingOrder
 }
 
-input CharacterPatch {
+input BookingPatch {
 	name: String
-	friends: [CharacterRef]
-	password: String
+	created: DateTime
+	updated: DateTime
 }
 
-input CharacterRef {
-	id: ID!
-}
-
-input HumanFilter {
-	id: [ID!]
-	name: StringExactFilter
-	has: [HumanHasFilter]
-	and: [HumanFilter]
-	or: [HumanFilter]
-	not: HumanFilter
-}
-
-input HumanOrder {
-	asc: HumanOrderable
-	desc: HumanOrderable
-	then: HumanOrder
-}
-
-input HumanPatch {
-	name: String
-	friends: [CharacterRef]
-	totalCredits: Int
-	password: String
-}
-
-input HumanRef {
+input BookingRef {
 	id: ID
 	name: String
-	friends: [CharacterRef]
-	totalCredits: Int
-	password: String
+	created: DateTime
+	updated: DateTime
 }
 
-input PersonFilter {
-	id: [ID!]
-	has: [PersonHasFilter]
-	and: [PersonFilter]
-	or: [PersonFilter]
-	not: PersonFilter
+input BookingXIDFilter {
+	id: StringHashFilter
+	has: [BookingXIDHasFilter]
+	and: [BookingXIDFilter]
+	or: [BookingXIDFilter]
+	not: BookingXIDFilter
 }
 
-input PersonOrder {
-	asc: PersonOrderable
-	desc: PersonOrderable
-	then: PersonOrder
+input BookingXIDOrder {
+	asc: BookingXIDOrderable
+	desc: BookingXIDOrderable
+	then: BookingXIDOrder
 }
 
-input PersonPatch {
+input BookingXIDPatch {
+	id: String
 	name: String
+	created: DateTime
+	updated: DateTime
 }
 
-input PersonRef {
-	id: ID
+input BookingXIDRef {
+	id: String
 	name: String
+	created: DateTime
+	updated: DateTime
 }
 
-input UpdateCharacterInput {
-	filter: CharacterFilter!
-	set: CharacterPatch
-	remove: CharacterPatch
+input UpdateBookingInput {
+	filter: BookingFilter!
+	set: BookingPatch
+	remove: BookingPatch
 }
 
-input UpdateHumanInput {
-	filter: HumanFilter!
-	set: HumanPatch
-	remove: HumanPatch
-}
-
-input UpdatePersonInput {
-	filter: PersonFilter!
-	set: PersonPatch
-	remove: PersonPatch
+input UpdateBookingXIDInput {
+	filter: BookingXIDFilter!
+	set: BookingXIDPatch
+	remove: BookingXIDPatch
 }
 
 #######################
@@ -478,13 +460,12 @@ input UpdatePersonInput {
 #######################
 
 type Query {
-	queryCharacter(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
-	aggregateCharacter(filter: CharacterFilter): CharacterAggregateResult
-	getHuman(id: ID!): Human
-	checkHumanPassword(id: ID!, password: String!): Human
-	queryHuman(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
-	aggregateHuman(filter: HumanFilter): HumanAggregateResult
-	queryPerson(filter: PersonFilter, order: PersonOrder, first: Int, offset: Int): [Person]
+	getBooking(id: ID!): Booking
+	queryBooking(filter: BookingFilter, order: BookingOrder, first: Int, offset: Int): [Booking]
+	aggregateBooking(filter: BookingFilter): BookingAggregateResult
+	getBookingXID(id: String!): BookingXID
+	queryBookingXID(filter: BookingXIDFilter, order: BookingXIDOrder, first: Int, offset: Int): [BookingXID]
+	aggregateBookingXID(filter: BookingXIDFilter): BookingXIDAggregateResult
 }
 
 #######################
@@ -492,21 +473,11 @@ type Query {
 #######################
 
 type Mutation {
-	updateCharacter(input: UpdateCharacterInput!): UpdateCharacterPayload
-	deleteCharacter(filter: CharacterFilter!): DeleteCharacterPayload
-	addHuman(input: [AddHumanInput!]!): AddHumanPayload
-	updateHuman(input: UpdateHumanInput!): UpdateHumanPayload
-	deleteHuman(filter: HumanFilter!): DeleteHumanPayload
-	updatePerson(input: UpdatePersonInput!): UpdatePersonPayload
+	addBooking(input: [AddBookingInput!]!): AddBookingPayload
+	updateBooking(input: UpdateBookingInput!): UpdateBookingPayload
+	deleteBooking(filter: BookingFilter!): DeleteBookingPayload
+	addBookingXID(input: [AddBookingXIDInput!]!, upsert: Boolean): AddBookingXIDPayload
+	updateBookingXID(input: UpdateBookingXIDInput!): UpdateBookingXIDPayload
+	deleteBookingXID(filter: BookingXIDFilter!): DeleteBookingXIDPayload
 }
 
-#######################
-# Generated Subscriptions
-#######################
-
-type Subscription {
-	getHuman(id: ID!): Human
-	queryHuman(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
-	aggregateHuman(filter: HumanFilter): HumanAggregateResult
-	queryPerson(filter: PersonFilter, order: PersonOrder, first: Int, offset: Int): [Person]
-}

@@ -1,0 +1,13 @@
+type Booking {
+    id: ID!
+    name: String!
+    created: DateTime! @default(add: {value:"$now"})
+    updated: DateTime! @default(add: {value:"$now"}, update: {value:"$now"})
+}
+
+type BookingXID {
+    id: String! @id
+    name: String!
+    created: DateTime! @default(add: {value:"$now"})
+    updated: DateTime! @default(add: {value:"$now"}, update: {value:"$now"})
+}
