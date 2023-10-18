@@ -352,6 +352,7 @@ func (c *LocalCluster) startContainer(dc dnode) error {
 	if err := c.dcli.ContainerStart(ctx, dc.cid(), types.ContainerStartOptions{}); err != nil {
 		return errors.Wrapf(err, "error starting container [%v]", dc.cname())
 	}
+	dc.changeStatus(true)
 	return nil
 }
 
@@ -398,6 +399,7 @@ func (c *LocalCluster) stopContainer(dc dnode) error {
 		}
 		return errors.Wrapf(err, "error stopping container [%v]", dc.cname())
 	}
+	dc.changeStatus(false)
 	return nil
 }
 
@@ -420,6 +422,9 @@ func (c *LocalCluster) killContainer(dc dnode) error {
 func (c *LocalCluster) HealthCheck(zeroOnly bool) error {
 	log.Printf("[INFO] checking health of containers")
 	for _, zo := range c.zeros {
+		if !zo.isRunning {
+			break
+		}
 		url, err := zo.healthURL(c)
 		if err != nil {
 			return errors.Wrap(err, "error getting health URL")
@@ -438,6 +443,9 @@ func (c *LocalCluster) HealthCheck(zeroOnly bool) error {
 	}
 
 	for _, aa := range c.alphas {
+		if !aa.isRunning {
+			break
+		}
 		url, err := aa.healthURL(c)
 		if err != nil {
 			return errors.Wrap(err, "error getting health URL")
@@ -688,8 +696,11 @@ func (c *LocalCluster) Client() (*GrpcClient, func(), error) {
 	// TODO(aman): can we cache the connections?
 	var apiClients []api.DgraphClient
 	var conns []*grpc.ClientConn
-	for i := 0; i < c.conf.numAlphas; i++ {
-		url, err := c.alphas[i].alphaURL(c)
+	for _, aa := range c.alphas {
+		if !aa.isRunning {
+			break
+		}
+		url, err := aa.alphaURL(c)
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "error getting health URL")
 		}

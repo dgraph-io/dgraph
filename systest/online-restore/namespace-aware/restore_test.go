@@ -25,23 +25,22 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/dgraphtest"
 	"github.com/dgraph-io/dgraph/x"
 )
 
-func addData(gc *dgraphtest.GrpcClient, pred string, start, end int) error {
-	if err := gc.SetupSchema(fmt.Sprintf(`%v: string @index(exact) .`, pred)); err != nil {
-		return err
-	}
+// func addData(gc *dgraphtest.GrpcClient, pred string, start, end int) error {
+// 	if err := gc.SetupSchema(fmt.Sprintf(`%v: string @index(exact) .`, pred)); err != nil {
+// 		return err
+// 	}
 
-	rdf := ""
-	for i := start; i <= end; i++ {
-		rdf = rdf + fmt.Sprintf("_:a%v <%v> \"%v%v\" .	\n", i, pred, pred, i)
-	}
-	_, err := gc.Mutate(&api.Mutation{SetNquads: []byte(rdf), CommitNow: true})
-	return err
-}
+// 	rdf := ""
+// 	for i := start; i <= end; i++ {
+// 		rdf = rdf + fmt.Sprintf("_:a%v <%v> \"%v%v\" .	\n", i, pred, pred, i)
+// 	}
+// 	_, err := gc.Mutate(&api.Mutation{SetNquads: []byte(rdf), CommitNow: true})
+// 	return err
+// }
 
 func commonTest(t *testing.T, existingCluster, freshCluster *dgraphtest.LocalCluster) {
 	hc, err := existingCluster.HTTPClient()
@@ -54,14 +53,14 @@ func commonTest(t *testing.T, existingCluster, freshCluster *dgraphtest.LocalClu
 	require.NoError(t, gc.Login(context.Background(), dgraphtest.DefaultUser, dgraphtest.DefaultPassword))
 
 	namespaces := []uint64{0}
-	require.NoError(t, addData(gc, "pred", 1, 100))
+	require.NoError(t, dgraphtest.AddData(gc, "pred", 1, 100))
 	for i := 1; i <= 5; i++ {
 		ns, err := hc.AddNamespace()
 		require.NoError(t, err)
 		namespaces = append(namespaces, ns)
 		require.NoError(t, gc.LoginIntoNamespace(context.Background(),
 			dgraphtest.DefaultUser, dgraphtest.DefaultPassword, ns))
-		require.NoError(t, addData(gc, "pred", 1, 100+int(ns)))
+		require.NoError(t, dgraphtest.AddData(gc, "pred", 1, 100+int(ns)))
 	}
 
 	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
@@ -118,7 +117,7 @@ func commonIncRestoreTest(t *testing.T, existingCluster, freshCluster *dgraphtes
 	require.NoError(t, gc.Login(context.Background(), dgraphtest.DefaultUser, dgraphtest.DefaultPassword))
 
 	require.NoError(t, gc.DropAll())
-	require.NoError(t, addData(gc, "pred", 1, 100))
+	require.NoError(t, dgraphtest.AddData(gc, "pred", 1, 100))
 
 	namespaces := []uint64{}
 	for i := 1; i <= 5; i++ {
@@ -133,7 +132,7 @@ func commonIncRestoreTest(t *testing.T, existingCluster, freshCluster *dgraphtes
 				dgraphtest.DefaultUser, dgraphtest.DefaultPassword, ns))
 			start := i*20 + 1
 			end := (i + 1) * 20
-			require.NoError(t, addData(gc, "pred", start, end))
+			require.NoError(t, dgraphtest.AddData(gc, "pred", start, end))
 		}
 
 		require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
