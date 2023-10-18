@@ -70,7 +70,10 @@ Deploy to AWS
 $ serverless deploy --aws-profile dgraph
 ```
 
-
+If we build an arm64 docker image (on Mac without forcing the platform), then the lambda must be configured with
+- architecture: arm64
+else, if we build the docker image for platform linux/amd64, then set
+- architecture: x86_64
 
 _Note_: In current form, after deployment, your API is protected by an API key. 
 
@@ -82,20 +85,29 @@ curl --request POST \
 
 --url https://<>.execute-api.us-east-1.amazonaws.com/dev/embedding \
 --header 'Content-Type: application/json' --header 'x-api-key: <apikey>' \
---data '{"text":["some sample text","some other text and more info"]}'
+--data '{"id":"some sample text"}'
 ```
 
 
 ### Local development
 
-docker build -t python-lambda .
-docker run --name embedding -p 8180:8080  -v ./handler.py:/var/task/handler.py   python-lambda
+> docker build -t embedding-lambda .
+
+Build for a specific platform
+
+> docker build -t embedding-lambda .
+
+docker run -d --name embedding -p 8180:8080  -v ./:/var/task/   python-lambda
+
+Runing locally a specific handler:
+
+> docker run -d --name embedding -p 8180:8080  -v ./handler.py:/var/task/handler.py   python-lambda "handler.embedding"
 
 ```
 curl --request POST \
 --url http://localhost:8180/2015-03-31/functions/function/invocations \
 --header 'Content-Type: application/json' \
---data '{"body":"{\"id1\":\"some sample text\",\"id2\",\"some other text\"\n}"}'
+--data '{"body":"{\"id1\":\"some sample text\",\"id2\":\"some other text\"\n}"}'
 ```
 
 Note that the payload has a “body” element as a string.
