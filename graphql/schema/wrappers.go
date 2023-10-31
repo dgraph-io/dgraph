@@ -85,24 +85,35 @@ type EntityRepresentations struct {
 
 // Query/Mutation types and arg names
 const (
-	GetQuery             QueryType    = "get"
-	FilterQuery          QueryType    = "query"
-	AggregateQuery       QueryType    = "aggregate"
-	SchemaQuery          QueryType    = "schema"
-	EntitiesQuery        QueryType    = "entities"
-	PasswordQuery        QueryType    = "checkPassword"
-	HTTPQuery            QueryType    = "http"
-	DQLQuery             QueryType    = "dql"
-	NotSupportedQuery    QueryType    = "notsupported"
-	AddMutation          MutationType = "add"
-	UpdateMutation       MutationType = "update"
-	DeleteMutation       MutationType = "delete"
-	HTTPMutation         MutationType = "http"
-	NotSupportedMutation MutationType = "notsupported"
-	IDType                            = "ID"
-	InputArgName                      = "input"
-	UpsertArgName                     = "upsert"
-	FilterArgName                     = "filter"
+	GetQuery                      QueryType    = "get"
+	SimilarByIdQuery              QueryType    = "querySimilarById"
+	SimilarByEmbeddingQuery       QueryType    = "querySimilarByEmbedding"
+	FilterQuery                   QueryType    = "query"
+	AggregateQuery                QueryType    = "aggregate"
+	SchemaQuery                   QueryType    = "schema"
+	EntitiesQuery                 QueryType    = "entities"
+	PasswordQuery                 QueryType    = "checkPassword"
+	HTTPQuery                     QueryType    = "http"
+	DQLQuery                      QueryType    = "dql"
+	NotSupportedQuery             QueryType    = "notsupported"
+	AddMutation                   MutationType = "add"
+	UpdateMutation                MutationType = "update"
+	DeleteMutation                MutationType = "delete"
+	HTTPMutation                  MutationType = "http"
+	NotSupportedMutation          MutationType = "notsupported"
+	IDType                                     = "ID"
+	InputArgName                               = "input"
+	UpsertArgName                              = "upsert"
+	FilterArgName                              = "filter"
+	SimilarByArgName                           = "by"
+	SimilarTopKArgName                         = "topK"
+	SimilarVectorArgName                       = "vector"
+	EmbeddingEnumSuffix                        = "Embedding"
+	SimilarQueryPrefix                         = "querySimilar"
+	SimilarByIdQuerySuffix                     = "ById"
+	SimilarByEmbeddingQuerySuffix              = "ByEmbedding"
+	SimilarQueryResultTypeSuffix               = "WithDistance"
+	SimilarQueryDistanceFieldName              = "hm_distance"
 )
 
 // Schema represents a valid GraphQL schema
@@ -269,6 +280,7 @@ type FieldDefinition interface {
 	IsID() bool
 	IsExternal() bool
 	HasIDDirective() bool
+	HasEmbeddingDirective() bool
 	HasInterfaceArg() bool
 	Inverse() FieldDefinition
 	WithMemberType(string) FieldDefinition
@@ -1376,8 +1388,11 @@ func (f *field) IDArgValue() (xids map[string]string, uid uint64, err error) {
 	// or Password. Therefore the non ID and Password field is an XID.
 	// TODO maybe there is a better way to do this.
 	for _, arg := range f.field.Arguments {
+		xidArgName = ""
 		if (idField == nil || arg.Name != idField.Name()) &&
-			(passwordField == nil || arg.Name != passwordField.Name()) {
+			(passwordField == nil || arg.Name != passwordField.Name()) &&
+			(queryType(f.field.Name, nil) != SimilarByIdQuery ||
+				(arg.Name != SimilarTopKArgName && arg.Name != SimilarByArgName)) {
 			xidArgName = arg.Name
 		}
 
@@ -2007,6 +2022,10 @@ func queryType(name string, custom *ast.Directive) QueryType {
 		return GetQuery
 	case name == "__schema" || name == "__type" || name == "__typename":
 		return SchemaQuery
+	case strings.HasPrefix(name, SimilarQueryPrefix) && strings.HasSuffix(name, SimilarByIdQuerySuffix):
+		return SimilarByIdQuery
+	case strings.HasPrefix(name, SimilarQueryPrefix) && strings.HasSuffix(name, SimilarByEmbeddingQuerySuffix):
+		return SimilarByEmbeddingQuery
 	case strings.HasPrefix(name, "query"):
 		return FilterQuery
 	case strings.HasPrefix(name, "check"):
@@ -2322,6 +2341,18 @@ func (fd *fieldDefinition) HasIDDirective() bool {
 
 func hasIDDirective(fd *ast.FieldDefinition) bool {
 	id := fd.Directives.ForName(idDirective)
+	return id != nil
+}
+
+func (fd *fieldDefinition) HasEmbeddingDirective() bool {
+	if fd.fieldDef == nil {
+		return false
+	}
+	return hasEmbeddingDirective(fd.fieldDef)
+}
+
+func hasEmbeddingDirective(fd *ast.FieldDefinition) bool {
+	id := fd.Directives.ForName(embeddingDirective)
 	return id != nil
 }
 

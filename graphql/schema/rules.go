@@ -829,6 +829,32 @@ func listValidityCheck(typ *ast.Definition, field *ast.FieldDefinition) gqlerror
 	return nil
 }
 
+func embeddingValidation(sch *ast.Schema, typ *ast.Definition,
+	field *ast.FieldDefinition, dir *ast.Directive,
+	secrets map[string]x.Sensitive) gqlerror.List {
+	var errs []*gqlerror.Error
+	if field.Type.Elem == nil {
+		errs = append(errs,
+			gqlerror.ErrorPosf(
+				field.Position,
+				"Type %s; Field %s: The field with @hm_embedding directive is of type %s,"+
+					" but @hm_embedding directive only applies"+
+					" to fields of type [Float].", typ.Name, field.Name, field.Type.Name()))
+		return errs
+	}
+
+	if !strings.EqualFold(field.Type.Elem.NamedType, "Float") {
+		errs = append(errs,
+			gqlerror.ErrorPosf(
+				field.Position,
+				"Type %s; Field %s: The field with @hm_embedding directive is of type [%s], "+
+					"but @hm_embedding directive only applies"+
+					" to fields of type [Float].", typ.Name, field.Name, field.Type.Name()))
+	}
+
+	return errs
+}
+
 func hasInverseValidation(sch *ast.Schema, typ *ast.Definition,
 	field *ast.FieldDefinition, dir *ast.Directive,
 	secrets map[string]x.Sensitive) gqlerror.List {
