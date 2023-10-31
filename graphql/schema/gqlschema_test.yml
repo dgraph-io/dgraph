@@ -2732,7 +2732,7 @@ invalid_schemas:
           review: String!
       }
     errlist: [
-      {"message": "Type Product; @remote directive cannot be defined with @key directive", "locations": [ { "line": 174, "column": 12} ] },
+      {"message": "Type Product; @remote directive cannot be defined with @key directive", "locations": [ { "line": 175, "column": 12} ] },
     ]
 
   - name: "directives defined on @external fields that are not @key."
@@ -2749,6 +2749,29 @@ invalid_schemas:
       }
     errlist: [
       {"message": "Type Product: Field name: @search directive can not be defined on @external fields that are not @key.", "locations": [ { "line": 3, "column": 18} ] },
+    ]
+
+  - name: "@hm_embedding directive on a field with String type"
+    input: |
+      type Product {
+        id: String! @id
+        description: String
+        title: String
+        productVector: String @hm_embedding
+      }
+    errlist: [
+      {"message": "Type Product; Field productVector: The field with @hm_embedding directive is of type String, but @hm_embedding directive only applies to fields of type [Float].", "locations": [ { "line": 5, "column": 3} ] },
+    ]
+
+  - name: "@hm_embedding directive on a field with [Int] type"
+    input: |
+      type User  {
+        email: String!  @id
+        name: String
+        userVector: [Int] @hm_embedding
+      }
+    errlist: [
+      {"message": "Type User; Field userVector: The field with @hm_embedding directive is of type [Int], but @hm_embedding directive only applies to fields of type [Float].", "locations": [ { "line": 4, "column": 3} ] },
     ]
 
   - name: "@requires directive defined on type definitions"

@@ -669,6 +669,15 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string,
 						}
 					}
 
+					embedding := f.Directives.ForName(embeddingDirective)
+					if embedding != nil {
+						// embeddingValidation ensured GQL type is [Float]
+						// set typStr to vfloat
+						typStr = "vfloat"
+						// Appropriate index will be created through embedding services
+						// indexes = append(indexes, "hnsw-euclidian")
+					}
+
 					if parentInt == nil {
 						// if field name contains @ then it is a language tagged field.
 						isLang := false

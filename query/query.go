@@ -1176,6 +1176,12 @@ func (sg *SubGraph) transformVars(doneVars map[string]varValue, path []*SubGraph
 			mt.Const = val
 			continue
 		}
+		// TODO: Need to understand why certain aggregations map to uid = 0
+		// while others map to uid = MaxUint64
+		if val, ok := newMap[0]; ok && len(newMap) == 1 {
+			mt.Const = val
+			continue
+		}
 
 		mt.Val = newMap
 	}
@@ -1258,8 +1264,10 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, path []*Su
 			}
 			if rangeOver == nil {
 				it := doneVars[sg.Params.Var]
+				mp[0] = sg.MathExp.Const
 				it.Vals = mp
 				doneVars[sg.Params.Var] = it
+				sg.Params.UidToVal = mp
 				return nil
 			}
 			for _, uid := range rangeOver.Uids {
