@@ -654,7 +654,7 @@ func rewriteAsSimilarByIdQuery(
 	// Get graphQL arguments
 	typ := query.Type()
 	pred := typ.DgraphPredicate(query.ArgValue(schema.SimilarByArgName).(string))
-	topK := query.ArgValue(schema.SimilarTopKArgName).(int64)
+	topK := query.ArgValue(schema.SimilarTopKArgName)
 
 	// First generate the query to fetch the uid
 	// for the given id. For Example,
@@ -717,7 +717,7 @@ func rewriteAsSimilarByIdQuery(
 					Value: pred,
 				},
 				{
-					Value: fmt.Sprintf("%d", topK),
+					Value: fmt.Sprintf("%v", topK),
 				},
 				{
 					Value: "val(v1)",
@@ -799,7 +799,7 @@ func rewriteAsSimilarByEmbeddingQuery(
 
 	// Get all the arguments from graphQL query
 	pred := typ.DgraphPredicate(query.ArgValue(schema.SimilarByArgName).(string))
-	topK := query.ArgValue(schema.SimilarTopKArgName).(int64)
+	topK := query.ArgValue(schema.SimilarTopKArgName)
 	vec := query.ArgValue(schema.SimilarVectorArgName).([]interface{})
 	vecStr, _ := json.Marshal(vec)
 
@@ -827,7 +827,7 @@ func rewriteAsSimilarByEmbeddingQuery(
 				Value: pred,
 			},
 			{
-				Value: fmt.Sprintf("%d", topK),
+				Value: fmt.Sprintf("%v", topK),
 			},
 			{
 				Value: "$search_vector",
