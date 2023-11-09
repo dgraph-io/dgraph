@@ -47,7 +47,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/vector-indexer/hnsw"
 	"github.com/dgraph-io/vector-indexer/index"
-	"github.com/dgraph-io/vector-indexer/manager"
 )
 
 func invokeNetworkRequest(ctx context.Context, addr string,
@@ -363,7 +362,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) (m
 		if err != nil {
 			return nil, fmt.Errorf("invalid value for number of neighbors: %s", q.SrcFunc.Args[0])
 		}
-		tokenizer, err := pickVFloatTokenizer(ctx, args.q.Attr, srcFn.fname)
+		cspec, err := pickFactoryCreateSpec(ctx, args.q.Attr)
 		if err != nil {
 			return nil, err
 		}
@@ -372,17 +371,17 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) (m
 			posting.NewViLocalCache(qs.cache),
 			args.q.ReadTs,
 		)
-		indexer, err := manager.NewIndexManager().Create(args.q.Attr, manager.KnownFlavors[tokenizer.Name()], 3, nil)
+		indexer, err := cspec.CreateIndex(args.q.Attr)
 		if err != nil {
 			return nil, err
 		}
 		var nnUids []uint64
 		if srcFn.vectorInfo != nil {
 			nnUids, err = indexer.Search(ctx, qc, srcFn.vectorInfo,
-				int(numNeighbors), index.AcceptAll)
+				int(numNeighbors), index.AcceptAll[float64])
 		} else {
 			nnUids, err = indexer.SearchWithUid(ctx, qc, srcFn.vectorUid,
-				int(numNeighbors), index.AcceptAll)
+				int(numNeighbors), index.AcceptAll[float64])
 		}
 
 		if err != nil {
@@ -392,40 +391,47 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) (m
 		args.out.UidMatrix = append(args.out.UidMatrix, &pb.List{Uids: nnUids})
 		return nil, nil
 	}
-
-	if srcFn.fnType == indexPathFn {
-		numNeighbors, err := strconv.ParseInt(q.SrcFunc.Args[0], 10, 32)
-		if err != nil {
-			return nil, fmt.Errorf("invalid value for number of neighbors: %s", q.SrcFunc.Args[0])
+	/*
+		if srcFn.fnType == indexPathFn {
+			numNeighbors, err := strconv.ParseInt(q.SrcFunc.Args[0], 10, 32)
+			if err != nil {
+				return nil, fmt.Errorf("invalid value for number of neighbors: %s", q.SrcFunc.Args[0])
+			}
+			cspec, err := pickFactoryCreateSpec(ctx, args.q.Attr)
+			if err != nil {
+				return nil, err
+			}
+			//TODO: generate maxLevels from schema, filter, etc.
+			qc := hnsw.NewQueryCache(
+				posting.NewViLocalCache(qs.cache),
+				args.q.ReadTs,
+			)
+			indexer, err := cspec.CreateIndex(args.q.Attr)
+			if err != nil {
+				return nil, err
+			}
+			// TODO: Kill this mechanism. We either expose SearchWithPath
+			//       as a public function in interface (along with possibly a
+			//       "supports SearchWithPath" capability),
+			//       Or we stop supporting getting traversal path.
+			//       Type inference of this kind is almost always a sign that
+			//       someone did not fully consider the design.
+			hnswIndexer, ok := indexer.(*hnsw.PersistentHNSW)
+			if !ok {
+				return nil, errors.Errorf("indexer is not hnsw")
+			}
+			r, err := hnswIndexer.SearchWithPath(ctx, qc, srcFn.vectorInfo,
+				int(numNeighbors), index.AcceptAll)
+			traversalPath := r.GetTraversalPath()
+			extraMetrics := r.GetExtraMetrics()
+			if err != nil {
+				return nil, err
+			}
+			sort.Slice(traversalPath, func(i, j int) bool { return traversalPath[i] < traversalPath[j] })
+			args.out.UidMatrix = append(args.out.UidMatrix, &pb.List{Uids: traversalPath})
+			return extraMetrics, nil
 		}
-		tokenizer, err := pickVFloatTokenizer(ctx, args.q.Attr, srcFn.fname)
-		if err != nil {
-			return nil, err
-		}
-		//TODO: generate maxLevels from schema, filter, etc.
-		qc := hnsw.NewQueryCache(
-			posting.NewViLocalCache(qs.cache),
-			args.q.ReadTs,
-		)
-		indexer, err := manager.NewIndexManager().Create(args.q.Attr, manager.KnownFlavors[tokenizer.Name()], 3, nil)
-		if err != nil {
-			return nil, err
-		}
-		hnswIndexer, ok := indexer.(*hnsw.PersistentHNSW)
-		if !ok {
-			return nil, errors.Errorf("indexer is not hnsw")
-		}
-		r, err := hnswIndexer.SearchWithPath(ctx, qc, srcFn.vectorInfo,
-			int(numNeighbors), index.AcceptAll)
-		traversalPath := r.GetTraversalPath()
-		extraMetrics := r.GetExtraMetrics()
-		if err != nil {
-			return nil, err
-		}
-		sort.Slice(traversalPath, func(i, j int) bool { return traversalPath[i] < traversalPath[j] })
-		args.out.UidMatrix = append(args.out.UidMatrix, &pb.List{Uids: traversalPath})
-		return extraMetrics, nil
-	}
+	*/
 
 	if srcFn.atype == types.PasswordID && srcFn.fnType != passwordFn {
 		// Silently skip if the user is trying to fetch an attribute of type password.

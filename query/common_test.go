@@ -259,6 +259,7 @@ type User {
 	gender
 	friend
 	alive
+	user_profile
 }
 
 type Node {
@@ -344,6 +345,7 @@ tweet-c                        : string @index(fulltext) .
 tweet-d                        : string @index(trigram) .
 name2                          : string @index(term)  .
 age2                           : int @index(int) .
+user_profile                   : vfloat @index(hnsw(metric:"euclidian")) .
 `
 
 func populateCluster() {

@@ -35,11 +35,15 @@ type nameType struct {
 }
 
 func checkSchema(t *testing.T, h map[string]*pb.SchemaUpdate, expected []nameType) {
+	if len(h) != len(expected) {
+		t.Errorf("In checkSchema, expected len(h) == len(expected)")
+	}
 	require.Len(t, h, len(expected))
 	for _, nt := range expected {
 		typ, found := h[nt.name]
 		require.True(t, found, nt)
-		require.EqualValues(t, *nt.typ, *typ)
+		require.EqualValuesf(t, *nt.typ, *typ, "found in map: %+v\n expected: %+v",
+			*typ, *nt.typ)
 	}
 }
 

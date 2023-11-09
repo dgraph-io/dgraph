@@ -519,6 +519,20 @@ message SchemaUpdate {
   // Deleted field:
   reserved 7;
   reserved "explicit";
+
+  repeated VectorSpec vector_specs = 15;
+}
+
+message VectorSpec {
+  // This names the kind of Vector Index, e.g.,
+  //    hnsw, lsh, hypertree, ...
+  string name = 1;
+  repeated OptionPair options = 2;
+}
+
+message OptionPair {
+  string key = 1;
+  string value = 2;
 }
 
 message TypeUpdate {

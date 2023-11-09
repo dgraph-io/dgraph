@@ -27,7 +27,6 @@ import (
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/vector-indexer/hnsw"
 )
 
 func verifyStringIndex(ctx context.Context, attr string, funcType FuncType) (string, bool) {
@@ -123,23 +122,28 @@ func pickTokenizer(ctx context.Context, attr string, f string) (tok.Tokenizer, e
 	return tokenizers[0], nil
 }
 
-func pickVFloatTokenizer(ctx context.Context, attr string, f string) (tok.Tokenizer, error) {
+// pickFactoryCreateSpec(ctx, attr) will find the FactoryCreateSpec (i.e.,
+// index name + options) for the given attribute "attr".
+// Note that unlike pickTokenizer(ctx, attr, f), we do not include the
+// parameter "f" (for function name), as we do not take action with it.
+// This is otherwise similar to pickTokenizer.
+func pickFactoryCreateSpec(ctx context.Context, attr string) (*tok.FactoryCreateSpec, error) {
 	// Get the tokenizers and choose the corresponding one.
 	if !schema.State().IsIndexed(ctx, attr) {
 		return nil, errors.Errorf("Attribute %s is not indexed.", attr)
 	}
 
-	tokenizers := schema.State().Tokenizer(ctx, attr)
-	if tokenizers == nil {
+	cspecs, err := schema.State().FactoryCreateSpec(ctx, attr)
+	if err != nil {
+		return nil, err
+	}
+	if len(cspecs) == 0 {
 		return nil, errors.Errorf("Schema state not found for %s.", attr)
 	}
 
-	// otherwise, lets return the first one.
-	if len(tokenizers) == 0 {
-		token, _ := tok.GetTokenizer(hnsw.HnswEuclidian)
-		return token, nil
-	}
-	return tokenizers[0], nil
+	// At the moment, it would only be relevant to consider the first one.
+	// This is similar to pickTokenizer in behavior.
+	return cspecs[0], nil
 }
 
 // getInequalityTokens gets tokens ge/le/between compared to given tokens using the first sortable

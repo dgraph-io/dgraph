@@ -399,11 +399,11 @@ func checkSchema(s *pb.SchemaUpdate) error {
 			x.ParseAttr(s.Predicate))
 	}
 
-	if s.Directive == pb.SchemaUpdate_INDEX && len(s.Tokenizer) == 0 {
+	if s.Directive == pb.SchemaUpdate_INDEX && !schema.HasTokenizerOrVectorSpec(s) {
 		return errors.Errorf("Tokenizer must be specified while indexing a predicate: %+v", s)
 	}
 
-	if len(s.Tokenizer) > 0 && s.Directive != pb.SchemaUpdate_INDEX {
+	if schema.HasTokenizerOrVectorSpec(s) && s.Directive != pb.SchemaUpdate_INDEX {
 		return errors.Errorf("Directive must be SchemaUpdate_INDEX when a tokenizer is specified")
 	}
 

@@ -43,16 +43,16 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/dgraph-io/vector-indexer/hnsw"
-	"github.com/dgraph-io/vector-indexer/manager"
 )
 
 var emptyCountParams countParams
 
 type indexMutationInfo struct {
-	tokenizers []tok.Tokenizer
-	edge       *pb.DirectedEdge // Represents the original uid -> value edge.
-	val        types.Val
-	op         pb.DirectedEdge_Op
+	tokenizers   []tok.Tokenizer
+	factorySpecs []*tok.FactoryCreateSpec
+	edge         *pb.DirectedEdge // Represents the original uid -> value edge.
+	val          types.Val
+	op           pb.DirectedEdge_Op
 }
 
 // indexTokens return tokens, without the predicate prefix and
@@ -94,6 +94,14 @@ func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) 
 		info.tokenizers = schema.State().Tokenizer(ctx, info.edge.Attr)
 	}
 
+	if info.factorySpecs == nil {
+		specs, err := schema.State().FactoryCreateSpec(ctx, info.edge.Attr)
+		if err != nil {
+			return nil, err
+		}
+		info.factorySpecs = specs
+	}
+
 	attr := info.edge.Attr
 	uid := info.edge.Entity
 	if uid == 0 {
@@ -110,18 +118,15 @@ func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) 
 		return []*pb.DirectedEdge{}, err
 	}
 
-	if info.tokenizers == nil {
-		if len(data) > 0 && data[0].Tid == types.VFloatID {
-			info.tokenizers = schema.State().Tokenizer(ctx, hnsw.HnswEuclidian)
-		} else {
-			info.tokenizers = schema.State().Tokenizer(ctx, info.edge.Attr)
-		}
-	}
-
 	if info.op == pb.DirectedEdge_DEL &&
 		len(data) > 0 && data[0].Tid == types.VFloatID {
 		// TODO look into better alternatives
-		// if a delete & dealing with vfloats, add this to dead node in persistent store
+		//      The issue here is that we will create dead nodes in the Vector Index
+		//      assuming an HNSW index type. What we should do instead is invoke
+		//      index.Remove(<key to dead index value>). However, we currently do
+		//      not support this in VectorIndex code!!
+		// if a delete & dealing with vfloats, add this to dead node in persistent store.
+		// What we should do instead is invoke the factory.Remove(key) operation.
 		deadAttr := hnsw.ConcatStrings(info.edge.Attr, hnsw.VecDead)
 		deadKey := x.DataKey(deadAttr, 1)
 		pl, err := txn.Get(deadKey)
@@ -152,12 +157,17 @@ func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) 
 		pl.addMutation(ctx, txn, edge)
 	}
 
+	// TODO: As stated earlier, we need to validate that it is okay to assume
+	//       that we care about just data[0].
+	//       Similarly, the current assumption is that we have at most one
+	//       Vector Index, but this assumption may break later.
 	if info.op == pb.DirectedEdge_SET &&
-		len(data) > 0 && data[0].Tid == types.VFloatID {
+		len(data) > 0 && data[0].Tid == types.VFloatID &&
+		len(info.factorySpecs) > 0 {
 		// retrieve vector from inUuid save as inVec
 		inVec := types.BytesAsFloatArray(data[0].Value.([]byte))
 		tc := hnsw.NewTxnCache(NewViTxn(txn), txn.StartTs)
-		indexer, err := manager.NewIndexManager().Create(attr, manager.KnownFlavors[info.tokenizers[0].Name()], 3, nil)
+		indexer, err := info.factorySpecs[0].CreateIndex(attr)
 		if err != nil {
 			return []*pb.DirectedEdge{}, err
 		}
@@ -368,11 +378,16 @@ func (l *List) handleDeleteAll(ctx context.Context, edge *pb.DirectedEdge, txn *
 				Tid:   types.TypeID(p.ValType),
 				Value: p.Value,
 			}
-			_, err := txn.addIndexMutations(ctx, &indexMutationInfo{
-				tokenizers: schema.State().Tokenizer(ctx, edge.Attr),
-				edge:       edge,
-				val:        val,
-				op:         pb.DirectedEdge_DEL,
+			factorySpecs, err := schema.State().FactoryCreateSpec(ctx, edge.Attr)
+			if err != nil {
+				return err
+			}
+			_, err = txn.addIndexMutations(ctx, &indexMutationInfo{
+				tokenizers:   schema.State().Tokenizer(ctx, edge.Attr),
+				factorySpecs: factorySpecs,
+				edge:         edge,
+				val:          val,
+				op:           pb.DirectedEdge_DEL,
 			})
 			return err
 		default:
@@ -885,10 +900,16 @@ func (rb *IndexRebuild) GetQuerySchema() *pb.SchemaUpdate {
 
 // DropIndexes drops the indexes that need to be rebuilt.
 func (rb *IndexRebuild) DropIndexes(ctx context.Context) error {
-	prefixes, err := prefixesForTokIndexes(ctx, rb)
+	rebuildInfo := rb.needsTokIndexRebuild()
+	prefixes, err := rebuildInfo.prefixesForTokIndexes()
 	if err != nil {
 		return err
 	}
+	vectorIndexPrefixes, err := rebuildInfo.prefixesForVectorIndexes()
+	if err != nil {
+		return nil
+	}
+	prefixes = append(prefixes, vectorIndexPrefixes...)
 	prefixes = append(prefixes, prefixesToDropReverseEdges(ctx, rb)...)
 	prefixes = append(prefixes, prefixesToDropCountIndex(ctx, rb)...)
 	prefixes = append(prefixes, prefixesToDropVectorIndexEdges(ctx, rb)...)
@@ -921,12 +942,15 @@ func (rb *IndexRebuild) BuildIndexes(ctx context.Context) error {
 }
 
 type indexRebuildInfo struct {
-	op                  indexOp
-	tokenizersToDelete  []string
-	tokenizersToRebuild []string
+	op                     indexOp
+	attr                   string
+	tokenizersToDelete     []string
+	tokenizersToRebuild    []string
+	vectorIndexesToDelete  []*pb.VectorSpec
+	vectorIndexesToRebuild []*pb.VectorSpec
 }
 
-func (rb *IndexRebuild) needsTokIndexRebuild() indexRebuildInfo {
+func (rb *IndexRebuild) needsTokIndexRebuild() *indexRebuildInfo {
 	x.AssertTruef(rb.CurrentSchema != nil, "Current schema cannot be nil.")
 
 	// If the old schema is nil, we can treat it as an empty schema. Copy it
@@ -942,8 +966,9 @@ func (rb *IndexRebuild) needsTokIndexRebuild() indexRebuildInfo {
 	// Index does not need to be rebuilt or deleted if the scheme directive
 	// did not require an index before and now.
 	if !currIndex && !prevIndex {
-		return indexRebuildInfo{
-			op: indexNoop,
+		return &indexRebuildInfo{
+			op:   indexNoop,
+			attr: rb.Attr,
 		}
 	}
 
@@ -952,19 +977,24 @@ func (rb *IndexRebuild) needsTokIndexRebuild() indexRebuildInfo {
 	// prevIndex since the previous if statement guarantees both values are
 	// different.
 	if !currIndex {
-		return indexRebuildInfo{
-			op:                 indexDelete,
-			tokenizersToDelete: old.Tokenizer,
+		return &indexRebuildInfo{
+			op:                    indexDelete,
+			attr:                  rb.Attr,
+			tokenizersToDelete:    old.Tokenizer,
+			vectorIndexesToDelete: old.VectorSpecs,
 		}
 	}
 
 	// All tokenizers in the index need to be deleted and rebuilt if the value
 	// types have changed.
 	if currIndex && rb.CurrentSchema.ValueType != old.ValueType {
-		return indexRebuildInfo{
-			op:                  indexRebuild,
-			tokenizersToDelete:  old.Tokenizer,
-			tokenizersToRebuild: rb.CurrentSchema.Tokenizer,
+		return &indexRebuildInfo{
+			op:                     indexRebuild,
+			attr:                   rb.Attr,
+			tokenizersToDelete:     old.Tokenizer,
+			tokenizersToRebuild:    rb.CurrentSchema.Tokenizer,
+			vectorIndexesToDelete:  old.VectorSpecs,
+			vectorIndexesToRebuild: rb.CurrentSchema.VectorSpecs,
 		}
 	}
 
@@ -980,63 +1010,129 @@ func (rb *IndexRebuild) needsTokIndexRebuild() indexRebuildInfo {
 
 	newTokenizers, deletedTokenizers := x.Diff(currTokens, prevTokens)
 
-	// If the tokenizers are the same, nothing needs to be done.
-	if len(newTokenizers) == 0 && len(deletedTokenizers) == 0 {
-		return indexRebuildInfo{
-			op: indexNoop,
-		}
+	prevFactoryNames := make(map[string]struct{})
+	prevFactories := make(map[string]*pb.VectorSpec)
+	for _, t := range old.VectorSpecs {
+		prevFactoryNames[t.Name] = struct{}{}
+		prevFactories[t.Name] = t
+	}
+	currFactoryNames := make(map[string]struct{})
+	currFactories := make(map[string]*pb.VectorSpec)
+	for _, t := range rb.CurrentSchema.VectorSpecs {
+		currFactoryNames[t.Name] = struct{}{}
+		currFactories[t.Name] = t
 	}
 
-	return indexRebuildInfo{
-		op:                  indexRebuild,
-		tokenizersToDelete:  deletedTokenizers,
-		tokenizersToRebuild: newTokenizers,
+	newFactoryNames, deletedFactoryNames := x.Diff(currFactoryNames, prevFactoryNames)
+
+	// If the tokenizers and factories are the same, nothing needs to be done.
+	if len(newTokenizers) == 0 && len(deletedTokenizers) == 0 &&
+		len(newFactoryNames) == 0 && len(deletedFactoryNames) == 0 {
+		return &indexRebuildInfo{
+			op:   indexNoop,
+			attr: rb.Attr,
+		}
+	}
+	newFactories := []*pb.VectorSpec{}
+	for _, name := range newFactoryNames {
+		newFactories = append(newFactories, currFactories[name])
+	}
+	deletedFactories := []*pb.VectorSpec{}
+	for _, name := range deletedFactoryNames {
+		deletedFactories = append(deletedFactories, prevFactories[name])
+	}
+
+	return &indexRebuildInfo{
+		op:                     indexRebuild,
+		attr:                   rb.Attr,
+		tokenizersToDelete:     deletedTokenizers,
+		tokenizersToRebuild:    newTokenizers,
+		vectorIndexesToDelete:  deletedFactories,
+		vectorIndexesToRebuild: newFactories,
 	}
 }
 
-func prefixesForTokIndexes(ctx context.Context, rb *IndexRebuild) ([][]byte, error) {
-	rebuildInfo := rb.needsTokIndexRebuild()
-	prefixes := [][]byte{}
+func (rb *indexRebuildInfo) appendTokenizerPrefixesToDelete(
+	tokenizer string,
+	priorPrefixes [][]byte) ([][]byte, error) {
+	retVal := priorPrefixes
+	prefixesNonLang, err := prefixesToDeleteTokensFor(rb.attr, tokenizer, false)
+	if err != nil {
+		return nil, err
+	}
+	retVal = append(retVal, prefixesNonLang...)
+	if tokenizer != "exact" {
+		return retVal, nil
+	}
+	prefixesWithLang, err := prefixesToDeleteTokensFor(rb.attr, tokenizer, true)
+	if err != nil {
+		return nil, err
+	}
+	return append(retVal, prefixesWithLang...), nil
+}
 
-	if rebuildInfo.op == indexNoop {
+// TODO: Kill this function. Rather than calculating prefixes -- like we do
+//
+//	for tokenizers -- we should instead invoke the Remove(indexName)
+//	operation of the VectorIndexFactory, and have it do all the deletion.
+//	At the moment however, the Remove operation does not interact with
+//	Dgraph transactions, so this is not yet possible.
+func (rb *indexRebuildInfo) prefixesForVectorIndexes() ([][]byte, error) {
+	prefixes := [][]byte{}
+	var err error
+	if rb.op == indexNoop {
 		return prefixes, nil
 	}
 
-	glog.Infof("Computing prefix index for attr %s and tokenizers %s", rb.Attr,
-		rebuildInfo.tokenizersToDelete)
-	for _, tokenizer := range rebuildInfo.tokenizersToDelete {
-		prefixesNonLang, err := prefixesToDeleteTokensFor(rb.Attr, tokenizer, false)
+	for _, vectorSpec := range rb.vectorIndexesToDelete {
+		glog.Infof("Computing prefix index for attr %s and index factory %s",
+			rb.attr, vectorSpec.Name)
+		// The mechanism currently is the same for tokenizers and
+		// vector factories.
+		prefixes, err = rb.appendTokenizerPrefixesToDelete(vectorSpec.Name, prefixes)
 		if err != nil {
 			return nil, err
 		}
-		prefixes = append(prefixes, prefixesNonLang...)
-		if tokenizer != "exact" {
-			continue
-		}
-		prefixesWithLang, err := prefixesToDeleteTokensFor(rb.Attr, tokenizer, true)
-		if err != nil {
-			return nil, err
-		}
-		prefixes = append(prefixes, prefixesWithLang...)
 	}
 
-	glog.Infof("Deleting index for attr %s and tokenizers %s", rb.Attr,
-		rebuildInfo.tokenizersToRebuild)
+	for _, vectorSpec := range rb.vectorIndexesToRebuild {
+		glog.Infof("Computing prefix index for attr %s and index factory %s",
+			rb.attr, vectorSpec.Name)
+		// The mechanism currently is the same for tokenizers and
+		// vector factories.
+		prefixes, err = rb.appendTokenizerPrefixesToDelete(vectorSpec.Name, prefixes)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return prefixes, nil
+}
+
+func (rb *indexRebuildInfo) prefixesForTokIndexes() ([][]byte, error) {
+	prefixes := [][]byte{}
+	var err error
+	if rb.op == indexNoop {
+		return prefixes, nil
+	}
+
+	glog.Infof("Computing prefix index for attr %s and tokenizers %s", rb.attr,
+		rb.tokenizersToDelete)
+	for _, tokenizer := range rb.tokenizersToDelete {
+		prefixes, err = rb.appendTokenizerPrefixesToDelete(tokenizer, prefixes)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	glog.Infof("Deleting index for attr %s and tokenizers %s", rb.attr,
+		rb.tokenizersToRebuild)
 	// Before rebuilding, the existing index needs to be deleted.
-	for _, tokenizer := range rebuildInfo.tokenizersToRebuild {
-		prefixesNonLang, err := prefixesToDeleteTokensFor(rb.Attr, tokenizer, false)
+	for _, tokenizer := range rb.tokenizersToRebuild {
+		prefixes, err = rb.appendTokenizerPrefixesToDelete(tokenizer, prefixes)
 		if err != nil {
 			return nil, err
 		}
-		prefixes = append(prefixes, prefixesNonLang...)
-		if tokenizer != "exact" {
-			continue
-		}
-		prefixesWithLang, err := prefixesToDeleteTokensFor(rb.Attr, tokenizer, true)
-		if err != nil {
-			return nil, err
-		}
-		prefixes = append(prefixes, prefixesWithLang...)
 	}
 
 	return prefixes, nil
@@ -1051,7 +1147,7 @@ func rebuildTokIndex(ctx context.Context, rb *IndexRebuild) error {
 	}
 
 	// Exit early if there are no tokenizers to rebuild.
-	if len(rebuildInfo.tokenizersToRebuild) == 0 {
+	if len(rebuildInfo.tokenizersToRebuild) == 0 && len(rebuildInfo.vectorIndexesToRebuild) == 0 {
 		return nil
 	}
 
@@ -1060,6 +1156,16 @@ func rebuildTokIndex(ctx context.Context, rb *IndexRebuild) error {
 	tokenizers, err := tok.GetTokenizers(rebuildInfo.tokenizersToRebuild)
 	if err != nil {
 		return err
+	}
+
+	var factorySpecs []*tok.FactoryCreateSpec
+	if len(rebuildInfo.vectorIndexesToRebuild) > 0 {
+		factorySpec, err := tok.GetFactoryCreateSpecFromSpec(
+			rebuildInfo.vectorIndexesToRebuild[0])
+		if err != nil {
+			return err
+		}
+		factorySpecs = []*tok.FactoryCreateSpec{factorySpec}
 	}
 
 	pk := x.ParsedKey{Attr: rb.Attr}
@@ -1077,10 +1183,11 @@ func rebuildTokIndex(ctx context.Context, rb *IndexRebuild) error {
 
 			for {
 				newEdges, err := txn.addIndexMutations(ctx, &indexMutationInfo{
-					tokenizers: tokenizers,
-					edge:       &edge,
-					val:        val,
-					op:         pb.DirectedEdge_SET,
+					tokenizers:   tokenizers,
+					factorySpecs: factorySpecs,
+					edge:         &edge,
+					val:          val,
+					op:           pb.DirectedEdge_SET,
 				})
 				switch err {
 				case ErrRetry:

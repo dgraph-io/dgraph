@@ -18,7 +18,6 @@ package tok
 
 import (
 	"encoding/binary"
-	"fmt"
 	"plugin"
 	"strings"
 	"time"
@@ -29,9 +28,11 @@ import (
 	"golang.org/x/crypto/blake2b"
 	"golang.org/x/text/collate"
 
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/vector-indexer/hnsw"
+	opts "github.com/dgraph-io/vector-indexer/options"
 )
 
 // Tokenizer identifiers are unique and can't be reused.
@@ -89,11 +90,10 @@ type Tokenizer interface {
 }
 
 var tokenizers = make(map[string]Tokenizer)
+var indexFactories = make(map[string]IndexFactory)
 
 func init() {
-	registerTokenizer(HNSWEuclidianTokenizer{})
-	registerTokenizer(HNSWCosineTokenizer{})
-	registerTokenizer(HNSWDotProdTokenizer{})
+	registerIndexFactory(createIndexFactory(hnsw.CreateFactory[float64](64)))
 	registerTokenizer(GeoTokenizer{})
 	registerTokenizer(IntTokenizer{})
 	registerTokenizer(FloatTokenizer{})
@@ -161,6 +161,63 @@ func GetTokenizer(name string) (Tokenizer, bool) {
 	return t, found
 }
 
+// GetIndexFactory returns IndexFactory given name.
+func GetIndexFactory(name string) (IndexFactory, bool) {
+	f, found := indexFactories[name]
+	return f, found
+}
+
+func getOptsFromFactorySpec(f IndexFactory, spec *pb.VectorSpec) (opts.Options, error) {
+	allowedOpts := f.AllowedOptions()
+	retVal := opts.NewOptions()
+	for _, optPair := range spec.Options {
+		val, err := allowedOpts.GetParsedOption(optPair.Key, optPair.Value)
+		if err != nil {
+			return nil, err
+		}
+		retVal.SetOpt(optPair.Key, val)
+	}
+	return retVal, nil
+}
+
+func GetFactoryCreateSpecFromSpec(spec *pb.VectorSpec) (*FactoryCreateSpec, error) {
+	factory, found := GetIndexFactoryFromSpec(spec)
+	if !found {
+		return &FactoryCreateSpec{}, errors.Errorf(
+			"cannot find index factory named '%s'", spec.Name)
+	}
+	opts, err := getOptsFromFactorySpec(factory, spec)
+	if err != nil {
+		return &FactoryCreateSpec{}, err
+	}
+	return &FactoryCreateSpec{factory: factory, opts: opts}, nil
+}
+
+func GetIndexFactoryFromSpec(spec *pb.VectorSpec) (IndexFactory, bool) {
+	return GetIndexFactory(spec.Name)
+}
+
+func GetIndexFactoryOptsFromSpec(spec *pb.VectorSpec) (opts.Options, error) {
+	factory, found := GetIndexFactoryFromSpec(spec)
+	if !found {
+		return nil, errors.Errorf(
+			"cannot get Options for factory named '%s' (factory not found)",
+			spec.Name)
+	}
+	return getOptsFromFactorySpec(factory, spec)
+}
+
+func GetIndexFactoriesFromSpecs(specs []*pb.VectorSpec) []IndexFactory {
+	retVal := []IndexFactory{}
+	for _, spec := range specs {
+		f, found := GetIndexFactoryFromSpec(spec)
+		if found {
+			retVal = append(retVal, f)
+		}
+	}
+	return retVal
+}
+
 // GetTokenizers returns a list of tokenizer given a list of unique names.
 func GetTokenizers(names []string) ([]Tokenizer, error) {
 	var tokenizers []Tokenizer
@@ -217,45 +274,6 @@ func (t FloatTokenizer) Tokens(v interface{}) ([]string, error) {
 func (t FloatTokenizer) Identifier() byte { return IdentFloat }
 func (t FloatTokenizer) IsSortable() bool { return true }
 func (t FloatTokenizer) IsLossy() bool    { return true }
-
-// HNSWEuclidianTokenizer generates tokens from vectors of float64 values and uses
-// euclidian distance to index.
-type HNSWEuclidianTokenizer struct{}
-
-func (t HNSWEuclidianTokenizer) Name() string { return hnsw.HnswEuclidian }
-func (t HNSWEuclidianTokenizer) Type() string { return "vfloat" }
-func (t HNSWEuclidianTokenizer) Tokens(v interface{}) ([]string, error) {
-	return tokensForExpectedVFloat(v)
-}
-func (t HNSWEuclidianTokenizer) Identifier() byte { return IdentVFloat }
-func (t HNSWEuclidianTokenizer) IsSortable() bool { return false }
-func (t HNSWEuclidianTokenizer) IsLossy() bool    { return true }
-
-// HNSWCosineTokenizer generates tokens from vectors of float64 values and uses
-// cosine similarity to index.
-type HNSWCosineTokenizer struct{}
-
-func (t HNSWCosineTokenizer) Name() string { return hnsw.HnswCosine }
-func (t HNSWCosineTokenizer) Type() string { return "vfloat" }
-func (t HNSWCosineTokenizer) Tokens(v interface{}) ([]string, error) {
-	return tokensForExpectedVFloat(v)
-}
-func (t HNSWCosineTokenizer) Identifier() byte { return IdentVFloat }
-func (t HNSWCosineTokenizer) IsSortable() bool { return false }
-func (t HNSWCosineTokenizer) IsLossy() bool    { return true }
-
-// HNSWDotProdTokenizer generates tokens from vectors of float64 values and uses
-// dotproduct to index.
-type HNSWDotProdTokenizer struct{}
-
-func (t HNSWDotProdTokenizer) Name() string { return hnsw.HnswDotProd }
-func (t HNSWDotProdTokenizer) Type() string { return "vfloat" }
-func (t HNSWDotProdTokenizer) Tokens(v interface{}) ([]string, error) {
-	return tokensForExpectedVFloat(v)
-}
-func (t HNSWDotProdTokenizer) Identifier() byte { return IdentVFloat }
-func (t HNSWDotProdTokenizer) IsSortable() bool { return false }
-func (t HNSWDotProdTokenizer) IsLossy() bool    { return true }
 
 // YearTokenizer generates year tokens from datetime data.
 type YearTokenizer struct{}
@@ -558,13 +576,4 @@ func EncodeRegexTokens(tokens []string) {
 	for i := 0; i < len(tokens); i++ {
 		tokens[i] = encodeToken(tokens[i], TrigramTokenizer{}.Identifier())
 	}
-}
-
-func tokensForExpectedVFloat(v interface{}) ([]string, error) {
-	value, ok := v.([]float64)
-	if !ok {
-		return []string{}, errors.Errorf("could not convert %s to vfloat", v.(string))
-	}
-	// Generates space-separated list of float64 values inside of "[]".
-	return []string{fmt.Sprintf("%+v", value)}, nil
 }

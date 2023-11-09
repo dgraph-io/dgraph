@@ -294,13 +294,14 @@ func (s *state) IsIndexed(ctx context.Context, pred string) bool {
 	defer s.RUnlock()
 	if isWrite {
 		// TODO(Aman): we could return the query schema if it is a delete.
-		if schema, ok := s.mutSchema[pred]; ok && len(schema.Tokenizer) > 0 {
+		if schema, ok := s.mutSchema[pred]; ok &&
+			(len(schema.Tokenizer) > 0 || len(schema.VectorSpecs) > 0) {
 			return true
 		}
 	}
 
 	if schema, ok := s.predicate[pred]; ok {
-		return len(schema.Tokenizer) > 0
+		return len(schema.Tokenizer) > 0 || len(schema.VectorSpecs) > 0
 	}
 
 	return false
@@ -365,6 +366,42 @@ func (s *state) Tokenizer(ctx context.Context, pred string) []tok.Tokenizer {
 		tokenizers = append(tokenizers, t)
 	}
 	return tokenizers
+}
+
+// FactoryCreateSpec(ctx, pred) returns the list of versioned
+// FactoryCreateSpec instances for given predicate.
+// The FactoryCreateSpec type defines the IndexFactory instance(s)
+// for given predicate along with their options, if specified.
+func (s *state) FactoryCreateSpec(ctx context.Context, pred string) ([]*tok.FactoryCreateSpec, error) {
+	isWrite, _ := ctx.Value(IsWrite).(bool)
+	s.RLock()
+	defer s.RUnlock()
+	var su *pb.SchemaUpdate
+	if isWrite {
+		if schema, ok := s.mutSchema[pred]; ok {
+			su = schema
+		}
+	}
+	if su == nil {
+		if schema, ok := s.predicate[pred]; ok {
+			su = schema
+		}
+	}
+	if su == nil {
+		// This may happen when some query that needs indexing over this predicate is executing
+		// while the predicate is dropped from the state (using drop operation).
+		glog.Errorf("Schema state not found for %s.", pred)
+		return nil, errors.Errorf("Schema state not found for %s.", pred)
+	}
+	creates := make([]*tok.FactoryCreateSpec, 0, len(su.VectorSpecs))
+	for _, vs := range su.VectorSpecs {
+		c, err := tok.GetFactoryCreateSpecFromSpec(vs)
+		if err != nil {
+			return nil, err
+		}
+		creates = append(creates, c)
+	}
+	return creates, nil
 }
 
 // TokenizerNames returns the tokenizer names for given predicate
