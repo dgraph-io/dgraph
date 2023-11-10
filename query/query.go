@@ -2854,6 +2854,14 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 				continue
 			}
 
+			// Just as above, no need to execute "similar_to" query if the
+			// vector parameter was a Var and evaluated as empty
+			if sg.SrcFunc != nil && sg.SrcFunc.Name == "similar_to" &&
+				len(sg.SrcFunc.Args) == 1 && len(sg.Params.NeedsVar) > 0 {
+				errChan <- nil
+				continue
+			}
+
 			switch {
 			case sg.Params.Alias == "shortest":
 				// We allow only one shortest path block per query.

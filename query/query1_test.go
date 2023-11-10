@@ -1649,6 +1649,23 @@ func TestAggregateEmpty3(t *testing.T) {
 	require.JSONEq(t, `{"data": {"all":[]}}`, js)
 }
 
+func TestAggregateEmpty4(t *testing.T) {
+	query := `
+		{
+			var(func: type(User))
+			{
+				up as user_profile
+			}
+			similar(func: similar_to(user_profile, 4, val(up)))
+			{
+				uid
+			}
+		}
+	`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"similar":[]}}`, js)
+}
+
 func TestFilterLang(t *testing.T) {
 	// This tests the fix for #1334. While getting uids for filter, we fetch data keys when number
 	// of uids is less than number of tokens. Lang tag was not passed correctly while fetching these
