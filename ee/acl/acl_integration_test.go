@@ -412,6 +412,7 @@ func (asuite *AclTestSuite) TestWrongPermission() {
 	defer cleanup()
 	require.NoError(t, gc.LoginIntoNamespace(ctx, dgraphtest.DefaultUser,
 		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	require.NoError(t, gc.DropAll())
 
 	mu := &api.Mutation{SetNquads: []byte(`
 	_:dev <dgraph.type> "dgraph.type.Group" .
@@ -436,4 +437,21 @@ func (asuite *AclTestSuite) TestWrongPermission() {
 
 	require.Error(t, err, "Setting permission to -1 should have returned error")
 	require.Contains(t, err.Error(), "Value for this predicate should be between 0 and 7")
+}
+
+func (asuite *AclTestSuite) TestACLDuplicateGrootUser() {
+	t := asuite.T()
+	gc, cleanup, err := asuite.dc.Client()
+	require.NoError(t, err)
+	defer cleanup()
+	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
+		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+
+	rdfs := `_:a <dgraph.xid> "groot" .
+	         _:a <dgraph.type> "dgraph.type.User"  .`
+
+	mu := &api.Mutation{SetNquads: []byte(rdfs), CommitNow: true}
+	_, err = gc.Mutate(mu)
+	require.Error(t, err)
+	require.ErrorContains(t, err, "could not insert duplicate value [groot] for predicate [dgraph.xid]")
 }
