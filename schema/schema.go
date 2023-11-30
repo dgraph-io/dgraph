@@ -791,6 +791,7 @@ func initialSchemaInternal(namespace uint64, all bool) []*pb.SchemaUpdate {
 				ValueType: pb.Posting_STRING,
 				Directive: pb.SchemaUpdate_INDEX,
 				Upsert:    true,
+				Unique:    true,
 				Tokenizer: []string{"exact"},
 			},
 			{

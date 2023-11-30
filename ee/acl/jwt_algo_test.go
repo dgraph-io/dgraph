@@ -26,6 +26,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dgraph-io/dgraph/dgraphapi"
 	"github.com/dgraph-io/dgraph/dgraphtest"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -48,7 +49,7 @@ func TestACLJwtAlgo(t *testing.T) {
 			require.NoError(t, err)
 			defer cleanup()
 			require.NoError(t, gc.LoginIntoNamespace(context.Background(),
-				dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+				dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace))
 
 			// op with Grpc client
 			_, err = gc.Query(`{q(func: uid(0x1)) {uid}}`)
@@ -61,8 +62,8 @@ func TestACLJwtAlgo(t *testing.T) {
 
 			hc, err := c.HTTPClient()
 			require.NoError(t, err)
-			require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
-				dgraphtest.DefaultPassword, x.GalaxyNamespace))
+			require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
+				dgraphapi.DefaultPassword, x.GalaxyNamespace))
 
 			// op with HTTP client
 			require.NoError(t, hc.Backup(c, true, dgraphtest.DefaultBackupDir))

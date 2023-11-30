@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dgraph-io/dgraph/dgraphapi"
 	"github.com/dgraph-io/dgraph/dgraphtest"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -37,7 +38,7 @@ func TestMain(m *testing.M) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	x.Panic(dg.LoginIntoNamespace(ctx, dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	x.Panic(dg.LoginIntoNamespace(ctx, dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace))
 
 	dc = c
 	client = dg.Dgraph

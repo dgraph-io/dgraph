@@ -23,7 +23,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dgraph-io/dgraph/dgraphapi"
 	"github.com/dgraph-io/dgraph/dgraphtest"
+
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
 )
@@ -99,10 +101,10 @@ func TestBulkLoaderNoDqlSchema(t *testing.T) {
 	// run some queries and ensure everything looks good
 	hc, err := c.HTTPClient()
 	require.NoError(t, err)
-	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
-		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
+		dgraphapi.DefaultPassword, x.GalaxyNamespace))
 
-	params := dgraphtest.GraphQLParams{
+	params := dgraphapi.GraphQLParams{
 		Query: `query {
 			getMessage(uniqueId: 3) {
 				content
@@ -112,15 +114,15 @@ func TestBulkLoaderNoDqlSchema(t *testing.T) {
 	}
 	data, err := hc.RunGraphqlQuery(params, false)
 	require.NoError(t, err)
-	dgraphtest.CompareJSON(`{
+	dgraphapi.CompareJSON(`{
 		"getMessage": {
 		  "content": "DVTCTXCVYI",
 		  "author": "USYMVFJYXA"
 		}
 	  }`, string(data))
 
-	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, 1))
-	params = dgraphtest.GraphQLParams{
+	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, 1))
+	params = dgraphapi.GraphQLParams{
 		Query: `query {
 			getTemplate(uniqueId: 2) {
 				content
@@ -129,7 +131,7 @@ func TestBulkLoaderNoDqlSchema(t *testing.T) {
 	}
 	data, err = hc.RunGraphqlQuery(params, false)
 	require.NoError(t, err)
-	dgraphtest.CompareJSON(`{
+	dgraphapi.CompareJSON(`{
 		"getTemplate": {
 		  "content": "t2"
 		}

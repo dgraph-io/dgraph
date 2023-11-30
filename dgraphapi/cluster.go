@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package dgraphtest
+package dgraphapi
 
 import (
 	"bytes"
@@ -26,7 +26,6 @@ import (
 	"net/http"
 	"os/exec"
 	"strings"
-	"testing"
 	"time"
 
 	"github.com/pkg/errors"
@@ -37,6 +36,12 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+const (
+	localVersion    = "local"
+	DefaultUser     = "groot"
+	DefaultPassword = "password"
+)
+
 type Cluster interface {
 	Client() (*GrpcClient, func(), error)
 	HTTPClient() (*HTTPClient, error)
@@ -45,6 +50,7 @@ type Cluster interface {
 	AssignUids(gc *dgo.Dgraph, num uint64) error
 	GetVersion() string
 	GetEncKeyPath() (string, error)
+	GetRepoDir() (string, error)
 }
 
 type GrpcClient struct {
@@ -88,6 +94,31 @@ type LicenseResponse struct {
 	Errors     x.GqlErrorList         `json:"errors,omitempty"`
 	Code       string                 `json:"code"`
 	Extensions map[string]interface{} `json:"license,omitempty"`
+}
+
+var client *http.Client = &http.Client{
+	Timeout: requestTimeout,
+}
+
+func DoReq(req *http.Request) ([]byte, error) {
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, errors.Wrap(err, "error performing HTTP request")
+	}
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			log.Printf("[WARNING] error closing response body: %v", err)
+		}
+	}()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, errors.Wrapf(err, "error reading response body: url: [%v], err: [%v]", req.URL, err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("got non 200 resp: %v", string(respBody))
+	}
+	return respBody, nil
 }
 
 func (hc *HTTPClient) LoginUsingToken(ns uint64) error {
@@ -239,7 +270,7 @@ func (hc *HTTPClient) doPost(body []byte, url string, contentType string) ([]byt
 		req.Header.Add("X-Dgraph-AccessToken", hc.AccessJwt)
 	}
 
-	return doReq(req)
+	return DoReq(req)
 }
 
 // RunGraphqlQuery makes a query to graphql (or admin) endpoint
@@ -264,7 +295,8 @@ func (hc *HTTPClient) RunGraphqlQuery(params GraphQLParams, admin bool) ([]byte,
 		return nil, errors.Wrap(err, "error unmarshalling GQL response")
 	}
 	if len(gqlResp.Errors) > 0 {
-		return nil, errors.Wrapf(gqlResp.Errors, "error while running graphql query, resp: %v", string(gqlResp.Data))
+		return nil, errors.Wrapf(gqlResp.Errors, "error while running graphql query, resp: %v",
+			string(gqlResp.Data))
 	}
 	return gqlResp.Data, nil
 }
@@ -287,8 +319,13 @@ func (hc *HTTPClient) HealthForInstance() ([]byte, error) {
 
 // Backup creates a backup of dgraph at a given path
 func (hc *HTTPClient) Backup(c Cluster, forceFull bool, backupPath string) error {
+	repoDir, err := c.GetRepoDir()
+	if err != nil {
+		return errors.Wrapf(err, "error getting repo directory")
+	}
+
 	// backup API was made async in the commit d3bf7b7b2786bcb99f02e1641f3b656d0a98f7f4
-	asyncAPI, err := IsHigherVersion(c.GetVersion(), "d3bf7b7b2786bcb99f02e1641f3b656d0a98f7f4")
+	asyncAPI, err := IsHigherVersion(c.GetVersion(), "d3bf7b7b2786bcb99f02e1641f3b656d0a98f7f4", repoDir)
 	if err != nil {
 		return errors.Wrapf(err, "error checking incremental restore support")
 	}
@@ -378,9 +415,13 @@ func (hc *HTTPClient) WaitForTask(taskId string) error {
 // Restore performs restore on Dgraph cluster from the given path to backup
 func (hc *HTTPClient) Restore(c Cluster, backupPath string,
 	backupId string, incrFrom, backupNum int) error {
+	repoDir, err := c.GetRepoDir()
+	if err != nil {
+		return errors.Wrapf(err, "error getting repo directory")
+	}
 
 	// incremental restore was introduced in commit 8b3712e93ed2435bea52d957f7b69976c6cfc55b
-	incrRestoreSupported, err := IsHigherVersion(c.GetVersion(), "8b3712e93ed2435bea52d957f7b69976c6cfc55b")
+	incrRestoreSupported, err := IsHigherVersion(c.GetVersion(), "8b3712e93ed2435bea52d957f7b69976c6cfc55b", repoDir)
 	if err != nil {
 		return errors.Wrapf(err, "error checking incremental restore support")
 	}
@@ -657,7 +698,7 @@ func (hc *HTTPClient) PostDqlQuery(query string) ([]byte, error) {
 	if hc.HttpToken != nil {
 		req.Header.Add("X-Dgraph-AccessToken", hc.AccessJwt)
 	}
-	return doReq(req)
+	return DoReq(req)
 }
 
 // SetupSchema sets up DQL schema
@@ -715,20 +756,8 @@ func (gc *GrpcClient) Query(query string) (*api.Response, error) {
 	return txn.Query(ctx, query)
 }
 
-// ShouldSkipTest skips a given test if clusterVersion < minVersion
-func ShouldSkipTest(t *testing.T, minVersion, clusterVersion string) error {
-	supported, err := IsHigherVersion(clusterVersion, minVersion)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !supported {
-		t.Skipf("test is valid for commits greater than [%v]", minVersion)
-	}
-	return nil
-}
-
 // IsHigherVersion checks whether "higher" is the higher version compared to "lower"
-func IsHigherVersion(higher, lower string) (bool, error) {
+func IsHigherVersion(higher, lower, repoDir string) (bool, error) {
 	// the order of if conditions matters here
 	if lower == localVersion {
 		return false, nil
@@ -750,4 +779,19 @@ func IsHigherVersion(higher, lower string) (bool, error) {
 	}
 
 	return true, nil
+}
+
+func GetHttpClient(alphaUrl, zeroUrl string) (*HTTPClient, error) {
+	adminUrl := "http://" + alphaUrl + "/admin"
+	graphQLUrl := "http://" + alphaUrl + "/graphql"
+	licenseUrl := "http://" + zeroUrl + "/enterpriseLicense"
+	stateUrl := "http://" + zeroUrl + "/state"
+	dqlUrl := "http://" + alphaUrl + "/query"
+	return &HTTPClient{
+		adminURL:   adminUrl,
+		graphqlURL: graphQLUrl,
+		licenseURL: licenseUrl,
+		stateURL:   stateUrl,
+		dqlURL:     dqlUrl,
+	}, nil
 }

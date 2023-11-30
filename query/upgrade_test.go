@@ -25,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dgraph-io/dgraph/dgraphapi"
 	"github.com/dgraph-io/dgraph/dgraphtest"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -34,8 +35,8 @@ func TestMain(m *testing.M) {
 		dg, cleanup, err := c.Client()
 		x.Panic(err)
 		defer cleanup()
-		x.Panic(dg.LoginIntoNamespace(context.Background(), dgraphtest.DefaultUser,
-			dgraphtest.DefaultPassword, x.GalaxyNamespace))
+		x.Panic(dg.LoginIntoNamespace(context.Background(), dgraphapi.DefaultUser,
+			dgraphapi.DefaultPassword, x.GalaxyNamespace))
 
 		client = dg
 		dc = c
@@ -46,8 +47,8 @@ func TestMain(m *testing.M) {
 		dg, cleanup, err := c.Client()
 		x.Panic(err)
 		defer cleanup()
-		x.Panic(dg.LoginIntoNamespace(context.Background(), dgraphtest.DefaultUser,
-			dgraphtest.DefaultPassword, x.GalaxyNamespace))
+		x.Panic(dg.LoginIntoNamespace(context.Background(), dgraphapi.DefaultUser,
+			dgraphapi.DefaultPassword, x.GalaxyNamespace))
 
 		client = dg
 		dc = c
@@ -65,7 +66,7 @@ func TestMain(m *testing.M) {
 
 		hc, err := c.HTTPClient()
 		x.Panic(err)
-		x.Panic(hc.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+		x.Panic(hc.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace))
 
 		mutate(c)
 		x.Panic(c.Upgrade(uc.After, uc.Strategy))

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package dgraphtest
+package dgraphapi
 
 import (
 	"encoding/json"
@@ -28,6 +28,11 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+)
+
+const (
+	waitDurBeforeRetry = time.Second
+	requestTimeout     = 120 * time.Second
 )
 
 func PollTillPassOrTimeout(gcli *GrpcClient, query, want string, timeout time.Duration) error {

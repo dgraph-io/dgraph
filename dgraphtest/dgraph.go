@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"testing"
 	"time"
 
 	"github.com/docker/docker/api/types/mount"
@@ -56,9 +57,6 @@ const (
 	aclSecretMountPath = "/secrets/secret-key"
 	encKeyFile         = "enc-key"
 	encKeyMountPath    = "/secrets/enc-key"
-
-	DefaultUser     = "groot"
-	DefaultPassword = "password"
 
 	goBinMountPath     = "/gobin"
 	localVersion       = "local"
@@ -414,4 +412,16 @@ func mountBinary(c *LocalCluster) (mount.Mount, error) {
 		Target:   goBinMountPath,
 		ReadOnly: true,
 	}, nil
+}
+
+// ShouldSkipTest skips a given test if clusterVersion < minVersion
+func ShouldSkipTest(t *testing.T, minVersion, clusterVersion string) error {
+	supported, err := IsHigherVersion(clusterVersion, minVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !supported {
+		t.Skipf("test is valid for commits greater than [%v]", minVersion)
+	}
+	return nil
 }

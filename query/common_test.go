@@ -29,6 +29,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/v230/protos/api"
+	"github.com/dgraph-io/dgraph/dgraphapi"
 	"github.com/dgraph-io/dgraph/dgraphtest"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -347,7 +348,7 @@ name2                          : string @index(term)  .
 age2                           : int @index(int) .
 `
 
-func populateCluster(dc dgraphtest.Cluster) {
+func populateCluster(dc dgraphapi.Cluster) {
 	x.Panic(client.Alter(context.Background(), &api.Operation{DropAll: true}))
 
 	// In the query package, we test using hard coded UIDs so that we know what results

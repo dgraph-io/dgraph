@@ -33,6 +33,7 @@ import (
 
 	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/live"
+	"github.com/dgraph-io/dgraph/dgraphapi"
 	"github.com/dgraph-io/dgraph/dgraphtest"
 )
 
@@ -49,7 +50,7 @@ const emailQueryWithUid = `{
 	    }
 	}`
 
-func setUpDgraph(t *testing.T) *dgraphtest.GrpcClient {
+func setUpDgraph(t *testing.T) *dgraphapi.GrpcClient {
 	c := dgraphtest.ComposeCluster{}
 	dg, close, err := c.Client()
 	require.NoError(t, err)
@@ -126,7 +127,7 @@ func TestUniqueTwoMutationSingleBlankNode(t *testing.T) {
 	require.NoError(t, err)
 	resp, err := dg.Query(emailQuery)
 	require.NoError(t, err)
-	require.NoError(t, dgraphtest.CompareJSON(`{ "q": [{"email": "example@email.com"}]}`, string(resp.Json)))
+	require.NoError(t, dgraphapi.CompareJSON(`{ "q": [{"email": "example@email.com"}]}`, string(resp.Json)))
 	_, err = dg.Mutate(&api.Mutation{
 		SetNquads: []byte(rdf),
 		CommitNow: true,
@@ -150,7 +151,7 @@ func TestUniqueOneMutationSameValueTwoBlankNode(t *testing.T) {
 
 	resp, err := dg.Query(emailQuery)
 	require.NoError(t, err)
-	require.NoError(t, dgraphtest.CompareJSON(`{ "q": [ ]}`, string(resp.Json)))
+	require.NoError(t, dgraphapi.CompareJSON(`{ "q": [ ]}`, string(resp.Json)))
 }
 
 func TestUniqueOneMutationSameValueSingleBlankNode(t *testing.T) {
@@ -166,7 +167,7 @@ func TestUniqueOneMutationSameValueSingleBlankNode(t *testing.T) {
 	require.NoError(t, err)
 	resp, err := dg.Query(emailQuery)
 	require.NoError(t, err)
-	require.NoError(t, dgraphtest.CompareJSON(`{ "q": [ {	"email": "example@email.com"}]}`,
+	require.NoError(t, dgraphapi.CompareJSON(`{ "q": [ {	"email": "example@email.com"}]}`,
 		string(resp.Json)))
 }
 
@@ -183,7 +184,7 @@ func TestUniqueTwoMutattionsTwoHardCodedUIDs(t *testing.T) {
 
 	resp, err := dg.Query(emailQueryWithUid)
 	require.NoError(t, err)
-	require.NoError(t, dgraphtest.CompareJSON(`{ "q": [ {"email": "example@email.com","uid" :"0x5"}]}`,
+	require.NoError(t, dgraphapi.CompareJSON(`{ "q": [ {"email": "example@email.com","uid" :"0x5"}]}`,
 		string(resp.Json)))
 
 	rdf = `<0x6> <email> "example@email.com" .	`
@@ -208,7 +209,7 @@ func TestUniqueHardCodedUidsWithDiffrentNotation(t *testing.T) {
 
 	resp, err := dg.Query(emailQueryWithUid)
 	require.NoError(t, err)
-	require.NoError(t, dgraphtest.CompareJSON(`{ "q": [ {"email": "example@email.com","uid" :"0xad"}]}`,
+	require.NoError(t, dgraphapi.CompareJSON(`{ "q": [ {"email": "example@email.com","uid" :"0xad"}]}`,
 		string(resp.Json)))
 
 	rdf = `<0o255> <email> "example@email.com" .	`
@@ -219,7 +220,7 @@ func TestUniqueHardCodedUidsWithDiffrentNotation(t *testing.T) {
 	require.NoError(t, err)
 	resp, err = dg.Query(emailQueryWithUid)
 	require.NoError(t, err)
-	require.NoError(t, dgraphtest.CompareJSON(`{ "q": [ {"email": "example@email.com","uid" :"0xad"}]}`,
+	require.NoError(t, dgraphapi.CompareJSON(`{ "q": [ {"email": "example@email.com","uid" :"0xad"}]}`,
 		string(resp.Json)))
 
 	rdf = `<0b10101101> <email> "example@email.com" .	`
@@ -230,7 +231,7 @@ func TestUniqueHardCodedUidsWithDiffrentNotation(t *testing.T) {
 	require.NoError(t, err)
 	resp, err = dg.Query(emailQueryWithUid)
 	require.NoError(t, err)
-	require.NoError(t, dgraphtest.CompareJSON(`{ "q": [ {"email": "example@email.com","uid" :"0xad"}]}`,
+	require.NoError(t, dgraphapi.CompareJSON(`{ "q": [ {"email": "example@email.com","uid" :"0xad"}]}`,
 		string(resp.Json)))
 
 	rdf = `<173> <email> "example@email.com" .	`
@@ -241,7 +242,7 @@ func TestUniqueHardCodedUidsWithDiffrentNotation(t *testing.T) {
 	require.NoError(t, err)
 	resp, err = dg.Query(emailQueryWithUid)
 	require.NoError(t, err)
-	require.NoError(t, dgraphtest.CompareJSON(`{ "q": [ {"email": "example@email.com","uid" :"0xad"}]}`,
+	require.NoError(t, dgraphapi.CompareJSON(`{ "q": [ {"email": "example@email.com","uid" :"0xad"}]}`,
 		string(resp.Json)))
 
 }
@@ -259,7 +260,7 @@ func TestUniqueSingleMutattionsOneHardCodedUIDSameValue(t *testing.T) {
 	require.NoError(t, err)
 	resp, err := dg.Query(emailQueryWithUid)
 	require.NoError(t, err)
-	require.NoError(t, dgraphtest.CompareJSON(`{ "q": [ {	
+	require.NoError(t, dgraphapi.CompareJSON(`{ "q": [ {	
 		"email": "example@email.com",
 		"uid":"0x5"
 	}]}`, string(resp.Json)))
@@ -280,7 +281,7 @@ func TestUniqueOneMutattionsTwoHardCodedUIDsDiffValue(t *testing.T) {
 
 	resp, err := dg.Query(emailQuery)
 	require.NoError(t, err)
-	require.NoError(t, dgraphtest.CompareJSON(`{ "q": [ ]}`, string(resp.Json)))
+	require.NoError(t, dgraphapi.CompareJSON(`{ "q": [ ]}`, string(resp.Json)))
 }
 
 func TestUniqueUpsertMutation(t *testing.T) {
@@ -306,7 +307,7 @@ func TestUniqueUpsertMutation(t *testing.T) {
 	require.NoError(t, err)
 	resp, err := dg.Query(emailQuery)
 	require.NoError(t, err)
-	require.NoError(t, dgraphtest.CompareJSON(`{ "q": [{"email": "example@email.com"} ]}`, string(resp.Json)))
+	require.NoError(t, dgraphapi.CompareJSON(`{ "q": [{"email": "example@email.com"} ]}`, string(resp.Json)))
 
 	mu = &api.Mutation{
 		SetNquads: []byte(` uid(v) <email> "example1@email.com" .`),
@@ -328,7 +329,7 @@ func TestUniqueWithConditionalUpsertMutation(t *testing.T) {
 	require.NoError(t, err)
 	resp, err := dg.Query(emailQuery)
 	require.NoError(t, err)
-	require.NoError(t, dgraphtest.CompareJSON(`{ "q": [{"email": "example@email.com"} ]}`, string(resp.Json)))
+	require.NoError(t, dgraphapi.CompareJSON(`{ "q": [{"email": "example@email.com"} ]}`, string(resp.Json)))
 
 	query := `query{
 		         v as person(func: eq(email, "example@email.com")) {
@@ -505,7 +506,7 @@ func TestUniqueForInt(t *testing.T) {
     }`
 	resp, err := dg.Query(query)
 	require.NoError(t, err)
-	require.NoError(t, dgraphtest.CompareJSON(`{ "q": [ {	"mobile": 1234567890}]}`, string(resp.Json)))
+	require.NoError(t, dgraphapi.CompareJSON(`{ "q": [ {	"mobile": 1234567890}]}`, string(resp.Json)))
 }
 
 func TestUniqueForLangDirective(t *testing.T) {
@@ -657,7 +658,7 @@ func TestConcurrencyMutationsDiffrentValuesForDiffrentBlankNode(t *testing.T) {
 	resp, err := dg.Query(query)
 	require.NoError(t, err)
 	// there should be 1000 emails in DB.
-	require.NoError(t, dgraphtest.CompareJSON(`{"allMails":[{"count":1000}]}`, string(resp.Json)))
+	require.NoError(t, dgraphapi.CompareJSON(`{"allMails":[{"count":1000}]}`, string(resp.Json)))
 }
 
 func TestUniqueTwoTxnWithoutCommit(t *testing.T) {
@@ -682,7 +683,7 @@ func TestUniqueTwoTxnWithoutCommit(t *testing.T) {
 	resp, err := dg.Query(emailQuery)
 	require.NoError(t, err)
 	// there should be only one email data as expected.
-	require.NoError(t, dgraphtest.CompareJSON(`{"q":[{"email":"example@email.com"}]}`, string(resp.Json)))
+	require.NoError(t, dgraphapi.CompareJSON(`{"q":[{"email":"example@email.com"}]}`, string(resp.Json)))
 }
 
 func TestUniqueSingelTxnDuplicteValuesWithoutCommit(t *testing.T) {
@@ -751,8 +752,8 @@ func TestConcurrency2(t *testing.T) {
 		}`, i)
 		resp, err := dg.Query(emailQuery)
 		require.NoError(t, err)
-		err1 := dgraphtest.CompareJSON(fmt.Sprintf(`{"q":[{"email":"example%v@email.com"}]}`, i), string(resp.Json))
-		err2 := dgraphtest.CompareJSON(fmt.Sprintf(`{ "q": [ ]}`), string(resp.Json))
+		err1 := dgraphapi.CompareJSON(fmt.Sprintf(`{"q":[{"email":"example%v@email.com"}]}`, i), string(resp.Json))
+		err2 := dgraphapi.CompareJSON(fmt.Sprintf(`{ "q": [ ]}`), string(resp.Json))
 		if err1 != nil && err2 != nil {
 			t.Fatal()
 		}

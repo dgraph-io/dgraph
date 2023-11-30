@@ -204,3 +204,28 @@ func copy(src, dst string) error {
 	_, err = io.Copy(destination, source)
 	return err
 }
+
+// IsHigherVersion checks whether "higher" is the higher version compared to "lower"
+func IsHigherVersion(higher, lower string) (bool, error) {
+	// the order of if conditions matters here
+	if lower == localVersion {
+		return false, nil
+	}
+	if higher == localVersion {
+		return true, nil
+	}
+
+	// An older commit is usually the ancestor of a newer commit which is a descendant commit
+	cmd := exec.Command("git", "merge-base", "--is-ancestor", lower, higher)
+	cmd.Dir = repoDir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		if exitError, ok := err.(*exec.ExitError); ok {
+			return exitError.ExitCode() == 0, nil
+		}
+
+		return false, errors.Wrapf(err, "error checking if [%v] is ancestor of [%v]\noutput:%v",
+			higher, lower, string(out))
+	}
+
+	return true, nil
+}

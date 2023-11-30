@@ -28,7 +28,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/v230/protos/api"
-	"github.com/dgraph-io/dgraph/dgraphtest"
+	"github.com/dgraph-io/dgraph/dgraphapi"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -638,9 +638,9 @@ func TestFilterAtSameLevelOnUIDWithExpand(t *testing.T) {
 	}`
 	js := processQueryNoErr(t, query)
 	// Because the UID for guardians and groot can change while upgrade tests are running
-	a := dgraphtest.CompareJSON(`{"data":{"q":[{"name":"Michonne","gender":"female","alive":true,
+	a := dgraphapi.CompareJSON(`{"data":{"q":[{"name":"Michonne","gender":"female","alive":true,
 	"friend":[{"gender":"male","alive":true,"name":"Rick Grimes"}]}]}}`, js)
-	b := dgraphtest.CompareJSON(`{"data":{"q":[{"name":"Michonne","gender":"female","alive":true,
+	b := dgraphapi.CompareJSON(`{"data":{"q":[{"name":"Michonne","gender":"female","alive":true,
 	"dgraph.xid":"guardians","friend":[{"gender":"male","alive":true,"name":"Rick Grimes"}]}]}}`, js)
 	if a != nil && b != nil {
 		t.Error(a)
