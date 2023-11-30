@@ -123,7 +123,7 @@ func (hc *HTTPClient) CreateGroup(name string) (string, error) {
 	}
 	resp, err := hc.RunGraphqlQuery(params, true)
 	if err != nil {
-		return "", nil
+		return "", err
 	}
 	type Response struct {
 		AddGroup struct {

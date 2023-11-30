@@ -709,6 +709,7 @@ func initialSchemaInternal(namespace uint64, all bool) []*pb.SchemaUpdate {
 			Directive: pb.SchemaUpdate_INDEX,
 			Tokenizer: []string{"exact"},
 			Upsert:    true,
+			Unique:    true,
 		}, &pb.SchemaUpdate{
 			Predicate: "dgraph.graphql.p_query",
 			ValueType: pb.Posting_STRING,
@@ -724,6 +725,7 @@ func initialSchemaInternal(namespace uint64, all bool) []*pb.SchemaUpdate {
 				ValueType: pb.Posting_STRING,
 				Directive: pb.SchemaUpdate_INDEX,
 				Upsert:    true,
+				Unique:    true,
 				Tokenizer: []string{"exact"},
 			},
 			{

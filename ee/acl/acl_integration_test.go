@@ -412,6 +412,7 @@ func (asuite *AclTestSuite) TestWrongPermission() {
 	defer cleanup()
 	require.NoError(t, gc.LoginIntoNamespace(ctx, dgraphtest.DefaultUser,
 		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	require.NoError(t, gc.DropAll())
 
 	mu := &api.Mutation{SetNquads: []byte(`
 	_:dev <dgraph.type> "dgraph.type.Group" .

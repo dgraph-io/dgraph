@@ -847,7 +847,8 @@
       "tokenizer": [
         "exact"
       ],
-      "upsert": true
+      "upsert": true,
+      "unique":true
     },
     {
       "predicate": "dgraph.type",

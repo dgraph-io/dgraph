@@ -82,7 +82,7 @@ func TestExportSchemaToMinio(t *testing.T) {
 var expectedSchema = `[0x0] <movie>:string .` + " " + `
 [0x0] <dgraph.type>:[string] @index(exact) .` + " " + `
 [0x0] <dgraph.drop.op>:string .` + " " + `
-[0x0] <dgraph.graphql.xid>:string @index(exact) @upsert .` + " " + `
+[0x0] <dgraph.graphql.xid>:string @index(exact) @upsert @unique .` + " " + `
 [0x0] <dgraph.graphql.schema>:string .` + " " + `
 [0x0] <dgraph.graphql.p_query>:string @index(sha256) .` + " " + `
 [0x0] type <Node> {

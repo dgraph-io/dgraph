@@ -323,6 +323,9 @@ func toSchema(attr string, update *pb.SchemaUpdate) *bpb.KV {
 	if update.GetUpsert() {
 		x.Check2(buf.WriteString(" @upsert"))
 	}
+	if update.GetUnique() {
+		x.Check2(buf.WriteString(" @unique"))
+	}
 	x.Check2(buf.WriteString(" . \n"))
 	//TODO(Naman): We don't need the version anymore.
 	return &bpb.KV{

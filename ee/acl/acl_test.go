@@ -35,6 +35,275 @@ var (
 	userpassword = "simplepassword"
 )
 
+const (
+
+	// This is the groot schema before adding @unique directive to the dgraph.xid predicate
+	oldGrootSchema = `{
+	"schema": [
+	  {
+		"predicate": "dgraph.acl.rule",
+		"type": "uid",
+		"list": true
+	  },
+	  {
+		  "predicate":"dgraph.drop.op",
+		  "type":"string"
+	  },
+	  {
+		  "predicate":"dgraph.graphql.p_query",
+		  "type":"string",
+		  "index":true,
+		  "tokenizer":["sha256"]
+	  },
+	  {
+		"predicate": "dgraph.graphql.schema",
+		"type": "string"
+	  },
+	  {
+		"predicate": "dgraph.graphql.xid",
+		"type": "string",
+		"index": true,
+		"tokenizer": [
+		  "exact"
+		],
+		"upsert": true
+	  },
+	  {
+		"predicate": "dgraph.password",
+		"type": "password"
+	  },
+	  {
+		"predicate": "dgraph.rule.permission",
+		"type": "int"
+	  },
+	  {
+		"predicate": "dgraph.rule.predicate",
+		"type": "string",
+		"index": true,
+		"tokenizer": [
+		  "exact"
+		],
+		"upsert": true
+	  },
+	  {
+		"predicate": "dgraph.type",
+		"type": "string",
+		"index": true,
+		"tokenizer": [
+		  "exact"
+		],
+		"list": true
+	  },
+	  {
+		"predicate": "dgraph.user.group",
+		"type": "uid",
+		"reverse": true,
+		"list": true
+	  },
+	  {
+		"predicate": "dgraph.xid",
+		"type": "string",
+		"index": true,
+		"tokenizer": [
+		  "exact"
+		],
+		"upsert": true
+	  }
+	],
+	"types": [
+	  {
+		"fields": [
+		  {
+			"name": "dgraph.graphql.schema"
+		  },
+		  {
+			"name": "dgraph.graphql.xid"
+		  }
+		],
+		"name": "dgraph.graphql"
+	  },
+	  {
+		  "fields": [
+			  {
+				  "name": "dgraph.graphql.p_query"
+			  }
+		  ],
+		  "name": "dgraph.graphql.persisted_query"
+	  },
+	  {
+		"fields": [
+		  {
+			"name": "dgraph.xid"
+		  },
+		  {
+			"name": "dgraph.acl.rule"
+		  }
+		],
+		"name": "dgraph.type.Group"
+	  },
+	  {
+		"fields": [
+		  {
+			"name": "dgraph.rule.predicate"
+		  },
+		  {
+			"name": "dgraph.rule.permission"
+		  }
+		],
+		"name": "dgraph.type.Rule"
+	  },
+	  {
+		"fields": [
+		  {
+			"name": "dgraph.xid"
+		  },
+		  {
+			"name": "dgraph.password"
+		  },
+		  {
+			"name": "dgraph.user.group"
+		  }
+		],
+		"name": "dgraph.type.User"
+	  }
+	]
+  }`
+
+	// This is the groot schema after adding @unique directive to the dgraph.xid predicate
+	newGrootSchema = `{
+	"schema": [
+	  {
+		"predicate": "dgraph.acl.rule",
+		"type": "uid",
+		"list": true
+	  },
+	  {
+		  "predicate":"dgraph.drop.op",
+		  "type":"string"
+	  },
+	  {
+		  "predicate":"dgraph.graphql.p_query",
+		  "type":"string",
+		  "index":true,
+		  "tokenizer":["sha256"]
+	  },
+	  {
+		"predicate": "dgraph.graphql.schema",
+		"type": "string"
+	  },
+	  {
+		"predicate": "dgraph.graphql.xid",
+		"type": "string",
+		"index": true,
+		"tokenizer": [
+		  "exact"
+		],
+		"upsert": true,
+		"unique": true
+	  },
+	  {
+		"predicate": "dgraph.password",
+		"type": "password"
+	  },
+	  {
+		"predicate": "dgraph.rule.permission",
+		"type": "int"
+	  },
+	  {
+		"predicate": "dgraph.rule.predicate",
+		"type": "string",
+		"index": true,
+		"tokenizer": [
+		  "exact"
+		],
+		"upsert": true
+	  },
+	  {
+		"predicate": "dgraph.type",
+		"type": "string",
+		"index": true,
+		"tokenizer": [
+		  "exact"
+		],
+		"list": true
+	  },
+	  {
+		"predicate": "dgraph.user.group",
+		"type": "uid",
+		"reverse": true,
+		"list": true
+	  },
+	  {
+		"predicate": "dgraph.xid",
+		"type": "string",
+		"index": true,
+		"tokenizer": [
+		  "exact"
+		],
+		"upsert": true,
+		"unique": true
+	  }
+	],
+	"types": [
+	  {
+		"fields": [
+		  {
+			"name": "dgraph.graphql.schema"
+		  },
+		  {
+			"name": "dgraph.graphql.xid"
+		  }
+		],
+		"name": "dgraph.graphql"
+	  },
+	  {
+		  "fields": [
+			  {
+				  "name": "dgraph.graphql.p_query"
+			  }
+		  ],
+		  "name": "dgraph.graphql.persisted_query"
+	  },
+	  {
+		"fields": [
+		  {
+			"name": "dgraph.xid"
+		  },
+		  {
+			"name": "dgraph.acl.rule"
+		  }
+		],
+		"name": "dgraph.type.Group"
+	  },
+	  {
+		"fields": [
+		  {
+			"name": "dgraph.rule.predicate"
+		  },
+		  {
+			"name": "dgraph.rule.permission"
+		  }
+		],
+		"name": "dgraph.type.Rule"
+	  },
+	  {
+		"fields": [
+		  {
+			"name": "dgraph.xid"
+		  },
+		  {
+			"name": "dgraph.password"
+		  },
+		  {
+			"name": "dgraph.user.group"
+		  }
+		],
+		"name": "dgraph.type.User"
+	  }
+	]
+  }`
+)
+
 func checkUserCount(t *testing.T, resp []byte, expected int) {
 	type Response struct {
 		AddUser struct {
@@ -142,7 +411,7 @@ func (asuite *AclTestSuite) TestPreDefinedPredicates() {
 	ctx := context.Background()
 	require.NoError(t, gc.LoginIntoNamespace(ctx, dgraphtest.DefaultUser,
 		dgraphtest.DefaultPassword, x.GalaxyNamespace))
-	alterPreDefinedPredicates(t, gc.Dgraph)
+	alterPreDefinedPredicates(t, gc.Dgraph, asuite.dc.GetVersion())
 }
 
 func (asuite *AclTestSuite) TestPreDefinedTypes() {
@@ -295,14 +564,25 @@ var (
 	}`, predicateToRead, queryAttr)
 )
 
-func alterPreDefinedPredicates(t *testing.T, dg *dgo.Dgraph) {
+func alterPreDefinedPredicates(t *testing.T, dg *dgo.Dgraph, clusterVersion string) {
 	ctx := context.Background()
 
-	// Test that alter requests are allowed if the new update is the same as
-	// the initial update for a pre-defined predicate.
-	require.NoError(t, dg.Alter(ctx, &api.Operation{
-		Schema: "dgraph.xid: string @index(exact) @upsert .",
-	}))
+	// Commit daa5805739ed258e913a157c6e0f126b2291b1b0 represents the latest update to the main branch.
+	// In this commit, the @unique directive is not applied to ACL predicates.
+	// Therefore, we are now deciding which schema to test.
+	// 'newGrootSchema' refers to the default schema with the @unique directive defined on ACL predicates.
+	// 'oldGrootSchema' refers to the default schema without the @unique directive on ACL predicates.
+	supported, err := dgraphtest.IsHigherVersion(clusterVersion, "daa5805739ed258e913a157c6e0f126b2291b1b0")
+	require.NoError(t, err)
+	if supported {
+		require.NoError(t, dg.Alter(ctx, &api.Operation{
+			Schema: "dgraph.xid: string @index(exact) @upsert @unique .",
+		}))
+	} else {
+		require.NoError(t, dg.Alter(ctx, &api.Operation{
+			Schema: "dgraph.xid: string @index(exact) @upsert .",
+		}))
+	}
 
 	err := dg.Alter(ctx, &api.Operation{Schema: "dgraph.xid: int ."})
 	require.Error(t, err)
@@ -1807,6 +2087,7 @@ func (asuite *AclTestSuite) TestQueryUserInfo() {
 
 func (asuite *AclTestSuite) TestQueriesWithUserAndGroupOfSameName() {
 	t := asuite.T()
+	dgraphtest.ShouldSkipTest(t, asuite.dc.GetVersion(), "7b1f473ddf01547e24b44f580a68e6b049502d69")
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 	defer cancel()
 
@@ -1923,136 +2204,7 @@ func (asuite *AclTestSuite) TestSchemaQueryWithACL() {
 	defer cancel()
 
 	schemaQuery := "schema{}"
-	grootSchema := `{
-  "schema": [
-    {
-      "predicate": "dgraph.acl.rule",
-      "type": "uid",
-      "list": true
-	},
-	{
-		"predicate":"dgraph.drop.op",
-		"type":"string"
-	},
-	{
-		"predicate":"dgraph.graphql.p_query",
-		"type":"string",
-		"index":true,
-		"tokenizer":["sha256"]
-	},
-    {
-      "predicate": "dgraph.graphql.schema",
-      "type": "string"
-	},
-    {
-      "predicate": "dgraph.graphql.xid",
-      "type": "string",
-      "index": true,
-      "tokenizer": [
-        "exact"
-      ],
-      "upsert": true
-    },
-    {
-      "predicate": "dgraph.password",
-      "type": "password"
-    },
-    {
-      "predicate": "dgraph.rule.permission",
-      "type": "int"
-    },
-    {
-      "predicate": "dgraph.rule.predicate",
-      "type": "string",
-      "index": true,
-      "tokenizer": [
-        "exact"
-      ],
-      "upsert": true
-    },
-    {
-      "predicate": "dgraph.type",
-      "type": "string",
-      "index": true,
-      "tokenizer": [
-        "exact"
-      ],
-      "list": true
-    },
-    {
-      "predicate": "dgraph.user.group",
-      "type": "uid",
-      "reverse": true,
-      "list": true
-    },
-    {
-      "predicate": "dgraph.xid",
-      "type": "string",
-      "index": true,
-      "tokenizer": [
-        "exact"
-      ],
-      "upsert": true
-    }
-  ],
-  "types": [
-    {
-      "fields": [
-        {
-          "name": "dgraph.graphql.schema"
-        },
-        {
-          "name": "dgraph.graphql.xid"
-        }
-      ],
-      "name": "dgraph.graphql"
-	},
-	{
-		"fields": [
-			{
-				"name": "dgraph.graphql.p_query"
-			}
-		],
-		"name": "dgraph.graphql.persisted_query"
-	},
-    {
-      "fields": [
-        {
-          "name": "dgraph.xid"
-        },
-        {
-          "name": "dgraph.acl.rule"
-        }
-      ],
-      "name": "dgraph.type.Group"
-    },
-    {
-      "fields": [
-        {
-          "name": "dgraph.rule.predicate"
-        },
-        {
-          "name": "dgraph.rule.permission"
-        }
-      ],
-      "name": "dgraph.type.Rule"
-    },
-    {
-      "fields": [
-        {
-          "name": "dgraph.xid"
-        },
-        {
-          "name": "dgraph.password"
-        },
-        {
-          "name": "dgraph.user.group"
-        }
-      ],
-      "name": "dgraph.type.User"
-    }
-  ]
-}`
+
 	aliceSchema := `{
   "schema": [
     {
@@ -2102,7 +2254,13 @@ func (asuite *AclTestSuite) TestSchemaQueryWithACL() {
 	require.NoError(t, gc.DropAll())
 	resp, err := gc.Query(schemaQuery)
 	require.NoError(t, err)
-	require.JSONEq(t, grootSchema, string(resp.GetJson()))
+	supported, err := dgraphtest.IsHigherVersion(asuite.dc.GetVersion(), "daa5805739ed258e913a157c6e0f126b2291b1b0")
+	require.NoError(t, err)
+	if supported {
+		require.JSONEq(t, newGrootSchema, string(resp.GetJson()))
+	} else {
+		require.JSONEq(t, oldGrootSchema, string(resp.GetJson()))
+	}
 
 	// add another user and some data for that user with permissions on predicates
 	resetUser(t, hc)

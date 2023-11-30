@@ -32,7 +32,7 @@ import (
 
 const (
 	aclPreds = `
-{"predicate":"dgraph.xid","type":"string", "index":true, "tokenizer":["exact"], "upsert":true},
+{"predicate":"dgraph.xid","type":"string", "index":true, "tokenizer":["exact"], "unique": true, "upsert":true},
 {"predicate":"dgraph.password","type":"password"},
 {"predicate":"dgraph.user.group","list":true, "reverse":true, "type":"uid"},
 {"predicate":"dgraph.acl.rule","type":"uid","list":true},
@@ -44,7 +44,7 @@ const (
 {"predicate":"dgraph.drop.op", "type": "string"},
 {"predicate":"dgraph.graphql.p_query","type":"string","index":true,"tokenizer":["sha256"]},
 {"predicate":"dgraph.graphql.schema", "type": "string"},
-{"predicate":"dgraph.graphql.xid","type":"string","index":true,"tokenizer":["exact"],"upsert":true}
+{"predicate":"dgraph.graphql.xid","type":"string","index":true,"tokenizer":["exact"], "unique": true,"upsert":true}
 `
 	aclTypes = `
 {
