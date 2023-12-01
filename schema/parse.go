@@ -407,7 +407,7 @@ func parseTokenOption(it *lex.ItemIterator, factory tok.IndexFactory) (*pb.Optio
 			"unexpected '%s' found when expecting quoted text",
 			nextItem.Val)
 	}
-	optVal := nextItem.Val
+	optVal := nextItem.Val[1 : len(nextItem.Val)-1]
 	return &pb.OptionPair{Key: optName, Value: optVal}, nil
 }
 
