@@ -13,7 +13,7 @@ require (
 	github.com/HdrHistogram/hdrhistogram-go v1.1.2
 	github.com/IBM/sarama v1.41.0
 	github.com/Masterminds/semver/v3 v3.1.0
-	github.com/blevesearch/bleve/v2 v2.3.9
+	github.com/blevesearch/bleve/v2 v2.3.10
 	github.com/dgraph-io/badger/v4 v4.2.0
 	github.com/dgraph-io/dgo/v230 v230.0.1
 	github.com/dgraph-io/gqlgen v0.13.2
