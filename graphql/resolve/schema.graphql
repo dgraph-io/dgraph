@@ -500,3 +500,11 @@ type LibraryManager  {
     name: String! @id
     manages: [LibraryMember]
 }
+
+type Product {
+  id: String! @id
+  description: String
+  title: String
+  imageUrl: String
+  productVector: [Float] @hm_embedding
+}
