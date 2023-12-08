@@ -162,6 +162,7 @@ enum DgraphIndex {
 	day
 	hour
 	geo
+	hnsw
 }
 
 input AuthRule {
@@ -276,7 +277,7 @@ input GenerateMutationParams {
 `
 	directiveDefs = `
 directive @hasInverse(field: String!) on FIELD_DEFINITION
-directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
+directive @search(by: [String!]) on FIELD_DEFINITION
 directive @hm_embedding on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id(interface: Boolean) on FIELD_DEFINITION
@@ -308,7 +309,7 @@ directive @generate(
 	// So, such directives have to be missed too.
 	apolloSupportedDirectiveDefs = `
 directive @hasInverse(field: String!) on FIELD_DEFINITION
-directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
+directive @search(by: [String!]) on FIELD_DEFINITION
 directive @hm_embedding on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id(interface: Boolean) on FIELD_DEFINITION
@@ -461,6 +462,7 @@ var supportedSearches = map[string]searchTypeIndex{
 	"point":        {"Point", "geo"},
 	"polygon":      {"Polygon", "geo"},
 	"multiPolygon": {"MultiPolygon", "geo"},
+	"hnsw":         {"Float", "hnsw"},
 }
 
 // GraphQL scalar/object type -> default search arg
@@ -535,6 +537,7 @@ var builtInFilters = map[string]string{
 	"point":        "PointGeoFilter",
 	"polygon":      "PolygonGeoFilter",
 	"multiPolygon": "PolygonGeoFilter",
+	"hnsw":         "HNSWSearchFilter",
 }
 
 // GraphQL in-built type -> Dgraph scalar
@@ -1314,7 +1317,7 @@ func addPatchType(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[
 
 // addFieldFilters adds field arguments that allow filtering to all fields of
 // defn that can be searched.  For example, if there's another type
-// `type R { ... f: String @search(by: [term]) ... }`
+// `type R { ... f: String @search(by: ["term"]) ... }`
 // and defn has a field of type R, e.g. if defn is like
 // `type T { ... g: R ... }`
 // then a query should be able to filter on g by term search on f, like
@@ -1473,6 +1476,7 @@ func getFilterTypes(schema *ast.Schema, fld *ast.FieldDefinition, filterName str
 	filterNames := make([]string, len(searchArgs))
 
 	for i, search := range searchArgs {
+		search = parseSearchType(search)
 		filterNames[i] = builtInFilters[search]
 
 		// For enum type, if the index is "hash" or "exact", we construct filter named

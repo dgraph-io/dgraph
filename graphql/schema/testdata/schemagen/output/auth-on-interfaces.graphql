@@ -4,21 +4,21 @@
 
 type Author {
 	id: ID!
-	name: String! @search(by: [hash])
+	name: String! @search(by: ["hash"])
 	posts(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post] @hasInverse(field: author)
 	postsAggregate(filter: PostFilter): PostAggregateResult
 }
 
 interface Post @secret(field: "pwd") @auth(password: {rule:"{$ROLE: { eq: \"Admin\" } }"}, query: {rule:"query($TEXT: String!) { \n  queryPost(filter: { text : {eq: $TEXT } } ) { \n    id \n  } \n}"}) {
 	id: ID!
-	text: String @search(by: [exact])
+	text: String @search(by: ["exact"])
 	datePublished: DateTime @search
 	author(filter: AuthorFilter): Author! @hasInverse(field: posts)
 }
 
 type Question implements Post @auth(query: {rule:"query($ANS: Boolean!) { \n  queryQuestion(filter: { answered: $ANS } ) { \n    id \n  } \n}"}) @secret(field: "pwd") {
 	id: ID!
-	text: String @search(by: [exact])
+	text: String @search(by: ["exact"])
 	datePublished: DateTime @search
 	author(filter: AuthorFilter): Author! @hasInverse(field: posts)
 	answered: Boolean @search
@@ -81,6 +81,7 @@ enum DgraphIndex {
 	day
 	hour
 	geo
+	hnsw
 }
 
 input AuthRule {
@@ -194,7 +195,7 @@ input GenerateMutationParams {
 }
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION
-directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
+directive @search(by: [String!]) on FIELD_DEFINITION
 directive @hm_embedding on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id(interface: Boolean) on FIELD_DEFINITION
