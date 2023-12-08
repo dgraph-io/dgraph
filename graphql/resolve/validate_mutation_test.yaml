@@ -18,9 +18,9 @@
   explanation: "Add mutation expects an array instead of an object"
   validationerror:
     { "message":
-            "input:2: Variable type provided AddAuthorInput! is incompatible with expected
-            type [AddAuthorInput!]!\ninput:2: Variable \"$auth\" of type \"AddAuthorInput!\"
-            used in position expecting type \"[AddAuthorInput!]!\".\n" }
+            "input:2: Variable type provided AddAuthorInput! is incompatible with expected type
+            [AddAuthorInput!]!\ninput:2: Variable \"$auth\" of type \"AddAuthorInput!\" used in
+            position expecting type \"[AddAuthorInput!]!\".\n" }
 
 
 -
