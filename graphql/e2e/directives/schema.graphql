@@ -3,13 +3,14 @@
 
 type Hotel {
     id: ID!
-    name: String! @search(by: [exact])
+    name: String! @search(by: ["exact"])
     location: Point @search
     area: Polygon @search
     branches: MultiPolygon @search
 }
 
 type Country {
+<<<<<<< HEAD
     # **Don't delete** Comments in types should work
     id: ID! # **Don't delete** Comments in lines should work
     name: String! @search(by: [trigram, hash])
@@ -23,6 +24,21 @@ type State {
     capital: String
     region: Region
     country: Country @dgraph(pred: "inCountry")
+=======
+        # **Don't delete** Comments in types should work
+        id: ID! # **Don't delete** Comments in lines should work
+        name: String! @search(by: ["trigram", "hash"])
+        states: [State] @hasInverse(field: country) @dgraph(pred: "hasStates")
+}
+
+type State {
+        id: ID!
+        xcode: String! @id @search(by: ["regexp"])
+        name: String!
+        capital: String
+        region: Region
+	    country: Country @dgraph(pred: "inCountry")
+>>>>>>> 18c0d84d4 (Feat(GraphQL): Add support for @search directive for vector searches (#69))
 }
 
 # **Don't delete** Comments in the middle of schemas should work
@@ -36,6 +52,7 @@ schema and should make their way into the generated schema.
 type Author @dgraph(type: "test.dgraph.author") {
     id: ID!
 
+<<<<<<< HEAD
     """
     GraphQL descriptions can be on fields.  They should work in the input
     schema and should make their way into the generated schema.
@@ -63,6 +80,35 @@ type Post @dgraph(type: "myPost") {
     postType: PostType @search(by: [hash, trigram])
     author: Author! @hasInverse(field: posts) @dgraph(pred: "post.author")
     category: Category @hasInverse(field: posts)
+=======
+        """
+        GraphQL descriptions can be on fields.  They should work in the input
+        schema and should make their way into the generated schema.
+        """
+        name: String! @search(by: ["hash", "trigram"])
+
+        dob: DateTime @search
+        reputation: Float @search
+        qualification: String @search(by: ["hash", "trigram"])
+        country: Country
+        posts: [Post!] @hasInverse(field: author)
+		bio: String @lambda
+		rank: Int @lambda
+}
+
+type Post @dgraph(type: "myPost") {
+        postID: ID!
+        title: String! @search(by: ["term", "fulltext"])
+        text: String @search(by: ["fulltext"]) @dgraph(pred: "text")
+        tags: [String] @search(by: ["exact"])
+        topic: String @search(by: ["exact"]) @dgraph(pred: "test.dgraph.topic")
+        numLikes: Int @search
+        numViews: Int64 @search
+        isPublished: Boolean @search @dgraph(pred: "is_published")
+        postType: PostType @search(by: ["hash", "trigram"])
+        author: Author! @hasInverse(field: posts) @dgraph(pred: "post.author")
+        category: Category @hasInverse(field: posts)
+>>>>>>> 18c0d84d4 (Feat(GraphQL): Add support for @search directive for vector searches (#69))
 }
 
 type Category {
@@ -99,6 +145,7 @@ interface Employee @dgraph(type: "test.dgraph.employee.en") {
 }
 
 interface Character @dgraph(type: "performance.character") {
+<<<<<<< HEAD
     id: ID!
     name: String! @search(by: [exact])
     appearsIn: [Episode!] @search @dgraph(pred: "appears_in")
@@ -121,6 +168,30 @@ type Droid implements Character @dgraph(type: "roboDroid") {
     appearsIn: [Episode!] @search
     bio: String @lambda
     primaryFunction: String
+=======
+        id: ID!
+        name: String! @search(by: ["exact"])
+        appearsIn: [Episode!] @search @dgraph(pred: "appears_in")
+		bio: String @lambda
+}
+
+type Human implements Character & Employee {
+        id: ID!
+        name: String! @search(by: ["exact"])
+        appearsIn: [Episode!] @search
+        bio: String @lambda
+        ename: String!
+        starships: [Starship]
+        totalCredits: Float @dgraph(pred: "credits")
+}
+
+type Droid implements Character @dgraph(type: "roboDroid") {
+        id: ID!
+        name: String! @search(by: ["exact"])
+        appearsIn: [Episode!] @search
+        bio: String @lambda
+        primaryFunction: String
+>>>>>>> 18c0d84d4 (Feat(GraphQL): Add support for @search directive for vector searches (#69))
 }
 
 enum Episode {
@@ -130,9 +201,15 @@ enum Episode {
 }
 
 type Starship @dgraph(type: "star.ship") {
+<<<<<<< HEAD
     id: ID!
     name: String! @search(by: [term]) @dgraph(pred: "star.ship.name")
     length: Float
+=======
+        id: ID!
+        name: String! @search(by: ["term"]) @dgraph(pred: "star.ship.name")
+        length: Float
+>>>>>>> 18c0d84d4 (Feat(GraphQL): Add support for @search directive for vector searches (#69))
 }
 
 type Movie {
@@ -197,7 +274,7 @@ type Comment1 {
 }
 type post1{
     id: ID
-    title: String! @id @search(by: [regexp])
+    title: String! @id @search(by: ["regexp"])
     numLikes: Int64 @search
     commentsByMonth: [Int]
     likesByMonth: [Int64]
@@ -213,13 +290,13 @@ type Person1 {
 
 type Person {
     id: ID!
-    name: String! @search(by: [hash])
-    nameHi: String @dgraph(pred:"Person.name@hi") @search(by: [hash])
-    nameZh: String @dgraph(pred:"Person.name@zh") @search(by: [hash])
+    name: String! @search(by: ["hash"])
+    nameHi: String @dgraph(pred:"Person.name@hi") @search(by: ["hash"])
+    nameZh: String @dgraph(pred:"Person.name@zh") @search(by: ["hash"])
     nameHiZh: String @dgraph(pred:"Person.name@hi:zh")
     nameZhHi: String @dgraph(pred:"Person.name@zh:hi")
     nameHi_Zh_Untag: String @dgraph(pred:"Person.name@hi:zh:.")
-    name_Untag_AnyLang: String @dgraph(pred:"Person.name@.") @search(by: [hash])
+    name_Untag_AnyLang: String @dgraph(pred:"Person.name@.") @search(by: ["hash"])
     professionEn: String @dgraph(pred:"Person.profession@en")
 }
 
@@ -363,7 +440,7 @@ type Owner {
 type Project {
     id: String! @id
     owner: Owner!
-    name: String! @search(by: [hash])
+    name: String! @search(by: ["hash"])
     datasets: [Dataset!] @hasInverse(field: project)
 }
 
@@ -371,11 +448,11 @@ type Dataset {
     id: String! @id
     owner: Owner!
     project: Project!
-    name: String! @search(by: [hash])
+    name: String! @search(by: ["hash"])
 }
 
 type author1{
-    name:String! @id @search(by: [regexp])
+    name:String! @id @search(by: ["regexp"])
     posts:[post1] @hasInverse(field: author)
 }
 # multiple fields with @id directive

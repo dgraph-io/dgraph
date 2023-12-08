@@ -5,17 +5,17 @@ type Product {
   description: String
   title: String
   imageUrl: String
-  product_vector: [Float] @hm_embedding 
+  product_vector: [Float!] @hm_embedding 
 }
 
 type Purchase @lambdaOnMutate(add: true){
   user: User @hasInverse(field: "purchase_history")
   product: Product
-  date: DateTime @search(by: [day])
+  date: DateTime @search(by: ["day"])
 }
 
 type User  {
   email: String!  @id
   purchase_history: [Purchase] 
-  user_vector: [Float] @hm_embedding 
+  user_vector: [Float!] @hm_embedding 
 }

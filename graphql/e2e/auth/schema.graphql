@@ -33,7 +33,7 @@ type Tweets @auth (
     update: { rule: "{$USER: { eq: \"foo\" } }"}
 ){
     id: String! @id
-    text: String! @search(by: [fulltext])
+    text: String! @search(by: ["fulltext"])
     user: User
     timestamp: DateTime! @search
     score: Int @search
@@ -71,8 +71,8 @@ type UserSecret @auth(
     """}
 ){
   id: ID!
-  aSecret: String @search(by: [term])
-  ownedBy: String @search(by: [hash])
+  aSecret: String @search(by: ["term"])
+  ownedBy: String @search(by: ["hash"])
 }
 
 type Region @auth(
@@ -83,7 +83,7 @@ type Region @auth(
     """}
 ){
   id: ID!
-  name: String @search(by: [hash])
+  name: String @search(by: ["hash"])
   global: Boolean @search
   users: [User]
 }
@@ -207,7 +207,7 @@ type Movie @auth(
     ]}
 ) {
   id: ID!
-  content: String @search(by: [hash])
+  content: String @search(by: ["hash"])
   hidden: Boolean @search
   regionsAvailable: [Region]
   reviews: [Review]
@@ -354,7 +354,7 @@ type Project @secret(field: "pwd") @auth(
      ]}
 ) {
   projID: ID!
-  name: String! @search(by: [hash])
+  name: String! @search(by: ["hash"])
   roles: [Role]
   columns: [Column] @hasInverse(field: inProject)
   random: String
@@ -478,7 +478,7 @@ type Column @auth(
 ) {
   colID: ID!
   inProject: Project! # @auth(update: { rule: "DENY" })
-  name: String! @search(by: [hash])
+  name: String! @search(by: ["hash"])
   tickets: [Ticket] @hasInverse(field: onColumn)
   random: String
 }
@@ -543,7 +543,7 @@ type Ticket @auth(
 ){
     id: ID!
     onColumn: Column!
-    title: String! @search(by: [term])
+    title: String! @search(by: ["term"])
     assignedTo: [User!]
 }
 
@@ -561,14 +561,14 @@ query($USER: String!) {
 }
 """},{ rule: "{$ROLE: { eq: \"ADMIN\" }}"}]}) {
     id: ID!
-    email: String! @dgraph(pred: "IOw80vnV") @search(by: [hash])
+    email: String! @dgraph(pred: "IOw80vnV") @search(by: ["hash"])
 }
 
 type Contact @auth(
     query: { rule: "{$ContactRole: { eq: \"ADMINISTRATOR\"}}" }
 ) {
     id: ID!
-    nickName: String @search(by: [exact, term, fulltext, regexp])
+    nickName: String @search(by: ["exact", "term", "fulltext", "regexp"])
     adminTasks: [AdminTask] @hasInverse(field: forContact)
     tasks: [Task] @hasInverse(field: forContact)
 }
@@ -577,14 +577,14 @@ type AdminTask @auth(
     query: { rule: "{$TaskRole: { eq: \"ADMINISTRATOR\"}}" }
 ) {
     id: ID!
-    name: String @search(by: [exact, term, fulltext, regexp])
+    name: String @search(by: ["exact", "term", "fulltext", "regexp"])
     occurrences: [TaskOccurrence] @hasInverse(field: adminTask)
     forContact: Contact @hasInverse(field: adminTasks)
 }
 
 type Task {
     id: ID!
-    name: String @search(by: [exact, term, fulltext, regexp])
+    name: String @search(by: ["exact", "term", "fulltext", "regexp"])
     occurrences: [TaskOccurrence] @hasInverse(field: task)
     forContact: Contact @hasInverse(field: tasks)
 }
@@ -608,12 +608,12 @@ type TaskOccurrence @auth(
     task: Task @hasInverse(field: occurrences)
     adminTask: AdminTask @hasInverse(field: occurrences)
     isPublic: Boolean @search
-    role: String @search(by: [exact, term, fulltext, regexp])
+    role: String @search(by: ["exact", "term", "fulltext", "regexp"])
 }
 
 type Author {
   id: ID!
-  name: String! @search(by: [exact])
+  name: String! @search(by: ["exact"])
   posts: [Post] @hasInverse(field: author)
 }
 
@@ -653,7 +653,7 @@ interface Post @secret(field: "pwd") @auth(
             }""" }
 ){
     id: ID!
-    text: String! @search(by: [exact])
+    text: String! @search(by: ["exact"])
     topic: String
     datePublished: DateTime @search
     author: Author!
@@ -725,7 +725,7 @@ type Answer implements Post {
 
 interface A {
     id: ID!
-    fieldA: String @search(by: [exact])
+    fieldA: String @search(by: ["exact"])
     random: String
 }
 
@@ -788,7 +788,7 @@ type Mission @key(fields: "id") @auth(
 ){
     id: String! @id
     crew: [Astronaut]
-    supervisorName: String @search(by: [exact])
+    supervisorName: String @search(by: ["exact"])
     designation: String!
     startDate: String
     endDate: String
@@ -812,7 +812,7 @@ interface Vehicle @auth(
         ]
     }
 ){
-    owner: String! @search(by: [exact])
+    owner: String! @search(by: ["exact"])
 }
 
 type Car implements Vehicle {
@@ -830,7 +830,7 @@ type Country @auth(
     """} ) {
     id: String! @id
     name: String!
-    ownedBy: String @search(by: [hash])
+    ownedBy: String @search(by: ["hash"])
     states: [State] @hasInverse(field: country)
 }
 
@@ -844,7 +844,7 @@ type State @auth(
     """} ) {
     code: String! @id
     name: String!
-    ownedBy: String @search(by: [hash])
+    ownedBy: String @search(by: ["hash"])
     country: Country
 }
 

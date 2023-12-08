@@ -7,19 +7,19 @@ type Product {
 	description: String
 	title: String
 	imageUrl: String
-	product_vector: [Float] @hm_embedding
+	product_vector: [Float!] @hm_embedding
 }
 
 type Purchase @lambdaOnMutate(add: true) {
 	user(filter: UserFilter): User @hasInverse(field: "purchase_history")
 	product(filter: ProductFilter): Product
-	date: DateTime @search(by: [day])
+	date: DateTime @search(by: ["day"])
 }
 
 type User {
 	email: String! @id
 	purchase_history(filter: PurchaseFilter, order: PurchaseOrder, first: Int, offset: Int): [Purchase] @hasInverse(field: user)
-	user_vector: [Float] @hm_embedding
+	user_vector: [Float!] @hm_embedding
 	purchase_historyAggregate(filter: PurchaseFilter): PurchaseAggregateResult
 }
 
@@ -80,6 +80,7 @@ enum DgraphIndex {
 	day
 	hour
 	geo
+	hnsw
 }
 
 input AuthRule {
@@ -193,7 +194,7 @@ input GenerateMutationParams {
 }
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION
-directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
+directive @search(by: [String!]) on FIELD_DEFINITION
 directive @hm_embedding on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id(interface: Boolean) on FIELD_DEFINITION
@@ -340,7 +341,7 @@ type ProductWithDistance @dgraph(type: "Product") {
 	description: String
 	title: String
 	imageUrl: String
-	product_vector: [Float] @hm_embedding
+	product_vector: [Float!] @hm_embedding
 	hm_distance: Float
 }
 
@@ -374,7 +375,7 @@ type UserAggregateResult {
 type UserWithDistance @dgraph(type: "User") {
 	email: String! @id
 	purchase_history(filter: PurchaseFilter, order: PurchaseOrder, first: Int, offset: Int): [Purchase] @hasInverse(field: user)
-	user_vector: [Float] @hm_embedding
+	user_vector: [Float!] @hm_embedding
 	purchase_historyAggregate(filter: PurchaseFilter): PurchaseAggregateResult
 }
 
@@ -434,7 +435,7 @@ input AddProductInput {
 	description: String
 	title: String
 	imageUrl: String
-	product_vector: [Float]
+	product_vector: [Float!]
 }
 
 input AddPurchaseInput {
@@ -446,7 +447,7 @@ input AddPurchaseInput {
 input AddUserInput {
 	email: String!
 	purchase_history: [PurchaseRef]
-	user_vector: [Float]
+	user_vector: [Float!]
 }
 
 input ProductFilter {
@@ -467,7 +468,7 @@ input ProductPatch {
 	description: String
 	title: String
 	imageUrl: String
-	product_vector: [Float]
+	product_vector: [Float!]
 }
 
 input ProductRef {
@@ -475,7 +476,7 @@ input ProductRef {
 	description: String
 	title: String
 	imageUrl: String
-	product_vector: [Float]
+	product_vector: [Float!]
 }
 
 input PurchaseFilter {
@@ -538,13 +539,13 @@ input UserOrder {
 
 input UserPatch {
 	purchase_history: [PurchaseRef]
-	user_vector: [Float]
+	user_vector: [Float!]
 }
 
 input UserRef {
 	email: String
 	purchase_history: [PurchaseRef]
-	user_vector: [Float]
+	user_vector: [Float!]
 }
 
 #######################
