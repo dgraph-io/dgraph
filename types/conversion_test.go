@@ -40,7 +40,7 @@ func bs(v interface{}) []byte {
 		var bs [8]byte
 		binary.LittleEndian.PutUint64(bs[:], math.Float64bits(x))
 		return bs[:]
-	case []float64:
+	case []float32:
 		return FloatArrayAsBytes(x)
 	case time.Time:
 		bs, err := x.MarshalBinary()
@@ -271,7 +271,7 @@ func TestConvertFromBinary(t *testing.T) {
 		{in: bs(time.Date(2016, 1, 1, 0, 0, 0, 0, time.UTC)),
 			out: Val{DateTimeID, time.Date(2016, 1, 1, 0, 0, 0, 0, time.UTC)}},
 		{in: bs(time.Time{}), out: Val{DateTimeID, time.Time{}}},
-		{in: bs([]float64{1.0, 2.0}), out: Val{VFloatID, []float64{1.0, 2.0}}},
+		{in: bs([]float32{1.0, 2.0}), out: Val{VFloatID, []float32{1.0, 2.0}}},
 	}
 
 	for _, tc := range tests {

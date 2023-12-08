@@ -93,7 +93,7 @@ var tokenizers = make(map[string]Tokenizer)
 var indexFactories = make(map[string]IndexFactory)
 
 func init() {
-	registerIndexFactory(createIndexFactory(hnsw.CreateFactory[float64](64)))
+	registerIndexFactory(createIndexFactory(hnsw.CreateFactory[float32](32)))
 	registerTokenizer(GeoTokenizer{})
 	registerTokenizer(IntTokenizer{})
 	registerTokenizer(FloatTokenizer{})

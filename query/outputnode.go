@@ -482,8 +482,8 @@ func (enc *encoder) AddValue(fj fastJsonNode, attr uint16, v types.Val) error {
 
 func (enc *encoder) AddListValue(fj fastJsonNode, attr uint16, v types.Val, list bool) error {
 	if v.Tid == types.VFloatID {
-		for _, f := range v.Value.([]float64) {
-			bs := []byte(strconv.FormatFloat(f, 'E', -1, 64))
+		for _, f := range v.Value.([]float32) {
+			bs := []byte(strconv.FormatFloat(float64(f), 'E', -1, 32))
 			sn, err := enc.makeScalarNode(attr, bs, true)
 			if err != nil {
 				return err
@@ -696,7 +696,7 @@ func valToBytes(v types.Val) ([]byte, error) {
 	case types.PasswordID:
 		return []byte(fmt.Sprintf("%q", v.Value.(string))), nil
 	case types.VFloatID:
-		return json.Marshal(v.Value.([]float64))
+		return json.Marshal(v.Value.([]float32))
 	default:
 		return nil, errors.New("Unsupported types.Val.Tid")
 	}

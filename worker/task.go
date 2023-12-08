@@ -378,10 +378,10 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) (m
 		var nnUids []uint64
 		if srcFn.vectorInfo != nil {
 			nnUids, err = indexer.Search(ctx, qc, srcFn.vectorInfo,
-				int(numNeighbors), index.AcceptAll[float64])
+				int(numNeighbors), index.AcceptAll[float32])
 		} else {
 			nnUids, err = indexer.SearchWithUid(ctx, qc, srcFn.vectorUid,
-				int(numNeighbors), index.AcceptAll[float64])
+				int(numNeighbors), index.AcceptAll[float32])
 		}
 
 		if err != nil {
@@ -1744,7 +1744,7 @@ type functionContext struct {
 	isFuncAtRoot   bool
 	isStringFn     bool
 	atype          types.TypeID
-	vectorInfo     []float64
+	vectorInfo     []float32
 	vectorUid      uint64
 }
 
@@ -2044,7 +2044,7 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 	return fc, nil
 }
 
-func interpretVFloatOrUid(val string) ([]float64, uint64, error) {
+func interpretVFloatOrUid(val string) ([]float32, uint64, error) {
 	vf, err := types.ParseVFloat(val)
 	if err == nil {
 		return vf, 0, nil

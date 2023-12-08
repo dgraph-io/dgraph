@@ -39,18 +39,18 @@ import (
 // according to the following ebnf:
 //
 //	floatArray ::= "[" [floatList] [whitespace] "]"
-//	floatList := float64Val |
-//	             float64Val floatSpaceList |
-//	             float64Val floatCommaList
-//	floatSpaceList := (whitespace float64Val)+
-//	floatCommaList := ([whitespace] "," [whitespace] float64Val)+
-//	float64Val := < a string rep of a float64 value >
-func ParseVFloat(s string) ([]float64, error) {
+//	floatList := float32Val |
+//	             float32Val floatSpaceList |
+//	             float32Val floatCommaList
+//	floatSpaceList := (whitespace float32Val)+
+//	floatCommaList := ([whitespace] "," [whitespace] float32Val)+
+//	float32Val := < a string rep of a float32 value >
+func ParseVFloat(s string) ([]float32, error) {
 	s = strings.ReplaceAll(s, "\n", " ")
 	s = strings.ReplaceAll(s, "\t", " ")
 	s = strings.TrimSpace(s)
 	if len(s) == 0 {
-		return []float64{}, nil
+		return []float32{}, nil
 	}
 	trimmedPre := strings.TrimPrefix(s, "[")
 	if len(trimmedPre) == len(s) {
@@ -61,24 +61,24 @@ func ParseVFloat(s string) ([]float64, error) {
 		return nil, cannotConvertToVFloat(s)
 	}
 	if len(trimmed) == 0 {
-		return []float64{}, nil
+		return []float32{}, nil
 	}
 	if strings.Index(trimmed, ",") != -1 {
 		// Splitting based on comma-separation.
 		values := strings.Split(trimmed, ",")
-		result := make([]float64, len(values))
+		result := make([]float32, len(values))
 		for i := 0; i < len(values); i++ {
 			trimmedVal := strings.TrimSpace(values[i])
-			val, err := strconv.ParseFloat(trimmedVal, 64)
+			val, err := strconv.ParseFloat(trimmedVal, 32)
 			if err != nil {
 				return nil, cannotConvertToVFloat(s)
 			}
-			result[i] = val
+			result[i] = float32(val)
 		}
 		return result, nil
 	}
 	values := strings.Split(trimmed, " ")
-	result := make([]float64, 0, len(values))
+	result := make([]float32, 0, len(values))
 	for i := 0; i < len(values); i++ {
 		if len(values[i]) == 0 {
 			// skip if we have an empty string. This can naturally
@@ -87,11 +87,11 @@ func ParseVFloat(s string) ([]float64, error) {
 			continue
 		}
 		if len(values[i]) > 0 {
-			val, err := strconv.ParseFloat(values[i], 64)
+			val, err := strconv.ParseFloat(values[i], 32)
 			if err != nil {
 				return nil, cannotConvertToVFloat(s)
 			}
-			result = append(result, val)
+			result = append(result, float32(val))
 		}
 	}
 	return result, nil
@@ -160,7 +160,7 @@ func Convert(from Val, toID TypeID) (Val, error) {
 			case PasswordID:
 				*res = string(data)
 			case VFloatID:
-				if len(data)%8 != 0 {
+				if len(data)%4 != 0 {
 					return to, errors.Errorf("Invalid data for vector of floats: %v", data)
 				}
 				*res = BytesAsFloatArray(data)
@@ -249,7 +249,7 @@ func Convert(from Val, toID TypeID) (Val, error) {
 			case DateTimeID:
 				*res = time.Unix(vc, 0).UTC()
 			case VFloatID:
-				*res = []float64{float64(vc)}
+				*res = []float32{float32(vc)}
 			default:
 				return to, cantConvert(fromID, toID)
 			}
@@ -284,7 +284,7 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				nsecs := int64(fracSecs * nanoSecondsInSec)
 				*res = time.Unix(secs, nsecs).UTC()
 			case VFloatID:
-				*res = []float64{vc}
+				*res = []float32{float32(vc)}
 			default:
 				return to, cantConvert(fromID, toID)
 			}
@@ -316,11 +316,11 @@ func Convert(from Val, toID TypeID) (Val, error) {
 					*res = float64(1)
 				}
 			case VFloatID:
-				asFloat := float64(0)
+				asFloat := float32(0)
 				if vc {
-					asFloat = float64(1)
+					asFloat = float32(1)
 				}
-				*res = []float64{asFloat}
+				*res = []float32{asFloat}
 			case StringID, DefaultID:
 				*res = strconv.FormatBool(vc)
 			default:
@@ -546,7 +546,7 @@ func Marshal(from Val, to *Val) error {
 			return cantConvert(fromID, toID)
 		}
 	case VFloatID:
-		vc := val.([]float64)
+		vc := val.([]float32)
 		switch toID {
 		case BinaryID:
 			*res = FloatArrayAsBytes(vc)

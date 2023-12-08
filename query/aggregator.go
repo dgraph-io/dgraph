@@ -134,8 +134,8 @@ func applyAdd(a, b, c *types.Val) error {
 		// so that c.Value[i] = a.Value[i] + b.Value[i] for all i
 		// in range. If lengths of a and b are different, we treat
 		// this as an error.
-		aVal := a.Value.([]float64)
-		bVal, ok := b.Value.([]float64)
+		aVal := a.Value.([]float32)
+		bVal, ok := b.Value.([]float32)
 		if !ok {
 			return ErrorArgsDisagree
 		}
@@ -150,7 +150,7 @@ func applyAdd(a, b, c *types.Val) error {
 		//       which invokes this.
 		//       If we really end up doing this operation repeatedly,
 		//       the memory allocation savings could be significant.
-		cVal := make([]float64, len(aVal))
+		cVal := make([]float32, len(aVal))
 		for i := 0; i < len(aVal); i++ {
 			cVal[i] = aVal[i] + bVal[i]
 		}
@@ -182,8 +182,8 @@ func applySub(a, b, c *types.Val) error {
 		// so that c.Value[i] = a.Value[i] - b.Value[i] for all i
 		// in range. If lengths of a and b are different, we treat
 		// this as an error.
-		aVal := a.Value.([]float64)
-		bVal, ok := b.Value.([]float64)
+		aVal := a.Value.([]float32)
+		bVal, ok := b.Value.([]float32)
 		if !ok {
 			return ErrorArgsDisagree
 		}
@@ -193,7 +193,7 @@ func applySub(a, b, c *types.Val) error {
 		// TODO: Same as applyAdd comment: we should theoretically
 		//       try to save allocation by having this preallocated
 		//       when we reach here.
-		cVal := make([]float64, len(aVal))
+		cVal := make([]float32, len(aVal))
 		for i := 0; i < len(aVal); i++ {
 			cVal[i] = aVal[i] - bVal[i]
 		}
@@ -239,10 +239,10 @@ func applyMul(a, b, c *types.Val) error {
 			c.Tid = types.FloatID
 			c.Value = aVal * b.Value.(float64)
 		case VFLOAT:
-			bVal := b.Value.([]float64)
-			cVal := make([]float64, len(bVal))
+			bVal := b.Value.([]float32)
+			cVal := make([]float32, len(bVal))
 			for i := 0; i < len(bVal); i++ {
-				cVal[i] = aVal * bVal[i]
+				cVal[i] = float32(aVal) * bVal[i]
 			}
 			c.Value = cVal
 			c.Tid = types.VFloatID
@@ -251,7 +251,7 @@ func applyMul(a, b, c *types.Val) error {
 
 		}
 	case VFLOAT:
-		aVal, ok := a.Value.([]float64)
+		aVal, ok := a.Value.([]float32)
 		if !ok {
 			return ErrorShouldBeVector
 		}
@@ -262,13 +262,13 @@ func applyMul(a, b, c *types.Val) error {
 		if !ok {
 			return errors.Errorf("Expected float64 type, but found %t", b.Value)
 		}
-		cVal, ok := c.Value.([]float64)
+		cVal, ok := c.Value.([]float32)
 		if !ok || len(aVal) != len(cVal) {
-			cVal = make([]float64, len(aVal))
+			cVal = make([]float32, len(aVal))
 			c.Value = cVal
 		}
 		for i := 0; i < len(aVal); i++ {
-			cVal[i] = aVal[i] * bVal
+			cVal[i] = aVal[i] * float32(bVal)
 		}
 		c.Tid = types.VFloatID
 
@@ -305,10 +305,10 @@ func applyDiv(a, b, c *types.Val) error {
 		if denom == float64(0) {
 			return ErrorDivisionByZero
 		}
-		aVal := a.Value.([]float64)
-		cVal := make([]float64, len(aVal))
+		aVal := a.Value.([]float32)
+		cVal := make([]float32, len(aVal))
 		for i := 0; i < len(aVal); i++ {
-			cVal[i] = aVal[i] / denom
+			cVal[i] = aVal[i] / float32(denom)
 		}
 		c.Value = cVal
 		c.Tid = types.VFloatID
@@ -416,15 +416,15 @@ func applyDot(a, b, c *types.Val) error {
 	if getValType(a) != VFLOAT || getValType(b) != VFLOAT {
 		return invalidTypeError(getValType(a), getValType(b), "dot")
 	}
-	aVal := a.Value.([]float64)
-	bVal := b.Value.([]float64)
+	aVal := a.Value.([]float32)
+	bVal := b.Value.([]float32)
 	if len(aVal) != len(bVal) {
 		return ErrorVectorsNotMatch
 	}
 	c.Tid = types.FloatID
 	var cVal float64
 	for i := 0; i < len(aVal); i++ {
-		cVal += aVal[i] * bVal[i]
+		cVal += (float64)(aVal[i]) * (float64)(bVal[i])
 	}
 	c.Value = cVal
 	return nil
@@ -483,8 +483,8 @@ func applyNeg(a, res *types.Val) error {
 		res.Value = -a.Value.(float64)
 		res.Tid = types.FloatID
 	case VFLOAT:
-		aVal := a.Value.([]float64)
-		resVal := make([]float64, len(aVal))
+		aVal := a.Value.([]float32)
+		resVal := make([]float32, len(aVal))
 		for i, v := range aVal {
 			resVal[i] = -v
 		}
@@ -787,15 +787,15 @@ func (ag *aggregator) Apply(val types.Val) {
 		case va.Tid == types.FloatID && vb.Tid == types.FloatID:
 			va.Value = va.Value.(float64) + vb.Value.(float64)
 		case va.Tid == types.VFloatID && vb.Tid == types.VFloatID:
-			accumVal := va.Value.([]float64)
-			bVal := vb.Value.([]float64)
+			accumVal := va.Value.([]float32)
+			bVal := vb.Value.([]float32)
 			// We're going to cheat here, and extend the results
 			// of va.Value if bVal is longer. This function, for
 			// whatever reason, does not supply a means of
 			// returning an error, and generates fatal instead.
 			// So, we do this hack instead ...
 			if len(bVal) > len(accumVal) {
-				newAccum := make([]float64, len(bVal))
+				newAccum := make([]float32, len(bVal))
 				for i := 0; i < len(accumVal); i++ {
 					newAccum[i] = accumVal[i] + bVal[i]
 				}

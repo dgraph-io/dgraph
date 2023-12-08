@@ -23,19 +23,19 @@ import (
 	"strings"
 )
 
-// BytesAsFloatArray(encoded) converts encoded into a []float64.
-// If len(encoded) % 8 is not 0, it will ignore any trailing
-// bytes, and simply convert 8 bytes at a time to generate the
+// BytesAsFloatArray(encoded) converts encoded into a []float32.
+// If len(encoded) % 4 is not 0, it will ignore any trailing
+// bytes, and simply convert 4 bytes at a time to generate the
 // float64 entries.
 // WARNING: Current implementation always requires a memory allocation!
-func BytesAsFloatArray(encoded []byte) []float64 {
+func BytesAsFloatArray(encoded []byte) []float32 {
 	// Unfortunately, this is not as simple as casting the result,
 	// and it is also not possible to directly use the
 	// golang "unsafe" library to directly do the conversion.
 	// The operation:
-	//      []float64(encoded)  does not compile!
+	//      []float32(encoded)  does not compile!
 	// Whereas:
-	//      []float64(unsafe.Slice(unsafe.Ptr(encoded), len(encoded)))
+	//      []float32(unsafe.Slice(unsafe.Ptr(encoded), len(encoded)))
 	// might compile (actually have not tested it), but its success or
 	// failure depends on agreement of the serialization mechanism
 	// of the source data and the data as it exists on the machine where
@@ -50,11 +50,11 @@ func BytesAsFloatArray(encoded []byte) []float64 {
 	// using LittleEndian format, there might be a way of making this
 	// work with the golang "unsafe" library.
 
-	resultLen := len(encoded) / 8
+	resultLen := len(encoded) / 4
 	if resultLen == 0 {
-		return []float64{}
+		return []float32{}
 	}
-	retVal := make([]float64, resultLen)
+	retVal := make([]float32, resultLen)
 	for i := 0; i < resultLen; i++ {
 		// Assume LittleEndian for encoding since this is
 		// the assumption elsewhere when reading from client.
@@ -63,9 +63,9 @@ func BytesAsFloatArray(encoded []byte) []float64 {
 		// This also seems to be the preference from many examples
 		// I have found via Google search. It's unclear why this
 		// should be a preference.
-		bits := binary.LittleEndian.Uint64(encoded)
-		retVal[i] = math.Float64frombits(bits)
-		encoded = encoded[8:]
+		bits := binary.LittleEndian.Uint32(encoded)
+		retVal[i] = math.Float32frombits(bits)
+		encoded = encoded[4:]
 	}
 	return retVal
 }
@@ -74,21 +74,21 @@ func BytesAsFloatArray(encoded []byte) []float64 {
 // v using LittleEndian format. This is sort of the inverse
 // of BytesAsFloatArray, but note that we can always be successful
 // converting to bytes, but the inverse is not feasible.
-func FloatArrayAsBytes(v []float64) []byte {
-	retVal := make([]byte, 8*len(v))
+func FloatArrayAsBytes(v []float32) []byte {
+	retVal := make([]byte, 4*len(v))
 	offset := retVal
 	for i := 0; i < len(v); i++ {
-		bits := math.Float64bits(v[i])
-		binary.LittleEndian.PutUint64(offset, bits)
-		offset = offset[8:]
+		bits := math.Float32bits(v[i])
+		binary.LittleEndian.PutUint32(offset, bits)
+		offset = offset[4:]
 	}
 	return retVal
 }
 
-func FloatArrayAsString(v []float64) string {
+func FloatArrayAsString(v []float32) string {
 	retVal := "["
 	for i := range v {
-		retVal += strconv.FormatFloat(v[i], 'f', -1, 64)
+		retVal += strconv.FormatFloat(float64(v[i]), 'f', -1, 32)
 		if i != len(v)-1 {
 			retVal += ", "
 		}

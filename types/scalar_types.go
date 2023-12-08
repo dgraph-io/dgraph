@@ -198,7 +198,7 @@ func ValueForType(id TypeID) Val {
 		var p string
 		return Val{PasswordID, p}
 	case VFloatID:
-		var v []float64
+		var v []float32
 		return Val{VFloatID, &v}
 	default:
 		return Val{}

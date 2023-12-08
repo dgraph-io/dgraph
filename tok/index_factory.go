@@ -34,7 +34,7 @@ func LoadCustomIndexFactory(soFile string) {
 	x.Checkf(err, "count not open custom vector indexer plugin file")
 	symb, err := pl.Lookup("CreateFactory")
 	x.Checkf(err, `could not find symbol "CreateTokenizer while loading custom vector indexer: %v`, err)
-	namedFactory := symb.(func() interface{})().(index.NamedFactory[float64])
+	namedFactory := symb.(func() interface{})().(index.NamedFactory[float32])
 	registerIndexFactory(createIndexFactory(namedFactory))
 }
 
@@ -56,7 +56,7 @@ type IndexFactory interface {
 	Tokenizer
 	// TODO: Distinguish between float64 and float32, allowing either.
 	//       Default should be float32.
-	index.IndexFactory[float64]
+	index.IndexFactory[float32]
 }
 
 // FactoryCreateSpec includes an IndexFactory and the options required
@@ -69,7 +69,7 @@ type FactoryCreateSpec struct {
 	//       At the moment, we can't use this.
 }
 
-func (fcs *FactoryCreateSpec) CreateIndex(name string) (index.VectorIndex[float64], error) {
+func (fcs *FactoryCreateSpec) CreateIndex(name string) (index.VectorIndex[float32], error) {
 	if fcs == nil || fcs.factory == nil {
 		return nil,
 			errors.Errorf(
@@ -85,15 +85,15 @@ func (fcs *FactoryCreateSpec) CreateIndex(name string) (index.VectorIndex[float6
 	//       has the downside of not allowing us to reuse the pre-existing
 	//       index.
 	// nil VectorSource at the moment.
-	return fcs.factory.CreateOrReplace(name, fcs.opts, nil, 64)
+	return fcs.factory.CreateOrReplace(name, fcs.opts, nil, 32)
 }
 
-func createIndexFactory(f index.NamedFactory[float64]) IndexFactory {
+func createIndexFactory(f index.NamedFactory[float32]) IndexFactory {
 	return &indexFactory{delegate: f}
 }
 
 type indexFactory struct {
-	delegate index.NamedFactory[float64]
+	delegate index.NamedFactory[float32]
 }
 
 func (f *indexFactory) Name() string { return f.delegate.Name() }
@@ -103,11 +103,11 @@ func (f *indexFactory) AllowedOptions() opts.AllowedOptions {
 func (f *indexFactory) Create(
 	name string,
 	o opts.Options,
-	source index.VectorSource[float64],
-	floatBits int) (index.VectorIndex[float64], error) {
+	source index.VectorSource[float32],
+	floatBits int) (index.VectorIndex[float32], error) {
 	return f.delegate.Create(name, o, source, floatBits)
 }
-func (f *indexFactory) Find(name string) (index.VectorIndex[float64], error) {
+func (f *indexFactory) Find(name string) (index.VectorIndex[float32], error) {
 	return f.delegate.Find(name)
 }
 func (f *indexFactory) Remove(name string) error {
@@ -116,8 +116,8 @@ func (f *indexFactory) Remove(name string) error {
 func (f *indexFactory) CreateOrReplace(
 	name string,
 	o opts.Options,
-	source index.VectorSource[float64],
-	floatBits int) (index.VectorIndex[float64], error) {
+	source index.VectorSource[float32],
+	floatBits int) (index.VectorIndex[float32], error) {
 	return f.delegate.CreateOrReplace(name, o, source, floatBits)
 }
 
@@ -134,10 +134,10 @@ func (f *indexFactory) IsSortable() bool { return false }
 func (f *indexFactory) IsLossy() bool    { return true }
 
 func tokensForExpectedVFloat(v interface{}) ([]string, error) {
-	value, ok := v.([]float64)
+	value, ok := v.([]float32)
 	if !ok {
 		return []string{}, errors.Errorf("could not convert %s to vfloat", v.(string))
 	}
-	// Generates space-separated list of float64 values inside of "[]".
+	// Generates space-separated list of float32 values inside of "[]".
 	return []string{fmt.Sprintf("%+v", value)}, nil
 }

@@ -71,13 +71,18 @@ func TestFloatArrayTranslation(t *testing.T) {
 		[]float64{0.1},
 		[]float64{0},
 		[]float64{0.65433, 1.855, 3.1415926539},
+	testCases := [][]float32{
+		{},
+		{0.1},
+		{0},
+		{0.65433, 1.855, 3.1415926539},
 	}
 	for _, tc := range testCases {
 		asBytes := FloatArrayAsBytes(tc)
-		asFloat64 := BytesAsFloatArray(asBytes)
-		require.Equal(t, len(tc), len(asFloat64))
+		asFloat32 := BytesAsFloatArray(asBytes)
+		require.Equal(t, len(tc), len(asFloat32))
 		for i := 0; i < len(tc); i++ {
-			require.Equal(t, tc[i], asFloat64[i])
+			require.Equal(t, tc[i], asFloat32[i])
 		}
 	}
 }

@@ -359,7 +359,7 @@ func parseValue(v varInfo) (types.Val, error) {
 			}
 		case "vfloat":
 			{
-				var i []float64
+				var i []float32
 				if i, err = types.ParseVFloat(v.Value); err != nil {
 					return types.Val{}, errors.Wrapf(err, "Expected a vfloat but got %v", v.Value)
 				}
