@@ -1026,7 +1026,7 @@ func TestSubscriptionWithCustomDQL(t *testing.T) {
 
 	// Check the latest update.
 	require.JSONEq(t,
-		`{"queryUserTweetCounts":[{"screen_name":"001","tweetCount": 2},{"screen_name":"002","tweetCount": 1}]}`,
+		`{"queryUserTweetCounts":[{"screenName":"001","tweetCount": 2},{"screenName":"002","tweetCount": 1}]}`,
 		string(subscriptionResp.Data))
 	require.Contains(t, subscriptionResp.Extensions, touchedUidskey)
 	require.Greater(t, int(subscriptionResp.Extensions[touchedUidskey].(float64)), 0)
