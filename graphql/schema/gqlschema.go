@@ -2079,7 +2079,7 @@ func addSimilarByEmbeddingQuery(schema *ast.Schema, defn *ast.Definition) {
 	//Accept the name of embedding field
 	qry.Arguments = append(qry.Arguments, &ast.ArgumentDefinition{
 		Name: SimilarByArgName,
-		Type: &ast.Type{NamedType: enumName},
+		Type: &ast.Type{NamedType: enumName, NonNull: true},
 	})
 
 	// Accept the topK, number of nearest neighbors to
@@ -2100,6 +2100,7 @@ func addSimilarByEmbeddingQuery(schema *ast.Schema, defn *ast.Definition) {
 				NamedType: "Float",
 				NonNull:   true,
 			},
+			NonNull: true,
 		},
 	})
 
@@ -2220,7 +2221,7 @@ func addSimilarByIdQuery(schema *ast.Schema, defn *ast.Definition,
 	// Accept the name of the embedding field.
 	qry.Arguments = append(qry.Arguments, &ast.ArgumentDefinition{
 		Name: SimilarByArgName,
-		Type: &ast.Type{NamedType: enumName},
+		Type: &ast.Type{NamedType: enumName, NonNull: true},
 	})
 
 	// Accept the topK, number of nearest neighbors to
