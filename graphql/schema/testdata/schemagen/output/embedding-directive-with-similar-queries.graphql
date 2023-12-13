@@ -8,6 +8,7 @@ type Product {
 	title: String
 	imageUrl: String
 	product_vector: [Float!] @hm_embedding
+	hm_distance: Float
 }
 
 type Purchase @lambdaOnMutate(add: true) {
@@ -20,6 +21,7 @@ type User {
 	email: String! @id
 	purchase_history(filter: PurchaseFilter, order: PurchaseOrder, first: Int, offset: Int): [Purchase] @hasInverse(field: user)
 	user_vector: [Float!] @hm_embedding
+	hm_distance: Float
 	purchase_historyAggregate(filter: PurchaseFilter): PurchaseAggregateResult
 }
 
@@ -336,15 +338,6 @@ type ProductAggregateResult {
 	imageUrlMax: String
 }
 
-type ProductWithDistance @dgraph(type: "Product") {
-	id: String! @id
-	description: String
-	title: String
-	imageUrl: String
-	product_vector: [Float!] @hm_embedding
-	hm_distance: Float
-}
-
 type PurchaseAggregateResult {
 	count: Int
 	dateMin: DateTime
@@ -372,13 +365,6 @@ type UserAggregateResult {
 	emailMax: String
 }
 
-type UserWithDistance @dgraph(type: "User") {
-	email: String! @id
-	purchase_history(filter: PurchaseFilter, order: PurchaseOrder, first: Int, offset: Int): [Purchase] @hasInverse(field: user)
-	user_vector: [Float!] @hm_embedding
-	purchase_historyAggregate(filter: PurchaseFilter): PurchaseAggregateResult
-}
-
 #######################
 # Generated Enums
 #######################
@@ -393,6 +379,7 @@ enum ProductHasFilter {
 	title
 	imageUrl
 	product_vector
+	hm_distance
 }
 
 enum ProductOrderable {
@@ -420,6 +407,7 @@ enum UserHasFilter {
 	email
 	purchase_history
 	user_vector
+	hm_distance
 }
 
 enum UserOrderable {
@@ -554,15 +542,15 @@ input UserRef {
 
 type Query {
 	getProduct(id: String!): Product
-	querySimilarProductById(id: String!, by: ProductEmbedding!, topK: Int!): [ProductWithDistance]
-	querySimilarProductByEmbedding(by: ProductEmbedding!, topK: Int!, vector: [Float!]!): [ProductWithDistance]
+	querySimilarProductById(id: String!, by: ProductEmbedding!, topK: Int!): [Product]
+	querySimilarProductByEmbedding(by: ProductEmbedding!, topK: Int!, vector: [Float!]!): [Product]
 	queryProduct(filter: ProductFilter, order: ProductOrder, first: Int, offset: Int): [Product]
 	aggregateProduct(filter: ProductFilter): ProductAggregateResult
 	queryPurchase(filter: PurchaseFilter, order: PurchaseOrder, first: Int, offset: Int): [Purchase]
 	aggregatePurchase(filter: PurchaseFilter): PurchaseAggregateResult
 	getUser(email: String!): User
-	querySimilarUserById(email: String!, by: UserEmbedding!, topK: Int!): [UserWithDistance]
-	querySimilarUserByEmbedding(by: UserEmbedding!, topK: Int!, vector: [Float!]!): [UserWithDistance]
+	querySimilarUserById(email: String!, by: UserEmbedding!, topK: Int!): [User]
+	querySimilarUserByEmbedding(by: UserEmbedding!, topK: Int!, vector: [Float!]!): [User]
 	queryUser(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
 	aggregateUser(filter: UserFilter): UserAggregateResult
 }
