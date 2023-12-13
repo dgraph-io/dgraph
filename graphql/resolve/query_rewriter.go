@@ -637,11 +637,11 @@ func rewriteAsGet(
 //		        distance as math((v2 - v1) dot (v2 - v1))
 //		    }
 //		    querySimilarProductById(func: uid(distance), orderasc: val(distance)) {
-//		        ProductWithDistance.id : Product.id
-//		        ProductWithDistance.description : Product.description
-//		        ProductWithDistance.title : Product.title
-//		        ProductWithDistance.imageUrl : Product.imageUrl
-//		        ProductWithDistance.hm_distance : val(distance)
+//		        Product.id : Product.id
+//		        Product.description : Product.description
+//		        Product.title : Product.title
+//		        Product.imageUrl : Product.imageUrl
+//		        Product.hm_distance : val(distance)
 //		        dgraph.uid : uid
 //		    }
 //	 }
@@ -746,11 +746,11 @@ func rewriteAsSimilarByIdQuery(
 
 	// order the result by euclidian distance, For example,
 	//	 querySimilarProductById(func: uid(distance), orderasc: val(distance)) {
-	//	     ProductWithDistance.id : Product.id
-	//	     ProductWithDistance.description : Product.description
-	//	     ProductWithDistance.title : Product.title
-	//	     ProductWithDistance.imageUrl : Product.imageUrl
-	//	     ProductWithDistance.hm_distance : val(distance)
+	//	     Product.id : Product.id
+	//	     Product.description : Product.description
+	//	     Product.title : Product.title
+	//	     Product.imageUrl : Product.imageUrl
+	//	     Product.hm_distance : val(distance)
 	//	     dgraph.uid : uid
 	//	  }
 	//	 }
@@ -779,11 +779,11 @@ func rewriteAsSimilarByIdQuery(
 //	        distance as math((v2 - $search_vector) dot (v2 - $search_vector))
 //	    }
 //	    querySimilarProductById(func: uid(distance), orderasc: val(distance)) {
-//	        ProductWithDistance.id : Product.id
-//	        ProductWithDistance.description : Product.description
-//	        ProductWithDistance.title : Product.title
-//	        ProductWithDistance.imageUrl : Product.imageUrl
-//	        ProductWithDistance.hm_distance : val(distance)
+//	        Product.id : Product.id
+//	        Product.description : Product.description
+//	        Product.title : Product.title
+//	        Product.imageUrl : Product.imageUrl
+//	        Product.hm_distance : val(distance)
 //	        dgraph.uid : uid
 //	     }
 //	 }

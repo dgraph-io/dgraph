@@ -2025,45 +2025,22 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition,
 // defn - The type definition for the object for which this query will be added
 func addSimilarByEmbeddingQuery(schema *ast.Schema, defn *ast.Definition) {
 
-	// Generate the new <Type> for similarity search results. This is done by
-	// adding a new field to
-	// the input type. The new field is "hm_distance". The name of the new type
-	// is <Type>WithDistance
-	fields := append(defn.Fields,
-		&ast.FieldDefinition{
-			Name: SimilarQueryDistanceFieldName,
-			Type: &ast.Type{NamedType: "Float"}})
-	// Add dgraph directive for the new type <Type>WithDistance.
-	// @dgraph(type: <Type>)
-	args := []*ast.Argument{}
-	args = append(args, &ast.Argument{
-		Name:  "type",
-		Value: &ast.Value{Kind: ast.StringValue, Raw: defn.Name}})
-	dir := &ast.Directive{
-		Name:      dgraphDirective,
-		Arguments: args,
-	}
-
-	// new type, <Type>WithDistance
-	resultTypeName := defn.Name + SimilarQueryResultTypeSuffix
-	resultType := &ast.Definition{
-		Kind:       ast.Object,
-		Name:       resultTypeName,
-		Fields:     fields,
-		Directives: []*ast.Directive{dir},
-	}
-
-	// create the new query, querySimilar<Type>ByEmbedding
-	schema.Types[resultTypeName] = resultType
 	qry := &ast.FieldDefinition{
 		Name: SimilarQueryPrefix + defn.Name + SimilarByEmbeddingQuerySuffix,
 		Type: &ast.Type{
 			Elem: &ast.Type{
-				NamedType: resultTypeName,
+				NamedType: defn.Name,
 			},
 		},
 	}
 
+	// The new field is "hm_distance". Add it to input Type
+	if defn.Fields.ForName(SimilarQueryDistanceFieldName) == nil {
+		defn.Fields = append(defn.Fields,
+			&ast.FieldDefinition{
+				Name: SimilarQueryDistanceFieldName,
+				Type: &ast.Type{NamedType: "Float"}})
+	}
 	// Define the enum to
 	//select from among all predicates with "@hm_embedding" directives
 	enumName := defn.Name + EmbeddingEnumSuffix
@@ -2125,46 +2102,23 @@ func addSimilarByIdQuery(schema *ast.Schema, defn *ast.Definition,
 		return
 	}
 
-	// Generate the new <Type> for similarity search results. This is done by
-	// adding a new field to the input type. The new field is "hm_distance".
-	// The name of the new type is <Type>WithDistance
-	fields := append(defn.Fields,
-		&ast.FieldDefinition{
-			Name: SimilarQueryDistanceFieldName,
-			Type: &ast.Type{NamedType: "Float"}})
-
-	// Add dgraph directive for the new type <Type>WithDistance.
-	// @dgraph(type: <Type>)
-	args := []*ast.Argument{}
-	args = append(args,
-		&ast.Argument{
-			Name:  "type",
-			Value: &ast.Value{Kind: ast.StringValue, Raw: defn.Name}})
-	dir := &ast.Directive{
-		Name:      dgraphDirective,
-		Arguments: args,
-	}
-
-	// new type, <Type>WithDistance
-	resultTypeName := defn.Name + SimilarQueryResultTypeSuffix
-	resultType := &ast.Definition{
-		Kind:       ast.Object,
-		Name:       resultTypeName,
-		Fields:     fields,
-		Directives: []*ast.Directive{dir},
-	}
-	schema.Types[resultTypeName] = resultType
-
 	// create the new query, querySimilar<Type>ById
 	qry := &ast.FieldDefinition{
 		Name: SimilarQueryPrefix + defn.Name + SimilarByIdQuerySuffix,
 		Type: &ast.Type{
 			Elem: &ast.Type{
-				NamedType: resultTypeName,
+				NamedType: defn.Name,
 			},
 		},
 	}
 
+	// The new field is "hm_distance". Add it to input Type
+	if defn.Fields.ForName(SimilarQueryDistanceFieldName) == nil {
+		defn.Fields = append(defn.Fields,
+			&ast.FieldDefinition{
+				Name: SimilarQueryDistanceFieldName,
+				Type: &ast.Type{NamedType: "Float"}})
+	}
 	// If the defn, only specified one of ID/XID field, then they are mandatory.
 	// If it specified both, then they are optional.
 	if hasIDField {
