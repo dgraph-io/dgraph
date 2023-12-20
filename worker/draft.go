@@ -1252,6 +1252,13 @@ func (n *node) Run() {
 			if leader {
 				// Leader can send messages in parallel with writing to disk.
 				for i := range rd.Messages {
+					// When there is a `raftpb.EntryConfChange` after creating the snapshot,
+					// then the confState included in the snapshot is out of date. so We need
+					// to update the confState before sending a snapshot to a follower.
+					if rd.Messages[i].Type == raftpb.MsgSnap {
+						rd.Messages[i].Snapshot.Metadata.ConfState = *n.ConfState()
+					}
+
 					// NOTE: We can do some optimizations here to drop messages.
 					n.Send(&rd.Messages[i])
 				}
@@ -1338,6 +1345,7 @@ func (n *node) Run() {
 					raft.IsEmptySnap(rd.Snapshot),
 					raft.IsEmptyHardState(rd.HardState))
 			}
+
 			for x.WorkerConfig.HardSync && rd.MustSync {
 				if err := n.Store.Sync(); err != nil {
 					glog.Errorf("Error while calling Store.Sync: %+v", err)
@@ -1405,6 +1413,12 @@ func (n *node) Run() {
 			if !leader {
 				// Followers should send messages later.
 				for i := range rd.Messages {
+					// When there is a `raftpb.EntryConfChange` after creating the snapshot,
+					// then the confState included in the snapshot is out of date. so We need
+					// to update the confState before sending a snapshot to a follower.
+					if rd.Messages[i].Type == raftpb.MsgSnap {
+						rd.Messages[i].Snapshot.Metadata.ConfState = *n.ConfState()
+					}
 					// NOTE: We can do some optimizations here to drop messages.
 					n.Send(&rd.Messages[i])
 				}

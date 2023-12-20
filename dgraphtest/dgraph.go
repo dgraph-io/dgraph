@@ -94,6 +94,7 @@ type dnode interface {
 	assignURL(*LocalCluster) (string, error)
 	alphaURL(*LocalCluster) (string, error)
 	zeroURL(*LocalCluster) (string, error)
+	changeStatus(bool)
 }
 
 type zero struct {
@@ -101,6 +102,7 @@ type zero struct {
 	containerID   string // container ID in docker world
 	containerName string // something like test-1234_zero2
 	aliasName     string // something like alpha0, zero1
+	isRunning     bool
 }
 
 func (z *zero) cname() string {
@@ -175,6 +177,10 @@ func (z *zero) healthURL(c *LocalCluster) (string, error) {
 	return "http://localhost:" + publicPort + "/health", nil
 }
 
+func (z *zero) changeStatus(isRunning bool) {
+	z.isRunning = isRunning
+}
+
 func (z *zero) assignURL(c *LocalCluster) (string, error) {
 	publicPort, err := publicPort(c.dcli, z, zeroHttpPort)
 	if err != nil {
@@ -200,6 +206,7 @@ type alpha struct {
 	containerID   string
 	containerName string
 	aliasName     string
+	isRunning     bool
 }
 
 func (a *alpha) cname() string {
@@ -283,6 +290,12 @@ func (a *alpha) cmd(c *LocalCluster) []string {
 		acmd = append(acmd, fmt.Sprintf("--custom_tokenizers=%s", c.customTokenizers))
 	}
 
+	if c.conf.snapShotAfterEntries != 0 {
+		acmd = append(acmd, fmt.Sprintf("--raft=%s",
+			fmt.Sprintf(`snapshot-after-entries=%v;snapshot-after-duration=%v;`,
+				c.conf.snapShotAfterEntries, c.conf.snapshotAfterDuration)))
+	}
+
 	return acmd
 }
 
@@ -349,6 +362,10 @@ func (a *alpha) alphaURL(c *LocalCluster) (string, error) {
 		return "", err
 	}
 	return "localhost:" + publicPort + "", nil
+}
+
+func (a *alpha) changeStatus(isRunning bool) {
+	a.isRunning = isRunning
 }
 
 func (a *alpha) zeroURL(c *LocalCluster) (string, error) {

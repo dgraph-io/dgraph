@@ -33,6 +33,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -492,4 +493,18 @@ func (c *LocalCluster) BulkLoad(opts BulkOpts) error {
 		log.Println(string(out))
 		return nil
 	}
+}
+
+// AddData will insert a total of end-start triples into the database.
+func AddData(gc *GrpcClient, pred string, start, end int) error {
+	if err := gc.SetupSchema(fmt.Sprintf(`%v: string @index(exact) .`, pred)); err != nil {
+		return err
+	}
+
+	rdf := ""
+	for i := start; i <= end; i++ {
+		rdf = rdf + fmt.Sprintf("_:a%v <%v> \"%v%v\" .	\n", i, pred, pred, i)
+	}
+	_, err := gc.Mutate(&api.Mutation{SetNquads: []byte(rdf), CommitNow: true})
+	return err
 }

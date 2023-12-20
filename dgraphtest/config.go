@@ -100,23 +100,25 @@ func AllUpgradeCombos(v20 bool) []UpgradeCombo {
 
 // ClusterConfig stores all config for setting up a dgraph cluster
 type ClusterConfig struct {
-	prefix         string
-	numAlphas      int
-	numZeros       int
-	replicas       int
-	verbosity      int
-	acl            bool
-	aclTTL         time.Duration
-	aclAlg         jwt.SigningMethod
-	encryption     bool
-	version        string
-	volumes        map[string]string
-	refillInterval time.Duration
-	uidLease       int
-	portOffset     int // exposed port offset for grpc/http port for both alpha/zero
-	bulkOutDir     string
-	featureFlags   []string
-	customPlugins  bool
+	prefix                string
+	numAlphas             int
+	numZeros              int
+	replicas              int
+	verbosity             int
+	acl                   bool
+	aclTTL                time.Duration
+	aclAlg                jwt.SigningMethod
+	encryption            bool
+	version               string
+	volumes               map[string]string
+	refillInterval        time.Duration
+	uidLease              int
+	portOffset            int // exposed port offset for grpc/http port for both alpha/zero
+	bulkOutDir            string
+	featureFlags          []string
+	customPlugins         bool
+	snapShotAfterEntries  uint64
+	snapshotAfterDuration time.Duration
 }
 
 // NewClusterConfig generates a default ClusterConfig
@@ -236,4 +238,11 @@ func (cc ClusterConfig) WithCustomPlugins() ClusterConfig {
 
 func (cc ClusterConfig) GetClusterVolume(volume string) string {
 	return cc.volumes[volume]
+}
+
+func (cc ClusterConfig) WithSnapshotConfig(snapShotAfterEntries uint64,
+	snapshotAfterDuration time.Duration) ClusterConfig {
+	cc.snapShotAfterEntries = snapShotAfterEntries
+	cc.snapshotAfterDuration = snapshotAfterDuration
+	return cc
 }
