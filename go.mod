@@ -2,6 +2,10 @@ module github.com/dgraph-io/dgraph
 
 go 1.19
 
+replace sourcegraph.com/sourcegraph/appdash => github.com/sourcegraph/appdash v0.0.0-20180110180208-2cc67fd64755
+
+replace sourcegraph.com/sourcegraph/appdash-data => github.com/sourcegraph/appdash-data v0.0.0-20151005221446-73f23eafcf67
+
 require (
 	contrib.go.opencensus.io/exporter/jaeger v0.1.0
 	contrib.go.opencensus.io/exporter/prometheus v0.1.0
@@ -61,6 +65,7 @@ require (
 	golang.org/x/text v0.12.0
 	golang.org/x/tools v0.9.3
 	google.golang.org/grpc v1.56.2
+	google.golang.org/protobuf v1.31.0
 	gopkg.in/square/go-jose.v2 v2.3.1
 	gopkg.in/yaml.v2 v2.4.0
 )
@@ -142,7 +147,6 @@ require (
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20230711160842-782d3b101e98 // indirect
 	google.golang.org/grpc/examples v0.0.0-20230821201920-d51b3f41716d // indirect
-	google.golang.org/protobuf v1.31.0 // indirect
 	gopkg.in/DataDog/dd-trace-go.v1 v1.22.0 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
