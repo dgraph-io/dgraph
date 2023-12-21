@@ -913,8 +913,13 @@ func (rb *IndexRebuild) DropIndexes(ctx context.Context) error {
 	prefixes = append(prefixes, prefixesToDropReverseEdges(ctx, rb)...)
 	prefixes = append(prefixes, prefixesToDropCountIndex(ctx, rb)...)
 	prefixes = append(prefixes, prefixesToDropVectorIndexEdges(ctx, rb)...)
-	glog.Infof("Deleting indexes for %s", rb.Attr)
-	return pstore.DropPrefix(prefixes...)
+	if len(prefixes) > 0 {
+		// This trace message now gets logged only if there are any prefixes to
+		// to be deleted
+		glog.Infof("Deleting indexes for %s", rb.Attr)
+		return pstore.DropPrefix(prefixes...)
+	}
+	return nil
 }
 
 // BuildData updates data.

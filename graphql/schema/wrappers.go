@@ -1392,7 +1392,7 @@ func (f *field) IDArgValue() (xids map[string]string, uid uint64, err error) {
 		if (idField == nil || arg.Name != idField.Name()) &&
 			(passwordField == nil || arg.Name != passwordField.Name()) &&
 			(queryType(f.field.Name, nil) != SimilarByIdQuery ||
-				(arg.Name != SimilarTopKArgName && arg.Name != SimilarByArgName)) {
+				(arg.Name != SimilarTopKArgName && arg.Name != SimilarByArgName && arg.Name != "filter")) {
 			xidArgName = arg.Name
 		}
 
