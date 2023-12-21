@@ -625,26 +625,27 @@ func rewriteAsGet(
 // rewrites SimilarById graphQL query to nested DQL query blocks
 // Example rewrittern query:
 //
-//		query {
-//		    var(func: eq(Product.id, "0528012398")) @filter(type(Product)) {
-//		        vec as Product.embedding
-//		    }
-//		    var() {
-//		        v1 as max(val(vec))
-//		    }
-//		    var(func: similar_to(Product.embedding, 8, val(v1))) {
-//		        v2 as Product.embedding
-//		        distance as math((v2 - v1) dot (v2 - v1))
-//		    }
-//		    querySimilarProductById(func: uid(distance), orderasc: val(distance)) {
-//		        Product.id : Product.id
-//		        Product.description : Product.description
-//		        Product.title : Product.title
-//		        Product.imageUrl : Product.imageUrl
-//		        Product.hm_distance : val(distance)
-//		        dgraph.uid : uid
-//		    }
-//	 }
+//			query {
+//			    var(func: eq(Product.id, "0528012398")) @filter(type(Product)) {
+//			        vec as Product.embedding
+//			    }
+//			    var() {
+//			        v1 as max(val(vec))
+//			    }
+//			    var(func: similar_to(Product.embedding, 8, val(v1))) {
+//			        v2 as Product.embedding
+//			        distance as math((v2 - v1) dot (v2 - v1))
+//			    }
+//			    querySimilarProductById(func: uid(distance)
+//	             @filter(Product.id != "0528012398"), orderasc: val(distance)) {
+//			        Product.id : Product.id
+//			        Product.description : Product.description
+//			        Product.title : Product.title
+//			        Product.imageUrl : Product.imageUrl
+//			        Product.hm_distance : val(distance)
+//			        dgraph.uid : uid
+//			    }
+//		 }
 func rewriteAsSimilarByIdQuery(
 	query schema.Query,
 	uid uint64,
@@ -763,6 +764,7 @@ func rewriteAsSimilarByIdQuery(
 		},
 		Order: []*pb.Order{{Attr: "val(distance)", Desc: false}},
 	}
+	addArgumentsToField(sortQuery, query)
 
 	dgQuery = append(dgQuery, aggQuery, similarQuery, sortQuery)
 	return dgQuery
@@ -773,20 +775,21 @@ func rewriteAsSimilarByIdQuery(
 // rewrites SimilarByEmbedding graphQL query to nested DQL query blocks
 // Example rewrittern query:
 //
-//	query gQLTodQL($search_vector: vfloat = "<json array of float>") {
-//	    var(func: similar_to(Product.embedding, 8, $search_vector)) {
-//	        v2 as Product.embedding
-//	        distance as math((v2 - $search_vector) dot (v2 - $search_vector))
-//	    }
-//	    querySimilarProductById(func: uid(distance), orderasc: val(distance)) {
-//	        Product.id : Product.id
-//	        Product.description : Product.description
-//	        Product.title : Product.title
-//	        Product.imageUrl : Product.imageUrl
-//	        Product.hm_distance : val(distance)
-//	        dgraph.uid : uid
-//	     }
-//	 }
+//		query gQLTodQL($search_vector: vfloat = "<json array of float>") {
+//		    var(func: similar_to(Product.embedding, 8, $search_vector)) {
+//		        v2 as Product.embedding
+//		        distance as math((v2 - $search_vector) dot (v2 - $search_vector))
+//		    }
+//		    querySimilarProductById(func: uid(distance),
+//	             @filter(Product.id != "0528012398"), orderasc: val(distance)) {
+//		        Product.id : Product.id
+//		        Product.description : Product.description
+//		        Product.title : Product.title
+//		        Product.imageUrl : Product.imageUrl
+//		        Product.hm_distance : val(distance)
+//		        dgraph.uid : uid
+//		     }
+//		 }
 func rewriteAsSimilarByEmbeddingQuery(
 	query schema.Query, auth *authRewriter) []*dql.GraphQuery {
 

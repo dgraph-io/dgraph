@@ -2084,6 +2084,7 @@ func addSimilarByEmbeddingQuery(schema *ast.Schema, defn *ast.Definition) {
 			NonNull: true,
 		},
 	})
+	addFilterArgument(schema, qry)
 
 	schema.Query.Fields = append(schema.Query.Fields, qry)
 }
@@ -2192,6 +2193,7 @@ func addSimilarByIdQuery(schema *ast.Schema, defn *ast.Definition,
 		},
 	})
 
+	addFilterArgument(schema, qry)
 	schema.Query.Fields = append(schema.Query.Fields, qry)
 }
 
