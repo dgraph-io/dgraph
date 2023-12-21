@@ -654,8 +654,18 @@ func rewriteAsSimilarByIdQuery(
 
 	// Get graphQL arguments
 	typ := query.Type()
-	pred := typ.DgraphPredicate(query.ArgValue(schema.SimilarByArgName).(string))
+	similarBy := query.ArgValue(schema.SimilarByArgName).(string)
+	pred := typ.DgraphPredicate(similarBy)
 	topK := query.ArgValue(schema.SimilarTopKArgName)
+	similarByField := typ.Field(similarBy)
+	metric := similarByField.EmbeddingSearchMetric()
+	distanceFormula := "math((v2 - v1) dot (v2 - v1))" // default - euclidian
+
+	if metric == schema.SimilarSearchMetricDotProduct {
+		distanceFormula = "math(v1 dot v2)"
+	} else if metric == schema.SimilarSearchMetricCosine {
+		distanceFormula = "math((v1 dot v2) / ((v1 dot v1) * (v2 dot v2)))"
+	}
 
 	// First generate the query to fetch the uid
 	// for the given id. For Example,
@@ -708,7 +718,7 @@ func rewriteAsSimilarByIdQuery(
 			},
 			{
 				Var:  "distance",
-				Attr: "math((v2 - v1) dot (v2 - v1))",
+				Attr: distanceFormula,
 			},
 		},
 		Func: &dql.Function{
@@ -801,10 +811,21 @@ func rewriteAsSimilarByEmbeddingQuery(
 	typ := query.Type()
 
 	// Get all the arguments from graphQL query
-	pred := typ.DgraphPredicate(query.ArgValue(schema.SimilarByArgName).(string))
+	similarBy := query.ArgValue(schema.SimilarByArgName).(string)
+	pred := typ.DgraphPredicate(similarBy)
 	topK := query.ArgValue(schema.SimilarTopKArgName)
 	vec := query.ArgValue(schema.SimilarVectorArgName).([]interface{})
 	vecStr, _ := json.Marshal(vec)
+
+	similarByField := typ.Field(similarBy)
+	metric := similarByField.EmbeddingSearchMetric()
+	distanceFormula := "math((v2 - $search_vector) dot (v2 - $search_vector))" // default = euclidian
+
+	if metric == schema.SimilarSearchMetricDotProduct {
+		distanceFormula = "math($search_vector dot v2)"
+	} else if metric == schema.SimilarSearchMetricCosine {
+		distanceFormula = "math(($search_vector dot v2) / (($search_vector dot $search_vector) * (v2 dot v2)))"
+	}
 
 	// Save vectorString as a query variable, $search_vector
 	queryArgs := dgQuery[0].Args
@@ -846,9 +867,8 @@ func rewriteAsSimilarByEmbeddingQuery(
 			Attr: pred,
 		},
 		{
-			Var: "distance",
-			// TODO: generate different math formula based on index type
-			Attr: "math((v2 - $search_vector) dot (v2 - $search_vector))",
+			Var:  "distance",
+			Attr: distanceFormula,
 		},
 	}
 

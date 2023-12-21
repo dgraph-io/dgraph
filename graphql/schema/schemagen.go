@@ -478,7 +478,7 @@ func getAllSearchIndexes(val *ast.Value) []string {
 	for i, child := range val.Children {
 		searchType := parseSearchType(child.Value.Raw)
 		res[i] = supportedSearches[searchType].dgIndex
-		searchOptions, _ := parseSearchOptions(child.Value.Raw)
+		searchOptions, _ := getSearchOptions(child.Value.Raw)
 		res[i] += searchOptions
 	}
 

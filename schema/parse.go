@@ -335,6 +335,9 @@ func parseTokenOrVectorSpec(
 //	TokenOptions ::= ['(' TokenOptionList ')']
 //	TokenOptionList ::= TokenOption [',' TokenOptionList ]
 //
+// TODO: TokenOptionList could be made optional so that "hnsw()" is treated as
+// an hnsw index with default search options
+//
 // For Parsing TokenOption, it defers to parseTokenOption
 // Note that specifying TokenOptions is optional! The result is considered
 // valid even if no token options are found as long as the first character
