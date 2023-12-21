@@ -114,6 +114,9 @@ const (
 	SimilarByEmbeddingQuerySuffix              = "ByEmbedding"
 	SimilarQueryResultTypeSuffix               = "WithDistance"
 	SimilarQueryDistanceFieldName              = "hm_distance"
+	SimilarSearchMetricEuclidian               = "euclidian"
+	SimilarSearchMetricDotProduct              = "dotproduct"
+	SimilarSearchMetricCosine                  = "cosine"
 )
 
 // Schema represents a valid GraphQL schema
@@ -281,6 +284,7 @@ type FieldDefinition interface {
 	IsExternal() bool
 	HasIDDirective() bool
 	HasEmbeddingDirective() bool
+	EmbeddingSearchMetric() string
 	HasInterfaceArg() bool
 	Inverse() FieldDefinition
 	WithMemberType(string) FieldDefinition
@@ -2349,6 +2353,18 @@ func (fd *fieldDefinition) HasEmbeddingDirective() bool {
 		return false
 	}
 	return hasEmbeddingDirective(fd.fieldDef)
+}
+
+func (fd *fieldDefinition) EmbeddingSearchMetric() string {
+	if fd.fieldDef == nil || !hasEmbeddingDirective(fd.fieldDef) ||
+		fd.fieldDef.Directives.ForName(searchDirective) == nil {
+		return ""
+	}
+
+	searchArg := getSearchArgs(fd.fieldDef)[0]
+	kvMap, _ := parseSearchOptions(searchArg)
+
+	return kvMap["metric"]
 }
 
 func hasEmbeddingDirective(fd *ast.FieldDefinition) bool {

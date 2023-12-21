@@ -1036,7 +1036,7 @@ func validateSearchArg(searchArg string,
 					"requires the field also has @%s directive.",
 				typ.Name, field.Name, searchArg, embeddingDirective)
 		}
-		_, valid := parseSearchOptions(searchArg)
+		_, valid := getSearchOptions(searchArg)
 		if !valid {
 			return gqlerror.ErrorPosf(
 				dir.Position,
@@ -1172,37 +1172,51 @@ func parseSearchType(searchArg string) string {
 //	<searchArg> := <searchType> [ <openParen> <searchOptions> <closeParen> ]
 //
 // searchOptions := <searchOption>*
+// <searchOption> := <OptionName><COLON><SPACE><OptionValue>
 // Examples:
 //
 //	hnsw(metric: euclidian, exponent: 6)
 //	hnsw
 //	hnsw(exponent: 3)
-func parseSearchOptions(searchArg string) (string, bool) {
-	res := ""
+func parseSearchOptions(searchArg string) (map[string]string, bool) {
 	searchArg = strings.TrimSpace(searchArg)
 	openParen := strings.Index(searchArg, "(")
 
 	if openParen < 0 && searchArg[len(searchArg)-1] != ')' {
 		// no search options and supported searchType found
-		return "", true // valid = true, no search options
+		return map[string]string{}, true // valid = true, no search options
 	}
 
 	if openParen+1 == len(searchArg)-1 {
 		// found <searchType>() with no index options between
 		// '(' & ')'
-		return "", true
+		// TODO: If DQL schema parser allows the pair of parentheses
+		// without any options then we need to allow this in GraphQL
+		// schema too
+		return map[string]string{}, false
 	}
 
 	if openParen < 0 || searchArg[len(searchArg)-1] != ')' {
 		// does not have open/close parenthesis
-		return "", false // valid = false
+		return map[string]string{}, false // valid = false
 	}
 
 	indexOptions := "{" + searchArg[openParen+1:len(searchArg)-1] + "}"
 	var kvMap map[string]string
 	err := yaml.Unmarshal([]byte(indexOptions), &kvMap)
 	if err != nil {
-		return "", false
+		return map[string]string{}, false
+	}
+
+	return kvMap, true // parsed valid options
+}
+
+// getSearchOptions(searchArg) Stringifies search options using DQL syntax
+func getSearchOptions(searchArg string) (string, bool) {
+	res := ""
+	kvMap, ok := parseSearchOptions(searchArg)
+	if len(kvMap) == 0 {
+		return res, ok
 	}
 
 	keys := make([]string, 0, len(kvMap))
