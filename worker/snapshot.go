@@ -70,6 +70,7 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) error {
 		sw := pstore.NewStreamWriter()
 		defer sw.Cancel()
 
+		glog.Infof("Creating StreamWriter\n")
 		if err := sw.Prepare(); err != nil {
 			return err
 		}
@@ -79,14 +80,43 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) error {
 		writer = pstore.NewManagedWriteBatch()
 	}
 
+	glog.Infof("Starting to receive snapshot...\n")
+	lastReceived := time.Now().Unix()
+	go func() {
+		tick := time.NewTicker(10 * time.Second)
+		defer tick.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-tick.C:
+				last := atomic.LoadInt64(&lastReceived)
+				if last == 0 {
+					continue
+				}
+				lastTs := time.Unix(last, 0)
+				if time.Since(lastTs) > 300*time.Second {
+					glog.Warningf("Haven't received anything for over 300s." +
+						" Abandoning snapshot retrieval...\n")
+					cancel()
+				}
+			}
+		}
+	}()
 	// We can use count to check the number of posting lists returned in tests.
 	size := 0
 	var done *pb.KVS
 	for {
+		// Track when we last received anything from the leader. If we don't
+		// receive anything for a while, we should abandon this connection.
+		atomic.StoreInt64(&lastReceived, time.Now().Unix())
 		kvs, err := stream.Recv()
 		if err != nil {
-			return err
+			return errors.Wrapf(err, "stream.Recv")
 		}
+		atomic.StoreInt64(&lastReceived, 0) // We got something.
+
 		if kvs.Done {
 			done = kvs
 			glog.V(1).Infoln("All key-values have been received.")
@@ -260,11 +290,87 @@ func doStreamSnapshot(snap *pb.Snapshot, out pb.Worker_StreamSnapshotServer) err
 	return nil
 }
 
+func (n *node) checkForFailedSnapshot() {
+	tick := time.NewTicker(10 * time.Second)
+	defer tick.Stop()
+
+	loopOverStatus := func() {
+		glog.V(2).Infof("Entering snapshot monitoring state")
+		defer func() {
+			glog.V(2).Infof("Exiting snapshot monitoring state")
+		}()
+
+		var last time.Time
+
+		for range tick.C {
+			if n.closer.Ctx().Err() != nil {
+				return
+			}
+			status := n.Raft().Status()
+			if status.Lead != status.ID {
+				// I'm not the leader, so don't do anything.
+				return
+			}
+			var snapshotId uint64
+			for id, prog := range status.Progress {
+				if prog.State != raft.ProgressStateSnapshot {
+					continue
+				}
+				snapshotId = id
+				break
+			}
+			if snapshotId == 0 {
+				// No Alpha is in pending snapshot state.
+				glog.Infof("No Alpha in pending snapshot state.\n")
+				return
+			}
+			if last.IsZero() {
+				last = time.Now()
+				glog.Infof("Registered a pending snapshot for ID: %#x\n", snapshotId)
+			}
+
+			var ongoing bool
+			for _, t := range GetOngoingTasks() {
+				if t == "opSnapshot" {
+					glog.V(2).Infof("Snapshot: Ongoing. All good.\n")
+					ongoing = true
+				}
+			}
+
+			if !ongoing && time.Since(last) > 60*time.Second {
+				// Report snapshot as failed.
+				glog.Warningf("Reporting snapshot for ID: %#x as failed\n", snapshotId)
+				n.Raft().ReportSnapshot(snapshotId, raft.SnapshotFailure)
+				return
+			}
+		}
+	}
+
+	for {
+		select {
+		case <-n.closer.HasBeenClosed():
+			return
+		case <-tick.C:
+			status := n.Raft().Status()
+			if status.Lead != status.ID {
+				// I'm not the leader, so don't do anything.
+				continue
+			}
+			for _, prog := range status.Progress {
+				if prog.State != raft.ProgressStateSnapshot {
+					continue
+				}
+				loopOverStatus()
+			}
+		}
+	}
+}
+
 func (w *grpcWorker) StreamSnapshot(stream pb.Worker_StreamSnapshotServer) error {
 	// Pause rollups during snapshot streaming.
 	closer, err := groups().Node.startTask(opSnapshot)
 	if err != nil {
-		return err
+		return errors.Wrapf(err, "startTask on StreamSnapshot failed")
 	}
 	defer closer.Done()
 
