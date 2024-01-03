@@ -38,8 +38,56 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "404 page not found", http.StatusNotFound)
 		return
 	}
-	x.Check2(w.Write([]byte(
-		"Dgraph browser is available for running separately using the dgraph-ratel binary")))
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+
+	dgraph := `<body>
+	<BR><h2>Dgraph is up and running...🎉🎉<BR><BR></h2>
+	<p>Now you can access your cluster via Ratel Dashboard.<BR>
+	Remember, the PORT to use there to connect to Alpha is 8080 + offset if the case.<BR><BR>
+	if you are running GraphQL you can use any GraphQL Client from the open source community.</p>
+	<p><BR><em>Thank you for using Dgraph!</em></p>
+	<p><BR>Important Links: <BR>
+	<a href="https://dgraph.io/docs" target="_blank">https://dgraph.io/docs</a> <BR>
+	<a href="https://discuss.dgraph.io/" target="_blank">https://discuss.dgraph.io/</a> <BR>
+	<a href="https://cloud.dgraph.io/" target="_blank">https://cloud.dgraph.io/</a></p> <BR>
+	<p><BR><BR><BR> <div>Copyright 2016-2022 Dgraph Labs, Inc. and Contributors.</div>
+	</html>`
+
+	head := `<!DOCTYPE html>
+	<html>
+	<head>
+	<title> Dgraph Alpha 🚀</title>
+	<style>
+	body{
+		width:35em;
+		margin:0 auto;
+		font-family:Tahoma,Verdana,Arial,sans-serif;
+	     }
+	h2 {
+		font-size: 150%;
+	   }
+	p {
+		font-size: 107%;
+	  }
+	a:link {
+		color: #3391ff;
+	  }
+	a:hover {
+		color: hotpink;
+	  }
+	 div {
+		position: absolute; 
+		left: 0; 
+		right: 0; 
+		margin-left: auto; 
+		margin-right: auto; 
+		width: 469px;
+	  }
+	</style>
+	</head> `
+
+	x.Check2(w.Write([]byte(head + dgraph)))
 }
 
 // Used to return a list of keywords, so that UI can show them for autocompletion.
