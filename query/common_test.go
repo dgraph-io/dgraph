@@ -29,6 +29,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/v230/protos/api"
+	"github.com/dgraph-io/dgraph/dgraphtest"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -253,15 +254,6 @@ type SchoolInfo {
 	county
 }
 
-type User {
-	name
-	password
-	gender
-	friend
-	alive
-	user_profile
-}
-
 type Node {
 	node
 	name
@@ -345,10 +337,9 @@ tweet-c                        : string @index(fulltext) .
 tweet-d                        : string @index(trigram) .
 name2                          : string @index(term)  .
 age2                           : int @index(int) .
-user_profile                   : vfloat @index(hnsw(metric:"euclidian")) .
 `
 
-func populateCluster() {
+func populateCluster(dc dgraphtest.Cluster) {
 	x.Panic(client.Alter(context.Background(), &api.Operation{DropAll: true}))
 
 	// In the query package, we test using hard coded UIDs so that we know what results
@@ -356,8 +347,30 @@ func populateCluster() {
 	// all the UIDs we are using during the tests.
 	x.Panic(dc.AssignUids(client.Dgraph, 65536))
 
-	setSchema(testSchema)
-	err := addTriplesToCluster(`
+	higher, err := dgraphtest.IsHigherVersion(dc.GetVersion(), "160a0faa5fc6233fdc5a4caa4a7a3d1591f460d0")
+	x.Panic(err)
+	var ts string
+	if higher {
+		ts = testSchema + `type User {
+			name
+			password
+			gender
+			friend
+			alive
+			user_profile
+		}
+		user_profile                   : vfloat @index(hnsw(metric:"euclidian")) .`
+	} else {
+		ts = testSchema + `type User {
+			name
+			password
+			gender
+			friend
+			alive
+		}`
+	}
+	setSchema(ts)
+	err = addTriplesToCluster(`
 		<1> <name> "Michonne" .
 		<2> <name> "King Lear" .
 		<3> <name> "Margaret" .
