@@ -82,10 +82,13 @@ image-local local-image:
 	@rm -r linux
 
 .PHONY: docker-image
-docker-image: dgraph
-	@mkdir -p linux
-	@cp ./dgraph/dgraph ./linux/dgraph
-	docker build -f contrib/Dockerfile -t dgraph/dgraph:$(DGRAPH_VERSION) .
+docker-image:
+	docker build -f contrib/Dockerfile -t dgraph/dgraph:$(DGRAPH_VERSION) \
+	--build-arg BUILD="$(BUILD)" \
+	--build-arg BUILD_CODENAME="$(BUILD_CODENAME)" \
+	--build-arg BUILD_DATE="$(BUILD_DATE)" \
+	--build-arg BUILD_BRANCH="$(BUILD_BRANCH)" \
+	--build-arg BUILD_VERSION="$(BUILD_VERSION)" .
 
 .PHONY: docker-image-standalone
 docker-image-standalone: dgraph docker-image
