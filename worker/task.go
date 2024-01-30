@@ -805,6 +805,10 @@ func (qs *queryState) handleUidPostings(
 	x.AssertTrue(width > 0)
 	span.Annotatef(nil, "Width: %d. NumGo: %d", width, numGo)
 
+	lang := langForFunc(q.Langs)
+	needFiltering := needsStringFiltering(srcFn, q.Langs, q.Attr)
+	isList := schema.State().IsList(q.Attr)
+
 	errCh := make(chan error, numGo)
 	outputs := make([]*pb.Result, numGo)
 
@@ -871,7 +875,32 @@ func (qs *queryState) handleUidPostings(
 				if i == 0 {
 					span.Annotate(nil, "HasFn")
 				}
-				empty, err := pl.IsEmpty(args.q.ReadTs, 0)
+				// We figure out if need to filter on bases of lang attribute or not.
+				// If we don't need to do so, we can just check if the posting list
+				// is empty. If we need to filter on basis of lang, we need to check
+				// the value with its tag. if lang == "", in that case, we need to
+				// return if there are any untagged values. If lang != "", in that
+				// case we need to check exact value.
+				empty := false
+				var err error
+				if !needFiltering {
+					empty, err = pl.IsEmpty(args.q.ReadTs, 0)
+				} else {
+					if lang == "" {
+						if isList {
+							_, err = pl.AllValues(args.q.ReadTs)
+						} else {
+							_, err = pl.Value(args.q.ReadTs)
+						}
+					} else {
+						_, err = pl.ValueForTag(args.q.ReadTs, lang)
+					}
+
+					if err == posting.ErrNoValue {
+						empty = true
+						err = nil
+					}
+				}
 				if err != nil {
 					return err
 				}

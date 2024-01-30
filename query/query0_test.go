@@ -52,6 +52,52 @@ func TestGetUID(t *testing.T) {
 		js)
 }
 
+func TestFilterHas(t *testing.T) {
+	// Query untagged values
+	query := `
+		{
+			me(func: has(alias)) @filter(has(alias_lang)) {
+				uid
+			}
+		}
+	`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data":{"me":[]}}`, js)
+
+	// Query all tagged values
+	query = `
+		{
+			me(func: has(alias)) @filter(has(alias_lang@.)) {
+				alias_lang@.
+			}
+		}
+	`
+	js = processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data":{"me":[{"alias_lang@.":"Zambo Alice"},{"alias_lang@.":"John Alice"},{"alias_lang@.":"Bob Joe"},{"alias_lang@.":"Allan Matt"},{"alias_lang@.":"John Oliver"}]}}`, js)
+
+	// All tagged values in root function
+	query = `
+		{
+			me(func: has(lossy@.)){
+				lossy@.
+			}
+		}
+	`
+	js = processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data":{"me":[{"lossy@.":"Badger"},{"lossy@.":"Honey badger"}]}}`, js)
+
+	// Query specific language
+	query = `
+		{
+			me(func: has(lossy@.)) @filter(has(lossy@fr)) {
+				lossy@fr
+			}
+		}
+	`
+	js = processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data":{"me":[{"lossy@fr":"Blaireau européen"}]}}`, js)
+}
+
 func TestQueryEmptyDefaultNames(t *testing.T) {
 	query := `{
 	  people(func: eq(name, "")) {
