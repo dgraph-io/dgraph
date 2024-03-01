@@ -255,8 +255,8 @@ func loadData(t *testing.T, dir, format string) {
 			testutil.SockAddr, "--zero", testutil.SockAddrZero,
 		},
 	}
-	_, err := testutil.Pipeline(pipeline)
-	require.NoErrorf(t, err, "Got error while loading data: %v", err)
+	str, err := testutil.Pipeline(pipeline)
+	require.NoErrorf(t, err, "Got error while loading data: %v %s", err, str)
 
 }
 

@@ -120,15 +120,19 @@ func (asuite *AclTestSuite) TestCreateAndDeleteUsers() {
 	require.Equal(t, userid, user)
 }
 
-func resetUser(t *testing.T, hc *dgraphtest.HTTPClient) {
-	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
-
+func resetUserWithNamespace(t *testing.T, hc *dgraphtest.HTTPClient, ns uint64) {
+	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
+		dgraphtest.DefaultPassword, ns))
 	// clean up the user to allow repeated running of this test
 	require.NoError(t, hc.DeleteUser(userid), "error while deleteing user")
 
 	user, err := hc.CreateUser(userid, userpassword)
 	require.NoError(t, err)
 	require.Equal(t, userid, user)
+}
+
+func resetUser(t *testing.T, hc *dgraphtest.HTTPClient) {
+	resetUserWithNamespace(t, hc, x.GalaxyNamespace)
 }
 
 func (asuite *AclTestSuite) TestPreDefinedPredicates() {
@@ -1562,15 +1566,17 @@ func (asuite *AclTestSuite) TestDeleteRule() {
 	require.NoError(t, dgraphtest.CompareJSON(string(resp.GetJson()), `{}`))
 }
 
-func addDataAndRules(ctx context.Context, t *testing.T, gc *dgraphtest.GrpcClient, hc *dgraphtest.HTTPClient) {
-	require.NoError(t, gc.DropAll())
+func addDataAndRulesWithNs(ctx context.Context, t *testing.T, gc *dgraphtest.GrpcClient, hc *dgraphtest.HTTPClient, ns uint64) {
+	if ns == x.GalaxyNamespace {
+		require.NoError(t, gc.DropAll())
+	}
 	op := api.Operation{Schema: `
 		name	 : string @index(exact) .
 		nickname : string @index(exact) .
 	`}
 	require.NoError(t, gc.Alter(ctx, &op))
 
-	resetUser(t, hc)
+	resetUserWithNamespace(t, hc, ns)
 
 	// TODO - We should be adding this data using the GraphQL API.
 	// We create three groups here, dev, dev-a and dev-b and add alice to two of them.
@@ -1626,6 +1632,32 @@ func addDataAndRules(ctx context.Context, t *testing.T, gc *dgraphtest.GrpcClien
 
 	_, err = gc.Mutate(mu)
 	require.NoError(t, err)
+}
+
+func addDataAndRules(ctx context.Context, t *testing.T, gc *dgraphtest.GrpcClient, hc *dgraphtest.HTTPClient) {
+	addDataAndRulesWithNs(ctx, t, gc, hc, x.GalaxyNamespace)
+}
+
+func (asuite *AclTestSuite) TestNonExistentGroup() {
+	t := asuite.T()
+	t.Skip()
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	defer cancel()
+	// This test won't return an error anymore as if an update in a GraphQL mutation doesn't find
+	// anything to update then it just returns an empty result.
+
+	gc, cleanup, err := asuite.dc.Client()
+	require.NoError(t, err)
+	defer cleanup()
+	require.NoError(t, gc.LoginIntoNamespace(ctx, dgraphtest.DefaultUser,
+		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	require.NoError(t, gc.DropAll())
+	hc, err := asuite.dc.HTTPClient()
+	require.NoError(t, err)
+	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
+		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	require.NoError(t, hc.AddRulesToGroup(devGroup,
+		[]dgraphtest.AclRule{{Predicate: "name", Permission: Read.Code}}, true))
 }
 
 func (asuite *AclTestSuite) TestQueryUserInfo() {
@@ -2068,11 +2100,11 @@ func (asuite *AclTestSuite) TestSchemaQueryWithACL() {
     {
       "fields": [],
       "name": "dgraph.graphql"
-	},
-	{
-		"fields":[],
-		"name":"dgraph.graphql.persisted_query"
-	},
+    },
+    {
+       "fields":[],
+       "name":"dgraph.graphql.persisted_query"
+    },
     {
       "fields": [],
       "name": "dgraph.type.Group"
@@ -2088,7 +2120,6 @@ func (asuite *AclTestSuite) TestSchemaQueryWithACL() {
   ]
 }`
 
-	// guardian user should be able to view full schema
 	gc, cleanup, err := asuite.dc.Client()
 	require.NoError(t, err)
 	defer cleanup()
@@ -2100,14 +2131,20 @@ func (asuite *AclTestSuite) TestSchemaQueryWithACL() {
 	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
 
 	require.NoError(t, gc.DropAll())
+
 	resp, err := gc.Query(schemaQuery)
 	require.NoError(t, err)
-	require.JSONEq(t, grootSchema, string(resp.GetJson()))
+	supportedUnique, err := dgraphtest.IsHigherVersion(asuite.dc.GetVersion(), "daa5805739ed258e913a157c6e0f126b2291b1b0")
+	require.NoError(t, err)
+	if supportedUnique {
+		require.JSONEq(t, newGrootSchema, string(resp.GetJson()))
+	} else {
+		require.JSONEq(t, oldGrootSchema, string(resp.GetJson()))
+	}
 
-	// add another user and some data for that user with permissions on predicates
 	resetUser(t, hc)
-
 	addDataAndRules(ctx, t, gc, hc)
+	// guardian user should be able to view full schema
 	time.Sleep(defaultTimeToSleep) // wait for ACL cache to refresh, otherwise it will be flaky test
 	asuite.Upgrade()
 	// the other user should be able to view only the part of schema for which it has read access
@@ -2117,7 +2154,206 @@ func (asuite *AclTestSuite) TestSchemaQueryWithACL() {
 	require.NoError(t, gc.LoginIntoNamespace(context.Background(), userid, userpassword, x.GalaxyNamespace))
 
 	resp, err = gc.Query(schemaQuery)
+	require.JSONEq(t, aliceSchema, string(resp.GetJson()))
+
+	asuite.Restart()
+
+	gc, _, err = asuite.dc.Client()
 	require.NoError(t, err)
+	require.NoError(t, gc.LoginIntoNamespace(context.Background(), userid, userpassword, x.GalaxyNamespace))
+
+	resp, err = gc.Query(schemaQuery)
+	require.JSONEq(t, aliceSchema, string(resp.GetJson()))
+}
+
+func (asuite *AclTestSuite) TestSchemaQueryDeleteMultiTenantWithACL() {
+	t := asuite.T()
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	defer cancel()
+	schemaQuery := "schema{}"
+
+	aliceSchema := `{
+  "types": [
+    {
+      "fields": [],
+      "name": "dgraph.graphql"
+    },
+    {
+       "fields":[],
+       "name":"dgraph.graphql.persisted_query"
+    },
+    {
+      "fields": [],
+      "name": "dgraph.type.Group"
+    },
+    {
+      "fields": [],
+      "name": "dgraph.type.Rule"
+    },
+    {
+      "fields": [],
+      "name": "dgraph.type.User"
+    }
+  ]
+}`
+
+	gc, cleanup, err := asuite.dc.Client()
+	require.NoError(t, err)
+	defer cleanup()
+	require.NoError(t, gc.LoginIntoNamespace(ctx, dgraphtest.DefaultUser,
+		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	hc, err := asuite.dc.HTTPClient()
+	require.NoError(t, err)
+	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
+		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	require.NoError(t, gc.DropAll())
+
+	ns, err := hc.AddNamespace()
+	require.NoError(t, err)
+
+	require.NoError(t, gc.LoginIntoNamespace(ctx, dgraphtest.DefaultUser,
+		dgraphtest.DefaultPassword, ns))
+
+	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
+		dgraphtest.DefaultPassword, ns))
+
+	resp, err := gc.Query(schemaQuery)
+	require.NoError(t, err)
+	supportedUnique, err := dgraphtest.IsHigherVersion(asuite.dc.GetVersion(), "daa5805739ed258e913a157c6e0f126b2291b1b0")
+	require.NoError(t, err)
+	if supportedUnique {
+		require.JSONEq(t, newGrootSchema, string(resp.GetJson()))
+	} else {
+		require.JSONEq(t, oldGrootSchema, string(resp.GetJson()))
+	}
+
+	time.Sleep(defaultTimeToSleep) // wait for ACL cache to refresh, otherwise it will be flaky test
+	asuite.Upgrade()
+	// the other user should be able to view only the part of schema for which it has read access
+	gc, _, err = asuite.dc.Client()
+	require.NoError(t, err)
+	require.NoError(t, gc.LoginIntoNamespace(ctx, dgraphtest.DefaultUser,
+		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+
+	resp, err = gc.Query(schemaQuery)
+
+	hc, err = asuite.dc.HTTPClient()
+	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
+		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	_, err = hc.DeleteNamespace(ns)
+	require.NoError(t, err)
+
+	ns, err = hc.AddNamespace()
+	require.NoError(t, err)
+
+	asuite.Restart()
+
+	gc, _, err = asuite.dc.Client()
+	require.NoError(t, err)
+	require.NoError(t, gc.LoginIntoNamespace(ctx, dgraphtest.DefaultUser,
+		dgraphtest.DefaultPassword, ns))
+
+	hc, err = asuite.dc.HTTPClient()
+	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
+		dgraphtest.DefaultPassword, ns))
+
+	resetUserWithNamespace(t, hc, ns)
+	require.NoError(t, gc.LoginIntoNamespace(context.Background(), userid, userpassword, ns))
+	resp, err = gc.Query(schemaQuery)
+	require.JSONEq(t, aliceSchema, string(resp.GetJson()))
+}
+
+func (asuite *AclTestSuite) TestSchemaQueryMultiTenantWithACL() {
+	t := asuite.T()
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	defer cancel()
+	schemaQuery := "schema{}"
+
+	aliceSchema := `{
+  "schema": [
+    {
+      "predicate": "name",
+      "type": "string",
+      "index": true,
+      "tokenizer": [
+        "exact"
+      ]
+    }
+  ],
+  "types": [
+    {
+      "fields": [],
+      "name": "dgraph.graphql"
+    },
+    {
+       "fields":[],
+       "name":"dgraph.graphql.persisted_query"
+    },
+    {
+      "fields": [],
+      "name": "dgraph.type.Group"
+    },
+    {
+      "fields": [],
+      "name": "dgraph.type.Rule"
+    },
+    {
+      "fields": [],
+      "name": "dgraph.type.User"
+    }
+  ]
+}`
+
+	gc, cleanup, err := asuite.dc.Client()
+	require.NoError(t, err)
+	defer cleanup()
+	require.NoError(t, gc.LoginIntoNamespace(ctx, dgraphtest.DefaultUser,
+		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	hc, err := asuite.dc.HTTPClient()
+	require.NoError(t, err)
+	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
+		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	require.NoError(t, gc.DropAll())
+
+	ns, err := hc.AddNamespace()
+	require.NoError(t, err)
+
+	require.NoError(t, gc.LoginIntoNamespace(ctx, dgraphtest.DefaultUser,
+		dgraphtest.DefaultPassword, ns))
+
+	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
+		dgraphtest.DefaultPassword, ns))
+
+	resp, err := gc.Query(schemaQuery)
+	require.NoError(t, err)
+	supportedUnique, err := dgraphtest.IsHigherVersion(asuite.dc.GetVersion(), "daa5805739ed258e913a157c6e0f126b2291b1b0")
+	require.NoError(t, err)
+	if supportedUnique {
+		require.JSONEq(t, newGrootSchema, string(resp.GetJson()))
+	} else {
+		require.JSONEq(t, oldGrootSchema, string(resp.GetJson()))
+	}
+
+	resetUserWithNamespace(t, hc, ns)
+	addDataAndRulesWithNs(ctx, t, gc, hc, ns)
+	// guardian user should be able to view full schema
+	time.Sleep(defaultTimeToSleep) // wait for ACL cache to refresh, otherwise it will be flaky test
+	asuite.Upgrade()
+	// the other user should be able to view only the part of schema for which it has read access
+	gc, _, err = asuite.dc.Client()
+	require.NoError(t, err)
+	require.NoError(t, gc.LoginIntoNamespace(context.Background(), userid, userpassword, ns))
+
+	resp, err = gc.Query(schemaQuery)
+	require.JSONEq(t, aliceSchema, string(resp.GetJson()))
+
+	asuite.Restart()
+
+	gc, _, err = asuite.dc.Client()
+	require.NoError(t, err)
+	require.NoError(t, gc.LoginIntoNamespace(context.Background(), userid, userpassword, ns))
+
+	resp, err = gc.Query(schemaQuery)
 	require.JSONEq(t, aliceSchema, string(resp.GetJson()))
 }
 

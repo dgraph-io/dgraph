@@ -338,7 +338,6 @@ func (c *LocalCluster) Start() error {
 	// sometimes health check doesn't work due to unmapped ports. We dont know why this happens,
 	// but checking it 4 times before failing the test.
 	for i := 0; i < 4; i++ {
-
 		if err = startAll(); err == nil {
 			return nil
 		}

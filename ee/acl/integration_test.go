@@ -29,6 +29,10 @@ func (suite *AclTestSuite) SetupTest() {
 	suite.dc = dgraphtest.NewComposeCluster()
 }
 
+func (suite *AclTestSuite) Restart() {
+	// not implemented for integration tests
+}
+
 func (suite *AclTestSuite) Upgrade() {
 	// not implemented for integration tests
 }

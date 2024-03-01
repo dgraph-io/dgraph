@@ -410,6 +410,9 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest, pidx uin
 		return errors.Wrapf(err, "cannot load schema after restore")
 	}
 
+	groups().applyInitialTypes()
+	groups().applyInitialSchema()
+
 	ResetAclCache()
 
 	// Reset gql schema only when the restore is not partial, so that after this restore

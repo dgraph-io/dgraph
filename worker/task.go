@@ -2475,6 +2475,7 @@ loop:
 	if span != nil {
 		span.Annotatef(nil, "handleHasFunction found %d uids", len(result.Uids))
 	}
+
 	out.UidMatrix = append(out.UidMatrix, result)
 	return nil
 }

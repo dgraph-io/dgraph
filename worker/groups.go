@@ -199,14 +199,16 @@ func (g *groupi) informZeroAboutTablets() {
 }
 
 func (g *groupi) applyInitialTypes() {
-	initialTypes := schema.InitialTypes(x.GalaxyNamespace)
-	for _, t := range initialTypes {
-		if _, ok := schema.State().GetType(t.TypeName); ok {
-			continue
-		}
-		// It is okay to write initial types at ts=1.
-		if err := updateType(t.GetTypeName(), *t, 1); err != nil {
-			glog.Errorf("Error while applying initial type: %s", err)
+	for ns := range schema.State().Namespaces() {
+		initialTypes := schema.InitialTypes(ns)
+		for _, t := range initialTypes {
+			if _, ok := schema.State().GetType(t.TypeName); ok {
+				continue
+			}
+			// It is okay to write initial types at ts=1.
+			if err := updateType(t.GetTypeName(), *t, 1); err != nil {
+				glog.Errorf("Error while applying initial type: %s", err)
+			}
 		}
 	}
 }
@@ -215,35 +217,37 @@ func (g *groupi) applyInitialSchema() {
 	if g.groupId() != 1 {
 		return
 	}
-	initialSchema := schema.InitialSchema(x.GalaxyNamespace)
-	ctx := g.Ctx()
+	for ns := range schema.State().Namespaces() {
+		initialSchema := schema.InitialSchema(ns)
+		ctx := g.Ctx()
 
-	apply := func(s *pb.SchemaUpdate) {
-		// There are 2 cases: either the alpha is fresh or it restarted. If it is fresh cluster
-		// then we can write the schema at ts=1. If alpha restarted, then we will already have the
-		// schema at higher version and this operation will be a no-op.
-		if err := applySchema(s, 1); err != nil {
-			glog.Errorf("Error while applying initial schema: %s", err)
+		apply := func(s *pb.SchemaUpdate) {
+			// There are 2 cases: either the alpha is fresh or it restarted. If it is fresh cluster
+			// then we can write the schema at ts=1. If alpha restarted, then we will already have the
+			// schema at higher version and this operation will be a no-op.
+			if err := applySchema(s, 1); err != nil {
+				glog.Errorf("Error while applying initial schema: %s", err)
+			}
 		}
-	}
 
-	for _, s := range initialSchema {
-		if gid, err := g.BelongsToReadOnly(s.Predicate, 0); err != nil {
-			glog.Errorf("Error getting tablet for predicate %s. Will force schema proposal.",
-				s.Predicate)
-			apply(s)
-		} else if gid == 0 {
-			// The tablet is not being served currently.
-			apply(s)
-		} else if curr, _ := schema.State().Get(ctx, s.Predicate); gid == g.groupId() &&
-			!proto.Equal(s, &curr) {
-			// If this tablet is served to the group, do not upsert the schema unless the
-			// stored schema and the proposed one are different.
-			apply(s)
-		} else {
-			// The schema for this predicate has already been proposed.
-			glog.V(1).Infof("Schema found for predicate %s: %+v", s.Predicate, curr)
-			continue
+		for _, s := range initialSchema {
+			if gid, err := g.BelongsToReadOnly(s.Predicate, 0); err != nil {
+				glog.Errorf("Error getting tablet for predicate %s. Will force schema proposal.",
+					s.Predicate)
+				apply(s)
+			} else if gid == 0 {
+				// The tablet is not being served currently.
+				apply(s)
+			} else if curr, _ := schema.State().Get(ctx, s.Predicate); gid == g.groupId() &&
+				!proto.Equal(s, &curr) {
+				// If this tablet is served to the group, do not upsert the schema unless the
+				// stored schema and the proposed one are different.
+				apply(s)
+			} else {
+				// The schema for this predicate has already been proposed.
+				glog.V(1).Infof("Schema found for predicate %s: %+v", s.Predicate, curr)
+				continue
+			}
 		}
 	}
 }

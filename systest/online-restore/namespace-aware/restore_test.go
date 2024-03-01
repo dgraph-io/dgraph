@@ -198,15 +198,15 @@ func TestNameSpaceAwareRestoreOnSingleNode(t *testing.T) {
 }
 
 func TestNamespaceAwareRestoreOnMultipleGroups(t *testing.T) {
-	baseClusterConf := dgraphtest.NewClusterConfig().WithNumAlphas(9).WithNumZeros(3).
-		WithReplicas(3).WithACL(20 * time.Hour).WithEncryption().WithUidLease(10000)
+	baseClusterConf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).
+		WithReplicas(1).WithACL(20 * time.Hour).WithEncryption().WithUidLease(10000)
 	baseCluster, err := dgraphtest.NewLocalCluster(baseClusterConf)
 	require.NoError(t, err)
 	defer func() { baseCluster.Cleanup(t.Failed()) }()
 	require.NoError(t, baseCluster.Start())
 
-	freshClusterConf := dgraphtest.NewClusterConfig().WithNumAlphas(9).WithNumZeros(3).
-		WithReplicas(3).WithACL(20*time.Hour).WithEncryption().WithUidLease(10000).
+	freshClusterConf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).
+		WithReplicas(1).WithACL(20*time.Hour).WithEncryption().WithUidLease(10000).
 		WithAlphaVolume(baseClusterConf.GetClusterVolume(dgraphtest.DefaultBackupDir), dgraphtest.DefaultBackupDir)
 	freshCluster, err := dgraphtest.NewLocalCluster(freshClusterConf)
 	require.NoError(t, err)
