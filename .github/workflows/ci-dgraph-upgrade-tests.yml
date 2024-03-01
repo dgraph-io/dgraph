@@ -4,12 +4,18 @@ on:
     branches:
       - main
       - 'release/**'
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
   schedule:
     - cron: "0 0 * * *" # 1 run per day
 jobs:
   dgraph-upgrade-tests:
     if: github.event.pull_request.draft == false
-    runs-on: ubuntu-20.04-32gb 
+    runs-on: buildjet-32vcpu-ubuntu-2004 
     steps:
       - uses: actions/checkout@v3
         with:

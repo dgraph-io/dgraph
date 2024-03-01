@@ -319,17 +319,40 @@ func (c *LocalCluster) Cleanup(verbose bool) {
 
 func (c *LocalCluster) Start() error {
 	log.Printf("[INFO] starting cluster with prefix [%v]", c.conf.prefix)
-	for i := 0; i < c.conf.numZeros; i++ {
-		if err := c.StartZero(i); err != nil {
+	startAll := func() error {
+		for i := 0; i < c.conf.numZeros; i++ {
+			if err := c.StartZero(i); err != nil {
+				return err
+			}
+		}
+		for i := 0; i < c.conf.numAlphas; i++ {
+			if err := c.StartAlpha(i); err != nil {
+				return err
+			}
+		}
+
+		return c.HealthCheck(false)
+	}
+
+	var err error
+	// sometimes health check doesn't work due to unmapped ports. We dont know why this happens,
+	// but checking it 4 times before failing the test.
+	for i := 0; i < 4; i++ {
+		c.Cleanup(false)
+		if err := c.init(); err != nil {
+			c.Cleanup(true)
 			return err
 		}
-	}
-	for i := 0; i < c.conf.numAlphas; i++ {
-		if err := c.StartAlpha(i); err != nil {
-			return err
+		if err = startAll(); err == nil {
+			return nil
+		}
+		log.Printf("[WARNING] Saw the error :%v, trying again", err)
+		if err1 := c.Stop(); err1 != nil {
+			log.Printf("[WARNING] error while stopping :%v", err)
 		}
 	}
-	return c.HealthCheck(false)
+
+	return err
 }
 
 func (c *LocalCluster) StartZero(id int) error {
