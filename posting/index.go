@@ -1523,12 +1523,18 @@ func DeleteData(ns uint64) error {
 // DeletePredicate deletes all entries and indices for a given predicate.
 func DeletePredicate(ctx context.Context, attr string, ts uint64) error {
 	glog.Infof("Dropping predicate: [%s]", attr)
-	prefix := x.PredicatePrefix(attr)
-	if err := pstore.DropPrefix(prefix); err != nil {
-		return err
+	preds := schema.State().PredicatesToDelete(attr)
+	for _, pred := range preds {
+		prefix := x.PredicatePrefix(pred)
+		if err := pstore.DropPrefix(prefix); err != nil {
+			return err
+		}
+		if err := schema.State().Delete(pred, ts); err != nil {
+			return err
+		}
 	}
 
-	return schema.State().Delete(attr, ts)
+	return nil
 }
 
 // DeleteNamespace bans the namespace and deletes its predicates/types from the schema.

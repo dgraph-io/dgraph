@@ -34,6 +34,7 @@ import (
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/vector-indexer/hnsw"
 )
 
 var (
@@ -455,6 +456,22 @@ func (s *state) HasCount(ctx context.Context, pred string) bool {
 		return schema.Count
 	}
 	return false
+}
+
+func (s *state) PredicatesToDelete(pred string) []string {
+	s.RLock()
+	defer s.RUnlock()
+	preds := make([]string, 0)
+	if schema, ok := s.predicate[pred]; ok {
+		preds = append(preds, pred)
+
+		if schema.ValueType == pb.Posting_VFLOAT && len(schema.VectorSpecs) != 0 {
+			preds = append(preds, hnsw.ConcatStrings(pred, hnsw.VecEntry))
+			preds = append(preds, hnsw.ConcatStrings(pred, hnsw.VecKeyword))
+			preds = append(preds, hnsw.ConcatStrings(pred, hnsw.VecDead))
+		}
+	}
+	return nil
 }
 
 // IsList returns whether the predicate is of list type.
