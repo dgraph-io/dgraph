@@ -299,6 +299,40 @@ func TestMutateVectorsDiffrentLengthWithDiffrentIndexes(t *testing.T) {
 	dropPredicate("vtest")
 }
 
+func TestVectorReindex(t *testing.T) {
+	dropPredicate("vtest")
+
+	pred := "vtest"
+
+	setSchema(fmt.Sprintf(vectorSchemaWithIndex, pred, "4", "euclidian"))
+
+	numVectors := 100
+	vectorSize := 4
+
+	randomVectors, allVectors := generateRandomVectors(numVectors, vectorSize, pred)
+	require.NoError(t, addTriplesToCluster(randomVectors))
+
+	setSchema(fmt.Sprintf(vectorSchemaWithoutIndex, pred))
+
+	query := `{
+		 vector(func: has(vtest)) {
+				count(uid)
+			 }
+	 }`
+
+	result := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"vector":[{"count":100}]}}`, result)
+
+	triple := strings.Split(randomVectors, "\n")[0]
+	_, err := querySingleVectorError(t, strings.Split(triple, `"`)[1], "vtest", false)
+	require.NotNil(t, err)
+
+	setSchema(fmt.Sprintf(vectorSchemaWithIndex, pred, "4", "euclidian"))
+	vector, err := querySingleVector(t, strings.Split(triple, `"`)[1], "vtest")
+	require.NoError(t, err)
+	require.Contains(t, allVectors, vector)
+}
+
 func TestVectorMutationWithoutIndex(t *testing.T) {
 	dropPredicate("vtest")
 
