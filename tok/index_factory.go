@@ -121,6 +121,10 @@ func (f *indexFactory) CreateOrReplace(
 	return f.delegate.CreateOrReplace(name, o, source, floatBits)
 }
 
+func (f *indexFactory) OptionalFeatures() *index.Features {
+	return nil
+}
+
 func (f *indexFactory) Type() string {
 	// TODO: rename to vfloat64, and distinguish between
 	//       float64 support and float32 support.
