@@ -19,12 +19,14 @@
 package query
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"math/rand"
 	"strings"
 	"testing"
 
+	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/dgraphtest"
 	"github.com/stretchr/testify/require"
 )
@@ -37,17 +39,94 @@ const (
 	vectorSchemaWithoutIndex = `%v: vfloat .`
 )
 
-func querySingleVector(t *testing.T, vector, pred string) ([]float32, error) {
+func updateVector(t *testing.T, triple string, pred string) []float32 {
+	uid := strings.Split(triple, " ")[0]
+	randomVec := generateRandomVector(10)
+	updatedTriple := fmt.Sprintf("%s <%s> \"%v\" .", uid, pred, randomVec)
+	require.NoError(t, addTriplesToCluster(updatedTriple))
+
+	updatedVec, err := queryVectorUsingUid(t, uid, pred)
+	require.NoError(t, err)
+	require.Equal(t, randomVec, updatedVec)
+	return updatedVec
+}
+
+func queryVectorUsingUid(t *testing.T, uid, pred string) ([]float32, error) {
 	vectorQuery := fmt.Sprintf(`
-	{
-		vector(func: similar_to(%v, 1, "%v")) {
-			   uid
-			   %v
-		 }
-    }`, pred, vector, pred)
+	 {  
+		 vector(func: uid(%v)) {
+				%v
+		  }
+	 }`, uid, pred)
 
 	resp, err := client.Query(vectorQuery)
-	require.NoError(t, err, "groot user query failed")
+	require.NoError(t, err)
+
+	type VectorData struct {
+		VTest []float32 `json:"vtest"`
+	}
+
+	type Data struct {
+		Vector []VectorData `json:"vector"`
+	}
+
+	var data Data
+
+	err = json.Unmarshal([]byte(resp.Json), &data)
+	if err != nil {
+		return []float32{}, err
+	}
+
+	return data.Vector[0].VTest, nil
+
+}
+
+func queryMultipleVectorsUsingSimilarTo(t *testing.T, vector []float32, pred string, topK int) ([][]float32, error) {
+	vectorQuery := fmt.Sprintf(`
+	 {  
+		 vector(func: similar_to(%v, %v, "%v")) {
+				uid
+				%v
+		  }
+	 }`, pred, topK, vector, pred)
+
+	resp, err := client.Query(vectorQuery)
+	require.NoError(t, err)
+
+	type VectorData struct {
+		UID   string    `json:"uid"`
+		VTest []float32 `json:"vtest"`
+	}
+
+	type Data struct {
+		Vector []VectorData `json:"vector"`
+	}
+
+	var data Data
+
+	err = json.Unmarshal([]byte(resp.Json), &data)
+	if err != nil {
+		return [][]float32{}, err
+	}
+
+	var vectors [][]float32
+	for _, vector := range data.Vector {
+		vectors = append(vectors, vector.VTest)
+	}
+	return vectors, nil
+}
+
+func querySingleVector(t *testing.T, vector, pred string) ([]float32, error) {
+	vectorQuery := fmt.Sprintf(`
+	 {  
+		 vector(func: similar_to(%v, 1, "%v")) {
+				uid
+				%v
+		  }
+	 }`, pred, vector, pred)
+
+	resp, err := client.Query(vectorQuery)
+	require.NoError(t, err)
 
 	type VectorData struct {
 		UID   string    `json:"uid"`
@@ -70,15 +149,15 @@ func querySingleVector(t *testing.T, vector, pred string) ([]float32, error) {
 
 func queryAllVectorsPred(t *testing.T, pred string) ([][]float32, error) {
 	vectorQuery := fmt.Sprintf(`
-	{
-		vector(func: has(%v)) {
-			   uid
-			   %v
-		 }
-	}`, pred, pred)
+	 {  
+		 vector(func: has(%v)) {
+				uid
+				%v
+		  }
+	 }`, pred, pred)
 
 	resp, err := client.Query(vectorQuery)
-	require.NoError(t, err, "groot user query failed")
+	require.NoError(t, err)
 
 	type VectorData struct {
 		UID   string    `json:"uid"`
@@ -106,7 +185,7 @@ func queryAllVectorsPred(t *testing.T, pred string) ([][]float32, error) {
 func generateRandomVector(size int) []float32 {
 	vector := make([]float32, size)
 	for i := 0; i < size; i++ {
-		vector[i] = rand.Float32() * 10 // Adjust the multiplier as needed
+		vector[i] = rand.Float32() * 10
 	}
 	return vector
 }
@@ -131,60 +210,51 @@ func generateRandomVectors(numVectors, vectorSize int, label string) (string, []
 }
 
 func testVectorMutationSameLength(t *testing.T) {
-	rdf := `<0x1> <vtest> "[1.5, 2.0, 3.0, 4.5]" .
-    <0x2> <vtest> "[0.0, -1.0, 2.5, 1.0]" .
-    <0x3> <vtest> "[-2.0, 3.5, 1.0, -0.5]" .
-    <0x4> <vtest> "[4.0, 2.0, -1.5, 0.0]" .
-    <0x5> <vtest> "[-3.0, 1.5, 0.5, 2.0]" .
-    <0x6> <vtest> "[0.5, -2.5, 1.0, 3.0]" .
-    <0x7> <vtest> "[2.0, 0.0, -2.0, 1.5]" .
-    <0x8> <vtest> "[1.0, 1.0, 1.0, 1.0]" .
-    <0x9> <vtest> "[-1.0, -1.0, -1.0, -1.0]" .
-    <0x10> <vtest> "[3.0, -3.0, 0.0, 2.5]" .`
-
+	rdf, vectors := generateRandomVectors(10, 5, "vtest")
 	require.NoError(t, addTriplesToCluster(rdf))
 
 	allVectors, err := queryAllVectorsPred(t, "vtest")
 	require.NoError(t, err)
 
-	require.Len(t, allVectors, 10)
+	require.Equal(t, vectors, allVectors)
 
-	vector, err := querySingleVector(t, "[1.5, 2.0, 3.0, 4.5]", "vtest")
+	triple := strings.Split(rdf, "\n")[1]
+	vector, err := querySingleVector(t, strings.Split(triple, `"`)[1], "vtest")
 	require.NoError(t, err)
 	require.Contains(t, allVectors, vector)
 
-	vector, err = querySingleVector(t, "[-3.0, 1.5, 0.5, 2.0]", "vtest")
+	triple = strings.Split(rdf, "\n")[3]
+	vector, err = querySingleVector(t, strings.Split(triple, `"`)[1], "vtest")
 	require.NoError(t, err)
 	require.Contains(t, allVectors, vector)
 
-	vector, err = querySingleVector(t, "[1.0, 1.0, 1.0, 1.0]", "vtest")
+	triple = strings.Split(rdf, "\n")[5]
+	vector, err = querySingleVector(t, strings.Split(triple, `"`)[1], "vtest")
 	require.NoError(t, err)
 	require.Contains(t, allVectors, vector)
 
-	vector, err = querySingleVector(t, "[3.0, -3.0, 0.0, 2.5]", "vtest")
+	triple = strings.Split(rdf, "\n")[7]
+	vector, err = querySingleVector(t, strings.Split(triple, `"`)[1], "vtest")
 	require.NoError(t, err)
 	require.Contains(t, allVectors, vector)
 
-	vector, err = querySingleVector(t, "[-1.0, -1.0, -1.0, -1.0]", "vtest")
-	require.NoError(t, err)
-	require.Contains(t, allVectors, vector)
-
-	vector, err = querySingleVector(t, "[2.0, 0.0, -2.0, 1.5]", "vtest")
+	triple = strings.Split(rdf, "\n")[9]
+	vector, err = querySingleVector(t, strings.Split(triple, `"`)[1], "vtest")
 	require.NoError(t, err)
 	require.Contains(t, allVectors, vector)
 }
 
 func testVectorMutationDiffrentLength(t *testing.T, err string) {
 	rdf := `<0x1> <vtest> "[1.5]" .
-	<0x2> <vtest> "[1.5, 2.0]" .
-	<0x3> <vtest> "[1.5, 2.0, 3.0]" .
-	<0x4> <vtest> "[1.5, 2.0, 3.0, 4.5]" .
-	<0x5> <vtest> "[1.5, 2.0, 3.0, 4.5, 5.0]" .
-	<0x6> <vtest> "[1.5, 2.0, 3.0, 4.5, 5.0, 6.5]" .
-	<0x7> <vtest> "[1.5, 2.0, 3.0, 4.5, 5.0, 6.5, 7.0]" .
-	<0x8> <vtest> "[1.5, 2.0, 3.0, 4.5, 5.0, 6.5, 7.0, 8.5]" .
-	<0x9> <vtest> "[1.5, 2.0, 3.0, 4.5, 5.0, 6.5, 7.0, 8.5, 9.0]" .
-	<0xA> <vtest> "[1.5, 2.0, 3.0, 4.5, 5.0, 6.5, 7.0, 8.5, 9.0, 10.5]" .`
+	 <0x2> <vtest> "[1.5, 2.0]" .
+	 <0x3> <vtest> "[1.5, 2.0, 3.0]" .
+	 <0x4> <vtest> "[1.5, 2.0, 3.0, 4.5]" .
+	 <0x5> <vtest> "[1.5, 2.0, 3.0, 4.5, 5.0]" .
+	 <0x6> <vtest> "[1.5, 2.0, 3.0, 4.5, 5.0, 6.5]" .
+	 <0x7> <vtest> "[1.5, 2.0, 3.0, 4.5, 5.0, 6.5, 7.0]" .
+	 <0x8> <vtest> "[1.5, 2.0, 3.0, 4.5, 5.0, 6.5, 7.0, 8.5]" .
+	 <0x9> <vtest> "[1.5, 2.0, 3.0, 4.5, 5.0, 6.5, 7.0, 8.5, 9.0]" .
+	 <0xA> <vtest> "[1.5, 2.0, 3.0, 4.5, 5.0, 6.5, 7.0, 8.5, 9.0, 10.5]" .`
 
 	require.ErrorContains(t, addTriplesToCluster(rdf), err)
 }
@@ -233,11 +303,11 @@ func TestVectorMutationWithoutIndex(t *testing.T) {
 	randomVectors, _ := generateRandomVectors(numVectors, vectorSize, pred)
 	require.NoError(t, addTriplesToCluster(randomVectors))
 
-	query := `{
-		vector(func: has(vtest)) {
-			   count(uid)
-		    }
-    }`
+	query := `{  
+		 vector(func: has(vtest)) {
+				count(uid)
+			 }
+	 }`
 
 	result := processQueryNoErr(t, query)
 	require.JSONEq(t, `{"data": {"vector":[{"count":100}]}}`, result)
@@ -250,11 +320,11 @@ func TestVectorMutationWithoutIndex(t *testing.T) {
 	randomVectors, _ = generateRandomVectors(numVectors, vectorSize, pred)
 	require.NoError(t, addTriplesToCluster(randomVectors))
 
-	query = `{
-		vector(func: has(vtest2)) {
-			   count(uid)
-		    }
-    }`
+	query = `{  
+		 vector(func: has(vtest2)) {
+				count(uid)
+			 }
+	 }`
 
 	result = processQueryNoErr(t, query)
 	require.JSONEq(t, `{"data": {"vector":[{"count":100}]}}`, result)
@@ -270,11 +340,11 @@ func TestDeleteVector(t *testing.T) {
 	rdf, vectors := generateRandomVectors(10, 10, "vtest")
 	require.NoError(t, addTriplesToCluster(rdf))
 
-	query := `{
-		vector(func: has(vtest)) {
-			   count(uid)
-		    }
-	}`
+	query := `{  
+		 vector(func: has(vtest)) {
+				count(uid)
+			 }
+	 }`
 
 	result := processQueryNoErr(t, query)
 	require.JSONEq(t, `{"data": {"vector":[{"count":10}]}}`, result)
@@ -288,10 +358,10 @@ func TestDeleteVector(t *testing.T) {
 	deleteTriplesInCluster(triple)
 	uid := strings.Split(triple, " ")[0]
 	query = fmt.Sprintf(`{
-		vector(func: uid(%s)) {
-		 vtest
-		}
-	 }`, uid[1:len(uid)-1])
+		 vector(func: uid(%s)) {
+		  vtest
+		 }
+	  }`, uid[1:len(uid)-1])
 
 	result = processQueryNoErr(t, query)
 	require.JSONEq(t, `{"data": {"vector":[]}}`, result)
@@ -309,10 +379,10 @@ func TestDeleteVector(t *testing.T) {
 	require.Contains(t, allVectors, vector)
 
 	query = fmt.Sprintf(`{
-		vector(func: uid(%s)) {
-		 vtest
-		}
-	 }`, uid[1:len(uid)-1])
+		 vector(func: uid(%s)) {
+		  vtest
+		 }
+	  }`, uid[1:len(uid)-1])
 
 	result = processQueryNoErr(t, query)
 	require.NoError(t, dgraphtest.CompareJSON(`{"data": {"vector":[]}}`, result))
@@ -322,10 +392,10 @@ func TestDeleteVector(t *testing.T) {
 
 	uid = strings.Split(triple, " ")[0]
 	query = fmt.Sprintf(`{
-		vector(func: uid(%s)) {
-		 vtest
-		}
-	 }`, uid[1:len(uid)-1])
+		 vector(func: uid(%s)) {
+		  vtest
+		 }
+	  }`, uid[1:len(uid)-1])
 
 	result = processQueryNoErr(t, query)
 	require.NoError(t, dgraphtest.CompareJSON(`{"data": {"vector":[]}}`, result))
@@ -339,11 +409,90 @@ func TestDeleteVector(t *testing.T) {
 	require.Contains(t, allVectors, vector)
 
 	query = fmt.Sprintf(`{
-		vector(func: uid(%s)) {
-		 vtest
-		}
-	 }`, uid[1:len(uid)-1])
+		 vector(func: uid(%s)) {
+		  vtest
+		 }
+	  }`, uid[1:len(uid)-1])
 
 	result = processQueryNoErr(t, query)
 	require.NoError(t, dgraphtest.CompareJSON(`{"data": {"vector":[]}}`, result))
+}
+
+func TestUpdateVector(t *testing.T) {
+	pred := "vtest"
+	dropPredicate(pred)
+
+	setSchema(fmt.Sprintf(vectorSchemaWithIndex, pred, "4", "euclidian"))
+
+	rdf, vectors := generateRandomVectors(10, 10, "vtest")
+	require.NoError(t, addTriplesToCluster(rdf))
+
+	allVectors, err := queryAllVectorsPred(t, "vtest")
+	require.NoError(t, err)
+
+	require.Equal(t, vectors, allVectors)
+
+	triple := strings.Split(rdf, "\n")[3]
+	updatedVec := updateVector(t, triple, "vtest")
+
+	updatedVectors, err := queryMultipleVectorsUsingSimilarTo(t, allVectors[0], "vtest", 10)
+	require.NoError(t, err)
+	require.Contains(t, updatedVectors, updatedVec)
+
+	triple = strings.Split(rdf, "\n")[4]
+	updatedVec = updateVector(t, triple, "vtest")
+	updatedVectors, err = queryMultipleVectorsUsingSimilarTo(t, allVectors[5], "vtest", 10)
+	require.NoError(t, err)
+	require.Contains(t, updatedVectors, updatedVec)
+
+	triple = strings.Split(rdf, "\n")[6]
+	updatedVec = updateVector(t, triple, "vtest")
+	updatedVectors, err = queryMultipleVectorsUsingSimilarTo(t, allVectors[7], "vtest", 10)
+	require.NoError(t, err)
+	require.Contains(t, updatedVectors, updatedVec)
+
+	triple = strings.Split(rdf, "\n")[7]
+	updatedVec = updateVector(t, triple, "vtest")
+	updatedVectors, err = queryMultipleVectorsUsingSimilarTo(t, allVectors[8], "vtest", 10)
+	require.NoError(t, err)
+	require.Contains(t, updatedVectors, updatedVec)
+
+	triple = strings.Split(rdf, "\n")[9]
+	triple = strings.Split(rdf, "\n")[7]
+	updatedVec = updateVector(t, triple, "vtest")
+	updatedVectors, err = queryMultipleVectorsUsingSimilarTo(t, allVectors[2], "vtest", 10)
+	require.NoError(t, err)
+	require.Contains(t, updatedVectors, updatedVec)
+}
+
+func TestVecotTwoTxnWithoutCommit(t *testing.T) {
+	pred := "vtest"
+	dropPredicate(pred)
+
+	setSchema(fmt.Sprintf(vectorSchemaWithIndex, pred, "4", "euclidian"))
+
+	rdf, vectors := generateRandomVectors(5, 5, "vtest")
+	txn1 := client.NewTxn()
+	_, err := txn1.Mutate(context.Background(), &api.Mutation{
+		SetNquads: []byte(rdf),
+	})
+	require.NoError(t, err)
+
+	rdf, _ = generateRandomVectors(5, 5, "vtest")
+	txn2 := client.NewTxn()
+	_, err = txn2.Mutate(context.Background(), &api.Mutation{
+		SetNquads: []byte(rdf),
+	})
+	require.NoError(t, err)
+
+	require.NoError(t, txn1.Commit(context.Background()))
+	require.Error(t, txn2.Commit(context.Background()))
+	resp, err := queryMultipleVectorsUsingSimilarTo(t, vectors[0], "vtest", 5)
+	require.NoError(t, err)
+
+	require.Contains(t, resp, vectors[0])
+	require.Contains(t, resp, vectors[1])
+	require.Contains(t, resp, vectors[2])
+	require.Contains(t, resp, vectors[3])
+	require.Contains(t, resp, vectors[4])
 }
