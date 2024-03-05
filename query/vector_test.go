@@ -27,7 +27,6 @@ import (
 	"testing"
 
 	"github.com/dgraph-io/dgo/v230/protos/api"
-	"github.com/dgraph-io/dgraph/dgraphtest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -53,7 +52,7 @@ func updateVector(t *testing.T, triple string, pred string) []float32 {
 
 func queryVectorUsingUid(t *testing.T, uid, pred string) ([]float32, error) {
 	vectorQuery := fmt.Sprintf(`
-	 {  
+	 {
 		 vector(func: uid(%v)) {
 				%v
 		  }
@@ -83,7 +82,7 @@ func queryVectorUsingUid(t *testing.T, uid, pred string) ([]float32, error) {
 
 func queryMultipleVectorsUsingSimilarTo(t *testing.T, vector []float32, pred string, topK int) ([][]float32, error) {
 	vectorQuery := fmt.Sprintf(`
-	 {  
+	 {
 		 vector(func: similar_to(%v, %v, "%v")) {
 				uid
 				%v
@@ -116,9 +115,10 @@ func queryMultipleVectorsUsingSimilarTo(t *testing.T, vector []float32, pred str
 	return vectors, nil
 }
 
-func querySingleVector(t *testing.T, vector, pred string) ([]float32, error) {
+func querySingleVectorError(t *testing.T, vector, pred string, validateError bool) ([]float32, error) {
+
 	vectorQuery := fmt.Sprintf(`
-	 {  
+	 {
 		 vector(func: similar_to(%v, 1, "%v")) {
 				uid
 				%v
@@ -126,7 +126,11 @@ func querySingleVector(t *testing.T, vector, pred string) ([]float32, error) {
 	 }`, pred, vector, pred)
 
 	resp, err := client.Query(vectorQuery)
-	require.NoError(t, err)
+	if validateError {
+		require.NoError(t, err)
+	} else if err != nil {
+		return []float32{}, err
+	}
 
 	type VectorData struct {
 		UID   string    `json:"uid"`
@@ -147,9 +151,13 @@ func querySingleVector(t *testing.T, vector, pred string) ([]float32, error) {
 	return data.Vector[0].VTest, nil
 }
 
+func querySingleVector(t *testing.T, vector, pred string) ([]float32, error) {
+	return querySingleVectorError(t, vector, pred, true)
+}
+
 func queryAllVectorsPred(t *testing.T, pred string) ([][]float32, error) {
 	vectorQuery := fmt.Sprintf(`
-	 {  
+	 {
 		 vector(func: has(%v)) {
 				uid
 				%v
@@ -303,7 +311,7 @@ func TestVectorMutationWithoutIndex(t *testing.T) {
 	randomVectors, _ := generateRandomVectors(numVectors, vectorSize, pred)
 	require.NoError(t, addTriplesToCluster(randomVectors))
 
-	query := `{  
+	query := `{
 		 vector(func: has(vtest)) {
 				count(uid)
 			 }
@@ -320,7 +328,7 @@ func TestVectorMutationWithoutIndex(t *testing.T) {
 	randomVectors, _ = generateRandomVectors(numVectors, vectorSize, pred)
 	require.NoError(t, addTriplesToCluster(randomVectors))
 
-	query = `{  
+	query = `{
 		 vector(func: has(vtest2)) {
 				count(uid)
 			 }
@@ -340,7 +348,7 @@ func TestDeleteVector(t *testing.T) {
 	rdf, vectors := generateRandomVectors(10, 10, "vtest")
 	require.NoError(t, addTriplesToCluster(rdf))
 
-	query := `{  
+	query := `{
 		 vector(func: has(vtest)) {
 				count(uid)
 			 }
@@ -354,68 +362,35 @@ func TestDeleteVector(t *testing.T) {
 
 	require.Equal(t, vectors, allVectors)
 
-	triple := strings.Split(rdf, "\n")[3]
-	deleteTriplesInCluster(triple)
-	uid := strings.Split(triple, " ")[0]
-	query = fmt.Sprintf(`{
+	triples := strings.Split(rdf, "\n")
+
+	deleteTriple := func(idx int) string {
+		triple := triples[idx]
+
+		deleteTriplesInCluster(triple)
+		uid := strings.Split(triple, " ")[0]
+		query = fmt.Sprintf(`{
 		 vector(func: uid(%s)) {
 		  vtest
 		 }
-	  }`, uid[1:len(uid)-1])
+	}`, uid[1:len(uid)-1])
 
-	result = processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"vector":[]}}`, result)
+		result = processQueryNoErr(t, query)
+		require.JSONEq(t, `{"data": {"vector":[]}}`, result)
+		return triple
 
-	vector, err := querySingleVector(t, strings.Split(triple, `"`)[1], "vtest")
-	require.NoError(t, err)
-	require.Contains(t, allVectors, vector)
+	}
 
-	triple = strings.Split(rdf, "\n")[0]
-	deleteTriplesInCluster(triple)
+	for i := 0; i < len(triples)-2; i++ {
+		triple := deleteTriple(i)
+		vector, err := querySingleVector(t, strings.Split(triple, `"`)[1], "vtest")
+		require.NoError(t, err)
+		require.Contains(t, allVectors, vector)
+	}
 
-	uid = strings.Split(triple, " ")[0]
-	vector, err = querySingleVector(t, strings.Split(triple, `"`)[1], "vtest")
-	require.NoError(t, err)
-	require.Contains(t, allVectors, vector)
-
-	query = fmt.Sprintf(`{
-		 vector(func: uid(%s)) {
-		  vtest
-		 }
-	  }`, uid[1:len(uid)-1])
-
-	result = processQueryNoErr(t, query)
-	require.NoError(t, dgraphtest.CompareJSON(`{"data": {"vector":[]}}`, result))
-
-	triple = strings.Split(rdf, "\n")[7]
-	deleteTriplesInCluster(triple)
-
-	uid = strings.Split(triple, " ")[0]
-	query = fmt.Sprintf(`{
-		 vector(func: uid(%s)) {
-		  vtest
-		 }
-	  }`, uid[1:len(uid)-1])
-
-	result = processQueryNoErr(t, query)
-	require.NoError(t, dgraphtest.CompareJSON(`{"data": {"vector":[]}}`, result))
-
-	triple = strings.Split(rdf, "\n")[9]
-	deleteTriplesInCluster(triple)
-	uid = strings.Split(triple, " ")[0]
-
-	vector, err = querySingleVector(t, strings.Split(triple, `"`)[1], "vtest")
-	require.NoError(t, err)
-	require.Contains(t, allVectors, vector)
-
-	query = fmt.Sprintf(`{
-		 vector(func: uid(%s)) {
-		  vtest
-		 }
-	  }`, uid[1:len(uid)-1])
-
-	result = processQueryNoErr(t, query)
-	require.NoError(t, dgraphtest.CompareJSON(`{"data": {"vector":[]}}`, result))
+	triple := deleteTriple(len(triples) - 2)
+	_, err = querySingleVectorError(t, strings.Split(triple, `"`)[1], "vtest", false)
+	require.NotNil(t, err)
 }
 
 func TestUpdateVector(t *testing.T) {

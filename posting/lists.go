@@ -32,7 +32,6 @@ import (
 	"github.com/dgraph-io/ristretto"
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/dgraph-io/vector-indexer/index"
-	"github.com/pkg/errors"
 )
 
 const (
@@ -268,7 +267,7 @@ func (lc *LocalCache) Find(pred []byte, filter func([]byte) bool) (uint64, error
 		return result.Uids[0], nil
 	}
 
-	return 0, errors.New("No entry node found")
+	return 0, badger.ErrKeyNotFound
 }
 
 func (lc *LocalCache) getNoStore(key string) *List {
