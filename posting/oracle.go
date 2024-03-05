@@ -76,6 +76,10 @@ func NewViTxn(delegate *Txn) *viTxn {
 	return &viTxn{delegate: delegate}
 }
 
+func (vt *viTxn) Find(prefix []byte, filter func([]byte) bool) (uint64, error) {
+	return vt.delegate.cache.Find(prefix, filter)
+}
+
 func (vt *viTxn) StartTs() uint64 {
 	return vt.delegate.StartTs
 }

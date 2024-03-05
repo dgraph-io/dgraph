@@ -17,6 +17,7 @@
 package posting
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"sync"
@@ -31,6 +32,7 @@ import (
 	"github.com/dgraph-io/ristretto"
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/dgraph-io/vector-indexer/index"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -120,6 +122,10 @@ type viLocalCache struct {
 	delegate *LocalCache
 }
 
+func (vc *viLocalCache) Find(prefix []byte, filter func([]byte) bool) (uint64, error) {
+	return vc.delegate.Find(prefix, filter)
+}
+
 func (vc *viLocalCache) Get(key []byte) (rval index.Value, rerr error) {
 	pl, err := vc.delegate.Get(key)
 	if err != nil {
@@ -162,6 +168,107 @@ func NewLocalCache(startTs uint64) *LocalCache {
 // around.
 func NoCache(startTs uint64) *LocalCache {
 	return &LocalCache{startTs: startTs}
+}
+
+func (lc *LocalCache) Find(pred []byte, filter func([]byte) bool) (uint64, error) {
+	txn := pstore.NewTransactionAt(lc.startTs, false)
+	defer txn.Discard()
+
+	attr := string(pred)
+
+	initKey := x.ParsedKey{
+		Attr: attr,
+	}
+	startKey := x.DataKey(string(pred), 0)
+	prefix := initKey.DataPrefix()
+
+	result := &pb.List{}
+	var prevKey []byte
+	itOpt := badger.DefaultIteratorOptions
+	itOpt.PrefetchValues = false
+	itOpt.AllVersions = true
+	itOpt.Prefix = prefix
+	it := txn.NewIterator(itOpt)
+	defer it.Close()
+
+	// This function could be switched to the stream.Lists framework, but after the change to use
+	// BitCompletePosting, the speed here is already pretty fast. The slowdown for @lang predicates
+	// occurs in filterStringFunction (like has(name) queries).
+	for it.Seek(startKey); it.Valid(); {
+		item := it.Item()
+		if bytes.Equal(item.Key(), prevKey) {
+			it.Next()
+			continue
+		}
+		prevKey = append(prevKey[:0], item.Key()...)
+
+		// Parse the key upfront, otherwise ReadPostingList would advance the
+		// iterator.
+		pk, err := x.Parse(item.Key())
+		if err != nil {
+			return 0, err
+		}
+
+		if pk.HasStartUid {
+			// The keys holding parts of a split key should not be accessed here because
+			// they have a different prefix. However, the check is being added to guard
+			// against future bugs.
+			continue
+		}
+
+		// The following optimization speeds up this iteration considerably, because it avoids
+		// the need to run ReadPostingList.
+		if item.UserMeta()&BitEmptyPosting > 0 {
+			// This is an empty posting list. So, it should not be included.
+			continue
+		}
+		if item.UserMeta()&BitCompletePosting > 0 {
+			// This bit would only be set if there are valid uids in UidPack.
+			key := x.DataKey(attr, pk.Uid)
+			pl, err := lc.Get(key)
+			if err != nil {
+				return 0, err
+			}
+			vals, err := pl.Value(lc.startTs)
+			switch {
+			case err == ErrNoValue:
+				continue
+			case err != nil:
+				return 0, err
+			}
+
+			if filter(vals.Value.([]byte)) {
+				result.Uids = append(result.Uids, pk.Uid)
+				break
+			}
+
+			continue
+		}
+
+		// We do need to copy over the key for ReadPostingList.
+		l, err := ReadPostingList(item.KeyCopy(nil), it)
+		if err != nil {
+			return 0, err
+		}
+		vals, err := l.Value(lc.startTs)
+		switch {
+		case err == ErrNoValue:
+			continue
+		case err != nil:
+			return 0, err
+		}
+
+		if filter(vals.Value.([]byte)) {
+			result.Uids = append(result.Uids, pk.Uid)
+			break
+		}
+	}
+
+	if len(result.Uids) > 0 {
+		return result.Uids[0], nil
+	}
+
+	return 0, errors.New("No entry node found")
 }
 
 func (lc *LocalCache) getNoStore(key string) *List {

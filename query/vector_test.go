@@ -39,7 +39,7 @@ const (
 
 func querySingleVector(t *testing.T, vector, pred string) ([]float32, error) {
 	vectorQuery := fmt.Sprintf(`
-	{  
+	{
 		vector(func: similar_to(%v, 1, "%v")) {
 			   uid
 			   %v
@@ -70,7 +70,7 @@ func querySingleVector(t *testing.T, vector, pred string) ([]float32, error) {
 
 func queryAllVectorsPred(t *testing.T, pred string) ([][]float32, error) {
 	vectorQuery := fmt.Sprintf(`
-	{  
+	{
 		vector(func: has(%v)) {
 			   uid
 			   %v
@@ -233,7 +233,7 @@ func TestVectorMutationWithoutIndex(t *testing.T) {
 	randomVectors, _ := generateRandomVectors(numVectors, vectorSize, pred)
 	require.NoError(t, addTriplesToCluster(randomVectors))
 
-	query := `{  
+	query := `{
 		vector(func: has(vtest)) {
 			   count(uid)
 		    }
@@ -250,7 +250,7 @@ func TestVectorMutationWithoutIndex(t *testing.T) {
 	randomVectors, _ = generateRandomVectors(numVectors, vectorSize, pred)
 	require.NoError(t, addTriplesToCluster(randomVectors))
 
-	query = `{  
+	query = `{
 		vector(func: has(vtest2)) {
 			   count(uid)
 		    }
@@ -270,7 +270,7 @@ func TestDeleteVector(t *testing.T) {
 	rdf, vectors := generateRandomVectors(10, 10, "vtest")
 	require.NoError(t, addTriplesToCluster(rdf))
 
-	query := `{  
+	query := `{
 		vector(func: has(vtest)) {
 			   count(uid)
 		    }
@@ -300,7 +300,7 @@ func TestDeleteVector(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, allVectors, vector)
 
-	triple = strings.Split(rdf, "\n")[5]
+	triple = strings.Split(rdf, "\n")[0]
 	deleteTriplesInCluster(triple)
 
 	uid = strings.Split(triple, " ")[0]
