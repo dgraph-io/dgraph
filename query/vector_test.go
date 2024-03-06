@@ -267,7 +267,7 @@ func testVectorMutationDiffrentLength(t *testing.T, err string) {
 	require.ErrorContains(t, addTriplesToCluster(rdf), err)
 }
 
-func TestMutateVectorsFixedLengthWithDiffrentIndexes(t *testing.T) {
+func TestVectorsMutateFixedLengthWithDiffrentIndexes(t *testing.T) {
 	dropPredicate("vtest")
 
 	setSchema(fmt.Sprintf(vectorSchemaWithIndex, "vtest", "4", "euclidian"))
@@ -283,7 +283,7 @@ func TestMutateVectorsFixedLengthWithDiffrentIndexes(t *testing.T) {
 	dropPredicate("vtest")
 }
 
-func TestMutateVectorsDiffrentLengthWithDiffrentIndexes(t *testing.T) {
+func TestVectorMutateDiffrentLengthWithDiffrentIndexes(t *testing.T) {
 	dropPredicate("vtest")
 
 	setSchema(fmt.Sprintf(vectorSchemaWithIndex, "vtest", "4", "euclidian"))
@@ -339,7 +339,7 @@ func TestVectorMutationWithoutIndex(t *testing.T) {
 	pred := "vtest"
 	setSchema(fmt.Sprintf(vectorSchemaWithoutIndex, pred))
 
-	numVectors := 100
+	numVectors := 1000
 	vectorSize := 4
 
 	randomVectors, _ := generateRandomVectors(numVectors, vectorSize, pred)
@@ -352,7 +352,7 @@ func TestVectorMutationWithoutIndex(t *testing.T) {
 	 }`
 
 	result := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"vector":[{"count":100}]}}`, result)
+	require.JSONEq(t, fmt.Sprintf(`{"data": {"vector":[{"count":%d}]}}`, numVectors), result)
 
 	dropPredicate("vtest")
 
@@ -369,17 +369,18 @@ func TestVectorMutationWithoutIndex(t *testing.T) {
 	 }`
 
 	result = processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"vector":[{"count":100}]}}`, result)
+	require.JSONEq(t, fmt.Sprintf(`{"data": {"vector":[{"count":%d}]}}`, numVectors), result)
 	dropPredicate("vtest2")
 }
 
-func TestDeleteVector(t *testing.T) {
+func TestVectorDelete(t *testing.T) {
 	pred := "vtest"
 	dropPredicate(pred)
 
 	setSchema(fmt.Sprintf(vectorSchemaWithIndex, pred, "4", "euclidian"))
 
-	rdf, vectors := generateRandomVectors(10, 10, "vtest")
+	numVectors := 1000
+	rdf, vectors := generateRandomVectors(numVectors, 10, "vtest")
 	require.NoError(t, addTriplesToCluster(rdf))
 
 	query := `{
@@ -389,7 +390,7 @@ func TestDeleteVector(t *testing.T) {
 	 }`
 
 	result := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"vector":[{"count":10}]}}`, result)
+	require.JSONEq(t, fmt.Sprintf(`{"data": {"vector":[{"count":%d}]}}`, numVectors), result)
 
 	allVectors, err := queryAllVectorsPred(t, "vtest")
 	require.NoError(t, err)
@@ -427,13 +428,14 @@ func TestDeleteVector(t *testing.T) {
 	require.NotNil(t, err)
 }
 
-func TestUpdateVector(t *testing.T) {
+func TestVectorUpdate(t *testing.T) {
 	pred := "vtest"
 	dropPredicate(pred)
 
 	setSchema(fmt.Sprintf(vectorSchemaWithIndex, pred, "4", "euclidian"))
 
-	rdf, vectors := generateRandomVectors(10, 10, "vtest")
+	numVectors := 1000
+	rdf, vectors := generateRandomVectors(1000, 10, "vtest")
 	require.NoError(t, addTriplesToCluster(rdf))
 
 	allVectors, err := queryAllVectorsPred(t, "vtest")
@@ -441,40 +443,26 @@ func TestUpdateVector(t *testing.T) {
 
 	require.Equal(t, vectors, allVectors)
 
-	triple := strings.Split(rdf, "\n")[3]
-	updatedVec := updateVector(t, triple, "vtest")
+	updateVectorQuery := func(idx int) {
+		triple := strings.Split(rdf, "\n")[idx]
+		updatedVec := updateVector(t, triple, "vtest")
+		allVectors[idx] = updatedVec
 
-	updatedVectors, err := queryMultipleVectorsUsingSimilarTo(t, allVectors[0], "vtest", 10)
-	require.NoError(t, err)
-	require.Contains(t, updatedVectors, updatedVec)
+		updatedVectors, err := queryMultipleVectorsUsingSimilarTo(t, allVectors[0], "vtest", 100)
+		require.NoError(t, err)
 
-	triple = strings.Split(rdf, "\n")[4]
-	updatedVec = updateVector(t, triple, "vtest")
-	updatedVectors, err = queryMultipleVectorsUsingSimilarTo(t, allVectors[5], "vtest", 10)
-	require.NoError(t, err)
-	require.Contains(t, updatedVectors, updatedVec)
+		for _, i := range updatedVectors {
+			require.Contains(t, allVectors, i)
+		}
+	}
 
-	triple = strings.Split(rdf, "\n")[6]
-	updatedVec = updateVector(t, triple, "vtest")
-	updatedVectors, err = queryMultipleVectorsUsingSimilarTo(t, allVectors[7], "vtest", 10)
-	require.NoError(t, err)
-	require.Contains(t, updatedVectors, updatedVec)
-
-	triple = strings.Split(rdf, "\n")[7]
-	updatedVec = updateVector(t, triple, "vtest")
-	updatedVectors, err = queryMultipleVectorsUsingSimilarTo(t, allVectors[8], "vtest", 10)
-	require.NoError(t, err)
-	require.Contains(t, updatedVectors, updatedVec)
-
-	triple = strings.Split(rdf, "\n")[9]
-	triple = strings.Split(rdf, "\n")[7]
-	updatedVec = updateVector(t, triple, "vtest")
-	updatedVectors, err = queryMultipleVectorsUsingSimilarTo(t, allVectors[2], "vtest", 10)
-	require.NoError(t, err)
-	require.Contains(t, updatedVectors, updatedVec)
+	for i := 0; i < 1000; i++ {
+		idx := rand.Intn(numVectors)
+		updateVectorQuery(idx)
+	}
 }
 
-func TestVecotTwoTxnWithoutCommit(t *testing.T) {
+func TestVectorTwoTxnWithoutCommit(t *testing.T) {
 	pred := "vtest"
 	dropPredicate(pred)
 
@@ -499,9 +487,7 @@ func TestVecotTwoTxnWithoutCommit(t *testing.T) {
 	resp, err := queryMultipleVectorsUsingSimilarTo(t, vectors[0], "vtest", 5)
 	require.NoError(t, err)
 
-	require.Contains(t, resp, vectors[0])
-	require.Contains(t, resp, vectors[1])
-	require.Contains(t, resp, vectors[2])
-	require.Contains(t, resp, vectors[3])
-	require.Contains(t, resp, vectors[4])
+	for i := 0; i < len(vectors); i++ {
+		require.Contains(t, resp, vectors[i])
+	}
 }

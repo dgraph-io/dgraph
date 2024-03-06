@@ -471,7 +471,7 @@ func (s *state) PredicatesToDelete(pred string) []string {
 			preds = append(preds, hnsw.ConcatStrings(pred, hnsw.VecDead))
 		}
 	}
-	return nil
+	return preds
 }
 
 // IsList returns whether the predicate is of list type.
