@@ -190,9 +190,6 @@ func (lc *LocalCache) Find(pred []byte, filter func([]byte) bool) (uint64, error
 	it := txn.NewIterator(itOpt)
 	defer it.Close()
 
-	// This function could be switched to the stream.Lists framework, but after the change to use
-	// BitCompletePosting, the speed here is already pretty fast. The slowdown for @lang predicates
-	// occurs in filterStringFunction (like has(name) queries).
 	for it.Seek(startKey); it.Valid(); {
 		item := it.Item()
 		if bytes.Equal(item.Key(), prevKey) {
@@ -206,6 +203,11 @@ func (lc *LocalCache) Find(pred []byte, filter func([]byte) bool) (uint64, error
 		pk, err := x.Parse(item.Key())
 		if err != nil {
 			return 0, err
+		}
+
+		// If we have moved to the next attribute, break
+		if pk.Attr != attr {
+			break
 		}
 
 		if pk.HasStartUid {
