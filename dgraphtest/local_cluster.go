@@ -666,7 +666,7 @@ func (c *LocalCluster) Upgrade(version string, strategy UpgradeStrategy) error {
 			}
 		}
 		// using -1 as namespace exports all the namespaces
-		if err := hc.Export(DefaultExportDir, -1); err != nil {
+		if err := hc.Export(DefaultExportDir, "rdf", -1); err != nil {
 			return errors.Wrap(err, "error taking export during upgrade")
 		}
 		if err := c.Stop(); err != nil {
@@ -742,6 +742,26 @@ func (c *LocalCluster) Client() (*GrpcClient, func(), error) {
 			if err := conn.Close(); err != nil {
 				log.Printf("[WARNING] error closing connection: %v", err)
 			}
+		}
+	}
+	return &GrpcClient{Dgraph: client}, cleanup, nil
+}
+
+func (c *LocalCluster) AlphaClient(id int) (*GrpcClient, func(), error) {
+	alpha := c.alphas[id]
+	url, err := alpha.alphaURL(c)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "error getting health URL")
+	}
+	conn, err := grpc.Dial(url, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "error connecting to alpha")
+	}
+
+	client := dgo.NewDgraphClient(api.NewDgraphClient(conn))
+	cleanup := func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("[WARNING] error closing connection: %v", err)
 		}
 	}
 	return &GrpcClient{Dgraph: client}, cleanup, nil

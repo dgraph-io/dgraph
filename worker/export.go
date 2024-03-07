@@ -89,6 +89,7 @@ var rdfTypeMap = map[types.TypeID]string{
 	types.GeoID:      "geo:geojson",
 	types.BinaryID:   "xs:base64Binary",
 	types.PasswordID: "xs:password",
+	types.VFloatID:   "xs:[]float32",
 }
 
 // UIDs like 0x1 look weird but 64-bit ones like 0x0000000000000001 are too long.
@@ -313,6 +314,11 @@ func toSchema(attr string, update *pb.SchemaUpdate) *bpb.KV {
 		x.Check2(buf.WriteString(" @index("))
 		x.Check2(buf.WriteString(strings.Join(update.GetTokenizer(), ",")))
 		x.Check2(buf.WriteRune(')'))
+
+	case len(update.GetIndexSpecs()) != 0:
+		str := formatVectorSchema(update)
+		x.Check2(buf.WriteString(str))
+
 	}
 	if update.GetCount() {
 		x.Check2(buf.WriteString(" @count"))
@@ -329,6 +335,34 @@ func toSchema(attr string, update *pb.SchemaUpdate) *bpb.KV {
 		Value:   buf.Bytes(),
 		Version: 3, // Schema value
 	}
+}
+
+func formatVectorSchema(schema *pb.SchemaUpdate) string {
+	var buf bytes.Buffer
+	x.Check2(buf.WriteString(" @index("))
+
+	for j, vectorSpec := range schema.IndexSpecs {
+
+		x.Check2(buf.WriteString(vectorSpec.Name))
+		x.Check2(buf.WriteString("("))
+		for index, i := range vectorSpec.Options {
+			x.Check2(buf.WriteString(string(i.Key)))
+			x.Check2(buf.WriteRune(':'))
+			x.Check2(buf.WriteRune('"'))
+
+			x.Check2(buf.WriteString(i.Value))
+			x.Check2(buf.WriteRune('"'))
+			if len(vectorSpec.Options)-1 > index {
+				x.Check2(buf.WriteString(","))
+			}
+		}
+		x.Check2(buf.WriteRune(')'))
+		if len(schema.IndexSpecs)-1 < j {
+			x.Check2(buf.WriteString(","))
+		}
+	}
+	x.Check2(buf.WriteRune(')'))
+	return buf.String()
 }
 
 func toType(attr string, update pb.TypeUpdate) *bpb.KV {
