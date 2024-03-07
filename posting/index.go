@@ -1526,10 +1526,10 @@ func DeletePredicate(ctx context.Context, attr string, ts uint64) error {
 	preds := schema.State().PredicatesToDelete(attr)
 	for _, pred := range preds {
 		prefix := x.PredicatePrefix(pred)
-		if err := pstore.DropPrefix(prefix); err != nil {
+		if err := schema.State().Delete(pred, ts); err != nil {
 			return err
 		}
-		if err := schema.State().Delete(pred, ts); err != nil {
+		if err := pstore.DropPrefix(prefix); err != nil {
 			return err
 		}
 	}
