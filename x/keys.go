@@ -291,13 +291,13 @@ func CountKey(attr string, count uint32, reverse bool) []byte {
 
 // ParsedKey represents a key that has been parsed into its multiple attributes.
 type ParsedKey struct {
-	ByteType    byte
 	Attr        string
 	Uid         uint64
-	HasStartUid bool
 	StartUid    uint64
 	Term        string
 	Count       uint32
+	ByteType    byte
+	HasStartUid bool
 	bytePrefix  byte
 }
 
