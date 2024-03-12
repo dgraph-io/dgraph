@@ -32,7 +32,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
-	"github.com/dgraph-io/vector-indexer/hnsw"
+	"github.com/dgraph-io/dgraph/vector-indexer/hnsw"
 )
 
 // Oracle stores and manages the transaction state and conflict detection.

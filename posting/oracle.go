@@ -29,7 +29,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/vector-indexer/index"
+	"github.com/dgraph-io/dgraph/vector-indexer/index"
 )
 
 var o *oracle

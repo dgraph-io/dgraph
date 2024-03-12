@@ -45,8 +45,8 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/vector-indexer/hnsw"
-	"github.com/dgraph-io/vector-indexer/index"
+	"github.com/dgraph-io/dgraph/vector-indexer/hnsw"
+	"github.com/dgraph-io/dgraph/vector-indexer/index"
 )
 
 func invokeNetworkRequest(ctx context.Context, addr string,

@@ -34,7 +34,7 @@ import (
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/vector-indexer/hnsw"
+	"github.com/dgraph-io/dgraph/vector-indexer/hnsw"
 )
 
 var (

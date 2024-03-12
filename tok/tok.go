@@ -31,8 +31,8 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/vector-indexer/hnsw"
-	opts "github.com/dgraph-io/vector-indexer/options"
+	"github.com/dgraph-io/dgraph/vector-indexer/hnsw"
+	opts "github.com/dgraph-io/dgraph/vector-indexer/options"
 )
 
 // Tokenizer identifiers are unique and can't be reused.

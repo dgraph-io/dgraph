@@ -24,8 +24,8 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/vector-indexer/index"
-	opts "github.com/dgraph-io/vector-indexer/options"
+	"github.com/dgraph-io/dgraph/vector-indexer/index"
+	opts "github.com/dgraph-io/dgraph/vector-indexer/options"
 )
 
 func LoadCustomIndexFactory(soFile string) {
