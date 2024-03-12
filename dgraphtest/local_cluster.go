@@ -338,17 +338,18 @@ func (c *LocalCluster) Start() error {
 	// sometimes health check doesn't work due to unmapped ports. We dont know why this happens,
 	// but checking it 4 times before failing the test.
 	for i := 0; i < 4; i++ {
-		c.Cleanup(false)
-		if err := c.init(); err != nil {
-			c.Cleanup(true)
-			return err
-		}
+
 		if err = startAll(); err == nil {
 			return nil
 		}
 		log.Printf("[WARNING] Saw the error :%v, trying again", err)
 		if err1 := c.Stop(); err1 != nil {
 			log.Printf("[WARNING] error while stopping :%v", err)
+		}
+		c.Cleanup(false)
+		if err := c.init(); err != nil {
+			c.Cleanup(true)
+			return err
 		}
 	}
 
