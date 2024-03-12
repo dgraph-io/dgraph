@@ -34,10 +34,9 @@ const (
 	searchDirective = "search"
 	searchArgs      = "by"
 
-	dgraphDirective    = "dgraph"
-	dgraphTypeArg      = "type"
-	dgraphPredArg      = "pred"
-	embeddingDirective = "hm_embedding"
+	dgraphDirective = "dgraph"
+	dgraphTypeArg   = "type"
+	dgraphPredArg   = "pred"
 
 	idDirective             = "id"
 	idDirectiveInterfaceArg = "interface"
@@ -162,7 +161,6 @@ enum DgraphIndex {
 	day
 	hour
 	geo
-	hnsw
 }
 
 input AuthRule {
@@ -277,8 +275,7 @@ input GenerateMutationParams {
 `
 	directiveDefs = `
 directive @hasInverse(field: String!) on FIELD_DEFINITION
-directive @search(by: [String!]) on FIELD_DEFINITION
-directive @hm_embedding on FIELD_DEFINITION
+directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id(interface: Boolean) on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE | FIELD_DEFINITION
@@ -309,8 +306,7 @@ directive @generate(
 	// So, such directives have to be missed too.
 	apolloSupportedDirectiveDefs = `
 directive @hasInverse(field: String!) on FIELD_DEFINITION
-directive @search(by: [String!]) on FIELD_DEFINITION
-directive @hm_embedding on FIELD_DEFINITION
+directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id(interface: Boolean) on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE | FIELD_DEFINITION
@@ -462,7 +458,6 @@ var supportedSearches = map[string]searchTypeIndex{
 	"point":        {"Point", "geo"},
 	"polygon":      {"Polygon", "geo"},
 	"multiPolygon": {"MultiPolygon", "geo"},
-	"hnsw":         {"Float", "hnsw"},
 }
 
 // GraphQL scalar/object type -> default search arg
@@ -537,7 +532,6 @@ var builtInFilters = map[string]string{
 	"point":        "PointGeoFilter",
 	"polygon":      "PolygonGeoFilter",
 	"multiPolygon": "PolygonGeoFilter",
-	"hnsw":         "HNSWSearchFilter",
 }
 
 // GraphQL in-built type -> Dgraph scalar
@@ -567,7 +561,6 @@ func ValidatorNoOp(
 var directiveValidators = map[string]directiveValidator{
 	inverseDirective:        hasInverseValidation,
 	searchDirective:         searchValidation,
-	embeddingDirective:      embeddingValidation,
 	dgraphDirective:         dgraphDirectiveValidation,
 	idDirective:             idValidation,
 	subscriptionDirective:   ValidatorNoOp,
@@ -1317,7 +1310,7 @@ func addPatchType(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[
 
 // addFieldFilters adds field arguments that allow filtering to all fields of
 // defn that can be searched.  For example, if there's another type
-// `type R { ... f: String @search(by: ["term"]) ... }`
+// `type R { ... f: String @search(by: [term]) ... }`
 // and defn has a field of type R, e.g. if defn is like
 // `type T { ... g: R ... }`
 // then a query should be able to filter on g by term search on f, like
@@ -1476,7 +1469,6 @@ func getFilterTypes(schema *ast.Schema, fld *ast.FieldDefinition, filterName str
 	filterNames := make([]string, len(searchArgs))
 
 	for i, search := range searchArgs {
-		search = parseSearchType(search)
 		filterNames[i] = builtInFilters[search]
 
 		// For enum type, if the index is "hash" or "exact", we construct filter named
@@ -1677,10 +1669,6 @@ func hasID(defn *ast.Definition) bool {
 
 func hasXID(defn *ast.Definition) bool {
 	return fieldAny(nonExternalAndKeyFields(defn), hasIDDirective)
-}
-
-func hasEmbedding(defn *ast.Definition) bool {
-	return fieldAny(nonExternalAndKeyFields(defn), hasEmbeddingDirective)
 }
 
 // fieldAny returns true if any field in fields satisfies pred
@@ -1957,8 +1945,7 @@ func addAggregationResultType(schema *ast.Schema, defn *ast.Definition, provides
 	}
 }
 
-func addGetQuery(schema *ast.Schema, defn *ast.Definition,
-	providesTypeMap map[string]bool, generateSubscription bool) {
+func addGetQuery(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[string]bool, generateSubscription bool) {
 	hasIDField := hasID(defn)
 	hasXIDField := hasXID(defn)
 	xidCount := xidsCount(defn.Fields)
@@ -2019,184 +2006,6 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition,
 	}
 }
 
-// addSimilarByEmbeddingQuery adds a query to perform similarity based search on
-// a specified embedding as an array of floats
-// schema - the graphQL schema. The schema will be modified by this operation
-// defn - The type definition for the object for which this query will be added
-func addSimilarByEmbeddingQuery(schema *ast.Schema, defn *ast.Definition) {
-
-	qry := &ast.FieldDefinition{
-		Name: SimilarQueryPrefix + defn.Name + SimilarByEmbeddingQuerySuffix,
-		Type: &ast.Type{
-			Elem: &ast.Type{
-				NamedType: defn.Name,
-			},
-		},
-	}
-
-	// The new field is "hm_distance". Add it to input Type
-	if defn.Fields.ForName(SimilarQueryDistanceFieldName) == nil {
-		defn.Fields = append(defn.Fields,
-			&ast.FieldDefinition{
-				Name: SimilarQueryDistanceFieldName,
-				Type: &ast.Type{NamedType: "Float"}})
-	}
-	// Define the enum to
-	//select from among all predicates with "@hm_embedding" directives
-	enumName := defn.Name + EmbeddingEnumSuffix
-	enum := &ast.Definition{
-		Kind: ast.Enum,
-		Name: enumName,
-	}
-
-	for _, fld := range defn.Fields {
-		if hasEmbeddingDirective(fld) {
-			enum.EnumValues = append(enum.EnumValues,
-				&ast.EnumValueDefinition{Name: fld.Name})
-		}
-	}
-	schema.Types[enumName] = enum
-
-	//Accept the name of embedding field
-	qry.Arguments = append(qry.Arguments, &ast.ArgumentDefinition{
-		Name: SimilarByArgName,
-		Type: &ast.Type{NamedType: enumName, NonNull: true},
-	})
-
-	// Accept the topK, number of nearest neighbors to
-	// return
-	qry.Arguments = append(qry.Arguments, &ast.ArgumentDefinition{
-		Name: SimilarTopKArgName,
-		Type: &ast.Type{
-			NamedType: "Int",
-			NonNull:   true,
-		},
-	})
-
-	// Accept an array of floats as the search vector
-	qry.Arguments = append(qry.Arguments, &ast.ArgumentDefinition{
-		Name: SimilarVectorArgName,
-		Type: &ast.Type{
-			Elem: &ast.Type{
-				NamedType: "Float",
-				NonNull:   true,
-			},
-			NonNull: true,
-		},
-	})
-	addFilterArgument(schema, qry)
-
-	schema.Query.Fields = append(schema.Query.Fields, qry)
-}
-
-// addSimilarByIdQuery adds a query that looks up a node based on an id/xid.
-// The query then performs a similarity search based on the value of the
-// selected embedding field to find similar objects
-// schema - The graphQL schema. New enums and result type are added to the schema
-// defn - The object type for which the query is added
-func addSimilarByIdQuery(schema *ast.Schema, defn *ast.Definition,
-	providesTypeMap map[string]bool) {
-	hasIDField := hasID(defn)
-	hasXIDField := hasXID(defn)
-	xidCount := xidsCount(defn.Fields)
-	if !hasIDField && !hasXIDField {
-		return
-	}
-
-	// create the new query, querySimilar<Type>ById
-	qry := &ast.FieldDefinition{
-		Name: SimilarQueryPrefix + defn.Name + SimilarByIdQuerySuffix,
-		Type: &ast.Type{
-			Elem: &ast.Type{
-				NamedType: defn.Name,
-			},
-		},
-	}
-
-	// The new field is "hm_distance". Add it to input Type
-	if defn.Fields.ForName(SimilarQueryDistanceFieldName) == nil {
-		defn.Fields = append(defn.Fields,
-			&ast.FieldDefinition{
-				Name: SimilarQueryDistanceFieldName,
-				Type: &ast.Type{NamedType: "Float"}})
-	}
-	// If the defn, only specified one of ID/XID field, then they are mandatory.
-	// If it specified both, then they are optional.
-	if hasIDField {
-		fields := getIDField(defn, providesTypeMap)
-		qry.Arguments = append(qry.Arguments, &ast.ArgumentDefinition{
-			Name: fields[0].Name,
-			Type: &ast.Type{
-				NamedType: idTypeFor(defn),
-				NonNull:   !hasXIDField,
-			},
-		})
-	}
-
-	if hasXIDField {
-		var idWithoutUniqueArgExists bool
-		for _, fld := range defn.Fields {
-			if hasIDDirective(fld) {
-				if !hasInterfaceArg(fld) {
-					idWithoutUniqueArgExists = true
-				}
-				qry.Arguments = append(qry.Arguments, &ast.ArgumentDefinition{
-					Name: fld.Name,
-					Type: &ast.Type{
-						NamedType: fld.Type.Name(),
-						NonNull:   !hasIDField && xidCount <= 1,
-					},
-				})
-			}
-		}
-		if defn.Kind == "INTERFACE" && idWithoutUniqueArgExists {
-			qry.Directives = append(
-				qry.Directives, &ast.Directive{Name: deprecatedDirective,
-					Arguments: ast.ArgumentList{&ast.Argument{Name: "reason",
-						Value: &ast.Value{Raw: "@id argument for get query on interface is being" +
-							" deprecated. Only those @id fields which have interface argument" +
-							" set to true will be available in getQuery argument on interface" +
-							" post v21.11.0, please update your schema accordingly.",
-							Kind: ast.StringValue}}}})
-		}
-	}
-
-	// Define the enum to
-	//select from among all predicates with "@hm_embedding" directives
-	enumName := defn.Name + EmbeddingEnumSuffix
-	enum := &ast.Definition{
-		Kind: ast.Enum,
-		Name: enumName,
-	}
-
-	for _, fld := range defn.Fields {
-		if hasEmbeddingDirective(fld) {
-			enum.EnumValues = append(enum.EnumValues,
-				&ast.EnumValueDefinition{Name: fld.Name})
-		}
-	}
-	schema.Types[enumName] = enum
-
-	// Accept the name of the embedding field.
-	qry.Arguments = append(qry.Arguments, &ast.ArgumentDefinition{
-		Name: SimilarByArgName,
-		Type: &ast.Type{NamedType: enumName, NonNull: true},
-	})
-
-	// Accept the topK, number of nearest neighbors to
-	// return
-	qry.Arguments = append(qry.Arguments, &ast.ArgumentDefinition{
-		Name: SimilarTopKArgName,
-		Type: &ast.Type{
-			NamedType: "Int",
-			NonNull:   true,
-		},
-	})
-
-	addFilterArgument(schema, qry)
-	schema.Query.Fields = append(schema.Query.Fields, qry)
-}
-
 func addFilterQuery(
 	schema *ast.Schema,
 	defn *ast.Definition,
@@ -2223,8 +2032,7 @@ func addFilterQuery(
 
 }
 
-func addAggregationQuery(schema *ast.Schema,
-	defn *ast.Definition, generateSubscription bool) {
+func addAggregationQuery(schema *ast.Schema, defn *ast.Definition, generateSubscription bool) {
 	qry := &ast.FieldDefinition{
 		Name: "aggregate" + defn.Name,
 		Type: &ast.Type{
@@ -2241,8 +2049,7 @@ func addAggregationQuery(schema *ast.Schema,
 
 }
 
-func addPasswordQuery(schema *ast.Schema,
-	defn *ast.Definition, providesTypeMap map[string]bool) {
+func addPasswordQuery(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[string]bool) {
 	hasIDField := hasID(defn)
 	hasXIDField := hasXID(defn)
 	if !hasIDField && !hasXIDField {
@@ -2288,10 +2095,6 @@ func addQueries(
 ) {
 	if params.generateGetQuery {
 		addGetQuery(schema, defn, providesTypeMap, params.generateSubscription)
-		if hasEmbedding(defn) {
-			addSimilarByIdQuery(schema, defn, providesTypeMap)
-			addSimilarByEmbeddingQuery(schema, defn)
-		}
 	}
 
 	if params.generatePasswordQuery {

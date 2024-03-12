@@ -41,12 +41,12 @@ const (
 	sch = `
 	type Product @withSubscription {
 		productID: ID!
-		name: String @search(by: ["term"])
+		name: String @search(by: [term])
 		reviews: [Review] @hasInverse(field: about)
 	}
 
 	type Customer  {
-		username: String! @id @search(by: ["hash", "regexp"])
+		username: String! @id @search(by: [hash, regexp])
 		reviews: [Review] @hasInverse(field: by)
 	}
 
@@ -54,7 +54,7 @@ const (
 		id: ID!
 		about: Product!
 		by: Customer!
-		comment: String @search(by: ["fulltext"])
+		comment: String @search(by: [fulltext])
 		rating: Int @search
 	}
 	`
@@ -69,15 +69,15 @@ const (
      	}
    ){
         id: ID!
-    	text: String! @search(by: ["term"])
-     	owner: String! @search(by: ["hash"])
+    	text: String! @search(by: [term])
+     	owner: String! @search(by: [hash])
    }
 # Dgraph.Authorization {"VerificationKey":"secret","Header":"Authorization","Namespace":"https://dgraph.io","Algo":"HS256"}
 `
 	schCustomDQL = `
 	type Tweets {
 		id: ID!
-		text: String! @search(by: ["fulltext"])
+		text: String! @search(by: [fulltext])
 		author: User
 		timestamp: DateTime @search
    }

@@ -197,7 +197,7 @@ func TestConcurrentSchemaUpdates(t *testing.T) {
 		{
 			graphQLSchema: `
 			type A {
-				b: String! @search(by: ["term"])
+				b: String! @search(by: [term])
 			}`,
 			dgraphSchema: `{
 				"predicate": "A.b",
@@ -212,7 +212,7 @@ func TestConcurrentSchemaUpdates(t *testing.T) {
 		{
 			graphQLSchema: `
 			type A {
-				b: String! @search(by: ["exact"])
+				b: String! @search(by: [exact])
 			}`,
 			dgraphSchema: `{
 				"predicate": "A.b",
@@ -564,7 +564,7 @@ func TestLargeSchemaUpdate(t *testing.T) {
 
 	schema := "type LargeSchema {"
 	for i := 1; i <= numFields; i++ {
-		schema = schema + "\n" + fmt.Sprintf("field%d: String! @search(by: [\"regexp\"])", i)
+		schema = schema + "\n" + fmt.Sprintf("field%d: String! @search(by: [regexp])", i)
 	}
 	schema = schema + "\n}"
 

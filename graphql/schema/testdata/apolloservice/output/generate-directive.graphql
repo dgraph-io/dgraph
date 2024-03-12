@@ -4,14 +4,14 @@
 
 interface Character @secret(field: "password") {
 	id: ID!
-	name: String! @search(by: ["exact"])
+	name: String! @search(by: [exact])
 	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
 	friendsAggregate(filter: CharacterFilter): CharacterAggregateResult
 }
 
 type Human @secret(field: "password") {
 	id: ID!
-	name: String! @search(by: ["exact"])
+	name: String! @search(by: [exact])
 	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
 	totalCredits: Int
 	friendsAggregate(filter: CharacterFilter): CharacterAggregateResult
@@ -79,7 +79,6 @@ enum DgraphIndex {
 	day
 	hour
 	geo
-	hnsw
 }
 
 input AuthRule {
@@ -193,8 +192,7 @@ input GenerateMutationParams {
 }
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION
-directive @search(by: [String!]) on FIELD_DEFINITION
-directive @hm_embedding on FIELD_DEFINITION
+directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id(interface: Boolean) on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE | FIELD_DEFINITION

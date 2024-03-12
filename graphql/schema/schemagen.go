@@ -472,14 +472,10 @@ func getAllowedHeaders(sch *ast.Schema, definitions []string, authHeader string)
 }
 
 func getAllSearchIndexes(val *ast.Value) []string {
-	// all searchArgs were validated before getting here.
 	res := make([]string, len(val.Children))
 
 	for i, child := range val.Children {
-		searchType := parseSearchType(child.Value.Raw)
-		res[i] = supportedSearches[searchType].dgIndex
-		searchOptions, _ := getSearchOptions(child.Value.Raw)
-		res[i] += searchOptions
+		res[i] = supportedSearches[child.Value.Raw].dgIndex
 	}
 
 	return res
@@ -671,13 +667,6 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string,
 								indexes = append(indexes, "hash")
 							}
 						}
-					}
-
-					embedding := f.Directives.ForName(embeddingDirective)
-					if embedding != nil {
-						// embeddingValidation ensured GQL type is [Float]
-						// set typStr to vfloat
-						typStr = "vfloat"
 					}
 
 					if parentInt == nil {

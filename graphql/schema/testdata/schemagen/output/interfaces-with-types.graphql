@@ -4,7 +4,7 @@
 
 interface Character {
 	id: ID!
-	name: String! @search(by: ["exact"])
+	name: String! @search(by: [exact])
 	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
 	appearsIn: [Episode!]! @search
 	friendsAggregate(filter: CharacterFilter): CharacterAggregateResult
@@ -12,7 +12,7 @@ interface Character {
 
 type Human implements Character {
 	id: ID!
-	name: String! @search(by: ["exact"])
+	name: String! @search(by: [exact])
 	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
 	appearsIn: [Episode!]! @search
 	starships(filter: StarshipFilter, order: StarshipOrder, first: Int, offset: Int): [Starship]
@@ -23,7 +23,7 @@ type Human implements Character {
 
 type Droid implements Character {
 	id: ID!
-	name: String! @search(by: ["exact"])
+	name: String! @search(by: [exact])
 	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
 	appearsIn: [Episode!]! @search
 	primaryFunction: String
@@ -38,7 +38,7 @@ enum Episode {
 
 type Starship {
 	id: ID!
-	name: String! @search(by: ["term"])
+	name: String! @search(by: [term])
 	length: Float
 }
 
@@ -99,7 +99,6 @@ enum DgraphIndex {
 	day
 	hour
 	geo
-	hnsw
 }
 
 input AuthRule {
@@ -213,8 +212,7 @@ input GenerateMutationParams {
 }
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION
-directive @search(by: [String!]) on FIELD_DEFINITION
-directive @hm_embedding on FIELD_DEFINITION
+directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id(interface: Boolean) on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE | FIELD_DEFINITION

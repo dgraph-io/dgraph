@@ -4,7 +4,7 @@
 
 type Author {
 	id: ID!
-	name: String! @search(by: ["hash"])
+	name: String! @search(by: [hash])
 	questions(filter: QuestionFilter, order: QuestionOrder, first: Int, offset: Int): [Question] @hasInverse(field: author)
 	answers(filter: AnswerFilter, order: AnswerOrder, first: Int, offset: Int): [Answer] @hasInverse(field: author)
 	questionsAggregate(filter: QuestionFilter): QuestionAggregateResult
@@ -13,14 +13,14 @@ type Author {
 
 interface Post {
 	id: ID!
-	text: String @search(by: ["fulltext"])
+	text: String @search(by: [fulltext])
 	datePublished: DateTime @search
 	author(filter: AuthorFilter): Author!
 }
 
 type Question implements Post {
 	id: ID!
-	text: String @search(by: ["fulltext"])
+	text: String @search(by: [fulltext])
 	datePublished: DateTime @search
 	author(filter: AuthorFilter): Author! @hasInverse(field: questions)
 	answered: Boolean
@@ -28,7 +28,7 @@ type Question implements Post {
 
 type Answer implements Post {
 	id: ID!
-	text: String @search(by: ["fulltext"])
+	text: String @search(by: [fulltext])
 	datePublished: DateTime @search
 	author(filter: AuthorFilter): Author! @hasInverse(field: answers)
 	markedUseful: Boolean
@@ -91,7 +91,6 @@ enum DgraphIndex {
 	day
 	hour
 	geo
-	hnsw
 }
 
 input AuthRule {
@@ -205,8 +204,7 @@ input GenerateMutationParams {
 }
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION
-directive @search(by: [String!]) on FIELD_DEFINITION
-directive @hm_embedding on FIELD_DEFINITION
+directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id(interface: Boolean) on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE | FIELD_DEFINITION

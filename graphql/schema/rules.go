@@ -29,7 +29,6 @@ import (
 	"github.com/dgraph-io/gqlparser/v2/gqlerror"
 	"github.com/dgraph-io/gqlparser/v2/parser"
 	"github.com/dgraph-io/gqlparser/v2/validator"
-	"gopkg.in/yaml.v2"
 )
 
 const (
@@ -830,33 +829,6 @@ func listValidityCheck(typ *ast.Definition, field *ast.FieldDefinition) gqlerror
 	return nil
 }
 
-func embeddingValidation(sch *ast.Schema, typ *ast.Definition,
-	field *ast.FieldDefinition, dir *ast.Directive,
-	secrets map[string]x.Sensitive) gqlerror.List {
-	var errs []*gqlerror.Error
-	if field.Type.Elem == nil {
-		errs = append(errs,
-			gqlerror.ErrorPosf(
-				field.Position,
-				"Type %s; Field %s: The field with @hm_embedding directive is of type %s,"+
-					" but @hm_embedding directive only applies"+
-					" to fields of type [Float!].", typ.Name, field.Name, field.Type.Name()))
-		return errs
-	}
-
-	if !strings.EqualFold(field.Type.Elem.NamedType, "Float") ||
-		!field.Type.Elem.NonNull {
-		errs = append(errs,
-			gqlerror.ErrorPosf(
-				field.Position,
-				"Type %s; Field %s: The field with @hm_embedding directive is of type [%s], "+
-					"but @hm_embedding directive only applies"+
-					" to fields of type [Float!].", typ.Name, field.Name, field.Type.Name()))
-	}
-
-	return errs
-}
-
 func hasInverseValidation(sch *ast.Schema, typ *ast.Definition,
 	field *ast.FieldDefinition, dir *ast.Directive,
 	secrets map[string]x.Sensitive) gqlerror.List {
@@ -999,8 +971,7 @@ func validateSearchArg(searchArg string,
 	dir *ast.Directive) *gqlerror.Error {
 
 	isEnum := sch.Types[field.Type.Name()].Kind == ast.Enum
-	searchType := parseSearchType(searchArg)
-	search, ok := supportedSearches[searchType]
+	search, ok := supportedSearches[searchArg]
 	switch {
 	case !ok:
 		// This check can be removed once gqlparser bug
@@ -1027,24 +998,6 @@ func validateSearchArg(searchArg string,
 				"doesn't apply to field type %s which is an Enum. Enum only supports "+
 				"hash, exact, regexp and trigram",
 			typ.Name, field.Name, searchArg, field.Type.Name())
-
-	case search.dgIndex == "hnsw":
-		if !hasEmbeddingDirective(field) {
-			return gqlerror.ErrorPosf(
-				dir.Position,
-				"Type %s; Field %s: has the @search directive but the argument %s "+
-					"requires the field also has @%s directive.",
-				typ.Name, field.Name, searchArg, embeddingDirective)
-		}
-		_, valid := getSearchOptions(searchArg)
-		if !valid {
-			return gqlerror.ErrorPosf(
-				dir.Position,
-				"Type %s; Field %s: has the @search directive but the argument '%s' "+
-					"with search options is malformed. Search options are comma-separated "+
-					"key-value pairs in YAML format => <optionName><COLON><SPACE><VALUE>",
-				typ.Name, field.Name, searchArg)
-		}
 	}
 
 	return nil
@@ -1088,7 +1041,7 @@ func searchValidation(
 	if arg.Value.Kind != ast.ListValue {
 		errs = append(errs, gqlerror.ErrorPosf(
 			dir.Position,
-			"Type %s; Field %s: the @search directive requires a list argument, like @search(by: [\"hash\"])",
+			"Type %s; Field %s: the @search directive requires a list argument, like @search(by: [hash])",
 			typ.Name, field.Name))
 		return errs
 	}
@@ -1103,16 +1056,7 @@ func searchValidation(
 
 		// Checks that the filter indexes aren't repeated and they
 		// don't clash with each other.
-		searchType := parseSearchType(searchArg)
-		searchIndex := builtInFilters[searchType]
-		if len(searchIndex) == 0 {
-			errs = append(errs, gqlerror.ErrorPosf(
-				dir.Position,
-				"Type %s; Field %s: the argument to @search '%s' is not among "+
-					"supported search types.",
-				typ.Name, field.Name, searchArg))
-			return errs
-		}
+		searchIndex := builtInFilters[searchArg]
 		if val, ok := searchIndexes[searchIndex]; ok {
 			if field.Type.Name() == "String" || sch.Types[field.Type.Name()].Kind == ast.Enum {
 				errs = append(errs, gqlerror.ErrorPosf(
@@ -1143,106 +1087,10 @@ func searchValidation(
 			}
 		}
 
-		searchIndexes[searchIndex] = searchType
+		searchIndexes[searchIndex] = searchArg
 	}
 
 	return errs
-}
-
-// parseSearchType(searchArg) parses the searchType from searchArg
-// searchArg is specified with the following syntax
-//
-//	<searchArg> := <searchType> [ <openParen> <searchOptions> <closeParen> ]
-//
-//	hnsw(metric: euclidian, exponent: 6)
-//	hnsw
-//	hnsw(exponent: 3)
-func parseSearchType(searchArg string) string {
-	searchType := searchArg
-	if strings.IndexByte(searchArg, '(') >= 0 {
-		searchType = searchArg[:strings.IndexByte(searchArg, '(')]
-		searchType = strings.TrimSpace(searchType)
-	}
-	return searchType
-}
-
-// parseSearchOptions(searchArg) parses searchOptions from searchArg
-// searchArg is specified with the following syntax
-//
-//	<searchArg> := <searchType> [ <openParen> <searchOptions> <closeParen> ]
-//
-// searchOptions := <searchOption>*
-// <searchOption> := <OptionName><COLON><SPACE><OptionValue>
-// Examples:
-//
-//	hnsw(metric: euclidian, exponent: 6)
-//	hnsw
-//	hnsw(exponent: 3)
-func parseSearchOptions(searchArg string) (map[string]string, bool) {
-	searchArg = strings.TrimSpace(searchArg)
-	openParen := strings.Index(searchArg, "(")
-
-	if openParen < 0 && searchArg[len(searchArg)-1] != ')' {
-		// no search options and supported searchType found
-		return map[string]string{}, true // valid = true, no search options
-	}
-
-	if openParen+1 == len(searchArg)-1 {
-		// found <searchType>() with no index options between
-		// '(' & ')'
-		// TODO: If DQL schema parser allows the pair of parentheses
-		// without any options then we need to allow this in GraphQL
-		// schema too
-		return map[string]string{}, false
-	}
-
-	if openParen < 0 || searchArg[len(searchArg)-1] != ')' {
-		// does not have open/close parenthesis
-		return map[string]string{}, false // valid = false
-	}
-
-	indexOptions := "{" + searchArg[openParen+1:len(searchArg)-1] + "}"
-	var kvMap map[string]string
-	err := yaml.Unmarshal([]byte(indexOptions), &kvMap)
-	if err != nil {
-		return map[string]string{}, false
-	}
-
-	return kvMap, true // parsed valid options
-}
-
-// getSearchOptions(searchArg) Stringifies search options using DQL syntax
-func getSearchOptions(searchArg string) (string, bool) {
-	res := ""
-	kvMap, ok := parseSearchOptions(searchArg)
-	if len(kvMap) == 0 {
-		return res, ok
-	}
-
-	keys := make([]string, 0, len(kvMap))
-	for k := range kvMap {
-		keys = append(keys, k)
-	}
-
-	sort.Strings(keys)
-
-	res += "("
-	i := 0
-	for _, key := range keys {
-		if len(kvMap[key]) == 0 {
-			// If the value is null, then return invalid
-			return "", false
-		}
-		res += strings.TrimSpace(key) + ": \"" +
-			strings.TrimSpace(kvMap[key]) + "\""
-		if i < len(keys)-1 {
-			res += ", "
-		}
-		i++
-	}
-	res += ")"
-
-	return res, true // parsed valid options
 }
 
 func dgraphDirectiveValidation(sch *ast.Schema, typ *ast.Definition, field *ast.FieldDefinition,
