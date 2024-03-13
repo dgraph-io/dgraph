@@ -61,7 +61,7 @@ jobs:
           make regenerate
           git diff --exit-code -- .
       - name: Make Linux Build and Docker Image
-        run: make docker-image # this internally builds dgraph binary
+        run: BUILD_TAGS=debug make docker-image # this internally builds dgraph binary
       - name: Build Test Binary
         run: |
           #!/bin/bash
