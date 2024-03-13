@@ -32,7 +32,7 @@ on:
       - main
       - 'release/**'
   schedule:
-    - cron: "1 * * * *"
+    - cron: "0 0 * * *"
 jobs:
   build:
     name: trivy-tests

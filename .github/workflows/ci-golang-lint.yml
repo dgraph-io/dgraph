@@ -32,7 +32,7 @@ on:
       - main
       - 'release/**'
   schedule:
-    - cron: "1 */2 * * *" # every 2hrs
+    - cron: "0 0 * * *"
 jobs:
   golang-lint:
     if: github.event.pull_request.draft == false

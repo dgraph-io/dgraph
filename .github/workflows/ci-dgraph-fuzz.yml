@@ -17,6 +17,7 @@ on:
     - cron: "0 0 * * *" # 1 run per day
 jobs:
   fuzz-test:
+    if: github.event.pull_request.draft == false
     runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v3
