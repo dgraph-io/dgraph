@@ -64,3 +64,25 @@ func TestTypeForValue(t *testing.T) {
 		require.Equal(t, tc.out, out, "%s != %s", tc.in, tc.out.Enum())
 	}
 }
+
+func TestFloatArrayTranslation(t *testing.T) {
+	testCases := [][]float64{
+		[]float64{},
+		[]float64{0.1},
+		[]float64{0},
+		[]float64{0.65433, 1.855, 3.1415926539},
+	testCases := [][]float32{
+		{},
+		{0.1},
+		{0},
+		{0.65433, 1.855, 3.1415926539},
+	}
+	for _, tc := range testCases {
+		asBytes := FloatArrayAsBytes(tc)
+		asFloat32 := BytesAsFloatArray(asBytes)
+		require.Equal(t, len(tc), len(asFloat32))
+		for i := 0; i < len(tc); i++ {
+			require.Equal(t, tc[i], asFloat32[i])
+		}
+	}
+}

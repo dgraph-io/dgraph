@@ -33,7 +33,8 @@ func couldApplyAggregatorOn(agrtr string, typ types.TypeID) bool {
 			typ == types.DefaultID
 	case "sum", "avg":
 		return typ == types.IntID ||
-			typ == types.FloatID
+			typ == types.FloatID ||
+			typ == types.VFloatID
 	default:
 		return false
 	}
