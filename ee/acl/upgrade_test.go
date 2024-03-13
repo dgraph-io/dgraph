@@ -48,6 +48,11 @@ func (asuite *AclTestSuite) TearDownTest() {
 	asuite.lc.Cleanup(asuite.T().Failed())
 }
 
+func (asuite *AclTestSuite) Restart() {
+	asuite.lc.Stop()
+	asuite.lc.Start()
+}
+
 func (asuite *AclTestSuite) Upgrade() {
 	require.NoError(asuite.T(), asuite.lc.Upgrade(asuite.uc.After, asuite.uc.Strategy))
 }

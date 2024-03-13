@@ -65,8 +65,7 @@ const (
 },{
 	"fields": [{"name": "dgraph.graphql.p_query"}],
 	"name": "dgraph.graphql.persisted_query"
-}
-`
+}`
 )
 
 type SchemaOptions struct {

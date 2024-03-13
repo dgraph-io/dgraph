@@ -152,6 +152,7 @@ func (s *state) Namespaces() map[uint64]struct{} {
 	for typ := range s.types {
 		ns[x.ParseNamespace(typ)] = struct{}{}
 	}
+	ns[x.GalaxyNamespace] = struct{}{}
 	return ns
 }
 
@@ -361,6 +362,7 @@ func (s *state) Tokenizer(ctx context.Context, pred string) []tok.Tokenizer {
 	tokenizers := make([]tok.Tokenizer, 0, len(su.Tokenizer))
 	for _, it := range su.Tokenizer {
 		t, found := tok.GetTokenizer(it)
+
 		x.AssertTruef(found, "Invalid tokenizer %s", it)
 		tokenizers = append(tokenizers, t)
 	}
