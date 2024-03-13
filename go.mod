@@ -16,7 +16,7 @@ require (
 	github.com/blevesearch/bleve/v2 v2.3.10
 	github.com/chewxy/math32 v1.10.1
 	github.com/dgraph-io/badger/v4 v4.2.0
-	github.com/dgraph-io/dgo/v230 v230.0.1
+	github.com/dgraph-io/dgo/v230 v230.0.2-0.20230929195431-42a4d4ef28da
 	github.com/dgraph-io/gqlgen v0.13.2
 	github.com/dgraph-io/gqlparser/v2 v2.2.1
 	github.com/dgraph-io/graphql-transport-ws v0.0.0-20210511143556-2cef522f1f15
