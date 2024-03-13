@@ -10,14 +10,10 @@ import (
 	"io"
 	"net/http"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/dgraph-io/dgo/v230"
-	"github.com/dgraph-io/dgo/v230/protos/api"
+	"github.com/dgraph-io/dgraph/dgraphtest"
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/dgraph-io/dgraph/testutil"
 )
@@ -92,13 +88,12 @@ func sendRestoreRequest(t *testing.T, location, backupId string, backupNum int) 
 }
 
 func TestAclCacheRestore(t *testing.T) {
-	// TODO: need to fix the race condition for license propagation, the sleep helps propagate the EE license correctly
-	time.Sleep(time.Second * 10)
-	disableDraining(t)
-	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	c := dgraphtest.NewComposeCluster()
+	gc, cleanup, err := c.Client()
+	defer cleanup()
 	require.NoError(t, err)
-	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
-	require.NoError(t, dg.Login(context.Background(), "groot", "password"))
+	require.NoError(t, gc.Login(context.Background(), "groot", "password"))
+	dg := gc.Dgraph
 
 	sendRestoreRequest(t, "/backups", "vibrant_euclid5", 1)
 	testutil.WaitForRestore(t, dg, testutil.SockAddrHttp)
