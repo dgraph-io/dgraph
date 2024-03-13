@@ -22,20 +22,22 @@ import (
 
 // Constants representing type of different graphql lexed items.
 const (
-	itemText       lex.ItemType = 5 + iota // plain text
-	itemNumber                             // number
-	itemLeftCurl                           // left curly bracket
-	itemRightCurl                          // right curly bracket
-	itemColon                              // colon
-	itemLeftRound                          // left round bracket
-	itemRightRound                         // right round bracket
-	itemAt
-	itemComma
-	itemNewLine
-	itemDot
-	itemLeftSquare
-	itemRightSquare
-	itemExclamationMark
+	itemText            lex.ItemType = 5 + iota // plain text
+	itemNumber                                  // number
+	itemLeftCurl                                // left curly bracket
+	itemRightCurl                               // right curly bracket
+	itemColon                                   // colon
+	itemLeftRound                               // left round bracket
+	itemRightRound                              // right round bracket
+	itemAt                                      // '@'
+	itemComma                                   // ','
+	itemNewLine                                 // carriage-return or line-feed.
+	itemDot                                     // '.'
+	itemLeftSquare                              // '['
+	itemRightSquare                             // ']'
+	itemExclamationMark                         // '!'
+	itemQuote                                   // double quote char: '"'
+	itemQuotedText                              // See Lexer.LexQuotedString()
 )
 
 func lexText(l *lex.Lexer) lex.StateFn {
@@ -91,6 +93,11 @@ Loop:
 				l.Backup()
 				return lexNumber
 			}
+		case r == '"':
+			if err := l.LexQuotedString(); err != nil {
+				return l.Errorf("Invalid schema: %v", err)
+			}
+			l.Emit(itemQuotedText)
 		default:
 			return l.Errorf("Invalid schema. Unexpected %s", l.Input[l.Start:l.Pos])
 		}

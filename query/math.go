@@ -17,6 +17,8 @@
 package query
 
 import (
+	"testing"
+
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 
@@ -29,6 +31,7 @@ type mathTree struct {
 	Const types.Val // If its a const value node.
 	Val   map[uint64]types.Val
 	Child []*mathTree
+	t     *testing.T
 }
 
 var (
@@ -37,10 +40,14 @@ var (
 	ErrorFractionalPower = errors.New("Fractional power of negative number")
 	ErrorNegativeLog     = errors.New("Log of negative number")
 	ErrorNegativeRoot    = errors.New("Root of negative number")
+	ErrorVectorsNotMatch = errors.New("The length of vectors must match")
+	ErrorArgsDisagree    = errors.New("Left and right arguments must match")
+	ErrorShouldBeVector  = errors.New("Type should be []float, but is not. Cannot determine type.")
+	ErrorBadVectorMult   = errors.New("Cannot multiply vector by vector")
 )
 
 // processBinary handles the binary operands like
-// +, -, *, /, %, max, min, logbase
+// +, -, *, /, %, max, min, logbase, dot
 func processBinary(mNode *mathTree) error {
 	destMap := make(map[uint64]types.Val)
 	aggName := mNode.Fn
@@ -98,7 +105,7 @@ func processBinary(mNode *mathTree) error {
 	}
 
 	if cl.Value != nil && cr.Value != nil {
-		// Both maps are nil, so 2 constatns.
+		// Both maps are nil, so 2 constants.
 		ag := aggregator{
 			name: aggName,
 		}

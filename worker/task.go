@@ -19,6 +19,7 @@ package worker
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -44,6 +45,8 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/vector-indexer/hnsw"
+	"github.com/dgraph-io/dgraph/vector-indexer/index"
 )
 
 func invokeNetworkRequest(ctx context.Context, addr string,
@@ -220,6 +223,8 @@ const (
 	uidInFn
 	customIndexFn
 	matchFn
+	similarToFn
+	indexPathFn
 	standardFn = 100
 )
 
@@ -258,6 +263,10 @@ func parseFuncTypeHelper(name string) (FuncType, string) {
 		return hasFn, f
 	case "uid_in":
 		return uidInFn, f
+	case "similar_to":
+		return similarToFn, f
+	case "index_path":
+		return indexPathFn, f
 	case "anyof", "allof":
 		return customIndexFn, f
 	case "match":
@@ -281,6 +290,8 @@ func needsIndex(fnType FuncType, uidList *pb.List) bool {
 		}
 		return true
 	case geoFn, fullTextSearchFn, standardFn, matchFn:
+		return true
+	case similarToFn, indexPathFn:
 		return true
 	}
 	return false
@@ -317,20 +328,20 @@ func (srcFn *functionContext) needsValuePostings(typ types.TypeID) (bool, error)
 	case uidInFn, compareScalarFn:
 		// Operate on uid postings
 		return false, nil
-	case notAFunction:
+	case notAFunction, similarToFn, indexPathFn:
 		return typ.IsScalar(), nil
 	}
 	return false, errors.Errorf("Unhandled case in fetchValuePostings for fn: %s", srcFn.fname)
 }
 
 // Handles fetching of value posting lists and filtering of uids based on that.
-func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) error {
+func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) (map[string]uint64, error) {
 	srcFn := args.srcFn
 	q := args.q
 
 	facetsTree, err := preprocessFilter(q.FacetsFilter)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	span := otrace.FromContext(ctx)
@@ -341,21 +352,97 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 	}
 
 	switch srcFn.fnType {
-	case notAFunction, aggregatorFn, passwordFn, compareAttrFn:
+	case notAFunction, aggregatorFn, passwordFn, compareAttrFn, similarToFn, indexPathFn:
 	default:
-		return errors.Errorf("Unhandled function in handleValuePostings: %s", srcFn.fname)
+		return nil, errors.Errorf("Unhandled function in handleValuePostings: %s", srcFn.fname)
 	}
+
+	if srcFn.fnType == similarToFn {
+		numNeighbors, err := strconv.ParseInt(q.SrcFunc.Args[0], 10, 32)
+		if err != nil {
+			return nil, fmt.Errorf("invalid value for number of neighbors: %s", q.SrcFunc.Args[0])
+		}
+		cspec, err := pickFactoryCreateSpec(ctx, args.q.Attr)
+		if err != nil {
+			return nil, err
+		}
+		//TODO: generate maxLevels from schema, filter, etc.
+		qc := hnsw.NewQueryCache(
+			posting.NewViLocalCache(qs.cache),
+			args.q.ReadTs,
+		)
+		indexer, err := cspec.CreateIndex(args.q.Attr)
+		if err != nil {
+			return nil, err
+		}
+		var nnUids []uint64
+		if srcFn.vectorInfo != nil {
+			nnUids, err = indexer.Search(ctx, qc, srcFn.vectorInfo,
+				int(numNeighbors), index.AcceptAll[float32])
+		} else {
+			nnUids, err = indexer.SearchWithUid(ctx, qc, srcFn.vectorUid,
+				int(numNeighbors), index.AcceptAll[float32])
+		}
+
+		if err != nil {
+			return nil, err
+		}
+		sort.Slice(nnUids, func(i, j int) bool { return nnUids[i] < nnUids[j] })
+		args.out.UidMatrix = append(args.out.UidMatrix, &pb.List{Uids: nnUids})
+		return nil, nil
+	}
+	/*
+		if srcFn.fnType == indexPathFn {
+			numNeighbors, err := strconv.ParseInt(q.SrcFunc.Args[0], 10, 32)
+			if err != nil {
+				return nil, fmt.Errorf("invalid value for number of neighbors: %s", q.SrcFunc.Args[0])
+			}
+			cspec, err := pickFactoryCreateSpec(ctx, args.q.Attr)
+			if err != nil {
+				return nil, err
+			}
+			//TODO: generate maxLevels from schema, filter, etc.
+			qc := hnsw.NewQueryCache(
+				posting.NewViLocalCache(qs.cache),
+				args.q.ReadTs,
+			)
+			indexer, err := cspec.CreateIndex(args.q.Attr)
+			if err != nil {
+				return nil, err
+			}
+			// TODO: Kill this mechanism. We either expose SearchWithPath
+			//       as a public function in interface (along with possibly a
+			//       "supports SearchWithPath" capability),
+			//       Or we stop supporting getting traversal path.
+			//       Type inference of this kind is almost always a sign that
+			//       someone did not fully consider the design.
+			hnswIndexer, ok := indexer.(*hnsw.PersistentHNSW)
+			if !ok {
+				return nil, errors.Errorf("indexer is not hnsw")
+			}
+			r, err := hnswIndexer.SearchWithPath(ctx, qc, srcFn.vectorInfo,
+				int(numNeighbors), index.AcceptAll)
+			traversalPath := r.GetTraversalPath()
+			extraMetrics := r.GetExtraMetrics()
+			if err != nil {
+				return nil, err
+			}
+			sort.Slice(traversalPath, func(i, j int) bool { return traversalPath[i] < traversalPath[j] })
+			args.out.UidMatrix = append(args.out.UidMatrix, &pb.List{Uids: traversalPath})
+			return extraMetrics, nil
+		}
+	*/
 
 	if srcFn.atype == types.PasswordID && srcFn.fnType != passwordFn {
 		// Silently skip if the user is trying to fetch an attribute of type password.
-		return nil
+		return nil, nil
 	}
 	if srcFn.fnType == passwordFn && srcFn.atype != types.PasswordID {
-		return errors.Errorf("checkpwd fn can only be used on attr: [%s] with schema type "+
+		return nil, errors.Errorf("checkpwd fn can only be used on attr: [%s] with schema type "+
 			"password. Got type: %s", x.ParseAttr(q.Attr), srcFn.atype.Name())
 	}
 	if srcFn.n == 0 {
-		return nil
+		return nil, nil
 	}
 
 	// srcFn.n should be equal to len(q.UidList.Uids) for below implementation(DivideAndRule and
@@ -363,7 +450,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 	// calculate(). panic is of the form "index out of range [4] with length 1". Hence return error
 	// from here when srcFn.n != len(q.UidList.Uids).
 	if srcFn.n != len(q.UidList.Uids) {
-		return errors.Errorf("srcFn.n: %d is not equal to len(q.UidList.Uids): %d, srcFn: %+v in "+
+		return nil, errors.Errorf("srcFn.n: %d is not equal to len(q.UidList.Uids): %d, srcFn: %+v in "+
 			"handleValuePostings", srcFn.n, len(q.UidList.GetUids()), srcFn)
 	}
 
@@ -519,7 +606,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 		})
 	}
 	if err := g.Wait(); err != nil {
-		return err
+		return nil, err
 	}
 
 	// All goroutines are done. Now attach their results.
@@ -531,7 +618,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 		out.FacetMatrix = append(out.FacetMatrix, chunk.FacetMatrix...)
 		out.LangMatrix = append(out.LangMatrix, chunk.LangMatrix...)
 	}
-	return nil
+	return nil, nil
 }
 
 func facetsFilterValuePostingList(args funcArgs, pl *posting.List, facetsTree *facetsTree,
@@ -718,6 +805,10 @@ func (qs *queryState) handleUidPostings(
 	x.AssertTrue(width > 0)
 	span.Annotatef(nil, "Width: %d. NumGo: %d", width, numGo)
 
+	lang := langForFunc(q.Langs)
+	needFiltering := needsStringFiltering(srcFn, q.Langs, q.Attr)
+	isList := schema.State().IsList(q.Attr)
+
 	errCh := make(chan error, numGo)
 	outputs := make([]*pb.Result, numGo)
 
@@ -784,7 +875,32 @@ func (qs *queryState) handleUidPostings(
 				if i == 0 {
 					span.Annotate(nil, "HasFn")
 				}
-				empty, err := pl.IsEmpty(args.q.ReadTs, 0)
+				// We figure out if need to filter on bases of lang attribute or not.
+				// If we don't need to do so, we can just check if the posting list
+				// is empty. If we need to filter on basis of lang, we need to check
+				// the value with its tag. if lang == "", in that case, we need to
+				// return if there are any untagged values. If lang != "", in that
+				// case we need to check exact value.
+				empty := false
+				var err error
+				if !needFiltering {
+					empty, err = pl.IsEmpty(args.q.ReadTs, 0)
+				} else {
+					if lang == "" {
+						if isList {
+							_, err = pl.AllValues(args.q.ReadTs)
+						} else {
+							_, err = pl.Value(args.q.ReadTs)
+						}
+					} else {
+						_, err = pl.ValueForTag(args.q.ReadTs, lang)
+					}
+
+					if err == posting.ErrNoValue {
+						empty = true
+						err = nil
+					}
+				}
 				if err != nil {
 					return err
 				}
@@ -997,9 +1113,11 @@ func (qs *queryState) helpProcessTask(ctx context.Context, q *pb.Query, gid uint
 	}
 	if needsValPostings {
 		span.Annotate(nil, "handleValuePostings")
-		if err = qs.handleValuePostings(ctx, args); err != nil {
+		var extraMetrics map[string]uint64
+		if extraMetrics, err = qs.handleValuePostings(ctx, args); err != nil {
 			return nil, err
 		}
+		out.ExtraMetrics = extraMetrics
 	} else {
 		span.Annotate(nil, "handleUidPostings")
 		if err = qs.handleUidPostings(ctx, args, opts); err != nil {
@@ -1655,6 +1773,8 @@ type functionContext struct {
 	isFuncAtRoot   bool
 	isStringFn     bool
 	atype          types.TypeID
+	vectorInfo     []float32
+	vectorUid      uint64
 }
 
 const (
@@ -1912,6 +2032,22 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 			return nil, err
 		}
 		checkRoot(q, fc)
+	case similarToFn:
+		if err = ensureArgsCount(q.SrcFunc, 2); err != nil {
+			return nil, err
+		}
+		fc.vectorInfo, fc.vectorUid, err = interpretVFloatOrUid(q.SrcFunc.Args[1])
+		if err != nil {
+			return nil, err
+		}
+	case indexPathFn:
+		if err = ensureArgsCount(q.SrcFunc, 2); err != nil {
+			return nil, err
+		}
+		fc.vectorInfo, err = types.ParseVFloat(q.SrcFunc.Args[1])
+		if err != nil {
+			return nil, err
+		}
 	case uidInFn:
 		for _, arg := range q.SrcFunc.Args {
 			uidParsed, err := strconv.ParseUint(arg, 0, 64)
@@ -1935,6 +2071,18 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 		return nil, errors.Errorf("FnType %d not handled in numFnAttrs.", fnType)
 	}
 	return fc, nil
+}
+
+func interpretVFloatOrUid(val string) ([]float32, uint64, error) {
+	vf, err := types.ParseVFloat(val)
+	if err == nil {
+		return vf, 0, nil
+	}
+	uid, err := strconv.ParseUint(val, 0, 64)
+	if err == nil {
+		return nil, uid, nil
+	}
+	return nil, uid, errors.Errorf("Value %q is not a uid or vector", val)
 }
 
 // ServeTask is used to respond to a query.

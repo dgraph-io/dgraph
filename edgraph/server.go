@@ -621,9 +621,13 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 		return err
 	}
 
-	qc.span.Annotatef(nil, "Applying mutations: %+v", m)
+	//TODO: Following trace messages have been commented out as stringified trace messages allocate
+	// too much memory. These trace messages need to be generated if tracing is enabled.
+	// qc.span.Annotatef(nil, "Applying mutations: %+v", m)
 	resp.Txn, err = query.ApplyMutations(ctx, m)
-	qc.span.Annotatef(nil, "Txn Context: %+v. Err=%v", resp.Txn, err)
+	//TODO: Following trace messages have been commented out as stringified trace messages allocate
+	// too much memory. These trace messages need to be generated if tracing is enabled.
+	// qc.span.Annotatef(nil, "Txn Context: %+v. Err=%v", resp.Txn, err)
 
 	// calculateMutationMetrics calculate cost for the mutation.
 	calculateMutationMetrics := func() {
@@ -1269,7 +1273,9 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (resp *api.Response,
 	l.Start = time.Now()
 
 	if bool(glog.V(3)) || worker.LogDQLRequestEnabled() {
-		glog.Infof("Got a query, DQL form: %+v at %+v", req.req, l.Start.Format(time.RFC3339))
+		//TODO: Following trace messages have been commented out as stringified trace messages allocate
+		// too much memory. These trace messages need to be generated if tracing is enabled.
+		// glog.Infof("Got a query, DQL form: %+v at %+v", req.req, l.Start.Format(time.RFC3339))
 	}
 
 	isMutation := len(req.req.Mutations) > 0
@@ -1308,8 +1314,10 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (resp *api.Response,
 		return nil, errors.Errorf("empty request")
 	}
 
-	span.AddAttributes(otrace.StringAttribute("Query", req.req.Query))
-	span.Annotatef(nil, "Request received: %v", req.req)
+	//TODO: Following trace messages have been commented out as stringified trace messages allocate
+	// too much memory. These trace messages need to be generated if tracing is enabled.
+	//span.AddAttributes(otrace.StringAttribute("Query", req.req.Query))
+	// span.Annotatef(nil, "Request received: %v", req.req)
 	if isQuery {
 		ostats.Record(ctx, x.PendingQueries.M(1), x.NumQueries.M(1))
 		defer func() {
@@ -1549,8 +1557,11 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 		NumUids: er.Metrics,
 	}
 	var total uint64
-	for _, num := range resp.Metrics.NumUids {
-		total += num
+	for metricName, num := range resp.Metrics.NumUids {
+		if !strings.Contains(metricName, "vector") {
+			total += num
+		}
+
 	}
 	resp.Metrics.NumUids["_total"] = total
 

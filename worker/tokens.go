@@ -122,6 +122,30 @@ func pickTokenizer(ctx context.Context, attr string, f string) (tok.Tokenizer, e
 	return tokenizers[0], nil
 }
 
+// pickFactoryCreateSpec(ctx, attr) will find the FactoryCreateSpec (i.e.,
+// index name + options) for the given attribute "attr".
+// Note that unlike pickTokenizer(ctx, attr, f), we do not include the
+// parameter "f" (for function name), as we do not take action with it.
+// This is otherwise similar to pickTokenizer.
+func pickFactoryCreateSpec(ctx context.Context, attr string) (*tok.FactoryCreateSpec, error) {
+	// Get the tokenizers and choose the corresponding one.
+	if !schema.State().IsIndexed(ctx, attr) {
+		return nil, errors.Errorf("Attribute %s is not indexed.", attr)
+	}
+
+	cspecs, err := schema.State().FactoryCreateSpec(ctx, attr)
+	if err != nil {
+		return nil, err
+	}
+	if len(cspecs) == 0 {
+		return nil, errors.Errorf("Schema state not found for %s.", attr)
+	}
+
+	// At the moment, it would only be relevant to consider the first one.
+	// This is similar to pickTokenizer in behavior.
+	return cspecs[0], nil
+}
+
 // getInequalityTokens gets tokens ge/le/between compared to given tokens using the first sortable
 // index that is found for the predicate.
 // In case of ge/gt/le/lt/eq len(ineqValues) should be 1, else(between) len(ineqValues) should be 2.

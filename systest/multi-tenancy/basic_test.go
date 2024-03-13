@@ -194,7 +194,7 @@ func (msuite *MultitenancyTestSuite) TestPersistentQuery() {
 
 	sch := `type Product {
 		productID: ID!
-		name: String @search(by: [term])
+		name: String @search(by: ["term"])
 	}`
 	require.NoError(t, hcli1.UpdateGQLSchema(sch))
 	require.NoError(t, hcli2.UpdateGQLSchema(sch))

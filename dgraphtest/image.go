@@ -26,6 +26,7 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
+	"golang.org/x/mod/modfile"
 )
 
 func (c *LocalCluster) dgraphImage() string {
@@ -151,6 +152,10 @@ func getHash(ref string) (string, error) {
 func buildDgraphBinary(dir, binaryDir, version string) error {
 	log.Printf("[INFO] building dgraph binary for version [%v]", version)
 
+	if err := fixGoModIfNeeded(); err != nil {
+		return err
+	}
+
 	cmd := exec.Command("make", "dgraph")
 	cmd.Dir = filepath.Join(dir, "dgraph")
 	if out, err := cmd.CombinedOutput(); err != nil {
@@ -203,4 +208,29 @@ func copy(src, dst string) error {
 	}
 	_, err = io.Copy(destination, source)
 	return err
+}
+
+func fixGoModIfNeeded() error {
+	repoModFilePath := filepath.Join(repoDir, "go.mod")
+	repoModFile, err := modfile.Parse(repoModFilePath, nil, nil)
+	if err != nil {
+		return errors.Wrapf(err, "error parsing mod file in repoDir [%v]", repoDir)
+	}
+
+	modFile, err := modfile.Parse("go.mod", nil, nil)
+	if err != nil {
+		return errors.Wrapf(err, "error while parsing go.mod file")
+	}
+
+	if len(modFile.Replace) == len(repoModFile.Replace) {
+		return nil
+	}
+
+	repoModFile.Replace = modFile.Replace
+	if data, err := repoModFile.Format(); err != nil {
+		return errors.Wrapf(err, "error while formatting mod file")
+	} else if err := os.WriteFile(repoModFilePath, data, 0644); err != nil {
+		return errors.Wrapf(err, "error while writing to go.mod file")
+	}
+	return nil
 }

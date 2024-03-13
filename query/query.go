@@ -298,6 +298,8 @@ type SubGraph struct {
 	List     bool // whether predicate is of list type
 
 	pathMeta *pathMetadata
+
+	extraMetrics map[string]uint64
 }
 
 func (sg *SubGraph) recurse(set func(sg *SubGraph)) {
@@ -1174,6 +1176,12 @@ func (sg *SubGraph) transformVars(doneVars map[string]varValue, path []*SubGraph
 			mt.Const = val
 			continue
 		}
+		// TODO: Need to understand why certain aggregations map to uid = 0
+		// while others map to uid = MaxUint64
+		if val, ok := newMap[0]; ok && len(newMap) == 1 {
+			mt.Const = val
+			continue
+		}
 
 		mt.Val = newMap
 	}
@@ -1256,8 +1264,10 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, path []*Su
 			}
 			if rangeOver == nil {
 				it := doneVars[sg.Params.Var]
+				mp[0] = sg.MathExp.Const
 				it.Vals = mp
 				doneVars[sg.Params.Var] = it
+				sg.Params.UidToVal = mp
 				return nil
 			}
 			for _, uid := range rangeOver.Uids {
@@ -2167,6 +2177,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			sg.counts = result.Counts
 			sg.LangTags = result.LangMatrix
 			sg.List = result.List
+			sg.extraMetrics = result.ExtraMetrics
 
 			if sg.Params.DoCount {
 				if len(sg.Filters) == 0 {
@@ -2645,7 +2656,7 @@ func isValidArg(a string) bool {
 func isValidFuncName(f string) bool {
 	switch f {
 	case "anyofterms", "allofterms", "val", "regexp", "anyoftext", "alloftext",
-		"has", "uid", "uid_in", "anyof", "allof", "type", "match":
+		"has", "uid", "uid_in", "anyof", "allof", "type", "match", "similar_to", "index_path":
 		return true
 	}
 	return isInequalityFn(f) || types.IsGeoFunc(f)
@@ -2843,6 +2854,14 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 				continue
 			}
 
+			// Just as above, no need to execute "similar_to" query if the
+			// vector parameter was a Var and evaluated as empty
+			if sg.SrcFunc != nil && sg.SrcFunc.Name == "similar_to" &&
+				len(sg.SrcFunc.Args) == 1 && len(sg.Params.NeedsVar) > 0 {
+				errChan <- nil
+				continue
+			}
+
 			switch {
 			case sg.Params.Alias == "shortest":
 				// We allow only one shortest path block per query.
@@ -3026,5 +3045,10 @@ func calculateMetrics(sg *SubGraph, metrics map[string]uint64) {
 	// Calculate metrics for the children as well.
 	for _, child := range sg.Children {
 		calculateMetrics(child, metrics)
+	}
+	if sg.extraMetrics != nil {
+		for key, value := range sg.extraMetrics {
+			metrics[key] += value
+		}
 	}
 }

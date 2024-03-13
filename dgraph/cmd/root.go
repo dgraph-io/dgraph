@@ -310,7 +310,7 @@ func convertJSON(old string) io.Reader {
 			// large integer like 1_000_000 will be printed as 1e06 unless
 			// we format it carefully.
 			if vFloat, ok := v.(float64); ok {
-				v = strconv.FormatFloat(vFloat, 'f', -1, 64)
+				v = strconv.FormatFloat(vFloat, 'f', -1, 32)
 			}
 			good[f] += fmt.Sprintf("%s=%v; ", k, v)
 		}

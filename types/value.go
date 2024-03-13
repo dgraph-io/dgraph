@@ -17,9 +17,85 @@
 package types
 
 import (
+	"encoding/binary"
+	"math"
 	"strconv"
 	"strings"
 )
+
+// BytesAsFloatArray(encoded) converts encoded into a []float32.
+// If len(encoded) % 4 is not 0, it will ignore any trailing
+// bytes, and simply convert 4 bytes at a time to generate the
+// float64 entries.
+// WARNING: Current implementation always requires a memory allocation!
+func BytesAsFloatArray(encoded []byte) []float32 {
+	// Unfortunately, this is not as simple as casting the result,
+	// and it is also not possible to directly use the
+	// golang "unsafe" library to directly do the conversion.
+	// The operation:
+	//      []float32(encoded)  does not compile!
+	// Whereas:
+	//      []float32(unsafe.Slice(unsafe.Ptr(encoded), len(encoded)))
+	// might compile (actually have not tested it), but its success or
+	// failure depends on agreement of the serialization mechanism
+	// of the source data and the data as it exists on the machine where
+	// the operation is being performed.
+	// The machine where this operation gets run might prefer
+	// BigEndian/LittleEndian, but the machine that sent it may have
+	// preferred the other, and there is no way to tell!
+	//
+	// The solution below, unfortunately, requires another memory
+	// allocation.
+	// TODO Potential optimization: If we detect that current machine is
+	// using LittleEndian format, there might be a way of making this
+	// work with the golang "unsafe" library.
+
+	resultLen := len(encoded) / 4
+	if resultLen == 0 {
+		return []float32{}
+	}
+	retVal := make([]float32, resultLen)
+	for i := 0; i < resultLen; i++ {
+		// Assume LittleEndian for encoding since this is
+		// the assumption elsewhere when reading from client.
+		// See dgraph-io/dgo/protos/api.pb.go
+		// See also dgraph-io/dgraph/types/conversion.go
+		// This also seems to be the preference from many examples
+		// I have found via Google search. It's unclear why this
+		// should be a preference.
+		bits := binary.LittleEndian.Uint32(encoded)
+		retVal[i] = math.Float32frombits(bits)
+		encoded = encoded[4:]
+	}
+	return retVal
+}
+
+// FloatArrayAsBytes(v) will create a byte array encoding
+// v using LittleEndian format. This is sort of the inverse
+// of BytesAsFloatArray, but note that we can always be successful
+// converting to bytes, but the inverse is not feasible.
+func FloatArrayAsBytes(v []float32) []byte {
+	retVal := make([]byte, 4*len(v))
+	offset := retVal
+	for i := 0; i < len(v); i++ {
+		bits := math.Float32bits(v[i])
+		binary.LittleEndian.PutUint32(offset, bits)
+		offset = offset[4:]
+	}
+	return retVal
+}
+
+func FloatArrayAsString(v []float32) string {
+	retVal := "["
+	for i := range v {
+		retVal += strconv.FormatFloat(float64(v[i]), 'f', -1, 32)
+		if i != len(v)-1 {
+			retVal += ", "
+		}
+	}
+	retVal += "]"
+	return retVal
+}
 
 // TypeForValue tries to determine the most likely type based on a value. We only want to use this
 // function when there's no schema type and no suggested storage type.
@@ -61,6 +137,10 @@ func TypeForValue(v []byte) (TypeID, interface{}) {
 			return FloatID, f
 		}
 	}
+
+	// TODO: Consider looking for vector type (vfloat). Not clear
+	//       about this, because the natural encoding as
+	//       "[ num, num, ... num ]" my look like a standard list type.
 	return DefaultID, nil
 }
 

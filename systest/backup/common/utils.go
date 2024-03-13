@@ -108,7 +108,7 @@ func AddItemSchema(t *testing.T, header http.Header, whichAlpha string) {
 	updateSchemaParams := &common.GraphQLParams{
 		Query: `mutation {
 			    updateGQLSchema(
-			      input: { set: { schema: "type Item {id: ID!, name: String! @search(by: [hash]), price: String!}"}})
+			      input: { set: { schema: "type Item {id: ID!, name: String! @search(by: [\"hash\"]), price: String!}"}})
 			    {
 			      gqlSchema {
 					schema
