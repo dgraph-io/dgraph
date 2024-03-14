@@ -1,9 +1,5 @@
 name: ci-dgraph-integration2-tests
 on:
-  push:
-    branches:
-      - main
-      - 'release/**'
   pull_request:
     types:
       - opened
@@ -13,14 +9,11 @@ on:
     branches:
       - main
       - 'release/**'
-  schedule:
-    - cron: "0 0 * * *" # 1 run per day
 jobs:
   dgraph-integration2-tests:
-    if: github.event.pull_request.draft == false
-    runs-on: ubuntu-20.04
+    runs-on: warp-ubuntu-latest-x64-4x
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - name: Get Go Version
@@ -29,7 +22,7 @@ jobs:
           GOVERSION=$({ [ -f .go-version ] && cat .go-version; })
           echo "GOVERSION=$GOVERSION" >> $GITHUB_ENV
       - name: Set up Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GOVERSION }}
       - name: Make Linux Build and Docker Image
