@@ -520,13 +520,13 @@ message SchemaUpdate {
   reserved 7;
   reserved "explicit";
 
-  repeated VectorSpec vector_specs = 15;
+  repeated VectorIndexSpec index_specs = 15;
 }
 
-message VectorSpec {
+message VectorIndexSpec {
   // This names the kind of Vector Index, e.g.,
   //    hnsw, lsh, hypertree, ...
-  string indexName = 1;
+  string name = 1;
   repeated OptionPair options = 2;
 }
 

@@ -144,12 +144,6 @@ func applyAdd(a, b, c *types.Val) error {
 		}
 		// Sadly, we don't already pre-allocate the result from
 		// ApplyVal, so we will waste some allocation time here.
-		// TODO: Consider the possibility of saving some allocations
-		//       by reusing an existing Value. This is theoretically
-		//       possible in applyAdd, but not currently in ApplyVal,
-		//       which invokes this.
-		//       If we really end up doing this operation repeatedly,
-		//       the memory allocation savings could be significant.
 		cVal := make([]float32, len(aVal))
 		for i := 0; i < len(aVal); i++ {
 			cVal[i] = aVal[i] + bVal[i]
@@ -190,9 +184,6 @@ func applySub(a, b, c *types.Val) error {
 		if len(aVal) != len(bVal) {
 			return ErrorVectorsNotMatch
 		}
-		// TODO: Same as applyAdd comment: we should theoretically
-		//       try to save allocation by having this preallocated
-		//       when we reach here.
 		cVal := make([]float32, len(aVal))
 		for i := 0; i < len(aVal); i++ {
 			cVal[i] = aVal[i] - bVal[i]
@@ -230,10 +221,7 @@ func applyMul(a, b, c *types.Val) error {
 		}
 
 	case FLOAT:
-		aVal, ok := a.Value.(float64)
-		if !ok {
-			return errors.Errorf("Expected float64 type, but found %t", a.Value)
-		}
+		aVal := a.Value.(float64)
 		switch rValType {
 		case FLOAT:
 			c.Tid = types.FloatID
@@ -248,13 +236,10 @@ func applyMul(a, b, c *types.Val) error {
 			c.Tid = types.VFloatID
 		default:
 			return invalidTypeError(lValType, rValType, "*")
+		}
 
-		}
 	case VFLOAT:
-		aVal, ok := a.Value.([]float32)
-		if !ok {
-			return ErrorShouldBeVector
-		}
+		aVal := a.Value.([]float32)
 		if rValType != FLOAT {
 			return invalidTypeError(lValType, rValType, "*")
 		}
@@ -262,10 +247,12 @@ func applyMul(a, b, c *types.Val) error {
 		if !ok {
 			return errors.Errorf("Expected float64 type, but found %t", b.Value)
 		}
-		cVal, ok := c.Value.([]float32)
-		if !ok || len(aVal) != len(cVal) {
-			cVal = make([]float32, len(aVal))
-			c.Value = cVal
+
+		cVal := make([]float32, len(aVal))
+		c.Value = cVal
+		// If you convert from float64 to 32, sometimes we can get inf.
+		if math.IsInf(float64(float32(bVal)), 0) {
+			return ErrorFloat32Overflow
 		}
 		for i := 0; i < len(aVal); i++ {
 			cVal[i] = aVal[i] * float32(bVal)
@@ -295,15 +282,19 @@ func applyDiv(a, b, c *types.Val) error {
 		c.Tid = types.IntID
 	case FLOAT:
 		denom := b.Value.(float64)
-		if denom == float64(0) {
+		if denom == 0 {
 			return ErrorDivisionByZero
 		}
 		c.Value = a.Value.(float64) / denom
 		c.Tid = types.FloatID
 	case VFLOAT:
 		denom := b.Value.(float64)
-		if denom == float64(0) {
+		if denom == 0 {
 			return ErrorDivisionByZero
+		}
+		// If you convert from float64 to 32, sometimes we can get inf.
+		if math.IsInf(float64(float32(denom)), 0) {
+			return ErrorFloat32Overflow
 		}
 		aVal := a.Value.([]float32)
 		cVal := make([]float32, len(aVal))

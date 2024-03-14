@@ -14,7 +14,6 @@ require (
 	github.com/IBM/sarama v1.41.0
 	github.com/Masterminds/semver/v3 v3.1.0
 	github.com/blevesearch/bleve/v2 v2.3.10
-	github.com/chewxy/math32 v1.10.1
 	github.com/dgraph-io/badger/v4 v4.2.0
 	github.com/dgraph-io/dgo/v230 v230.0.2-0.20230929195431-42a4d4ef28da
 	github.com/dgraph-io/gqlgen v0.13.2
@@ -59,7 +58,6 @@ require (
 	go.opencensus.io v0.24.0
 	go.uber.org/zap v1.16.0
 	golang.org/x/crypto v0.19.0
-	golang.org/x/exp v0.0.0-20240222234643-814bf88cf225
 	golang.org/x/net v0.21.0
 	golang.org/x/sync v0.6.0
 	golang.org/x/sys v0.17.0

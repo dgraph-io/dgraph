@@ -383,6 +383,32 @@ func TestProcessBinary(t *testing.T) {
 			name: "Subtraction integer underflow",
 		},
 		{in: &mathTree{
+			Fn: "/",
+			Child: []*mathTree{
+				{Const: types.Val{
+					Tid:   types.VFloatID,
+					Value: []float32{0.5, 0.25, 0.75}}},
+				{Const: types.Val{
+					Tid:   types.FloatID,
+					Value: float64(1.243e40)}},
+			}},
+			err:  ErrorFloat32Overflow,
+			name: "Float overflow",
+		},
+		{in: &mathTree{
+			Fn: "+",
+			Child: []*mathTree{
+				{Const: types.Val{
+					Tid:   types.VFloatID,
+					Value: []float32{0.5, 0.25, 0.75}}},
+				{Const: types.Val{
+					Tid:   types.IntID,
+					Value: int64(3)}},
+			}},
+			err:  ErrorArgsDisagree,
+			name: "Left and right arguments must match",
+		},
+		{in: &mathTree{
 			Fn: "*",
 			Child: []*mathTree{
 				{Const: types.Val{Tid: types.IntID, Value: int64(9223372036854775)}},

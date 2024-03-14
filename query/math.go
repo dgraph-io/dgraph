@@ -33,6 +33,7 @@ type mathTree struct {
 
 var (
 	ErrorIntOverflow     = errors.New("Integer overflow")
+	ErrorFloat32Overflow = errors.New("Float32 overflow")
 	ErrorDivisionByZero  = errors.New("Division by zero")
 	ErrorFractionalPower = errors.New("Fractional power of negative number")
 	ErrorNegativeLog     = errors.New("Log of negative number")
