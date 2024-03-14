@@ -28,6 +28,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/lex"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -208,11 +209,23 @@ var mathOpPrecedence = map[string]int{
 	"max":     85,
 	"min":     84,
 
+	// NOTE: Previously, we had "/" at precedence 50 and "*" at precedence 49.
+	//       This is problematic because it would evaluate:
+	//              5 * 10 / 50 as: 5 * (10/50). This is fine for floating point, but breaks
+	//       for integer arithmetic! The result in integer arithmetic is 0, but the precedence
+	//       should actually be evaluated as (5*10)/50 = 1.
 	"/": 50,
-	"*": 49,
-	"%": 48,
-	"-": 47,
-	"+": 46,
+	"*": 50,
+	// We add dot as lower priority than "/" and "*" so that the expression:
+	//   c1 * v1 dot c2 * v2 gets evaluated as (c1 *  v1) dot (c2 * v2).
+	// Note that v dot c where v is a vector and c is a float (or int) is not legal,
+	// so we must evaluate this with this precedence! This also implies that we need
+	// support for v / c where v is a vector and c is a float, and that this should
+	// be interpreted the same as v * (1/c).
+	"dot": 49,
+	"%":   48,
+	"-":   47,
+	"+":   46,
 
 	"<":  10,
 	">":  9,
@@ -303,6 +316,67 @@ type Request struct {
 	Variables map[string]string
 }
 
+func parseValue(v varInfo) (types.Val, error) {
+	var err error
+	typ := v.Type
+	if v.Value != "" {
+		switch typ {
+		case "int":
+			{
+				var i int64
+				if i, err = strconv.ParseInt(v.Value, 0, 64); err != nil {
+					return types.Val{}, errors.Wrapf(err, "Expected an int but got %v", v.Value)
+				}
+				return types.Val{
+					Tid:   types.IntID,
+					Value: i,
+				}, nil
+			}
+		case "float":
+			{
+				var i float64
+				if i, err = strconv.ParseFloat(v.Value, 64); err != nil {
+					return types.Val{}, errors.Wrapf(err, "Expected a float but got %v", v.Value)
+				}
+				return types.Val{
+					Tid:   types.FloatID,
+					Value: i,
+				}, nil
+			}
+		case "bool":
+			{
+				var i bool
+				if i, err = strconv.ParseBool(v.Value); err != nil {
+					return types.Val{}, errors.Wrapf(err, "Expected a bool but got %v", v.Value)
+				}
+				return types.Val{
+					Tid:   types.BoolID,
+					Value: i,
+				}, nil
+			}
+		case "vfloat":
+			{
+				var i []float32
+				if i, err = types.ParseVFloat(v.Value); err != nil {
+					return types.Val{}, errors.Wrapf(err, "Expected a vfloat but got %v", v.Value)
+				}
+				return types.Val{
+					Tid:   types.VFloatID,
+					Value: i,
+				}, nil
+			}
+		case "string": // Value is a valid string. No checks required.
+			return types.Val{
+				Tid:   types.StringID,
+				Value: v.Value,
+			}, nil
+		default:
+			return types.Val{}, errors.Errorf("Type %q not supported", typ)
+		}
+	}
+	return types.Val{}, errors.Errorf("No value found")
+}
+
 func checkValueType(vm varMap) error {
 	for k, v := range vm {
 		typ := v.Type
@@ -340,6 +414,12 @@ func checkValueType(vm varMap) error {
 						return errors.Wrapf(err, "Expected a bool but got %v", v.Value)
 					}
 				}
+			case "vfloat":
+				{
+					if _, err := types.ParseVFloat(v.Value); err != nil {
+						return errors.Wrapf(err, "Expected a vfloat but got %v", v.Value)
+					}
+				}
 			case "string": // Value is a valid string. No checks required.
 			default:
 				return errors.Errorf("Type %q not supported", typ)
@@ -361,6 +441,10 @@ func substituteVar(f string, res *string, vmap varMap) error {
 	return nil
 }
 
+func substituteVarInMath(gq *GraphQuery, vmap varMap) error {
+	return gq.MathExp.subs(vmap)
+}
+
 func substituteVariables(gq *GraphQuery, vmap varMap) error {
 	for k, v := range gq.Args {
 		// v won't be empty as its handled in parseDqlVariables.
@@ -380,6 +464,12 @@ func substituteVariables(gq *GraphQuery, vmap varMap) error {
 		gq.UID = append(gq.UID, uids...)
 		// Deleting it here because we don't need to fill it in query.go.
 		delete(gq.Args, "id")
+	}
+
+	if gq.MathExp != nil {
+		if err := substituteVarInMath(gq, vmap); err != nil {
+			return err
+		}
 	}
 
 	if gq.Func != nil {
@@ -3064,7 +3154,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				if varName == "" && alias == "" {
 					return it.Errorf("Function math should be used with a variable or have an alias")
 				}
-				mathTree, again, err := parseMathFunc(it, false)
+				mathTree, again, err := parseMathFunc(gq, it, false)
 				if err != nil {
 					return err
 				}
