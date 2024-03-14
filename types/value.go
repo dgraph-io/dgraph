@@ -21,34 +21,15 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"unsafe"
 )
 
 // BytesAsFloatArray(encoded) converts encoded into a []float32.
 // If len(encoded) % 4 is not 0, it will ignore any trailing
 // bytes, and simply convert 4 bytes at a time to generate the
 // float64 entries.
-// WARNING: Current implementation always requires a memory allocation!
+// Current implementation assuming littleEndian encoding
 func BytesAsFloatArray(encoded []byte) []float32 {
-	// Unfortunately, this is not as simple as casting the result,
-	// and it is also not possible to directly use the
-	// golang "unsafe" library to directly do the conversion.
-	// The operation:
-	//      []float32(encoded)  does not compile!
-	// Whereas:
-	//      []float32(unsafe.Slice(unsafe.Ptr(encoded), len(encoded)))
-	// might compile (actually have not tested it), but its success or
-	// failure depends on agreement of the serialization mechanism
-	// of the source data and the data as it exists on the machine where
-	// the operation is being performed.
-	// The machine where this operation gets run might prefer
-	// BigEndian/LittleEndian, but the machine that sent it may have
-	// preferred the other, and there is no way to tell!
-	//
-	// The solution below, unfortunately, requires another memory
-	// allocation.
-	// TODO Potential optimization: If we detect that current machine is
-	// using LittleEndian format, there might be a way of making this
-	// work with the golang "unsafe" library.
 
 	resultLen := len(encoded) / 4
 	if resultLen == 0 {
@@ -56,15 +37,7 @@ func BytesAsFloatArray(encoded []byte) []float32 {
 	}
 	retVal := make([]float32, resultLen)
 	for i := 0; i < resultLen; i++ {
-		// Assume LittleEndian for encoding since this is
-		// the assumption elsewhere when reading from client.
-		// See dgraph-io/dgo/protos/api.pb.go
-		// See also dgraph-io/dgraph/types/conversion.go
-		// This also seems to be the preference from many examples
-		// I have found via Google search. It's unclear why this
-		// should be a preference.
-		bits := binary.LittleEndian.Uint32(encoded)
-		retVal[i] = math.Float32frombits(bits)
+		retVal[i] = *(*float32)(unsafe.Pointer(&encoded[0]))
 		encoded = encoded[4:]
 	}
 	return retVal
@@ -86,15 +59,17 @@ func FloatArrayAsBytes(v []float32) []byte {
 }
 
 func FloatArrayAsString(v []float32) string {
-	retVal := "["
+	var sb strings.Builder
+
+	sb.WriteRune('[')
 	for i := range v {
-		retVal += strconv.FormatFloat(float64(v[i]), 'f', -1, 32)
+		sb.WriteString(strconv.FormatFloat(float64(v[i]), 'f', -1, 32))
 		if i != len(v)-1 {
-			retVal += ", "
+			sb.WriteRune(',')
 		}
 	}
-	retVal += "]"
-	return retVal
+	sb.WriteRune(']')
+	return sb.String()
 }
 
 // TypeForValue tries to determine the most likely type based on a value. We only want to use this

@@ -17,8 +17,6 @@
 package query
 
 import (
-	"testing"
-
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 
@@ -31,7 +29,6 @@ type mathTree struct {
 	Const types.Val // If its a const value node.
 	Val   map[uint64]types.Val
 	Child []*mathTree
-	t     *testing.T
 }
 
 var (

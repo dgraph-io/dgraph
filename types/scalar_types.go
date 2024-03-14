@@ -68,17 +68,17 @@ const (
 )
 
 var typeNameMap = map[string]TypeID{
-	"default":  DefaultID,
-	"binary":   BinaryID,
-	"int":      IntID,
-	"float":    FloatID,
-	"bool":     BoolID,
-	"datetime": DateTimeID,
-	"geo":      GeoID,
-	"uid":      UidID,
-	"string":   StringID,
-	"password": PasswordID,
-	"vfloat":   VFloatID,
+	"default":       DefaultID,
+	"binary":        BinaryID,
+	"int":           IntID,
+	"float":         FloatID,
+	"bool":          BoolID,
+	"datetime":      DateTimeID,
+	"geo":           GeoID,
+	"uid":           UidID,
+	"string":        StringID,
+	"password":      PasswordID,
+	"float32vector": VFloatID,
 }
 
 // TypeID represents the type of the data.

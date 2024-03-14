@@ -98,7 +98,7 @@ func ParseVFloat(s string) ([]float32, error) {
 }
 
 func cannotConvertToVFloat(s string) error {
-	return errors.Errorf("Cannot convert %s to vfloat", s)
+	return errors.Errorf("cannot convert %s to vfloat", s)
 }
 
 // Convert converts the value to given scalar type.
@@ -108,7 +108,7 @@ func Convert(from Val, toID TypeID) (Val, error) {
 	// sanity: we expect a value
 	data, ok := from.Value.([]byte)
 	if !ok {
-		return to, errors.Errorf("Invalid data to convert to %s", toID.Name())
+		return to, errors.Errorf("invalid data to convert to %s", toID.Name())
 	}
 
 	fromID := from.Tid

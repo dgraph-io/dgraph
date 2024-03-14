@@ -93,7 +93,7 @@ message Result {
   repeated FacetsList facet_matrix = 5;
   repeated LangList lang_matrix = 6;
   bool list = 7;
-  map<string, uint64> extra_metrics = 8;
+  map<string, uint64> vector_metrics = 8;
 }
 
 message Order {
@@ -526,7 +526,7 @@ message SchemaUpdate {
 message VectorSpec {
   // This names the kind of Vector Index, e.g.,
   //    hnsw, lsh, hypertree, ...
-  string name = 1;
+  string indexName = 1;
   repeated OptionPair options = 2;
 }
 

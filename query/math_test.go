@@ -227,6 +227,20 @@ func TestProcessBinary(t *testing.T) {
 			Child: []*mathTree{
 				{Const: types.Val{
 					Tid:   types.VFloatID,
+					Value: []float32{0.0005, 0.25001, 0.7500001}}},
+				{Const: types.Val{
+					Tid:   types.VFloatID,
+					Value: []float32{0.0005, 0.25001, 0.7500001}}},
+			}},
+			out: types.Val{
+				Tid:   types.VFloatID,
+				Value: []float32{0.001, 0.50002, 1.5000002}},
+		},
+		{in: &mathTree{
+			Fn: "+",
+			Child: []*mathTree{
+				{Const: types.Val{
+					Tid:   types.VFloatID,
 					Value: []float32{0.5, 0.25, 0.75}}},
 				{Const: types.Val{
 					Tid:   types.VFloatID,
@@ -269,14 +283,11 @@ func TestProcessBinary(t *testing.T) {
 			Child: []*mathTree{
 				{Const: types.Val{
 					Tid:   types.IntID,
-					Value: int64(2)},
-					t: t},
+					Value: int64(2)}},
 				{Const: types.Val{
 					Tid:   types.VFloatID,
-					Value: []float32{0.25, 0.5, 0.75}},
-					t: t},
-			},
-			t: t},
+					Value: []float32{0.25, 0.5, 0.75}}},
+			}},
 			out: types.Val{
 				Tid:   types.VFloatID,
 				Value: []float32{0.5, 1.0, 1.5}},
