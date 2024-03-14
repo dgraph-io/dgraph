@@ -127,12 +127,12 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				*res = *(*string)(unsafe.Pointer(&data))
 			case IntID:
 				if len(data) < 8 {
-					return to, errors.Errorf("Invalid data for int64 %v", data)
+					return to, errors.Errorf("invalid data for int64 %v", data)
 				}
 				*res = int64(binary.LittleEndian.Uint64(data))
 			case FloatID:
 				if len(data) < 8 {
-					return to, errors.Errorf("Invalid data for float %v", data)
+					return to, errors.Errorf("invalid data for float %v", data)
 				}
 				i := binary.LittleEndian.Uint64(data)
 				*res = math.Float64frombits(i)
@@ -144,7 +144,7 @@ func Convert(from Val, toID TypeID) (Val, error) {
 					*res = true
 					return to, nil
 				}
-				return to, errors.Errorf("Invalid value for bool %v", data[0])
+				return to, errors.Errorf("invalid value for bool %v", data[0])
 			case DateTimeID:
 				var t time.Time
 				if err := t.UnmarshalBinary(data); err != nil {
@@ -161,7 +161,7 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				*res = string(data)
 			case VFloatID:
 				if len(data)%4 != 0 {
-					return to, errors.Errorf("Invalid data for vector of floats: %v", data)
+					return to, errors.Errorf("invalid data for vector of floats: %v", data)
 				}
 				*res = BytesAsFloatArray(data)
 			default:
@@ -230,7 +230,7 @@ func Convert(from Val, toID TypeID) (Val, error) {
 	case IntID:
 		{
 			if len(data) < 8 {
-				return to, errors.Errorf("Invalid data for int64 %v", data)
+				return to, errors.Errorf("invalid data for int64 %v", data)
 			}
 			vc := int64(binary.LittleEndian.Uint64(data))
 			switch toID {
@@ -257,7 +257,7 @@ func Convert(from Val, toID TypeID) (Val, error) {
 	case FloatID:
 		{
 			if len(data) < 8 {
-				return to, errors.Errorf("Invalid data for float %v", data)
+				return to, errors.Errorf("invalid data for float %v", data)
 			}
 			i := binary.LittleEndian.Uint64(data)
 			vc := math.Float64frombits(i)
@@ -293,7 +293,7 @@ func Convert(from Val, toID TypeID) (Val, error) {
 		{
 			var vc bool
 			if len(data) == 0 || data[0] > 1 {
-				return to, errors.Errorf("Invalid value for bool %v", data)
+				return to, errors.Errorf("invalid value for bool %v", data)
 			}
 			vc = data[0] == 1
 
@@ -422,7 +422,7 @@ func Convert(from Val, toID TypeID) (Val, error) {
 
 func Marshal(from Val, to *Val) error {
 	if to == nil {
-		return errors.Errorf("Invalid conversion %s to nil", from.Tid.Name())
+		return errors.Errorf("invalid conversion %s to nil", from.Tid.Name())
 	}
 
 	fromID := from.Tid
@@ -664,5 +664,5 @@ func (v Val) MarshalJSON() ([]byte, error) {
 	case PasswordID:
 		return json.Marshal(v.Value.(string))
 	}
-	return nil, errors.Errorf("Invalid type for MarshalJSON: %v", v.Tid)
+	return nil, errors.Errorf("invalid type for MarshalJSON: %v", v.Tid)
 }
