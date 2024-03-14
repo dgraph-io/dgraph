@@ -1,12 +1,7 @@
 name: ci-dgraph-tests
 on:
   pull_request:
-    types:
-      - opened
-      - reopened
-      - synchronize
-      - ready_for_review
-    paths-ignore:
+      paths-ignore:
       - '.github/CODEOWNERS'
       - '.vscode/**'
       - 'compose/**'
@@ -24,6 +19,11 @@ on:
       - '**/**.jpg'
       - '**/**.gif'
       - '**/**.ini'
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
     branches:
       - main
       - 'release/**'
@@ -32,14 +32,14 @@ jobs:
     if: github.event.pull_request.draft == false
     runs-on: buildjet-32vcpu-ubuntu-2004 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Get Go Version
         run: |
           #!/bin/bash
           GOVERSION=$({ [ -f .go-version ] && cat .go-version; })
           echo "GOVERSION=$GOVERSION" >> $GITHUB_ENV
       - name: Set up Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GOVERSION }}
       - name: Set up Node
