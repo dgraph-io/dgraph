@@ -88,7 +88,7 @@ func TestConversionEdgeCases(t *testing.T) {
 	}{
 		{in: Val{Tid: BinaryID},
 			out:     Val{Tid: BinaryID},
-			failure: "Invalid data to convert to binary"},
+			failure: "invalid data to convert to binary"},
 
 		// From BinaryID to X
 		{in: Val{Tid: BinaryID, Value: []byte{}},

@@ -590,16 +590,16 @@ var binaryFunctions = map[string]binaryFunc{
 // In fact, if one of the arguments is a vector then the other *must* be
 // a scalar!
 var mixedScalarVectOps = map[string]struct{}{
-	"*": struct{}{},
-	"/": struct{}{},
+	"*": {},
+	"/": {},
 }
 
 var opsAllowingVectorsOnRight = map[string]struct{}{
-	"u-":  struct{}{},
-	"+":   struct{}{},
-	"-":   struct{}{},
-	"*":   struct{}{},
-	"dot": struct{}{},
+	"u-":  {},
+	"+":   {},
+	"-":   {},
+	"*":   {},
+	"dot": {},
 }
 
 type valType int

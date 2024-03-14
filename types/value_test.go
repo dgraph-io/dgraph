@@ -67,10 +67,10 @@ func TestTypeForValue(t *testing.T) {
 
 func TestFloatArrayTranslation(t *testing.T) {
 	testCases := [][]float32{
-		[]float32{},
-		[]float32{0.1},
-		[]float32{0},
-		[]float32{0.65433, 1.855, 3.1415926539},
+		{},
+		{0.1},
+		{0},
+		{0.65433, 1.855, 3.1415926539},
 	}
 	for _, tc := range testCases {
 		asBytes := FloatArrayAsBytes(tc)

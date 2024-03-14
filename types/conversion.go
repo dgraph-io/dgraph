@@ -63,7 +63,7 @@ func ParseVFloat(s string) ([]float32, error) {
 	if len(trimmed) == 0 {
 		return []float32{}, nil
 	}
-	if strings.Index(trimmed, ",") != -1 {
+	if strings.Contains(trimmed, ",") {
 		// Splitting based on comma-separation.
 		values := strings.Split(trimmed, ",")
 		result := make([]float32, len(values))
