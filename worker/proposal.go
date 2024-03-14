@@ -223,7 +223,9 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 	defer stop()
 
 	propose := func(timeout time.Duration) error {
-		cctx, cancel := context.WithCancel(ctx)
+		// We don't need to extend from base ctx as it might have a timeout. This timeout
+		// is only to find the proposal back via Raft.
+		cctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
 		errCh := make(chan error, 1)
@@ -248,8 +250,6 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 			case err = <-errCh:
 				// We arrived here by a call to n.Proposals.Done().
 				return err
-			case <-ctx.Done():
-				return ctx.Err()
 			case <-timer.C:
 				if atomic.LoadUint32(&pctx.Found) > 0 {
 					// We found the proposal in CommittedEntries. No need to retry.
