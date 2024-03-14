@@ -29,6 +29,7 @@ on:
       - 'release/**'
 jobs:
   dgraph-load-tests:
+    if: github.event.pull_request.draft == false
     runs-on: buildjet-32vcpu-ubuntu-2004
     steps:
       - uses: actions/checkout@v4
