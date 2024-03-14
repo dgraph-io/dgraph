@@ -29,6 +29,7 @@ on:
       - 'release/**'
 jobs:
   dgraph-ldbc-tests:
+    if: github.event.pull_request.draft == false
     runs-on: warp-ubuntu-latest-x64-4x
     steps:
       - name: Checkout Dgraph
