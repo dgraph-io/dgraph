@@ -5,7 +5,9 @@ package certrequest
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
@@ -32,7 +34,17 @@ func TestAccessWithCaCert(t *testing.T) {
 
 	dg, err := testutil.DgraphClientWithCerts(testutil.SockAddr, conf)
 	require.NoError(t, err, "Unable to get dgraph client: %v", err)
-	require.NoError(t, dg.Alter(context.Background(), &api.Operation{DropAll: true}))
+	for i := 0; i < 20; i++ {
+		err := dg.Alter(context.Background(), &api.Operation{DropAll: true})
+		if err == nil {
+			break
+		}
+		if strings.Contains(err.Error(), "first record does not look like a TLS handshake") {
+			// this is a transient error that happens when the server is still starting up
+			time.Sleep(time.Second)
+			continue
+		}
+	}
 }
 
 func TestCurlAccessWithCaCert(t *testing.T) {
