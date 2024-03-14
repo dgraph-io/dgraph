@@ -10,8 +10,6 @@ on:
       - reopened
       - synchronize
       - ready_for_review
-  schedule:
-    - cron: "0 0 * * *" # 1 run per day
 jobs:
   dgraph-upgrade-tests:
     if: github.event.pull_request.draft == false
