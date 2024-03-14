@@ -78,10 +78,10 @@ func TypeValFrom(val *api.Value) types.Val {
 		return types.Val{Tid: types.DateTimeID, Value: val.GetDatetimeVal()}
 	case *api.Value_PasswordVal:
 		return types.Val{Tid: types.PasswordID, Value: val.GetPasswordVal()}
-	case *api.Value_VdoubleVal:
+	case *api.Value_Vfloat32Val:
 		return types.Val{
 			Tid:   types.VFloatID,
-			Value: types.BytesAsFloatArray(val.GetVdoubleVal()),
+			Value: types.BytesAsFloatArray(val.GetVfloat32Val()),
 		}
 	case *api.Value_DefaultVal:
 		return types.Val{Tid: types.DefaultID, Value: val.GetDefaultVal()}

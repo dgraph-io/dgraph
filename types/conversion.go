@@ -628,7 +628,7 @@ func ObjectValue(id TypeID, value interface{}) (*api.Value, error) {
 		if err != nil {
 			return def, err
 		}
-		return &api.Value{Val: &api.Value_VdoubleVal{VdoubleVal: vf}}, nil
+		return &api.Value{Val: &api.Value_Vfloat32Val{Vfloat32Val: vf}}, nil
 	default:
 		return def, errors.Errorf("ObjectValue not available for: %v", id)
 	}
