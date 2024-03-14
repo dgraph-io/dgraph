@@ -30,7 +30,6 @@ import (
 // float64 entries.
 // Current implementation assuming littleEndian encoding
 func BytesAsFloatArray(encoded []byte) []float32 {
-
 	resultLen := len(encoded) / 4
 	if resultLen == 0 {
 		return []float32{}

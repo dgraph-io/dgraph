@@ -142,8 +142,6 @@ func applyAdd(a, b, c *types.Val) error {
 		if len(aVal) != len(bVal) {
 			return ErrorVectorsNotMatch
 		}
-		// Sadly, we don't already pre-allocate the result from
-		// ApplyVal, so we will waste some allocation time here.
 		cVal := make([]float32, len(aVal))
 		for i := 0; i < len(aVal); i++ {
 			cVal[i] = aVal[i] + bVal[i]
@@ -243,14 +241,11 @@ func applyMul(a, b, c *types.Val) error {
 		if rValType != FLOAT {
 			return invalidTypeError(lValType, rValType, "*")
 		}
-		bVal, ok := b.Value.(float64)
-		if !ok {
-			return errors.Errorf("Expected float64 type, but found %t", b.Value)
-		}
+		bVal := b.Value.(float64)
 
 		cVal := make([]float32, len(aVal))
 		c.Value = cVal
-		// If you convert from float64 to 32, sometimes we can get inf.
+		// If you convert from float64 to float32, sometimes we can get inf.
 		if math.IsInf(float64(float32(bVal)), 0) {
 			return ErrorFloat32Overflow
 		}
@@ -292,7 +287,7 @@ func applyDiv(a, b, c *types.Val) error {
 		if denom == 0 {
 			return ErrorDivisionByZero
 		}
-		// If you convert from float64 to 32, sometimes we can get inf.
+		// If you convert from float64 to float32, sometimes we can get inf.
 		if math.IsInf(float64(float32(denom)), 0) {
 			return ErrorFloat32Overflow
 		}
