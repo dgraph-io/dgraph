@@ -31,16 +31,16 @@ jobs:
   golang-lint:
     if: github.event.pull_request.draft == false
     name: lint
-    runs-on: ubuntu-20.04
+    runs-on: warp-ubuntu-latest-x64-4x
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Get Go Version
         run: |
           #!/bin/bash
           GOVERSION=$({ [ -f .go-version ] && cat .go-version; })
           echo "GOVERSION=$GOVERSION" >> $GITHUB_ENV
       - name: Setup Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GOVERSION }}
       - name: golang-lint
