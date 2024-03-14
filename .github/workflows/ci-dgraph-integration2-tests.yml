@@ -11,6 +11,7 @@ on:
       - 'release/**'
 jobs:
   dgraph-integration2-tests:
+    if: github.event.pull_request.draft == false
     runs-on: warp-ubuntu-latest-x64-4x
     steps:
       - uses: actions/checkout@v4
