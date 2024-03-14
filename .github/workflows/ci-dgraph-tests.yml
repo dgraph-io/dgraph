@@ -30,7 +30,7 @@ on:
 jobs:
   dgraph-tests:
     if: github.event.pull_request.draft == false
-    runs-on: buildjet-32vcpu-ubuntu-2004 
+    runs-on: warp-ubuntu-latest-x64-16x
     steps:
       - uses: actions/checkout@v4
       - name: Get Go Version
