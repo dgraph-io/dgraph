@@ -20,6 +20,7 @@ import (
 	"math"
 	"testing"
 
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/types"
@@ -383,6 +384,19 @@ func TestProcessBinary(t *testing.T) {
 			name: "Subtraction integer underflow",
 		},
 		{in: &mathTree{
+			Fn: "*",
+			Child: []*mathTree{
+				{Const: types.Val{
+					Tid:   types.VFloatID,
+					Value: []float32{0.5, 0.25, 0.75}}},
+				{Const: types.Val{
+					Tid:   types.FloatID,
+					Value: float64(1.243e40)}},
+			}},
+			err:  ErrorFloat32Overflow,
+			name: "Float overflow Mul",
+		},
+		{in: &mathTree{
 			Fn: "/",
 			Child: []*mathTree{
 				{Const: types.Val{
@@ -394,6 +408,45 @@ func TestProcessBinary(t *testing.T) {
 			}},
 			err:  ErrorFloat32Overflow,
 			name: "Float overflow",
+		},
+		{in: &mathTree{
+			Fn: "/",
+			Child: []*mathTree{
+				{Const: types.Val{
+					Tid:   types.VFloatID,
+					Value: []float32{0.5, 0.25, 0.75}}},
+				{Const: types.Val{
+					Tid:   types.VFloatID,
+					Value: []float32{0.5, 0.25, 0.75}}},
+			}},
+			err:  errors.New("invalid types 2, 2 for func /"),
+			name: "Invalid type in matchType",
+		},
+		{in: &mathTree{
+			Fn: "dot",
+			Child: []*mathTree{
+				{Const: types.Val{
+					Tid:   types.VFloatID,
+					Value: []float32{0.5, 0.25, 0.75}}},
+				{Const: types.Val{
+					Tid:   types.VFloatID,
+					Value: []float32{0.5, 0.25, 0.75, 0.1}}},
+			}},
+			err:  ErrorVectorsNotMatch,
+			name: "Vectors length not match",
+		},
+		{in: &mathTree{
+			Fn: "/",
+			Child: []*mathTree{
+				{Const: types.Val{
+					Tid:   types.VFloatID,
+					Value: []float32{0.5, 0.25, 0.75}}},
+				{Const: types.Val{
+					Tid:   types.IntID,
+					Value: int64(0)}},
+			}},
+			err:  ErrorDivisionByZero,
+			name: "Vector division by 0",
 		},
 		{in: &mathTree{
 			Fn: "+",
