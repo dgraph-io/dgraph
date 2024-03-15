@@ -30,7 +30,7 @@ on:
 jobs:
   dgraph-ldbc-tests:
     if: github.event.pull_request.draft == false
-    runs-on: warp-ubuntu-latest-x64-4x
+    runs-on: ubuntu-20.04
     steps:
       - name: Checkout Dgraph
         uses: actions/checkout@v4
