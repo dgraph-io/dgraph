@@ -741,11 +741,19 @@ func (ag *aggregator) ApplyVal(v types.Val) error {
 	return nil
 }
 
-func (ag *aggregator) Apply(val types.Val) {
+func (ag *aggregator) Apply(val types.Val) error {
 	if ag.result.Value == nil {
-		ag.result = val
+		if val.Tid == types.VFloatID {
+			// Copy array if it's VFloat, otherwise we overwrite value.
+			va := val.Value.([]float32)
+			res := make([]float32, len(va))
+			copy(res, va)
+			ag.result = types.Val{Tid: types.VFloatID, Value: res}
+		} else {
+			ag.result = val
+		}
 		ag.count++
-		return
+		return nil
 	}
 
 	va := ag.result
@@ -775,24 +783,11 @@ func (ag *aggregator) Apply(val types.Val) {
 		case va.Tid == types.VFloatID && vb.Tid == types.VFloatID:
 			accumVal := va.Value.([]float32)
 			bVal := vb.Value.([]float32)
-			// We're going to cheat here, and extend the results
-			// of va.Value if bVal is longer. This function, for
-			// whatever reason, does not supply a means of
-			// returning an error, and generates fatal instead.
-			// So, we do this hack instead ...
-			if len(bVal) > len(accumVal) {
-				newAccum := make([]float32, len(bVal))
-				for i := 0; i < len(accumVal); i++ {
-					newAccum[i] = accumVal[i] + bVal[i]
-				}
-				for i := len(accumVal); i < len(bVal); i++ {
-					newAccum[i] = bVal[i]
-				}
-				va.Value = newAccum
-			} else {
-				for i := 0; i < len(bVal); i++ {
-					accumVal[i] += bVal[i]
-				}
+			if len(bVal) != len(accumVal) {
+				return ErrorVectorsNotMatch
+			}
+			for i := 0; i < len(bVal); i++ {
+				accumVal[i] += bVal[i]
 			}
 		}
 		// Skipping the else case since that means the pair cannot be summed.
@@ -802,6 +797,7 @@ func (ag *aggregator) Apply(val types.Val) {
 	}
 	ag.count++
 	ag.result = res
+	return nil
 }
 
 func (ag *aggregator) ValueMarshalled() (*pb.TaskValue, error) {
@@ -830,6 +826,14 @@ func (ag *aggregator) divideByCount() {
 		v = float64(ag.result.Value.(int64))
 	case types.FloatID:
 		v = ag.result.Value.(float64)
+	case types.VFloatID:
+		arr := ag.result.Value.([]float32)
+		res := make([]float32, len(arr))
+		for i := 0; i < len(arr); i++ {
+			res[i] = arr[i] / float32(ag.count)
+		}
+		ag.result.Value = res
+		return
 	}
 
 	ag.result.Tid = types.FloatID
