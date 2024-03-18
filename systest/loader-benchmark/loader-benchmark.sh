@@ -14,7 +14,7 @@ function Info {
 }
 
 function DockerCompose {
-    docker-compose -p dgraph "$@"
+    docker compose -p dgraph "$@"
 }
 
 if [[ $BENCHMARK_SIZE != small && $BENCHMARK_SIZE != big ]]; then

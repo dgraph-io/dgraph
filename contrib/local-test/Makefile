@@ -3,19 +3,19 @@ DGRAPH_VERSION ?= local
 current_dir = $(shell pwd)
 
 up: ## Start the zero and alpha containers
-	DGRAPH_VERSION=$(DGRAPH_VERSION) docker-compose up -d && docker-compose logs --follow alpha zero keepalive
+	DGRAPH_VERSION=$(DGRAPH_VERSION) docker compose up -d && docker compose logs --follow alpha zero keepalive
 
 up-with-lambda: ## Start the zero and alpha containers and a lambda container
-	DGRAPH_VERSION=$(DGRAPH_VERSION) docker-compose -f docker-compose.yml -f docker-compose-lambda.yml up -d && docker-compose logs --follow alpha zero lambda keepalive
+	DGRAPH_VERSION=$(DGRAPH_VERSION) docker compose -f docker-compose.yml -f docker-compose-lambda.yml up -d && docker compose logs --follow alpha zero lambda keepalive
 
 down: ## Stop the containers
-	DGRAPH_VERSION=$(DGRAPH_VERSION) docker-compose stop
+	DGRAPH_VERSION=$(DGRAPH_VERSION) docker compose stop
 
 down-with-lambda: ## Stop the containers (including the lambda container)
-	DGRAPH_VERSION=$(DGRAPH_VERSION) docker-compose -f docker-compose.yml -f docker-compose-lambda.yml stop
+	DGRAPH_VERSION=$(DGRAPH_VERSION) docker compose -f docker-compose.yml -f docker-compose-lambda.yml stop
 
 refresh: ## Kick containers if new dgragh image found
-	DGRAPH_VERSION=$(DGRAPH_VERSION) docker-compose up --detach --build
+	DGRAPH_VERSION=$(DGRAPH_VERSION) docker compose up --detach --build
 
 schema-dql: ## Load/update a DQL schema
 ifneq (,$(wildcard ./schema.dql))
