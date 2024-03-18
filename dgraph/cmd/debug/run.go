@@ -993,6 +993,7 @@ func run() {
 	if isWal {
 		store, err := raftwal.InitEncrypted(dir, opt.key)
 		x.Check(err)
+		defer func() { x.Check(store.Close()) }()
 		if err := handleWal(store); err != nil {
 			fmt.Printf("\nGot error while handling WAL: %v\n", err)
 		}

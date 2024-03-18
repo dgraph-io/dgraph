@@ -132,13 +132,14 @@ func printRaft(store *raftwal.DiskStorage) {
 	pending := make(map[uint64]bool)
 	startIdx, lastIdx := printBasic(store)
 
-	for startIdx < lastIdx-1 {
+	for startIdx < lastIdx {
 		entries, err := store.Entries(startIdx, lastIdx+1, 64<<20)
 		x.Check(err)
 		for _, ent := range entries {
 			printEntry(ent, pending, isZero)
 			startIdx = x.Max(startIdx, ent.Index)
 		}
+		startIdx = startIdx + 1
 	}
 }
 
