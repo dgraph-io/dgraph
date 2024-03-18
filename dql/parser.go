@@ -317,64 +317,64 @@ type Request struct {
 }
 
 func parseValue(v varInfo) (types.Val, error) {
-	var err error
 	typ := v.Type
-	if v.Value != "" {
-		switch typ {
-		case "int":
-			{
-				var i int64
-				if i, err = strconv.ParseInt(v.Value, 0, 64); err != nil {
-					return types.Val{}, errors.Wrapf(err, "Expected an int but got %v", v.Value)
-				}
+	if v.Value == "" {
+		return types.Val{}, errors.Errorf("No value found")
+	}
+
+	switch typ {
+	case "int":
+		{
+			if i, err := strconv.ParseInt(v.Value, 0, 64); err != nil {
+				return types.Val{}, errors.Wrapf(err, "Expected an int but got %v", v.Value)
+			} else {
 				return types.Val{
 					Tid:   types.IntID,
 					Value: i,
 				}, nil
 			}
-		case "float":
-			{
-				var i float64
-				if i, err = strconv.ParseFloat(v.Value, 64); err != nil {
-					return types.Val{}, errors.Wrapf(err, "Expected a float but got %v", v.Value)
-				}
+		}
+	case "float":
+		{
+			if i, err := strconv.ParseFloat(v.Value, 64); err != nil {
+				return types.Val{}, errors.Wrapf(err, "Expected a float but got %v", v.Value)
+			} else {
 				return types.Val{
 					Tid:   types.FloatID,
 					Value: i,
 				}, nil
 			}
-		case "bool":
-			{
-				var i bool
-				if i, err = strconv.ParseBool(v.Value); err != nil {
-					return types.Val{}, errors.Wrapf(err, "Expected a bool but got %v", v.Value)
-				}
+		}
+	case "bool":
+		{
+			if i, err := strconv.ParseBool(v.Value); err != nil {
+				return types.Val{}, errors.Wrapf(err, "Expected a bool but got %v", v.Value)
+			} else {
 				return types.Val{
 					Tid:   types.BoolID,
 					Value: i,
 				}, nil
 			}
-		case "vfloat":
-			{
-				var i []float32
-				if i, err = types.ParseVFloat(v.Value); err != nil {
-					return types.Val{}, errors.Wrapf(err, "Expected a vfloat but got %v", v.Value)
-				}
+		}
+	case "vfloat":
+		{
+			if i, err := types.ParseVFloat(v.Value); err != nil {
+				return types.Val{}, errors.Wrapf(err, "Expected a vfloat but got %v", v.Value)
+			} else {
 				return types.Val{
 					Tid:   types.VFloatID,
 					Value: i,
 				}, nil
 			}
-		case "string": // Value is a valid string. No checks required.
-			return types.Val{
-				Tid:   types.StringID,
-				Value: v.Value,
-			}, nil
-		default:
-			return types.Val{}, errors.Errorf("Type %q not supported", typ)
 		}
+	case "string": // Value is a valid string. No checks required.
+		return types.Val{
+			Tid:   types.StringID,
+			Value: v.Value,
+		}, nil
+	default:
+		return types.Val{}, errors.Errorf("Type %q not supported", typ)
 	}
-	return types.Val{}, errors.Errorf("No value found")
 }
 
 func checkValueType(vm varMap) error {

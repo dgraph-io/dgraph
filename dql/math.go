@@ -369,8 +369,7 @@ func (t *MathTree) subs(vmap varMap) error {
 		t.Var = ""
 	}
 	for _, i := range t.Child {
-		err := i.subs(vmap)
-		if err != nil {
+		if err := i.subs(vmap); err != nil {
 			return err
 		}
 	}

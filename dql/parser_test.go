@@ -43,7 +43,7 @@ func TestParseMathSubs(t *testing.T) {
 	q := `query test($a: int) {
 	q(func: uid(0x1)) {
 		x as count(uid)
-		math(x + $a)
+		p : math(x + $a)
 	}
 }`
 
@@ -57,6 +57,14 @@ func TestParseMathSubs(t *testing.T) {
 	require.NotNil(t, val)
 	require.Equal(t, val.Tid, types.IntID)
 	require.Equal(t, val.Value, int64(3))
+
+	r = Request{
+		Str:       q,
+		Variables: map[string]string{"$a": "3.3"},
+	}
+	_, err = Parse(r)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Expected an int but got 3.3")
 }
 
 func TestParseCountValError(t *testing.T) {
