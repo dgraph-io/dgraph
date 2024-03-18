@@ -594,6 +594,12 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 	if err != nil {
 		return err
 	}
+
+	if len(edges) > x.Config.LimitMutationsNquad {
+		return errors.Errorf("NQuad count in the request: %d, is more that threshold: %d",
+			len(edges), x.Config.LimitMutationsNquad)
+	}
+
 	ns, err := x.ExtractNamespace(ctx)
 	if err != nil {
 		return errors.Wrapf(err, "While doing mutations:")
@@ -953,7 +959,6 @@ func updateValInMutations(gmu *dql.Mutation, qc *queryContext) error {
 // updateUIDInMutations does following transformations:
 //   - uid(v) -> 0x123     -- If v is defined in query block
 //   - uid(v) -> _:uid(v)  -- Otherwise
-
 func updateUIDInMutations(gmu *dql.Mutation, qc *queryContext) error {
 	// usedMutationVars keeps track of variables that are used in mutations.
 	getNewVals := func(s string) []string {
