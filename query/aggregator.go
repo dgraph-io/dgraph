@@ -170,7 +170,7 @@ func applySub(a, b, c *types.Val) error {
 	case FLOAT:
 		c.Value = a.Value.(float64) - b.Value.(float64)
 	case VFLOAT:
-		// When adding vectors of floats, we add then item-wise
+		// When subtracting vectors of floats, we add then item-wise
 		// so that c.Value[i] = a.Value[i] - b.Value[i] for all i
 		// in range. If lengths of a and b are different, we treat
 		// this as an error.

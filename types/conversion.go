@@ -46,6 +46,7 @@ import (
 //	floatCommaList := ([whitespace] "," [whitespace] float32Val)+
 //	float32Val := < a string rep of a float32 value >
 func ParseVFloat(s string) ([]float32, error) {
+	// TODO Check if this can be done using lexer
 	s = strings.ReplaceAll(s, "\n", " ")
 	s = strings.ReplaceAll(s, "\t", " ")
 	s = strings.TrimSpace(s)

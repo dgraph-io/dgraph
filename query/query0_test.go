@@ -48,38 +48,18 @@ func TestGetVector(t *testing.T) {
   "data": {
     "me": [
       {
-        "vectorNonIndex": [
-          1,
-          1,
-          2,
-          2
-        ]
+        "vectorNonIndex": [1,1,2,2]
       },
       {
-        "vectorNonIndex": [
-          2,
-          1,
-          2,
-          2
-        ]
+        "vectorNonIndex": [2,1,2,2]
       }
     ],
     "aggregation": [
       {
-        "avg(val(a))": [
-          1.5,
-          1,
-          2,
-          2
-        ]
+        "avg(val(a))": [1.5,1,2,2]
       },
       {
-        "sum(val(a))": [
-          3,
-          2,
-          4,
-          4
-        ]
+        "sum(val(a))": [3,2,4,4]
       }
     ]
   }
