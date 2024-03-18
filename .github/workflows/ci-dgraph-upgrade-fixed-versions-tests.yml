@@ -4,10 +4,10 @@ on:
     - cron: "0 3 * * *" # 1 run per day
 jobs:
   dgraph-upgrade-fixed-versions-tests:
-    runs-on: ubuntu-20.04-32gb 
+    runs-on: warp-ubuntu-latest-x64-16x 
     timeout-minutes: 720
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - name: Get Go Version
@@ -16,7 +16,7 @@ jobs:
           GOVERSION=$({ [ -f .go-version ] && cat .go-version; })
           echo "GOVERSION=$GOVERSION" >> $GITHUB_ENV
       - name: Set up Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GOVERSION }}
       - name: Make Linux Build and Docker Image
