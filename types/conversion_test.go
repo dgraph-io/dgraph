@@ -40,6 +40,8 @@ func bs(v interface{}) []byte {
 		var bs [8]byte
 		binary.LittleEndian.PutUint64(bs[:], math.Float64bits(x))
 		return bs[:]
+	case []float32:
+		return FloatArrayAsBytes(x)
 	case time.Time:
 		bs, err := x.MarshalBinary()
 		if err == nil {
@@ -86,20 +88,20 @@ func TestConversionEdgeCases(t *testing.T) {
 	}{
 		{in: Val{Tid: BinaryID},
 			out:     Val{Tid: BinaryID},
-			failure: "Invalid data to convert to binary"},
+			failure: "invalid data to convert to binary"},
 
 		// From BinaryID to X
 		{in: Val{Tid: BinaryID, Value: []byte{}},
 			out:     Val{Tid: IntID, Value: int64(0)},
-			failure: "Invalid data for int64"},
+			failure: "invalid data for int64"},
 		{in: Val{Tid: BinaryID, Value: []byte{}},
 			out:     Val{Tid: FloatID, Value: int64(0)},
-			failure: "Invalid data for float"},
+			failure: "invalid data for float"},
 		{in: Val{Tid: BinaryID, Value: []byte{}},
 			out: Val{Tid: BoolID, Value: false}},
 		{in: Val{Tid: BinaryID, Value: []byte{2}},
 			out:     Val{Tid: BoolID, Value: false},
-			failure: "Invalid value for bool"},
+			failure: "invalid value for bool"},
 		{in: Val{Tid: BinaryID, Value: []byte{8}},
 			out:     Val{Tid: DateTimeID, Value: time.Time{}},
 			failure: "Time.UnmarshalBinary:"},
@@ -123,21 +125,21 @@ func TestConversionEdgeCases(t *testing.T) {
 
 		// From IntID to X
 		{in: Val{Tid: IntID, Value: []byte{}},
-			failure: "Invalid data for int64"},
+			failure: "invalid data for int64"},
 		{in: Val{Tid: IntID, Value: bs(int64(0))},
 			out: Val{Tid: DateTimeID, Value: time.Unix(0, 0).UTC()}},
 
 		// From FloatID to X
 		{in: Val{Tid: FloatID, Value: []byte{}},
-			failure: "Invalid data for float"},
+			failure: "invalid data for float"},
 		{in: Val{Tid: FloatID, Value: bs(float64(0))},
 			out: Val{Tid: DateTimeID, Value: time.Unix(0, 0).UTC()}},
 
 		// From BoolID to X
 		{in: Val{Tid: BoolID, Value: []byte{}},
-			failure: "Invalid value for bool"},
+			failure: "invalid value for bool"},
 		{in: Val{Tid: BoolID, Value: []byte{8}},
-			failure: "Invalid value for bool"},
+			failure: "invalid value for bool"},
 
 		// From DateTimeID to X
 		{in: Val{Tid: DateTimeID, Value: []byte{}},
@@ -269,6 +271,7 @@ func TestConvertFromBinary(t *testing.T) {
 		{in: bs(time.Date(2016, 1, 1, 0, 0, 0, 0, time.UTC)),
 			out: Val{DateTimeID, time.Date(2016, 1, 1, 0, 0, 0, 0, time.UTC)}},
 		{in: bs(time.Time{}), out: Val{DateTimeID, time.Time{}}},
+		{in: bs([]float32{1.0, 2.0}), out: Val{VFloatID, []float32{1.0, 2.0}}},
 	}
 
 	for _, tc := range tests {

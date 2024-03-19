@@ -20,6 +20,7 @@ import (
 	"math"
 	"testing"
 
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/types"
@@ -222,6 +223,118 @@ func TestProcessBinary(t *testing.T) {
 			}},
 			out: types.Val{Tid: types.FloatID, Value: 8.0},
 		},
+		{in: &mathTree{
+			Fn: "+",
+			Child: []*mathTree{
+				{Const: types.Val{
+					Tid:   types.VFloatID,
+					Value: []float32{0.0005, 0.25001, 0.7500001}}},
+				{Const: types.Val{
+					Tid:   types.VFloatID,
+					Value: []float32{0.0005, 0.25001, 0.7500001}}},
+			}},
+			out: types.Val{
+				Tid:   types.VFloatID,
+				Value: []float32{0.001, 0.50002, 1.5000002}},
+		},
+		{in: &mathTree{
+			Fn: "+",
+			Child: []*mathTree{
+				{Const: types.Val{
+					Tid:   types.VFloatID,
+					Value: []float32{0.5, 0.25, 0.75}}},
+				{Const: types.Val{
+					Tid:   types.VFloatID,
+					Value: []float32{0.5, 0.75, 0.25}}},
+			}},
+			out: types.Val{
+				Tid:   types.VFloatID,
+				Value: []float32{1.0, 1.0, 1.0}},
+		},
+		{in: &mathTree{
+			Fn: "-",
+			Child: []*mathTree{
+				{Const: types.Val{
+					Tid:   types.VFloatID,
+					Value: []float32{1.0, 1.0, 1.0}}},
+				{Const: types.Val{
+					Tid:   types.VFloatID,
+					Value: []float32{0.5, 0.25, 0.75}}},
+			}},
+			out: types.Val{
+				Tid:   types.VFloatID,
+				Value: []float32{0.5, 0.75, 0.25}},
+		},
+		{in: &mathTree{
+			Fn: "*",
+			Child: []*mathTree{
+				{Const: types.Val{
+					Tid:   types.FloatID,
+					Value: float64(2)}},
+				{Const: types.Val{
+					Tid:   types.VFloatID,
+					Value: []float32{0.25, 0.5, 0.75}}},
+			}},
+			out: types.Val{
+				Tid:   types.VFloatID,
+				Value: []float32{0.5, 1.0, 1.5}},
+		},
+		{in: &mathTree{
+			Fn: "*",
+			Child: []*mathTree{
+				{Const: types.Val{
+					Tid:   types.IntID,
+					Value: int64(2)}},
+				{Const: types.Val{
+					Tid:   types.VFloatID,
+					Value: []float32{0.25, 0.5, 0.75}}},
+			}},
+			out: types.Val{
+				Tid:   types.VFloatID,
+				Value: []float32{0.5, 1.0, 1.5}},
+		},
+		{in: &mathTree{
+			Fn: "*",
+			Child: []*mathTree{
+				{Const: types.Val{
+					Tid:   types.VFloatID,
+					Value: []float32{0.25, 0.5, 0.75}}},
+				{Const: types.Val{
+					Tid:   types.IntID,
+					Value: int64(2)}},
+			}},
+			out: types.Val{
+				Tid:   types.VFloatID,
+				Value: []float32{0.5, 1.0, 1.5}},
+		},
+		{in: &mathTree{
+			Fn: "/",
+			Child: []*mathTree{
+				{Const: types.Val{
+					Tid:   types.VFloatID,
+					Value: []float32{0.5, 1.0, 1.5}}},
+				{Const: types.Val{
+					Tid:   types.FloatID,
+					Value: float64(2)}},
+			}},
+			out: types.Val{
+				Tid:   types.VFloatID,
+				Value: []float32{0.25, 0.5, 0.75}},
+		},
+		{in: &mathTree{
+			Fn: "dot",
+			Child: []*mathTree{
+				{Const: types.Val{
+					Tid:   types.VFloatID,
+					Value: []float32{1.0, 2.0, 3.0}}},
+				{Const: types.Val{
+					Tid:   types.VFloatID,
+					Value: []float32{1.0, 2.0, 3.0}}},
+			}},
+			out: types.Val{
+				Tid:   types.FloatID,
+				Value: float64(14.0)},
+		},
 	}
 	for _, tc := range tests {
 		t.Logf("Test: %s", tc.in.Fn)
@@ -269,6 +382,84 @@ func TestProcessBinary(t *testing.T) {
 			}},
 			err:  ErrorIntOverflow,
 			name: "Subtraction integer underflow",
+		},
+		{in: &mathTree{
+			Fn: "*",
+			Child: []*mathTree{
+				{Const: types.Val{
+					Tid:   types.VFloatID,
+					Value: []float32{0.5, 0.25, 0.75}}},
+				{Const: types.Val{
+					Tid:   types.FloatID,
+					Value: float64(1.243e40)}},
+			}},
+			err:  ErrorFloat32Overflow,
+			name: "Float overflow Mul",
+		},
+		{in: &mathTree{
+			Fn: "/",
+			Child: []*mathTree{
+				{Const: types.Val{
+					Tid:   types.VFloatID,
+					Value: []float32{0.5, 0.25, 0.75}}},
+				{Const: types.Val{
+					Tid:   types.FloatID,
+					Value: float64(1.243e40)}},
+			}},
+			err:  ErrorFloat32Overflow,
+			name: "Float overflow",
+		},
+		{in: &mathTree{
+			Fn: "/",
+			Child: []*mathTree{
+				{Const: types.Val{
+					Tid:   types.VFloatID,
+					Value: []float32{0.5, 0.25, 0.75}}},
+				{Const: types.Val{
+					Tid:   types.VFloatID,
+					Value: []float32{0.5, 0.25, 0.75}}},
+			}},
+			err:  errors.New("invalid types 2, 2 for func /"),
+			name: "Invalid type in matchType",
+		},
+		{in: &mathTree{
+			Fn: "dot",
+			Child: []*mathTree{
+				{Const: types.Val{
+					Tid:   types.VFloatID,
+					Value: []float32{0.5, 0.25, 0.75}}},
+				{Const: types.Val{
+					Tid:   types.VFloatID,
+					Value: []float32{0.5, 0.25, 0.75, 0.1}}},
+			}},
+			err:  ErrorVectorsNotMatch,
+			name: "Vectors length not match",
+		},
+		{in: &mathTree{
+			Fn: "/",
+			Child: []*mathTree{
+				{Const: types.Val{
+					Tid:   types.VFloatID,
+					Value: []float32{0.5, 0.25, 0.75}}},
+				{Const: types.Val{
+					Tid:   types.IntID,
+					Value: int64(0)}},
+			}},
+			err:  ErrorDivisionByZero,
+			name: "Vector division by 0",
+		},
+		{in: &mathTree{
+			Fn: "+",
+			Child: []*mathTree{
+				{Const: types.Val{
+					Tid:   types.VFloatID,
+					Value: []float32{0.5, 0.25, 0.75}}},
+				{Const: types.Val{
+					Tid:   types.IntID,
+					Value: int64(3)}},
+			}},
+			err:  ErrorArgsDisagree,
+			name: "Left and right arguments must match",
 		},
 		{in: &mathTree{
 			Fn: "*",
@@ -424,6 +615,17 @@ func TestProcessUnary(t *testing.T) {
 				{Const: types.Val{Tid: types.FloatID, Value: 2.5}},
 			}},
 			out: types.Val{Tid: types.FloatID, Value: 3.0},
+		},
+		{in: &mathTree{
+			Fn: "u-",
+			Child: []*mathTree{
+				{Const: types.Val{
+					Tid:   types.VFloatID,
+					Value: []float32{1.25, 2.5, 3.25}}},
+			}},
+			out: types.Val{
+				Tid:   types.VFloatID,
+				Value: []float32{-1.25, -2.5, -3.25}},
 		},
 	}
 	for _, tc := range tests {

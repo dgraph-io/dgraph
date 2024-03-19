@@ -35,11 +35,14 @@ type nameType struct {
 }
 
 func checkSchema(t *testing.T, h map[string]*pb.SchemaUpdate, expected []nameType) {
+	if len(h) != len(expected) {
+		t.Errorf("In checkSchema, expected len(h) == len(expected)")
+	}
 	require.Len(t, h, len(expected))
 	for _, nt := range expected {
 		typ, found := h[nt.name]
 		require.True(t, found, nt)
-		require.EqualValues(t, *nt.typ, *typ)
+		require.EqualValuesf(t, *nt.typ, *typ, "found in map: %+v\n expected: %+v", *typ, *nt.typ)
 	}
 }
 
@@ -49,6 +52,7 @@ age:int .
 name: string .
  address: string .
 <http://scalar.com/helloworld/> : string .
+coordinates: float32vector .
 `
 
 func TestSchema(t *testing.T) {
@@ -70,11 +74,19 @@ func TestSchema(t *testing.T) {
 			Predicate: x.GalaxyAttr("age"),
 			ValueType: pb.Posting_INT,
 		}},
+		{x.GalaxyAttr("coordinates"), &pb.SchemaUpdate{
+			Predicate: x.GalaxyAttr("coordinates"),
+			ValueType: pb.Posting_VFLOAT,
+		}},
 	})
 
 	typ, err := State().TypeOf(x.GalaxyAttr("age"))
 	require.NoError(t, err)
 	require.Equal(t, types.IntID, typ)
+
+	typ, err = State().TypeOf(x.GalaxyAttr("coordinates"))
+	require.NoError(t, err)
+	require.Equal(t, types.VFloatID, typ)
 
 	_, err = State().TypeOf(x.GalaxyAttr("agea"))
 	require.Error(t, err)

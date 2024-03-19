@@ -57,21 +57,28 @@ const (
 	PasswordID = TypeID(pb.Posting_PASSWORD)
 	// StringID represents the string type.
 	StringID = TypeID(pb.Posting_STRING)
+	// TODO: Add constant for pb.Posting_OBJECT ??
+	//       Not clear if it belongs here, but if it does,
+	//       we should add it, if not, we should document here
+	//       why it does not belong here.
+	// VFloatID represents a vector of IEEE754 64-bit floats.
+	VFloatID = TypeID(pb.Posting_VFLOAT)
 	// UndefinedID represents the undefined type.
 	UndefinedID = TypeID(100)
 )
 
 var typeNameMap = map[string]TypeID{
-	"default":  DefaultID,
-	"binary":   BinaryID,
-	"int":      IntID,
-	"float":    FloatID,
-	"bool":     BoolID,
-	"datetime": DateTimeID,
-	"geo":      GeoID,
-	"uid":      UidID,
-	"string":   StringID,
-	"password": PasswordID,
+	"default":       DefaultID,
+	"binary":        BinaryID,
+	"int":           IntID,
+	"float":         FloatID,
+	"bool":          BoolID,
+	"datetime":      DateTimeID,
+	"geo":           GeoID,
+	"uid":           UidID,
+	"string":        StringID,
+	"password":      PasswordID,
+	"float32vector": VFloatID,
 }
 
 // TypeID represents the type of the data.
@@ -105,6 +112,8 @@ func (t TypeID) Name() string {
 		return "string"
 	case PasswordID:
 		return "password"
+	case VFloatID:
+		return "vfloat"
 	}
 	return ""
 }
@@ -188,7 +197,9 @@ func ValueForType(id TypeID) Val {
 	case PasswordID:
 		var p string
 		return Val{PasswordID, p}
-
+	case VFloatID:
+		var v []float32
+		return Val{VFloatID, &v}
 	default:
 		return Val{}
 	}

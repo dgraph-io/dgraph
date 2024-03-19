@@ -230,6 +230,11 @@ func handleBasicType(k string, v interface{}, op int, nq *api.NQuad) error {
 			return nil
 		}
 
+		if vf, err := types.ParseVFloat(v); err == nil {
+			nq.ObjectValue = &api.Value{Val: &api.Value_Vfloat32Val{Vfloat32Val: types.FloatArrayAsBytes(vf)}}
+			return nil
+		}
+
 		// Handle the uid function in upsert block
 		s := stripSpaces(v)
 		if strings.HasPrefix(s, "uid(") || strings.HasPrefix(s, "val(") {

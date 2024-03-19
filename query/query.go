@@ -1034,7 +1034,10 @@ func evalLevelAgg(
 			name: sg.SrcFunc.Name,
 		}
 		for _, val := range vals {
-			ag.Apply(val)
+			err := ag.Apply(val)
+			if err != nil {
+				return nil, err
+			}
 		}
 		v, err := ag.Value()
 		if err != nil && err != ErrEmptyVal {

@@ -93,6 +93,7 @@ message Result {
   repeated FacetsList facet_matrix = 5;
   repeated LangList lang_matrix = 6;
   bool list = 7;
+  map<string, uint64> vector_metrics = 8;
 }
 
 message Order {
@@ -377,6 +378,10 @@ message Posting {
     PASSWORD = 8;
     STRING = 9;
     OBJECT = 10;
+    // RESERVE 11 for BIGFLOAT, should we desire to pull
+    // that in at a later date. (There is a pending PR
+    // that uses this).
+    VFLOAT = 12; // Float64 Vector
   }
   ValType val_type = 3;
   enum PostingType {
@@ -514,6 +519,20 @@ message SchemaUpdate {
   // Deleted field:
   reserved 7;
   reserved "explicit";
+
+  repeated VectorIndexSpec index_specs = 15;
+}
+
+message VectorIndexSpec {
+  // This names the kind of Vector Index, e.g.,
+  //    hnsw, lsh, hypertree, ...
+  string name = 1;
+  repeated OptionPair options = 2;
+}
+
+message OptionPair {
+  string key = 1;
+  string value = 2;
 }
 
 message TypeUpdate {
