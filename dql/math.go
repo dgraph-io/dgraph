@@ -164,10 +164,10 @@ func isMathFunc(f string) bool {
 		f == "==" || f == "!=" ||
 		f == "min" || f == "max" || f == "sqrt" ||
 		f == "pow" || f == "logbase" || f == "floor" || f == "ceil" ||
-		f == "since"
+		f == "since" || f == "dot"
 }
 
-func parseMathFunc(it *lex.ItemIterator, again bool) (*MathTree, bool, error) {
+func parseMathFunc(gq *GraphQuery, it *lex.ItemIterator, again bool) (*MathTree, bool, error) {
 	if !again {
 		it.Next()
 		item := it.Item()
@@ -218,7 +218,7 @@ loop:
 				again := false
 				var child *MathTree
 				for {
-					child, again, err = parseMathFunc(it, again)
+					child, again, err = parseMathFunc(gq, it, again)
 					if err != nil {
 						return nil, false, err
 					}
@@ -240,7 +240,7 @@ loop:
 				}
 				var child *MathTree
 				for {
-					child, again, err = parseMathFunc(it, again)
+					child, again, err = parseMathFunc(gq, it, again)
 					if err != nil {
 						return nil, false, err
 					}
@@ -320,6 +320,14 @@ loop:
 				// The parentheses are balanced out. Let's break.
 				break loop
 			}
+		case item.Typ == itemDollar:
+			varName, err := parseVarName(it)
+			if err != nil {
+				return nil, false, err
+			}
+			child := &MathTree{}
+			child.Var = varName
+			valueStack.push(child)
 		default:
 			return nil, false, errors.Errorf("Unexpected item while parsing math expression: %v",
 				item)
@@ -345,6 +353,27 @@ loop:
 	}
 	res, err := valueStack.pop()
 	return res, false, err
+}
+
+func (t *MathTree) subs(vmap varMap) error {
+	if strings.HasPrefix(t.Var, "$") {
+		va, ok := vmap[t.Var]
+		if !ok {
+			return errors.Errorf("Variable not found in math")
+		}
+		var err error
+		t.Const, err = parseValue(va)
+		if err != nil {
+			return err
+		}
+		t.Var = ""
+	}
+	for _, i := range t.Child {
+		if err := i.subs(vmap); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // debugString converts mathTree to a string. Good for testing, debugging.
@@ -383,7 +412,7 @@ func (t *MathTree) stringHelper(buf *bytes.Buffer) {
 	switch t.Fn {
 	case "+", "-", "/", "*", "%", "exp", "ln", "cond", "min",
 		"sqrt", "max", "<", ">", "<=", ">=", "==", "!=", "u-",
-		"logbase", "pow":
+		"logbase", "pow", "dot":
 		x.Check2(buf.WriteString(t.Fn))
 	default:
 		x.Fatalf("Unknown operator: %q", t.Fn)
