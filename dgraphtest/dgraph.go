@@ -252,6 +252,10 @@ func (a *alpha) cmd(c *LocalCluster) []string {
 			"--telemetry=reports=false;sentry=false;")
 	}
 
+	if c.conf.lambdaURL != "" {
+		acmd = append(acmd, fmt.Sprintf(`--graphql=lambda-url=%s`, c.conf.lambdaURL))
+	}
+
 	if c.conf.acl {
 		if c.lowerThanV21 {
 			acmd = append(acmd, fmt.Sprintf(`--acl_secret_file=%s`, aclSecretMountPath),

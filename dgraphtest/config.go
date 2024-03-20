@@ -115,10 +115,16 @@ type ClusterConfig struct {
 	uidLease              int
 	portOffset            int // exposed port offset for grpc/http port for both alpha/zero
 	bulkOutDir            string
+	lambdaURL             string
 	featureFlags          []string
 	customPlugins         bool
 	snapShotAfterEntries  uint64
 	snapshotAfterDuration time.Duration
+}
+
+func (cc ClusterConfig) WithGraphqlLambdaURL(url string) ClusterConfig {
+	cc.lambdaURL = url
+	return cc
 }
 
 // NewClusterConfig generates a default ClusterConfig

@@ -32,8 +32,8 @@ import (
 )
 
 const (
-	baseRules         = 0
-	listCoercionRules = 1000
+	baseRules         = -2
+	listCoercionRules = -1
 )
 
 func init() {
