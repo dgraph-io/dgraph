@@ -28,6 +28,9 @@ import (
 	"golang.org/x/crypto/blake2b"
 	"golang.org/x/text/collate"
 
+	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/tok/hnsw"
+	opts "github.com/dgraph-io/dgraph/tok/options"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -53,6 +56,8 @@ const (
 	IdentTrigram   = 0xA
 	IdentHash      = 0xB
 	IdentSha       = 0xC
+	// Reserving 0xD for IdentBigFloat
+	IdentVFloat    = 0xE
 	IdentCustom    = 0x80
 	IdentDelimiter = 0x1f // ASCII 31 - Unit separator
 )
@@ -85,8 +90,10 @@ type Tokenizer interface {
 }
 
 var tokenizers = make(map[string]Tokenizer)
+var indexFactories = make(map[string]IndexFactory)
 
 func init() {
+	registerIndexFactory(createIndexFactory(hnsw.CreateFactory[float32](32)))
 	registerTokenizer(GeoTokenizer{})
 	registerTokenizer(IntTokenizer{})
 	registerTokenizer(FloatTokenizer{})
@@ -152,6 +159,63 @@ func GetTokenizerByID(id byte) (Tokenizer, bool) {
 func GetTokenizer(name string) (Tokenizer, bool) {
 	t, found := tokenizers[name]
 	return t, found
+}
+
+// GetIndexFactory returns IndexFactory given name.
+func GetIndexFactory(name string) (IndexFactory, bool) {
+	f, found := indexFactories[name]
+	return f, found
+}
+
+func getOptsFromFactorySpec(f IndexFactory, spec *pb.VectorIndexSpec) (opts.Options, error) {
+	allowedOpts := f.AllowedOptions()
+	retVal := opts.NewOptions()
+	for _, optPair := range spec.Options {
+		val, err := allowedOpts.GetParsedOption(optPair.Key, optPair.Value)
+		if err != nil {
+			return nil, err
+		}
+		retVal.SetOpt(optPair.Key, val)
+	}
+	return retVal, nil
+}
+
+func GetFactoryCreateSpecFromSpec(spec *pb.VectorIndexSpec) (*FactoryCreateSpec, error) {
+	factory, found := GetIndexFactoryFromSpec(spec)
+	if !found {
+		return &FactoryCreateSpec{}, errors.Errorf(
+			"cannot find index factory named '%s'", spec.Name)
+	}
+	opts, err := getOptsFromFactorySpec(factory, spec)
+	if err != nil {
+		return &FactoryCreateSpec{}, err
+	}
+	return &FactoryCreateSpec{factory: factory, opts: opts}, nil
+}
+
+func GetIndexFactoryFromSpec(spec *pb.VectorIndexSpec) (IndexFactory, bool) {
+	return GetIndexFactory(spec.Name)
+}
+
+func GetIndexFactoryOptsFromSpec(spec *pb.VectorIndexSpec) (opts.Options, error) {
+	factory, found := GetIndexFactoryFromSpec(spec)
+	if !found {
+		return nil, errors.Errorf(
+			"cannot get Options for factory named '%s' (factory not found)",
+			spec.Name)
+	}
+	return getOptsFromFactorySpec(factory, spec)
+}
+
+func GetIndexFactoriesFromSpecs(specs []*pb.VectorIndexSpec) []IndexFactory {
+	retVal := []IndexFactory{}
+	for _, spec := range specs {
+		f, found := GetIndexFactoryFromSpec(spec)
+		if found {
+			retVal = append(retVal, f)
+		}
+	}
+	return retVal
 }
 
 // GetTokenizers returns a list of tokenizer given a list of unique names.
