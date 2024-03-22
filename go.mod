@@ -6,8 +6,6 @@ replace sourcegraph.com/sourcegraph/appdash => github.com/sourcegraph/appdash v0
 
 replace sourcegraph.com/sourcegraph/appdash-data => github.com/sourcegraph/appdash-data v0.0.0-20151005221446-73f23eafcf67
 
-replace github.com/dgraph-io/gqlparser/v2 => /home/harshil/Projects/gqlparser
-
 require (
 	contrib.go.opencensus.io/exporter/jaeger v0.1.0
 	contrib.go.opencensus.io/exporter/prometheus v0.1.0
