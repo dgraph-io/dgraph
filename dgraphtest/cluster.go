@@ -62,8 +62,8 @@ type HttpToken struct {
 // HTTPClient allows doing operations on Dgraph over http
 type HTTPClient struct {
 	*HttpToken
-	adminURL   string
-	graphqlURL string
+	AdminURL   string
+	GraphqlURL string
 	licenseURL string
 	stateURL   string
 	dqlURL     string
@@ -249,9 +249,9 @@ func (hc *HTTPClient) RunGraphqlQuery(params GraphQLParams, admin bool) ([]byte,
 		return nil, errors.Wrap(err, "error while marshalling params")
 	}
 
-	url := hc.graphqlURL
+	url := hc.GraphqlURL
 	if admin {
-		url = hc.adminURL
+		url = hc.AdminURL
 	}
 
 	respBody, err := hc.doPost(reqBody, url, "application/json")

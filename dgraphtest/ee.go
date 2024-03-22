@@ -453,3 +453,27 @@ func (hc *HTTPClient) DeleteNamespace(nsID uint64) (uint64, error) {
 	}
 	return 0, errors.New(result.DeleteNamespace.Message)
 }
+
+func (hc *HTTPClient) ListNamespaces() ([]uint64, error) {
+	const listNss = `{ state {
+		namespaces
+	  }
+	}`
+
+	params := GraphQLParams{Query: listNss}
+	resp, err := hc.RunGraphqlQuery(params, true)
+	if err != nil {
+		return []uint64{}, err
+	}
+
+	var result struct {
+		State struct {
+			Namespaces []uint64 `json:"namespaces"`
+		} `json:"state"`
+	}
+	if err := json.Unmarshal(resp, &result); err != nil {
+		return []uint64{}, errors.Wrap(err, "error unmarshalling response")
+	}
+
+	return result.State.Namespaces, nil
+}
