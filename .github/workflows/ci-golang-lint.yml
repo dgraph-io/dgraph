@@ -31,7 +31,7 @@ jobs:
   golang-lint:
     if: github.event.pull_request.draft == false
     name: lint
-    runs-on: warp-ubuntu-latest-x64-4x
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Get Go Version
