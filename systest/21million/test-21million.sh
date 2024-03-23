@@ -16,7 +16,7 @@ function Info {
 }
 
 function DockerCompose {
-    docker-compose -p dgraph "$@"
+    docker compose -p dgraph "$@"
 }
 function DgraphLive {
     dgraph live "$@"

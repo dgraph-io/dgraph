@@ -13,7 +13,7 @@ function Info {
 }
 
 function DockerCompose {
-    docker-compose -p dgraph "$@"
+    docker compose -p dgraph "$@"
 }
 
 Info "cloning benchmarks repo"
