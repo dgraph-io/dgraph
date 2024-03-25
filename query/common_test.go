@@ -29,6 +29,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/v230/protos/api"
+	"github.com/dgraph-io/dgraph/dgraphtest"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -74,7 +75,7 @@ func processQuery(ctx context.Context, t *testing.T, query string) (string, erro
 	return string(jsonResponse), err
 }
 
-func processQueryRDF(ctx context.Context, t *testing.T, query string) (string, error) {
+func processQueryRDF(ctx context.Context, query string) (string, error) {
 	txn := client.NewTxn()
 	defer func() { _ = txn.Discard(ctx) }()
 
@@ -347,7 +348,7 @@ age2                           : int @index(int) .
 vectorNonIndex                 : float32vector .
 `
 
-func populateCluster() {
+func populateCluster(dc dgraphtest.Cluster) {
 	x.Panic(client.Alter(context.Background(), &api.Operation{DropAll: true}))
 
 	// In the query package, we test using hard coded UIDs so that we know what results

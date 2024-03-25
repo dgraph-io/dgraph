@@ -138,6 +138,7 @@ func (c *LocalCluster) init() error {
 		}
 	}
 
+	c.zeros = c.zeros[:0]
 	for i := 0; i < c.conf.numZeros; i++ {
 		zo := &zero{id: i}
 		zo.containerName = fmt.Sprintf(zeroNameFmt, c.conf.prefix, zo.id)
@@ -145,6 +146,7 @@ func (c *LocalCluster) init() error {
 		c.zeros = append(c.zeros, zo)
 	}
 
+	c.alphas = c.alphas[:0]
 	for i := 0; i < c.conf.numAlphas; i++ {
 		aa := &alpha{id: i}
 		aa.containerName = fmt.Sprintf(alphaNameFmt, c.conf.prefix, aa.id)
@@ -334,26 +336,29 @@ func (c *LocalCluster) Start() error {
 		return c.HealthCheck(false)
 	}
 
-	var err error
-	// sometimes health check doesn't work due to unmapped ports. We dont know why this happens,
-	// but checking it 4 times before failing the test.
-	for i := 0; i < 4; i++ {
+	// sometimes health check doesn't work due to unmapped ports. We dont
+	// know why this happens, but checking it 3 times before failing the test.
+	retry := 0
+	for {
+		retry++
 
-		if err = startAll(); err == nil {
+		if err := startAll(); err == nil {
 			return nil
+		} else if retry == 3 {
+			return err
+		} else {
+			log.Printf("[WARNING] saw the err, trying again: %v", err)
 		}
-		log.Printf("[WARNING] Saw the error :%v, trying again", err)
-		if err1 := c.Stop(); err1 != nil {
-			log.Printf("[WARNING] error while stopping :%v", err)
-		}
-		c.Cleanup(false)
+
+		log.Printf("[INFO] cleaning up the cluster for retrying!")
+		c.Cleanup(true)
+
+		c.conf = newClusterConfigFrom(c.conf)
 		if err := c.init(); err != nil {
-			c.Cleanup(true)
+			log.Printf("[ERROR] error while init, returning: %v", err)
 			return err
 		}
 	}
-
-	return err
 }
 
 func (c *LocalCluster) StartZero(id int) error {

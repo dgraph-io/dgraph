@@ -39,7 +39,7 @@ func TestMain(m *testing.M) {
 
 		client = dg
 		dc = c
-		populateCluster()
+		populateCluster(dc)
 	}
 
 	query := func(c dgraphtest.Cluster) int {

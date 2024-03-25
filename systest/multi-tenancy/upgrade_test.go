@@ -61,7 +61,7 @@ func (msuite *MultitenancyTestSuite) Upgrade() {
 
 func TestMultitenancySuite(t *testing.T) {
 	for _, uc := range dgraphtest.AllUpgradeCombos(false) {
-		log.Printf("running upgrade tests for confg: %+v", uc)
+		log.Printf("running upgrade tests for config: %+v", uc)
 		var msuite MultitenancyTestSuite
 		msuite.uc = uc
 		suite.Run(t, &msuite)
