@@ -63,12 +63,13 @@ func parseDirective(it *lex.ItemIterator, schema *pb.SchemaUpdate, t types.TypeI
 		}
 		schema.Directive = pb.SchemaUpdate_REVERSE
 	case "index":
-		tokenizer, err := parseIndexDirective(it, schema.Predicate, t)
+		tokenizer, vectorSpecs, err := parseIndexDirective(it, schema.Predicate, t)
 		if err != nil {
 			return err
 		}
 		schema.Directive = pb.SchemaUpdate_INDEX
 		schema.Tokenizer = tokenizer
+		schema.IndexSpecs = vectorSpecs
 	case "count":
 		schema.Count = true
 	case "upsert":
@@ -175,77 +176,249 @@ func parseScalarPair(it *lex.ItemIterator, predicate string, ns uint64) (*pb.Sch
 	return schema, nil
 }
 
-// parseIndexDirective works on "@index" or "@index(customtokenizer)".
+// parseIndexDirective works on "@index" or "@index(customtokenizer)"
+// or @index(tok1(opt1:"opt1val",opt2:"opt2val"), tok2, tok3)
+// We assume that the "@index" has already been found, so we just need
+// to parse the rest.
+// Syntax EBNF (after '@index' has been found):
+//
+//	Tokens ::= '(' TokenList ')'
+//	TokenList ::= Token [',' TokenList]*
+//
+// This function will specifically handle this as:
+//
+//	Tokens ::= '(' TokenList ')'
+//	TokenList ::= Token [',' TokeniList]
+//
+// It then defers to parseTokenOrVectorIndexSpec to parse Token.
 func parseIndexDirective(it *lex.ItemIterator, predicate string,
-	typ types.TypeID) ([]string, error) {
-	var tokenizers []string
+	typ types.TypeID) ([]string, []*pb.VectorIndexSpec, error) {
+	tokenizers := []string{}
+	var vectorSpecs []*pb.VectorIndexSpec
 	var seen = make(map[string]bool)
 	var seenSortableTok bool
 
 	if typ == types.UidID || typ == types.DefaultID || typ == types.PasswordID {
-		return tokenizers, it.Item().Errorf("Indexing not allowed on predicate %s of type %s",
-			predicate, typ.Name())
+		return tokenizers, vectorSpecs,
+			it.Item().Errorf("Indexing not allowed on predicate %s of type %s",
+				predicate, typ.Name())
 	}
 	if !it.Next() {
 		// Nothing to read.
-		return []string{}, it.Item().Errorf("Invalid ending.")
+		return tokenizers, vectorSpecs, it.Item().Errorf("Invalid ending.")
 	}
 	next := it.Item()
 	if next.Typ != itemLeftRound {
 		it.Prev() // Backup.
-		return []string{}, it.Item().Errorf("Require type of tokenizer for pred: %s for indexing.",
-			predicate)
+		return tokenizers, vectorSpecs,
+			it.Item().Errorf("Require type of tokenizer for pred: %s for indexing.",
+				predicate)
 	}
 
-	expectArg := true
-	// Look for tokenizers.
+	// Look for tokenizers and IndexFactories (vectorSpecs).
 	for {
+		tokenText, vectorSpec, sortable, err := parseTokenOrVectorIndexSpec(it, predicate, typ)
+		if err != nil {
+			return tokenizers, vectorSpecs, err
+		}
+		if sortable && seenSortableTok {
+			return tokenizers, vectorSpecs,
+				next.Errorf("Only one index tokenizer can be sortable for %s",
+					predicate)
+		}
+		seenSortableTok = sortable
+		if tokenText != "" {
+			if _, found := seen[tokenText]; found {
+				return tokenizers, vectorSpecs,
+					next.Errorf("Duplicate tokenizers defined for predicate %v",
+						predicate)
+			}
+			tokenizers = append(tokenizers, tokenText)
+			seen[tokenText] = true
+		} else {
+			// parseTokenOrVectorIndexSpec should have returned either
+			// non-empty tokenText or non-nil vectorsSpec or an error.
+			x.AssertTrue(vectorSpec != nil)
+			// At the moment, we cannot accept two VectorIndexSpecs of
+			// the same name. Later, we may reconsider this as we
+			// develop a simple means to distinguish how their keys
+			// are formed based on the specified options. The notion
+			// of "seen" still applies, but we just use the tokenizer name.
+			seen[vectorSpec.Name] = true
+			vectorSpecs = append(vectorSpecs, vectorSpec)
+		}
+
 		it.Next()
 		next = it.Item()
 		if next.Typ == itemRightRound {
 			break
 		}
-		if next.Typ == itemComma {
-			if expectArg {
-				return nil, next.Errorf("Expected a tokenizer but got comma")
-			}
-			expectArg = true
-			continue
+		if next.Typ != itemComma {
+			return tokenizers, vectorSpecs, next.Errorf(
+				"Expected ',' or ')' but found '%s' for predicate '%s'",
+				next.Val, predicate)
 		}
-		if next.Typ != itemText {
-			return tokenizers, next.Errorf("Expected directive arg but got: %v", next.Val)
-		}
-		if !expectArg {
-			return tokenizers, next.Errorf("Expected a comma but got: %v", next)
-		}
-		// Look for custom tokenizer.
-		tokenizer, has := tok.GetTokenizer(strings.ToLower(next.Val))
-		if !has {
-			return tokenizers, next.Errorf("Invalid tokenizer %s", next.Val)
-		}
-		tokenizerType, ok := types.TypeForName(tokenizer.Type())
-		x.AssertTrue(ok) // Type is validated during tokenizer loading.
-		if tokenizerType != typ {
-			return tokenizers,
-				next.Errorf("Tokenizer: %s isn't valid for predicate: %s of type: %s",
-					tokenizer.Name(), x.ParseAttr(predicate), typ.Name())
-		}
-		if _, found := seen[tokenizer.Name()]; found {
-			return tokenizers, next.Errorf("Duplicate tokenizers defined for pred %v",
-				predicate)
-		}
-		if tokenizer.IsSortable() {
-			if seenSortableTok {
-				return nil, next.Errorf("More than one sortable index encountered for: %v",
-					predicate)
-			}
-			seenSortableTok = true
-		}
-		tokenizers = append(tokenizers, tokenizer.Name())
-		seen[tokenizer.Name()] = true
-		expectArg = false
 	}
-	return tokenizers, nil
+	return tokenizers, vectorSpecs, nil
+}
+
+// parseTokenOrVectorIndexSpec(it, predicate, typ) will parse a "Token" according to the
+// grammar specification below.
+//
+//	Token ::= TokenName [ TokenOptions ]
+//	TokenName ::= {itemText from Lexer}
+//
+// For TokenOptions, it defers to parseTokenOptions parsing.
+// We expect either to find the name of a Tokenizer or else the name of an IndexFactory
+// along with its options. We also return a boolean value indicating whether or
+// not the found index is Sortable.
+func parseTokenOrVectorIndexSpec(
+	it *lex.ItemIterator,
+	predicate string,
+	typ types.TypeID) (string, *pb.VectorIndexSpec, bool, error) {
+	it.Next()
+	next := it.Item()
+	if next.Typ != itemText {
+		return "", nil, false, next.Errorf(
+			"Expected token or VectorFactory name, but found '%s'",
+			next.Val)
+	}
+	tokenOrFactoryName := strings.ToLower(next.Val)
+	factory, found := tok.GetIndexFactory(tokenOrFactoryName)
+	if found {
+		// TODO: Consider allowing IndexFactory types not related to
+		//       VectorIndex objects.
+		if typ != types.VFloatID {
+			return "", nil, false,
+				next.Errorf("IndexFactory: %s isn't valid for predicate: %s of type: %s",
+					factory.Name(), x.ParseAttr(predicate), typ.Name())
+		}
+		tokenOpts, err := parseTokenOptions(it, factory)
+		if err != nil {
+			return "", nil, false, err
+		}
+		allowedOpts := factory.AllowedOptions()
+		for _, pair := range tokenOpts {
+			_, err := allowedOpts.GetParsedOption(pair.Key, pair.Value)
+			if err != nil {
+				return "", nil, false,
+					next.Errorf("IndexFactory: %s issues this error: '%s'",
+						factory.Name(), err)
+			}
+		}
+		vs := &pb.VectorIndexSpec{
+			Name:    tokenOrFactoryName,
+			Options: tokenOpts,
+		}
+		return "", vs, factory.IsSortable(), err
+	}
+
+	// Look for custom tokenizer, and validate its type.
+	tokenizer, has := tok.GetTokenizer(tokenOrFactoryName)
+	if !has {
+		return tokenOrFactoryName, nil, false,
+			next.Errorf("Invalid tokenizer %s", next.Val)
+	}
+	tokenizerType, ok := types.TypeForName(tokenizer.Type())
+	x.AssertTrue(ok) // Type is validated during tokenizer loading.
+	if tokenizerType != typ {
+		return tokenOrFactoryName, nil, false,
+			next.Errorf("Tokenizer: %s isn't valid for predicate: %s of type: %s",
+				tokenizer.Name(), x.ParseAttr(predicate), typ.Name())
+	}
+	return tokenOrFactoryName, nil, tokenizer.IsSortable(), nil
+}
+
+// parseTokenOptions(it, factory) will parse "TokenOptions" according to the
+// following grammar:
+//
+//	TokenOptions ::= ['(' TokenOptionList ')']
+//	TokenOptionList ::= TokenOption [',' TokenOptionList ]
+//
+// TODO: TokenOptionList could be made optional so that "hnsw()" is treated as
+// an hnsw index with default search options
+//
+// For Parsing TokenOption, it defers to parseTokenOption
+// Note that specifying TokenOptions is optional! The result is considered
+// valid even if no token options are found as long as the first character
+// discovered by it is a comma or end-parenthesis. (In the context where we
+// invoke this, a comma indicates another tokenizer, and an end-parenthesis
+// indicates the end of a list of tokenizers.
+// TokenOptions provide the OptionKey-OptionValue pairs needed for building
+// a VectorIndex. The factory is used to validate that any option name given
+// is specified as an AllowedOption.
+func parseTokenOptions(it *lex.ItemIterator, factory tok.IndexFactory) ([]*pb.OptionPair, error) {
+	retVal := []*pb.OptionPair{}
+	nextItem, found := it.PeekOne()
+	if !found {
+		return nil, nextItem.Errorf(
+			"unexpected end of stream when looking for IndexFactory options")
+	}
+	if nextItem.Typ == itemComma || nextItem.Typ == itemRightRound {
+		return []*pb.OptionPair{}, nil
+	}
+	if nextItem.Typ != itemLeftRound {
+		return nil, nextItem.Errorf(
+			"unexpected '%s' found when expecting '('", nextItem.Val)
+	}
+	it.Next() // Reads initial '('
+	for {
+		optPair, err := parseTokenOption(it, factory)
+		if err != nil {
+			return retVal, err
+		}
+		retVal = append(retVal, optPair)
+		it.Next()
+		nextItem = it.Item()
+		if nextItem.Typ == itemRightRound {
+			return retVal, nil
+		}
+		if nextItem.Typ != itemComma {
+			return nil, nextItem.Errorf(
+				"unexpected '%s' found when expecting ',' or ')'",
+				nextItem.Val)
+		}
+	}
+}
+
+// parseTokenOption(it, factory) constructs OptionPair instances
+// and validates that the options are okay via the factory.
+//
+//	TokenOption ::= OptionName ':' OptionValue
+//	OptionName ::= {itemText from Lexer}
+//	OptionValue ::= {itemQuotedText from Lexer}
+func parseTokenOption(it *lex.ItemIterator, factory tok.IndexFactory) (*pb.OptionPair, error) {
+	it.Next()
+	nextItem := it.Item()
+	if nextItem.Typ != itemText {
+		return nil, nextItem.Errorf(
+			"unexpected '%s' found when expecting option name",
+			nextItem.Val)
+	}
+	optName := nextItem.Val
+	it.Next()
+	nextItem = it.Item()
+	if nextItem.Typ != itemColon {
+		return nil, nextItem.Errorf(
+			"unexpected '%s' found when expecting ':'",
+			nextItem.Val)
+	}
+	it.Next()
+	nextItem = it.Item()
+	if nextItem.Typ != itemQuotedText {
+		return nil, nextItem.Errorf(
+			"unexpected '%s' found when expecting quoted text",
+			nextItem.Val)
+	}
+	optVal := nextItem.Val[1 : len(nextItem.Val)-1]
+	return &pb.OptionPair{Key: optName, Value: optVal}, nil
+}
+
+func HasTokenizerOrVectorIndexSpec(update *pb.SchemaUpdate) bool {
+	if update == nil {
+		return false
+	}
+	return len(update.Tokenizer) > 0 || len(update.IndexSpecs) > 0
 }
 
 // resolveTokenizers resolves default tokenizers and verifies tokenizers definitions.
@@ -263,13 +436,17 @@ func resolveTokenizers(updates []*pb.SchemaUpdate) error {
 			continue
 		}
 
-		if len(schema.Tokenizer) == 0 && schema.Directive == pb.SchemaUpdate_INDEX {
-			return errors.Errorf("Require type of tokenizer for pred: %s of type: %s for indexing.",
+		if !HasTokenizerOrVectorIndexSpec(schema) &&
+			schema.Directive == pb.SchemaUpdate_INDEX {
+			return errors.Errorf(
+				"Require type of tokenizer for pred: %s of type: %s for indexing.",
 				schema.Predicate, typ.Name())
-		} else if len(schema.Tokenizer) > 0 && schema.Directive != pb.SchemaUpdate_INDEX {
-			return errors.Errorf("Tokenizers present without indexing on attr %s", x.ParseAttr(schema.Predicate))
+		} else if HasTokenizerOrVectorIndexSpec(schema) &&
+			schema.Directive != pb.SchemaUpdate_INDEX {
+			return errors.Errorf("Tokenizers present without indexing on attr %s",
+				x.ParseAttr(schema.Predicate))
 		}
-		// check for valid tokeniser types and duplicates
+		// check for valid tokenizer types and duplicates
 		var seen = make(map[string]bool)
 		var seenSortableTok bool
 		for _, t := range schema.Tokenizer {
