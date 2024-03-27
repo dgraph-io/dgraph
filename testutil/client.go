@@ -124,7 +124,7 @@ func init() {
 	SockAddrZero4 = ContainerAddr("zero2", 5080)
 	SockAddrZero4Http = ContainerAddr("zero2", 6080)
 
-	fmt.Printf("testutil: %q %s %s\n", DockerPrefix, SockAddr, SockAddrZero)
+	// fmt.Printf("testutil: %q %s %s\n", DockerPrefix, SockAddr, SockAddrZero)
 }
 
 // DgraphClientDropAll creates a Dgraph client and drops all existing data.

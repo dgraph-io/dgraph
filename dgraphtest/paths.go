@@ -55,7 +55,7 @@ func init() {
 		panic(err)
 	}
 
-	log.Printf("[INFO] baseRepoDir: %v", baseRepoDir)
-	log.Printf("[INFO] repoDir: %v", repoDir)
-	log.Printf("[INFO] binariesPath: %v", binariesPath)
+	// log.Printf("[INFO] baseRepoDir: %v", baseRepoDir)
+	// log.Printf("[INFO] repoDir: %v", repoDir)
+	// log.Printf("[INFO] binariesPath: %v", binariesPath)
 }

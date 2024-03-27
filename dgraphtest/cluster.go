@@ -751,3 +751,12 @@ func IsHigherVersion(higher, lower string) (bool, error) {
 
 	return true, nil
 }
+
+func GetHttpClient(alphaUrl string) *HTTPClient {
+	return &HTTPClient{
+		adminURL:   alphaUrl + "/admin",
+		graphqlURL: alphaUrl + "/graphql",
+		dqlURL:     alphaUrl + "/query",
+		HttpToken:  &HttpToken{},
+	}
+}
