@@ -54,6 +54,7 @@ name: string .
  address: string .
 <http://scalar.com/helloworld/> : string .
 coordinates: float32vector .
+indexvector: float32vector @index(hnsw(metric:"euclidian")) .
 `
 
 func TestSchema(t *testing.T) {
@@ -78,6 +79,23 @@ func TestSchema(t *testing.T) {
 		{x.GalaxyAttr("coordinates"), &pb.SchemaUpdate{
 			Predicate: x.GalaxyAttr("coordinates"),
 			ValueType: pb.Posting_VFLOAT,
+		}},
+		{x.GalaxyAttr("indexvector"), &pb.SchemaUpdate{
+			Predicate: x.GalaxyAttr("indexvector"),
+			ValueType: pb.Posting_VFLOAT,
+			Tokenizer: []string{},
+			Directive: pb.SchemaUpdate_INDEX,
+			IndexSpecs: []*pb.VectorIndexSpec{
+				{
+					Name: "hnsw",
+					Options: []*pb.OptionPair{
+						{
+							Key:   "metric",
+							Value: "euclidian",
+						},
+					},
+				},
+			},
 		}},
 	})
 
