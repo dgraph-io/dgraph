@@ -93,20 +93,8 @@ func (hf *persistentIndexFactory[T]) createWithLock(
 		err := errors.New("index with name " + name + " already exists")
 		return nil, err
 	}
-	retVal := &persistentHNSW[T]{
-		pred:         name,
-		vecEntryKey:  ConcatStrings(name, VecEntry),
-		vecKey:       ConcatStrings(name, VecKeyword),
-		vecDead:      ConcatStrings(name, VecDead),
-		floatBits:    floatBits,
-		nodeAllEdges: map[uint64][][]uint64{},
-	}
-	err := retVal.applyOptions(o)
-	if err != nil {
-		return nil, err
-	}
-	hf.indexMap[name] = retVal
-	return retVal, nil
+	// Not implemented yet
+	return nil, nil
 }
 
 // Find is an implementation of the IndexFactory interface function, invoked by an persistentIndexFactory

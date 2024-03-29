@@ -54,6 +54,10 @@ type FactoryCreateSpec struct {
 	opts    opts.Options
 }
 
+func (fcs *FactoryCreateSpec) Name() string {
+	return fcs.factory.Name()
+}
+
 func (fcs *FactoryCreateSpec) CreateIndex(name string) (index.VectorIndex[float32], error) {
 	if fcs == nil || fcs.factory == nil {
 		return nil,

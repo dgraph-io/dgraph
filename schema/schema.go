@@ -405,6 +405,19 @@ func (s *state) FactoryCreateSpec(ctx context.Context, pred string) ([]*tok.Fact
 	return creates, nil
 }
 
+// VectorIndexNames returns the indexes for given predicate
+func (s *state) VectorIndexes(ctx context.Context, pred string) []string {
+	var names []string
+	vectorIndexes, err := s.FactoryCreateSpec(ctx, pred)
+	if err != nil {
+		glog.Errorf("Vector Tokenizers error for %s: %s", pred, err)
+	}
+	for _, v := range vectorIndexes {
+		names = append(names, v.Name())
+	}
+	return names
+}
+
 // TokenizerNames returns the tokenizer names for given predicate
 func (s *state) TokenizerNames(ctx context.Context, pred string) []string {
 	var names []string
@@ -466,9 +479,9 @@ func (s *state) PredicatesToDelete(pred string) []string {
 		preds = append(preds, pred)
 
 		if schema.ValueType == pb.Posting_VFLOAT && len(schema.IndexSpecs) != 0 {
-			preds = append(preds, hnsw.ConcatStrings(pred, hnsw.VecEntry))
-			preds = append(preds, hnsw.ConcatStrings(pred, hnsw.VecKeyword))
-			preds = append(preds, hnsw.ConcatStrings(pred, hnsw.VecDead))
+			preds = append(preds, pred+hnsw.VecEntry)
+			preds = append(preds, pred+hnsw.VecKeyword)
+			preds = append(preds, pred+hnsw.VecDead)
 		}
 	}
 	return preds
