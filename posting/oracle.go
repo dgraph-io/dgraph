@@ -29,6 +29,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/tok/index"
 )
 
 var o *oracle
@@ -63,6 +64,74 @@ type Txn struct {
 	lastUpdate time.Time
 
 	cache *LocalCache // This pointer does not get modified.
+}
+
+// struct to implement Txn interface from vector-indexer
+// acts as wrapper for dgraph *Txn
+type viTxn struct {
+	delegate *Txn
+}
+
+func NewViTxn(delegate *Txn) *viTxn {
+	return &viTxn{delegate: delegate}
+}
+
+func (vt *viTxn) Find(prefix []byte, filter func([]byte) bool) (uint64, error) {
+	return vt.delegate.cache.Find(prefix, filter)
+}
+
+func (vt *viTxn) StartTs() uint64 {
+	return vt.delegate.StartTs
+}
+
+func (vt *viTxn) Get(key []byte) (rval index.Value, rerr error) {
+	pl, err := vt.delegate.cache.Get(key)
+	if err != nil {
+		return nil, err
+	}
+	pl.Lock()
+	defer pl.Unlock()
+	return vt.GetValueFromPostingList(pl)
+}
+
+func (vt *viTxn) GetWithLockHeld(key []byte) (rval index.Value, rerr error) {
+	pl, err := vt.delegate.cache.Get(key)
+	if err != nil {
+		return nil, err
+	}
+	return vt.GetValueFromPostingList(pl)
+}
+
+func (vt *viTxn) GetValueFromPostingList(pl *List) (rval index.Value, rerr error) {
+	val, err := pl.ValueWithLockHeld(vt.delegate.StartTs)
+	rval = val.Value
+	return rval, err
+}
+
+func (vt *viTxn) AddMutation(ctx context.Context, key []byte, t *index.KeyValue) error {
+	pl, err := vt.delegate.cache.Get(key)
+	if err != nil {
+		return err
+	}
+	return pl.addMutation(ctx, vt.delegate, indexEdgeToPbEdge(t))
+}
+
+func (vt *viTxn) AddMutationWithLockHeld(ctx context.Context, key []byte, t *index.KeyValue) error {
+	pl, err := vt.delegate.cache.Get(key)
+	if err != nil {
+		return err
+	}
+	return pl.addMutationInternal(ctx, vt.delegate, indexEdgeToPbEdge(t))
+}
+
+func (vt *viTxn) LockKey(key []byte) {
+	pl, _ := vt.delegate.cache.Get(key)
+	pl.Lock()
+}
+
+func (vt *viTxn) UnlockKey(key []byte) {
+	pl, _ := vt.delegate.cache.Get(key)
+	pl.Unlock()
 }
 
 // NewTxn returns a new Txn instance.

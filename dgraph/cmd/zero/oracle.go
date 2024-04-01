@@ -30,6 +30,7 @@ import (
 	"github.com/dgraph-io/badger/v4/y"
 	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/tok/hnsw"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
 )
@@ -376,6 +377,9 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 				return errors.Wrapf(err, "unable to parse group id from %s", pkey)
 			}
 			pred := splits[1]
+			if strings.Contains(pred, hnsw.VecKeyword) {
+				pred = pred[0:strings.Index(pred, hnsw.VecKeyword)]
+			}
 			tablet := s.ServingTablet(pred)
 			if tablet == nil {
 				return errors.Errorf("Tablet for %s is nil", pred)

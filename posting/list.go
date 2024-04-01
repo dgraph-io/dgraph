@@ -38,6 +38,7 @@ import (
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
+	"github.com/dgraph-io/dgraph/tok/index"
 )
 
 var (
@@ -76,6 +77,16 @@ type List struct {
 	mutationMap map[uint64]*pb.PostingList
 	minTs       uint64 // commit timestamp of immutable layer, reject reads before this ts.
 	maxTs       uint64 // max commit timestamp seen for this list.
+}
+
+func indexEdgeToPbEdge(t *index.KeyValue) *pb.DirectedEdge {
+	return &pb.DirectedEdge{
+		Entity:    t.Entity,
+		Attr:      t.Attr,
+		Value:     t.Value,
+		ValueType: pb.Posting_ValType(0),
+		Op:        pb.DirectedEdge_SET,
+	}
 }
 
 // NewList returns a new list with an immutable layer set to plist and the
@@ -1298,9 +1309,14 @@ func (l *List) GetLangTags(readTs uint64) ([]string, error) {
 
 // Value returns the default value from the posting list. The default value is
 // defined as the value without a language tag.
+// Value cannot be used to read from cache
 func (l *List) Value(readTs uint64) (rval types.Val, rerr error) {
 	l.RLock()
 	defer l.RUnlock()
+	return l.ValueWithLockHeld(readTs)
+}
+
+func (l *List) ValueWithLockHeld(readTs uint64) (rval types.Val, rerr error) {
 	val, found, err := l.findValue(readTs, math.MaxUint64)
 	if err != nil {
 		return val, errors.Wrapf(err,

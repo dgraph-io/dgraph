@@ -1,13 +1,20 @@
 package hnsw
 
 import (
+	"context"
+	"encoding/binary"
+	"encoding/json"
+	"log"
 	"math"
+	"math/rand"
 	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/chewxy/math32"
 	c "github.com/dgraph-io/dgraph/tok/constraints"
+	"github.com/dgraph-io/dgraph/tok/index"
+	"github.com/getsentry/sentry-go"
 	"github.com/pkg/errors"
 )
 
@@ -259,5 +266,419 @@ func GetSimType[T c.Float](indexType string, floatBits int) SimilarityType[T] {
 	default:
 		return SimilarityType[T]{indexType: Euclidian, distanceScore: euclidianDistanceSq[T],
 			insortHeap: insortPersistentHeapAscending[T], isBetterScore: isBetterScoreForDistance[T]}
+	}
+}
+
+// implements CacheType interface
+type TxnCache struct {
+	txn     index.Txn
+	startTs uint64
+}
+
+func (tc *TxnCache) Get(key []byte) (rval index.Value, rerr error) {
+	return tc.txn.Get(key)
+}
+
+func (tc *TxnCache) Ts() uint64 {
+	return tc.startTs
+}
+
+func (tc *TxnCache) Find(prefix []byte, filter func([]byte) bool) (uint64, error) {
+	return tc.txn.Find(prefix, filter)
+}
+
+func NewTxnCache(txn index.Txn, startTs uint64) *TxnCache {
+	return &TxnCache{
+		txn:     txn,
+		startTs: startTs,
+	}
+}
+
+// implements index.CacheType interface
+type QueryCache struct {
+	cache  index.LocalCache
+	readTs uint64
+}
+
+func (qc *QueryCache) Find(prefix []byte, filter func([]byte) bool) (uint64, error) {
+	return qc.cache.Find(prefix, filter)
+}
+
+func (qc *QueryCache) Get(key []byte) (rval index.Value, rerr error) {
+	return qc.cache.Get(key)
+}
+
+func (qc *QueryCache) Ts() uint64 {
+	return qc.readTs
+}
+
+func NewQueryCache(cache index.LocalCache, readTs uint64) *QueryCache {
+	return &QueryCache{
+		cache:  cache,
+		readTs: readTs,
+	}
+}
+
+// getDataFromKeyWithCacheType(keyString, uid, c) looks up data in c
+// associated with keyString and uid.
+func getDataFromKeyWithCacheType(keyString string, uid uint64, c index.CacheType) (index.Value, error) {
+	key := DataKey(keyString, uid)
+	data, err := c.Get(key)
+	if err != nil {
+		return nil, errors.New(err.Error() + plError + keyString + " with uid" + strconv.FormatUint(uid, 10))
+	}
+	return data, nil
+}
+
+// populateEdgeDataFromStore(keyString, uid, c, edgeData)
+// will fill edgeData with the contents of the neighboring edges for
+// a given DataKey by looking into the given cache (which may result
+// in a call to the underlying persistent storage).
+// If data is found for the key, this returns true, otherwise, it
+// returns false. If the data was found (and there were no errors),
+// it populates edgeData with the found contents.
+func populateEdgeDataFromKeyWithCacheType(
+	keyString string,
+	uid uint64,
+	c index.CacheType,
+	edgeData *[][]uint64) (bool, error) {
+	data, err := getDataFromKeyWithCacheType(keyString, uid, c)
+	// Note that "dataError" errors are treated as just not having
+	// found the data -- no harm, no foul, as it is probably a
+	// dead reference that we can ignore.
+	if err != nil && !strings.Contains(err.Error(), dataError) {
+		return false, err
+	}
+	if data == nil {
+		return false, nil
+	}
+	err = json.Unmarshal(data.([]byte), &edgeData)
+	return true, err
+}
+
+// entryUuidInsert adds the entry uuid to the given key
+func entryUuidInsert(
+	ctx context.Context,
+	key []byte,
+	txn index.Txn,
+	predEntryKey string,
+	entryUuid []byte) (*index.KeyValue, error) {
+	edge := &index.KeyValue{
+		Entity: 1,
+		Attr:   predEntryKey,
+		Value:  entryUuid,
+	}
+	err := txn.AddMutationWithLockHeld(ctx, key, edge)
+	return edge, err
+}
+
+func ConcatStrings(strs ...string) string {
+	total := ""
+	for _, s := range strs {
+		total += s
+	}
+	return total
+}
+
+func getInsertLayer(maxLevels int) int {
+	// multFactor is a multiplicative factor used to normalize the distribution
+	var level int
+	randFloat := rand.Float64()
+	for i := 0; i < maxLevels; i++ {
+		// calculate level based on section 3.1 here
+		if randFloat < math.Pow(1.0/float64(5), float64(maxLevels-1-i)) {
+			level = i
+			break
+		}
+	}
+	return level
+}
+
+// adds the data corresponding to a uid to the given vec variable in the form of []T
+// this does not allocate memory for vec, so it must be allocated before calling this function
+func (ph *persistentHNSW[T]) getVecFromUid(uid uint64, c index.CacheType, vec *[]T) error {
+	data, err := getDataFromKeyWithCacheType(ph.pred, uid, c)
+	if err != nil {
+		if strings.Contains(err.Error(), plError) {
+			// no vector. Return empty array of floats
+			index.BytesAsFloatArray([]byte{}, vec, ph.floatBits)
+			return errors.New("Nil vector returned")
+		}
+		return err
+	}
+	if data != nil {
+		index.BytesAsFloatArray(data.([]byte), vec, ph.floatBits)
+		return nil
+
+	} else {
+		index.BytesAsFloatArray([]byte{}, vec, ph.floatBits)
+		return errors.New("Nil vector returned")
+	}
+}
+
+// chooses whether to create the entry and start nodes based on if it already
+// exists, and if it hasnt been created yet, it adds the startNode to all
+// levels.
+func (ph *persistentHNSW[T]) createEntryAndStartNodes(
+	ctx context.Context,
+	c *TxnCache,
+	inUuid uint64,
+	vec *[]T) (uint64, []*index.KeyValue, error) {
+	txn := c.txn
+	edges := []*index.KeyValue{}
+	entryKey := DataKey(ph.vecEntryKey, 1) // 0-profile_vector_entry
+	txn.LockKey(entryKey)
+	defer txn.UnlockKey(entryKey)
+	data, _ := txn.GetWithLockHeld(entryKey)
+
+	create_edges := func(inUuid uint64) (uint64, []*index.KeyValue, error) {
+		startEdges, err := ph.addStartNodeToAllLevels(ctx, entryKey, txn, inUuid)
+		if err != nil {
+			return 0, []*index.KeyValue{}, err
+		}
+		// return entry node at all levels
+		edges = append(edges, startEdges...)
+		return 0, edges, nil
+	}
+
+	if data == nil {
+		// no entries in vector index yet b/c no entry exists, so put in all levels
+		return create_edges(inUuid)
+	}
+
+	entry := BytesToUint64(data.([]byte)) // convert entry Uuid returned from Get to uint64
+	err := ph.getVecFromUid(entry, c, vec)
+	if err != nil || len(*vec) == 0 {
+		// The entry vector has been deleted. We have to create a new entry vector.
+		entry, err := ph.PickStartNode(ctx, c, vec)
+		if err != nil {
+			return 0, []*index.KeyValue{}, err
+		}
+		return create_edges(entry)
+	}
+
+	return entry, edges, nil
+}
+
+// adds empty layers to all levels
+func (ph *persistentHNSW[T]) addStartNodeToAllLevels(
+	ctx context.Context,
+	entryKey []byte,
+	txn index.Txn,
+	inUuid uint64) ([]*index.KeyValue, error) {
+	edges := []*index.KeyValue{}
+	key := DataKey(ph.vecKey, inUuid)
+	emptyEdges := make([][]uint64, ph.maxLevels)
+	emptyEdgesBytes, err := json.Marshal(emptyEdges)
+	if err != nil {
+		return []*index.KeyValue{}, err
+	}
+	// creates empty at all levels only for entry node
+	edge, err := ph.newPersistentEdgeKeyValueEntry(ctx, key, txn, inUuid, emptyEdgesBytes)
+	if err != nil {
+		return []*index.KeyValue{}, err
+	}
+	edges = append(edges, edge)
+	inUuidByte := Uint64ToBytes(inUuid)
+	// add inUuid as entry for this structure from now on
+	edge, err = entryUuidInsert(ctx, entryKey, txn, ph.vecEntryKey, inUuidByte)
+	if err != nil {
+		return []*index.KeyValue{}, err
+	}
+	edges = append(edges, edge)
+	return edges, nil
+}
+
+// creates a new edge with the given uuid and edges. Lock must be held before calling this function
+func (ph *persistentHNSW[T]) newPersistentEdgeKeyValueEntry(ctx context.Context, key []byte,
+	txn index.Txn, uuid uint64, edges []byte) (*index.KeyValue, error) {
+	txn.LockKey(key)
+	defer txn.UnlockKey(key)
+	edge := &index.KeyValue{
+		Entity: uuid,
+		Attr:   ph.vecKey,
+		Value:  edges,
+	}
+	if err := txn.AddMutationWithLockHeld(ctx, key, edge); err != nil {
+		return nil, err
+	}
+	return edge, nil
+}
+
+// addNeighbors adds the neighbors of the given uuid to the given level.
+// It returns the edge created and the error if any.
+func (ph *persistentHNSW[T]) addNeighbors(ctx context.Context, tc *TxnCache,
+	uuid uint64, allLayerNeighbors [][]uint64) (*index.KeyValue, error) {
+
+	txn := tc.txn
+	keyPred := ph.vecKey
+	key := DataKey(keyPred, uuid)
+	txn.LockKey(key)
+	defer txn.UnlockKey(key)
+	var nnEdgesErr error
+	var allLayerEdges [][]uint64
+	var ok bool
+	allLayerEdges, ok = ph.nodeAllEdges[uuid]
+	if !ok {
+		data, _ := txn.GetWithLockHeld(key)
+		if data == nil {
+			allLayerEdges = allLayerNeighbors
+		} else {
+			// all edges of nearest neighbor
+			err := json.Unmarshal(data.([]byte), &allLayerEdges)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	for level := 0; level < ph.maxLevels; level++ {
+		allLayerEdges[level], nnEdgesErr = ph.removeDeadNodes(allLayerEdges[level], tc)
+		if nnEdgesErr != nil {
+			return nil, nnEdgesErr
+		}
+		// This adds at most efConstruction number of edges for each layer for this node
+		allLayerEdges[level] = append(allLayerEdges[level], allLayerNeighbors[level]...)
+	}
+
+	// on every modification of the layer edges, add it to in mem map so you dont have to always be reading
+	// from persistent storage
+	ph.nodeAllEdges[uuid] = allLayerEdges
+	inboundEdgesBytes, marshalErr := json.Marshal(allLayerEdges)
+	if marshalErr != nil {
+		return nil, marshalErr
+	}
+
+	edge := &index.KeyValue{
+		Entity: uuid,
+		Attr:   ph.vecKey,
+		Value:  inboundEdgesBytes,
+	}
+	if err := txn.AddMutationWithLockHeld(ctx, key, edge); err != nil {
+		return nil, err
+	}
+	return edge, nil
+}
+
+// removeDeadNodes(nnEdges, tc) removes dead nodes from nnEdges and returns the new nnEdges
+func (ph *persistentHNSW[T]) removeDeadNodes(nnEdges []uint64, tc *TxnCache) ([]uint64, error) {
+	data, err := getDataFromKeyWithCacheType(ph.vecDead, 1, tc)
+	if err != nil && err.Error() == plError {
+		return []uint64{}, err
+	}
+	var deadNodes []uint64
+	if data != nil { // if dead nodes exist, convert to []uint64
+		deadNodes, err = ParseEdges(string(data.([]byte)))
+		if err != nil {
+			return []uint64{}, err
+		}
+		nnEdges = diff(nnEdges, deadNodes) // set nnEdges to be all elements not contained in deadNodes
+	}
+	return nnEdges, nil
+}
+
+func Uint64ToBytes(key uint64) []byte {
+	b := make([]byte, 8)
+	binary.BigEndian.PutUint64(b, key)
+	return b
+}
+
+func BytesToUint64(bytes []byte) uint64 {
+	return binary.BigEndian.Uint64(bytes)
+}
+
+func isEqual[T c.Float](a []T, b []T) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i, val := range a {
+		if val != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// DataKey generates a data key with the given attribute and UID.
+// The structure of a data key is as follows:
+//
+// byte 0: key type prefix (set to DefaultPrefix or ByteSplit if part of a multi-part list)
+// byte 1-2: length of attr
+// next len(attr) bytes: value of attr
+// next byte: data type prefix (set to ByteData)
+// next eight bytes: value of uid
+// next eight bytes (optional): if the key corresponds to a split list, the startUid of
+// the split stored in this key and the first byte will be sets to ByteSplit.
+func DataKey(attr string, uid uint64) []byte {
+	extra := 1 + 8 // ByteData + UID
+	buf, prefixLen := generateKey(DefaultPrefix, attr, extra)
+
+	rest := buf[prefixLen:]
+	rest[0] = ByteData
+
+	rest = rest[1:]
+	binary.BigEndian.PutUint64(rest, uid)
+	return buf
+}
+
+// genKey creates the key and writes the initial bytes (type byte, length of attribute,
+// and the attribute itself). It leaves the rest of the key empty for further processing
+// if necessary. It also returns next index from where further processing should be done.
+func generateKey(typeByte byte, attr string, extra int) ([]byte, int) {
+	// Separate namespace and attribute from attr and write namespace in the first 8 bytes of key.
+	namespace, attr := ParseNamespaceBytes(attr)
+	prefixLen := 1 + 8 + 2 + len(attr) // byteType + ns + len(pred) + pred
+	buf := make([]byte, prefixLen+extra)
+	buf[0] = typeByte
+	AssertTrue(copy(buf[1:], namespace) == 8)
+	rest := buf[9:]
+
+	writeAttr(rest, attr)
+	return buf, prefixLen
+}
+
+func ParseNamespaceBytes(attr string) ([]byte, string) {
+	splits := strings.SplitN(attr, NsSeparator, 2)
+	ns := make([]byte, 8)
+	binary.BigEndian.PutUint64(ns, strToUint(splits[0]))
+	return ns, splits[1]
+}
+
+// AssertTrue asserts that b is true. Otherwise, it would log fatal.
+func AssertTrue(b bool) {
+	if !b {
+		log.Fatalf("%+v", errors.Errorf("Assert failed"))
+	}
+}
+
+func writeAttr(buf []byte, attr string) []byte {
+	AssertTrue(len(attr) < math.MaxUint16)
+	binary.BigEndian.PutUint16(buf[:2], uint16(len(attr)))
+
+	rest := buf[2:]
+	AssertTrue(len(attr) == copy(rest, attr))
+
+	return rest[len(attr):]
+}
+
+// For consistency, use base16 to encode/decode the namespace.
+func strToUint(s string) uint64 {
+	ns, err := strconv.ParseUint(s, 16, 64)
+	Check(err)
+	return ns
+}
+
+// Check logs fatal if err != nil.
+func Check(err error) {
+	if err != nil {
+		err = errors.Wrap(err, "")
+		CaptureSentryException(err)
+		log.Fatalf("%+v", err)
+	}
+}
+
+// CaptureSentryException sends the error report to Sentry.
+func CaptureSentryException(err error) {
+	if err != nil {
+		sentry.CaptureException(err)
 	}
 }

@@ -267,7 +267,8 @@ func TestRebuildTokIndex(t *testing.T) {
 		OldSchema:     nil,
 		CurrentSchema: &currentSchema,
 	}
-	prefixes, err := prefixesForTokIndexes(context.Background(), &rb)
+	rebuildInfo := rb.needsTokIndexRebuild()
+	prefixes, err := rebuildInfo.prefixesForTokIndexes()
 	require.NoError(t, err)
 	require.NoError(t, pstore.DropPrefix(prefixes...))
 	require.NoError(t, rebuildTokIndex(context.Background(), &rb))
@@ -320,7 +321,8 @@ func TestRebuildTokIndexWithDeletion(t *testing.T) {
 		OldSchema:     nil,
 		CurrentSchema: &currentSchema,
 	}
-	prefixes, err := prefixesForTokIndexes(context.Background(), &rb)
+	rebuildInfo := rb.needsTokIndexRebuild()
+	prefixes, err := rebuildInfo.prefixesForTokIndexes()
 	require.NoError(t, err)
 	require.NoError(t, pstore.DropPrefix(prefixes...))
 	require.NoError(t, rebuildTokIndex(context.Background(), &rb))
@@ -334,7 +336,8 @@ func TestRebuildTokIndexWithDeletion(t *testing.T) {
 		OldSchema:     &currentSchema,
 		CurrentSchema: &newSchema,
 	}
-	prefixes, err = prefixesForTokIndexes(context.Background(), &rb)
+	rebuildInfo = rb.needsTokIndexRebuild()
+	prefixes, err = rebuildInfo.prefixesForTokIndexes()
 	require.NoError(t, err)
 	require.NoError(t, pstore.DropPrefix(prefixes...))
 	require.NoError(t, rebuildTokIndex(context.Background(), &rb))

@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"math"
 	"os"
@@ -38,6 +39,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/tok"
+	"github.com/dgraph-io/dgraph/tok/hnsw"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
@@ -46,10 +48,11 @@ import (
 var emptyCountParams countParams
 
 type indexMutationInfo struct {
-	tokenizers []tok.Tokenizer
-	edge       *pb.DirectedEdge // Represents the original uid -> value edge.
-	val        types.Val
-	op         pb.DirectedEdge_Op
+	tokenizers   []tok.Tokenizer
+	factorySpecs []*tok.FactoryCreateSpec
+	edge         *pb.DirectedEdge // Represents the original uid -> value edge.
+	val          types.Val
+	op           pb.DirectedEdge_Op
 }
 
 // indexTokens return tokens, without the predicate prefix and
@@ -85,20 +88,104 @@ func indexTokens(ctx context.Context, info *indexMutationInfo) ([]string, error)
 // addIndexMutations adds mutation(s) for a single term, to maintain the index,
 // but only for the given tokenizers.
 // TODO - See if we need to pass op as argument as t should already have Op.
-func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) error {
+
+func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) ([]*pb.DirectedEdge, error) {
 	if info.tokenizers == nil {
 		info.tokenizers = schema.State().Tokenizer(ctx, info.edge.Attr)
+	}
+
+	if info.factorySpecs == nil {
+		specs, err := schema.State().FactoryCreateSpec(ctx, info.edge.Attr)
+		if err != nil {
+			return nil, err
+		}
+		info.factorySpecs = specs
 	}
 
 	attr := info.edge.Attr
 	uid := info.edge.Entity
 	if uid == 0 {
-		return errors.New("invalid UID with value 0")
+		return []*pb.DirectedEdge{}, errors.New("invalid UID with value 0")
+	}
+
+	inKey := x.DataKey(info.edge.Attr, uid)
+	pl, err := txn.Get(inKey)
+	if err != nil {
+		return []*pb.DirectedEdge{}, err
+	}
+	data, err := pl.AllValues(txn.StartTs)
+	if err != nil {
+		return []*pb.DirectedEdge{}, err
+	}
+
+	if info.op == pb.DirectedEdge_DEL &&
+		len(data) > 0 && data[0].Tid == types.VFloatID {
+		// TODO look into better alternatives
+		//      The issue here is that we will create dead nodes in the Vector Index
+		//      assuming an HNSW index type. What we should do instead is invoke
+		//      index.Remove(<key to dead index value>). However, we currently do
+		//      not support this in VectorIndex code!!
+		// if a delete & dealing with vfloats, add this to dead node in persistent store.
+		// What we should do instead is invoke the factory.Remove(key) operation.
+		deadAttr := hnsw.ConcatStrings(info.edge.Attr, hnsw.VecDead)
+		deadKey := x.DataKey(deadAttr, 1)
+		pl, err := txn.Get(deadKey)
+		if err != nil {
+			return []*pb.DirectedEdge{}, err
+		}
+		var deadNodes []uint64
+		deadData, _ := pl.Value(txn.StartTs)
+		if deadData.Value == nil {
+			deadNodes = append(deadNodes, uid)
+		} else {
+			deadNodes, err = hnsw.ParseEdges(string(deadData.Value.([]byte)))
+			if err != nil {
+				return []*pb.DirectedEdge{}, err
+			}
+			deadNodes = append(deadNodes, uid)
+		}
+		deadNodesBytes, marshalErr := json.Marshal(deadNodes)
+		if marshalErr != nil {
+			return []*pb.DirectedEdge{}, marshalErr
+		}
+		edge := &pb.DirectedEdge{
+			Entity:    1,
+			Attr:      deadAttr,
+			Value:     deadNodesBytes,
+			ValueType: pb.Posting_ValType(0),
+		}
+		pl.addMutation(ctx, txn, edge)
+	}
+
+	// TODO: As stated earlier, we need to validate that it is okay to assume
+	//       that we care about just data[0].
+	//       Similarly, the current assumption is that we have at most one
+	//       Vector Index, but this assumption may break later.
+	if info.op == pb.DirectedEdge_SET &&
+		len(data) > 0 && data[0].Tid == types.VFloatID &&
+		len(info.factorySpecs) > 0 {
+		// retrieve vector from inUuid save as inVec
+		inVec := types.BytesAsFloatArray(data[0].Value.([]byte))
+		tc := hnsw.NewTxnCache(NewViTxn(txn), txn.StartTs)
+		indexer, err := info.factorySpecs[0].CreateIndex(attr)
+		if err != nil {
+			return []*pb.DirectedEdge{}, err
+		}
+		edges, err := indexer.Insert(ctx, tc, uid, inVec)
+		if err != nil {
+			return []*pb.DirectedEdge{}, err
+		}
+		pbEdges := []*pb.DirectedEdge{}
+		for _, e := range edges {
+			pbe := indexEdgeToPbEdge(e)
+			pbEdges = append(pbEdges, pbe)
+		}
+		return pbEdges, nil
 	}
 	tokens, err := indexTokens(ctx, info)
 	if err != nil {
 		// This data is not indexable
-		return err
+		return []*pb.DirectedEdge{}, err
 	}
 
 	// Create a value token -> uid edge.
@@ -110,10 +197,10 @@ func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) 
 
 	for _, token := range tokens {
 		if err := txn.addIndexMutation(ctx, edge, token); err != nil {
-			return err
+			return []*pb.DirectedEdge{}, err
 		}
 	}
-	return nil
+	return []*pb.DirectedEdge{}, nil
 }
 
 func (txn *Txn) addIndexMutation(ctx context.Context, edge *pb.DirectedEdge, token string) error {
@@ -291,12 +378,18 @@ func (l *List) handleDeleteAll(ctx context.Context, edge *pb.DirectedEdge, txn *
 				Tid:   types.TypeID(p.ValType),
 				Value: p.Value,
 			}
-			return txn.addIndexMutations(ctx, &indexMutationInfo{
-				tokenizers: schema.State().Tokenizer(ctx, edge.Attr),
-				edge:       edge,
-				val:        val,
-				op:         pb.DirectedEdge_DEL,
+			factorySpecs, err := schema.State().FactoryCreateSpec(ctx, edge.Attr)
+			if err != nil {
+				return err
+			}
+			_, err = txn.addIndexMutations(ctx, &indexMutationInfo{
+				tokenizers:   schema.State().Tokenizer(ctx, edge.Attr),
+				factorySpecs: factorySpecs,
+				edge:         edge,
+				val:          val,
+				op:           pb.DirectedEdge_DEL,
 			})
+			return err
 		default:
 			return nil
 		}
@@ -490,7 +583,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, edge *pb.DirectedEdge, 
 	if doUpdateIndex {
 		// Exact matches.
 		if found && val.Value != nil {
-			if err := txn.addIndexMutations(ctx, &indexMutationInfo{
+			if _, err := txn.addIndexMutations(ctx, &indexMutationInfo{
 				tokenizers: schema.State().Tokenizer(ctx, edge.Attr),
 				edge:       edge,
 				val:        val,
@@ -504,7 +597,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, edge *pb.DirectedEdge, 
 				Tid:   types.TypeID(edge.ValueType),
 				Value: edge.Value,
 			}
-			if err := txn.addIndexMutations(ctx, &indexMutationInfo{
+			if _, err := txn.addIndexMutations(ctx, &indexMutationInfo{
 				tokenizers: schema.State().Tokenizer(ctx, edge.Attr),
 				edge:       edge,
 				val:        val,
@@ -551,13 +644,18 @@ type rebuilder struct {
 
 	// The posting list passed here is the on disk version. It is not coming
 	// from the LRU cache.
-	fn func(uid uint64, pl *List, txn *Txn) error
+	fn func(uid uint64, pl *List, txn *Txn) ([]*pb.DirectedEdge, error)
 }
 
 func (r *rebuilder) Run(ctx context.Context) error {
 	if r.startTs == 0 {
 		glog.Infof("maxassigned is 0, no indexing work for predicate %s", r.attr)
 		return nil
+	}
+
+	pred, ok := schema.State().Get(ctx, r.attr)
+	if !ok {
+		return errors.Errorf("Rebuilder.run: Unable to find schema for %s", r.attr)
 	}
 
 	// We write the index in a temporary badger first and then,
@@ -597,10 +695,16 @@ func (r *rebuilder) Run(ctx context.Context) error {
 	// We set it to 1 in case there are no keys found and NewStreamAt is called with ts=0.
 	var counter uint64 = 1
 
+	var txn *Txn
+
 	tmpWriter := tmpDB.NewManagedWriteBatch()
 	stream := pstore.NewStreamAt(r.startTs)
 	stream.LogPrefix = fmt.Sprintf("Rebuilding index for predicate %s (1/2):", r.attr)
 	stream.Prefix = r.prefix
+	//TODO We need to create a single transaction irrespective of the type of the predicate
+	if pred.ValueType == pb.Posting_VFLOAT {
+		txn = NewTxn(r.startTs)
+	}
 	stream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
 		// We should return quickly if the context is no longer valid.
 		select {
@@ -622,17 +726,42 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		// We are using different transactions in each call to KeyToList function. This could
 		// be a problem for computing reverse count indexes if deltas for same key are added
 		// in different transactions. Such a case doesn't occur for now.
-		txn := NewTxn(r.startTs)
-		if err := r.fn(pk.Uid, l, txn); err != nil {
+		// TODO: Maybe we can always use txn initialized in rebuilder.Run().
+		streamTxn := txn
+		if streamTxn == nil {
+			streamTxn = NewTxn(r.startTs)
+		}
+		edges, err := r.fn(pk.Uid, l, streamTxn)
+		if err != nil {
 			return nil, err
 		}
 
-		// Convert data into deltas.
-		txn.Update()
+		if txn != nil {
+			kvs := make([]*bpb.KV, 0, len(edges))
+			for _, edge := range edges {
+				version := atomic.AddUint64(&counter, 1)
+				key := x.DataKey(edge.Attr, edge.Entity)
+				pl, err := txn.GetFromDelta(key)
+				if err != nil {
+					return &bpb.KVList{}, nil
+				}
+				data := pl.getMutation(r.startTs)
+				kv := bpb.KV{
+					Key:      x.DataKey(edge.Attr, edge.Entity),
+					Value:    data,
+					UserMeta: []byte{BitDeltaPosting},
+					Version:  version,
+				}
+				kvs = append(kvs, &kv)
+			}
+			return &bpb.KVList{Kv: kvs}, nil
+		}
 
+		// Convert data into deltas.
+		streamTxn.Update()
 		// txn.cache.Lock() is not required because we are the only one making changes to txn.
-		kvs := make([]*bpb.KV, 0, len(txn.cache.deltas))
-		for key, data := range txn.cache.deltas {
+		kvs := make([]*bpb.KV, 0, len(streamTxn.cache.deltas))
+		for key, data := range streamTxn.cache.deltas {
 			version := atomic.AddUint64(&counter, 1)
 			kv := bpb.KV{
 				Key:      []byte(key),
@@ -771,14 +900,26 @@ func (rb *IndexRebuild) GetQuerySchema() *pb.SchemaUpdate {
 
 // DropIndexes drops the indexes that need to be rebuilt.
 func (rb *IndexRebuild) DropIndexes(ctx context.Context) error {
-	prefixes, err := prefixesForTokIndexes(ctx, rb)
+	rebuildInfo := rb.needsTokIndexRebuild()
+	prefixes, err := rebuildInfo.prefixesForTokIndexes()
 	if err != nil {
 		return err
 	}
+	vectorIndexPrefixes, err := rebuildInfo.prefixesForVectorIndexes()
+	if err != nil {
+		return nil
+	}
+	prefixes = append(prefixes, vectorIndexPrefixes...)
 	prefixes = append(prefixes, prefixesToDropReverseEdges(ctx, rb)...)
 	prefixes = append(prefixes, prefixesToDropCountIndex(ctx, rb)...)
-	glog.Infof("Deleting indexes for %s", rb.Attr)
-	return pstore.DropPrefix(prefixes...)
+	prefixes = append(prefixes, prefixesToDropVectorIndexEdges(ctx, rb)...)
+	if len(prefixes) > 0 {
+		// This trace message now gets logged only if there are any prefixes to
+		// to be deleted
+		glog.Infof("Deleting indexes for %s", rb.Attr)
+		return pstore.DropPrefix(prefixes...)
+	}
+	return nil
 }
 
 // BuildData updates data.
@@ -806,12 +947,15 @@ func (rb *IndexRebuild) BuildIndexes(ctx context.Context) error {
 }
 
 type indexRebuildInfo struct {
-	op                  indexOp
-	tokenizersToDelete  []string
-	tokenizersToRebuild []string
+	op                     indexOp
+	attr                   string
+	tokenizersToDelete     []string
+	tokenizersToRebuild    []string
+	vectorIndexesToDelete  []*pb.VectorIndexSpec
+	vectorIndexesToRebuild []*pb.VectorIndexSpec
 }
 
-func (rb *IndexRebuild) needsTokIndexRebuild() indexRebuildInfo {
+func (rb *IndexRebuild) needsTokIndexRebuild() *indexRebuildInfo {
 	x.AssertTruef(rb.CurrentSchema != nil, "Current schema cannot be nil.")
 
 	// If the old schema is nil, we can treat it as an empty schema. Copy it
@@ -827,8 +971,9 @@ func (rb *IndexRebuild) needsTokIndexRebuild() indexRebuildInfo {
 	// Index does not need to be rebuilt or deleted if the scheme directive
 	// did not require an index before and now.
 	if !currIndex && !prevIndex {
-		return indexRebuildInfo{
-			op: indexNoop,
+		return &indexRebuildInfo{
+			op:   indexNoop,
+			attr: rb.Attr,
 		}
 	}
 
@@ -837,19 +982,24 @@ func (rb *IndexRebuild) needsTokIndexRebuild() indexRebuildInfo {
 	// prevIndex since the previous if statement guarantees both values are
 	// different.
 	if !currIndex {
-		return indexRebuildInfo{
-			op:                 indexDelete,
-			tokenizersToDelete: old.Tokenizer,
+		return &indexRebuildInfo{
+			op:                    indexDelete,
+			attr:                  rb.Attr,
+			tokenizersToDelete:    old.Tokenizer,
+			vectorIndexesToDelete: old.IndexSpecs,
 		}
 	}
 
 	// All tokenizers in the index need to be deleted and rebuilt if the value
 	// types have changed.
 	if currIndex && rb.CurrentSchema.ValueType != old.ValueType {
-		return indexRebuildInfo{
-			op:                  indexRebuild,
-			tokenizersToDelete:  old.Tokenizer,
-			tokenizersToRebuild: rb.CurrentSchema.Tokenizer,
+		return &indexRebuildInfo{
+			op:                     indexRebuild,
+			attr:                   rb.Attr,
+			tokenizersToDelete:     old.Tokenizer,
+			tokenizersToRebuild:    rb.CurrentSchema.Tokenizer,
+			vectorIndexesToDelete:  old.IndexSpecs,
+			vectorIndexesToRebuild: rb.CurrentSchema.IndexSpecs,
 		}
 	}
 
@@ -865,63 +1015,129 @@ func (rb *IndexRebuild) needsTokIndexRebuild() indexRebuildInfo {
 
 	newTokenizers, deletedTokenizers := x.Diff(currTokens, prevTokens)
 
-	// If the tokenizers are the same, nothing needs to be done.
-	if len(newTokenizers) == 0 && len(deletedTokenizers) == 0 {
-		return indexRebuildInfo{
-			op: indexNoop,
-		}
+	prevFactoryNames := make(map[string]struct{})
+	prevFactories := make(map[string]*pb.VectorIndexSpec)
+	for _, t := range old.IndexSpecs {
+		prevFactoryNames[t.Name] = struct{}{}
+		prevFactories[t.Name] = t
+	}
+	currFactoryNames := make(map[string]struct{})
+	currFactories := make(map[string]*pb.VectorIndexSpec)
+	for _, t := range rb.CurrentSchema.IndexSpecs {
+		currFactoryNames[t.Name] = struct{}{}
+		currFactories[t.Name] = t
 	}
 
-	return indexRebuildInfo{
-		op:                  indexRebuild,
-		tokenizersToDelete:  deletedTokenizers,
-		tokenizersToRebuild: newTokenizers,
+	newFactoryNames, deletedFactoryNames := x.Diff(currFactoryNames, prevFactoryNames)
+
+	// If the tokenizers and factories are the same, nothing needs to be done.
+	if len(newTokenizers) == 0 && len(deletedTokenizers) == 0 &&
+		len(newFactoryNames) == 0 && len(deletedFactoryNames) == 0 {
+		return &indexRebuildInfo{
+			op:   indexNoop,
+			attr: rb.Attr,
+		}
+	}
+	newFactories := []*pb.VectorIndexSpec{}
+	for _, name := range newFactoryNames {
+		newFactories = append(newFactories, currFactories[name])
+	}
+	deletedFactories := []*pb.VectorIndexSpec{}
+	for _, name := range deletedFactoryNames {
+		deletedFactories = append(deletedFactories, prevFactories[name])
+	}
+
+	return &indexRebuildInfo{
+		op:                     indexRebuild,
+		attr:                   rb.Attr,
+		tokenizersToDelete:     deletedTokenizers,
+		tokenizersToRebuild:    newTokenizers,
+		vectorIndexesToDelete:  deletedFactories,
+		vectorIndexesToRebuild: newFactories,
 	}
 }
 
-func prefixesForTokIndexes(ctx context.Context, rb *IndexRebuild) ([][]byte, error) {
-	rebuildInfo := rb.needsTokIndexRebuild()
-	prefixes := [][]byte{}
+func (rb *indexRebuildInfo) appendTokenizerPrefixesToDelete(
+	tokenizer string,
+	priorPrefixes [][]byte) ([][]byte, error) {
+	retVal := priorPrefixes
+	prefixesNonLang, err := prefixesToDeleteTokensFor(rb.attr, tokenizer, false)
+	if err != nil {
+		return nil, err
+	}
+	retVal = append(retVal, prefixesNonLang...)
+	if tokenizer != "exact" {
+		return retVal, nil
+	}
+	prefixesWithLang, err := prefixesToDeleteTokensFor(rb.attr, tokenizer, true)
+	if err != nil {
+		return nil, err
+	}
+	return append(retVal, prefixesWithLang...), nil
+}
 
-	if rebuildInfo.op == indexNoop {
+// TODO: Kill this function. Rather than calculating prefixes -- like we do
+//
+//	for tokenizers -- we should instead invoke the Remove(indexName)
+//	operation of the VectorIndexFactory, and have it do all the deletion.
+//	At the moment however, the Remove operation does not interact with
+//	Dgraph transactions, so this is not yet possible.
+func (rb *indexRebuildInfo) prefixesForVectorIndexes() ([][]byte, error) {
+	prefixes := [][]byte{}
+	var err error
+	if rb.op == indexNoop {
 		return prefixes, nil
 	}
 
-	glog.Infof("Computing prefix index for attr %s and tokenizers %s", rb.Attr,
-		rebuildInfo.tokenizersToDelete)
-	for _, tokenizer := range rebuildInfo.tokenizersToDelete {
-		prefixesNonLang, err := prefixesToDeleteTokensFor(rb.Attr, tokenizer, false)
+	for _, vectorSpec := range rb.vectorIndexesToDelete {
+		glog.Infof("Computing prefix index for attr %s and index factory %s",
+			rb.attr, vectorSpec.Name)
+		// The mechanism currently is the same for tokenizers and
+		// vector factories.
+		prefixes, err = rb.appendTokenizerPrefixesToDelete(vectorSpec.Name, prefixes)
 		if err != nil {
 			return nil, err
 		}
-		prefixes = append(prefixes, prefixesNonLang...)
-		if tokenizer != "exact" {
-			continue
-		}
-		prefixesWithLang, err := prefixesToDeleteTokensFor(rb.Attr, tokenizer, true)
-		if err != nil {
-			return nil, err
-		}
-		prefixes = append(prefixes, prefixesWithLang...)
 	}
 
-	glog.Infof("Deleting index for attr %s and tokenizers %s", rb.Attr,
-		rebuildInfo.tokenizersToRebuild)
+	for _, vectorSpec := range rb.vectorIndexesToRebuild {
+		glog.Infof("Computing prefix index for attr %s and index factory %s",
+			rb.attr, vectorSpec.Name)
+		// The mechanism currently is the same for tokenizers and
+		// vector factories.
+		prefixes, err = rb.appendTokenizerPrefixesToDelete(vectorSpec.Name, prefixes)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return prefixes, nil
+}
+
+func (rb *indexRebuildInfo) prefixesForTokIndexes() ([][]byte, error) {
+	prefixes := [][]byte{}
+	var err error
+	if rb.op == indexNoop {
+		return prefixes, nil
+	}
+
+	glog.Infof("Computing prefix index for attr %s and tokenizers %s", rb.attr,
+		rb.tokenizersToDelete)
+	for _, tokenizer := range rb.tokenizersToDelete {
+		prefixes, err = rb.appendTokenizerPrefixesToDelete(tokenizer, prefixes)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	glog.Infof("Deleting index for attr %s and tokenizers %s", rb.attr,
+		rb.tokenizersToRebuild)
 	// Before rebuilding, the existing index needs to be deleted.
-	for _, tokenizer := range rebuildInfo.tokenizersToRebuild {
-		prefixesNonLang, err := prefixesToDeleteTokensFor(rb.Attr, tokenizer, false)
+	for _, tokenizer := range rb.tokenizersToRebuild {
+		prefixes, err = rb.appendTokenizerPrefixesToDelete(tokenizer, prefixes)
 		if err != nil {
 			return nil, err
 		}
-		prefixes = append(prefixes, prefixesNonLang...)
-		if tokenizer != "exact" {
-			continue
-		}
-		prefixesWithLang, err := prefixesToDeleteTokensFor(rb.Attr, tokenizer, true)
-		if err != nil {
-			return nil, err
-		}
-		prefixes = append(prefixes, prefixesWithLang...)
 	}
 
 	return prefixes, nil
@@ -936,7 +1152,7 @@ func rebuildTokIndex(ctx context.Context, rb *IndexRebuild) error {
 	}
 
 	// Exit early if there are no tokenizers to rebuild.
-	if len(rebuildInfo.tokenizersToRebuild) == 0 {
+	if len(rebuildInfo.tokenizersToRebuild) == 0 && len(rebuildInfo.vectorIndexesToRebuild) == 0 {
 		return nil
 	}
 
@@ -947,11 +1163,22 @@ func rebuildTokIndex(ctx context.Context, rb *IndexRebuild) error {
 		return err
 	}
 
+	var factorySpecs []*tok.FactoryCreateSpec
+	if len(rebuildInfo.vectorIndexesToRebuild) > 0 {
+		factorySpec, err := tok.GetFactoryCreateSpecFromSpec(
+			rebuildInfo.vectorIndexesToRebuild[0])
+		if err != nil {
+			return err
+		}
+		factorySpecs = []*tok.FactoryCreateSpec{factorySpec}
+	}
+
 	pk := x.ParsedKey{Attr: rb.Attr}
 	builder := rebuilder{attr: rb.Attr, prefix: pk.DataPrefix(), startTs: rb.StartTs}
-	builder.fn = func(uid uint64, pl *List, txn *Txn) error {
+	builder.fn = func(uid uint64, pl *List, txn *Txn) ([]*pb.DirectedEdge, error) {
 		edge := pb.DirectedEdge{Attr: rb.Attr, Entity: uid}
-		return pl.Iterate(txn.StartTs, 0, func(p *pb.Posting) error {
+		edges := []*pb.DirectedEdge{}
+		err := pl.Iterate(txn.StartTs, 0, func(p *pb.Posting) error {
 			// Add index entries based on p.
 			val := types.Val{
 				Value: p.Value,
@@ -960,20 +1187,26 @@ func rebuildTokIndex(ctx context.Context, rb *IndexRebuild) error {
 			edge.Lang = string(p.LangTag)
 
 			for {
-				err := txn.addIndexMutations(ctx, &indexMutationInfo{
-					tokenizers: tokenizers,
-					edge:       &edge,
-					val:        val,
-					op:         pb.DirectedEdge_SET,
+				newEdges, err := txn.addIndexMutations(ctx, &indexMutationInfo{
+					tokenizers:   tokenizers,
+					factorySpecs: factorySpecs,
+					edge:         &edge,
+					val:          val,
+					op:           pb.DirectedEdge_SET,
 				})
 				switch err {
 				case ErrRetry:
 					time.Sleep(10 * time.Millisecond)
 				default:
+					edges = append(edges, newEdges...)
 					return err
 				}
 			}
 		})
+		if err != nil {
+			return []*pb.DirectedEdge{}, err
+		}
+		return edges, err
 	}
 	return builder.Run(ctx)
 }
@@ -1038,7 +1271,7 @@ func rebuildCountIndex(ctx context.Context, rb *IndexRebuild) error {
 
 	glog.Infof("Rebuilding count index for %s", rb.Attr)
 	var reverse bool
-	fn := func(uid uint64, pl *List, txn *Txn) error {
+	fn := func(uid uint64, pl *List, txn *Txn) ([]*pb.DirectedEdge, error) {
 		t := &pb.DirectedEdge{
 			ValueId: uid,
 			Attr:    rb.Attr,
@@ -1046,7 +1279,7 @@ func rebuildCountIndex(ctx context.Context, rb *IndexRebuild) error {
 		}
 		sz := pl.Length(rb.StartTs, 0)
 		if sz == -1 {
-			return nil
+			return []*pb.DirectedEdge{}, nil
 		}
 		for {
 			err := txn.addCountMutation(ctx, t, uint32(sz), reverse)
@@ -1054,7 +1287,7 @@ func rebuildCountIndex(ctx context.Context, rb *IndexRebuild) error {
 			case ErrRetry:
 				time.Sleep(10 * time.Millisecond)
 			default:
-				return err
+				return []*pb.DirectedEdge{}, err
 			}
 		}
 	}
@@ -1075,6 +1308,53 @@ func rebuildCountIndex(ctx context.Context, rb *IndexRebuild) error {
 	builder = rebuilder{attr: rb.Attr, prefix: pk.ReversePrefix(), startTs: rb.StartTs}
 	builder.fn = fn
 	return builder.Run(ctx)
+}
+
+func (rb *IndexRebuild) needsVectorIndexEdgesRebuild() indexOp {
+	x.AssertTruef(rb.CurrentSchema != nil, "Current schema cannot be nil.")
+
+	// If old schema is nil, treat it as an empty schema. Copy it to avoid
+	// overwriting it in rb.
+	old := rb.OldSchema
+	if old == nil {
+		old = &pb.SchemaUpdate{}
+	}
+
+	currIndex := rb.CurrentSchema.Directive == pb.SchemaUpdate_INDEX &&
+		rb.CurrentSchema.ValueType == pb.Posting_VFLOAT
+	prevIndex := old.Directive == pb.SchemaUpdate_INDEX &&
+		old.ValueType == pb.Posting_VFLOAT
+
+	// If the schema directive did not change, return indexNoop.
+	if currIndex == prevIndex {
+		return indexNoop
+	}
+
+	// If the current schema requires an index, index should be rebuilt.
+	if currIndex {
+		return indexRebuild
+	}
+	// Otherwise, index should only be deleted.
+	return indexDelete
+}
+
+// This needs to be moved to the implementation of vector-indexer API
+func prefixesToDropVectorIndexEdges(ctx context.Context, rb *IndexRebuild) [][]byte {
+	// Exit early if indices do not need to be rebuilt.
+	op := rb.needsVectorIndexEdgesRebuild()
+	if op == indexNoop {
+		return nil
+	}
+
+	prefixes := append([][]byte{}, x.PredicatePrefix(hnsw.ConcatStrings(rb.Attr, hnsw.VecEntry)))
+	prefixes = append(prefixes, x.PredicatePrefix(hnsw.ConcatStrings(rb.Attr, hnsw.VecDead)))
+	prefixes = append(prefixes, x.PredicatePrefix(hnsw.ConcatStrings(rb.Attr, hnsw.VecKeyword)))
+
+	for i := 0; i < hnsw.VectorIndexMaxLevels; i++ {
+		prefixes = append(prefixes, x.PredicatePrefix(hnsw.ConcatStrings(rb.Attr, hnsw.VecKeyword, fmt.Sprint(i))))
+	}
+
+	return prefixes
 }
 
 func (rb *IndexRebuild) needsReverseEdgesRebuild() indexOp {
@@ -1132,9 +1412,9 @@ func rebuildReverseEdges(ctx context.Context, rb *IndexRebuild) error {
 	glog.Infof("Rebuilding reverse index for %s", rb.Attr)
 	pk := x.ParsedKey{Attr: rb.Attr}
 	builder := rebuilder{attr: rb.Attr, prefix: pk.DataPrefix(), startTs: rb.StartTs}
-	builder.fn = func(uid uint64, pl *List, txn *Txn) error {
+	builder.fn = func(uid uint64, pl *List, txn *Txn) ([]*pb.DirectedEdge, error) {
 		edge := pb.DirectedEdge{Attr: rb.Attr, Entity: uid}
-		return pl.Iterate(txn.StartTs, 0, func(pp *pb.Posting) error {
+		return []*pb.DirectedEdge{}, pl.Iterate(txn.StartTs, 0, func(pp *pb.Posting) error {
 			puid := pp.Uid
 			// Add reverse entries based on p.
 			edge.ValueId = puid
@@ -1185,7 +1465,7 @@ func rebuildListType(ctx context.Context, rb *IndexRebuild) error {
 
 	pk := x.ParsedKey{Attr: rb.Attr}
 	builder := rebuilder{attr: rb.Attr, prefix: pk.DataPrefix(), startTs: rb.StartTs}
-	builder.fn = func(uid uint64, pl *List, txn *Txn) error {
+	builder.fn = func(uid uint64, pl *List, txn *Txn) ([]*pb.DirectedEdge, error) {
 		var mpost *pb.Posting
 		err := pl.Iterate(txn.StartTs, 0, func(p *pb.Posting) error {
 			// We only want to modify the untagged value. There could be other values with a
@@ -1196,10 +1476,10 @@ func rebuildListType(ctx context.Context, rb *IndexRebuild) error {
 			return nil
 		})
 		if err != nil {
-			return err
+			return []*pb.DirectedEdge{}, err
 		}
 		if mpost == nil {
-			return nil
+			return []*pb.DirectedEdge{}, nil
 		}
 		// Delete the old edge corresponding to ValueId math.MaxUint64
 		t := &pb.DirectedEdge{
@@ -1212,7 +1492,7 @@ func rebuildListType(ctx context.Context, rb *IndexRebuild) error {
 		// get updated.
 		pl = txn.cache.SetIfAbsent(string(pl.key), pl)
 		if err := pl.addMutation(ctx, txn, t); err != nil {
-			return err
+			return []*pb.DirectedEdge{}, err
 		}
 		// Add the new edge with the fingerprinted value id.
 		newEdge := &pb.DirectedEdge{
@@ -1222,7 +1502,7 @@ func rebuildListType(ctx context.Context, rb *IndexRebuild) error {
 			Op:        pb.DirectedEdge_SET,
 			Facets:    mpost.Facets,
 		}
-		return pl.addMutation(ctx, txn, newEdge)
+		return []*pb.DirectedEdge{}, pl.addMutation(ctx, txn, newEdge)
 	}
 	return builder.Run(ctx)
 }
@@ -1243,12 +1523,18 @@ func DeleteData(ns uint64) error {
 // DeletePredicate deletes all entries and indices for a given predicate.
 func DeletePredicate(ctx context.Context, attr string, ts uint64) error {
 	glog.Infof("Dropping predicate: [%s]", attr)
-	prefix := x.PredicatePrefix(attr)
-	if err := pstore.DropPrefix(prefix); err != nil {
-		return err
+	preds := schema.State().PredicatesToDelete(attr)
+	for _, pred := range preds {
+		prefix := x.PredicatePrefix(pred)
+		if err := schema.State().Delete(pred, ts); err != nil {
+			return err
+		}
+		if err := pstore.DropPrefix(prefix); err != nil {
+			return err
+		}
 	}
 
-	return schema.State().Delete(attr, ts)
+	return nil
 }
 
 // DeleteNamespace bans the namespace and deletes its predicates/types from the schema.

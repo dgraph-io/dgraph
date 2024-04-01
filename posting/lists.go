@@ -17,6 +17,7 @@
 package posting
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"sync"
@@ -30,6 +31,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto"
 	"github.com/dgraph-io/ristretto/z"
+	"github.com/dgraph-io/dgraph/tok/index"
 )
 
 const (
@@ -113,6 +115,44 @@ type LocalCache struct {
 	plists map[string]*List
 }
 
+// struct to implement LocalCache interface from vector-indexer
+// acts as wrapper for dgraph *LocalCache
+type viLocalCache struct {
+	delegate *LocalCache
+}
+
+func (vc *viLocalCache) Find(prefix []byte, filter func([]byte) bool) (uint64, error) {
+	return vc.delegate.Find(prefix, filter)
+}
+
+func (vc *viLocalCache) Get(key []byte) (rval index.Value, rerr error) {
+	pl, err := vc.delegate.Get(key)
+	if err != nil {
+		return nil, err
+	}
+	pl.Lock()
+	defer pl.Unlock()
+	return vc.GetValueFromPostingList(pl)
+}
+
+func (vc *viLocalCache) GetWithLockHeld(key []byte) (rval index.Value, rerr error) {
+	pl, err := vc.delegate.Get(key)
+	if err != nil {
+		return nil, err
+	}
+	return vc.GetValueFromPostingList(pl)
+}
+
+func (vc *viLocalCache) GetValueFromPostingList(pl *List) (rval index.Value, rerr error) {
+	val, err := pl.ValueWithLockHeld(vc.delegate.startTs)
+	rval = val.Value
+	return rval, err
+}
+
+func NewViLocalCache(delegate *LocalCache) *viLocalCache {
+	return &viLocalCache{delegate: delegate}
+}
+
 // NewLocalCache returns a new LocalCache instance.
 func NewLocalCache(startTs uint64) *LocalCache {
 	return &LocalCache{
@@ -127,6 +167,89 @@ func NewLocalCache(startTs uint64) *LocalCache {
 // around.
 func NoCache(startTs uint64) *LocalCache {
 	return &LocalCache{startTs: startTs}
+}
+
+func (lc *LocalCache) Find(pred []byte, filter func([]byte) bool) (uint64, error) {
+	txn := pstore.NewTransactionAt(lc.startTs, false)
+	defer txn.Discard()
+
+	attr := string(pred)
+
+	initKey := x.ParsedKey{
+		Attr: attr,
+	}
+	startKey := x.DataKey(attr, 0)
+	prefix := initKey.DataPrefix()
+
+	result := &pb.List{}
+	var prevKey []byte
+	itOpt := badger.DefaultIteratorOptions
+	itOpt.PrefetchValues = false
+	itOpt.AllVersions = true
+	itOpt.Prefix = prefix
+	it := txn.NewIterator(itOpt)
+	defer it.Close()
+
+	for it.Seek(startKey); it.Valid(); {
+		item := it.Item()
+		if bytes.Equal(item.Key(), prevKey) {
+			it.Next()
+			continue
+		}
+		prevKey = append(prevKey[:0], item.Key()...)
+
+		// Parse the key upfront, otherwise ReadPostingList would advance the
+		// iterator.
+		pk, err := x.Parse(item.Key())
+		if err != nil {
+			return 0, err
+		}
+
+		// If we have moved to the next attribute, break
+		if pk.Attr != attr {
+			break
+		}
+
+		if pk.HasStartUid {
+			// The keys holding parts of a split key should not be accessed here because
+			// they have a different prefix. However, the check is being added to guard
+			// against future bugs.
+			continue
+		}
+
+		switch {
+		case item.UserMeta()&BitEmptyPosting > 0:
+			// This is an empty posting list. So, it should not be included.
+			continue
+		default:
+			// This bit would only be set if there are valid uids in UidPack.
+			key := x.DataKey(attr, pk.Uid)
+			pl, err := lc.Get(key)
+			if err != nil {
+				return 0, err
+			}
+			vals, err := pl.Value(lc.startTs)
+			switch {
+			case err == ErrNoValue:
+				continue
+			case err != nil:
+				return 0, err
+			}
+
+			if filter(vals.Value.([]byte)) {
+				result.Uids = append(result.Uids, pk.Uid)
+				break
+			}
+
+			continue
+		}
+	}
+
+	if len(result.Uids) > 0 {
+		return result.Uids[0], nil
+	}
+
+	return 0, badger.ErrKeyNotFound
 }
 
 func (lc *LocalCache) getNoStore(key string) *List {
