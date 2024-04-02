@@ -169,6 +169,17 @@ func initClusterTest(t *testing.T, schemaStr string) *dgo.Dgraph {
 	return dg
 }
 
+func TestVectorSchema(t *testing.T) {
+	dg := initClusterTest(t, `
+	neighbour: [uid] .
+	vectortest: float32vector @index(hnsw(metric: "euclidian")) .`)
+
+	resp, err := testutil.RetryQuery(dg, "schema {}")
+	require.NoError(t, err)
+
+	x.AssertTrue(strings.Contains(string(resp.Json), `{"predicate":"vectortest","type":"vfloat","tokenizer":["hnsw"]}`))
+}
+
 func TestProcessTask(t *testing.T) {
 	dg := initClusterTest(t, `neighbour: [uid] .`)
 

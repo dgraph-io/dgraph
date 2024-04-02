@@ -102,6 +102,9 @@ func populateSchema(attr string, fields []string) *pb.SchemaNode {
 			if len(pred.GetTokenizer()) > 0 {
 				schemaNode.Tokenizer = schema.State().TokenizerNames(ctx, attr)
 			}
+			if len(pred.GetIndexSpecs()) > 0 {
+				schemaNode.Tokenizer = schema.State().VectorIndexes(ctx, attr)
+			}
 		case "reverse":
 			schemaNode.Reverse = pred.GetDirective() == pb.SchemaUpdate_REVERSE
 		case "count":
