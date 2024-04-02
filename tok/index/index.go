@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Hypermode, Inc. and Contributors
+ * Copyright 2016-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,6 +34,9 @@ type IndexFactory[T c.Float] interface {
 	// The Name returned represents the name of the factory rather than the
 	// name of any particular index.
 	Name() string
+
+	// Fetch the string of all the options being used
+	GetOptions(o opts.Options) string
 
 	// Specifies the set of allowed options and a corresponding means to
 	// parse a string version of those options.

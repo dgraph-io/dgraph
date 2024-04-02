@@ -9,6 +9,7 @@ import (
 	c "github.com/dgraph-io/dgraph/tok/constraints"
 	"github.com/dgraph-io/dgraph/tok/index"
 	opt "github.com/dgraph-io/dgraph/tok/options"
+	"github.com/golang/glog"
 	"github.com/pkg/errors"
 )
 
@@ -26,6 +27,38 @@ type persistentHNSW[T c.Float] struct {
 	// layer for uuid 65443. The result will be a neighboring uuid.
 	nodeAllEdges map[uint64][][]uint64
 	visitedUids  []uint64
+}
+
+func GetPersistantOptions[T c.Float](o opt.Options) string {
+	sb := strings.Builder{}
+
+	if val, ok, _ := opt.GetOpt(o, ExponentOpt, 3); ok {
+		sb.WriteString(fmt.Sprintf(`"%s":"%d",`, ExponentOpt, val))
+	}
+	if val, ok, _ := opt.GetOpt(o, MaxLevelsOpt, 3); ok {
+		sb.WriteString(fmt.Sprintf(`"%s":"%d",`, MaxLevelsOpt, val))
+	}
+	if val, ok, _ := opt.GetOpt(o, EfConstructionOpt, 3); ok {
+		sb.WriteString(fmt.Sprintf(`"%s":"%d",`, EfConstructionOpt, val))
+	}
+	if val, ok, _ := opt.GetOpt(o, EfSearchOpt, 3); ok {
+		sb.WriteString(fmt.Sprintf(`"%s":"%d",`, EfSearchOpt, val))
+	}
+
+	if simType, foundSimType := opt.GetInterfaceOpt(o, MetricOpt); foundSimType {
+		sim, ok := simType.(SimilarityType[T])
+		if !ok {
+			glog.Errorf("cannot cast %T to SimilarityType", simType)
+		}
+		sb.WriteString(fmt.Sprintf(`"%s":"%s",`, MetricOpt, sim.indexType))
+	}
+
+	final := sb.String()
+	if len(final) > 0 {
+		// Remove last , and cover with brackets
+		return "(" + final[:len(final)-1] + ")"
+	}
+	return ""
 }
 
 func (ph *persistentHNSW[T]) applyOptions(o opt.Options) error {

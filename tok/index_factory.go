@@ -55,7 +55,7 @@ type FactoryCreateSpec struct {
 }
 
 func (fcs *FactoryCreateSpec) Name() string {
-	return fcs.factory.Name()
+	return fcs.factory.Name() + fcs.factory.GetOptions(fcs.opts)
 }
 
 func (fcs *FactoryCreateSpec) CreateIndex(name string) (index.VectorIndex[float32], error) {
@@ -106,6 +106,10 @@ func (f *indexFactory) CreateOrReplace(
 	o opts.Options,
 	floatBits int) (index.VectorIndex[float32], error) {
 	return f.delegate.CreateOrReplace(name, o, floatBits)
+}
+
+func (f *indexFactory) GetOptions(o opts.Options) string {
+	return f.delegate.GetOptions(o)
 }
 
 func (f *indexFactory) Type() string {

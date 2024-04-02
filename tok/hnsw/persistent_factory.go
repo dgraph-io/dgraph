@@ -42,6 +42,10 @@ func CreateFactory[T c.Float](floatBits int) index.IndexFactory[T] {
 // Implements NamedFactory interface for use as a plugin.
 func (hf *persistentIndexFactory[T]) Name() string { return Hnsw }
 
+func (hf *persistentIndexFactory[T]) GetOptions(o opt.Options) string {
+	return GetPersistantOptions[T](o)
+}
+
 func (hf *persistentIndexFactory[T]) isNameAvailableWithLock(name string) bool {
 	_, nameUsed := hf.indexMap[name]
 	return !nameUsed

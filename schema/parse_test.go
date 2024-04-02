@@ -42,8 +42,7 @@ func checkSchema(t *testing.T, h map[string]*pb.SchemaUpdate, expected []nameTyp
 	for _, nt := range expected {
 		typ, found := h[nt.name]
 		require.True(t, found, nt)
-		require.EqualValuesf(t, *nt.typ, *typ, "found in map: %+v\n expected: %+v",
-			*typ, *nt.typ)
+		require.EqualValuesf(t, *nt.typ, *typ, "found in map: %+v\n expected: %+v", *typ, *nt.typ)
 	}
 }
 
