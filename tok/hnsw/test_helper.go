@@ -124,10 +124,9 @@ type inMemTxn struct {
 }
 
 func (t *inMemTxn) Find(prefix []byte, filter func([]byte) bool) (uint64, error) {
-	tsDb := tsDbs[t.startTs]
-	tsDb.readMu.RLock()
-	defer tsDb.readMu.RUnlock()
-	for _, b := range tsDb.inMemTestDb {
+	tsDbs[t.startTs].readMu.RLock()
+	defer tsDbs[t.startTs].readMu.RUnlock()
+	for _, b := range tsDbs[t.startTs].inMemTestDb {
 		if filter(b.([]byte)) {
 			return 1, nil
 		}
@@ -209,10 +208,9 @@ func (c *inMemLocalCache) Get(key []byte) (rval index.Value, rerr error) {
 }
 
 func (c *inMemLocalCache) Find(prefix []byte, filter func([]byte) bool) (uint64, error) {
-	tsDb := tsDbs[c.readTs]
-	tsDb.readMu.RLock()
-	defer tsDb.readMu.RUnlock()
-	for _, b := range tsDb.inMemTestDb {
+	tsDbs[c.readTs].readMu.RLock()
+	defer tsDbs[c.readTs].readMu.RUnlock()
+	for _, b := range tsDbs[c.readTs].inMemTestDb {
 		if filter(b.([]byte)) {
 			return 1, nil
 		}

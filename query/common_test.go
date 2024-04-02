@@ -337,6 +337,7 @@ tweet-c                        : string @index(fulltext) .
 tweet-d                        : string @index(trigram) .
 name2                          : string @index(term)  .
 age2                           : int @index(int) .
+vectorNonIndex                 : float32vector .
 `
 
 func populateCluster(dc dgraphtest.Cluster) {
@@ -371,6 +372,8 @@ func populateCluster(dc dgraphtest.Cluster) {
 	}
 	setSchema(ts)
 	err = addTriplesToCluster(`
+                <1> <vectorNonIndex> "[1.0, 1.0, 2.0, 2.0]" .
+                <2> <vectorNonIndex> "[2.0, 1.0, 2.0, 2.0]" .
 		<1> <name> "Michonne" .
 		<2> <name> "King Lear" .
 		<3> <name> "Margaret" .
