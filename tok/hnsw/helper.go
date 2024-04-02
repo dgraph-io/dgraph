@@ -48,15 +48,6 @@ type SearchResult struct {
 	extraMetrics  map[string]uint64
 }
 
-func newSearchResult(nnUids []uint64, traversalPath []uint64,
-	extraMetrics map[string]uint64) *SearchResult {
-	return &SearchResult{
-		nnUids:        nnUids,
-		traversalPath: traversalPath,
-		extraMetrics:  extraMetrics,
-	}
-}
-
 func (s *SearchResult) GetNnUids() []uint64 {
 	return s.nnUids
 }
@@ -125,15 +116,6 @@ func euclidianDistanceSq[T c.Float](a, b []T, floatBits int) (T, error) {
 		distSq += val * val
 	}
 	return distSq, nil
-}
-
-func contains[T c.Float](slice []minPersistentHeapElement[T], uuid uint64) bool {
-	for _, e := range slice {
-		if e.index == uuid {
-			return true
-		}
-	}
-	return false
 }
 
 // Used for distance, since shorter distance is better

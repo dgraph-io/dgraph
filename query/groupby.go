@@ -158,7 +158,9 @@ func aggregateGroup(grp *groupResult, child *SubGraph) (types.Val, error) {
 		if err != nil {
 			continue
 		}
-		ag.Apply(val)
+		if err := ag.Apply(val); err != nil {
+			return types.Val{}, err
+		}
 	}
 	return ag.Value()
 }

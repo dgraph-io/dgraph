@@ -50,11 +50,6 @@ func (hf *persistentIndexFactory[T]) isNameAvailableWithLock(name string) bool {
 	_, nameUsed := hf.indexMap[name]
 	return !nameUsed
 }
-func (hf *persistentIndexFactory[T]) isNameAvailable(name string) bool {
-	hf.mu.Lock()
-	defer hf.mu.Unlock()
-	return hf.isNameAvailableWithLock(name)
-}
 
 // hf.AllowedOptions() allows persistentIndexFactory to implement the
 // IndexFactory interface (see vector-indexer/index/index.go for details).

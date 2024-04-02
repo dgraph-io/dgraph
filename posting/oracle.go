@@ -28,8 +28,8 @@ import (
 	ostats "go.opencensus.io/stats"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/tok/index"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 var o *oracle

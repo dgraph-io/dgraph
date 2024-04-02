@@ -17,8 +17,6 @@
 package tok
 
 import (
-	"fmt"
-
 	"github.com/pkg/errors"
 
 	"github.com/dgraph-io/dgraph/tok/index"
@@ -124,5 +122,5 @@ func (f *indexFactory) IsLossy() bool    { return true }
 
 func tokensForExpectedVFloat(v interface{}) ([]string, error) {
 	// If there is a vfloat, we can only allow one mutation at a time
-	return []string{fmt.Sprint("float")}, nil
+	return []string{"float"}, nil
 }

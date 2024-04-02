@@ -1082,7 +1082,9 @@ func evalLevelAgg(
 		}
 		for _, uid := range list.Uids {
 			if val, ok := vals[uid]; ok {
-				ag.Apply(val)
+				if err := ag.Apply(val); err != nil {
+					return nil, errors.Errorf("Error in applying aggregation %s", err)
+				}
 			}
 		}
 		v, err := ag.Value()
@@ -1147,8 +1149,12 @@ func (fromNode *varValue) transformTo(toPath []*SubGraph) (map[uint64]types.Val,
 			for j := 0; j < len(ul.Uids); j++ {
 				dstUid := ul.Uids[j]
 				ag := aggregator{name: "sum"}
-				ag.Apply(curVal)
-				ag.Apply(tempMap[dstUid])
+				if err := ag.Apply(curVal); err != nil {
+					return nil, errors.Errorf("Error in applying aggregation %s", err)
+				}
+				if err := ag.Apply(tempMap[dstUid]); err != nil {
+					return nil, errors.Errorf("Error in applying aggregation %s", err)
+				}
 				val, err := ag.Value()
 				if err != nil {
 					continue
@@ -1645,8 +1651,12 @@ func (sg *SubGraph) populateFacetVars(doneVars map[string]varValue, sgPath []*Su
 							"facet var encountered.")
 					}
 					ag := aggregator{name: "sum"}
-					ag.Apply(pVal)
-					ag.Apply(nVal)
+					if err := ag.Apply(pVal); err != nil {
+						return err
+					}
+					if err := ag.Apply(nVal); err != nil {
+						return err
+					}
 					fVal, err := ag.Value()
 					if err != nil {
 						continue
