@@ -78,7 +78,7 @@ func TestRaceCreateOrReplace(t *testing.T) {
 	var wg sync.WaitGroup
 	run := func() {
 		for i := 0; i < 10; i++ {
-			vIndex, err := f.CreateOrReplace(test.pred, opts, nil, 64)
+			vIndex, err := f.CreateOrReplace(test.pred, opts, 32)
 			if err != nil {
 				t.Errorf("Error creating index: %s for test case %d (%+v)",
 					err, i, test)
@@ -100,10 +100,10 @@ func TestRaceCreateOrReplace(t *testing.T) {
 }
 
 func TestCreatepersistentHNSW(t *testing.T) {
-	f := CreateFactory[float64](64)
+	f := CreateFactory[float64](32)
 	for i, test := range createpersistentHNSWTests {
 		opts := optionsFromCreateTestCase(test)
-		vIndex, err := f.CreateOrReplace(test.pred, opts, nil, 64)
+		vIndex, err := f.CreateOrReplace(test.pred, opts, 32)
 		if err != nil {
 			t.Errorf("Error creating index: %s for test case %d (%+v)",
 				err, i, test)

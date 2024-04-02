@@ -154,7 +154,9 @@ func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) 
 			Value:     deadNodesBytes,
 			ValueType: pb.Posting_ValType(0),
 		}
-		pl.addMutation(ctx, txn, edge)
+		if err := pl.addMutation(ctx, txn, edge); err != nil {
+			return nil, err
+		}
 	}
 
 	// TODO: As stated earlier, we need to validate that it is okay to assume
