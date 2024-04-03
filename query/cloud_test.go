@@ -41,6 +41,6 @@ func TestMain(m *testing.M) {
 
 	dc = c
 	client = dg.Dgraph
-	populateCluster()
+	populateCluster(dc)
 	m.Run()
 }

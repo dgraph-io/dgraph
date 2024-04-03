@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Hypermode, Inc. and Contributors
+ * Copyright 2016-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,6 +34,9 @@ type IndexFactory[T c.Float] interface {
 	// The Name returned represents the name of the factory rather than the
 	// name of any particular index.
 	Name() string
+
+	// Fetch the string of all the options being used
+	GetOptions(o opts.Options) string
 
 	// Specifies the set of allowed options and a corresponding means to
 	// parse a string version of those options.
@@ -79,15 +82,35 @@ func AcceptAll[T c.Float](_, _ []T, _ uint64) bool { return true }
 // AcceptNone implements SearchFilter by way of rejecting all results.
 func AcceptNone[T c.Float](_, _ []T, _ uint64) bool { return false }
 
+// OptionalIndexSupport defines abilities that might not be universally
+// supported by all VectorIndex types. A VectorIndex will technically
+// define the functions required by OptionalIndexSupport, but may do so
+// by way of simply returning an errors.ErrUnsupported result.
+type OptionalIndexSupport[T c.Float] interface {
+	// SearchWithPath(ctx, c, query, maxResults, filter) is similar to
+	// Search(ctx, c, query, maxResults, filter), but returns an extended
+	// set of content in the search results.
+	// The full contents returned are indicated by the SearchPathResult.
+	// See the description there for more info.
+	SearchWithPath(
+		ctx context.Context,
+		c CacheType,
+		query []T,
+		maxResults int,
+		filter SearchFilter[T]) (*SearchPathResult, error)
+}
+
 // A VectorIndex can be used to Search for vectors and add vectors to an index.
 type VectorIndex[T c.Float] interface {
+	OptionalIndexSupport[T]
+
 	// Search will find the uids for a given set of vectors based on the
 	// input query, limiting to the specified maximum number of results.
 	// The filter parameter indicates that we might discard certain parameters
 	// based on some input criteria. The maxResults count is counted *after*
 	// being filtered. In other words, we only count those results that had not
 	// been filtered out.
-	Search(ctx context.Context, query []T,
+	Search(ctx context.Context, c CacheType, query []T,
 		maxResults int,
 		filter SearchFilter[T]) ([]uint64, error)
 
@@ -97,11 +120,51 @@ type VectorIndex[T c.Float] interface {
 	// based on some input criteria. The maxResults count is counted *after*
 	// being filtered. In other words, we only count those results that had not
 	// been filtered out.
-	SearchWithUid(ctx context.Context, queryUid uint64,
+	SearchWithUid(ctx context.Context, c CacheType, queryUid uint64,
 		maxResults int,
 		filter SearchFilter[T]) ([]uint64, error)
 
 	// Insert will add a vector and uuid into the existing VectorIndex. If
 	// uuid already exists, it should throw an error to not insert duplicate uuids
-	Insert(ctx context.Context, uuid uint64, vec []T) ([]*KeyValue, error)
+	Insert(ctx context.Context, c CacheType, uuid uint64, vec []T) ([]*KeyValue, error)
+}
+
+// A Txn is an interface representation of a persistent storage transaction,
+// where multiple operations are performed on a database
+type Txn interface {
+	// StartTs gets the exact time that the transaction started, returned in uint64 format
+	StartTs() uint64
+	// Get uses a []byte key to return the Value corresponding to the key
+	Get(key []byte) (rval Value, rerr error)
+	// GetWithLockHeld uses a []byte key to return the Value corresponding to the key with a mutex lock held
+	GetWithLockHeld(key []byte) (rval Value, rerr error)
+	Find(prefix []byte, filter func(val []byte) bool) (uint64, error)
+	// Adds a mutation operation on a index.Txn interface, where the mutation
+	// is represented in the form of an index.DirectedEdge
+	AddMutation(ctx context.Context, key []byte, t *KeyValue) error
+	// Same as AddMutation but with a mutex lock held
+	AddMutationWithLockHeld(ctx context.Context, key []byte, t *KeyValue) error
+	// mutex lock
+	LockKey(key []byte)
+	// mutex unlock
+	UnlockKey(key []byte)
+}
+
+// Local cache is an interface representation of the local cache of a persistent storage system
+type LocalCache interface {
+	// Get uses a []byte key to return the Value corresponding to the key
+	Get(key []byte) (rval Value, rerr error)
+	// GetWithLockHeld uses a []byte key to return the Value corresponding to the key with a mutex lock held
+	GetWithLockHeld(key []byte) (rval Value, rerr error)
+	Find(prefix []byte, filter func(val []byte) bool) (uint64, error)
+}
+
+// Value is an interface representation of the value of a persistent storage system
+type Value interface{}
+
+// CacheType is an interface representation of the cache of a persistent storage system
+type CacheType interface {
+	Get(key []byte) (rval Value, rerr error)
+	Ts() uint64
+	Find(prefix []byte, filter func(val []byte) bool) (uint64, error)
 }

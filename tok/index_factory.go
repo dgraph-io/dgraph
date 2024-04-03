@@ -17,8 +17,6 @@
 package tok
 
 import (
-	"fmt"
-
 	"github.com/pkg/errors"
 
 	"github.com/dgraph-io/dgraph/tok/index"
@@ -55,7 +53,7 @@ type FactoryCreateSpec struct {
 }
 
 func (fcs *FactoryCreateSpec) Name() string {
-	return fcs.factory.Name()
+	return fcs.factory.Name() + fcs.factory.GetOptions(fcs.opts)
 }
 
 func (fcs *FactoryCreateSpec) CreateIndex(name string) (index.VectorIndex[float32], error) {
@@ -108,6 +106,10 @@ func (f *indexFactory) CreateOrReplace(
 	return f.delegate.CreateOrReplace(name, o, floatBits)
 }
 
+func (f *indexFactory) GetOptions(o opts.Options) string {
+	return f.delegate.GetOptions(o)
+}
+
 func (f *indexFactory) Type() string {
 	return "float32vector"
 }
@@ -120,5 +122,5 @@ func (f *indexFactory) IsLossy() bool    { return true }
 
 func tokensForExpectedVFloat(v interface{}) ([]string, error) {
 	// If there is a vfloat, we can only allow one mutation at a time
-	return []string{fmt.Sprint("float")}, nil
+	return []string{"float"}, nil
 }

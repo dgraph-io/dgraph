@@ -113,7 +113,7 @@ func (t TypeID) Name() string {
 	case PasswordID:
 		return "password"
 	case VFloatID:
-		return "vfloat"
+		return "float32vector"
 	}
 	return ""
 }

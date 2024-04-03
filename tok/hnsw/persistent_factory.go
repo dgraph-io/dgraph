@@ -42,14 +42,13 @@ func CreateFactory[T c.Float](floatBits int) index.IndexFactory[T] {
 // Implements NamedFactory interface for use as a plugin.
 func (hf *persistentIndexFactory[T]) Name() string { return Hnsw }
 
+func (hf *persistentIndexFactory[T]) GetOptions(o opt.Options) string {
+	return GetPersistantOptions[T](o)
+}
+
 func (hf *persistentIndexFactory[T]) isNameAvailableWithLock(name string) bool {
 	_, nameUsed := hf.indexMap[name]
 	return !nameUsed
-}
-func (hf *persistentIndexFactory[T]) isNameAvailable(name string) bool {
-	hf.mu.Lock()
-	defer hf.mu.Unlock()
-	return hf.isNameAvailableWithLock(name)
 }
 
 // hf.AllowedOptions() allows persistentIndexFactory to implement the
@@ -93,8 +92,20 @@ func (hf *persistentIndexFactory[T]) createWithLock(
 		err := errors.New("index with name " + name + " already exists")
 		return nil, err
 	}
-	// Not implemented yet
-	return nil, nil
+	retVal := &persistentHNSW[T]{
+		pred:         name,
+		vecEntryKey:  ConcatStrings(name, VecEntry),
+		vecKey:       ConcatStrings(name, VecKeyword),
+		vecDead:      ConcatStrings(name, VecDead),
+		floatBits:    floatBits,
+		nodeAllEdges: map[uint64][][]uint64{},
+	}
+	err := retVal.applyOptions(o)
+	if err != nil {
+		return nil, err
+	}
+	hf.indexMap[name] = retVal
+	return retVal, nil
 }
 
 // Find is an implementation of the IndexFactory interface function, invoked by an persistentIndexFactory

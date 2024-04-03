@@ -19,6 +19,7 @@ package worker
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -41,6 +42,8 @@ import (
 	"github.com/dgraph-io/dgraph/schema"
 	ctask "github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/tok"
+	"github.com/dgraph-io/dgraph/tok/hnsw"
+	"github.com/dgraph-io/dgraph/tok/index"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
@@ -220,6 +223,7 @@ const (
 	uidInFn
 	customIndexFn
 	matchFn
+	similarToFn
 	standardFn = 100
 )
 
@@ -258,6 +262,8 @@ func parseFuncTypeHelper(name string) (FuncType, string) {
 		return hasFn, f
 	case "uid_in":
 		return uidInFn, f
+	case "similar_to":
+		return similarToFn, f
 	case "anyof", "allof":
 		return customIndexFn, f
 	case "match":
@@ -281,6 +287,8 @@ func needsIndex(fnType FuncType, uidList *pb.List) bool {
 		}
 		return true
 	case geoFn, fullTextSearchFn, standardFn, matchFn:
+		return true
+	case similarToFn:
 		return true
 	}
 	return false
@@ -317,7 +325,7 @@ func (srcFn *functionContext) needsValuePostings(typ types.TypeID) (bool, error)
 	case uidInFn, compareScalarFn:
 		// Operate on uid postings
 		return false, nil
-	case notAFunction:
+	case notAFunction, similarToFn:
 		return typ.IsScalar(), nil
 	}
 	return false, errors.Errorf("Unhandled case in fetchValuePostings for fn: %s", srcFn.fname)
@@ -341,9 +349,44 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 	}
 
 	switch srcFn.fnType {
-	case notAFunction, aggregatorFn, passwordFn, compareAttrFn:
+	case notAFunction, aggregatorFn, passwordFn, compareAttrFn, similarToFn:
 	default:
 		return errors.Errorf("Unhandled function in handleValuePostings: %s", srcFn.fname)
+	}
+
+	if srcFn.fnType == similarToFn {
+		numNeighbors, err := strconv.ParseInt(q.SrcFunc.Args[0], 10, 32)
+		if err != nil {
+			return fmt.Errorf("invalid value for number of neighbors: %s", q.SrcFunc.Args[0])
+		}
+		cspec, err := pickFactoryCreateSpec(ctx, args.q.Attr)
+		if err != nil {
+			return err
+		}
+		//TODO: generate maxLevels from schema, filter, etc.
+		qc := hnsw.NewQueryCache(
+			posting.NewViLocalCache(qs.cache),
+			args.q.ReadTs,
+		)
+		indexer, err := cspec.CreateIndex(args.q.Attr)
+		if err != nil {
+			return err
+		}
+		var nnUids []uint64
+		if srcFn.vectorInfo != nil {
+			nnUids, err = indexer.Search(ctx, qc, srcFn.vectorInfo,
+				int(numNeighbors), index.AcceptAll[float32])
+		} else {
+			nnUids, err = indexer.SearchWithUid(ctx, qc, srcFn.vectorUid,
+				int(numNeighbors), index.AcceptAll[float32])
+		}
+
+		if err != nil {
+			return err
+		}
+		sort.Slice(nnUids, func(i, j int) bool { return nnUids[i] < nnUids[j] })
+		args.out.UidMatrix = append(args.out.UidMatrix, &pb.List{Uids: nnUids})
+		return nil
 	}
 
 	if srcFn.atype == types.PasswordID && srcFn.fnType != passwordFn {
@@ -1026,7 +1069,7 @@ func (qs *queryState) helpProcessTask(ctx context.Context, q *pb.Query, gid uint
 	}
 	if needsValPostings {
 		span.Annotate(nil, "handleValuePostings")
-		if err = qs.handleValuePostings(ctx, args); err != nil {
+		if err := qs.handleValuePostings(ctx, args); err != nil {
 			return nil, err
 		}
 	} else {
@@ -1684,6 +1727,8 @@ type functionContext struct {
 	isFuncAtRoot   bool
 	isStringFn     bool
 	atype          types.TypeID
+	vectorInfo     []float32
+	vectorUid      uint64
 }
 
 const (
@@ -1941,6 +1986,14 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 			return nil, err
 		}
 		checkRoot(q, fc)
+	case similarToFn:
+		if err = ensureArgsCount(q.SrcFunc, 2); err != nil {
+			return nil, err
+		}
+		fc.vectorInfo, fc.vectorUid, err = interpretVFloatOrUid(q.SrcFunc.Args[1])
+		if err != nil {
+			return nil, err
+		}
 	case uidInFn:
 		for _, arg := range q.SrcFunc.Args {
 			uidParsed, err := strconv.ParseUint(arg, 0, 64)
@@ -1964,6 +2017,18 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 		return nil, errors.Errorf("FnType %d not handled in numFnAttrs.", fnType)
 	}
 	return fc, nil
+}
+
+func interpretVFloatOrUid(val string) ([]float32, uint64, error) {
+	vf, err := types.ParseVFloat(val)
+	if err == nil {
+		return vf, 0, nil
+	}
+	uid, err := strconv.ParseUint(val, 0, 64)
+	if err == nil {
+		return nil, uid, nil
+	}
+	return nil, uid, errors.Errorf("Value %q is not a uid or vector", val)
 }
 
 // ServeTask is used to respond to a query.
