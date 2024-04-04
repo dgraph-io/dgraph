@@ -94,7 +94,7 @@ func UnmarshalVectorResp(resp *api.Response) ([][]float32, error) {
 		} `json:"vector"`
 	}
 	var data Data
-	if err := json.Unmarshal([]byte(resp.Json), &data); err != nil {
+	if err := json.Unmarshal(resp.Json, &data); err != nil {
 		return nil, err
 	}
 
