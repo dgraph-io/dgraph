@@ -543,9 +543,10 @@ func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate) error {
 			x.ParseAttr(edge.Attr), edge)
 
 	case schemaType == types.TypeID(pb.Posting_VFLOAT):
-		if !(storageType == types.TypeID(pb.Posting_DEFAULT) || storageType == types.TypeID(pb.Posting_STRING) || storageType == types.TypeID(pb.Posting_VFLOAT)) {
-			return errors.Errorf("Input for predicate %q of type vector is not vector. Did you forget to add quotes before []?. Edge: %v",
-				x.ParseAttr(edge.Attr), edge)
+		if !(storageType == types.TypeID(pb.Posting_VFLOAT) || storageType == types.TypeID(pb.Posting_STRING) ||
+			storageType == types.TypeID(pb.Posting_DEFAULT)) {
+			return errors.Errorf("Input for predicate %q of type vector is not vector."+
+				" Did you forget to add quotes before []?. Edge: %v", x.ParseAttr(edge.Attr), edge)
 		}
 
 	// The suggested storage type matches the schema, OK! (Nothing to do ...)
