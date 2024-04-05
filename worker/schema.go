@@ -57,7 +57,7 @@ func getSchema(ctx context.Context, s *pb.SchemaRequest) (*pb.SchemaResult, erro
 		fields = s.Fields
 	} else {
 		fields = []string{"type", "index", "tokenizer", "reverse", "count", "list", "upsert", "unique",
-			"lang", "noconflict"}
+			"lang", "noconflict", "vector_specs"}
 	}
 
 	myGid := groups().groupId()
@@ -119,6 +119,8 @@ func populateSchema(attr string, fields []string) *pb.SchemaNode {
 			schemaNode.Lang = pred.GetLang()
 		case "noconflict":
 			schemaNode.NoConflict = pred.GetNoConflict()
+		case "vector_specs":
+			schemaNode.IndexSpecs = pred.GetIndexSpecs()
 		default:
 			//pass
 		}

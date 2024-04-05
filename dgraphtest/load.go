@@ -386,7 +386,7 @@ func (c *LocalCluster) LiveLoadFromExport(exportDir string) error {
 	}()
 
 	// .rdf.gz, .schema.gz,.gql_schema.gz
-	var rdfFiles, schemaFiles, gqlSchemaFiles []string
+	var rdfFiles, schemaFiles, gqlSchemaFiles, jsonFiles []string
 	tr := tar.NewReader(ts)
 	for {
 		header, err := tr.Next()
@@ -404,6 +404,8 @@ func (c *LocalCluster) LiveLoadFromExport(exportDir string) error {
 		switch {
 		case strings.HasSuffix(fileName, ".rdf.gz"):
 			rdfFiles = append(rdfFiles, hostFile)
+		case strings.HasSuffix(fileName, ".json.gz"):
+			jsonFiles = append(jsonFiles, hostFile)
 		case strings.HasSuffix(fileName, ".schema.gz"):
 			schemaFiles = append(schemaFiles, hostFile)
 		case strings.HasSuffix(fileName, ".gql_schema.gz"):
@@ -441,9 +443,13 @@ func (c *LocalCluster) LiveLoadFromExport(exportDir string) error {
 	}
 
 	opts := LiveOpts{
-		DataFiles:      rdfFiles,
 		SchemaFiles:    schemaFiles,
 		GqlSchemaFiles: gqlSchemaFiles,
+	}
+	if len(rdfFiles) == 0 {
+		opts.DataFiles = jsonFiles
+	} else {
+		opts.DataFiles = rdfFiles
 	}
 	if err := c.LiveLoad(opts); err != nil {
 		return errors.Wrapf(err, "error running live loader: %v", err)

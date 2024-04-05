@@ -357,10 +357,10 @@ func parseValue(v varInfo) (types.Val, error) {
 				}, nil
 			}
 		}
-	case "vector32float":
+	case "float32vector":
 		{
 			if i, err := types.ParseVFloat(v.Value); err != nil {
-				return types.Val{}, errors.Wrapf(err, "Expected a vfloat but got %v", v.Value)
+				return types.Val{}, errors.Wrapf(err, "Expected a float32vector but got %v", v.Value)
 			} else {
 				return types.Val{
 					Tid:   types.VFloatID,
@@ -415,10 +415,10 @@ func checkValueType(vm varMap) error {
 						return errors.Wrapf(err, "Expected a bool but got %v", v.Value)
 					}
 				}
-			case "vfloat":
+			case "float32vector":
 				{
 					if _, err := types.ParseVFloat(v.Value); err != nil {
-						return errors.Wrapf(err, "Expected a vfloat but got %v", v.Value)
+						return errors.Wrapf(err, "Expected a vector32float but got %v", v.Value)
 					}
 				}
 			case "string": // Value is a valid string. No checks required.
