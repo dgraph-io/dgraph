@@ -1791,6 +1791,9 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 		case q.UidList != nil && len(fc.tokens) > len(q.UidList.Uids) && fc.fname != eq:
 			fc.tokens = fc.tokens[:0]
 			fc.n = len(q.UidList.Uids)
+		case q.UidList != nil && fc.fname == eq && strings.HasSuffix(attr, "dgraph.type") && int64(len(q.UidList.Uids)) < Config.TypeFilterUidLimit:
+			fc.tokens = fc.tokens[:0]
+			fc.n = len(q.UidList.Uids)
 		default:
 			fc.n = len(fc.tokens)
 		}
