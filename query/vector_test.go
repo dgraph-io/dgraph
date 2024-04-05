@@ -487,6 +487,49 @@ func TestVectorUpdate(t *testing.T) {
 	}
 }
 
+func TestVectorWithoutQuote(t *testing.T) {
+	pred := "test-ve"
+	dropPredicate(pred)
+	setSchema(fmt.Sprintf(vectorSchemaWithIndex, pred, "4", "euclidian"))
+
+	setJson := `
+{
+   "set": [
+     {
+       "test-ve": [1,0],
+       "v-name":"ve1"
+     },
+     {
+       "test-ve": [0.866025,0.5],
+       "v-name":"ve2"
+     },
+     {
+       "test-ve": [0.5,0.866025],
+       "v-name":"ve3"
+     },
+     {
+       "test-ve": [0,1],
+       "v-name":"ve4"
+     },
+     {
+       "test-ve": [-0.5,0.866025],
+       "v-name":"ve5"
+     },
+     {
+       "test-ve": [-0.866025,0.5],
+       "v-name":"ve6"
+     }
+   ]
+ }
+	`
+	txn1 := client.NewTxn()
+	_, err := txn1.Mutate(context.Background(), &api.Mutation{
+		SetJson: []byte(setJson),
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Input for predicate \"test-ve\" of type vector is not vector")
+}
+
 func TestVectorTwoTxnWithoutCommit(t *testing.T) {
 	pred := "vtest"
 	dropPredicate(pred)
