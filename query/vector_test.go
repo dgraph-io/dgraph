@@ -267,6 +267,31 @@ func testVectorMutationDiffrentLength(t *testing.T, err string) {
 	require.ErrorContains(t, addTriplesToCluster(rdf), err)
 }
 
+func TestVectorInQueryArgument(t *testing.T) {
+	dropPredicate("vtest")
+	setSchema(fmt.Sprintf(vectorSchemaWithIndex, "vtest", "4", "euclidian"))
+
+	numVectors := 100
+	vectorSize := 4
+
+	randomVectors, allVectors := generateRandomVectors(numVectors, vectorSize, "vtest")
+	require.NoError(t, addTriplesToCluster(randomVectors))
+
+	query := `query demo($v: float32vector) {
+		 vector(func: similar_to(vtest, 1, $v)) {
+				uid
+		 }
+	}`
+
+	vectorString := fmt.Sprintf(`[%s]`, strings.Trim(strings.Join(strings.Fields(fmt.Sprint(allVectors[0])), ", "), "[]"))
+	vars := map[string]string{
+		"$v": vectorString,
+	}
+
+	_, err := processQueryWithVars(t, query, vars)
+	require.NoError(t, err)
+}
+
 func TestVectorsMutateFixedLengthWithDiffrentIndexes(t *testing.T) {
 	dropPredicate("vtest")
 

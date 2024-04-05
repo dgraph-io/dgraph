@@ -177,7 +177,7 @@ func TestVectorSchema(t *testing.T) {
 	resp, err := testutil.RetryQuery(dg, "schema {}")
 	require.NoError(t, err)
 
-	x.AssertTrue(strings.Contains(string(resp.Json), `{"predicate":"vectortest","type":"float32vector","tokenizer":["hnsw(\"metric\":\"euclidian\")"]}`))
+	x.AssertTrue(strings.Contains(string(resp.Json), `{"predicate":"vectortest","type":"float32vector","tokenizer":["hnsw(\"metric\":\"euclidian\")"],"index_specs":[{"name":"hnsw","options":[{"key":"metric","value":"euclidian"}]}]}]`))
 }
 
 func TestProcessTask(t *testing.T) {
