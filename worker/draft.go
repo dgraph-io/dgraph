@@ -836,7 +836,7 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 	writer := posting.NewTxnWriter(pstore)
 	toDisk := func(start, commit uint64) {
 		txn := posting.Oracle().GetTxn(start)
-		if txn == nil {
+		if txn == nil || commit == 0 {
 			return
 		}
 		txn.Update()
@@ -865,6 +865,7 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 	if err := writer.Flush(); err != nil {
 		return errors.Wrapf(err, "while flushing to disk")
 	}
+
 	if x.WorkerConfig.HardSync {
 		if err := pstore.Sync(); err != nil {
 			glog.Errorf("Error while calling Sync while commitOrAbort: %v", err)
@@ -879,9 +880,8 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 	// Clear all the cached lists that were touched by this transaction.
 	for _, status := range delta.Txns {
 		txn := posting.Oracle().GetTxn(status.StartTs)
-		txn.RemoveCachedKeys()
+		txn.UpdateCachedKeys(status.CommitTs)
 	}
-	posting.WaitForCache()
 
 	// Now advance Oracle(), so we can service waiting reads.
 	posting.Oracle().ProcessDelta(delta)
