@@ -313,6 +313,20 @@ func (o *oracle) ProcessDelta(delta *pb.OracleDelta) {
 		x.MaxAssignedTs.M(int64(delta.MaxAssigned))) // Can't access o.MaxAssigned without atomics.
 }
 
+func (o *oracle) DeleteTxnsAndRollupKeys(delta *pb.OracleDelta) {
+	o.Lock()
+	for _, status := range delta.Txns {
+		txn := o.pendingTxns[status.StartTs]
+		if txn != nil && status.CommitTs > 0 {
+			for k := range txn.cache.deltas {
+				IncrRollup.addKeyToBatch([]byte(k), 0)
+			}
+		}
+		delete(o.pendingTxns, status.StartTs)
+	}
+	o.Unlock()
+}
+
 func (o *oracle) ResetTxns() {
 	o.Lock()
 	defer o.Unlock()

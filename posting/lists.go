@@ -49,10 +49,12 @@ func Init(ps *badger.DB, cacheSize int64) {
 	pstore = ps
 	closer = z.NewCloser(1)
 	go x.MonitorMemoryMetrics(closer)
+
 	// Initialize cache.
 	if cacheSize == 0 {
 		return
 	}
+
 	var err error
 	lCache, err = ristretto.NewCache(&ristretto.Config{
 		// Use 5% of cache memory for storing counters.
@@ -61,11 +63,15 @@ func Init(ps *badger.DB, cacheSize int64) {
 		BufferItems: 64,
 		Metrics:     true,
 		Cost: func(val interface{}) int64 {
-			l, ok := val.(*List)
-			if !ok {
-				return int64(0)
+			switch val.(type) {
+			case *List:
+				return int64(val.(*List).DeepSize())
+			case uint64:
+				return 8
+			default:
+				x.AssertTruef(false, "Don't know about type %T in Dgraph cache", val)
+				return 0
 			}
-			return int64(l.DeepSize())
 		},
 	})
 	x.Check(err)
