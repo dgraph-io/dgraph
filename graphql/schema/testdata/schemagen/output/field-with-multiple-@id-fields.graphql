@@ -11,7 +11,7 @@ type Post {
 
 type Author {
 	id: ID
-	name: String! @id @search(by: [regexp])
+	name: String! @id @search(by: ["regexp"])
 	pen_name: String! @id
 	posts(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
 	postsAggregate(filter: PostFilter): PostAggregateResult
@@ -78,6 +78,7 @@ enum DgraphIndex {
 	day
 	hour
 	geo
+	hnsw
 }
 
 input AuthRule {
@@ -191,7 +192,8 @@ input GenerateMutationParams {
 }
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION
-directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
+directive @search(by: [String!]) on FIELD_DEFINITION
+directive @hm_embedding on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id(interface: Boolean) on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE | FIELD_DEFINITION
@@ -345,11 +347,6 @@ type UpdateAuthorPayload {
 	numUids: Int
 }
 
-type UpdateGenrePayload {
-	genre(filter: GenreFilter, order: GenreOrder, first: Int, offset: Int): [Genre]
-	numUids: Int
-}
-
 type UpdatePostPayload {
 	post(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
 	numUids: Int
@@ -425,8 +422,6 @@ input AuthorOrder {
 }
 
 input AuthorPatch {
-	name: String
-	pen_name: String
 	posts: [PostRef]
 }
 
@@ -449,10 +444,6 @@ input GenreOrder {
 	asc: GenreOrderable
 	desc: GenreOrderable
 	then: GenreOrder
-}
-
-input GenrePatch {
-	name: String
 }
 
 input GenreRef {
@@ -498,12 +489,6 @@ input UpdateAuthorInput {
 	remove: AuthorPatch
 }
 
-input UpdateGenreInput {
-	filter: GenreFilter!
-	set: GenrePatch
-	remove: GenrePatch
-}
-
 input UpdatePostInput {
 	filter: PostFilter!
 	set: PostPatch
@@ -538,7 +523,6 @@ type Mutation {
 	updateAuthor(input: UpdateAuthorInput!): UpdateAuthorPayload
 	deleteAuthor(filter: AuthorFilter!): DeleteAuthorPayload
 	addGenre(input: [AddGenreInput!]!, upsert: Boolean): AddGenrePayload
-	updateGenre(input: UpdateGenreInput!): UpdateGenrePayload
 	deleteGenre(filter: GenreFilter!): DeleteGenrePayload
 }
 

@@ -4,7 +4,7 @@
 
 type Author {
 	id: ID!
-	name: String! @search(by: [hash])
+	name: String! @search(by: ["hash"])
 	dob: DateTime
 	posts(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
 	postsAggregate(filter: PostFilter): PostAggregateResult
@@ -12,8 +12,8 @@ type Author {
 
 type Post {
 	postID: ID!
-	title: String! @search(by: [term,fulltext])
-	text: String @search(by: [fulltext,term])
+	title: String! @search(by: ["term","fulltext"])
+	text: String @search(by: ["fulltext","term"])
 	datePublished: DateTime
 }
 
@@ -74,6 +74,7 @@ enum DgraphIndex {
 	day
 	hour
 	geo
+	hnsw
 }
 
 input AuthRule {
@@ -187,7 +188,8 @@ input GenerateMutationParams {
 }
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION
-directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
+directive @search(by: [String!]) on FIELD_DEFINITION
+directive @hm_embedding on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id(interface: Boolean) on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE | FIELD_DEFINITION

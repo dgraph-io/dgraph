@@ -37,7 +37,7 @@ func TestDgraphMapping_WithoutDirectives(t *testing.T) {
 type Author {
         id: ID!
 
-        name: String! @search(by: [hash, trigram])
+        name: String! @search(by: ["hash", "trigram"])
         dob: DateTime @search
         reputation: Float @search
         posts: [Post!] @hasInverse(field: author)
@@ -61,7 +61,7 @@ interface Employee {
 
 interface Character {
         id: ID!
-        name: String! @search(by: [exact])
+        name: String! @search(by: ["exact"])
         appearsIn: [Episode!] @search
 }
 
@@ -82,7 +82,7 @@ enum Episode {
 
 type Starship {
         id: ID!
-        name: String! @search(by: [term])
+        name: String! @search(by: ["term"])
         length: Float
 }`
 
@@ -222,7 +222,7 @@ func TestDgraphMapping_WithDirectives(t *testing.T) {
 	type Author @dgraph(type: "dgraph.author") {
 			id: ID!
 
-			name: String! @search(by: [hash, trigram])
+			name: String! @search(by: ["hash", "trigram"])
 			dob: DateTime @search
 			reputation: Float @search
 			posts: [Post!] @hasInverse(field: author)
@@ -246,7 +246,7 @@ func TestDgraphMapping_WithDirectives(t *testing.T) {
 
 	interface Character @dgraph(type: "performance.character") {
 			id: ID!
-			name: String! @search(by: [exact])
+			name: String! @search(by: ["exact"])
 			appearsIn: [Episode!] @search @dgraph(pred: "appears_in")
 	}
 
@@ -267,7 +267,7 @@ func TestDgraphMapping_WithDirectives(t *testing.T) {
 
 	type Starship @dgraph(type: "star.ship") {
 			id: ID!
-			name: String! @search(by: [term]) @dgraph(pred: "star.ship.name")
+			name: String! @search(by: ["term"]) @dgraph(pred: "star.ship.name")
 			length: Float
 	}`
 
@@ -1007,7 +1007,7 @@ func TestAllowedHeadersList(t *testing.T) {
         }
       ) {
         username: String! @id
-        userRole: String @search(by: [hash])
+        userRole: String @search(by: ["hash"])
 	  }
 	  # Dgraph.Authorization  {"VerificationKey":"-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsppQMzPRyYP9KcIAg4CG\nUV3NGCIRdi2PqkFAWzlyo0mpZlHf5Hxzqb7KMaXBt8Yh+1fbi9jcBbB4CYgbvgV0\n7pAZY/HE4ET9LqnjeF2sjmYiGVxLARv8MHXpNLcw7NGcL0FgSX7+B2PB2WjBPnJY\ndvaJ5tsT+AuZbySaJNS1Ha77lW6gy/dmBDybZ1UU+ixRjDWEqPmtD71g2Fpk8fgr\nReNm2h/ZQsJ19onFaGPQN6L6uJR+hfYN0xmOdTC21rXRMUJT8Pw9Xsi6wSt+tI4T\nKxDfMTxKksfjv93dnnof5zJtIcMFQlSKLOrgDC0WP07gVTR2b85tFod80ykevvgu\nAQIDAQAB\n-----END PUBLIC KEY-----","Header":"X-Test-Dgraph","Namespace":"https://dgraph.io/jwt/claims","Algo":"RS256"}
 	`,

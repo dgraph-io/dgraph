@@ -37,7 +37,7 @@
     },
     {
       "index": true,
-      "predicate": "Worker.empId",
+      "predicate": "Worker.emp_Id",
       "tokenizer": [
         "hash"
       ],
@@ -46,7 +46,7 @@
     },
     {
       "index": true,
-      "predicate": "Worker.regNo",
+      "predicate": "Worker.reg_No",
       "tokenizer": [
         "int"
       ],
@@ -177,34 +177,6 @@
       "list": true,
       "predicate": "Employer.worker",
       "type": "uid"
-    },
-    {
-      "index": true,
-      "predicate": "Employer.name",
-      "tokenizer": [
-        "hash"
-      ],
-      "type": "string",
-      "upsert": true
-    },
-    {
-      "index": true,
-      "predicate": "Worker.uniqueId",
-      "tokenizer": [
-        "int"
-      ],
-      "type": "int",
-      "upsert": true
-    },
-    {
-      "index": true,
-      "index": true,
-      "predicate": "Employer.companyId",
-      "tokenizer": [
-        "hash"
-      ],
-      "type": "string",
-      "upsert": true
     },
     {
       "lang": true,
@@ -678,7 +650,8 @@
       "tokenizer": [
         "exact"
       ],
-      "upsert": true
+      "upsert": true,
+      "unique":true
     },
     {
       "predicate": "dgraph.type",
@@ -889,6 +862,52 @@
     {
       "predicate": "职业",
       "type": "string"
+    },
+    {
+      "predicate": "hypermode.embedding.entityType",
+      "type": "string"
+    },
+    {
+      "predicate": "hypermode.embedding.id",
+      "type": "string",
+      "index": true,
+      "tokenizer": [
+        "exact"
+      ],
+      "upsert": true
+    },
+    {
+      "predicate":"hypermode.embedding.modelSpec",
+      "type":"uid"
+    },
+    {
+      "predicate":"hypermode.embedding.predicate",
+      "type":"string"
+    },
+    {
+      "predicate":"hypermode.embedding.prompt",
+      "type":"string"
+    },
+    {
+      "predicate":"hypermode.embedding.query",
+      "type":"string"
+    },
+    {
+      "predicate":"hypermode.model.endpoint",
+      "type":"string"
+    },
+    {
+      "predicate": "hypermode.model.id",
+      "type": "string",
+      "index": true,
+      "tokenizer": [
+        "exact"
+      ],
+      "upsert": true
+    },
+    {
+      "predicate":"hypermode.model.type",
+      "type":"string"
     }
   ],
   "types": [
@@ -1059,16 +1078,13 @@
     {
       "fields": [
         {
-          "name": "Worker.empId"
+          "name": "Worker.emp_Id"
         },
         {
-          "name": "Worker.regNo"
+          "name": "Worker.reg_No"
         },
         {
           "name": "Worker.name"
-        },
-        {
-          "name": "Worker.uniqueId"
         }
       ],
       "name": "Worker"
@@ -1564,12 +1580,6 @@
         },
         {
           "name": "Employer.worker"
-        },
-        {
-          "name": "Employer.companyId"
-        },
-        {
-          "name": "Employer.name"
         }
       ],
       "name": "Employer"
@@ -1681,6 +1691,43 @@
         }
       ],
       "name": "LibraryMember"
+    },
+    {
+      "fields": [
+        {
+          "name": "hypermode.embedding.id"
+        },
+        {
+          "name": "hypermode.embedding.entityType"
+        },
+        {
+          "name": "hypermode.embedding.predicate"
+        },
+        {
+          "name": "hypermode.embedding.modelSpec"
+        },
+        {
+          "name": "hypermode.embedding.query"
+        },
+        {
+          "name": "hypermode.embedding.prompt"
+        }
+      ],
+      "name": "hypermode.type.EmbeddingSpec"
+    },
+    {
+      "fields": [
+        {
+          "name": "hypermode.model.id"
+        },
+        {
+          "name": "hypermode.model.type"
+        },
+        {
+          "name": "hypermode.model.endpoint"
+        }
+      ],
+      "name": "hypermode.type.ModelSpec"
     }
   ]
 }

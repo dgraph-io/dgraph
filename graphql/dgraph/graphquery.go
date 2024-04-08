@@ -28,12 +28,16 @@ import (
 // validate query, and so doesn't return an error if query is 'malformed' - it might
 // just write something that wouldn't parse as a Dgraph query.
 func AsString(queries []*dql.GraphQuery) string {
-	if queries == nil {
+	if len(queries) == 0 {
 		return ""
 	}
 
 	var b strings.Builder
-	x.Check2(b.WriteString("query {\n"))
+	queryName := queries[len(queries)-1].Attr
+	x.Check2(b.WriteString("query "))
+	addQueryVars(&b, queryName, queries[0].Args)
+	x.Check2(b.WriteString("{\n"))
+
 	numRewrittenQueries := 0
 	for _, q := range queries {
 		if q == nil {
@@ -52,6 +56,24 @@ func AsString(queries []*dql.GraphQuery) string {
 		return ""
 	}
 	return b.String()
+}
+
+func addQueryVars(b *strings.Builder, queryName string, args map[string]string) {
+	dollarFound := false
+	for name, val := range args {
+		if strings.HasPrefix(name, "$") {
+			if !dollarFound {
+				x.Check2(b.WriteString(queryName + "("))
+				x.Check2(b.WriteString(name + ": " + val))
+				dollarFound = true
+			} else {
+				x.Check2(b.WriteString(", " + name + ": " + val))
+			}
+		}
+	}
+	if dollarFound {
+		x.Check2(b.WriteString(") "))
+	}
 }
 
 func writeQuery(b *strings.Builder, query *dql.GraphQuery, prefix string) {
@@ -145,6 +167,9 @@ func writeRoot(b *strings.Builder, q *dql.GraphQuery) {
 	}
 
 	switch {
+	// TODO: Instead of the hard-coded strings "uid", "type", etc., use the
+	// pre-defined constants in dql/parser.go such as dql.uidFunc, dql.typFunc,
+	// etc. This of course will require that we make these constants public.
 	case q.Func.Name == "uid":
 		x.Check2(b.WriteString("(func: "))
 		writeUIDFunc(b, q.Func.UID, q.Func.Args)
@@ -152,6 +177,10 @@ func writeRoot(b *strings.Builder, q *dql.GraphQuery) {
 		x.Check2(b.WriteString(fmt.Sprintf("(func: type(%s)", q.Func.Args[0].Value)))
 	case q.Func.Name == "eq":
 		x.Check2(b.WriteString("(func: eq("))
+		writeFilterArguments(b, q.Func.Args)
+		x.Check2(b.WriteRune(')'))
+	case q.Func.Name == "similar_to":
+		x.Check2(b.WriteString("(func: similar_to("))
 		writeFilterArguments(b, q.Func.Args)
 		x.Check2(b.WriteRune(')'))
 	}

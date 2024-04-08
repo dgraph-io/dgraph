@@ -12,12 +12,12 @@ type Person implements Node {
 	f2: String @dgraph(pred: "T.f@no")
 	f3: String @dgraph(pred: "f3@en")
 	name: String! @id
-	nameHi: String @dgraph(pred: "Person.name@hi") @search(by: [term,exact])
-	nameEn: String @dgraph(pred: "Person.name@en") @search(by: [regexp])
+	nameHi: String @dgraph(pred: "Person.name@hi") @search(by: ["term","exact"])
+	nameEn: String @dgraph(pred: "Person.name@en") @search(by: ["regexp"])
 	nameHiEn: String @dgraph(pred: "Person.name@hi:en")
 	nameHi_En_Untag: String @dgraph(pred: "Person.name@hi:en:.")
 	name_Untag_AnyLang: String @dgraph(pred: "Person.name@.")
-	address: String @search(by: [fulltext])
+	address: String @search(by: ["fulltext"])
 	addressHi: String @dgraph(pred: "Person.address@hi")
 	professionEn: String @dgraph(pred: "Person.profession@en")
 }
@@ -79,6 +79,7 @@ enum DgraphIndex {
 	day
 	hour
 	geo
+	hnsw
 }
 
 input AuthRule {
@@ -192,7 +193,8 @@ input GenerateMutationParams {
 }
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION
-directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
+directive @search(by: [String!]) on FIELD_DEFINITION
+directive @hm_embedding on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id(interface: Boolean) on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE | FIELD_DEFINITION
@@ -447,7 +449,6 @@ input PersonPatch {
 	f1Hi: String
 	f2: String
 	f3: String
-	name: String
 	nameHi: String
 	nameEn: String
 	address: String

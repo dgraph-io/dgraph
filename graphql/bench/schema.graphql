@@ -1,14 +1,14 @@
 type Country {
     cid: ID!
     id: String! @id
-    name: String! @search(by: [term])
+    name: String! @search(by: ["term"])
     cities: [City]
 }
 
 type City {
     cid: ID!
     id: String! @id
-    name: String! @search(by: [term])
+    name: String! @search(by: ["term"])
     country: Country! @hasInverse(field: cities)
     restaurants: [RestaurantAddress] @hasInverse(field: city)
 }
@@ -30,12 +30,12 @@ type RestaurantAddress implements Location {
 type Restaurant {
     id: ID!
     xid: String! @id
-    name: String!  @search(by: [term])
+    name: String!  @search(by: ["term"])
     pic: String
     addr: RestaurantAddress
     rating: Float
     costFor2: Float
-    currency: String @search(by: [hash])
+    currency: String @search(by: ["hash"])
     cuisines: [Cuisine]
     dishes: [Dish] @hasInverse(field: servedBy)
     createdAt: DateTime
@@ -47,14 +47,14 @@ type Cuisine {
     name: String! @id
     restaurants: [Restaurant] @hasInverse(field: cuisines)
     dishes: [Dish] @hasInverse(field: cuisine)
-    type: String! @search(by: [hash])
+    type: String! @search(by: ["hash"])
     public: Boolean @search
 }
 
 type Dish {
     id: ID!
-    name: String! @search(by: [term])
-    type: String! @search(by: [hash])
+    name: String! @search(by: ["term"])
+    type: String! @search(by: ["hash"])
     pic: String
     price: Float
     description: String
@@ -65,7 +65,7 @@ type Dish {
 
 type Owner {
     username: String! @id
-    name: String! @search(by: [hash])
+    name: String! @search(by: ["hash"])
     hasRestaurants: [Restaurant] @hasInverse(field: owner)
 }
 

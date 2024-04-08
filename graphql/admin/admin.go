@@ -508,11 +508,15 @@ var (
 		"getGQLSchema": stdAdminQryMWs,
 		// for queries and mutations related to User/Group, dgraph handles Guardian auth,
 		// so no need to apply GuardianAuth Middleware
-		"queryUser":      minimalAdminQryMWs,
-		"queryGroup":     minimalAdminQryMWs,
-		"getUser":        minimalAdminQryMWs,
-		"getCurrentUser": minimalAdminQryMWs,
-		"getGroup":       minimalAdminQryMWs,
+		"queryUser":          minimalAdminQryMWs,
+		"queryGroup":         minimalAdminQryMWs,
+		"queryEmbeddingSpec": minimalAdminQryMWs,
+		"queryModelSpec":     minimalAdminQryMWs,
+		"getUser":            minimalAdminQryMWs,
+		"getCurrentUser":     minimalAdminQryMWs,
+		"getGroup":           minimalAdminQryMWs,
+		"getEmbeddingSpec":   minimalAdminQryMWs,
+		"getModelSpec":       minimalAdminQryMWs,
 	}
 	adminMutationMWConfig = map[string]resolve.MutationMiddlewares{
 		"backup":            gogMutMWs,
@@ -532,12 +536,18 @@ var (
 		"resetPassword":     gogAclMutMWs,
 		// for queries and mutations related to User/Group, dgraph handles Guardian auth,
 		// so no need to apply GuardianAuth Middleware
-		"addUser":     minimalAdminMutMWs,
-		"addGroup":    minimalAdminMutMWs,
-		"updateUser":  minimalAdminMutMWs,
-		"updateGroup": minimalAdminMutMWs,
-		"deleteUser":  minimalAdminMutMWs,
-		"deleteGroup": minimalAdminMutMWs,
+		"addUser":             minimalAdminMutMWs,
+		"addGroup":            minimalAdminMutMWs,
+		"addEmbeddingSpec":    minimalAdminMutMWs,
+		"addModelSpec":        minimalAdminMutMWs,
+		"updateUser":          minimalAdminMutMWs,
+		"updateGroup":         minimalAdminMutMWs,
+		"updateEmbeddingSpec": minimalAdminMutMWs,
+		"updateModelSpec":     minimalAdminMutMWs,
+		"deleteUser":          minimalAdminMutMWs,
+		"deleteGroup":         minimalAdminMutMWs,
+		"deleteEmbeddingSpec": minimalAdminMutMWs,
+		"deleteModelSpec":     minimalAdminMutMWs,
 	}
 	// mainHealthStore stores the health of the main GraphQL server.
 	mainHealthStore = &GraphQLHealthStore{}
@@ -906,6 +916,14 @@ func (as *adminServer) addConnectedAdminResolvers() {
 			func(q schema.Query) resolve.QueryResolver {
 				return resolve.NewQueryResolver(qryRw, dgEx)
 			}).
+		WithQueryResolver("queryEmbeddingSpec",
+			func(q schema.Query) resolve.QueryResolver {
+				return resolve.NewQueryResolver(qryRw, dgEx)
+			}).
+		WithQueryResolver("queryModelSpec",
+			func(q schema.Query) resolve.QueryResolver {
+				return resolve.NewQueryResolver(qryRw, dgEx)
+			}).
 		WithQueryResolver("getGroup",
 			func(q schema.Query) resolve.QueryResolver {
 				return resolve.NewQueryResolver(qryRw, dgEx)
@@ -918,6 +936,14 @@ func (as *adminServer) addConnectedAdminResolvers() {
 			func(q schema.Query) resolve.QueryResolver {
 				return resolve.NewQueryResolver(qryRw, dgEx)
 			}).
+		WithQueryResolver("getEmbeddingSpec",
+			func(q schema.Query) resolve.QueryResolver {
+				return resolve.NewQueryResolver(qryRw, dgEx)
+			}).
+		WithQueryResolver("getModelSpec",
+			func(q schema.Query) resolve.QueryResolver {
+				return resolve.NewQueryResolver(qryRw, dgEx)
+			}).
 		WithMutationResolver("addUser",
 			func(m schema.Mutation) resolve.MutationResolver {
 				return resolve.NewDgraphResolver(resolve.NewAddRewriter(), dgEx)
@@ -925,6 +951,14 @@ func (as *adminServer) addConnectedAdminResolvers() {
 		WithMutationResolver("addGroup",
 			func(m schema.Mutation) resolve.MutationResolver {
 				return resolve.NewDgraphResolver(NewAddGroupRewriter(), dgEx)
+			}).
+		WithMutationResolver("addEmbeddingSpec",
+			func(m schema.Mutation) resolve.MutationResolver {
+				return resolve.NewDgraphResolver(resolve.NewAddRewriter(), dgEx)
+			}).
+		WithMutationResolver("addModelSpec",
+			func(m schema.Mutation) resolve.MutationResolver {
+				return resolve.NewDgraphResolver(resolve.NewAddRewriter(), dgEx)
 			}).
 		WithMutationResolver("updateUser",
 			func(m schema.Mutation) resolve.MutationResolver {
@@ -934,11 +968,27 @@ func (as *adminServer) addConnectedAdminResolvers() {
 			func(m schema.Mutation) resolve.MutationResolver {
 				return resolve.NewDgraphResolver(NewUpdateGroupRewriter(), dgEx)
 			}).
+		WithMutationResolver("updateEmbeddingSpec",
+			func(m schema.Mutation) resolve.MutationResolver {
+				return resolve.NewDgraphResolver(resolve.NewUpdateRewriter(), dgEx)
+			}).
+		WithMutationResolver("updateModelSpec",
+			func(m schema.Mutation) resolve.MutationResolver {
+				return resolve.NewDgraphResolver(resolve.NewUpdateRewriter(), dgEx)
+			}).
 		WithMutationResolver("deleteUser",
 			func(m schema.Mutation) resolve.MutationResolver {
 				return resolve.NewDgraphResolver(resolve.NewDeleteRewriter(), dgEx)
 			}).
 		WithMutationResolver("deleteGroup",
+			func(m schema.Mutation) resolve.MutationResolver {
+				return resolve.NewDgraphResolver(resolve.NewDeleteRewriter(), dgEx)
+			}).
+		WithMutationResolver("deleteEmbeddingSpec",
+			func(m schema.Mutation) resolve.MutationResolver {
+				return resolve.NewDgraphResolver(resolve.NewDeleteRewriter(), dgEx)
+			}).
+		WithMutationResolver("deleteModelSpec",
 			func(m schema.Mutation) resolve.MutationResolver {
 				return resolve.NewDgraphResolver(resolve.NewDeleteRewriter(), dgEx)
 			})

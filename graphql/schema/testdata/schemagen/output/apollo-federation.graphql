@@ -99,6 +99,7 @@ enum DgraphIndex {
 	day
 	hour
 	geo
+	hnsw
 }
 
 input AuthRule {
@@ -212,7 +213,8 @@ input GenerateMutationParams {
 }
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION
-directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
+directive @search(by: [String!]) on FIELD_DEFINITION
+directive @hm_embedding on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id(interface: Boolean) on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE | FIELD_DEFINITION
@@ -571,7 +573,6 @@ input CountryOrder {
 }
 
 input CountryPatch {
-	code: String
 	name: String
 }
 
@@ -721,7 +722,6 @@ input UserOrder {
 }
 
 input UserPatch {
-	name: String
 	age: Int
 	reviews: [ReviewsRef]
 }

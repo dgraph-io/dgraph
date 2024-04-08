@@ -9,6 +9,10 @@
  * may obtain a copy of the License at
  *
  *     https://github.com/dgraph-io/dgraph/blob/main/licenses/DCL.txt
+ *
+ * Oct 2023: added Embedding related types and functions
+ * underlying DQL schema for embeddings is defined in schema.go
+ * resolvers are declared in admin.go
  */
 
 package admin
@@ -274,6 +278,47 @@ const adminTypes = `
 
 		groups: [Group] @dgraph(pred: "dgraph.user.group")
 	}
+	type EmbeddingSpec @dgraph(type: "hypermode.type.EmbeddingSpec")  {
+		"""
+		unique id of embedding spec based on entityType.predicate,   Dgraph ensures uniqueness of id.
+		"""
+		id: String! @id @dgraph(pred: "hypermode.embedding.id")
+		"""
+		The type of object having this predicate.
+		"""
+		entityType: String! @dgraph(pred: "hypermode.embedding.entityType")
+		"""
+		The vector predicate computed by this embedding.
+		"""
+		predicate: String! @dgraph(pred: "hypermode.embedding.predicate")
+		"""
+		The model spec used to compute the embedding
+		"""
+		modelSpec: ModelSpec! @dgraph(pred: "hypermode.embedding.modelSpec")
+		"""
+		the query used to build the prompt for this embedding
+		"""
+		query: String! @dgraph(pred: "hypermode.embedding.query")
+		"""
+		the prompt used to build the embedding
+		"""
+		prompt: String @dgraph(pred: "hypermode.embedding.prompt")
+	}
+
+	type ModelSpec @dgraph(type: "hypermode.type.ModelSpec") {
+		"""
+		unique id of the model, given from hypermode console.
+		"""
+		id: String! @id @dgraph(pred: "hypermode.model.id")
+		"""
+		Type of the model.
+		"""
+		type: String! @dgraph(pred: "hypermode.model.type")
+		"""
+		Endpoint of the model.
+		"""
+		endpoint: String! @dgraph(pred: "hypermode.model.endpoint")
+	}
 
 	type Group @dgraph(type: "dgraph.type.Group") {
 
@@ -330,6 +375,21 @@ const adminTypes = `
 		groups: [GroupRef]
 	}
 
+	input AddEmbeddingSpecInput {
+		id: String!
+		entityType: String!
+		predicate: String!
+		query: String!
+		prompt: String!
+		modelSpec: ModelSpecRef!
+	}
+
+	input AddModelSpecInput {
+		id: String!
+		type: String!
+		endpoint: String!
+	}
+
 	input AddGroupInput {
 		name: String!
 		rules: [RuleRef]
@@ -376,6 +436,26 @@ const adminTypes = `
 		not: UserFilter
 	}
 
+	input ModelSpecRef {
+		id: String!
+		type: String!
+		endpoint: String!
+	}
+
+	input EmbeddingSpecFilter {
+		id: StringHashFilter
+		and: EmbeddingSpecFilter
+		or: EmbeddingSpecFilter
+		not: EmbeddingSpecFilter
+	}
+
+	input ModelSpecFilter {
+		id: StringHashFilter
+		and: ModelSpecFilter
+		or: ModelSpecFilter
+		not: ModelSpecFilter
+	}
+
 	input UserOrder {
 		asc: UserOrderable
 		desc: UserOrderable
@@ -393,10 +473,31 @@ const adminTypes = `
 		groups: [GroupRef]
 	}
 
+	input EmbeddingSpecPatch {
+		query: String
+		prompt: String
+		modelSpec: ModelSpecRef
+	}
+
+	input ModelSpecPatch {
+		type: String
+		endpoint: String
+	}
+
 	input UpdateUserInput {
 		filter: UserFilter!
 		set: UserPatch
 		remove: UserPatch
+	}
+
+	input UpdateEmbeddingSpecInput {
+		filter: EmbeddingSpecFilter!
+		set: EmbeddingSpecPatch
+	}
+
+	input UpdateModelSpecInput {
+		filter: ModelSpecFilter!
+		set: ModelSpecPatch
 	}
 
 	input GroupFilter {
@@ -423,6 +524,14 @@ const adminTypes = `
 	type AddUserPayload {
 		user: [User]
 	}
+	
+	type AddEmbeddingSpecPayload {
+		embeddingSpec: [EmbeddingSpec]
+	}
+
+	type AddModelSpecPayload {
+		modelSpec: [ModelSpec]
+	}
 
 	type AddGroupPayload {
 		group: [Group]
@@ -434,6 +543,16 @@ const adminTypes = `
 	}
 
 	type DeleteGroupPayload {
+		msg: String
+		numUids: Int
+	}
+	
+	type DeleteEmbeddingSpecPayload {
+		msg: String
+		numUids: Int
+	}
+
+	type DeleteModelSpecPayload {
 		msg: String
 		numUids: Int
 	}
@@ -511,6 +630,16 @@ const adminMutations = `
 	in an error.
 	"""
 	addUser(input: [AddUserInput!]!): AddUserPayload
+	
+	"""
+	Add an embedding spec. You must pass in a full model spec object, as that isn't a supported resolver
+	"""
+	addEmbeddingSpec(input: [AddEmbeddingSpecInput!]!): AddEmbeddingSpecPayload
+
+	"""
+	Add a model spec.
+	"""
+	addModelSpec(input: [AddModelSpecInput!]!): AddModelSpecPayload
 
 	"""
 	Add a new group and (optionally) set the rules for the group.
@@ -530,8 +659,22 @@ const adminMutations = `
 	"""
 	updateGroup(input: UpdateGroupInput!): AddGroupPayload
 
+	"""
+	Update embedding specs, their queries, prompts and model specs.  If the filter doesn't match
+	any embedding specs, the mutation has no effect.
+	"""
+	updateEmbeddingSpec(input: UpdateEmbeddingSpecInput!): AddEmbeddingSpecPayload
+
+	"""
+	Update model specs, their types and endpoints.  If the filter doesn't match
+	any model specs, the mutation has no effect.
+	"""
+	updateModelSpec(input: UpdateModelSpecInput!): AddModelSpecPayload
+
 	deleteGroup(filter: GroupFilter!): DeleteGroupPayload
 	deleteUser(filter: UserFilter!): DeleteUserPayload
+	deleteEmbeddingSpec(filter: EmbeddingSpecFilter!): DeleteEmbeddingSpecPayload
+	deleteModelSpec(filter: ModelSpecFilter!): DeleteModelSpecPayload
 
 	"""
 	Add a new namespace.
@@ -558,7 +701,9 @@ const adminMutations = `
 const adminQueries = `
 	getUser(name: String!): User
 	getGroup(name: String!): Group
-
+	getEmbeddingSpec(id: String!): EmbeddingSpec
+	getModelSpec(id: String!): ModelSpec
+	
 	"""
 	Get the currently logged in user.
 	"""
@@ -566,7 +711,9 @@ const adminQueries = `
 
 	queryUser(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
 	queryGroup(filter: GroupFilter, order: GroupOrder, first: Int, offset: Int): [Group]
-
+    queryEmbeddingSpec(filter: EmbeddingSpecFilter, first: Int, offset: Int): [EmbeddingSpec]
+	queryModelSpec(filter: ModelSpecFilter, first: Int, offset: Int): [ModelSpec]
+	
 	"""
 	Get the information about the backups at a given location.
 	"""

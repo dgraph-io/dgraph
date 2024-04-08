@@ -4,20 +4,20 @@
 
 type Tweets {
 	id: ID!
-	text: String! @search(by: [fulltext])
+	text: String! @search(by: ["fulltext"])
 	author(filter: UserFilter): User @hasInverse(field: tweets)
 	timestamp: DateTime! @search
 }
 
 type User {
-	screenName: String! @id
+	screen_name: String! @id
 	followers: Int @search
 	tweets(filter: TweetsFilter, order: TweetsOrder, first: Int, offset: Int): [Tweets] @hasInverse(field: author)
 	tweetsAggregate(filter: TweetsFilter): TweetsAggregateResult
 }
 
 type UserTweetCount @remote {
-	screenName: String
+	screen_name: String
 	tweetCount: Int
 }
 
@@ -78,6 +78,7 @@ enum DgraphIndex {
 	day
 	hour
 	geo
+	hnsw
 }
 
 input AuthRule {
@@ -191,7 +192,8 @@ input GenerateMutationParams {
 }
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION
-directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
+directive @search(by: [String!]) on FIELD_DEFINITION
+directive @hm_embedding on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id(interface: Boolean) on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE | FIELD_DEFINITION
@@ -329,8 +331,8 @@ type UpdateUserPayload {
 
 type UserAggregateResult {
 	count: Int
-	screenNameMin: String
-	screenNameMax: String
+	screen_nameMin: String
+	screen_nameMax: String
 	followersMin: Int
 	followersMax: Int
 	followersSum: Int
@@ -353,13 +355,13 @@ enum TweetsOrderable {
 }
 
 enum UserHasFilter {
-	screenName
+	screen_name
 	followers
 	tweets
 }
 
 enum UserOrderable {
-	screenName
+	screen_name
 	followers
 }
 
@@ -374,7 +376,7 @@ input AddTweetsInput {
 }
 
 input AddUserInput {
-	screenName: String!
+	screen_name: String!
 	followers: Int
 	tweets: [TweetsRef]
 }
@@ -421,7 +423,7 @@ input UpdateUserInput {
 }
 
 input UserFilter {
-	screenName: StringHashFilter
+	screen_name: StringHashFilter
 	followers: IntFilter
 	has: [UserHasFilter]
 	and: [UserFilter]
@@ -436,13 +438,12 @@ input UserOrder {
 }
 
 input UserPatch {
-	screenName: String
 	followers: Int
 	tweets: [TweetsRef]
 }
 
 input UserRef {
-	screenName: String
+	screen_name: String
 	followers: Int
 	tweets: [TweetsRef]
 }
@@ -452,11 +453,11 @@ input UserRef {
 #######################
 
 type Query {
-	queryUserTweetCounts: [UserTweetCount] @withSubscription @custom(dql: "query {\n    queryUserTweetCounts(func: type(User)) {\n        screenName: User.screenName\n        tweetCount: count(User.tweets)\n    }\n}")
+	queryUserTweetCounts: [UserTweetCount] @withSubscription @custom(dql: "query {\n    queryUserTweetCounts(func: type(User)) {\n        screen_name: User.screen_name\n        tweetCount: count(User.tweets)\n    }\n}")
 	getTweets(id: ID!): Tweets
 	queryTweets(filter: TweetsFilter, order: TweetsOrder, first: Int, offset: Int): [Tweets]
 	aggregateTweets(filter: TweetsFilter): TweetsAggregateResult
-	getUser(screenName: String!): User
+	getUser(screen_name: String!): User
 	queryUser(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
 	aggregateUser(filter: UserFilter): UserAggregateResult
 }
@@ -479,5 +480,5 @@ type Mutation {
 #######################
 
 type Subscription {
-	queryUserTweetCounts: [UserTweetCount] @withSubscription @custom(dql: "query {\n    queryUserTweetCounts(func: type(User)) {\n        screenName: User.screenName\n        tweetCount: count(User.tweets)\n    }\n}")
+	queryUserTweetCounts: [UserTweetCount] @withSubscription @custom(dql: "query {\n    queryUserTweetCounts(func: type(User)) {\n        screen_name: User.screen_name\n        tweetCount: count(User.tweets)\n    }\n}")
 }

@@ -182,6 +182,9 @@ func admin(t *testing.T) {
 	updateSchemaThroughAdminSchemaEndpt(t, client)
 	gqlSchemaNodeHasXid(t, client)
 
+	updateModelSpec(t, client)
+	updateEmbeddingSpec(t, client)
+
 	// restore the state to the initial schema and data.
 	testutil.DropAll(t, client)
 
@@ -224,6 +227,17 @@ func updateSchema(t *testing.T, client *dgo.Dgraph) {
 	})
 
 	introspect(t, updatedIntrospectionResponse)
+}
+
+func updateModelSpec(t *testing.T, client *dgo.Dgraph) {
+	err := addModelSpec(GraphqlAdminURL, "test modelId", "test modelEndpoint", "test modelType")
+	require.NoError(t, err)
+}
+
+func updateEmbeddingSpec(t *testing.T, client *dgo.Dgraph) {
+	err := addEmbeddingSpec(GraphqlAdminURL, "test id", "test endpoint", "test model type", "test query", "test prompt",
+		"test modelId", "test modelType", "test modelEndpoint")
+	require.NoError(t, err)
 }
 
 func updateSchemaThroughAdminSchemaEndpt(t *testing.T, client *dgo.Dgraph) {

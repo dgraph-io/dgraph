@@ -41,12 +41,12 @@ const (
 	sch = `
 	type Product @withSubscription {
 		productID: ID!
-		name: String @search(by: [term])
+		name: String @search(by: ["term"])
 		reviews: [Review] @hasInverse(field: about)
 	}
 
 	type Customer  {
-		username: String! @id @search(by: [hash, regexp])
+		username: String! @id @search(by: ["hash", "regexp"])
 		reviews: [Review] @hasInverse(field: by)
 	}
 
@@ -54,7 +54,7 @@ const (
 		id: ID!
 		about: Product!
 		by: Customer!
-		comment: String @search(by: [fulltext])
+		comment: String @search(by: ["fulltext"])
 		rating: Int @search
 	}
 	`
@@ -69,25 +69,25 @@ const (
      	}
    ){
         id: ID!
-    	text: String! @search(by: [term])
-     	owner: String! @search(by: [hash])
+    	text: String! @search(by: ["term"])
+     	owner: String! @search(by: ["hash"])
    }
 # Dgraph.Authorization {"VerificationKey":"secret","Header":"Authorization","Namespace":"https://dgraph.io","Algo":"HS256"}
 `
 	schCustomDQL = `
 	type Tweets {
 		id: ID!
-		text: String! @search(by: [fulltext])
+		text: String! @search(by: ["fulltext"])
 		author: User
 		timestamp: DateTime @search
    }
    type User {
-    	screenName: String! @id
+    	screen_name: String! @id
 		followers: Int @search
 		tweets: [Tweets] @hasInverse(field: author)
    }
    type UserTweetCount @remote {
-		screenName: String
+		screen_name: String
 		tweetCount: Int
    }
 
@@ -95,7 +95,7 @@ const (
   	queryUserTweetCounts: [UserTweetCount] @withSubscription @custom(dql: """
 		query {
 			queryUserTweetCounts(func: type(User)) {
-				screenName: User.screenName
+				screen_name: User.screen_name
 				tweetCount: count(User.tweets)
 			}
 		}
@@ -964,7 +964,7 @@ func TestSubscriptionWithCustomDQL(t *testing.T) {
 	add := &common.GraphQLParams{
 		Query: `mutation  {
 				addTweets(input: [
-					{text: "Graphql is best",author:{screenName:"001"}},
+					{text: "Graphql is best",author:{screen_name:"001"}},
 				]) {
 				    numUids
 				    tweets {
@@ -980,7 +980,7 @@ func TestSubscriptionWithCustomDQL(t *testing.T) {
 	subscriptionClient, err := common.NewGraphQLSubscription(subscriptionEndpoint, &schema.Request{
 		Query: `subscription {
 					queryUserTweetCounts{
-						screenName
+						screen_name
 						tweetCount
 					}
 				}`,
@@ -993,7 +993,7 @@ func TestSubscriptionWithCustomDQL(t *testing.T) {
 	require.NoError(t, json.Unmarshal(res, &subscriptionResp))
 	common.RequireNoGQLErrors(t, &subscriptionResp)
 
-	require.JSONEq(t, `{"queryUserTweetCounts":[{"screenName":"001","tweetCount": 1}]}`, string(subscriptionResp.Data))
+	require.JSONEq(t, `{"queryUserTweetCounts":[{"screen_name":"001","tweetCount": 1}]}`, string(subscriptionResp.Data))
 	require.Contains(t, subscriptionResp.Extensions, touchedUidskey)
 	require.Greater(t, int(subscriptionResp.Extensions[touchedUidskey].(float64)), 0)
 
@@ -1001,8 +1001,8 @@ func TestSubscriptionWithCustomDQL(t *testing.T) {
 	add = &common.GraphQLParams{
 		Query: `mutation  {
 				addTweets(input: [
-					{text: "Dgraph is best",author:{screenName:"002"}}
-                    {text: "Badger is best",author:{screenName:"001"}},
+					{text: "Dgraph is best",author:{screen_name:"002"}}
+                    {text: "Badger is best",author:{screen_name:"001"}},
 				]) {
 				    numUids
 				    tweets {
@@ -1026,7 +1026,7 @@ func TestSubscriptionWithCustomDQL(t *testing.T) {
 
 	// Check the latest update.
 	require.JSONEq(t,
-		`{"queryUserTweetCounts":[{"screenName":"001","tweetCount": 2},{"screenName":"002","tweetCount": 1}]}`,
+		`{"queryUserTweetCounts":[{"screen_name":"001","tweetCount": 2},{"screen_name":"002","tweetCount": 1}]}`,
 		string(subscriptionResp.Data))
 	require.Contains(t, subscriptionResp.Extensions, touchedUidskey)
 	require.Greater(t, int(subscriptionResp.Extensions[touchedUidskey].(float64)), 0)
