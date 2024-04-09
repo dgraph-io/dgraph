@@ -462,12 +462,8 @@ func copyList(l *List) *List {
 }
 
 func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
-	cachedVal, ok := lCache.Get(key)
-	if ok {
-		l, ok := cachedVal.(*List)
-		if ok && l != nil {
-			return l, nil
-		}
+	if pstore.IsClosed() {
+		return nil, badger.ErrDBClosed
 	}
 
 	var seenTs uint64
@@ -509,9 +505,6 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 		lCache.Set(key, uint64(1), 0)
 	}
 
-	if pstore.IsClosed() {
-		return nil, badger.ErrDBClosed
-	}
 	txn := pstore.NewTransactionAt(readTs, false)
 	defer txn.Discard()
 
