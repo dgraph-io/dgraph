@@ -1,6 +1,6 @@
 name: ci-aqua-security-trivy-tests
 on:
-  push:
+  pull_request:
     paths-ignore:
       - '.github/CODEOWNERS'
       - '.vscode/**'
@@ -19,10 +19,6 @@ on:
       - '**/**.jpg'
       - '**/**.gif'
       - '**/**.ini'
-    branches:
-      - main
-      - 'release/**'
-  pull_request:
     types:
       - opened
       - reopened
@@ -37,17 +33,17 @@ jobs:
   build:
     name: trivy-tests
     if: github.event.pull_request.draft == false
-    runs-on: ubuntu-20.04
+    runs-on: warp-ubuntu-latest-x64-4x
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Get Go Version
         run: |
           #!/bin/bash
           GOVERSION=$({ [ -f .go-version ] && cat .go-version; })
           echo "GOVERSION=$GOVERSION" >> $GITHUB_ENV
       - name: Set up Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GOVERSION }}
       - name: Build Docker image
@@ -60,6 +56,6 @@ jobs:
           format: 'sarif'
           output: 'trivy-results.sarif'
       - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v2
+        uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: 'trivy-results.sarif'

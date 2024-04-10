@@ -12,9 +12,9 @@ on:
         type: string
 jobs:
   dgraph-build-amd64:
-    runs-on: ubuntu-20.04
+    runs-on: warp-ubuntu-latest-x64-16x
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           ref: '${{ github.event.inputs.releasetag }}'
       - name: Get Go Version
@@ -23,7 +23,7 @@ jobs:
           GOVERSION=$({ [ -f .go-version ] && cat .go-version; })
           echo "GOVERSION=$GOVERSION" >> $GITHUB_ENV
       - name: Set up Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GOVERSION }}
       - name: Install protobuf-compiler
@@ -100,9 +100,9 @@ jobs:
           docker push dgraph/dgraph:${{ env.DGRAPH_RELEASE_VERSION }}-amd64
 
   dgraph-build-arm64:
-    runs-on: [self-hosted, arm64]
+    runs-on: warp-ubuntu-latest-arm64-16x
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           ref: '${{ github.event.inputs.releasetag }}'
       - name: Get Go Version
@@ -111,7 +111,7 @@ jobs:
           GOVERSION=$({ [ -f .go-version ] && cat .go-version; })
           echo "GOVERSION=$GOVERSION" >> $GITHUB_ENV
       - name: Set up Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GOVERSION }}
       - name: Install protobuf-compiler
@@ -189,9 +189,9 @@ jobs:
 
   dgraph-docker-manifest:
     needs: [dgraph-build-amd64, dgraph-build-arm64]
-    runs-on: ubuntu-20.04
+    runs-on: warp-ubuntu-latest-x64-16x
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           ref: '${{ github.event.inputs.releasetag }}'
       - name: Set Dgraph Release Version

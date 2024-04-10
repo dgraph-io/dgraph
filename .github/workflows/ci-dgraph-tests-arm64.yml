@@ -1,24 +1,29 @@
 name: ci-dgraph-tests-arm64
 on:
-  push:
+  pull_request:
     paths-ignore:
-      - '.github/CODEOWNERS'
-      - '.vscode/**'
-      - 'compose/**'
-      - 'contrib/systemd/**'
-      - 'licenses/**'
-      - 'paper/**'
-      - 'present/**'
-      - 'RFC/**'
-      - 'static/**'
-      - 'wiki/**'
-      - '**/**.dockerignore'
-      - '**/**.gitignore'
-      - '**/**.md'
-      - '**/**.png'
-      - '**/**.jpg'
-      - '**/**.gif'
-      - '**/**.ini'
+    - '.github/CODEOWNERS'
+    - '.vscode/**'
+    - 'compose/**'
+    - 'contrib/systemd/**'
+    - 'licenses/**'
+    - 'paper/**'
+    - 'present/**'
+    - 'RFC/**'
+    - 'static/**'
+    - 'wiki/**'
+    - '**/**.dockerignore'
+    - '**/**.gitignore'
+    - '**/**.md'
+    - '**/**.png'
+    - '**/**.jpg'
+    - '**/**.gif'
+    - '**/**.ini'
+    types:
+    - opened
+    - reopened
+    - synchronize
+    - ready_for_review
     branches:
       - main
       - 'release/**'
@@ -33,23 +38,25 @@ on:
       - 'release/**'
   schedule:
     - cron: "1 0,6,12,18 * * *"
+    - main
+    - 'release/**'
 jobs:
   dgraph-tests:
     if: github.event.pull_request.draft == false
-    runs-on: [self-hosted, ARM64]
+    runs-on: warp-ubuntu-latest-arm64-16x
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Get Go Version
         run: |
           #!/bin/bash
           GOVERSION=$({ [ -f .go-version ] && cat .go-version; })
           echo "GOVERSION=$GOVERSION" >> $GITHUB_ENV
       - name: Set up Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GOVERSION }}
       - name: Set up Node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: 16
       - name: Install protobuf-compiler

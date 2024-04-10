@@ -24,17 +24,16 @@ on:
       - 'release/**'
 jobs:
   dgraph-code-coverage:
-    runs-on: [self-hosted, x64]
-    # runs-on: ubuntu-20.04
+    runs-on: warp-ubuntu-latest-x64-16x
     steps:
-      - uses: actions/checkout@v3 # defaults to SHA of event that triggered workflow
+      - uses: actions/checkout@v4 # defaults to SHA of event that triggered workflow
       - name: Get Go Version
         run: |
           #!/bin/bash
           GOVERSION=$({ [ -f .go-version ] && cat .go-version; })
           echo "GOVERSION=$GOVERSION" >> $GITHUB_ENV
       - name: Set up Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GOVERSION }}
       - name: Set up Node
