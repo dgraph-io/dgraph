@@ -1979,7 +1979,6 @@
           "Author.name": "Alice"
         }
       cond: "@if(gt(len(x), 0))"
-
 -
   name: "Updating @id field when given values for @id fields doesn't exists"
   explaination: "We are giving two @id fields title and ISBN in set part of update mutation,
@@ -2170,7 +2169,6 @@
             "uid": "uid(x)"
         }
       cond: "@if(gt(len(x), 0))"
-
 -
   name: "Updating link to nested field require all the non-null id's to be present in nested field"
   explaination: "when we update link to nested field then we check if that already exist or not,
@@ -2242,7 +2240,6 @@
                 }
             }
     }
-
   dgquery: |-
     query {
       LibraryMember_1(func: eq(Member.name, "Alice")) {
@@ -2273,7 +2270,6 @@
             "uid":"uid(x)"
         }
     cond: "@if(gt(len(x), 0))"
-
 -
   name: "Updating inherited @id field with interface arg -2 "
   explaination: "For this case we will generate one more existence query for inherited @id field refID.
@@ -2331,7 +2327,7 @@
   explaination: "If nested object have inherited @id field which have interface argument set, and that
    field already exist in some other implementing type than we returns error.In below mutation manages
   is of type LibraryMember but node with given refID already exist in some other
-   type than LibraryMember"
+   type than than LibraryMember"
   gqlmutation: |
     mutation update($patch: UpdateLibraryManagerInput!) {
       updateLibraryManager(input: $patch) {
@@ -2447,3 +2443,4 @@
          "uid": "uid(x)"
        }
     cond: "@if(gt(len(x), 0))"
+

@@ -858,52 +858,6 @@
         "trigram"
       ],
       "upsert": true
-    },
-    {
-      "predicate": "hypermode.embedding.entityType",
-      "type": "string"
-    },
-    {
-      "predicate": "hypermode.embedding.id",
-      "type": "string",
-      "index": true,
-      "tokenizer": [
-        "exact"
-      ],
-      "upsert": true
-    },
-    {
-      "predicate":"hypermode.embedding.modelSpec",
-      "type":"uid"
-    },
-    {
-      "predicate":"hypermode.embedding.predicate",
-      "type":"string"
-    },
-    {
-      "predicate":"hypermode.embedding.prompt",
-      "type":"string"
-    },
-    {
-      "predicate":"hypermode.embedding.query",
-      "type":"string"
-    },
-    {
-      "predicate":"hypermode.model.endpoint",
-      "type":"string"
-    },
-    {
-      "predicate": "hypermode.model.id",
-      "type": "string",
-      "index": true,
-      "tokenizer": [
-        "exact"
-      ],
-      "upsert": true
-    },
-    {
-      "predicate":"hypermode.model.type",
-      "type":"string"
     }
   ],
   "types": [
@@ -1679,43 +1633,5 @@
         }
       ],
       "name": "Person"
-    },
-    {
-      "fields": [
-        {
-          "name": "hypermode.embedding.id"
-        },
-        {
-          "name": "hypermode.embedding.entityType"
-        },
-        {
-          "name": "hypermode.embedding.predicate"
-        },
-        {
-          "name": "hypermode.embedding.modelSpec"
-        },
-        {
-          "name": "hypermode.embedding.query"
-        },
-        {
-          "name": "hypermode.embedding.prompt"
-        }
-      ],
-      "name": "hypermode.type.EmbeddingSpec"
-    },
-    {
-      "fields": [
-        {
-          "name": "hypermode.model.id"
-        },
-        {
-          "name": "hypermode.model.type"
-        },
-        {
-          "name": "hypermode.model.endpoint"
-        }
-      ],
-      "name": "hypermode.type.ModelSpec"
-    }
-  ]
+    }  ]
 }

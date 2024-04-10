@@ -104,7 +104,7 @@ func mutationValidation(t *testing.T, file string, rewriterFactory func() Mutati
 				})
 
 			require.NotNil(t, err)
-			require.Equal(t, err.Error(), tcase.ValidationError.Error())
+			require.Equal(t, tcase.ValidationError.Error(), err.Error())
 		})
 	}
 }

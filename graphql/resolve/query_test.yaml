@@ -3353,3 +3353,168 @@
         dgraph.uid : uid
       }
     }
+- name: "query similar_to"
+  gqlquery: |
+    query {
+      querySimilarProductByEmbedding(by: productVector, topK: 1, vector: [0.1, 0.2, 0.3, 0.4, 0.5]) {
+        id
+        title
+        productVector
+      }
+    }
+
+  dgquery: |-
+    query querySimilarProductByEmbedding($search_vector:  float32vector = "[0.1,0.2,0.3,0.4,0.5]") {
+      var(func: similar_to(Product.productVector, 1, $search_vector)) @filter(type(Product)) {
+        v2 as Product.productVector
+        distance as math((v2 - $search_vector) dot (v2 - $search_vector))
+      }
+      querySimilarProductByEmbedding(func: uid(distance), orderasc: val(distance)) {
+        Product.id : Product.id
+        Product.title : Product.title
+        Product.productVector : Product.productVector
+        dgraph.uid : uid
+        Product.hm_distance : val(distance)
+      }
+    }
+- name: "query vector using uid"
+  gqlquery: |
+    query {
+      querySimilarProductById(by: productVector, topK: 3, id: "0x1") {
+        id
+        title
+        productVector
+      }
+    }
+
+  dgquery: |-
+    query {
+      var(func: eq(Product.id, "0x1")) @filter(type(Product)) {
+        vec as Product.productVector
+      }
+      var() {
+        v1 as max(val(vec))
+      }
+      var(func: similar_to(Product.productVector, 3, val(v1))) {
+        v2 as Product.productVector
+        distance as math((v2 - v1) dot (v2 - v1))
+      }
+      querySimilarProductById(func: uid(distance), orderasc: val(distance)) {
+        Product.id : Product.id
+        Product.title : Product.title
+        Product.productVector : Product.productVector
+        dgraph.uid : uid
+        Product.hm_distance : val(distance)
+      }
+    }
+
+- name: "query vector by id with cosine distance"
+  gqlquery: |
+    query {
+      querySimilarProjectById(by: description_v, topK: 3, id: "0x1") {
+        id
+        title
+        description_v
+      }
+    }
+
+  dgquery: |-
+    query {
+      var(func: eq(Project.id, "0x1")) @filter(type(Project)) {
+        vec as Project.description_v
+      }
+      var() {
+        v1 as max(val(vec))
+      }
+      var(func: similar_to(Project.description_v, 3, val(v1))) {
+        v2 as Project.description_v
+        distance as math((v1 dot v2) / ((v1 dot v1) * (v2 dot v2)))
+      }
+      querySimilarProjectById(func: uid(distance), orderasc: val(distance)) {
+        Project.id : Project.id
+        Project.title : Project.title
+        Project.description_v : Project.description_v
+        dgraph.uid : uid
+        Project.hm_distance : val(distance)
+      }
+    }
+
+- name: "query similar_to with cosine distance"
+  gqlquery: |
+    query {
+      querySimilarProjectByEmbedding(by: description_v, topK: 1, vector: [0.1, 0.2, 0.3, 0.4, 0.5]) {
+        id
+        title
+        description_v
+      }
+    }
+
+  dgquery: |-
+    query querySimilarProjectByEmbedding($search_vector:  float32vector = "[0.1,0.2,0.3,0.4,0.5]") {
+      var(func: similar_to(Project.description_v, 1, $search_vector)) @filter(type(Project)) {
+        v2 as Project.description_v
+        distance as math(($search_vector dot v2) / (($search_vector dot $search_vector) * (v2 dot v2)))
+      }
+      querySimilarProjectByEmbedding(func: uid(distance), orderasc: val(distance)) {
+        Project.id : Project.id
+        Project.title : Project.title
+        Project.description_v : Project.description_v
+        dgraph.uid : uid
+        Project.hm_distance : val(distance)
+      }
+    }
+- name: "query vector by id with dot product distance"
+  gqlquery: |
+    query {
+      querySimilarProject1ById(by: description_v, topK: 3, id: "0x1") {
+        id
+        title
+        description_v
+      }
+    }
+
+  dgquery: |-
+    query {
+      var(func: eq(Project1.id, "0x1")) @filter(type(Project1)) {
+        vec as Project1.description_v
+      }
+      var() {
+        v1 as max(val(vec))
+      }
+      var(func: similar_to(Project1.description_v, 3, val(v1))) {
+        v2 as Project1.description_v
+        distance as math(v1 dot v2)
+      }
+      querySimilarProject1ById(func: uid(distance), orderasc: val(distance)) {
+        Project1.id : Project1.id
+        Project1.title : Project1.title
+        Project1.description_v : Project1.description_v
+        dgraph.uid : uid
+        Project1.hm_distance : val(distance)
+      }
+    }
+
+- name: "query similar_to with dot product distance"
+  gqlquery: |
+    query {
+      querySimilarProject1ByEmbedding(by: description_v, topK: 1, vector: [0.1, 0.2, 0.3, 0.4, 0.5]) {
+        id
+        title
+        description_v
+      }
+    }
+
+  dgquery: |-
+    query querySimilarProject1ByEmbedding($search_vector:  float32vector = "[0.1,0.2,0.3,0.4,0.5]") {
+      var(func: similar_to(Project1.description_v, 1, $search_vector)) @filter(type(Project1)) {
+        v2 as Project1.description_v
+        distance as math($search_vector dot v2)
+      }
+      querySimilarProject1ByEmbedding(func: uid(distance), orderasc: val(distance)) {
+        Project1.id : Project1.id
+        Project1.title : Project1.title
+        Project1.description_v : Project1.description_v
+        dgraph.uid : uid
+        Project1.hm_distance : val(distance)
+      }
+    }
