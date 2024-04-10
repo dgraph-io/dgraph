@@ -85,7 +85,7 @@ func saveDebug(sourceURL, filePath string, duration time.Duration) error {
 		return fmt.Errorf("error while creating debug file: %s", err)
 	}
 	_, err = io.Copy(out, resp)
-	return err
+	return out.Close()
 }
 
 // fetchURL fetches a profile from a URL using HTTP.
