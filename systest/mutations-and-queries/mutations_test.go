@@ -1903,7 +1903,7 @@ func (ssuite *SystestTestSuite) HasReverseEdge() {
 }
 
 func (ssuite *SystestTestSuite) MaxPredicateSize() {
-	// Create a string that has more than than 2^16 chars.
+	// Create a string that has more than 2^16 chars.
 	var b strings.Builder
 	for i := 0; i < 10000; i++ {
 		b.WriteString("abcdefg")

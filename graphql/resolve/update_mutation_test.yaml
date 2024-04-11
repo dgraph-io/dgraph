@@ -2331,7 +2331,7 @@
   explaination: "If nested object have inherited @id field which have interface argument set, and that
    field already exist in some other implementing type than we returns error.In below mutation manages
   is of type LibraryMember but node with given refID already exist in some other
-   type than than LibraryMember"
+   type than LibraryMember"
   gqlmutation: |
     mutation update($patch: UpdateLibraryManagerInput!) {
       updateLibraryManager(input: $patch) {
