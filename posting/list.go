@@ -25,6 +25,7 @@ import (
 	"sort"
 
 	"github.com/dgryski/go-farm"
+	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 
@@ -655,6 +656,16 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) e
 		})
 	}
 
+	numDeletePostingsRead := 0
+	numNormalPostingsRead := 0
+	defer func() {
+		if numNormalPostingsRead < numDeletePostingsRead {
+			glog.V(3).Infof("During iterate on posting list, we read %d set postings, %d delete postings"+
+				". Difference: %d", numNormalPostingsRead, numDeletePostingsRead,
+				numNormalPostingsRead-numDeletePostingsRead)
+		}
+	}()
+
 	var (
 		mp, pp  *pb.Posting
 		pitr    pIterator
@@ -697,6 +708,7 @@ loop:
 		case mp.Uid == 0 || (pp.Uid > 0 && pp.Uid < mp.Uid):
 			// Either mp is empty, or pp is lower than mp.
 			err = f(pp)
+			numNormalPostingsRead += 1
 			if err != nil {
 				break loop
 			}
@@ -708,18 +720,24 @@ loop:
 			// Either pp is empty, or mp is lower than pp.
 			if mp.Op != Del {
 				err = f(mp)
+				numNormalPostingsRead += 1
 				if err != nil {
 					break loop
 				}
+			} else {
+				numDeletePostingsRead += 1
 			}
 			prevUid = mp.Uid
 			midx++
 		case pp.Uid == mp.Uid:
 			if mp.Op != Del {
 				err = f(mp)
+				numNormalPostingsRead += 1
 				if err != nil {
 					break loop
 				}
+			} else {
+				numDeletePostingsRead += 1
 			}
 			prevUid = mp.Uid
 			if err = pitr.next(); err != nil {
@@ -1208,8 +1226,14 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 
 	// Do The intersection here as it's optimized.
 	out.Uids = res
+	lenBefore := len(res)
 	if opt.Intersect != nil {
 		algo.IntersectWith(out, opt.Intersect, out)
+	}
+	lenAfter := len(out.Uids)
+	if lenBefore-lenAfter > 0 {
+		glog.V(3).Infof("Retrieved a list. length before intersection: %d, length after: %d, extra"+
+			" elements: %d", lenBefore, lenAfter, lenBefore-lenAfter)
 	}
 	return out, nil
 }
