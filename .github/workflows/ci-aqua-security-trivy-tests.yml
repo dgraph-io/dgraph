@@ -27,6 +27,8 @@ on:
     branches:
       - main
       - 'release/**'
+  schedule:
+    - cron: "0 0 * * *"
 jobs:
   build:
     name: trivy-tests
