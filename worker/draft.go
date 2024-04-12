@@ -1245,6 +1245,7 @@ func (n *node) Run() {
 				} else {
 					ostats.Record(ctx, x.RaftIsLeader.M(0))
 				}
+				timer.Record("updating soft state")
 			}
 			if leader {
 				// Leader can send messages in parallel with writing to disk.
@@ -1252,6 +1253,7 @@ func (n *node) Run() {
 					// NOTE: We can do some optimizations here to drop messages.
 					n.Send(&rd.Messages[i])
 				}
+				timer.Record("leader sending message")
 			}
 			if span != nil {
 				span.Annotate(nil, "Handled ReadStates and SoftState.")
@@ -1324,6 +1326,7 @@ func (n *node) Run() {
 				if span != nil {
 					span.Annotate(nil, "Applied or retrieved snapshot.")
 				}
+				timer.Record("got snapshot")
 			}
 
 			// Store the hardstate and entries. Note that these are not CommittedEntries.

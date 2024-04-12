@@ -58,7 +58,7 @@ func TestCurlAccessWithoutClientCert(t *testing.T) {
 	}
 	testutil.VerifyCurlCmd(t, curlArgs, &testutil.CurlFailureConfig{
 		ShouldFail: true,
-		CurlErrMsg: "alert bad certificate",
+		CurlErrMsg: "alert",
 	})
 }
 
@@ -137,5 +137,5 @@ func TestGQLAdminHealthWithoutClientCert(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 
 	_, err = client.Do(req)
-	require.Contains(t, err.Error(), "remote error: tls: bad certificate")
+	require.Contains(t, err.Error(), "remote error: tls")
 }

@@ -208,6 +208,10 @@ they form a Raft group and provide synchronous replication.
 		Flag("shared-instance", "When set to true, it disables ACLs for non-galaxy users. "+
 			"It expects the access JWT to be constructed outside dgraph for non-galaxy users as "+
 			"login is denied to them. Additionally, this disables access to environment variables for minio, aws, etc.").
+		Flag("type-filter-uid-limit", "TypeFilterUidLimit decides how many elements would be searched directly"+
+			" vs searched via type index. If the number of elements are too low, then querying the"+
+			" index might be slower. This would allow people to set their limit according to"+
+			" their use case.").
 		String())
 
 	flag.String("graphql", worker.GraphQLDefaults, z.NewSuperFlagHelp(worker.GraphQLDefaults).
@@ -641,16 +645,21 @@ func run() {
 	security := z.NewSuperFlag(Alpha.Conf.GetString("security")).MergeAndCheckDefault(
 		worker.SecurityDefaults)
 	conf := audit.GetAuditConf(Alpha.Conf.GetString("audit"))
+
+	x.Config.Limit = z.NewSuperFlag(Alpha.Conf.GetString("limit")).MergeAndCheckDefault(
+		worker.LimitDefaults)
+
 	opts := worker.Options{
 		PostingDir:      Alpha.Conf.GetString("postings"),
 		WALDir:          Alpha.Conf.GetString("wal"),
 		CacheMb:         totalCache,
 		CachePercentage: cachePercentage,
 
-		MutationsMode:  worker.AllowMutations,
-		AuthToken:      security.GetString("token"),
-		Audit:          conf,
-		ChangeDataConf: Alpha.Conf.GetString("cdc"),
+		MutationsMode:      worker.AllowMutations,
+		AuthToken:          security.GetString("token"),
+		Audit:              conf,
+		ChangeDataConf:     Alpha.Conf.GetString("cdc"),
+		TypeFilterUidLimit: x.Config.Limit.GetInt64("type-filter-uid-limit"),
 	}
 
 	keys, err := ee.GetKeys(Alpha.Conf)
@@ -663,8 +672,6 @@ func run() {
 		glog.Info("ACL secret key loaded successfully.")
 	}
 
-	x.Config.Limit = z.NewSuperFlag(Alpha.Conf.GetString("limit")).MergeAndCheckDefault(
-		worker.LimitDefaults)
 	abortDur := x.Config.Limit.GetDuration("txn-abort-after")
 	switch strings.ToLower(x.Config.Limit.GetString("mutations")) {
 	case "allow":

@@ -60,6 +60,12 @@ type Options struct {
 
 	// Define different ChangeDataCapture configurations
 	ChangeDataConf string
+
+	// TypeFilterUidLimit decides how many elements would be searched directly
+	// vs searched via type index. If the number of elements are too low, then querying the
+	// index might be slower. This would allow people to set their limit according to
+	// their use case.
+	TypeFilterUidLimit int64
 }
 
 // Config holds an instance of the server options..
