@@ -659,10 +659,13 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) e
 	numDeletePostingsRead := 0
 	numNormalPostingsRead := 0
 	defer func() {
-		if numNormalPostingsRead < numDeletePostingsRead {
-			glog.V(3).Infof("During iterate on posting list, we read %d set postings, %d delete postings"+
-				". Difference: %d", numNormalPostingsRead, numDeletePostingsRead,
-				numNormalPostingsRead-numDeletePostingsRead)
+		// If we see a lot of these logs, it means that a lot of elements are getting deleted.
+		// This could be normal, but if we see this too much, that means that rollups are too slow.
+		if numNormalPostingsRead < numDeletePostingsRead &&
+			(numNormalPostingsRead > 0 || numDeletePostingsRead > 0) {
+			glog.V(3).Infof("High proportion of deleted data observed for posting list %b: total = %d, "+
+				"percent deleted = %d", l.key, numNormalPostingsRead+numDeletePostingsRead,
+				(numDeletePostingsRead*100)/(numDeletePostingsRead+numNormalPostingsRead))
 		}
 	}()
 
@@ -1232,6 +1235,7 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 	}
 	lenAfter := len(out.Uids)
 	if lenBefore-lenAfter > 0 {
+		// If we see this log, that means that iterate is going over too many elements that it doesn't need to
 		glog.V(3).Infof("Retrieved a list. length before intersection: %d, length after: %d, extra"+
 			" elements: %d", lenBefore, lenAfter, lenBefore-lenAfter)
 	}
