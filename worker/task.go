@@ -1852,6 +1852,15 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 			fc.tokens = append(fc.tokens, tokens...)
 		}
 
+		checkUidEmpty := func(uids []uint64) bool {
+			for _, i := range uids {
+				if i == 0 {
+					return false
+				}
+			}
+			return true
+		}
+
 		// In case of non-indexed predicate, there won't be any tokens. We will fetch value
 		// from data keys.
 		// If number of index keys is more than no. of uids to filter, so its better to fetch values
@@ -1863,6 +1872,10 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 		case q.UidList != nil && !isIndexedAttr:
 			fc.n = len(q.UidList.Uids)
 		case q.UidList != nil && len(fc.tokens) > len(q.UidList.Uids) && fc.fname != eq:
+			fc.tokens = fc.tokens[:0]
+			fc.n = len(q.UidList.Uids)
+		case q.UidList != nil && fc.fname == eq && strings.HasSuffix(attr, "dgraph.type") &&
+			int64(len(q.UidList.Uids)) < Config.TypeFilterUidLimit && checkUidEmpty(q.UidList.Uids):
 			fc.tokens = fc.tokens[:0]
 			fc.n = len(q.UidList.Uids)
 		default:
