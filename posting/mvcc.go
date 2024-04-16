@@ -19,6 +19,7 @@ package posting
 import (
 	"bytes"
 	"encoding/hex"
+	"fmt"
 	"math"
 	"strconv"
 	"sync"
@@ -118,6 +119,11 @@ func (ir *incrRollupi) rollUpKey(writer *TxnWriter, key []byte) error {
 		return err
 	}
 
+	l.RLock()
+	fmt.Println("Rolling up")
+	lCache.Set(key, copyList(l), int64(l.DeepSize()))
+	l.RUnlock()
+
 	// If we do a rollup, we typically won't need to update the key in cache.
 	// The only caveat is that the key written by rollup would be written at +1
 	// timestamp, hence bumping the latest TS for the key by 1. The cache should
@@ -173,7 +179,7 @@ func (ir *incrRollupi) Process(closer *z.Closer, getNewTs func(bool) uint64) {
 		currTs := time.Now().Unix()
 		for _, key := range *batch {
 			hash := z.MemHash(key)
-			if elem := m[hash]; currTs-elem >= 10 {
+			if elem := m[hash]; currTs-elem >= 2 {
 				// Key not present or Key present but last roll up was more than 10 sec ago.
 				// Add/Update map and rollup.
 				m[hash] = currTs
@@ -327,7 +333,14 @@ func (txn *Txn) UpdateCachedKeys(commitTs uint64) {
 	}
 	x.AssertTrue(commitTs > 0)
 	for key := range txn.cache.deltas {
-		lCache.Set([]byte(key), commitTs, 0)
+		list, err := txn.GetFromDelta([]byte(key))
+		if err == nil {
+			//out, err := list.rollup(commitTs, true)
+			//out.free()
+			//if err != nil {
+			lCache.Set([]byte(key), list, int64(list.DeepSize()))
+			//}
+		}
 	}
 }
 
@@ -451,13 +464,12 @@ func copyList(l *List) *List {
 	l.AssertRLock()
 	// No need to clone the immutable layer or the key since mutations will not modify it.
 	lCopy := &List{
-		minTs: l.minTs,
-		maxTs: l.maxTs,
-		key:   l.key,
-		plist: l.plist,
+		minTs:       l.minTs,
+		maxTs:       l.maxTs,
+		key:         l.key,
+		plist:       l.plist,
+		mutationMap: l.mutationMap,
 	}
-	// We do a rollup before storing PL in cache.
-	x.AssertTrue(len(l.mutationMap) == 0)
 	return lCopy
 }
 
@@ -466,7 +478,6 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 		return nil, badger.ErrDBClosed
 	}
 
-	var seenTs uint64
 	// We use badger subscription to invalidate the cache. For every write we make the value
 	// corresponding to the key in the cache to nil. So, if we get some non-nil value from the cache
 	// then it means that no  writes have happened after the last set of this key in the cache.
@@ -476,33 +487,13 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 			l := val.(*List)
 			// l.maxTs can be greater than readTs. We might have the latest
 			// version cached, while readTs is looking for an older version.
-			if l != nil && l.maxTs <= readTs {
+			if l != nil && l.maxTs >= readTs {
 				l.RLock()
 				lCopy := copyList(l)
 				l.RUnlock()
 				return lCopy, nil
 			}
-
-		case uint64:
-			seenTs = val.(uint64)
 		}
-	} else {
-		// The key wasn't found in cache. So, we set the key upfront.  This
-		// gives it a chance to register in the cache, so it can capture any new
-		// writes comming from commits. Once we
-		// retrieve the value from Badger, we do an update if the key is already
-		// present in the cache.
-		// We must guarantee that the cache contains the latest version of the
-		// key. This mechanism avoids the following race condition:
-		// 1. We read from Badger at Ts 10.
-		// 2. New write comes in for the key at Ts 12. The key isn't in cache,
-		// so this write doesn't get registered with the cache.
-		// 3. Cache set the value read from Badger at Ts10.
-		//
-		// With this Set then Update mechanism, before we read from Badger, we
-		// already set the key in cache. So, any new writes coming in would get
-		// registered with cache correctly, before we update the value.
-		lCache.Set(key, uint64(1), 0)
 	}
 
 	txn := pstore.NewTransactionAt(readTs, false)
@@ -520,20 +511,14 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 	if err != nil {
 		return l, err
 	}
-	newList := func() *List {
-		return &List{
-			minTs: l.minTs,
-			maxTs: l.maxTs,
-			key:   l.key,
-			plist: l.plist,
-		}
-	}
 
 	// Only set l to the cache if readTs >= latestTs, which implies that l is
 	// the latest version of the PL. We also check that we're reading a version
 	// from Badger, which is higher than the write registered by the cache.
-	if readTs >= l.maxTs && l.minTs >= seenTs {
-		lCache.Set(key, newList(), 0)
+	if readTs >= l.maxTs {
+		l.RLock()
+		defer l.RUnlock()
+		lCache.Set(key, copyList(l), int64(l.DeepSize()))
 	}
 	return l, nil
 }

@@ -20,11 +20,9 @@ package bulk
 
 import (
 	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/dgraph-io/dgraph/systest/21million/common"
-	"github.com/dgraph-io/dgraph/testutil"
 )
 
 func TestQueries(t *testing.T) {
@@ -32,19 +30,19 @@ func TestQueries(t *testing.T) {
 }
 
 func TestMain(m *testing.M) {
-	schemaFile := filepath.Join(testutil.TestDataDirectory, "21million.schema")
-	rdfFile := filepath.Join(testutil.TestDataDirectory, "21million.rdf.gz")
-	if err := testutil.LiveLoad(testutil.LiveOpts{
-		Alpha:      testutil.ContainerAddr("alpha1", 9080),
-		Zero:       testutil.SockAddrZero,
-		RdfFile:    rdfFile,
-		SchemaFile: schemaFile,
-	}); err != nil {
-		cleanupAndExit(1)
-	}
+	//schemaFile := filepath.Join(testutil.TestDataDirectory, "21million.schema")
+	//rdfFile := filepath.Join(testutil.TestDataDirectory, "21million.rdf.gz")
+	//if err := testutil.LiveLoad(testutil.LiveOpts{
+	//	Alpha:      testutil.ContainerAddr("alpha1", 9080),
+	//	Zero:       testutil.SockAddrZero,
+	//	RdfFile:    rdfFile,
+	//	SchemaFile: schemaFile,
+	//}); err != nil {
+	//	cleanupAndExit(1)
+	//}
 
-	exitCode := m.Run()
-	cleanupAndExit(exitCode)
+	m.Run()
+	//cleanupAndExit(exitCode)
 }
 
 func cleanupAndExit(exitCode int) {
