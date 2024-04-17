@@ -2034,7 +2034,7 @@ func addSimilarByEmbeddingQuery(schema *ast.Schema, defn *ast.Definition) {
 		},
 	}
 
-	// The new field is "hm_distance". Add it to input Type
+	// The new field is "vector_distance". Add it to input Type
 	if defn.Fields.ForName(SimilarQueryDistanceFieldName) == nil {
 		defn.Fields = append(defn.Fields,
 			&ast.FieldDefinition{
@@ -2113,7 +2113,7 @@ func addSimilarByIdQuery(schema *ast.Schema, defn *ast.Definition,
 		},
 	}
 
-	// The new field is "hm_distance". Add it to input Type
+	// The new field is "vector_distance". Add it to input Type
 	if defn.Fields.ForName(SimilarQueryDistanceFieldName) == nil {
 		defn.Fields = append(defn.Fields,
 			&ast.FieldDefinition{

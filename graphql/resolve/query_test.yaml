@@ -3374,7 +3374,7 @@
         Product.title : Product.title
         Product.productVector : Product.productVector
         dgraph.uid : uid
-        Product.hm_distance : val(distance)
+        Product.vector_distance : val(distance)
       }
     }
 - name: "query vector using uid"
@@ -3404,7 +3404,7 @@
         Product.title : Product.title
         Product.productVector : Product.productVector
         dgraph.uid : uid
-        Product.hm_distance : val(distance)
+        Product.vector_distance : val(distance)
       }
     }
 
@@ -3435,7 +3435,7 @@
         ProjectCosine.title : ProjectCosine.title
         ProjectCosine.description_v : ProjectCosine.description_v
         dgraph.uid : uid
-        ProjectCosine.hm_distance : val(distance)
+        ProjectCosine.vector_distance : val(distance)
       }
     }
 
@@ -3460,7 +3460,7 @@
         ProjectCosine.title : ProjectCosine.title
         ProjectCosine.description_v : ProjectCosine.description_v
         dgraph.uid : uid
-        ProjectCosine.hm_distance : val(distance)
+        ProjectCosine.vector_distance : val(distance)
       }
     }
 - name: "query vector by id with dot product distance"
@@ -3490,7 +3490,7 @@
         ProjectDotProduct.title : ProjectDotProduct.title
         ProjectDotProduct.description_v : ProjectDotProduct.description_v
         dgraph.uid : uid
-        ProjectDotProduct.hm_distance : val(distance)
+        ProjectDotProduct.vector_distance : val(distance)
       }
     }
 
@@ -3515,6 +3515,6 @@
         ProjectDotProduct.title : ProjectDotProduct.title
         ProjectDotProduct.description_v : ProjectDotProduct.description_v
         dgraph.uid : uid
-        ProjectDotProduct.hm_distance : val(distance)
+        ProjectDotProduct.vector_distance : val(distance)
       }
     }

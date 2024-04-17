@@ -8,7 +8,7 @@ type Product {
 	title: String
 	imageUrl: String
 	product_vector: [Float!] @embedding @search(by: ["hnsw(metric: euclidian, exponent: 4)"])
-	hm_distance: Float
+	vector_distance: Float
 }
 
 type Purchase @lambdaOnMutate(add: true) {
@@ -21,7 +21,7 @@ type User {
 	email: String! @id
 	purchase_history(filter: PurchaseFilter, order: PurchaseOrder, first: Int, offset: Int): [Purchase] @hasInverse(field: user)
 	user_vector: [Float!] @embedding @search(by: ["hnsw"])
-	hm_distance: Float
+	vector_distance: Float
 	purchase_historyAggregate(filter: PurchaseFilter): PurchaseAggregateResult
 }
 
@@ -379,7 +379,7 @@ enum ProductHasFilter {
 	title
 	imageUrl
 	product_vector
-	hm_distance
+	vector_distance
 }
 
 enum ProductOrderable {
@@ -407,7 +407,7 @@ enum UserHasFilter {
 	email
 	purchase_history
 	user_vector
-	hm_distance
+	vector_distance
 }
 
 enum UserOrderable {

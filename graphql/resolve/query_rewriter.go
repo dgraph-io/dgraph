@@ -642,7 +642,7 @@ func rewriteAsGet(
 //			        Product.description : Product.description
 //			        Product.title : Product.title
 //			        Product.imageUrl : Product.imageUrl
-//			        Product.hm_distance : val(distance)
+//			        Product.vector_distance : val(distance)
 //			        dgraph.uid : uid
 //			    }
 //		 }
@@ -737,7 +737,7 @@ func rewriteAsSimilarByIdQuery(
 		},
 	}
 
-	// Rename the distance as <Type>.hm_distance
+	// Rename the distance as <Type>.vector_distance
 	distance := &dql.GraphQuery{
 		Alias: typ.Name() + "." + schema.SimilarQueryDistanceFieldName,
 		Attr:  "val(distance)",
@@ -761,7 +761,7 @@ func rewriteAsSimilarByIdQuery(
 	//	     Product.description : Product.description
 	//	     Product.title : Product.title
 	//	     Product.imageUrl : Product.imageUrl
-	//	     Product.hm_distance : val(distance)
+	//	     Product.vector_distance : val(distance)
 	//	     dgraph.uid : uid
 	//	  }
 	//	 }
@@ -796,7 +796,7 @@ func rewriteAsSimilarByIdQuery(
 //		        Product.description : Product.description
 //		        Product.title : Product.title
 //		        Product.imageUrl : Product.imageUrl
-//		        Product.hm_distance : val(distance)
+//		        Product.vector_distance : val(distance)
 //		        dgraph.uid : uid
 //		     }
 //		 }
@@ -872,7 +872,7 @@ func rewriteAsSimilarByEmbeddingQuery(
 		},
 	}
 
-	// Rename distance as <Type>.hm_distance
+	// Rename distance as <Type>.vector_distance
 	distance := &dql.GraphQuery{
 		Alias: typ.Name() + "." + schema.SimilarQueryDistanceFieldName,
 		Attr:  "val(distance)",
