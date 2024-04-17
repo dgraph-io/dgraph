@@ -107,7 +107,8 @@ func GetNoStore(key []byte, readTs uint64) (rlist *List, err error) {
 type LocalCache struct {
 	sync.RWMutex
 
-	startTs uint64
+	startTs  uint64
+	commitTs uint64
 
 	// The keys for these maps is a string representation of the Badger key for the posting list.
 	// deltas keep track of the updates made by txn. These must be kept around until written to disk
@@ -173,6 +174,12 @@ func NewLocalCache(startTs uint64) *LocalCache {
 // around.
 func NoCache(startTs uint64) *LocalCache {
 	return &LocalCache{startTs: startTs}
+}
+
+func (lc *LocalCache) UpdateCommitTs(commitTs uint64) {
+	lc.Lock()
+	defer lc.Unlock()
+	lc.commitTs = commitTs
 }
 
 func (lc *LocalCache) Find(pred []byte, filter func([]byte) bool) (uint64, error) {
@@ -318,7 +325,11 @@ func (lc *LocalCache) getInternal(key []byte, readFromDisk bool) (*List, error) 
 	// apply it before returning the list.
 	lc.RLock()
 	if delta, ok := lc.deltas[skey]; ok && len(delta) > 0 {
-		pl.setMutation(lc.startTs, delta)
+		if lc.commitTs == 0 {
+			pl.setMutation(lc.startTs, delta)
+		} else {
+			pl.setMutationAfterCommit(lc.startTs, lc.commitTs, delta)
+		}
 	}
 	lc.RUnlock()
 	return lc.SetIfAbsent(skey, pl), nil

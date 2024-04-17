@@ -19,8 +19,6 @@ package posting
 import (
 	"bytes"
 	"encoding/hex"
-	"fmt"
-	"math"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -109,7 +107,7 @@ func (ir *incrRollupi) rollUpKey(writer *TxnWriter, key []byte) error {
 		}
 	}
 
-	l, err := GetNoStore(key, math.MaxUint64)
+	l, err := GetNoStore(key, ts)
 	if err != nil {
 		return err
 	}
@@ -119,9 +117,18 @@ func (ir *incrRollupi) rollUpKey(writer *TxnWriter, key []byte) error {
 		return err
 	}
 
+	if len(kvs) > 0 {
+		pl := new(pb.PostingList)
+		x.Check(pl.Unmarshal(kvs[0].Value))
+		l.Lock()
+		l.plist = pl
+		l.mutationMap = nil
+		l.maxTs = kvs[0].Version
+		l.Unlock()
+	}
+
 	l.RLock()
-	fmt.Println("Rolling up")
-	lCache.Set(key, copyList(l), int64(l.DeepSize()))
+	lCache.Set(key, l, int64(l.DeepSize()))
 	l.RUnlock()
 
 	// If we do a rollup, we typically won't need to update the key in cache.
@@ -487,7 +494,10 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 			l := val.(*List)
 			// l.maxTs can be greater than readTs. We might have the latest
 			// version cached, while readTs is looking for an older version.
-			if l != nil && l.maxTs >= readTs {
+			if l != nil {
+				//fmt.Println(l.maxTs, readTs)
+			}
+			if l != nil && l.maxTs > 0 {
 				l.RLock()
 				lCopy := copyList(l)
 				l.RUnlock()
@@ -518,6 +528,7 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 	if readTs >= l.maxTs {
 		l.RLock()
 		defer l.RUnlock()
+		//fmt.Println("Setting", l.maxTs)
 		lCache.Set(key, copyList(l), int64(l.DeepSize()))
 	}
 	return l, nil

@@ -556,6 +556,22 @@ func (l *List) getMutation(startTs uint64) []byte {
 	return nil
 }
 
+func (l *List) setMutationAfterCommit(startTs, commitTs uint64, data []byte) {
+	pl := new(pb.PostingList)
+	x.Check(pl.Unmarshal(data))
+	pl.CommitTs = commitTs
+
+	l.Lock()
+	if l.mutationMap == nil {
+		l.mutationMap = make(map[uint64]*pb.PostingList)
+	}
+	l.mutationMap[startTs] = pl
+	if pl.CommitTs != 0 {
+		l.maxTs = x.Max(l.maxTs, pl.CommitTs)
+	}
+	l.Unlock()
+}
+
 func (l *List) setMutation(startTs uint64, data []byte) {
 	pl := new(pb.PostingList)
 	x.Check(pl.Unmarshal(data))
@@ -565,6 +581,9 @@ func (l *List) setMutation(startTs uint64, data []byte) {
 		l.mutationMap = make(map[uint64]*pb.PostingList)
 	}
 	l.mutationMap[startTs] = pl
+	if pl.CommitTs != 0 {
+		l.maxTs = x.Max(l.maxTs, pl.CommitTs)
+	}
 	l.Unlock()
 }
 
@@ -649,11 +668,64 @@ func (l *List) pickPostings(readTs uint64) (uint64, []*pb.Posting) {
 	return deleteBelowTs, posts
 }
 
+func (l *List) iterateNoSort(readTs uint64, afterUid uint64, f func(obj *pb.Posting) error) error {
+	l.AssertRLock()
+
+	effective := func(start, commit uint64) uint64 {
+		if commit > 0 && commit <= readTs {
+			// Has been committed and below the readTs.
+			return commit
+		}
+		if start == readTs {
+			// This mutation is by ME. So, I must be able to read it.
+			return start
+		}
+		return 0
+	}
+
+	// First pick up the postings.
+	var deleteBelowTs uint64
+	var posts []*pb.Posting
+	for startTs, plist := range l.mutationMap {
+		// Pick up the transactions which are either committed, or the one which is ME.
+		effectiveTs := effective(startTs, plist.CommitTs)
+		if effectiveTs > deleteBelowTs {
+			// We're above the deleteBelowTs marker. We wouldn't reach here if effectiveTs is zero.
+			for _, mpost := range plist.Postings {
+				if hasDeleteAll(mpost) {
+					deleteBelowTs = effectiveTs
+					continue
+				}
+				posts = append(posts, mpost)
+			}
+		}
+	}
+
+	if deleteBelowTs > 0 {
+		// There was a delete all marker. So, trim down the list of postings.
+		result := posts[:0]
+		for _, post := range posts {
+			effectiveTs := effective(post.StartTs, post.CommitTs)
+			if effectiveTs < deleteBelowTs { // Do pick the posts at effectiveTs == deleteBelowTs.
+				continue
+			}
+			result = append(result, post)
+		}
+		posts = result
+	}
+
+	return l.iterateInternal(readTs, afterUid, f, deleteBelowTs, posts)
+}
+
 func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) error) error {
 	l.AssertRLock()
 
 	// mposts is the list of mutable postings
 	deleteBelowTs, mposts := l.pickPostings(readTs)
+	return l.iterateInternal(readTs, afterUid, f, deleteBelowTs, mposts)
+}
+
+func (l *List) iterateInternal(readTs uint64, afterUid uint64, f func(obj *pb.Posting) error, deleteBelowTs uint64, mposts []*pb.Posting) error {
 	if readTs < l.minTs {
 		return errors.Errorf("readTs: %d less than minTs: %d for key: %q", readTs, l.minTs, l.key)
 	}
@@ -760,6 +832,26 @@ func (l *List) IsEmpty(readTs, afterUid uint64) (bool, error) {
 		return false, errors.Wrapf(err, "cannot iterate over list when calling List.IsEmpty")
 	}
 	return count == 0, nil
+}
+
+func (l *List) getPostingAndLengthNoSort(readTs, afterUid, uid uint64) (int, bool, *pb.Posting) {
+	l.AssertRLock()
+	var count int
+	var found bool
+	var post *pb.Posting
+	err := l.iterateNoSort(readTs, afterUid, func(p *pb.Posting) error {
+		if p.Uid == uid {
+			post = p
+			found = true
+		}
+		count++
+		return nil
+	})
+	if err != nil {
+		return -1, false, nil
+	}
+
+	return count, found, post
 }
 
 func (l *List) getPostingAndLength(readTs, afterUid, uid uint64) (int, bool, *pb.Posting) {
