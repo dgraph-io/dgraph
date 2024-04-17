@@ -785,7 +785,7 @@ func rewriteAsSimilarByIdQuery(
 // rewrites SimilarByEmbedding graphQL query to nested DQL query blocks
 // Example rewrittern query:
 //
-//		query gQLTodQL($search_vector: vfloat = "<json array of float>") {
+//		query gQLTodQL($search_vector: float32vector = "<json array of float>") {
 //		    var(func: similar_to(Product.embedding, 8, $search_vector)) {
 //		        v2 as Product.embedding
 //		        distance as math((v2 - $search_vector) dot (v2 - $search_vector))
@@ -832,7 +832,7 @@ func rewriteAsSimilarByEmbeddingQuery(
 	if queryArgs == nil {
 		queryArgs = make(map[string]string)
 	}
-	queryArgs["$search_vector"] = " vfloat = \"" + string(vecStr) + "\""
+	queryArgs["$search_vector"] = " float32vector = \"" + string(vecStr) + "\""
 	thisFilter := &dql.FilterTree{
 		Func: dgQuery[0].Func,
 	}

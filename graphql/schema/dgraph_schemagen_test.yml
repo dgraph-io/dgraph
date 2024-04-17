@@ -218,10 +218,10 @@ schemas:
       X.dt3: dateTime @index(month) .
       X.dt4: dateTime @index(day) .
       X.dt5: dateTime @index(hour) .
-      X.vf1: vfloat @index(hnsw) .
-      X.vf2: vfloat @index(hnsw(exponent: "4", metric: "euclidian")) .
-      X.vf3: vfloat @index(hnsw(metric: "cosine")) .
-      X.vf4: vfloat @index(hnsw(exponent: "4", metric: "dotproduct")) .
+      X.vf1: float32vector @index(hnsw) .
+      X.vf2: float32vector @index(hnsw(exponent: "4", metric: "euclidian")) .
+      X.vf3: float32vector @index(hnsw(metric: "cosine")) .
+      X.vf4: float32vector @index(hnsw(exponent: "4", metric: "dotproduct")) .
       X.e: string @index(hash) .
       X.e1: string @index(hash) .
       X.e2: string @index(exact) .

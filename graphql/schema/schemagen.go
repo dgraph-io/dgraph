@@ -676,8 +676,8 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string,
 					embedding := f.Directives.ForName(embeddingDirective)
 					if embedding != nil {
 						// embeddingValidation ensured GQL type is [Float]
-						// set typStr to vfloat
-						typStr = "vfloat"
+						// set typStr to float32vector
+						typStr = "float32vector"
 					}
 
 					if parentInt == nil {
