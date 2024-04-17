@@ -838,8 +838,8 @@ func embeddingValidation(sch *ast.Schema, typ *ast.Definition,
 		errs = append(errs,
 			gqlerror.ErrorPosf(
 				field.Position,
-				"Type %s; Field %s: The field with @hm_embedding directive is of type %s,"+
-					" but @hm_embedding directive only applies"+
+				"Type %s; Field %s: The field with @embedding directive is of type %s,"+
+					" but @embedding directive only applies"+
 					" to fields of type [Float!].", typ.Name, field.Name, field.Type.Name()))
 		return errs
 	}
@@ -849,8 +849,8 @@ func embeddingValidation(sch *ast.Schema, typ *ast.Definition,
 		errs = append(errs,
 			gqlerror.ErrorPosf(
 				field.Position,
-				"Type %s; Field %s: The field with @hm_embedding directive is of type [%s], "+
-					"but @hm_embedding directive only applies"+
+				"Type %s; Field %s: The field with @embedding directive is of type [%s], "+
+					"but @embedding directive only applies"+
 					" to fields of type [Float!].", typ.Name, field.Name, field.Type.Name()))
 	}
 

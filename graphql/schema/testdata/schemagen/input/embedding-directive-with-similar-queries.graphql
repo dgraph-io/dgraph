@@ -5,7 +5,7 @@ type Product {
   description: String
   title: String
   imageUrl: String
-  product_vector: [Float!] @hm_embedding @search(by: ["hnsw(metric: euclidian, exponent: 4)"])
+  product_vector: [Float!] @embedding @search(by: ["hnsw(metric: euclidian, exponent: 4)"])
 }
 
 type Purchase @lambdaOnMutate(add: true){
@@ -17,5 +17,5 @@ type Purchase @lambdaOnMutate(add: true){
 type User  {
   email: String!  @id
   purchase_history: [Purchase] 
-  user_vector: [Float!] @hm_embedding @search(by: ["hnsw"])
+  user_vector: [Float!] @embedding @search(by: ["hnsw"])
 }

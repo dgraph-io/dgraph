@@ -7,7 +7,7 @@ type Product {
 	description: String
 	title: String
 	imageUrl: String
-	product_vector: [Float!] @hm_embedding @search(by: ["hnsw(metric: euclidian, exponent: 4)"])
+	product_vector: [Float!] @embedding @search(by: ["hnsw(metric: euclidian, exponent: 4)"])
 	hm_distance: Float
 }
 
@@ -20,7 +20,7 @@ type Purchase @lambdaOnMutate(add: true) {
 type User {
 	email: String! @id
 	purchase_history(filter: PurchaseFilter, order: PurchaseOrder, first: Int, offset: Int): [Purchase] @hasInverse(field: user)
-	user_vector: [Float!] @hm_embedding @search(by: ["hnsw"])
+	user_vector: [Float!] @embedding @search(by: ["hnsw"])
 	hm_distance: Float
 	purchase_historyAggregate(filter: PurchaseFilter): PurchaseAggregateResult
 }
@@ -197,7 +197,7 @@ input GenerateMutationParams {
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [String!]) on FIELD_DEFINITION
-directive @hm_embedding on FIELD_DEFINITION
+directive @embedding on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id(interface: Boolean) on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE | FIELD_DEFINITION

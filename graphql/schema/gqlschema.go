@@ -37,7 +37,7 @@ const (
 	dgraphDirective    = "dgraph"
 	dgraphTypeArg      = "type"
 	dgraphPredArg      = "pred"
-	embeddingDirective = "hm_embedding"
+	embeddingDirective = "embedding"
 
 	idDirective             = "id"
 	idDirectiveInterfaceArg = "interface"
@@ -277,8 +277,8 @@ input GenerateMutationParams {
 `
 	directiveDefs = `
 directive @hasInverse(field: String!) on FIELD_DEFINITION
-directive @search(by: [String!]) on FIELD_DEFINITION
-directive @hm_embedding on FIELD_DEFINITION
+directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
+directive @embedding on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id(interface: Boolean) on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE | FIELD_DEFINITION
@@ -309,8 +309,8 @@ directive @generate(
 	// So, such directives have to be missed too.
 	apolloSupportedDirectiveDefs = `
 directive @hasInverse(field: String!) on FIELD_DEFINITION
-directive @search(by: [String!]) on FIELD_DEFINITION
-directive @hm_embedding on FIELD_DEFINITION
+directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
+directive @embedding on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id(interface: Boolean) on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE | FIELD_DEFINITION
@@ -2042,7 +2042,7 @@ func addSimilarByEmbeddingQuery(schema *ast.Schema, defn *ast.Definition) {
 				Type: &ast.Type{NamedType: "Float"}})
 	}
 	// Define the enum to
-	//select from among all predicates with "@hm_embedding" directives
+	//select from among all predicates with "@embedding" directives
 	enumName := defn.Name + EmbeddingEnumSuffix
 	enum := &ast.Definition{
 		Kind: ast.Enum,
@@ -2162,7 +2162,7 @@ func addSimilarByIdQuery(schema *ast.Schema, defn *ast.Definition,
 	}
 
 	// Define the enum to
-	//select from among all predicates with "@hm_embedding" directives
+	//select from among all predicates with "@embedding" directives
 	enumName := defn.Name + EmbeddingEnumSuffix
 	enum := &ast.Definition{
 		Kind: ast.Enum,
