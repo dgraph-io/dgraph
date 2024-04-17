@@ -508,3 +508,17 @@ type Product {
   imageUrl: String
   productVector: [Float!] @embedding
 }
+
+type ProjectCosine {
+  id: String! @id
+  description: String
+  title: String
+  description_v: [Float!] @embedding @search(by: ["hnsw(metric: cosine, exponent: 4)"]) 
+}
+
+type ProjectDotProduct {
+  id: String! @id
+  description: String
+  title: String
+  description_v: [Float!] @embedding @search(by: ["hnsw(metric: dotproduct, exponent: 4)"]) 
+}
