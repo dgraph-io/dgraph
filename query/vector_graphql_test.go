@@ -36,7 +36,7 @@ const (
 	 type Project  {
 		 id: ID!
 		 title: String!  @search(by: [exact])
-		 title_v: [Float!] @embedding @search(by: ["hnsw(metric: euclidian, exponent: 4)"]) 
+		 title_v: [Float!] @embedding @search(by: ["hnsw(metric: euclidian, exponent: 4)"])
 	 }
 	 `
 )
@@ -80,7 +80,7 @@ func addProject(t *testing.T, hc *dgraphtest.HTTPClient, project ProjectInput) {
 	require.NoError(t, err)
 }
 func queryProjectUsingTitle(t *testing.T, hc *dgraphtest.HTTPClient, title string) ProjectInput {
-	query := ` QueryProject($title: String!) {
+	query := ` query QueryProject($title: String!) {
 		 queryProject(filter: { title: { eq: $title } }) {
 		   title
 		   title_v
@@ -106,14 +106,14 @@ func queryProjectUsingTitle(t *testing.T, hc *dgraphtest.HTTPClient, title strin
 
 func queryProjectsSimilarByEmbedding(t *testing.T, hc *dgraphtest.HTTPClient, vector []float32) []ProjectInput {
 	// query similar project by embedding
-	queryProduct := `query QuerySimilarProjectByEmbedding($by: String!, $topK: Int!, $vector: [Float!]!) {
+	queryProduct := `query QuerySimilarProjectByEmbedding($by: ProjectEmbedding!, $topK: Int!, $vector: [Float!]!) {
 		 querySimilarProjectByEmbedding(by: $by, topK: $topK, vector: $vector) {
 		   id
 		   title
 		   title_v
 		 }
 	   }
-	   
+
 	 `
 
 	params := dgraphtest.GraphQLParams{
@@ -195,11 +195,12 @@ func TestVectorSchema(t *testing.T) {
 	schema := `type Project  {
 		 id: ID!
 		 title: String!  @search(by: [exact])
-		 title_v: [Float!] 
+		 title_v: [Float!]
 	 }`
 
 	// add schema
 	require.NoError(t, hc.UpdateGQLSchema(schema))
-
+	require.Error(t, hc.UpdateGQLSchema(graphQLVectorSchema))
+	require.NoError(t, client.DropAll())
 	require.NoError(t, hc.UpdateGQLSchema(graphQLVectorSchema))
 }
