@@ -6273,6 +6273,63 @@ func addMutationWithIDFieldHavingInterfaceArg(t *testing.T) {
 			error: "couldn't rewrite mutation addLibraryManager because failed to rewrite mutation" +
 				" payload because id 102 already exists for field refID in some other implementing" +
 				" type of interface Member",
+		}, {
+			name: "updating inherited @id with interface argument true," +
+				"returns error if given value for id already exist in a node of " +
+				"some other implementing type",
+			query: `mutation update($patch: UpdateLibraryMemberInput!) {
+                      updateLibraryMember(input: $patch) {
+                        libraryMember {
+                          refID
+                        }
+                      }
+                    }`,
+			variables: `{
+                      "patch": {
+                          "filter": {
+                              "refID": {
+                                  "in": "101"
+                              }
+                          },
+                          "set": {
+                              "refID": "102",
+                              "name": "Miles",
+                              "readHours": "5d2hr"
+                          }
+                      }
+                  }`,
+			error: "couldn't rewrite mutation updateLibraryMember because failed to rewrite" +
+				" mutation payload because id 102 already exists for field refID in some other" +
+				" implementing type of interface Member",
+		},
+		{
+			name: "updating link to a type that have inherited @id field with interface" +
+				" argument true, returns error if given value for id field  already exist" +
+				" in a node of some other implementing type",
+			query: `mutation update($patch: UpdateLibraryManagerInput!) {
+                     updateLibraryManager(input: $patch) {
+                       libraryManager {
+                         name
+                       }
+                     }
+                   }`,
+			variables: `{
+                    "patch": {
+                        "filter": {
+                            "name": {
+                                "in": "Juliet"
+                            }
+                        },
+                        "set": {
+                            "manages": {
+                                "refID": "102"
+                            }
+                        }
+                    }
+                }`,
+			error: "couldn't rewrite mutation updateLibraryManager because failed to rewrite mutation" +
+				" payload because id 102 already exists for field refID in some other" +
+				" implementing type of interface Member",
 		},
 	}
 
@@ -6302,4 +6359,267 @@ func addMutationWithIDFieldHavingInterfaceArg(t *testing.T) {
 	DeleteGqlType(t, "SportsMember", map[string]interface{}{}, 1, nil)
 	DeleteGqlType(t, "CricketTeam", map[string]interface{}{}, 1, nil)
 	DeleteGqlType(t, "LibraryManager", map[string]interface{}{}, 1, nil)
+}
+
+func xidUpdateAndNullableTests(t *testing.T) {
+	tcases := []struct {
+		name      string
+		query     string
+		variables string
+		error     string
+	}{
+		{
+			name: "2-level add mutation without nullable @id fields",
+			query: `mutation addEmployer($input: [AddEmployerInput!]!) {
+                      addEmployer(input: $input, upsert: false) {
+                        employer {
+                          company
+                        }
+                      }
+                    }`,
+			variables: `{
+                         "input": [
+                             {
+                                 "company": "ABC tech",
+                                 "name": "XYZ",
+                                 "worker": {
+                                     "name": "Alice",
+                                     "regNo": 101,
+                                     "empId": "E01"
+                                 }
+                             },
+                             {
+                                 "company": "XYZ industry",
+                                 "name": "ABC",
+                                 "worker": {
+                                     "name": "Bob",
+                                     "regNo": 102,
+                                     "empId": "E02"
+                                 }
+                             }
+                         ]
+                     }`,
+		}, {
+			name: "2-level add mutation with upserts without nullable @id fields",
+			query: `mutation addEmployer($input: [AddEmployerInput!]!) {
+                      addEmployer(input: $input, upsert: true) {
+                        employer {
+                          company
+                        }
+                      }
+                    }`,
+			variables: `{
+                      "input": {
+                          "company": "ABC tech",
+                          "worker": {
+                              "name": "Juliet",
+                              "regNo": 103,
+                              "empId": "E03"
+                          }
+                      }
+                  }`,
+		}, {
+			name: "upsert mutation gives error when multiple nodes are found with given @id fields",
+			query: `mutation addEmployer($input: [AddEmployerInput!]!) {
+                      addEmployer(input: $input, upsert: true) {
+                        employer {
+                          company
+                        }
+                      }
+                    }`,
+			variables: `{
+                       "input": {
+                           "company": "ABC tech",
+                           "name": "ABC"
+                       }
+                   }`,
+			error: "couldn't rewrite mutation addEmployer because failed to rewrite mutation" +
+				" payload because multiple nodes found for given xid values, updation not possible",
+		}, {
+			name: "upsert mutation gives error when multiple nodes are found with" +
+				" given @id fields at nested level",
+			query: `mutation addEmployer($input: [AddEmployerInput!]!) {
+                      addEmployer(input: $input, upsert: true) {
+                        employer {
+                          company
+                        }
+                      }
+                    }`,
+			variables: `{
+                     "input": {
+                         "company": "ABC tech",
+                         "worker": {
+                             "empId": "E02",
+                             "regNo": 103,
+                             "name": "William"
+                         }
+                     }
+                 }`,
+			error: "couldn't rewrite mutation addEmployer because failed to rewrite mutation" +
+				" payload because multiple nodes found for given xid values, updation not possible",
+		},
+		{
+			name: "Non-nullable id should be present while creating new node at nested level" +
+				" using upsert",
+			query: `mutation addEmployer($input: [AddEmployerInput!]!) {
+                      addEmployer(input: $input, upsert: true) {
+                        employer {
+                          company
+                        }
+                      }
+                    }`,
+			variables: `{
+                      "input": {
+                          "company": "ABC tech1",
+                          "worker": {
+                              "regNo": 104,
+                              "name": "John"
+                          }
+                      }
+                  }`,
+			error: "couldn't rewrite mutation addEmployer because failed to rewrite" +
+				" mutation payload because type Worker requires a value for" +
+				" field empId, but no value present",
+		},
+		{
+			name: "update mutation fails when @id field is being updated" +
+				" and multiple nodes are selected in filter",
+			query: `mutation update($patch: UpdateEmployerInput!) {
+                    	updateEmployer(input: $patch) {
+                    		employer {
+                    			company
+                    		}
+                    	}
+                    }`,
+			variables: `{
+                    "patch": {
+                        "filter": {
+                            "name": {
+                                "in": [
+                                    "XYZ",
+                                    "ABC"
+                                ]
+                            }
+                        },
+                        "set": {
+                            "company": "JKL"
+                        }
+                    }
+                }`,
+			error: "mutation updateEmployer failed because only one node is allowed in the filter" +
+				" while updating fields with @id directive",
+		}, {
+			name: "successfully updating @id field of a node ",
+			query: `mutation update($patch: UpdateEmployerInput!) {
+                    	updateEmployer(input: $patch) {
+                    		employer {
+                    			company
+                    		}
+                    	}
+                    }`,
+			variables: `{
+                    "patch": {
+                        "filter": {
+                            "name": {
+                                "in": [
+                                    "XYZ"
+                                ]
+                            }
+                        },
+                        "set": {
+                            "name": "JKL",
+                            "company": "JKL tech"
+                        }
+                    }
+                }`,
+		},
+		{
+			name: "updating @id field returns error because given value in update mutation already exists",
+			query: `mutation update($patch: UpdateEmployerInput!) {
+                    	updateEmployer(input: $patch) {
+                    		employer {
+                    			company
+                    		}
+                    	}
+                    }`,
+			variables: `{
+                        "patch": {
+                            "filter": {
+                                "name": {
+                                    "in": [
+                                        "JKL"
+                                    ]
+                                }
+                            },
+                            "set": {
+                                "name": "ABC",
+                                "company": "ABC tech"
+                            }
+                        }
+                     }`,
+			error: "couldn't rewrite mutation updateEmployer because failed to rewrite mutation" +
+				" payload because id ABC already exists for field name inside type Employer",
+		},
+		{
+			name: "updating root @id fields and also create a nested  link to nested object",
+			query: `mutation update($patch: UpdateEmployerInput!) {
+                    	updateEmployer(input: $patch) {
+                    		employer {
+                    			company
+                    		}
+                    	}
+                    }`,
+			variables: `{
+                      "patch": {
+                          "filter": {
+                              "name": {
+                                  "in": [
+                                      "JKL"
+                                  ]
+                              }
+                          },
+                          "set": {
+                              "name": "MNO",
+                              "company": "MNO tech",
+                              "worker": {
+                                  "name": "Miles",
+                                  "empId": "E05",
+                                  "regNo": 105
+                              }
+                          }
+                      }
+                  }`,
+		},
+	}
+
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			var vars map[string]interface{}
+			if tcase.variables != "" {
+				err := json.Unmarshal([]byte(tcase.variables), &vars)
+				require.NoError(t, err)
+			}
+			params := &GraphQLParams{
+				Query:     tcase.query,
+				Variables: vars,
+			}
+			resp := params.ExecuteAsPost(t, GraphqlURL)
+			if tcase.error != "" {
+				require.Equal(t, tcase.error, resp.Errors[0].Error())
+			} else {
+				RequireNoGQLErrors(t, resp)
+			}
+
+		})
+	}
+
+	// Cleanup
+	filterEmployer :=
+		map[string]interface{}{
+			"name": map[string]interface{}{"in": []string{"ABC", "MNO"}}}
+	filterWorker :=
+		map[string]interface{}{
+			"regNo": map[string]interface{}{"in": []int{101, 102, 103, 105}}}
+	DeleteGqlType(t, "Employer", filterEmployer, 2, nil)
+	DeleteGqlType(t, "Worker", filterWorker, 4, nil)
 }

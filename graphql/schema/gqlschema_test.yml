@@ -104,7 +104,7 @@ invalid_schemas:
     name: "HNSW index options malformed"
     input: |
       type T {
-        f: [Float!] @hm_embedding @search(by: ["hnsw(metric:dotproduct)"])
+        f: [Float!] @embedding @search(by: ["hnsw(metric:dotproduct)"])
       }
     errlist: [
       {"message": "Type T; Field f: has the @search directive but the argument 'hnsw(metric:dotproduct)' with search options is malformed. Search options are comma-separated key-value pairs in YAML format => <optionName><COLON><SPACE><VALUE>",
@@ -2773,27 +2773,27 @@ invalid_schemas:
       {"message": "Type Product: Field name: @search directive can not be defined on @external fields that are not @key.", "locations": [ { "line": 3, "column": 18} ] },
     ]
 
-  - name: "@hm_embedding directive on a field with String type"
+  - name: "@embedding directive on a field with String type"
     input: |
       type Product {
         id: String! @id
         description: String
         title: String
-        productVector: String @hm_embedding
+        productVector: String @embedding
       }
     errlist: [
-      {"message": "Type Product; Field productVector: The field with @hm_embedding directive is of type String, but @hm_embedding directive only applies to fields of type [Float!].", "locations": [ { "line": 5, "column": 3} ] },
+      {"message": "Type Product; Field productVector: The field with @embedding directive is of type String, but @embedding directive only applies to fields of type [Float!].", "locations": [ { "line": 5, "column": 3} ] },
     ]
 
-  - name: "@hm_embedding directive on a field with [Int] type"
+  - name: "@embedding directive on a field with [Int] type"
     input: |
       type User  {
         email: String!  @id
         name: String
-        userVector: [Int] @hm_embedding
+        userVector: [Int] @embedding
       }
     errlist: [
-      {"message": "Type User; Field userVector: The field with @hm_embedding directive is of type [Int], but @hm_embedding directive only applies to fields of type [Float!].", "locations": [ { "line": 4, "column": 3} ] },
+      {"message": "Type User; Field userVector: The field with @embedding directive is of type [Int], but @embedding directive only applies to fields of type [Float!].", "locations": [ { "line": 4, "column": 3} ] },
     ]
 
   - name: "@requires directive defined on type definitions"

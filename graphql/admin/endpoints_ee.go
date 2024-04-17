@@ -9,10 +9,6 @@
  * may obtain a copy of the License at
  *
  *     https://github.com/dgraph-io/dgraph/blob/main/licenses/DCL.txt
- *
- * Oct 2023: added Embedding related types and functions
- * underlying DQL schema for embeddings is defined in schema.go
- * resolvers are declared in admin.go
  */
 
 package admin

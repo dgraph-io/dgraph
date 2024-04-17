@@ -88,7 +88,7 @@ type Product {
   description: String
   title: String
   imageUrl: String
-  productVector: [Float!] @hm_embedding
+  productVector: [Float!] @embedding
 }
 
 type Post {
