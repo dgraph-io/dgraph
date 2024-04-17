@@ -453,6 +453,7 @@ input ProductOrder {
 }
 
 input ProductPatch {
+	id: String
 	description: String
 	title: String
 	imageUrl: String
@@ -526,6 +527,7 @@ input UserOrder {
 }
 
 input UserPatch {
+	email: String
 	purchase_history: [PurchaseRef]
 	user_vector: [Float!]
 }

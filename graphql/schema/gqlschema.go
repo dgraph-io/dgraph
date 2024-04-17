@@ -277,7 +277,7 @@ input GenerateMutationParams {
 `
 	directiveDefs = `
 directive @hasInverse(field: String!) on FIELD_DEFINITION
-directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
+directive @search(by: [String!]) on FIELD_DEFINITION
 directive @embedding on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id(interface: Boolean) on FIELD_DEFINITION
@@ -309,7 +309,7 @@ directive @generate(
 	// So, such directives have to be missed too.
 	apolloSupportedDirectiveDefs = `
 directive @hasInverse(field: String!) on FIELD_DEFINITION
-directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
+directive @search(by: [String!]) on FIELD_DEFINITION
 directive @embedding on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id(interface: Boolean) on FIELD_DEFINITION

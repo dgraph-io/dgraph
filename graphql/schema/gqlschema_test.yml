@@ -108,7 +108,7 @@ invalid_schemas:
       }
     errlist: [
       {"message": "Type T; Field f: has the @search directive but the argument 'hnsw(metric:dotproduct)' with search options is malformed. Search options are comma-separated key-value pairs in YAML format => <optionName><COLON><SPACE><VALUE>",
-      "locations": [{"line": 2, "column": 30}]}
+      "locations": [{"line": 2, "column": 27}]}
     ]
 
   -
