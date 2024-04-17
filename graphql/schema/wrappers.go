@@ -113,7 +113,7 @@ const (
 	SimilarByIdQuerySuffix                     = "ById"
 	SimilarByEmbeddingQuerySuffix              = "ByEmbedding"
 	SimilarQueryResultTypeSuffix               = "WithDistance"
-	SimilarQueryDistanceFieldName              = "distance"
+	SimilarQueryDistanceFieldName              = "vector_distance"
 	SimilarSearchMetricEuclidian               = "euclidian"
 	SimilarSearchMetricDotProduct              = "dotproduct"
 	SimilarSearchMetricCosine                  = "cosine"
