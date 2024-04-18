@@ -14,7 +14,7 @@ type Product {
 type Purchase @lambdaOnMutate(add: true) {
 	user(filter: UserFilter): User @hasInverse(field: "purchase_history")
 	product(filter: ProductFilter): Product
-	date: DateTime @search(by: ["day"])
+	date: DateTime @search(by: [day])
 }
 
 type User {

@@ -197,7 +197,7 @@ type Comment1 {
 }
 type post1{
     id: ID
-    title: String! @id @search(by: ["regexp"])
+    title: String! @id @search(by: [regexp])
     numLikes: Int64 @search
     commentsByMonth: [Int]
     likesByMonth: [Int64]
@@ -375,7 +375,7 @@ type Dataset {
 }
 
 type author1{
-    name:String! @id @search(by: ["regexp"])
+    name:String! @id @search(by: [regexp])
     posts:[post1] @hasInverse(field: author)
 }
 # multiple fields with @id directive

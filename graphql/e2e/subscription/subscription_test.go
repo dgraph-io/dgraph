@@ -54,7 +54,7 @@ const (
 		id: ID!
 		about: Product!
 		by: Customer!
-		comment: String @search(by: ["fulltext"])
+		comment: String @search(by: [fulltext])
 		rating: Int @search
 	}
 	`
@@ -77,7 +77,7 @@ const (
 	schCustomDQL = `
 	type Tweets {
 		id: ID!
-		text: String! @search(by: ["fulltext"])
+		text: String! @search(by: [fulltext])
 		author: User
 		timestamp: DateTime @search
    }

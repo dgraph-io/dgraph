@@ -127,26 +127,26 @@ schemas:
     input: |
       type X {
         i1: Int @search
-        i2: Int @search(by: ["int"])
+        i2: Int @search(by: [int])
         i64_1: Int64 @search
-        i64_2: Int64 @search(by: ["int64"])
+        i64_2: Int64 @search(by: [int64])
         f1: Float @search
-        f2: Float @search(by: ["float"])
+        f2: Float @search(by: [float])
         b1: Boolean @search
-        b2: Boolean @search(by: ["bool"])
+        b2: Boolean @search(by: [bool])
         s1: String @search
         s2: String @search(by: [hash])
         s3: String @search(by: [exact])
         s4: String @search(by: [term])
-        s5: String @search(by: ["fulltext"])
-        s6: String @search(by: ["trigram"])
-        s7: String @search(by: ["regexp"])
+        s5: String @search(by: [fulltext])
+        s6: String @search(by: [trigram])
+        s7: String @search(by: [regexp])
         s8: String @search(by: ["exact", "fulltext", "term", "trigram"])
         dt1: DateTime @search
-        dt2: DateTime @search(by: ["year"])
-        dt3: DateTime @search(by: ["month"])
-        dt4: DateTime @search(by: ["day"])
-        dt5: DateTime @search(by: ["hour"])
+        dt2: DateTime @search(by: [year])
+        dt3: DateTime @search(by: [month])
+        dt4: DateTime @search(by: [day])
+        dt5: DateTime @search(by: [hour])
         vf1: [Float!] @embedding @search(by: ["hnsw"])
         vf2: [Float!] @embedding @search(by: ["hnsw(exponent: 4, metric: euclidian)"])
         vf3: [Float!] @embedding @search(by: ["hnsw(metric: cosine)"])
@@ -154,8 +154,8 @@ schemas:
         e: E @search
         e1: E @search(by: [hash])
         e2: E @search(by: [exact])
-        e3: E @search(by: ["trigram"])
-        e4: E @search(by: ["regexp"])
+        e3: E @search(by: [trigram])
+        e4: E @search(by: [regexp])
         e5: E @search(by: ["hash", "regexp"])
         e6: E @search(by: ["hash", "trigram"])
         e7: E @search(by: ["exact", "regexp"])
@@ -447,11 +447,11 @@ schemas:
         f3: String @dgraph(pred: "f3@en")
         name: String! @id
         nameHi: String @dgraph(pred: "Person.name@hi") @search(by: ["term", "exact"])
-        nameEn: String @dgraph(pred: "Person.name@en") @search(by: ["regexp"])
+        nameEn: String @dgraph(pred: "Person.name@en") @search(by: [regexp])
         nameHiEn: String @dgraph(pred: "Person.name@hi:en")
         nameHi_En_Untag: String @dgraph(pred: "Person.name@hi:en:.")
         name_Untag_AnyLang: String @dgraph(pred: "Person.name@.")
-        address: String @search(by: ["fulltext"])
+        address: String @search(by: [fulltext])
         addressHi: String @dgraph(pred: "Person.address@hi")
         professionEn: String @dgraph(pred: "Person.profession@en")
       }
@@ -496,7 +496,7 @@ schemas:
   - name: "Field with @id directive gets hash index."
     input: |
       interface A {
-        id: String! @id @search(by: ["trigram"])
+        id: String! @id @search(by: [trigram])
       }
       type B implements A {
         correct: Boolean @search
@@ -656,7 +656,7 @@ schemas:
         p: String @dgraph(pred: "name") @search(by: ["exact", "term"])
       }
       type B {
-        q: String @dgraph(pred: "name") @search(by: ["trigram"])
+        q: String @dgraph(pred: "name") @search(by: [trigram])
       }
       type C {
         q: String @dgraph(pred: "name") @search(by: ["exact", "term"])
@@ -732,13 +732,13 @@ schemas:
         name: String!
         location: Point @search
         landmark: Point
-        office: Point  @search(by: ["point"])
+        office: Point  @search(by: [point])
         area1: Polygon @search
         area2: Polygon
-        area3: Polygon @search(by: ["polygon"])
+        area3: Polygon @search(by: [polygon])
         branches1: MultiPolygon @search
         branches2: MultiPolygon
-        branches3: MultiPolygon @search(by: ["multiPolygon"])
+        branches3: MultiPolygon @search(by: [multiPolygon])
       }
     output: |
       type Hotel {

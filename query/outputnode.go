@@ -1574,7 +1574,7 @@ func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode) erro
 					if lang != "" && lang != "*" {
 						fieldNameWithTag += "@" + lang
 					}
-					encodeAsList := (pc.List && lang == "")
+					encodeAsList := pc.List && lang == ""
 					if err := enc.AddListValue(dst, enc.idForAttr(fieldNameWithTag),
 						sv, encodeAsList); err != nil {
 						return err

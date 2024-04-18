@@ -17,7 +17,7 @@ invalid_schemas:
       type Hotel {
         id: ID!
         name: String!
-        location: Point @search(by: ["int"])
+        location: Point @search(by: [int])
       }
     errlist: [
       {"message":"Type Hotel; Field location: has the @search directive but the argument int doesn't apply to field type Point.  Search by int applies to fields of type Int. Fields of type Point are searchable by just @search.", "locations":[ { "line": 4, "column":20}]},
@@ -451,7 +451,7 @@ invalid_schemas:
     name: "Search with wrong arg (int) with error on default search type (Int64)"
     input: |
       type X {
-        y: Int64 @search(by: ["int"])
+        y: Int64 @search(by: [int])
       }
     errlist: [
       {"message": "Type X; Field y: has the @search directive but the argument int doesn't
@@ -464,7 +464,7 @@ invalid_schemas:
     name: "Search with wrong arg with error on search type"
     input: |
       type X {
-        y: String @search(by: ["day"])
+        y: String @search(by: [day])
       }
     errlist: [
       {"message": "Type X; Field y: has the @search directive but the argument day doesn't
@@ -3114,33 +3114,33 @@ valid_schemas:
     input: |
       type X {
         int1: Int @search
-        int2: Int @search(by: ["int"])
+        int2: Int @search(by: [int])
         int3: Int @search(by: [])
         int64_1: Int64 @search
-        int64_2: Int64 @search(by: ["int64"])
+        int64_2: Int64 @search(by: [int64])
         int64_3: Int64 @search(by: [])
         float1: Float @search
-        float2: Float @search(by: ["float"])
+        float2: Float @search(by: [float])
         float3: Float @search(by: [])
         bool1: Boolean @search
-        bool2: Boolean @search(by: ["bool"])
+        bool2: Boolean @search(by: [bool])
         bool3: Boolean @search(by: [])
         str: String @search
         str2: String @search(by: [])
         strHash: String @search(by: [hash])
         strExact: String @search(by: [exact])
         strTerm: String @search(by: [term])
-        strFulltext: String @search(by: ["fulltext"])
-        strTrigram: String @search(by: ["trigram"])
-        strRegexp: String @search(by: ["regexp"])
+        strFulltext: String @search(by: [fulltext])
+        strTrigram: String @search(by: [trigram])
+        strRegexp: String @search(by: [regexp])
         strRegexpFulltext: String @search(by: ["regexp", "fulltext"])
         strMultipleIndex: String @search(by: ["trigram", "hash", "term", "fulltext"])
         dt: DateTime @search
         dt2: DateTime @search(by: [])
-        dtYear: DateTime @search(by: ["year"])
-        dtMonth: DateTime @search(by: ["month"])
-        dtDay: DateTime @search(by: ["day"])
-        dtHour: DateTime @search(by: ["hour"])
+        dtYear: DateTime @search(by: [year])
+        dtMonth: DateTime @search(by: [month])
+        dtDay: DateTime @search(by: [day])
+        dtHour: DateTime @search(by: [hour])
         enumFld: E @search
         req: String! @search(by: [term])
         list: [Int] @search
@@ -3284,7 +3284,7 @@ valid_schemas:
     input: |
       type Tweets {
           id: ID!
-          text: String! @search(by: ["fulltext"])
+          text: String! @search(by: [fulltext])
           user: User
           timestamp: DateTime! @search
       }
@@ -3481,11 +3481,11 @@ valid_schemas:
         name: String! @id
         f3: String @dgraph(pred: "f3@en")
         nameHi: String @dgraph(pred: "Person.name@hi") @search(by: ["term", "exact"])
-        nameEn: String @dgraph(pred: "Person.name@en") @search(by: ["regexp"])
+        nameEn: String @dgraph(pred: "Person.name@en") @search(by: [regexp])
         nameHiEn: String @dgraph(pred: "Person.name@hi:en")
         nameHi_En_Untag: String @dgraph(pred: "Person.name@hi:en:.")
         name_Untag_AnyLang: String @dgraph(pred: "Person.name@.")
-        address: String @search(by: ["fulltext"])
+        address: String @search(by: [fulltext])
         addressHi: String @dgraph(pred: "Person.address@hi")
         professionEn: String @dgraph(pred: "Person.profession@en")
       }

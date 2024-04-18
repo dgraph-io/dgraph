@@ -4,7 +4,7 @@
 
 type Tweets {
 	id: ID!
-	text: String! @search(by: ["fulltext"])
+	text: String! @search(by: [fulltext])
 	author(filter: UserFilter): User @hasInverse(field: tweets)
 	timestamp: DateTime! @search
 }

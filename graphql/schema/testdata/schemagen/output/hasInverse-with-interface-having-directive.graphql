@@ -11,14 +11,14 @@ type Author {
 
 interface Post {
 	id: ID!
-	text: String @search(by: ["fulltext"])
+	text: String @search(by: [fulltext])
 	datePublished: DateTime @search
 	author(filter: AuthorFilter): Author! @hasInverse(field: posts)
 }
 
 type Question implements Post {
 	id: ID!
-	text: String @search(by: ["fulltext"])
+	text: String @search(by: [fulltext])
 	datePublished: DateTime @search
 	author(filter: AuthorFilter): Author! @hasInverse(field: posts)
 	answered: Boolean
@@ -26,7 +26,7 @@ type Question implements Post {
 
 type Answer implements Post {
 	id: ID!
-	text: String @search(by: ["fulltext"])
+	text: String @search(by: [fulltext])
 	datePublished: DateTime @search
 	author(filter: AuthorFilter): Author! @hasInverse(field: posts)
 	markedUseful: Boolean

@@ -6,7 +6,7 @@ type Author {
 
 interface Post {
   id: ID!
-  text: String @search(by: ["fulltext"])
+  text: String @search(by: [fulltext])
   datePublished: DateTime @search
   author: Author! 
 }

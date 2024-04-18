@@ -33,7 +33,7 @@ type Tweets @auth (
     update: { rule: "{$USER: { eq: \"foo\" } }"}
 ){
     id: String! @id
-    text: String! @search(by: ["fulltext"])
+    text: String! @search(by: [fulltext])
     user: User
     timestamp: DateTime! @search
     score: Int @search
