@@ -4,7 +4,7 @@
 
 interface Character {
 	id: ID!
-	name: String! @search(by: ["exact"])
+	name: String! @search(by: [exact])
 	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
 	enemyOf(filter: ResidentFilter): Resident
 	appearsIn: [Episode!]! @search
@@ -13,7 +13,7 @@ interface Character {
 
 type Human implements Character {
 	id: ID!
-	name: String! @search(by: ["exact"])
+	name: String! @search(by: [exact])
 	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
 	enemyOf(filter: ResidentFilter): Resident
 	appearsIn: [Episode!]! @search
@@ -25,7 +25,7 @@ type Human implements Character {
 
 type Droid implements Character {
 	id: ID!
-	name: String! @search(by: ["exact"])
+	name: String! @search(by: [exact])
 	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
 	enemyOf(filter: ResidentFilter): Resident
 	appearsIn: [Episode!]! @search
@@ -41,7 +41,7 @@ enum Episode {
 
 type Starship {
 	id: ID!
-	name: String! @search(by: ["term"])
+	name: String! @search(by: [term])
 	length: Float
 }
 

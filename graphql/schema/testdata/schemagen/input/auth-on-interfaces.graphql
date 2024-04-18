@@ -1,6 +1,6 @@
 type Author {
   id: ID!
-  name: String! @search(by: ["hash"])
+  name: String! @search(by: [hash])
   posts: [Post] @hasInverse(field: author)
 }
 
@@ -14,7 +14,7 @@ interface Post @secret(field: "pwd") @auth(
             }""" }
 ){
     id: ID!
-    text: String @search(by: ["exact"])
+    text: String @search(by: [exact])
     datePublished: DateTime @search
     author: Author! 
 }

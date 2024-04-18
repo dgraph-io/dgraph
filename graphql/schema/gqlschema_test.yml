@@ -390,7 +390,7 @@ invalid_schemas:
         name: String
       }
       type Y {
-        id: ID! @search(by: ["term"])
+        id: ID! @search(by: [term])
         name: String
       }
     errlist: [
@@ -422,7 +422,7 @@ invalid_schemas:
     name: "Search (with arg) will error that can't have the @search"
     input: |
       type X {
-        y: Y @search(by: ["term"])
+        y: Y @search(by: [term])
       }
       type Y {
         y: String
@@ -438,7 +438,7 @@ invalid_schemas:
     name: "Search with wrong arg with error on default search type"
     input: |
       type X {
-        y: Int @search(by: ["term"])
+        y: Int @search(by: [term])
       }
     errlist: [
       {"message": "Type X; Field y: has the @search directive but the argument term doesn't
@@ -2251,7 +2251,7 @@ invalid_schemas:
     input: |
       type X {
         username: String! @id @auth(query: {rule: "{ X_MyApp_Role : { eq : \"ADMIN\"}}" })
-        userRole: String @search(by: ["hash"])
+        userRole: String @search(by: [hash])
       }
     errlist: [
     {"message": "Directive auth is not applicable on FIELD_DEFINITION.",
@@ -2949,7 +2949,7 @@ invalid_schemas:
     input: |
       type Person  {
         name: String!
-        nameHiEn: String! @dgraph(pred:"Person.name@hi:en") @search(by: ["exact"])
+        nameHiEn: String! @dgraph(pred:"Person.name@hi:en") @search(by: [exact])
       }
     errlist: [
       { "message": "Type Person; Field nameHiEn: @search directive not applicable on language tag
@@ -2990,7 +2990,7 @@ valid_schemas:
   - name: "field with @id directive can have exact index"
     input: |
       type X {
-        f1: String! @id @search(by:["exact"])
+        f1: String! @id @search(by:[exact])
       }
 
   - name: "Type implements from two interfaces where both have ID"
@@ -3053,7 +3053,7 @@ valid_schemas:
                  }
                  """ }
       ){
-        userRole: String @search(by: ["hash"])
+        userRole: String @search(by: [hash])
       }
 
   -
@@ -3127,9 +3127,9 @@ valid_schemas:
         bool3: Boolean @search(by: [])
         str: String @search
         str2: String @search(by: [])
-        strHash: String @search(by: ["hash"])
-        strExact: String @search(by: ["exact"])
-        strTerm: String @search(by: ["term"])
+        strHash: String @search(by: [hash])
+        strExact: String @search(by: [exact])
+        strTerm: String @search(by: [term])
         strFulltext: String @search(by: ["fulltext"])
         strTrigram: String @search(by: ["trigram"])
         strRegexp: String @search(by: ["regexp"])
@@ -3142,7 +3142,7 @@ valid_schemas:
         dtDay: DateTime @search(by: ["day"])
         dtHour: DateTime @search(by: ["hour"])
         enumFld: E @search
-        req: String! @search(by: ["term"])
+        req: String! @search(by: [term])
         list: [Int] @search
         reqList: [DateTime!]! @search
       }

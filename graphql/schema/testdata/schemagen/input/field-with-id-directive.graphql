@@ -14,5 +14,5 @@ type Author {
 
 type Genre {
     # This will add exact index on name field, overwriting the default "hash" index for field of type "String! @id".
-    name: String! @id @search(by: ["exact"])
+    name: String! @id @search(by: [exact])
 }

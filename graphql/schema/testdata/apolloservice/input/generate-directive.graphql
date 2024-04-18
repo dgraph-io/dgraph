@@ -6,7 +6,7 @@ interface Character @secret(field: "password") @generate(
     subscription: false
 ) {
     id: ID!
-    name: String! @search(by: ["exact"])
+    name: String! @search(by: [exact])
     friends: [Character]
 }
 

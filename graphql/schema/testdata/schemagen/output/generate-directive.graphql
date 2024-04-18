@@ -4,14 +4,14 @@
 
 interface Character @secret(field: "password") @generate(query: {get:false,password:false}, subscription: false) {
 	id: ID!
-	name: String! @search(by: ["exact"])
+	name: String! @search(by: [exact])
 	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
 	friendsAggregate(filter: CharacterFilter): CharacterAggregateResult
 }
 
 type Human implements Character @generate(query: {aggregate:true}, subscription: true) @secret(field: "password") {
 	id: ID!
-	name: String! @search(by: ["exact"])
+	name: String! @search(by: [exact])
 	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
 	totalCredits: Int
 	friendsAggregate(filter: CharacterFilter): CharacterAggregateResult

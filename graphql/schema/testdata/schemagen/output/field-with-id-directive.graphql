@@ -18,7 +18,7 @@ type Author {
 }
 
 type Genre {
-	name: String! @id @search(by: ["exact"])
+	name: String! @id @search(by: [exact])
 }
 
 #######################

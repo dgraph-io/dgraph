@@ -3,7 +3,7 @@
 
 type Hotel {
     id: ID!
-    name: String! @search(by: ["exact"])
+    name: String! @search(by: [exact])
     location: Point @search
     area: Polygon @search
     branches: MultiPolygon @search
@@ -213,13 +213,13 @@ type Person1 {
 
 type Person {
     id: ID!
-    name: String! @search(by: ["hash"])
-    nameHi: String @dgraph(pred:"Person.name@hi") @search(by: ["hash"])
-    nameZh: String @dgraph(pred:"Person.name@zh") @search(by: ["hash"])
+    name: String! @search(by: [hash])
+    nameHi: String @dgraph(pred:"Person.name@hi") @search(by: [hash])
+    nameZh: String @dgraph(pred:"Person.name@zh") @search(by: [hash])
     nameHiZh: String @dgraph(pred:"Person.name@hi:zh")
     nameZhHi: String @dgraph(pred:"Person.name@zh:hi")
     nameHi_Zh_Untag: String @dgraph(pred:"Person.name@hi:zh:.")
-    name_Untag_AnyLang: String @dgraph(pred:"Person.name@.") @search(by: ["hash"])
+    name_Untag_AnyLang: String @dgraph(pred:"Person.name@.") @search(by: [hash])
     professionEn: String @dgraph(pred:"Person.profession@en")
 }
 
@@ -363,7 +363,7 @@ type Owner {
 type Project {
     id: String! @id
     owner: Owner!
-    name: String! @search(by: ["hash"])
+    name: String! @search(by: [hash])
     datasets: [Dataset!] @hasInverse(field: project)
 }
 
@@ -371,7 +371,7 @@ type Dataset {
     id: String! @id
     owner: Owner!
     project: Project!
-    name: String! @search(by: ["hash"])
+    name: String! @search(by: [hash])
 }
 
 type author1{

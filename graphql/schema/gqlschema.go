@@ -1317,7 +1317,7 @@ func addPatchType(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[
 
 // addFieldFilters adds field arguments that allow filtering to all fields of
 // defn that can be searched.  For example, if there's another type
-// `type R { ... f: String @search(by: ["term"]) ... }`
+// `type R { ... f: String @search(by: [term]) ... }`
 // and defn has a field of type R, e.g. if defn is like
 // `type T { ... g: R ... }`
 // then a query should be able to filter on g by term search on f, like

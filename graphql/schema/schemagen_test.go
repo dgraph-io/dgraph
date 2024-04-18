@@ -224,9 +224,9 @@ func TestOnlyCorrectSearchArgsWork(t *testing.T) {
 	}{
 		"String searches don't apply to Int": {schema: `
 			type X {
-				str1: Int @search(by: ["hash"])
-				str2: Int @search(by: ["exact"])
-				str3: Int @search(by: ["term"])
+				str1: Int @search(by: [hash])
+				str2: Int @search(by: [exact])
+				str3: Int @search(by: [term])
 				str4: Int @search(by: ["fulltext"])
 				str5: Int @search(by: ["trigram"])
 				str6: Int @search(by: ["regexp"])
@@ -234,9 +234,9 @@ func TestOnlyCorrectSearchArgsWork(t *testing.T) {
 			expectedErrors: 6},
 		"String searches don't apply to Float": {schema: `
 			type X {
-				str1: Float @search(by: ["hash"])
-				str2: Float @search(by: ["exact"])
-				str3: Float @search(by: ["term"])
+				str1: Float @search(by: [hash])
+				str2: Float @search(by: [exact])
+				str3: Float @search(by: [term])
 				str4: Float @search(by: ["fulltext"])
 				str5: Float @search(by: ["trigram"])
 				str6: Float @search(by: ["regexp"])
@@ -244,9 +244,9 @@ func TestOnlyCorrectSearchArgsWork(t *testing.T) {
 			expectedErrors: 6},
 		"String searches don't apply to Boolean": {schema: `
 			type X {
-				str1: Boolean @search(by: ["hash"])
-				str2: Boolean @search(by: ["exact"])
-				str3: Boolean @search(by: ["term"])
+				str1: Boolean @search(by: [hash])
+				str2: Boolean @search(by: [exact])
+				str3: Boolean @search(by: [term])
 				str4: Boolean @search(by: ["fulltext"])
 				str5: Boolean @search(by: ["trigram"])
 				str6: Boolean @search(by: ["regexp"])
@@ -254,9 +254,9 @@ func TestOnlyCorrectSearchArgsWork(t *testing.T) {
 			expectedErrors: 6},
 		"String searches don't apply to DateTime": {schema: `
 			type X {
-				str1: DateTime @search(by: ["hash"])
-				str2: DateTime @search(by: ["exact"])
-				str3: DateTime @search(by: ["term"])
+				str1: DateTime @search(by: [hash])
+				str2: DateTime @search(by: [exact])
+				str3: DateTime @search(by: [term])
 				str4: DateTime @search(by: ["fulltext"])
 				str5: DateTime @search(by: ["trigram"])
 				str6: DateTime @search(by: ["regexp"])
@@ -327,7 +327,7 @@ func TestOnlyCorrectSearchArgsWork(t *testing.T) {
 				e5: E @search(by: ["month"])
 				e6: E @search(by: ["day"])
 				e7: E @search(by: ["hour"])
-				e9: E @search(by: ["term"])
+				e9: E @search(by: [term])
 				e10: E @search(by: ["fulltext"])
 			}
 			enum E {

@@ -135,9 +135,9 @@ schemas:
         b1: Boolean @search
         b2: Boolean @search(by: ["bool"])
         s1: String @search
-        s2: String @search(by: ["hash"])
-        s3: String @search(by: ["exact"])
-        s4: String @search(by: ["term"])
+        s2: String @search(by: [hash])
+        s3: String @search(by: [exact])
+        s4: String @search(by: [term])
         s5: String @search(by: ["fulltext"])
         s6: String @search(by: ["trigram"])
         s7: String @search(by: ["regexp"])
@@ -152,8 +152,8 @@ schemas:
         vf3: [Float!] @embedding @search(by: ["hnsw(metric: cosine)"])
         vf4: [Float!] @embedding @search(by: ["hnsw(metric: dotproduct, exponent: 4)"])
         e: E @search
-        e1: E @search(by: ["hash"])
-        e2: E @search(by: ["exact"])
+        e1: E @search(by: [hash])
+        e2: E @search(by: [exact])
         e3: E @search(by: ["trigram"])
         e4: E @search(by: ["regexp"])
         e5: E @search(by: ["hash", "regexp"])
@@ -235,7 +235,7 @@ schemas:
     input: |
       interface A {
         id: ID!
-        name: String! @search(by: ["exact"])
+        name: String! @search(by: [exact])
       }
       type B implements A {
         correct: Boolean @search
@@ -365,7 +365,7 @@ schemas:
 
       interface B @dgraph(type: "dgraph.interface.B") {
         id: ID!
-        name: String! @search(by: ["exact"]) @dgraph(pred: "dgraph.abc.name")
+        name: String! @search(by: [exact]) @dgraph(pred: "dgraph.abc.name")
         age: Int
       }
 
@@ -534,7 +534,7 @@ schemas:
   - name: "Field with @id directive and a exact arg in search directive generates correct schema."
     input: |
       interface A {
-        id: String! @id @search(by: ["exact"])
+        id: String! @id @search(by: [exact])
       }
       type B implements A {
         correct: Boolean @search

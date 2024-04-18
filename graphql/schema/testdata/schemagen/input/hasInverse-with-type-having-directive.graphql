@@ -1,6 +1,6 @@
 type Author {
   id: ID!
-  name: String! @search(by: ["hash"])
+  name: String! @search(by: [hash])
   posts: [Post] @hasInverse(field: author)
 }
 

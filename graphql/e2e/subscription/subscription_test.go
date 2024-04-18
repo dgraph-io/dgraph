@@ -41,7 +41,7 @@ const (
 	sch = `
 	type Product @withSubscription {
 		productID: ID!
-		name: String @search(by: ["term"])
+		name: String @search(by: [term])
 		reviews: [Review] @hasInverse(field: about)
 	}
 
@@ -69,8 +69,8 @@ const (
      	}
    ){
         id: ID!
-    	text: String! @search(by: ["term"])
-     	owner: String! @search(by: ["hash"])
+    	text: String! @search(by: [term])
+     	owner: String! @search(by: [hash])
    }
 # Dgraph.Authorization {"VerificationKey":"secret","Header":"Authorization","Namespace":"https://dgraph.io","Algo":"HS256"}
 `

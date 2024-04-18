@@ -24,7 +24,7 @@ type State {
 
 type Author {
     id: ID!
-    name: String! @search(by: ["hash"])
+    name: String! @search(by: [hash])
     dob: DateTime @search
     reputation: Float @search
     country: Country
@@ -34,14 +34,14 @@ type Author {
 type Editor {
     id: ID!
     code: String! @id
-    name: String! @search(by: ["hash"])
+    name: String! @search(by: [hash])
 }
 
 type Post {
     postID: ID!
-    title: String! @search(by: ["term"])
+    title: String! @search(by: [term])
     text: String @search(by: ["fulltext"])
-    tags: [String] @search(by: ["exact"])
+    tags: [String] @search(by: [exact])
     numLikes: Int @search
     isPublished: Boolean @search
     postType: [PostType] @search
@@ -89,8 +89,8 @@ type Human implements Character & Employee {
 # just for testing filters on enum types
 
 type Verification {
-    name: String @search(by: ["exact"])
-    status: [Status!]! @search(by: ["exact"])
+    name: String @search(by: [exact])
+    status: [Status!]! @search(by: [exact])
     prevStatus: Status! @search
 }
 
@@ -259,7 +259,7 @@ type Y implements X @auth(
     }
     """ }
 ){
-    userRole: String @search(by: ["hash"])
+    userRole: String @search(by: [hash])
 }
 
 type Post1 {
@@ -310,12 +310,12 @@ type ThingTwo implements Thing {
 
 type Person {
     id: ID!
-    name: String @search(by: ["hash"])
-    nameHi: String @dgraph(pred:"Person.name@hi") @search(by: ["hash"])
-    nameZh: String @dgraph(pred:"Person.name@zh") @search(by: ["hash"])
+    name: String @search(by: [hash])
+    nameHi: String @dgraph(pred:"Person.name@hi") @search(by: [hash])
+    nameZh: String @dgraph(pred:"Person.name@zh") @search(by: [hash])
     nameHiZh: String @dgraph(pred:"Person.name@hi:zh")
     nameHi_Zh_Untag: String @dgraph(pred:"Person.name@hi:zh:.")
-    name_Untag_AnyLang: String @dgraph(pred:"Person.name@.") @search(by: ["hash"])
+    name_Untag_AnyLang: String @dgraph(pred:"Person.name@.") @search(by: [hash])
     friends: [Person] @hasInverse(field: friends)
 }
 
