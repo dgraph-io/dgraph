@@ -5,7 +5,7 @@
 type Post {
 	postID: ID!
 	title: String! @search(by: [term])
-	titleByEverything: String! @search(by: [term,fulltext,trigram,hash])
+	titleByEverything: String! @search(by: ["term","fulltext","trigram","hash"])
 	text: String @search(by: [fulltext])
 	tags: [String] @search(by: [trigram])
 	tagsHash: [String] @search(by: [hash])
@@ -26,8 +26,8 @@ type Post {
 	postTypeRegexp: PostType @search(by: [regexp])
 	postTypeExact: [PostType] @search(by: [exact])
 	postTypeHash: PostType @search(by: [hash])
-	postTypeRegexpExact: PostType @search(by: [exact,regexp])
-	postTypeHashRegexp: PostType @search(by: [hash,regexp])
+	postTypeRegexpExact: PostType @search(by: ["exact","regexp"])
+	postTypeHashRegexp: PostType @search(by: ["hash","regexp"])
 	postTypeNone: PostType @search(by: [])
 }
 
@@ -94,6 +94,7 @@ enum DgraphIndex {
 	day
 	hour
 	geo
+	hnsw
 }
 
 input AuthRule {
@@ -207,7 +208,8 @@ input GenerateMutationParams {
 }
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION
-directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
+directive @search(by: [String!]) on FIELD_DEFINITION
+directive @embedding on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id(interface: Boolean) on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE | FIELD_DEFINITION

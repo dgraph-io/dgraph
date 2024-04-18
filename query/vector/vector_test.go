@@ -25,8 +25,10 @@ import (
 	"math/rand"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/dgraph-io/dgo/v230/protos/api"
+	"github.com/dgraph-io/dgraph/dgraphtest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -38,6 +40,124 @@ const (
 	vectorSchemaWithoutIndex = `%v: float32vector .`
 )
 
+var client *dgraphtest.GrpcClient
+var dc dgraphtest.Cluster
+
+func setSchema(schema string) {
+	var err error
+	for retry := 0; retry < 60; retry++ {
+		err = client.Alter(context.Background(), &api.Operation{Schema: schema})
+		if err == nil {
+			return
+		}
+		time.Sleep(time.Second)
+	}
+	panic(fmt.Sprintf("Could not alter schema. Got error %v", err.Error()))
+}
+
+func dropPredicate(pred string) {
+	err := client.Alter(context.Background(), &api.Operation{
+		DropAttr: pred,
+	})
+	if err != nil {
+		panic(fmt.Sprintf("Could not drop predicate. Got error %v", err.Error()))
+	}
+}
+
+func processQuery(ctx context.Context, t *testing.T, query string) (string, error) {
+	txn := client.NewTxn()
+	defer func() {
+		if err := txn.Discard(ctx); err != nil {
+			t.Logf("error discarding txn: %v", err)
+		}
+	}()
+
+	res, err := txn.Query(ctx, query)
+	if err != nil {
+		return "", err
+	}
+
+	response := map[string]interface{}{}
+	response["data"] = json.RawMessage(string(res.Json))
+
+	jsonResponse, err := json.Marshal(response)
+	require.NoError(t, err)
+	return string(jsonResponse), err
+}
+
+func processQueryRDF(ctx context.Context, t *testing.T, query string) (string, error) {
+	txn := client.NewTxn()
+	defer func() { _ = txn.Discard(ctx) }()
+
+	res, err := txn.Do(ctx, &api.Request{
+		Query:      query,
+		RespFormat: api.Request_RDF,
+	})
+	if err != nil {
+		return "", err
+	}
+	return string(res.Rdf), err
+}
+
+func processQueryNoErr(t *testing.T, query string) string {
+	res, err := processQuery(context.Background(), t, query)
+	require.NoError(t, err)
+	return res
+}
+
+// processQueryForMetrics works like processQuery but returns metrics instead of response.
+func processQueryForMetrics(t *testing.T, query string) *api.Metrics {
+	txn := client.NewTxn()
+	defer func() { _ = txn.Discard(context.Background()) }()
+
+	res, err := txn.Query(context.Background(), query)
+	require.NoError(t, err)
+	return res.Metrics
+}
+
+func processQueryWithVars(t *testing.T, query string,
+	vars map[string]string) (string, error) {
+	txn := client.NewTxn()
+	defer func() { _ = txn.Discard(context.Background()) }()
+
+	res, err := txn.QueryWithVars(context.Background(), query, vars)
+	if err != nil {
+		return "", err
+	}
+
+	response := map[string]interface{}{}
+	response["data"] = json.RawMessage(string(res.Json))
+
+	jsonResponse, err := json.Marshal(response)
+	require.NoError(t, err)
+	return string(jsonResponse), err
+}
+
+func addTriplesToCluster(triples string) error {
+	txn := client.NewTxn()
+	ctx := context.Background()
+	defer func() { _ = txn.Discard(ctx) }()
+
+	_, err := txn.Mutate(ctx, &api.Mutation{
+		SetNquads: []byte(triples),
+		CommitNow: true,
+	})
+	return err
+}
+
+func deleteTriplesInCluster(triples string) {
+	txn := client.NewTxn()
+	ctx := context.Background()
+	defer func() { _ = txn.Discard(ctx) }()
+
+	_, err := txn.Mutate(ctx, &api.Mutation{
+		DelNquads: []byte(triples),
+		CommitNow: true,
+	})
+	if err != nil {
+		panic(fmt.Sprintf("Could not delete triples. Got error %v", err.Error()))
+	}
+}
 func updateVector(t *testing.T, triple string, pred string) []float32 {
 	uid := strings.Split(triple, " ")[0]
 	randomVec := generateRandomVector(10)

@@ -11,7 +11,7 @@ type Hotel {
 
 type Country {
     id: ID!
-    name: String! @search(by: [trigram, exact])
+    name: String! @search(by: ["trigram", "exact"])
     states: [State] @hasInverse(field: country)
 }
 
@@ -499,4 +499,26 @@ type CricketTeam implements Team {
 type LibraryManager  {
     name: String! @id
     manages: [LibraryMember]
+}
+
+type Product {
+  id: String! @id
+  description: String
+  title: String
+  imageUrl: String
+  productVector: [Float!] @embedding
+}
+
+type ProjectCosine {
+  id: String! @id
+  description: String
+  title: String
+  description_v: [Float!] @embedding @search(by: ["hnsw(metric: cosine, exponent: 4)"]) 
+}
+
+type ProjectDotProduct {
+  id: String! @id
+  description: String
+  title: String
+  description_v: [Float!] @embedding @search(by: ["hnsw(metric: dotproduct, exponent: 4)"]) 
 }

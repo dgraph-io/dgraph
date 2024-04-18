@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
 	"os/exec"
@@ -346,7 +347,8 @@ func (c *LocalCluster) Start() error {
 		if err1 := c.Stop(); err1 != nil {
 			log.Printf("[WARNING] error while stopping :%v", err)
 		}
-		c.Cleanup(false)
+		c.Cleanup(true)
+		c.conf.prefix = fmt.Sprintf("dgraphtest-%d", rand.NewSource(time.Now().UnixNano()).Int63()%1000000)
 		if err := c.init(); err != nil {
 			c.Cleanup(true)
 			return err
@@ -449,11 +451,7 @@ func (c *LocalCluster) HealthCheck(zeroOnly bool) error {
 		if !zo.isRunning {
 			break
 		}
-		url, err := zo.healthURL(c)
-		if err != nil {
-			return errors.Wrap(err, "error getting health URL")
-		}
-		if err := c.containerHealthCheck(url); err != nil {
+		if err := c.containerHealthCheck(zo.healthURL); err != nil {
 			return err
 		}
 		log.Printf("[INFO] container [%v] passed health check", zo.containerName)
@@ -470,11 +468,7 @@ func (c *LocalCluster) HealthCheck(zeroOnly bool) error {
 		if !aa.isRunning {
 			break
 		}
-		url, err := aa.healthURL(c)
-		if err != nil {
-			return errors.Wrap(err, "error getting health URL")
-		}
-		if err := c.containerHealthCheck(url); err != nil {
+		if err := c.containerHealthCheck(aa.healthURL); err != nil {
 			return err
 		}
 		log.Printf("[INFO] container [%v] passed health check", aa.containerName)
@@ -486,18 +480,27 @@ func (c *LocalCluster) HealthCheck(zeroOnly bool) error {
 	return nil
 }
 
-func (c *LocalCluster) containerHealthCheck(url string) error {
+func (c *LocalCluster) containerHealthCheck(url func(c *LocalCluster) (string, error)) error {
+	endpoint, err := url(c)
+	if err != nil {
+		return errors.Wrap(err, "error getting health URL")
+	}
 	for i := 0; i < 60; i++ {
 		time.Sleep(waitDurBeforeRetry)
 
-		req, err := http.NewRequest(http.MethodGet, url, nil)
+		endpoint, err = url(c)
 		if err != nil {
-			log.Printf("[WARNING] error building req for endpoint [%v], err: [%v]", url, err)
+			return errors.Wrap(err, "error getting health URL")
+		}
+
+		req, err := http.NewRequest(http.MethodGet, endpoint, nil)
+		if err != nil {
+			log.Printf("[WARNING] error building req for endpoint [%v], err: [%v]", endpoint, err)
 			continue
 		}
 		body, err := doReq(req)
 		if err != nil {
-			log.Printf("[WARNING] error hitting health endpoint [%v], err: [%v]", url, err)
+			log.Printf("[WARNING] error hitting health endpoint [%v], err: [%v]", endpoint, err)
 			continue
 		}
 		resp := string(body)
@@ -523,7 +526,7 @@ func (c *LocalCluster) containerHealthCheck(url string) error {
 		return nil
 	}
 
-	return fmt.Errorf("health failed, cluster took too long to come up [%v]", url)
+	return fmt.Errorf("health failed, cluster took too long to come up [%v]", endpoint)
 }
 
 func (c *LocalCluster) waitUntilLogin() error {

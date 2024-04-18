@@ -2,16 +2,27 @@
 # Input Schema
 #######################
 
-enum Role {
-	Admin
-	User
+type Product {
+	id: String! @id
+	description: String
+	title: String
+	imageUrl: String
+	product_vector: [Float!] @embedding @search(by: ["hnsw(metric: euclidian, exponent: 4)"])
+	vector_distance: Float
 }
 
-type Product {
-	id: ID!
-	price: Float! @search
-	name: String! @search @dgraph(pred: "p")
-	name2: String! @search @dgraph(pred: "p")
+type Purchase @lambdaOnMutate(add: true) {
+	user(filter: UserFilter): User @hasInverse(field: "purchase_history")
+	product(filter: ProductFilter): Product
+	date: DateTime @search(by: [day])
+}
+
+type User {
+	email: String! @id
+	purchase_history(filter: PurchaseFilter, order: PurchaseOrder, first: Int, offset: Int): [Purchase] @hasInverse(field: user)
+	user_vector: [Float!] @embedding @search(by: ["hnsw"])
+	vector_distance: Float
+	purchase_historyAggregate(filter: PurchaseFilter): PurchaseAggregateResult
 }
 
 #######################
@@ -287,22 +298,50 @@ type AddProductPayload {
 	numUids: Int
 }
 
+type AddPurchasePayload {
+	purchase(filter: PurchaseFilter, order: PurchaseOrder, first: Int, offset: Int): [Purchase]
+	numUids: Int
+}
+
+type AddUserPayload {
+	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+	numUids: Int
+}
+
 type DeleteProductPayload {
 	product(filter: ProductFilter, order: ProductOrder, first: Int, offset: Int): [Product]
 	msg: String
 	numUids: Int
 }
 
+type DeletePurchasePayload {
+	purchase(filter: PurchaseFilter, order: PurchaseOrder, first: Int, offset: Int): [Purchase]
+	msg: String
+	numUids: Int
+}
+
+type DeleteUserPayload {
+	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+	msg: String
+	numUids: Int
+}
+
 type ProductAggregateResult {
 	count: Int
-	priceMin: Float
-	priceMax: Float
-	priceSum: Float
-	priceAvg: Float
-	nameMin: String
-	nameMax: String
-	name2Min: String
-	name2Max: String
+	idMin: String
+	idMax: String
+	descriptionMin: String
+	descriptionMax: String
+	titleMin: String
+	titleMax: String
+	imageUrlMin: String
+	imageUrlMax: String
+}
+
+type PurchaseAggregateResult {
+	count: Int
+	dateMin: DateTime
+	dateMax: DateTime
 }
 
 type UpdateProductPayload {
@@ -310,20 +349,69 @@ type UpdateProductPayload {
 	numUids: Int
 }
 
+type UpdatePurchasePayload {
+	purchase(filter: PurchaseFilter, order: PurchaseOrder, first: Int, offset: Int): [Purchase]
+	numUids: Int
+}
+
+type UpdateUserPayload {
+	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+	numUids: Int
+}
+
+type UserAggregateResult {
+	count: Int
+	emailMin: String
+	emailMax: String
+}
+
 #######################
 # Generated Enums
 #######################
 
+enum ProductEmbedding {
+	product_vector
+}
+
 enum ProductHasFilter {
-	price
-	name
-	name2
+	id
+	description
+	title
+	imageUrl
+	product_vector
+	vector_distance
 }
 
 enum ProductOrderable {
-	price
-	name
-	name2
+	id
+	description
+	title
+	imageUrl
+}
+
+enum PurchaseHasFilter {
+	user
+	product
+	date
+}
+
+enum PurchaseOrderable {
+	date
+}
+
+enum UserEmbedding {
+	user_vector
+}
+
+enum UserHasFilter {
+	email
+	purchase_history
+	user_vector
+	vector_distance
+}
+
+enum UserOrderable {
+	email
 }
 
 #######################
@@ -331,16 +419,27 @@ enum ProductOrderable {
 #######################
 
 input AddProductInput {
-	price: Float!
-	name: String!
-	name2: String!
+	id: String!
+	description: String
+	title: String
+	imageUrl: String
+	product_vector: [Float!]
+}
+
+input AddPurchaseInput {
+	user: UserRef
+	product: ProductRef
+	date: DateTime
+}
+
+input AddUserInput {
+	email: String!
+	purchase_history: [PurchaseRef]
+	user_vector: [Float!]
 }
 
 input ProductFilter {
-	id: [ID!]
-	price: FloatFilter
-	name: StringTermFilter
-	name2: StringTermFilter
+	id: StringHashFilter
 	has: [ProductHasFilter]
 	and: [ProductFilter]
 	or: [ProductFilter]
@@ -354,16 +453,45 @@ input ProductOrder {
 }
 
 input ProductPatch {
-	price: Float
-	name: String
-	name2: String
+	id: String
+	description: String
+	title: String
+	imageUrl: String
+	product_vector: [Float!]
 }
 
 input ProductRef {
-	id: ID
-	price: Float
-	name: String
-	name2: String
+	id: String
+	description: String
+	title: String
+	imageUrl: String
+	product_vector: [Float!]
+}
+
+input PurchaseFilter {
+	date: DateTimeFilter
+	has: [PurchaseHasFilter]
+	and: [PurchaseFilter]
+	or: [PurchaseFilter]
+	not: PurchaseFilter
+}
+
+input PurchaseOrder {
+	asc: PurchaseOrderable
+	desc: PurchaseOrderable
+	then: PurchaseOrder
+}
+
+input PurchasePatch {
+	user: UserRef
+	product: ProductRef
+	date: DateTime
+}
+
+input PurchaseRef {
+	user: UserRef
+	product: ProductRef
+	date: DateTime
 }
 
 input UpdateProductInput {
@@ -372,14 +500,61 @@ input UpdateProductInput {
 	remove: ProductPatch
 }
 
+input UpdatePurchaseInput {
+	filter: PurchaseFilter!
+	set: PurchasePatch
+	remove: PurchasePatch
+}
+
+input UpdateUserInput {
+	filter: UserFilter!
+	set: UserPatch
+	remove: UserPatch
+}
+
+input UserFilter {
+	email: StringHashFilter
+	has: [UserHasFilter]
+	and: [UserFilter]
+	or: [UserFilter]
+	not: UserFilter
+}
+
+input UserOrder {
+	asc: UserOrderable
+	desc: UserOrderable
+	then: UserOrder
+}
+
+input UserPatch {
+	email: String
+	purchase_history: [PurchaseRef]
+	user_vector: [Float!]
+}
+
+input UserRef {
+	email: String
+	purchase_history: [PurchaseRef]
+	user_vector: [Float!]
+}
+
 #######################
 # Generated Query
 #######################
 
 type Query {
-	getProduct(id: ID!): Product
+	getProduct(id: String!): Product
+	querySimilarProductById(id: String!, by: ProductEmbedding!, topK: Int!, filter: ProductFilter): [Product]
+	querySimilarProductByEmbedding(by: ProductEmbedding!, topK: Int!, vector: [Float!]!, filter: ProductFilter): [Product]
 	queryProduct(filter: ProductFilter, order: ProductOrder, first: Int, offset: Int): [Product]
 	aggregateProduct(filter: ProductFilter): ProductAggregateResult
+	queryPurchase(filter: PurchaseFilter, order: PurchaseOrder, first: Int, offset: Int): [Purchase]
+	aggregatePurchase(filter: PurchaseFilter): PurchaseAggregateResult
+	getUser(email: String!): User
+	querySimilarUserById(email: String!, by: UserEmbedding!, topK: Int!, filter: UserFilter): [User]
+	querySimilarUserByEmbedding(by: UserEmbedding!, topK: Int!, vector: [Float!]!, filter: UserFilter): [User]
+	queryUser(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+	aggregateUser(filter: UserFilter): UserAggregateResult
 }
 
 #######################
@@ -387,8 +562,14 @@ type Query {
 #######################
 
 type Mutation {
-	addProduct(input: [AddProductInput!]!): AddProductPayload
+	addProduct(input: [AddProductInput!]!, upsert: Boolean): AddProductPayload
 	updateProduct(input: UpdateProductInput!): UpdateProductPayload
 	deleteProduct(filter: ProductFilter!): DeleteProductPayload
+	addPurchase(input: [AddPurchaseInput!]!): AddPurchasePayload
+	updatePurchase(input: UpdatePurchaseInput!): UpdatePurchasePayload
+	deletePurchase(filter: PurchaseFilter!): DeletePurchasePayload
+	addUser(input: [AddUserInput!]!, upsert: Boolean): AddUserPayload
+	updateUser(input: UpdateUserInput!): UpdateUserPayload
+	deleteUser(filter: UserFilter!): DeleteUserPayload
 }
 

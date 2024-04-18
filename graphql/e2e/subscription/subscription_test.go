@@ -46,7 +46,7 @@ const (
 	}
 
 	type Customer  {
-		username: String! @id @search(by: [hash, regexp])
+		username: String! @id @search(by: ["hash", "regexp"])
 		reviews: [Review] @hasInverse(field: by)
 	}
 
