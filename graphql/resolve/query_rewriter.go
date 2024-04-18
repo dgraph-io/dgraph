@@ -2086,7 +2086,7 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *dql.FilterTree
 					// { latitude: 11.11, longitude: 22.22}, { latitude: 15.15, longitude: 16.16} ,
 					// { latitude: 20.20, longitude: 21.21} ]}] } } }
 					within := val.(map[string]interface{})
-					polygon := within[polygon].(map[string]interface{})
+					polygon := within["polygon"].(map[string]interface{})
 					var buf bytes.Buffer
 					buildPolygon(polygon, &buf)
 					args = append(args, dql.Arg{Value: buf.String()})
@@ -2099,9 +2099,9 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *dql.FilterTree
 					// { latitude: 20.20, longitude: 21.21} ]}] } } }
 					contains := val.(map[string]interface{})
 					var buf bytes.Buffer
-					if polygon, ok := contains[polygon].(map[string]interface{}); ok {
+					if polygon, ok := contains["polygon"].(map[string]interface{}); ok {
 						buildPolygon(polygon, &buf)
-					} else if point, ok := contains[point].(map[string]interface{}); ok {
+					} else if point, ok := contains["point"].(map[string]interface{}); ok {
 						buildPoint(point, &buf)
 					}
 					args = append(args, dql.Arg{Value: buf.String()})
@@ -2122,9 +2122,9 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *dql.FilterTree
 					// { latitude: 20.20, longitude: 21.21} ]}] }] } } }
 					intersects := val.(map[string]interface{})
 					var buf bytes.Buffer
-					if polygon, ok := intersects[polygon].(map[string]interface{}); ok {
+					if polygon, ok := intersects["polygon"].(map[string]interface{}); ok {
 						buildPolygon(polygon, &buf)
-					} else if multiPolygon, ok := intersects[multiPolygon].(map[string]interface{}); ok {
+					} else if multiPolygon, ok := intersects["multiPolygon"].(map[string]interface{}); ok {
 						buildMultiPolygon(multiPolygon, &buf)
 					}
 					args = append(args, dql.Arg{Value: buf.String()})
