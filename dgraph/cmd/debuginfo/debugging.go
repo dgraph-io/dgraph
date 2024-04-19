@@ -87,7 +87,6 @@ func saveDebug(sourceURL, filePath string, duration time.Duration) error {
 		out.Close()
 	}()
 	_, err = io.Copy(out, resp)
-	out.Close()
 	return err
 }
 
