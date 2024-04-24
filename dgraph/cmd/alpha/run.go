@@ -208,6 +208,7 @@ they form a Raft group and provide synchronous replication.
 		Flag("shared-instance", "When set to true, it disables ACLs for non-galaxy users. "+
 			"It expects the access JWT to be constructed outside dgraph for non-galaxy users as "+
 			"login is denied to them. Additionally, this disables access to environment variables for minio, aws, etc.").
+		Flag("opt-max-query-numgo", "it set value of numGo in DivideAndRule").
 		String())
 
 	flag.String("graphql", worker.GraphQLDefaults, z.NewSuperFlagHelp(worker.GraphQLDefaults).
@@ -726,6 +727,7 @@ func run() {
 	x.Config.QueryTimeout = x.Config.Limit.GetDuration("query-timeout")
 	x.Config.MaxRetries = x.Config.Limit.GetInt64("max-retries")
 	x.Config.SharedInstance = x.Config.Limit.GetBool("shared-instance")
+	x.Config.OptMaxQueryNumgo = int(x.Config.Limit.GetInt64("opt-max-query-numgo"))
 
 	x.Config.GraphQL = z.NewSuperFlag(Alpha.Conf.GetString("graphql")).MergeAndCheckDefault(
 		worker.GraphQLDefaults)

@@ -920,7 +920,7 @@ func PredicateLang(s string) (string, string) {
 
 // DivideAndRule is used to divide a number of tasks among multiple go routines.
 func DivideAndRule(num int) (numGo, width int) {
-	numGo, width = 64, 0
+	numGo, width = Config.OptMaxQueryNumgo, 0
 	for ; numGo >= 1; numGo /= 2 {
 		widthF := math.Ceil(float64(num) / float64(numGo))
 		if numGo == 1 || widthF >= 256.0 {

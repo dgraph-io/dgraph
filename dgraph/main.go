@@ -17,8 +17,11 @@
 package main
 
 import (
+	"fmt"
 	"math/rand"
+	"os"
 	"runtime"
+	"strconv"
 	"time"
 
 	"github.com/dustin/go-humanize"
@@ -30,10 +33,22 @@ import (
 
 func main() {
 	rand.Seed(time.Now().UnixNano())
+
+	gomaxprocs := os.Getenv("DGRAPH_GOMAXPROCS")
+
 	// Setting a higher number here allows more disk I/O calls to be scheduled, hence considerably
 	// improving throughput. The extra CPU overhead is almost negligible in comparison. The
 	// benchmark notes are located in badger-bench/randread.
-	runtime.GOMAXPROCS(128)
+	if gomaxprocs == "" {
+		runtime.GOMAXPROCS(128)
+	} else {
+		intVar, err := strconv.Atoi(gomaxprocs)
+		if err != nil {
+			fmt.Println("Error converting environment variable to integer:", err)
+			return
+		}
+		runtime.GOMAXPROCS(intVar)
+	}
 
 	absDiff := func(a, b uint64) uint64 {
 		if a > b {
