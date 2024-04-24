@@ -57,6 +57,13 @@ type incrRollupi struct {
 	closer   *z.Closer
 }
 
+type GlobalCache struct {
+	sync.RWMutex
+
+	count map[string]int
+	list  map[string]*List
+}
+
 var (
 	// ErrTsTooOld is returned when a transaction is too old to be applied.
 	ErrTsTooOld = errors.Errorf("Transaction is too old")
@@ -70,6 +77,8 @@ var (
 	IncrRollup = &incrRollupi{
 		priorityKeys: make([]*pooledKeys, 2),
 	}
+
+	countMap = &GlobalCache{count: make(map[string]int), list: make(map[string]*List)}
 )
 
 func init() {
@@ -344,15 +353,27 @@ func (txn *Txn) UpdateCachedKeys(commitTs uint64) {
 		return
 	}
 	x.AssertTrue(commitTs > 0)
-	for key := range txn.cache.deltas {
-		list, err := txn.GetFromDelta([]byte(key))
-		if err == nil {
-			//out, err := list.rollup(commitTs, true)
-			//out.free()
-			//if err != nil {
-			lCache.Set([]byte(key), list, int64(list.DeepSize()))
-			//}
+	for key, delta := range txn.cache.deltas {
+		countMap.Lock()
+		val, ok := countMap.count[key]
+		if !ok {
+			countMap.Unlock()
+			continue
 		}
+		countMap.count[key] = val - 1
+		if val == 1 {
+			delete(countMap.count, key)
+			delete(countMap.list, key)
+			countMap.Unlock()
+			continue
+		}
+
+		pl, ok := countMap.list[key]
+		if ok {
+			pl.setMutationAfterCommit(txn.StartTs, commitTs, delta)
+		}
+		countMap.Unlock()
+
 	}
 }
 
@@ -476,11 +497,14 @@ func copyList(l *List) *List {
 	l.AssertRLock()
 	// No need to clone the immutable layer or the key since mutations will not modify it.
 	lCopy := &List{
-		minTs:       l.minTs,
-		maxTs:       l.maxTs,
-		key:         l.key,
-		plist:       l.plist,
-		mutationMap: l.mutationMap,
+		minTs: l.minTs,
+		maxTs: l.maxTs,
+		key:   l.key,
+		plist: l.plist,
+	}
+	lCopy.mutationMap = make(map[uint64]*pb.PostingList, len(l.mutationMap))
+	for k, v := range l.mutationMap {
+		lCopy.mutationMap[k] = v
 	}
 	return lCopy
 }
@@ -490,26 +514,42 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 		return nil, badger.ErrDBClosed
 	}
 
+	pk, _ := x.Parse(key)
+	countMap.Lock()
+	countMap.count[string(key)]++
+
 	// We use badger subscription to invalidate the cache. For every write we make the value
 	// corresponding to the key in the cache to nil. So, if we get some non-nil value from the cache
 	// then it means that no  writes have happened after the last set of this key in the cache.
-	if val, ok := lCache.Get(key); ok {
-		switch val.(type) {
-		case *List:
-			l := val.(*List)
-			// l.maxTs can be greater than readTs. We might have the latest
-			// version cached, while readTs is looking for an older version.
-			if l != nil {
-				//fmt.Println(l.maxTs, readTs)
-			}
+	if !pk.IsData() {
+		if l, ok := countMap.list[string(key)]; ok {
 			if l != nil && l.maxTs > 0 {
 				l.RLock()
 				lCopy := copyList(l)
 				l.RUnlock()
+				countMap.Unlock()
 				return lCopy, nil
 			}
 		}
+		//if val, ok := lCache.Get(key); ok {
+		//	switch val.(type) {
+		//	case *List:
+		//		l := val.(*List)
+		//		// l.maxTs can be greater than readTs. We might have the latest
+		//		// version cached, while readTs is looking for an older version.
+		//		if l != nil {
+		//			//fmt.Println(l.maxTs, readTs)
+		//		}
+		//		if l != nil && l.maxTs > 0 {
+		//			l.RLock()
+		//			lCopy := copyList(l)
+		//			l.RUnlock()
+		//			return lCopy, nil
+		//		}
+		//	}
+		//}
 	}
+	countMap.Unlock()
 
 	txn := pstore.NewTransactionAt(readTs, false)
 	defer txn.Discard()
@@ -530,11 +570,20 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 	// Only set l to the cache if readTs >= latestTs, which implies that l is
 	// the latest version of the PL. We also check that we're reading a version
 	// from Badger, which is higher than the write registered by the cache.
-	if readTs >= l.maxTs {
-		l.RLock()
-		defer l.RUnlock()
+	m := l.DeepSize()
+	//fmt.Printf("{TXN} Reading %v, %d \n", pk, m)
+	if !pk.IsData() && readTs >= l.maxTs && m > 200 {
+		//l.RLock()
+		//defer l.RUnlock()
 		//fmt.Println("Setting", l.maxTs)
-		lCache.Set(key, copyList(l), int64(l.DeepSize()))
+		//lCache.Set(key, copyList(l), int64(l.DeepSize()))
+		countMap.Lock()
+
+		l.RLock()
+		countMap.list[string(key)] = copyList(l)
+		l.RUnlock()
+
+		countMap.Unlock()
 	}
 	return l, nil
 }
