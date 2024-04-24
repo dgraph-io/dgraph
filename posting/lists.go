@@ -356,6 +356,8 @@ func (lc *LocalCache) UpdateDeltasAndDiscardLists() {
 	}
 
 	for key, pl := range lc.plists {
+		//pk, _ := x.Parse([]byte(key))
+		//fmt.Printf("{TXN} Closing %v\n", pk)
 		data := pl.getMutation(lc.startTs)
 		if len(data) > 0 {
 			lc.deltas[key] = data
