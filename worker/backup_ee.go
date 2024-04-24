@@ -37,6 +37,7 @@ import (
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/tok/hnsw"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
 )
@@ -194,6 +195,28 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest) error {
 		for pred := range group.Tablets {
 			predMap[gid] = append(predMap[gid], pred)
 		}
+
+	}
+
+	// see if any of the predicates are vector predicates and add the supporting
+	// vector predicates to the backup request.
+	vecPredMap := make(map[uint32][]string)
+	for gid, preds := range predMap {
+		schema, err := GetSchemaOverNetwork(ctx, &pb.SchemaRequest{Predicates: preds})
+		if err != nil {
+			return err
+		}
+
+		for _, pred := range schema {
+			if pred.Type == "float32vector" && len(pred.IndexSpecs) != 0 {
+				vecPredMap[gid] = append(predMap[gid], pred.Predicate+hnsw.VecEntry, pred.Predicate+hnsw.VecKeyword,
+					pred.Predicate+hnsw.VecDead)
+			}
+		}
+	}
+
+	for gid, preds := range vecPredMap {
+		predMap[gid] = append(predMap[gid], preds...)
 	}
 
 	glog.Infof(

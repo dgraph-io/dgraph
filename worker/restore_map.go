@@ -27,6 +27,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -44,6 +45,7 @@ import (
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/tok/hnsw"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
 )
@@ -470,6 +472,15 @@ func (m *mapper) processReqCh(ctx context.Context) error {
 				}
 				return nil
 			}
+
+			isVectorSupportingPred := func(pred string) bool {
+				if strings.HasSuffix(pred, hnsw.VecEntry) || strings.HasSuffix(pred, hnsw.VecKeyword) ||
+					strings.HasSuffix(pred, hnsw.VecDead) {
+					return true
+				}
+				return false
+			}
+
 			// We changed the format of predicate in 2103 and 2105. SchemaUpdate and TypeUpdate have
 			// predicate stored within them, so they also need to be updated accordingly.
 			switch in.version {
@@ -487,6 +498,12 @@ func (m *mapper) processReqCh(ctx context.Context) error {
 				}
 			default:
 				// for manifest versions >= 2015, do nothing.
+			}
+
+			// If the predicate is a vector supporting predicate, skip further processing.
+			// currently we don't store vector supporting predicates in the schema.
+			if isVectorSupportingPred(parsedKey.Attr) {
+				return nil
 			}
 			// Reset the StreamId to prevent ordering issues while writing to stream writer.
 			kv.StreamId = 0

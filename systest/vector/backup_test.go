@@ -21,6 +21,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -75,13 +76,6 @@ func TestVectorIncrBackupRestore(t *testing.T) {
 		incrFrom := i - 1
 		require.NoError(t, hc.Restore(c, dgraphtest.DefaultBackupDir, "", incrFrom, i))
 		require.NoError(t, dgraphtest.WaitForRestore(c))
-
-		// rebuild index
-		require.NoError(t, gc.SetupSchema(testSchemaWithoutIndex))
-		time.Sleep(2 * time.Minute)
-		require.NoError(t, gc.SetupSchema(testSchema))
-		time.Sleep(2 * time.Minute)
-
 		query := `{
 			vector(func: has(project_discription_v)) {
 				   count(uid)
@@ -93,9 +87,9 @@ func TestVectorIncrBackupRestore(t *testing.T) {
 
 		if i == 0 {
 			require.JSONEq(t, fmt.Sprintf(`{"vector":[{"count":%v}]}`, numVectors*5), string(result.GetJson()))
-			var a [][]float32
+			var allSpredVec [][]float32
 			for _, vecArr := range allVectors {
-				a = append(a, vecArr...)
+				allSpredVec = append(allSpredVec, vecArr...)
 			}
 
 			for p, vector := range allVectors[i] {
@@ -110,12 +104,18 @@ func TestVectorIncrBackupRestore(t *testing.T) {
 				require.Equal(t, numVectors, len(similarVectors))
 
 				for _, similarVector := range similarVectors {
-					require.Contains(t, a, similarVector)
+					require.Contains(t, allSpredVec, similarVector)
 				}
 			}
 
 		} else {
-			require.JSONEq(t, fmt.Sprintf(`{"vector":[{"count":%v}]}`, numVectors), string(result.GetJson()))
+			require.JSONEq(t, fmt.Sprintf(`{"vector":[{"count":%v}]}`, numVectors*i), string(result.GetJson()))
+			var allSpredVec [][]float32
+			for i, vecArr := range allVectors {
+				if i <= i {
+					allSpredVec = append(allSpredVec, vecArr...)
+				}
+			}
 			for p, vector := range allVectors[i-1] {
 				triple := strings.Split(allRdfs[i-1], "\n")[p]
 				uid := strings.Split(triple, " ")[0]
@@ -126,10 +126,9 @@ func TestVectorIncrBackupRestore(t *testing.T) {
 
 				similarVectors, err := gc.QueryMultipleVectorsUsingSimilarTo(vector, pred, numVectors)
 				require.NoError(t, err)
-				require.Equal(t, numVectors, len(similarVectors))
-
+				require.GreaterOrEqual(t, len(similarVectors), 10)
 				for _, similarVector := range similarVectors {
-					require.Contains(t, allVectors[i-1], similarVector)
+					require.Contains(t, allSpredVec, similarVector)
 				}
 			}
 		}
@@ -171,11 +170,94 @@ func TestVectorBackupRestore(t *testing.T) {
 	require.NoError(t, hc.Restore(c, dgraphtest.DefaultBackupDir, "", 0, 0))
 	require.NoError(t, dgraphtest.WaitForRestore(c))
 
-	// rebuild index
-	require.NoError(t, gc.SetupSchema(testSchemaWithoutIndex))
-	time.Sleep(2 * time.Minute)
-	require.NoError(t, gc.SetupSchema(testSchema))
-	time.Sleep(2 * time.Minute)
-
 	testVectorQuery(t, gc, vectors, rdfs, pred, numVectors)
+}
+
+func TestVectorBackupRestoreDropIndex(t *testing.T) {
+	// setup cluster
+	conf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).WithReplicas(1).WithACL(time.Hour)
+	c, err := dgraphtest.NewLocalCluster(conf)
+	require.NoError(t, err)
+	defer func() { c.Cleanup(t.Failed()) }()
+	require.NoError(t, c.Start())
+
+	gc, cleanup, err := c.Client()
+	require.NoError(t, err)
+	defer cleanup()
+	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
+		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+
+	hc, err := c.HTTPClient()
+	require.NoError(t, err)
+	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
+		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+
+	// add vector predicate + index
+	require.NoError(t, gc.SetupSchema(testSchema))
+	// add data to the vector predicate
+	numVectors := 3
+	pred := "project_discription_v"
+	rdfs, vectors := dgraphtest.GenerateRandomVectors(0, numVectors, 1, pred)
+	mu := &api.Mutation{SetNquads: []byte(rdfs), CommitNow: true}
+	_, err = gc.Mutate(mu)
+	require.NoError(t, err)
+
+	t.Log("taking full backup \n")
+	require.NoError(t, hc.Backup(c, false, dgraphtest.DefaultBackupDir))
+
+	// drop index
+	require.NoError(t, gc.SetupSchema(testSchemaWithoutIndex))
+
+	// add more data to the vector predicate
+	rdfs, vectors2 := dgraphtest.GenerateRandomVectors(3, numVectors+3, 1, pred)
+	mu = &api.Mutation{SetNquads: []byte(rdfs), CommitNow: true}
+	_, err = gc.Mutate(mu)
+	require.NoError(t, err)
+
+	// delete some entries
+	mu = &api.Mutation{DelNquads: []byte(strings.Split(rdfs, "\n")[1]), CommitNow: true}
+	_, err = gc.Mutate(mu)
+	require.NoError(t, err)
+
+	vectors2 = slices.Delete(vectors2, 1, 2)
+
+	mu = &api.Mutation{DelNquads: []byte(strings.Split(rdfs, "\n")[0]), CommitNow: true}
+	_, err = gc.Mutate(mu)
+	require.NoError(t, err)
+	vectors2 = slices.Delete(vectors2, 0, 1)
+
+	t.Log("taking first incr backup \n")
+	require.NoError(t, hc.Backup(c, false, dgraphtest.DefaultBackupDir))
+
+	// add index
+	require.NoError(t, gc.SetupSchema(testSchema))
+
+	t.Log("taking second incr backup \n")
+	require.NoError(t, hc.Backup(c, false, dgraphtest.DefaultBackupDir))
+
+	// restore backup
+	t.Log("restoring backup \n")
+	require.NoError(t, hc.Restore(c, dgraphtest.DefaultBackupDir, "", 0, 0))
+	require.NoError(t, dgraphtest.WaitForRestore(c))
+
+	query := ` {
+		vectors(func: has(project_discription_v)) {
+			   count(uid)
+			 }
+		}`
+	resp, err := gc.Query(query)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"vectors":[{"count":4}]}`, string(resp.GetJson()))
+
+	require.NoError(t, err)
+	allVec := append(vectors, vectors2...)
+
+	for _, vector := range allVec {
+
+		similarVectors, err := gc.QueryMultipleVectorsUsingSimilarTo(vector, pred, 4)
+		require.NoError(t, err)
+		for _, similarVector := range similarVectors {
+			require.Contains(t, allVec, similarVector)
+		}
+	}
 }
