@@ -339,6 +339,10 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 }
 
 func ResetCache() {
+	countMap.Lock()
+	countMap.count = make(map[string]int)
+	countMap.list = make(map[string]*List)
+	countMap.Unlock()
 	lCache.Clear()
 }
 
