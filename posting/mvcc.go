@@ -521,34 +521,32 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 	// We use badger subscription to invalidate the cache. For every write we make the value
 	// corresponding to the key in the cache to nil. So, if we get some non-nil value from the cache
 	// then it means that no  writes have happened after the last set of this key in the cache.
-	if !pk.IsData() {
-		if l, ok := countMap.list[string(key)]; ok {
-			if l != nil && l.maxTs > 0 {
-				l.RLock()
-				lCopy := copyList(l)
-				l.RUnlock()
-				countMap.Unlock()
-				return lCopy, nil
-			}
+	if l, ok := countMap.list[string(key)]; ok {
+		if l != nil && l.maxTs < readTs {
+			l.RLock()
+			lCopy := copyList(l)
+			l.RUnlock()
+			countMap.Unlock()
+			return lCopy, nil
 		}
-		//if val, ok := lCache.Get(key); ok {
-		//	switch val.(type) {
-		//	case *List:
-		//		l := val.(*List)
-		//		// l.maxTs can be greater than readTs. We might have the latest
-		//		// version cached, while readTs is looking for an older version.
-		//		if l != nil {
-		//			//fmt.Println(l.maxTs, readTs)
-		//		}
-		//		if l != nil && l.maxTs > 0 {
-		//			l.RLock()
-		//			lCopy := copyList(l)
-		//			l.RUnlock()
-		//			return lCopy, nil
-		//		}
-		//	}
-		//}
 	}
+	//if val, ok := lCache.Get(key); ok {
+	//	switch val.(type) {
+	//	case *List:
+	//		l := val.(*List)
+	//		// l.maxTs can be greater than readTs. We might have the latest
+	//		// version cached, while readTs is looking for an older version.
+	//		if l != nil {
+	//			//fmt.Println(l.maxTs, readTs)
+	//		}
+	//		if l != nil && l.maxTs > 0 {
+	//			l.RLock()
+	//			lCopy := copyList(l)
+	//			l.RUnlock()
+	//			return lCopy, nil
+	//		}
+	//	}
+	//}
 	countMap.Unlock()
 
 	txn := pstore.NewTransactionAt(readTs, false)
@@ -570,9 +568,7 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 	// Only set l to the cache if readTs >= latestTs, which implies that l is
 	// the latest version of the PL. We also check that we're reading a version
 	// from Badger, which is higher than the write registered by the cache.
-	m := l.DeepSize()
-	//fmt.Printf("{TXN} Reading %v, %d \n", pk, m)
-	if !pk.IsData() && readTs >= l.maxTs && m > 200 {
+	if !pk.IsData() && readTs >= l.maxTs {
 		//l.RLock()
 		//defer l.RUnlock()
 		//fmt.Println("Setting", l.maxTs)
