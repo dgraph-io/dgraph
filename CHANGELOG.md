@@ -4,60 +4,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project will adhere to [Semantic Versioning](https://semver.org) starting `v22.0.0`.
 
-## [v23.1.0] - 2023-08-17
-[v23.1.0]: https://github.com/dgraph-io/dgraph/compare/v23.0.1...v23.1.0
-
-### Added
-
-- **Core Dgraph**
-    - perf(query): Improve IntersectCompressedWithBin for UID Pack (#8941)
-    - feat(query): add feature flag normalize-compatibility-mode (#8845) (#8929)
-    - feat(alpha): support RDF response via http query request (#8004)  (#8639)
-    - perf(query): speed up parsing of a huge query (#8942)
-    - fix(live): replace panic in live loader with errors (#7798) (#8944)
-
-- **GraphQL**
-    - feat(graphql): This PR allows @id field in interface to be unique across all implementing types (#8876)
+## [23.1.1] - 2024-04-26
+[v23.1.1]: https://github.com/dgraph-io/dgraph/compare/v23.1.0...v23.1.1
 
 ### Fixed
 
 - **Core Dgraph**
-    - docs(zero): add comments in zero and clarify naming (#8945)
-    - fix(cdc): skip bad events in CDC (#8076)
-    - fix(bulk): enable running bulk loader with only gql schema (#8903)
-    - chore(badger): upgrade badger to v4.2.0 (#8932) (#8925)
-    - doc(restore): add docs for mutations in between incremental restores (#8908)
-    - chore: fix compilation on 32bit (#8895)
-    - chore(raft): add debug logs to print all transactions (#8890)
-    - chore(alpha): add logs for processing entries in applyCh (#8930)
-    - fix(acl): allow data deletion for non-reserved predicates (#8937)
-    - fix(alpha): convert numbers correctly in superflags (#7712) (#8943)
-    - chore(raft): better logging message for cleaning banned ns pred (#7886)
-
-- **Security**
-    - sec(acl): convert x.Sensitive to string type for auth hash (#8931)
-    - chore(deps): bump google.golang.org/grpc from 1.52.0 to 1.53.0 (#8900)
-    - chore(deps): bump certifi from 2022.12.7 to 2023.7.22 in /contrib/config/marketplace/aws/tests (#8920)
-    - chore(deps): bump certifi from 2022.12.7 to 2023.7.22 in /contrib/embargo (#8921)
-    - chore(deps): bump pygments from 2.7.4 to 2.15.0 in /contrib/embargo (#8913)
-    - chore: upgrade bleve to v2.3.9 (#8948)
+    - perf(core): Fix performance issue in type filter (#9065)
+    
 
 - **CI & Testing**
-    - chore: update cron job frequency to reset github notifications (#8956)
-    - test(upgrade): add v20.11 upgrade tests in query package (#8954)
-    - chore(contrib) - fixes for Vault  (#7739)
-    - chore(build): make build codename configurable (#8951)
-    - fix(upgrade): look for version string in logs bottom up (#8926)
-    - fix(upgrade): check commit SHA to find running dgraph version (#8923)
-    - chore(upgrade): run upgrade tests for v23.0.1 (#8918)
-    - chore(upgrade): ensure we run right version of Dgraph (#8910)
-    - chore(upgrade): add workaround for multiple groot issue in export-import (#8897)
-    - test(upgrade): add upgrade tests for systest/license package (#8902)
-    - chore(upgrade): increase the upgrade job duration limit to 12h (#8907)
-    - chore(upgrade): increase the duration of the CI workflow (#8906)
-    - ci(upgrade): break down upgrade tests CI workflow (#8904)
-    - test(acl): add upgrade tests for ee/acl package (#8792)
-    - chore: update pull request template (#8899)
+    - ci/cd optimizations (#9069)
 
 ## [v23.0.1] - 2023-07-09
 [v23.0.1]: https://github.com/dgraph-io/dgraph/compare/v23.0.0...v23.0.1
