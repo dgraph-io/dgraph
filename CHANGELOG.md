@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project will adhere to [Semantic Versioning](https://semver.org) starting `v22.0.0`.
 
+## [23.1.1] - 2024-04-26
+[v23.1.1]: https://github.com/dgraph-io/dgraph/compare/v23.1.0...v23.1.1
+
+### Fixed
+
+- **Core Dgraph**
+    - perf(core): Fix performance issue in type filter (#9065)
+
+
+- **CI & Testing**
+    - ci/cd optimizations (#9069)
+
 ## [v23.1.0] - 2023-08-17
 [v23.1.0]: https://github.com/dgraph-io/dgraph/compare/v23.0.1...v23.1.0
 
