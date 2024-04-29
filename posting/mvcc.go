@@ -78,7 +78,7 @@ var (
 		priorityKeys: make([]*pooledKeys, 2),
 	}
 
-	countMap = &GlobalCache{count: make(map[string]int), list: make(map[string]*List)}
+	globalCache = &GlobalCache{count: make(map[string]int), list: make(map[string]*List)}
 )
 
 func init() {
@@ -344,10 +344,10 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 }
 
 func ResetCache() {
-	countMap.Lock()
-	countMap.count = make(map[string]int)
-	countMap.list = make(map[string]*List)
-	countMap.Unlock()
+	globalCache.Lock()
+	globalCache.count = make(map[string]int)
+	globalCache.list = make(map[string]*List)
+	globalCache.Unlock()
 	lCache.Clear()
 }
 
@@ -358,26 +358,25 @@ func (txn *Txn) UpdateCachedKeys(commitTs uint64) {
 	}
 	x.AssertTrue(commitTs > 0)
 	for key, delta := range txn.cache.deltas {
-		countMap.Lock()
-		val, ok := countMap.count[key]
+		globalCache.Lock()
+		val, ok := globalCache.count[key]
 		if !ok {
-			countMap.Unlock()
+			globalCache.Unlock()
 			continue
 		}
-		countMap.count[key] = val - 1
+		globalCache.count[key] = val - 1
 		if val == 1 {
-			delete(countMap.count, key)
-			delete(countMap.list, key)
-			countMap.Unlock()
+			delete(globalCache.count, key)
+			delete(globalCache.list, key)
+			globalCache.Unlock()
 			continue
 		}
 
-		pl, ok := countMap.list[key]
+		pl, ok := globalCache.list[key]
 		if ok {
 			pl.setMutationAfterCommit(txn.StartTs, commitTs, delta)
 		}
-		countMap.Unlock()
-
+		globalCache.Unlock()
 	}
 }
 
@@ -519,18 +518,18 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 	}
 
 	pk, _ := x.Parse(key)
-	countMap.Lock()
-	countMap.count[string(key)]++
+	globalCache.Lock()
+	globalCache.count[string(key)]++
 
 	// We use badger subscription to invalidate the cache. For every write we make the value
 	// corresponding to the key in the cache to nil. So, if we get some non-nil value from the cache
 	// then it means that no  writes have happened after the last set of this key in the cache.
-	if l, ok := countMap.list[string(key)]; ok {
+	if l, ok := globalCache.list[string(key)]; ok {
 		if l != nil && l.maxTs < readTs {
 			l.RLock()
 			lCopy := copyList(l)
 			l.RUnlock()
-			countMap.Unlock()
+			globalCache.Unlock()
 			return lCopy, nil
 		}
 	}
@@ -551,7 +550,7 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 	//		}
 	//	}
 	//}
-	countMap.Unlock()
+	globalCache.Unlock()
 
 	txn := pstore.NewTransactionAt(readTs, false)
 	defer txn.Discard()
@@ -577,13 +576,13 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 		//defer l.RUnlock()
 		//fmt.Println("Setting", l.maxTs)
 		//lCache.Set(key, copyList(l), int64(l.DeepSize()))
-		countMap.Lock()
+		globalCache.Lock()
 
 		l.RLock()
-		countMap.list[string(key)] = copyList(l)
+		globalCache.list[string(key)] = copyList(l)
 		l.RUnlock()
 
-		countMap.Unlock()
+		globalCache.Unlock()
 	}
 	return l, nil
 }
