@@ -560,6 +560,9 @@ func (l *List) setMutationAfterCommit(startTs, commitTs uint64, data []byte) {
 	pl := new(pb.PostingList)
 	x.Check(pl.Unmarshal(data))
 	pl.CommitTs = commitTs
+	for _, p := range pl.Postings {
+		p.CommitTs = commitTs
+	}
 
 	l.Lock()
 	if l.mutationMap == nil {
