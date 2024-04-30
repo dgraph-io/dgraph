@@ -63,15 +63,7 @@ func Init(ps *badger.DB, cacheSize int64) {
 		BufferItems: 64,
 		Metrics:     true,
 		Cost: func(val interface{}) int64 {
-			switch val.(type) {
-			case *List:
-				return int64(val.(*List).DeepSize())
-			case uint64:
-				return 8
-			default:
-				x.AssertTruef(false, "Don't know about type %T in Dgraph cache", val)
-				return 0
-			}
+			return 0
 		},
 	})
 	x.Check(err)
