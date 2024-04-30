@@ -729,7 +729,8 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) e
 	return l.iterateInternal(readTs, afterUid, f, deleteBelowTs, mposts)
 }
 
-func (l *List) iterateInternal(readTs uint64, afterUid uint64, f func(obj *pb.Posting) error, deleteBelowTs uint64, mposts []*pb.Posting) error {
+func (l *List) iterateInternal(readTs uint64, afterUid uint64, f func(obj *pb.Posting) error, deleteBelowTs uint64,
+	mposts []*pb.Posting) error {
 	if readTs < l.minTs {
 		return errors.Errorf("readTs: %d less than minTs: %d for key: %q", readTs, l.minTs, l.key)
 	}
