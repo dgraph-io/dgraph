@@ -880,9 +880,7 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 	// Clear all the cached lists that were touched by this transaction.
 	for _, status := range delta.Txns {
 		txn := posting.Oracle().GetTxn(status.StartTs)
-		if status.CommitTs > 0 {
-			txn.UpdateCachedKeys(status.CommitTs)
-		}
+		txn.UpdateCachedKeys(status.CommitTs)
 	}
 
 	// Now advance Oracle(), so we can service waiting reads.

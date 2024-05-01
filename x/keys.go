@@ -303,7 +303,7 @@ type ParsedKey struct {
 
 func (p ParsedKey) String() string {
 	if p.IsIndex() {
-		return fmt.Sprintf("UID: %v, Attr: %v, IsIndex: true, Term: %v", p.Uid, p.Attr, p.Count)
+		return fmt.Sprintf("UID: %v, Attr: %v, IsIndex: true, Term: %v", p.Uid, p.Attr, []byte(p.Term))
 	} else if p.IsCountOrCountRev() {
 		return fmt.Sprintf("UID: %v, Attr: %v, IsCount/Ref: true, Count: %v", p.Uid, p.Attr, p.Count)
 	} else {

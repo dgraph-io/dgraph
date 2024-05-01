@@ -317,11 +317,7 @@ func (lc *LocalCache) getInternal(key []byte, readFromDisk bool) (*List, error) 
 	// apply it before returning the list.
 	lc.RLock()
 	if delta, ok := lc.deltas[skey]; ok && len(delta) > 0 {
-		if lc.commitTs == 0 {
-			pl.setMutation(lc.startTs, delta)
-		} else {
-			pl.setMutationAfterCommit(lc.startTs, lc.commitTs, delta)
-		}
+		pl.setMutation(lc.startTs, delta)
 	}
 	lc.RUnlock()
 	return lc.SetIfAbsent(skey, pl), nil

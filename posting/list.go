@@ -564,6 +564,8 @@ func (l *List) setMutationAfterCommit(startTs, commitTs uint64, data []byte) {
 		p.CommitTs = commitTs
 	}
 
+	x.AssertTrue(pl.Pack == nil)
+
 	l.Lock()
 	if l.mutationMap == nil {
 		l.mutationMap = make(map[uint64]*pb.PostingList)

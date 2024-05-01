@@ -351,12 +351,17 @@ func (txn *Txn) UpdateCachedKeys(commitTs uint64) {
 	if txn == nil || txn.cache == nil {
 		return
 	}
-	x.AssertTrue(commitTs > 0)
+
 	for key, delta := range txn.cache.deltas {
+		//pk, _ := x.Parse([]byte(key))
+		//p := new(pb.PostingList)
+		//x.Check(p.Unmarshal(delta))
+		//fmt.Println("UPDATING0", pk, p, commitTs)
 		globalCache.Lock()
 		val, ok := globalCache.count[key]
 		if !ok {
 			globalCache.Unlock()
+			//fmt.Println("UPDATING1", pk, p, commitTs)
 			continue
 		}
 		globalCache.count[key] = val - 1
@@ -364,12 +369,16 @@ func (txn *Txn) UpdateCachedKeys(commitTs uint64) {
 			delete(globalCache.count, key)
 			delete(globalCache.list, key)
 			globalCache.Unlock()
+			//fmt.Println("UPDATING2", pk, p, commitTs)
 			continue
 		}
 
-		pl, ok := globalCache.list[key]
-		if ok {
-			pl.setMutationAfterCommit(txn.StartTs, commitTs, delta)
+		if commitTs != 0 {
+			pl, ok := globalCache.list[key]
+			if ok {
+				pl.setMutationAfterCommit(txn.StartTs, commitTs, delta)
+				//fmt.Println("UPDATING3", pk, p, commitTs, pl.mutationMap)
+			}
 		}
 		globalCache.Unlock()
 	}
@@ -524,6 +533,11 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 			l.RLock()
 			lCopy := copyList(l)
 			l.RUnlock()
+			//var o ListOptions
+			//o.ReadTs = readTs
+			//uids, _ := lCopy.Uids(o)
+			//vals, _ := lCopy.AllValues(readTs)
+			//fmt.Println("GETTING", pk, uids, vals, lCopy.mutationMap, l.mutationMap)
 			globalCache.Unlock()
 			return lCopy, nil
 		}
@@ -574,7 +588,10 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 		globalCache.Lock()
 
 		l.RLock()
-		globalCache.list[string(key)] = copyList(l)
+		cacheList, ok := globalCache.list[string(key)]
+		if !ok || (ok && cacheList.maxTs < l.maxTs) {
+			globalCache.list[string(key)] = copyList(l)
+		}
 		l.RUnlock()
 
 		globalCache.Unlock()
