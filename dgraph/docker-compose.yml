@@ -69,8 +69,8 @@ services:
         target: /dgraph-enc/enc-key
         read_only: true
     ports:
-      - 8080:8080
-      - 9080:9080
+      - 8080
+      - 9080
     labels:
       cluster: test
       service: alpha
