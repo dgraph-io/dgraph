@@ -128,19 +128,19 @@ func (ir *incrRollupi) rollUpKey(writer *TxnWriter, key []byte) error {
 		return err
 	}
 
-	if len(kvs) > 0 {
-		pl := new(pb.PostingList)
-		x.Check(pl.Unmarshal(kvs[0].Value))
-		l.Lock()
-		l.plist = pl
-		l.mutationMap = nil
-		l.maxTs = kvs[0].Version
-		l.Unlock()
-	}
+	//if len(kvs) > 0 {
+	//	pl := new(pb.PostingList)
+	//	x.Check(pl.Unmarshal(kvs[0].Value))
+	//	l.Lock()
+	//	l.plist = pl
+	//	l.mutationMap = nil
+	//	l.maxTs = kvs[0].Version
+	//	l.Unlock()
+	//}
 
-	l.RLock()
-	lCache.Set(key, l, int64(l.DeepSize()))
-	l.RUnlock()
+	//l.RLock()
+	//lCache.Set(key, l, int64(l.DeepSize()))
+	//l.RUnlock()
 
 	// If we do a rollup, we typically won't need to update the key in cache.
 	// The only caveat is that the key written by rollup would be written at +1
