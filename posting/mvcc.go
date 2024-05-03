@@ -19,6 +19,7 @@ package posting
 import (
 	"bytes"
 	"encoding/hex"
+	"fmt"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -354,15 +355,15 @@ func (txn *Txn) UpdateCachedKeys(commitTs uint64) {
 	}
 
 	for key, delta := range txn.cache.deltas {
-		//pk, _ := x.Parse([]byte(key))
-		//p := new(pb.PostingList)
-		//x.Check(p.Unmarshal(delta))
-		//fmt.Println("UPDATING0", pk, p, commitTs)
+		pk, _ := x.Parse([]byte(key))
+		p := new(pb.PostingList)
+		x.Check(p.Unmarshal(delta))
+		fmt.Println("[TXN] UPDATING0", pk, p, commitTs)
 		globalCache.Lock()
 		val, ok := globalCache.count[key]
 		if !ok {
 			globalCache.Unlock()
-			//fmt.Println("UPDATING1", pk, p, commitTs)
+			fmt.Println("[TXN] UPDATING1", pk, p, commitTs)
 			continue
 		}
 		globalCache.count[key] = val - 1
@@ -370,7 +371,7 @@ func (txn *Txn) UpdateCachedKeys(commitTs uint64) {
 			delete(globalCache.count, key)
 			delete(globalCache.list, key)
 			globalCache.Unlock()
-			//fmt.Println("UPDATING2", pk, p, commitTs)
+			fmt.Println("[TXN] UPDATING2", pk, p, commitTs)
 			continue
 		}
 
@@ -378,7 +379,7 @@ func (txn *Txn) UpdateCachedKeys(commitTs uint64) {
 			pl, ok := globalCache.list[key]
 			if ok {
 				pl.setMutationAfterCommit(txn.StartTs, commitTs, delta)
-				//fmt.Println("UPDATING3", pk, p, commitTs, pl.mutationMap)
+				fmt.Println("[TXN] UPDATING3", pk, p, commitTs, pl.mutationMap)
 			}
 		}
 		globalCache.Unlock()
@@ -530,9 +531,10 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 	// corresponding to the key in the cache to nil. So, if we get some non-nil value from the cache
 	// then it means that no  writes have happened after the last set of this key in the cache.
 	if l, ok := globalCache.list[string(key)]; ok {
-		if l != nil && l.maxTs < readTs {
+		if l != nil && l.minTs > readTs {
 			l.RLock()
 			lCopy := copyList(l)
+			fmt.Println("[TXN] getting data", pk, l.mutationMap, l.plist, readTs)
 			l.RUnlock()
 			//var o ListOptions
 			//o.ReadTs = readTs
@@ -591,7 +593,14 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 		l.RLock()
 		cacheList, ok := globalCache.list[string(key)]
 		if !ok || (ok && cacheList.maxTs < l.maxTs) {
+			fmt.Println("[TXN] setting data", pk, l.mutationMap, l.plist, readTs)
 			globalCache.list[string(key)] = copyList(l)
+		} else {
+			lCopy := copyList(l)
+			fmt.Println("[TXN] getting data", pk, l.mutationMap, l.plist, readTs)
+			l.RUnlock()
+			globalCache.Unlock()
+			return lCopy, nil
 		}
 		l.RUnlock()
 
