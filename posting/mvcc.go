@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/golang/glog"
+	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 
 	"github.com/dgraph-io/badger/v4"
@@ -511,7 +512,7 @@ func copyList(l *List) *List {
 	}
 	lCopy.mutationMap = make(map[uint64]*pb.PostingList, len(l.mutationMap))
 	for k, v := range l.mutationMap {
-		lCopy.mutationMap[k] = v
+		lCopy.mutationMap[k] = proto.Clone(v).(*pb.PostingList)
 	}
 	return lCopy
 }
