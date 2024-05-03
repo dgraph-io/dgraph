@@ -531,7 +531,7 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 	// corresponding to the key in the cache to nil. So, if we get some non-nil value from the cache
 	// then it means that no  writes have happened after the last set of this key in the cache.
 	if l, ok := globalCache.list[string(key)]; ok {
-		if l != nil && l.minTs > readTs {
+		if l != nil && l.minTs <= readTs {
 			l.RLock()
 			lCopy := copyList(l)
 			fmt.Println("[TXN] getting data", pk, l.mutationMap, l.plist, readTs)
