@@ -1464,8 +1464,8 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 	er, err := qr.Process(ctx)
 
 	if bool(glog.V(3)) || worker.LogDQLRequestEnabled() {
-		glog.Infof("Finished a query that started at: %+v %s\n",
-			qr.Latency.Start.Format(time.RFC3339), string(resp.Json))
+		glog.Infof("Finished a query that started at: %+v %s %+v\n",
+			qr.Latency.Start.Format(time.RFC3339), string(resp.Json), qc)
 	}
 
 	if err != nil {
