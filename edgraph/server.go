@@ -1496,7 +1496,7 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 
 	if bool(glog.V(3)) || worker.LogDQLRequestEnabled() {
 		glog.Infof("%d Finished a query that started at: %+v %s %s %+v\n",
-			qc.req.StartTs, qr.Latency.Start.Format(time.RFC3339), string(resp.Json), string(resp.Rdf), qc)
+			qc.req.StartTs, qr.Latency.Start.Format(time.RFC3339), string(resp.Json), string(resp.Rdf), qc.req.Query)
 	}
 
 	// if err is just some error from GraphQL encoding, then we need to continue the normal
