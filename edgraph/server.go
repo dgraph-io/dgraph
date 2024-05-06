@@ -1463,11 +1463,6 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 	// Core processing happens here.
 	er, err := qr.Process(ctx)
 
-	if bool(glog.V(3)) || worker.LogDQLRequestEnabled() {
-		glog.Infof("Finished a query that started at: %+v %s %+v\n",
-			qr.Latency.Start.Format(time.RFC3339), string(resp.Json), qc)
-	}
-
 	if err != nil {
 		if bool(glog.V(3)) {
 			glog.Infof("Error processing query: %+v\n", err.Error())
@@ -1499,6 +1494,12 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 	} else {
 		resp.Json, err = query.ToJson(ctx, qc.latency, er.Subgraphs, qc.gqlField)
 	}
+
+	if bool(glog.V(3)) || worker.LogDQLRequestEnabled() {
+		glog.Infof("Finished a query that started at: %+v %s %s %+v\n",
+			qr.Latency.Start.Format(time.RFC3339), string(resp.Json), string(resp.Rdf), qc)
+	}
+
 	// if err is just some error from GraphQL encoding, then we need to continue the normal
 	// execution ignoring the error as we still need to assign metrics and latency info to resp.
 	if err != nil && (qc.gqlField == nil || !x.IsGqlErrorList(err)) {
