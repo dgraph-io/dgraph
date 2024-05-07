@@ -372,7 +372,6 @@ func (txn *Txn) UpdateCachedKeys(commitTs uint64) {
 		globalCache.count[key] = val - 1
 		if val == 1 {
 			delete(globalCache.count, key)
-			delete(globalCache.lastUpdate, key)
 			delete(globalCache.list, key)
 			globalCache.Unlock()
 			fmt.Println("[TXN] UPDATING2", pk, p, commitTs, "start_ts:", txn.cache.startTs)
@@ -597,16 +596,10 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 		l.RLock()
 		cacheList, ok := globalCache.list[string(key)]
 		if !ok || (ok && cacheList.maxTs < l.maxTs) {
-			if lastUpdateTs, ok := globalCache.lastUpdate[string(key)]; ok && lastUpdateTs < readTs {
-				fmt.Println("[TXN] setting data", pk, l.mutationMap, l.plist, readTs)
+			if lastUpdateTs, found := globalCache.lastUpdate[string(key)]; found && lastUpdateTs < readTs {
+				fmt.Println("[TXN] setting data", pk, l.mutationMap, l.plist, readTs, lastUpdateTs)
 				globalCache.list[string(key)] = copyList(l)
 			}
-		} else {
-			lCopy := copyList(l)
-			fmt.Println("[TXN] getting data", pk, l.mutationMap, l.plist, readTs)
-			l.RUnlock()
-			globalCache.Unlock()
-			return lCopy, nil
 		}
 		l.RUnlock()
 
