@@ -596,7 +596,7 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 		l.RLock()
 		cacheList, ok := globalCache.list[string(key)]
 		if !ok || (ok && cacheList.maxTs < l.maxTs) {
-			if lastUpdateTs, k := globalCache.lastUpdate[string(key)]; k && lastUpdateTs < readTs {
+			if lastUpdateTs, k := globalCache.lastUpdate[string(key)]; !k || (k && lastUpdateTs < readTs) {
 				fmt.Println("[TXN] setting data", pk, l.mutationMap, l.plist, readTs, lastUpdateTs)
 				globalCache.list[string(key)] = copyList(l)
 			}
