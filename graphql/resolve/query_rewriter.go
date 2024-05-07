@@ -662,9 +662,9 @@ func rewriteAsSimilarByIdQuery(
 	distanceFormula := "math((v2 - v1) dot (v2 - v1))" // default - euclidian
 
 	if metric == schema.SimilarSearchMetricDotProduct {
-		distanceFormula = "math(v1 dot v2)"
+		distanceFormula = "math((1.0 - (v1 dot v2)) /2.0)"
 	} else if metric == schema.SimilarSearchMetricCosine {
-		distanceFormula = "math((v1 dot v2) / ((v1 dot v1) * (v2 dot v2)))"
+		distanceFormula = "math((1.0 - ((v1 dot v2) / ((v1 dot v1) * (v2 dot v2)))) / 2.0)"
 	}
 
 	// First generate the query to fetch the uid
@@ -822,7 +822,7 @@ func rewriteAsSimilarByEmbeddingQuery(
 	distanceFormula := "math((v2 - $search_vector) dot (v2 - $search_vector))" // default = euclidian
 
 	if metric == schema.SimilarSearchMetricDotProduct {
-		distanceFormula = "math(($search_vector) dot v2)"
+		distanceFormula = "math(( 1.0 - (($search_vector) dot v2)) /2.0)"
 	} else if metric == schema.SimilarSearchMetricCosine {
 		distanceFormula = "math(( ($search_vector) dot v2) / (( ($search_vector) dot ($search_vector)) * (v2 dot v2)))"
 	}
