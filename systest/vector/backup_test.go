@@ -70,7 +70,7 @@ func TestVectorIncrBackupRestore(t *testing.T) {
 		require.NoError(t, hc.Backup(c, i == 1, dgraphtest.DefaultBackupDir))
 	}
 
-	for i := 0; i < 5; i++ {
+	for i := 1; i <= 5; i++ {
 		t.Logf("restoring backup #%v\n", i)
 
 		incrFrom := i - 1
@@ -81,55 +81,29 @@ func TestVectorIncrBackupRestore(t *testing.T) {
 				   count(uid)
 				}
 		}`
-
 		result, err := gc.Query(query)
 		require.NoError(t, err)
 
-		if i == 0 {
-			require.JSONEq(t, fmt.Sprintf(`{"vector":[{"count":%v}]}`, numVectors*5), string(result.GetJson()))
-			var allSpredVec [][]float32
-			for _, vecArr := range allVectors {
+		require.JSONEq(t, fmt.Sprintf(`{"vector":[{"count":%v}]}`, numVectors*i), string(result.GetJson()))
+		var allSpredVec [][]float32
+		for i, vecArr := range allVectors {
+			if i <= i {
 				allSpredVec = append(allSpredVec, vecArr...)
 			}
+		}
+		for p, vector := range allVectors[i-1] {
+			triple := strings.Split(allRdfs[i-1], "\n")[p]
+			uid := strings.Split(triple, " ")[0]
+			queriedVector, err := gc.QuerySingleVectorsUsingUid(uid, pred)
+			require.NoError(t, err)
 
-			for p, vector := range allVectors[i] {
-				triple := strings.Split(allRdfs[i], "\n")[p]
-				uid := strings.Split(triple, " ")[0]
-				queriedVector, err := gc.QuerySingleVectorsUsingUid(uid, pred)
-				require.NoError(t, err)
-				require.Equal(t, allVectors[i][p], queriedVector[0])
+			require.Equal(t, allVectors[i-1][p], queriedVector[0])
 
-				similarVectors, err := gc.QueryMultipleVectorsUsingSimilarTo(vector, pred, numVectors)
-				require.NoError(t, err)
-				require.Equal(t, numVectors, len(similarVectors))
-
-				for _, similarVector := range similarVectors {
-					require.Contains(t, allSpredVec, similarVector)
-				}
-			}
-
-		} else {
-			require.JSONEq(t, fmt.Sprintf(`{"vector":[{"count":%v}]}`, numVectors*i), string(result.GetJson()))
-			var allSpredVec [][]float32
-			for i, vecArr := range allVectors {
-				if i <= i {
-					allSpredVec = append(allSpredVec, vecArr...)
-				}
-			}
-			for p, vector := range allVectors[i-1] {
-				triple := strings.Split(allRdfs[i-1], "\n")[p]
-				uid := strings.Split(triple, " ")[0]
-				queriedVector, err := gc.QuerySingleVectorsUsingUid(uid, pred)
-				require.NoError(t, err)
-
-				require.Equal(t, allVectors[i-1][p], queriedVector[0])
-
-				similarVectors, err := gc.QueryMultipleVectorsUsingSimilarTo(vector, pred, numVectors)
-				require.NoError(t, err)
-				require.GreaterOrEqual(t, len(similarVectors), 10)
-				for _, similarVector := range similarVectors {
-					require.Contains(t, allSpredVec, similarVector)
-				}
+			similarVectors, err := gc.QueryMultipleVectorsUsingSimilarTo(vector, pred, numVectors)
+			require.NoError(t, err)
+			require.GreaterOrEqual(t, len(similarVectors), 10)
+			for _, similarVector := range similarVectors {
+				require.Contains(t, allSpredVec, similarVector)
 			}
 		}
 	}
