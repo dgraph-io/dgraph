@@ -27,6 +27,7 @@ import (
 
 	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/dgraphtest"
+	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
 )
@@ -287,4 +288,68 @@ func TestVectorIndexRebuilding(t *testing.T) {
 	require.JSONEq(t, fmt.Sprintf(`{"vector":[{"count":%v}]}`, numVectors), string(result.GetJson()))
 
 	testVectorQuery(t, gc, vectors, rdfs, pred, numVectors)
+}
+
+func TestVectorNormalTestCase(t *testing.T) {
+	conf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).WithReplicas(1).WithACL(time.Hour)
+	c, err := dgraphtest.NewLocalCluster(conf)
+	require.NoError(t, err)
+	defer func() { c.Cleanup(t.Failed()) }()
+	require.NoError(t, c.Start())
+
+	gc, cleanup, err := c.Client()
+	require.NoError(t, err)
+	defer cleanup()
+	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
+		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+
+	hc, err := c.HTTPClient()
+	require.NoError(t, err)
+	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
+		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+
+	require.NoError(t, gc.SetupSchema(testSchema))
+
+	numVectors := 70
+	pred := "project_discription_v"
+	rdfs, vectors := dgraphtest.GenerateRandomVectors(0, numVectors, 10, pred)
+
+	mu := &api.Mutation{SetNquads: []byte(rdfs), CommitNow: true}
+	_, err = gc.Mutate(mu)
+	require.NoError(t, err)
+
+	// t.Log("taking backup \n")
+	// require.NoError(t, hc.Backup(c, false, dgraphtest.DefaultBackupDir))
+
+	// t.Log("restoring backup \n")
+	// require.NoError(t, hc.Restore(c, dgraphtest.DefaultBackupDir, "", 0, 0))
+	// require.NoError(t, dgraphtest.WaitForRestore(c))
+
+	// time.Sleep(2 * time.Minute)
+
+	testVectorQuery(t, gc, vectors, rdfs, pred, numVectors)
+	// testVectorQuery(t, gc, vectors, rdfs, pred, 300)
+	// testVectorQuery(t, gc, vectors, rdfs, pred, 400)
+	// testVectorQuery(t, gc, vectors, rdfs, pred, 500)
+	// testVectorQuery(t, gc, vectors, rdfs, pred, 600)
+
+}
+
+func TestAddVectors(t *testing.T) {
+	gc, err := testutil.DgraphClient("localhost:9080")
+	require.NoError(t, err)
+	gc.Alter(context.Background(), &api.Operation{Schema: testSchema})
+	numVectors := 100
+	pred := "project_discription_v"
+	rdfs, _ := dgraphtest.GenerateRandomVectors(0, numVectors, 1, pred)
+
+	mu := &api.Mutation{SetNquads: []byte(rdfs), CommitNow: true}
+	txn := gc.NewTxn()
+	defer func() { _ = txn.Discard(context.Background()) }()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*180)
+	defer cancel()
+	resp, err := txn.Mutate(ctx, mu)
+	require.NoError(t, err)
+	fmt.Println("resp is", string(resp.Json))
 }
