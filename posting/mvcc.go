@@ -62,8 +62,9 @@ type incrRollupi struct {
 type GlobalCache struct {
 	sync.RWMutex
 
-	count map[string]int
-	list  map[string]*List
+	count      map[string]int
+	list       map[string]*List
+	lastUpdate map[string]uint64
 }
 
 var (
@@ -360,6 +361,7 @@ func (txn *Txn) UpdateCachedKeys(commitTs uint64) {
 		x.Check(p.Unmarshal(delta))
 		fmt.Println("[TXN] UPDATING0", pk, p, commitTs, "start_ts:", txn.cache.startTs)
 		globalCache.Lock()
+		globalCache.lastUpdate[key] = commitTs
 		val, ok := globalCache.count[key]
 		if !ok {
 			globalCache.Unlock()
@@ -369,6 +371,7 @@ func (txn *Txn) UpdateCachedKeys(commitTs uint64) {
 		globalCache.count[key] = val - 1
 		if val == 1 {
 			delete(globalCache.count, key)
+			delete(globalCache.lastUpdate, key)
 			delete(globalCache.list, key)
 			globalCache.Unlock()
 			fmt.Println("[TXN] UPDATING2", pk, p, commitTs, "start_ts:", txn.cache.startTs)
@@ -593,8 +596,10 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 		l.RLock()
 		cacheList, ok := globalCache.list[string(key)]
 		if !ok || (ok && cacheList.maxTs < l.maxTs) {
-			fmt.Println("[TXN] setting data", pk, l.mutationMap, l.plist, readTs)
-			globalCache.list[string(key)] = copyList(l)
+			if lastUpdateTs, ok := globalCache.lastUpdate[string(key)]; ok && lastUpdateTs < readTs {
+				fmt.Println("[TXN] setting data", pk, l.mutationMap, l.plist, readTs)
+				globalCache.list[string(key)] = copyList(l)
+			}
 		} else {
 			lCopy := copyList(l)
 			fmt.Println("[TXN] getting data", pk, l.mutationMap, l.plist, readTs)

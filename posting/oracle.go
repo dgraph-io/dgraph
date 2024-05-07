@@ -279,6 +279,7 @@ func (o *oracle) ProcessDelta(delta *pb.OracleDelta) {
 	if glog.V(3) {
 		glog.Infof("ProcessDelta: Max Assigned: %d", delta.MaxAssigned)
 		glog.Infof("ProcessDelta: Group checksum: %v", delta.GroupChecksums)
+		glog.Infof("ProcessDelta: %v", delta.Txns)
 		for _, txn := range delta.Txns {
 			if txn.CommitTs == 0 {
 				glog.Infof("ProcessDelta Aborted: %d", txn.StartTs)
