@@ -822,9 +822,9 @@ func rewriteAsSimilarByEmbeddingQuery(
 	distanceFormula := "math((v2 - $search_vector) dot (v2 - $search_vector))" // default = euclidian
 
 	if metric == schema.SimilarSearchMetricDotProduct {
-		distanceFormula = "math($search_vector dot v2)"
+		distanceFormula = "math(($search_vector) dot v2)"
 	} else if metric == schema.SimilarSearchMetricCosine {
-		distanceFormula = "math(($search_vector dot v2) / (($search_vector dot $search_vector) * (v2 dot v2)))"
+		distanceFormula = "math(( ($search_vector) dot v2) / (( ($search_vector) dot ($search_vector)) * (v2 dot v2)))"
 	}
 
 	// Save vectorString as a query variable, $search_vector
