@@ -81,7 +81,7 @@ var (
 		priorityKeys: make([]*pooledKeys, 2),
 	}
 
-	globalCache = &GlobalCache{count: make(map[string]int), list: make(map[string]*List)}
+	globalCache = &GlobalCache{count: make(map[string]int), list: make(map[string]*List), lastUpdate: make(map[string]uint64)}
 )
 
 func init() {
@@ -345,6 +345,7 @@ func ResetCache() {
 	globalCache.Lock()
 	globalCache.count = make(map[string]int)
 	globalCache.list = make(map[string]*List)
+	globalCache.lastUpdate = make(map[string]uint64)
 	globalCache.Unlock()
 	lCache.Clear()
 }
