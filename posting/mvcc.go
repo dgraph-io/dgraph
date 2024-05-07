@@ -358,12 +358,12 @@ func (txn *Txn) UpdateCachedKeys(commitTs uint64) {
 		pk, _ := x.Parse([]byte(key))
 		p := new(pb.PostingList)
 		x.Check(p.Unmarshal(delta))
-		fmt.Println("[TXN] UPDATING0", pk, p, commitTs)
+		fmt.Println("[TXN] UPDATING0", pk, p, commitTs, "start_ts:", txn.cache.startTs)
 		globalCache.Lock()
 		val, ok := globalCache.count[key]
 		if !ok {
 			globalCache.Unlock()
-			fmt.Println("[TXN] UPDATING1", pk, p, commitTs)
+			fmt.Println("[TXN] UPDATING1", pk, p, commitTs, "start_ts:", txn.cache.startTs)
 			continue
 		}
 		globalCache.count[key] = val - 1
@@ -371,7 +371,7 @@ func (txn *Txn) UpdateCachedKeys(commitTs uint64) {
 			delete(globalCache.count, key)
 			delete(globalCache.list, key)
 			globalCache.Unlock()
-			fmt.Println("[TXN] UPDATING2", pk, p, commitTs)
+			fmt.Println("[TXN] UPDATING2", pk, p, commitTs, "start_ts:", txn.cache.startTs)
 			continue
 		}
 
