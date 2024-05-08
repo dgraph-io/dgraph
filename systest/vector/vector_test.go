@@ -288,3 +288,29 @@ func TestVectorIndexRebuilding(t *testing.T) {
 
 	testVectorQuery(t, gc, vectors, rdfs, pred, numVectors)
 }
+
+func TestVectorIndexOnVectorPredWithoutData(t *testing.T) {
+	conf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).WithReplicas(1).WithACL(time.Hour)
+	c, err := dgraphtest.NewLocalCluster(conf)
+	require.NoError(t, err)
+	defer func() { c.Cleanup(t.Failed()) }()
+	require.NoError(t, c.Start())
+
+	gc, cleanup, err := c.Client()
+	require.NoError(t, err)
+	defer cleanup()
+	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
+		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+
+	hc, err := c.HTTPClient()
+	require.NoError(t, err)
+	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
+		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+
+	require.NoError(t, gc.SetupSchema(testSchema))
+	pred := "project_discription_v"
+
+	vector := []float32{1.0, 2.0, 3.0}
+	_, err = gc.QueryMultipleVectorsUsingSimilarTo(vector, pred, 10)
+	require.NoError(t, err)
+}

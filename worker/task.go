@@ -381,7 +381,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 				int(numNeighbors), index.AcceptAll[float32])
 		}
 
-		if err != nil {
+		if err != nil && !strings.Contains(err.Error(), "HNSW tree has no elements: Key not found") {
 			return err
 		}
 		sort.Slice(nnUids, func(i, j int) bool { return nnUids[i] < nnUids[j] })
