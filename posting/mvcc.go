@@ -605,5 +605,9 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 
 		globalCache.Unlock()
 	}
+
+	l.RLock()
+	fmt.Println("[TXN] return data from disk", pk, l.mutationMap, l.plist, "start_ts:", readTs)
+	l.RUnlock()
 	return l, nil
 }

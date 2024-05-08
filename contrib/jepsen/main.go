@@ -400,6 +400,10 @@ func main() {
 		*nemesis = strings.Join(testAllNemeses, " ")
 	}
 
+	if *nemesis == "all" {
+		*nemesis = strings.Join(testAllNemeses, " ")
+	}
+
 	if *workload == "" || *nemesis == "" {
 		fmt.Fprintf(os.Stderr, "You must specify at least one workload and at least one nemesis.\n")
 		fmt.Fprintf(os.Stderr, "See --help for example usage.\n")
