@@ -473,14 +473,6 @@ func (m *mapper) processReqCh(ctx context.Context) error {
 				return nil
 			}
 
-			isVectorSupportingPred := func(pred string) bool {
-				if strings.HasSuffix(pred, hnsw.VecEntry) || strings.HasSuffix(pred, hnsw.VecKeyword) ||
-					strings.HasSuffix(pred, hnsw.VecDead) {
-					return true
-				}
-				return false
-			}
-
 			// We changed the format of predicate in 2103 and 2105. SchemaUpdate and TypeUpdate have
 			// predicate stored within them, so they also need to be updated accordingly.
 			switch in.version {
@@ -500,9 +492,10 @@ func (m *mapper) processReqCh(ctx context.Context) error {
 				// for manifest versions >= 2015, do nothing.
 			}
 
-			// If the predicate is a vector supporting predicate, skip further processing.
+			// If the predicate is a vector indexing predicate, skip further processing.
 			// currently we don't store vector supporting predicates in the schema.
-			if isVectorSupportingPred(parsedKey.Attr) {
+			if strings.HasSuffix(parsedKey.Attr, hnsw.VecEntry) || strings.HasSuffix(parsedKey.Attr, hnsw.VecKeyword) ||
+				strings.HasSuffix(parsedKey.Attr, hnsw.VecDead) {
 				return nil
 			}
 			// Reset the StreamId to prevent ordering issues while writing to stream writer.
