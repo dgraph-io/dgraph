@@ -362,7 +362,9 @@ func (txn *Txn) UpdateCachedKeys(commitTs uint64) {
 		x.Check(p.Unmarshal(delta))
 		fmt.Println("[TXN] UPDATING0", pk, p, commitTs, "start_ts:", txn.cache.startTs)
 		globalCache.Lock()
-		globalCache.lastUpdate[key] = commitTs
+		if commitTs != 0 {
+			globalCache.lastUpdate[key] = commitTs
+		}
 		val, ok := globalCache.count[key]
 		if !ok {
 			globalCache.Unlock()
