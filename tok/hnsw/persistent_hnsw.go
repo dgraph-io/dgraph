@@ -289,10 +289,10 @@ func (ph *persistentHNSW[T]) calculateNewEntryVec(
 	})
 
 	if err != nil {
-		return 0, errors.Wrapf(err, "HNSW tree has no elements")
+		return 0, errors.Wrapf(err, EmptyHNSWTreeError)
 	}
 	if itr == 0 {
-		return itr, errors.New("HNSW tree has no elements")
+		return itr, errors.New(EmptyHNSWTreeError)
 	}
 
 	return itr, nil

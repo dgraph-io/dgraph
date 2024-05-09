@@ -24,6 +24,7 @@ const (
 	DotProd              = "dotproduct"
 	plError              = "\nerror fetching posting list for data key: "
 	dataError            = "\nerror fetching data for data key: "
+	EmptyHNSWTreeError   = "HNSW tree has no elements"
 	VecKeyword           = "__vector_"
 	visitedVectorsLevel  = "visited_vectors_level_"
 	distanceComputations = "vector_distance_computations"
