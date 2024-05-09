@@ -61,8 +61,9 @@ type incrRollupi struct {
 type GlobalCache struct {
 	sync.RWMutex
 
-	count map[string]int
-	list  map[string]*List
+	count      map[string]int
+	list       map[string]*List
+	lastUpdate map[string]uint64
 }
 
 var (
@@ -79,7 +80,7 @@ var (
 		priorityKeys: make([]*pooledKeys, 2),
 	}
 
-	globalCache = &GlobalCache{count: make(map[string]int), list: make(map[string]*List)}
+	globalCache = &GlobalCache{count: make(map[string]int), list: make(map[string]*List), lastUpdate: make(map[string]uint64)}
 )
 
 func init() {
@@ -127,20 +128,7 @@ func (ir *incrRollupi) rollUpKey(writer *TxnWriter, key []byte) error {
 		return err
 	}
 
-	if len(kvs) > 0 {
-		pl := new(pb.PostingList)
-		x.Check(pl.Unmarshal(kvs[0].Value))
-		l.Lock()
-		l.plist = pl
-		l.mutationMap = nil
-		l.maxTs = kvs[0].Version
-		l.Unlock()
-	}
-
-	l.RLock()
-	lCache.Set(key, l, int64(l.DeepSize()))
-	l.RUnlock()
-
+	// TODO Update cache with rolled up results
 	// If we do a rollup, we typically won't need to update the key in cache.
 	// The only caveat is that the key written by rollup would be written at +1
 	// timestamp, hence bumping the latest TS for the key by 1. The cache should
@@ -348,6 +336,7 @@ func ResetCache() {
 	globalCache.Lock()
 	globalCache.count = make(map[string]int)
 	globalCache.list = make(map[string]*List)
+	globalCache.lastUpdate = make(map[string]uint64)
 	globalCache.Unlock()
 	lCache.Clear()
 }
@@ -359,15 +348,18 @@ func (txn *Txn) UpdateCachedKeys(commitTs uint64) {
 	}
 
 	for key, delta := range txn.cache.deltas {
-		//pk, _ := x.Parse([]byte(key))
-		//p := new(pb.PostingList)
-		//x.Check(p.Unmarshal(delta))
-		//fmt.Println("UPDATING0", pk, p, commitTs)
+		pk, _ := x.Parse([]byte(key))
+		if pk.IsData() {
+			continue
+		}
 		globalCache.Lock()
+		if commitTs != 0 {
+			// TODO Delete this if the values are too old in an async thread
+			globalCache.lastUpdate[key] = commitTs
+		}
 		val, ok := globalCache.count[key]
 		if !ok {
 			globalCache.Unlock()
-			//fmt.Println("UPDATING1", pk, p, commitTs)
 			continue
 		}
 		globalCache.count[key] = val - 1
@@ -375,15 +367,15 @@ func (txn *Txn) UpdateCachedKeys(commitTs uint64) {
 			delete(globalCache.count, key)
 			delete(globalCache.list, key)
 			globalCache.Unlock()
-			//fmt.Println("UPDATING2", pk, p, commitTs)
 			continue
 		}
 
 		if commitTs != 0 {
 			pl, ok := globalCache.list[key]
 			if ok {
+				p := new(pb.PostingList)
+				x.Check(p.Unmarshal(delta))
 				pl.setMutationAfterCommit(txn.StartTs, commitTs, delta)
-				//fmt.Println("UPDATING3", pk, p, commitTs, pl.mutationMap)
 			}
 		}
 		globalCache.Unlock()
@@ -535,36 +527,14 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 	// corresponding to the key in the cache to nil. So, if we get some non-nil value from the cache
 	// then it means that no  writes have happened after the last set of this key in the cache.
 	if l, ok := globalCache.list[string(key)]; ok {
-		if l != nil && l.maxTs < readTs {
+		if l != nil && l.minTs <= readTs {
 			l.RLock()
 			lCopy := copyList(l)
 			l.RUnlock()
-			//var o ListOptions
-			//o.ReadTs = readTs
-			//uids, _ := lCopy.Uids(o)
-			//vals, _ := lCopy.AllValues(readTs)
-			//fmt.Println("GETTING", pk, uids, vals, lCopy.mutationMap, l.mutationMap)
 			globalCache.Unlock()
 			return lCopy, nil
 		}
 	}
-	//if val, ok := lCache.Get(key); ok {
-	//	switch val.(type) {
-	//	case *List:
-	//		l := val.(*List)
-	//		// l.maxTs can be greater than readTs. We might have the latest
-	//		// version cached, while readTs is looking for an older version.
-	//		if l != nil {
-	//			//fmt.Println(l.maxTs, readTs)
-	//		}
-	//		if l != nil && l.maxTs > 0 {
-	//			l.RLock()
-	//			lCopy := copyList(l)
-	//			l.RUnlock()
-	//			return lCopy, nil
-	//		}
-	//	}
-	//}
 	globalCache.Unlock()
 
 	txn := pstore.NewTransactionAt(readTs, false)
@@ -587,20 +557,17 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 	// the latest version of the PL. We also check that we're reading a version
 	// from Badger, which is higher than the write registered by the cache.
 	if !pk.IsData() && readTs >= l.maxTs {
-		//l.RLock()
-		//defer l.RUnlock()
-		//fmt.Println("Setting", l.maxTs)
-		//lCache.Set(key, copyList(l), int64(l.DeepSize()))
 		globalCache.Lock()
-
 		l.RLock()
 		cacheList, ok := globalCache.list[string(key)]
 		if !ok || (ok && cacheList.maxTs < l.maxTs) {
-			globalCache.list[string(key)] = copyList(l)
+			if lastUpdateTs, k := globalCache.lastUpdate[string(key)]; !k || (k && lastUpdateTs < readTs) {
+				globalCache.list[string(key)] = copyList(l)
+			}
 		}
 		l.RUnlock()
-
 		globalCache.Unlock()
 	}
+
 	return l, nil
 }
