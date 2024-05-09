@@ -80,7 +80,11 @@ var (
 		priorityKeys: make([]*pooledKeys, 2),
 	}
 
-	globalCache = &GlobalCache{count: make(map[string]int), list: make(map[string]*List), lastUpdate: make(map[string]uint64)}
+	globalCache = &GlobalCache{
+		count:      make(map[string]int),
+		list:       make(map[string]*List),
+		lastUpdate: make(map[string]uint64),
+	}
 )
 
 func init() {
