@@ -268,6 +268,10 @@ func querySingleVectorError(t *testing.T, vector, pred string, validateError boo
 		return []float32{}, err
 	}
 
+	if len(data.Vector) == 0 {
+		return []float32{}, nil
+	}
+
 	return data.Vector[0].VTest, nil
 }
 
@@ -569,8 +573,9 @@ func TestVectorDelete(t *testing.T) {
 	}
 
 	triple := deleteTriple(len(triples) - 2)
+	// after deleteing all vectors, we should get an empty array of vectors in response when we do silimar_to query
 	_, err = querySingleVectorError(t, strings.Split(triple, `"`)[1], "vtest", false)
-	require.NotNil(t, err)
+	require.NoError(t, err)
 }
 
 func TestVectorUpdate(t *testing.T) {
