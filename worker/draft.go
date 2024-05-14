@@ -549,12 +549,16 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 			errCh <- process(m.Edges[start:end])
 		}(start, end)
 	}
+	var errs error
 	for i := 0; i < numGo; i++ {
 		if err := <-errCh; err != nil {
-			return err
+			if errs == nil {
+				errs = errors.New("Got error while running mutation")
+			}
+			errs = errors.Wrapf(err, errs.Error())
 		}
 	}
-	return nil
+	return errs
 }
 
 func (n *node) applyCommitted(proposal *pb.Proposal, key uint64) error {
