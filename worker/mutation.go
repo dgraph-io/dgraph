@@ -950,7 +950,9 @@ func (w *grpcWorker) proposeAndWait(ctx context.Context, txnCtx *api.TxnContext,
 
 	node := groups().Node
 	err := node.proposeAndWait(ctx, &pb.Proposal{Mutations: m})
-	fillTxnContext(txnCtx, m.StartTs)
+	if err == nil {
+		fillTxnContext(txnCtx, m.StartTs)
+	}
 	return err
 }
 
