@@ -432,11 +432,7 @@ func (ph *persistentHNSW[T]) createEntryAndStartNodes(
 	err := ph.getVecFromUid(entry, c, vec)
 	if err != nil || len(*vec) == 0 {
 		// The entry vector has been deleted. We have to create a new entry vector.
-		entry, err := ph.PickStartNode(ctx, c, vec)
-		if err != nil {
-			return 0, []*index.KeyValue{}, err
-		}
-		return create_edges(entry)
+		return create_edges(inUuid)
 	}
 
 	return entry, edges, nil

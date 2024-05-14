@@ -851,7 +851,9 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 		if txn == nil {
 			return
 		}
-		txn.Update()
+		if commit != 0 {
+			txn.Update()
+		}
 		// We start with 20 ms, so that we end up waiting 5 mins by the end.
 		// If there is any transient issue, it should get fixed within that timeframe.
 		err := x.ExponentialRetry(int(x.Config.MaxRetries),
