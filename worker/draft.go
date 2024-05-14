@@ -517,10 +517,13 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		var retries int
 		for _, edge := range edges {
 			for {
+				fmt.Println("runing mutation----------------------------------->")
 				err := runMutation(ctx, edge, txn)
+				fmt.Println("finished mutation----------------------------------->", err)
 				if err == nil {
 					break
 				}
+
 				if err != posting.ErrRetry {
 					return err
 				}
@@ -536,6 +539,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	span.Annotatef(nil, "To apply: %d edges. NumGo: %d. Width: %d", len(m.Edges), numGo, width)
 
 	if numGo == 1 {
+		fmt.Println("returning from here ============================>542")
 		return process(m.Edges)
 	}
 	errCh := make(chan error, numGo)
@@ -549,12 +553,20 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 			errCh <- process(m.Edges[start:end])
 		}(start, end)
 	}
+	var errs error
 	for i := 0; i < numGo; i++ {
 		if err := <-errCh; err != nil {
-			return err
+			if errs == nil {
+				errs = errors.New("Got error while running mutation")
+			}
+			fmt.Println("returning error-------------------------------->", err)
+			errs = errors.Wrapf(err, errs.Error())
+		} else {
+			fmt.Println("got return statement----------------------------------->", i, numGo)
 		}
 	}
-	return nil
+	fmt.Println("returning from here ============================>566", errs)
+	return errs
 }
 
 func (n *node) applyCommitted(proposal *pb.Proposal, key uint64) error {

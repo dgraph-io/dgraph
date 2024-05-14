@@ -339,7 +339,8 @@ func TestAddVectors(t *testing.T) {
 	gc, err := testutil.DgraphClient("localhost:9080")
 	require.NoError(t, err)
 	gc.Alter(context.Background(), &api.Operation{Schema: testSchema})
-	numVectors := 100
+
+	numVectors := 1000
 	pred := "project_discription_v"
 	rdfs, _ := dgraphtest.GenerateRandomVectors(0, numVectors, 1, pred)
 

@@ -19,7 +19,9 @@ package posting
 import (
 	"context"
 	"encoding/hex"
+	"fmt"
 	"math"
+	"runtime/debug"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -155,7 +157,11 @@ func (txn *Txn) GetFromDelta(key []byte) (*List, error) {
 
 // Update calls UpdateDeltasAndDiscardLists on the local cache.
 func (txn *Txn) Update() {
+	debug.PrintStack()
+	fmt.Println("staringing update----------------------------->")
 	txn.cache.UpdateDeltasAndDiscardLists()
+	fmt.Println("finish update----------------------------->")
+
 }
 
 // Store is used by tests.

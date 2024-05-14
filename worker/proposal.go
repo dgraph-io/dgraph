@@ -247,6 +247,8 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 		defer timer.Stop()
 
 		for {
+			glog.Warning("----------------------------------------------->")
+
 			select {
 			case err = <-errCh:
 				// We arrived here by a call to n.Proposals.Done().
@@ -256,6 +258,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 				return ctx.Err()
 			case <-timer.C:
 				if atomic.LoadUint32(&pctx.Found) > 0 {
+					glog.Warning("===================================================>")
 					// We found the proposal in CommittedEntries. No need to retry.
 				} else {
 					span.Annotatef(nil, "Timeout %s reached. Cancelling...", timeout)
