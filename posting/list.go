@@ -795,6 +795,38 @@ func (l *List) length(readTs, afterUid uint64) int {
 	return count
 }
 
+func (l *List) getPostingAndLengthNoSort(readTs, afterUid, uid uint64) (int, bool, *pb.Posting) {
+	l.AssertRLock()
+
+	dec := codec.Decoder{Pack: l.plist.Pack}
+	uids := dec.Seek(uid, codec.SeekStart)
+	length := codec.ExactLen(l.plist.Pack)
+	found1 := len(uids) > 0 && uids[0] == uid
+
+	for _, plist := range l.mutationMap {
+		for _, mpost := range plist.Postings {
+			if (mpost.CommitTs > 0 && mpost.CommitTs <= readTs) || (mpost.StartTs == readTs) {
+				if hasDeleteAll(mpost) {
+					found1 = false
+					length = 0
+					continue
+				}
+				if mpost.Uid == uid {
+					found1 = (mpost.Op == Set)
+				}
+				if mpost.Op == Set {
+					length += 1
+				} else {
+					length -= 1
+				}
+
+			}
+		}
+	}
+
+	return length, found1, nil
+}
+
 // Length iterates over the mutation layer and counts number of elements.
 func (l *List) Length(readTs, afterUid uint64) int {
 	l.RLock()
