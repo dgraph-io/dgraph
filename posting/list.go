@@ -25,6 +25,7 @@ import (
 	"sort"
 
 	"github.com/dgryski/go-farm"
+	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 
@@ -666,6 +667,19 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) e
 		})
 	}
 
+	numDeletePostingsRead := 0
+	numNormalPostingsRead := 0
+	defer func() {
+		// If we see a lot of these logs, it means that a lot of elements are getting deleted.
+		// This could be normal, but if we see this too much, that means that rollups are too slow.
+		if numNormalPostingsRead < numDeletePostingsRead &&
+			(numNormalPostingsRead > 0 || numDeletePostingsRead > 0) {
+			glog.V(3).Infof("High proportion of deleted data observed for posting list %b: total = %d, "+
+				"percent deleted = %d", l.key, numNormalPostingsRead+numDeletePostingsRead,
+				(numDeletePostingsRead*100)/(numDeletePostingsRead+numNormalPostingsRead))
+		}
+	}()
+
 	var (
 		mp, pp  *pb.Posting
 		pitr    pIterator
@@ -708,6 +722,7 @@ loop:
 		case mp.Uid == 0 || (pp.Uid > 0 && pp.Uid < mp.Uid):
 			// Either mp is empty, or pp is lower than mp.
 			err = f(pp)
+			numNormalPostingsRead += 1
 			if err != nil {
 				break loop
 			}
@@ -719,18 +734,24 @@ loop:
 			// Either pp is empty, or mp is lower than pp.
 			if mp.Op != Del {
 				err = f(mp)
+				numNormalPostingsRead += 1
 				if err != nil {
 					break loop
 				}
+			} else {
+				numDeletePostingsRead += 1
 			}
 			prevUid = mp.Uid
 			midx++
 		case pp.Uid == mp.Uid:
 			if mp.Op != Del {
 				err = f(mp)
+				numNormalPostingsRead += 1
 				if err != nil {
 					break loop
 				}
+			} else {
+				numDeletePostingsRead += 1
 			}
 			prevUid = mp.Uid
 			if err = pitr.next(); err != nil {
@@ -1219,8 +1240,15 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 
 	// Do The intersection here as it's optimized.
 	out.Uids = res
+	lenBefore := len(res)
 	if opt.Intersect != nil {
 		algo.IntersectWith(out, opt.Intersect, out)
+	}
+	lenAfter := len(out.Uids)
+	if lenBefore-lenAfter > 0 {
+		// If we see this log, that means that iterate is going over too many elements that it doesn't need to
+		glog.V(3).Infof("Retrieved a list. length before intersection: %d, length after: %d, extra"+
+			" elements: %d", lenBefore, lenAfter, lenBefore-lenAfter)
 	}
 	return out, nil
 }
