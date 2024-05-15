@@ -441,6 +441,7 @@ func TestVectorDeadlockwithTimeout(t *testing.T) {
 	defer cleanup()
 
 	for i := 0; i < 5; i++ {
+		fmt.Println("Testing iteration: ", i)
 		ctx, cancel2 := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel2()
 		err = client.LoginIntoNamespace(ctx, dgraphtest.DefaultUser,
@@ -458,7 +459,7 @@ func TestVectorDeadlockwithTimeout(t *testing.T) {
 		randomVectors, _ := generateRandomVectors(numVectors, vectorSize, "vtest")
 
 		txn := client.NewTxn()
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer func() { _ = txn.Discard(ctx) }()
 		defer cancel()
 
