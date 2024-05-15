@@ -434,6 +434,7 @@ func TestVectorsMutateFixedLengthWithDiffrentIndexes(t *testing.T) {
 }
 
 func TestVectorDeadlockwithTimeout(t *testing.T) {
+	pred := "vtest1"
 	dc = dgraphtest.NewComposeCluster()
 	var cleanup func()
 	client, cleanup, err := dc.Client()
@@ -449,14 +450,14 @@ func TestVectorDeadlockwithTimeout(t *testing.T) {
 		require.NoError(t, err)
 
 		err = client.Alter(context.Background(), &api.Operation{
-			DropAttr: "vtest",
+			DropAttr: pred,
 		})
-		dropPredicate("vtest")
-		setSchema(fmt.Sprintf(vectorSchemaWithIndex, "vtest", "4", "euclidian"))
+		dropPredicate(pred)
+		setSchema(fmt.Sprintf(vectorSchemaWithIndex, pred, "4", "euclidian"))
 		numVectors := 1000
 		vectorSize := 10
 
-		randomVectors, _ := generateRandomVectors(numVectors, vectorSize, "vtest")
+		randomVectors, _ := generateRandomVectors(numVectors, vectorSize, pred)
 
 		txn := client.NewTxn()
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
