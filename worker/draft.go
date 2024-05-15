@@ -549,6 +549,9 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 			errCh <- process(m.Edges[start:end])
 		}(start, end)
 	}
+	// Earlier we were returning after even if one thread had an error. We should wait for
+	// all the transactions to finish. We call txn.Update() when this function exists. This could cause
+	// a deadlock with runMutation.
 	var errs error
 	for i := 0; i < numGo; i++ {
 		if err := <-errCh; err != nil {
@@ -843,6 +846,7 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 		if txn == nil {
 			return
 		}
+		// If the transaction has failed, we dont need to update it.
 		if commit != 0 {
 			txn.Update()
 		}
