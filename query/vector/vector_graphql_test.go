@@ -161,7 +161,6 @@ func queryProjectsSimilarByEmbedding(t *testing.T, hc *dgraphtest.HTTPClient, ve
 	require.NoError(t, err)
 
 	return resp.QueryProject
-
 }
 
 func TestVectorGraphQLAddVectorPredicate(t *testing.T) {
@@ -206,7 +205,6 @@ func TestVectorGraphQlEuclidianIndexMutationAndQuery(t *testing.T) {
 	// add schema
 	require.NoError(t, hc.UpdateGQLSchema(schema))
 	testVectorGraphQlMutationAndQuery(t, hc)
-
 }
 
 func TestVectorGraphQlCosineIndexMutationAndQuery(t *testing.T) {
@@ -219,7 +217,6 @@ func TestVectorGraphQlCosineIndexMutationAndQuery(t *testing.T) {
 	// add schema
 	require.NoError(t, hc.UpdateGQLSchema(schema))
 	testVectorGraphQlMutationAndQuery(t, hc)
-
 }
 
 func TestVectorGraphQlDotProductIndexMutationAndQuery(t *testing.T) {
@@ -232,14 +229,12 @@ func TestVectorGraphQlDotProductIndexMutationAndQuery(t *testing.T) {
 	// add schema
 	require.NoError(t, hc.UpdateGQLSchema(schema))
 	testVectorGraphQlMutationAndQuery(t, hc)
-
 }
 
 func testVectorGraphQlMutationAndQuery(t *testing.T, hc *dgraphtest.HTTPClient) {
 	var vectors [][]float32
 	numProjects := 100
 	projects := generateProjects(numProjects)
-	fmt.Println("projects", len(projects))
 	for _, project := range projects {
 		vectors = append(vectors, project.TitleV)
 		addProject(t, hc, project)
@@ -247,15 +242,12 @@ func testVectorGraphQlMutationAndQuery(t *testing.T, hc *dgraphtest.HTTPClient) 
 
 	for _, project := range projects {
 		p := queryProjectUsingTitle(t, hc, project.Title)
-		fmt.Println("p", p)
 		require.Equal(t, project.Title, p.Title)
 		require.Equal(t, project.TitleV, p.TitleV)
 	}
 
 	for _, project := range projects {
 		p := queryProjectUsingTitle(t, hc, project.Title)
-		fmt.Println("p1", p)
-
 		require.Equal(t, project.Title, p.Title)
 		require.Equal(t, project.TitleV, p.TitleV)
 	}
