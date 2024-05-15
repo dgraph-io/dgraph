@@ -674,55 +674,6 @@ func (l *List) pickPostings(readTs uint64) (uint64, []*pb.Posting) {
 	return deleteBelowTs, posts
 }
 
-func (l *List) iterateNoSort(readTs uint64, afterUid uint64, f func(obj *pb.Posting) error) error {
-	l.AssertRLock()
-
-	effective := func(start, commit uint64) uint64 {
-		if commit > 0 && commit <= readTs {
-			// Has been committed and below the readTs.
-			return commit
-		}
-		if start == readTs {
-			// This mutation is by ME. So, I must be able to read it.
-			return start
-		}
-		return 0
-	}
-
-	// First pick up the postings.
-	var deleteBelowTs uint64
-	var posts []*pb.Posting
-	for startTs, plist := range l.mutationMap {
-		// Pick up the transactions which are either committed, or the one which is ME.
-		effectiveTs := effective(startTs, plist.CommitTs)
-		if effectiveTs > deleteBelowTs {
-			// We're above the deleteBelowTs marker. We wouldn't reach here if effectiveTs is zero.
-			for _, mpost := range plist.Postings {
-				if hasDeleteAll(mpost) {
-					deleteBelowTs = effectiveTs
-					continue
-				}
-				posts = append(posts, mpost)
-			}
-		}
-	}
-
-	if deleteBelowTs > 0 {
-		// There was a delete all marker. So, trim down the list of postings.
-		result := posts[:0]
-		for _, post := range posts {
-			effectiveTs := effective(post.StartTs, post.CommitTs)
-			if effectiveTs < deleteBelowTs { // Do pick the posts at effectiveTs == deleteBelowTs.
-				continue
-			}
-			result = append(result, post)
-		}
-		posts = result
-	}
-
-	return l.iterateInternal(readTs, afterUid, f, deleteBelowTs, posts)
-}
-
 func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) error) error {
 	l.AssertRLock()
 
@@ -863,22 +814,34 @@ func (l *List) IsEmpty(readTs, afterUid uint64) (bool, error) {
 
 func (l *List) getPostingAndLengthNoSort(readTs, afterUid, uid uint64) (int, bool, *pb.Posting) {
 	l.AssertRLock()
-	var count int
-	var found bool
-	var post *pb.Posting
-	err := l.iterateNoSort(readTs, afterUid, func(p *pb.Posting) error {
-		if p.Uid == uid {
-			post = p
-			found = true
+
+	dec := codec.Decoder{Pack: l.plist.Pack}
+	uids := dec.Seek(uid, codec.SeekStart)
+	length := codec.ExactLen(l.plist.Pack)
+	found1 := len(uids) > 0 && uids[0] == uid
+
+	for _, plist := range l.mutationMap {
+		for _, mpost := range plist.Postings {
+			if (mpost.CommitTs > 0 && mpost.CommitTs <= readTs) || (mpost.StartTs == readTs) {
+				if hasDeleteAll(mpost) {
+					found1 = false
+					length = 0
+					continue
+				}
+				if mpost.Uid == uid {
+					found1 = (mpost.Op == Set)
+				}
+				if mpost.Op == Set {
+					length += 1
+				} else {
+					length -= 1
+				}
+
+			}
 		}
-		count++
-		return nil
-	})
-	if err != nil {
-		return -1, false, nil
 	}
 
-	return count, found, post
+	return length, found1, nil
 }
 
 func (l *List) getPostingAndLength(readTs, afterUid, uid uint64) (int, bool, *pb.Posting) {
