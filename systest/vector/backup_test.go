@@ -235,3 +235,54 @@ func TestVectorBackupRestoreDropIndex(t *testing.T) {
 		}
 	}
 }
+
+func TestVectorBackupRestoreReIndexing(t *testing.T) {
+	conf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).WithReplicas(1).WithACL(time.Hour)
+	c, err := dgraphtest.NewLocalCluster(conf)
+	require.NoError(t, err)
+	defer func() { c.Cleanup(t.Failed()) }()
+	require.NoError(t, c.Start())
+
+	gc, cleanup, err := c.Client()
+	require.NoError(t, err)
+	defer cleanup()
+	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
+		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+
+	hc, err := c.HTTPClient()
+	require.NoError(t, err)
+	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
+		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+
+	require.NoError(t, gc.SetupSchema(testSchema))
+
+	numVectors := 1000
+	pred := "project_discription_v"
+	rdfs, vectors := dgraphtest.GenerateRandomVectors(0, numVectors, 10, pred)
+
+	mu := &api.Mutation{SetNquads: []byte(rdfs), CommitNow: true}
+	_, err = gc.Mutate(mu)
+	require.NoError(t, err)
+
+	t.Log("taking backup \n")
+	require.NoError(t, hc.Backup(c, false, dgraphtest.DefaultBackupDir))
+
+	rdfs2, vectors2 := dgraphtest.GenerateRandomVectors(numVectors, numVectors+300, 10, pred)
+
+	mu = &api.Mutation{SetNquads: []byte(rdfs2), CommitNow: true}
+	_, err = gc.Mutate(mu)
+	require.NoError(t, err)
+	t.Log("restoring backup \n")
+	require.NoError(t, hc.Restore(c, dgraphtest.DefaultBackupDir, "", 2, 1))
+	require.NoError(t, dgraphtest.WaitForRestore(c))
+
+	for i := 0; i < 5; i++ {
+		// drop index
+		require.NoError(t, gc.SetupSchema(testSchemaWithoutIndex))
+		// add index
+		require.NoError(t, gc.SetupSchema(testSchema))
+	}
+	vectors = append(vectors, vectors2...)
+	rdfs = rdfs + rdfs2
+	testVectorQuery(t, gc, vectors, rdfs, pred, numVectors)
+}
