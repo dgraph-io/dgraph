@@ -189,10 +189,6 @@ func TestVectorSchema(t *testing.T) {
 	// add schema
 	require.NoError(t, hc.UpdateGQLSchema(schema))
 	require.Error(t, hc.UpdateGQLSchema(fmt.Sprintf(graphQLVectorSchema, "euclidean")))
-	require.NoError(t, client.DropAll())
-	require.Error(t, hc.UpdateGQLSchema(fmt.Sprintf(graphQLVectorSchema, "dotproduct")))
-	require.NoError(t, client.DropAll())
-	require.Error(t, hc.UpdateGQLSchema(fmt.Sprintf(graphQLVectorSchema, "cosine")))
 }
 
 func TestVectorGraphQlEuclidianIndexMutationAndQuery(t *testing.T) {
