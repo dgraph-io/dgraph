@@ -3367,7 +3367,7 @@
     query querySimilarProductByEmbedding($search_vector:  float32vector = "[0.1,0.2,0.3,0.4,0.5]") {
       var(func: similar_to(Product.productVector, 1, $search_vector)) @filter(type(Product)) {
         v2 as Product.productVector
-        distance as math((v2 - $search_vector) dot (v2 - $search_vector))
+        distance as math(sqrt((v2 - $search_vector) dot (v2 - $search_vector)))
       }
       querySimilarProductByEmbedding(func: uid(distance), orderasc: val(distance)) {
         Product.id : Product.id
@@ -3397,7 +3397,7 @@
       }
       var(func: similar_to(Product.productVector, 3, val(v1))) {
         v2 as Product.productVector
-        distance as math((v2 - v1) dot (v2 - v1))
+        distance as math(sqrt((v2 - v1) dot (v2 - v1)))
       }
       querySimilarProductById(func: uid(distance), orderasc: val(distance)) {
         Product.id : Product.id
@@ -3428,7 +3428,7 @@
       }
       var(func: similar_to(ProjectCosine.description_v, 3, val(v1))) {
         v2 as ProjectCosine.description_v
-        distance as math((v1 dot v2) / ((v1 dot v1) * (v2 dot v2)))
+        distance as math((1.0 - ((v1 dot v2) / sqrt( (v1 dot v1) * (v2 dot v2) ) )) / 2.0)
       }
       querySimilarProjectCosineById(func: uid(distance), orderasc: val(distance)) {
         ProjectCosine.id : ProjectCosine.id
@@ -3453,7 +3453,7 @@
     query querySimilarProjectCosineByEmbedding($search_vector:  float32vector = "[0.1,0.2,0.3,0.4,0.5]") {
       var(func: similar_to(ProjectCosine.description_v, 1, $search_vector)) @filter(type(ProjectCosine)) {
         v2 as ProjectCosine.description_v
-        distance as math(($search_vector dot v2) / (($search_vector dot $search_vector) * (v2 dot v2)))
+        distance as math((1.0 - ( (($search_vector) dot v2) / sqrt( (($search_vector) dot ($search_vector)) * (v2 dot v2) ) )) / 2.0)
       }
       querySimilarProjectCosineByEmbedding(func: uid(distance), orderasc: val(distance)) {
         ProjectCosine.id : ProjectCosine.id
@@ -3483,7 +3483,7 @@
       }
       var(func: similar_to(ProjectDotProduct.description_v, 3, val(v1))) {
         v2 as ProjectDotProduct.description_v
-        distance as math(v1 dot v2)
+        distance as math((1.0 - (v1 dot v2)) /2.0)
       }
       querySimilarProjectDotProductById(func: uid(distance), orderasc: val(distance)) {
         ProjectDotProduct.id : ProjectDotProduct.id
@@ -3508,7 +3508,7 @@
     query querySimilarProjectDotProductByEmbedding($search_vector:  float32vector = "[0.1,0.2,0.3,0.4,0.5]") {
       var(func: similar_to(ProjectDotProduct.description_v, 1, $search_vector)) @filter(type(ProjectDotProduct)) {
         v2 as ProjectDotProduct.description_v
-        distance as math($search_vector dot v2)
+        distance as math(( 1.0 - (($search_vector) dot v2)) /2.0)
       }
       querySimilarProjectDotProductByEmbedding(func: uid(distance), orderasc: val(distance)) {
         ProjectDotProduct.id : ProjectDotProduct.id
