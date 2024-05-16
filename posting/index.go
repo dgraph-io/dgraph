@@ -239,7 +239,7 @@ func (txn *Txn) addReverseMutationHelper(ctx context.Context, plist *List,
 	plist.Lock()
 	defer plist.Unlock()
 	if hasCountIndex {
-		countBefore, found, _ = plist.getPostingAndLength(txn.StartTs, 0, edge.ValueId)
+		countBefore, found, _ = plist.getPostingAndLengthNoSort(txn.StartTs, 0, edge.ValueId)
 		if countBefore == -1 {
 			return emptyCountParams, ErrTsTooOld
 		}
