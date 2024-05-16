@@ -349,7 +349,16 @@ func toType(attr string, update pb.TypeUpdate) *bpb.KV {
 
 func fieldToString(update *pb.SchemaUpdate) string {
 	var builder strings.Builder
-	predicate := x.ParseAttr(update.Predicate)
+	ps := strings.SplitN(update.Predicate, x.NsSeparator, 2)
+	predicate := ""
+	var err error
+	if len(ps) > 1 {
+		// This is not possible, but can happen by mistake
+		predicate = ps[1]
+	} else {
+		predicate, err = x.AttrFrom2103(update.Predicate)
+		x.Check(err)
+	}
 	x.Check2(builder.WriteString("\t"))
 	// We don't need the namespace information with the fields. We already have that with type.
 	if strings.HasPrefix(predicate, "~") {
