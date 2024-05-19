@@ -235,7 +235,7 @@ func (txn *Txn) addConflictKey(conflictKey uint64) {
 }
 
 // FillContext updates the given transaction context with data from this transaction.
-func (txn *Txn) FillContext(ctx *api.TxnContext, gid uint32) {
+func (txn *Txn) FillContext(ctx *api.TxnContext, gid uint32, isErrored bool) {
 	txn.Lock()
 	ctx.StartTs = txn.StartTs
 
@@ -249,7 +249,12 @@ func (txn *Txn) FillContext(ctx *api.TxnContext, gid uint32) {
 	ctx.Keys = x.Unique(ctx.Keys)
 
 	txn.Unlock()
-	txn.Update()
+	// If the trasnaction has errored out, we don't need to update it, as these values will never be read.
+	// Sometimes, the transaction might have failed due to timeout. If we let this trasnactino update, there
+	// could be deadlock with the running transaction.
+	if !isErrored {
+		txn.Update()
+	}
 	txn.cache.fillPreds(ctx, gid)
 }
 

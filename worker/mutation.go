@@ -642,9 +642,9 @@ func Timestamps(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error) {
 	return c.Timestamps(ctx, num)
 }
 
-func fillTxnContext(tctx *api.TxnContext, startTs uint64) {
+func fillTxnContext(tctx *api.TxnContext, startTs uint64, isErrored bool) {
 	if txn := posting.Oracle().GetTxn(startTs); txn != nil {
-		txn.FillContext(tctx, groups().groupId())
+		txn.FillContext(tctx, groups().groupId(), isErrored)
 	}
 	// We do not need to fill linread mechanism anymore, because transaction
 	// start ts is sufficient to wait for, to achieve lin reads.
@@ -950,7 +950,8 @@ func (w *grpcWorker) proposeAndWait(ctx context.Context, txnCtx *api.TxnContext,
 
 	node := groups().Node
 	err := node.proposeAndWait(ctx, &pb.Proposal{Mutations: m})
-	fillTxnContext(txnCtx, m.StartTs)
+	// When we are filling txn context, we don't need to update latest delta if the transaction has failed.
+	fillTxnContext(txnCtx, m.StartTs, err != nil)
 	return err
 }
 

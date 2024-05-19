@@ -549,12 +549,19 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 			errCh <- process(m.Edges[start:end])
 		}(start, end)
 	}
+	// Earlier we were returning after even if one thread had an error. We should wait for
+	// all the transactions to finish. We call txn.Update() when this function exists. This could cause
+	// a deadlock with runMutation.
+	var errs error
 	for i := 0; i < numGo; i++ {
 		if err := <-errCh; err != nil {
-			return err
+			if errs == nil {
+				errs = errors.New("Got error while running mutation")
+			}
+			errs = errors.Wrapf(err, errs.Error())
 		}
 	}
-	return nil
+	return errs
 }
 
 func (n *node) applyCommitted(proposal *pb.Proposal, key uint64) error {
@@ -839,7 +846,10 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 		if txn == nil {
 			return
 		}
-		txn.Update()
+		// If the transaction has failed, we dont need to update it.
+		if commit != 0 {
+			txn.Update()
+		}
 		// We start with 20 ms, so that we end up waiting 5 mins by the end.
 		// If there is any transient issue, it should get fixed within that timeframe.
 		err := x.ExponentialRetry(int(x.Config.MaxRetries),

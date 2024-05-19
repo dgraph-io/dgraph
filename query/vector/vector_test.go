@@ -29,6 +29,7 @@ import (
 
 	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/dgraphtest"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
 )
 
@@ -430,6 +431,48 @@ func TestVectorsMutateFixedLengthWithDiffrentIndexes(t *testing.T) {
 	setSchema(fmt.Sprintf(vectorSchemaWithIndex, "vtest", "4", "dot_product"))
 	testVectorMutationSameLength(t)
 	dropPredicate("vtest")
+}
+
+func TestVectorDeadlockwithTimeout(t *testing.T) {
+	pred := "vtest1"
+	dc = dgraphtest.NewComposeCluster()
+	var cleanup func()
+	client, cleanup, err := dc.Client()
+	x.Panic(err)
+	defer cleanup()
+
+	for i := 0; i < 5; i++ {
+		fmt.Println("Testing iteration: ", i)
+		ctx, cancel2 := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel2()
+		err = client.LoginIntoNamespace(ctx, dgraphtest.DefaultUser,
+			dgraphtest.DefaultPassword, x.GalaxyNamespace)
+		require.NoError(t, err)
+
+		err = client.Alter(context.Background(), &api.Operation{
+			DropAttr: pred,
+		})
+		dropPredicate(pred)
+		setSchema(fmt.Sprintf(vectorSchemaWithIndex, pred, "4", "euclidian"))
+		numVectors := 1000
+		vectorSize := 10
+
+		randomVectors, _ := generateRandomVectors(numVectors, vectorSize, pred)
+
+		txn := client.NewTxn()
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer func() { _ = txn.Discard(ctx) }()
+		defer cancel()
+
+		_, err = txn.Mutate(ctx, &api.Mutation{
+			SetNquads: []byte(randomVectors),
+			CommitNow: true,
+		})
+		require.Error(t, err)
+
+		err = txn.Commit(ctx)
+		require.Contains(t, err.Error(), "Transaction has already been committed or discarded")
+	}
 }
 
 func TestVectorMutateDiffrentLengthWithDiffrentIndexes(t *testing.T) {
