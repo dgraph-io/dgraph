@@ -679,11 +679,6 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) e
 
 	// mposts is the list of mutable postings
 	deleteBelowTs, mposts := l.pickPostings(readTs)
-	return l.iterateInternal(readTs, afterUid, f, deleteBelowTs, mposts)
-}
-
-func (l *List) iterateInternal(readTs uint64, afterUid uint64, f func(obj *pb.Posting) error, deleteBelowTs uint64,
-	mposts []*pb.Posting) error {
 	if readTs < l.minTs {
 		return errors.Errorf("readTs: %d less than minTs: %d for key: %q", readTs, l.minTs, l.key)
 	}
@@ -818,18 +813,18 @@ func (l *List) getPostingAndLengthNoSort(readTs, afterUid, uid uint64) (int, boo
 	dec := codec.Decoder{Pack: l.plist.Pack}
 	uids := dec.Seek(uid, codec.SeekStart)
 	length := codec.ExactLen(l.plist.Pack)
-	found1 := len(uids) > 0 && uids[0] == uid
+	found := len(uids) > 0 && uids[0] == uid
 
 	for _, plist := range l.mutationMap {
 		for _, mpost := range plist.Postings {
 			if (mpost.CommitTs > 0 && mpost.CommitTs <= readTs) || (mpost.StartTs == readTs) {
 				if hasDeleteAll(mpost) {
-					found1 = false
+					found = false
 					length = 0
 					continue
 				}
 				if mpost.Uid == uid {
-					found1 = (mpost.Op == Set)
+					found = (mpost.Op == Set)
 				}
 				if mpost.Op == Set {
 					length += 1
@@ -841,7 +836,7 @@ func (l *List) getPostingAndLengthNoSort(readTs, afterUid, uid uint64) (int, boo
 		}
 	}
 
-	return length, found1, nil
+	return length, found, nil
 }
 
 func (l *List) getPostingAndLength(readTs, afterUid, uid uint64) (int, bool, *pb.Posting) {
@@ -875,38 +870,6 @@ func (l *List) length(readTs, afterUid uint64) int {
 		return -1
 	}
 	return count
-}
-
-func (l *List) getPostingAndLengthNoSort(readTs, afterUid, uid uint64) (int, bool, *pb.Posting) {
-	l.AssertRLock()
-
-	dec := codec.Decoder{Pack: l.plist.Pack}
-	uids := dec.Seek(uid, codec.SeekStart)
-	length := codec.ExactLen(l.plist.Pack)
-	found1 := len(uids) > 0 && uids[0] == uid
-
-	for _, plist := range l.mutationMap {
-		for _, mpost := range plist.Postings {
-			if (mpost.CommitTs > 0 && mpost.CommitTs <= readTs) || (mpost.StartTs == readTs) {
-				if hasDeleteAll(mpost) {
-					found1 = false
-					length = 0
-					continue
-				}
-				if mpost.Uid == uid {
-					found1 = (mpost.Op == Set)
-				}
-				if mpost.Op == Set {
-					length += 1
-				} else {
-					length -= 1
-				}
-
-			}
-		}
-	}
-
-	return length, found1, nil
 }
 
 // Length iterates over the mutation layer and counts number of elements.

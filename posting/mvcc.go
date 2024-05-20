@@ -58,12 +58,16 @@ type incrRollupi struct {
 	closer   *z.Closer
 }
 
+type CachePL struct {
+	count      int
+	list       *List
+	lastUpdate uint64
+}
+
 type GlobalCache struct {
 	sync.RWMutex
 
-	count      map[string]int
-	list       map[string]*List
-	lastUpdate map[string]uint64
+	items map[string]*CachePL
 }
 
 var (
@@ -80,11 +84,7 @@ var (
 		priorityKeys: make([]*pooledKeys, 2),
 	}
 
-	globalCache = &GlobalCache{
-		count:      make(map[string]int),
-		list:       make(map[string]*List),
-		lastUpdate: make(map[string]uint64),
-	}
+	globalCache = &GlobalCache{items: make(map[string]*CachePL)}
 )
 
 func init() {
@@ -338,9 +338,7 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 
 func ResetCache() {
 	globalCache.Lock()
-	globalCache.count = make(map[string]int)
-	globalCache.list = make(map[string]*List)
-	globalCache.lastUpdate = make(map[string]uint64)
+	globalCache.items = make(map[string]*CachePL)
 	globalCache.Unlock()
 	lCache.Clear()
 }
@@ -353,34 +351,38 @@ func (txn *Txn) UpdateCachedKeys(commitTs uint64) {
 
 	for key, delta := range txn.cache.deltas {
 		pk, _ := x.Parse([]byte(key))
-		if pk.IsData() {
+		if !ShouldGoInCache(pk) {
 			continue
 		}
 		globalCache.Lock()
+		val, ok := globalCache.items[key]
+		if !ok {
+			val = &CachePL{
+				count:      0,
+				list:       nil,
+				lastUpdate: commitTs,
+			}
+			globalCache.items[key] = val
+		}
 		if commitTs != 0 {
 			// TODO Delete this if the values are too old in an async thread
-			globalCache.lastUpdate[key] = commitTs
+			val.lastUpdate = commitTs
 		}
-		val, ok := globalCache.count[key]
 		if !ok {
 			globalCache.Unlock()
 			continue
 		}
-		globalCache.count[key] = val - 1
-		if val == 1 {
-			delete(globalCache.count, key)
-			delete(globalCache.list, key)
+		val.count -= 1
+		if val.count == 1 {
+			val.list = nil
 			globalCache.Unlock()
 			continue
 		}
 
-		if commitTs != 0 {
-			pl, ok := globalCache.list[key]
-			if ok {
-				p := new(pb.PostingList)
-				x.Check(p.Unmarshal(delta))
-				pl.setMutationAfterCommit(txn.StartTs, commitTs, delta)
-			}
+		if commitTs != 0 && val.list != nil {
+			p := new(pb.PostingList)
+			x.Check(p.Unmarshal(delta))
+			val.list.setMutationAfterCommit(txn.StartTs, commitTs, delta)
 		}
 		globalCache.Unlock()
 	}
@@ -518,28 +520,50 @@ func copyList(l *List) *List {
 	return lCopy
 }
 
+func (c *CachePL) Set(l *List, readTs uint64) {
+	if c.lastUpdate < readTs && (c.list == nil || c.list.maxTs < l.maxTs) {
+		c.list = l
+	}
+}
+
+func ShouldGoInCache(pk x.ParsedKey) bool {
+	return !pk.IsData()
+}
+
 func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 	if pstore.IsClosed() {
 		return nil, badger.ErrDBClosed
 	}
 
 	pk, _ := x.Parse(key)
-	globalCache.Lock()
-	globalCache.count[string(key)]++
 
-	// We use badger subscription to invalidate the cache. For every write we make the value
-	// corresponding to the key in the cache to nil. So, if we get some non-nil value from the cache
-	// then it means that no  writes have happened after the last set of this key in the cache.
-	if l, ok := globalCache.list[string(key)]; ok {
-		if l != nil && l.minTs <= readTs {
-			l.RLock()
-			lCopy := copyList(l)
-			l.RUnlock()
-			globalCache.Unlock()
-			return lCopy, nil
+	if ShouldGoInCache(pk) {
+		globalCache.Lock()
+		cacheItem, ok := globalCache.items[string(key)]
+		if !ok {
+			cacheItem = &CachePL{
+				count:      0,
+				list:       nil,
+				lastUpdate: 0,
+			}
+			globalCache.items[string(key)] = cacheItem
 		}
+		cacheItem.count += 1
+
+		// We use badger subscription to invalidate the cache. For every write we make the value
+		// corresponding to the key in the cache to nil. So, if we get some non-nil value from the cache
+		// then it means that no  writes have happened after the last set of this key in the cache.
+		if ok {
+			if cacheItem.list != nil && cacheItem.list.minTs <= readTs {
+				cacheItem.list.RLock()
+				lCopy := copyList(cacheItem.list)
+				cacheItem.list.RUnlock()
+				globalCache.Unlock()
+				return lCopy, nil
+			}
+		}
+		globalCache.Unlock()
 	}
-	globalCache.Unlock()
 
 	txn := pstore.NewTransactionAt(readTs, false)
 	defer txn.Discard()
@@ -560,14 +584,19 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 	// Only set l to the cache if readTs >= latestTs, which implies that l is
 	// the latest version of the PL. We also check that we're reading a version
 	// from Badger, which is higher than the write registered by the cache.
-	if !pk.IsData() && readTs >= l.maxTs {
+	if ShouldGoInCache(pk) {
 		globalCache.Lock()
 		l.RLock()
-		cacheList, ok := globalCache.list[string(key)]
-		if !ok || (ok && cacheList.maxTs < l.maxTs) {
-			if lastUpdateTs, k := globalCache.lastUpdate[string(key)]; !k || (k && lastUpdateTs < readTs) {
-				globalCache.list[string(key)] = copyList(l)
+		cacheItem, ok := globalCache.items[string(key)]
+		if !ok {
+			cacheItemNew := &CachePL{
+				count:      1,
+				list:       copyList(l),
+				lastUpdate: l.maxTs,
 			}
+			globalCache.items[string(key)] = cacheItemNew
+		} else {
+			cacheItem.Set(copyList(l), readTs)
 		}
 		l.RUnlock()
 		globalCache.Unlock()
