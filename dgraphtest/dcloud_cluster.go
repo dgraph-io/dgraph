@@ -167,3 +167,11 @@ func (c *DCloudCluster) GetVersion() string {
 func (c *DCloudCluster) GetRepoDir() (string, error) {
 	return "", errNotImplemented
 }
+
+func (c *DCloudCluster) AlphasLogs() ([]string, error) {
+	return nil, errNotImplemented
+}
+
+func (c *DCloudCluster) GetEncKeyPath() (string, error) {
+	return "", errNotImplemented
+}

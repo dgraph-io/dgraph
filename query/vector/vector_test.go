@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgo/v230/protos/api"
+	"github.com/dgraph-io/dgraph/dgraphapi"
 	"github.com/dgraph-io/dgraph/dgraphtest"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
@@ -41,8 +42,8 @@ const (
 	vectorSchemaWithoutIndex = `%v: float32vector .`
 )
 
-var client *dgraphtest.GrpcClient
-var dc dgraphtest.Cluster
+var client *dgraphapi.GrpcClient
+var dc dgraphapi.Cluster
 
 func setSchema(schema string) {
 	var err error
@@ -445,8 +446,8 @@ func TestVectorDeadlockwithTimeout(t *testing.T) {
 		fmt.Println("Testing iteration: ", i)
 		ctx, cancel2 := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel2()
-		err = client.LoginIntoNamespace(ctx, dgraphtest.DefaultUser,
-			dgraphtest.DefaultPassword, x.GalaxyNamespace)
+		err = client.LoginIntoNamespace(ctx, dgraphapi.DefaultUser,
+			dgraphapi.DefaultPassword, x.GalaxyNamespace)
 		require.NoError(t, err)
 
 		err = client.Alter(context.Background(), &api.Operation{
