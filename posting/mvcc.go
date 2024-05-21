@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -84,7 +85,7 @@ var (
 		priorityKeys: make([]*pooledKeys, 2),
 	}
 
-	globalCache = &GlobalCache{items: make(map[string]*CachePL)}
+	globalCache = &GlobalCache{items: make(map[string]*CachePL, 100)}
 )
 
 func init() {
@@ -132,6 +133,12 @@ func (ir *incrRollupi) rollUpKey(writer *TxnWriter, key []byte) error {
 		return err
 	}
 
+	globalCache.Lock()
+	val, ok := globalCache.items[string(key)]
+	if ok {
+		val.list = nil
+	}
+	globalCache.Unlock()
 	// TODO Update cache with rolled up results
 	// If we do a rollup, we typically won't need to update the key in cache.
 	// The only caveat is that the key written by rollup would be written at +1
@@ -372,12 +379,8 @@ func (txn *Txn) UpdateCachedKeys(commitTs uint64) {
 			globalCache.Unlock()
 			continue
 		}
+
 		val.count -= 1
-		if val.count == 1 {
-			val.list = nil
-			globalCache.Unlock()
-			continue
-		}
 
 		if commitTs != 0 && val.list != nil {
 			p := new(pb.PostingList)
@@ -527,7 +530,7 @@ func (c *CachePL) Set(l *List, readTs uint64) {
 }
 
 func ShouldGoInCache(pk x.ParsedKey) bool {
-	return !pk.IsData()
+	return !pk.IsData() && strings.HasSuffix(pk.Attr, "dgraph.type")
 }
 
 func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
