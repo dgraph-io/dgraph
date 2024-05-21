@@ -196,7 +196,7 @@ func (ir *incrRollupi) Process(closer *z.Closer, getNewTs func(bool) uint64) {
 		for _, key := range *batch {
 			hash := z.MemHash(key)
 			if elem := m[hash]; currTs-elem >= 2 {
-				// Key not present or Key present but last roll up was more than 10 sec ago.
+				// Key not present or Key present but last roll up was more than 2 sec ago.
 				// Add/Update map and rollup.
 				m[hash] = currTs
 				if err := ir.rollUpKey(writer, key); err != nil {
@@ -350,6 +350,14 @@ func ResetCache() {
 	lCache.Clear()
 }
 
+func NewCachePL() *CachePL {
+	return &CachePL{
+		count:      0,
+		list:       nil,
+		lastUpdate: 0,
+	}
+}
+
 // RemoveCachedKeys will delete the cached list by this txn.
 func (txn *Txn) UpdateCachedKeys(commitTs uint64) {
 	if txn == nil || txn.cache == nil {
@@ -364,11 +372,8 @@ func (txn *Txn) UpdateCachedKeys(commitTs uint64) {
 		globalCache.Lock()
 		val, ok := globalCache.items[key]
 		if !ok {
-			val = &CachePL{
-				count:      0,
-				list:       nil,
-				lastUpdate: commitTs,
-			}
+			val = NewCachePL()
+			val.lastUpdate = commitTs
 			globalCache.items[key] = val
 		}
 		if commitTs != 0 {
@@ -544,11 +549,7 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 		globalCache.Lock()
 		cacheItem, ok := globalCache.items[string(key)]
 		if !ok {
-			cacheItem = &CachePL{
-				count:      0,
-				list:       nil,
-				lastUpdate: 0,
-			}
+			cacheItem = NewCachePL()
 			globalCache.items[string(key)] = cacheItem
 		}
 		cacheItem.count += 1
@@ -592,11 +593,10 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 		l.RLock()
 		cacheItem, ok := globalCache.items[string(key)]
 		if !ok {
-			cacheItemNew := &CachePL{
-				count:      1,
-				list:       copyList(l),
-				lastUpdate: l.maxTs,
-			}
+			cacheItemNew := NewCachePL()
+			cacheItemNew.count = 1
+			cacheItemNew.list = copyList(l)
+			cacheItemNew.lastUpdate = l.maxTs
 			globalCache.items[string(key)] = cacheItemNew
 		} else {
 			cacheItem.Set(copyList(l), readTs)
