@@ -19,6 +19,7 @@ package posting
 import (
 	"bytes"
 	"encoding/hex"
+	"fmt"
 	"strconv"
 	"strings"
 	"sync"
@@ -535,6 +536,7 @@ func (c *CachePL) Set(l *List, readTs uint64) {
 }
 
 func ShouldGoInCache(pk x.ParsedKey) bool {
+	fmt.Printf("SHOULD GO IN CACHE: %t, %s, %v\n", pk.IsData(), pk.Attr, pk)
 	return !pk.IsData() && strings.HasSuffix(pk.Attr, "dgraph.type")
 }
 
@@ -563,6 +565,7 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 				lCopy := copyList(cacheItem.list)
 				cacheItem.list.RUnlock()
 				globalCache.Unlock()
+				fmt.Println("Returning from cache")
 				return lCopy, nil
 			}
 		}
