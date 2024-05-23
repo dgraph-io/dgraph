@@ -89,6 +89,7 @@ jobs:
         run: |
           make docker-image DGRAPH_VERSION=${{ env.DGRAPH_RELEASE_VERSION }}-amd64
           [[ "${{ inputs.latest }}" = true ]] && docker tag dgraph/dgraph:${{ env.DGRAPH_RELEASE_VERSION }}-amd64 dgraph/dgraph:latest-amd64 || true
+          [[ "${{ inputs.custom-build }}" = true ]] && docker tag dgraph/dgraph-custom:${{ env.DGRAPH_RELEASE_VERSION }}-amd64  || true
       - name: Make Dgraph Standalone Docker Image with Version
         #No need to build and push Standalone Image when its a custom build
         if: ${{ inputs.custom-build == 'false' }}
@@ -183,6 +184,7 @@ jobs:
         run: |
           make docker-image DGRAPH_VERSION=${{ env.DGRAPH_RELEASE_VERSION }}-arm64
           [[ "${{ inputs.latest }}" = true ]] && docker tag dgraph/dgraph:${{ env.DGRAPH_RELEASE_VERSION }}-arm64 dgraph/dgraph:latest-arm64 || true
+          [[ "${{ inputs.custom-build }}" = true ]] && docker tag dgraph/dgraph-custom:${{ env.DGRAPH_RELEASE_VERSION }}-arm64  || true
       - name: Make Dgraph Standalone Docker Image with Version
          #No need to build and push Standalone Image when its a custom build
         if: ${{ inputs.custom-build == 'false' }}
