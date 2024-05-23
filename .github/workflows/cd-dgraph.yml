@@ -231,18 +231,22 @@ jobs:
           password: ${{ secrets.DOCKERHUB_PASSWORD_TOKEN }}
       - name: Docker Manifest
         run: |
-          if [ "${{ inputs.custom-build }}" = "true" ]; then
-            docker manifest create dgraph/dgraph-custom:${{ env.DGRAPH_RELEASE_VERSION }} --amend dgraph/dgraph-custom:${{ env.DGRAPH_RELEASE_VERSION }}-amd64 --amend dgraph/dgraph-custom:${{ env.DGRAPH_RELEASE_VERSION }}-arm64
-            docker manifest push dgraph/dgraph-custom:${{ env.DGRAPH_RELEASE_VERSION }}
+            if [ "${{ github.event.inputs.custom-build }}" = "true" ]; then
+               docker manifest create dgraph/dgraph-custom:${{ env.DGRAPH_RELEASE_VERSION }} --amend dgraph/dgraph-custom:${{ env.DGRAPH_RELEASE_VERSION }}-amd64 --amend dgraph/dgraph-custom:${{ env.DGRAPH_RELEASE_VERSION }}-arm64
+               docker manifest push dgraph/dgraph-custom:${{ env.DGRAPH_RELEASE_VERSION }}
           else
             # standalone
-            docker manifest create dgraph/standalone:${{ env.DGRAPH_RELEASE_VERSION }} --amend dgraph/standalone:${{ env.DGRAPH_RELEASE_VERSION }}-amd64 --amend dgraph/standalone:${{ env.DGRAPH_RELEASE_VERSION }}-arm64
+            docker manifest create dgraph/standalone:${{ env.DGRAPH_RELEASE_VERSION }} --amend dgraph/standalone:${{ env.DGRAPH_RELEASE_VERSION }}-amd64 --amend dgraph/standalone:${{ env.DGRAPH_RELEASE_VERSION }}-arm64      
             docker manifest push dgraph/standalone:${{ env.DGRAPH_RELEASE_VERSION }}
-            [[ "${{ inputs.latest }}" = true ]] && docker manifest create dgraph/standalone:latest --amend dgraph/standalone:${{ env.DGRAPH_RELEASE_VERSION }}-amd64 --amend dgraph/standalone:${{ env.DGRAPH_RELEASE_VERSION }}-arm64
-            [[ "${{ inputs.latest }}" = true ]] && docker manifest push dgraph/standalone:latest || true
+            if [ "${{ github.event.inputs.latest }}" = "true" ]; then
+              docker manifest create dgraph/standalone:latest --amend dgraph/standalone:${{ env.DGRAPH_RELEASE_VERSION }}-amd64 --amend dgraph/standalone:${{ env.DGRAPH_RELEASE_VERSION }}-arm64
+              docker manifest push dgraph/standalone:latest
+            fi
             # dgraph
             docker manifest create dgraph/dgraph:${{ env.DGRAPH_RELEASE_VERSION }} --amend dgraph/dgraph:${{ env.DGRAPH_RELEASE_VERSION }}-amd64 --amend dgraph/dgraph:${{ env.DGRAPH_RELEASE_VERSION }}-arm64
             docker manifest push dgraph/dgraph:${{ env.DGRAPH_RELEASE_VERSION }}
-            [[ "${{ inputs.latest }}" = true ]] && docker manifest create dgraph/dgraph:latest --amend dgraph/dgraph:${{ env.DGRAPH_RELEASE_VERSION }}-amd64 --amend dgraph/dgraph:${{ env.DGRAPH_RELEASE_VERSION }}-arm64 || true
-            [[ "${{ inputs.latest }}" = true ]] && docker manifest push dgraph/dgraph:latest || true
-        fi 
+            if [ "${{ github.event.inputs.latest }}" = "true" ]; then
+              docker manifest create dgraph/dgraph:latest --amend dgraph/dgraph:${{ env.DGRAPH_RELEASE_VERSION }}-amd64 --amend dgraph/dgraph:${{ env.DGRAPH_RELEASE_VERSION }}-arm64
+              docker manifest push dgraph/dgraph:latest
+            fi
+          fi
