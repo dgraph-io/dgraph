@@ -49,10 +49,12 @@ func Init(ps *badger.DB, cacheSize int64) {
 	pstore = ps
 	closer = z.NewCloser(1)
 	go x.MonitorMemoryMetrics(closer)
+
 	// Initialize cache.
 	if cacheSize == 0 {
 		return
 	}
+
 	var err error
 	lCache, err = ristretto.NewCache(&ristretto.Config{
 		// Use 5% of cache memory for storing counters.
@@ -61,11 +63,7 @@ func Init(ps *badger.DB, cacheSize int64) {
 		BufferItems: 64,
 		Metrics:     true,
 		Cost: func(val interface{}) int64 {
-			l, ok := val.(*List)
-			if !ok {
-				return int64(0)
-			}
-			return int64(l.DeepSize())
+			return 0
 		},
 	})
 	x.Check(err)
@@ -101,7 +99,8 @@ func GetNoStore(key []byte, readTs uint64) (rlist *List, err error) {
 type LocalCache struct {
 	sync.RWMutex
 
-	startTs uint64
+	startTs  uint64
+	commitTs uint64
 
 	// The keys for these maps is a string representation of the Badger key for the posting list.
 	// deltas keep track of the updates made by txn. These must be kept around until written to disk
@@ -167,6 +166,12 @@ func NewLocalCache(startTs uint64) *LocalCache {
 // around.
 func NoCache(startTs uint64) *LocalCache {
 	return &LocalCache{startTs: startTs}
+}
+
+func (lc *LocalCache) UpdateCommitTs(commitTs uint64) {
+	lc.Lock()
+	defer lc.Unlock()
+	lc.commitTs = commitTs
 }
 
 func (lc *LocalCache) Find(pred []byte, filter func([]byte) bool) (uint64, error) {
@@ -339,6 +344,8 @@ func (lc *LocalCache) UpdateDeltasAndDiscardLists() {
 	}
 
 	for key, pl := range lc.plists {
+		//pk, _ := x.Parse([]byte(key))
+		//fmt.Printf("{TXN} Closing %v\n", pk)
 		data := pl.getMutation(lc.startTs)
 		if len(data) > 0 {
 			lc.deltas[key] = data
