@@ -250,3 +250,4 @@ jobs:
               docker manifest push dgraph/dgraph:latest
             fi
           fi
+
