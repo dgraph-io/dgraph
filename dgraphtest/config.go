@@ -74,9 +74,8 @@ func AllUpgradeCombos(v20 bool) []UpgradeCombo {
 	// In mainCombos list, we keep latest version to current HEAD as well as
 	// older versions of dgraph to ensure that a change does not cause failures.
 	mainCombos := []UpgradeCombo{
-		{"v23.0.1", localVersion, BackupRestore},
-		{"v23.0.1", localVersion, InPlace},
-		{"v21.03.0", "4fc9cfd", BackupRestore},
+		{"v23.1.0", localVersion, BackupRestore},
+		{"v23.1.0", localVersion, InPlace},
 	}
 
 	if v20 {
