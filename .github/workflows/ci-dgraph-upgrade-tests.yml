@@ -10,7 +10,7 @@ on:
       - main
       - 'release/**'
   schedule:
-    - cron: "0 11 * * *" # 1 run per day
+    - cron: "15 20 * * *" # 1 run per day
 jobs:
   dgraph-upgrade-tests:
     if: github.event.pull_request.draft == false

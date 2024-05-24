@@ -1,7 +1,7 @@
 name: ci-dgraph-upgrade-fixed-versions-tests
 on:
   schedule:
-    - cron: "0 11 * * *" # 1 run per day
+    - cron: "15 20 * * *" # 1 run per day
 jobs:
   dgraph-upgrade-fixed-versions-tests:
     runs-on: warp-ubuntu-latest-x64-16x 
