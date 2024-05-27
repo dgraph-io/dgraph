@@ -42,6 +42,7 @@ const (
 	alphaHttp = "http_port"
 	dgUser    = "dgUser"
 	password  = "password"
+	namespace = "namespace"
 )
 
 type commandInput struct {
@@ -49,6 +50,7 @@ type commandInput struct {
 	alphaHttp string
 	dgUser    string
 	password  string
+	namespace uint64
 }
 
 type aclNode struct {
@@ -79,57 +81,44 @@ func contains(slice []string, value string) bool {
 	return false
 }
 
-func findDuplicateNodes(aclNodes []aclNode) []map[string][]string {
+func findDuplicateNodes(aclNodes []aclNode) [3]map[string][]string {
 	du := make(map[string][]string)
 	dg := make(map[string][]string)
 	dug := make(map[string][]string)
-
-	var duplicates []map[string][]string
 
 	for i, node1 := range aclNodes {
 		for j := i + 1; j < len(aclNodes); j++ {
 			node2 := aclNodes[j]
 			if node1.DgraphXID == node2.DgraphXID {
 				if node1.DgraphType[0] == "dgraph.type.User" && node1.DgraphType[0] == node2.DgraphType[0] {
-					if _, exists := du[node1.DgraphXID]; !exists {
-						du[node1.DgraphXID] = []string{}
-					}
-					if !contains(du[node1.DgraphXID], node1.UID) {
-						du[node1.DgraphXID] = append(du[node1.DgraphXID], node1.UID)
-					}
-					if !contains(du[node1.DgraphXID], node2.UID) {
-						du[node1.DgraphXID] = append(du[node1.DgraphXID], node2.UID)
-					}
+					filterAndRecordDuplicates(du, node1, node2)
 				} else if node1.DgraphType[0] == "dgraph.type.Group" && node1.DgraphType[0] == node2.DgraphType[0] {
-					if _, exists := dg[node1.DgraphXID]; !exists {
-						dg[node1.DgraphXID] = []string{}
-					}
-					if !contains(dg[node1.DgraphXID], node1.UID) {
-						dg[node1.DgraphXID] = append(dg[node1.DgraphXID], node1.UID)
-					}
-					if !contains(dg[node1.DgraphXID], node2.UID) {
-						dg[node1.DgraphXID] = append(dg[node1.DgraphXID], node2.UID)
-					}
+					filterAndRecordDuplicates(dg, node1, node2)
 				} else {
-					if _, exists := dug[node1.DgraphXID]; !exists {
-						dug[node1.DgraphXID] = []string{}
-					}
-					if !contains(dug[node1.DgraphXID], node1.UID) {
-						dug[node1.DgraphXID] = append(dug[node1.DgraphXID], node1.UID)
-					}
-					if !contains(dug[node1.DgraphXID], node2.UID) {
-						dug[node1.DgraphXID] = append(dug[node1.DgraphXID], node2.UID)
-					}
+					filterAndRecordDuplicates(dug, node1, node2)
 				}
 			}
 		}
 	}
 
-	duplicates = append(duplicates, du, dg, dug)
-	return duplicates
+	return [3]map[string][]string{
+		du, dg, dug,
+	}
 }
 
-func queryACLNodes(ctx context.Context, dg *dgo.Dgraph) ([]map[string][]string, error) {
+func filterAndRecordDuplicates(du map[string][]string, node1 aclNode, node2 aclNode) {
+	if _, exists := du[node1.DgraphXID]; !exists {
+		du[node1.DgraphXID] = []string{}
+	}
+	if !contains(du[node1.DgraphXID], node1.UID) {
+		du[node1.DgraphXID] = append(du[node1.DgraphXID], node1.UID)
+	}
+	if !contains(du[node1.DgraphXID], node2.UID) {
+		du[node1.DgraphXID] = append(du[node1.DgraphXID], node2.UID)
+	}
+}
+
+func queryDuplicateNodes(ctx context.Context, dg *dgo.Dgraph) ([3]map[string][]string, error) {
 	query := `{ 
 		nodes(func: has(dgraph.xid)) {
 			       uid
@@ -140,7 +129,7 @@ func queryACLNodes(ctx context.Context, dg *dgo.Dgraph) ([]map[string][]string, 
 
 	resp, err := dg.NewTxn().Query(ctx, query)
 	if err != nil {
-		return nil, errors.Wrapf(err, "while querying dgraph for duplicate nodes")
+		return [3]map[string][]string{}, errors.Wrapf(err, "while querying dgraph for duplicate nodes")
 	}
 
 	type Nodes struct {
@@ -148,7 +137,7 @@ func queryACLNodes(ctx context.Context, dg *dgo.Dgraph) ([]map[string][]string, 
 	}
 	var result Nodes
 	if err := json.Unmarshal(resp.Json, &result); err != nil {
-		return nil, errors.Wrapf(err, "while unmarshalling response: %v", string(resp.Json))
+		return [3]map[string][]string{}, errors.Wrapf(err, "while unmarshalling response: %v", string(resp.Json))
 
 	}
 	return findDuplicateNodes(result.Nodes), nil
@@ -180,8 +169,9 @@ func init() {
 	flag := CheckUpgrade.Cmd.Flags()
 	flag.String(alphaGrpc, "127.0.0.1:9080", "Dgraph Alpha gRPC server address")
 	flag.String(alphaHttp, "127.0.0.1:8080", "Dgraph Alpha Http server address")
-	flag.String(dgUser, "groot", "Username of galaxy namespace's user")
-	flag.String(password, "password", "Password of galaxy namespace's user")
+	flag.String(namespace, "0", "Namespace to check for duplicate nodes")
+	flag.String(dgUser, "groot", "Username of the namespace's user")
+	flag.String(password, "password", "Password of the namespace's user")
 }
 
 func run() {
@@ -199,37 +189,30 @@ func checkUpgrade() error {
 		return errors.Wrapf(err, "while setting up clients")
 	}
 
-	if err = hc.LoginIntoNamespace(cmdInput.dgUser, cmdInput.password, x.GalaxyNamespace); err != nil {
+	if err = hc.LoginIntoNamespace(cmdInput.dgUser, cmdInput.password, cmdInput.namespace); err != nil {
 		return errors.Wrapf(err, "while logging into namespace: %v", x.GalaxyNamespace)
 	}
 
-	namespaces, err := hc.ListNamespaces()
+	ctx := context.Background()
+	if err := gc.LoginIntoNamespace(ctx, cmdInput.dgUser, cmdInput.password, cmdInput.namespace); err != nil {
+		return errors.Wrapf(err, "while logging into namespace: %v", cmdInput.namespace)
+	}
+
+	duplicates, err := queryDuplicateNodes(ctx, gc)
 	if err != nil {
 		return err
 	}
 
-	ctx := context.Background()
-	for _, ns := range namespaces {
-		if err := gc.LoginIntoNamespace(ctx, cmdInput.dgUser, cmdInput.password, ns); err != nil {
-			return errors.Wrapf(err, "while logging into namespace: %v", ns)
-		}
-
-		duplicates, err := queryACLNodes(ctx, gc)
-		if err != nil {
-			return err
-		}
-
-		printDuplicates("user", ns, duplicates[0])
-		// example output:
-		//	Found duplicate users in namespace: #0
-		// dgraph.xid user1 , Uids: [0x4 0x3]
-		printDuplicates("group", ns, duplicates[1])
-		// Found duplicate groups in namespace: #1
-		// dgraph.xid group1 , Uids: [0x2714 0x2711]
-		printDuplicates("groups and user", ns, duplicates[2])
-		// Found duplicate groups and users in namespace: #0
-		// dgraph.xid userGroup1 , Uids: [0x7532 0x7531]
-	}
+	printDuplicates("user", cmdInput.namespace, duplicates[0])
+	// example output:
+	//	Found duplicate users in namespace: #0
+	// dgraph.xid user1 , Uids: [0x4 0x3]
+	printDuplicates("group", cmdInput.namespace, duplicates[1])
+	// Found duplicate groups in namespace: #1
+	// dgraph.xid group1 , Uids: [0x2714 0x2711]
+	printDuplicates("groups and user", cmdInput.namespace, duplicates[2])
+	// Found duplicate groups and users in namespace: #0
+	// dgraph.xid userGroup1 , Uids: [0x7532 0x7531]
 
 	fmt.Println("To delete duplicate nodes use following mutation: ")
 	deleteMut := `
@@ -246,5 +229,5 @@ func checkUpgrade() error {
 func parseInput() *commandInput {
 	return &commandInput{alphaGrpc: CheckUpgrade.Conf.GetString(alphaGrpc),
 		alphaHttp: CheckUpgrade.Conf.GetString(alphaHttp), dgUser: CheckUpgrade.Conf.GetString(dgUser),
-		password: CheckUpgrade.Conf.GetString(password)}
+		password: CheckUpgrade.Conf.GetString(password), namespace: CheckUpgrade.Conf.GetUint64(namespace)}
 }

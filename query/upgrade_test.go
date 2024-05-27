@@ -31,7 +31,7 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	mutate := func(c dgraphtest.Cluster) {
+	mutate := func(c dgraphapi.Cluster) {
 		dg, cleanup, err := c.Client()
 		x.Panic(err)
 		defer cleanup()
@@ -43,7 +43,7 @@ func TestMain(m *testing.M) {
 		populateCluster(dc)
 	}
 
-	query := func(c dgraphtest.Cluster) int {
+	query := func(c dgraphapi.Cluster) int {
 		dg, cleanup, err := c.Client()
 		x.Panic(err)
 		defer cleanup()
