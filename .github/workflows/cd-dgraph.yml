@@ -103,7 +103,7 @@ jobs:
           password: ${{ secrets.DOCKERHUB_PASSWORD_TOKEN }}
       - name: Push Images to DockerHub
         run: |
-          if [ "${{ inputs.custom-build }}" = "true" ]; then
+          if [ "${{ inputs.custom-build }}" == "true" ]; then
             docker push dgraph/dgraph-custom:${{ env.DGRAPH_RELEASE_VERSION }}-amd64
           else
             docker push dgraph/standalone:${{ env.DGRAPH_RELEASE_VERSION }}-amd64
