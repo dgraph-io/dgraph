@@ -264,6 +264,14 @@ type Speaker {
 	language
 }
 
+type User {
+	name
+	password
+	gender
+	friend
+	alive
+}
+
 name                           : string @index(term, exact, trigram) @count @lang .
 name_lang                      : string @lang .
 lang_type                      : string @index(exact) .
@@ -337,7 +345,6 @@ tweet-c                        : string @index(fulltext) .
 tweet-d                        : string @index(trigram) .
 name2                          : string @index(term)  .
 age2                           : int @index(int) .
-vectorNonIndex                 : float32vector .
 `
 
 func populateCluster(dc dgraphtest.Cluster) {
@@ -348,32 +355,30 @@ func populateCluster(dc dgraphtest.Cluster) {
 	// all the UIDs we are using during the tests.
 	x.Panic(dc.AssignUids(client.Dgraph, 65536))
 
-	higher, err := dgraphtest.IsHigherVersion(dc.GetVersion(), "160a0faa5fc6233fdc5a4caa4a7a3d1591f460d0")
-	x.Panic(err)
-	var ts string
-	if higher {
-		ts = testSchema + `type User {
-			name
-			password
-			gender
-			friend
-			alive
-			user_profile
-		}
-		user_profile                   : float32vector @index(hnsw(metric:"euclidian")) .`
-	} else {
-		ts = testSchema + `type User {
-			name
-			password
-			gender
-			friend
-			alive
-		}`
-	}
-	setSchema(ts)
-	err = addTriplesToCluster(`
-                <1> <vectorNonIndex> "[1.0, 1.0, 2.0, 2.0]" .
-                <2> <vectorNonIndex> "[2.0, 1.0, 2.0, 2.0]" .
+	// higher, err := dgraphtest.IsHigherVersion(dc.GetVersion(), "160a0faa5fc6233fdc5a4caa4a7a3d1591f460d0")
+	// x.Panic(err)
+	// var ts string
+	// if higher {
+	// 	ts = testSchema + `type User {
+	// 		name
+	// 		password
+	// 		gender
+	// 		friend
+	// 		alive
+	// 		user_profile
+	// 	}
+	// 	user_profile                   : float32vector @index(hnsw(metric:"euclidian")) .`
+	// } else {
+	// 	ts = testSchema + `type User {
+	// 		name
+	// 		password
+	// 		gender
+	// 		friend
+	// 		alive
+	// 	}`
+	// }
+	setSchema(testSchema)
+	err := addTriplesToCluster(`
 		<1> <name> "Michonne" .
 		<2> <name> "King Lear" .
 		<3> <name> "Margaret" .
