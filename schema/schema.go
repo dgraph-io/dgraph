@@ -830,10 +830,11 @@ func initialSchemaInternal(namespace uint64, all bool) []*pb.SchemaUpdate {
 	return initialSchema
 }
 
-// IsPreDefPredChanged returns true if the initial update for the pre-defined
-// predicate is different than the passed update.
-// If the passed update is not a pre-defined predicate then it just returns false.
-func IsPreDefPredChanged(update *pb.SchemaUpdate) bool {
+// CheckAndModifyPreDefPredicate returns true if the initial update for the pre-defined
+// predicate is different from the passed update. It may also modify certain predicates
+// under specific conditions.
+// If the passed update is not a pre-defined predicate, it returns false.
+func CheckAndModifyPreDefPredicate(update *pb.SchemaUpdate) bool {
 	// Return false for non-pre-defined predicates.
 	if !x.IsPreDefinedPredicate(update.Predicate) {
 		return false
@@ -862,10 +863,7 @@ func IsPreDefPredChanged(update *pb.SchemaUpdate) bool {
 // isDgraphXidChangeValid returns true if the change in the dgraph.xid predicate is valid.
 func isDgraphXidChangeValid(original, update *pb.SchemaUpdate) bool {
 	changed := compareSchemaUpdates(original, update)
-	if len(changed) == 1 && changed[0] == "Unique" {
-		return true
-	}
-	return false
+	return len(changed) == 1 && changed[0] == "Unique"
 }
 
 func compareSchemaUpdates(original, update *pb.SchemaUpdate) []string {

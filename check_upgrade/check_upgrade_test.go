@@ -1,4 +1,4 @@
-//go:build integration
+//go:build integration2
 
 /*
  * Copyright 2024 Dgraph Labs, Inc. and Contributors
