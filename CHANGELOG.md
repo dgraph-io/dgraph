@@ -9,9 +9,9 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
 
 > **Warning**
 > This will be a breaking change for anyone moving from to `v.24.0.0`.
-> If you have any duplicate users in Dgraph ACL, they would not be accessible from now on. Please delete any duplicate
-> users before you upgrade. File format is the same, so binary can be directly replaced after deleting duplicate
-> users.
+> If you have any duplicate users or groups in Dgraph ACL, they would not be accessible from now on. Please delete any 
+> duplicate users and groups before you upgrade. File format is the same, so binary can be directly replaced after.
+> deleting duplicate users and groups.
 
 ### Added
 
