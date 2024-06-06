@@ -68,11 +68,12 @@ type HttpToken struct {
 // HTTPClient allows doing operations on Dgraph over http
 type HTTPClient struct {
 	*HttpToken
-	adminURL   string
-	graphqlURL string
-	licenseURL string
-	stateURL   string
-	dqlURL     string
+	adminURL     string
+	graphqlURL   string
+	licenseURL   string
+	stateURL     string
+	dqlURL       string
+	dqlMutateUrl string
 }
 
 // GraphQLParams are used for making graphql requests to dgraph
@@ -701,6 +702,23 @@ func (hc *HTTPClient) PostDqlQuery(query string) ([]byte, error) {
 	return DoReq(req)
 }
 
+func (hc *HTTPClient) Mutate(mutation string, commitNow bool) ([]byte, error) {
+	url := hc.dqlMutateUrl
+	if commitNow {
+		url = hc.dqlMutateUrl + "?commitNow=true"
+	}
+
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBufferString(mutation))
+	if err != nil {
+		return nil, errors.Wrapf(err, "error building req for endpoint [%v]", url)
+	}
+	req.Header.Add("Content-Type", "application/rdf")
+	if hc.HttpToken != nil {
+		req.Header.Add("X-Dgraph-AccessToken", hc.AccessJwt)
+	}
+	return DoReq(req)
+}
+
 // SetupSchema sets up DQL schema
 func (gc *GrpcClient) SetupSchema(dbSchema string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
@@ -787,12 +805,14 @@ func GetHttpClient(alphaUrl, zeroUrl string) (*HTTPClient, error) {
 	licenseUrl := "http://" + zeroUrl + "/enterpriseLicense"
 	stateUrl := "http://" + zeroUrl + "/state"
 	dqlUrl := "http://" + alphaUrl + "/query"
+	dqlMutateUrl := "http://" + alphaUrl + "/mutate"
 	return &HTTPClient{
-		adminURL:   adminUrl,
-		graphqlURL: graphQLUrl,
-		licenseURL: licenseUrl,
-		stateURL:   stateUrl,
-		dqlURL:     dqlUrl,
-		HttpToken:  &HttpToken{},
+		adminURL:     adminUrl,
+		graphqlURL:   graphQLUrl,
+		licenseURL:   licenseUrl,
+		stateURL:     stateUrl,
+		dqlURL:       dqlUrl,
+		dqlMutateUrl: dqlMutateUrl,
+		HttpToken:    &HttpToken{},
 	}, nil
 }

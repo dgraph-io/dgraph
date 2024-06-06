@@ -21,6 +21,7 @@ import (
 	"crypto/ed25519"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"strings"
 	"time"
@@ -44,8 +45,8 @@ const (
 	namespace            = "namespace"
 	aclSecretKeyFilePath = "aclSecretKeyFilePath"
 	jwtAlg               = "jwt-alg"
-
-	guardianGroup = "guardians"
+	deleteDup            = "delete-duplicates"
+	guardianGroup        = "guardians"
 )
 
 type commandInput struct {
@@ -55,12 +56,26 @@ type commandInput struct {
 	namespace            uint64
 	aclSecretKeyFilePath string
 	jwtAlg               string
+	dupDelete            bool
 }
 
 type aclNode struct {
-	UID        string   `json:"uid"`
-	DgraphXID  string   `json:"dgraph.xid"`
-	DgraphType []string `json:"dgraph.type"`
+	UID             string      `json:"uid"`
+	DgraphXID       string      `json:"dgraph.xid"`
+	DgraphType      []string    `json:"dgraph.type"`
+	DgraphUserGroup []UserGroup `json:"dgraph.user.group"`
+}
+
+type UserGroup struct {
+	UID       string `json:"uid"`
+	DgraphXid string `json:"dgraph.xid"`
+}
+
+type Nodes struct {
+	Nodes []aclNode `json:"nodes"`
+}
+type Response struct {
+	Data Nodes `json:"data"`
 }
 
 func parseJWTKey(alg jwt.SigningMethod, key x.Sensitive) (interface{}, interface{}, error) {
@@ -145,6 +160,13 @@ func contains(slice []string, value string) bool {
 	return false
 }
 
+func remove(slice []int, index int) []int {
+	if index < 0 || index >= len(slice) {
+		return slice // Return the original slice if the index is out of bounds
+	}
+	return append(slice[:index], slice[index+1:]...)
+}
+
 func findDuplicateNodes(aclNodes []aclNode) [3]map[string][]string {
 	du := make(map[string][]string)
 	dg := make(map[string][]string)
@@ -192,18 +214,10 @@ func queryDuplicateNodes(hc *dgraphapi.HTTPClient) ([3]map[string][]string, erro
 	}`
 
 	resp, err := hc.PostDqlQuery(query)
-
-	fmt.Println("resp: ", string(resp))
 	if err != nil {
 		return [3]map[string][]string{}, errors.Wrapf(err, "while querying dgraph for duplicate nodes")
 	}
 
-	type Nodes struct {
-		Nodes []aclNode `json:"nodes"`
-	}
-	type Response struct {
-		Data Nodes `json:"data"`
-	}
 	var result Response
 	if err := json.Unmarshal(resp, &result); err != nil {
 		return [3]map[string][]string{}, errors.Wrapf(err, "while unmarshalling response: %v", string(resp))
@@ -212,16 +226,319 @@ func queryDuplicateNodes(hc *dgraphapi.HTTPClient) ([3]map[string][]string, erro
 	return findDuplicateNodes(result.Data.Nodes), nil
 }
 
-func printDuplicates(entityType string, ns uint64, nodesmap map[string][]string) {
+func printDuplicates(hc *dgraphapi.HTTPClient, entityType string, ns uint64, nodesmap map[string][]string,
+	dupDelete bool) error {
 	if len(nodesmap) == 0 {
-		return
+		return nil
 	}
 
 	fmt.Printf("Found duplicate %ss in namespace: #%v\n", entityType, ns)
 	for key, node := range nodesmap {
 		fmt.Printf("dgraph.xid %v , Uids: %v\n", key, node)
 	}
-	fmt.Println("")
+
+	if dupDelete {
+		switch entityType {
+		case "user":
+			return deleteDuplicatesUser(hc, nodesmap)
+
+		case "group":
+			return deleteDuplicatesGroup(hc, nodesmap)
+		default:
+			return deleteDuplicatesUserGroup(hc, nodesmap)
+
+		}
+	}
+	return nil
+}
+func deleteUids(hc *dgraphapi.HTTPClient, uids []string, skipUid int, node string) error {
+	query := `{
+		delete {
+			<%v> * * .
+		}
+	}`
+
+	for i, uid := range uids {
+		if i == skipUid {
+			continue
+		}
+
+		fmt.Printf("deleting following uid [%v] of duplicate node:%v\n", uid, node)
+		resp, err := hc.Mutate(fmt.Sprintf(query, uid), true)
+		fmt.Println("resp: ", string(resp))
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// uniqueStringsExcluding extracts unique strings from nodeCollection excluding those in the exclude slice
+func uniqueStringsExcluding(nodeCollection [][]string, exclude []string) []string {
+	excludeMap := make(map[string]struct{})
+	for _, e := range exclude {
+		excludeMap[e] = struct{}{}
+	}
+
+	uniqueMap := make(map[string]struct{})
+	for _, nodes := range nodeCollection {
+		for _, node := range nodes {
+			if _, inExclude := excludeMap[node]; !inExclude {
+				uniqueMap[node] = struct{}{}
+			}
+		}
+	}
+
+	uniqueSlice := make([]string, 0, len(uniqueMap))
+	for node := range uniqueMap {
+		uniqueSlice = append(uniqueSlice, node)
+	}
+
+	return uniqueSlice
+}
+
+func queryUserGroup(hc *dgraphapi.HTTPClient, uid string) (aclNode, error) {
+	query := fmt.Sprintf(`{ 
+		nodes(func: eq("dgraph.xid", "%v")) {
+			uid
+			dgraph.xid
+		}
+	}`, uid)
+	resp, err := hc.PostDqlQuery(query)
+	if err != nil {
+		return aclNode{}, err
+	}
+	var result Response
+	if err := json.Unmarshal(resp, &result); err != nil {
+		return aclNode{}, errors.Wrapf(err, "while unmarshalling response: %v", string(resp))
+	}
+
+	if len(result.Data.Nodes) > 1 {
+		return aclNode{}, nil
+	}
+
+	return result.Data.Nodes[0], nil
+}
+
+func addUsersToGroup(hc *dgraphapi.HTTPClient, users []string, groupUid string) error {
+	// query user and get its uid and also check for duplicate
+	rdf := ``
+	for _, user := range users {
+		fmt.Printf("adding user %v to group %v\n", user, groupUid)
+		node, err := queryUserGroup(hc, user)
+		if err != nil {
+			return err
+		}
+		if node.UID != "" {
+			rdf += fmt.Sprintf("<%v> <dgraph.user.group> <%v> .\n", groupUid, node.UID)
+
+		}
+	}
+	fmt.Println("rdf:----------> ", rdf)
+	// hc.Mutate(rdf, true)
+	return nil
+}
+
+// func checkAndDeleteDuplicates(hc *dgraphapi.HTTPClient, duplicates map[string][]string, query string,
+// 	toDelete string) error {
+// 	for entity, uids := range duplicates {
+// 		var nodeCollection [][]string
+// 		for _, uid := range uids {
+// 			resp, err := hc.PostDqlQuery(fmt.Sprintf(query, uid))
+// 			if err != nil {
+// 				return err
+// 			}
+// 			var result Response
+// 			if err := json.Unmarshal(resp, &result); err != nil {
+// 				log.Fatalf("while unmarshalling response: %v", err)
+// 			}
+// 			var strs []string
+// 			for i := range result.Data.Nodes[0].DgraphUserGroup {
+// 				strs = append(strs, result.Data.Nodes[0].DgraphUserGroup[i].DgraphXid)
+// 			}
+// 			nodeCollection = append(nodeCollection, strs)
+// 		}
+// 		var saveIndex int
+// 		prevLen := 0
+
+// 		fmt.Println("remaining user--------------->", entity, uids[saveIndex])
+// 		switch toDelete {
+// 		case "user":
+// 			for k, nodes := range nodeCollection {
+// 				if contains(nodes, "guardian") && len(nodes) > prevLen {
+// 					saveIndex = k
+// 					prevLen = len(nodes)
+// 				}
+// 			}
+// 			if err := deleteUids(hc, uids, saveIndex); err != nil {
+// 				return err
+// 			}
+// 		case "group":
+// 			if entity == guardianGroup {
+// 				for k, nodes := range nodeCollection {
+// 					if contains(nodes, "groot") && len(nodes) > prevLen {
+// 						saveIndex = k
+// 						prevLen = len(nodes)
+// 					}
+// 				}
+// 				uniqueUsers := uniqueStringsExcluding(nodeCollection, uids)
+// 				if err := addUsersToGroup(hc, uniqueUsers, uids[saveIndex]); err != nil {
+// 					return err
+// 				}
+
+// 			} else {
+// 				if err := deleteUids(hc, uids, 0); err != nil {
+// 					return err
+// 				}
+// 			}
+
+// 		}
+
+// 	}
+// 	return nil
+// }
+
+func deleteDuplicatesGroup(hc *dgraphapi.HTTPClient, duplicates map[string][]string) error {
+	query := `{
+		nodes(func: uid(%v)) {
+			uid
+			dgraph.xid  
+			dgraph.type
+			~dgraph.user.group{
+				dgraph.xid  
+			}
+		}
+	}`
+
+	for group, uids := range duplicates {
+		var nodeCollection [][]string
+
+		for _, uid := range uids {
+			resp, err := hc.PostDqlQuery(fmt.Sprintf(query, uid))
+			if err != nil {
+				return err
+			}
+			var result Response
+			if err := json.Unmarshal(resp, &result); err != nil {
+				log.Fatalf("while unmarshalling response: %v", err)
+			}
+			var strs []string
+			for i := range result.Data.Nodes[0].DgraphUserGroup {
+				strs = append(strs, result.Data.Nodes[0].DgraphUserGroup[i].DgraphXid)
+			}
+			nodeCollection = append(nodeCollection, strs)
+		}
+		var saveIndex int
+		prevLen := 0
+
+		fmt.Println("remaining group--------------->", group, uids[saveIndex])
+		if group == guardianGroup {
+			for k, nodes := range nodeCollection {
+				if contains(nodes, "groot") && len(nodes) > prevLen {
+					saveIndex = k
+					prevLen = len(nodes)
+				}
+			}
+			uniqueUsers := uniqueStringsExcluding(nodeCollection, uids)
+			if err := addUsersToGroup(hc, uniqueUsers, uids[saveIndex]); err != nil {
+				return err
+			}
+
+		} else {
+			if err := deleteUids(hc, uids, 0, group); err != nil {
+				return err
+			}
+		}
+
+	}
+	return nil
+}
+
+func deleteDuplicatesUser(hc *dgraphapi.HTTPClient, duplicates map[string][]string) error {
+	query := `{
+		nodes(func: uid(%v)) {
+			uid
+			dgraph.xid  
+			dgraph.type
+			dgraph.user.group{
+				dgraph.xid  
+			}
+		}
+	}`
+	for user, uids := range duplicates {
+		var groupsCollection [][]string
+		for _, uid := range uids {
+			resp, err := hc.PostDqlQuery(fmt.Sprintf(query, uid))
+			if err != nil {
+				return err
+			}
+			var result Response
+			if err := json.Unmarshal(resp, &result); err != nil {
+				log.Fatalf("while unmarshalling response: %v", err)
+			}
+			var strs []string
+			for i := range result.Data.Nodes[0].DgraphUserGroup {
+				strs = append(strs, result.Data.Nodes[0].DgraphUserGroup[i].DgraphXid)
+			}
+			groupsCollection = append(groupsCollection, strs)
+		}
+		var saveIndex int
+		prevLen := 0
+		for k, groups := range groupsCollection {
+			if contains(groups, "guardians") && len(groups) > prevLen {
+				saveIndex = k
+				prevLen = len(groups)
+			}
+		}
+
+		fmt.Println("remaining user--------------->", user, uids[saveIndex])
+
+		if err := deleteUids(hc, uids, saveIndex, user); err != nil {
+			return err
+		}
+
+	}
+	return nil
+}
+
+func deleteDuplicatesUserGroup(hc *dgraphapi.HTTPClient, duplicates map[string][]string) error {
+	// we will delete only user in this case
+	query := `{
+		nodes(func: uid(%v)) {
+			uid
+			dgraph.xid  
+			dgraph.type
+		}
+	}`
+
+	for userGroup, uids := range duplicates {
+		var saveIndex int
+
+		for i, uid := range uids {
+			resp, err := hc.PostDqlQuery(fmt.Sprintf(query, uid))
+			if err != nil {
+				return err
+			}
+			var result Response
+			if err := json.Unmarshal(resp, &result); err != nil {
+				log.Fatalf("while unmarshalling response: %v", err)
+			}
+
+			if result.Data.Nodes[0].DgraphType[0] == "dgraph.type.group" {
+				saveIndex = i
+				break
+			}
+		}
+		fmt.Println("remaining group--------------->", userGroup, uids[saveIndex])
+		fmt.Print("\n")
+
+		if err := deleteUids(hc, uids, saveIndex, userGroup); err != nil {
+			return err
+		}
+
+	}
+	return nil
 }
 
 func init() {
@@ -242,6 +559,7 @@ func init() {
 	flag.String(password, "password", "Password of the namespace's user")
 	flag.String(aclSecretKeyFilePath, "", "path of file that stores secret key or private key, which is used to sign the ACL JWT")
 	flag.String(jwtAlg, "HS256", "JWT signing algorithm")
+	flag.String(deleteDup, "false", "set this flag to true to delete duplicates nodes")
 }
 
 func run() {
@@ -295,14 +613,14 @@ func checkUpgrade() error {
 		if err != nil {
 			return err
 		}
-		printDuplicates("user", cmdInput.namespace, duplicates[0])
+		printDuplicates(hc, "user", cmdInput.namespace, duplicates[0], cmdInput.dupDelete)
 		// example output:
 		//	Found duplicate users in namespace: #0
 		// dgraph.xid user1 , Uids: [0x4 0x3]
-		printDuplicates("group", cmdInput.namespace, duplicates[1])
+		printDuplicates(hc, "group", cmdInput.namespace, duplicates[1], cmdInput.dupDelete)
 		// Found duplicate groups in namespace: #1
 		// dgraph.xid group1 , Uids: [0x2714 0x2711]
-		printDuplicates("groups and user", cmdInput.namespace, duplicates[2])
+		printDuplicates(hc, "groups and user", cmdInput.namespace, duplicates[2], cmdInput.dupDelete)
 		// Found duplicate groups and users in namespace: #0
 		// dgraph.xid userGroup1 , Uids: [0x7532 0x7531]
 
@@ -324,5 +642,5 @@ func parseInput() *commandInput {
 	return &commandInput{alphaHttp: CheckUpgrade.Conf.GetString(alphaHttp), dgUser: CheckUpgrade.Conf.GetString(dgUser),
 		password: CheckUpgrade.Conf.GetString(password), namespace: CheckUpgrade.Conf.GetUint64(namespace),
 		aclSecretKeyFilePath: CheckUpgrade.Conf.GetString(aclSecretKeyFilePath),
-		jwtAlg:               CheckUpgrade.Conf.GetString(jwtAlg)}
+		jwtAlg:               CheckUpgrade.Conf.GetString(jwtAlg), dupDelete: CheckUpgrade.Conf.GetBool(deleteDup)}
 }

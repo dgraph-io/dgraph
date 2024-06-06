@@ -111,7 +111,7 @@ func TestQueryDuplicateNodes(t *testing.T) {
 		WithACL(time.Hour).WithVersion("57aa5c4ac").WithAclAlg(jwt.GetSigningMethod("HS256"))
 	c, err := dgraphtest.NewLocalCluster(conf)
 	require.NoError(t, err)
-	defer func() { c.Cleanup(t.Failed()) }()
+	// defer func() { c.Cleanup(t.Failed()) }()
 	require.NoError(t, c.Start())
 	gc, cleanup, err := c.Client()
 	require.NoError(t, err)
@@ -129,6 +129,8 @@ func TestQueryDuplicateNodes(t *testing.T) {
 			<0x50> <dgraph.type> "dgraph.type.User"  .
 			<0x60> <dgraph.xid> "user1" .
 			<0x60> <dgraph.type> "dgraph.type.User"  .
+			<0x60> <dgraph.user.group> <0x1>  .
+			<0x50> <dgraph.user.group> <0x1>  .
 			<0x70> <dgraph.xid> "user1" .
 			<0x70> <dgraph.type> "dgraph.type.User"  .
 			<0x80> <dgraph.xid> "user3" .
@@ -191,5 +193,17 @@ func TestQueryDuplicateNodes(t *testing.T) {
 			}
 		}
 	}
+	require.NoError(t, deleteDuplicatesGroup(hc, duplicateNodes[0]))
+	require.NoError(t, deleteDuplicatesGroup(hc, duplicateNodes[1]))
+	require.NoError(t, deleteDuplicatesGroup(hc, duplicateNodes[2]))
+}
+
+func TestDeleteDuplicateUser(t *testing.T) {
+	hc, err := setupClient("localhost:36085")
+
+	require.NoError(t, err)
+
+	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
+		dgraphapi.DefaultPassword, x.GalaxyNamespace))
 
 }
