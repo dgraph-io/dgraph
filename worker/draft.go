@@ -659,6 +659,7 @@ func (n *node) applyCommitted(proposal *pb.Proposal, key uint64) error {
 			}
 			glog.Warningf("Error while calling CreateSnapshot: %v. Retrying...", err)
 		}
+		atomic.StoreInt64(&lastSnapshotTime, time.Now().Unix())
 		// We can now discard all invalid versions of keys below this ts.
 		pstore.SetDiscardTs(snap.ReadTs)
 		return nil
@@ -1066,9 +1067,10 @@ func (n *node) updateRaftProgress() error {
 	return nil
 }
 
+var lastSnapshotTime int64 = time.Now().Unix()
+
 func (n *node) checkpointAndClose(done chan struct{}) {
 	slowTicker := time.NewTicker(time.Minute)
-	lastSnapshotTime := time.Now()
 	defer slowTicker.Stop()
 
 	snapshotAfterEntries := x.WorkerConfig.Raft.GetUint64("snapshot-after-entries")
@@ -1105,7 +1107,8 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 				// Only take snapshot if both snapshotFrequency and
 				// snapshotAfterEntries requirements are met. If set to 0,
 				// we consider duration condition to be disabled.
-				if snapshotFrequency == 0 || time.Since(lastSnapshotTime) > snapshotFrequency {
+				lastSnapTime := time.Unix(atomic.LoadInt64(&lastSnapshotTime), 0)
+				if snapshotFrequency == 0 || time.Since(lastSnapTime) > snapshotFrequency {
 					if chk, err := n.Store.Checkpoint(); err == nil {
 						if first, err := n.Store.FirstIndex(); err == nil {
 							// Save some cycles by only calculating snapshot if the checkpoint
@@ -1136,7 +1139,7 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 					if err := n.proposeSnapshot(); err != nil {
 						glog.Errorf("While calculating and proposing snapshot: %v", err)
 					} else {
-						lastSnapshotTime = time.Now()
+						atomic.StoreInt64(&lastSnapshotTime, time.Now().Unix())
 					}
 				}
 				go n.abortOldTransactions()
