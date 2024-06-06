@@ -264,8 +264,7 @@ func deleteUids(hc *dgraphapi.HTTPClient, uids []string, skipUid int, node strin
 		}
 
 		fmt.Printf("deleting following uid [%v] of duplicate node:%v\n", uid, node)
-		resp, err := hc.Mutate(fmt.Sprintf(query, uid), true)
-		fmt.Println("resp: ", string(resp))
+		_, err := hc.Mutate(fmt.Sprintf(query, uid), true)
 		if err != nil {
 			return err
 		}
@@ -322,7 +321,6 @@ func queryUserGroup(hc *dgraphapi.HTTPClient, uid string) (aclNode, error) {
 }
 
 func addUsersToGroup(hc *dgraphapi.HTTPClient, users []string, groupUid string) error {
-	// query user and get its uid and also check for duplicate
 	rdf := ``
 	for _, user := range users {
 		fmt.Printf("adding user %v to group %v\n", user, groupUid)
@@ -335,69 +333,13 @@ func addUsersToGroup(hc *dgraphapi.HTTPClient, users []string, groupUid string) 
 
 		}
 	}
-	fmt.Println("rdf:----------> ", rdf)
-	// hc.Mutate(rdf, true)
+
+	_, err := hc.Mutate(rdf, true)
+	if err != nil {
+		return err
+	}
 	return nil
 }
-
-// func checkAndDeleteDuplicates(hc *dgraphapi.HTTPClient, duplicates map[string][]string, query string,
-// 	toDelete string) error {
-// 	for entity, uids := range duplicates {
-// 		var nodeCollection [][]string
-// 		for _, uid := range uids {
-// 			resp, err := hc.PostDqlQuery(fmt.Sprintf(query, uid))
-// 			if err != nil {
-// 				return err
-// 			}
-// 			var result Response
-// 			if err := json.Unmarshal(resp, &result); err != nil {
-// 				log.Fatalf("while unmarshalling response: %v", err)
-// 			}
-// 			var strs []string
-// 			for i := range result.Data.Nodes[0].DgraphUserGroup {
-// 				strs = append(strs, result.Data.Nodes[0].DgraphUserGroup[i].DgraphXid)
-// 			}
-// 			nodeCollection = append(nodeCollection, strs)
-// 		}
-// 		var saveIndex int
-// 		prevLen := 0
-
-// 		fmt.Println("remaining user--------------->", entity, uids[saveIndex])
-// 		switch toDelete {
-// 		case "user":
-// 			for k, nodes := range nodeCollection {
-// 				if contains(nodes, "guardian") && len(nodes) > prevLen {
-// 					saveIndex = k
-// 					prevLen = len(nodes)
-// 				}
-// 			}
-// 			if err := deleteUids(hc, uids, saveIndex); err != nil {
-// 				return err
-// 			}
-// 		case "group":
-// 			if entity == guardianGroup {
-// 				for k, nodes := range nodeCollection {
-// 					if contains(nodes, "groot") && len(nodes) > prevLen {
-// 						saveIndex = k
-// 						prevLen = len(nodes)
-// 					}
-// 				}
-// 				uniqueUsers := uniqueStringsExcluding(nodeCollection, uids)
-// 				if err := addUsersToGroup(hc, uniqueUsers, uids[saveIndex]); err != nil {
-// 					return err
-// 				}
-
-// 			} else {
-// 				if err := deleteUids(hc, uids, 0); err != nil {
-// 					return err
-// 				}
-// 			}
-
-// 		}
-
-// 	}
-// 	return nil
-// }
 
 func deleteDuplicatesGroup(hc *dgraphapi.HTTPClient, duplicates map[string][]string) error {
 	query := `{
@@ -432,7 +374,7 @@ func deleteDuplicatesGroup(hc *dgraphapi.HTTPClient, duplicates map[string][]str
 		var saveIndex int
 		prevLen := 0
 
-		fmt.Println("remaining group--------------->", group, uids[saveIndex])
+		fmt.Printf("keeping group%v with uid: %v", group, uids[saveIndex])
 		if group == guardianGroup {
 			for k, nodes := range nodeCollection {
 				if contains(nodes, "groot") && len(nodes) > prevLen {
@@ -442,6 +384,9 @@ func deleteDuplicatesGroup(hc *dgraphapi.HTTPClient, duplicates map[string][]str
 			}
 			uniqueUsers := uniqueStringsExcluding(nodeCollection, uids)
 			if err := addUsersToGroup(hc, uniqueUsers, uids[saveIndex]); err != nil {
+				return err
+			}
+			if err := deleteUids(hc, uids, saveIndex, group); err != nil {
 				return err
 			}
 
@@ -492,7 +437,7 @@ func deleteDuplicatesUser(hc *dgraphapi.HTTPClient, duplicates map[string][]stri
 			}
 		}
 
-		fmt.Println("remaining user--------------->", user, uids[saveIndex])
+		fmt.Printf("keeping user%v with uid: %v", user, uids[saveIndex])
 
 		if err := deleteUids(hc, uids, saveIndex, user); err != nil {
 			return err
@@ -530,7 +475,7 @@ func deleteDuplicatesUserGroup(hc *dgraphapi.HTTPClient, duplicates map[string][
 				break
 			}
 		}
-		fmt.Println("remaining group--------------->", userGroup, uids[saveIndex])
+		fmt.Printf("keeping group%v with uid: %v", userGroup, uids[saveIndex])
 		fmt.Print("\n")
 
 		if err := deleteUids(hc, uids, saveIndex, userGroup); err != nil {
@@ -613,28 +558,26 @@ func checkUpgrade() error {
 		if err != nil {
 			return err
 		}
-		printDuplicates(hc, "user", cmdInput.namespace, duplicates[0], cmdInput.dupDelete)
+		printDuplicates(hc, "user", ns, duplicates[0], cmdInput.dupDelete)
 		// example output:
 		//	Found duplicate users in namespace: #0
 		// dgraph.xid user1 , Uids: [0x4 0x3]
-		printDuplicates(hc, "group", cmdInput.namespace, duplicates[1], cmdInput.dupDelete)
+		printDuplicates(hc, "group", ns, duplicates[1], cmdInput.dupDelete)
 		// Found duplicate groups in namespace: #1
 		// dgraph.xid group1 , Uids: [0x2714 0x2711]
-		printDuplicates(hc, "groups and user", cmdInput.namespace, duplicates[2], cmdInput.dupDelete)
+		printDuplicates(hc, "groups and user", ns, duplicates[2], cmdInput.dupDelete)
 		// Found duplicate groups and users in namespace: #0
 		// dgraph.xid userGroup1 , Uids: [0x7532 0x7531]
+	}
 
-		fmt.Println("To delete duplicate nodes use following mutation: ")
-		deleteMut := `
+	fmt.Println("To delete duplicate nodes use following mutation: ")
+	deleteMut := `
 	{
 		delete {
 			<UID> * * .
 		}
 	}`
-		fmt.Fprint(os.Stderr, deleteMut)
-
-	}
-
+	fmt.Fprint(os.Stderr, deleteMut)
 	return nil
 }
 
