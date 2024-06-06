@@ -160,13 +160,6 @@ func contains(slice []string, value string) bool {
 	return false
 }
 
-func remove(slice []int, index int) []int {
-	if index < 0 || index >= len(slice) {
-		return slice // Return the original slice if the index is out of bounds
-	}
-	return append(slice[:index], slice[index+1:]...)
-}
-
 func findDuplicateNodes(aclNodes []aclNode) [3]map[string][]string {
 	du := make(map[string][]string)
 	dg := make(map[string][]string)
@@ -226,7 +219,7 @@ func queryDuplicateNodes(hc *dgraphapi.HTTPClient) ([3]map[string][]string, erro
 	return findDuplicateNodes(result.Data.Nodes), nil
 }
 
-func printDuplicates(hc *dgraphapi.HTTPClient, entityType string, ns uint64, nodesmap map[string][]string,
+func printAndDeleteDuplicates(hc *dgraphapi.HTTPClient, entityType string, ns uint64, nodesmap map[string][]string,
 	dupDelete bool) error {
 	if len(nodesmap) == 0 {
 		return nil
@@ -502,7 +495,8 @@ func init() {
 	flag.String(namespace, "", "Namespace to check for duplicate nodes")
 	flag.String(dgUser, "groot", "Username of the namespace's user")
 	flag.String(password, "password", "Password of the namespace's user")
-	flag.String(aclSecretKeyFilePath, "", "path of file that stores secret key or private key, which is used to sign the ACL JWT")
+	flag.String(aclSecretKeyFilePath, "", "path of file that stores secret key or private key,"+
+		" which is used to sign the ACL JWT")
 	flag.String(jwtAlg, "HS256", "JWT signing algorithm")
 	flag.String(deleteDup, "false", "set this flag to true to delete duplicates nodes")
 }
@@ -551,21 +545,29 @@ func checkUpgrade() error {
 				return errors.Wrapf(err, "while getting access jwt token for namespace %v", ns)
 			}
 		} else {
-			hc.LoginIntoNamespace(cmdInput.dgUser, cmdInput.password, ns)
+			if err := hc.LoginIntoNamespace(cmdInput.dgUser, cmdInput.password, ns); err != nil {
+				return errors.Wrapf(err, "while logging into namespace %v", ns)
+			}
 		}
 
 		duplicates, err := queryDuplicateNodes(hc)
 		if err != nil {
 			return err
 		}
-		printDuplicates(hc, "user", ns, duplicates[0], cmdInput.dupDelete)
+		if err := printAndDeleteDuplicates(hc, "user", ns, duplicates[0], cmdInput.dupDelete); err != nil {
+			return err
+		}
 		// example output:
 		//	Found duplicate users in namespace: #0
 		// dgraph.xid user1 , Uids: [0x4 0x3]
-		printDuplicates(hc, "group", ns, duplicates[1], cmdInput.dupDelete)
+		if err := printAndDeleteDuplicates(hc, "group", ns, duplicates[1], cmdInput.dupDelete); err != nil {
+			return err
+		}
 		// Found duplicate groups in namespace: #1
 		// dgraph.xid group1 , Uids: [0x2714 0x2711]
-		printDuplicates(hc, "groups and user", ns, duplicates[2], cmdInput.dupDelete)
+		if err := printAndDeleteDuplicates(hc, "groups and user", ns, duplicates[2], cmdInput.dupDelete); err != nil {
+			return err
+		}
 		// Found duplicate groups and users in namespace: #0
 		// dgraph.xid userGroup1 , Uids: [0x7532 0x7531]
 	}

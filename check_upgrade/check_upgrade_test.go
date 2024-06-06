@@ -197,13 +197,3 @@ func TestQueryDuplicateNodes(t *testing.T) {
 	require.NoError(t, deleteDuplicatesGroup(hc, duplicateNodes[1]))
 	require.NoError(t, deleteDuplicatesGroup(hc, duplicateNodes[2]))
 }
-
-func TestDeleteDuplicateUser(t *testing.T) {
-	hc, err := setupClient("localhost:36085")
-
-	require.NoError(t, err)
-
-	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
-		dgraphapi.DefaultPassword, x.GalaxyNamespace))
-
-}
