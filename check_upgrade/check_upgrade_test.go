@@ -31,6 +31,7 @@ import (
 	"github.com/dgraph-io/dgraph/dgraphapi"
 	"github.com/dgraph-io/dgraph/dgraphtest"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/require"
 )
 
@@ -82,12 +83,8 @@ func TestCheckUpgrade(t *testing.T) {
 	alphaHttp, err := c.GetAlphaHttpPublicPort()
 	require.NoError(t, err)
 
-	alphaGrpc, err := c.GetAlphaGrpcPublicPort()
-	require.NoError(t, err)
-
 	args := []string{
 		"checkupgrade",
-		"--grpc_port", "localhost:" + alphaGrpc,
 		"--http_port", "localhost:" + alphaHttp,
 		"--dgUser", "groot",
 		"--password", "password",
@@ -111,7 +108,7 @@ func TestCheckUpgrade(t *testing.T) {
 
 func TestQueryDuplicateNodes(t *testing.T) {
 	conf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).WithReplicas(1).
-		WithACL(time.Hour).WithVersion("57aa5c4ac")
+		WithACL(time.Hour).WithVersion("57aa5c4ac").WithAclAlg(jwt.GetSigningMethod("HS256"))
 	c, err := dgraphtest.NewLocalCluster(conf)
 	require.NoError(t, err)
 	defer func() { c.Cleanup(t.Failed()) }()
@@ -165,7 +162,7 @@ func TestQueryDuplicateNodes(t *testing.T) {
 	_, err = gc.Mutate(mu)
 	require.NoError(t, err)
 
-	duplicateNodes, err := queryDuplicateNodes(context.Background(), gc.Dgraph)
+	duplicateNodes, err := queryDuplicateNodes(hc)
 	require.NoError(t, err)
 
 	du := map[string][]string{

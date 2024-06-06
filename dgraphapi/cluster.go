@@ -793,5 +793,6 @@ func GetHttpClient(alphaUrl, zeroUrl string) (*HTTPClient, error) {
 		licenseURL: licenseUrl,
 		stateURL:   stateUrl,
 		dqlURL:     dqlUrl,
+		HttpToken:  &HttpToken{},
 	}, nil
 }

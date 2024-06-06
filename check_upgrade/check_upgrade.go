@@ -17,18 +17,18 @@
 package checkupgrade
 
 import (
-	"context"
+	"crypto"
+	"crypto/ed25519"
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
+	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/dgraph-io/dgo/v230"
-	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/dgraphapi"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -38,19 +38,23 @@ var (
 )
 
 const (
-	alphaGrpc = "grpc_port"
-	alphaHttp = "http_port"
-	dgUser    = "dgUser"
-	password  = "password"
-	namespace = "namespace"
+	alphaHttp            = "http_port"
+	dgUser               = "dgUser"
+	password             = "password"
+	namespace            = "namespace"
+	aclSecretKeyFilePath = "aclSecretKeyFilePath"
+	jwtAlg               = "jwt-alg"
+
+	guardianGroup = "guardians"
 )
 
 type commandInput struct {
-	alphaGrpc string
-	alphaHttp string
-	dgUser    string
-	password  string
-	namespace uint64
+	alphaHttp            string
+	dgUser               string
+	password             string
+	namespace            uint64
+	aclSecretKeyFilePath string
+	jwtAlg               string
 }
 
 type aclNode struct {
@@ -59,17 +63,77 @@ type aclNode struct {
 	DgraphType []string `json:"dgraph.type"`
 }
 
-func setupClients(alphaGrpc, alphaHttp string) (*dgo.Dgraph, *dgraphapi.HTTPClient, error) {
-	d, err := grpc.Dial(alphaGrpc, grpc.WithTransportCredentials(insecure.NewCredentials()))
+func parseJWTKey(alg jwt.SigningMethod, key x.Sensitive) (interface{}, interface{}, error) {
+	switch {
+	case strings.HasPrefix(alg.Alg(), "HS"):
+		return key, key, nil
+
+	case strings.HasPrefix(alg.Alg(), "ES"):
+		pk, err := jwt.ParseECPrivateKeyFromPEM(key)
+		if err != nil {
+			return nil, nil, errors.Wrapf(err, "error parsing ACL key as ECDSA private key")
+		}
+		return pk, &pk.PublicKey, nil
+
+	case strings.HasPrefix(alg.Alg(), "RS") || strings.HasPrefix(alg.Alg(), "PS"):
+		pk, err := jwt.ParseRSAPrivateKeyFromPEM(key)
+		if err != nil {
+			return nil, nil, errors.Wrapf(err, "error parsing ACL key as RSA private key")
+		}
+		return pk, &pk.PublicKey, nil
+
+	case alg.Alg() == "EdDSA":
+		pk, err := jwt.ParseEdPrivateKeyFromPEM(key)
+		if err != nil {
+			return nil, nil, errors.Wrapf(err, "error parsing ACL key as EdDSA private key")
+		}
+		return pk.(crypto.Signer), pk.(ed25519.PrivateKey).Public(), nil
+
+	default:
+		return nil, nil, errors.Errorf("unsupported signing algorithm: %v", alg.Alg())
+	}
+}
+
+func getAccessJwt(userId string, group string, namespace uint64, aclSecretFile string,
+	algStr string) (string, error) {
+	aclKey, err := os.ReadFile(aclSecretFile)
 	if err != nil {
-		return nil, nil, errors.Wrapf(err, "while dialing gRPC server")
+		return "", fmt.Errorf("error reading ACL secret key from file: %s: %s", aclSecretFile, err)
 	}
 
+	var aclAlg jwt.SigningMethod
+	var privKey interface{}
+	if aclKey != nil {
+		aclAlg = jwt.GetSigningMethod(algStr)
+		if aclAlg == nil {
+			return "", fmt.Errorf("unsupported jwt signing algorithm for acl: %v", algStr)
+		}
+		privKey, _, err = parseJWTKey(aclAlg, aclKey)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	token := jwt.NewWithClaims(aclAlg, jwt.MapClaims{
+		"userid":    userId,
+		"groups":    []string{group},
+		"namespace": namespace,
+		"exp":       time.Now().Add(time.Hour).Unix(),
+	})
+
+	jwtString, err := token.SignedString(x.MaybeKeyToBytes(privKey))
+	if err != nil {
+		return "", errors.Errorf("unable to encode jwt to string: %v", err)
+	}
+	return jwtString, nil
+}
+
+func setupClient(alphaHttp string) (*dgraphapi.HTTPClient, error) {
 	httpClient, err := dgraphapi.GetHttpClient(alphaHttp, "")
 	if err != nil {
-		return nil, nil, errors.Wrapf(err, "while getting HTTP client")
+		return nil, errors.Wrapf(err, "while getting HTTP client")
 	}
-	return dgo.NewDgraphClient(api.NewDgraphClient(d)), httpClient, nil
+	return httpClient, nil
 }
 
 func contains(slice []string, value string) bool {
@@ -118,7 +182,7 @@ func filterAndRecordDuplicates(du map[string][]string, node1 aclNode, node2 aclN
 	}
 }
 
-func queryDuplicateNodes(ctx context.Context, dg *dgo.Dgraph) ([3]map[string][]string, error) {
+func queryDuplicateNodes(hc *dgraphapi.HTTPClient) ([3]map[string][]string, error) {
 	query := `{ 
 		nodes(func: has(dgraph.xid)) {
 			       uid
@@ -127,7 +191,9 @@ func queryDuplicateNodes(ctx context.Context, dg *dgo.Dgraph) ([3]map[string][]s
 		        }
 	}`
 
-	resp, err := dg.NewTxn().Query(ctx, query)
+	resp, err := hc.PostDqlQuery(query)
+
+	fmt.Println("resp: ", string(resp))
 	if err != nil {
 		return [3]map[string][]string{}, errors.Wrapf(err, "while querying dgraph for duplicate nodes")
 	}
@@ -135,12 +201,15 @@ func queryDuplicateNodes(ctx context.Context, dg *dgo.Dgraph) ([3]map[string][]s
 	type Nodes struct {
 		Nodes []aclNode `json:"nodes"`
 	}
-	var result Nodes
-	if err := json.Unmarshal(resp.Json, &result); err != nil {
-		return [3]map[string][]string{}, errors.Wrapf(err, "while unmarshalling response: %v", string(resp.Json))
+	type Response struct {
+		Data Nodes `json:"data"`
+	}
+	var result Response
+	if err := json.Unmarshal(resp, &result); err != nil {
+		return [3]map[string][]string{}, errors.Wrapf(err, "while unmarshalling response: %v", string(resp))
 
 	}
-	return findDuplicateNodes(result.Nodes), nil
+	return findDuplicateNodes(result.Data.Nodes), nil
 }
 
 func printDuplicates(entityType string, ns uint64, nodesmap map[string][]string) {
@@ -167,11 +236,12 @@ func init() {
 	}
 	CheckUpgrade.Cmd.SetHelpTemplate(x.NonRootTemplate)
 	flag := CheckUpgrade.Cmd.Flags()
-	flag.String(alphaGrpc, "127.0.0.1:9080", "Dgraph Alpha gRPC server address")
 	flag.String(alphaHttp, "127.0.0.1:8080", "Dgraph Alpha Http server address")
-	flag.String(namespace, "0", "Namespace to check for duplicate nodes")
+	flag.String(namespace, "", "Namespace to check for duplicate nodes")
 	flag.String(dgUser, "groot", "Username of the namespace's user")
 	flag.String(password, "password", "Password of the namespace's user")
+	flag.String(aclSecretKeyFilePath, "", "path of file that stores secret key or private key, which is used to sign the ACL JWT")
+	flag.String(jwtAlg, "HS256", "JWT signing algorithm")
 }
 
 func run() {
@@ -184,50 +254,75 @@ func checkUpgrade() error {
 	fmt.Println("Running check-upgrade tool")
 
 	cmdInput := parseInput()
-	gc, hc, err := setupClients(cmdInput.alphaGrpc, cmdInput.alphaHttp)
+	var accessJwt string
+	var err error
+	if cmdInput.aclSecretKeyFilePath != "" {
+		accessJwt, err = getAccessJwt(dgraphapi.DefaultUser, guardianGroup, 0, cmdInput.aclSecretKeyFilePath,
+			cmdInput.jwtAlg)
+		if err != nil {
+			return errors.Wrapf(err, "while getting access jwt token")
+		}
+	}
+	hc, err := setupClient(cmdInput.alphaHttp)
 	if err != nil {
 		return errors.Wrapf(err, "while setting up clients")
 	}
 
-	if err = hc.LoginIntoNamespace(cmdInput.dgUser, cmdInput.password, cmdInput.namespace); err != nil {
-		return errors.Wrapf(err, "while logging into namespace: %v", x.GalaxyNamespace)
+	hc.AccessJwt = accessJwt
+
+	var namespaces []uint64
+	if cmdInput.namespace == 0 {
+		namespaces, err = hc.ListNamespaces()
+		if err != nil {
+			return errors.Wrapf(err, "while lisiting namespaces")
+		}
+	} else {
+		namespaces = append(namespaces, cmdInput.namespace)
 	}
 
-	ctx := context.Background()
-	if err := gc.LoginIntoNamespace(ctx, cmdInput.dgUser, cmdInput.password, cmdInput.namespace); err != nil {
-		return errors.Wrapf(err, "while logging into namespace: %v", cmdInput.namespace)
-	}
+	for _, ns := range namespaces {
+		if cmdInput.aclSecretKeyFilePath != "" {
+			hc.AccessJwt, err = getAccessJwt(dgraphapi.DefaultUser, guardianGroup, ns, cmdInput.aclSecretKeyFilePath,
+				cmdInput.jwtAlg)
+			if err != nil {
+				return errors.Wrapf(err, "while getting access jwt token for namespace %v", ns)
+			}
+		} else {
+			hc.LoginIntoNamespace(cmdInput.dgUser, cmdInput.password, ns)
+		}
 
-	duplicates, err := queryDuplicateNodes(ctx, gc)
-	if err != nil {
-		return err
-	}
+		duplicates, err := queryDuplicateNodes(hc)
+		if err != nil {
+			return err
+		}
+		printDuplicates("user", cmdInput.namespace, duplicates[0])
+		// example output:
+		//	Found duplicate users in namespace: #0
+		// dgraph.xid user1 , Uids: [0x4 0x3]
+		printDuplicates("group", cmdInput.namespace, duplicates[1])
+		// Found duplicate groups in namespace: #1
+		// dgraph.xid group1 , Uids: [0x2714 0x2711]
+		printDuplicates("groups and user", cmdInput.namespace, duplicates[2])
+		// Found duplicate groups and users in namespace: #0
+		// dgraph.xid userGroup1 , Uids: [0x7532 0x7531]
 
-	printDuplicates("user", cmdInput.namespace, duplicates[0])
-	// example output:
-	//	Found duplicate users in namespace: #0
-	// dgraph.xid user1 , Uids: [0x4 0x3]
-	printDuplicates("group", cmdInput.namespace, duplicates[1])
-	// Found duplicate groups in namespace: #1
-	// dgraph.xid group1 , Uids: [0x2714 0x2711]
-	printDuplicates("groups and user", cmdInput.namespace, duplicates[2])
-	// Found duplicate groups and users in namespace: #0
-	// dgraph.xid userGroup1 , Uids: [0x7532 0x7531]
-
-	fmt.Println("To delete duplicate nodes use following mutation: ")
-	deleteMut := `
+		fmt.Println("To delete duplicate nodes use following mutation: ")
+		deleteMut := `
 	{
 		delete {
 			<UID> * * .
 		}
 	}`
-	fmt.Fprint(os.Stderr, deleteMut)
+		fmt.Fprint(os.Stderr, deleteMut)
+
+	}
 
 	return nil
 }
 
 func parseInput() *commandInput {
-	return &commandInput{alphaGrpc: CheckUpgrade.Conf.GetString(alphaGrpc),
-		alphaHttp: CheckUpgrade.Conf.GetString(alphaHttp), dgUser: CheckUpgrade.Conf.GetString(dgUser),
-		password: CheckUpgrade.Conf.GetString(password), namespace: CheckUpgrade.Conf.GetUint64(namespace)}
+	return &commandInput{alphaHttp: CheckUpgrade.Conf.GetString(alphaHttp), dgUser: CheckUpgrade.Conf.GetString(dgUser),
+		password: CheckUpgrade.Conf.GetString(password), namespace: CheckUpgrade.Conf.GetUint64(namespace),
+		aclSecretKeyFilePath: CheckUpgrade.Conf.GetString(aclSecretKeyFilePath),
+		jwtAlg:               CheckUpgrade.Conf.GetString(jwtAlg)}
 }
