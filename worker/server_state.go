@@ -119,7 +119,9 @@ func (s *ServerState) initStorage() {
 
 	{
 		// Write Ahead Log directory
-		x.Checkf(os.MkdirAll(Config.WALDir, 0700), "Error while creating WAL dir.")
+		if Config.WALDir != "" {
+			x.Checkf(os.MkdirAll(Config.WALDir, 0700), "Error while creating WAL dir.")
+		}
 		s.WALstore, err = raftwal.InitEncrypted(Config.WALDir, x.WorkerConfig.EncryptionKey)
 		x.Check(err)
 	}
@@ -127,11 +129,15 @@ func (s *ServerState) initStorage() {
 		// Postings directory
 		// All the writes to posting store should be synchronous. We use batched writers
 		// for posting lists, so the cost of sync writes is amortized.
-		x.Check(os.MkdirAll(Config.PostingDir, 0700))
 		opt := x.WorkerConfig.Badger.
-			WithDir(Config.PostingDir).WithValueDir(Config.PostingDir).
 			WithNumVersionsToKeep(math.MaxInt32).
 			WithNamespaceOffset(x.NamespaceOffset)
+
+		if Config.PostingDir != "" {
+			x.Checkf(os.MkdirAll(Config.PostingDir, 0700), "Error while creating P dir.")
+			opt = opt.WithDir(Config.PostingDir).WithValueDir(Config.PostingDir)
+		}
+
 		opt = setBadgerOptions(opt)
 
 		// Print the options w/o exposing key.

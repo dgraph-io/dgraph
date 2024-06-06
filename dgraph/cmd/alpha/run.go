@@ -687,8 +687,6 @@ func run() {
 		os.Exit(1)
 	}
 
-	worker.SetConfiguration(&opts)
-
 	ips, err := getIPsFromString(security.GetString("whitelist"))
 	x.Check(err)
 
@@ -717,6 +715,10 @@ func run() {
 		Badger:              bopts,
 	}
 	x.WorkerConfig.Parse(Alpha.Conf)
+
+	// We need to set configurations now that we have updated TmpDir and other folders
+	// so that we validate the correct folders.
+	worker.SetConfiguration(&opts)
 
 	if telemetry.GetBool("reports") {
 		go edgraph.PeriodicallyPostTelemetry()
