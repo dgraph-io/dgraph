@@ -32,7 +32,7 @@ import (
 
 const (
 	aclPreds = `
-{"predicate":"dgraph.xid","type":"string", "index":true, "tokenizer":["exact"], "upsert":true},
+{"predicate":"dgraph.xid","type":"string", "index":true, "tokenizer":["exact"], "unique": true, "upsert":true},
 {"predicate":"dgraph.password","type":"password"},
 {"predicate":"dgraph.user.group","list":true, "reverse":true, "type":"uid"},
 {"predicate":"dgraph.acl.rule","type":"uid","list":true},

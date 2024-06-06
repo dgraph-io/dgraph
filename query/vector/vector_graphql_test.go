@@ -24,7 +24,7 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/dgraphtest"
+	"github.com/dgraph-io/dgraph/dgraphapi"
 	"github.com/stretchr/testify/require"
 )
 
@@ -89,7 +89,7 @@ func generateRandomTitleV(size int) []float32 {
 	return titleV
 }
 
-func addProject(t *testing.T, hc *dgraphtest.HTTPClient, project ProjectInput) {
+func addProject(t *testing.T, hc *dgraphapi.HTTPClient, project ProjectInput) {
 	query := `
 	  mutation addProject($project: AddProjectInput!) {
 		  addProject(input: [$project]) {
@@ -100,7 +100,7 @@ func addProject(t *testing.T, hc *dgraphtest.HTTPClient, project ProjectInput) {
 		  }
 	  }`
 
-	params := dgraphtest.GraphQLParams{
+	params := dgraphapi.GraphQLParams{
 		Query:     query,
 		Variables: map[string]interface{}{"project": project},
 	}
@@ -109,7 +109,7 @@ func addProject(t *testing.T, hc *dgraphtest.HTTPClient, project ProjectInput) {
 	require.NoError(t, err)
 }
 
-func queryProjectUsingTitle(t *testing.T, hc *dgraphtest.HTTPClient, title string) ProjectInput {
+func queryProjectUsingTitle(t *testing.T, hc *dgraphapi.HTTPClient, title string) ProjectInput {
 	query := ` query QueryProject($title: String!) {
 		 queryProject(filter: { title: { eq: $title } }) {
 		   title
@@ -117,7 +117,7 @@ func queryProjectUsingTitle(t *testing.T, hc *dgraphtest.HTTPClient, title strin
 		 }
 	   }`
 
-	params := dgraphtest.GraphQLParams{
+	params := dgraphapi.GraphQLParams{
 		Query:     query,
 		Variables: map[string]interface{}{"title": title},
 	}
@@ -133,7 +133,7 @@ func queryProjectUsingTitle(t *testing.T, hc *dgraphtest.HTTPClient, title strin
 	return resp.QueryProject[0]
 }
 
-func queryProjectsSimilarByEmbedding(t *testing.T, hc *dgraphtest.HTTPClient, vector []float32, topk int) []ProjectInput {
+func queryProjectsSimilarByEmbedding(t *testing.T, hc *dgraphapi.HTTPClient, vector []float32, topk int) []ProjectInput {
 	// query similar project by embedding
 	queryProduct := `query QuerySimilarProjectByEmbedding($by: ProjectEmbedding!, $topK: Int!, $vector: [Float!]!) {
 		 querySimilarProjectByEmbedding(by: $by, topK: $topK, vector: $vector) {
@@ -144,7 +144,7 @@ func queryProjectsSimilarByEmbedding(t *testing.T, hc *dgraphtest.HTTPClient, ve
 
 	 `
 
-	params := dgraphtest.GraphQLParams{
+	params := dgraphapi.GraphQLParams{
 		Query: queryProduct,
 		Variables: map[string]interface{}{
 			"by":     "title_v",
@@ -227,7 +227,7 @@ func TestVectorGraphQlDotProductIndexMutationAndQuery(t *testing.T) {
 	testVectorGraphQlMutationAndQuery(t, hc)
 }
 
-func testVectorGraphQlMutationAndQuery(t *testing.T, hc *dgraphtest.HTTPClient) {
+func testVectorGraphQlMutationAndQuery(t *testing.T, hc *dgraphapi.HTTPClient) {
 	var vectors [][]float32
 	numProjects := 100
 	projects := generateProjects(numProjects)

@@ -26,13 +26,14 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	"github.com/dgraph-io/dgo/v230/protos/api"
+	"github.com/dgraph-io/dgraph/dgraphapi"
 	"github.com/dgraph-io/dgraph/dgraphtest"
 	"github.com/dgraph-io/dgraph/x"
 )
 
 type MultitenancyTestSuite struct {
 	suite.Suite
-	dc dgraphtest.Cluster
+	dc dgraphapi.Cluster
 }
 
 func (msuite *MultitenancyTestSuite) SetupTest() {
@@ -45,7 +46,7 @@ func (msuite *MultitenancyTestSuite) TearDownTest() {
 	defer cleanup()
 	require.NoError(t, err)
 	require.NoError(t, gcli.LoginIntoNamespace(context.Background(),
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace))
 	require.NoError(t, gcli.Alter(context.Background(), &api.Operation{DropAll: true}))
 }
 

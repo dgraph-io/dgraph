@@ -29,6 +29,7 @@ import (
 
 	"github.com/dgraph-io/dgo/v230"
 	"github.com/dgraph-io/dgo/v230/protos/api"
+	"github.com/dgraph-io/dgraph/dgraphapi"
 )
 
 type DCloudCluster struct {
@@ -71,7 +72,7 @@ func (c *DCloudCluster) init() error {
 	return nil
 }
 
-func (c *DCloudCluster) Client() (*GrpcClient, func(), error) {
+func (c *DCloudCluster) Client() (*dgraphapi.GrpcClient, func(), error) {
 	var conns []*grpc.ClientConn
 	conn, err := dgo.DialCloud(c.url, c.token)
 	if err != nil {
@@ -87,10 +88,10 @@ func (c *DCloudCluster) Client() (*GrpcClient, func(), error) {
 		}
 	}
 	client := dgo.NewDgraphClient(api.NewDgraphClient(conn))
-	return &GrpcClient{Dgraph: client}, cleanup, nil
+	return &dgraphapi.GrpcClient{Dgraph: client}, cleanup, nil
 }
 
-func (c *DCloudCluster) HTTPClient() (*HTTPClient, error) {
+func (c *DCloudCluster) HTTPClient() (*dgraphapi.HTTPClient, error) {
 	return nil, errNotImplemented
 }
 
@@ -160,4 +161,17 @@ func (c1 *DCloudCluster) AssignUids(client *dgo.Dgraph, num uint64) error {
 
 func (c *DCloudCluster) GetVersion() string {
 	return localVersion
+}
+
+// GetRepoDir returns the repositroty directory of the cluster
+func (c *DCloudCluster) GetRepoDir() (string, error) {
+	return "", errNotImplemented
+}
+
+func (c *DCloudCluster) AlphasLogs() ([]string, error) {
+	return nil, errNotImplemented
+}
+
+func (c *DCloudCluster) GetEncKeyPath() (string, error) {
+	return "", errNotImplemented
 }

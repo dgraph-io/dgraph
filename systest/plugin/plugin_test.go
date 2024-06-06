@@ -24,7 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/v230/protos/api"
-	"github.com/dgraph-io/dgraph/dgraphtest"
+	"github.com/dgraph-io/dgraph/dgraphapi"
 )
 
 type testCase struct {
@@ -329,7 +329,7 @@ func (psuite *PluginTestSuite) TestPlugins() {
 			for _, test := range testInp[i].cases {
 				reply, err := gcli.Query(test.query)
 				require.NoError(t, err)
-				dgraphtest.CompareJSON(test.wantResult, string(reply.GetJson()))
+				dgraphapi.CompareJSON(test.wantResult, string(reply.GetJson()))
 			}
 		})
 	}

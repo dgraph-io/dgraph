@@ -23,7 +23,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgraph/dgraphtest"
+	"github.com/dgraph-io/dgraph/dgraphapi"
 )
 
 var expiredKey = []byte(`-----BEGIN PGP MESSAGE-----
@@ -138,20 +138,20 @@ func (lsuite *LicenseTestSuite) TestEnterpriseLicenseWithGraphqlEndPoint() {
 		if tt.code == `Success` {
 			require.NoError(t, err)
 			// Check if the license is applied
-			dgraphtest.CompareJSON(`{"enterpriseLicense":{"response":{"code":"Success"}}}`, string(resp))
+			dgraphapi.CompareJSON(`{"enterpriseLicense":{"response":{"code":"Success"}}}`, string(resp))
 
 			// check the user information in case the license is applied
 			// Expired license should not be enabled even after it is applied
 			assertLicenseNotEnabled(t, hcli, tt.user)
 		} else {
-			dgraphtest.CompareJSON(`{"enterpriseLicense":null}`, string(resp))
+			dgraphapi.CompareJSON(`{"enterpriseLicense":null}`, string(resp))
 			// check the error message in case the license is not applied
 			require.Contains(t, err.Error(), tt.message)
 		}
 	}
 }
 
-func assertLicenseNotEnabled(t *testing.T, hcli *dgraphtest.HTTPClient, user string) {
+func assertLicenseNotEnabled(t *testing.T, hcli *dgraphapi.HTTPClient, user string) {
 	response, err := hcli.GetZeroState()
 	require.NoError(t, err)
 

@@ -119,6 +119,7 @@ type ClusterConfig struct {
 	customPlugins         bool
 	snapShotAfterEntries  uint64
 	snapshotAfterDuration time.Duration
+	repoDir               string
 }
 
 func (cc ClusterConfig) WithGraphqlLambdaURL(url string) ClusterConfig {

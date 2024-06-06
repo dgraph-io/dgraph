@@ -24,13 +24,14 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
+	"github.com/dgraph-io/dgraph/dgraphapi"
 	"github.com/dgraph-io/dgraph/dgraphtest"
 	"github.com/dgraph-io/dgraph/x"
 )
 
 type LicenseTestSuite struct {
 	suite.Suite
-	dc dgraphtest.Cluster
+	dc dgraphapi.Cluster
 	lc *dgraphtest.LocalCluster
 	uc dgraphtest.UpgradeCombo
 }

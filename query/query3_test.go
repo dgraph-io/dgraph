@@ -29,7 +29,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/metadata"
 
-	"github.com/dgraph-io/dgraph/dgraphtest"
+	"github.com/dgraph-io/dgraph/dgraphapi"
 	"github.com/dgraph-io/dgraph/testutil"
 )
 
@@ -2346,9 +2346,9 @@ func TestPasswordExpandAll1(t *testing.T) {
 	`
 	js := processQueryNoErr(t, query)
 	// During upgrade tests, UIDs of groot and guardians nodes might change.
-	a := dgraphtest.CompareJSON(`{"data":{"me":[{"alive":true,
+	a := dgraphapi.CompareJSON(`{"data":{"me":[{"alive":true,
 	"gender":"female", "name":"Michonne"}]}}`, js)
-	b := dgraphtest.CompareJSON(`{"data":{"me":[{"alive":true, "dgraph.xid":"guardians",
+	b := dgraphapi.CompareJSON(`{"data":{"me":[{"alive":true, "dgraph.xid":"guardians",
 	"gender":"female","name":"Michonne"}]}}`, js)
 	if a != nil && b != nil {
 		t.Error(a)
@@ -2366,9 +2366,9 @@ func TestPasswordExpandAll2(t *testing.T) {
 	`
 	js := processQueryNoErr(t, query)
 	// During upgrade tests, UIDs of groot and guardians nodes might change.
-	a := dgraphtest.CompareJSON(`{"data":{"me":[{"alive":true, "checkpwd(password)":false,
+	a := dgraphapi.CompareJSON(`{"data":{"me":[{"alive":true, "checkpwd(password)":false,
 	"gender":"female", "name":"Michonne"}]}}`, js)
-	b := dgraphtest.CompareJSON(`{"data":{"me":[{"alive":true, "dgraph.xid":"guardians",
+	b := dgraphapi.CompareJSON(`{"data":{"me":[{"alive":true, "dgraph.xid":"guardians",
 	"checkpwd(password)":false, "gender":"female", "name":"Michonne"}]}}`, js)
 	if a != nil && b != nil {
 		t.Error(a)
@@ -3213,8 +3213,8 @@ func TestMultiRegexInFilter(t *testing.T) {
 	`
 	res := processQueryNoErr(t, query)
 	// During upgrade tests, UIDs of groot and guardians nodes might change.
-	a := dgraphtest.CompareJSON(`{"data": {"q": [{"alive":true, "gender":"female","name":"Michonne"}]}}`, res)
-	b := dgraphtest.CompareJSON(`{"data": {"q": [{"alive":true, "dgraph.xid":"guardians",
+	a := dgraphapi.CompareJSON(`{"data": {"q": [{"alive":true, "gender":"female","name":"Michonne"}]}}`, res)
+	b := dgraphapi.CompareJSON(`{"data": {"q": [{"alive":true, "dgraph.xid":"guardians",
 		"gender":"female","name":"Michonne"}]}}`, res)
 	if a != nil && b != nil {
 		t.Error(a)

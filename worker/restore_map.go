@@ -45,6 +45,7 @@ import (
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/tok/hnsw"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
@@ -544,6 +545,23 @@ func (m *mapper) processReqCh(ctx context.Context) error {
 				// then update all values to the zeroth(default) namespace.
 				// i.e 2-email => 0-email
 				if err := transformNamespaceToZero(parsedKey); err != nil {
+					return err
+				}
+			}
+
+			// If the backup was taken on old version, we need to set unique to true for xid predicates.
+			if parsedKey.IsSchema() {
+				var update pb.SchemaUpdate
+				if err := update.Unmarshal(kv.Value); err != nil {
+					return err
+				}
+
+				if strings.HasSuffix(update.Predicate, "dgraph.xid") && !update.Unique && schema.IsUniqueDgraphXid {
+					update.Unique = true
+				}
+
+				kv.Value, err = update.Marshal()
+				if err != nil {
 					return err
 				}
 			}

@@ -18,6 +18,7 @@ package dgraphtest
 
 import (
 	"github.com/dgraph-io/dgo/v230"
+	"github.com/dgraph-io/dgraph/dgraphapi"
 	"github.com/dgraph-io/dgraph/testutil"
 )
 
@@ -27,30 +28,23 @@ func NewComposeCluster() *ComposeCluster {
 	return &ComposeCluster{}
 }
 
-func (c *ComposeCluster) Client() (*GrpcClient, func(), error) {
+func (c *ComposeCluster) Client() (*dgraphapi.GrpcClient, func(), error) {
 	client, err := testutil.DgraphClient(testutil.SockAddr)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	return &GrpcClient{Dgraph: client}, func() {}, nil
+	return &dgraphapi.GrpcClient{Dgraph: client}, func() {}, nil
 }
 
 // HTTPClient creates an HTTP client
-func (c *ComposeCluster) HTTPClient() (*HTTPClient, error) {
-	adminUrl := "http://" + testutil.SockAddrHttp + "/admin"
-	graphQLUrl := "http://" + testutil.SockAddrHttp + "/graphql"
-	licenseUrl := "http://" + testutil.SockAddrZeroHttp + "/enterpriseLicense"
-	stateUrl := "http://" + testutil.SockAddrZeroHttp + "/state"
-	dqlUrl := "http://" + testutil.SockAddrHttp + "/query"
-	return &HTTPClient{
-		adminURL:   adminUrl,
-		graphqlURL: graphQLUrl,
-		licenseURL: licenseUrl,
-		stateURL:   stateUrl,
-		dqlURL:     dqlUrl,
-		HttpToken:  &HttpToken{},
-	}, nil
+func (c *ComposeCluster) HTTPClient() (*dgraphapi.HTTPClient, error) {
+	httpClient, err := dgraphapi.GetHttpClient(testutil.SockAddrHttp, testutil.SockAddrZeroHttp)
+	if err != nil {
+		return nil, err
+	}
+	httpClient.HttpToken = &dgraphapi.HttpToken{}
+	return httpClient, nil
 }
 
 func (c *ComposeCluster) AlphasHealth() ([]string, error) {
@@ -70,5 +64,10 @@ func (c *ComposeCluster) GetVersion() string {
 }
 
 func (c *ComposeCluster) GetEncKeyPath() (string, error) {
+	return "", errNotImplemented
+}
+
+// GetRepoDir returns the repositroty directory of the cluster
+func (c *ComposeCluster) GetRepoDir() (string, error) {
 	return "", errNotImplemented
 }
