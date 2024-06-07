@@ -1494,7 +1494,6 @@ func buildAggregateFields(
 				Attr:  "count(" + constructedForDgraphPredicate + ")",
 			}
 			// Add filter to count aggregation field.
-			// TODO: IA: add filter queries
 			_, aggFilterQueries := addFilter(aggregateChild, constructedForType, fieldFilter, f.Alias())
 			filterQueries = append(filterQueries, aggFilterQueries...)
 
@@ -1927,7 +1926,7 @@ func addFilter(q *dql.GraphQuery, typ schema.Type, filter map[string]interface{}
 	}
 
 	if typ.IsUnion() {
-		if filter, includeField := buildUnionFilter(typ, filter); includeField {
+		if filter, filterQueries, includeField := buildUnionFilter(typ, filter, queryName); includeField {
 			q.Filter = filter
 		} else {
 			return false, filterQueries
@@ -2330,12 +2329,13 @@ func buildMultiPolygon(multipolygon map[string]interface{}, buf *bytes.Buffer) {
 	x.Check2(buf.WriteString("]"))
 }
 
-func buildUnionFilter(typ schema.Type, filter map[string]interface{}) (*dql.FilterTree, bool) {
+func buildUnionFilter(typ schema.Type, filter map[string]interface{}, queryName string) (*dql.FilterTree, []*dql.GraphQuery, bool) {
+	var queries []*dql.GraphQuery
 	memberTypesList, ok := filter["memberTypes"].([]interface{})
 	// if memberTypes was specified to be an empty list like: { memberTypes: [], ...},
 	// then we don't need to include the field, on which the filter was specified, in the query.
 	if ok && len(memberTypesList) == 0 {
-		return nil, false
+		return nil, queries, false
 	}
 
 	ft := &dql.FilterTree{
@@ -2353,8 +2353,8 @@ func buildUnionFilter(typ schema.Type, filter map[string]interface{}) (*dql.Filt
 			memberTypeFt = &dql.FilterTree{Func: buildTypeFunc(memberType.DgraphName())}
 		} else {
 			// else we need to query only the nodes which match the filter for that member type
-			// TODO: IA: capture filter queries
-			ft, _ := buildFilter(memberType, memberTypeFilter, "qn")
+			ft, qs := buildFilter(memberType, memberTypeFilter, queryName)
+			queries = qs
 			memberTypeFt = &dql.FilterTree{
 				Op: "and",
 				Child: []*dql.FilterTree{
@@ -2367,7 +2367,7 @@ func buildUnionFilter(typ schema.Type, filter map[string]interface{}) (*dql.Filt
 	}
 
 	// return true because we want to include the field with filter in query
-	return ft, true
+	return ft, queries, true
 }
 
 func maybeQuoteArg(fn string, arg interface{}) string {
