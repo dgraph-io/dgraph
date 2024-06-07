@@ -22,6 +22,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/dgraph-io/dgraph/dgraphapi"
 	"github.com/dgraph-io/dgraph/dgraphtest"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -34,8 +35,8 @@ func TestMain(m *testing.M) {
 	client, cleanup, err = dc.Client()
 	x.Panic(err)
 	defer cleanup()
-	x.Panic(client.LoginIntoNamespace(context.Background(), dgraphtest.DefaultUser,
-		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	x.Panic(client.LoginIntoNamespace(context.Background(), dgraphapi.DefaultUser,
+		dgraphapi.DefaultPassword, x.GalaxyNamespace))
 
 	populateCluster(dc)
 	m.Run()

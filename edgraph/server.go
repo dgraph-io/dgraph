@@ -303,7 +303,7 @@ func parseSchemaFromAlterOperation(ctx context.Context, op *api.Operation) (
 
 		// Pre-defined predicates cannot be altered but let the update go through
 		// if the update is equal to the existing one.
-		if schema.IsPreDefPredChanged(update) {
+		if schema.CheckAndModifyPreDefPredicate(update) {
 			return nil, errors.Errorf("predicate %s is pre-defined and is not allowed to be"+
 				" modified", x.ParseAttr(update.Predicate))
 		}

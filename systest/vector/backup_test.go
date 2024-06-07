@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgo/v230/protos/api"
+	"github.com/dgraph-io/dgraph/dgraphapi"
 	"github.com/dgraph-io/dgraph/dgraphtest"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
@@ -43,12 +44,12 @@ func TestVectorIncrBackupRestore(t *testing.T) {
 	require.NoError(t, err)
 	defer cleanup()
 	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace))
 
 	hc, err := c.HTTPClient()
 	require.NoError(t, err)
-	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
-		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
+		dgraphapi.DefaultPassword, x.GalaxyNamespace))
 
 	require.NoError(t, gc.SetupSchema(testSchema))
 
@@ -59,7 +60,7 @@ func TestVectorIncrBackupRestore(t *testing.T) {
 	for i := 1; i <= 5; i++ {
 		var rdfs string
 		var vectors [][]float32
-		rdfs, vectors = dgraphtest.GenerateRandomVectors(numVectors*(i-1), numVectors*i, 1, pred)
+		rdfs, vectors = dgraphapi.GenerateRandomVectors(numVectors*(i-1), numVectors*i, 1, pred)
 		allVectors = append(allVectors, vectors)
 		allRdfs = append(allRdfs, rdfs)
 		mu := &api.Mutation{SetNquads: []byte(rdfs), CommitNow: true}
@@ -75,7 +76,7 @@ func TestVectorIncrBackupRestore(t *testing.T) {
 
 		incrFrom := i - 1
 		require.NoError(t, hc.Restore(c, dgraphtest.DefaultBackupDir, "", incrFrom, i))
-		require.NoError(t, dgraphtest.WaitForRestore(c))
+		require.NoError(t, dgraphapi.WaitForRestore(c))
 		query := `{
 			vector(func: has(project_discription_v)) {
 				   count(uid)
@@ -120,18 +121,18 @@ func TestVectorBackupRestore(t *testing.T) {
 	require.NoError(t, err)
 	defer cleanup()
 	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace))
 
 	hc, err := c.HTTPClient()
 	require.NoError(t, err)
-	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
-		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
+		dgraphapi.DefaultPassword, x.GalaxyNamespace))
 
 	require.NoError(t, gc.SetupSchema(testSchema))
 
 	numVectors := 1000
 	pred := "project_discription_v"
-	rdfs, vectors := dgraphtest.GenerateRandomVectors(0, numVectors, 10, pred)
+	rdfs, vectors := dgraphapi.GenerateRandomVectors(0, numVectors, 10, pred)
 
 	mu := &api.Mutation{SetNquads: []byte(rdfs), CommitNow: true}
 	_, err = gc.Mutate(mu)
@@ -142,7 +143,7 @@ func TestVectorBackupRestore(t *testing.T) {
 
 	t.Log("restoring backup \n")
 	require.NoError(t, hc.Restore(c, dgraphtest.DefaultBackupDir, "", 0, 0))
-	require.NoError(t, dgraphtest.WaitForRestore(c))
+	require.NoError(t, dgraphapi.WaitForRestore(c))
 
 	testVectorQuery(t, gc, vectors, rdfs, pred, numVectors)
 }
@@ -159,19 +160,19 @@ func TestVectorBackupRestoreDropIndex(t *testing.T) {
 	require.NoError(t, err)
 	defer cleanup()
 	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace))
 
 	hc, err := c.HTTPClient()
 	require.NoError(t, err)
-	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
-		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
+		dgraphapi.DefaultPassword, x.GalaxyNamespace))
 
 	// add vector predicate + index
 	require.NoError(t, gc.SetupSchema(testSchema))
 	// add data to the vector predicate
 	numVectors := 3
 	pred := "project_discription_v"
-	rdfs, vectors := dgraphtest.GenerateRandomVectors(0, numVectors, 1, pred)
+	rdfs, vectors := dgraphapi.GenerateRandomVectors(0, numVectors, 1, pred)
 	mu := &api.Mutation{SetNquads: []byte(rdfs), CommitNow: true}
 	_, err = gc.Mutate(mu)
 	require.NoError(t, err)
@@ -183,7 +184,7 @@ func TestVectorBackupRestoreDropIndex(t *testing.T) {
 	require.NoError(t, gc.SetupSchema(testSchemaWithoutIndex))
 
 	// add more data to the vector predicate
-	rdfs, vectors2 := dgraphtest.GenerateRandomVectors(3, numVectors+3, 1, pred)
+	rdfs, vectors2 := dgraphapi.GenerateRandomVectors(3, numVectors+3, 1, pred)
 	mu = &api.Mutation{SetNquads: []byte(rdfs), CommitNow: true}
 	_, err = gc.Mutate(mu)
 	require.NoError(t, err)
@@ -212,7 +213,7 @@ func TestVectorBackupRestoreDropIndex(t *testing.T) {
 	// restore backup
 	t.Log("restoring backup \n")
 	require.NoError(t, hc.Restore(c, dgraphtest.DefaultBackupDir, "", 0, 0))
-	require.NoError(t, dgraphtest.WaitForRestore(c))
+	require.NoError(t, dgraphapi.WaitForRestore(c))
 
 	query := ` {
 		vectors(func: has(project_discription_v)) {
@@ -247,18 +248,18 @@ func TestVectorBackupRestoreReIndexing(t *testing.T) {
 	require.NoError(t, err)
 	defer cleanup()
 	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace))
 
 	hc, err := c.HTTPClient()
 	require.NoError(t, err)
-	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
-		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
+		dgraphapi.DefaultPassword, x.GalaxyNamespace))
 
 	require.NoError(t, gc.SetupSchema(testSchema))
 
 	numVectors := 1000
 	pred := "project_discription_v"
-	rdfs, vectors := dgraphtest.GenerateRandomVectors(0, numVectors, 10, pred)
+	rdfs, vectors := dgraphapi.GenerateRandomVectors(0, numVectors, 10, pred)
 
 	mu := &api.Mutation{SetNquads: []byte(rdfs), CommitNow: true}
 	_, err = gc.Mutate(mu)
@@ -267,14 +268,14 @@ func TestVectorBackupRestoreReIndexing(t *testing.T) {
 	t.Log("taking backup \n")
 	require.NoError(t, hc.Backup(c, false, dgraphtest.DefaultBackupDir))
 
-	rdfs2, vectors2 := dgraphtest.GenerateRandomVectors(numVectors, numVectors+300, 10, pred)
+	rdfs2, vectors2 := dgraphapi.GenerateRandomVectors(numVectors, numVectors+300, 10, pred)
 
 	mu = &api.Mutation{SetNquads: []byte(rdfs2), CommitNow: true}
 	_, err = gc.Mutate(mu)
 	require.NoError(t, err)
 	t.Log("restoring backup \n")
 	require.NoError(t, hc.Restore(c, dgraphtest.DefaultBackupDir, "", 2, 1))
-	require.NoError(t, dgraphtest.WaitForRestore(c))
+	require.NoError(t, dgraphapi.WaitForRestore(c))
 
 	for i := 0; i < 5; i++ {
 		// drop index

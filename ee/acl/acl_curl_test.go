@@ -22,7 +22,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgraph/dgraphtest"
+	"github.com/dgraph-io/dgraph/dgraphapi"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -37,13 +37,13 @@ func (asuite *AclTestSuite) TestCurlAuthorization() {
 	gc, cleanup, err := asuite.dc.Client()
 	require.NoError(t, err)
 	defer cleanup()
-	require.NoError(t, gc.LoginIntoNamespace(ctx, dgraphtest.DefaultUser,
-		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	require.NoError(t, gc.LoginIntoNamespace(ctx, dgraphapi.DefaultUser,
+		dgraphapi.DefaultPassword, x.GalaxyNamespace))
 
 	hc, err := asuite.dc.HTTPClient()
 	require.NoError(t, err)
-	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
-		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
+		dgraphapi.DefaultPassword, x.GalaxyNamespace))
 	createAccountAndData(t, gc, hc)
 
 	// test query through curl
@@ -104,8 +104,8 @@ func (asuite *AclTestSuite) TestCurlAuthorization() {
 	require.NoError(t, err, fmt.Sprintf("login through refresh httpToken failed: %v", err))
 	hcWithGroot, err := asuite.dc.HTTPClient()
 	require.NoError(t, err)
-	require.NoError(t, hcWithGroot.LoginIntoNamespace(dgraphtest.DefaultUser,
-		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	require.NoError(t, hcWithGroot.LoginIntoNamespace(dgraphapi.DefaultUser,
+		dgraphapi.DefaultPassword, x.GalaxyNamespace))
 	createGroupAndAcls(t, unusedGroup, false, hcWithGroot)
 	time.Sleep(expireJwtSleep)
 	testutil.VerifyCurlCmd(t, queryArgs(hc.AccessJwt), &testutil.CurlFailureConfig{
@@ -129,8 +129,8 @@ func (asuite *AclTestSuite) TestCurlAuthorization() {
 		ShouldFail:   true,
 		DgraphErrMsg: "PermissionDenied",
 	})
-	require.NoError(t, hcWithGroot.LoginIntoNamespace(dgraphtest.DefaultUser,
-		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	require.NoError(t, hcWithGroot.LoginIntoNamespace(dgraphapi.DefaultUser,
+		dgraphapi.DefaultPassword, x.GalaxyNamespace))
 	createGroupAndAcls(t, devGroup, true, hcWithGroot)
 	time.Sleep(defaultTimeToSleep)
 	// refresh the jwts again

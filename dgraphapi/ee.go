@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package dgraphtest
+package dgraphapi
 
 import (
 	"encoding/json"
@@ -123,7 +123,7 @@ func (hc *HTTPClient) CreateGroup(name string) (string, error) {
 	}
 	resp, err := hc.RunGraphqlQuery(params, true)
 	if err != nil {
-		return "", nil
+		return "", err
 	}
 	type Response struct {
 		AddGroup struct {
@@ -452,4 +452,28 @@ func (hc *HTTPClient) DeleteNamespace(nsID uint64) (uint64, error) {
 		return result.DeleteNamespace.NamespaceId, nil
 	}
 	return 0, errors.New(result.DeleteNamespace.Message)
+}
+
+func (hc *HTTPClient) ListNamespaces() ([]uint64, error) {
+	const listNss = `{ state {
+		namespaces
+	  }
+	}`
+
+	params := GraphQLParams{Query: listNss}
+	resp, err := hc.RunGraphqlQuery(params, true)
+	if err != nil {
+		return nil, err
+	}
+
+	var result struct {
+		State struct {
+			Namespaces []uint64 `json:"namespaces"`
+		} `json:"state"`
+	}
+	if err := json.Unmarshal(resp, &result); err != nil {
+		return nil, errors.Wrap(err, "error unmarshalling response")
+	}
+
+	return result.State.Namespaces, nil
 }

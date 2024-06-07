@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dgraph-io/dgraph/dgraphapi"
 	"github.com/dgraph-io/dgraph/dgraphtest"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
@@ -37,8 +38,8 @@ func TestGraphqlSchema(t *testing.T) {
 
 	hc, err := c.HTTPClient()
 	require.NoError(t, err)
-	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
-		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
+		dgraphapi.DefaultPassword, x.GalaxyNamespace))
 
 	// DGRAPHCORE-329
 	//nolint:lll
@@ -74,7 +75,7 @@ func TestGraphqlSchema(t *testing.T) {
 	# Dgraph.Authorization {"VerificationKey":"secretkey","Header":"X-Test-Auth","Namespace":"https://xyz.io/jwt/claims","Algo":"HS256","Audience":["aud"]}`
 	require.NoError(t, hc.UpdateGQLSchema(sch1))
 
-	params := dgraphtest.GraphQLParams{
+	params := dgraphapi.GraphQLParams{
 		Query: `query {
 			queryCity(filter: { id: { eq: 0 } }) {
 				name
@@ -84,7 +85,7 @@ func TestGraphqlSchema(t *testing.T) {
 	_, err = hc.RunGraphqlQuery(params, false)
 	require.NoError(t, err)
 
-	params = dgraphtest.GraphQLParams{
+	params = dgraphapi.GraphQLParams{
 		Query: `query {
 			queryCity(filter: { id: "0" }) {
 				name
@@ -714,9 +715,9 @@ func TestGraphqlSchema(t *testing.T) {
 	  """
 	  newPlaces: [Place]
 	  """
-	  Uncommon visited places. A place is uncommon if not visited for more than three times prior to the summary date.
+	  Uncommon visited places. A place is Uncommon if not visited for more than three times prior to the summary date.
 	  """
-	  uncommonPlaces: [Place]
+	  UncommonPlaces: [Place]
 	  """
 	  The total number of places visited in the day.
 	  """
@@ -726,9 +727,9 @@ func TestGraphqlSchema(t *testing.T) {
 	  """
 	  newPlaceCount: Int
 	  """
-	  The number of uncommon places visited in the day.
+	  The number of Uncommon places visited in the day.
 	  """
-	  uncommonPlaceCount: Int
+	  UncommonPlaceCount: Int
 	  """
 	  Cummulative time (in seconds) stationary.
 	  """
@@ -738,7 +739,7 @@ func TestGraphqlSchema(t *testing.T) {
 	  """
 	  durationInNewPlaces: Int
 	  """
-	  Cummulative time (in seconds) spent in uncommon places within the day.
+	  Cummulative time (in seconds) spent in Uncommon places within the day.
 	  """
 	  durationInUncommonPlaces: Int
 	  """
