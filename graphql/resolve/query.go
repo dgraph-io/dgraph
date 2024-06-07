@@ -17,6 +17,7 @@
 package resolve
 
 import (
+	"fmt"
 	"context"
 	"encoding/json"
 	"errors"
@@ -127,6 +128,7 @@ func (qr *queryResolver) rewriteAndExecute(ctx context.Context, query schema.Que
 			query.ResponseName()))
 	}
 	qry := dgraph.AsString(dgQuery)
+	fmt.Println("myquery - ", qry)
 
 	queryTimer := newtimer(ctx, &dgraphQueryDuration.OffsetDuration)
 	queryTimer.Start()

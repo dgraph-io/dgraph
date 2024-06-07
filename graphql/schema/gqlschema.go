@@ -1588,6 +1588,15 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition, providesTypeMap map
 				})
 
 			mergeAndAddFilters(filterTypes, schema, filterName)
+		}else if (fld.Type.Name() == "Group"){
+			filterName := fld.Type.Name() + "Filter"
+			filter.Fields = append(filter.Fields,
+				&ast.FieldDefinition{
+					Name: fld.Name,
+					Type: &ast.Type{
+						NamedType: filterName,
+					},
+				})
 		}
 	}
 

@@ -996,7 +996,8 @@ func RewriteUpsertQueryFromMutation(
 			addTypeFunc(dgQuery[0], m.MutatedType().DgraphName())
 		}
 
-		_ = addFilter(dgQuery[0], m.MutatedType(), filter)
+		_, filterQueries := addFilter(dgQuery[0], m.MutatedType(), filter, m.Alias())
+		dgQuery = append(dgQuery, filterQueries...)
 	} else {
 		// It means this is called from upsert with Add mutation.
 		// nodeID will be uid of the node to be upserted. We add UID func
