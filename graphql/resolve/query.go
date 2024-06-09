@@ -128,8 +128,6 @@ func (qr *queryResolver) rewriteAndExecute(ctx context.Context, query schema.Que
 			query.ResponseName()))
 	}
 	qry := dgraph.AsString(dgQuery)
-	fmt.Println("myquery - ", qry)
-
 	queryTimer := newtimer(ctx, &dgraphQueryDuration.OffsetDuration)
 	queryTimer.Start()
 	resp, err := qr.executor.Execute(ctx, &dgoapi.Request{Query: qry, ReadOnly: true}, query)

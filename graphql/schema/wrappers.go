@@ -2372,6 +2372,11 @@ func hasEmbeddingDirective(fd *ast.FieldDefinition) bool {
 	return id != nil
 }
 
+func hasSearchDirective(fd *ast.FieldDefinition) bool {
+	id := fd.Directives.ForName(searchDirective)
+	return id != nil
+}
+
 func (fd *fieldDefinition) HasInterfaceArg() bool {
 	if fd.fieldDef == nil {
 		return false
@@ -2394,6 +2399,46 @@ func hasInterfaceArg(fd *ast.FieldDefinition) bool {
 	}
 
 	return false
+}
+
+// hasInverseReference checks if an inverse predicate is configured for an object.
+func hasInverseReference(sch *ast.Schema, typ *ast.Definition, fd *ast.FieldDefinition) bool {
+	// check that the @hasInverse directive is provided
+	id := fd.Directives.ForName(inverseDirective)
+	if id != nil {
+		return true
+	}
+
+	// also check the reference type.
+	refType := sch.Types[fd.Type.Name()]
+	for _, refField := range refType.Fields {
+		
+		refFieldType := sch.Types[refField.Type.Name()]
+		if refField.Type.Name() != typ.Name && !typ.OneOf(refFieldType.Interfaces...){ 
+			continue
+		}
+
+		refFieldDir := refField.Directives.ForName(inverseDirective);
+		if refFieldDir == nil {
+			continue
+		}
+
+		invField := refFieldDir.Arguments.ForName("field")
+		if invField == nil {
+			continue
+		}
+
+		invFieldName := invField.Value.Raw
+		if invFieldName == fd.Name {
+			return true
+		}
+	}
+	return false
+}
+
+func isCustomType(sch *ast.Schema, fd *ast.FieldDefinition) bool {
+	_, ok := inbuiltTypeToDgraph[fd.Type.Name()]
+	return !ok && sch.Types[fd.Type.Name()].Kind == ast.Object
 }
 
 func isID(fd *ast.FieldDefinition) bool {

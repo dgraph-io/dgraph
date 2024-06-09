@@ -1075,6 +1075,21 @@ func searchValidation(
 			return nil
 		}
 
+		// If the field is an object, it is require to have an inverse edge for filtering.
+		// It's not enough to just check for the @hasInverse directive as it
+		// may be defined in the inverse type.
+		if isCustomType(sch, field) {
+			if !hasInverseReference(sch, typ, field) {
+				errs = append(errs, gqlerror.ErrorPosf(
+					dir.Position,
+					"Type %s; Field %s: has the @search directive for type %s "+
+					"but also requires the @hasInverse directive.",
+					typ.Name, field.Name, field.Type.Name()))
+				return errs
+			}
+			return nil
+		}
+
 		errs = append(errs, gqlerror.ErrorPosf(
 			dir.Position,
 			"Type %s; Field %s: has the @search directive but fields of type %s "+
