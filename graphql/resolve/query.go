@@ -17,7 +17,6 @@
 package resolve
 
 import (
-	"fmt"
 	"context"
 	"encoding/json"
 	"errors"
