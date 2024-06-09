@@ -283,6 +283,7 @@ type FieldDefinition interface {
 	IsID() bool
 	IsExternal() bool
 	HasIDDirective() bool
+	HasSearchDirective() bool
 	HasEmbeddingDirective() bool
 	EmbeddingSearchMetric() string
 	HasInterfaceArg() bool
@@ -2370,6 +2371,13 @@ func (fd *fieldDefinition) EmbeddingSearchMetric() string {
 func hasEmbeddingDirective(fd *ast.FieldDefinition) bool {
 	id := fd.Directives.ForName(embeddingDirective)
 	return id != nil
+}
+
+func (fd *fieldDefinition) HasSearchDirective() bool {
+	if fd.fieldDef == nil {
+		return false
+	}
+	return hasSearchDirective(fd.fieldDef)
 }
 
 func hasSearchDirective(fd *ast.FieldDefinition) bool {

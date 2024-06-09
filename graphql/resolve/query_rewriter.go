@@ -2058,9 +2058,10 @@ func buildFilter(typ schema.Type, filter map[string]interface{}, queryName strin
 		default:
 
 			// handle nested object filtering
-			if typ.Field(field).Inverse() != nil {
-				fil, qs := buildFilter(typ.Field(field).Type(), filter[field].(map[string]interface{}), qn)
-				queries = append(queries, qs...)				
+			fd := typ.Field(field)
+			if fd != nil && fd.HasSearchDirective() && fd.Inverse() != nil {
+				fil, qs := buildFilter(fd.Type(), filter[field].(map[string]interface{}), qn)
+				queries = append(queries, qs...)			
 				
 				// add the uids of the nested object
 				ands = append(ands, &dql.FilterTree{
@@ -2078,11 +2079,11 @@ func buildFilter(typ schema.Type, filter map[string]interface{}, queryName strin
 					Attr: "var",
 					Func: &dql.Function{
 						Name: "type",
-						Args: []dql.Arg{{Value: typ.Field(field).Type().Name()}},
+						Args: []dql.Arg{{Value: fd.Type().Name()}},
 					},
 					Filter: fil,
 					Children: []*dql.GraphQuery{{
-						Attr: typ.Field(field).Inverse().DgraphPredicate(),
+						Attr: fd.Inverse().DgraphPredicate(),
 						Var: qn,
 					}},
 				})
