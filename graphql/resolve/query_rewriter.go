@@ -1494,8 +1494,7 @@ func buildAggregateFields(
 				Attr:  "count(" + constructedForDgraphPredicate + ")",
 			}
 			// Add filter to count aggregation field.
-			_, aggFilterQueries := addFilter(aggregateChild, constructedForType, fieldFilter, f.Alias())
-			filterQueries = append(filterQueries, aggFilterQueries...)
+			addFilter(aggregateChild, constructedForType, fieldFilter, f.Alias())
 
 			// Add type filter in case the Dgraph predicate for which the aggregate
 			// field belongs to is a reverse edge
@@ -1948,6 +1947,8 @@ func addFilter(q *dql.GraphQuery, typ schema.Type, filter map[string]interface{}
 // filter: { title: { anyofterms: "GraphQL" }, isPublished: true, ... }
 // or
 // filter: { title: { anyofterms: "GraphQL" }, and: { not: { ... } } }
+// or
+// filter: { <nested-field>: { ... }, ... }
 // etc
 //
 // typ is the GraphQL type we are filtering on, and is needed to turn for example
@@ -2056,8 +2057,15 @@ func buildFilter(typ schema.Type, filter map[string]interface{}, queryName strin
 				})
 			queries = append(queries, qs...)
 		default:
-
-			// handle nested object filtering
+			// Handle nested object filtering
+			// 
+			// filter: { <nested-field>: { ... }, ... }
+			//     we are here ^^
+			// ->
+			// var() @filter(<nested-field-filter>){
+			// 		nested_field_name as <inverse field>
+			// }
+			// root() @filter(var(nested_field_name))
 			fd := typ.Field(field)
 			if fd != nil && fd.HasSearchDirective() && fd.Inverse() != nil {
 				fil, qs := buildFilter(fd.Type(), filter[field].(map[string]interface{}), qn)
@@ -2089,6 +2097,7 @@ func buildFilter(typ schema.Type, filter map[string]interface{}, queryName strin
 				})
 				continue
 			}
+
 			//// It's a base case like:
 			//// title: { anyofterms: "GraphQL" } ->  anyofterms(Post.title: "GraphQL")
 			//// numLikes: { between : { min : 10,  max:100 }}
