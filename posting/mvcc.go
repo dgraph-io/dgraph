@@ -32,6 +32,7 @@ import (
 	"github.com/dgraph-io/badger/v4"
 	bpb "github.com/dgraph-io/badger/v4/pb"
 	"github.com/dgraph-io/dgo/v230/protos/api"
+	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
@@ -433,9 +434,12 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 		return nil, ErrInvalidKey
 	}
 
+	readUids := true
+
 	l := new(List)
 	l.key = key
 	l.plist = new(pb.PostingList)
+	l.uidMap = make(map[uint64]struct{}, 0)
 
 	// We use the following block of code to trigger incremental rollup on this key.
 	deltaCount := 0
@@ -472,6 +476,17 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 			}
 			l.minTs = item.Version()
 
+			if readUids && l.plist.Pack != nil {
+				dec := codec.Decoder{Pack: l.plist.Pack}
+				uids := dec.Seek(0, codec.SeekStart)
+				for len(uids) != 0 {
+					for _, i := range uids {
+						l.uidMap[i] = struct{}{}
+					}
+					uids = dec.Next()
+				}
+			}
+
 			// No need to do Next here. The outer loop can take care of skipping
 			// more versions of the same key.
 			return l, nil
@@ -491,6 +506,21 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 					l.mutationMap = make(map[uint64]*pb.PostingList)
 				}
 				l.mutationMap[pl.CommitTs] = pl
+				if readUids {
+					for _, i := range l.plist.Postings {
+						if hasDeleteAll(i) {
+							readUids = false
+							return nil
+						}
+						if i.Uid != 0 {
+							if i.Op == Set {
+								l.uidMap[i.Uid] = struct{}{}
+							} else {
+								delete(l.uidMap, i.Uid)
+							}
+						}
+					}
+				}
 				return nil
 			})
 			if err != nil {
@@ -516,10 +546,11 @@ func copyList(l *List) *List {
 	l.AssertRLock()
 	// No need to clone the immutable layer or the key since mutations will not modify it.
 	lCopy := &List{
-		minTs: l.minTs,
-		maxTs: l.maxTs,
-		key:   l.key,
-		plist: l.plist,
+		minTs:  l.minTs,
+		maxTs:  l.maxTs,
+		key:    l.key,
+		plist:  l.plist,
+		uidMap: l.uidMap,
 	}
 	lCopy.mutationMap = make(map[uint64]*pb.PostingList, len(l.mutationMap))
 	for k, v := range l.mutationMap {

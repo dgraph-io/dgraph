@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	"fmt"
 	"log"
 	"math"
 	"sort"
@@ -78,6 +79,7 @@ type List struct {
 	mutationMap map[uint64]*pb.PostingList
 	minTs       uint64 // commit timestamp of immutable layer, reject reads before this ts.
 	maxTs       uint64 // max commit timestamp seen for this list.
+	uidMap      map[uint64]struct{}
 }
 
 func indexEdgeToPbEdge(t *index.KeyValue) *pb.DirectedEdge {
@@ -561,13 +563,20 @@ func (l *List) setMutationAfterCommit(startTs, commitTs uint64, data []byte) {
 	pl := new(pb.PostingList)
 	x.Check(pl.Unmarshal(data))
 	pl.CommitTs = commitTs
+	l.Lock()
 	for _, p := range pl.Postings {
+		if p.Uid != 0 {
+			if p.Op == Set {
+				l.uidMap[p.Uid] = struct{}{}
+			} else {
+				delete(l.uidMap, p.Uid)
+			}
+		}
 		p.CommitTs = commitTs
 	}
 
 	x.AssertTrue(pl.Pack == nil)
 
-	l.Lock()
 	if l.mutationMap == nil {
 		l.mutationMap = make(map[uint64]*pb.PostingList)
 	}
@@ -583,6 +592,15 @@ func (l *List) setMutation(startTs uint64, data []byte) {
 	x.Check(pl.Unmarshal(data))
 
 	l.Lock()
+	for _, p := range pl.Postings {
+		if p.Uid != 0 {
+			if p.Op == Set {
+				l.uidMap[p.Uid] = struct{}{}
+			} else {
+				delete(l.uidMap, p.Uid)
+			}
+		}
+	}
 	if l.mutationMap == nil {
 		l.mutationMap = make(map[uint64]*pb.PostingList)
 	}
@@ -676,6 +694,19 @@ func (l *List) pickPostings(readTs uint64) (uint64, []*pb.Posting) {
 
 func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) error) error {
 	l.AssertRLock()
+
+	if l.uidMap != nil && len(l.uidMap) != 0 {
+		var err error
+		for i := range l.uidMap {
+			mp := &pb.Posting{}
+			mp.Uid = i
+			err = f(mp)
+		}
+		if err == ErrStopIteration {
+			return nil
+		}
+		return err
+	}
 
 	// mposts is the list of mutable postings
 	deleteBelowTs, mposts := l.pickPostings(readTs)
@@ -1262,6 +1293,23 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 	}
 	// Pre-assign length to make it faster.
 	l.RLock()
+	if l.uidMap != nil {
+		out := &pb.List{}
+		if opt.Intersect != nil {
+			for _, i := range opt.Intersect.Uids {
+				if _, ok := l.uidMap[i]; ok {
+					out.Uids = append(out.Uids, i)
+				}
+			}
+		} else {
+			for i := range l.uidMap {
+				out.Uids = append(out.Uids, i)
+			}
+		}
+		fmt.Println("Here")
+		l.RUnlock()
+		return out, nil
+	}
 	// Use approximate length for initial capacity.
 	res := make([]uint64, 0, len(l.mutationMap)+codec.ApproxLen(l.plist.Pack))
 	out := &pb.List{}
