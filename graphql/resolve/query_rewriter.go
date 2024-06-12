@@ -1898,8 +1898,8 @@ func idFilter(filter map[string]interface{}, idField schema.FieldDefinition) []u
 // addFilter adds a filter to the input DQL query. It returns false if the field for which the
 // filter was specified should not be included in the DQL query.
 // Currently, it would only be false for a union field when no memberTypes are queried.
-func addFilter(q *dql.GraphQuery, typ schema.Type, filter map[string]interface{}, queryName string)(bool, []*dql.GraphQuery){
-	
+func addFilter(q *dql.GraphQuery, typ schema.Type, filter map[string]interface{}, queryName string) (bool, []*dql.GraphQuery) {
+
 	filterQueries := []*dql.GraphQuery{}
 
 	if len(filter) == 0 {
@@ -2058,7 +2058,7 @@ func buildFilter(typ schema.Type, filter map[string]interface{}, queryName strin
 			queries = append(queries, qs...)
 		default:
 			// Handle nested object filtering
-			// 
+			//
 			// filter: { <nested-field>: { ... }, ... }
 			//     we are here ^^
 			// ->
@@ -2069,11 +2069,11 @@ func buildFilter(typ schema.Type, filter map[string]interface{}, queryName strin
 			fd := typ.Field(field)
 			if fd != nil && fd.HasSearchDirective() && fd.Inverse() != nil {
 				fil, qs := buildFilter(fd.Type(), filter[field].(map[string]interface{}), qn)
-				queries = append(queries, qs...)			
-				
+				queries = append(queries, qs...)
+
 				// add the uids of the nested object
 				ands = append(ands, &dql.FilterTree{
-					Op:    "and",
+					Op: "and",
 					Child: []*dql.FilterTree{{
 						Func: &dql.Function{
 							Name: "uid",
@@ -2092,7 +2092,7 @@ func buildFilter(typ schema.Type, filter map[string]interface{}, queryName strin
 					Filter: fil,
 					Children: []*dql.GraphQuery{{
 						Attr: fd.Inverse().DgraphPredicate(),
-						Var: qn,
+						Var:  qn,
 					}},
 				})
 				continue

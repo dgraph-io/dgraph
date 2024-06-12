@@ -1079,11 +1079,11 @@ func searchValidation(
 		// It's not enough to just check for the @hasInverse directive as it
 		// may be defined in the inverse type.
 		if isCustomType(sch, field) {
-			if !hasInverseReference(sch, typ, field) {
+			if !hasInverse(sch, typ, field) {
 				errs = append(errs, gqlerror.ErrorPosf(
 					dir.Position,
 					"Type %s; Field %s: has the @search directive for type %s "+
-					"but also requires the @hasInverse directive.",
+						"but also requires the @hasInverse directive.",
 					typ.Name, field.Name, field.Type.Name()))
 				return errs
 			}

@@ -404,7 +404,7 @@ invalid_schemas:
       ]
 
   -
-    name: "Search will error on type that can't have the @search"
+    name: "Search will error on type that require @hasInverse directive"
     input: |
       type X {
         y: Y @search
@@ -413,8 +413,22 @@ invalid_schemas:
         y: String
       }
     errlist: [
-      {"message": "Type X; Field y: has the @search directive but fields of type Y
-          can't have the @search directive.",
+      {"message": "Type X; Field y: has the @search directive for type Y but also requires
+          the @hasInverse directive.",
+      "locations":[{"line":2, "column":9}]}
+      ]
+  -
+    name: "Search will error on interface that require @hasInverse directive"
+    input: |
+      type X {
+        y: Y @search
+      }
+      interface Y {
+        y: String
+      }
+    errlist: [
+      {"message": "Type X; Field y: has the @search directive for type Y but also requires
+          the @hasInverse directive.",
       "locations":[{"line":2, "column":9}]}
       ]
 
@@ -3148,6 +3162,38 @@ valid_schemas:
       }
       enum E {
         A
+      }
+
+  -
+    name: "Correct search on object type"
+    input: |
+      type X {
+        y: Y @hasInverse(field: x) @search
+        y2: Y @search
+        y3: Y @hasInverse(field: x3) @search
+      }
+      type Y {
+        x: X
+        x2: X @hasInverse(field: y2)
+        x3: X @hasInverse(field: y3) @search
+      }
+
+  -
+    name: "Correct search on interface type"
+    input: |
+      type X {
+        y: Y @hasInverse(field: x) @search
+        y2: Y @search
+        y3: Y @hasInverse(field: x3) @search
+        y4: Y
+        y5: Y @hasInverse(field: x5)
+      }
+      interface Y {
+        x: X
+        x2: X @hasInverse(field: y2)
+        x3: X @hasInverse(field: y3) @search
+        x4: X @hasInverse(field: y4) @search
+        x5: X @search
       }
 
   -
