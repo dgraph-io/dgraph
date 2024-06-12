@@ -941,13 +941,19 @@ func (n *node) retrieveSnapshot(snap pb.Snapshot) error {
 	var pool *conn.Pool
 	addr := snap.Context.GetAddr()
 	glog.V(2).Infof("Snapshot.RaftContext.Addr: %q", addr)
-	if len(addr) > 0 {
+	if addr == n.MyAddr {
+		// There was a bug here. If the the address was my address, then the
+		// snapshot request would loop back to myself, and get stuck in an
+		// infinite loop.
+		glog.V(2).Infof("Snapshot.RaftContext address is mine. Skipping that...")
+
+	} else if len(addr) > 0 {
 		p, err := conn.GetPools().Get(addr)
 		if err != nil {
 			glog.V(2).Infof("conn.Get(%q) Error: %v", addr, err)
 		} else {
 			pool = p
-			glog.V(2).Infof("Leader connection picked from RaftContext")
+			glog.V(2).Infof("Leader connection picked from RaftContext: %s", addr)
 		}
 	}
 	if pool == nil {
@@ -957,6 +963,7 @@ func (n *node) retrieveSnapshot(snap pb.Snapshot) error {
 			return err
 		}
 		pool = p
+		glog.V(2).Infof("Leader connection picked from membership state: %s", p.Addr)
 	}
 
 	// Need to clear pl's stored in memory for the case when retrieving snapshot with
@@ -1890,6 +1897,7 @@ func (n *node) InitAndStartNode() {
 	_, _ = n.startTask(opRollup)
 	go n.stopAllTasks()
 	go n.Run()
+	go n.checkForFailedSnapshot()
 }
 
 func (n *node) AmLeader() bool {
