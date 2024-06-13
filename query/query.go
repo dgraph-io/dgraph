@@ -112,6 +112,8 @@ type params struct {
 	Count int
 	// Offset is the value of the "offset" parameter.
 	Offset int
+	// Every is the value of the "every" parameter
+	Every int
 	// AfterUID is the value of the "after" parameter.
 	AfterUID uint64
 	// DoCount is true if the count of the predicate is requested instead of its value.
@@ -742,6 +744,14 @@ func (args *params) fill(gq *dql.GraphQuery) error {
 			return err
 		}
 		args.Count = int(first)
+	}
+
+	if v, ok := gq.Args["every"]; ok {
+		every, err := strconv.ParseInt(v, 0, 32)
+		if err != nil {
+			return err
+		}
+		args.Every = int(every)
 	}
 	return nil
 }
@@ -1672,19 +1682,16 @@ func (sg *SubGraph) populateFacetVars(doneVars map[string]varValue, sgPath []*Su
 // recursiveFillVars fills the value of variables before a query is to be processed using the result
 // of the values (doneVars) computed by other queries that were successfully run before this query.
 func (sg *SubGraph) recursiveFillVars(doneVars map[string]varValue) error {
-	err := sg.fillVars(doneVars)
-	if err != nil {
+	if err := sg.fillVars(doneVars); err != nil {
 		return err
 	}
 	for _, child := range sg.Children {
-		err = child.recursiveFillVars(doneVars)
-		if err != nil {
+		if err := child.recursiveFillVars(doneVars); err != nil {
 			return err
 		}
 	}
 	for _, fchild := range sg.Filters {
-		err = fchild.recursiveFillVars(doneVars)
-		if err != nil {
+		if err := fchild.recursiveFillVars(doneVars); err != nil {
 			return err
 		}
 	}
@@ -2144,7 +2151,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		switch {
 		case isInequalityFn && sg.SrcFunc.IsValueVar:
 			// This is a ineq function which uses a value variable.
-			err = sg.applyIneqFunc()
+			err := sg.applyIneqFunc()
 			if parent != nil {
 				rch <- err
 				return
@@ -2251,7 +2258,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 
 		var filterErr error
 		for range sg.Filters {
-			if err = <-filterChan; err != nil {
+			if err := <-filterChan; err != nil {
 				// Store error in a variable and wait for all filters to run
 				// before returning. Else tracing causes crashes.
 				filterErr = err
@@ -2294,7 +2301,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		// correct paginated results so no need to apply pagination here.
 		if !(len(sg.Filters) == 0 && sg.SrcFunc != nil && sg.SrcFunc.Name == "has") {
 			// There is no ordering. Just apply pagination and return.
-			if err = sg.applyPagination(ctx); err != nil {
+			if err := sg.applyPagination(ctx); err != nil {
 				rch <- err
 				return
 			}
@@ -2303,10 +2310,18 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		// If we are asked for count, we don't need to change the order of results.
 		if !sg.Params.DoCount {
 			// We need to sort first before pagination.
-			if err = sg.applyOrderAndPagination(ctx); err != nil {
+			if err := sg.applyOrderAndPagination(ctx); err != nil {
 				rch <- err
 				return
 			}
+		}
+	}
+
+	// We apply Every _after_ pagination
+	if sg.Params.Every > 1 {
+		if err := sg.applyEvery(ctx); err != nil {
+			rch <- err
+			return
 		}
 	}
 
@@ -2354,7 +2369,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		// We store any variable defined by this node in the map and pass it on
 		// to the children which might depend on it. We only need to do this if the SubGraph
 		// has children.
-		if err = sg.updateVars(sg.Params.ParentVars, []*SubGraph{}); err != nil {
+		if err := sg.updateVars(sg.Params.ParentVars, []*SubGraph{}); err != nil {
 			rch <- err
 			return
 		}
@@ -2382,7 +2397,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		if child.IsInternal() {
 			continue
 		}
-		if err = <-childChan; err != nil {
+		if err := <-childChan; err != nil {
 			childErr = err
 		}
 	}
@@ -2405,6 +2420,31 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	}
 
 	rch <- childErr
+}
+
+// applies "every" to sg.uidMatrix[*].Uids
+// every 'every-th' uid is selected from the uid lists,
+func (sg *SubGraph) applyEvery(ctx context.Context) error {
+	sg.updateUidMatrix()
+
+	every := sg.Params.Every
+	for i := 0; i < len(sg.uidMatrix); i++ {
+		uidList := sg.uidMatrix[i].Uids
+
+		// take every 'every'-th uid
+		uidsLen := len(uidList) / every
+		uids := make([]uint64, uidsLen)
+		for j := 0; j < uidsLen; j++ {
+			// take the last uid of every-sized batches
+			// taking the last rather than the first allows us to paginate via after
+			uids[j] = uidList[(j+1)*every-1]
+		}
+		sg.uidMatrix[i].Uids = uids
+	}
+
+	// Re-merge the UID matrix.
+	sg.DestUIDs = algo.MergeSorted(sg.uidMatrix)
+	return nil
 }
 
 // applyPagination applies count and offset to lists inside uidMatrix.
@@ -2658,8 +2698,8 @@ func (sg *SubGraph) sortAndPaginateUsingVar(ctx context.Context) error {
 // isValidArg checks if arg passed is valid keyword.
 func isValidArg(a string) bool {
 	switch a {
-	case "numpaths", "from", "to", "orderasc", "orderdesc", "first", "offset", "after", "depth",
-		"minweight", "maxweight":
+	case "numpaths", "from", "to", "orderasc", "orderdesc", "first", "offset", "every", "after",
+		"depth", "minweight", "maxweight":
 		return true
 	}
 	return false
@@ -2851,8 +2891,7 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 				continue
 			}
 
-			err = sg.recursiveFillVars(req.Vars)
-			if err != nil {
+			if err := sg.recursiveFillVars(req.Vars); err != nil {
 				return err
 			}
 			hasExecuted[idx] = true
@@ -2894,7 +2933,7 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 		var ferr error
 		// Wait for the execution that was started in this iteration.
 		for i := 0; i < len(idxList); i++ {
-			if err = <-errChan; err != nil {
+			if err := <-errChan; err != nil {
 				ferr = err
 				continue
 			}

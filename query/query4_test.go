@@ -953,6 +953,7 @@ func TestHasFilterOrderOffset(t *testing.T) {
 		  }
 	}`, js)
 }
+
 func TestCascadeSubQuery1(t *testing.T) {
 	query := `
 	{
@@ -985,6 +986,142 @@ func TestCascadeSubQuery1(t *testing.T) {
 				}
 			]
 		}
+	}`, js)
+}
+
+func TestHasEvery(t *testing.T) {
+	query := `{
+		q(func:has(name), every:10) {
+			 uid
+			 name
+		 }
+	 }`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{
+		"data": {
+			"q": [
+			  {
+				"uid": "0x18",
+				"name": "Glenn Rhee"
+			  },
+			  {
+				"uid": "0x36",
+				"name": "D"
+			  },
+			  {
+				"uid": "0x3e8",
+				"name": "Alice"
+			  },
+			  {
+				"uid": "0x1001",
+				"name": "Badger"
+			  },
+			  {
+				"uid": "0x2000",
+				"name": "Regex Master"
+			  }
+			]
+		  }
+	}`, js)
+}
+
+func TestHasEveryWithFirst(t *testing.T) {
+	query := `{
+		q(func:has(name), first: 20, every:10) {
+			 uid
+			 name
+		 }
+	 }`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{
+		"data": {
+			"q": [
+			  {
+				"uid": "0x18",
+				"name": "Glenn Rhee"
+			  },
+			  {
+				"uid": "0x36",
+				"name": "D"
+			  }
+			]
+		  }
+	}`, js)
+}
+
+func TestHasEveryWithFirstOffset(t *testing.T) {
+	query := `{
+		q(func:has(name), first:20, offset:20, every:10) {
+			 uid
+			 name
+		 }
+	 }`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{
+		"data": {
+			"q": [
+			  {
+				"uid": "0x3e8",
+				"name": "Alice"
+			  },
+			  {
+				"uid": "0x1001",
+				"name": "Badger"
+			  }
+			]
+		  }
+	}`, js)
+}
+
+func TestHasEveryWithAfter(t *testing.T) {
+	query := `{
+		q(func:has(name), after:0x36, every:10) {
+			 uid
+			 name
+		 }
+	 }`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{
+		"data": {
+			"q": [
+			  {
+				"uid": "0x3e8",
+				"name": "Alice"
+			  },
+			  {
+				"uid": "0x1001",
+				"name": "Badger"
+			  },
+			  {
+				"uid": "0x2000",
+				"name": "Regex Master"
+			  }
+			]
+		  }
+	}`, js)
+}
+
+func TestHasEveryWithFirstAfter(t *testing.T) {
+	query := `{
+		q(func:has(name), first:20, after: 0x36, every: 10) {
+			 uid
+			 name
+		 }
+	 }`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{
+		"data": {
+			"q": [
+			  {
+				"uid": "0x3e8",
+				"name": "Alice"
+			  },
+			  {
+				"uid": "0x1001",
+				"name": "Badger"
+			  }
+			]
+		  }
 	}`, js)
 }
 
