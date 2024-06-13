@@ -3636,3 +3636,23 @@
         queryNested_X_or_y as Nested_Z.x
       }
     }
+
+- name: "query nested with aggregate function"
+  gqlquery: |
+    query {
+      aggregateNested_X(filter: {s: {eq: ""}, or: { y: {s: {eq: ""}}}}) {
+        sMax
+      }
+    }
+  dgquery: |-
+    query {
+      aggregateNested_X() {
+        Nested_XAggregateResult.sMax : max(val(sVar))
+      }
+      var(func: type(Nested_X)) @filter((eq(Nested_X.s, "") OR ((uid(aggregateNested_X_or_y))))) {
+        sVar as Nested_X.s
+      }
+      var(func: type(Nested_Y)) @filter(eq(Nested_Y.s, "")) {
+        aggregateNested_X_or_y as Nested_Z.x
+      }
+    }
