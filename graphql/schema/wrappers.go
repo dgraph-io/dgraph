@@ -2444,10 +2444,10 @@ func hasInverse(sch *ast.Schema, typ *ast.Definition, fd *ast.FieldDefinition) b
 	return false
 }
 
-func isCustomType(sch *ast.Schema, fd *ast.FieldDefinition) bool {
-	_, ok := inbuiltTypeToDgraph[fd.Type.Name()]
-	return !ok && (sch.Types[fd.Type.Name()].Kind == ast.Object ||
-		sch.Types[fd.Type.Name()].Kind == ast.Interface)
+func isCustomType(sch *ast.Schema, t *ast.Type) bool {
+	_, ok := inbuiltTypeToDgraph[t.Name()]
+	return !ok && (sch.Types[t.Name()].Kind == ast.Object ||
+		sch.Types[t.Name()].Kind == ast.Interface)
 }
 
 func isID(fd *ast.FieldDefinition) bool {

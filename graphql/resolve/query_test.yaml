@@ -3576,7 +3576,63 @@
         queryNested_Z_x as Nested_X.y
       }
     }
+- name: "query deeply nested object"
+  gqlquery: |
+    query {
+      queryNested_Z(filter: { x: { y: {s: {eq: ""}}}}) {
+        x { s }
+      }
+    }
+  dgquery: |-
+    query {
+      queryNested_Z(func: type(Nested_Z)) @filter((uid(queryNested_Z_x))) {
+        dgraph.type
+        Nested_Z.x : Nested_Z.x {
+          Nested_X.s : Nested_X.s
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+      var(func: type(Nested_Y)) @filter(eq(Nested_Y.s, "")) {
+        queryNested_Z_x_y as Nested_Z.x
+      }
+      var(func: type(Nested_X)) @filter((uid(queryNested_Z_x_y))) {
+        queryNested_Z_x as Nested_X.y
+      }
+    }
 
-# query deeply nested
-# query nested with OR condition
-# query nested with AND condition
+- name: "query nested with AND condition"
+  gqlquery: |
+    query {
+      queryNested_X(filter: {s: {eq: ""}, and: { y: {s: {eq: ""}}}}) {
+        s
+      }
+    }
+  dgquery: |-
+    query {
+      queryNested_X(func: type(Nested_X)) @filter(((uid(queryNested_X_and_y)) AND eq(Nested_X.s, ""))) {
+        Nested_X.s : Nested_X.s
+        dgraph.uid : uid
+      }
+      var(func: type(Nested_Y)) @filter(eq(Nested_Y.s, "")) {
+        queryNested_X_and_y as Nested_Z.x
+      }
+    }
+
+- name: "query nested with OR condition"
+  gqlquery: |
+    query {
+      queryNested_X(filter: {s: {eq: ""}, or: { y: {s: {eq: ""}}}}) {
+        s
+      }
+    }
+  dgquery: |-
+    query {
+      queryNested_X(func: type(Nested_X)) @filter((eq(Nested_X.s, "") OR ((uid(queryNested_X_or_y))))) {
+        Nested_X.s : Nested_X.s
+        dgraph.uid : uid
+      }
+      var(func: type(Nested_Y)) @filter(eq(Nested_Y.s, "")) {
+        queryNested_X_or_y as Nested_Z.x
+      }
+    }

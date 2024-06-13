@@ -2067,35 +2067,39 @@ func buildFilter(typ schema.Type, filter map[string]interface{}, queryName strin
 			// }
 			// root() @filter(var(nested_field_name))
 			fd := typ.Field(field)
-			if fd != nil && fd.HasSearchDirective() && fd.Inverse() != nil {
-				fil, qs := buildFilter(fd.Type(), filter[field].(map[string]interface{}), qn)
-				queries = append(queries, qs...)
+			if fd != nil && fd.HasSearchDirective() {
 
-				// add the uids of the nested object
-				ands = append(ands, &dql.FilterTree{
-					Op: "and",
-					Child: []*dql.FilterTree{{
+				if inv := fd.Inverse(); inv != nil {
+
+					fil, qs := buildFilter(fd.Type(), filter[field].(map[string]interface{}), qn)
+					queries = append(queries, qs...)
+
+					// add the uids of the nested object
+					ands = append(ands, &dql.FilterTree{
+						Op: "and",
+						Child: []*dql.FilterTree{{
+							Func: &dql.Function{
+								Name: "uid",
+								Args: []dql.Arg{{Value: qn}},
+							},
+						}},
+					})
+
+					// generate filter var query for nested object
+					queries = append(queries, &dql.GraphQuery{
+						Attr: "var",
 						Func: &dql.Function{
-							Name: "uid",
-							Args: []dql.Arg{{Value: qn}},
+							Name: "type",
+							Args: []dql.Arg{{Value: fd.Type().Name()}},
 						},
-					}},
-				})
-
-				// generate filter var query for nested object
-				queries = append(queries, &dql.GraphQuery{
-					Attr: "var",
-					Func: &dql.Function{
-						Name: "type",
-						Args: []dql.Arg{{Value: fd.Type().Name()}},
-					},
-					Filter: fil,
-					Children: []*dql.GraphQuery{{
-						Attr: fd.Inverse().DgraphPredicate(),
-						Var:  qn,
-					}},
-				})
-				continue
+						Filter: fil,
+						Children: []*dql.GraphQuery{{
+							Attr: inv.DgraphPredicate(),
+							Var:  qn,
+						}},
+					})
+					continue
+				}
 			}
 
 			//// It's a base case like:

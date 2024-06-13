@@ -1475,7 +1475,7 @@ func getFilterTypes(schema *ast.Schema, fld *ast.FieldDefinition, filterName str
 
 	// Return the object filter if the field is an object that is searchable.
 	fldType := schema.Types[fld.Type.Name()]
-	if isCustomType(schema, fld) && hasFilterable(fldType) && hasSearchDirective(fld) {
+	if isCustomType(schema, fld.Type) && hasFilterable(fldType) && hasSearchDirective(fld) {
 		return []string{fld.Type.Name() + "Filter"}
 	}
 

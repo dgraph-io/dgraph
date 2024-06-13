@@ -1078,7 +1078,7 @@ func searchValidation(
 		// If the field is an object, it is require to have an inverse edge for filtering.
 		// It's not enough to just check for the @hasInverse directive as it
 		// may be defined in the inverse type.
-		if isCustomType(sch, field) {
+		if isCustomType(sch, field.Type) {
 			if !hasInverse(sch, typ, field) {
 				errs = append(errs, gqlerror.ErrorPosf(
 					dir.Position,
