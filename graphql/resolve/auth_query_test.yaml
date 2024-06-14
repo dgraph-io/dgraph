@@ -2148,3 +2148,40 @@
         Person.id : uid
       }
     }
+
+-
+  name: "Query auth rules with nested filter"
+  gqlquery: |
+    query{
+      queryNested_X{
+        b
+        y { s }
+      }
+    }
+  jwtvar:
+    USER: "0x5"
+  dgquery: |-
+    query {
+      queryNested_X(func: uid(Nested_XRoot)) {
+        Nested_X.b : Nested_X.b
+        Nested_X.y : Nested_X.y @filter(uid(Nested_Y_1)) {
+          Nested_Y.s : Nested_Y.s
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+      Nested_XRoot as var(func: uid(Nested_X_3)) @filter((uid(Nested_X_Auth4) OR uid(Nested_X_Auth5)))
+      Nested_X_3 as var(func: type(Nested_X))
+      Nested_X_Auth4 as var(func: uid(Nested_X_3)) @filter(((uid(Nested_X_Auth4_and_y)) AND eq(Nested_X.b, true))) @cascade
+      var(func: type(Nested_Y)) @filter(eq(Nested_Y.s, "")) {
+        Nested_X_Auth4_and_y as Nested_Z.x
+      }
+      Nested_X_Auth5 as var(func: uid(Nested_X_3)) @filter(((uid(Nested_X_Auth5_and_y)) AND eq(Nested_X.b, true))) @cascade
+      var(func: type(Nested_Y)) @filter(eq(Nested_Y.s, "")) {
+        Nested_X_Auth5_and_y as Nested_Z.x
+      }
+      var(func: uid(Nested_XRoot)) {
+        Nested_Y_2 as Nested_X.y
+      }
+      Nested_Y_1 as var(func: uid(Nested_Y_2))
+    }

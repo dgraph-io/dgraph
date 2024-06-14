@@ -157,7 +157,7 @@ func (qr *queryRewriter) Rewrite(
 	case schema.SimilarByEmbeddingQuery:
 		return rewriteAsSimilarByEmbeddingQuery(gqlQuery, authRw), nil
 	case schema.FilterQuery:
-		return rewriteAsQuery(gqlQuery, authRw), nil
+		return rewriteAsQuery(gqlQuery, authRw, gqlQuery.Alias()), nil
 	case schema.PasswordQuery:
 		return passwordQuery(gqlQuery, authRw)
 	case schema.AggregateQuery:
@@ -257,8 +257,8 @@ func aggregateQuery(query schema.Query, authRw *authRewriter) []*dql.GraphQuery 
 
 	// Add filter
 	filter, _ := query.ArgValue("filter").(map[string]interface{})
-	_, filterQueries := addFilter(dgQuery[0], mainType, filter, query.Alias())
-	dgQuery = append(dgQuery, filterQueries...)
+	_, varQry := addFilter(dgQuery[0], mainType, filter, query.Alias())
+	dgQuery = append(dgQuery, varQry...)
 
 	dgQuery = authRw.addAuthQueries(mainType, dgQuery, rbac)
 
@@ -452,7 +452,8 @@ func addUID(dgQuery *dql.GraphQuery) {
 func rewriteAsQueryByIds(
 	field schema.Field,
 	uids []uint64,
-	authRw *authRewriter) []*dql.GraphQuery {
+	authRw *authRewriter,
+	queryName string) []*dql.GraphQuery {
 	if field == nil {
 		return nil
 	}
@@ -476,7 +477,7 @@ func rewriteAsQueryByIds(
 		addUIDFunc(dgQuery[0], intersection(ids, uids))
 	}
 
-	includedQueries := addArgumentsToField(dgQuery[0], field)
+	includedQueries := addArgumentsToField(dgQuery[0], field, queryName)
 	dgQuery = append(dgQuery, includedQueries...)
 
 	// The function getQueryByIds is called for passwordQuery or fetching query result types
@@ -503,12 +504,12 @@ func rewriteAsQueryByIds(
 
 // addArgumentsToField adds various different arguments to a field, such as
 // filter, order and pagination.
-func addArgumentsToField(dgQuery *dql.GraphQuery, field schema.Field) []*dql.GraphQuery {
+func addArgumentsToField(dgQuery *dql.GraphQuery, field schema.Field, queryName string) []*dql.GraphQuery {
 	filter, _ := field.ArgValue("filter").(map[string]interface{})
-	_, filterQueries := addFilter(dgQuery, field.Type(), filter, field.Alias())
+	_, varQry := addFilter(dgQuery, field.Type(), filter, queryName)
 	addOrder(dgQuery, field)
 	addPagination(dgQuery, field)
-	return filterQueries
+	return varQry
 }
 
 func addTopLevelTypeFilter(query *dql.GraphQuery, field schema.Field) {
@@ -548,7 +549,7 @@ func rewriteAsGet(
 	}
 
 	if len(xidArgToVal) == 0 {
-		dgQuery = rewriteAsQueryByIds(query, []uint64{uid}, auth)
+		dgQuery = rewriteAsQueryByIds(query, []uint64{uid}, auth, query.Alias())
 
 		// Add the type filter to the top level get query. When the auth has been written into the
 		// query the top level get query may be present in query's children.
@@ -777,7 +778,7 @@ func rewriteAsSimilarByIdQuery(
 		},
 		Order: []*pb.Order{{Attr: "val(distance)", Desc: false}},
 	}
-	addArgumentsToField(sortQuery, query)
+	addArgumentsToField(sortQuery, query, query.Alias())
 
 	dgQuery = append(dgQuery, aggQuery, similarQuery, sortQuery)
 	return dgQuery
@@ -806,7 +807,7 @@ func rewriteAsSimilarByIdQuery(
 func rewriteAsSimilarByEmbeddingQuery(
 	query schema.Query, auth *authRewriter) []*dql.GraphQuery {
 
-	dgQuery := rewriteAsQuery(query, auth)
+	dgQuery := rewriteAsQuery(query, auth, query.Alias())
 
 	// Remember dgQuery[0].Children as result type for the last block
 	// in the rewritten query
@@ -954,14 +955,14 @@ func addCommonRules(
 	return []*dql.GraphQuery{dgQuery}, rbac
 }
 
-func rewriteAsQuery(field schema.Field, authRw *authRewriter) []*dql.GraphQuery {
+func rewriteAsQuery(field schema.Field, authRw *authRewriter, queryName string) []*dql.GraphQuery {
 	dgQuery, rbac := addCommonRules(field, field.Type(), authRw)
 	if rbac == schema.Negative {
 		return dgQuery
 	}
 
-	includedQueries := addArgumentsToField(dgQuery[0], field)
-	dgQuery = append(dgQuery, includedQueries...)
+	varQry := addArgumentsToField(dgQuery[0], field, queryName)
+	dgQuery = append(dgQuery, varQry...)
 
 	selectionAuth := addSelectionSetFrom(dgQuery[0], field, authRw)
 	// we don't need to query uid for auth queries, as they always have at least one field in their
@@ -1326,14 +1327,15 @@ func (authRw *authRewriter) rewriteRuleNode(
 		// build
 		// Todo2 as var(func: uid(Todo1)) @cascade { ...auth query 1... }
 		varName := authRw.varGen.Next(typ, "", "", authRw.isWritingAuth)
-		r1 := rewriteAsQuery(qry, authRw)
+		r1 := rewriteAsQuery(qry, authRw, varName)
 		r1[0].Var = varName
 		r1[0].Attr = "var"
 		if len(r1[0].Cascade) == 0 {
 			r1[0].Cascade = append(r1[0].Cascade, "__all__")
 		}
 
-		return []*dql.GraphQuery{r1[0]}, &dql.FilterTree{
+		// return all queries, including the nested var queries.
+		return r1, &dql.FilterTree{
 			Func: &dql.Function{
 				Name: "uid",
 				Args: []dql.Arg{{Value: varName}},
@@ -1470,7 +1472,7 @@ func buildAggregateFields(
 	// Filter for aggregate Fields. This is added to all count aggregate fields
 	// and mainField
 	fieldFilter, _ := f.ArgValue("filter").(map[string]interface{})
-	_, filterQueries := addFilter(mainField, constructedForType, fieldFilter, f.Alias())
+	_, varQry := addFilter(mainField, constructedForType, fieldFilter, f.Alias())
 
 	// Add type filter in case the Dgraph predicate for which the aggregate
 	// field belongs to is a reverse edge
@@ -1602,7 +1604,7 @@ func buildAggregateFields(
 	// not added to them.
 	aggregateChildren = append(aggregateChildren, otherAggregateChildren...)
 	retAuthQueries = append(retAuthQueries, fieldAuth...)
-	retAuthQueries = append(retAuthQueries, filterQueries...)
+	retAuthQueries = append(retAuthQueries, varQry...)
 	return aggregateChildren, retAuthQueries
 }
 
@@ -1687,12 +1689,12 @@ func addSelectionSetFrom(
 
 		filter, _ := f.ArgValue("filter").(map[string]interface{})
 		// if this field has been filtered out by the filter, then don't add it in DQL query
-		includeField, filterQueries := addFilter(child, f.Type(), filter, field.Alias())
+		includeField, varQry := addFilter(child, f.Type(), filter, f.Alias())
 		if !includeField {
 			continue
 		}
 
-		authQueries = append(authQueries, filterQueries...)
+		authQueries = append(authQueries, varQry...)
 
 		// Add type filter in case the Dgraph predicate is a reverse edge
 		if strings.HasPrefix(f.DgraphPredicate(), "~") {
@@ -1900,10 +1902,10 @@ func idFilter(filter map[string]interface{}, idField schema.FieldDefinition) []u
 // Currently, it would only be false for a union field when no memberTypes are queried.
 func addFilter(q *dql.GraphQuery, typ schema.Type, filter map[string]interface{}, queryName string) (bool, []*dql.GraphQuery) {
 
-	filterQueries := []*dql.GraphQuery{}
+	varQry := []*dql.GraphQuery{}
 
 	if len(filter) == 0 {
-		return true, filterQueries
+		return true, varQry
 	}
 
 	// There are two cases here.
@@ -1925,18 +1927,19 @@ func addFilter(q *dql.GraphQuery, typ schema.Type, filter map[string]interface{}
 	}
 
 	if typ.IsUnion() {
-		if filter, filterQueries, includeField := buildUnionFilter(typ, filter, queryName); includeField {
+		if filter, varq, includeField := buildUnionFilter(typ, filter, queryName); includeField {
 			q.Filter = filter
+			varQry = varq
 		} else {
-			return false, filterQueries
+			return false, varQry
 		}
 	} else {
-		q.Filter, filterQueries = buildFilter(typ, filter, queryName)
+		q.Filter, varQry = buildFilter(typ, filter, queryName)
 	}
 	if filterAtRoot {
 		addTypeFilter(q, typ)
 	}
-	return true, filterQueries
+	return true, varQry
 }
 
 // buildFilter builds a Dgraph dql.FilterTree from a GraphQL 'filter' arg.

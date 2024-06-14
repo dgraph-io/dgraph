@@ -807,7 +807,7 @@ func (arw *AddRewriter) FromMutationResult(
 		return nil, errs
 	}
 	// No errors are thrown while rewriting queries by Ids.
-	return rewriteAsQueryByIds(mutation.QueryField(), uids, authRw), nil
+	return rewriteAsQueryByIds(mutation.QueryField(), uids, authRw, mutation.Alias()), nil
 }
 
 // FromMutationResult rewrites the query part of a GraphQL update mutation into a Dgraph query.
@@ -843,7 +843,7 @@ func (urw *UpdateRewriter) FromMutationResult(
 		parentVarName: mutation.MutatedType().Name() + "Root",
 	}
 	authRw.hasAuthRules = hasAuthRules(mutation.QueryField(), authRw)
-	return rewriteAsQueryByIds(mutation.QueryField(), uids, authRw), nil
+	return rewriteAsQueryByIds(mutation.QueryField(), uids, authRw, mutation.Alias()), nil
 }
 
 func (arw *AddRewriter) MutatedRootUIDs(
@@ -996,8 +996,8 @@ func RewriteUpsertQueryFromMutation(
 			addTypeFunc(dgQuery[0], m.MutatedType().DgraphName())
 		}
 
-		_, filterQueries := addFilter(dgQuery[0], m.MutatedType(), filter, m.Alias())
-		dgQuery = append(dgQuery, filterQueries...)
+		_, varQry := addFilter(dgQuery[0], m.MutatedType(), filter, m.Alias())
+		dgQuery = append(dgQuery, varQry...)
 	} else {
 		// It means this is called from upsert with Add mutation.
 		// nodeID will be uid of the node to be upserted. We add UID func
@@ -1114,7 +1114,7 @@ func (drw *deleteRewriter) Rewrite(
 		}
 
 		// these queries are responsible for querying the queryField
-		queryFieldQry := rewriteAsQuery(queryField, queryAuthRw)
+		queryFieldQry := rewriteAsQuery(queryField, queryAuthRw, MutationQueryVar)
 
 		// we don't want the `x` query to show up in GraphQL JSON response while querying the query
 		// field. So, need to make it `var` query and remove any children from it as there can be
