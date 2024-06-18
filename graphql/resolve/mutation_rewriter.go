@@ -996,7 +996,7 @@ func RewriteUpsertQueryFromMutation(
 			addTypeFunc(dgQuery[0], m.MutatedType().DgraphName())
 		}
 
-		_, varQry := addFilter(dgQuery[0], m.MutatedType(), filter, m.Alias())
+		_, varQry := addFilter(dgQuery[0], m.MutatedType(), filter, authRw, m.Alias())
 		dgQuery = append(dgQuery, varQry...)
 	} else {
 		// It means this is called from upsert with Add mutation.

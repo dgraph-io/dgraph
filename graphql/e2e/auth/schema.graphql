@@ -979,28 +979,35 @@ type Home @auth(
 This types are used to validate nested filting.
 """
 type Nested_X @auth(
-    # only return homes with either:
-    # 1. a Dog member which has something to eat
-    # 2. or a Plant member
-    query: { or: [{ rule: """
+    query: { rule: """
     query {
-        queryNested_X(filter: {b: true, and: {y: {s: {eq: ""}}}}){
+        queryNested_X(filter: {y: {s: {eq: "y"}}}){
             __typename
         }
     }
-    """}, { rule: """
-    query {
-        queryNested_X(filter: {b: true, and: {y: {s: {eq: ""}}}}){
-            __typename
-        }
-    }
-    """}]}
+    """}
 ) {
   b: Boolean @search
   y: Nested_Y @hasInverse(field: x) @search
 }
 
-type Nested_Y implements Nested_Z{
+type Nested_Y implements Nested_Z @auth(
+    query: {
+        or: [
+            { rule: "{ $rbac: { eq: \"positive\" } }" }
+            { and: [
+                { rule: "{ $rbac: { eq: \"uncertain\" } }" }
+                { rule: """
+                    query {
+                        queryNested_Y(filter: {x: {b: true}}){
+                            __typename
+                        }
+                    }
+                    """
+                }
+            ]
+        }]
+    }) {
   s: String @search(by: [hash])
 }
 
