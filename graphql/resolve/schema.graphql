@@ -522,3 +522,19 @@ type ProjectDotProduct {
   title: String
   description_v: [Float!] @embedding @search(by: ["hnsw(metric: dotproduct, exponent: 4)"]) 
 }
+
+"""
+This types are used to validate nested filting.
+"""
+type Nested_X {
+  s: String @search(by: [hash])
+  y: Nested_Y @hasInverse(field: x) @search
+}
+
+type Nested_Y implements Nested_Z{
+  s: String @search(by: [hash])
+}
+
+interface Nested_Z {
+  x: Nested_X @search
+}
