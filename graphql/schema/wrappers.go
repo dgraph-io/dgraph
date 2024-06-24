@@ -2504,7 +2504,8 @@ func (fd *fieldDefinition) Inverse() FieldDefinition {
 		for _, refField := range typ.Fields {
 
 			refFieldType := fd.inSchema.schema.Types[refField.Type.Name()]
-			if refField.Type.Name() != typ.Name && !fd.inSchema.schema.Types[fd.ParentType().Name()].OneOf(refFieldType.Interfaces...) {
+			if refField.Type.Name() != typ.Name &&
+				!fd.inSchema.schema.Types[fd.ParentType().Name()].OneOf(refFieldType.Interfaces...) {
 				continue
 			}
 
