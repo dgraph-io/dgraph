@@ -1698,6 +1698,19 @@ func verifyUnique(qc *queryContext, qr query.Request) error {
 	return nil
 }
 
+// isLatinString checks if the given string contains only Latin letters.
+// It iterates over each rune in the string and verifies if it is a letter
+// and if it belongs to the Latin script. If any rune does not meet these
+// criteria, the function returns false. Otherwise, it returns true.
+func isLatinString(s string) bool {
+	for _, r := range s {
+		if !unicode.IsLetter(r) || !unicode.Is(unicode.Latin, r) {
+			return false
+		}
+	}
+	return true
+}
+
 // addQueryIfUnique adds dummy queries in the request for checking whether predicate is unique in the db
 func addQueryIfUnique(qctx context.Context, qc *queryContext) error {
 	if len(qc.gmuList) == 0 {
@@ -1761,6 +1774,13 @@ func addQueryIfUnique(qctx context.Context, qc *queryContext) error {
 			// If the returned UID is different than the UID we have
 			// in the mutation, then we reject the mutation.
 
+			// The following code snippet checks if the variable `predicateName` contains only Latin letters.
+			// If `predicateName` is not a Latin string, it wraps `predicateName` with angle brackets using
+			// `fmt.Sprintf`. This is useful for ensuring that non-Latin predicate names are properly formatted
+			// during the automatic serialization of a structure into JSON.
+			if !isLatinString(predicateName) {
+				predicateName = fmt.Sprintf(`<%v>`, predicateName)
+			}
 			if !strings.HasPrefix(pred.ObjectId, "val(") {
 				query := fmt.Sprintf(`%v as var(func: eq(%v,"%v"))`, queryVar, predicateName,
 					dql.TypeValFrom(pred.ObjectValue).Value)
@@ -1788,7 +1808,7 @@ func addQueryIfUnique(qctx context.Context, qc *queryContext) error {
 			if qc.req.Query == "" {
 				qc.req.Query = "{" + buildQuery.String()
 			} else {
-				qc.req.Query = strings.TrimRight(qc.req.Query, "}")
+				qc.req.Query = strings.TrimSuffix(qc.req.Query, "}")
 				qc.req.Query = qc.req.Query + buildQuery.String()
 			}
 		}
