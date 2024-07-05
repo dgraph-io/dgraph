@@ -74,6 +74,13 @@ type Person struct {
 	School    *School    `json:"school,omitempty"`
 }
 
+type Product struct {
+	Uid           string `json:"uid,omitempty"`
+	Name          string `json:"name"`
+	Discription   string `json:"discription"`
+	Discription_v string `json:"discription_v"`
+}
+
 func Parse(b []byte, op int) ([]*api.NQuad, error) {
 	nqs := NewNQuadBuffer(1000)
 	err := nqs.ParseJSON(b, op)
@@ -1379,4 +1386,129 @@ func BenchmarkNoFacetsFast(b *testing.B) {
 	for n := 0; n < b.N; n++ {
 		_, _ = FastParse(json, SetNquads)
 	}
+}
+
+func TestNquadsEmptyStringFromJson(t *testing.T) {
+	json := `[{"name":""}]`
+
+	nq, err := Parse([]byte(json), SetNquads)
+	require.NoError(t, err)
+
+	fastNQ, err := FastParse([]byte(json), SetNquads)
+	require.NoError(t, err)
+
+	// The string value should be empty.
+	require.Equal(t, nq[0].ObjectValue.GetStrVal(), "")
+	require.Equal(t, fastNQ[0].ObjectValue.GetStrVal(), "")
+}
+
+func TestNquadsJsonEmptyStringVectorPred(t *testing.T) {
+	p := Product{
+		Uid:           "1",
+		Name:          "",
+		Discription_v: "",
+	}
+
+	b, err := json.Marshal([]Product{p})
+	require.NoError(t, err)
+
+	nq, err := Parse(b, SetNquads)
+	require.NoError(t, err)
+	require.Equal(t, 3, len(nq))
+
+	fastNQ, err := FastParse(b, SetNquads)
+	require.NoError(t, err)
+	require.Equal(t, 3, len(fastNQ))
+
+	// predicate Name should be empty and edge for Discription_v should not be there
+	// we do not create edge for "" in float32vector.
+	exp := &Experiment{
+		t:   t,
+		nqs: nq,
+		schema: `name: string @index(exact) .
+		discription_v: float32vector .`,
+		query: `{product(func: uid(1)) {
+			name
+			discription_v
+		}}`,
+		expected: `{"product":[{
+			"name":""}]}`,
+	}
+	exp.verify()
+
+	exp.nqs = fastNQ
+	exp.verify()
+}
+
+func TestNquadsJsonEmptySquareBracketVectorPred(t *testing.T) {
+	p := Product{
+		Name:          "ipad",
+		Discription_v: "[]",
+	}
+
+	b, err := json.Marshal(p)
+	require.NoError(t, err)
+
+	nq, err := Parse(b, SetNquads)
+	require.NoError(t, err)
+	require.Equal(t, 3, len(nq))
+
+	fastNQ, err := FastParse(b, SetNquads)
+	require.NoError(t, err)
+	require.Equal(t, 3, len(fastNQ))
+
+	// predicate Name should have value "ipad" and edge for Discription_v should not be there
+	// we do not create edge for [] in float32vector.
+	exp := &Experiment{
+		t:   t,
+		nqs: nq,
+		schema: `name: string @index(exact) .
+		discription_v: float32vector .`,
+		query: `{product(func: eq(name, "ipad")) {
+			name
+			discription_v
+		}}`,
+		expected: `{"product":[{
+			"name":"ipad"}]}`,
+	}
+	exp.verify()
+
+	exp.nqs = fastNQ
+	exp.verify()
+}
+
+func TestNquadsJsonValidVector(t *testing.T) {
+	p := Product{
+		Name:          "ipad",
+		Discription_v: "[1.1, 2.2, 3.3]",
+	}
+
+	b, err := json.Marshal(p)
+	require.NoError(t, err)
+
+	nq, err := Parse(b, SetNquads)
+	require.NoError(t, err)
+	require.Equal(t, 3, len(nq))
+
+	fastNQ, err := FastParse(b, SetNquads)
+	require.NoError(t, err)
+	require.Equal(t, 3, len(fastNQ))
+
+	exp := &Experiment{
+		t:   t,
+		nqs: nq,
+		schema: `name: string @index(exact) .
+		discription_v: float32vector .`,
+		query: `{product(func: eq(name, "ipad")) {
+			name
+			discription_v
+		}}`,
+		expected: `{"product":[{
+			"name":"ipad",
+			"discription_v":[1.1, 2.2, 3.3]}]}`,
+	}
+	exp.verify()
+
+	exp.nqs = fastNQ
+	exp.verify()
 }
