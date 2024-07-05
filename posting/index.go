@@ -120,6 +120,7 @@ func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) 
 
 	if info.op == pb.DirectedEdge_DEL &&
 		len(data) > 0 && data[0].Tid == types.VFloatID {
+		fmt.Println("here")
 		// TODO look into better alternatives
 		//      The issue here is that we will create dead nodes in the Vector Index
 		//      assuming an HNSW index type. What we should do instead is invoke
@@ -1145,6 +1146,8 @@ func (rb *indexRebuildInfo) prefixesForTokIndexes() ([][]byte, error) {
 	return prefixes, nil
 }
 
+var k int
+
 // rebuildTokIndex rebuilds index for a given attribute.
 // We commit mutations with startTs and ignore the errors.
 func rebuildTokIndex(ctx context.Context, rb *IndexRebuild) error {
@@ -1165,6 +1168,7 @@ func rebuildTokIndex(ctx context.Context, rb *IndexRebuild) error {
 		return err
 	}
 
+	k = 0
 	var factorySpecs []*tok.FactoryCreateSpec
 	if len(rebuildInfo.vectorIndexesToRebuild) > 0 {
 		factorySpec, err := tok.GetFactoryCreateSpecFromSpec(
@@ -1178,6 +1182,11 @@ func rebuildTokIndex(ctx context.Context, rb *IndexRebuild) error {
 	pk := x.ParsedKey{Attr: rb.Attr}
 	builder := rebuilder{attr: rb.Attr, prefix: pk.DataPrefix(), startTs: rb.StartTs}
 	builder.fn = func(uid uint64, pl *List, txn *Txn) ([]*pb.DirectedEdge, error) {
+		k += 1
+		if k%1000 == 0 {
+			fmt.Println(k)
+		}
+
 		edge := pb.DirectedEdge{Attr: rb.Attr, Entity: uid}
 		edges := []*pb.DirectedEdge{}
 		err := pl.Iterate(txn.StartTs, 0, func(p *pb.Posting) error {

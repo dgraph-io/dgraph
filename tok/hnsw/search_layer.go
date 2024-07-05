@@ -11,7 +11,7 @@ type searchLayerResult[T c.Float] struct {
 	// neighbors represents the candidates with the best scores so far.
 	neighbors []minPersistentHeapElement[T]
 	// visited represents elements seen (so we don't try to re-visit).
-	visited []minPersistentHeapElement[T]
+	visited map[uint64]minPersistentHeapElement[T]
 	path    []uint64
 	metrics map[string]uint64
 	level   int
@@ -29,7 +29,7 @@ type searchLayerResult[T c.Float] struct {
 func newLayerResult[T c.Float](level int) *searchLayerResult[T] {
 	return &searchLayerResult[T]{
 		neighbors: []minPersistentHeapElement[T]{},
-		visited:   []minPersistentHeapElement[T]{},
+		visited:   make(map[uint64]minPersistentHeapElement[T]),
 		path:      []uint64{},
 		metrics:   make(map[string]uint64),
 		level:     level,
@@ -38,7 +38,8 @@ func newLayerResult[T c.Float](level int) *searchLayerResult[T] {
 
 func (slr *searchLayerResult[T]) setFirstPathNode(n minPersistentHeapElement[T]) {
 	slr.neighbors = []minPersistentHeapElement[T]{n}
-	slr.visited = []minPersistentHeapElement[T]{n}
+	slr.visited = make(map[uint64]minPersistentHeapElement[T])
+	slr.visited[n.index] = n
 	slr.path = []uint64{n.index}
 }
 
@@ -87,16 +88,12 @@ func (slr *searchLayerResult[T]) bestNeighbor() minPersistentHeapElement[T] {
 }
 
 func (slr *searchLayerResult[T]) nodeVisited(n minPersistentHeapElement[T]) bool {
-	for _, visitedNode := range slr.visited {
-		if visitedNode.index == n.index {
-			return true
-		}
-	}
-	return false
+	_, ok := slr.visited[n.index]
+	return ok
 }
 
 func (slr *searchLayerResult[T]) addToVisited(n minPersistentHeapElement[T]) {
-	slr.visited = append(slr.visited, n)
+	slr.visited[n.index] = n
 }
 
 func (slr *searchLayerResult[T]) updateFinalMetrics(r *index.SearchPathResult) {

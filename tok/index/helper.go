@@ -18,7 +18,9 @@ package index
 
 import (
 	"encoding/binary"
+	"fmt"
 	"math"
+	"unsafe"
 
 	c "github.com/dgraph-io/dgraph/tok/constraints"
 )
@@ -45,26 +47,36 @@ func BytesAsFloatArray[T c.Float](encoded []byte, retVal *[]T, floatBits int) {
 	// work with the golang "unsafe" library.
 	floatBytes := floatBits / 8
 
-	*retVal = (*retVal)[:0]
-	resultLen := len(encoded) / floatBytes
-	if resultLen == 0 {
+	// Ensure the byte slice length is a multiple of 8 (size of float64)
+	if len(encoded)%floatBytes != 0 {
+		fmt.Println("Invalid byte slice length")
 		return
 	}
-	for i := 0; i < resultLen; i++ {
-		// Assume LittleEndian for encoding since this is
-		// the assumption elsewhere when reading from client.
-		// See dgraph-io/dgo/protos/api.pb.go
-		// See also dgraph-io/dgraph/types/conversion.go
-		// This also seems to be the preference from many examples
-		// I have found via Google search. It's unclear why this
-		// should be a preference.
-		if retVal == nil {
-			retVal = &[]T{}
-		}
-		*retVal = append(*retVal, BytesToFloat[T](encoded, floatBits))
 
-		encoded = encoded[(floatBytes):]
-	}
+	// Create a slice header
+	*retVal = *(*[]T)(unsafe.Pointer(&encoded))
+	//floatBytes := floatBits / 8
+
+	//*retVal = (*retVal)[:0]
+	//resultLen := len(encoded) / floatBytes
+	//if resultLen == 0 {
+	//	return
+	//}
+	//for i := 0; i < resultLen; i++ {
+	//	// Assume LittleEndian for encoding since this is
+	//	// the assumption elsewhere when reading from client.
+	//	// See dgraph-io/dgo/protos/api.pb.go
+	//	// See also dgraph-io/dgraph/types/conversion.go
+	//	// This also seems to be the preference from many examples
+	//	// I have found via Google search. It's unclear why this
+	//	// should be a preference.
+	//	if retVal == nil {
+	//		retVal = &[]T{}
+	//	}
+	//	*retVal = append(*retVal, BytesToFloat[T](encoded, floatBits))
+
+	//	encoded = encoded[(floatBytes):]
+	//}
 }
 
 func BytesToFloat[T c.Float](encoded []byte, floatBits int) T {
