@@ -48,6 +48,12 @@ func BytesAsFloatArray[T c.Float](encoded []byte, retVal *[]T, floatBits int) {
 	// work with the golang "unsafe" library.
 	floatBytes := floatBits / 8
 
+	if len(encoded) == 0 {
+		*retVal = []T{}
+		return
+
+	}
+
 	// Ensure the byte slice length is a multiple of 8 (size of float64)
 	if len(encoded)%floatBytes != 0 {
 		fmt.Println("Invalid byte slice length")
