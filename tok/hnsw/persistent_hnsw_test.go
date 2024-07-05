@@ -345,12 +345,13 @@ func TestFlatEntryInsertToPersistentFlatStorage(t *testing.T) {
 			}
 		}
 		var float1, float2 = []float64{}, []float64{}
-		index.BytesAsFloatArray(tsDbs[0].inMemTestDb[string(key[:])].([]byte), &float1, 64)
-		index.BytesAsFloatArray(tsDbs[99].inMemTestDb[string(key[:])].([]byte), &float2, 64)
+		skey := string(key[:])
+		index.BytesAsFloatArray(tsDbs[0].inMemTestDb[skey].([]byte), &float1, 64)
+		index.BytesAsFloatArray(tsDbs[99].inMemTestDb[skey].([]byte), &float2, 64)
 		if !equalFloat64Slice(float1, float2) {
 			t.Errorf("Vector value for predicate %q at beginning and end of database were "+
-				"not equivalent. Start Value: %v, End Value: %v", flatPh.pred, tsDbs[0].inMemTestDb[flatPh.pred].([]float64),
-				tsDbs[99].inMemTestDb[flatPh.pred].([]float64))
+				"not equivalent. Start Value: %v\n, End Value: %v\n %v\n %v", flatPh.pred, tsDbs[0].inMemTestDb[skey],
+				tsDbs[99].inMemTestDb[skey], float1, float2)
 		}
 		edgesNameList := []string{}
 		for _, edge := range edges {

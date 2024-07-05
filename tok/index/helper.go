@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math"
+	"reflect"
 	"unsafe"
 
 	c "github.com/dgraph-io/dgraph/tok/constraints"
@@ -53,8 +54,14 @@ func BytesAsFloatArray[T c.Float](encoded []byte, retVal *[]T, floatBits int) {
 		return
 	}
 
+	header := (*reflect.SliceHeader)(unsafe.Pointer(retVal))
+	header.Data = uintptr(unsafe.Pointer(&encoded[0]))
+	header.Len = len(encoded) / floatBytes
+	header.Cap = len(encoded) / floatBytes
+
 	// Create a slice header
-	*retVal = *(*[]T)(unsafe.Pointer(&encoded))
+	//*retVal = (*retVal)[:0]
+	//*retVal = *(*[]T)(unsafe.Pointer(&encoded))
 	//floatBytes := floatBits / 8
 
 	//*retVal = (*retVal)[:0]
