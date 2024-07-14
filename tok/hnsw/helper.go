@@ -3,19 +3,22 @@ package hnsw
 import (
 	"context"
 	"encoding/binary"
-	"encoding/json"
+	"fmt"
 	"log"
 	"math"
 	"math/rand"
 	"sort"
 	"strconv"
 	"strings"
+	"unsafe"
 
 	"github.com/chewxy/math32"
 	c "github.com/dgraph-io/dgraph/tok/constraints"
 	"github.com/dgraph-io/dgraph/tok/index"
 	"github.com/getsentry/sentry-go"
 	"github.com/pkg/errors"
+	"github.com/viterin/vek"
+	"github.com/viterin/vek/vek32"
 )
 
 const (
@@ -72,36 +75,68 @@ func norm[T c.Float](v []T, floatBits int) T {
 	panic("Invalid floatBits")
 }
 
+var k int
+
 // This needs to implement signature of SimilarityType[T].distanceScore
 // function, hence it takes in a floatBits parameter,
 // but doesn't actually use it.
 func dotProduct[T c.Float](a, b []T, floatBits int) (T, error) {
-	var dotProduct T
+	k += 1
+	if k%100000 == 0 {
+		fmt.Println("dot:", k)
+	}
+
 	if len(a) != len(b) {
 		err := errors.New("can not compute dot product on vectors of different lengths")
-		return dotProduct, err
+		return T(0), err
 	}
-	for i := range a {
-		dotProduct += a[i] * b[i]
+
+	if floatBits == 32 {
+		var a1, b1 []float32
+		a1 = *(*[]float32)(unsafe.Pointer(&a))
+		b1 = *(*[]float32)(unsafe.Pointer(&b))
+		return T(vek32.Dot(a1, b1)), nil
+	} else if floatBits == 64 {
+		var a1, b1 []float64
+		a1 = *(*[]float64)(unsafe.Pointer(&a))
+		b1 = *(*[]float64)(unsafe.Pointer(&b))
+		return T(vek.Dot(a1, b1)), nil
 	}
-	return dotProduct, nil
+
+	panic("invalid")
 }
 
 // This needs to implement signature of SimilarityType[T].distanceScore
 // function, hence it takes in a floatBits parameter.
 func cosineSimilarity[T c.Float](a, b []T, floatBits int) (T, error) {
-	dotProd, err := dotProduct(a, b, floatBits)
-	if err != nil {
-		return 0, err
+	if len(a) != len(b) {
+		err := errors.New("can not compute dot product on vectors of different lengths")
+		return T(0), err
 	}
-	normA := norm[T](a, floatBits)
-	normB := norm[T](b, floatBits)
-	if normA == 0 || normB == 0 {
-		err := errors.New("can not compute cosine similarity on zero vector")
-		var empty T
-		return empty, err
+	if floatBits == 32 {
+		var a1, b1 []float32
+		a1 = *(*[]float32)(unsafe.Pointer(&a))
+		b1 = *(*[]float32)(unsafe.Pointer(&b))
+		return T(vek32.CosineSimilarity(a1, b1)), nil
+	} else if floatBits == 64 {
+		var a1, b1 []float64
+		a1 = *(*[]float64)(unsafe.Pointer(&a))
+		b1 = *(*[]float64)(unsafe.Pointer(&b))
+		return T(vek.CosineSimilarity(a1, b1)), nil
 	}
-	return dotProd / (normA * normB), nil
+	panic("Invalid")
+	//dotProd, err := dotProduct(a, b, floatBits)
+	//if err != nil {
+	//	return 0, err
+	//}
+	//normA := norm[T](a, floatBits)
+	//normB := norm[T](b, floatBits)
+	//if normA == 0 || normB == 0 {
+	//	err := errors.New("can not compute cosine similarity on zero vector")
+	//	var empty T
+	//	return empty, err
+	//}
+	//return dotProd / (normA * normB), nil
 }
 
 // This needs to implement signature of SimilarityType[T].distanceScore
@@ -111,12 +146,18 @@ func euclidianDistanceSq[T c.Float](a, b []T, floatBits int) (T, error) {
 	if len(a) != len(b) {
 		return 0, errors.New("can not subtract vectors of different lengths")
 	}
-	var distSq T
-	for i := range a {
-		val := a[i] - b[i]
-		distSq += val * val
+	if floatBits == 32 {
+		var a1, b1 []float32
+		a1 = *(*[]float32)(unsafe.Pointer(&a))
+		b1 = *(*[]float32)(unsafe.Pointer(&b))
+		return T(vek32.Distance(a1, b1)), nil
+	} else if floatBits == 64 {
+		var a1, b1 []float64
+		a1 = *(*[]float64)(unsafe.Pointer(&a))
+		b1 = *(*[]float64)(unsafe.Pointer(&b))
+		return T(vek.Distance(a1, b1)), nil
 	}
-	return distSq, nil
+	panic("Invalid")
 }
 
 // Used for distance, since shorter distance is better
@@ -335,7 +376,7 @@ func populateEdgeDataFromKeyWithCacheType(
 	if data == nil {
 		return false, nil
 	}
-	err = json.Unmarshal(data.([]byte), &edgeData)
+	err = decodeUint64MatrixUnsafe(data.([]byte), edgeData)
 	return true, err
 }
 
@@ -444,6 +485,70 @@ func (ph *persistentHNSW[T]) createEntryAndStartNodes(
 	return entry, edges, nil
 }
 
+func encodeUint64MatrixUnsafe(matrix [][]uint64) []byte {
+	if len(matrix) == 0 {
+		return nil
+	}
+
+	// Calculate the total size
+	var totalSize uint64
+	for _, row := range matrix {
+		totalSize += uint64(len(row))*uint64(unsafe.Sizeof(uint64(0))) + uint64(unsafe.Sizeof(uint64(0)))
+	}
+	totalSize += uint64(unsafe.Sizeof(uint64(0)))
+
+	// Create a byte slice with the appropriate size
+	data := make([]byte, totalSize)
+
+	offset := 0
+	// Write number of rows
+	rows := uint64(len(matrix))
+	copy(data[offset:offset+8], (*[8]byte)(unsafe.Pointer(&rows))[:])
+	offset += 8
+
+	// Write each row's length and data
+	for _, row := range matrix {
+		rowLen := uint64(len(row))
+		copy(data[offset:offset+8], (*[8]byte)(unsafe.Pointer(&rowLen))[:])
+		offset += 8
+		for _, value := range row {
+			copy(data[offset:offset+8], (*[8]byte)(unsafe.Pointer(&value))[:])
+			offset += 8
+		}
+	}
+
+	return data
+}
+
+func decodeUint64MatrixUnsafe(data []byte, matrix *[][]uint64) error {
+	if len(data) == 0 {
+		return nil
+	}
+
+	offset := 0
+	// Read number of rows
+	var rows uint64
+	rows = *(*uint64)(unsafe.Pointer(&data[offset]))
+	offset += 8
+
+	*matrix = make([][]uint64, rows)
+
+	for i := 0; i < int(rows); i++ {
+		// Read row length
+		var rowLen uint64
+		rowLen = *(*uint64)(unsafe.Pointer(&data[offset]))
+		offset += 8
+
+		(*matrix)[i] = make([]uint64, rowLen)
+		for j := 0; j < int(rowLen); j++ {
+			(*matrix)[i][j] = *(*uint64)(unsafe.Pointer(&data[offset]))
+			offset += 8
+		}
+	}
+
+	return nil
+}
+
 // adds empty layers to all levels
 func (ph *persistentHNSW[T]) addStartNodeToAllLevels(
 	ctx context.Context,
@@ -452,11 +557,7 @@ func (ph *persistentHNSW[T]) addStartNodeToAllLevels(
 	inUuid uint64) ([]*index.KeyValue, error) {
 	edges := []*index.KeyValue{}
 	key := DataKey(ph.vecKey, inUuid)
-	emptyEdges := make([][]uint64, ph.maxLevels)
-	emptyEdgesBytes, err := json.Marshal(emptyEdges)
-	if err != nil {
-		return []*index.KeyValue{}, err
-	}
+	emptyEdgesBytes := encodeUint64MatrixUnsafe(make([][]uint64, ph.maxLevels))
 	// creates empty at all levels only for entry node
 	edge, err := ph.newPersistentEdgeKeyValueEntry(ctx, key, txn, inUuid, emptyEdgesBytes)
 	if err != nil {
@@ -509,7 +610,7 @@ func (ph *persistentHNSW[T]) addNeighbors(ctx context.Context, tc *TxnCache,
 			allLayerEdges = allLayerNeighbors
 		} else {
 			// all edges of nearest neighbor
-			err := json.Unmarshal(data.([]byte), &allLayerEdges)
+			err := decodeUint64MatrixUnsafe(data.([]byte), &allLayerEdges)
 			if err != nil {
 				return nil, err
 			}
@@ -527,10 +628,7 @@ func (ph *persistentHNSW[T]) addNeighbors(ctx context.Context, tc *TxnCache,
 	// on every modification of the layer edges, add it to in mem map so you dont have to always be reading
 	// from persistent storage
 	ph.nodeAllEdges[uuid] = allLayerEdges
-	inboundEdgesBytes, marshalErr := json.Marshal(allLayerEdges)
-	if marshalErr != nil {
-		return nil, marshalErr
-	}
+	inboundEdgesBytes := encodeUint64MatrixUnsafe(allLayerEdges)
 
 	edge := &index.KeyValue{
 		Entity: uuid,

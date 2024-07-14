@@ -60,6 +60,12 @@ func BytesAsFloatArray[T c.Float](encoded []byte, retVal *[]T, floatBits int) {
 		return
 	}
 
+	//*retVal = *(*[]T)(unsafe.Pointer(&encoded))
+
+	*retVal = (*retVal)[:0]
+	if retVal == nil {
+		*retVal = make([]T, len(encoded)/floatBytes)
+	}
 	header := (*reflect.SliceHeader)(unsafe.Pointer(retVal))
 	header.Data = uintptr(unsafe.Pointer(&encoded[0]))
 	header.Len = len(encoded) / floatBytes

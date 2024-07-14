@@ -87,6 +87,11 @@ func (slr *searchLayerResult[T]) bestNeighbor() minPersistentHeapElement[T] {
 	return slr.neighbors[0]
 }
 
+func (slr *searchLayerResult[T]) indexVisited(n uint64) bool {
+	_, ok := slr.visited[n]
+	return ok
+}
+
 func (slr *searchLayerResult[T]) nodeVisited(n minPersistentHeapElement[T]) bool {
 	_, ok := slr.visited[n.index]
 	return ok

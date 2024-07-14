@@ -17,18 +17,309 @@
 package index
 
 import (
+	"bytes"
 	"crypto/rand"
+	"encoding/binary"
+	"encoding/gob"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"testing"
 	"unsafe"
 
 	c "github.com/dgraph-io/dgraph/tok/constraints"
+	"github.com/viterin/vek/vek32"
 )
+
+// GenerateMatrix generates a 2D slice of uint64 with varying lengths for each row.
+func GenerateMatrix(rows int) [][]uint64 {
+	matrix := make([][]uint64, rows)
+	value := uint64(1)
+	for i := range matrix {
+		cols := i + 1 // Variable number of columns for each row
+		matrix[i] = make([]uint64, cols)
+		for j := range matrix[i] {
+			matrix[i][j] = value
+			value++
+		}
+	}
+	return matrix
+}
+
+// Encoding and decoding functions
+func encodeUint64Matrix(matrix [][]uint64) ([]byte, error) {
+	var buf bytes.Buffer
+
+	// Write number of rows
+	if err := binary.Write(&buf, binary.LittleEndian, uint64(len(matrix))); err != nil {
+		return nil, err
+	}
+
+	// Write each row's length and data
+	for _, row := range matrix {
+		if err := binary.Write(&buf, binary.LittleEndian, uint64(len(row))); err != nil {
+			return nil, err
+		}
+		for _, value := range row {
+			if err := binary.Write(&buf, binary.LittleEndian, value); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return buf.Bytes(), nil
+}
+
+func decodeUint64Matrix(data []byte) ([][]uint64, error) {
+	buf := bytes.NewReader(data)
+
+	var numRows uint64
+	if err := binary.Read(buf, binary.LittleEndian, &numRows); err != nil {
+		return nil, err
+	}
+
+	matrix := make([][]uint64, numRows)
+	for i := range matrix {
+		var numCols uint64
+		if err := binary.Read(buf, binary.LittleEndian, &numCols); err != nil {
+			return nil, err
+		}
+		matrix[i] = make([]uint64, numCols)
+		for j := range matrix[i] {
+			if err := binary.Read(buf, binary.LittleEndian, &matrix[i][j]); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return matrix, nil
+}
+
+func encodeUint64MatrixWithGob(matrix [][]uint64) ([]byte, error) {
+	var buf bytes.Buffer
+	enc := gob.NewEncoder(&buf)
+
+	if err := enc.Encode(matrix); err != nil {
+		return nil, err
+	}
+
+	return buf.Bytes(), nil
+}
+
+func decodeUint64MatrixWithGob(data []byte) ([][]uint64, error) {
+	var matrix [][]uint64
+	buf := bytes.NewReader(data)
+	dec := gob.NewDecoder(buf)
+
+	if err := dec.Decode(&matrix); err != nil {
+		return nil, err
+	}
+
+	return matrix, nil
+}
+
+func encodeUint64MatrixWithJSON(matrix [][]uint64) ([]byte, error) {
+	return json.Marshal(matrix)
+}
+
+func decodeUint64MatrixWithJSON(data []byte) ([][]uint64, error) {
+	var matrix [][]uint64
+	if err := json.Unmarshal(data, &matrix); err != nil {
+		return nil, err
+	}
+	return matrix, nil
+}
+
+func encodeUint64MatrixUnsafe(matrix [][]uint64) []byte {
+	if len(matrix) == 0 {
+		return nil
+	}
+
+	// Calculate the total size
+	var totalSize uint64
+	for _, row := range matrix {
+		totalSize += uint64(len(row))*uint64(unsafe.Sizeof(uint64(0))) + uint64(unsafe.Sizeof(uint64(0)))
+	}
+	totalSize += uint64(unsafe.Sizeof(uint64(0)))
+
+	// Create a byte slice with the appropriate size
+	data := make([]byte, totalSize)
+
+	offset := 0
+	// Write number of rows
+	rows := uint64(len(matrix))
+	copy(data[offset:offset+8], (*[8]byte)(unsafe.Pointer(&rows))[:])
+	offset += 8
+
+	// Write each row's length and data
+	for _, row := range matrix {
+		rowLen := uint64(len(row))
+		copy(data[offset:offset+8], (*[8]byte)(unsafe.Pointer(&rowLen))[:])
+		offset += 8
+		for _, value := range row {
+			copy(data[offset:offset+8], (*[8]byte)(unsafe.Pointer(&value))[:])
+			offset += 8
+		}
+	}
+
+	return data
+}
+
+func decodeUint64MatrixUnsafe(data []byte) ([][]uint64, error) {
+	if len(data) == 0 {
+		return nil, nil
+	}
+
+	offset := 0
+	// Read number of rows
+	var rows uint64
+	rows = *(*uint64)(unsafe.Pointer(&data[offset]))
+	offset += 8
+
+	matrix := make([][]uint64, rows)
+
+	for i := 0; i < int(rows); i++ {
+		// Read row length
+		var rowLen uint64
+		rowLen = *(*uint64)(unsafe.Pointer(&data[offset]))
+		offset += 8
+
+		matrix[i] = make([]uint64, rowLen)
+		for j := 0; j < int(rowLen); j++ {
+			matrix[i][j] = *(*uint64)(unsafe.Pointer(&data[offset]))
+			offset += 8
+		}
+	}
+
+	return matrix, nil
+}
+
+// Combined benchmark function
+func BenchmarkEncodeDecodeUint64Matrix(b *testing.B) {
+	matrix := GenerateMatrix(10)
+
+	b.Run("Binary Encoding/Decoding", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			data, err := encodeUint64Matrix(matrix)
+			if err != nil {
+				b.Error(err)
+			}
+			_, err = decodeUint64Matrix(data)
+			if err != nil {
+				b.Error(err)
+			}
+		}
+	})
+
+	b.Run("Gob Encoding/Decoding", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			data, err := encodeUint64MatrixWithGob(matrix)
+			if err != nil {
+				b.Error(err)
+			}
+			_, err = decodeUint64MatrixWithGob(data)
+			if err != nil {
+				b.Error(err)
+			}
+		}
+	})
+
+	b.Run("JSON Encoding/Decoding", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			data, err := encodeUint64MatrixWithJSON(matrix)
+			if err != nil {
+				b.Error(err)
+			}
+			_, err = decodeUint64MatrixWithJSON(data)
+			if err != nil {
+				b.Error(err)
+			}
+		}
+	})
+
+	b.Run("Unsafe Encoding/Decoding", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			data := encodeUint64MatrixUnsafe(matrix)
+			_, err := decodeUint64MatrixUnsafe(data)
+			if err != nil {
+				b.Error(err)
+			}
+		}
+	})
+}
+
+func dotProductT[T c.Float](a, b []T, floatBits int) (T, error) {
+	var dotProduct T
+	if len(a) != len(b) {
+		err := errors.New("can not compute dot product on vectors of different lengths")
+		return dotProduct, err
+	}
+	for i := 0; i < len(a); i++ {
+		dotProduct += a[i] * b[i]
+	}
+	return dotProduct, nil
+}
+
+func dotProduct(a, b []float32) (float32, error) {
+	if len(a) != len(b) {
+		err := errors.New("can not compute dot product on vectors of different lengths")
+		return 0, err
+	}
+	sum := int8(0)
+	for i := 0; i < len(a); i += 2 {
+		sum += *(*int8)(unsafe.Pointer(&a[i]))**(*int8)(unsafe.Pointer(&b[i])) + *(*int8)(unsafe.Pointer(&a[i+1]))**(*int8)(unsafe.Pointer(&b[i+1]))
+	}
+	return float32(sum), nil
+}
+
+func BenchmarkDotProduct(b *testing.B) {
+
+	num := 1500
+	data := make([]byte, 64*num)
+	_, err := rand.Read(data)
+	if err != nil {
+		b.Skip()
+	}
+
+	b.Run(fmt.Sprintf("vek:size=%d", len(data)),
+		func(b *testing.B) {
+
+			temp := make([]float32, num)
+			BytesAsFloatArray[float32](data, &temp, 32)
+			for k := 0; k < b.N; k++ {
+				vek32.Dot(temp, temp)
+			}
+
+		})
+
+	b.Run(fmt.Sprintf("dotProduct:size=%d", len(data)),
+		func(b *testing.B) {
+
+			temp := make([]float32, num)
+			BytesAsFloatArray[float32](data, &temp, 32)
+			for k := 0; k < b.N; k++ {
+				dotProduct(temp, temp)
+			}
+
+		})
+
+	b.Run(fmt.Sprintf("dotProductT:size=%d", len(data)),
+		func(b *testing.B) {
+
+			temp := make([]float32, num)
+			BytesAsFloatArray[float32](data, &temp, 32)
+			for k := 0; k < b.N; k++ {
+				dotProductT[float32](temp, temp, 32)
+			}
+
+		})
+
+}
 
 func pointerFloatConversion[T c.Float](encoded []byte, retVal *[]T, floatBits int) {
 	floatBytes := floatBits / 8
 
-	// Ensure the byte slice length is a multiple of 8 (size of float64)
+	// Ensure the byte slice length is a multiple of 8 (size of float32)
 	if len(encoded)%floatBytes != 0 {
 		fmt.Println("Invalid byte slice length")
 		return
@@ -53,7 +344,7 @@ func littleEndianBytesAsFloatArray[T c.Float](encoded []byte, retVal *[]T, float
 	// work with the golang "unsafe" library.
 	floatBytes := floatBits / 8
 
-	// Ensure the byte slice length is a multiple of 8 (size of float64)
+	// Ensure the byte slice length is a multiple of 8 (size of float32)
 	if len(encoded)%floatBytes != 0 {
 		fmt.Println("Invalid byte slice length")
 		return
@@ -89,21 +380,31 @@ func BenchmarkFloatConverstion(b *testing.B) {
 		b.Skip()
 	}
 
+	b.Run(fmt.Sprintf("Current:size=%d", len(data)),
+		func(b *testing.B) {
+
+			temp := make([]float32, num)
+			for k := 0; k < b.N; k++ {
+				BytesAsFloatArray[float32](data, &temp, 64)
+			}
+
+		})
+
 	b.Run(fmt.Sprintf("pointerFloat:size=%d", len(data)),
 		func(b *testing.B) {
 
-			temp := make([]float64, num)
+			temp := make([]float32, num)
 			for k := 0; k < b.N; k++ {
-				pointerFloatConversion[float64](data, &temp, 64)
+				pointerFloatConversion[float32](data, &temp, 64)
 			}
 
 		})
 
 	b.Run(fmt.Sprintf("littleEndianFloat:size=%d", len(data)),
 		func(b *testing.B) {
-			temp := make([]float64, num)
+			temp := make([]float32, num)
 			for k := 0; k < b.N; k++ {
-				littleEndianBytesAsFloatArray[float64](data, &temp, 64)
+				littleEndianBytesAsFloatArray[float32](data, &temp, 64)
 			}
 
 		})
