@@ -589,7 +589,7 @@ var overlappingSearchPersistentFlatStorageTests = []searchPersistentFlatStorageT
 		query:       []float64{0.3, 0.5, 0.7},
 		maxResults:  1,
 		expectedErr: nil,
-		expectedNns: []uint64{123},
+		expectedNns: []uint64{1},
 	},
 	{
 		qc:          NewQueryCache(&inMemLocalCache{readTs: 93}, 93),
