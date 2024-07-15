@@ -172,6 +172,7 @@ func (ph *persistentHNSW[T]) searchPersistentLayer(
 		index:       entry,
 		filteredOut: entryIsFilteredOut,
 	}
+
 	r.setFirstPathNode(best)
 	candidateHeap := *buildPersistentHeapByInit([]minPersistentHeapElement[T]{best})
 
@@ -238,6 +239,9 @@ func (ph *persistentHNSW[T]) searchPersistentLayer(
 				// check! In this way, we can make sure to allow in up to
 				// expectedNeighbors "unfiltered" elements.
 				if r.numNeighbors() < expectedNeighbors || ph.simType.isBetterScore(currDist, r.lastNeighborScore()) {
+					if candidateHeap.Len() > expectedNeighbors {
+						candidateHeap.PopLast()
+					}
 					candidateHeap.Push(*currElement)
 					r.addPathNode(*currElement, ph.simType, expectedNeighbors)
 					improved = true
