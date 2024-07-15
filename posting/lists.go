@@ -234,6 +234,7 @@ func (lc *LocalCache) Find(pred []byte, filter func([]byte) bool) (uint64, error
 				return 0, err
 			}
 			vals, err := pl.Value(lc.startTs)
+			fmt.Println(attr, pk.Uid, vals)
 			switch {
 			case err == ErrNoValue:
 				continue

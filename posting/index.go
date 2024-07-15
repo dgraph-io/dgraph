@@ -27,6 +27,7 @@ import (
 	"os"
 	"sync/atomic"
 	"time"
+	"unsafe"
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
@@ -650,6 +651,36 @@ type rebuilder struct {
 	fn func(uid uint64, pl *List, txn *Txn) ([]*pb.DirectedEdge, error)
 }
 
+func decodeUint64MatrixUnsafe(data []byte, matrix *[][]uint64) error {
+	if len(data) == 0 {
+		return nil
+	}
+
+	offset := 0
+	// Read number of rows
+	var rows uint64
+	rows = *(*uint64)(unsafe.Pointer(&data[offset]))
+	offset += 8
+
+	fmt.Println(rows)
+	*matrix = make([][]uint64, rows)
+
+	for i := 0; i < int(rows); i++ {
+		// Read row length
+		var rowLen uint64
+		rowLen = *(*uint64)(unsafe.Pointer(&data[offset]))
+		offset += 8
+
+		(*matrix)[i] = make([]uint64, rowLen)
+		for j := 0; j < int(rowLen); j++ {
+			(*matrix)[i][j] = *(*uint64)(unsafe.Pointer(&data[offset]))
+			offset += 8
+		}
+	}
+
+	return nil
+}
+
 func (r *rebuilder) RunWithoutTemp(ctx context.Context) error {
 	stream := pstore.NewStreamAt(r.startTs)
 	stream.LogPrefix = fmt.Sprintf("Rebuilding index for predicate %s (1/2):", r.attr)
@@ -731,6 +762,7 @@ func (r *rebuilder) RunWithoutTemp(ctx context.Context) error {
 		return nil, nil
 	}
 	stream.Send = func(buf *z.Buffer) error {
+		// TODO. Make an in memory txn with disk backing for more data than memory.
 		return nil
 	}
 
@@ -738,6 +770,33 @@ func (r *rebuilder) RunWithoutTemp(ctx context.Context) error {
 	if err := stream.Orchestrate(ctx); err != nil {
 		return err
 	}
+
+	res := make([]int, 3, 3)
+	nn := make([]int, 3, 3)
+
+	var edges [][]uint64
+	for key, pl := range txn.cache.plists {
+		pk, _ := x.Parse([]byte(key))
+		if pk.Attr[len(pk.Attr)-1] != '_' {
+			continue
+		}
+		data, err := pl.Value(r.startTs)
+		if data.Value != nil && err == nil {
+			decodeUint64MatrixUnsafe(data.Value.([]byte), &edges)
+			fmt.Printf("%s %d ", pk.Attr, pk.Uid)
+			for i, r := range edges {
+				res[i] += len(r)
+				if len(r) > 0 {
+					nn[i] += 1
+				}
+				fmt.Printf("%d ", len(r))
+			}
+			fmt.Printf("\n")
+		}
+	}
+
+	fmt.Println(res)
+	fmt.Println(nn)
 
 	txn.Update()
 	writer := NewTxnWriter(pstore)

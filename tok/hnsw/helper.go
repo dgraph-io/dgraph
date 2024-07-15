@@ -643,19 +643,38 @@ func (ph *persistentHNSW[T]) addNeighbors(ctx context.Context, tc *TxnCache,
 
 // removeDeadNodes(nnEdges, tc) removes dead nodes from nnEdges and returns the new nnEdges
 func (ph *persistentHNSW[T]) removeDeadNodes(nnEdges []uint64, tc *TxnCache) ([]uint64, error) {
-	data, err := getDataFromKeyWithCacheType(ph.vecDead, 1, tc)
-	if err != nil && err.Error() == plError {
-		return []uint64{}, err
-	}
-	var deadNodes []uint64
-	if data != nil { // if dead nodes exist, convert to []uint64
-		deadNodes, err = ParseEdges(string(data.([]byte)))
-		if err != nil {
+	// TODO add a path to delete deadNodes
+	if ph.deadNodes == nil {
+		data, err := getDataFromKeyWithCacheType(ph.vecDead, 1, tc)
+		if err != nil && err.Error() == plError {
 			return []uint64{}, err
 		}
-		nnEdges = diff(nnEdges, deadNodes) // set nnEdges to be all elements not contained in deadNodes
+
+		var deadNodes []uint64
+		if data != nil { // if dead nodes exist, convert to []uint64
+			deadNodes, err = ParseEdges(string(data.([]byte)))
+			if err != nil {
+				return []uint64{}, err
+			}
+		}
+
+		ph.deadNodes = make(map[uint64]struct{})
+		for _, n := range deadNodes {
+			ph.deadNodes[n] = struct{}{}
+		}
 	}
-	return nnEdges, nil
+	if len(ph.deadNodes) == 0 {
+		return nnEdges, nil
+	}
+
+	var diff []uint64
+	for _, s := range nnEdges {
+		if _, ok := ph.deadNodes[s]; !ok {
+			diff = append(diff, s)
+			continue
+		}
+	}
+	return diff, nil
 }
 
 func Uint64ToBytes(key uint64) []byte {
