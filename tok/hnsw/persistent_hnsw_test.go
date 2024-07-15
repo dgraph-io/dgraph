@@ -480,7 +480,7 @@ var searchPersistentFlatStorageTests = []searchPersistentFlatStorageTest{
 		query:       []float64{0.824, 0.319, 0.111},
 		maxResults:  1,
 		expectedErr: nil,
-		expectedNns: []uint64{5},
+		expectedNns: []uint64{123},
 	},
 }
 

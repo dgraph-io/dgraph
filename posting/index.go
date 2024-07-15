@@ -1383,7 +1383,10 @@ func rebuildTokIndex(ctx context.Context, rb *IndexRebuild) error {
 		}
 		return nil, err
 	}
-	return builder.RunWithoutTemp(ctx)
+	if len(factorySpecs) != 0 {
+		return builder.RunWithoutTemp(ctx)
+	}
+	return builder.Run(ctx)
 }
 
 func (rb *IndexRebuild) needsCountIndexRebuild() indexOp {
