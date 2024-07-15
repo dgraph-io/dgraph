@@ -142,7 +142,7 @@ func (ph *persistentHNSW[T]) fillNeighborEdges(uuid uint64, c index.CacheType, e
 	return true, nil
 }
 
-var topC, bottomC int
+var topC int
 
 // searchPersistentLayer searches a layer of the hnsw graph for the nearest
 // neighbors of the query vector and returns the traversal path and the nearest
@@ -225,27 +225,25 @@ func (ph *persistentHNSW[T]) searchPersistentLayer(
 			filteredOut := !filter(query, eVec, currUid)
 			currElement := initPersistentHeapElement(
 				currDist, currUid, filteredOut)
-			nodeVisited := r.nodeVisited(*currElement)
-			if !nodeVisited {
-				r.addToVisited(*currElement)
-				ph.visitedUids.Set(uint(currUid))
+			r.addToVisited(*currElement)
+			r.incrementDistanceComputations()
+			ph.visitedUids.Set(uint(currUid))
 
-				// If we have not yet found k candidates, we can consider
-				// any candidate. Otherwise, only consider those that
-				// are better than our current k nearest neighbors.
-				// Note that the "numNeighbors" function is a bit tricky:
-				// If we previously added to the heap M elements that should
-				// be filtered out, we ignore M elements in the numNeighbors
-				// check! In this way, we can make sure to allow in up to
-				// expectedNeighbors "unfiltered" elements.
-				if r.numNeighbors() < expectedNeighbors || ph.simType.isBetterScore(currDist, r.lastNeighborScore()) {
-					if candidateHeap.Len() > expectedNeighbors {
-						candidateHeap.PopLast()
-					}
-					candidateHeap.Push(*currElement)
-					r.addPathNode(*currElement, ph.simType, expectedNeighbors)
-					improved = true
+			// If we have not yet found k candidates, we can consider
+			// any candidate. Otherwise, only consider those that
+			// are better than our current k nearest neighbors.
+			// Note that the "numNeighbors" function is a bit tricky:
+			// If we previously added to the heap M elements that should
+			// be filtered out, we ignore M elements in the numNeighbors
+			// check! In this way, we can make sure to allow in up to
+			// expectedNeighbors "unfiltered" elements.
+			if r.numNeighbors() < expectedNeighbors || ph.simType.isBetterScore(currDist, r.lastNeighborScore()) {
+				if candidateHeap.Len() > expectedNeighbors {
+					candidateHeap.PopLast()
 				}
+				candidateHeap.Push(*currElement)
+				r.addPathNode(*currElement, ph.simType, expectedNeighbors)
+				improved = true
 			}
 		}
 

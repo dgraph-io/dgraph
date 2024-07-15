@@ -658,8 +658,7 @@ func decodeUint64MatrixUnsafe(data []byte, matrix *[][]uint64) error {
 
 	offset := 0
 	// Read number of rows
-	var rows uint64
-	rows = *(*uint64)(unsafe.Pointer(&data[offset]))
+	rows := *(*uint64)(unsafe.Pointer(&data[offset]))
 	offset += 8
 
 	fmt.Println(rows)
@@ -667,8 +666,7 @@ func decodeUint64MatrixUnsafe(data []byte, matrix *[][]uint64) error {
 
 	for i := 0; i < int(rows); i++ {
 		// Read row length
-		var rowLen uint64
-		rowLen = *(*uint64)(unsafe.Pointer(&data[offset]))
+		rowLen := *(*uint64)(unsafe.Pointer(&data[offset]))
 		offset += 8
 
 		(*matrix)[i] = make([]uint64, rowLen)
@@ -704,11 +702,12 @@ func (r *rebuilder) RunWithoutTemp(ctx context.Context) error {
 		l.key = key
 		l.plist = new(pb.PostingList)
 
+		found := false
+
 		for it.Valid() {
 			item := it.Item()
 			if !bytes.Equal(item.Key(), l.key) {
 				break
-
 			}
 			l.maxTs = x.Max(l.maxTs, item.Version())
 			if item.IsDeletedOrExpired() {
@@ -716,6 +715,7 @@ func (r *rebuilder) RunWithoutTemp(ctx context.Context) error {
 				break
 			}
 
+			found = true
 			switch item.UserMeta() {
 			case BitEmptyPosting:
 				l.minTs = item.Version()
@@ -752,7 +752,9 @@ func (r *rebuilder) RunWithoutTemp(ctx context.Context) error {
 				return nil, errors.Errorf(
 					"Unexpected meta: %d for key: %s", item.UserMeta(), hex.Dump(key))
 			}
-			break
+			if found {
+				break
+			}
 		}
 
 		_, err = r.fn(pk.Uid, l, txn)
@@ -771,9 +773,10 @@ func (r *rebuilder) RunWithoutTemp(ctx context.Context) error {
 		return err
 	}
 
-	res := make([]int, 3, 3)
-	nn := make([]int, 3, 3)
+	res := make([]int, 3)
+	nn := make([]int, 3)
 
+	// Temp stuff to analyse the tree
 	var edges [][]uint64
 	for key, pl := range txn.cache.plists {
 		pk, _ := x.Parse([]byte(key))
@@ -782,7 +785,10 @@ func (r *rebuilder) RunWithoutTemp(ctx context.Context) error {
 		}
 		data, err := pl.Value(r.startTs)
 		if data.Value != nil && err == nil {
-			decodeUint64MatrixUnsafe(data.Value.([]byte), &edges)
+			err = decodeUint64MatrixUnsafe(data.Value.([]byte), &edges)
+			if err != nil {
+				fmt.Println(err)
+			}
 			fmt.Printf("%s %d ", pk.Attr, pk.Uid)
 			for i, r := range edges {
 				res[i] += len(r)

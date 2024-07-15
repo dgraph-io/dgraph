@@ -12,7 +12,6 @@ import (
 	"strings"
 	"unsafe"
 
-	"github.com/chewxy/math32"
 	c "github.com/dgraph-io/dgraph/tok/constraints"
 	"github.com/dgraph-io/dgraph/tok/index"
 	"github.com/getsentry/sentry-go"
@@ -64,16 +63,16 @@ func (s *SearchResult) GetExtraMetrics() map[string]uint64 {
 	return s.extraMetrics
 }
 
-func norm[T c.Float](v []T, floatBits int) T {
-	vectorNorm, _ := dotProduct(v, v, floatBits)
-	if floatBits == 32 {
-		return T(math32.Sqrt(float32(vectorNorm)))
-	}
-	if floatBits == 64 {
-		return T(math.Sqrt(float64(vectorNorm)))
-	}
-	panic("Invalid floatBits")
-}
+//func norm[T c.Float](v []T, floatBits int) T {
+//	vectorNorm, _ := dotProduct(v, v, floatBits)
+//	if floatBits == 32 {
+//		return T(math32.Sqrt(float32(vectorNorm)))
+//	}
+//	if floatBits == 64 {
+//		return T(math.Sqrt(float64(vectorNorm)))
+//	}
+//	panic("Invalid floatBits")
+//}
 
 var k int
 
@@ -246,24 +245,6 @@ func ParseEdges(s string) ([]uint64, error) {
 
 func cannotConvertToUintSlice(s string) error {
 	return errors.Errorf("Cannot convert %s to uint slice", s)
-}
-
-func diff(a []uint64, b []uint64) []uint64 {
-	// Turn b into a map
-	m := make(map[uint64]bool, len(b))
-	for _, s := range b {
-		m[s] = false
-	}
-	// Append values from the longest slice that don't exist in the map
-	var diff []uint64
-	for _, s := range a {
-		if _, ok := m[s]; !ok {
-			diff = append(diff, s)
-			continue
-		}
-		m[s] = true
-	}
-	return diff
 }
 
 // TODO: Move SimilarityType to index package.
@@ -511,8 +492,8 @@ func encodeUint64MatrixUnsafe(matrix [][]uint64) []byte {
 		rowLen := uint64(len(row))
 		copy(data[offset:offset+8], (*[8]byte)(unsafe.Pointer(&rowLen))[:])
 		offset += 8
-		for _, value := range row {
-			copy(data[offset:offset+8], (*[8]byte)(unsafe.Pointer(&value))[:])
+		for i := range row {
+			copy(data[offset:offset+8], (*[8]byte)(unsafe.Pointer(&row[i]))[:])
 			offset += 8
 		}
 	}
@@ -527,16 +508,14 @@ func decodeUint64MatrixUnsafe(data []byte, matrix *[][]uint64) error {
 
 	offset := 0
 	// Read number of rows
-	var rows uint64
-	rows = *(*uint64)(unsafe.Pointer(&data[offset]))
+	rows := *(*uint64)(unsafe.Pointer(&data[offset]))
 	offset += 8
 
 	*matrix = make([][]uint64, rows)
 
 	for i := 0; i < int(rows); i++ {
 		// Read row length
-		var rowLen uint64
-		rowLen = *(*uint64)(unsafe.Pointer(&data[offset]))
+		rowLen := *(*uint64)(unsafe.Pointer(&data[offset]))
 		offset += 8
 
 		(*matrix)[i] = make([]uint64, rowLen)

@@ -92,10 +92,10 @@ func (slr *searchLayerResult[T]) indexVisited(n uint64) bool {
 	return ok
 }
 
-func (slr *searchLayerResult[T]) nodeVisited(n minPersistentHeapElement[T]) bool {
-	_, ok := slr.visited[n.index]
-	return ok
-}
+//func (slr *searchLayerResult[T]) nodeVisited(n minPersistentHeapElement[T]) bool {
+//	_, ok := slr.visited[n.index]
+//	return ok
+//}
 
 func (slr *searchLayerResult[T]) addToVisited(n minPersistentHeapElement[T]) {
 	slr.visited[n.index] = n

@@ -1,6 +1,7 @@
 run:
   skip-dirs:
   skip-files:
+      - '_test\.go$'
 
 linters-settings:
   lll:
