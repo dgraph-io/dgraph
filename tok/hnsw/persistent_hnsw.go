@@ -472,7 +472,7 @@ func (ph *persistentHNSW[T]) insertHelper(ctx context.Context, tc *TxnCache,
 			return []minPersistentHeapElement[T]{}, []*index.KeyValue{}, err
 		}
 		layerResult, err := ph.searchPersistentLayer(tc, level, entry, startVec,
-			inVec, false, ph.efConstruction/2, index.AcceptAll[T])
+			inVec, false, ph.efConstruction, index.AcceptAll[T])
 		if err != nil {
 			return []minPersistentHeapElement[T]{}, []*index.KeyValue{}, layerErr
 		}

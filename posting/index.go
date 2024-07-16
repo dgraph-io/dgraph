@@ -811,6 +811,8 @@ func (r *rebuilder) RunWithoutTemp(ctx context.Context) error {
 			r.attr, time.Since(start))
 	}()
 
+	ResetCache()
+
 	return x.ExponentialRetry(int(x.Config.MaxRetries),
 		20*time.Millisecond, func() error {
 			err := txn.CommitToDisk(writer, r.startTs)
