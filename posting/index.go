@@ -27,7 +27,6 @@ import (
 	"os"
 	"sync/atomic"
 	"time"
-	"unsafe"
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
@@ -651,33 +650,33 @@ type rebuilder struct {
 	fn func(uid uint64, pl *List, txn *Txn) ([]*pb.DirectedEdge, error)
 }
 
-func decodeUint64MatrixUnsafe(data []byte, matrix *[][]uint64) error {
-	if len(data) == 0 {
-		return nil
-	}
-
-	offset := 0
-	// Read number of rows
-	rows := *(*uint64)(unsafe.Pointer(&data[offset]))
-	offset += 8
-
-	fmt.Println(rows)
-	*matrix = make([][]uint64, rows)
-
-	for i := 0; i < int(rows); i++ {
-		// Read row length
-		rowLen := *(*uint64)(unsafe.Pointer(&data[offset]))
-		offset += 8
-
-		(*matrix)[i] = make([]uint64, rowLen)
-		for j := 0; j < int(rowLen); j++ {
-			(*matrix)[i][j] = *(*uint64)(unsafe.Pointer(&data[offset]))
-			offset += 8
-		}
-	}
-
-	return nil
-}
+//func decodeUint64MatrixUnsafe(data []byte, matrix *[][]uint64) error {
+//	if len(data) == 0 {
+//		return nil
+//	}
+//
+//	offset := 0
+//	// Read number of rows
+//	rows := *(*uint64)(unsafe.Pointer(&data[offset]))
+//	offset += 8
+//
+//	fmt.Println(rows)
+//	*matrix = make([][]uint64, rows)
+//
+//	for i := 0; i < int(rows); i++ {
+//		// Read row length
+//		rowLen := *(*uint64)(unsafe.Pointer(&data[offset]))
+//		offset += 8
+//
+//		(*matrix)[i] = make([]uint64, rowLen)
+//		for j := 0; j < int(rowLen); j++ {
+//			(*matrix)[i][j] = *(*uint64)(unsafe.Pointer(&data[offset]))
+//			offset += 8
+//		}
+//	}
+//
+//	return nil
+//}
 
 func (r *rebuilder) RunWithoutTemp(ctx context.Context) error {
 	stream := pstore.NewStreamAt(r.startTs)
