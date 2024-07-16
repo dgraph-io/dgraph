@@ -19,6 +19,7 @@ package index
 import (
 	"context"
 
+	"github.com/dgraph-io/dgraph/protos/pb"
 	c "github.com/dgraph-io/dgraph/tok/constraints"
 	opts "github.com/dgraph-io/dgraph/tok/options"
 )
@@ -138,7 +139,9 @@ type Txn interface {
 	Get(key []byte) (rval Value, rerr error)
 	// GetWithLockHeld uses a []byte key to return the Value corresponding to the key with a mutex lock held
 	GetWithLockHeld(key []byte) (rval Value, rerr error)
+	// Find iterates over all the values of a predicate that starts with prefix.
 	Find(prefix []byte, filter func(val []byte) bool) (uint64, error)
+	GetBatchSinglePosting(keys [][]byte) ([]*pb.PostingList, error)
 	// Adds a mutation operation on a index.Txn interface, where the mutation
 	// is represented in the form of an index.DirectedEdge
 	AddMutation(ctx context.Context, key []byte, t *KeyValue) error
@@ -157,6 +160,7 @@ type LocalCache interface {
 	// GetWithLockHeld uses a []byte key to return the Value corresponding to the key with a mutex lock held
 	GetWithLockHeld(key []byte) (rval Value, rerr error)
 	Find(prefix []byte, filter func(val []byte) bool) (uint64, error)
+	GetBatchSinglePosting(keys [][]byte) ([]*pb.PostingList, error)
 }
 
 // Value is an interface representation of the value of a persistent storage system
@@ -164,6 +168,7 @@ type Value interface{}
 
 // CacheType is an interface representation of the cache of a persistent storage system
 type CacheType interface {
+	GetBatchSinglePosting(keys [][]byte) ([]*pb.PostingList, error)
 	Get(key []byte) (rval Value, rerr error)
 	Ts() uint64
 	Find(prefix []byte, filter func(val []byte) bool) (uint64, error)

@@ -19,6 +19,7 @@ package posting
 import (
 	"bytes"
 	"encoding/hex"
+	"fmt"
 	"strconv"
 	"strings"
 	"sync"
@@ -510,6 +511,73 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 		it.Next()
 	}
 	return l, nil
+}
+
+func (lc *LocalCache) GetBatchSinglePosting(keys [][]byte) ([]*pb.PostingList, error) {
+	results := make([]*pb.PostingList, len(keys))
+	remaining_keys := make([][]byte, 0)
+	lc.RLock()
+	for i, key := range keys {
+		if pl, ok := lc.plists[string(key)]; ok && pl.mutationMap[lc.startTs] != nil {
+			results[i] = pl.mutationMap[lc.startTs]
+		} else if delta, ok := lc.deltas[string(key)]; ok && len(delta) > 0 {
+			pl := &pb.PostingList{}
+			err := pl.Unmarshal(delta)
+			if err != nil {
+				results[i] = pl
+			}
+		} else {
+			remaining_keys = append(remaining_keys, key)
+		}
+	}
+	lc.RUnlock()
+
+	txn := pstore.NewTransactionAt(lc.startTs, false)
+	items, err := txn.GetBatch(remaining_keys)
+	if err != nil {
+		fmt.Println(err, keys)
+		return nil, err
+	}
+	idx := 0
+
+	for i := 0; i < len(results); i++ {
+		if results[i] != nil {
+			continue
+		}
+		pl := &pb.PostingList{}
+		err = items[idx].Value(func(val []byte) error {
+			if err := pl.Unmarshal(val); err != nil {
+				return err
+			}
+			return nil
+		})
+		idx += 1
+		results[i] = pl
+	}
+
+	for i := 0; i < len(results); i++ {
+		pl := results[i]
+		idx := 0
+		for _, postings := range pl.Postings {
+			if hasDeleteAll(postings) {
+				return nil, nil
+			}
+			if postings.Op != Del {
+				pl.Postings[idx] = postings
+				idx++
+			}
+		}
+		pl.Postings = pl.Postings[:idx]
+		results[i] = pl
+		l := &List{
+			key:         keys[i],
+			plist:       new(pb.PostingList),
+			mutationMap: map[uint64]*pb.PostingList{lc.startTs: pl},
+		}
+		lc.SetIfAbsent(string(keys[i]), l)
+	}
+
+	return results, err
 }
 
 func copyList(l *List) *List {

@@ -3,6 +3,7 @@ package hnsw
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -201,8 +202,54 @@ func (ph *persistentHNSW[T]) searchPersistentLayer(
 		if !found {
 			continue
 		}
-		var eVec []T
 		improved := false
+
+		uids := make([]uint64, 10)
+
+		checkUids := func() error {
+			sort.Slice(uids, func(i, j int) bool {
+				return uids[i] < uids[j]
+			})
+
+			vecs := make([][]T, len(uids))
+			err = ph.getMultipleVecFromUid(uids, c, &vecs)
+			for i, currUid := range uids {
+				// iterate over candidate's neighbors distances to get
+				// best ones
+				if len(vecs[i]) == 0 {
+					continue
+				}
+				currDist, err := ph.simType.distanceScore(vecs[i], query, ph.floatBits)
+				if err != nil {
+					return err
+				}
+				filteredOut := !filter(query, vecs[i], currUid)
+				currElement := initPersistentHeapElement(
+					currDist, currUid, filteredOut)
+				r.addToVisited(*currElement)
+				r.incrementDistanceComputations()
+				ph.visitedUids.Set(uint(currUid))
+
+				// If we have not yet found k candidates, we can consider
+				// any candidate. Otherwise, only consider those that
+				// are better than our current k nearest neighbors.
+				// Note that the "numNeighbors" function is a bit tricky:
+				// If we previously added to the heap M elements that should
+				// be filtered out, we ignore M elements in the numNeighbors
+				// check! In this way, we can make sure to allow in up to
+				// expectedNeighbors "unfiltered" elements.
+				if r.numNeighbors() < expectedNeighbors || ph.simType.isBetterScore(currDist, r.lastNeighborScore()) {
+					if candidateHeap.Len() > expectedNeighbors {
+						candidateHeap.PopLast()
+					}
+					candidateHeap.Push(*currElement)
+					r.addPathNode(*currElement, ph.simType, expectedNeighbors)
+					improved = true
+				}
+			}
+			return nil
+		}
+
 		for _, currUid := range allLayerEdges[level] {
 			if ph.visitedUids.Test(uint(currUid)) {
 				continue
@@ -210,40 +257,20 @@ func (ph *persistentHNSW[T]) searchPersistentLayer(
 			if r.indexVisited(currUid) {
 				continue
 			}
-			// iterate over candidate's neighbors distances to get
-			// best ones
-			_ = ph.getVecFromUid(currUid, c, &eVec)
-			// intentionally ignoring error -- we catch it
-			// indirectly via eVec == nil check.
-			if len(eVec) == 0 {
-				continue
+			uids = append(uids, currUid)
+			if len(uids) == 10 {
+				err := checkUids()
+				if err != nil {
+					return ph.emptySearchResultWithError(err)
+				}
 			}
-			currDist, err := ph.simType.distanceScore(eVec, query, ph.floatBits)
+			uids = uids[:0]
+		}
+
+		if len(uids) > 0 {
+			err := checkUids()
 			if err != nil {
 				return ph.emptySearchResultWithError(err)
-			}
-			filteredOut := !filter(query, eVec, currUid)
-			currElement := initPersistentHeapElement(
-				currDist, currUid, filteredOut)
-			r.addToVisited(*currElement)
-			r.incrementDistanceComputations()
-			ph.visitedUids.Set(uint(currUid))
-
-			// If we have not yet found k candidates, we can consider
-			// any candidate. Otherwise, only consider those that
-			// are better than our current k nearest neighbors.
-			// Note that the "numNeighbors" function is a bit tricky:
-			// If we previously added to the heap M elements that should
-			// be filtered out, we ignore M elements in the numNeighbors
-			// check! In this way, we can make sure to allow in up to
-			// expectedNeighbors "unfiltered" elements.
-			if r.numNeighbors() < expectedNeighbors || ph.simType.isBetterScore(currDist, r.lastNeighborScore()) {
-				if candidateHeap.Len() > expectedNeighbors {
-					candidateHeap.PopLast()
-				}
-				candidateHeap.Push(*currElement)
-				r.addPathNode(*currElement, ph.simType, expectedNeighbors)
-				improved = true
 			}
 		}
 

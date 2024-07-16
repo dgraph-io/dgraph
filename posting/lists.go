@@ -120,6 +120,10 @@ type viLocalCache struct {
 	delegate *LocalCache
 }
 
+func (vc *viLocalCache) GetBatchSinglePosting(keys [][]byte) ([]*pb.PostingList, error) {
+	return vc.delegate.GetBatchSinglePosting(keys)
+}
+
 func (vc *viLocalCache) Find(prefix []byte, filter func([]byte) bool) (uint64, error) {
 	return vc.delegate.Find(prefix, filter)
 }

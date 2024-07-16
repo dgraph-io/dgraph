@@ -12,6 +12,7 @@ import (
 	"strings"
 	"unsafe"
 
+	"github.com/dgraph-io/dgraph/protos/pb"
 	c "github.com/dgraph-io/dgraph/tok/constraints"
 	"github.com/dgraph-io/dgraph/tok/index"
 	"github.com/getsentry/sentry-go"
@@ -292,6 +293,10 @@ func (tc *TxnCache) Find(prefix []byte, filter func([]byte) bool) (uint64, error
 	return tc.txn.Find(prefix, filter)
 }
 
+func (tc *TxnCache) GetBatchSinglePosting(keys [][]byte) ([]*pb.PostingList, error) {
+	return tc.txn.GetBatchSinglePosting(keys)
+}
+
 func NewTxnCache(txn index.Txn, startTs uint64) *TxnCache {
 	return &TxnCache{
 		txn:     txn,
@@ -303,6 +308,10 @@ func NewTxnCache(txn index.Txn, startTs uint64) *TxnCache {
 type QueryCache struct {
 	cache  index.LocalCache
 	readTs uint64
+}
+
+func (qc *QueryCache) GetBatchSinglePosting(keys [][]byte) ([]*pb.PostingList, error) {
+	return qc.cache.GetBatchSinglePosting(keys)
 }
 
 func (qc *QueryCache) Find(prefix []byte, filter func([]byte) bool) (uint64, error) {
@@ -397,6 +406,26 @@ func getInsertLayer(maxLevels int) int {
 		}
 	}
 	return level
+}
+
+func (ph *persistentHNSW[T]) getMultipleVecFromUid(uids []uint64, c index.CacheType, vec *[][]T) error {
+	keys := [][]byte{}
+	for _, uid := range uids {
+		keys = append(keys, DataKey(ph.pred, uid))
+	}
+
+	data, err := c.GetBatchSinglePosting(keys)
+	if err != nil {
+		return errors.New(fmt.Sprintf("%s %s %s", err.Error(), plError, keys))
+	}
+
+	for indx, i := range data {
+		if len(i.Postings) > 0 {
+			index.BytesAsFloatArray(i.Postings[0].Value, &((*vec)[indx]), ph.floatBits)
+		}
+	}
+
+	return nil
 }
 
 // adds the data corresponding to a uid to the given vec variable in the form of []T
