@@ -773,36 +773,36 @@ func (r *rebuilder) RunWithoutTemp(ctx context.Context) error {
 		return err
 	}
 
-	res := []int{0, 0, 0}
-	nn := []int{0, 0, 0}
+	//res := []int{0, 0, 0}
+	//nn := []int{0, 0, 0}
 
-	// Temp stuff to analyse the tree
-	var edges [][]uint64
-	for key, pl := range txn.cache.plists {
-		pk, _ := x.Parse([]byte(key))
-		if pk.Attr[len(pk.Attr)-1] != '_' {
-			continue
-		}
-		data, err := pl.Value(r.startTs)
-		if data.Value != nil && err == nil {
-			err = decodeUint64MatrixUnsafe(data.Value.([]byte), &edges)
-			if err != nil {
-				fmt.Println(err)
-			}
-			fmt.Printf("%s %d ", pk.Attr, pk.Uid)
-			for i, r := range edges {
-				res[i] += len(r)
-				if len(r) > 0 {
-					nn[i] += 1
-				}
-				fmt.Printf("%d ", len(r))
-			}
-			fmt.Printf("\n")
-		}
-	}
+	//// Temp stuff to analyse the tree
+	//var edges [][]uint64
+	//for key, pl := range txn.cache.plists {
+	//	pk, _ := x.Parse([]byte(key))
+	//	if pk.Attr[len(pk.Attr)-1] != '_' {
+	//		continue
+	//	}
+	//	data, err := pl.Value(r.startTs)
+	//	if data.Value != nil && err == nil {
+	//		err = decodeUint64MatrixUnsafe(data.Value.([]byte), &edges)
+	//		if err != nil {
+	//			fmt.Println(err)
+	//		}
+	//		fmt.Printf("%s %d ", pk.Attr, pk.Uid)
+	//		for i, r := range edges {
+	//			res[i] += len(r)
+	//			if len(r) > 0 {
+	//				nn[i] += 1
+	//			}
+	//			fmt.Printf("%d ", len(r))
+	//		}
+	//		fmt.Printf("\n")
+	//	}
+	//}
 
-	fmt.Println(res)
-	fmt.Println(nn)
+	//fmt.Println(res)
+	//fmt.Println(nn)
 
 	txn.Update()
 	writer := NewTxnWriter(pstore)
