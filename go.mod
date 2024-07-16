@@ -15,7 +15,6 @@ require (
 	github.com/Masterminds/semver/v3 v3.1.0
 	github.com/bits-and-blooms/bitset v1.2.0
 	github.com/blevesearch/bleve/v2 v2.3.10
-	github.com/chewxy/math32 v1.10.1
 	github.com/dgraph-io/badger/v4 v4.2.0
 	github.com/dgraph-io/dgo/v230 v230.0.2-0.20240314155021-7b8d289e37f3
 	github.com/dgraph-io/gqlgen v0.13.2
@@ -86,6 +85,7 @@ require (
 	github.com/blevesearch/snowballstem v0.9.0 // indirect
 	github.com/blevesearch/upsidedown_store_api v1.0.2 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
+	github.com/chewxy/math32 v1.10.1 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/docker/distribution v2.8.2+incompatible // indirect
 	github.com/docker/go-units v0.4.0 // indirect

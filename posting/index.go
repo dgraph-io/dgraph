@@ -773,8 +773,8 @@ func (r *rebuilder) RunWithoutTemp(ctx context.Context) error {
 		return err
 	}
 
-	res := make([]int, 3)
-	nn := make([]int, 3)
+	res := []int{0, 0, 0}
+	nn := []int{0, 0, 0}
 
 	// Temp stuff to analyse the tree
 	var edges [][]uint64
