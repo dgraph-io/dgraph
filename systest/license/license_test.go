@@ -20,6 +20,7 @@ package main
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -154,6 +155,12 @@ func (lsuite *LicenseTestSuite) TestEnterpriseLicenseWithGraphqlEndPoint() {
 func assertLicenseNotEnabled(t *testing.T, hcli *dgraphapi.HTTPClient, user string) {
 	response, err := hcli.GetZeroState()
 	require.NoError(t, err)
+
+	if len(user) != len(response.Extensions["user"].(string)) {
+		time.Sleep(5 * time.Second)
+		response, err = hcli.GetZeroState()
+		require.NoError(t, err)
+	}
 
 	require.Equal(t, response.Extensions["user"], user)
 	require.Equal(t, response.Extensions["enabled"], false)
