@@ -4,6 +4,76 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project will adhere to [Semantic Versioning](https://semver.org) starting `v22.0.0`.
 
+## [v24.0.0] - 2024-06-06
+[v24.0.0]: https://github.com/dgraph-io/dgraph/compare/v24.0.0...v23.1.0
+
+> **Warning**
+> This will be a breaking change for anyone moving from to `v.24.0.0`.
+> If you have any duplicate users or groups in Dgraph ACL, they would not be accessible from now on. Please delete any 
+> duplicate users and groups before you upgrade. File format is the same, so binary can be directly replaced after.
+> deleting duplicate users and groups.
+
+### Added
+
+- **Vector**
+	- feat(graphql): Add vector support to graphql (#9074)
+	- feat(vector): add vector to schema in #9060
+	- feat(vector): Added similar_to in vector in #9062
+	- feat(vector): Add vector type to Dgraph in #9050
+	- feat(vector): fix live loader and add tests for dropall, drop namespace, live load in #9063
+	- fix(vector): show error is invalid input is provided to vector predicate in #9064
+	- fix(vector):fix similar_to() error return when data is not present in #9084
+	- fix(vector): Update query_rewriter to fix dotproduct and cosine query conversion in #9083
+
+- **Core**
+	- feat(core): Add cache to dgraph.type predicate in #9068
+	- [BREAKING]feat(core): add unique constraint support in schema for new predicates in #8827
+	- feat(debug): add parse_key to debug tool in #7640
+	- feat(acl): support more JWT algorithms for ACL by in #8912
+	- feat(restore): add support for namespace aware restore by in #8968
+
+- **GraphQL**
+	- feat(vector): Added lang support by in #8924
+	- feat(graphql): allow updatable and nullable id fields. (#7736) in #9020
+### Fixed
+
+- **Core**
+	- Fix(debug): Close file correctly before exiting on error in #9076
+	- fix(restore): fix incr restore and normal restore for vector predicates in #9078
+	- Fix(core): Fix deadlock in runMutation and error handling in #9085
+	- fix(core): Fixed deadlock that happens due to timeout in #9007
+	- fix(core): limit #edges using LimitMutationsNquad config and add logs in #9010
+	- fix(core): Update math parsing function by in #9053
+	- fix(restore): use different map directory for each group (#8047) in #8972
+	- fix(export): Support for any s3 endpoint by in #8978
+	- fix(restore): use custom type for sensitive fields by in #8969
+	- fix(export): Escape MySQL column names in #8961
+	- fix(debug): fix debug tool for schema keys in #7939
+	- fix(restore): allow incrementalFrom to be 1 in restore API by in #8988
+	- fix(raft):alpha leader fails to stream snapshot to new alpha nodes in #9022
+	- fix(query): fix has function in filter in #9043
+	- fix(core):Reduce x.ParsedKey memory allocation from 72 to 56 bytes by optimizing struct memory alignment in #9047
+	- fix(restore): do not retry restore proposal (#8058) in #9017
+
+- **Perf**
+	- perf(core): Fix performance issue in type filter (#9065) in #9089
+	- perf(core): Update postinglistCountAndLength function to improve performance in #9088
+	- perf(query): use quickselect instead of sorting while pagination by in #8995
+	- perf(query): Update CompressedBin IntersectionAlgo by in #9000
+
+- **Chore**
+	- chore(upgrade): run tests from v23.1.0 -> main in #9097
+	- chore(deps): upgrade etcd/raft to v3 by in #7688
+	- chore(restore): add more logs for restore request (#8050) in #8975
+	- upgrade(go): update go version to 1.22 in #9058
+	- chore(deps): bump github.com/apache/thrift from 0.12.0 to 0.13.0 by in #8982
+	- chore(deps): bump golang.org/x/net from 0.14.0 to 0.17.0 in #9015
+	- chore(deps): use bleve 2.3.10 for more languages in full text search in #9030
+	- chore(deps): bump golang.org/x/crypto from 0.12.0 to 0.17.0 in #9032
+	- chore(deps): bump urllib3 from 1.26.5 to 1.26.18 in /contrib/config/marketplace/aws/tests in #9018
+	- chore(deps): bump google.golang.org/grpc from 1.56.2 to 1.56.3 in #9024
+	- chore(deps): bump google.golang.org/protobuf from 1.31.0 to 1.33.0in #9051[
+
 ## [23.1.1] - 2024-04-26
 [v23.1.1]: https://github.com/dgraph-io/dgraph/compare/v23.1.0...v23.1.1
 

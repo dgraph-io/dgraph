@@ -17,12 +17,13 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
+	"github.com/dgraph-io/dgraph/dgraphapi"
 	"github.com/dgraph-io/dgraph/dgraphtest"
 )
 
 type AclTestSuite struct {
 	suite.Suite
-	dc dgraphtest.Cluster
+	dc dgraphapi.Cluster
 }
 
 func (suite *AclTestSuite) SetupTest() {

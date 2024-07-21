@@ -27,45 +27,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/dgraph-io/dgraph/dgraphapi"
 	"github.com/dgraph-io/dgraph/dgraphtest"
 	"github.com/dgraph-io/dgraph/dql"
 )
-
-func TestGetVector(t *testing.T) {
-	query := `
-		{
-			me(func: has(vectorNonIndex)) {
-				a as vectorNonIndex
-			}
-			aggregation() {
-				avg(val(a))
-				sum(val(a))
-			}
-		}
-	`
-	js := processQueryNoErr(t, query)
-	k := `{
-  "data": {
-    "me": [
-      {
-        "vectorNonIndex": [1,1,2,2]
-      },
-      {
-        "vectorNonIndex": [2,1,2,2]
-      }
-    ],
-    "aggregation": [
-      {
-        "avg(val(a))": [1.5,1,2,2]
-      },
-      {
-        "sum(val(a))": [3,2,4,4]
-      }
-    ]
-  }
-}`
-	require.JSONEq(t, k, js)
-}
 
 func TestGetUID(t *testing.T) {
 	query := `
@@ -3657,5 +3622,5 @@ func TestInvalidRegex(t *testing.T) {
 	}
 }
 
-var client *dgraphtest.GrpcClient
-var dc dgraphtest.Cluster
+var client *dgraphapi.GrpcClient
+var dc dgraphapi.Cluster

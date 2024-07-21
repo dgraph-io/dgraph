@@ -20,6 +20,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
+	"github.com/dgraph-io/dgraph/dgraphapi"
 	"github.com/dgraph-io/dgraph/dgraphtest"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -27,7 +28,7 @@ import (
 type AclTestSuite struct {
 	suite.Suite
 	lc *dgraphtest.LocalCluster
-	dc dgraphtest.Cluster
+	dc dgraphapi.Cluster
 	uc dgraphtest.UpgradeCombo
 }
 

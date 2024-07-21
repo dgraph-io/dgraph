@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dgraph-io/dgraph/dgraphapi"
 	"github.com/dgraph-io/dgraph/dgraphtest"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
@@ -42,13 +43,13 @@ func TestSnapshotTranferAfterNewNodeJoins(t *testing.T) {
 
 	hc, err := c.HTTPClient()
 	require.NoError(t, err)
-	hc.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace)
+	hc.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace)
 
 	gc, cleanup, err := c.Client()
 	require.NoError(t, err)
 	defer cleanup()
 	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace))
 
 	prevSnapshotTs, err := hc.GetCurrentSnapshotTs(1)
 	require.NoError(t, err)

@@ -32,6 +32,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	checkupgrade "github.com/dgraph-io/dgraph/check_upgrade"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/alpha"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/bulk"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/cert"
@@ -84,6 +85,7 @@ var rootConf = viper.New()
 var subcommands = []*x.SubCommand{
 	&bulk.Bulk, &cert.Cert, &conv.Conv, &live.Live, &alpha.Alpha, &zero.Zero, &version.Version,
 	&debug.Debug, &migrate.Migrate, &debuginfo.DebugInfo, &upgrade.Upgrade, &decrypt.Decrypt, &increment.Increment,
+	&checkupgrade.CheckUpgrade,
 }
 
 func initCmds() {

@@ -28,7 +28,9 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgo/v230/protos/api"
+	"github.com/dgraph-io/dgraph/dgraphapi"
 	"github.com/dgraph-io/dgraph/dgraphtest"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
 )
 
@@ -40,8 +42,8 @@ const (
 	vectorSchemaWithoutIndex = `%v: float32vector .`
 )
 
-var client *dgraphtest.GrpcClient
-var dc dgraphtest.Cluster
+var client *dgraphapi.GrpcClient
+var dc dgraphapi.Cluster
 
 func setSchema(schema string) {
 	var err error
@@ -268,6 +270,10 @@ func querySingleVectorError(t *testing.T, vector, pred string, validateError boo
 		return []float32{}, err
 	}
 
+	if len(data.Vector) == 0 {
+		return []float32{}, nil
+	}
+
 	return data.Vector[0].VTest, nil
 }
 
@@ -428,6 +434,48 @@ func TestVectorsMutateFixedLengthWithDiffrentIndexes(t *testing.T) {
 	dropPredicate("vtest")
 }
 
+func TestVectorDeadlockwithTimeout(t *testing.T) {
+	pred := "vtest1"
+	dc = dgraphtest.NewComposeCluster()
+	var cleanup func()
+	client, cleanup, err := dc.Client()
+	x.Panic(err)
+	defer cleanup()
+
+	for i := 0; i < 5; i++ {
+		fmt.Println("Testing iteration: ", i)
+		ctx, cancel2 := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel2()
+		err = client.LoginIntoNamespace(ctx, dgraphapi.DefaultUser,
+			dgraphapi.DefaultPassword, x.GalaxyNamespace)
+		require.NoError(t, err)
+
+		err = client.Alter(context.Background(), &api.Operation{
+			DropAttr: pred,
+		})
+		dropPredicate(pred)
+		setSchema(fmt.Sprintf(vectorSchemaWithIndex, pred, "4", "euclidian"))
+		numVectors := 1000
+		vectorSize := 10
+
+		randomVectors, _ := generateRandomVectors(numVectors, vectorSize, pred)
+
+		txn := client.NewTxn()
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer func() { _ = txn.Discard(ctx) }()
+		defer cancel()
+
+		_, err = txn.Mutate(ctx, &api.Mutation{
+			SetNquads: []byte(randomVectors),
+			CommitNow: true,
+		})
+		require.Error(t, err)
+
+		err = txn.Commit(ctx)
+		require.Contains(t, err.Error(), "Transaction has already been committed or discarded")
+	}
+}
+
 func TestVectorMutateDiffrentLengthWithDiffrentIndexes(t *testing.T) {
 	dropPredicate("vtest")
 
@@ -569,8 +617,9 @@ func TestVectorDelete(t *testing.T) {
 	}
 
 	triple := deleteTriple(len(triples) - 2)
+	// after deleteing all vectors, we should get an empty array of vectors in response when we do silimar_to query
 	_, err = querySingleVectorError(t, strings.Split(triple, `"`)[1], "vtest", false)
-	require.NotNil(t, err)
+	require.NoError(t, err)
 }
 
 func TestVectorUpdate(t *testing.T) {
@@ -678,4 +727,67 @@ func TestVectorTwoTxnWithoutCommit(t *testing.T) {
 	for i := 0; i < len(vectors); i++ {
 		require.Contains(t, resp, vectors[i])
 	}
+}
+
+func TestGetVector(t *testing.T) {
+	setSchema("vectorNonIndex : float32vector .")
+
+	rdfs := `
+	<1> <vectorNonIndex> "[1.0, 1.0, 2.0, 2.0]" .
+	<2> <vectorNonIndex> "[2.0, 1.0, 2.0, 2.0]" .`
+	require.NoError(t, addTriplesToCluster(rdfs))
+
+	query := `
+		{
+			me(func: has(vectorNonIndex)) {
+				a as vectorNonIndex
+			}
+			aggregation() {
+				avg(val(a))
+				sum(val(a))
+			}
+		}
+	`
+	js := processQueryNoErr(t, query)
+	k := `{
+		"data": {
+		  "me": [
+			{
+			  "vectorNonIndex": [
+				1,
+				1,
+				2,
+				2
+			  ]
+			},
+			{
+			  "vectorNonIndex": [
+				2,
+				1,
+				2,
+				2
+			  ]
+			}
+		  ],
+		  "aggregation": [
+			{
+			  "avg(val(a))": [
+				1.5,
+				1,
+				2,
+				2
+			  ]
+			},
+			{
+			  "sum(val(a))": [
+				3,
+				2,
+				4,
+				4
+			  ]
+			}
+		  ]
+		}
+	  }`
+	require.JSONEq(t, k, js)
 }

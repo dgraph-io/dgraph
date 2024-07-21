@@ -290,8 +290,14 @@ func (o *oracle) ProcessDelta(delta *pb.OracleDelta) {
 
 	o.Lock()
 	defer o.Unlock()
-	for _, txn := range delta.Txns {
-		delete(o.pendingTxns, txn.StartTs)
+	for _, status := range delta.Txns {
+		txn := o.pendingTxns[status.StartTs]
+		if txn != nil && status.CommitTs > 0 {
+			for k := range txn.cache.deltas {
+				IncrRollup.addKeyToBatch([]byte(k), 0)
+			}
+		}
+		delete(o.pendingTxns, status.StartTs)
 	}
 	curMax := o.MaxAssigned()
 	if delta.MaxAssigned < curMax {

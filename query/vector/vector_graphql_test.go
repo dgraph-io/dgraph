@@ -20,9 +20,11 @@ package query
 
 import (
 	"encoding/json"
+	"fmt"
+	"math/rand"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/dgraphtest"
+	"github.com/dgraph-io/dgraph/dgraphapi"
 	"github.com/stretchr/testify/require"
 )
 
@@ -36,31 +38,58 @@ const (
 	 type Project  {
 		 id: ID!
 		 title: String!  @search(by: [exact])
-		 title_v: [Float!] @embedding @search(by: ["hnsw(metric: euclidian, exponent: 4)"])
-	 }
-	 `
+		 title_v: [Float!] @embedding @search(by: ["hnsw(metric: %v, exponent: 4)"])
+	 } `
 )
 
-var (
-	projects = []ProjectInput{ProjectInput{
-		Title:  "iCreate with a Mini iPad",
-		TitleV: []float32{0.7, 0.8, 0.9, 0.1, 0.2},
-	}, ProjectInput{
-		Title:  "Resistive Touchscreen",
-		TitleV: []float32{0.7, 0.8, 0.9, 0.1, 0.2},
-	}, ProjectInput{
-		Title:  "Fitness Band",
-		TitleV: []float32{0.7, 0.8, 0.9, 0.1, 0.2},
-	}, ProjectInput{
-		Title:  "Smart Watch",
-		TitleV: []float32{0.7, 0.8, 0.9, 0.1, 0.2},
-	}, ProjectInput{
-		Title:  "Smart Ring",
-		TitleV: []float32{0.7, 0.8, 0.9, 0.1, 0.2},
-	}}
-)
+func generateProjects(count int) []ProjectInput {
+	var projects []ProjectInput
+	for i := 0; i < count; i++ {
+		title := generateUniqueRandomTitle(projects)
+		titleV := generateRandomTitleV(5) // Assuming size is fixed at 5
+		project := ProjectInput{
+			Title:  title,
+			TitleV: titleV,
+		}
+		projects = append(projects, project)
+	}
+	return projects
+}
 
-func addProject(t *testing.T, hc *dgraphtest.HTTPClient, project ProjectInput) {
+func isTitleExists(title string, existingTitles []ProjectInput) bool {
+	for _, project := range existingTitles {
+		if project.Title == title {
+			return true
+		}
+	}
+	return false
+}
+
+func generateUniqueRandomTitle(existingTitles []ProjectInput) string {
+	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	const titleLength = 10
+	title := make([]byte, titleLength)
+	for {
+		for i := range title {
+			title[i] = charset[rand.Intn(len(charset))]
+		}
+		titleStr := string(title)
+		if !isTitleExists(titleStr, existingTitles) {
+			return titleStr
+		}
+	}
+}
+
+func generateRandomTitleV(size int) []float32 {
+	var titleV []float32
+	for i := 0; i < size; i++ {
+		value := rand.Float32()
+		titleV = append(titleV, value)
+	}
+	return titleV
+}
+
+func addProject(t *testing.T, hc *dgraphapi.HTTPClient, project ProjectInput) {
 	query := `
 	  mutation addProject($project: AddProjectInput!) {
 		  addProject(input: [$project]) {
@@ -71,7 +100,7 @@ func addProject(t *testing.T, hc *dgraphtest.HTTPClient, project ProjectInput) {
 		  }
 	  }`
 
-	params := dgraphtest.GraphQLParams{
+	params := dgraphapi.GraphQLParams{
 		Query:     query,
 		Variables: map[string]interface{}{"project": project},
 	}
@@ -79,7 +108,8 @@ func addProject(t *testing.T, hc *dgraphtest.HTTPClient, project ProjectInput) {
 	_, err := hc.RunGraphqlQuery(params, false)
 	require.NoError(t, err)
 }
-func queryProjectUsingTitle(t *testing.T, hc *dgraphtest.HTTPClient, title string) ProjectInput {
+
+func queryProjectUsingTitle(t *testing.T, hc *dgraphapi.HTTPClient, title string) ProjectInput {
 	query := ` query QueryProject($title: String!) {
 		 queryProject(filter: { title: { eq: $title } }) {
 		   title
@@ -87,7 +117,7 @@ func queryProjectUsingTitle(t *testing.T, hc *dgraphtest.HTTPClient, title strin
 		 }
 	   }`
 
-	params := dgraphtest.GraphQLParams{
+	params := dgraphapi.GraphQLParams{
 		Query:     query,
 		Variables: map[string]interface{}{"title": title},
 	}
@@ -96,7 +126,6 @@ func queryProjectUsingTitle(t *testing.T, hc *dgraphtest.HTTPClient, title strin
 	type QueryResult struct {
 		QueryProject []ProjectInput `json:"queryProject"`
 	}
-
 	var resp QueryResult
 	err = json.Unmarshal([]byte(string(response)), &resp)
 	require.NoError(t, err)
@@ -104,11 +133,10 @@ func queryProjectUsingTitle(t *testing.T, hc *dgraphtest.HTTPClient, title strin
 	return resp.QueryProject[0]
 }
 
-func queryProjectsSimilarByEmbedding(t *testing.T, hc *dgraphtest.HTTPClient, vector []float32) []ProjectInput {
+func queryProjectsSimilarByEmbedding(t *testing.T, hc *dgraphapi.HTTPClient, vector []float32, topk int) []ProjectInput {
 	// query similar project by embedding
 	queryProduct := `query QuerySimilarProjectByEmbedding($by: ProjectEmbedding!, $topK: Int!, $vector: [Float!]!) {
 		 querySimilarProjectByEmbedding(by: $by, topK: $topK, vector: $vector) {
-		   id
 		   title
 		   title_v
 		 }
@@ -116,24 +144,23 @@ func queryProjectsSimilarByEmbedding(t *testing.T, hc *dgraphtest.HTTPClient, ve
 
 	 `
 
-	params := dgraphtest.GraphQLParams{
+	params := dgraphapi.GraphQLParams{
 		Query: queryProduct,
 		Variables: map[string]interface{}{
 			"by":     "title_v",
-			"topK":   3,
+			"topK":   topk,
 			"vector": vector,
 		}}
 	response, err := hc.RunGraphqlQuery(params, false)
 	require.NoError(t, err)
 	type QueryResult struct {
-		QueryProject []ProjectInput `json:"queryProject"`
+		QueryProject []ProjectInput `json:"querySimilarProjectByEmbedding"`
 	}
 	var resp QueryResult
 	err = json.Unmarshal([]byte(string(response)), &resp)
 	require.NoError(t, err)
 
 	return resp.QueryProject
-
 }
 
 func TestVectorGraphQLAddVectorPredicate(t *testing.T) {
@@ -143,21 +170,67 @@ func TestVectorGraphQLAddVectorPredicate(t *testing.T) {
 	require.NoError(t, err)
 	hc.LoginIntoNamespace("groot", "password", 0)
 	// add schema
-	require.NoError(t, hc.UpdateGQLSchema(graphQLVectorSchema))
+	require.NoError(t, hc.UpdateGQLSchema(fmt.Sprintf(graphQLVectorSchema, "euclidean")))
 }
 
-func TestVectorGraphQlMutationAndQuery(t *testing.T) {
+func TestVectorSchema(t *testing.T) {
 	require.NoError(t, client.DropAll())
 
 	hc, err := dc.HTTPClient()
 	require.NoError(t, err)
 	hc.LoginIntoNamespace("groot", "password", 0)
 
-	// add schema
-	require.NoError(t, hc.UpdateGQLSchema(graphQLVectorSchema))
+	schema := `type Project  {
+		 id: ID!
+		 title: String!  @search(by: [exact])
+		 title_v: [Float!]
+	 }`
 
-	// add project
+	// add schema
+	require.NoError(t, hc.UpdateGQLSchema(schema))
+	require.Error(t, hc.UpdateGQLSchema(fmt.Sprintf(graphQLVectorSchema, "euclidean")))
+}
+
+func TestVectorGraphQlEuclidianIndexMutationAndQuery(t *testing.T) {
+	require.NoError(t, client.DropAll())
+	hc, err := dc.HTTPClient()
+	require.NoError(t, err)
+	hc.LoginIntoNamespace("groot", "password", 0)
+
+	schema := fmt.Sprintf(graphQLVectorSchema, "euclidean")
+	// add schema
+	require.NoError(t, hc.UpdateGQLSchema(schema))
+	testVectorGraphQlMutationAndQuery(t, hc)
+}
+
+func TestVectorGraphQlCosineIndexMutationAndQuery(t *testing.T) {
+	require.NoError(t, client.DropAll())
+	hc, err := dc.HTTPClient()
+	require.NoError(t, err)
+	hc.LoginIntoNamespace("groot", "password", 0)
+
+	schema := fmt.Sprintf(graphQLVectorSchema, "cosine")
+	// add schema
+	require.NoError(t, hc.UpdateGQLSchema(schema))
+	testVectorGraphQlMutationAndQuery(t, hc)
+}
+
+func TestVectorGraphQlDotProductIndexMutationAndQuery(t *testing.T) {
+	require.NoError(t, client.DropAll())
+	hc, err := dc.HTTPClient()
+	require.NoError(t, err)
+	hc.LoginIntoNamespace("groot", "password", 0)
+
+	schema := fmt.Sprintf(graphQLVectorSchema, "dotproduct")
+	// add schema
+	require.NoError(t, hc.UpdateGQLSchema(schema))
+	testVectorGraphQlMutationAndQuery(t, hc)
+}
+
+func testVectorGraphQlMutationAndQuery(t *testing.T, hc *dgraphapi.HTTPClient) {
 	var vectors [][]float32
+	numProjects := 100
+	projects := generateProjects(numProjects)
 	for _, project := range projects {
 		vectors = append(vectors, project.TitleV)
 		addProject(t, hc, project)
@@ -177,30 +250,9 @@ func TestVectorGraphQlMutationAndQuery(t *testing.T) {
 
 	// query similar project by embedding
 	for _, project := range projects {
-		similarProjects := queryProjectsSimilarByEmbedding(t, hc, project.TitleV)
-
+		similarProjects := queryProjectsSimilarByEmbedding(t, hc, project.TitleV, numProjects)
 		for _, similarVec := range similarProjects {
 			require.Contains(t, vectors, similarVec.TitleV)
 		}
 	}
-}
-
-func TestVectorSchema(t *testing.T) {
-	require.NoError(t, client.DropAll())
-
-	hc, err := dc.HTTPClient()
-	require.NoError(t, err)
-	hc.LoginIntoNamespace("groot", "password", 0)
-
-	schema := `type Project  {
-		 id: ID!
-		 title: String!  @search(by: [exact])
-		 title_v: [Float!]
-	 }`
-
-	// add schema
-	require.NoError(t, hc.UpdateGQLSchema(schema))
-	require.Error(t, hc.UpdateGQLSchema(graphQLVectorSchema))
-	require.NoError(t, client.DropAll())
-	require.NoError(t, hc.UpdateGQLSchema(graphQLVectorSchema))
 }

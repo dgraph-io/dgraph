@@ -42,6 +42,21 @@ func setMaxListSize(newMaxListSize int) {
 	maxListSize = newMaxListSize
 }
 
+func readPostingListFromDisk(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
+	txn := pstore.NewTransactionAt(readTs, false)
+	defer txn.Discard()
+
+	// When we do rollups, an older version would go to the top of the LSM tree, which can cause
+	// issues during txn.Get. Therefore, always iterate.
+	iterOpts := badger.DefaultIteratorOptions
+	iterOpts.AllVersions = true
+	iterOpts.PrefetchValues = false
+	itr := txn.NewKeyIterator(key, iterOpts)
+	defer itr.Close()
+	itr.Seek(key)
+	return ReadPostingList(key, itr)
+}
+
 func (l *List) PostingList() *pb.PostingList {
 	l.RLock()
 	defer l.RUnlock()
@@ -177,7 +192,7 @@ func checkValue(t *testing.T, ol *List, val string, readTs uint64) {
 // TODO(txn): Add tests after lru eviction
 func TestAddMutation_Value(t *testing.T) {
 	key := x.DataKey(x.GalaxyAttr(x.GalaxyAttr("value")), 10)
-	ol, err := getNew(key, ps, math.MaxUint64)
+	ol, err := readPostingListFromDisk(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 	edge := &pb.DirectedEdge{
 		Value: []byte("oh hey there"),
@@ -440,7 +455,7 @@ func TestRollupMaxTsIsSet(t *testing.T) {
 	maxListSize = math.MaxInt32
 
 	key := x.DataKey(x.GalaxyAttr("bal"), 1333)
-	ol, err := getNew(key, ps, math.MaxUint64)
+	ol, err := readPostingListFromDisk(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 	var commits int
 	N := int(1e6)
@@ -461,7 +476,7 @@ func TestRollupMaxTsIsSet(t *testing.T) {
 			}
 			require.NoError(t, err)
 			require.NoError(t, writePostingListToDisk(kvs))
-			ol, err = getNew(key, ps, math.MaxUint64)
+			ol, err = readPostingListFromDisk(key, ps, math.MaxUint64)
 			require.NoError(t, err)
 		}
 		commits++
@@ -474,7 +489,7 @@ func TestMillion(t *testing.T) {
 	maxListSize = math.MaxInt32
 
 	key := x.DataKey(x.GalaxyAttr("bal"), 1331)
-	ol, err := getNew(key, ps, math.MaxUint64)
+	ol, err := readPostingListFromDisk(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 	var commits int
 	N := int(1e6)
@@ -492,7 +507,7 @@ func TestMillion(t *testing.T) {
 			kvs, err := ol.Rollup(nil, math.MaxUint64)
 			require.NoError(t, err)
 			require.NoError(t, writePostingListToDisk(kvs))
-			ol, err = getNew(key, ps, math.MaxUint64)
+			ol, err = readPostingListFromDisk(key, ps, math.MaxUint64)
 			require.NoError(t, err)
 		}
 		commits++
@@ -512,7 +527,7 @@ func TestMillion(t *testing.T) {
 func TestAddMutation_mrjn2(t *testing.T) {
 	ctx := context.Background()
 	key := x.DataKey(x.GalaxyAttr("bal"), 1001)
-	ol, err := getNew(key, ps, math.MaxUint64)
+	ol, err := readPostingListFromDisk(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 	var readTs uint64
 	for readTs = 1; readTs < 10; readTs++ {
@@ -587,7 +602,7 @@ func TestAddMutation_mrjn2(t *testing.T) {
 
 func TestAddMutation_gru(t *testing.T) {
 	key := x.DataKey(x.GalaxyAttr("question.tag"), 0x01)
-	ol, err := getNew(key, ps, math.MaxUint64)
+	ol, err := readPostingListFromDisk(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 
 	{
@@ -620,7 +635,7 @@ func TestAddMutation_gru(t *testing.T) {
 
 func TestAddMutation_gru2(t *testing.T) {
 	key := x.DataKey(x.GalaxyAttr("question.tag"), 0x100)
-	ol, err := getNew(key, ps, math.MaxUint64)
+	ol, err := readPostingListFromDisk(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 
 	{
@@ -667,7 +682,7 @@ func TestAddAndDelMutation(t *testing.T) {
 	// Ensure each test uses unique key since we don't clear the postings
 	// after each test
 	key := x.DataKey(x.GalaxyAttr("dummy_key"), 0x927)
-	ol, err := getNew(key, ps, math.MaxUint64)
+	ol, err := readPostingListFromDisk(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 
 	{
@@ -695,7 +710,7 @@ func TestAddAndDelMutation(t *testing.T) {
 
 func TestAfterUIDCount(t *testing.T) {
 	key := x.DataKey(x.GalaxyAttr("value"), 22)
-	ol, err := getNew(key, ps, math.MaxUint64)
+	ol, err := readPostingListFromDisk(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 	// Set value to cars and merge to BadgerDB.
 	edge := &pb.DirectedEdge{}
@@ -766,7 +781,7 @@ func TestAfterUIDCount(t *testing.T) {
 
 func TestAfterUIDCount2(t *testing.T) {
 	key := x.DataKey(x.GalaxyAttr("value"), 23)
-	ol, err := getNew(key, ps, math.MaxUint64)
+	ol, err := readPostingListFromDisk(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 
 	// Set value to cars and merge to BadgerDB.
@@ -793,7 +808,7 @@ func TestAfterUIDCount2(t *testing.T) {
 
 func TestDelete(t *testing.T) {
 	key := x.DataKey(x.GalaxyAttr("value"), 25)
-	ol, err := getNew(key, ps, math.MaxUint64)
+	ol, err := readPostingListFromDisk(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 
 	// Set value to cars and merge to BadgerDB.
@@ -815,7 +830,7 @@ func TestDelete(t *testing.T) {
 
 func TestAfterUIDCountWithCommit(t *testing.T) {
 	key := x.DataKey(x.GalaxyAttr("value"), 26)
-	ol, err := getNew(key, ps, math.MaxUint64)
+	ol, err := readPostingListFromDisk(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 
 	// Set value to cars and merge to BadgerDB.
@@ -906,7 +921,7 @@ func createMultiPartList(t *testing.T, size int, addFacet bool) (*List, int) {
 	maxListSize = 5000
 
 	key := x.DataKey(x.GalaxyAttr(uuid.New().String()), 1331)
-	ol, err := getNew(key, ps, math.MaxUint64)
+	ol, err := readPostingListFromDisk(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 	commits := 0
 	for i := 1; i <= size; i++ {
@@ -926,7 +941,7 @@ func createMultiPartList(t *testing.T, size int, addFacet bool) (*List, int) {
 			kvs, err := ol.Rollup(nil, math.MaxUint64)
 			require.NoError(t, err)
 			require.NoError(t, writePostingListToDisk(kvs))
-			ol, err = getNew(key, ps, math.MaxUint64)
+			ol, err = readPostingListFromDisk(key, ps, math.MaxUint64)
 			require.NoError(t, err)
 		}
 		commits++
@@ -938,7 +953,7 @@ func createMultiPartList(t *testing.T, size int, addFacet bool) (*List, int) {
 		require.Equal(t, uint64(size+1), kv.Version)
 	}
 	require.NoError(t, writePostingListToDisk(kvs))
-	ol, err = getNew(key, ps, math.MaxUint64)
+	ol, err = readPostingListFromDisk(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 	require.Nil(t, ol.plist.Pack)
 	require.Equal(t, 0, len(ol.plist.Postings))
@@ -954,7 +969,7 @@ func createAndDeleteMultiPartList(t *testing.T, size int) (*List, int) {
 	maxListSize = 10000
 
 	key := x.DataKey(x.GalaxyAttr(uuid.New().String()), 1331)
-	ol, err := getNew(key, ps, math.MaxUint64)
+	ol, err := readPostingListFromDisk(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 	commits := 0
 	for i := 1; i <= size; i++ {
@@ -969,7 +984,7 @@ func createAndDeleteMultiPartList(t *testing.T, size int) (*List, int) {
 			kvs, err := ol.Rollup(nil, math.MaxUint64)
 			require.NoError(t, err)
 			require.NoError(t, writePostingListToDisk(kvs))
-			ol, err = getNew(key, ps, math.MaxUint64)
+			ol, err = readPostingListFromDisk(key, ps, math.MaxUint64)
 			require.NoError(t, err)
 		}
 		commits++
@@ -990,7 +1005,7 @@ func createAndDeleteMultiPartList(t *testing.T, size int) (*List, int) {
 			kvs, err := ol.Rollup(nil, math.MaxUint64)
 			require.NoError(t, err)
 			require.NoError(t, writePostingListToDisk(kvs))
-			ol, err = getNew(key, ps, math.MaxUint64)
+			ol, err = readPostingListFromDisk(key, ps, math.MaxUint64)
 			require.NoError(t, err)
 		}
 		commits++
@@ -1002,7 +1017,7 @@ func createAndDeleteMultiPartList(t *testing.T, size int) (*List, int) {
 
 func TestLargePlistSplit(t *testing.T) {
 	key := x.DataKey(uuid.New().String(), 1331)
-	ol, err := getNew(key, ps, math.MaxUint64)
+	ol, err := readPostingListFromDisk(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 	b := make([]byte, 30<<20)
 	_, _ = rand.Read(b)
@@ -1019,7 +1034,7 @@ func TestLargePlistSplit(t *testing.T) {
 	_, err = ol.Rollup(nil, math.MaxUint64)
 	require.NoError(t, err)
 
-	ol, err = getNew(key, ps, math.MaxUint64)
+	ol, err = readPostingListFromDisk(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 	b = make([]byte, 10<<20)
 	_, _ = rand.Read(b)
@@ -1038,7 +1053,7 @@ func TestLargePlistSplit(t *testing.T) {
 	kvs, err := ol.Rollup(nil, math.MaxUint64)
 	require.NoError(t, err)
 	require.NoError(t, writePostingListToDisk(kvs))
-	ol, err = getNew(key, ps, math.MaxUint64)
+	ol, err = readPostingListFromDisk(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 	// require.Nil(t, ol.plist.Bitmap)
 	require.Equal(t, 0, len(ol.plist.Postings))
@@ -1113,7 +1128,7 @@ func TestBinSplit(t *testing.T) {
 			maxListSize = originalListSize
 		}()
 		key := x.DataKey(x.GalaxyAttr(uuid.New().String()), 1331)
-		ol, err := getNew(key, ps, math.MaxUint64)
+		ol, err := readPostingListFromDisk(key, ps, math.MaxUint64)
 		require.NoError(t, err)
 		for i := 1; i <= size; i++ {
 			edge := &pb.DirectedEdge{
@@ -1131,7 +1146,7 @@ func TestBinSplit(t *testing.T) {
 			require.Equal(t, uint64(size+1), kv.Version)
 		}
 		require.NoError(t, writePostingListToDisk(kvs))
-		ol, err = getNew(key, ps, math.MaxUint64)
+		ol, err = readPostingListFromDisk(key, ps, math.MaxUint64)
 		require.NoError(t, err)
 		require.Equal(t, 0, len(ol.plist.Splits))
 		require.Equal(t, size, len(ol.plist.Postings))
@@ -1245,7 +1260,7 @@ func TestMultiPartListWriteToDisk(t *testing.T) {
 	require.Equal(t, len(kvs), len(originalList.plist.Splits)+1)
 
 	require.NoError(t, writePostingListToDisk(kvs))
-	newList, err := getNew(kvs[0].Key, ps, math.MaxUint64)
+	newList, err := readPostingListFromDisk(kvs[0].Key, ps, math.MaxUint64)
 	require.NoError(t, err)
 
 	opt := ListOptions{ReadTs: uint64(size) + 1}
@@ -1294,7 +1309,7 @@ func TestMultiPartListDeleteAndAdd(t *testing.T) {
 
 	// Add entries to the maps.
 	key := x.DataKey(x.GalaxyAttr(uuid.New().String()), 1331)
-	ol, err := getNew(key, ps, math.MaxUint64)
+	ol, err := readPostingListFromDisk(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 	for i := 1; i <= size; i++ {
 		edge := &pb.DirectedEdge{
@@ -1308,7 +1323,7 @@ func TestMultiPartListDeleteAndAdd(t *testing.T) {
 			kvs, err := ol.Rollup(nil, math.MaxUint64)
 			require.NoError(t, err)
 			require.NoError(t, writePostingListToDisk(kvs))
-			ol, err = getNew(key, ps, math.MaxUint64)
+			ol, err = readPostingListFromDisk(key, ps, math.MaxUint64)
 			require.NoError(t, err)
 		}
 	}
@@ -1335,7 +1350,7 @@ func TestMultiPartListDeleteAndAdd(t *testing.T) {
 			kvs, err := ol.Rollup(nil, math.MaxUint64)
 			require.NoError(t, err)
 			require.NoError(t, writePostingListToDisk(kvs))
-			ol, err = getNew(key, ps, math.MaxUint64)
+			ol, err = readPostingListFromDisk(key, ps, math.MaxUint64)
 			require.NoError(t, err)
 		}
 	}
@@ -1344,7 +1359,7 @@ func TestMultiPartListDeleteAndAdd(t *testing.T) {
 	kvs, err := ol.Rollup(nil, math.MaxUint64)
 	require.NoError(t, err)
 	require.NoError(t, writePostingListToDisk(kvs))
-	ol, err = getNew(key, ps, math.MaxUint64)
+	ol, err = readPostingListFromDisk(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 	for _, kv := range kvs {
 		require.Equal(t, baseStartTs+uint64(1+size/2), kv.Version)
@@ -1372,7 +1387,7 @@ func TestMultiPartListDeleteAndAdd(t *testing.T) {
 			kvs, err := ol.Rollup(nil, math.MaxUint64)
 			require.NoError(t, err)
 			require.NoError(t, writePostingListToDisk(kvs))
-			ol, err = getNew(key, ps, math.MaxUint64)
+			ol, err = readPostingListFromDisk(key, ps, math.MaxUint64)
 			require.NoError(t, err)
 		}
 	}
@@ -1381,7 +1396,7 @@ func TestMultiPartListDeleteAndAdd(t *testing.T) {
 	kvs, err = ol.Rollup(nil, math.MaxUint64)
 	require.NoError(t, err)
 	require.NoError(t, writePostingListToDisk(kvs))
-	ol, err = getNew(key, ps, math.MaxUint64)
+	ol, err = readPostingListFromDisk(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 
 	// Verify all entries are once again in the list.
@@ -1435,7 +1450,7 @@ func TestRecursiveSplits(t *testing.T) {
 	// Create a list that should be split recursively.
 	size := int(1e5)
 	key := x.DataKey(x.GalaxyAttr(uuid.New().String()), 1331)
-	ol, err := getNew(key, ps, math.MaxUint64)
+	ol, err := readPostingListFromDisk(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 	commits := 0
 	for i := 1; i <= size; i++ {
@@ -1457,7 +1472,7 @@ func TestRecursiveSplits(t *testing.T) {
 	kvs, err := ol.Rollup(nil, math.MaxUint64)
 	require.NoError(t, err)
 	require.NoError(t, writePostingListToDisk(kvs))
-	ol, err = getNew(key, ps, math.MaxUint64)
+	ol, err = readPostingListFromDisk(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 	require.True(t, len(ol.plist.Splits) > 2)
 
@@ -1496,7 +1511,7 @@ func TestMain(m *testing.M) {
 
 func BenchmarkAddMutations(b *testing.B) {
 	key := x.DataKey(x.GalaxyAttr("name"), 1)
-	l, err := getNew(key, ps, math.MaxUint64)
+	l, err := readPostingListFromDisk(key, ps, math.MaxUint64)
 	if err != nil {
 		b.Error(err)
 	}

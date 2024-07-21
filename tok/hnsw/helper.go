@@ -24,6 +24,7 @@ const (
 	DotProd              = "dotproduct"
 	plError              = "\nerror fetching posting list for data key: "
 	dataError            = "\nerror fetching data for data key: "
+	EmptyHNSWTreeError   = "HNSW tree has no elements"
 	VecKeyword           = "__vector_"
 	visitedVectorsLevel  = "visited_vectors_level_"
 	distanceComputations = "vector_distance_computations"
@@ -432,9 +433,10 @@ func (ph *persistentHNSW[T]) createEntryAndStartNodes(
 	err := ph.getVecFromUid(entry, c, vec)
 	if err != nil || len(*vec) == 0 {
 		// The entry vector has been deleted. We have to create a new entry vector.
-		entry, err := ph.PickStartNode(ctx, c, vec)
+		entry, err := ph.calculateNewEntryVec(ctx, c, vec)
 		if err != nil {
-			return 0, []*index.KeyValue{}, err
+			// No other node exists, go with the new node that has come
+			return create_edges(inUuid)
 		}
 		return create_edges(entry)
 	}

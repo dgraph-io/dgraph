@@ -21,6 +21,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math"
+	"reflect"
 	"sync"
 
 	"github.com/golang/glog"
@@ -50,7 +51,8 @@ var (
 type contextKey int
 
 const (
-	IsWrite contextKey = iota
+	IsWrite           contextKey = iota
+	IsUniqueDgraphXid            = true
 )
 
 // GetWriteContext returns a context that sets the schema context for writing.
@@ -791,6 +793,7 @@ func initialSchemaInternal(namespace uint64, all bool) []*pb.SchemaUpdate {
 				ValueType: pb.Posting_STRING,
 				Directive: pb.SchemaUpdate_INDEX,
 				Upsert:    true,
+				Unique:    IsUniqueDgraphXid,
 				Tokenizer: []string{"exact"},
 			},
 			{
@@ -827,23 +830,58 @@ func initialSchemaInternal(namespace uint64, all bool) []*pb.SchemaUpdate {
 	return initialSchema
 }
 
-// IsPreDefPredChanged returns true if the initial update for the pre-defined
-// predicate is different than the passed update.
-// If the passed update is not a pre-defined predicate then it just returns false.
-func IsPreDefPredChanged(update *pb.SchemaUpdate) bool {
+// CheckAndModifyPreDefPredicate returns true if the initial update for the pre-defined
+// predicate is different from the passed update. It may also modify certain predicates
+// under specific conditions.
+// If the passed update is not a pre-defined predicate, it returns false.
+func CheckAndModifyPreDefPredicate(update *pb.SchemaUpdate) bool {
 	// Return false for non-pre-defined predicates.
 	if !x.IsPreDefinedPredicate(update.Predicate) {
 		return false
 	}
-
-	initialSchema := CompleteInitialSchema(x.ParseNamespace(update.Predicate))
+	ns := x.ParseNamespace(update.Predicate)
+	initialSchema := CompleteInitialSchema(ns)
 	for _, original := range initialSchema {
 		if original.Predicate != update.Predicate {
 			continue
 		}
+
+		// For the dgraph.xid predicate, only the Unique field is allowed to be changed.
+		// Previously, the Unique attribute was not applied to the dgraph.xid predicate.
+		// For users upgrading from a lower version, we will set Unique to true.
+		if update.Predicate == x.NamespaceAttr(ns, "dgraph.xid") && !update.Unique {
+			if isDgraphXidChangeValid(original, update) {
+				update.Unique = true
+				return false
+			}
+		}
 		return !proto.Equal(original, update)
 	}
 	return true
+}
+
+// isDgraphXidChangeValid returns true if the change in the dgraph.xid predicate is valid.
+func isDgraphXidChangeValid(original, update *pb.SchemaUpdate) bool {
+	changed := compareSchemaUpdates(original, update)
+	return len(changed) == 1 && changed[0] == "Unique"
+}
+
+func compareSchemaUpdates(original, update *pb.SchemaUpdate) []string {
+	var changes []string
+	vOriginal := reflect.ValueOf(*original)
+	vUpdate := reflect.ValueOf(*update)
+
+	for i := 0; i < vOriginal.NumField(); i++ {
+		fieldName := vOriginal.Type().Field(i).Name
+		valueOriginal := vOriginal.Field(i)
+		valueUpdate := vUpdate.Field(i)
+
+		if !reflect.DeepEqual(valueOriginal.Interface(), valueUpdate.Interface()) {
+			changes = append(changes, fieldName)
+		}
+	}
+
+	return changes
 }
 
 // IsPreDefTypeChanged returns true if the initial update for the pre-defined

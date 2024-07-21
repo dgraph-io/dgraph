@@ -239,7 +239,7 @@ func (txn *Txn) addReverseMutationHelper(ctx context.Context, plist *List,
 	plist.Lock()
 	defer plist.Unlock()
 	if hasCountIndex {
-		countBefore, found, _ = plist.getPostingAndLength(txn.StartTs, 0, edge.ValueId)
+		countBefore, found, _ = plist.getPostingAndLengthNoSort(txn.StartTs, 0, edge.ValueId)
 		if countBefore == -1 {
 			return emptyCountParams, ErrTsTooOld
 		}
@@ -1511,11 +1511,13 @@ func rebuildListType(ctx context.Context, rb *IndexRebuild) error {
 
 // DeleteAll deletes all entries in the posting list.
 func DeleteAll() error {
+	ResetCache()
 	return pstore.DropAll()
 }
 
 // DeleteData deletes all data for the namespace but leaves types and schema intact.
 func DeleteData(ns uint64) error {
+	ResetCache()
 	prefix := make([]byte, 9)
 	prefix[0] = x.DefaultPrefix
 	binary.BigEndian.PutUint64(prefix[1:], ns)
@@ -1525,6 +1527,7 @@ func DeleteData(ns uint64) error {
 // DeletePredicate deletes all entries and indices for a given predicate.
 func DeletePredicate(ctx context.Context, attr string, ts uint64) error {
 	glog.Infof("Dropping predicate: [%s]", attr)
+	ResetCache()
 	preds := schema.State().PredicatesToDelete(attr)
 	for _, pred := range preds {
 		prefix := x.PredicatePrefix(pred)
@@ -1541,6 +1544,8 @@ func DeletePredicate(ctx context.Context, attr string, ts uint64) error {
 
 // DeleteNamespace bans the namespace and deletes its predicates/types from the schema.
 func DeleteNamespace(ns uint64) error {
+	// TODO: We should only delete cache for certain keys, not all the keys.
+	ResetCache()
 	schema.State().DeletePredsForNs(ns)
 	return pstore.BanNamespace(ns)
 }

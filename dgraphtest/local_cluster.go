@@ -44,6 +44,7 @@ import (
 
 	"github.com/dgraph-io/dgo/v230"
 	"github.com/dgraph-io/dgo/v230/protos/api"
+	"github.com/dgraph-io/dgraph/dgraphapi"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -498,7 +499,7 @@ func (c *LocalCluster) containerHealthCheck(url func(c *LocalCluster) (string, e
 			log.Printf("[WARNING] error building req for endpoint [%v], err: [%v]", endpoint, err)
 			continue
 		}
-		body, err := doReq(req)
+		body, err := dgraphapi.DoReq(req)
 		if err != nil {
 			log.Printf("[WARNING] error hitting health endpoint [%v], err: [%v]", endpoint, err)
 			continue
@@ -543,7 +544,7 @@ func (c *LocalCluster) waitUntilLogin() error {
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 	defer cancel()
 	for i := 0; i < 10; i++ {
-		err := client.Login(ctx, DefaultUser, DefaultPassword)
+		err := client.Login(ctx, dgraphapi.DefaultUser, dgraphapi.DefaultPassword)
 		if err == nil {
 			log.Printf("[INFO] login succeeded")
 			return nil
@@ -560,7 +561,7 @@ func (c *LocalCluster) waitUntilGraphqlHealthCheck() error {
 		return errors.Wrap(err, "error creating http client while graphql health check")
 	}
 	if c.conf.acl {
-		if err := hc.LoginIntoNamespace(DefaultUser, DefaultPassword, x.GalaxyNamespace); err != nil {
+		if err := hc.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace); err != nil {
 			return errors.Wrap(err, "error during login while graphql health check")
 		}
 	}
@@ -584,31 +585,6 @@ func (c *LocalCluster) waitUntilGraphqlHealthCheck() error {
 	return errors.New("error during graphql health check")
 }
 
-var client *http.Client = &http.Client{
-	Timeout: requestTimeout,
-}
-
-func doReq(req *http.Request) ([]byte, error) {
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, errors.Wrap(err, "error performing HTTP request")
-	}
-	defer func() {
-		if err := resp.Body.Close(); err != nil {
-			log.Printf("[WARNING] error closing response body: %v", err)
-		}
-	}()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, errors.Wrapf(err, "error reading response body: url: [%v], err: [%v]", req.URL, err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("got non 200 resp: %v", string(respBody))
-	}
-	return respBody, nil
-}
-
 // Upgrades the cluster to the provided dgraph version
 func (c *LocalCluster) Upgrade(version string, strategy UpgradeStrategy) error {
 	if version == c.conf.version {
@@ -623,7 +599,7 @@ func (c *LocalCluster) Upgrade(version string, strategy UpgradeStrategy) error {
 			return err
 		}
 		if c.conf.acl {
-			if err := hc.LoginIntoNamespace(DefaultUser, DefaultPassword, x.GalaxyNamespace); err != nil {
+			if err := hc.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace); err != nil {
 				return errors.Wrapf(err, "error during login before upgrade")
 			}
 		}
@@ -646,14 +622,14 @@ func (c *LocalCluster) Upgrade(version string, strategy UpgradeStrategy) error {
 			return errors.Wrapf(err, "error creating HTTP client after upgrade")
 		}
 		if c.conf.acl {
-			if err := hc.LoginIntoNamespace(DefaultUser, DefaultPassword, x.GalaxyNamespace); err != nil {
+			if err := hc.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace); err != nil {
 				return errors.Wrapf(err, "error during login after upgrade")
 			}
 		}
 		if err := hc.Restore(c, DefaultBackupDir, "", 0, 1); err != nil {
 			return errors.Wrap(err, "error doing restore during upgrade")
 		}
-		if err := WaitForRestore(c); err != nil {
+		if err := dgraphapi.WaitForRestore(c); err != nil {
 			return errors.Wrap(err, "error waiting for restore to complete")
 		}
 		return nil
@@ -664,7 +640,7 @@ func (c *LocalCluster) Upgrade(version string, strategy UpgradeStrategy) error {
 			return err
 		}
 		if c.conf.acl {
-			if err := hc.LoginIntoNamespace(DefaultUser, DefaultPassword, x.GalaxyNamespace); err != nil {
+			if err := hc.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace); err != nil {
 				return errors.Wrapf(err, "error during login before upgrade")
 			}
 		}
@@ -719,7 +695,7 @@ func (c *LocalCluster) recreateContainers() error {
 }
 
 // Client returns a grpc client that can talk to any Alpha in the cluster
-func (c *LocalCluster) Client() (*GrpcClient, func(), error) {
+func (c *LocalCluster) Client() (*dgraphapi.GrpcClient, func(), error) {
 	// TODO(aman): can we cache the connections?
 	var apiClients []api.DgraphClient
 	var conns []*grpc.ClientConn
@@ -747,10 +723,10 @@ func (c *LocalCluster) Client() (*GrpcClient, func(), error) {
 			}
 		}
 	}
-	return &GrpcClient{Dgraph: client}, cleanup, nil
+	return &dgraphapi.GrpcClient{Dgraph: client}, cleanup, nil
 }
 
-func (c *LocalCluster) AlphaClient(id int) (*GrpcClient, func(), error) {
+func (c *LocalCluster) AlphaClient(id int) (*dgraphapi.GrpcClient, func(), error) {
 	alpha := c.alphas[id]
 	url, err := alpha.alphaURL(c)
 	if err != nil {
@@ -767,39 +743,22 @@ func (c *LocalCluster) AlphaClient(id int) (*GrpcClient, func(), error) {
 			log.Printf("[WARNING] error closing connection: %v", err)
 		}
 	}
-	return &GrpcClient{Dgraph: client}, cleanup, nil
+	return &dgraphapi.GrpcClient{Dgraph: client}, cleanup, nil
 }
 
 // HTTPClient creates an HTTP client
-func (c *LocalCluster) HTTPClient() (*HTTPClient, error) {
-	adminURL, err := c.serverURL("alpha", "/admin")
-	if err != nil {
-		return nil, err
-	}
-	graphqlURL, err := c.serverURL("alpha", "/graphql")
-	if err != nil {
-		return nil, err
-	}
-	licenseURL, err := c.serverURL("zero", "/enterpriseLicense")
-	if err != nil {
-		return nil, err
-	}
-	stateURL, err := c.serverURL("zero", "/state")
-	if err != nil {
-		return nil, err
-	}
-	dqlURL, err := c.dqlURL()
+func (c *LocalCluster) HTTPClient() (*dgraphapi.HTTPClient, error) {
+	alphaUrl, err := c.serverURL("alpha", "")
 	if err != nil {
 		return nil, err
 	}
 
-	return &HTTPClient{
-		adminURL:   adminURL,
-		graphqlURL: graphqlURL,
-		licenseURL: licenseURL,
-		stateURL:   stateURL,
-		dqlURL:     dqlURL,
-	}, nil
+	zeroUrl, err := c.serverURL("zero", "")
+	if err != nil {
+		return nil, err
+	}
+
+	return dgraphapi.GetHttpClient(alphaUrl, zeroUrl)
 }
 
 // serverURL returns url to the 'server' 'endpoint'
@@ -811,17 +770,7 @@ func (c *LocalCluster) serverURL(server, endpoint string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	url := "http://localhost:" + pubPort + endpoint
-	return url, nil
-}
-
-// dqlURL returns url to the dql query endpoint
-func (c *LocalCluster) dqlURL() (string, error) {
-	publicPort, err := publicPort(c.dcli, c.alphas[0], alphaHttpPort)
-	if err != nil {
-		return "", err
-	}
-	url := "http://localhost:" + publicPort + "/query"
+	url := "localhost:" + pubPort + endpoint
 	return url, nil
 }
 
@@ -841,7 +790,7 @@ func (c *LocalCluster) AlphasHealth() ([]string, error) {
 		if err != nil {
 			return nil, errors.Wrapf(err, "error building req for endpoint [%v]", url)
 		}
-		h, err := doReq(req)
+		h, err := dgraphapi.DoReq(req)
 		if err != nil {
 			return nil, errors.Wrap(err, "error getting health")
 		}
@@ -880,7 +829,7 @@ func (c *LocalCluster) AssignUids(_ *dgo.Dgraph, num uint64) error {
 	if err != nil {
 		return errors.Wrapf(err, "error building req for endpoint [%v]", url)
 	}
-	body, err := doReq(req)
+	body, err := dgraphapi.DoReq(req)
 	if err != nil {
 		return err
 	}
@@ -902,6 +851,11 @@ func (c *LocalCluster) AssignUids(_ *dgo.Dgraph, num uint64) error {
 // GetVersion returns the version of dgraph the cluster is running
 func (c *LocalCluster) GetVersion() string {
 	return c.conf.version
+}
+
+// GetRepoDir returns the repositroty directory of the cluster
+func (c *LocalCluster) GetRepoDir() (string, error) {
+	return c.conf.repoDir, nil
 }
 
 // GetEncKeyPath returns the path to the encryption key file when encryption is enabled.
@@ -1146,4 +1100,16 @@ func (c *LocalCluster) GeneratePlugins(raceEnabled bool) error {
 	log.Printf("plugin build completed. Files are: %s\n", sofiles)
 
 	return nil
+}
+
+func (c *LocalCluster) GetAlphaGrpcPublicPort() (string, error) {
+	return publicPort(c.dcli, c.alphas[0], alphaGrpcPort)
+}
+
+func (c *LocalCluster) GetAlphaHttpPublicPort() (string, error) {
+	return publicPort(c.dcli, c.alphas[0], alphaHttpPort)
+}
+
+func (c *LocalCluster) GetTempDir() string {
+	return c.tempBinDir
 }
