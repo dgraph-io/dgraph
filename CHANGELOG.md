@@ -74,6 +74,18 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
 	- chore(deps): bump google.golang.org/grpc from 1.56.2 to 1.56.3 in #9024
 	- chore(deps): bump google.golang.org/protobuf from 1.31.0 to 1.33.0in #9051[
 
+## [23.1.1] - 2024-04-26
+[v23.1.1]: https://github.com/dgraph-io/dgraph/compare/v23.1.0...v23.1.1
+
+### Fixed
+
+- **Core Dgraph**
+    - perf(core): Fix performance issue in type filter (#9065)
+
+
+- **CI & Testing**
+    - ci/cd optimizations (#9069)
+
 ## [v23.1.0] - 2023-08-17
 [v23.1.0]: https://github.com/dgraph-io/dgraph/compare/v23.0.1...v23.1.0
 
