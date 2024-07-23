@@ -121,4 +121,5 @@ func TestMain(m *testing.M) {
 	worker.Config.AccessJwtTtl = 20 * time.Second
 	worker.Config.RefreshJwtTtl = 20 * time.Second
 	worker.Config.AclSecretKey = x.Sensitive("6ABBAA2014CFF00289D20D20DA296F67")
+	m.Run()
 }

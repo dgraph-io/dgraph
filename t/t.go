@@ -39,6 +39,7 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
+	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/volume"
 	"github.com/docker/docker/client"
 	"github.com/golang/glog"
@@ -664,13 +665,13 @@ func removeAllTestContainers() {
 			err := cli.ContainerStop(ctxb, c.ID, o)
 			fmt.Printf("Stopped container %s with error: %v\n", c.Names[0], err)
 
-			err = cli.ContainerRemove(ctxb, c.ID, types.ContainerRemoveOptions{})
+			err = cli.ContainerRemove(ctxb, c.ID, container.RemoveOptions{})
 			fmt.Printf("Removed container %s with error: %v\n", c.Names[0], err)
 		}(c)
 	}
 	wg.Wait()
 
-	networks, err := cli.NetworkList(ctxb, types.NetworkListOptions{})
+	networks, err := cli.NetworkList(ctxb, network.ListOptions{})
 	x.Check(err)
 	for _, n := range networks {
 		if strings.HasPrefix(n.Name, getGlobalPrefix()) {
