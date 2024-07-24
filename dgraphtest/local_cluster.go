@@ -17,6 +17,7 @@
 package dgraphtest
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -281,6 +282,86 @@ func (c *LocalCluster) destroyContainers() error {
 	return nil
 }
 
+// CheckRunningServices checks open ports using lsof and returns the output as a string
+func CheckRunningServices() (string, error) {
+	lsofCmd := exec.Command("lsof", "-i")
+	output, err := runCommand(lsofCmd)
+	if err != nil {
+		return "", fmt.Errorf("error running lsof command: %v", err)
+	}
+	return output, nil
+}
+
+// CheckNetworkConnections checks network connections using netstat and returns the output as a string
+func CheckNetworkConnections() (string, error) {
+	netstatCmd := exec.Command("netstat", "-an")
+	output, err := runCommand(netstatCmd)
+	if err != nil {
+		return "", fmt.Errorf("error running netstat command: %v", err)
+	}
+	return output, nil
+}
+
+// ListRunningContainers lists running Docker containers using the Docker Go client
+func (c *LocalCluster) listRunningContainers() (string, error) {
+	containers, err := c.dcli.ContainerList(context.Background(), types.ContainerListOptions{})
+	if err != nil {
+		return "", fmt.Errorf("error listing Docker containers: %v", err)
+	}
+
+	var result bytes.Buffer
+	for _, container := range containers {
+		result.WriteString(fmt.Sprintf("ID: %s, Image: %s, Command: %s, Status: %s\n",
+			container.ID[:10], container.Image, container.Command, container.Status))
+	}
+
+	return result.String(), nil
+}
+
+// runCommand executes a command and returns its output or an error
+func runCommand(cmd *exec.Cmd) (string, error) {
+	var out bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	if err != nil {
+		return "", fmt.Errorf("%v: %v", err, stderr.String())
+	}
+	return out.String(), nil
+}
+
+func (c *LocalCluster) printNetworkStuff() {
+	log.Printf("Checking running services and ports using lsof, netstat, and Docker...\n")
+
+	// Check running services using lsof
+	lsofOutput, err := CheckRunningServices()
+	if err != nil {
+		fmt.Printf("Error checking running services: %v\n", err)
+	} else {
+		log.Printf("Output of lsof -i:")
+		log.Printf(lsofOutput)
+	}
+
+	// Check network connections using netstat
+	netstatOutput, err := CheckNetworkConnections()
+	if err != nil {
+		fmt.Printf("Error checking network connections: %v\n", err)
+	} else {
+		log.Printf("Output of netstat -an:")
+		log.Printf(netstatOutput)
+	}
+
+	// List running Docker containers
+	dockerOutput, err := c.listRunningContainers()
+	if err != nil {
+		fmt.Printf("Error listing Docker containers: %v\n", err)
+	} else {
+		log.Printf("Running Docker containers:")
+		log.Printf(dockerOutput)
+	}
+}
+
 func (c *LocalCluster) Cleanup(verbose bool) {
 	if c == nil {
 		return
@@ -349,6 +430,7 @@ func (c *LocalCluster) Start() error {
 			return err
 		} else {
 			log.Printf("[WARNING] saw the err, trying again: %v", err)
+			c.printNetworkStuff()
 		}
 
 		log.Printf("[INFO] cleaning up the cluster for retrying!")
