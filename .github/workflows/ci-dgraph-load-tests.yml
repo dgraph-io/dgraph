@@ -29,7 +29,7 @@ on:
       - 'release/**'
 jobs:
   dgraph-load-tests:
-    if: github.event.pull_request.draft == false
+    if: github.event.pull_request.draft == true
     runs-on: warp-ubuntu-latest-x64-16x
     steps:
       - uses: actions/checkout@v4
