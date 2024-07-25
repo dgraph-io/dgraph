@@ -857,7 +857,7 @@ func (c *LocalCluster) serverURL(server, endpoint string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	url := "localhost:" + pubPort + endpoint
+	url := "0.0.0.0:" + pubPort + endpoint
 	return url, nil
 }
 
