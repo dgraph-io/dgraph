@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
 	"os/exec"
@@ -34,6 +35,7 @@ import (
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/volume"
 	docker "github.com/docker/docker/client"
@@ -402,6 +404,26 @@ func (c *LocalCluster) Cleanup(verbose bool) {
 	}
 }
 
+func (c *LocalCluster) cleanupDocker() error {
+	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+	defer cancel()
+	// Prune containers
+	contsReport, err := c.dcli.ContainersPrune(ctx, filters.Args{})
+	if err != nil {
+		log.Fatalf("[ERROR] Error pruning containers: %v", err)
+	}
+	log.Printf("[INFO] Pruned containers: %+v\n", contsReport)
+
+	// Prune networks
+	netsReport, err := c.dcli.NetworksPrune(ctx, filters.Args{})
+	if err != nil {
+		log.Fatalf("[ERROR] Error pruning networks: %v", err)
+	}
+	log.Printf("[INFO] Pruned networks: %+v\n", netsReport)
+
+	return nil
+}
+
 func (c *LocalCluster) Start() error {
 	log.Printf("[INFO] starting cluster with prefix [%v]", c.conf.prefix)
 	startAll := func() error {
@@ -433,10 +455,16 @@ func (c *LocalCluster) Start() error {
 			log.Printf("[WARNING] saw the err, trying again: %v", err)
 		}
 
-		log.Printf("[INFO] cleaning up the cluster for retrying!")
+		if err1 := c.Stop(); err1 != nil {
+			log.Printf("[WARNING] error while stopping :%v", err1)
+		}
 		c.Cleanup(true)
 
-		c.conf = newClusterConfigFrom(c.conf)
+		if err := c.cleanupDocker(); err != nil {
+			log.Printf("[ERROR] while cleaning old dockers %v", err)
+		}
+
+		c.conf.prefix = fmt.Sprintf("dgraphtest-%d", rand.NewSource(time.Now().UnixNano()).Int63()%1000000)
 		if err := c.init(); err != nil {
 			log.Printf("[ERROR] error while init, returning: %v", err)
 			return err

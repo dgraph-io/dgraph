@@ -649,6 +649,120 @@ type rebuilder struct {
 	fn func(uid uint64, pl *List, txn *Txn) ([]*pb.DirectedEdge, error)
 }
 
+func (r *rebuilder) RunWithoutTemp(ctx context.Context) error {
+	stream := pstore.NewStreamAt(r.startTs)
+	stream.LogPrefix = fmt.Sprintf("Rebuilding index for predicate %s (1/2):", r.attr)
+	stream.Prefix = r.prefix
+	stream.NumGo = 128
+	txn := NewTxn(r.startTs)
+	stream.KeyToList = func(key []byte, it *badger.Iterator) (*bpb.KVList, error) {
+		// We should return quickly if the context is no longer valid.
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
+
+		pk, err := x.Parse(key)
+		if err != nil {
+			return nil, errors.Wrapf(err, "could not parse key %s", hex.Dump(key))
+		}
+
+		l := new(List)
+		l.key = key
+		l.plist = new(pb.PostingList)
+
+		found := false
+
+		for it.Valid() {
+			item := it.Item()
+			if !bytes.Equal(item.Key(), l.key) {
+				break
+			}
+			l.maxTs = x.Max(l.maxTs, item.Version())
+			if item.IsDeletedOrExpired() {
+				// Don't consider any more versions.
+				break
+			}
+
+			found = true
+			switch item.UserMeta() {
+			case BitEmptyPosting:
+				l.minTs = item.Version()
+			case BitCompletePosting:
+				if err := unmarshalOrCopy(l.plist, item); err != nil {
+					return nil, err
+				}
+				l.minTs = item.Version()
+
+				// No need to do Next here. The outer loop can take care of skipping
+				// more versions of the same key.
+			case BitDeltaPosting:
+				err := item.Value(func(val []byte) error {
+					pl := &pb.PostingList{}
+					if err := pl.Unmarshal(val); err != nil {
+						return err
+					}
+					pl.CommitTs = item.Version()
+					for _, mpost := range pl.Postings {
+						// commitTs, startTs are meant to be only in memory, not
+						// stored on disk.
+						mpost.CommitTs = item.Version()
+					}
+					if l.mutationMap == nil {
+						l.mutationMap = make(map[uint64]*pb.PostingList)
+					}
+					l.mutationMap[pl.CommitTs] = pl
+					return nil
+				})
+				if err != nil {
+					return nil, err
+				}
+			default:
+				return nil, errors.Errorf(
+					"Unexpected meta: %d for key: %s", item.UserMeta(), hex.Dump(key))
+			}
+			if found {
+				break
+			}
+		}
+
+		if _, err := r.fn(pk.Uid, l, txn); err != nil {
+			return nil, err
+		}
+		return nil, nil
+	}
+	stream.Send = func(buf *z.Buffer) error {
+		// TODO. Make an in memory txn with disk backing for more data than memory.
+		return nil
+	}
+
+	start := time.Now()
+	if err := stream.Orchestrate(ctx); err != nil {
+		return err
+	}
+
+	txn.Update()
+	writer := NewTxnWriter(pstore)
+
+	defer func() {
+		glog.V(1).Infof("Rebuilding index for predicate %s: building index took: %v\n",
+			r.attr, time.Since(start))
+	}()
+
+	ResetCache()
+
+	return x.ExponentialRetry(int(x.Config.MaxRetries),
+		20*time.Millisecond, func() error {
+			err := txn.CommitToDisk(writer, r.startTs)
+			if err == badger.ErrBannedKey {
+				glog.Errorf("Error while writing to banned namespace.")
+				return nil
+			}
+			return err
+		})
+}
+
 func (r *rebuilder) Run(ctx context.Context) error {
 	if r.startTs == 0 {
 		glog.Infof("maxassigned is 0, no indexing work for predicate %s", r.attr)
@@ -1175,6 +1289,8 @@ func rebuildTokIndex(ctx context.Context, rb *IndexRebuild) error {
 		factorySpecs = []*tok.FactoryCreateSpec{factorySpec}
 	}
 
+	runForVectors := (len(factorySpecs) != 0)
+
 	pk := x.ParsedKey{Attr: rb.Attr}
 	builder := rebuilder{attr: rb.Attr, prefix: pk.DataPrefix(), startTs: rb.StartTs}
 	builder.fn = func(uid uint64, pl *List, txn *Txn) ([]*pb.DirectedEdge, error) {
@@ -1200,7 +1316,9 @@ func rebuildTokIndex(ctx context.Context, rb *IndexRebuild) error {
 				case ErrRetry:
 					time.Sleep(10 * time.Millisecond)
 				default:
-					edges = append(edges, newEdges...)
+					if !runForVectors {
+						edges = append(edges, newEdges...)
+					}
 					return err
 				}
 			}
@@ -1209,6 +1327,9 @@ func rebuildTokIndex(ctx context.Context, rb *IndexRebuild) error {
 			return []*pb.DirectedEdge{}, err
 		}
 		return edges, err
+	}
+	if len(factorySpecs) != 0 {
+		return builder.RunWithoutTemp(ctx)
 	}
 	return builder.Run(ctx)
 }
