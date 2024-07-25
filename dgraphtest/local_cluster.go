@@ -17,6 +17,7 @@
 package dgraphtest
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -281,6 +282,87 @@ func (c *LocalCluster) destroyContainers() error {
 	return nil
 }
 
+// CheckRunningServices checks open ports using lsof and returns the output as a string
+func CheckRunningServices() (string, error) {
+	lsofCmd := exec.Command("lsof", "-i", "-n")
+	output, err := runCommand(lsofCmd)
+	if err != nil {
+		return "", fmt.Errorf("error running lsof command: %v", err)
+	}
+	return output, nil
+}
+
+// ListRunningContainers lists running Docker containers using the Docker Go client
+func (c *LocalCluster) listRunningContainers() (string, error) {
+	containers, err := c.dcli.ContainerList(context.Background(), types.ContainerListOptions{})
+	if err != nil {
+		return "", fmt.Errorf("error listing Docker containers: %v", err)
+	}
+
+	var result bytes.Buffer
+	for _, container := range containers {
+		result.WriteString(fmt.Sprintf("ID: %s, Image: %s, Command: %s, Status: %s\n",
+			container.ID[:10], container.Image, container.Command, container.Status))
+
+		result.WriteString("Port Mappings:\n")
+		for _, port := range container.Ports {
+			result.WriteString(fmt.Sprintf("  %s:%d -> %d\n", port.IP, port.PublicPort, port.PrivatePort))
+		}
+		result.WriteString("\n")
+
+		result.WriteString("Port Mappings:\n")
+		info, err := c.dcli.ContainerInspect(context.Background(), container.ID)
+		if err != nil {
+			return "", errors.Wrap(err, "error inspecting container")
+		}
+
+		for port, bindings := range info.NetworkSettings.Ports {
+			if len(bindings) == 0 {
+				continue
+			}
+			result.WriteString(fmt.Sprintf("  %s:%s\n", port.Port(), bindings))
+		}
+		result.WriteString("\n")
+	}
+
+	return result.String(), nil
+}
+
+// runCommand executes a command and returns its output or an error
+func runCommand(cmd *exec.Cmd) (string, error) {
+	var out bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	if err != nil {
+		return "", fmt.Errorf("%v: %v", err, stderr.String())
+	}
+	return out.String(), nil
+}
+
+func (c *LocalCluster) printNetworkStuff() {
+	log.Printf("Checking running services and ports using lsof, netstat, and Docker...\n")
+
+	// Check running services using lsof
+	lsofOutput, err := CheckRunningServices()
+	if err != nil {
+		fmt.Printf("Error checking running services: %v\n", err)
+	} else {
+		log.Printf("Output of lsof -i:")
+		log.Println(lsofOutput)
+	}
+
+	// List running Docker containers
+	dockerOutput, err := c.listRunningContainers()
+	if err != nil {
+		fmt.Printf("Error listing Docker containers: %v\n", err)
+	} else {
+		log.Printf("Running Docker containers:")
+		log.Println(dockerOutput)
+	}
+}
+
 func (c *LocalCluster) Cleanup(verbose bool) {
 	if c == nil {
 		return
@@ -489,6 +571,7 @@ func (c *LocalCluster) containerHealthCheck(url func(c *LocalCluster) (string, e
 	if err != nil {
 		return errors.Wrap(err, "error getting health URL")
 	}
+
 	for i := 0; i < 60; i++ {
 		time.Sleep(waitDurBeforeRetry)
 
@@ -530,6 +613,7 @@ func (c *LocalCluster) containerHealthCheck(url func(c *LocalCluster) (string, e
 		return nil
 	}
 
+	c.printNetworkStuff()
 	return fmt.Errorf("health failed, cluster took too long to come up [%v]", endpoint)
 }
 
@@ -773,7 +857,7 @@ func (c *LocalCluster) serverURL(server, endpoint string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	url := "localhost:" + pubPort + endpoint
+	url := "0.0.0.0:" + pubPort + endpoint
 	return url, nil
 }
 

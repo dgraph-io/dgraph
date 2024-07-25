@@ -172,7 +172,7 @@ func (z *zero) healthURL(c *LocalCluster) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return "http://localhost:" + publicPort + "/health", nil
+	return "http://0.0.0.0:" + publicPort + "/health", nil
 }
 
 func (z *zero) changeStatus(isRunning bool) {
@@ -184,7 +184,7 @@ func (z *zero) assignURL(c *LocalCluster) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return "http://localhost:" + publicPort + "/assign", nil
+	return "http://0.0.0.0:" + publicPort + "/assign", nil
 }
 
 func (z *zero) alphaURL(c *LocalCluster) (string, error) {
@@ -196,7 +196,7 @@ func (z *zero) zeroURL(c *LocalCluster) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return "localhost:" + publicPort + "", nil
+	return "0.0.0.0:" + publicPort + "", nil
 }
 
 type alpha struct {
@@ -351,7 +351,7 @@ func (a *alpha) healthURL(c *LocalCluster) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return "http://localhost:" + publicPort + "/health", nil
+	return "http://0.0.0.0:" + publicPort + "/health", nil
 }
 
 func (a *alpha) assignURL(c *LocalCluster) (string, error) {
@@ -363,7 +363,7 @@ func (a *alpha) alphaURL(c *LocalCluster) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return "localhost:" + publicPort + "", nil
+	return "0.0.0.0:" + publicPort + "", nil
 }
 
 func (a *alpha) changeStatus(isRunning bool) {
@@ -388,8 +388,14 @@ func publicPort(dcli *docker.Client, dc dnode, privatePort string) (string, erro
 		if len(bindings) == 0 {
 			continue
 		}
-		if port.Port() == privatePort {
-			return bindings[0].HostPort, nil
+		if port.Port() != privatePort {
+			continue
+		}
+
+		for _, binding := range bindings {
+			if binding.HostIP == "0.0.0.0" {
+				return binding.HostPort, nil
+			}
 		}
 	}
 
