@@ -81,3 +81,7 @@ jobs:
           ./t -r
           # sleep
           sleep 5
+      - name: Setup interactive ssh session
+        if: ${{ failure() }}
+        uses: Warpbuilds/action-debugger@v1.3
+        timeout-minutes: 4320
