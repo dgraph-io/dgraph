@@ -1344,7 +1344,7 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (resp *api.Response,
 		graphql:  isGraphQL,
 		gqlField: req.gqlField,
 	}
-	if rerr = parseRequest(qc); rerr != nil {
+	if rerr = parseRequest(ctx, qc); rerr != nil {
 		return
 	}
 
@@ -1565,7 +1565,7 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 }
 
 // parseRequest parses the incoming request
-func parseRequest(qc *queryContext) error {
+func parseRequest(ctx context.Context, qc *queryContext) error {
 	start := time.Now()
 	defer func() {
 		qc.latency.Parsing = time.Since(start)
@@ -1585,7 +1585,7 @@ func parseRequest(qc *queryContext) error {
 			qc.gmuList = append(qc.gmuList, gmu)
 		}
 
-		if err := addQueryIfUnique(qc); err != nil {
+		if err := addQueryIfUnique(ctx, qc); err != nil {
 			return err
 		}
 
@@ -1698,19 +1698,38 @@ func verifyUnique(qc *queryContext, qr query.Request) error {
 }
 
 // addQueryIfUnique adds dummy queries in the request for checking whether predicate is unique in the db
-func addQueryIfUnique(qc *queryContext) error {
+func addQueryIfUnique(qctx context.Context, qc *queryContext) error {
 	if len(qc.gmuList) == 0 {
 		return nil
 	}
 
-	ctx := context.WithValue(context.Background(), schema.IsWrite, false)
+	ctx := context.WithValue(qctx, schema.IsWrite, false)
+	namespace, err := x.ExtractNamespace(ctx)
+	if err != nil {
+		// It's okay to ignore this here. If namespace is not set, it could mean either there is no
+		// authorization or it's trying to be bypassed. So the namespace is either 0 or the mutation would fail.
+		glog.Errorf("Error while extracting namespace, assuming default %s", err)
+		namespace = 0
+	}
+	isGalaxyQuery := x.IsGalaxyOperation(ctx)
+
 	qc.uniqueVars = map[uint64]uniquePredMeta{}
 	var buildQuery strings.Builder
 	for gmuIndex, gmu := range qc.gmuList {
 		for rdfIndex, pred := range gmu.Set {
-			predSchema, _ := schema.State().Get(ctx, x.NamespaceAttr(pred.Namespace, pred.Predicate))
-			if !predSchema.Unique {
-				continue
+			if isGalaxyQuery {
+				// The caller should make sure that the directed edges contain the namespace we want
+				// to insert into.
+				namespace = pred.Namespace
+			}
+			if pred.Predicate != "dgraph.xid" {
+				// [TODO] Don't check if it's dgraph.xid. It's a bug as this node might not be aware
+				// of the schema for the given predicate. This is a bug issue for dgraph.xid hence
+				// we are bypassing it manually until the bug is fixed.
+				predSchema, ok := schema.State().Get(ctx, x.NamespaceAttr(namespace, pred.Predicate))
+				if !ok || !predSchema.Unique {
+					continue
+				}
 			}
 			var predicateName string
 			if pred.Lang != "" {

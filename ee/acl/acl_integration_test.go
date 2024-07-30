@@ -439,6 +439,37 @@ func (asuite *AclTestSuite) TestWrongPermission() {
 	require.Contains(t, err.Error(), "Value for this predicate should be between 0 and 7")
 }
 
+func (asuite *AclTestSuite) TestACLNamespaceEdge() {
+	t := asuite.T()
+	gc, cleanup, err := asuite.dc.Client()
+	require.NoError(t, err)
+	defer cleanup()
+	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
+		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace))
+
+	json := `
+	{
+    "set": [
+        {
+            "dgraph.xid": "groot",
+            "dgraph.password": "password",
+            "dgraph.type": "dgraph.type.User",
+            "dgraph.user.group": {
+                "dgraph.xid": "guardians",
+                "dgraph.type": "dgraph.type.Group",
+                "namespace": 1
+            },
+            "namespace": 1
+        }
+    ]
+}`
+
+	mu := &api.Mutation{SetJson: []byte(json), CommitNow: true}
+	_, err = gc.Mutate(mu)
+	require.Error(t, err)
+	require.ErrorContains(t, err, "could not insert duplicate value") // Could be gaurdian or groot
+}
+
 func (asuite *AclTestSuite) TestACLDuplicateGrootUser() {
 	t := asuite.T()
 	gc, cleanup, err := asuite.dc.Client()
@@ -451,7 +482,7 @@ func (asuite *AclTestSuite) TestACLDuplicateGrootUser() {
 	         _:a <dgraph.type> "dgraph.type.User"  .`
 
 	mu := &api.Mutation{SetNquads: []byte(rdfs), CommitNow: true}
-	_, err = gc.Mutate(mu)
+	_, err := gc.Mutate(mu)
 	require.Error(t, err)
 	require.ErrorContains(t, err, "could not insert duplicate value [groot] for predicate [dgraph.xid]")
 }
