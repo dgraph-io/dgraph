@@ -550,7 +550,7 @@ func (ph *persistentHNSW[T]) addNeighbors(ctx context.Context, tc *TxnCache,
 			return nil, nnEdgesErr
 		}
 		// This adds at most efConstruction number of edges for each layer for this node
-		allLayerEdges[level] = append(allLayerEdges[level], allLayerNeighbors[level]...)
+		allLayerEdges[level] = append(allLayerEdges[level], allLayerNeighbors[level][:20]...)
 	}
 
 	// on every modification of the layer edges, add it to in mem map so you dont have to always be reading
