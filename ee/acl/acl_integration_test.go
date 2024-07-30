@@ -482,7 +482,7 @@ func (asuite *AclTestSuite) TestACLDuplicateGrootUser() {
 	         _:a <dgraph.type> "dgraph.type.User"  .`
 
 	mu := &api.Mutation{SetNquads: []byte(rdfs), CommitNow: true}
-	_, err := gc.Mutate(mu)
+	_, err = gc.Mutate(mu)
 	require.Error(t, err)
 	require.ErrorContains(t, err, "could not insert duplicate value [groot] for predicate [dgraph.xid]")
 }
