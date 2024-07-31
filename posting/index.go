@@ -25,8 +25,10 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"strings"
 	"sync/atomic"
 	"time"
+	"unsafe"
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
@@ -653,7 +655,7 @@ func (r *rebuilder) RunWithoutTemp(ctx context.Context) error {
 	stream := pstore.NewStreamAt(r.startTs)
 	stream.LogPrefix = fmt.Sprintf("Rebuilding index for predicate %s (1/2):", r.attr)
 	stream.Prefix = r.prefix
-	stream.NumGo = 128
+	stream.NumGo = 8
 	txn := NewTxn(r.startTs)
 	stream.KeyToList = func(key []byte, it *badger.Iterator) (*bpb.KVList, error) {
 		// We should return quickly if the context is no longer valid.
@@ -742,6 +744,52 @@ func (r *rebuilder) RunWithoutTemp(ctx context.Context) error {
 		return err
 	}
 
+	txn.cache.Lock()
+
+	numLevels := 20
+	numNodes := make([]int, numLevels)
+	numConnections := make([]int, numLevels)
+
+	var temp [][]uint64
+	for key, pl := range txn.cache.plists {
+		pk, _ := x.Parse([]byte(key))
+		if strings.HasSuffix(pk.Attr, "__vector_") {
+			data := pl.getPosting(txn.cache.startTs)
+			if data == nil || len(data.Postings) == 0 {
+				continue
+			}
+
+			decodeUint64MatrixUnsafe(data.Postings[0].Value, &temp)
+
+			for i := 0; i < len(temp); i++ {
+				if len(temp[i]) > 0 {
+					numNodes[i] += 1
+				}
+				numConnections[i] += len(temp[i])
+			}
+
+		}
+	}
+
+	for i := 0; i < numLevels; i++ {
+		fmt.Printf("%d, ", numNodes[i])
+	}
+	fmt.Println("")
+	for i := 0; i < numLevels; i++ {
+		fmt.Printf("%d, ", numConnections[i])
+	}
+	fmt.Println("")
+	for i := 0; i < numLevels; i++ {
+		if numNodes[i] == 0 {
+			fmt.Printf("0, ")
+			continue
+		}
+		fmt.Printf("%d, ", numConnections[i]/numNodes[i])
+	}
+	fmt.Println("")
+
+	txn.cache.Unlock()
+
 	txn.Update()
 	writer := NewTxnWriter(pstore)
 
@@ -761,6 +809,33 @@ func (r *rebuilder) RunWithoutTemp(ctx context.Context) error {
 			}
 			return err
 		})
+}
+
+func decodeUint64MatrixUnsafe(data []byte, matrix *[][]uint64) error {
+	if len(data) == 0 {
+		return nil
+	}
+
+	offset := 0
+	// Read number of rows
+	rows := *(*uint64)(unsafe.Pointer(&data[offset]))
+	offset += 8
+
+	*matrix = make([][]uint64, rows)
+
+	for i := 0; i < int(rows); i++ {
+		// Read row length
+		rowLen := *(*uint64)(unsafe.Pointer(&data[offset]))
+		offset += 8
+
+		(*matrix)[i] = make([]uint64, rowLen)
+		for j := 0; j < int(rowLen); j++ {
+			(*matrix)[i][j] = *(*uint64)(unsafe.Pointer(&data[offset]))
+			offset += 8
+		}
+	}
+
+	return nil
 }
 
 func (r *rebuilder) Run(ctx context.Context) error {
@@ -1291,12 +1366,19 @@ func rebuildTokIndex(ctx context.Context, rb *IndexRebuild) error {
 
 	runForVectors := (len(factorySpecs) != 0)
 
+	k := 0
+
 	pk := x.ParsedKey{Attr: rb.Attr}
 	builder := rebuilder{attr: rb.Attr, prefix: pk.DataPrefix(), startTs: rb.StartTs}
 	builder.fn = func(uid uint64, pl *List, txn *Txn) ([]*pb.DirectedEdge, error) {
 		edge := pb.DirectedEdge{Attr: rb.Attr, Entity: uid}
 		edges := []*pb.DirectedEdge{}
 		err := pl.Iterate(txn.StartTs, 0, func(p *pb.Posting) error {
+			k += 1
+			if k%10000 == 0 {
+				fmt.Println("DONE:", k)
+
+			}
 			// Add index entries based on p.
 			val := types.Val{
 				Value: p.Value,

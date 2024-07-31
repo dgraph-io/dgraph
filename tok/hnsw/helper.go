@@ -1,6 +1,7 @@
 package hnsw
 
 import (
+	"container/heap"
 	"context"
 	"encoding/binary"
 	"fmt"
@@ -518,6 +519,56 @@ func (ph *persistentHNSW[T]) newPersistentEdgeKeyValueEntry(ctx context.Context,
 	return edge, nil
 }
 
+func (ph *persistentHNSW[T]) distance_betw(ctx context.Context, tc *TxnCache, inUuid, outUuid uint64, inVec,
+	outVec *[]T) T {
+	err := ph.getVecFromUid(outUuid, tc, outVec)
+	if err != nil {
+		log.Printf("[ERROR] While getting vector %s", err)
+		return -1
+	}
+
+	d, err := ph.simType.distanceScore(*inVec, *outVec, ph.floatBits)
+	if err != nil {
+		log.Printf("[ERROR] While getting vector %s", err)
+		return -1
+	}
+	return d
+}
+
+type CustomHeap struct {
+	data    []uint64
+	compare func(a, b uint64) bool
+}
+
+// Len is the number of elements in the collection.
+func (h CustomHeap) Len() int {
+	return len(h.data)
+}
+
+// Less reports whether the element with index i should sort before the element with index j.
+func (h CustomHeap) Less(i, j int) bool {
+	return h.compare(h.data[i], h.data[j])
+}
+
+// Swap swaps the elements with indexes i and j.
+func (h CustomHeap) Swap(i, j int) {
+	h.data[i], h.data[j] = h.data[j], h.data[i]
+}
+
+// Push adds an element to the heap.
+func (h *CustomHeap) Push(x interface{}) {
+	h.data = append(h.data, x.(uint64))
+}
+
+// Pop removes and returns the maximum element from the heap.
+func (h *CustomHeap) Pop() interface{} {
+	old := h.data
+	n := len(old)
+	x := old[n-1]
+	h.data = old[0 : n-1]
+	return x
+}
+
 // addNeighbors adds the neighbors of the given uuid to the given level.
 // It returns the edge created and the error if any.
 func (ph *persistentHNSW[T]) addNeighbors(ctx context.Context, tc *TxnCache,
@@ -544,6 +595,7 @@ func (ph *persistentHNSW[T]) addNeighbors(ctx context.Context, tc *TxnCache,
 			}
 		}
 	}
+	var inVec, outVec []T
 	for level := 0; level < ph.maxLevels; level++ {
 		allLayerEdges[level], nnEdgesErr = ph.removeDeadNodes(allLayerEdges[level], tc)
 		if nnEdgesErr != nil {
@@ -551,6 +603,26 @@ func (ph *persistentHNSW[T]) addNeighbors(ctx context.Context, tc *TxnCache,
 		}
 		// This adds at most efConstruction number of edges for each layer for this node
 		allLayerEdges[level] = append(allLayerEdges[level], allLayerNeighbors[level]...)
+		m := 25
+		if len(allLayerEdges[level]) > m {
+			err := ph.getVecFromUid(uuid, tc, &inVec)
+			if err != nil {
+				log.Printf("[ERROR] While getting vector %s", err)
+			} else {
+				h := &CustomHeap{
+					data: allLayerEdges[level],
+					compare: func(i, j uint64) bool {
+						return ph.distance_betw(ctx, tc, uuid, i, &inVec, &outVec) >
+							ph.distance_betw(ctx, tc, uuid, j, &inVec, &outVec)
+					}}
+
+				for _, e := range allLayerNeighbors[level] {
+					heap.Push(h, e)
+					heap.Pop(h)
+				}
+			}
+			allLayerEdges[level] = allLayerEdges[level][:m]
+		}
 	}
 
 	// on every modification of the layer edges, add it to in mem map so you dont have to always be reading
