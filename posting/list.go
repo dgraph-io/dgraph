@@ -78,6 +78,10 @@ type List struct {
 	mutationMap map[uint64]*pb.PostingList
 	minTs       uint64 // commit timestamp of immutable layer, reject reads before this ts.
 	maxTs       uint64 // max commit timestamp seen for this list.
+
+	returnVal types.Val
+	returnTs  uint64
+	found     bool
 }
 
 func indexEdgeToPbEdge(t *index.KeyValue) *pb.DirectedEdge {
@@ -341,6 +345,7 @@ func hasDeleteAll(mpost *pb.Posting) bool {
 func (l *List) updateMutationLayer(mpost *pb.Posting, singleUidUpdate bool) error {
 	l.AssertLock()
 	x.AssertTrue(mpost.Op == Set || mpost.Op == Del)
+	l.found = false
 
 	// If we have a delete all, then we replace the map entry with just one.
 	if hasDeleteAll(mpost) {
@@ -542,6 +547,16 @@ func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.Directed
 	// order. We can do so by proposing them in the same order as received by the Oracle delta
 	// stream from Zero, instead of in goroutines.
 	txn.addConflictKey(GetConflictKey(pk, l.key, t))
+	return nil
+}
+
+// getMutation returns a marshaled version of posting list mutation stored internally.
+func (l *List) getPosting(startTs uint64) *pb.PostingList {
+	l.RLock()
+	defer l.RUnlock()
+	if pl, ok := l.mutationMap[startTs]; ok {
+		return pl
+	}
 	return nil
 }
 
@@ -1402,6 +1417,18 @@ func (l *List) Value(readTs uint64) (rval types.Val, rerr error) {
 	return l.ValueWithLockHeld(readTs)
 }
 
+func (l *List) StaticValueWithLockHeld(readTs uint64) (rval types.Val, rerr error) {
+	val, found, err := l.findStaticValue(readTs, math.MaxUint64)
+	if err != nil {
+		return val, errors.Wrapf(err,
+			"cannot retrieve default value from list with key %s", hex.EncodeToString(l.key))
+	}
+	if !found {
+		return val, ErrNoValue
+	}
+	return val, nil
+}
+
 func (l *List) ValueWithLockHeld(readTs uint64) (rval types.Val, rerr error) {
 	val, found, err := l.findValue(readTs, math.MaxUint64)
 	if err != nil {
@@ -1531,6 +1558,51 @@ func (l *List) postingForTag(readTs uint64, tag string) (p *pb.Posting, rerr err
 	}
 
 	return p, nil
+}
+
+func (l *List) findStaticValue(readTs, uid uint64) (rval types.Val, found bool, err error) {
+	l.AssertRLock()
+
+	if l.found {
+		return l.returnVal, l.found, nil
+
+	}
+
+	mutation, ok := l.mutationMap[readTs]
+	if ok {
+		l.returnTs = readTs
+		l.returnVal = valueToTypesVal(mutation.Postings[0])
+		l.found = true
+		return l.returnVal, l.found, nil
+	}
+
+	if l.maxTs < readTs {
+		mutation, ok = l.mutationMap[l.maxTs]
+		if ok {
+			l.returnTs = readTs
+			l.returnVal = valueToTypesVal(mutation.Postings[0])
+			l.found = true
+			return l.returnVal, l.found, nil
+		}
+	}
+
+	if len(l.mutationMap) != 0 {
+		for _, mutation = range l.mutationMap {
+		}
+		l.returnTs = readTs
+		l.returnVal = valueToTypesVal(mutation.Postings[0])
+		l.found = true
+		return l.returnVal, l.found, nil
+	}
+
+	if len(l.plist.Postings) > 0 {
+		l.returnTs = readTs
+		l.returnVal = valueToTypesVal(l.plist.Postings[0])
+		l.found = true
+		return l.returnVal, l.found, nil
+	}
+
+	return types.Val{}, false, nil
 }
 
 func (l *List) findValue(readTs, uid uint64) (rval types.Val, found bool, err error) {

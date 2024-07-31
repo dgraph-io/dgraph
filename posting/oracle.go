@@ -103,7 +103,7 @@ func (vt *viTxn) GetWithLockHeld(key []byte) (rval index.Value, rerr error) {
 }
 
 func (vt *viTxn) GetValueFromPostingList(pl *List) (rval index.Value, rerr error) {
-	val, err := pl.ValueWithLockHeld(vt.delegate.StartTs)
+	val, err := pl.StaticValueWithLockHeld(vt.delegate.StartTs)
 	rval = val.Value
 	return rval, err
 }
