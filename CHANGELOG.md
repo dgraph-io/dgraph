@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project will adhere to [Semantic Versioning](https://semver.org) starting `v22.0.0`.
 
+## [v24.0.1] - 2024-07-30
+[v24.0.1]: https://github.com/dgraph-io/dgraph/compare/v24.0.0...v24.0.1
+
+> **Warning**
+> After upgrading to v24.0.1, vector index needs to be rebuilt as underlying data has changed.
+
+- **Fixed**
+  
+	- fix(core): Fix regression in parsing json empty string #9108
+	- fix(upgrade): fix failing upgrade tests #9042
+	- fix(ci): fixing health endpoint issue #9116
+	- Fix(graphql): issue with local variable squashing intended JWK index by @matthewmcneely in #9114
+
+- **Chore**
+	- chore(deps): bump urllib3 from 1.26.18 to 1.26.19 /contrib/config/marketplace/aws/tests #9103
+	- chore(deps): bump requests from 2.31.0 to 2.32.0 /contrib/config/marketplace/aws/tests #9090
+
+
+- **Perf**
+	- perf(vector): updated marshalling of vector #9109
+
+
 ## [v24.0.0] - 2024-06-06
 [v24.0.0]: https://github.com/dgraph-io/dgraph/compare/v24.0.0...v23.1.0
 
