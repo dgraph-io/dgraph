@@ -13,7 +13,7 @@ decorator==4.4.2
 docker==4.2.0
 docutils==0.15.2
 dulwich==0.19.15
-idna==2.9
+idna==3.7
 Jinja2==3.1.4
 jmespath==0.9.5
 jsonpatch==1.25
