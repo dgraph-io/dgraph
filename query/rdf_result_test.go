@@ -36,7 +36,7 @@ func TestRDFResult(t *testing.T) {
 		}
 	  }`
 
-	rdf, err := processQueryRDF(context.Background(), t, query)
+	rdf, err := processQueryRDF(context.Background(), query)
 	require.NoError(t, err)
 	require.Equal(t, rdf, `<0x1> <name> "Michonne" .
 <0x1> <friend> <0x17> .
@@ -69,7 +69,7 @@ func TestRDFNormalize(t *testing.T) {
 			}
 		}
 	}`
-	_, err := processQueryRDF(context.Background(), t, query)
+	_, err := processQueryRDF(context.Background(), query)
 	require.Error(t, err, "normalize directive is not supported in the rdf output format")
 }
 
@@ -80,7 +80,7 @@ func TestRDFGroupBy(t *testing.T) {
 				count(uid)
 		}
 	}`
-	_, err := processQueryRDF(context.Background(), t, query)
+	_, err := processQueryRDF(context.Background(), query)
 	require.Contains(t, err.Error(), "groupby is not supported in rdf output format")
 }
 
@@ -91,7 +91,7 @@ func TestRDFUidCount(t *testing.T) {
 			count(uid)
 		}
 	}`
-	_, err := processQueryRDF(context.Background(), t, query)
+	_, err := processQueryRDF(context.Background(), query)
 	require.Contains(t, err.Error(), "uid count is not supported in the rdf output format")
 }
 
@@ -108,7 +108,7 @@ func TestRDFIngoreReflex(t *testing.T) {
 			}
 		}
 	}`
-	_, err := processQueryRDF(context.Background(), t, query)
+	_, err := processQueryRDF(context.Background(), query)
 	require.Contains(t, err.Error(),
 		"ignorereflex directive is not supported in the rdf output format")
 }
@@ -121,7 +121,7 @@ func TestRDFRecurse(t *testing.T) {
 			friend
 		}
 	}`
-	rdf, err := processQueryRDF(context.Background(), t, query)
+	rdf, err := processQueryRDF(context.Background(), query)
 	require.NoError(t, err)
 	require.Equal(t, rdf, `<0x1> <name> "Michonne" .
 <0x17> <name> "Rick Grimes" .
@@ -137,7 +137,7 @@ func TestRDFIgnoreUid(t *testing.T) {
 			name
 		}
 	}`
-	rdf, err := processQueryRDF(context.Background(), t, query)
+	rdf, err := processQueryRDF(context.Background(), query)
 	require.NoError(t, err)
 	require.Equal(t, rdf, `<0x1> <name> "Michonne" .
 <0x17> <name> "Rick Grimes" .
@@ -154,7 +154,7 @@ func TestRDFCheckPwd(t *testing.T) {
 		}
     }
 	`
-	_, err := processQueryRDF(context.Background(), t, query)
+	_, err := processQueryRDF(context.Background(), query)
 	require.Contains(t, err.Error(),
 		"chkpwd function is not supported in the rdf output format")
 }
@@ -172,7 +172,7 @@ func TestRDFPredicateCount(t *testing.T) {
     }
 	`
 
-	rdf, err := processQueryRDF(context.Background(), t, query)
+	rdf, err := processQueryRDF(context.Background(), query)
 	require.NoError(t, err)
 	require.Equal(t, `<0x1> <name> "Michonne" .
 <0x17> <name> "Rick Grimes" .
@@ -201,7 +201,7 @@ func TestRDFFacets(t *testing.T) {
 				path @facets(weight)
 			}
 		}`
-	_, err := processQueryRDF(context.Background(), t, query)
+	_, err := processQueryRDF(context.Background(), query)
 	require.Contains(t, err.Error(),
 		"facets are not supported in the rdf output format")
 }
@@ -219,7 +219,7 @@ func TestDateRDF(t *testing.T) {
 			}
 		}
 	`
-	rdf, err := processQueryRDF(context.Background(), t, query)
+	rdf, err := processQueryRDF(context.Background(), query)
 	require.NoError(t, err)
 	expected := `<0x1> <name> "Michonne" .
 <0x1> <gender> "female" .

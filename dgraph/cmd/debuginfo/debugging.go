@@ -79,11 +79,13 @@ func saveDebug(sourceURL, filePath string, duration time.Duration) error {
 			glog.Warningf("error closing resp reader: %v", err)
 		}
 	}()
-
 	out, err := os.Create(filePath)
 	if err != nil {
 		return fmt.Errorf("error while creating debug file: %s", err)
 	}
+	defer func() {
+		out.Close()
+	}()
 	_, err = io.Copy(out, resp)
 	return err
 }

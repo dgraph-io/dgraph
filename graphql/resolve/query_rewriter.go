@@ -19,6 +19,7 @@ package resolve
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strconv"
@@ -147,7 +148,14 @@ func (qr *queryRewriter) Rewrite(
 
 		dgQuery := rewriteAsGet(gqlQuery, uid, xid, authRw)
 		return dgQuery, nil
-
+	case schema.SimilarByIdQuery:
+		xid, uid, err := gqlQuery.IDArgValue()
+		if err != nil {
+			return nil, err
+		}
+		return rewriteAsSimilarByIdQuery(gqlQuery, uid, xid, authRw), nil
+	case schema.SimilarByEmbeddingQuery:
+		return rewriteAsSimilarByEmbeddingQuery(gqlQuery, authRw), nil
 	case schema.FilterQuery:
 		return rewriteAsQuery(gqlQuery, authRw), nil
 	case schema.PasswordQuery:
@@ -609,6 +617,292 @@ func rewriteAsGet(
 		dgQuery = append(dgQuery, selectionAuth...)
 	}
 
+	return dgQuery
+}
+
+// rewriteAsSimilarByIdQuery
+//
+// rewrites SimilarById graphQL query to nested DQL query blocks
+// Example rewrittern query:
+//
+//			query {
+//			    var(func: eq(Product.id, "0528012398")) @filter(type(Product)) {
+//			        vec as Product.embedding
+//			    }
+//			    var() {
+//			        v1 as max(val(vec))
+//			    }
+//			    var(func: similar_to(Product.embedding, 8, val(v1))) {
+//			        v2 as Product.embedding
+//			        distance as math((v2 - v1) dot (v2 - v1))
+//			    }
+//			    querySimilarProductById(func: uid(distance)
+//	             @filter(Product.id != "0528012398"), orderasc: val(distance)) {
+//			        Product.id : Product.id
+//			        Product.description : Product.description
+//			        Product.title : Product.title
+//			        Product.imageUrl : Product.imageUrl
+//			        Product.vector_distance : val(distance)
+//			        dgraph.uid : uid
+//			    }
+//		 }
+func rewriteAsSimilarByIdQuery(
+	query schema.Query,
+	uid uint64,
+	xidArgToVal map[string]string,
+	auth *authRewriter) []*dql.GraphQuery {
+
+	// Get graphQL arguments
+	typ := query.Type()
+	similarBy := query.ArgValue(schema.SimilarByArgName).(string)
+	pred := typ.DgraphPredicate(similarBy)
+	topK := query.ArgValue(schema.SimilarTopKArgName)
+	similarByField := typ.Field(similarBy)
+	metric := similarByField.EmbeddingSearchMetric()
+	distanceFormula := "math(sqrt((v2 - v1) dot (v2 - v1)))" // default - euclidian
+
+	if metric == schema.SimilarSearchMetricDotProduct {
+		distanceFormula = "math((1.0 - (v1 dot v2)) /2.0)"
+	} else if metric == schema.SimilarSearchMetricCosine {
+		distanceFormula = "math((1.0 - ((v1 dot v2) / sqrt( (v1 dot v1) * (v2 dot v2) ) )) / 2.0)"
+	}
+
+	// First generate the query to fetch the uid
+	// for the given id. For Example,
+	// var(func: eq(Product.id, "0528012398")) @filter(type(Product)) {
+	// 	vec as Product.embedding
+	// }
+	dgQuery := rewriteAsGet(query, uid, xidArgToVal, auth)
+	lastQuery := dgQuery[len(dgQuery)-1]
+	// Turn the root query into "var"
+	lastQuery.Attr = "var"
+	// Save the result to be later used for the last query block, sortQuery
+	result := lastQuery.Children
+
+	// define the variable "vec" for the search vector
+	lastQuery.Children = []*dql.GraphQuery{{
+		Attr: pred,
+		Var:  "vec",
+	}}
+
+	// Turn the variable into a "const" by
+	// remembering the  max of it.
+	// The lookup is going to return exactly one uid
+	// anyway. For example,
+	// var() {
+	//	 v1 as max(val(vec))
+	// }
+	aggQuery := &dql.GraphQuery{
+		Attr: "var" + "()",
+		Children: []*dql.GraphQuery{
+			{
+				Var:  "v1",
+				Attr: "max(val(vec))",
+			},
+		},
+	}
+
+	// Similar_to query, computes the distance for
+	// ordering the result later.
+	// Example:
+	// var(func: similar_to(Product.embedding, 8, val(v1))) {
+	//	  v2 as Product.embedding
+	//	  distance as math((v2 - v1) dot (v2 - v1))
+	//  }
+	similarQuery := &dql.GraphQuery{
+		Attr: "var",
+		Children: []*dql.GraphQuery{
+			{
+				Var:  "v2",
+				Attr: pred,
+			},
+			{
+				Var:  "distance",
+				Attr: distanceFormula,
+			},
+		},
+		Func: &dql.Function{
+			Name: "similar_to",
+			Args: []dql.Arg{
+				{
+					Value: pred,
+				},
+				{
+					Value: fmt.Sprintf("%v", topK),
+				},
+				{
+					Value: "val(v1)",
+				},
+			},
+		},
+	}
+
+	// Rename the distance as <Type>.vector_distance
+	distance := &dql.GraphQuery{
+		Alias: typ.Name() + "." + schema.SimilarQueryDistanceFieldName,
+		Attr:  "val(distance)",
+	}
+
+	var found bool = false
+	for _, child := range result {
+		if child.Alias == typ.Name()+"."+schema.SimilarQueryDistanceFieldName {
+			child.Attr = "val(distance)"
+			found = true
+			break
+		}
+	}
+	if !found {
+		result = append(result, distance)
+	}
+
+	// order the result by euclidian distance, For example,
+	//	 querySimilarProductById(func: uid(distance), orderasc: val(distance)) {
+	//	     Product.id : Product.id
+	//	     Product.description : Product.description
+	//	     Product.title : Product.title
+	//	     Product.imageUrl : Product.imageUrl
+	//	     Product.vector_distance : val(distance)
+	//	     dgraph.uid : uid
+	//	  }
+	//	 }
+	sortQuery := &dql.GraphQuery{
+		Attr:     query.DgraphAlias(),
+		Children: result,
+		Func: &dql.Function{
+			Name: "uid",
+			Args: []dql.Arg{{Value: "distance"}},
+		},
+		Order: []*pb.Order{{Attr: "val(distance)", Desc: false}},
+	}
+	addArgumentsToField(sortQuery, query)
+
+	dgQuery = append(dgQuery, aggQuery, similarQuery, sortQuery)
+	return dgQuery
+}
+
+// rewriteAsSimilarByEmbeddingQuery
+//
+// rewrites SimilarByEmbedding graphQL query to nested DQL query blocks
+// Example rewrittern query:
+//
+//		query gQLTodQL($search_vector: float32vector = "<json array of float>") {
+//		    var(func: similar_to(Product.embedding, 8, $search_vector)) {
+//		        v2 as Product.embedding
+//		        distance as math((v2 - $search_vector) dot (v2 - $search_vector))
+//		    }
+//		    querySimilarProductById(func: uid(distance),
+//	             @filter(Product.id != "0528012398"), orderasc: val(distance)) {
+//		        Product.id : Product.id
+//		        Product.description : Product.description
+//		        Product.title : Product.title
+//		        Product.imageUrl : Product.imageUrl
+//		        Product.vector_distance : val(distance)
+//		        dgraph.uid : uid
+//		     }
+//		 }
+func rewriteAsSimilarByEmbeddingQuery(
+	query schema.Query, auth *authRewriter) []*dql.GraphQuery {
+
+	dgQuery := rewriteAsQuery(query, auth)
+
+	// Remember dgQuery[0].Children as result type for the last block
+	// in the rewritten query
+	result := dgQuery[0].Children
+	typ := query.Type()
+
+	// Get all the arguments from graphQL query
+	similarBy := query.ArgValue(schema.SimilarByArgName).(string)
+	pred := typ.DgraphPredicate(similarBy)
+	topK := query.ArgValue(schema.SimilarTopKArgName)
+	vec := query.ArgValue(schema.SimilarVectorArgName).([]interface{})
+	vecStr, _ := json.Marshal(vec)
+
+	similarByField := typ.Field(similarBy)
+	metric := similarByField.EmbeddingSearchMetric()
+	distanceFormula := "math(sqrt((v2 - $search_vector) dot (v2 - $search_vector)))" // default = euclidian
+
+	if metric == schema.SimilarSearchMetricDotProduct {
+		distanceFormula = "math(( 1.0 - (($search_vector) dot v2)) /2.0)"
+	} else if metric == schema.SimilarSearchMetricCosine {
+		distanceFormula = "math((1.0 - ( (($search_vector) dot v2) / sqrt( (($search_vector) dot ($search_vector))" +
+			" * (v2 dot v2) ) )) / 2.0)"
+	}
+
+	// Save vectorString as a query variable, $search_vector
+	queryArgs := dgQuery[0].Args
+	if queryArgs == nil {
+		queryArgs = make(map[string]string)
+	}
+	queryArgs["$search_vector"] = " float32vector = \"" + string(vecStr) + "\""
+	thisFilter := &dql.FilterTree{
+		Func: dgQuery[0].Func,
+	}
+
+	// create the similar_to function and move existing root function
+	// to the filter tree
+	addToFilterTree(dgQuery[0], thisFilter)
+
+	// Create similar_to as the root function, passing $search_vector as
+	// the search vector
+	dgQuery[0].Attr = "var"
+	dgQuery[0].Func = &dql.Function{
+		Name: "similar_to",
+		Args: []dql.Arg{
+			{
+				Value: pred,
+			},
+			{
+				Value: fmt.Sprintf("%v", topK),
+			},
+			{
+				Value: "$search_vector",
+			},
+		},
+	}
+
+	// Compute the euclidian distance between the neighbor
+	// and the search vector
+	dgQuery[0].Children = []*dql.GraphQuery{
+		{
+			Var:  "v2",
+			Attr: pred,
+		},
+		{
+			Var:  "distance",
+			Attr: distanceFormula,
+		},
+	}
+
+	// Rename distance as <Type>.vector_distance
+	distance := &dql.GraphQuery{
+		Alias: typ.Name() + "." + schema.SimilarQueryDistanceFieldName,
+		Attr:  "val(distance)",
+	}
+
+	var found bool = false
+	for _, child := range result {
+		if child.Alias == typ.Name()+"."+schema.SimilarQueryDistanceFieldName {
+			child.Attr = "val(distance)"
+			found = true
+			break
+		}
+	}
+	if !found {
+		result = append(result, distance)
+	}
+
+	// order by distance
+	sortQuery := &dql.GraphQuery{
+		Attr:     query.DgraphAlias(),
+		Children: result,
+		Func: &dql.Function{
+			Name: "uid",
+			Args: []dql.Arg{{Value: "distance"}},
+		},
+		Order: []*pb.Order{{Attr: "val(distance)", Desc: false}},
+	}
+
+	dgQuery = append(dgQuery, sortQuery)
 	return dgQuery
 }
 

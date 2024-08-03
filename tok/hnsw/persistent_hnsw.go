@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bits-and-blooms/bitset"
 	c "github.com/dgraph-io/dgraph/tok/constraints"
 	"github.com/dgraph-io/dgraph/tok/index"
 	opt "github.com/dgraph-io/dgraph/tok/options"
@@ -26,7 +27,8 @@ type persistentHNSW[T c.Float] struct {
 	// nodeAllEdges[65443][1][3] indicates the 3rd neighbor in the first
 	// layer for uuid 65443. The result will be a neighboring uuid.
 	nodeAllEdges map[uint64][][]uint64
-	visitedUids  []uint64
+	visitedUids  bitset.BitSet
+	deadNodes    map[uint64]struct{}
 }
 
 func GetPersistantOptions[T c.Float](o opt.Options) string {
@@ -163,10 +165,13 @@ func (ph *persistentHNSW[T]) searchPersistentLayer(
 		index:       entry,
 		filteredOut: entryIsFilteredOut,
 	}
+
 	r.setFirstPathNode(best)
-	//create set using map to append to on future visited nodes
-	ph.visitedUids = append(ph.visitedUids, best.index)
 	candidateHeap := *buildPersistentHeapByInit([]minPersistentHeapElement[T]{best})
+
+	var allLayerEdges [][]uint64
+
+	//create set using map to append to on future visited nodes
 	for candidateHeap.Len() != 0 {
 		currCandidate := candidateHeap.Pop().(minPersistentHeapElement[T])
 		if r.numNeighbors() < expectedNeighbors &&
@@ -181,7 +186,6 @@ func (ph *persistentHNSW[T]) searchPersistentLayer(
 			// guarantees of getting best results.
 			break
 		}
-		var allLayerEdges [][]uint64
 
 		found, err := ph.fillNeighborEdges(currCandidate.index, c, &allLayerEdges)
 		if err != nil {
@@ -190,45 +194,54 @@ func (ph *persistentHNSW[T]) searchPersistentLayer(
 		if !found {
 			continue
 		}
-		currLayerEdges := allLayerEdges[level]
-		currLayerEdges = diff(currLayerEdges, ph.visitedUids)
 		var eVec []T
-		for i := range currLayerEdges {
+		improved := false
+		for _, currUid := range allLayerEdges[level] {
+			if ph.visitedUids.Test(uint(currUid)) {
+				continue
+			}
+			if r.indexVisited(currUid) {
+				continue
+			}
 			// iterate over candidate's neighbors distances to get
 			// best ones
-			_ = ph.getVecFromUid(currLayerEdges[i], c, &eVec)
+			_ = ph.getVecFromUid(currUid, c, &eVec)
 			// intentionally ignoring error -- we catch it
 			// indirectly via eVec == nil check.
 			if len(eVec) == 0 {
 				continue
 			}
 			currDist, err := ph.simType.distanceScore(eVec, query, ph.floatBits)
-			ph.visitedUids = append(ph.visitedUids, currLayerEdges[i])
-			r.incrementDistanceComputations()
 			if err != nil {
 				return ph.emptySearchResultWithError(err)
 			}
-			filteredOut := !filter(query, eVec, currLayerEdges[i])
+			filteredOut := !filter(query, eVec, currUid)
 			currElement := initPersistentHeapElement(
-				currDist, currLayerEdges[i], filteredOut)
-			nodeVisited := r.nodeVisited(*currElement)
-			if !nodeVisited {
-				r.addToVisited(*currElement)
+				currDist, currUid, filteredOut)
+			r.addToVisited(*currElement)
+			r.incrementDistanceComputations()
+			ph.visitedUids.Set(uint(currUid))
 
-				// If we have not yet found k candidates, we can consider
-				// any candidate. Otherwise, only consider those that
-				// are better than our current k nearest neighbors.
-				// Note that the "numNeighbors" function is a bit tricky:
-				// If we previously added to the heap M elements that should
-				// be filtered out, we ignore M elements in the numNeighbors
-				// check! In this way, we can make sure to allow in up to
-				// expectedNeighbors "unfiltered" elements.
-				if ph.simType.isBetterScore(currDist, r.lastNeighborScore()) ||
-					r.numNeighbors() < expectedNeighbors {
-					candidateHeap.Push(*currElement)
-					r.addPathNode(*currElement, ph.simType, expectedNeighbors)
+			// If we have not yet found k candidates, we can consider
+			// any candidate. Otherwise, only consider those that
+			// are better than our current k nearest neighbors.
+			// Note that the "numNeighbors" function is a bit tricky:
+			// If we previously added to the heap M elements that should
+			// be filtered out, we ignore M elements in the numNeighbors
+			// check! In this way, we can make sure to allow in up to
+			// expectedNeighbors "unfiltered" elements.
+			if r.numNeighbors() < expectedNeighbors || ph.simType.isBetterScore(currDist, r.lastNeighborScore()) {
+				if candidateHeap.Len() > expectedNeighbors {
+					candidateHeap.PopLast()
 				}
+				candidateHeap.Push(*currElement)
+				r.addPathNode(*currElement, ph.simType, expectedNeighbors)
+				improved = true
 			}
+		}
+
+		if !improved && r.numNeighbors() >= expectedNeighbors {
+			break
 		}
 	}
 	return r, nil
@@ -289,10 +302,10 @@ func (ph *persistentHNSW[T]) calculateNewEntryVec(
 	})
 
 	if err != nil {
-		return 0, errors.Wrapf(err, "HNSW tree has no elements")
+		return 0, errors.Wrapf(err, EmptyHNSWTreeError)
 	}
 	if itr == 0 {
-		return itr, errors.New("HNSW tree has no elements")
+		return itr, errors.New(EmptyHNSWTreeError)
 	}
 
 	return itr, nil
@@ -335,6 +348,8 @@ func (ph *persistentHNSW[T]) SearchWithPath(
 	start := time.Now().UnixMilli()
 	r = index.NewSearchPathResult()
 
+	ph.visitedUids.ClearAll()
+
 	// 0-profile_vector_entry
 	var startVec []T
 	entry, err := ph.PickStartNode(ctx, c, &startVec)
@@ -356,6 +371,7 @@ func (ph *persistentHNSW[T]) SearchWithPath(
 		}
 		layerResult.updateFinalMetrics(r)
 		entry = layerResult.bestNeighbor().index
+
 		layerResult.updateFinalPath(r)
 		err = ph.getVecFromUid(entry, c, &startVec)
 		if err != nil {
@@ -417,6 +433,8 @@ func (ph *persistentHNSW[T]) insertHelper(ctx context.Context, tc *TxnCache,
 	inLevel := getInsertLayer(ph.maxLevels) // calculate layer to insert node at (randomized every time)
 	var layerErr error
 
+	ph.visitedUids.ClearAll()
+
 	for level := 0; level < inLevel; level++ {
 		// perform insertion for layers [level, max_level) only, when level < inLevel just find better start
 		err := ph.getVecFromUid(entry, tc, &startVec)
@@ -424,7 +442,7 @@ func (ph *persistentHNSW[T]) insertHelper(ctx context.Context, tc *TxnCache,
 			return []minPersistentHeapElement[T]{}, []*index.KeyValue{}, err
 		}
 		layerResult, err := ph.searchPersistentLayer(tc, level, entry, startVec,
-			inVec, false, 1, index.AcceptAll[T])
+			inVec, false, ph.efSearch, index.AcceptAll[T])
 		if err != nil {
 			return []minPersistentHeapElement[T]{}, []*index.KeyValue{}, err
 		}
@@ -451,10 +469,14 @@ func (ph *persistentHNSW[T]) insertHelper(ctx context.Context, tc *TxnCache,
 			return []minPersistentHeapElement[T]{}, []*index.KeyValue{}, layerErr
 		}
 
+		entry = layerResult.bestNeighbor().index
+
 		nns := layerResult.neighbors
 		for i := 0; i < len(nns); i++ {
 			nnUidArray = append(nnUidArray, nns[i].index)
-			inboundEdgesAllLayersMap[nns[i].index] = make([][]uint64, ph.maxLevels)
+			if inboundEdgesAllLayersMap[nns[i].index] == nil {
+				inboundEdgesAllLayersMap[nns[i].index] = make([][]uint64, ph.maxLevels)
+			}
 			inboundEdgesAllLayersMap[nns[i].index][level] =
 				append(inboundEdgesAllLayersMap[nns[i].index][level], inUuid)
 			// add nn to outboundEdges.

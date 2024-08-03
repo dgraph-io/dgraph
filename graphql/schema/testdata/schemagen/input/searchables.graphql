@@ -1,7 +1,7 @@
 type Post {
 	postID: ID!
 	title: String! @search(by: [term])
-	titleByEverything: String! @search(by: [term, fulltext, trigram, hash])
+	titleByEverything: String! @search(by: ["term", "fulltext", "trigram", "hash"])
 	text: String @search(by: [fulltext])
 
 	tags: [String] @search(by: [trigram])
@@ -26,8 +26,8 @@ type Post {
 	postTypeRegexp: PostType @search(by: [regexp])
 	postTypeExact: [PostType] @search(by: [exact])
 	postTypeHash: PostType @search(by: [hash])
-	postTypeRegexpExact: PostType @search(by: [exact, regexp])
-	postTypeHashRegexp: PostType @search(by: [hash, regexp])
+	postTypeRegexpExact: PostType @search(by: ["exact", "regexp"])
+	postTypeHashRegexp: PostType @search(by: ["hash", "regexp"])
 	postTypeNone: PostType @search(by: [])
 }
 

@@ -27,7 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/v230/protos/api"
-	"github.com/dgraph-io/dgraph/dgraphtest"
+	"github.com/dgraph-io/dgraph/dgraphapi"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -46,9 +46,9 @@ func (asuite *AclTestSuite) TestPasswordReturn() {
 	t := asuite.T()
 	hc, err := asuite.dc.HTTPClient()
 	require.NoError(t, err)
-	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
-		dgraphtest.DefaultPassword, x.GalaxyNamespace))
-	query := dgraphtest.GraphQLParams{
+	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
+		dgraphapi.DefaultPassword, x.GalaxyNamespace))
+	query := dgraphapi.GraphQLParams{
 		Query: `
 	query {
 		getCurrentUser {
@@ -66,8 +66,8 @@ func (asuite *AclTestSuite) TestHealthForAcl() {
 	t := asuite.T()
 	hc, err := asuite.dc.HTTPClient()
 	require.NoError(t, err)
-	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
-		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
+		dgraphapi.DefaultPassword, x.GalaxyNamespace))
 
 	resetUser(t, hc)
 	require.NoError(t, hc.LoginIntoNamespace(userid, userpassword, x.GalaxyNamespace))
@@ -77,8 +77,8 @@ func (asuite *AclTestSuite) TestHealthForAcl() {
 	assertNonGuardianFailure(t, "health", false, gqlResp, err)
 
 	// assert data for guardians
-	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
-		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
+		dgraphapi.DefaultPassword, x.GalaxyNamespace))
 
 	resp, err := hc.HealthForInstance()
 	require.NoError(t, err, "health request failed")
@@ -336,11 +336,11 @@ func (asuite *AclTestSuite) TestGuardianOnlyAccessForAdminEndpoints() {
 
 	for _, tcase := range tcases {
 		t.Run(tcase.name, func(t *testing.T) {
-			params := dgraphtest.GraphQLParams{Query: tcase.query}
+			params := dgraphapi.GraphQLParams{Query: tcase.query}
 			hc, err := asuite.dc.HTTPClient()
 			require.NoError(t, err)
-			require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
-				dgraphtest.DefaultPassword, x.GalaxyNamespace))
+			require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
+				dgraphapi.DefaultPassword, x.GalaxyNamespace))
 
 			resetUser(t, hc)
 			require.NoError(t, hc.LoginIntoNamespace(userid, userpassword, x.GalaxyNamespace))
@@ -351,8 +351,8 @@ func (asuite *AclTestSuite) TestGuardianOnlyAccessForAdminEndpoints() {
 
 			// for guardians, assert non-ACL error or success
 			if tcase.testGuardianAccess {
-				require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
-					dgraphtest.DefaultPassword, x.GalaxyNamespace))
+				require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
+					dgraphapi.DefaultPassword, x.GalaxyNamespace))
 
 				resp, err := hc.RunGraphqlQuery(params, true)
 				if tcase.guardianErr == "" {
@@ -378,13 +378,13 @@ func (asuite *AclTestSuite) TestFailedLogin() {
 	gc, cleanup, err := asuite.dc.Client()
 	require.NoError(t, err)
 	defer cleanup()
-	require.NoError(t, gc.LoginIntoNamespace(ctx, dgraphtest.DefaultUser,
-		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	require.NoError(t, gc.LoginIntoNamespace(ctx, dgraphapi.DefaultUser,
+		dgraphapi.DefaultPassword, x.GalaxyNamespace))
 
 	hc, err := asuite.dc.HTTPClient()
 	require.NoError(t, err)
-	require.NoError(t, hc.LoginIntoNamespace(dgraphtest.DefaultUser,
-		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
+		dgraphapi.DefaultPassword, x.GalaxyNamespace))
 
 	require.NoError(t, gc.DropAll())
 
@@ -410,8 +410,9 @@ func (asuite *AclTestSuite) TestWrongPermission() {
 	gc, cleanup, err := asuite.dc.Client()
 	require.NoError(t, err)
 	defer cleanup()
-	require.NoError(t, gc.LoginIntoNamespace(ctx, dgraphtest.DefaultUser,
-		dgraphtest.DefaultPassword, x.GalaxyNamespace))
+	require.NoError(t, gc.LoginIntoNamespace(ctx, dgraphapi.DefaultUser,
+		dgraphapi.DefaultPassword, x.GalaxyNamespace))
+	require.NoError(t, gc.DropAll())
 
 	mu := &api.Mutation{SetNquads: []byte(`
 	_:dev <dgraph.type> "dgraph.type.Group" .
@@ -436,4 +437,52 @@ func (asuite *AclTestSuite) TestWrongPermission() {
 
 	require.Error(t, err, "Setting permission to -1 should have returned error")
 	require.Contains(t, err.Error(), "Value for this predicate should be between 0 and 7")
+}
+
+func (asuite *AclTestSuite) TestACLNamespaceEdge() {
+	t := asuite.T()
+	gc, cleanup, err := asuite.dc.Client()
+	require.NoError(t, err)
+	defer cleanup()
+	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
+		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace))
+
+	json := `
+	{
+    "set": [
+        {
+            "dgraph.xid": "groot",
+            "dgraph.password": "password",
+            "dgraph.type": "dgraph.type.User",
+            "dgraph.user.group": {
+                "dgraph.xid": "guardians",
+                "dgraph.type": "dgraph.type.Group",
+                "namespace": 1
+            },
+            "namespace": 1
+        }
+    ]
+}`
+
+	mu := &api.Mutation{SetJson: []byte(json), CommitNow: true}
+	_, err = gc.Mutate(mu)
+	require.Error(t, err)
+	require.ErrorContains(t, err, "could not insert duplicate value") // Could be gaurdian or groot
+}
+
+func (asuite *AclTestSuite) TestACLDuplicateGrootUser() {
+	t := asuite.T()
+	gc, cleanup, err := asuite.dc.Client()
+	require.NoError(t, err)
+	defer cleanup()
+	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
+		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace))
+
+	rdfs := `_:a <dgraph.xid> "groot" .
+	         _:a <dgraph.type> "dgraph.type.User"  .`
+
+	mu := &api.Mutation{SetNquads: []byte(rdfs), CommitNow: true}
+	_, err = gc.Mutate(mu)
+	require.Error(t, err)
+	require.ErrorContains(t, err, "could not insert duplicate value [groot] for predicate [dgraph.xid]")
 }

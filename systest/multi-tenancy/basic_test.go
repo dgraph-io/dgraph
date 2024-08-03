@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/v230/protos/api"
+	"github.com/dgraph-io/dgraph/dgraphapi"
 	"github.com/dgraph-io/dgraph/dgraphtest"
 	"github.com/dgraph-io/dgraph/ee/acl"
 	"github.com/dgraph-io/dgraph/x"
@@ -42,7 +43,7 @@ func (msuite *MultitenancyTestSuite) TestAclBasic() {
 	// Galaxy Login
 	hcli, err := msuite.dc.HTTPClient()
 	require.NoError(t, err)
-	err = hcli.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace)
+	err = hcli.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace)
 	require.NotNil(t, hcli.AccessJwt, "galaxy token is nil")
 	require.NoError(t, err, "login with namespace failed")
 
@@ -56,7 +57,7 @@ func (msuite *MultitenancyTestSuite) TestAclBasic() {
 	defer cleanup()
 	require.NoError(t, err)
 	require.NoError(t, gcli.LoginIntoNamespace(context.Background(),
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, ns))
+		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, ns))
 	msuite.AddData(gcli)
 
 	// Upgrade
@@ -66,7 +67,7 @@ func (msuite *MultitenancyTestSuite) TestAclBasic() {
 	defer cleanup()
 	require.NoError(t, err)
 	require.NoError(t, gcli.LoginIntoNamespace(context.Background(),
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, ns))
+		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, ns))
 
 	query := `{
 		me(func: has(name)) {
@@ -76,7 +77,7 @@ func (msuite *MultitenancyTestSuite) TestAclBasic() {
 	}`
 	resp, err := gcli.Query(query)
 	require.NoError(t, err)
-	require.NoError(t, dgraphtest.CompareJSON(
+	require.NoError(t, dgraphapi.CompareJSON(
 		`{"me": [{"name":"guy1","nickname":"RG"},{"name": "guy2", "nickname":"RG2"}]}`, string(resp.Json)))
 
 	// groot of namespace 0 should not see the data of namespace-1
@@ -84,15 +85,15 @@ func (msuite *MultitenancyTestSuite) TestAclBasic() {
 	defer cleanup()
 	require.NoError(t, err)
 	require.NoError(t, gcli.LoginIntoNamespace(context.Background(),
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace))
 	resp, err = gcli.Query(query)
 	require.NoError(t, err)
-	require.NoError(t, dgraphtest.CompareJSON(`{"me": []}`, string(resp.Json)))
+	require.NoError(t, dgraphapi.CompareJSON(`{"me": []}`, string(resp.Json)))
 
 	// Login to namespace 1 via groot and create new user alice.
 	hcli, err = msuite.dc.HTTPClient()
 	require.NoError(t, err)
-	err = hcli.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, ns)
+	err = hcli.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, ns)
 	require.NotNil(t, hcli.AccessJwt, "token for the namespace is nil")
 	require.NoErrorf(t, err, "login with namespace %d failed", ns)
 	_, err = hcli.CreateUser("alice", "newpassword")
@@ -105,21 +106,21 @@ func (msuite *MultitenancyTestSuite) TestAclBasic() {
 	require.NoError(t, gcli.LoginIntoNamespace(context.Background(), "alice", "newpassword", ns))
 	resp, err = gcli.Query(query)
 	require.NoError(t, err)
-	require.NoError(t, dgraphtest.CompareJSON(`{}`, string(resp.Json)))
+	require.NoError(t, dgraphapi.CompareJSON(`{}`, string(resp.Json)))
 
 	// Create a new group, add alice to that group and give read access of <name> to dev group.
 	_, err = hcli.CreateGroup("dev")
 	require.NoError(t, err)
 	require.NoError(t, hcli.AddUserToGroup("alice", "dev"))
 	require.NoError(t, hcli.AddRulesToGroup("dev",
-		[]dgraphtest.AclRule{{Predicate: "name", Permission: acl.Read.Code}}, true))
+		[]dgraphapi.AclRule{{Predicate: "name", Permission: acl.Read.Code}}, true))
 
 	// Now alice should see the name predicate but not nickname.
 	gcli, cleanup, err = msuite.dc.Client()
 	defer cleanup()
 	require.NoError(t, err)
 	require.NoError(t, gcli.LoginIntoNamespace(context.Background(), "alice", "newpassword", ns))
-	dgraphtest.PollTillPassOrTimeout(gcli, query, `{"me": [{"name":"guy1"},{"name": "guy2"}]}`, aclQueryTimeout)
+	dgraphapi.PollTillPassOrTimeout(gcli, query, `{"me": [{"name":"guy1"},{"name": "guy2"}]}`, aclQueryTimeout)
 }
 
 func (msuite *MultitenancyTestSuite) TestNameSpaceLimitFlag() {
@@ -128,7 +129,7 @@ func (msuite *MultitenancyTestSuite) TestNameSpaceLimitFlag() {
 	// Galaxy login
 	hcli, err := msuite.dc.HTTPClient()
 	require.NoError(t, err)
-	err = hcli.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace)
+	err = hcli.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace)
 	require.NotNil(t, hcli.AccessJwt, "galaxy token is nil")
 	require.NoErrorf(t, err, "login as groot into namespace %d failed", x.GalaxyNamespace)
 
@@ -144,7 +145,7 @@ func (msuite *MultitenancyTestSuite) TestNameSpaceLimitFlag() {
 	defer cleanup()
 	require.NoError(t, e)
 	require.NoError(t, gcli.LoginIntoNamespace(context.Background(),
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, ns))
+		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, ns))
 	require.NoError(t, gcli.SetupSchema(`name: string .`))
 
 	// trying to load more triplets than allowed,It should return error.
@@ -167,7 +168,7 @@ func (msuite *MultitenancyTestSuite) TestPersistentQuery() {
 	// Galaxy Login
 	hcli1, err := msuite.dc.HTTPClient()
 	require.NoError(t, err)
-	err = hcli1.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace)
+	err = hcli1.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace)
 	require.NotNil(t, hcli1.AccessJwt, "galaxy token is nil")
 	require.NoErrorf(t, err, "login as groot into namespace %d failed", x.GalaxyNamespace)
 
@@ -181,20 +182,20 @@ func (msuite *MultitenancyTestSuite) TestPersistentQuery() {
 	// Galaxy Login
 	hcli1, err = msuite.dc.HTTPClient()
 	require.NoError(t, err)
-	err = hcli1.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace)
+	err = hcli1.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace)
 	require.NotNil(t, hcli1.AccessJwt, "galaxy token is nil")
 	require.NoErrorf(t, err, "login as groot into namespace %d failed", x.GalaxyNamespace)
 
 	// Log into ns
 	hcli2, err := msuite.dc.HTTPClient()
 	require.NoError(t, err)
-	err = hcli2.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, ns)
+	err = hcli2.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, ns)
 	require.NotNil(t, hcli2.AccessJwt, "token is nil")
 	require.NoErrorf(t, err, "login as groot into namespace %d failed", ns)
 
 	sch := `type Product {
 		productID: ID!
-		name: String @search(by: [term])
+		name: String @search(by: ["term"])
 	}`
 	require.NoError(t, hcli1.UpdateGQLSchema(sch))
 	require.NoError(t, hcli2.UpdateGQLSchema(sch))
@@ -218,7 +219,7 @@ func (msuite *MultitenancyTestSuite) TestPersistentQuery() {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "PersistedQueryNotFound")
 
-	hcli3 := &dgraphtest.HTTPClient{HttpToken: &dgraphtest.HttpToken{AccessJwt: ""}}
+	hcli3 := &dgraphapi.HTTPClient{HttpToken: &dgraphapi.HttpToken{AccessJwt: ""}}
 	_, err = hcli3.PostPersistentQuery("", sha1)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "unsupported protocol scheme")
@@ -230,7 +231,7 @@ func (msuite *MultitenancyTestSuite) TestTokenExpired() {
 	// Galaxy Login
 	hcli, err := msuite.dc.HTTPClient()
 	require.NoError(t, err)
-	err = hcli.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace)
+	err = hcli.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace)
 	require.NotNil(t, hcli.HttpToken, "galaxy token is nil")
 	require.NoErrorf(t, err, "login as groot into namespace %d failed", x.GalaxyNamespace)
 
@@ -244,7 +245,7 @@ func (msuite *MultitenancyTestSuite) TestTokenExpired() {
 	// ns Login
 	hcli, err = msuite.dc.HTTPClient()
 	require.NoError(t, err)
-	err = hcli.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, ns)
+	err = hcli.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, ns)
 	require.NotNil(t, hcli.HttpToken, "token is nil")
 	require.NoErrorf(t, err, "login as groot into namespace %d failed", ns)
 
@@ -266,7 +267,7 @@ func (msuite *MultitenancyTestSuite) TestTwoPermissionSetsInNameSpacesWithAcl() 
 	// Galaxy Login
 	ghcli, err := msuite.dc.HTTPClient()
 	require.NoError(t, err)
-	err = ghcli.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace)
+	err = ghcli.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace)
 	require.NotNil(t, ghcli, "galaxy token is nil")
 	require.NoErrorf(t, err, "login as groot into namespace %d failed", x.GalaxyNamespace)
 
@@ -284,7 +285,7 @@ func (msuite *MultitenancyTestSuite) TestTwoPermissionSetsInNameSpacesWithAcl() 
 	defer cleanup()
 	require.NoError(t, e)
 	require.NoError(t, gcli.LoginIntoNamespace(context.Background(),
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, ns1))
+		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, ns1))
 	msuite.AddData(gcli)
 
 	user1, user2 := "alice", "bob"
@@ -293,7 +294,7 @@ func (msuite *MultitenancyTestSuite) TestTwoPermissionSetsInNameSpacesWithAcl() 
 	// Create user alice in ns1
 	hcli, err := msuite.dc.HTTPClient()
 	require.NoError(t, err)
-	err = hcli.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, ns1)
+	err = hcli.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, ns1)
 	require.NoErrorf(t, err, "login as groot into namespace %d failed", ns1)
 	_, err = hcli.CreateUser(user1, user1passwd)
 	require.NoError(t, err)
@@ -309,13 +310,13 @@ func (msuite *MultitenancyTestSuite) TestTwoPermissionSetsInNameSpacesWithAcl() 
 	gcli, cleanup, err = msuite.dc.Client()
 	defer cleanup()
 	require.NoError(t, err)
-	require.NoError(t, gcli.LoginIntoNamespace(context.Background(), dgraphtest.DefaultUser, dgraphtest.DefaultPassword, ns2))
+	require.NoError(t, gcli.LoginIntoNamespace(context.Background(), dgraphapi.DefaultUser, dgraphapi.DefaultPassword, ns2))
 	msuite.AddData(gcli)
 
 	// Create user bob
 	hcli, err = msuite.dc.HTTPClient()
 	require.NoError(t, err)
-	err = hcli.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, ns2)
+	err = hcli.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, ns2)
 	require.NoErrorf(t, err, "login with namespace %d failed", ns2)
 	_, err = hcli.CreateUser(user2, user2passwd)
 	require.NoError(t, err)
@@ -331,14 +332,14 @@ func (msuite *MultitenancyTestSuite) TestTwoPermissionSetsInNameSpacesWithAcl() 
 	defer cleanup()
 	require.NoError(t, err)
 	require.NoError(t, gcli.LoginIntoNamespace(context.Background(), user1, user1passwd, ns1))
-	dgraphtest.PollTillPassOrTimeout(gcli, query, `{"me": [{"name":"guy2"}, {"name":"guy1"}]}`, aclQueryTimeout)
+	dgraphapi.PollTillPassOrTimeout(gcli, query, `{"me": [{"name":"guy2"}, {"name":"guy1"}]}`, aclQueryTimeout)
 
 	// Query via bob and check result
 	gcli, cleanup, err = msuite.dc.Client()
 	defer cleanup()
 	require.NoError(t, err)
 	require.NoError(t, gcli.LoginIntoNamespace(context.Background(), user2, user2passwd, ns2))
-	require.NoError(t, dgraphtest.PollTillPassOrTimeout(gcli, query, `{}`, aclQueryTimeout))
+	require.NoError(t, dgraphapi.PollTillPassOrTimeout(gcli, query, `{}`, aclQueryTimeout))
 
 	// Query namespace-1 via alice and check result to ensure it still works
 	gcli, cleanup, err = msuite.dc.Client()
@@ -347,22 +348,22 @@ func (msuite *MultitenancyTestSuite) TestTwoPermissionSetsInNameSpacesWithAcl() 
 	require.NoError(t, gcli.LoginIntoNamespace(context.Background(), user1, user1passwd, ns1))
 	resp, err := gcli.Query(query)
 	require.NoError(t, err)
-	require.NoError(t, dgraphtest.CompareJSON(`{"me": [{"name":"guy2"}, {"name":"guy1"}]}`, string(resp.Json)))
+	require.NoError(t, dgraphapi.CompareJSON(`{"me": [{"name":"guy2"}, {"name":"guy1"}]}`, string(resp.Json)))
 
 	// Change permissions in namespace-2
 	hcli, err = msuite.dc.HTTPClient()
 	require.NoError(t, err)
-	err = hcli.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, ns2)
+	err = hcli.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, ns2)
 	require.NoErrorf(t, err, "login as groot into namespace %d failed", ns2)
 	require.NoError(t, hcli.AddRulesToGroup("dev",
-		[]dgraphtest.AclRule{{Predicate: "name", Permission: acl.Read.Code}}, false))
+		[]dgraphapi.AclRule{{Predicate: "name", Permission: acl.Read.Code}}, false))
 
 	// Query namespace-2
 	gcli, cleanup, err = msuite.dc.Client()
 	defer cleanup()
 	require.NoError(t, err)
 	require.NoError(t, gcli.LoginIntoNamespace(context.Background(), user2, user2passwd, ns2))
-	require.NoError(t, dgraphtest.PollTillPassOrTimeout(gcli, query,
+	require.NoError(t, dgraphapi.PollTillPassOrTimeout(gcli, query,
 		`{"me": [{"name":"guy2", "nickname": "RG2"}, {"name":"guy1", "nickname": "RG"}]}`, aclQueryTimeout))
 
 	// Query namespace-1
@@ -372,7 +373,7 @@ func (msuite *MultitenancyTestSuite) TestTwoPermissionSetsInNameSpacesWithAcl() 
 	require.NoError(t, gcli.LoginIntoNamespace(context.Background(), user1, user1passwd, ns1))
 	resp, err = gcli.Query(query)
 	require.NoError(t, err)
-	require.NoError(t, dgraphtest.CompareJSON(`{"me": [{"name":"guy2"}, {"name":"guy1"}]}`, string(resp.Json)))
+	require.NoError(t, dgraphapi.CompareJSON(`{"me": [{"name":"guy2"}, {"name":"guy1"}]}`, string(resp.Json)))
 }
 
 func (msuite *MultitenancyTestSuite) TestCreateNamespace() {
@@ -381,7 +382,7 @@ func (msuite *MultitenancyTestSuite) TestCreateNamespace() {
 	// Galaxy Login
 	hcli, err := msuite.dc.HTTPClient()
 	require.NoError(t, err)
-	err = hcli.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace)
+	err = hcli.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace)
 	require.NotNil(t, hcli.AccessJwt, "Galaxy token is nil")
 	require.NoErrorf(t, err, "login failed")
 
@@ -395,7 +396,7 @@ func (msuite *MultitenancyTestSuite) TestCreateNamespace() {
 	// Log into the namespace as groot
 	hcli, err = msuite.dc.HTTPClient()
 	require.NoError(t, err)
-	err = hcli.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, ns)
+	err = hcli.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, ns)
 	require.NotNil(t, hcli.AccessJwt, "namespace token is nil")
 	require.NoErrorf(t, err, "login with namespace %d failed", ns)
 
@@ -411,7 +412,7 @@ func (msuite *MultitenancyTestSuite) TestResetPassword() {
 	// Galaxy Login
 	hcli1, err := msuite.dc.HTTPClient()
 	require.NoError(t, err)
-	err = hcli1.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace)
+	err = hcli1.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace)
 	require.NotNil(t, hcli1.HttpToken, "Galaxy token is nil")
 	require.NoErrorf(t, err, "login failed")
 
@@ -420,7 +421,7 @@ func (msuite *MultitenancyTestSuite) TestResetPassword() {
 	require.NoError(t, err)
 
 	// Reset Password
-	_, err = hcli1.ResetPassword(dgraphtest.DefaultUser, "newpassword", ns)
+	_, err = hcli1.ResetPassword(dgraphapi.DefaultUser, "newpassword", ns)
 	require.NoError(t, err)
 
 	// Upgrade
@@ -429,14 +430,14 @@ func (msuite *MultitenancyTestSuite) TestResetPassword() {
 	// Try and Fail with old password for groot
 	hcli2, err := msuite.dc.HTTPClient()
 	require.NoError(t, err)
-	err = hcli2.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, ns)
+	err = hcli2.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, ns)
 	require.Error(t, err, "expected error because incorrect login")
 	require.Empty(t, hcli2.AccessJwt, "nil token because incorrect login")
 
 	// Try and succeed with new password for groot
 	hcli3, err := msuite.dc.HTTPClient()
 	require.NoError(t, err)
-	err = hcli3.LoginIntoNamespace(dgraphtest.DefaultUser, "newpassword", ns)
+	err = hcli3.LoginIntoNamespace(dgraphapi.DefaultUser, "newpassword", ns)
 	require.NoError(t, err, "login failed")
 	require.Equal(t, hcli3.Password, "newpassword", "new password matches the reset password")
 }
@@ -447,15 +448,15 @@ func (msuite *MultitenancyTestSuite) TestDeleteNamespace() {
 	// Galaxy Login
 	hcli, err := msuite.dc.HTTPClient()
 	require.NoError(t, err)
-	err = hcli.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace)
+	err = hcli.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace)
 	require.NoErrorf(t, err, "login failed")
 
-	dg := make(map[uint64]*dgraphtest.GrpcClient)
+	dg := make(map[uint64]*dgraphapi.GrpcClient)
 	gcli, cleanup, e := msuite.dc.Client()
 	defer cleanup()
 	require.NoError(t, e)
 	require.NoError(t, gcli.LoginIntoNamespace(context.Background(),
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace))
 	dg[x.GalaxyNamespace] = gcli
 
 	// Create a new namespace
@@ -467,7 +468,7 @@ func (msuite *MultitenancyTestSuite) TestDeleteNamespace() {
 	defer cleanup()
 	require.NoError(t, err)
 	require.NoError(t, gcli.LoginIntoNamespace(context.Background(),
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, ns))
+		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, ns))
 	dg[ns] = gcli
 
 	addData := func(ns uint64) error {
@@ -490,7 +491,7 @@ func (msuite *MultitenancyTestSuite) TestDeleteNamespace() {
 	`
 		resp, err := dg[ns].Query(query)
 		require.NoError(t, err)
-		require.NoError(t, dgraphtest.CompareJSON(expected, string(resp.Json)))
+		require.NoError(t, dgraphapi.CompareJSON(expected, string(resp.Json)))
 	}
 
 	require.NoError(t, addData(x.GalaxyNamespace))
@@ -501,13 +502,13 @@ func (msuite *MultitenancyTestSuite) TestDeleteNamespace() {
 
 	// Upgrade
 	msuite.Upgrade()
-	dg = make(map[uint64]*dgraphtest.GrpcClient)
+	dg = make(map[uint64]*dgraphapi.GrpcClient)
 
 	gcli, cleanup, err = msuite.dc.Client()
 	defer cleanup()
 	require.NoError(t, err)
 	require.NoError(t, gcli.LoginIntoNamespace(context.Background(),
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace))
 	dg[x.GalaxyNamespace] = gcli
 
 	// Log into namespace as groot
@@ -515,13 +516,13 @@ func (msuite *MultitenancyTestSuite) TestDeleteNamespace() {
 	defer cleanup()
 	require.NoError(t, err)
 	require.NoError(t, gcli.LoginIntoNamespace(context.Background(),
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, ns))
+		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, ns))
 	dg[ns] = gcli
 
 	// Galaxy Login
 	hcli, err = msuite.dc.HTTPClient()
 	require.NoError(t, err)
-	err = hcli.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace)
+	err = hcli.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace)
 	require.NoError(t, err, "login failed")
 
 	// Delete namespace
@@ -554,7 +555,7 @@ func (msuite *MultitenancyTestSuite) TestDeleteNamespace() {
 	}
 }
 
-func (msuite *MultitenancyTestSuite) AddData(gcli *dgraphtest.GrpcClient) {
+func (msuite *MultitenancyTestSuite) AddData(gcli *dgraphapi.GrpcClient) {
 	rdfs := `
 		_:a <name> "guy1" .
 		_:a <nickname> "RG" .
@@ -566,7 +567,7 @@ func (msuite *MultitenancyTestSuite) AddData(gcli *dgraphtest.GrpcClient) {
 	require.NoError(msuite.T(), err)
 }
 
-func AddNumberOfTriples(gcli *dgraphtest.GrpcClient, start, end int) (*api.Response, error) {
+func AddNumberOfTriples(gcli *dgraphapi.GrpcClient, start, end int) (*api.Response, error) {
 	triples := strings.Builder{}
 	for i := start; i <= end; i++ {
 		triples.WriteString(fmt.Sprintf("_:person%[1]v <name> \"person%[1]v\" .\n", i))
@@ -579,12 +580,12 @@ func (msuite *MultitenancyTestSuite) createGroupAndSetPermissions(namespace uint
 	t := msuite.T()
 	hcli, err := msuite.dc.HTTPClient()
 	require.NoError(t, err)
-	require.NoError(t, hcli.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, namespace))
+	require.NoError(t, hcli.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, namespace))
 	require.NotNil(t, hcli.AccessJwt, "namespace token is nil")
 	require.NoErrorf(t, err, "login as groot into namespace %d failed", namespace)
 	_, err = hcli.CreateGroup(group)
 	require.NoError(t, err)
 	require.NoError(t, hcli.AddUserToGroup(user, group))
 	require.NoError(t, hcli.AddRulesToGroup(group,
-		[]dgraphtest.AclRule{{Predicate: predicate, Permission: acl.Read.Code}}, true))
+		[]dgraphapi.AclRule{{Predicate: predicate, Permission: acl.Read.Code}}, true))
 }

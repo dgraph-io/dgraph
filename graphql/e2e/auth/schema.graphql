@@ -568,7 +568,7 @@ type Contact @auth(
     query: { rule: "{$ContactRole: { eq: \"ADMINISTRATOR\"}}" }
 ) {
     id: ID!
-    nickName: String @search(by: [exact, term, fulltext, regexp])
+    nickName: String @search(by: ["exact", "term", "fulltext", "regexp"])
     adminTasks: [AdminTask] @hasInverse(field: forContact)
     tasks: [Task] @hasInverse(field: forContact)
 }
@@ -577,14 +577,14 @@ type AdminTask @auth(
     query: { rule: "{$TaskRole: { eq: \"ADMINISTRATOR\"}}" }
 ) {
     id: ID!
-    name: String @search(by: [exact, term, fulltext, regexp])
+    name: String @search(by: ["exact", "term", "fulltext", "regexp"])
     occurrences: [TaskOccurrence] @hasInverse(field: adminTask)
     forContact: Contact @hasInverse(field: adminTasks)
 }
 
 type Task {
     id: ID!
-    name: String @search(by: [exact, term, fulltext, regexp])
+    name: String @search(by: ["exact", "term", "fulltext", "regexp"])
     occurrences: [TaskOccurrence] @hasInverse(field: task)
     forContact: Contact @hasInverse(field: tasks)
 }
@@ -608,7 +608,7 @@ type TaskOccurrence @auth(
     task: Task @hasInverse(field: occurrences)
     adminTask: AdminTask @hasInverse(field: occurrences)
     isPublic: Boolean @search
-    role: String @search(by: [exact, term, fulltext, regexp])
+    role: String @search(by: ["exact", "term", "fulltext", "regexp"])
 }
 
 type Author {

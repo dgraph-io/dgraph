@@ -77,7 +77,7 @@ invalid_schemas:
     name: "Enum indexes clash trigram and regexp"
     input: |
       type T {
-        f: E @search(by: [trigram, regexp])
+        f: E @search(by: ["trigram", "regexp"])
       }
       enum E {
         A
@@ -91,13 +91,24 @@ invalid_schemas:
     name: "Enum indexes clash hash and exact"
     input: |
       type T {
-        f: E @search(by: [hash, exact])
+        f: E @search(by: ["hash", "exact"])
       }
       enum E {
         A
       }
     errlist: [
       {"message": "Type T; Field f: the arguments 'hash' and 'exact' can't be used together as arguments to @search.", "locations": [{"line": 2, "column": 9}]}
+    ]
+
+  -
+    name: "HNSW index options malformed"
+    input: |
+      type T {
+        f: [Float!] @embedding @search(by: ["hnsw(metric:dotproduct)"])
+      }
+    errlist: [
+      {"message": "Type T; Field f: has the @search directive but the argument 'hnsw(metric:dotproduct)' with search options is malformed. Search options are comma-separated key-value pairs in YAML format => <optionName><COLON><SPACE><VALUE>",
+      "locations": [{"line": 2, "column": 27}]}
     ]
 
   -
@@ -466,7 +477,7 @@ invalid_schemas:
     name: "Search with wrong arg for the index"
     input: |
       type X {
-        y: String @search(by: [hash, hour])
+        y: String @search(by: ["hash", "hour"])
       }
     errlist: [
       {"message": "Type X; Field y: has the @search directive but the argument hour doesn't
@@ -479,11 +490,11 @@ invalid_schemas:
     name: "Search without []"
     input: |
       type X {
-        y: String @search(by: hash)
+        y: String @search(by: "hash")
       }
     errlist: [
       {"message": "Type X; Field y: the @search directive requires a list argument,
-          like @search(by: [hash])",
+          like @search(by: [\"hash\"])",
       "locations":[{"line":2, "column":14}]}
       ]
 
@@ -491,7 +502,7 @@ invalid_schemas:
     name: "Search doesn't allow hash and exact together"
     input: |
       type X {
-        y: String @search(by: [hash, exact])
+        y: String @search(by: ["hash", "exact"])
       }
     errlist: [
       {"message": "Type X; Field y: the arguments 'hash' and 'exact' can't be
@@ -503,7 +514,7 @@ invalid_schemas:
     name: "Search with multiple datetime index"
     input: |
       type X {
-        y: DateTime @search(by: [hour, month])
+        y: DateTime @search(by: ["hour", "month"])
       }
     errlist: [
       {"message": "Type X; Field y: has the search directive on DateTime. DateTime
@@ -515,7 +526,7 @@ invalid_schemas:
     name: "Search doesn't allow trigram and regexp together"
     input: |
       type X {
-        y: String @search(by: [trigram, regexp])
+        y: String @search(by: ["trigram", "regexp"])
       }
     errlist: [
       {"message": "Type X; Field y: the argument to @search 'trigram' is the same as
@@ -527,7 +538,7 @@ invalid_schemas:
     name: "Search doesn't accept bogus args"
     input: |
       type X {
-        y: String @search(by: [bogus])
+        y: String @search(by: ["bogus"])
       }
     errlist: [
       {"message": "Type X; Field y: the argument to @search bogus isn't valid.Fields of type
@@ -2732,7 +2743,7 @@ invalid_schemas:
           review: String!
       }
     errlist: [
-      {"message": "Type Product; @remote directive cannot be defined with @key directive", "locations": [ { "line": 174, "column": 12} ] },
+      {"message": "Type Product; @remote directive cannot be defined with @key directive", "locations": [ { "line": 176, "column": 12} ] },
     ]
 
   - name: "directives defined on @external fields that are not @key."
@@ -2749,6 +2760,29 @@ invalid_schemas:
       }
     errlist: [
       {"message": "Type Product: Field name: @search directive can not be defined on @external fields that are not @key.", "locations": [ { "line": 3, "column": 18} ] },
+    ]
+
+  - name: "@embedding directive on a field with String type"
+    input: |
+      type Product {
+        id: String! @id
+        description: String
+        title: String
+        productVector: String @embedding
+      }
+    errlist: [
+      {"message": "Type Product; Field productVector: The field with @embedding directive is of type String, but @embedding directive only applies to fields of type [Float!].", "locations": [ { "line": 5, "column": 3} ] },
+    ]
+
+  - name: "@embedding directive on a field with [Int] type"
+    input: |
+      type User  {
+        email: String!  @id
+        name: String
+        userVector: [Int] @embedding
+      }
+    errlist: [
+      {"message": "Type User; Field userVector: The field with @embedding directive is of type [Int], but @embedding directive only applies to fields of type [Float!].", "locations": [ { "line": 4, "column": 3} ] },
     ]
 
   - name: "@requires directive defined on type definitions"
@@ -3099,8 +3133,8 @@ valid_schemas:
         strFulltext: String @search(by: [fulltext])
         strTrigram: String @search(by: [trigram])
         strRegexp: String @search(by: [regexp])
-        strRegexpFulltext: String @search(by: [regexp, fulltext])
-        strMultipleIndex: String @search(by: [trigram, hash, term, fulltext])
+        strRegexpFulltext: String @search(by: ["regexp", "fulltext"])
+        strMultipleIndex: String @search(by: ["trigram", "hash", "term", "fulltext"])
         dt: DateTime @search
         dt2: DateTime @search(by: [])
         dtYear: DateTime @search(by: [year])
@@ -3446,7 +3480,7 @@ valid_schemas:
         f2: String @dgraph(pred: "T.f@no")
         name: String! @id
         f3: String @dgraph(pred: "f3@en")
-        nameHi: String @dgraph(pred: "Person.name@hi") @search(by: [term, exact])
+        nameHi: String @dgraph(pred: "Person.name@hi") @search(by: ["term", "exact"])
         nameEn: String @dgraph(pred: "Person.name@en") @search(by: [regexp])
         nameHiEn: String @dgraph(pred: "Person.name@hi:en")
         nameHi_En_Untag: String @dgraph(pred: "Person.name@hi:en:.")

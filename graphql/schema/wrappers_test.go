@@ -37,7 +37,7 @@ func TestDgraphMapping_WithoutDirectives(t *testing.T) {
 type Author {
         id: ID!
 
-        name: String! @search(by: [hash, trigram])
+        name: String! @search(by: ["hash", "trigram"])
         dob: DateTime @search
         reputation: Float @search
         posts: [Post!] @hasInverse(field: author)
@@ -222,7 +222,7 @@ func TestDgraphMapping_WithDirectives(t *testing.T) {
 	type Author @dgraph(type: "dgraph.author") {
 			id: ID!
 
-			name: String! @search(by: [hash, trigram])
+			name: String! @search(by: ["hash", "trigram"])
 			dob: DateTime @search
 			reputation: Float @search
 			posts: [Post!] @hasInverse(field: author)

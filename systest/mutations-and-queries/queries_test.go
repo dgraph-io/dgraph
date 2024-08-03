@@ -27,7 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/v230/protos/api"
-	"github.com/dgraph-io/dgraph/dgraphtest"
+	"github.com/dgraph-io/dgraph/dgraphapi"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -226,7 +226,7 @@ func (ssuite *SystestTestSuite) MultipleBlockEval() {
 	for _, tc := range tests {
 		resp, err := txn.Query(ctx, fmt.Sprintf(queryFmt, tc.in))
 		require.NoError(t, err)
-		dgraphtest.CompareJSON(tc.out, string(resp.Json))
+		dgraphapi.CompareJSON(tc.out, string(resp.Json))
 	}
 }
 
@@ -328,7 +328,7 @@ func (ssuite *SystestTestSuite) UnmatchedVarEval() {
 	for _, tc := range tests {
 		resp, err := txn.Query(ctx, tc.in)
 		require.NoError(t, err)
-		dgraphtest.CompareJSON(tc.out, string(resp.Json))
+		dgraphapi.CompareJSON(tc.out, string(resp.Json))
 	}
 }
 
@@ -453,7 +453,7 @@ func (ssuite *SystestTestSuite) SchemaQueryTestPredicate1() {
 	"types": [` + testutil.GetInternalTypes(false) + `
 	]
   }`
-	dgraphtest.CompareJSON(js, string(resp.Json))
+	dgraphapi.CompareJSON(js, string(resp.Json))
 }
 
 func (ssuite *SystestTestSuite) SchemaQueryTestPredicate2() {
@@ -496,7 +496,7 @@ func (ssuite *SystestTestSuite) SchemaQueryTestPredicate2() {
       }
     ]
   }`
-	dgraphtest.CompareJSON(js, string(resp.Json))
+	dgraphapi.CompareJSON(js, string(resp.Json))
 }
 
 func (ssuite *SystestTestSuite) SchemaQueryTestPredicate3() {
@@ -548,7 +548,7 @@ func (ssuite *SystestTestSuite) SchemaQueryTestPredicate3() {
       }
     ]
   }`
-	dgraphtest.CompareJSON(js, string(resp.Json))
+	dgraphapi.CompareJSON(js, string(resp.Json))
 }
 
 func (ssuite *SystestTestSuite) SchemaQueryTestHTTP() {
@@ -573,7 +573,7 @@ func (ssuite *SystestTestSuite) SchemaQueryTestHTTP() {
 
 	hcli, err := ssuite.dc.HTTPClient()
 	require.NoError(t, err)
-	err = hcli.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace)
+	err = hcli.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace)
 	require.NotNil(t, hcli.AccessJwt, "token is nil")
 	require.NoError(t, err)
 
@@ -584,7 +584,7 @@ func (ssuite *SystestTestSuite) SchemaQueryTestHTTP() {
 	var m map[string]json.RawMessage
 	require.NoError(t, json.Unmarshal(res, &m))
 	require.NotNil(t, m["extensions"])
-	dgraphtest.CompareJSON(testutil.GetFullSchemaJSON(testutil.SchemaOptions{UserPreds: `
+	dgraphapi.CompareJSON(testutil.GetFullSchemaJSON(testutil.SchemaOptions{UserPreds: `
 	  {
         "predicate": "name",
         "type": "string",
@@ -747,7 +747,7 @@ func (ssuite *SystestTestSuite) FuzzyMatch() {
 			continue
 		}
 		require.NoError(t, err)
-		dgraphtest.CompareJSON(tc.out, string(resp.Json))
+		dgraphapi.CompareJSON(tc.out, string(resp.Json))
 	}
 }
 
@@ -1218,7 +1218,7 @@ func (ssuite *SystestTestSuite) CascadeParams() {
 	for _, tc := range tests {
 		resp, err := gcli.NewTxn().Query(ctx, tc.in)
 		require.NoError(t, err)
-		dgraphtest.CompareJSON(tc.out, string(resp.Json))
+		dgraphapi.CompareJSON(tc.out, string(resp.Json))
 	}
 }
 
@@ -1339,7 +1339,7 @@ func (ssuite *SystestTestSuite) QueryHashIndex() {
 	for _, tc := range tests {
 		resp, err := gcli.NewTxn().Query(ctx, tc.in)
 		require.NoError(t, err)
-		dgraphtest.CompareJSON(tc.out, string(resp.Json))
+		dgraphapi.CompareJSON(tc.out, string(resp.Json))
 	}
 }
 
@@ -1396,7 +1396,7 @@ func (ssuite *SystestTestSuite) RegexpToggleTrigramIndex() {
 	for _, tc := range tests {
 		resp, err := gcli.NewTxn().Query(ctx, tc.in)
 		require.NoError(t, err)
-		dgraphtest.CompareJSON(tc.out, string(resp.Json))
+		dgraphapi.CompareJSON(tc.out, string(resp.Json))
 	}
 
 	op = &api.Operation{Schema: `name: string @index(trigram) @lang .`}
@@ -1406,7 +1406,7 @@ func (ssuite *SystestTestSuite) RegexpToggleTrigramIndex() {
 	for _, tc := range tests {
 		resp, err := gcli.NewTxn().Query(ctx, tc.in)
 		require.NoError(t, err)
-		dgraphtest.CompareJSON(tc.out, string(resp.Json))
+		dgraphapi.CompareJSON(tc.out, string(resp.Json))
 	}
 
 	require.NoError(t, gcli.Alter(ctx, &api.Operation{
@@ -1455,7 +1455,7 @@ func (ssuite *SystestTestSuite) EqWithAlteredIndexOrder() {
 	expectedResult := `{"q":[{"name":"Alice"}]}`
 	resp, err := gcli.NewReadOnlyTxn().Query(ctx, q)
 	require.NoError(t, err)
-	dgraphtest.CompareJSON(expectedResult, string(resp.Json))
+	dgraphapi.CompareJSON(expectedResult, string(resp.Json))
 
 	// now, let's set the schema with trigram before term
 	op = &api.Operation{Schema: `name: string @index(trigram, term) .`}
@@ -1464,7 +1464,7 @@ func (ssuite *SystestTestSuite) EqWithAlteredIndexOrder() {
 	// querying with eq should still work
 	resp, err = gcli.NewReadOnlyTxn().Query(ctx, q)
 	require.NoError(t, err)
-	dgraphtest.CompareJSON(expectedResult, string(resp.Json))
+	dgraphapi.CompareJSON(expectedResult, string(resp.Json))
 }
 
 func (ssuite *SystestTestSuite) GroupByUidWorks() {
@@ -1519,17 +1519,17 @@ func (ssuite *SystestTestSuite) GroupByUidWorks() {
 	for _, tc := range tests {
 		resp, err := gcli.NewTxn().Query(ctx, tc.in)
 		require.NoError(t, err)
-		dgraphtest.CompareJSON(tc.out, string(resp.Json))
+		dgraphapi.CompareJSON(tc.out, string(resp.Json))
 	}
 }
 
-func doGrpcLogin(ssuite *SystestTestSuite) (*dgraphtest.GrpcClient, func(), error) {
+func doGrpcLogin(ssuite *SystestTestSuite) (*dgraphapi.GrpcClient, func(), error) {
 	gcli, cleanup, err := ssuite.dc.Client()
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "error creating grpc client")
 	}
 	err = gcli.LoginIntoNamespace(context.Background(),
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace)
+		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "groot login into galaxy namespace failed")
 	}

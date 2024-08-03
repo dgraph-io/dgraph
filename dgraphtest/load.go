@@ -34,6 +34,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/dgraph-io/dgo/v230/protos/api"
+	"github.com/dgraph-io/dgraph/dgraphapi"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -138,7 +139,7 @@ func setDQLSchema(c *LocalCluster, files []string) error {
 	if c.conf.acl {
 		ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 		defer cancel()
-		err := gc.LoginIntoNamespace(ctx, DefaultUser, DefaultPassword, x.GalaxyNamespace)
+		err := gc.LoginIntoNamespace(ctx, dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace)
 		if err != nil {
 			return errors.Wrap(err, "error login to default namespace")
 		}
@@ -188,7 +189,7 @@ func setGraphQLSchema(c *LocalCluster, files []string) error {
 			}
 
 			if c.conf.acl {
-				err := hc.LoginIntoNamespace(DefaultUser, DefaultPassword, nss.Namespace)
+				err := hc.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, nss.Namespace)
 				if err != nil {
 					return errors.Wrap(err, "error login into default namespace")
 				}
@@ -233,7 +234,7 @@ func (c *LocalCluster) LiveLoad(opts LiveOpts) error {
 	}
 	if c.conf.acl {
 		args = append(args, fmt.Sprintf("--creds=user=%s;password=%s;namespace=%d",
-			DefaultUser, DefaultPassword, x.GalaxyNamespace))
+			dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace))
 	}
 	if c.conf.encryption {
 		args = append(args, fmt.Sprintf("--encryption=key-file=%v", c.encKeyPath))
@@ -261,7 +262,7 @@ func findGrootAndGuardians(c *LocalCluster) (string, string, error) {
 	if c.conf.acl {
 		ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 		defer cancel()
-		err = gc.LoginIntoNamespace(ctx, DefaultUser, DefaultPassword, x.GalaxyNamespace)
+		err = gc.LoginIntoNamespace(ctx, dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace)
 		if err != nil {
 			return "", "", errors.Wrapf(err, "error logging in as groot")
 		}
@@ -502,7 +503,7 @@ func (c *LocalCluster) BulkLoad(opts BulkOpts) error {
 }
 
 // AddData will insert a total of end-start triples into the database.
-func AddData(gc *GrpcClient, pred string, start, end int) error {
+func AddData(gc *dgraphapi.GrpcClient, pred string, start, end int) error {
 	if err := gc.SetupSchema(fmt.Sprintf(`%v: string @index(exact) .`, pred)); err != nil {
 		return err
 	}

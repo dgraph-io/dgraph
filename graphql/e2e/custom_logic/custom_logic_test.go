@@ -1067,7 +1067,7 @@ func TestCustomFieldsShouldPassBody(t *testing.T) {
 
 	schema := `
     type User {
-		id: String! @id @search(by: [hash, regexp])
+		id: String! @id @search(by: ["hash", "regexp"])
         address:String
 		name: String
 			@custom(
@@ -2573,7 +2573,7 @@ func TestCustomDQL(t *testing.T) {
 	}
 	type Tweets implements Node {
 		id: ID!
-		text: String! @search(by: [fulltext, exact])
+		text: String! @search(by: ["fulltext", "exact"])
 		user: User
 		timestamp: DateTime! @search
 	}
@@ -2864,7 +2864,7 @@ func TestCustomFieldsWithRestError(t *testing.T) {
 	}
 
 	type User {
-		id: String! @id @search(by: [hash, regexp])
+		id: String! @id @search(by: ["hash", "regexp"])
 		name: String
 			@custom(
 				http: {

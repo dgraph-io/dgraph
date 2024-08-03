@@ -25,8 +25,12 @@ import (
 	"math/rand"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/dgraph-io/dgo/v230/protos/api"
+	"github.com/dgraph-io/dgraph/dgraphapi"
+	"github.com/dgraph-io/dgraph/dgraphtest"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
 )
 
@@ -38,6 +42,124 @@ const (
 	vectorSchemaWithoutIndex = `%v: float32vector .`
 )
 
+var client *dgraphapi.GrpcClient
+var dc dgraphapi.Cluster
+
+func setSchema(schema string) {
+	var err error
+	for retry := 0; retry < 60; retry++ {
+		err = client.Alter(context.Background(), &api.Operation{Schema: schema})
+		if err == nil {
+			return
+		}
+		time.Sleep(time.Second)
+	}
+	panic(fmt.Sprintf("Could not alter schema. Got error %v", err.Error()))
+}
+
+func dropPredicate(pred string) {
+	err := client.Alter(context.Background(), &api.Operation{
+		DropAttr: pred,
+	})
+	if err != nil {
+		panic(fmt.Sprintf("Could not drop predicate. Got error %v", err.Error()))
+	}
+}
+
+func processQuery(ctx context.Context, t *testing.T, query string) (string, error) {
+	txn := client.NewTxn()
+	defer func() {
+		if err := txn.Discard(ctx); err != nil {
+			t.Logf("error discarding txn: %v", err)
+		}
+	}()
+
+	res, err := txn.Query(ctx, query)
+	if err != nil {
+		return "", err
+	}
+
+	response := map[string]interface{}{}
+	response["data"] = json.RawMessage(string(res.Json))
+
+	jsonResponse, err := json.Marshal(response)
+	require.NoError(t, err)
+	return string(jsonResponse), err
+}
+
+func processQueryRDF(ctx context.Context, t *testing.T, query string) (string, error) {
+	txn := client.NewTxn()
+	defer func() { _ = txn.Discard(ctx) }()
+
+	res, err := txn.Do(ctx, &api.Request{
+		Query:      query,
+		RespFormat: api.Request_RDF,
+	})
+	if err != nil {
+		return "", err
+	}
+	return string(res.Rdf), err
+}
+
+func processQueryNoErr(t *testing.T, query string) string {
+	res, err := processQuery(context.Background(), t, query)
+	require.NoError(t, err)
+	return res
+}
+
+// processQueryForMetrics works like processQuery but returns metrics instead of response.
+func processQueryForMetrics(t *testing.T, query string) *api.Metrics {
+	txn := client.NewTxn()
+	defer func() { _ = txn.Discard(context.Background()) }()
+
+	res, err := txn.Query(context.Background(), query)
+	require.NoError(t, err)
+	return res.Metrics
+}
+
+func processQueryWithVars(t *testing.T, query string,
+	vars map[string]string) (string, error) {
+	txn := client.NewTxn()
+	defer func() { _ = txn.Discard(context.Background()) }()
+
+	res, err := txn.QueryWithVars(context.Background(), query, vars)
+	if err != nil {
+		return "", err
+	}
+
+	response := map[string]interface{}{}
+	response["data"] = json.RawMessage(string(res.Json))
+
+	jsonResponse, err := json.Marshal(response)
+	require.NoError(t, err)
+	return string(jsonResponse), err
+}
+
+func addTriplesToCluster(triples string) error {
+	txn := client.NewTxn()
+	ctx := context.Background()
+	defer func() { _ = txn.Discard(ctx) }()
+
+	_, err := txn.Mutate(ctx, &api.Mutation{
+		SetNquads: []byte(triples),
+		CommitNow: true,
+	})
+	return err
+}
+
+func deleteTriplesInCluster(triples string) {
+	txn := client.NewTxn()
+	ctx := context.Background()
+	defer func() { _ = txn.Discard(ctx) }()
+
+	_, err := txn.Mutate(ctx, &api.Mutation{
+		DelNquads: []byte(triples),
+		CommitNow: true,
+	})
+	if err != nil {
+		panic(fmt.Sprintf("Could not delete triples. Got error %v", err.Error()))
+	}
+}
 func updateVector(t *testing.T, triple string, pred string) []float32 {
 	uid := strings.Split(triple, " ")[0]
 	randomVec := generateRandomVector(10)
@@ -146,6 +268,10 @@ func querySingleVectorError(t *testing.T, vector, pred string, validateError boo
 	err = json.Unmarshal([]byte(resp.Json), &data)
 	if err != nil {
 		return []float32{}, err
+	}
+
+	if len(data.Vector) == 0 {
+		return []float32{}, nil
 	}
 
 	return data.Vector[0].VTest, nil
@@ -303,24 +429,66 @@ func TestVectorsMutateFixedLengthWithDiffrentIndexes(t *testing.T) {
 	testVectorMutationSameLength(t)
 	dropPredicate("vtest")
 
-	setSchema(fmt.Sprintf(vectorSchemaWithIndex, "vtest", "4", "dot_product"))
+	setSchema(fmt.Sprintf(vectorSchemaWithIndex, "vtest", "4", "dotproduct"))
 	testVectorMutationSameLength(t)
 	dropPredicate("vtest")
+}
+
+func TestVectorDeadlockwithTimeout(t *testing.T) {
+	pred := "vtest1"
+	dc = dgraphtest.NewComposeCluster()
+	var cleanup func()
+	client, cleanup, err := dc.Client()
+	x.Panic(err)
+	defer cleanup()
+
+	for i := 0; i < 5; i++ {
+		fmt.Println("Testing iteration: ", i)
+		ctx, cancel2 := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel2()
+		err = client.LoginIntoNamespace(ctx, dgraphapi.DefaultUser,
+			dgraphapi.DefaultPassword, x.GalaxyNamespace)
+		require.NoError(t, err)
+
+		err = client.Alter(context.Background(), &api.Operation{
+			DropAttr: pred,
+		})
+		dropPredicate(pred)
+		setSchema(fmt.Sprintf(vectorSchemaWithIndex, pred, "4", "euclidian"))
+		numVectors := 10000
+		vectorSize := 1000
+
+		randomVectors, _ := generateRandomVectors(numVectors, vectorSize, pred)
+
+		txn := client.NewTxn()
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer func() { _ = txn.Discard(ctx) }()
+		defer cancel()
+
+		_, err = txn.Mutate(ctx, &api.Mutation{
+			SetNquads: []byte(randomVectors),
+			CommitNow: true,
+		})
+		require.Error(t, err)
+
+		err = txn.Commit(ctx)
+		require.Contains(t, err.Error(), "Transaction has already been committed or discarded")
+	}
 }
 
 func TestVectorMutateDiffrentLengthWithDiffrentIndexes(t *testing.T) {
 	dropPredicate("vtest")
 
 	setSchema(fmt.Sprintf(vectorSchemaWithIndex, "vtest", "4", "euclidian"))
-	testVectorMutationDiffrentLength(t, "can not subtract vectors of different lengths")
+	testVectorMutationDiffrentLength(t, "can not compute euclidian distance on vectors of different lengths")
 	dropPredicate("vtest")
 
 	setSchema(fmt.Sprintf(vectorSchemaWithIndex, "vtest", "4", "cosine"))
-	testVectorMutationDiffrentLength(t, "can not compute dot product on vectors of different lengths")
+	testVectorMutationDiffrentLength(t, "can not compute cosine distance on vectors of different lengths")
 	dropPredicate("vtest")
 
-	setSchema(fmt.Sprintf(vectorSchemaWithIndex, "vtest", "4", "dot_product"))
-	testVectorMutationDiffrentLength(t, "can not subtract vectors of different lengths")
+	setSchema(fmt.Sprintf(vectorSchemaWithIndex, "vtest", "4", "dotproduct"))
+	testVectorMutationDiffrentLength(t, "can not compute dot product on vectors of different lengths")
 	dropPredicate("vtest")
 }
 
@@ -449,8 +617,9 @@ func TestVectorDelete(t *testing.T) {
 	}
 
 	triple := deleteTriple(len(triples) - 2)
+	// after deleteing all vectors, we should get an empty array of vectors in response when we do silimar_to query
 	_, err = querySingleVectorError(t, strings.Split(triple, `"`)[1], "vtest", false)
-	require.NotNil(t, err)
+	require.NoError(t, err)
 }
 
 func TestVectorUpdate(t *testing.T) {
@@ -558,4 +727,67 @@ func TestVectorTwoTxnWithoutCommit(t *testing.T) {
 	for i := 0; i < len(vectors); i++ {
 		require.Contains(t, resp, vectors[i])
 	}
+}
+
+func TestGetVector(t *testing.T) {
+	setSchema("vectorNonIndex : float32vector .")
+
+	rdfs := `
+	<1> <vectorNonIndex> "[1.0, 1.0, 2.0, 2.0]" .
+	<2> <vectorNonIndex> "[2.0, 1.0, 2.0, 2.0]" .`
+	require.NoError(t, addTriplesToCluster(rdfs))
+
+	query := `
+		{
+			me(func: has(vectorNonIndex)) {
+				a as vectorNonIndex
+			}
+			aggregation() {
+				avg(val(a))
+				sum(val(a))
+			}
+		}
+	`
+	js := processQueryNoErr(t, query)
+	k := `{
+		"data": {
+		  "me": [
+			{
+			  "vectorNonIndex": [
+				1,
+				1,
+				2,
+				2
+			  ]
+			},
+			{
+			  "vectorNonIndex": [
+				2,
+				1,
+				2,
+				2
+			  ]
+			}
+		  ],
+		  "aggregation": [
+			{
+			  "avg(val(a))": [
+				1.5,
+				1,
+				2,
+				2
+			  ]
+			},
+			{
+			  "sum(val(a))": [
+				3,
+				2,
+				4,
+				4
+			  ]
+			}
+		  ]
+		}
+	  }`
+	require.JSONEq(t, k, js)
 }

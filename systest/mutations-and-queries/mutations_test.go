@@ -36,6 +36,7 @@ import (
 
 	"github.com/dgraph-io/dgo/v230"
 	"github.com/dgraph-io/dgo/v230/protos/api"
+	"github.com/dgraph-io/dgraph/dgraphapi"
 	"github.com/dgraph-io/dgraph/dgraphtest"
 	"github.com/dgraph-io/dgraph/testutil"
 )
@@ -162,7 +163,7 @@ func (ssuite *SystestTestSuite) FacetJsonInputSupportsAnyOfTerms() {
 	require.NoError(t, err, "the query should have succeeded")
 
 	//var respUser User
-	dgraphtest.CompareJSON(fmt.Sprintf(`
+	dgraphapi.CompareJSON(fmt.Sprintf(`
 	{
 		"direct":[
 			{
@@ -246,7 +247,7 @@ func (ssuite *SystestTestSuite) NQuadMutationTest() {
 	txn = gcli.NewTxn()
 	resp, err := txn.Query(ctx, breakfastQuery)
 	require.NoError(t, err)
-	dgraphtest.CompareJSON(`{ "q": [ {
+	dgraphapi.CompareJSON(`{ "q": [ {
 		"fruit": [
 			{ "xid": "apple" },
 			{ "xid": "banana" }
@@ -275,7 +276,7 @@ func (ssuite *SystestTestSuite) NQuadMutationTest() {
 	txn = gcli.NewTxn()
 	resp, err = txn.Query(ctx, breakfastQuery)
 	require.NoError(t, err)
-	dgraphtest.CompareJSON(`{ "q": [ {
+	dgraphapi.CompareJSON(`{ "q": [ {
 		"fruit": [
 			{ "xid": "apple" }
 		]
@@ -328,7 +329,7 @@ func (ssuite *SystestTestSuite) DeleteAllReverseIndex() {
 	ctx = context.Background()
 	resp, err := gcli.NewTxn().Query(ctx, fmt.Sprintf("{ q(func: uid(%s)) { ~link { uid } }}", bId))
 	require.NoError(t, err)
-	dgraphtest.CompareJSON(`{"q":[]}`, string(resp.Json))
+	dgraphapi.CompareJSON(`{"q":[]}`, string(resp.Json))
 
 	assignedIds, err = gcli.NewTxn().Mutate(ctx, &api.Mutation{
 		CommitNow: true,
@@ -339,7 +340,7 @@ func (ssuite *SystestTestSuite) DeleteAllReverseIndex() {
 
 	resp, err = gcli.NewTxn().Query(ctx, fmt.Sprintf("{ q(func: uid(%s)) { ~link { uid } }}", cId))
 	require.NoError(t, err)
-	dgraphtest.CompareJSON(fmt.Sprintf(`{"q":[{"~link": [{"uid": "%s"}]}]}`, aId), string(resp.Json))
+	dgraphapi.CompareJSON(fmt.Sprintf(`{"q":[{"~link": [{"uid": "%s"}]}]}`, aId), string(resp.Json))
 }
 
 func (ssuite *SystestTestSuite) NormalizeEdgeCasesTest() {
@@ -478,7 +479,7 @@ func (ssuite *SystestTestSuite) FacetOrderTest() {
 	ctx = context.Background()
 	resp, err := txn.Query(ctx, friendQuery)
 	require.NoError(t, err)
-	dgraphtest.CompareJSON(`
+	dgraphapi.CompareJSON(`
 	{
 		"q":[
 			{
@@ -1188,7 +1189,7 @@ func (ssuite *SystestTestSuite) DeleteWithExpandAll() {
 	require.Equal(t, 0, len(r.Me))
 }
 
-func testTimeValue(t *testing.T, c *dgraphtest.GrpcClient, timeBytes []byte) {
+func testTimeValue(t *testing.T, c *dgraphapi.GrpcClient, timeBytes []byte) {
 	nquads := []*api.NQuad{
 		{
 			Subject:   "0x01",
@@ -1264,7 +1265,7 @@ func (ssuite *SystestTestSuite) SkipEmptyPLForHas() {
 		}`
 	resp, err := gcli.NewTxn().Query(ctx, q)
 	require.NoError(t, err)
-	dgraphtest.CompareJSON(`{"users":[{"name":"u"},{"name":"u1"}]}`, string(resp.Json))
+	dgraphapi.CompareJSON(`{"users":[{"name":"u"},{"name":"u1"}]}`, string(resp.Json))
 
 	op := &api.Operation{DropAll: true}
 	require.NoError(t, gcli.Alter(ctx, op))
@@ -1331,7 +1332,7 @@ func (ssuite *SystestTestSuite) HasWithDash() {
 	txn = gcli.NewTxn()
 	resp, err := txn.Query(ctx, friendQuery)
 	require.NoError(t, err)
-	dgraphtest.CompareJSON(`{"q":[{"new-friend":[{"name":"Bob"},{"name":"Charlie"}]}]}`, string(resp.Json))
+	dgraphapi.CompareJSON(`{"q":[{"new-friend":[{"name":"Bob"},{"name":"Charlie"}]}]}`, string(resp.Json))
 }
 
 func (ssuite *SystestTestSuite) ListGeoFilterTest() {
@@ -1378,7 +1379,7 @@ func (ssuite *SystestTestSuite) ListGeoFilterTest() {
 		}
 	}`)
 	require.NoError(t, err)
-	dgraphtest.CompareJSON(`
+	dgraphapi.CompareJSON(`
 	{
 		"q": [
 			{
@@ -1436,7 +1437,7 @@ func (ssuite *SystestTestSuite) ListRegexFilterTest() {
 		}
 	}`)
 	require.NoError(t, err)
-	dgraphtest.CompareJSON(`
+	dgraphapi.CompareJSON(`
 	{
 		"q": [
 			{
@@ -1485,7 +1486,7 @@ func (ssuite *SystestTestSuite) RegexQueryWithVarsWithSlash() {
 		}
 	}`)
 	require.NoError(t, err)
-	dgraphtest.CompareJSON(`
+	dgraphapi.CompareJSON(`
 	{
 		"q": [
 			{
@@ -1503,7 +1504,7 @@ func (ssuite *SystestTestSuite) RegexQueryWithVarsWithSlash() {
 		}
 	}`, map[string]string{"$rex": "/\\/def/"})
 	require.NoError(t, err)
-	dgraphtest.CompareJSON(`
+	dgraphapi.CompareJSON(`
 	{
 		"q": [
 			{
@@ -1559,7 +1560,7 @@ func (ssuite *SystestTestSuite) RegexQueryWithVars() {
 			}
 		}`, map[string]string{"$term": "/^rea.*$/"})
 	require.NoError(t, err)
-	dgraphtest.CompareJSON(`
+	dgraphapi.CompareJSON(`
 	{
 		"q": [
 			{
@@ -1616,7 +1617,7 @@ func (ssuite *SystestTestSuite) GraphQLVarChild() {
 		}
 	}`, map[string]string{"$alice": a})
 	require.NoError(t, err)
-	dgraphtest.CompareJSON(`
+	dgraphapi.CompareJSON(`
 	{
 		"q": [
 			{
@@ -1637,7 +1638,7 @@ func (ssuite *SystestTestSuite) GraphQLVarChild() {
 		}
 	}`, map[string]string{"$bob": b})
 	require.NoError(t, err)
-	dgraphtest.CompareJSON(`
+	dgraphapi.CompareJSON(`
 	{
 		"q": [
 			{
@@ -1664,7 +1665,7 @@ func (ssuite *SystestTestSuite) GraphQLVarChild() {
 		}
 	}`, map[string]string{"$friends": friends})
 	require.NoError(t, err)
-	dgraphtest.CompareJSON(`
+	dgraphapi.CompareJSON(`
 	{
 		"q": [
 			{
@@ -1721,7 +1722,7 @@ func (ssuite *SystestTestSuite) MathGe() {
 		}
 	}`)
 	require.NoError(t, err)
-	dgraphtest.CompareJSON(`
+	dgraphapi.CompareJSON(`
 		{
 		  "q": [
 		    {
@@ -1958,7 +1959,7 @@ func (ssuite *SystestTestSuite) RestoreReservedPreds() {
 	query := `schema(preds: dgraph.type) {predicate}`
 	resp, err := gcli.NewReadOnlyTxn().Query(ctx, query)
 	require.NoError(t, err)
-	dgraphtest.CompareJSON(`{"schema": [{"predicate":"dgraph.type"}]}`, string(resp.Json))
+	dgraphapi.CompareJSON(`{"schema": [{"predicate":"dgraph.type"}]}`, string(resp.Json))
 }
 
 func (ssuite *SystestTestSuite) DropData() {
@@ -2005,7 +2006,7 @@ func (ssuite *SystestTestSuite) DropData() {
 	query := `schema(preds: [name, follow]) {predicate}`
 	resp, err := gcli.NewReadOnlyTxn().Query(ctx, query)
 	require.NoError(t, err)
-	dgraphtest.CompareJSON(`{"schema": [{"predicate":"name"}, {"predicate":"follow"}]}`, string(resp.Json))
+	dgraphapi.CompareJSON(`{"schema": [{"predicate":"name"}, {"predicate":"follow"}]}`, string(resp.Json))
 
 	// Check data is gone.
 	resp, err = gcli.NewTxn().Query(ctx, `{
@@ -2015,7 +2016,7 @@ func (ssuite *SystestTestSuite) DropData() {
 		}
 	}`)
 	require.NoError(t, err)
-	dgraphtest.CompareJSON(`{"q": []}`, string(resp.GetJson()))
+	dgraphapi.CompareJSON(`{"q": []}`, string(resp.GetJson()))
 }
 
 func (ssuite *SystestTestSuite) DropDataAndDropAll() {
@@ -2061,7 +2062,7 @@ func (ssuite *SystestTestSuite) DropType() {
 	query := `schema(type: Person) {}`
 	resp, err := gcli.NewReadOnlyTxn().Query(ctx, query)
 	require.NoError(t, err)
-	dgraphtest.CompareJSON(`{"types":[{"name":"Person", "fields":[{"name":"name"}]}]}`,
+	dgraphapi.CompareJSON(`{"types":[{"name":"Person", "fields":[{"name":"name"}]}]}`,
 		string(resp.Json))
 
 	require.NoError(t, gcli.Alter(ctx, &api.Operation{
@@ -2072,7 +2073,7 @@ func (ssuite *SystestTestSuite) DropType() {
 	// Check type is gone.
 	resp, err = gcli.NewReadOnlyTxn().Query(ctx, query)
 	require.NoError(t, err)
-	dgraphtest.CompareJSON("{}", string(resp.Json))
+	dgraphapi.CompareJSON("{}", string(resp.Json))
 }
 
 func (ssuite *SystestTestSuite) DropTypeNoValue() {
@@ -2111,7 +2112,7 @@ func (ssuite *SystestTestSuite) CountIndexConcurrentSetDelUIDList() {
 	var wg sync.WaitGroup
 	wg.Add(numRoutines)
 	for i := 0; i < numRoutines; i++ {
-		go func(dg *dgraphtest.GrpcClient, wg *sync.WaitGroup) {
+		go func(dg *dgraphapi.GrpcClient, wg *sync.WaitGroup) {
 			defer wg.Done()
 			for {
 				if atomic.AddUint64(&txnCur, 1) > txnTotal {
@@ -2146,7 +2147,7 @@ func (ssuite *SystestTestSuite) CountIndexConcurrentSetDelUIDList() {
 	}`, len(insertedMap))
 	resp, err := gcli.NewReadOnlyTxn().Query(ctx, q)
 	require.NoError(t, err, "the query should have succeeded")
-	dgraphtest.CompareJSON(`{"me":[{"uid": "0x1"}]}`, string(resp.GetJson()))
+	dgraphapi.CompareJSON(`{"me":[{"uid": "0x1"}]}`, string(resp.GetJson()))
 
 	// Now start deleting UIDs.
 	var insertedUids []int
@@ -2162,7 +2163,7 @@ func (ssuite *SystestTestSuite) CountIndexConcurrentSetDelUIDList() {
 
 	wg.Add(numRoutines)
 	for i := 0; i < numRoutines; i++ {
-		go func(dg *dgraphtest.GrpcClient, wg *sync.WaitGroup) {
+		go func(dg *dgraphapi.GrpcClient, wg *sync.WaitGroup) {
 			defer wg.Done()
 			for {
 				if atomic.AddUint64(&txnCur, 1) > txnTotal {
@@ -2197,7 +2198,7 @@ func (ssuite *SystestTestSuite) CountIndexConcurrentSetDelUIDList() {
 	}`, insertedCount-len(deletedMap))
 	resp, err = gcli.NewReadOnlyTxn().Query(ctx, q)
 	require.NoError(t, err, "the query should have succeeded")
-	dgraphtest.CompareJSON(`{"me":[{"uid": "0x1"}]}`, string(resp.GetJson()))
+	dgraphapi.CompareJSON(`{"me":[{"uid": "0x1"}]}`, string(resp.GetJson()))
 
 	// Delete all friends now.
 	mu := &api.Mutation{
@@ -2216,7 +2217,7 @@ func (ssuite *SystestTestSuite) CountIndexConcurrentSetDelUIDList() {
 	ctx = context.Background()
 	resp, err = gcli.NewReadOnlyTxn().Query(ctx, q)
 	require.NoError(t, err, "the query should have succeeded")
-	dgraphtest.CompareJSON(`{"me":[]}`, string(resp.GetJson()))
+	dgraphapi.CompareJSON(`{"me":[]}`, string(resp.GetJson()))
 }
 
 func (ssuite *SystestTestSuite) CountIndexConcurrentSetDelScalarPredicate() {
@@ -2238,7 +2239,7 @@ func (ssuite *SystestTestSuite) CountIndexConcurrentSetDelScalarPredicate() {
 	var wg sync.WaitGroup
 	wg.Add(numRoutines)
 	for i := 0; i < numRoutines; i++ {
-		go func(dg *dgraphtest.GrpcClient, wg *sync.WaitGroup) {
+		go func(dg *dgraphapi.GrpcClient, wg *sync.WaitGroup) {
 			defer wg.Done()
 			for {
 				if atomic.AddUint64(&txnCur, 1) > txnTotal {
@@ -2293,7 +2294,7 @@ func (ssuite *SystestTestSuite) CountIndexConcurrentSetDelScalarPredicate() {
 	ctx = context.Background()
 	resp, err = gcli.NewReadOnlyTxn().Query(ctx, q)
 	require.NoError(t, err, "the query should have succeeded")
-	dgraphtest.CompareJSON(`{"q":[]}`, string(resp.GetJson()))
+	dgraphapi.CompareJSON(`{"q":[]}`, string(resp.GetJson()))
 }
 
 func (ssuite *SystestTestSuite) CountIndexNonlistPredicateDelete() {
@@ -2324,7 +2325,7 @@ func (ssuite *SystestTestSuite) CountIndexNonlistPredicateDelete() {
 	}`
 	resp, err := gcli.NewReadOnlyTxn().Query(ctx, q)
 	require.NoError(t, err, "the query should have succeeded")
-	dgraphtest.CompareJSON(`{"q": [{"uid": "0x1"}]}`, string(resp.GetJson()))
+	dgraphapi.CompareJSON(`{"q": [{"uid": "0x1"}]}`, string(resp.GetJson()))
 
 	// Upgrade
 	ssuite.Upgrade()
@@ -2345,7 +2346,7 @@ func (ssuite *SystestTestSuite) CountIndexNonlistPredicateDelete() {
 	// Query it using count index.
 	resp, err = gcli.NewReadOnlyTxn().Query(ctx, q)
 	require.NoError(t, err, "the query should have succeeded")
-	dgraphtest.CompareJSON(`{"q": [{"uid": "0x1"}]}`, string(resp.GetJson()))
+	dgraphapi.CompareJSON(`{"q": [{"uid": "0x1"}]}`, string(resp.GetJson()))
 }
 
 func (ssuite *SystestTestSuite) ReverseCountIndexDelete() {
@@ -2375,7 +2376,7 @@ func (ssuite *SystestTestSuite) ReverseCountIndexDelete() {
 	}`
 	resp, err := gcli.NewReadOnlyTxn().Query(ctx, q)
 	require.NoError(t, err, "the query should have succeeded")
-	dgraphtest.CompareJSON(`{"me":[{"uid": "0x2"}, {"uid": "0x3"}]}`, string(resp.GetJson()))
+	dgraphapi.CompareJSON(`{"me":[{"uid": "0x2"}, {"uid": "0x3"}]}`, string(resp.GetJson()))
 
 	// Upgrade
 	ssuite.Upgrade()
@@ -2394,7 +2395,7 @@ func (ssuite *SystestTestSuite) ReverseCountIndexDelete() {
 
 	resp, err = gcli.NewReadOnlyTxn().Query(ctx, q)
 	require.NoError(t, err, "the query should have succeeded")
-	dgraphtest.CompareJSON(`{"me":[{"uid": "0x3"}]}`, string(resp.GetJson()))
+	dgraphapi.CompareJSON(`{"me":[{"uid": "0x3"}]}`, string(resp.GetJson()))
 
 }
 
@@ -2428,7 +2429,7 @@ func (ssuite *SystestTestSuite) ReverseCountIndex() {
 	var wg sync.WaitGroup
 	wg.Add(numRoutines)
 	for i := 0; i < numRoutines; i++ {
-		go func(dg *dgraphtest.GrpcClient, id string, wg *sync.WaitGroup) {
+		go func(dg *dgraphapi.GrpcClient, id string, wg *sync.WaitGroup) {
 			defer wg.Done()
 			mu := &api.Mutation{
 				CommitNow: true,
@@ -2461,7 +2462,7 @@ func (ssuite *SystestTestSuite) ReverseCountIndex() {
 	ctx = context.Background()
 	resp, err := gcli.NewReadOnlyTxn().Query(ctx, q)
 	require.NoError(t, err, "the query should have succeeded")
-	dgraphtest.CompareJSON(`{"me":[{"name":"Alice","count(~friend)":10}]}`, string(resp.GetJson()))
+	dgraphapi.CompareJSON(`{"me":[{"name":"Alice","count(~friend)":10}]}`, string(resp.GetJson()))
 }
 
 func (ssuite *SystestTestSuite) TypePredicateCheck() {
@@ -2566,7 +2567,7 @@ func (ssuite *SystestTestSuite) InferSchemaAsList() {
 	require.NoError(t, err)
 	resp, err := gcli.NewReadOnlyTxn().Query(context.Background(), query)
 	require.NoError(t, err)
-	dgraphtest.CompareJSON(`{"schema": [{"predicate":"name", "list":true},
+	dgraphapi.CompareJSON(`{"schema": [{"predicate":"name", "list":true},
 		{"predicate":"nickname"}]}`, string(resp.Json))
 }
 
@@ -2594,7 +2595,7 @@ func (ssuite *SystestTestSuite) InferSchemaAsListJSON() {
 	require.NoError(t, err)
 	resp, err := gcli.NewReadOnlyTxn().Query(context.Background(), query)
 	require.NoError(t, err)
-	dgraphtest.CompareJSON(`{"schema": [{"predicate":"name", "list":true},
+	dgraphapi.CompareJSON(`{"schema": [{"predicate":"name", "list":true},
 		{"predicate":"nickname"}]}`, string(resp.Json))
 }
 
@@ -2623,7 +2624,7 @@ func (ssuite *SystestTestSuite) ForceSchemaAsListJSON() {
 	require.NoError(t, err)
 	resp, err := gcli.NewReadOnlyTxn().Query(context.Background(), query)
 	require.NoError(t, err)
-	dgraphtest.CompareJSON(`{"schema": [{"predicate":"name", "list":true},
+	dgraphapi.CompareJSON(`{"schema": [{"predicate":"name", "list":true},
 		{"predicate":"nickname"}]}`, string(resp.Json))
 }
 
@@ -2652,7 +2653,7 @@ func (ssuite *SystestTestSuite) ForceSchemaAsSingleJSON() {
 	require.NoError(t, err)
 	resp, err := gcli.NewReadOnlyTxn().Query(context.Background(), query)
 	require.NoError(t, err)
-	dgraphtest.CompareJSON(`{"schema": [{"predicate":"person"}, {"predicate":"nickname"}]}`,
+	dgraphapi.CompareJSON(`{"schema": [{"predicate":"person"}, {"predicate":"nickname"}]}`,
 		string(resp.Json))
 }
 
@@ -2692,7 +2693,7 @@ func (ssuite *SystestTestSuite) OverwriteUidPredicates() {
 }`
 	resp, err := gcli.NewReadOnlyTxn().Query(ctx, q)
 	require.NoError(t, err)
-	dgraphtest.CompareJSON(`{"me":[{"name":"Alice","best_friend": {"name": "Bob"}}]}`,
+	dgraphapi.CompareJSON(`{"me":[{"name":"Alice","best_friend": {"name": "Bob"}}]}`,
 		string(resp.GetJson()))
 
 	upsertQuery := `query { alice as var(func: eq(name, Alice)) }`
@@ -2717,7 +2718,7 @@ func (ssuite *SystestTestSuite) OverwriteUidPredicates() {
 	require.NoError(t, err)
 	resp, err = gcli.NewReadOnlyTxn().Query(context.Background(), q)
 	require.NoError(t, err)
-	dgraphtest.CompareJSON(`{"me":[{"name":"Alice","best_friend": {"name": "Carol"}}]}`,
+	dgraphapi.CompareJSON(`{"me":[{"name":"Alice","best_friend": {"name": "Carol"}}]}`,
 		string(resp.GetJson()))
 }
 
@@ -2757,7 +2758,7 @@ func (ssuite *SystestTestSuite) OverwriteUidPredicatesReverse() {
 }`
 	resp, err := gcli.NewReadOnlyTxn().Query(ctx, q)
 	require.NoError(t, err)
-	dgraphtest.CompareJSON(`{"me":[{"name":"Alice","best_friend": {"name": "Bob"}}]}`,
+	dgraphapi.CompareJSON(`{"me":[{"name":"Alice","best_friend": {"name": "Bob"}}]}`,
 		string(resp.GetJson()))
 
 	reverseQuery := `{
@@ -2769,7 +2770,7 @@ func (ssuite *SystestTestSuite) OverwriteUidPredicatesReverse() {
 		}}`
 	resp, err = gcli.NewReadOnlyTxn().Query(ctx, reverseQuery)
 	require.NoError(t, err)
-	dgraphtest.CompareJSON(`{"reverse":[{"name":"Bob","~best_friend": [{"name": "Alice"}]}]}`,
+	dgraphapi.CompareJSON(`{"reverse":[{"name":"Bob","~best_friend": [{"name": "Alice"}]}]}`,
 		string(resp.GetJson()))
 
 	upsertQuery := `query { alice as var(func: eq(name, Alice)) }`
@@ -2788,7 +2789,7 @@ func (ssuite *SystestTestSuite) OverwriteUidPredicatesReverse() {
 
 	resp, err = gcli.NewReadOnlyTxn().Query(ctx, reverseQuery)
 	require.NoError(t, err)
-	dgraphtest.CompareJSON(`{"reverse":[{"name":"Carol","~best_friend": [{"name": "Alice"}]}]}`,
+	dgraphapi.CompareJSON(`{"reverse":[{"name":"Carol","~best_friend": [{"name": "Alice"}]}]}`,
 		string(resp.GetJson()))
 
 	// Delete the triples and verify the reverse edge is gone.
@@ -2816,12 +2817,12 @@ func (ssuite *SystestTestSuite) OverwriteUidPredicatesReverse() {
 	ctx = context.Background()
 	resp, err = gcli.NewReadOnlyTxn().Query(ctx, reverseQuery)
 	require.NoError(t, err)
-	dgraphtest.CompareJSON(`{"reverse":[]}`,
+	dgraphapi.CompareJSON(`{"reverse":[]}`,
 		string(resp.GetJson()))
 
 	resp, err = gcli.NewReadOnlyTxn().Query(ctx, q)
 	require.NoError(t, err)
-	dgraphtest.CompareJSON(`{"me":[{"name":"Alice"}]}`,
+	dgraphapi.CompareJSON(`{"me":[{"name":"Alice"}]}`,
 		string(resp.GetJson()))
 }
 
@@ -2883,7 +2884,7 @@ func (ssuite *SystestTestSuite) OverwriteUidPredicatesMultipleTxn() {
 	require.NoError(t, err)
 	resp, err = gcli.NewReadOnlyTxn().Query(context.Background(), query)
 	require.NoError(t, err)
-	dgraphtest.CompareJSON(`{"me":[{"name":"Alice","best_friend": {"name": "Carl"}}]}`,
+	dgraphapi.CompareJSON(`{"me":[{"name":"Alice","best_friend": {"name": "Carl"}}]}`,
 		string(resp.GetJson()))
 }
 
@@ -2927,7 +2928,7 @@ func (ssuite *SystestTestSuite) DeleteAndQuerySameTxn() {
 	q := `{ me(func: has(name)) { name } }`
 	resp, err := txn2.Query(ctx, q)
 	require.NoError(t, err)
-	dgraphtest.CompareJSON(`{"me":[{"name":"Alice"}]}`,
+	dgraphapi.CompareJSON(`{"me":[{"name":"Alice"}]}`,
 		string(resp.GetJson()))
 	require.NoError(t, txn2.Commit(ctx))
 
@@ -2940,7 +2941,7 @@ func (ssuite *SystestTestSuite) DeleteAndQuerySameTxn() {
 	// Verify that changes are reflected after the transaction is committed.
 	resp, err = gcli.NewReadOnlyTxn().Query(context.Background(), q)
 	require.NoError(t, err)
-	dgraphtest.CompareJSON(`{"me":[{"name":"Alice"}]}`,
+	dgraphapi.CompareJSON(`{"me":[{"name":"Alice"}]}`,
 		string(resp.GetJson()))
 }
 
@@ -2980,7 +2981,7 @@ func (ssuite *SystestTestSuite) AddAndQueryZeroTimeValue() {
 	txn = gcli.NewTxn()
 	resp, err := txn.Query(ctx, datetimeQuery)
 	require.NoError(t, err)
-	dgraphtest.CompareJSON(`{
+	dgraphapi.CompareJSON(`{
 		"q": [
 		  {
 			"val": "0000-01-01T00:00:00Z"

@@ -549,12 +549,19 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 			errCh <- process(m.Edges[start:end])
 		}(start, end)
 	}
+	// Earlier we were returning after even if one thread had an error. We should wait for
+	// all the transactions to finish. We call txn.Update() when this function exists. This could cause
+	// a deadlock with runMutation.
+	var errs error
 	for i := 0; i < numGo; i++ {
 		if err := <-errCh; err != nil {
-			return err
+			if errs == nil {
+				errs = errors.New("Got error while running mutation")
+			}
+			errs = errors.Wrapf(err, errs.Error())
 		}
 	}
-	return nil
+	return errs
 }
 
 func (n *node) applyCommitted(proposal *pb.Proposal, key uint64) error {
@@ -836,10 +843,13 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 	writer := posting.NewTxnWriter(pstore)
 	toDisk := func(start, commit uint64) {
 		txn := posting.Oracle().GetTxn(start)
-		if txn == nil {
+		if txn == nil || commit == 0 {
 			return
 		}
-		txn.Update()
+		// If the transaction has failed, we dont need to update it.
+		if commit != 0 {
+			txn.Update()
+		}
 		// We start with 20 ms, so that we end up waiting 5 mins by the end.
 		// If there is any transient issue, it should get fixed within that timeframe.
 		err := x.ExponentialRetry(int(x.Config.MaxRetries),
@@ -865,6 +875,7 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 	if err := writer.Flush(); err != nil {
 		return errors.Wrapf(err, "while flushing to disk")
 	}
+
 	if x.WorkerConfig.HardSync {
 		if err := pstore.Sync(); err != nil {
 			glog.Errorf("Error while calling Sync while commitOrAbort: %v", err)
@@ -879,9 +890,8 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 	// Clear all the cached lists that were touched by this transaction.
 	for _, status := range delta.Txns {
 		txn := posting.Oracle().GetTxn(status.StartTs)
-		txn.RemoveCachedKeys()
+		txn.UpdateCachedKeys(status.CommitTs)
 	}
-	posting.WaitForCache()
 
 	// Now advance Oracle(), so we can service waiting reads.
 	posting.Oracle().ProcessDelta(delta)
@@ -1248,6 +1258,7 @@ func (n *node) Run() {
 				} else {
 					ostats.Record(ctx, x.RaftIsLeader.M(0))
 				}
+				timer.Record("updating soft state")
 			}
 			if leader {
 				// Leader can send messages in parallel with writing to disk.
@@ -1262,6 +1273,7 @@ func (n *node) Run() {
 					// NOTE: We can do some optimizations here to drop messages.
 					n.Send(&rd.Messages[i])
 				}
+				timer.Record("leader sending message")
 			}
 			if span != nil {
 				span.Annotate(nil, "Handled ReadStates and SoftState.")
@@ -1334,6 +1346,7 @@ func (n *node) Run() {
 				if span != nil {
 					span.Annotate(nil, "Applied or retrieved snapshot.")
 				}
+				timer.Record("got snapshot")
 			}
 
 			// Store the hardstate and entries. Note that these are not CommittedEntries.

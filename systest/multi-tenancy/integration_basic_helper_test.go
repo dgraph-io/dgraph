@@ -27,7 +27,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgraph/dgraphtest"
+	"github.com/dgraph-io/dgraph/dgraphapi"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -67,11 +67,11 @@ func (msuite *MultitenancyTestSuite) TestLiveLoadMulti() {
 	defer cleanup()
 	require.NoError(t, err)
 	require.NoError(t, gcli0.LoginIntoNamespace(context.Background(),
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace))
+		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace))
 
 	hcli, err := msuite.dc.HTTPClient()
 	require.NoError(t, err)
-	err = hcli.LoginIntoNamespace(dgraphtest.DefaultUser, dgraphtest.DefaultPassword, x.GalaxyNamespace)
+	err = hcli.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace)
 	require.NoError(t, err, "login failed")
 
 	// Create a new namespace
@@ -81,11 +81,11 @@ func (msuite *MultitenancyTestSuite) TestLiveLoadMulti() {
 	defer cleanup()
 	require.NoError(t, err)
 	require.NoError(t, gcli1.LoginIntoNamespace(context.Background(),
-		dgraphtest.DefaultUser, dgraphtest.DefaultPassword, ns))
+		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, ns))
 
 	// Load data.
-	galaxyCreds := &testutil.LoginParams{UserID: dgraphtest.DefaultUser,
-		Passwd: dgraphtest.DefaultPassword, Namespace: x.GalaxyNamespace}
+	galaxyCreds := &testutil.LoginParams{UserID: dgraphapi.DefaultUser,
+		Passwd: dgraphapi.DefaultPassword, Namespace: x.GalaxyNamespace}
 	require.NoError(t, msuite.liveLoadData(&liveOpts{
 		rdfs: fmt.Sprintf(`
 		_:a <name> "galaxy alice" .
@@ -184,7 +184,7 @@ func (msuite *MultitenancyTestSuite) TestLiveLoadMulti() {
 	err = msuite.liveLoadData(&liveOpts{
 		rdfs:    `_:c <name> "ns hola" .`,
 		schema:  `name: string @index(term) .`,
-		creds:   &testutil.LoginParams{UserID: dgraphtest.DefaultUser, Passwd: dgraphtest.DefaultPassword, Namespace: ns},
+		creds:   &testutil.LoginParams{UserID: dgraphapi.DefaultUser, Passwd: dgraphapi.DefaultPassword, Namespace: ns},
 		forceNs: -1,
 	})
 	require.Error(t, err)
@@ -193,7 +193,7 @@ func (msuite *MultitenancyTestSuite) TestLiveLoadMulti() {
 	err = msuite.liveLoadData(&liveOpts{
 		rdfs:    `_:c <name> "ns hola" .`,
 		schema:  `name: string @index(term) .`,
-		creds:   &testutil.LoginParams{UserID: dgraphtest.DefaultUser, Passwd: dgraphtest.DefaultPassword, Namespace: ns},
+		creds:   &testutil.LoginParams{UserID: dgraphapi.DefaultUser, Passwd: dgraphapi.DefaultPassword, Namespace: ns},
 		forceNs: 10,
 	})
 	require.Error(t, err)
@@ -205,7 +205,7 @@ func (msuite *MultitenancyTestSuite) TestLiveLoadMulti() {
 			_:b <name> "ns gary" <%#x> .
 			_:c <name> "ns hola" <%#x> .`, ns, 0x100),
 		schema: `name: string @index(term) .`,
-		creds:  &testutil.LoginParams{UserID: dgraphtest.DefaultUser, Passwd: dgraphtest.DefaultPassword, Namespace: ns},
+		creds:  &testutil.LoginParams{UserID: dgraphapi.DefaultUser, Passwd: dgraphapi.DefaultPassword, Namespace: ns},
 	}))
 
 	resp, err = gcli1.Query(query3)

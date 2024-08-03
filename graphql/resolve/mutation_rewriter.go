@@ -1675,6 +1675,12 @@ func rewriteObject(
 			fieldName = fieldName[1 : len(fieldName)-1]
 		}
 
+		if fieldDef.HasEmbeddingDirective() {
+			// embedding is a JSON array of numbers. Rewrite it as a string, for now
+			var valBytes []byte
+			valBytes, _ = json.Marshal(val)
+			val = string(valBytes)
+		}
 		// TODO: Write a function for aggregating data of fragment from child nodes.
 		switch val := val.(type) {
 		case map[string]interface{}:

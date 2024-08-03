@@ -114,6 +114,8 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) error {
 	if err := deleteStalePreds(ctx, done, snap.ReadTs); err != nil {
 		return err
 	}
+	// Reset the cache after having received a snapshot.
+	posting.ResetCache()
 
 	glog.Infof("Snapshot writes DONE. Sending ACK")
 	// Send an acknowledgement back to the leader.

@@ -61,6 +61,42 @@ func TestIncrRollupGetsCancelledQuickly(t *testing.T) {
 	}
 }
 
+func TestCacheAfterDeltaUpdateRecieved(t *testing.T) {
+	attr := x.GalaxyAttr("cache")
+	key := x.IndexKey(attr, "temp")
+
+	// Create a delta from 5->15. Mimick how a follower recieves a delta.
+	p := new(pb.PostingList)
+	p.Postings = []*pb.Posting{{
+		Uid:      1,
+		StartTs:  5,
+		CommitTs: 15,
+		Op:       1,
+	}}
+	delta, err := p.Marshal()
+	require.NoError(t, err)
+
+	// Write delta to disk and call update
+	txn := Oracle().RegisterStartTs(5)
+	txn.cache.deltas[string(key)] = delta
+
+	writer := NewTxnWriter(pstore)
+	require.NoError(t, txn.CommitToDisk(writer, 15))
+	require.NoError(t, writer.Flush())
+
+	txn.UpdateCachedKeys(15)
+
+	// Read key at timestamp 10. Make sure cache is not updated by this, as there is a later read.
+	l, err := GetNoStore(key, 10)
+	require.NoError(t, err)
+	require.Equal(t, len(l.mutationMap), 0)
+
+	// Read at 20 should show the value
+	l1, err := GetNoStore(key, 20)
+	require.NoError(t, err)
+	require.Equal(t, len(l1.mutationMap), 1)
+}
+
 func TestRollupTimestamp(t *testing.T) {
 	attr := x.GalaxyAttr("rollup")
 	key := x.DataKey(attr, 1)
@@ -79,8 +115,9 @@ func TestRollupTimestamp(t *testing.T) {
 	edge := &pb.DirectedEdge{
 		Entity: 1,
 		Attr:   attr,
-		Value:  []byte(x.Star),
-		Op:     pb.DirectedEdge_DEL,
+
+		Value: []byte(x.Star),
+		Op:    pb.DirectedEdge_DEL,
 	}
 	addMutation(t, l, edge, Del, 9, 10, false)
 

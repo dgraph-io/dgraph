@@ -25,6 +25,7 @@ import (
 	"sort"
 
 	"github.com/dgryski/go-farm"
+	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 
@@ -556,6 +557,27 @@ func (l *List) getMutation(startTs uint64) []byte {
 	return nil
 }
 
+func (l *List) setMutationAfterCommit(startTs, commitTs uint64, data []byte) {
+	pl := new(pb.PostingList)
+	x.Check(pl.Unmarshal(data))
+	pl.CommitTs = commitTs
+	for _, p := range pl.Postings {
+		p.CommitTs = commitTs
+	}
+
+	x.AssertTrue(pl.Pack == nil)
+
+	l.Lock()
+	if l.mutationMap == nil {
+		l.mutationMap = make(map[uint64]*pb.PostingList)
+	}
+	l.mutationMap[startTs] = pl
+	if pl.CommitTs != 0 {
+		l.maxTs = x.Max(l.maxTs, pl.CommitTs)
+	}
+	l.Unlock()
+}
+
 func (l *List) setMutation(startTs uint64, data []byte) {
 	pl := new(pb.PostingList)
 	x.Check(pl.Unmarshal(data))
@@ -565,6 +587,9 @@ func (l *List) setMutation(startTs uint64, data []byte) {
 		l.mutationMap = make(map[uint64]*pb.PostingList)
 	}
 	l.mutationMap[startTs] = pl
+	if pl.CommitTs != 0 {
+		l.maxTs = x.Max(l.maxTs, pl.CommitTs)
+	}
 	l.Unlock()
 }
 
@@ -666,6 +691,19 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) e
 		})
 	}
 
+	numDeletePostingsRead := 0
+	numNormalPostingsRead := 0
+	defer func() {
+		// If we see a lot of these logs, it means that a lot of elements are getting deleted.
+		// This could be normal, but if we see this too much, that means that rollups are too slow.
+		if numNormalPostingsRead < numDeletePostingsRead &&
+			(numNormalPostingsRead > 0 || numDeletePostingsRead > 0) {
+			glog.V(3).Infof("High proportion of deleted data observed for posting list %b: total = %d, "+
+				"percent deleted = %d", l.key, numNormalPostingsRead+numDeletePostingsRead,
+				(numDeletePostingsRead*100)/(numDeletePostingsRead+numNormalPostingsRead))
+		}
+	}()
+
 	var (
 		mp, pp  *pb.Posting
 		pitr    pIterator
@@ -708,6 +746,7 @@ loop:
 		case mp.Uid == 0 || (pp.Uid > 0 && pp.Uid < mp.Uid):
 			// Either mp is empty, or pp is lower than mp.
 			err = f(pp)
+			numNormalPostingsRead += 1
 			if err != nil {
 				break loop
 			}
@@ -719,18 +758,24 @@ loop:
 			// Either pp is empty, or mp is lower than pp.
 			if mp.Op != Del {
 				err = f(mp)
+				numNormalPostingsRead += 1
 				if err != nil {
 					break loop
 				}
+			} else {
+				numDeletePostingsRead += 1
 			}
 			prevUid = mp.Uid
 			midx++
 		case pp.Uid == mp.Uid:
 			if mp.Op != Del {
 				err = f(mp)
+				numNormalPostingsRead += 1
 				if err != nil {
 					break loop
 				}
+			} else {
+				numDeletePostingsRead += 1
 			}
 			prevUid = mp.Uid
 			if err = pitr.next(); err != nil {
@@ -760,6 +805,38 @@ func (l *List) IsEmpty(readTs, afterUid uint64) (bool, error) {
 		return false, errors.Wrapf(err, "cannot iterate over list when calling List.IsEmpty")
 	}
 	return count == 0, nil
+}
+
+func (l *List) getPostingAndLengthNoSort(readTs, afterUid, uid uint64) (int, bool, *pb.Posting) {
+	l.AssertRLock()
+
+	dec := codec.Decoder{Pack: l.plist.Pack}
+	uids := dec.Seek(uid, codec.SeekStart)
+	length := codec.ExactLen(l.plist.Pack)
+	found := len(uids) > 0 && uids[0] == uid
+
+	for _, plist := range l.mutationMap {
+		for _, mpost := range plist.Postings {
+			if (mpost.CommitTs > 0 && mpost.CommitTs <= readTs) || (mpost.StartTs == readTs) {
+				if hasDeleteAll(mpost) {
+					found = false
+					length = 0
+					continue
+				}
+				if mpost.Uid == uid {
+					found = (mpost.Op == Set)
+				}
+				if mpost.Op == Set {
+					length += 1
+				} else {
+					length -= 1
+				}
+
+			}
+		}
+	}
+
+	return length, found, nil
 }
 
 func (l *List) getPostingAndLength(readTs, afterUid, uid uint64) (int, bool, *pb.Posting) {
@@ -1130,6 +1207,8 @@ func (l *List) rollup(readTs uint64, split bool) (*rollupOutput, error) {
 	}
 
 	if len(out.plist.Splits) > 0 || len(l.mutationMap) > 0 {
+		// In case there were splits, this would read all the splits from
+		// Badger.
 		if err := l.encode(out, readTs, split); err != nil {
 			return nil, errors.Wrapf(err, "while encoding")
 		}
@@ -1219,8 +1298,15 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 
 	// Do The intersection here as it's optimized.
 	out.Uids = res
+	lenBefore := len(res)
 	if opt.Intersect != nil {
 		algo.IntersectWith(out, opt.Intersect, out)
+	}
+	lenAfter := len(out.Uids)
+	if lenBefore-lenAfter > 0 {
+		// If we see this log, that means that iterate is going over too many elements that it doesn't need to
+		glog.V(3).Infof("Retrieved a list. length before intersection: %d, length after: %d, extra"+
+			" elements: %d", lenBefore, lenAfter, lenBefore-lenAfter)
 	}
 	return out, nil
 }

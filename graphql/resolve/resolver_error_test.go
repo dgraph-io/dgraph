@@ -83,6 +83,14 @@ type Author {
 	postsNullableListRequired: [Post]!
 }
 
+type Product {
+  id: String! @id
+  description: String
+  title: String
+  imageUrl: String
+  productVector: [Float!] @embedding
+}
+
 type Post {
 	id: ID!
 	title: String!

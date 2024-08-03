@@ -564,7 +564,7 @@ func TestLargeSchemaUpdate(t *testing.T) {
 
 	schema := "type LargeSchema {"
 	for i := 1; i <= numFields; i++ {
-		schema = schema + "\n" + fmt.Sprintf("field%d: String! @search(by: [regexp])", i)
+		schema = schema + "\n" + fmt.Sprintf("field%d: String! @search(by: [\"regexp\"])", i)
 	}
 	schema = schema + "\n}"
 

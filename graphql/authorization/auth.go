@@ -513,7 +513,7 @@ func (a *AuthMeta) FetchJWK(i int) error {
 
 func (a *AuthMeta) refreshJWK(i int) error {
 	var err error
-	for i := 0; i < 3; i++ {
+	for n := 0; n < 3; n++ {
 		err = a.FetchJWK(i)
 		if err == nil {
 			return nil

@@ -1285,7 +1285,7 @@ func stringExactFilters(t *testing.T) {
 
 func scalarListFilters(t *testing.T) {
 
-	// tags is a list of strings with @search(by: exact).  So all the filters
+	// tags is a list of strings with @search(by: "exact").  So all the filters
 	// lt, le, ... mean "is there something in the list that's lt 'Dgraph'", etc.
 
 	cases := map[string]struct {
