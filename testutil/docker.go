@@ -79,7 +79,7 @@ func (in ContainerInstance) BestEffortWaitForHealthy(privatePort uint16) error {
 	}
 
 	for i := 0; i < 60; i++ {
-		resp, err := http.Get("http://localhost:" + port + "/health")
+		resp, err := http.Get("http://0.0.0.0:" + port + "/health")
 		var body []byte
 		if resp != nil && resp.Body != nil {
 			body, _ = io.ReadAll(resp.Body)
@@ -97,7 +97,7 @@ func (in ContainerInstance) BestEffortWaitForHealthy(privatePort uint16) error {
 		fmt.Printf("Health for %s failed: %v. Response: %q. Retrying...\n", in, err, body)
 		time.Sleep(time.Second)
 	}
-	return fmt.Errorf("did not pass health check on %s", "http://localhost:"+port+"/health\n")
+	return fmt.Errorf("did not pass health check on %s", "http://0.0.0.0:"+port+"/health\n")
 }
 
 func (in ContainerInstance) publicPort(privatePort uint16) string {
@@ -120,7 +120,7 @@ func (in ContainerInstance) login() error {
 	}
 
 	_, err := HttpLogin(&LoginParams{
-		Endpoint: "http://localhost:" + addr + "/admin",
+		Endpoint: "http://0.0.0.0:" + addr + "/admin",
 		UserID:   "groot",
 		Passwd:   "password",
 	})
@@ -171,7 +171,7 @@ func getContainer(name string) types.Container {
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	x.Check(err)
 
-	containers, err := cli.ContainerList(context.Background(), types.ContainerListOptions{All: true})
+	containers, err := cli.ContainerList(context.Background(), container.ListOptions{All: true})
 	if err != nil {
 		log.Fatalf("While listing container: %v\n", err)
 	}
@@ -192,7 +192,7 @@ func AllContainers(prefix string) []types.Container {
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	x.Check(err)
 
-	containers, err := cli.ContainerList(context.Background(), types.ContainerListOptions{All: true})
+	containers, err := cli.ContainerList(context.Background(), container.ListOptions{All: true})
 	if err != nil {
 		log.Fatalf("While listing container: %v\n", err)
 	}
@@ -212,10 +212,10 @@ func ContainerAddr(name string, privatePort uint16) string {
 	c := getContainer(name)
 	for _, p := range c.Ports {
 		if p.PrivatePort == privatePort {
-			return "localhost:" + strconv.Itoa(int(p.PublicPort))
+			return "0.0.0.0:" + strconv.Itoa(int(p.PublicPort))
 		}
 	}
-	return "localhost:" + strconv.Itoa(int(privatePort))
+	return "0.0.0.0:" + strconv.Itoa(int(privatePort))
 }
 
 // DockerStart starts the specified services.
@@ -231,8 +231,7 @@ func DockerRun(instance string, op int) error {
 
 	switch op {
 	case Start:
-		if err := cli.ContainerStart(context.Background(), c.ID,
-			types.ContainerStartOptions{}); err != nil {
+		if err := cli.ContainerStart(context.Background(), c.ID, container.StartOptions{}); err != nil {
 			return err
 		}
 	case Stop:
