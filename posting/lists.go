@@ -242,8 +242,7 @@ func (lc *LocalCache) Find(pred []byte, filter func([]byte) bool) (uint64, error
 			}
 
 			if filter(vals.Value.([]byte)) {
-				result.Uids = append(result.Uids, pk.Uid)
-				break
+				return pk.Uid, nil
 			}
 
 			continue

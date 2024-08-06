@@ -44,6 +44,10 @@ func (h *minPersistentTupleHeap[T]) Push(x interface{}) {
 	*h = append(*h, x.(minPersistentHeapElement[T]))
 }
 
+func (h *minPersistentTupleHeap[T]) PopLast() {
+	heap.Remove(h, h.Len()-1)
+}
+
 func (h *minPersistentTupleHeap[T]) Pop() interface{} {
 	old := *h
 	n := len(old)

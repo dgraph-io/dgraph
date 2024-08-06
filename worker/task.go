@@ -312,7 +312,7 @@ type funcArgs struct {
 // The function tells us whether we want to fetch value posting lists or uid posting lists.
 func (srcFn *functionContext) needsValuePostings(typ types.TypeID) (bool, error) {
 	switch srcFn.fnType {
-	case aggregatorFn, passwordFn:
+	case aggregatorFn, passwordFn, similarToFn:
 		return true, nil
 	case compareAttrFn:
 		if len(srcFn.tokens) > 0 {
@@ -325,7 +325,7 @@ func (srcFn *functionContext) needsValuePostings(typ types.TypeID) (bool, error)
 	case uidInFn, compareScalarFn:
 		// Operate on uid postings
 		return false, nil
-	case notAFunction, similarToFn:
+	case notAFunction:
 		return typ.IsScalar(), nil
 	}
 	return false, errors.Errorf("Unhandled case in fetchValuePostings for fn: %s", srcFn.fname)

@@ -230,7 +230,7 @@ func handleBasicType(k string, v interface{}, op int, nq *api.NQuad) error {
 			return nil
 		}
 
-		if vf, err := types.ParseVFloat(v); err == nil {
+		if vf, err := types.ParseVFloat(v); err == nil && len(vf) != 0 {
 			nq.ObjectValue = &api.Value{Val: &api.Value_Vfloat32Val{Vfloat32Val: types.FloatArrayAsBytes(vf)}}
 			return nil
 		}

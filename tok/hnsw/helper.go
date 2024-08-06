@@ -3,19 +3,21 @@ package hnsw
 import (
 	"context"
 	"encoding/binary"
-	"encoding/json"
+	"fmt"
 	"log"
 	"math"
 	"math/rand"
 	"sort"
 	"strconv"
 	"strings"
+	"unsafe"
 
-	"github.com/chewxy/math32"
 	c "github.com/dgraph-io/dgraph/tok/constraints"
 	"github.com/dgraph-io/dgraph/tok/index"
 	"github.com/getsentry/sentry-go"
 	"github.com/pkg/errors"
+	"github.com/viterin/vek"
+	"github.com/viterin/vek/vek32"
 )
 
 const (
@@ -61,62 +63,47 @@ func (s *SearchResult) GetExtraMetrics() map[string]uint64 {
 	return s.extraMetrics
 }
 
-func norm[T c.Float](v []T, floatBits int) T {
-	vectorNorm, _ := dotProduct(v, v, floatBits)
+func applyDistanceFunction[T c.Float](a, b []T, floatBits int, funcName string,
+	applyFn32 func(a, b []float32) float32, applyFn64 func(a, b []float64) float64) (T, error) {
+	if len(a) != len(b) {
+		err := errors.New(fmt.Sprintf("can not compute %s on vectors of different lengths", funcName))
+		return T(0), err
+	}
+
 	if floatBits == 32 {
-		return T(math32.Sqrt(float32(vectorNorm)))
+		var a1, b1 []float32
+		a1 = *(*[]float32)(unsafe.Pointer(&a))
+		b1 = *(*[]float32)(unsafe.Pointer(&b))
+		return T(applyFn32(a1, b1)), nil
+	} else if floatBits == 64 {
+		var a1, b1 []float64
+		a1 = *(*[]float64)(unsafe.Pointer(&a))
+		b1 = *(*[]float64)(unsafe.Pointer(&b))
+		return T(applyFn64(a1, b1)), nil
 	}
-	if floatBits == 64 {
-		return T(math.Sqrt(float64(vectorNorm)))
-	}
-	panic("Invalid floatBits")
+
+	panic("While applying function on two floats, found an invalid number of float bits")
+
 }
 
 // This needs to implement signature of SimilarityType[T].distanceScore
 // function, hence it takes in a floatBits parameter,
 // but doesn't actually use it.
 func dotProduct[T c.Float](a, b []T, floatBits int) (T, error) {
-	var dotProduct T
-	if len(a) != len(b) {
-		err := errors.New("can not compute dot product on vectors of different lengths")
-		return dotProduct, err
-	}
-	for i := range a {
-		dotProduct += a[i] * b[i]
-	}
-	return dotProduct, nil
+	return applyDistanceFunction(a, b, floatBits, "dot product", vek32.Dot, vek.Dot)
 }
 
 // This needs to implement signature of SimilarityType[T].distanceScore
 // function, hence it takes in a floatBits parameter.
 func cosineSimilarity[T c.Float](a, b []T, floatBits int) (T, error) {
-	dotProd, err := dotProduct(a, b, floatBits)
-	if err != nil {
-		return 0, err
-	}
-	normA := norm[T](a, floatBits)
-	normB := norm[T](b, floatBits)
-	if normA == 0 || normB == 0 {
-		err := errors.New("can not compute cosine similarity on zero vector")
-		var empty T
-		return empty, err
-	}
-	return dotProd / (normA * normB), nil
+	return applyDistanceFunction(a, b, floatBits, "cosine distance", vek32.CosineSimilarity, vek.CosineSimilarity)
 }
 
 // This needs to implement signature of SimilarityType[T].distanceScore
 // function, hence it takes in a floatBits parameter,
 // but doesn't actually use it.
 func euclidianDistanceSq[T c.Float](a, b []T, floatBits int) (T, error) {
-	if len(a) != len(b) {
-		return 0, errors.New("can not subtract vectors of different lengths")
-	}
-	var distSq T
-	for i := range a {
-		val := a[i] - b[i]
-		distSq += val * val
-	}
-	return distSq, nil
+	return applyDistanceFunction(a, b, floatBits, "euclidian distance", vek32.Distance, vek.Distance)
 }
 
 // Used for distance, since shorter distance is better
@@ -205,24 +192,6 @@ func ParseEdges(s string) ([]uint64, error) {
 
 func cannotConvertToUintSlice(s string) error {
 	return errors.Errorf("Cannot convert %s to uint slice", s)
-}
-
-func diff(a []uint64, b []uint64) []uint64 {
-	// Turn b into a map
-	m := make(map[uint64]bool, len(b))
-	for _, s := range b {
-		m[s] = false
-	}
-	// Append values from the longest slice that don't exist in the map
-	var diff []uint64
-	for _, s := range a {
-		if _, ok := m[s]; !ok {
-			diff = append(diff, s)
-			continue
-		}
-		m[s] = true
-	}
-	return diff
 }
 
 // TODO: Move SimilarityType to index package.
@@ -335,7 +304,7 @@ func populateEdgeDataFromKeyWithCacheType(
 	if data == nil {
 		return false, nil
 	}
-	err = json.Unmarshal(data.([]byte), &edgeData)
+	err = decodeUint64MatrixUnsafe(data.([]byte), edgeData)
 	return true, err
 }
 
@@ -444,6 +413,70 @@ func (ph *persistentHNSW[T]) createEntryAndStartNodes(
 	return entry, edges, nil
 }
 
+// Converts the matrix into linear array that looks like
+// [0: Number of rows  1: Length of row1 2-n: Data of row1 3: Length of row2 ..]
+func encodeUint64MatrixUnsafe(matrix [][]uint64) []byte {
+	if len(matrix) == 0 {
+		return nil
+	}
+
+	// Calculate the total size
+	var totalSize uint64
+	for _, row := range matrix {
+		totalSize += uint64(len(row))*uint64(unsafe.Sizeof(uint64(0))) + uint64(unsafe.Sizeof(uint64(0)))
+	}
+	totalSize += uint64(unsafe.Sizeof(uint64(0)))
+
+	// Create a byte slice with the appropriate size
+	data := make([]byte, totalSize)
+
+	offset := 0
+	// Write number of rows
+	rows := uint64(len(matrix))
+	copy(data[offset:offset+8], (*[8]byte)(unsafe.Pointer(&rows))[:])
+	offset += 8
+
+	// Write each row's length and data
+	for _, row := range matrix {
+		rowLen := uint64(len(row))
+		copy(data[offset:offset+8], (*[8]byte)(unsafe.Pointer(&rowLen))[:])
+		offset += 8
+		for i := range row {
+			copy(data[offset:offset+8], (*[8]byte)(unsafe.Pointer(&row[i]))[:])
+			offset += 8
+		}
+	}
+
+	return data
+}
+
+func decodeUint64MatrixUnsafe(data []byte, matrix *[][]uint64) error {
+	if len(data) == 0 {
+		return nil
+	}
+
+	offset := 0
+	// Read number of rows
+	rows := *(*uint64)(unsafe.Pointer(&data[offset]))
+	offset += 8
+
+	*matrix = make([][]uint64, rows)
+
+	for i := 0; i < int(rows); i++ {
+		// Read row length
+		rowLen := *(*uint64)(unsafe.Pointer(&data[offset]))
+		offset += 8
+
+		(*matrix)[i] = make([]uint64, rowLen)
+		for j := 0; j < int(rowLen); j++ {
+			(*matrix)[i][j] = *(*uint64)(unsafe.Pointer(&data[offset]))
+			offset += 8
+		}
+	}
+
+	return nil
+}
+
 // adds empty layers to all levels
 func (ph *persistentHNSW[T]) addStartNodeToAllLevels(
 	ctx context.Context,
@@ -452,11 +485,7 @@ func (ph *persistentHNSW[T]) addStartNodeToAllLevels(
 	inUuid uint64) ([]*index.KeyValue, error) {
 	edges := []*index.KeyValue{}
 	key := DataKey(ph.vecKey, inUuid)
-	emptyEdges := make([][]uint64, ph.maxLevels)
-	emptyEdgesBytes, err := json.Marshal(emptyEdges)
-	if err != nil {
-		return []*index.KeyValue{}, err
-	}
+	emptyEdgesBytes := encodeUint64MatrixUnsafe(make([][]uint64, ph.maxLevels))
 	// creates empty at all levels only for entry node
 	edge, err := ph.newPersistentEdgeKeyValueEntry(ctx, key, txn, inUuid, emptyEdgesBytes)
 	if err != nil {
@@ -509,7 +538,7 @@ func (ph *persistentHNSW[T]) addNeighbors(ctx context.Context, tc *TxnCache,
 			allLayerEdges = allLayerNeighbors
 		} else {
 			// all edges of nearest neighbor
-			err := json.Unmarshal(data.([]byte), &allLayerEdges)
+			err := decodeUint64MatrixUnsafe(data.([]byte), &allLayerEdges)
 			if err != nil {
 				return nil, err
 			}
@@ -527,10 +556,7 @@ func (ph *persistentHNSW[T]) addNeighbors(ctx context.Context, tc *TxnCache,
 	// on every modification of the layer edges, add it to in mem map so you dont have to always be reading
 	// from persistent storage
 	ph.nodeAllEdges[uuid] = allLayerEdges
-	inboundEdgesBytes, marshalErr := json.Marshal(allLayerEdges)
-	if marshalErr != nil {
-		return nil, marshalErr
-	}
+	inboundEdgesBytes := encodeUint64MatrixUnsafe(allLayerEdges)
 
 	edge := &index.KeyValue{
 		Entity: uuid,
@@ -545,19 +571,38 @@ func (ph *persistentHNSW[T]) addNeighbors(ctx context.Context, tc *TxnCache,
 
 // removeDeadNodes(nnEdges, tc) removes dead nodes from nnEdges and returns the new nnEdges
 func (ph *persistentHNSW[T]) removeDeadNodes(nnEdges []uint64, tc *TxnCache) ([]uint64, error) {
-	data, err := getDataFromKeyWithCacheType(ph.vecDead, 1, tc)
-	if err != nil && err.Error() == plError {
-		return []uint64{}, err
-	}
-	var deadNodes []uint64
-	if data != nil { // if dead nodes exist, convert to []uint64
-		deadNodes, err = ParseEdges(string(data.([]byte)))
-		if err != nil {
+	// TODO add a path to delete deadNodes
+	if ph.deadNodes == nil {
+		data, err := getDataFromKeyWithCacheType(ph.vecDead, 1, tc)
+		if err != nil && err.Error() == plError {
 			return []uint64{}, err
 		}
-		nnEdges = diff(nnEdges, deadNodes) // set nnEdges to be all elements not contained in deadNodes
+
+		var deadNodes []uint64
+		if data != nil { // if dead nodes exist, convert to []uint64
+			deadNodes, err = ParseEdges(string(data.([]byte)))
+			if err != nil {
+				return []uint64{}, err
+			}
+		}
+
+		ph.deadNodes = make(map[uint64]struct{})
+		for _, n := range deadNodes {
+			ph.deadNodes[n] = struct{}{}
+		}
 	}
-	return nnEdges, nil
+	if len(ph.deadNodes) == 0 {
+		return nnEdges, nil
+	}
+
+	var diff []uint64
+	for _, s := range nnEdges {
+		if _, ok := ph.deadNodes[s]; !ok {
+			diff = append(diff, s)
+			continue
+		}
+	}
+	return diff, nil
 }
 
 func Uint64ToBytes(key uint64) []byte {

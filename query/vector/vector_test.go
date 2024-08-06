@@ -429,7 +429,7 @@ func TestVectorsMutateFixedLengthWithDiffrentIndexes(t *testing.T) {
 	testVectorMutationSameLength(t)
 	dropPredicate("vtest")
 
-	setSchema(fmt.Sprintf(vectorSchemaWithIndex, "vtest", "4", "dot_product"))
+	setSchema(fmt.Sprintf(vectorSchemaWithIndex, "vtest", "4", "dotproduct"))
 	testVectorMutationSameLength(t)
 	dropPredicate("vtest")
 }
@@ -455,8 +455,8 @@ func TestVectorDeadlockwithTimeout(t *testing.T) {
 		})
 		dropPredicate(pred)
 		setSchema(fmt.Sprintf(vectorSchemaWithIndex, pred, "4", "euclidian"))
-		numVectors := 1000
-		vectorSize := 10
+		numVectors := 10000
+		vectorSize := 1000
 
 		randomVectors, _ := generateRandomVectors(numVectors, vectorSize, pred)
 
@@ -480,15 +480,15 @@ func TestVectorMutateDiffrentLengthWithDiffrentIndexes(t *testing.T) {
 	dropPredicate("vtest")
 
 	setSchema(fmt.Sprintf(vectorSchemaWithIndex, "vtest", "4", "euclidian"))
-	testVectorMutationDiffrentLength(t, "can not subtract vectors of different lengths")
+	testVectorMutationDiffrentLength(t, "can not compute euclidian distance on vectors of different lengths")
 	dropPredicate("vtest")
 
 	setSchema(fmt.Sprintf(vectorSchemaWithIndex, "vtest", "4", "cosine"))
-	testVectorMutationDiffrentLength(t, "can not compute dot product on vectors of different lengths")
+	testVectorMutationDiffrentLength(t, "can not compute cosine distance on vectors of different lengths")
 	dropPredicate("vtest")
 
-	setSchema(fmt.Sprintf(vectorSchemaWithIndex, "vtest", "4", "dot_product"))
-	testVectorMutationDiffrentLength(t, "can not subtract vectors of different lengths")
+	setSchema(fmt.Sprintf(vectorSchemaWithIndex, "vtest", "4", "dotproduct"))
+	testVectorMutationDiffrentLength(t, "can not compute dot product on vectors of different lengths")
 	dropPredicate("vtest")
 }
 

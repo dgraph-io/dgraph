@@ -4,7 +4,7 @@ awscli==1.18.40
 backports.shutil-get-terminal-size==1.0.0
 boto3==1.12.40
 botocore==1.15.40
-certifi==2023.7.22
+certifi==2024.7.4
 cfn-lint==0.29.5
 chardet==3.0.4
 colorama==0.4.3
@@ -13,7 +13,7 @@ decorator==4.4.2
 docker==4.2.0
 docutils==0.15.2
 dulwich==0.19.15
-idna==2.9
+idna==3.7
 Jinja2==3.1.4
 jmespath==0.9.5
 jsonpatch==1.25
@@ -29,13 +29,13 @@ pyrsistent==0.16.0
 python-dateutil==2.8.1
 PyYAML==5.4
 reprint==0.5.2
-requests==2.31.0
+requests==2.32.0
 rsa==4.7
 s3transfer==0.3.3
 six==1.14.0
 tabulate==0.8.7
 taskcat==0.9.17
 typing-extensions==3.7.4.2
-urllib3==1.26.18
+urllib3==1.26.19
 websocket-client==0.57.0
 yattag==1.13.2

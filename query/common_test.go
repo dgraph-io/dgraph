@@ -75,7 +75,7 @@ func processQuery(ctx context.Context, t *testing.T, query string) (string, erro
 	return string(jsonResponse), err
 }
 
-func processQueryRDF(ctx context.Context, t *testing.T, query string) (string, error) {
+func processQueryRDF(ctx context.Context, query string) (string, error) {
 	txn := client.NewTxn()
 	defer func() { _ = txn.Discard(ctx) }()
 
