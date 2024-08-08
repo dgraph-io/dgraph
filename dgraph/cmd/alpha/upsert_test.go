@@ -1906,22 +1906,20 @@ func TestUpsertBulkUpdateValue(t *testing.T) {
 	// Resetting the val in upsert to check if the
 	// values are not switched and the interest is added
 	m1 := `
-upsert {
-  query {
-    u as var(func: has(amount)) {
-      amt as amount
+  upsert {
+    query {
+      u as var(func: has(amount)) {
+        amt as amount
+        updated_amt as math(amt+1.123456789101112)
+      }
     }
-    me () {
-      updated_amt as math(amt+1.123456789101112)
-    }
-  }
 
-  mutation {
-    set {
-      uid(u) <amount> val(updated_amt) .
+    mutation {
+      set {
+        uid(u) <amount> val(updated_amt) .
+      }
     }
   }
-}
   `
 
 	q1 := `

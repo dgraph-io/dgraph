@@ -76,8 +76,8 @@ func TestSchema(t *testing.T) {
 			Predicate: x.GalaxyAttr("age"),
 			ValueType: pb.Posting_INT,
 		}},
-		{"amount", &pb.SchemaUpdate{
-			Predicate: "amount",
+		{x.GalaxyAttr("amount"), &pb.SchemaUpdate{
+			Predicate: x.GalaxyAttr("amount"),
 			ValueType: pb.Posting_BIGFLOAT,
 		}},
 		{x.GalaxyAttr("coordinates"), &pb.SchemaUpdate{

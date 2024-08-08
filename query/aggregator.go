@@ -728,11 +728,11 @@ func (ag *aggregator) matchType(left, right *types.Val) error {
 	case BIGFLOAT:
 		if rightType == FLOAT {
 			var bf big.Float
-			right.Value = bf.SetPrec(types.BigFloatPrecision).SetFloat64(right.Value.(float64))
+			right.Value = *bf.SetPrec(types.BigFloatPrecision).SetFloat64(right.Value.(float64))
 			right.Tid = types.BigFloatID
 		} else if rightType == INT {
 			var bf big.Float
-			right.Value = bf.SetPrec(types.BigFloatPrecision).SetInt64(right.Value.(int64))
+			right.Value = *bf.SetPrec(types.BigFloatPrecision).SetInt64(right.Value.(int64))
 			right.Tid = types.BigFloatID
 		}
 
