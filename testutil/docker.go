@@ -223,7 +223,7 @@ func ContainerAddr0(name string, privatePort uint16) string {
 }
 
 func ContainerAddr(name string, privatePort uint16) string {
-	return ContainerAddrWithHost(name, privatePort, "localhost")
+	return ContainerAddrWithHost(name, privatePort, "0.0.0.0")
 }
 
 // DockerStart starts the specified services.
