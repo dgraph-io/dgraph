@@ -283,6 +283,7 @@ type FieldDefinition interface {
 	IsID() bool
 	IsExternal() bool
 	HasIDDirective() bool
+	HasSearchDirective() bool
 	HasEmbeddingDirective() bool
 	EmbeddingSearchMetric() string
 	HasInterfaceArg() bool
@@ -2372,6 +2373,18 @@ func hasEmbeddingDirective(fd *ast.FieldDefinition) bool {
 	return id != nil
 }
 
+func (fd *fieldDefinition) HasSearchDirective() bool {
+	if fd.fieldDef == nil {
+		return false
+	}
+	return hasSearchDirective(fd.fieldDef)
+}
+
+func hasSearchDirective(fd *ast.FieldDefinition) bool {
+	id := fd.Directives.ForName(searchDirective)
+	return id != nil
+}
+
 func (fd *fieldDefinition) HasInterfaceArg() bool {
 	if fd.fieldDef == nil {
 		return false
@@ -2396,6 +2409,47 @@ func hasInterfaceArg(fd *ast.FieldDefinition) bool {
 	return false
 }
 
+// hasInverse checks if an inverse predicate is configured for an object.
+func hasInverse(sch *ast.Schema, typ *ast.Definition, fd *ast.FieldDefinition) bool {
+	// check that the @hasInverse directive is provided
+	id := fd.Directives.ForName(inverseDirective)
+	if id != nil {
+		return true
+	}
+
+	// also check the reference type.
+	refType := sch.Types[fd.Type.Name()]
+	for _, refField := range refType.Fields {
+
+		refFieldType := sch.Types[refField.Type.Name()]
+		if refField.Type.Name() != typ.Name && !typ.OneOf(refFieldType.Interfaces...) {
+			continue
+		}
+
+		refFieldDir := refField.Directives.ForName(inverseDirective)
+		if refFieldDir == nil {
+			continue
+		}
+
+		invField := refFieldDir.Arguments.ForName("field")
+		if invField == nil {
+			continue
+		}
+
+		invFieldName := invField.Value.Raw
+		if invFieldName == fd.Name {
+			return true
+		}
+	}
+	return false
+}
+
+func isCustomType(sch *ast.Schema, t *ast.Type) bool {
+	_, ok := inbuiltTypeToDgraph[t.Name()]
+	return !ok && (sch.Types[t.Name()].Kind == ast.Object ||
+		sch.Types[t.Name()].Kind == ast.Interface)
+}
+
 func isID(fd *ast.FieldDefinition) bool {
 	return fd.Type.Name() == "ID"
 }
@@ -2414,29 +2468,69 @@ func (fd *fieldDefinition) ParentType() Type {
 
 func (fd *fieldDefinition) Inverse() FieldDefinition {
 
-	invDirective := fd.fieldDef.Directives.ForName(inverseDirective)
-	if invDirective == nil {
+	if fd.fieldDef == nil {
 		return nil
 	}
 
-	invFieldArg := invDirective.Arguments.ForName(inverseArg)
-	if invFieldArg == nil {
-		return nil // really not possible
+	invDirective := fd.fieldDef.Directives.ForName(inverseDirective)
+	if invDirective != nil {
+
+		invFieldArg := invDirective.Arguments.ForName(inverseArg)
+		if invFieldArg == nil {
+			return nil // really not possible
+		}
+
+		typeWrapper := fd.Type()
+		// typ must exist if the schema passed GQL validation
+		typ := fd.inSchema.schema.Types[typeWrapper.Name()]
+
+		// fld must exist if the schema passed our validation
+		fld := typ.Fields.ForName(invFieldArg.Value.Raw)
+
+		return &fieldDefinition{
+			fieldDef:        fld,
+			inSchema:        fd.inSchema,
+			dgraphPredicate: fd.dgraphPredicate,
+			parentType:      typeWrapper,
+		}
+	} else {
+		// also check the inverse type especially when querying from an interface
+		// and not the implemented type. In this case the interface won't have the
+		// inverse field.
+		typeWrapper := fd.Type()
+		// typ must exist if the schema passed GQL validation
+		typ := fd.inSchema.schema.Types[typeWrapper.Name()]
+
+		for _, refField := range typ.Fields {
+
+			refFieldType := fd.inSchema.schema.Types[refField.Type.Name()]
+			if refField.Type.Name() != typ.Name &&
+				!fd.inSchema.schema.Types[fd.ParentType().Name()].OneOf(refFieldType.Interfaces...) {
+				continue
+			}
+
+			refFieldDir := refField.Directives.ForName(inverseDirective)
+			if refFieldDir == nil {
+				continue
+			}
+
+			invField := refFieldDir.Arguments.ForName("field")
+			if invField == nil {
+				continue
+			}
+
+			invFieldName := invField.Value.Raw
+			if invFieldName == fd.Name() {
+				return &fieldDefinition{
+					fieldDef:        refField,
+					inSchema:        fd.inSchema,
+					dgraphPredicate: fd.dgraphPredicate,
+					parentType:      typeWrapper,
+				}
+			}
+		}
 	}
-
-	typeWrapper := fd.Type()
-	// typ must exist if the schema passed GQL validation
-	typ := fd.inSchema.schema.Types[typeWrapper.Name()]
-
-	// fld must exist if the schema passed our validation
-	fld := typ.Fields.ForName(invFieldArg.Value.Raw)
-
-	return &fieldDefinition{
-		fieldDef:        fld,
-		inSchema:        fd.inSchema,
-		dgraphPredicate: fd.dgraphPredicate,
-		parentType:      typeWrapper,
-	}
+	return nil
 }
 
 func (fd *fieldDefinition) WithMemberType(memberType string) FieldDefinition {
