@@ -42,9 +42,9 @@ import (
 )
 
 var (
-	groupOneHTTP   = testutil.ContainerAddr("alpha1", 8080)
-	groupTwoHTTP   = testutil.ContainerAddr("alpha2", 8080)
-	groupThreeHTTP = testutil.ContainerAddr("alpha3", 8080)
+	groupOneHTTP   = testutil.ContainerAddr0("alpha1", 8080)
+	groupTwoHTTP   = testutil.ContainerAddr0("alpha2", 8080)
+	groupThreeHTTP = testutil.ContainerAddr0("alpha3", 8080)
 	groupOnegRPC   = testutil.SockAddr
 
 	groupOneGraphQLServer   = "http://" + groupOneHTTP + "/graphql"

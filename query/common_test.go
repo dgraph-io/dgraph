@@ -345,6 +345,19 @@ tweet-c                        : string @index(fulltext) .
 tweet-d                        : string @index(trigram) .
 name2                          : string @index(term)  .
 age2                           : int @index(int) .
+
+DispatchBoard.column: uid @reverse .
+order: int .
+
+type DispatchBoardColumn {
+  name
+}
+
+type DispatchBoardCard {
+  DispatchBoard.column
+  order
+}
+
 `
 
 func populateCluster(dc dgraphapi.Cluster) {
@@ -892,6 +905,16 @@ func populateCluster(dc dgraphapi.Cluster) {
 
 		<40> <name2> "Alice" .
 		<41> <age2> "20" .
+
+		<1023> <dgraph.type> "DispatchBoardColumn" .
+                <1024> <dgraph.type> "DispatchBoardColumn" .
+                <1025> <dgraph.type> "DispatchBoardCard" .
+                <1026> <dgraph.type> "DispatchBoardCard" .
+
+                <1025> <DispatchBoard.column> <1023> .
+                <1025> <order> "0" .
+                <1026> <DispatchBoard.column> <1023> .
+                <1026> <order> "1" .
 	`)
 	x.Panic(err)
 
