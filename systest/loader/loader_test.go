@@ -71,8 +71,8 @@ func TestLoaderXidmap(t *testing.T) {
 	err = testutil.ExecWithOpts([]string{testutil.DgraphBinaryPath(), "live",
 		"--tls", tlsFlag,
 		"--files", data,
-		"--alpha", testutil.SockAddr,
-		"--zero", testutil.SockAddrZero,
+		"--alpha", testutil.SockAddrLocalhost,
+		"--zero", testutil.SockAddrZeroLocalhost,
 		"-x", "x"}, testutil.CmdOpts{Dir: tmpDir})
 	require.NoError(t, err)
 
@@ -82,8 +82,8 @@ func TestLoaderXidmap(t *testing.T) {
 	err = testutil.ExecWithOpts([]string{testutil.DgraphBinaryPath(), "live",
 		"--tls", tlsFlag,
 		"--files", data,
-		"--alpha", testutil.SockAddr,
-		"--zero", testutil.SockAddrZero,
+		"--alpha", testutil.SockAddrLocalhost,
+		"--zero", testutil.SockAddrZeroLocalhost,
 		"-x", "x"}, testutil.CmdOpts{Dir: tmpDir})
 	require.NoError(t, err)
 
