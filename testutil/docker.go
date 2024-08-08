@@ -208,14 +208,22 @@ func AllContainers(prefix string) []types.Container {
 	return out
 }
 
-func ContainerAddr(name string, privatePort uint16) string {
+func ContainerAddrWithHost(name string, privatePort uint16, host string) string {
 	c := getContainer(name)
 	for _, p := range c.Ports {
 		if p.PrivatePort == privatePort {
-			return "0.0.0.0:" + strconv.Itoa(int(p.PublicPort))
+			return host + ":" + strconv.Itoa(int(p.PublicPort))
 		}
 	}
-	return "0.0.0.0:" + strconv.Itoa(int(privatePort))
+	return host + ":" + strconv.Itoa(int(privatePort))
+}
+
+func ContainerAddr0(name string, privatePort uint16) string {
+	return ContainerAddrWithHost(name, privatePort, "0.0.0.0")
+}
+
+func ContainerAddr(name string, privatePort uint16) string {
+	return ContainerAddrWithHost(name, privatePort, "localhost")
 }
 
 // DockerStart starts the specified services.
