@@ -44,8 +44,8 @@ import (
 )
 
 var (
-	Alpha1HTTP = testutil.ContainerAddr0("alpha1", 8080)
-	Alpha1gRPC = testutil.ContainerAddr0("alpha1", 9080)
+	Alpha1HTTP = testutil.ContainerAddr("alpha1", 8080)
+	Alpha1gRPC = testutil.ContainerAddr("alpha1", 9080)
 
 	GraphqlURL      = "http://" + Alpha1HTTP + "/graphql"
 	GraphqlAdminURL = "http://" + Alpha1HTTP + "/admin"

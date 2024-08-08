@@ -218,8 +218,8 @@ func ContainerAddrWithHost(name string, privatePort uint16, host string) string 
 	return host + ":" + strconv.Itoa(int(privatePort))
 }
 
-func ContainerAddr0(name string, privatePort uint16) string {
-	return ContainerAddrWithHost(name, privatePort, "0.0.0.0")
+func ContainerAddrLocalhost(name string, privatePort uint16) string {
+	return ContainerAddrWithHost(name, privatePort, "localhost")
 }
 
 func ContainerAddr(name string, privatePort uint16) string {

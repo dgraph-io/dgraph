@@ -54,6 +54,8 @@ var (
 	TestDataDirectory string
 	Instance          string
 	MinioInstance     string
+	// SockAddr is the address to the gRPC endpoint of the alpha used during tests with localhost
+	SockAddrLocalhost string
 	// SockAddr is the address to the gRPC endpoint of the alpha used during tests.
 	SockAddr string
 	// SockAddrHttp is the address to the HTTP of alpha used during tests.
@@ -104,8 +106,9 @@ func init() {
 	TestDataDirectory = os.Getenv("TEST_DATA_DIRECTORY")
 	MinioInstance = ContainerAddr("minio", 9001)
 	Instance = fmt.Sprintf("%s_%s_1", DockerPrefix, "alpha1")
+	SockAddrLocalhost = ContainerAddrLocalhost("alpha1", 9080)
 	SockAddr = ContainerAddr("alpha1", 9080)
-	SockAddrHttp = ContainerAddr0("alpha1", 8080)
+	SockAddrHttp = ContainerAddr("alpha1", 8080)
 
 	SockAddrZero = ContainerAddr("zero1", 5080)
 	SockAddrZeroHttp = ContainerAddr("zero1", 6080)

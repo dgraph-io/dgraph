@@ -43,7 +43,7 @@ func TestLoaderXidmap(t *testing.T) {
 		// internal-port
 		true))
 
-	dg, err := testutil.DgraphClientWithCerts(testutil.SockAddr, conf)
+	dg, err := testutil.DgraphClientWithCerts(testutil.SockAddrLocalhost, conf)
 	require.NoError(t, err)
 	ctx := context.Background()
 	testutil.DropAll(t, dg)
