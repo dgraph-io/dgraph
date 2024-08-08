@@ -74,7 +74,7 @@ func TestBigMathValue(t *testing.T) {
            {
                q(func: has(money)) {
                        f as money
-                       g: math(f2)
+                       g: math(f-2)
                }
            }`
 
@@ -90,7 +90,7 @@ func TestBigMathValue(t *testing.T) {
            {
                q(func: has(money)) {
                        f as money
-                       g: math(f2)
+                       g: math(f-2)
                }
            }`
 
