@@ -360,6 +360,8 @@ func (l *loader) conflictKeysForReq(req *request) []uint64 {
 	}
 	return keys
 }
+
+//lint:ignore U1000 Ignore unused function temporarily for debugging
 func (l *loader) print(req *request) {
 	m := make(map[string]struct{})
 	for _, i := range req.Set {
