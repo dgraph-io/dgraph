@@ -212,10 +212,10 @@ func ContainerAddr(name string, privatePort uint16) string {
 	c := getContainer(name)
 	for _, p := range c.Ports {
 		if p.PrivatePort == privatePort {
-			return "localhost:" + strconv.Itoa(int(p.PublicPort))
+			return "0.0.0.0:" + strconv.Itoa(int(p.PublicPort))
 		}
 	}
-	return "localhost:" + strconv.Itoa(int(privatePort))
+	return "0.0.0.0:" + strconv.Itoa(int(privatePort))
 }
 
 // DockerStart starts the specified services.
