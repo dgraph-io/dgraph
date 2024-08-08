@@ -78,26 +78,40 @@ func (in ContainerInstance) BestEffortWaitForHealthy(privatePort uint16) error {
 		return nil
 	}
 
-	for i := 0; i < 60; i++ {
-		resp, err := http.Get("http://localhost:" + port + "/health")
-		var body []byte
-		if resp != nil && resp.Body != nil {
-			body, _ = io.ReadAll(resp.Body)
-			_ = resp.Body.Close()
-		}
-		if err == nil && resp.StatusCode == http.StatusOK {
-			if aerr := checkACL(body); aerr == nil {
-				return nil
-			} else {
-				fmt.Printf("waiting for login to work: %v\n", aerr)
-				time.Sleep(time.Second)
-				continue
+	tryWith := func(host string) error {
+		for i := 0; i < 60; i++ {
+			resp, err := http.Get("http://" + host + ":" + port + "/health")
+			var body []byte
+			if resp != nil && resp.Body != nil {
+				body, _ = io.ReadAll(resp.Body)
+				_ = resp.Body.Close()
 			}
+			if err == nil && resp.StatusCode == http.StatusOK {
+				if aerr := checkACL(body); aerr == nil {
+					return nil
+				} else {
+					fmt.Printf("waiting for login to work: %v\n", aerr)
+					time.Sleep(time.Second)
+					continue
+				}
+			}
+			fmt.Printf("Health for %s failed: %v. Response: %q. Retrying...\n", in, err, body)
+			time.Sleep(time.Second)
 		}
-		fmt.Printf("Health for %s failed: %v. Response: %q. Retrying...\n", in, err, body)
-		time.Sleep(time.Second)
+		return fmt.Errorf("did not pass health check on %s", "http://"+host+":"+port+"/health\n")
 	}
-	return fmt.Errorf("did not pass health check on %s", "http://localhost:"+port+"/health\n")
+
+	err := tryWith("0.0.0.0")
+	if err == nil {
+		return nil
+	}
+
+	err = tryWith("localhost")
+	if err == nil {
+		return nil
+	}
+
+	return err
 }
 
 func (in ContainerInstance) publicPort(privatePort uint16) string {
