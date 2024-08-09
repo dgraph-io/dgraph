@@ -50,7 +50,7 @@ func TestAccessWithCaCert(t *testing.T) {
 func TestCurlAccessWithCaCert(t *testing.T) {
 	// curl over plaintext should fail
 	curlPlainTextArgs := []string{
-		"https://" + testutil.SockAddrHttp + "/alter",
+		"https://" + testutil.SockAddrHttpLocalhost + "/alter",
 		"-d", "name: string @index(exact) .",
 	}
 	testutil.VerifyCurlCmd(t, curlPlainTextArgs, &testutil.CurlFailureConfig{
@@ -59,7 +59,7 @@ func TestCurlAccessWithCaCert(t *testing.T) {
 	})
 
 	curlArgs := []string{
-		"--cacert", "../tls/ca.crt", "https://" + testutil.SockAddrHttp + "/alter",
+		"--cacert", "../tls/ca.crt", "https://" + testutil.SockAddrHttpLocalhost + "/alter",
 		"-d", "name: string @index(exact) .",
 	}
 	testutil.VerifyCurlCmd(t, curlArgs, &testutil.CurlFailureConfig{
