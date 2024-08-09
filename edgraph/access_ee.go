@@ -440,6 +440,26 @@ func InitializeAcl(closer *z.Closer) {
 	upsertGuardianAndGroot(closer, x.GalaxyNamespace)
 }
 
+func RestoreGuardianAndGroot(ctx context.Context, passwd string) {
+	for ctx.Err() == nil {
+		if err := upsertGuardian(ctx); err != nil {
+			glog.Infof("Unable to upsert the guardian group. Error: %v", err)
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+		break
+	}
+
+	for ctx.Err() == nil {
+		if err := upsertGroot(ctx, passwd); err != nil {
+			glog.Infof("Unable to upsert the groot account. Error: %v", err)
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+		break
+	}
+}
+
 // Note: The handling of closer should be done by caller.
 func upsertGuardianAndGroot(closer *z.Closer, ns uint64) {
 	if worker.Config.AclSecretKey == nil {
