@@ -134,7 +134,7 @@ func (in ContainerInstance) login() error {
 	}
 
 	_, err := HttpLogin(&LoginParams{
-		Endpoint: "http://localhost:" + addr + "/admin",
+		Endpoint: "http://0.0.0.0:" + addr + "/admin",
 		UserID:   "groot",
 		Passwd:   "password",
 	})
