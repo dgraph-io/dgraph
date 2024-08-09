@@ -322,6 +322,80 @@ func (lc *LocalCache) getInternal(key []byte, readFromDisk bool) (*List, error) 
 	return lc.SetIfAbsent(skey, pl), nil
 }
 
+// GetSinglePosting retrieves the cached version of the first item in the list associated with the
+// given key. This is used for retrieving the value of a scalar predicats.
+func (lc *LocalCache) GetSinglePosting(key []byte) (*pb.PostingList, error) {
+	getList := func() *pb.PostingList {
+		lc.RLock()
+
+		pl := &pb.PostingList{}
+		if delta, ok := lc.deltas[string(key)]; ok && len(delta) > 0 {
+			err := pl.Unmarshal(delta)
+			if err == nil {
+				lc.RUnlock()
+				return pl
+			}
+		}
+
+		l := lc.plists[string(key)]
+		lc.RUnlock()
+
+		if l != nil {
+			pl, err := l.StaticValue(lc.startTs)
+			if err != nil {
+				return pl
+			}
+		}
+
+		return nil
+	}
+
+	getPostings := func() (*pb.PostingList, error) {
+		pl := getList()
+		if pl != nil {
+			return pl, nil
+		}
+
+		pl = &pb.PostingList{}
+		txn := pstore.NewTransactionAt(lc.startTs, false)
+		item, err := txn.Get(key)
+		if err != nil {
+			return nil, err
+		}
+
+		err = item.Value(func(val []byte) error {
+			if err := pl.Unmarshal(val); err != nil {
+				return err
+			}
+			return nil
+		})
+
+		return pl, err
+	}
+
+	pl, err := getPostings()
+	if err == badger.ErrKeyNotFound {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	// Filter and remove STAR_ALL and OP_DELETE Postings
+	idx := 0
+	for _, postings := range pl.Postings {
+		if hasDeleteAll(postings) {
+			return nil, nil
+		}
+		if postings.Op != Del {
+			pl.Postings[idx] = postings
+			idx++
+		}
+	}
+	pl.Postings = pl.Postings[:idx]
+	return pl, nil
+}
+
 // Get retrieves the cached version of the list associated with the given key.
 func (lc *LocalCache) Get(key []byte) (*List, error) {
 	return lc.getInternal(key, true)

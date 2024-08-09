@@ -1393,6 +1393,58 @@ func (l *List) GetLangTags(readTs uint64) ([]string, error) {
 		hex.EncodeToString(l.key))
 }
 
+func (l *List) StaticValue(readTs uint64) (*pb.PostingList, error) {
+	l.RLock()
+	defer l.RUnlock()
+
+	return l.StaticValueWithLockHeld(readTs)
+}
+
+func (l *List) StaticValueWithLockHeld(readTs uint64) (*pb.PostingList, error) {
+	val, found, err := l.findStaticValue(readTs, math.MaxUint64)
+	if err != nil {
+		return val, errors.Wrapf(err,
+			"cannot retrieve default value from list with key %s", hex.EncodeToString(l.key))
+	}
+	if !found {
+		return val, ErrNoValue
+	}
+	return val, nil
+}
+
+func (l *List) findStaticValue(readTs, uid uint64) (*pb.PostingList, bool, error) {
+	l.AssertRLock()
+
+	mutation, ok := l.mutationMap[readTs]
+	if ok {
+		return mutation, true, nil
+	}
+
+	if l.maxTs < readTs {
+		mutation, ok = l.mutationMap[l.maxTs]
+		if ok {
+			return mutation, true, nil
+		}
+	}
+
+	if len(l.mutationMap) != 0 {
+		for ts, mutation_i := range l.mutationMap {
+			if ts <= readTs {
+				mutation = mutation_i
+			} else {
+				break
+			}
+		}
+		return mutation, true, nil
+	}
+
+	if len(l.plist.Postings) > 0 {
+		return l.plist, true, nil
+	}
+
+	return nil, false, nil
+}
+
 // Value returns the default value from the posting list. The default value is
 // defined as the value without a language tag.
 // Value cannot be used to read from cache
