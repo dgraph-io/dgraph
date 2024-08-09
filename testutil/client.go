@@ -59,7 +59,8 @@ var (
 	// SockAddr is the address to the gRPC endpoint of the alpha used during tests.
 	SockAddr string
 	// SockAddrHttp is the address to the HTTP of alpha used during tests.
-	SockAddrHttp string
+	SockAddrHttp          string
+	SockAddrHttpLocalhost string
 	// SockAddrZero is the address to the gRPC endpoint of the zero used during tests.
 	SockAddrZero string
 	// SockAddrZeroHttp is the address to the HTTP endpoint of the zero used during tests.
@@ -110,6 +111,7 @@ func init() {
 	SockAddrLocalhost = ContainerAddrLocalhost("alpha1", 9080)
 	SockAddr = ContainerAddr("alpha1", 9080)
 	SockAddrHttp = ContainerAddr("alpha1", 8080)
+	SockAddrHttpLocalhost = ContainerAddrLocalhost("alpha1", 8080)
 
 	SockAddrZero = ContainerAddr("zero1", 5080)
 	SockAddrZeroLocalhost = ContainerAddrLocalhost("zero1", 5080)
