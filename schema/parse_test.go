@@ -52,6 +52,7 @@ age:int .
 name: string .
  address: string .
 <http://scalar.com/helloworld/> : string .
+amount: bigfloat .
 coordinates: float32vector .
 indexvector: float32vector @index(hnsw(metric:"euclidian")) .
 `
@@ -74,6 +75,10 @@ func TestSchema(t *testing.T) {
 		{x.GalaxyAttr("age"), &pb.SchemaUpdate{
 			Predicate: x.GalaxyAttr("age"),
 			ValueType: pb.Posting_INT,
+		}},
+		{x.GalaxyAttr("amount"), &pb.SchemaUpdate{
+			Predicate: x.GalaxyAttr("amount"),
+			ValueType: pb.Posting_BIGFLOAT,
 		}},
 		{x.GalaxyAttr("coordinates"), &pb.SchemaUpdate{
 			Predicate: x.GalaxyAttr("coordinates"),
@@ -101,6 +106,10 @@ func TestSchema(t *testing.T) {
 	typ, err := State().TypeOf(x.GalaxyAttr("age"))
 	require.NoError(t, err)
 	require.Equal(t, types.IntID, typ)
+
+	typ, err = State().TypeOf(x.GalaxyAttr("amount"))
+	require.NoError(t, err)
+	require.Equal(t, types.BigFloatID, typ)
 
 	typ, err = State().TypeOf(x.GalaxyAttr("coordinates"))
 	require.NoError(t, err)
