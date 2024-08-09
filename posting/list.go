@@ -1397,52 +1397,51 @@ func (l *List) StaticValue(readTs uint64) (*pb.PostingList, error) {
 	l.RLock()
 	defer l.RUnlock()
 
-	return l.StaticValueWithLockHeld(readTs)
+	return l.findStaticValue(readTs), nil
 }
 
-func (l *List) StaticValueWithLockHeld(readTs uint64) (*pb.PostingList, error) {
-	val, found, err := l.findStaticValue(readTs, math.MaxUint64)
-	if err != nil {
-		return val, errors.Wrapf(err,
-			"cannot retrieve default value from list with key %s", hex.EncodeToString(l.key))
-	}
-	if !found {
-		return val, ErrNoValue
-	}
-	return val, nil
-}
-
-func (l *List) findStaticValue(readTs, uid uint64) (*pb.PostingList, bool, error) {
+func (l *List) findStaticValue(readTs uint64) *pb.PostingList {
 	l.AssertRLock()
 
-	mutation, ok := l.mutationMap[readTs]
-	if ok {
-		return mutation, true, nil
+	if l.mutationMap == nil {
+		// If mutation map is empty, check if there is some data, and return it.
+		if l.plist != nil && len(l.plist.Postings) > 0 {
+			return l.plist
+		}
+		return nil
 	}
 
+	// Return readTs is if it's present in the mutation. It's going to be the latest value.
+	mutation, ok := l.mutationMap[readTs]
+	if ok {
+		return mutation
+	}
+
+	// If maxTs < readTs then we need to read maxTs
 	if l.maxTs < readTs {
 		mutation, ok = l.mutationMap[l.maxTs]
 		if ok {
-			return mutation, true, nil
+			return mutation
 		}
 	}
 
-	if len(l.mutationMap) != 0 {
-		for ts, mutation_i := range l.mutationMap {
-			if ts <= readTs {
-				mutation = mutation_i
-			} else {
-				break
-			}
+	// This means that maxTs > readTs. Go through the map to find the closest value to readTs
+	mutation = nil
+	ts_found := uint64(0)
+	for ts, mutation_i := range l.mutationMap {
+		if ts <= readTs && ts > ts_found {
+			ts_found = ts
+			mutation = mutation_i
 		}
-		return mutation, true, nil
 	}
 
-	if len(l.plist.Postings) > 0 {
-		return l.plist, true, nil
+	if mutation != nil {
+		return mutation
 	}
 
-	return nil, false, nil
+	// If we reach here, that means that there was no entry in mutation map which is less than readTs. That
+	// means we need to return l.plist
+	return l.plist
 }
 
 // Value returns the default value from the posting list. The default value is

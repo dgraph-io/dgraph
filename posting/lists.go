@@ -325,49 +325,46 @@ func (lc *LocalCache) getInternal(key []byte, readFromDisk bool) (*List, error) 
 // GetSinglePosting retrieves the cached version of the first item in the list associated with the
 // given key. This is used for retrieving the value of a scalar predicats.
 func (lc *LocalCache) GetSinglePosting(key []byte) (*pb.PostingList, error) {
-	getList := func() *pb.PostingList {
+	// This would return an error if there is some data in the local cache, but we couldn't read it.
+	getListFromLocalCache := func() (*pb.PostingList, error) {
 		lc.RLock()
 
 		pl := &pb.PostingList{}
 		if delta, ok := lc.deltas[string(key)]; ok && len(delta) > 0 {
 			err := pl.Unmarshal(delta)
-			if err == nil {
-				lc.RUnlock()
-				return pl
-			}
+			lc.RUnlock()
+			return pl, err
 		}
 
 		l := lc.plists[string(key)]
 		lc.RUnlock()
 
 		if l != nil {
-			pl, err := l.StaticValue(lc.startTs)
-			if err != nil {
-				return pl
-			}
+			return l.StaticValue(lc.startTs)
 		}
 
-		return nil
+		return nil, nil
 	}
 
 	getPostings := func() (*pb.PostingList, error) {
-		pl := getList()
-		if pl != nil {
-			return pl, nil
+		pl, err := getListFromLocalCache()
+		// If both pl and err are empty, that means that there was no data in local cache, hence we should
+		// read the data from badger.
+		if pl != nil || err != nil {
+			return pl, err
 		}
 
 		pl = &pb.PostingList{}
 		txn := pstore.NewTransactionAt(lc.startTs, false)
+		defer txn.Discard()
+
 		item, err := txn.Get(key)
 		if err != nil {
 			return nil, err
 		}
 
 		err = item.Value(func(val []byte) error {
-			if err := pl.Unmarshal(val); err != nil {
-				return err
-			}
-			return nil
+			return pl.Unmarshal(val)
 		})
 
 		return pl, err
