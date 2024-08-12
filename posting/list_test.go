@@ -124,6 +124,53 @@ func (l *List) commitMutation(startTs, commitTs uint64) error {
 	return nil
 }
 
+func TestGetSinglePosting(t *testing.T) {
+	key := x.DataKey(x.GalaxyAttr("GetSinglePosting"), 123)
+	txn := NewTxn(5)
+	l, err := txn.Get(key)
+	require.NoError(t, err)
+
+	create_pl := func(startTs uint64) *pb.PostingList {
+		return &pb.PostingList{
+			Postings: []*pb.Posting{{
+				Uid:     1,
+				Op:      1,
+				StartTs: startTs,
+			}},
+		}
+	}
+
+	res, err := l.StaticValue(1)
+	require.NoError(t, err)
+	require.Equal(t, res == nil, true)
+
+	l.plist = create_pl(1)
+
+	res, err = l.StaticValue(1)
+	require.NoError(t, err)
+	require.Equal(t, res.Postings[0].StartTs, uint64(1))
+
+	res, err = l.StaticValue(4)
+	require.NoError(t, err)
+	require.Equal(t, res.Postings[0].StartTs, uint64(1))
+
+	l.mutationMap = make(map[uint64]*pb.PostingList)
+	l.mutationMap[3] = create_pl(3)
+	l.maxTs = 3
+
+	res, err = l.StaticValue(1)
+	require.NoError(t, err)
+	require.Equal(t, res.Postings[0].StartTs, uint64(1))
+
+	res, err = l.StaticValue(3)
+	require.NoError(t, err)
+	require.Equal(t, res.Postings[0].StartTs, uint64(3))
+
+	res, err = l.StaticValue(4)
+	require.NoError(t, err)
+	require.Equal(t, res.Postings[0].StartTs, uint64(3))
+}
+
 func TestAddMutation(t *testing.T) {
 	key := x.DataKey(x.GalaxyAttr("name"), 2)
 
