@@ -132,11 +132,15 @@ func TestGetSinglePosting(t *testing.T) {
 
 	create_pl := func(startTs uint64) *pb.PostingList {
 		return &pb.PostingList{
-			Postings: []*pb.Posting{{
-				Uid:     1,
-				Op:      1,
-				StartTs: startTs,
-			}},
+			Postings: []*pb.Posting{
+				{
+					Uid:      1,
+					Op:       1,
+					StartTs:  startTs,
+					CommitTs: startTs,
+				},
+			},
+			CommitTs: startTs,
 		}
 	}
 
@@ -169,6 +173,19 @@ func TestGetSinglePosting(t *testing.T) {
 	res, err = l.StaticValue(4)
 	require.NoError(t, err)
 	require.Equal(t, res.Postings[0].StartTs, uint64(3))
+
+	// Create txn from 4->6. It could be stored as 4 or 6 in the map.
+	l.mutationMap[4] = create_pl(6)
+	l.mutationMap[4].Postings[0].StartTs = 4
+	l.maxTs = 6
+
+	res, err = l.StaticValue(5)
+	require.NoError(t, err)
+	require.Equal(t, res.Postings[0].StartTs, uint64(3))
+
+	res, err = l.StaticValue(6)
+	require.NoError(t, err)
+	require.Equal(t, res.Postings[0].StartTs, uint64(4))
 }
 
 func TestAddMutation(t *testing.T) {

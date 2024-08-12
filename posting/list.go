@@ -1428,7 +1428,8 @@ func (l *List) findStaticValue(readTs uint64) *pb.PostingList {
 	// This means that maxTs > readTs. Go through the map to find the closest value to readTs
 	mutation = nil
 	ts_found := uint64(0)
-	for ts, mutation_i := range l.mutationMap {
+	for _, mutation_i := range l.mutationMap {
+		ts := mutation_i.CommitTs
 		if ts <= readTs && ts > ts_found {
 			ts_found = ts
 			mutation = mutation_i
