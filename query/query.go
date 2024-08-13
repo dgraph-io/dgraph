@@ -1186,11 +1186,6 @@ func (sg *SubGraph) transformVars(doneVars map[string]varValue, path []*SubGraph
 			continue
 		}
 
-		if val, ok := newMap[0]; ok && len(newMap) == 1 {
-			mt.Const = val
-			continue
-		}
-
 		mt.Val = newMap
 	}
 	return nil
