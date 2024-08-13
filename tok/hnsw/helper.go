@@ -603,8 +603,7 @@ func (ph *persistentHNSW[T]) addNeighbors(ctx context.Context, tc *TxnCache,
 		}
 		// This adds at most efConstruction number of edges for each layer for this node
 		allLayerEdges[level] = append(allLayerEdges[level], allLayerNeighbors[level]...)
-		m := 25
-		if len(allLayerEdges[level]) > m {
+		if len(allLayerEdges[level]) > ph.efConstruction {
 			err := ph.getVecFromUid(uuid, tc, &inVec)
 			if err != nil {
 				log.Printf("[ERROR] While getting vector %s", err)
@@ -621,7 +620,7 @@ func (ph *persistentHNSW[T]) addNeighbors(ctx context.Context, tc *TxnCache,
 					heap.Pop(h)
 				}
 			}
-			allLayerEdges[level] = allLayerEdges[level][:m]
+			allLayerEdges[level] = allLayerEdges[level][:ph.efConstruction]
 		}
 	}
 
