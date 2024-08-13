@@ -1,3 +1,21 @@
+/*
+ * Copyright 2016-2024 Dgraph Labs, Inc. and Contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ * Co-authored by: jairad26@gmail.com, sunil@hypermode.com, bill@hypdermode.com
+ */
+
 package hnsw
 
 import (
@@ -535,33 +553,33 @@ func (ph *persistentHNSW[T]) distance_betw(ctx context.Context, tc *TxnCache, in
 	return d
 }
 
-type CustomHeap struct {
+type HeapDataHolder struct {
 	data    []uint64
 	compare func(a, b uint64) bool
 }
 
 // Len is the number of elements in the collection.
-func (h CustomHeap) Len() int {
+func (h HeapDataHolder) Len() int {
 	return len(h.data)
 }
 
 // Less reports whether the element with index i should sort before the element with index j.
-func (h CustomHeap) Less(i, j int) bool {
+func (h HeapDataHolder) Less(i, j int) bool {
 	return h.compare(h.data[i], h.data[j])
 }
 
 // Swap swaps the elements with indexes i and j.
-func (h CustomHeap) Swap(i, j int) {
+func (h HeapDataHolder) Swap(i, j int) {
 	h.data[i], h.data[j] = h.data[j], h.data[i]
 }
 
 // Push adds an element to the heap.
-func (h *CustomHeap) Push(x interface{}) {
+func (h *HeapDataHolder) Push(x interface{}) {
 	h.data = append(h.data, x.(uint64))
 }
 
 // Pop removes and returns the maximum element from the heap.
-func (h *CustomHeap) Pop() interface{} {
+func (h *HeapDataHolder) Pop() interface{} {
 	old := h.data
 	n := len(old)
 	x := old[n-1]
@@ -608,7 +626,7 @@ func (ph *persistentHNSW[T]) addNeighbors(ctx context.Context, tc *TxnCache,
 			if err != nil {
 				log.Printf("[ERROR] While getting vector %s", err)
 			} else {
-				h := &CustomHeap{
+				h := &HeapDataHolder{
 					data: allLayerEdges[level],
 					compare: func(i, j uint64) bool {
 						return ph.distance_betw(ctx, tc, uuid, i, &inVec, &outVec) >
