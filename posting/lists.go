@@ -145,7 +145,7 @@ func (vc *viLocalCache) GetWithLockHeld(key []byte) (rval index.Value, rerr erro
 func (vc *viLocalCache) GetValueFromPostingList(pl *List) (rval index.Value, rerr error) {
 	value := pl.findStaticValue(vc.delegate.startTs)
 	if value == nil {
-		return nil, nil
+		return nil, badger.ErrKeyNotFound
 	}
 	return value.Postings[0].Value, nil
 }
