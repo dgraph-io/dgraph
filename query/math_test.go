@@ -26,6 +26,53 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 )
 
+func TestVector(t *testing.T) {
+	tree := &mathTree{
+		Fn: "sqrt",
+		Child: []*mathTree{{
+			Fn: "dot",
+			Child: []*mathTree{
+				{
+					Fn: "-",
+					Child: []*mathTree{
+						{
+							Var: "v1",
+							Val: map[uint64]types.Val{
+								0: {Tid: 12, Value: []float32{1.0, 2.0}},
+							},
+						},
+						{
+							Var: "v2",
+							Val: map[uint64]types.Val{
+								123: {Tid: 12, Value: []float32{1.0, 2.0}},
+							},
+						},
+					},
+				},
+				{
+					Fn: "-",
+					Child: []*mathTree{
+						{
+							Var: "v1",
+							Val: map[uint64]types.Val{
+								0: {Tid: 12, Value: []float32{1.0, 2.0}},
+							},
+						},
+						{
+							Var: "v2",
+							Val: map[uint64]types.Val{
+								123: {Tid: 12, Value: []float32{1.0, 2.0}},
+							},
+						},
+					},
+				},
+			},
+		}},
+	}
+
+	require.NoError(t, evalMathTree(tree))
+}
+
 func TestProcessBinary(t *testing.T) {
 	tests := []struct {
 		in  *mathTree

@@ -598,10 +598,10 @@ func TestVectorDelete(t *testing.T) {
 		deleteTriplesInCluster(triple)
 		uid := strings.Split(triple, " ")[0]
 		query = fmt.Sprintf(`{
-		 vector(func: uid(%s)) {
-		  vtest
-		 }
-	}`, uid[1:len(uid)-1])
+		  vector(func: uid(%s)) {
+		   vtest
+		  }
+		}`, uid[1:len(uid)-1])
 
 		result = processQueryNoErr(t, query)
 		require.JSONEq(t, `{"data": {"vector":[]}}`, result)

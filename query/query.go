@@ -1185,6 +1185,7 @@ func (sg *SubGraph) transformVars(doneVars map[string]varValue, path []*SubGraph
 			mt.Const = val
 			continue
 		}
+
 		mt.Val = newMap
 	}
 	return nil

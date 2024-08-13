@@ -143,9 +143,17 @@ func (vc *viLocalCache) GetWithLockHeld(key []byte) (rval index.Value, rerr erro
 }
 
 func (vc *viLocalCache) GetValueFromPostingList(pl *List) (rval index.Value, rerr error) {
-	val, err := pl.ValueWithLockHeld(vc.delegate.startTs)
-	rval = val.Value
-	return rval, err
+	value := pl.findStaticValue(vc.delegate.startTs)
+
+	if value == nil {
+		return nil, ErrNoValue
+	}
+
+	if hasDeleteAll(value.Postings[0]) || value.Postings[0].Op == Del {
+		return nil, ErrNoValue
+	}
+
+	return value.Postings[0].Value, nil
 }
 
 func NewViLocalCache(delegate *LocalCache) *viLocalCache {
@@ -280,22 +288,21 @@ func (lc *LocalCache) SetIfAbsent(key string, updated *List) *List {
 }
 
 func (lc *LocalCache) getInternal(key []byte, readFromDisk bool) (*List, error) {
+	skey := string(key)
 	getNewPlistNil := func() (*List, error) {
 		lc.RLock()
 		defer lc.RUnlock()
 		if lc.plists == nil {
 			return getNew(key, pstore, lc.startTs)
 		}
+		if l, ok := lc.plists[skey]; ok {
+			return l, nil
+		}
 		return nil, nil
 	}
 
 	if l, err := getNewPlistNil(); l != nil || err != nil {
 		return l, err
-	}
-
-	skey := string(key)
-	if pl := lc.getNoStore(skey); pl != nil {
-		return pl, nil
 	}
 
 	var pl *List
