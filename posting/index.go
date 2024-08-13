@@ -655,7 +655,7 @@ func (r *rebuilder) RunWithoutTemp(ctx context.Context) error {
 	stream := pstore.NewStreamAt(r.startTs)
 	stream.LogPrefix = fmt.Sprintf("Rebuilding index for predicate %s (1/2):", r.attr)
 	stream.Prefix = r.prefix
-	stream.NumGo = 8
+	stream.NumGo = 16
 	txn := NewTxn(r.startTs)
 	stream.KeyToList = func(key []byte, it *badger.Iterator) (*bpb.KVList, error) {
 		// We should return quickly if the context is no longer valid.
@@ -744,6 +744,32 @@ func (r *rebuilder) RunWithoutTemp(ctx context.Context) error {
 		return err
 	}
 
+	if os.Getenv("DEBUG_SHOW_HNSW_TREE") != "" {
+		printTreeStats(txn)
+	}
+
+	txn.Update()
+	writer := NewTxnWriter(pstore)
+
+	defer func() {
+		glog.V(1).Infof("Rebuilding index for predicate %s: building index took: %v\n",
+			r.attr, time.Since(start))
+	}()
+
+	ResetCache()
+
+	return x.ExponentialRetry(int(x.Config.MaxRetries),
+		20*time.Millisecond, func() error {
+			err := txn.CommitToDisk(writer, r.startTs)
+			if err == badger.ErrBannedKey {
+				glog.Errorf("Error while writing to banned namespace.")
+				return nil
+			}
+			return err
+		})
+}
+
+func printTreeStats(txn *Txn) {
 	txn.cache.Lock()
 
 	numLevels := 20
@@ -759,7 +785,10 @@ func (r *rebuilder) RunWithoutTemp(ctx context.Context) error {
 				continue
 			}
 
-			decodeUint64MatrixUnsafe(data.Postings[0].Value, &temp)
+			err := decodeUint64MatrixUnsafe(data.Postings[0].Value, &temp)
+			if err != nil {
+				fmt.Println("Error while decoding", err)
+			}
 
 			for i := 0; i < len(temp); i++ {
 				if len(temp[i]) > 0 {
@@ -789,26 +818,6 @@ func (r *rebuilder) RunWithoutTemp(ctx context.Context) error {
 	fmt.Println("")
 
 	txn.cache.Unlock()
-
-	txn.Update()
-	writer := NewTxnWriter(pstore)
-
-	defer func() {
-		glog.V(1).Infof("Rebuilding index for predicate %s: building index took: %v\n",
-			r.attr, time.Since(start))
-	}()
-
-	ResetCache()
-
-	return x.ExponentialRetry(int(x.Config.MaxRetries),
-		20*time.Millisecond, func() error {
-			err := txn.CommitToDisk(writer, r.startTs)
-			if err == badger.ErrBannedKey {
-				glog.Errorf("Error while writing to banned namespace.")
-				return nil
-			}
-			return err
-		})
 }
 
 func decodeUint64MatrixUnsafe(data []byte, matrix *[][]uint64) error {
@@ -1366,19 +1375,12 @@ func rebuildTokIndex(ctx context.Context, rb *IndexRebuild) error {
 
 	runForVectors := (len(factorySpecs) != 0)
 
-	k := 0
-
 	pk := x.ParsedKey{Attr: rb.Attr}
 	builder := rebuilder{attr: rb.Attr, prefix: pk.DataPrefix(), startTs: rb.StartTs}
 	builder.fn = func(uid uint64, pl *List, txn *Txn) ([]*pb.DirectedEdge, error) {
 		edge := pb.DirectedEdge{Attr: rb.Attr, Entity: uid}
 		edges := []*pb.DirectedEdge{}
 		err := pl.Iterate(txn.StartTs, 0, func(p *pb.Posting) error {
-			k += 1
-			if k%10000 == 0 {
-				fmt.Println("DONE:", k)
-
-			}
 			// Add index entries based on p.
 			val := types.Val{
 				Value: p.Value,
