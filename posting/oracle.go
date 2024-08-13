@@ -27,7 +27,6 @@ import (
 	"github.com/golang/glog"
 	ostats "go.opencensus.io/stats"
 
-	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/tok/index"
 	"github.com/dgraph-io/dgraph/x"
@@ -105,9 +104,16 @@ func (vt *viTxn) GetWithLockHeld(key []byte) (rval index.Value, rerr error) {
 
 func (vt *viTxn) GetValueFromPostingList(pl *List) (rval index.Value, rerr error) {
 	value := pl.findStaticValue(vt.delegate.StartTs)
+
 	if value == nil {
-		return nil, badger.ErrKeyNotFound
+		//fmt.Println("DIFF", val, err, nil, badger.ErrKeyNotFound)
+		return nil, ErrNoValue
 	}
+
+	if hasDeleteAll(value.Postings[0]) || value.Postings[0].Op == Del {
+		return nil, ErrNoValue
+	}
+
 	return value.Postings[0].Value, nil
 }
 
