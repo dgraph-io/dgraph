@@ -1393,6 +1393,58 @@ func (l *List) GetLangTags(readTs uint64) ([]string, error) {
 		hex.EncodeToString(l.key))
 }
 
+func (l *List) StaticValue(readTs uint64) (*pb.PostingList, error) {
+	l.RLock()
+	defer l.RUnlock()
+
+	return l.findStaticValue(readTs), nil
+}
+
+func (l *List) findStaticValue(readTs uint64) *pb.PostingList {
+	l.AssertRLock()
+
+	if l.mutationMap == nil {
+		// If mutation map is empty, check if there is some data, and return it.
+		if l.plist != nil && len(l.plist.Postings) > 0 {
+			return l.plist
+		}
+		return nil
+	}
+
+	// Return readTs is if it's present in the mutation. It's going to be the latest value.
+	mutation, ok := l.mutationMap[readTs]
+	if ok {
+		return mutation
+	}
+
+	// If maxTs < readTs then we need to read maxTs
+	if l.maxTs < readTs {
+		mutation, ok = l.mutationMap[l.maxTs]
+		if ok {
+			return mutation
+		}
+	}
+
+	// This means that maxTs > readTs. Go through the map to find the closest value to readTs
+	mutation = nil
+	ts_found := uint64(0)
+	for _, mutation_i := range l.mutationMap {
+		ts := mutation_i.CommitTs
+		if ts <= readTs && ts > ts_found {
+			ts_found = ts
+			mutation = mutation_i
+		}
+	}
+
+	if mutation != nil {
+		return mutation
+	}
+
+	// If we reach here, that means that there was no entry in mutation map which is less than readTs. That
+	// means we need to return l.plist
+	return l.plist
+}
+
 // Value returns the default value from the posting list. The default value is
 // defined as the value without a language tag.
 // Value cannot be used to read from cache
