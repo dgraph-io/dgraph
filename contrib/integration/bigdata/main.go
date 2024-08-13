@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,10 +28,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dgraph-io/dgo/v2"
-	"github.com/dgraph-io/dgo/v2/protos/api"
-	"github.com/dgraph-io/dgraph/x"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+
+	"github.com/dgraph-io/dgo/v230"
+	"github.com/dgraph-io/dgo/v230/protos/api"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 var addrs = flag.String("addrs", "", "comma separated dgraph addresses")
@@ -137,7 +139,7 @@ func initialData() string {
 func makeClient() *dgo.Dgraph {
 	var dgcs []api.DgraphClient
 	for _, addr := range strings.Split(*addrs, ",") {
-		c, err := grpc.Dial(addr, grpc.WithInsecure())
+		c, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		x.Check(err)
 		dgcs = append(dgcs, api.NewDgraphClient(c))
 	}
@@ -188,7 +190,9 @@ func mutate(c *dgo.Dgraph) error {
 			continue
 		}
 		payload := make([]byte, 16+rand.Intn(16))
-		rand.Read(payload)
+		if _, err := rand.Read(payload); err != nil {
+			return err
+		}
 		rdfs += fmt.Sprintf("_:node <attr_%c> \"%s\" .\n", char, url.QueryEscape(string(payload)))
 	}
 	if _, err := r.txn.Mutate(ctx, &api.Mutation{

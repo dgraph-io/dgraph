@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: "{{ .Values.nfs.claim.name }}"
+  namespace: "{{ .Values.nfs.claim.namespace }}"
+spec:
+  storageClassName: "rook-nfs-{{ .Values.nfs.path }}"
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      ## Allocation to use from Server
+      storage: "{{ .Values.nfs.claim.size }}"

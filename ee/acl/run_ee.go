@@ -1,13 +1,14 @@
+//go:build !oss
 // +build !oss
 
 /*
- * Copyright 2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Dgraph Community License (the "License"); you
  * may not use this file except in compliance with the License. You
  * may obtain a copy of the License at
  *
- *     https://github.com/dgraph-io/dgraph/blob/master/licenses/DCL.txt
+ *     https://github.com/dgraph-io/dgraph/blob/main/licenses/DCL.txt
  */
 
 package acl
@@ -16,10 +17,11 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+
+	"github.com/dgraph-io/dgraph/x"
 )
 
 var (
@@ -27,20 +29,24 @@ var (
 	CmdAcl x.SubCommand
 )
 
-const gPassword = "gpassword"
 const defaultGroupList = "dgraph-unused-group"
 
 func init() {
 	CmdAcl.Cmd = &cobra.Command{
-		Use:   "acl",
-		Short: "Run the Dgraph acl tool",
+		Use:         "acl",
+		Short:       "Run the Dgraph Enterprise Edition ACL tool",
+		Annotations: map[string]string{"group": "security"},
 	}
-
+	CmdAcl.Cmd.SetHelpTemplate(x.NonRootTemplate)
 	flag := CmdAcl.Cmd.PersistentFlags()
 	flag.StringP("alpha", "a", "127.0.0.1:9080", "Dgraph Alpha gRPC server address")
-	flag.StringP(gPassword, "x", "", "Groot password to authorize this operation")
+	flag.String("guardian-creds", "", `Login credentials for the guardian
+	user defines the username to login.
+	password defines the password of the user.
+	namespace defines the namespace to log into.
+	Sample flag could look like --guardian-creds user=username;password=mypass;namespace=2`)
 
-	// TLS configuration
+	// --tls SuperFlag
 	x.RegisterClientTLSFlags(flag)
 
 	subcommands := initSubcommands()
@@ -111,8 +117,6 @@ func initSubcommands() []*x.SubCommand {
 		"The list of groups to be set for the user")
 	modFlags.StringP("group", "g", "", "The group whose permission is to be changed")
 	modFlags.StringP("pred", "p", "", "The predicates whose acls are to be changed")
-	modFlags.StringP("pred_regex", "P", "", "The regular expression specifying predicates"+
-		" whose acls are to be changed")
 	modFlags.IntP("perm", "m", 0, "The acl represented using "+
 		"an integer: 4 for read, 2 for write, and 1 for modify. Use a negative value to remove a "+
 		"predicate from the group")

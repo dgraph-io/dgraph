@@ -1,0 +1,412 @@
+ADD_UPDATE_MUTATION:
+  -
+    name: "single level"
+    gqlquery: |
+      mutation {
+        ADD_UPDATE_MUTATION {
+          post {
+            postID
+            title
+          }
+        }
+      }
+    dgquery: |-
+      query {
+        PAYLOAD_TYPE.post(func: uid(0x4)) {
+          Post.postID : uid
+          Post.title : Post.title
+        }
+      }
+
+  -
+    name: "alias is ignored in query rewriting"
+    gqlquery: |
+      mutation {
+        ADD_UPDATE_MUTATION {
+          result : post {
+            postID
+            titleAlias : title
+            theAuthor : author {
+              nameAlias : name
+            }
+          }
+        }
+      }
+    dgquery: |-
+      query {
+        PAYLOAD_TYPE.result(func: uid(0x4)) {
+          Post.postID : uid
+          Post.titleAlias : Post.title
+          Post.theAuthor : Post.author {
+            Author.nameAlias : Author.name
+            dgraph.uid : uid
+          }
+        }
+      }
+
+  -
+    name: "selection set in result"
+    gqlquery: |
+      mutation {
+        ADD_UPDATE_MUTATION {
+          post (first: 0, offset: 10, order : {asc: title}, filter: { title: { anyofterms: "GraphQL" } }){
+            postID
+            title
+          }
+        }
+      }
+    dgquery: |-
+      query {
+        PAYLOAD_TYPE.post(func: uid(0x4), orderasc: Post.title, first: 0, offset: 10) @filter(anyofterms(Post.title, "GraphQL")) {
+          Post.postID : uid
+          Post.title : Post.title
+        }
+      }
+
+  -
+    name: "deep"
+    gqlquery: |
+      mutation {
+        ADD_UPDATE_MUTATION {
+          post {
+            postID
+            title
+            author {
+              name
+            }
+          }
+        }
+      }
+    dgquery: |-
+      query {
+        PAYLOAD_TYPE.post(func: uid(0x4)) {
+          Post.postID : uid
+          Post.title : Post.title
+          Post.author : Post.author {
+            Author.name : Author.name
+            dgraph.uid : uid
+          }
+        }
+      }
+
+  -
+    name: "can do deep filter"
+    gqlquery: |
+      mutation {
+        ADD_UPDATE_MUTATION {
+          post {
+            postID
+            title
+            author {
+              name
+              posts(filter: { title: { anyofterms: "GraphQL" } }) {
+                title
+              }
+            }
+          }
+        }
+      }
+    dgquery: |-
+      query {
+        PAYLOAD_TYPE.post(func: uid(0x4)) {
+          Post.postID : uid
+          Post.title : Post.title
+          Post.author : Post.author {
+            Author.name : Author.name
+            Author.posts : Author.posts @filter(anyofterms(Post.title, "GraphQL")) {
+              Post.title : Post.title
+              dgraph.uid : uid
+            }
+            dgraph.uid : uid
+          }
+        }
+      }
+
+  -
+    name: "can work with skip and filter"
+    gqlquery: |
+      mutation ($skip: Boolean!, $include: Boolean!) {
+        ADD_UPDATE_MUTATION {
+          post {
+            postID @skip(if: $skip)
+            title
+            author @include(if: $include) {
+              name
+              posts(filter: { title: { anyofterms: "GraphQL" } }) {
+                title
+              }
+            }
+          }
+        }
+      }
+    gqlvariables: |
+      {
+          "skip": true,
+          "include": false
+      }
+    dgquery: |-
+      query {
+        PAYLOAD_TYPE.post(func: uid(0x4)) {
+          Post.title : Post.title
+          dgraph.uid : uid
+        }
+      }
+
+  -
+    name: "cascade directive on mutation payload"
+    gqlquery: |
+      mutation {
+        ADD_UPDATE_MUTATION @cascade {
+          post {
+            title
+            text
+            author {
+              name
+              dob
+            }
+          }
+        }
+      }
+    dgquery: |-
+      query {
+        PAYLOAD_TYPE.post(func: uid(0x4)) @cascade {
+          Post.title : Post.title
+          Post.text : Post.text
+          Post.author : Post.author {
+            Author.name : Author.name
+            Author.dob : Author.dob
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+      }
+
+  -
+    name: "cascade directive on mutation query field"
+    gqlquery: |
+      mutation {
+        ADD_UPDATE_MUTATION {
+          post @cascade {
+            title
+            text
+            author {
+              name
+              dob
+            }
+          }
+        }
+      }
+    dgquery: |-
+      query {
+        PAYLOAD_TYPE.post(func: uid(0x4)) @cascade {
+          Post.title : Post.title
+          Post.text : Post.text
+          Post.author : Post.author {
+            Author.name : Author.name
+            Author.dob : Author.dob
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+      }
+
+  -
+    name: "cascade directive inside mutation query"
+    gqlquery: |
+      mutation {
+        ADD_UPDATE_MUTATION {
+          post {
+            title
+            text
+            author @cascade {
+              name
+              dob
+            }
+          }
+        }
+      }
+    dgquery: |-
+      query {
+        PAYLOAD_TYPE.post(func: uid(0x4)) {
+          Post.title : Post.title
+          Post.text : Post.text
+          Post.author : Post.author @cascade {
+            Author.name : Author.name
+            Author.dob : Author.dob
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+      }
+
+  -
+    name: "parameterized cascade directive on mutation payload"
+    gqlquery: |
+      mutation {
+        ADD_UPDATE_MUTATION @cascade(fields:["post","numUids"]) {
+          post {
+            title
+            text
+            author {
+              name
+              dob
+            }
+          }
+        }
+      }
+    dgquery: |-
+      query {
+        PAYLOAD_TYPE.post(func: uid(0x4)) @cascade {
+          Post.title : Post.title
+          Post.text : Post.text
+          Post.author : Post.author {
+            Author.name : Author.name
+            Author.dob : Author.dob
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+      }
+
+  -
+    name: "parametrized cascade directive on mutation query field"
+    gqlquery: |
+      mutation {
+        ADD_UPDATE_MUTATION  {
+          post @cascade(fields:["title","text"]) {
+            title
+            text
+            author {
+              name
+              dob
+            }
+          }
+        }
+      }
+    dgquery: |-
+      query {
+        PAYLOAD_TYPE.post(func: uid(0x4)) @cascade(Post.title, Post.text) {
+          Post.title : Post.title
+          Post.text : Post.text
+          Post.author : Post.author {
+            Author.name : Author.name
+            Author.dob : Author.dob
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+      }
+
+  -
+    name: "parameterized cascade directive inside mutation query"
+    gqlquery: |
+      mutation {
+        ADD_UPDATE_MUTATION {
+          post {
+            title
+            text
+            author @cascade(fields:["name","dob","id"]) {
+              name
+              dob
+            }
+          }
+        }
+      }
+    dgquery: |-
+      query {
+        PAYLOAD_TYPE.post(func: uid(0x4)) {
+          Post.title : Post.title
+          Post.text : Post.text
+          Post.author : Post.author @cascade(Author.name, Author.dob, uid) {
+            Author.name : Author.name
+            Author.dob : Author.dob
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+      }
+
+  -
+    name: "parameterized cascade directive at multiple levels "
+    gqlquery: |
+      mutation {
+        ADD_UPDATE_MUTATION @cascade(fields:["post"]) {
+          post {
+            title
+            text
+            author @cascade(fields:["name","dob"]) {
+              name
+              dob
+            }
+          }
+        }
+      }
+    dgquery: |-
+      query {
+        PAYLOAD_TYPE.post(func: uid(0x4)) @cascade {
+          Post.title : Post.title
+          Post.text : Post.text
+          Post.author : Post.author @cascade(Author.name, Author.dob) {
+            Author.name : Author.name
+            Author.dob : Author.dob
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+      }
+UPDATE_MUTATION:
+  -
+    name: "filter update result"
+    gqlquery: |
+      mutation {
+        UPDATE_MUTATION {
+          post(filter: { title: { anyofterms: "GraphQL" } }) {
+            postID
+            title
+          }
+        }
+      }
+    dgquery: |-
+      query {
+        PAYLOAD_TYPE.post(func: uid(0x4)) @filter(anyofterms(Post.title, "GraphQL")) {
+          Post.postID : uid
+          Post.title : Post.title
+        }
+      }
+  -
+    name: "order update result"
+    gqlquery: |
+      mutation {
+        UPDATE_MUTATION {
+          post(order : {asc: title}) {
+            postID
+            title
+          }
+        }
+      }
+    dgquery: |-
+      query {
+        PAYLOAD_TYPE.post(func: uid(0x4), orderasc: Post.title) {
+          Post.postID : uid
+          Post.title : Post.title
+        }
+      }
+
+  -
+    name: "order and pagination update result"
+    gqlquery: |
+      mutation {
+        UPDATE_MUTATION {
+          post(first: 0, offset: 10, order : {asc: title}) {
+            postID
+            title
+          }
+        }
+      }
+    dgquery: |-
+      query {
+        PAYLOAD_TYPE.post(func: uid(0x4), orderasc: Post.title, first: 0, offset: 10) {
+          Post.postID : uid
+          Post.title : Post.title
+        }
+      }

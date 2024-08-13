@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2016-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,24 +18,29 @@ package worker
 
 import (
 	"bytes"
+	"context"
 	"math"
+	"sync"
+	"sync/atomic"
 	"time"
 
-	"github.com/dgraph-io/badger/v2"
-	"github.com/dgraph-io/dgo/v2"
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/golang/glog"
+	"github.com/pkg/errors"
+	ostats "go.opencensus.io/stats"
+	otrace "go.opencensus.io/trace"
+	"google.golang.org/grpc/metadata"
 
+	"github.com/dgraph-io/badger/v4"
+	"github.com/dgraph-io/badger/v4/y"
+	"github.com/dgraph-io/dgo/v230"
+	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
-
-	"github.com/golang/glog"
-	"github.com/pkg/errors"
-	otrace "go.opencensus.io/trace"
-	"golang.org/x/net/context"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 var (
@@ -44,6 +49,9 @@ var (
 	errNonExistentTablet        = errors.Errorf(ErrNonExistentTabletMessage)
 	errUnservedTablet           = errors.Errorf("Tablet isn't being served by this instance")
 )
+
+// Default limit on number of simultaneous open files on unix systems
+const DefaultMaxOpenFileLimit = 1024
 
 func isStarAll(v []byte) bool {
 	return bytes.Equal(v, []byte(x.Star))
@@ -55,10 +63,11 @@ func isDeletePredicateEdge(edge *pb.DirectedEdge) bool {
 
 // runMutation goes through all the edges and applies them.
 func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *posting.Txn) error {
+	ctx = schema.GetWriteContext(ctx)
+
 	// We shouldn't check whether this Alpha serves this predicate or not. Membership information
 	// isn't consistent across the entire cluster. We should just apply whatever is given to us.
-
-	su, ok := schema.State().Get(edge.Attr)
+	su, ok := schema.State().Get(ctx, edge.Attr)
 	if edge.Op == pb.DirectedEdge_SET {
 		if !ok {
 			return errors.Errorf("runMutation: Unable to find schema for %s", edge.Attr)
@@ -68,6 +77,7 @@ func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *posting.Txn) e
 	if isDeletePredicateEdge(edge) {
 		return errors.New("We should never reach here")
 	}
+
 	// Once mutation comes via raft we do best effort conversion
 	// Type check is done before proposing mutation, in case schema is not
 	// present, some invalid entries might be written initially
@@ -115,85 +125,193 @@ func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *posting.Txn) e
 	return plist.AddMutationWithIndex(ctx, edge, txn)
 }
 
-// This is serialized with mutations, called after applied watermarks catch up
-// and further mutations are blocked until this is done.
-func runSchemaMutation(ctx context.Context, update *pb.SchemaUpdate, startTs uint64) error {
-	if err := runSchemaMutationHelper(ctx, update, startTs); err != nil {
-		// on error, we restore the memory state to be the same as the disk
-		maxRetries := 10
-		loadErr := x.RetryUntilSuccess(maxRetries, 10*time.Millisecond, func() error {
-			return schema.Load(update.Predicate)
-		})
+func undoSchemaUpdate(predicate string) {
+	maxRetries := 10
+	loadErr := x.RetryUntilSuccess(maxRetries, 10*time.Millisecond, func() error {
+		return schema.Load(predicate)
+	})
 
-		if loadErr != nil {
-			glog.Fatalf("failed to load schema after %d retries: %v", maxRetries, loadErr)
-		}
-		return err
+	if loadErr != nil {
+		glog.Fatalf("failed to load schema after %d retries: %v", maxRetries, loadErr)
 	}
-
-	return updateSchema(update)
 }
 
-func runSchemaMutationHelper(ctx context.Context, update *pb.SchemaUpdate, startTs uint64) error {
-	if tablet, err := groups().Tablet(update.Predicate); err != nil {
-		return err
-	} else if tablet.GetGroupId() != groups().groupId() {
-		return errors.Errorf("Tablet isn't being served by this group. Tablet: %+v", tablet)
+func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs uint64) error {
+	if len(updates) == 0 {
+		return nil
+	}
+	// Wait until schema modification for all predicates is complete. There cannot be two
+	// background tasks running as this is a race condition. We typically won't propose an
+	// index update if one is already going on. If that's not the case, then the receiver
+	// of the update had probably finished the previous index update but some follower
+	// (or perhaps leader) had not finished it.
+	// In other words, the proposer checks whether there is another indexing in progress.
+	// If that's the case, the alter request is rejected. Otherwise, the request is accepted.
+	// Before reaching here, the proposer P would have checked that no indexing is in progress
+	// (could also be because proposer was done earlier than others). If P was still indexing
+	// when the req was received, it would have rejected the Alter request. Only if P is
+	// not indexing, it would accept and propose the request.
+	// It is possible that a receiver R of the proposal is still indexing. In that case, R would
+	// block here and wait for indexing to be finished.
+	gr.Node.waitForTask(opIndexing)
+
+	// done is used to ensure that we only stop the indexing task once.
+	var done uint32
+	start := time.Now()
+	stopIndexing := func(closer *z.Closer) {
+		// runSchemaMutation can return. stopIndexing could be called by goroutines.
+		if !schema.State().IndexingInProgress() {
+			if atomic.CompareAndSwapUint32(&done, 0, 1) {
+				closer.Done()
+				// Time check is here so that we do not propose snapshot too frequently.
+				if time.Since(start) < 10*time.Second || !gr.Node.AmLeader() {
+					return
+				}
+				if err := gr.Node.proposeSnapshot(); err != nil {
+					glog.Errorf("error in proposing snapshot: %v", err)
+				}
+			}
+		}
 	}
 
-	if err := checkSchema(update); err != nil {
-		return err
+	buildIndexesHelper := func(update *pb.SchemaUpdate, rebuild posting.IndexRebuild) error {
+		wrtCtx := schema.GetWriteContext(context.Background())
+		if err := rebuild.BuildIndexes(wrtCtx); err != nil {
+			return err
+		}
+		if err := updateSchema(update, rebuild.StartTs); err != nil {
+			return err
+		}
+
+		glog.Infof("Done schema update %+v\n", update)
+		return nil
 	}
-	old, _ := schema.State().Get(update.Predicate)
-	current := *update
-	// Sets only in memory, we will update it on disk only after schema mutations
-	// are successful and  written to disk.
-	schema.State().Set(update.Predicate, current)
 
-	// Once we remove index or reverse edges from schema, even though the values
-	// are present in db, they won't be used due to validation in work/task.go
-
-	// We don't want to use sync watermarks for background removal, because it would block
-	// linearizable read requests. Only downside would be on system crash, stale edges
-	// might remain, which is ok.
-
-	// Indexing can't be done in background as it can cause race conditons with new
-	// index mutations (old set and new del)
-	// We need watermark for index/reverse edge addition for linearizable reads.
-	// (both applied and synced watermarks).
-	defer glog.Infof("Done schema update %+v\n", update)
-	rebuild := posting.IndexRebuild{
-		Attr:          update.Predicate,
-		StartTs:       startTs,
-		OldSchema:     &old,
-		CurrentSchema: &current,
+	// This wg allows waiting until setup for all the predicates is complete
+	// before running buildIndexes for any of those predicates.
+	var wg sync.WaitGroup
+	wg.Add(1)
+	defer wg.Done()
+	// This throttle allows is used to limit the number of files which are opened simultaneously
+	// by badger while building indexes for predicates in background.
+	maxOpenFileLimit, err := x.QueryMaxOpenFiles()
+	if err != nil {
+		// Setting to default value on unix systems
+		maxOpenFileLimit = 1024
 	}
-	return rebuild.Run(ctx)
+	glog.Infof("Max open files limit: %d", maxOpenFileLimit)
+	// Badger opens around 8 files for indexing per predicate.
+	// The throttle limit is set to maxOpenFileLimit/8 to ensure that indexing does not throw
+	// "Too many open files" error.
+	throttle := y.NewThrottle(maxOpenFileLimit / 8)
+
+	buildIndexes := func(update *pb.SchemaUpdate, rebuild posting.IndexRebuild, c *z.Closer) {
+		// In case background indexing is running, we should call it here again.
+		defer stopIndexing(c)
+
+		// We should only start building indexes once this function has returned.
+		// This is in order to ensure that we do not call DropPrefix for one predicate
+		// and write indexes for another predicate simultaneously. because that could
+		// cause writes to badger to fail leading to undesired indexing failures.
+		wg.Wait()
+
+		x.Check(throttle.Do())
+		// undo schema changes in case re-indexing fails.
+		if err := buildIndexesHelper(update, rebuild); err != nil {
+			glog.Errorf("error in building indexes, aborting :: %v\n", err)
+			undoSchemaUpdate(update.Predicate)
+		}
+		throttle.Done(nil)
+	}
+
+	var closer *z.Closer
+	for _, su := range updates {
+		if tablet, err := groups().Tablet(su.Predicate); err != nil {
+			return err
+		} else if tablet.GetGroupId() != groups().groupId() {
+			return errors.Errorf("Tablet isn't being served by this group. Tablet: %+v", tablet)
+		}
+
+		if err := checkSchema(su); err != nil {
+			return err
+		}
+
+		old, ok := schema.State().Get(ctx, su.Predicate)
+		rebuild := posting.IndexRebuild{
+			Attr:          su.Predicate,
+			StartTs:       startTs,
+			OldSchema:     &old,
+			CurrentSchema: su,
+		}
+		shouldRebuild := ok && rebuild.NeedIndexRebuild()
+
+		// Start opIndexing task only if schema update needs to build the indexes.
+		if shouldRebuild && !gr.Node.isRunningTask(opIndexing) {
+			closer, err = gr.Node.startTaskAtTs(opIndexing, startTs)
+			if err != nil {
+				return err
+			}
+			defer stopIndexing(closer)
+		}
+
+		querySchema := rebuild.GetQuerySchema()
+		// Sets the schema only in memory. The schema is written to
+		// disk only after schema mutations are successful.
+		schema.State().Set(su.Predicate, querySchema)
+		schema.State().SetMutSchema(su.Predicate, su)
+
+		// TODO(Aman): If we return an error, we may not have right schema reflected.
+		setup := func() error {
+			if !ok {
+				return nil
+			}
+			if err := rebuild.DropIndexes(ctx); err != nil {
+				return err
+			}
+			return rebuild.BuildData(ctx)
+		}
+		if err := setup(); err != nil {
+			glog.Errorf("error in building indexes, aborting :: %v\n", err)
+			undoSchemaUpdate(su.Predicate)
+			return err
+		}
+
+		if shouldRebuild {
+			go buildIndexes(su, rebuild, closer)
+		} else if err := updateSchema(su, rebuild.StartTs); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // updateSchema commits the schema to disk in blocking way, should be ok because this happens
 // only during schema mutations or we see a new predicate.
-func updateSchema(s *pb.SchemaUpdate) error {
-	schema.State().Set(s.Predicate, *s)
-	txn := pstore.NewTransactionAt(1, true)
+func updateSchema(s *pb.SchemaUpdate, ts uint64) error {
+	schema.State().Set(s.Predicate, s)
+	schema.State().DeleteMutSchema(s.Predicate)
+	txn := pstore.NewTransactionAt(ts, true)
 	defer txn.Discard()
 	data, err := s.Marshal()
 	x.Check(err)
-	err = txn.SetEntry(&badger.Entry{
+	e := &badger.Entry{
 		Key:      x.SchemaKey(s.Predicate),
 		Value:    data,
 		UserMeta: posting.BitSchemaPosting,
-	})
-	if err != nil {
+	}
+	if err = txn.SetEntry(e.WithDiscard()); err != nil {
 		return err
 	}
-	return txn.CommitAt(1, nil)
+	return txn.CommitAt(ts, nil)
 }
 
-func createSchema(attr string, typ types.TypeID) error {
+func createSchema(attr string, typ types.TypeID, hint pb.Metadata_HintType, ts uint64) error {
+	ctx := schema.GetWriteContext(context.Background())
+
 	// Don't overwrite schema blindly, acl's might have been set even though
 	// type is not present
-	s, ok := schema.State().Get(attr)
+	s, ok := schema.State().Get(ctx, attr)
 	if ok {
 		s.ValueType = typ.Enum()
 	} else {
@@ -203,36 +321,44 @@ func createSchema(attr string, typ types.TypeID) error {
 		if typ == types.UidID {
 			s.List = true
 		}
+
+		switch hint {
+		case pb.Metadata_SINGLE:
+			s.List = false
+		case pb.Metadata_LIST:
+			s.List = true
+		default:
+		}
 	}
 	if err := checkSchema(&s); err != nil {
 		return err
 	}
-	return updateSchema(&s)
+	return updateSchema(&s, ts)
 }
 
-func runTypeMutation(ctx context.Context, update *pb.TypeUpdate) error {
+func runTypeMutation(ctx context.Context, update *pb.TypeUpdate, ts uint64) error {
 	current := *update
-	schema.State().SetType(update.TypeName, current)
-	return updateType(update.TypeName, *update)
+	schema.State().SetType(update.TypeName, &current)
+	return updateType(update.TypeName, *update, ts)
 }
 
 // We commit schema to disk in blocking way, should be ok because this happens
 // only during schema mutations or we see a new predicate.
-func updateType(typeName string, t pb.TypeUpdate) error {
-	schema.State().SetType(typeName, t)
-	txn := pstore.NewTransactionAt(1, true)
+func updateType(typeName string, t pb.TypeUpdate, ts uint64) error {
+	schema.State().SetType(typeName, &t)
+	txn := pstore.NewTransactionAt(ts, true)
 	defer txn.Discard()
 	data, err := t.Marshal()
 	x.Check(err)
-	err = txn.SetEntry(&badger.Entry{
+	e := &badger.Entry{
 		Key:      x.TypeKey(typeName),
 		Value:    data,
 		UserMeta: posting.BitSchemaPosting,
-	})
-	if err != nil {
+	}
+	if err := txn.SetEntry(e.WithDiscard()); err != nil {
 		return err
 	}
-	return txn.CommitAt(1, nil)
+	return txn.CommitAt(ts, nil)
 }
 
 func hasEdges(attr string, startTs uint64) bool {
@@ -260,20 +386,24 @@ func hasEdges(attr string, startTs uint64) bool {
 	return false
 }
 func checkSchema(s *pb.SchemaUpdate) error {
-	if len(s.Predicate) == 0 {
+	if s == nil {
+		return errors.Errorf("Nil schema")
+	}
+
+	if x.ParseAttr(s.Predicate) == "" {
 		return errors.Errorf("No predicate specified in schema mutation")
 	}
 
 	if x.IsInternalPredicate(s.Predicate) {
 		return errors.Errorf("Cannot create user-defined predicate with internal name %s",
-			s.Predicate)
+			x.ParseAttr(s.Predicate))
 	}
 
-	if s.Directive == pb.SchemaUpdate_INDEX && len(s.Tokenizer) == 0 {
+	if s.Directive == pb.SchemaUpdate_INDEX && !schema.HasTokenizerOrVectorIndexSpec(s) {
 		return errors.Errorf("Tokenizer must be specified while indexing a predicate: %+v", s)
 	}
 
-	if len(s.Tokenizer) > 0 && s.Directive != pb.SchemaUpdate_INDEX {
+	if schema.HasTokenizerOrVectorIndexSpec(s) && s.Directive != pb.SchemaUpdate_INDEX {
 		return errors.Errorf("Directive must be SchemaUpdate_INDEX when a tokenizer is specified")
 	}
 
@@ -281,16 +411,25 @@ func checkSchema(s *pb.SchemaUpdate) error {
 	if typ == types.UidID && s.Directive == pb.SchemaUpdate_INDEX {
 		// index on uid type
 		return errors.Errorf("Index not allowed on predicate of type uid on predicate %s",
-			s.Predicate)
+			x.ParseAttr(s.Predicate))
 	} else if typ != types.UidID && s.Directive == pb.SchemaUpdate_REVERSE {
 		// reverse on non-uid type
-		return errors.Errorf("Cannot reverse for non-uid type on predicate %s", s.Predicate)
+		return errors.Errorf("Cannot reverse for non-uid type on predicate %s",
+			x.ParseAttr(s.Predicate))
 	}
 
 	// If schema update has upsert directive, it should have index directive.
-	if s.Upsert && len(s.Tokenizer) == 0 {
+	if s.Upsert && len(s.Tokenizer) == 0 && !s.Unique {
 		return errors.Errorf("Index tokenizer is mandatory for: [%s] when specifying @upsert directive",
-			s.Predicate)
+			x.ParseAttr(s.Predicate))
+	}
+
+	if s.Unique {
+		ctx := context.WithValue(context.Background(), schema.IsWrite, false)
+		prevSchema, _ := schema.State().Get(ctx, s.Predicate)
+		if err := validateSchemaForUnique(prevSchema, s); err != nil {
+			return err
+		}
 	}
 
 	t, err := schema.State().TypeOf(s.Predicate)
@@ -313,22 +452,69 @@ func checkSchema(s *pb.SchemaUpdate) error {
 		// has data.
 		if schema.State().IsList(s.Predicate) && !s.List && hasEdges(s.Predicate, math.MaxUint64) {
 			return errors.Errorf("Schema change not allowed from [%s] => %s without"+
-				" deleting pred: %s", t.Name(), typ.Name(), s.Predicate)
+				" deleting pred: %s", t.Name(), typ.Name(), x.ParseAttr(s.Predicate))
 		}
 
 	default:
 		// uid => scalar or scalar => uid. Check that there shouldn't be any data.
 		if hasEdges(s.Predicate, math.MaxUint64) {
 			return errors.Errorf("Schema change not allowed from scalar to uid or vice versa"+
-				" while there is data for pred: %s", s.Predicate)
+				" while there is data for pred: %s", x.ParseAttr(s.Predicate))
 		}
 	}
 	return nil
 }
 
+func validateSchemaForUnique(prevSchema pb.SchemaUpdate, currentSchema *pb.SchemaUpdate) error {
+	validTokenizer := func(tokenizers []string) bool {
+		for _, value := range tokenizers {
+			if value == "hash" || value == "exact" || value == "int" {
+				return true
+			}
+		}
+		return false
+	}
+	if prevSchema.Predicate != "" {
+		if prevSchema.Upsert && !currentSchema.Upsert {
+			return errors.Errorf("could not drop @upsert from [%v] predicate when @unique directive specified",
+				x.ParseAttr(currentSchema.Predicate))
+		}
+
+		if prevSchema.Unique && !validTokenizer(currentSchema.Tokenizer) {
+			return errors.Errorf("could not drop index %v from [%v] predicate when @unique directive specified",
+				prevSchema.Tokenizer, x.ParseAttr(currentSchema.Predicate))
+		}
+	}
+	if !currentSchema.Upsert {
+		currentSchema.Upsert = true
+	}
+	switch currentSchema.ValueType {
+	case pb.Posting_STRING:
+		if len(currentSchema.Tokenizer) == 0 ||
+			(len(currentSchema.Tokenizer) > 0 && !validTokenizer(currentSchema.Tokenizer)) {
+
+			return errors.Errorf("index for predicate [%v] is missing, add either hash or exact index with @unique",
+				x.ParseAttr(currentSchema.Predicate))
+		} else {
+			return nil
+		}
+
+	case pb.Posting_INT:
+		if len(currentSchema.Tokenizer) == 0 {
+			return errors.Errorf("index for predicate [%v] is missing, add int index with @unique",
+				x.ParseAttr(currentSchema.Predicate))
+		} else {
+			return nil
+		}
+	}
+
+	return errors.Errorf("@unique directive not supported on [%v] type predicate", currentSchema.ValueType.String())
+}
+
 // ValidateAndConvert checks compatibility or converts to the schema type if the storage type is
 // specified. If no storage type is specified then it converts to the schema type.
 func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate) error {
+
 	if isDeletePredicateEdge(edge) {
 		return nil
 	}
@@ -343,18 +529,27 @@ func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate) error {
 	switch {
 	case edge.Lang != "" && !su.GetLang():
 		return errors.Errorf("Attr: [%v] should have @lang directive in schema to mutate edge: [%v]",
-			edge.Attr, edge)
+			x.ParseAttr(edge.Attr), edge)
 
 	case !schemaType.IsScalar() && !storageType.IsScalar():
 		return nil
 
 	case !schemaType.IsScalar() && storageType.IsScalar():
-		return errors.Errorf("Input for predicate %q of type uid is scalar. Edge: %v", edge.Attr, edge)
+		return errors.Errorf("Input for predicate %q of type uid is scalar. Edge: %v",
+			x.ParseAttr(edge.Attr), edge)
 
 	case schemaType.IsScalar() && !storageType.IsScalar():
-		return errors.Errorf("Input for predicate %q of type scalar is uid. Edge: %v", edge.Attr, edge)
+		return errors.Errorf("Input for predicate %q of type scalar is uid. Edge: %v",
+			x.ParseAttr(edge.Attr), edge)
 
-	// The suggested storage type matches the schema, OK!
+	case schemaType == types.TypeID(pb.Posting_VFLOAT):
+		if !(storageType == types.TypeID(pb.Posting_VFLOAT) || storageType == types.TypeID(pb.Posting_STRING) ||
+			storageType == types.TypeID(pb.Posting_DEFAULT)) {
+			return errors.Errorf("Input for predicate %q of type vector is not vector."+
+				" Did you forget to add quotes before []?. Edge: %v", x.ParseAttr(edge.Attr), edge)
+		}
+
+	// The suggested storage type matches the schema, OK! (Nothing to do ...)
 	case storageType == schemaType && schemaType != types.DefaultID:
 		return nil
 
@@ -370,6 +565,7 @@ func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate) error {
 
 	src := types.Val{Tid: types.TypeID(edge.ValueType), Value: edge.Value}
 	// check compatibility of schema type and storage type
+	// The goal is to convert value on edge to value type defined by schema.
 	if dst, err = types.Convert(src, schemaType); err != nil {
 		return err
 	}
@@ -379,21 +575,59 @@ func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate) error {
 	if err = types.Marshal(dst, &b); err != nil {
 		return err
 	}
+
+	if x.WorkerConfig.AclEnabled && x.ParseAttr(edge.GetAttr()) == "dgraph.rule.permission" {
+		perm, ok := dst.Value.(int64)
+		if !ok {
+			return errors.Errorf("Value for predicate <dgraph.rule.permission> should be of type int")
+		}
+		if perm < 0 || perm > 7 {
+			return errors.Errorf("Can't set <dgraph.rule.permission> to %d, Value for this"+
+				" predicate should be between 0 and 7", perm)
+		}
+	}
+
+	// TODO: Figure out why this is Enum. It really seems like an odd choice -- rather than
+	//       specifying it as the same type as presented in su.
 	edge.ValueType = schemaType.Enum()
-	edge.Value = b.Value.([]byte)
+	var ok bool
+	edge.Value, ok = b.Value.([]byte)
+	if !ok {
+		return errors.Errorf("failure to convert edge type: '%+v' to schema type: '%+v'",
+			storageType, schemaType)
+	}
+
 	return nil
 }
 
-// AssignUidsOverNetwork sends a request to assign UIDs to blank nodes to the current zero leader.
-func AssignUidsOverNetwork(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error) {
+// AssignNsIdsOverNetwork sends a request to assign Namespace IDs to the current zero leader.
+func AssignNsIdsOverNetwork(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error) {
 	pl := groups().Leader(0)
 	if pl == nil {
 		return nil, conn.ErrNoConnection
 	}
 
-	conn := pl.Get()
-	c := pb.NewZeroClient(conn)
-	return c.AssignUids(ctx, num)
+	con := pl.Get()
+	c := pb.NewZeroClient(con)
+	num.Type = pb.Num_NS_ID
+	return c.AssignIds(ctx, num)
+}
+
+// AssignUidsOverNetwork sends a request to assign UIDs to blank nodes to the current zero leader.
+func AssignUidsOverNetwork(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error) {
+	// Pass on the incoming metadata to the zero. Namespace from the metadata is required by zero.
+	if md, ok := metadata.FromIncomingContext(ctx); ok {
+		ctx = metadata.NewOutgoingContext(ctx, md)
+	}
+	pl := groups().Leader(0)
+	if pl == nil {
+		return nil, conn.ErrNoConnection
+	}
+
+	con := pl.Get()
+	c := pb.NewZeroClient(con)
+	num.Type = pb.Num_UID
+	return c.AssignIds(ctx, num)
 }
 
 // Timestamps sends a request to assign startTs for a new transaction to the current zero leader.
@@ -403,14 +637,14 @@ func Timestamps(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error) {
 		return nil, conn.ErrNoConnection
 	}
 
-	conn := pl.Get()
-	c := pb.NewZeroClient(conn)
+	con := pl.Get()
+	c := pb.NewZeroClient(con)
 	return c.Timestamps(ctx, num)
 }
 
-func fillTxnContext(tctx *api.TxnContext, startTs uint64) {
+func fillTxnContext(tctx *api.TxnContext, startTs uint64, isErrored bool) {
 	if txn := posting.Oracle().GetTxn(startTs); txn != nil {
-		txn.FillContext(tctx, groups().groupId())
+		txn.FillContext(tctx, groups().groupId(), isErrored)
 	}
 	// We do not need to fill linread mechanism anymore, because transaction
 	// start ts is sufficient to wait for, to achieve lin reads.
@@ -433,10 +667,9 @@ func proposeOrSend(ctx context.Context, gid uint32, m *pb.Mutations, chr chan re
 		chr <- res
 		return
 	}
-	conn := pl.Get()
 
 	var tc *api.TxnContext
-	c := pb.NewWorkerClient(conn)
+	c := pb.NewWorkerClient(pl.Get())
 
 	ch := make(chan error, 1)
 	go func() {
@@ -472,6 +705,7 @@ func populateMutationMap(src *pb.Mutations) (map[uint32]*pb.Mutations, error) {
 			mm[gid] = mu
 		}
 		mu.Edges = append(mu.Edges, edge)
+		mu.Metadata = src.Metadata
 	}
 
 	for _, schema := range src.Schema {
@@ -573,7 +807,7 @@ func verifyTypes(ctx context.Context, m *pb.Mutations) error {
 	// Create a set of all the predicates already present in the schema.
 	var fields []string
 	for _, t := range m.Types {
-		if len(t.TypeName) == 0 {
+		if t.TypeName == "" {
 			return errors.Errorf("Type name must be specified in type update")
 		}
 
@@ -583,8 +817,9 @@ func verifyTypes(ctx context.Context, m *pb.Mutations) error {
 
 		for _, field := range t.Fields {
 			fieldName := field.Predicate
-			if fieldName[0] == '~' {
-				fieldName = fieldName[1:]
+			ns, attr := x.ParseNamespaceAttr(fieldName)
+			if attr[0] == '~' {
+				fieldName = x.NamespaceAttr(ns, attr[1:])
 			}
 
 			if _, ok := reqPredSet[fieldName]; !ok {
@@ -608,8 +843,9 @@ func verifyTypes(ctx context.Context, m *pb.Mutations) error {
 		// this request.
 		for _, field := range t.Fields {
 			fieldName := field.Predicate
-			if fieldName[0] == '~' {
-				fieldName = fieldName[1:]
+			ns, attr := x.ParseNamespaceAttr(fieldName)
+			if attr[0] == '~' {
+				fieldName = x.NamespaceAttr(ns, attr[1:])
 			}
 
 			_, inSchema := schemaSet[fieldName]
@@ -628,11 +864,11 @@ func verifyTypes(ctx context.Context, m *pb.Mutations) error {
 // typeSanityCheck performs basic sanity checks on the given type update.
 func typeSanityCheck(t *pb.TypeUpdate) error {
 	for _, field := range t.Fields {
-		if len(field.Predicate) == 0 {
+		if x.ParseAttr(field.Predicate) == "" {
 			return errors.Errorf("Field in type definition must have a name")
 		}
 
-		if field.ValueType == pb.Posting_OBJECT && len(field.ObjectTypeName) == 0 {
+		if field.ValueType == pb.Posting_OBJECT && field.ObjectTypeName == "" {
 			return errors.Errorf(
 				"Field with value type OBJECT must specify the name of the object type")
 		}
@@ -654,10 +890,22 @@ func CommitOverNetwork(ctx context.Context, tc *api.TxnContext) (uint64, error) 
 	ctx, span := otrace.StartSpan(ctx, "worker.CommitOverNetwork")
 	defer span.End()
 
+	clientDiscard := false
+	if tc.Aborted {
+		// The client called Discard
+		ostats.Record(ctx, x.TxnDiscards.M(1))
+		clientDiscard = true
+	}
+
 	pl := groups().Leader(0)
 	if pl == nil {
 		return 0, conn.ErrNoConnection
 	}
+
+	// Do de-duplication before sending the request to zero.
+	tc.Keys = x.Unique(tc.Keys)
+	tc.Preds = x.Unique(tc.Preds)
+
 	zc := pb.NewZeroClient(pl.Get())
 	tctx, err := zc.CommitOrAbort(ctx, tc)
 
@@ -666,13 +914,18 @@ func CommitOverNetwork(ctx context.Context, tc *api.TxnContext) (uint64, error) 
 		return 0, err
 	}
 	var attributes []otrace.Attribute
-	attributes = append(attributes, otrace.Int64Attribute("commitTs", int64(tctx.CommitTs)))
-	attributes = append(attributes, otrace.BoolAttribute("committed", tctx.CommitTs > 0))
+	attributes = append(attributes, otrace.Int64Attribute("commitTs", int64(tctx.CommitTs)),
+		otrace.BoolAttribute("committed", tctx.CommitTs > 0))
 	span.Annotate(attributes, "")
 
 	if tctx.Aborted || tctx.CommitTs == 0 {
+		if !clientDiscard {
+			// The server aborted the txn (not the client)
+			ostats.Record(ctx, x.TxnAborts.M(1))
+		}
 		return 0, dgo.ErrAborted
 	}
+	ostats.Record(ctx, x.TxnCommits.M(1))
 	return tctx.CommitTs, nil
 }
 
@@ -697,7 +950,8 @@ func (w *grpcWorker) proposeAndWait(ctx context.Context, txnCtx *api.TxnContext,
 
 	node := groups().Node
 	err := node.proposeAndWait(ctx, &pb.Proposal{Mutations: m})
-	fillTxnContext(txnCtx, m.StartTs)
+	// When we are filling txn context, we don't need to update latest delta if the transaction has failed.
+	fillTxnContext(txnCtx, m.StartTs, err != nil)
 	return err
 }
 

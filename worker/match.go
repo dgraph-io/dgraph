@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,10 +29,10 @@ import (
 // single-character edits (i.e. insertions, deletions or substitutions)
 // required to change one word into the other.
 //
-// This implemention is optimized to use O(min(m,n)) space and is based on the
+// This implementation is optimized to use O(min(m,n)) space and is based on the
 // optimized C version found here:
 // http://en.wikibooks.org/wiki/Algorithm_implementation/Strings/Levenshtein_distance#C
-func levenshteinDistance(s, t string, max int) int {
+func levenshteinDistance(s, t string) int {
 	if len(s) > len(t) {
 		s, t = t, s
 	}
@@ -43,7 +43,6 @@ func levenshteinDistance(s, t string, max int) int {
 		column[y] = y
 	}
 
-	var minIdx int
 	for x := 1; x <= len(r2); x++ {
 		column[0] = x
 
@@ -56,12 +55,6 @@ func levenshteinDistance(s, t string, max int) int {
 			column[y] = min(column[y]+1, column[y-1]+1, lastDiag+cost)
 			lastDiag = oldDiag
 		}
-		if minIdx < len(r1) && column[minIdx] > column[minIdx+1] {
-			minIdx++
-		}
-		if column[minIdx] > max {
-			return column[minIdx]
-		}
 	}
 	return column[len(r1)]
 }
@@ -69,7 +62,8 @@ func levenshteinDistance(s, t string, max int) int {
 func min(a, b, c int) int {
 	if a < b && a < c {
 		return a
-	} else if b < c {
+	}
+	if b < c {
 		return b
 	}
 	return c
@@ -81,17 +75,21 @@ func matchFuzzy(query, val string, max int) bool {
 	if val == "" {
 		return false
 	}
-	return levenshteinDistance(val, query, max) <= max
+	return levenshteinDistance(val, query) <= max
 }
 
 // uidsForMatch collects a list of uids that "might" match a fuzzy term based on the ngram
 // index. matchFuzzy does the actual fuzzy match.
 // Returns the list of uids even if empty, or an error otherwise.
 func uidsForMatch(attr string, arg funcArgs) (*pb.List, error) {
-	opts := posting.ListOptions{ReadTs: arg.q.ReadTs}
+	opts := posting.ListOptions{
+		ReadTs:   arg.q.ReadTs,
+		First:    int(arg.q.First),
+		AfterUid: arg.q.AfterUid,
+	}
 	uidsForNgram := func(ngram string) (*pb.List, error) {
 		key := x.IndexKey(attr, ngram)
-		pl, err := posting.GetNoStore(key)
+		pl, err := posting.GetNoStore(key, arg.q.ReadTs)
 		if err != nil {
 			return nil, err
 		}

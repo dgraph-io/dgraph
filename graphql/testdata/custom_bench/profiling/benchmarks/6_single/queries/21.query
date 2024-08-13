@@ -1,0 +1,11 @@
+query {
+	queryDish {
+		name
+		price
+		cuisine {
+			id
+			name
+		}
+	}
+}
+

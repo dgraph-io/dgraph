@@ -1,0 +1,11 @@
+type User {
+    id: ID!
+    name: String!
+}
+
+type Query {
+    getMyFavoriteUsers(id: ID!): [User] @custom(http: {
+        url: "http://my-api.com",
+        method: "GET"
+    })
+}

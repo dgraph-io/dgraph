@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2016-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,11 +19,12 @@ package types
 import (
 	"encoding/json"
 
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/geo/s2"
 	"github.com/pkg/errors"
 	geom "github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
+
+	"github.com/dgraph-io/dgraph/x"
 )
 
 func edgesCrossPoints(l *s2.Loop, pts []s2.Point) bool {

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,8 +28,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dgraph-io/dgo/v2"
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/pkg/errors"
+
+	"github.com/dgraph-io/dgo/v230"
+	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -135,10 +137,20 @@ func main() {
 
 }
 
+func getNextWord(index int) string {
+	// check if index is in the range of words
+	if index < 0 || index >= len(words) {
+		x.Fatalf("invalid index for getting next word: %d", index)
+	}
+	return words[index]
+}
+
 func createSentences(n int) []string {
+	var wordIndex int
 	sents := make([]string, n)
 	for i := range sents {
-		sents[i] = nextWord()
+		sents[i] = getNextWord(wordIndex)
+		wordIndex++
 	}
 
 	// add trailing words -- some will be common between sentences
@@ -148,7 +160,8 @@ func createSentences(n int) []string {
 		var count int
 		for i := range sents {
 			if i%same == 0 {
-				w = nextWord()
+				w = getNextWord(wordIndex)
+				wordIndex++
 				count++
 			}
 			sents[i] += " " + w
@@ -367,7 +380,7 @@ func checkInvariants(c *dgo.Dgraph, uids []string, sentences []string) error {
 		sort.Strings(gotUids)
 		sort.Strings(uids)
 		if !reflect.DeepEqual(gotUids, uids) {
-			panic(fmt.Sprintf(`query: %s\n
+			x.Panic(errors.Errorf(`query: %s\n
 			Uids in index for %q didn't match
 			calculated: %v. Len: %d
 				got:        %v

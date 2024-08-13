@@ -1,7 +1,8 @@
+//go:build oss
 // +build oss
 
 /*
- * Copyright 2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,11 +22,13 @@ package edgraph
 import (
 	"context"
 
-	"github.com/dgraph-io/badger/v2/y"
-	"github.com/dgraph-io/dgo/v2/protos/api"
-	"github.com/dgraph-io/dgraph/gql"
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
+
+	"github.com/dgraph-io/dgo/v230/protos/api"
+	"github.com/dgraph-io/dgraph/dql"
+	"github.com/dgraph-io/dgraph/query"
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 // Login handles login requests from clients. This version rejects all requests
@@ -41,26 +44,62 @@ func (s *Server) Login(ctx context.Context,
 }
 
 // ResetAcl is an empty method since ACL is only supported in the enterprise version.
-func ResetAcl() {
+func InitializeAcl(closer *z.Closer) {
 	// do nothing
 }
 
-// ResetAcls is an empty method since ACL is only supported in the enterprise version.
-func RefreshAcls(closer *y.Closer) {
+func upsertGuardianAndGroot(closer *z.Closer, ns uint64) {
+	// do nothing
+}
+
+// SubscribeForAclUpdates is an empty method since ACL is only supported in the enterprise version.
+func SubscribeForAclUpdates(closer *z.Closer) {
 	// do nothing
 	<-closer.HasBeenClosed()
 	closer.Done()
+}
+
+// RefreshACLs is an empty method since ACL is only supported in the enterprise version.
+func RefreshACLs(ctx context.Context) {
+	return
 }
 
 func authorizeAlter(ctx context.Context, op *api.Operation) error {
 	return nil
 }
 
-func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
+func authorizeMutation(ctx context.Context, gmu *dql.Mutation) error {
 	return nil
 }
 
-func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
+func authorizeQuery(ctx context.Context, parsedReq *dql.Result, graphql bool) error {
 	// always allow access
+	return nil
+}
+
+func authorizeSchemaQuery(ctx context.Context, er *query.ExecutionResult) error {
+	// always allow schema access
+	return nil
+}
+
+func AuthorizeGuardians(ctx context.Context) error {
+	// always allow access
+	return nil
+}
+
+func AuthGuardianOfTheGalaxy(ctx context.Context) error {
+	// always allow access
+	return nil
+}
+
+func validateToken(jwtStr string) ([]string, error) {
+	return nil, nil
+}
+
+func upsertGuardian(ctx context.Context) error {
+	return nil
+}
+
+func upsertGroot(ctx context.Context) error {
 	return nil
 }

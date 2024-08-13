@@ -1,5 +1,7 @@
+//go:build integration || cloud || upgrade
+
 /*
- * Copyright 2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +16,7 @@
  * limitations under the License.
  */
 
+//nolint:lll
 package query
 
 import (
@@ -907,6 +910,185 @@ func TestLanguageOrderNonIndexed2(t *testing.T) {
 		js)
 }
 
+func TestLanguageOrderIndexed1(t *testing.T) {
+	query := `
+	{
+		q(func:eq(lang_type, "Test"), orderasc: name_lang_index@de)  {
+			name_lang_index@de
+			name_lang_index@sv
+		}
+	}
+	`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t,
+		`{
+			"data": {
+				"q": [{
+					"name_lang_index@de": "öffnen",
+					"name_lang_index@sv": "zon"
+				}, {
+					"name_lang_index@de": "zumachen",
+					"name_lang_index@sv": "öppna"
+				}]
+			}
+		}`,
+		js)
+}
+
+func TestLanguageOrderIndexed2(t *testing.T) {
+	query := `
+	{
+		q(func:eq(lang_type, "Test"), orderasc: name_lang_index@sv)  {
+			name_lang_index@de
+			name_lang_index@sv
+		}
+	}
+	`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t,
+		`{
+			"data": {
+				"q": [{
+					"name_lang_index@de": "öffnen",
+					"name_lang_index@sv": "zon"
+				}, {
+					"name_lang_index@de": "zumachen",
+					"name_lang_index@sv": "öppna"
+				}]
+			}
+		}`,
+		js)
+}
+
+func TestLanguageOrderIndexed3(t *testing.T) {
+	query := `
+	{
+		q(func:eq(lang_type, "Test"), orderasc: name_lang_index)  {
+			name_lang_index@de
+			name_lang_index@sv
+		}
+	}
+	`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t,
+		`{
+			"data": {
+				"q": [{
+					"name_lang_index@de": "öffnen",
+					"name_lang_index@sv": "zon"
+				}, {
+					"name_lang_index@de": "zumachen",
+					"name_lang_index@sv": "öppna"
+				}]
+			}
+		}`,
+		js)
+}
+
+func TestLanguageOrderIndexed4(t *testing.T) {
+	query := `
+	{
+		q(func:eq(lang_type, "Test"), orderasc: name_lang_index@hi)  {
+			name_lang_index@de
+			name_lang_index@sv
+		}
+	}
+	`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t,
+		`{
+			"data": {
+				"q": [{
+					"name_lang_index@de": "öffnen",
+					"name_lang_index@sv": "zon"
+				}, {
+					"name_lang_index@de": "zumachen",
+					"name_lang_index@sv": "öppna"
+				}]
+			}
+		}`,
+		js)
+}
+
+func TestLanguageOrderIndexed5(t *testing.T) {
+	query := `
+	{
+		q(func:eq(lang_type, "Test"), orderdesc: name_lang_index@de)  {
+			name_lang_index@de
+			name_lang_index@sv
+		}
+	}
+	`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t,
+		`{
+			"data": {
+				"q": [{
+					"name_lang_index@de": "zumachen",
+					"name_lang_index@sv": "öppna"
+				}, {
+					"name_lang_index@de": "öffnen",
+					"name_lang_index@sv": "zon"
+				}]
+			}
+		}`,
+		js)
+}
+
+func TestLanguageOrderIndexed6(t *testing.T) {
+	query := `
+	{
+		q(func:eq(lang_type, "Test"), orderdesc: name_lang_index@sv)  {
+			name_lang_index@de
+			name_lang_index@sv
+		}
+	}
+	`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t,
+		`{
+			"data": {
+				"q": [{
+					"name_lang_index@de": "zumachen",
+					"name_lang_index@sv": "öppna"
+				}, {
+					"name_lang_index@de": "öffnen",
+					"name_lang_index@sv": "zon"
+				}]
+			}
+		}`,
+		js)
+}
+
+func TestLanguageOrderIndexedPaginationOffset(t *testing.T) {
+	query := `
+	{
+		q(func:eq(lang_type, "Test"), orderasc: name_lang_index@sv, first: 1, offset: 1)  {
+			name_lang_index@de
+			name_lang_index@sv
+		}
+	}
+	`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t,
+		`{
+			"data": {
+				"q": [{
+					"name_lang_index@de": "zumachen",
+					"name_lang_index@sv": "öppna"
+				}]
+			}
+		}`,
+		js)
+}
+
 // Test sorting / ordering by dob.
 func TestToFastJSONOrderDesc_pawan(t *testing.T) {
 
@@ -1660,6 +1842,70 @@ func TestNormalizeDirective(t *testing.T) {
 			  ]
 			}
 		}`, js)
+}
+
+func TestNormalizeDirectiveWithRecurseDirective(t *testing.T) {
+	query := `
+		{
+			me(func: uid(0x01)) @recurse @normalize {
+				n: name
+				d: dob
+				friend
+			}
+		}`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+		{
+          "data": {
+              "me": [
+                  {
+                      "n": [
+                          "Michonne",
+                          "Rick Grimes",
+                          "Michonne"
+                      ],
+                      "d": [
+                          "1910-01-01T00:00:00Z",
+                          "1910-01-02T00:00:00Z",
+                          "1910-01-01T00:00:00Z"
+                      ]
+                  },
+                  {
+                      "n": [
+                          "Michonne",
+                          "Glenn Rhee"
+                      ],
+                      "d": [
+                          "1910-01-01T00:00:00Z",
+                          "1909-05-05T00:00:00Z"
+                      ]
+                  },
+                  {
+                      "n": [
+                          "Michonne",
+                          "Daryl Dixon"
+                      ],
+                      "d": [
+                          "1910-01-01T00:00:00Z",
+                          "1909-01-10T00:00:00Z"
+                      ]
+                  },
+                  {
+                      "n": [
+                          "Michonne",
+                          "Andrea",
+                          "Glenn Rhee"
+                      ],
+                      "d": [
+                          "1910-01-01T00:00:00Z",
+                          "1901-01-15T00:00:00Z",
+                          "1909-05-05T00:00:00Z"
+                      ]
+                  }
+              ]
+          }
+      }`, js)
 }
 
 func TestNormalizeDirectiveSubQueryLevel1(t *testing.T) {
@@ -2889,4 +3135,17 @@ func TestLangDotInFunction(t *testing.T) {
 	require.JSONEq(t,
 		`{"data": {"me":[{"name@pl":"Borsuk europejski","name@en":"European badger"},{"name@en":"Honey badger"},{"name@en":"Honey bee"}]}}`,
 		js)
+}
+
+func TestGeoFuncWithAfter(t *testing.T) {
+
+	query := `{
+		me(func: near(geometry, [-122.082506, 37.4249518], 1000), after: 0x13ee) {
+			name
+		}
+	}`
+
+	js := processQueryNoErr(t, query)
+	expected := `{"data": {"me":[{"name": "SF Bay area"}, {"name": "Mountain View"}]}}`
+	require.JSONEq(t, expected, js)
 }

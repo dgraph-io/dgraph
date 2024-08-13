@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,16 +25,16 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
-	"github.com/pkg/errors"
-	"io/ioutil"
 	"os"
-	"path"
 	"path/filepath"
+
+	"github.com/golang/glog"
+	"github.com/pkg/errors"
 )
 
 const (
 	defaultDir      = "tls"
-	defaultDays     = 1826
+	defaultDays     = 365
 	defaultCADays   = 3651
 	defaultCACert   = "ca.crt"
 	defaultCAKey    = "ca.key"
@@ -60,7 +60,11 @@ func makeKey(keyFile string, c *certConfig) (crypto.PrivateKey, error) {
 		}
 		return nil, err
 	}
-	defer fp.Close()
+	defer func() {
+		if err := fp.Close(); err != nil {
+			glog.Warningf("error closing file: %v", err)
+		}
+	}()
 
 	var key crypto.PrivateKey
 	switch c.curve {
@@ -101,7 +105,7 @@ func makeKey(keyFile string, c *certConfig) (crypto.PrivateKey, error) {
 // readKey tries to read and decode the contents of a private key file.
 // Returns the private key, or error otherwise.
 func readKey(keyFile string) (crypto.PrivateKey, error) {
-	b, err := ioutil.ReadFile(keyFile)
+	b, err := os.ReadFile(keyFile)
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +125,7 @@ func readKey(keyFile string) (crypto.PrivateKey, error) {
 // readCert tries to read and decode the contents of a signed cert file.
 // Returns the x509v3 cert, or error otherwise.
 func readCert(certFile string) (*x509.Certificate, error) {
-	b, err := ioutil.ReadFile(certFile)
+	b, err := os.ReadFile(certFile)
 	if err != nil {
 		return nil, err
 	}
@@ -150,7 +154,7 @@ func safeCreate(name string, overwrite bool, perm os.FileMode) (*os.File, error)
 // if it doesn't already exist or we force it. The key path can differ from the certsDir
 // which case the path must already exist and be writable.
 // Returns nil on success, or an error otherwise.
-func createCAPair(opt options) error {
+func createCAPair(opt *options) error {
 	cc := certConfig{
 		isCA:    true,
 		until:   defaultCADays,
@@ -170,7 +174,7 @@ func createCAPair(opt options) error {
 // if it doesn't already exist or we force it. The key path can differ from the certsDir
 // which case the path must already exist and be writable.
 // Returns nil on success, or an error otherwise.
-func createNodePair(opt options) error {
+func createNodePair(opt *options) error {
 	if opt.nodes == nil || len(opt.nodes) == 0 {
 		return nil
 	}
@@ -210,7 +214,7 @@ func createNodePair(opt options) error {
 // if it doesn't already exist or we force it. The key path can differ from the certsDir
 // which case the path must already exist and be writable.
 // Returns nil on success, or an error otherwise.
-func createClientPair(opt options) error {
+func createClientPair(opt *options) error {
 	if opt.client == "" {
 		return nil
 	}
@@ -246,7 +250,11 @@ func createClientPair(opt options) error {
 	return cc.verifyCert(certFile)
 }
 
-func createCerts(opt options) error {
+func createCerts(opt *options) error {
+	if opt == nil {
+		return errors.New("nil options")
+	}
+
 	if opt.dir == "" {
 		return errors.New("Invalid TLS directory")
 	}
@@ -273,7 +281,7 @@ func createCerts(opt options) error {
 	}
 
 	// no path then save it in certsDir.
-	if path.Base(opt.caKey) == opt.caKey {
+	if filepath.Base(opt.caKey) == opt.caKey {
 		opt.caKey = filepath.Join(opt.dir, opt.caKey)
 	}
 	opt.caCert = filepath.Join(opt.dir, defaultCACert)

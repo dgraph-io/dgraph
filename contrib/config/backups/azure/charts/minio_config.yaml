@@ -1,0 +1,8 @@
+image:
+  repository: minio/minio
+  tag: RELEASE.2020-09-17T04-49-20Z
+persistence:
+  enabled: false
+azuregateway:
+  enabled: true
+  replicas: 1

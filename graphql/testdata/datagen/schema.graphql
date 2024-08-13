@@ -1,0 +1,60 @@
+type Country {
+	cid: ID!
+	id: String! @id
+	name: String!
+	cities: [City]
+}
+
+type City {
+	cid: ID!
+	id: String! @id
+	name: String!
+	country: Country! @hasInverse(field: cities)
+	restaurants: [RestaurantAddress] @hasInverse(field: city)
+}
+
+interface Location {
+	id: ID!
+	lat: Float!
+	long: Float!
+	address: String!
+	locality: String!
+	city: City!
+	zipcode: Int
+}
+
+type RestaurantAddress implements Location {
+	restaurant: Restaurant! @hasInverse(field: addr)
+}
+
+type Restaurant {
+	id: ID!
+	xid: String! @id
+	name: String!
+	pic: String
+	addr: RestaurantAddress!
+	rating: Float
+	costFor2: Float
+	currency: String
+	cuisines: [Cuisine]
+	dishes: [Dish] @hasInverse(field: servedBy)
+	createdAt: DateTime!
+}
+
+type Cuisine {
+	id: ID!
+	name: String! @id
+	restaurants: [Restaurant] @hasInverse(field: cuisines)
+	dishes: [Dish] @hasInverse(field: cuisine)
+}
+
+type Dish {
+	id: ID!
+	name: String!
+	pic: String
+	price: Float!
+	description: String
+	isVeg: Boolean!
+	cuisine: Cuisine
+	servedBy: Restaurant!
+}

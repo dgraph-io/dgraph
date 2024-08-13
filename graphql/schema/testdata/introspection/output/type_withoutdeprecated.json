@@ -1,0 +1,12 @@
+{
+    "__type": {
+        "name": "TestDeprecatedObject",
+        "fields": [
+            {
+                "deprecationReason": null,
+                "isDeprecated": false,
+                "name": "notDep"
+            }
+        ]
+    }
+}

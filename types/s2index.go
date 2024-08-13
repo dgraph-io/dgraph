@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2016-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,10 +20,10 @@ import (
 	"log"
 
 	"github.com/golang/geo/s2"
+	"github.com/pkg/errors"
 	geom "github.com/twpayne/go-geom"
 
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/pkg/errors"
 )
 
 func parentCoverTokens(parents s2.CellUnion, cover s2.CellUnion) []string {
@@ -149,7 +149,7 @@ func loopFromPolygon(p *geom.Polygon) (*s2.Loop, error) {
 
 	// Since our clockwise check was approximate, we check the cap and reverse if needed.
 	if l.CapBound().Radius().Degrees() > 90 {
-		l = loopFromRing(r, !reverse)
+		l.Invert()
 	}
 	return l, nil
 }

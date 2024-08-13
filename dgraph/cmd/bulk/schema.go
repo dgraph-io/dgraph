@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@ import (
 	"math"
 	"sync"
 
-	"github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
@@ -37,27 +37,22 @@ type schemaStore struct {
 	*state
 }
 
-func newSchemaStore(initial *schema.ParsedSchema, opt options, state *state) *schemaStore {
+func newSchemaStore(initial *schema.ParsedSchema, opt *options, state *state) *schemaStore {
+	if opt == nil {
+		log.Fatalf("Cannot create schema store with nil options.")
+	}
+
 	s := &schemaStore{
 		schemaMap: map[string]*pb.SchemaUpdate{},
 		state:     state,
 	}
 
-	// Load all initial predicates. Some predicates that might not be used when
-	// the alpha is started (e.g ACL predicates) might be included but it's
-	// better to include them in case the input data contains triples with these
-	// predicates.
-	for _, update := range schema.CompleteInitialSchema() {
-		s.schemaMap[update.Predicate] = update
-	}
+	// Initialize only for the default namespace. Initialization for other namespaces will be done
+	// whenever we see data for a new namespace.
+	s.checkAndSetInitialSchema(x.GalaxyNamespace)
 
-	if opt.StoreXids {
-		s.schemaMap["xid"] = &pb.SchemaUpdate{
-			ValueType: pb.Posting_STRING,
-			Tokenizer: []string{"hash"},
-		}
-	}
-
+	s.types = initial.Types
+	// This is from the schema read from the schema file.
 	for _, sch := range initial.Preds {
 		p := sch.Predicate
 		sch.Predicate = "" // Predicate is stored in the (badger) key, so not needed in the value.
@@ -65,10 +60,9 @@ func newSchemaStore(initial *schema.ParsedSchema, opt options, state *state) *sc
 			fmt.Printf("Predicate %q already exists in schema\n", p)
 			continue
 		}
+		s.checkAndSetInitialSchema(x.ParseNamespace(p))
 		s.schemaMap[p] = sch
 	}
-
-	s.types = initial.Types
 
 	return s
 }
@@ -82,11 +76,40 @@ func (s *schemaStore) getSchema(pred string) *pb.SchemaUpdate {
 func (s *schemaStore) setSchemaAsList(pred string) {
 	s.Lock()
 	defer s.Unlock()
-	schema, ok := s.schemaMap[pred]
+	sch, ok := s.schemaMap[pred]
 	if !ok {
 		return
 	}
-	schema.List = true
+	sch.List = true
+}
+
+// checkAndSetInitialSchema initializes the schema for namespace if it does not already exist.
+func (s *schemaStore) checkAndSetInitialSchema(namespace uint64) {
+	if _, ok := s.namespaces.Load(namespace); ok {
+		return
+	}
+	s.Lock()
+	defer s.Unlock()
+
+	if _, ok := s.namespaces.Load(namespace); ok {
+		return
+	}
+	// Load all initial predicates. Some predicates that might not be used when
+	// the alpha is started (e.g ACL predicates) might be included but it's
+	// better to include them in case the input data contains triples with these
+	// predicates.
+	for _, update := range schema.CompleteInitialSchema(namespace) {
+		s.schemaMap[update.Predicate] = update
+	}
+	s.types = append(s.types, schema.CompleteInitialTypes(namespace)...)
+
+	if s.opt.StoreXids {
+		s.schemaMap[x.NamespaceAttr(namespace, "xid")] = &pb.SchemaUpdate{
+			ValueType: pb.Posting_STRING,
+			Tokenizer: []string{"hash"},
+		}
+	}
+	s.namespaces.Store(namespace, struct{}{})
 }
 
 func (s *schemaStore) validateType(de *pb.DirectedEdge, objectIsUID bool) {

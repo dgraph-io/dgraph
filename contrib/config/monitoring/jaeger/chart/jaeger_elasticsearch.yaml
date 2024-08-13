@@ -1,0 +1,33 @@
+provisionDataStore:
+  elasticsearch: true
+storage:
+  type: elasticsearch
+  elasticsearch:
+    user: elasticuser
+    usePassword: true
+    ## CHANGE THIS BEFORE DEPLOYING!!!
+    password: CHANGEME
+    
+## The settings under cassandra can be found here:
+## https://github.com/elastic/helm-charts/tree/master/elasticsearch
+elasticsearch:
+  persistence:
+    enabled: true
+    labels:
+      enabled: true
+
+agent:
+  ## Optional Monitoring for Prometheus
+  serviceMonitor:
+    enabled: false
+    additionalLabels: {release:  prometheus}
+collector:
+  ## Optional Monitoring for Prometheus
+  serviceMonitor:
+    enabled: false
+    additionalLabels: {release:  prometheus}
+query:
+  ## Optional Monitoring for Prometheus
+  serviceMonitor:
+    enabled: false
+    additionalLabels: {release:  prometheus}

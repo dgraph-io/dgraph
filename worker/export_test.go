@@ -1,5 +1,7 @@
+//go:build integration
+
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +23,9 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
-	"io/ioutil"
+	"encoding/json"
+	"fmt"
+	"io"
 	"math"
 	"net/http"
 	"os"
@@ -33,50 +37,67 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgo/v2/protos/api"
-
+	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/chunker"
-	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/dql"
+	"github.com/dgraph-io/dgraph/lex"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
-
-	"github.com/dgraph-io/dgraph/lex"
-	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
 )
 
+const (
+	gqlSchema = "type Example { name: String }"
+)
+
 var personType = &pb.TypeUpdate{
-	TypeName: "Person",
+	TypeName: x.GalaxyAttr("Person"),
 	Fields: []*pb.SchemaUpdate{
 		{
-			Predicate: "name",
+			Predicate: x.GalaxyAttr("name"),
 		},
 		{
-			Predicate: "friend",
+			Predicate: x.GalaxyAttr("friend"),
 		},
 		{
-			Predicate: "friend_not_served",
+			Predicate: x.GalaxyAttr("~friend"),
+		},
+		{
+			Predicate: x.GalaxyAttr("friend_not_served"),
 		},
 	},
 }
 
 func populateGraphExport(t *testing.T) {
 	rdfEdges := []string{
-		`<1> <friend> <5> <author0> .`,
-		`<2> <friend> <5> <author0> .`,
+		`<1> <friend> <5> .`,
+		`<2> <friend> <5> .`,
 		`<3> <friend> <5> .`,
-		`<4> <friend> <5> <author0> (since=2005-05-02T15:04:05,close=true,` +
+		`<4> <friend> <5> (since=2005-05-02T15:04:05,close=true,` +
 			`age=33,game="football",poem="roses are red\nviolets are blue") .`,
-		`<1> <name> "pho\ton\u0000" <author0> .`,
-		`<2> <name> "pho\ton"@en <author0> .`,
+		`<1> <name> "pho\ton\u0000" .`,
+		`<2> <name> "pho\ton"@en .`,
 		`<3> <name> "First Line\nSecondLine" .`,
-		"<1> <friend_not_served> <5> <author0> .",
+		"<1> <friend_not_served> <5> .",
 		`<5> <name> "" .`,
 		`<6> <name> "Ding!\u0007Ding!\u0007Ding!\u0007" .`,
+		`<7> <name> "node_to_delete" .`,
+		fmt.Sprintf("<8> <dgraph.graphql.schema> \"%s\" .", gqlSchema),
+		`<8> <dgraph.graphql.xid> "dgraph.graphql.schema" .`,
+		`<8> <dgraph.type> "dgraph.graphql" .`,
+		`<9> <name> "ns2" <0x2> .`,
+		`<10> <name> "ns2_node_to_delete" <0x2> .`,
 	}
+	// This triplet will be deleted to ensure deleted nodes do not affect the output of the export.
+	edgesToDelete := []string{
+		`<7> <name> "node_to_delete" .`,
+		`<10> <name> "ns2_node_to_delete" <0x2> .`,
+	}
+
 	idMap := map[string]uint64{
 		"1": 1,
 		"2": 2,
@@ -84,66 +105,83 @@ func populateGraphExport(t *testing.T) {
 		"4": 4,
 		"5": 5,
 		"6": 6,
+		"7": 7,
 	}
 
 	l := &lex.Lexer{}
-	for _, edge := range rdfEdges {
+	processEdge := func(edge string, set bool) {
 		nq, err := chunker.ParseRDF(edge, l)
 		require.NoError(t, err)
-		rnq := gql.NQuad{NQuad: &nq}
-		err = facets.SortAndValidate(rnq.Facets)
-		require.NoError(t, err)
+		rnq := dql.NQuad{NQuad: &nq}
+		require.NoError(t, facets.SortAndValidate(rnq.Facets))
 		e, err := rnq.ToEdgeUsing(idMap)
+		e.Attr = x.NamespaceAttr(nq.Namespace, e.Attr)
 		require.NoError(t, err)
-		addEdge(t, e, getOrCreate(x.DataKey(e.Attr, e.Entity)))
+		if set {
+			addEdge(t, e, getOrCreate(x.DataKey(e.Attr, e.Entity)))
+		} else {
+			delEdge(t, e, getOrCreate(x.DataKey(e.Attr, e.Entity)))
+		}
+	}
+
+	for _, edge := range rdfEdges {
+		processEdge(edge, true)
+	}
+	for _, edge := range edgesToDelete {
+		processEdge(edge, false)
 	}
 }
 
 func initTestExport(t *testing.T, schemaStr string) {
-	schema.ParseBytes([]byte(schemaStr), 1)
+	require.NoError(t, schema.ParseBytes([]byte(schemaStr), 1))
 
 	val, err := (&pb.SchemaUpdate{ValueType: pb.Posting_UID}).Marshal()
 	require.NoError(t, err)
 
 	txn := pstore.NewTransactionAt(math.MaxUint64, true)
-	require.NoError(t, txn.Set(x.SchemaKey("friend"), val))
+	require.NoError(t, txn.Set(testutil.GalaxySchemaKey("friend"), val))
 	// Schema is always written at timestamp 1
 	require.NoError(t, txn.CommitAt(1, nil))
-	txn.Discard()
 
 	require.NoError(t, err)
 	val, err = (&pb.SchemaUpdate{ValueType: pb.Posting_UID}).Marshal()
 	require.NoError(t, err)
 
 	txn = pstore.NewTransactionAt(math.MaxUint64, true)
-	txn.Set(x.SchemaKey("http://www.w3.org/2000/01/rdf-schema#range"), val)
-	require.NoError(t, err)
-	txn.Set(x.SchemaKey("friend_not_served"), val)
+	require.NoError(t, txn.Set(testutil.GalaxySchemaKey("http://www.w3.org/2000/01/rdf-schema#range"), val))
+	require.NoError(t, txn.Set(testutil.GalaxySchemaKey("friend_not_served"), val))
+	require.NoError(t, txn.Set(testutil.GalaxySchemaKey("age"), val))
 	require.NoError(t, txn.CommitAt(1, nil))
-	txn.Discard()
 
 	val, err = personType.Marshal()
 	require.NoError(t, err)
 
 	txn = pstore.NewTransactionAt(math.MaxUint64, true)
-	txn.Set(x.TypeKey("Person"), val)
-	require.NoError(t, err)
+	require.NoError(t, txn.Set(testutil.GalaxyTypeKey("Person"), val))
 	require.NoError(t, txn.CommitAt(1, nil))
-	txn.Discard()
 
 	populateGraphExport(t)
+
+	// Drop age predicate after populating DB.
+	// age should not exist in the exported schema.
+	txn = pstore.NewTransactionAt(math.MaxUint64, true)
+	require.NoError(t, txn.Delete(testutil.GalaxySchemaKey("age")))
+	require.NoError(t, txn.CommitAt(1, nil))
 }
 
-func getExportFileList(t *testing.T, bdir string) (dataFiles, schemaFiles []string) {
+func getExportFileList(t *testing.T, bdir string) (dataFiles, schemaFiles, gqlSchema []string) {
 	searchDir := bdir
 	err := filepath.Walk(searchDir, func(path string, f os.FileInfo, err error) error {
 		if f.IsDir() {
 			return nil
 		}
 		if path != bdir {
-			if strings.Contains(path, "schema") {
+			switch {
+			case strings.Contains(path, "gql_schema"):
+				gqlSchema = append(gqlSchema, path)
+			case strings.Contains(path, "schema"):
 				schemaFiles = append(schemaFiles, path)
-			} else {
+			default:
 				dataFiles = append(dataFiles, path)
 			}
 		}
@@ -164,14 +202,15 @@ func checkExportSchema(t *testing.T, schemaFileList []string) {
 	r, err := gzip.NewReader(f)
 	require.NoError(t, err)
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, err = buf.ReadFrom(r)
+	require.NoError(t, err)
 
 	result, err := schema.Parse(buf.String())
 	require.NoError(t, err)
 
 	require.Equal(t, 2, len(result.Preds))
 	require.Equal(t, "uid", types.TypeID(result.Preds[0].ValueType).Name())
-	require.Equal(t, "http://www.w3.org/2000/01/rdf-schema#range",
+	require.Equal(t, x.GalaxyAttr("http://www.w3.org/2000/01/rdf-schema#range"),
 		result.Preds[1].Predicate)
 	require.Equal(t, "uid", types.TypeID(result.Preds[1].ValueType).Name())
 
@@ -179,14 +218,32 @@ func checkExportSchema(t *testing.T, schemaFileList []string) {
 	require.True(t, proto.Equal(result.Types[0], personType))
 }
 
+func checkExportGqlSchema(t *testing.T, gqlSchemaFiles []string) {
+	require.Equal(t, 1, len(gqlSchemaFiles))
+	file := gqlSchemaFiles[0]
+	f, err := os.Open(file)
+	require.NoError(t, err)
+
+	r, err := gzip.NewReader(f)
+	require.NoError(t, err)
+	var buf bytes.Buffer
+	_, err = buf.ReadFrom(r)
+	require.NoError(t, err)
+	expected := []x.ExportedGQLSchema{{Namespace: x.GalaxyNamespace, Schema: gqlSchema}}
+	b, err := json.Marshal(expected)
+	require.NoError(t, err)
+	require.JSONEq(t, string(b), buf.String())
+}
+
 func TestExportRdf(t *testing.T) {
 	// Index the name predicate. We ensure it doesn't show up on export.
-	initTestExport(t, "name:string @index .")
+	initTestExport(t, `
+		name: string @index(exact) .
+		age: int .
+		[0x2] name: string @index(exact) .
+		`)
 
-	bdir, err := ioutil.TempDir("", "export")
-	require.NoError(t, err)
-	defer os.RemoveAll(bdir)
-
+	bdir := t.TempDir()
 	time.Sleep(1 * time.Second)
 
 	// We have 4 friend type edges. FP("friends")%10 = 2.
@@ -194,10 +251,12 @@ func TestExportRdf(t *testing.T) {
 	readTs := timestamp()
 	// Do the following so export won't block forever for readTs.
 	posting.Oracle().ProcessDelta(&pb.OracleDelta{MaxAssigned: readTs})
-	err = export(context.Background(), &pb.ExportRequest{ReadTs: readTs, GroupId: 1, Format: "rdf"})
+	files, err := export(context.Background(), &pb.ExportRequest{ReadTs: readTs, GroupId: 1,
+		Namespace: math.MaxUint64, Format: "rdf"})
 	require.NoError(t, err)
 
-	fileList, schemaFileList := getExportFileList(t, bdir)
+	fileList, schemaFileList, gqlSchema := getExportFileList(t, bdir)
+	require.Equal(t, len(files), len(fileList)+len(schemaFileList)+len(gqlSchema))
 
 	file := fileList[0]
 	f, err := os.Open(file)
@@ -213,7 +272,7 @@ func TestExportRdf(t *testing.T) {
 	for scanner.Scan() {
 		nq, err := chunker.ParseRDF(scanner.Text(), l)
 		require.NoError(t, err)
-		require.Contains(t, []string{"0x1", "0x2", "0x3", "0x4", "0x5", "0x6"}, nq.Subject)
+		require.Contains(t, []string{"0x1", "0x2", "0x3", "0x4", "0x5", "0x6", "0x9"}, nq.Subject)
 		if nq.ObjectValue != nil {
 			switch nq.Subject {
 			case "0x1", "0x2":
@@ -224,9 +283,12 @@ func TestExportRdf(t *testing.T) {
 					nq.ObjectValue)
 			case "0x4":
 			case "0x5":
-				require.Equal(t, `<0x5> <name> "" .`, scanner.Text())
+				require.Equal(t, `<0x5> <name> "" <0x0> .`, scanner.Text())
 			case "0x6":
-				require.Equal(t, `<0x6> <name> "Ding!\u0007Ding!\u0007Ding!\u0007" .`, scanner.Text())
+				require.Equal(t, `<0x6> <name> "Ding!\u0007Ding!\u0007Ding!\u0007" <0x0> .`,
+					scanner.Text())
+			case "0x9":
+				require.Equal(t, `<0x9> <name> "ns2" <0x2> .`, scanner.Text())
 			default:
 				t.Errorf("Unexpected subject: %v", nq.Subject)
 			}
@@ -269,19 +331,18 @@ func TestExportRdf(t *testing.T) {
 	}
 	require.NoError(t, scanner.Err())
 	// This order will be preserved due to file naming.
-	require.Equal(t, 9, count)
+	require.Equal(t, 10, count)
 
 	checkExportSchema(t, schemaFileList)
+	checkExportGqlSchema(t, gqlSchema)
 }
 
 func TestExportJson(t *testing.T) {
 	// Index the name predicate. We ensure it doesn't show up on export.
-	initTestExport(t, "name:string @index .")
+	initTestExport(t, `name: string @index(exact) .
+				 [0x2] name: string @index(exact) .`)
 
-	bdir, err := ioutil.TempDir("", "export")
-	require.NoError(t, err)
-	defer os.RemoveAll(bdir)
-
+	bdir := t.TempDir()
 	time.Sleep(1 * time.Second)
 
 	// We have 4 friend type edges. FP("friends")%10 = 2.
@@ -289,11 +350,12 @@ func TestExportJson(t *testing.T) {
 	readTs := timestamp()
 	// Do the following so export won't block forever for readTs.
 	posting.Oracle().ProcessDelta(&pb.OracleDelta{MaxAssigned: readTs})
-	req := pb.ExportRequest{ReadTs: readTs, GroupId: 1, Format: "json"}
-	err = export(context.Background(), &req)
+	req := pb.ExportRequest{ReadTs: readTs, GroupId: 1, Format: "json", Namespace: math.MaxUint64}
+	files, err := export(context.Background(), &req)
 	require.NoError(t, err)
 
-	fileList, schemaFileList := getExportFileList(t, bdir)
+	fileList, schemaFileList, gqlSchema := getExportFileList(t, bdir)
+	require.Equal(t, len(files), len(fileList)+len(schemaFileList)+len(gqlSchema))
 
 	file := fileList[0]
 	f, err := os.Open(file)
@@ -303,45 +365,82 @@ func TestExportJson(t *testing.T) {
 	require.NoError(t, err)
 
 	wantJson := `
-[
-  {"uid":"0x1","name":"pho\ton"},
-  {"uid":"0x2","name@en":"pho\ton"},
-  {"uid":"0x3","name":"First Line\nSecondLine"},
-  {"uid":"0x5","name":""},
-  {"uid":"0x6","name":"Ding!\u0007Ding!\u0007Ding!\u0007"},
-  {"uid":"0x1","friend":[{"uid":"0x5"}]},
-  {"uid":"0x2","friend":[{"uid":"0x5"}]},
-  {"uid":"0x3","friend":[{"uid":"0x5"}]},
-  {"uid":"0x4","friend":[{"uid":"0x5"}],"friend|age":33,"friend|close":"true","friend|game":"football","friend|poem":"roses are red\nviolets are blue","friend|since":"2005-05-02T15:04:05Z"}
-]
-`
-	gotJson, err := ioutil.ReadAll(r)
+	[
+		{"uid":"0x1","namespace":"0x0","name":"pho\ton"},
+		{"uid":"0x2","namespace":"0x0","name@en":"pho\ton"},
+		{"uid":"0x3","namespace":"0x0","name":"First Line\nSecondLine"},
+		{"uid":"0x5","namespace":"0x0","name":""},
+		{"uid":"0x6","namespace":"0x0","name":"Ding!\u0007Ding!\u0007Ding!\u0007"},
+		{"uid":"0x1","namespace":"0x0","friend":[{"uid":"0x5"}]},
+		{"uid":"0x2","namespace":"0x0","friend":[{"uid":"0x5"}]},
+		{"uid":"0x3","namespace":"0x0","friend":[{"uid":"0x5"}]},
+		{"uid":"0x4","namespace":"0x0","friend":[{"uid":"0x5","friend|age":33,
+			"friend|close":"true","friend|game":"football",
+			"friend|poem":"roses are red\nviolets are blue","friend|since":"2005-05-02T15:04:05Z"}]},
+		{"uid":"0x9","namespace":"0x2","name":"ns2"}
+	]
+	`
+	gotJson, err := io.ReadAll(r)
 	require.NoError(t, err)
-	require.JSONEq(t, wantJson, string(gotJson))
+	var expected interface{}
+	require.NoError(t, json.Unmarshal([]byte(wantJson), &expected))
+
+	var actual interface{}
+	require.NoError(t, json.Unmarshal(gotJson, &actual))
+	require.ElementsMatch(t, expected, actual)
 
 	checkExportSchema(t, schemaFileList)
+	checkExportGqlSchema(t, gqlSchema)
 }
 
+const exportRequest = `mutation export($format: String!) {
+	export(input: {format: $format}) {
+		response { code }
+		taskId
+	}
+}`
+
 func TestExportFormat(t *testing.T) {
-	tmpdir, err := ioutil.TempDir("", "export")
-	require.NoError(t, err)
-	defer os.RemoveAll(tmpdir)
+	adminUrl := "http://" + testutil.SockAddrHttp + "/admin"
+	require.NoError(t, testutil.CheckForGraphQLEndpointToReady(t))
 
-	resp, err := http.Get("http://" + testutil.SockAddrHttp + "/admin/export?format=json")
+	params := testutil.GraphQLParams{
+		Query:     exportRequest,
+		Variables: map[string]interface{}{"format": "json"},
+	}
+	b, err := json.Marshal(params)
 	require.NoError(t, err)
-	require.Equal(t, resp.StatusCode, http.StatusOK)
 
-	resp, err = http.Get("http://" + testutil.SockAddrHttp + "/admin/export?format=rdf")
+	resp, err := http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
-	require.Equal(t, resp.StatusCode, http.StatusOK)
 
-	resp, err = http.Get("http://" + testutil.SockAddrHttp + "/admin/export?format=xml")
-	require.NoError(t, err)
-	require.NotEqual(t, resp.StatusCode, http.StatusOK)
+	var data interface{}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
+	require.Equal(t, "Success", testutil.JsonGet(data, "data", "export", "response", "code").(string))
+	taskId := testutil.JsonGet(data, "data", "export", "taskId").(string)
+	testutil.WaitForTask(t, taskId, false, testutil.SockAddrHttp)
 
-	resp, err = http.Get("http://" + testutil.SockAddrHttp + "/admin/export?output=rdf")
+	params.Variables["format"] = "rdf"
+	b, err = json.Marshal(params)
 	require.NoError(t, err)
-	require.Equal(t, resp.StatusCode, http.StatusOK)
+
+	resp, err = http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
+	require.NoError(t, err)
+	testutil.RequireNoGraphQLErrors(t, resp)
+
+	params.Variables["format"] = "xml"
+	b, err = json.Marshal(params)
+	require.NoError(t, err)
+	resp, err = http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
+	require.NoError(t, err)
+
+	defer resp.Body.Close()
+	b, err = io.ReadAll(resp.Body)
+	require.NoError(t, err)
+
+	var result *testutil.GraphQLResponse
+	require.NoError(t, json.Unmarshal(b, &result))
+	require.NotNil(t, result.Errors)
 }
 
 type skv struct {
@@ -356,9 +455,9 @@ func TestToSchema(t *testing.T) {
 	}{
 		{
 			skv: &skv{
-				attr: "Alice",
+				attr: x.GalaxyAttr("Alice"),
 				schema: pb.SchemaUpdate{
-					Predicate: "mother",
+					Predicate: x.GalaxyAttr("mother"),
 					ValueType: pb.Posting_STRING,
 					Directive: pb.SchemaUpdate_REVERSE,
 					List:      false,
@@ -367,13 +466,13 @@ func TestToSchema(t *testing.T) {
 					Lang:      true,
 				},
 			},
-			expected: "<Alice>:string @reverse @count @lang @upsert . \n",
+			expected: "[0x0] <Alice>:string @reverse @count @lang @upsert . \n",
 		},
 		{
 			skv: &skv{
-				attr: "Alice:best",
+				attr: x.NamespaceAttr(0xf2, "Alice:best"),
 				schema: pb.SchemaUpdate{
-					Predicate: "mother",
+					Predicate: x.NamespaceAttr(0xf2, "mother"),
 					ValueType: pb.Posting_STRING,
 					Directive: pb.SchemaUpdate_REVERSE,
 					List:      false,
@@ -382,13 +481,13 @@ func TestToSchema(t *testing.T) {
 					Lang:      true,
 				},
 			},
-			expected: "<Alice:best>:string @reverse @lang . \n",
+			expected: "[0xf2] <Alice:best>:string @reverse @lang . \n",
 		},
 		{
 			skv: &skv{
-				attr: "username/password",
+				attr: x.GalaxyAttr("username/password"),
 				schema: pb.SchemaUpdate{
-					Predicate: "",
+					Predicate: x.GalaxyAttr(""),
 					ValueType: pb.Posting_STRING,
 					Directive: pb.SchemaUpdate_NONE,
 					List:      false,
@@ -397,13 +496,13 @@ func TestToSchema(t *testing.T) {
 					Lang:      false,
 				},
 			},
-			expected: "<username/password>:string . \n",
+			expected: "[0x0] <username/password>:string . \n",
 		},
 		{
 			skv: &skv{
-				attr: "B*-tree",
+				attr: x.GalaxyAttr("B*-tree"),
 				schema: pb.SchemaUpdate{
-					Predicate: "",
+					Predicate: x.GalaxyAttr(""),
 					ValueType: pb.Posting_UID,
 					Directive: pb.SchemaUpdate_REVERSE,
 					List:      true,
@@ -412,13 +511,13 @@ func TestToSchema(t *testing.T) {
 					Lang:      false,
 				},
 			},
-			expected: "<B*-tree>:[uid] @reverse . \n",
+			expected: "[0x0] <B*-tree>:[uid] @reverse . \n",
 		},
 		{
 			skv: &skv{
-				attr: "base_de_données",
+				attr: x.GalaxyAttr("base_de_données"),
 				schema: pb.SchemaUpdate{
-					Predicate: "",
+					Predicate: x.GalaxyAttr(""),
 					ValueType: pb.Posting_STRING,
 					Directive: pb.SchemaUpdate_NONE,
 					List:      false,
@@ -427,13 +526,13 @@ func TestToSchema(t *testing.T) {
 					Lang:      true,
 				},
 			},
-			expected: "<base_de_données>:string @lang . \n",
+			expected: "[0x0] <base_de_données>:string @lang . \n",
 		},
 		{
 			skv: &skv{
-				attr: "data_base",
+				attr: x.GalaxyAttr("data_base"),
 				schema: pb.SchemaUpdate{
-					Predicate: "",
+					Predicate: x.GalaxyAttr(""),
 					ValueType: pb.Posting_STRING,
 					Directive: pb.SchemaUpdate_NONE,
 					List:      false,
@@ -442,13 +541,13 @@ func TestToSchema(t *testing.T) {
 					Lang:      true,
 				},
 			},
-			expected: "<data_base>:string @lang . \n",
+			expected: "[0x0] <data_base>:string @lang . \n",
 		},
 		{
 			skv: &skv{
-				attr: "data.base",
+				attr: x.GalaxyAttr("data.base"),
 				schema: pb.SchemaUpdate{
-					Predicate: "",
+					Predicate: x.GalaxyAttr(""),
 					ValueType: pb.Posting_STRING,
 					Directive: pb.SchemaUpdate_NONE,
 					List:      false,
@@ -457,12 +556,11 @@ func TestToSchema(t *testing.T) {
 					Lang:      true,
 				},
 			},
-			expected: "<data.base>:string @lang . \n",
+			expected: "[0x0] <data.base>:string @lang . \n",
 		},
 	}
 	for _, testCase := range testCases {
-		list, err := toSchema(testCase.skv.attr, testCase.skv.schema)
-		require.NoError(t, err)
-		require.Equal(t, testCase.expected, string(list.Kv[0].Value))
+		kv := toSchema(testCase.skv.attr, &testCase.skv.schema)
+		require.Equal(t, testCase.expected, string(kv.Value))
 	}
 }

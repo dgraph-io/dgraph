@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@ package tok
 import (
 	"testing"
 
-	"github.com/blevesearch/bleve/analysis"
+	"github.com/blevesearch/bleve/v2/analysis"
 	"github.com/stretchr/testify/require"
 )
 

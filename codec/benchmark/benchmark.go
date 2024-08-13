@@ -31,6 +31,8 @@ import (
 	"sort"
 	"time"
 
+	"github.com/golang/glog"
+
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
@@ -51,28 +53,27 @@ import (
 // TODO: Improve performance here, using SIMD instructions.
 
 const (
-	// chunkByteSize is the number
-	// of bytes per chunk of data.
+	// chunkByteSize is the number of bytes per chunk of data.
 	chunkByteSize = 262144
 )
 
 func read(filename string) []int {
 	f, err := os.Open(filename)
-	if err != nil {
-		panic(err)
-	}
-	defer f.Close()
+	x.Panic(err)
+	defer func() {
+		if err := f.Close(); err != nil {
+			glog.Warningf("error while closing fd: %v", err)
+		}
+	}()
 
 	fgzip, err := gzip.NewReader(f)
-	if err != nil {
-		panic(err)
-	}
+	x.Panic(err)
 	defer fgzip.Close()
 
 	buf := make([]byte, 4)
 	_, err = fgzip.Read(buf)
 	if err != nil && err != io.EOF {
-		panic(err)
+		x.Panic(err)
 	}
 	ndata := binary.LittleEndian.Uint32(buf)
 
@@ -80,7 +81,7 @@ func read(filename string) []int {
 	for i := range data {
 		_, err = fgzip.Read(buf)
 		if err != nil && err != io.EOF {
-			panic(err)
+			x.Panic(err)
 		}
 
 		data[i] = int(binary.LittleEndian.Uint32(buf))
@@ -120,7 +121,8 @@ func benchmarkPack(trials int, chunks *chunks) int {
 	for i := range times {
 		start := time.Now()
 		for _, c := range chunks.data {
-			codec.Encode(c, 256)
+			pack := codec.Encode(c, 256)
+			codec.FreePack(pack)
 			// bp128.DeltaPack(c)
 		}
 		times[i] = int(time.Since(start).Nanoseconds())
@@ -180,10 +182,9 @@ func main() {
 	}
 
 	chunks64 := chunkify64(data)
-	mis := 0
 	const ntrials = 100
 
-	mis = benchmarkPack(ntrials, chunks64)
+	mis := benchmarkPack(ntrials, chunks64)
 	fmtBenchmark("BenchmarkDeltaPack64", mis)
 
 	mis = benchmarkUnpack(ntrials, chunks64)

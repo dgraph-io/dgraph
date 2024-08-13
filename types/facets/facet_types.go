@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,9 @@
 
 package facets
 
-import "github.com/dgraph-io/dgo/v2/protos/api"
+import (
+	"github.com/dgraph-io/dgo/v230/protos/api"
+)
 
 const (
 	// IntID represents the integer type.
@@ -47,6 +49,7 @@ func ValTypeForTypeID(typId TypeID) api.Facet_ValType {
 		return api.Facet_DATETIME
 	case StringID:
 		return api.Facet_STRING
+	default:
+		panic("unhandled case in ValTypeForTypeID")
 	}
-	panic("Unhandled case in ValTypeForTypeID.")
 }

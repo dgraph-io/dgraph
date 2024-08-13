@@ -1,0 +1,25 @@
+alertmanager:
+  config:
+    global:
+     resolve_timeout: 1m
+     pagerduty_url: https://events.pagerduty.com/v2/enqueue
+
+    route:
+      receiver: 'null'
+      {{- if env "DGRAPH_ALERTS_ENABLED" }}
+      routes:
+        - match:
+            alertname: dgraph*
+          receiver: 'pagerduty-notifications'
+      {{- if env "DGRAPH_BACKUPS_ALERTS_ENABLED" }}
+        - match:
+            alertname: CronJobStatusFailed
+          receiver: 'pagerduty-notifications'
+      {{- end }}
+      {{- end }}
+    receivers:
+    - name: 'pagerduty-notifications'
+      pagerduty_configs:
+        - service_key: "{{ requiredEnv "PAGERDUTY_INTEGRATION_KEY" }}"
+          send_resolved: true
+    - name: 'null'

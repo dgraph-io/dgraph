@@ -1,0 +1,12 @@
+interface Message {
+    text: String
+}
+
+type Question implements Message {
+    askedBy: User
+}
+
+type User {
+    name: String
+    messages: [Message]
+}

@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2016-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,22 +24,27 @@ import (
 	"math"
 	"net"
 	"sync"
-
-	"github.com/dgraph-io/badger/v2"
-	"github.com/dgraph-io/dgraph/conn"
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/x"
-	"go.opencensus.io/plugin/ocgrpc"
+	"sync/atomic"
 
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
+	"go.opencensus.io/plugin/ocgrpc"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
+
+	"github.com/dgraph-io/badger/v4"
+	badgerpb "github.com/dgraph-io/badger/v4/pb"
+	"github.com/dgraph-io/dgraph/conn"
+	"github.com/dgraph-io/dgraph/posting"
+	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 var (
-	pstore           *badger.DB
-	workerServer     *grpc.Server
-	raftServer       conn.RaftServer
-	pendingProposals chan struct{}
+	pstore       *badger.DB
+	workerServer *grpc.Server
+	raftServer   conn.RaftServer
+
 	// In case of flaky network connectivity we would try to keep upto maxPendingEntries in wal
 	// so that the nodes which have lagged behind leader can just replay entries instead of
 	// fetching snapshot if network disconnectivity is greater than the interval at which snapshots
@@ -54,17 +59,45 @@ func workerPort() int {
 func Init(ps *badger.DB) {
 	pstore = ps
 	// needs to be initialized after group config
-	pendingProposals = make(chan struct{}, x.WorkerConfig.NumPendingProposals)
-	workerServer = grpc.NewServer(
+	limiter = rateLimiter{c: sync.NewCond(&sync.Mutex{}), max: int(x.WorkerConfig.Raft.GetInt64("pending-proposals"))}
+	go limiter.bleed()
+
+	grpcOpts := []grpc.ServerOption{
 		grpc.MaxRecvMsgSize(x.GrpcMaxSize),
 		grpc.MaxSendMsgSize(x.GrpcMaxSize),
 		grpc.MaxConcurrentStreams(math.MaxInt32),
-		grpc.StatsHandler(&ocgrpc.ServerHandler{}))
+		grpc.StatsHandler(&ocgrpc.ServerHandler{}),
+	}
+
+	if x.WorkerConfig.TLSServerConfig != nil {
+		grpcOpts = append(grpcOpts, grpc.Creds(credentials.NewTLS(x.WorkerConfig.TLSServerConfig)))
+	}
+	workerServer = grpc.NewServer(grpcOpts...)
 }
 
 // grpcWorker struct implements the gRPC server interface.
 type grpcWorker struct {
 	sync.Mutex
+}
+
+// grpcWorker implements pb.WorkerServer.
+var _ pb.WorkerServer = (*grpcWorker)(nil)
+
+func (w *grpcWorker) Subscribe(
+	req *pb.SubscriptionRequest, stream pb.Worker_SubscribeServer) error {
+	// Subscribe on given prefixes.
+	var matches []badgerpb.Match
+	for _, p := range req.GetPrefixes() {
+		matches = append(matches, badgerpb.Match{
+			Prefix: p,
+		})
+	}
+	for _, m := range req.GetMatches() {
+		matches = append(matches, *m)
+	}
+	return pstore.Subscribe(stream.Context(), func(kvs *badgerpb.KVList) error {
+		return stream.Send(kvs)
+	}, matches)
 }
 
 // RunServer initializes a tcp server on port which listens to requests from
@@ -97,9 +130,59 @@ func BlockingStop() {
 	glog.Infof("Stopping group...")
 	groups().closer.SignalAndWait()
 
+	// Update checkpoint so that proposals are not replayed after the server restarts.
+	glog.Infof("Updating RAFT state before shutting down...")
+	if err := groups().Node.updateRaftProgress(); err != nil {
+		glog.Warningf("Error while updating RAFT progress before shutdown: %v", err)
+	}
+
 	glog.Infof("Stopping node...")
 	groups().Node.closer.SignalAndWait()
 
 	glog.Infof("Stopping worker server...")
 	workerServer.Stop()
+
+	groups().Node.cdcTracker.Close()
+}
+
+// UpdateCacheMb updates the value of cache_mb and updates the corresponding cache sizes.
+func UpdateCacheMb(memoryMB int64) error {
+	glog.Infof("Updating cacheMb to %d", memoryMB)
+	if memoryMB < 0 {
+		return errors.Errorf("cache_mb must be non-negative")
+	}
+
+	cachePercent, err := x.GetCachePercentages(Config.CachePercentage, 3)
+	if err != nil {
+		return err
+	}
+	plCacheSize := (cachePercent[0] * (memoryMB << 20)) / 100
+	blockCacheSize := (cachePercent[1] * (memoryMB << 20)) / 100
+	indexCacheSize := (cachePercent[2] * (memoryMB << 20)) / 100
+
+	posting.UpdateMaxCost(plCacheSize)
+	if _, err := pstore.CacheMaxCost(badger.BlockCache, blockCacheSize); err != nil {
+		return errors.Wrapf(err, "cannot update block cache size")
+	}
+	if _, err := pstore.CacheMaxCost(badger.IndexCache, indexCacheSize); err != nil {
+		return errors.Wrapf(err, "cannot update index cache size")
+	}
+
+	Config.CacheMb = memoryMB
+	return nil
+}
+
+// UpdateLogDQLRequest updates value of x.WorkerConfig.LogDQLRequest.
+func UpdateLogDQLRequest(val bool) {
+	if val {
+		atomic.StoreInt32(&x.WorkerConfig.LogDQLRequest, 1)
+		return
+	}
+
+	atomic.StoreInt32(&x.WorkerConfig.LogDQLRequest, 0)
+}
+
+// LogDQLRequestEnabled returns true if logging of requests is enabled otherwise false.
+func LogDQLRequestEnabled() bool {
+	return atomic.LoadInt32(&x.WorkerConfig.LogDQLRequest) > 0
 }

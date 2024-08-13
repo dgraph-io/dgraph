@@ -1,0 +1,4 @@
+# Artifacts Are Automatically Generated
+minio.env
+credentials.json
+env.sh

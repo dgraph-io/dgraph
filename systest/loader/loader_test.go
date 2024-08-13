@@ -1,5 +1,7 @@
+//go:build integration
+
 /*
- * Copyright 2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,97 +19,91 @@
 package main
 
 import (
+	"context"
 	"fmt"
-	"io/ioutil"
-	"net/http"
-	"os"
-	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
 
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgraph/x"
 )
 
+// TestLoaderXidmap checks that live loader re-uses xidmap on loading data from two different files
 func TestLoaderXidmap(t *testing.T) {
-	tmpDir, err := ioutil.TempDir("", "loader_test")
+	conf := viper.GetViper()
+	conf.Set("tls", fmt.Sprintf("ca-cert=%s; server-name=%s; internal-port=%v;",
+		// ca-cert
+		"../../tlstest/mtls_internal/tls/live/ca.crt",
+		// server-name
+		"alpha1",
+		// internal-port
+		true))
+
+	dg, err := testutil.DgraphClientWithCerts(testutil.SockAddrLocalhost, conf)
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	ctx := context.Background()
+	testutil.DropAll(t, dg)
+	tmpDir := t.TempDir()
 
 	data, err := filepath.Abs("testdata/first.rdf.gz")
 	require.NoError(t, err)
-	liveCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
+
+	tlsDir, err := filepath.Abs("../../tlstest/mtls_internal/tls/live")
+	require.NoError(t, err)
+
+	tlsFlag := fmt.Sprintf(
+		`ca-cert=%s; internal-port=%v; client-cert=%s; client-key=%s; server-name=%s;`,
+		// ca-cert
+		tlsDir+"/ca.crt",
+		// internal-port
+		true,
+		// client-cert
+		tlsDir+"/client.liveclient.crt",
+		// client-key
+		tlsDir+"/client.liveclient.key",
+		// server-name
+		"alpha1")
+
+	err = testutil.ExecWithOpts([]string{testutil.DgraphBinaryPath(), "live",
+		"--tls", tlsFlag,
 		"--files", data,
-		"--alpha", testutil.SockAddr,
-		"--zero", testutil.SockAddrZero,
-		"-x", "x",
-	)
-	liveCmd.Dir = tmpDir
-	require.NoError(t, liveCmd.Run())
+		"--alpha", testutil.SockAddrLocalhost,
+		"--zero", testutil.SockAddrZeroLocalhost,
+		"-x", "x"}, testutil.CmdOpts{Dir: tmpDir})
+	require.NoError(t, err)
 
 	// Load another file, live should reuse the xidmap.
 	data, err = filepath.Abs("testdata/second.rdf.gz")
 	require.NoError(t, err)
-	liveCmd = exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
+	err = testutil.ExecWithOpts([]string{testutil.DgraphBinaryPath(), "live",
+		"--tls", tlsFlag,
 		"--files", data,
-		"--alpha", testutil.SockAddr,
-		"--zero", testutil.SockAddrZero,
-		"-x", "x",
-	)
-	liveCmd.Dir = tmpDir
-	liveCmd.Stdout = os.Stdout
-	liveCmd.Stderr = os.Stdout
-	require.NoError(t, liveCmd.Run())
-
-	resp, err := http.Get(fmt.Sprintf("http://%s/admin/export", testutil.SockAddrHttp))
+		"--alpha", testutil.SockAddrLocalhost,
+		"--zero", testutil.SockAddrZeroLocalhost,
+		"-x", "x"}, testutil.CmdOpts{Dir: tmpDir})
 	require.NoError(t, err)
 
-	b, _ := ioutil.ReadAll(resp.Body)
-	expected := `{"code": "Success", "message": "Export completed."}`
-	require.Equal(t, expected, string(b))
+	op := api.Operation{Schema: "name: string @index(exact) ."}
+	x.Check(dg.Alter(ctx, &op))
 
-	require.NoError(t, copyExportFiles(tmpDir))
-
-	dataFile, err := findFile(filepath.Join(tmpDir, "export"), ".rdf.gz")
-	require.NoError(t, err)
-
-	cmd := fmt.Sprintf("gunzip -c %s | sort", dataFile)
-	out, err := exec.Command("sh", "-c", cmd).Output()
-	require.NoError(t, err)
-
-	expected = `<0x1> <age> "13" .
-<0x1> <friend> <0x2711> .
-<0x1> <location> "Wonderland" .
-<0x1> <name> "Alice" .
-<0x2711> <name> "Bob" .
-`
-	require.Equal(t, expected, string(out))
-}
-
-func copyExportFiles(tmpDir string) error {
-	exportPath := filepath.Join(tmpDir, "export")
-	if err := os.MkdirAll(exportPath, 0755); err != nil {
-		return err
-	}
-
-	srcPath := "alpha1:/data/alpha1/export"
-	dstPath := filepath.Join(tmpDir, "export")
-	return testutil.DockerCp(srcPath, dstPath)
-}
-
-func findFile(dir string, ext string) (string, error) {
-	var fp string
-	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
+	query := `
+	{
+		q(func: eq(name, "Alice")) {
+			age
+			location
+			friend{
+				name
+			}
 		}
-		if strings.HasSuffix(path, ext) {
-			fp = path
-			return nil
-		}
-		return nil
-	})
-	return fp, err
+	}`
+	expected := `{"q":[{"age":"13","location":"Wonderland","friend":[{"name":"Bob"}]}]}`
+
+	resp, err := dg.NewReadOnlyTxn().Query(ctx, query)
+	require.NoError(t, err)
+	testutil.CompareJSON(t, expected, string(resp.GetJson()))
+
 }

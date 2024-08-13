@@ -1,0 +1,39 @@
+repositories:
+  - name: jaegertracing
+    url: https://jaegertracing.github.io/helm-charts
+  - name: dgraph
+    url: https://charts.dgraph.io
+
+releases:
+  - name: jaeger-operator
+    namespace: observability
+    chart: jaegertracing/jaeger-operator
+    version: 2.17.0
+    values:
+      - serviceAccount:
+          name: jaeger-operator
+        rbac:
+          clusterRole: true
+  ## Jaeger Operator Reference (official)
+  ##  https://godoc.org/github.com/jaegertracing/jaeger-operator/pkg/apis/jaegertracing/v1#JaegerSpec
+  ## Example based on
+  ##  https://github.com/jaegertracing/jaeger-operator/blob/master/deploy/examples/with-badger-and-volume.yaml
+  - name: jaeger
+    namespace: observability
+    chart: ./jaeger
+    needs:
+      - observability/jaeger-operator
+    hooks:
+      - events:
+          - prepare
+          - cleanup
+        command: ./helmify.sh
+        args:
+          - "{{`{{if eq .Event.Name \"prepare\"}}build{{else}}clean{{end}}`}}"
+          - "{{`{{.Release.Chart}}`}}"
+          - badger
+  - name: dgraph
+    namespace: default
+    chart: dgraph/dgraph
+    values:
+      - dgraph_jaeger.yaml

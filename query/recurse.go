@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,9 +21,10 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/pkg/errors"
+
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/pkg/errors"
 )
 
 func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error {
@@ -137,7 +138,7 @@ func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error
 					})
 				}
 			}
-			if len(sg.Params.Order) > 0 || len(sg.Params.FacetOrder) > 0 {
+			if len(sg.Params.Order) > 0 || len(sg.Params.FacetsOrder) > 0 {
 				// Can't use merge sort if the UIDs are not sorted.
 				sg.updateDestUids()
 			} else {
@@ -161,10 +162,10 @@ func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error
 			out = append(out, exp...)
 		}
 
-		if numEdges > x.Config.QueryEdgeLimit {
+		if numEdges > x.Config.LimitQueryEdge {
 			// If we've seen too many edges, stop the query.
 			return errors.Errorf("Exceeded query edge limit = %v. Found %v edges.",
-				x.Config.QueryEdgeLimit, numEdges)
+				x.Config.LimitQueryEdge, numEdges)
 		}
 
 		if len(out) == 0 {

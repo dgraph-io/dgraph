@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2015-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -364,7 +364,8 @@ func lexLabel(l *lex.Lexer) lex.StateFn {
 
 // lexFacets parses key-value pairs of Facets. sample is :
 // ( key1 = "value1", key2=13, key3=, key4 =2.4, key5=2006-01-02T15:04:05,
-//   key6=2006-01-02 )
+//
+//	key6=2006-01-02 )
 func lexFacets(l *lex.Lexer) lex.StateFn {
 	r := l.Next()
 	if r != leftRound {

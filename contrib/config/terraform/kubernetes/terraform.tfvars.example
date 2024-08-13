@@ -1,0 +1,31 @@
+## VPC/EKS
+##########
+prefix = "dgraph"
+cidr   = "10.20.0.0/16"
+region = "ap-south-1"
+
+# If ha is set to false the worker_node_count is overridden to 1
+ha                 = true
+worker_nodes_count = 3
+instance_types     = ["m5.large"]
+
+# If only_whitelist_local_ip is set to true, the ingress_whitelist_cidrs is overridden to local IP of the executioner
+ingress_whitelist_cidrs = ["0.0.0.0/0"]
+only_whitelist_local_ip = false
+
+
+## Dgraph
+#########
+namespace = "dgraph"
+
+# Zero
+zero_replicas        = 3
+zero_persistence     = true
+zero_storage_size_gb = 10
+
+# Alpha
+alpha_initialize_data = false
+alpha_replicas        = 3
+alpha_persistence     = true
+alpha_storage_size_gb = 10
+alpha_lru_size_mb     = 2048

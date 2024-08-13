@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,9 +17,59 @@
 package types
 
 import (
+	"encoding/binary"
+	"math"
 	"strconv"
 	"strings"
+	"unsafe"
 )
+
+// BytesAsFloatArray(encoded) converts encoded into a []float32.
+// If len(encoded) % 4 is not 0, it will ignore any trailing
+// bytes, and simply convert 4 bytes at a time to generate the
+// float64 entries.
+// Current implementation assuming littleEndian encoding
+func BytesAsFloatArray(encoded []byte) []float32 {
+	resultLen := len(encoded) / 4
+	if resultLen == 0 {
+		return []float32{}
+	}
+	retVal := make([]float32, resultLen)
+	for i := 0; i < resultLen; i++ {
+		retVal[i] = *(*float32)(unsafe.Pointer(&encoded[0]))
+		encoded = encoded[4:]
+	}
+	return retVal
+}
+
+// FloatArrayAsBytes(v) will create a byte array encoding
+// v using LittleEndian format. This is sort of the inverse
+// of BytesAsFloatArray, but note that we can always be successful
+// converting to bytes, but the inverse is not feasible.
+func FloatArrayAsBytes(v []float32) []byte {
+	retVal := make([]byte, 4*len(v))
+	offset := retVal
+	for i := 0; i < len(v); i++ {
+		bits := math.Float32bits(v[i])
+		binary.LittleEndian.PutUint32(offset, bits)
+		offset = offset[4:]
+	}
+	return retVal
+}
+
+func FloatArrayAsString(v []float32) string {
+	var sb strings.Builder
+
+	sb.WriteRune('[')
+	for i := range v {
+		sb.WriteString(strconv.FormatFloat(float64(v[i]), 'f', -1, 32))
+		if i != len(v)-1 {
+			sb.WriteRune(',')
+		}
+	}
+	sb.WriteRune(']')
+	return sb.String()
+}
 
 // TypeForValue tries to determine the most likely type based on a value. We only want to use this
 // function when there's no schema type and no suggested storage type.
@@ -61,6 +111,10 @@ func TypeForValue(v []byte) (TypeID, interface{}) {
 			return FloatID, f
 		}
 	}
+
+	// TODO: Consider looking for vector type (vfloat). Not clear
+	//       about this, because the natural encoding as
+	//       "[ num, num, ... num ]" my look like a standard list type.
 	return DefaultID, nil
 }
 

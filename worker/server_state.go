@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,36 +17,52 @@
 package worker
 
 import (
-	"io/ioutil"
+	"context"
 	"math"
 	"os"
-	"path/filepath"
-	"strconv"
-	"strings"
 	"time"
 
-	"github.com/dgraph-io/badger/v2"
-	"github.com/dgraph-io/badger/v2/options"
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
-	"golang.org/x/net/context"
+
+	"github.com/dgraph-io/badger/v4"
+	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/raftwal"
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 const (
-	groupFile = "group_id"
+	// NOTE: SuperFlag defaults must include every possible option that can be used. This way, if a
+	//       user makes a typo while defining a SuperFlag we can catch it and fail right away rather
+	//       than fail during runtime while trying to retrieve an option that isn't there.
+	//
+	//       For easy readability, keep the options without default values (if any) at the end of
+	//       the *Defaults string. Also, since these strings are printed in --help text, avoid line
+	//       breaks.
+	AuditDefaults  = `compress=false; days=10; size=100; dir=; output=; encrypt-file=;`
+	BadgerDefaults = `compression=snappy; numgoroutines=8;`
+	RaftDefaults   = `learner=false; snapshot-after-entries=10000; ` +
+		`snapshot-after-duration=30m; pending-proposals=256; idx=; group=;`
+	SecurityDefaults = `token=; whitelist=;`
+	CDCDefaults      = `file=; kafka=; sasl_user=; sasl_password=; ca_cert=; client_cert=; ` +
+		`client_key=; sasl-mechanism=PLAIN; tls=false;`
+	LimitDefaults = `mutations=allow; query-edge=1000000; normalize-node=10000; ` +
+		`mutations-nquad=1000000; disallow-drop=false; query-timeout=0ms; txn-abort-after=5m; ` +
+		` max-retries=10;max-pending-queries=10000;shared-instance=false;type-filter-uid-limit=10`
+	ZeroLimitsDefaults = `uid-lease=0; refill-interval=30s; disable-admin-http=false;`
+	GraphQLDefaults    = `introspection=true; debug=false; extensions=true; poll-interval=1s; ` +
+		`lambda-url=;`
+	CacheDefaults        = `size-mb=1024; percentage=0,80,20;`
+	FeatureFlagsDefaults = `normalize-compatibility-mode=`
 )
 
 // ServerState holds the state of the Dgraph server.
 type ServerState struct {
-	FinishCh   chan struct{} // channel to wait for all pending reqs to finish.
-	ShutdownCh chan struct{} // channel to signal shutdown.
+	FinishCh chan struct{} // channel to wait for all pending reqs to finish.
 
 	Pstore   *badger.DB
-	WALstore *badger.DB
-
-	vlogTicker          *time.Ticker // runs every 1m, check size of vlog and run GC conditionally.
-	mandatoryVlogTicker *time.Ticker // runs every 10m, we always run vlog GC.
+	WALstore *raftwal.DiskStorage
+	gcCloser *z.Closer // closer for valueLogGC
 
 	needTs chan tsReq
 }
@@ -59,133 +75,97 @@ func InitServerState() {
 	Config.validate()
 
 	State.FinishCh = make(chan struct{})
-	State.ShutdownCh = make(chan struct{})
 	State.needTs = make(chan tsReq, 100)
 
 	State.initStorage()
 	go State.fillTimestampRequests()
 
-	contents, err := ioutil.ReadFile(filepath.Join(Config.PostingDir, groupFile))
+	groupId, err := x.ReadGroupIdFile(Config.PostingDir)
 	if err != nil {
-		return
+		glog.Warningf("Could not read %s file inside posting directory %s.", x.GroupIdFileName,
+			Config.PostingDir)
 	}
-
-	glog.Infof("Found group_id file inside posting directory %s. Will attempt to read.",
-		Config.PostingDir)
-	groupId, err := strconv.ParseUint(strings.TrimSpace(string(contents)), 0, 32)
-	if err != nil {
-		glog.Warningf("Could not read %s file inside posting directory %s.",
-			groupFile, Config.PostingDir)
-	}
-	x.WorkerConfig.ProposedGroupId = uint32(groupId)
-}
-
-func (s *ServerState) runVlogGC(store *badger.DB) {
-	// Get initial size on start.
-	_, lastVlogSize := store.Size()
-	const GB = int64(1 << 30)
-
-	runGC := func() {
-		var err error
-		for err == nil {
-			// If a GC is successful, immediately run it again.
-			err = store.RunValueLogGC(0.7)
-		}
-		_, lastVlogSize = store.Size()
-	}
-
-	for {
-		select {
-		case <-s.vlogTicker.C:
-			_, currentVlogSize := store.Size()
-			if currentVlogSize < lastVlogSize+GB {
-				continue
-			}
-			runGC()
-		case <-s.mandatoryVlogTicker.C:
-			runGC()
-		}
-	}
+	x.WorkerConfig.ProposedGroupId = groupId
 }
 
 func setBadgerOptions(opt badger.Options) badger.Options {
-	opt = opt.WithSyncWrites(false).WithTruncate(true).WithLogger(&x.ToGlog{})
+	opt = opt.WithSyncWrites(false).
+		WithLogger(&x.ToGlog{}).
+		WithEncryptionKey(x.WorkerConfig.EncryptionKey)
 
-	glog.Infof("Setting Badger table load option: %s", Config.BadgerTables)
-	switch Config.BadgerTables {
-	case "mmap":
-		opt.TableLoadingMode = options.MemoryMap
-	case "ram":
-		opt.TableLoadingMode = options.LoadToRAM
-	case "disk":
-		opt.TableLoadingMode = options.FileIO
-	default:
-		x.Fatalf("Invalid Badger Tables options")
-	}
+	// Disable conflict detection in badger. Alpha runs in managed mode and
+	// perform its own conflict detection so we don't need badger's conflict
+	// detection. Using badger's conflict detection uses memory which can be
+	// saved by disabling it.
+	opt.DetectConflicts = false
 
-	glog.Infof("Setting Badger value log load option: %s", Config.BadgerVlog)
-	switch Config.BadgerVlog {
-	case "mmap":
-		opt.ValueLogLoadingMode = options.MemoryMap
-	case "disk":
-		opt.ValueLogLoadingMode = options.FileIO
-	default:
-		x.Fatalf("Invalid Badger Value log options")
-	}
+	// Settings for the data directory.
 	return opt
 }
 
 func (s *ServerState) initStorage() {
 	var err error
+
+	if x.WorkerConfig.EncryptionKey != nil {
+		// non-nil key file
+		if !EnterpriseEnabled() {
+			// not licensed --> crash.
+			glog.Fatal("Valid Enterprise License needed for the Encryption feature.")
+		} else {
+			// licensed --> OK.
+			glog.Infof("Encryption feature enabled.")
+		}
+	}
+
 	{
 		// Write Ahead Log directory
 		x.Checkf(os.MkdirAll(Config.WALDir, 0700), "Error while creating WAL dir.")
-		opt := badger.LSMOnlyOptions(Config.WALDir)
-		opt = setBadgerOptions(opt)
-		opt.ValueLogMaxEntries = 10000 // Allow for easy space reclamation.
-		opt.MaxCacheSize = 10 << 20    // 10 mb of cache size for WAL.
-
-		// We should always force load LSM tables to memory, disregarding user settings, because
-		// Raft.Advance hits the WAL many times. If the tables are not in memory, retrieval slows
-		// down way too much, causing cluster membership issues. Because of prefix compression and
-		// value separation provided by Badger, this is still better than using the memory based WAL
-		// storage provided by the Raft library.
-		opt.TableLoadingMode = options.LoadToRAM
-
-		glog.Infof("Opening write-ahead log BadgerDB with options: %+v\n", opt)
-		s.WALstore, err = badger.Open(opt)
-		x.Checkf(err, "Error while creating badger KV WAL store")
+		s.WALstore, err = raftwal.InitEncrypted(Config.WALDir, x.WorkerConfig.EncryptionKey)
+		x.Check(err)
 	}
 	{
 		// Postings directory
 		// All the writes to posting store should be synchronous. We use batched writers
 		// for posting lists, so the cost of sync writes is amortized.
 		x.Check(os.MkdirAll(Config.PostingDir, 0700))
-		opt := badger.DefaultOptions(Config.PostingDir).WithValueThreshold(1 << 10 /* 1KB */).
-			WithNumVersionsToKeep(math.MaxInt32).WithMaxCacheSize(1 << 30)
+		opt := x.WorkerConfig.Badger.
+			WithDir(Config.PostingDir).WithValueDir(Config.PostingDir).
+			WithNumVersionsToKeep(math.MaxInt32).
+			WithNamespaceOffset(x.NamespaceOffset)
 		opt = setBadgerOptions(opt)
 
+		// Print the options w/o exposing key.
+		// TODO: Build a stringify interface in Badger options, which is used to print nicely here.
+		key := opt.EncryptionKey
+		opt.EncryptionKey = nil
 		glog.Infof("Opening postings BadgerDB with options: %+v\n", opt)
+		opt.EncryptionKey = key
+
 		s.Pstore, err = badger.OpenManaged(opt)
 		x.Checkf(err, "Error while creating badger KV posting store")
-	}
 
-	s.vlogTicker = time.NewTicker(1 * time.Minute)
-	s.mandatoryVlogTicker = time.NewTicker(10 * time.Minute)
-	go s.runVlogGC(s.Pstore)
-	go s.runVlogGC(s.WALstore)
+		// zero out from memory
+		opt.EncryptionKey = nil
+	}
+	// Temp directory
+	x.Check(os.MkdirAll(x.WorkerConfig.TmpDir, 0700))
+
+	s.gcCloser = z.NewCloser(3)
+	go x.RunVlogGC(s.Pstore, s.gcCloser)
+	// Commenting this out because Badger is doing its own cache checks.
+	go x.MonitorCacheHealth(s.Pstore, s.gcCloser)
+	go x.MonitorDiskMetrics("postings_fs", Config.PostingDir, s.gcCloser)
 }
 
 // Dispose stops and closes all the resources inside the server state.
 func (s *ServerState) Dispose() {
+	s.gcCloser.SignalAndWait()
 	if err := s.Pstore.Close(); err != nil {
 		glog.Errorf("Error while closing postings store: %v", err)
 	}
 	if err := s.WALstore.Close(); err != nil {
 		glog.Errorf("Error while closing WAL store: %v", err)
 	}
-	s.vlogTicker.Stop()
-	s.mandatoryVlogTicker.Stop()
 }
 
 func (s *ServerState) GetTimestamp(readOnly bool) uint64 {
@@ -200,20 +180,28 @@ func (s *ServerState) fillTimestampRequests() {
 		maxDelay  = time.Second
 	)
 
+	defer func() {
+		glog.Infoln("Exiting fillTimestampRequests")
+	}()
+
 	var reqs []tsReq
 	for {
 		// Reset variables.
 		reqs = reqs[:0]
 		delay := initDelay
 
-		req := <-s.needTs
-	slurpLoop:
-		for {
-			reqs = append(reqs, req)
-			select {
-			case req = <-s.needTs:
-			default:
-				break slurpLoop
+		select {
+		case <-s.gcCloser.HasBeenClosed():
+			return
+		case req := <-s.needTs:
+		slurpLoop:
+			for {
+				reqs = append(reqs, req)
+				select {
+				case req = <-s.needTs:
+				default:
+					break slurpLoop
+				}
 			}
 		}
 
@@ -229,7 +217,10 @@ func (s *ServerState) fillTimestampRequests() {
 
 		// Execute the request with infinite retries.
 	retry:
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		if s.gcCloser.Ctx().Err() != nil {
+			return
+		}
+		ctx, cancel := context.WithTimeout(s.gcCloser.Ctx(), 10*time.Second)
 		ts, err := Timestamps(ctx, num)
 		cancel()
 		if err != nil {

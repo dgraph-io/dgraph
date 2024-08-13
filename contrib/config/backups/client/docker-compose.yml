@@ -1,0 +1,44 @@
+version: "3.5"
+services:
+  zero1:
+    ## DGRAPH_VERSION set by ./compose-setup.sh
+    image: dgraph/dgraph:$DGRAPH_VERSION
+    container_name: zero1
+    working_dir: /dgraph/data/zero1
+    volumes:
+      - type: bind
+        source: ./data
+        target: /dgraph
+        read_only: false
+    ports:
+      - 5080:5080
+      - 6080:6080
+    command: dgraph zero --my=zero1:5080 --replicas 1 --raft="idx=1"
+
+  alpha1:
+    ## DGRAPH_VERSION set by ./compose-setup.sh
+    image: dgraph/dgraph:$DGRAPH_VERSION
+    container_name: alpha1
+    working_dir: /dgraph/data/alpha1
+    volumes:
+      - type: bind
+        source: ./data
+        target: /dgraph
+        read_only: false
+    ports:
+      - 8080:8080
+      - 9080:9080
+    ## configuration setup by ./compose-setup.sh
+    command: dgraph alpha --config /dgraph/config/config.toml --my=alpha1:7080 --zero=zero1:5080
+
+  ratel:
+    ## DGRAPH_VERSION set by ./compose-setup.sh
+    image: dgraph/ratel:$DGRAPH_VERSION
+    volumes:
+      - type: bind
+        source: ./data
+        target: /dgraph
+        read_only: false
+    ports:
+      - 8000:8000
+    container_name: ratel

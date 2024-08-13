@@ -1,0 +1,82 @@
+prometheusOperator:
+  createCustomResource: true
+
+grafana:
+  enabled: true
+  persistence:
+    enabled: true
+    accessModes: ["ReadWriteOnce"]
+    size: 5Gi
+  defaultDashboardsEnabled: true
+  service:
+    type: ClusterIP
+
+alertmanager:
+  service:
+    labels:
+      app: dgraph-io
+  alertmanagerSpec:
+    storage:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 5Gi
+    replicas: 1
+    logLevel: debug
+  config:
+    global:
+      resolve_timeout: 2m
+    route:
+      group_by: ['job']
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 12h
+      receiver: 'null'
+      routes:
+      - match:
+          alertname: Watchdog
+        receiver: 'null'
+    receivers:
+    - name: 'null'
+
+prometheus:
+  service:
+      type: ClusterIP
+  serviceAccount:
+    create: true
+    name: prometheus-dgraph-io
+
+  prometheusSpec:
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 25Gi
+    resources:
+      requests:
+        memory: 400Mi
+    enableAdminAPI: false
+
+  additionalServiceMonitors:
+    - name: zero-dgraph-io
+      endpoints:
+        - port: http-zero
+          path: /debug/prometheus_metrics
+      namespaceSelector:
+        any: true
+      selector:
+        matchLabels:
+          monitor: zero-dgraph-io
+    - name: alpha-dgraph-io
+      endpoints:
+        - port: http-alpha
+          path: /debug/prometheus_metrics
+      namespaceSelector:
+        any: true
+      selector:
+        matchLabels:
+          monitor: alpha-dgraph-io

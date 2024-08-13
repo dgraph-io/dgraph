@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,20 +18,18 @@ package conn
 
 import (
 	"bytes"
+	"context"
 	"fmt"
-	"io/ioutil"
-	"os"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/badger/v2"
+	"github.com/stretchr/testify/require"
+	"go.etcd.io/etcd/raft/v3"
+	"go.etcd.io/etcd/raft/v3/raftpb"
+
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
-	"github.com/stretchr/testify/require"
-	"go.etcd.io/etcd/raft"
-	"go.etcd.io/etcd/raft/raftpb"
-	"golang.org/x/net/context"
 )
 
 func (n *Node) run(wg *sync.WaitGroup) {
@@ -43,11 +41,13 @@ func (n *Node) run(wg *sync.WaitGroup) {
 		case <-ticker.C:
 			n.Raft().Tick()
 		case rd := <-n.Raft().Ready():
-			n.SaveToStorage(rd.HardState, rd.Entries, rd.Snapshot)
+			n.SaveToStorage(&rd.HardState, rd.Entries, &rd.Snapshot)
 			for _, entry := range rd.CommittedEntries {
 				if entry.Type == raftpb.EntryConfChange {
 					var cc raftpb.ConfChange
-					cc.Unmarshal(entry.Data)
+					if err := cc.Unmarshal(entry.Data); err != nil {
+						fmt.Printf("error in unmarshalling: %v\n", err)
+					}
 					n.Raft().ApplyConfChange(cc)
 				} else if entry.Type == raftpb.EntryNormal {
 					if bytes.HasPrefix(entry.Data, []byte("hey")) {
@@ -61,16 +61,11 @@ func (n *Node) run(wg *sync.WaitGroup) {
 }
 
 func TestProposal(t *testing.T) {
-	dir, err := ioutil.TempDir("", "badger")
-	require.NoError(t, err)
-	defer os.RemoveAll(dir)
-
-	db, err := badger.Open(badger.DefaultOptions(dir))
-	require.NoError(t, err)
-	store := raftwal.Init(db, 0, 0)
+	dir := t.TempDir()
+	store := raftwal.Init(dir)
 
 	rc := &pb.RaftContext{Id: 1}
-	n := NewNode(rc, store)
+	n := NewNode(rc, store, nil)
 
 	peers := []raft.Peer{{ID: n.Id}}
 	n.SetRaft(raft.StartNode(n.Cfg, peers))

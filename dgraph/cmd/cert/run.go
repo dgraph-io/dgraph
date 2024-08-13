@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,8 +20,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/cobra"
+
+	"github.com/dgraph-io/dgraph/x"
 )
 
 // Cert is the sub-command invoked when running "dgraph cert".
@@ -45,7 +46,9 @@ func init() {
 			defer x.StartProfile(Cert.Conf).Stop()
 			return run()
 		},
+		Annotations: map[string]string{"group": "security"},
 	}
+	Cert.Cmd.SetHelpTemplate(x.NonRootTemplate)
 
 	flag := Cert.Cmd.Flags()
 	flag.StringP("dir", "d", defaultDir, "directory containing TLS certs and keys")
@@ -84,7 +87,7 @@ func run() error {
 		curve:   Cert.Conf.GetString("elliptic-curve"),
 	}
 
-	return createCerts(opt)
+	return createCerts(&opt)
 }
 
 // listCerts handles the subcommand of "dgraph cert ls".

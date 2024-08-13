@@ -1,7 +1,8 @@
+//go:build oss
 // +build oss
 
 /*
- * Copyright 2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +22,8 @@ package zero
 import (
 	"net/http"
 
-	"github.com/dgraph-io/badger/v2/y"
+	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 // dummy function as enterprise features are not available in oss binary.
@@ -30,10 +32,18 @@ func (n *node) proposeTrialLicense() error {
 }
 
 // periodically checks the validity of the enterprise license and updates the membership state.
-func (n *node) updateEnterpriseState(closer *y.Closer) {
+func (n *node) updateEnterpriseState(closer *z.Closer) {
 	closer.Done()
 }
 
 func (st *state) applyEnterpriseLicense(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotFound)
+}
+
+func (s *Server) applyLicenseFile(path string) {
+	return
+}
+
+func (s *Server) license() *pb.License {
+	return nil
 }

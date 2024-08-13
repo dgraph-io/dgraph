@@ -1,6 +1,0 @@
-{
-		me(func: uid(1)) {
-			checkpwd(password, "123456")
-			hometown
-		}
-	}

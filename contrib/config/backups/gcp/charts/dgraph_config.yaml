@@ -1,0 +1,9 @@
+backups:
+  full:
+    enabled: true
+    debug: true
+    schedule: "*/15 * * * *"
+alpha:
+  configFile:
+    config.hcl: |
+      whitelist = "10.0.0.0/8,172.0.0.0/8,192.168.0.0/16,127.0.0.1"

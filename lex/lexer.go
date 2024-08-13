@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2015-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,8 +20,9 @@ import (
 	"fmt"
 	"unicode/utf8"
 
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
+
+	"github.com/dgraph-io/dgraph/x"
 )
 
 // EOF indicates the end of the an input.
@@ -56,8 +57,7 @@ func (i Item) Errorf(format string, args ...interface{}) error {
 }
 
 func (i Item) String() string {
-	switch i.Typ {
-	case ItemEOF:
+	if i.Typ == ItemEOF {
 		return "EOF"
 	}
 	return fmt.Sprintf("lex.Item [%v] %q at %d:%d", i.Typ, i.Val, i.line, i.column)
@@ -284,6 +284,19 @@ func (l *Lexer) Peek() rune {
 	r := l.Next()
 	l.Backup()
 	return r
+}
+
+// Peek returns the next two rune without advancing the lexer.
+func (l *Lexer) PeekTwo() []rune {
+	r1 := l.Next()
+	if r1 == EOF {
+		l.Backup()
+		return []rune{r1, EOF}
+	}
+	r2 := l.Next()
+	l.Backup()
+	l.Backup()
+	return []rune{r1, r2}
 }
 
 func (l *Lexer) moveStartToPos() {

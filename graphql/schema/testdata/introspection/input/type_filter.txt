@@ -1,0 +1,8 @@
+{
+    typeKindType: __type(name: "__TypeKind") {
+        name,
+        enumValues {
+            name,
+        }
+    }
+}

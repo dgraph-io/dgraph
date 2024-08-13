@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2016-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,6 +40,8 @@ func bs(v interface{}) []byte {
 		var bs [8]byte
 		binary.LittleEndian.PutUint64(bs[:], math.Float64bits(x))
 		return bs[:]
+	case []float32:
+		return FloatArrayAsBytes(x)
 	case time.Time:
 		bs, err := x.MarshalBinary()
 		if err == nil {
@@ -86,20 +88,20 @@ func TestConversionEdgeCases(t *testing.T) {
 	}{
 		{in: Val{Tid: BinaryID},
 			out:     Val{Tid: BinaryID},
-			failure: "Invalid data to convert to binary"},
+			failure: "invalid data to convert to binary"},
 
 		// From BinaryID to X
 		{in: Val{Tid: BinaryID, Value: []byte{}},
 			out:     Val{Tid: IntID, Value: int64(0)},
-			failure: "Invalid data for int64"},
+			failure: "invalid data for int64"},
 		{in: Val{Tid: BinaryID, Value: []byte{}},
 			out:     Val{Tid: FloatID, Value: int64(0)},
-			failure: "Invalid data for float"},
+			failure: "invalid data for float"},
 		{in: Val{Tid: BinaryID, Value: []byte{}},
 			out: Val{Tid: BoolID, Value: false}},
 		{in: Val{Tid: BinaryID, Value: []byte{2}},
 			out:     Val{Tid: BoolID, Value: false},
-			failure: "Invalid value for bool"},
+			failure: "invalid value for bool"},
 		{in: Val{Tid: BinaryID, Value: []byte{8}},
 			out:     Val{Tid: DateTimeID, Value: time.Time{}},
 			failure: "Time.UnmarshalBinary:"},
@@ -119,35 +121,35 @@ func TestConversionEdgeCases(t *testing.T) {
 			failure: "strconv.ParseBool"},
 		{in: Val{Tid: StringID, Value: []byte{}},
 			out:     Val{Tid: DateTimeID, Value: time.Time{}},
-			failure: `parsing time "" as "2006": cannot parse "" as "2006"`},
+			failure: `parsing time "" as "2006-01-02T15:04:05": cannot parse "" as "2006"`},
 
 		// From IntID to X
 		{in: Val{Tid: IntID, Value: []byte{}},
-			failure: "Invalid data for int64"},
+			failure: "invalid data for int64"},
 		{in: Val{Tid: IntID, Value: bs(int64(0))},
 			out: Val{Tid: DateTimeID, Value: time.Unix(0, 0).UTC()}},
 
 		// From FloatID to X
 		{in: Val{Tid: FloatID, Value: []byte{}},
-			failure: "Invalid data for float"},
+			failure: "invalid data for float"},
 		{in: Val{Tid: FloatID, Value: bs(float64(0))},
 			out: Val{Tid: DateTimeID, Value: time.Unix(0, 0).UTC()}},
 
 		// From BoolID to X
 		{in: Val{Tid: BoolID, Value: []byte{}},
-			failure: "Invalid value for bool"},
+			failure: "invalid value for bool"},
 		{in: Val{Tid: BoolID, Value: []byte{8}},
-			failure: "Invalid value for bool"},
+			failure: "invalid value for bool"},
 
 		// From DateTimeID to X
 		{in: Val{Tid: DateTimeID, Value: []byte{}},
 			out:     Val{Tid: DateTimeID, Value: time.Time{}},
-			failure: "Time.UnmarshalBinary:"},
+			failure: "Time.UnmarshalBinary: no data"},
 		{in: Val{Tid: DateTimeID, Value: bs(time.Time{})},
 			out: Val{Tid: DateTimeID, Value: time.Time{}}},
 		{in: Val{Tid: DateTimeID, Value: []byte{}},
 			out:     Val{Tid: BinaryID, Value: []byte{}},
-			failure: "Time.UnmarshalBinary"},
+			failure: "Time.UnmarshalBinary: no data"},
 		{in: Val{Tid: DateTimeID, Value: bs(time.Time{})},
 			out: Val{Tid: BinaryID, Value: bs(time.Time{})}},
 		{in: Val{Tid: DateTimeID, Value: []byte{}},
@@ -240,7 +242,8 @@ func TestConvertToBinary(t *testing.T) {
 		{in: Val{BinaryID, []byte("2016")}, out: []byte("2016")},
 		{in: Val{IntID, bs(int64(3))}, out: bs(int64(3))},
 		{in: Val{FloatID, bs(float64(-3.5))}, out: bs(float64(-3.5))},
-		{in: Val{DateTimeID, bs(time.Date(2006, 01, 02, 15, 04, 05, 0, time.UTC))}, out: bs(time.Date(2006, 01, 02, 15, 04, 05, 0, time.UTC))},
+		{in: Val{DateTimeID, bs(time.Date(2006, 01, 02, 15, 04, 05, 0, time.UTC))},
+			out: bs(time.Date(2006, 01, 02, 15, 04, 05, 0, time.UTC))},
 	}
 
 	for _, tc := range tests {
@@ -265,8 +268,10 @@ func TestConvertFromBinary(t *testing.T) {
 		{in: []byte(""), out: Val{BinaryID, []byte("")}},
 		{in: []byte("hello"), out: Val{StringID, "hello"}},
 		{in: []byte(""), out: Val{StringID, ""}},
-		{in: bs(time.Date(2016, 1, 1, 0, 0, 0, 0, time.UTC)), out: Val{DateTimeID, time.Date(2016, 1, 1, 0, 0, 0, 0, time.UTC)}},
+		{in: bs(time.Date(2016, 1, 1, 0, 0, 0, 0, time.UTC)),
+			out: Val{DateTimeID, time.Date(2016, 1, 1, 0, 0, 0, 0, time.UTC)}},
 		{in: bs(time.Time{}), out: Val{DateTimeID, time.Time{}}},
+		{in: bs([]float32{1.0, 2.0}), out: Val{VFloatID, []float32{1.0, 2.0}}},
 	}
 
 	for _, tc := range tests {
@@ -723,7 +728,7 @@ func TestConvertStringToFloat(t *testing.T) {
 		{in: "1", out: float64(1)},
 		{in: "13816.251", out: float64(13816.251)},
 		{in: "-1221.12", out: float64(-1221.12)},
-		{in: "-0.0", out: float64(-0.0)},
+		{in: "-0.0", out: float64(0.0)},
 		{in: "1e10", out: float64(1e10)},
 		{in: "1e-2", out: float64(0.01)},
 		{
@@ -840,7 +845,8 @@ func TestConvertToString(t *testing.T) {
 		{in: Val{Tid: BoolID, Value: bs(true)}, out: "true"},
 		{in: Val{Tid: StringID, Value: []byte("srfrog")}, out: "srfrog"},
 		{in: Val{Tid: PasswordID, Value: []byte("password")}, out: "password"},
-		{in: Val{Tid: DateTimeID, Value: bs(time.Date(2006, time.January, 2, 15, 4, 5, 0, time.UTC))}, out: "2006-01-02T15:04:05Z"},
+		{in: Val{Tid: DateTimeID, Value: bs(time.Date(2006, time.January, 2, 15, 4, 5, 0, time.UTC))},
+			out: "2006-01-02T15:04:05Z"},
 	}
 
 	for _, tc := range tests {

@@ -3,10 +3,10 @@
     director.film {
       starring {  # starring an actor
         performance.actor {
-          movies as count(actor.film)  
+          movies as count(actor.film)
           # number of roles for this actor
         }
-        perf_total as sum(val(movies))       
+        perf_total as sum(val(movies))
       }
       movie_total as sum(val(perf_total))
       # total roles for all actors in this movie

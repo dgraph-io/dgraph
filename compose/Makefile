@@ -1,5 +1,5 @@
 #
-# Copyright 2019 Dgraph Labs, Inc. and Contributors
+# Copyright 2023 Dgraph Labs, Inc. and Contributors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,9 +20,12 @@ BUILD_FLAGS  ?= "-N -l"
 .PHONY: all
 all: install_dgraph $(BIN)
 
+.PHONY: install
+install: all
+
 .PHONY: install_dgraph
 install_dgraph:
-	$(MAKE) -C .. install
+	$(MAKE) -C ../dgraph install
 
 $(BIN): compose.go
 	go build -gcflags=$(BUILD_FLAGS) -o $(BIN)

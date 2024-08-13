@@ -1,0 +1,123 @@
+% usenix.sty - to be used with latex2e for USENIX.
+% To use this style file, look at the template usenix_template.tex
+%
+% $Id: usenix.sty,v 1.2 2005/02/16 22:30:47 maniatis Exp $
+%
+% The following definitions are modifications of standard article.sty
+% definitions, arranged to do a better job of matching the USENIX
+% guidelines.
+% It will automatically select two-column mode and the Times-Roman
+% font.
+%
+% 2018-12-19 [for ATC'19]: add packages to help embed all fonts in
+%   pdf; to improve appearance (hopefully); to make refs and citations
+%   clickable in pdf
+
+%
+% USENIX papers are two-column.
+% Times-Roman font is nice if you can get it (requires NFSS,
+% which is in latex2e.
+
+\if@twocolumn\else\input twocolumn.sty\fi
+\usepackage{mathptmx}  % times roman, including math (where possible)
+
+% hopefully embeds all fonts in pdf
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{pslatex}
+
+% appearance
+\usepackage[kerning,spacing]{microtype} % more compact and arguably nicer
+\usepackage{flushend} % make cols in last page equal in size
+
+% refs and bib
+\usepackage{cite}               % order multiple entries in \cite{...}
+\usepackage{breakurl}           % break too-long urls in refs
+\usepackage{url}                % allow \url in bibtex for clickable links
+\usepackage{xcolor}             % color definitions, to be use for...
+\usepackage[]{hyperref}         % ...clickable refs within pdf...
+\hypersetup{                    % ...like so
+  colorlinks,
+  linkcolor={green!80!black},
+  citecolor={red!70!black},
+  urlcolor={blue!70!black}
+}
+
+%
+% USENIX wants margins of: 0.75" sides, 1" bottom, and 1" top.
+% 0.33" gutter between columns.
+% Gives active areas of 7" x 9"
+%
+\setlength{\textheight}{9.0in}
+\setlength{\columnsep}{0.33in}
+\setlength{\textwidth}{7.00in}
+
+\setlength{\topmargin}{0.0in}
+
+\setlength{\headheight}{0.0in}
+
+\setlength{\headsep}{0.0in}
+
+\addtolength{\oddsidemargin}{-0.25in}
+\addtolength{\evensidemargin}{-0.25in}
+
+% Usenix wants no page numbers for camera-ready papers, so that they can
+% number them themselves.  But submitted papers should have page numbers
+% for the reviewers' convenience.
+% 
+%
+% \pagestyle{empty}
+
+%
+% Usenix titles are in 14-point bold type, with no date, and with no
+% change in the empty page headers.  The whole author section is 12 point
+% italic--- you must use {\rm } around the actual author names to get
+% them in roman.
+%
+\def\maketitle{\par
+ \begingroup
+   \renewcommand\thefootnote{\fnsymbol{footnote}}%
+   \def\@makefnmark{\hbox to\z@{$\m@th^{\@thefnmark}$\hss}}%
+    \long\def\@makefntext##1{\parindent 1em\noindent
+            \hbox to1.8em{\hss$\m@th^{\@thefnmark}$}##1}%
+   \if@twocolumn
+     \twocolumn[\@maketitle]%
+     \else \newpage
+     \global\@topnum\z@
+     \@maketitle \fi\@thanks
+ \endgroup
+ \setcounter{footnote}{0}%
+ \let\maketitle\relax
+ \let\@maketitle\relax
+ \gdef\@thanks{}\gdef\@author{}\gdef\@title{}\let\thanks\relax}
+
+\def\@maketitle{\newpage
+ \vbox to 2.5in{
+ \vspace*{\fill}
+ \vskip 2em
+ \begin{center}%
+  {\Large\bf \@title \par}%
+  \vskip 0.375in minus 0.300in
+  {\large\it
+   \lineskip .5em
+   \begin{tabular}[t]{c}\@author
+   \end{tabular}\par}%
+ \end{center}%
+ \par
+ \vspace*{\fill}
+% \vskip 1.5em
+ }
+}
+
+%
+% The abstract is preceded by a 12-pt bold centered heading
+\def\abstract{\begin{center}%
+{\large\bf \abstractname\vspace{-.5em}\vspace{\z@}}%
+\end{center}}
+\def\endabstract{}
+
+%
+% Main section titles are 12-pt bold.  Others can be same or smaller.
+%
+\def\section{\@startsection {section}{1}{\z@}{-3.5ex plus-1ex minus
+    -.2ex}{2.3ex plus.2ex}{\reset@font\large\bf}}

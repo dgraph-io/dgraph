@@ -1,0 +1,74 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  creationTimestamp: null
+  labels:
+    app: dgraph-io
+    prometheus: dgraph-io
+    role: alert-rules
+  name: prometheus-rules-dgraph-io
+spec:
+  groups:
+  - name: ./dgraph-alert.rules
+    interval: 30s
+    rules:
+    - alert: AlphaNotReady
+      expr: dgraph_alpha_health_status{job="dgraph-alpha-public"}
+        == 0
+      for: 3m
+      annotations:
+        description: '{{ $labels.instance }} for cluster {{ $labels.cluster }} has been
+          down for more than 3 minutes.'
+        summary: Instance {{ $labels.instance }} down
+      labels:
+        severity: medium
+    - alert: AlphaDead
+      expr: dgraph_alpha_health_status{job="dgraph-alpha-public"}
+        == 0
+      for: 10m
+      annotations:
+        description: '{{ $labels.instance }} for cluster {{ $labels.cluster }} has been
+          down for more than 10 minutes.'
+        summary: Instance {{ $labels.instance }} down
+      labels:
+        severity: high
+    - alert: HighPendingQueriesCount
+      expr: (sum
+        by(instance, cluster) (dgraph_pending_queries_total{job="dgraph-alpha-public"}))
+        > 1000
+      for: 5m
+      annotations:
+        description: '{{ $labels.instance }} for cluster {{ $labels.cluster }} has
+          a high number of pending queries({{ $value }} in last 5m).'
+        summary: Instance {{ $labels.instance }} is experiencing high pending query rates.
+      labels:
+        severity: medium
+    - alert: HighAlphaOpenFDCount
+      expr: process_open_fds{job="dgraph-alpha-public"}
+        / process_max_fds{job="dgraph-alpha-public"} > 0.75
+      for: 10m
+      annotations:
+        description: 'Too many open file descriptors on alpha instance {{ $labels.instance }}: {{ $value
+          }} fraction used.'
+        summary: 'Alpha instance {{ $labels.instance }} have too many open file descriptors.'
+      labels:
+        severity: high
+    - alert: HighZeroOpenFDCount
+      expr: process_open_fds{job="dgraph-zero-public"}
+        / process_max_fds{job="dgraph-zero-public"} > 0.75
+      for: 10m
+      annotations:
+        description: 'Too many open file descriptors on zero instance {{ $labels.instance }}: {{ $value
+          }} fraction used.'
+        summary: 'Zero instance {{ $labels.instance }} have too many open file descriptors.'
+      labels:
+        severity: high
+    - alert: FollowerBehindTs
+      expr: (max
+        by(cluster) (dgraph_max_assigned_ts)) - (min by(cluster) (dgraph_max_assigned_ts))
+        > 1000
+      for: 30s
+      annotations:
+        description: A follower is behind the leader's latest applied timestamp by {{ $value }}.
+      labels:
+        severity: medium

@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,21 +17,21 @@
 package tok
 
 import (
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/blevesearch/bleve/v2/analysis"
+	"github.com/blevesearch/bleve/v2/analysis/analyzer/custom"
+	"github.com/blevesearch/bleve/v2/analysis/token/lowercase"
+	"github.com/blevesearch/bleve/v2/analysis/token/unicodenorm"
+	"github.com/blevesearch/bleve/v2/analysis/tokenizer/unicode"
+	"github.com/blevesearch/bleve/v2/registry"
 
-	"github.com/blevesearch/bleve/analysis"
-	"github.com/blevesearch/bleve/analysis/analyzer/custom"
-	"github.com/blevesearch/bleve/analysis/token/lowercase"
-	"github.com/blevesearch/bleve/analysis/token/unicodenorm"
-	"github.com/blevesearch/bleve/analysis/tokenizer/unicode"
-	"github.com/blevesearch/bleve/registry"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 const unicodenormName = "unicodenorm_nfkc"
 
 var (
 	bleveCache                     = registry.NewCache()
-	termAnalyzer, fulltextAnalyzer *analysis.Analyzer
+	termAnalyzer, fulltextAnalyzer analysis.Analyzer
 )
 
 // setupBleve creates bleve filters and analyzers that we use for term and fulltext tokenizers.

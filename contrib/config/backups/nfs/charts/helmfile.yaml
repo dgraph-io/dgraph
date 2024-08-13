@@ -1,0 +1,28 @@
+helmfiles:
+  - ./rook/helmfile.yaml
+
+repositories:
+  - name: dgraph
+    url: https://charts.dgraph.io
+
+releases:
+  #########
+  # Dgraph helm chart configuration
+  #################################################
+  - name: my-release
+    namespace: default
+    chart: dgraph/dgraph
+    values:
+      - ./dgraph_{{ env "VOL_TYPE" | default "nfs" }}.yaml
+      - backups:
+          {{- if eq (env "VOL_TYPE") "volume" }}
+          ## backup drive allocated through volume claim
+          volume:
+            claim: {{ env "NFS_CLAIM_NAME" }}
+          ## backup drive allocated through specifying NFS server and path
+          {{- else }}
+          nfs:
+            server: {{ env "NFS_SERVER" }}
+            path: {{ env "NFS_PATH" }}
+            storage: {{ env "NFS_CLAIM_SIZE" | default "32Gi" }}
+          {{- end }}

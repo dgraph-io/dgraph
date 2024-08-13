@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2016-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +16,18 @@
 
 package algo
 
+import (
+	"github.com/dgraph-io/dgraph/codec"
+)
+
 type elem struct {
 	val     uint64 // Value of this element.
 	listIdx int    // Which list this element comes from.
+
+	// The following fields are only used when merging pb.UidPack objects.
+	decoder   *codec.Decoder // pointer to the decoder for this pb.UidPack object.
+	blockIdx  int            // The current position in the current pb.UidBlock object.
+	blockUids []uint64       // The current block.
 }
 
 type uint64Heap []elem

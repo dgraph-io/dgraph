@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2016-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,13 +17,20 @@
 package types
 
 import (
+	"errors"
 	"time"
 
+	"github.com/twpayne/go-geom"
+
 	"github.com/dgraph-io/dgraph/protos/pb"
-	geom "github.com/twpayne/go-geom"
 )
 
 const nanoSecondsInSec = 1000000000
+const dateFormatY = "2006" // time.longYear
+const dateFormatYM = "2006-01"
+const dateFormatYMD = "2006-01-02"
+const dateFormatYMDZone = "2006-01-02 15:04:05 -0700 MST"
+const dateTimeFormat = "2006-01-02T15:04:05"
 
 // Note: These ids are stored in the posting lists to indicate the type
 // of the data. The order *cannot* be changed without breaking existing
@@ -38,7 +45,7 @@ const (
 	IntID = TypeID(pb.Posting_INT)
 	// FloatID represents the floating-point number type.
 	FloatID = TypeID(pb.Posting_FLOAT)
-	// FloatID represents the boolean type.
+	// BoolID represents the boolean type.
 	BoolID = TypeID(pb.Posting_BOOL)
 	// DateTimeID represents the datetime type.
 	DateTimeID = TypeID(pb.Posting_DATETIME)
@@ -50,21 +57,28 @@ const (
 	PasswordID = TypeID(pb.Posting_PASSWORD)
 	// StringID represents the string type.
 	StringID = TypeID(pb.Posting_STRING)
+	// TODO: Add constant for pb.Posting_OBJECT ??
+	//       Not clear if it belongs here, but if it does,
+	//       we should add it, if not, we should document here
+	//       why it does not belong here.
+	// VFloatID represents a vector of IEEE754 64-bit floats.
+	VFloatID = TypeID(pb.Posting_VFLOAT)
 	// UndefinedID represents the undefined type.
 	UndefinedID = TypeID(100)
 )
 
 var typeNameMap = map[string]TypeID{
-	"default":  DefaultID,
-	"binary":   BinaryID,
-	"int":      IntID,
-	"float":    FloatID,
-	"bool":     BoolID,
-	"datetime": DateTimeID,
-	"geo":      GeoID,
-	"uid":      UidID,
-	"string":   StringID,
-	"password": PasswordID,
+	"default":       DefaultID,
+	"binary":        BinaryID,
+	"int":           IntID,
+	"float":         FloatID,
+	"bool":          BoolID,
+	"datetime":      DateTimeID,
+	"geo":           GeoID,
+	"uid":           UidID,
+	"string":        StringID,
+	"password":      PasswordID,
+	"float32vector": VFloatID,
 }
 
 // TypeID represents the type of the data.
@@ -98,6 +112,8 @@ func (t TypeID) Name() string {
 		return "string"
 	case PasswordID:
 		return "password"
+	case VFloatID:
+		return "float32vector"
 	}
 	return ""
 }
@@ -181,37 +197,55 @@ func ValueForType(id TypeID) Val {
 	case PasswordID:
 		var p string
 		return Val{PasswordID, p}
-
+	case VFloatID:
+		var v []float32
+		return Val{VFloatID, &v}
 	default:
 		return Val{}
 	}
 }
 
+// GoodTimeZone returns true if timezone (provided in offset
+// format in seconds) is valid according to RFC3339.
+func GoodTimeZone(offset int) bool {
+	const boundary = 23*60*60 + 59*60
+	return offset <= boundary && offset >= -1*boundary
+}
+
 // ParseTime parses the time from string trying various datetime formats.
 // By default, Go parses time in UTC unless specified in the data itself.
 func ParseTime(val string) (time.Time, error) {
-	var t time.Time
-	if err := t.UnmarshalText([]byte(val)); err == nil {
+	t, err := parseTimeNonStrict(val)
+	if err != nil {
 		return t, err
+	}
+
+	_, offset := t.Zone()
+	if !GoodTimeZone(offset) {
+		return time.Time{}, errors.New("timezone outside of range [-23:59,23:59]")
+	}
+
+	return t, nil
+}
+
+func parseTimeNonStrict(val string) (time.Time, error) {
+	if len(val) == len(dateFormatY) {
+		return time.Parse(dateFormatY, val)
+	}
+	if len(val) == len(dateFormatYM) {
+		return time.Parse(dateFormatYM, val)
+	}
+	if len(val) == len(dateFormatYMD) {
+		return time.Parse(dateFormatYMD, val)
+	}
+	if len(val) > len(dateTimeFormat) && val[len(dateFormatYMD)] == 'T' &&
+		(val[len(val)-1] == 'Z' || val[len(val)-3] == ':') {
+		// https://tools.ietf.org/html/rfc3339#section-5.6
+		return time.Parse(time.RFC3339, val)
 	}
 	if t, err := time.Parse(dateFormatYMDZone, val); err == nil {
 		return t, err
 	}
-	// try without timezone
-	if t, err := time.Parse(dateTimeFormat, val); err == nil {
-		return t, err
-	}
-	if t, err := time.Parse(dateFormatYMD, val); err == nil {
-		return t, err
-	}
-	if t, err := time.Parse(dateFormatYM, val); err == nil {
-		return t, err
-	}
-	return time.Parse(dateFormatY, val)
+	// Try without timezone.
+	return time.Parse(dateTimeFormat, val)
 }
-
-const dateFormatYMDZone = "2006-01-02 15:04:05 -0700 MST"
-const dateFormatYMD = "2006-01-02"
-const dateFormatYM = "2006-01"
-const dateFormatY = "2006"
-const dateTimeFormat = "2006-01-02T15:04:05"

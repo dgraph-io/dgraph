@@ -1,0 +1,15 @@
+enum Role {
+  Admin
+  User
+}
+
+directive @unkown1(r: Role = User) on OBJECT | FIELD_DEFINITION
+directive @unkown2(r: Role = User, b: Role = User) on FIELD_DEFINITION
+directive @unkown3(r: Role = User, b: Role = User) on FIELD_DEFINITION
+
+type Product @unkown1 {
+  id: ID!
+  price: Float! @search @unkown1(r: Admin) @unkown2(r: User, b: Admin)
+  name: String! @unkown1(r: Admin) @search @unkown2 @unkown3 @dgraph(pred: "p")
+  name2: String! @unkown1(r: Admin) @search @unkown2 @dgraph(pred: "p") @unkown3
+}

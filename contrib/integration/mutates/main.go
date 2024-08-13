@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,10 +23,12 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/dgraph-io/dgo/v2"
-	"github.com/dgraph-io/dgo/v2/protos/api"
-	"github.com/dgraph-io/dgraph/x"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+
+	"github.com/dgraph-io/dgo/v230"
+	"github.com/dgraph-io/dgo/v230/protos/api"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 var alpha = flag.String("alpha", "localhost:9080", "Dgraph alpha addr")
@@ -37,12 +39,14 @@ func main() {
 
 	// Setup dgraph client
 	ctx := context.Background()
-	conn, err := grpc.Dial(*alpha, grpc.WithInsecure())
+	conn, err := grpc.Dial(*alpha, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatal(err)
 	}
 	pc := api.NewDgraphClient(conn)
 	c := dgo.NewDgraphClient(pc)
+	err = c.Login(ctx, "groot", "password")
+	x.Check(err)
 
 	// Ingest
 	if *insert {
@@ -104,7 +108,7 @@ func testInsert3Quads(ctx context.Context, c *dgo.Dgraph) {
 
 func testQuery3Quads(ctx context.Context, c *dgo.Dgraph) {
 	txn := c.NewTxn()
-	q := fmt.Sprint(`{ me(func: uid(200, 300, 400)) { name }}`)
+	q := `{ me(func: uid(200, 300, 400)) { name }}`
 	resp, err := txn.Query(ctx, q)
 	if err != nil {
 		log.Fatalf("Error while running query: %v\n", err)

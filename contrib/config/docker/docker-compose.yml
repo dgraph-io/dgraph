@@ -2,7 +2,7 @@
 # and Alpha in different Docker containers.
 
 # It mounts /tmp/data on the host machine to /dgraph within the
-# container. You can change /tmp/data to a more appropriate location.
+# container. You will need to change /tmp/data to a more appropriate location.
 # Run `docker-compose up` to start Dgraph.
 
 version: "3.2"
@@ -24,9 +24,8 @@ services:
       - 8080:8080
       - 9080:9080
     restart: on-failure
-    command: dgraph alpha --my=alpha:7080 --lru_mb=2048 --zero=zero:5080
+    command: dgraph alpha --my=alpha:7080 --zero=zero:5080
   ratel:
-    image: dgraph/dgraph:latest
+    image: dgraph/ratel:latest
     ports:
       - 8000:8000
-    command: dgraph-ratel

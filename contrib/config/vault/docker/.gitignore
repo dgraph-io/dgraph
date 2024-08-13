@@ -1,0 +1,5 @@
+vault/*
+!**/.gitkeep
+!vault/policy_*.hcl
+!vault/payload_*.json
+!vault/config.hcl

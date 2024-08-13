@@ -1,0 +1,113 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: fluentd-dgraph-io
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRole
+metadata:
+  name: fluentd-dgraph-io
+  namespace: default
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  - namespaces
+  verbs:
+  - get
+  - list
+  - watch
+
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1beta1
+metadata:
+  name: fluentd-dgraph-io
+roleRef:
+  kind: ClusterRole
+  name: fluentd-dgraph-io
+  apiGroup: rbac.authorization.k8s.io
+subjects:
+- kind: ServiceAccount
+  name: fluentd-dgraph-io
+  namespace: default
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: fluentd-elasticsearch
+  namespace: default
+  labels:
+    k8s-app: fluentd-logging
+    version: v1
+spec:
+  selector:
+    matchLabels:
+      name: fluentd-elasticsearch
+  template:
+    metadata:
+      labels:
+        name: fluentd-elasticsearch
+        k8s-app: fluentd-logging
+        version: v1
+    spec:
+      serviceAccount: fluentd-dgraph-io
+      serviceAccountName: fluentd-dgraph-io
+      tolerations:
+      - key: node-role.kubernetes.io/master
+        effect: NoSchedule
+      initContainers:
+      - name: config-fluentd
+        image: busybox
+        imagePullPolicy: IfNotPresent
+        command: ["/bin/sh","-c"]
+        args:
+        - cp /fluentd/etcsrc/containers.input.conf /fluentd/etc/fluent.conf
+        volumeMounts:
+        - name: config-path
+          mountPath: /fluentd/etc
+        - name: config-source
+          mountPath: /fluentd/etcsrc
+      containers:
+      - name: fluentd-elasticsearch
+        image: fluent/fluentd-kubernetes-daemonset:v1-debian-elasticsearch
+        env:
+          - name:  FLUENT_ELASTICSEARCH_HOST
+            value: "<HOST>"
+          - name:  FLUENT_ELASTICSEARCH_PORT
+            value: "<PORT>"
+          - name: FLUENT_ELASTICSEARCH_SCHEME
+            value: "https"
+          - name: FLUENT_ELASTICSEARCH_USER
+            value: <USER>
+          - name: FLUENT_ELASTICSEARCH_PASSWORD
+            value: <PASSWORD>
+        resources:
+          limits:
+            memory: 200Mi
+          requests:
+            cpu: 100m
+            memory: 200Mi
+        volumeMounts:
+        - name: varlog
+          mountPath: /var/log
+        - name: varlibdockercontainers
+          mountPath: /var/lib/docker/containers
+          readOnly: true
+        - name: config-path
+          mountPath: /fluentd/etc
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - name: varlog
+        hostPath:
+          path: /var/log
+      - name: varlibdockercontainers
+        hostPath:
+          path: /var/lib/docker/containers
+      - name: config-source
+        configMap:
+          name: fluentd-config-dgraph-io
+      - name: config-path
+        emptyDir: {}

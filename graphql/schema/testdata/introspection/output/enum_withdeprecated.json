@@ -1,0 +1,22 @@
+{
+    "__type": {
+        "name": "TestDeprecatedEnum",
+        "enumValues": [
+            {
+                "deprecationReason": null,
+                "isDeprecated": true,
+                "name": "dep"
+            },
+            {
+                "deprecationReason": null,
+                "isDeprecated": false,
+                "name": "notDep"
+            },
+            {
+                "deprecationReason": "because",
+                "isDeprecated": true,
+                "name": "depReason"
+            }
+        ]
+    }
+}

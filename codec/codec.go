@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,11 +18,16 @@ package codec
 
 import (
 	"bytes"
+	"encoding/binary"
 	"math"
 	"sort"
+	"unsafe"
+
+	"github.com/dgryski/go-groupvarint"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgryski/go-groupvarint"
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 type seekPos int
@@ -43,17 +48,40 @@ type Encoder struct {
 	BlockSize int
 	pack      *pb.UidPack
 	uids      []uint64
+	Alloc     *z.Allocator
+	buf       *bytes.Buffer
+}
+
+var blockSize = int(unsafe.Sizeof(pb.UidBlock{}))
+
+func FreePack(pack *pb.UidPack) {
+	if pack == nil {
+		return
+	}
+	if pack.AllocRef == 0 {
+		return
+	}
+	alloc := z.AllocatorFrom(pack.AllocRef)
+	alloc.Release()
 }
 
 func (e *Encoder) packBlock() {
 	if len(e.uids) == 0 {
 		return
 	}
-	block := &pb.UidBlock{Base: e.uids[0], NumUids: uint32(len(e.uids))}
+
+	// Allocate blocks manually.
+	b := e.Alloc.AllocateAligned(blockSize)
+	block := (*pb.UidBlock)(unsafe.Pointer(&b[0]))
+
+	block.Base = e.uids[0]
+	block.NumUids = uint32(len(e.uids))
+
+	// block := &pb.UidBlock{Base: e.uids[0], NumUids: uint32(len(e.uids))}
 	last := e.uids[0]
 	e.uids = e.uids[1:]
 
-	var out bytes.Buffer
+	e.buf.Reset()
 	buf := make([]byte, 17)
 	tmpUids := make([]uint32, 4)
 	for {
@@ -68,7 +96,7 @@ func (e *Encoder) packBlock() {
 		}
 
 		data := groupvarint.Encode4(buf, tmpUids)
-		out.Write(data)
+		x.Check2(e.buf.Write(data))
 
 		// e.uids has ended and we have padded tmpUids with 0s
 		if len(e.uids) <= 4 {
@@ -78,14 +106,22 @@ func (e *Encoder) packBlock() {
 		e.uids = e.uids[4:]
 	}
 
-	block.Deltas = out.Bytes()
+	sz := len(e.buf.Bytes())
+	block.Deltas = e.Alloc.Allocate(sz)
+	x.AssertTrue(sz == copy(block.Deltas, e.buf.Bytes()))
 	e.pack.Blocks = append(e.pack.Blocks, block)
 }
+
+var tagEncoder = "enc"
 
 // Add takes an uid and adds it to the list of UIDs to be encoded.
 func (e *Encoder) Add(uid uint64) {
 	if e.pack == nil {
 		e.pack = &pb.UidPack{BlockSize: uint32(e.BlockSize)}
+		e.buf = new(bytes.Buffer)
+	}
+	if e.Alloc == nil {
+		e.Alloc = z.NewAllocator(1024, tagEncoder)
 	}
 
 	size := len(e.uids)
@@ -101,9 +137,12 @@ func (e *Encoder) Add(uid uint64) {
 	}
 }
 
-// Done returns the final output of the encoder.
+// Done returns the final output of the encoder. This UidPack MUST BE FREED via a call to FreePack.
 func (e *Encoder) Done() *pb.UidPack {
 	e.packBlock()
+	if e.pack != nil && e.Alloc != nil {
+		e.pack.AllocRef = e.Alloc.Ref
+	}
 	return e.pack
 }
 
@@ -114,7 +153,16 @@ type Decoder struct {
 	uids     []uint64
 }
 
-func (d *Decoder) unpackBlock() []uint64 {
+// NewDecoder returns a decoder for the given UidPack and properly initializes it.
+func NewDecoder(pack *pb.UidPack) *Decoder {
+	decoder := &Decoder{
+		Pack: pack,
+	}
+	decoder.Seek(0, SeekStart)
+	return decoder
+}
+
+func (d *Decoder) UnpackBlock() []uint64 {
 	if len(d.uids) > 0 {
 		// We were previously preallocating the d.uids slice to block size. This caused slowdown
 		// because many blocks are small and only contain a few ints, causing wastage while still
@@ -141,7 +189,12 @@ func (d *Decoder) unpackBlock() []uint64 {
 			// The SSE code tries to read 16 bytes past the header(1 byte).
 			// So we are padding encData to increase its length to 17 bytes.
 			// This is a workaround for https://github.com/dgryski/go-groupvarint/issues/1
-			encData = append(encData, bytes.Repeat([]byte{0}, 17-len(encData))...)
+			//
+			// We should NEVER write to encData, because it references block.Deltas, which is laid
+			// out on an allocator.
+			tmp := make([]byte, 17)
+			copy(tmp, encData)
+			encData = tmp
 		}
 
 		groupvarint.Decode4(tmpUids, encData)
@@ -159,10 +212,74 @@ func (d *Decoder) unpackBlock() []uint64 {
 
 // ApproxLen returns the approximate number of UIDs in the pb.UidPack object.
 func (d *Decoder) ApproxLen() int {
+	if d == nil {
+		return 0
+	}
+	if d.Pack == nil {
+		return 0
+	}
 	return int(d.Pack.BlockSize) * (len(d.Pack.Blocks) - d.blockIdx)
 }
 
 type searchFunc func(int) bool
+
+// SeekToBlock will find the block containing the uid, and unpack it. When we are going to
+// intersect the list later, this function is useful. As this function skips the search function
+// and returns the entire block, it is faster than Seek. Unlike seek, we don't truncate the uids
+// returned, which would be done by the intersect function anyways.
+func (d *Decoder) SeekToBlock(uid uint64, whence seekPos) []uint64 {
+	if d.Pack == nil {
+		return []uint64{}
+	}
+	prevBlockIdx := d.blockIdx
+	d.blockIdx = 0
+	if uid == 0 {
+		return d.UnpackBlock()
+	}
+
+	// If for some reason we are searching an older uid, we need to search the entire pack
+	if prevBlockIdx > 0 && uid < d.Pack.Blocks[prevBlockIdx].Base {
+		prevBlockIdx = 0
+	}
+
+	blocksFunc := func() searchFunc {
+		var f searchFunc
+		switch whence {
+		case SeekStart:
+			f = func(i int) bool { return d.Pack.Blocks[i+prevBlockIdx].Base >= uid }
+		case SeekCurrent:
+			f = func(i int) bool { return d.Pack.Blocks[i+prevBlockIdx].Base > uid }
+		}
+		return f
+	}
+
+	idx := sort.Search(len(d.Pack.Blocks[prevBlockIdx:]), blocksFunc()) + prevBlockIdx
+	// The first block.Base >= uid.
+	if idx == 0 {
+		return d.UnpackBlock()
+	}
+	// The uid is the first entry in the block.
+	if idx < len(d.Pack.Blocks) && d.Pack.Blocks[idx].Base == uid {
+		d.blockIdx = idx
+		return d.UnpackBlock()
+	}
+
+	// Either the idx = len(pack.Blocks) that means it wasn't found in any of the block's base. Or,
+	// we found the first block index whose base is greater than uid. In these cases, go to the
+	// previous block and search there.
+	d.blockIdx = idx - 1 // Move to the previous block. If blockIdx<0, unpack will deal with it.
+	if d.blockIdx != prevBlockIdx {
+		d.UnpackBlock() // And get all their uids.
+	}
+
+	if uid <= d.uids[len(d.uids)-1] {
+		return d.uids
+	}
+
+	// Could not find any uid in the block, which is >= uid. The next block might still have valid
+	// entries > uid.
+	return d.Next()
+}
 
 // Seek will search for uid in a packed block using the specified whence position.
 // The value of whence must be one of the predefined values SeekStart or SeekCurrent.
@@ -176,7 +293,7 @@ func (d *Decoder) Seek(uid uint64, whence seekPos) []uint64 {
 	}
 	d.blockIdx = 0
 	if uid == 0 {
-		return d.unpackBlock()
+		return d.UnpackBlock()
 	}
 
 	pack := d.Pack
@@ -194,19 +311,19 @@ func (d *Decoder) Seek(uid uint64, whence seekPos) []uint64 {
 	idx := sort.Search(len(pack.Blocks), blocksFunc())
 	// The first block.Base >= uid.
 	if idx == 0 {
-		return d.unpackBlock()
+		return d.UnpackBlock()
 	}
 	// The uid is the first entry in the block.
 	if idx < len(pack.Blocks) && pack.Blocks[idx].Base == uid {
 		d.blockIdx = idx
-		return d.unpackBlock()
+		return d.UnpackBlock()
 	}
 
 	// Either the idx = len(pack.Blocks) that means it wasn't found in any of the block's base. Or,
 	// we found the first block index whose base is greater than uid. In these cases, go to the
 	// previous block and search there.
 	d.blockIdx = idx - 1 // Move to the previous block. If blockIdx<0, unpack will deal with it.
-	d.unpackBlock()      // And get all their uids.
+	d.UnpackBlock()      // And get all their uids.
 
 	uidsFunc := func() searchFunc {
 		var f searchFunc
@@ -249,7 +366,7 @@ func (d *Decoder) LinearSeek(seek uint64) []uint64 {
 		d.blockIdx++
 	}
 
-	return d.unpackBlock()
+	return d.UnpackBlock()
 }
 
 // PeekNextBase returns the base of the next block without advancing the decoder.
@@ -269,7 +386,12 @@ func (d *Decoder) Valid() bool {
 // Next moves the decoder on to the next block.
 func (d *Decoder) Next() []uint64 {
 	d.blockIdx++
-	return d.unpackBlock()
+	return d.UnpackBlock()
+}
+
+// BlockIdx returns the index of the block that is currently being decoded.
+func (d *Decoder) BlockIdx() int {
+	return d.blockIdx
 }
 
 // Encode takes in a list of uids and a block size. It would pack these uids into blocks of the
@@ -283,6 +405,21 @@ func Encode(uids []uint64, blockSize int) *pb.UidPack {
 	enc := Encoder{BlockSize: blockSize}
 	for _, uid := range uids {
 		enc.Add(uid)
+	}
+	return enc.Done()
+}
+
+// EncodeFromBuffer is the same as Encode but it accepts a byte slice instead of a uint64 slice.
+func EncodeFromBuffer(buf []byte, blockSize int) *pb.UidPack {
+	enc := Encoder{BlockSize: blockSize}
+	var prev uint64
+	for len(buf) > 0 {
+		uid, n := binary.Uvarint(buf)
+		buf = buf[n:]
+
+		next := prev + uid
+		enc.Add(next)
+		prev = next
 	}
 	return enc.Done()
 }
@@ -316,15 +453,51 @@ func ExactLen(pack *pb.UidPack) int {
 // Decode decodes the UidPack back into the list of uids. This is a stop-gap function, Decode would
 // need to do more specific things than just return the list back.
 func Decode(pack *pb.UidPack, seek uint64) []uint64 {
-	uids := make([]uint64, 0, ApproxLen(pack))
+	out := make([]uint64, 0, ApproxLen(pack))
 	dec := Decoder{Pack: pack}
 
-	for block := dec.Seek(seek, SeekStart); len(block) > 0; block = dec.Next() {
-		uids = append(uids, block...)
+	for uids := dec.Seek(seek, SeekStart); len(uids) > 0; uids = dec.Next() {
+		out = append(out, uids...)
 	}
-	return uids
+	return out
+}
+
+// DecodeToBuffer is the same as Decode but it returns a z.Buffer which is
+// calloc'ed and can be SHOULD be freed up by calling buffer.Release().
+func DecodeToBuffer(buf *z.Buffer, pack *pb.UidPack) {
+	var last uint64
+	tmp := make([]byte, 16)
+	dec := Decoder{Pack: pack}
+	for uids := dec.Seek(0, SeekStart); len(uids) > 0; uids = dec.Next() {
+		for _, u := range uids {
+			n := binary.PutUvarint(tmp, u-last)
+			x.Check2(buf.Write(tmp[:n]))
+			last = u
+		}
+	}
 }
 
 func match32MSB(num1, num2 uint64) bool {
 	return (num1 & bitMask) == (num2 & bitMask)
+}
+
+// CopyUidPack creates a copy of the given UidPack.
+func CopyUidPack(pack *pb.UidPack) *pb.UidPack {
+	if pack == nil {
+		return nil
+	}
+
+	packCopy := new(pb.UidPack)
+	packCopy.BlockSize = pack.BlockSize
+	packCopy.Blocks = make([]*pb.UidBlock, len(pack.Blocks))
+
+	for i, block := range pack.Blocks {
+		packCopy.Blocks[i] = new(pb.UidBlock)
+		packCopy.Blocks[i].Base = block.Base
+		packCopy.Blocks[i].NumUids = block.NumUids
+		packCopy.Blocks[i].Deltas = make([]byte, len(block.Deltas))
+		copy(packCopy.Blocks[i].Deltas, block.Deltas)
+	}
+
+	return packCopy
 }

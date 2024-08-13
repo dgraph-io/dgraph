@@ -1,0 +1,59 @@
+additionalPrometheusRulesMap:
+  dgraph-alerts:
+    groups:
+    - name: dgraph-alert.rules
+      rules:
+      - alert: dgraphAlphaNotReady
+        expr: dgraph_alpha_health_status{job="{{ env "DGRAPH_RELEASE" | default "my-release" }}-dgraph-alpha"} == 0
+        for: 3m
+        annotations:
+          description: '{{ printf "{{ $labels.instance }}" }} for cluster {{ printf "{{ $labels.cluster }}" }} has been down for more than 3 minutes.'
+          summary: Instance {{ printf "{{ $labels.instance }}" }} down
+        labels:
+          severity: medium
+      - alert: dgraphAlphaDead
+        expr: dgraph_alpha_health_status{job="{{ env "DGRAPH_RELEASE"  | default "my-release" }}-dgraph-alpha"} == 0
+        for: 10m
+        annotations:
+          description: '{{ printf "{{ $labels.instance }}" }} for cluster {{ printf "{{ $labels.cluster }}" }} has been down for more than 10 minutes.'
+          summary: Instance {{ printf "{{ $labels.instance }}" }} down
+        labels:
+          severity: high
+      - alert: dgraphHighPendingQueriesCount
+        expr: (sum
+          by(instance, cluster) (dgraph_pending_queries_total{job="{{ env "DGRAPH_RELEASE"  | default "my-release" }}-dgraph-alpha"}))
+          > 1000
+        for: 5m
+        annotations:
+          description: '{{ printf "{{ $labels.instance }}" }} for cluster {{ printf "{{ $labels.cluster }}" }} has
+            a high number of pending queries({{ printf "{{ $value }}" }} in last 5m).'
+          summary: Instance {{ printf "{{ $labels.instance }}" }} is experiencing high pending query rates.
+        labels:
+          severity: medium
+      - alert: dgraphHighAlphaOpenFDCount
+        expr: process_open_fds{job="{{ env "DGRAPH_RELEASE" | default "my-release" }}-dgraph-alpha"}
+          / process_max_fds{job="{{ env "DGRAPH_RELEASE" | default "my-release" }}-dgraph-alpha"} > 0.75
+        for: 10m
+        annotations:
+          description: 'Too many open file descriptors on alpha instance {{ printf "{{ $labels.instance }}" }}: {{ printf "{{ $value }}" }} fraction used.'
+          summary: 'Alpha instance {{ printf "{{ $labels.instance }}" }} have too many open file descriptors.'
+        labels:
+          severity: high
+      - alert: dgraphHighZeroOpenFDCount
+        expr: process_open_fds{job="{{ env "DGRAPH_RELEASE" | default "my-release" }}-dgraph-zero"}
+          / process_max_fds{job="{{ env "DGRAPH_RELEASE" | default "my-release" }}-dgraph-zero"} > 0.75
+        for: 10m
+        annotations:
+          description: 'Too many open file descriptors on zero instance {{ printf "{{ $labels.instance }}" }}: {{ printf "{{ $value }}" }} fraction used.'
+          summary: 'Zero instance {{ printf "{{ $labels.instance }}" }} have too many open file descriptors.'
+        labels:
+          severity: high
+      - alert: dgraphFollowerBehindTs
+        expr: (max
+          by(cluster) (dgraph_max_assigned_ts)) - (min by(cluster) (dgraph_max_assigned_ts))
+          > 1000
+        for: 30s
+        annotations:
+          description: A follower is behind the leader's latest applied timestamp by {{ printf "{{ $value }}" }}.
+        labels:
+          severity: medium

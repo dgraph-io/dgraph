@@ -178,7 +178,7 @@
 
    END OF TERMS AND CONDITIONS
 
-   Copyright 2013-2018 Docker, Inc.
+   Copyright 2013-2023 Docker, Inc.
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -1280,12 +1280,14 @@ var (
 // integer between 0 and 10 will be added to the end of the name, e.g `focused_turing3`
 func GetRandomName(retry int) string {
 begin:
+	//nolint:gosec // cryptographic precision not required for randomly selecting from set
 	name := fmt.Sprintf("%s_%s", left[rand.Intn(len(left))], right[rand.Intn(len(right))])
 	if name == "boring_wozniak" /* Steve Wozniak is not boring */ {
 		goto begin
 	}
 
 	if retry > 0 {
+		//nolint:gosec // cryptographic precision not required for randomly selecting from fixed range
 		name = fmt.Sprintf("%s%d", name, rand.Intn(10))
 	}
 	return name

@@ -1,0 +1,975 @@
+- name: "Update one node that creates nothing"
+  gqlquery: |
+    mutation updateUserSecret($upd: UpdateUserSecretInput!) {
+      updateUserSecret(input: $upd) {
+        userSecret {
+          id
+        }
+      }
+    }
+  jwtvar:
+    USER: "user1"
+  variables: |
+    { "upd":
+      { "filter": { "id": [ "0x123" ] },
+        "set": { "aSecret": "new Value" }
+      }
+    }
+  dgquerysec: |-
+    query {
+      x as updateUserSecret(func: uid(UserSecretRoot)) {
+        uid
+      }
+      UserSecretRoot as var(func: uid(UserSecret_1)) @filter(uid(UserSecret_Auth2))
+      UserSecret_1 as var(func: uid(0x123)) @filter(type(UserSecret))
+      UserSecret_Auth2 as var(func: uid(UserSecret_1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
+    }
+  uids: |
+    { }
+
+- name: "Update a node that does a deep add"
+  gqlquery: |
+    mutation updateColumn($upd: UpdateColumnInput!) {
+      updateColumn(input: $upd) {
+        column {
+          colID
+        }
+      }
+    }
+  jwtvar:
+    USER: "user1"
+  variables: |
+    { "upd":
+      {
+        "filter": { "colID": [ "0x123" ] },
+        "set": {
+          "name": "new name",
+          "tickets": [ { "title": "a ticket" } ]
+        }
+      }
+    }
+  dgquerysec: |-
+    query {
+      x as updateColumn(func: uid(ColumnRoot)) {
+        uid
+      }
+      ColumnRoot as var(func: uid(Column_1)) @filter(uid(Column_Auth2))
+      Column_1 as var(func: uid(0x123)) @filter(type(Column))
+      Column_Auth2 as var(func: uid(Column_1)) @cascade {
+        Column.inProject : Column.inProject {
+          Project.roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+          }
+        }
+      }
+    }
+  uids: |
+    { "Ticket_4": "0x789" }
+  json: |
+    {  }
+  authquery: |-
+    query {
+      Ticket(func: uid(Ticket_1)) @filter(uid(Ticket_Auth2)) {
+        uid
+      }
+      Ticket_1 as var(func: uid(0x789))
+      Ticket_Auth2 as var(func: uid(Ticket_1)) @cascade {
+        Ticket.onColumn : Ticket.onColumn {
+          Column.inProject : Column.inProject {
+            Project.roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
+              Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+            }
+          }
+        }
+      }
+    }
+  authjson: |
+    {
+      "Ticket": [ { "uid": "0x789" } ]
+    }
+
+
+- name: "Update a node that does a deep add and fails auth"
+  gqlquery: |
+    mutation updateColumn($upd: UpdateColumnInput!) {
+      updateColumn(input: $upd) {
+        column {
+          colID
+        }
+      }
+    }
+  jwtvar:
+    USER: "user1"
+  variables: |
+    { "upd":
+      {
+        "filter": { "colID": [ "0x123" ] },
+        "set": {
+          "name": "new name",
+          "tickets": [ { "title": "a ticket" } ]
+        }
+      }
+    }
+  dgquerysec: |-
+    query {
+      x as updateColumn(func: uid(ColumnRoot)) {
+        uid
+      }
+      ColumnRoot as var(func: uid(Column_1)) @filter(uid(Column_Auth2))
+      Column_1 as var(func: uid(0x123)) @filter(type(Column))
+      Column_Auth2 as var(func: uid(Column_1)) @cascade {
+        Column.inProject : Column.inProject {
+          Project.roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+          }
+        }
+      }
+    }
+  uids: |
+    { "Ticket_4": "0x789" }
+  json: |
+    {  }
+  authquery: |-
+    query {
+      Ticket(func: uid(Ticket_1)) @filter(uid(Ticket_Auth2)) {
+        uid
+      }
+      Ticket_1 as var(func: uid(0x789))
+      Ticket_Auth2 as var(func: uid(Ticket_1)) @cascade {
+        Ticket.onColumn : Ticket.onColumn {
+          Column.inProject : Column.inProject {
+            Project.roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
+              Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+            }
+          }
+        }
+      }
+    }
+  authjson: |
+    { }
+  error:
+    { "message": "mutation failed because authorization failed" }
+
+# See comments about additional deletes in update_mutation_test.yaml.
+# Because of those additional deletes, for example, when we update a column and
+# link it to an existing ticket, we might remove that ticket from the column it was
+# attached to ... so we need authorization to update that column as well.
+- name: "update with auth on additional delete (updt list edge)"
+  gqlquery: |
+    mutation updateColumn($upd: UpdateColumnInput!) {
+      updateColumn(input: $upd) {
+        column {
+          colID
+        }
+      }
+    }
+  jwtvar:
+    USER: "user1"
+  variables: |
+    { "upd":
+      {
+        "filter": { "colID": [ "0x123" ] },
+        "set": {
+          "name": "new name",
+          "tickets": [ { "id": "0x789" } ]
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      Ticket_1(func: uid(0x789)) {
+        uid
+        dgraph.type
+      }
+    }
+  queryjson: |
+    {
+      "Ticket_1": [ { "uid": "0x789", "dgraph.type": ["Ticket"] } ]
+    }
+  dgquerysec: |-
+    query {
+      x as updateColumn(func: uid(ColumnRoot)) {
+        uid
+      }
+      ColumnRoot as var(func: uid(Column_2)) @filter(uid(Column_Auth3))
+      Column_2 as var(func: uid(0x123)) @filter(type(Column))
+      Column_Auth3 as var(func: uid(Column_2)) @cascade {
+        Column.inProject : Column.inProject {
+          Project.roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+          }
+        }
+      }
+      var(func: uid(0x789)) {
+        Column_5 as Ticket.onColumn @filter(NOT (uid(x)))
+      }
+      Column_5(func: uid(Column_5)) {
+        uid
+      }
+      Column_5.auth(func: uid(Column_5)) @filter(uid(Column_Auth6)) {
+        uid
+      }
+      Column_Auth6 as var(func: uid(Column_5)) @cascade {
+        Column.inProject : Column.inProject {
+          Project.roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+          }
+        }
+      }
+    }
+  json: |
+    {
+      "Column_1": [ { "uid": "0x123" } ],
+      "Ticket_4": [ { "uid": "0x789" } ],
+      "Column_5":  [ { "uid": "0x456" } ],
+      "Column_5.auth": [ { "uid": "0x456" } ]
+    }
+
+- name: "update with auth on additional delete that fails (updt list edge)"
+  gqlquery: |
+    mutation updateColumn($upd: UpdateColumnInput!) {
+      updateColumn(input: $upd) {
+        column {
+          colID
+        }
+      }
+    }
+  jwtvar:
+    USER: "user1"
+  variables: |
+    { "upd":
+      {
+        "filter": { "colID": [ "0x123" ] },
+        "set": {
+          "name": "new name",
+          "tickets": [ { "id": "0x789" } ]
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      Ticket_1(func: uid(0x789)) {
+        uid
+        dgraph.type
+      }
+    }
+  queryjson: |
+    {
+        "Ticket_1": [ { "uid": "0x789", "dgraph.type":["Ticket"] } ]
+    }
+  dgquerysec: |-
+    query {
+      x as updateColumn(func: uid(ColumnRoot)) {
+        uid
+      }
+      ColumnRoot as var(func: uid(Column_2)) @filter(uid(Column_Auth3))
+      Column_2 as var(func: uid(0x123)) @filter(type(Column))
+      Column_Auth3 as var(func: uid(Column_2)) @cascade {
+        Column.inProject : Column.inProject {
+          Project.roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+          }
+        }
+      }
+      var(func: uid(0x789)) {
+        Column_5 as Ticket.onColumn @filter(NOT (uid(x)))
+      }
+      Column_5(func: uid(Column_5)) {
+        uid
+      }
+      Column_5.auth(func: uid(Column_5)) @filter(uid(Column_Auth6)) {
+        uid
+      }
+      Column_Auth6 as var(func: uid(Column_5)) @cascade {
+        Column.inProject : Column.inProject {
+          Project.roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+          }
+        }
+      }
+    }
+  json: |
+    {
+      "Column_1": [ { "uid": "0x123" } ],
+      "Ticket_4": [ { "uid": "0x789" } ],
+      "Column_5":  [ { "uid": "0x456" } ]
+    }
+  authquery: |-
+    query {
+    }
+  authjson: |
+    { }
+  error:
+    { "message": "couldn't rewrite query for mutation updateColumn because authorization failed" }
+
+- name: "update with auth on additional delete (updt single edge)"
+  gqlquery: |
+    mutation updateTicket($upd: UpdateTicketInput!) {
+      updateTicket(input: $upd) {
+        ticket {
+          id
+        }
+      }
+    }
+  jwtvar:
+    USER: "user1"
+  variables: |
+    { "upd":
+      {
+        "filter": { "id": [ "0x123" ] },
+        "set": {
+          "title": "new title",
+          "onColumn": { "colID": "0x456" }
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      Column_1(func: uid(0x456)) {
+        uid
+        dgraph.type
+      }
+    }
+  queryjson: |
+    {
+        "Column_1": [ { "uid": "0x456", "dgraph.type": ["Column"]} ]
+    }
+  dgquerysec: |-
+    query {
+      x as updateTicket(func: uid(TicketRoot)) {
+        uid
+      }
+      TicketRoot as var(func: uid(Ticket_2)) @filter(uid(Ticket_Auth3))
+      Ticket_2 as var(func: uid(0x123)) @filter(type(Ticket))
+      Ticket_Auth3 as var(func: uid(Ticket_2)) @cascade {
+        Ticket.onColumn : Ticket.onColumn {
+          Column.inProject : Column.inProject {
+            Project.roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
+              Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+            }
+          }
+        }
+      }
+      var(func: uid(x)) {
+        Column_5 as Ticket.onColumn @filter(NOT (uid(0x456)))
+      }
+      Column_5(func: uid(Column_5)) {
+        uid
+      }
+      Column_5.auth(func: uid(Column_5)) @filter(uid(Column_Auth6)) {
+        uid
+      }
+      Column_Auth6 as var(func: uid(Column_5)) @cascade {
+        Column.inProject : Column.inProject {
+          Project.roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+          }
+        }
+      }
+    }
+  json: |
+    {
+      "Column_4": [ { "uid": "0x456" } ],
+      "Column_5":  [ { "uid": "0x499" } ],
+      "Column_5.auth": [ { "uid": "0x499" } ]
+    }
+
+- name: "update with auth on additional delete that fails (updt single edge)"
+  gqlquery: |
+    mutation updateTicket($upd: UpdateTicketInput!) {
+      updateTicket(input: $upd) {
+        ticket {
+          id
+        }
+      }
+    }
+  jwtvar:
+    USER: "user1"
+  variables: |
+    { "upd":
+      {
+        "filter": { "id": [ "0x123" ] },
+        "set": {
+          "title": "new title",
+          "onColumn": { "colID": "0x456" }
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      Column_1(func: uid(0x456)) {
+        uid
+        dgraph.type
+      }
+    }
+  queryjson: |
+    {
+        "Column_1": [ { "uid": "0x456", "dgraph.type":["Column"] } ]
+    }
+  dgquerysec: |-
+    query {
+      x as updateTicket(func: uid(TicketRoot)) {
+        uid
+      }
+      TicketRoot as var(func: uid(Ticket_2)) @filter(uid(Ticket_Auth3))
+      Ticket_2 as var(func: uid(0x123)) @filter(type(Ticket))
+      Ticket_Auth3 as var(func: uid(Ticket_2)) @cascade {
+        Ticket.onColumn : Ticket.onColumn {
+          Column.inProject : Column.inProject {
+            Project.roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
+              Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+            }
+          }
+        }
+      }
+      var(func: uid(x)) {
+        Column_5 as Ticket.onColumn @filter(NOT (uid(0x456)))
+      }
+      Column_5(func: uid(Column_5)) {
+        uid
+      }
+      Column_5.auth(func: uid(Column_5)) @filter(uid(Column_Auth6)) {
+        uid
+      }
+      Column_Auth6 as var(func: uid(Column_5)) @cascade {
+        Column.inProject : Column.inProject {
+          Project.roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+          }
+        }
+      }
+    }
+  json: |
+    {
+      "Column_4": [ { "uid": "0x456" } ],
+      "Column_5":  [ { "uid": "0x499" } ]
+    }
+  error:
+    { "message": "couldn't rewrite query for mutation updateTicket because authorization failed" }
+
+- name: "Update with top level RBAC false."
+  gqlquery: |
+    mutation updateLog($log: UpdateLogInput!) {
+      updateLog(input: $log) {
+        log {
+          id
+        }
+      }
+    }
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
+  variables: |
+    { "log":
+      {
+        "filter": { "id": [ "0x123" ] },
+        "set": {
+          "logs": "log123",
+          "random": "random123"
+        }
+      }
+    }
+  dgquerysec: |-
+    query {
+      x as updateLog()
+    }
+
+- name: "Update with top level RBAC true."
+  gqlquery: |
+    mutation updateLog($log: UpdateLogInput!) {
+      updateLog(input: $log) {
+        log {
+          id
+        }
+      }
+    }
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
+  variables: |
+    { "log":
+      {
+        "filter": { "id": [ "0x123" ] },
+        "set": {
+          "logs": "log123",
+          "random": "random123"
+        }
+      }
+    }
+  dgquerysec: |-
+    query {
+      x as updateLog(func: uid(LogRoot)) {
+        uid
+      }
+      LogRoot as var(func: uid(Log_1))
+      Log_1 as var(func: uid(0x123)) @filter(type(Log))
+    }
+
+- name: "Update with top level OR RBAC false."
+  gqlquery: |
+    mutation updateProject($proj: UpdateProjectInput!) {
+      updateProject(input: $proj) {
+        project {
+          projID
+        }
+      }
+    }
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
+  variables: |
+    { "proj":
+      {
+        "filter": { "projID": [ "0x123" ] },
+        "set": {
+          "name": "Project1"
+        }
+      }
+    }
+  dgquerysec: |-
+    query {
+      x as updateProject(func: uid(ProjectRoot)) {
+        uid
+      }
+      ProjectRoot as var(func: uid(Project_1)) @filter(uid(Project_Auth2))
+      Project_1 as var(func: uid(0x123)) @filter(type(Project))
+      Project_Auth2 as var(func: uid(Project_1)) @cascade {
+        Project.roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+          Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+        }
+      }
+    }
+
+- name: "Update with top level OR RBAC true."
+  gqlquery: |
+    mutation updateProject($proj: UpdateProjectInput!) {
+      updateProject(input: $proj) {
+        project {
+          projID
+        }
+      }
+    }
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
+  variables: |
+    { "proj":
+      {
+        "filter": { "projID": [ "0x123" ] },
+        "set": {
+          "name": "Project1"
+        }
+      }
+    }
+  dgquerysec: |-
+    query {
+      x as updateProject(func: uid(ProjectRoot)) {
+        uid
+      }
+      ProjectRoot as var(func: uid(Project_1))
+      Project_1 as var(func: uid(0x123)) @filter(type(Project))
+    }
+
+- name: "Update with top level And RBAC true."
+  gqlquery: |
+    mutation updateIssue($issue: UpdateIssueInput!) {
+      updateIssue(input: $issue) {
+        issue {
+          id
+        }
+      }
+    }
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
+  variables: |
+    { "issue":
+      {
+        "filter": { "id": [ "0x123" ] },
+        "set": {
+          "random": "random456"
+        }
+      }
+    }
+  dgquerysec: |-
+    query {
+      x as updateIssue(func: uid(IssueRoot)) {
+        uid
+      }
+      IssueRoot as var(func: uid(Issue_1)) @filter(uid(Issue_Auth2))
+      Issue_1 as var(func: uid(0x123)) @filter(type(Issue))
+      Issue_Auth2 as var(func: uid(Issue_1)) @cascade {
+        Issue.owner : Issue.owner @filter(eq(User.username, "user1"))
+      }
+    }
+
+- name: "Update with top level And RBAC false."
+  gqlquery: |
+    mutation updateIssue($issue: UpdateIssueInput!) {
+      updateIssue(input: $issue) {
+        issue {
+          id
+        }
+      }
+    }
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
+  variables: |
+    { "issue":
+      {
+        "filter": { "id": [ "0x123" ] },
+        "set": {
+          "random": "random456"
+        }
+      }
+    }
+  dgquerysec: |-
+    query {
+      x as updateIssue()
+    }
+
+- name: "Update with top level not RBAC true."
+  gqlquery: |
+    mutation updateComplexLog($log: UpdateComplexLogInput!) {
+      updateComplexLog(input: $log) {
+        complexLog {
+          id
+        }
+      }
+    }
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
+  variables: |
+    { "log":
+      {
+        "filter": { "id": [ "0x123" ] },
+        "set": {
+          "logs": "log123"
+        }
+      }
+    }
+  dgquerysec: |-
+    query {
+      x as updateComplexLog(func: uid(ComplexLogRoot)) {
+        uid
+      }
+      ComplexLogRoot as var(func: uid(ComplexLog_1))
+      ComplexLog_1 as var(func: uid(0x123)) @filter(type(ComplexLog))
+    }
+
+- name: "Update with top level not RBAC false."
+  gqlquery: |
+    mutation updateComplexLog($log: UpdateComplexLogInput!) {
+      updateComplexLog(input: $log) {
+        complexLog {
+          id
+        }
+      }
+    }
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
+  variables: |
+    { "log":
+      {
+        "filter": { "id": [ "0x123" ] },
+        "set": {
+          "logs": "log123"
+        }
+      }
+    }
+  dgquerysec: |-
+    query {
+      x as updateComplexLog()
+    }
+
+- name: "Update Type inheriting Graph Traversal Auth Rules from Interface."
+  gqlquery: |
+    mutation updateQuestion($question: UpdateQuestionInput!) {
+      updateQuestion(input: $question) {
+        question {
+          id
+        }
+      }
+    }
+  jwtvar:
+    USER: "user1"
+    ANS: "true"
+  variables: |
+    {
+      "question":
+      {
+        "filter": {"id": ["0x123"] },
+        "set": {
+          "topic": "A topic"
+        }
+      }
+    }
+  dgquerysec: |-
+    query {
+      x as updateQuestion(func: uid(QuestionRoot)) {
+        uid
+      }
+      QuestionRoot as var(func: uid(Question_1)) @filter((uid(Question_Auth2) AND uid(Question_Auth3)))
+      Question_1 as var(func: uid(0x123)) @filter(type(Question))
+      Question_Auth2 as var(func: uid(Question_1)) @filter(eq(Question.answered, true)) @cascade {
+        Question.id : uid
+      }
+      Question_Auth3 as var(func: uid(Question_1)) @cascade {
+        dgraph.type
+        Post.author : Post.author @filter(eq(Author.name, "user1")) {
+          Author.name : Author.name
+        }
+      }
+    }
+
+- name: "Update Type inheriting Graph Traversal Auth Rules on Interface failed."
+  gqlquery: |
+    mutation updateQuestion($question: UpdateQuestionInput!) {
+      updateQuestion(input: $question) {
+        question {
+          id
+        }
+      }
+    }
+  variables: |
+    {
+      "question":
+      {
+        "filter": {"id": ["0x123"] },
+        "set": {
+          "topic": "A topic"
+        }
+      }
+    }
+  dgquerysec: |-
+    query {
+      x as updateQuestion()
+    }
+
+- name: "Update Type inheriting RBAC Auth Rules from Interface."
+  gqlquery: |
+    mutation updateFbPost($post: UpdateFbPostInput!) {
+      updateFbPost(input: $post) {
+        fbPost {
+          id
+        }
+      }
+    }
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
+  variables: |
+    {
+      "post":
+      {
+        "filter": {"id": ["0x123"] },
+        "set": {
+          "topic": "A topic"
+        }
+      }
+    }
+  dgquerysec: |-
+    query {
+      x as updateFbPost(func: uid(FbPostRoot)) {
+        uid
+      }
+      FbPostRoot as var(func: uid(FbPost_1)) @filter(uid(FbPost_Auth2))
+      FbPost_1 as var(func: uid(0x123)) @filter(type(FbPost))
+      FbPost_Auth2 as var(func: uid(FbPost_1)) @cascade {
+        dgraph.type
+        Post.author : Post.author @filter(eq(Author.name, "user1")) {
+          Author.name : Author.name
+        }
+      }
+    }
+
+- name: "Update Type inheriting RBAC Auth Rules from Interface failed"
+  gqlquery: |
+    mutation updateFbPost($post: UpdateFbPostInput!) {
+      updateFbPost(input: $post) {
+        fbPost {
+          id
+        }
+      }
+    }
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
+  variables: |
+    {
+      "post":
+      {
+        "filter": {"id": ["0x123"] },
+        "set": {
+          "topic": "A topic"
+        }
+      }
+    }
+  dgquerysec: |-
+    query {
+      x as updateFbPost()
+    }
+
+- name: "Updating interface having its own auth rules and implementing types also have auth rules and all are satisfied"
+  gqlquery: |
+    mutation updatePost($post: UpdatePostInput!) {
+      updatePost(input: $post) {
+        post {
+          id
+        }
+      }
+    }
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
+    ANS: "true"
+  variables: |
+    {
+        "post":
+        {
+          "filter": {"id": ["0x123", "0x456"] },
+          "set": {
+            "topic": "A topic"
+          }
+        }
+      }
+  dgquerysec: |-
+    query {
+      x as updatePost(func: uid(PostRoot)) {
+        uid
+      }
+      PostRoot as var(func: uid(Post_1)) @filter(((uid(Question_Auth3) AND uid(Question_Auth4)) OR uid(FbPost_Auth6) OR uid(Answer_Auth8)))
+      Post_1 as var(func: uid(0x123, 0x456)) @filter(type(Post))
+      Question_2 as var(func: type(Question))
+      Question_Auth3 as var(func: uid(Question_2)) @filter(eq(Question.answered, true)) @cascade {
+        Question.id : uid
+      }
+      Question_Auth4 as var(func: uid(Question_2)) @cascade {
+        dgraph.type
+        Post.author : Post.author @filter(eq(Author.name, "user1")) {
+          Author.name : Author.name
+        }
+      }
+      FbPost_5 as var(func: type(FbPost))
+      FbPost_Auth6 as var(func: uid(FbPost_5)) @cascade {
+        dgraph.type
+        Post.author : Post.author @filter(eq(Author.name, "user1")) {
+          Author.name : Author.name
+        }
+      }
+      Answer_7 as var(func: type(Answer))
+      Answer_Auth8 as var(func: uid(Answer_7)) @cascade {
+        dgraph.type
+        Post.author : Post.author @filter(eq(Author.name, "user1")) {
+          Author.name : Author.name
+        }
+      }
+    }
+
+- name: "Updating interface having its own auth rules and implementing types also have auth rules and some of the rules of implementing types are not satisfied"
+  gqlquery: |
+    mutation updatePost($post: UpdatePostInput!) {
+      updatePost(input: $post) {
+        post {
+          id
+        }
+      }
+    }
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
+  variables: |
+    {
+        "post":
+        {
+          "filter": {"id": ["0x123", "0x456"] },
+          "set": {
+            "topic": "A topic"
+          }
+        }
+      }
+  dgquerysec: |-
+    query {
+      x as updatePost(func: uid(PostRoot)) {
+        uid
+      }
+      PostRoot as var(func: uid(Post_1)) @filter((uid(FbPost_Auth3) OR uid(Answer_Auth5)))
+      Post_1 as var(func: uid(0x123, 0x456)) @filter(type(Post))
+      FbPost_2 as var(func: type(FbPost))
+      FbPost_Auth3 as var(func: uid(FbPost_2)) @cascade {
+        dgraph.type
+        Post.author : Post.author @filter(eq(Author.name, "user1")) {
+          Author.name : Author.name
+        }
+      }
+      Answer_4 as var(func: type(Answer))
+      Answer_Auth5 as var(func: uid(Answer_4)) @cascade {
+        dgraph.type
+        Post.author : Post.author @filter(eq(Author.name, "user1")) {
+          Author.name : Author.name
+        }
+      }
+    }
+
+- name: "Updating interface having its own auth rules and implementing types also have auth rules and the rules of interface are not satisfied"
+  gqlquery: |
+    mutation updatePost($post: UpdatePostInput!) {
+      updatePost(input: $post) {
+        post {
+          id
+        }
+      }
+    }
+  jwtvar:
+    ROLE: "ADMIN"
+    ANS: "true"
+  variables: |
+    {
+        "post":
+        {
+          "filter": {"id": ["0x123", "0x456"] },
+          "set": {
+            "topic": "A topic"
+          }
+        }
+      }
+  dgquerysec: |-
+    query {
+      x as updatePost()
+    }
+
+- name: "Updating interface having no own auth rules but some implementing types have auth rules and they are not satisfied."
+  gqlquery: |
+    mutation updateA($inp: UpdateAInput!) {
+      updateA(input: $inp) {
+        a {
+          id
+        }
+      }
+    }
+  jwtvar:
+    ROLE: "ADMIN"
+    ANS: "true"
+  variables: |
+    {
+        "inp":
+        {
+          "filter": {"id": ["0x123", "0x456"] },
+          "set": {
+            "random": "Random String"
+          }
+        }
+      }
+  dgquerysec: |-
+    query {
+      x as updateA(func: uid(ARoot)) {
+        uid
+      }
+      ARoot as var(func: uid(A_1)) @filter((uid(B_2) OR uid(C_3)))
+      A_1 as var(func: uid(0x123, 0x456)) @filter(type(A))
+      B_2 as var(func: type(B))
+      C_3 as var(func: type(C))
+    }

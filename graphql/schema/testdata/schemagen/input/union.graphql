@@ -1,0 +1,41 @@
+interface Character {
+	id: ID!
+	name: String! @search(by: [exact])
+	friends: [Character]
+	enemyOf: Resident
+	appearsIn: [Episode!]! @search
+}
+
+type Human implements Character {
+	starships: [Starship]
+	totalCredits: Int
+}
+
+type Droid implements Character {
+	primaryFunction: String
+}
+
+enum Episode {
+	NEWHOPE
+	EMPIRE
+	JEDI
+}
+
+type Starship {
+	id: ID!
+	name: String! @search(by: [term])
+	length: Float
+}
+
+union Resident = Human | Droid | Starship
+union Tool @remote = Droid | Starship
+
+type Planet {
+	id: ID!
+	name: String!
+	residents: [Resident!] @dgraph(pred: "residents")
+	bestTool: Tool @custom(http: {
+		url: "http://mock:8888/tool/$id"
+		method: "GET"
+	})
+}

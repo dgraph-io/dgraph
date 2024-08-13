@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2016-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,17 +20,18 @@ import (
 	"sort"
 	"time"
 
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
 	"golang.org/x/text/collate"
 	"golang.org/x/text/language"
+
+	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 type sortBase struct {
 	values [][]Val // Each uid could have multiple values which we need to sort it by.
 	desc   []bool  // Sort orders for different values.
-	ul     *pb.List
+	ul     *[]uint64
 	o      []*pb.Facets
 	cl     *collate.Collator // Compares Unicode strings according to the given collation order.
 }
@@ -41,14 +42,18 @@ func (s sortBase) Len() int { return len(s.values) }
 // Swap swaps two elements.
 func (s sortBase) Swap(i, j int) {
 	s.values[i], s.values[j] = s.values[j], s.values[i]
-	data := s.ul.Uids
-	data[i], data[j] = data[j], data[i]
+	(*s.ul)[i], (*s.ul)[j] = (*s.ul)[j], (*s.ul)[i]
 	if s.o != nil {
 		s.o[i], s.o[j] = s.o[j], s.o[i]
 	}
 }
 
 type byValue struct{ sortBase }
+
+func (s byValue) isNil(i int) bool {
+	first := s.values[i]
+	return len(first) == 0 || first[0].Value == nil
+}
 
 // Less compares two elements
 func (s byValue) Less(i, j int) bool {
@@ -57,14 +62,18 @@ func (s byValue) Less(i, j int) bool {
 		return false
 	}
 	for vidx := range first {
-		// Null value is considered greatest hence comes at first place while doing descending sort
-		// and at last place while doing ascending sort.
-		if first[vidx].Value == nil {
+		// Null values are appended at the end of the sort result for both ascending and descending.
+		// If both first and second has nil values, then maintain the order by UID.
+		if first[vidx].Value == nil && second[vidx].Value == nil {
 			return s.desc[vidx]
 		}
 
+		if first[vidx].Value == nil {
+			return false
+		}
+
 		if second[vidx].Value == nil {
-			return !s.desc[vidx]
+			return true
 		}
 
 		// We have to look at next value to decide.
@@ -82,19 +91,73 @@ func (s byValue) Less(i, j int) bool {
 	return false
 }
 
-// SortWithFacet sorts the given array in-place and considers the given facets to calculate
-// the proper ordering.
-func SortWithFacet(v [][]Val, ul *pb.List, l []*pb.Facets, desc []bool, lang string) error {
+// IsSortable returns true, if tid is sortable. Otherwise it returns false.
+func IsSortable(tid TypeID) bool {
+	switch tid {
+	case DateTimeID, IntID, FloatID, StringID, DefaultID:
+		return true
+	default:
+		return false
+	}
+}
+
+// SortTopN finds and places the first n elements in 0-N
+func SortTopN(v [][]Val, ul *[]uint64, desc []bool, lang string, n int) error {
 	if len(v) == 0 || len(v[0]) == 0 {
 		return nil
 	}
 
-	typ := v[0][0].Tid
-	switch typ {
-	case DateTimeID, IntID, FloatID, StringID, DefaultID:
-		// Don't do anything, we can sort values of this type.
-	default:
-		return errors.Errorf("Value of type: %s isn't sortable", typ.Name())
+	for _, val := range v[0] {
+		if !IsSortable(val.Tid) {
+			return errors.Errorf("Value of type: %v isn't sortable", val.Tid.Name())
+		}
+	}
+
+	var cl *collate.Collator
+	if lang != "" {
+		// Collator is nil if we are unable to parse the language.
+		// We default to bytewise comparison in that case.
+		if langTag, err := language.Parse(lang); err == nil {
+			cl = collate.New(langTag)
+		}
+	}
+
+	b := sortBase{v, desc, ul, nil, cl}
+	toBeSorted := byValue{b}
+
+	nul := 0
+	for i := 0; i < len(*ul); i++ {
+		if toBeSorted.isNil(i) {
+			continue
+		}
+		if i != nul {
+			toBeSorted.Swap(i, nul)
+		}
+		nul += 1
+	}
+
+	if nul > n {
+		b1 := sortBase{v[:nul], desc, ul, nil, cl}
+		toBeSorted1 := byValue{b1}
+		quickSelect(toBeSorted1, 0, nul-1, n)
+	}
+	toBeSorted.values = toBeSorted.values[:n]
+	sort.Sort(toBeSorted)
+
+	return nil
+}
+
+// SortWithFacet sorts the given array in-place and considers the given facets to calculate
+// the proper ordering.
+func SortWithFacet(v [][]Val, ul *[]uint64, l []*pb.Facets, desc []bool, lang string) error {
+	if len(v) == 0 || len(v[0]) == 0 {
+		return nil
+	}
+
+	for _, val := range v[0] {
+		if !IsSortable(val.Tid) {
+			return errors.Errorf("Value of type: %s isn't sortable", val.Tid.Name())
+		}
 	}
 
 	var cl *collate.Collator
@@ -113,7 +176,7 @@ func SortWithFacet(v [][]Val, ul *pb.List, l []*pb.Facets, desc []bool, lang str
 }
 
 // Sort sorts the given array in-place.
-func Sort(v [][]Val, ul *pb.List, desc []bool, lang string) error {
+func Sort(v [][]Val, ul *[]uint64, desc []bool, lang string) error {
 	return SortWithFacet(v, ul, nil, desc, lang)
 }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,9 +29,15 @@ import (
 const (
 	mapShardDir    = "map_output"
 	reduceShardDir = "shards"
+	bufferDir      = "buffer"
 )
 
-func mergeMapShardsIntoReduceShards(opt options) {
+func mergeMapShardsIntoReduceShards(opt *options) {
+	if opt == nil {
+		fmt.Printf("Nil options passed to merge shards phase.\n")
+		os.Exit(1)
+	}
+
 	shardDirs := readShardDirs(filepath.Join(opt.TmpDir, mapShardDir))
 	if len(shardDirs) == 0 {
 		fmt.Printf(
@@ -53,7 +59,7 @@ func mergeMapShardsIntoReduceShards(opt options) {
 	}
 
 	// Put the first map shard in the first reduce shard since it contains all the reserved
-	// predicates.
+	// predicates. We want all the reserved predicates in group 1.
 	reduceShard := filepath.Join(reduceShards[0], filepath.Base(firstShard))
 	fmt.Printf("Shard %s -> Reduce %s\n", firstShard, reduceShard)
 	x.Check(os.Rename(firstShard, reduceShard))

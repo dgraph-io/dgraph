@@ -1,19 +1,14 @@
+//go:build !oss
 // +build !oss
 
 /*
- * Copyright 2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Licensed under the Dgraph Community License (the "License"); you
+ * may not use this file except in compliance with the License. You
+ * may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ *     https://github.com/dgraph-io/dgraph/blob/main/licenses/DCL.txt
  */
 
 package alpha
@@ -21,15 +16,13 @@ package alpha
 import (
 	"context"
 	"encoding/json"
-	"net"
 	"net/http"
-	"strconv"
 
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/golang/glog"
+
+	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/glog"
-	"google.golang.org/grpc/peer"
 )
 
 func loginHandler(w http.ResponseWriter, r *http.Request) {
@@ -37,18 +30,9 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx := context.Background()
-	if ip, port, err := net.SplitHostPort(r.RemoteAddr); err == nil {
-		// add remote addr as peer info so that the remote address can be logged inside Server.Login
-		if intPort, convErr := strconv.Atoi(port); convErr == nil {
-			ctx = peer.NewContext(ctx, &peer.Peer{
-				Addr: &net.TCPAddr{
-					IP:   net.ParseIP(ip),
-					Port: intPort,
-				},
-			})
-		}
-	}
+	// Pass in PoorMan's auth, IP information if present.
+	ctx := x.AttachRemoteIP(context.Background(), r)
+	ctx = x.AttachAuthToken(ctx, r)
 
 	body := readRequest(w, r)
 	loginReq := api.LoginRequest{}
@@ -80,7 +64,7 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := writeResponse(w, r, js); err != nil {
+	if _, err := x.WriteResponse(w, r, js); err != nil {
 		glog.Errorf("Error while writing response: %v", err)
 	}
 }

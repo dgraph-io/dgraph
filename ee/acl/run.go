@@ -1,7 +1,8 @@
+//go:build oss
 // +build oss
 
 /*
- * Copyright 2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,15 +20,30 @@
 package acl
 
 import (
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/cobra"
+
+	"github.com/dgraph-io/dgo/v230/protos/api"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 var CmdAcl x.SubCommand
 
 func init() {
 	CmdAcl.Cmd = &cobra.Command{
-		Use:   "acl",
-		Short: "Enterprise feature. Not supported in oss version",
+		Use:         "acl",
+		Short:       "Enterprise feature. Not supported in oss version",
+		Annotations: map[string]string{"group": "security"},
 	}
+	CmdAcl.Cmd.SetHelpTemplate(x.NonRootTemplate)
+}
+
+// CreateGroupNQuads cretes NQuads needed to store a group with the give ID.
+func CreateGroupNQuads(groupId string) []*api.NQuad {
+	return nil
+}
+
+// CreateUserNQuads creates the NQuads needed to store a user with the given ID and
+// password in the ACL system.
+func CreateUserNQuads(userId, password string) []*api.NQuad {
+	return nil
 }

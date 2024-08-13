@@ -1,13 +1,14 @@
+//go:build !oss
 // +build !oss
 
 /*
- * Copyright 2018 Dgraph Labs, Inc. All rights reserved.
+ * Copyright 2023 Dgraph Labs, Inc. All rights reserved.
  *
  * Licensed under the Dgraph Community License (the "License"); you
  * may not use this file except in compliance with the License. You
  * may obtain a copy of the License at
  *
- *     https://github.com/dgraph-io/dgraph/blob/master/licenses/DCL.txt
+ *     https://github.com/dgraph-io/dgraph/blob/main/licenses/DCL.txt
  */
 
 package acl
@@ -15,12 +16,14 @@ package acl
 import (
 	"encoding/json"
 
-	"github.com/dgraph-io/dgo/v2"
-	"github.com/dgraph-io/dgo/v2/protos/api"
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
+
+	"github.com/dgraph-io/dgo/v230"
+	"github.com/dgraph-io/dgo/v230/protos/api"
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 // GetGroupIDs returns a slice containing the group ids of all the given groups.
@@ -72,6 +75,7 @@ type User struct {
 	Uid           string  `json:"uid"`
 	UserID        string  `json:"dgraph.xid"`
 	Password      string  `json:"dgraph.password"`
+	Namespace     uint64  `json:"namespace"`
 	PasswordMatch bool    `json:"password_match"`
 	Groups        []Group `json:"dgraph.user.group"`
 }
@@ -104,12 +108,10 @@ func UnmarshalUser(resp *api.Response, userKey string) (user *User, err error) {
 }
 
 // Acl represents the permissions in the ACL system.
-// An Acl can have either a single predicate or a regex that can be used to
-// match multiple predicates.
+// An Acl can have a predicate and permission for that predicate.
 type Acl struct {
-	Predicate string `json:"predicate"`
-	Regex     string `json:"regex"`
-	Perm      int32  `json:"perm"`
+	Predicate string `json:"dgraph.rule.predicate"`
+	Perm      int32  `json:"dgraph.rule.permission"`
 }
 
 // Group represents a group in the ACL system.
@@ -117,7 +119,7 @@ type Group struct {
 	Uid     string `json:"uid"`
 	GroupID string `json:"dgraph.xid"`
 	Users   []User `json:"~dgraph.user.group"`
-	Acls    string `json:"dgraph.group.acl"`
+	Rules   []Acl  `json:"dgraph.acl.rule"`
 }
 
 // GetUid returns the UID of the group.
@@ -164,10 +166,11 @@ func UnmarshalGroups(input []byte, groupKey string) (group []Group, err error) {
 // options, and then login using groot id and password
 func getClientWithAdminCtx(conf *viper.Viper) (*dgo.Dgraph, x.CloseFunc, error) {
 	dg, closeClient := x.GetDgraphClient(conf, false)
+	creds := z.NewSuperFlag(conf.GetString("guardian-creds"))
 	err := x.GetPassAndLogin(dg, &x.CredOpt{
-		Conf:        conf,
-		UserID:      x.GrootId,
-		PasswordOpt: gPassword,
+		UserID:    creds.GetString("user"),
+		Password:  creds.GetString("password"),
+		Namespace: creds.GetUint64("namespace"),
 	})
 	if err != nil {
 		return nil, nil, err
@@ -177,7 +180,7 @@ func getClientWithAdminCtx(conf *viper.Viper) (*dgo.Dgraph, x.CloseFunc, error) 
 
 // CreateUserNQuads creates the NQuads needed to store a user with the given ID and
 // password in the ACL system.
-func CreateUserNQuads(userId string, password string) []*api.NQuad {
+func CreateUserNQuads(userId, password string) []*api.NQuad {
 	return []*api.NQuad{
 		{
 			Subject:     "_:newuser",
@@ -192,7 +195,23 @@ func CreateUserNQuads(userId string, password string) []*api.NQuad {
 		{
 			Subject:     "_:newuser",
 			Predicate:   "dgraph.type",
-			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "User"}},
+			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "dgraph.type.User"}},
+		},
+	}
+}
+
+// CreateGroupNQuads cretes NQuads needed to store a group with the give ID.
+func CreateGroupNQuads(groupId string) []*api.NQuad {
+	return []*api.NQuad{
+		{
+			Subject:     "_:newgroup",
+			Predicate:   "dgraph.xid",
+			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: groupId}},
+		},
+		{
+			Subject:     "_:newgroup",
+			Predicate:   "dgraph.type",
+			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "dgraph.type.Group"}},
 		},
 	}
 }

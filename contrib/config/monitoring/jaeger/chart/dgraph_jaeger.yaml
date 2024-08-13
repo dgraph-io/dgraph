@@ -1,0 +1,8 @@
+alpha:
+  extraEnvs:
+    - name: DGRAPH_ALPHA_JAEGER_COLLECTOR
+      value: http://jaeger-collector.observability.svc:14268
+zero:
+  extraEnvs:
+    - name: DGRAPH_ZERO_JAEGER_COLLECTOR
+      value: http://jaeger-collector.observability.svc:14268

@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,9 +20,10 @@ import (
 	"math"
 	"sync"
 
-	"github.com/dgraph-io/badger/v2"
-	"github.com/dgraph-io/badger/v2/pb"
 	"github.com/golang/glog"
+
+	"github.com/dgraph-io/badger/v4"
+	"github.com/dgraph-io/badger/v4/pb"
 )
 
 // TxnWriter is in charge or writing transactions to badger.
@@ -113,11 +114,11 @@ func (w *TxnWriter) SetAt(key, val []byte, meta byte, ts uint64) error {
 
 // Flush waits until all operations are done and all data is written to disk.
 func (w *TxnWriter) Flush() error {
-	defer func() {
-		if err := w.db.Sync(); err != nil {
-			glog.Errorf("Error while calling Sync from TxnWriter.Flush: %v", err)
-		}
-	}()
+	// No need to call Sync here.
+	return w.Wait()
+}
+
+func (w *TxnWriter) Wait() error {
 	w.wg.Wait()
 	select {
 	case err := <-w.che:

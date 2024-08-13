@@ -1,5 +1,7 @@
+//go:build integration
+
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +16,7 @@
  * limitations under the License.
  */
 
+//nolint:lll
 package chunker
 
 import (
@@ -25,13 +28,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/glog"
+	"github.com/stretchr/testify/require"
+
+	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/tok"
-	"github.com/golang/glog"
-
-	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/types"
-	"github.com/stretchr/testify/require"
 )
 
 func makeNquad(sub, pred string, val *api.Value) *api.NQuad {
@@ -51,7 +54,7 @@ func makeNquadEdge(sub, pred, obj string) *api.NQuad {
 }
 
 type School struct {
-	Name string `json:",omitempty"`
+	Name string `json:"name,omitempty"`
 }
 
 type address struct {
@@ -60,19 +63,34 @@ type address struct {
 }
 
 type Person struct {
-	Uid     string     `json:"uid,omitempty"`
-	Name    string     `json:"name,omitempty"`
-	Age     int        `json:"age,omitempty"`
-	Married *bool      `json:"married,omitempty"`
-	Now     *time.Time `json:"now,omitempty"`
-	Address address    `json:"address,omitempty"` // geo value
-	Friends []Person   `json:"friend,omitempty"`
-	School  *School    `json:"school,omitempty"`
+	Uid       string     `json:"uid,omitempty"`
+	Namespace string     `json:"namespace,omitempty"`
+	Name      string     `json:"name,omitempty"`
+	Age       int        `json:"age,omitempty"`
+	Married   *bool      `json:"married,omitempty"`
+	Now       *time.Time `json:"now,omitempty"`
+	Address   address    `json:"address,omitempty"` // geo value
+	Friends   []Person   `json:"friend,omitempty"`
+	School    *School    `json:"school,omitempty"`
+}
+
+type Product struct {
+	Uid           string `json:"uid,omitempty"`
+	Name          string `json:"name"`
+	Discription   string `json:"discription"`
+	Discription_v string `json:"discription_v"`
 }
 
 func Parse(b []byte, op int) ([]*api.NQuad, error) {
 	nqs := NewNQuadBuffer(1000)
 	err := nqs.ParseJSON(b, op)
+	return nqs.nquads, err
+}
+
+// FastParse uses buf.FastParseJSON() simdjson parser.
+func FastParse(b []byte, op int) ([]*api.NQuad, error) {
+	nqs := NewNQuadBuffer(1000)
+	err := nqs.FastParseJSON(b, op)
 	return nqs.nquads, err
 }
 
@@ -109,10 +127,12 @@ func TestNquadsFromJson1(t *testing.T) {
 	tn := time.Now().UTC()
 	m := true
 	p := Person{
-		Name:    "Alice",
-		Age:     26,
-		Married: &m,
-		Now:     &tn,
+		Uid:       "1",
+		Namespace: "0x2",
+		Name:      "Alice",
+		Age:       26,
+		Married:   &m,
+		Now:       &tn,
 		Address: address{
 			Type:   "Point",
 			Coords: []float64{1.1, 2.0},
@@ -124,25 +144,36 @@ func TestNquadsFromJson1(t *testing.T) {
 
 	nq, err := Parse(b, SetNquads)
 	require.NoError(t, err)
-
 	require.Equal(t, 5, len(nq))
+
+	fastNQ, err := FastParse(b, SetNquads)
+	require.NoError(t, err)
+	require.Equal(t, 5, len(fastNQ))
+
 	exp := &Experiment{
 		t:      t,
 		nqs:    nq,
 		schema: "name: string @index(exact) .",
-		query: `{alice(func: eq(name, "Alice")) {
-name
-age
-married
-address 
-}}`,
-		expected: `{"alice": [
-{"name": "Alice",
-"age": 26,
-"married": true,
-"address": {"coordinates": [2,1.1], "type": "Point"}}
-]}								
-`}
+		query: `{
+			alice(func: eq(name, "Alice")) {
+				name
+				age
+				married
+				address
+			}
+		}`,
+		expected: `{
+			"alice": [{
+				"name": "Alice",
+				"age": 26,
+				"married": true,
+				"address": {"coordinates": [2,1.1], "type": "Point"}}
+			]}
+		`,
+	}
+	exp.verify()
+
+	exp.nqs = fastNQ
 	exp.verify()
 }
 
@@ -166,6 +197,11 @@ func TestNquadsFromJson2(t *testing.T) {
 	nq, err := Parse(b, SetNquads)
 	require.NoError(t, err)
 	require.Equal(t, 6, len(nq))
+
+	fastNQ, err := FastParse(b, SetNquads)
+	require.NoError(t, err)
+	require.Equal(t, 6, len(fastNQ))
+
 	exp := &Experiment{
 		t:      t,
 		nqs:    nq,
@@ -185,13 +221,11 @@ friend {
 }]}`,
 	}
 	exp.verify()
+
+	exp.nqs = fastNQ
+	exp.verify()
 }
 
-func outputNq(nqs []*api.NQuad) {
-	for _, nq := range nqs {
-		fmt.Printf("%v\n", nq)
-	}
-}
 func TestNquadsFromJson3(t *testing.T) {
 	p := Person{
 		Name: "Alice",
@@ -204,19 +238,26 @@ func TestNquadsFromJson3(t *testing.T) {
 	require.NoError(t, err)
 	nq, err := Parse(b, SetNquads)
 	require.NoError(t, err)
+
+	fastNQ, err := FastParse(b, SetNquads)
+	require.NoError(t, err)
+
 	exp := &Experiment{
 		t:      t,
 		nqs:    nq,
 		schema: "name: string @index(exact) .",
 		query: `{alice(func: eq(name, "Alice")) {
 name
-school {Name}
+school {name}
 }}`,
 		expected: `{"alice":[{
 "name":"Alice",
-"school": [{"Name":"Wellington Public School"}]
+"school": [{"name":"Wellington Public School"}]
 }]}`,
 	}
+	exp.verify()
+
+	exp.nqs = fastNQ
 	exp.verify()
 }
 
@@ -225,6 +266,10 @@ func TestNquadsFromJson4(t *testing.T) {
 
 	nq, err := Parse([]byte(json), SetNquads)
 	require.NoError(t, err)
+
+	fastNQ, err := FastParse([]byte(json), SetNquads)
+	require.NoError(t, err)
+
 	exp := &Experiment{
 		t:      t,
 		nqs:    nq,
@@ -239,6 +284,9 @@ weight
 		expected: fmt.Sprintf(`{"alice":%s}`, json),
 	}
 	exp.verify()
+
+	exp.nqs = fastNQ
+	exp.verify()
 }
 
 func TestNquadsFromJsonMap(t *testing.T) {
@@ -250,6 +298,10 @@ func TestNquadsFromJsonMap(t *testing.T) {
 
 	nq, err := Parse([]byte(json), SetNquads)
 	require.NoError(t, err)
+
+	fastNQ, err := FastParse([]byte(json), SetNquads)
+	require.NoError(t, err)
+
 	exp := &Experiment{
 		t:      t,
 		nqs:    nq,
@@ -261,6 +313,9 @@ friends {name}
 }}`,
 		expected: fmt.Sprintf(`{"people":[%s]}`, json),
 	}
+	exp.verify()
+
+	exp.nqs = fastNQ
 	exp.verify()
 }
 
@@ -328,6 +383,10 @@ func TestNquadsFromMultipleJsonObjects(t *testing.T) {
 
 	nq, err := Parse([]byte(json), SetNquads)
 	require.NoError(t, err)
+
+	fastNQ, err := FastParse([]byte(json), SetNquads)
+	require.NoError(t, err)
+
 	exp := &Experiment{
 		t:      t,
 		nqs:    nq,
@@ -340,6 +399,9 @@ friends
 		expected: fmt.Sprintf(`{"people":%s}`, json),
 	}
 	exp.verify()
+
+	exp.nqs = fastNQ
+	exp.verify()
 }
 
 func TestJsonNumberParsing(t *testing.T) {
@@ -348,7 +410,8 @@ func TestJsonNumberParsing(t *testing.T) {
 		out *api.Value
 	}{
 		{`{"uid": "1", "key": 9223372036854775299}`, &api.Value{Val: &api.Value_IntVal{IntVal: 9223372036854775299}}},
-		{`{"uid": "1", "key": 9223372036854775299.0}`, &api.Value{Val: &api.Value_DoubleVal{DoubleVal: 9223372036854775299.0}}},
+		{`{"uid": "1", "key": 9223372036854775299.0}`,
+			&api.Value{Val: &api.Value_DoubleVal{DoubleVal: 9223372036854775299.0}}},
 		{`{"uid": "1", "key": 27670116110564327426}`, nil},
 		{`{"uid": "1", "key": "23452786"}`, &api.Value{Val: &api.Value_StrVal{StrVal: "23452786"}}},
 		{`{"uid": "1", "key": "23452786.2378"}`, &api.Value{Val: &api.Value_StrVal{StrVal: "23452786.2378"}}},
@@ -356,11 +419,25 @@ func TestJsonNumberParsing(t *testing.T) {
 		{`{"uid": "1", "key": 0E-0}`, &api.Value{Val: &api.Value_DoubleVal{DoubleVal: 0}}},
 	}
 
-	for _, test := range tests {
+	for i, test := range tests {
 		nqs, err := Parse([]byte(test.in), SetNquads)
+		if i == 2 {
+			fmt.Println(err)
+		}
 		if test.out != nil {
 			require.NoError(t, err, "%T", err)
 			require.Equal(t, makeNquad("1", "key", test.out), nqs[0])
+		} else {
+			require.Error(t, err)
+		}
+
+		fastNQ, err := FastParse([]byte(test.in), SetNquads)
+		if i == 2 {
+			fmt.Println(err)
+		}
+		if test.out != nil {
+			require.NoError(t, err, "%T", err)
+			require.Equal(t, makeNquad("1", "key", test.out), fastNQ[0])
 		} else {
 			require.Error(t, err)
 		}
@@ -372,12 +449,51 @@ func TestNquadsFromJson_UidOutofRangeError(t *testing.T) {
 
 	_, err := Parse([]byte(json), SetNquads)
 	require.Error(t, err)
+
+	_, err = FastParse([]byte(json), SetNquads)
+	require.Error(t, err)
+}
+
+func TestNquadsFromJsonArray(t *testing.T) {
+	json := `[
+		{
+			"uid": "uid(Project10)",
+			"Ticket.row": {
+				"uid": "uid(x)"
+			}
+		},
+		{
+			"Project.columns": [
+				{
+					"uid": "uid(x)"
+				}
+			],
+			"uid": "uid(Project3)"
+		},
+		{
+			"Ticket.onColumn": {
+				"uid": "uid(x)"
+			},
+			"uid": "uid(Ticket4)"
+		}
+	]`
+
+	nqs, err := Parse([]byte(json), SetNquads)
+	require.NoError(t, err)
+	require.Equal(t, 3, len(nqs))
+
+	nqs, err = FastParse([]byte(json), SetNquads)
+	require.NoError(t, err)
+	require.Equal(t, 3, len(nqs))
 }
 
 func TestNquadsFromJson_NegativeUidError(t *testing.T) {
 	json := `{"uid":"-100","name":"Name","following":[{"name":"Bob"}],"school":[{"uid":"","name@en":"Crown Public School"}]}`
 
 	_, err := Parse([]byte(json), SetNquads)
+	require.Error(t, err)
+
+	_, err = FastParse([]byte(json), SetNquads)
 	require.Error(t, err)
 }
 
@@ -387,6 +503,9 @@ func TestNquadsFromJson_EmptyUid(t *testing.T) {
 	nq, err := Parse([]byte(json), SetNquads)
 	require.NoError(t, err)
 
+	fastNQ, err := FastParse([]byte(json), SetNquads)
+	require.NoError(t, err)
+
 	exp := &Experiment{
 		t:      t,
 		nqs:    nq,
@@ -399,6 +518,9 @@ school { name}
 		expected: `{"alice":[{"name":"Alice","following":[{"name":"Bob"}],"school":[{
 "name":"Crown Public School"}]}]}`,
 	}
+	exp.verify()
+
+	exp.nqs = fastNQ
 	exp.verify()
 }
 
@@ -408,6 +530,9 @@ func TestNquadsFromJson_BlankNodes(t *testing.T) {
 	nq, err := Parse([]byte(json), SetNquads)
 	require.NoError(t, err)
 
+	fastNQ, err := FastParse([]byte(json), SetNquads)
+	require.NoError(t, err)
+
 	exp := &Experiment{
 		t:      t,
 		nqs:    nq,
@@ -421,6 +546,9 @@ school { name}
 "name":"Crown Public School"}]}]}`,
 	}
 	exp.verify()
+
+	exp.nqs = fastNQ
+	exp.verify()
 }
 
 func TestNquadsDeleteEdges(t *testing.T) {
@@ -428,6 +556,10 @@ func TestNquadsDeleteEdges(t *testing.T) {
 	nq, err := Parse([]byte(json), DeleteNquads)
 	require.NoError(t, err)
 	require.Equal(t, 3, len(nq))
+
+	fastNQ, err := FastParse([]byte(json), DeleteNquads)
+	require.NoError(t, err)
+	require.Equal(t, 3, len(fastNQ))
 }
 
 func checkCount(t *testing.T, nq []*api.NQuad, pred string, count int) {
@@ -484,7 +616,7 @@ func TestNquadsFromJsonFacets1(t *testing.T) {
 
 	carPrice := 30000.56
 	var priceBytes [8]byte
-	u := math.Float64bits(float64(carPrice))
+	u := math.Float64bits(carPrice)
 	binary.LittleEndian.PutUint64(priceBytes[:], u)
 
 	carAge := 3
@@ -503,9 +635,16 @@ func TestNquadsFromJsonFacets1(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 3, len(nq))
 
+	fastNQ, err := FastParse([]byte(json), SetNquads)
+	require.NoError(t, err)
+	require.Equal(t, 3, len(fastNQ))
+
 	for _, n := range nq {
 		glog.Infof("%v", n)
+	}
 
+	for _, n := range fastNQ {
+		glog.Infof("%v", n)
 	}
 
 	checkFacets(t, nq, "mobile", []*api.Facet{
@@ -517,7 +656,39 @@ func TestNquadsFromJsonFacets1(t *testing.T) {
 		},
 	})
 
+	checkFacets(t, fastNQ, "mobile", []*api.Facet{
+		{
+			Key:     "operation",
+			Value:   []byte(operation),
+			ValType: api.Facet_STRING,
+			Tokens:  operationTokens,
+		},
+	})
+
 	checkFacets(t, nq, "car", []*api.Facet{
+		{
+			Key:     "first",
+			Value:   []byte{1},
+			ValType: api.Facet_BOOL,
+		},
+		{
+			Key:     "age",
+			Value:   ageBytes[:],
+			ValType: api.Facet_INT,
+		},
+		{
+			Key:     "price",
+			Value:   priceBytes[:],
+			ValType: api.Facet_FLOAT,
+		},
+		{
+			Key:     "since",
+			Value:   timeBinary,
+			ValType: api.Facet_DATETIME,
+		},
+	})
+
+	checkFacets(t, fastNQ, "car", []*api.Facet{
 		{
 			Key:     "first",
 			Value:   []byte{1},
@@ -549,6 +720,250 @@ func TestNquadsFromJsonFacets2(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 3, len(nq))
 	checkCount(t, nq, "friend", 1)
+
+	fastNQ, err := FastParse([]byte(json), SetNquads)
+	require.NoError(t, err)
+	require.Equal(t, 3, len(fastNQ))
+	checkCount(t, fastNQ, "friend", 1)
+}
+
+// Test valid facets json.
+func TestNquadsFromJsonFacets3(t *testing.T) {
+	json := `
+	[
+		{
+			"name":"Alice",
+			"friend": ["Joshua", "David", "Josh"],
+			"friend|from": {
+				"0": "school",
+				"2": "college"
+			},
+			"friend|age": {
+				"1": 20,
+				"2": 21
+			}
+		}
+	]`
+
+	nqs, err := Parse([]byte(json), SetNquads)
+	require.NoError(t, err)
+	require.Equal(t, 4, len(nqs))
+	for _, nq := range nqs {
+		predVal := nq.ObjectValue.GetStrVal()
+		switch predVal {
+		case "Alice":
+			require.Equal(t, 0, len(nq.Facets))
+		case "Joshua":
+			require.Equal(t, 1, len(nq.Facets))
+		case "David":
+			require.Equal(t, 1, len(nq.Facets))
+		case "Josh":
+			require.Equal(t, 2, len(nq.Facets))
+		}
+	}
+
+	fastNQ, err := FastParse([]byte(json), SetNquads)
+	require.NoError(t, err)
+	require.Equal(t, 4, len(fastNQ))
+	for _, nq := range fastNQ {
+		predVal := nq.ObjectValue.GetStrVal()
+		switch predVal {
+		case "Alice":
+			require.Equal(t, 0, len(nq.Facets))
+		case "Joshua":
+			require.Equal(t, 1, len(nq.Facets))
+		case "David":
+			require.Equal(t, 1, len(nq.Facets))
+		case "Josh":
+			require.Equal(t, 2, len(nq.Facets))
+		}
+	}
+}
+
+// Test invalid facet format with scalar list predicate.
+func TestNquadsFromJsonFacets4(t *testing.T) {
+	type input struct {
+		Name     string
+		ErrorOut bool
+		Json     string
+	}
+
+	inputs := []input{
+		{
+			"facets_should_be_map",
+			true,
+			`
+			[
+				{
+					"name":"Alice",
+					"friend": ["Joshua", "David", "Josh"],
+					"friend|age": 20
+				}
+			]`,
+		},
+		{
+			"predicate_should_be_list",
+			true,
+			`
+			[
+				{
+					"name":"Alice",
+					"friend": "Joshua",
+					"friend|age": {
+						"0": 20
+					}
+				}
+			]`,
+		},
+		{
+			"only_scalar_values_in_facet_map",
+			true,
+			`
+			[
+				{
+					"name":"Alice",
+					"friend": ["Joshua"],
+					"friend|age": {
+						"0": {
+							"1": 20
+						}
+					}
+				}
+			]`,
+		},
+		{
+			"invalid_key_in_facet_map",
+			true,
+			`
+			[
+				{
+					"name":"Alice",
+					"friend": ["Joshua"],
+					"friend|age": {
+						"a": 20
+					}
+				}
+			]`,
+		},
+		{
+			// Facets will be ignored here.
+			"predicate_is_null",
+			false,
+			`
+			[
+				{
+					"name":"Alice",
+					"friend": null,
+					"friend|age": {
+						"0": 20
+					}
+				}
+			]`,
+		},
+		{
+			// Facets will be ignored here.
+			"empty_scalar_list",
+			false,
+			`
+			[
+				{
+					"name":"Alice",
+					"friend": [],
+					"friend|age": {
+						"0": 20
+					}
+				}
+			]`,
+		},
+		{
+			"facet_map_is_null",
+			false,
+			`
+			[
+				{
+					"name":"Alice",
+					"friend": ["Joshua"],
+					"friend|age": null
+				}
+			]`,
+		},
+		{
+			"facet_vales_should_not_be_list",
+			true,
+			`
+			[
+				{
+					"name":"Alice",
+					"friend": ["Joshua", "David", "Josh"],
+					"friend|age": ["20"]
+				}
+			]`,
+		},
+		{
+			// Facets with higher index will be ignored.
+			"facet_map_with_index_greater_than_scalarlist_length",
+			false,
+			`
+			[
+				{
+					"name":"Alice",
+					"friend": ["Joshua", "David", "Josh"],
+					"friend|age": {
+						"100": 30,
+						"20": 28
+					}
+				}
+			]`,
+		},
+	}
+
+	for _, input := range inputs {
+		_, err := Parse([]byte(input.Json), SetNquads)
+		if input.ErrorOut {
+			require.Error(t, err, "TestNquadsFromJsonFacets4-%s", input.Name)
+		} else {
+			require.NoError(t, err, "TestNquadsFromJsonFacets4-%s", input.Name)
+		}
+
+		_, err = FastParse([]byte(input.Json), SetNquads)
+		if input.ErrorOut {
+			require.Error(t, err, "TestNquadsFromJsonFacets4-%s", input.Name)
+		} else {
+			require.NoError(t, err, "TestNquadsFromJsonFacets4-%s", input.Name)
+		}
+	}
+}
+
+func TestNquadsFromJsonFacets5(t *testing.T) {
+	// Dave has uid facets which should go on the edge between Alice and Dave,
+	// AND Emily has uid facets which should go on the edge between Dave and Emily
+	json := `[
+		{
+			"name": "Alice",
+			"friend": [
+				{
+					"name": "Dave",
+					"friend|close": true,
+					"friend": [
+						{
+							"name": "Emily",
+							"friend|close": true
+						}
+					]
+				}
+			]
+		}
+	]`
+
+	nq, err := Parse([]byte(json), SetNquads)
+	require.NoError(t, err)
+	require.Equal(t, 5, len(nq))
+	checkCount(t, nq, "friend", 1)
+
+	fastNQ, err := FastParse([]byte(json), SetNquads)
+	require.NoError(t, err)
+	require.Equal(t, 5, len(fastNQ))
+	checkCount(t, fastNQ, "friend", 1)
 }
 
 func TestNquadsFromJsonError1(t *testing.T) {
@@ -565,6 +980,10 @@ func TestNquadsFromJsonError1(t *testing.T) {
 	_, err = Parse(b, DeleteNquads)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "UID must be present and non-zero while deleting edges.")
+
+	_, err = FastParse(b, DeleteNquads)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "UID must be present and non-zero while deleting edges.")
 }
 
 func TestNquadsFromJsonList(t *testing.T) {
@@ -573,6 +992,10 @@ func TestNquadsFromJsonList(t *testing.T) {
 	nq, err := Parse([]byte(json), SetNquads)
 	require.NoError(t, err)
 	require.Equal(t, 6, len(nq))
+
+	fastNQ, err := FastParse([]byte(json), SetNquads)
+	require.NoError(t, err)
+	require.Equal(t, 6, len(fastNQ))
 }
 
 func TestNquadsFromJsonDelete(t *testing.T) {
@@ -581,6 +1004,10 @@ func TestNquadsFromJsonDelete(t *testing.T) {
 	nq, err := Parse([]byte(json), DeleteNquads)
 	require.NoError(t, err)
 	require.Equal(t, nq[0], makeNquadEdge("1000", "friend", "1001"))
+
+	fastNQ, err := FastParse([]byte(json), DeleteNquads)
+	require.NoError(t, err)
+	require.Equal(t, fastNQ[0], makeNquadEdge("1000", "friend", "1001"))
 }
 
 func TestNquadsFromJsonDeleteStar(t *testing.T) {
@@ -588,6 +1015,10 @@ func TestNquadsFromJsonDeleteStar(t *testing.T) {
 
 	nq, err := Parse([]byte(json), DeleteNquads)
 	require.NoError(t, err)
+
+	fastNQ, err := FastParse([]byte(json), DeleteNquads)
+	require.NoError(t, err)
+
 	expected := &api.NQuad{
 		Subject:   "1000",
 		Predicate: "name",
@@ -597,19 +1028,27 @@ func TestNquadsFromJsonDeleteStar(t *testing.T) {
 			},
 		},
 	}
+
 	require.Equal(t, expected, nq[0])
+	require.Equal(t, expected, fastNQ[0])
 }
 
 func TestValInUpsert(t *testing.T) {
 	json := `{"uid":1000, "name": "val(name)"}`
 	nq, err := Parse([]byte(json), SetNquads)
 	require.NoError(t, err)
+
+	fastNQ, err := FastParse([]byte(json), SetNquads)
+	require.NoError(t, err)
+
 	expected := &api.NQuad{
 		Subject:   "1000",
 		Predicate: "name",
 		ObjectId:  "val(name)",
 	}
+
 	require.Equal(t, expected, nq[0])
+	require.Equal(t, expected, fastNQ[0])
 }
 
 func TestNquadsFromJsonDeleteStarLang(t *testing.T) {
@@ -617,6 +1056,10 @@ func TestNquadsFromJsonDeleteStarLang(t *testing.T) {
 
 	nq, err := Parse([]byte(json), DeleteNquads)
 	require.NoError(t, err)
+
+	fastNQ, err := FastParse([]byte(json), DeleteNquads)
+	require.NoError(t, err)
+
 	expected := &api.NQuad{
 		Subject:   "1000",
 		Predicate: "name",
@@ -627,7 +1070,9 @@ func TestNquadsFromJsonDeleteStarLang(t *testing.T) {
 		},
 		Lang: "es",
 	}
+
 	require.Equal(t, expected, nq[0])
+	require.Equal(t, expected, fastNQ[0])
 }
 
 func TestSetNquadNilValue(t *testing.T) {
@@ -636,4 +1081,434 @@ func TestSetNquadNilValue(t *testing.T) {
 	nq, err := Parse([]byte(json), SetNquads)
 	require.NoError(t, err)
 	require.Equal(t, 0, len(nq))
+
+	fastNQ, err := FastParse([]byte(json), SetNquads)
+	require.NoError(t, err)
+	require.Equal(t, 0, len(fastNQ))
+}
+
+// See PR #7737 to understand why this test exists.
+func TestNquadsFromJsonEmptyFacet(t *testing.T) {
+	json := `{"uid":1000,"doesnt|exist":null}`
+
+	// fast
+	buf := NewNQuadBuffer(-1)
+	require.Nil(t, buf.FastParseJSON([]byte(json), DeleteNquads))
+	buf.Flush()
+	// needs to be empty, otherwise node gets deleted
+	require.Equal(t, 0, len(<-buf.Ch()))
+
+	// old
+	buf = NewNQuadBuffer(-1)
+	require.Nil(t, buf.ParseJSON([]byte(json), DeleteNquads))
+	buf.Flush()
+	// needs to be empty, otherwise node gets deleted
+	require.Equal(t, 0, len(<-buf.Ch()))
+}
+
+func BenchmarkNoFacets(b *testing.B) {
+	json := []byte(`[
+	{
+		"uid":123,
+		"flguid":123,
+		"is_validate":"xxxxxxxxxx",
+		"createDatetime":"xxxxxxxxxx",
+		"contains":{
+			"createDatetime":"xxxxxxxxxx",
+			"final_individ":"xxxxxxxxxx",
+			"cm_bad_debt":"xxxxxxxxxx",
+			"cm_bill_address1":"xxxxxxxxxx",
+			"cm_bill_address2":"xxxxxxxxxx",
+			"cm_bill_city":"xxxxxxxxxx",
+			"cm_bill_state":"xxxxxxxxxx",
+			"cm_zip":"xxxxxxxxxx",
+			"zip5":"xxxxxxxxxx",
+			"cm_customer_id":"xxxxxxxxxx",
+			"final_gaid":"xxxxxxxxxx",
+			"final_hholdid":"xxxxxxxxxx",
+			"final_firstname":"xxxxxxxxxx",
+			"final_middlename":"xxxxxxxxxx",
+			"final_surname":"xxxxxxxxxx",
+			"final_gender":"xxxxxxxxxx",
+			"final_ace_prim_addr":"xxxxxxxxxx",
+			"final_ace_sec_addr":"xxxxxxxxxx",
+			"final_ace_urb":"xxxxxxxxxx",
+			"final_ace_city_llidx":"xxxxxxxxxx",
+			"final_ace_state":"xxxxxxxxxx",
+			"final_ace_postal_code":"xxxxxxxxxx",
+			"final_ace_zip4":"xxxxxxxxxx",
+			"final_ace_dpbc":"xxxxxxxxxx",
+			"final_ace_checkdigit":"xxxxxxxxxx",
+			"final_ace_iso_code":"xxxxxxxxxx",
+			"final_ace_cart":"xxxxxxxxxx",
+			"final_ace_lot":"xxxxxxxxxx",
+			"final_ace_lot_order":"xxxxxxxxxx",
+			"final_ace_rec_type":"xxxxxxxxxx",
+			"final_ace_remainder":"xxxxxxxxxx",
+			"final_ace_dpv_cmra":"xxxxxxxxxx",
+			"final_ace_dpv_ftnote":"xxxxxxxxxx",
+			"final_ace_dpv_status":"xxxxxxxxxx",
+			"final_ace_foreigncode":"xxxxxxxxxx",
+			"final_ace_match_5":"xxxxxxxxxx",
+			"final_ace_match_9":"xxxxxxxxxx",
+			"final_ace_match_un":"xxxxxxxxxx",
+			"final_ace_zip_move":"xxxxxxxxxx",
+			"final_ace_ziptype":"xxxxxxxxxx",
+			"final_ace_congress":"xxxxxxxxxx",
+			"final_ace_county":"xxxxxxxxxx",
+			"final_ace_countyname":"xxxxxxxxxx",
+			"final_ace_factype":"xxxxxxxxxx",
+			"final_ace_fipscode":"xxxxxxxxxx",
+			"final_ace_error_code":"xxxxxxxxxx",
+			"final_ace_stat_code":"xxxxxxxxxx",
+			"final_ace_geo_match":"xxxxxxxxxx",
+			"final_ace_geo_lat":"xxxxxxxxxx",
+			"final_ace_geo_lng":"xxxxxxxxxx",
+			"final_ace_ageo_pla":"xxxxxxxxxx",
+			"final_ace_geo_blk":"xxxxxxxxxx",
+			"final_ace_ageo_mcd":"xxxxxxxxxx",
+			"final_ace_cgeo_cbsa":"xxxxxxxxxx",
+			"final_ace_cgeo_msa":"xxxxxxxxxx",
+			"final_ace_ap_lacscode":"xxxxxxxxxx",
+			"final_dsf_businessflag":"xxxxxxxxxx",
+			"final_dsf_dropflag":"xxxxxxxxxx",
+			"final_dsf_throwbackflag":"xxxxxxxxxx",
+			"final_dsf_seasonalflag":"xxxxxxxxxx",
+			"final_dsf_vacantflag":"xxxxxxxxxx",
+			"final_dsf_deliverytype":"xxxxxxxxxx",
+			"final_dsf_dt_curbflag":"xxxxxxxxxx",
+			"final_dsf_dt_ndcbuflag":"xxxxxxxxxx",
+			"final_dsf_dt_centralflag":"xxxxxxxxxx",
+			"final_dsf_dt_doorslotflag":"xxxxxxxxxx",
+			"final_dsf_dropcount":"xxxxxxxxxx",
+			"final_dsf_nostatflag":"xxxxxxxxxx",
+			"final_dsf_educationalflag":"xxxxxxxxxx",
+			"final_dsf_rectyp":"xxxxxxxxxx",
+			"final_mailability_score":"xxxxxxxxxx",
+			"final_occupancy_score":"xxxxxxxxxx",
+			"final_multi_type":"xxxxxxxxxx",
+			"final_deceased_flag":"xxxxxxxxxx",
+			"final_dnm_flag":"xxxxxxxxxx",
+			"final_dnc_flag":"xxxxxxxxxx",
+			"final_dnf_flag":"xxxxxxxxxx",
+			"final_prison_flag":"xxxxxxxxxx",
+			"final_nursing_home_flag":"xxxxxxxxxx",
+			"final_date_of_birth":"xxxxxxxxxx",
+			"final_date_of_death":"xxxxxxxxxx",
+			"vip_number":"xxxxxxxxxx",
+			"vip_store_no":"xxxxxxxxxx",
+			"vip_division":"xxxxxxxxxx",
+			"vip_phone_number":"xxxxxxxxxx",
+			"vip_email_address":"xxxxxxxxxx",
+			"vip_first_name":"xxxxxxxxxx",
+			"vip_last_name":"xxxxxxxxxx",
+			"vip_gender":"xxxxxxxxxx",
+			"vip_status":"xxxxxxxxxx",
+			"vip_membership_date":"xxxxxxxxxx",
+			"vip_expiration_date":"xxxxxxxxxx",
+			"cm_date_addr_chng":"xxxxxxxxxx",
+			"cm_date_entered":"xxxxxxxxxx",
+			"cm_name":"xxxxxxxxxx",
+			"cm_opt_on_acct":"xxxxxxxxxx",
+			"cm_origin":"xxxxxxxxxx",
+			"cm_orig_acq_source":"xxxxxxxxxx",
+			"cm_phone_number":"xxxxxxxxxx",
+			"cm_phone_number2":"xxxxxxxxxx",
+			"cm_problem_cust":"xxxxxxxxxx",
+			"cm_rm_list":"xxxxxxxxxx",
+			"cm_rm_rented_list":"xxxxxxxxxx",
+			"cm_tax_code":"xxxxxxxxxx",
+			"email_address":"xxxxxxxxxx",
+			"esp_email_id":"xxxxxxxxxx",
+			"esp_sub_date":"xxxxxxxxxx",
+			"esp_unsub_date":"xxxxxxxxxx",
+			"cm_user_def_1":"xxxxxxxxxx",
+			"cm_user_def_7":"xxxxxxxxxx",
+			"do_not_phone":"xxxxxxxxxx",
+			"company_num":"xxxxxxxxxx",
+			"customer_id":"xxxxxxxxxx",
+			"load_date":"xxxxxxxxxx",
+			"activity_date":"xxxxxxxxxx",
+			"email_address_hashed":"xxxxxxxxxx",
+			"event_id":"",
+			"contains":{
+				"uid": 123,
+				"flguid": 123,
+				"is_validate":"xxxxxxxxxx",
+				"createDatetime":"xxxxxxxxxx"
+			}
+		}
+	}]`)
+
+	// we're parsing 125 nquads at a time, so the MB/s == MNquads/s
+	b.SetBytes(125)
+	for n := 0; n < b.N; n++ {
+		_, _ = Parse(json, SetNquads)
+	}
+}
+
+func BenchmarkNoFacetsFast(b *testing.B) {
+	json := []byte(`[
+	{
+		"uid":123,
+		"flguid":123,
+		"is_validate":"xxxxxxxxxx",
+		"createDatetime":"xxxxxxxxxx",
+		"contains":{
+			"createDatetime":"xxxxxxxxxx",
+			"final_individ":"xxxxxxxxxx",
+			"cm_bad_debt":"xxxxxxxxxx",
+			"cm_bill_address1":"xxxxxxxxxx",
+			"cm_bill_address2":"xxxxxxxxxx",
+			"cm_bill_city":"xxxxxxxxxx",
+			"cm_bill_state":"xxxxxxxxxx",
+			"cm_zip":"xxxxxxxxxx",
+			"zip5":"xxxxxxxxxx",
+			"cm_customer_id":"xxxxxxxxxx",
+			"final_gaid":"xxxxxxxxxx",
+			"final_hholdid":"xxxxxxxxxx",
+			"final_firstname":"xxxxxxxxxx",
+			"final_middlename":"xxxxxxxxxx",
+			"final_surname":"xxxxxxxxxx",
+			"final_gender":"xxxxxxxxxx",
+			"final_ace_prim_addr":"xxxxxxxxxx",
+			"final_ace_sec_addr":"xxxxxxxxxx",
+			"final_ace_urb":"xxxxxxxxxx",
+			"final_ace_city_llidx":"xxxxxxxxxx",
+			"final_ace_state":"xxxxxxxxxx",
+			"final_ace_postal_code":"xxxxxxxxxx",
+			"final_ace_zip4":"xxxxxxxxxx",
+			"final_ace_dpbc":"xxxxxxxxxx",
+			"final_ace_checkdigit":"xxxxxxxxxx",
+			"final_ace_iso_code":"xxxxxxxxxx",
+			"final_ace_cart":"xxxxxxxxxx",
+			"final_ace_lot":"xxxxxxxxxx",
+			"final_ace_lot_order":"xxxxxxxxxx",
+			"final_ace_rec_type":"xxxxxxxxxx",
+			"final_ace_remainder":"xxxxxxxxxx",
+			"final_ace_dpv_cmra":"xxxxxxxxxx",
+			"final_ace_dpv_ftnote":"xxxxxxxxxx",
+			"final_ace_dpv_status":"xxxxxxxxxx",
+			"final_ace_foreigncode":"xxxxxxxxxx",
+			"final_ace_match_5":"xxxxxxxxxx",
+			"final_ace_match_9":"xxxxxxxxxx",
+			"final_ace_match_un":"xxxxxxxxxx",
+			"final_ace_zip_move":"xxxxxxxxxx",
+			"final_ace_ziptype":"xxxxxxxxxx",
+			"final_ace_congress":"xxxxxxxxxx",
+			"final_ace_county":"xxxxxxxxxx",
+			"final_ace_countyname":"xxxxxxxxxx",
+			"final_ace_factype":"xxxxxxxxxx",
+			"final_ace_fipscode":"xxxxxxxxxx",
+			"final_ace_error_code":"xxxxxxxxxx",
+			"final_ace_stat_code":"xxxxxxxxxx",
+			"final_ace_geo_match":"xxxxxxxxxx",
+			"final_ace_geo_lat":"xxxxxxxxxx",
+			"final_ace_geo_lng":"xxxxxxxxxx",
+			"final_ace_ageo_pla":"xxxxxxxxxx",
+			"final_ace_geo_blk":"xxxxxxxxxx",
+			"final_ace_ageo_mcd":"xxxxxxxxxx",
+			"final_ace_cgeo_cbsa":"xxxxxxxxxx",
+			"final_ace_cgeo_msa":"xxxxxxxxxx",
+			"final_ace_ap_lacscode":"xxxxxxxxxx",
+			"final_dsf_businessflag":"xxxxxxxxxx",
+			"final_dsf_dropflag":"xxxxxxxxxx",
+			"final_dsf_throwbackflag":"xxxxxxxxxx",
+			"final_dsf_seasonalflag":"xxxxxxxxxx",
+			"final_dsf_vacantflag":"xxxxxxxxxx",
+			"final_dsf_deliverytype":"xxxxxxxxxx",
+			"final_dsf_dt_curbflag":"xxxxxxxxxx",
+			"final_dsf_dt_ndcbuflag":"xxxxxxxxxx",
+			"final_dsf_dt_centralflag":"xxxxxxxxxx",
+			"final_dsf_dt_doorslotflag":"xxxxxxxxxx",
+			"final_dsf_dropcount":"xxxxxxxxxx",
+			"final_dsf_nostatflag":"xxxxxxxxxx",
+			"final_dsf_educationalflag":"xxxxxxxxxx",
+			"final_dsf_rectyp":"xxxxxxxxxx",
+			"final_mailability_score":"xxxxxxxxxx",
+			"final_occupancy_score":"xxxxxxxxxx",
+			"final_multi_type":"xxxxxxxxxx",
+			"final_deceased_flag":"xxxxxxxxxx",
+			"final_dnm_flag":"xxxxxxxxxx",
+			"final_dnc_flag":"xxxxxxxxxx",
+			"final_dnf_flag":"xxxxxxxxxx",
+			"final_prison_flag":"xxxxxxxxxx",
+			"final_nursing_home_flag":"xxxxxxxxxx",
+			"final_date_of_birth":"xxxxxxxxxx",
+			"final_date_of_death":"xxxxxxxxxx",
+			"vip_number":"xxxxxxxxxx",
+			"vip_store_no":"xxxxxxxxxx",
+			"vip_division":"xxxxxxxxxx",
+			"vip_phone_number":"xxxxxxxxxx",
+			"vip_email_address":"xxxxxxxxxx",
+			"vip_first_name":"xxxxxxxxxx",
+			"vip_last_name":"xxxxxxxxxx",
+			"vip_gender":"xxxxxxxxxx",
+			"vip_status":"xxxxxxxxxx",
+			"vip_membership_date":"xxxxxxxxxx",
+			"vip_expiration_date":"xxxxxxxxxx",
+			"cm_date_addr_chng":"xxxxxxxxxx",
+			"cm_date_entered":"xxxxxxxxxx",
+			"cm_name":"xxxxxxxxxx",
+			"cm_opt_on_acct":"xxxxxxxxxx",
+			"cm_origin":"xxxxxxxxxx",
+			"cm_orig_acq_source":"xxxxxxxxxx",
+			"cm_phone_number":"xxxxxxxxxx",
+			"cm_phone_number2":"xxxxxxxxxx",
+			"cm_problem_cust":"xxxxxxxxxx",
+			"cm_rm_list":"xxxxxxxxxx",
+			"cm_rm_rented_list":"xxxxxxxxxx",
+			"cm_tax_code":"xxxxxxxxxx",
+			"email_address":"xxxxxxxxxx",
+			"esp_email_id":"xxxxxxxxxx",
+			"esp_sub_date":"xxxxxxxxxx",
+			"esp_unsub_date":"xxxxxxxxxx",
+			"cm_user_def_1":"xxxxxxxxxx",
+			"cm_user_def_7":"xxxxxxxxxx",
+			"do_not_phone":"xxxxxxxxxx",
+			"company_num":"xxxxxxxxxx",
+			"customer_id":"xxxxxxxxxx",
+			"load_date":"xxxxxxxxxx",
+			"activity_date":"xxxxxxxxxx",
+			"email_address_hashed":"xxxxxxxxxx",
+			"event_id":"",
+			"contains":{
+				"uid": 123,
+				"flguid": 123,
+				"is_validate":"xxxxxxxxxx",
+				"createDatetime":"xxxxxxxxxx"
+			}
+		}
+	}]`)
+
+	// we're parsing 125 nquads at a time, so the MB/s == MNquads/s
+	b.SetBytes(125)
+	for n := 0; n < b.N; n++ {
+		_, _ = FastParse(json, SetNquads)
+	}
+}
+
+func TestNquadsEmptyStringFromJson(t *testing.T) {
+	json := `[{"name":""}]`
+
+	nq, err := Parse([]byte(json), SetNquads)
+	require.NoError(t, err)
+
+	fastNQ, err := FastParse([]byte(json), SetNquads)
+	require.NoError(t, err)
+
+	// The string value should be empty.
+	require.Equal(t, nq[0].ObjectValue.GetStrVal(), "")
+	require.Equal(t, fastNQ[0].ObjectValue.GetStrVal(), "")
+}
+
+func TestNquadsJsonEmptyStringVectorPred(t *testing.T) {
+	p := Product{
+		Uid:           "1",
+		Name:          "",
+		Discription_v: "",
+	}
+
+	b, err := json.Marshal([]Product{p})
+	require.NoError(t, err)
+
+	nq, err := Parse(b, SetNquads)
+	require.NoError(t, err)
+	require.Equal(t, 3, len(nq))
+
+	fastNQ, err := FastParse(b, SetNquads)
+	require.NoError(t, err)
+	require.Equal(t, 3, len(fastNQ))
+
+	// predicate Name should be empty and edge for Discription_v should not be there
+	// we do not create edge for "" in float32vector.
+	exp := &Experiment{
+		t:   t,
+		nqs: nq,
+		schema: `name: string @index(exact) .
+		discription_v: float32vector .`,
+		query: `{product(func: uid(1)) {
+			name
+			discription_v
+		}}`,
+		expected: `{"product":[{
+			"name":""}]}`,
+	}
+	exp.verify()
+
+	exp.nqs = fastNQ
+	exp.verify()
+}
+
+func TestNquadsJsonEmptySquareBracketVectorPred(t *testing.T) {
+	p := Product{
+		Name:          "ipad",
+		Discription_v: "[]",
+	}
+
+	b, err := json.Marshal(p)
+	require.NoError(t, err)
+
+	nq, err := Parse(b, SetNquads)
+	require.NoError(t, err)
+	require.Equal(t, 3, len(nq))
+
+	fastNQ, err := FastParse(b, SetNquads)
+	require.NoError(t, err)
+	require.Equal(t, 3, len(fastNQ))
+
+	// predicate Name should have value "ipad" and edge for Discription_v should not be there
+	// we do not create edge for [] in float32vector.
+	exp := &Experiment{
+		t:   t,
+		nqs: nq,
+		schema: `name: string @index(exact) .
+		discription_v: float32vector .`,
+		query: `{product(func: eq(name, "ipad")) {
+			name
+			discription_v
+		}}`,
+		expected: `{"product":[{
+			"name":"ipad"}]}`,
+	}
+	exp.verify()
+
+	exp.nqs = fastNQ
+	exp.verify()
+}
+
+func TestNquadsJsonValidVector(t *testing.T) {
+	p := Product{
+		Name:          "ipad",
+		Discription_v: "[1.1, 2.2, 3.3]",
+	}
+
+	b, err := json.Marshal(p)
+	require.NoError(t, err)
+
+	nq, err := Parse(b, SetNquads)
+	require.NoError(t, err)
+	require.Equal(t, 3, len(nq))
+
+	fastNQ, err := FastParse(b, SetNquads)
+	require.NoError(t, err)
+	require.Equal(t, 3, len(fastNQ))
+
+	exp := &Experiment{
+		t:   t,
+		nqs: nq,
+		schema: `name: string @index(exact) .
+		discription_v: float32vector .`,
+		query: `{product(func: eq(name, "ipad")) {
+			name
+			discription_v
+		}}`,
+		expected: `{"product":[{
+			"name":"ipad",
+			"discription_v":[1.1, 2.2, 3.3]}]}`,
+	}
+	exp.verify()
+
+	exp.nqs = fastNQ
+	exp.verify()
 }

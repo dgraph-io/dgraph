@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2016-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ package types
 
 import (
 	"encoding/binary"
+	"math/rand"
 	"strings"
 	"testing"
 
@@ -49,11 +50,11 @@ func formData(t *testing.T, str string) string {
 	require.NoError(t, err)
 
 	src := ValueForType(GeoID)
-	src.Value = []byte(d)
+	src.Value = d
 	gd, err := Convert(src, StringID)
 	require.NoError(t, err)
 	gb := gd.Value.(string)
-	return string(gb)
+	return gb
 }
 
 func formDataPoint(t *testing.T, p *geom.Point) string {
@@ -61,12 +62,12 @@ func formDataPoint(t *testing.T, p *geom.Point) string {
 	require.NoError(t, err)
 
 	src := ValueForType(GeoID)
-	src.Value = []byte(d)
+	src.Value = d
 	gd, err := Convert(src, StringID)
 	require.NoError(t, err)
 	gb := gd.Value.(string)
 
-	return string(gb)
+	return gb
 }
 
 func formDataPolygon(t *testing.T, g geom.T) string {
@@ -74,12 +75,12 @@ func formDataPolygon(t *testing.T, g geom.T) string {
 	require.NoError(t, err)
 
 	src := ValueForType(GeoID)
-	src.Value = []byte(d)
+	src.Value = d
 	gd, err := Convert(src, StringID)
 	require.NoError(t, err)
 	gb := gd.Value.(string)
 
-	return string(gb)
+	return gb
 }
 
 func TestQueryTokensPolygon(t *testing.T) {
@@ -120,11 +121,12 @@ func TestQueryTokensPoint(t *testing.T) {
 		toks, qd, err := queryTokens(qt, data, 0.0)
 		require.NoError(t, err)
 
-		if qt == QueryTypeWithin {
+		switch qt {
+		case QueryTypeWithin:
 			require.Len(t, toks, 1)
-		} else if qt == QueryTypeContains {
+		case QueryTypeContains:
 			require.Len(t, toks, MaxCellLevel-MinCellLevel+1)
-		} else {
+		default:
 			require.Len(t, toks, MaxCellLevel-MinCellLevel+2)
 		}
 		require.NotNil(t, qd)
@@ -245,6 +247,16 @@ func TestMatchesFilterContainsPoint(t *testing.T) {
 	_, qd, err = queryTokens(QueryTypeContains, data, 0.0)
 	require.NoError(t, err)
 	require.False(t, qd.MatchesFilter(us))
+
+	// Test with a different polygon (Sudan)
+	sudan, err := loadPolygon("testdata/sudan.json")
+	require.NoError(t, err)
+
+	p = geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{0, 0})
+	data = formDataPoint(t, p)
+	_, qd, err = queryTokens(QueryTypeContains, data, 0.0)
+	require.NoError(t, err)
+	require.False(t, qd.MatchesFilter(sudan))
 }
 
 /*
@@ -319,11 +331,30 @@ func TestMatchesFilterIntersectsPolygon(t *testing.T) {
 
 	// These two polygons don't intersect.
 	polyOut := geom.NewPolygon(geom.XY).MustSetCoords([][]geom.Coord{
-		{{-122.4989104270935, 37.736953437345356}, {-122.50504732131958, 37.729096212099975}, {-122.49515533447264, 37.732049133202324}, {-122.4989104270935, 37.736953437345356}},
+		{
+			{-122.4989104270935, 37.736953437345356},
+			{-122.50504732131958, 37.729096212099975},
+			{-122.49515533447264, 37.732049133202324},
+			{-122.4989104270935, 37.736953437345356},
+		},
 	})
 
 	poly2 := geom.NewPolygon(geom.XY).MustSetCoords([][]geom.Coord{
-		{{-122.5033039, 37.7334601}, {-122.503128, 37.7335189}, {-122.5031222, 37.7335205}, {-122.5030813, 37.7335868}, {-122.5031511, 37.73359}, {-122.5031933, 37.7335916}, {-122.5032228, 37.7336022}, {-122.5032697, 37.7335937}, {-122.5033194, 37.7335874}, {-122.5033723, 37.7335518}, {-122.503369, 37.7335068}, {-122.5033462, 37.7334474}, {-122.5033039, 37.7334601}},
+		{
+			{-122.5033039, 37.7334601},
+			{-122.503128, 37.7335189},
+			{-122.5031222, 37.7335205},
+			{-122.5030813, 37.7335868},
+			{-122.5031511, 37.73359},
+			{-122.5031933, 37.7335916},
+			{-122.5032228, 37.7336022},
+			{-122.5032697, 37.7335937},
+			{-122.5033194, 37.7335874},
+			{-122.5033723, 37.7335518},
+			{-122.503369, 37.7335068},
+			{-122.5033462, 37.7334474},
+			{-122.5033039, 37.7334601},
+		},
 	})
 	data = formDataPolygon(t, polyOut)
 	_, qd, err = queryTokens(QueryTypeIntersects, data, 0.0)
@@ -396,4 +427,23 @@ func TestMatchesFilterNearPoint(t *testing.T) {
 		{{-122, 37}, {-123, 37}, {-123, 38}, {-122, 38}, {-122, 37}},
 	})
 	require.True(t, qd.MatchesFilter(poly))
+}
+
+func BenchmarkMatchesFilterContainsPoint(b *testing.B) {
+	us, _ := loadPolygon("testdata/us.json")
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		p := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{
+			(rand.Float64() * 360) - 180,
+			(rand.Float64() * 180) - 90})
+
+		d, _ := wkb.Marshal(p, binary.LittleEndian)
+		src := ValueForType(GeoID)
+		src.Value = d
+		gd, _ := Convert(src, StringID)
+		gb := gd.Value.(string)
+		_, qd, _ := queryTokens(QueryTypeContains, gb, 0.0)
+		qd.contains(us)
+	}
 }

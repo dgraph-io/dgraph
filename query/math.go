@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,9 +17,10 @@
 package query
 
 import (
-	"github.com/dgraph-io/dgraph/types"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
+
+	"github.com/dgraph-io/dgraph/types"
 )
 
 type mathTree struct {
@@ -30,8 +31,21 @@ type mathTree struct {
 	Child []*mathTree
 }
 
+var (
+	ErrorIntOverflow     = errors.New("Integer overflow")
+	ErrorFloat32Overflow = errors.New("Float32 overflow")
+	ErrorDivisionByZero  = errors.New("Division by zero")
+	ErrorFractionalPower = errors.New("Fractional power of negative number")
+	ErrorNegativeLog     = errors.New("Log of negative number")
+	ErrorNegativeRoot    = errors.New("Root of negative number")
+	ErrorVectorsNotMatch = errors.New("The length of vectors must match")
+	ErrorArgsDisagree    = errors.New("Left and right arguments must match")
+	ErrorShouldBeVector  = errors.New("Type should be []float, but is not. Cannot determine type.")
+	ErrorBadVectorMult   = errors.New("Cannot multiply vector by vector")
+)
+
 // processBinary handles the binary operands like
-// +, -, *, /, %, max, min, logbase
+// +, -, *, /, %, max, min, logbase, dot
 func processBinary(mNode *mathTree) error {
 	destMap := make(map[uint64]types.Val)
 	aggName := mNode.Fn
@@ -70,6 +84,25 @@ func processBinary(mNode *mathTree) error {
 		return nil
 	}
 
+	// If mpl or mpr have 0 and just 0 in it, that means it's an output of aggregation somewhere.
+	// This value would need to be applied to all.
+	checkAggrResult := func(value map[uint64]types.Val) (types.Val, bool) {
+		if len(value) != 1 {
+			return types.Val{}, false
+		}
+
+		val, ok := value[0]
+		return val, ok
+	}
+
+	if val, ok := checkAggrResult(mpl); ok {
+		cl = val
+		mpl = nil
+	} else if val, ok := checkAggrResult(mpr); ok {
+		cr = val
+		mpr = nil
+	}
+
 	if len(mpl) != 0 || len(mpr) != 0 {
 		for k := range mpr {
 			if err := f(k); err != nil {
@@ -89,7 +122,7 @@ func processBinary(mNode *mathTree) error {
 	}
 
 	if cl.Value != nil && cr.Value != nil {
-		// Both maps are nil, so 2 constatns.
+		// Both maps are nil, so 2 constants.
 		ag := aggregator{
 			name: aggName,
 		}

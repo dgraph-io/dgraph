@@ -1,0 +1,6 @@
+query {
+	queryRestaurant {
+		name
+		rating
+	}
+}

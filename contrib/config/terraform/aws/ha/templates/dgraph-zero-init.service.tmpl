@@ -1,0 +1,16 @@
+[Unit]
+Description=dgraph.io zero server
+Wants=network.target
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/dgraph zero --my=${private_ip}:5080 -w /var/run/dgraph/w --raft="idx=${index}"
+StandardOutput=journal
+StandardError=journal
+User=dgraph
+Group=dgraph
+
+[Install]
+WantedBy=multi-user.target
+RequiredBy=dgraph.service

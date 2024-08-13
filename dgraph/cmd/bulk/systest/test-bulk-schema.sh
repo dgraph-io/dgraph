@@ -11,6 +11,10 @@ INFO()  { echo "$ME: $@";     }
 ERROR() { echo >&2 "$ME: $@"; }
 FATAL() { ERROR "$@"; exit 1; }
 
+function DockerCompose {
+    docker-compose -p dgraph "$@"
+}
+
 set -e
 
 INFO "rebuilding dgraph"
@@ -45,7 +49,7 @@ function ErrorExit
 function StartZero
 {
   INFO "starting zero container"
-  docker-compose -f $DOCKER_CONF up --force-recreate --detach zero1
+  DockerCompose -f $DOCKER_CONF up --force-recreate --remove-orphans -d zero1
   TIMEOUT=10
   while [[ $TIMEOUT > 0 ]]; do
     if docker logs zero1 2>&1 | grep -q 'CID set'; then
@@ -63,11 +67,11 @@ function StartAlpha
   local p_dir=$1
 
   INFO "starting alpha container"
-  docker-compose -f $DOCKER_CONF up --force-recreate --no-start alpha1
+  DockerCompose -f $DOCKER_CONF up --force-recreate --remove-orphans --no-start alpha1
   if [[ $p_dir ]]; then
     docker cp $p_dir alpha1:/data/alpha1/
   fi
-  docker-compose -f $DOCKER_CONF up --detach alpha1
+  DockerCompose -f $DOCKER_CONF up -d --remove-orphans alpha1
 
   TIMEOUT=10
   while [[ $TIMEOUT > 0 ]]; do
@@ -84,7 +88,7 @@ function StartAlpha
 function ResetCluster
 {
     INFO "restarting cluster with only one zero and alpha"
-    docker-compose -f $DOCKER_CONF down
+    DockerCompose -f $DOCKER_CONF down --remove-orphans
     StartZero
     StartAlpha
 }
@@ -97,6 +101,10 @@ predicate_with_no_uid_count:string  .
 predicate_with_default_type:default  .
 predicate_with_index_no_uid_count:string @index(exact) .
 ' &>/dev/null
+
+  # Wait for background indexing to finish.
+  # TODO: Use better way of waiting once it's available.
+  sleep 5
 
   curl -H "Content-Type: application/rdf" localhost:$HTTP_PORT/mutate?commitNow=true -X POST -d $'
 {
@@ -111,14 +119,14 @@ function QuerySchema
 {
   INFO "running schema query"
   local out_file="schema.out"
-  curl -sS -H "Content-Type: application/graphql+-" localhost:$HTTP_PORT/query -XPOST -d'schema(pred:[genre,language,name,revenue,predicate_with_default_type,predicate_with_index_no_uid_count,predicate_with_no_uid_count]) {}' | python -c "import json,sys; d=json.load(sys.stdin); json.dump(d['data'],sys.stdout,sort_keys=True,indent=2)"  > $out_file
+  curl -sS -H "Content-Type: application/dql" localhost:$HTTP_PORT/query -XPOST -d'schema(pred:[genre,language,name,revenue,predicate_with_default_type,predicate_with_index_no_uid_count,predicate_with_no_uid_count]) {}' | python3 -c "import json,sys; d=json.load(sys.stdin); json.dump(d['data'],sys.stdout,sort_keys=True,indent=2)"  > $out_file
   echo >> $out_file
 }
 
 function DoExport
 {
   INFO "running export"
-  docker exec alpha1 curl -Ss localhost:$HTTP_PORT/admin/export &>/dev/null
+  docker exec alpha1 curl -Ss -H "Content-Type: application/json" localhost:$HTTP_PORT/admin -XPOST -d '{ "query": "mutation { export(input: {format: \"rdf\"}) { response { code message } }}" }' &>/dev/null
   sleep 2
   docker cp alpha1:/data/alpha1/export .
   sleep 1
@@ -188,11 +196,20 @@ EOF
 
   INFO "checking that each predicate appears in only one shard"
 
-  dgraph debug -p out/0/p 2>|/dev/null | grep '{s}' | cut -d' ' -f4  > all_dbs.out
-  dgraph debug -p out/1/p 2>|/dev/null | grep '{s}' | cut -d' ' -f4 >> all_dbs.out
+  dgraph debug -p out/0/p 2>|/dev/null | grep '{s}' | cut -d' ' -f3  > all_dbs.out
+  dgraph debug -p out/1/p 2>|/dev/null | grep '{s}' | cut -d' ' -f3 >> all_dbs.out
   diff <(LC_ALL=C sort all_dbs.out | uniq -c) - <<EOF
-      1 dgraph.group.acl
+      1 dgraph.acl.rule
+      1 dgraph.cors
+      1 dgraph.drop.op
+      1 dgraph.graphql.p_query
+      1 dgraph.graphql.schema
+      1 dgraph.graphql.schema_created_at
+      1 dgraph.graphql.schema_history
+      1 dgraph.graphql.xid
       1 dgraph.password
+      1 dgraph.rule.permission
+      1 dgraph.rule.predicate
       1 dgraph.type
       1 dgraph.user.group
       1 dgraph.xid
@@ -205,8 +222,8 @@ EOF
 
 function StopServers
 {
-  INFO "stoping containers"
-  docker-compose -f $DOCKER_CONF down
+  INFO "stopping containers"
+  DockerCompose -f $DOCKER_CONF down --remove-orphans
 }
 
 function Cleanup
@@ -223,7 +240,6 @@ UpdateDatabase
 QuerySchema
 DoExport
 StopServers
-
 popd >/dev/null
 mkdir dir2
 pushd dir2 >/dev/null
@@ -231,12 +247,13 @@ pushd dir2 >/dev/null
 StartZero
 BulkLoadExportedData
 StartAlpha "./out/0/p"
+sleep 5
 QuerySchema
 StopServers
 
 popd >/dev/null
 
-INFO "verifing schema is same before export and after bulk import"
+INFO "verifying schema is same before export and after bulk import"
 diff -b dir1/schema.out dir2/schema.out || FATAL "schema incorrect"
 INFO "schema is correct"
 
@@ -246,6 +263,7 @@ pushd dir3 >/dev/null
 StartZero
 BulkLoadFixtureData
 StartAlpha "./out/0/p"
+sleep 5
 QuerySchema
 StopServers
 

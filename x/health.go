@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,7 +32,7 @@ var (
 	errHealth       = errors.New("Please retry again, server is not ready to accept requests")
 	errDrainingMode = errors.New("the server is in draining mode " +
 		"and client requests will only be allowed after exiting the mode " +
-		" by sending a POST request to /admin/draining?enable=false")
+		" by sending a GraphQL draining(enable: false) mutation to /admin")
 )
 
 // UpdateHealthStatus updates the server's health status so it can start accepting requests.

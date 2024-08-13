@@ -1,0 +1,30 @@
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nfs-default-claim
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      ## Size to allocate from default storage class
+      storage: "{{ .Values.nfs.size }}"
+---
+apiVersion: nfs.rook.io/v1alpha1
+kind: NFSServer
+metadata:
+  name: rook-nfs
+spec:
+  replicas: 1
+  exports:
+  - name: "{{ .Values.nfs.path }}"
+    server:
+      accessMode: ReadWrite
+      squash: "none"
+    ## A Persistent Volume Claim must be created before creating NFS CRD instance.
+    persistentVolumeClaim:
+      claimName: nfs-default-claim
+  ## A key/value list of annotations
+  annotations:
+    rook: nfs

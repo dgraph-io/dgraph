@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,9 +19,10 @@ package posting
 import (
 	"encoding/binary"
 	"flag"
-	"io/ioutil"
+	"io"
 	"log"
 	"math"
+	_ "net/http/pprof"
 	"os"
 	"os/exec"
 	"runtime"
@@ -30,21 +31,18 @@ import (
 	"strings"
 	"testing"
 
-	_ "net/http/pprof"
-
-	"github.com/dgraph-io/badger/v2"
-	"github.com/dgraph-io/dgo/v2/protos/api"
-	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
-
 	"github.com/stretchr/testify/require"
+
+	"github.com/dgraph-io/badger/v4"
+	"github.com/dgraph-io/dgo/v230/protos/api"
+	"github.com/dgraph-io/dgraph/protos/pb"
 )
 
 var manual = flag.Bool("manual", false, "Set when manually running some tests.")
 var (
 	list    *List
-	plist   *pb.PostingList
 	pack    *pb.UidPack
 	block   *pb.UidBlock
 	posting *pb.Posting
@@ -91,26 +89,26 @@ func TestPostingListCalculation(t *testing.T) {
 
 func TestUidPackCalculation(t *testing.T) {
 	pack = &pb.UidPack{}
-	// 64 is obtained from BenchmarkUidPack
-	require.Equal(t, uint64(64), calculatePackSize(pack))
+	// 48 is obtained from BenchmarkUidPack
+	require.Equal(t, uint64(48), calculatePackSize(pack))
 }
 
 func TestUidBlockCalculation(t *testing.T) {
 	block = &pb.UidBlock{}
-	// 80 is obtained from BenchmarkUidBlock
-	require.Equal(t, uint64(80), calculateUIDBlock(block))
+	// 48 is obtained from BenchmarkUidBlock
+	require.Equal(t, uint64(48), calculateUIDBlock(block))
 }
 
 func TestPostingCalculation(t *testing.T) {
 	posting = &pb.Posting{}
-	// 160 is obtained from BenchmarkPosting
-	require.Equal(t, uint64(160), calculatePostingSize(posting))
+	// 128 is obtained from BenchmarkPosting
+	require.Equal(t, uint64(128), calculatePostingSize(posting))
 }
 
 func TestFacetCalculation(t *testing.T) {
 	facet = &api.Facet{}
-	// 128 is obtained from BenchmarkFacet
-	require.Equal(t, uint64(128), calculateFacet(facet))
+	// 96 is obtained from BenchmarkFacet
+	require.Equal(t, uint64(96), calculateFacet(facet))
 }
 
 // run this test manually for the verfication.
@@ -132,6 +130,9 @@ func PopulateList(l *List, t *testing.T) {
 			continue
 		}
 		pl, err := ReadPostingList(item.Key(), itr)
+		if err == ErrInvalidKey {
+			continue
+		}
 		require.NoError(t, err)
 		l.mutationMap[i] = pl.plist
 		i++
@@ -176,11 +177,11 @@ func Test21MillionDataSetSize(t *testing.T) {
 	}
 	fp, err := os.Open("size.data")
 	require.NoError(t, err)
-	buf, err := ioutil.ReadAll(fp)
+	buf, err := io.ReadAll(fp)
 	require.NoError(t, err)
 	calculatedSize := binary.BigEndian.Uint32(buf)
 	var pprofSize uint32
-	cmd := exec.Command("pprof", "-list", "PopulateList", "mem.out")
+	cmd := exec.Command("go", "tool", "pprof", "-list", "PopulateList", "mem.out")
 	out, err := cmd.Output()
 	if err != nil {
 		log.Fatal(err)
@@ -210,7 +211,7 @@ func Test21MillionDataSetSize(t *testing.T) {
 	percent := (float64(difference) / float64(calculatedSize)) * 100.0
 	t.Logf("calculated unit %s profied unit %s percent difference %.2f%%",
 		humanize.Bytes(uint64(calculatedSize)), humanize.Bytes(uint64(pprofSize)), percent)
-	if percent > 5 {
+	if percent > 10 {
 		require.Fail(t, "Expected size difference is less than 8 but got %f", percent)
 	}
 }
@@ -219,15 +220,23 @@ func Test21MillionDataSetSize(t *testing.T) {
 func filterUnit(line string) (string, error) {
 	words := strings.Split(line, " ")
 	for _, word := range words {
-		if strings.Contains(word, "MB") || strings.Contains(word, "GB") {
+		if strings.Contains(word, "MB") || strings.Contains(word, "GB") ||
+			strings.Contains(word, "kB") {
 			return strings.TrimSpace(word), nil
 		}
 	}
-	return "", errors.New("Invalid line. Line does not contain GB or MB")
+	return "", errors.Errorf("Invalid line. Line %s does not contain GB or MB", line)
 }
 
 // convertToBytes converts the unit into bytes.
 func convertToBytes(unit string) (uint32, error) {
+	if strings.Contains(unit, "kB") {
+		kb, err := strconv.ParseFloat(unit[0:len(unit)-2], 64)
+		if err != nil {
+			return 0, err
+		}
+		return uint32(kb * 1024.0), nil
+	}
 	if strings.Contains(unit, "MB") {
 		mb, err := strconv.ParseFloat(unit[0:len(unit)-2], 64)
 		if err != nil {

@@ -1,0 +1,10 @@
+backups/*
+logs/*
+!data/acl/
+!data/enc/
+!data/token/
+!**/.gitkeep
+.env
+!/data/backup.sh
+!/data/backup_helper.sh
+data/*

@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,10 +28,11 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/pkg/errors"
+
+	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/lex"
 	"github.com/dgraph-io/dgraph/x"
-
-	"github.com/pkg/errors"
 )
 
 // Chunker describes the interface to parse and process the input to the live and bulk loaders.
@@ -84,7 +85,8 @@ func NewChunker(inputFormat InputFormat, batchSize int) Chunker {
 			nqs: NewNQuadBuffer(batchSize),
 		}
 	default:
-		panic("unknown input format")
+		x.Panic(errors.New("unknown input format"))
+		return nil
 	}
 }
 
@@ -147,12 +149,14 @@ func (rc *rdfChunker) Parse(chunkBuf *bytes.Buffer) error {
 		}
 
 		nq, err := ParseRDF(str, rc.lexer)
-		if err == ErrEmpty {
+		switch {
+		case err == ErrEmpty:
 			continue // blank line or comment
-		} else if err != nil {
+		case err != nil:
 			return errors.Wrapf(err, "while parsing line %q", str)
+		default:
+			rc.nqs.Push(&nq)
 		}
-		rc.nqs.Push(&nq)
 	}
 	return nil
 }
@@ -166,14 +170,15 @@ func (jc *jsonChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	}
 	// If the file starts with a list rune [, we set the inList flag, and keep consuming maps
 	// until we reach the threshold.
-	if ch == '[' {
+	switch {
+	case ch == '[':
 		jc.inList = true
-	} else if ch == '{' {
+	case ch == '{':
 		// put the rune back for it to be consumed in the consumeMap function
 		if err := r.UnreadRune(); err != nil {
 			return nil, err
 		}
-	} else {
+	default:
 		return nil, errors.Errorf("file is not JSON")
 	}
 
@@ -300,8 +305,7 @@ func (jc *jsonChunker) Parse(chunkBuf *bytes.Buffer) error {
 		return nil
 	}
 
-	err := jc.nqs.ParseJSON(chunkBuf.Bytes(), SetNquads)
-	return err
+	return jc.nqs.ParseJSON(chunkBuf.Bytes(), SetNquads)
 }
 
 func slurpSpace(r *bufio.Reader) error {
@@ -344,10 +348,11 @@ func slurpQuoted(r *bufio.Reader, out *bytes.Buffer) error {
 	}
 }
 
-// FileReader returns an open reader and file on the given file. Gzip-compressed input is detected
-// and decompressed automatically even without the gz extension. The caller is responsible for
-// calling the returned cleanup function when done with the reader.
-func FileReader(file string) (rd *bufio.Reader, cleanup func()) {
+// FileReader returns an open reader on the given file. Gzip-compressed input is detected
+// and decompressed automatically even without the gz extension. The key, if non-nil,
+// is used to decrypt the file. The caller is responsible for calling the returned cleanup
+// function when done with the reader.
+func FileReader(file string, key x.Sensitive) (*bufio.Reader, func()) {
 	var f *os.File
 	var err error
 	if file == "-" {
@@ -358,10 +363,18 @@ func FileReader(file string) (rd *bufio.Reader, cleanup func()) {
 
 	x.Check(err)
 
+	return StreamReader(file, key, f)
+}
+
+// StreamReader returns a bufio given a ReadCloser. The file is passed just to check for .gz files
+func StreamReader(file string, key x.Sensitive, f io.ReadCloser) (
+	rd *bufio.Reader, cleanup func()) {
 	cleanup = func() { _ = f.Close() }
 
 	if filepath.Ext(file) == ".gz" {
-		gzr, err := gzip.NewReader(f)
+		r, err := enc.GetReader(key, f)
+		x.Check(err)
+		gzr, err := gzip.NewReader(r)
 		x.Check(err)
 		rd = bufio.NewReader(gzr)
 		cleanup = func() { _ = f.Close(); _ = gzr.Close() }

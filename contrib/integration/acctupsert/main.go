@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,8 +27,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dgraph-io/dgo/v2"
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/golang/glog"
+
+	"github.com/dgraph-io/dgo/v230"
+	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -83,14 +85,15 @@ func setup(c *dgo.Dgraph) {
 	x.Check(c.Alter(ctx, &api.Operation{
 		DropAll: true,
 	}))
-	x.Check(c.Alter(ctx, &api.Operation{
+	op := &api.Operation{
 		Schema: `
 			first:  string   @index(term) @upsert .
 			last:   string   @index(hash) @upsert .
 			age:    int      @index(int)  @upsert .
 			when:   int                   .
 		`,
-	}))
+	}
+	x.Check(c.Alter(ctx, op))
 }
 
 func doUpserts(c *dgo.Dgraph) {
@@ -121,12 +124,13 @@ func upsert(c *dgo.Dgraph, acc account) {
 			lastStatus = time.Now()
 		}
 		err := tryUpsert(c, acc)
-		if err == nil {
+		switch err {
+		case nil:
 			atomic.AddUint64(&successCount, 1)
 			return
-		} else if err == dgo.ErrAborted {
+		case dgo.ErrAborted:
 			// pass
-		} else {
+		default:
 			fmt.Printf("ERROR: %v", err)
 		}
 		atomic.AddUint64(&retryCount, 1)
@@ -137,7 +141,12 @@ func tryUpsert(c *dgo.Dgraph, acc account) error {
 	ctx := context.Background()
 
 	txn := c.NewTxn()
-	defer func() { _ = txn.Discard(ctx) }()
+	defer func() {
+		if err := txn.Discard(ctx); err != nil {
+			glog.Warningf("error in discarding txn: %v", err)
+		}
+	}()
+
 	q := fmt.Sprintf(`
 		{
 			get(func: eq(first, %q)) @filter(eq(last, %q) AND eq(age, %d)) {
@@ -147,8 +156,12 @@ func tryUpsert(c *dgo.Dgraph, acc account) error {
 		}
 	`, acc.first, acc.last, acc.age)
 	resp, err := txn.Query(ctx, q)
+	if err != nil &&
+		(strings.Contains(err.Error(), "Transaction is too old") ||
+			strings.Contains(err.Error(), "less than minTs")) {
+		return err
+	}
 	x.Check(err)
-
 	decode := struct {
 		Get []struct {
 			Uid *string

@@ -1,0 +1,53 @@
+name: ci-dgraph-jepsen-tests
+on:
+  schedule:
+    - cron: "0 4 * * 3,6" # run twice weekly
+env:
+    GOPATH: /home/ubuntu/go
+jobs:
+  dgraph-jepsen-tests:
+    runs-on: warp-ubuntu-latest-x64-4x
+    steps:
+      - name: Checkout dgraph repo
+        uses: actions/checkout@v4
+      - name: Checkout jepsen repo
+        uses: actions/checkout@v4
+        with:
+          repository: dgraph-io/jepsen
+          path: jepsen
+          ref: master
+      - name: Get go version
+        run: |
+          #!/bin/bash
+          GOVERSION=$({ [ -f .go-version ] && cat .go-version; })
+          echo "GOVERSION=$GOVERSION" >> $GITHUB_ENV
+      - name: Set jepsen root
+        run: |
+          #!/bin/bash
+          cd jepsen
+          JEPSEN_ROOT=$(pwd)
+          echo "JEPSEN_ROOT=$JEPSEN_ROOT" >> $GITHUB_ENV
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GOVERSION }}
+      - name: Make dgraph linux build
+        run: make install
+      - name: Start jepsen cluster
+        run: |
+          #!/bin/bash
+          cd contrib/jepsen
+          go build -v .
+          ./jepsen --jepsen-root ${{ env.JEPSEN_ROOT }} --up-only
+      - name: Run jepsen tests
+        run: |
+          #!/bin/bash
+          cd contrib/jepsen
+          ./jepsen --jepsen-root ${{ env.JEPSEN_ROOT }} --jaeger="" --web=false --test-all -l 300
+      - name: Stop jepsen cluster
+        run: |
+          #!/bin/bash
+          cd contrib/jepsen
+          ./jepsen --jepsen-root ${{ env.JEPSEN_ROOT }} --down-only
+
+          

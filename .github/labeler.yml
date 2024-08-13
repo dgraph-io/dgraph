@@ -1,0 +1,49 @@
+area/graphql:
+  - graphql/**/*
+area/documentation:
+  - "**/*.md"
+  - "**/*.pdf"
+  - "**/*.tex"
+area/bulk-loader:
+  - dgraph/cmd/bulk/**/*
+area/live-loader:
+  - dgraph/cmd/live/**/*
+area/querylang:
+  - dql/**/*
+area/integrations:
+  - contrib/**/*
+  - .github/**/*
+  - .travis/**/*
+area/testing/jepsen:
+  - contrib/jepsen/**/*
+area/enterprise:
+  - ee/**/*
+area/enterprise/backup:
+  - ee/backup/**/*
+area/enterprise/acl:
+  - ee/acl/**/*
+area/schema:
+  - schema/**/*
+area/testing:
+  - systest/**/*
+  - "**/*test.go"
+  - graphql/e2e/**/*
+  - "**/*test.yaml"
+  - t/**/*
+  - testutil/**/*
+  - tlstest/**/*
+area/core:
+  - protos/**/*
+  - posting/**/*
+  - raftwal/**/*
+  - query/**/*
+  - schema/**/*
+  - protos/**/*
+  - x/**/*
+  - xidmap/**/*
+  - worker/**/*
+  - graphql/**/*
+go:
+  - "**/*.go"
+python:
+  - "**/*.py"

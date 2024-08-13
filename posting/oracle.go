@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,15 +18,18 @@ package posting
 
 import (
 	"context"
+	"encoding/hex"
 	"math"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	ostats "go.opencensus.io/stats"
+
+	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/tok/index"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 var o *oracle
@@ -61,6 +64,83 @@ type Txn struct {
 	lastUpdate time.Time
 
 	cache *LocalCache // This pointer does not get modified.
+}
+
+// struct to implement Txn interface from vector-indexer
+// acts as wrapper for dgraph *Txn
+type viTxn struct {
+	delegate *Txn
+}
+
+func NewViTxn(delegate *Txn) *viTxn {
+	return &viTxn{delegate: delegate}
+}
+
+func (vt *viTxn) Find(prefix []byte, filter func([]byte) bool) (uint64, error) {
+	return vt.delegate.cache.Find(prefix, filter)
+}
+
+func (vt *viTxn) StartTs() uint64 {
+	return vt.delegate.StartTs
+}
+
+func (vt *viTxn) Get(key []byte) (rval index.Value, rerr error) {
+	pl, err := vt.delegate.cache.Get(key)
+	if err != nil {
+		return nil, err
+	}
+	pl.Lock()
+	defer pl.Unlock()
+	return vt.GetValueFromPostingList(pl)
+}
+
+func (vt *viTxn) GetWithLockHeld(key []byte) (rval index.Value, rerr error) {
+	pl, err := vt.delegate.cache.Get(key)
+	if err != nil {
+		return nil, err
+	}
+	return vt.GetValueFromPostingList(pl)
+}
+
+func (vt *viTxn) GetValueFromPostingList(pl *List) (rval index.Value, rerr error) {
+	value := pl.findStaticValue(vt.delegate.StartTs)
+
+	if value == nil {
+		//fmt.Println("DIFF", val, err, nil, badger.ErrKeyNotFound)
+		return nil, ErrNoValue
+	}
+
+	if hasDeleteAll(value.Postings[0]) || value.Postings[0].Op == Del {
+		return nil, ErrNoValue
+	}
+
+	return value.Postings[0].Value, nil
+}
+
+func (vt *viTxn) AddMutation(ctx context.Context, key []byte, t *index.KeyValue) error {
+	pl, err := vt.delegate.cache.Get(key)
+	if err != nil {
+		return err
+	}
+	return pl.addMutation(ctx, vt.delegate, indexEdgeToPbEdge(t))
+}
+
+func (vt *viTxn) AddMutationWithLockHeld(ctx context.Context, key []byte, t *index.KeyValue) error {
+	pl, err := vt.delegate.cache.Get(key)
+	if err != nil {
+		return err
+	}
+	return pl.addMutationInternal(ctx, vt.delegate, indexEdgeToPbEdge(t))
+}
+
+func (vt *viTxn) LockKey(key []byte) {
+	pl, _ := vt.delegate.cache.Get(key)
+	pl.Lock()
+}
+
+func (vt *viTxn) UnlockKey(key []byte) {
+	pl, _ := vt.delegate.cache.Get(key)
+	pl.Unlock()
 }
 
 // NewTxn returns a new Txn instance.
@@ -219,8 +299,14 @@ func (o *oracle) ProcessDelta(delta *pb.OracleDelta) {
 
 	o.Lock()
 	defer o.Unlock()
-	for _, txn := range delta.Txns {
-		delete(o.pendingTxns, txn.StartTs)
+	for _, status := range delta.Txns {
+		txn := o.pendingTxns[status.StartTs]
+		if txn != nil && status.CommitTs > 0 {
+			for k := range txn.cache.deltas {
+				IncrRollup.addKeyToBatch([]byte(k), 0)
+			}
+		}
+		delete(o.pendingTxns, status.StartTs)
 	}
 	curMax := o.MaxAssigned()
 	if delta.MaxAssigned < curMax {
@@ -246,6 +332,23 @@ func (o *oracle) ResetTxns() {
 	o.Lock()
 	defer o.Unlock()
 	o.pendingTxns = make(map[uint64]*Txn)
+}
+
+// ResetTxnForNs deletes all the pending transactions for a given namespace.
+func (o *oracle) ResetTxnsForNs(ns uint64) {
+	txns := o.IterateTxns(func(key []byte) bool {
+		pk, err := x.Parse(key)
+		if err != nil {
+			glog.Errorf("error %v while parsing key %v", err, hex.EncodeToString(key))
+			return false
+		}
+		return x.ParseNamespace(pk.Attr) == ns
+	})
+	o.Lock()
+	defer o.Unlock()
+	for _, txn := range txns {
+		delete(o.pendingTxns, txn)
+	}
 }
 
 func (o *oracle) GetTxn(startTs uint64) *Txn {

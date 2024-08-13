@@ -1,42 +1,52 @@
+//go:build integration
+
 package certverifyifgiven
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
-	"github.com/dgraph-io/dgo/v2/protos/api"
-	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dgraph-io/dgo/v230/protos/api"
+	"github.com/dgraph-io/dgraph/testutil"
 )
 
 func TestAccessWithoutClientCert(t *testing.T) {
 	conf := viper.New()
-	conf.Set("tls_cacert", "../tls/ca.crt")
-	conf.Set("tls_server_name", "node")
+	conf.Set("tls", fmt.Sprintf("ca-cert=%s; server-name=%s;",
+		// ca-cert
+		"../tls/ca.crt",
+		// server-name
+		"node"))
 
-	dg, err := testutil.DgraphClientWithCerts(testutil.SockAddr, conf)
+	dg, err := testutil.DgraphClientWithCerts(testutil.SockAddrLocalhost, conf)
 	require.NoError(t, err, "Unable to get dgraph client: %v", err)
-	err = dg.Alter(context.Background(), &api.Operation{DropAll: true})
-	require.NoError(t, err, "Unable to perform dropall: %v", err)
+	require.NoError(t, dg.Alter(context.Background(), &api.Operation{DropAll: true}))
 }
 
 func TestAccessWithClientCert(t *testing.T) {
 	conf := viper.New()
-	conf.Set("tls_cacert", "../tls/ca.crt")
-	conf.Set("tls_server_name", "node")
-	conf.Set("tls_cert", "../tls/client.acl.crt")
-	conf.Set("tls_key", "../tls/client.acl.key")
+	conf.Set("tls", fmt.Sprintf("ca-cert=%s; server-name=%s; client-cert=%s; client-key=%s;",
+		// ca-cert
+		"../tls/ca.crt",
+		// server-name
+		"node",
+		// client-cert
+		"../tls/client.acl.crt",
+		// client-key
+		"../tls/client.acl.key"))
 
-	dg, err := testutil.DgraphClientWithCerts(testutil.SockAddr, conf)
+	dg, err := testutil.DgraphClientWithCerts(testutil.SockAddrLocalhost, conf)
 	require.NoError(t, err, "Unable to get dgraph client: %v", err)
-	err = dg.Alter(context.Background(), &api.Operation{DropAll: true})
-	require.NoError(t, err, "Unable to perform dropall: %v", err)
+	require.NoError(t, dg.Alter(context.Background(), &api.Operation{DropAll: true}))
 }
 
 func TestCurlAccessWithoutClientCert(t *testing.T) {
 	curlArgs := []string{
-		"--cacert", "../tls/ca.crt", "https://localhost:8180/alter",
+		"--cacert", "../tls/ca.crt", "https://" + testutil.SockAddrHttpLocalhost + "/alter",
 		"-d", "name: string @index(exact) .",
 	}
 	testutil.VerifyCurlCmd(t, curlArgs, &testutil.CurlFailureConfig{
@@ -49,7 +59,7 @@ func TestCurlAccessWithClientCert(t *testing.T) {
 		"--cacert", "../tls/ca.crt",
 		"--cert", "../tls/client.acl.crt",
 		"--key", "../tls/client.acl.key",
-		"https://localhost:8180/alter",
+		"https://" + testutil.SockAddrHttpLocalhost + "/alter",
 		"-d", "name: string @index(exact) .",
 	}
 	testutil.VerifyCurlCmd(t, curlArgs, &testutil.CurlFailureConfig{

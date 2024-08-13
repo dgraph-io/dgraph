@@ -1,0 +1,327 @@
+-
+  name: "Only id filter"
+  gqlmutation: |
+    mutation deleteAuthor($filter: AuthorFilter!) {
+      deleteAuthor(filter: $filter) {
+        msg
+      }
+    }
+  gqlvariables: |
+    { "filter":
+      { "id": ["0x1", "0x2"] }
+    }
+  explanation: "The correct mutation and query should be built using variable and filters."
+  dgmutations:
+    - deletejson: |
+        [
+          { "uid": "uid(x)" },
+          {
+            "uid": "uid(Post_2)",
+            "Post.author": { "uid": "uid(x)" }
+          }
+        ]
+  dgquery: |-
+    query {
+      x as deleteAuthor(func: uid(0x1, 0x2)) @filter(type(Author)) {
+        uid
+        Post_2 as Author.posts
+      }
+    }
+
+-
+  name: "Delete with deep query in result"
+  gqlmutation: |
+    mutation deleteAuthor($filter: AuthorFilter!) {
+      deleteAuthor(filter: $filter) {
+        msg
+        numUids
+        author (filter: { name: { eq: "GraphQL" } }, order: { asc: name }, first: 10, offset: 10) {
+          id
+          name
+          country {
+            name
+            states (filter: { code: { eq: "GraphQL" } }, order: { asc: name }, first: 10, offset: 10) {
+              code
+              name
+              capital
+            }
+          }
+        }
+      }
+    }
+  gqlvariables: |
+    { "filter":
+      { "id": ["0x1", "0x2"] }
+    }
+  explanation: "The correct mutation and query should be built using variable and filters."
+  dgmutations:
+    - deletejson: |
+        [
+          { "uid": "uid(x)" },
+          {
+            "uid": "uid(Post_2)",
+            "Post.author": { "uid": "uid(x)" }
+          }
+        ]
+  dgquery: |-
+    query {
+      x as deleteAuthor(func: uid(0x1, 0x2)) @filter(type(Author)) {
+        uid
+        Post_2 as Author.posts
+      }
+    }
+  dgquerysec: |-
+    query {
+      x as var(func: uid(0x1, 0x2)) @filter(type(Author))
+      DeleteAuthorPayload.author(func: uid(x), orderasc: Author.name, first: 10, offset: 10) @filter(eq(Author.name, "GraphQL")) {
+        Author.id : uid
+        Author.name : Author.name
+        Author.country : Author.country {
+          Country.name : Country.name
+          Country.states : Country.states @filter(eq(State.code, "GraphQL")) (orderasc: State.name, first: 10, offset: 10) {
+            State.code : State.code
+            State.name : State.name
+            State.capital : State.capital
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+      }
+    }
+
+-
+  name: "Multiple filters including id"
+  gqlmutation: |
+    mutation deleteAuthor($filter: AuthorFilter!) {
+      deleteAuthor(filter: $filter) {
+        msg
+      }
+    }
+  gqlvariables: |
+    { "filter":
+      {
+        "id": ["0x1", "0x2"],
+        "name": { "eq": "A.N. Author" }
+      }
+    }
+  explanation: "The correct mutation and query should be built using variable and filters."
+  dgmutations:
+    - deletejson: |
+        [
+          { "uid": "uid(x)" },
+          {
+            "uid": "uid(Post_2)",
+            "Post.author": { "uid": "uid(x)" }
+          }
+        ]
+  dgquery: |-
+    query {
+      x as deleteAuthor(func: uid(0x1, 0x2)) @filter((eq(Author.name, "A.N. Author") AND type(Author))) {
+        uid
+        Post_2 as Author.posts
+      }
+    }
+
+-
+  name: "Multiple non-id filters"
+  gqlmutation: |
+    mutation deleteAuthor($filter: AuthorFilter!) {
+      deleteAuthor(filter: $filter) {
+        msg
+      }
+    }
+  gqlvariables: |
+    { "filter":
+      {
+        "name": { "eq": "A.N. Author" },
+        "dob": { "eq": "2000-01-01" }
+      }
+    }
+  explanation: "The correct mutation and query should be built using variable and filters."
+  dgmutations:
+    - deletejson: |
+        [
+          { "uid": "uid(x)" },
+          {
+            "uid": "uid(Post_2)",
+            "Post.author": { "uid": "uid(x)" }
+          }
+        ]
+  dgquery: |-
+    query {
+      x as deleteAuthor(func: type(Author)) @filter((eq(Author.dob, "2000-01-01") AND eq(Author.name, "A.N. Author"))) {
+        uid
+        Post_2 as Author.posts
+      }
+    }
+
+-
+  name: "With list inverse"
+  gqlmutation: |
+    mutation deleteState($filter: StateFilter!) {
+      deleteState(filter: $filter) {
+        msg
+      }
+    }
+  gqlvariables: |
+    { "filter":
+      { "code": { "eq": "abc" } }
+    }
+  explanation: "The correct mutation and query should be built using variable and filters."
+  dgmutations:
+    - deletejson: |
+        [
+          { "uid": "uid(x)" },
+          {
+            "uid": "uid(Country_2)",
+            "Country.states": [{ "uid": "uid(x)" }]
+          }
+        ]
+  dgquery: |-
+    query {
+      x as deleteState(func: type(State)) @filter(eq(State.code, "abc")) {
+        uid
+        Country_2 as State.country
+      }
+    }
+
+-
+  name: "With multiple inverses"
+  gqlmutation: |
+    mutation deletePost($filter: PostFilter!) {
+      deletePost(filter: $filter) {
+        msg
+      }
+    }
+  gqlvariables: |
+    { "filter":
+      { "postID": ["0x1", "0x2"] }
+    }
+  explanation: "The correct mutation and query should be built using variable and filters."
+  dgmutations:
+    - deletejson: |
+        [
+          { "uid": "uid(x)" },
+          {
+            "uid": "uid(Author_2)",
+            "Author.posts": [{ "uid": "uid(x)" }]
+          },
+          {
+            "uid": "uid(Category_3)",
+            "Category.posts": [{ "uid": "uid(x)" }]
+          }
+        ]
+  dgquery: |-
+    query {
+      x as deletePost(func: uid(0x1, 0x2)) @filter(type(Post)) {
+        uid
+        Author_2 as Post.author
+        Category_3 as Post.category
+      }
+    }
+
+-
+  name: "Delete mutation on a type with a field with reverse predicate"
+  gqlmutation: |
+    mutation deleteMovie($filter: MovieFilter!) {
+      deleteMovie(filter: $filter) {
+        msg
+      }
+    }
+  gqlvariables: |
+    { "filter":
+      { "id": ["0x1", "0x2"] }
+    }
+  explanation: "The correct mutation and query should be built using variable and filters."
+  dgmutations:
+    - deletejson: |
+        [
+          { "uid": "uid(x)" },
+          {
+            "uid": "uid(MovieDirector_2)",
+            "directed.movies": [{ "uid": "uid(x)" }]
+          }
+        ]
+  dgquery: |-
+    query {
+      x as deleteMovie(func: uid(0x1, 0x2)) @filter(type(Movie)) {
+        uid
+        MovieDirector_2 as ~directed.movies
+      }
+    }
+-
+  name: "Deleting an interface with just a field with @id directive"
+  gqlmutation: |
+    mutation{
+      deleteA(filter:{name:{eq: "xyz"}}){
+        a{
+          name
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      x as deleteA(func: type(A)) @filter(eq(A.name, "xyz")) {
+        uid
+      }
+    }
+  dgquerysec: |-
+    query {
+      x as var(func: type(A)) @filter(eq(A.name, "xyz"))
+      DeleteAPayload.a(func: uid(x)) {
+        dgraph.type
+        A.name : A.name
+        dgraph.uid : uid
+      }
+    }
+  dgmutations:
+    - deletejson: |
+        [{ "uid": "uid(x)"}]
+
+-
+  name: "delete with multiple id's"
+  gqlmutation: |
+    mutation deleteBook($filter: BookFilter!) {
+    	deleteBook(filter: $filter) {
+    		msg
+    	}
+    }
+  gqlvariables: |
+    {
+        "filter": {
+            "or": [
+                {
+                    "title": {
+                        "in": "Sapiens"
+                    }
+                },
+                {
+                    "ISBN": {
+                        "in": "2SB1Q"
+                    }
+                }
+            ]
+        }
+    }
+  dgmutations:
+    - deletejson: |
+        [
+            {
+                "uid": "uid(x)"
+            },
+            {
+                "uid": "uid(author_2)",
+                "author.book": [
+                    {
+                        "uid": "uid(x)"
+                    }
+                ]
+            }
+        ]
+  dgquery: |-
+    query {
+      x as deleteBook(func: type(Book)) @filter((eq(Book.title, "Sapiens") OR eq(Book.ISBN, "2SB1Q"))) {
+        uid
+        author_2 as Book.author
+      }
+    }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2016-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,9 +23,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/stretchr/testify/require"
 )
 
 func newList(data []uint64) *pb.List {
@@ -258,6 +259,30 @@ func TestUIDListIntersect5(t *testing.T) {
 	require.Equal(t, []uint64{3}, u.Uids)
 }
 
+func TestUIDListIntersect6(t *testing.T) {
+	common, other, _ := fillNums(10, 500)
+	u := newList(common)
+	v := newList(other)
+	IntersectWith(u, v, u)
+	require.Equal(t, common, u.Uids)
+}
+
+func TestUIDListIntersect7(t *testing.T) {
+	common, other, _ := fillNums(10, 2500)
+	u := newList(common)
+	v := newList(other)
+	IntersectWith(u, v, u)
+	require.Equal(t, common, u.Uids)
+}
+
+func TestUIDListIntersect8(t *testing.T) {
+	common, other, _ := fillNums(10, 20000)
+	u := newList(common)
+	v := newList(other)
+	IntersectWith(u, v, newList(nil))
+	require.Equal(t, common, u.Uids)
+}
+
 func TestUIDListIntersectDupFirst(t *testing.T) {
 	u := newList([]uint64{1, 1, 2, 3})
 	v := newList([]uint64{1, 2})
@@ -330,6 +355,8 @@ func BenchmarkListIntersectRandom(b *testing.B) {
 		if j < len(dst2.Uids) {
 			b.Errorf("Unexpected error in intersection")
 		}
+
+		codec.FreePack(compressedUids)
 	}
 
 	randomTests(10240, 0.3)
@@ -338,6 +365,61 @@ func BenchmarkListIntersectRandom(b *testing.B) {
 	randomTests(1024000, 0.1)
 	randomTests(10240, 0.01)
 	randomTests(1024000, 0.01)
+}
+
+func BenchmarkListIntersectCompressBin(b *testing.B) {
+	randomTests := func(sz int, overlap float64) {
+		rs := []float64{0.01, 0.1, 1, 10, 100}
+		for _, r := range rs {
+			sz1 := sz
+			sz2 := int(float64(sz) * r)
+			if sz2 > 10000000 || sz2 == 0 {
+				break
+			}
+
+			u1, v1 := make([]uint64, sz1), make([]uint64, sz2)
+			limit := int64(float64(sz) / overlap)
+			for i := 0; i < sz1; i++ {
+				u1[i] = uint64(rand.Int63n(limit))
+			}
+			for i := 0; i < sz2; i++ {
+				v1[i] = uint64(rand.Int63n(limit))
+			}
+			sort.Slice(u1, func(i, j int) bool { return u1[i] < u1[j] })
+			sort.Slice(v1, func(i, j int) bool { return v1[i] < v1[j] })
+
+			dst2 := &pb.List{}
+			dst1 := &pb.List{}
+			compressedUids := codec.Encode(v1, 256)
+
+			b.Run(fmt.Sprintf("linJump:IntersectWith:ratio=%v:size=%d:overlap=%.2f:", r, sz, overlap),
+				func(b *testing.B) {
+					for k := 0; k < b.N; k++ {
+						dec := codec.Decoder{Pack: compressedUids}
+						dec.Seek(0, codec.SeekStart)
+						IntersectCompressedWithLinJump(&dec, u1, &dst1.Uids)
+					}
+				})
+
+			b.Run(fmt.Sprintf("compressed:IntersectWith:ratio=%v:size=%d:overlap=%.2f:", r, sz, overlap),
+				func(b *testing.B) {
+					for k := 0; k < b.N; k++ {
+						dec := codec.Decoder{Pack: compressedUids}
+						dec.Seek(0, codec.SeekStart)
+						IntersectCompressedWithBin(&dec, u1, &dst2.Uids)
+					}
+				})
+
+			codec.FreePack(compressedUids)
+		}
+	}
+
+	randomTests(10, 0.01)
+	randomTests(100, 0.01)
+	randomTests(1000, 0.01)
+	randomTests(10000, 0.01)
+	randomTests(100000, 0.01)
+	randomTests(1000000, 0.01)
 }
 
 func BenchmarkListIntersectRatio(b *testing.B) {
@@ -395,6 +477,8 @@ func BenchmarkListIntersectRatio(b *testing.B) {
 			if j < len(dst2.Uids) {
 				b.Errorf("Unexpected error in intersection")
 			}
+
+			codec.FreePack(compressedUids)
 		}
 	}
 
@@ -416,6 +500,43 @@ func skipDuplicate(in []uint64, idx int) int {
 
 func sortUint64(nums []uint64) {
 	sort.Slice(nums, func(i, j int) bool { return nums[i] < nums[j] })
+}
+
+func fillNumsDiff(N1, N2, N3 int) ([]uint64, []uint64, []uint64) {
+	rand.Seed(time.Now().UnixNano())
+
+	commonNums := make([]uint64, N1)
+	blockNums := make([]uint64, N1+N2)
+	otherNums := make([]uint64, N1+N3)
+	allC := make(map[uint64]bool)
+
+	for i := 0; i < N1; i++ {
+		val := rand.Uint64() % 1000
+		commonNums[i] = val
+		blockNums[i] = val
+		otherNums[i] = val
+		allC[val] = true
+	}
+
+	for i := N1; i < N1+N2; i++ {
+		val := rand.Uint64() % 1000
+		blockNums[i] = val
+		allC[val] = true
+	}
+
+	for i := N1; i < N1+N3; i++ {
+		val := rand.Uint64()
+		for ok := true; ok; _, ok = allC[val] {
+			val = rand.Uint64() % 1000
+		}
+		otherNums[i] = val
+	}
+
+	sortUint64(commonNums)
+	sortUint64(blockNums)
+	sortUint64(otherNums)
+
+	return commonNums, blockNums, otherNums
 }
 
 func fillNums(N1, N2 int) ([]uint64, []uint64, []uint64) {
@@ -459,10 +580,63 @@ func TestIntersectCompressedWithLinJump(t *testing.T) {
 
 			pack := enc.Done()
 			dec := codec.Decoder{Pack: pack}
+			dec.Seek(0, codec.SeekStart)
 
 			actual := make([]uint64, 0)
 			IntersectCompressedWithLinJump(&dec, otherNums, &actual)
 			require.Equal(t, commonNums, actual)
+			codec.FreePack(pack)
+		}
+	}
+}
+
+func TestIntersectCompressedWithBin(t *testing.T) {
+	//lengths := []int{0, 1, 3, 11, 100, 500, 1000}
+
+	for _, N1 := range []int{11} {
+		for _, N2 := range []int{3} {
+			// Intersection of blockNums and otherNums is commonNums.
+			commonNums, blockNums, otherNums := fillNumsDiff(N1/10, N1, N2)
+
+			enc := codec.Encoder{BlockSize: 10}
+			for _, num := range blockNums {
+				enc.Add(num)
+			}
+
+			pack := enc.Done()
+			dec := codec.Decoder{Pack: pack}
+			dec.Seek(0, codec.SeekStart)
+
+			actual := make([]uint64, 0)
+			IntersectCompressedWithBin(&dec, otherNums, &actual)
+			require.Equal(t, commonNums, actual)
+			codec.FreePack(pack)
+		}
+	}
+}
+
+func TestIntersectCompressedWithBinMissingSize(t *testing.T) {
+	lengths := []int{0, 1, 3, 11, 100, 500, 1000}
+
+	for _, N1 := range lengths {
+		for _, N2 := range lengths {
+			// Intersection of blockNums and otherNums is commonNums.
+			commonNums, blockNums, otherNums := fillNums(N1, N2)
+
+			// Set the block size to 0 to verify that the method still works in this case.
+			enc := codec.Encoder{BlockSize: 0}
+			for _, num := range blockNums {
+				enc.Add(num)
+			}
+
+			pack := enc.Done()
+			dec := codec.Decoder{Pack: pack}
+			dec.Seek(0, codec.SeekStart)
+
+			actual := make([]uint64, 0)
+			IntersectCompressedWithBin(&dec, otherNums, &actual)
+			require.Equal(t, commonNums, actual)
+			codec.FreePack(pack)
 		}
 	}
 }

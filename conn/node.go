@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,8 @@ package conn
 
 import (
 	"bytes"
+	"context"
+	"crypto/tls"
 	"encoding/binary"
 	"fmt"
 	"math/rand"
@@ -26,17 +28,18 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dgraph-io/badger/v2/y"
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/golang/glog"
+	"github.com/pkg/errors"
+	"go.etcd.io/etcd/raft/v3"
+	"go.etcd.io/etcd/raft/v3/raftpb"
+	otrace "go.opencensus.io/trace"
+
+	"github.com/dgraph-io/badger/v4/y"
+	"github.com/dgraph-io/dgo/v230/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/glog"
-	"github.com/pkg/errors"
-	"go.etcd.io/etcd/raft"
-	"go.etcd.io/etcd/raft/raftpb"
-	otrace "go.opencensus.io/trace"
-	"golang.org/x/net/context"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 var (
@@ -48,6 +51,12 @@ var (
 type Node struct {
 	x.SafeMutex
 
+	// Applied is used to keep track of the applied RAFT proposals.
+	// The stages are proposed -> committed (accepted by cluster) ->
+	// applied (to PL) -> synced (to BadgerDB).
+	// This needs to be 64 bit aligned for atomics to work on 32 bit machine.
+	Applied y.WaterMark
+
 	joinLock sync.Mutex
 
 	// Used to keep track of lin read requests.
@@ -58,35 +67,34 @@ type Node struct {
 	_raft      raft.Node
 
 	// Fields which are never changed after init.
-	Cfg         *raft.Config
-	MyAddr      string
-	Id          uint64
-	peers       map[uint64]string
-	confChanges map[uint64]chan error
-	messages    chan sendmsg
-	RaftContext *pb.RaftContext
-	Store       *raftwal.DiskStorage
-	Rand        *rand.Rand
+	StartTime       time.Time
+	Cfg             *raft.Config
+	MyAddr          string
+	Id              uint64
+	peers           map[uint64]string
+	confChanges     map[uint64]chan error
+	messages        chan sendmsg
+	RaftContext     *pb.RaftContext
+	Store           *raftwal.DiskStorage
+	Rand            *rand.Rand
+	tlsClientConfig *tls.Config
 
 	Proposals proposals
-	// applied is used to keep track of the applied RAFT proposals.
-	// The stages are proposed -> committed (accepted by cluster) ->
-	// applied (to PL) -> synced (to BadgerDB).
-	Applied y.WaterMark
 
 	heartbeatsOut int64
 	heartbeatsIn  int64
 }
 
 // NewNode returns a new Node instance.
-func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage) *Node {
+func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage, tlsConfig *tls.Config) *Node {
 	snap, err := store.Snapshot()
 	x.Check(err)
 
 	n := &Node{
-		Id:     rc.Id,
-		MyAddr: rc.Addr,
-		Store:  store,
+		StartTime: time.Now(),
+		Id:        rc.Id,
+		MyAddr:    rc.Addr,
+		Store:     store,
 		Cfg: &raft.Config{
 			ID:                       rc.Id,
 			ElectionTick:             20, // 2s if we call Tick() every 100 ms.
@@ -129,18 +137,20 @@ func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage) *Node {
 		},
 		// processConfChange etc are not throttled so some extra delta, so that we don't
 		// block tick when applyCh is full
-		Applied:     y.WaterMark{Name: fmt.Sprintf("Applied watermark")},
+		Applied:     y.WaterMark{Name: "Applied watermark"},
 		RaftContext: rc,
-		Rand:        rand.New(&lockedSource{src: rand.NewSource(time.Now().UnixNano())}),
-		confChanges: make(map[uint64]chan error),
-		messages:    make(chan sendmsg, 100),
-		peers:       make(map[uint64]string),
-		requestCh:   make(chan linReadReq, 100),
+		//nolint:gosec // random node id generator does not require cryptographic precision
+		Rand:            rand.New(&lockedSource{src: rand.NewSource(time.Now().UnixNano())}),
+		confChanges:     make(map[uint64]chan error),
+		messages:        make(chan sendmsg, 100),
+		peers:           make(map[uint64]string),
+		requestCh:       make(chan linReadReq, 100),
+		tlsClientConfig: tlsConfig,
 	}
-	n.Applied.Init(nil, true)
+	n.Applied.Init(nil)
 	// This should match up to the Applied index set above.
 	n.Applied.SetDoneUntil(n.Cfg.Applied)
-	glog.Infof("Setting raft.Config to: %+v\n", n.Cfg)
+	glog.Infof("Setting raft.Config to: %+v", n.Cfg)
 	return n
 }
 
@@ -196,6 +206,7 @@ func (n *Node) DoneConfChange(id uint64, err error) {
 	ch <- err
 }
 
+//nolint:gosec // random node id generator does not require cryptographic precision
 func (n *Node) storeConfChange(che chan error) uint64 {
 	n.Lock()
 	defer n.Unlock()
@@ -274,7 +285,7 @@ func (n *Node) Snapshot() (raftpb.Snapshot, error) {
 }
 
 // SaveToStorage saves the hard state, entries, and snapshot to persistent storage, in that order.
-func (n *Node) SaveToStorage(h raftpb.HardState, es []raftpb.Entry, s raftpb.Snapshot) {
+func (n *Node) SaveToStorage(h *raftpb.HardState, es []raftpb.Entry, s *raftpb.Snapshot) {
 	for {
 		if err := n.Store.Save(h, es, s); err != nil {
 			glog.Errorf("While trying to save Raft update: %v. Retrying...", err)
@@ -313,11 +324,7 @@ func (n *Node) PastLife() (uint64, bool, error) {
 		restart = true
 	}
 
-	var num int
-	num, rerr = n.Store.NumEntries()
-	if rerr != nil {
-		return 0, false, rerr
-	}
+	num := n.Store.NumEntries()
 	glog.Infof("Group %d found %d entries\n", n.RaftContext.Group, num)
 	// We'll always have at least one entry.
 	if num > 1 {
@@ -408,6 +415,8 @@ func (n *Node) streamMessages(to uint64, s *stream) {
 
 	var logged int
 	for range ticker.C { // Don't do this in an busy-wait loop, use a ticker.
+		// doSendMessage would block doing a stream. So, time.Now().After is
+		// only there to avoid a busy-wait.
 		if err := n.doSendMessage(to, s.msgCh); err != nil {
 			// Update lastLog so we print error only a few times if we are not able to connect.
 			// Otherwise, the log is polluted with repeated errors.
@@ -459,6 +468,10 @@ func (n *Node) doSendMessage(to uint64, msgCh chan []byte) error {
 	}
 
 	ctx = mc.Context()
+
+	fastTick := time.NewTicker(5 * time.Second)
+	defer fastTick.Stop()
+
 	ticker := time.NewTicker(3 * time.Minute)
 	defer ticker.Stop()
 
@@ -469,12 +482,17 @@ func (n *Node) doSendMessage(to uint64, msgCh chan []byte) error {
 				Context: n.RaftContext,
 				Payload: &api.Payload{Data: data},
 			}
-			packets++
 			slurp(batch) // Pick up more entries from msgCh, if present.
-			span.Annotatef(nil, "[Packets: %d] Sending data of length: %d.",
-				packets, len(batch.Payload.Data))
+			span.Annotatef(nil, "[to: %x] [Packets: %d] Sending data of length: %d.",
+				to, packets, len(batch.Payload.Data))
+			if packets%10000 == 0 {
+				glog.V(2).Infof("[to: %x] [Packets: %d] Sending data of length: %d.",
+					to, packets, len(batch.Payload.Data))
+			}
+			packets++
 			if err := mc.Send(batch); err != nil {
 				span.Annotatef(nil, "Error while mc.Send: %v", err)
+				glog.Errorf("[to: %x] Error while mc.Send: %v", to, err)
 				switch {
 				case strings.Contains(err.Error(), "TransientFailure"):
 					glog.Warningf("Reporting node: %d addr: %s as unreachable.", to, pool.Addr)
@@ -485,6 +503,23 @@ func (n *Node) doSendMessage(to uint64, msgCh chan []byte) error {
 				// We don't need to do anything if we receive any error while sending message.
 				// RAFT would automatically retry.
 				return err
+			}
+		case <-fastTick.C:
+			// We use this ticker, because during network partitions, mc.Send is
+			// unable to actually send packets, and also does not complain about
+			// them. We could have potentially used the separately tracked
+			// heartbeats to check this, but what we have observed is that
+			// incoming traffic might be OK, but outgoing might not be. So, this
+			// is a better way for us to verify whether this particular outbound
+			// connection is valid or not.
+			ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+			_, err := c.IsPeer(ctx, n.RaftContext)
+			cancel()
+			if err != nil {
+				glog.Errorf("Error while calling IsPeer %v. Reporting %x as unreachable.", err, to)
+				n.Raft().ReportUnreachable(to)
+				pool.SetUnhealthy()
+				return errors.Wrapf(err, "while calling IsPeer %x", to)
 			}
 		case <-ticker.C:
 			if lastPackets == packets {
@@ -519,7 +554,7 @@ func (n *Node) Connect(pid uint64, addr string) {
 		n.SetPeer(pid, addr)
 		return
 	}
-	GetPools().Connect(addr)
+	GetPools().Connect(addr, n.tlsClientConfig)
 	n.SetPeer(pid, addr)
 }
 
@@ -560,14 +595,9 @@ func (n *Node) proposeConfChange(ctx context.Context, conf raftpb.ConfChange) er
 	}
 }
 
-func (n *Node) addToCluster(ctx context.Context, pid uint64) error {
-	addr, ok := n.Peer(pid)
-	x.AssertTruef(ok, "Unable to find conn pool for peer: %#x", pid)
-	rc := &pb.RaftContext{
-		Addr:  addr,
-		Group: n.RaftContext.Group,
-		Id:    pid,
-	}
+func (n *Node) addToCluster(ctx context.Context, rc *pb.RaftContext) error {
+	pid := rc.Id
+	rc.SnapshotTs = 0
 	rcBytes, err := rc.Marshal()
 	x.Check(err)
 
@@ -576,9 +606,13 @@ func (n *Node) addToCluster(ctx context.Context, pid uint64) error {
 		NodeID:  pid,
 		Context: rcBytes,
 	}
+	if rc.IsLearner {
+		cc.Type = raftpb.ConfChangeAddLearnerNode
+	}
+
 	err = errInternalRetry
 	for err == errInternalRetry {
-		glog.Infof("Trying to add %#x to cluster. Addr: %v\n", pid, addr)
+		glog.Infof("Trying to add %#x to cluster. Addr: %v\n", pid, rc.Addr)
 		glog.Infof("Current confstate at %#x: %+v\n", n.Id, n.ConfState())
 		err = n.proposeConfChange(ctx, cc)
 	}
@@ -612,11 +646,16 @@ type linReadReq struct {
 var errReadIndex = errors.Errorf(
 	"Cannot get linearized read (time expired or no configured leader)")
 
+var readIndexOk, readIndexTotal uint64
+
 // WaitLinearizableRead waits until a linearizable read can be performed.
 func (n *Node) WaitLinearizableRead(ctx context.Context) error {
 	span := otrace.FromContext(ctx)
 	span.Annotate(nil, "WaitLinearizableRead")
 
+	if num := atomic.AddUint64(&readIndexTotal, 1); num%1000 == 0 {
+		glog.V(2).Infof("ReadIndex Total: %d\n", num)
+	}
 	indexCh := make(chan uint64, 1)
 	select {
 	case n.requestCh <- linReadReq{indexCh: indexCh}:
@@ -631,6 +670,8 @@ func (n *Node) WaitLinearizableRead(ctx context.Context) error {
 		span.Annotatef(nil, "Received index: %d", index)
 		if index == 0 {
 			return errReadIndex
+		} else if num := atomic.AddUint64(&readIndexOk, 1); num%1000 == 0 {
+			glog.V(2).Infof("ReadIndex OK: %d\n", num)
 		}
 		err := n.Applied.WaitForMark(ctx, index)
 		span.Annotatef(nil, "Error from Applied.WaitForMark: %v", err)
@@ -642,7 +683,7 @@ func (n *Node) WaitLinearizableRead(ctx context.Context) error {
 }
 
 // RunReadIndexLoop runs the RAFT index in a loop.
-func (n *Node) RunReadIndexLoop(closer *y.Closer, readStateCh <-chan raft.ReadState) {
+func (n *Node) RunReadIndexLoop(closer *z.Closer, readStateCh <-chan raft.ReadState) {
 	defer closer.Done()
 	readIndex := func(activeRctx []byte) (uint64, error) {
 		// Read Request can get rejected then we would wait indefinitely on the channel
@@ -696,7 +737,7 @@ func (n *Node) RunReadIndexLoop(closer *y.Closer, readStateCh <-chan raft.ReadSt
 			// call, causing more unique traffic and further delays in request processing.
 			activeRctx := make([]byte, 8)
 			x.Check2(n.Rand.Read(activeRctx))
-			glog.V(3).Infof("Request readctx: %#x", activeRctx)
+			glog.V(4).Infof("Request readctx: %#x", activeRctx)
 			for {
 				index, err := readIndex(activeRctx)
 				if err == errInternalRetry {
@@ -740,7 +781,7 @@ func (n *Node) joinCluster(ctx context.Context, rc *pb.RaftContext) (*api.Payloa
 	}
 	n.Connect(rc.Id, rc.Addr)
 
-	err := n.addToCluster(context.Background(), rc.Id)
+	err := n.addToCluster(context.Background(), rc)
 	glog.Infof("[%#x] Done joining cluster with err: %v", rc.Id, err)
 	return &api.Payload{}, err
 }

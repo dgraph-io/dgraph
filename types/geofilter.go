@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2016-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,11 +22,12 @@ import (
 	"strings"
 
 	"github.com/golang/geo/s2"
+	"github.com/pkg/errors"
 	geom "github.com/twpayne/go-geom"
+	"github.com/twpayne/go-geom/xy"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/pkg/errors"
 )
 
 // QueryType indicates the type of geo query.
@@ -311,12 +312,13 @@ func (q GeoQueryData) contains(g geom.T) bool {
 	x.AssertTruef(q.pt != nil || len(q.loops) > 0, "At least a point or loop should be defined.")
 	switch v := g.(type) {
 	case *geom.Polygon:
+		if q.pt != nil {
+			return polygonContainsCoord(v, q.pt)
+		}
+
 		s2loop, err := loopFromPolygon(v)
 		if err != nil {
 			return false
-		}
-		if q.pt != nil {
-			return s2loop.ContainsPoint(*q.pt)
 		}
 
 		// Input could be a multipolygon, in which q.loops would have more than 1 loop. Each loop
@@ -329,16 +331,13 @@ func (q GeoQueryData) contains(g geom.T) bool {
 		return true
 	case *geom.MultiPolygon:
 		if q.pt != nil {
-			for i := 0; i < v.NumPolygons(); i++ {
-				p := v.Polygon(i)
-				s2loop, err := loopFromPolygon(p)
-				if err != nil {
-					return false
-				}
-				if s2loop.ContainsPoint(*q.pt) {
+			for j := 0; j < v.NumPolygons(); j++ {
+				if polygonContainsCoord(v.Polygon(j), q.pt) {
 					return true
 				}
 			}
+
+			return false
 		}
 
 		if len(q.loops) > 0 {
@@ -356,6 +355,19 @@ func (q GeoQueryData) contains(g geom.T) bool {
 		// We will only consider polygons for contains queries.
 		return false
 	}
+}
+
+func polygonContainsCoord(v *geom.Polygon, pt *s2.Point) bool {
+	for i := 0; i < v.NumLinearRings(); i++ {
+		r := v.LinearRing(i)
+		ll := s2.LatLngFromPoint(*pt)
+		p := []float64{ll.Lng.Degrees(), ll.Lat.Degrees()}
+		if xy.IsPointInRing(r.Layout(), p, r.FlatCoords()) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // returns true if the geometry represented by uid/attr intersects the given loop or point

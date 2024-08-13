@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ const (
 	floatType
 	doubleType
 	datetimeType
-	uidType // foreign key reference, which would corrspond to uid type in Dgraph
+	uidType // foreign key reference, which would correspond to uid type in Dgraph
 )
 
 // the typeToString map is used to generate the Dgraph schema file
@@ -44,6 +44,7 @@ func initDataTypes() {
 
 	sqlTypeToInternal = make(map[string]dataType)
 	sqlTypeToInternal["int"] = intType
+	sqlTypeToInternal["tinyint"] = intType
 	sqlTypeToInternal["varchar"] = stringType
 	sqlTypeToInternal["text"] = stringType
 	sqlTypeToInternal["date"] = datetimeType

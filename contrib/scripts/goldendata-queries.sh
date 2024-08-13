@@ -1,5 +1,7 @@
 #!/bin/bash
 
+basedir=$(dirname "${BASH_SOURCE[0]}")/../..
+source $basedir/contrib/scripts/functions.sh
 pushd $(dirname "${BASH_SOURCE[0]}")/queries &> /dev/null
 
 function run_index_test {
@@ -15,7 +17,8 @@ function run_index_test {
   while (( $attempt < $max_attempts ))
   do
     set +e
-    N=`curl -s -H 'Content-Type: application/graphql+-' localhost:8180/query -XPOST -d @${X}.in`
+    accessToken=`loginWithGroot`
+    N=`curl -s -H 'Content-Type: application/dql' localhost:8180/query -XPOST -d @${X}.in -H "X-Dgraph-AccessToken: $accessToken"`
     exitCode=$?
 
     set -e
@@ -31,7 +34,7 @@ function run_index_test {
     timeout=$(( timeout * 2 ))
   done
 
-  NUM=$(echo $N | python -m json.tool | grep $GREPFOR | wc -l)
+  NUM=$(echo $N | python3 -m json.tool | grep $GREPFOR | wc -l)
   if [[ ! "$NUM" -eq "$ANS" ]]; then
     echo "Index test failed: ${X}  Expected: $ANS  Got: $NUM"
     exit 1

@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2016-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,15 +19,20 @@ package tok
 import (
 	"encoding/binary"
 	"plugin"
+	"strings"
 	"time"
 
 	"github.com/golang/glog"
-	geom "github.com/twpayne/go-geom"
+	"github.com/pkg/errors"
+	"github.com/twpayne/go-geom"
 	"golang.org/x/crypto/blake2b"
+	"golang.org/x/text/collate"
 
+	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/tok/hnsw"
+	opts "github.com/dgraph-io/dgraph/tok/options"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/pkg/errors"
 )
 
 // Tokenizer identifiers are unique and can't be reused.
@@ -35,21 +40,26 @@ import (
 // The range 0x80 - 0xff is for custom tokenizers.
 // TODO: use these everywhere where we must ensure a system tokenizer.
 const (
-	IdentNone     = 0x0
-	IdentTerm     = 0x1
-	IdentExact    = 0x2
-	IdentYear     = 0x4
-	IdentMonth    = 0x41
-	IdentDay      = 0x42
-	IdentHour     = 0x43
-	IdentGeo      = 0x5
-	IdentInt      = 0x6
-	IdentFloat    = 0x7
-	IdentFullText = 0x8
-	IdentBool     = 0x9
-	IdentTrigram  = 0xA
-	IdentHash     = 0xB
-	IdentCustom   = 0x80
+	IdentNone      = 0x0
+	IdentTerm      = 0x1
+	IdentExact     = 0x2
+	IdentExactLang = 0x3
+	IdentYear      = 0x4
+	IdentMonth     = 0x41
+	IdentDay       = 0x42
+	IdentHour      = 0x43
+	IdentGeo       = 0x5
+	IdentInt       = 0x6
+	IdentFloat     = 0x7
+	IdentFullText  = 0x8
+	IdentBool      = 0x9
+	IdentTrigram   = 0xA
+	IdentHash      = 0xB
+	IdentSha       = 0xC
+	// Reserving 0xD for IdentBigFloat
+	IdentVFloat    = 0xE
+	IdentCustom    = 0x80
+	IdentDelimiter = 0x1f // ASCII 31 - Unit separator
 )
 
 // Tokenizer defines what a tokenizer must provide.
@@ -73,15 +83,17 @@ type Tokenizer interface {
 	// IsSortable returns true if the tokenizer can be used for sorting/ordering.
 	IsSortable() bool
 
-	// IsLossy() returns true if we don't store the values directly as index keys
+	// IsLossy returns true if we don't store the values directly as index keys
 	// during tokenization. If a predicate is tokenized using an IsLossy() tokenizer,
 	// then we need to fetch the actual value and compare.
 	IsLossy() bool
 }
 
 var tokenizers = make(map[string]Tokenizer)
+var indexFactories = make(map[string]IndexFactory)
 
 func init() {
+	registerIndexFactory(createIndexFactory(hnsw.CreateFactory[float32](32)))
 	registerTokenizer(GeoTokenizer{})
 	registerTokenizer(IntTokenizer{})
 	registerTokenizer(FloatTokenizer{})
@@ -95,6 +107,7 @@ func init() {
 	registerTokenizer(HashTokenizer{})
 	registerTokenizer(TermTokenizer{})
 	registerTokenizer(FullTextTokenizer{})
+	registerTokenizer(Sha256Tokenizer{})
 	setupBleve()
 }
 
@@ -146,6 +159,63 @@ func GetTokenizerByID(id byte) (Tokenizer, bool) {
 func GetTokenizer(name string) (Tokenizer, bool) {
 	t, found := tokenizers[name]
 	return t, found
+}
+
+// GetIndexFactory returns IndexFactory given name.
+func GetIndexFactory(name string) (IndexFactory, bool) {
+	f, found := indexFactories[name]
+	return f, found
+}
+
+func getOptsFromFactorySpec(f IndexFactory, spec *pb.VectorIndexSpec) (opts.Options, error) {
+	allowedOpts := f.AllowedOptions()
+	retVal := opts.NewOptions()
+	for _, optPair := range spec.Options {
+		val, err := allowedOpts.GetParsedOption(optPair.Key, optPair.Value)
+		if err != nil {
+			return nil, err
+		}
+		retVal.SetOpt(optPair.Key, val)
+	}
+	return retVal, nil
+}
+
+func GetFactoryCreateSpecFromSpec(spec *pb.VectorIndexSpec) (*FactoryCreateSpec, error) {
+	factory, found := GetIndexFactoryFromSpec(spec)
+	if !found {
+		return &FactoryCreateSpec{}, errors.Errorf(
+			"cannot find index factory named '%s'", spec.Name)
+	}
+	opts, err := getOptsFromFactorySpec(factory, spec)
+	if err != nil {
+		return &FactoryCreateSpec{}, err
+	}
+	return &FactoryCreateSpec{factory: factory, opts: opts}, nil
+}
+
+func GetIndexFactoryFromSpec(spec *pb.VectorIndexSpec) (IndexFactory, bool) {
+	return GetIndexFactory(spec.Name)
+}
+
+func GetIndexFactoryOptsFromSpec(spec *pb.VectorIndexSpec) (opts.Options, error) {
+	factory, found := GetIndexFactoryFromSpec(spec)
+	if !found {
+		return nil, errors.Errorf(
+			"cannot get Options for factory named '%s' (factory not found)",
+			spec.Name)
+	}
+	return getOptsFromFactorySpec(factory, spec)
+}
+
+func GetIndexFactoriesFromSpecs(specs []*pb.VectorIndexSpec) []IndexFactory {
+	retVal := []IndexFactory{}
+	for _, spec := range specs {
+		f, found := GetIndexFactoryFromSpec(spec)
+		if found {
+			retVal = append(retVal, f)
+		}
+	}
+	return retVal
 }
 
 // GetTokenizers returns a list of tokenizer given a list of unique names.
@@ -272,7 +342,9 @@ func (t HourTokenizer) IsSortable() bool { return true }
 func (t HourTokenizer) IsLossy() bool    { return true }
 
 // TermTokenizer generates term tokens from string data.
-type TermTokenizer struct{}
+type TermTokenizer struct {
+	lang string
+}
 
 func (t TermTokenizer) Name() string { return "term" }
 func (t TermTokenizer) Type() string { return "string" }
@@ -281,27 +353,71 @@ func (t TermTokenizer) Tokens(v interface{}) ([]string, error) {
 	if !ok || str == "" {
 		return []string{str}, nil
 	}
-	tokens := termAnalyzer.Analyze([]byte(str))
-	return uniqueTerms(tokens), nil
+	lang := LangBase(t.lang)
+	switch lang {
+	case "zh", "ja", "th", "lo", "my", "bo", "km", "kxm":
+		// Chinese, Japanese, Thai, Lao, Burmese, Tibetan and Khmer (km, kxm)
+		// do not use spaces as delimiters. We simply split by space.
+		tokens := strings.Split(str, " ")
+		return x.RemoveDuplicates(tokens), nil
+	default:
+		tokens := termAnalyzer.Analyze([]byte(str))
+		return uniqueTerms(tokens), nil
+	}
+
 }
 func (t TermTokenizer) Identifier() byte { return IdentTerm }
 func (t TermTokenizer) IsSortable() bool { return false }
 func (t TermTokenizer) IsLossy() bool    { return true }
 
-// ExactTokenizer returns the exact string as a token.
-type ExactTokenizer struct{}
+// ExactTokenizer returns the exact string as a token. If collator is provided for
+// any language then it also adds the language in the prefix .
+type ExactTokenizer struct {
+	langBase string
+	cl       *collate.Collator
+	buffer   *collate.Buffer
+}
 
 func (t ExactTokenizer) Name() string { return "exact" }
 func (t ExactTokenizer) Type() string { return "string" }
 func (t ExactTokenizer) Tokens(v interface{}) ([]string, error) {
-	if term, ok := v.(string); ok {
-		return []string{term}, nil
+	val, ok := v.(string)
+	if !ok {
+		return nil, errors.Errorf("Exact indices only supported for string types")
 	}
-	return nil, errors.Errorf("Exact indices only supported for string types")
+
+	if t.cl == nil {
+		return []string{val}, nil
+	}
+
+	encodedTerm := t.cl.KeyFromString(t.buffer, val)
+
+	term := make([]byte, 0, len(t.langBase)+2+len(encodedTerm))
+	term = append(term, []byte(t.langBase)...)
+	term = append(term, IdentDelimiter)
+	term = append(term, encodedTerm...)
+
+	t.buffer.Reset()
+	return []string{string(term)}, nil
 }
-func (t ExactTokenizer) Identifier() byte { return IdentExact }
+
+func (t ExactTokenizer) Identifier() byte {
+	if t.cl == nil {
+		return IdentExact
+	}
+	return IdentExactLang
+}
 func (t ExactTokenizer) IsSortable() bool { return true }
 func (t ExactTokenizer) IsLossy() bool    { return false }
+func (t ExactTokenizer) Prefix() []byte {
+	if t.cl == nil {
+		return []byte{IdentExact}
+	}
+	prefix := []byte{IdentExactLang}
+	prefix = append(prefix, []byte(t.langBase)...)
+	prefix = append(prefix, IdentDelimiter)
+	return prefix
+}
 
 // FullTextTokenizer generates full-text tokens from string data.
 type FullTextTokenizer struct{ lang string }
@@ -313,7 +429,7 @@ func (t FullTextTokenizer) Tokens(v interface{}) ([]string, error) {
 	if !ok || str == "" {
 		return []string{}, nil
 	}
-	lang := langBase(t.lang)
+	lang := LangBase(t.lang)
 	// pass 1 - lowercase and normalize input
 	tokens := fulltextAnalyzer.Analyze([]byte(str))
 	// pass 2 - filter stop words
@@ -326,6 +442,24 @@ func (t FullTextTokenizer) Tokens(v interface{}) ([]string, error) {
 func (t FullTextTokenizer) Identifier() byte { return IdentFullText }
 func (t FullTextTokenizer) IsSortable() bool { return false }
 func (t FullTextTokenizer) IsLossy() bool    { return true }
+
+// Sha256Tokenizer generates tokens for the sha256 hash part from string data.
+type Sha256Tokenizer struct{ _ string }
+
+func (t Sha256Tokenizer) Name() string { return "sha256" }
+func (t Sha256Tokenizer) Type() string { return "string" }
+func (t Sha256Tokenizer) Tokens(v interface{}) ([]string, error) {
+	str, ok := v.(string)
+	if !ok || len(str) < 64 {
+		return []string{}, nil
+	}
+	// The first 64 characters contain the sha256 for a query in hex format so
+	// lets extract and index that part.
+	return []string{str[:64]}, nil
+}
+func (t Sha256Tokenizer) Identifier() byte { return IdentSha }
+func (t Sha256Tokenizer) IsSortable() bool { return false }
+func (t Sha256Tokenizer) IsLossy() bool    { return false }
 
 // BoolTokenizer returns tokens from boolean data.
 type BoolTokenizer struct{}

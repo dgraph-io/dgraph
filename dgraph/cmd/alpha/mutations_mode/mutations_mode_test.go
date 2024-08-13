@@ -1,5 +1,7 @@
+//go:build integration
+
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,20 +23,16 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dgraph-io/dgo/v2"
-	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/stretchr/testify/require"
-
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+
+	"github.com/dgraph-io/dgo/v230"
+	"github.com/dgraph-io/dgo/v230/protos/api"
+	"github.com/dgraph-io/dgraph/testutil"
 )
 
-// Tests in this file require a cluster running with the --mutations=<mode> option.
-
-// Since this requires three alphas they will likely always be run with docker-compose,
-// so no point in trying to use testutil.TestSockAddr here.
-const disallowModeAlpha = "localhost:9180"
-const strictModeAlphaGroup1 = "localhost:9182"
-const strictModeAlphaGroup2 = "localhost:9183"
+// Tests in this file require a cluster running with the --limit "mutations=<mode>;" flag.
 
 func runOn(conn *grpc.ClientConn, fn func(*testing.T, *dgo.Dgraph)) func(*testing.T) {
 	return func(t *testing.T) {
@@ -45,15 +43,12 @@ func runOn(conn *grpc.ClientConn, fn func(*testing.T, *dgo.Dgraph)) func(*testin
 
 func dropAllDisallowed(t *testing.T, dg *dgo.Dgraph) {
 	err := dg.Alter(context.Background(), &api.Operation{DropAll: true})
-
 	require.Error(t, err)
 	require.Contains(t, strings.ToLower(err.Error()), "no mutations allowed")
 }
 
 func dropAllAllowed(t *testing.T, dg *dgo.Dgraph) {
-	err := dg.Alter(context.Background(), &api.Operation{DropAll: true})
-
-	require.NoError(t, err)
+	require.NoError(t, dg.Alter(context.Background(), &api.Operation{DropAll: true}))
 }
 
 func mutateNewDisallowed(t *testing.T, dg *dgo.Dgraph) {
@@ -97,21 +92,17 @@ func addPredicateDisallowed(t *testing.T, dg *dgo.Dgraph) {
 
 func addPredicateAllowed1(t *testing.T, dg *dgo.Dgraph) {
 	ctx := context.Background()
-
 	err := dg.Alter(ctx, &api.Operation{
 		Schema: `name: string @index(exact) .`,
 	})
-
 	require.NoError(t, err)
 }
 
 func addPredicateAllowed2(t *testing.T, dg *dgo.Dgraph) {
 	ctx := context.Background()
-
 	err := dg.Alter(ctx, &api.Operation{
 		Schema: `size: string @index(exact) .`,
 	})
-
 	require.NoError(t, err)
 }
 
@@ -159,7 +150,8 @@ func mutateExistingAllowed2(t *testing.T, dg *dgo.Dgraph) {
 }
 
 func TestMutationsDisallow(t *testing.T) {
-	conn, err := grpc.Dial(disallowModeAlpha, grpc.WithInsecure())
+	a := testutil.ContainerAddr("alpha1", 9080)
+	conn, err := grpc.Dial(a, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("Cannot perform drop all op: %s", err.Error())
 	}
@@ -176,13 +168,15 @@ func TestMutationsDisallow(t *testing.T) {
 }
 
 func TestMutationsStrict(t *testing.T) {
-	conn1, err := grpc.Dial(strictModeAlphaGroup1, grpc.WithInsecure())
+	a1 := testutil.ContainerAddr("alpha2", 9080)
+	conn1, err := grpc.Dial(a1, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("Cannot perform drop all op: %s", err.Error())
 	}
 	defer conn1.Close()
 
-	conn2, err := grpc.Dial(strictModeAlphaGroup2, grpc.WithInsecure())
+	a2 := testutil.ContainerAddr("alpha3", 9080)
+	conn2, err := grpc.Dial(a2, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("Cannot perform drop all op: %s", err.Error())
 	}

@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,16 +17,10 @@
 package testutil
 
 import (
-	"github.com/minio/minio-go"
-)
-
-var (
-	accessKey     = "accesskey"
-	secretKey     = "secretkey"
-	minioEndpoint = "localhost:9001"
+	"github.com/minio/minio-go/v6"
 )
 
 // NewMinioClient returns a minio client.
 func NewMinioClient() (*minio.Client, error) {
-	return minio.New(minioEndpoint, accessKey, secretKey, false)
+	return minio.New(MinioInstance, "accesskey", "secretkey", false)
 }

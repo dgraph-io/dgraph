@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,10 +21,11 @@ import (
 	"sort"
 	"strconv"
 
+	"github.com/pkg/errors"
+
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
-	"github.com/pkg/errors"
 )
 
 type groupPair struct {
@@ -157,7 +158,9 @@ func aggregateGroup(grp *groupResult, child *SubGraph) (types.Val, error) {
 		if err != nil {
 			continue
 		}
-		ag.Apply(val)
+		if err := ag.Apply(val); err != nil {
+			return types.Val{}, err
+		}
 	}
 	return ag.Value()
 }
@@ -391,19 +394,22 @@ func (sg *SubGraph) processGroupBy(doneVars map[string]varValue, path []*SubGrap
 }
 
 func groupLess(a, b *groupResult) bool {
-	if len(a.uids) < len(b.uids) {
+	switch {
+	case len(a.uids) < len(b.uids):
 		return true
-	} else if len(a.uids) != len(b.uids) {
+	case len(a.uids) != len(b.uids):
 		return false
 	}
-	if len(a.keys) < len(b.keys) {
+	switch {
+	case len(a.keys) < len(b.keys):
 		return true
-	} else if len(a.keys) != len(b.keys) {
+	case len(a.keys) != len(b.keys):
 		return false
 	}
-	if len(a.aggregates) < len(b.aggregates) {
+	switch {
+	case len(a.aggregates) < len(b.aggregates):
 		return true
-	} else if len(a.aggregates) != len(b.aggregates) {
+	case len(a.aggregates) != len(b.aggregates):
 		return false
 	}
 

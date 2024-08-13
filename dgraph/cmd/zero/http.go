@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,16 +18,20 @@ package zero
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"net"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/gogo/protobuf/jsonpb"
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
+
+	"github.com/dgraph-io/dgo/v230/protos/api"
+	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 // intFromQueryParam checks for name as a query param, converts it to uint64 and returns it.
@@ -65,7 +69,7 @@ func (st *state) assign(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	num := &pb.Num{Val: uint64(val)}
+	num := &pb.Num{Val: val}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -74,15 +78,20 @@ func (st *state) assign(w http.ResponseWriter, r *http.Request) {
 	what := r.URL.Query().Get("what")
 	switch what {
 	case "uids":
-		ids, err = st.zero.AssignUids(ctx, num)
+		num.Type = pb.Num_UID
+		ids, err = st.zero.AssignIds(ctx, num)
 	case "timestamps":
+		num.Type = pb.Num_TXN_TS
 		if num.Val == 0 {
 			num.ReadOnly = true
 		}
 		ids, err = st.zero.Timestamps(ctx, num)
+	case "nsids":
+		num.Type = pb.Num_NS_ID
+		ids, err = st.zero.AssignIds(ctx, num)
 	default:
 		x.SetStatus(w, x.Error,
-			fmt.Sprintf("Invalid what: [%s]. Must be one of uids or timestamps", what))
+			fmt.Sprintf("Invalid what: [%s]. Must be one of: [uids, timestamps, nsids]", what))
 		return
 	}
 	if err != nil {
@@ -90,7 +99,7 @@ func (st *state) assign(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	m := jsonpb.Marshaler{}
+	m := jsonpb.Marshaler{EmitDefaults: true}
 	if err := m.Marshal(w, ids); err != nil {
 		x.SetStatus(w, x.ErrorNoData, err.Error())
 		return
@@ -119,7 +128,10 @@ func (st *state) removeNode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := st.zero.removeNode(context.Background(), nodeId, uint32(groupId)); err != nil {
+	if _, err := st.zero.RemoveNode(
+		context.Background(),
+		&pb.RemoveNodeRequest{NodeId: nodeId, GroupId: uint32(groupId)},
+	); err != nil {
 		x.SetStatus(w, x.Error, err.Error())
 		return
 	}
@@ -149,6 +161,18 @@ func (st *state) moveTablet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	namespace := r.URL.Query().Get("namespace")
+	namespace = strings.TrimSpace(namespace)
+	ns := x.GalaxyNamespace
+	if namespace != "" {
+		var err error
+		if ns, err = strconv.ParseUint(namespace, 0, 64); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			x.SetStatus(w, x.ErrorInvalidRequest, "Invalid namespace in query parameter.")
+			return
+		}
+	}
+
 	tablet := r.URL.Query().Get("tablet")
 	if len(tablet) == 0 {
 		w.WriteHeader(http.StatusBadRequest)
@@ -159,50 +183,28 @@ func (st *state) moveTablet(w http.ResponseWriter, r *http.Request) {
 	groupId, ok := intFromQueryParam(w, r, "group")
 	if !ok {
 		w.WriteHeader(http.StatusBadRequest)
-		x.SetStatus(w, x.ErrorInvalidRequest, fmt.Sprintf(
-			"Query parameter 'group' should contain a valid integer."))
+		x.SetStatus(w, x.ErrorInvalidRequest,
+			"Query parameter 'group' should contain a valid integer.")
 		return
 	}
 	dstGroup := uint32(groupId)
-	knownGroups := st.zero.KnownGroups()
-	var isKnown bool
-	for _, grp := range knownGroups {
-		if grp == dstGroup {
-			isKnown = true
-			break
+
+	var resp *pb.Status
+	var err error
+	if resp, err = st.zero.MoveTablet(
+		context.Background(),
+		&pb.MoveTabletRequest{Namespace: ns, Tablet: tablet, DstGroup: dstGroup},
+	); err != nil {
+		if resp.GetMsg() == x.ErrorInvalidRequest {
+			w.WriteHeader(http.StatusBadRequest)
+			x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+		} else {
+			w.WriteHeader(http.StatusInternalServerError)
+			x.SetStatus(w, x.Error, err.Error())
 		}
-	}
-	if !isKnown {
-		w.WriteHeader(http.StatusBadRequest)
-		x.SetStatus(w, x.ErrorInvalidRequest, fmt.Sprintf("Group: [%d] is not a known group.",
-			dstGroup))
 		return
 	}
-
-	tab := st.zero.ServingTablet(tablet)
-	if tab == nil {
-		w.WriteHeader(http.StatusBadRequest)
-		x.SetStatus(w, x.ErrorInvalidRequest, fmt.Sprintf("No tablet found for: %s", tablet))
-		return
-	}
-
-	srcGroup := tab.GroupId
-	if srcGroup == dstGroup {
-		w.WriteHeader(http.StatusInternalServerError)
-		x.SetStatus(w, x.ErrorInvalidRequest,
-			fmt.Sprintf("Tablet: [%s] is already being served by group: [%d]", tablet, srcGroup))
-		return
-	}
-
-	if err := st.zero.movePredicate(tablet, srcGroup, dstGroup); err != nil {
-		glog.Errorf("While moving predicate %s from %d -> %d. Error: %v",
-			tablet, srcGroup, dstGroup, err)
-		w.WriteHeader(http.StatusInternalServerError)
-		x.SetStatus(w, x.Error, err.Error())
-		return
-	}
-	_, err := fmt.Fprintf(w, "Predicate: [%s] moved from group [%d] to [%d]",
-		tablet, srcGroup, dstGroup)
+	_, err = fmt.Fprint(w, resp.GetMsg())
 	if err != nil {
 		glog.Warningf("Error while writing response: %+v", err)
 	}
@@ -225,30 +227,63 @@ func (st *state) getState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	m := jsonpb.Marshaler{}
+	m := jsonpb.Marshaler{EmitDefaults: true}
 	if err := m.Marshal(w, mstate); err != nil {
 		x.SetStatus(w, x.ErrorNoData, err.Error())
 		return
 	}
 }
 
-func (st *state) serveHTTP(l net.Listener) {
-	srv := &http.Server{
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 600 * time.Second,
-		IdleTimeout:  2 * time.Minute,
+func (s *Server) zeroHealth(ctx context.Context) (*api.Response, error) {
+	if ctx.Err() != nil {
+		return nil, errors.Wrap(ctx.Err(), "http request context error")
 	}
+	health := pb.HealthInfo{
+		Instance: "zero",
+		Address:  x.WorkerConfig.MyAddr,
+		Status:   "healthy",
+		Version:  x.Version(),
+		Uptime:   int64(time.Since(x.WorkerConfig.StartTime) / time.Second),
+		LastEcho: time.Now().Unix(),
+	}
+	jsonOut, err := json.Marshal(health)
+	if err != nil {
+		return nil, errors.Wrapf(err, "unable to marshal zero health, error")
+	}
+	return &api.Response{Json: jsonOut}, nil
+}
 
-	go func() {
-		defer st.zero.closer.Done()
-		err := srv.Serve(l)
-		glog.Errorf("Stopped taking more http(s) requests. Err: %v", err)
-		ctx, cancel := context.WithTimeout(context.Background(), 630*time.Second)
-		defer cancel()
-		err = srv.Shutdown(ctx)
-		glog.Infoln("All http(s) requests finished.")
+func (st *state) pingResponse(w http.ResponseWriter, r *http.Request) {
+	x.AddCorsHeaders(w)
+
+	/*
+	 * zero is changed to also output the health in JSON format for client
+	 * request header "Accept: application/json".
+	 *
+	 * Backward compatibility- Before this change the '/health' endpoint
+	 * used to output the string OK. After the fix it returns OK when the
+	 * client sends the request without "Accept: application/json" in its
+	 * http header.
+	 */
+	switch r.Header.Get("Accept") {
+	case "application/json":
+		resp, err := (st.zero).zeroHealth(r.Context())
 		if err != nil {
-			glog.Errorf("Http(s) shutdown err: %v", err)
+			x.SetStatus(w, x.Error, err.Error())
+			return
 		}
-	}()
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		if _, err := w.Write(resp.Json); err != nil {
+			glog.Warningf("http error send failed, error msg=[%v]", err)
+			return
+		}
+	default:
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		if _, err := w.Write([]byte("OK")); err != nil {
+			glog.Warningf("http error send failed, error msg=[%v]", err)
+			return
+		}
+	}
 }

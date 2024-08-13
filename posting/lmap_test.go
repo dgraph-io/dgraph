@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2015-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 package posting
 
 import (
+	"math"
 	"math/rand"
 	"testing"
 )
@@ -28,7 +29,7 @@ func BenchmarkGet(b *testing.B) {
 		for pb.Next() {
 			// i := uint64(rand.Int63())
 			_ = uint64(rand.Int63())
-			getNew(key, nil)
+			_, _ = getNew(key, nil, math.MaxUint64)
 			// lmap.Get(i)
 		}
 	})
@@ -40,7 +41,7 @@ func BenchmarkGetLinear(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		k := uint64(i)
 		if _, ok := m[k]; !ok {
-			l, err := getNew(key, nil)
+			l, err := getNew(key, nil, math.MaxUint64)
 			if err != nil {
 				b.Error(err)
 			}

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,25 +17,36 @@
 package cmd
 
 import (
+	"bytes"
+	"encoding/json"
 	"flag"
+	"fmt"
+	"io"
 	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
+	"unicode"
 
-	"github.com/dgraph-io/dgraph/dgraph/cmd/migrate"
+	"github.com/pkg/errors"
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 
+	checkupgrade "github.com/dgraph-io/dgraph/check_upgrade"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/alpha"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/bulk"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/cert"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/conv"
-	"github.com/dgraph-io/dgraph/dgraph/cmd/counter"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/debug"
+	"github.com/dgraph-io/dgraph/dgraph/cmd/debuginfo"
+	"github.com/dgraph-io/dgraph/dgraph/cmd/decrypt"
+	"github.com/dgraph-io/dgraph/dgraph/cmd/increment"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/live"
+	"github.com/dgraph-io/dgraph/dgraph/cmd/migrate"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/version"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
+	"github.com/dgraph-io/dgraph/upgrade"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/pkg/errors"
-	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 // RootCmd represents the base command when called without any subcommands
@@ -45,7 +56,7 @@ var RootCmd = &cobra.Command{
 	Long: `
 Dgraph is a horizontally scalable and distributed graph database,
 providing ACID transactions, consistent replication and linearizable reads.
-It's built from ground up to perform for a rich set of queries. Being a native
+It's built from the ground up to perform for a rich set of queries. Being a native
 graph database, it tightly controls how the data is arranged on disk to optimize
 for query performance and throughput, reducing disk seeks and network calls in a
 cluster.
@@ -73,7 +84,8 @@ var rootConf = viper.New()
 // subcommands initially contains all default sub-commands.
 var subcommands = []*x.SubCommand{
 	&bulk.Bulk, &cert.Cert, &conv.Conv, &live.Live, &alpha.Alpha, &zero.Zero, &version.Version,
-	&debug.Debug, &counter.Increment, &migrate.Migrate,
+	&debug.Debug, &migrate.Migrate, &debuginfo.DebugInfo, &upgrade.Upgrade, &decrypt.Decrypt, &increment.Increment,
+	&checkupgrade.CheckUpgrade,
 }
 
 func initCmds() {
@@ -113,6 +125,7 @@ func initCmds() {
 	}
 	// For bash shell completion
 	RootCmd.AddCommand(shellCompletionCmd())
+	RootCmd.SetHelpTemplate(x.RootTemplate)
 
 	cobra.OnInitialize(func() {
 		// When run inside docker, the working_dir is created by root even if afterward
@@ -127,13 +140,41 @@ func initCmds() {
 			x.CheckfNoTrace(os.Chdir(cwd))
 		}
 
-		cfg := rootConf.GetString("config")
-		if cfg == "" {
-			return
-		}
 		for _, sc := range subcommands {
-			sc.Conf.SetConfigFile(cfg)
-			x.Check(errors.Wrapf(sc.Conf.ReadInConfig(), "reading config"))
+			// Set config file is provided for each subcommand, this is done
+			// for individual subcommand because each subcommand has its own config
+			// prefix, like `dgraph zero` expects the prefix to be `DGRAPH_ZERO`.
+			cfg := sc.Conf.GetString("config")
+			if cfg == "" {
+				continue
+			}
+			// TODO: might want to put the rest of this scope outside the for loop, do we need to
+			//       read the config file for each subcommand if there's only one global config
+			//       file?
+			cfgFile, err := os.OpenFile(cfg, os.O_RDONLY, 0644)
+			if err != nil {
+				x.Fatalf("unable to open config file for reading: %v", err)
+			}
+			cfgData, err := io.ReadAll(cfgFile)
+			if err != nil {
+				x.Fatalf("unable to read config file: %v", err)
+			}
+			if ext := filepath.Ext(cfg); len(ext) > 1 {
+				ext = ext[1:]
+				sc.Conf.SetConfigType(ext)
+				var fixed io.Reader
+				switch ext {
+				case "json":
+					fixed = convertJSON(string(cfgData))
+				case "yaml", "yml":
+					fixed = convertYAML(string(cfgData))
+				default:
+					x.Fatalf("unknown config file extension: %s", ext)
+				}
+				x.Check(errors.Wrapf(sc.Conf.ReadConfig(fixed), "reading config"))
+			} else {
+				x.Fatalf("config file requires an extension: .json or .yaml or .yml")
+			}
 			setGlogFlags(sc.Conf)
 		}
 	})
@@ -152,26 +193,29 @@ func setGlogFlags(conf *viper.Viper) {
 	}
 	for _, gflag := range glogFlags {
 		// Set value of flag to the value in config
-		if stringValue, ok := conf.Get(gflag).(string); ok {
-			// Special handling for log_backtrace_at flag because the flag is of
-			// type tracelocation. The nil value for tracelocation type is
-			// ":0"(See https://github.com/golang/glog/blob/master/glog.go#L322).
-			// But we can't set nil value for the flag because of
-			// https://github.com/golang/glog/blob/master/glog.go#L374
-			// Skip setting value if log_backstrace_at is nil in config.
-			if gflag == "log_backtrace_at" && stringValue == ":0" {
-				continue
-			}
-			x.Check(flag.Lookup(gflag).Value.Set(stringValue))
+		stringValue := conf.GetString(gflag)
+		// Special handling for log_backtrace_at flag because the flag is of
+		// type tracelocation. The nil value for tracelocation type is
+		// ":0"(See https://github.com/golang/glog/blob/master/glog.go#L322).
+		// But we can't set nil value for the flag because of
+		// https://github.com/golang/glog/blob/master/glog.go#L374
+		// Skip setting value if log_backstrace_at is nil in config.
+		if gflag == "log_backtrace_at" && (stringValue == "0" || stringValue == ":0") {
+			continue
 		}
+		x.Check(flag.Lookup(gflag).Value.Set(stringValue))
 	}
 }
 
 func shellCompletionCmd() *cobra.Command {
+
 	cmd := &cobra.Command{
-		Use:   "completion",
-		Short: "Generates shell completion scripts for bash or zsh",
+
+		Use:         "completion",
+		Short:       "Generates shell completion scripts for bash or zsh",
+		Annotations: map[string]string{"group": "tool"},
 	}
+	cmd.SetHelpTemplate(x.NonRootTemplate)
 
 	// bash subcommand
 	cmd.AddCommand(&cobra.Command{
@@ -212,4 +256,159 @@ http://zsh.sourceforge.net/Doc/Release/Completion-System.html
 	})
 
 	return cmd
+
+}
+
+// convertJSON converts JSON hierarchical config objects into a flattened map fulfilling the
+// z.SuperFlag string format so that Viper can correctly set z.SuperFlag config options for the
+// respective subcommands. If JSON hierarchical config objects are not used, convertJSON doesn't
+// change anything and returns the config file string as it is. For example:
+//
+//	{
+//	  "mutations": "strict",
+//	  "badger": {
+//	    "compression": "zstd:1",
+//	    "goroutines": 5
+//	  },
+//	  "raft": {
+//	    "idx": 2,
+//	    "learner": true
+//	  },
+//	  "security": {
+//	    "whitelist": "127.0.0.1,0.0.0.0"
+//	  }
+//	}
+//
+// Is converted into:
+//
+//	{
+//	  "mutations": "strict",
+//	  "badger": "compression=zstd:1; goroutines=5;",
+//	  "raft": "idx=2; learner=true;",
+//	  "security": "whitelist=127.0.0.1,0.0.0.0;"
+//	}
+//
+// Viper then uses the "converted" JSON to set the z.SuperFlag strings in subcommand option structs.
+func convertJSON(old string) io.Reader {
+	dec := json.NewDecoder(strings.NewReader(old))
+	config := make(map[string]interface{})
+	x.Panic(dec.Decode(&config))
+
+	// super holds superflags to later be condensed into 'good'
+	super, good := make(map[string]map[string]interface{}), make(map[string]string)
+	for k, v := range config {
+		switch t := v.(type) {
+		case map[string]interface{}:
+			super[k] = t
+		default:
+			good[k] = fmt.Sprintf("%v", v)
+		}
+	}
+	// condense superflags
+	for f, options := range super {
+		for k, v := range options {
+			// JSON does not have distinct types for integers and floats.
+			// Go will always give us a float64 value. So, an exceptionally
+			// large integer like 1_000_000 will be printed as 1e06 unless
+			// we format it carefully.
+			if vFloat, ok := v.(float64); ok {
+				v = strconv.FormatFloat(vFloat, 'f', -1, 64)
+			}
+			good[f] += fmt.Sprintf("%s=%v; ", k, v)
+		}
+		good[f] = good[f][:len(good[f])-1]
+	}
+	// generate good json string
+	buf := &bytes.Buffer{}
+	enc := json.NewEncoder(buf)
+	enc.SetIndent("", "    ")
+	x.Panic(enc.Encode(&good))
+
+	return buf
+}
+
+// convertYAML converts YAML hierarchical notation into a flattened map fulfilling the z.SuperFlag
+// string format so that Viper can correctly set the z.SuperFlag config options for the respective
+// subcommands. If YAML hierarchical notation is not used, convertYAML doesn't change anything and
+// returns the config file string as it is. For example:
+//
+//	mutations: strict
+//	badger:
+//	  compression: zstd:1
+//	  goroutines: 5
+//	raft:
+//	  idx: 2
+//	  learner: true
+//	security:
+//	  whitelist: "127.0.0.1,0.0.0.0"
+//
+// Is converted into:
+//
+//	mutations: strict
+//	badger: "compression=zstd:1; goroutines=5;"
+//	raft: "idx=2; learner=true;"
+//	security: "whitelist=127.0.0.1,0.0.0.0;"
+//
+// Viper then uses the "converted" YAML to set the z.SuperFlag strings in subcommand option structs.
+func convertYAML(old string) io.Reader {
+	isFlat := func(l string) bool {
+		if len(l) < 1 {
+			return false
+		}
+		if unicode.IsSpace(rune(l[0])) {
+			return false
+		}
+		return true
+	}
+	isOption := func(l string) bool {
+		if len(l) < 3 {
+			return false
+		}
+		if !strings.Contains(l, ":") {
+			return false
+		}
+		if !unicode.IsSpace(rune(l[0])) {
+			return false
+		}
+		return true
+	}
+	isSuper := func(l string) bool {
+		s := strings.TrimSpace(l)
+		if len(s) < 1 {
+			return false
+		}
+		if s[len(s)-1] != ':' {
+			return false
+		}
+		return true
+	}
+	getName := func(l string) string {
+		s := strings.TrimSpace(l)
+		return s[:strings.IndexRune(s, rune(':'))]
+	}
+	getValue := func(l string) string {
+		s := strings.TrimSpace(l)
+		v := s[strings.IndexRune(s, rune(':'))+2:]
+		return strings.ReplaceAll(v, `"`, ``)
+	}
+	super, good, last := make(map[string]string), make([]string, 0), ""
+	for _, line := range strings.Split(old, "\n") {
+		if isSuper(line) {
+			last = getName(line)
+			continue
+		}
+		if isOption(line) {
+			name, value := getName(line), getValue(line)
+			super[last] += name + "=" + value + "; "
+			continue
+		}
+		if isFlat(line) {
+			good = append(good, strings.TrimSpace(line))
+		}
+	}
+	for k, v := range super {
+		super[k] = `"` + strings.TrimSpace(v) + `"`
+		good = append(good, fmt.Sprintf("%s: %s", k, super[k]))
+	}
+	return strings.NewReader(strings.Join(good, "\n"))
 }

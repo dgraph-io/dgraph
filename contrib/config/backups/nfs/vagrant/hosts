@@ -1,0 +1,2 @@
+192.168.123.27 nfs-server
+192.168.123.28 nfs-client nostart default

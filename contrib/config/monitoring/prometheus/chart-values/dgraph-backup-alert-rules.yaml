@@ -1,0 +1,42 @@
+additionalPrometheusRulesMap:
+  backup-cron:
+    groups:
+    - name: kube-cron.rules
+      rules:
+      - record: job_cronjob:kube_job_status_start_time:max
+        expr: |
+          label_replace(
+            label_replace(
+              max(
+                kube_job_status_start_time
+                * ON(job_name) GROUP_RIGHT()
+                kube_job_labels{label_cronjob!=""}
+              ) BY (job_name, label_cronjob)
+              == ON(label_cronjob) GROUP_LEFT()
+              max(
+                kube_job_status_start_time
+                * ON(job_name) GROUP_RIGHT()
+                kube_job_labels{label_cronjob!=""}
+              ) BY (label_cronjob),
+              "job", "$1", "job_name", "(.+)"),
+            "cronjob", "$1", "label_cronjob", "(.+)")
+      - record: job_cronjob:kube_job_status_failed:sum
+        expr: |
+          clamp_max(
+            job_cronjob:kube_job_status_start_time:max,
+          1)
+          * ON(job) GROUP_LEFT()
+          label_replace(
+            label_replace(
+              (kube_job_status_failed != 0),
+              "job", "$1", "job_name", "(.+)"),
+            "cronjob", "$1", "label_cronjob", "(.+)")
+      - alert: CronJobStatusFailed
+        expr: |
+          job_cronjob:kube_job_status_failed:sum
+          * ON(cronjob) GROUP_RIGHT()
+          kube_cronjob_labels
+          > 0
+        for: 1m
+        annotations:
+          description: '{{ $labels.cronjob }} last run has failed {{ $value }} times.'

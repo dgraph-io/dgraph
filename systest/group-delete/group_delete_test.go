@@ -1,5 +1,7 @@
+//go:build integration
+
 /*
- * Copyright 2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,26 +25,36 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgo/v2"
-	"github.com/dgraph-io/dgo/v2/protos/api"
-	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dgraph-io/dgo/v230"
+	"github.com/dgraph-io/dgo/v230/protos/api"
+	"github.com/dgraph-io/dgraph/testutil"
 )
 
 func NodesSetup(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 
-	require.NoError(t, c.Alter(ctx, &api.Operation{DropAll: true}))
+	// Retry DropAll to make sure the nodes is up and running.
+	var err error
+	for i := 0; i < 3; i++ {
+		if err = c.Alter(ctx, &api.Operation{DropAll: true}); err != nil {
+			time.Sleep(5 * time.Second)
+			continue
+		}
+		break
+	}
+	require.NoError(t, err, "error while dropping all the data")
 
-	schema, err := ioutil.ReadFile(`../data/goldendata.schema`)
+	schema, err := os.ReadFile(`../data/goldendata.schema`)
 	require.NoError(t, err)
 	require.NoError(t, c.Alter(ctx, &api.Operation{Schema: string(schema)}))
 
@@ -114,7 +126,7 @@ func doTestQuery(t *testing.T, c *dgo.Dgraph) {
 
 func getError(rc io.ReadCloser) error {
 	defer rc.Close()
-	b, err := ioutil.ReadAll(rc)
+	b, err := io.ReadAll(rc)
 	if err != nil {
 		return errors.Wrapf(err, "while reading")
 	}
@@ -125,7 +137,15 @@ func getError(rc io.ReadCloser) error {
 }
 
 func TestNodes(t *testing.T) {
-	dg, err := testutil.GetClientToGroup("1")
+	var dg *dgo.Dgraph
+	var err error
+	for i := 0; i < 3; i++ {
+		dg, err = testutil.GetClientToGroup("1")
+		if err == nil {
+			break
+		}
+		time.Sleep(5 * time.Second)
+	}
 	require.NoError(t, err, "error while getting connection to group 1")
 
 	NodesSetup(t, dg)
@@ -134,11 +154,7 @@ func TestNodes(t *testing.T) {
 	require.NoError(t, err)
 
 	for pred := range state1.Groups["3"].Tablets {
-		moveUrl := fmt.Sprintf("http://"+testutil.SockAddrZeroHttp+"/moveTablet?tablet=%s&group=2",
-			url.QueryEscape(pred))
-		resp, err := http.Get(moveUrl)
-		require.NoError(t, err)
-		require.NoError(t, getError(resp.Body))
+		testutil.AssertMoveTablet(t, pred, 2)
 		time.Sleep(time.Second)
 	}
 
@@ -149,9 +165,11 @@ func TestNodes(t *testing.T) {
 		t.Errorf("moving tablets failed")
 	}
 
-	resp, err := http.Get("http://" + testutil.SockAddrZeroHttp + "/removeNode?group=3&id=3")
+	groupNodes, err := testutil.GetNodesInGroup("3")
 	require.NoError(t, err)
-	require.NoError(t, getError(resp.Body))
+	nodeId, err := strconv.ParseUint(groupNodes[0], 10, 64)
+	require.NoError(t, err)
+	testutil.AssertRemoveNode(t, nodeId, 3)
 
 	state2, err = testutil.GetState()
 	require.NoError(t, err)
@@ -183,7 +201,10 @@ func TestNodes(t *testing.T) {
 		t.Errorf("moving tablets failed")
 	}
 
-	resp, err = http.Get("http://" + testutil.SockAddrZeroHttp + "/removeNode?group=2&id=2")
+	groupNodes, err = testutil.GetNodesInGroup("2")
+	require.NoError(t, err)
+	resp, err := http.Get("http://" + testutil.SockAddrZeroHttp + "/removeNode?group=2&id=" +
+		groupNodes[0])
 	require.NoError(t, err)
 	require.NoError(t, getError(resp.Body))
 

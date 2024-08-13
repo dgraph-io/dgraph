@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,17 +20,19 @@ import (
 	"context"
 	"encoding/binary"
 	"math/rand"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/dgraph-io/dgo/v2/protos/api"
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
-	"go.etcd.io/etcd/raft/raftpb"
+	"go.etcd.io/etcd/raft/v3/raftpb"
 	otrace "go.opencensus.io/trace"
+
+	"github.com/dgraph-io/dgo/v230/protos/api"
+	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 type sendmsg struct {
@@ -64,17 +66,17 @@ type ProposalCtx struct {
 
 type proposals struct {
 	sync.RWMutex
-	all map[string]*ProposalCtx
+	all map[uint64]*ProposalCtx
 }
 
-func (p *proposals) Store(key string, pctx *ProposalCtx) bool {
-	if len(key) == 0 {
+func (p *proposals) Store(key uint64, pctx *ProposalCtx) bool {
+	if key == 0 {
 		return false
 	}
 	p.Lock()
 	defer p.Unlock()
 	if p.all == nil {
-		p.all = make(map[string]*ProposalCtx)
+		p.all = make(map[uint64]*ProposalCtx)
 	}
 	if _, has := p.all[key]; has {
 		return false
@@ -83,21 +85,21 @@ func (p *proposals) Store(key string, pctx *ProposalCtx) bool {
 	return true
 }
 
-func (p *proposals) Ctx(key string) context.Context {
+func (p *proposals) Ctx(key uint64) context.Context {
 	if pctx := p.Get(key); pctx != nil {
 		return pctx.Ctx
 	}
 	return context.Background()
 }
 
-func (p *proposals) Get(key string) *ProposalCtx {
+func (p *proposals) Get(key uint64) *ProposalCtx {
 	p.RLock()
 	defer p.RUnlock()
 	return p.all[key]
 }
 
-func (p *proposals) Delete(key string) {
-	if len(key) == 0 {
+func (p *proposals) Delete(key uint64) {
+	if key == 0 {
 		return
 	}
 	p.Lock()
@@ -105,8 +107,8 @@ func (p *proposals) Delete(key string) {
 	delete(p.all, key)
 }
 
-func (p *proposals) Done(key string, err error) {
-	if len(key) == 0 {
+func (p *proposals) Done(key uint64, err error) {
+	if key == 0 {
 		return
 	}
 	p.Lock()
@@ -161,7 +163,7 @@ func (w *RaftServer) IsPeer(ctx context.Context, rc *pb.RaftContext) (
 		return &pb.PeerResponse{}, nil
 	}
 
-	for _, raftIdx := range confState.Nodes {
+	for _, raftIdx := range confState.Voters {
 		if rc.Id == raftIdx {
 			return &pb.PeerResponse{Status: true}, nil
 		}
@@ -271,18 +273,36 @@ func (w *RaftServer) RaftMessage(server pb.Raft_RaftMessageServer) error {
 
 // Heartbeat rpc call is used to check connection with other workers after worker
 // tcp server for this instance starts.
-func (w *RaftServer) Heartbeat(in *api.Payload, stream pb.Raft_HeartbeatServer) error {
+func (w *RaftServer) Heartbeat(_ *api.Payload, stream pb.Raft_HeartbeatServer) error {
 	ticker := time.NewTicker(echoDuration)
 	defer ticker.Stop()
 
+	node := w.GetNode()
+	if node == nil {
+		return ErrNoNode
+	}
+	// TODO(Aman): Send list of ongoing tasks as part of heartbeats.
+	// Currently, there is a cyclic dependency of imports worker -> conn -> worker.
+	info := pb.HealthInfo{
+		Instance: "alpha",
+		Address:  node.MyAddr,
+		Group:    strconv.Itoa(int(node.RaftContext.GetGroup())),
+		Version:  x.Version(),
+		Uptime:   int64(time.Since(node.StartTime) / time.Second),
+	}
+	if info.Group == "0" {
+		info.Instance = "zero"
+	}
+
 	ctx := stream.Context()
-	out := &api.Payload{Data: []byte("beat")}
+
 	for {
+		info.Uptime = int64(time.Since(node.StartTime) / time.Second)
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-ticker.C:
-			if err := stream.Send(out); err != nil {
+			if err := stream.Send(&info); err != nil {
 				return err
 			}
 		}

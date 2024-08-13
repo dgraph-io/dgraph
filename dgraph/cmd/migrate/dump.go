@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,6 +49,17 @@ type sqlRow struct {
 	tableInfo      *sqlTable
 }
 
+// escapeColumnNames wraps columnNames with backticks in order to avoid creating
+// invalid sql queries in cases where a table uses a reserved keyword as a
+// column name
+func escapeColumnNames(columnNames []string) []string {
+	var escapedColNames []string
+	for _, c := range columnNames {
+		escapedColNames = append(escapedColNames, fmt.Sprintf("`"+"%s"+"`", c))
+	}
+	return escapedColNames
+}
+
 // dumpSchema generates the Dgraph schema based on m.tableGuides
 // and sends the schema to m.schemaWriter
 func (m *dumpMeta) dumpSchema() error {
@@ -91,7 +102,9 @@ func (m *dumpMeta) dumpTable(table string) error {
 	tableGuide := m.tableGuides[table]
 	tableInfo := m.tableInfos[table]
 
-	query := fmt.Sprintf(`select %s from %s`, strings.Join(tableInfo.columnNames, ","), table)
+	escapedColNames := escapeColumnNames(tableInfo.columnNames)
+
+	query := fmt.Sprintf(`select %s from %s`, strings.Join(escapedColNames, ","), table)
 	rows, err := m.sqlPool.Query(query)
 	if err != nil {
 		return err
@@ -135,7 +148,9 @@ func (m *dumpMeta) dumpTableConstraints(table string) error {
 	tableGuide := m.tableGuides[table]
 	tableInfo := m.tableInfos[table]
 
-	query := fmt.Sprintf(`select %s from %s`, strings.Join(tableInfo.columnNames, ","), table)
+	escapedColNames := escapeColumnNames(tableInfo.columnNames)
+
+	query := fmt.Sprintf(`select %s from %s`, strings.Join(escapedColNames, ","), table)
 	rows, err := m.sqlPool.Query(query)
 	if err != nil {
 		return err

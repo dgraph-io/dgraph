@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,15 +17,16 @@
 package worker
 
 import (
+	"context"
+
+	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"
-	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
-	"github.com/dgraph-io/dgraph/x"
 )
 
 var (
@@ -55,16 +56,19 @@ func getSchema(ctx context.Context, s *pb.SchemaRequest) (*pb.SchemaResult, erro
 	if len(s.Fields) > 0 {
 		fields = s.Fields
 	} else {
-		fields = []string{"type", "index", "tokenizer", "reverse", "count", "list", "upsert",
-			"lang"}
+		fields = []string{"type", "index", "tokenizer", "reverse", "count", "list", "upsert", "unique",
+			"lang", "noconflict", "vector_specs"}
 	}
 
+	myGid := groups().groupId()
 	for _, attr := range predicates {
 		// This can happen after a predicate is moved. We don't delete predicate from schema state
 		// immediately. So lets ignore this predicate.
-		if servesTablet, err := groups().ServesTabletReadOnly(attr); err != nil {
+		gid, err := groups().BelongsToReadOnly(attr, 0)
+		if err != nil {
 			return nil, err
-		} else if !servesTablet {
+		}
+		if myGid != gid {
 			continue
 		}
 
@@ -85,26 +89,38 @@ func populateSchema(attr string, fields []string) *pb.SchemaNode {
 		return nil
 	}
 	schemaNode.Predicate = attr
+	ctx := context.Background()
+	pred, _ := schema.State().Get(ctx, attr)
+
 	for _, field := range fields {
 		switch field {
 		case "type":
 			schemaNode.Type = typ.Name()
 		case "index":
-			schemaNode.Index = schema.State().IsIndexed(attr)
+			schemaNode.Index = len(pred.GetTokenizer()) > 0
 		case "tokenizer":
-			if schema.State().IsIndexed(attr) {
-				schemaNode.Tokenizer = schema.State().TokenizerNames(attr)
+			if len(pred.GetTokenizer()) > 0 {
+				schemaNode.Tokenizer = schema.State().TokenizerNames(ctx, attr)
+			}
+			if len(pred.GetIndexSpecs()) > 0 {
+				schemaNode.Tokenizer = schema.State().VectorIndexes(ctx, attr)
 			}
 		case "reverse":
-			schemaNode.Reverse = schema.State().IsReversed(attr)
+			schemaNode.Reverse = pred.GetDirective() == pb.SchemaUpdate_REVERSE
 		case "count":
-			schemaNode.Count = schema.State().HasCount(attr)
+			schemaNode.Count = pred.GetCount()
 		case "list":
-			schemaNode.List = schema.State().IsList(attr)
+			schemaNode.List = pred.GetList()
 		case "upsert":
-			schemaNode.Upsert = schema.State().HasUpsert(attr)
+			schemaNode.Upsert = pred.GetUpsert()
+		case "unique":
+			schemaNode.Unique = pred.GetUnique()
 		case "lang":
-			schemaNode.Lang = schema.State().HasLang(attr)
+			schemaNode.Lang = pred.GetLang()
+		case "noconflict":
+			schemaNode.NoConflict = pred.GetNoConflict()
+		case "vector_specs":
+			schemaNode.IndexSpecs = pred.GetIndexSpecs()
 		default:
 			//pass
 		}
@@ -116,7 +132,7 @@ func populateSchema(attr string, fields []string) *pb.SchemaNode {
 // empty then it adds all known groups
 func addToSchemaMap(schemaMap map[uint32]*pb.SchemaRequest, schema *pb.SchemaRequest) error {
 	for _, attr := range schema.Predicates {
-		gid, err := groups().BelongsToReadOnly(attr)
+		gid, err := groups().BelongsToReadOnly(attr, 0)
 		if err != nil {
 			return err
 		}
@@ -167,8 +183,7 @@ func getSchemaOverNetwork(ctx context.Context, gid uint32, s *pb.SchemaRequest, 
 		ch <- resultErr{err: conn.ErrNoConnection}
 		return
 	}
-	conn := pl.Get()
-	c := pb.NewWorkerClient(conn)
+	c := pb.NewWorkerClient(pl.Get())
 	schema, e := c.Schema(ctx, s)
 	ch <- resultErr{result: schema, err: e}
 }
@@ -181,9 +196,8 @@ func GetSchemaOverNetwork(ctx context.Context, schema *pb.SchemaRequest) (
 	ctx, span := otrace.StartSpan(ctx, "worker.GetSchemaOverNetwork")
 	defer span.End()
 
-	if err := x.HealthCheck(); err != nil {
-		return nil, err
-	}
+	// There was a health check here which is not needed. The health check should be done by the
+	// receiver of the request, not the sender.
 
 	if len(schema.Predicates) == 0 && len(schema.Types) > 0 {
 		return nil, nil
@@ -251,7 +265,7 @@ func GetTypes(ctx context.Context, req *pb.SchemaRequest) ([]*pb.TypeUpdate, err
 		if !found {
 			continue
 		}
-		out = append(out, &typeUpdate)
+		out = append(out, proto.Clone(&typeUpdate).(*pb.TypeUpdate))
 	}
 
 	return out, nil

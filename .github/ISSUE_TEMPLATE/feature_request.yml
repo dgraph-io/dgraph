@@ -1,0 +1,56 @@
+name: "⚡ Feature Request"
+description: Suggest a new feature
+title: "[FEATURE]: <Title>"
+labels: ["kind/feature","status/triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        You have an idea for making Dgraph better? We'd love to hear about it.
+        Please search the issue list first as there is a chance that someone else has had the same idea.
+        Feature requests are tagged `kind/feature`.
+        If you find a similar request, add a thumbs-up to vote for it and optionally add a comment to be part of the conversation.
+  - type: textarea
+    attributes:
+      label: Use case
+      description: Describe the context in which the feature will be used and what is achieved when the feature is used.
+      placeholder: |
+          Type here.
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Links to Discuss, RFC or previous Issues and PRs
+      description: Reference of any prior work, post on Discuss or other.
+      placeholder: |
+          Type here.
+    validations:
+      required: false
+  - type: textarea
+    attributes:
+      label: Links to examples and research
+      description: Is there a software that has this feature? Any relevant standards or conventions?
+      placeholder: |
+          Type here.
+    validations:
+      required: false
+  - type: textarea
+    attributes:
+      label: Current state
+      description: Is there any workaround to achieve the expected result? Why is the current state not acceptable?
+    validations:
+      required: false
+  - type: textarea
+    attributes:
+      label: Solution proposal
+      description: You have an idea on how to implement the feature? Please share it with us.
+      placeholder: |
+          Type here.
+    validations:
+      required: false
+  - type: textarea
+    attributes:
+      label: Additional Information
+      description: Any useful additional info?
+    validations:
+      required: false

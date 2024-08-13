@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,4 +44,11 @@ func CompareVals(op string, arg1, arg2 Val) bool {
 		x.Fatalf("Unknown ineqType %v", op)
 	}
 	return false
+}
+
+// CompareBetween compares if the dst value lie between
+// two values val1 and val2(both inclusive).
+func CompareBetween(dst, val1, val2 Val) bool {
+	return CompareVals("ge", dst, val1) &&
+		CompareVals("le", dst, val2)
 }

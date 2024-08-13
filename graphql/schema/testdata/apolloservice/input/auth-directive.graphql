@@ -1,0 +1,66 @@
+type Todo @secret(field: "pwd") @auth(
+    password: { rule: "{$ROLE: { eq: \"Admin\" } }"},
+    query: {
+        or: [
+            { rule: """
+            query($X_MyApp_User: String!) { 
+                queryTodo { 
+                    owner (filter: { username: { eq: $X_MyApp_User }}) {
+                        username
+                    }
+                }
+            }""" },
+            { rule: """
+            query($X_MyApp_User: String!) { 
+                queryTodo {
+                    sharedWith (filter: { username: { eq: $X_MyApp_User }}) {
+                        username
+                    }
+                }
+            }""" },
+            { rule: """
+            query { 
+                queryTodo(filter: { isPublic: true }) {
+                    id
+                }
+            }""" },
+        ]
+    },
+    add: { rule: """
+            query($X_MyApp_User: String!) { 
+                queryTodo {
+                    owner (filter: { username: { eq: $X_MyApp_User }}) {
+                        username
+                    }
+                }
+            }""" },
+    update: { rule: """
+            query($X_MyApp_User: String!) { 
+                queryTodo {
+                    owner (filter: { username: { eq: $X_MyApp_User }}) {
+                        username
+                    }
+                }
+            }""" },
+) {
+    id: ID!
+    title: String
+    text: String
+    isPublic: Boolean @search
+    dateCompleted: String @search 
+    sharedWith: [User]
+    owner: User @hasInverse(field: "todos")
+    somethingPrivate: String
+}
+
+type User @key(fields: "username") @auth(
+    update: { rule: """
+            query($X_MyApp_User: String!) { 
+                queryUser(filter: { username: { eq: $X_MyApp_User }}) {
+                    username
+                }
+            }""" }
+){
+    username: String! @id
+    todos: [Todo]
+}

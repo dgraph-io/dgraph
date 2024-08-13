@@ -1,5 +1,7 @@
+//go:build integration || cloud || upgrade
+
 /*
- * Copyright 2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,18 +16,23 @@
  * limitations under the License.
  */
 
+//nolint:lll
 package query
 
 import (
 	"context"
 	"encoding/json"
-	"io/ioutil"
+	"fmt"
+	"os"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/metadata"
+
+	"github.com/dgraph-io/dgo/v230/protos/api"
 )
 
 func TestSchemaBlock2(t *testing.T) {
@@ -80,22 +87,17 @@ func TestSchemaBlock5(t *testing.T) {
 	require.JSONEq(t, `{"data":{"schema":[{"predicate":"name","type":"string","index":true,"tokenizer":["term","exact","trigram"],"count":true,"lang":true}]}}`, js)
 }
 
-func TestFilterNonIndexedPredicateFail(t *testing.T) {
-
-	// filtering on non indexing predicate fails
+func TestNonIndexedPredicateAtRoot(t *testing.T) {
 	query := `
-		{
-			me(func: uid(0x01)) {
-				friend @filter(le(survival_rate, 30)) {
-					uid
-					name
-					age
-				}
-			}
+	{
+		me(func: ge(noindex_name, "Michonne")) {
+			noindex_name
 		}
+	}
 	`
 	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Predicate noindex_name is not indexed")
 }
 
 func TestMultipleSamePredicateInBlockFail(t *testing.T) {
@@ -176,8 +178,7 @@ func TestXidInvalidJSON(t *testing.T) {
 		`{"data": {"me":[{"_xid_":"mich","alive":true,"friend":[{"name":"Rick Grimes"},{"_xid_":"g\"lenn","name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}}`,
 		js)
 	m := make(map[string]interface{})
-	err := json.Unmarshal([]byte(js), &m)
-	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal([]byte(js), &m))
 }
 
 func TestToJSONReverseNegativeFirst(t *testing.T) {
@@ -204,8 +205,8 @@ func TestToFastJSONOrderLang(t *testing.T) {
 	query := `
 		{
 			me(func: uid(0x01)) {
-				friend(first:2, orderdesc: alias@en) {
-					alias
+				friend(first: 2, orderdesc: alias_lang@en) {
+					alias_lang@en
 				}
 			}
 		}
@@ -213,7 +214,17 @@ func TestToFastJSONOrderLang(t *testing.T) {
 
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t,
-		`{"data": {"me":[{"friend":[{"alias":"Zambo Alice"},{"alias":"John Oliver"}]}]}}`,
+		`{
+			"data": {
+				"me": [{
+					"friend": [{
+						"alias_lang@en": "Zambo Alice"
+					}, {
+						"alias_lang@en": "John Oliver"
+					}]
+				}]
+			}
+		}`,
 		js)
 }
 
@@ -331,6 +342,49 @@ func TestJSONQueryVariables(t *testing.T) {
 	js, err := processQueryWithVars(t, q, map[string]string{"$a": "2"})
 	require.NoError(t, err)
 	require.JSONEq(t, `{"data": {"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"}],"gender":"female","name":"Michonne"}]}}`, js)
+}
+
+func TestGraphQLVarsInUpsert(t *testing.T) {
+	req := &api.Request{
+		Query: `query test ($a: int = 1) {
+			me(func: uid(0x01)) {
+				v as uid
+				name
+				gender
+				friend(first: $a) {
+					name
+				}
+			}
+		}`,
+		Vars: map[string]string{"$a": "2"},
+		Mutations: []*api.Mutation{
+			{
+				SetNquads: []byte(`_:user <pred> "value" .`),
+				Cond:      `@if(eq(len(v), 0))`,
+			},
+		},
+		CommitNow: true,
+	}
+	resp, err := client.NewTxn().Do(context.Background(), req)
+	require.NoError(t, err)
+	js := string(resp.GetJson())
+	require.JSONEq(t, `{
+		"me": [
+		  {
+			"friend": [
+			  {
+				"name": "Rick Grimes"
+			  },
+			  {
+				"name": "Glenn Rhee"
+			  }
+			],
+			"uid": "0x1",
+			"gender": "female",
+			"name": "Michonne"
+		  }
+		]
+	  }`, js)
 }
 
 func TestOrderDescFilterCount(t *testing.T) {
@@ -601,6 +655,18 @@ func TestHasFuncAtRoot(t *testing.T) {
 	require.JSONEq(t, `{"data": {"me":[{"friend":[{"count":5}],"name":"Michonne"},{"friend":[{"count":1}],"name":"Rick Grimes"},{"friend":[{"count":1}],"name":"Andrea"}]}}`, js)
 }
 
+func TestHasFuncAtRootWithFirstAndOffset(t *testing.T) {
+	query := `
+	{
+		me(func: has(name), first: 5, offset: 5) {
+			name
+		}
+	}
+	`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{ "data": {"me":[{"name": "Bear"},{"name": "Nemo"},{"name": "name"},{"name": "Rick Grimes"},{"name": "Glenn Rhee"}]}}`, js)
+}
+
 func TestHasFuncAtRootWithAfter(t *testing.T) {
 
 	query := `
@@ -617,6 +683,43 @@ func TestHasFuncAtRootWithAfter(t *testing.T) {
 
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t, `{"data": {"me":[{"friend":[{"count":1}],"name":"Rick Grimes","uid":"0x17"},{"friend":[{"count":1}],"name":"Andrea","uid":"0x1f"}]}}`, js)
+}
+
+func TestHasFuncAtRootWithAfterOnUIDs(t *testing.T) {
+
+	query := `
+	{
+			var(func: has(name)) {
+					uids as uid
+			}
+			me(func: uid(uids), first: 2, after: 0x5) {
+					uid
+			}
+	}
+	`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"uid":"0x6"},{"uid":"0x7"}]}}`, js)
+}
+
+func TestHasFuncAtRootWithAfterOnUIDsOtherThanRoot(t *testing.T) {
+
+	query := `
+	{
+		var(func: has(name)) {
+			uids as uid
+		}
+		me(func: uid(0x1, 0x1f)) {
+				uid
+				friend(first:2, after:0x5) @filter(uid(uids)) {
+					uid
+			}
+		}
+	}
+	`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"uid":"0x1","friend":[{"uid": "0x17"},{"uid": "0x18"}]},{"uid": "0x1f","friend": [{"uid": "0x18"}]}]}}`, js)
 }
 
 func TestHasFuncAtRootFilter(t *testing.T) {
@@ -988,17 +1091,208 @@ func TestUidInFunction2(t *testing.T) {
 		js)
 }
 
-func TestUidInFunctionAtRoot(t *testing.T) {
+func TestUidInFunctionWithError(t *testing.T) {
 
 	query := `
 	{
-		me(func: uid_in(school, 5000)) {
+		me(func: uid(1, 23, 24)) {
+			friend @filter(uid_in(school, foo)) {
 				name
+			}
 		}
 	}`
-
+	expectedErr := errors.New(`Value "foo" in uid_in is not a number`)
 	_, err := processQuery(context.Background(), t, query)
-	require.Error(t, err)
+	require.Contains(t, err.Error(), expectedErr.Error())
+
+}
+
+func TestUidInFunction3(t *testing.T) {
+	tcases := []struct {
+		description string
+		query       string
+		expected    string
+		expectedErr error
+	}{
+		{
+			description: "query at top level with unsorted input UIDs",
+			query: `{
+				me(func: UID(1, 23, 24)) @filter(uid_in(school, [5001, 5000])) {
+					name
+				}
+			}`,
+			expected:    `{"data": {"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}}`,
+			expectedErr: nil,
+		},
+		{
+			description: "query at top level with nested UID variable",
+			query: `{
+				uidVar as var(func: uid(5001, 5000))
+				me(func: UID(1, 23, 24)) @filter(uid_in(school, uid(uidVar))) {
+					name
+				}
+			}`,
+			expected:    `{"data":{"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}}`,
+			expectedErr: nil,
+		},
+		{
+			description: "query at top level with sorted input UIDs",
+			query: `{
+				me(func: UID(1, 23, 24)) @filter(uid_in(school, [5000, 5001])) {
+					name
+				}
+			}`,
+			expected:    `{"data": {"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}}`,
+			expectedErr: nil,
+		},
+		{
+			description: "query at top level with no UIDs present in predicate",
+			query: `{
+				me(func: UID(1, 23, 24)) @filter(uid_in(school, [500, 501])) {
+					name
+				}
+			}`,
+			expected:    `{"data":{"me":[]}}`,
+			expectedErr: nil,
+		},
+		{
+			description: "query at top level with with UID variables not present in predicate",
+			query: `{
+				uidVar as var(func: uid(500, 501))
+				me(func: UID(1, 23, 24)) @filter(uid_in(school, uid(uidVar))) {
+					name
+				}
+			}`,
+			expected:    `{"data":{"me":[]}}`,
+			expectedErr: nil,
+		},
+	}
+	for _, test := range tcases {
+		t.Run(test.description, func(t *testing.T) {
+			js := processQueryNoErr(t, test.query)
+			require.JSONEq(t, test.expected, js)
+		})
+	}
+
+}
+
+func TestUidInFunction4(t *testing.T) {
+	tcases := []struct {
+		description string
+		query       string
+		expected    string
+		expectedErr error
+	}{
+		{
+			description: "query inside root with sorted input UIDs",
+			query: `{
+				me(func: uid(1, 23, 24 )) {
+					friend @filter(uid_in(school, [5000, 5001])) {
+						name
+					}
+				}
+			}`,
+			expected:    `{"data": {"me":[{"friend":[{"name":"Rick Grimes"}, {"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]},{"friend":[{"name":"Michonne"}]}]}}`,
+			expectedErr: nil,
+		},
+		{
+			description: "query inside root with unsorted and absent UIDs",
+			query: `{
+				me(func: uid(1, 23, 24 )) {
+					friend @filter(uid_in(school, [5001, 500])) {
+						name
+					}
+				}
+			}`,
+			expected:    `{"data":{"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Andrea"}]}]}}`,
+			expectedErr: nil,
+		},
+		{
+			description: "query inside root with nested uid variable which resolves to two uids",
+			query: `{
+				var(func: uid( 31, 25)){
+					schoolsVar as school
+				}
+				me(func: uid(1, 23, 24 )){
+					friend @filter(uid_in(school, uid(schoolsVar))) {
+						name
+					}
+				}
+			}`,
+			expected:    `{"data":{"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]},{"friend":[{"name":"Michonne"}]}]}}`,
+			expectedErr: nil,
+		},
+		{
+			description: "query inside root with nested uid variable which resolves to one uid",
+			query: `{
+				var(func: uid(31)){
+					schoolsVar as school
+				}
+				me(func: uid(1, 23, 24 )){
+					friend @filter(uid_in(school, uid(schoolsVar))) {
+						name
+					}
+				}
+			}`,
+			expected:    `{"data":{"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Andrea"}]}]}}`,
+			expectedErr: nil,
+		},
+		{
+			description: "query inside root with nested uid variable which resolves to zero uids",
+			query: `{
+				var(func: uid(40)){
+					schoolsVar as school
+				}
+				me(func: uid(1, 23, 24 )){
+					friend @filter(uid_in(school, uid(schoolsVar))) {
+						name
+					}
+				}
+			}`,
+			expected:    `{"data":{"me":[]}}`,
+			expectedErr: nil,
+		},
+	}
+	for _, test := range tcases {
+		t.Run(test.description, func(t *testing.T) {
+			js := processQueryNoErr(t, test.query)
+			require.JSONEq(t, test.expected, js)
+		})
+	}
+}
+
+func TestUidInFunctionAtRoot(t *testing.T) {
+	tcases := []struct {
+		description string
+		query       string
+		expectedErr error
+	}{
+		{
+			description: "query with uidIn at the root",
+			query: `{
+				me(func: uid_in(school, 5000)) {
+						name
+				}
+			}`,
+			expectedErr: errors.New("rpc error: code = Unknown desc = : uid_in function not allowed at root"),
+		},
+		{
+			description: "query with uid variable and uidIn at the root",
+			query: `{
+				uidVar as var(func: uid(5000))
+				me(func: uid_in(school, uid(uidVar))) {
+						name
+				}
+			}`,
+			expectedErr: errors.New("rpc error: code = Unknown desc = : uid_in function not allowed at root"),
+		},
+	}
+	for _, test := range tcases {
+		t.Run(test.description, func(t *testing.T) {
+			_, err := processQuery(context.Background(), t, test.query)
+			require.EqualError(t, err, test.expectedErr.Error())
+		})
+	}
 }
 
 func TestBinaryJSON(t *testing.T) {
@@ -1195,7 +1489,7 @@ func TestAggregateRoot5(t *testing.T) {
 		}
 	`
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"sum(val(m))":0.000000}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[{"sum(val(m))":null}]}}`, js)
 }
 
 func TestAggregateRoot6(t *testing.T) {
@@ -1239,6 +1533,66 @@ func TestAggregateRootError(t *testing.T) {
 	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Only aggregated variables allowed within empty block.")
+}
+
+func TestAggregateEmptyData(t *testing.T) {
+
+	query := `
+		{
+			var(func: anyofterms(name, "Non-Existent-Data")) {
+				a as age
+			}
+
+			me() {
+				avg(val(a))
+				min(val(a))
+				max(val(a))
+			}
+		}
+	`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"avg(val(a))":null},{"min(val(a))":null},{"max(val(a))":null}]}}`, js)
+}
+
+func TestCountEmptyData(t *testing.T) {
+
+	query := `
+		{
+			me(func: anyofterms(name, "Non-Existent-Data")) {
+				a: count(uid)
+			}
+		}
+	`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"a":0}]}}`, js)
+}
+
+func TestCountEmptyData2(t *testing.T) {
+
+	query := `
+	{
+		a as var(func: eq(name, "Michonne"))
+		me(func: uid(a)) {
+			c: count(friend) @filter(eq(name, "non-existent"))
+		}
+	}
+	`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"c":0}]}}`, js)
+}
+
+func TestCountEmptyData3(t *testing.T) {
+
+	query := `
+	{
+		a as var(func: eq(name, "Michonne"))
+		me(func: uid(a)) {
+			c: count(friend2)
+		}
+	}
+	`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me":[]}}`, js)
 }
 
 func TestAggregateEmpty1(t *testing.T) {
@@ -1293,6 +1647,23 @@ func TestAggregateEmpty3(t *testing.T) {
 	`
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t, `{"data": {"all":[]}}`, js)
+}
+
+func TestAggregateEmpty4(t *testing.T) {
+	query := `
+		{
+			var(func: type(User))
+			{
+				up as user_profile
+			}
+			similar(func: similar_to(user_profile, 4, val(up)))
+			{
+				uid
+			}
+		}
+	`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"similar":[]}}`, js)
 }
 
 func TestFilterLang(t *testing.T) {
@@ -1502,7 +1873,7 @@ func TestMultipleValueGroupByError(t *testing.T) {
 
 func TestMultiPolygonIntersects(t *testing.T) {
 
-	usc, err := ioutil.ReadFile("testdata/us-coordinates.txt")
+	usc, err := os.ReadFile("testdata/us-coordinates.txt")
 	require.NoError(t, err)
 	query := `{
 		me(func: intersects(geometry, "` + strings.TrimSpace(string(usc)) + `" )) {
@@ -1517,7 +1888,7 @@ func TestMultiPolygonIntersects(t *testing.T) {
 
 func TestMultiPolygonWithin(t *testing.T) {
 
-	usc, err := ioutil.ReadFile("testdata/us-coordinates.txt")
+	usc, err := os.ReadFile("testdata/us-coordinates.txt")
 	require.NoError(t, err)
 	query := `{
 		me(func: within(geometry, "` + strings.TrimSpace(string(usc)) + `" )) {
@@ -1608,7 +1979,7 @@ func TestMultiSort5(t *testing.T) {
 	}`
 	js := processQueryNoErr(t, query)
 	// Null value for third Alice comes at first.
-	require.JSONEq(t, `{"data": {"me":[{"name":"Alice","age":75},{"name":"Alice","age":75,"salary":10002.000000},{"name":"Alice","age":25,"salary":10000.000000},{"name":"Bob","age":25},{"name":"Bob","age":75},{"name":"Colin","age":25},{"name":"Elizabeth","age":25},{"name":"Elizabeth","age":75}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[{"name":"Alice","age":75,"salary":10002.000000},{"name":"Alice","age":25,"salary":10000.000000},{"name":"Alice","age":75},{"name":"Bob","age":25},{"name":"Bob","age":75},{"name":"Colin","age":25},{"name":"Elizabeth","age":25},{"name":"Elizabeth","age":75}]}}`, js)
 }
 
 func TestMultiSort6Paginate(t *testing.T) {
@@ -1635,6 +2006,312 @@ func TestMultiSort7Paginate(t *testing.T) {
 
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t, `{"data": {"me":[{"name":"Alice","age":25},{"name":"Alice","age":75},{"name":"Alice","age":75},{"name":"Bob","age":25},{"name":"Bob","age":75},{"name":"Colin","age":25},{"name":"Elizabeth","age":25}]}}`, js)
+}
+
+func TestSortWithNulls(t *testing.T) {
+	tests := []struct {
+		index  int32
+		offset int32
+		first  int32
+		desc   bool
+		result string
+	}{
+		{0, -1, -1, false, `{"data": {"me":[
+			{"pname":"nameA","pred":"A"},
+			{"pname":"nameB","pred":"B"},
+			{"pname":"nameC","pred":"C"},
+			{"pname":"nameD","pred":"D"},
+			{"pname":"nameE","pred":"E"},
+			{"pname":"nameF"},
+			{"pname":"nameG"},
+			{"pname":"nameH"},
+			{"pname":"nameI"},
+			{"pname":"nameJ"}]}}`,
+		},
+		{1, -1, -1, true, `{"data": {"me":[
+			{"pname":"nameE","pred":"E"},
+			{"pname":"nameD","pred":"D"},
+			{"pname":"nameC","pred":"C"},
+			{"pname":"nameB","pred":"B"},
+			{"pname":"nameA","pred":"A"},
+			{"pname":"nameF"},
+			{"pname":"nameG"},
+			{"pname":"nameH"},
+			{"pname":"nameI"},
+			{"pname":"nameJ"}]}}`,
+		},
+		{2, -1, 2, false, `{"data": {"me":[
+			{"pname":"nameA", "pred": "A"},
+			{"pname":"nameB","pred":"B"}]}}`,
+		},
+		{4, -1, 2, true, `{"data": {"me":[
+			{"pname":"nameE", "pred":"E"},
+			{"pname":"nameD", "pred": "D"}]}}`,
+		},
+		{5, -1, 7, false, `{"data": {"me":[
+			{"pname":"nameA","pred":"A"},
+			{"pname":"nameB","pred":"B"},
+			{"pname":"nameC","pred":"C"},
+			{"pname":"nameD","pred":"D"},
+			{"pname":"nameE","pred":"E"},
+			{"pname":"nameF"},
+			{"pname":"nameG"}]}}`,
+		},
+		{6, -1, 7, true, `{"data": {"me":[
+			{"pname":"nameE","pred":"E"},
+			{"pname":"nameD","pred":"D"},
+			{"pname":"nameC","pred":"C"},
+			{"pname":"nameB","pred":"B"},
+			{"pname":"nameA","pred":"A"},
+			{"pname":"nameF"},
+			{"pname":"nameG"}]}}`,
+		},
+		{7, 2, 7, false, `{"data": {"me":[
+			{"pname":"nameC","pred":"C"},
+			{"pname":"nameD","pred":"D"},
+			{"pname":"nameE","pred":"E"},
+			{"pname":"nameF"},
+			{"pname":"nameG"},
+			{"pname":"nameH"},
+			{"pname":"nameI"}]}}`,
+		},
+		{8, 2, 7, true, `{"data": {"me":[
+			{"pname":"nameC","pred":"C"},
+			{"pname":"nameB","pred":"B"},
+			{"pname":"nameA","pred":"A"},
+			{"pname":"nameF"},
+			{"pname":"nameG"},
+			{"pname":"nameH"},
+			{"pname":"nameI"}]}}`,
+		},
+		{9, 2, 100, false, `{"data": {"me":[
+			{"pname":"nameC","pred":"C"},
+			{"pname":"nameD","pred":"D"},
+			{"pname":"nameE","pred":"E"},
+			{"pname":"nameF"},
+			{"pname":"nameG"},
+			{"pname":"nameH"},
+			{"pname":"nameI"},
+			{"pname":"nameJ"}]}}`,
+		},
+		{10, 2, 100, true, `{"data": {"me":[
+			{"pname":"nameC","pred":"C"},
+			{"pname":"nameB","pred":"B"},
+			{"pname":"nameA","pred":"A"},
+			{"pname":"nameF"},
+			{"pname":"nameG"},
+			{"pname":"nameH"},
+			{"pname":"nameI"},
+			{"pname":"nameJ"}]}}`,
+		},
+		{11, 5, 5, false, `{"data": {"me":[
+			{"pname":"nameF"},
+			{"pname":"nameG"},
+			{"pname":"nameH"},
+			{"pname":"nameI"},
+			{"pname":"nameJ"}]}}`,
+		},
+		{12, 5, 5, true, `{"data": {"me":[
+			{"pname":"nameF"},
+			{"pname":"nameG"},
+			{"pname":"nameH"},
+			{"pname":"nameI"},
+			{"pname":"nameJ"}]}}`,
+		},
+		{13, 9, 5, false, `{"data": {"me":[
+			{"pname":"nameJ"}]}}`,
+		},
+		{14, 9, 5, true, `{"data": {"me":[
+			{"pname":"nameJ"}]}}`,
+		},
+		{15, 12, 5, false, `{"data": {"me":[]}}`},
+		{16, 12, 5, true, `{"data": {"me":[]}}`},
+	}
+
+	makeQuery := func(offset, first int32, desc, index bool) string {
+		pred := "pred"
+		if index {
+			pred = "indexpred"
+		}
+		order := "orderasc: " + pred
+		if desc {
+			order = "orderdesc: " + pred
+		}
+		qfunc := "me(func: uid(61, 62, 63, 64, 65, 66, 67, 68, 69, 70), "
+		qfunc += order
+		if offset != -1 {
+			qfunc += fmt.Sprintf(", offset: %d", offset)
+		}
+		if first != -1 {
+			qfunc += fmt.Sprintf(", first: %d", first)
+		}
+		query := "{" + qfunc + ") { pname pred:" + pred + " } }"
+		return processQueryNoErr(t, query)
+	}
+
+	for _, tc := range tests {
+		// Case of sort with Index.
+		actual := makeQuery(tc.offset, tc.first, tc.desc, true)
+		require.JSONEqf(t, tc.result, actual, "Failed on index-testcase: %d\n", tc.index)
+
+		// Case of sort without index
+		actual = makeQuery(tc.offset, tc.first, tc.desc, false)
+		require.JSONEqf(t, tc.result, actual, "Failed on testcase: %d\n", tc.index)
+	}
+}
+
+func TestMultiSortWithNulls(t *testing.T) {
+
+	tests := []struct {
+		index  int32
+		offset int32
+		first  int32
+		desc   bool
+		result string
+	}{
+		{0, -1, -1, true, `{"data": {"me":[
+			{"pname":"nameB","pred1":"A", "pred2":"J"},
+			{"pname":"nameA","pred1":"A", "pred2":"I"},
+			{"pname":"nameC","pred1":"A"},
+			{"pname":"nameE","pred1":"B", "pred2":"J"},
+			{"pname":"nameD","pred1":"B", "pred2":"I"},
+			{"pname":"nameF","pred1":"B"},
+			{"pname":"nameI","pred1":"C", "pred2":"K"},
+			{"pname":"nameH","pred1":"C", "pred2":"J"},
+			{"pname":"nameG","pred1":"C", "pred2":"I"},
+			{"pname":"nameJ","pred1":"C"}]}}`,
+		},
+		{1, -1, -1, false, `{"data": {"me":[
+			{"pname":"nameA","pred1":"A", "pred2":"I"},
+			{"pname":"nameB","pred1":"A", "pred2":"J"},
+			{"pname":"nameC","pred1":"A"},
+			{"pname":"nameD","pred1":"B", "pred2":"I"},
+			{"pname":"nameE","pred1":"B", "pred2":"J"},
+			{"pname":"nameF","pred1":"B"},
+			{"pname":"nameG","pred1":"C", "pred2":"I"},
+			{"pname":"nameH","pred1":"C", "pred2":"J"},
+			{"pname":"nameI","pred1":"C", "pred2":"K"},
+			{"pname":"nameJ","pred1":"C"}]}}`,
+		},
+		{2, -1, 2, true, `{"data": {"me":[
+			{"pname":"nameB","pred1":"A", "pred2":"J"},
+			{"pname":"nameA","pred1":"A", "pred2":"I"}]}}`,
+		},
+		{3, -1, 2, false, `{"data": {"me":[
+			{"pname":"nameA","pred1":"A", "pred2":"I"},
+			{"pname":"nameB","pred1":"A", "pred2":"J"}]}}`,
+		},
+		{4, -1, 7, true, `{"data": {"me":[
+			{"pname":"nameB","pred1":"A", "pred2":"J"},
+			{"pname":"nameA","pred1":"A", "pred2":"I"},
+			{"pname":"nameC","pred1":"A"},
+			{"pname":"nameE","pred1":"B", "pred2":"J"},
+			{"pname":"nameD","pred1":"B", "pred2":"I"},
+			{"pname":"nameF","pred1":"B"},
+			{"pname":"nameI","pred1":"C", "pred2":"K"}]}}`,
+		},
+		{5, -1, 7, false, `{"data": {"me":[
+			{"pname":"nameA","pred1":"A", "pred2":"I"},
+			{"pname":"nameB","pred1":"A", "pred2":"J"},
+			{"pname":"nameC","pred1":"A"},
+			{"pname":"nameD","pred1":"B", "pred2":"I"},
+			{"pname":"nameE","pred1":"B", "pred2":"J"},
+			{"pname":"nameF","pred1":"B"},
+			{"pname":"nameG","pred1":"C", "pred2":"I"}]}}`,
+		},
+		{6, 2, 7, true, `{"data": {"me":[
+			{"pname":"nameC","pred1":"A"},
+			{"pname":"nameE","pred1":"B", "pred2":"J"},
+			{"pname":"nameD","pred1":"B", "pred2":"I"},
+			{"pname":"nameF","pred1":"B"},
+			{"pname":"nameI","pred1":"C", "pred2":"K"},
+			{"pname":"nameH","pred1":"C", "pred2":"J"},
+			{"pname":"nameG","pred1":"C", "pred2":"I"}]}}`,
+		},
+		{7, 2, 7, false, `{"data": {"me":[
+			{"pname":"nameC","pred1":"A"},
+			{"pname":"nameD","pred1":"B", "pred2":"I"},
+			{"pname":"nameE","pred1":"B", "pred2":"J"},
+			{"pname":"nameF","pred1":"B"},
+			{"pname":"nameG","pred1":"C", "pred2":"I"},
+			{"pname":"nameH","pred1":"C", "pred2":"J"},
+			{"pname":"nameI","pred1":"C", "pred2":"K"}]}}`,
+		},
+		{8, 2, 100, true, `{"data": {"me":[
+			{"pname":"nameC","pred1":"A"},
+			{"pname":"nameE","pred1":"B", "pred2":"J"},
+			{"pname":"nameD","pred1":"B", "pred2":"I"},
+			{"pname":"nameF","pred1":"B"},
+			{"pname":"nameI","pred1":"C", "pred2":"K"},
+			{"pname":"nameH","pred1":"C", "pred2":"J"},
+			{"pname":"nameG","pred1":"C", "pred2":"I"},
+			{"pname":"nameJ","pred1":"C"}]}}`,
+		},
+		{9, 2, 100, false, `{"data": {"me":[
+			{"pname":"nameC","pred1":"A"},
+			{"pname":"nameD","pred1":"B", "pred2":"I"},
+			{"pname":"nameE","pred1":"B", "pred2":"J"},
+			{"pname":"nameF","pred1":"B"},
+			{"pname":"nameG","pred1":"C", "pred2":"I"},
+			{"pname":"nameH","pred1":"C", "pred2":"J"},
+			{"pname":"nameI","pred1":"C", "pred2":"K"},
+			{"pname":"nameJ","pred1":"C"}]}}`,
+		},
+		{10, 5, 5, true, `{"data": {"me":[
+			{"pname":"nameF","pred1":"B"},
+			{"pname":"nameI","pred1":"C", "pred2":"K"},
+			{"pname":"nameH","pred1":"C", "pred2":"J"},
+			{"pname":"nameG","pred1":"C", "pred2":"I"},
+			{"pname":"nameJ","pred1":"C"}]}}`,
+		},
+		{11, 5, 5, false, `{"data": {"me":[
+			{"pname":"nameF","pred1":"B"},
+			{"pname":"nameG","pred1":"C", "pred2":"I"},
+			{"pname":"nameH","pred1":"C", "pred2":"J"},
+			{"pname":"nameI","pred1":"C", "pred2":"K"},
+			{"pname":"nameJ","pred1":"C"}]}}`,
+		},
+		{12, 9, 5, true, `{"data": {"me":[
+			{"pname":"nameJ","pred1":"C"}]}}`,
+		},
+		{13, 9, 5, false, `{"data": {"me":[
+			{"pname":"nameJ","pred1":"C"}]}}`,
+		},
+		{14, 12, 5, true, `{"data": {"me":[]}}`},
+		{15, 12, 5, false, `{"data": {"me":[]}}`},
+	}
+	makeQuery := func(offset, first int32, desc, index bool) string {
+		pred1 := "pred1"
+		pred2 := "pred2"
+		if index {
+			pred1 = "index-pred1"
+			pred2 = "index-pred2"
+		}
+		order := ",orderasc: "
+		if desc {
+			order = ",orderdesc: "
+		}
+		q := "me(func: uid(61, 62, 63, 64, 65, 66, 67, 68, 69, 70), orderasc: " + pred1 +
+			order + pred2
+		if offset != -1 {
+			q += fmt.Sprintf(", offset: %d", offset)
+		}
+		if first != -1 {
+			q += fmt.Sprintf(", first: %d", first)
+		}
+		query := "{" + q + ") { pname pred1:" + pred1 + " pred2:" + pred2 + " } }"
+		return processQueryNoErr(t, query)
+	}
+
+	for _, tc := range tests {
+		// Case of sort with Index.
+		actual := makeQuery(tc.offset, tc.first, tc.desc, true)
+		require.JSONEqf(t, tc.result, actual, "Failed on index-testcase: %d\n", tc.index)
+
+		// Case of sort without index
+		actual = makeQuery(tc.offset, tc.first, tc.desc, false)
+		require.JSONEqf(t, tc.result, actual, "Failed on testcase: %d\n", tc.index)
+	}
 }
 
 func TestMultiSortPaginateWithOffset(t *testing.T) {
@@ -1723,6 +2400,19 @@ func TestFilterRoot(t *testing.T) {
 
 	query := `{
 		me(func: eq(name, "Michonne")) @filter(eq(name, "Rick Grimes")) {
+			uid
+			name
+		}
+	}
+	`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me": []}}`, js)
+}
+
+func TestFilterWithNoSrcUid(t *testing.T) {
+
+	query := `{
+		me(func: eq(name, "Does Not Exist")) @filter(eq(name, "Michonne")) {
 			uid
 			name
 		}
@@ -1899,4 +2589,60 @@ func TestExpandAll_empty_panic(t *testing.T) {
 	`
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t, `{"data":{"me":[]}}`, js)
+}
+
+func TestMatchFuncWithAfterWithValidUid(t *testing.T) {
+	query := `
+		{
+			q(func: match(name, Ali, 5), after: 0x2710) {
+				uid
+				name
+			}
+		}
+	`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"q": [{"name": "Alice", "uid": "0x2712"}, {"name": "Alice", "uid": "0x2714"}]}}`, js)
+}
+
+func TestMatchFuncWithAfterWithInvalidUid(t *testing.T) {
+	query := `
+		{
+			q(func: match(name, Ali, 5), after: -1) {
+				uid
+				name
+			}
+		}
+	`
+	_, err := processQuery(context.Background(), t, query)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "parsing \"-1\": invalid syntax")
+}
+
+func TestMatchFuncWithAfterWithLastUid(t *testing.T) {
+	query := `
+		{
+			q(func: match(name, Ali, 5), after: 0x2714) {
+				uid
+				name
+			}
+		}
+	`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"q":[] } }`, js)
+}
+
+func TestCompareFuncWithAfter(t *testing.T) {
+	query := `
+		{
+			q(func: eq(name, Alice), after: 0x2710) {
+				uid
+				name
+			}
+		}
+	`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"q": [{"name": "Alice", "uid": "0x2712"}, {"name": "Alice", "uid": "0x2714"}]}}`, js)
 }

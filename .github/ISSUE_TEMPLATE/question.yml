@@ -1,0 +1,16 @@
+name: "🙋 Question"
+description: Question related to Dgraph
+title: "[QUESTION]: <Title>"
+labels: ["kind/question ", "status/triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The issue tracker is not for questions.
+        - If you have a question, please try asking it on https://discuss.dgraph.io
+        - Our Docs: https://dgraph.io/docs/
+        - If it is code related, you could open it here
+  - type: textarea
+    attributes:
+      label: Question.
+      description: Ask your Question.

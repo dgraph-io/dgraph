@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2016-2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,13 +17,13 @@
 package schema
 
 import (
-	"io/ioutil"
+	"context"
 	"os"
 	"testing"
 
-	"github.com/dgraph-io/badger/v2"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -35,11 +35,14 @@ type nameType struct {
 }
 
 func checkSchema(t *testing.T, h map[string]*pb.SchemaUpdate, expected []nameType) {
+	if len(h) != len(expected) {
+		t.Errorf("In checkSchema, expected len(h) == len(expected)")
+	}
 	require.Len(t, h, len(expected))
 	for _, nt := range expected {
 		typ, found := h[nt.name]
 		require.True(t, found, nt)
-		require.EqualValues(t, *nt.typ, *typ)
+		require.EqualValuesf(t, *nt.typ, *typ, "found in map: %+v\n expected: %+v", *typ, *nt.typ)
 	}
 }
 
@@ -49,34 +52,61 @@ age:int .
 name: string .
  address: string .
 <http://scalar.com/helloworld/> : string .
+coordinates: float32vector .
+indexvector: float32vector @index(hnsw(metric:"euclidian")) .
 `
 
 func TestSchema(t *testing.T) {
 	require.NoError(t, ParseBytes([]byte(schemaVal), 1))
 	checkSchema(t, State().predicate, []nameType{
-		{"name", &pb.SchemaUpdate{
-			Predicate: "name",
+		{x.GalaxyAttr("name"), &pb.SchemaUpdate{
+			Predicate: x.GalaxyAttr("name"),
 			ValueType: pb.Posting_STRING,
 		}},
-		{"address", &pb.SchemaUpdate{
-			Predicate: "address",
+		{x.GalaxyAttr("address"), &pb.SchemaUpdate{
+			Predicate: x.GalaxyAttr("address"),
 			ValueType: pb.Posting_STRING,
 		}},
-		{"http://scalar.com/helloworld/", &pb.SchemaUpdate{
-			Predicate: "http://scalar.com/helloworld/",
+		{x.GalaxyAttr("http://scalar.com/helloworld/"), &pb.SchemaUpdate{
+			Predicate: x.GalaxyAttr("http://scalar.com/helloworld/"),
 			ValueType: pb.Posting_STRING,
 		}},
-		{"age", &pb.SchemaUpdate{
-			Predicate: "age",
+		{x.GalaxyAttr("age"), &pb.SchemaUpdate{
+			Predicate: x.GalaxyAttr("age"),
 			ValueType: pb.Posting_INT,
+		}},
+		{x.GalaxyAttr("coordinates"), &pb.SchemaUpdate{
+			Predicate: x.GalaxyAttr("coordinates"),
+			ValueType: pb.Posting_VFLOAT,
+		}},
+		{x.GalaxyAttr("indexvector"), &pb.SchemaUpdate{
+			Predicate: x.GalaxyAttr("indexvector"),
+			ValueType: pb.Posting_VFLOAT,
+			Tokenizer: []string{},
+			Directive: pb.SchemaUpdate_INDEX,
+			IndexSpecs: []*pb.VectorIndexSpec{
+				{
+					Name: "hnsw",
+					Options: []*pb.OptionPair{
+						{
+							Key:   "metric",
+							Value: "euclidian",
+						},
+					},
+				},
+			},
 		}},
 	})
 
-	typ, err := State().TypeOf("age")
+	typ, err := State().TypeOf(x.GalaxyAttr("age"))
 	require.NoError(t, err)
 	require.Equal(t, types.IntID, typ)
 
-	_, err = State().TypeOf("agea")
+	typ, err = State().TypeOf(x.GalaxyAttr("coordinates"))
+	require.NoError(t, err)
+	require.Equal(t, types.VFloatID, typ)
+
+	_, err = State().TypeOf(x.GalaxyAttr("agea"))
 	require.Error(t, err)
 }
 
@@ -107,17 +137,6 @@ test test: int
 
 func TestSchema3_Error(t *testing.T) {
 	require.Error(t, ParseBytes([]byte(schemaVal3), 1))
-}
-
-var schemaIndexVal1 = `
-age:int @index(int) .
-
-name: string .
-address: string @index(term) .`
-
-func TestSchemaIndex(t *testing.T) {
-	require.NoError(t, ParseBytes([]byte(schemaIndexVal1), 1))
-	require.Equal(t, 2, len(State().IndexedFields()))
 }
 
 var schemaIndexVal2 = `
@@ -169,37 +188,36 @@ friend  : [uid] @reverse @count .
 func TestSchemaIndexCustom(t *testing.T) {
 	require.NoError(t, ParseBytes([]byte(schemaIndexVal5), 1))
 	checkSchema(t, State().predicate, []nameType{
-		{"name", &pb.SchemaUpdate{
-			Predicate: "name",
+		{x.GalaxyAttr("name"), &pb.SchemaUpdate{
+			Predicate: x.GalaxyAttr("name"),
 			ValueType: pb.Posting_STRING,
 			Tokenizer: []string{"exact"},
 			Directive: pb.SchemaUpdate_INDEX,
 			Count:     true,
 		}},
-		{"address", &pb.SchemaUpdate{
-			Predicate: "address",
+		{x.GalaxyAttr("address"), &pb.SchemaUpdate{
+			Predicate: x.GalaxyAttr("address"),
 			ValueType: pb.Posting_STRING,
 			Tokenizer: []string{"term"},
 			Directive: pb.SchemaUpdate_INDEX,
 		}},
-		{"age", &pb.SchemaUpdate{
-			Predicate: "age",
+		{x.GalaxyAttr("age"), &pb.SchemaUpdate{
+			Predicate: x.GalaxyAttr("age"),
 			ValueType: pb.Posting_INT,
 			Tokenizer: []string{"int"},
 			Directive: pb.SchemaUpdate_INDEX,
 		}},
-		{"friend", &pb.SchemaUpdate{
+		{x.GalaxyAttr("friend"), &pb.SchemaUpdate{
 			ValueType: pb.Posting_UID,
-			Predicate: "friend",
+			Predicate: x.GalaxyAttr("friend"),
 			Directive: pb.SchemaUpdate_REVERSE,
 			Count:     true,
 			List:      true,
 		}},
 	})
-	require.True(t, State().IsIndexed("name"))
-	require.False(t, State().IsReversed("name"))
-	require.Equal(t, "int", State().Tokenizer("age")[0].Name())
-	require.Equal(t, 3, len(State().IndexedFields()))
+	require.True(t, State().IsIndexed(context.Background(), x.GalaxyAttr("name")))
+	require.False(t, State().IsReversed(context.Background(), x.GalaxyAttr("name")))
+	require.Equal(t, "int", State().Tokenizer(context.Background(), x.GalaxyAttr("age"))[0].Name())
 }
 
 func TestParse(t *testing.T) {
@@ -234,7 +252,7 @@ func TestParse4_NoError(t *testing.T) {
 	reset()
 	result, err := Parse("name:string @index(fulltext) .")
 	require.NotNil(t, result)
-	require.Nil(t, err)
+	require.NoError(t, err)
 }
 
 func TestParse5_Error(t *testing.T) {
@@ -265,6 +283,13 @@ func TestParse8_Error(t *testing.T) {
 	require.Nil(t, result)
 }
 
+func TestParse9_Error(t *testing.T) {
+	reset()
+	result, err := Parse("age:uid @noconflict .")
+	require.NotNil(t, result)
+	require.NoError(t, err)
+}
+
 func TestParseScalarList(t *testing.T) {
 	reset()
 	result, err := Parse(`
@@ -275,7 +300,7 @@ func TestParseScalarList(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 3, len(result.Preds))
 	require.EqualValues(t, &pb.SchemaUpdate{
-		Predicate: "jobs",
+		Predicate: x.GalaxyAttr("jobs"),
 		ValueType: 9,
 		Directive: pb.SchemaUpdate_INDEX,
 		Tokenizer: []string{"term"},
@@ -283,13 +308,13 @@ func TestParseScalarList(t *testing.T) {
 	}, result.Preds[0])
 
 	require.EqualValues(t, &pb.SchemaUpdate{
-		Predicate: "occupations",
+		Predicate: x.GalaxyAttr("occupations"),
 		ValueType: 9,
 		List:      true,
 	}, result.Preds[1])
 
 	require.EqualValues(t, &pb.SchemaUpdate{
-		Predicate: "graduation",
+		Predicate: x.GalaxyAttr("graduation"),
 		ValueType: 5,
 		List:      true,
 	}, result.Preds[2])
@@ -332,7 +357,7 @@ func TestParseUidList(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, len(result.Preds))
 	require.EqualValues(t, &pb.SchemaUpdate{
-		Predicate: "friend",
+		Predicate: x.GalaxyAttr("friend"),
 		ValueType: 7,
 		List:      true,
 	}, result.Preds[0])
@@ -346,7 +371,7 @@ func TestParseUidSingleValue(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, len(result.Preds))
 	require.EqualValues(t, &pb.SchemaUpdate{
-		Predicate: "friend",
+		Predicate: x.GalaxyAttr("friend"),
 		ValueType: 7,
 		List:      false,
 	}, result.Preds[0])
@@ -376,7 +401,7 @@ func TestParseEmptyType(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, len(result.Types))
 	require.Equal(t, &pb.TypeUpdate{
-		TypeName: "Person",
+		TypeName: x.GalaxyAttr("Person"),
 	}, result.Types[0])
 
 }
@@ -389,7 +414,7 @@ func TestParseTypeEOF(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, len(result.Types))
 	require.Equal(t, &pb.TypeUpdate{
-		TypeName: "Person",
+		TypeName: x.GalaxyAttr("Person"),
 	}, result.Types[0])
 
 }
@@ -404,10 +429,10 @@ func TestParseSingleType(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, len(result.Types))
 	require.Equal(t, &pb.TypeUpdate{
-		TypeName: "Person",
+		TypeName: x.GalaxyAttr("Person"),
 		Fields: []*pb.SchemaUpdate{
 			{
-				Predicate: "name",
+				Predicate: x.GalaxyAttr("name"),
 			},
 		},
 	}, result.Types[0])
@@ -424,15 +449,15 @@ func TestParseCombinedSchemasAndTypes(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, len(result.Preds))
 	require.Equal(t, &pb.SchemaUpdate{
-		Predicate: "name",
+		Predicate: x.GalaxyAttr("name"),
 		ValueType: 9,
 	}, result.Preds[0])
 	require.Equal(t, 1, len(result.Types))
 	require.Equal(t, &pb.TypeUpdate{
-		TypeName: "Person",
+		TypeName: x.GalaxyAttr("Person"),
 		Fields: []*pb.SchemaUpdate{
 			{
-				Predicate: "name",
+				Predicate: x.GalaxyAttr("name"),
 			},
 		},
 	}, result.Types[0])
@@ -451,18 +476,18 @@ func TestParseMultipleTypes(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 2, len(result.Types))
 	require.Equal(t, &pb.TypeUpdate{
-		TypeName: "Person",
+		TypeName: x.GalaxyAttr("Person"),
 		Fields: []*pb.SchemaUpdate{
 			{
-				Predicate: "name",
+				Predicate: x.GalaxyAttr("name"),
 			},
 		},
 	}, result.Types[0])
 	require.Equal(t, &pb.TypeUpdate{
-		TypeName: "Animal",
+		TypeName: x.GalaxyAttr("Animal"),
 		Fields: []*pb.SchemaUpdate{
 			{
-				Predicate: "name",
+				Predicate: x.GalaxyAttr("name"),
 			},
 		},
 	}, result.Types[1])
@@ -492,16 +517,16 @@ func TestOldTypeFormat(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, len(result.Types))
 	require.Equal(t, &pb.TypeUpdate{
-		TypeName: "Person",
+		TypeName: x.GalaxyAttr("Person"),
 		Fields: []*pb.SchemaUpdate{
 			{
-				Predicate: "name",
+				Predicate: x.GalaxyAttr("name"),
 			},
 			{
-				Predicate: "address",
+				Predicate: x.GalaxyAttr("address"),
 			},
 			{
-				Predicate: "children",
+				Predicate: x.GalaxyAttr("children"),
 			},
 		},
 	}, result.Types[0])
@@ -518,13 +543,13 @@ func TestOldAndNewTypeFormat(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, len(result.Types))
 	require.Equal(t, &pb.TypeUpdate{
-		TypeName: "Person",
+		TypeName: x.GalaxyAttr("Person"),
 		Fields: []*pb.SchemaUpdate{
 			{
-				Predicate: "name",
+				Predicate: x.GalaxyAttr("name"),
 			},
 			{
-				Predicate: "address",
+				Predicate: x.GalaxyAttr("address"),
 			},
 		},
 	}, result.Types[0])
@@ -599,21 +624,70 @@ func TestParseTypeComments(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestParseWithNamespace(t *testing.T) {
+	reset()
+	result, err := Parse(`
+		[10] jobs: [string] @index(term) .
+		[0x123] occupations: [string] .
+		[0xf2] graduation: [dateTime] .
+		[0xf2] type Person {
+			name: [string!]!
+			address: string!
+			children: [Person]
+		}
+	`)
+	require.NoError(t, err)
+	require.Equal(t, 3, len(result.Preds))
+	require.EqualValues(t, &pb.SchemaUpdate{
+		Predicate: x.NamespaceAttr(10, "jobs"),
+		ValueType: 9,
+		Directive: pb.SchemaUpdate_INDEX,
+		Tokenizer: []string{"term"},
+		List:      true,
+	}, result.Preds[0])
+
+	require.EqualValues(t, &pb.SchemaUpdate{
+		Predicate: x.NamespaceAttr(0x123, "occupations"),
+		ValueType: 9,
+		List:      true,
+	}, result.Preds[1])
+
+	require.EqualValues(t, &pb.SchemaUpdate{
+		Predicate: x.NamespaceAttr(0xf2, "graduation"),
+		ValueType: 5,
+		List:      true,
+	}, result.Preds[2])
+
+	require.NoError(t, err)
+	require.Equal(t, 1, len(result.Types))
+	require.Equal(t, &pb.TypeUpdate{
+		TypeName: x.NamespaceAttr(0xf2, "Person"),
+		Fields: []*pb.SchemaUpdate{
+			{
+				Predicate: x.NamespaceAttr(0xf2, "name"),
+			},
+			{
+				Predicate: x.NamespaceAttr(0xf2, "address"),
+			},
+			{
+				Predicate: x.NamespaceAttr(0xf2, "children"),
+			},
+		},
+	}, result.Types[0])
+}
+
 var ps *badger.DB
 
 func TestMain(m *testing.M) {
-	x.Init()
+	dir, err := os.MkdirTemp("", "storetest_")
+	x.Panic(err)
+	defer os.RemoveAll(dir)
 
-	dir, err := ioutil.TempDir("", "storetest_")
-	x.Check(err)
 	kvOpt := badger.DefaultOptions(dir)
 	ps, err = badger.OpenManaged(kvOpt)
-	x.Check(err)
+	x.Panic(err)
+	defer ps.Close()
+
 	Init(ps)
-
-	r := m.Run()
-
-	ps.Close()
-	os.RemoveAll(dir)
-	os.Exit(r)
+	m.Run()
 }

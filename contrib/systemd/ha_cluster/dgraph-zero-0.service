@@ -1,0 +1,17 @@
+[Unit]
+Description=dgraph zero server
+Wants=network.target
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/var/lib/dgraph
+Restart=on-failure
+ExecStart=/bin/bash -c '/usr/local/bin/dgraph zero --my={{ myhostname }}:5080 --wal /var/lib/dgraph/zw --raft="idx=1" --replicas 3'
+StandardOutput=journal
+StandardError=journal
+User=dgraph
+Group=dgraph
+
+[Install]
+WantedBy=multi-user.target

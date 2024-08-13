@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2023 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,10 +31,10 @@ var langBaseCache struct {
 	m map[string]string
 }
 
-// langBase returns the BCP47 base of a language.
+// LangBase returns the BCP47 base of a language.
 // If the confidence of the matching is better than none, we return that base.
 // Otherwise, we return "en" (English) which is a good default.
-func langBase(lang string) string {
+func LangBase(lang string) string {
 	if lang == "" {
 		return enBase // default to this
 	}
