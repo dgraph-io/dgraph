@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project will adhere to [Semantic Versioning](https://semver.org) starting `v22.0.0`.
 
+## [v24.0.2] - 2024-08-15
+[v24.0.1]: https://github.com/dgraph-io/dgraph/compare/v24.0.1...v24.0.2
+
+
+
+- **Fixed**
+  
+	- fix(core): Fix namespace used by unique query https://github.com/dgraph-io/dgraph/pull/9119 
+	- fix(core): Fix regression in computing cond variables  https://github.com/dgraph-io/dgraph/pull/9126
+  	- fix(live): Fix derigster while retrying  https://github.com/dgraph-io/dgraph/pull/9121
+   
+
+- **Chore**
+	- chore(deps): bump certifi from 2023.7.22 to 2024.7.4 in /contrib/config/marketplace/aws/tests https://github.com/dgraph-io/dgraph/pull/9110
+	- chore(deps): bump idna from 2.9 to 3.7 in /contrib/config/marketplace/aws/tests  https://github.com/dgraph-io/dgraph/pull/9072
+
+
+- **Perf**
+	- perf(query): Read just the latest value for scalar types https://github.com/dgraph-io/dgraph/pull/8966
+  - perf(vector): Add heap to neighbour edges https://github.com/dgraph-io/dgraph/pull/9122
+
 ## [v24.0.1] - 2024-07-30
 [v24.0.1]: https://github.com/dgraph-io/dgraph/compare/v24.0.0...v24.0.1
 
