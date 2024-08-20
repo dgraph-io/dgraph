@@ -378,9 +378,7 @@ message Posting {
     PASSWORD = 8;
     STRING = 9;
     OBJECT = 10;
-    // RESERVE 11 for BIGFLOAT, should we desire to pull
-    // that in at a later date. (There is a pending PR
-    // that uses this).
+    BIGFLOAT = 11;
     VFLOAT = 12; // Float64 Vector
   }
   ValType val_type = 3;

@@ -89,6 +89,7 @@ var rdfTypeMap = map[types.TypeID]string{
 	types.GeoID:      "geo:geojson",
 	types.BinaryID:   "xs:base64Binary",
 	types.PasswordID: "xs:password",
+	types.BigFloatID: "xs:decimal",
 	types.VFloatID:   "xs:[]float32",
 }
 
