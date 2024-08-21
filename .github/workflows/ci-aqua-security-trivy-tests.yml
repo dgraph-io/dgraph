@@ -29,6 +29,10 @@ on:
       - 'release/**'
   schedule:
     - cron: "0 0 * * *"
+
+permissions:
+  security-events: write
+
 jobs:
   build:
     name: trivy-tests
