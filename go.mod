@@ -1,6 +1,6 @@
 module github.com/dgraph-io/dgraph
 
-go 1.22
+go 1.22.6
 
 replace sourcegraph.com/sourcegraph/appdash => github.com/sourcegraph/appdash v0.0.0-20180110180208-2cc67fd64755
 
