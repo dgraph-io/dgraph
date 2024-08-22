@@ -24,7 +24,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/v24/protos/pb"
 )
 
 func toString(t *testing.T, values [][]Val, vID TypeID) []string {

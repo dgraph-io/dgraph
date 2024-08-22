@@ -23,8 +23,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/systest/21million/common"
-	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgraph/v24/systest/21million/common"
+	"github.com/dgraph-io/dgraph/v24/testutil"
 )
 
 func TestQueries(t *testing.T) {

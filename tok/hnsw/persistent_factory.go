@@ -21,9 +21,9 @@ package hnsw
 import (
 	"sync"
 
-	c "github.com/dgraph-io/dgraph/tok/constraints"
-	"github.com/dgraph-io/dgraph/tok/index"
-	opt "github.com/dgraph-io/dgraph/tok/options"
+	c "github.com/dgraph-io/dgraph/v24/tok/constraints"
+	"github.com/dgraph-io/dgraph/v24/tok/index"
+	opt "github.com/dgraph-io/dgraph/v24/tok/options"
 	"github.com/pkg/errors"
 )
 

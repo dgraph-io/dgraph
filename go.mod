@@ -1,4 +1,4 @@
-module github.com/dgraph-io/dgraph
+module github.com/dgraph-io/dgraph/v24
 
 go 1.22.6
 

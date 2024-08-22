@@ -26,8 +26,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v2"
 
-	dschema "github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/x"
+	dschema "github.com/dgraph-io/dgraph/v24/schema"
+	"github.com/dgraph-io/dgraph/v24/x"
 	"github.com/dgraph-io/gqlparser/v2/gqlerror"
 	_ "github.com/dgraph-io/gqlparser/v2/validator/rules"
 	"github.com/dgraph-io/ristretto/z"

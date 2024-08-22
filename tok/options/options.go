@@ -19,7 +19,7 @@ package options
 import (
 	"fmt"
 
-	c "github.com/dgraph-io/dgraph/tok/constraints"
+	c "github.com/dgraph-io/dgraph/v24/tok/constraints"
 )
 
 // An Options instance maps the various named options to their specific values.

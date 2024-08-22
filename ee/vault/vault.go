@@ -23,7 +23,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/spf13/viper"
 
-	"github.com/dgraph-io/dgraph/ee"
+	"github.com/dgraph-io/dgraph/v24/ee"
 )
 
 func GetKeys(config *viper.Viper) (*ee.Keys, error) {

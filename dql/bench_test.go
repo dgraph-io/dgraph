@@ -22,7 +22,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgraph/schema"
+	"github.com/dgraph-io/dgraph/v24/schema"
 )
 
 var sc = `type.object.name.en: string @index .

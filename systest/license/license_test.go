@@ -23,7 +23,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgraph/dgraphapi"
+	"github.com/dgraph-io/dgraph/v24/dgraphapi"
 )
 
 var expiredKey = []byte(`-----BEGIN PGP MESSAGE-----
