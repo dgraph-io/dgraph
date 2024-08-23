@@ -42,12 +42,8 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GOVERSION }}
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 16
       - name: Install protobuf-compiler
-        run: sudo apt-get install -y protobuf-compiler
+        run: sudo apt update && sudo apt install -y protobuf-compiler
       - name: Check protobuf
         run: |
           cd ./protos
