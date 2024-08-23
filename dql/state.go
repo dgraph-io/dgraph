@@ -18,7 +18,7 @@
 package dql
 
 import (
-	"github.com/dgraph-io/dgraph/lex"
+	"github.com/dgraph-io/dgraph/v24/lex"
 )
 
 const (

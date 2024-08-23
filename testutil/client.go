@@ -42,8 +42,8 @@ import (
 
 	"github.com/dgraph-io/dgo/v230"
 	"github.com/dgraph-io/dgo/v230/protos/api"
-	"github.com/dgraph-io/dgraph/dql"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/v24/dql"
+	"github.com/dgraph-io/dgraph/v24/x"
 )
 
 // socket addr = IP address and port number

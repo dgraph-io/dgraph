@@ -31,12 +31,12 @@ import (
 
 	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/badger/v4/options"
-	"github.com/dgraph-io/dgraph/conn"
-	"github.com/dgraph-io/dgraph/ee"
-	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/v24/conn"
+	"github.com/dgraph-io/dgraph/v24/ee"
+	"github.com/dgraph-io/dgraph/v24/posting"
+	"github.com/dgraph-io/dgraph/v24/protos/pb"
+	"github.com/dgraph-io/dgraph/v24/schema"
+	"github.com/dgraph-io/dgraph/v24/x"
 )
 
 const (

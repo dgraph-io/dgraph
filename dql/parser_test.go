@@ -26,9 +26,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/v230/protos/api"
-	"github.com/dgraph-io/dgraph/chunker"
-	"github.com/dgraph-io/dgraph/lex"
-	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/dgraph/v24/chunker"
+	"github.com/dgraph-io/dgraph/v24/lex"
+	"github.com/dgraph-io/dgraph/v24/types"
 )
 
 func childAttrs(g *GraphQuery) []string {

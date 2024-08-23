@@ -21,10 +21,10 @@ import (
 
 	"github.com/golang/glog"
 
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/tok"
-	"github.com/dgraph-io/dgraph/types"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/v24/protos/pb"
+	"github.com/dgraph-io/dgraph/v24/tok"
+	"github.com/dgraph-io/dgraph/v24/types"
+	"github.com/dgraph-io/dgraph/v24/x"
 )
 
 type matchFunc func(types.Val, *stringFilter) bool

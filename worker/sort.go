@@ -28,13 +28,13 @@ import (
 	otrace "go.opencensus.io/trace"
 
 	"github.com/dgraph-io/badger/v4"
-	"github.com/dgraph-io/dgraph/algo"
-	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/tok"
-	"github.com/dgraph-io/dgraph/types"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/v24/algo"
+	"github.com/dgraph-io/dgraph/v24/posting"
+	"github.com/dgraph-io/dgraph/v24/protos/pb"
+	"github.com/dgraph-io/dgraph/v24/schema"
+	"github.com/dgraph-io/dgraph/v24/tok"
+	"github.com/dgraph-io/dgraph/v24/types"
+	"github.com/dgraph-io/dgraph/v24/x"
 )
 
 var emptySortResult pb.SortResult

@@ -21,10 +21,10 @@ import (
 	"net/http"
 	"testing"
 
-	e2eCommon "github.com/dgraph-io/dgraph/graphql/e2e/common"
-	utilsCommon "github.com/dgraph-io/dgraph/systest/backup/common"
-	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/dgraph-io/dgraph/x"
+	e2eCommon "github.com/dgraph-io/dgraph/v24/graphql/e2e/common"
+	utilsCommon "github.com/dgraph-io/dgraph/v24/systest/backup/common"
+	"github.com/dgraph-io/dgraph/v24/testutil"
+	"github.com/dgraph-io/dgraph/v24/x"
 )
 
 const (

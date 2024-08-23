@@ -34,9 +34,9 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/dgraph-io/dgo/v230/protos/api"
-	"github.com/dgraph-io/dgraph/dgraphapi"
-	"github.com/dgraph-io/dgraph/ee/enc"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/v24/dgraphapi"
+	"github.com/dgraph-io/dgraph/v24/ee/enc"
+	"github.com/dgraph-io/dgraph/v24/x"
 )
 
 const (

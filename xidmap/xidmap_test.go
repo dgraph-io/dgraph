@@ -16,8 +16,8 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/badger/v4"
-	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/v24/testutil"
+	"github.com/dgraph-io/dgraph/v24/x"
 	"github.com/dgraph-io/ristretto/z"
 )
 

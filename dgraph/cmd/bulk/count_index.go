@@ -26,10 +26,10 @@ import (
 	"github.com/golang/glog"
 
 	"github.com/dgraph-io/badger/v4"
-	"github.com/dgraph-io/dgraph/codec"
-	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/v24/codec"
+	"github.com/dgraph-io/dgraph/v24/posting"
+	"github.com/dgraph-io/dgraph/v24/protos/pb"
+	"github.com/dgraph-io/dgraph/v24/x"
 	"github.com/dgraph-io/ristretto/z"
 )
 

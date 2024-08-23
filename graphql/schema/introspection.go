@@ -6,7 +6,7 @@ import (
 	"errors"
 	"strconv"
 
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/v24/x"
 	"github.com/dgraph-io/gqlgen/graphql"
 	"github.com/dgraph-io/gqlgen/graphql/introspection"
 	"github.com/dgraph-io/gqlparser/v2/ast"

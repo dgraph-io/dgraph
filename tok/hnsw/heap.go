@@ -21,7 +21,7 @@ package hnsw
 import (
 	"container/heap"
 
-	c "github.com/dgraph-io/dgraph/tok/constraints"
+	c "github.com/dgraph-io/dgraph/v24/tok/constraints"
 )
 
 const notAUid uint64 = 0

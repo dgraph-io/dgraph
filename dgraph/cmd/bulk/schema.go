@@ -23,11 +23,11 @@ import (
 	"sync"
 
 	"github.com/dgraph-io/badger/v4"
-	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/schema"
-	wk "github.com/dgraph-io/dgraph/worker"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/v24/posting"
+	"github.com/dgraph-io/dgraph/v24/protos/pb"
+	"github.com/dgraph-io/dgraph/v24/schema"
+	wk "github.com/dgraph-io/dgraph/v24/worker"
+	"github.com/dgraph-io/dgraph/v24/x"
 )
 
 type schemaStore struct {

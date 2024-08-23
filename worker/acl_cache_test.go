@@ -18,8 +18,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgraph/ee/acl"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/v24/ee/acl"
+	"github.com/dgraph-io/dgraph/v24/x"
 )
 
 func TestAclCache(t *testing.T) {

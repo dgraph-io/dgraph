@@ -23,7 +23,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/v24/x"
 )
 
 const (

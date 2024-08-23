@@ -28,8 +28,8 @@ import (
 	"testing"
 	"unsafe"
 
-	"github.com/dgraph-io/dgraph/protos/pb"
-	c "github.com/dgraph-io/dgraph/tok/constraints"
+	"github.com/dgraph-io/dgraph/v24/protos/pb"
+	c "github.com/dgraph-io/dgraph/v24/tok/constraints"
 	"github.com/viterin/vek/vek32"
 )
 

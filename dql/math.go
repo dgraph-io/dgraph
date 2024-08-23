@@ -23,9 +23,9 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/dgraph-io/dgraph/lex"
-	"github.com/dgraph-io/dgraph/types"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/v24/lex"
+	"github.com/dgraph-io/dgraph/v24/types"
+	"github.com/dgraph-io/dgraph/v24/x"
 )
 
 type mathTreeStack struct{ a []*MathTree }

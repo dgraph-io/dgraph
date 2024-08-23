@@ -24,8 +24,8 @@ import (
 	"golang.org/x/text/collate"
 	"golang.org/x/text/language"
 
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/v24/protos/pb"
+	"github.com/dgraph-io/dgraph/v24/x"
 )
 
 type sortBase struct {

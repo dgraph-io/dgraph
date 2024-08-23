@@ -32,9 +32,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/v230/protos/api"
-	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/dgraph-io/dgraph/tok"
-	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/dgraph/v24/testutil"
+	"github.com/dgraph-io/dgraph/v24/tok"
+	"github.com/dgraph-io/dgraph/v24/types"
 )
 
 func makeNquad(sub, pred string, val *api.Value) *api.NQuad {
