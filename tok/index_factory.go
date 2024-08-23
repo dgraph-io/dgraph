@@ -19,8 +19,8 @@ package tok
 import (
 	"github.com/pkg/errors"
 
-	"github.com/dgraph-io/dgraph/tok/index"
-	opts "github.com/dgraph-io/dgraph/tok/options"
+	"github.com/dgraph-io/dgraph/v24/tok/index"
+	opts "github.com/dgraph-io/dgraph/v24/tok/options"
 )
 
 // registerIndexFactory(f) will register f as both a Tokenizer and specifically

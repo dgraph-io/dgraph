@@ -18,8 +18,8 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/dgraph-io/dgraph/ee/acl"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/v24/ee/acl"
+	"github.com/dgraph-io/dgraph/v24/x"
 )
 
 // AclCache is the cache mapping group names to the corresponding group acls

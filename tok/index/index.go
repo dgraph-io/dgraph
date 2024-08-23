@@ -21,8 +21,8 @@ package index
 import (
 	"context"
 
-	c "github.com/dgraph-io/dgraph/tok/constraints"
-	opts "github.com/dgraph-io/dgraph/tok/options"
+	c "github.com/dgraph-io/dgraph/v24/tok/constraints"
+	opts "github.com/dgraph-io/dgraph/v24/tok/options"
 )
 
 // IndexFactory is responsible for being able to create, find, and remove

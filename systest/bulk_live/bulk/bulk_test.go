@@ -21,7 +21,7 @@ package main
 import (
 	"testing"
 
-	"github.com/dgraph-io/dgraph/systest/bulk_live/common"
+	"github.com/dgraph-io/dgraph/v24/systest/bulk_live/common"
 )
 
 func TestBulkCases(t *testing.T) {

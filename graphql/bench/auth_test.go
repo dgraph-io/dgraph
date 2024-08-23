@@ -25,10 +25,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgraph/graphql/authorization"
-	"github.com/dgraph-io/dgraph/graphql/e2e/common"
-	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/v24/graphql/authorization"
+	"github.com/dgraph-io/dgraph/v24/graphql/e2e/common"
+	"github.com/dgraph-io/dgraph/v24/testutil"
+	"github.com/dgraph-io/dgraph/v24/x"
 )
 
 const (
@@ -119,7 +119,7 @@ func clearAll(b require.TestingT, metaInfo *testutil.AuthMeta) {
 //	go test -bench=. -benchtime=60s
 //	goos: linux
 //	goarch: amd64
-//	pkg: github.com/dgraph-io/dgraph/graphql/e2e/auth/bench
+//	pkg: github.com/dgraph-io/dgraph/v24/graphql/e2e/auth/bench
 // Auth
 //	BenchmarkNestedQuery-8                88         815315761 ns/op
 //	BenchmarkOneLevelQuery-8            4357          15626384 ns/op

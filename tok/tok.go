@@ -29,11 +29,11 @@ import (
 	"golang.org/x/crypto/blake2b"
 	"golang.org/x/text/collate"
 
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/tok/hnsw"
-	opts "github.com/dgraph-io/dgraph/tok/options"
-	"github.com/dgraph-io/dgraph/types"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/v24/protos/pb"
+	"github.com/dgraph-io/dgraph/v24/tok/hnsw"
+	opts "github.com/dgraph-io/dgraph/v24/tok/options"
+	"github.com/dgraph-io/dgraph/v24/types"
+	"github.com/dgraph-io/dgraph/v24/x"
 )
 
 // Tokenizer identifiers are unique and can't be reused.

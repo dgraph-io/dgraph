@@ -32,9 +32,9 @@ package worker
 // "github.com/stretchr/testify/require"
 // "google.golang.org/grpc"
 
-// "github.com/dgraph-io/dgraph/posting"
-// "github.com/dgraph-io/dgraph/protos/pb"
-// "github.com/dgraph-io/dgraph/x"
+// "github.com/dgraph-io/dgraph/v24/posting"
+// "github.com/dgraph-io/dgraph/v24/protos/pb"
+// "github.com/dgraph-io/dgraph/v24/x"
 // )
 
 // func checkShard(ps *badger.DB) (int, []byte) {

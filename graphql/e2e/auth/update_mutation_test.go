@@ -24,7 +24,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgraph/graphql/e2e/common"
+	"github.com/dgraph-io/dgraph/v24/graphql/e2e/common"
 )
 
 func getAllProjects(t *testing.T, users, roles []string) []string {

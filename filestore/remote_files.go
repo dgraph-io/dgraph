@@ -24,8 +24,8 @@ import (
 
 	"github.com/minio/minio-go/v6"
 
-	"github.com/dgraph-io/dgraph/chunker"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/v24/chunker"
+	"github.com/dgraph-io/dgraph/v24/x"
 )
 
 type remoteFiles struct {
