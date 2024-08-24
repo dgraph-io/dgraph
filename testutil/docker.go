@@ -185,7 +185,7 @@ func getContainer(name string) types.Container {
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	x.Check(err)
 
-	containers, err := cli.ContainerList(context.Background(), types.ContainerListOptions{All: true})
+	containers, err := cli.ContainerList(context.Background(), container.ListOptions{All: true})
 	if err != nil {
 		log.Fatalf("While listing container: %v\n", err)
 	}
@@ -206,7 +206,7 @@ func AllContainers(prefix string) []types.Container {
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	x.Check(err)
 
-	containers, err := cli.ContainerList(context.Background(), types.ContainerListOptions{All: true})
+	containers, err := cli.ContainerList(context.Background(), container.ListOptions{All: true})
 	if err != nil {
 		log.Fatalf("While listing container: %v\n", err)
 	}
@@ -253,8 +253,7 @@ func DockerRun(instance string, op int) error {
 
 	switch op {
 	case Start:
-		if err := cli.ContainerStart(context.Background(), c.ID,
-			types.ContainerStartOptions{}); err != nil {
+		if err := cli.ContainerStart(context.Background(), c.ID, container.StartOptions{}); err != nil {
 			return err
 		}
 	case Stop:
