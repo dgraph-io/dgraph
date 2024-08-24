@@ -9,7 +9,7 @@ require (
 	github.com/HdrHistogram/hdrhistogram-go v1.1.2
 	github.com/IBM/sarama v1.43.3
 	github.com/Masterminds/semver/v3 v3.2.1
-	github.com/bits-and-blooms/bitset v1.13.0
+	github.com/bits-and-blooms/bitset v1.14.2
 	github.com/blevesearch/bleve/v2 v2.4.2
 	github.com/dgraph-io/badger/v4 v4.2.0
 	github.com/dgraph-io/dgo/v230 v230.0.2-0.20240314155021-7b8d289e37f3
