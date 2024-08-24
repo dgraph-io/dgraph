@@ -97,7 +97,7 @@ jobs:
           make docker-image-standalone DGRAPH_VERSION=${{ env.DGRAPH_RELEASE_VERSION }}-amd64
           [[ "${{ inputs.latest }}" = true ]] && docker tag dgraph/standalone:${{ env.DGRAPH_RELEASE_VERSION }}-amd64 dgraph/standalone:latest-amd64 || true
       - name: Login to DockerHub
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_PASSWORD_TOKEN }}
@@ -192,7 +192,7 @@ jobs:
           make docker-image-standalone DGRAPH_VERSION=${{ env.DGRAPH_RELEASE_VERSION }}-arm64
           [[ "${{ inputs.latest }}" = true ]] && docker tag dgraph/standalone:${{ env.DGRAPH_RELEASE_VERSION }}-arm64 dgraph/standalone:latest-arm64 || true
       - name: Login to DockerHub
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_PASSWORD_TOKEN }}
@@ -227,7 +227,7 @@ jobs:
           echo "making a new release for dgraph "$DGRAPH_RELEASE_VERSION
           echo "DGRAPH_RELEASE_VERSION=$DGRAPH_RELEASE_VERSION" >> $GITHUB_ENV
       - name: Login to DockerHub
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_PASSWORD_TOKEN }}
