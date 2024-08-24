@@ -42,18 +42,6 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GOVERSION }}
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 16
-      - name: Install protobuf-compiler
-        run: sudo apt-get install -y protobuf-compiler
-      - name: Check protobuf
-        run: |
-          cd ./protos
-          go mod tidy
-          make regenerate
-          git diff --exit-code -- .
       - name: Make Linux Build and Docker Image
         run: make docker-image # this internally builds dgraph binary
       - name: Build Test Binary

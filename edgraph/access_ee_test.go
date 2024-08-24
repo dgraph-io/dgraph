@@ -115,10 +115,11 @@ func TestGetRefreshJwt(t *testing.T) {
 }
 
 func TestMain(m *testing.M) {
+	worker.Config.AclJwtAlg = jwt.SigningMethodHS256
 	x.WorkerConfig.AclJwtAlg = jwt.SigningMethodHS256
 	x.WorkerConfig.AclPublicKey = x.Sensitive("6ABBAA2014CFF00289D20D20DA296F67")
-
 	worker.Config.AccessJwtTtl = 20 * time.Second
 	worker.Config.RefreshJwtTtl = 20 * time.Second
 	worker.Config.AclSecretKey = x.Sensitive("6ABBAA2014CFF00289D20D20DA296F67")
+	m.Run()
 }

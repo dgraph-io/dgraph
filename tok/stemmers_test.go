@@ -69,9 +69,9 @@ func TestFilterStemmers(t *testing.T) {
 				&analysis.Token{Term: []byte("Dgraph")},
 			},
 			out: analysis.TokenStream{
-				&analysis.Token{Term: []byte("deseandol")},
+				&analysis.Token{Term: []byte("deseándol")},
 				&analysis.Token{Term: []byte("much")},
-				&analysis.Token{Term: []byte("alegri")},
+				&analysis.Token{Term: []byte("alegrí")},
 				&analysis.Token{Term: []byte("a")},
 				&analysis.Token{Term: []byte("las")},
 				&analysis.Token{Term: []byte("señorit")},

@@ -31,7 +31,7 @@ jobs:
         with:
           go-version: ${{ env.GOVERSION }}
       - name: Install protobuf-compiler
-        run: sudo apt-get install -y protobuf-compiler
+        run: sudo apt update && sudo apt install -y protobuf-compiler
       - name: Check protobuf
         run: |
           cd ./protos
@@ -126,7 +126,7 @@ jobs:
         with:
           go-version: ${{ env.GOVERSION }}
       - name: Install protobuf-compiler
-        run: sudo apt-get install -y protobuf-compiler
+        run: sudo apt update && sudo apt install -y protobuf-compiler
       - name: Check protobuf
         run: |
           cd ./protos
