@@ -28,7 +28,7 @@ scalar Int64
 
 """
 The DateTime scalar type represents date and time as a string in RFC3339 format.
-For example: "1985-04-12T23:20:50.52Z" represents 20 minutes and 50.52 seconds after the 23rd hour of April 12th, 1985 in UTC.
+For example: "1985-04-12T23:20:50.52Z" represents 20 mins 50.52 secs after the 23rd hour of Apr 12th 1985 in UTC.
 """
 scalar DateTime
 
@@ -73,6 +73,7 @@ enum DgraphIndex {
 	day
 	hour
 	geo
+	hnsw
 }
 
 input AuthRule {
@@ -190,9 +191,10 @@ input GenerateMutationParams {
 }
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION
-directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
+directive @search(by: [String!]) on FIELD_DEFINITION
+directive @embedding on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
-directive @id on FIELD_DEFINITION
+directive @id(interface: Boolean) on FIELD_DEFINITION
 directive @default(add: DgraphDefault, update: DgraphDefault) on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE

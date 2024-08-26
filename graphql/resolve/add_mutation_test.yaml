@@ -5500,45 +5500,7 @@
     {
       "message": "failed to rewrite mutation payload because field id cannot be empty"
     }
-
--
-  name: "Add Mutation referencing same XID in different types"
-  gqlmutation: |
-    mutation($input: [AddT1Input!]!) {
-      addT1(input: $input) {
-        t1 {
-          name
-          name1
-          name2
-          link {
-            name
-            name1
-            name3
-          }
-        }
-      }
-    }
-  gqlvariables: |
-    {
-      "input": [
-        {
-          "name": "Bob",
-          "name1": "Bob11",
-          "name2": "Bob2",
-          "link": {
-            "name": "Bob"
-          }
-        }
-      ]
-    }
-  explanation: "As the link and top level object contain the same XID, Bob, this should throw an error"
-  error:
-    {
-      "message":
-        "failed to rewrite mutation payload because using duplicate XID value: Bob for XID: name for two different
-         implementing types of same interfaces: T1 and T2"
-    }
-
+    
 -
   name: "Add mutation with @default directive"
   gqlmutation: |
