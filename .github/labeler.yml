@@ -6,8 +6,8 @@ area/documentation:
 - changed-files:
   - any-glob-to-any-file:
     - '**/*.md'
-    - `**/*.pdf`
-    - `**/*.tex`
+    - '**/*.pdf'
+    - '**/*.tex'
 
 area/bulk-loader:
 - changed-files:
@@ -52,9 +52,9 @@ area/testing:
 - changed-files:
   - any-glob-to-any-file:
     - systest/**
-    - `**/*test.go`
+    - '**/*test.go'
     - graphql/e2e/**
-    - `**/*test.yaml`
+    - '**/*test.yaml'
     - t/**
     - testutil/**
     - tlstest/**
@@ -75,8 +75,8 @@ area/core:
 
 go:
 - changed-files:
-  - any-glob-to-any-file: `**/*.go`
+  - any-glob-to-any-file: '**/*.go'
 
 python:
 - changed-files:
-  - any-glob-to-any-file: `**/*.py`
+  - any-glob-to-any-file: '**/*.py'
