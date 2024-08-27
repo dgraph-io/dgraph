@@ -1453,6 +1453,12 @@ func lambdaDirectiveValidation(sch *ast.Schema,
 	return errs
 }
 
+// defaultDirectiveValidation will prevents use of @default on:
+// Types with @remote directive
+// Fields of type ID
+// Fields that are not scalar types (Int, Float, String, Boolean, DateTime) or an enum
+// Fields that are list types (ie `[String])
+// Fields with @id, @custom, @lambda
 func defaultDirectiveValidation(sch *ast.Schema,
 	typ *ast.Definition,
 	field *ast.FieldDefinition,

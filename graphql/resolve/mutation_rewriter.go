@@ -34,9 +34,11 @@ import (
 )
 
 const (
-	MutationQueryVar        = "x"
-	MutationQueryVarUID     = "uid(x)"
-	updateMutationCondition = `gt(len(x), 0)`
+	MutationQueryVar          = "x"
+	MutationQueryVarUID       = "uid(x)"
+	updateMutationCondition   = `gt(len(x), 0)`
+	defaultDirectiveUpdateAct = "update"
+	defaultDirectiveAddAct    = "add"
 )
 
 // Enum passed on to rewriteObject function.
@@ -1587,7 +1589,7 @@ func rewriteObject(
 		}
 	}
 
-	action := "update"
+	action := defaultDirectiveUpdateAct
 
 	// This is not an XID reference. This is also not a UID reference.
 	// This is definitely a new node.
@@ -1637,7 +1639,7 @@ func rewriteObject(
 		// "_:Project2" . myUID will store the variable generated to reference this node.
 		newObj["dgraph.type"] = dgraphTypes
 		newObj["uid"] = myUID
-		action = "add"
+		action = defaultDirectiveAddAct
 	}
 
 	// Now we know whether this is a new node or not, we can set @default(add/update) fields
