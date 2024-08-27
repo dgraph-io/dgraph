@@ -2,9 +2,18 @@
 # Input Schema
 #######################
 
-type User {
+type Booking {
 	id: ID!
 	name: String!
+	created: DateTime! @default(add: {value:"$now"})
+	updated: DateTime! @default(add: {value:"$now"}, update: {value:"$now"})
+}
+
+type BookingXID {
+	id: String! @id
+	name: String!
+	created: DateTime! @default(add: {value:"$now"})
+	updated: DateTime! @default(add: {value:"$now"}, update: {value:"$now"})
 }
 
 #######################
@@ -280,75 +289,172 @@ input StringHashFilter {
 # Generated Types
 #######################
 
-type AddUserPayload {
-	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+type AddBookingPayload {
+	booking(filter: BookingFilter, order: BookingOrder, first: Int, offset: Int): [Booking]
 	numUids: Int
 }
 
-type DeleteUserPayload {
-	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+type AddBookingXIDPayload {
+	bookingXID(filter: BookingXIDFilter, order: BookingXIDOrder, first: Int, offset: Int): [BookingXID]
+	numUids: Int
+}
+
+type BookingAggregateResult {
+	count: Int
+	nameMin: String
+	nameMax: String
+	createdMin: DateTime
+	createdMax: DateTime
+	updatedMin: DateTime
+	updatedMax: DateTime
+}
+
+type BookingXIDAggregateResult {
+	count: Int
+	idMin: String
+	idMax: String
+	nameMin: String
+	nameMax: String
+	createdMin: DateTime
+	createdMax: DateTime
+	updatedMin: DateTime
+	updatedMax: DateTime
+}
+
+type DeleteBookingPayload {
+	booking(filter: BookingFilter, order: BookingOrder, first: Int, offset: Int): [Booking]
 	msg: String
 	numUids: Int
 }
 
-type UpdateUserPayload {
-	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+type DeleteBookingXIDPayload {
+	bookingXID(filter: BookingXIDFilter, order: BookingXIDOrder, first: Int, offset: Int): [BookingXID]
+	msg: String
 	numUids: Int
 }
 
-type UserAggregateResult {
-	count: Int
-	nameMin: String
-	nameMax: String
+type UpdateBookingPayload {
+	booking(filter: BookingFilter, order: BookingOrder, first: Int, offset: Int): [Booking]
+	numUids: Int
+}
+
+type UpdateBookingXIDPayload {
+	bookingXID(filter: BookingXIDFilter, order: BookingXIDOrder, first: Int, offset: Int): [BookingXID]
+	numUids: Int
 }
 
 #######################
 # Generated Enums
 #######################
 
-enum UserHasFilter {
+enum BookingHasFilter {
 	name
+	created
+	updated
 }
 
-enum UserOrderable {
+enum BookingOrderable {
 	name
+	created
+	updated
+}
+
+enum BookingXIDHasFilter {
+	id
+	name
+	created
+	updated
+}
+
+enum BookingXIDOrderable {
+	id
+	name
+	created
+	updated
 }
 
 #######################
 # Generated Inputs
 #######################
 
-input AddUserInput {
+input AddBookingInput {
 	name: String!
+	created: DateTime
+	updated: DateTime
 }
 
-input UpdateUserInput {
-	filter: UserFilter!
-	set: UserPatch
-	remove: UserPatch
+input AddBookingXIDInput {
+	id: String!
+	name: String!
+	created: DateTime
+	updated: DateTime
 }
 
-input UserFilter {
+input BookingFilter {
 	id: [ID!]
-	has: [UserHasFilter]
-	and: [UserFilter]
-	or: [UserFilter]
-	not: UserFilter
+	has: [BookingHasFilter]
+	and: [BookingFilter]
+	or: [BookingFilter]
+	not: BookingFilter
 }
 
-input UserOrder {
-	asc: UserOrderable
-	desc: UserOrderable
-	then: UserOrder
+input BookingOrder {
+	asc: BookingOrderable
+	desc: BookingOrderable
+	then: BookingOrder
 }
 
-input UserPatch {
+input BookingPatch {
 	name: String
+	created: DateTime
+	updated: DateTime
 }
 
-input UserRef {
+input BookingRef {
 	id: ID
 	name: String
+	created: DateTime
+	updated: DateTime
+}
+
+input BookingXIDFilter {
+	id: StringHashFilter
+	has: [BookingXIDHasFilter]
+	and: [BookingXIDFilter]
+	or: [BookingXIDFilter]
+	not: BookingXIDFilter
+}
+
+input BookingXIDOrder {
+	asc: BookingXIDOrderable
+	desc: BookingXIDOrderable
+	then: BookingXIDOrder
+}
+
+input BookingXIDPatch {
+	id: String
+	name: String
+	created: DateTime
+	updated: DateTime
+}
+
+input BookingXIDRef {
+	id: String
+	name: String
+	created: DateTime
+	updated: DateTime
+}
+
+input UpdateBookingInput {
+	filter: BookingFilter!
+	set: BookingPatch
+	remove: BookingPatch
+}
+
+input UpdateBookingXIDInput {
+	filter: BookingXIDFilter!
+	set: BookingXIDPatch
+	remove: BookingXIDPatch
 }
 
 #######################
@@ -356,10 +462,12 @@ input UserRef {
 #######################
 
 type Query {
-	getMyFavoriteUsers(id: ID!): [User] @custom(http: {url:"http://my-api.com",method:"GET"})
-	getUser(id: ID!): User
-	queryUser(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
-	aggregateUser(filter: UserFilter): UserAggregateResult
+	getBooking(id: ID!): Booking
+	queryBooking(filter: BookingFilter, order: BookingOrder, first: Int, offset: Int): [Booking]
+	aggregateBooking(filter: BookingFilter): BookingAggregateResult
+	getBookingXID(id: String!): BookingXID
+	queryBookingXID(filter: BookingXIDFilter, order: BookingXIDOrder, first: Int, offset: Int): [BookingXID]
+	aggregateBookingXID(filter: BookingXIDFilter): BookingXIDAggregateResult
 }
 
 #######################
@@ -367,8 +475,11 @@ type Query {
 #######################
 
 type Mutation {
-	addUser(input: [AddUserInput!]!): AddUserPayload
-	updateUser(input: UpdateUserInput!): UpdateUserPayload
-	deleteUser(filter: UserFilter!): DeleteUserPayload
+	addBooking(input: [AddBookingInput!]!): AddBookingPayload
+	updateBooking(input: UpdateBookingInput!): UpdateBookingPayload
+	deleteBooking(filter: BookingFilter!): DeleteBookingPayload
+	addBookingXID(input: [AddBookingXIDInput!]!, upsert: Boolean): AddBookingXIDPayload
+	updateBookingXID(input: UpdateBookingXIDInput!): UpdateBookingXIDPayload
+	deleteBookingXID(filter: BookingXIDFilter!): DeleteBookingXIDPayload
 }
 
