@@ -1,6 +1,6 @@
 name: labeler
 on:
-  pull_request:
+  pull_request_target:
     types:
       - opened
       - reopened
@@ -18,5 +18,3 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/labeler@v5
-        with:
-          repo-token: "${{ secrets.GH_TOKEN }}"
