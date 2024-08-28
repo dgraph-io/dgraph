@@ -393,6 +393,41 @@ func testVectorMutationDiffrentLength(t *testing.T, err string) {
 	require.ErrorContains(t, addTriplesToCluster(rdf), err)
 }
 
+func TestInvalidVectorIndex(t *testing.T) {
+	dropPredicate("vtest")
+	schema := fmt.Sprintf(vectorSchemaWithIndex, "vtest", "4", "euclidan")
+	var err error
+	for retry := 0; retry < 10; retry++ {
+		err = client.Alter(context.Background(), &api.Operation{Schema: schema})
+		if err == nil {
+			require.Error(t, err)
+		}
+		if strings.Contains(err.Error(), "Can't create a vector index for euclidan") {
+			return
+		}
+		time.Sleep(time.Second)
+	}
+	require.Error(t, nil)
+}
+
+func TestVectorIndexRebuildWhenChange(t *testing.T) {
+	dropPredicate("vtest")
+	setSchema(fmt.Sprintf(vectorSchemaWithIndex, "vtest", "4", "euclidian"))
+
+	numVectors := 9000
+	vectorSize := 100
+
+	randomVectors, _ := generateRandomVectors(numVectors, vectorSize, "vtest")
+	require.NoError(t, addTriplesToCluster(randomVectors))
+
+	startTime := time.Now()
+	setSchema(fmt.Sprintf(vectorSchemaWithIndex, "vtest", "6", "euclidian"))
+
+	dur := time.Since(startTime)
+	// Easy way to check that the index was actually rebuilt
+	require.Greater(t, dur, time.Second*4)
+}
+
 func TestVectorInQueryArgument(t *testing.T) {
 	dropPredicate("vtest")
 	setSchema(fmt.Sprintf(vectorSchemaWithIndex, "vtest", "4", "euclidian"))

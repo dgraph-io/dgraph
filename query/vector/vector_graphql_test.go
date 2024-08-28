@@ -170,7 +170,7 @@ func TestVectorGraphQLAddVectorPredicate(t *testing.T) {
 	require.NoError(t, err)
 	hc.LoginIntoNamespace("groot", "password", 0)
 	// add schema
-	require.NoError(t, hc.UpdateGQLSchema(fmt.Sprintf(graphQLVectorSchema, "euclidean")))
+	require.NoError(t, hc.UpdateGQLSchema(fmt.Sprintf(graphQLVectorSchema, "euclidian")))
 }
 
 func TestVectorSchema(t *testing.T) {
@@ -188,7 +188,7 @@ func TestVectorSchema(t *testing.T) {
 
 	// add schema
 	require.NoError(t, hc.UpdateGQLSchema(schema))
-	require.Error(t, hc.UpdateGQLSchema(fmt.Sprintf(graphQLVectorSchema, "euclidean")))
+	require.Error(t, hc.UpdateGQLSchema(fmt.Sprintf(graphQLVectorSchema, "euclidian")))
 }
 
 func TestVectorGraphQlEuclidianIndexMutationAndQuery(t *testing.T) {
@@ -197,7 +197,7 @@ func TestVectorGraphQlEuclidianIndexMutationAndQuery(t *testing.T) {
 	require.NoError(t, err)
 	hc.LoginIntoNamespace("groot", "password", 0)
 
-	schema := fmt.Sprintf(graphQLVectorSchema, "euclidean")
+	schema := fmt.Sprintf(graphQLVectorSchema, "euclidian")
 	// add schema
 	require.NoError(t, hc.UpdateGQLSchema(schema))
 	testVectorGraphQlMutationAndQuery(t, hc)

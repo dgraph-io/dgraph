@@ -1218,14 +1218,22 @@ func (rb *IndexRebuild) needsTokIndexRebuild() *indexRebuildInfo {
 	prevFactoryNames := make(map[string]struct{})
 	prevFactories := make(map[string]*pb.VectorIndexSpec)
 	for _, t := range old.IndexSpecs {
-		prevFactoryNames[t.Name] = struct{}{}
-		prevFactories[t.Name] = t
+		spec, err := tok.GetFactoryCreateSpecFromSpec(t)
+		x.AssertTruef(err == nil, "Error while building index spec %s", err)
+		name := spec.Name()
+
+		prevFactoryNames[name] = struct{}{}
+		prevFactories[name] = t
 	}
 	currFactoryNames := make(map[string]struct{})
 	currFactories := make(map[string]*pb.VectorIndexSpec)
 	for _, t := range rb.CurrentSchema.IndexSpecs {
-		currFactoryNames[t.Name] = struct{}{}
-		currFactories[t.Name] = t
+		spec, err := tok.GetFactoryCreateSpecFromSpec(t)
+		x.AssertTruef(err == nil, "Error while building index spec %s", err)
+		name := spec.Name()
+
+		currFactoryNames[name] = struct{}{}
+		currFactories[name] = t
 	}
 
 	newFactoryNames, deletedFactoryNames := x.Diff(currFactoryNames, prevFactoryNames)
@@ -1532,13 +1540,37 @@ func (rb *IndexRebuild) needsVectorIndexEdgesRebuild() indexOp {
 	prevIndex := old.Directive == pb.SchemaUpdate_INDEX &&
 		old.ValueType == pb.Posting_VFLOAT
 
+	prevFactoryNames := make(map[string]struct{})
+	prevFactories := make(map[string]*pb.VectorIndexSpec)
+	for _, t := range old.IndexSpecs {
+		spec, err := tok.GetFactoryCreateSpecFromSpec(t)
+		x.AssertTruef(err == nil, "Error while building index spec %s", err)
+		name := spec.Name()
+
+		prevFactoryNames[name] = struct{}{}
+		prevFactories[name] = t
+	}
+
+	currFactoryNames := make(map[string]struct{})
+	currFactories := make(map[string]*pb.VectorIndexSpec)
+	for _, t := range rb.CurrentSchema.IndexSpecs {
+		spec, err := tok.GetFactoryCreateSpecFromSpec(t)
+		x.AssertTruef(err == nil, "Error while building index spec %s", err)
+		name := spec.Name()
+
+		currFactoryNames[name] = struct{}{}
+		currFactories[name] = t
+	}
+
+	newFactoryNames, deletedFactoryNames := x.Diff(currFactoryNames, prevFactoryNames)
+
 	// If the schema directive did not change, return indexNoop.
-	if currIndex == prevIndex {
+	if currIndex == prevIndex && len(newFactoryNames) == 0 && len(deletedFactoryNames) == 0 {
 		return indexNoop
 	}
 
 	// If the current schema requires an index, index should be rebuilt.
-	if currIndex {
+	if currIndex || len(newFactoryNames) != 0 {
 		return indexRebuild
 	}
 	// Otherwise, index should only be deleted.
