@@ -8,7 +8,7 @@ require (
 	github.com/DataDog/opencensus-go-exporter-datadog v0.0.0-20220622145613-731d59e8b567
 	github.com/HdrHistogram/hdrhistogram-go v1.1.2
 	github.com/IBM/sarama v1.43.3
-	github.com/Masterminds/semver/v3 v3.2.1
+	github.com/Masterminds/semver/v3 v3.3.0
 	github.com/bits-and-blooms/bitset v1.14.2
 	github.com/blevesearch/bleve/v2 v2.4.2
 	github.com/dgraph-io/badger/v4 v4.2.0
