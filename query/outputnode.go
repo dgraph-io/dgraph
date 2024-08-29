@@ -908,7 +908,7 @@ func (enc *encoder) merge(parent, child []fastJsonNode) ([]fastJsonNode, error) 
 			caCopy, caNodeCount := enc.copyFastJsonList(ca)
 
 			cnt += paNodeCount + caNodeCount
-			if cnt > x.Config.LimitNormalizeNode {
+			if cnt > x.AlphaConfig.LimitNormalizeNode {
 				return nil, errors.Errorf(
 					"Couldn't evaluate @normalize directive - too many results")
 			}
@@ -996,7 +996,7 @@ func (enc *encoder) normalize(fj fastJsonNode) ([]fastJsonNode, error) {
 	}
 
 	for i, slice := range parentSlice {
-		if x.Config.NormalizeCompatibilityMode == "" {
+		if x.AlphaConfig.NormalizeCompatibilityMode == "" {
 			// sort the fastJson list. This will ensure that nodes
 			// with same attribute name comes together in response
 			enc.MergeSort(&parentSlice[i])

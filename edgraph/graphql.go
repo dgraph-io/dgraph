@@ -50,7 +50,7 @@ func ProcessPersistedQuery(ctx context.Context, gqlReq *schema.Request) error {
 		return nil
 	}
 
-	if x.WorkerConfig.AclEnabled {
+	if x.AlphaWorkerConfig.AclEnabled {
 		accessJwt, err := x.ExtractJwt(ctx)
 		if err != nil {
 			return err

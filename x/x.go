@@ -442,7 +442,7 @@ func ParseRequest(w http.ResponseWriter, r *http.Request, data interface{}) bool
 // AttachJWTNamespace attaches the namespace in the JWT claims to the context if present, otherwise
 // it attaches the galaxy namespace.
 func AttachJWTNamespace(ctx context.Context) context.Context {
-	if !WorkerConfig.AclEnabled {
+	if !AlphaWorkerConfig.AclEnabled {
 		return AttachNamespace(ctx, GalaxyNamespace)
 	}
 
@@ -471,7 +471,7 @@ func AttachNamespace(ctx context.Context, namespace uint64) context.Context {
 // AttachJWTNamespaceOutgoing attaches the namespace in the JWT claims to the outgoing metadata of
 // the context.
 func AttachJWTNamespaceOutgoing(ctx context.Context) (context.Context, error) {
-	if !WorkerConfig.AclEnabled {
+	if !AlphaWorkerConfig.AclEnabled {
 		return AttachNamespaceOutgoing(ctx, GalaxyNamespace), nil
 	}
 	ns, err := ExtractNamespaceFrom(ctx)
@@ -558,7 +558,7 @@ func isIpWhitelisted(ipString string) bool {
 		return true
 	}
 
-	for _, ipRange := range WorkerConfig.WhiteListedIPRanges {
+	for _, ipRange := range AlphaWorkerConfig.WhiteListedIPRanges {
 		if bytes.Compare(ip, ipRange.Lower) >= 0 && bytes.Compare(ip, ipRange.Upper) <= 0 {
 			return true
 		}
@@ -1512,7 +1512,7 @@ func (r *RateLimiter) RefillPeriodically() {
 
 // LambdaUrl returns the correct lambda-url for the given namespace
 func LambdaUrl(ns uint64) string {
-	return strings.Replace(Config.GraphQL.GetString("lambda-url"), "$ns", strconv.FormatUint(ns,
+	return strings.Replace(AlphaConfig.GraphQL.GetString("lambda-url"), "$ns", strconv.FormatUint(ns,
 		10), 1)
 }
 

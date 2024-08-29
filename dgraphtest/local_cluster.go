@@ -556,11 +556,6 @@ func (c *LocalCluster) containerHealthCheck(url func(c *LocalCluster) (string, e
 	for i := 0; i < 60; i++ {
 		time.Sleep(waitDurBeforeRetry)
 
-		endpoint, err = url(c)
-		if err != nil {
-			return errors.Wrap(err, "error getting health URL")
-		}
-
 		req, err := http.NewRequest(http.MethodGet, endpoint, nil)
 		if err != nil {
 			log.Printf("[WARNING] error building req for endpoint [%v], err: [%v]", endpoint, err)

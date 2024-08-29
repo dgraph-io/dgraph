@@ -67,11 +67,16 @@ func InitSentry(ee bool) {
 }
 
 func initSentry() {
+	myaddr := AlphaWorkerConfig.MyAddr
+	if myaddr == "" {
+		myaddr = ZeroWorkerConfig.MyAddr
+	}
+
 	if err := sentry.Init(sentry.ClientOptions{
 		Dsn:              dsn,
 		Debug:            true,
 		AttachStacktrace: true,
-		ServerName:       WorkerConfig.MyAddr,
+		ServerName:       myaddr,
 		Environment:      env,
 		Release:          Version(),
 		BeforeSend: func(event *sentry.Event, hint *sentry.EventHint) *sentry.Event {

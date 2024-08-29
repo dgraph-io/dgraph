@@ -67,7 +67,7 @@ cluster.
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
-	initCmds()
+	InitCmds()
 
 	// Convinces glog that Parse() has been called to avoid noisy logs.
 	// https://github.com/kubernetes/kubernetes/issues/17162#issuecomment-225596212
@@ -88,7 +88,7 @@ var subcommands = []*x.SubCommand{
 	&checkupgrade.CheckUpgrade,
 }
 
-func initCmds() {
+func InitCmds() {
 	RootCmd.PersistentFlags().String("cwd", "",
 		"Change working directory to the path specified. The parent must exist.")
 	RootCmd.PersistentFlags().String("profile_mode", "",

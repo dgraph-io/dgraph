@@ -410,7 +410,7 @@ func TestTruncateStorage(t *testing.T) {
 
 func TestStorageOnlySnap(t *testing.T) {
 	test := func(t *testing.T, key []byte) {
-		x.WorkerConfig.EncryptionKey = key
+		x.AlphaWorkerConfig.EncryptionKey = key
 		dir := t.TempDir()
 
 		ds, err := InitEncrypted(dir, key)

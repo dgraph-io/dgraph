@@ -85,13 +85,13 @@ func InitServerState() {
 		glog.Warningf("Could not read %s file inside posting directory %s.", x.GroupIdFileName,
 			Config.PostingDir)
 	}
-	x.WorkerConfig.ProposedGroupId = groupId
+	x.AlphaWorkerConfig.ProposedGroupId = groupId
 }
 
 func setBadgerOptions(opt badger.Options) badger.Options {
 	opt = opt.WithSyncWrites(false).
 		WithLogger(&x.ToGlog{}).
-		WithEncryptionKey(x.WorkerConfig.EncryptionKey)
+		WithEncryptionKey(x.AlphaWorkerConfig.EncryptionKey)
 
 	// Disable conflict detection in badger. Alpha runs in managed mode and
 	// perform its own conflict detection so we don't need badger's conflict
@@ -106,7 +106,7 @@ func setBadgerOptions(opt badger.Options) badger.Options {
 func (s *ServerState) initStorage() {
 	var err error
 
-	if x.WorkerConfig.EncryptionKey != nil {
+	if x.AlphaWorkerConfig.EncryptionKey != nil {
 		// non-nil key file
 		if !EnterpriseEnabled() {
 			// not licensed --> crash.
@@ -120,7 +120,7 @@ func (s *ServerState) initStorage() {
 	{
 		// Write Ahead Log directory
 		x.Checkf(os.MkdirAll(Config.WALDir, 0700), "Error while creating WAL dir.")
-		s.WALstore, err = raftwal.InitEncrypted(Config.WALDir, x.WorkerConfig.EncryptionKey)
+		s.WALstore, err = raftwal.InitEncrypted(Config.WALDir, x.AlphaWorkerConfig.EncryptionKey)
 		x.Check(err)
 	}
 	{
@@ -128,7 +128,7 @@ func (s *ServerState) initStorage() {
 		// All the writes to posting store should be synchronous. We use batched writers
 		// for posting lists, so the cost of sync writes is amortized.
 		x.Check(os.MkdirAll(Config.PostingDir, 0700))
-		opt := x.WorkerConfig.Badger.
+		opt := x.AlphaWorkerConfig.Badger.
 			WithDir(Config.PostingDir).WithValueDir(Config.PostingDir).
 			WithNumVersionsToKeep(math.MaxInt32).
 			WithNamespaceOffset(x.NamespaceOffset)
@@ -148,7 +148,7 @@ func (s *ServerState) initStorage() {
 		opt.EncryptionKey = nil
 	}
 	// Temp directory
-	x.Check(os.MkdirAll(x.WorkerConfig.TmpDir, 0700))
+	x.Check(os.MkdirAll(x.AlphaWorkerConfig.TmpDir, 0700))
 
 	s.gcCloser = z.NewCloser(3)
 	go x.RunVlogGC(s.Pstore, s.gcCloser)

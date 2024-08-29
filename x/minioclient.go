@@ -108,7 +108,7 @@ func NewMinioClient(uri *url.URL, creds *MinioCredentials) (*MinioClient, error)
 	}
 
 	var credsProvider *credentials.Credentials
-	if Config.SharedInstance {
+	if AlphaConfig.SharedInstance {
 		credsProvider = credentials.New(MinioCredentialsProviderWithoutEnv(requestCreds(creds)))
 	} else {
 		credsProvider = credentials.New(MinioCredentialsProvider(uri.Scheme, requestCreds(creds)))

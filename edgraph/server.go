@@ -205,7 +205,7 @@ func UpdateGQLSchema(ctx context.Context, gqlSchema,
 	var err error
 	parsedDgraphSchema := &schema.ParsedSchema{}
 
-	if !x.WorkerConfig.AclEnabled {
+	if !x.AlphaWorkerConfig.AclEnabled {
 		ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
 	}
 	// The schema could be empty if it only has custom types/queries/mutations.
@@ -246,6 +246,11 @@ func validateAlterOperation(ctx context.Context, op *api.Operation) error {
 	if !isMutationAllowed(ctx) {
 		return errors.Errorf("No mutations allowed by server.")
 	}
+
+	if x.IsDgraphLite() {
+		return nil
+	}
+
 	if _, err := hasAdminAuth(ctx, "Alter"); err != nil {
 		glog.Warningf("Alter denied with error: %v\n", err)
 		return err
@@ -399,7 +404,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	// if it lies on some other machine. Let's get it for safety.
 	m := &pb.Mutations{StartTs: worker.State.GetTimestamp(false)}
 	if isDropAll(op) {
-		if x.Config.BlockClusterWideDrop {
+		if x.AlphaConfig.BlockClusterWideDrop {
 			glog.V(2).Info("Blocked drop-all because it is not permitted.")
 			return empty, errors.New("Drop all operation is not permitted.")
 		}
@@ -596,9 +601,9 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 		return err
 	}
 
-	if len(edges) > x.Config.LimitMutationsNquad {
+	if len(edges) > x.AlphaConfig.LimitMutationsNquad {
 		return errors.Errorf("NQuad count in the request: %d, is more that threshold: %d",
-			len(edges), x.Config.LimitMutationsNquad)
+			len(edges), x.AlphaConfig.LimitMutationsNquad)
 	}
 
 	ns, err := x.ExtractNamespace(ctx)
@@ -950,9 +955,9 @@ func updateValInNQuads(nquads []*api.NQuad, qc *queryContext, isSet bool) []*api
 func updateValInMutations(gmu *dql.Mutation, qc *queryContext) error {
 	gmu.Del = updateValInNQuads(gmu.Del, qc, false)
 	gmu.Set = updateValInNQuads(gmu.Set, qc, true)
-	if qc.nquadsCount > x.Config.LimitMutationsNquad {
+	if qc.nquadsCount > x.AlphaConfig.LimitMutationsNquad {
 		return errors.Errorf("NQuad count in the request: %d, is more that threshold: %d",
-			qc.nquadsCount, x.Config.LimitMutationsNquad)
+			qc.nquadsCount, x.AlphaConfig.LimitMutationsNquad)
 	}
 	return nil
 }
@@ -1004,9 +1009,9 @@ func updateUIDInMutations(gmu *dql.Mutation, qc *queryContext) error {
 				gmuDel = append(gmuDel, getNewNQuad(nq, s, o))
 				qc.nquadsCount++
 			}
-			if qc.nquadsCount > x.Config.LimitMutationsNquad {
+			if qc.nquadsCount > x.AlphaConfig.LimitMutationsNquad {
 				return errors.Errorf("NQuad count in the request: %d, is more that threshold: %d",
-					qc.nquadsCount, x.Config.LimitMutationsNquad)
+					qc.nquadsCount, x.AlphaConfig.LimitMutationsNquad)
 			}
 		}
 	}
@@ -1020,9 +1025,9 @@ func updateUIDInMutations(gmu *dql.Mutation, qc *queryContext) error {
 		newObs := getNewVals(nq.ObjectId)
 
 		qc.nquadsCount += len(newSubs) * len(newObs)
-		if qc.nquadsCount > int(x.Config.LimitQueryEdge) {
+		if qc.nquadsCount > int(x.AlphaConfig.LimitQueryEdge) {
 			return errors.Errorf("NQuad count in the request: %d, is more that threshold: %d",
-				qc.nquadsCount, int(x.Config.LimitQueryEdge))
+				qc.nquadsCount, int(x.AlphaConfig.LimitQueryEdge))
 		}
 
 		for _, s := range newSubs {
@@ -1102,7 +1107,7 @@ func (s *Server) Health(ctx context.Context, all bool) (*api.Response, error) {
 		}
 		pool := conn.GetPools().GetAll()
 		for _, p := range pool {
-			if p.Addr == x.WorkerConfig.MyAddr {
+			if p.Addr == x.AlphaWorkerConfig.MyAddr {
 				continue
 			}
 			healthAll = append(healthAll, p.HealthInfo())
@@ -1112,11 +1117,11 @@ func (s *Server) Health(ctx context.Context, all bool) (*api.Response, error) {
 	// Append self.
 	healthAll = append(healthAll, pb.HealthInfo{
 		Instance:    "alpha",
-		Address:     x.WorkerConfig.MyAddr,
+		Address:     x.AlphaWorkerConfig.MyAddr,
 		Status:      "healthy",
 		Group:       strconv.Itoa(int(worker.GroupId())),
 		Version:     x.Version(),
-		Uptime:      int64(time.Since(x.WorkerConfig.StartTime) / time.Second),
+		Uptime:      int64(time.Since(x.AlphaWorkerConfig.StartTime) / time.Second),
 		LastEcho:    time.Now().Unix(),
 		Ongoing:     worker.GetOngoingTasks(),
 		Indexing:    schema.GetIndexingPredicates(),
@@ -1134,7 +1139,7 @@ func (s *Server) Health(ctx context.Context, all bool) (*api.Response, error) {
 
 // Filter out the tablets that do not belong to the requestor's namespace.
 func filterTablets(ctx context.Context, ms *pb.MembershipState) error {
-	if !x.WorkerConfig.AclEnabled {
+	if !x.AlphaWorkerConfig.AclEnabled {
 		return nil
 	}
 	namespace, err := x.ExtractNamespaceFrom(ctx)
@@ -1199,10 +1204,10 @@ func (s *Server) QueryGraphQL(ctx context.Context, req *api.Request,
 	// Add a timeout for queries which don't have a deadline set. We don't want to
 	// apply a timeout if it's a mutation, that's currently handled by flag
 	// "txn-abort-after".
-	if req.GetMutations() == nil && x.Config.QueryTimeout != 0 {
+	if req.GetMutations() == nil && x.AlphaConfig.QueryTimeout != 0 {
 		if d, _ := ctx.Deadline(); d.IsZero() {
 			var cancel context.CancelFunc
-			ctx, cancel = context.WithTimeout(ctx, x.Config.QueryTimeout)
+			ctx, cancel = context.WithTimeout(ctx, x.AlphaConfig.QueryTimeout)
 			defer cancel()
 		}
 	}
@@ -1225,7 +1230,7 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, er
 // Query handles queries or mutations
 func (s *Server) QueryNoGrpc(ctx context.Context, req *api.Request) (*api.Response, error) {
 	ctx = x.AttachJWTNamespace(ctx)
-	if x.WorkerConfig.AclEnabled && req.GetStartTs() != 0 {
+	if x.AlphaWorkerConfig.AclEnabled && req.GetStartTs() != 0 {
 		// A fresh StartTs is assigned if it is 0.
 		ns, err := x.ExtractNamespace(ctx)
 		if err != nil {
@@ -1238,10 +1243,10 @@ func (s *Server) QueryNoGrpc(ctx context.Context, req *api.Request) (*api.Respon
 	// Add a timeout for queries which don't have a deadline set. We don't want to
 	// apply a timeout if it's a mutation, that's currently handled by flag
 	// "txn-abort-after".
-	if req.GetMutations() == nil && x.Config.QueryTimeout != 0 {
+	if req.GetMutations() == nil && x.AlphaConfig.QueryTimeout != 0 {
 		if d, _ := ctx.Deadline(); d.IsZero() {
 			var cancel context.CancelFunc
-			ctx, cancel = context.WithTimeout(ctx, x.Config.QueryTimeout)
+			ctx, cancel = context.WithTimeout(ctx, x.AlphaConfig.QueryTimeout)
 			defer cancel()
 		}
 	}
@@ -1253,7 +1258,7 @@ var maxPendingQueries int64
 var serverOverloadErr = errors.New("429 Too Many Requests. Please throttle your requests")
 
 func Init() {
-	maxPendingQueries = x.Config.Limit.GetInt64("max-pending-queries")
+	maxPendingQueries = x.AlphaConfig.Limit.GetInt64("max-pending-queries")
 }
 
 func (s *Server) doQuery(ctx context.Context, req *Request) (resp *api.Response, rerr error) {
@@ -1261,7 +1266,7 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (resp *api.Response,
 		return nil, ctx.Err()
 	}
 	defer atomic.AddInt64(&pendingQueries, -1)
-	if val := atomic.AddInt64(&pendingQueries, 1); val > maxPendingQueries {
+	if val := atomic.AddInt64(&pendingQueries, 1); val > maxPendingQueries && !x.IsDgraphLite() {
 		return nil, serverOverloadErr
 	}
 
@@ -1364,7 +1369,7 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (resp *api.Response,
 		req.req.StartTs = worker.State.GetTimestamp(false)
 		qc.latency.AssignTimestamp = time.Since(start)
 	}
-	if x.WorkerConfig.AclEnabled {
+	if x.AlphaWorkerConfig.AclEnabled {
 		ns, err := x.ExtractNamespace(ctx)
 		if err != nil {
 			return nil, err
@@ -1818,7 +1823,7 @@ func getHash(ns, startTs uint64) string {
 }
 
 func validateNamespace(ctx context.Context, tc *api.TxnContext) error {
-	if !x.WorkerConfig.AclEnabled {
+	if !x.AlphaWorkerConfig.AclEnabled {
 		return nil
 	}
 

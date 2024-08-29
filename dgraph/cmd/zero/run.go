@@ -63,6 +63,7 @@ type options struct {
 	limiterConfig     *x.LimiterConf
 }
 
+var st state
 var opts options
 
 // Zero is the sub-command used to start Zero servers.
@@ -79,7 +80,7 @@ instances to achieve high-availability.
 `,
 		Run: func(cmd *cobra.Command, args []string) {
 			defer x.StartProfile(Zero.Conf).Stop()
-			run()
+			Run()
 		},
 		Annotations: map[string]string{"group": "core"},
 	}
@@ -170,7 +171,7 @@ func (st *state) serveGRPC(l net.Listener, store *raftwal.DiskStorage) {
 	nodeId := opts.raft.GetUint64("idx")
 	rc := pb.RaftContext{
 		Id:        nodeId,
-		Addr:      x.WorkerConfig.MyAddr,
+		Addr:      x.ZeroWorkerConfig.MyAddr,
 		Group:     0,
 		IsLearner: opts.raft.GetBool("learner"),
 	}
@@ -212,16 +213,16 @@ func (st *state) serveGRPC(l net.Listener, store *raftwal.DiskStorage) {
 	}()
 }
 
-func run() {
+func Run() {
 	telemetry := z.NewSuperFlag(Zero.Conf.GetString("telemetry")).MergeAndCheckDefault(
 		x.TelemetryDefaults)
-	if telemetry.GetBool("sentry") {
-		x.InitSentry(enc.EeBuild)
-		defer x.FlushSentry()
-		x.ConfigureSentryScope("zero")
-		x.WrapPanics()
-		x.SentryOptOutNote()
-	}
+	// if telemetry.GetBool("sentry") {
+	// 	x.InitSentry(enc.EeBuild)
+	// 	defer x.FlushSentry()
+	// 	x.ConfigureSentryScope("zero")
+	// 	x.WrapPanics()
+	// 	x.SentryOptOutNote()
+	// }
 
 	x.PrintVersion()
 	tlsConf, err := x.LoadClientTLSConfigForInternalPort(Zero.Conf)
@@ -251,7 +252,7 @@ func run() {
 		limiterConfig:     limitConf,
 	}
 	glog.Infof("Setting Config to: %+v", opts)
-	x.WorkerConfig.Parse(Zero.Conf)
+	x.ZeroWorkerConfig.Parse(Zero.Conf)
 
 	if !enc.EeBuild && Zero.Conf.GetString("enterprise_license") != "" {
 		log.Fatalf("ERROR: enterprise_license option cannot be applied to OSS builds. ")
@@ -291,8 +292,8 @@ func run() {
 	if opts.bindall {
 		addr = "0.0.0.0"
 	}
-	if x.WorkerConfig.MyAddr == "" {
-		x.WorkerConfig.MyAddr = fmt.Sprintf("localhost:%d", x.PortZeroGrpc+opts.portOffset)
+	if x.ZeroWorkerConfig.MyAddr == "" {
+		x.ZeroWorkerConfig.MyAddr = fmt.Sprintf("localhost:%d", x.PortZeroGrpc+opts.portOffset)
 	}
 
 	nodeId := opts.raft.GetUint64("idx")
@@ -311,7 +312,6 @@ func run() {
 	store.SetUint(raftwal.GroupId, 0) // All zeros have group zero.
 
 	// Initialize the servers.
-	var st state
 	st.serveGRPC(grpcListener, store)
 
 	tlsCfg, err := x.LoadServerTLSConfig(Zero.Conf)
@@ -395,4 +395,8 @@ func run() {
 
 	st.zero.orc.close()
 	glog.Infoln("All done. Goodbye!")
+}
+
+func Stop() {
+	st.zero.closer.Signal()
 }

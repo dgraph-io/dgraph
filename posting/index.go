@@ -758,7 +758,7 @@ func (r *rebuilder) RunWithoutTemp(ctx context.Context) error {
 
 	ResetCache()
 
-	return x.ExponentialRetry(int(x.Config.MaxRetries),
+	return x.ExponentialRetry(int(x.AlphaConfig.MaxRetries),
 		20*time.Millisecond, func() error {
 			err := txn.CommitToDisk(writer, r.startTs)
 			if err == badger.ErrBannedKey {
@@ -860,7 +860,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 
 	// We write the index in a temporary badger first and then,
 	// merge entries before writing them to p directory.
-	tmpIndexDir, err := os.MkdirTemp(x.WorkerConfig.TmpDir, "dgraph_index_")
+	tmpIndexDir, err := os.MkdirTemp(x.AlphaWorkerConfig.TmpDir, "dgraph_index_")
 	if err != nil {
 		return errors.Wrap(err, "error creating temp dir for reindexing")
 	}
@@ -876,8 +876,8 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		WithMetricsEnabled(false)
 
 	// Set cache if we have encryption.
-	if len(x.WorkerConfig.EncryptionKey) > 0 {
-		dbOpts.EncryptionKey = x.WorkerConfig.EncryptionKey
+	if len(x.AlphaWorkerConfig.EncryptionKey) > 0 {
+		dbOpts.EncryptionKey = x.AlphaWorkerConfig.EncryptionKey
 		dbOpts.BlockCacheSize = 100 << 20
 		dbOpts.IndexCacheSize = 100 << 20
 	}

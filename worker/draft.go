@@ -266,7 +266,7 @@ func GetOngoingTasks() []string {
 func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *node {
 	glog.Infof("Node ID: %#x with GroupID: %d\n", id, gid)
 
-	isLearner := x.WorkerConfig.Raft.GetBool("learner")
+	isLearner := x.AlphaWorkerConfig.Raft.GetBool("learner")
 	rc := &pb.RaftContext{
 		Addr:      myAddr,
 		Group:     gid,
@@ -274,7 +274,7 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		IsLearner: isLearner,
 	}
 	glog.Infof("RaftContext: %+v\n", rc)
-	m := conn.NewNode(rc, store, x.WorkerConfig.TLSClientConfig)
+	m := conn.NewNode(rc, store, x.AlphaWorkerConfig.TLSClientConfig)
 
 	n := &node{
 		Node: m,
@@ -852,7 +852,7 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 		}
 		// We start with 20 ms, so that we end up waiting 5 mins by the end.
 		// If there is any transient issue, it should get fixed within that timeframe.
-		err := x.ExponentialRetry(int(x.Config.MaxRetries),
+		err := x.ExponentialRetry(int(x.AlphaConfig.MaxRetries),
 			20*time.Millisecond, func() error {
 				err := txn.CommitToDisk(writer, commit)
 				if err == badger.ErrBannedKey {
@@ -876,7 +876,7 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 		return errors.Wrapf(err, "while flushing to disk")
 	}
 
-	if x.WorkerConfig.HardSync {
+	if x.AlphaWorkerConfig.HardSync {
 		if err := pstore.Sync(); err != nil {
 			glog.Errorf("Error while calling Sync while commitOrAbort: %v", err)
 		}
@@ -1071,10 +1071,10 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 	lastSnapshotTime := time.Now()
 	defer slowTicker.Stop()
 
-	snapshotAfterEntries := x.WorkerConfig.Raft.GetUint64("snapshot-after-entries")
+	snapshotAfterEntries := x.AlphaWorkerConfig.Raft.GetUint64("snapshot-after-entries")
 	x.AssertTruef(snapshotAfterEntries > 10, "raft.snapshot-after must be a number greater than 10")
 
-	snapshotFrequency := x.WorkerConfig.Raft.GetDuration("snapshot-after-duration")
+	snapshotFrequency := x.AlphaWorkerConfig.Raft.GetDuration("snapshot-after-duration")
 
 	for {
 		select {
@@ -1198,7 +1198,7 @@ func (n *node) Run() {
 	go n.checkpointAndClose(done)
 	go n.ReportRaftComms()
 
-	if !x.WorkerConfig.HardSync {
+	if !x.AlphaWorkerConfig.HardSync {
 		closer := z.NewCloser(2)
 		defer closer.SignalAndWait()
 		go x.StoreSync(n.Store, closer)
@@ -1236,7 +1236,7 @@ func (n *node) Run() {
 
 			timer.Start()
 			_, span := otrace.StartSpan(n.ctx, "Alpha.RunLoop",
-				otrace.WithSampler(otrace.ProbabilitySampler(x.WorkerConfig.Trace.GetFloat64("ratio"))))
+				otrace.WithSampler(otrace.ProbabilitySampler(x.AlphaWorkerConfig.Trace.GetFloat64("ratio"))))
 
 			if rd.SoftState != nil {
 				groups().triggerMembershipSync()
@@ -1359,7 +1359,7 @@ func (n *node) Run() {
 					raft.IsEmptyHardState(rd.HardState))
 			}
 
-			for x.WorkerConfig.HardSync && rd.MustSync {
+			for x.AlphaWorkerConfig.HardSync && rd.MustSync {
 				if err := n.Store.Sync(); err != nil {
 					glog.Errorf("Error while calling Store.Sync: %+v", err)
 					time.Sleep(10 * time.Millisecond)
@@ -1593,7 +1593,7 @@ func (n *node) blockingAbort(req *pb.TxnTimestamps) error {
 // abort. Note that only the leader runs this function.
 func (n *node) abortOldTransactions() {
 	// Aborts if not already committed.
-	starts := posting.Oracle().TxnOlderThan(x.WorkerConfig.AbortOlderThan)
+	starts := posting.Oracle().TxnOlderThan(x.AlphaWorkerConfig.AbortOlderThan)
 	if len(starts) == 0 {
 		return
 	}

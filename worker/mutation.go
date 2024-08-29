@@ -576,7 +576,7 @@ func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate) error {
 		return err
 	}
 
-	if x.WorkerConfig.AclEnabled && x.ParseAttr(edge.GetAttr()) == "dgraph.rule.permission" {
+	if x.AlphaWorkerConfig.AclEnabled && x.ParseAttr(edge.GetAttr()) == "dgraph.rule.permission" {
 		perm, ok := dst.Value.(int64)
 		if !ok {
 			return errors.Errorf("Value for predicate <dgraph.rule.permission> should be of type int")
@@ -931,7 +931,7 @@ func CommitOverNetwork(ctx context.Context, tc *api.TxnContext) (uint64, error) 
 
 func (w *grpcWorker) proposeAndWait(ctx context.Context, txnCtx *api.TxnContext,
 	m *pb.Mutations) error {
-	if x.WorkerConfig.StrictMutations {
+	if x.AlphaWorkerConfig.StrictMutations {
 		for _, edge := range m.Edges {
 			if _, err := schema.State().TypeOf(edge.Attr); err != nil {
 				return err

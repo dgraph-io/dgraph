@@ -52,14 +52,14 @@ var (
 )
 
 func workerPort() int {
-	return x.Config.PortOffset + x.PortInternal
+	return x.AlphaConfig.PortOffset + x.PortInternal
 }
 
 // Init initializes this package.
 func Init(ps *badger.DB) {
 	pstore = ps
 	// needs to be initialized after group config
-	limiter = rateLimiter{c: sync.NewCond(&sync.Mutex{}), max: int(x.WorkerConfig.Raft.GetInt64("pending-proposals"))}
+	limiter = rateLimiter{c: sync.NewCond(&sync.Mutex{}), max: int(x.AlphaWorkerConfig.Raft.GetInt64("pending-proposals"))}
 	go limiter.bleed()
 
 	grpcOpts := []grpc.ServerOption{
@@ -69,8 +69,8 @@ func Init(ps *badger.DB) {
 		grpc.StatsHandler(&ocgrpc.ServerHandler{}),
 	}
 
-	if x.WorkerConfig.TLSServerConfig != nil {
-		grpcOpts = append(grpcOpts, grpc.Creds(credentials.NewTLS(x.WorkerConfig.TLSServerConfig)))
+	if x.AlphaWorkerConfig.TLSServerConfig != nil {
+		grpcOpts = append(grpcOpts, grpc.Creds(credentials.NewTLS(x.AlphaWorkerConfig.TLSServerConfig)))
 	}
 	workerServer = grpc.NewServer(grpcOpts...)
 }
@@ -172,17 +172,17 @@ func UpdateCacheMb(memoryMB int64) error {
 	return nil
 }
 
-// UpdateLogDQLRequest updates value of x.WorkerConfig.LogDQLRequest.
+// UpdateLogDQLRequest updates value of x.AlphaWorkerConfig.LogDQLRequest.
 func UpdateLogDQLRequest(val bool) {
 	if val {
-		atomic.StoreInt32(&x.WorkerConfig.LogDQLRequest, 1)
+		atomic.StoreInt32(&x.AlphaWorkerConfig.LogDQLRequest, 1)
 		return
 	}
 
-	atomic.StoreInt32(&x.WorkerConfig.LogDQLRequest, 0)
+	atomic.StoreInt32(&x.AlphaWorkerConfig.LogDQLRequest, 0)
 }
 
 // LogDQLRequestEnabled returns true if logging of requests is enabled otherwise false.
 func LogDQLRequestEnabled() bool {
-	return atomic.LoadInt32(&x.WorkerConfig.LogDQLRequest) > 0
+	return atomic.LoadInt32(&x.AlphaWorkerConfig.LogDQLRequest) > 0
 }

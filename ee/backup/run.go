@@ -427,7 +427,7 @@ func runExportBackup() error {
 		return errors.Wrapf(err, "runExportBackup")
 	}
 
-	mapDir, err := os.MkdirTemp(x.WorkerConfig.TmpDir, "restore-export")
+	mapDir, err := os.MkdirTemp(x.AlphaWorkerConfig.TmpDir, "restore-export")
 	x.Check(err)
 	defer func() {
 		if err := os.RemoveAll(mapDir); err != nil {

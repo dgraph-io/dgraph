@@ -228,7 +228,7 @@ func LoggingMWMutation(resolver MutationResolver) MutationResolver {
 func AclOnlyMW4Mutation(resolver MutationResolver) MutationResolver {
 	return MutationResolverFunc(func(ctx context.Context, mutation schema.Mutation) (*Resolved,
 		bool) {
-		if !x.WorkerConfig.AclEnabled {
+		if !x.AlphaWorkerConfig.AclEnabled {
 			return EmptyResult(mutation, errors.New("Enable ACL to use this mutation")), false
 		}
 		return resolver.Resolve(ctx, mutation)

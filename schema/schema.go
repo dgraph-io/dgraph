@@ -683,7 +683,7 @@ func initialTypesInternal(namespace uint64, all bool) []*pb.TypeUpdate {
 			},
 		})
 
-	if all || x.WorkerConfig.AclEnabled {
+	if all || x.AlphaWorkerConfig.AclEnabled {
 		// These type definitions are required for deleteUser and deleteGroup GraphQL API to work
 		// properly.
 		initialTypes = append(initialTypes, &pb.TypeUpdate{
@@ -785,7 +785,7 @@ func initialSchemaInternal(namespace uint64, all bool) []*pb.SchemaUpdate {
 			Tokenizer: []string{"sha256"},
 		})
 
-	if all || x.WorkerConfig.AclEnabled {
+	if all || x.AlphaWorkerConfig.AclEnabled {
 		// propose the schema update for acl predicates
 		initialSchema = append(initialSchema, []*pb.SchemaUpdate{
 			{

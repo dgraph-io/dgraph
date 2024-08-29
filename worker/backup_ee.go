@@ -163,7 +163,7 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest) error {
 	if req.ForceFull {
 		req.SinceTs = 0
 	} else {
-		if x.WorkerConfig.EncryptionKey != nil {
+		if x.AlphaWorkerConfig.EncryptionKey != nil {
 			// If encryption key given, latest backup should be encrypted.
 			if latestManifest.Type != "" && !latestManifest.Encrypted {
 				err = errors.Errorf("latest manifest indicates the last backup was not encrypted " +
@@ -269,7 +269,7 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest) error {
 		m.BackupId = latestManifest.BackupId
 		m.BackupNum = latestManifest.BackupNum + 1
 	}
-	m.Encrypted = x.WorkerConfig.EncryptionKey != nil
+	m.Encrypted = x.AlphaWorkerConfig.EncryptionKey != nil
 
 	bp := NewBackupProcessor(nil, req)
 	defer bp.Close()
@@ -321,7 +321,7 @@ func NewBackupProcessor(db *badger.DB, req *pb.BackupRequest) *BackupProcessor {
 	bp := &BackupProcessor{
 		DB:      db,
 		Request: req,
-		threads: make([]*threadLocal, x.WorkerConfig.Badger.NumGoroutines),
+		threads: make([]*threadLocal, x.AlphaWorkerConfig.Badger.NumGoroutines),
 	}
 	if req.SinceTs > 0 && db != nil {
 		bp.txn = db.NewTransactionAt(req.ReadTs, false)
@@ -389,7 +389,7 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.BackupResponse,
 	}
 	glog.V(3).Infof("Backup manifest version: %d", pr.Request.SinceTs)
 
-	eWriter, err := enc.GetWriter(x.WorkerConfig.EncryptionKey, w)
+	eWriter, err := enc.GetWriter(x.AlphaWorkerConfig.EncryptionKey, w)
 	if err != nil {
 		return nil, err
 	}

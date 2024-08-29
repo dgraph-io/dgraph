@@ -418,7 +418,7 @@ func (writer *ExportWriter) open(fpath string) error {
 		return err
 	}
 	writer.bw = bufio.NewWriterSize(writer.fd, 1e6)
-	w, err := enc.GetWriter(x.WorkerConfig.EncryptionKey, writer.bw)
+	w, err := enc.GetWriter(x.AlphaWorkerConfig.EncryptionKey, writer.bw)
 	if err != nil {
 		return err
 	}
@@ -512,7 +512,7 @@ func (l *localExportStorage) FinishWriting(w *Writers) (ExportedFiles, error) {
 }
 
 func newRemoteExportStorage(in *pb.ExportRequest, backupName string) (*remoteExportStorage, error) {
-	tmpDir, err := os.MkdirTemp(x.WorkerConfig.TmpDir, "export")
+	tmpDir, err := os.MkdirTemp(x.AlphaWorkerConfig.TmpDir, "export")
 	if err != nil {
 		return nil, err
 	}
@@ -582,7 +582,7 @@ func NewExportStorage(in *pb.ExportRequest, backupName string) (ExportStorage, e
 	case strings.HasPrefix(in.Destination, "minio://") || strings.HasPrefix(in.Destination, "s3://"):
 		return newRemoteExportStorage(in, backupName)
 	default:
-		return newLocalExportStorage(x.WorkerConfig.ExportPath, backupName)
+		return newLocalExportStorage(x.AlphaWorkerConfig.ExportPath, backupName)
 	}
 }
 

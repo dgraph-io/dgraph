@@ -265,7 +265,7 @@ func ToDirectedEdges(gmuList []*dql.Mutation, newUids map[string]uint64) (
 
 func checkIfDeletingAclOperation(ctx context.Context, edges []*pb.DirectedEdge) error {
 	// Don't need to make any checks if ACL is not enabled
-	if !x.WorkerConfig.AclEnabled {
+	if !x.AlphaWorkerConfig.AclEnabled {
 		return nil
 	}
 	namespace, err := x.ExtractNamespace(ctx)

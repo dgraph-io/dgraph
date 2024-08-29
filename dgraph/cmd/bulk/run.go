@@ -203,8 +203,8 @@ func run() {
 		tlsConf, err := x.LoadClientTLSConfigForInternalPort(Bulk.Conf)
 		x.Check(err)
 		// Need to set zero addr in WorkerConfig before checking the license.
-		x.WorkerConfig.ZeroAddr = []string{opt.ZeroAddr}
-		x.WorkerConfig.TLSClientConfig = tlsConf
+		x.AlphaWorkerConfig.ZeroAddr = []string{opt.ZeroAddr}
+		x.AlphaWorkerConfig.TLSClientConfig = tlsConf
 		if !worker.EnterpriseEnabled() {
 			// Crash since the enterprise license is not enabled..
 			log.Fatal("Enterprise License needed for the Encryption feature.")

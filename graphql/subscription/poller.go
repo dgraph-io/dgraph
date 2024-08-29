@@ -180,7 +180,7 @@ func (p *Poller) poll(req *pollRequest) {
 	pollID := uint64(0)
 	for {
 		pollID++
-		time.Sleep(x.Config.GraphQL.GetDuration("poll-interval"))
+		time.Sleep(x.AlphaConfig.GraphQL.GetDuration("poll-interval"))
 
 		globalEpoch := atomic.LoadUint64(p.globalEpoch)
 		if req.localEpoch != globalEpoch || globalEpoch == math.MaxUint64 {

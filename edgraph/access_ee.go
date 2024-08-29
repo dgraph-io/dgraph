@@ -961,7 +961,7 @@ func blockedPreds(preds []string) map[string]struct{} {
 
 // With shared instance enabled, we don't allow ACL operations from any of the non-galaxy namespace.
 func shouldAllowAcls(ns uint64) bool {
-	return !x.Config.SharedInstance || ns == x.GalaxyNamespace
+	return !x.AlphaConfig.SharedInstance || ns == x.GalaxyNamespace
 }
 
 // authorizeQuery authorizes the query using the aclCachePtr. It will silently drop all
@@ -1133,7 +1133,7 @@ func authorizeSchemaQuery(ctx context.Context, er *query.ExecutionResult) error 
 // deletion of a namespace, resetting passwords across namespaces etc.
 // NOTE: The caller should not wrap the error returned. If needed, propagate the GRPC error code.
 func AuthGuardianOfTheGalaxy(ctx context.Context) error {
-	if !x.WorkerConfig.AclEnabled {
+	if !x.AlphaWorkerConfig.AclEnabled {
 		return nil
 	}
 	ns, err := x.ExtractNamespaceFrom(ctx)

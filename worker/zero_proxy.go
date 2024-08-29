@@ -16,7 +16,7 @@ func forwardAssignUidsToZero(ctx context.Context, in *pb.Num) (*pb.AssignedIds, 
 		return &pb.AssignedIds{}, errors.Errorf("Cannot lease %s via zero proxy", in.Type.String())
 	}
 
-	if x.WorkerConfig.AclEnabled {
+	if x.AlphaWorkerConfig.AclEnabled {
 		var err error
 		ctx, err = x.AttachJWTNamespaceOutgoing(ctx)
 		if err != nil {

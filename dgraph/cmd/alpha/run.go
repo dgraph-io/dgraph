@@ -53,7 +53,6 @@ import (
 	"github.com/dgraph-io/dgraph/v24/edgraph"
 	"github.com/dgraph-io/dgraph/v24/ee"
 	"github.com/dgraph-io/dgraph/v24/ee/audit"
-	"github.com/dgraph-io/dgraph/v24/ee/enc"
 	"github.com/dgraph-io/dgraph/v24/graphql/admin"
 	"github.com/dgraph-io/dgraph/v24/posting"
 	"github.com/dgraph-io/dgraph/v24/schema"
@@ -89,7 +88,7 @@ they form a Raft group and provide synchronous replication.
 `,
 		Run: func(cmd *cobra.Command, args []string) {
 			defer x.StartProfile(Alpha.Conf).Stop()
-			run()
+			Run()
 		},
 		Annotations: map[string]string{"group": "core"},
 	}
@@ -355,11 +354,11 @@ func getIPsFromString(str string) ([]x.IPRange, error) {
 }
 
 func httpPort() int {
-	return x.Config.PortOffset + x.PortHTTP
+	return x.AlphaConfig.PortOffset + x.PortHTTP
 }
 
 func grpcPort() int {
-	return x.Config.PortOffset + x.PortGrpc
+	return x.AlphaConfig.PortOffset + x.PortGrpc
 }
 
 func healthCheck(w http.ResponseWriter, r *http.Request) {
@@ -497,7 +496,7 @@ func setupServer(closer *z.Closer) {
 	}
 
 	baseMux := http.NewServeMux()
-	http.Handle("/", audit.AuditRequestHttp(baseMux))
+	// http.Handle("/", audit.AuditRequestHttp(baseMux))
 
 	baseMux.HandleFunc("/query", queryHandler)
 	baseMux.HandleFunc("/query/", queryHandler)
@@ -513,7 +512,7 @@ func setupServer(closer *z.Closer) {
 	// TODO: Figure out what this is for?
 	http.HandleFunc("/debug/store", storeStatsHandler)
 
-	introspection := x.Config.GraphQL.GetBool("introspection")
+	introspection := x.AlphaConfig.GraphQL.GetBool("introspection")
 
 	// Global Epoch is a lockless synchronization mechanism for graphql service.
 	// It's is just an atomic counter used by the graphql subscription to update its state.
@@ -612,18 +611,18 @@ func setupServer(closer *z.Closer) {
 	x.ServerCloser.Wait()
 }
 
-func run() {
+func Run() {
 	var err error
 
 	telemetry := z.NewSuperFlag(Alpha.Conf.GetString("telemetry")).MergeAndCheckDefault(
 		x.TelemetryDefaults)
-	if telemetry.GetBool("sentry") {
-		x.InitSentry(enc.EeBuild)
-		defer x.FlushSentry()
-		x.ConfigureSentryScope("alpha")
-		x.WrapPanics()
-		x.SentryOptOutNote()
-	}
+	// if telemetry.GetBool("sentry") {
+	// 	x.InitSentry(enc.EeBuild)
+	// 	defer x.FlushSentry()
+	// 	x.ConfigureSentryScope("alpha")
+	// 	x.WrapPanics()
+	// 	x.SentryOptOutNote()
+	// }
 
 	bindall = Alpha.Conf.GetBool("bindall")
 	cache := z.NewSuperFlag(Alpha.Conf.GetString("cache")).MergeAndCheckDefault(
@@ -646,7 +645,7 @@ func run() {
 		worker.SecurityDefaults)
 	conf := audit.GetAuditConf(Alpha.Conf.GetString("audit"))
 
-	x.Config.Limit = z.NewSuperFlag(Alpha.Conf.GetString("limit")).MergeAndCheckDefault(
+	x.AlphaConfig.Limit = z.NewSuperFlag(Alpha.Conf.GetString("limit")).MergeAndCheckDefault(
 		worker.LimitDefaults)
 
 	opts := worker.Options{
@@ -659,7 +658,7 @@ func run() {
 		AuthToken:          security.GetString("token"),
 		Audit:              conf,
 		ChangeDataConf:     Alpha.Conf.GetString("cdc"),
-		TypeFilterUidLimit: x.Config.Limit.GetInt64("type-filter-uid-limit"),
+		TypeFilterUidLimit: x.AlphaConfig.Limit.GetInt64("type-filter-uid-limit"),
 	}
 
 	keys, err := ee.GetKeys(Alpha.Conf)
@@ -674,8 +673,8 @@ func run() {
 		glog.Info("ACL secret key loaded successfully.")
 	}
 
-	abortDur := x.Config.Limit.GetDuration("txn-abort-after")
-	switch strings.ToLower(x.Config.Limit.GetString("mutations")) {
+	abortDur := x.AlphaConfig.Limit.GetDuration("txn-abort-after")
+	switch strings.ToLower(x.AlphaConfig.Limit.GetString("mutations")) {
 	case "allow":
 		opts.MutationsMode = worker.AllowMutations
 	case "disallow":
@@ -698,7 +697,7 @@ func run() {
 	x.Check(err)
 
 	raft := z.NewSuperFlag(Alpha.Conf.GetString("raft")).MergeAndCheckDefault(worker.RaftDefaults)
-	x.WorkerConfig = x.WorkerOptions{
+	x.AlphaWorkerConfig = x.WorkerOptions{
 		TmpDir:              Alpha.Conf.GetString("tmp"),
 		ExportPath:          Alpha.Conf.GetString("export"),
 		ZeroAddr:            strings.Split(Alpha.Conf.GetString("zero"), ","),
@@ -716,32 +715,32 @@ func run() {
 		Audit:               opts.Audit != nil,
 		Badger:              bopts,
 	}
-	x.WorkerConfig.Parse(Alpha.Conf)
+	x.AlphaWorkerConfig.Parse(Alpha.Conf)
 
 	if telemetry.GetBool("reports") {
 		go edgraph.PeriodicallyPostTelemetry()
 	}
 
 	// Set the directory for temporary buffers.
-	z.SetTmpDir(x.WorkerConfig.TmpDir)
+	z.SetTmpDir(x.AlphaWorkerConfig.TmpDir)
 
-	x.WorkerConfig.EncryptionKey = keys.EncKey
+	x.AlphaWorkerConfig.EncryptionKey = keys.EncKey
 
 	setupCustomTokenizers()
-	x.Config.PortOffset = Alpha.Conf.GetInt("port_offset")
-	x.Config.LimitMutationsNquad = int(x.Config.Limit.GetInt64("mutations-nquad"))
-	x.Config.LimitQueryEdge = x.Config.Limit.GetUint64("query-edge")
-	x.Config.BlockClusterWideDrop = x.Config.Limit.GetBool("disallow-drop")
-	x.Config.LimitNormalizeNode = int(x.Config.Limit.GetInt64("normalize-node"))
-	x.Config.QueryTimeout = x.Config.Limit.GetDuration("query-timeout")
-	x.Config.MaxRetries = x.Config.Limit.GetInt64("max-retries")
-	x.Config.SharedInstance = x.Config.Limit.GetBool("shared-instance")
+	x.AlphaConfig.PortOffset = Alpha.Conf.GetInt("port_offset")
+	x.AlphaConfig.LimitMutationsNquad = int(x.AlphaConfig.Limit.GetInt64("mutations-nquad"))
+	x.AlphaConfig.LimitQueryEdge = x.AlphaConfig.Limit.GetUint64("query-edge")
+	x.AlphaConfig.BlockClusterWideDrop = x.AlphaConfig.Limit.GetBool("disallow-drop")
+	x.AlphaConfig.LimitNormalizeNode = int(x.AlphaConfig.Limit.GetInt64("normalize-node"))
+	x.AlphaConfig.QueryTimeout = x.AlphaConfig.Limit.GetDuration("query-timeout")
+	x.AlphaConfig.MaxRetries = x.AlphaConfig.Limit.GetInt64("max-retries")
+	x.AlphaConfig.SharedInstance = x.AlphaConfig.Limit.GetBool("shared-instance")
 
-	x.Config.GraphQL = z.NewSuperFlag(Alpha.Conf.GetString("graphql")).MergeAndCheckDefault(
+	x.AlphaConfig.GraphQL = z.NewSuperFlag(Alpha.Conf.GetString("graphql")).MergeAndCheckDefault(
 		worker.GraphQLDefaults)
-	x.Config.GraphQLDebug = x.Config.GraphQL.GetBool("debug")
-	if x.Config.GraphQL.GetString("lambda-url") != "" {
-		graphqlLambdaUrl, err := url.Parse(x.Config.GraphQL.GetString("lambda-url"))
+	x.AlphaConfig.GraphQLDebug = x.AlphaConfig.GraphQL.GetBool("debug")
+	if x.AlphaConfig.GraphQL.GetString("lambda-url") != "" {
+		graphqlLambdaUrl, err := url.Parse(x.AlphaConfig.GraphQL.GetString("lambda-url"))
 		if err != nil {
 			glog.Errorf("unable to parse --graphql lambda-url: %v", err)
 			return
@@ -757,11 +756,11 @@ func run() {
 	// feature flags
 	featureFlagsConf := z.NewSuperFlag(Alpha.Conf.GetString("feature-flags")).MergeAndCheckDefault(
 		worker.FeatureFlagsDefaults)
-	x.Config.NormalizeCompatibilityMode = featureFlagsConf.GetString("normalize-compatibility-mode")
+	x.AlphaConfig.NormalizeCompatibilityMode = featureFlagsConf.GetString("normalize-compatibility-mode")
 
 	x.PrintVersion()
-	glog.Infof("x.Config: %+v", x.Config)
-	glog.Infof("x.WorkerConfig: %+v", x.WorkerConfig)
+	glog.Infof("x.AlphaConfig: %+v", x.AlphaConfig)
+	glog.Infof("x.AlphaWorkerConfig: %+v", x.AlphaWorkerConfig)
 	glog.Infof("worker.Config: %+v", worker.Config)
 
 	worker.InitServerState()
@@ -774,7 +773,7 @@ func run() {
 		}
 	}
 	otrace.ApplyConfig(otrace.Config{
-		DefaultSampler:             otrace.ProbabilitySampler(x.WorkerConfig.Trace.GetFloat64("ratio")),
+		DefaultSampler:             otrace.ProbabilitySampler(x.AlphaWorkerConfig.Trace.GetFloat64("ratio")),
 		MaxAnnotationEventsPerSpan: 256,
 	})
 

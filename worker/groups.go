@@ -71,45 +71,45 @@ func groups() *groupi {
 // This function triggers RAFT nodes to be created, and is the entrance to the RAFT
 // world from main.go.
 func StartRaftNodes(walStore *raftwal.DiskStorage, bindall bool) {
-	if x.WorkerConfig.MyAddr == "" {
-		x.WorkerConfig.MyAddr = fmt.Sprintf("localhost:%d", workerPort())
+	if x.AlphaWorkerConfig.MyAddr == "" {
+		x.AlphaWorkerConfig.MyAddr = fmt.Sprintf("localhost:%d", workerPort())
 	} else {
 		// check if address is valid or not
-		x.Check(x.ValidateAddress(x.WorkerConfig.MyAddr))
+		x.Check(x.ValidateAddress(x.AlphaWorkerConfig.MyAddr))
 		if !bindall {
 			glog.Errorln("--my flag is provided without bindall, Did you forget to specify bindall?")
 		}
 	}
 
-	x.AssertTruef(len(x.WorkerConfig.ZeroAddr) > 0, "Providing dgraphzero address is mandatory.")
-	for _, zeroAddr := range x.WorkerConfig.ZeroAddr {
-		x.AssertTruef(zeroAddr != x.WorkerConfig.MyAddr,
+	x.AssertTruef(len(x.AlphaWorkerConfig.ZeroAddr) > 0, "Providing dgraphzero address is mandatory.")
+	for _, zeroAddr := range x.AlphaWorkerConfig.ZeroAddr {
+		x.AssertTruef(zeroAddr != x.AlphaWorkerConfig.MyAddr,
 			"Dgraph Zero address %s and Dgraph address (IP:Port) %s can't be the same.",
-			zeroAddr, x.WorkerConfig.MyAddr)
+			zeroAddr, x.AlphaWorkerConfig.MyAddr)
 	}
 
-	raftIdx := x.WorkerConfig.Raft.GetUint64("idx")
+	raftIdx := x.AlphaWorkerConfig.Raft.GetUint64("idx")
 	if raftIdx == 0 {
 		raftIdx = walStore.Uint(raftwal.RaftId)
 
 		// If the w directory already contains raft information, ignore the proposed
 		// group ID stored inside the p directory.
 		if raftIdx > 0 {
-			x.WorkerConfig.ProposedGroupId = 0
+			x.AlphaWorkerConfig.ProposedGroupId = 0
 		}
 	}
 	glog.Infof("Current Raft Id: %#x\n", raftIdx)
 
-	if x.WorkerConfig.ProposedGroupId == 0 {
-		x.WorkerConfig.ProposedGroupId = x.WorkerConfig.Raft.GetUint32("group")
+	if x.AlphaWorkerConfig.ProposedGroupId == 0 {
+		x.AlphaWorkerConfig.ProposedGroupId = x.AlphaWorkerConfig.Raft.GetUint32("group")
 	}
 	// Successfully connect with dgraphzero, before doing anything else.
 	// Connect with Zero leader and figure out what group we should belong to.
 	m := &pb.Member{
 		Id:      raftIdx,
-		GroupId: x.WorkerConfig.ProposedGroupId,
-		Addr:    x.WorkerConfig.MyAddr,
-		Learner: x.WorkerConfig.Raft.GetBool("learner"),
+		GroupId: x.AlphaWorkerConfig.ProposedGroupId,
+		Addr:    x.AlphaWorkerConfig.MyAddr,
+		Learner: x.AlphaWorkerConfig.Raft.GetBool("learner"),
 	}
 	if m.GroupId > 0 {
 		m.ForceGroupId = true
@@ -149,7 +149,7 @@ func StartRaftNodes(walStore *raftwal.DiskStorage, bindall bool) {
 	walStore.SetUint(raftwal.RaftId, raftIdx)
 	walStore.SetUint(raftwal.GroupId, uint64(gid))
 
-	gr.Node = newNode(walStore, gid, raftIdx, x.WorkerConfig.MyAddr)
+	gr.Node = newNode(walStore, gid, raftIdx, x.AlphaWorkerConfig.MyAddr)
 
 	x.Checkf(schema.LoadFromDb(context.Background()), "Error while initializing schema")
 	glog.Infof("Load schema from DB: OK")
@@ -332,8 +332,8 @@ func (g *groupi) applyState(myId uint64, state *pb.MembershipState) {
 				foundSelf = true
 				atomic.StoreUint32(&g.gid, gid)
 			}
-			if x.WorkerConfig.MyAddr != member.Addr {
-				conn.GetPools().Connect(member.Addr, x.WorkerConfig.TLSClientConfig)
+			if x.AlphaWorkerConfig.MyAddr != member.Addr {
+				conn.GetPools().Connect(member.Addr, x.AlphaWorkerConfig.TLSClientConfig)
 			}
 		}
 		for _, tablet := range group.Tablets {
@@ -345,8 +345,8 @@ func (g *groupi) applyState(myId uint64, state *pb.MembershipState) {
 		}
 	}
 	for _, member := range g.state.Zeros {
-		if x.WorkerConfig.MyAddr != member.Addr {
-			conn.GetPools().Connect(member.Addr, x.WorkerConfig.TLSClientConfig)
+		if x.AlphaWorkerConfig.MyAddr != member.Addr {
+			conn.GetPools().Connect(member.Addr, x.AlphaWorkerConfig.TLSClientConfig)
 		}
 	}
 	if !foundSelf {
@@ -714,7 +714,7 @@ func (g *groupi) connToZeroLeader() *conn.Pool {
 		}
 		for _, mz := range connState.State.GetZeros() {
 			if mz.Leader {
-				return conn.GetPools().Connect(mz.GetAddr(), x.WorkerConfig.TLSClientConfig)
+				return conn.GetPools().Connect(mz.GetAddr(), x.AlphaWorkerConfig.TLSClientConfig)
 			}
 		}
 		return nil
@@ -733,13 +733,13 @@ func (g *groupi) connToZeroLeader() *conn.Pool {
 			delay *= 2
 		}
 
-		zAddrList := x.WorkerConfig.ZeroAddr
+		zAddrList := x.AlphaWorkerConfig.ZeroAddr
 		// Pick addresses in round robin manner.
 		addr := zAddrList[i%len(zAddrList)]
 
 		pl := g.AnyServer(0)
 		if pl == nil {
-			pl = conn.GetPools().Connect(addr, x.WorkerConfig.TLSClientConfig)
+			pl = conn.GetPools().Connect(addr, x.AlphaWorkerConfig.TLSClientConfig)
 		}
 		if pl == nil {
 			glog.V(1).Infof("No healthy Zero server found. Retrying...")
@@ -759,7 +759,7 @@ func (g *groupi) doSendMembership(tablets map[string]*pb.Tablet) error {
 	member := &pb.Member{
 		Id:         g.Node.Id,
 		GroupId:    g.groupId(),
-		Addr:       x.WorkerConfig.MyAddr,
+		Addr:       x.AlphaWorkerConfig.MyAddr,
 		Leader:     leader,
 		LastUpdate: uint64(time.Now().Unix()),
 	}
@@ -1123,12 +1123,12 @@ func GetEEFeaturesList() []string {
 		ee = append(ee, "acl")
 		ee = append(ee, "multi_tenancy")
 	}
-	if x.WorkerConfig.EncryptionKey != nil {
+	if x.AlphaWorkerConfig.EncryptionKey != nil {
 		ee = append(ee, "encryption_at_rest", "encrypted_backup_restore", "encrypted_export")
 	} else {
 		ee = append(ee, "backup_restore")
 	}
-	if x.WorkerConfig.Audit {
+	if x.AlphaWorkerConfig.Audit {
 		ee = append(ee, "audit")
 	}
 	if Config.ChangeDataConf != "" {
@@ -1205,7 +1205,7 @@ func SubscribeForUpdates(prefixes [][]byte, ignore string, cb func(kvs *badgerpb
 		if len(members) == 0 {
 			return fmt.Errorf("unable to find any servers for group: %d", group)
 		}
-		pool := conn.GetPools().Connect(members[0], x.WorkerConfig.TLSClientConfig)
+		pool := conn.GetPools().Connect(members[0], x.AlphaWorkerConfig.TLSClientConfig)
 		client := pb.NewWorkerClient(pool.Get())
 
 		// Get Subscriber stream.

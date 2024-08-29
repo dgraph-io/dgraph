@@ -145,7 +145,7 @@ func AuditWebSockets(ctx context.Context, req *schema.Request) {
 	auditor.Audit(&AuditEvent{
 		User:        user,
 		Namespace:   namespace,
-		ServerHost:  x.WorkerConfig.MyAddr,
+		ServerHost:  x.AlphaWorkerConfig.MyAddr,
 		ClientHost:  ip,
 		Endpoint:    "/graphql",
 		ReqType:     WebSocket,
@@ -199,7 +199,7 @@ func auditGrpc(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo)
 	auditor.Audit(&AuditEvent{
 		User:       user,
 		Namespace:  namespace,
-		ServerHost: x.WorkerConfig.MyAddr,
+		ServerHost: x.AlphaWorkerConfig.MyAddr,
 		ClientHost: clientHost,
 		Endpoint:   info.FullMethod,
 		ReqType:    Grpc,
@@ -222,7 +222,7 @@ func auditHttp(w *ResponseWriter, r *http.Request) {
 	auditor.Audit(&AuditEvent{
 		User:        user,
 		Namespace:   x.ExtractNamespaceHTTP(r),
-		ServerHost:  x.WorkerConfig.MyAddr,
+		ServerHost:  x.AlphaWorkerConfig.MyAddr,
 		ClientHost:  r.RemoteAddr,
 		Endpoint:    r.URL.Path,
 		ReqType:     Http,
@@ -365,7 +365,7 @@ func getUser(token string, poorman bool) string {
 	var user string
 	var err error
 	if token == "" {
-		if x.WorkerConfig.AclEnabled {
+		if x.AlphaWorkerConfig.AclEnabled {
 			user = UnauthorisedUser
 		}
 	} else {

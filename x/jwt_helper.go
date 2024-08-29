@@ -40,13 +40,13 @@ func MaybeKeyToBytes(k interface{}) interface{} {
 
 func ParseJWT(jwtStr string) (jwt.MapClaims, error) {
 	token, err := jwt.Parse(jwtStr, func(token *jwt.Token) (interface{}, error) {
-		if WorkerConfig.AclJwtAlg == nil {
+		if AlphaWorkerConfig.AclJwtAlg == nil {
 			return nil, errors.Errorf("ACL is disabled")
 		}
-		if token.Method.Alg() != WorkerConfig.AclJwtAlg.Alg() {
+		if token.Method.Alg() != AlphaWorkerConfig.AclJwtAlg.Alg() {
 			return nil, errors.Errorf("unexpected signing method in token: %v", token.Header["alg"])
 		}
-		return MaybeKeyToBytes(WorkerConfig.AclPublicKey), nil
+		return MaybeKeyToBytes(AlphaWorkerConfig.AclPublicKey), nil
 	})
 	if err != nil {
 		// This is for backward compatibility in clients

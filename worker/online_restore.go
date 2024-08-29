@@ -324,7 +324,7 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest, pidx uin
 		}
 	}
 
-	mapDir, err := os.MkdirTemp(x.WorkerConfig.TmpDir, "restore-map")
+	mapDir, err := os.MkdirTemp(x.AlphaWorkerConfig.TmpDir, "restore-map")
 	x.Check(err)
 	defer func() {
 		if err := os.RemoveAll(mapDir); err != nil {
@@ -552,7 +552,7 @@ func RunOfflineRestore(dir, location, backupId, keyFile string, key x.Sensitive,
 			EncryptionKeyFile: keyFile,
 			RestoreTs:         1,
 		}
-		mapDir, err := os.MkdirTemp(x.WorkerConfig.TmpDir, "restore-map")
+		mapDir, err := os.MkdirTemp(x.AlphaWorkerConfig.TmpDir, "restore-map")
 		if err != nil {
 			return LoadResult{Err: errors.Wrapf(err, "Failed to create temp map directory")}
 		}

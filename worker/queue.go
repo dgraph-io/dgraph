@@ -97,7 +97,7 @@ var (
 
 // InitTasks initializes the global Tasks variable.
 func InitTasks() {
-	path := filepath.Join(x.WorkerConfig.TmpDir, "tasks.buf")
+	path := filepath.Join(x.AlphaWorkerConfig.TmpDir, "tasks.buf")
 	log, err := z.NewTreePersistent(path)
 	x.Check(err)
 

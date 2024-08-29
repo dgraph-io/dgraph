@@ -65,7 +65,7 @@ func TestEncodeMemory(t *testing.T) {
 
 func TestNormalizeJSONLimit(t *testing.T) {
 	// Set default normalize limit.
-	x.Config.Limit = z.NewSuperFlag("normalize-node=10000;").MergeAndCheckDefault(worker.LimitDefaults)
+	x.AlphaConfig.Limit = z.NewSuperFlag("normalize-node=10000;").MergeAndCheckDefault(worker.LimitDefaults)
 
 	if testing.Short() {
 		t.Skip("Skipping TestNormalizeJSONLimit")

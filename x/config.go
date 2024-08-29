@@ -74,7 +74,8 @@ type Options struct {
 }
 
 // Config stores the global instance of this package's options.
-var Config Options
+var ZeroConfig Options
+var AlphaConfig Options
 
 // IPRange represents an IP range.
 type IPRange struct {
@@ -147,7 +148,8 @@ type WorkerOptions struct {
 }
 
 // WorkerConfig stores the global instance of the worker package's options.
-var WorkerConfig WorkerOptions
+var ZeroWorkerConfig WorkerOptions
+var AlphaWorkerConfig WorkerOptions
 
 func (w *WorkerOptions) Parse(conf *viper.Viper) {
 	w.MyAddr = conf.GetString("my")

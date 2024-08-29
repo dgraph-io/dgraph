@@ -240,10 +240,10 @@ func (s *Server) zeroHealth(ctx context.Context) (*api.Response, error) {
 	}
 	health := pb.HealthInfo{
 		Instance: "zero",
-		Address:  x.WorkerConfig.MyAddr,
+		Address:  x.ZeroWorkerConfig.MyAddr,
 		Status:   "healthy",
 		Version:  x.Version(),
-		Uptime:   int64(time.Since(x.WorkerConfig.StartTime) / time.Second),
+		Uptime:   int64(time.Since(x.ZeroWorkerConfig.StartTime) / time.Second),
 		LastEcho: time.Now().Unix(),
 	}
 	jsonOut, err := json.Marshal(health)
