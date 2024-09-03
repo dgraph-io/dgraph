@@ -33,7 +33,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/golang/snappy"
 
-	"github.com/dgraph-io/dgo/v230/protos/api"
+	"github.com/dgraph-io/dgo/v240/protos/api"
 	"github.com/dgraph-io/dgraph/v24/chunker"
 	"github.com/dgraph-io/dgraph/v24/dql"
 	"github.com/dgraph-io/dgraph/v24/ee/acl"
